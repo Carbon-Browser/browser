@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,6 +35,7 @@ class LocalCardMigrationBubbleControllerImpl
   void ReshowBubble();
 
   void AddObserver(LocalCardMigrationControllerObserver* observer);
+  void RemoveObserver(LocalCardMigrationControllerObserver* observer);
 
   // Returns nullptr if no bubble is currently shown.
   AutofillBubbleBase* local_card_migration_bubble_view() const;
@@ -42,7 +43,7 @@ class LocalCardMigrationBubbleControllerImpl
   // LocalCardMigrationBubbleController:
   void OnConfirmButtonClicked() override;
   void OnCancelButtonClicked() override;
-  void OnBubbleClosed(PaymentsBubbleClosedReason closed_reason) override;
+  void OnBubbleClosed(PaymentsUiClosedReason closed_reason) override;
 
  protected:
   explicit LocalCardMigrationBubbleControllerImpl(
@@ -75,8 +76,7 @@ class LocalCardMigrationBubbleControllerImpl
   // clicking the Continue button.
   bool should_add_strikes_on_bubble_close_ = true;
 
-  base::ObserverList<LocalCardMigrationControllerObserver>::Unchecked
-      observer_list_;
+  base::ObserverList<LocalCardMigrationControllerObserver> observer_list_;
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 };

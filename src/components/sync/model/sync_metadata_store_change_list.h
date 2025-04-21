@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,13 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
-#include "components/sync/base/model_type.h"
+#include "components/sync/base/data_type.h"
 #include "components/sync/model/metadata_change_list.h"
 #include "components/sync/model/model_error.h"
 #include "components/sync/model/sync_metadata_store.h"
-#include "components/sync/protocol/model_type_state.pb.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace sync_pb {
+class DataTypeState;
 class EntityMetadata;
 }  // namespace sync_pb
 
@@ -23,34 +22,44 @@ namespace syncer {
 
 // A thin wrapper around an SyncMetadataStore that implements sync's
 // MetadataChangeList interface. Changes are passed directly into the store and
-// not stored inside this object. Since the store calls can fail, |TakeError()|
-// must be called before this object is destroyed to check whether any
-// operations failed.
+// not stored inside this object.
 class SyncMetadataStoreChangeList : public MetadataChangeList {
  public:
-  SyncMetadataStoreChangeList(SyncMetadataStore* store, syncer::ModelType type);
+  using ErrorCallback = base::RepeatingCallback<void(const ModelError&)>;
+
+  // If an error happened during any Update*/Clear* operation, then
+  // `error_callback` will be called during destruction and passed the error.
+  // Should typically be bound to DataTypeLocalChangeProcessor::ReportError().
+  SyncMetadataStoreChangeList(SyncMetadataStore* store,
+                              DataType type,
+                              ErrorCallback error_callback);
   ~SyncMetadataStoreChangeList() override;
 
   // MetadataChangeList implementation.
-  void UpdateModelTypeState(
-      const sync_pb::ModelTypeState& model_type_state) override;
-  void ClearModelTypeState() override;
+  void UpdateDataTypeState(
+      const sync_pb::DataTypeState& data_type_state) override;
+  void ClearDataTypeState() override;
   void UpdateMetadata(const std::string& storage_key,
                       const sync_pb::EntityMetadata& metadata) override;
   void ClearMetadata(const std::string& storage_key) override;
-  absl::optional<syncer::ModelError> TakeError();
 
   const SyncMetadataStore* GetMetadataStoreForTesting() const;
 
  private:
-  // The metadata store to store metadata in; always outlives |this|.
-  raw_ptr<SyncMetadataStore> store_;
+  void SetError(ModelError error);
 
-  // The sync model type for this metadata.
-  syncer::ModelType type_;
+  // The metadata store to store metadata in; always outlives `this`.
+  const raw_ptr<SyncMetadataStore> store_;
 
-  // The first error encountered by this object, if any.
-  absl::optional<syncer::ModelError> error_;
+  // The sync data type for this metadata.
+  DataType type_;
+
+  // Whether this object encountered any error previously. Used to prevent any
+  // further changes, and to ensure that only the first error gets passed on
+  // (since any subsequent ones likely aren't meaningful).
+  bool error_encountered_ = false;
+
+  const ErrorCallback error_callback_;
 };
 
 }  // namespace syncer

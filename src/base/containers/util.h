@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 namespace base {
 
-// TODO(crbug.com/817982): What we really need is for checked_math.h to be
+// TODO(crbug.com/40565371): What we really need is for checked_math.h to be
 // able to do checked arithmetic on pointers.
 template <typename T>
 inline uintptr_t get_uintptr(const T* t) {

@@ -1,21 +1,21 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.m.js';
-import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
-import 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
-import 'chrome://resources/cr_elements/cr_radio_button/cr_radio_button.m.js';
-import 'chrome://resources/cr_elements/cr_radio_group/cr_radio_group.m.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
-import 'chrome://resources/cr_elements/md_select_css.m.js';
+import 'chrome://resources/ash/common/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/ash/common/cr_elements/cr_checkbox/cr_checkbox.js';
+import 'chrome://resources/ash/common/cr_elements/cr_icon_button/cr_icon_button.js';
+import 'chrome://resources/ash/common/cr_elements/cr_input/cr_input.js';
+import 'chrome://resources/ash/common/cr_elements/cr_radio_button/cr_radio_button.js';
+import 'chrome://resources/ash/common/cr_elements/cr_radio_group/cr_radio_group.js';
+import 'chrome://resources/ash/common/cr_elements/cr_shared_vars.css.js';
+import 'chrome://resources/ash/common/cr_elements/md_select.css.js';
 import 'chrome://resources/polymer/v3_0/iron-collapse/iron-collapse.js';
 import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
 import './icons.js';
 import './shared_styles.js';
 
-import {WebUIListenerBehavior} from 'chrome://resources/js/web_ui_listener_behavior.m.js';
+import {WebUIListenerBehavior} from 'chrome://resources/ash/common/web_ui_listener_behavior.js';
 import {html, Polymer} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 Polymer({
@@ -169,7 +169,7 @@ Polymer({
 
   batteryStateChanged(batteryState) {
     // Find the index of the selected battery state.
-    var index = this.batteryStateOptions.indexOf(batteryState);
+    const index = this.batteryStateOptions.indexOf(batteryState);
     if (index < 0) {
       return;
     }
@@ -177,7 +177,7 @@ Polymer({
   },
 
   powerSourcesChanged() {
-    var connectedPowerSources =
+    const connectedPowerSources =
         this.powerSourceOptions.filter(function(source) {
           return source.connected;
         });
@@ -221,11 +221,11 @@ Polymer({
   },
 
   isBatteryPresent() {
-    return this.batteryState != 'Not Present';
+    return this.batteryState !== 'Not Present';
   },
 
   isDualRole(source) {
-    return source.type == 'DualRoleUSB';
+    return source.type === 'DualRoleUSB';
   },
 
   /**
@@ -234,11 +234,11 @@ Polymer({
    * @private
    */
   cssClassForSetAsSource_(source) {
-    return source.id == this.selectedPowerSourceId ? '' : 'action-button';
+    return source.id === this.selectedPowerSourceId ? '' : 'action-button';
   },
 
   canAmpsChange(type) {
-    return type == 'USB';
+    return type === 'USB';
   },
 
   canBecomeSource(source, selectedId, powerSourceOptionsChange) {
@@ -246,7 +246,7 @@ Polymer({
       return false;
     }
     return !this.powerSourceOptions.some(function(source) {
-      return source.connected && source.type == 'DedicatedCharger';
+      return source.connected && source.type === 'DedicatedCharger';
     });
   },
 });

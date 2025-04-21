@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,12 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include "base/compiler_specific.h"
 #include "base/gtest_prod_util.h"
-#include "base/strings/string_piece.h"
 #include "base/time/time.h"
 #include "url/gurl.h"
 
@@ -839,7 +839,7 @@ class ChangeResource {
 
   // Extracts the change type from the given string. Returns false and does
   // not change |result| when |type_name| has an unrecognizable value.
-  static bool GetType(base::StringPiece type_name,
+  static bool GetType(std::string_view type_name,
                       ChangeResource::ChangeType* result);
 
   int64_t change_id_;

@@ -32,6 +32,7 @@
 
 #include "third_party/blink/renderer/core/css/css_property_equality.h"
 #include "third_party/blink/renderer/core/css/properties/css_property.h"
+#include "third_party/blink/renderer/core/css/properties/longhands.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
 
 namespace blink {
@@ -39,7 +40,9 @@ namespace blink {
 ElementAnimations::ElementAnimations()
     : animation_style_change_(false),
       composited_background_color_status_(static_cast<unsigned>(
-          CompositedPaintStatus::kNeedsRepaintOrNoAnimation)){};
+          CompositedPaintStatus::kNoAnimation)),
+      composited_clip_path_status_(static_cast<unsigned>(
+          CompositedPaintStatus::kNoAnimation)) {}
 
 ElementAnimations::~ElementAnimations() = default;
 
@@ -53,6 +56,7 @@ void ElementAnimations::Trace(Visitor* visitor) const {
   visitor->Trace(effect_stack_);
   visitor->Trace(animations_);
   visitor->Trace(worklet_animations_);
+  ElementRareDataField::Trace(visitor);
 }
 
 bool ElementAnimations::UpdateBoxSizeAndCheckTransformAxisAlignment(
@@ -80,6 +84,92 @@ bool ElementAnimations::IsIdentityOrTranslation() const {
     }
   }
   return true;
+}
+
+bool ElementAnimations::HasCompositedPaintWorkletAnimation() {
+  return CompositedBackgroundColorStatus() ==
+             ElementAnimations::CompositedPaintStatus::kComposited ||
+         CompositedClipPathStatus() ==
+             ElementAnimations::CompositedPaintStatus::kComposited;
+}
+
+void ElementAnimations::RecalcCompositedStatusForKeyframeChange(
+    Element& element,
+    Animation::NativePaintWorkletReasons properties) {
+  if (!element.GetLayoutObject()) {
+    return;
+  }
+  if ((CompositedBackgroundColorStatus() ==
+       ElementAnimations::CompositedPaintStatus::kComposited) &&
+      (properties &
+       Animation::NativePaintWorkletProperties::kBackgroundColorPaintWorklet)) {
+    SetCompositedBackgroundColorStatus(
+        ElementAnimations::CompositedPaintStatus::kNeedsRepaint);
+    element.GetLayoutObject()->SetShouldDoFullPaintInvalidation();
+  }
+  if ((CompositedClipPathStatus() ==
+       ElementAnimations::CompositedPaintStatus::kComposited) &&
+      (properties &
+       Animation::NativePaintWorkletProperties::kClipPathPaintWorklet)) {
+    SetCompositedClipPathStatus(
+        ElementAnimations::CompositedPaintStatus::kNeedsRepaint);
+    element.GetLayoutObject()->SetShouldDoFullPaintInvalidation();
+    // For clip paths, we also need to update the paint properties to switch
+    // from path based to mask based clip.
+    element.GetLayoutObject()->SetNeedsPaintPropertyUpdate();
+  }
+}
+
+void ElementAnimations::RecalcCompositedStatus(Element* element) {
+  Animation::NativePaintWorkletReasons reasons = Animation::kNoPaintWorklet;
+  for (auto& entry : Animations()) {
+    if (entry.key->CalculateAnimationPlayState() ==
+        V8AnimationPlayState::Enum::kIdle) {
+      continue;
+    }
+    reasons |= entry.key->GetNativePaintWorkletReasons();
+  }
+
+  if (RuntimeEnabledFeatures::CompositeBGColorAnimationEnabled()) {
+    ElementAnimations::CompositedPaintStatus status =
+        reasons & Animation::kBackgroundColorPaintWorklet
+            ? ElementAnimations::CompositedPaintStatus::kNeedsRepaint
+            : ElementAnimations::CompositedPaintStatus::kNoAnimation;
+    if (SetCompositedBackgroundColorStatus(status) &&
+        element->GetLayoutObject()) {
+      element->GetLayoutObject()->SetShouldDoFullPaintInvalidation();
+    }
+  }
+  if (RuntimeEnabledFeatures::CompositeClipPathAnimationEnabled()) {
+    ElementAnimations::CompositedPaintStatus status =
+        reasons & Animation::kClipPathPaintWorklet
+            ? ElementAnimations::CompositedPaintStatus::kNeedsRepaint
+            : ElementAnimations::CompositedPaintStatus::kNoAnimation;
+    if (SetCompositedClipPathStatus(status) && element->GetLayoutObject()) {
+      element->GetLayoutObject()->SetShouldDoFullPaintInvalidation();
+      // For clip paths, we also need to update the paint properties to switch
+      // from path based to mask based clip.
+      element->GetLayoutObject()->SetNeedsPaintPropertyUpdate();
+    }
+  }
+}
+
+bool ElementAnimations::SetCompositedClipPathStatus(
+    CompositedPaintStatus status) {
+  if (static_cast<unsigned>(status) != composited_clip_path_status_) {
+    composited_clip_path_status_ = static_cast<unsigned>(status);
+    return true;
+  }
+  return false;
+}
+
+bool ElementAnimations::SetCompositedBackgroundColorStatus(
+    CompositedPaintStatus status) {
+  if (static_cast<unsigned>(status) != composited_background_color_status_) {
+    composited_background_color_status_ = static_cast<unsigned>(status);
+    return true;
+  }
+  return false;
 }
 
 }  // namespace blink

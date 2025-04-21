@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,6 @@
 #include "base/strings/string_util.h"
 #include "chrome/browser/safe_browsing/chrome_safe_browsing_blocking_page_factory.h"
 #include "chrome/browser/safe_browsing/chrome_ui_manager_delegate.h"
-#include "chrome/browser/safe_browsing/download_protection/download_protection_service.h"
-#include "chrome/browser/safe_browsing/incident_reporting/incident_reporting_service.h"
 #include "chrome/browser/safe_browsing/services_delegate.h"
 #include "chrome/common/url_constants.h"
 #include "components/safe_browsing/buildflags.h"
@@ -18,19 +16,24 @@
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 
+#if BUILDFLAG(FULL_SAFE_BROWSING)
+#include "chrome/browser/safe_browsing/download_protection/download_protection_service.h"
+#include "chrome/browser/safe_browsing/download_protection/download_protection_util.h"
+#include "chrome/browser/safe_browsing/incident_reporting/incident_reporting_service.h"
+#endif
+
 namespace safe_browsing {
 
 // TestSafeBrowsingService functions:
 TestSafeBrowsingService::TestSafeBrowsingService()
     : test_shared_loader_factory_(
-          base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
-              &test_url_loader_factory_)) {
+          test_url_loader_factory_.GetSafeWeakWrapper()) {
 #if BUILDFLAG(FULL_SAFE_BROWSING)
   services_delegate_ = ServicesDelegate::CreateForTest(this, this);
 #endif  // BUILDFLAG(FULL_SAFE_BROWSING)
 }
 
-TestSafeBrowsingService::~TestSafeBrowsingService() {}
+TestSafeBrowsingService::~TestSafeBrowsingService() = default;
 
 V4ProtocolConfig TestSafeBrowsingService::GetV4ProtocolConfig() const {
   if (v4_protocol_config_)
@@ -61,7 +64,7 @@ base::CallbackListSubscription TestSafeBrowsingService::RegisterStateCallback(
   return {};
 }
 
-std::string TestSafeBrowsingService::serilized_download_report() {
+std::string TestSafeBrowsingService::serialized_download_report() {
   return serialized_download_report_;
 }
 
@@ -85,13 +88,30 @@ SafeBrowsingUIManager* TestSafeBrowsingService::CreateUIManager() {
   return SafeBrowsingService::CreateUIManager();
 }
 
-PingManager::ReportThreatDetailsResult
-TestSafeBrowsingService::SendDownloadReport(
-    Profile* profile,
-    std::unique_ptr<ClientSafeBrowsingReportRequest> report) {
+#if BUILDFLAG(FULL_SAFE_BROWSING)
+void TestSafeBrowsingService::SendDownloadReport(
+    download::DownloadItem* download,
+    ClientSafeBrowsingReportRequest::ReportType report_type,
+    bool did_proceed,
+    std::optional<bool> show_download_in_folder) {
+  auto report = std::make_unique<ClientSafeBrowsingReportRequest>();
+  report->set_type(report_type);
+  report->set_download_verdict(
+      DownloadProtectionService::GetDownloadProtectionVerdict(download));
+  report->set_url(download->GetURL().spec());
+  report->set_did_proceed(did_proceed);
+  if (show_download_in_folder) {
+    report->set_show_download_in_folder(show_download_in_folder.value());
+  }
+
+  std::string token = DownloadProtectionService::GetDownloadPingToken(download);
+  if (!token.empty()) {
+    report->set_token(token);
+  }
   report->SerializeToString(&serialized_download_report_);
-  return PingManager::ReportThreatDetailsResult::SUCCESS;
+  return;
 }
+#endif
 
 const scoped_refptr<SafeBrowsingDatabaseManager>&
 TestSafeBrowsingService::database_manager() const {
@@ -121,7 +141,7 @@ SafeBrowsingDatabaseManager* TestSafeBrowsingService::CreateDatabaseManager() {
   DCHECK(!use_v4_local_db_manager_);
 #if BUILDFLAG(FULL_SAFE_BROWSING)
   return new TestSafeBrowsingDatabaseManager(
-      content::GetUIThreadTaskRunner({}), content::GetIOThreadTaskRunner({}));
+      content::GetUIThreadTaskRunner({}));
 #else
   NOTIMPLEMENTED();
   return nullptr;
@@ -157,7 +177,7 @@ TestSafeBrowsingService::GetURLLoaderFactory(
 TestSafeBrowsingServiceFactory::TestSafeBrowsingServiceFactory()
     : test_safe_browsing_service_(nullptr), use_v4_local_db_manager_(false) {}
 
-TestSafeBrowsingServiceFactory::~TestSafeBrowsingServiceFactory() {}
+TestSafeBrowsingServiceFactory::~TestSafeBrowsingServiceFactory() = default;
 
 SafeBrowsingService*
 TestSafeBrowsingServiceFactory::CreateSafeBrowsingService() {
@@ -219,5 +239,5 @@ std::list<std::string>* TestSafeBrowsingUIManager::GetThreatDetails() {
   return &details_;
 }
 
-TestSafeBrowsingUIManager::~TestSafeBrowsingUIManager() {}
+TestSafeBrowsingUIManager::~TestSafeBrowsingUIManager() = default;
 }  // namespace safe_browsing

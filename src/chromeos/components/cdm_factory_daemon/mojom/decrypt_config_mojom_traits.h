@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -106,7 +106,7 @@ struct COMPONENT_EXPORT(CHROMEOS_CDM_MOJOM)
     return input->subsamples();
   }
 
-  static const absl::optional<media::EncryptionPattern>& encryption_pattern(
+  static const std::optional<media::EncryptionPattern>& encryption_pattern(
       const std::unique_ptr<media::DecryptConfig>& input) {
     return input->encryption_pattern();
   }

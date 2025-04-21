@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/strings/string_util.h"
 #include "base/test/task_environment.h"
@@ -15,6 +15,7 @@
 #include "mojo/public/cpp/bindings/unique_receiver_set.h"
 #include "mojo/public/cpp/system/functions.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
+#include "services/device/public/mojom/geolocation_client_id.mojom.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/test/test_network_connection_tracker.h"
 #include "services/network/test/test_url_loader_factory.h"
@@ -55,6 +56,7 @@ class PublicIpAddressGeolocatorTest : public testing::Test {
     receiver_set_.Add(
         std::make_unique<PublicIpAddressGeolocator>(
             PARTIAL_TRAFFIC_ANNOTATION_FOR_TESTS, notifier_.get(),
+            mojom::GeolocationClientId::kForTesting,
             base::BindRepeating(
                 &PublicIpAddressGeolocatorTest::OnGeolocatorBadMessage,
                 base::Unretained(this))),
@@ -84,16 +86,16 @@ class PublicIpAddressGeolocatorTest : public testing::Test {
         base::Unretained(this), std::move(done_closure)));
   }
 
-  // Callback for QueryNextPosition() that records the result in |position_| and
+  // Callback for QueryNextPosition() that records the result in |result_| and
   // then invokes |done_closure|.
   void OnQueryNextPositionResponse(base::OnceClosure done_closure,
-                                   mojom::GeopositionPtr position) {
-    position_ = std::move(position);
+                                   mojom::GeopositionResultPtr result) {
+    result_ = std::move(result);
     std::move(done_closure).Run();
   }
 
   // Result of the latest completed call to QueryNextPosition.
-  mojom::GeopositionPtr position_;
+  mojom::GeopositionResultPtr result_;
 
   // UniqueReceiverSet to mojom::Geolocation.
   mojo::UniqueReceiverSet<mojom::Geolocation> receiver_set_;
@@ -144,9 +146,11 @@ TEST_F(PublicIpAddressGeolocatorTest, BindAndQuery) {
   // Wait for QueryNextPosition to return.
   loop.Run();
 
-  EXPECT_THAT(position_->accuracy, testing::Eq(100.0));
-  EXPECT_THAT(position_->latitude, testing::Eq(10.0));
-  EXPECT_THAT(position_->longitude, testing::Eq(20.0));
+  ASSERT_TRUE(result_->is_position());
+  const auto& position = *result_->get_position();
+  EXPECT_THAT(position.accuracy, testing::Eq(100.0));
+  EXPECT_THAT(position.latitude, testing::Eq(10.0));
+  EXPECT_THAT(position.longitude, testing::Eq(20.0));
   EXPECT_THAT(bad_messages_, testing::IsEmpty());
 }
 

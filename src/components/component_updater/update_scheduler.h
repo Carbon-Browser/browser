@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_COMPONENT_UPDATER_UPDATE_SCHEDULER_H_
 #define COMPONENTS_COMPONENT_UPDATER_UPDATE_SCHEDULER_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/time/time.h"
 
 namespace component_updater {
@@ -26,8 +26,8 @@ class UpdateScheduler {
   // |delay|. The first time |user_task| will be run after at least
   // |initial_delay|. If the execution of |user_task| must be stopped before it
   // called its |on_finished| callback, |on_stop| will be called.
-  virtual void Schedule(const base::TimeDelta& initial_delay,
-                        const base::TimeDelta& delay,
+  virtual void Schedule(base::TimeDelta initial_delay,
+                        base::TimeDelta delay,
                         const UserTask& user_task,
                         const OnStopTaskCallback& on_stop) = 0;
   // Stops to periodically run |user_task| previously scheduled with |Schedule|.

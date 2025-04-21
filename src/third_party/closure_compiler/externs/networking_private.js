@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,10 @@
 // Please run the closure compiler before committing changes.
 // See https://chromium.googlesource.com/chromium/src/+/main/docs/closure_compilation.md
 
-/** @fileoverview Externs generated from namespace: networkingPrivate */
+/**
+ * @fileoverview Externs generated from namespace: networkingPrivate
+ * @externs
+ */
 
 /** @const */
 chrome.networkingPrivate = {};
@@ -84,6 +87,25 @@ chrome.networkingPrivate.ProxySettingsType = {
   MANUAL: 'Manual',
   PAC: 'PAC',
   WPAD: 'WPAD',
+};
+
+/**
+ * @enum {string}
+ */
+chrome.networkingPrivate.ApnType = {
+  DEFAULT: 'Default',
+  ATTACH: 'Attach',
+  TETHER: 'Tether',
+};
+
+/**
+ * @enum {string}
+ */
+chrome.networkingPrivate.ApnSource = {
+  MODEM: 'Modem',
+  MODB: 'Modb',
+  UI: 'Ui',
+  ADMIN: 'Admin',
 };
 
 /**
@@ -178,7 +200,9 @@ chrome.networkingPrivate.ManagedProxySettingsType;
  *   LocalizedName: (string|undefined),
  *   Name: (string|undefined),
  *   Password: (string|undefined),
- *   Username: (string|undefined)
+ *   Username: (string|undefined),
+ *   ApnTypes: (!Array<!chrome.networkingPrivate.ApnType>|undefined),
+ *   Source: (!chrome.networkingPrivate.ApnSource|undefined)
  * }}
  */
 chrome.networkingPrivate.APNProperties;
@@ -382,7 +406,9 @@ chrome.networkingPrivate.ManagedXAUTHProperties;
  *   EAP: (!chrome.networkingPrivate.EAPProperties|undefined),
  *   Group: (string|undefined),
  *   IKEVersion: (number|undefined),
+ *   LocalIdentity: (string|undefined),
  *   PSK: (string|undefined),
+ *   RemoteIdentity: (string|undefined),
  *   SaveCredentials: (boolean|undefined),
  *   ServerCAPEMs: (!Array<string>|undefined),
  *   ServerCARefs: (!Array<string>|undefined),
@@ -876,6 +902,7 @@ chrome.networkingPrivate.NetworkConfigProperties;
  *   SavedIPConfig: (!chrome.networkingPrivate.IPConfigProperties|undefined),
  *   Source: (string|undefined),
  *   Tether: (!chrome.networkingPrivate.TetherProperties|undefined),
+ *   TrafficCounterResetTime: (number|undefined),
  *   Type: !chrome.networkingPrivate.NetworkType,
  *   VPN: (!chrome.networkingPrivate.VPNProperties|undefined),
  *   WiFi: (!chrome.networkingPrivate.WiFiProperties|undefined)
@@ -904,6 +931,7 @@ chrome.networkingPrivate.NetworkProperties;
  *   SavedIPConfig: (!chrome.networkingPrivate.IPConfigProperties|undefined),
  *   Source: (string|undefined),
  *   Tether: (!chrome.networkingPrivate.TetherProperties|undefined),
+ *   TrafficCounterResetTime: (number|undefined),
  *   Type: !chrome.networkingPrivate.NetworkType,
  *   VPN: (!chrome.networkingPrivate.ManagedVPNProperties|undefined),
  *   WiFi: (!chrome.networkingPrivate.ManagedWiFiProperties|undefined)

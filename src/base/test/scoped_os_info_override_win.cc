@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,6 +31,7 @@ ScopedOSInfoOverride::UniqueOsInfo ScopedOSInfoOverride::CreateInfoOfType(
   switch (type) {
     case Type::kWin11Pro:
     case Type::kWin11Home:
+    case Type::kWin11HomeN:
       version_info.dwMajorVersion = 10;
       version_info.dwMinorVersion = 0;
       version_info.dwBuildNumber = 22000;
@@ -44,8 +45,9 @@ ScopedOSInfoOverride::UniqueOsInfo ScopedOSInfoOverride::CreateInfoOfType(
       system_info.dwNumberOfProcessors = 1;
       system_info.dwAllocationGranularity = 8;
 
-      os_type =
-          type == Type::kWin11Home ? PRODUCT_HOME_BASIC : PRODUCT_PROFESSIONAL;
+      os_type = type == Type::kWin11Home    ? PRODUCT_HOME_BASIC
+                : type == Type::kWin11HomeN ? PRODUCT_HOME_BASIC_N
+                                            : PRODUCT_PROFESSIONAL;
       break;
     case Type::kWinServer2022:
       version_info.dwMajorVersion = 10;
@@ -97,54 +99,6 @@ ScopedOSInfoOverride::UniqueOsInfo ScopedOSInfoOverride::CreateInfoOfType(
       system_info.dwAllocationGranularity = 64 * 1024;
 
       os_type = PRODUCT_STANDARD_SERVER;
-      break;
-    case Type::kWin81Pro:
-      version_info.dwMajorVersion = 6;
-      version_info.dwMinorVersion = 3;
-      version_info.dwBuildNumber = 9600;
-      version_info.wServicePackMajor = 0;
-      version_info.wServicePackMinor = 0;
-      version_info.szCSDVersion[0] = 0;
-      version_info.wProductType = VER_NT_WORKSTATION;
-      version_info.wSuiteMask = VER_SUITE_PERSONAL;
-
-      system_info.wProcessorArchitecture = PROCESSOR_ARCHITECTURE_AMD64;
-      system_info.dwNumberOfProcessors = 1;
-      system_info.dwAllocationGranularity = 64 * 1024;
-
-      os_type = PRODUCT_PROFESSIONAL;
-      break;
-    case Type::kWinServer2012R2:
-      version_info.dwMajorVersion = 6;
-      version_info.dwMinorVersion = 3;
-      version_info.dwBuildNumber = 9600;
-      version_info.wServicePackMajor = 0;
-      version_info.wServicePackMinor = 0;
-      version_info.szCSDVersion[0] = 0;
-      version_info.wProductType = VER_NT_SERVER;
-      version_info.wSuiteMask = VER_SUITE_ENTERPRISE;
-
-      system_info.wProcessorArchitecture = PROCESSOR_ARCHITECTURE_AMD64;
-      system_info.dwNumberOfProcessors = 2;
-      system_info.dwAllocationGranularity = 64 * 1024;
-
-      os_type = PRODUCT_STANDARD_SERVER;
-      break;
-    case Type::kWin7ProSP1:
-      version_info.dwMajorVersion = 6;
-      version_info.dwMinorVersion = 1;
-      version_info.dwBuildNumber = 7601;
-      version_info.wServicePackMajor = 1;
-      version_info.wServicePackMinor = 0;
-      wcscpy_s(version_info.szCSDVersion, L"Service Pack 1");
-      version_info.wProductType = VER_NT_WORKSTATION;
-      version_info.wSuiteMask = VER_SUITE_PERSONAL;
-
-      system_info.wProcessorArchitecture = PROCESSOR_ARCHITECTURE_AMD64;
-      system_info.dwNumberOfProcessors = 1;
-      system_info.dwAllocationGranularity = 64 * 1024;
-
-      os_type = PRODUCT_PROFESSIONAL;
       break;
   }
 

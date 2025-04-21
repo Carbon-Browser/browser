@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,6 +39,9 @@ class PLATFORM_EXPORT MainThreadWebSchedulingTaskQueueImpl
   // value and return that in GetTaskRunner().
   class WebSchedulingTaskRunner : public base::SingleThreadTaskRunner {
    public:
+    // `delayed_task_runner` can be null if this is a continuation task queue
+    // (continuations are always immediate). `immediate_task_runner` must be
+    // non-null.
     WebSchedulingTaskRunner(
         scoped_refptr<base::SingleThreadTaskRunner> immediate_task_runner,
         scoped_refptr<base::SingleThreadTaskRunner> delayed_task_runner);
@@ -55,6 +58,7 @@ class PLATFORM_EXPORT MainThreadWebSchedulingTaskQueueImpl
     base::SingleThreadTaskRunner* GetTaskRunnerForDelay(base::TimeDelta delay);
 
     const scoped_refptr<base::SingleThreadTaskRunner> immediate_task_runner_;
+    // Null for continuation task queues.
     const scoped_refptr<base::SingleThreadTaskRunner> delayed_task_runner_;
   };
 

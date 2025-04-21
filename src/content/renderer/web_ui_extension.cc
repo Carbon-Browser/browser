@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "content/public/common/bindings_policy.h"
 #include "content/public/common/url_constants.h"
@@ -18,7 +18,7 @@
 #include "content/renderer/web_ui_extension_data.h"
 #include "gin/arguments.h"
 #include "gin/function_template.h"
-#include "third_party/blink/public/web/blink.h"
+#include "third_party/blink/public/platform/scheduler/web_agent_group_scheduler.h"
 #include "third_party/blink/public/web/web_document.h"
 #include "third_party/blink/public/web/web_local_frame.h"
 #include "third_party/blink/public/web/web_view.h"
@@ -45,7 +45,7 @@ bool ShouldRespondToRequest(blink::WebLocalFrame** frame_ptr,
     return false;
 
   bool webui_enabled =
-      (render_frame->GetEnabledBindings() & BINDINGS_POLICY_WEB_UI) &&
+      (render_frame->GetEnabledBindings().Has(BindingsPolicyValue::kWebUi)) &&
       (frame_url.SchemeIs(kChromeUIScheme) ||
        frame_url.SchemeIs(url::kDataScheme));
 
@@ -87,7 +87,7 @@ v8::Local<v8::Object> GetOrCreateChildObject(v8::Local<v8::Object> parent,
 //  - chrome.timeTicks.nowInMicroseconds: Returns base::TimeTicks::Now() in
 //      microseconds. Used for performance measuring.
 void WebUIExtension::Install(blink::WebLocalFrame* frame) {
-  v8::Isolate* isolate = blink::MainThreadIsolate();
+  v8::Isolate* isolate = frame->GetAgentGroupScheduler()->Isolate();
   v8::HandleScope handle_scope(isolate);
   v8::Local<v8::Context> context = frame->MainWorldScriptContext();
   if (context.IsEmpty())
@@ -149,14 +149,13 @@ void WebUIExtension::Send(gin::Arguments* args) {
         V8ValueConverter::Create()->FromV8Value(
             obj, frame->MainWorldScriptContext());
     DCHECK(value->is_list());
-    content = std::move(value->GetList());
+    content = std::move(*value).TakeList();
 
     // The conversion of |obj| could have triggered arbitrary JavaScript code,
     // so check that the frame is still valid to avoid dereferencing a stale
     // pointer.
     if (frame != blink::WebLocalFrame::FrameForCurrentContext()) {
       NOTREACHED();
-      return;
     }
   }
 

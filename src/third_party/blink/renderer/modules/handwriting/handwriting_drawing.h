@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 namespace blink {
 
 class ExecutionContext;
+class HandwritingPrediction;
 class HandwritingRecognizer;
 class HandwritingStroke;
 class ScriptState;
@@ -35,7 +36,8 @@ class HandwritingDrawing final : public ScriptWrappable {
   void addStroke(HandwritingStroke* stroke);
   void removeStroke(const HandwritingStroke* stroke);
   void clear();
-  ScriptPromise getPrediction(ScriptState* script_state);
+  ScriptPromise<IDLSequence<HandwritingPrediction>> getPrediction(
+      ScriptState* script_state);
   const HeapVector<Member<HandwritingStroke>>& getStrokes();
 
   void Trace(Visitor* visitor) const override;

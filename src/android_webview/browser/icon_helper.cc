@@ -1,12 +1,13 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "android_webview/browser/icon_helper.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/hash/hash.h"
 #include "base/notreached.h"
 #include "components/favicon_base/select_favicon_frames.h"
@@ -109,7 +110,6 @@ void IconHelper::DidUpdateFaviconURL(
         break;
       default:
         NOTREACHED();
-        break;
     }
   }
 }
@@ -128,7 +128,7 @@ void IconHelper::MarkUnableToDownloadFavicon(const GURL& icon_url) {
 
 bool IconHelper::WasUnableToDownloadFavicon(const GURL& icon_url) const {
   MissingFaviconURLHash url_hash = base::FastHash(icon_url.spec());
-  return missing_favicon_urls_.find(url_hash) != missing_favicon_urls_.end();
+  return base::Contains(missing_favicon_urls_, url_hash);
 }
 
 void IconHelper::ClearUnableToDownloadFavicons() {

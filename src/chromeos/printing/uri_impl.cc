@@ -1,6 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chromeos/printing/uri_impl.h"
 
@@ -72,24 +77,10 @@ bool ParseCharacter(const Iter& end, Iter* current, char* out) {
   return true;
 }
 
-// Helper struct for the function below.
-class Comparator {
- public:
-  // The string given as a parameter must be valid for the whole lifetime
-  // of this object.
-  explicit Comparator(const std::string& chars) : chars_(chars) {}
-  bool operator()(std::string::value_type element) const {
-    return (chars_.find(element) != std::string::npos);
-  }
-
- private:
-  const std::string& chars_;
-};
-
 // Returns iterator to the first occurrence of any character from |chars|
 // in |begin|-|end|. Returns |end| if none of the characters were found.
 Iter FindFirstOf(Iter begin, Iter end, const std::string& chars) {
-  return std::find_if(begin, end, Comparator(chars));
+  return std::find_first_of(begin, end, chars.begin(), chars.end());
 }
 
 }  // namespace
@@ -119,7 +110,8 @@ bool Uri::Pim::ParseString(const Iter& begin,
     } else {
       // Try to parse UTF-8 character.
       base::StreamingUtf8Validator utf_parser;
-      base::StreamingUtf8Validator::State state = utf_parser.AddBytes(&c, 1);
+      base::StreamingUtf8Validator::State state =
+          utf_parser.AddBytes(base::byte_span_from_ref(c));
       if (state != base::StreamingUtf8Validator::State::VALID_MIDPOINT) {
         parser_error_.status = ParserStatus::kDisallowedASCIICharacter;
         return false;
@@ -135,7 +127,7 @@ bool Uri::Pim::ParseString(const Iter& begin,
           parser_error_.status = ParserStatus::kInvalidPercentEncoding;
           return false;
         }
-        state = utf_parser.AddBytes(&c, 1);
+        state = utf_parser.AddBytes(base::byte_span_from_ref(c));
         if (state == base::StreamingUtf8Validator::State::INVALID) {
           parser_error_.status = ParserStatus::kInvalidUTF8Character;
           return false;

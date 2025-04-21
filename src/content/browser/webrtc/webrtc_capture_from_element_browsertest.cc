@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -70,15 +70,14 @@ class WebRtcCaptureFromElementBrowserTest
     WebRtcContentBrowserTestBase::SetUpCommandLine(command_line);
 
     // Allow <video>/<audio>.play() when not initiated by user gesture.
-    base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
+    command_line->AppendSwitchASCII(
         switches::kAutoplayPolicy,
         switches::autoplay::kNoUserGestureRequiredPolicy);
     // Allow experimental canvas features.
-    base::CommandLine::ForCurrentProcess()->AppendSwitch(
+    command_line->AppendSwitch(
         switches::kEnableExperimentalWebPlatformFeatures);
     // Allow window.internals for simulating context loss.
-    base::CommandLine::ForCurrentProcess()->AppendSwitch(
-        switches::kExposeInternalsForTesting);
+    command_line->AppendSwitch(switches::kExposeInternalsForTesting);
   }
 };
 
@@ -88,38 +87,47 @@ IN_PROC_BROWSER_TEST_F(WebRtcCaptureFromElementBrowserTest,
                   kCanvasCaptureColorTestHtmlFile);
 }
 
-// TODO(https://crbug.com/1334876): Flaky.
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-#define MAYBE_VerifyCanvasWebGLCaptureColor \
-  DISABLED_VerifyCanvasWebGLCaptureColor
+#if BUILDFLAG(IS_WIN) && defined(ARCH_CPU_ARM64)
+#define MAYBE_VerifyCanvasWebGLCaptureOpaqueColor \
+  DISABLED_VerifyCanvasWebGLCaptureOpaqueColor
 #else
-#define MAYBE_VerifyCanvasWebGLCaptureColor VerifyCanvasWebGLCaptureColor
-#endif
+#define MAYBE_VerifyCanvasWebGLCaptureOpaqueColor \
+  VerifyCanvasWebGLCaptureOpaqueColor
+#endif  // BUILDFLAG(IS_WIN) && defined(ARCH_CPU_ARM64)
 IN_PROC_BROWSER_TEST_F(WebRtcCaptureFromElementBrowserTest,
-                       MAYBE_VerifyCanvasWebGLCaptureColor) {
-#if !BUILDFLAG(IS_MAC)
-  // TODO(crbug.com/706009): Make this test pass on mac.  Behavior is not buggy
-  // (verified manually) on mac, but for some reason this test fails on the mac
-  // bot.
-  MakeTypicalCall("testCanvasWebGLCaptureColors(true);",
+                       MAYBE_VerifyCanvasWebGLCaptureOpaqueColor) {
+  MakeTypicalCall("testCanvasWebGLCaptureOpaqueColors(true);",
                   kCanvasCaptureColorTestHtmlFile);
-#endif
 }
 
+#if BUILDFLAG(IS_WIN) && defined(ARCH_CPU_ARM64)
+#define MAYBE_VerifyCanvasWebGLCaptureAlphaColor \
+  DISABLED_VerifyCanvasWebGLCaptureAlphaColor
+#else
+#define MAYBE_VerifyCanvasWebGLCaptureAlphaColor \
+  VerifyCanvasWebGLCaptureAlphaColor
+#endif  // BUILDFLAG(IS_WIN) && defined(ARCH_CPU_ARM64)
 IN_PROC_BROWSER_TEST_F(WebRtcCaptureFromElementBrowserTest,
-                       VerifyCanvasCapture2DFrames) {
+                       MAYBE_VerifyCanvasWebGLCaptureAlphaColor) {
+  MakeTypicalCall("testCanvasWebGLCaptureAlphaColors(true);",
+                  kCanvasCaptureColorTestHtmlFile);
+}
+
+// TODO(crbug.com/40856408): Flaky.
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_ANDROID)
+#define MAYBE_VerifyCanvasCapture2DFrames DISABLED_VerifyCanvasCapture2DFrames
+#else
+#define MAYBE_VerifyCanvasCapture2DFrames VerifyCanvasCapture2DFrames
+#endif
+IN_PROC_BROWSER_TEST_F(WebRtcCaptureFromElementBrowserTest,
+                       MAYBE_VerifyCanvasCapture2DFrames) {
   MakeTypicalCall("testCanvasCapture(draw2d);", kCanvasCaptureTestHtmlFile);
 }
 
-// TODO(https://crbug.com/1335032): Flaky.
-#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
-#define MAYBE_VerifyCanvasCaptureWebGLFrames \
-  DISABLED_VerifyCanvasCaptureWebGLFrames
-#else
-#define MAYBE_VerifyCanvasCaptureWebGLFrames VerifyCanvasCaptureWebGLFrames
-#endif
+// TODO(crbug.com/40846825): Flaky on mac, windows, and linux.
+// TODO(crbug.com/362833242): Flaky on Android.
 IN_PROC_BROWSER_TEST_F(WebRtcCaptureFromElementBrowserTest,
-                       MAYBE_VerifyCanvasCaptureWebGLFrames) {
+                       DISABLED_VerifyCanvasCaptureWebGLFrames) {
   MakeTypicalCall("testCanvasCapture(drawWebGL);", kCanvasCaptureTestHtmlFile);
 }
 
@@ -133,7 +141,7 @@ IN_PROC_BROWSER_TEST_F(WebRtcCaptureFromElementBrowserTest,
                   kCanvasCaptureTestHtmlFile);
 }
 
-// TODO(crbug.com/1334909): Fix and re-enable.
+// TODO(crbug.com/40846743): Fix and re-enable.
 IN_PROC_BROWSER_TEST_F(WebRtcCaptureFromElementBrowserTest,
                        DISABLED_VerifyCanvasCaptureBitmapRendererFrames) {
   MakeTypicalCall("testCanvasCapture(drawBitmapRenderer);",

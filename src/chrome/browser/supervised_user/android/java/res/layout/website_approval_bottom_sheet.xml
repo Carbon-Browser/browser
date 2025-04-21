@@ -1,37 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright 2022 The Chromium Authors. All rights reserved.
-     Use of this source code is governed by a BSD-style license that can be
-     found in the LICENSE file. -->
+<!--
+Copyright 2022 The Chromium Authors
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
+-->
+
+<!-- This UI should not apply dynamic colors (it should only respect the
+     dark/light mode of the android device). This happens for UI consistency
+     reasons as this screen is displayed after a GMSCore bottom sheet which
+     doesn't support dynamic colors. -->
 
 <LinearLayout
+    android:id="@+id/local_parent_approval_layout"
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_height="wrap_content"
     android:layout_width="match_parent"
-    android:orientation="vertical">
+    android:layout_marginStart="24dp"
+    android:layout_marginEnd="24dp"
+    android:orientation="vertical"
+    android:paddingTop="24dp" >
 
-    <!-- TODO(crbug.com/1330900): check if it's really right to duplicate this from other
+    <!-- TODO(crbug.com/40843544): check if it's really right to duplicate this from other
     sheets? -->
     <ImageView
-        android:id="@+id/drag_handlebar"
+        android:id="@+id/googleg_icon"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center_horizontal"
-        android:layout_marginStart="@dimen/website_approval_horizontal_margin"
-        android:layout_marginEnd="@dimen/website_approval_horizontal_margin"
-        android:layout_marginTop="8dp"
-        android:layout_marginBottom="24dp"
-        android:importantForAccessibility="no"
-        app:srcCompat="@drawable/drag_handlebar" />
-
-    <ImageView
-        android:id="@+id/family_link_icon"
-        android:layout_width="32dp"
-        android:layout_height="32dp"
+        android:layout_height="24dp"
         android:layout_gravity="center_horizontal"
         android:importantForAccessibility="no"
-        app:srcCompat="@drawable/ic_family_link" />
+        app:srcCompat="@drawable/ic_logo_googleg_24dp"/>
 
     <!-- The main text including website -->
     <androidx.appcompat.widget.DialogTitle
@@ -41,18 +40,24 @@
         android:layout_gravity="center_horizontal"
         android:layout_marginStart="@dimen/website_approval_horizontal_margin"
         android:layout_marginEnd="@dimen/website_approval_horizontal_margin"
-        android:paddingTop="16dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
         android:paddingBottom="24dp"
         android:text="@string/parent_website_approval_title"
         android:textAlignment="center"
+        android:importantForAccessibility="yes"
+        android:screenReaderFocusable="true"
+        android:accessibilityTraversalBefore="@+id/website_details_container"
         android:textAppearance="@style/TextAppearance.AlertDialogTitleStyle" />
 
     <!-- The info box showing the website details -->
     <org.chromium.components.browser_ui.widget.MaterialCardViewNoShadow
+        android:id="@+id/website_details_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginStart="@dimen/website_approval_horizontal_margin"
         android:layout_marginEnd="@dimen/website_approval_horizontal_margin"
+        android:backgroundTint="@color/default_bg_color_secondary"
         style="@style/MaterialCardStyle">
 
         <LinearLayout
@@ -61,13 +66,14 @@
             android:minHeight="72dp"
             android:gravity="center_vertical"
             android:orientation="horizontal"
+            android:screenReaderFocusable="true"
+            android:importantForAccessibility="yes"
             android:descendantFocusability="blocksDescendants">
 
-            <!-- TODO(crbug.com/1330900): replace with the actual website favicon -->
             <ImageView
                 android:id="@+id/favicon"
-                android:layout_width="28dp"
-                android:layout_height="28dp"
+                android:layout_width="@dimen/favicon_size_width"
+                android:layout_height="@dimen/favicon_size_width"
                 android:layout_marginStart="15dp"
                 android:layout_marginEnd="15dp"
                 android:layout_marginTop="22dp"
@@ -78,12 +84,14 @@
 
             <!-- Details of the domain that will be allowed, and full URL being displayed-->
             <LinearLayout
+                android:id="@+id/url_container"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="24dp"
                 android:layout_marginTop="14dp"
                 android:layout_marginBottom="14dp"
                 android:layout_weight="1"
+                android:screenReaderFocusable="true"
                 android:orientation="vertical">
                 <TextView
                     android:id="@+id/all_pages_of"
@@ -91,22 +99,25 @@
                     android:layout_height="wrap_content"
                     android:minHeight="20dp"
                     android:ellipsize="end"
-                    android:singleLine="true"
+                    android:importantForAccessibility="yes"
+                    android:focusable="false"
                     android:textAppearance="@style/TextAppearance.TextLarge.Primary" />
-                <TextView
+                <view
                     android:id="@+id/full_url"
+                    class="org.chromium.ui.ElidedUrlTextView"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:minHeight="20dp"
                     android:ellipsize="end"
-                    android:singleLine="true"
+                    android:importantForAccessibility="yes"
+                    android:focusable="false"
                     android:textAppearance="@style/TextAppearance.TextMedium.Secondary" />
             </LinearLayout>
         </LinearLayout>
     </org.chromium.components.browser_ui.widget.MaterialCardViewNoShadow>
 
     <!-- The approve button -->
-    <org.chromium.ui.widget.ButtonCompat
+   <org.chromium.ui.widget.ButtonCompat
         android:id="@+id/approve_button"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -119,7 +130,9 @@
         android:ellipsize="end"
         android:singleLine="true"
         android:text="@string/parent_website_approval_approve_button"
-        style="@style/FilledButton.Flat"/>
+        app:buttonColor="@color/filled_button_bg"
+        app:buttonTextColor="@color/default_text_color_on_accent1_baseline_list"
+        style="@style/FilledButton"/>
 
     <!-- The deny button button -->
     <org.chromium.ui.widget.ButtonCompat
@@ -135,6 +148,7 @@
         android:ellipsize="end"
         android:singleLine="true"
         android:text="@string/parent_website_approval_deny_button"
+        app:buttonTextColor="@color/default_text_color_blue_baseline"
         style="@style/TextButton"/>
 
 </LinearLayout>

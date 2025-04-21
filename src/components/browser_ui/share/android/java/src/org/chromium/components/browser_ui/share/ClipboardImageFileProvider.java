@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,9 +19,7 @@ import org.chromium.base.ContextUtils;
 import org.chromium.base.StrictModeContext;
 import org.chromium.ui.base.Clipboard;
 
-/**
- * Implementation class for {@link Clipboard.ImageFileProvider}.
- */
+/** Implementation class for {@link Clipboard.ImageFileProvider}. */
 public class ClipboardImageFileProvider implements Clipboard.ImageFileProvider {
     @Override
     public void storeImageAndGenerateUri(

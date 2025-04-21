@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -218,11 +218,14 @@ _COMMANDS = {
     "TouchUp": (Method.POST, "/session/:sessionId/touch/up"),
     "Type": (Method.POST, "/session/:sessionId/keys"),
     "TypeElement": (Method.POST, "/session/:sessionId/element/:id/value"),
-    "UploadFile": (Method.POST, "/session/:sessionId/file")
+    "UploadFile": (Method.POST, "/session/:sessionId/file"),
+    "Print": (Method.POST, "/session/:sessionId/print"),
 }
 
 MULTI_SESSION_COMMANDS = ["GetSessions"]
 
+# Matches the target id.
+_TARGET_ID_REGEX = re.compile(r"^[A-F0-9]{32}$")
 
 class ReplayException(Exception):
   """Thrown for irrecoverable problems in parsing the log file."""
@@ -288,13 +291,17 @@ def _GetAnyElementIds(payload):
       return [payload[element_tag]]
   elif isinstance(payload, list):
     elements = [item[element_tag] for item in payload if element_tag in item]
-    windows = [item for item in payload if "CDwindow" in item]
+    windows = [item for item in payload if _IsTargetId(item)]
     if not elements and not windows:
       return None
 
     return elements + windows
 
   return None
+
+
+def _IsTargetId(handle):
+    return isinstance(handle, str) and re.match(_TARGET_ID_REGEX, handle)
 
 
 def _ReplaceWindowAndElementIds(payload, id_map):

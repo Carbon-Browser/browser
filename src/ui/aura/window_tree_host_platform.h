@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@
 #include "ui/platform_window/platform_window_delegate.h"
 
 namespace ui {
-enum class DomCode;
+enum class DomCode : uint32_t;
 class PlatformWindow;
 class KeyboardHook;
 struct PlatformWindowInitProperties;
@@ -36,6 +36,8 @@ class AURA_EXPORT WindowTreeHostPlatform : public WindowTreeHost,
 
   ~WindowTreeHostPlatform() override;
 
+  static WindowTreeHostPlatform* GetHostForWindow(aura::Window* window);
+
   // WindowTreeHost:
   ui::EventSource* GetEventSource() override;
   gfx::AcceleratedWidget GetAcceleratedWidget() override;
@@ -55,6 +57,20 @@ class AURA_EXPORT WindowTreeHostPlatform : public WindowTreeHost,
   const ui::PlatformWindow* platform_window() const {
     return platform_window_.get();
   }
+
+  // Returns `PlatformWindow` for the platform. If
+  // `PlatformWindowFactoryDelegateForTesting` is set, it uses the delegate.
+  std::unique_ptr<ui::PlatformWindow> CreatePlatformWindow(
+      ui::PlatformWindowInitProperties properties);
+
+  class PlatformWindowFactoryDelegateForTesting {
+   public:
+    virtual ~PlatformWindowFactoryDelegateForTesting() = default;
+    virtual std::unique_ptr<ui::PlatformWindow> Create(
+        WindowTreeHostPlatform*) = 0;
+  };
+  static void SetPlatformWindowFactoryDelegateForTesting(
+      PlatformWindowFactoryDelegateForTesting* delegate);
 
  protected:
   // NOTE: this does not call CreateCompositor(); subclasses must call
@@ -83,23 +99,32 @@ class AURA_EXPORT WindowTreeHostPlatform : public WindowTreeHost,
   void OnMouseEnter() override;
   void OnOcclusionStateChanged(
       ui::PlatformWindowOcclusionState occlusion_state) override;
-  void SetFrameRateThrottleEnabled(bool enabled) override;
+  int64_t OnStateUpdate(const PlatformWindowDelegate::State& old,
+                        const PlatformWindowDelegate::State& latest) override;
 
   // Overridden from aura::WindowTreeHost:
   gfx::Point GetLocationOnScreenInPixels() const override;
   bool CaptureSystemKeyEventsImpl(
-      absl::optional<base::flat_set<ui::DomCode>> dom_codes) override;
+      std::optional<base::flat_set<ui::DomCode>> dom_codes) override;
   void ReleaseSystemKeyEventCapture() override;
   bool IsKeyLocked(ui::DomCode dom_code) override;
   base::flat_map<std::string, std::string> GetKeyboardLayoutMap() override;
+
+  void OnVideoCaptureLockCreated() override;
+  void OnVideoCaptureLockDestroyed() override;
 
  private:
   gfx::AcceleratedWidget widget_;
   std::unique_ptr<ui::PlatformWindow> platform_window_;
   gfx::NativeCursor current_cursor_;
-  gfx::Rect bounds_in_pixels_;
+  // TODO: use compositor's size.
+  gfx::Size size_in_pixels_;
 
   std::unique_ptr<ui::KeyboardHook> keyboard_hook_;
+
+  // Prop to hold mapping to and `WindowTreeHostPlatform`. Used by
+  // `GetHostForWindow`.
+  std::unique_ptr<ui::ViewProp> prop_;
 
   // Tracks how nested OnBoundsChanged() is. That is, on entering
   // OnBoundsChanged() this is incremented and on leaving OnBoundsChanged() this

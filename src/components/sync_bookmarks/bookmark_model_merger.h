@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,13 +11,13 @@
 #include <unordered_map>
 #include <vector>
 
-#include "base/guid.h"
 #include "base/memory/raw_ptr.h"
+#include "base/time/time.h"
+#include "base/uuid.h"
 #include "components/sync/base/unique_position.h"
 #include "components/sync/engine/commit_and_get_updates_types.h"
 
 namespace bookmarks {
-class BookmarkModel;
 class BookmarkNode;
 }  // namespace bookmarks
 
@@ -27,18 +27,19 @@ class FaviconService;
 
 namespace sync_bookmarks {
 
+class BookmarkModelView;
 class SyncedBookmarkTracker;
 
 // Responsible for merging local and remote bookmark models when bookmark sync
 // is enabled for the first time by the user (i.e. no sync metadata exists
 // locally), so we need a best-effort merge based on similarity. It is used by
-// the BookmarkModelTypeProcessor().
+// the BookmarkDataTypeProcessor().
 class BookmarkModelMerger {
  public:
   // |bookmark_model|, |favicon_service| and |bookmark_tracker| must not be
   // null and must outlive this object.
   BookmarkModelMerger(syncer::UpdateResponseDataList updates,
-                      bookmarks::BookmarkModel* bookmark_model,
+                      BookmarkModelView* bookmark_model,
                       favicon::FaviconService* favicon_service,
                       SyncedBookmarkTracker* bookmark_tracker);
 
@@ -58,23 +59,23 @@ class BookmarkModelMerger {
   // Internal representation of a remote tree, composed of nodes.
   class RemoteTreeNode final {
    private:
-    using UpdatesPerParentGUID =
-        std::unordered_map<base::GUID,
+    using UpdatesPerParentUuid =
+        std::unordered_map<base::Uuid,
                            std::list<syncer::UpdateResponseData>,
-                           base::GUIDHash>;
+                           base::UuidHash>;
 
    public:
     // Constructs a tree given |update| as root and recursively all descendants
-    // by traversing |*updates_per_parent_guid|. |update| and
-    // |updates_per_parent_guid| must not be null. All updates
-    // |*updates_per_parent_guid| must represent valid updates. Updates
+    // by traversing |*updates_per_parent_uuid|. |update| and
+    // |updates_per_parent_uuid| must not be null. All updates
+    // |*updates_per_parent_uuid| must represent valid updates. Updates
     // corresponding from descendant nodes are moved away from
-    // |*updates_per_parent_guid|. |max_depth| is the max tree depth to sync
+    // |*updates_per_parent_uuid|. |max_depth| is the max tree depth to sync
     // after which content is silently ignored.
     static RemoteTreeNode BuildTree(
         syncer::UpdateResponseData update,
         size_t max_depth,
-        UpdatesPerParentGUID* updates_per_parent_guid);
+        UpdatesPerParentUuid* updates_per_parent_uuid);
 
     ~RemoteTreeNode();
 
@@ -89,11 +90,11 @@ class BookmarkModelMerger {
     // guaranteed to be valid updates (e.g. IsValidBookmarkSpecifics()).
     const std::vector<RemoteTreeNode>& children() const { return children_; }
 
-    // Recursively emplaces all GUIDs (this node and descendants) into
-    // |*guid_to_remote_node_map|, which must not be null.
-    void EmplaceSelfAndDescendantsByGUID(
-        std::unordered_map<base::GUID, const RemoteTreeNode*, base::GUIDHash>*
-            guid_to_remote_node_map) const;
+    // Recursively emplaces all UUIDs (this node and descendants) into
+    // |*uuid_to_remote_node_map|, which must not be null.
+    void EmplaceSelfAndDescendantsByUuid(
+        std::unordered_map<base::Uuid, const RemoteTreeNode*, base::UuidHash>*
+            uuid_to_remote_node_map) const;
 
    private:
     static bool UniquePositionLessThan(const RemoteTreeNode& lhs,
@@ -113,11 +114,11 @@ class BookmarkModelMerger {
   using RemoteForest = std::unordered_map<std::string, RemoteTreeNode>;
 
   // Represents a pair of bookmarks, one local and one remote, that have been
-  // matched by GUID. They are guaranteed to have the same type and URL (if
+  // matched by UUID. They are guaranteed to have the same type and URL (if
   // applicable).
   struct GuidMatch {
-    const bookmarks::BookmarkNode* local_node;
-    const RemoteTreeNode* remote_node;
+    raw_ptr<const bookmarks::BookmarkNode> local_node = nullptr;
+    raw_ptr<const RemoteTreeNode> remote_node = nullptr;
   };
 
   // Constructs the remote bookmark tree to be merged. Each entry in the
@@ -137,12 +138,12 @@ class BookmarkModelMerger {
   static int CountRemoteTreeNodeDescendantsForUma(
       const BookmarkModelMerger::RemoteTreeNode& node);
 
-  // Computes bookmark pairs that should be matched by GUID. Local bookmark
-  // GUIDs may be regenerated for the case where they collide with a remote GUID
+  // Computes bookmark pairs that should be matched by UUID. Local bookmark
+  // UUIDs may be regenerated for the case where they collide with a remote UUID
   // that is not compatible (e.g. folder vs non-folder).
-  static std::unordered_map<base::GUID, GuidMatch, base::GUIDHash>
+  static std::unordered_map<base::Uuid, GuidMatch, base::UuidHash>
   FindGuidMatchesOrReassignLocal(const RemoteForest& remote_forest,
-                                 bookmarks::BookmarkModel* bookmark_model);
+                                 BookmarkModelView* bookmark_model);
 
   // Merges a local and a remote subtrees. The input nodes are two equivalent
   // local and remote nodes. This method tries to recursively match their
@@ -150,11 +151,17 @@ class BookmarkModelMerger {
   void MergeSubtree(const bookmarks::BookmarkNode* local_node,
                     const RemoteTreeNode& remote_node);
 
-  // Updates |local_node| to hold same GUID and semantics as its |remote_node|
+  // Makes a second pass on previously-merged subtree to detect if any of the
+  // remote updates are lacking a client tag hash. If so, it migrates the entity
+  // by issuing a deletion and a creation, using a new random GUID.
+  void MigrateBookmarksInSubtreeWithoutClientTagHash(
+      const RemoteTreeNode& remote_node);
+
+  // Updates |local_node| to hold same UUID and semantics as its |remote_node|
   // match. The input nodes are two equivalent local and remote bookmarks that
   // are about to be merged. The output node is the potentially replaced
   // |local_node|. |local_node| must not be a BookmarkPermanentNode.
-  const bookmarks::BookmarkNode* UpdateBookmarkNodeFromSpecificsIncludingGUID(
+  const bookmarks::BookmarkNode* UpdateBookmarkNodeFromSpecificsIncludingUuid(
       const bookmarks::BookmarkNode* local_node,
       const RemoteTreeNode& remote_node);
 
@@ -175,27 +182,27 @@ class BookmarkModelMerger {
 
   // Looks for a local node under |local_parent| that matches |remote_node|,
   // starting at index |local_child_start_index|. First attempts to find a match
-  // by GUID and otherwise attempts to find one by semantics. If no match is
+  // by UUID and otherwise attempts to find one by semantics. If no match is
   // found, a nullptr is returned.
   const bookmarks::BookmarkNode* FindMatchingLocalNode(
       const RemoteTreeNode& remote_node,
       const bookmarks::BookmarkNode* local_parent,
       size_t local_child_start_index) const;
 
-  // If |local_node| has a remote counterpart of the same GUID, returns the
+  // If |local_node| has a remote counterpart of the same UUID, returns the
   // corresponding remote node, otherwise returns a nullptr. |local_node| must
   // not be null.
-  const RemoteTreeNode* FindMatchingRemoteNodeByGUID(
+  const RemoteTreeNode* FindMatchingRemoteNodeByUuid(
       const bookmarks::BookmarkNode* local_node) const;
 
-  // If |remote_node| has a local counterpart of the same GUID, returns the
+  // If |remote_node| has a local counterpart of the same UUID, returns the
   // corresponding local node, otherwise returns a nullptr.
-  const bookmarks::BookmarkNode* FindMatchingLocalNodeByGUID(
+  const bookmarks::BookmarkNode* FindMatchingLocalNodeByUuid(
       const RemoteTreeNode& remote_node) const;
 
   // Tries to find a child local node under |local_parent| that matches
   // |remote_node| semantically and returns the index of that node, as long as
-  // this local child cannot be matched by GUID to a different node. Matching is
+  // this local child cannot be matched by UUID to a different node. Matching is
   // decided using NodeSemanticsMatch(). It searches in the children list
   // starting from position |search_starting_child_index|. In case of no match
   // is found, it returns |kInvalidIndex|.
@@ -209,15 +216,23 @@ class BookmarkModelMerger {
   syncer::UniquePosition GenerateUniquePositionForLocalCreation(
       const bookmarks::BookmarkNode* parent,
       size_t index,
-      const std::string& suffix) const;
+      const syncer::UniquePosition::Suffix& suffix) const;
 
-  const raw_ptr<bookmarks::BookmarkModel> bookmark_model_;
+  void ReportTimeMetrics();
+
+  // The base time used to calculate elapsed time at different stages during the
+  // initial merge. Should be the first member to initialize before any other
+  // long operations like BuildRemoteForest().
+  const base::TimeTicks started_ = base::TimeTicks::Now();
+
+  const raw_ptr<BookmarkModelView> bookmark_model_;
   const raw_ptr<favicon::FaviconService> favicon_service_;
   const raw_ptr<SyncedBookmarkTracker> bookmark_tracker_;
+  const size_t remote_updates_size_;
   // Preprocessed remote nodes in the form a forest where each tree's root is a
   // permanent node. Computed upon construction via BuildRemoteForest().
   const RemoteForest remote_forest_;
-  std::unordered_map<base::GUID, GuidMatch, base::GUIDHash> guid_to_match_map_;
+  std::unordered_map<base::Uuid, GuidMatch, base::UuidHash> uuid_to_match_map_;
 };
 
 }  // namespace sync_bookmarks

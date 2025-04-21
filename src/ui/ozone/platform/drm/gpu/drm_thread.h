@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,33 +8,37 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
+#include <vector>
 
 #include "base/files/file.h"
-#include "base/files/scoped_file.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread.h"
 #include "mojo/public/cpp/bindings/associated_receiver_set.h"
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
-#include "ui/display/types/display_configuration_params.h"
 #include "ui/gfx/native_pixmap_handle.h"
 #include "ui/gfx/native_widget_types.h"
-#include "ui/gfx/vsync_provider.h"
 #include "ui/ozone/platform/drm/common/display_types.h"
 #include "ui/ozone/platform/drm/gpu/drm_device_generator.h"
 #include "ui/ozone/platform/drm/mojom/device_cursor.mojom.h"
 #include "ui/ozone/platform/drm/mojom/drm_device.mojom.h"
+#include "ui/ozone/public/drm_modifiers_filter.h"
 #include "ui/ozone/public/hardware_capabilities.h"
 #include "ui/ozone/public/overlay_surface_candidate.h"
 #include "ui/ozone/public/swap_completion_callback.h"
 
 namespace base {
 class FilePath;
-}
+}  // namespace base
 
 namespace display {
-struct GammaRampRGBEntry;
+struct ColorCalibration;
+struct ColorTemperatureAdjustment;
+struct DisplayConfigurationParams;
+struct GammaAdjustment;
 }  // namespace display
 
 namespace gfx {
@@ -112,9 +116,6 @@ class DrmThread : public base::Thread,
   void AddDrmDeviceReceiver(
       mojo::PendingReceiver<ozone::mojom::DrmDevice> receiver);
 
-  void SetColorSpace(gfx::AcceleratedWidget widget,
-                     const gfx::ColorSpace& color_space);
-
   // Verifies if the display controller can successfully scanout the given set
   // of OverlaySurfaceCandidates and return the status associated with each
   // candidate.
@@ -131,9 +132,8 @@ class DrmThread : public base::Thread,
       std::vector<OverlayStatus>* result);
   // Calls `receive_callback` with a `HardwareCapabilities` containing
   // information about overlay support on the current hardware.
-  void GetHardwareCapabilities(
-      gfx::AcceleratedWidget widget,
-      ui::HardwareCapabilitiesCallback receive_callback);
+  void GetHardwareCapabilities(gfx::AcceleratedWidget widget,
+                               HardwareCapabilitiesCallback receive_callback);
 
   // DrmWindowProxy (on GPU thread) is the client for these methods.
   void SchedulePageFlip(gfx::AcceleratedWidget widget,
@@ -142,6 +142,10 @@ class DrmThread : public base::Thread,
                         PresentationOnceCallback presentation_callback);
 
   void IsDeviceAtomic(gfx::AcceleratedWidget widget, bool* is_atomic);
+
+  // Sets a filter that the DRM thread can invoke to filter out modifiers
+  // incompatible with use in GPU main and Viz threads.
+  void SetDrmModifiersFilter(std::unique_ptr<DrmModifiersFilter> filter);
 
   // ozone::mojom::DrmDevice
   void CreateWindow(gfx::AcceleratedWidget widget,
@@ -157,12 +161,16 @@ class DrmThread : public base::Thread,
       base::OnceCallback<void(bool)> callback) override;
   void RefreshNativeDisplays(
       base::OnceCallback<void(MovableDisplaySnapshots)> callback) override;
-  void AddGraphicsDevice(const base::FilePath& path, base::File file) override;
+  void AddGraphicsDevice(const base::FilePath& path,
+                         mojo::PlatformHandle fd_mojo_handle) override;
   void RemoveGraphicsDevice(const base::FilePath& path) override;
   void ConfigureNativeDisplays(
       const std::vector<display::DisplayConfigurationParams>& config_requests,
-      uint32_t modeset_flag,
+      display::ModesetFlags modeset_flags,
       ConfigureNativeDisplaysCallback callback) override;
+  void SetHdcpKeyProp(int64_t display_id,
+                      const std::string& key,
+                      SetHdcpKeyPropCallback callback) override;
   void GetHDCPState(int64_t display_id,
                     base::OnceCallback<void(int64_t,
                                             bool,
@@ -173,15 +181,21 @@ class DrmThread : public base::Thread,
                     display::HDCPState state,
                     display::ContentProtectionMethod protection_method,
                     base::OnceCallback<void(int64_t, bool)> callback) override;
-  void SetColorMatrix(int64_t display_id,
-                      const std::vector<float>& color_matrix) override;
-  void SetGammaCorrection(
+  void SetColorTemperatureAdjustment(
       int64_t display_id,
-      const std::vector<display::GammaRampRGBEntry>& degamma_lut,
-      const std::vector<display::GammaRampRGBEntry>& gamma_lut) override;
+      const display::ColorTemperatureAdjustment& cta) override;
+  void SetColorCalibration(
+      int64_t display_id,
+      const display::ColorCalibration& calibration) override;
+  void SetGammaAdjustment(int64_t display_id,
+                          const display::GammaAdjustment& adjustment) override;
   void SetPrivacyScreen(int64_t display_id,
                         bool enabled,
                         base::OnceCallback<void(bool)> callback) override;
+  void GetSeamlessRefreshRates(
+      int64_t display_id,
+      GetSeamlessRefreshRatesCallback callback) override;
+
   void GetDeviceCursor(
       mojo::PendingAssociatedReceiver<ozone::mojom::DeviceCursor> receiver)
       override;
@@ -189,7 +203,7 @@ class DrmThread : public base::Thread,
   // ozone::mojom::DeviceCursor
   void SetCursor(gfx::AcceleratedWidget widget,
                  const std::vector<SkBitmap>& bitmaps,
-                 const gfx::Point& location,
+                 const std::optional<gfx::Point>& location,
                  base::TimeDelta frame_delay) override;
   void MoveCursor(gfx::AcceleratedWidget widget,
                   const gfx::Point& location) override;
@@ -201,7 +215,7 @@ class DrmThread : public base::Thread,
  private:
   struct TaskInfo {
     base::OnceClosure task;
-    base::WaitableEvent* done;
+    raw_ptr<base::WaitableEvent> done;
 
     TaskInfo(base::OnceClosure task, base::WaitableEvent* done);
     TaskInfo(TaskInfo&& other);

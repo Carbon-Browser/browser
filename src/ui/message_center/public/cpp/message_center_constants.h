@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <stddef.h>
 
 #include "build/build_config.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/color_palette.h"
 
@@ -30,6 +31,7 @@ const int kSmallImagePadding = 4;
 
 // Rounded corners are applied to large and small images in ash
 constexpr int kImageCornerRadius = 8;
+constexpr int kJellyImageCornerRadius = 12;
 
 // Limits.
 const size_t kMaxVisibleMessageCenterNotifications = 100;
@@ -37,6 +39,9 @@ const size_t kMaxVisiblePopupNotifications = 3;
 
 // DIP dimension; H size of the whole card.
 const int kNotificationWidth = 360;
+
+// DIP dimension; H size of the whole card.
+const int kChromeOSNotificationWidth = 400;
 
 // Within a notification ///////////////////////////////////////////////////////
 
@@ -49,9 +54,6 @@ const int kIconBottomPadding = 16;  // Minimum non-zero V space between icon
 // H space between the context message and the end of the card.
 const int kTextRightPadding = 23;
 const int kTextLeftPadding = kNotificationIconSize + kIconToTextPadding;
-const int kContextMessageViewWidth =
-    kNotificationWidth - kTextLeftPadding - kTextRightPadding;
-// space between buttons and frame.
 const int kControlButtonPadding = 2;
 const int kControlButtonBorderSize = 4;
 
@@ -77,10 +79,6 @@ constexpr int kMinPixelsPerTitleCharacter = 4;
 constexpr int kMaxLinesForMessageLabel = 1;
 constexpr int kMaxLinesForExpandedMessageLabel = 4;
 
-// Character limit = pixels per line * line limit / min. pixels per character.
-constexpr size_t kMessageCharacterLimit =
-    kNotificationWidth * kMessageExpandedLineLimit / 3;
-
 // For list notifications.
 // Not used when --enabled-new-style-notification is set.
 const size_t kNotificationMaximumItems = 5;
@@ -94,12 +92,16 @@ const int kAutocloseShortDelaySeconds = 6;
 // platforms, this improves users' ability to interact with the toasts.
 const int kAutocloseDefaultDelaySeconds = 8;
 const int kAutocloseHighPriorityDelaySeconds = 25;
+const int kAutocloseCrosHighPriorityDelaySeconds = 1800;
 
 // Buttons.
 const int kButtonHeight = 38;              // In DIPs.
 const int kButtonHorizontalPadding = 16;   // In DIPs.
 const int kButtonIconTopPadding = 11;      // In DIPs.
 const int kButtonIconToTitlePadding = 16;  // In DIPs.
+
+// Max number of lines for progress notification status_view_.
+const int kMaxLinesForStatusView = 3;
 
 // Progress bar.
 const int kProgressBarTopPadding = 16;
@@ -118,7 +120,11 @@ constexpr int kNotificationBorderThickness = 1;
 constexpr int kMarginBetweenItemsInList = 8;
 
 // Horizontal & vertical space around & between popup notifications.
+#if BUILDFLAG(IS_CHROMEOS)
+constexpr int kMarginBetweenPopups = 8;
+#else
 constexpr int kMarginBetweenPopups = 10;
+#endif
 
 // Radius of the rounded corners of a notification.
 // The corners are only rounded in Chrome OS.
@@ -127,7 +133,22 @@ constexpr int kNotificationCornerRadius = 2;
 // Animation Durations
 constexpr int kNotificationResizeAnimationDurationMs = 200;
 
-constexpr char kIdSuffixForGroupContainerNotification[] = "_copy";
+// Returns the width of the notification.
+inline int GetNotificationWidth() {
+#if BUILDFLAG(IS_CHROMEOS)
+  return chromeos::features::IsNotificationWidthIncreaseEnabled()
+             ? kChromeOSNotificationWidth
+             : kNotificationWidth;
+#else
+  return kNotificationWidth;
+#endif
+}
+
+// Returns the character limit per line; character limit = pixels per line *
+// line limit / min. pixels per character.
+inline int GetMessageCharacterLimit() {
+  return GetNotificationWidth() * kMessageExpandedLineLimit / 3;
+}
 }  // namespace message_center
 
 #endif  // UI_MESSAGE_CENTER_PUBLIC_CPP_MESSAGE_CENTER_CONSTANTS_H_

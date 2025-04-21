@@ -1,14 +1,17 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/android/oom_intervention/near_oom_monitor.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/system/sys_info.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "chrome/android/chrome_jni_headers/NearOomMonitor_jni.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/android/oom_intervention/oom_intervention_config.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "chrome/android/chrome_jni_headers/NearOomMonitor_jni.h"
 
 namespace {
 
@@ -25,7 +28,7 @@ NearOomMonitor* NearOomMonitor::Create() {
   auto* config = OomInterventionConfig::GetInstance();
   if (!config->is_swap_monitor_enabled())
     return nullptr;
-  return new NearOomMonitor(base::ThreadTaskRunnerHandle::Get(),
+  return new NearOomMonitor(base::SingleThreadTaskRunner::GetCurrentDefault(),
                             config->swapfree_threshold());
 }
 

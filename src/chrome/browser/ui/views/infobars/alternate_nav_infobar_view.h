@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,7 +34,7 @@ class AlternateNavInfoBarView : public InfoBarView {
   static void ElideLabels(Labels* labels, int available_width);
 
   // InfoBarView:
-  void Layout() override;
+  void Layout(PassKey) override;
   int GetContentMinimumWidth() const override;
 
   AlternateNavInfoBarDelegate* GetDelegate();

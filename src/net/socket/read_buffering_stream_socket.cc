@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -74,8 +74,6 @@ int ReadBufferingStreamSocket::DoLoop(int result) {
       case STATE_NONE:
       default:
         NOTREACHED() << "Unexpected state: " << current_state;
-        rv = ERR_UNEXPECTED;
-        break;
     }
   } while (rv != ERR_IO_PENDING && state_ != STATE_NONE);
   return rv;

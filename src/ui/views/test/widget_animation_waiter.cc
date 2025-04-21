@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,31 +13,29 @@
 namespace views {
 
 WidgetAnimationWaiter::WidgetAnimationWaiter(Widget* widget)
-    : target_bounds_(gfx::Rect()), widget_(widget) {
-  widget->GetLayer()->GetAnimator()->AddObserver(this);
-}
+    : WidgetAnimationWaiter(widget, /*target_bounds=*/gfx::Rect()) {}
 
 WidgetAnimationWaiter::WidgetAnimationWaiter(Widget* widget,
                                              const gfx::Rect& target_bounds)
-    : target_bounds_(target_bounds), widget_(widget) {
-  widget->GetLayer()->GetAnimator()->AddObserver(this);
+    : target_bounds_(target_bounds) {
+  widget_observation_.Observe(widget);
+  layer_animation_observation_.Observe(widget->GetLayer()->GetAnimator());
 }
 
-WidgetAnimationWaiter::~WidgetAnimationWaiter() {
-  widget_->GetLayer()->GetAnimator()->RemoveObserver(this);
-}
+WidgetAnimationWaiter::~WidgetAnimationWaiter() = default;
 
 void WidgetAnimationWaiter::OnLayerAnimationEnded(
     ui::LayerAnimationSequence* sequence) {
-  if (!widget_->GetLayer()->GetAnimator()->is_animating() &&
+  Widget* widget = widget_observation_.GetSource();
+  if (!widget->GetLayer()->GetAnimator()->is_animating() &&
       animation_scheduled_) {
     if (!target_bounds_.IsEmpty()) {
-      EXPECT_EQ(widget_->GetWindowBoundsInScreen(), target_bounds_);
-      EXPECT_EQ(widget_->GetLayer()->transform(), gfx::Transform());
+      EXPECT_EQ(widget->GetWindowBoundsInScreen(), target_bounds_);
+      EXPECT_EQ(widget->GetLayer()->transform(), gfx::Transform());
     }
 
     is_valid_animation_ = true;
-    widget_->GetLayer()->GetAnimator()->RemoveObserver(this);
+    layer_animation_observation_.Reset();
     run_loop_.Quit();
   }
 }
@@ -48,8 +46,10 @@ void WidgetAnimationWaiter::OnLayerAnimationAborted(
 void WidgetAnimationWaiter::OnLayerAnimationScheduled(
     ui::LayerAnimationSequence* sequence) {
   animation_scheduled_ = true;
-  if (!target_bounds_.IsEmpty())
-    EXPECT_NE(widget_->GetLayer()->transform(), gfx::Transform());
+  if (!target_bounds_.IsEmpty()) {
+    EXPECT_NE(widget_observation_.GetSource()->GetLayer()->transform(),
+              gfx::Transform());
+  }
 }
 
 void WidgetAnimationWaiter::WaitForAnimation() {
@@ -58,6 +58,11 @@ void WidgetAnimationWaiter::WaitForAnimation() {
 
 bool WidgetAnimationWaiter::WasValidAnimation() {
   return animation_scheduled_ && is_valid_animation_;
+}
+
+void WidgetAnimationWaiter::OnWidgetDestroying(Widget* widget) {
+  widget_observation_.Reset();
+  layer_animation_observation_.Reset();
 }
 
 }  // namespace views

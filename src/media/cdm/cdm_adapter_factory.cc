@@ -1,11 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/cdm/cdm_adapter_factory.h"
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "media/base/cdm_factory.h"
 #include "media/cdm/cdm_adapter.h"
 #include "media/cdm/cdm_module.h"
@@ -32,17 +32,17 @@ void CdmAdapterFactory::Create(
   CdmAdapter::CreateCdmFunc create_cdm_func =
       CdmModule::GetInstance()->GetCreateCdmFunc();
   if (!create_cdm_func) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(cdm_created_cb), nullptr,
-                                  "CreateCdmFunc not available."));
+                                  CreateCdmStatus::kCreateCdmFuncNotAvailable));
     return;
   }
 
   std::unique_ptr<CdmAuxiliaryHelper> cdm_helper = helper_creation_cb_.Run();
   if (!cdm_helper) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(cdm_created_cb), nullptr,
-                                  "CDM helper creation failed."));
+                                  CreateCdmStatus::kCdmHelperCreationFailed));
     return;
   }
 

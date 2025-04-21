@@ -1,12 +1,15 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/graphics/gpu/xr_webgl_drawing_buffer.h"
 
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
+#include "components/viz/common/resources/shared_image_format.h"
 #include "gpu/GLES2/gl2extchromium.h"
+#include "gpu/command_buffer/client/client_shared_image.h"
 #include "gpu/command_buffer/client/shared_image_interface.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
 #include "gpu/config/gpu_driver_bug_workaround_type.h"
@@ -16,8 +19,32 @@
 #include "third_party/blink/renderer/platform/graphics/gpu/shared_gpu_context.h"
 #include "third_party/blink/renderer/platform/graphics/unaccelerated_static_bitmap_image.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
+#include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/skia/include/core/SkSurface.h"
+
+namespace {
+
+class ScopedPixelLocalStorageInterrupt {
+ public:
+  explicit ScopedPixelLocalStorageInterrupt(
+      blink::DrawingBuffer::Client* client)
+      : client_(client) {
+    if (client_) {
+      client_->DrawingBufferClientInterruptPixelLocalStorage();
+    }
+  }
+  ~ScopedPixelLocalStorageInterrupt() {
+    if (client_) {
+      client_->DrawingBufferClientRestorePixelLocalStorage();
+    }
+  }
+
+ private:
+  const raw_ptr<blink::DrawingBuffer::Client> client_;
+};
+
+}  // namespace
 
 namespace blink {
 
@@ -29,34 +56,30 @@ namespace blink {
 XRWebGLDrawingBuffer::ColorBuffer::ColorBuffer(
     base::WeakPtr<XRWebGLDrawingBuffer> drawing_buffer,
     const gfx::Size& size,
-    const gpu::Mailbox& mailbox,
-    GLuint texture_id)
+    scoped_refptr<gpu::ClientSharedImage> shared_image,
+    std::unique_ptr<gpu::SharedImageTexture> texture)
     : owning_thread_ref(base::PlatformThread::CurrentRef()),
       drawing_buffer(std::move(drawing_buffer)),
       size(size),
-      texture_id(texture_id),
-      mailbox(mailbox) {}
+      shared_image(std::move(shared_image)),
+      texture_(std::move(texture)) {}
 
-XRWebGLDrawingBuffer::ColorBuffer::~ColorBuffer() {
-  if (base::PlatformThread::CurrentRef() != owning_thread_ref ||
-      !drawing_buffer) {
-    // If the context has been destroyed no cleanup is necessary since all
-    // resources below are automatically destroyed. Note that if a ColorBuffer
-    // is being destroyed on a different thread, it implies that the owning
-    // thread was destroyed which means the associated context was also
-    // destroyed.
-    return;
+void XRWebGLDrawingBuffer::ColorBuffer::BeginAccess() {
+  scoped_access_ =
+      texture_->BeginAccess(receive_sync_token, /*readonly=*/false);
+}
+
+void XRWebGLDrawingBuffer::ColorBuffer::EndAccess() {
+  produce_sync_token = gpu::SharedImageTexture::ScopedAccess::EndAccess(
+      std::move(scoped_access_));
+  shared_image->UpdateDestructionSyncToken(produce_sync_token);
+}
+
+void XRWebGLDrawingBuffer::ColorBuffer::CleanUp() {
+  if (scoped_access_) {
+    EndAccess();
   }
-
-  gpu::gles2::GLES2Interface* gl = drawing_buffer->ContextGL();
-  if (receive_sync_token.HasData())
-    gl->WaitSyncTokenCHROMIUM(receive_sync_token.GetConstData());
-  gl->DeleteTextures(1, &texture_id);
-  gpu::SyncToken sync_token;
-  gl->GenUnverifiedSyncTokenCHROMIUM(sync_token.GetData());
-  auto* sii = drawing_buffer->drawing_buffer_->ContextProvider()
-                  ->SharedImageInterface();
-  sii->DestroySharedImage(sync_token, mailbox);
+  texture_.reset();
 }
 
 scoped_refptr<XRWebGLDrawingBuffer> XRWebGLDrawingBuffer::Create(
@@ -134,13 +157,17 @@ XRWebGLDrawingBuffer::XRWebGLDrawingBuffer(DrawingBuffer* drawing_buffer,
 
 void XRWebGLDrawingBuffer::BeginDestruction() {
   if (back_color_buffer_) {
-    gpu::gles2::GLES2Interface* gl = drawing_buffer_->ContextGL();
-    gl->EndSharedImageAccessDirectCHROMIUM(back_color_buffer_->texture_id);
+    back_color_buffer_->EndAccess();
     back_color_buffer_ = nullptr;
   }
 
   front_color_buffer_ = nullptr;
   recycled_color_buffer_queue_.clear();
+
+  for (auto color_buffer : exported_color_buffers_) {
+    color_buffer->CleanUp();
+  }
+  exported_color_buffers_.clear();
 }
 
 // TODO(bajones): The GL resources allocated in this function are leaking. Add
@@ -161,8 +188,15 @@ bool XRWebGLDrawingBuffer::Initialize(const gfx::Size& size,
   if (use_multisampling) {
     gl->GetIntegerv(GL_MAX_SAMPLES_ANGLE, &max_sample_count);
     anti_aliasing_mode_ = kMSAAExplicitResolve;
-    if (extensions_util->SupportsExtension(
-            "GL_EXT_multisampled_render_to_texture")) {
+    const auto& gpu_feature_info =
+        drawing_buffer_->ContextProvider()->GetGpuFeatureInfo();
+    const bool is_using_graphite =
+        gpu_feature_info.status_values[gpu::GPU_FEATURE_TYPE_SKIA_GRAPHITE] ==
+        gpu::kGpuFeatureStatusEnabled;
+    // With Graphite, Skia is not using ANGLE, so ANGLE cannot do an implicit
+    // resolve when the back buffer is sampled by Skia.
+    if (!is_using_graphite && extensions_util->SupportsExtension(
+                                  "GL_EXT_multisampled_render_to_texture")) {
       anti_aliasing_mode_ = kMSAAImplicitResolve;
     }
   }
@@ -216,32 +250,30 @@ gfx::Size XRWebGLDrawingBuffer::AdjustSize(const gfx::Size& new_size) {
 }
 
 void XRWebGLDrawingBuffer::UseSharedBuffer(
-    const gpu::MailboxHolder& buffer_mailbox_holder) {
+    const scoped_refptr<gpu::ClientSharedImage>& buffer_shared_image,
+    const gpu::SyncToken& buffer_sync_token) {
+  ScopedPixelLocalStorageInterrupt scoped_pls_interrupt(
+      drawing_buffer_->client());
   gpu::gles2::GLES2Interface* gl = drawing_buffer_->ContextGL();
 
-  // Ensure that the mailbox holder is ready to use, the following actions need
+  // Ensure that the shared image is ready to use, the following actions need
   // to be sequenced after setup steps that were done through a different
   // process's GPU command buffer context.
   //
   // TODO(https://crbug.com/1111526): Investigate handling context loss and
   // recovery for cases where these assumptions may not be accurate.
-  DCHECK(buffer_mailbox_holder.sync_token.HasData());
-  DCHECK(!buffer_mailbox_holder.mailbox.IsZero());
+  DCHECK(buffer_sync_token.HasData());
+  DCHECK(buffer_shared_image);
   DVLOG(3) << __func__
-           << ": mailbox=" << buffer_mailbox_holder.mailbox.ToDebugString()
-           << ", SyncToken="
-           << buffer_mailbox_holder.sync_token.ToDebugString();
-  gl->WaitSyncTokenCHROMIUM(buffer_mailbox_holder.sync_token.GetConstData());
+           << ": mailbox=" << buffer_shared_image->mailbox().ToDebugString()
+           << ", SyncToken=" << buffer_sync_token.ToDebugString();
 
   // Create a texture backed by the shared buffer image.
-  DCHECK(!shared_buffer_texture_id_);
-  DCHECK(buffer_mailbox_holder.mailbox.IsSharedImage());
-  shared_buffer_texture_id_ = gl->CreateAndTexStorage2DSharedImageCHROMIUM(
-      buffer_mailbox_holder.mailbox.name);
-
-  gl->BeginSharedImageAccessDirectCHROMIUM(
-      shared_buffer_texture_id_,
-      GL_SHARED_IMAGE_ACCESS_MODE_READWRITE_CHROMIUM);
+  DCHECK(!shared_buffer_texture_);
+  shared_buffer_texture_ = buffer_shared_image->CreateGLTexture(gl);
+  shared_buffer_scoped_access_ =
+      shared_buffer_texture_->BeginAccess(buffer_sync_token,
+                                          /*readonly=*/false);
 
   if (WantExplicitResolve()) {
     // Bind the shared texture to the destination framebuffer of
@@ -258,11 +290,12 @@ void XRWebGLDrawingBuffer::UseSharedBuffer(
   if (anti_aliasing_mode_ == kMSAAImplicitResolve) {
     gl->FramebufferTexture2DMultisampleEXT(
         GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
-        shared_buffer_texture_id_, 0, sample_count_);
+        shared_buffer_scoped_access_->texture_id(), 0, sample_count_);
   } else {
     // Explicit resolve, screen space antialiasing, or no antialiasing.
     gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                             GL_TEXTURE_2D, shared_buffer_texture_id_, 0);
+                             GL_TEXTURE_2D,
+                             shared_buffer_scoped_access_->texture_id(), 0);
   }
 
   if (!framebuffer_complete_checked_for_sharedbuffer_) {
@@ -287,6 +320,8 @@ void XRWebGLDrawingBuffer::UseSharedBuffer(
 void XRWebGLDrawingBuffer::DoneWithSharedBuffer() {
   DVLOG(3) << __FUNCTION__;
 
+  ScopedPixelLocalStorageInterrupt scoped_pls_interrupt(
+      drawing_buffer_->client());
   BindAndResolveDestinationFramebuffer();
 
   gpu::gles2::GLES2Interface* gl = drawing_buffer_->ContextGL();
@@ -306,10 +341,10 @@ void XRWebGLDrawingBuffer::DoneWithSharedBuffer() {
 
   // Done with the texture created by CreateAndTexStorage2DSharedImageCHROMIUM
   // finish accessing and delete it.
-  DCHECK(shared_buffer_texture_id_);
-  gl->EndSharedImageAccessDirectCHROMIUM(shared_buffer_texture_id_);
-  gl->DeleteTextures(1, &shared_buffer_texture_id_);
-  shared_buffer_texture_id_ = 0;
+  DCHECK(shared_buffer_texture_);
+  gpu::SharedImageTexture::ScopedAccess::EndAccess(
+      std::move(shared_buffer_scoped_access_));
+  shared_buffer_texture_.reset();
 
   DrawingBuffer::Client* client = drawing_buffer_->client();
   if (!client)
@@ -318,6 +353,8 @@ void XRWebGLDrawingBuffer::DoneWithSharedBuffer() {
 }
 
 void XRWebGLDrawingBuffer::ClearBoundFramebuffer() {
+  ScopedPixelLocalStorageInterrupt scoped_pls_interrupt(
+      drawing_buffer_->client());
   gpu::gles2::GLES2Interface* gl = drawing_buffer_->ContextGL();
 
   GLbitfield clear_bits = GL_COLOR_BUFFER_BIT;
@@ -358,6 +395,8 @@ void XRWebGLDrawingBuffer::Resize(const gfx::Size& new_size) {
   if (ContextLost())
     return;
 
+  ScopedPixelLocalStorageInterrupt scoped_pls_interrupt(
+      drawing_buffer_->client());
   gpu::gles2::GLES2Interface* gl = drawing_buffer_->ContextGL();
 
   size_ = adjusted_size;
@@ -421,23 +460,22 @@ void XRWebGLDrawingBuffer::Resize(const gfx::Size& new_size) {
   }
 
   if (back_color_buffer_) {
-    gl->EndSharedImageAccessDirectCHROMIUM(back_color_buffer_->texture_id);
+    back_color_buffer_->EndAccess();
   }
 
   back_color_buffer_ = CreateColorBuffer();
   front_color_buffer_ = nullptr;
 
-  gl->BeginSharedImageAccessDirectCHROMIUM(
-      back_color_buffer_->texture_id,
-      GL_SHARED_IMAGE_ACCESS_MODE_READWRITE_CHROMIUM);
+  back_color_buffer_->BeginAccess();
 
   if (anti_aliasing_mode_ == kMSAAImplicitResolve) {
     gl->FramebufferTexture2DMultisampleEXT(
         GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
-        back_color_buffer_->texture_id, 0, sample_count_);
+        back_color_buffer_->texture_id(), 0, sample_count_);
   } else {
     gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                             GL_TEXTURE_2D, back_color_buffer_->texture_id, 0);
+                             GL_TEXTURE_2D, back_color_buffer_->texture_id(),
+                             0);
   }
 
   if (!framebuffer_complete_checked_for_resize_) {
@@ -453,40 +491,41 @@ void XRWebGLDrawingBuffer::Resize(const gfx::Size& new_size) {
 
 scoped_refptr<XRWebGLDrawingBuffer::ColorBuffer>
 XRWebGLDrawingBuffer::CreateColorBuffer() {
+  ScopedPixelLocalStorageInterrupt scoped_pls_interrupt(
+      drawing_buffer_->client());
   auto* sii = drawing_buffer_->ContextProvider()->SharedImageInterface();
-  uint32_t usage = gpu::SHARED_IMAGE_USAGE_DISPLAY |
-                   gpu::SHARED_IMAGE_USAGE_GLES2 |
-                   gpu::SHARED_IMAGE_USAGE_GLES2_FRAMEBUFFER_HINT;
-  gpu::Mailbox mailbox = sii->CreateSharedImage(
-      alpha_ ? viz::RGBA_8888 : viz::RGBX_8888, size_, gfx::ColorSpace(),
-      kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType, usage,
+
+  // These shared images will be imported into textures on the GL context. We
+  // take a read/write access scope whenever the color buffer is used as the
+  // back buffer.
+  gpu::SharedImageUsageSet usage = gpu::SHARED_IMAGE_USAGE_DISPLAY_READ |
+                                   gpu::SHARED_IMAGE_USAGE_GLES2_READ |
+                                   gpu::SHARED_IMAGE_USAGE_GLES2_WRITE;
+  auto client_shared_image = sii->CreateSharedImage(
+      {alpha_ ? viz::SinglePlaneFormat::kRGBA_8888
+              : viz::SinglePlaneFormat::kRGBX_8888,
+       size_, gfx::ColorSpace(), usage, "XRWebGLDrawingBuffer"},
       gpu::kNullSurfaceHandle);
+  CHECK(client_shared_image);
 
   gpu::gles2::GLES2Interface* gl = drawing_buffer_->ContextGL();
-  gl->WaitSyncTokenCHROMIUM(sii->GenUnverifiedSyncToken().GetConstData());
 
-  // The shared image is imported into a texture on the GL context. We take a
-  // read/write access scope whenever the color buffer is used as the back
-  // buffer.
-  GLuint texture_id =
-      gl->CreateAndTexStorage2DSharedImageCHROMIUM(mailbox.name);
+  std::unique_ptr<gpu::SharedImageTexture> texture =
+      client_shared_image->CreateGLTexture(gl);
 
   DrawingBuffer::Client* client = drawing_buffer_->client();
   client->DrawingBufferClientRestoreTexture2DBinding();
 
   return base::MakeRefCounted<ColorBuffer>(weak_factory_.GetWeakPtr(), size_,
-                                           mailbox, texture_id);
+                                           std::move(client_shared_image),
+                                           std::move(texture));
 }
 
 scoped_refptr<XRWebGLDrawingBuffer::ColorBuffer>
 XRWebGLDrawingBuffer::CreateOrRecycleColorBuffer() {
-  if (!recycled_color_buffer_queue_.IsEmpty()) {
+  if (!recycled_color_buffer_queue_.empty()) {
     scoped_refptr<ColorBuffer> recycled =
         recycled_color_buffer_queue_.TakeLast();
-    if (recycled->receive_sync_token.HasData()) {
-      gpu::gles2::GLES2Interface* gl = drawing_buffer_->ContextGL();
-      gl->WaitSyncTokenCHROMIUM(recycled->receive_sync_token.GetData());
-    }
     DCHECK(recycled->size == size_);
     return recycled;
   }
@@ -504,6 +543,7 @@ void XRWebGLDrawingBuffer::BindAndResolveDestinationFramebuffer() {
   gpu::gles2::GLES2Interface* gl = drawing_buffer_->ContextGL();
 
   DrawingBuffer::Client* client = drawing_buffer_->client();
+  ScopedPixelLocalStorageInterrupt scoped_pls_interrupt(client);
 
   // Resolve multisample buffers if needed
   if (WantExplicitResolve()) {
@@ -537,28 +577,28 @@ void XRWebGLDrawingBuffer::SwapColorBuffers() {
   gpu::gles2::GLES2Interface* gl = drawing_buffer_->ContextGL();
 
   DrawingBuffer::Client* client = drawing_buffer_->client();
+  ScopedPixelLocalStorageInterrupt scoped_pls_interrupt(client);
 
   BindAndResolveDestinationFramebuffer();
 
   if (back_color_buffer_) {
-    gl->EndSharedImageAccessDirectCHROMIUM(back_color_buffer_->texture_id);
+    back_color_buffer_->EndAccess();
   }
 
   // Swap buffers
   front_color_buffer_ = back_color_buffer_;
   back_color_buffer_ = CreateOrRecycleColorBuffer();
 
-  gl->BeginSharedImageAccessDirectCHROMIUM(
-      back_color_buffer_->texture_id,
-      GL_SHARED_IMAGE_ACCESS_MODE_READWRITE_CHROMIUM);
+  back_color_buffer_->BeginAccess();
 
   if (anti_aliasing_mode_ == kMSAAImplicitResolve) {
     gl->FramebufferTexture2DMultisampleEXT(
         GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
-        back_color_buffer_->texture_id, 0, sample_count_);
+        back_color_buffer_->texture_id(), 0, sample_count_);
   } else {
     gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                             GL_TEXTURE_2D, back_color_buffer_->texture_id, 0);
+                             GL_TEXTURE_2D, back_color_buffer_->texture_id(),
+                             0);
   }
 
   if (!framebuffer_complete_checked_for_swap_) {
@@ -579,7 +619,6 @@ void XRWebGLDrawingBuffer::SwapColorBuffers() {
 
 scoped_refptr<StaticBitmapImage>
 XRWebGLDrawingBuffer::TransferToStaticBitmapImage() {
-  gpu::gles2::GLES2Interface* gl = drawing_buffer_->ContextGL();
   scoped_refptr<ColorBuffer> buffer;
   bool success = false;
 
@@ -589,8 +628,6 @@ XRWebGLDrawingBuffer::TransferToStaticBitmapImage() {
     SwapColorBuffers();
 
     buffer = front_color_buffer_;
-
-    gl->GenUnverifiedSyncTokenCHROMIUM(buffer->produce_sync_token.GetData());
 
     // This should only fail if the context is lost during the buffer swap.
     if (buffer->produce_sync_token.HasData()) {
@@ -604,8 +641,8 @@ XRWebGLDrawingBuffer::TransferToStaticBitmapImage() {
     // to transferToImageBitmap are made back-to-back, if the framebuffer is
     // incomplete (likely due to a failed buffer allocation), or when the
     // context gets lost.
-    sk_sp<SkSurface> surface =
-        SkSurface::MakeRasterN32Premul(size_.width(), size_.height());
+    sk_sp<SkSurface> surface = SkSurfaces::Raster(
+        SkImageInfo::MakeN32Premul(size_.width(), size_.height()));
     return UnacceleratedStaticBitmapImage::Create(surface->makeImageSnapshot());
   }
 
@@ -613,16 +650,18 @@ XRWebGLDrawingBuffer::TransferToStaticBitmapImage() {
   // until the mailbox is released (and while the callback is running).
   viz::ReleaseCallback release_callback =
       base::BindOnce(&XRWebGLDrawingBuffer::NotifyMailboxReleased, buffer);
+  exported_color_buffers_.insert(buffer);
   const SkImageInfo sk_image_info =
       SkImageInfo::MakeN32Premul(size_.width(), size_.height());
 
-  return AcceleratedStaticBitmapImage::CreateFromCanvasMailbox(
-      buffer->mailbox, buffer->produce_sync_token,
-      /* shared_image_texture_id = */ 0, sk_image_info, GL_TEXTURE_2D,
-      /* is_origin_top_left = */ false,
+  return AcceleratedStaticBitmapImage::CreateFromCanvasSharedImage(
+      buffer->shared_image, buffer->produce_sync_token,
+      /* shared_image_texture_id = */ 0, sk_image_info,
       drawing_buffer_->ContextProviderWeakPtr(),
-      base::PlatformThread::CurrentRef(), Thread::Current()->GetTaskRunner(),
-      std::move(release_callback), /*supports_display_compositing=*/true,
+      base::PlatformThread::CurrentRef(),
+      ThreadScheduler::Current()->CleanupTaskRunner(),
+      std::move(release_callback),
+      /*supports_display_compositing=*/true,
       // CreateColorBuffer() never sets the SCANOUT usage bit.
       /*is_overlay_candidate=*/false);
 }
@@ -637,6 +676,7 @@ void XRWebGLDrawingBuffer::NotifyMailboxReleased(
   // Update the SyncToken to ensure that we will wait for it even if we
   // immediately destroy this buffer.
   color_buffer->receive_sync_token = sync_token;
+  color_buffer->shared_image->UpdateDestructionSyncToken(sync_token);
   if (color_buffer->drawing_buffer) {
     color_buffer->drawing_buffer->MailboxReleased(color_buffer, lost_resource);
   }

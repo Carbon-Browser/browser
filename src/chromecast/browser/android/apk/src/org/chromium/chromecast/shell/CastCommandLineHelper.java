@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,10 +22,11 @@ public class CastCommandLineHelper {
 
     /**
      * Initializes the command line and set the arguments from the Intent extra data.
+     *
      * @param intent Intent to use to load command line arguments from.
      */
     public static void initCommandLine(Intent intent) {
-        CommandLineInitUtil.initCommandLine(COMMAND_LINE_FILE);
+        CommandLineInitUtil.initCommandLine(COMMAND_LINE_FILE, null);
 
         if (intent == null) return;
 

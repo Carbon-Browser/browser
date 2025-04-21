@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -64,6 +64,8 @@ class BLINK_COMMON_EXPORT SyntheticWebGestureEventBuilder {
       float dx,
       float dy,
       int modifiers,
+      blink::WebGestureDevice source_device);
+  static blink::WebGestureEvent BuildScrollEnd(
       blink::WebGestureDevice source_device);
   static blink::WebGestureEvent BuildPinchUpdate(
       float scale,

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,33 +8,7 @@
 
 #include "net/base/load_timing_info.h"
 
-namespace {
-
-int BucketWithOffsetAndUnit(int num, int offset, int unit) {
-  // Bucketing raw number with `offset` centered.
-  const int grid = (num - offset) / unit;
-  const int bucketed =
-      grid == 0 ? 0
-                : grid > 0 ? std::pow(2, static_cast<int>(std::log2(grid)))
-                           : -std::pow(2, static_cast<int>(std::log2(-grid)));
-  return bucketed * unit + offset;
-}
-
-}  // namespace
-
 namespace page_load_metrics {
-
-int GetBucketedViewportInitialScale(const blink::MobileFriendliness& mf) {
-  return mf.viewport_initial_scale_x10 <= -1
-             ? -1
-             : BucketWithOffsetAndUnit(mf.viewport_initial_scale_x10, 10, 2);
-}
-
-int GetBucketedViewportHardcodedWidth(const blink::MobileFriendliness& mf) {
-  return mf.viewport_hardcoded_width <= -1
-             ? -1
-             : BucketWithOffsetAndUnit(mf.viewport_hardcoded_width, 500, 10);
-}
 
 MemoryUpdate::MemoryUpdate(content::GlobalRenderFrameHostId id, int64_t delta)
     : routing_id(id), delta_bytes(delta) {}
@@ -42,7 +16,7 @@ MemoryUpdate::MemoryUpdate(content::GlobalRenderFrameHostId id, int64_t delta)
 ExtraRequestCompleteInfo::ExtraRequestCompleteInfo(
     const url::SchemeHostPort& final_url,
     const net::IPEndPoint& remote_endpoint,
-    int frame_tree_node_id,
+    content::FrameTreeNodeId frame_tree_node_id,
     bool was_cached,
     int64_t raw_body_bytes,
     int64_t original_network_content_length,
@@ -74,13 +48,17 @@ ExtraRequestCompleteInfo::ExtraRequestCompleteInfo(
                            : std::make_unique<net::LoadTimingInfo>(
                                  *other.load_timing_info)) {}
 
-ExtraRequestCompleteInfo::~ExtraRequestCompleteInfo() {}
+ExtraRequestCompleteInfo::~ExtraRequestCompleteInfo() = default;
 
-FailedProvisionalLoadInfo::FailedProvisionalLoadInfo(base::TimeDelta interval,
-                                                     net::Error error)
-    : time_to_failed_provisional_load(interval), error(error) {}
+FailedProvisionalLoadInfo::FailedProvisionalLoadInfo(
+    base::TimeDelta interval,
+    net::Error error,
+    content::NavigationDiscardReason discard_reason)
+    : time_to_failed_provisional_load(interval),
+      error(error),
+      discard_reason(discard_reason) {}
 
-FailedProvisionalLoadInfo::~FailedProvisionalLoadInfo() {}
+FailedProvisionalLoadInfo::~FailedProvisionalLoadInfo() = default;
 
 const char* PageLoadMetricsObserver::GetObserverName() const {
   return nullptr;
@@ -93,11 +71,16 @@ PageLoadMetricsObserver::ObservePolicy PageLoadMetricsObserver::OnStart(
   return CONTINUE_OBSERVING;
 }
 
-PageLoadMetricsObserver::ObservePolicy
-PageLoadMetricsObserver::OnPrerenderStart(
+PageLoadMetricsObserver::ObservePolicy PageLoadMetricsObserver::OnPreviewStart(
     content::NavigationHandle* navigation_handle,
     const GURL& currently_committed_url) {
   return STOP_OBSERVING;
+}
+
+PageLoadMetricsObserver::ObservePolicy
+PageLoadMetricsObserver::OnNavigationHandleTimingUpdated(
+    content::NavigationHandle* navigation_handle) {
+  return CONTINUE_OBSERVING;
 }
 
 PageLoadMetricsObserver::ObservePolicy PageLoadMetricsObserver::OnRedirect(
@@ -140,6 +123,13 @@ PageLoadMetricsObserver::ShouldObserveMimeType(
                                               : STOP_OBSERVING;
 }
 
+PageLoadMetricsObserver::ObservePolicy
+PageLoadMetricsObserver::ShouldObserveScheme(const GURL& url) const {
+  bool should_observe_scheme =
+      url.SchemeIsHTTPOrHTTPS() || delegate_->ShouldObserveScheme(url.scheme());
+  return should_observe_scheme ? CONTINUE_OBSERVING : STOP_OBSERVING;
+}
+
 // static
 bool PageLoadMetricsObserver::IsStandardWebPageMimeType(
     const std::string& mime_type) {
@@ -152,7 +142,7 @@ PageLoadMetricsObserver::~PageLoadMetricsObserver() = default;
 const PageLoadMetricsObserverDelegate& PageLoadMetricsObserver::GetDelegate()
     const {
   // The delegate must exist and outlive the page load metrics observer.
-  DCHECK(delegate_);
+  CHECK(delegate_);
   return *delegate_;
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@ namespace {
 
 class Builder {
  public:
-  Builder() {}
+  Builder() = default;
 
   Builder& Stump(int feature_number, double split, double weight) {
     StumpProto* stump = proto_.add_stump();

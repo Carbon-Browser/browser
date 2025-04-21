@@ -1,10 +1,14 @@
-/// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/feature_engagement/public/tracker.h"
 
 #include <utility>
+
+#include "components/feature_engagement/public/configuration_provider.h"
+#include "components/feature_engagement/public/field_trial_configuration_provider.h"
+#include "components/feature_engagement/public/local_configuration_provider.h"
 
 namespace feature_engagement {
 
@@ -34,6 +38,13 @@ bool Tracker::TriggerDetails::ShouldShowIph() const {
 
 bool Tracker::TriggerDetails::ShouldShowSnooze() const {
   return should_show_snooze_;
+}
+
+ConfigurationProviderList Tracker::GetDefaultConfigurationProviders() {
+  ConfigurationProviderList providers;
+  providers.emplace_back(std::make_unique<FieldTrialConfigurationProvider>());
+  providers.emplace_back(std::make_unique<LocalConfigurationProvider>());
+  return providers;
 }
 
 }  // namespace feature_engagement

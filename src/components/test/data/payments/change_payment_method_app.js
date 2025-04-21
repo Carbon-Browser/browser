@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 The Chromium Authors. All rights reserved.
+ * Copyright 2019 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -16,7 +16,7 @@ self.addEventListener('canmakepayment', (event) => {
  * @param {PaymentRequestEvent} event - The event to respond.
  * @return {PamentDetailsUpdate} - The update to the payment details.
  */
-async function responder(event) { // eslint-disable-line no-unused-vars
+async function responder(event) {
   const methodName = event.methodData[0].supportedMethods;
   if (!event.changePaymentMethod) {
     return {

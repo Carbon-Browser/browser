@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,7 +42,6 @@ class MockStreamSocket : public net::StreamSocket {
   MOCK_CONST_METHOD0(NetLog, const net::NetLogWithSource&());
   MOCK_CONST_METHOD0(WasEverUsed, bool());
   MOCK_CONST_METHOD0(UsingTCPFastOpen, bool());
-  MOCK_CONST_METHOD0(WasAlpnNegotiated, bool());
   MOCK_CONST_METHOD0(GetNegotiatedProtocol, net::NextProto());
   MOCK_METHOD1(GetSSLInfo, bool(net::SSLInfo*));
   MOCK_CONST_METHOD0(GetTotalReceivedBytes, int64_t());

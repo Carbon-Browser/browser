@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include "base/component_export.h"
 #include "base/observer_list_types.h"
 #include "chromeos/ash/components/dbus/vm_plugin_dispatcher/vm_plugin_dispatcher.pb.h"
+#include "chromeos/dbus/common/dbus_callback.h"
 #include "chromeos/dbus/common/dbus_client.h"
-#include "chromeos/dbus/common/dbus_method_call_status.h"
 #include "dbus/object_proxy.h"
 
 namespace ash {
@@ -17,7 +17,7 @@ namespace ash {
 // VmPluginDispatcherClient is used to communicate with the Plugin VM
 // Dispatcher, which manages plugin VMs.
 class COMPONENT_EXPORT(ASH_DBUS_VM_PLUGIN_DISPATCHER) VmPluginDispatcherClient
-    : public DBusClient {
+    : public chromeos::DBusClient {
  public:
   // Used to observe changes to VM tool's state and VM's state.
   class Observer : public base::CheckedObserver {
@@ -39,31 +39,31 @@ class COMPONENT_EXPORT(ASH_DBUS_VM_PLUGIN_DISPATCHER) VmPluginDispatcherClient
   // Asynchronously starts a given VM.
   virtual void StartVm(
       const vm_tools::plugin_dispatcher::StartVmRequest& request,
-      DBusMethodCallback<vm_tools::plugin_dispatcher::StartVmResponse>
+      chromeos::DBusMethodCallback<vm_tools::plugin_dispatcher::StartVmResponse>
           callback) = 0;
 
   // Retrieve metadata about a specific or all VMs.
   virtual void ListVms(
       const vm_tools::plugin_dispatcher::ListVmRequest& request,
-      DBusMethodCallback<vm_tools::plugin_dispatcher::ListVmResponse>
+      chromeos::DBusMethodCallback<vm_tools::plugin_dispatcher::ListVmResponse>
           callback) = 0;
 
   // Asynchronously stop a given VM. This does not close the UI.
   virtual void StopVm(
       const vm_tools::plugin_dispatcher::StopVmRequest& request,
-      DBusMethodCallback<vm_tools::plugin_dispatcher::StopVmResponse>
+      chromeos::DBusMethodCallback<vm_tools::plugin_dispatcher::StopVmResponse>
           callback) = 0;
 
   // Asynchronously suspend a given VM. This does not close the UI.
   virtual void SuspendVm(
       const vm_tools::plugin_dispatcher::SuspendVmRequest& request,
-      DBusMethodCallback<vm_tools::plugin_dispatcher::SuspendVmResponse>
-          callback) = 0;
+      chromeos::DBusMethodCallback<
+          vm_tools::plugin_dispatcher::SuspendVmResponse> callback) = 0;
 
   // Start the UI component responsible for rendering VM display.
   virtual void ShowVm(
       const vm_tools::plugin_dispatcher::ShowVmRequest& request,
-      DBusMethodCallback<vm_tools::plugin_dispatcher::ShowVmResponse>
+      chromeos::DBusMethodCallback<vm_tools::plugin_dispatcher::ShowVmResponse>
           callback) = 0;
 
   // Runs |callback| when the VM Plugin Dispatcher service becomes available.

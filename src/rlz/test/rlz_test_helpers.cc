@@ -1,8 +1,13 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
 // Main entry point for all unit tests.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "rlz_test_helpers.h"
 
@@ -133,7 +138,7 @@ void RlzLibTestNoMachineStateHelper::SetUp() {
   ASSERT_NO_FATAL_FAILURE(
       InitializeRegistryOverridesForTesting(&override_manager_));
 #elif BUILDFLAG(IS_APPLE)
-  base::mac::ScopedNSAutoreleasePool pool;
+  base::apple::ScopedNSAutoreleasePool pool;
 #endif  // BUILDFLAG(IS_WIN)
 #if BUILDFLAG(IS_POSIX)
   ASSERT_TRUE(temp_dir_.CreateUniqueTempDir());
@@ -184,14 +189,13 @@ void RlzLibTestBase::SetUp() {
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   statistics_provider_ =
-      std::make_unique<chromeos::system::FakeStatisticsProvider>();
-  chromeos::system::StatisticsProvider::SetTestProvider(
-      statistics_provider_.get());
+      std::make_unique<ash::system::FakeStatisticsProvider>();
+  ash::system::StatisticsProvider::SetTestProvider(statistics_provider_.get());
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 }
 
 void RlzLibTestBase::TearDown() {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  chromeos::system::StatisticsProvider::SetTestProvider(nullptr);
+  ash::system::StatisticsProvider::SetTestProvider(nullptr);
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 }

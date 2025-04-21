@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 #define COMPONENTS_CRONET_TESTING_TEST_SERVER_TEST_SERVER_H_
 
 #include <string>
+
+#include "net/test/embedded_test_server/embedded_test_server.h"
 
 namespace base {
 class FilePath;
@@ -17,11 +19,18 @@ class TestServer {
  public:
   // Starts the server serving files from default test data directory.
   // Returns true if started, false if server is already running.
+  // This will run the server in default mode (HTTP/1 with no SSL)
   static bool Start();
+
   // Starts the server serving files from |test_files_root| directory.
   // Returns true if started, false if server is already running.
+  // The provided server will support either HTTP/1 or HTTPS/1 depending
+  // on the |type| provided.
   static bool StartServeFilesFromDirectory(
-      const base::FilePath& test_files_root);
+      const base::FilePath& test_files_root,
+      net::EmbeddedTestServer::Type type,
+      net::EmbeddedTestServer::ServerCertificate cert);
+
   // Shuts down the server.
   static void Shutdown();
 

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,20 @@ struct EnumTraits<viz::mojom::BeginFrameArgsType,
 };
 
 template <>
+struct StructTraits<viz::mojom::BeginFrameIdDataView, viz::BeginFrameId> {
+  static uint64_t source_id(const viz::BeginFrameId& frame_id) {
+    return frame_id.source_id;
+  }
+
+  static uint64_t sequence_number(const viz::BeginFrameId& frame_id) {
+    return frame_id.sequence_number;
+  }
+
+  static bool Read(viz::mojom::BeginFrameIdDataView data,
+                   viz::BeginFrameId* out);
+};
+
+template <>
 struct StructTraits<viz::mojom::BeginFrameArgsDataView, viz::BeginFrameArgs> {
   static base::TimeTicks frame_time(const viz::BeginFrameArgs& args) {
     return args.frame_time;
@@ -34,12 +48,8 @@ struct StructTraits<viz::mojom::BeginFrameArgsDataView, viz::BeginFrameArgs> {
     return args.interval;
   }
 
-  static uint64_t sequence_number(const viz::BeginFrameArgs& args) {
-    return args.frame_id.sequence_number;
-  }
-
-  static uint64_t source_id(const viz::BeginFrameArgs& args) {
-    return args.frame_id.source_id;
+  static viz::BeginFrameId frame_id(const viz::BeginFrameArgs& args) {
+    return args.frame_id;
   }
 
   static uint64_t frames_throttled_since_last(const viz::BeginFrameArgs& args) {
@@ -48,6 +58,14 @@ struct StructTraits<viz::mojom::BeginFrameArgsDataView, viz::BeginFrameArgs> {
 
   static int64_t trace_id(const viz::BeginFrameArgs& args) {
     return args.trace_id;
+  }
+
+  static base::TimeTicks dispatch_time(const viz::BeginFrameArgs& args) {
+    return args.dispatch_time;
+  }
+
+  static base::TimeTicks client_arrival_time(const viz::BeginFrameArgs& args) {
+    return args.client_arrival_time;
   }
 
   static viz::BeginFrameArgs::BeginFrameArgsType type(
@@ -83,6 +101,13 @@ struct StructTraits<viz::mojom::BeginFrameAckDataView, viz::BeginFrameAck> {
 
   static bool has_damage(const viz::BeginFrameAck& ack) {
     return ack.has_damage;
+  }
+
+  static std::optional<base::TimeDelta> preferred_frame_interval(
+      const viz::BeginFrameAck& ack) {
+    DCHECK(!ack.preferred_frame_interval ||
+           ack.preferred_frame_interval.value() >= base::TimeDelta());
+    return ack.preferred_frame_interval;
   }
 
   static bool Read(viz::mojom::BeginFrameAckDataView data,

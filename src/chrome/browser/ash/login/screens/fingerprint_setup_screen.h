@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,18 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/weak_ptr.h"
+#include "chrome/browser/ash/auth/legacy_fingerprint_engine.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ui/webui/chromeos/login/fingerprint_setup_screen_handler.h"
+#include "chromeos/ash/components/login/auth/auth_performer.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/device/public/mojom/fingerprint.mojom.h"
 
 namespace ash {
+
+class FingerprintSetupScreenView;
 
 // Controls fingerprint setup. The screen can be shown during OOBE. It allows
 // user to enroll fingerprint on the device.
@@ -45,7 +48,7 @@ class FingerprintSetupScreen : public BaseScreen,
 
   using ScreenExitCallback = base::RepeatingCallback<void(Result result)>;
 
-  FingerprintSetupScreen(FingerprintSetupScreenView* view,
+  FingerprintSetupScreen(base::WeakPtr<FingerprintSetupScreenView> view,
                          const ScreenExitCallback& exit_callback);
 
   FingerprintSetupScreen(const FingerprintSetupScreen&) = delete;
@@ -63,6 +66,7 @@ class FingerprintSetupScreen : public BaseScreen,
 
   // device::mojom::FingerprintObserver:
   void OnRestarted() override;
+  void OnStatusChanged(device::mojom::BiometricsManagerStatus status) override;
   void OnEnrollScanDone(device::mojom::ScanResult scan_result,
                         bool enroll_session_complete,
                         int percent_complete) override;
@@ -76,10 +80,11 @@ class FingerprintSetupScreen : public BaseScreen,
 
  protected:
   // BaseScreen:
-  bool MaybeSkip(WizardContext* context) override;
+  bool MaybeSkip(WizardContext& context) override;
+  bool ShouldBeSkipped(const WizardContext& context) const override;
   void ShowImpl() override;
   void HideImpl() override;
-  void OnUserActionDeprecated(const std::string& action_id) override;
+  void OnUserAction(const base::Value::List& args) override;
 
  private:
   void StartAddingFinger();
@@ -90,18 +95,15 @@ class FingerprintSetupScreen : public BaseScreen,
   int enrolled_finger_count_ = 0;
   bool enroll_session_started_ = false;
 
-  FingerprintSetupScreenView* const view_;
+  base::WeakPtr<FingerprintSetupScreenView> view_;
   ScreenExitCallback exit_callback_;
+
+  AuthPerformer auth_performer_;
+  LegacyFingerprintEngine fp_engine_;
 
   base::WeakPtrFactory<FingerprintSetupScreen> weak_ptr_factory_{this};
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::FingerprintSetupScreen;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SCREENS_FINGERPRINT_SETUP_SCREEN_H_

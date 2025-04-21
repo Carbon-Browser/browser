@@ -1,11 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_PAGE_LOAD_METRICS_OBSERVERS_HTTPS_ENGAGEMENT_METRICS_HTTPS_ENGAGEMENT_SERVICE_FACTORY_H_
 #define CHROME_BROWSER_PAGE_LOAD_METRICS_OBSERVERS_HTTPS_ENGAGEMENT_METRICS_HTTPS_ENGAGEMENT_SERVICE_FACTORY_H_
 
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 namespace content {
 class BrowserContext;
@@ -13,14 +13,14 @@ class BrowserContext;
 
 namespace base {
 template <typename T>
-struct DefaultSingletonTraits;
+class NoDestructor;
 }
 
 class HttpsEngagementService;
 
 // Singleton that owns all HttpsEngagementKeyServices and associates them with
 // BrowserContexts.
-class HttpsEngagementServiceFactory : public BrowserContextKeyedServiceFactory {
+class HttpsEngagementServiceFactory : public ProfileKeyedServiceFactory {
  public:
   static HttpsEngagementService* GetForBrowserContext(
       content::BrowserContext* context);
@@ -31,15 +31,13 @@ class HttpsEngagementServiceFactory : public BrowserContextKeyedServiceFactory {
       const HttpsEngagementServiceFactory&) = delete;
 
  private:
-  friend struct base::DefaultSingletonTraits<HttpsEngagementServiceFactory>;
+  friend base::NoDestructor<HttpsEngagementServiceFactory>;
 
   HttpsEngagementServiceFactory();
   ~HttpsEngagementServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
-      content::BrowserContext* context) const override;
-  content::BrowserContext* GetBrowserContextToUse(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   bool ServiceIsCreatedWithBrowserContext() const override;
 };

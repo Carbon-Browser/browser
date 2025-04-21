@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,10 +34,11 @@ ViewsTextServicesContextMenuChromeos::ViewsTextServicesContextMenuChromeos(
 
   // In unit tests, `impl_factory` may not be set. Use
   // `ViewTextServicesContextMenuBase` in that case.
-  if (impl_factory)
+  if (impl_factory) {
     impl_ = impl_factory.Run(menu, client);
-  else
+  } else {
     impl_ = std::make_unique<ViewsTextServicesContextMenuBase>(menu, client);
+  }
 }
 
 ViewsTextServicesContextMenuChromeos::~ViewsTextServicesContextMenuChromeos() =
@@ -66,7 +67,7 @@ void ViewsTextServicesContextMenuChromeos::ExecuteCommand(int command_id,
 
 bool ViewsTextServicesContextMenuChromeos::SupportsCommand(
     int command_id) const {
-  return impl_->IsCommandIdEnabled(command_id);
+  return impl_->SupportsCommand(command_id);
 }
 
 // static

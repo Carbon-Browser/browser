@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -187,23 +187,14 @@ void CastWindowManagerAura::Setup() {
   gfx::Rect host_bounds = GetPrimaryDisplayHostBounds();
   ui::PlatformWindowInitProperties properties(host_bounds);
 
-#if BUILDFLAG(IS_FUCHSIA)
-  // When using Scenic Ozone platform we need to supply a view_token to the
-  // window. This is not necessary when using the headless ozone platform.
-  if (ui::OzonePlatform::GetInstance()
-          ->GetPlatformProperties()
-          .needs_view_token) {
-    ui::fuchsia::InitializeViewTokenAndPresentView(&properties);
-  }
-#endif
-
   LOG(INFO) << "Starting window manager, bounds: " << host_bounds.ToString();
   CHECK(aura::Env::GetInstance());
   window_tree_host_ = std::make_unique<CastWindowTreeHostAura>(
       enable_input_, std::move(properties));
   window_tree_host_->InitHost();
   aura::Window* root_window = window_tree_host_->window();
-  root_window->SetLayoutManager(new CastLayoutManager(this, root_window));
+  root_window->SetLayoutManager(
+      std::make_unique<CastLayoutManager>(this, root_window));
   window_tree_host_->SetRootTransform(GetPrimaryDisplayRotationTransform());
 
   // Allow seeing through to the hardware video plane:
@@ -304,8 +295,10 @@ CastWindowManagerAura::GetWindowOrder() {
   return window_order_;
 }
 
-aura::Window* CastWindowManagerAura::GetDefaultParent(aura::Window* window,
-                                                      const gfx::Rect& bounds) {
+aura::Window* CastWindowManagerAura::GetDefaultParent(
+    aura::Window* window,
+    const gfx::Rect& bounds,
+    const int64_t display_id) {
   DCHECK(window_tree_host_);
   return window_tree_host_->window();
 }

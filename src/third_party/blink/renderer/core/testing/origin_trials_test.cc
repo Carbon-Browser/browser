@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,12 @@
 
 namespace blink {
 
+OriginTrialsTest* OriginTrialsTest::Create() {
+  return MakeGarbageCollected<OriginTrialsTest>();
+}
+
 bool OriginTrialsTest::throwingAttribute(ScriptState* script_state,
                                          ExceptionState& exception_state) {
-  String error_message;
   if (!RuntimeEnabledFeatures::OriginTrialsSampleAPIEnabled(
           ExecutionContext::From(script_state))) {
     exception_state.ThrowDOMException(

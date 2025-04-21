@@ -1,14 +1,17 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <stdint.h>
+
 #include <cstddef>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "content/browser/media/webaudio/audio_context_manager_impl.h"  // [nogncheck]
 #include "content/browser/site_instance_impl.h"  // nogncheck
@@ -26,7 +29,6 @@
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/webaudio/audio_context_manager.mojom-mojolpm.h"
 #include "third_party/blink/public/mojom/webaudio/audio_context_manager.mojom.h"
 #include "third_party/libprotobuf-mutator/src/src/libfuzzer/libfuzzer_macro.h"
@@ -74,8 +76,8 @@ class AudioContextManagerTestcase
   content::mojolpm::RenderViewHostTestHarnessAdapter test_adapter_;
 
   base::SimpleTestTickClock clock_;
-  content::AudioContextManagerImpl* audio_context_manager_ = nullptr;
-  content::TestRenderFrameHost* render_frame_host_ = nullptr;
+  raw_ptr<content::AudioContextManagerImpl> audio_context_manager_ = nullptr;
+  raw_ptr<content::TestRenderFrameHost> render_frame_host_ = nullptr;
 };
 
 AudioContextManagerTestcase::AudioContextManagerTestcase(

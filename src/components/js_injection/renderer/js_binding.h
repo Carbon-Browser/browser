@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,15 @@
 #include <string>
 
 #include "base/auto_reset.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/js_injection/common/interfaces.mojom.h"
 #include "gin/arguments.h"
 #include "gin/wrappable.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
+#include "third_party/blink/public/common/messaging/string_message_codec.h"
+#include "v8/include/v8.h"
 
 namespace v8 {
 template <typename T>
@@ -42,12 +45,17 @@ class JsBinding final : public gin::Wrappable<JsBinding>,
   static base::WeakPtr<JsBinding> Install(
       content::RenderFrame* render_frame,
       const std::u16string& js_object_name,
-      base::WeakPtr<JsCommunication> js_communication);
+      base::WeakPtr<JsCommunication> js_communication,
+      v8::Isolate* isolate,
+      v8::Local<v8::Context> context);
 
   // mojom::BrowserToJsMessaging implementation.
-  void OnPostMessage(const std::u16string& message) override;
+  void OnPostMessage(blink::WebMessagePayload message) override;
 
   void ReleaseV8GlobalObjects();
+
+  void Bind(
+      mojo::PendingAssociatedReceiver<mojom::BrowserToJsMessaging> receiver);
 
  protected:
   ~JsBinding() override;
@@ -72,7 +80,7 @@ class JsBinding final : public gin::Wrappable<JsBinding>,
   // For set jsObject.onmessage.
   void SetOnMessage(v8::Isolate* isolate, v8::Local<v8::Value> value);
 
-  content::RenderFrame* render_frame_;
+  raw_ptr<content::RenderFrame> render_frame_;
   std::u16string js_object_name_;
   v8::Global<v8::Function> on_message_;
   std::vector<v8::Global<v8::Function>> listeners_;

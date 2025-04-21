@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 // MtabWatcherLinux implementation.
 
@@ -10,7 +15,7 @@
 #include <stddef.h>
 #include <stdio.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/threading/scoped_blocking_call.h"
 
@@ -93,7 +98,6 @@ void MtabWatcherLinux::OnFilePathChanged(
     // This cannot happen unless FilePathWatcher is buggy. Just ignore this
     // notification and do nothing.
     NOTREACHED();
-    return;
   }
   if (error) {
     LOG(ERROR) << "Error watching " << mtab_path_.value();

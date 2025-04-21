@@ -42,6 +42,7 @@
 #include "third_party/blink/renderer/core/fileapi/blob.h"
 #include "third_party/blink/renderer/core/messaging/message_port.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_array_buffer.h"
+#include "third_party/blink/renderer/platform/bindings/v8_external_memory_accounter.h"
 #include "third_party/blink/renderer/platform/bindings/v8_private_property.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 
@@ -141,7 +142,7 @@ class CORE_EXPORT MessageEvent final : public Event {
                         const String& origin,
                         const String& last_event_id,
                         EventTarget* source,
-                        MessagePortArray& ports);
+                        MessagePortArray ports);
   void initMessageEvent(const AtomicString& type,
                         bool bubbles,
                         bool cancelable,
@@ -168,10 +169,12 @@ class CORE_EXPORT MessageEvent final : public Event {
   EventTarget* source() const { return source_.Get(); }
   MessagePortArray ports();
   bool isPortsDirty() const { return is_ports_dirty_; }
-  UserActivation* userActivation() const { return user_activation_; }
+  UserActivation* userActivation() const { return user_activation_.Get(); }
   mojom::blink::DelegatedCapability delegatedCapability() const {
     return delegated_capability_;
   }
+  uint64_t GetTraceId() const { return trace_id_; }
+  void SetTraceId(uint64_t trace_id) { trace_id_ = trace_id; }
 
   Vector<MessagePortChannel> ReleaseChannels() { return std::move(channels_); }
 
@@ -192,6 +195,10 @@ class CORE_EXPORT MessageEvent final : public Event {
   // Returns true when |data_as_serialized_script_value_| is locked to an
   // agent cluster.
   bool IsLockedToAgentCluster() const;
+
+  // Returns true when |data_as_serialized_script_value_| is not prevented from
+  // being deserialized in the provided execution context.
+  bool CanDeserializeIn(ExecutionContext*) const;
 
   void EntangleMessagePorts(ExecutionContext*);
 
@@ -216,13 +223,10 @@ class CORE_EXPORT MessageEvent final : public Event {
 
   size_t SizeOfExternalMemoryInBytes();
 
-  void RegisterAmountOfExternallyAllocatedMemory();
-
-  void UnregisterAmountOfExternallyAllocatedMemory();
-
   DataType data_type_;
   WorldSafeV8Reference<v8::Value> data_as_v8_value_;
   Member<UnpackedSerializedScriptValue> data_as_serialized_script_value_;
+  V8ExternalMemoryAccounter serialized_data_memory_accounter_;
   String data_as_string_;
   Member<Blob> data_as_blob_;
   Member<DOMArrayBuffer> data_as_array_buffer_;
@@ -238,11 +242,11 @@ class CORE_EXPORT MessageEvent final : public Event {
   Vector<MessagePortChannel> channels_;
   Member<UserActivation> user_activation_;
   mojom::blink::DelegatedCapability delegated_capability_;
-  size_t amount_of_external_memory_ = 0;
   // For serialized messages across process this attribute contains the
   // information of whether the actual original SerializedScriptValue was locked
   // to the agent cluster.
   bool locked_to_agent_cluster_ = false;
+  uint64_t trace_id_;
 };
 
 }  // namespace blink

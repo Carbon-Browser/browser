@@ -1,10 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_PUBLIC_UTILITY_UTILITY_THREAD_H_
 #define CONTENT_PUBLIC_UTILITY_UTILITY_THREAD_H_
 
+#include "base/auto_reset.h"
 #include "build/build_config.h"
 #include "content/common/content_export.h"
 #include "content/public/child/child_thread.h"
@@ -30,6 +31,9 @@ class CONTENT_EXPORT UtilityThread : virtual public ChildThread {
   // Initializes blink with web sandbox support.
   virtual void EnsureBlinkInitializedWithSandboxSupport() = 0;
 #endif
+
+ private:
+  const base::AutoReset<UtilityThread*> resetter_;
 };
 
 }  // namespace content

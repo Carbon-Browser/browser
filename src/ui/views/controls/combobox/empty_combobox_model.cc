@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,7 @@
 
 #include "base/notreached.h"
 
-namespace views {
-namespace internal {
+namespace views::internal {
 
 EmptyComboboxModel::EmptyComboboxModel() = default;
 EmptyComboboxModel::~EmptyComboboxModel() = default;
@@ -20,12 +19,10 @@ size_t EmptyComboboxModel::GetItemCount() const {
 
 std::u16string EmptyComboboxModel::GetItemAt(size_t index) const {
   NOTREACHED();
-  return std::u16string();
 }
 
-absl::optional<size_t> EmptyComboboxModel::GetDefaultIndex() const {
-  return absl::nullopt;
+std::optional<size_t> EmptyComboboxModel::GetDefaultIndex() const {
+  return std::nullopt;
 }
 
-}  // namespace internal
-}  // namespace views
+}  // namespace views::internal

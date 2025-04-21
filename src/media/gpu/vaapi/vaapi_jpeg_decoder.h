@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,6 +45,10 @@ class VaapiJpegDecoder : public VaapiImageDecoder {
   // nullptr on failure and sets *|status| to the reason for failure.
   std::unique_ptr<ScopedVAImage> GetImage(uint32_t preferred_image_fourcc,
                                           VaapiImageDecodeStatus* status);
+
+  // Returns the supported image profile.
+  static std::optional<gpu::ImageDecodeAcceleratorSupportedProfile>
+  GetSupportedProfile();
 
  private:
   friend class fuzzing::VaapiJpegDecoderWrapper;

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -113,6 +113,11 @@ message NetworkHostnameProto {
   optional string device_hostname_template = 1;
 }
 
+message DeviceHindiInscriptLayoutEnabledProto {
+  // Determines if Hindi Inscript Layout is available
+  optional bool enabled = 1 [default = false];
+}
+
 message HostnameUserConfigurableProto {
   // Determines if user is allowed to configure the device hostname
   optional bool device_hostname_user_configurable = 1 [default = false];
@@ -128,9 +133,14 @@ message DeviceReportingProto {
   optional bool report_activity_times = 2 [default = true];
   optional bool report_boot_mode = 3 [default = true];
   optional bool report_location = 4 [default = false];
-  optional bool report_network_interfaces = 5 [default = true];
+  // The server side still retains this field for being backward compatible with
+  // old versions of ChromeOS <= 95. See b/243958646.
+  optional bool report_network_interfaces = 5
+      [default = true, deprecated = true];
   optional bool report_users = 6 [default = true];
-  optional bool report_hardware_status = 7 [default = true];
+  // The server side still retains this field for being backward compatible with
+  // old versions of ChromeOS <= 95. See b/243960946.
+  optional bool report_hardware_status = 7 [default = true, deprecated = true];
   optional bool report_session_status = 8 [default = true];
   optional bool report_os_update_status = 10 [default = false];
   optional bool report_running_kiosk_app = 11 [default = false];
@@ -156,15 +166,19 @@ message DeviceReportingProto {
   optional bool report_security_status = 31 [default = false];
   optional bool report_crd_sessions = 36 [default = false];
   optional bool report_peripherals = 37 [default = false];
+  optional bool report_network_events = 41 [default = false];
+  optional bool report_runtime_counters = 42 [default = false];
 
   // Frequency to report device status, default to 3 hours.
   // If changed, the default value has to be updated in
   // chrome/browser/ash/policy/core/device_cloud_policy_manager_ash.cc.
   optional int64 device_status_frequency = 9 [default = 10800000];
 
+  // Obsolete: This policy is not supported by the client starting with M-106.
   // This is a internal flag that will be used to control whether enable
   // granular device reporting is enabled
-  optional bool enable_granular_reporting = 32 [default = true];
+  optional bool enable_granular_reporting = 32
+      [default = true, deprecated = true];
 
   // Network telemetry policies.
   optional int64 report_network_telemetry_collection_rate_ms = 33
@@ -175,12 +189,26 @@ message DeviceReportingProto {
   // Audio telemetry policy
   optional int64 report_device_audio_status_checking_rate_ms = 35
       [default = 600000];
+
+  // Runtime counters telemetry policy.
+  optional int64 device_report_runtime_counters_checking_rate_ms = 43
+      [default = 86400000];
+
+  optional StringList report_signal_strength_event_driven_telemetry = 38;
+
+  // Device activity heartbeat policies.
+  optional bool device_activity_heartbeat_enabled = 39 [default = false];
+  optional int64 device_activity_heartbeat_collection_rate_ms = 40
+      [default = 900000];
 }
 
 message EphemeralUsersEnabledProto {
   // Determines whether users should be treated as ephemeral. In ephemeral users
   // mode, no cryptohome is created for the user, but a tmpfs mount is used
   // instead such that upon logout all user state is discarded.
+  //
+  // Does not apply for device-local accounts with specified `ephemeral_mode`
+  // that is equal to EPHEMERAL_MODE_DISABLE or EPHEMERAL_MODE_ENABLE.
   optional bool ephemeral_users_enabled = 1;
 }
 
@@ -318,17 +346,15 @@ message AutoUpdateSettingsProto {
     // case, the device will still respect |target_version_prefix|, so it will
     // not update Chrome OS.
     ROLLBACK_DISABLED = 1;
-    // If |target_version_prefix| specifies an older version than the currently
-    // installed Chrome OS version, the device should roll back to a Chrome OS
-    // version starting with |target_version_prefix|. The device does a full
-    // powerwash during the rollback, including TPM reset.
+    // Deprecated. This option is not available or supported anymore.
     ROLLBACK_AND_POWERWASH = 2;
     // If |target_version_prefix| specifies an older version than the currently
-    // installed Chrome OS version, the device should roll back to a Chrome OS
+    // installed ChromeOS version, the device should roll back to a ChromeOS
     // version starting with |target_version_prefix|.
-    // If possible, the device tries to carry over device-level configuration
-    // including network credentials during the rollback process.
-    // If that is not possible, rolls back with a full powerwash.
+    // The device is powerwashed but some data is preserved and recovered: OOBE
+    // completion state, stats consent status, and device-wide network
+    // configurations without certificates. When rolling back to M>=106, the
+    // device re-enrolls automatically.
     ROLLBACK_AND_RESTORE_IF_POSSIBLE = 3;
   }
 
@@ -345,13 +371,12 @@ message AutoUpdateSettingsProto {
 
   // Specifies the time intervals during which the device is not allowed to do
   // automatic update checks. This is a JSON string, for details see
-  // "DeviceAutoUpdateTimeRestrictions" in policy_templates.json.
+  // DeviceAutoUpdateTimeRestrictions.yaml.
   optional string disallowed_time_intervals = 12;
 
   // Specifies how much of the fleet to update per day as a json
   // string that contains a list of pairs <day, percentage>. For more
-  // details and examples, see "DeviceUpdateStagingSchedule" in
-  // policy_templates.json.
+  // details and examples, see DeviceUpdateStagingSchedule.yaml.
   optional string staging_schedule = 14;
 
   // This token is forwarded to omaha by update_engine. If it is set, omaha may
@@ -392,6 +417,16 @@ message OBSOLETE_StartUpUrlsProto {
   // Specifies the URLs to be loaded on login to the anonymous account used if
   // the device is in RETAIL mode.
   repeated string OBSOLETE_start_up_urls = 1 [deprecated = true];
+}
+
+message DeviceLoginScreenGeolocationAccessLevelProto {
+  enum GeolocationAccessLevel {
+    DISALLOWED = 0;
+    ALLOWED = 1;
+  }
+
+  optional GeolocationAccessLevel geolocation_access_level = 1
+      [default = ALLOWED];
 }
 
 message SystemTimezoneProto {
@@ -444,6 +479,7 @@ message KioskAppInfoProto {
 }
 
 // Describes which Android application is to be launched.
+// Deprecated. Unsupported starting with M126.
 message AndroidKioskAppInfoProto {
   // Package name (must be present).
   // In the event this is the only field that is specified, runtime may use
@@ -492,6 +528,19 @@ message WebKioskAppInfoProto {
   optional string icon_url = 3;
 }
 
+// Parameters for Isolated Web App kiosk device local accounts.
+message IsolatedWebAppKioskInfoProto {
+  // Signed Web Bundle ID (required).
+  // A base32 [a-z2-7] string of 56 or 58 characters.
+  // The public key of the Signed Web Bundle is used to create the Web Bundle ID
+  // that identifies the IWA.
+  optional string web_bundle_id = 1;
+
+  // Update URL of the isolated app (required).
+  // Specifies the app version and where to download the web bundle from.
+  optional string update_manifest_url = 2;
+}
+
 // Describes a single device-local account.
 message DeviceLocalAccountInfoProto {
   // Deprecated: Account identifier for a public session device-local account.
@@ -516,12 +565,15 @@ message DeviceLocalAccountInfoProto {
     // Chrome app.
     ACCOUNT_TYPE_KIOSK_APP = 1;
     // An account that serves as a container for a single full-screen
-    // Android app.
-    ACCOUNT_TYPE_KIOSK_ANDROID_APP = 2;
-    // SAML public session account
+    // Android app. Deprecated.
+    ACCOUNT_TYPE_KIOSK_ANDROID_APP = 2 [deprecated = true];
+    // SAML public session account.
     ACCOUNT_TYPE_SAML_PUBLIC_SESSION = 3;
-    // Web App.
+    // An account that serves as a container for a single full-screen Web App.
     ACCOUNT_TYPE_WEB_KIOSK_APP = 4;
+    // An account that serves as a container for a single full-screen
+    // Isolated Web App (IWA).
+    ACCOUNT_TYPE_KIOSK_IWA = 5;
   }
   // Should keep ChromeServletUtil.toDimensionAccountType logic in sync with
   // AccountType enum.
@@ -534,10 +586,43 @@ message DeviceLocalAccountInfoProto {
   optional KioskAppInfoProto kiosk_app = 4;
 
   // Kiosk App parameters, relevant if |type| is ACCOUNT_TYPE_KIOSK_ANDROID_APP
-  optional AndroidKioskAppInfoProto android_kiosk_app = 5;
+  optional AndroidKioskAppInfoProto android_kiosk_app = 5 [deprecated = true];
 
   // Web Kiosk App parameters, relevant if |type| is ACCOUNT_TYPE_WEB_KIOSK_APP
   optional WebKioskAppInfoProto web_kiosk_app = 6;
+
+  enum EphemeralMode {
+    // Default value. Same behaviour as
+    // EPHEMERAL_MODE_FOLLOW_DEVICE_WIDE_POLICY value.
+    EPHEMERAL_MODE_UNSET = 0;
+    // Device-local account ephemeral mode controlled by
+    // DeviceEphemeralUsersEnabled policy.
+    //
+    // Prefer this value over EPHEMERAL_MODE_UNSET to avoid errors when merging
+    // child OU and parent OU protobufs on the service-side.
+    EPHEMERAL_MODE_FOLLOW_DEVICE_WIDE_POLICY = 1;
+    // Device-local account must be non-ephemeral.
+    EPHEMERAL_MODE_DISABLE = 2;
+    // Device-local account must be ephemeral.
+    EPHEMERAL_MODE_ENABLE = 3;
+  }
+
+  // Configures whether the current device-local account should be ephemeral and
+  // overrides the behaviour of DeviceEphemeralUsersEnabled policy for the
+  // current device-local account iff
+  //   1) `ephemeral_mode` is present AND
+  //   2) `ephemeral_mode` value is equal EPHEMERAL_MODE_DISABLE
+  //       or EPHEMERAL_MODE_ENABLE.
+  //
+  // Otherwise, DeviceEphemeralUsersEnabled policy is applied to the
+  // current device-local account.
+  //
+  // Relevant if `type` is ACCOUNT_TYPE_KIOSK_APP,
+  // ACCOUNT_TYPE_KIOSK_ANDROID_APP or ACCOUNT_TYPE_WEB_KIOSK_APP.
+  optional EphemeralMode ephemeral_mode = 7;
+
+  // Kiosk App parameters, relevant if |type| is ACCOUNT_TYPE_KIOSK_IWA.
+  optional IsolatedWebAppKioskInfoProto isolated_kiosk_app = 8;
 }
 
 message DeviceLocalAccountsProto {
@@ -911,13 +996,19 @@ message SAMLSettingsProto {
   // are transferred during each user's first login only.
   optional bool transfer_saml_cookies = 1;
 
+  // Deprecated. This field has been moved to SAMLUsernameProto.
+  optional string OBSOLETE_url_parameter_to_autofill_saml_username = 2
+      [deprecated = true];
+}
+
+message SAMLUsernameProto {
   // If this policy is not configured or set to a blank string, users will have
   // to manually enter their username on SAML IdP page during online
   // authentication on the sign-in screen and the lock screen.
   // Otherwise, this string is expected to contain a url parameter name which
-  // should be used on IdP web page as $|autofill_saml_username|=[user's email]
-  // to autofill the username.
-  optional string url_parameter_to_autofill_saml_username = 2;
+  // should be used on IdP's login page with user's email as a value to autofill
+  // the username.
+  optional string url_parameter_to_autofill_saml_username = 1;
 }
 
 message RebootOnShutdownProto {
@@ -1095,6 +1186,18 @@ message DeviceLoginScreenExtensionsProto {
   repeated string device_login_screen_extensions = 1;
 }
 
+// A boolean indicate if manifest v2 extension is available.
+message LoginScreenExtensionManifestV2AvailabilityProto {
+  enum Availability {
+    DEFAULT = 0;
+    DISABLE = 1;
+    ENABLE = 2;
+    ENABLE_FOR_FORCED_EXTENSIONS = 3;
+  }
+
+  optional Availability login_screen_extension_manifest_v2_availability = 1;
+}
+
 // A list of allowed locales on the login screen.
 message LoginScreenLocalesProto {
   repeated string login_screen_locales = 1;
@@ -1110,6 +1213,29 @@ message LoginScreenInputMethodsProto {
 message DeviceWallpaperImageProto {
   optional string device_wallpaper_image = 1;
 }
+
+message DeviceScreensaverLoginScreenIdleTimeoutSecondsProto {
+  optional int64 device_screensaver_login_screen_idle_timeout_seconds = 1;
+};
+
+message DeviceScreensaverLoginScreenImageDisplayIntervalSecondsProto {
+  optional int64
+      device_screensaver_login_screen_image_display_interval_seconds = 1;
+};
+
+// A list of URLs referencing the images to be displayed on the
+// sign-in screen screensaver.
+message DeviceScreensaverLoginScreenImagesProto {
+  repeated string device_screensaver_login_screen_images = 1;
+};
+
+message DeviceScreensaverLoginScreenEnabledProto {
+  optional bool device_screensaver_login_screen_enabled = 1;
+};
+
+message DeviceSystemAecEnabledProto {
+  optional bool device_system_aec_enabled = 1;
+};
 
 // Migration strategy for the case when ARC(N+) needs the ext4 encryption while
 // the device used ecryptfs in the past.
@@ -1349,6 +1475,26 @@ message DeviceKerberosEncryptionTypesProto {
   optional Types types = 1 [default = ENC_TYPES_STRONG];
 }
 
+// Mirrors BacklightColor from the personalization_app.mojom
+message KeyboardBacklightColorProto {
+  enum BacklightColor {
+    BACKLIGHT_UNSPECIFIED = 0;  // Default value for the keyboard color.
+    BACKLIGHT_WHITE = 1;
+    BACKLIGHT_RED = 2;
+    BACKLIGHT_YELLOW = 3;
+    BACKLIGHT_GREEN = 4;
+    BACKLIGHT_BLUE = 5;
+    BACKLIGHT_INDIGO = 6;
+    BACKLIGHT_PURPLE = 7;
+
+    BACKLIGHT_RAINBOW =
+        100;  // Match values in personalization_app.mojom-shared.h
+    // Next ID to use: 101
+  }
+
+  optional BacklightColor color = 1 [default = BACKLIGHT_UNSPECIFIED];
+}
+
 // Specifies how user policy from device GPOs interacts with user policy from
 // user GPOs. In 'MERGE' mode, device GPOs take preference in case of conflicts.
 // Applies to Active Directory management mode only.
@@ -1410,18 +1556,6 @@ message DeviceAuthDataCacheLifetimeProto {
   optional int32 lifetime_hours = 1;
 }
 
-// Setting to control the authentication type for newly added users which log in
-// via SAML.
-message SamlLoginAuthenticationTypeProto {
-  enum Type {
-    TYPE_DEFAULT = 0;             // Implementation-defined default config.
-    TYPE_CLIENT_CERTIFICATE = 1;  // Client certificate authentication.
-    // Next ID to use: 2
-  }
-
-  optional Type saml_login_authentication_type = 1 [default = TYPE_DEFAULT];
-}
-
 // Setting that controls whether unaffiliated users are allowed to run Crostini
 // (true by default)
 message DeviceUnaffiliatedCrostiniAllowedProto {
@@ -1457,14 +1591,18 @@ message DeviceRebootOnUserSignoutProto {
   optional RebootOnSignoutMode reboot_on_signout_mode = 1 [default = NEVER];
 }
 
+// Obsolete: This policy is not supported starting with M-122.
 // Setting that controls whether wilco diagnostics and telemetry controller is
 // allowed on this device.
+// TODO(b/328547362): Add obsolete prefix after server-side usages are removed.
 message DeviceWilcoDtcAllowedProto {
   optional bool device_wilco_dtc_allowed = 1;
 }
 
+// Obsolete: This policy is not supported starting with M-122.
 // Setting that specifies wilco diagnostics and telemetry controller
 // configuration for this device.
+// TODO(b/328547362): Add obsolete prefix after server-side usages are removed.
 message DeviceWilcoDtcConfigurationProto {
   optional string device_wilco_dtc_configuration = 1;
 }
@@ -1472,17 +1610,15 @@ message DeviceWilcoDtcConfigurationProto {
 // Settings that control power peak shift policy.
 message DevicePowerPeakShiftProto {
   // Setting that controls whether power peak shift is enabled on this device.
-  // For details see "DevicePowerPeakShiftEnabled" in policy_templates.json.
+  // For details see DevicePowerPeakShiftEnabled.yaml.
   optional bool enabled = 1;
 
   // Setting that controls power peak shift battery threshold on this device.
-  // For details see "DevicePowerPeakShiftBatteryThreshold" in
-  // policy_templates.json.
+  // For details see DevicePowerPeakShiftBatteryThreshold.yaml.
   optional int32 battery_threshold = 2;
 
   // Setting that controls power peak shift day configs on this device.
-  // This is a JSON string, for details see "DevicePowerPeakShiftDayConfig" in
-  // policy_templates.json.
+  // This is a JSON string, for details see DevicePowerPeakShiftDayConfig.yaml.
   optional string day_configs = 3;
 }
 
@@ -1510,14 +1646,13 @@ message DeviceDockMacAddressSourceProto {
 message DeviceAdvancedBatteryChargeModeProto {
   // Setting that controls whether advanced battery charge mode is enabled on
   // this device.
-  // For details see "DeviceAdvancedBatteryChargeModeEnabled" in
-  // policy_templates.json.
+  // For details see DeviceAdvancedBatteryChargeModeEnabled.yaml.
   optional bool enabled = 1;
 
   // Setting that controls advanced battery charge mode day config on this
   // device.
   // This is a JSON string, for details see
-  // "DeviceAdvancedBatteryChargeModeDayConfig" in policy_templates.json.
+  // DeviceAdvancedBatteryChargeModeDayConfig.yaml.
   optional string day_configs = 2;
 }
 
@@ -1533,17 +1668,15 @@ message DeviceBatteryChargeModeProto {
   }
 
   // Setting that controls battery charge mode on this device.
-  // For details see "DeviceBatteryChargeMode" in policy_templates.json.
+  // For details see DeviceBatteryChargeMode.yaml.
   optional BatteryChargeMode battery_charge_mode = 1;
 
   // Percent at which charging starts when using CUSTOM.
-  // For details see "DeviceBatteryChargeCustomStartCharging" in
-  // policy_templates.json.
+  // For details see DeviceBatteryChargeCustomStartCharging.yaml.
   optional int32 custom_charge_start = 2;
 
   // Percent at which charging stops when using CUSTOM.
-  // For details see "DeviceBatteryChargeCustomStopCharging" in
-  // policy_templates.json.
+  // For details see DeviceBatteryChargeCustomStopCharging.yaml.
   optional int32 custom_charge_stop = 3;
 }
 
@@ -1557,8 +1690,7 @@ message DeviceUsbPowerShareProto {
 // checks are recurring. In order to disable a set schedule the policy must be
 // removed.
 message DeviceScheduledUpdateCheckProto {
-  // This is a JSON string, for details see "DeviceScheduledUpdateCheck" in
-  // policy_templates.json.
+  // This is a JSON string, for details see DeviceScheduledUpdateCheck.yaml.
   optional string device_scheduled_update_check_settings = 1;
 }
 
@@ -1572,22 +1704,21 @@ message DevicePowerwashAllowedProto {
 // used via the WebUSB API on the login screen.
 message DeviceLoginScreenWebUsbAllowDevicesForUrlsProto {
   // This is a JSON string, for details see
-  // "DeviceLoginScreenWebUsbAllowDevicesForUrls" in policy_templates.json.
+  // DeviceLoginScreenWebUsbAllowDevicesForUrls.yaml.
   optional string device_login_screen_webusb_allow_devices_for_urls = 1;
 }
 
 // Settings that control the availability of System-proxy service and the web
 // proxy credentials for system services connecting through System-proxy.
 message SystemProxySettingsProto {
-  // This is a JSON string, for details see "SystemProxySettings" in
-  // policy_templates.json.
+  // This is a JSON string, for details see SystemProxySettings.yaml.
   optional string system_proxy_settings = 1;
 }
 
 // Settings that control what certificates should be privisioned via DM server.
 message RequiredClientCertificateForDeviceProto {
   // This is a JSON string, for details see
-  // "RequiredClientCertificateForDevice" in policy_templates.json.
+  // RequiredClientCertificateForDevice.yaml.
   optional string required_client_certificate_for_device = 1;
 }
 
@@ -1615,10 +1746,10 @@ message DeviceFamilyLinkAccountsAllowedProto {
 
 // Setting that controls whether ARC data snapshotting is enabled for the device
 // and time intervals of updating ARC data snapshot.
-message DeviceArcDataSnapshotHoursProto {
+message OBSOLETE_DeviceArcDataSnapshotHoursProto {
   // This is a JSON string, for details see
-  // "DeviceArcDataSnapshotHours" in policy_template.json
-  optional string arc_data_snapshot_hours = 1;
+  // DeviceArcDataSnapshotHours.yaml.
+  optional string OBSOLETE_arc_data_snapshot_hours = 1 [deprecated = true];
 }
 
 // Setting that controls whether system-wide trace collection using the Perfetto
@@ -1642,7 +1773,7 @@ message DevicePciPeripheralDataAccessEnabledProtoV2 {
 }
 
 // Setting that controls whether Borealis will be allowed on the device.
-message DeviceBorealisAllowedProto {
+message OBSOLETE_DeviceBorealisAllowedProto {
   optional bool allowed = 1 [default = true];
 }
 
@@ -1660,8 +1791,7 @@ message DeviceDebugPacketCaptureAllowedProto {
 // recurring. In order to disable scheduled reboots the policy must be
 // removed.
 message DeviceScheduledRebootProto {
-  // This is a JSON string, for details see "DeviceScheduledReboot" in
-  // policy_templates.json.
+  // This is a JSON string, for details see DeviceScheduledReboot.yaml.
   optional string device_scheduled_reboot_settings = 1;
 }
 
@@ -1687,12 +1817,6 @@ message RevenDeviceHWDataUsageEnabledProto {
   optional bool hardware_data_usage_enabled = 1 [default = false];
 }
 
-// Controls whether Login WebUI will be explicitly loaded on start.
-// Overrides EnableLazyLoginWebUILoading feature.
-message DeviceLoginScreenWebUILazyLoadingProto {
-  optional bool enabled = 1 [default = false];
-}
-
 // Setting that controls different configurations for the Encrypted Reporting
 // Pipeline.
 message EncryptedReportingPipelineConfigurationProto {
@@ -1701,8 +1825,43 @@ message EncryptedReportingPipelineConfigurationProto {
   optional bool enabled = 1 [default = true];
 }
 
+message DeviceReportXDREventsProto {
+  optional bool enabled = 1 [default = false];
+}
+
+message DeviceLowBatterySoundProto {
+  optional bool enabled = 1;
+}
+
+message DeviceChargingSoundsProto {
+  optional bool enabled = 1;
+}
+
+message DeviceSwitchFunctionKeysBehaviorEnabledProto {
+  optional bool enabled = 1;
+}
+
+message DeviceFlexHwDataForProductImprovementEnabledProto {
+  // Enable sending hardware data specifically for product improvement on
+  // managed ChromeOS Flex devices.
+  optional bool enabled = 1 [default = true];
+}
+
+// Mirrors ExtendedFkeysModifier from the extended_fkeys_modifier.mojom
+message OBSOLETE_ExtendedFkeysModifierProto {
+  enum OBSOLETE_ExtendedFkeysModifier {
+    OBSOLETE_DISABLED = 0;  // Default value for the F11/F12 settings.
+    OBSOLETE_ALT = 1;
+    OBSOLETE_SHIFT = 2;
+    OBSOLETE_CTRL_SHIFT = 3;
+  }
+
+  optional OBSOLETE_ExtendedFkeysModifier OBSOLETE_modifier = 1
+      [default = OBSOLETE_DISABLED];
+}
+
 message ChromeDeviceSettingsProto {
-  reserved 61, 90;
+  reserved 61, 71, 90, 131;
   optional DevicePolicyRefreshRateProto device_policy_refresh_rate = 1;
   optional UserWhitelistProto user_whitelist = 2;
   optional GuestModeEnabledProto guest_mode_enabled = 3;
@@ -1791,7 +1950,6 @@ message ChromeDeviceSettingsProto {
   optional VirtualMachinesAllowedProto virtual_machines_allowed = 69;
   optional DeviceMachinePasswordChangeRateProto
       device_machine_password_change_rate = 70;
-  optional SamlLoginAuthenticationTypeProto saml_login_authentication_type = 71;
   optional DeviceUnaffiliatedCrostiniAllowedProto
       device_unaffiliated_crostini_allowed = 72;
   optional DeviceWiFiFastTransitionEnabledProto
@@ -1803,8 +1961,10 @@ message ChromeDeviceSettingsProto {
       77;
   optional PluginVmLicenseKeyProto plugin_vm_license_key = 78;
   optional DeviceRebootOnUserSignoutProto device_reboot_on_user_signout = 79;
-  optional DeviceWilcoDtcAllowedProto device_wilco_dtc_allowed = 80;
-  optional DeviceWilcoDtcConfigurationProto device_wilco_dtc_configuration = 81;
+  optional DeviceWilcoDtcAllowedProto device_wilco_dtc_allowed = 80
+      [deprecated = true];
+  optional DeviceWilcoDtcConfigurationProto device_wilco_dtc_configuration = 81
+      [deprecated = true];
   optional DeviceWiFiAllowedProto device_wifi_allowed = 82;
   optional DevicePowerPeakShiftProto device_power_peak_shift = 83;
   optional DeviceBootOnAcProto device_boot_on_ac = 84;
@@ -1846,14 +2006,16 @@ message ChromeDeviceSettingsProto {
   optional UsbDetachableAllowlistProto usb_detachable_allowlist = 113;
   optional DeviceFamilyLinkAccountsAllowedProto family_link_accounts_allowed =
       114;
-  optional DeviceArcDataSnapshotHoursProto arc_data_snapshot_hours = 115;
+  optional OBSOLETE_DeviceArcDataSnapshotHoursProto arc_data_snapshot_hours =
+      115 [deprecated = true];
   optional BooleanPolicyProto device_allow_mgs_to_store_display_properties =
       116;
   optional DeviceSystemWideTracingEnabledProto
       device_system_wide_tracing_enabled = 117;
   optional DevicePciPeripheralDataAccessEnabledProto
       device_pci_peripheral_data_access_enabled = 118;
-  optional DeviceBorealisAllowedProto device_borealis_allowed = 119;
+  optional OBSOLETE_DeviceBorealisAllowedProto device_borealis_allowed = 119
+      [deprecated = true];
   optional DeviceAllowedBluetoothServicesProto
       device_allowed_bluetooth_services = 120;
   optional DeviceDebugPacketCaptureAllowedProto
@@ -1870,11 +2032,64 @@ message ChromeDeviceSettingsProto {
   optional DeviceI18nShortcutsEnabledProto device_i18n_shortcuts_enabled = 128;
   optional BooleanPolicyProto chromad_to_cloud_migration_enabled = 129;
   optional RevenDeviceHWDataUsageEnabledProto hardware_data_usage_enabled = 130;
-  optional DeviceLoginScreenWebUILazyLoadingProto login_web_ui_lazy_loading =
-      131;
   optional DeviceKeylockerForStorageEncryptionEnabledProto
       keylocker_for_storage_encryption_enabled = 132;
   optional BooleanPolicyProto device_run_automatic_cleanup_on_login = 133;
   optional EncryptedReportingPipelineConfigurationProto
       device_encrypted_reporting_pipeline_enabled = 134;
+  optional SAMLUsernameProto saml_username = 135;
+  optional StringListPolicyProto
+      device_login_screen_context_aware_access_signals_allowlist = 136;
+  optional StringPolicyProto device_printing_client_name_template = 137;
+  optional DeviceReportXDREventsProto device_report_xdr_events = 138;
+  optional KeyboardBacklightColorProto keyboard_backlight_color = 139;
+  optional DeviceHindiInscriptLayoutEnabledProto
+      device_hindi_inscript_layout_enabled = 140;
+  optional LoginScreenExtensionManifestV2AvailabilityProto
+      login_screen_extension_manifest_v2_availability = 141;
+  optional DeviceScreensaverLoginScreenEnabledProto
+      device_screensaver_login_screen_enabled = 142;
+  optional DeviceScreensaverLoginScreenIdleTimeoutSecondsProto
+      device_screensaver_login_screen_idle_timeout_seconds = 143;
+  optional DeviceScreensaverLoginScreenImageDisplayIntervalSecondsProto
+      device_screensaver_login_screen_image_display_interval_seconds = 144;
+  optional DeviceScreensaverLoginScreenImagesProto
+      device_screensaver_login_screen_images = 145;
+  optional DeviceSystemAecEnabledProto device_system_aec_enabled = 146;
+  optional DeviceLoginScreenGeolocationAccessLevelProto
+      device_login_screen_geolocation_access_level = 147;
+  optional StringPolicyProto device_login_screen_webhid_allow_devices_for_urls =
+      148;
+  optional DeviceLowBatterySoundProto device_low_battery_sound = 149;
+  optional DeviceChargingSoundsProto device_charging_sounds = 150;
+  optional StringListPolicyProto device_authentication_url_blocklist = 151;
+  optional StringListPolicyProto device_authentication_url_allowlist = 152;
+  optional DeviceSwitchFunctionKeysBehaviorEnabledProto
+      device_switch_function_keys_behavior_enabled = 153;
+  optional StringListPolicyProto device_dlc_predownload_list = 154;
+  optional BooleanPolicyProto device_ephemeral_network_policies_enabled = 155;
+  optional OBSOLETE_ExtendedFkeysModifierProto extended_fkeys_modifier = 156
+      [deprecated = true];
+  optional DeviceFlexHwDataForProductImprovementEnabledProto
+      device_flex_hw_data_for_product_improvement_enabled = 157;
+  // New rules for device policies (see
+  // go/device-policy-generation-future-proofing):
+  // * All device policies should use common types (see
+  //   policy_common_definitions.proto).
+  // * Field names should be the policy name (no underscores).
+  // * Field ID should be the policy ID.
+  optional BooleanPolicyProto DeviceHardwareVideoDecodingEnabled = 1185;
+  optional BooleanPolicyProto DeviceLoginScreenTouchVirtualKeyboardEnabled =
+      1194;
+  optional BooleanPolicyProto DeviceExtendedAutoUpdateEnabled = 1195;
+  optional StringPolicyProto DeviceWeeklyScheduledSuspend = 1209;
+  optional IntegerPolicyProto DeviceAuthenticationFlowAutoReloadInterval = 1247;
+  optional BooleanPolicyProto DeviceExtensionsSystemLogEnabled = 1252;
+  optional BooleanPolicyProto DeviceAllowEnterpriseRemoteAccessConnections =
+      1268;
+  optional BooleanPolicyProto DevicePostQuantumKeyAgreementEnabled = 1276;
+  optional StringPolicyProto DeviceRestrictionSchedule = 1290;
+  optional BooleanPolicyProto DeviceNativeClientForceAllowed = 1314;
+  optional IntegerPolicyProto DevicePowerBatteryChargingOptimization = 1319;
+  optional BooleanPolicyProto DeviceFlexArcPreloadEnabled = 1320;
 }

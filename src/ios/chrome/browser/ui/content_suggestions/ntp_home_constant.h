@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,20 +16,6 @@ enum PanelIdentifier {
   BOOKMARKS_PANEL,
   RECENT_TABS_PANEL,
   INCOGNITO_PANEL,
-};
-
-// Type of content displayed when a NTP is opened, for UMA report. It should be
-// treated as append-only.
-// These match tools/metrics/histograms/enums.xml.
-typedef NS_ENUM(NSUInteger, IOSNTPImpression) {
-  // The NTP only displays the local suggestions.
-  LOCAL_SUGGESTIONS = 0,
-  // The NTP displays local and remote suggestions.
-  REMOTE_SUGGESTIONS = 1,
-  // The NTP displays local suggestions and remote suggestions are collapsed.
-  REMOTE_COLLAPSED = 2,
-  // Add new enum above COUNT.
-  COUNT
 };
 
 // Returns the accessibility identifier used by the fake omnibox.
@@ -50,11 +36,21 @@ extern const CGFloat kSuggestionPeekingHeight;
 
 // Dimension of user's identity avatar as a square image.
 extern const CGFloat kIdentityAvatarDimension;
-// Margin around user's identity avatar.
-extern const CGFloat kIdentityAvatarMargin;
+// Margin around identity avatar and customization menu.
+extern const CGFloat kHeaderIconMargin;
+// Padding around user's identity avatar and its margin.
+extern const CGFloat kIdentityAvatarPadding;
+// Dimension of signed-out identity icon.
+extern const CGFloat kSignedOutIdentityIconSize;
+// Dimension of the customization menu button's icon.
+extern const CGFloat kCustomizationMenuIconSize;
+// Dimension of the customization menu button.
+extern const CGFloat kCustomizationMenuButtonDimension;
+// The corner radius of the customization menu button.
+extern const CGFloat kCustomizationMenuButtonCornerRadius;
 
 // The background color of the NTP.
-UIColor* kNTPBackgroundColor();
+UIColor* NTPBackgroundColor();
 
 }  // namespace ntp_home
 

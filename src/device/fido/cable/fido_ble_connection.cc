@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,11 @@
 #include <utility>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "components/device_event_log/device_event_log.h"
 #include "device/bluetooth/bluetooth_gatt_connection.h"
@@ -50,31 +50,29 @@ constexpr const char* ToString(BluetoothDevice::ConnectErrorCode error_code) {
       return "ERROR_UNSUPPORTED_DEVICE";
     default:
       NOTREACHED();
-      return "";
   }
 }
 
 constexpr const char* ToString(BluetoothGattService::GattErrorCode error_code) {
   switch (error_code) {
-    case BluetoothGattService::GATT_ERROR_UNKNOWN:
+    case BluetoothGattService::GattErrorCode::kUnknown:
       return "GATT_ERROR_UNKNOWN";
-    case BluetoothGattService::GATT_ERROR_FAILED:
+    case BluetoothGattService::GattErrorCode::kFailed:
       return "GATT_ERROR_FAILED";
-    case BluetoothGattService::GATT_ERROR_IN_PROGRESS:
+    case BluetoothGattService::GattErrorCode::kInProgress:
       return "GATT_ERROR_IN_PROGRESS";
-    case BluetoothGattService::GATT_ERROR_INVALID_LENGTH:
+    case BluetoothGattService::GattErrorCode::kInvalidLength:
       return "GATT_ERROR_INVALID_LENGTH";
-    case BluetoothGattService::GATT_ERROR_NOT_PERMITTED:
+    case BluetoothGattService::GattErrorCode::kNotPermitted:
       return "GATT_ERROR_NOT_PERMITTED";
-    case BluetoothGattService::GATT_ERROR_NOT_AUTHORIZED:
+    case BluetoothGattService::GattErrorCode::kNotAuthorized:
       return "GATT_ERROR_NOT_AUTHORIZED";
-    case BluetoothGattService::GATT_ERROR_NOT_PAIRED:
+    case BluetoothGattService::GattErrorCode::kNotPaired:
       return "GATT_ERROR_NOT_PAIRED";
-    case BluetoothGattService::GATT_ERROR_NOT_SUPPORTED:
+    case BluetoothGattService::GattErrorCode::kNotSupported:
       return "GATT_ERROR_NOT_SUPPORTED";
     default:
       NOTREACHED();
-      return "";
   }
 }
 
@@ -90,7 +88,6 @@ std::ostream& operator<<(std::ostream& os,
   }
 
   NOTREACHED();
-  return os;
 }
 
 void OnWriteRemoteCharacteristic(FidoBleConnection::WriteCallback callback) {
@@ -108,7 +105,7 @@ void OnWriteRemoteCharacteristicError(
 
 void OnReadServiceRevisionBitfield(
     ServiceRevisionsCallback callback,
-    absl::optional<device::BluetoothGattService::GattErrorCode> error_code,
+    std::optional<device::BluetoothGattService::GattErrorCode> error_code,
     const std::vector<uint8_t>& value) {
   if (error_code.has_value()) {
     FIDO_LOG(ERROR) << "Error while reading Service Revision Bitfield: "
@@ -178,7 +175,7 @@ void FidoBleConnection::Connect(ConnectionCallback callback) {
   auto* device = GetBleDevice();
   if (!device) {
     FIDO_LOG(ERROR) << "Failed to get Device.";
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), false));
     return;
   }
@@ -195,15 +192,15 @@ void FidoBleConnection::ReadControlPointLength(
     ControlPointLengthCallback callback) {
   const auto* fido_service = GetFidoService();
   if (!fido_service) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
-        FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(std::move(callback), std::nullopt));
     return;
   }
 
   if (!control_point_length_id_) {
     FIDO_LOG(ERROR) << "Failed to get Control Point Length.";
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
-        FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(std::move(callback), std::nullopt));
     return;
   }
 
@@ -211,8 +208,8 @@ void FidoBleConnection::ReadControlPointLength(
       fido_service->GetCharacteristic(*control_point_length_id_);
   if (!control_point_length) {
     FIDO_LOG(ERROR) << "No Control Point Length characteristic present.";
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
-        FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(std::move(callback), std::nullopt));
     return;
   }
 
@@ -225,14 +222,14 @@ void FidoBleConnection::WriteControlPoint(const std::vector<uint8_t>& data,
                                           WriteCallback callback) {
   const auto* fido_service = GetFidoService();
   if (!fido_service) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), false));
     return;
   }
 
   if (!control_point_id_) {
     FIDO_LOG(ERROR) << "Failed to get Control Point.";
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), false));
     return;
   }
@@ -241,7 +238,7 @@ void FidoBleConnection::WriteControlPoint(const std::vector<uint8_t>& data,
       fido_service->GetCharacteristic(*control_point_id_);
   if (!control_point) {
     FIDO_LOG(ERROR) << "Control Point characteristic not present.";
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), false));
     return;
   }
@@ -267,13 +264,13 @@ void FidoBleConnection::WriteControlPoint(const std::vector<uint8_t>& data,
 
 void FidoBleConnection::OnCreateGattConnection(
     std::unique_ptr<BluetoothGattConnection> connection,
-    absl::optional<BluetoothDevice::ConnectErrorCode> error_code) {
+    std::optional<BluetoothDevice::ConnectErrorCode> error_code) {
   FIDO_LOG(DEBUG) << "GATT connection created";
   DCHECK(pending_connection_callback_);
   if (error_code.has_value()) {
     FIDO_LOG(ERROR) << "CreateGattConnection() failed: "
                     << ToString(error_code.value());
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(pending_connection_callback_), false));
     return;
@@ -283,7 +280,7 @@ void FidoBleConnection::OnCreateGattConnection(
   BluetoothDevice* device = adapter_->GetDevice(address_);
   if (!device) {
     FIDO_LOG(ERROR) << "Failed to get Device.";
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(pending_connection_callback_), false));
     return;
@@ -304,7 +301,7 @@ void FidoBleConnection::ConnectToFidoService() {
   const auto* fido_service = GetFidoService();
   if (!fido_service) {
     FIDO_LOG(ERROR) << "Failed to get Fido Service.";
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(pending_connection_callback_), false));
     return;
@@ -350,7 +347,7 @@ void FidoBleConnection::ConnectToFidoService() {
   if (!control_point_length_id_ || !control_point_id_ || !status_id_ ||
       (!service_revision_id_ && !service_revision_bitfield_id_)) {
     FIDO_LOG(ERROR) << "Fido Characteristics missing.";
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(pending_connection_callback_), false));
     return;
@@ -386,7 +383,7 @@ void FidoBleConnection::OnReadServiceRevisions(
   // characteristic. Note that this information is currently not used in another
   // way, as we will still attempt a CTAP GetInfo() command, even if only U2F is
   // supported.
-  // TODO(https://crbug.com/780078): Consider short circuiting to the
+  // TODO(crbug.com/40547449): Consider short circuiting to the
   // U2F logic if FIDO2 is not supported.
   DCHECK_EQ(
       *std::min_element(service_revisions.begin(), service_revisions.end()),
@@ -400,7 +397,7 @@ void FidoBleConnection::WriteServiceRevision(ServiceRevision service_revision) {
 
   const auto* fido_service = GetFidoService();
   if (!fido_service) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), false));
     return;
   }
@@ -409,7 +406,7 @@ void FidoBleConnection::WriteServiceRevision(ServiceRevision service_revision) {
   DCHECK(service_revision_bitfield_id_);
   fido_service->GetCharacteristic(*service_revision_bitfield_id_)
       ->WriteRemoteCharacteristic(
-          {static_cast<uint8_t>(service_revision)},
+          base::byte_span_from_ref(static_cast<uint8_t>(service_revision)),
           BluetoothRemoteGattCharacteristic::WriteType::kWithResponse,
           base::BindOnce(OnWriteRemoteCharacteristic,
                          std::move(split_callback.first)),
@@ -433,7 +430,7 @@ void FidoBleConnection::StartNotifySession() {
   DCHECK(pending_connection_callback_);
   const auto* fido_service = GetFidoService();
   if (!fido_service) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(pending_connection_callback_), false));
     return;
@@ -514,18 +511,18 @@ const BluetoothRemoteGattService* FidoBleConnection::GetFidoService() {
 // static
 void FidoBleConnection::OnReadControlPointLength(
     ControlPointLengthCallback callback,
-    absl::optional<device::BluetoothGattService::GattErrorCode> error_code,
+    std::optional<device::BluetoothGattService::GattErrorCode> error_code,
     const std::vector<uint8_t>& value) {
   if (error_code.has_value()) {
     FIDO_LOG(ERROR) << "Error reading Control Point Length: "
                     << ToString(error_code.value());
-    std::move(callback).Run(absl::nullopt);
+    std::move(callback).Run(std::nullopt);
     return;
   }
   if (value.size() != 2) {
     FIDO_LOG(ERROR) << "Wrong Control Point Length: " << value.size()
                     << " bytes";
-    std::move(callback).Run(absl::nullopt);
+    std::move(callback).Run(std::nullopt);
     return;
   }
 

@@ -1,10 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "sandbox/policy/sandbox.h"
 
 #include "base/command_line.h"
+#include "base/metrics/histogram_functions.h"
 #include "build/build_config.h"
 #include "sandbox/policy/mojom/sandbox.mojom.h"
 #include "sandbox/policy/switches.h"
@@ -22,6 +23,7 @@
 #endif  // BUILDFLAG(IS_MAC)
 
 #if BUILDFLAG(IS_WIN)
+#include "base/check_op.h"
 #include "base/process/process_info.h"
 #include "sandbox/policy/win/sandbox_win.h"
 #include "sandbox/win/src/sandbox.h"
@@ -56,9 +58,11 @@ bool Sandbox::Initialize(sandbox::mojom::Sandbox sandbox_type,
       // process because it will initialize the sandbox broker, which requires
       // the process to swap its window station. During this time all the UI
       // will be broken. This has to run before threads and windows are created.
-      ResultCode result =
-          broker_services->CreatePolicy()->CreateAlternateDesktop(true);
-      CHECK(SBOX_ERROR_FAILED_TO_SWITCH_BACK_WINSTATION != result);
+      ResultCode result = broker_services->CreateAlternateDesktop(
+          Desktop::kAlternateWinstation);
+      // This failure is usually caused by third-party software or by the host
+      // system exhausting its desktop heap.
+      CHECK(result == SBOX_ALL_OK);
     }
     return true;
   }
@@ -91,7 +95,7 @@ bool Sandbox::IsProcessSandboxed() {
           env, process_class.obj(), "isIsolated", "()Z");
   return env->CallStaticBooleanMethod(process_class.obj(), is_isolated);
 #elif BUILDFLAG(IS_FUCHSIA)
-  // TODO(https://crbug.com/1071420): Figure out what to do here. Process
+  // TODO(crbug.com/40126761): Figure out what to do here. Process
   // launching controls the sandbox and there are no ambient capabilities, so
   // basically everything but the browser is considered sandboxed.
   return !is_browser;

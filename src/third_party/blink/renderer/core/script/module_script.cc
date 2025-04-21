@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,9 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/worker_or_worklet_script_controller.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
+#include "third_party/blink/renderer/core/probe/core_probes.h"
 #include "third_party/blink/renderer/core/script/module_record_resolver.h"
+#include "third_party/blink/renderer/core/script/script.h"
 #include "third_party/blink/renderer/core/workers/worker_or_worklet_global_scope.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_position.h"
@@ -113,9 +115,13 @@ ScriptEvaluationResult ModuleScript::RunScriptOnScriptStateAndReturnValue(
     ScriptState* script_state,
     ExecuteScriptPolicy execute_script_policy,
     V8ScriptRunner::RethrowErrorsOption rethrow_errors) {
+  DCHECK_EQ(script_state, SettingsObject()->GetScriptState());
+  DCHECK(script_state);
+  probe::EvaluateScriptBlock probe_scope(*script_state, BaseUrl(),
+                                         /*module=*/true, /*sanitize=*/false);
+
   DCHECK_EQ(execute_script_policy,
             ExecuteScriptPolicy::kDoNotExecuteScriptWhenScriptsDisabled);
-  DCHECK_EQ(script_state, SettingsObject()->GetScriptState());
   return V8ScriptRunner::EvaluateModule(this, std::move(rethrow_errors));
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
+#include "base/scoped_observation_traits.h"
 #include "base/time/time.h"
 #include "components/translate/content/common/translate.mojom.h"
 #include "components/translate/core/browser/translate_driver.h"
@@ -34,7 +35,6 @@ namespace translate {
 
 struct LanguageDetectionDetails;
 class TranslateManager;
-class TranslateModelService;
 
 // Content implementation of TranslateDriver.
 class ContentTranslateDriver : public TranslateDriver,
@@ -52,13 +52,12 @@ class ContentTranslateDriver : public TranslateDriver,
     // Called when the page has been translated.
     virtual void OnPageTranslated(const std::string& source_lang,
                                   const std::string& translated_lang,
-                                  translate::TranslateErrors::Type error_type) {
-    }
+                                  translate::TranslateErrors error_type) {}
   };
 
-  ContentTranslateDriver(content::WebContents& web_contents,
-                         language::UrlLanguageHistogram* url_language_histogram,
-                         TranslateModelService* translate_model_service);
+  ContentTranslateDriver(
+      content::WebContents& web_contents,
+      language::UrlLanguageHistogram* url_language_histogram);
 
   ContentTranslateDriver(const ContentTranslateDriver&) = delete;
   ContentTranslateDriver& operator=(const ContentTranslateDriver&) = delete;
@@ -91,13 +90,12 @@ class ContentTranslateDriver : public TranslateDriver,
                      const std::string& source_lang,
                      const std::string& target_lang) override;
   void RevertTranslation(int page_seq_no) override;
-  bool IsIncognito() override;
+  bool IsIncognito() const override;
   const std::string& GetContentsMimeType() override;
-  const GURL& GetLastCommittedURL() override;
+  const GURL& GetLastCommittedURL() const override;
   const GURL& GetVisibleURL() override;
   ukm::SourceId GetUkmSourceId() override;
-  bool HasCurrentPage() override;
-  void OpenUrlInNewTab(const GURL& url) override;
+  bool HasCurrentPage() const override;
 
   // content::WebContentsObserver implementation.
   void DidFinishNavigation(
@@ -106,7 +104,7 @@ class ContentTranslateDriver : public TranslateDriver,
   void OnPageTranslated(bool cancelled,
                         const std::string& source_lang,
                         const std::string& translated_lang,
-                        TranslateErrors::Type error_type);
+                        TranslateErrors error_type);
 
   // Adds a receiver in |receivers_| for the passed |receiver|.
   void AddReceiver(
@@ -116,25 +114,7 @@ class ContentTranslateDriver : public TranslateDriver,
   void RegisterPage(
       mojo::PendingRemote<translate::mojom::TranslateAgent> translate_agent,
       const translate::LanguageDetectionDetails& details,
-      bool page_level_translation_critiera_met) override;
-
-  // translate::mojom::ContentTranslateDriver implementation:
-  void GetLanguageDetectionModel(
-      GetLanguageDetectionModelCallback callback) override;
-
- protected:
-  const base::ObserverList<TranslationObserver, true>& translation_observers()
-      const {
-    return translation_observers_;
-  }
-
-  TranslateManager* translate_manager() const { return translate_manager_; }
-
-  language::UrlLanguageHistogram* language_histogram() const {
-    return language_histogram_;
-  }
-
-  bool IsAutoHrefTranslateAllOriginsEnabled() const;
+      bool page_level_translation_criteria_met) override;
 
  private:
   void OnPageAway(int page_seq_no);
@@ -142,18 +122,15 @@ class ContentTranslateDriver : public TranslateDriver,
   void InitiateTranslationIfReload(
       content::NavigationHandle* navigation_handle);
 
-  // Notifies |this| that the translate model service is available for model
-  // requests or is invalidating existing requests specified by |is_available|.
-  //  |callback| will be either forwarded to a request to get the actual model
-  // file or will be run with an empty file if the translate model service is
-  // rejecting requests.
-  void OnLanguageModelFileAvailabilityChanged(
-      GetLanguageDetectionModelCallback callback,
-      bool is_available);
-
-  raw_ptr<TranslateManager> translate_manager_;
+  raw_ptr<TranslateManager, DanglingUntriaged> translate_manager_;
 
   base::ObserverList<TranslationObserver, true> translation_observers_;
+
+  // Whether the associated browser context is off the record.
+  bool is_otr_context_;
+
+  // The last committed URL of the primary main frame of the contents.
+  GURL last_committed_url_;
 
   // Max number of attempts before checking if a page has been reloaded.
   int max_reload_check_attempts_;
@@ -179,13 +156,29 @@ class ContentTranslateDriver : public TranslateDriver,
   // page language is determined.
   base::TimeTicks finish_navigation_time_;
 
-  // The service that provides the model files needed for translate. Not owned
-  // but guaranteed to outlive |this|.
-  const raw_ptr<TranslateModelService> translate_model_service_;
-
   base::WeakPtrFactory<ContentTranslateDriver> weak_pointer_factory_{this};
 };
 
 }  // namespace translate
+
+namespace base {
+
+template <>
+struct ScopedObservationTraits<
+    translate::ContentTranslateDriver,
+    translate::ContentTranslateDriver::TranslationObserver> {
+  static void AddObserver(
+      translate::ContentTranslateDriver* source,
+      translate::ContentTranslateDriver::TranslationObserver* observer) {
+    source->AddTranslationObserver(observer);
+  }
+  static void RemoveObserver(
+      translate::ContentTranslateDriver* source,
+      translate::ContentTranslateDriver::TranslationObserver* observer) {
+    source->RemoveTranslationObserver(observer);
+  }
+};
+
+}  // namespace base
 
 #endif  // COMPONENTS_TRANSLATE_CONTENT_BROWSER_CONTENT_TRANSLATE_DRIVER_H_

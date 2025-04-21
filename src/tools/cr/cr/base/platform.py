@@ -1,4 +1,4 @@
-# Copyright 2013 The Chromium Authors. All rights reserved.
+# Copyright 2013 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -62,9 +62,7 @@ def _PathFixup(base, key, value):
       if entry not in paths:
         paths.append(entry)
     for entry in value.split(os.path.pathsep):
-      if entry.endswith(os.path.sep + 'goma'):
-        pass
-      elif entry not in paths:
+      if entry not in paths:
         paths.append(entry)
     value = os.path.pathsep.join(paths)
   return value

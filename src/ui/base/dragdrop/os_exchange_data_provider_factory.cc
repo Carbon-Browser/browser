@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,7 @@ OSExchangeDataProviderFactory::CreateProvider() {
 #elif BUILDFLAG(IS_WIN)
   return std::make_unique<OSExchangeDataProviderWin>();
 #elif BUILDFLAG(IS_FUCHSIA)
-  // TODO(crbug.com/980371): Implement OSExchangeDataProvider for Fuchsia.
+  // TODO(crbug.com/42050646): Implement OSExchangeDataProvider for Fuchsia.
   return std::make_unique<OSExchangeDataProviderNonBacked>();
 #else
 #error "Unknown operating system"

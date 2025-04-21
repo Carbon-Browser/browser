@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "components/no_state_prefetch/browser/no_state_prefetch_manager_delegate.h"
-#include "components/no_state_prefetch/common/prerender_origin.h"
+#include "components/no_state_prefetch/common/no_state_prefetch_origin.h"
 
 class Profile;
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,13 +11,14 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/cancelable_callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/devtools/device/android_device_manager.h"
 #include "chrome/browser/devtools/device/devtools_device_discovery.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "content/public/browser/browser_thread.h"
@@ -39,7 +40,7 @@ class TCPDeviceProvider;
 
 class DevToolsAndroidBridge : public KeyedService {
  public:
-  class Factory : public BrowserContextKeyedServiceFactory {
+  class Factory : public ProfileKeyedServiceFactory {
    public:
     // Returns singleton instance of DevToolsAndroidBridge.
     static Factory* GetInstance();
@@ -57,7 +58,7 @@ class DevToolsAndroidBridge : public KeyedService {
     ~Factory() override;
 
     // BrowserContextKeyedServiceFactory overrides:
-    KeyedService* BuildServiceInstanceFor(
+    std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
         content::BrowserContext* context) const override;
   };
 
@@ -76,11 +77,11 @@ class DevToolsAndroidBridge : public KeyedService {
    public:
     virtual void DeviceListChanged(const RemoteDevices& devices) = 0;
    protected:
-    virtual ~DeviceListListener() {}
+    virtual ~DeviceListListener() = default;
   };
 
   explicit DevToolsAndroidBridge(Profile* profile);
-
+  ~DevToolsAndroidBridge() override;
   DevToolsAndroidBridge(const DevToolsAndroidBridge&) = delete;
   DevToolsAndroidBridge& operator=(const DevToolsAndroidBridge&) = delete;
 
@@ -91,7 +92,7 @@ class DevToolsAndroidBridge : public KeyedService {
    public:
     virtual void DeviceCountChanged(int count) = 0;
    protected:
-    virtual ~DeviceCountListener() {}
+    virtual ~DeviceCountListener() = default;
   };
 
   void AddDeviceCountListener(DeviceCountListener* listener);
@@ -110,7 +111,7 @@ class DevToolsAndroidBridge : public KeyedService {
 
     virtual void PortStatusChanged(const ForwardingStatus&) = 0;
    protected:
-    virtual ~PortForwardingListener() {}
+    virtual ~PortForwardingListener() = default;
   };
 
   void AddPortForwardingListener(PortForwardingListener* listener);
@@ -149,7 +150,6 @@ class DevToolsAndroidBridge : public KeyedService {
       content::BrowserThread::UI>;
   friend class base::DeleteHelper<DevToolsAndroidBridge>;
 
-  ~DevToolsAndroidBridge() override;
 
   void StartDeviceListPolling();
   void StopDeviceListPolling();
@@ -168,22 +168,25 @@ class DevToolsAndroidBridge : public KeyedService {
       return weak_factory_.GetWeakPtr();
   }
 
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
   std::unique_ptr<AndroidDeviceManager> device_manager_;
 
   using DeviceMap =
       std::map<std::string, scoped_refptr<AndroidDeviceManager::Device> >;
   DeviceMap device_map_;
 
-  using DeviceListListeners = std::vector<DeviceListListener*>;
+  using DeviceListListeners =
+      std::vector<raw_ptr<DeviceListListener, VectorExperimental>>;
   DeviceListListeners device_list_listeners_;
 
-  using DeviceCountListeners = std::vector<DeviceCountListener*>;
+  using DeviceCountListeners =
+      std::vector<raw_ptr<DeviceCountListener, VectorExperimental>>;
   DeviceCountListeners device_count_listeners_;
   base::CancelableRepeatingCallback<void(int)> device_count_callback_;
   base::RepeatingCallback<void(base::OnceClosure)> task_scheduler_;
 
-  using PortForwardingListeners = std::vector<PortForwardingListener*>;
+  using PortForwardingListeners =
+      std::vector<raw_ptr<PortForwardingListener, VectorExperimental>>;
   PortForwardingListeners port_forwarding_listeners_;
   std::unique_ptr<PortForwardingController> port_forwarding_controller_;
 

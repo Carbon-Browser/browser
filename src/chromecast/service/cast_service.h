@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,6 @@
 #define CHROMECAST_SERVICE_CAST_SERVICE_H_
 
 #include <memory>
-
-#include "base/callback.h"
 
 namespace base {
 class ThreadChecker;
@@ -29,9 +27,6 @@ class CastService {
   // Starts/stops the cast service.
   void Start();
   void Stop();
-
-  // Notify out-of-process (non-chrome renderers) of accessibility state.
-  virtual void AccessibilityStateChanged(bool enabled);
 
  protected:
   CastService();

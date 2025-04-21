@@ -1,9 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_PREDICTORS_LOADING_PREDICTOR_TAB_HELPER_H_
 #define CHROME_BROWSER_PREDICTORS_LOADING_PREDICTOR_TAB_HELPER_H_
+
+#include <optional>
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
@@ -14,7 +16,6 @@
 #include "content/public/browser/navigation_handle_user_data.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/browser/web_contents_user_data.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
 class NavigationHandle;
@@ -64,10 +65,6 @@ class LoadingPredictorTabHelper
       network::mojom::RequestDestination request_destination) override;
   void DocumentOnLoadCompletedInPrimaryMainFrame() override;
 
-  // Used by LoadingPredictorPageLoadMetricsObserver.
-  void RecordFirstContentfulPaint(content::RenderFrameHost* render_frame_host,
-                                  base::TimeTicks first_contentful_paint);
-
   void SetLoadingPredictorForTesting(
       base::WeakPtr<LoadingPredictor> predictor) {
     predictor_ = predictor;
@@ -103,15 +100,16 @@ class LoadingPredictorTabHelper
 
     bool has_local_preconnect_predictions_for_current_navigation_ = false;
 
-    // The optimization guide prediction for the current navigation. If set,
-    // this will be cleared on |DocumentOnLoadCompletedInPrimaryMainFrame|.
-    absl::optional<OptimizationGuidePrediction>
+    // The optimization guide prediction for the current navigation.
+    std::optional<OptimizationGuidePrediction>
         last_optimization_guide_prediction_;
 
     // Stores weak ptrs to the document and navigation page data holders, in
     // order to determine the current state of the navigation.
     base::WeakPtr<DocumentPageDataHolder> document_page_data_holder_;
     base::WeakPtr<NavigationPageDataHolder> navigation_page_data_holder_;
+
+    base::WeakPtr<LoadingPredictor> predictor_;
 
    private:
     friend class base::RefCounted<PageData>;
@@ -154,6 +152,7 @@ class LoadingPredictorTabHelper
   // required to decide if it has remote predictions for the page load.
   void OnOptimizationGuideDecision(
       scoped_refptr<PageData> page_helper,
+      const std::optional<url::Origin>& initiator_origin,
       const GURL& main_frame_url,
       bool should_add_preconnects_to_prediction,
       optimization_guide::OptimizationGuideDecision decision,

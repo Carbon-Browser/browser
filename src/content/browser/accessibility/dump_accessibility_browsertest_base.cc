@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,18 +9,17 @@
 #include <vector>
 
 #include "base/command_line.h"
+#include "base/containers/contains.h"
 #include "base/files/file_util.h"
 #include "base/path_service.h"
+#include "base/scoped_observation.h"
 #include "base/strings/escape.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_command_line.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
-#include "content/browser/accessibility/browser_accessibility.h"
-#include "content/browser/accessibility/browser_accessibility_manager.h"
 #include "content/browser/accessibility/browser_accessibility_state_impl.h"
 #include "content/browser/renderer_host/render_widget_host_view_child_frame.h"
 #include "content/public/browser/ax_inspect_factory.h"
@@ -41,62 +40,146 @@
 #include "ui/accessibility/accessibility_features.h"
 #include "ui/accessibility/ax_node.h"
 #include "ui/accessibility/ax_role_properties.h"
+#include "ui/accessibility/platform/browser_accessibility.h"
+#include "ui/accessibility/platform/browser_accessibility_manager.h"
 #include "ui/base/ui_base_features.h"
+
+#if BUILDFLAG(IS_ANDROID)
+#include "ui/accessibility/android/accessibility_state.h"
+#endif
 
 namespace content {
 
 namespace {
 
-bool ShouldHaveChildTree(const ui::AXNode& node) {
+bool SkipUrlMatch(const std::vector<std::string>& skip_urls,
+                  const std::string& url) {
+  for (const auto& skip_url : skip_urls) {
+    if (base::Contains(url, skip_url)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool ShouldHaveChildTree(const ui::AXNode& node,
+                         const std::vector<std::string>& skip_urls) {
   const ui::AXNodeData& data = node.data();
   if (data.GetRestriction() == ax::mojom::Restriction::kDisabled) {
     DCHECK(!data.HasStringAttribute(ax::mojom::StringAttribute::kChildTreeId));
     return false;  // A disabled child tree owner won't have a child tree.
   }
-  // If has a child tree owner role or a child tree id, then expect some
-  // child tree content. In some cases IsChildTreeOwner(role) will be false,
+
+  if (node.IsInvisibleOrIgnored()) {
+    return false;
+  }
+
+  // If it has an embedding element role or a child tree id, then expect some
+  // child tree content. In some cases IsEmbeddingElement(role) will be false,
   // if an ARIA role was used, e.g. <iframe role="region">.
-  return ui::IsChildTreeOwner(node.GetRole()) ||
-         data.HasStringAttribute(ax::mojom::StringAttribute::kChildTreeId);
+  if (data.HasStringAttribute(ax::mojom::StringAttribute::kChildTreeId)) {
+    return true;
+  }
+  if (!ui::IsEmbeddingElement(node.GetRole())) {
+    return false;
+  }
+  std::string url = node.GetStringAttribute(ax::mojom::StringAttribute::kUrl);
+  return (!url.empty() && !SkipUrlMatch(skip_urls, url));
 }
 
-bool AccessibilityTreeContainsAllChildTrees(const ui::AXNode& node) {
-  size_t num_children = node.GetChildCountCrossingTreeBoundary();
-  if (!num_children) {
-    // No children. All content is contained unless there is supposed to be
-    // a child tree for this node.
-    return !ShouldHaveChildTree(node);
-  }
+class AXTreeChangeWaiter : public ui::AXTreeObserver {
+ public:
+  AXTreeChangeWaiter()
+      : loop_runner_(std::make_unique<base::RunLoop>()),
+        loop_runner_quit_closure_(loop_runner_->QuitClosure()) {}
 
-  for (size_t i = 0; i < num_children; i++) {
-    if (!AccessibilityTreeContainsAllChildTrees(
-            *node.GetChildAtIndexCrossingTreeBoundary(i))) {
-      return false;
+  void OnStringAttributeChanged(ui::AXTree* tree,
+                                ui::AXNode* node,
+                                ax::mojom::StringAttribute attr,
+                                const std::string& old_value,
+                                const std::string& new_value) override {
+    if (attr == ax::mojom::StringAttribute::kChildTreeId) {
+      tree->RemoveObserver(this);
+      loop_runner_quit_closure_.Run();
     }
   }
 
-  return true;
+  void OnChildTreeConnectionChanged(ui::AXNode* host_node) override {
+    host_node->tree()->RemoveObserver(this);
+    loop_runner_quit_closure_.Run();
+  }
+
+  void WaitForChange(ui::AXTree* tree) {
+    base::ScopedObservation<ui::AXTree, ui::AXTreeObserver> observation(this);
+    observation.Observe(tree);
+    loop_runner_->Run();
+    loop_runner_.reset();
+    loop_runner_quit_closure_.Reset();
+  }
+
+ private:
+  std::unique_ptr<base::RunLoop> loop_runner_;
+  base::RepeatingClosure loop_runner_quit_closure_;
+};
+
+void WaitForChildTrees(const ui::AXNode& node,
+                       const std::vector<std::string>& skip_urls) {
+  while (true) {
+    size_t num_children = node.GetChildCountCrossingTreeBoundary();
+    if (!num_children && ShouldHaveChildTree(node, skip_urls)) {
+      AXTreeChangeWaiter waiter;
+      waiter.WaitForChange(node.tree());
+      continue;
+    }
+
+    // Any node that is the connection point for a child tree should have
+    // exactly one child.
+    DCHECK(!ShouldHaveChildTree(node, skip_urls) || num_children == 1u)
+        << "AXNode (" << node << ") has an unexpected number of "
+        << "children :" << num_children;
+
+    for (size_t i = 0; i < num_children; i++) {
+      WaitForChildTrees(*node.GetChildAtIndexCrossingTreeBoundary(i),
+                        skip_urls);
+    }
+    break;
+  }
 }
 
-// Searches recursively and returns true if an accessibility node is found
-// that represents a fully loaded web document with the given url.
-bool AccessibilityTreeContainsLoadedDocWithUrl(BrowserAccessibility* node,
-                                               const std::string& url) {
-  if (node->GetRole() == ax::mojom::Role::kRootWebArea &&
-      node->GetStringAttribute(ax::mojom::StringAttribute::kUrl) == url) {
-    // Ensure the doc has finished loading and has a non-zero size.
-    return node->manager()->GetTreeData().loaded &&
-           (node->GetData().relative_bounds.bounds.width() > 0 &&
-            node->GetData().relative_bounds.bounds.height() > 0);
+bool IsLoadedDocWithUrl(const ui::BrowserAccessibility* node,
+                        const std::string& url) {
+  return node->GetRole() == ax::mojom::Role::kRootWebArea &&
+         node->GetStringAttribute(ax::mojom::StringAttribute::kUrl) == url &&
+         node->manager()->GetTreeData().loaded;
+}
+
+// Recursively searches accessibility nodes in the subtree of |node| that
+// represent a fully loaded web document with the given |url|. If less than
+// |num_expected| occurrences are found, it returns the remainder. Otherwise,
+// it stops searching when reaching |num_expected| occurrences, and returns 0.
+unsigned SearchLoadedDocsWithUrlInAccessibilityTree(
+    const ui::BrowserAccessibility* node,
+    const std::string& url,
+    unsigned num_expected) {
+  if (!num_expected) {
+    return 0;
   }
 
-  for (unsigned i = 0; i < node->PlatformChildCount(); i++) {
-    if (AccessibilityTreeContainsLoadedDocWithUrl(node->PlatformGetChild(i),
-                                                  url)) {
-      return true;
+  if (IsLoadedDocWithUrl(node, url)) {
+    num_expected -= 1;
+    if (!num_expected) {
+      return 0;
     }
   }
-  return false;
+
+  for (const auto* child : node->AllChildren()) {
+    num_expected =
+        SearchLoadedDocsWithUrlInAccessibilityTree(child, url, num_expected);
+    if (!num_expected) {
+      return 0;
+    }
+  }
+  return num_expected;
 }
 
 }  // namespace
@@ -113,9 +196,6 @@ DumpAccessibilityTestBase::~DumpAccessibilityTestBase() {}
 void DumpAccessibilityTestBase::SetUpCommandLine(
     base::CommandLine* command_line) {
   IsolateAllSitesForTesting(command_line);
-
-  // Each test pass may require custom command-line setup.
-  test_helper_.SetUpCommandLine(command_line);
 }
 
 void DumpAccessibilityTestBase::SetUpOnMainThread() {
@@ -125,8 +205,11 @@ void DumpAccessibilityTestBase::SetUpOnMainThread() {
 }
 
 void DumpAccessibilityTestBase::SetUp() {
-  std::vector<base::Feature> enabled_features;
-  std::vector<base::Feature> disabled_features;
+  // Each test pass may require custom feature setup.
+  test_helper_.InitializeFeatureList();
+
+  std::vector<base::test::FeatureRef> enabled_features;
+  std::vector<base::test::FeatureRef> disabled_features;
   ChooseFeatures(&enabled_features, &disabled_features);
 
   scoped_feature_list_.InitWithFeatures(enabled_features, disabled_features);
@@ -139,21 +222,33 @@ void DumpAccessibilityTestBase::SetUp() {
   ContentBrowserTest::SetUp();
 }
 
+void DumpAccessibilityTestBase::TearDown() {
+  ContentBrowserTest::TearDown();
+  scoped_feature_list_.Reset();
+  test_helper_.ResetFeatureList();
+}
+
 void DumpAccessibilityTestBase::SignalRunTestOnMainThread(int) {
   LOG(INFO) << "\n\nFinal accessibility tree upon the test termination:\n"
             << DumpUnfilteredAccessibilityTreeAsString();
 }
 
 void DumpAccessibilityTestBase::ChooseFeatures(
-    std::vector<base::Feature>* enabled_features,
-    std::vector<base::Feature>* disabled_features) {
+    std::vector<base::test::FeatureRef>* enabled_features,
+    std::vector<base::test::FeatureRef>* disabled_features) {
   // For the best test coverage during development of this feature, enable the
   // code that expposes document markers on AXInlineTextBox objects and the
   // corresponding code in AXPosition on the browser that collects those
   // markers.
   enabled_features->emplace_back(features::kUseAXPositionForDocumentMarkers);
-
-  enabled_features->emplace_back(blink::features::kPortals);
+  // For improved test coverage ahead of a finch trial, enable the feature that
+  // prunes redundant text for inline text boxes.
+  enabled_features->emplace_back(
+      features::kAccessibilityPruneRedundantInlineText);
+  // For improved test coverage ahead of a finch trial, enable the feature that
+  // prunes redundant (next|previous) on line IDs.
+  enabled_features->emplace_back(
+      features::kAccessibilityPruneRedundantInlineConnectivity);
 }
 
 std::string DumpAccessibilityTestBase::DumpTreeAsString() const {
@@ -161,9 +256,7 @@ std::string DumpAccessibilityTestBase::DumpTreeAsString() const {
   formatter->SetPropertyFilters(scenario_.property_filters,
                                 AXTreeFormatter::kFiltersDefaultSet);
   formatter->SetNodeFilters(scenario_.node_filters);
-  std::string actual_contents =
-      formatter->Format(GetRootAccessibilityNode(GetWebContents()));
-  return base::EscapeNonASCII(actual_contents);
+  return FormatWebContentsTree(*formatter);
 }
 
 std::string
@@ -171,43 +264,89 @@ DumpAccessibilityTestBase::DumpUnfilteredAccessibilityTreeAsString() {
   std::unique_ptr<AXTreeFormatter> formatter(CreateFormatter());
   formatter->SetPropertyFilters({{"*", AXPropertyFilter::ALLOW}});
   formatter->set_show_ids(true);
-  return formatter->Format(GetRootAccessibilityNode(GetWebContents()));
+  return FormatWebContentsTree(*formatter);
+}
+
+std::string DumpAccessibilityTestBase::FormatWebContentsTree(
+    const ui::AXTreeFormatter& formatter) const {
+  std::string contents =
+      IsTestingExternalTree()
+          ? formatter.Format(
+                {GetAcceleratedWidget(), ui::AXTreeSelector::ActiveTab})
+          : formatter.Format(GetRootAccessibilityNode(GetWebContents()));
+  return base::EscapeNonASCII(contents);
+}
+
+std::string DumpAccessibilityTestBase::FormatWebContentsTestNode(
+    const ui::AXTreeFormatter& formatter) const {
+  // Retrieve the element by "test" ID if present or "test" class name.
+  // Using only the class name is preferred, as the presence of an ID can impact
+  // the accessibility tree and make testing certain scenarios difficult.
+  // Supporting only the class name reduces unnecessary complexity in testing.
+  const std::string kTestNodeName = "test";
+  std::string contents;
+  if (IsTestingExternalTree()) {
+    contents = formatter.FormatNode(
+        {ui::AXTreeSelector::ActiveTab | ui::AXTreeSelector::IDOrClass,
+         kTestNodeName, GetAcceleratedWidget()});
+  } else {
+    ui::BrowserAccessibility* test_node = FindNodeByStringAttribute(
+        ax::mojom::StringAttribute::kHtmlId, kTestNodeName);
+    if (!test_node) {
+      test_node = FindNodeByStringAttribute(
+          ax::mojom::StringAttribute::kClassName, kTestNodeName);
+    }
+    contents =
+        test_node ? formatter.FormatNode(test_node) : "Test node not found.";
+  }
+  return base::EscapeNonASCII(contents);
+}
+
+void DumpAccessibilityTestBase::RunTest(
+    ui::AXMode mode,
+    const base::FilePath file_path,
+    const char* file_dir,
+    const base::FilePath::StringType& expectations_qualifier) {
+  RunTestForPlatform(mode, file_path, file_dir, expectations_qualifier);
 }
 
 void DumpAccessibilityTestBase::RunTest(
     const base::FilePath file_path,
     const char* file_dir,
     const base::FilePath::StringType& expectations_qualifier) {
-  RunTestForPlatform(file_path, file_dir, expectations_qualifier);
+  RunTestForPlatform(ui::kAXModeComplete, file_path, file_dir,
+                     expectations_qualifier);
 }
 
 // TODO(accessibility) Consider renaming these things to
 // WaitForAccessibiltiyClean(), Action::kRequestAccessibilityCleanNotification,
 // Event::kAccessibilityClean, etc. because this can be used multiple times
 // per test.
-// TODO(accessibility) A potential test flakiness fix would be to
-// WaitForEndOfTest on all descendant documents. This currently only
-// ensures a clean state for the root document. However, the code in
-// RenderAccessibilityImpl would not be able to perfectly check all child
-// documents because some frames are remote, aka in another process. This does
-// not appear to be necessary for our current tests. It may be necessary if we
-// end up with <portal> or <iframe> tests that have more complex content.
-void DumpAccessibilityTestBase::WaitForEndOfTest() const {
+void DumpAccessibilityTestBase::WaitForEndOfTest(ui::AXMode mode) const {
   // To make sure we've handled all accessibility events, add a sentinel by
-  // calling SignalEndOfTest and waiting for a kEndOfTest event in response.
-  AccessibilityNotificationWaiter waiter(GetWebContents(), ui::kAXModeComplete,
+  // calling SignalEndOfTest on each frame and waiting for a kEndOfTest event
+  // in response.
+  auto hosts = content::CollectAllRenderFrameHosts(GetWebContents());
+  for (auto* host : hosts) {
+    ui::AXActionData action_data;
+    action_data.action = ax::mojom::Action::kSignalEndOfTest;
+    host->AccessibilityPerformAction(action_data);
+  }
+
+  AccessibilityNotificationWaiter waiter(GetWebContents(), mode,
                                          ax::mojom::Event::kEndOfTest);
-  GetManager()->SignalEndOfTest();
-  ASSERT_TRUE(waiter.WaitForNotification());
+  ASSERT_TRUE(waiter.WaitForNotification(true));
 }
 
-void DumpAccessibilityTestBase::PerformAndWaitForDefaultActions() {
+void DumpAccessibilityTestBase::PerformAndWaitForDefaultActions(
+    ui::AXMode mode) {
   // Only perform actions the first call, as they are only allowed once per
   // test, e.g. only perform the action once if this is  script is executed
   // multiple times.
 
-  if (has_performed_default_actions_)
+  if (has_performed_default_actions_) {
     return;
+  }
 
   has_performed_default_actions_ = true;
 
@@ -215,9 +354,9 @@ void DumpAccessibilityTestBase::PerformAndWaitForDefaultActions() {
   for (const auto& str : scenario_.default_action_on) {
     // TODO(accessibility) Consider waiting for kEndOfTest instead (but change
     // the name to something more like kAccessibilityClean).
-    AccessibilityNotificationWaiter waiter(
-        GetWebContents(), ui::kAXModeComplete, ax::mojom::Event::kClicked);
-    BrowserAccessibility* action_element;
+    AccessibilityNotificationWaiter waiter(GetWebContents(), mode,
+                                           ax::mojom::Event::kClicked);
+    ui::BrowserAccessibility* action_element;
 
     // TODO(accessibility) base/strings/string_split.h might be cleaner here.
     size_t parent_node_delimiter_index = str.find(",");
@@ -225,7 +364,7 @@ void DumpAccessibilityTestBase::PerformAndWaitForDefaultActions() {
       auto node_name = str.substr(0, parent_node_delimiter_index);
       auto parent_node_name = str.substr(parent_node_delimiter_index + 1);
 
-      BrowserAccessibility* parent_node = FindNode(parent_node_name);
+      ui::BrowserAccessibility* parent_node = FindNode(parent_node_name);
       DCHECK(parent_node) << "Parent node name provided but not found";
       action_element = FindNode(node_name, parent_node);
     } else {
@@ -240,7 +379,7 @@ void DumpAccessibilityTestBase::PerformAndWaitForDefaultActions() {
   }
 }
 
-void DumpAccessibilityTestBase::WaitForExpectedText() {
+void DumpAccessibilityTestBase::WaitForExpectedText(ui::AXMode mode) {
   // If the original page has a @WAIT-FOR directive, don't break until
   // the text we're waiting for appears in the full text dump of the
   // accessibility tree, either.
@@ -249,9 +388,9 @@ void DumpAccessibilityTestBase::WaitForExpectedText() {
     VLOG(1) << "Top of WaitForExpectedText() loop";
     // Check to see if the @WAIT-FOR text has appeared yet.
     bool all_wait_for_strings_found = true;
-    std::string tree_dump = DumpUnfilteredAccessibilityTreeAsString();
+    std::string tree_dump = DumpTreeAsString();
     for (const auto& str : scenario_.wait_for) {
-      if (tree_dump.find(str) == std::string::npos) {
+      if (!base::Contains(tree_dump, str)) {
         VLOG(1) << "Still waiting on this text to be found: " << str;
         all_wait_for_strings_found = false;
         break;
@@ -259,43 +398,51 @@ void DumpAccessibilityTestBase::WaitForExpectedText() {
     }
 
     // If the @WAIT-FOR text has appeared, we're done.
-    if (all_wait_for_strings_found)
+    if (all_wait_for_strings_found) {
       break;
+    }
 
     // Block until the next accessibility notification in any frame.
     VLOG(1) << "Waiting until the next accessibility event";
-    AccessibilityNotificationWaiter accessibility_waiter(
-        GetWebContents(), ui::kAXModeComplete, ax::mojom::Event::kNone);
+    AccessibilityNotificationWaiter accessibility_waiter(GetWebContents());
     ASSERT_TRUE(accessibility_waiter.WaitForNotification());
   }
 }
 
-void DumpAccessibilityTestBase::WaitForFinalTreeContents() {
+void DumpAccessibilityTestBase::WaitForFinalTreeContents(ui::AXMode mode) {
   // If @DEFAULT-ACTION-ON:[name] is used, perform the action and wait until it
   // is complete.
-  PerformAndWaitForDefaultActions();
+  PerformAndWaitForDefaultActions(mode);
 
-  // Wait for expected text from @WAIT-FOR.
-  WaitForExpectedText();
-
-  // Wait until all accessibility events and dirty objects have been processed.
-  WaitForEndOfTest();
+  if (scenario_.wait_for.size()) {
+    // Wait for expected text from @WAIT-FOR.
+    WaitForExpectedText(mode);
+  } else {
+    // Wait until all accessibility events and dirty objects have been
+    // processed.
+    WaitForEndOfTest(mode);
+  }
 }
 
 void DumpAccessibilityTestBase::RunTestForPlatform(
+    ui::AXMode mode,
     const base::FilePath file_path,
     const char* file_dir,
     const base::FilePath::StringType& expectations_qualifier) {
-  // Disable the "hot tracked" state (set when the mouse is hovering over
+  // Ignore the hovered state (set when the mouse is hovering over
   // an object) because it makes test output change based on the mouse position.
-  BrowserAccessibilityStateImpl::GetInstance()
-      ->set_disable_hot_tracking_for_testing(true);
+  ui::BrowserAccessibility::ignore_hovered_state_for_testing_ = true;
+
+  // For Android, set a consistent user preference for how password display.
+#if BUILDFLAG(IS_ANDROID)
+  ui::AccessibilityState::ForceRespectDisplayedPasswordTextForTesting();
+#endif
 
   // Normally some accessibility events that would be fired are suppressed or
   // delayed, depending on what has focus or the type of event. For testing,
   // we want all events to fire immediately to make tests predictable and not
   // flaky.
-  BrowserAccessibilityManager::NeverSuppressOrDelayEventsForTesting();
+  ui::BrowserAccessibilityManager::NeverSuppressOrDelayEventsForTesting();
 
   // Enable the behavior whereby all focused nodes will be exposed to the
   // platform accessibility layer. This behavior is currently disabled in
@@ -306,7 +453,7 @@ void DumpAccessibilityTestBase::RunTestForPlatform(
 
   EXPECT_TRUE(NavigateToURL(shell(), GURL(url::kAboutBlankURL)));
 
-  absl::optional<ui::AXInspectScenario> scenario =
+  std::optional<ui::AXInspectScenario> scenario =
       test_helper_.ParseScenario(file_path, DefaultFilters());
   if (!scenario) {
     ADD_FAILURE()
@@ -316,13 +463,14 @@ void DumpAccessibilityTestBase::RunTestForPlatform(
   }
   scenario_ = std::move(*scenario);
 
-  absl::optional<std::vector<std::string>> expected_lines;
+  std::optional<std::vector<std::string>> expected_lines;
 
   // Get expectation lines from expectation file if any.
   base::FilePath expected_file =
       test_helper_.GetExpectationFilePath(file_path, expectations_qualifier);
-  if (!expected_file.empty())
+  if (!expected_file.empty()) {
     expected_lines = test_helper_.LoadExpectationFile(expected_file);
+  }
 
   // Get the test URL.
   GURL url(embedded_test_server()->GetURL(
@@ -330,44 +478,55 @@ void DumpAccessibilityTestBase::RunTestForPlatform(
       "/" + std::string(file_dir) + "/" + file_path.BaseName().MaybeAsASCII()));
   WebContentsImpl* web_contents = GetWebContents();
 
+  // Start with no AXMode, so that in case the test was run with
+  // --force-renderer-accessibility, we can still set the correct mode for the
+  // test, e.g. form controls mode.
+  BrowserAccessibilityState::GetInstance()->DisableAccessibility();
+
   if (enable_accessibility_after_navigating_ &&
       web_contents->GetAccessibilityMode().is_mode_off()) {
     // Load the url, then enable accessibility.
     EXPECT_TRUE(NavigateToURL(shell(), url));
     AccessibilityNotificationWaiter accessibility_waiter(
-        web_contents, ui::kAXModeComplete, ax::mojom::Event::kNone);
+        web_contents, mode, ax::mojom::Event::kNone);
+    static_cast<BrowserAccessibilityStateImpl*>(
+        BrowserAccessibilityState::GetInstance())
+        ->SetAXModeChangeAllowed(false);
     ASSERT_TRUE(accessibility_waiter.WaitForNotification());
   } else {
     // Enable accessibility, then load the test html and wait for the
     // "load complete" AX event.
     AccessibilityNotificationWaiter accessibility_waiter(
-        web_contents, ui::kAXModeComplete, ax::mojom::Event::kLoadComplete);
+        web_contents, mode, ax::mojom::Event::kLoadComplete);
+    static_cast<BrowserAccessibilityStateImpl*>(
+        BrowserAccessibilityState::GetInstance())
+        ->SetAXModeChangeAllowed(false);
     EXPECT_TRUE(NavigateToURL(shell(), url));
-    // TODO(https://crbug.com/1332468): Investigate why this does not return
+    // TODO(crbug.com/40844856): Investigate why this does not return
     // true.
     ASSERT_TRUE(accessibility_waiter.WaitForNotification());
   }
 
-  WaitForAllFramesLoaded();
+  WaitForAllFramesLoaded(mode);
 
   // Call the subclass to dump the output.
-  std::vector<std::string> actual_lines = Dump();
+  std::vector<std::string> actual_lines = Dump(mode);
 
   // Execute and wait for specified string
   for (const auto& function_name : scenario_.execute) {
     DLOG(INFO) << "executing: " << function_name;
-    base::Value result = ExecuteScriptAndGetValue(
-        web_contents->GetPrimaryMainFrame(), function_name);
-    const std::string& str = result.is_string() ? result.GetString() : "";
+    const std::string str =
+        EvalJs(web_contents->GetPrimaryMainFrame(), function_name)
+            .ExtractString();
     // If no string is specified, do not wait.
     bool wait_for_string = str != "";
     while (wait_for_string) {
       // Loop until specified string is found.
       std::string tree_dump = DumpUnfilteredAccessibilityTreeAsString();
-      if (tree_dump.find(str) != std::string::npos) {
+      if (base::Contains(tree_dump, str)) {
         wait_for_string = false;
         // Append an additional dump if the specified string was found.
-        std::vector<std::string> additional_dump = Dump();
+        std::vector<std::string> additional_dump = Dump(mode);
         actual_lines.emplace_back("=== Start Continuation ===");
         actual_lines.insert(actual_lines.end(), additional_dump.begin(),
                             additional_dump.end());
@@ -378,8 +537,7 @@ void DumpAccessibilityTestBase::RunTestForPlatform(
       VLOG(1) << "Waiting until the next accessibility event";
       // TODO(aleventhal) Try waiting for kEndOfTest to make sure all events
       // after code execution are captured.
-      AccessibilityNotificationWaiter accessibility_waiter(
-          web_contents, ui::AXMode(), ax::mojom::Event::kNone);
+      AccessibilityNotificationWaiter accessibility_waiter(web_contents);
       ASSERT_TRUE(accessibility_waiter.WaitForNotification());
     }
   }
@@ -396,13 +554,14 @@ void DumpAccessibilityTestBase::RunTestForPlatform(
   bool matches_expectation = test_helper_.ValidateAgainstExpectation(
       file_path, expected_file, actual_lines, *expected_lines);
   EXPECT_TRUE(matches_expectation);
-  if (!matches_expectation)
+  if (!matches_expectation) {
     OnDiffFailed();
+  }
 }
 
-std::vector<std::string> DumpAccessibilityTestBase::CollectAllFrameUrls(
+std::map<std::string, unsigned> DumpAccessibilityTestBase::CollectAllFrameUrls(
     const std::vector<std::string>& skip_urls) {
-  std::vector<std::string> all_frame_urls;
+  std::map<std::string, unsigned> all_frame_urls;
   // Get the url of every frame in the frame tree.
   for (FrameTreeNode* node : GetWebContents()->GetPrimaryFrameTree().Nodes()) {
     // Ignore about:blank urls because of the case where a parent frame A
@@ -411,94 +570,75 @@ std::vector<std::string> DumpAccessibilityTestBase::CollectAllFrameUrls(
     //
     // In this scenario, B's contentWindow.location.href matches A's url,
     // but B's url in the browser frame tree is still "about:blank".
-    //
-    // We also ignore frame tree nodes created for portals in the outer
-    // WebContents as the node doesn't have a url set.
 
     std::string url = node->current_url().spec();
-
-    // sometimes we expect a url to never load, in these cases, don't wait.
-    bool skip_url = false;
-    for (std::string no_load_url : skip_urls) {
-      if (url.find(no_load_url) != std::string::npos) {
-        skip_url = true;
-        break;
-      }
-    }
-    if (!skip_url && url != url::kAboutBlankURL && !url.empty() &&
-        node->frame_owner_element_type() !=
-            blink::FrameOwnerElementType::kPortal) {
-      all_frame_urls.push_back(url);
+    if (url != url::kAboutBlankURL && url != url::kAboutSrcdocURL &&
+        !url.empty() && !SkipUrlMatch(skip_urls, url)) {
+      all_frame_urls[url] += 1;
     }
   }
   return all_frame_urls;
 }
 
-void DumpAccessibilityTestBase::WaitForAllFramesLoaded() {
+void DumpAccessibilityTestBase::WaitForAllFramesLoaded(ui::AXMode mode) {
   // Wait for the accessibility tree to fully load for all frames,
   // by searching for the WEB_AREA node in the accessibility tree
-  // with the url of each frame in our frame tree. Note that this
-  // doesn't support cases where there are two iframes with the
-  // exact same url. If all frames haven't loaded yet, set up a
-  // listener for accessibility events on any frame and block
-  // until the next one is received.
+  // with the url of each frame in our frame tree. If all frames
+  // haven't loaded yet, set up a listener for accessibility events
+  // on any frame and block until the next one is received.
   WebContentsImpl* web_contents = GetWebContents();
   for (;;) {
     VLOG(1) << "Top of WaitForAllFramesLoaded() loop";
     RenderFrameHostImpl* main_frame =
         static_cast<RenderFrameHostImpl*>(web_contents->GetPrimaryMainFrame());
-    BrowserAccessibilityManager* manager =
+    ui::BrowserAccessibilityManager* manager =
         main_frame->browser_accessibility_manager();
     if (manager) {
-      BrowserAccessibility* accessibility_root = manager->GetRoot();
+      ui::BrowserAccessibility* accessibility_root =
+          manager->GetBrowserAccessibilityRoot();
 
-      // Check to see if all frames have loaded. If not, we invoke
-      // WaitForEndOfTest to listen for a kEndOfTest signal which will be
-      // fired for each loaded child tree.
-      if (!AccessibilityTreeContainsAllChildTrees(
-              *accessibility_root->node())) {
-        WaitForEndOfTest();
-        continue;
-      }
+      WaitForChildTrees(*accessibility_root->node(),
+                        scenario_.no_load_expected);
 
-      bool all_frames_loaded = true;
+      bool all_expected_urls_loaded = true;
       // A test may change the url for a frame, for example by setting
       // window.location.href, so collect the current list of urls.
-      const std::vector<std::string> all_frame_urls =
+      const std::map<std::string, unsigned> all_frame_urls =
           CollectAllFrameUrls(scenario_.no_load_expected);
-      for (const auto& url : all_frame_urls) {
-        if (!AccessibilityTreeContainsLoadedDocWithUrl(accessibility_root,
-                                                       url)) {
-          VLOG(1) << "Still waiting on this frame to load: " << url;
-          all_frames_loaded = false;
+      for (const auto& [url, num_expected] : all_frame_urls) {
+        if (unsigned num_remaining = SearchLoadedDocsWithUrlInAccessibilityTree(
+                accessibility_root, url, num_expected)) {
+          VLOG(1) << "Still waiting on " << num_remaining
+                  << " frame(s) to load: " << url;
+          all_expected_urls_loaded = false;
           break;
         }
       }
-      // If all frames have loaded, we're done.
-      if (all_frames_loaded)
+      if (all_expected_urls_loaded) {
         break;
+      }
     }
 
     // Block until the next accessibility notification in any frame.
     VLOG(1) << "Waiting until the next accessibility event";
-    AccessibilityNotificationWaiter accessibility_waiter(
-        web_contents, ui::kAXModeComplete, ax::mojom::Event::kNone);
+    AccessibilityNotificationWaiter accessibility_waiter(web_contents);
     ASSERT_TRUE(accessibility_waiter.WaitForNotification());
   }
 }
 
-BrowserAccessibility* DumpAccessibilityTestBase::FindNode(
+ui::BrowserAccessibility* DumpAccessibilityTestBase::FindNode(
     const std::string& name,
-    BrowserAccessibility* search_root) const {
-  if (!search_root)
-    search_root = GetManager()->GetRoot();
+    ui::BrowserAccessibility* search_root) const {
+  if (!search_root) {
+    search_root = GetManager()->GetBrowserAccessibilityRoot();
+  }
 
   CHECK(search_root);
-  BrowserAccessibility* node = FindNodeInSubtree(*search_root, name);
+  ui::BrowserAccessibility* node = FindNodeInSubtree(*search_root, name);
   return node;
 }
 
-BrowserAccessibilityManager* DumpAccessibilityTestBase::GetManager() const {
+ui::BrowserAccessibilityManager* DumpAccessibilityTestBase::GetManager() const {
   return GetWebContents()->GetRootBrowserAccessibilityManager();
 }
 
@@ -506,17 +646,29 @@ WebContentsImpl* DumpAccessibilityTestBase::GetWebContents() const {
   return static_cast<WebContentsImpl*>(shell()->web_contents());
 }
 
+gfx::AcceleratedWidget DumpAccessibilityTestBase::GetAcceleratedWidget() const {
+#if BUILDFLAG(IS_OZONE) || BUILDFLAG(IS_APPLE)
+  return static_cast<gfx::AcceleratedWidget>(getpid());
+#else
+  // The getpid() function is unavailable on some platforms, like Windows. Use 0
+  // as a fallback until support for these platforms is required for external
+  // tree testing.
+  return reinterpret_cast<gfx::AcceleratedWidget>(0);
+#endif
+}
+
 std::unique_ptr<AXTreeFormatter> DumpAccessibilityTestBase::CreateFormatter()
     const {
   return AXInspectFactory::CreateFormatter(GetParam());
 }
 
-std::pair<base::Value, std::vector<std::string>>
-DumpAccessibilityTestBase::CaptureEvents(InvokeAction invoke_action) {
+std::pair<EvalJsResult, std::vector<std::string>>
+DumpAccessibilityTestBase::CaptureEvents(InvokeAction invoke_action,
+                                         ui::AXMode mode) {
   // Create a new Event Recorder for the run.
-  BrowserAccessibilityManager* manager = GetManager();
-  ui::AXTreeSelector selector(
-      manager->GetRoot()->GetTargetForNativeAccessibilityEvent());
+  ui::BrowserAccessibilityManager* manager = GetManager();
+  ui::AXTreeSelector selector(manager->GetBrowserAccessibilityRoot()
+                                  ->GetTargetForNativeAccessibilityEvent());
   std::unique_ptr<ui::AXEventRecorder> event_recorder =
       AXInspectFactory::CreateRecorder(GetParam(), manager,
                                        base::GetCurrentProcId(), selector);
@@ -529,33 +681,35 @@ DumpAccessibilityTestBase::CaptureEvents(InvokeAction invoke_action) {
 
   // If @DEFAULT-ACTION-ON:[name] is used, perform the action and wait until
   // it is complete.
-  PerformAndWaitForDefaultActions();
+  PerformAndWaitForDefaultActions(mode);
 
   // Create a waiter that waits for any one accessibility event.
   // This will ensure that after calling the go() function, we
   // block until we've received an accessibility event generated as
   // a result of this function.
-  AccessibilityNotificationWaiter waiter(GetWebContents(), ui::kAXModeComplete,
-                                         ax::mojom::Event::kNone);
+  AccessibilityNotificationWaiter waiter(GetWebContents());
 
   // Run any script, e.g. go().
   // If an action was performed, we already waited for the kClicked event in
   // PerformAndWaitForDefaultActions(), which means the action is already
   // completed.
-  base::Value action_result = std::move(invoke_action).Run();
+  EvalJsResult action_result = std::move(invoke_action).Run();
 
-  // Wait for at least one event. This may unblock either when |waiter|
+  // If we didn't already wait for a default action to complete, then
+  // wait for at least one event. This may unblock either when |waiter|
   // observes either an ax::mojom::Event or ui::AXEventGenerator::Event, or
   // when |event_recorder| records a platform event.
-  // TODO(https://crbug.com/1332468): Investigate why this does not return
+  // TODO(crbug.com/40844856): Investigate why this does not return
   // true.
-  EXPECT_TRUE(waiter.WaitForNotification());
+  if (scenario_.default_action_on.empty()) {
+    EXPECT_TRUE(waiter.WaitForNotification());
+  }
 
   // More than one accessibility event could have been generated.
   // To make sure we've received all accessibility events, add a
   // sentinel by calling SignalEndOfTest and waiting for a kEndOfTest
   // event in response.
-  WaitForEndOfTest();
+  WaitForEndOfTest(mode);
   event_recorder->WaitForDoneRecording();
 
   LOG(INFO) << "-------------- Stop listening to events --------------";
@@ -572,59 +726,60 @@ DumpAccessibilityTestBase::CaptureEvents(InvokeAction invoke_action) {
   return std::make_pair(std::move(action_result), std::move(event_logs));
 }
 
-BrowserAccessibility* DumpAccessibilityTestBase::FindNodeInSubtree(
-    BrowserAccessibility& node,
+ui::BrowserAccessibility* DumpAccessibilityTestBase::FindNodeInSubtree(
+    ui::BrowserAccessibility& node,
     const std::string& name) const {
-  if (node.GetStringAttribute(ax::mojom::StringAttribute::kName) == name)
+  if (node.GetStringAttribute(ax::mojom::StringAttribute::kName) == name) {
     return &node;
+  }
 
   for (unsigned int i = 0; i < node.PlatformChildCount(); ++i) {
-    BrowserAccessibility* result =
+    ui::BrowserAccessibility* result =
         FindNodeInSubtree(*node.PlatformGetChild(i), name);
-    if (result)
+    if (result) {
       return result;
+    }
   }
   return nullptr;
 }
 
-bool DumpAccessibilityTestBase::HasHtmlAttribute(
-    BrowserAccessibility& node,
-    const char* attr,
+ui::BrowserAccessibility* DumpAccessibilityTestBase::FindNodeByStringAttribute(
+    const ax::mojom::StringAttribute attr,
     const std::string& value) const {
-  std::string result;
-  if (node.GetHtmlAttribute(attr, &result))
-    return result == value;
-
-  if (base::EqualsCaseInsensitiveASCII(attr, "class"))
-    return node.GetStringAttribute(ax::mojom::StringAttribute::kClassName) ==
-           value;
-
-  return false;
-}
-
-BrowserAccessibility* DumpAccessibilityTestBase::FindNodeByHTMLAttribute(
-    const char* attr,
-    const std::string& value) const {
-  BrowserAccessibility* root = GetManager()->GetRoot();
+  ui::BrowserAccessibility* root = GetManager()->GetBrowserAccessibilityRoot();
 
   CHECK(root);
-  return FindNodeByHTMLAttributeInSubtree(*root, attr, value);
+  return FindNodeByStringAttributeInSubtree(*root, attr, value);
 }
 
-BrowserAccessibility*
-DumpAccessibilityTestBase::FindNodeByHTMLAttributeInSubtree(
-    BrowserAccessibility& node,
-    const char* attr,
+ui::BrowserAccessibility*
+DumpAccessibilityTestBase::FindNodeByStringAttributeInSubtree(
+    ui::BrowserAccessibility& node,
+    const ax::mojom::StringAttribute attr,
     const std::string& value) const {
-  if (HasHtmlAttribute(node, attr, value))
+  if (node.GetStringAttribute(attr) == value) {
     return &node;
+  }
 
   for (unsigned int i = 0; i < node.PlatformChildCount(); ++i) {
-    if (BrowserAccessibility* result = FindNodeByHTMLAttributeInSubtree(
-            *node.PlatformGetChild(i), attr, value))
+    if (ui::BrowserAccessibility* result = FindNodeByStringAttributeInSubtree(
+            *node.PlatformGetChild(i), attr, value)) {
       return result;
+    }
   }
   return nullptr;
+}
+
+bool DumpAccessibilityTestBase::IsTestingExternalTree() const {
+#if BUILDFLAG(IS_MAC)
+  // macOS uses an external accessibility tree, which allows testing exactly
+  // what assistive technologies operates with. Other platforms
+  // test the internal accessibility tree except the Android one which tests
+  // both.
+  return GetParam() == ui::AXApiType::kMac;
+#else
+  return false;
+#endif
 }
 
 void DumpAccessibilityTestBase::UseHttpsTestServer() {

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,6 @@ import android.os.Bundle;
 
 import com.google.firebase.messaging.FirebaseMessagingService;
 import com.google.firebase.messaging.RemoteMessage;
-
-import org.chromium.base.BundleUtils;
 
 /**
  * GcmListenerService base class which will call through to the given {@link Impl}. This class must
@@ -25,11 +23,13 @@ public class SplitCompatGcmListenerService extends FirebaseMessagingService {
     }
 
     @Override
-    protected void attachBaseContext(Context context) {
-        context = SplitCompatApplication.createChromeContext(context);
-        mImpl = (Impl) BundleUtils.newInstance(context, mServiceClassName);
+    protected void attachBaseContext(Context baseContext) {
+        mImpl =
+                (Impl)
+                        SplitCompatUtils.loadClassAndAdjustContextChrome(
+                                baseContext, mServiceClassName);
         mImpl.setService(this);
-        super.attachBaseContext(context);
+        super.attachBaseContext(baseContext);
     }
 
     @Override

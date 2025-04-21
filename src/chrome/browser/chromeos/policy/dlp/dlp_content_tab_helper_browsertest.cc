@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,16 @@
 #include "base/path_service.h"
 #include "chrome/browser/apps/platform_apps/app_browsertest_util.h"
 #include "chrome/browser/chromeos/policy/dlp/dlp_content_observer.h"
-#include "chrome/browser/chromeos/policy/dlp/mock_dlp_content_observer.h"
+#include "chrome/browser/chromeos/policy/dlp/test/mock_dlp_content_observer.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
-#include "content/public/browser/notification_types.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_features.h"
+#include "content/public/test/back_forward_cache_util.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "extensions/test/extension_test_message_listener.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
@@ -57,9 +58,7 @@ IN_PROC_BROWSER_TEST_F(DlpContentTabHelperBrowserTest, PlatformApp) {
   ExtensionTestMessageListener launched_listener("Launched");
 
   // Install Platform App
-  content::WindowedNotificationObserver app_loaded_observer(
-      content::NOTIFICATION_LOAD_COMPLETED_MAIN_FRAME,
-      content::NotificationService::AllSources());
+  content::CreateAndLoadWebContentsObserver app_loaded_observer;
   const extensions::Extension* extension = InstallPlatformApp("dlp_test");
   ASSERT_TRUE(extension);
 
@@ -94,10 +93,9 @@ class DlpContentTabHelperBFCacheBrowserTest : public InProcessBrowserTest {
       : scoped_dlp_content_observer_(&mock_dlp_content_observer_),
         ignore_dlp_rules_manager_(
             DlpContentTabHelper::IgnoreDlpRulesManagerForTesting()) {
-    bfcache_feature_list_.InitWithFeatures(
-        {features::kBackForwardCache},
-        // Allow BackForwardCache for all devices regardless of their memory.
-        {features::kBackForwardCacheMemoryControls});
+    bfcache_feature_list_.InitWithFeaturesAndParameters(
+        content::GetBasicBackForwardCacheFeatureForTesting(),
+        content::GetDefaultDisabledBackForwardCacheFeaturesForTesting());
   }
 
   void SetUpOnMainThread() override {

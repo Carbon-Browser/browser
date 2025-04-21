@@ -1,21 +1,23 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/fuchsia/video/fuchsia_decoder_factory.h"
 
+#include "base/task/sequenced_task_runner.h"
 #include "components/viz/common/gpu/raster_context_provider.h"
 #include "media/fuchsia/video/fuchsia_video_decoder.h"
 #include "media/video/gpu_video_accelerator_factories.h"
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 
 namespace media {
 
 FuchsiaDecoderFactory::FuchsiaDecoderFactory(
-    blink::BrowserInterfaceBrokerProxy* interface_broker) {
-  interface_broker->GetInterface(
-      media_resource_provider_handle_.InitWithNewPipeAndPassReceiver());
-}
+    mojo::PendingRemote<media::mojom::FuchsiaMediaCodecProvider>
+        resource_provider,
+    bool allow_overlays)
+    : resource_provider_(std::move(resource_provider)),
+      allow_overlays_(allow_overlays) {}
 
 FuchsiaDecoderFactory::~FuchsiaDecoderFactory() = default;
 
@@ -26,12 +28,6 @@ void FuchsiaDecoderFactory::CreateAudioDecoders(
   // There are no Fuchsia-specific audio decoders.
 }
 
-SupportedVideoDecoderConfigs
-FuchsiaDecoderFactory::GetSupportedVideoDecoderConfigsForWebRTC() {
-  // TODO(crbug.com/1207991) Enable HW decoder support for WebRTC.
-  return {};
-}
-
 void FuchsiaDecoderFactory::CreateVideoDecoders(
     scoped_refptr<base::SequencedTaskRunner> task_runner,
     GpuVideoAcceleratorFactories* gpu_factories,
@@ -39,10 +35,6 @@ void FuchsiaDecoderFactory::CreateVideoDecoders(
     RequestOverlayInfoCB request_overlay_info_cb,
     const gfx::ColorSpace& target_color_space,
     std::vector<std::unique_ptr<VideoDecoder>>* video_decoders) {
-  // Bind `media_resource_provider_` the first time this function is called.
-  if (media_resource_provider_handle_)
-    media_resource_provider_.Bind(std::move(media_resource_provider_handle_));
-
   if (gpu_factories && gpu_factories->IsGpuVideoDecodeAcceleratorEnabled()) {
     auto* context_provider = gpu_factories->GetMediaContextProvider();
 
@@ -52,10 +44,10 @@ void FuchsiaDecoderFactory::CreateVideoDecoders(
     // instance, but there is no way to get it here. For now just don't add
     // FuchsiaVideoDecoder in that scenario.
     //
-    // TODO(crbug.com/995902) Handle lost context.
+    // TODO(crbug.com/42050657) Handle lost context.
     if (context_provider) {
       video_decoders->push_back(std::make_unique<FuchsiaVideoDecoder>(
-          context_provider, media_resource_provider_.get()));
+          context_provider, resource_provider_, allow_overlays_));
     } else {
       LOG(ERROR) << "Can't create FuchsiaVideoDecoder due to GPU context loss.";
     }

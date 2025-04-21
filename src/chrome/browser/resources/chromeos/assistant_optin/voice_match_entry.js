@@ -1,16 +1,24 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-/* #js_imports_placeholder */
+import '//resources/ash/common/cr_elements/icons.html.js';
+import '//resources/polymer/v3_0/iron-icon/iron-icon.js';
+import '//resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
+import '../components/common_styles/oobe_common_styles.css.js';
+import './assistant_common_styles.css.js';
+
+import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {OobeI18nMixin} from '../components/mixins/oobe_i18n_mixin.js';
+
+import {getTemplate} from './voice_match_entry.html.js';
 
 /**
  * @constructor
  * @extends {PolymerElement}
  */
- const VoiceMatchEntryBase = Polymer.mixinBehaviors(
-  [OobeI18nBehavior],
-  Polymer.Element);
+const VoiceMatchEntryBase = OobeI18nMixin(PolymerElement);
 
 /**
  * @polymer
@@ -20,7 +28,9 @@ class VoiceMatchEntry extends VoiceMatchEntryBase {
     return 'voice-match-entry';
   }
 
-  /* #html_template_placeholder */
+  static get template() {
+    return getTemplate();
+  }
 
   static get properties() {
     return {

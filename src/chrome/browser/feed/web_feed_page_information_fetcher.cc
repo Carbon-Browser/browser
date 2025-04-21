@@ -1,10 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/feed/web_feed_page_information_fetcher.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "chrome/browser/feed/rss_links_fetcher.h"
 #include "content/public/browser/render_frame_host.h"
@@ -18,7 +18,7 @@ namespace {
 
 void FetchPageCanonicalUrl(
     const PageInformation& page_info,
-    base::OnceCallback<void(const absl::optional<::GURL>&)> callback) {
+    base::OnceCallback<void(const std::optional<::GURL>&)> callback) {
   DCHECK(page_info.web_contents->GetPrimaryMainFrame()->IsRenderFrameLive());
   page_info.web_contents->GetPrimaryMainFrame()->GetCanonicalUrl(
       std::move(callback));
@@ -47,13 +47,13 @@ void WebFeedPageInformationFetcher::Start(
   auto self = base::MakeRefCounted<WebFeedPageInformationFetcher>(
       page_info, std::move(callback));
 
-  FetchRssLinks(page_info.url, page_info.web_contents,
-                base::BindOnce(&WebFeedPageInformationFetcher::OnRssFetched,
-                               base::RetainedRef(self.get())));
+  FetchRssLinks(
+      page_info.url, page_info.web_contents,
+      base::BindOnce(&WebFeedPageInformationFetcher::OnRssFetched, self));
   FetchPageCanonicalUrl(
       page_info,
       base::BindOnce(&WebFeedPageInformationFetcher::OnCanonicalUrlFetched,
-                     base::RetainedRef(self.get())));
+                     self));
 }
 
 WebFeedPageInformationFetcher::WebFeedPageInformationFetcher(
@@ -71,7 +71,7 @@ void WebFeedPageInformationFetcher::CallCallbackIfReady() {
 }
 
 void WebFeedPageInformationFetcher::OnCanonicalUrlFetched(
-    const absl::optional<::GURL>& url) {
+    const std::optional<::GURL>& url) {
   if (url) {
     page_info_.SetCanonicalUrl(*url);
   }

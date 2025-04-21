@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,6 +45,10 @@ class MediaBrowserTest : public ContentBrowserTest {
 
   // Adds titles that RunTest() should wait for.
   virtual void AddTitlesToAwait(content::TitleWatcher* title_watcher);
+
+ protected:
+  // BrowserTestBase implementation.
+  void PreRunTestOnMainThread() override;
 
  private:
   base::test::ScopedFeatureList scoped_feature_list_;

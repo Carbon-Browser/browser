@@ -1,14 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMEOS_ASH_COMPONENTS_NETWORK_SYSTEM_TOKEN_CERT_DB_STORAGE_H_
 #define CHROMEOS_ASH_COMPONENTS_NETWORK_SYSTEM_TOKEN_CERT_DB_STORAGE_H_
 
-#include "base/callback.h"
-#include "base/callback_forward.h"
 #include "base/callback_list.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
 #include "base/sequence_checker.h"
@@ -19,7 +20,7 @@ namespace net {
 class NSSCertDatabase;
 }
 
-namespace chromeos {
+namespace ash {
 
 // Used by SystemTokenCertDbInitializer to save the system token certificate
 // database when it is ready.
@@ -100,7 +101,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) SystemTokenCertDbStorage {
 
   // Global NSSCertDatabase which sees the system token. Owned by
   // SystemTokenCertDbInitializer.
-  net::NSSCertDatabase* system_token_cert_database_ = nullptr;
+  raw_ptr<net::NSSCertDatabase> system_token_cert_database_ = nullptr;
 
   bool system_token_cert_db_retrieval_failed_ = false;
 
@@ -109,11 +110,6 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) SystemTokenCertDbStorage {
   SEQUENCE_CHECKER(sequence_checker_);
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove when moved to ash.
-namespace ash {
-using ::chromeos::SystemTokenCertDbStorage;
 }  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_SYSTEM_TOKEN_CERT_DB_STORAGE_H_

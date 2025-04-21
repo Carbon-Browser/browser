@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,7 @@
 #include "components/payments/content/payment_request_spec.h"
 #include "components/payments/content/payment_request_state.h"
 #include "components/payments/content/service_worker_payment_app.h"
+#include "components/payments/core/csp_checker.h"
 #include "components/payments/core/journey_logger.h"
 #include "content/public/browser/document_service.h"
 #include "content/public/browser/web_contents_observer.h"
@@ -36,6 +37,7 @@ enum class SPCTransactionMode {
   NONE,
   AUTOACCEPT,
   AUTOREJECT,
+  AUTOOPTOUT,
 };
 
 // This class manages the interaction between the renderer (through the
@@ -57,6 +59,7 @@ class PaymentRequest : public content::DocumentService<mojom::PaymentRequest>,
                        public PaymentRequestSpec::Observer,
                        public PaymentRequestState::Delegate,
                        public InitializationTask::Observer,
+                       public CSPChecker,
                        public content::WebContentsObserver {
  public:
   class ObserverForTest {
@@ -70,19 +73,16 @@ class PaymentRequest : public content::DocumentService<mojom::PaymentRequest>,
     virtual void OnErrorDisplayed() {}
     virtual void OnNotSupportedError() = 0;
     virtual void OnConnectionTerminated() = 0;
+    virtual void OnPayCalled() = 0;
     virtual void OnAbortCalled() = 0;
     virtual void OnCompleteCalled() {}
 
    protected:
-    virtual ~ObserverForTest() {}
+    virtual ~ObserverForTest() = default;
   };
 
-  PaymentRequest(content::RenderFrameHost& render_frame_host,
-                 std::unique_ptr<ContentPaymentRequestDelegate> delegate,
-                 base::WeakPtr<PaymentRequestDisplayManager> display_manager,
-                 mojo::PendingReceiver<mojom::PaymentRequest> receiver,
-                 SPCTransactionMode spc_transaction_mode,
-                 base::WeakPtr<ObserverForTest> observer_for_testing);
+  PaymentRequest(std::unique_ptr<ContentPaymentRequestDelegate> delegate,
+                 mojo::PendingReceiver<mojom::PaymentRequest> receiver);
 
   PaymentRequest(const PaymentRequest&) = delete;
   PaymentRequest& operator=(const PaymentRequest&) = delete;
@@ -94,7 +94,7 @@ class PaymentRequest : public content::DocumentService<mojom::PaymentRequest>,
             std::vector<mojom::PaymentMethodDataPtr> method_data,
             mojom::PaymentDetailsPtr details,
             mojom::PaymentOptionsPtr options) override;
-  void Show(bool wait_for_updated_details) override;
+  void Show(bool wait_for_updated_details, bool had_user_activation) override;
   void Retry(mojom::PaymentValidationErrorsPtr errors) override;
   void UpdateWith(mojom::PaymentDetailsPtr details) override;
   void OnPaymentDetailsNotUpdated() override;
@@ -160,7 +160,18 @@ class PaymentRequest : public content::DocumentService<mojom::PaymentRequest>,
 
   base::WeakPtr<PaymentRequest> GetWeakPtr();
 
+  void set_observer_for_test(base::WeakPtr<ObserverForTest> observer_for_test) {
+    observer_for_testing_ = observer_for_test;
+  }
+
  private:
+  // CSPChecker.
+  void AllowConnectToSource(
+      const GURL& url,
+      const GURL& url_before_redirects,
+      bool did_follow_redirect,
+      base::OnceCallback<void(bool)> result_callback) override;
+
   // InitializationTask::Observer.
   void OnInitialized(InitializationTask* initialization_task) override;
 
@@ -178,10 +189,10 @@ class PaymentRequest : public content::DocumentService<mojom::PaymentRequest>,
   // contact information whenever needed.
   bool OnlySingleAppCanProvideAllRequiredInformation() const;
 
-  // Returns true if this payment request supports skipping the Payment Sheet.
-  // Typically, this means that exactly one payment app can provide requested
-  // information.
-  bool SatisfiesSkipUIConstraints();
+  // Checks and records via JourneyLogger whether this payment request will skip
+  // showing the Payment Sheet, and returns the result. Typically, this means
+  // that exactly one payment app can provide requested information.
+  bool CheckSatisfiesSkipUIConstraintsAndRecordShownState();
 
   // Only records the abort reason if it's the first completion for this
   // Payment Request. This is necessary since the aborts cascade into one
@@ -276,6 +287,11 @@ class PaymentRequest : public content::DocumentService<mojom::PaymentRequest>,
   // If not empty, use this error message for rejecting
   // PaymentRequest.show().
   std::string reject_show_error_message_;
+
+  // Whether the PaymentRequest.show() was successfully invoked without a user
+  // activation. Used to record the activationless show JourneyLogger event only
+  // if UI was shown.
+  bool is_activationless_show_ = false;
 
   base::WeakPtrFactory<PaymentRequest> weak_ptr_factory_{this};
 };

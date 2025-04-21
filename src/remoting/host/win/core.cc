@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,9 @@ extern "C" BOOL WINAPI PsDllMain(HINSTANCE instance,
                                  void* reserved);
 
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, void* reserved) {
-  if (reason == DLL_PROCESS_ATTACH)
+  if (reason == DLL_PROCESS_ATTACH) {
     DisableThreadLibraryCalls(instance);
+  }
 
   // Initialize the proxy/stub code as well.
   return PsDllMain(instance, reason, reserved);

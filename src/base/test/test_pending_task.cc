@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,8 +33,9 @@ TimeTicks TestPendingTask::GetTimeToRun() const {
 }
 
 bool TestPendingTask::ShouldRunBefore(const TestPendingTask& other) const {
-  if (nestability != other.nestability)
+  if (nestability != other.nestability) {
     return (nestability == NESTABLE);
+  }
   return GetTimeToRun() < other.GetTimeToRun();
 }
 

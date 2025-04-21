@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "base/format_macros.h"
+#include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/views/controls/button/label_button.h"
@@ -21,13 +22,16 @@
 using l10n_util::GetStringUTF16;
 using l10n_util::GetStringUTF8;
 
-namespace views {
-namespace examples {
+namespace views::examples {
 
 TabbedPaneExample::TabbedPaneExample()
     : ExampleBase(GetStringUTF8(IDS_TABBED_PANE_SELECT_LABEL).c_str()) {}
 
-TabbedPaneExample::~TabbedPaneExample() = default;
+TabbedPaneExample::~TabbedPaneExample() {
+  if (tabbed_pane_) {
+    tabbed_pane_->SetListener(nullptr);
+  }
+}
 
 void TabbedPaneExample::CreateExampleView(View* container) {
   container->SetLayoutManager(std::make_unique<views::FlexLayout>())
@@ -59,8 +63,9 @@ void TabbedPaneExample::CreateExampleView(View* container) {
   const auto full_flex = FlexSpecification(MinimumFlexSizeRule::kScaleToZero,
                                            MaximumFlexSizeRule::kUnbounded)
                              .WithWeight(1);
-  for (View* view : button_panel->children())
+  for (View* view : button_panel->children()) {
     view->SetProperty(views::kFlexBehaviorKey, full_flex);
+  }
 
   CreateTabbedPane(container, TabbedPane::Orientation::kHorizontal,
                    TabbedPane::TabStripStyle::kBorder);
@@ -75,12 +80,13 @@ void TabbedPaneExample::CreateTabbedPane(View* container,
                                          TabbedPane::Orientation orientation,
                                          TabbedPane::TabStripStyle style) {
   // Tabbed panes only support highlighted style for vertical tabs.
-  if (orientation == TabbedPane::Orientation::kHorizontal)
+  if (orientation == TabbedPane::Orientation::kHorizontal) {
     style = TabbedPane::TabStripStyle::kBorder;
+  }
 
   tabbed_pane_ = container->AddChildViewAt(
       std::make_unique<TabbedPane>(orientation, style), 0);
-  tabbed_pane_->set_listener(this);
+  tabbed_pane_->SetListener(this);
   toggle_highlighted_->SetEnabled(orientation ==
                                   TabbedPane::Orientation::kVertical);
   const auto full_flex = FlexSpecification(MinimumFlexSizeRule::kScaleToZero,
@@ -93,8 +99,9 @@ void TabbedPaneExample::CreateTabbedPane(View* container,
 }
 
 void TabbedPaneExample::PrintCurrentStatus() {
-  PrintStatus("Tab Count:%" PRIuS ", Selected Tab:%" PRIuS,
-              tabbed_pane_->GetTabCount(), tabbed_pane_->GetSelectedTabIndex());
+  PrintStatus(base::StringPrintf("Tab Count:%" PRIuS ", Selected Tab:%" PRIuS,
+                                 tabbed_pane_->GetTabCount(),
+                                 tabbed_pane_->GetSelectedTabIndex()));
 }
 
 void TabbedPaneExample::SwapLayout() {
@@ -134,9 +141,9 @@ void TabbedPaneExample::AddAt() {
 }
 
 void TabbedPaneExample::SelectAt() {
-  if (tabbed_pane_->GetTabCount() > 1)
+  if (tabbed_pane_->GetTabCount() > 1) {
     tabbed_pane_->SelectTabAt(1);
+  }
 }
 
-}  // namespace examples
-}  // namespace views
+}  // namespace views::examples

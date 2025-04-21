@@ -1,16 +1,16 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/views/interaction/element_tracker_views.h"
 
-#include <algorithm>
 #include <iterator>
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "base/test/bind.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -49,11 +49,10 @@ View* ElementToView(ui::TrackedElement* element) {
 
 // A subclass of View that has metadata.
 class TypedView : public View {
- public:
-  METADATA_HEADER(TypedView);
+  METADATA_HEADER(TypedView, View)
 };
 
-BEGIN_METADATA(TypedView, View)
+BEGIN_METADATA(TypedView)
 END_METADATA
 
 // Watches events on the ElementTracker and converts the resulting values back
@@ -96,8 +95,9 @@ class ElementEventWatcher {
 
  private:
   void OnEvent(ui::TrackedElement* element) {
-    if (event_type_ != ElementEventType::kCustom)
+    if (event_type_ != ElementEventType::kCustom) {
       EXPECT_EQ(id_, element->identifier());
+    }
     last_view_ = ElementToView(element);
     ++event_count_;
   }
@@ -106,18 +106,16 @@ class ElementEventWatcher {
   const ElementEventType event_type_;
   ui::ElementTracker::Subscription subscription_;
   int event_count_ = 0;
-  // TODO(crbug.com/1298696): views_unittests breaks with MTECheckedPtr
-  // enabled. Triage.
-  raw_ptr<View, DegradeToNoOpWhenMTE> last_view_ = nullptr;
+  raw_ptr<View, DanglingUntriaged> last_view_ = nullptr;
 };
 
 ElementTrackerViews::ViewList ElementsToViews(
     ui::ElementTracker::ElementList elements) {
   ElementTrackerViews::ViewList result;
-  std::transform(elements.begin(), elements.end(), std::back_inserter(result),
-                 [](ui::TrackedElement* element) {
-                   return element->AsA<TrackedElementViews>()->view();
-                 });
+  base::ranges::transform(elements, std::back_inserter(result),
+                          [](ui::TrackedElement* element) {
+                            return element->AsA<TrackedElementViews>()->view();
+                          });
   return result;
 }
 
@@ -146,8 +144,8 @@ class ElementTrackerViewsTest : public ViewsTestBase {
   std::unique_ptr<Widget> CreateWidget() {
     auto widget = std::make_unique<Widget>();
     Widget::InitParams params =
-        CreateParams(Widget::InitParams::TYPE_WINDOW_FRAMELESS);
-    params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
+        CreateParams(Widget::InitParams::CLIENT_OWNS_WIDGET,
+                     Widget::InitParams::TYPE_WINDOW_FRAMELESS);
     params.bounds = gfx::Rect(0, 0, 650, 650);
     widget->Init(std::move(params));
     return widget;
@@ -178,7 +176,7 @@ TEST_F(ElementTrackerViewsTest,
   auto* const view = widget_->SetContentsView(std::make_unique<View>());
   auto* const button = view->AddChildView(std::move(button_ptr));
   EXPECT_EQ(0, watcher.event_count());
-  view->RemoveChildViewT(button);
+  button_ptr = view->RemoveChildViewT(button);
   EXPECT_EQ(1, watcher.event_count());
   EXPECT_EQ(button, watcher.last_view());
 }
@@ -271,12 +269,14 @@ TEST_F(ElementTrackerViewsTest, ButtonPressedSendsActivatedSignal) {
 
   // Test mouse click.
   constexpr gfx::Point kPressPoint(10, 10);
-  button->OnMousePressed(ui::MouseEvent(
-      ui::ET_MOUSE_PRESSED, kPressPoint, kPressPoint, ui::EventTimeForNow(),
-      ui::EF_LEFT_MOUSE_BUTTON, ui::EF_LEFT_MOUSE_BUTTON));
-  button->OnMouseReleased(ui::MouseEvent(
-      ui::ET_MOUSE_PRESSED, kPressPoint, kPressPoint, ui::EventTimeForNow(),
-      ui::EF_LEFT_MOUSE_BUTTON, ui::EF_LEFT_MOUSE_BUTTON));
+  button->OnMousePressed(
+      ui::MouseEvent(ui::EventType::kMousePressed, kPressPoint, kPressPoint,
+                     ui::EventTimeForNow(), ui::EF_LEFT_MOUSE_BUTTON,
+                     ui::EF_LEFT_MOUSE_BUTTON));
+  button->OnMouseReleased(
+      ui::MouseEvent(ui::EventType::kMousePressed, kPressPoint, kPressPoint,
+                     ui::EventTimeForNow(), ui::EF_LEFT_MOUSE_BUTTON,
+                     ui::EF_LEFT_MOUSE_BUTTON));
   EXPECT_EQ(1, watcher.event_count());
   EXPECT_EQ(button, watcher.last_view());
 
@@ -299,9 +299,10 @@ TEST_F(ElementTrackerViewsTest, MenuButtonPressedSendsActivatedSignal) {
 
   // Test mouse click.
   constexpr gfx::Point kPressPoint(10, 10);
-  button->OnMousePressed(ui::MouseEvent(
-      ui::ET_MOUSE_PRESSED, kPressPoint, kPressPoint, ui::EventTimeForNow(),
-      ui::EF_LEFT_MOUSE_BUTTON, ui::EF_LEFT_MOUSE_BUTTON));
+  button->OnMousePressed(
+      ui::MouseEvent(ui::EventType::kMousePressed, kPressPoint, kPressPoint,
+                     ui::EventTimeForNow(), ui::EF_LEFT_MOUSE_BUTTON,
+                     ui::EF_LEFT_MOUSE_BUTTON));
   EXPECT_EQ(1U, pressed_count);
   EXPECT_EQ(1, watcher.event_count());
   EXPECT_EQ(button, watcher.last_view());
@@ -363,11 +364,11 @@ TEST_F(ElementTrackerViewsTest, HandlesCreateWithTheSameIDMultipleTimes) {
   auto* const button = widget_->SetContentsView(std::move(button_ptr));
   EXPECT_EQ(1, watcher.event_count());
   EXPECT_EQ(button, watcher.last_view());
-  widget_->GetRootView()->RemoveChildViewT(button);
+  button_ptr = widget_->GetRootView()->RemoveChildViewT(button);
 
-  button_ptr = std::make_unique<LabelButton>();
-  button_ptr->SetProperty(kElementIdentifierKey, kTestElementID);
-  auto* const button2 = widget_->SetContentsView(std::move(button_ptr));
+  auto button_ptr2 = std::make_unique<LabelButton>();
+  button_ptr2->SetProperty(kElementIdentifierKey, kTestElementID);
+  auto* const button2 = widget_->SetContentsView(std::move(button_ptr2));
   EXPECT_EQ(2, watcher.event_count());
   EXPECT_EQ(button2, watcher.last_view());
 }
@@ -1377,23 +1378,27 @@ TEST_F(ElementTrackerTwoWidgetTest,
 
   // Test mouse click.
   constexpr gfx::Point kPressPoint(10, 10);
-  button->OnMousePressed(ui::MouseEvent(
-      ui::ET_MOUSE_PRESSED, kPressPoint, kPressPoint, ui::EventTimeForNow(),
-      ui::EF_LEFT_MOUSE_BUTTON, ui::EF_LEFT_MOUSE_BUTTON));
-  button->OnMouseReleased(ui::MouseEvent(
-      ui::ET_MOUSE_PRESSED, kPressPoint, kPressPoint, ui::EventTimeForNow(),
-      ui::EF_LEFT_MOUSE_BUTTON, ui::EF_LEFT_MOUSE_BUTTON));
+  button->OnMousePressed(
+      ui::MouseEvent(ui::EventType::kMousePressed, kPressPoint, kPressPoint,
+                     ui::EventTimeForNow(), ui::EF_LEFT_MOUSE_BUTTON,
+                     ui::EF_LEFT_MOUSE_BUTTON));
+  button->OnMouseReleased(
+      ui::MouseEvent(ui::EventType::kMousePressed, kPressPoint, kPressPoint,
+                     ui::EventTimeForNow(), ui::EF_LEFT_MOUSE_BUTTON,
+                     ui::EF_LEFT_MOUSE_BUTTON));
   EXPECT_EQ(1, watcher.event_count());
   EXPECT_EQ(button, watcher.last_view());
   EXPECT_EQ(0, watcher2.event_count());
 
   // Click other button.
-  button2->OnMousePressed(ui::MouseEvent(
-      ui::ET_MOUSE_PRESSED, kPressPoint, kPressPoint, ui::EventTimeForNow(),
-      ui::EF_LEFT_MOUSE_BUTTON, ui::EF_LEFT_MOUSE_BUTTON));
-  button2->OnMouseReleased(ui::MouseEvent(
-      ui::ET_MOUSE_PRESSED, kPressPoint, kPressPoint, ui::EventTimeForNow(),
-      ui::EF_LEFT_MOUSE_BUTTON, ui::EF_LEFT_MOUSE_BUTTON));
+  button2->OnMousePressed(
+      ui::MouseEvent(ui::EventType::kMousePressed, kPressPoint, kPressPoint,
+                     ui::EventTimeForNow(), ui::EF_LEFT_MOUSE_BUTTON,
+                     ui::EF_LEFT_MOUSE_BUTTON));
+  button2->OnMouseReleased(
+      ui::MouseEvent(ui::EventType::kMousePressed, kPressPoint, kPressPoint,
+                     ui::EventTimeForNow(), ui::EF_LEFT_MOUSE_BUTTON,
+                     ui::EF_LEFT_MOUSE_BUTTON));
   EXPECT_EQ(1, watcher.event_count());
   EXPECT_EQ(button, watcher.last_view());
   EXPECT_EQ(1, watcher2.event_count());
@@ -1406,6 +1411,73 @@ TEST_F(ElementTrackerTwoWidgetTest,
   views::test::InteractionTestUtilSimulatorViews::PressButton(button);
   EXPECT_EQ(2, watcher.event_count());
   EXPECT_EQ(2, watcher2.event_count());
+}
+
+// The following are variations on the "view's context changes when it moves
+// between widgets" test, but with an override context callback modifying
+// what context is returned for one or both widgets.
+
+TEST_F(ElementTrackerTwoWidgetTest, OverrideContextCallbackCollapsesContexts) {
+  const ui::ElementContext kContext{1};
+  ElementTrackerViews::SetContextOverrideCallback(
+      base::BindLambdaForTesting([kContext](Widget*) { return kContext; }));
+  ElementEventWatcher shown(kTestElementID, kContext, ElementEventType::kShown);
+  ElementEventWatcher hidden(kTestElementID, kContext,
+                             ElementEventType::kHidden);
+  auto* const view = widget_->SetContentsView(std::make_unique<View>());
+  auto* const view2 = widget2_->SetContentsView(std::make_unique<View>());
+  auto button_ptr = std::make_unique<LabelButton>();
+  button_ptr->SetProperty(kElementIdentifierKey, kTestElementID);
+  // Add to first widget.
+  auto* const button = view->AddChildView(std::move(button_ptr));
+  EXPECT_EQ(1, shown.event_count());
+  EXPECT_EQ(0, hidden.event_count());
+  // Move to second widget.
+  view2->AddChildView(button);
+  EXPECT_EQ(2, shown.event_count());
+  EXPECT_EQ(1, hidden.event_count());
+  // Destroy the second widget.
+  widget2_.reset();
+  EXPECT_EQ(2, shown.event_count());
+  EXPECT_EQ(2, hidden.event_count());
+}
+
+TEST_F(ElementTrackerTwoWidgetTest,
+       OverrideContextCallbackOverridesContextSelectively) {
+  const ui::ElementContext kContext{1};
+  ElementTrackerViews::SetContextOverrideCallback(
+      base::BindLambdaForTesting([this, kContext](Widget* widget) {
+        return widget == widget_.get() ? kContext : ui::ElementContext();
+      }));
+  ElementEventWatcher shown(kTestElementID, kContext, ElementEventType::kShown);
+  ElementEventWatcher hidden(kTestElementID, kContext,
+                             ElementEventType::kHidden);
+  ElementEventWatcher shown2(kTestElementID, context2(),
+                             ElementEventType::kShown);
+  ElementEventWatcher hidden2(kTestElementID, context2(),
+                              ElementEventType::kHidden);
+  auto* const view = widget_->SetContentsView(std::make_unique<View>());
+  auto* const view2 = widget2_->SetContentsView(std::make_unique<View>());
+  auto button_ptr = std::make_unique<LabelButton>();
+  button_ptr->SetProperty(kElementIdentifierKey, kTestElementID);
+  // Add to first widget.
+  auto* const button = view->AddChildView(std::move(button_ptr));
+  EXPECT_EQ(1, shown.event_count());
+  EXPECT_EQ(0, hidden.event_count());
+  EXPECT_EQ(0, shown2.event_count());
+  EXPECT_EQ(0, hidden2.event_count());
+  // Move to second widget.
+  view2->AddChildView(button);
+  EXPECT_EQ(1, shown.event_count());
+  EXPECT_EQ(1, hidden.event_count());
+  EXPECT_EQ(1, shown2.event_count());
+  EXPECT_EQ(0, hidden2.event_count());
+  // Destroy the second widget.
+  widget2_.reset();
+  EXPECT_EQ(1, shown.event_count());
+  EXPECT_EQ(1, hidden.event_count());
+  EXPECT_EQ(1, shown2.event_count());
+  EXPECT_EQ(1, hidden2.event_count());
 }
 
 }  // namespace views

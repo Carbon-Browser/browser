@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,18 +9,17 @@
 #include <vector>
 
 #include "ash/ash_export.h"
-#include "ash/public/cpp/cast_config_controller.h"
+#include "ash/keyboard/keyboard_controller_impl.h"
 #include "ash/public/cpp/ime_controller.h"
 #include "ash/public/cpp/ime_controller_client.h"
 #include "ash/public/cpp/ime_info.h"
-#include "ash/system/screen_security/screen_capture_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "ui/base/ime/ash/ime_keyset.h"
-#include "ui/display/display_observer.h"
 
 namespace ui {
 class Accelerator;
@@ -33,29 +32,14 @@ class ModeIndicatorObserver;
 // Connects ash IME users (e.g. the system tray) to the IME implementation,
 // which might live in Chrome browser or in a separate mojo service.
 class ASH_EXPORT ImeControllerImpl : public ImeController,
-                                     public display::DisplayObserver,
-                                     public CastConfigController::Observer,
-                                     public ScreenCaptureObserver {
+                                     public KeyboardControllerObserver {
  public:
-  class Observer {
-   public:
-    // Called when the caps lock state has changed.
-    virtual void OnCapsLockChanged(bool enabled) = 0;
-
-    // Called when the keyboard layout name has changed.
-    virtual void OnKeyboardLayoutNameChanged(
-        const std::string& layout_name) = 0;
-  };
-
   ImeControllerImpl();
 
   ImeControllerImpl(const ImeControllerImpl&) = delete;
   ImeControllerImpl& operator=(const ImeControllerImpl&) = delete;
 
   ~ImeControllerImpl() override;
-
-  void AddObserver(Observer* observer);
-  void RemoveObserver(Observer* observer);
 
   const std::vector<ImeInfo>& GetVisibleImes() const;
   bool IsCurrentImeVisible() const;
@@ -100,6 +84,8 @@ class ASH_EXPORT ImeControllerImpl : public ImeController,
   void SwitchImeWithAccelerator(const ui::Accelerator& accelerator);
 
   // ImeController:
+  void AddObserver(Observer* observer) override;
+  void RemoveObserver(Observer* observer) override;
   void SetClient(ImeControllerClient* client) override;
   void RefreshIme(const std::string& current_ime_id,
                   std::vector<ImeInfo> available_imes,
@@ -108,6 +94,7 @@ class ASH_EXPORT ImeControllerImpl : public ImeController,
   void ShowImeMenuOnShelf(bool show) override;
   void UpdateCapsLockState(bool caps_enabled) override;
   void OnKeyboardLayoutNameChanged(const std::string& layout_name) override;
+  void OnKeyboardEnabledChanged(bool is_enabled) override;
 
   void SetExtraInputOptionsEnabledState(bool is_extra_input_options_enabled,
                                         bool is_emoji_enabled,
@@ -118,22 +105,8 @@ class ASH_EXPORT ImeControllerImpl : public ImeController,
   void ShowModeIndicator(const gfx::Rect& anchor_bounds,
                          const std::u16string& ime_short_name) override;
 
-  // display::DisplayObserver:
-  void OnDisplayMetricsChanged(const display::Display& display,
-                               uint32_t changed_metrics) override;
-
-  // CastConfigController::Observer:
-  void OnDevicesUpdated(const std::vector<SinkAndRoute>& devices) override;
-
-  // ScreenCaptureObserver:
-  void OnScreenCaptureStart(
-      const base::RepeatingClosure& stop_callback,
-      const base::RepeatingClosure& source_callback,
-      const std::u16string& screen_capture_status) override;
-  void OnScreenCaptureStop() override;
-
   // Synchronously returns the cached caps lock state.
-  bool IsCapsLockEnabled() const;
+  bool IsCapsLockEnabled() const override;
 
   // Synchronously returns the cached keyboard layout name
   const std::string& keyboard_layout_name() const {
@@ -152,7 +125,7 @@ class ASH_EXPORT ImeControllerImpl : public ImeController,
       const ui::Accelerator& accelerator) const;
 
   // Client interface back to IME code in chrome.
-  ImeControllerClient* client_ = nullptr;
+  raw_ptr<ImeControllerClient> client_ = nullptr;
 
   // Copy of the current IME so we can return it by reference.
   ImeInfo current_ime_;

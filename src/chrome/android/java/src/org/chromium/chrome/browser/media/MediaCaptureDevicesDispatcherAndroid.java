@@ -1,10 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.media;
 
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.content_public.browser.WebContents;
 
 /**
@@ -35,8 +36,11 @@ public class MediaCaptureDevicesDispatcherAndroid {
     @NativeMethods
     interface Natives {
         boolean isCapturingAudio(WebContents webContents);
+
         boolean isCapturingVideo(WebContents webContents);
+
         boolean isCapturingScreen(WebContents webContents);
+
         void notifyStopped(WebContents webContents);
     }
 }

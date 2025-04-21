@@ -1,12 +1,13 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ui/snapshot/snapshot_win.h"
+#include "ui/snapshot/snapshot.h"
 
 #include <memory>
+#include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/win/windows_version.h"
 #include "skia/ext/platform_canvas.h"
 #include "skia/ext/skia_utils_win.h"
@@ -17,25 +18,12 @@
 #include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/geometry/transform.h"
 #include "ui/gfx/image/image.h"
-#include "ui/snapshot/snapshot.h"
-#include "ui/snapshot/snapshot_aura.h"
-
-namespace {
-
-// Windows 8.1 is the first version that supports PW_RENDERFULLCONTENT.
-// Without that flag PrintWindow may not correctly capture what's actually
-// onscreen.
-bool UseAuraSnapshot() {
-  return (base::win::GetVersion() < base::win::Version::WIN8_1);
-}
-
-}  // namespace
 
 namespace ui {
 
-namespace internal {
+namespace {
 
-bool GrabHwndSnapshot(HWND window_handle,
+void GrabHwndSnapshot(HWND window_handle,
                       const gfx::Rect& snapshot_bounds_in_pixels,
                       const gfx::Rect& clip_rect_in_pixels,
                       gfx::Image* image) {
@@ -57,7 +45,7 @@ bool GrabHwndSnapshot(HWND window_handle,
   BOOL result = PrintWindow(window_handle, mem_hdc, flags);
   if (!result) {
     PLOG(ERROR) << "Failed to print window";
-    return false;
+    return;
   }
 
   SkBitmap bitmap;
@@ -81,38 +69,22 @@ bool GrabHwndSnapshot(HWND window_handle,
 
   *image = gfx::Image::CreateFrom1xBitmap(bitmap);
 
-  return true;
+  return;
 }
 
-}  // namespace internal
-
-bool GrabViewSnapshot(gfx::NativeView view_handle,
-                      const gfx::Rect& snapshot_bounds,
-                      gfx::Image* image) {
-  return GrabWindowSnapshot(view_handle, snapshot_bounds, image);
-}
-
-bool GrabWindowSnapshot(gfx::NativeWindow window_handle,
-                        const gfx::Rect& snapshot_bounds,
-                        gfx::Image* image) {
-  if (UseAuraSnapshot()) {
-    // Not supported in Aura.  Callers should fall back to the async version.
-    return false;
-  }
-
-  DCHECK(window_handle);
-  gfx::Rect window_bounds = window_handle->GetBoundsInRootWindow();
-  aura::WindowTreeHost* host = window_handle->GetHost();
+void GrabNativeWindowSnapshot(gfx::NativeWindow native_window,
+                              const gfx::Rect& snapshot_bounds,
+                              gfx::Image* image) {
+  DCHECK(native_window);
+  gfx::Rect window_bounds = native_window->GetBoundsInRootWindow();
+  aura::WindowTreeHost* host = native_window->GetHost();
   DCHECK(host);
   HWND hwnd = host->GetAcceleratedWidget();
 
-  gfx::RectF window_bounds_in_pixels(window_bounds);
-  host->GetRootTransform().TransformRect(&window_bounds_in_pixels);
-  gfx::RectF snapshot_bounds_in_pixels(snapshot_bounds);
-  host->GetRootTransform().TransformRect(&snapshot_bounds_in_pixels);
-
+  gfx::Rect snapshot_bounds_in_pixels =
+      host->GetRootTransform().MapRect(snapshot_bounds);
   gfx::Rect expanded_window_bounds_in_pixels =
-      gfx::ToEnclosingRect(window_bounds_in_pixels);
+      host->GetRootTransform().MapRect(window_bounds);
   RECT client_area;
   ::GetClientRect(hwnd, &client_area);
   gfx::Rect client_area_rect(client_area);
@@ -120,45 +92,26 @@ bool GrabWindowSnapshot(gfx::NativeWindow window_handle,
 
   expanded_window_bounds_in_pixels.Intersect(client_area_rect);
 
-  return internal::GrabHwndSnapshot(
-      hwnd, gfx::ToEnclosingRect(snapshot_bounds_in_pixels),
-      expanded_window_bounds_in_pixels, image);
+  GrabHwndSnapshot(hwnd, snapshot_bounds_in_pixels,
+                   expanded_window_bounds_in_pixels, image);
 }
 
-void GrabWindowSnapshotAsync(gfx::NativeWindow window,
-                             const gfx::Rect& source_rect,
-                             GrabWindowSnapshotAsyncCallback callback) {
-  if (UseAuraSnapshot()) {
-    GrabWindowSnapshotAsyncAura(window, source_rect, std::move(callback));
-    return;
-  }
+}  // namespace
+
+void GrabWindowSnapshot(gfx::NativeWindow window,
+                        const gfx::Rect& source_rect,
+                        GrabSnapshotImageCallback callback) {
   gfx::Image image;
-  GrabWindowSnapshot(window, source_rect, &image);
+  GrabNativeWindowSnapshot(window, source_rect, &image);
   std::move(callback).Run(image);
 }
 
-void GrabViewSnapshotAsync(gfx::NativeView view,
-                           const gfx::Rect& source_rect,
-                           GrabWindowSnapshotAsyncCallback callback) {
-  if (UseAuraSnapshot()) {
-    GrabWindowSnapshotAsyncAura(view, source_rect, std::move(callback));
-    return;
-  }
-  NOTIMPLEMENTED();
-  std::move(callback).Run(gfx::Image());
-}
-
-void GrabWindowSnapshotAndScaleAsync(gfx::NativeWindow window,
-                                     const gfx::Rect& source_rect,
-                                     const gfx::Size& target_size,
-                                     GrabWindowSnapshotAsyncCallback callback) {
-  if (UseAuraSnapshot()) {
-    GrabWindowSnapshotAndScaleAsyncAura(window, source_rect, target_size,
-                                        std::move(callback));
-    return;
-  }
-  NOTIMPLEMENTED();
-  std::move(callback).Run(gfx::Image());
+void GrabViewSnapshot(gfx::NativeView view,
+                      const gfx::Rect& source_rect,
+                      GrabSnapshotImageCallback callback) {
+  gfx::Image image;
+  GrabNativeWindowSnapshot(view, source_rect, &image);
+  std::move(callback).Run(image);
 }
 
 }  // namespace ui

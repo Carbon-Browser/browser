@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/synchronization/lock.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/service_manager/public/cpp/service.h"
@@ -103,7 +103,7 @@ void ServiceReceiver::CreatePackagedServiceInstance(
       identity.name(), std::move(receiver),
       base::BindOnce(
           [](mojo::PendingRemote<mojom::ProcessMetadata> pending_metadata,
-             absl::optional<base::ProcessId> pid) {
+             std::optional<base::ProcessId> pid) {
             if (pid) {
               mojo::Remote<mojom::ProcessMetadata> metadata(
                   std::move(pending_metadata));

@@ -1,10 +1,17 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/services/app_service/public/cpp/run_on_os_login_types.h"
 
 namespace apps {
+
+namespace {
+
+const char kLoginModeKey[] = "login_mode";
+const char kIsManagedKey[] = "is_managed";
+
+}  // namespace
 
 APP_ENUM_TO_STRING(RunOnOsLoginMode, kUnknown, kNotRun, kWindowed)
 
@@ -23,46 +30,34 @@ bool RunOnOsLogin::operator!=(const RunOnOsLogin& other) const {
   return !(*this == other);
 }
 
-apps::mojom::RunOnOsLoginPtr ConvertRunOnOsLoginToMojomRunOnOsLogin(
+base::Value::Dict ConvertRunOnOsLoginToDict(
     const RunOnOsLogin& run_on_os_login) {
-  auto run_on_os_login_mojom = apps::mojom::RunOnOsLogin::New();
-  run_on_os_login_mojom->login_mode =
-      ConvertRunOnOsLoginModeToMojomRunOnOsLoginMode(
-          run_on_os_login.login_mode);
-  run_on_os_login_mojom->is_managed = run_on_os_login.is_managed;
-  return run_on_os_login_mojom;
+  base::Value::Dict dict;
+  dict.Set(kLoginModeKey, static_cast<int>(run_on_os_login.login_mode));
+  dict.Set(kIsManagedKey, run_on_os_login.is_managed);
+  return dict;
 }
 
-RunOnOsLoginPtr ConvertMojomRunOnOsLoginToRunOnOsLogin(
-    const apps::mojom::RunOnOsLoginPtr& run_on_os_login) {
-  DCHECK(run_on_os_login);
-  return std::make_unique<RunOnOsLogin>(
-      ConvertMojomRunOnOsLoginModeToRunOnOsLoginMode(
-          run_on_os_login->login_mode),
-      run_on_os_login->is_managed);
-}
-
-apps::mojom::RunOnOsLoginMode ConvertRunOnOsLoginModeToMojomRunOnOsLoginMode(
-    RunOnOsLoginMode login_mode) {
-  switch (login_mode) {
-    case RunOnOsLoginMode::kUnknown:
-      return apps::mojom::RunOnOsLoginMode::kUnknown;
-    case RunOnOsLoginMode::kNotRun:
-      return apps::mojom::RunOnOsLoginMode::kNotRun;
-    case RunOnOsLoginMode::kWindowed:
-      return apps::mojom::RunOnOsLoginMode::kWindowed;
+std::optional<RunOnOsLogin> ConvertDictToRunOnOsLogin(
+    const base::Value::Dict* dict) {
+  if (!dict) {
+    return std::nullopt;
   }
+
+  std::optional<int> login_mode = dict->FindInt(kLoginModeKey);
+  if (!login_mode.has_value() ||
+      login_mode.value() < static_cast<int>(RunOnOsLoginMode::kUnknown) ||
+      login_mode.value() > static_cast<int>(RunOnOsLoginMode::kMaxValue)) {
+    return std::nullopt;
+  }
+
+  std::optional<bool> is_managed = dict->FindBool(kIsManagedKey);
+  if (!is_managed.has_value()) {
+    return std::nullopt;
+  }
+
+  return RunOnOsLogin(static_cast<RunOnOsLoginMode>(login_mode.value()),
+                      is_managed.value());
 }
 
-RunOnOsLoginMode ConvertMojomRunOnOsLoginModeToRunOnOsLoginMode(
-    apps::mojom::RunOnOsLoginMode login_mode) {
-  switch (login_mode) {
-    case apps::mojom::RunOnOsLoginMode::kUnknown:
-      return RunOnOsLoginMode::kUnknown;
-    case apps::mojom::RunOnOsLoginMode::kNotRun:
-      return RunOnOsLoginMode::kNotRun;
-    case apps::mojom::RunOnOsLoginMode::kWindowed:
-      return RunOnOsLoginMode::kWindowed;
-  }
-}
 }  // namespace apps

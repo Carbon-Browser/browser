@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "net/base/net_errors.h"
 #include "net/socket/client_socket_factory.h"
@@ -71,13 +71,13 @@ void TLSClientSocket::OnTLSConnectCompleted(int result) {
     socket_ = nullptr;
     std::move(connect_callback_)
         .Run(result, mojo::ScopedDataPipeConsumerHandle(),
-             mojo::ScopedDataPipeProducerHandle(), absl::nullopt);
+             mojo::ScopedDataPipeProducerHandle(), std::nullopt);
     return;
   }
   socket_data_pump_ = std::make_unique<SocketDataPump>(
       socket_.get(), this /*delegate*/, std::move(receive_producer_handle),
       std::move(send_consumer_handle), traffic_annotation_);
-  absl::optional<net::SSLInfo> ssl_info;
+  std::optional<net::SSLInfo> ssl_info;
   if (send_ssl_info_) {
     net::SSLInfo local;
     socket_->GetSSLInfo(&local);

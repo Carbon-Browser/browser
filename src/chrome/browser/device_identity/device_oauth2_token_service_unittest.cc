@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,6 @@
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
@@ -150,6 +149,17 @@ class DeviceOAuth2TokenServiceTest : public testing::Test {
            "  \"user_id\": \"1234567890\" }";
   }
 
+  std::string GetInvalidScopeResponse(const std::string& scope) {
+    return "{ \"error\": \"invalid_scope\", "
+           "\"error_description\": \"Some requested scopes were invalid. "
+           "{invalid\\u003d[" +
+           scope +
+           "}\", "
+           "\"error_uri\": "
+           "\"https://developers.google.com/identity/protocols/oauth2\""
+           "}";
+  }
+
   bool RefreshTokenIsAvailable() {
     return oauth2_service_->RefreshTokenIsAvailable();
   }
@@ -201,7 +211,7 @@ class DeviceOAuth2TokenServiceTest : public testing::Test {
   std::unique_ptr<DeviceOAuth2TokenService, TokenServiceDeleter>
       oauth2_service_;
   TestingOAuth2AccessTokenManagerConsumer consumer_;
-  raw_ptr<MockDeviceOAuth2TokenStore> token_store_;
+  raw_ptr<MockDeviceOAuth2TokenStore, DanglingUntriaged> token_store_;
 };
 
 void DeviceOAuth2TokenServiceTest::ReturnOAuthUrlFetchResults(
@@ -331,6 +341,27 @@ TEST_F(DeviceOAuth2TokenServiceTest,
                                GetValidTokenResponse("ignored", 3600));
 
   AssertConsumerTokensAndErrors(0, 1);
+}
+
+TEST_F(DeviceOAuth2TokenServiceTest,
+       RefreshTokenValidation_Failure_InvalidScope) {
+  SetUpDefaultValues();
+  std::unique_ptr<OAuth2AccessTokenManager::Request> request =
+      StartTokenRequest();
+
+  PerformURLFetchesWithResults(
+      net::HTTP_OK, GetValidTokenResponse("tokeninfo_access_token", 3600),
+      net::HTTP_OK, GetValidTokenInfoResponse(kRobotEmail),
+      net::HTTP_BAD_REQUEST, GetInvalidScopeResponse("test_scope"));
+
+  AssertConsumerTokensAndErrors(0, 1);
+  EXPECT_EQ(consumer_.last_error_.state(),
+            GoogleServiceAuthError::SCOPE_LIMITED_UNRECOVERABLE_ERROR);
+  EXPECT_EQ(
+      consumer_.last_error_.error_message(),
+      "{ \"error\": \"invalid_scope\", \"error_description\": \"Some requested "
+      "scopes were invalid. {invalid\\u003d[test_scope}\", \"error_uri\": "
+      "\"https://developers.google.com/identity/protocols/oauth2\"}");
 }
 
 TEST_F(DeviceOAuth2TokenServiceTest,

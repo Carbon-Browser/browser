@@ -1,6 +1,8 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "content/browser/browsing_data/conditional_cache_deletion_helper.h"
 
 #include <algorithm>
 #include <memory>
@@ -8,13 +10,12 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/test/test_timeouts.h"
 #include "base/threading/platform_thread.h"
 #include "build/build_config.h"
-#include "content/browser/browsing_data/conditional_cache_deletion_helper.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -27,6 +28,7 @@
 #include "net/disk_cache/disk_cache.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/http/http_cache.h"
+#include "services/network/public/mojom/clear_data_filter.mojom.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 
 namespace content {
@@ -59,6 +61,7 @@ class ConditionalCacheDeletionHelperBrowserTest : public ContentBrowserTest {
     base::Time start = base::Time::Now();
     bool all_entries_written = false;
 
+    // TODO(crbug.com/41492111): `base::test::RunUntil` times out on mac.
     while (base::Time::Now() - start < TestTimeouts::action_timeout()) {
       all_entries_written = true;
       for (auto& url : urls) {

@@ -1,22 +1,21 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ENTERPRISE_CONNECTORS_DEVICE_TRUST_KEY_MANAGEMENT_CORE_NETWORK_MOJO_KEY_NETWORK_DELEGATE_H_
 #define CHROME_BROWSER_ENTERPRISE_CONNECTORS_DEVICE_TRUST_KEY_MANAGEMENT_CORE_NETWORK_MOJO_KEY_NETWORK_DELEGATE_H_
 
-#include "chrome/browser/enterprise/connectors/device_trust/key_management/core/network/key_network_delegate.h"
-
 #include <memory>
 #include <string>
 
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "chrome/browser/enterprise/connectors/device_trust/key_management/core/network/key_network_delegate.h"
 #include "net/http/http_response_headers.h"
-#include "services/network/public/mojom/url_loader_factory.mojom.h"
 #include "url/gurl.h"
 
 namespace network {
+class SharedURLLoaderFactory;
 class SimpleURLLoader;
 }  // namespace network
 
@@ -27,7 +26,7 @@ namespace enterprise_connectors {
 class MojoKeyNetworkDelegate : public KeyNetworkDelegate {
  public:
   explicit MojoKeyNetworkDelegate(
-      network::mojom::URLLoaderFactory* url_loader_factory);
+      scoped_refptr<network::SharedURLLoaderFactory> shared_url_loader_factory);
 
   ~MojoKeyNetworkDelegate() override;
 
@@ -44,11 +43,12 @@ class MojoKeyNetworkDelegate : public KeyNetworkDelegate {
   // `upload_key_completed_callback` is used to return the HTTP status
   // code.
   void OnURLLoaderComplete(
+      std::unique_ptr<network::SimpleURLLoader> url_loader,
       UploadKeyCompletedCallback upload_key_completed_callback,
       scoped_refptr<net::HttpResponseHeaders> headers);
 
-  std::unique_ptr<network::SimpleURLLoader> url_loader_;
-  base::raw_ptr<network::mojom::URLLoaderFactory> url_loader_factory_;
+  scoped_refptr<network::SharedURLLoaderFactory> shared_url_loader_factory_;
+
   base::WeakPtrFactory<MojoKeyNetworkDelegate> weak_factory_{this};
 };
 

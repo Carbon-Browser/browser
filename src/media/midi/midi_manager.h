@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/synchronization/lock.h"
 #include "base/thread_annotations.h"
 #include "base/time/time.h"
@@ -187,10 +187,12 @@ class MIDI_EXPORT MidiManager {
   mojom::Result result_ = mojom::Result::NOT_INITIALIZED;
 
   // Keeps track of all clients who are waiting for CompleteStartSession().
-  std::set<MidiManagerClient*> pending_clients_ GUARDED_BY(lock_);
+  std::set<raw_ptr<MidiManagerClient, SetExperimental>> pending_clients_
+      GUARDED_BY(lock_);
 
   // Keeps track of all clients who wish to receive MIDI data.
-  std::set<MidiManagerClient*> clients_ GUARDED_BY(lock_);
+  std::set<raw_ptr<MidiManagerClient, SetExperimental>> clients_
+      GUARDED_BY(lock_);
 
   // Keeps a SingleThreadTaskRunner of the thread that calls StartSession in
   // order to invoke CompleteStartSession() on the thread. This is touched only

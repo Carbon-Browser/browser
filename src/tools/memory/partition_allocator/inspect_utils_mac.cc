@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,11 @@
 #include <mach/mach_vm.h>
 #include <sys/mman.h>
 
-#include "base/allocator/partition_allocator/partition_alloc_base/migration_adapter.h"
-#include "base/allocator/partition_allocator/thread_cache.h"
 #include "base/check_op.h"
 #include "base/debug/proc_maps_linux.h"
 #include "base/logging.h"
 #include "base/memory/page_size.h"
-#include "base/strings/stringprintf.h"
+#include "partition_alloc/thread_cache.h"
 
 namespace partition_alloc::tools {
 

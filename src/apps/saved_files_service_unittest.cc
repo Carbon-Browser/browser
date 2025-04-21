@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,8 +38,7 @@ std::string GenerateId(int i) {
 class SavedFilesServiceUnitTest : public testing::Test {
  protected:
   void SetUp() override {
-    testing::Test::SetUp();
-    extension_ = env_.MakeExtension(*base::test::ParseJsonDeprecated(
+    static const char kManifest[] =
         "{"
         "  \"app\": {"
         "    \"background\": {"
@@ -49,7 +48,9 @@ class SavedFilesServiceUnitTest : public testing::Test {
         "  \"permissions\": ["
         "    {\"fileSystem\": [\"retainEntries\"]}"
         "  ]"
-        "}"));
+        "}";
+    testing::Test::SetUp();
+    extension_ = env_.MakeExtension(base::test::ParseJsonDict(kManifest));
     service_ = SavedFilesService::Get(env_.profile());
     path_ = base::FilePath(FILE_PATH_LITERAL("filename.ext"));
   }
@@ -148,9 +149,11 @@ TEST_F(SavedFilesServiceUnitTest, RetainTwoFilesTest) {
 }
 
 TEST_F(SavedFilesServiceUnitTest, NoRetainEntriesPermissionTest) {
-  extension_ = env_.MakeExtension(*base::test::ParseJsonDeprecated(
+  static const char kManifest[] =
       "{\"app\": {\"background\": {\"scripts\": [\"background.js\"]}},"
-      "\"permissions\": [\"fileSystem\"]}"));
+      "\"permissions\": [\"fileSystem\"]}";
+  extension_ = nullptr;
+  extension_ = env_.MakeExtension(base::test::ParseJsonDict(kManifest));
   service_->RegisterFileEntry(extension_->id(), GenerateId(1), path_, true);
   TRACE_CALL(CheckEntrySequenceNumber(1, 0));
   SavedFileEntry entry;

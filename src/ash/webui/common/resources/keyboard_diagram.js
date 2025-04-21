@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {I18nBehavior, I18nBehaviorInterface} from 'chrome://resources/js/i18n_behavior.m.js';
+import {I18nBehavior, I18nBehaviorInterface} from 'chrome://resources/ash/common/i18n_behavior.js';
 import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
+import {getTemplate} from './keyboard_diagram.html.js';
 import {KeyboardKeyState} from './keyboard_key.js';
 import {getKeyboardLayoutForRegionCode} from './keyboard_layouts.js';
 
@@ -25,9 +26,9 @@ const MINIMUM_HEIGHT_PX = 250;
  * @enum {string}
  */
 export const MechanicalLayout = {
-  kAnsi: 'ansi',
-  kIso: 'iso',
-  kJis: 'jis',
+  ANSI: 'ansi',
+  ISO: 'iso',
+  JIS: 'jis',
 };
 
 /**
@@ -35,9 +36,10 @@ export const MechanicalLayout = {
  * @enum {string}
  */
 export const PhysicalLayout = {
-  kChromeOS: 'chrome-os',
-  kChromeOSDellEnterpriseWilco: 'dell-enterprise-wilco',
-  kChromeOSDellEnterpriseDrallion: 'dell-enterprise-drallion',
+  CHROME_OS: 'chrome-os',
+  CHROME_OS_DELL_ENTERPRISE_WILCO: 'dell-enterprise-wilco',
+  CHROME_OS_DELL_ENTERPRISE_DRALLION: 'dell-enterprise-drallion',
+  SPLIT_MODIFIER: 'split-modifier',
 };
 
 /**
@@ -45,9 +47,37 @@ export const PhysicalLayout = {
  * @enum {string}
  */
 export const TopRightKey = {
-  kPower: 'power',
-  kLock: 'lock',
-  kControlPanel: 'control-panel',
+  POWER: 'power',
+  LOCK: 'lock',
+  CONTROL_PANEL: 'control-panel',
+};
+
+/**
+ * Enum of bottom left functional keys layout.
+ * @enum {string}
+ */
+export const BottomLeftLayout = {
+  THREE_KEYS: '3keys',
+  FOUR_KEYS: '4keys',
+};
+
+/**
+ * Enum of bottom right functional keys layout.
+ * @enum {string}
+ */
+export const BottomRightLayout = {
+  TWO_KEYS: '2keys',
+  THREE_KEYS: '3keys',
+  FOUR_KEYS: '4keys',
+};
+
+/**
+ * Enum of number pad layout.
+ * @enum {string}
+ */
+export const NumberPadLayout = {
+  THREE_COLUMN: '3columns',
+  FOUR_COLUMN: '4columns',
 };
 
 /**
@@ -134,6 +164,12 @@ export const TopRowKey = {
     icon: 'keyboard:screen-mirror',
     ariaNameI18n: 'keyboardDiagramAriaNameScreenMirror',
   },
+  kAccessibility: {
+    icon: 'keyboard:accessibility',
+  },
+  kDictation: {
+    icon: 'keyboard:dictation',
+  },
   // TODO(crbug.com/1207678): work out the localization scheme for keys like
   // delete and unknown.
   kDelete: {text: 'delete'},
@@ -155,7 +191,7 @@ export class KeyboardDiagramElement extends KeyboardDiagramElementBase {
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -213,7 +249,7 @@ export class KeyboardDiagramElement extends KeyboardDiagramElementBase {
        */
       topRightKey: {
         type: String,
-        value: TopRightKey.kLock,
+        value: TopRightKey.LOCK,
       },
 
       /** @protected {number} */
@@ -242,8 +278,8 @@ export class KeyboardDiagramElement extends KeyboardDiagramElementBase {
    * @private
    */
   computeShowFnAndGlobeKeys_(physicalLayout) {
-    return physicalLayout == PhysicalLayout.kChromeOSDellEnterpriseWilco ||
-        physicalLayout == PhysicalLayout.kChromeOSDellEnterpriseDrallion;
+    return physicalLayout == PhysicalLayout.CHROME_OS_DELL_ENTERPRISE_WILCO ||
+        physicalLayout == PhysicalLayout.CHROME_OS_DELL_ENTERPRISE_DRALLION;
   }
 
   /**
@@ -253,9 +289,9 @@ export class KeyboardDiagramElement extends KeyboardDiagramElementBase {
    */
   computeTopRightKeyCode_(topRightKey) {
     return {
-      [TopRightKey.kPower]: 116,
-      [TopRightKey.kLock]: 142,
-      [TopRightKey.kControlPanel]: 579,
+      [TopRightKey.POWER]: 116,
+      [TopRightKey.LOCK]: 142,
+      [TopRightKey.CONTROL_PANEL]: 579,
     }[topRightKey];
   }
 
@@ -275,9 +311,9 @@ export class KeyboardDiagramElement extends KeyboardDiagramElementBase {
    */
   computeTopRightKeyAriaNameI18n_(topRightKey) {
     return {
-      [TopRightKey.kPower]: 'keyboardDiagramAriaNamePower',
-      [TopRightKey.kLock]: 'keyboardDiagramAriaNameLock',
-      [TopRightKey.kControlPanel]: 'keyboardDiagramAriaNameControlPanel',
+      [TopRightKey.POWER]: 'keyboardDiagramAriaNamePower',
+      [TopRightKey.LOCK]: 'keyboardDiagramAriaNameLock',
+      [TopRightKey.CONTROL_PANEL]: 'keyboardDiagramAriaNameControlPanel',
     }[topRightKey];
   }
 
@@ -421,9 +457,17 @@ export class KeyboardDiagramElement extends KeyboardDiagramElementBase {
   /** Set any pressed keys to the "tested" state. */
   clearPressedKeys() {
     const keys = this.root.querySelectorAll(
-        `keyboard-key[state="${KeyboardKeyState.kPressed}"]`);
+        `keyboard-key[state="${KeyboardKeyState.PRESSED}"]`);
     for (const key of keys) {
-      key.state = KeyboardKeyState.kTested;
+      key.state = KeyboardKeyState.TESTED;
+    }
+  }
+
+  /** Set all keys to the "not pressed" state. */
+  resetAllKeys() {
+    const keys = this.root.querySelectorAll(`keyboard-key`);
+    for (const key of keys) {
+      key.state = KeyboardKeyState.NOT_PRESSED;
     }
   }
 }

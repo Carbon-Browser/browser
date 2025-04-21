@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 #define DEVICE_BLUETOOTH_TEST_TEST_BLUETOOTH_LOCAL_GATT_SERVICE_DELEGATE_H_
 
 #include <cstdint>
+#include <map>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "device/bluetooth/bluetooth_local_gatt_characteristic.h"
 #include "device/bluetooth/bluetooth_local_gatt_descriptor.h"
@@ -91,8 +92,9 @@ class TestBluetoothLocalGattServiceDelegate
 
  private:
   raw_ptr<BluetoothLocalGattService> expected_service_;
-  raw_ptr<BluetoothLocalGattCharacteristic> expected_characteristic_;
-  raw_ptr<BluetoothLocalGattDescriptor> expected_descriptor_;
+  raw_ptr<BluetoothLocalGattCharacteristic, DanglingUntriaged>
+      expected_characteristic_;
+  raw_ptr<BluetoothLocalGattDescriptor, DanglingUntriaged> expected_descriptor_;
 
   std::map<std::string, bool> notifications_started_for_characteristic_;
 };

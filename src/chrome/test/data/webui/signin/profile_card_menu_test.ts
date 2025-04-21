@@ -1,16 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://profile-picker/profile_picker.js';
 
-import {ManageProfilesBrowserProxyImpl, ProfileCardMenuElement, ProfileState, Statistics, StatisticsResult} from 'chrome://profile-picker/profile_picker.js';
-import {webUIListenerCallback} from 'chrome://resources/js/cr.m.js';
+import type {ProfileCardMenuElement, ProfileState, Statistics, StatisticsResult} from 'chrome://profile-picker/profile_picker.js';
+import {ManageProfilesBrowserProxyImpl} from 'chrome://profile-picker/profile_picker.js';
+import {webUIListenerCallback} from 'chrome://resources/js/cr.js';
 import {assertEquals, assertFalse, assertNotEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {waitBeforeNextRender} from 'chrome://webui-test/test_util.js';
-// <if expr="chromeos_lacros">
-import {waitAfterNextRender} from 'chrome://webui-test/test_util.js';
-// </if>
+import {microtasksFinished} from 'chrome://webui-test/test_util.js';
 
 import {TestManageProfilesBrowserProxy} from './test_manage_profiles_browser_proxy.js';
 
@@ -26,12 +24,11 @@ suite('ProfileCardMenuTest', function() {
   const statisticsDataTypes: string[] =
       ['BrowsingHistory', 'Passwords', 'Bookmarks', 'Autofill'];
 
-  setup(function() {
+  setup(async function() {
     browserProxy = new TestManageProfilesBrowserProxy();
     ManageProfilesBrowserProxyImpl.setInstance(browserProxy);
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     profileCardMenuElement = document.createElement('profile-card-menu');
-    document.body.appendChild(profileCardMenuElement);
     const testProfileState: ProfileState = {
       profilePath: `profilePath`,
       localProfileName: `profile`,
@@ -39,14 +36,12 @@ suite('ProfileCardMenuTest', function() {
       needsSignin: false,
       gaiaName: `User`,
       userName: `User@gmail.com`,
-      isManaged: false,
       avatarIcon: `AvatarUrl`,
-      // <if expr="chromeos_lacros">
-      isPrimaryLacrosProfile: false,
-      // </if>
+      avatarBadge: ``,
+      profileCardButtonLabel: ``,
     };
     profileCardMenuElement.profileState = testProfileState;
-    return waitBeforeNextRender(profileCardMenuElement);
+    document.body.appendChild(profileCardMenuElement);
   });
 
   // Checks basic layout of the action menu.
@@ -93,6 +88,7 @@ suite('ProfileCardMenuTest', function() {
     assertTrue(dialog.open);
     dialog.querySelector<HTMLElement>('.cancel-button')!.click();
     assertFalse(dialog.open);
+    assertEquals(browserProxy.getCallCount('closeProfileStatistics'), 1);
     assertEquals(browserProxy.getCallCount('removeProfile'), 0);
   });
 
@@ -106,6 +102,7 @@ suite('ProfileCardMenuTest', function() {
     await browserProxy.whenCalled('removeProfile');
     webUIListenerCallback('profile-removed', 'profilePath');
     assertFalse(dialog.open);
+    assertEquals(browserProxy.getCallCount('closeProfileStatistics'), 0);
   });
 
   // The profile info in the remove confirmation dialog is displayed correctly.
@@ -125,6 +122,7 @@ suite('ProfileCardMenuTest', function() {
     updatedProfileState.localProfileName = 'updatedProfile';
     updatedProfileState.gaiaName = 'updatedUser';
     profileCardMenuElement.profileState = updatedProfileState;
+    await microtasksFinished();
 
     assertEquals(
         dialog.querySelector<HTMLElement>('#profileName')!.innerText,
@@ -152,10 +150,11 @@ suite('ProfileCardMenuTest', function() {
       statistics: statistics,
     };
     webUIListenerCallback('profile-statistics-received', statisticsResult);
+    await microtasksFinished();
 
     const statisticsCountElements =
         dialog.querySelector('.statistics')!.querySelectorAll<HTMLElement>(
-            '.count')!;
+            '.count');
     for (let i = 0; i < statisticsDataTypes.length; i++) {
       assertEquals(
           statisticsCountElements[i]!.innerText,
@@ -183,98 +182,10 @@ suite('ProfileCardMenuTest', function() {
 
     const statisticsCountElements =
         dialog.querySelector('.statistics')!.querySelectorAll<HTMLElement>(
-            '.count')!;
+            '.count');
     assertNotEquals(
         statisticsCountElements[statisticsDataTypes.indexOf('BrowsingHistory')]!
             .innerText,
         '1');
   });
 });
-
-// <if expr="chromeos_lacros">
-suite('ProfileCardMenuLacrosTest', function() {
-  let primaryProfileCardMenuElement: ProfileCardMenuElement;
-  let secondaryProfileCardMenuElement: ProfileCardMenuElement;
-  let browserProxy: TestManageProfilesBrowserProxy;
-
-  setup(async function() {
-    browserProxy = new TestManageProfilesBrowserProxy();
-    ManageProfilesBrowserProxyImpl.setInstance(browserProxy);
-    document.body.innerHTML = '';
-    primaryProfileCardMenuElement = document.createElement('profile-card-menu');
-    document.body.appendChild(primaryProfileCardMenuElement);
-    const testPrimaryProfileState: ProfileState = {
-      profilePath: `primaryProfilePath`,
-      localProfileName: `profile`,
-      isSyncing: true,
-      needsSignin: false,
-      gaiaName: `User`,
-      userName: `User@gmail.com`,
-      isManaged: true,
-      avatarIcon: `AvatarUrl`,
-      isPrimaryLacrosProfile: true,
-    };
-    primaryProfileCardMenuElement.profileState = testPrimaryProfileState;
-    await waitAfterNextRender(primaryProfileCardMenuElement);
-    secondaryProfileCardMenuElement =
-        document.createElement('profile-card-menu');
-    document.body.appendChild(secondaryProfileCardMenuElement);
-    const testSecondaryProfileState: ProfileState = {
-      profilePath: `secondaryProfilePath`,
-      localProfileName: `profile`,
-      isSyncing: true,
-      needsSignin: false,
-      gaiaName: `User2`,
-      userName: `User2@gmail.com`,
-      isManaged: false,
-      avatarIcon: `AvatarUrl`,
-      isPrimaryLacrosProfile: false,
-    };
-    secondaryProfileCardMenuElement.profileState = testSecondaryProfileState;
-    return waitAfterNextRender(secondaryProfileCardMenuElement);
-  });
-
-  // The primary profile cannot be deleted in Lacros. The delete button should
-  // just open a notification about that.
-  test('PrimaryProfileCannotBeDeleted', async function() {
-    primaryProfileCardMenuElement.$.moreActionsButton.click();
-    const menuButtons = primaryProfileCardMenuElement.shadowRoot!
-                            .querySelectorAll<HTMLButtonElement>(
-                                '#actionMenu > .dropdown-item');
-    assertFalse(menuButtons[MenuButtonIndex.DELETE]!.disabled);
-    menuButtons[MenuButtonIndex.DELETE]!.click();
-    assertFalse(primaryProfileCardMenuElement.$.actionMenu.open);
-    const dialog =
-        primaryProfileCardMenuElement.$.removePrimaryLacrosProfileDialog;
-    assertTrue(dialog.open);
-    dialog.querySelector<HTMLElement>('.action-button')!.click();
-    waitBeforeNextRender(primaryProfileCardMenuElement);
-    assertFalse(dialog.open);
-  });
-
-  // All other profiles can be deleted as normal.
-  test('SecondaryProfileCanBeDeleted', async function() {
-    secondaryProfileCardMenuElement.$.moreActionsButton.click();
-    const menuButtons = secondaryProfileCardMenuElement.shadowRoot!
-                            .querySelectorAll<HTMLButtonElement>(
-                                '#actionMenu > .dropdown-item');
-    assertFalse(menuButtons[MenuButtonIndex.DELETE]!.disabled);
-    menuButtons[MenuButtonIndex.DELETE]!.click();
-    assertFalse(secondaryProfileCardMenuElement.$.actionMenu.open);
-    assertTrue(secondaryProfileCardMenuElement.$.removeConfirmationDialog.open);
-  });
-
-  // Check that the confirmation dialog has a clickable link.
-  test('RemoveConfirmationDialogLink', async function() {
-    const dialog = secondaryProfileCardMenuElement.$.removeConfirmationDialog;
-    dialog.showModal();
-    assertTrue(dialog.open);
-
-    const settingsLink = dialog.querySelector<HTMLElement>(
-        '#removeWarningHeader a[is="action-link"]');
-    settingsLink!.click();
-    await browserProxy.whenCalled('openAshAccountSettingsPage');
-  });
-
-});
-// </if>

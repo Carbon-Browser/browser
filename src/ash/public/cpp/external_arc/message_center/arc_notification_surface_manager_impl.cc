@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "ash/public/cpp/external_arc/message_center/arc_notification_surface_impl.h"
+#include "base/check.h"
 #include "components/exo/notification_surface.h"
 
 namespace ash {
@@ -32,6 +33,13 @@ void ArcNotificationSurfaceManagerImpl::RemoveObserver(Observer* observer) {
   observers_.RemoveObserver(observer);
 }
 
+void ArcNotificationSurfaceManagerImpl::OnNotificationSurfaceAXTreeIdChanged(
+    ArcNotificationSurface* surface) {
+  for (auto& observer : observers_) {
+    observer.OnNotificationSurfaceAXTreeIdChanged(surface);
+  }
+}
+
 exo::NotificationSurface* ArcNotificationSurfaceManagerImpl::GetSurface(
     const std::string& notification_key) const {
   auto it = notification_surface_map_.find(notification_key);
@@ -41,14 +49,14 @@ exo::NotificationSurface* ArcNotificationSurfaceManagerImpl::GetSurface(
 
 void ArcNotificationSurfaceManagerImpl::AddSurface(
     exo::NotificationSurface* surface) {
+  // Make sure that the observer is notified if another surface with the same
+  // key is already registered.
+  RemoveSurfaceByKey(surface->notification_key());
   auto result = notification_surface_map_.insert(
       std::pair<std::string, std::unique_ptr<ArcNotificationSurfaceImpl>>(
           surface->notification_key(),
           std::make_unique<ArcNotificationSurfaceImpl>(surface)));
-  if (!result.second) {
-    NOTREACHED();
-    return;
-  }
+  CHECK(result.second);
 
   for (auto& observer : observers_)
     observer.OnNotificationSurfaceAdded(result.first->second.get());
@@ -56,7 +64,12 @@ void ArcNotificationSurfaceManagerImpl::AddSurface(
 
 void ArcNotificationSurfaceManagerImpl::RemoveSurface(
     exo::NotificationSurface* surface) {
-  auto it = notification_surface_map_.find(surface->notification_key());
+  RemoveSurfaceByKey(surface->notification_key());
+}
+
+void ArcNotificationSurfaceManagerImpl::RemoveSurfaceByKey(
+    const std::string& notification_key) {
+  auto it = notification_surface_map_.find(notification_key);
   if (it == notification_surface_map_.end())
     return;
 

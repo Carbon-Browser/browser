@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CHROME_CREDENTIAL_PROVIDER_GAIACP_SCOPED_HANDLE_H_
 
 #include <windows.h>
+
 #include <winhttp.h>
 
 #include "base/win/scoped_handle.h"

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
 
@@ -42,16 +41,16 @@ bool WebUIMessageHandler::IsJavascriptAllowed() {
 }
 
 void WebUIMessageHandler::ResolveJavascriptCallback(
-    const base::Value& callback_id,
-    const base::Value& response) {
+    const base::ValueView callback_id,
+    const base::ValueView response) {
   // cr.webUIResponse is a global JS function exposed from cr.js.
   CallJavascriptFunction("cr.webUIResponse", callback_id, base::Value(true),
                          response);
 }
 
 void WebUIMessageHandler::RejectJavascriptCallback(
-    const base::Value& callback_id,
-    const base::Value& response) {
+    const base::ValueView callback_id,
+    const base::ValueView response) {
   // cr.webUIResponse is a global JS function exposed from cr.js.
   CallJavascriptFunction("cr.webUIResponse", callback_id, base::Value(false),
                          response);

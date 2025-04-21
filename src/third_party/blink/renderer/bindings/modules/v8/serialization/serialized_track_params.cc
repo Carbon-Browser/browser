@@ -1,8 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/bindings/modules/v8/serialization/serialized_track_params.h"
+#include "third_party/blink/renderer/modules/breakout_box/media_stream_track_generator.h"
+#include "third_party/blink/renderer/modules/mediacapturefromelement/canvas_capture_media_stream_track.h"
+#include "third_party/blink/renderer/modules/mediastream/browser_capture_media_stream_track.h"
 
 namespace blink {
 
@@ -26,7 +29,6 @@ SerializedContentHintType SerializeContentHint(
   // new values are added in enum WebMediaStreamTrack::ContentHintType, then add
   // them here as well. Do not use default.
   NOTREACHED();
-  return SerializedContentHintType::kNone;
 }
 
 SerializedReadyState SerializeReadyState(MediaStreamSource::ReadyState state) {
@@ -42,7 +44,23 @@ SerializedReadyState SerializeReadyState(MediaStreamSource::ReadyState state) {
   // values are added in enum MediaStreamSource::ReadyState, then add them here
   // as well. Do not use default.
   NOTREACHED();
-  return SerializedReadyState::kReadyStateEnded;
+}
+
+SerializedTrackImplSubtype SerializeTrackImplSubtype(
+    ScriptWrappable::TypeDispatcher& dispatcher) {
+  if (dispatcher.ToMostDerived<MediaStreamTrack>()) {
+    return SerializedTrackImplSubtype::kTrackImplSubtypeBase;
+  } else if (dispatcher.ToMostDerived<CanvasCaptureMediaStreamTrack>()) {
+    return SerializedTrackImplSubtype::kTrackImplSubtypeCanvasCapture;
+  } else if (dispatcher.ToMostDerived<MediaStreamTrackGenerator>()) {
+    return SerializedTrackImplSubtype::kTrackImplSubtypeGenerator;
+  } else if (dispatcher.ToMostDerived<BrowserCaptureMediaStreamTrack>()) {
+    return SerializedTrackImplSubtype::kTrackImplSubtypeBrowserCapture;
+  }
+  auto* wrapper_type_info =
+      dispatcher.DowncastTo<MediaStreamTrack>()->GetWrapperTypeInfo();
+  LOG(FATAL) << "SerializeTrackImplSubtype is missing a case for "
+             << wrapper_type_info->interface_name;
 }
 
 WebMediaStreamTrack::ContentHintType DeserializeContentHint(
@@ -72,6 +90,20 @@ MediaStreamSource::ReadyState DeserializeReadyState(
       return MediaStreamSource::kReadyStateMuted;
     case SerializedReadyState::kReadyStateEnded:
       return MediaStreamSource::kReadyStateEnded;
+  }
+}
+
+const WrapperTypeInfo* DeserializeTrackImplSubtype(
+    SerializedTrackImplSubtype type) {
+  switch (type) {
+    case SerializedTrackImplSubtype::kTrackImplSubtypeBase:
+      return MediaStreamTrack::GetStaticWrapperTypeInfo();
+    case SerializedTrackImplSubtype::kTrackImplSubtypeCanvasCapture:
+      return CanvasCaptureMediaStreamTrack::GetStaticWrapperTypeInfo();
+    case SerializedTrackImplSubtype::kTrackImplSubtypeGenerator:
+      return MediaStreamTrackGenerator::GetStaticWrapperTypeInfo();
+    case SerializedTrackImplSubtype::kTrackImplSubtypeBrowserCapture:
+      return BrowserCaptureMediaStreamTrack::GetStaticWrapperTypeInfo();
   }
 }
 

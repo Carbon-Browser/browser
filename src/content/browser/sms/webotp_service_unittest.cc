@@ -1,16 +1,17 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/sms/webotp_service.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -36,15 +37,14 @@
 #include "services/service_manager/public/cpp/bind_source_info.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/sms/webotp_service_outcome.h"
 #include "third_party/blink/public/mojom/sms/webotp_service.mojom-shared.h"
 #include "third_party/blink/public/mojom/sms/webotp_service.mojom.h"
 
-using absl::optional;
 using base::BindLambdaForTesting;
 using blink::mojom::SmsStatus;
 using blink::mojom::WebOTPService;
+using std::optional;
 using std::string;
 using ::testing::_;
 using ::testing::ByMove;
@@ -103,13 +103,7 @@ class Service {
                 /* avoid showing user prompts */
                 std::make_unique<NoopUserConsentHandler>()) {}
 
-  ~Service() {
-    // WebOTPService sends IPCs in its destructor, so for the unit test, pretend
-    // that this works.
-    service_->WillBeDestroyed(
-        DocumentServiceDestructionReason::kEndOfDocumentLifetime);
-    service_->ResetAndDeleteThis();
-  }
+  ~Service() { Dispose(); }
 
   NiceMock<MockSmsProvider>* provider() { return &provider_; }
   SmsFetcher* fetcher() { return &fetcher_; }
@@ -134,6 +128,19 @@ class Service {
   }
 
   void ActivateTimer() { service_->OnTimeout(); }
+
+ protected:
+  void Dispose() {
+    if (!service_) {
+      return;
+    }
+
+    // WebOTPService sends IPCs in its destructor, so for the unit test, pretend
+    // that this works.
+    service_->WillBeDestroyed(
+        DocumentServiceDestructionReason::kEndOfDocumentLifetime);
+    service_.ExtractAsDangling()->ResetAndDeleteThis();
+  }
 
  private:
   StubWebContentsDelegate contents_delegate_;
@@ -169,7 +176,7 @@ class WebOTPServiceTest : public RenderViewHostTestHarness {
 
     // There are non-outcome metrics under the same entry of SMSReceiver UKM. We
     // need to make sure that the outcome metric only includes the expected one.
-    for (const auto* const entry : entries) {
+    for (const ukm::mojom::UkmEntry* const entry : entries) {
       const int64_t* metric = ukm_recorder()->GetEntryMetric(entry, "Outcome");
       if (metric && *metric != static_cast<int>(outcome))
         FAIL() << "Unexpected outcome was recorded";
@@ -183,7 +190,7 @@ class WebOTPServiceTest : public RenderViewHostTestHarness {
 
     ASSERT_FALSE(entries.empty());
 
-    for (const auto* const entry : entries) {
+    for (const ukm::mojom::UkmEntry* const entry : entries) {
       if (ukm_recorder()->GetEntryMetric(entry, metric_name)) {
         SUCCEED();
         return;
@@ -473,7 +480,7 @@ TEST_F(WebOTPServiceTest, AtMostOneSmsRequestPerOrigin) {
   sms1_loop.Run();
   sms2_loop.Run();
 
-  EXPECT_EQ(absl::nullopt, response1);
+  EXPECT_EQ(std::nullopt, response1);
   EXPECT_EQ(SmsStatus::kCancelled, sms_status1);
 
   EXPECT_EQ("second", response2.value());
@@ -505,7 +512,7 @@ TEST_F(WebOTPServiceTest, CleansUp) {
   service->Receive(base::BindLambdaForTesting(
       [&reload](SmsStatus status, const optional<string>& otp) {
         EXPECT_EQ(SmsStatus::kUnhandledRequest, status);
-        EXPECT_EQ(absl::nullopt, otp);
+        EXPECT_EQ(std::nullopt, otp);
         reload.Quit();
       }));
 
@@ -530,7 +537,7 @@ TEST_F(WebOTPServiceTest, Abort) {
   service.MakeRequest(BindLambdaForTesting(
       [&loop](SmsStatus status, const optional<string>& otp) {
         EXPECT_EQ(SmsStatus::kAborted, status);
-        EXPECT_EQ(absl::nullopt, otp);
+        EXPECT_EQ(std::nullopt, otp);
         loop.Quit();
       }));
 
@@ -555,15 +562,22 @@ class ServiceWithPrompt : public Service {
         static_cast<NiceMock<MockUserConsentHandler>*>(consent_handler());
   }
 
+  ~ServiceWithPrompt() {
+    // At destruction, WebOTPService calls into `MockUserConsentHandler`, which
+    // can reference `on_complete_callback_`. Preemptively tear it down so
+    // `on_complete_callback_` is not destroyed before it is used.
+    Dispose();
+  }
+
   void ExpectRequestUserConsent() {
     EXPECT_CALL(*mock_handler_, RequestUserConsent(_, _))
-        .WillOnce(
-            Invoke([=](const std::string&, CompletionCallback on_complete) {
+        .WillOnce(Invoke(
+            [=, this](const std::string&, CompletionCallback on_complete) {
               on_complete_callback_ = std::move(on_complete);
             }));
 
     EXPECT_CALL(*mock_handler_, is_async()).WillRepeatedly(Return(true));
-    EXPECT_CALL(*mock_handler_, is_active()).WillRepeatedly(Invoke([=]() {
+    EXPECT_CALL(*mock_handler_, is_active()).WillRepeatedly(Invoke([=, this]() {
       return !on_complete_callback_.is_null();
     }));
   }
@@ -636,7 +650,7 @@ TEST_F(WebOTPServiceTest, SecondRequestDuringPrompt) {
 
   sms_loop.Run();
 
-  EXPECT_EQ(absl::nullopt, response1);
+  EXPECT_EQ(std::nullopt, response1);
   EXPECT_EQ(SmsStatus::kCancelled, sms_status1);
 
   EXPECT_EQ("second", response2.value());
@@ -655,7 +669,7 @@ TEST_F(WebOTPServiceTest, AbortWhilePrompt) {
   service.MakeRequest(BindLambdaForTesting(
       [&loop](SmsStatus status, const optional<string>& otp) {
         EXPECT_EQ(SmsStatus::kAborted, status);
-        EXPECT_EQ(absl::nullopt, otp);
+        EXPECT_EQ(std::nullopt, otp);
         loop.Quit();
       }));
 
@@ -686,7 +700,7 @@ TEST_F(WebOTPServiceTest, RequestAfterAbortWhilePrompt) {
     service.MakeRequest(BindLambdaForTesting(
         [&loop](SmsStatus status, const optional<string>& otp) {
           EXPECT_EQ(SmsStatus::kAborted, status);
-          EXPECT_EQ(absl::nullopt, otp);
+          EXPECT_EQ(std::nullopt, otp);
           loop.Quit();
         }));
 
@@ -743,7 +757,7 @@ TEST_F(WebOTPServiceTest, SecondRequestWhilePrompt) {
   service.MakeRequest(BindLambdaForTesting(
       [&callback_loop1](SmsStatus status, const optional<string>& otp) {
         EXPECT_EQ(SmsStatus::kAborted, status);
-        EXPECT_EQ(absl::nullopt, otp);
+        EXPECT_EQ(std::nullopt, otp);
         callback_loop1.Quit();
       }));
 
@@ -755,7 +769,7 @@ TEST_F(WebOTPServiceTest, SecondRequestWhilePrompt) {
 
   callback_loop1.Run();
 
-  base::ThreadTaskRunnerHandle::Get()->PostTaskAndReply(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTaskAndReply(
       FROM_HERE, BindLambdaForTesting([&]() {
         service.MakeRequest(BindLambdaForTesting(
             [&callback_loop2](SmsStatus status, const optional<string>& otp) {
@@ -951,7 +965,7 @@ TEST_F(WebOTPServiceTest, RecordUnhandledRequestOnNavigation) {
   service->Receive(base::BindLambdaForTesting(
       [&reload](SmsStatus status, const optional<string>& otp) {
         EXPECT_EQ(SmsStatus::kUnhandledRequest, status);
-        EXPECT_EQ(absl::nullopt, otp);
+        EXPECT_EQ(std::nullopt, otp);
         reload.Quit();
       }));
 

@@ -1,31 +1,29 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-
-#include <array>
 
 #include <Foundation/Foundation.h>
 #include <Security/Security.h>
 
-#include "base/strings/string_number_conversions.h"
+#include <array>
 
+#include "base/strings/string_number_conversions.h"
 #include "base/test/task_environment.h"
+#include "base/test/test_future.h"
 #include "device/fido/fido_constants.h"
 #include "device/fido/fido_test_data.h"
 #include "device/fido/mac/authenticator_config.h"
 #include "device/fido/mac/credential_store.h"
 #include "device/fido/mac/get_assertion_operation.h"
 #include "device/fido/mac/make_credential_operation.h"
-#include "device/fido/test_callback_receiver.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace device {
-namespace fido {
-namespace mac {
+namespace device::fido::mac {
+
 namespace {
 
-using test::TestCallbackReceiver;
+using base::test::TestFuture;
 
 const std::string kRpId = "rp.example.com";
 const std::vector<uint8_t> kUserId = {10, 11, 12, 13, 14, 15};
@@ -37,9 +35,9 @@ CtapGetAssertionRequest MakeTestRequest() {
 }
 
 bool MakeCredential() {
-  TestCallbackReceiver<CtapDeviceResponseCode,
-                       absl::optional<AuthenticatorMakeCredentialResponse>>
-      callback_receiver;
+  TestFuture<MakeCredentialStatus,
+             std::optional<AuthenticatorMakeCredentialResponse>>
+      future;
   auto request = CtapMakeCredentialRequest(
       test_data::kClientDataJson, PublicKeyCredentialRpEntity(kRpId),
       PublicKeyCredentialUserEntity(kUserId),
@@ -48,15 +46,12 @@ bool MakeCredential() {
                 CredentialInfo() /* defaults to ES-256 */}}));
   TouchIdCredentialStore credential_store(
       AuthenticatorConfig{"test-profile", kKeychainAccessGroup});
-  MakeCredentialOperation op(request, &credential_store,
-                             callback_receiver.callback());
+  MakeCredentialOperation op(request, &credential_store, future.GetCallback());
 
   op.Run();
-  callback_receiver.WaitForCallback();
-  auto result = callback_receiver.TakeResult();
-  CtapDeviceResponseCode error = std::get<0>(result);
-  auto opt_response = std::move(std::get<1>(result));
-  return error == CtapDeviceResponseCode::kSuccess && opt_response;
+  EXPECT_TRUE(future.Wait());
+  MakeCredentialStatus error = std::get<0>(future.Get());
+  return error == MakeCredentialStatus::kSuccess && std::get<1>(future.Get());
 }
 
 // For demo purposes only. This test does a Touch ID user prompt. It will fail
@@ -66,26 +61,23 @@ TEST(GetAssertionOperationTest, DISABLED_TestRun) {
   base::test::TaskEnvironment task_environment;
   ASSERT_TRUE(MakeCredential());
 
-  TestCallbackReceiver<CtapDeviceResponseCode,
-                       absl::optional<AuthenticatorGetAssertionResponse>>
-      callback_receiver;
+  TestFuture<GetAssertionStatus, std::vector<AuthenticatorGetAssertionResponse>>
+      future;
   auto request = MakeTestRequest();
   TouchIdCredentialStore credential_store(
       AuthenticatorConfig{"test-profile", kKeychainAccessGroup});
-  GetAssertionOperation op(request, &credential_store,
-                           callback_receiver.callback());
+  GetAssertionOperation op(request, &credential_store, future.GetCallback());
 
   op.Run();
-  callback_receiver.WaitForCallback();
-  auto result = callback_receiver.TakeResult();
-  CtapDeviceResponseCode error = std::get<0>(result);
-  EXPECT_EQ(CtapDeviceResponseCode::kSuccess, error);
-  auto opt_response = std::move(std::get<1>(result));
-  ASSERT_TRUE(opt_response);
-  ASSERT_TRUE(opt_response->credential);
-  EXPECT_FALSE(opt_response->credential->id.empty());
+  EXPECT_TRUE(future.Wait());
+  auto result = future.Take();
+  GetAssertionStatus error = std::get<0>(result);
+  EXPECT_EQ(GetAssertionStatus::kSuccess, error);
+  auto opt_responses = std::move(std::get<1>(result));
+  ASSERT_EQ(opt_responses.size(), 1u);
+  EXPECT_FALSE(opt_responses.at(0).credential->id.empty());
 }
+
 }  // namespace
-}  // namespace mac
-}  // namespace fido
-}  // namespace device
+
+}  // namespace device::fido::mac

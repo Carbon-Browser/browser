@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -10,13 +10,11 @@
 #include <string>
 #include "rlz/lib/rlz_enums.h"
 
-#if defined(RLZ_NETWORK_IMPLEMENTATION_CHROME_NET)
 namespace network {
 namespace mojom {
 class URLLoaderFactory;
 }
 }  // namespace network
-#endif
 
 namespace rlz_lib {
 
@@ -58,21 +56,17 @@ class FinancialPing {
   // Ping the financial server with request. Writes to RlzValueStore.
   static PingResponse PingServer(const char* request, std::string* response);
 
-#if defined(RLZ_NETWORK_IMPLEMENTATION_CHROME_NET)
   static bool SetURLLoaderFactory(network::mojom::URLLoaderFactory* factory);
-#endif
 
  private:
   FinancialPing() {}
   ~FinancialPing() {}
 };
 
-#if defined(RLZ_NETWORK_IMPLEMENTATION_CHROME_NET)
 namespace test {
 void ResetSendFinancialPingInterrupted();
 bool WasSendFinancialPingInterrupted();
 }  // namespace test
-#endif
 
 }  // namespace rlz_lib
 

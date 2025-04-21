@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,9 @@
  * Javascript for DevicesPage and DevicesView, served from
  *     chrome://bluetooth-internals/.
  */
+import './device_table.js';
 
-import {DeviceInfo} from './device.mojom-webui.js';
 import {DeviceCollection} from './device_collection.js';
-import {DeviceTable} from './device_table.js';
 import {Page} from './page.js';
 
 /**
@@ -31,7 +30,7 @@ export class DevicesPage extends Page {
   constructor() {
     super('devices', 'Devices', 'devices');
 
-    this.deviceTable = new DeviceTable();
+    this.deviceTable = document.createElement('device-table');
     this.pageDiv.appendChild(this.deviceTable);
     this.scanBtn_ = this.pageDiv.querySelector('#scan-btn');
     this.scanBtn_.addEventListener('click', event => {

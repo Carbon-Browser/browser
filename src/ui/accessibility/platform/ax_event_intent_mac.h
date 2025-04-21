@@ -1,12 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_ACCESSIBILITY_PLATFORM_AX_EVENT_INTENT_MAC_H_
 #define UI_ACCESSIBILITY_PLATFORM_AX_EVENT_INTENT_MAC_H_
 
+#include "base/component_export.h"
 #include "ui/accessibility/ax_enums.mojom-forward.h"
-#include "ui/accessibility/ax_export.h"
 
 namespace ui {
 
@@ -115,9 +115,9 @@ struct AXTextSelection final {
   bool focus_change = false;
 };
 
-// The equivalent of an accessibility event intent (ui::AXEventIntent), as
+// The equivalent of an accessibility event intent (AXEventIntent), as
 // defined by Mac's accessibility framework.
-struct AX_EXPORT AXTextStateChangeIntent final {
+struct COMPONENT_EXPORT(AX_PLATFORM) AXTextStateChangeIntent final {
   // Constructs an intent that is used when the selection is set to a different
   // iframe or control, and focus has move to that element.
   static AXTextStateChangeIntent DefaultFocusTextStateChangeIntent();
@@ -135,7 +135,7 @@ struct AX_EXPORT AXTextStateChangeIntent final {
                           AXTextSelection selection);
 
   // Constructs an editing intent.
-  AXTextStateChangeIntent(AXTextEditType edit);
+  explicit AXTextStateChangeIntent(AXTextEditType edit);
 
   AXTextStateChangeIntent(const AXTextStateChangeIntent& intent);
 
@@ -148,9 +148,9 @@ struct AX_EXPORT AXTextStateChangeIntent final {
   AXTextSelection selection;
 };
 
-// Converts from Chromium's ui::AXEventIntent to Mac's AXTextStateChangeIntent.
-AX_EXPORT AXTextStateChangeIntent
-FromEventIntent(const AXEventIntent& event_intent);
+// Converts from Chromium's AXEventIntent to Mac's AXTextStateChangeIntent.
+COMPONENT_EXPORT(AX_PLATFORM)
+AXTextStateChangeIntent FromEventIntent(const AXEventIntent& event_intent);
 
 }  // namespace ui
 

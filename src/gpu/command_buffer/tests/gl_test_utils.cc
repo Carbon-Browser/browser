@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "gpu/command_buffer/tests/gl_test_utils.h"
 
@@ -12,6 +17,8 @@
 #include <string>
 
 #include "base/command_line.h"
+#include "base/containers/contains.h"
+#include "base/containers/heap_array.h"
 #include "base/logging.h"
 #include "build/build_config.h"
 #include "gpu/command_buffer/common/gles2_cmd_utils.h"
@@ -24,10 +31,6 @@
 #include "ui/gl/gl_version_info.h"
 #include "ui/gl/init/gl_factory.h"
 
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-#include "ui/gl/gl_image_native_pixmap.h"
-#endif
-
 namespace gpu {
 
 // GCC requires these declarations, but MSVC requires they not be present.
@@ -38,19 +41,19 @@ const uint8_t GLTestHelper::kCheckClearValue;
 gl::GLDisplay* GLTestHelper::InitializeGL(gl::GLImplementation gl_impl) {
   gl::GLDisplay* display = nullptr;
   if (gl_impl == gl::GLImplementation::kGLImplementationNone) {
-    display = gl::init::InitializeGLNoExtensionsOneOff(/*init_bindings=*/true,
-                                                       /*system_device_id=*/0);
+    display = gl::init::InitializeGLNoExtensionsOneOff(
+        /*init_bindings=*/true,
+        /*gpu_preference=*/gl::GpuPreference::kDefault);
   } else {
     if (!gl::init::InitializeStaticGLBindingsImplementation(
-            gl::GLImplementationParts(gl_impl),
-            /*fallback_to_software_gl=*/false))
+            gl::GLImplementationParts(gl_impl))) {
       return nullptr;
+    }
 
     display = gl::init::InitializeGLOneOffPlatformImplementation(
-        /*fallback_to_software_gl=*/false,
         /*disable_gl_drawing=*/false,
         /*init_extensions=*/false,
-        /*system_device_id=*/0);
+        /*gpu_preference=*/gl::GpuPreference::kDefault);
   }
 
   if (!display)
@@ -82,7 +85,7 @@ bool GLTestHelper::HasExtension(const char* extension) {
       std::string(reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS))) +
       " ";
   std::string extension_padded = std::string(extension) + " ";
-  return extensions.find(extension_padded) != std::string::npos;
+  return base::Contains(extensions, extension_padded);
 }
 
 bool GLTestHelper::CheckGLError(const char* msg, int line) {
@@ -308,16 +311,15 @@ bool GLTestHelper::SaveBackbufferAsBMP(
   glPixelStorei(GL_PACK_ALIGNMENT, 1);
   int num_pixels = width * height;
   int size = num_pixels * 4;
-  std::unique_ptr<uint8_t[]> data(new uint8_t[size]);
-  uint8_t* pixels = data.get();
-  glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+  auto data = base::HeapArray<uint8_t>::WithSize(size);
+  glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data.data());
 
   // RGBA to BGRA
   for (int ii = 0; ii < num_pixels; ++ii) {
     int offset = ii * 4;
-    uint8_t t = pixels[offset + 0];
-    pixels[offset + 0] = pixels[offset + 2];
-    pixels[offset + 2] = t;
+    uint8_t t = data[offset + 0];
+    data[offset + 0] = data[offset + 2];
+    data[offset + 2] = t;
   }
 
   BitmapHeaderFile bhf;
@@ -342,7 +344,7 @@ bool GLTestHelper::SaveBackbufferAsBMP(
 
   fwrite(&bhf, sizeof(bhf), 1, fp);
   fwrite(&bih, sizeof(bih), 1, fp);
-  fwrite(pixels, size, 1, fp);
+  fwrite(data.data(), size, 1, fp);
   fclose(fp);
   return true;
 }
@@ -395,7 +397,7 @@ bool GpuCommandBufferTestEGL::InitializeEGL(int width, int height) {
                                   &gpu_info);
     // See crbug.com/822716, the ATI proprietary driver has eglGetProcAddress
     // but eglInitialize crashes with x11.
-    if (gpu_info.gl_vendor.find("ATI Technologies Inc.") != std::string::npos) {
+    if (base::Contains(gpu_info.gl_vendor, "ATI Technologies Inc.")) {
       LOG(INFO) << "Skip test, ATI proprietary driver crashes with egl/x11";
       return false;
     }
@@ -457,60 +459,5 @@ void GpuCommandBufferTestEGL::RestoreGLDefault() {
   egl_extensions_.clear();
   window_system_binding_info_ = gl::GLWindowSystemBindingInfo();
 }
-
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-scoped_refptr<gl::GLImageNativePixmap>
-GpuCommandBufferTestEGL::CreateGLImageNativePixmap(gfx::BufferFormat format,
-                                                   gfx::Size size,
-                                                   uint8_t* pixels) const {
-  // Upload raw pixels to a new GL texture.
-  GLuint tex_client_id = 0;
-  glGenTextures(1, &tex_client_id);
-  DCHECK_NE(0u, tex_client_id);
-  glBindTexture(GL_TEXTURE_2D, tex_client_id);
-  glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, size.width(), size.height(), 0,
-               GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-
-  // Make sure the texture exists in the service side.
-  glFinish();
-
-  // This works because the test run in a similar mode as In-Process-GPU.
-  unsigned int tex_service_id = 0;
-  gl_.decoder()->GetServiceTextureId(tex_client_id, &tex_service_id);
-  EXPECT_NE(0u, tex_service_id);
-
-  // Create an EGLImage from the real texture id.
-  auto image = base::MakeRefCounted<gl::GLImageNativePixmap>(size, format);
-  bool result = image->InitializeFromTexture(tex_service_id);
-  DCHECK(result);
-
-  // The test will own the EGLImage no need to keep a reference on the GL
-  // texture after returning from this function. This is covered by the
-  // EGL_KHR_image_base.txt specification, i.e. the underlying memory remains
-  // allocated as long as there is at least one sibling (like ref count).
-  glDeleteTextures(1, &tex_client_id);
-
-  return image;
-}
-
-gfx::NativePixmapHandle GpuCommandBufferTestEGL::CreateNativePixmapHandle(
-    gfx::BufferFormat format,
-    gfx::Size size,
-    uint8_t* pixels) {
-  scoped_refptr<gl::GLImageNativePixmap> image =
-      CreateGLImageNativePixmap(format, size, pixels);
-  EXPECT_TRUE(image);
-  EXPECT_EQ(size, image->GetSize());
-
-  // Export the EGLImage as dmabuf fds
-  // The test will own the dmabuf fds so no need to keep a reference on the
-  // EGLImage after returning from this function.
-  return image->ExportHandle();
-}
-#endif
 
 }  // namespace gpu

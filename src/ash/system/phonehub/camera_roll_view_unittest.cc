@@ -1,20 +1,21 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/system/phonehub/camera_roll_view.h"
 
-#include "ash/components/phonehub/camera_roll_item.h"
-#include "ash/components/phonehub/fake_camera_roll_manager.h"
-#include "ash/components/phonehub/fake_user_action_recorder.h"
 #include "ash/system/phonehub/camera_roll_thumbnail.h"
 #include "ash/system/phonehub/phone_hub_metrics.h"
 #include "ash/test/ash_test_base.h"
-#include "camera_roll_view.h"
+#include "chromeos/ash/components/phonehub/camera_roll_item.h"
+#include "chromeos/ash/components/phonehub/fake_camera_roll_manager.h"
+#include "chromeos/ash/components/phonehub/fake_user_action_recorder.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/compositor/property_change_reason.h"
 #include "ui/gfx/image/image.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/controls/button/menu_button.h"
+#include "ui/views/test/views_test_utils.h"
 #include "ui/views/view.h"
 
 namespace ash {
@@ -174,8 +175,8 @@ TEST_F(CameraRollViewTest, ViewLayout) {
   // Test the layout size and positions of the items. If the layout is being
   // intentionally changed this test will need to be updated.
   fake_camera_roll_manager()->SetCurrentItems(CreateFakeItems(4));
-  GetItemsView()->Layout();
-  EXPECT_EQ(GetItemsView()->CalculatePreferredSize(), gfx::Size(328, 82));
+  views::test::RunScheduledLayout(GetItemsView());
+  EXPECT_EQ(GetItemsView()->CalculatePreferredSize({}), gfx::Size(328, 82));
   EXPECT_EQ(GetThumbnailView(0)->bounds(), gfx::Rect(4, 4, 74, 74));
   EXPECT_EQ(GetThumbnailView(1)->bounds(), gfx::Rect(86, 4, 74, 74));
   EXPECT_EQ(GetThumbnailView(2)->bounds(), gfx::Rect(168, 4, 74, 74));
@@ -186,13 +187,17 @@ TEST_F(CameraRollViewTest, AccessibleNameAndTooltip) {
   PresetCameraRollOptInState(/*can_be_enabled=*/false);
   fake_camera_roll_manager()->SetCurrentItems(CreateFakeItems(4));
 
-  EXPECT_EQ(u"Recent photo 1 of 4.", GetThumbnailView(0)->GetAccessibleName());
+  EXPECT_EQ(u"Recent photo 1 of 4.",
+            GetThumbnailView(0)->GetViewAccessibility().GetCachedName());
   EXPECT_EQ(u"Recent photo 1 of 4.", GetThumbnailView(0)->GetTooltipText());
-  EXPECT_EQ(u"Recent photo 2 of 4.", GetThumbnailView(1)->GetAccessibleName());
+  EXPECT_EQ(u"Recent photo 2 of 4.",
+            GetThumbnailView(1)->GetViewAccessibility().GetCachedName());
   EXPECT_EQ(u"Recent photo 2 of 4.", GetThumbnailView(1)->GetTooltipText());
-  EXPECT_EQ(u"Recent photo 3 of 4.", GetThumbnailView(2)->GetAccessibleName());
+  EXPECT_EQ(u"Recent photo 3 of 4.",
+            GetThumbnailView(2)->GetViewAccessibility().GetCachedName());
   EXPECT_EQ(u"Recent photo 3 of 4.", GetThumbnailView(2)->GetTooltipText());
-  EXPECT_EQ(u"Recent photo 4 of 4.", GetThumbnailView(3)->GetAccessibleName());
+  EXPECT_EQ(u"Recent photo 4 of 4.",
+            GetThumbnailView(3)->GetViewAccessibility().GetCachedName());
   EXPECT_EQ(u"Recent photo 4 of 4.", GetThumbnailView(3)->GetTooltipText());
 }
 

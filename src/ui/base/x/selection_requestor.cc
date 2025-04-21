@@ -1,19 +1,22 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "ui/base/x/selection_requestor.h"
 
-#include <algorithm>
-
 #include "base/memory/ref_counted_memory.h"
+#include "base/ranges/algorithm.h"
 #include "ui/base/x/selection_owner.h"
 #include "ui/base/x/selection_utils.h"
 #include "ui/base/x/x11_clipboard_helper.h"
 #include "ui/base/x/x11_util.h"
-#include "ui/gfx/x/x11_atom_cache.h"
+#include "ui/gfx/x/atom_cache.h"
 #include "ui/gfx/x/xproto.h"
-#include "ui/gfx/x/xproto_util.h"
 
 namespace ui {
 
@@ -28,8 +31,9 @@ const int kRequestTimeoutMs = 1000;
 std::vector<uint8_t> CombineData(
     const std::vector<scoped_refptr<base::RefCountedMemory>>& data) {
   size_t bytes = 0;
-  for (const auto& datum : data)
+  for (const auto& datum : data) {
     bytes += datum->size();
+  }
   std::vector<uint8_t> combined;
   combined.reserve(bytes);
   for (const auto& datum : data) {
@@ -58,11 +62,12 @@ bool SelectionRequestor::PerformBlockingConvertSelection(
       base::TimeTicks::Now() + base::Milliseconds(kRequestTimeoutMs);
   Request request(selection, target, timeout);
   requests_.push_back(&request);
-  if (current_request_index_ == (requests_.size() - 1))
+  if (current_request_index_ == (requests_.size() - 1)) {
     ConvertSelectionForCurrentRequest();
+  }
   BlockTillSelectionNotifyForRequest(&request);
 
-  auto request_it = std::find(requests_.begin(), requests_.end(), &request);
+  auto request_it = base::ranges::find(requests_, &request);
   CHECK(request_it != requests_.end());
   if (static_cast<int>(current_request_index_) >
       request_it - requests_.begin()) {
@@ -71,10 +76,12 @@ bool SelectionRequestor::PerformBlockingConvertSelection(
   requests_.erase(request_it);
 
   if (request.success) {
-    if (out_data)
+    if (out_data) {
       *out_data = CombineData(request.out_data);
-    if (out_type)
+    }
+    if (out_type) {
       *out_type = request.out_type;
+    }
   }
   return request.success;
 }
@@ -83,8 +90,8 @@ void SelectionRequestor::PerformBlockingConvertSelectionWithParameter(
     x11::Atom selection,
     x11::Atom target,
     const std::vector<x11::Atom>& parameter) {
-  SetArrayProperty(x_window_, x11::GetAtom(kChromeSelection), x11::Atom::ATOM,
-                   parameter);
+  x11::Connection::Get()->SetArrayProperty(
+      x_window_, x11::GetAtom(kChromeSelection), x11::Atom::ATOM, parameter);
   PerformBlockingConvertSelection(selection, target, nullptr, nullptr);
 }
 
@@ -96,7 +103,8 @@ SelectionData SelectionRequestor::RequestAndWaitForTypes(
     x11::Atom type = x11::Atom::None;
     if (PerformBlockingConvertSelection(selection, item, &data, &type) &&
         type == item) {
-      return SelectionData(type, base::RefCountedBytes::TakeVector(&data));
+      return SelectionData(
+          type, base::MakeRefCounted<base::RefCountedBytes>(std::move(data)));
     }
   }
 
@@ -111,8 +119,9 @@ void SelectionRequestor::OnSelectionNotify(
       request->selection != selection.selection ||
       request->target != selection.target) {
     // ICCCM requires us to delete the property passed into SelectionNotify.
-    if (event_property != x11::Atom::None)
-      x11::DeleteProperty(x_window_, event_property);
+    if (event_property != x11::Atom::None) {
+      x11::Connection::Get()->DeleteProperty(x_window_, event_property);
+    }
     return;
   }
 
@@ -126,8 +135,9 @@ void SelectionRequestor::OnSelectionNotify(
       request->out_data.push_back(out_data);
     }
   }
-  if (event_property != x11::Atom::None)
-    x11::DeleteProperty(x_window_, event_property);
+  if (event_property != x11::Atom::None) {
+    x11::Connection::Get()->DeleteProperty(x_window_, event_property);
+  }
 
   if (request->out_type == x11::GetAtom(kIncr)) {
     request->data_sent_incrementally = true;
@@ -149,8 +159,9 @@ bool SelectionRequestor::CanDispatchPropertyEvent(
 void SelectionRequestor::OnPropertyEvent(
     const x11::PropertyNotifyEvent& event) {
   Request* request = GetCurrentRequest();
-  if (!request || !request->data_sent_incrementally)
+  if (!request || !request->data_sent_incrementally) {
     return;
+  }
 
   scoped_refptr<base::RefCountedMemory> out_data;
   x11::Atom out_type = x11::Atom::None;
@@ -170,36 +181,41 @@ void SelectionRequestor::OnPropertyEvent(
   request->out_type = out_type;
 
   // Delete the property to tell the selection owner to send the next chunk.
-  x11::DeleteProperty(x_window_, x_property_);
+  x11::Connection::Get()->DeleteProperty(x_window_, x_property_);
 
   request->timeout =
       base::TimeTicks::Now() + base::Milliseconds(kRequestTimeoutMs);
 
-  if (!out_data->size())
+  if (!out_data->size()) {
     CompleteRequest(current_request_index_, true);
+  }
 }
 
 void SelectionRequestor::AbortStaleRequests() {
   base::TimeTicks now = base::TimeTicks::Now();
   for (size_t i = current_request_index_; i < requests_.size(); ++i) {
-    if (requests_[i]->timeout <= now)
+    if (requests_[i]->timeout <= now) {
       CompleteRequest(i, false);
+    }
   }
 }
 
 void SelectionRequestor::CompleteRequest(size_t index, bool success) {
-  if (index >= requests_.size())
+  if (index >= requests_.size()) {
     return;
+  }
 
   Request* request = requests_[index];
-  if (request->completed)
+  if (request->completed) {
     return;
+  }
   request->success = success;
   request->completed = true;
 
   if (index == current_request_index_) {
-    while (GetCurrentRequest() && GetCurrentRequest()->completed)
+    while (GetCurrentRequest() && GetCurrentRequest()->completed) {
       ++current_request_index_;
+    }
     ConvertSelectionForCurrentRequest();
   }
 }
@@ -227,8 +243,9 @@ void SelectionRequestor::BlockTillSelectionNotifyForRequest(Request* request) {
     size_t events_size = events.size();
     for (; i < events_size; ++i) {
       auto& event = events[i];
-      if (helper_->DispatchEvent(event))
+      if (helper_->DispatchEvent(event)) {
         event = x11::Event();
+      }
     }
     DCHECK_EQ(events_size, events.size());
   }

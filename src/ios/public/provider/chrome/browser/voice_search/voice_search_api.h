@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #import <Foundation/Foundation.h>
 
-#import "ios/chrome/browser/voice/voice_search_language.h"
+#import "ios/chrome/browser/voice/model/voice_search_language.h"
 #import "ios/public/provider/chrome/browser/voice_search/voice_search_controller.h"
 
 class Browser;

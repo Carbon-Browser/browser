@@ -1,11 +1,12 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/android/edge_effect.h"
 
 #include "base/notreached.h"
-#include "cc/layers/ui_resource_layer.h"
+#include "cc/slim/layer.h"
+#include "cc/slim/ui_resource_layer.h"
 #include "ui/android/animation_utils.h"
 #include "ui/android/resources/resource_manager.h"
 #include "ui/android/resources/system_ui_resource_type.h"
@@ -55,20 +56,23 @@ gfx::Transform ComputeTransform(EdgeEffect::Edge edge,
   // Transforms assume the edge layers are anchored to their *top center point*.
   switch (edge) {
     case EdgeEffect::EDGE_TOP:
-      return gfx::Transform(1, 0, 0, 1, 0, offset);
+      return gfx::Transform::MakeTranslation(0, offset);
     case EdgeEffect::EDGE_LEFT:
-      return gfx::Transform(0, 1, -1, 0, -viewport_size.height() / 2.f + offset,
-                            viewport_size.height() / 2.f);
+      return gfx::Transform::MakeTranslation(
+                 -viewport_size.height() / 2.f + offset,
+                 viewport_size.height() / 2.f) *
+             gfx::Transform::Make270degRotation();
     case EdgeEffect::EDGE_BOTTOM:
-      return gfx::Transform(-1, 0, 0, -1, 0, viewport_size.height() + offset);
+      return gfx::Transform::MakeTranslation(0,
+                                             viewport_size.height() + offset) *
+             gfx::Transform::Make180degRotation();
     case EdgeEffect::EDGE_RIGHT:
-      return gfx::Transform(
-          0, -1, 1, 0,
-          -viewport_size.height() / 2.f + viewport_size.width() + offset,
-          viewport_size.height() / 2.f);
+      return gfx::Transform::MakeTranslation(
+                 -viewport_size.height() / 2.f + viewport_size.width() + offset,
+                 viewport_size.height() / 2.f) *
+             gfx::Transform::Make90degRotation();
     default:
       NOTREACHED() << "Invalid edge: " << edge;
-      return gfx::Transform();
   };
 }
 
@@ -86,7 +90,6 @@ gfx::SizeF ComputeOrientedSize(EdgeEffect::Edge edge,
       return gfx::SizeF(viewport_size.height(), viewport_size.width());
     default:
       NOTREACHED() << "Invalid edge: " << edge;
-      return gfx::SizeF();
   };
 }
 
@@ -94,7 +97,7 @@ gfx::SizeF ComputeOrientedSize(EdgeEffect::Edge edge,
 
 EdgeEffect::EdgeEffect(ui::ResourceManager* resource_manager)
     : resource_manager_(resource_manager),
-      glow_(cc::UIResourceLayer::Create()),
+      glow_(cc::slim::UIResourceLayer::Create()),
       glow_alpha_(0),
       glow_scale_y_(0),
       glow_alpha_start_(0),
@@ -322,13 +325,13 @@ void EdgeEffect::ApplyToLayers(Edge edge,
   glow_->SetIsDrawable(true);
   glow_->SetUIResourceId(resource_manager_->GetUIResourceId(
       ui::ANDROID_RESOURCE_TYPE_SYSTEM, kResourceId));
-  glow_->SetTransformOrigin(gfx::Point3F(bounds_.width() * 0.5f, 0, 0));
+  glow_->SetTransformOrigin(gfx::PointF(bounds_.width() * 0.5f, 0));
   glow_->SetBounds(gfx::ToRoundedSize(clipped_rect.size()));
   glow_->SetContentsOpaque(false);
   glow_->SetOpacity(Clamp(glow_alpha_, 0.f, 1.f));
 }
 
-void EdgeEffect::SetParent(cc::Layer* parent) {
+void EdgeEffect::SetParent(cc::slim::Layer* parent) {
   if (glow_->parent() != parent)
     parent->AddChild(glow_);
 }

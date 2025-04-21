@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,12 +10,14 @@
 #include <stdint.h>
 
 #include <string>
+#include <string_view>
 
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/metrics/data_use_tracker.h"
 #include "components/metrics/metrics_log_uploader.h"
+#include "components/metrics/metrics_logs_event_manager.h"
 #include "third_party/metrics_proto/reporting_info.pb.h"
 #include "url/gurl.h"
 
@@ -35,13 +37,16 @@ class MetricsServiceClient;
 // occur while attempting to upload logs.
 class ReportingService {
  public:
-  // Creates a ReportingService with the given |client|, |local_state|, and
-  // |max_retransmit_size|. Does not take ownership of the parameters; instead
-  // it stores a weak pointer to each. Caller should ensure that the parameters
-  // are valid for the lifetime of this class.
+  // Creates a ReportingService with the given |client|, |local_state|,
+  // |max_retransmit_size|, and |logs_event_manager|. Does not take ownership
+  // of the parameters; instead it stores a weak pointer to each. Caller should
+  // ensure that the parameters are valid for the lifetime of this class.
+  // |logs_event_manager| is used to notify observers of log events. Can be set
+  // to null if observing the events is not necessary.
   ReportingService(MetricsServiceClient* client,
                    PrefService* local_state,
-                   size_t max_retransmit_size);
+                   size_t max_retransmit_size,
+                   MetricsLogsEventManager* logs_event_manager);
 
   ReportingService(const ReportingService&) = delete;
   ReportingService& operator=(const ReportingService&) = delete;
@@ -71,6 +76,12 @@ class ReportingService {
   // True iff reporting is currently enabled.
   bool reporting_active() const;
 
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
+  void SetIsInForegound(bool is_in_foreground) {
+    is_in_foreground_ = is_in_foreground;
+  }
+#endif  // BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
+
   // Registers local state prefs used by this class. This should only be called
   // once.
   static void RegisterPrefs(PrefRegistrySimple* registry);
@@ -85,7 +96,7 @@ class ReportingService {
   // Getters for MetricsLogUploader parameters.
   virtual GURL GetUploadUrl() const = 0;
   virtual GURL GetInsecureUploadUrl() const = 0;
-  virtual base::StringPiece upload_mime_type() const = 0;
+  virtual std::string_view upload_mime_type() const = 0;
   virtual MetricsLogUploader::MetricServiceType service_type() const = 0;
 
   // Methods for recording data to histograms.
@@ -106,14 +117,28 @@ class ReportingService {
   void SendStagedLog();
 
   // Called after transmission completes (either successfully or with failure).
-  void OnLogUploadComplete(int response_code, int error_code, bool was_https);
+  // If |force_discard| is true, discard the log regardless of the response or
+  // error code. For example, this is used for builds that do not include any
+  // metrics server URLs (no reason to keep re-sending to a non-existent URL).
+  void OnLogUploadComplete(int response_code,
+                           int error_code,
+                           bool was_https,
+                           bool force_discard,
+                           std::string_view force_discard_reason);
 
   // Used to interact with the embedder. Weak pointer; must outlive |this|
   // instance.
   const raw_ptr<MetricsServiceClient> client_;
 
+  // Used to flush changes to disk after uploading a log. Weak pointer; must
+  // outlive |this| instance.
+  const raw_ptr<PrefService> local_state_;
+
   // Largest log size to attempt to retransmit.
   size_t max_retransmit_size_;
+
+  // Event manager to notify observers of log events.
+  const raw_ptr<MetricsLogsEventManager> logs_event_manager_;
 
   // Indicate whether recording and reporting are currently happening.
   // These should not be set directly, but by calling SetRecording and
@@ -138,6 +163,13 @@ class ReportingService {
 
   // Info on current reporting state to send along with reports.
   ReportingInfo reporting_info_;
+
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
+  // Indicates whether the browser is currently in the foreground. Used to
+  // determine whether |local_state_| should be flushed immediately after
+  // uploading a log.
+  bool is_in_foreground_ = false;
+#endif  // BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
 
   SEQUENCE_CHECKER(sequence_checker_);
 

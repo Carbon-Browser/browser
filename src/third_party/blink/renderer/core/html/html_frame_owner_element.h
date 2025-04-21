@@ -24,6 +24,7 @@
 #include "services/network/public/mojom/trust_tokens.mojom-blink-forward.h"
 #include "third_party/blink/public/common/frame/frame_owner_element_type.h"
 #include "third_party/blink/public/mojom/scroll/scrollbar_mode.mojom-blink.h"
+#include "third_party/blink/public/mojom/timing/resource_timing.mojom-blink.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/frame/dom_window.h"
@@ -68,15 +69,18 @@ class CORE_EXPORT HTMLFrameOwnerElement : public HTMLElement,
 
   virtual FrameOwnerElementType OwnerType() const = 0;
 
+  virtual const QualifiedName& SubResourceAttributeName() const;
+
   Document* getSVGDocument(ExceptionState&) const;
 
   void SetEmbeddedContentView(EmbeddedContentView*);
   EmbeddedContentView* ReleaseEmbeddedContentView();
   EmbeddedContentView* OwnedEmbeddedContentView() const {
-    return embedded_content_view_;
+    return embedded_content_view_.Get();
   }
 
   void SetColorScheme(mojom::blink::ColorScheme);
+  void SetPreferredColorScheme(mojom::blink::PreferredColorScheme);
 
   class PluginDisposeSuspendScope {
     STACK_ALLOCATED();
@@ -98,11 +102,18 @@ class CORE_EXPORT HTMLFrameOwnerElement : public HTMLElement,
     friend class HTMLFrameOwnerElement;
   };
 
+  // Node overrides:
+  Node::InsertionNotificationRequest InsertedInto(
+      ContainerNode& insertion_point) override;
+  void RemovedFrom(ContainerNode& insertion_point) override;
+  // Element overrides:
+  void DidRecalcStyle(const StyleRecalcChange) override;
+
   // FrameOwner overrides:
-  Frame* ContentFrame() const final { return content_frame_; }
+  Frame* ContentFrame() const final { return content_frame_.Get(); }
   void SetContentFrame(Frame&) final;
   void ClearContentFrame() final;
-  void AddResourceTiming(const ResourceTimingInfo&) final;
+  void AddResourceTiming(mojom::blink::ResourceTimingInfoPtr) final;
   void DispatchLoad() final;
   const FramePolicy& GetFramePolicy() const final { return frame_policy_; }
   void IntrinsicSizingInfoChanged() override {}
@@ -119,10 +130,21 @@ class CORE_EXPORT HTMLFrameOwnerElement : public HTMLElement,
   bool AllowPaymentRequest() const override { return false; }
   bool IsDisplayNone() const override { return !embedded_content_view_; }
   mojom::blink::ColorScheme GetColorScheme() const override;
+  mojom::blink::PreferredColorScheme GetPreferredColorScheme() const override;
   bool ShouldLazyLoadChildren() const final;
+  void DidReportResourceTiming();
+  bool HasPendingFallbackTimingInfo() const;
 
   // For unit tests, manually trigger the UpdateContainerPolicy method.
   void UpdateContainerPolicyForTests() { UpdateContainerPolicy(); }
+
+  // Updates the deferred fetch policy and notify the frame loader client of any
+  // changes after `LoadOrRedirectSubframe()` is called and navigating to
+  // a target URL.
+  // Must be called after navigation such that "inherited policy" is available.
+  // To be precise, after `ApplyPermissionsPolicy()` is called by
+  // `DocumentLoader::CommitNavigation()`.
+  void UpdateDeferredFetchPolicy();
 
   void CancelPendingLazyLoad();
 
@@ -145,7 +167,9 @@ class CORE_EXPORT HTMLFrameOwnerElement : public HTMLElement,
   bool LoadOrRedirectSubframe(const KURL&,
                               const AtomicString& frame_name,
                               bool replace_current_item);
-  bool IsKeyboardFocusable() const override;
+  bool IsKeyboardFocusableSlow(
+      UpdateBehavior update_behavior =
+          UpdateBehavior::kStyleAndLayout) const override;
   void FrameOwnerPropertiesChanged() override;
 
   void DisposePluginSoon(WebPluginContainerImpl*);
@@ -168,6 +192,10 @@ class CORE_EXPORT HTMLFrameOwnerElement : public HTMLElement,
   // changes.
   void UpdateContainerPolicy();
 
+  // Called when the container policy changes. Typically used to sync a
+  // container policy update to the browser process.
+  virtual void DidChangeContainerPolicy();
+
   // Return a document policy required policy for this frame, based on the
   // frame attributes.
   virtual DocumentPolicyFeatureState ConstructRequiredPolicy() const {
@@ -182,6 +210,7 @@ class CORE_EXPORT HTMLFrameOwnerElement : public HTMLElement,
   // based on the frame attributes.
   virtual network::mojom::blink::TrustTokenParamsPtr ConstructTrustTokenParams()
       const;
+  void ReportFallbackResourceTimingIfNeeded();
 
  protected:
   bool is_swapping_frames() const { return is_swapping_frames_; }
@@ -189,27 +218,10 @@ class CORE_EXPORT HTMLFrameOwnerElement : public HTMLElement,
   // Checks that the number of frames on the page are within the current limit.
   bool IsCurrentlyWithinFrameLimit() const;
 
+  // Pre-iframe frame-owning elements have certain policies by default.
+  static ParsedPermissionsPolicy GetLegacyFramePolicies();
+
  private:
-  // These values are persisted to logs. Entries should not be renumbered and
-  // numeric values should never be reused.
-  // This enum represents which auto lazy-load mechanism is used.
-  enum class AutomaticLazyLoadReason {
-    // If the frame is neither embeds nor ads, or the flags are not enabled,
-    // mark it as not eligible.
-    kNotEligible = 0,
-    // For LazyEmbeds
-    kEmbeds = 1,
-    // For LazyAds
-    kAds = 2,
-    // It's possible that the frame is eligible for both LazyEmbeds and LazyAds.
-    // TOOD(crbug.com/1341892) Remove kBothEmbedsAndAds once we confirm that we
-    // can ignore
-    // this case because the impact on the analysis is minimal.
-    kBothEmbedsAndAds = 3,
-
-    kMaxValue = kBothEmbedsAndAds,
-  };
-
   // Intentionally private to prevent redundant checks when the type is
   // already HTMLFrameOwnerElement.
   bool IsLocal() const final { return true; }
@@ -218,12 +230,6 @@ class CORE_EXPORT HTMLFrameOwnerElement : public HTMLElement,
   void SetIsSwappingFrames(bool is_swapping) override {
     is_swapping_frames_ = is_swapping;
   }
-
-  bool IsEligibleForLazyAds(const KURL& url);
-  void MaybeSetTimeoutToStartFrameLoading(
-      const KURL& url,
-      bool is_loading_attr_lazy,
-      AutomaticLazyLoadReason auto_lazy_load_reason);
 
   // Check if the frame should be lazy-loaded and apply when conditions are
   // passed. Return true when lazy-load is applied.
@@ -240,8 +246,10 @@ class CORE_EXPORT HTMLFrameOwnerElement : public HTMLElement,
   FramePolicy frame_policy_;
 
   Member<LazyLoadFrameObserver> lazy_load_frame_observer_;
+  mojom::blink::ResourceTimingInfoPtr fallback_timing_info_;
   bool should_lazy_load_children_;
-  bool is_swapping_frames_;
+  bool is_swapping_frames_{false};
+  mojom::blink::PreferredColorScheme preferred_color_scheme_;
 };
 
 class SubframeLoadingDisabler {

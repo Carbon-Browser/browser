@@ -1,13 +1,16 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-
+//
 // This source code is a part of eyeo Chromium SDK.
 // Use of this source code is governed by the GPLv3 that can be found in the
 // components/adblock/LICENSE file.
 
+#include "extensions/common/permissions/permission_set.h"
+
 #include <stddef.h>
 
+#include <array>
 #include <memory>
 #include <utility>
 
@@ -30,11 +33,9 @@
 #include "extensions/common/permissions/permission_message_provider.h"
 #include "extensions/common/permissions/permission_message_test_util.h"
 #include "extensions/common/permissions/permission_message_util.h"
-#include "extensions/common/permissions/permission_set.h"
 #include "extensions/common/permissions/permissions_data.h"
 #include "extensions/common/permissions/permissions_info.h"
 #include "extensions/common/permissions/socket_permission.h"
-#include "extensions/common/value_builder.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/l10n/l10n_util.h"
 
@@ -120,7 +121,7 @@ testing::AssertionResult PermissionSetProducesMessage(
 // Tests GetByID.
 TEST(PermissionsTest, GetByID) {
   PermissionsInfo* info = PermissionsInfo::GetInstance();
-  APIPermissionSet apis = info->GetAll();
+  APIPermissionSet apis = info->GetAllForTest();
   for (const auto* api : apis)
     EXPECT_EQ(api->id(), api->info()->id());
 }
@@ -136,7 +137,7 @@ TEST(PermissionsTest, GetByName) {
 TEST(PermissionsTest, GetAll) {
   size_t count = 0;
   PermissionsInfo* info = PermissionsInfo::GetInstance();
-  APIPermissionSet apis = info->GetAll();
+  APIPermissionSet apis = info->GetAllForTest();
   for (const auto* api : apis) {
     // Make sure only the valid permission IDs get returned.
     EXPECT_NE(APIPermissionID::kInvalid, api->id());
@@ -163,7 +164,7 @@ TEST(PermissionsTest, GetAllByName) {
   expected.insert(APIPermissionID::kTab);
 
   EXPECT_EQ(expected,
-            PermissionsInfo::GetInstance()->GetAllByName(names));
+            PermissionsInfo::GetInstance()->GetAllByNameForTest(names));
 }
 
 // Tests that the aliases are properly mapped.
@@ -344,10 +345,11 @@ TEST(PermissionsTest, CreateUnion) {
   std::unique_ptr<APIPermission> permission =
       permission_info->CreateAPIPermission();
   {
-    base::Value value(base::Value::Type::LIST);
-    value.Append("tcp-connect:*.example.com:80");
-    value.Append("udp-bind::8080");
-    value.Append("udp-send-to::8888");
+    base::Value::List list;
+    list.Append("tcp-connect:*.example.com:80");
+    list.Append("udp-bind::8080");
+    list.Append("udp-send-to::8888");
+    base::Value value(std::move(list));
     ASSERT_TRUE(permission->FromValue(&value, nullptr, nullptr));
   }
 
@@ -389,9 +391,10 @@ TEST(PermissionsTest, CreateUnion) {
 
   permission = permission_info->CreateAPIPermission();
   {
-    base::Value value(base::Value::Type::LIST);
-    value.Append("tcp-connect:*.example.com:80");
-    value.Append("udp-send-to::8899");
+    base::Value::List list;
+    list.Append("tcp-connect:*.example.com:80");
+    list.Append("udp-send-to::8899");
+    base::Value value(std::move(list));
     ASSERT_TRUE(permission->FromValue(&value, nullptr, nullptr));
   }
   apis2.insert(std::move(permission));
@@ -402,11 +405,12 @@ TEST(PermissionsTest, CreateUnion) {
 
   permission = permission_info->CreateAPIPermission();
   {
-    base::Value value(base::Value::Type::LIST);
-    value.Append("tcp-connect:*.example.com:80");
-    value.Append("udp-bind::8080");
-    value.Append("udp-send-to::8888");
-    value.Append("udp-send-to::8899");
+    base::Value::List list;
+    list.Append("tcp-connect:*.example.com:80");
+    list.Append("udp-bind::8080");
+    list.Append("udp-send-to::8888");
+    list.Append("udp-send-to::8899");
+    base::Value value(std::move(list));
     ASSERT_TRUE(permission->FromValue(&value, nullptr, nullptr));
   }
   // Insert a new permission socket permisssion which will replace the old one.
@@ -468,10 +472,11 @@ TEST(PermissionsTest, CreateIntersection) {
   std::unique_ptr<APIPermission> permission =
       permission_info->CreateAPIPermission();
   {
-    base::Value value(base::Value::Type::LIST);
-    value.Append("tcp-connect:*.example.com:80");
-    value.Append("udp-bind::8080");
-    value.Append("udp-send-to::8888");
+    base::Value::List list;
+    list.Append("tcp-connect:*.example.com:80");
+    list.Append("udp-bind::8080");
+    list.Append("udp-send-to::8888");
+    base::Value value(std::move(list));
     ASSERT_TRUE(permission->FromValue(&value, nullptr, nullptr));
   }
   apis1.insert(std::move(permission));
@@ -505,10 +510,11 @@ TEST(PermissionsTest, CreateIntersection) {
   apis2.insert(APIPermissionID::kClipboardWrite);
   permission = permission_info->CreateAPIPermission();
   {
-    base::Value value(base::Value::Type::LIST);
-    value.Append("udp-bind::8080");
-    value.Append("udp-send-to::8888");
-    value.Append("udp-send-to::8899");
+    base::Value::List list;
+    list.Append("udp-bind::8080");
+    list.Append("udp-send-to::8888");
+    list.Append("udp-send-to::8899");
+    base::Value value(std::move(list));
     ASSERT_TRUE(permission->FromValue(&value, nullptr, nullptr));
   }
   apis2.insert(std::move(permission));
@@ -516,9 +522,10 @@ TEST(PermissionsTest, CreateIntersection) {
   expected_apis.insert(APIPermissionID::kTab);
   permission = permission_info->CreateAPIPermission();
   {
-    base::Value value(base::Value::Type::LIST);
-    value.Append("udp-bind::8080");
-    value.Append("udp-send-to::8888");
+    base::Value::List list;
+    list.Append("udp-bind::8080");
+    list.Append("udp-send-to::8888");
+    base::Value value(std::move(list));
     ASSERT_TRUE(permission->FromValue(&value, nullptr, nullptr));
   }
   expected_apis.insert(std::move(permission));
@@ -579,10 +586,11 @@ TEST(PermissionsTest, CreateDifference) {
   std::unique_ptr<APIPermission> permission =
       permission_info->CreateAPIPermission();
   {
-    base::Value value(base::Value::Type::LIST);
-    value.Append("tcp-connect:*.example.com:80");
-    value.Append("udp-bind::8080");
-    value.Append("udp-send-to::8888");
+    base::Value::List list;
+    list.Append("tcp-connect:*.example.com:80");
+    list.Append("udp-bind::8080");
+    list.Append("udp-send-to::8888");
+    base::Value value(std::move(list));
     ASSERT_TRUE(permission->FromValue(&value, nullptr, nullptr));
   }
   apis1.insert(std::move(permission));
@@ -605,9 +613,10 @@ TEST(PermissionsTest, CreateDifference) {
   apis2.insert(APIPermissionID::kClipboardWrite);
   permission = permission_info->CreateAPIPermission();
   {
-    base::Value value(base::Value::Type::LIST);
-    value.Append("tcp-connect:*.example.com:80");
-    value.Append("udp-send-to::8899");
+    base::Value::List list;
+    list.Append("tcp-connect:*.example.com:80");
+    list.Append("udp-send-to::8899");
+    base::Value value(std::move(list));
     ASSERT_TRUE(permission->FromValue(&value, nullptr, nullptr));
   }
   apis2.insert(std::move(permission));
@@ -615,9 +624,10 @@ TEST(PermissionsTest, CreateDifference) {
   expected_apis.insert(APIPermissionID::kBackground);
   permission = permission_info->CreateAPIPermission();
   {
-    base::Value value(base::Value::Type::LIST);
-    value.Append("udp-bind::8080");
-    value.Append("udp-send-to::8888");
+    base::Value::List list;
+    list.Append("udp-bind::8080");
+    list.Append("udp-send-to::8888");
+    base::Value value(std::move(list));
     ASSERT_TRUE(permission->FromValue(&value, nullptr, nullptr));
   }
   expected_apis.insert(std::move(permission));
@@ -650,10 +660,11 @@ TEST(PermissionsTest, CreateDifference) {
 }
 
 TEST(PermissionsTest, IsPrivilegeIncrease) {
-  const struct {
+  struct Tests {
     const char* base_name;
     bool expect_increase;
-  } kTests[] = {
+  };
+  const auto kTests = std::to_array<Tests>({
       {"allhosts1", false},     // all -> all
       {"allhosts2", false},     // all -> one
       {"allhosts3", true},      // one -> all
@@ -690,7 +701,7 @@ TEST(PermissionsTest, IsPrivilegeIncrease) {
       {"sockets1", true},           // none -> tcp:*:*
       {"sockets2", false},          // tcp:*:* -> tcp:*:*
       {"sockets3", true},           // tcp:a.com:80 -> tcp:*:*
-  };
+  });
 
   for (size_t i = 0; i < std::size(kTests); ++i) {
     scoped_refptr<Extension> old_extension(
@@ -751,8 +762,6 @@ TEST(PermissionsTest, PermissionMessages) {
   skip.insert(APIPermissionID::kBrowsingData);
   skip.insert(APIPermissionID::kCommandsAccessibility);
   skip.insert(APIPermissionID::kContextMenus);
-  skip.insert(APIPermissionID::kCryptotokenPrivate);
-  skip.insert(APIPermissionID::kDesktopCapturePrivate);
   skip.insert(APIPermissionID::kDiagnostics);
   skip.insert(APIPermissionID::kDns);
   skip.insert(APIPermissionID::kDownloadsShelf);
@@ -798,8 +807,10 @@ TEST(PermissionsTest, PermissionMessages) {
   skip.insert(APIPermissionID::kProxy);
   skip.insert(APIPermissionID::kScripting);
   skip.insert(APIPermissionID::kTabCapture);
+  skip.insert(APIPermissionID::kUserScripts);
   skip.insert(APIPermissionID::kWebRequest);
   skip.insert(APIPermissionID::kWebRequestBlocking);
+  skip.insert(APIPermissionID::kWebRequestAuthProvider);
   skip.insert(APIPermissionID::kDeclarativeNetRequestWithHostAccess);
 
   // This permission requires explicit user action (context menu handler)
@@ -814,41 +825,48 @@ TEST(PermissionsTest, PermissionMessages) {
   // to warn you further.
   skip.insert(APIPermissionID::kExperimental);
 
+  // The Experimental AI Data API is gated on commandline switches, in
+  // addition to the permission in the manifest. If you've turned on the
+  // experimental AI Data command-line flag, we don't need to warn you further.
+  skip.insert(APIPermissionID::kExperimentalAiData);
+
   // The Identity API has its own server-driven permission prompts.
   skip.insert(APIPermissionID::kIdentity);
 
+  // This API is still in origin trial so we don't want to show a permission
+  // prompt.
+  skip.insert(APIPermissionID::kAILanguageModelOriginTrial);
+
   // These are private.
   skip.insert(APIPermissionID::kAccessibilityPrivate);
+  skip.insert(APIPermissionID::kAccessibilityServicePrivate);
   skip.insert(APIPermissionID::kArcAppsPrivate);
   skip.insert(APIPermissionID::kAutoTestPrivate);
-  skip.insert(APIPermissionID::kBookmarkManagerPrivate);
   skip.insert(APIPermissionID::kBrailleDisplayPrivate);
   skip.insert(APIPermissionID::kCecPrivate);
   skip.insert(APIPermissionID::kChromeosInfoPrivate);
   skip.insert(APIPermissionID::kCommandLinePrivate);
   skip.insert(APIPermissionID::kCrashReportPrivate);
   skip.insert(APIPermissionID::kDeveloperPrivate);
-  skip.insert(APIPermissionID::kDownloadsInternal);
   skip.insert(APIPermissionID::kEchoPrivate);
   skip.insert(APIPermissionID::kEnterprisePlatformKeysPrivate);
   skip.insert(APIPermissionID::kFeedbackPrivate);
-  skip.insert(APIPermissionID::kFileBrowserHandlerInternal);
   skip.insert(APIPermissionID::kFileManagerPrivate);
   skip.insert(APIPermissionID::kFirstRunPrivate);
   skip.insert(APIPermissionID::kSharedStoragePrivate);
-  skip.insert(APIPermissionID::kIdentityPrivate);
+  skip.insert(APIPermissionID::kImageLoaderPrivate);
   skip.insert(APIPermissionID::kInputMethodPrivate);
   skip.insert(APIPermissionID::kLanguageSettingsPrivate);
   skip.insert(APIPermissionID::kLockWindowFullscreenPrivate);
   skip.insert(APIPermissionID::kMediaPlayerPrivate);
   skip.insert(APIPermissionID::kMediaPerceptionPrivate);
-  skip.insert(APIPermissionID::kMediaRouterPrivate);
   skip.insert(APIPermissionID::kMetricsPrivate);
-  skip.insert(APIPermissionID::kNetworkingCastPrivate);
+  skip.insert(APIPermissionID::kPdfViewerPrivate);
   skip.insert(APIPermissionID::kImageWriterPrivate);
   skip.insert(APIPermissionID::kResourcesPrivate);
   skip.insert(APIPermissionID::kRtcPrivate);
   skip.insert(APIPermissionID::kSafeBrowsingPrivate);
+  skip.insert(APIPermissionID::kSmartCardProviderPrivate);
   skip.insert(APIPermissionID::kSystemPrivate);
   skip.insert(APIPermissionID::kTabCaptureForTab);
   skip.insert(APIPermissionID::kTerminalPrivate);
@@ -858,11 +876,13 @@ TEST(PermissionsTest, PermissionMessages) {
   skip.insert(APIPermissionID::kWebrtcLoggingPrivate);
   skip.insert(APIPermissionID::kWebrtcLoggingPrivateAudioDebug);
   skip.insert(APIPermissionID::kWebstorePrivate);
-  skip.insert(APIPermissionID::kWebstoreWidgetPrivate);
   skip.insert(APIPermissionID::kWmDesksPrivate);
+  skip.insert(APIPermissionID::kSystemLog);
+  skip.insert(APIPermissionID::kOdfsConfigPrivate);
 
   // Adblock API is also private (in separate block to minimize conflicts).
   skip.insert(APIPermissionID::kAdblockPrivate);
+  skip.insert(APIPermissionID::kEyeoFilteringPrivate);
 
   // Warned as part of host permissions.
   skip.insert(APIPermissionID::kDevtools);
@@ -879,16 +899,12 @@ TEST(PermissionsTest, PermissionMessages) {
   skip.insert(APIPermissionID::kUsb);
   skip.insert(APIPermissionID::kVirtualKeyboard);
 
-  // The lock screen apps are set by user through settings, no need to warn at
-  // installation time.
-  skip.insert(APIPermissionID::kLockScreen);
-
   // We already have a generic message for declaring externally_connectable.
-  skip.insert(APIPermissionID::kExternallyConnectableAllUrls);
+  skip.insert(APIPermissionID::kDeprecated_ExternallyConnectableAllUrls);
 
   const PermissionMessageProvider* provider = PermissionMessageProvider::Get();
   PermissionsInfo* info = PermissionsInfo::GetInstance();
-  APIPermissionSet permissions = info->GetAll();
+  APIPermissionSet permissions = info->GetAllForTest();
   for (const auto* permission : permissions) {
     const APIPermissionInfo* permission_info = permission->info();
     EXPECT_TRUE(permission_info);
@@ -1171,7 +1187,7 @@ TEST(PermissionsTest, GetWarningMessages_CombinedSessions) {
     EXPECT_TRUE(VerifyOnePermissionMessage(
         permissions, Manifest::TYPE_EXTENSION,
         l10n_util::GetStringUTF16(
-            IDS_EXTENSION_PROMPT_WARNING_HISTORY_READ_AND_SESSIONS)));
+            IDS_EXTENSION_PROMPT_WARNING_HISTORY_READ_ON_ALL_DEVICES)));
   }
   {
     APIPermissionSet api_permissions;
@@ -1187,7 +1203,7 @@ TEST(PermissionsTest, GetWarningMessages_CombinedSessions) {
     EXPECT_TRUE(VerifyOnePermissionMessage(
         permissions, Manifest::TYPE_EXTENSION,
         l10n_util::GetStringUTF16(
-            IDS_EXTENSION_PROMPT_WARNING_HISTORY_WRITE_AND_SESSIONS)));
+            IDS_EXTENSION_PROMPT_WARNING_HISTORY_WRITE_ON_ALL_DEVICES)));
   }
 }
 
@@ -1311,7 +1327,7 @@ TEST(PermissionsTest, GetWarningMessages_PlatformAppHosts) {
 
 testing::AssertionResult ShowsAllHostsWarning(const std::string& pattern) {
   scoped_refptr<const Extension> extension =
-      ExtensionBuilder("TLDWildCardTest").AddPermission(pattern).Build();
+      ExtensionBuilder("TLDWildCardTest").AddHostPermission(pattern).Build();
 
   return VerifyHasPermissionMessage(
       extension->permissions_data(),
@@ -1582,7 +1598,7 @@ TEST(PermissionsTest, GetDistinctHosts_FirstInListIs4thBestRcd) {
 }
 
 TEST(PermissionsTest, IsHostPrivilegeIncrease) {
-  const struct {
+  struct TestCases {
     struct host_spec {
       int schemes;
       std::string pattern;
@@ -1592,7 +1608,8 @@ TEST(PermissionsTest, IsHostPrivilegeIncrease) {
     Manifest::Type type;
     bool is_increase;
     bool reverse_is_increase;
-  } test_cases[] = {
+  };
+  const auto test_cases = std::to_array<TestCases>({
       // Order doesn't matter.
       {{{URLPattern::SCHEME_HTTP, "http://www.google.com.hk/path"},
         {URLPattern::SCHEME_HTTP, "http://www.google.com/path"}},
@@ -1673,13 +1690,13 @@ TEST(PermissionsTest, IsHostPrivilegeIncrease) {
        false,
        true},
       // Test expanding from any .com host to any host in any TLD.
-      // TODO(crbug.com/849906): Should this really be a permissions increase?
+      // TODO(crbug.com/40579475): Should this really be a permissions increase?
       {{{URLPattern::SCHEME_HTTP | URLPattern::SCHEME_HTTPS, "*://*.com/*"}},
        {{URLPattern::SCHEME_HTTP | URLPattern::SCHEME_HTTPS, "*://*/*"}},
        Manifest::TYPE_EXTENSION,
        true,
        false},
-  };
+  });
   const PermissionMessageProvider* provider = PermissionMessageProvider::Get();
   for (size_t i = 0; i < std::size(test_cases); ++i) {
     URLPatternSet explicit_hosts1;
@@ -1722,7 +1739,7 @@ TEST(PermissionsTest, GetAPIsAsStrings) {
   // and we can convert it back to the id set.
   EXPECT_EQ(4u, api_names.size());
   EXPECT_EQ(apis,
-            PermissionsInfo::GetInstance()->GetAllByName(api_names));
+            PermissionsInfo::GetInstance()->GetAllByNameForTest(api_names));
 }
 
 TEST(PermissionsTest, IsEmpty) {
@@ -1755,16 +1772,6 @@ TEST(PermissionsTest, IsEmpty) {
       APIPermissionSet(), ManifestPermissionSet(), URLPatternSet(),
       non_empty_extent.Clone());
   EXPECT_FALSE(perm_set->IsEmpty());
-}
-
-TEST(PermissionsTest, ImpliedPermissions) {
-  APIPermissionSet apis;
-  apis.insert(APIPermissionID::kFileBrowserHandler);
-  EXPECT_EQ(1U, apis.size());
-
-  PermissionSet perm_set(std::move(apis), ManifestPermissionSet(),
-                         URLPatternSet(), URLPatternSet());
-  EXPECT_EQ(2U, perm_set.apis().size());
 }
 
 TEST(PermissionsTest, SyncFileSystemPermission) {
@@ -1812,6 +1819,90 @@ TEST(PermissionsTest, IsPrivilegeIncrease_DeclarativeWebRequest) {
 
   EXPECT_FALSE(PermissionMessageProvider::Get()->IsPrivilegeIncrease(
       permissions, permissions_dwr, extension->GetType()));
+}
+
+// Exercises setting different members in the PermissionSet. Due to varying
+// amounts of initialization, these can be non-trivial and have side-effects.
+TEST(PermissionsTest, SettingMembers) {
+  URLPattern first_host(URLPattern::SCHEME_ALL, "http://first.example/*");
+  URLPattern second_host(URLPattern::SCHEME_ALL, "http://second.example/*");
+  URLPattern third_host(URLPattern::SCHEME_ALL, "http://third.example/*");
+  URLPattern all_hosts(URLPattern::SCHEME_ALL, "<all_urls>");
+
+  {
+    // Setting explicit hosts also sets effective hosts.
+    PermissionSet set(APIPermissionSet(), ManifestPermissionSet(),
+                      URLPatternSet({first_host}),
+                      URLPatternSet({second_host}));
+    set.SetExplicitHosts(URLPatternSet({third_host}));
+    EXPECT_EQ(URLPatternSet({third_host}), set.explicit_hosts());
+    EXPECT_EQ(URLPatternSet({second_host}), set.scriptable_hosts());
+    EXPECT_EQ(URLPatternSet({second_host, third_host}), set.effective_hosts());
+  }
+
+  {
+    // Setting scriptable hosts also sets effective hosts.
+    PermissionSet set(APIPermissionSet(), ManifestPermissionSet(),
+                      URLPatternSet({first_host}),
+                      URLPatternSet({second_host}));
+    set.SetScriptableHosts(URLPatternSet({third_host}));
+    EXPECT_EQ(URLPatternSet({first_host}), set.explicit_hosts());
+    EXPECT_EQ(URLPatternSet({third_host}), set.scriptable_hosts());
+    EXPECT_EQ(URLPatternSet({first_host, third_host}), set.effective_hosts());
+  }
+
+  {
+    // Setting explicit hosts recalculates whether to warn for all URLs.
+    PermissionSet set(APIPermissionSet(), ManifestPermissionSet(),
+                      URLPatternSet({first_host}),
+                      URLPatternSet({second_host}));
+    EXPECT_FALSE(set.ShouldWarnAllHosts());
+    set.SetExplicitHosts(URLPatternSet({all_hosts}));
+    EXPECT_TRUE(set.ShouldWarnAllHosts());
+  }
+
+  {
+    // Setting scriptable hosts recalculates whether to warn for all URLs.
+    PermissionSet set(APIPermissionSet(), ManifestPermissionSet(),
+                      URLPatternSet({first_host}),
+                      URLPatternSet({second_host}));
+    EXPECT_FALSE(set.ShouldWarnAllHosts());
+    set.SetExplicitHosts(URLPatternSet({all_hosts}));
+    EXPECT_TRUE(set.ShouldWarnAllHosts());
+  }
+
+  {
+    // Newly-set explicit hosts have their paths set to "/*".
+    PermissionSet set(APIPermissionSet(), ManifestPermissionSet(),
+                      URLPatternSet({first_host}),
+                      URLPatternSet({second_host}));
+    URLPattern custom_path(URLPattern::SCHEME_ALL, "https://path.example/path");
+    URLPattern cleaned_path(URLPattern::SCHEME_ALL, "https://path.example/*");
+    set.SetExplicitHosts(URLPatternSet({custom_path}));
+    EXPECT_EQ(URLPatternSet({cleaned_path}), set.explicit_hosts());
+  }
+
+  {
+    // Setting API permissions recalculates whether to warn for all URLs.
+    APIPermissionSet apis;
+    apis.insert(APIPermissionID::kTab);
+    PermissionSet set(std::move(apis), ManifestPermissionSet(), URLPatternSet(),
+                      URLPatternSet());
+    EXPECT_FALSE(set.ShouldWarnAllHosts());
+    APIPermissionSet new_apis;
+    new_apis.insert(APIPermissionID::kDebugger);
+    set.SetAPIPermissions(std::move(new_apis));
+    EXPECT_TRUE(set.ShouldWarnAllHosts());
+  }
+
+  {
+    // Setting API permissions adds implicit permissions.
+    PermissionSet set;
+    APIPermissionSet new_apis;
+    new_apis.insert(APIPermissionID::kFileBrowserHandler);
+    set.SetAPIPermissions(std::move(new_apis));
+    EXPECT_TRUE(set.HasAPIPermission(APIPermissionID::kFileBrowserHandler));
+  }
 }
 
 }  // namespace extensions

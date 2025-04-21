@@ -1,15 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromecast/public/reboot_shlib.h"
 
-#if !defined(NDEBUG) || defined(DCHECK_ALWAYS_ON)
 #include <stdlib.h>  // abort()
 #define NOTREACHED() abort()
-#else
-#define NOTREACHED() static_cast<void>(0)
-#endif
 
 namespace chromecast {
 

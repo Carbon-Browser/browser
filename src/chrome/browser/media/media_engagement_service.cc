@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,14 @@
 #include <functional>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/time/clock.h"
 #include "base/time/default_clock.h"
 #include "base/time/time.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/media/media_engagement_contents_observer.h"
+#include "chrome/browser/media/media_engagement_preloaded_list.h"
 #include "chrome/browser/media/media_engagement_score.h"
 #include "chrome/browser/media/media_engagement_service_factory.h"
 #include "chrome/browser/preloading/prefetch/no_state_prefetch/chrome_no_state_prefetch_contents_delegate.h"
@@ -171,7 +172,7 @@ void MediaEngagementService::Shutdown() {
   history_service_observation_.Reset();
 }
 
-void MediaEngagementService::OnURLsDeleted(
+void MediaEngagementService::OnHistoryDeletions(
     history::HistoryService* history_service,
     const history::DeletionInfo& deletion_info) {
   if (deletion_info.IsAllHistory()) {
@@ -256,7 +257,26 @@ double MediaEngagementService::GetEngagementScore(
 
 bool MediaEngagementService::HasHighEngagement(
     const url::Origin& origin) const {
-  return CreateEngagementScore(origin).high_score();
+  MediaEngagementScore score = CreateEngagementScore(origin);
+  bool has_high_engagement = score.high_score();
+  if (has_high_engagement) {
+    return true;
+  }
+
+  if (base::FeatureList::IsEnabled(media::kMediaEngagementHTTPSOnly)) {
+    DCHECK(!has_high_engagement || (origin.scheme() == url::kHttpsScheme));
+  }
+
+  if (!base::FeatureList::IsEnabled(media::kPreloadMediaEngagementData)) {
+    return false;
+  }
+
+  if (score.visits() >= MediaEngagementScore::GetScoreMinVisits()) {
+    return false;
+  }
+
+  return MediaEngagementPreloadedList::GetInstance()->CheckOriginIsPresent(
+      origin);
 }
 
 std::map<url::Origin, double> MediaEngagementService::GetScoreMapForTesting()
@@ -325,25 +345,23 @@ bool MediaEngagementService::ShouldRecordEngagement(
 
 std::vector<MediaEngagementScore> MediaEngagementService::GetAllStoredScores()
     const {
-  ContentSettingsForOneType content_settings;
   std::vector<MediaEngagementScore> data;
 
   HostContentSettingsMap* settings =
       HostContentSettingsMapFactory::GetForProfile(profile_);
-  settings->GetSettingsForOneType(ContentSettingsType::MEDIA_ENGAGEMENT,
-                                  &content_settings);
 
   // `GetSettingsForOneType` mixes incognito and non-incognito results in
   // incognito profiles creating duplicates. The incognito results are first so
   // we should discard the results following.
   std::map<url::Origin, const ContentSettingPatternSource*> filtered_results;
 
-  for (const auto& site : content_settings) {
+  ContentSettingsForOneType content_settings =
+      settings->GetSettingsForOneType(ContentSettingsType::MEDIA_ENGAGEMENT);
+  for (const ContentSettingPatternSource& site : content_settings) {
     url::Origin origin =
         url::Origin::Create(GURL(site.primary_pattern.ToString()));
     if (origin.opaque()) {
       NOTREACHED();
-      continue;
     }
 
     if (base::FeatureList::IsEnabled(media::kMediaEngagementHTTPSOnly) &&
@@ -364,12 +382,11 @@ std::vector<MediaEngagementScore> MediaEngagementService::GetAllStoredScores()
     const auto& origin = it.first;
     auto* const site = it.second;
 
-    std::unique_ptr<base::Value> clone =
-        base::Value::ToUniquePtrValue(site->setting_value.Clone());
+    base::Value clone = site->setting_value.Clone();
+    DCHECK(clone.is_dict());
 
-    data.push_back(MediaEngagementScore(
-        clock_, origin, base::DictionaryValue::From(std::move(clone)),
-        settings));
+    data.push_back(MediaEngagementScore(clock_, origin,
+                                        std::move(clone).TakeDict(), settings));
   }
 
   return data;

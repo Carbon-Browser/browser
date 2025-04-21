@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,14 +10,13 @@
 #include <vector>
 
 #include "ash/components/arc/session/arc_service_manager.h"
-#include "ash/components/arc/test/test_browser_context.h"
-#include "ash/constants/app_types.h"
 #include "ash/constants/ash_pref_names.h"
 #include "ash/public/cpp/keyboard/arc/arc_input_method_bounds_tracker.h"
 #include "ash/public/cpp/keyboard/keyboard_switches.h"
-#include "ash/public/cpp/tablet_mode.h"
-#include "base/containers/cxx20_erase.h"
+#include "ash/wm/tablet_mode/tablet_mode_controller_test_api.h"
+#include "base/containers/contains.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
@@ -27,7 +26,10 @@
 #include "chrome/browser/ui/ash/keyboard/chrome_keyboard_controller_client_test_helper.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/testing_profile.h"
+#include "chromeos/ui/base/app_types.h"
+#include "chromeos/ui/base/window_properties.h"
 #include "components/crx_file/id_util.h"
+#include "components/prefs/pref_service.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -39,6 +41,7 @@
 #include "ui/base/ime/ash/mock_input_method_manager.h"
 #include "ui/base/ime/dummy_text_input_client.h"
 #include "ui/base/ime/mock_input_method.h"
+#include "ui/display/test/test_screen.h"
 #include "ui/views/widget/widget.h"
 
 namespace arc {
@@ -60,43 +63,6 @@ mojom::ImeInfoPtr GenerateImeInfo(const std::string& id,
   info->is_allowed_in_clamshell_mode = always_allowed;
   return info;
 }
-
-class FakeTabletMode : public ash::TabletMode {
- public:
-  FakeTabletMode() = default;
-  ~FakeTabletMode() override = default;
-
-  // ash::TabletMode overrides:
-  void AddObserver(ash::TabletModeObserver* observer) override {
-    observer_ = observer;
-  }
-
-  void RemoveObserver(ash::TabletModeObserver* observer) override {
-    observer_ = nullptr;
-  }
-
-  bool InTabletMode() const override { return in_tablet_mode; }
-
-  bool ForceUiTabletModeState(absl::optional<bool> enabled) override {
-    return false;
-  }
-
-  void SetEnabledForTest(bool enabled) override {
-    bool changed = (in_tablet_mode != enabled);
-    in_tablet_mode = enabled;
-
-    if (changed && observer_) {
-      if (in_tablet_mode)
-        observer_->OnTabletModeStarted();
-      else
-        observer_->OnTabletModeEnded();
-    }
-  }
-
- private:
-  ash::TabletModeObserver* observer_ = nullptr;
-  bool in_tablet_mode = false;
-};
 
 class FakeInputMethodBoundsObserver
     : public ArcInputMethodManagerService::Observer {
@@ -143,14 +109,14 @@ class TestInputMethodManager : public im::MockInputMethodManager {
     im::InputMethodDescriptor GetCurrentInputMethod() const override {
       im::InputMethodDescriptor descriptor(
           current_ime_id_, "", "", "", std::vector<std::string>(),
-          false /* is_login_keyboard */, GURL(), GURL());
+          false /* is_login_keyboard */, GURL(), GURL(),
+          /*handwriting_language=*/std::nullopt);
       return descriptor;
     }
 
-    void AddInputMethodExtension(
-        const std::string& extension_id,
-        const im::InputMethodDescriptors& descriptors,
-        ui::IMEEngineHandlerInterface* instance) override {
+    void AddInputMethodExtension(const std::string& extension_id,
+                                 const im::InputMethodDescriptors& descriptors,
+                                 ash::TextInputMethod* instance) override {
       added_input_method_extensions_.push_back(
           std::make_tuple(extension_id, descriptors, instance));
     }
@@ -166,14 +132,13 @@ class TestInputMethodManager : public im::MockInputMethodManager {
     }
 
     void AddEnabledInputMethodId(const std::string& ime_id) {
-      if (!std::count(enabled_input_method_ids_.begin(),
-                      enabled_input_method_ids_.end(), ime_id)) {
+      if (!base::Contains(enabled_input_method_ids_, ime_id)) {
         enabled_input_method_ids_.push_back(ime_id);
       }
     }
 
     void RemoveEnabledInputMethodId(const std::string& ime_id) {
-      base::EraseIf(enabled_input_method_ids_,
+      std::erase_if(enabled_input_method_ids_,
                     [&ime_id](const std::string& id) { return id == ime_id; });
     }
 
@@ -184,8 +149,9 @@ class TestInputMethodManager : public im::MockInputMethodManager {
     void GetInputMethodExtensions(
         im::InputMethodDescriptors* descriptors) override {
       for (const auto& id : enabled_input_method_ids_) {
-        descriptors->push_back(im::InputMethodDescriptor(
-            id, "", "", {}, {}, false, GURL(), GURL()));
+        descriptors->push_back(
+            im::InputMethodDescriptor(id, "", "", {}, {}, false, GURL(), GURL(),
+                                      /*handwriting_language=*/std::nullopt));
       }
     }
 
@@ -197,7 +163,7 @@ class TestInputMethodManager : public im::MockInputMethodManager {
 
     std::vector<std::tuple<std::string,
                            im::InputMethodDescriptors,
-                           ui::IMEEngineHandlerInterface*>>
+                           ash::TextInputMethod*>>
         added_input_method_extensions_;
     std::vector<std::string> removed_input_method_extensions_;
     std::vector<std::string> enabled_input_methods_;
@@ -230,7 +196,7 @@ class TestInputMethodManager : public im::MockInputMethodManager {
   scoped_refptr<TestState> state_;
 };
 
-class TestIMEInputContextHandler : public ui::MockIMEInputContextHandler {
+class TestIMEInputContextHandler : public ash::MockIMEInputContextHandler {
  public:
   explicit TestIMEInputContextHandler(ui::InputMethod* input_method)
       : input_method_(input_method) {}
@@ -242,7 +208,7 @@ class TestIMEInputContextHandler : public ui::MockIMEInputContextHandler {
   ui::InputMethod* GetInputMethod() override { return input_method_; }
 
  private:
-  ui::InputMethod* const input_method_;
+  const raw_ptr<ui::InputMethod> input_method_;
 };
 
 class TestWindowDelegate : public ArcInputMethodManagerService::WindowDelegate {
@@ -262,8 +228,8 @@ class TestWindowDelegate : public ArcInputMethodManagerService::WindowDelegate {
   void SetActiveWindow(aura::Window* window) { active_ = window; }
 
  private:
-  aura::Window* focused_ = nullptr;
-  aura::Window* active_ = nullptr;
+  raw_ptr<aura::Window, DanglingUntriaged> focused_ = nullptr;
+  raw_ptr<aura::Window, DanglingUntriaged> active_ = nullptr;
 };
 
 class ArcInputMethodManagerServiceTest : public testing::Test {
@@ -289,7 +255,9 @@ class ArcInputMethodManagerServiceTest : public testing::Test {
   TestWindowDelegate* window_delegate() { return window_delegate_; }
 
   void ToggleTabletMode(bool enabled) {
-    tablet_mode_controller_->SetEnabledForTest(enabled);
+    auto state = enabled ? display::TabletState::kInTabletMode
+                         : display::TabletState::kInClamshellMode;
+    test_screen_.OverrideTabletStateForTesting(state);
   }
 
   void NotifyNewBounds(const gfx::Rect& bounds) {
@@ -305,8 +273,7 @@ class ArcInputMethodManagerServiceTest : public testing::Test {
   aura::Window* CreateTestArcWindow() {
     auto* window = aura::test::CreateTestWindowWithId(1, nullptr);
     window->SetProperty(aura::client::kSkipImeProcessing, true);
-    window->SetProperty(aura::client::kAppType,
-                        static_cast<int>(ash::AppType::ARC_APP));
+    window->SetProperty(chromeos::kAppTypeKey, chromeos::AppType::ARC_APP);
     return window;
   }
 
@@ -315,7 +282,6 @@ class ArcInputMethodManagerServiceTest : public testing::Test {
     im::InputMethodManager::Initialize(input_method_manager_);
     profile_ = std::make_unique<TestingProfile>();
 
-    tablet_mode_controller_ = std::make_unique<FakeTabletMode>();
     input_method_bounds_tracker_ =
         std::make_unique<ash::ArcInputMethodBoundsTracker>();
 
@@ -327,9 +293,10 @@ class ArcInputMethodManagerServiceTest : public testing::Test {
         profile_.get());
     test_bridge_ = new TestInputMethodManagerBridge();
     service_->SetInputMethodManagerBridgeForTesting(
-        base::WrapUnique(test_bridge_));
+        base::WrapUnique(test_bridge_.get()));
     window_delegate_ = new TestWindowDelegate();
-    service_->SetWindowDelegateForTesting(base::WrapUnique(window_delegate_));
+    service_->SetWindowDelegateForTesting(
+        base::WrapUnique(window_delegate_.get()));
   }
 
   void TearDown() override {
@@ -337,7 +304,6 @@ class ArcInputMethodManagerServiceTest : public testing::Test {
     service_->Shutdown();
     chrome_keyboard_controller_client_test_helper_.reset();
     input_method_bounds_tracker_.reset();
-    tablet_mode_controller_.reset();
     profile_.reset();
     im::InputMethodManager::Shutdown();
   }
@@ -345,17 +311,20 @@ class ArcInputMethodManagerServiceTest : public testing::Test {
  private:
   content::BrowserTaskEnvironment task_environment_;
 
+  display::test::TestScreen test_screen_{/*create_dispay=*/true,
+                                         /*register_screen=*/true};
   std::unique_ptr<ArcServiceManager> arc_service_manager_;
   std::unique_ptr<TestingProfile> profile_;
   std::unique_ptr<ChromeKeyboardControllerClientTestHelper>
       chrome_keyboard_controller_client_test_helper_;
-  std::unique_ptr<FakeTabletMode> tablet_mode_controller_;
   std::unique_ptr<ash::ArcInputMethodBoundsTracker>
       input_method_bounds_tracker_;
-  TestInputMethodManager* input_method_manager_ = nullptr;
-  TestInputMethodManagerBridge* test_bridge_ = nullptr;  // Owned by |service_|
-  ArcInputMethodManagerService* service_ = nullptr;
-  TestWindowDelegate* window_delegate_ = nullptr;
+  raw_ptr<TestInputMethodManager, DanglingUntriaged> input_method_manager_ =
+      nullptr;
+  raw_ptr<TestInputMethodManagerBridge> test_bridge_ =
+      nullptr;  // Owned by |service_|
+  raw_ptr<ArcInputMethodManagerService, DanglingUntriaged> service_ = nullptr;
+  raw_ptr<TestWindowDelegate, DanglingUntriaged> window_delegate_ = nullptr;
 };
 
 }  // anonymous namespace
@@ -575,7 +544,7 @@ TEST_F(ArcInputMethodManagerServiceTest, OnImeInfoChanged) {
                                             settings_url2, true, false);
 
   std::vector<std::tuple<std::string, im::InputMethodDescriptors,
-                         ui::IMEEngineHandlerInterface*>>& added_extensions =
+                         ash::TextInputMethod*>>& added_extensions =
       imm()->state()->added_input_method_extensions_;
   ASSERT_EQ(0u, added_extensions.size());
 
@@ -938,23 +907,19 @@ TEST_F(ArcInputMethodManagerServiceTest, FocusAndBlur) {
   }
   // The proxy IME engine should be added.
   ASSERT_EQ(1u, imm()->state()->added_input_method_extensions_.size());
-  ui::IMEEngineHandlerInterface* engine_handler =
+  ash::TextInputMethod* engine_handler =
       std::get<2>(imm()->state()->added_input_method_extensions_.at(0));
 
   // Set up mock input context.
-  const ui::IMEEngineHandlerInterface::InputContext test_context{
-      ui::TEXT_INPUT_TYPE_TEXT,
-      ui::TEXT_INPUT_MODE_DEFAULT,
-      0 /* flags */,
-      ui::TextInputClient::FOCUS_REASON_MOUSE,
-      true /* should_do_learning */};
+  const ash::TextInputMethod::InputContext test_context(
+      ui::TEXT_INPUT_TYPE_TEXT);
   ui::MockInputMethod mock_input_method(nullptr);
   TestIMEInputContextHandler test_context_handler(&mock_input_method);
   ui::DummyTextInputClient dummy_text_input_client(ui::TEXT_INPUT_TYPE_TEXT);
-  ui::IMEBridge::Get()->SetInputContextHandler(&test_context_handler);
+  ash::IMEBridge::Get()->SetInputContextHandler(&test_context_handler);
 
   // Enable the ARC IME.
-  ui::IMEBridge::Get()->SetCurrentEngineHandler(engine_handler);
+  ash::IMEBridge::Get()->SetCurrentEngineHandler(engine_handler);
   engine_handler->Enable(ash::extension_ime_util::GetComponentIDByInputMethodID(
       std::get<1>(imm()->state()->added_input_method_extensions_.at(0))
           .at(0)
@@ -963,21 +928,21 @@ TEST_F(ArcInputMethodManagerServiceTest, FocusAndBlur) {
 
   ASSERT_EQ(0, bridge()->focus_calls_count_);
 
-  engine_handler->FocusIn(test_context);
+  engine_handler->Focus(test_context);
   EXPECT_EQ(1, bridge()->focus_calls_count_);
 
-  engine_handler->FocusOut();
+  engine_handler->Blur();
   EXPECT_EQ(1, bridge()->focus_calls_count_);
 
-  // If an ARC window is focused, FocusIn doesn't call the bridge's Focus().
+  // If an ARC window is focused, Focus doesn't call the bridge's Focus().
   auto window = base::WrapUnique(CreateTestArcWindow());
   window_delegate()->SetFocusedWindow(window.get());
   window_delegate()->SetActiveWindow(window.get());
 
-  engine_handler->FocusIn(test_context);
+  engine_handler->Focus(test_context);
   EXPECT_EQ(1, bridge()->focus_calls_count_);
 
-  engine_handler->FocusOut();
+  engine_handler->Blur();
   EXPECT_EQ(1, bridge()->focus_calls_count_);
 }
 
@@ -1037,23 +1002,19 @@ TEST_F(ArcInputMethodManagerServiceTest, ShowVirtualKeyboard) {
   }
   // The proxy IME engine should be added.
   ASSERT_EQ(1u, imm()->state()->added_input_method_extensions_.size());
-  ui::IMEEngineHandlerInterface* engine_handler =
+  ash::TextInputMethod* engine_handler =
       std::get<2>(imm()->state()->added_input_method_extensions_.at(0));
 
   // Set up mock input context.
-  const ui::IMEEngineHandlerInterface::InputContext test_context{
-      ui::TEXT_INPUT_TYPE_TEXT,
-      ui::TEXT_INPUT_MODE_DEFAULT,
-      0 /* flags */,
-      ui::TextInputClient::FOCUS_REASON_MOUSE,
-      true /* should_do_learning */};
+  const ash::TextInputMethod::InputContext test_context(
+      ui::TEXT_INPUT_TYPE_TEXT);
   ui::MockInputMethod mock_input_method(nullptr);
   TestIMEInputContextHandler test_context_handler(&mock_input_method);
   ui::DummyTextInputClient dummy_text_input_client(ui::TEXT_INPUT_TYPE_TEXT);
-  ui::IMEBridge::Get()->SetInputContextHandler(&test_context_handler);
+  ash::IMEBridge::Get()->SetInputContextHandler(&test_context_handler);
 
   // Enable the ARC IME.
-  ui::IMEBridge::Get()->SetCurrentEngineHandler(engine_handler);
+  ash::IMEBridge::Get()->SetCurrentEngineHandler(engine_handler);
   engine_handler->Enable(ash::extension_ime_util::GetComponentIDByInputMethodID(
       std::get<1>(imm()->state()->added_input_method_extensions_.at(0))
           .at(0)
@@ -1064,8 +1025,8 @@ TEST_F(ArcInputMethodManagerServiceTest, ShowVirtualKeyboard) {
   EXPECT_EQ(0, bridge()->show_virtual_keyboard_calls_count_);
   mock_input_method.SetVirtualKeyboardVisibilityIfEnabled(true);
   EXPECT_EQ(1, bridge()->show_virtual_keyboard_calls_count_);
-  ui::IMEBridge::Get()->SetInputContextHandler(nullptr);
-  ui::IMEBridge::Get()->SetCurrentEngineHandler(nullptr);
+  ash::IMEBridge::Get()->SetInputContextHandler(nullptr);
+  ash::IMEBridge::Get()->SetCurrentEngineHandler(nullptr);
 }
 
 TEST_F(ArcInputMethodManagerServiceTest, VisibilityObserver) {
@@ -1105,23 +1066,19 @@ TEST_F(ArcInputMethodManagerServiceTest, VisibilityObserver) {
   }
   // The proxy IME engine should be added.
   ASSERT_EQ(1u, imm()->state()->added_input_method_extensions_.size());
-  ui::IMEEngineHandlerInterface* engine_handler =
+  ash::TextInputMethod* engine_handler =
       std::get<2>(imm()->state()->added_input_method_extensions_.at(0));
 
   // Set up mock input context.
-  const ui::IMEEngineHandlerInterface::InputContext test_context{
-      ui::TEXT_INPUT_TYPE_TEXT,
-      ui::TEXT_INPUT_MODE_DEFAULT,
-      0 /* flags */,
-      ui::TextInputClient::FOCUS_REASON_MOUSE,
-      true /* should_do_learning */};
+  const ash::TextInputMethod::InputContext test_context(
+      ui::TEXT_INPUT_TYPE_TEXT);
   ui::MockInputMethod mock_input_method(nullptr);
   TestIMEInputContextHandler test_context_handler(&mock_input_method);
   ui::DummyTextInputClient dummy_text_input_client(ui::TEXT_INPUT_TYPE_TEXT);
-  ui::IMEBridge::Get()->SetInputContextHandler(&test_context_handler);
+  ash::IMEBridge::Get()->SetInputContextHandler(&test_context_handler);
 
   // Enable the ARC IME.
-  ui::IMEBridge::Get()->SetCurrentEngineHandler(engine_handler);
+  ash::IMEBridge::Get()->SetCurrentEngineHandler(engine_handler);
   engine_handler->Enable(ash::extension_ime_util::GetComponentIDByInputMethodID(
       std::get<1>(imm()->state()->added_input_method_extensions_.at(0))
           .at(0)

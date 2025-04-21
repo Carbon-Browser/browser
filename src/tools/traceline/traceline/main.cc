@@ -1,4 +1,4 @@
-// Copyright (c) 2009 The Chromium Authors. All rights reserved.
+// Copyright 2009 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,10 +20,9 @@
 #include "assembler.h"
 #include "logging.h"
 #include "rdtsc.h"
+#include "sidestep/mini_disassembler.h"
 #include "sym_resolver.h"
 #include "syscall_map.h"
-
-#include "sidestep/mini_disassembler.h"
 
 namespace {
 

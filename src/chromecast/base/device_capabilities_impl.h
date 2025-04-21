@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,11 @@
 #include <string>
 #include <unordered_map>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list_threadsafe.h"
 #include "base/synchronization/lock.h"
+#include "base/values.h"
 #include "chromecast/base/device_capabilities.h"
 
 namespace base {
@@ -40,12 +42,12 @@ class DeviceCapabilitiesImpl : public DeviceCapabilities {
   scoped_refptr<Data> GetPublicData() const override;
   void SetCapability(const std::string& path,
                      base::Value proposed_value) override;
-  void MergeDictionary(const base::Value& dict_value) override;
+  void MergeDictionary(const base::Value::Dict& dict) override;
   void AddCapabilitiesObserver(Observer* observer) override;
   void RemoveCapabilitiesObserver(Observer* observer) override;
 
  private:
-  class ValidatorInfo : public base::SupportsWeakPtr<ValidatorInfo> {
+  class ValidatorInfo final {
    public:
     explicit ValidatorInfo(Validator* validator);
 
@@ -62,10 +64,16 @@ class DeviceCapabilitiesImpl : public DeviceCapabilities {
 
     void Validate(const std::string& path, base::Value proposed_value) const;
 
+    base::WeakPtr<ValidatorInfo> AsWeakPtr() {
+      return weak_ptr_factory_.GetWeakPtr();
+    }
+
    private:
-    Validator* const validator_;
+    const raw_ptr<Validator> validator_;
     // TaskRunner of thread that validator_ was registered on
     const scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
+
+    base::WeakPtrFactory<ValidatorInfo> weak_ptr_factory_{this};
   };
 
   // For DeviceCapabilitiesImpl()
@@ -86,7 +94,7 @@ class DeviceCapabilitiesImpl : public DeviceCapabilities {
   void SetValidatedValueInternal(const std::string& path,
                                  base::Value new_value);
 
-  scoped_refptr<Data> GenerateDataWithNewValue(const base::Value& dict,
+  scoped_refptr<Data> GenerateDataWithNewValue(const base::Value::Dict& dict,
                                                const std::string& path,
                                                base::Value new_value);
 

@@ -1,6 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "base/profiler/suspendable_thread_delegate_mac.h"
 
@@ -10,8 +15,8 @@
 
 #include <vector>
 
+#include "base/apple/mach_logging.h"
 #include "base/check.h"
-#include "base/mac/mach_logging.h"
 #include "base/profiler/profile_builder.h"
 #include "build/build_config.h"
 
@@ -56,8 +61,9 @@ SuspendableThreadDelegateMac::ScopedSuspendThread::ScopedSuspendThread(
 // NO HEAP ALLOCATIONS. The MACH_CHECK is OK because it provides a more noisy
 // failure mode than deadlocking.
 SuspendableThreadDelegateMac::ScopedSuspendThread::~ScopedSuspendThread() {
-  if (!WasSuccessful())
+  if (!WasSuccessful()) {
     return;
+  }
 
   kern_return_t kr = thread_resume(thread_port_);
   MACH_CHECK(kr == KERN_SUCCESS, kr) << "thread_resume";

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,6 @@ namespace ipcz {
 // released. Consumers can hold onto references to RefCountedFragment objects
 // by holding a FragmentRef.
 struct IPCZ_ALIGN(4) RefCountedFragment {
-  enum { kAdoptExistingRef };
   enum { kUnmanagedRef };
 
   RefCountedFragment();

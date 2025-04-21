@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,16 @@
 #include <memory>
 
 #include "base/android/jni_string.h"
-#include "base/bind.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread_restrictions.h"
 #include "chrome/browser/thumbnail/generator/android/thumbnail_media_parser.h"
-#include "chrome/browser/thumbnail/generator/jni_headers/ThumbnailGenerator_jni.h"
 #include "chrome/browser/thumbnail/generator/thumbnail_util.h"
 #include "content/public/browser/browser_thread.h"
 #include "ui/gfx/android/java_bitmap.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "chrome/browser/thumbnail/generator/jni_headers/ThumbnailGenerator_jni.h"
 
 class SkBitmap;
 
@@ -85,8 +87,8 @@ void ThumbnailGenerator::OnVideoThumbnailRetrieved(
   // That's why |parser|'s destruction is postponed till the current task
   // is completed and the call stack doesn't have frames referencing memory
   // owned by |parser|
-  base::SequencedTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE,
-                                                     std::move(parser));
+  base::SequencedTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                             std::move(parser));
 }
 
 void ThumbnailGenerator::RetrieveThumbnail(

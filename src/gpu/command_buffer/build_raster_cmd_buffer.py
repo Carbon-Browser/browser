@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """code generator for raster command buffers."""
@@ -51,9 +51,6 @@ _NAMED_TYPE_INFO = {
       'GL_COMMANDS_ISSUED_CHROMIUM',
       'GL_COMMANDS_ISSUED_TIMESTAMP_CHROMIUM',
       'GL_COMMANDS_COMPLETED_CHROMIUM',
-    ],
-    'invalid': [
-      'GL_LATENCY_QUERY_CHROMIUM',
     ],
   },
   'TextureParameter': {
@@ -116,33 +113,6 @@ _NAMED_TYPE_INFO = {
       'gfx::BufferUsage::CAMERA_AND_CPU_READ_WRITE',
     ],
   },
-  'viz::ResourceFormat': {
-    'type': 'viz::ResourceFormat',
-    'valid': [
-      'viz::ResourceFormat::RGBA_8888',
-      'viz::ResourceFormat::RGBA_4444',
-      'viz::ResourceFormat::BGRA_8888',
-      'viz::ResourceFormat::ALPHA_8',
-      'viz::ResourceFormat::LUMINANCE_8',
-      'viz::ResourceFormat::RGB_565',
-      'viz::ResourceFormat::BGR_565',
-      'viz::ResourceFormat::RED_8',
-      'viz::ResourceFormat::RG_88',
-      'viz::ResourceFormat::LUMINANCE_F16',
-      'viz::ResourceFormat::RGBA_F16',
-      'viz::ResourceFormat::R16_EXT',
-      'viz::ResourceFormat::RGBX_8888',
-      'viz::ResourceFormat::BGRX_8888',
-      'viz::ResourceFormat::RGBA_1010102',
-      'viz::ResourceFormat::BGRA_1010102',
-      'viz::ResourceFormat::YVU_420',
-      'viz::ResourceFormat::YUV_420_BIPLANAR',
-      'viz::ResourceFormat::P010',
-    ],
-    'invalid': [
-      'viz::ResourceFormat::ETC1',
-    ],
-  },
   'gpu::raster::MsaaMode': {
     'type': 'gpu::raster::MsaaMode',
     'is_complete': True,
@@ -192,8 +162,8 @@ _NAMED_TYPE_INFO = {
 # not_shared:   For GENn types, True if objects can't be shared between contexts
 
 _FUNCTION_INFO = {
-  'CopySubTextureINTERNAL': {
-    'decoder_func': 'DoCopySubTextureINTERNAL',
+  'CopySharedImageINTERNAL': {
+    'decoder_func': 'DoCopySharedImageINTERNAL',
     'internal': True,
     'type': 'PUT',
     'count': 32,  # GL_MAILBOX_SIZE_CHROMIUM x2
@@ -202,6 +172,14 @@ _FUNCTION_INFO = {
   },
   'WritePixelsINTERNAL': {
     'decoder_func': 'DoWritePixelsINTERNAL',
+    'internal': True,
+    'type': 'PUT',
+    'count': 16,  # GL_MAILBOX_SIZE_CHROMIUM
+    'unit_test': False,
+    'trace_level': 2,
+  },
+  'WritePixelsYUVINTERNAL': {
+    'decoder_func': 'DoWritePixelsYUVINTERNAL',
     'internal': True,
     'type': 'PUT',
     'count': 16,  # GL_MAILBOX_SIZE_CHROMIUM
@@ -224,22 +202,6 @@ _FUNCTION_INFO = {
     'count': 16, # GL_MAILBOX_SIZE_CHROMIUM
     'unit_test': False,
     'result': ['uint32_t'],
-    'trace_level': 2,
-  },
-  'ConvertYUVAMailboxesToRGBINTERNAL': {
-    'decoder_func': 'DoConvertYUVAMailboxesToRGBINTERNAL',
-    'internal': True,
-    'type': 'PUT',
-    'count': 80, #GL_MAILBOX_SIZE_CHROMIUM x5
-    'unit_test': False,
-    'trace_level': 2,
-  },
-  'ConvertRGBAToYUVAMailboxesINTERNAL': {
-    'decoder_func': 'DoConvertRGBAToYUVAMailboxesINTERNAL',
-    'internal': True,
-    'type': 'PUT',
-    'count': 80, #GL_MAILBOX_SIZE_CHROMIUM x5
-    'unit_test': False,
     'trace_level': 2,
   },
   'Finish': {
@@ -349,6 +311,7 @@ _FUNCTION_INFO = {
   },
   'RasterCHROMIUM': {
     'decoder_func': 'DoRasterCHROMIUM',
+    'type': 'Custom',
     'internal': True,
     'impl_func': True,
     'cmd_args': 'GLuint raster_shm_id, GLuint raster_shm_offset,'
@@ -385,6 +348,7 @@ _FUNCTION_INFO = {
     'type': 'DELn',
     'internal': True,
     'unit_test': False,
+    'data_transfer_methods': ['immediate', 'shm'],
   },
   'ClearPaintCacheINTERNAL': {
     'decoder_func': 'DoClearPaintCacheINTERNAL',
@@ -420,7 +384,8 @@ def main(argv):
 
   # This script lives under src/gpu/command_buffer.
   script_dir = os.path.dirname(os.path.abspath(__file__))
-  assert script_dir.endswith(os.path.normpath("src/gpu/command_buffer"))
+  assert script_dir.endswith((os.path.normpath("src/gpu/command_buffer"),
+                              os.path.normpath("chromium/gpu/command_buffer")))
   # os.path.join doesn't do the right thing with relative paths.
   chromium_root_dir = os.path.abspath(script_dir + "/../..")
 

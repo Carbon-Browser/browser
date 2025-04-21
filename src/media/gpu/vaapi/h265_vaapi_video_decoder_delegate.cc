@@ -1,14 +1,19 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/gpu/vaapi/h265_vaapi_video_decoder_delegate.h"
 
 #include "build/chromeos_buildflags.h"
 #include "media/base/cdm_context.h"
-#include "media/gpu/decode_surface_handler.h"
 #include "media/gpu/macros.h"
 #include "media/gpu/vaapi/vaapi_common.h"
+#include "media/gpu/vaapi/vaapi_decode_surface_handler.h"
 #include "media/gpu/vaapi/vaapi_wrapper.h"
 
 namespace media {
@@ -35,7 +40,7 @@ constexpr int kInvalidRefPicIndex = -1;
 using DecodeStatus = H265Decoder::H265Accelerator::Status;
 
 H265VaapiVideoDecoderDelegate::H265VaapiVideoDecoderDelegate(
-    DecodeSurfaceHandler<VASurface>* const vaapi_dec,
+    VaapiDecodeSurfaceHandler* const vaapi_dec,
     scoped_refptr<VaapiWrapper> vaapi_wrapper,
     ProtectedSessionUpdateCB on_protected_session_update_cb,
     CdmContext* cdm_context,
@@ -52,11 +57,17 @@ H265VaapiVideoDecoderDelegate::~H265VaapiVideoDecoderDelegate() = default;
 
 scoped_refptr<H265Picture> H265VaapiVideoDecoderDelegate::CreateH265Picture() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  const auto va_surface = vaapi_dec_->CreateSurface();
-  if (!va_surface)
+  auto va_surface_handle = vaapi_dec_->CreateSurface();
+  if (!va_surface_handle) {
     return nullptr;
+  }
 
-  return new VaapiH265Picture(std::move(va_surface));
+  return new VaapiH265Picture(std::move(va_surface_handle));
+}
+
+bool H265VaapiVideoDecoderDelegate::IsChromaSamplingSupported(
+    VideoChromaSampling chroma_sampling) {
+  return chroma_sampling == VideoChromaSampling::k420;
 }
 
 DecodeStatus H265VaapiVideoDecoderDelegate::SubmitFrameMetadata(
@@ -64,9 +75,22 @@ DecodeStatus H265VaapiVideoDecoderDelegate::SubmitFrameMetadata(
     const H265PPS* pps,
     const H265SliceHeader* slice_hdr,
     const H265Picture::Vector& ref_pic_list,
+    const H265Picture::Vector& ref_pic_set_lt_curr,
+    const H265Picture::Vector& ref_pic_set_st_curr_after,
+    const H265Picture::Vector& ref_pic_set_st_curr_before,
     scoped_refptr<H265Picture> pic) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!last_slice_data_);
+
+  drop_frame_ = false;
+  if (pic->no_rasl_output_flag_ &&
+      (slice_hdr->nal_unit_type == H265NALU::RASL_N ||
+       slice_hdr->nal_unit_type == H265NALU::RASL_R)) {
+    // Drop this RASL frame as this is not decodable.
+    DVLOGF(3) << "Drop RASL frame";
+    drop_frame_ = true;
+    return DecodeStatus::kOk;
+  }
 
   VAPictureParameterBufferHEVC pic_param;
   memset(&pic_param, 0, sizeof(pic_param));
@@ -245,36 +269,48 @@ DecodeStatus H265VaapiVideoDecoderDelegate::SubmitFrameMetadata(
                      std::size(iq_matrix_buf.ScalingListDC32x32)),
                 "Mismatched HEVC scaling list matrix sizes");
 
-  for (int i = 0; i < H265ScalingListData::kNumScalingListMatrices; ++i) {
-    for (int j = 0; j < H265ScalingListData::kScalingListSizeId0Count; ++j)
-      iq_matrix_buf.ScalingList4x4[i][j] = scaling_list.scaling_list_4x4[i][j];
+  for (size_t i = 0; i < H265ScalingListData::kNumScalingListMatrices; ++i) {
+    for (size_t j = 0; j < H265ScalingListData::kScalingListSizeId0Count; ++j) {
+      iq_matrix_buf.ScalingList4x4[i][j] =
+          scaling_list.GetScalingList4x4EntryInRasterOrder(/*matrix_id=*/i,
+                                                           /*raster_idx=*/j);
+    }
   }
 
-  for (int i = 0; i < H265ScalingListData::kNumScalingListMatrices; ++i) {
-    for (int j = 0; j < H265ScalingListData::kScalingListSizeId1To3Count; ++j)
-      iq_matrix_buf.ScalingList8x8[i][j] = scaling_list.scaling_list_8x8[i][j];
+  for (size_t i = 0; i < H265ScalingListData::kNumScalingListMatrices; ++i) {
+    for (size_t j = 0; j < H265ScalingListData::kScalingListSizeId1To3Count;
+         ++j) {
+      iq_matrix_buf.ScalingList8x8[i][j] =
+          scaling_list.GetScalingList8x8EntryInRasterOrder(/*matrix_id=*/i,
+                                                           /*raster_idx=*/j);
+    }
   }
 
-  for (int i = 0; i < H265ScalingListData::kNumScalingListMatrices; ++i) {
-    for (int j = 0; j < H265ScalingListData::kScalingListSizeId1To3Count; ++j)
+  for (size_t i = 0; i < H265ScalingListData::kNumScalingListMatrices; ++i) {
+    for (size_t j = 0; j < H265ScalingListData::kScalingListSizeId1To3Count;
+         ++j) {
       iq_matrix_buf.ScalingList16x16[i][j] =
-          scaling_list.scaling_list_16x16[i][j];
+          scaling_list.GetScalingList16x16EntryInRasterOrder(/*matrix_id=*/i,
+                                                             /*raster_idx=*/j);
+    }
   }
 
-  for (int i = 0; i < H265ScalingListData::kNumScalingListMatrices; i += 3) {
-    for (int j = 0; j < H265ScalingListData::kScalingListSizeId1To3Count; ++j)
+  for (size_t i = 0; i < H265ScalingListData::kNumScalingListMatrices; i += 3) {
+    for (size_t j = 0; j < H265ScalingListData::kScalingListSizeId1To3Count;
+         ++j) {
       iq_matrix_buf.ScalingList32x32[i / 3][j] =
-          scaling_list.scaling_list_32x32[i][j];
+          scaling_list.GetScalingList32x32EntryInRasterOrder(/*matrix_id=*/i,
+                                                             /*raster_idx=*/j);
+    }
   }
 
-  for (int i = 0; i < H265ScalingListData::kNumScalingListMatrices; ++i)
-    iq_matrix_buf.ScalingListDC16x16[i] =
-        scaling_list.scaling_list_dc_coef_16x16[i];
-
-  for (int i = 0; i < H265ScalingListData::kNumScalingListMatrices; i += 3) {
-    iq_matrix_buf.ScalingListDC32x32[i / 3] =
-        scaling_list.scaling_list_dc_coef_32x32[i];
-  }
+  memcpy(iq_matrix_buf.ScalingListDC16x16,
+         scaling_list.scaling_list_dc_coef_16x16,
+         sizeof(iq_matrix_buf.ScalingListDC16x16));
+  iq_matrix_buf.ScalingListDC32x32[0] =
+      scaling_list.scaling_list_dc_coef_32x32[0];
+  iq_matrix_buf.ScalingListDC32x32[1] =
+      scaling_list.scaling_list_dc_coef_32x32[3];
 
   return vaapi_wrapper_->SubmitBuffer(VAIQMatrixBufferType, &iq_matrix_buf)
              ? DecodeStatus::kOk
@@ -295,6 +331,11 @@ DecodeStatus H265VaapiVideoDecoderDelegate::SubmitSlice(
     size_t size,
     const std::vector<SubsampleEntry>& subsamples) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  if (drop_frame_) {
+    return DecodeStatus::kOk;
+  }
+
   if (!SubmitPriorSliceDataIfPresent(false)) {
     DLOG(ERROR) << "Failure submitting prior slice data";
     return DecodeStatus::kFail;
@@ -455,6 +496,10 @@ DecodeStatus H265VaapiVideoDecoderDelegate::SubmitDecode(
     scoped_refptr<H265Picture> pic) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
+  if (drop_frame_) {
+    return DecodeStatus::kOk;
+  }
+
   if (!SubmitPriorSliceDataIfPresent(true)) {
     DLOG(ERROR) << "Failure submitting prior slice data";
     return DecodeStatus::kFail;
@@ -469,11 +514,8 @@ DecodeStatus H265VaapiVideoDecoderDelegate::SubmitDecode(
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   const VaapiH265Picture* vaapi_pic = pic->AsVaapiH265Picture();
-  CHECK(
-      gfx::Rect(vaapi_pic->va_surface()->size()).Contains(pic->visible_rect()));
-
   const bool success = vaapi_wrapper_->ExecuteAndDestroyPendingBuffers(
-      vaapi_pic->GetVASurfaceID());
+      vaapi_pic->va_surface_id());
   ref_pic_list_pocs_.clear();
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   encryption_segment_info_.clear();
@@ -492,8 +534,8 @@ bool H265VaapiVideoDecoderDelegate::OutputPicture(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   const VaapiH265Picture* vaapi_pic = pic->AsVaapiH265Picture();
-  vaapi_dec_->SurfaceReady(vaapi_pic->va_surface(), vaapi_pic->bitstream_id(),
-                           vaapi_pic->visible_rect(),
+  vaapi_dec_->SurfaceReady(vaapi_pic->va_surface_id(),
+                           vaapi_pic->bitstream_id(), vaapi_pic->visible_rect(),
                            vaapi_pic->get_colorspace());
   return true;
 }
@@ -505,6 +547,7 @@ void H265VaapiVideoDecoderDelegate::Reset() {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   encryption_segment_info_.clear();
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+  drop_frame_ = false;
   last_slice_data_ = nullptr;
   last_slice_size_ = 0;
   last_transcrypt_params_.clear();
@@ -524,7 +567,7 @@ void H265VaapiVideoDecoderDelegate::FillVAPicture(
     VAPictureHEVC* va_pic,
     scoped_refptr<H265Picture> pic) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  va_pic->picture_id = pic->AsVaapiH265Picture()->GetVASurfaceID();
+  va_pic->picture_id = pic->AsVaapiH265Picture()->va_surface_id();
   va_pic->pic_order_cnt = pic->pic_order_cnt_val_;
   va_pic->flags = 0;
 
@@ -584,11 +627,11 @@ bool H265VaapiVideoDecoderDelegate::SubmitPriorSliceDataIfPresent(
         {{VAProtectedSliceDataBufferType, last_transcrypt_params_.length(),
           last_transcrypt_params_.data()},
          {VASliceParameterBufferType, sizeof(slice_param_), &slice_param_},
-         {VASliceDataBufferType, last_slice_size_, last_slice_data_}});
+         {VASliceDataBufferType, last_slice_size_, last_slice_data_.get()}});
   } else {
     success = vaapi_wrapper_->SubmitBuffers(
         {{VASliceParameterBufferType, sizeof(slice_param_), &slice_param_},
-         {VASliceDataBufferType, last_slice_size_, last_slice_data_}});
+         {VASliceDataBufferType, last_slice_size_, last_slice_data_.get()}});
   }
   last_slice_data_ = nullptr;
   last_slice_size_ = 0;

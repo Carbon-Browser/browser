@@ -1,12 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ui/views/payments/payment_request_browsertest_base.h"
 #include "chrome/browser/ui/views/payments/payment_request_dialog_view_ids.h"
-#include "components/autofill/core/browser/autofill_test_utils.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
+#include "components/autofill/core/browser/test_utils/autofill_test_utils.h"
 #include "content/public/test/browser_test.h"
 
 namespace payments {
@@ -18,7 +18,7 @@ using PaymentRequestShippingAddressInstanceTest = PaymentRequestBrowserTestBase;
 IN_PROC_BROWSER_TEST_F(PaymentRequestShippingAddressInstanceTest,
                        ShouldBeSameInstance) {
   std::string payment_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &payment_method_name);
 
   autofill::AutofillProfile billing_address = autofill::test::GetFullProfile();
@@ -35,7 +35,7 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestShippingAddressInstanceTest,
   ResetEventWaiterForSequence(
       {DialogEvent::PROCESSING_SPINNER_SHOWN, DialogEvent::DIALOG_CLOSED});
   ClickOnDialogViewAndWait(DialogViewID::PAY_BUTTON, dialog_view());
-  WaitForObservedEvent();
+  ASSERT_TRUE(WaitForObservedEvent());
 
   // Verify that the shippingAddress instance in the request and response were
   // the same object instance.

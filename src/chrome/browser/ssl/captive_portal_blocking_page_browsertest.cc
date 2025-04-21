@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,11 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_feature_list.h"
@@ -20,10 +20,7 @@
 #include "chrome/browser/interstitials/security_interstitial_idn_test.h"
 #include "chrome/browser/interstitials/security_interstitial_page_test_utils.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/safe_browsing/certificate_reporting_service_test_utils.h"
-#include "chrome/browser/ssl/certificate_reporting_test_utils.h"
 #include "chrome/browser/ssl/chrome_security_blocking_page_factory.h"
-#include "chrome/browser/ssl/security_state_tab_helper.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -32,12 +29,10 @@
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/captive_portal/core/captive_portal_detector.h"
 #include "components/prefs/pref_service.h"
-#include "components/security_interstitials/content/cert_report_helper.h"
 #include "components/security_interstitials/content/security_interstitial_tab_helper.h"
-#include "components/security_interstitials/content/ssl_cert_reporter.h"
+#include "components/security_state/content/security_state_tab_helper.h"
 #include "components/security_state/core/security_state.h"
-#include "components/variations/variations_params_manager.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
@@ -81,10 +76,9 @@ class CaptivePortalTestingNavigationThrottle
   CaptivePortalTestingNavigationThrottle(
       content::NavigationHandle* handle,
       const GURL& login_url,
-      std::unique_ptr<SSLCertReporter> ssl_cert_reporter,
       bool is_wifi_connection,
       const std::string& wifi_ssid);
-  ~CaptivePortalTestingNavigationThrottle() override {}
+  ~CaptivePortalTestingNavigationThrottle() override = default;
 
   // content::NavigationThrottle:
   const char* GetNameForLogging() override {
@@ -96,7 +90,6 @@ class CaptivePortalTestingNavigationThrottle
   content::NavigationThrottle::ThrottleCheckResult WillFailRequest() override;
 
   const GURL login_url_;
-  std::unique_ptr<SSLCertReporter> ssl_cert_reporter_;
   bool is_wifi_connection_;
   std::string wifi_ssid_;
 };
@@ -104,12 +97,10 @@ class CaptivePortalTestingNavigationThrottle
 CaptivePortalTestingNavigationThrottle::CaptivePortalTestingNavigationThrottle(
     content::NavigationHandle* handle,
     const GURL& login_url,
-    std::unique_ptr<SSLCertReporter> ssl_cert_reporter,
     bool is_wifi_connection,
     const std::string& wifi_ssid)
     : content::NavigationThrottle(handle),
       login_url_(login_url),
-      ssl_cert_reporter_(std::move(ssl_cert_reporter)),
       is_wifi_connection_(is_wifi_connection),
       wifi_ssid_(wifi_ssid) {}
 
@@ -123,8 +114,7 @@ CaptivePortalTestingNavigationThrottle::WillFailRequest() {
   std::unique_ptr<CaptivePortalBlockingPage> blocking_page =
       blocking_page_factory.CreateCaptivePortalBlockingPage(
           navigation_handle()->GetWebContents(), GURL(kBrokenSSL), login_url_,
-          std::move(ssl_cert_reporter_), ssl_info,
-          net::ERR_CERT_COMMON_NAME_INVALID);
+          ssl_info, net::ERR_CERT_COMMON_NAME_INVALID);
   blocking_page->OverrideWifiInfoForTesting(is_wifi_connection_, wifi_ssid_);
 
   std::string html = blocking_page->GetHTMLContents();
@@ -141,10 +131,9 @@ class TestingThrottleInstaller : public content::WebContentsObserver {
  public:
   TestingThrottleInstaller(content::WebContents* web_contents,
                            const GURL& login_url,
-                           std::unique_ptr<SSLCertReporter> ssl_cert_reporter,
                            bool is_wifi_connection,
                            const std::string& wifi_ssid);
-  ~TestingThrottleInstaller() override {}
+  ~TestingThrottleInstaller() override = default;
 
   // content::WebContentsObserver:
   void DidStartNavigation(
@@ -152,7 +141,6 @@ class TestingThrottleInstaller : public content::WebContentsObserver {
 
  private:
   const GURL login_url_;
-  std::unique_ptr<SSLCertReporter> ssl_cert_reporter_;
   bool is_wifi_connection_;
   std::string wifi_ssid_;
 };
@@ -160,12 +148,10 @@ class TestingThrottleInstaller : public content::WebContentsObserver {
 TestingThrottleInstaller::TestingThrottleInstaller(
     content::WebContents* web_contents,
     const GURL& login_url,
-    std::unique_ptr<SSLCertReporter> ssl_cert_reporter,
     bool is_wifi_connection,
     const std::string& wifi_ssid)
     : content::WebContentsObserver(web_contents),
       login_url_(login_url),
-      ssl_cert_reporter_(std::move(ssl_cert_reporter)),
       is_wifi_connection_(is_wifi_connection),
       wifi_ssid_(wifi_ssid) {}
 
@@ -173,36 +159,19 @@ void TestingThrottleInstaller::DidStartNavigation(
     content::NavigationHandle* navigation_handle) {
   navigation_handle->RegisterThrottleForTesting(
       std::make_unique<CaptivePortalTestingNavigationThrottle>(
-          navigation_handle, login_url_, std::move(ssl_cert_reporter_),
-          is_wifi_connection_, wifi_ssid_));
+          navigation_handle, login_url_, is_wifi_connection_, wifi_ssid_));
 }
 
 }  // namespace
 
 class CaptivePortalBlockingPageTest : public InProcessBrowserTest {
- public:
-  CaptivePortalBlockingPageTest() {
-    CertReportHelper::SetFakeOfficialBuildForTesting();
-  }
-
-  CaptivePortalBlockingPageTest(const CaptivePortalBlockingPageTest&) = delete;
-  CaptivePortalBlockingPageTest& operator=(
-      const CaptivePortalBlockingPageTest&) = delete;
-
-  void SetUpCommandLine(base::CommandLine* command_line) override {
-    // Setting the sending threshold to 1.0 ensures reporting is enabled.
-    variations::testing::VariationParamsManager::AppendVariationParams(
-        "ReportCertificateErrors", "ShowAndPossiblySend",
-        {{"sendingThreshold", "1.0"}}, command_line);
-  }
-
+ protected:
   void TestInterstitial(bool is_wifi_connection,
                         const std::string& wifi_ssid,
                         const GURL& login_url,
                         ExpectWiFi expect_wifi,
                         ExpectWiFiSSID expect_wifi_ssid,
                         ExpectLoginURL expect_login_url,
-                        std::unique_ptr<SSLCertReporter> ssl_cert_reporter,
                         const std::string& expected_login_hostname);
 
   void TestInterstitial(bool is_wifi_connection,
@@ -211,16 +180,6 @@ class CaptivePortalBlockingPageTest : public InProcessBrowserTest {
                         ExpectWiFi expect_wifi,
                         ExpectWiFiSSID expect_wifi_ssid,
                         ExpectLoginURL expect_login_url);
-
-  void TestInterstitial(bool is_wifi_connection,
-                        const std::string& wifi_ssid,
-                        const GURL& login_url,
-                        ExpectWiFi expect_wifi,
-                        ExpectWiFiSSID expect_wifi_ssid,
-                        ExpectLoginURL expect_login_url,
-                        std::unique_ptr<SSLCertReporter> ssl_cert_reporter);
-
-  void TestCertReporting(certificate_reporting_test_utils::OptIn opt_in);
 
  private:
   std::unique_ptr<TestingThrottleInstaller> testing_throttle_installer_;
@@ -234,21 +193,19 @@ void CaptivePortalBlockingPageTest::TestInterstitial(
     ExpectWiFi expect_wifi,
     ExpectWiFiSSID expect_wifi_ssid,
     ExpectLoginURL expect_login_url,
-    std::unique_ptr<SSLCertReporter> ssl_cert_reporter,
     const std::string& expected_login_hostname) {
   content::WebContents* contents =
       browser()->tab_strip_model()->GetActiveWebContents();
   DCHECK(contents);
 
   testing_throttle_installer_ = std::make_unique<TestingThrottleInstaller>(
-      contents, login_url, std::move(ssl_cert_reporter), is_wifi_connection,
-      wifi_ssid);
+      contents, login_url, is_wifi_connection, wifi_ssid);
   // We cancel the navigation with ERR_BLOCKED_BY_CLIENT so it doesn't get
   // handled by the normal SSLErrorNavigationThrotttle since this test only
   // checks the behavior of the Blocking Page, not the integration with that
   // throttle.
   //
-  // TODO(https://crbug.com/1003940): Clean this code up now that committed
+  // TODO(crbug.com/40647477): Clean this code up now that committed
   // interstitials have shipped.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
       browser(), GURL("https://mock.failed.request/start=-20")));
@@ -276,56 +233,7 @@ void CaptivePortalBlockingPageTest::TestInterstitial(
     ExpectWiFiSSID expect_wifi_ssid,
     ExpectLoginURL expect_login_url) {
   TestInterstitial(is_wifi_connection, wifi_ssid, login_url, expect_wifi,
-                   expect_wifi_ssid, expect_login_url, nullptr,
-                   login_url.host());
-}
-
-void CaptivePortalBlockingPageTest::TestInterstitial(
-    bool is_wifi_connection,
-    const std::string& wifi_ssid,
-    const GURL& login_url,
-    ExpectWiFi expect_wifi,
-    ExpectWiFiSSID expect_wifi_ssid,
-    ExpectLoginURL expect_login_url,
-    std::unique_ptr<SSLCertReporter> ssl_cert_reporter) {
-  TestInterstitial(is_wifi_connection, wifi_ssid, login_url, expect_wifi,
-                   expect_wifi_ssid, expect_login_url,
-                   std::move(ssl_cert_reporter), login_url.host());
-}
-
-void CaptivePortalBlockingPageTest::TestCertReporting(
-    certificate_reporting_test_utils::OptIn opt_in) {
-  certificate_reporting_test_utils::SetCertReportingOptIn(browser(), opt_in);
-  base::RunLoop run_loop;
-  certificate_reporting_test_utils::SSLCertReporterCallback reporter_callback(
-      &run_loop);
-
-  std::unique_ptr<SSLCertReporter> ssl_cert_reporter =
-      certificate_reporting_test_utils::CreateMockSSLCertReporter(
-          base::BindRepeating(&certificate_reporting_test_utils::
-                                  SSLCertReporterCallback::ReportSent,
-                              base::Unretained(&reporter_callback)),
-          opt_in == certificate_reporting_test_utils::EXTENDED_REPORTING_OPT_IN
-              ? certificate_reporting_test_utils::CERT_REPORT_EXPECTED
-              : certificate_reporting_test_utils::CERT_REPORT_NOT_EXPECTED);
-
-  const GURL kLandingUrl(captive_portal::CaptivePortalDetector::kDefaultURL);
-  TestInterstitial(true, std::string(), kLandingUrl, EXPECT_WIFI_YES,
-                   EXPECT_WIFI_SSID_NO, EXPECT_LOGIN_URL_NO,
-                   std::move(ssl_cert_reporter));
-
-  EXPECT_EQ(std::string(), reporter_callback.GetLatestHostnameReported());
-
-  chrome::GoBack(browser(), WindowOpenDisposition::CURRENT_TAB);
-
-  if (opt_in == certificate_reporting_test_utils::EXTENDED_REPORTING_OPT_IN) {
-    // Check that the mock reporter received a request to send a report.
-    run_loop.Run();
-    EXPECT_EQ(GURL(kBrokenSSL).host(),
-              reporter_callback.GetLatestHostnameReported());
-  } else {
-    EXPECT_EQ(std::string(), reporter_callback.GetLatestHostnameReported());
-  }
+                   expect_wifi_ssid, expect_login_url, login_url.host());
 }
 
 // If the connection is not a Wi-Fi connection, the wired network version of the
@@ -406,16 +314,6 @@ IN_PROC_BROWSER_TEST_F(CaptivePortalBlockingPageTest, WiFi_NoSSID_NoLoginURL) {
                    EXPECT_WIFI_SSID_NO, EXPECT_LOGIN_URL_NO);
 }
 
-IN_PROC_BROWSER_TEST_F(CaptivePortalBlockingPageTest, CertReportingOptIn) {
-  TestCertReporting(
-      certificate_reporting_test_utils::EXTENDED_REPORTING_OPT_IN);
-}
-
-IN_PROC_BROWSER_TEST_F(CaptivePortalBlockingPageTest, CertReportingOptOut) {
-  TestCertReporting(
-      certificate_reporting_test_utils::EXTENDED_REPORTING_DO_NOT_OPT_IN);
-}
-
 class CaptivePortalBlockingPageIDNTest : public SecurityInterstitialIDNTest {
  protected:
   // SecurityInterstitialIDNTest implementation
@@ -427,7 +325,7 @@ class CaptivePortalBlockingPageIDNTest : public SecurityInterstitialIDNTest {
     ChromeSecurityBlockingPageFactory blocking_page_factory;
     std::unique_ptr<CaptivePortalBlockingPage> blocking_page =
         blocking_page_factory.CreateCaptivePortalBlockingPage(
-            contents, GURL(kBrokenSSL), request_url, nullptr, empty_ssl_info,
+            contents, GURL(kBrokenSSL), request_url, empty_ssl_info,
             net::ERR_CERT_COMMON_NAME_INVALID);
     blocking_page->OverrideWifiInfoForTesting(false, "");
     return blocking_page.release();

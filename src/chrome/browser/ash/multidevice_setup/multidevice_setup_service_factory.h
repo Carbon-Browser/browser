@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define CHROME_BROWSER_ASH_MULTIDEVICE_SETUP_MULTIDEVICE_SETUP_SERVICE_FACTORY_H_
 
 #include "base/no_destructor.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 class Profile;
 
@@ -15,8 +15,7 @@ namespace multidevice_setup {
 
 class MultiDeviceSetupService;
 
-class MultiDeviceSetupServiceFactory
-    : public BrowserContextKeyedServiceFactory {
+class MultiDeviceSetupServiceFactory : public ProfileKeyedServiceFactory {
  public:
   static MultiDeviceSetupService* GetForProfile(Profile* profile);
 
@@ -33,7 +32,7 @@ class MultiDeviceSetupServiceFactory
   ~MultiDeviceSetupServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory implementation:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
 };
 

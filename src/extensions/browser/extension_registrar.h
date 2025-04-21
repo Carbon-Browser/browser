@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,17 @@
 
 #include <memory>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
+#include "extensions/browser/disable_reason.h"
 #include "extensions/browser/process_manager.h"
 #include "extensions/browser/process_manager_observer.h"
 #include "extensions/browser/unloaded_extension_reason.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_id.h"
+#include "third_party/blink/public/common/service_worker/service_worker_status_code.h"
 
 namespace base {
 class FilePath;
@@ -96,6 +99,9 @@ class ExtensionRegistrar : public ProcessManagerObserver {
 
   ~ExtensionRegistrar() override;
 
+  // Called when the associated Profile is going to be destroyed.
+  void Shutdown();
+
   // Adds the extension to the ExtensionRegistry. The extension will be added to
   // the enabled, disabled, blocklisted or blocked set. If the extension is
   // added as enabled, it will be activated.
@@ -120,6 +126,20 @@ class ExtensionRegistrar : public ProcessManagerObserver {
   // retains a reference to it, so it can be enabled later.
   void DisableExtension(const ExtensionId& extension_id, int disable_reasons);
 
+  // Same as `DisableExtension`, but assumes that the request to disable
+  // `extension_id` originates from `source_extension` when evaluating whether
+  // the extension can be disabled. Please see `ExtensionMayModifySettings`
+  // for details.
+  void DisableExtensionWithSource(
+      const Extension* source_extension,
+      const std::string& extension_id,
+      disable_reason::DisableReason disable_reasons);
+
+  // Removes the disable reason and enable the extension if there are no disable
+  // reasons left and is not blocked for another reason.
+  void RemoveDisableReasonAndMaybeEnable(const std::string& extension_id,
+                                         disable_reason::DisableReason reason);
+
   // Attempts to reload the specified extension by disabling it if it is enabled
   // and requesting the Delegate load it again.
   // NOTE: Reloading an extension can invalidate |extension_id| and Extension
@@ -129,6 +149,17 @@ class ExtensionRegistrar : public ProcessManagerObserver {
                        LoadErrorBehavior load_error_behavior);
 
   // TODO(michaelpg): Add methods for blocklisting and blocking extensions.
+
+  // Helper method to determine if an extension can be blocked.
+  bool CanBlockExtension(const Extension* extension) const;
+
+  // Puts all extensions in a blocked state: Unloading every extension, and
+  // preventing them from ever loading until UnblockAllExtensions is called.
+  // This state is stored in preferences, so persists until Chrome restarts.
+  //
+  // Component, external component and allowlisted policy installed extensions
+  // are exempt from being Blocked (see CanBlockExtension in .cc file).
+  void BlockAllExtensions();
 
   // Deactivates the extension, adding its id to the list of terminated
   // extensions.
@@ -162,32 +193,35 @@ class ExtensionRegistrar : public ProcessManagerObserver {
   void DeactivateExtension(const Extension* extension,
                            UnloadedExtensionReason reason);
 
+  // Unregister the service worker that is not from manifest and has extension
+  // root scope.
+  void UnregisterServiceWorkerWithRootScope(const Extension* extension);
+  void NotifyServiceWorkerUnregistered(const ExtensionId& extension_id,
+                                       bool worker_previously_registered,
+                                       blink::ServiceWorkerStatusCode status);
+
   // Given an extension that was disabled for reloading, completes the reload
   // by replacing the old extension with the new version and enabling it.
   // Returns true on success.
   bool ReplaceReloadedExtension(scoped_refptr<const Extension> extension);
 
-  // Marks the extension ready after URLRequestContexts have been updated on
-  // the IO thread.
-  void OnExtensionRegisteredWithRequestContexts(
-      scoped_refptr<const Extension> extension);
-
   // Upon reloading an extension, spins up its context if necessary.
   void MaybeSpinUpLazyContext(const Extension* extension, bool is_newly_added);
 
   // ProcessManagerObserver overrides
-  void OnServiceWorkerRegistered(const WorkerId& worker_id) override;
+  void OnStartedTrackingServiceWorkerInstance(
+      const WorkerId& worker_id) override;
 
-  content::BrowserContext* const browser_context_;
+  const raw_ptr<content::BrowserContext> browser_context_;
 
   // Delegate provided in the constructor. Should outlive this object.
-  Delegate* const delegate_;
+  const raw_ptr<Delegate> delegate_;
 
   // Keyed services we depend on. Cached here for repeated access.
-  ExtensionSystem* const extension_system_;
-  ExtensionPrefs* const extension_prefs_;
-  ExtensionRegistry* const registry_;
-  RendererStartupHelper* const renderer_helper_;
+  raw_ptr<ExtensionSystem> extension_system_;
+  const raw_ptr<ExtensionPrefs> extension_prefs_;
+  const raw_ptr<ExtensionRegistry> registry_;
+  const raw_ptr<RendererStartupHelper> renderer_helper_;
 
   // Map of DevToolsAgentHost instances that are detached,
   // waiting for an extension to be reloaded.

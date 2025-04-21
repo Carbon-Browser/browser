@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,10 @@
 #include "ash/app_list/model/app_list_item.h"
 #include "ash/app_list/views/app_list_item_view.h"
 #include "ash/public/cpp/app_list/app_list_config.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/time/time.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
-#include "ui/views/animation/bounds_animator.h"
 #include "ui/views/controls/scroll_view.h"
 #include "ui/views/focus/focus_manager.h"
 #include "ui/views/view_model_utils.h"
@@ -24,7 +23,7 @@
 namespace ash {
 namespace {
 
-// TODO(crbug.com/1211608): Add this to AppListConfig.
+// TODO(crbug.com/40182999): Add this to AppListConfig.
 const int kVerticalTilePadding = 8;
 
 // Vertical margin in DIPs inside the top and bottom of scroll view where
@@ -49,15 +48,14 @@ ScrollableAppsGridView::ScrollableAppsGridView(
     AppsGridViewFolderDelegate* folder_delegate,
     views::ScrollView* parent_scroll_view,
     AppListFolderController* folder_controller,
-    AppsGridViewFocusDelegate* focus_delegate)
+    AppListKeyboardController* keyboard_controller)
     : AppsGridView(a11y_announcer,
                    view_delegate,
                    folder_delegate,
                    folder_controller,
-                   focus_delegate),
+                   keyboard_controller),
       scroll_view_(parent_scroll_view) {
   DCHECK(scroll_view_);
-  view_structure_.Init(PagedViewStructure::Mode::kSinglePage);
 }
 
 ScrollableAppsGridView::~ScrollableAppsGridView() {
@@ -68,17 +66,14 @@ void ScrollableAppsGridView::SetMaxColumns(int max_cols) {
   SetMaxColumnsInternal(max_cols);
 }
 
-void ScrollableAppsGridView::Layout() {
+void ScrollableAppsGridView::Layout(PassKey) {
   if (ignore_layout())
     return;
-
-  if (bounds_animator()->IsAnimating())
-    bounds_animator()->Cancel();
 
   if (GetContentsBounds().IsEmpty())
     return;
 
-  // TODO(crbug.com/1211608): Use FillLayout on the items container.
+  // TODO(crbug.com/40182999): Use FillLayout on the items container.
   items_container()->SetBoundsRect(GetContentsBounds());
 
   CalculateIdealBounds();
@@ -113,13 +108,30 @@ gfx::Insets ScrollableAppsGridView::GetTilePadding(int page) const {
   return gfx::Insets::VH(-kVerticalTilePadding, -horizontal_tile_padding);
 }
 
+bool ScrollableAppsGridView::ShouldContainerHandleDragEvents() {
+  // Apps grid folder view handles its own drag and drop events, otherwise, it
+  // should delegate to the apps grid container.
+  return !IsInFolder();
+}
+
+bool ScrollableAppsGridView::IsAboveTheFold(AppListItemView* item_view) {
+  gfx::Rect item_bounds_in_scroll_view = views::View::ConvertRectToTarget(
+      item_view, scroll_view_->contents(), item_view->GetLocalBounds());
+  return item_bounds_in_scroll_view.bottom() <
+         scroll_view_->GetVisibleRect().height();
+}
+
 gfx::Size ScrollableAppsGridView::GetTileGridSize() const {
   // AppListItemList may contain page break items, so use the view_model().
-  size_t items = view_model()->view_size();
+  size_t items = view_model()->view_size() + pulsing_blocks_model().view_size();
   // Tests sometimes start with 0 items. Ensure space for at least 1 item.
   if (items == 0) {
     items = 1;
   }
+
+  if (HasExtraSlotForReorderPlaceholder())
+    ++items;
+
   const bool is_last_row_full = (items % cols() == 0);
   const int rows = is_last_row_full ? items / cols() : items / cols() + 1;
   gfx::Size tile_size = GetTotalTileSize(/*page=*/0);
@@ -136,8 +148,19 @@ int ScrollableAppsGridView::GetSelectedPage() const {
   return 0;
 }
 
-bool ScrollableAppsGridView::IsScrollAxisVertical() const {
-  return true;
+bool ScrollableAppsGridView::IsPageFull(size_t page_index) const {
+  return false;
+}
+
+GridIndex ScrollableAppsGridView::GetGridIndexFromIndexInViewModel(
+    int index) const {
+  return GridIndex(0, index);
+}
+
+int ScrollableAppsGridView::GetNumberOfPulsingBlocksToShow(
+    int item_count) const {
+  const int residue = item_count % cols();
+  return cols() + (residue ? cols() - residue : 0);
 }
 
 bool ScrollableAppsGridView::MaybeAutoScroll() {
@@ -280,10 +303,8 @@ void ScrollableAppsGridView::RecordAppMovingTypeMetrics(
                             kMaxAppListAppMovingType);
 }
 
-int ScrollableAppsGridView::GetMaxRowsInPage(int page) const {
-  // Return an arbitrary large number, chosen to be small enough
-  // that cols*rows_per_page will not overflow.
-  return 100000;
+std::optional<int> ScrollableAppsGridView::GetMaxRowsInPage(int page) const {
+  return std::nullopt;
 }
 
 gfx::Vector2d ScrollableAppsGridView::GetGridCenteringOffset(int page) const {
@@ -291,7 +312,7 @@ gfx::Vector2d ScrollableAppsGridView::GetGridCenteringOffset(int page) const {
 }
 
 void ScrollableAppsGridView::EnsureViewVisible(const GridIndex& index) {
-  // If called after usesr action that changes the grid size, make sure grid
+  // If called after user action that changes the grid size, make sure grid
   // view ancestor layout is up to date before attempting scroll.
   GetWidget()->LayoutRootViewIfNecessary();
 
@@ -300,13 +321,13 @@ void ScrollableAppsGridView::EnsureViewVisible(const GridIndex& index) {
     view->ScrollViewToVisible();
 }
 
-absl::optional<ScrollableAppsGridView::VisibleItemIndexRange>
+std::optional<ScrollableAppsGridView::VisibleItemIndexRange>
 ScrollableAppsGridView::GetVisibleItemIndexRange() const {
   // Indicate the first row on which item views are visible.
-  absl::optional<int> first_visible_row;
+  std::optional<int> first_visible_row;
 
   // Indicate the first invisible row that is right after the last visible row.
-  absl::optional<int> first_invisible_row;
+  std::optional<int> first_invisible_row;
 
   const gfx::Rect scroll_view_visible_rect = scroll_view_->GetVisibleRect();
   for (size_t view_index = 0; view_index < view_model()->view_size();
@@ -343,7 +364,7 @@ ScrollableAppsGridView::GetVisibleItemIndexRange() const {
   }
 
   if (!first_visible_row)
-    return absl::nullopt;
+    return std::nullopt;
 
   VisibleItemIndexRange result;
   result.first_index = *first_visible_row * cols();
@@ -356,18 +377,13 @@ ScrollableAppsGridView::GetVisibleItemIndexRange() const {
   return result;
 }
 
-base::ScopedClosureRunner ScrollableAppsGridView::LockAppsGridOpacity() {
-  // Do nothing.
-  return base::ScopedClosureRunner();
-}
-
 const gfx::Vector2d ScrollableAppsGridView::CalculateTransitionOffset(
     int page_of_view) const {
   // The ScrollableAppsGridView has no page transitions.
   return gfx::Vector2d();
 }
 
-BEGIN_METADATA(ScrollableAppsGridView, AppsGridView)
+BEGIN_METADATA(ScrollableAppsGridView)
 END_METADATA
 
 }  // namespace ash

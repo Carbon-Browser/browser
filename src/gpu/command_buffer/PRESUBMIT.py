@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Enforces command buffer autogen matches script output.
@@ -8,9 +8,7 @@ for more details on the presubmit API built into depot_tools.
 """
 
 import os.path
-
-USE_PYTHON3 = True
-
+import tempfile
 
 def _IsGLES2CmdBufferFile(affected_file):
   filename = os.path.basename(affected_file.LocalPath())
@@ -58,7 +56,7 @@ def CommonChecks(input_api, output_api):
 
   messages = []
 
-  with input_api.temporary_directory() as temp_dir:
+  with tempfile.TemporaryDirectory() as temp_dir:
     commands = []
     if len(gles2_cmd_buffer_files) > 0:
       commands.append(

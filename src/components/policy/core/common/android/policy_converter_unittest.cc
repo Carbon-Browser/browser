@@ -1,6 +1,8 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "components/policy/core/common/android/policy_converter.h"
 
 #include <stddef.h>
 
@@ -8,13 +10,11 @@
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
 #include "base/json/json_writer.h"
+#include "base/types/expected_macros.h"
 #include "base/values.h"
-#include "components/policy/core/common/android/policy_converter.h"
 #include "components/policy/core/common/schema.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-using base::DictionaryValue;
-using base::ListValue;
 using base::Value;
 using base::android::JavaRef;
 using base::android::ScopedJavaLocalRef;
@@ -40,17 +40,15 @@ class PolicyConverterTest : public testing::Test {
           "dict": { "type": "object" }
         }
       })";
-
-    std::string error;
-    schema_ = Schema::Parse(kSchemaTemplate, &error);
-    ASSERT_TRUE(schema_.valid()) << error;
+    ASSIGN_OR_RETURN(schema_, Schema::Parse(kSchemaTemplate),
+                     [](const auto& e) { ADD_FAILURE() << e; });
   }
 
  protected:
   // Converts the passed in value to the passed in schema, and serializes the
   // result to JSON, to make it easier to compare with EXPECT_EQ.
   std::string Convert(Value value, const Schema& value_schema) {
-    absl::optional<base::Value> converted_value =
+    std::optional<base::Value> converted_value =
         PolicyConverter::ConvertValueToSchema(std::move(value), value_schema);
     EXPECT_TRUE(converted_value.has_value());
 
@@ -59,13 +57,13 @@ class PolicyConverterTest : public testing::Test {
     return json_string;
   }
 
-  // Uses|PolicyConverter::ConvertJavaStringArrayToListValue| to convert the
+  // Uses `PolicyConverter::ConvertJavaStringArrayToListValue` to convert the
   // passed in java array and serializes the result to JSON, to make it easier
-  // to compare with EXPECT_EQ.
+  // to compare with `EXPECT_EQ`.
   std::string ConvertJavaStringArrayToListValue(
       JNIEnv* env,
       const JavaRef<jobjectArray>& java_array) {
-    base::Value list =
+    base::Value::List list =
         PolicyConverter::ConvertJavaStringArrayToListValue(env, java_array);
 
     std::string json_string;
@@ -79,7 +77,7 @@ class PolicyConverterTest : public testing::Test {
       JNIEnv* env,
       std::vector<std::string> values) {
     jobjectArray java_array = (jobjectArray)env->NewObjectArray(
-        values.size(), env->FindClass("java/lang/String"), nullptr);
+        values.size(), jni_zero::g_string_class, nullptr);
     for (size_t i = 0; i < values.size(); i++) {
       env->SetObjectArrayElement(
           java_array, i,
@@ -106,7 +104,7 @@ TEST_F(PolicyConverterTest, ConvertToBoolValue) {
   EXPECT_EQ("true", Convert(Value(42), bool_schema));
   EXPECT_EQ("true", Convert(Value(-1), bool_schema));
   EXPECT_EQ("\"1\"", Convert(Value("1"), bool_schema));
-  EXPECT_EQ("{}", Convert(Value(Value::Type::DICTIONARY), bool_schema));
+  EXPECT_EQ("{}", Convert(Value(Value::Type::DICT), bool_schema));
 }
 
 TEST_F(PolicyConverterTest, ConvertToIntValue) {
@@ -143,13 +141,15 @@ TEST_F(PolicyConverterTest, ConvertToListValue) {
   Schema list_schema = schema_.GetKnownProperty("list");
   ASSERT_TRUE(list_schema.valid());
 
-  Value list = Value(Value::Type::LIST);
+  Value::List list;
   list.Append("foo");
   list.Append("bar");
-  EXPECT_EQ("[\"foo\",\"bar\"]", Convert(std::move(list), list_schema));
+  EXPECT_EQ("[\"foo\",\"bar\"]", Convert(Value(std::move(list)), list_schema));
   EXPECT_EQ("[\"baz\",\"blurp\"]",
             Convert(Value("[\"baz\", \"blurp\"]"), list_schema));
-  EXPECT_EQ("\"hurz\"", Convert(Value("hurz"), list_schema));
+  EXPECT_EQ("[\"hurz\"]", Convert(Value("hurz"), list_schema));
+  EXPECT_EQ("[\"foo\",\"bar\"]", Convert(Value("foo,bar"), list_schema));
+  EXPECT_EQ("[\"foo\",\"bar\"]", Convert(Value("foo, bar"), list_schema));
   EXPECT_EQ("19", Convert(Value(19), list_schema));
 
   EXPECT_FALSE(PolicyConverter::ConvertValueToSchema(Value(""), list_schema)
@@ -165,13 +165,13 @@ TEST_F(PolicyConverterTest, ConvertFromJavaListToListValue) {
                       env, MakeJavaStringArray(env, {})));
 }
 
-TEST_F(PolicyConverterTest, ConvertToDictionaryValue) {
+TEST_F(PolicyConverterTest, ConvertToDictValue) {
   Schema dict_schema = schema_.GetKnownProperty("dict");
   ASSERT_TRUE(dict_schema.valid());
 
-  Value dict = Value(Value::Type::DICTIONARY);
-  dict.SetIntKey("thx", 1138);
-  EXPECT_EQ("{\"thx\":1138}", Convert(std::move(dict), dict_schema));
+  base::Value::Dict dict;
+  dict.Set("thx", 1138);
+  EXPECT_EQ("{\"thx\":1138}", Convert(Value(std::move(dict)), dict_schema));
   EXPECT_EQ("{\"moose\":true}",
             Convert(Value("{\"moose\": true}"), dict_schema));
   EXPECT_EQ("\"fnord\"", Convert(Value("fnord"), dict_schema));

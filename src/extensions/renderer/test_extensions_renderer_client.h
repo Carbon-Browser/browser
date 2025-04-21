@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,10 +20,6 @@ class TestExtensionsRendererClient : public ExtensionsRendererClient {
   // ExtensionsRendererClient implementation.
   bool IsIncognitoProcess() const override;
   int GetLowestIsolatedWorldId() const override;
-  Dispatcher* GetDispatcher() override;
-  bool ExtensionAPIEnabledForServiceWorkerScript(
-      const GURL& scope,
-      const GURL& script_url) const override;
 };
 
 }  // namespace extensions

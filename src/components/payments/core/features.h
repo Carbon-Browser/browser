@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,64 +6,67 @@
 #define COMPONENTS_PAYMENTS_CORE_FEATURES_H_
 
 #include "base/feature_list.h"
-#include "build/build_config.h"
+#include "base/metrics/field_trial_params.h"
+#include "build/blink_buildflags.h"
 
 namespace payments {
 namespace features {
 
 // Master toggle for all experimental features that will ship in the next
 // release.
-extern const base::Feature kWebPaymentsExperimentalFeatures;
-
-#if BUILDFLAG(IS_IOS)
-// Used to control the support for iOS third party apps as payment methods.
-extern const base::Feature kWebPaymentsNativeApps;
-#endif
-
-// Used to control payment method section order on payment request UI. Payment
-// method section should be put on top of the address section when this feature
-// is enabled instead of under it.
-extern const base::Feature kWebPaymentsMethodSectionOrderV2;
-
-// Used to control the support for Payment Details modifiers.
-extern const base::Feature kWebPaymentsModifiers;
+BASE_DECLARE_FEATURE(kWebPaymentsExperimentalFeatures);
 
 // Used to control whether the Payment Sheet can be skipped for Payment Requests
 // with a single URL based payment app and no other info requested.
-extern const base::Feature kWebPaymentsSingleAppUiSkip;
+BASE_DECLARE_FEATURE(kWebPaymentsSingleAppUiSkip);
 
 // Used to control whether the invoking TWA can handle payments for app store
 // payment method identifiers.
-extern const base::Feature kAppStoreBilling;
+BASE_DECLARE_FEATURE(kAppStoreBilling);
 
 // Used to control whether to remove the restriction that TWA has to be
 // installed from specific app stores.
-extern const base::Feature kAppStoreBillingDebug;
+BASE_DECLARE_FEATURE(kAppStoreBillingDebug);
 
 // Used to control whether allow crawling just-in-time installable payment app.
-extern const base::Feature kWebPaymentsJustInTimePaymentApp;
-
-// Used to control whether the shipping address returned for the
-// ShippingAddressChangeEvent is redacted of fine-grained details.
-extern const base::Feature kWebPaymentsRedactShippingAddress;
-
-// If enabled, just-in-time installable payment handlers are ranked lower than
-// complete autofill instruments in payment sheet's method selection section.
-extern const base::Feature kDownRankJustInTimePaymentApp;
-
-// Desktop only, if enabled payment handler window size matches the pop up
-// window size.
-extern const base::Feature kPaymentHandlerPopUpSizeWindow;
+BASE_DECLARE_FEATURE(kWebPaymentsJustInTimePaymentApp);
 
 // Used to test icon refetch for JIT installed apps with missing icons.
-extern const base::Feature kAllowJITInstallationWhenAppIconIsMissing;
+BASE_DECLARE_FEATURE(kAllowJITInstallationWhenAppIconIsMissing);
 
 // Used to reject the apps with partial delegation.
-extern const base::Feature kEnforceFullDelegation;
+BASE_DECLARE_FEATURE(kEnforceFullDelegation);
 
 // If enabled, the GooglePayPaymentApp handles communications between the native
 // GPay app and the browser for dynamic updates on shipping and payment data.
-extern const base::Feature kGPayAppDynamicUpdate;
+BASE_DECLARE_FEATURE(kGPayAppDynamicUpdate);
+
+// Used to control whether SecurePaymentConfirmation is able to rely on OS-level
+// credential store APIs, or if it can only rely on the user-profile database.
+BASE_DECLARE_FEATURE(kSecurePaymentConfirmationUseCredentialStoreAPIs);
+
+#if BUILDFLAG(USE_BLINK)
+// Controls how network and issuer icons (when enabled) are presented in SPC UX.
+extern const base::FeatureParam<std::string>
+    kSecurePaymentConfirmationNetworkAndIssuerIconsOptions;
+
+// Defines the supported UX treatments for displaying the network and issuer
+// icons in SPC UX.
+enum class SecurePaymentConfirmationNetworkAndIssuerIconsTreatment {
+  // Issuer and network icons should not be shown.
+  kNone,
+  // Issuer and network icons should be shown inline with the dialog title text.
+  kInline,
+  // Issuer and network icons should be shown as rows in the SPC transaction
+  // data 'table'.
+  kRows
+};
+
+// Retrieve the current UX treatment for network and issuer icons for SPC, based
+// on the feature flags set.
+SecurePaymentConfirmationNetworkAndIssuerIconsTreatment
+GetNetworkAndIssuerIconsTreatment();
+#endif
 
 }  // namespace features
 }  // namespace payments

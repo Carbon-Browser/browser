@@ -1,4 +1,4 @@
-# Chrome Privacy Team
-rainhard@chromium.org
-sauski@google.com
-olesiamarukhno@google.com
+file://components/privacy_sandbox/OWNERS
+
+per-file *.mojom=set noparent
+per-file *.mojom=file://ipc/SECURITY_OWNERS

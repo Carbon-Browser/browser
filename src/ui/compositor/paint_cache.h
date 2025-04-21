@@ -1,17 +1,15 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_COMPOSITOR_PAINT_CACHE_H_
 #define UI_COMPOSITOR_PAINT_CACHE_H_
 
-#include "third_party/skia/include/core/SkRefCnt.h"
+#include <optional>
+
+#include "cc/paint/paint_record.h"
 #include "ui/compositor/compositor_export.h"
 #include "ui/gfx/geometry/rect.h"
-
-namespace cc {
-class PaintOpBuffer;
-}
 
 namespace ui {
 class PaintContext;
@@ -38,12 +36,11 @@ class COMPOSITOR_EXPORT PaintCache {
   // Only PaintRecorder can modify these.
   friend PaintRecorder;
 
-  void SetPaintOpBuffer(sk_sp<cc::PaintOpBuffer> paint_op_buffer,
-                        float device_scale_factor);
+  void SetPaintRecord(cc::PaintRecord record, float device_scale_factor);
 
   // Stored in an sk_sp because PaintOpBuffer requires this to append the cached
   // items into it.
-  sk_sp<cc::PaintOpBuffer> paint_op_buffer_;
+  std::optional<cc::PaintRecord> record_;
 
   // This allows paint cache to be device scale factor aware. If a request for
   // a cache entry is made that does not match the stored cache entry's DSF,

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,7 @@ class ASH_EXPORT ProgressRingAnimation : public ProgressIndicatorAnimation {
   ProgressRingAnimation& operator=(const ProgressRingAnimation&) = delete;
   ~ProgressRingAnimation() override;
 
-  // Returns a created progress ring animation of the specified `type`.
+  // Returns an initialized progress ring animation of the specified `type`.
   static std::unique_ptr<ProgressRingAnimation> CreateOfType(Type type);
 
   // Returns the specific type of this animation.

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -103,9 +103,10 @@ class PaintWorkletTest : public PageTestBase {
     EXPECT_EQ(num_paints_before_switch, expected_num_paints_before_switch);
   }
 
-  void Terminate() {
+  void TearDown() override {
     proxy_->TerminateWorkletGlobalScope();
     proxy_ = nullptr;
+    PageTestBase::TearDown();
   }
 
  private:
@@ -151,6 +152,10 @@ TEST_F(PaintWorkletTest, PaintWithNullPaintArguments) {
 // registered. In the real world, this document paint definition should not be
 // used to paint until we see a second one being registed with the same name.
 TEST_F(PaintWorkletTest, SinglyRegisteredDocumentDefinitionNotUsed) {
+  PaintWorklet* paint_worklet_to_test =
+      PaintWorklet::From(*GetFrame().GetDocument()->domWindow());
+  paint_worklet_to_test->ResetIsPaintOffThreadForTesting();
+
   PaintWorkletGlobalScope* global_scope = GetProxy()->global_scope();
   ClassicScript::CreateUnspecifiedScript(
       "registerPaint('foo', class { paint() { } });")
@@ -184,9 +189,6 @@ TEST_F(PaintWorkletTest, GlobalScopeSelection) {
   // In the last one where |paints_to_switch| is 20, there is no switching after
   // the first paint call.
   ExpectSwitchGlobalScope(false, 10, 20, 0, paint_worklet_to_test);
-
-  // Delete the page & associated objects.
-  Terminate();
 }
 
 TEST_F(PaintWorkletTest, NativeAndCustomProperties) {
@@ -305,18 +307,27 @@ TEST_P(MainOrOffThreadPaintWorkletTest, ConsistentGlobalScopeOnMainThread) {
   EXPECT_TRUE(paint_worklet_to_test->GetDocumentDefinitionMap().at("bar"));
 }
 
-TEST_P(MainOrOffThreadPaintWorkletTest, AllGlobalScopesMustBeCreated) {
+// TODO(crbug.com/1430318): All/MainOrOffThreadPaintWorkletTest.
+// AllGlobalScopesMustBeCreated/1 is failing on Linux TSan Tests.
+#if defined(THREAD_SANITIZER)
+#define MAYBE_AllGlobalScopesMustBeCreated DISABLED_AllGlobalScopesMustBeCreated
+#else
+#define MAYBE_AllGlobalScopesMustBeCreated AllGlobalScopesMustBeCreated
+#endif
+TEST_P(MainOrOffThreadPaintWorkletTest, MAYBE_AllGlobalScopesMustBeCreated) {
   PaintWorklet* paint_worklet_to_test =
       MakeGarbageCollected<PaintWorklet>(*GetFrame().DomWindow());
   paint_worklet_to_test->ResetIsPaintOffThreadForTesting();
 
-  EXPECT_TRUE(paint_worklet_to_test->GetGlobalScopesForTesting().IsEmpty());
+  EXPECT_TRUE(paint_worklet_to_test->GetGlobalScopesForTesting().empty());
 
   std::unique_ptr<PaintWorkletPaintDispatcher> dispatcher =
       std::make_unique<PaintWorkletPaintDispatcher>();
   Persistent<PaintWorkletProxyClient> proxy_client =
       MakeGarbageCollected<PaintWorkletProxyClient>(
-          1, paint_worklet_to_test, dispatcher->GetWeakPtr(), nullptr);
+          1, paint_worklet_to_test,
+          GetFrame().GetTaskRunner(TaskType::kInternalDefault),
+          dispatcher->GetWeakPtr(), nullptr);
   paint_worklet_to_test->SetProxyClientForTesting(proxy_client);
 
   while (paint_worklet_to_test->NeedsToCreateGlobalScopeForTesting()) {

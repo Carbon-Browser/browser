@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,11 +34,6 @@ interface WebDatabaseHost {
   [Sync]
   GetFileAttributes(mojo_base.mojom.String16 vfs_file_name) => (
       int32 attributes);
-
-  // Asks the browser set the size of a DB file.
-  [Sync]
-  SetFileSize(mojo_base.mojom.String16 vfs_file_name,
-              int64 expected_size) => (bool success);
 
   // Asks the browser process for the amount of space available to an origin.
   [Sync]

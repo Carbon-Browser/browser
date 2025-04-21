@@ -1,8 +1,10 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/audio/device_listener_output_stream.h"
+
+#include <optional>
 
 #include "base/memory/raw_ptr.h"
 #include "base/test/gmock_callback_support.h"
@@ -14,7 +16,6 @@
 #include "media/base/audio_parameters.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 using ::testing::_;
 using ::testing::InSequence;
@@ -49,11 +50,11 @@ class MockAudioOutputStream : public AudioOutputStream {
 
   int SimulateOnMoreData(base::TimeDelta delay,
                          base::TimeTicks delay_timestamp,
-                         int prior_frames_skipped,
+                         const media::AudioGlitchInfo& glitch_info,
                          AudioBus* dest) {
     DCHECK(provided_callback_);
-    return provided_callback_->OnMoreData(delay, delay_timestamp,
-                                          prior_frames_skipped, dest);
+    return provided_callback_->OnMoreData(delay, delay_timestamp, glitch_info,
+                                          dest);
   }
 
   void SimulateError(AudioSourceCallback::ErrorType error) {
@@ -62,7 +63,8 @@ class MockAudioOutputStream : public AudioOutputStream {
   }
 
  private:
-  raw_ptr<AudioOutputStream::AudioSourceCallback> provided_callback_ = nullptr;
+  raw_ptr<AudioOutputStream::AudioSourceCallback, DanglingUntriaged>
+      provided_callback_ = nullptr;
 };
 
 class FakeAudioManagerForDeviceChange : public media::FakeAudioManager {
@@ -112,7 +114,8 @@ TEST_F(DeviceListenerOutputStreamTest, DelegatesCallsToWrappedStream) {
   base::TimeDelta delay = base::Milliseconds(30);
   base::TimeTicks delay_timestamp =
       base::TimeTicks() + base::Milliseconds(21);
-  int prior_frames_skipped = 44;
+  media::AudioGlitchInfo glitch_info{.duration = base::Seconds(5),
+                                     .count = 123};
   std::unique_ptr<media::AudioBus> dest = media::AudioBus::Create(1, 128);
 
   InSequence sequence;
@@ -120,8 +123,8 @@ TEST_F(DeviceListenerOutputStreamTest, DelegatesCallsToWrappedStream) {
       .Times(1);
   EXPECT_CALL(mock_stream, Open()).Times(1);
   EXPECT_CALL(mock_stream, StartCalled(_)).Times(1);
-  EXPECT_CALL(mock_callback, OnMoreData(delay, delay_timestamp,
-                                        prior_frames_skipped, dest.get()));
+  EXPECT_CALL(mock_callback,
+              OnMoreData(delay, delay_timestamp, glitch_info, dest.get()));
   EXPECT_CALL(mock_stream, SetVolume(volume)).Times(1);
   EXPECT_CALL(mock_stream, GetVolume(&volume)).Times(1);
   EXPECT_CALL(mock_stream, Stop()).Times(1);
@@ -140,7 +143,7 @@ TEST_F(DeviceListenerOutputStreamTest, DelegatesCallsToWrappedStream) {
 
   stream_under_test->Open();
   stream_under_test->Start(&mock_callback);
-  mock_stream.SimulateOnMoreData(delay, delay_timestamp, prior_frames_skipped,
+  mock_stream.SimulateOnMoreData(delay, delay_timestamp, glitch_info,
                                  dest.get());
   stream_under_test->SetVolume(volume);
   stream_under_test->GetVolume(&volume);

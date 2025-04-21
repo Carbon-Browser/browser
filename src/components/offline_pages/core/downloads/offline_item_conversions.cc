@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,8 +42,7 @@ const std::string GetMimeType() {
 namespace offline_pages {
 
 OfflineItem OfflineItemConversions::CreateOfflineItem(
-    const OfflinePageItem& page,
-    bool is_suggested) {
+    const OfflinePageItem& page) {
   OfflineItem item;
   item.id = ContentId(kOfflinePageNamespace, page.client_id.id);
   item.title = GetDisplayName(page);
@@ -62,7 +61,6 @@ OfflineItem OfflineItemConversions::CreateOfflineItem(
   item.progress.value = 100;
   item.progress.max = 100;
   item.progress.unit = OfflineItemProgressUnit::PERCENTAGE;
-  item.is_suggested = is_suggested;
   item.is_openable = true;
   item.externally_removed = page.file_missing_time != base::Time();
   item.description = page.snippet;

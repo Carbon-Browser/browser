@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,11 @@
 #include "base/system/sys_info.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
+#include "chrome/browser/chrome_content_browser_client.h"
 #include "chrome/common/chrome_features.h"
 #include "components/site_isolation/features.h"
 #include "components/site_isolation/preloaded_isolated_origins.h"
+#include "components/site_isolation/site_isolation_policy.h"
 #include "content/public/browser/child_process_security_policy.h"
 #include "content/public/browser/site_isolation_policy.h"
 #include "content/public/common/content_features.h"
@@ -23,7 +25,7 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
 #include "extensions/common/extension_urls.h"
 #endif
 
@@ -62,6 +64,13 @@ class ChromeSiteIsolationPolicyTest : public testing::Test {
     EXPECT_EQ(512, base::SysInfo::AmountOfPhysicalMemoryMB());
 
     mode_feature_.InitAndEnableFeature(features::kSitePerProcess);
+    site_isolation::SiteIsolationPolicy::
+        SetDisallowMemoryThresholdCachingForTesting(true);
+  }
+
+  void TearDown() override {
+    site_isolation::SiteIsolationPolicy::
+        SetDisallowMemoryThresholdCachingForTesting(false);
   }
 
   // Note that this only sets the memory threshold for strict site isolation,
@@ -107,12 +116,16 @@ TEST_F(ChromeSiteIsolationPolicyTest, IsolatedOriginsContainChromeOrigins) {
   // built-in origins.
   std::vector<url::Origin> expected_embedder_origins =
       site_isolation::GetBrowserSpecificBuiltInIsolatedOrigins();
-#if !BUILDFLAG(IS_ANDROID)
-  expected_embedder_origins.push_back(GaiaUrls::GetInstance()->gaia_origin());
-#endif
-#if BUILDFLAG(ENABLE_EXTENSIONS)
+
+  if (ChromeContentBrowserClient::DoesGaiaOriginRequireDedicatedProcess()) {
+    expected_embedder_origins.push_back(GaiaUrls::GetInstance()->gaia_origin());
+  }
+
+#if BUILDFLAG(ENABLE_EXTENSIONS_CORE)
   expected_embedder_origins.push_back(
       url::Origin::Create(extension_urls::GetWebstoreLaunchURL()));
+  expected_embedder_origins.push_back(
+      url::Origin::Create(extension_urls::GetNewWebstoreLaunchURL()));
 #endif
   auto* cpsp = content::ChildProcessSecurityPolicy::GetInstance();
   std::vector<url::Origin> isolated_origins = cpsp->GetIsolatedOrigins();

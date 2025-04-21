@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <string>
 
+#include "base/memory/weak_ptr.h"
 #include "components/sync_sessions/sync_sessions_client.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "url/gurl.h"
@@ -19,7 +20,7 @@ class MockSyncSessionsClient : public SyncSessionsClient {
   MockSyncSessionsClient();
   ~MockSyncSessionsClient() override;
   MOCK_METHOD(SessionSyncPrefs*, GetSessionSyncPrefs, (), (override));
-  MOCK_METHOD(syncer::RepeatingModelTypeStoreFactory,
+  MOCK_METHOD(syncer::RepeatingDataTypeStoreFactory,
               GetStoreFactory,
               (),
               (override));
@@ -37,6 +38,11 @@ class MockSyncSessionsClient : public SyncSessionsClient {
               GetLocalSessionEventRouter,
               (),
               (override));
+
+  base::WeakPtr<SyncSessionsClient> AsWeakPtr() override;
+
+ private:
+  base::WeakPtrFactory<MockSyncSessionsClient> weak_ptr_factory_{this};
 };
 
 }  // namespace sync_sessions

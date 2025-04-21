@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <ostream>
+#include <string_view>
 
 #include "base/strings/stringprintf.h"
 #include "components/viz/common/surfaces/surface_range.h"
@@ -18,8 +19,7 @@ std::string SurfaceId::ToString() const {
                             local_surface_id_.ToString().c_str());
 }
 
-std::string SurfaceId::ToString(
-    base::StringPiece frame_sink_debug_label) const {
+std::string SurfaceId::ToString(std::string_view frame_sink_debug_label) const {
   return base::StringPrintf(
       "SurfaceId(%s, %s)",
       frame_sink_id_.ToString(frame_sink_debug_label).c_str(),

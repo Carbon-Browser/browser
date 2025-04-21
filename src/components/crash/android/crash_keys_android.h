@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,13 +11,11 @@
 // A Java counterpart will be generated for this enum.
 // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.components.crash
 enum class CrashKeyIndex {
-  LOADED_DYNAMIC_MODULE = 0,
-  ACTIVE_DYNAMIC_MODULE,
-  APPLICATION_STATUS,
-  INSTALLED_MODULES,
-  EMULATED_MODULES,
-  DYNAMIC_MODULE_DEX_NAME,
+  APPLICATION_STATUS = 0,
   PARTNER_CUSTOMIZATION_CONFIG,
+  FIRST_RUN,
+  NUM_SMALL_KEYS,
+  INSTALLED_MODULES = NUM_SMALL_KEYS,
   NUM_ENTRIES
 };
 

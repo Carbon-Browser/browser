@@ -1,8 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "android_webview/browser/network_service/aw_network_change_notifier.h"
+#include "android_webview/common/aw_features.h"
+#include "base/feature_list.h"
 
 namespace android_webview {
 
@@ -23,7 +25,8 @@ void AwNetworkChangeNotifier::GetCurrentMaxBandwidthAndConnectionType(
 }
 
 bool AwNetworkChangeNotifier::AreNetworkHandlesCurrentlySupported() const {
-  return false;
+  return base::FeatureList::IsEnabled(
+      features::kWebViewPropagateNetworkChangeSignals);
 }
 
 void AwNetworkChangeNotifier::GetCurrentConnectedNetworks(
@@ -33,12 +36,12 @@ void AwNetworkChangeNotifier::GetCurrentConnectedNetworks(
 
 net::NetworkChangeNotifier::ConnectionType
 AwNetworkChangeNotifier::GetCurrentNetworkConnectionType(
-    NetworkHandle network) const {
+    net::handles::NetworkHandle network) const {
   return delegate_->GetNetworkConnectionType(network);
 }
 
-net::NetworkChangeNotifier::NetworkHandle
-AwNetworkChangeNotifier::GetCurrentDefaultNetwork() const {
+net::handles::NetworkHandle AwNetworkChangeNotifier::GetCurrentDefaultNetwork()
+    const {
   return delegate_->GetCurrentDefaultNetwork();
 }
 
@@ -55,12 +58,38 @@ void AwNetworkChangeNotifier::OnMaxBandwidthChanged(
                                                              type);
 }
 
-void AwNetworkChangeNotifier::OnNetworkConnected(NetworkHandle network) {}
+void AwNetworkChangeNotifier::OnNetworkConnected(
+    net::handles::NetworkHandle network) {
+  if (base::FeatureList::IsEnabled(
+          features::kWebViewPropagateNetworkChangeSignals)) {
+    NetworkChangeNotifier::NotifyObserversOfSpecificNetworkChange(
+        NetworkChangeType::kConnected, network);
+  }
+}
 void AwNetworkChangeNotifier::OnNetworkSoonToDisconnect(
-    NetworkHandle network) {}
+    net::handles::NetworkHandle network) {
+  if (base::FeatureList::IsEnabled(
+          features::kWebViewPropagateNetworkChangeSignals)) {
+    NetworkChangeNotifier::NotifyObserversOfSpecificNetworkChange(
+        NetworkChangeType::kSoonToDisconnect, network);
+  }
+}
 void AwNetworkChangeNotifier::OnNetworkDisconnected(
-    NetworkHandle network) {}
-void AwNetworkChangeNotifier::OnNetworkMadeDefault(NetworkHandle network) {}
+    net::handles::NetworkHandle network) {
+  if (base::FeatureList::IsEnabled(
+          features::kWebViewPropagateNetworkChangeSignals)) {
+    NetworkChangeNotifier::NotifyObserversOfSpecificNetworkChange(
+        NetworkChangeType::kDisconnected, network);
+  }
+}
+void AwNetworkChangeNotifier::OnNetworkMadeDefault(
+    net::handles::NetworkHandle network) {
+  if (base::FeatureList::IsEnabled(
+          features::kWebViewPropagateNetworkChangeSignals)) {
+    NetworkChangeNotifier::NotifyObserversOfSpecificNetworkChange(
+        NetworkChangeType::kMadeDefault, network);
+  }
+}
 
 void AwNetworkChangeNotifier::OnDefaultNetworkActive() {}
 

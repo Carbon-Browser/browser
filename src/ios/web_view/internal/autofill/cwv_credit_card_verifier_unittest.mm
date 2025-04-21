@@ -1,24 +1,23 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#import "ios/web_view/internal/autofill/cwv_credit_card_verifier_internal.h"
-
 #import <UIKit/UIKit.h>
+
 #include <string>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/weak_ptr.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/sys_string_conversions.h"
-#import "base/test/ios/wait_util.h"
-#include "components/autofill/core/browser/autofill_test_utils.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
 #include "components/autofill/core/browser/payments/card_unmask_delegate.h"
+#import "components/autofill/core/browser/payments/payments_autofill_client.h"
+#include "components/autofill/core/browser/test_utils/autofill_test_utils.h"
 #include "components/autofill/core/common/autofill_payments_features.h"
 #include "components/autofill/core/common/autofill_prefs.h"
 #include "components/prefs/pref_registry_simple.h"
@@ -27,19 +26,14 @@
 #include "ios/web/public/thread/web_task_traits.h"
 #include "ios/web/public/thread/web_thread.h"
 #import "ios/web_view/internal/autofill/cwv_credit_card_internal.h"
+#import "ios/web_view/internal/autofill/cwv_credit_card_verifier_internal.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #import "testing/gtest_mac.h"
 #include "testing/platform_test.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
 #include "ui/base/l10n/l10n_util_mac.h"
 #include "ui/base/resource/resource_bundle.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-using base::test::ios::kWaitForActionTimeout;
-using base::test::ios::WaitUntilConditionOrTimeout;
+#import "ui/base/resource/resource_scale_factor.h"
 
 namespace ios_web_view {
 
@@ -51,7 +45,7 @@ class FakeCardUnmaskDelegate : public autofill::CardUnmaskDelegate {
   FakeCardUnmaskDelegate(const FakeCardUnmaskDelegate&) = delete;
   FakeCardUnmaskDelegate& operator=(const FakeCardUnmaskDelegate&) = delete;
 
-  virtual ~FakeCardUnmaskDelegate() {}
+  ~FakeCardUnmaskDelegate() override = default;
 
   // CardUnmaskDelegate implementation.
   void OnUnmaskPromptAccepted(
@@ -60,12 +54,13 @@ class FakeCardUnmaskDelegate : public autofill::CardUnmaskDelegate {
     // Fake the actual verification and just respond with success.
     web::GetUIThreadTaskRunner({})->PostTask(
         FROM_HERE, base::BindOnce(^{
-          autofill::AutofillClient::PaymentsRpcResult result =
-              autofill::AutofillClient::PaymentsRpcResult::kSuccess;
+          autofill::payments::PaymentsAutofillClient::PaymentsRpcResult result =
+              autofill::payments::PaymentsAutofillClient::PaymentsRpcResult::
+                  kSuccess;
           [credit_card_verifier_ didReceiveUnmaskVerificationResult:result];
         }));
   }
-  void OnUnmaskPromptClosed() override {}
+  void OnUnmaskPromptCancelled() override {}
   bool ShouldOfferFidoAuth() const override { return false; }
 
   base::WeakPtr<FakeCardUnmaskDelegate> GetWeakPtr() {
@@ -101,30 +96,29 @@ class CWVCreditCardVerifierTest : public PlatformTest {
         ui::ResourceBundle::GetSharedInstance();
 
     // Don't load 100P resource since no @1x devices are supported.
-    if (ui::ResourceBundle::IsScaleFactorSupported(ui::k200Percent)) {
+    if (ui::IsScaleFactorSupported(ui::k200Percent)) {
       base::FilePath pak_file_200;
-      base::PathService::Get(base::DIR_MODULE, &pak_file_200);
+      base::PathService::Get(base::DIR_ASSETS, &pak_file_200);
       pak_file_200 =
           pak_file_200.Append(FILE_PATH_LITERAL("web_view_200_percent.pak"));
       resource_bundle.AddDataPackFromPath(pak_file_200, ui::k200Percent);
     }
-    if (ui::ResourceBundle::IsScaleFactorSupported(ui::k300Percent)) {
+    if (ui::IsScaleFactorSupported(ui::k300Percent)) {
       base::FilePath pak_file_300;
-      base::PathService::Get(base::DIR_MODULE, &pak_file_300);
+      base::PathService::Get(base::DIR_ASSETS, &pak_file_300);
       pak_file_300 =
           pak_file_300.Append(FILE_PATH_LITERAL("web_view_300_percent.pak"));
       resource_bundle.AddDataPackFromPath(pak_file_300, ui::k300Percent);
     }
 
     pref_service_ = std::make_unique<TestingPrefServiceSimple>();
-    pref_service_->registry()->RegisterBooleanPref(
-        autofill::prefs::kAutofillWalletImportStorageCheckboxState, false);
     autofill::CreditCard credit_card = autofill::test::GetMaskedServerCard();
     credit_card_verifier_ = [[CWVCreditCardVerifier alloc]
          initWithPrefs:pref_service_.get()
         isOffTheRecord:NO
             creditCard:credit_card
-                reason:autofill::AutofillClient::UnmaskCardReason::kAutofill
+                reason:autofill::payments::PaymentsAutofillClient::
+                           UnmaskCardReason::kAutofill
               delegate:card_unmask_delegate_.GetWeakPtr()];
     card_unmask_delegate_.SetCreditCardVerifier(credit_card_verifier_);
   }
@@ -197,9 +191,9 @@ TEST_F(CWVCreditCardVerifierTest, VerifyCardSucceeded) {
       card_unmask_delegate_.GetUserProvidedUnmaskDetails();
   EXPECT_NSEQ(cvc, base::SysUTF16ToNSString(unmask_details_.cvc));
 
-  [credit_card_verifier_
-      didReceiveUnmaskVerificationResult:autofill::AutofillClient::
-                                             PaymentsRpcResult::kSuccess];
+  [credit_card_verifier_ didReceiveUnmaskVerificationResult:
+                             autofill::payments::PaymentsAutofillClient::
+                                 PaymentsRpcResult::kSuccess];
   EXPECT_TRUE(completionCalled);
   EXPECT_TRUE(completionError == nil);
 }
@@ -222,9 +216,9 @@ TEST_F(CWVCreditCardVerifierTest, VerifyCardFailed) {
       card_unmask_delegate_.GetUserProvidedUnmaskDetails();
   EXPECT_NSEQ(cvc, base::SysUTF16ToNSString(unmask_details_.cvc));
 
-  [credit_card_verifier_
-      didReceiveUnmaskVerificationResult:
-          autofill::AutofillClient::PaymentsRpcResult::kTryAgainFailure];
+  [credit_card_verifier_ didReceiveUnmaskVerificationResult:
+                             autofill::payments::PaymentsAutofillClient::
+                                 PaymentsRpcResult::kTryAgainFailure];
   ASSERT_TRUE(completionError != nil);
   EXPECT_EQ(CWVCreditCardVerifierErrorDomain, completionError.domain);
   EXPECT_EQ(CWVCreditCardVerificationErrorTryAgainFailure,

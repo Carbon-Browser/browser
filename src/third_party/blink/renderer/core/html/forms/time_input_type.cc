@@ -43,6 +43,7 @@
 #include "third_party/blink/renderer/platform/wtf/date_math.h"
 #include "third_party/blink/renderer/platform/wtf/math_extras.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
+#include "ui/strings/grit/ax_strings.h"
 
 namespace blink {
 
@@ -51,14 +52,10 @@ static const int kTimeDefaultStepBase = 0;
 static const int kTimeStepScaleFactor = 1000;
 
 TimeInputType::TimeInputType(HTMLInputElement& element)
-    : BaseTemporalInputType(element) {}
+    : BaseTemporalInputType(Type::kTime, element) {}
 
 void TimeInputType::CountUsage() {
   CountUsageIfVisible(WebFeature::kInputTypeTime);
-}
-
-const AtomicString& TimeInputType::FormControlType() const {
-  return input_type_names::kTime;
 }
 
 Decimal TimeInputType::DefaultValueForStepUp() const {
@@ -116,7 +113,7 @@ String TimeInputType::LocalizeValue(const String& proposed_value) const {
                                        : Locale::kFormatTypeShort;
 
   String localized = GetElement().GetLocale().FormatDateTime(date, format_type);
-  return localized.IsEmpty() ? proposed_value : localized;
+  return localized.empty() ? proposed_value : localized;
 }
 
 String TimeInputType::FormatDateTimeFieldsState(

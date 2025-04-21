@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,7 @@
 #include "content/public/common/content_features.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
 #include "ui/views/layout/box_layout.h"
 
 namespace {
@@ -43,38 +44,38 @@ void RecordBubbleHistogramValue(StoragePressureBubbleHistogramValue value) {
 namespace chrome {
 
 // static
-void ShowStoragePressureBubble(const url::Origin origin) {
-  StoragePressureBubbleView::ShowBubble(std::move(origin));
+void ShowStoragePressureBubble(const url::Origin& origin) {
+  StoragePressureBubbleView::ShowBubble(origin);
 }
 
 }  // namespace chrome
 
-void StoragePressureBubbleView::ShowBubble(const url::Origin origin) {
+void StoragePressureBubbleView::ShowBubble(const url::Origin& origin) {
   Browser* browser = BrowserList::GetInstance()->GetLastActive();
-  if (!browser)
+  if (!browser) {
     return;
+  }
 
   StoragePressureBubbleView* bubble = new StoragePressureBubbleView(
       BrowserView::GetBrowserViewForBrowser(browser)
           ->toolbar_button_provider()
           ->GetAppMenuButton(),
-      browser, std::move(origin));
+      browser, origin);
   views::BubbleDialogDelegateView::CreateBubble(bubble)->Show();
 
   RecordBubbleHistogramValue(StoragePressureBubbleHistogramValue::kShown);
 }
 
-StoragePressureBubbleView::StoragePressureBubbleView(
-    views::View* anchor_view,
-    Browser* browser,
-    const url::Origin origin)
+StoragePressureBubbleView::StoragePressureBubbleView(views::View* anchor_view,
+                                                     Browser* browser,
+                                                     const url::Origin& origin)
     : BubbleDialogDelegateView(anchor_view, views::BubbleBorder::TOP_RIGHT),
       browser_(browser),
-      origin_(std::move(origin)),
+      origin_(origin),
       ignored_(true) {
-  SetButtons(ui::DIALOG_BUTTON_OK);
+  SetButtons(static_cast<int>(ui::mojom::DialogButton::kOk));
   SetTitle(IDS_SETTINGS_STORAGE_PRESSURE_BUBBLE_VIEW_TITLE);
-  SetButtonLabel(ui::DIALOG_BUTTON_OK,
+  SetButtonLabel(ui::mojom::DialogButton::kOk,
                  l10n_util::GetStringUTF16(
                      IDS_SETTINGS_STORAGE_PRESSURE_BUBBLE_VIEW_BUTTON_LABEL));
   SetAcceptCallback(base::BindOnce(&StoragePressureBubbleView::OnDialogAccepted,
@@ -131,5 +132,5 @@ bool StoragePressureBubbleView::ShouldShowCloseButton() const {
   return true;
 }
 
-BEGIN_METADATA(StoragePressureBubbleView, views::BubbleDialogDelegateView)
+BEGIN_METADATA(StoragePressureBubbleView)
 END_METADATA

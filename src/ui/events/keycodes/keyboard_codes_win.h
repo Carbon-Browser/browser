@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 namespace ui {
 
-enum KeyboardCode {
+enum KeyboardCode : unsigned short {
   VKEY_CANCEL = VK_CANCEL,
   VKEY_BACK = VK_BACK,
   VKEY_TAB = VK_TAB,

@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,13 @@
 #include "url/gurl.h"
 
 namespace error_page {
+
+// If this property set to true, override the default error page.
+static constexpr const char kOverrideErrorPage[] = "override_error_page";
+
+// Set to true when the device may be in a portal state. Will be used to show a
+// suggestion in the error page where appropriate.
+static constexpr const char kIsPortalStateKey[] = "is_portal_state";
 
 class LocalizedError {
  public:
@@ -29,7 +36,6 @@ class LocalizedError {
     bool is_offline_error = false;
     bool reload_button_shown = false;
     bool download_button_shown = false;
-    bool offline_content_feature_enabled = false;
     bool auto_fetch_allowed = false;
   };
 
@@ -48,11 +54,11 @@ class LocalizedError {
                                 bool stale_copy_in_cache,
                                 bool can_show_network_diagnostics_dialog,
                                 bool is_incognito,
-                                bool offline_content_feature_enabled,
                                 bool auto_fetch_feature_enabled,
                                 bool is_kiosk_mode,
                                 const std::string& locale,
-                                bool is_blocked_by_extension);
+                                bool is_blocked_by_extension,
+                                const base::Value::Dict* error_page_params);
 
   // Returns a |PageState| that describes the elements that should be shown on
   // when default offline page is shown.

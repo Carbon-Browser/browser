@@ -1,6 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
@@ -47,7 +52,6 @@ static const char* extension(GLenum format) {
     default:
       NOTREACHED();
   }
-  return nullptr;
 }
 
 // Index that chooses the given colors (color_0 and color_1),
@@ -182,9 +186,9 @@ class CompressedTextureTest : public ::testing::TestWithParam<GLenum> {
       case GL_COMPRESSED_RGBA_S3TC_DXT1_EXT: return LoadTextureDXT1(true);
       case GL_COMPRESSED_RGBA_S3TC_DXT3_EXT: return LoadTextureDXT3();
       case GL_COMPRESSED_RGBA_S3TC_DXT5_EXT: return LoadTextureDXT5();
-      default: NOTREACHED();
+      default:
+        NOTREACHED();
     }
-    return 0;
   }
 
  private:

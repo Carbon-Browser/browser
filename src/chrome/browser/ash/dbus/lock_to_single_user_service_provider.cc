@@ -1,19 +1,18 @@
-
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/dbus/lock_to_single_user_service_provider.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
 namespace ash {
 
-LockToSingleUserServiceProvider::LockToSingleUserServiceProvider() {}
-LockToSingleUserServiceProvider::~LockToSingleUserServiceProvider() {}
+LockToSingleUserServiceProvider::LockToSingleUserServiceProvider() = default;
+LockToSingleUserServiceProvider::~LockToSingleUserServiceProvider() = default;
 
 void LockToSingleUserServiceProvider::Start(
     scoped_refptr<dbus::ExportedObject> exported_object) {

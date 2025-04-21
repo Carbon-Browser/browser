@@ -1,8 +1,7 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-from .code_generator_info import CodeGeneratorInfo
 from .composition_parts import WithCodeGeneratorInfo
 from .composition_parts import WithComponent
 from .composition_parts import WithDebugInfo
@@ -10,7 +9,6 @@ from .composition_parts import WithExposure
 from .composition_parts import WithExtendedAttributes
 from .composition_parts import WithIdentifier
 from .composition_parts import WithOwner
-from .exposure import Exposure
 from .idl_type import IdlType
 from .ir_map import IRMap
 from .literal_constant import LiteralConstant
@@ -23,6 +21,10 @@ class Dictionary(UserDefinedType, WithExtendedAttributes,
                  WithCodeGeneratorInfo, WithExposure, WithComponent,
                  WithDebugInfo):
     """https://webidl.spec.whatwg.org/#idl-dictionaries"""
+
+    class Usage(object):
+        INPUT = 1
+        OUTPUT = 2
 
     class IR(IRMap.IR, WithExtendedAttributes, WithCodeGeneratorInfo,
              WithExposure, WithComponent, WithDebugInfo):
@@ -52,9 +54,14 @@ class Dictionary(UserDefinedType, WithExtendedAttributes,
             self.is_partial = is_partial
             self.inherited = inherited
             self.own_members = list(own_members)
+            self.usage = 0
 
         def iter_all_members(self):
             return iter(self.own_members)
+
+        def add_usage(self, usage):
+            assert isinstance(usage, int)
+            self.usage = self.usage | usage
 
     def __init__(self, ir):
         assert isinstance(ir, Dictionary.IR)
@@ -69,6 +76,7 @@ class Dictionary(UserDefinedType, WithExtendedAttributes,
         WithDebugInfo.__init__(self, ir.debug_info)
 
         self._inherited = ir.inherited
+        self._usage = ir.usage
         self._own_members = tuple([
             DictionaryMember(member_ir, owner=self)
             for member_ir in ir.own_members
@@ -110,6 +118,10 @@ class Dictionary(UserDefinedType, WithExtendedAttributes,
         Returns True if the dictionary has any required dictionary members.
         """
         return bool(any(member.is_required for member in self.members))
+
+    @property
+    def usage(self):
+        return self._usage
 
     # UserDefinedType overrides
     @property

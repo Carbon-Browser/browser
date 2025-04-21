@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,30 +21,30 @@ public class ChromeBrowserTestRule implements TestRule {
 
     @Override
     public Statement apply(final Statement base, Description description) {
-        Statement statement = new Statement() {
-            @Override
-            public void evaluate() throws Throwable {
-                /**
-                 * Loads the native library on the activity UI thread.  After loading the library,
-                 * this will initialize the browser process if necessary.
-                 */
-                NativeLibraryTestUtils.loadNativeLibraryAndInitBrowserProcess();
-                base.evaluate();
-            }
-        };
+        Statement statement =
+                new Statement() {
+                    @Override
+                    public void evaluate() throws Throwable {
+                        // Loads the native library on the activity UI thread. After loading the
+                        // library, this will initialize the browser process if necessary.
+                        NativeLibraryTestUtils.loadNativeLibraryAndInitBrowserProcess();
+                        base.evaluate();
+                    }
+                };
         return mSigninTestRule.apply(statement, description);
     }
 
-    /**
-     * Adds an account of the given accountName to the fake AccountManagerFacade.
-     */
+    /** Adds an account of the given accountName to the fake AccountManagerFacade. */
     public CoreAccountInfo addAccount(String accountName) {
         return mSigninTestRule.addAccount(accountName);
     }
 
-    /**
-     * Add and sign in an account with the default name.
-     */
+    /** Adds and signs in an account with the default name without sync consent. */
+    public CoreAccountInfo addTestAccountThenSignin() {
+        return mSigninTestRule.addTestAccountThenSignin();
+    }
+
+    /** Add and sign in an account with the default name. */
     public CoreAccountInfo addTestAccountThenSigninAndEnableSync() {
         return mSigninTestRule.addTestAccountThenSigninAndEnableSync();
     }

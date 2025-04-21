@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,10 @@
 #include <string>
 #include <utility>
 
-#include "ash/components/settings/cros_settings_names.h"
-#include "ash/components/settings/cros_settings_provider.h"
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
 #include "ash/public/cpp/system_tray.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/numerics/safe_conversions.h"
@@ -26,12 +24,15 @@
 #include "chrome/browser/ash/policy/handlers/minimum_version_policy_handler_delegate_impl.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
-#include "chrome/browser/ui/ash/system_tray_client_impl.h"
+#include "chrome/browser/ui/ash/system/system_tray_client_impl.h"
 #include "chrome/browser/upgrade_detector/build_state.h"
 #include "chrome/browser/upgrade_detector/upgrade_detector.h"
 #include "chrome/common/pref_names.h"
 #include "chromeos/ash/components/dbus/update_engine/update_engine_client.h"
 #include "chromeos/ash/components/network/network_handler.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
+#include "chromeos/ash/components/settings/cros_settings_provider.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "ui/chromeos/devicetype_utils.h"
@@ -51,9 +52,9 @@ PrefService* local_state() {
 }
 
 MinimumVersionPolicyHandler::NetworkStatus GetCurrentNetworkStatus() {
-  chromeos::NetworkStateHandler* network_state_handler =
-      chromeos::NetworkHandler::Get()->network_state_handler();
-  const chromeos::NetworkState* current_network =
+  ash::NetworkStateHandler* network_state_handler =
+      ash::NetworkHandler::Get()->network_state_handler();
+  const ash::NetworkState* current_network =
       network_state_handler->DefaultNetwork();
   if (!current_network || !current_network->IsConnectedState())
     return MinimumVersionPolicyHandler::NetworkStatus::kOffline;
@@ -119,17 +120,17 @@ MinimumVersionRequirement::MinimumVersionRequirement(
 
 std::unique_ptr<MinimumVersionRequirement>
 MinimumVersionRequirement::CreateInstanceIfValid(
-    const base::DictionaryValue* dict) {
-  const std::string* version = dict->FindStringKey(kChromeOsVersion);
+    const base::Value::Dict& dict) {
+  const std::string* version = dict.FindString(kChromeOsVersion);
   if (!version)
     return nullptr;
   base::Version minimum_version(*version);
   if (!minimum_version.IsValid())
     return nullptr;
-  auto warning = dict->FindIntKey(kWarningPeriod);
+  auto warning = dict.FindInt(kWarningPeriod);
   base::TimeDelta warning_time =
       base::Days(warning.has_value() ? warning.value() : 0);
-  auto eol_warning = dict->FindIntKey(kEolWarningPeriod);
+  auto eol_warning = dict.FindInt(kEolWarningPeriod);
   base::TimeDelta eol_warning_time =
       base::Days(eol_warning.has_value() ? eol_warning.value() : 0);
   return std::make_unique<MinimumVersionRequirement>(
@@ -218,37 +219,36 @@ void MinimumVersionPolicyHandler::OnPolicyChanged() {
           base::BindOnce(&MinimumVersionPolicyHandler::OnPolicyChanged,
                          weak_factory_.GetWeakPtr()));
   if (status != ash::CrosSettingsProvider::TRUSTED || !IsPolicyApplicable() ||
-      !chromeos::features::IsMinimumChromeVersionEnabled()) {
+      !ash::features::IsMinimumChromeVersionEnabled()) {
     VLOG(1) << "Ignore policy change - policy is not applicable or settings "
                "are not trusted.";
     return;
   }
 
-  const base::DictionaryValue* policy_value;
+  const base::Value::Dict* policy_value;
   if (!cros_settings_->GetDictionary(ash::kDeviceMinimumVersion,
                                      &policy_value)) {
     VLOG(1) << "Revoke policy - policy is unset or value is incorrect.";
     HandleUpdateNotRequired();
     return;
   }
-  const base::Value* entries = policy_value->FindListKey(kRequirements);
-  if (!entries || entries->GetListDeprecated().empty()) {
+  const base::Value::List* entries = policy_value->FindList(kRequirements);
+  if (!entries || entries->empty()) {
     VLOG(1) << "Revoke policy - empty policy requirements.";
     HandleUpdateNotRequired();
     return;
   }
-  auto restricted = policy_value->FindBoolKey(kUnmanagedUserRestricted);
+  auto restricted = policy_value->FindBool(kUnmanagedUserRestricted);
   unmanaged_user_restricted_ = restricted.value_or(false);
 
   std::vector<std::unique_ptr<MinimumVersionRequirement>> configs;
-  for (const auto& item : entries->GetListDeprecated()) {
-    const base::DictionaryValue* dict;
-    if (item.GetAsDictionary(&dict)) {
-      std::unique_ptr<MinimumVersionRequirement> instance =
-          MinimumVersionRequirement::CreateInstanceIfValid(dict);
-      if (instance)
-        configs.push_back(std::move(instance));
-    }
+  for (const auto& item : *entries) {
+    if (!item.is_dict())
+      continue;
+    std::unique_ptr<MinimumVersionRequirement> instance =
+        MinimumVersionRequirement::CreateInstanceIfValid(item.GetDict());
+    if (instance)
+      configs.push_back(std::move(instance));
   }
 
   // Select the strongest config whose requirements are not satisfied by the
@@ -456,10 +456,10 @@ void MinimumVersionPolicyHandler::StartObservingUpdate() {
     build_state->AddObserver(this);
 }
 
-absl::optional<int> MinimumVersionPolicyHandler::GetTimeRemainingInDays() {
+std::optional<int> MinimumVersionPolicyHandler::GetTimeRemainingInDays() {
   const base::Time now = clock_->Now();
   if (!state_ || update_required_deadline_ <= now)
-    return absl::nullopt;
+    return std::nullopt;
   base::TimeDelta time_remaining = update_required_deadline_ - now;
   return GetDaysRounded(time_remaining);
 }
@@ -468,7 +468,7 @@ void MinimumVersionPolicyHandler::MaybeShowNotificationOnLogin() {
   // |days| could be null if |update_required_deadline_timer_| expired while
   // login was in progress, else we would have shown the update required screen
   // at startup.
-  absl::optional<int> days = GetTimeRemainingInDays();
+  std::optional<int> days = GetTimeRemainingInDays();
   if (days && days.value() <= 1)
     MaybeShowNotification(base::Days(days.value()));
 }
@@ -507,15 +507,14 @@ void MinimumVersionPolicyHandler::MaybeShowNotification(
     button_click_callback = base::BindOnce(&OpenNetworkSettings);
   } else {
     NOTREACHED();
-    return;
   }
   notification_handler_->Show(type, warning, manager, device_type,
                               std::move(button_click_callback),
                               std::move(close_callback));
 
   if (!eol_reached_) {
-    chromeos::NetworkStateHandler* network_state_handler =
-        chromeos::NetworkHandler::Get()->network_state_handler();
+    ash::NetworkStateHandler* network_state_handler =
+        ash::NetworkHandler::Get()->network_state_handler();
     if (!network_state_handler->HasObserver(this))
       network_state_handler_observer_.Observe(network_state_handler);
   }
@@ -570,7 +569,7 @@ void MinimumVersionPolicyHandler::HideNotification() const {
 }
 
 void MinimumVersionPolicyHandler::DefaultNetworkChanged(
-    const chromeos::NetworkState* network) {
+    const ash::NetworkState* network) {
   // Close notification if network has switched to one that allows updates.
   const NetworkStatus status = GetCurrentNetworkStatus();
   if (status == NetworkStatus::kAllowed && notification_handler_) {

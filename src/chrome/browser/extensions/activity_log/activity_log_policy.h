@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,9 +13,9 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/values.h"
 #include "chrome/browser/extensions/activity_log/activity_actions.h"
@@ -102,7 +102,7 @@ class ActivityLogPolicy {
 
     // Serialize a Value as a JSON string.  Returns an empty string if value is
     // null.
-    static std::string Serialize(absl::optional<base::ValueView> value);
+    static std::string Serialize(std::optional<base::ValueView> value);
 
     // Removes potentially privacy-sensitive data that should not be logged.
     // This should generally be called on an Action before logging, unless

@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@ package org.chromium.content.browser.picker;
 
 import android.content.Context;
 
+import org.chromium.build.annotations.NullMarked;
 import org.chromium.content.R;
 
-/**
- * A month picker dialog
- */
+/** A month picker dialog */
+@NullMarked
 public class MonthPickerDialog extends TwoFieldDatePickerDialog {
 
     /**
@@ -19,8 +19,13 @@ public class MonthPickerDialog extends TwoFieldDatePickerDialog {
      * @param year The initial year of the dialog.
      * @param monthOfYear The initial month of the dialog.
      */
-    public MonthPickerDialog(Context context,  OnValueSetListener callBack,
-            int year, int monthOfYear, double minMonth, double maxMonth) {
+    public MonthPickerDialog(
+            Context context,
+            OnValueSetListener callBack,
+            int year,
+            int monthOfYear,
+            double minMonth,
+            double maxMonth) {
         super(context, callBack, year, monthOfYear, minMonth, maxMonth);
         setTitle(R.string.month_picker_dialog_title);
     }

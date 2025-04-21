@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -250,7 +250,7 @@ Status UnwrapKey(blink::WebCryptoKeyFormat format,
 
 Status DeriveBits(const blink::WebCryptoAlgorithm& algorithm,
                   const blink::WebCryptoKey& base_key,
-                  unsigned int length_bits,
+                  std::optional<unsigned int> length_bits,
                   std::vector<uint8_t>* derived_bytes) {
   if (!base_key.KeyUsageAllows(blink::kWebCryptoKeyUsageDeriveBits))
     return Status::ErrorUnexpected();
@@ -263,8 +263,7 @@ Status DeriveBits(const blink::WebCryptoAlgorithm& algorithm,
   if (status.IsError())
     return status;
 
-  return impl->DeriveBits(algorithm, base_key, true, length_bits,
-                          derived_bytes);
+  return impl->DeriveBits(algorithm, base_key, length_bits, derived_bytes);
 }
 
 Status DeriveKey(const blink::WebCryptoAlgorithm& algorithm,
@@ -290,12 +289,11 @@ Status DeriveKey(const blink::WebCryptoAlgorithm& algorithm,
     return status;
 
   // Determine how many bits long the derived key should be.
-  unsigned int length_bits = 0;
-  bool has_length_bits = false;
-  status = import_impl->GetKeyLength(key_length_algorithm, &has_length_bits,
-                                     &length_bits);
-  if (status.IsError())
+  std::optional<unsigned int> length_bits;
+  status = import_impl->GetKeyLength(key_length_algorithm, &length_bits);
+  if (status.IsError()) {
     return status;
+  }
 
   // Derive the key bytes.
   const AlgorithmImplementation* derive_impl = nullptr;
@@ -304,10 +302,11 @@ Status DeriveKey(const blink::WebCryptoAlgorithm& algorithm,
     return status;
 
   std::vector<uint8_t> derived_bytes;
-  status = derive_impl->DeriveBits(algorithm, base_key, has_length_bits,
-                                   length_bits, &derived_bytes);
-  if (status.IsError())
+  status =
+      derive_impl->DeriveBits(algorithm, base_key, length_bits, &derived_bytes);
+  if (status.IsError()) {
     return status;
+  }
 
   // Create the key using the derived bytes.
   return ImportKey(blink::kWebCryptoKeyFormatRaw, derived_bytes,

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,12 @@
 #define UI_VIEWS_CONTROLS_HIGHLIGHT_PATH_GENERATOR_H_
 
 #include <memory>
+#include <optional>
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkPath.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/rect_f.h"
+#include "ui/gfx/geometry/rounded_corners_f.h"
 #include "ui/views/views_export.h"
 
 namespace gfx {
@@ -35,7 +36,7 @@ class VIEWS_EXPORT HighlightPathGenerator {
 
   static void Install(View* host,
                       std::unique_ptr<HighlightPathGenerator> generator);
-  static absl::optional<gfx::RRectF> GetRoundRectForView(const View* view);
+  static std::optional<gfx::RRectF> GetRoundRectForView(const View* view);
 
   // TODO(http://crbug.com/1056490): Deprecate |GetHighlightPath()| in favor of
   // |GetRoundRect()|.
@@ -45,8 +46,8 @@ class VIEWS_EXPORT HighlightPathGenerator {
   // highlight. Note that |rect| is in the coordinate system of the view.
   // TODO(http://crbug.com/1056490): Once |GetHighlightPath()| is deprecated,
   // make this a pure virtual function and make the return not optional.
-  virtual absl::optional<gfx::RRectF> GetRoundRect(const gfx::RectF& rect);
-  absl::optional<gfx::RRectF> GetRoundRect(const View* view);
+  virtual std::optional<gfx::RRectF> GetRoundRect(const gfx::RectF& rect);
+  std::optional<gfx::RRectF> GetRoundRect(const View* view);
 
   void set_use_contents_bounds(bool use_contents_bounds) {
     use_contents_bounds_ = use_contents_bounds;
@@ -83,7 +84,7 @@ class VIEWS_EXPORT EmptyHighlightPathGenerator : public HighlightPathGenerator {
       delete;
 
   // HighlightPathGenerator:
-  absl::optional<gfx::RRectF> GetRoundRect(const gfx::RectF& rect) override;
+  std::optional<gfx::RRectF> GetRoundRect(const gfx::RectF& rect) override;
 };
 
 void VIEWS_EXPORT InstallEmptyHighlightPathGenerator(View* view);
@@ -98,7 +99,7 @@ class VIEWS_EXPORT RectHighlightPathGenerator : public HighlightPathGenerator {
       delete;
 
   // HighlightPathGenerator:
-  absl::optional<gfx::RRectF> GetRoundRect(const gfx::RectF& rect) override;
+  std::optional<gfx::RRectF> GetRoundRect(const gfx::RectF& rect) override;
 };
 
 void VIEWS_EXPORT InstallRectHighlightPathGenerator(View* view);
@@ -114,7 +115,7 @@ class VIEWS_EXPORT CircleHighlightPathGenerator
       delete;
 
   // HighlightPathGenerator:
-  absl::optional<gfx::RRectF> GetRoundRect(const gfx::RectF& rect) override;
+  std::optional<gfx::RRectF> GetRoundRect(const gfx::RectF& rect) override;
 };
 
 void VIEWS_EXPORT InstallCircleHighlightPathGenerator(View* view);
@@ -131,7 +132,7 @@ class VIEWS_EXPORT PillHighlightPathGenerator : public HighlightPathGenerator {
       delete;
 
   // HighlightPathGenerator:
-  absl::optional<gfx::RRectF> GetRoundRect(const gfx::RectF& rect) override;
+  std::optional<gfx::RRectF> GetRoundRect(const gfx::RectF& rect) override;
 };
 
 void VIEWS_EXPORT InstallPillHighlightPathGenerator(View* view);
@@ -148,7 +149,7 @@ class VIEWS_EXPORT FixedSizeCircleHighlightPathGenerator
       const FixedSizeCircleHighlightPathGenerator&) = delete;
 
   // HighlightPathGenerator:
-  absl::optional<gfx::RRectF> GetRoundRect(const gfx::RectF& rect) override;
+  std::optional<gfx::RRectF> GetRoundRect(const gfx::RectF& rect) override;
 
  private:
   const int radius_;
@@ -162,6 +163,8 @@ class VIEWS_EXPORT RoundRectHighlightPathGenerator
     : public HighlightPathGenerator {
  public:
   RoundRectHighlightPathGenerator(const gfx::Insets& insets, int corner_radius);
+  RoundRectHighlightPathGenerator(const gfx::Insets& insets,
+                                  const gfx::RoundedCornersF& rounded_corners);
 
   RoundRectHighlightPathGenerator(const RoundRectHighlightPathGenerator&) =
       delete;
@@ -169,16 +172,21 @@ class VIEWS_EXPORT RoundRectHighlightPathGenerator
       const RoundRectHighlightPathGenerator&) = delete;
 
   // HighlightPathGenerator:
-  absl::optional<gfx::RRectF> GetRoundRect(const gfx::RectF& rect) override;
+  std::optional<gfx::RRectF> GetRoundRect(const gfx::RectF& rect) override;
 
  private:
-  const int corner_radius_;
+  const gfx::RoundedCornersF rounded_corners_;
 };
 
 void VIEWS_EXPORT
 InstallRoundRectHighlightPathGenerator(View* view,
                                        const gfx::Insets& insets,
                                        int corner_radius);
+
+void VIEWS_EXPORT InstallRoundRectHighlightPathGenerator(
+    View* view,
+    const gfx::Insets& insets,
+    const gfx::RoundedCornersF& corner_radii);
 
 }  // namespace views
 

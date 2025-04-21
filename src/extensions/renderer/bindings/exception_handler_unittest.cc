@@ -1,25 +1,25 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/renderer/bindings/exception_handler.h"
 
+#include <optional>
 #include <string>
 #include <tuple>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/stringprintf.h"
 #include "extensions/renderer/bindings/api_binding_test.h"
 #include "extensions/renderer/bindings/api_binding_test_util.h"
 #include "gin/converter.h"
 #include "testing/gmock/include/gmock/gmock.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace extensions {
 
 namespace {
 
-void PopulateError(absl::optional<std::string>* error_out,
+void PopulateError(std::optional<std::string>* error_out,
                    v8::Local<v8::Context> context,
                    const std::string& error) {
   *error_out = error;
@@ -46,7 +46,7 @@ TEST_F(ExceptionHandlerTest, TestBasicHandling) {
   v8::HandleScope handle_scope(isolate());
   v8::Local<v8::Context> context = MainContext();
 
-  absl::optional<std::string> logged_error;
+  std::optional<std::string> logged_error;
   ExceptionHandler handler(base::BindRepeating(&PopulateError, &logged_error));
 
   ThrowException(context, "new Error('some error')", &handler);
@@ -60,7 +60,7 @@ TEST_F(ExceptionHandlerTest, PerContextHandlers) {
   v8::Local<v8::Context> context_a = MainContext();
   v8::Local<v8::Context> context_b = AddContext();
 
-  absl::optional<std::string> logged_error;
+  std::optional<std::string> logged_error;
   ExceptionHandler handler(base::BindRepeating(&PopulateError, &logged_error));
 
   v8::Local<v8::Function> custom_handler = FunctionFromString(
@@ -107,7 +107,7 @@ TEST_F(ExceptionHandlerTest, ThrowingNonErrors) {
   v8::HandleScope handle_scope(isolate());
   v8::Local<v8::Context> context = MainContext();
 
-  absl::optional<std::string> logged_error;
+  std::optional<std::string> logged_error;
   ExceptionHandler handler(base::BindRepeating(&PopulateError, &logged_error));
 
   ThrowException(context, "'hello'", &handler);
@@ -145,7 +145,7 @@ TEST_F(ExceptionHandlerTest, StackTraces) {
   v8::HandleScope handle_scope(isolate());
   v8::Local<v8::Context> context = MainContext();
 
-  absl::optional<std::string> logged_error;
+  std::optional<std::string> logged_error;
   ExceptionHandler handler(base::BindRepeating(&PopulateError, &logged_error));
 
   {

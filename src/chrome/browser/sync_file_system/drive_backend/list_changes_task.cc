@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/containers/cxx20_erase.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/strings/stringprintf.h"
 #include "chrome/browser/sync_file_system/drive_backend/drive_backend_util.h"
@@ -68,9 +67,6 @@ void ListChangesTask::DidListChanges(
 
   if (!change_list) {
     NOTREACHED();
-    token->RecordLog("Got invalid change list.");
-    SyncTaskManager::NotifyTaskDone(std::move(token), SYNC_STATUS_FAILED);
-    return;
   }
 
   auto* mutable_items = change_list->mutable_items();
@@ -78,7 +74,7 @@ void ListChangesTask::DidListChanges(
   // google_apis::ChangeList can contain both FileResource and TeamDriveResource
   // entries. We only care about FileResource entries, so filter out any entries
   // that are TeamDriveReasource.
-  base::EraseIf(*mutable_items, [](const auto& change_resource) {
+  std::erase_if(*mutable_items, [](const auto& change_resource) {
     return change_resource->type() ==
            google_apis::ChangeResource::ChangeType::TEAM_DRIVE;
   });

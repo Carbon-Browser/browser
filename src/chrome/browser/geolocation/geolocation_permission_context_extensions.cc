@@ -1,11 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/geolocation/geolocation_permission_context_extensions.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "extensions/buildflags/buildflags.h"
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
@@ -45,8 +45,7 @@ GeolocationPermissionContextExtensions::GeolocationPermissionContextExtensions(
 }
 
 GeolocationPermissionContextExtensions::
-~GeolocationPermissionContextExtensions() {
-}
+    ~GeolocationPermissionContextExtensions() = default;
 
 bool GeolocationPermissionContextExtensions::DecidePermission(
     const permissions::PermissionRequestID& request_id,
@@ -58,7 +57,7 @@ bool GeolocationPermissionContextExtensions::DecidePermission(
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 
   content::RenderFrameHost* rfh = content::RenderFrameHost::FromID(
-      request_id.render_process_id(), request_id.render_frame_id());
+      request_id.global_render_frame_host_id());
 
   content::WebContents* web_contents =
       content::WebContents::FromRenderFrameHost(rfh);
@@ -66,7 +65,7 @@ bool GeolocationPermissionContextExtensions::DecidePermission(
   GURL requesting_frame_origin = requesting_frame.DeprecatedGetOriginAsURL();
 
   extensions::WebViewPermissionHelper* web_view_permission_helper =
-      extensions::WebViewPermissionHelper::FromWebContents(web_contents);
+      extensions::WebViewPermissionHelper::FromRenderFrameHost(rfh);
   if (web_view_permission_helper) {
     web_view_permission_helper->RequestGeolocationPermission(
         requesting_frame, user_gesture,
@@ -86,7 +85,8 @@ bool GeolocationPermissionContextExtensions::DecidePermission(
             web_contents->GetPrimaryMainFrame())) {
       // Make sure the extension is in the calling process.
       if (extensions::ProcessMap::Get(profile_)->Contains(
-              extension->id(), request_id.render_process_id())) {
+              extension->id(),
+              request_id.global_render_frame_host_id().child_id)) {
         *permission_set = true;
         *new_permission = true;
         return true;

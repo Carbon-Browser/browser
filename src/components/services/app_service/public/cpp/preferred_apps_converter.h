@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,6 @@
 
 namespace apps {
 
-extern const char kConditionTypeKey[];
-extern const char kConditionValuesKey[];
-extern const char kValueKey[];
-extern const char kMatchTypeKey[];
 extern const char kAppIdKey[];
 extern const char kIntentFilterKey[];
 extern const char kPreferredAppsKey[];

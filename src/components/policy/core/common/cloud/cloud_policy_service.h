@@ -1,22 +1,23 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_POLICY_CORE_COMMON_CLOUD_CLOUD_POLICY_SERVICE_H_
 #define COMPONENTS_POLICY_CORE_COMMON_CLOUD_CLOUD_POLICY_SERVICE_H_
 
+#include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
 #include "components/policy/core/common/cloud/cloud_policy_client.h"
 #include "components/policy/core/common/cloud/cloud_policy_store.h"
 #include "components/policy/policy_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace policy {
 
@@ -30,10 +31,6 @@ class POLICY_EXPORT CloudPolicyService : public CloudPolicyClient::Observer,
   // bool parameter is true if the refresh was successful (no error).
   using RefreshPolicyCallback = base::OnceCallback<void(bool)>;
 
-  // Callback invoked once the unregister attempt has completed. Passed bool
-  // parameter is true if unregistering was successful (no error).
-  using UnregisterCallback = base::OnceCallback<void(bool)>;
-
   class POLICY_EXPORT Observer {
    public:
     // Invoked when CloudPolicyService has finished initializing (any initial
@@ -45,7 +42,11 @@ class POLICY_EXPORT CloudPolicyService : public CloudPolicyClient::Observer,
     // was successful.
     virtual void OnPolicyRefreshed(bool success) {}
 
-    virtual ~Observer() {}
+    // Name of the observer for logging purposes.
+    // TODO(b/40915114): Remove once solved.
+    virtual std::string_view name() const = 0;
+
+    virtual ~Observer() = default;
   };
 
   // |client| and |store| must remain valid for the object life time.
@@ -59,12 +60,11 @@ class POLICY_EXPORT CloudPolicyService : public CloudPolicyClient::Observer,
 
   // Refreshes policy. |callback| will be invoked after the operation completes
   // or aborts because of errors.
-  virtual void RefreshPolicy(RefreshPolicyCallback callback);
-
-  // Unregisters the device. |callback| will be invoked after the operation
-  // completes or aborts because of errors. All pending refresh policy requests
-  // will be aborted, and no further refresh policy requests will be allowed.
-  void Unregister(UnregisterCallback callback);
+  //
+  // The |reason| parameter will be used to tag the request to DMServer. This
+  // will allow for more targeted monitoring and alerting.
+  virtual void RefreshPolicy(RefreshPolicyCallback callback,
+                             PolicyFetchReason reason);
 
   // Adds/Removes an Observer for this object.
   void AddObserver(Observer* observer);
@@ -79,7 +79,7 @@ class POLICY_EXPORT CloudPolicyService : public CloudPolicyClient::Observer,
   void OnStoreLoaded(CloudPolicyStore* store) override;
   void OnStoreError(CloudPolicyStore* store) override;
 
-  void ReportValidationResult(CloudPolicyStore* store);
+  void ReportValidationResult(CloudPolicyStore* store, ValidationAction action);
 
   bool IsInitializationComplete() const {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -89,7 +89,7 @@ class POLICY_EXPORT CloudPolicyService : public CloudPolicyClient::Observer,
   // If initial policy refresh was completed returns its result.
   // This allows ChildPolicyObserver to know whether policy was fetched before
   // profile creation.
-  absl::optional<bool> initial_policy_refresh_result() const {
+  std::optional<bool> initial_policy_refresh_result() const {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     return initial_policy_refresh_result_;
   }
@@ -102,10 +102,6 @@ class POLICY_EXPORT CloudPolicyService : public CloudPolicyClient::Observer,
   // Invokes the refresh callbacks and clears refresh state. The |success| flag
   // is passed through to the refresh callbacks.
   void RefreshCompleted(bool success);
-
-  // Invokes the unregister callback and clears unregister state. The |success|
-  // flag is passed through to the unregister callback.
-  void UnregisterCompleted(bool success);
 
   // Assert non-concurrent usage in debug builds.
   SEQUENCE_CHECKER(sequence_checker_);
@@ -131,16 +127,8 @@ class POLICY_EXPORT CloudPolicyService : public CloudPolicyClient::Observer,
     REFRESH_POLICY_STORE,
   } refresh_state_;
 
-  // Tracks the state of a pending unregister operation, if any.
-  enum {
-    UNREGISTER_NONE,
-    UNREGISTER_PENDING,
-  } unregister_state_;
-
   // Callbacks to invoke upon policy refresh.
   std::vector<RefreshPolicyCallback> refresh_callbacks_;
-
-  UnregisterCallback unregister_callback_;
 
   // Set to true once the service is initialized (initial policy load/refresh
   // is complete).
@@ -148,7 +136,7 @@ class POLICY_EXPORT CloudPolicyService : public CloudPolicyClient::Observer,
 
   // Set to true if initial policy refresh was successful. Set to false
   // otherwise.
-  absl::optional<bool> initial_policy_refresh_result_;
+  std::optional<bool> initial_policy_refresh_result_;
 
   // Observers who will receive notifications when the service has finished
   // initializing.

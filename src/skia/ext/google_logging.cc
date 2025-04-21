@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,9 @@
 
 void SkDebugf_FileLine(const char* file, int line, const char* format, ...) {
 #if DCHECK_IS_ON()
-  int severity = logging::LOG_ERROR;
+  int severity = logging::LOGGING_ERROR;
 #else
-  int severity = logging::LOG_INFO;
+  int severity = logging::LOGGING_INFO;
 #endif
   if (severity < logging::GetMinLogLevel())
     return;
@@ -30,7 +30,7 @@ void SkDebugf_FileLine(const char* file, int line, const char* format, ...) {
 }
 
 void SkAbort_FileLine(const char* file, int line, const char* format, ...) {
-  int severity = logging::LOG_FATAL;
+  int severity = logging::LOGGING_FATAL;
 
   va_list ap;
   va_start(ap, format);

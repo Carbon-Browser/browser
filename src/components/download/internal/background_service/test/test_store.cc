@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@ namespace test {
 
 TestStore::TestStore() : ready_(false), init_called_(false) {}
 
-TestStore::~TestStore() {}
+TestStore::~TestStore() = default;
 
 bool TestStore::IsInitialized() {
   return ready_;

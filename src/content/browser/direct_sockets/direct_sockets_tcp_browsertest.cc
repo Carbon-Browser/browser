@@ -1,14 +1,23 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/342213636): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
+
 #include <stdint.h>
+
+#include <optional>
 #include <string>
 
+#include "base/containers/span.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/test/test_future.h"
 #include "build/build_config.h"
 #include "content/browser/direct_sockets/direct_sockets_service_impl.h"
 #include "content/browser/direct_sockets/direct_sockets_test_utils.h"
@@ -18,8 +27,6 @@
 #include "content/public/browser/storage_partition.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_client.h"
-#include "content/public/common/content_features.h"
-#include "content/public/common/content_switches.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_browser_test.h"
@@ -34,14 +41,18 @@
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
+#include "services/network/public/mojom/clear_data_filter.mojom.h"
 #include "services/network/public/mojom/host_resolver.mojom.h"
-#include "services/network/public/mojom/mdns_responder.mojom.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 #include "services/network/public/mojom/tcp_socket.mojom.h"
 #include "testing/gmock/include/gmock/gmock-matchers.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/permissions_policy/permissions_policy.h"
 #include "url/gurl.h"
+
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chromeos/dbus/permission_broker/fake_permission_broker_client.h"  // nogncheck
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 // The tests in this file use the Network Service implementation of
 // NetworkContext, to test sending and receiving of data over TCP sockets.
@@ -57,8 +68,8 @@ constexpr char kLocalhostAddress[] = "127.0.0.1";
 class ReadWriteWaiter {
  public:
   ReadWriteWaiter(
-      uint32_t required_receive_bytes,
-      uint32_t required_send_bytes,
+      size_t required_receive_bytes,
+      size_t required_send_bytes,
       mojo::Remote<network::mojom::TCPServerSocket>& tcp_server_socket)
       : required_receive_bytes_(required_receive_bytes),
         required_send_bytes_(required_send_bytes) {
@@ -73,7 +84,7 @@ class ReadWriteWaiter {
  private:
   void OnAccept(
       int result,
-      const absl::optional<net::IPEndPoint>& remote_addr,
+      const std::optional<net::IPEndPoint>& remote_addr,
       mojo::PendingRemote<network::mojom::TCPConnectedSocket> accepted_socket,
       mojo::ScopedDataPipeConsumerHandle consumer_handle,
       mojo::ScopedDataPipeProducerHandle producer_handle) {
@@ -120,10 +131,9 @@ class ReadWriteWaiter {
     while (true) {
       DCHECK(receive_stream_.is_valid());
       DCHECK_LT(bytes_received_, required_receive_bytes_);
-      const void* buffer = nullptr;
-      uint32_t num_bytes = 0;
-      MojoResult mojo_result = receive_stream_->BeginReadData(
-          &buffer, &num_bytes, MOJO_READ_DATA_FLAG_NONE);
+      base::span<const uint8_t> buffer;
+      MojoResult mojo_result =
+          receive_stream_->BeginReadData(MOJO_READ_DATA_FLAG_NONE, buffer);
       if (mojo_result == MOJO_RESULT_SHOULD_WAIT) {
         read_watcher_->ArmOrNotify();
         return;
@@ -131,22 +141,20 @@ class ReadWriteWaiter {
       DCHECK_EQ(mojo_result, MOJO_RESULT_OK);
 
       // This is guaranteed by Mojo.
-      DCHECK_GT(num_bytes, 0u);
+      DCHECK_GT(buffer.size(), 0u);
 
-      const unsigned char* current = static_cast<const unsigned char*>(buffer);
-      const unsigned char* const end = current + num_bytes;
-      while (current < end) {
-        EXPECT_EQ(*current, bytes_received_ % 256);
-        ++current;
+      for (uint8_t current : buffer) {
+        EXPECT_EQ(current, bytes_received_ % 256);
         ++bytes_received_;
       }
 
-      mojo_result = receive_stream_->EndReadData(num_bytes);
+      mojo_result = receive_stream_->EndReadData(buffer.size());
       DCHECK_EQ(mojo_result, MOJO_RESULT_OK);
 
       if (bytes_received_ == required_receive_bytes_) {
-        if (bytes_sent_ == required_send_bytes_)
+        if (bytes_sent_ == required_send_bytes_) {
           run_loop_.Quit();
+        }
         return;
       }
     }
@@ -156,10 +164,10 @@ class ReadWriteWaiter {
     while (true) {
       DCHECK(send_stream_.is_valid());
       DCHECK_LT(bytes_sent_, required_send_bytes_);
-      void* buffer = nullptr;
-      uint32_t num_bytes = 0;
+      base::span<uint8_t> buffer;
+      size_t size_hint = required_send_bytes_ - bytes_sent_;
       MojoResult mojo_result = send_stream_->BeginWriteData(
-          &buffer, &num_bytes, MOJO_WRITE_DATA_FLAG_NONE);
+          size_hint, MOJO_WRITE_DATA_FLAG_NONE, buffer);
       if (mojo_result == MOJO_RESULT_SHOULD_WAIT) {
         write_watcher_->ArmOrNotify();
         return;
@@ -167,47 +175,44 @@ class ReadWriteWaiter {
       DCHECK_EQ(mojo_result, MOJO_RESULT_OK);
 
       // This is guaranteed by Mojo.
-      DCHECK_GT(num_bytes, 0u);
+      DCHECK_GT(buffer.size(), 0u);
 
-      num_bytes = std::min(num_bytes, required_send_bytes_ - bytes_sent_);
+      buffer = buffer.first(
+          std::min(buffer.size(), required_send_bytes_ - bytes_sent_));
 
-      unsigned char* current = static_cast<unsigned char*>(buffer);
-      unsigned char* const end = current + num_bytes;
-      while (current != end) {
-        *current = bytes_sent_ % 256;
-        ++current;
+      for (char& c : base::as_writable_chars(buffer)) {
+        c = bytes_sent_ % 256;
         ++bytes_sent_;
       }
 
-      mojo_result = send_stream_->EndWriteData(num_bytes);
+      mojo_result = send_stream_->EndWriteData(buffer.size());
       DCHECK_EQ(mojo_result, MOJO_RESULT_OK);
 
       if (bytes_sent_ == required_send_bytes_) {
-        if (bytes_received_ == required_receive_bytes_)
+        if (bytes_received_ == required_receive_bytes_) {
           run_loop_.Quit();
+        }
         return;
       }
     }
   }
 
-  const uint32_t required_receive_bytes_;
-  const uint32_t required_send_bytes_;
+  const size_t required_receive_bytes_;
+  const size_t required_send_bytes_;
   base::RunLoop run_loop_;
   mojo::Remote<network::mojom::TCPConnectedSocket> accepted_socket_;
   mojo::ScopedDataPipeConsumerHandle receive_stream_;
   mojo::ScopedDataPipeProducerHandle send_stream_;
   std::unique_ptr<mojo::SimpleWatcher> read_watcher_;
   std::unique_ptr<mojo::SimpleWatcher> write_watcher_;
-  uint32_t bytes_received_ = 0;
-  uint32_t bytes_sent_ = 0;
+  size_t bytes_received_ = 0;
+  size_t bytes_sent_ = 0;
 };
 
 }  // anonymous namespace
 
 class DirectSocketsTcpBrowserTest : public ContentBrowserTest {
  public:
-  ~DirectSocketsTcpBrowserTest() override = default;
-
   GURL GetTestOpenPageURL() {
     return embedded_test_server()->GetURL("/direct_sockets/open.html");
   }
@@ -220,46 +225,21 @@ class DirectSocketsTcpBrowserTest : public ContentBrowserTest {
     return browser_context()->GetDefaultStoragePartition()->GetNetworkContext();
   }
 
-  std::string CreateMDNSHostName() {
-    DCHECK(!mdns_responder_.is_bound());
-    GetNetworkContext()->CreateMdnsResponder(
-        mdns_responder_.BindNewPipeAndPassReceiver());
-
-    std::string name;
-    base::RunLoop run_loop;
-    mdns_responder_->CreateNameForAddress(
-        net::IPAddress::IPv4Localhost(),
-        base::BindLambdaForTesting(
-            [&name, &run_loop](const std::string& name_out,
-                               bool announcement_scheduled) {
-              name = name_out;
-              run_loop.Quit();
-            }));
-    run_loop.Run();
-    return name;
-  }
-
   // Returns the port listening for TCP connections.
   uint16_t StartTcpServer() {
-    net::IPEndPoint local_addr;
-    base::RunLoop run_loop;
+    base::test::TestFuture<int32_t, const std::optional<net::IPEndPoint>&>
+        future;
+    auto options = network::mojom::TCPServerSocketOptions::New();
+    options->backlog = 5;
     GetNetworkContext()->CreateTCPServerSocket(
         net::IPEndPoint(net::IPAddress::IPv4Localhost(),
                         /*port=*/0),
-        /*backlog=*/5,
+        std::move(options),
         net::MutableNetworkTrafficAnnotationTag(TRAFFIC_ANNOTATION_FOR_TESTS),
-        tcp_server_socket_.BindNewPipeAndPassReceiver(),
-        base::BindLambdaForTesting(
-            [&local_addr, &run_loop](
-                int32_t result,
-                const absl::optional<net::IPEndPoint>& local_addr_out) {
-              DCHECK_EQ(result, net::OK);
-              DCHECK(local_addr_out.has_value());
-              local_addr = *local_addr_out;
-              run_loop.Quit();
-            }));
-    run_loop.Run();
-    return local_addr.port();
+        tcp_server_socket_.BindNewPipeAndPassReceiver(), future.GetCallback());
+    auto local_addr = future.Get<std::optional<net::IPEndPoint>>();
+    DCHECK(local_addr);
+    return local_addr->port();
   }
 
   mojo::Remote<network::mojom::TCPServerSocket>& tcp_server_socket() {
@@ -285,9 +265,12 @@ class DirectSocketsTcpBrowserTest : public ContentBrowserTest {
  protected:
   void SetUpOnMainThread() override {
     ContentBrowserTest::SetUpOnMainThread();
-    ASSERT_TRUE(NavigateToURL(shell(), GetTestPageURL()));
+
+    client_ = CreateContentBrowserClient();
     runner_ =
         std::make_unique<content::test::AsyncJsRunner>(shell()->web_contents());
+
+    ASSERT_TRUE(NavigateToURL(shell(), GetTestPageURL()));
   }
 
   void SetUp() override {
@@ -296,12 +279,9 @@ class DirectSocketsTcpBrowserTest : public ContentBrowserTest {
     ContentBrowserTest::SetUp();
   }
 
-  void SetUpCommandLine(base::CommandLine* command_line) override {
-    ContentBrowserTest::SetUpCommandLine(command_line);
-    std::string origin_list =
-        GetTestOpenPageURL().spec() + "," + GetTestPageURL().spec();
-
-    command_line->AppendSwitchASCII(switches::kIsolatedAppOrigins, origin_list);
+  virtual std::unique_ptr<ContentBrowserClient> CreateContentBrowserClient() {
+    return std::make_unique<test::IsolatedWebAppContentBrowserClient>(
+        url::Origin::Create(GetTestPageURL()));
   }
 
  private:
@@ -310,12 +290,9 @@ class DirectSocketsTcpBrowserTest : public ContentBrowserTest {
   }
 
  private:
-  test::IsolatedAppContentBrowserClient client_;
-  ScopedContentBrowserClientSetting setting{&client_};
-  base::test::ScopedFeatureList feature_list_;
-  mojo::Remote<network::mojom::MdnsResponder> mdns_responder_;
   mojo::Remote<network::mojom::TCPServerSocket> tcp_server_socket_;
 
+  std::unique_ptr<ContentBrowserClient> client_;
   std::unique_ptr<content::test::AsyncJsRunner> runner_;
 };
 
@@ -343,31 +320,6 @@ IN_PROC_BROWSER_TEST_F(DirectSocketsTcpBrowserTest, OpenTcp_Success_Global) {
               StartsWith("openTcp succeeded"));
 }
 
-#if BUILDFLAG(IS_MAC)
-// https://crbug.com/1211492 Keep failing on Mac11.3
-#define MAYBE_OpenTcp_MDNS DISABLED_OpenTcp_MDNS
-#else
-#define MAYBE_OpenTcp_MDNS OpenTcp_MDNS
-#endif
-IN_PROC_BROWSER_TEST_F(DirectSocketsTcpBrowserTest, MAYBE_OpenTcp_MDNS) {
-  ASSERT_TRUE(NavigateToURL(shell(), GetTestOpenPageURL()));
-
-  const int listening_port = StartTcpServer();
-  const std::string name = CreateMDNSHostName();
-  EXPECT_TRUE(base::EndsWith(name, ".local"));
-
-  const std::string script =
-      JsReplace("openTcp($1, $2)", name.c_str(), listening_port);
-
-#if BUILDFLAG(ENABLE_MDNS)
-  EXPECT_THAT(EvalJs(shell(), script).ExtractString(),
-              StartsWith("openTcp succeeded"));
-#else
-  EXPECT_EQ("openTcp failed: NotAllowedError: Permission denied",
-            EvalJs(shell(), script));
-#endif  // BUILDFLAG(ENABLE_MDNS)
-}
-
 IN_PROC_BROWSER_TEST_F(DirectSocketsTcpBrowserTest, CloseTcp) {
   const int listening_port = StartTcpServer();
   const std::string script =
@@ -389,6 +341,25 @@ IN_PROC_BROWSER_TEST_F(DirectSocketsTcpBrowserTest, WriteTcp) {
       listening_port, kRequiredBytes);
 
   EXPECT_EQ("write succeeded", EvalJs(shell(), script));
+  waiter.Await();
+}
+
+IN_PROC_BROWSER_TEST_F(DirectSocketsTcpBrowserTest, WriteLargeTcpPacket) {
+  // The default capacity of TCPSocket mojo pipe is 65536 bytes. This test
+  // verifies that out asynchronous writing logic actually works.
+  constexpr uint32_t defaultMojoPipeCapacity = (1 << 16);
+  constexpr int32_t kRequiredBytes = 3 * defaultMojoPipeCapacity + 1;
+
+  const int listening_port = StartTcpServer();
+  ReadWriteWaiter waiter(/*required_receive_bytes=*/kRequiredBytes,
+                         /*required_send_bytes=*/0, tcp_server_socket());
+
+  const std::string script =
+      JsReplace("writeLargeTcpPacket($1, $2, $3)",
+                net::IPAddress::IPv4Localhost().ToString(), listening_port,
+                kRequiredBytes);
+
+  EXPECT_EQ("writeLargeTcpPacket succeeded", EvalJs(shell(), script));
   waiter.Await();
 }
 
@@ -431,7 +402,7 @@ class MockTcpNetworkContext : public content::test::MockNetworkContext {
 
   // network::TestNetworkContext:
   void CreateTCPConnectedSocket(
-      const absl::optional<net::IPEndPoint>& local_addr,
+      const std::optional<net::IPEndPoint>& local_addr,
       const net::AddressList& remote_addr_list,
       network::mojom::TCPConnectedSocketOptionsPtr tcp_connected_socket_options,
       const net::MutableNetworkTrafficAnnotationTag& traffic_annotation,
@@ -609,6 +580,287 @@ IN_PROC_BROWSER_TEST_F(DirectSocketsTcpBrowserTest,
 
   EXPECT_THAT(future->Get(),
               ::testing::HasSubstr("waitForClosedPromise succeeded."));
+}
+
+class DirectSocketsTcpServerBrowserTest : public DirectSocketsTcpBrowserTest {
+ public:
+#if BUILDFLAG(IS_CHROMEOS)
+  DirectSocketsTcpServerBrowserTest() {
+    chromeos::PermissionBrokerClient::InitializeFake();
+    DirectSocketsServiceImpl::SetAlwaysOpenFirewallHoleForTesting();
+  }
+
+  ~DirectSocketsTcpServerBrowserTest() override {
+    chromeos::PermissionBrokerClient::Shutdown();
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS)
+};
+
+IN_PROC_BROWSER_TEST_F(DirectSocketsTcpServerBrowserTest, ExchangeTcpServer) {
+  ASSERT_THAT(EvalJs(shell(), "exchangeSingleTcpPacketBetweenClientAndServer()")
+                  .ExtractString(),
+              testing::HasSubstr("succeeded"));
+}
+
+#if BUILDFLAG(IS_CHROMEOS)
+IN_PROC_BROWSER_TEST_F(DirectSocketsTcpServerBrowserTest, HasFirewallHole) {
+  class DelegateImpl : public chromeos::FakePermissionBrokerClient::Delegate {
+   public:
+    DelegateImpl(uint16_t port, base::OnceClosure quit_closure)
+        : port_(port), quit_closure_(std::move(quit_closure)) {}
+
+    void OnTcpPortReleased(uint16_t port,
+                           const std::string& interface) override {
+      if (port == port_) {
+        ASSERT_EQ(interface, "");
+        ASSERT_TRUE(quit_closure_);
+        std::move(quit_closure_).Run();
+      }
+    }
+
+   private:
+    uint16_t port_;
+    base::OnceClosure quit_closure_;
+  };
+
+  auto* client = chromeos::FakePermissionBrokerClient::Get();
+
+  const std::string open_script = R"(
+    (async () => {
+      socket = new TCPServerSocket('127.0.0.1');
+      const { localPort } = await socket.opened;
+      return localPort;
+    })();
+  )";
+
+  const int32_t local_port = EvalJs(shell(), open_script).ExtractInt();
+  ASSERT_TRUE(client->HasTcpHole(local_port, "" /* all interfaces */));
+
+  base::RunLoop run_loop;
+  auto delegate =
+      std::make_unique<DelegateImpl>(local_port, run_loop.QuitClosure());
+  client->AttachDelegate(delegate.get());
+
+  EXPECT_TRUE(EvalJs(shell(), content::test::WrapAsync("socket.close()"))
+                  .error.empty());
+  run_loop.Run();
+}
+
+IN_PROC_BROWSER_TEST_F(DirectSocketsTcpServerBrowserTest, FirewallHoleDenied) {
+  auto* client = chromeos::FakePermissionBrokerClient::Get();
+  client->SetTcpDenyAll();
+
+  const std::string open_script = R"(
+    (async () => {
+      socket = new TCPServerSocket('127.0.0.1');
+      return await socket.opened.catch(err => err.message);
+    })();
+  )";
+
+  EXPECT_THAT(EvalJs(shell(), open_script).ExtractString(),
+              testing::HasSubstr("Firewall"));
+}
+
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
+IN_PROC_BROWSER_TEST_F(DirectSocketsTcpServerBrowserTest, OkOnClose) {
+  ASSERT_EQ(true, EvalJs(shell(), R"(
+    (async () => {
+      socket = new TCPServerSocket('127.0.0.1');
+      await socket.opened;
+      socket.close();
+      return await socket.closed.then(() => true);
+    })();
+  )"));
+}
+
+class MockNetworkContextWithTCPServerSocketReceiver
+    : public network::TestNetworkContext {
+ public:
+  void CreateTCPServerSocket(
+      const net::IPEndPoint& local_addr,
+      network::mojom::TCPServerSocketOptionsPtr options,
+      const net::MutableNetworkTrafficAnnotationTag& traffic_annotation,
+      mojo::PendingReceiver<network::mojom::TCPServerSocket> socket,
+      CreateTCPServerSocketCallback callback) override {
+    receiver_.Bind(std::move(socket));
+    std::move(callback).Run(net::OK, /*local_addr=*/net::IPEndPoint(
+                                net::IPAddress::IPv4Localhost(), 0));
+  }
+
+  void ResetSocketReceiver() { receiver_.reset(); }
+
+ private:
+  mojo::Receiver<network::mojom::TCPServerSocket> receiver_{nullptr};
+};
+
+IN_PROC_BROWSER_TEST_F(DirectSocketsTcpServerBrowserTest, ErrorOnRemoteReset) {
+  MockNetworkContextWithTCPServerSocketReceiver mock_network_context;
+  DirectSocketsServiceImpl::SetNetworkContextForTesting(&mock_network_context);
+
+  ASSERT_EQ(true, EvalJs(shell(), R"(
+    (async () => {
+      socket = new TCPServerSocket('127.0.0.1');
+      await socket.opened;
+      return true;
+    })();
+  )"));
+
+  auto future = GetAsyncJsRunner()->RunScript(
+      test::WrapAsync("return socket.closed.catch(() => 'ok')"));
+  mock_network_context.ResetSocketReceiver();
+
+  ASSERT_EQ("ok", future->Get());
+}
+
+IN_PROC_BROWSER_TEST_F(DirectSocketsTcpServerBrowserTest, Ipv6Only) {
+  // Should be able to connect as mapped IPv4 with |ipv6Only| = false.
+  EXPECT_EQ(
+      true,
+      EvalJs(shell(),
+             "connectToServerWithIPv6Only(/*ipv6Only=*/false, '127.0.0.1')"));
+
+  // Connection to IPv4 loopback is rejected with |ipv6Only| = true.
+  EXPECT_EQ(
+      false,
+      EvalJs(shell(),
+             "connectToServerWithIPv6Only(/*ipv6Only=*/true, '127.0.0.1')"));
+
+  // Connection to IPv6 loopback succeeds.
+  EXPECT_EQ(
+      true,
+      EvalJs(shell(), "connectToServerWithIPv6Only(/*ipv6Only=*/true, '::1')"));
+}
+
+// A ContentBrowserClient that grants Isolated Web Apps the "direct-sockets"
+// permission, but not "cross-origin-isolated", which should result in Direct
+// Sockets being disabled.
+class NoCoiPermissionIsolatedWebAppContentBrowserClient
+    : public test::IsolatedWebAppContentBrowserClient {
+ public:
+  explicit NoCoiPermissionIsolatedWebAppContentBrowserClient(
+      const url::Origin& isolated_app_origin)
+      : IsolatedWebAppContentBrowserClient(isolated_app_origin) {}
+
+  std::optional<blink::ParsedPermissionsPolicy>
+  GetPermissionsPolicyForIsolatedWebApp(
+      WebContents* web_contents,
+      const url::Origin& app_origin) override {
+    return {{blink::ParsedPermissionsPolicyDeclaration(
+        blink::mojom::PermissionsPolicyFeature::kDirectSockets,
+        /*allowed_origins=*/{},
+        /*self_if_matches=*/app_origin,
+        /*matches_all_origins=*/false, /*matches_opaque_src=*/false)}};
+  }
+};
+
+IN_PROC_BROWSER_TEST_F(DirectSocketsTcpBrowserTest, NoCoiPermission) {
+  NoCoiPermissionIsolatedWebAppContentBrowserClient client(
+      url::Origin::Create(GetTestPageURL()));
+
+  ASSERT_TRUE(NavigateToURL(shell(), GetTestOpenPageURL()));
+
+  EXPECT_EQ(false, EvalJs(shell(), "self.crossOriginIsolated"));
+
+  const int listening_port = StartTcpServer();
+  const std::string script =
+      JsReplace("openTcp($1, $2)", net::IPAddress::IPv4Localhost().ToString(),
+                listening_port);
+
+  EXPECT_THAT(EvalJs(shell(), script).ExtractString(),
+              StartsWith("openTcp failed: NotAllowedError"));
+}
+
+IN_PROC_BROWSER_TEST_F(DirectSocketsTcpBrowserTest, NotInCrossOriginIframe) {
+  net::EmbeddedTestServer test_server2{net::EmbeddedTestServer::TYPE_HTTPS};
+  test_server2.AddDefaultHandlers();
+  net::test_server::EmbeddedTestServerHandle server_handle =
+      test_server2.StartAndReturnHandle();
+
+  ASSERT_TRUE(NavigateToURL(shell(), GetTestOpenPageURL()));
+
+  EXPECT_EQ(true, EvalJs(shell(), "self.crossOriginIsolated"));
+  EXPECT_TRUE(ExecJs(shell(), "TCPSocket !== undefined"));
+
+  constexpr const char kCreateIframeJs[] = R"(
+      new Promise(resolve => {
+        let f = document.createElement('iframe');
+        f.src = $1;
+        f.allow = 'cross-origin-isolated';
+        f.addEventListener('load', () => resolve());
+        document.body.appendChild(f);
+      });
+  )";
+  GURL cross_origin_corp_url = test_server2.GetURL(
+      "/set-header?"
+      "Cross-Origin-Opener-Policy: same-origin&"
+      "Cross-Origin-Embedder-Policy: require-corp&"
+      "Cross-Origin-Resource-Policy: cross-origin&");
+  ASSERT_TRUE(content::ExecJs(
+      shell(), content::JsReplace(kCreateIframeJs, cross_origin_corp_url)));
+
+  content::RenderFrameHost* iframe_rfh = content::ChildFrameAt(shell(), 0);
+  EXPECT_FALSE(iframe_rfh->IsErrorDocument());
+  EXPECT_EQ(cross_origin_corp_url, iframe_rfh->GetLastCommittedURL());
+  EXPECT_EQ(true, EvalJs(iframe_rfh, "self.crossOriginIsolated"));
+  EXPECT_TRUE(ExecJs(shell(), "TCPSocket === undefined"));
+}
+
+class IsolatedContextContentBrowserClient
+    : public ContentBrowserTestContentBrowserClient {
+ public:
+  bool IsIsolatedContextAllowedForUrl(BrowserContext* browser_context,
+                                      const GURL& lock_url) override {
+    return lock_url.is_valid();
+  }
+};
+
+class DirectSocketsIsolatedContextTcpBrowserTest
+    : public DirectSocketsTcpBrowserTest {
+ protected:
+  std::unique_ptr<ContentBrowserClient> CreateContentBrowserClient() override {
+    return std::make_unique<IsolatedContextContentBrowserClient>();
+  }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_{
+      blink::features::kIsolateSandboxedIframes};
+};
+
+IN_PROC_BROWSER_TEST_F(DirectSocketsIsolatedContextTcpBrowserTest,
+                       NotAvailableInSandboxedIframes) {
+  ASSERT_TRUE(NavigateToURL(shell(), GetTestOpenPageURL()));
+
+  ASSERT_EQ(true, EvalJs(shell(), "'TCPSocket' in window"));
+
+  // Verify that non-sandboxed iframes have TCPSocket.
+  ASSERT_TRUE(ExecJs(shell(), content::JsReplace(R"(
+      new Promise(resolve => {
+        let f = document.createElement('iframe');
+        f.src = $1;
+        f.addEventListener('load', () => resolve());
+        document.body.appendChild(f);
+      });
+  )",
+                                                 GetTestOpenPageURL())));
+  content::RenderFrameHost* iframe1_rfh = content::ChildFrameAt(shell(), 0);
+
+  ASSERT_EQ(true, EvalJs(iframe1_rfh, "'TCPSocket' in window"));
+
+  // Verify that sandboxed iframes don't have TCPSocket.
+  ASSERT_TRUE(ExecJs(shell(), content::JsReplace(R"(
+      new Promise(resolve => {
+        let f = document.createElement('iframe');
+        f.src = $1;
+        f.sandbox = 'allow-scripts';
+        f.addEventListener('load', () => resolve());
+        document.body.appendChild(f);
+      });
+  )",
+                                                 GetTestOpenPageURL())));
+  content::RenderFrameHost* iframe2_rfh = content::ChildFrameAt(shell(), 1);
+
+  ASSERT_EQ(false, EvalJs(iframe2_rfh, "'TCPSocket' in window"));
 }
 
 }  // namespace content

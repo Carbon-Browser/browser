@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,13 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string_view>
 
+#include "base/containers/fixed_flat_map.h"
+#include "base/feature_list.h"
 #include "extensions/common/api/declarative_net_request/constants.h"
 
-namespace extensions {
-namespace declarative_net_request {
+namespace extensions::declarative_net_request {
 
 // The result of parsing JSON rules provided by an extension. Corresponds to a
 // single rule.
@@ -61,18 +63,29 @@ enum class ParseResult {
   ERROR_INVALID_REGEX_SUBSTITUTION,
   ERROR_INVALID_ALLOW_ALL_REQUESTS_RESOURCE_TYPE,
 
-  ERROR_NO_HEADERS_SPECIFIED,
-  ERROR_EMPTY_REQUEST_HEADERS_LIST,
-  ERROR_EMPTY_RESPONSE_HEADERS_LIST,
-  ERROR_INVALID_HEADER_NAME,
-  ERROR_INVALID_HEADER_VALUE,
+  // Parse errors related to fields specific to modifyheaders rules.
+  ERROR_NO_HEADERS_TO_MODIFY_SPECIFIED,
+  ERROR_EMPTY_MODIFY_REQUEST_HEADERS_LIST,
+  ERROR_EMPTY_MODIFY_RESPONSE_HEADERS_LIST,
+  ERROR_INVALID_HEADER_TO_MODIFY_NAME,
+  ERROR_INVALID_HEADER_TO_MODIFY_VALUE,
   ERROR_HEADER_VALUE_NOT_SPECIFIED,
   ERROR_HEADER_VALUE_PRESENT,
-  ERROR_APPEND_REQUEST_HEADER_UNSUPPORTED,
+  ERROR_APPEND_INVALID_REQUEST_HEADER,
 
+  // Parse errors related to matching on tab IDs.
   ERROR_EMPTY_TAB_IDS_LIST,
   ERROR_TAB_IDS_ON_NON_SESSION_RULE,
   ERROR_TAB_ID_DUPLICATED,
+
+  // Parse errors related to matching on response headers.
+  ERROR_EMPTY_RESPONSE_HEADER_MATCHING_LIST,
+  ERROR_EMPTY_EXCLUDED_RESPONSE_HEADER_MATCHING_LIST,
+  ERROR_INVALID_MATCHING_RESPONSE_HEADER_NAME,
+  ERROR_INVALID_MATCHING_EXCLUDED_RESPONSE_HEADER_NAME,
+  ERROR_INVALID_MATCHING_RESPONSE_HEADER_VALUE,
+  ERROR_MATCHING_RESPONSE_HEADER_DUPLICATED,
+  ERROR_RESPONSE_HEADER_RULE_CANNOT_MODIFY_REQUEST_HEADERS,
 };
 
 // Describes the ways in which updating dynamic rules can fail.
@@ -98,10 +111,11 @@ enum class UpdateDynamicRulesStatus {
   kErrorSerializeToJson = 16,
   kErrorWriteJson = 17,
   kErrorWriteFlatbuffer = 18,
+  kErrorUnsafeRuleCountExceeded = 19,
 
   // Magic constant used by histograms code. Should be equal to the largest enum
   // value.
-  kMaxValue = kErrorWriteFlatbuffer,
+  kMaxValue = kErrorUnsafeRuleCountExceeded,
 };
 
 // Describes the result of loading a single JSON Ruleset.
@@ -145,7 +159,32 @@ enum class HostPermissionsAlwaysRequired {
   kTrue,
   // In this case, only redirecting (excluding upgrading) requests and modifying
   // headers require host permissions to the request url and initiator.
-  kFalse
+  kFalse,
+};
+
+// Specifies the request stage for which rulesets are to be matched.
+enum class RulesetMatchingStage {
+  // At this stage, the request has been prepared but not sent. Rules with
+  // conditions based only on the request's parameters will be matched.
+  kOnBeforeRequest,
+  // At this stage, the request's headers have been sent and response headers
+  // have been received. Rules with conditions that depend on the request's
+  // response will be matched.
+  kOnHeadersReceived,
+};
+
+// Specifies what triggered a ruleset load for an extension.
+enum class LoadRulesetRequestSource {
+  // The ruleset load was triggered when the extension is loaded. This will load
+  // enabled static rulesets and dynamic rules.
+  kOnExtensionLoad = 0,
+
+  // The ruleset load was triggered by an updateEnabledRulesets API call, which
+  // enabled a disabled ruleset.
+  kUpdateEnabledStaticRulesets = 1,
+
+  // The ruleset load was triggered by an updateDynamicRules API call.
+  kUpdateDynamicRules = 2,
 };
 
 // Schemes which can be used as part of url transforms.
@@ -172,13 +211,17 @@ extern const char kErrorRegexSubstitutionWithoutFilter[];
 extern const char kErrorInvalidAllowAllRequestsResourceType[];
 extern const char kErrorRegexTooLarge[];
 extern const char kErrorNoHeaderListsSpecified[];
-extern const char kErrorInvalidHeaderName[];
-extern const char kErrorInvalidHeaderValue[];
+extern const char kErrorInvalidModifyHeaderName[];
+extern const char kErrorInvalidModifyHeaderValue[];
 extern const char kErrorNoHeaderValueSpecified[];
 extern const char kErrorHeaderValuePresent[];
-extern const char kErrorCannotAppendRequestHeader[];
+extern const char kErrorAppendInvalidRequestHeader[];
 extern const char kErrorTabIdsOnNonSessionRule[];
 extern const char kErrorTabIdDuplicated[];
+extern const char kErrorInvalidMatchingHeaderName[];
+extern const char kErrorInvalidMatchingHeaderValue[];
+extern const char kErrorResponseHeaderDuplicated[];
+extern const char kErrorResponseHeaderRuleCannotModifyRequestHeaders[];
 
 extern const char kErrorListNotPassed[];
 
@@ -195,10 +238,12 @@ extern const char kIndexingRuleLimitExceeded[];
 extern const char kInternalErrorUpdatingDynamicRules[];
 extern const char kInternalErrorGettingDynamicRules[];
 extern const char kDynamicRuleCountExceeded[];
+extern const char kDynamicUnsafeRuleCountExceeded[];
 extern const char kDynamicRegexRuleCountExceeded[];
 
 // Session-scoped rules API errors.
 extern const char kSessionRuleCountExceeded[];
+extern const char kSessionUnsafeRuleCountExceeded[];
 extern const char kSessionRegexRuleCountExceeded[];
 
 // Static ruleset toggling API errors.
@@ -208,6 +253,9 @@ extern const char kEnabledRulesetsRegexRuleCountExceeded[];
 extern const char kInternalErrorUpdatingEnabledRulesets[];
 extern const char kEnabledRulesetCountExceeded[];
 
+// Static rule toggling API errors.
+extern const char kDisabledStaticRuleCountExceeded[];
+
 // setExtensionActionOptions API errors.
 extern const char kTabNotFoundError[];
 extern const char kIncrementActionCountWithoutUseAsBadgeTextError[];
@@ -216,6 +264,9 @@ extern const char kIncrementActionCountWithoutUseAsBadgeTextError[];
 extern const char kInvalidTestURLError[];
 extern const char kInvalidTestInitiatorError[];
 extern const char kInvalidTestTabIdError[];
+extern const char kInvalidResponseHeaderObjectError[];
+extern const char kInvalidResponseHeaderNameError[];
+extern const char kInvalidResponseHeaderValueError[];
 
 // Histogram names.
 extern const char kIndexAndPersistRulesTimeHistogram[];
@@ -223,6 +274,7 @@ extern const char kManifestEnabledRulesCountHistogram[];
 extern const char kUpdateDynamicRulesStatusHistogram[];
 extern const char kReadDynamicRulesJSONStatusHistogram[];
 extern const char kIsLargeRegexHistogram[];
+extern const char kRegexRuleSizeHistogram[];
 extern const char kLoadRulesetResultHistogram[];
 
 // Placeholder text to use for getBadgeText extension function call, when the
@@ -235,13 +287,47 @@ extern const char kErrorGetMatchedRulesMissingPermissions[];
 
 // The maximum amount of static rules in the global rule pool for a single
 // profile.
-constexpr int kMaxStaticRulesPerProfile = 300000;
+inline constexpr int kMaxStaticRulesPerProfile = 300000;
+
+// The per-extension maximum amount of disabled static rules.
+inline constexpr int kMaxDisabledStaticRules = 5000;
+
+// Maximum size of a compiled RegEx rule in KB. Limited to 2 KB which means
+// that given 1024 rules, the total usage would be 2 MB.
+inline constexpr int kRegexMaxMemKb = 2;
 
 // Identifier for a Flatbuffer containing `flat::EmbedderConditions` as the
 // root.
 extern const char kEmbedderConditionsBufferIdentifier[];
 
-}  // namespace declarative_net_request
-}  // namespace extensions
+// An allowlist of request headers that can be appended onto, in the form of
+// (header name, header delimiter). Currently, this list contains all standard
+// HTTP request headers that support multiple values in a single entry. This
+// list may be extended in the future to support custom headers.
+inline constexpr auto kDNRRequestHeaderAppendAllowList =
+    base::MakeFixedFlatMap<std::string_view, std::string_view>(
+        {{"accept", ", "},
+         {"accept-encoding", ", "},
+         {"accept-language", ", "},
+         {"access-control-request-headers", ", "},
+         {"cache-control", ", "},
+         {"connection", ", "},
+         {"content-language", ", "},
+         {"cookie", "; "},
+         {"forwarded", ", "},
+         {"if-match", ", "},
+         {"if-none-match", ", "},
+         {"keep-alive", ", "},
+         {"range", ", "},
+         {"te", ", "},
+         {"trailer", ""},
+         {"transfer-encoding", ", "},
+         {"upgrade", ", "},
+         {"user-agent", " "},
+         {"via", ", "},
+         {"want-digest", ", "},
+         {"x-forwarded-for", ", "}});
+
+}  // namespace extensions::declarative_net_request
 
 #endif  // EXTENSIONS_BROWSER_API_DECLARATIVE_NET_REQUEST_CONSTANTS_H_

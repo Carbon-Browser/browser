@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,6 @@
 #include "base/memory/raw_ptr.h"
 #include "base/values.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "content/browser/speech/tts_utterance_impl.h"
 #include "content/public/browser/tts_platform.h"
 #include "content/public/browser/visibility.h"
@@ -22,7 +21,7 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/mojom/speech/speech_synthesis.mojom.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 #include "content/public/browser/tts_controller_delegate.h"
 #endif
 
@@ -73,10 +72,6 @@ class MockTtsPlatformImpl : public TtsPlatform {
   void ClearError() override { error_.clear(); }
   void Shutdown() override {}
   void FinalizeVoiceOrdering(std::vector<VoiceData>& voices) override {}
-  void GetVoicesForBrowserContext(
-      content::BrowserContext* browser_context,
-      const GURL& source_url,
-      std::vector<content::VoiceData>* out_voices) override {}
   void RefreshVoices() override {}
 
   void SetPlatformImplSupported(bool state) { platform_supported_ = state; }
@@ -104,8 +99,10 @@ class MockTtsPlatformImpl : public TtsPlatform {
     utterance_id_ = -1;
   }
 
+  void ClearController() { controller_ = nullptr; }
+
  private:
-  const raw_ptr<TtsController> controller_;
+  raw_ptr<TtsController> controller_;
   bool platform_supported_ = true;
   bool platform_initialized_ = true;
   std::vector<VoiceData> voices_;
@@ -133,6 +130,22 @@ class MockTtsEngineDelegate : public TtsEngineDelegate {
   void Speak(TtsUtterance* utterance, const VoiceData& voice) override {
     utterance_id_ = utterance->GetId();
   }
+
+  void UninstallLanguageRequest(content::BrowserContext* browser_context,
+                                const std::string& lang,
+                                const std::string& client_id,
+                                int source,
+                                bool uninstall_immediately) override {}
+
+  void InstallLanguageRequest(BrowserContext* browser_context,
+                              const std::string& lang,
+                              const std::string& client_id,
+                              int source) override {}
+
+  void LanguageStatusRequest(BrowserContext* browser_context,
+                             const std::string& lang,
+                             const std::string& client_id,
+                             int source) override {}
 
   void LoadBuiltInTtsEngine(BrowserContext* browser_context) override {}
 
@@ -166,7 +179,7 @@ class MockTtsEngineDelegate : public TtsEngineDelegate {
   int stop_called_ = 0;
 };
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 class MockTtsControllerDelegate : public TtsControllerDelegate {
  public:
   MockTtsControllerDelegate() = default;
@@ -194,7 +207,7 @@ class MockTtsControllerDelegate : public TtsControllerDelegate {
                                         double* volume) override {}
 
  private:
-  BrowserContext* last_browser_context_ = nullptr;
+  raw_ptr<BrowserContext> last_browser_context_ = nullptr;
   PreferredVoiceIds ids_;
 };
 #endif
@@ -214,7 +227,7 @@ class TestTtsControllerImpl : public TtsControllerImpl {
   using TtsControllerImpl::GetMatchingVoice;
   using TtsControllerImpl::SpeakNextUtterance;
   using TtsControllerImpl::UpdateUtteranceDefaults;
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   using TtsControllerImpl::SetTtsControllerDelegateForTesting;
 #endif
   using TtsControllerImpl::IsPausedForTesting;
@@ -239,7 +252,7 @@ class TtsControllerTest : public testing::Test {
     // since it has no extensions.
     controller()->SetTtsEngineDelegate(&engine_delegate_);
 #endif  // !BUILDFLAG(IS_ANDROID)
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
     controller()->SetTtsControllerDelegateForTesting(&delegate_);
 #endif
     controller()->AddVoicesChangedDelegate(&voices_changed_);
@@ -255,10 +268,15 @@ class TtsControllerTest : public testing::Test {
   TestBrowserContext* browser_context() { return browser_context_.get(); }
   MockTtsEngineDelegate* engine_delegate() { return &engine_delegate_; }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   MockTtsControllerDelegate* delegate() { return &delegate_; }
 #endif
-  void ReleaseTtsController() { controller_.reset(); }
+  void ReleaseTtsController() {
+    // Need to clear the controller on MockTtsPlatformImpl to avoid a dangling
+    // pointer.
+    platform_impl_->ClearController();
+    controller_.reset();
+  }
   void ReleaseBrowserContext() {
     // BrowserContext::~BrowserContext(...) is calling OnBrowserContextDestroyed
     // on the tts controller singleton. That call is simulated here to ensures
@@ -292,29 +310,13 @@ class TtsControllerTest : public testing::Test {
   std::unique_ptr<MockTtsPlatformImpl> platform_impl_;
   std::unique_ptr<TestBrowserContext> browser_context_;
   MockTtsEngineDelegate engine_delegate_;
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   MockTtsControllerDelegate delegate_;
 #endif
   MockVoicesChangedDelegate voices_changed_;
 };
 
-TEST_F(TtsControllerTest, TestTtsControllerShutdown) {
-  std::unique_ptr<TtsUtterance> utterance1 = TtsUtterance::Create();
-  utterance1->SetShouldClearQueue(false);
-  utterance1->SetSrcId(1);
-  controller()->SpeakOrEnqueue(std::move(utterance1));
-
-  std::unique_ptr<TtsUtterance> utterance2 = TtsUtterance::Create();
-  utterance2->SetShouldClearQueue(false);
-  utterance2->SetSrcId(2);
-  controller()->SpeakOrEnqueue(std::move(utterance2));
-
-  // Make sure that deleting the controller when there are pending
-  // utterances doesn't cause a crash.
-  ReleaseTtsController();
-}
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 TEST_F(TtsControllerTest, TestBrowserContextRemoved) {
   std::vector<VoiceData> voices;
   VoiceData voice_data;
@@ -467,7 +469,7 @@ TEST_F(TtsControllerTest, TestGetMatchingVoice) {
     utterance->SetEngineId("id5");
     EXPECT_EQ(5, controller()->GetMatchingVoice(utterance.get(), voices));
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
     TtsControllerDelegate::PreferredVoiceIds preferred_voice_ids;
     preferred_voice_ids.locale_voice_id.emplace("Voice7", "id7");
     preferred_voice_ids.any_locale_voice_id.emplace("Android", "");
@@ -534,7 +536,7 @@ TEST_F(TtsControllerTest, TestGetMatchingVoice) {
     utterance->SetLang("");
     EXPECT_EQ(1, controller()->GetMatchingVoice(utterance.get(), voices));
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
     // voice0 is matched against the system language which has no region piece.
     TestContentBrowserClient::GetInstance()->set_application_locale("en");
     EXPECT_EQ(0, controller()->GetMatchingVoice(utterance.get(), voices));
@@ -572,7 +574,7 @@ TEST_F(TtsControllerTest, TestGetMatchingVoice) {
     utterance->SetLang("EN-US");
     EXPECT_EQ(0, controller()->GetMatchingVoice(utterance.get(), voices));
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
     // Add another English voice.
     VoiceData voice2;
     voice2.engine_id = "id1";
@@ -591,6 +593,22 @@ TEST_F(TtsControllerTest, TestGetMatchingVoice) {
     EXPECT_EQ(2, controller()->GetMatchingVoice(utterance.get(), voices));
 #endif
   }
+}
+
+TEST_F(TtsControllerTest, TestTtsControllerShutdown) {
+  std::unique_ptr<TtsUtterance> utterance1 = TtsUtterance::Create();
+  utterance1->SetShouldClearQueue(false);
+  utterance1->SetSrcId(1);
+  controller()->SpeakOrEnqueue(std::move(utterance1));
+
+  std::unique_ptr<TtsUtterance> utterance2 = TtsUtterance::Create();
+  utterance2->SetShouldClearQueue(false);
+  utterance2->SetSrcId(2);
+  controller()->SpeakOrEnqueue(std::move(utterance2));
+
+  // Make sure that deleting the controller when there are pending
+  // utterances doesn't cause a crash.
+  ReleaseTtsController();
 }
 
 TEST_F(TtsControllerTest, StopsWhenWebContentsDestroyed) {
@@ -715,14 +733,6 @@ TEST_F(TtsControllerTest, SkipsQueuedUtteranceFromHiddenWebContents) {
   controller()->OnTtsEvent(utterance1_id, TTS_EVENT_END, 0, 0, {});
   EXPECT_EQ(nullptr, TtsControllerCurrentUtterance());
   EXPECT_TRUE(IsUtteranceListEmpty());
-}
-
-TEST_F(TtsControllerTest, PauseResumeNoUtterance) {
-  // Pause should not call the platform API when there is no utterance.
-  controller()->Pause();
-  controller()->Resume();
-  EXPECT_EQ(0, platform_impl()->pause_called());
-  EXPECT_EQ(0, platform_impl()->resume_called());
 }
 
 TEST_F(TtsControllerTest, SpeakPauseResume) {
@@ -989,6 +999,14 @@ TEST_F(TtsControllerTest, EngineIdSetNoDelegateSpeakPauseResumeStop) {
   EXPECT_FALSE(controller()->IsSpeaking());
 }
 
+TEST_F(TtsControllerTest, PauseResumeNoUtterance) {
+  // Pause should not call the platform API when there is no utterance.
+  controller()->Pause();
+  controller()->Resume();
+  EXPECT_EQ(0, platform_impl()->pause_called());
+  EXPECT_EQ(0, platform_impl()->resume_called());
+}
+
 TEST_F(TtsControllerTest, PlatformNotSupported) {
   std::unique_ptr<WebContents> web_contents = CreateWebContents();
   std::unique_ptr<TtsUtteranceImpl> utterance =
@@ -1010,7 +1028,6 @@ TEST_F(TtsControllerTest, PlatformNotSupported) {
   EXPECT_EQ(0, platform_impl()->stop_speaking_called());
 }
 
-#if !BUILDFLAG(IS_CHROMEOS_LACROS)
 TEST_F(TtsControllerTest, SpeakWhenLoadingPlatformImpl) {
   platform_impl()->SetPlatformImplInitialized(false);
 
@@ -1064,14 +1081,9 @@ TEST_F(TtsControllerTest, GetVoicesOnlineOffline) {
   EXPECT_EQ(1U, controller_voices.size());
   EXPECT_EQ("offline", controller_voices[0].name);
 }
-#endif  // !BUILDFLAG(IS_CHROMEOS_LACROS)
 
 #if !BUILDFLAG(IS_ANDROID)
 TEST_F(TtsControllerTest, SpeakWhenLoadingBuiltInEngine) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  platform_impl()->SetPlatformImplSupported(false);
-#endif
-
   engine_delegate()->set_is_built_in_tts_engine_initialized(false);
 
   std::vector<VoiceData> voices;

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,7 @@ LevelDBWrapper::Iterator::Iterator(LevelDBWrapper* db)
       db_iterator_(db->db_->NewIterator(leveldb::ReadOptions())),
       map_iterator_(db->pending_.end()) {}
 
-LevelDBWrapper::Iterator::~Iterator() {}
+LevelDBWrapper::Iterator::~Iterator() = default;
 
 bool LevelDBWrapper::Iterator::Valid() {
   return map_iterator_ != db_->pending_.end() ||
@@ -150,7 +150,7 @@ LevelDBWrapper::LevelDBWrapper(std::unique_ptr<leveldb::DB> db)
   DCHECK(db_);
 }
 
-LevelDBWrapper::~LevelDBWrapper() {}
+LevelDBWrapper::~LevelDBWrapper() = default;
 
 void LevelDBWrapper::Put(const std::string& key, const std::string& value) {
   pending_[key] = Transaction(PUT_OPERATION, value);
@@ -177,7 +177,6 @@ leveldb::Status LevelDBWrapper::Get(const std::string& key,
       return leveldb::Status::NotFound(leveldb::Slice());
   }
   NOTREACHED();
-  return leveldb::Status::NotSupported("Not supported operation.");
 }
 
 std::unique_ptr<LevelDBWrapper::Iterator> LevelDBWrapper::NewIterator() {

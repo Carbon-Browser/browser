@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "ui/gfx/color_space.h"
 #include "ui/gfx/gpu_fence.h"
 #include "ui/gfx/gpu_fence_handle.h"
 #include "ui/gfx/overlay_plane_data.h"
@@ -33,8 +34,18 @@ struct WaylandOverlayConfig {
   int z_order = 0;
 
   // Specifies how the buffer is to be transformed during composition.
-  gfx::OverlayTransform transform =
+  // Note: A |gfx::OverlayTransform| transforms the buffer within its bounds and
+  // does not affect |bounds_rect|.
+  absl::variant<gfx::OverlayTransform, gfx::Transform> transform =
       gfx::OverlayTransform::OVERLAY_TRANSFORM_NONE;
+
+  // Specifies if alpha blending, with premultiplied alpha should be applied at
+  // scanout.
+  bool enable_blend = false;
+
+  // Specifies priority of this overlay if delegated composition is supported
+  // and enabled.
+  gfx::OverlayPriorityHint priority_hint = gfx::OverlayPriorityHint::kNone;
 
   // A unique id for the buffer, which is used to identify imported wl_buffers
   // on the browser process.
@@ -53,13 +64,9 @@ struct WaylandOverlayConfig {
   // This sets the source rectangle of Wayland Viewport.
   gfx::RectF crop_rect = {1.f, 1.f};
 
-  // Describes the changed region of the buffer. Optional to hint a partial
-  // swap.
+  // Damage in viz::Display space, the same space as |bounds_rect|. Optional
+  // to hint a partial swap.
   gfx::Rect damage_region;
-
-  // Specifies if alpha blending, with premultiplied alpha should be applied at
-  // scanout.
-  bool enable_blend = false;
 
   // Opacity of the overlay independent of buffer alpha.
   // Valid values are [0.0, 1.0f].
@@ -70,18 +77,10 @@ struct WaylandOverlayConfig {
   // compositing.
   gfx::GpuFenceHandle access_fence_handle;
 
-  // Specifies priority of this overlay if delegated composition is supported
-  // and enabled.
-  gfx::OverlayPriorityHint priority_hint = gfx::OverlayPriorityHint::kNone;
-
-  // Specifies rounded clip bounds of the overlay if delegated composition is
-  // supported and enabled.
-  gfx::RRectF rounded_clip_bounds;
-
-  // Optional: background color of this overlay plane.
-  absl::optional<SkColor> background_color;
+  // Specifies the color space data of the wayland config.
+  std::optional<gfx::ColorSpace> color_space;
 };
 
 }  // namespace wl
 
-#endif  // COMPONENTS_VIZ_COMMON_QUADS_COMPOSITOR_FRAME_H_
+#endif  // UI_OZONE_PLATFORM_WAYLAND_COMMON_WAYLAND_OVERLAY_CONFIG_H_

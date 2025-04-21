@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,23 +7,20 @@
 #include <windows.h>
 #include <winternl.h>
 
-#include <lm.h>  // Needed for LSA_UNICODE_STRING
+#include <lm.h>
 #include <process.h>
 
-#define _NTDEF_  // Prevent redefition errors, must come after <winternl.h>
-#include <ntsecapi.h>  // For POLICY_ALL_ACCESS types
-
+#include <algorithm>
 #include <memory>
 
 #include "base/containers/span.h"
-#include "base/cxx17_backports.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/win/ntsecapi_shim.h"
 #include "chrome/credential_provider/common/gcp_strings.h"
 #include "chrome/credential_provider/gaiacp/gcp_utils.h"
 #include "chrome/credential_provider/gaiacp/gcpw_strings.h"
 #include "chrome/credential_provider/gaiacp/logging.h"
 #include "chrome/credential_provider/gaiacp/os_user_manager.h"
-#include "chrome/credential_provider/gaiacp/reg_utils.h"
 #include "chrome/credential_provider/gaiacp/win_http_url_fetcher.h"
 
 namespace credential_provider {
@@ -235,9 +232,9 @@ HRESULT GemDeviceDetailsManager::UploadDeviceDetailsInternal(
     hr = S_OK;
   }
 
-  base::Value mac_address_value_list(base::Value::Type::LIST);
+  base::Value::List mac_address_value_list;
   for (const std::string& mac_address : mac_addresses)
-    mac_address_value_list.Append(base::Value(mac_address));
+    mac_address_value_list.Append(mac_address);
 
   std::wstring dm_token_value = dm_token;
   if (dm_token_value.empty()) {
@@ -248,53 +245,48 @@ HRESULT GemDeviceDetailsManager::UploadDeviceDetailsInternal(
     }
   }
 
-  request_dict_ = std::make_unique<base::Value>(base::Value::Type::DICTIONARY);
-  request_dict_->SetStringKey(
-      kUploadDeviceDetailsRequestSerialNumberParameterName,
-      base::WideToUTF8(serial_number));
-  request_dict_->SetStringKey(
-      kUploadDeviceDetailsRequestMachineGuidParameterName,
-      base::WideToUTF8(machine_guid));
-  request_dict_->SetStringKey(kUploadDeviceDetailsRequestUserSidParameterName,
-                              base::WideToUTF8(sid));
+  request_dict_ = std::make_unique<base::Value::Dict>();
+  request_dict_->Set(kUploadDeviceDetailsRequestSerialNumberParameterName,
+                     base::WideToUTF8(serial_number));
+  request_dict_->Set(kUploadDeviceDetailsRequestMachineGuidParameterName,
+                     base::WideToUTF8(machine_guid));
+  request_dict_->Set(kUploadDeviceDetailsRequestUserSidParameterName,
+                     base::WideToUTF8(sid));
 
   if (!username.empty()) {
-    request_dict_->SetStringKey(
-        kUploadDeviceDetailsRequestUsernameParameterName,
-        base::WideToUTF8(username));
+    request_dict_->Set(kUploadDeviceDetailsRequestUsernameParameterName,
+                       base::WideToUTF8(username));
   }
 
   if (!domain.empty()) {
-    request_dict_->SetStringKey(kUploadDeviceDetailsRequestDomainParameterName,
-                                base::WideToUTF8(domain));
+    request_dict_->Set(kUploadDeviceDetailsRequestDomainParameterName,
+                       base::WideToUTF8(domain));
   }
 
-  request_dict_->SetBoolKey(kIsAdJoinedUserParameterName,
-                            OSUserManager::Get()->IsUserDomainJoined(sid));
-  request_dict_->SetKey(kMacAddressParameterName,
-                        std::move(mac_address_value_list));
-  request_dict_->SetStringKey(kOsVersion, version);
-  request_dict_->SetStringKey(kBuiltInAdminNameParameterName,
-                              base::WideToUTF8(built_in_admin_name));
-  request_dict_->SetStringKey(kAdminGroupNameParameterName,
-                              base::WideToUTF8(admin_group_name));
-  request_dict_->SetStringKey(kDmToken, base::WideToUTF8(dm_token_value));
+  request_dict_->Set(kIsAdJoinedUserParameterName,
+                     OSUserManager::Get()->IsUserDomainJoined(sid));
+  request_dict_->Set(kMacAddressParameterName,
+                     std::move(mac_address_value_list));
+  request_dict_->Set(kOsVersion, version);
+  request_dict_->Set(kBuiltInAdminNameParameterName,
+                     base::WideToUTF8(built_in_admin_name));
+  request_dict_->Set(kAdminGroupNameParameterName,
+                     base::WideToUTF8(admin_group_name));
+  request_dict_->Set(kDmToken, base::WideToUTF8(dm_token_value));
 
   if (!obfuscated_user_id.empty()) {
-    request_dict_->SetStringKey(kObfuscatedGaiaId,
-                                base::WideToUTF8(obfuscated_user_id));
+    request_dict_->Set(kObfuscatedGaiaId, base::WideToUTF8(obfuscated_user_id));
   }
 
   std::wstring known_resource_id = device_resource_id.empty()
                                        ? GetUserDeviceResourceId(sid)
                                        : device_resource_id;
   if (!known_resource_id.empty()) {
-    request_dict_->SetStringKey(
-        kUploadDeviceDetailsRequestDeviceResourceIdParameterName,
-        base::WideToUTF8(known_resource_id));
+    request_dict_->Set(kUploadDeviceDetailsRequestDeviceResourceIdParameterName,
+                       base::WideToUTF8(known_resource_id));
   }
 
-  absl::optional<base::Value> request_result;
+  std::optional<base::Value> request_result;
 
   hr = WinHttpUrlFetcher::BuildRequestAndFetchResultFromHttpService(
       GemDeviceDetailsManager::Get()->GetGemServiceUploadDeviceDetailsUrl(),
@@ -307,7 +299,7 @@ HRESULT GemDeviceDetailsManager::UploadDeviceDetailsInternal(
     return E_FAIL;
   }
 
-  std::string* resource_id = request_result->FindStringKey(
+  auto* resource_id = request_result->GetDict().FindString(
       kUploadDeviceDetailsResponseDeviceResourceIdParameterName);
   if (resource_id) {
     hr = SetUserProperty(sid, kRegUserDeviceResourceId,

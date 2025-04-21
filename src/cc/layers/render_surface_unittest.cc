@@ -1,4 +1,4 @@
-// Copyright 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,6 @@
 #include "cc/test/fake_layer_tree_host_impl.h"
 #include "cc/test/fake_picture_layer_impl.h"
 #include "cc/test/layer_tree_impl_test_base.h"
-#include "cc/test/mock_occlusion_tracker.h"
 #include "cc/test/test_task_graph_runner.h"
 #include "cc/trees/layer_tree_impl.h"
 #include "cc/trees/single_thread_proxy.h"
@@ -87,11 +86,11 @@ TEST(RenderSurfaceTest, VerifySurfaceChangesAreTrackedProperly) {
   // This test checks that SurfacePropertyChanged() has the correct behavior.
   //
 
-  LayerTreeImplTestBase impl;
+  LayerTreeImplTestBase impl(CommitToActiveTreeLayerListSettings());
   LayerImpl* root = impl.root_layer();
   LayerTreeImpl* active_tree = impl.host_impl()->active_tree();
 
-  LayerImpl* layer = impl.AddLayer<LayerImpl>();
+  LayerImpl* layer = impl.AddLayerInActiveTree<LayerImpl>();
   CopyProperties(root, layer);
   CreateEffectNode(layer).render_surface_reason = RenderSurfaceReason::kTest;
 
@@ -135,10 +134,10 @@ TEST(RenderSurfaceTest, VerifySurfaceChangesAreTrackedProperly) {
 }
 
 TEST(RenderSurfaceTest, SanityCheckSurfaceCreatesCorrectSharedQuadState) {
-  LayerTreeImplTestBase impl;
+  LayerTreeImplTestBase impl(CommitToActiveTreeLayerListSettings());
   LayerImpl* root = impl.root_layer();
 
-  LayerImpl* layer = impl.AddLayer<LayerImpl>();
+  LayerImpl* layer = impl.AddLayerInActiveTree<LayerImpl>();
   CopyProperties(root, layer);
   auto& effect_node = CreateEffectNode(layer);
   effect_node.render_surface_reason = RenderSurfaceReason::kBlendMode;
@@ -170,10 +169,8 @@ TEST(RenderSurfaceTest, SanityCheckSurfaceCreatesCorrectSharedQuadState) {
   viz::SharedQuadState* shared_quad_state =
       render_pass->shared_quad_state_list.front();
 
-  EXPECT_EQ(30.0,
-            shared_quad_state->quad_to_target_transform.matrix().rc(0, 3));
-  EXPECT_EQ(40.0,
-            shared_quad_state->quad_to_target_transform.matrix().rc(1, 3));
+  EXPECT_EQ(30.0, shared_quad_state->quad_to_target_transform.rc(0, 3));
+  EXPECT_EQ(40.0, shared_quad_state->quad_to_target_transform.rc(1, 3));
   EXPECT_EQ(content_rect,
             gfx::Rect(shared_quad_state->visible_quad_layer_rect));
   EXPECT_EQ(1.f, shared_quad_state->opacity);
@@ -181,10 +178,11 @@ TEST(RenderSurfaceTest, SanityCheckSurfaceCreatesCorrectSharedQuadState) {
 }
 
 TEST(RenderSurfaceTest, SanityCheckSurfaceCreatesCorrectRenderPass) {
-  LayerTreeImplTestBase impl;
+  LayerTreeImplTestBase impl(CommitToActiveTreeLayerListSettings());
   LayerImpl* root = impl.root_layer();
+  LayerImpl* layer = impl.AddLayerInActiveTree<LayerImpl>();
+  impl.SetElementIdsForTesting();
 
-  LayerImpl* layer = impl.AddLayer<LayerImpl>();
   CopyProperties(root, layer);
   auto& effect_node = CreateEffectNode(layer);
   effect_node.render_surface_reason = RenderSurfaceReason::kTest;
@@ -203,24 +201,26 @@ TEST(RenderSurfaceTest, SanityCheckSurfaceCreatesCorrectRenderPass) {
 
   auto pass = render_surface->CreateRenderPass();
 
-  EXPECT_EQ(viz::CompositorRenderPassId{2}, pass->id);
+  EXPECT_EQ(viz::CompositorRenderPassId(layer->element_id().GetInternalValue()),
+            pass->id);
   EXPECT_EQ(content_rect, pass->output_rect);
   EXPECT_EQ(origin, pass->transform_to_root_target);
 }
 
 TEST(RenderSurfaceTest, SanityCheckSurfaceIgnoreMaskLayerOcclusion) {
-  LayerTreeImplTestBase impl;
+  LayerTreeImplTestBase impl(CommitToActiveTreeLayerListSettings());
   LayerImpl* root = impl.root_layer();
   // Set a big enough viewport to show the entire render pass.
   impl.host_impl()->active_tree()->SetDeviceViewportRect(gfx::Rect(1000, 1000));
 
-  auto* layer = impl.AddLayer<LayerImpl>();
+  auto* layer = impl.AddLayerInActiveTree<LayerImpl>();
   layer->SetBounds(gfx::Size(200, 100));
   layer->SetDrawsContent(true);
   CopyProperties(root, layer);
   CreateEffectNode(layer);
 
-  auto* mask_layer = impl.AddLayer<FakePictureLayerImplForRenderSurfaceTest>();
+  auto* mask_layer =
+      impl.AddLayerInActiveTree<FakePictureLayerImplForRenderSurfaceTest>();
   scoped_refptr<FakeRasterSource> raster_source(
       FakeRasterSource::CreateFilled(mask_layer->bounds()));
   mask_layer->SetRasterSource(raster_source, Region());

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,8 @@
 #include <memory>
 #include <utility>
 
+#include "base/memory/raw_ref.h"
+#include "base/test/bind.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/mojom/script/script_type.mojom-blink.h"
 #include "third_party/blink/public/platform/modules/service_worker/web_service_worker_provider.h"
@@ -19,13 +21,16 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_gc_controller.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
+#include "third_party/blink/renderer/core/dom/events/event.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/page/focus_controller.h"
 #include "third_party/blink/renderer/core/testing/page_test_base.h"
+#include "third_party/blink/renderer/core/testing/wait_for_event.h"
 #include "third_party/blink/renderer/modules/service_worker/navigator_service_worker.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/thread_state.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
@@ -38,38 +43,21 @@ namespace {
 
 // Promise-related test support.
 
-struct StubScriptFunction {
+class StubScriptFunction : public ThenCallable<IDLAny, StubScriptFunction> {
  public:
-  StubScriptFunction() : call_count_(0) {}
-
-  // The returned ScriptFunction can outlive the StubScriptFunction,
-  // but it should not be called after the StubScriptFunction dies.
-  v8::Local<v8::Function> GetFunction(ScriptState* script_state) {
-    return MakeGarbageCollected<ScriptFunction>(
-               script_state, MakeGarbageCollected<ScriptFunctionImpl>(*this))
-        ->V8Function();
+  void React(ScriptState*, ScriptValue result) { result_ = result; }
+  ScriptValue Result() const {
+    CHECK(!result_.IsEmpty());
+    return result_;
   }
 
-  size_t CallCount() { return call_count_; }
-  ScriptValue Arg() { return arg_; }
-  void Trace(Visitor* visitor) const { visitor->Trace(arg_); }
+  void Trace(Visitor* visitor) const override {
+    ThenCallable<IDLAny, StubScriptFunction>::Trace(visitor);
+    visitor->Trace(result_);
+  }
 
  private:
-  size_t call_count_;
-  ScriptValue arg_;
-
-  class ScriptFunctionImpl : public ScriptFunction::Callable {
-   public:
-    explicit ScriptFunctionImpl(StubScriptFunction& owner) : owner_(owner) {}
-
-    ScriptValue Call(ScriptState*, ScriptValue arg) override {
-      owner_.arg_ = arg;
-      owner_.call_count_++;
-      return ScriptValue();
-    }
-
-    StubScriptFunction& owner_;
-  };
+  ScriptValue result_;
 };
 
 class ScriptValueTest {
@@ -81,16 +69,13 @@ class ScriptValueTest {
 // Runs microtasks and expects |promise| to be rejected. Calls
 // |valueTest| with the value passed to |reject|, if any.
 void ExpectRejected(ScriptState* script_state,
-                    ScriptPromise& promise,
+                    ScriptPromise<ServiceWorkerRegistration>& promise,
                     const ScriptValueTest& value_test) {
-  StubScriptFunction resolved, rejected;
-  promise.Then(resolved.GetFunction(script_state),
-               rejected.GetFunction(script_state));
-  v8::MicrotasksScope::PerformCheckpoint(promise.GetIsolate());
-  EXPECT_EQ(0ul, resolved.CallCount());
-  EXPECT_EQ(1ul, rejected.CallCount());
-  if (rejected.CallCount())
-    value_test(script_state, rejected.Arg());
+  StubScriptFunction* rejected = MakeGarbageCollected<StubScriptFunction>();
+  promise.Catch(script_state, rejected);
+  script_state->GetContext()->GetMicrotaskQueue()->PerformCheckpoint(
+      script_state->GetIsolate());
+  value_test(script_state, rejected->Result());
 }
 
 // DOM-related test support.
@@ -105,7 +90,7 @@ class ExpectDOMException : public ScriptValueTest {
   ~ExpectDOMException() override = default;
 
   void operator()(ScriptState* script_state, ScriptValue value) const override {
-    DOMException* exception = V8DOMException::ToImplWithTypeCheck(
+    DOMException* exception = V8DOMException::ToWrappable(
         script_state->GetIsolate(), value.V8Value());
     EXPECT_TRUE(exception) << "the value should be a DOMException";
     if (!exception)
@@ -139,9 +124,10 @@ class ExpectTypeError : public ScriptValueTest {
             .ToLocalChecked();
 
     EXPECT_EQ("TypeError",
-              ToCoreString(name->ToString(context).ToLocalChecked()));
-    EXPECT_EQ(expected_message_,
-              ToCoreString(message->ToString(context).ToLocalChecked()));
+              ToCoreString(isolate, name->ToString(context).ToLocalChecked()));
+    EXPECT_EQ(
+        expected_message_,
+        ToCoreString(isolate, message->ToString(context).ToLocalChecked()));
   }
 
  private:
@@ -181,7 +167,6 @@ class ServiceWorkerContainerTest : public PageTestBase {
     ThreadState::Current()->CollectAllGarbageForTesting();
   }
 
-  v8::Isolate* GetIsolate() { return v8::Isolate::GetCurrent(); }
   ScriptState* GetScriptState() {
     return ToScriptStateForMainWorld(GetDocument().GetFrame());
   }
@@ -202,7 +187,7 @@ class ServiceWorkerContainerTest : public PageTestBase {
     ScriptState::Scope script_scope(GetScriptState());
     RegistrationOptions* options = RegistrationOptions::Create();
     options->setScope(scope);
-    ScriptPromise promise =
+    ScriptPromise<ServiceWorkerRegistration> promise =
         container->registerServiceWorker(GetScriptState(), script_url, options);
     ExpectRejected(GetScriptState(), promise, value_test);
   }
@@ -214,7 +199,7 @@ class ServiceWorkerContainerTest : public PageTestBase {
             *GetFrame().DomWindow(),
             std::make_unique<NotReachedWebServiceWorkerProvider>());
     ScriptState::Scope script_scope(GetScriptState());
-    ScriptPromise promise =
+    ScriptPromise<ServiceWorkerRegistration> promise =
         container->getRegistration(GetScriptState(), document_url);
     ExpectRejected(GetScriptState(), promise, value_test);
   }
@@ -309,11 +294,11 @@ class StubWebServiceWorkerProvider {
         const WebFetchClientSettingsObject& fetch_client_settings_object,
         std::unique_ptr<WebServiceWorkerRegistrationCallbacks> callbacks)
         override {
-      owner_.register_call_count_++;
-      owner_.register_scope_ = scope;
-      owner_.register_script_url_ = script_url;
-      owner_.script_type_ = script_type;
-      owner_.update_via_cache_ = update_via_cache;
+      owner_->register_call_count_++;
+      owner_->register_scope_ = scope;
+      owner_->register_script_url_ = script_url;
+      owner_->script_type_ = script_type;
+      owner_->update_via_cache_ = update_via_cache;
       registration_callbacks_to_delete_.push_back(std::move(callbacks));
     }
 
@@ -321,8 +306,8 @@ class StubWebServiceWorkerProvider {
         const WebURL& document_url,
         std::unique_ptr<WebServiceWorkerGetRegistrationCallbacks> callbacks)
         override {
-      owner_.get_registration_call_count_++;
-      owner_.get_registration_url_ = document_url;
+      owner_->get_registration_call_count_++;
+      owner_->get_registration_url_ = document_url;
       get_registration_callbacks_to_delete_.push_back(std::move(callbacks));
     }
 
@@ -333,7 +318,7 @@ class StubWebServiceWorkerProvider {
     }
 
    private:
-    StubWebServiceWorkerProvider& owner_;
+    const raw_ref<StubWebServiceWorkerProvider> owner_;
     Vector<std::unique_ptr<WebServiceWorkerRegistrationCallbacks>>
         registration_callbacks_to_delete_;
     Vector<std::unique_ptr<WebServiceWorkerGetRegistrationCallbacks>>
@@ -448,6 +433,93 @@ TEST_F(ServiceWorkerContainerTest, Register_TypeOptionDelegatesToProvider) {
     EXPECT_EQ(mojom::ServiceWorkerUpdateViaCache::kImports,
               stub_provider.UpdateViaCache());
   }
+}
+
+WebServiceWorkerObjectInfo MakeServiceWorkerObjectInfo() {
+  return {1,
+          mojom::blink::ServiceWorkerState::kActivated,
+          WebURL(KURL(KURL(), "http://localhost/x/y/worker.js")),
+          {},
+          {}};
+}
+
+TransferableMessage MakeTransferableMessage() {
+  TransferableMessage message;
+  message.owned_encoded_message = {0xff, 0x09, '0'};
+  message.encoded_message = message.owned_encoded_message;
+  message.sender_agent_cluster_id = base::UnguessableToken::Create();
+  return message;
+}
+
+TEST_F(ServiceWorkerContainerTest, ReceiveMessage) {
+  SetPageURL("http://localhost/x/index.html");
+
+  StubWebServiceWorkerProvider stub_provider;
+  ServiceWorkerContainer* container = ServiceWorkerContainer::CreateForTesting(
+      *GetFrame().DomWindow(), stub_provider.Provider());
+
+  base::RunLoop run_loop;
+  auto* wait = MakeGarbageCollected<WaitForEvent>();
+  wait->AddEventListener(container, event_type_names::kMessage);
+  wait->AddEventListener(container, event_type_names::kMessageerror);
+  wait->AddCompletionClosure(run_loop.QuitClosure());
+  container->ReceiveMessage(MakeServiceWorkerObjectInfo(),
+                            MakeTransferableMessage());
+  run_loop.Run();
+
+  auto* event = wait->GetLastEvent();
+  EXPECT_EQ(event->type(), event_type_names::kMessage);
+}
+
+TEST_F(ServiceWorkerContainerTest, ReceiveMessageLockedToAgentCluster) {
+  SetPageURL("http://localhost/x/index.html");
+
+  StubWebServiceWorkerProvider stub_provider;
+  ServiceWorkerContainer* container = ServiceWorkerContainer::CreateForTesting(
+      *GetFrame().DomWindow(), stub_provider.Provider());
+
+  base::RunLoop run_loop;
+  auto* wait = MakeGarbageCollected<WaitForEvent>();
+  wait->AddEventListener(container, event_type_names::kMessage);
+  wait->AddEventListener(container, event_type_names::kMessageerror);
+  wait->AddCompletionClosure(run_loop.QuitClosure());
+  auto message = MakeTransferableMessage();
+  message.locked_to_sender_agent_cluster = true;
+  container->ReceiveMessage(MakeServiceWorkerObjectInfo(), std::move(message));
+  run_loop.Run();
+
+  auto* event = wait->GetLastEvent();
+  EXPECT_EQ(event->type(), event_type_names::kMessageerror);
+}
+
+TEST_F(ServiceWorkerContainerTest, ReceiveMessageWhichCannotDeserialize) {
+  SetPageURL("http://localhost/x/index.html");
+
+  StubWebServiceWorkerProvider stub_provider;
+  LocalDOMWindow* window = GetFrame().DomWindow();
+  ServiceWorkerContainer* container = ServiceWorkerContainer::CreateForTesting(
+      *window, stub_provider.Provider());
+
+  SerializedScriptValue::ScopedOverrideCanDeserializeInForTesting
+      override_can_deserialize_in(base::BindLambdaForTesting(
+          [&](const SerializedScriptValue& value,
+              ExecutionContext* execution_context, bool can_deserialize) {
+            EXPECT_EQ(execution_context, window);
+            EXPECT_TRUE(can_deserialize);
+            return false;
+          }));
+
+  base::RunLoop run_loop;
+  auto* wait = MakeGarbageCollected<WaitForEvent>();
+  wait->AddEventListener(container, event_type_names::kMessage);
+  wait->AddEventListener(container, event_type_names::kMessageerror);
+  wait->AddCompletionClosure(run_loop.QuitClosure());
+  container->ReceiveMessage(MakeServiceWorkerObjectInfo(),
+                            MakeTransferableMessage());
+  run_loop.Run();
+
+  auto* event = wait->GetLastEvent();
+  EXPECT_EQ(event->type(), event_type_names::kMessageerror);
 }
 
 }  // namespace

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -168,9 +168,9 @@ class HidReportDescriptorItem {
  private:
   size_t GetHeaderSize() const;
 
-  raw_ptr<HidReportDescriptorItem> previous_;
-  raw_ptr<HidReportDescriptorItem> next_;
-  raw_ptr<HidReportDescriptorItem> parent_;
+  raw_ptr<HidReportDescriptorItem, DanglingUntriaged> previous_;
+  raw_ptr<HidReportDescriptorItem, DanglingUntriaged> next_;
+  raw_ptr<HidReportDescriptorItem, DanglingUntriaged> parent_;
   Tag tag_;
   uint32_t shortData_;
   size_t payload_size_;

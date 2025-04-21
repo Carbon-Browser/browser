@@ -1,17 +1,19 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/assistant/model/assistant_response.h"
 
-#include <algorithm>
 #include <utility>
 
 #include "ash/assistant/model/assistant_response_observer.h"
 #include "ash/assistant/model/ui/assistant_error_element.h"
 #include "ash/assistant/model/ui/assistant_ui_element.h"
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "base/unguessable_token.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
 #include "chromeos/ash/services/assistant/public/cpp/features.h"
@@ -94,7 +96,7 @@ class AssistantResponse::Processor {
   }
 
   // |response_| should outlive the Processor.
-  AssistantResponse* const response_;
+  const raw_ptr<AssistantResponse> response_;
   ProcessingCallback callback_;
 
   int processing_count_ = 0;
@@ -169,8 +171,8 @@ void AssistantResponse::AddSuggestions(
   NotifySuggestionsAdded(suggestions);
 }
 
-const chromeos::assistant::AssistantSuggestion*
-AssistantResponse::GetSuggestionById(const base::UnguessableToken& id) const {
+const assistant::AssistantSuggestion* AssistantResponse::GetSuggestionById(
+    const base::UnguessableToken& id) const {
   for (auto& suggestion : suggestions_) {
     if (suggestion.id == id)
       return &suggestion;
@@ -178,7 +180,7 @@ AssistantResponse::GetSuggestionById(const base::UnguessableToken& id) const {
   return nullptr;
 }
 
-const std::vector<chromeos::assistant::AssistantSuggestion>&
+const std::vector<assistant::AssistantSuggestion>&
 AssistantResponse::GetSuggestions() const {
   return suggestions_;
 }
@@ -204,11 +206,8 @@ bool AssistantResponse::ContainsUiElement(
     const AssistantUiElement* element) const {
   DCHECK(element);
 
-  bool contains_element =
-      std::any_of(ui_elements_.cbegin(), ui_elements_.cend(),
-                  [element](const std::unique_ptr<AssistantUiElement>& other) {
-                    return *other == *element;
-                  });
+  bool contains_element = base::Contains(
+      ui_elements_, *element, &std::unique_ptr<AssistantUiElement>::operator*);
 
   return contains_element || ContainsPendingUiElement(element);
 }
@@ -217,9 +216,10 @@ bool AssistantResponse::ContainsPendingUiElement(
     const AssistantUiElement* element) const {
   DCHECK(element);
 
-  return std::any_of(pending_ui_elements_.cbegin(), pending_ui_elements_.cend(),
-                     [element](const std::unique_ptr<PendingUiElement>& other) {
-                       return *other->ui_element == *element;
-                     });
+  return base::ranges::any_of(
+      pending_ui_elements_,
+      [element](const std::unique_ptr<PendingUiElement>& other) {
+        return *other->ui_element == *element;
+      });
 }
 }  // namespace ash

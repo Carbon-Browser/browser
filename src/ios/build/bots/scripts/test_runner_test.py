@@ -1,5 +1,5 @@
 #!/usr/bin/env vpython3
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -17,6 +17,7 @@ import result_sink_util
 import test_apps
 from test_result_util import ResultCollection, TestResult, TestStatus
 import test_runner
+import xcode_util
 
 
 class TestCase(unittest.TestCase):
@@ -42,6 +43,16 @@ class TestCase(unittest.TestCase):
         member, getattr(obj, member))
     setattr(obj, member, mock)
 
+  def unmock(self, obj, member):
+    """Uninstalls the mock from the named member of given obj.
+
+    Args:
+      obj: An obj who's member has been mocked
+      member: String naming the attribute of the object to unmock
+    """
+    if self._mocks[obj][member]:
+      setattr(obj, member, self._mocks[obj][member])
+
   def tearDown(self, *args, **kwargs):
     """Uninstalls mocks."""
     super(TestCase, self).tearDown(*args, **kwargs)
@@ -63,14 +74,15 @@ class SimulatorTestRunnerTest(TestCase):
     self.mock(test_runner, 'get_current_xcode_info', lambda: {
         'version': 'test version', 'build': 'test build', 'path': 'test/path'})
     self.mock(test_apps, 'get_bundle_id', lambda _: 'fake-bundle-id')
-    self.mock(test_apps.SimulatorXCTestUnitTestsApp,
-              '_xctest_path', lambda _: 'fake-path')
-    self.mock(test_apps.plistlib, 'writePlist', lambda _1, _2: '')
+    self.mock(xcode_util, 'xctest_path', lambda _: 'fake-path')
+    self.mock(test_apps.plistlib, 'dump', lambda _1, _2: '')
     self.mock(os.path, 'abspath', lambda path: '/abs/path/to/%s' % path)
     self.mock(os.path, 'exists', lambda _: True)
     self.mock(test_runner.TestRunner, 'set_sigterm_handler',
       lambda self, handler: 0)
     self.mock(os, 'listdir', lambda _: [])
+    self.mock(test_apps.GTestsApp, 'fill_xctest_run',
+              lambda _, folder: '/abs/path/to/%s' % folder)
 
   def test_app_not_found(self):
     """Ensures AppNotFoundError is raised."""
@@ -92,11 +104,11 @@ class SimulatorTestRunnerTest(TestCase):
 
     with self.assertRaises(test_runner.SimulatorNotFoundError):
       test_runner.SimulatorTestRunner(
-        'fake-app',
-        'fake-iossim',
-        'iPhone X',
-        '11.4',
-        'out-dir',
+          'fake-app',
+          'fake-iossim',
+          'iPhone X',
+          '11.4',
+          'out-dir',
       )
 
   def test_init(self):
@@ -130,7 +142,7 @@ class SimulatorTestRunnerTest(TestCase):
     )
     with self.assertRaises(test_runner.AppLaunchError):
       tr.launch()
-    self.assertEquals(len(mock_run.mock_calls), 2)
+    self.assertEqual(len(mock_run.mock_calls), 2)
 
   def test_relaunch(self):
     """Ensures test is relaunched on test crash until tests complete."""
@@ -138,7 +150,7 @@ class SimulatorTestRunnerTest(TestCase):
       return
 
     @staticmethod
-    def _run(cmd, shards=None):
+    def _run(cmd, clones=None):
       if not any('retry_after_crash' in cmd_arg for cmd_arg in cmd):
         # First run, has no test filter supplied. Mock a crash.
         result = ResultCollection(
@@ -185,7 +197,7 @@ class SimulatorTestRunnerTest(TestCase):
     tr = test_runner.SimulatorTestRunner(
         'fake-app', 'fake-iossim', 'iPhone X', '11.4', 'out-dir', retries=3)
     tr.launch()
-    self.assertEquals(len(mock_run.mock_calls), 3)
+    self.assertEqual(len(mock_run.mock_calls), 3)
     self.assertTrue(tr.logs)
 
   @mock.patch('test_runner.SimulatorTestRunner.tear_down')
@@ -212,7 +224,7 @@ class SimulatorTestRunnerTest(TestCase):
     tr = test_runner.SimulatorTestRunner(
         'fake-app', 'fake-iossim', 'iPhone X', '11.4', 'out-dir', retries=3)
     tr.launch()
-    self.assertEquals(len(mock_run.mock_calls), 5)
+    self.assertEqual(len(mock_run.mock_calls), 5)
     self.assertTrue(tr.test_results['interrupted'])
     self.assertIn('test suite crash', tr.logs)
     self.assertTrue(tr.logs)
@@ -240,7 +252,7 @@ class SimulatorTestRunnerTest(TestCase):
     tr = test_runner.SimulatorTestRunner(
         'fake-app', 'fake-iossim', 'iPhone X', '11.4', 'out-dir', retries=3)
     tr.launch()
-    self.assertEquals(len(mock_run.mock_calls), 5)
+    self.assertEqual(len(mock_run.mock_calls), 5)
     self.assertFalse(tr.test_results['interrupted'])
     self.assertTrue(tr.logs)
 
@@ -262,10 +274,27 @@ class SimulatorTestRunnerTest(TestCase):
     tr = test_runner.SimulatorTestRunner(
         'fake-app', 'fake-iossim', 'iPhone X', '11.4', 'out-dir', retries=3)
     tr.launch()
-    self.assertEquals(len(mock_run.mock_calls), 4)
+    self.assertEqual(len(mock_run.mock_calls), 4)
     self.assertFalse(tr.test_results['interrupted'])
-    self.assertEquals(tr.test_results['tests']['test1']['actual'],
-                      'FAIL FAIL FAIL SKIP')
+    self.assertEqual(tr.test_results['tests']['test1']['actual'],
+                     'FAIL FAIL FAIL SKIP')
+    self.assertTrue(tr.logs)
+
+  @mock.patch('test_runner.SimulatorTestRunner.tear_down')
+  @mock.patch('test_runner.SimulatorTestRunner.set_up')
+  @mock.patch('test_runner.TestRunner._run')
+  def test_crashed_spawning_launcher_no_retry(self, mock_run, _1, _2):
+    test1_crash_result = TestResult('test1', TestStatus.CRASH)
+    initial_result = ResultCollection(test_results=[test1_crash_result])
+    initial_result.crashed = True
+    initial_result.spawning_test_launcher = True
+    mock_run.side_effect = [initial_result]
+    tr = test_runner.SimulatorTestRunner(
+        'fake-app', 'fake-iossim', 'iPhone X', '11.4', 'out-dir', retries=3)
+    tr.launch()
+    self.assertEqual(len(mock_run.mock_calls), 1)
+    self.assertTrue(tr.test_results['interrupted'])
+    self.assertIn('test suite crash', tr.logs)
     self.assertTrue(tr.logs)
 
 
@@ -287,7 +316,6 @@ class DeviceTestRunnerTest(TestCase):
     self.mock(os.path, 'exists', lambda _: True)
     self.mock(os, 'listdir', lambda _: [])
     self.mock(tempfile, 'mkstemp', lambda: '/tmp/tmp_file')
-
     self.tr = test_runner.DeviceTestRunner(
         'fake-app',
         'xcode-version',

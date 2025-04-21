@@ -1,10 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/public/test/test_utils.h"
 
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
@@ -27,7 +28,7 @@ TEST(ContentTestUtils, NestedRunAllTasksUntilIdleWithPendingThreadPoolWork) {
 
   base::RunLoop run_loop;
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindLambdaForTesting([&]() {
         // Nested RunAllTasksUntilIdle() (i.e. crbug.com/1035189).
         content::RunAllTasksUntilIdle();
@@ -68,7 +69,7 @@ TEST(ContentTestUtils, NestedFlushRealIOThread) {
 
   base::RunLoop run_loop;
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindLambdaForTesting([&]() {
         content::RunAllPendingInMessageLoop(content::BrowserThread::IO);
         EXPECT_TRUE(io_task_completed);

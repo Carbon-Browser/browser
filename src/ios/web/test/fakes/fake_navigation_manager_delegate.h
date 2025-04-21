@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 #define IOS_WEB_TEST_FAKES_FAKE_NAVIGATION_MANAGER_DELEGATE_H_
 
 #import "ios/web/navigation/navigation_manager_delegate.h"
+
+#import "base/memory/raw_ptr.h"
 
 @protocol CRWWebViewNavigationProxy;
 
@@ -28,6 +30,7 @@ class FakeNavigationManagerDelegate : public NavigationManagerDelegate {
                                bool has_user_gesture) override;
   void RemoveWebView() override;
   NavigationItemImpl* GetPendingItem() override;
+  GURL GetCurrentURL() const override;
 
   // Setters for tests to inject dependencies.
   void SetWebViewNavigationProxy(id test_web_view);
@@ -35,7 +38,7 @@ class FakeNavigationManagerDelegate : public NavigationManagerDelegate {
 
  private:
   id test_web_view_;
-  WebState* web_state_ = nullptr;
+  raw_ptr<WebState> web_state_ = nullptr;
 };
 
 }  // namespace web

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/signin/public/identity_manager/access_token_info.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
@@ -32,7 +33,7 @@ class TokenFetcher {
       GoogleServiceAuthError error,
       signin::AccessTokenInfo access_token_info);
 
-  signin::IdentityManager* identity_manager_;
+  raw_ptr<signin::IdentityManager, LeakedDanglingUntriaged> identity_manager_;
   std::unique_ptr<signin::AccessTokenFetcher> token_fetcher_;
 
   base::WeakPtrFactory<TokenFetcher> weak_ptr_factory_{this};

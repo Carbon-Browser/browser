@@ -1,14 +1,14 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/hud_display/cpu_graph_page_view.h"
 
+#include <algorithm>
 #include <numeric>
 
 #include "ash/hud_display/hud_constants.h"
-#include "base/bind.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
@@ -20,29 +20,26 @@ namespace hud_display {
 ////////////////////////////////////////////////////////////////////////////////
 // CpuGraphPageView, public:
 
-BEGIN_METADATA(CpuGraphPageView, GraphPageViewBase)
-END_METADATA
-
 CpuGraphPageView::CpuGraphPageView(const base::TimeDelta refresh_interval)
     : cpu_other_(kHUDGraphWidth,
-                 Graph::Baseline::BASELINE_BOTTOM,
-                 Graph::Fill::SOLID,
-                 Graph::Style::LINES,
+                 Graph::Baseline::kBaselineBottom,
+                 Graph::Fill::kSolid,
+                 Graph::Style::kLines,
                  SkColorSetA(SK_ColorMAGENTA, kHUDAlpha)),
       cpu_system_(kHUDGraphWidth,
-                  Graph::Baseline::BASELINE_BOTTOM,
-                  Graph::Fill::SOLID,
-                  Graph::Style::LINES,
+                  Graph::Baseline::kBaselineBottom,
+                  Graph::Fill::kSolid,
+                  Graph::Style::kLines,
                   SkColorSetA(SK_ColorRED, kHUDAlpha)),
       cpu_user_(kHUDGraphWidth,
-                Graph::Baseline::BASELINE_BOTTOM,
-                Graph::Fill::SOLID,
-                Graph::Style::LINES,
+                Graph::Baseline::kBaselineBottom,
+                Graph::Fill::kSolid,
+                Graph::Style::kLines,
                 SkColorSetA(SK_ColorBLUE, kHUDAlpha)),
       cpu_idle_(kHUDGraphWidth,
-                Graph::Baseline::BASELINE_BOTTOM,
-                Graph::Fill::SOLID,
-                Graph::Style::LINES,
+                Graph::Baseline::kBaselineBottom,
+                Graph::Fill::kSolid,
+                Graph::Style::kLines,
                 SkColorSetA(SK_ColorDKGRAY, kHUDAlpha)) {
   const int data_width = cpu_other_.max_data_points();
   // Verical ticks are drawn every 10% (10/100 interval).
@@ -62,7 +59,7 @@ CpuGraphPageView::CpuGraphPageView(const base::TimeDelta refresh_interval)
 
   Legend::Formatter formatter = base::BindRepeating([](float value) {
     return base::ASCIIToUTF16(
-        base::StringPrintf("%d %%", base::clamp((int)(value * 100), 0, 100)));
+        base::StringPrintf("%d %%", std::clamp((int)(value * 100), 0, 100)));
   });
 
   const std::vector<Legend::Entry> legend(
@@ -108,8 +105,9 @@ void CpuGraphPageView::UpdateData(const DataSource::Snapshot& snapshot) {
   const float total = snapshot.cpu_idle_part + snapshot.cpu_user_part +
                       snapshot.cpu_system_part + snapshot.cpu_other_part;
   // Nothing to do if data is not available yet (sum < 1%).
-  if (total < 0.01)
+  if (total < 0.01) {
     return;
+  }
 
   // Assume total already equals 1, no need to re-weight.
 
@@ -122,6 +120,9 @@ void CpuGraphPageView::UpdateData(const DataSource::Snapshot& snapshot) {
 
   RefreshLegendValues();
 }
+
+BEGIN_METADATA(CpuGraphPageView)
+END_METADATA
 
 }  // namespace hud_display
 }  // namespace ash

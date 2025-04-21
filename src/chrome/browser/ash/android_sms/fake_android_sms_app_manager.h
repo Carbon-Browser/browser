@@ -1,13 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_ANDROID_SMS_FAKE_ANDROID_SMS_APP_MANAGER_H_
 #define CHROME_BROWSER_ASH_ANDROID_SMS_FAKE_ANDROID_SMS_APP_MANAGER_H_
 
-#include "ash/services/multidevice_setup/public/cpp/fake_android_sms_app_helper_delegate.h"
+#include <optional>
+
 #include "chrome/browser/ash/android_sms/android_sms_app_manager.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chromeos/ash/services/multidevice_setup/public/cpp/fake_android_sms_app_helper_delegate.h"
 #include "url/gurl.h"
 
 namespace ash {
@@ -29,23 +30,16 @@ class FakeAndroidSmsAppManager
 
   ~FakeAndroidSmsAppManager() override;
 
-  void SetInstalledAppUrl(const absl::optional<GURL>& url);
+  void SetInstalledAppUrl(const std::optional<GURL>& url);
 
  private:
   // AndroidSmsAppManager:
-  absl::optional<GURL> GetCurrentAppUrl() override;
+  std::optional<GURL> GetCurrentAppUrl() override;
 
-  absl::optional<GURL> url_;
+  std::optional<GURL> url_;
 };
 
 }  // namespace android_sms
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the migration is finished.
-namespace chromeos {
-namespace android_sms {
-using ::ash::android_sms::FakeAndroidSmsAppManager;
-}
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_ANDROID_SMS_FAKE_ANDROID_SMS_APP_MANAGER_H_

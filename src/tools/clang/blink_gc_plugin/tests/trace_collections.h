@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,10 +31,8 @@ private:
 
     HeapHashMap<int, Member<HeapObject> > m_heapMapKey;
     HeapHashMap<Member<HeapObject>, int > m_heapMapVal;
-    HashMap<int, Member<HeapObject>, void, void, void, HeapAllocator>
-    m_wtfMapKey;
-    HashMap<Member<HeapObject>, int, void, void, void, HeapAllocator>
-    m_wtfMapVal;
+    HashMap<int, Member<HeapObject>, void, void, HeapAllocator> m_wtfMapKey;
+    HashMap<Member<HeapObject>, int, void, void, HeapAllocator> m_wtfMapVal;
 };
 
 }

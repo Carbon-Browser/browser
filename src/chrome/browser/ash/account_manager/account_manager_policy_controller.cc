@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <string>
 
 #include "ash/constants/ash_pref_names.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/sequence_checker.h"
 #include "chrome/browser/ash/account_manager/account_manager_edu_coexistence_controller.h"
 #include "chrome/browser/ash/account_manager/account_manager_util.h"
@@ -17,6 +17,7 @@
 #include "components/account_manager_core/chromeos/account_manager_facade_factory.h"
 #include "components/account_manager_core/pref_names.h"
 #include "components/prefs/pref_service.h"
+#include "google_apis/gaia/gaia_id.h"
 
 namespace ash {
 
@@ -86,7 +87,7 @@ void AccountManagerPolicyController::RemoveSecondaryAccounts(
     }
 
     if (device_account_id_.GetAccountType() == AccountType::GOOGLE &&
-        account.key.id() == device_account_id_.GetGaiaId()) {
+        GaiaId(account.key.id()) == device_account_id_.GetGaiaId()) {
       // Do not remove the Device Account.
       continue;
     }

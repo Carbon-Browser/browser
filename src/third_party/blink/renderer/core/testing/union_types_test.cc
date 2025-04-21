@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,6 @@ UnionTypesTest::doubleOrStringOrStringSequenceAttribute() const {
           attribute_string_sequence_);
   }
   NOTREACHED();
-  return nullptr;
 }
 
 void UnionTypesTest::setDoubleOrStringOrStringSequenceAttribute(
@@ -63,7 +62,6 @@ String UnionTypesTest::doubleOrStringArg(V8UnionDoubleOrString* arg) {
   }
 
   NOTREACHED();
-  return String();
 }
 
 String UnionTypesTest::doubleOrInternalEnumArg(
@@ -79,15 +77,14 @@ String UnionTypesTest::doubleOrInternalEnumArg(
   }
 
   NOTREACHED();
-  return String();
 }
 
 String UnionTypesTest::doubleOrStringSequenceArg(
-    HeapVector<Member<V8UnionDoubleOrString>>& sequence) {
+    const HeapVector<Member<V8UnionDoubleOrString>>& sequence) {
   StringBuilder builder;
   for (auto& double_or_string : sequence) {
     DCHECK(double_or_string);
-    if (!builder.IsEmpty())
+    if (!builder.empty())
       builder.Append(", ");
     switch (double_or_string->GetContentType()) {
       case V8UnionDoubleOrString::ContentType::kDouble:
@@ -123,7 +120,6 @@ String UnionTypesTest::nodeListOrElementOrNullArg(
   }
 
   NOTREACHED();
-  return String();
 }
 
 String UnionTypesTest::doubleOrStringOrStringSequenceArg(
@@ -154,7 +150,6 @@ String UnionTypesTest::doubleOrStringOrStringSequenceArg(
   }
 
   NOTREACHED();
-  return String();
 }
 
 }  // namespace blink

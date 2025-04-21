@@ -1,22 +1,22 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMEOS_ASH_SERVICES_ASSISTANT_MEDIA_SESSION_ASSISTANT_MEDIA_SESSION_H_
 #define CHROMEOS_ASH_SERVICES_ASSISTANT_MEDIA_SESSION_ASSISTANT_MEDIA_SESSION_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/timer/timer.h"
 #include "base/unguessable_token.h"
-#include "chromeos/services/libassistant/public/mojom/media_controller.mojom-forward.h"
+#include "chromeos/ash/services/libassistant/public/mojom/media_controller.mojom-forward.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote_set.h"
 #include "services/media_session/public/mojom/audio_focus.mojom.h"
 #include "services/media_session/public/mojom/media_session.mojom.h"
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 class MediaHost;
 
@@ -46,6 +46,8 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AssistantMediaSession
   void PreviousTrack() override {}
   void NextTrack() override {}
   void SkipAd() override {}
+  void PreviousSlide() override {}
+  void NextSlide() override {}
   void Seek(base::TimeDelta seek_time) override {}
   void Stop(SuspendType suspend_type) override {}
   void GetMediaImageBitmap(const media_session::MediaImage& image,
@@ -56,19 +58,22 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AssistantMediaSession
   void ScrubTo(base::TimeDelta seek_time) override {}
   void EnterPictureInPicture() override {}
   void ExitPictureInPicture() override {}
-  void SetAudioSinkId(const absl::optional<std::string>& sink_id) override {}
+  void GetVisibility(GetVisibilityCallback callback) override;
+  void SetAudioSinkId(const std::optional<std::string>& sink_id) override {}
   void ToggleMicrophone() override {}
   void ToggleCamera() override {}
   void HangUp() override {}
   void Raise() override {}
   void SetMute(bool mute) override {}
+  void RequestMediaRemoting() override {}
+  void EnterAutoPictureInPicture() override {}
 
   // Requests/abandons audio focus to the AudioFocusManager.
   void RequestAudioFocus(media_session::mojom::AudioFocusType audio_focus_type);
   void AbandonAudioFocusIfNeeded();
 
   void NotifyMediaSessionMetadataChanged(
-      const chromeos::libassistant::mojom::MediaState& status);
+      const libassistant::mojom::MediaState& status);
 
   base::WeakPtr<AssistantMediaSession> GetWeakPtr();
 
@@ -109,7 +114,7 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AssistantMediaSession
   // The current metadata associated with the current media session.
   media_session::MediaMetadata metadata_;
 
-  MediaHost* const host_;
+  const raw_ptr<MediaHost> host_;
 
   scoped_refptr<base::SequencedTaskRunner> main_task_runner_;
   // Binding for Mojo pointer to |this| held by AudioFocusManager.
@@ -136,7 +141,6 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AssistantMediaSession
   base::WeakPtrFactory<AssistantMediaSession> weak_factory_{this};
 };
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant
 
 #endif  // CHROMEOS_ASH_SERVICES_ASSISTANT_MEDIA_SESSION_ASSISTANT_MEDIA_SESSION_H_

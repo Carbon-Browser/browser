@@ -1,9 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/critical_notification_bubble_view.h"
 
+#include "base/i18n/time_formatting.h"
 #include "base/metrics/user_metrics.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/browser_process.h"
@@ -13,7 +14,7 @@
 #include "chrome/browser/ui/views/chrome_typography.h"
 #include "chrome/browser/upgrade_detector/upgrade_detector.h"
 #include "chrome/common/pref_names.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/grit/locale_settings.h"
 #include "components/prefs/pref_service.h"
@@ -22,7 +23,9 @@
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
 #include "ui/base/resource/resource_bundle.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/bubble/bubble_frame_view.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/layout/fill_layout.h"
@@ -31,15 +34,22 @@
 
 using base::UserMetricsAction;
 
-////////////////////////////////////////////////////////////////////////////////
-// CriticalNotificationBubbleView
+CriticalNotificationBubbleView::TimeFormatter g_time_formatter =
+    &base::TimeDurationFormatWithSeconds;
+
+CriticalNotificationBubbleView::ScopedSetTimeFormatterForTesting::
+    ScopedSetTimeFormatterForTesting(TimeFormatter time_formatter)
+    : resetter_(&g_time_formatter, time_formatter) {}
+
+CriticalNotificationBubbleView::ScopedSetTimeFormatterForTesting::
+    ~ScopedSetTimeFormatterForTesting() = default;
 
 CriticalNotificationBubbleView::CriticalNotificationBubbleView(
     views::View* anchor_view)
     : BubbleDialogDelegateView(anchor_view, views::BubbleBorder::TOP_RIGHT) {
-  SetButtonLabel(ui::DIALOG_BUTTON_OK,
+  SetButtonLabel(ui::mojom::DialogButton::kOk,
                  l10n_util::GetStringUTF16(IDS_CRITICAL_NOTIFICATION_RESTART));
-  SetButtonLabel(ui::DIALOG_BUTTON_CANCEL,
+  SetButtonLabel(ui::mojom::DialogButton::kCancel,
                  l10n_util::GetStringUTF16(IDS_CANCEL));
   SetAcceptCallback(
       base::BindOnce(&CriticalNotificationBubbleView::OnDialogAccepted,
@@ -48,16 +58,16 @@ CriticalNotificationBubbleView::CriticalNotificationBubbleView(
       base::BindOnce(&CriticalNotificationBubbleView::OnDialogCancelled,
                      base::Unretained(this)));
   set_close_on_deactivate(false);
+
+  GetViewAccessibility().SetRole(ax::mojom::Role::kAlertDialog);
 }
 
-CriticalNotificationBubbleView::~CriticalNotificationBubbleView() {
-}
+CriticalNotificationBubbleView::~CriticalNotificationBubbleView() = default;
 
 base::TimeDelta CriticalNotificationBubbleView::GetRemainingTime() const {
   // How long to give the user until auto-restart if no action is taken.
-  constexpr auto kCountdownDuration = base::Seconds(30);
   const base::TimeDelta time_lapsed = base::TimeTicks::Now() - bubble_created_;
-  return kCountdownDuration - time_lapsed;
+  return base::Seconds(30) - time_lapsed;
 }
 
 void CriticalNotificationBubbleView::OnCountdown() {
@@ -86,9 +96,12 @@ void CriticalNotificationBubbleView::OnCountdown() {
 
 std::u16string CriticalNotificationBubbleView::GetWindowTitle() const {
   const auto remaining_time = GetRemainingTime();
-  return remaining_time.is_positive()
-             ? l10n_util::GetPluralStringFUTF16(IDS_CRITICAL_NOTIFICATION_TITLE,
-                                                remaining_time.InSeconds())
+  std::u16string formatted_time;
+  return remaining_time.is_positive() &&
+                 (*g_time_formatter)(remaining_time, base::DURATION_WIDTH_WIDE,
+                                     &formatted_time)
+             ? l10n_util::GetStringFUTF16(IDS_CRITICAL_NOTIFICATION_TITLE,
+                                          formatted_time)
              : l10n_util::GetStringUTF16(
                    IDS_CRITICAL_NOTIFICATION_TITLE_ALTERNATE);
 }
@@ -104,8 +117,9 @@ void CriticalNotificationBubbleView::OnDialogCancelled() {
   // the user selects, for example, "Stay on this page" during an
   // onbeforeunload handler.
   PrefService* prefs = g_browser_process->local_state();
-  if (prefs->HasPrefPath(prefs::kRestartLastSessionOnShutdown))
+  if (prefs->HasPrefPath(prefs::kRestartLastSessionOnShutdown)) {
     prefs->ClearPref(prefs::kRestartLastSessionOnShutdown);
+  }
 }
 
 void CriticalNotificationBubbleView::OnDialogAccepted() {
@@ -135,16 +149,12 @@ void CriticalNotificationBubbleView::Init() {
   base::RecordAction(UserMetricsAction("CriticalNotificationShown"));
 }
 
-void CriticalNotificationBubbleView::GetAccessibleNodeData(
-    ui::AXNodeData* node_data) {
-  node_data->role = ax::mojom::Role::kAlertDialog;
-}
-
 void CriticalNotificationBubbleView::ViewHierarchyChanged(
     const views::ViewHierarchyChangedDetails& details) {
-  if (details.is_add && details.child == this)
+  if (details.is_add && details.child == this) {
     NotifyAccessibilityEvent(ax::mojom::Event::kAlert, true);
+  }
 }
 
-BEGIN_METADATA(CriticalNotificationBubbleView, views::BubbleDialogDelegateView)
+BEGIN_METADATA(CriticalNotificationBubbleView)
 END_METADATA

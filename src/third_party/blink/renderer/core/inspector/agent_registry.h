@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,7 +53,7 @@ class CORE_EXPORT AgentRegistry {
   // modification.
   bool RequiresCopy() const { return iteration_counter_ != 0; }
 
-  bool IsEmpty() const { return agents_.IsEmpty(); }
+  bool IsEmpty() const { return agents_.empty(); }
 
   wtf_size_t size() const { return agents_.size(); }
 
@@ -70,9 +70,8 @@ class CORE_EXPORT AgentRegistry {
   template <typename ForEachCallable>
   void ForEachAgent(const ForEachCallable& callable) const {
     iteration_counter_++;
-    auto* end = agents_.end();
-    for (auto* agent = agents_.begin(); agent != end; agent++) {
-      callable(agent->Get());
+    for (const Member<AgentType>& agent : agents_) {
+      callable(agent);
     }
     if (iteration_counter_ > 0)
       iteration_counter_--;
@@ -88,4 +87,4 @@ class CORE_EXPORT AgentRegistry {
 
 }  // namespace blink
 
-#endif  // THIRD_PARTY_BLINK_RENDERER_CORE_INSPRCTOR_AGENT_REGISTRY_H_
+#endif  // THIRD_PARTY_BLINK_RENDERER_CORE_INSPECTOR_AGENT_REGISTRY_H_

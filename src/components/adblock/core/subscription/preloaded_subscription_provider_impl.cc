@@ -17,14 +17,14 @@
 
 #include "components/adblock/core/subscription/preloaded_subscription_provider_impl.h"
 
-#include "base/bind.h"
+#include <string_view>
+
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/pattern.h"
-#include "base/strings/string_piece.h"
 #include "base/trace_event/trace_event.h"
-#include "components/adblock/core/common/adblock_prefs.h"
 #include "components/adblock/core/common/adblock_utils.h"
 #include "components/adblock/core/common/flatbuffer_data.h"
 #include "components/adblock/core/subscription/installed_subscription_impl.h"
@@ -35,7 +35,7 @@ namespace adblock {
 namespace {
 
 bool HasSubscriptionWithMatchingUrl(const std::vector<GURL>& collection,
-                                    base::StringPiece pattern) {
+                                    std::string_view pattern) {
   return std::find_if(collection.begin(), collection.end(),
                       [pattern](const GURL& url) {
                         return base::MatchPattern(url.spec(), pattern);
@@ -64,11 +64,11 @@ class PreloadedSubscriptionProviderImpl::SingleSubscriptionProvider {
           utils::MakeFlatbufferDataFromResourceBundle(
               info_.flatbuffer_resource_id),
           Subscription::InstallationState::Preloaded, base::Time());
-      DLOG(INFO) << "[eyeo] Preloaded subscription now in use: "
-                 << subscription_->GetSourceUrl();
+      VLOG(1) << "[eyeo] Preloaded subscription now in use: "
+              << subscription_->GetSourceUrl();
     } else if (!needs_subscription && subscription_) {
-      DLOG(INFO) << "[eyeo] Preloaded subscription no longer in use: "
-                 << subscription_->GetSourceUrl();
+      VLOG(1) << "[eyeo] Preloaded subscription no longer in use: "
+              << subscription_->GetSourceUrl();
       subscription_.reset();
     }
   }
@@ -86,13 +86,7 @@ class PreloadedSubscriptionProviderImpl::SingleSubscriptionProvider {
 
 PreloadedSubscriptionProviderImpl::~PreloadedSubscriptionProviderImpl() =
     default;
-PreloadedSubscriptionProviderImpl::PreloadedSubscriptionProviderImpl(
-    PrefService* prefs) {
-  adblocking_enabled_.Init(
-      prefs::kEnableAdblock, prefs,
-      base::BindRepeating(
-          &PreloadedSubscriptionProviderImpl::OnAdblockingEnabledChanged,
-          base::Unretained(this)));
+PreloadedSubscriptionProviderImpl::PreloadedSubscriptionProviderImpl() {
   for (const auto& info : config::GetPreloadedSubscriptionConfiguration()) {
     providers_.emplace_back(info);
   }
@@ -103,8 +97,7 @@ void PreloadedSubscriptionProviderImpl::UpdateSubscriptions(
     std::vector<GURL> pending_subscriptions) {
   installed_subscriptions_ = std::move(installed_subscriptions);
   pending_subscriptions_ = std::move(pending_subscriptions);
-  if (adblocking_enabled_.GetValue())
-    UpdateSubscriptionsInternal();
+  UpdateSubscriptionsInternal();
 }
 
 std::vector<scoped_refptr<InstalledSubscription>>
@@ -112,8 +105,9 @@ PreloadedSubscriptionProviderImpl::GetCurrentPreloadedSubscriptions() const {
   std::vector<scoped_refptr<InstalledSubscription>> result;
   for (const auto& provider : providers_) {
     auto sub = provider.subscription();
-    if (sub)
+    if (sub) {
       result.push_back(sub);
+    }
   }
   return result;
 }
@@ -122,19 +116,6 @@ void PreloadedSubscriptionProviderImpl::UpdateSubscriptionsInternal() {
   for (auto& provider : providers_) {
     provider.UpdatePreloadedSubscription(installed_subscriptions_,
                                          pending_subscriptions_);
-  }
-}
-
-void PreloadedSubscriptionProviderImpl::OnAdblockingEnabledChanged() {
-  if (!adblocking_enabled_.GetValue()) {
-    // Reclaim memory by destroying preloaded subscriptions.
-    for (auto& provider : providers_) {
-      provider.Reset();
-    }
-  } else {
-    // Recreate preloaded subscriptions based on |installed_subscriptions_| and
-    // |pending_subscriptions_|.
-    UpdateSubscriptionsInternal();
   }
 }
 

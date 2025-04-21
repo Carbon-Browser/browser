@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,9 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/metrics/histogram_macros.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/android/oom_intervention/oom_intervention_config.h"
 #include "chrome/browser/android/oom_intervention/oom_intervention_decider.h"
-#include "chrome/browser/ui/android/infobars/near_oom_reduction_infobar.h"
 #include "components/back_forward_cache/back_forward_cache_disable.h"
 #include "components/messages/android/messages_feature.h"
 #include "content/public/browser/back_forward_cache.h"
@@ -62,32 +60,12 @@ void OomInterventionTabHelper::OnHighMemoryUsage() {
   if (config->is_renderer_pause_enabled() ||
       config->is_navigate_ads_enabled() ||
       config->is_purge_v8_memory_enabled()) {
-    if (messages::IsNearOomReductionMessagesUiEnabled()) {
-      near_oom_reduction_message_delegate_.ShowMessage(web_contents(), this);
-    } else {
-      NearOomReductionInfoBar::Show(web_contents(), this);
-    }
+    near_oom_reduction_message_delegate_.ShowMessage(web_contents(), this);
     intervention_state_ = InterventionState::UI_SHOWN;
   }
-  if (!last_navigation_timestamp_.is_null()) {
-    base::TimeDelta time_since_last_navigation =
-        base::TimeTicks::Now() - last_navigation_timestamp_;
-    UMA_HISTOGRAM_COUNTS_1M(
-        "Memory.Experimental.OomIntervention."
-        "RendererTimeSinceLastNavigationAtDetection",
-        time_since_last_navigation.InSeconds());
-  }
-
-  DCHECK(!start_monitor_timestamp_.is_null());
-  base::TimeDelta time_since_start_monitor =
-      base::TimeTicks::Now() - start_monitor_timestamp_;
-  UMA_HISTOGRAM_COUNTS_1M(
-      "Memory.Experimental.OomIntervention."
-      "RendererTimeSinceStartMonitoringAtDetection",
-      time_since_start_monitor.InSeconds());
 
   near_oom_detected_time_ = base::TimeTicks::Now();
-  renderer_detection_timer_.AbandonAndStop();
+  renderer_detection_timer_.Stop();
 }
 
 void OomInterventionTabHelper::AcceptIntervention() {
@@ -142,8 +120,6 @@ void OomInterventionTabHelper::DidStartNavigation(
     return;
   }
 
-  last_navigation_timestamp_ = base::TimeTicks::Now();
-
   // Filter out the first navigation.
   if (!navigation_started_) {
     navigation_started_ = true;
@@ -189,9 +165,13 @@ void OomInterventionTabHelper::OnCrashDumpProcessed(
     int rph_id,
     const crash_reporter::CrashMetricsReporter::ReportedCrashTypeSet&
         reported_counts) {
-  if (rph_id !=
-      web_contents()->GetPrimaryPage().GetMainDocument().GetProcess()->GetID())
+  if (rph_id != web_contents()
+                    ->GetPrimaryPage()
+                    .GetMainDocument()
+                    .GetProcess()
+                    ->GetDeprecatedID()) {
     return;
+  }
   if (!reported_counts.count(
           crash_reporter::CrashMetricsReporter::ProcessedCrashCounts::
               kRendererForegroundVisibleOom)) {
@@ -202,16 +182,6 @@ void OomInterventionTabHelper::OnCrashDumpProcessed(
   if (near_oom_detected_time_) {
     ResetInterventionState();
   }
-
-  base::TimeDelta time_since_last_navigation;
-  if (!last_navigation_timestamp_.is_null()) {
-    time_since_last_navigation =
-        base::TimeTicks::Now() - last_navigation_timestamp_;
-  }
-  UMA_HISTOGRAM_COUNTS_1M(
-      "Memory.Experimental.OomIntervention."
-      "RendererTimeSinceLastNavigationAtOOM",
-      time_since_last_navigation.InSeconds());
 
   if (decider_) {
     DCHECK(!web_contents()->GetBrowserContext()->IsOffTheRecord());
@@ -269,8 +239,6 @@ void OomInterventionTabHelper::StartDetectionInRenderer() {
     }
   }
 
-  start_monitor_timestamp_ = base::TimeTicks::Now();
-
   content::RenderFrameHost& main_frame =
       web_contents()->GetPrimaryPage().GetMainDocument();
 
@@ -317,7 +285,7 @@ void OomInterventionTabHelper::
 void OomInterventionTabHelper::ResetInterventionState() {
   near_oom_detected_time_.reset();
   intervention_state_ = InterventionState::NOT_TRIGGERED;
-  renderer_detection_timer_.AbandonAndStop();
+  renderer_detection_timer_.Stop();
 }
 
 void OomInterventionTabHelper::ResetInterfaces() {

@@ -1,13 +1,14 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/media_router/media_router_ui_service.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/observer_list.h"
 #include "chrome/browser/media/router/media_router_feature.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/global_media_controls/media_notification_service_factory.h"
 #include "chrome/browser/ui/media_router/media_router_ui_service_factory.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_change_registrar.h"
@@ -20,7 +21,7 @@ MediaRouterUIService::MediaRouterUIService(Profile* profile)
 
 MediaRouterUIService::MediaRouterUIService(
     Profile* profile,
-    std::unique_ptr<MediaRouterActionController> action_controller)
+    std::unique_ptr<CastToolbarButtonController> action_controller)
     : profile_(profile),
       action_controller_(std::move(action_controller)),
       profile_pref_registrar_(std::make_unique<PrefChangeRegistrar>()) {
@@ -32,7 +33,7 @@ MediaRouterUIService::MediaRouterUIService(
   ConfigureService();
 }
 
-MediaRouterUIService::~MediaRouterUIService() {}
+MediaRouterUIService::~MediaRouterUIService() = default;
 
 void MediaRouterUIService::Shutdown() {
   DisableService();
@@ -43,7 +44,7 @@ MediaRouterUIService* MediaRouterUIService::Get(Profile* profile) {
   return MediaRouterUIServiceFactory::GetForBrowserContext(profile);
 }
 
-MediaRouterActionController* MediaRouterUIService::action_controller() {
+CastToolbarButtonController* MediaRouterUIService::action_controller() {
   return action_controller_.get();
 }
 
@@ -56,17 +57,25 @@ void MediaRouterUIService::RemoveObserver(Observer* observer) {
 }
 
 void MediaRouterUIService::ConfigureService() {
-  if (!MediaRouterEnabled(profile_)) {
+  if (MediaRouterEnabled(profile_)) {
+    if (!action_controller_) {
+      action_controller_ =
+          std::make_unique<CastToolbarButtonController>(profile_);
+    }
+#if BUILDFLAG(IS_CHROMEOS)
+    // Ensure that MediaNotificationService is instantiated so that it can
+    // show the Cast device picker in Global Media Controls.
+    MediaNotificationServiceFactory::GetForProfile(profile_);
+#endif
+  } else {
     DisableService();
-  } else if (!action_controller_ && MediaRouterEnabled(profile_)) {
-    action_controller_ =
-        std::make_unique<MediaRouterActionController>(profile_);
   }
 }
 
 void MediaRouterUIService::DisableService() {
-  for (auto& observer : observers_)
+  for (auto& observer : observers_) {
     observer.OnServiceDisabled();
+  }
   action_controller_.reset();
 }
 

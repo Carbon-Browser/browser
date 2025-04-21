@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,12 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/no_destructor.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "base/values.h"
 
@@ -151,7 +152,7 @@ class CastMetricsHelper {
   // |tick_clock| just provided for unit test to construct; normally it should
   // be nullptr when accessed through GetInstance.
   CastMetricsHelper(scoped_refptr<base::SequencedTaskRunner> task_runner =
-                        base::SequencedTaskRunnerHandle::Get(),
+                        base::SequencedTaskRunner::GetCurrentDefault(),
                     const base::TickClock* tick_clock = nullptr);
   virtual ~CastMetricsHelper();
 
@@ -164,11 +165,11 @@ class CastMetricsHelper {
                              int num_buckets);
   void LogMediumTimeHistogramEvent(const std::string& name,
                                    base::TimeDelta value);
-  base::Value CreateEventBase(const std::string& name);
+  base::Value::Dict CreateEventBase(const std::string& name);
   base::TimeTicks Now();
 
   const scoped_refptr<base::SequencedTaskRunner> task_runner_;
-  const base::TickClock* const tick_clock_;
+  const raw_ptr<const base::TickClock> tick_clock_;
 
   // Start times for loading the next apps.
   base::flat_map<std::string /* app_id */, base::TimeTicks>
@@ -182,7 +183,7 @@ class CastMetricsHelper {
   std::string session_id_;
   std::string sdk_version_;
 
-  MetricsSink* metrics_sink_;
+  raw_ptr<MetricsSink> metrics_sink_;
 
   bool logged_first_audio_;
 

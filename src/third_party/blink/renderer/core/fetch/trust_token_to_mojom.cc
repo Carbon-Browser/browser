@@ -1,132 +1,179 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/fetch/trust_token_to_mojom.h"
+#include "third_party/blink/public/mojom/permissions_policy/permissions_policy_feature.mojom-blink.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_private_token.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
+#include "third_party/blink/renderer/core/execution_context/execution_context.h"
 
 namespace blink {
 
-bool ConvertTrustTokenToMojom(const TrustToken& in,
-                              ExceptionState* exception_state,
-                              network::mojom::blink::TrustTokenParams* out) {
-  DCHECK(in.hasType());  // field is required in IDL
-  if (in.type() == "token-request") {
-    out->type = network::mojom::blink::TrustTokenOperationType::kIssuance;
-    return true;
-  }
+using VersionType = V8PrivateTokenVersion::Enum;
+using OperationType = V8OperationType::Enum;
+using RefreshPolicy = V8RefreshPolicy::Enum;
+using network::mojom::blink::TrustTokenOperationStatus;
+using network::mojom::blink::TrustTokenOperationType;
 
-  if (in.type() == "token-redemption") {
-    out->type = network::mojom::blink::TrustTokenOperationType::kRedemption;
+PSTFeatures GetPSTFeatures(const ExecutionContext& execution_context) {
+  PSTFeatures features;
+  features.issuance_enabled = execution_context.IsFeatureEnabled(
+      mojom::blink::PermissionsPolicyFeature::kPrivateStateTokenIssuance);
+  features.redemption_enabled = execution_context.IsFeatureEnabled(
+      mojom::blink::PermissionsPolicyFeature::kTrustTokenRedemption);
+  return features;
+}
+
+bool ConvertTrustTokenToMojomAndCheckPermissions(
+    const PrivateToken& in,
+    const PSTFeatures& pst_features,
+    ExceptionState* exception_state,
+    network::mojom::blink::TrustTokenParams* out) {
+  // The current implementation always has these fields; the implementation
+  // always initializes them, and the hasFoo functions always return true. These
+  // DCHECKs serve as canaries for implementation changes.
+  DCHECK(in.hasOperation());
+  DCHECK(in.hasVersion());
+
+  // only version 1 exists at this time
+  DCHECK_EQ(in.version().AsEnum(), VersionType::k1);
+
+  if (in.operation().AsEnum() == OperationType::kTokenRequest) {
+    out->operation = network::mojom::blink::TrustTokenOperationType::kIssuance;
+  } else if (in.operation().AsEnum() == OperationType::kTokenRedemption) {
+    out->operation =
+        network::mojom::blink::TrustTokenOperationType::kRedemption;
 
     DCHECK(in.hasRefreshPolicy());  // default is defined
-    out->include_timestamp_header = in.includeTimestampHeader();
 
-    if (in.refreshPolicy() == "none") {
+    if (in.refreshPolicy().AsEnum() == RefreshPolicy::kNone) {
       out->refresh_policy =
           network::mojom::blink::TrustTokenRefreshPolicy::kUseCached;
-    } else if (in.refreshPolicy() == "refresh") {
+    } else if (in.refreshPolicy().AsEnum() == RefreshPolicy::kRefresh) {
       out->refresh_policy =
           network::mojom::blink::TrustTokenRefreshPolicy::kRefresh;
     }
-    return true;
-  }
-
-  DCHECK_EQ(
-      in.type(),
-      "send-redemption-record");  // final possible value of the input enum
-  out->type = network::mojom::blink::TrustTokenOperationType::kSigning;
-
-  if (in.hasSignRequestData()) {
-    if (in.signRequestData() == "omit") {
-      out->sign_request_data =
-          network::mojom::blink::TrustTokenSignRequestData::kOmit;
-    } else if (in.signRequestData() == "include") {
-      out->sign_request_data =
-          network::mojom::blink::TrustTokenSignRequestData::kInclude;
-    } else if (in.signRequestData() == "headers-only") {
-      out->sign_request_data =
-          network::mojom::blink::TrustTokenSignRequestData::kHeadersOnly;
-    }
-  }
-
-  if (in.hasAdditionalSignedHeaders()) {
-    out->additional_signed_headers = in.additionalSignedHeaders();
-  }
-
-  DCHECK(in.hasIncludeTimestampHeader());  // default is defined
-  out->include_timestamp_header = in.includeTimestampHeader();
-
-  if (in.hasIssuers() && !in.issuers().IsEmpty()) {
-    for (const String& issuer : in.issuers()) {
-      // Two conditions on the issuers:
-      // 1. HTTP or HTTPS (because much Trust Tokens protocol state is
-      // stored keyed by issuer origin, requiring HTTP or HTTPS is a way to
-      // ensure these origins serialize to unique values);
-      // 2. potentially trustworthy (a security requirement).
-      KURL parsed_url = KURL(issuer);
-      if (!parsed_url.ProtocolIsInHTTPFamily()) {
-        exception_state->ThrowTypeError(
-            "trustToken: operation type 'send-redemption-record' requires that "
-            "the 'issuers' "
-            "fields' members parse to HTTP(S) origins, but one did not: " +
-            issuer);
-        return false;
-      }
-
-      out->issuers.push_back(blink::SecurityOrigin::Create(parsed_url));
-      DCHECK(out->issuers.back());  // SecurityOrigin::Create cannot fail.
-      if (!out->issuers.back()->IsPotentiallyTrustworthy()) {
-        exception_state->ThrowTypeError(
-            "trustToken: operation type 'send-redemption-record' requires that "
-            "the 'issuers' "
-            "fields' members parse to secure origins, but one did not: " +
-            issuer);
-        return false;
-      }
-    }
   } else {
-    exception_state->ThrowTypeError(
-        "trustToken: operation type 'send-redemption-record' requires that the "
-        "'issuers' "
-        "field be present and contain at least one secure, HTTP(S) URL, but it "
-        "was missing or empty.");
-    return false;
+    // The final possible value of the type enum.
+    DCHECK_EQ(in.operation().AsEnum(), OperationType::kSendRedemptionRecord);
+    out->operation = network::mojom::blink::TrustTokenOperationType::kSigning;
+
+    if (in.hasIssuers() && !in.issuers().empty()) {
+      for (const String& issuer : in.issuers()) {
+        // Two conditions on the issuers:
+        // 1. HTTP or HTTPS (because much Trust Tokens protocol state is
+        // stored keyed by issuer origin, requiring HTTP or HTTPS is a way to
+        // ensure these origins serialize to unique values);
+        // 2. potentially trustworthy (a security requirement).
+        KURL parsed_url = KURL(issuer);
+        if (!parsed_url.ProtocolIsInHTTPFamily()) {
+          exception_state->ThrowTypeError(
+              "privateToken: operation type 'send-redemption-record' requires "
+              "that "
+              "the 'issuers' "
+              "fields' members parse to HTTP(S) origins, but one did not: " +
+              issuer);
+          return false;
+        }
+
+        out->issuers.push_back(blink::SecurityOrigin::Create(parsed_url));
+        DCHECK(out->issuers.back());  // SecurityOrigin::Create cannot fail.
+        if (!out->issuers.back()->IsPotentiallyTrustworthy()) {
+          exception_state->ThrowTypeError(
+              "privateToken: operation type 'send-redemption-record' requires "
+              "that "
+              "the 'issuers' "
+              "fields' members parse to secure origins, but one did not: " +
+              issuer);
+          return false;
+        }
+      }
+    } else {
+      exception_state->ThrowTypeError(
+          "privateToken: operation type 'send-redemption-record' requires that "
+          "the 'issuers' field be present and contain at least one secure, "
+          "HTTP(S) URL, but it was missing or empty.");
+      return false;
+    }
   }
 
-  if (in.hasAdditionalSigningData())
-    out->possibly_unsafe_additional_signing_data = in.additionalSigningData();
+  switch (out->operation) {
+    case TrustTokenOperationType::kRedemption:
+    case TrustTokenOperationType::kSigning:
+      if (!pst_features.redemption_enabled) {
+        exception_state->ThrowDOMException(
+            DOMExceptionCode::kNotAllowedError,
+            "Private State Token Redemption ('token-redemption') and signing "
+            "('send-redemption-record') operations require that the "
+            "private-state-token-redemption "
+            "Permissions Policy feature be enabled.");
+        return false;
+      }
+      break;
+    case TrustTokenOperationType::kIssuance:
+      if (!pst_features.issuance_enabled) {
+        exception_state->ThrowDOMException(
+            DOMExceptionCode::kNotAllowedError,
+            "Private State Token Issuance ('token-request') operation "
+            "requires that the private-state-token-issuance "
+            "Permissions Policy feature be enabled.");
+        return false;
+      }
+      break;
+  }
 
   return true;
 }
 
-DOMException* TrustTokenErrorToDOMException(
-    network::mojom::blink::TrustTokenOperationStatus error) {
+DOMException* TrustTokenErrorToDOMException(TrustTokenOperationStatus error) {
+  auto create = [](const String& message, DOMExceptionCode code) {
+    return DOMException::Create(message, DOMException::GetErrorName(code));
+  };
+
   // This should only be called on failure.
-  DCHECK_NE(error, network::mojom::blink::TrustTokenOperationStatus::kOk);
+  DCHECK_NE(error, TrustTokenOperationStatus::kOk);
 
   switch (error) {
-    case network::mojom::blink::TrustTokenOperationStatus::kAlreadyExists:
-      return DOMException::Create(
-          "Redemption operation aborted due to Signed Redemption Record "
-          "cache hit",
-          DOMException::GetErrorName(
-              DOMExceptionCode::kNoModificationAllowedError));
-    case network::mojom::blink::TrustTokenOperationStatus::
-        kOperationSuccessfullyFulfilledLocally:
-      return DOMException::Create(
-          "Trust Tokens operation satisfied locally, without needing to send "
-          "the request to its initial destination",
-          DOMException::GetErrorName(
-              DOMExceptionCode::kNoModificationAllowedError));
-    case network::mojom::blink::TrustTokenOperationStatus::kFailedPrecondition:
-      return DOMException::Create(
-          "Precondition failed during Trust Tokens operation",
-          DOMException::GetErrorName(DOMExceptionCode::kInvalidStateError));
+    case TrustTokenOperationStatus::kAlreadyExists:
+      return create(
+          "Redemption operation aborted due to Redemption Record cache hit",
+          DOMExceptionCode::kNoModificationAllowedError);
+    case TrustTokenOperationStatus::kOperationSuccessfullyFulfilledLocally:
+      return create(
+          "Private State Tokens operation satisfied locally, without needing "
+          "to send the request to its initial destination",
+          DOMExceptionCode::kNoModificationAllowedError);
+    case TrustTokenOperationStatus::kMissingIssuerKeys:
+      return create(
+          "No keys currently available for PST issuer. Issuer may need to "
+          "register their key commitments.",
+          DOMExceptionCode::kInvalidStateError);
+    case TrustTokenOperationStatus::kFailedPrecondition:
+      return create("Precondition failed during Private State Tokens operation",
+                    DOMExceptionCode::kInvalidStateError);
+    case TrustTokenOperationStatus::kInvalidArgument:
+      return create("Invalid arguments for Private State Tokens operation",
+                    DOMExceptionCode::kOperationError);
+    case TrustTokenOperationStatus::kResourceExhausted:
+      return create("Tokens exhausted for Private State Tokens operation",
+                    DOMExceptionCode::kOperationError);
+    case TrustTokenOperationStatus::kResourceLimited:
+      return create("Quota hit for Private State Tokens operation",
+                    DOMExceptionCode::kOperationError);
+    case TrustTokenOperationStatus::kSiteIssuerLimit:
+      return create("Limit hit for Private State Tokens issuers per site",
+                    DOMExceptionCode::kOperationError);
+    case TrustTokenOperationStatus::kUnauthorized:
+      return create(
+          "Private State Tokens API unavailable due to user settings.",
+          DOMExceptionCode::kOperationError);
+    case TrustTokenOperationStatus::kBadResponse:
+      return create("Unknown response for Private State Tokens operation",
+                    DOMExceptionCode::kOperationError);
     default:
-      return DOMException::Create(
-          "Error executing Trust Tokens operation",
-          DOMException::GetErrorName(DOMExceptionCode::kOperationError));
+      return create("Error executing Trust Tokens operation",
+                    DOMExceptionCode::kOperationError);
   }
 }
 

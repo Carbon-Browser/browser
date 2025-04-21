@@ -1,18 +1,15 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 package org.chromium.content_public.browser;
 
-import android.os.Build;
-import android.os.Bundle;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewStructure;
 import android.view.accessibility.AccessibilityNodeProvider;
 
-import androidx.annotation.RequiresApi;
-import androidx.annotation.VisibleForTesting;
-
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 import org.chromium.content.browser.accessibility.WebContentsAccessibilityImpl;
 
 /**
@@ -20,58 +17,22 @@ import org.chromium.content.browser.accessibility.WebContentsAccessibilityImpl;
  * accessibility part is lazily created upon the first request from Android framework on
  *{@link AccessibilityNodeProvider}, and shares the lifetime with {@link WebContents}.
  */
+@NullMarked
 public interface WebContentsAccessibility {
     /**
      * @param webContents {@link WebContents} object.
      * @return {@link WebContentsAccessibility} object used for the give WebContents.
      *         {@code null} if not available.
      */
-    static WebContentsAccessibility fromWebContents(WebContents webContents) {
+    static @Nullable WebContentsAccessibility fromWebContents(WebContents webContents) {
         return WebContentsAccessibilityImpl.fromWebContents(webContents);
     }
 
     /**
-     * Determines whether or not the given accessibility action can be handled.
-     * @param action The action to perform.
-     * @return Whether or not this action is supported.
+     *  Determines if the underlying native C++ a11y framework has been initialized.
+     *  @return {@code true} if the framework has been initialized.
      */
-    boolean supportsAction(int action);
-
-    /**
-     *  Determines if a11y enabled.
-     *  @return {@code true} if a11y is enabled.
-     */
-    boolean isAccessibilityEnabled();
-
-    /**
-     *  Enables a11y for testing.
-     */
-    @VisibleForTesting
-    void setAccessibilityEnabledForTesting();
-
-    /**
-     * Enables a11y service mask flags in the BrowserAccessibilityState for testing.
-     */
-    @VisibleForTesting
-    void setBrowserAccessibilityStateForTesting();
-
-    /**
-     *  Add a spelling error.
-     */
-    @VisibleForTesting
-    void addSpellingErrorForTesting(int virtualViewId, int startOffset, int endOffset);
-
-    /**
-     * Attempts to perform an accessibility action on the web content.  If the accessibility action
-     * cannot be processed, it returns {@code null}, allowing the caller to know to call the
-     * super {@link View#performAccessibilityAction(int, Bundle)} method and use that return value.
-     * Otherwise the return value from this method should be used.
-     * @param action The action to perform.
-     * @param arguments Optional action arguments.
-     * @return Whether the action was performed or {@code null} if the call should be delegated to
-     *         the super {@link View} class.
-     */
-    boolean performAction(int action, Bundle arguments);
+    boolean isNativeInitialized();
 
     /**
      * If native accessibility is enabled and no other views are temporarily
@@ -80,33 +41,38 @@ public interface WebContentsAccessibility {
      * Lazily initializes native accessibility here if it's allowed.
      * @return The AccessibilityNodeProvider, if available, or null otherwise.
      */
+    @Nullable
     AccessibilityNodeProvider getAccessibilityNodeProvider();
 
     /**
      * @see View#onProvideVirtualStructure().
      */
-    @RequiresApi(Build.VERSION_CODES.M)
     void onProvideVirtualStructure(ViewStructure structure, boolean ignoreScrollOffset);
 
     /**
-     * Set whether or not the web contents are obscured by another view.
-     * If true, we won't return an accessibility node provider or respond
-     * to touch exploration events.
+     * Notify the system that the web contents for this instance are obscured by another view.
+     *
+     * If set to true, indicates a client/embedder's view is obscuring the web contents. When the
+     * web contents are obscured, future calls to #getAccessibilityNodeProvider will return |null|,
+     * and calls to #performAction and touch exploration events will not be honored. The
+     * associated WebContentsAccessibilityImpl will return a |null| AccessibilityNodeProvider
+     * instance, and ignore actions sent from the framework.
+     *
+     * Clients may use this method for situations such as (but not limited to):
+     *      - Preventing accessibility from running after certain browser state changes
+     *      - Preventing accessibility from running when a screen/flow is blocking the web contents,
+     *        e.g. modal dialog, tab switcher, bottom sheet, page info tray, etc.
+     *
+     * Note: It is the responsibility of the client/embedder to toggle this state back to its
+     *       previous value when the web contents are no longer obscured.
+     *
+     * Note: The native-side code is lazily initialized, so if it has not been initialized before
+     *       a client invokes this method, then it will not be initialized. However, if it has
+     *       already been initialized, it will remain in memory but not used.
+     *
+     * @param isObscured True if the web contents are currently obscured by another view.
      */
     void setObscuredByAnotherView(boolean isObscured);
-
-    /**
-     * Returns true if accessibility is on and touch exploration is enabled.
-     */
-    boolean isTouchExplorationEnabled();
-
-    /**
-     * Turns browser accessibility on or off.
-     * If |state| is |false|, this turns off both native and injected accessibility.
-     * Otherwise, if accessibility script injection is enabled, this will enable the injected
-     * accessibility scripts. Native accessibility is enabled on demand.
-     */
-    void setState(boolean state);
 
     /**
      * Sets whether or not we should set accessibility focus on page load.
@@ -117,9 +83,17 @@ public interface WebContentsAccessibility {
     void setShouldFocusOnPageLoad(boolean on);
 
     /**
-     * Sets whether or not the image descriptions feature should be allowed.
+     * Sets whether or not this instance is a candidate for the image descriptions feature to be
+     * enabled. This feature is dependent on embedder behavior and screen reader state.
+     * See BrowserAccessibilityState.java.
      */
-    void setAllowImageDescriptions(boolean allowImageDescriptions);
+    void setIsImageDescriptionsCandidate(boolean isImageDescriptionsCandidate);
+
+    /**
+     * Sets whether or not this instance is a candidate for the auto-disable accessibility feature,
+     * if it is enabled. This feature is dependent on embedder behavior and accessibility state.
+     */
+    void setIsAutoDisableAccessibilityCandidate(boolean isAutoDisableAccessibilityCandidate);
 
     /**
      * Called when autofill popup is displayed. Used to upport navigation through the view.
@@ -127,14 +101,10 @@ public interface WebContentsAccessibility {
      */
     void onAutofillPopupDisplayed(View autofillPopupView);
 
-    /**
-     * Called when autofill popup is dismissed.
-     */
+    /** Called when autofill popup is dismissed. */
     void onAutofillPopupDismissed();
 
-    /**
-     * Called when the a11y focus gets cleared on the autofill popup.
-     */
+    /** Called when the a11y focus gets cleared on the autofill popup. */
     void onAutofillPopupAccessibilityFocusCleared();
 
     /**
@@ -143,8 +113,12 @@ public interface WebContentsAccessibility {
      */
     boolean onHoverEventNoRenderer(MotionEvent event);
 
-    /**
-     * Called to reset focus state to nothing.
-     */
+    /** Called to reset focus state to nothing. */
     void resetFocus();
+
+    /**
+     * Set the a11y focus to the DOM element that had it just before the focus
+     * gets out WebContents, e.g. by focusing a native view node.
+     */
+    void restoreFocus();
 }

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,6 +31,7 @@ class MockMojoMediaRouter : public MockMediaRouter, public mojom::MediaRouter {
       void(mojom::MediaRouteProviderId provider_id,
            mojo::PendingRemote<mojom::MediaRouteProvider>& provider_remote));
   MOCK_METHOD1(OnIssue, void(const IssueInfo& issue));
+  MOCK_METHOD1(ClearTopIssueForSink, void(const std::string& sink_id));
   MOCK_METHOD4(OnSinksReceived,
                void(mojom::MediaRouteProviderId provider_id,
                     const std::string& media_source,
@@ -60,23 +61,11 @@ class MockMojoMediaRouter : public MockMediaRouter, public mojom::MediaRouter {
       GetMediaSinkServiceStatusInternal,
       void(mojom::MediaRouter::GetMediaSinkServiceStatusCallback& callback));
   MOCK_METHOD0(GetMediaSinkServiceStatus, std::string());
-  MOCK_METHOD2(
-      GetMirroringServiceHostForTab,
-      void(int32_t target_tab_id,
-           mojo::PendingReceiver<mirroring::mojom::MirroringServiceHost>
-               receiver));
-  MOCK_METHOD3(
-      GetMirroringServiceHostForDesktop,
-      void(int32_t initiator_tab_id,
-           const std::string& desktop_stream_id,
-           mojo::PendingReceiver<mirroring::mojom::MirroringServiceHost>
-               receiver));
-  MOCK_METHOD3(
-      GetMirroringServiceHostForOffscreenTab,
-      void(const GURL& presentation_url,
-           const std::string& presentation_id,
-           mojo::PendingReceiver<mirroring::mojom::MirroringServiceHost>
-               receiver));
+  MOCK_METHOD(void,
+              GetDebugger,
+              (mojo::PendingReceiver<mojom::Debugger> receiver),
+              (override));
+  MOCK_METHOD(MediaRouterDebugger&, GetDebugger, (), (override));
 };
 
 }  // namespace media_router

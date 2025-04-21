@@ -1,26 +1,28 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.base;
 
 import android.app.Application;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.ApplicationInfo;
 import android.content.res.Configuration;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Process;
 
 import androidx.annotation.CallSuper;
+import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.ApplicationState;
 import org.chromium.base.ApplicationStatus;
-import org.chromium.base.BuildInfo;
 import org.chromium.base.BundleUtils;
 import org.chromium.base.CommandLineInitUtil;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.EarlyTraceEvent;
+import org.chromium.base.IntentUtils;
 import org.chromium.base.JNIUtils;
 import org.chromium.base.LocaleUtils;
 import org.chromium.base.Log;
@@ -31,19 +33,21 @@ import org.chromium.base.library_loader.LibraryProcessType;
 import org.chromium.base.memory.MemoryPressureMonitor;
 import org.chromium.base.supplier.Supplier;
 import org.chromium.base.task.AsyncTask;
+import org.chromium.base.version_info.VersionConstants;
 import org.chromium.build.BuildConfig;
+import org.chromium.build.NativeLibraries;
 import org.chromium.chrome.browser.ProductConfig;
 import org.chromium.chrome.browser.crash.ApplicationStatusTracker;
-import org.chromium.chrome.browser.crash.FirebaseConfig;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.language.AppLocaleUtils;
 import org.chromium.chrome.browser.language.GlobalAppLocaleController;
 import org.chromium.chrome.browser.metrics.UmaUtils;
+import org.chromium.components.crash.CustomAssertionHandler;
 import org.chromium.components.crash.PureJavaExceptionHandler;
 import org.chromium.components.crash.PureJavaExceptionHandler.JavaExceptionReporter;
+import org.chromium.components.crash.PureJavaExceptionHandler.JavaExceptionReporterFactory;
 import org.chromium.components.embedder_support.application.FontPreloadingWorkaround;
 import org.chromium.components.module_installer.util.ModuleUtil;
-import org.chromium.components.version_info.VersionConstants;
 import org.chromium.ui.base.ResourceBundle;
 
 /**
@@ -62,8 +66,13 @@ public class SplitCompatApplication extends Application {
     // Public to allow use in ChromeBackupAgent
     public static final String PRIVATE_DATA_DIRECTORY_SUFFIX = "chrome";
 
+    @VisibleForTesting
+    public static final String LAUNCH_FAILED_ACTIVITY_CLASS_NAME =
+            "org.chromium.chrome.browser.init.LaunchFailedActivity";
+
     private Supplier<Impl> mImplSupplier;
     private Impl mImpl;
+    private ServiceTracingProxyProvider mServiceTracingProxyProvider;
 
     /**
      * Holds the implementation of application logic. Will be called by {@link
@@ -88,6 +97,7 @@ public class SplitCompatApplication extends Application {
         public void onCreate() {}
 
         public void onTrimMemory(int level) {}
+
         public void onConfigurationChanged(Configuration newConfig) {}
     }
 
@@ -119,15 +129,12 @@ public class SplitCompatApplication extends Application {
     protected void attachBaseContext(Context context) {
         boolean isIsolatedProcess = ContextUtils.isIsolatedProcess();
         boolean isBrowserProcess = isBrowserProcess();
-        // Using concatenation rather than %s to allow values to be inlined by R8.
-        Log.i(TAG,
-                "Launched version=" + VersionConstants.PRODUCT_VERSION
-                        + " minSdkVersion=" + BuildConfig.MIN_SDK_VERSION
-                        + " isBundle=" + ProductConfig.IS_BUNDLE + " processName=%s isIsolated=%s",
-                ContextUtils.getProcessName(), isIsolatedProcess);
 
         if (isBrowserProcess) {
             UmaUtils.recordMainEntryPointTime();
+
+            // Register Service tracing early as some services are used below in this function.
+            mServiceTracingProxyProvider = ServiceTracingProxyProvider.create(context);
             // *** The Application Context should not be used before the locale override is set ***
             if (GlobalAppLocaleController.getInstance().init(context)) {
                 // If the app locale override preference is set, create a new override
@@ -138,14 +145,56 @@ public class SplitCompatApplication extends Application {
                 LocaleUtils.setDefaultLocalesFromConfiguration(config);
                 context = context.createConfigurationContext(config);
             }
-            performBrowserProcessPreloading(context);
         }
 
         super.attachBaseContext(context);
         // Perform initialization of globals common to all processes.
         ContextUtils.initApplicationContext(this);
+
+        Log.i(
+                TAG,
+                "version=%s (%s) minSdkVersion=%s isBundle=%s processName=%s isIsolatedProcess=%s",
+                VersionConstants.PRODUCT_VERSION,
+                BuildConfig.VERSION_CODE,
+                BuildConfig.MIN_SDK_VERSION,
+                // BundleUtils uses getApplicationContext, so logging after we init it.
+                BundleUtils.isBundle(),
+                ContextUtils.getProcessName(),
+                isIsolatedProcess);
+
+        if (isBrowserProcess) {
+            // This must come as early as possible to avoid early loading of the native library from
+            // failing unnoticed.
+            LibraryLoader.sLoadFailedCallback =
+                    unsatisfiedLinkError -> {
+                        Intent newIntent = new Intent();
+                        newIntent.setComponent(
+                                new ComponentName(
+                                        ContextUtils.getApplicationContext(),
+                                        LAUNCH_FAILED_ACTIVITY_CLASS_NAME));
+                        newIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        IntentUtils.safeStartActivity(
+                                ContextUtils.getApplicationContext(), newIntent);
+                        if (cannotLoadIn64Bit()) {
+                            throw new RuntimeException(
+                                    "Starting in 64-bit mode requires the 64-bit native library. If"
+                                            + " the device is 64-bit only, see alternatives here: "
+                                            + "https://crbug.com/1303857#c7.",
+                                    unsatisfiedLinkError);
+                        } else if (cannotLoadIn32Bit()) {
+                            throw new RuntimeException(
+                                    "Starting in 32-bit mode requires the 32-bit native library.",
+                                    unsatisfiedLinkError);
+                        }
+                        throw unsatisfiedLinkError;
+                    };
+        }
+
         maybeInitProcessType();
-        BundleUtils.setIsBundle(ProductConfig.IS_BUNDLE);
+
+        if (isBrowserProcess) {
+            performBrowserProcessPreloading(context);
+        }
 
         // Write installed modules to crash keys. This needs to be done as early as possible so
         // that these values are set before any crashes are reported.
@@ -154,9 +203,7 @@ public class SplitCompatApplication extends Application {
         AsyncTask.takeOverAndroidThreadPool();
         JNIUtils.setClassLoader(getClassLoader());
         ResourceBundle.setAvailablePakLocales(ProductConfig.LOCALES);
-        LibraryLoader.getInstance().setLinkerImplementation(
-                ProductConfig.USE_CHROMIUM_LINKER, ProductConfig.USE_MODERN_LINKER);
-        LibraryLoader.getInstance().enableJniChecks();
+        LibraryLoader.getInstance().setLinkerImplementation(ProductConfig.USE_CHROMIUM_LINKER);
 
         if (!isBrowserProcess) {
             EarlyTraceEvent.earlyEnableInChildWithoutCommandLine();
@@ -174,20 +221,14 @@ public class SplitCompatApplication extends Application {
             CommandLineInitUtil.initCommandLine(
                     COMMAND_LINE_FILE, SplitCompatApplication::shouldUseDebugFlags);
 
-            // Enable ATrace on debug OS or app builds.
-            int applicationFlags = context.getApplicationInfo().flags;
-            boolean isAppDebuggable = (applicationFlags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
-            boolean isOsDebuggable = BuildInfo.isDebugAndroid();
-            // Requires command-line flags.
-            TraceEvent.maybeEnableEarlyTracing(
-                    (isAppDebuggable || isOsDebuggable) ? TraceEvent.ATRACE_TAG_APP : 0,
-                    /*readCommandLine=*/true);
+            TraceEvent.maybeEnableEarlyTracing(/* readCommandLine= */ true);
             TraceEvent.begin(ATTACH_BASE_CONTEXT_EVENT);
 
             // Register for activity lifecycle callbacks. Must be done before any activities are
             // created and is needed only by processes that use the ApplicationStatus api (which
             // for Chrome is just the browser process).
             ApplicationStatus.initialize(this);
+            ColdStartTracker.initialize();
 
             // Register and initialize application status listener for crashes, this needs to be
             // done as early as possible so that this value is set before any crashes are
@@ -205,19 +246,24 @@ public class SplitCompatApplication extends Application {
             }
         }
 
-        BuildInfo.setFirebaseAppId(FirebaseConfig.getFirebaseAppId());
-
         // WebView installs its own PureJavaExceptionHandler.
+        // Incremental install disables process isolation, so things in this block will
+        // actually be run for incremental apks, but not normal apks.
         if (!isIsolatedProcess && !isWebViewProcess()) {
-            // Incremental install disables process isolation, so things in this block will
-            // actually be run for incremental apks, but not normal apks.
-            PureJavaExceptionHandler.installHandler(() -> {
-                // ChromePureJavaExceptionReporter may be in the chrome module, so load by
-                // reflection from there.
-                return (JavaExceptionReporter) BundleUtils.newInstance(
-                        createChromeContext(ContextUtils.getApplicationContext()),
-                        "org.chromium.chrome.browser.crash.ChromePureJavaExceptionReporter");
-            });
+            JavaExceptionReporterFactory factory =
+                    new JavaExceptionReporterFactory() {
+                        @Override
+                        public JavaExceptionReporter createJavaExceptionReporter() {
+                            // ChromePureJavaExceptionReporter may be in the chrome module, so load
+                            // by reflection from there.
+                            return (JavaExceptionReporter)
+                                    BundleUtils.newInstance(
+                                            "org.chromium.chrome.browser.crash.ChromePureJavaExceptionReporter",
+                                            CHROME_SPLIT_NAME);
+                        }
+                    };
+            PureJavaExceptionHandler.installHandler(factory);
+            CustomAssertionHandler.installPreNativeHandler(factory);
         }
 
         TraceEvent.end(ATTACH_BASE_CONTEXT_EVENT);
@@ -251,6 +297,18 @@ public class SplitCompatApplication extends Application {
         getImpl().startActivity(intent, options);
     }
 
+    // Note that we do not need to (and can't) override getSystemService(Class<T>) as internally
+    // that just gets the name of the Service and calls getSystemService(String) for backwards
+    // compatibility with overrides like this one.
+    @Override
+    public Object getSystemService(String name) {
+        Object service = super.getSystemService(name);
+        if (mServiceTracingProxyProvider != null) {
+            mServiceTracingProxyProvider.traceSystemServices();
+        }
+        return service;
+    }
+
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
@@ -271,12 +329,15 @@ public class SplitCompatApplication extends Application {
         return !ContextUtils.getProcessName().contains(":");
     }
 
-    /** Creates a context which can be used to load code and resources in the chrome split. */
-    public static Context createChromeContext(Context base) {
-        if (!BundleUtils.isIsolatedSplitInstalled(base, CHROME_SPLIT_NAME)) {
-            return base;
+    public static boolean cannotLoadIn64Bit() {
+        if (LibraryLoader.sOverrideNativeLibraryCannotBeLoadedForTesting) {
+            return true;
         }
-        return BundleUtils.createIsolatedSplitContext(base, CHROME_SPLIT_NAME);
+        return Process.is64Bit() && !NativeLibraries.sSupport64Bit;
+    }
+
+    public static boolean cannotLoadIn32Bit() {
+        return !Process.is64Bit() && !NativeLibraries.sSupport32Bit;
     }
 
     private void maybeInitProcessType() {
@@ -304,7 +365,8 @@ public class SplitCompatApplication extends Application {
 
     private static void updateMemoryPressurePolling(@ApplicationState int newState) {
         if (newState == ApplicationState.HAS_RUNNING_ACTIVITIES) {
-            MemoryPressureMonitor.INSTANCE.enablePolling();
+            MemoryPressureMonitor.INSTANCE.enablePolling(
+                    ChromeFeatureList.sPostGetMyMemoryStateToBackground.isEnabled());
         } else if (newState == ApplicationState.HAS_STOPPED_ACTIVITIES) {
             MemoryPressureMonitor.INSTANCE.disablePolling();
         }
@@ -315,7 +377,7 @@ public class SplitCompatApplication extends Application {
         // During app update the old apk can still be triggered by broadcasts and spin up an
         // out-of-date application. Kill old applications in this bad state. See
         // http://crbug.com/658130 for more context and http://b.android.com/56296 for the bug.
-        if (ContextUtils.getApplicationAssets() == null) {
+        if (ContextUtils.getApplicationContext().getAssets() == null) {
             throw new RuntimeException("App out of date, getResources() null, closing app.");
         }
     }

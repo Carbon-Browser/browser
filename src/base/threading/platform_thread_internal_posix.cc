@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,19 +11,20 @@
 
 #include "base/containers/adapters.h"
 #include "base/logging.h"
+#include "base/notimplemented.h"
 #include "base/notreached.h"
 
 namespace base {
 
 namespace internal {
 
-int ThreadTypeToNiceValue(ThreadType thread_type) {
+BASE_EXPORT int ThreadTypeToNiceValue(ThreadType thread_type) {
   for (const auto& pair : kThreadTypeToNiceValueMap) {
-    if (pair.thread_type == thread_type)
+    if (pair.thread_type == thread_type) {
       return pair.nice_value;
+    }
   }
   NOTREACHED() << "Unknown ThreadType";
-  return 0;
 }
 
 ThreadPriorityForTest NiceValueToThreadPriorityForTest(int nice_value) {
@@ -31,8 +32,9 @@ ThreadPriorityForTest NiceValueToThreadPriorityForTest(int nice_value) {
   // an exact match, this method returns the closest priority whose nice value
   // is higher (lower priority) than |nice_value|.
   for (const auto& pair : kThreadPriorityToNiceValueMapForTest) {
-    if (pair.nice_value >= nice_value)
+    if (pair.nice_value >= nice_value) {
       return pair.priority;
+    }
   }
 
   // Reaching here means |nice_value| is more than any of the defined

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,8 +22,8 @@ enum class WebauthnDialogState {
   // Indicating the card verification is in progress. Shown only for opted-in
   // users.
   kVerifyPending,
-  // TODO(crbug.com/991037): Add an extra state for case when the cancel button
-  // in the verify pending dialog should be disabled.
+  // TODO(crbug.com/40639086): Add an extra state for case when the cancel
+  // button in the verify pending dialog should be disabled.
 };
 
 }  // namespace autofill

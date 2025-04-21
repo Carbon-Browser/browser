@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,9 @@
 #include "gin/handle.h"
 #include "gin/object_template_builder.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
-#include "third_party/blink/public/web/blink.h"
+#include "third_party/blink/public/platform/scheduler/web_agent_group_scheduler.h"
 #include "third_party/blink/public/web/web_local_frame.h"
+#include "v8/include/v8-context.h"
 #include "v8/include/v8-microtask-queue.h"
 
 namespace security_interstitials {
@@ -22,15 +23,16 @@ gin::WrapperInfo SecurityInterstitialPageController::kWrapperInfo = {
 
 void SecurityInterstitialPageController::Install(
     content::RenderFrame* render_frame) {
-  v8::Isolate* isolate = blink::MainThreadIsolate();
+  blink::WebLocalFrame* web_frame = render_frame->GetWebFrame();
+  v8::Isolate* isolate = web_frame->GetAgentGroupScheduler()->Isolate();
   v8::HandleScope handle_scope(isolate);
-  v8::MicrotasksScope microtasks_scope(
-      isolate, v8::MicrotasksScope::kDoNotRunMicrotasks);
-  v8::Local<v8::Context> context =
-      render_frame->GetWebFrame()->MainWorldScriptContext();
+  v8::Local<v8::Context> context = web_frame->MainWorldScriptContext();
   if (context.IsEmpty())
     return;
 
+  v8::MicrotasksScope microtasks_scope(
+      isolate, context->GetMicrotaskQueue(),
+      v8::MicrotasksScope::kDoNotRunMicrotasks);
   v8::Context::Scope context_scope(context);
 
   gin::Handle<SecurityInterstitialPageController> controller =
@@ -50,7 +52,8 @@ SecurityInterstitialPageController::SecurityInterstitialPageController(
     content::RenderFrame* render_frame)
     : RenderFrameObserver(render_frame) {}
 
-SecurityInterstitialPageController::~SecurityInterstitialPageController() {}
+SecurityInterstitialPageController::~SecurityInterstitialPageController() =
+    default;
 
 void SecurityInterstitialPageController::DontProceed() {
   SendCommand(

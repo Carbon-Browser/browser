@@ -45,12 +45,37 @@ class CORE_EXPORT HTMLButtonElement final : public HTMLFormControlElement {
                          mojom::blink::FocusType,
                          InputDeviceCapabilities*) override;
 
+  // This returns a <select> if this button has type=select and is a direct
+  // child of a <select>.
+  HTMLSelectElement* OwnerSelect() const;
+
+  // Invoker Commands (https://github.com/whatwg/html/pull/9841)
+  Element* commandForElement();
+  AtomicString command() const;
+  CommandEventType GetCommandEventType() const;
+
+  // Override for inertness in order to make customizable <select> button inert.
+  // TODO(crbug.com/1511354): Replace this with interactivity:inert in
+  // UA stylesheet after CSSInert feature has been enabled by default and remove
+  // virtual from HTMLElement::IsInertRoot.
+  bool IsInertRoot() const override;
+
  private:
-  enum Type { kSubmit, kReset, kButton };
+  // The type attribute of HTMLButtonElement is an enumerated attribute:
+  // https://html.spec.whatwg.org/multipage/form-elements.html#attr-button-type
+  // These values are a subset of the `FormControlType` enum. They have the same
+  // binary representation so that FormControlType() reduces to a type cast.
+  enum Type : std::underlying_type_t<mojom::blink::FormControlType> {
+    kSubmit = base::to_underlying(mojom::blink::FormControlType::kButtonSubmit),
+    kReset = base::to_underlying(mojom::blink::FormControlType::kButtonReset),
+    kButton = base::to_underlying(mojom::blink::FormControlType::kButtonButton),
+  };
 
-  const AtomicString& FormControlType() const override;
+  mojom::blink::FormControlType FormControlType() const override;
+  const AtomicString& FormControlTypeAsString() const override;
 
-  LayoutObject* CreateLayoutObject(const ComputedStyle&, LegacyLayout) override;
+  LayoutObject* CreateLayoutObject(const ComputedStyle&) override;
+  void AdjustStyle(ComputedStyleBuilder&) override;
 
   // HTMLFormControlElement always creates one, but buttons don't need it.
   bool AlwaysCreateUserAgentShadowRoot() const override { return false; }
@@ -61,9 +86,9 @@ class CORE_EXPORT HTMLButtonElement final : public HTMLFormControlElement {
   void DefaultEventHandler(Event&) override;
   bool HasActivationBehavior() const override;
 
-  // Buttons can trigger popups.
-  PopupTriggerSupport SupportsPopupTriggering() const override {
-    return PopupTriggerSupport::kSupported;
+  // Buttons can trigger popovers.
+  PopoverTriggerSupport SupportsPopoverTriggering() const override {
+    return PopoverTriggerSupport::kSupported;
   }
 
   void AppendToFormData(FormData&) override;

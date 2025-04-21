@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,13 @@
 
 #include <list>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "base/memory/raw_ptr.h"
 #include "components/download/public/background_service/background_download_service.h"
 #include "components/download/public/background_service/client.h"
 #include "components/download/public/background_service/download_params.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace download {
 
@@ -45,7 +45,7 @@ class TestDownloadService : public BackgroundDownloadService {
                               const SchedulingParams& params) override;
   Logger* GetLogger() override;
 
-  const absl::optional<DownloadParams>& GetDownload(
+  const std::optional<DownloadParams>& GetDownload(
       const std::string& guid) const;
 
   // Set failed_download_id and fail_at_start.
@@ -55,6 +55,8 @@ class TestDownloadService : public BackgroundDownloadService {
   void SetIsReady(bool is_ready);
 
   void SetHash256(const std::string& hash256);
+
+  void SetFilePath(base::FilePath path);
 
   void set_client(Client* client) { client_ = client; }
 
@@ -74,15 +76,16 @@ class TestDownloadService : public BackgroundDownloadService {
   std::unique_ptr<ServiceConfig> service_config_;
   std::unique_ptr<Logger> logger_;
 
-  bool is_ready_;
+  bool is_ready_ = false;
   std::string hash256_;
   std::string failed_download_id_;
-  bool fail_at_start_;
-  uint64_t file_size_;
+  bool fail_at_start_ = false;
+  uint64_t file_size_ = 123456789u;
+  base::FilePath path_;
 
-  raw_ptr<Client> client_;
+  raw_ptr<Client> client_ = nullptr;
 
-  std::list<absl::optional<DownloadParams>> downloads_;
+  std::list<std::optional<DownloadParams>> downloads_;
 };
 
 }  // namespace test

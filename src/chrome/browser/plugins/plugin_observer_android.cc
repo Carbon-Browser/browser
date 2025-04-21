@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,7 +44,7 @@ void PluginObserverAndroid::OpenPDF(const GURL& url) {
       ui::PAGE_TRANSITION_AUTO_BOOKMARK, false);
   // On Android, PDFs downloaded with a user gesture are auto-opened.
   open_url_params.user_gesture = true;
-  GetWebContents().OpenURL(open_url_params);
+  GetWebContents().OpenURL(open_url_params, /*navigation_handle_callback=*/{});
 }
 
 WEB_CONTENTS_USER_DATA_KEY_IMPL(PluginObserverAndroid);

@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-Copyright (c) 2018 The Chromium Authors. All rights reserved.
+Copyright 2018 The Chromium Authors
 Use of this source code is governed by a BSD-style license that can be
 found in the LICENSE file.
 -->
@@ -80,7 +80,9 @@ function init() {
 window.addEventListener('load', init, false);
 
 function draw() {
-  document.getElementById("myDiv0").style.opacity = Math.random() * 0.5 + 0.5;
+  let opacity = document.getElementById("myDiv0").style.opacity * 100;
+  opacity = 50 + ((opacity + 1) % 50);
+  document.getElementById("myDiv0").style.opacity = opacity / 100;
 };
 </script>
 <body id="body"></body>

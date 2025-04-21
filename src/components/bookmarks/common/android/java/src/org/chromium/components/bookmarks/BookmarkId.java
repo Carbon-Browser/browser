@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,17 +7,12 @@ package org.chromium.components.bookmarks;
 import android.text.TextUtils;
 import android.util.Log;
 
-import org.chromium.base.annotations.CalledByNative;
+import org.jni_zero.CalledByNative;
 
-/**
- * Simple object representing the bookmark id.
- */
+/** Simple object representing the bookmark id. */
 public class BookmarkId {
     public static final int INVALID_FOLDER_ID = -2;
     public static final int INVALID_ID = -1;
-    public static final int SHOPPING_FILTER_ID = -3;
-    public static final BookmarkId SHOPPING_FOLDER =
-            new BookmarkId(SHOPPING_FILTER_ID, BookmarkType.NORMAL);
 
     private static final String LOG_TAG = "BookmarkId";
     private static final char TYPE_PARTNER = 'p';
@@ -25,9 +20,10 @@ public class BookmarkId {
     private static final int ROOT_FOLDER_ID = -1;
 
     private final long mId;
-    private final int mType;
+    private final @BookmarkType int mType;
 
-    public BookmarkId(long id, int type) {
+    public BookmarkId(long id, @BookmarkType int type) {
+        assert BookmarkType.NORMAL <= type && type <= BookmarkType.LAST;
         mId = id;
         mType = type;
     }
@@ -36,7 +32,7 @@ public class BookmarkId {
      * @param c The char representing the type.
      * @return The Bookmark type from a char representing the type.
      */
-    private static int getBookmarkTypeFromChar(char c) {
+    private static @BookmarkType int getBookmarkTypeFromChar(char c) {
         switch (c) {
             case TYPE_PARTNER:
                 return BookmarkType.PARTNER;
@@ -62,7 +58,7 @@ public class BookmarkId {
      */
     public static BookmarkId getBookmarkIdFromString(String s) {
         long id = ROOT_FOLDER_ID;
-        int type = BookmarkType.NORMAL;
+        @BookmarkType int type = BookmarkType.NORMAL;
         if (TextUtils.isEmpty(s)) return new BookmarkId(id, type);
         char folderTypeChar = s.charAt(0);
         if (isValidBookmarkTypeFromChar(folderTypeChar)) {
@@ -77,17 +73,13 @@ public class BookmarkId {
         return new BookmarkId(id, type);
     }
 
-    /**
-     * @return The id of the bookmark.
-     */
+    /** @return The id of the bookmark. */
     @CalledByNative
     public long getId() {
         return mId;
     }
 
-    /**
-     * Returns the bookmark type: {@link BookmarkType#NORMAL} or {@link BookmarkType#PARTNER}.
-     */
+    /** Returns the bookmark type: {@link BookmarkType#NORMAL} or {@link BookmarkType#PARTNER}. */
     @CalledByNative
     public @BookmarkType int getType() {
         return mType;
@@ -99,7 +91,7 @@ public class BookmarkId {
      * @return The BookmarkId Object.
      */
     @CalledByNative
-    private static BookmarkId createBookmarkId(long id, int type) {
+    private static BookmarkId createBookmarkId(long id, @BookmarkType int type) {
         return new BookmarkId(id, type);
     }
 

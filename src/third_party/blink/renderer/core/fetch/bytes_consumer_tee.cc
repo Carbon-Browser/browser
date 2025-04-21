@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/fetch/blob_bytes_consumer.h"
 #include "third_party/blink/renderer/core/fetch/form_data_bytes_consumer.h"
+#include "third_party/blink/renderer/platform/bindings/v8_external_memory_accounter.h"
 #include "third_party/blink/renderer/platform/blob/blob_data.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_deque.h"
 #include "third_party/blink/renderer/platform/heap/persistent.h"
@@ -53,9 +54,8 @@ class TeeHelper final : public GarbageCollected<TeeHelper>,
     bool has_enqueued = false;
 
     while (true) {
-      const char* buffer = nullptr;
-      size_t available = 0;
-      auto result = src_->BeginRead(&buffer, &available);
+      base::span<const char> buffer;
+      auto result = src_->BeginRead(buffer);
       if (result == Result::kShouldWait) {
         if (has_enqueued && destination1_was_empty)
           destination1_->Notify();
@@ -65,9 +65,8 @@ class TeeHelper final : public GarbageCollected<TeeHelper>,
       }
       Chunk* chunk = nullptr;
       if (result == Result::kOk) {
-        chunk = MakeGarbageCollected<Chunk>(
-            buffer, base::checked_cast<wtf_size_t>(available));
-        result = src_->EndRead(available);
+        chunk = MakeGarbageCollected<Chunk>(buffer);
+        result = src_->EndRead(buffer.size());
       }
       switch (result) {
         case Result::kOk:
@@ -78,7 +77,6 @@ class TeeHelper final : public GarbageCollected<TeeHelper>,
           break;
         case Result::kShouldWait:
           NOTREACHED();
-          return;
         case Result::kDone:
           if (chunk) {
             destination1_->Enqueue(chunk);
@@ -109,8 +107,8 @@ class TeeHelper final : public GarbageCollected<TeeHelper>,
     src_->Cancel();
   }
 
-  BytesConsumer* Destination1() const { return destination1_; }
-  BytesConsumer* Destination2() const { return destination2_; }
+  BytesConsumer* Destination1() const { return destination1_.Get(); }
+  BytesConsumer* Destination2() const { return destination2_.Get(); }
 
   void Trace(Visitor* visitor) const override {
     visitor->Trace(src_);
@@ -123,24 +121,31 @@ class TeeHelper final : public GarbageCollected<TeeHelper>,
   using Result = BytesConsumer::Result;
   class Chunk final : public GarbageCollected<Chunk> {
    public:
-    Chunk(const char* data, wtf_size_t size) {
-      buffer_.ReserveInitialCapacity(size);
-      buffer_.Append(data, size);
+    explicit Chunk(base::span<const char> data) {
+      buffer_.ReserveInitialCapacity(
+          base::checked_cast<wtf_size_t>(data.size()));
+      buffer_.AppendSpan(data);
       // Report buffer size to V8 so GC can be triggered appropriately.
-      v8::Isolate::GetCurrent()->AdjustAmountOfExternalAllocatedMemory(
-          static_cast<int64_t>(buffer_.size()));
+      external_memory_accounter_.Increase(v8::Isolate::GetCurrent(),
+                                          static_cast<int64_t>(buffer_.size()));
     }
     ~Chunk() {
-      v8::Isolate::GetCurrent()->AdjustAmountOfExternalAllocatedMemory(
-          -static_cast<int64_t>(buffer_.size()));
+      external_memory_accounter_.Decrease(v8::Isolate::GetCurrent(),
+                                          static_cast<int64_t>(buffer_.size()));
     }
     const char* data() const { return buffer_.data(); }
     wtf_size_t size() const { return buffer_.size(); }
+
+    // Iterators, so this type meets the requirements of
+    // `std::ranges::contiguous_range`.
+    auto begin() const { return buffer_.begin(); }
+    auto end() const { return buffer_.end(); }
 
     void Trace(Visitor* visitor) const {}
 
    private:
     Vector<char> buffer_;
+    NO_UNIQUE_ADDRESS V8ExternalMemoryAccounterBase external_memory_accounter_;
   };
 
   class Destination final : public BytesConsumer {
@@ -148,17 +153,15 @@ class TeeHelper final : public GarbageCollected<TeeHelper>,
     Destination(ExecutionContext* execution_context, TeeHelper* tee)
         : execution_context_(execution_context), tee_(tee) {}
 
-    Result BeginRead(const char** buffer, size_t* available) override {
+    Result BeginRead(base::span<const char>& buffer) override {
       DCHECK(!chunk_in_use_);
-      *buffer = nullptr;
-      *available = 0;
+      buffer = {};
       if (is_cancelled_ || is_closed_)
         return Result::kDone;
-      if (!chunks_.IsEmpty()) {
+      if (!chunks_.empty()) {
         Chunk* chunk = chunks_[0];
         DCHECK_LE(offset_, chunk->size());
-        *buffer = chunk->data() + offset_;
-        *available = chunk->size() - offset_;
+        buffer = base::span(*chunk).subspan(offset_);
         chunk_in_use_ = chunk;
         return Result::kOk;
       }
@@ -174,14 +177,13 @@ class TeeHelper final : public GarbageCollected<TeeHelper>,
           return Result::kError;
       }
       NOTREACHED();
-      return Result::kError;
     }
 
     Result EndRead(size_t read) override {
       DCHECK(chunk_in_use_);
-      DCHECK(chunks_.IsEmpty() || chunk_in_use_ == chunks_[0]);
+      DCHECK(chunks_.empty() || chunk_in_use_ == chunks_[0]);
       chunk_in_use_ = nullptr;
-      if (chunks_.IsEmpty()) {
+      if (chunks_.empty()) {
         // This object becomes errored during the two-phase read.
         DCHECK_EQ(PublicState::kErrored, GetPublicState());
         return Result::kOk;
@@ -193,11 +195,11 @@ class TeeHelper final : public GarbageCollected<TeeHelper>,
         offset_ = 0;
         chunks_.pop_front();
       }
-      if (chunks_.IsEmpty() && tee_->GetPublicState() == PublicState::kClosed) {
+      if (chunks_.empty() && tee_->GetPublicState() == PublicState::kClosed) {
         // All data has been consumed.
         execution_context_->GetTaskRunner(TaskType::kNetworking)
-            ->PostTask(FROM_HERE,
-                       WTF::Bind(&Destination::Close, WrapPersistent(this)));
+            ->PostTask(FROM_HERE, WTF::BindOnce(&Destination::Close,
+                                                WrapPersistent(this)));
       }
       return Result::kOk;
     }
@@ -244,7 +246,7 @@ class TeeHelper final : public GarbageCollected<TeeHelper>,
       chunks_.push_back(chunk);
     }
 
-    bool IsEmpty() const { return chunks_.IsEmpty(); }
+    bool IsEmpty() const { return chunks_.empty(); }
 
     void ClearChunks() {
       chunks_.clear();
@@ -254,7 +256,7 @@ class TeeHelper final : public GarbageCollected<TeeHelper>,
     void Notify() {
       if (is_cancelled_ || is_closed_)
         return;
-      if (chunks_.IsEmpty() && tee_->GetPublicState() == PublicState::kClosed) {
+      if (chunks_.empty() && tee_->GetPublicState() == PublicState::kClosed) {
         Close();
         return;
       }
@@ -279,7 +281,7 @@ class TeeHelper final : public GarbageCollected<TeeHelper>,
    private:
     void Close() {
       DCHECK_EQ(PublicState::kClosed, tee_->GetPublicState());
-      DCHECK(chunks_.IsEmpty());
+      DCHECK(chunks_.empty());
       if (is_closed_ || is_cancelled_) {
         // It's possible to reach here because this function can be
         // called asynchronously.

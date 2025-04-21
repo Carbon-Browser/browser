@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 
 #include "base/check.h"
 #include "build/build_config.h"
+#include "media/base/audio_parameters.h"
+#include "media/base/channel_layout.h"
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom.h"
 
 namespace blink {
@@ -58,6 +60,19 @@ bool IsDeviceMediaType(mojom::MediaStreamType type) {
           type == mojom::MediaStreamType::DEVICE_VIDEO_CAPTURE);
 }
 
+bool IsMediaStreamDeviceTransferrable(const MediaStreamDevice& device) {
+  // Return |false| if |device.type| is not a valid MediaStreamType or is of
+  // device capture type.
+  if (device.type == mojom::MediaStreamType::NO_SERVICE ||
+      device.type == mojom::MediaStreamType::NUM_MEDIA_TYPES ||
+      IsDeviceMediaType(device.type)) {
+    return false;
+  }
+  const auto& info = device.display_media_info;
+  return info && info->display_surface ==
+                     media::mojom::DisplayCaptureSurfaceType::BROWSER;
+}
+
 MediaStreamDevice::MediaStreamDevice()
     : type(mojom::MediaStreamType::NO_SERVICE),
       video_facing(media::MEDIA_VIDEO_FACING_NONE) {}
@@ -70,13 +85,23 @@ MediaStreamDevice::MediaStreamDevice(mojom::MediaStreamType type,
       video_facing(media::MEDIA_VIDEO_FACING_NONE),
       name(name) {}
 
+MediaStreamDevice::MediaStreamDevice(mojom::MediaStreamType type,
+                                     const std::string& id,
+                                     const std::string& name,
+                                     int64_t display_id)
+    : type(type),
+      id(id),
+      display_id(display_id),
+      video_facing(media::MEDIA_VIDEO_FACING_NONE),
+      name(name) {}
+
 MediaStreamDevice::MediaStreamDevice(
     mojom::MediaStreamType type,
     const std::string& id,
     const std::string& name,
     const media::VideoCaptureControlSupport& control_support,
     media::VideoFacingMode facing,
-    const absl::optional<std::string>& group_id)
+    const std::optional<std::string>& group_id)
     : type(type),
       id(id),
       video_control_support(control_support),
@@ -84,18 +109,19 @@ MediaStreamDevice::MediaStreamDevice(
       group_id(group_id),
       name(name) {}
 
-MediaStreamDevice::MediaStreamDevice(mojom::MediaStreamType type,
-                                     const std::string& id,
-                                     const std::string& name,
-                                     int sample_rate,
-                                     int channel_layout,
-                                     int frames_per_buffer)
+MediaStreamDevice::MediaStreamDevice(
+    mojom::MediaStreamType type,
+    const std::string& id,
+    const std::string& name,
+    int sample_rate,
+    const media::ChannelLayoutConfig& channel_layout_config,
+    int frames_per_buffer)
     : type(type),
       id(id),
       video_facing(media::MEDIA_VIDEO_FACING_NONE),
       name(name),
       input(media::AudioParameters::AUDIO_FAKE,
-            static_cast<media::ChannelLayout>(channel_layout),
+            channel_layout_config,
             sample_rate,
             frames_per_buffer) {
   DCHECK(input.IsValid());
@@ -104,6 +130,7 @@ MediaStreamDevice::MediaStreamDevice(mojom::MediaStreamType type,
 MediaStreamDevice::MediaStreamDevice(const MediaStreamDevice& other)
     : type(other.type),
       id(other.id),
+      display_id(other.display_id),
       video_control_support(other.video_control_support),
       video_facing(other.video_facing),
       group_id(other.group_id),
@@ -124,6 +151,7 @@ MediaStreamDevice& MediaStreamDevice::operator=(
     return *this;
   type = other.type;
   id = other.id;
+  display_id = other.display_id;
   video_control_support = other.video_control_support;
   video_facing = other.video_facing;
   group_id = other.group_id;
@@ -144,6 +172,11 @@ bool MediaStreamDevice::IsSameDevice(
          input.sample_rate() == other_device.input.sample_rate() &&
          input.channel_layout() == other_device.input.channel_layout() &&
          session_id_ == other_device.session_id_;
+}
+
+bool MediaStreamDevice::operator==(
+    const MediaStreamDevice& other_device) const {
+  return IsSameDevice(other_device);
 }
 
 blink::MediaStreamDevices ToMediaStreamDevicesList(

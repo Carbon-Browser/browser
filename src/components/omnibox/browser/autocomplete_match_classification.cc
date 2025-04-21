@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,41 +12,86 @@
 
 namespace {
 
-std::u16string clean(std::u16string text) {
+std::u16string clean(std::u16string_view text) {
   const size_t kMaxTextLength = 2000;
   return base::i18n::ToLower(text.substr(0, kMaxTextLength));
 }
 
 }  // namespace
 
-TermMatches FindTermMatches(std::u16string find_text,
-                            std::u16string text,
+ACMatchClassifications ClassifyAllMatchesInString(
+    const std::u16string& find_text,
+    const std::u16string& text,
+    const bool text_is_search_query,
+    const ACMatchClassifications& original_class) {
+  DCHECK(!find_text.empty());
+
+  if (text.empty()) {
+    return original_class;
+  }
+
+  TermMatches term_matches = FindTermMatches(find_text, text);
+
+  ACMatchClassifications classifications;
+  if (text_is_search_query) {
+    classifications = ClassifyTermMatches(term_matches, text.size(),
+                                          ACMatchClassification::NONE,
+                                          ACMatchClassification::MATCH);
+  } else {
+    classifications = ClassifyTermMatches(term_matches, text.size(),
+                                          ACMatchClassification::MATCH,
+                                          ACMatchClassification::NONE);
+  }
+
+  return AutocompleteMatch::MergeClassifications(original_class,
+                                                 classifications);
+}
+
+TermMatches FindTermMatches(std::u16string_view find_text,
+                            std::u16string_view text,
                             bool allow_prefix_matching,
                             bool allow_mid_word_matching) {
-  find_text = clean(find_text);
-  text = clean(text);
+  std::u16string find_text_str = clean(find_text);
+  std::u16string text_str = clean(text);
+
+  if (find_text_str.empty()) {
+    return {};
+  }
 
   if (allow_prefix_matching &&
-      base::StartsWith(text, find_text, base::CompareCase::SENSITIVE))
-    return {{0, 0, find_text.length()}};
+      base::StartsWith(text_str, find_text_str, base::CompareCase::SENSITIVE)) {
+    return {{0, 0, find_text_str.length()}};
+  }
 
-  String16Vector find_terms = String16VectorFromString16(find_text, NULL);
+  String16Vector find_terms =
+      String16VectorFromString16(find_text_str, nullptr);
+  WordStarts word_starts;
+  // `word_starts` is unused if `allow_mid_word_matching` is true.
+  if (!allow_mid_word_matching) {
+    String16VectorFromString16(text_str, &word_starts);
+  }
+  return FindTermMatchesForTerms(find_terms, WordStarts(find_terms.size(), 0),
+                                 text_str, word_starts,
+                                 allow_mid_word_matching);
+}
 
-  TermMatches matches = MatchTermsInString(find_terms, text);
+TermMatches FindTermMatchesForTerms(const String16Vector& find_terms,
+                                    const WordStarts& find_terms_word_starts,
+                                    const std::u16string& cleaned_text,
+                                    const WordStarts& text_word_starts,
+                                    bool allow_mid_word_matching) {
+  TermMatches matches = MatchTermsInString(find_terms, cleaned_text);
   matches = SortMatches(matches);
   matches = DeoverlapMatches(matches);
 
   if (allow_mid_word_matching)
     return matches;
 
-  WordStarts word_starts;
-  String16VectorFromString16(text, &word_starts);
   return ScoredHistoryMatch::FilterTermMatchesByWordStarts(
-      matches, WordStarts(find_terms.size(), 0), word_starts, 0,
-      std::string::npos);
+      matches, find_terms_word_starts, text_word_starts, 0, std::string::npos);
 }
 
-ACMatchClassifications ClassifyTermMatches(TermMatches matches,
+ACMatchClassifications ClassifyTermMatches(const TermMatches& matches,
                                            size_t text_length,
                                            int match_style,
                                            int non_match_style) {

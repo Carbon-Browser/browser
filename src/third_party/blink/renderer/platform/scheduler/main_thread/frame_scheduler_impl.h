@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,17 +11,19 @@
 #include <utility>
 
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequence_manager/task_queue.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
-#include "components/power_scheduler/power_mode_voter.h"
+#include "base/unguessable_token.h"
 #include "net/base/request_priority.h"
-#include "services/metrics/public/cpp/ukm_source_id.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/scheduler/common/back_forward_cache_disabling_feature_tracker.h"
+#include "third_party/blink/renderer/platform/scheduler/common/task_priority.h"
+#include "third_party/blink/renderer/platform/scheduler/common/throttling/type.h"
 #include "third_party/blink/renderer/platform/scheduler/common/tracing_helper.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/agent_group_scheduler_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/frame_origin_type.h"
@@ -30,6 +32,7 @@
 #include "third_party/blink/renderer/platform/scheduler/main_thread/page_visibility_state.h"
 #include "third_party/blink/renderer/platform/scheduler/public/frame_scheduler.h"
 #include "third_party/blink/renderer/platform/scheduler/public/web_scheduling_priority.h"
+#include "third_party/blink/renderer/platform/scheduler/public/web_scheduling_queue_type.h"
 #include "third_party/blink/renderer/platform/scheduler/worker/worker_scheduler_proxy.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
@@ -38,14 +41,7 @@ namespace base {
 namespace sequence_manager {
 class TaskQueue;
 }  // namespace sequence_manager
-namespace trace_event {
-class BlameContext;
-}  // namespace trace_event
 }  // namespace base
-
-namespace ukm {
-class UkmRecorder;
-}
 
 namespace blink {
 
@@ -54,9 +50,11 @@ class WebSchedulingTaskQueue;
 
 namespace scheduler {
 
+class AgentGroupSchedulerImpl;
 class MainThreadSchedulerImpl;
 class MainThreadTaskQueue;
 class PageSchedulerImpl;
+class PolicyUpdater;
 class ResourceLoadingTaskRunnerHandleImpl;
 
 namespace main_thread_scheduler_impl_unittest {
@@ -76,7 +74,6 @@ class PLATFORM_EXPORT FrameSchedulerImpl : public FrameScheduler,
  public:
   FrameSchedulerImpl(PageSchedulerImpl* page_scheduler,
                      FrameScheduler::Delegate* delegate,
-                     base::trace_event::BlameContext* blame_context,
                      bool is_in_embedded_frame_tree,
                      FrameScheduler::FrameType frame_type);
   FrameSchedulerImpl(const FrameSchedulerImpl&) = delete;
@@ -89,6 +86,8 @@ class PLATFORM_EXPORT FrameSchedulerImpl : public FrameScheduler,
   // FrameScheduler implementation:
   void SetFrameVisible(bool frame_visible) override;
   bool IsFrameVisible() const override;
+  void SetVisibleAreaLarge(bool is_large) override;
+  void SetHadUserActivation(bool had_user_activation) override;
 
   bool IsPageVisible() const override;
 
@@ -98,6 +97,9 @@ class PLATFORM_EXPORT FrameSchedulerImpl : public FrameScheduler,
   void SetCrossOriginToNearestMainFrame(bool cross_origin) override;
   bool IsCrossOriginToNearestMainFrame() const override;
 
+  void SetAgentClusterId(
+      const base::UnguessableToken& agent_cluster_id) override;
+
   void SetIsAdFrame(bool is_ad_frame) override;
   bool IsAdFrame() const override;
 
@@ -105,33 +107,39 @@ class PLATFORM_EXPORT FrameSchedulerImpl : public FrameScheduler,
 
   void TraceUrlChange(const String& url) override;
   void AddTaskTime(base::TimeDelta time) override;
+  void OnTaskCompleted(TaskQueue::TaskTiming*);
   FrameScheduler::FrameType GetFrameType() const override;
   scoped_refptr<base::SingleThreadTaskRunner> GetTaskRunner(TaskType) override;
 
-  // Returns a wrapper around an instance of MainThreadTaskQueue which is
-  // maintained in |resource_loading_task_queues_| map. The main thread task
-  // queue is removed from the map and detached from both the main thread and
-  // the frame schedulers when the wrapper instance goes out of scope.
-  std::unique_ptr<WebResourceLoadingTaskRunnerHandle>
-  CreateResourceLoadingTaskRunnerHandle() override;
-
-  std::unique_ptr<WebResourceLoadingTaskRunnerHandle>
-  CreateResourceLoadingMaybeUnfreezableTaskRunnerHandle() override;
-  WebAgentGroupScheduler* GetAgentGroupScheduler() override;
+  AgentGroupScheduler* GetAgentGroupScheduler() override;
   PageScheduler* GetPageScheduler() const override;
   void DidStartProvisionalLoad() override;
   void DidCommitProvisionalLoad(bool is_web_history_inert_commit,
-                                NavigationType navigation_type) override;
+                                NavigationType navigation_type,
+                                DidCommitProvisionalLoadParams params = {
+                                    base::TimeDelta()}) override;
   WebScopedVirtualTimePauser CreateWebScopedVirtualTimePauser(
       const WTF::String& name,
       WebScopedVirtualTimePauser::VirtualTaskDuration duration) override;
+  scoped_refptr<base::SingleThreadTaskRunner> CompositorTaskRunner() override;
 
   void OnFirstContentfulPaintInMainFrame() override;
-  void OnDomContentLoaded() override;
-  void OnFirstMeaningfulPaint() override;
-  void OnLoad() override;
+  void OnFirstMeaningfulPaint(base::TimeTicks timestamp) override;
+  void OnMainFrameInteractive() override;
+  void OnDispatchLoadEvent() override;
+  void OnDidInstallNewDocument() override;
+  base::TimeDelta UnreportedTaskTime() const override;
+
   bool IsWaitingForContentfulPaint() const;
   bool IsWaitingForMeaningfulPaint() const;
+
+  // Returns true when
+  // 1. the FrameSchedulerImpl is still waiting for the meaningful paint signal,
+  // or
+  // 2. the FrameSchedulerImpl has received the meaningful paint signal not
+  // longer than `GetLoadingPhaseBufferTimeAfterFirstMeaningfulPaint` ago, and
+  // the load event is not dispatched yet.
+  bool IsLoading() const;
 
   // An "ordinary" FrameScheduler is responsible for a frame whose parent page
   // is a fully-featured page owned by a web view (as opposed to, e.g.: a Page
@@ -142,10 +150,17 @@ class PLATFORM_EXPORT FrameSchedulerImpl : public FrameScheduler,
   std::unique_ptr<blink::mojom::blink::PauseSubresourceLoadingHandle>
   GetPauseSubresourceLoadingHandle() override;
 
-  void OnStartedUsingFeature(SchedulingPolicy::Feature feature,
-                             const SchedulingPolicy& policy) override;
-  void OnStoppedUsingFeature(SchedulingPolicy::Feature feature,
-                             const SchedulingPolicy& policy) override;
+  void OnStartedUsingNonStickyFeature(
+      SchedulingPolicy::Feature feature,
+      const SchedulingPolicy& policy,
+      std::unique_ptr<SourceLocation> source_location,
+      SchedulingAffectingFeatureHandle* handle) override;
+  void OnStartedUsingStickyFeature(
+      SchedulingPolicy::Feature feature,
+      const SchedulingPolicy& policy,
+      std::unique_ptr<SourceLocation> source_location) override;
+  void OnStoppedUsingNonStickyFeature(
+      SchedulingAffectingFeatureHandle* handle) override;
 
   base::WeakPtr<FrameScheduler> GetWeakPtr() override;
   base::WeakPtr<const FrameSchedulerImpl> GetWeakPtr() const;
@@ -165,17 +180,12 @@ class PLATFORM_EXPORT FrameSchedulerImpl : public FrameScheduler,
 
   void OnTraceLogEnabled() { tracing_controller_.OnTraceLogEnabled(); }
 
-  void SetPageVisibilityForTracing(PageVisibilityState page_visibility);
   void SetPageFrozenForTracing(bool frozen);
 
   // Computes the priority of |task_queue| if it is associated to this frame
   // scheduler. Note that the main thread's policy should be upto date to
   // compute the correct priority.
-  base::sequence_manager::TaskQueue::QueuePriority ComputePriority(
-      MainThreadTaskQueue* task_queue) const;
-
-  ukm::SourceId GetUkmSourceId() override;
-  ukm::UkmRecorder* GetUkmRecorder();
+  TaskPriority ComputePriority(MainThreadTaskQueue* task_queue) const;
 
   // FrameTaskQueueController::Delegate implementation.
   void OnTaskQueueCreated(
@@ -193,6 +203,7 @@ class PLATFORM_EXPORT FrameSchedulerImpl : public FrameScheduler,
   GetActiveFeaturesTrackedForBackForwardCacheMetrics() override;
 
   std::unique_ptr<WebSchedulingTaskQueue> CreateWebSchedulingTaskQueue(
+      WebSchedulingQueueType,
       WebSchedulingPriority) override;
   void OnWebSchedulingTaskQueuePriorityChanged(MainThreadTaskQueue*);
   void OnWebSchedulingTaskQueueDestroyed(MainThreadTaskQueue*);
@@ -208,20 +219,12 @@ class PLATFORM_EXPORT FrameSchedulerImpl : public FrameScheduler,
   FrameSchedulerImpl(MainThreadSchedulerImpl* main_thread_scheduler,
                      PageSchedulerImpl* parent_page_scheduler,
                      FrameScheduler::Delegate* delegate,
-                     base::trace_event::BlameContext* blame_context,
                      bool is_in_embedded_frame_tree,
                      FrameScheduler::FrameType frame_type);
 
   // This will construct a subframe that is not linked to any main thread or
   // page scheduler. Should be used only for testing purposes.
   FrameSchedulerImpl();
-
-  void OnShutdownResourceLoadingTaskQueue(
-      scoped_refptr<MainThreadTaskQueue> task_queue);
-
-  void DidChangeResourceLoadingPriority(
-      scoped_refptr<MainThreadTaskQueue> task_queue,
-      net::RequestPriority priority);
 
   scoped_refptr<MainThreadTaskQueue> GetTaskQueue(TaskType);
 
@@ -253,10 +256,24 @@ class PLATFORM_EXPORT FrameSchedulerImpl : public FrameScheduler,
     base::WeakPtr<FrameSchedulerImpl> frame_scheduler_;
   };
 
-  void DetachFromPageScheduler();
+  AgentGroupSchedulerImpl& GetAgentGroupSchedulerImpl();
+
+  // Invoked by the parent page scheduler when its visibility changes to
+  // `page_visibility`. May schedule a policy update via `policy_updater`.
+  void OnPageVisibilityChange(PageVisibilityState page_visibility,
+                              PolicyUpdater& policy_updater);
+
+  // Invoked by the parent page scheduler's destructor. May
+  // schedule a policy update via `policy_updater`.
+  void OnPageSchedulerDeletion(PolicyUpdater& policy_updater);
+
+  // Invoked when the value of `AreFrameAndPageVisible()` changes. May
+  // schedule a policy update via `policy_updater`.
+  void OnFrameAndPageVisibleChanged(PolicyUpdater& policy_updater);
+
   void RemoveThrottleableQueueFromBudgetPools(MainThreadTaskQueue*);
   void ApplyPolicyToThrottleableQueue();
-  bool ShouldThrottleTaskQueues() const;
+  ThrottlingType ComputeThrottlingType();
   SchedulingLifecycleState CalculateLifecycleState(
       ObserverType type) const override;
   void UpdateQueuePolicy(
@@ -269,14 +286,11 @@ class PLATFORM_EXPORT FrameSchedulerImpl : public FrameScheduler,
   void OnAddedAggressiveThrottlingOptOut();
   void OnRemovedAggressiveThrottlingOptOut();
 
-  std::unique_ptr<ResourceLoadingTaskRunnerHandleImpl>
-  CreateResourceLoadingTaskRunnerHandleImpl();
-
   FrameTaskQueueController* FrameTaskQueueControllerForTest() {
     return frame_task_queue_controller_.get();
   }
 
-  // Create the QueueTraits for a specific TaskType. This returns absl::nullopt
+  // Create the QueueTraits for a specific TaskType. This returns std::nullopt
   // for loading tasks and non-frame-level tasks.
   static MainThreadTaskQueue::QueueTraits CreateQueueTraitsForTaskType(
       TaskType);
@@ -284,14 +298,24 @@ class PLATFORM_EXPORT FrameSchedulerImpl : public FrameScheduler,
   // Reset the state which should not persist across navigations.
   void ResetForNavigation();
 
-  // Same as GetActiveFeaturesTrackedForBackForwardCacheMetrics, but returns
-  // a mask instead of a set.
-  uint64_t GetActiveFeaturesTrackedForBackForwardCacheMetricsMask() const;
+  // Whether the frame is considered important.
+  bool IsImportant() const;
 
-  base::WeakPtr<FrameOrWorkerScheduler> GetSchedulingAffectingFeatureWeakPtr()
+  // Whether the frame and parent page are visible (note: unlike
+  // `IsFrameVisible()`, this always returns false when the parent page is
+  // hidden, even if the frame "would be visible" if the parent page was
+  // visible).
+  bool AreFrameAndPageVisible() const;
+
+  base::WeakPtr<FrameOrWorkerScheduler> GetFrameOrWorkerSchedulerWeakPtr()
       override;
 
-  void MoveTaskQueuesToCorrectWakeUpBudgetPool();
+  // Returns whether the given `TaskType` can be deferred for rendering in
+  // response to discrete input, which depends on the experimental
+  // DeferRendererTasksAfterInput policy and whether the type
+  // `is_deferrable_for_touchstart` (the CanBeDeferred QueueTrait).
+  bool ComputeCanBeDeferredForRendering(bool is_deferrable_for_touchstart,
+                                        TaskType) const;
 
   // Create QueueTraits for the default (non-finch) task queues.
   static MainThreadTaskQueue::QueueTraits ThrottleableTaskQueueTraits();
@@ -314,34 +338,40 @@ class PLATFORM_EXPORT FrameSchedulerImpl : public FrameScheduler,
   // inside an embedded frame tree. See /docs/frame_trees.md.
   const bool is_in_embedded_frame_tree_;
 
+  base::UnguessableToken agent_cluster_id_ = base::UnguessableToken::Null();
+
   bool is_ad_frame_ = false;
 
-  // A running tally of (wall) time spent in tasks for this frame.
-  // This is periodically forwarded and zeroed out.
-  base::TimeDelta task_time_;
+  // A running tally of (wall) time spent in tasks for this frame. Note that we
+  // are keeping this as a buffer of task time that is not yet reported to the
+  // browser process. This is periodically forwarded and zeroed out when it
+  // reaches kTaskDurationSendThreshold.
+  // Even though this value is saved in the FrameScheduler, which might change
+  // after cross-document navigations, it will be carried over if the new
+  // FrameScheduler object lives in the same process, by passing the value in
+  // OldDocumentInfoForCommit. That is needed to keep the legacy behavior where
+  // the amount of unreported task time is aggregated on a per-frame basis (i.e.
+  // preserved after navigations) instead of a per-document basis. However, note
+  // that the value will not be carried over if the navigation is cross-process,
+  // due to complexities in passing this value.
+  base::TimeDelta unreported_task_time_;
 
   TraceableVariableController tracing_controller_;
   std::unique_ptr<FrameTaskQueueController> frame_task_queue_controller_;
 
-  using ResourceLoadingTaskQueuePriorityMap =
-      WTF::HashMap<scoped_refptr<MainThreadTaskQueue>,
-                   base::sequence_manager::TaskQueue::QueuePriority>;
-
-  // Queue to priority map of resource loading task queues created by
-  // |frame_task_queue_controller_| via CreateResourceLoadingTaskRunnerHandle.
-  ResourceLoadingTaskQueuePriorityMap resource_loading_task_queue_priorities_;
-
-  MainThreadSchedulerImpl* const main_thread_scheduler_;  // NOT OWNED
-  PageSchedulerImpl* parent_page_scheduler_;              // NOT OWNED
-  FrameScheduler::Delegate* delegate_;                    // NOT OWNED
-  base::trace_event::BlameContext* blame_context_;        // NOT OWNED
-  SchedulingLifecycleState throttling_state_;
+  const raw_ptr<MainThreadSchedulerImpl, DanglingUntriaged>
+      main_thread_scheduler_;  // NOT OWNED
+  raw_ptr<PageSchedulerImpl> parent_page_scheduler_;  // NOT OWNED
+  raw_ptr<FrameScheduler::Delegate> delegate_;        // NOT OWNED
+  TraceableState<PageVisibilityState, TracingCategory::kInfo> page_visibility_;
   TraceableState<bool, TracingCategory::kInfo> frame_visible_;
+  TraceableState<bool, TracingCategory::kInfo> is_visible_area_large_;
+  TraceableState<bool, TracingCategory::kInfo> had_user_activation_;
   TraceableState<bool, TracingCategory::kInfo> frame_paused_;
   TraceableState<FrameOriginType, TracingCategory::kInfo> frame_origin_type_;
   TraceableState<bool, TracingCategory::kInfo> subresource_loading_paused_;
   StateTracer<TracingCategory::kInfo> url_tracer_;
-  TraceableState<bool, TracingCategory::kInfo> task_queues_throttled_;
+  TraceableState<ThrottlingType, TracingCategory::kInfo> throttling_type_;
   Vector<MainThreadTaskQueue::ThrottleHandle> throttled_task_queue_handles_;
   TraceableState<bool, TracingCategory::kInfo>
       preempted_for_cooperative_scheduling_;
@@ -354,23 +384,25 @@ class PLATFORM_EXPORT FrameSchedulerImpl : public FrameScheduler,
   BackForwardCacheDisablingFeatureTracker
       back_forward_cache_disabling_feature_tracker_;
 
-  base::sequence_manager::TaskQueue::QueuePriority
-      default_loading_task_priority_ =
-          base::sequence_manager::TaskQueue::QueuePriority::kNormalPriority;
+  TaskPriority default_loading_task_priority_ = TaskPriority::kNormalPriority;
+
+  TaskPriority low_priority_async_script_task_priority_;
 
   // These are the states of the Page.
   // They should be accessed via GetPageScheduler()->SetPageState().
   // they are here because we don't support page-level tracing yet.
   TraceableState<bool, TracingCategory::kInfo> page_frozen_for_tracing_;
-  TraceableState<PageVisibilityState, TracingCategory::kInfo>
-      page_visibility_for_tracing_;
 
-  TraceableState<bool, TracingCategory::kInfo> waiting_for_dom_content_loaded_;
   TraceableState<bool, TracingCategory::kInfo> waiting_for_contentful_paint_;
   TraceableState<bool, TracingCategory::kInfo> waiting_for_meaningful_paint_;
-  TraceableState<bool, TracingCategory::kInfo> waiting_for_load_;
+  TraceableState<bool, TracingCategory::kInfo> is_load_event_dispatched_;
+  base::TimeTicks first_meaningful_paint_timestamp_;
 
-  std::unique_ptr<power_scheduler::PowerModeVoter> loading_power_mode_voter_;
+  using TaskRunnerMap =
+      WTF::HashMap<TaskType, scoped_refptr<base::SingleThreadTaskRunner>>;
+
+  // Map of all TaskRunners, indexed by TaskType.
+  TaskRunnerMap task_runners_;
 
   // TODO(altimin): Remove after we have have 1:1 relationship between frames
   // and documents.

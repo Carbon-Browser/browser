@@ -1,11 +1,9 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 module network.mojom;
 
-import "url/mojom/url.mojom";
-import "mojo/public/mojom/base/unguessable_token.mojom";
 import "services/network/public/mojom/source_location.mojom";
 
 enum CoopAccessReportType {
@@ -75,6 +73,9 @@ enum CrossOriginOpenerPolicyValue {
   // COOP: restrict-properties with a COEP value compatible with
   // crossOriginIsolation.
   kRestrictPropertiesPlusCoep,
+
+  // COOP: noopener-allow-popups severs the opener relationship with any opener.
+  kNoopenerAllowPopups,
 };
 
 // Cross-Origin-Opener-Policy enum representing parsed values.

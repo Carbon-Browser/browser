@@ -1,17 +1,27 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "sandbox/win/tests/common/controller.h"
 
+#include <memory>
 #include <string>
+#include <string_view>
 
 #include "base/check.h"
 #include "base/dcheck_is_on.h"
+#include "base/functional/callback.h"
 #include "base/memory/platform_shared_memory_region.h"
 #include "base/memory/read_only_shared_memory_region.h"
+#include "base/notreached.h"
 #include "base/process/process.h"
 #include "base/process/process_handle.h"
+#include "base/sequence_checker.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/sys_string_conversions.h"
@@ -25,11 +35,58 @@
 
 namespace {
 
+// Used by the machinery that counts how many processes the sandbox is tracking.
+HANDLE g_no_targets_event = nullptr;
+
+// Helper to track the number of live processes, sets an event when there are
+// none and resets it when one process is added.
+class TargetTracker : public sandbox::BrokerServicesTargetTracker {
+ public:
+  TargetTracker(HANDLE no_targets) : no_targets_event_(no_targets) {
+    // We create this in a test thread but it is only accessed on the sandbox
+    // internal events thread.
+    DETACH_FROM_SEQUENCE(target_events_sequence_);
+    ::ResetEvent(no_targets_event_);
+  }
+  TargetTracker(const TargetTracker&) = delete;
+  TargetTracker& operator=(const TargetTracker&) = delete;
+  ~TargetTracker() override {}
+
+  void OnTargetAdded() override {
+    DCHECK_CALLED_ON_VALID_SEQUENCE(target_events_sequence_);
+    ++targets_;
+    if (1 == targets_) {
+      ::ResetEvent(no_targets_event_);
+    }
+  }
+  void OnTargetRemoved() override {
+    DCHECK_CALLED_ON_VALID_SEQUENCE(target_events_sequence_);
+    CHECK_NE(targets_, 0U);
+    --targets_;
+    if (targets_ == 0) {
+      ::SetEvent(no_targets_event_);
+    }
+  }
+
+ private:
+  // Event is owned by the test framework but we can set it.
+  const HANDLE no_targets_event_;
+  // Number of processes we're tracking (both directly associated with a
+  // TargetPolicy in a job, and those launched by tracked jobs).
+  size_t targets_ GUARDED_BY_CONTEXT(target_events_sequence_) = 0;
+  SEQUENCE_CHECKER(target_events_sequence_);
+};
+
 bool IsProcessRunning(HANDLE process) {
   DWORD exit_code = 0;
   if (::GetExitCodeProcess(process, &exit_code))
     return exit_code == STILL_ACTIVE;
   return false;
+}
+
+bool WaitForAllTargetsInternal() {
+  ::WaitForSingleObject(g_no_targets_event, INFINITE);
+  return true;
 }
 
 }  // namespace
@@ -38,7 +95,7 @@ namespace sandbox {
 
 // Constructs a full path to a file inside the system32 folder.
 std::wstring MakePathToSys32(const wchar_t* name, bool is_obj_man_path) {
-  wchar_t windows_path[MAX_PATH] = {0};
+  wchar_t windows_path[MAX_PATH] = {};
   if (0 == ::GetSystemWindowsDirectoryW(windows_path, MAX_PATH))
     return std::wstring();
 
@@ -56,7 +113,7 @@ std::wstring MakePathToSys32(const wchar_t* name, bool is_obj_man_path) {
 
 // Constructs a full path to a file inside the syswow64 folder.
 std::wstring MakePathToSysWow64(const wchar_t* name, bool is_obj_man_path) {
-  wchar_t windows_path[MAX_PATH] = {0};
+  wchar_t windows_path[MAX_PATH] = {};
   if (0 == ::GetSystemWindowsDirectoryW(windows_path, MAX_PATH))
     return std::wstring();
 
@@ -78,6 +135,28 @@ std::wstring MakePathToSys(const wchar_t* name, bool is_obj_man_path) {
              : MakePathToSys32(name, is_obj_man_path);
 }
 
+// This delegate is required for initializing BrokerServices and configures it
+// to use synchronous launching.
+class TestBrokerServicesDelegateImpl : public BrokerServicesDelegate {
+ public:
+  bool ParallelLaunchEnabled() override { return false; }
+
+  void ParallelLaunchPostTaskAndReplyWithResult(
+      const base::Location& from_here,
+      base::OnceCallback<CreateTargetResult()> task,
+      base::OnceCallback<void(CreateTargetResult)> reply) override {
+    // This function is only used for parallel launching and should not get
+    // called.
+    NOTREACHED();
+  }
+
+  void BeforeTargetProcessCreateOnCreationThread(
+      const void* trace_id) override {}
+
+  void AfterTargetProcessCreateOnCreationThread(const void* trace_id,
+                                                DWORD process_id) override {}
+};
+
 BrokerServices* GetBroker() {
   static BrokerServices* broker = SandboxFactory::GetBrokerServices();
   static bool is_initialized = false;
@@ -87,8 +166,17 @@ BrokerServices* GetBroker() {
   }
 
   if (!is_initialized) {
-    if (SBOX_ALL_OK != broker->Init())
-      return NULL;
+    g_no_targets_event = ::CreateEventW(nullptr, true, false, nullptr);
+    if (!g_no_targets_event) {
+      return nullptr;
+    }
+
+    auto tracker = std::make_unique<TargetTracker>(g_no_targets_event);
+    if (SBOX_ALL_OK != broker->InitForTesting(  // IN-TEST
+                           std::make_unique<TestBrokerServicesDelegateImpl>(),
+                           std::move(tracker))) {
+      return nullptr;
+    }
 
     is_initialized = true;
   }
@@ -120,8 +208,12 @@ TestRunner::TestRunner(JobLevel job_level,
   if (!policy_)
     return;
 
-  policy_->SetJobLevel(job_level, 0);
-  policy_->SetTokenLevel(startup_token, main_token);
+  auto result = policy_->GetConfig()->SetJobLevel(job_level, 0);
+  if (result != SBOX_ALL_OK)
+    return;
+  result = policy_->GetConfig()->SetTokenLevel(startup_token, main_token);
+  if (result != SBOX_ALL_OK)
+    return;
 
   is_init_ = true;
 }
@@ -136,20 +228,28 @@ TargetPolicy* TestRunner::GetPolicy() {
 }
 
 TestRunner::~TestRunner() {
-  if (target_process_.IsValid() && kill_on_destruction_)
-    ::TerminateProcess(target_process_.Get(), 0);
+  if (target_process_.is_valid() && kill_on_destruction_) {
+    ::TerminateProcess(target_process_.get(), 0);
+  }
 }
 
-bool TestRunner::AddRule(SubSystem subsystem,
-                         Semantics semantics,
-                         const wchar_t* pattern) {
+bool TestRunner::WaitForAllTargets() {
+  return WaitForAllTargetsInternal();
+}
+
+bool TestRunner::AllowFileAccess(FileSemantics semantics,
+                                 const wchar_t* pattern) {
   if (!is_init_)
     return false;
 
-  return (SBOX_ALL_OK == policy_->AddRule(subsystem, semantics, pattern));
+  if (policy_->GetConfig()->IsConfigured())
+    return false;
+
+  return (SBOX_ALL_OK ==
+          policy_->GetConfig()->AllowFileAccess(semantics, pattern));
 }
 
-bool TestRunner::AddRuleSys32(Semantics semantics, const wchar_t* pattern) {
+bool TestRunner::AddRuleSys32(FileSemantics semantics, const wchar_t* pattern) {
   if (!is_init_)
     return false;
 
@@ -157,8 +257,9 @@ bool TestRunner::AddRuleSys32(Semantics semantics, const wchar_t* pattern) {
   if (win32_path.empty())
     return false;
 
-  if (!AddRule(SubSystem::kFiles, semantics, win32_path.c_str()))
+  if (!AllowFileAccess(semantics, win32_path.c_str())) {
     return false;
+  }
 
   if (!base::win::OSInfo::GetInstance()->IsWowX86OnAMD64())
     return true;
@@ -167,14 +268,7 @@ bool TestRunner::AddRuleSys32(Semantics semantics, const wchar_t* pattern) {
   if (win32_path.empty())
     return false;
 
-  return AddRule(SubSystem::kFiles, semantics, win32_path.c_str());
-}
-
-bool TestRunner::AddFsRule(Semantics semantics, const wchar_t* pattern) {
-  if (!is_init_)
-    return false;
-
-  return AddRule(SubSystem::kFiles, semantics, pattern);
+  return AllowFileAccess(semantics, win32_path.c_str());
 }
 
 int TestRunner::RunTest(const wchar_t* command) {
@@ -195,23 +289,26 @@ int TestRunner::InternalRunTest(const wchar_t* command) {
     return SBOX_TEST_FAILED_TO_RUN_TEST;
 
   // For simplicity TestRunner supports only one process per instance.
-  if (target_process_.IsValid()) {
-    if (IsProcessRunning(target_process_.Get()))
+  if (target_process_.is_valid()) {
+    if (IsProcessRunning(target_process_.get())) {
       return SBOX_TEST_FAILED_TO_RUN_TEST;
+    }
     target_process_.Close();
     target_process_id_ = 0;
   }
 
-  if (disable_csrss_)
-    policy_->SetDisconnectCsrss();
+  if (disable_csrss_) {
+    auto* config = policy_->GetConfig();
+    if (config->GetAppContainer() == nullptr) {
+      config->SetDisconnectCsrss();
+    }
+  }
 
   // Get the path to the sandboxed process.
   wchar_t prog_name[MAX_PATH];
   GetModuleFileNameW(NULL, prog_name, MAX_PATH);
 
   // Launch the sandboxed process.
-  ResultCode result = SBOX_ALL_OK;
-  ResultCode warning_result = SBOX_ALL_OK;
   DWORD last_error = ERROR_SUCCESS;
   PROCESS_INFORMATION target = {0};
 
@@ -221,6 +318,7 @@ int TestRunner::InternalRunTest(const wchar_t* command) {
   arguments += no_sandbox_ ? L"-no-sandbox " : L" ";
   arguments += command;
 
+  ResultCode result = SBOX_ALL_OK;
   if (no_sandbox_) {
     STARTUPINFO startup_info = {sizeof(STARTUPINFO)};
     if (!::CreateProcessW(prog_name, &arguments[0], NULL, NULL, FALSE, 0,
@@ -228,9 +326,8 @@ int TestRunner::InternalRunTest(const wchar_t* command) {
       return SBOX_ERROR_GENERIC;
     }
   } else {
-    result =
-        broker_->SpawnTarget(prog_name, arguments.c_str(), std::move(policy_),
-                             &warning_result, &last_error, &target);
+    result = broker_->SpawnTarget(prog_name, arguments.c_str(),
+                                  std::move(policy_), &last_error, &target);
   }
 
   if (SBOX_ALL_OK != result)
@@ -329,15 +426,16 @@ int DispatchCall(int argc, wchar_t **argv) {
   // in read only mode and sleep infinitely if we succeed.
   if (0 == _wcsicmp(argv[3], L"shared_memory_handle")) {
     HANDLE raw_handle = nullptr;
-    base::StringPiece test_contents = "Hello World";
+    std::string_view test_contents = "Hello World";
     base::StringToUint(base::AsStringPiece16(argv[4]),
                        reinterpret_cast<unsigned int*>(&raw_handle));
     if (raw_handle == nullptr)
       return SBOX_TEST_INVALID_PARAMETER;
     // First extract the handle to the platform-native ScopedHandle.
     base::win::ScopedHandle scoped_handle(raw_handle);
-    if (!scoped_handle.IsValid())
+    if (!scoped_handle.is_valid()) {
       return SBOX_TEST_INVALID_PARAMETER;
+    }
     // Then convert to the low-level chromium region.
     base::subtle::PlatformSharedMemoryRegion platform_region =
         base::subtle::PlatformSharedMemoryRegion::Take(

@@ -1,23 +1,22 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/phonehub/camera_roll_download_manager_impl.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "ash/components/phonehub/camera_roll_download_manager.h"
-#include "ash/components/phonehub/proto/phonehub_api.pb.h"
 #include "ash/public/cpp/holding_space/holding_space_item.h"
 #include "ash/public/cpp/holding_space/holding_space_model.h"
 #include "ash/public/cpp/holding_space/holding_space_progress.h"
-#include "ash/services/secure_channel/public/mojom/secure_channel_types.mojom.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_path_watcher.h"
 #include "base/files/file_util.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/system/sys_info.h"
 #include "base/test/bind.h"
@@ -31,14 +30,16 @@
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/base/testing_profile_manager.h"
+#include "chromeos/ash/components/phonehub/camera_roll_download_manager.h"
+#include "chromeos/ash/components/phonehub/proto/phonehub_api.pb.h"
+#include "chromeos/ash/services/secure_channel/public/mojom/secure_channel_types.mojom.h"
 #include "components/account_id/account_id.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace ash {
-namespace phonehub {
+namespace ash::phonehub {
+
 namespace {
 
 using CreatePayloadFilesResult =
@@ -61,7 +62,7 @@ class CameraRollDownloadManagerImplTest : public testing::Test {
       : profile_manager_(CreateTestingProfileManager()),
         profile_(profile_manager_->CreateTestingProfile(kUserEmail)),
         user_manager_(new ash::FakeChromeUserManager),
-        user_manager_owner_(base::WrapUnique(user_manager_)) {
+        user_manager_owner_(base::WrapUnique(user_manager_.get())) {
     AccountId account_id(AccountId::FromUserEmail(kUserEmail));
     user_manager_->AddUser(account_id);
     user_manager_->LoginUser(account_id);
@@ -91,7 +92,7 @@ class CameraRollDownloadManagerImplTest : public testing::Test {
         payload_id, item_metadata,
         base::BindLambdaForTesting(
             [&](CreatePayloadFilesResult result,
-                absl::optional<secure_channel::mojom::PayloadFilesPtr>
+                std::optional<secure_channel::mojom::PayloadFilesPtr>
                     payload_files) {
               EXPECT_EQ(CreatePayloadFilesResult::kSuccess, result);
               EXPECT_TRUE(payload_files.has_value());
@@ -111,7 +112,7 @@ class CameraRollDownloadManagerImplTest : public testing::Test {
         payload_id, item_metadata,
         base::BindLambdaForTesting(
             [&](CreatePayloadFilesResult result,
-                absl::optional<secure_channel::mojom::PayloadFilesPtr>
+                std::optional<secure_channel::mojom::PayloadFilesPtr>
                     payload_files) {
               EXPECT_NE(CreatePayloadFilesResult::kSuccess, result);
               EXPECT_FALSE(payload_files.has_value());
@@ -140,10 +141,10 @@ class CameraRollDownloadManagerImplTest : public testing::Test {
 
  private:
   std::unique_ptr<TestingProfileManager> profile_manager_;
-  TestingProfile* const profile_;
-  ash::FakeChromeUserManager* const user_manager_;
+  const raw_ptr<TestingProfile> profile_;
+  const raw_ptr<ash::FakeChromeUserManager, DanglingUntriaged> user_manager_;
   user_manager::ScopedUserManager user_manager_owner_;
-  HoldingSpaceKeyedService* holding_space_keyed_service_;
+  raw_ptr<HoldingSpaceKeyedService> holding_space_keyed_service_;
   std::unique_ptr<holding_space::ScopedTestMountPoint> downloads_mount_;
 
   std::unique_ptr<CameraRollDownloadManagerImpl> camera_roll_download_manager_;
@@ -432,5 +433,4 @@ TEST_F(CameraRollDownloadManagerImplTest, DeleteFile) {
   EXPECT_FALSE(base::PathExists(expected_path));
 }
 
-}  // namespace phonehub
-}  // namespace ash
+}  // namespace ash::phonehub

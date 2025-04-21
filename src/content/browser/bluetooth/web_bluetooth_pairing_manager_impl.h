@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_BROWSER_BLUETOOTH_WEB_BLUETOOTH_PAIRING_MANAGER_IMPL_H_
 #define CONTENT_BROWSER_BLUETOOTH_WEB_BLUETOOTH_PAIRING_MANAGER_IMPL_H_
 
+#include <optional>
 #include <string>
 
 #include "base/containers/flat_set.h"
@@ -16,7 +17,6 @@
 #include "content/common/content_export.h"
 #include "device/bluetooth/bluetooth_device.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/bluetooth/web_bluetooth.mojom.h"
 
 namespace content {
@@ -28,6 +28,9 @@ class CONTENT_EXPORT WebBluetoothPairingManagerImpl
   // The maximum number of Bluetooth pairing attempts during a single
   // read/write operation.
   static constexpr int kMaxPairAttempts = 10;
+
+  // Passkey/Pin has to be exact 6 digits
+  static constexpr int kPairingPinSize = 6;
 
   explicit WebBluetoothPairingManagerImpl(
       WebBluetoothPairingManagerDelegate* pairing_manager_delegate);
@@ -76,6 +79,10 @@ class CONTENT_EXPORT WebBluetoothPairingManagerImpl
                            PairConfirmPromptSuccess);
   FRIEND_TEST_ALL_PREFIXES(BluetoothPairingManagerTest,
                            PairConfirmPromptCancelled);
+  FRIEND_TEST_ALL_PREFIXES(BluetoothPairingManagerTest,
+                           PairConfirmPinPromptSuccess);
+  FRIEND_TEST_ALL_PREFIXES(BluetoothPairingManagerTest,
+                           PairConfirmPinPromptCancelled);
 
   // Pair the Bluetooth device identified by |device_id|. |num_pair_attempts|
   // represents the number of pairing attempts for the specified device which
@@ -93,7 +100,7 @@ class CONTENT_EXPORT WebBluetoothPairingManagerImpl
       blink::WebBluetoothDeviceId device_id,
       int num_pair_attempts,
       device::BluetoothDevice::ConnectCallback callback,
-      absl::optional<device::BluetoothDevice::ConnectErrorCode> error_code);
+      std::optional<device::BluetoothDevice::ConnectErrorCode> error_code);
 
   void OnPinCodeResult(blink::WebBluetoothDeviceId device_id,
                        const BluetoothDelegate::PairPromptResult& result);

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,22 +8,23 @@
  * Chrome OS and non-Chrome OS.
  */
 
-import 'chrome://resources/cr_elements/hidden_style_css.m.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
-import 'chrome://resources/cr_elements/md_select_css.m.js';
-import 'chrome://resources/js/util.m.js';
-import 'chrome://resources/polymer/v3_0/iron-iconset-svg/iron-iconset-svg.js';
+import 'chrome://resources/cr_elements/cr_hidden_style.css.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
+import 'chrome://resources/cr_elements/md_select.css.js';
+import 'chrome://resources/js/util.js';
 import './destination_select_style.css.js';
 import './icons.html.js';
 import './print_preview_shared.css.js';
 import './throbber.css.js';
-import '../strings.m.js';
+import '/strings.m.js';
 
-import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
-import {IronMeta} from 'chrome://resources/polymer/v3_0/iron-meta/iron-meta.js';
+import {IconsetMap} from 'chrome://resources/cr_elements/cr_icon/iconset_map.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {assert} from 'chrome://resources/js/assert.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {Destination, PDF_DESTINATION_KEY} from '../data/destination.js';
+import type {Destination} from '../data/destination.js';
+import {PDF_DESTINATION_KEY} from '../data/destination.js';
 import {getSelectDropdownBackground} from '../print_preview_utils.js';
 
 import {getTemplate} from './destination_select.html.js';
@@ -76,13 +77,6 @@ export class PrintPreviewDestinationSelectElement extends
   pdfPrinterDisabled: boolean;
   recentDestinationList: Destination[];
   private pdfDestinationKey_: string;
-  private meta_: IronMeta;
-
-  constructor() {
-    super();
-
-    this.meta_ = new IronMeta({type: 'iconset', value: undefined});
-  }
 
   override focus() {
     this.shadowRoot!.querySelector<HTMLElement>('.md-select')!.focus();
@@ -144,7 +138,9 @@ export class PrintPreviewDestinationSelectElement extends
       iconSetAndIcon = ['cr', 'error'];
     }
     iconSetAndIcon = iconSetAndIcon || icon.split(':');
-    const iconset = this.meta_.byKey(iconSetAndIcon[0]);
+
+    const iconset = IconsetMap.getInstance().get(iconSetAndIcon[0]);
+    assert(iconset);
     return getSelectDropdownBackground(iconset, iconSetAndIcon[1], this);
   }
 

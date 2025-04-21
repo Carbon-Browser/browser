@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ref.h"
 #include "base/memory/weak_ptr.h"
 #include "components/feed/core/v2/tasks/load_stream_from_store_task.h"
 #include "components/offline_pages/task/task.h"
@@ -37,7 +38,7 @@ class PrefetchImagesTask : public offline_pages::Task {
 
   void MaybePrefetchImage(const GURL& gurl);
 
-  FeedStream& stream_;
+  const raw_ref<FeedStream> stream_;
   std::unordered_set<std::string> previously_fetched_;
   unsigned long max_images_per_refresh_;
 

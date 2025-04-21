@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -124,7 +124,9 @@ var tests = [
       chrome.test.assertTrue(warnings.indexOf(
         "Detect your physical location") != -1);
       chrome.test.assertTrue(
-        warnings.indexOf("Read and change your browsing history") != -1);
+          warnings.indexOf(
+              "Read and change your browsing history on all your signed-in " +
+              "devices") != -1);
     }));
 
     chrome.management.getAll(callback(function(items) {

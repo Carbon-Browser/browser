@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,5 @@ FrameNode::~FrameNode() = default;
 
 FrameNodeObserver::FrameNodeObserver() = default;
 FrameNodeObserver::~FrameNodeObserver() = default;
-
-FrameNode::ObserverDefaultImpl::ObserverDefaultImpl() = default;
-FrameNode::ObserverDefaultImpl::~ObserverDefaultImpl() = default;
 
 }  // namespace performance_manager

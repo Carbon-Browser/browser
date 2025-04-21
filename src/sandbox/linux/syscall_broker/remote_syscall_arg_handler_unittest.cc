@@ -1,6 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "sandbox/linux/syscall_broker/remote_syscall_arg_handler.h"
 
@@ -11,9 +16,9 @@
 #include <cstring>
 #include <tuple>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/page_size.h"
 #include "base/posix/unix_domain_socket.h"
 #include "base/test/bind.h"

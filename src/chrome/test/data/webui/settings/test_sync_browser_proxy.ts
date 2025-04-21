@@ -1,9 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // clang-format off
-import {PageStatus, StatusAction, StoredAccount, SyncBrowserProxy, SyncPrefs, SyncStatus} from 'chrome://settings/settings.js';
+import type {StoredAccount, SyncBrowserProxy, SyncPrefs, SyncStatus} from 'chrome://settings/settings.js';
+import type {ChromeSigninUserChoiceInfo} from 'chrome://settings/settings.js';
+import {PageStatus, SignedInState, StatusAction, ChromeSigninUserChoice} from 'chrome://settings/settings.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 
 // clang-format on
@@ -13,7 +15,7 @@ export class TestSyncBrowserProxy extends TestBrowserProxy implements
   private impressionCount_: number = 0;
   private resolveGetSyncStatus_: Function|null = null;
   private syncStatus_: SyncStatus|null = {
-    signedIn: true,
+    signedInState: SignedInState.SYNCING,
     signedInUsername: 'fakeUsername',
     statusAction: StatusAction.NO_ACTION,
   };
@@ -22,6 +24,12 @@ export class TestSyncBrowserProxy extends TestBrowserProxy implements
   encryptionPassphraseSuccess: boolean = false;
   decryptionPassphraseSuccess: boolean = false;
   storedAccounts: StoredAccount[] = [];
+  profileAvatarURL: string = '';
+  chromeSigninUserChoiceInfo: ChromeSigninUserChoiceInfo = {
+    shouldShowSettings: false,
+    choice: ChromeSigninUserChoice.NO_CHOICE,
+    signedInEmail: '',
+  };
 
   constructor() {
     // clang-format off
@@ -30,6 +38,7 @@ export class TestSyncBrowserProxy extends TestBrowserProxy implements
       'didNavigateToSyncPage',
       'getPromoImpressionCount',
       'getStoredAccounts',
+      'getProfileAvatar',
       'getSyncStatus',
       'incrementPromoImpressionCount',
       'setSyncDatatypes',
@@ -49,6 +58,8 @@ export class TestSyncBrowserProxy extends TestBrowserProxy implements
       'turnOnSync',
       'turnOffSync',
       // </if>
+      'setChromeSigninUserChoice',
+      'getChromeSigninUserChoiceInfo',
     ]);
     // clang-format on
   }
@@ -79,6 +90,11 @@ export class TestSyncBrowserProxy extends TestBrowserProxy implements
   getStoredAccounts() {
     this.methodCalled('getStoredAccounts');
     return Promise.resolve(this.storedAccounts);
+  }
+
+  getProfileAvatar() {
+    this.methodCalled('getProfileAvatar');
+    return Promise.resolve(this.profileAvatarURL);
   }
 
   // <if expr="not chromeos_ash">
@@ -147,6 +163,8 @@ export class TestSyncBrowserProxy extends TestBrowserProxy implements
 
   startKeyRetrieval() {}
 
+  showSyncPassphraseDialog() {}
+
   // <if expr="chromeos_ash">
   attemptUserExit() {}
 
@@ -158,4 +176,19 @@ export class TestSyncBrowserProxy extends TestBrowserProxy implements
     this.methodCalled('turnOffSync');
   }
   // </if>
+
+  setChromeSigninUserChoice(): void {
+    this.methodCalled('setChromeSigninUserChoice');
+  }
+
+  // Prepares the return value for `getChromeSigninUserChoiceInfo()`.
+  setGetUserChromeSigninUserChoiceInfoResponse(
+      info: ChromeSigninUserChoiceInfo): void {
+    this.chromeSigninUserChoiceInfo = info;
+  }
+
+  getChromeSigninUserChoiceInfo(): Promise<ChromeSigninUserChoiceInfo> {
+    this.methodCalled('getChromeSigninUserChoiceInfo');
+    return Promise.resolve(this.chromeSigninUserChoiceInfo);
+  }
 }

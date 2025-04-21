@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@ constexpr size_t kSizeKolySignatureInBytes = sizeof(kKolySignature);
 
 }  // namespace
 
-DiskImageTypeSnifferMac::DiskImageTypeSnifferMac() {}
+DiskImageTypeSnifferMac::DiskImageTypeSnifferMac() = default;
 
 // static
 bool DiskImageTypeSnifferMac::IsAppleDiskImage(const base::FilePath& dmg_file) {
@@ -27,17 +27,16 @@ bool DiskImageTypeSnifferMac::IsAppleDiskImage(const base::FilePath& dmg_file) {
   if (!file.IsValid())
     return false;
 
-  char data[kSizeKolySignatureInBytes];
+  uint8_t data[kSizeKolySignatureInBytes];
 
   if (file.Seek(base::File::FROM_END, -1 * kAppleDiskImageTrailerSize) == -1)
     return false;
 
-  if (file.ReadAtCurrentPos(data, kSizeKolySignatureInBytes) !=
-      kSizeKolySignatureInBytes)
+  if (file.ReadAtCurrentPos(data) != kSizeKolySignatureInBytes) {
     return false;
+  }
 
-  return IsAppleDiskImageTrailer(base::span<uint8_t>(
-      reinterpret_cast<uint8_t*>(data), kSizeKolySignatureInBytes));
+  return IsAppleDiskImageTrailer(data);
 }
 
 // static

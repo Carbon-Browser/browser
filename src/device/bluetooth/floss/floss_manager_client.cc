@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,93 +9,53 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/observer_list.h"
-#include "base/strings/stringprintf.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
+#include "components/device_event_log/device_event_log.h"
 #include "dbus/bus.h"
 #include "dbus/exported_object.h"
 #include "dbus/message.h"
 #include "dbus/object_proxy.h"
+#include "device/bluetooth/bluez/bluez_features.h"
+#include "device/bluetooth/chromeos_platform_features.h"
 #include "device/bluetooth/floss/floss_dbus_client.h"
 #include "device/bluetooth/floss/floss_features.h"
 
 namespace floss {
 
-namespace {
-constexpr char kUnknownManagerError[] = "org.chromium.Error.UnknownManager";
-constexpr char kHciInterfaceKey[] = "hci_interface";
-constexpr char kEnabledKey[] = "enabled";
+using internal::AdapterWithEnabled;
 
-bool ParseAdapterWithEnabled(dbus::MessageReader& array,
-                             int* adapter,
-                             bool* enabled) {
-  dbus::MessageReader dict(nullptr);
-  bool found_adapter = false;
-  bool found_enabled = false;
+template <>
+bool FlossDBusClient::ReadDBusParam(dbus::MessageReader* reader,
+                                    AdapterWithEnabled* adapter) {
+  static FlossDBusClient::StructReader<AdapterWithEnabled> struct_reader({
+      {"hci_interface", CreateFieldReader(&AdapterWithEnabled::adapter)},
+      {"enabled", CreateFieldReader(&AdapterWithEnabled::enabled)},
+  });
 
-  while (array.PopDictEntry(&dict)) {
-    std::string key;
-    dict.PopString(&key);
-
-    if (key == kHciInterfaceKey) {
-      found_adapter = dict.PopVariantOfInt32(adapter);
-    } else if (key == kEnabledKey) {
-      found_enabled = dict.PopVariantOfBool(enabled);
-    }
-  }
-
-  return found_adapter && found_enabled;
+  return struct_reader.ReadDBusParam(reader, adapter);
 }
 
-void HandleExported(const std::string& method_name,
-                    const std::string& interface_name,
-                    const std::string& object_path,
-                    bool success) {
-  DVLOG(1) << (success ? "Successfully exported " : "Failed to export ")
-           << method_name << " on interface = " << interface_name
-           << ", object = " << object_path;
-}
-
-}  // namespace
-
-FlossManagerClient::PoweredCallback::PoweredCallback(ResponseCallback<Void> cb,
-                                                     int timeout_ms) {
-  cb_ = std::move(cb);
-  timeout_ms_ = timeout_ms;
-}
-
-FlossManagerClient::PoweredCallback::~PoweredCallback() = default;
-
-// static
-std::unique_ptr<FlossManagerClient::PoweredCallback>
-FlossManagerClient::PoweredCallback::CreateWithTimeout(
-    ResponseCallback<Void> cb,
-    int timeout_ms) {
-  std::unique_ptr<FlossManagerClient::PoweredCallback> self =
-      std::make_unique<FlossManagerClient::PoweredCallback>(std::move(cb),
-                                                            timeout_ms);
-  self->PostDelayedError();
-
-  return self;
-}
-
-void FlossManagerClient::PoweredCallback::PostDelayedError() {
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-      FROM_HERE,
-      base::BindOnce(&PoweredCallback::RunError,
-                     weak_ptr_factory_.GetWeakPtr()),
-      base::Milliseconds(timeout_ms_));
+template <>
+const DBusTypeInfo& GetDBusTypeInfo<AdapterWithEnabled>(
+    const AdapterWithEnabled* unused) {
+  static DBusTypeInfo info{"a{sv}", "AdapterWithEnabled"};
+  return info;
 }
 
 // static
 const char FlossManagerClient::kExportedCallbacksPath[] =
-    "/org/chromium/bluetooth/managerclient";
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+    "/org/chromium/bluetooth/manager/callback/lacros";
+#else
+    "/org/chromium/bluetooth/manager/callback";
+#endif
 
 // static
 const char FlossManagerClient::kObjectManagerPath[] = "/";
@@ -132,8 +92,8 @@ void FlossManagerClient::RemoveObserver(
 
 std::vector<int> FlossManagerClient::GetAdapters() const {
   std::vector<int> adapters;
-  for (auto kv : adapter_to_powered_) {
-    adapters.push_back(kv.first);
+  for (auto& [adapter, enabled] : adapter_to_enabled_) {
+    adapters.push_back(adapter);
   }
 
   return adapters;
@@ -144,12 +104,12 @@ int FlossManagerClient::GetDefaultAdapter() const {
 }
 
 bool FlossManagerClient::GetAdapterPresent(int adapter) const {
-  return base::Contains(adapter_to_powered_, adapter);
+  return base::Contains(adapter_to_enabled_, adapter);
 }
 
 bool FlossManagerClient::GetAdapterEnabled(int adapter) const {
-  auto iter = adapter_to_powered_.find(adapter);
-  if (iter != adapter_to_powered_.end()) {
+  auto iter = adapter_to_enabled_.find(adapter);
+  if (iter != adapter_to_enabled_.end()) {
     return iter->second;
   }
 
@@ -159,60 +119,28 @@ bool FlossManagerClient::GetAdapterEnabled(int adapter) const {
 void FlossManagerClient::GetFlossEnabledWithTarget(bool target,
                                                    int retry,
                                                    int retry_wait_ms) {
-  dbus::ObjectProxy* object_proxy =
-      bus_->GetObjectProxy(service_name_, dbus::ObjectPath(kManagerObject));
-  if (!object_proxy) {
-    if (set_floss_enabled_callback_) {
-      set_floss_enabled_callback_->Run(absl::nullopt,
-                                       Error(kUnknownManagerError, ""));
-      set_floss_enabled_callback_.reset();
-    }
-    return;
-  }
-
-  DVLOG(2) << __func__;
-
-  dbus::MethodCall method_call(kManagerInterface, manager::kGetFlossEnabled);
-  dbus::MessageWriter writer(&method_call);
-
-  object_proxy->CallMethodWithErrorResponse(
-      &method_call, kDBusTimeoutMs,
+  CallManagerMethod<bool>(
       base::BindOnce(&FlossManagerClient::HandleGetFlossEnabled,
                      weak_ptr_factory_.GetWeakPtr(), target, retry,
-                     retry_wait_ms));
+                     retry_wait_ms),
+      manager::kGetFlossEnabled);
 }
 
 void FlossManagerClient::SetFlossEnabled(
     bool enabled,
     int retry,
     int retry_wait_ms,
-    absl::optional<ResponseCallback<bool>> cb) {
-  dbus::ObjectProxy* object_proxy =
-      bus_->GetObjectProxy(service_name_, dbus::ObjectPath(kManagerObject));
-  if (!object_proxy) {
-    if (cb) {
-      std::move(*cb).Run(/*ret=*/absl::nullopt,
-                         /*err=*/Error(kUnknownManagerError, ""));
-    }
-    return;
-  }
-
-  DVLOG(1) << __func__;
-
+    std::optional<ResponseCallback<bool>> cb) {
   if (cb) {
     set_floss_enabled_callback_ =
-        WeaklyOwnedCallback<bool>::Create(std::move(*cb));
+        WeaklyOwnedResponseCallback<bool>::Create(std::move(*cb));
   }
 
-  dbus::MethodCall method_call(kManagerInterface, manager::kSetFlossEnabled);
-  dbus::MessageWriter writer(&method_call);
-  writer.AppendBool(enabled);
-
-  object_proxy->CallMethodWithErrorResponse(
-      &method_call, kSetFlossEnabledDBusTimeoutMs,
+  CallManagerMethod<Void>(
       base::BindOnce(&FlossManagerClient::HandleSetFlossEnabled,
                      weak_ptr_factory_.GetWeakPtr(), enabled, retry,
-                     retry_wait_ms));
+                     retry_wait_ms),
+      manager::kSetFlossEnabled, enabled);
 }
 
 void FlossManagerClient::SetAdapterEnabled(int adapter,
@@ -222,66 +150,75 @@ void FlossManagerClient::SetAdapterEnabled(int adapter,
     return;
   }
 
-  dbus::ObjectProxy* object_proxy =
-      bus_->GetObjectProxy(service_name_, dbus::ObjectPath(kManagerObject));
-  if (!object_proxy) {
-    std::move(callback).Run(absl::nullopt,
-                            Error(kUnknownManagerError, std::string()));
-    return;
-  }
-
   DVLOG(1) << __func__;
 
-  auto* command = enabled ? manager::kStart : manager::kStop;
-  dbus::MethodCall method_call(kManagerInterface, command);
-  dbus::MessageWriter writer(&method_call);
-  writer.AppendInt32(adapter);
+  adapter_enabled_callback_ =
+      WeaklyOwnedResponseCallback<Void>::CreateWithTimeout(
+          std::move(callback), kAdapterEnabledTimeoutMs,
+          base::unexpected(Error(kErrorNoResponse, "")));
 
-  powered_callback_ =
-      PoweredCallback::CreateWithTimeout(std::move(callback), kDBusTimeoutMs);
-
-  object_proxy->CallMethodWithErrorResponse(
-      &method_call, kDBusTimeoutMs,
+  const char* command = enabled ? manager::kStart : manager::kStop;
+  CallManagerMethod<Void>(
       base::BindOnce(&FlossManagerClient::OnSetAdapterEnabled,
-                     weak_ptr_factory_.GetWeakPtr()));
+                     weak_ptr_factory_.GetWeakPtr()),
+      command, adapter);
 }
 
-void FlossManagerClient::OnSetAdapterEnabled(
-    dbus::Response* response,
-    dbus::ErrorResponse* error_response) {
-  // Only handle error cases since non-error called in OnHciEnabledChange
-  if (powered_callback_ && (!response || error_response)) {
-    powered_callback_->RunError();
-    powered_callback_.reset();
+base::Version FlossManagerClient::GetFlossApiVersion() const {
+  return version_;
+}
+
+void FlossManagerClient::DoGetFlossApiVersion() {
+  CallManagerMethod<uint32_t>(
+      base::BindOnce(&FlossManagerClient::HandleGetFlossApiVersion,
+                     weak_ptr_factory_.GetWeakPtr()),
+      manager::kGetFlossApiVersion);
+}
+
+bool FlossManagerClient::IsCompatibleFlossApi() {
+  return version_ >= floss::version::GetMinimalSupportedVersion() &&
+         version_ <= floss::version::GetMaximalSupportedVersion();
+}
+
+void FlossManagerClient::OnSetAdapterEnabled(DBusResult<Void> response) {
+  // Only handle error cases since non-error called in OnHciEnabledChanged
+  if (adapter_enabled_callback_ && !response.has_value()) {
+    adapter_enabled_callback_->Run(
+        base::unexpected(Error(kErrorNoResponse, "")));
+    adapter_enabled_callback_.reset();
   }
+}
+
+void FlossManagerClient::SetLLPrivacy(ResponseCallback<bool> callback,
+                                      const bool enable) {
+  CallExperimentalMethod<bool>(std::move(callback), experimental::kSetLLPrivacy,
+                               enable);
 }
 
 // Register manager client against manager.
 void FlossManagerClient::RegisterWithManager() {
   DCHECK(!manager_available_);
 
-  dbus::ObjectProxy* object_proxy =
-      bus_->GetObjectProxy(service_name_, dbus::ObjectPath(kManagerObject));
+  // Get Floss API version of the daemon.
+  DoGetFlossApiVersion();
 
-  // Get all hci devices available.
-  dbus::MethodCall method_call(kManagerInterface,
-                               manager::kGetAvailableAdapters);
-  object_proxy->CallMethodWithErrorResponse(
-      &method_call, kDBusTimeoutMs,
+  // Register for callbacks before Get* calls so we won't miss any state change.
+  CallManagerMethod<Void>(
+      base::BindOnce(&FlossManagerClient::HandleRegisterCallback,
+                     weak_ptr_factory_.GetWeakPtr()),
+      manager::kRegisterCallback, dbus::ObjectPath(kExportedCallbacksPath));
+
+  // Get the default adapter.
+  CallManagerMethod<int>(
+      base::BindOnce(&FlossManagerClient::HandleGetDefaultAdapter,
+                     weak_ptr_factory_.GetWeakPtr()),
+      manager::kGetDefaultAdapter);
+
+  // Get the list of available adapters.
+  CallManagerMethod<std::vector<AdapterWithEnabled>>(
       base::BindOnce(&FlossManagerClient::HandleGetAvailableAdapters,
-                     weak_ptr_factory_.GetWeakPtr()));
-
-  // Register for callbacks.
-  dbus::MethodCall register_callback(kManagerInterface,
-                                     manager::kRegisterCallback);
-  dbus::MessageWriter writer(&register_callback);
-  writer.AppendObjectPath(dbus::ObjectPath(kExportedCallbacksPath));
-
-  object_proxy->CallMethodWithErrorResponse(
-      &register_callback, kDBusTimeoutMs,
-      base::BindOnce(&FlossManagerClient::DefaultResponse,
-                     weak_ptr_factory_.GetWeakPtr(),
-                     manager::kRegisterCallback));
+                     weak_ptr_factory_.GetWeakPtr()),
+      manager::kGetAvailableAdapters);
 
   manager_available_ = true;
   for (auto& observer : observers_) {
@@ -292,13 +229,14 @@ void FlossManagerClient::RegisterWithManager() {
 // Remove manager client (no longer available).
 void FlossManagerClient::RemoveManager() {
   // Make copy of old adapters and clear existing ones.
-  auto previous_adapters = std::move(adapter_to_powered_);
-  adapter_to_powered_.clear();
+  auto previous_adapters = std::move(adapter_to_enabled_);
+  adapter_to_enabled_.clear();
+  adapter_present_pending_.clear();
 
   // All old adapters need to be sent a `present = false` notification.
-  for (auto& kv : previous_adapters) {
+  for (auto& [adapter, enabled] : previous_adapters) {
     for (auto& observer : observers_) {
-      observer.AdapterPresent(kv.first, false);
+      observer.AdapterPresent(adapter, false);
     }
   }
 
@@ -308,193 +246,237 @@ void FlossManagerClient::RemoveManager() {
   }
 }
 
-// The manager can manage multiple adapters so ignore the adapter path given
+// The manager can manage multiple adapters so ignore the adapter index given
 // here. It is unused.
 void FlossManagerClient::Init(dbus::Bus* bus,
                               const std::string& service_name,
-                              const std::string& adapter_path) {
+                              const int adapter_index,
+                              base::Version version,
+                              base::OnceClosure on_ready) {
+  init_ = false;
   bus_ = bus;
   service_name_ = service_name;
-
-  dbus::ObjectProxy* object_proxy =
-      bus_->GetObjectProxy(service_name_, dbus::ObjectPath(kManagerObject));
+  on_ready_ = std::move(on_ready);
 
   // We should always have object proxy since the client initialization is
   // gated on ObjectManager marking the manager interface as available.
-  if (!object_proxy) {
+  if (!bus_->GetObjectProxy(service_name_, dbus::ObjectPath(kManagerObject))) {
     LOG(ERROR) << "FlossManagerClient couldn't init. Object proxy was null.";
+    std::move(on_ready_).Run();
     return;
   }
 
   DVLOG(1) << __func__;
 
-  // Register callback object.
-  dbus::ExportedObject* callbacks =
-      bus_->GetExportedObject(dbus::ObjectPath(kExportedCallbacksPath));
-
-  if (!callbacks) {
-    LOG(ERROR) << "FlossManagerClient couldn't export client callbacks.";
+  exported_callback_manager_.Init(bus_.get());
+  exported_callback_manager_.AddMethod(
+      manager::kOnHciDeviceChanged,
+      &FlossManagerClientCallbacks::OnHciDeviceChanged);
+  exported_callback_manager_.AddMethod(
+      manager::kOnHciEnabledChanged,
+      &FlossManagerClientCallbacks::OnHciEnabledChanged);
+  exported_callback_manager_.AddMethod(
+      manager::kOnDefaultAdapterChanged,
+      &FlossManagerClientCallbacks::OnDefaultAdapterChanged);
+  if (!exported_callback_manager_.ExportCallback(
+          dbus::ObjectPath(kExportedCallbacksPath),
+          weak_ptr_factory_.GetWeakPtr(),
+          base::BindOnce(&FlossManagerClient::RegisterWithManager,
+                         weak_ptr_factory_.GetWeakPtr()))) {
+    LOG(ERROR) << "Unable to successfully export FlossManagerClientCallbacks.";
+    std::move(on_ready_).Run();
     return;
   }
-
-  // Register callbacks for OnHciDeviceChanged and OnHciEnabledChanged.
-  callbacks->ExportMethod(
-      manager::kCallbackInterface, manager::kOnHciDeviceChanged,
-      base::BindRepeating(&FlossManagerClient::OnHciDeviceChange,
-                          weak_ptr_factory_.GetWeakPtr()),
-      base::BindOnce(&HandleExported, manager::kOnHciDeviceChanged));
-
-  callbacks->ExportMethod(
-      manager::kCallbackInterface, manager::kOnHciEnabledChanged,
-      base::BindRepeating(&FlossManagerClient::OnHciEnabledChange,
-                          weak_ptr_factory_.GetWeakPtr()),
-      base::BindOnce(&HandleExported, manager::kOnHciEnabledChanged));
 
   // Register object manager for Manager.
   object_manager_ = bus_->GetObjectManager(
       service_name, dbus::ObjectPath(kObjectManagerPath));
   object_manager_->RegisterInterface(kManagerInterface, this);
 
-  // Get manager ready.
-  RegisterWithManager();
-
+#if BUILDFLAG(IS_CHROMEOS_ASH)
   // Enable Floss and retry a few times until it is set.
   SetFlossEnabled(floss::features::IsFlossEnabled(), kSetFlossRetryCount,
                   kSetFlossRetryDelayMs,
                   base::BindOnce(&FlossManagerClient::CompleteSetFlossEnabled,
                                  weak_ptr_factory_.GetWeakPtr()));
+
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+}
+
+void FlossManagerClient::HandleGetDefaultAdapter(DBusResult<int32_t> response) {
+  if (!response.has_value()) {
+    LOG(ERROR) << "GetDefaultAdapter responded with error: "
+               << response.error();
+    return;
+  }
+
+  OnDefaultAdapterChanged(response.value());
 }
 
 void FlossManagerClient::HandleGetAvailableAdapters(
-    dbus::Response* response,
-    dbus::ErrorResponse* error_response) {
-  if (!response) {
-    FlossDBusClient::LogErrorResponse(
-        "FlossManagerClient::HandleGetAvailableAdapters", error_response);
+    DBusResult<std::vector<AdapterWithEnabled>> adapters) {
+  if (!adapters.has_value()) {
+    LOG(WARNING) << "GetAvailableAdapters return error " << adapters.error();
     return;
   }
 
-  dbus::MessageReader msg(response);
-  dbus::MessageReader arr(nullptr);
+  auto previous_adapters = std::move(adapter_to_enabled_);
 
-  if (msg.PopArray(&arr)) {
-    auto previous_adapters = std::move(adapter_to_powered_);
-
-    // Clear existing adapters.
-    adapter_to_powered_.clear();
-
-    dbus::MessageReader propmap(nullptr);
-    while (arr.PopArray(&propmap)) {
-      int adapter = -1;
-      bool enabled = false;
-
-      if (ParseAdapterWithEnabled(propmap, &adapter, &enabled)) {
-        DCHECK(adapter >= 0);
-        adapter_to_powered_.emplace(adapter, enabled);
-      }
-    }
-
-    // Trigger the observers for adapter present on any new ones we listed.
-    for (auto& observer : observers_) {
-      // Emit present for new adapters that weren't in old list. Also emit the
-      // powered changed for them.
-      for (auto& kv : adapter_to_powered_) {
-        if (!base::Contains(previous_adapters, kv.first)) {
-          observer.AdapterPresent(kv.first, true);
-          observer.AdapterEnabledChanged(kv.first, kv.second);
-        }
-      }
-
-      // Emit not present for adapters that aren't in new list.
-      // We don't need to emit AdapterEnabledChanged since we emit
-      // AdapterPresent is false
-      for (auto& kv : previous_adapters) {
-        if (!base::Contains(adapter_to_powered_, kv.first))
-          observer.AdapterPresent(kv.first, false);
-      }
-    }
-  }
-}
-
-void FlossManagerClient::OnHciDeviceChange(
-    dbus::MethodCall* method_call,
-    dbus::ExportedObject::ResponseSender response_sender) {
-  dbus::MessageReader msg(method_call);
-  int adapter;
-  bool present;
-
-  if (!msg.PopInt32(&adapter) || !msg.PopBool(&present)) {
-    std::move(response_sender)
-        .Run(dbus::ErrorResponse::FromMethodCall(
-            method_call, kErrorInvalidParameters, std::string()));
-    return;
+  // Clear existing adapters.
+  adapter_to_enabled_.clear();
+  adapter_present_pending_.clear();
+  for (auto v : adapters.value()) {
+    adapter_to_enabled_.insert({v.adapter, v.enabled});
   }
 
+  // Trigger the observers for adapter present on any new ones we listed.
   for (auto& observer : observers_) {
-    observer.AdapterPresent(adapter, present);
-  }
+    // Emit present for new adapters that weren't in old list. Also emit the
+    // enabled changed for them.
+    for (auto& [adapter, enabled] : adapter_to_enabled_) {
+      if (!base::Contains(previous_adapters, adapter)) {
+        observer.AdapterPresent(adapter, true);
+        observer.AdapterEnabledChanged(adapter, enabled);
+      }
+    }
 
-  // Update the cached list of available adapters.
-  auto iter = adapter_to_powered_.find(adapter);
-  if (present && iter == adapter_to_powered_.end()) {
-    adapter_to_powered_.insert({adapter, false});
-  } else if (!present && iter != adapter_to_powered_.end()) {
-    adapter_to_powered_.erase(iter);
+    // Emit not present for adapters that aren't in new list.
+    // We don't need to emit AdapterEnabledChanged since we emit
+    // AdapterPresent is false
+    for (auto& [adapter, enabled] : previous_adapters) {
+      if (!base::Contains(adapter_to_enabled_, adapter)) {
+        observer.AdapterPresent(adapter, false);
+      }
+    }
   }
-
-  std::move(response_sender).Run(dbus::Response::FromMethodCall(method_call));
 }
 
-void FlossManagerClient::OnHciEnabledChange(
-    dbus::MethodCall* method_call,
-    dbus::ExportedObject::ResponseSender response_sender) {
-  dbus::MessageReader msg(method_call);
-  int adapter;
-  bool enabled;
+void FlossManagerClient::HandleRegisterCallback(DBusResult<Void> result) {
+  if (!result.has_value()) {
+    LOG(ERROR) << "Floss manager RegisterCallback returned error: "
+               << result.error();
+    init_ = false;
+  } else {
+    init_ = IsCompatibleFlossApi();
+  }
 
-  if (!msg.PopInt32(&adapter) || !msg.PopBool(&enabled)) {
-    std::move(response_sender)
-        .Run(dbus::ErrorResponse::FromMethodCall(
-            method_call, kErrorInvalidParameters, std::string()));
+  if (on_ready_) {
+    std::move(on_ready_).Run();
+  }
+}
+
+void FlossManagerClient::HandleGetAdapterEnabledAfterPresent(
+    int32_t adapter,
+    DBusResult<bool> response) {
+  if (!base::Contains(adapter_present_pending_, adapter)) {
+    // We may have cleared the pending list in OnHciEnabledChanged.
     return;
   }
+  adapter_present_pending_.erase(adapter);
 
-  if (adapter == GetDefaultAdapter() && powered_callback_) {
-    powered_callback_->RunNoError();
-    powered_callback_.reset();
+  if (!response.has_value()) {
+    LOG(ERROR) << "Floss manager GetAdapterEnabled returned error: "
+               << response.error();
+    // Default to disabled if the call failed.
+    adapter_to_enabled_[adapter] = false;
+  } else {
+    adapter_to_enabled_[adapter] = response.value();
   }
 
-  adapter_to_powered_[adapter] = enabled;
+  // Don't need to send out AdapterEnabledChanged as BluetoothAdapterFloss
+  // should query the state proactively.
+  for (auto& observer : observers_) {
+    // Always true because this function is only called when present is true.
+    observer.AdapterPresent(adapter, true);
+  }
+}
+
+void FlossManagerClient::OnHciDeviceChanged(int32_t adapter, bool present) {
+  auto was_present = base::Contains(adapter_to_enabled_, adapter);
+  // Newly present
+  if (!was_present && present) {
+    if (!base::Contains(adapter_present_pending_, adapter)) {
+      // Defer the AdapterPresent event until we know the actual state.
+      adapter_present_pending_.insert(adapter);
+      CallManagerMethod<bool>(
+          base::BindOnce(
+              &FlossManagerClient::HandleGetAdapterEnabledAfterPresent,
+              weak_ptr_factory_.GetWeakPtr(), adapter),
+          manager::kGetAdapterEnabled, adapter);
+    } else {
+      LOG(WARNING) << "Unexpected OnHciDeviceChanged: adapter " << adapter
+                   << " already pending";
+    }
+  }
+  // Adapter disappeared
+  else if (was_present && !present) {
+    adapter_to_enabled_.erase(adapter);
+    for (auto& observer : observers_) {
+      observer.AdapterPresent(adapter, present);
+    }
+  }
+  // Adapter disappeared while pending, only need to clean up pending list
+  else if (!was_present && !present) {
+    auto res = adapter_present_pending_.erase(adapter);
+    if (res == 0) {
+      LOG(WARNING) << "Unexpected OnHciDeviceChanged: adapter " << adapter
+                   << " present=" << present << " but not pending";
+    }
+  }
+  // Already present
+  else if (was_present && present) {
+    LOG(WARNING) << "Unexpected OnHciDeviceChanged: adapter " << adapter
+                 << " already present";
+  }
+}
+
+void FlossManagerClient::OnHciEnabledChanged(int32_t adapter, bool enabled) {
+  adapter_to_enabled_[adapter] = enabled;
+
+  if (base::Contains(adapter_present_pending_, adapter)) {
+    // We haven't notified the presence for this adapter. Notify now.
+    adapter_present_pending_.erase(adapter);
+    for (auto& observer : observers_) {
+      observer.AdapterPresent(adapter, true);
+    }
+  }
 
   for (auto& observer : observers_) {
     observer.AdapterEnabledChanged(adapter, enabled);
   }
 
-  std::move(response_sender).Run(dbus::Response::FromMethodCall(method_call));
+  if (adapter == GetDefaultAdapter() && adapter_enabled_callback_) {
+    adapter_enabled_callback_->Run(Void{});
+    adapter_enabled_callback_.reset();
+  }
 }
 
-void FlossManagerClient::HandleSetFlossEnabled(
-    bool target,
-    int retry,
-    int retry_wait_ms,
-    dbus::Response* response,
-    dbus::ErrorResponse* error_response) {
+void FlossManagerClient::OnDefaultAdapterChanged(int32_t adapter) {
+  int32_t previous_default = default_adapter_;
+  default_adapter_ = adapter;
+
+  for (auto& observer : observers_) {
+    observer.DefaultAdapterChanged(previous_default, adapter);
+  }
+}
+
+void FlossManagerClient::HandleSetFlossEnabled(bool target,
+                                               int retry,
+                                               int retry_wait_ms,
+                                               DBusResult<Void> response) {
   // Failed to call |SetFlossEnabled| so first log the error and post a delayed
   // set if there are retries left.
-  if (!response) {
-    FlossDBusClient::LogErrorResponse(
-        "FlossManagerClient::HandleSetFlossEnabled", error_response);
+  if (!response.has_value()) {
+    LOG(ERROR) << response.error();
     if (retry > 0) {
-      base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
           FROM_HERE,
           base::BindOnce(&FlossManagerClient::SetFlossEnabled,
                          weak_ptr_factory_.GetWeakPtr(), target, retry - 1,
-                         retry_wait_ms, absl::nullopt),
+                         retry_wait_ms, std::nullopt),
           base::Milliseconds(retry_wait_ms));
     } else if (set_floss_enabled_callback_) {
-      set_floss_enabled_callback_->Run(
-          /*ret=*/absl::nullopt,
-          ErrorResponseToError(kUnknownManagerError, "", error_response));
+      set_floss_enabled_callback_->Run(base::unexpected(response.error()));
       set_floss_enabled_callback_.reset();
     }
 
@@ -504,67 +486,87 @@ void FlossManagerClient::HandleSetFlossEnabled(
   GetFlossEnabledWithTarget(target, retry, retry_wait_ms);
 }
 
-void FlossManagerClient::HandleGetFlossEnabled(
-    bool target,
-    int retry,
-    int retry_wait_ms,
-    dbus::Response* response,
-    dbus::ErrorResponse* error_response) {
-  if (!response) {
-    FlossDBusClient::LogErrorResponse(
-        "FlossManagerClient::HandleGetFlossEnabled", error_response);
+void FlossManagerClient::HandleGetFlossEnabled(bool target,
+                                               int retry,
+                                               int retry_wait_ms,
+                                               DBusResult<bool> response) {
+  if (!response.has_value()) {
+    LOG(ERROR) << response.error();
     if (retry > 0) {
-      base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
           FROM_HERE,
           base::BindOnce(&FlossManagerClient::GetFlossEnabledWithTarget,
                          weak_ptr_factory_.GetWeakPtr(), target, retry - 1,
                          retry_wait_ms),
           base::Milliseconds(retry_wait_ms));
     } else if (set_floss_enabled_callback_) {
-      set_floss_enabled_callback_->Run(
-          /*ret=*/absl::nullopt,
-          ErrorResponseToError(kUnknownManagerError, "", error_response));
+      set_floss_enabled_callback_->Run(base::unexpected(response.error()));
       set_floss_enabled_callback_.reset();
     }
 
     return;
   }
 
-  bool floss_enabled = false;
-  dbus::MessageReader msg(response);
-  if (!msg.PopBool(&floss_enabled)) {
-    LOG(ERROR) << "Response to GetFlossEnabled was not a bool";
-    return;
-  }
+  bool floss_enabled = response.value();
 
   // Target doesn't match reality. Retry |SetFlossEnabled|.
   if (floss_enabled != target && retry > 0) {
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&FlossManagerClient::SetFlossEnabled,
                        weak_ptr_factory_.GetWeakPtr(), target, retry - 1,
-                       retry_wait_ms, absl::nullopt),
+                       retry_wait_ms, std::nullopt),
         base::Milliseconds(kSetFlossRetryDelayMs));
   } else {
     DVLOG(1) << "Floss is currently "
              << (floss_enabled ? "enabled" : "disabled") << " and target was "
              << (target ? "enabled" : "disabled");
     if (set_floss_enabled_callback_) {
-      set_floss_enabled_callback_->Run(floss_enabled,
-                                       /*err=*/absl::nullopt);
+      set_floss_enabled_callback_->Run(floss_enabled);
       set_floss_enabled_callback_.reset();
     }
   }
 }
 
-void FlossManagerClient::CompleteSetFlossEnabled(
-    const absl::optional<bool>& ret,
-    const absl::optional<Error>& err) {
-  if (err) {
-    LOG(ERROR) << "Floss couldn't be enabled. Error=" << err->name << ", "
-               << err->message;
+void FlossManagerClient::CompleteSetFlossEnabled(DBusResult<bool> ret) {
+  if (!ret.has_value()) {
+    LOG(ERROR) << "Floss couldn't be enabled. Error=" << ret.error();
   } else {
     DVLOG(1) << "Completed SetFlossEnabled with value " << *ret;
+    // Set LL privacy if floss is enabled.
+    if (floss::features::IsLLPrivacyAvailable() && ret.value()) {
+      SetLLPrivacy(
+          base::BindOnce([](DBusResult<bool> ret) {
+            if (!ret.has_value()) {
+              LOG(ERROR) << "Set LL privacy returned error: " << ret.error();
+            } else if (!ret.value()) {
+              LOG(ERROR) << "Dbus call to set LL privary returned false.\n";
+            }
+          }),
+          base::FeatureList::IsEnabled(bluez::features::kLinkLayerPrivacy));
+    }
+  }
+}
+
+void FlossManagerClient::HandleGetFlossApiVersion(
+    DBusResult<uint32_t> response) {
+  if (!response.has_value()) {
+    BLUETOOTH_LOG(EVENT) << "Floss API version is not available! Error="
+                         << response.error();
+    version_ = base::Version("0.0");
+    return;
+  }
+
+  uint32_t val = response.value();
+  version_ = floss::version::IntoVersion(val);
+
+  BLUETOOTH_LOG(EVENT) << "Floss API version " << version_;
+  if (!IsCompatibleFlossApi()) {
+    BLUETOOTH_LOG(ERROR) << "Unsupported Floss API version " << version_
+                         << ". Valid range: "
+                         << floss::version::GetMinimalSupportedVersion()
+                         << " to "
+                         << floss::version::GetMaximalSupportedVersion();
   }
 }
 
@@ -578,11 +580,8 @@ dbus::PropertySet* FlossManagerClient::CreateProperties(
 // Manager interface is available.
 void FlossManagerClient::ObjectAdded(const dbus::ObjectPath& object_path,
                                      const std::string& interface_name) {
-  // TODO(b/193839304) - When manager exits, we're not getting the
-  //                     ObjectRemoved notification. So remove the manager
-  //                     before re-adding it here.
   if (manager_available_) {
-    RemoveManager();
+    return;
   }
 
   DVLOG(0) << __func__ << ": " << object_path.value() << ", " << interface_name;
@@ -599,11 +598,6 @@ void FlossManagerClient::ObjectRemoved(const dbus::ObjectPath& object_path,
   DVLOG(0) << __func__ << ": " << object_path.value() << ", " << interface_name;
 
   RemoveManager();
-}
-
-// static
-dbus::ObjectPath FlossManagerClient::GenerateAdapterPath(int adapter) {
-  return dbus::ObjectPath(base::StringPrintf(kAdapterObjectFormat, adapter));
 }
 
 // static

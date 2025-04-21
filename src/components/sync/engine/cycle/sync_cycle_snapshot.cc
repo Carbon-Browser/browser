@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -65,42 +65,36 @@ SyncCycleSnapshot::SyncCycleSnapshot(const SyncCycleSnapshot& other) = default;
 
 SyncCycleSnapshot::~SyncCycleSnapshot() = default;
 
-std::unique_ptr<base::DictionaryValue> SyncCycleSnapshot::ToValue() const {
-  std::unique_ptr<base::DictionaryValue> value(new base::DictionaryValue());
-  value->SetStringKey("birthday", birthday_);
-  std::string encoded_bag_of_chips;
-  base::Base64Encode(bag_of_chips_, &encoded_bag_of_chips);
-  value->SetStringKey("bagOfChips", encoded_bag_of_chips);
-  value->SetIntKey("numSuccessfulCommits",
-                   model_neutral_state_.num_successful_commits);
-  value->SetIntKey("numSuccessfulBookmarkCommits",
-                   model_neutral_state_.num_successful_bookmark_commits);
-  value->SetIntKey("numUpdatesDownloadedTotal",
-                   model_neutral_state_.num_updates_downloaded_total);
-  value->SetIntKey("numTombstoneUpdatesDownloadedTotal",
-                   model_neutral_state_.num_tombstone_updates_downloaded_total);
-  value->SetKey("downloadProgressMarkers",
-                base::Value::FromUniquePtrValue(
-                    ProgressMarkerMapToValue(download_progress_markers_)));
-  value->SetBoolKey("isSilenced", is_silenced_);
-  // We don't care too much if we lose precision here, also.
-  value->SetIntKey("numServerConflicts", num_server_conflicts_);
-  value->SetStringKey("getUpdatesOrigin",
-                      ProtoEnumToString(get_updates_origin_));
-  value->SetBoolKey("notificationsEnabled", notifications_enabled_);
+base::Value::Dict SyncCycleSnapshot::ToValue() const {
+  std::string encoded_bag_of_chips = base::Base64Encode(bag_of_chips_);
 
-  value->SetBoolKey("hasRemainingLocalChanges", has_remaining_local_changes_);
-  value->SetStringKey("poll_interval", FormatTimeDelta(poll_interval_));
-  value->SetStringKey(
-      "poll_finish_time",
-      base::TimeFormatShortDateAndTimeWithTimeZone(poll_finish_time_));
-  return value;
+  return base::Value::Dict()
+      .Set("birthday", birthday_)
+      .Set("bagOfChips", encoded_bag_of_chips)
+      .Set("numSuccessfulCommits", model_neutral_state_.num_successful_commits)
+      .Set("numSuccessfulBookmarkCommits",
+           model_neutral_state_.num_successful_bookmark_commits)
+      .Set("numUpdatesDownloadedTotal",
+           model_neutral_state_.num_updates_downloaded_total)
+      .Set("numTombstoneUpdatesDownloadedTotal",
+           model_neutral_state_.num_tombstone_updates_downloaded_total)
+      .Set("downloadProgressMarkers",
+           ProgressMarkerMapToValueDict(download_progress_markers_))
+      .Set("isSilenced", is_silenced_)
+      // We don't care too much if we lose precision here, also.
+      .Set("numServerConflicts", num_server_conflicts_)
+      .Set("getUpdatesOrigin", ProtoEnumToString(get_updates_origin_))
+      .Set("notificationsEnabled", notifications_enabled_)
+      .Set("hasRemainingLocalChanges", has_remaining_local_changes_)
+      .Set("poll_interval", FormatTimeDelta(poll_interval_))
+      .Set("poll_finish_time",
+           base::TimeFormatShortDateAndTimeWithTimeZone(poll_finish_time_));
 }
 
 std::string SyncCycleSnapshot::ToString() const {
   std::string json;
   base::JSONWriter::WriteWithOptions(
-      *ToValue(), base::JSONWriter::OPTIONS_PRETTY_PRINT, &json);
+      ToValue(), base::JSONWriter::OPTIONS_PRETTY_PRINT, &json);
   return json;
 }
 

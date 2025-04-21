@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,7 @@ class GeneratedResolveTimezoneByGeolocationMethodShort
   ~GeneratedResolveTimezoneByGeolocationMethodShort() override;
 
   // GeneratedPrefsChromeOSImpl implementation:
-  std::unique_ptr<settings_api::PrefObject> GetPrefObject() const override;
+  settings_api::PrefObject GetPrefObject() const override;
   SetPrefResult SetPref(const base::Value* value) override;
 };
 
@@ -48,18 +48,17 @@ GeneratedResolveTimezoneByGeolocationMethodShort::
 GeneratedResolveTimezoneByGeolocationMethodShort::
     ~GeneratedResolveTimezoneByGeolocationMethodShort() = default;
 
-std::unique_ptr<settings_api::PrefObject>
+settings_api::PrefObject
 GeneratedResolveTimezoneByGeolocationMethodShort::GetPrefObject() const {
-  std::unique_ptr<settings_api::PrefObject> pref_object =
-      std::make_unique<settings_api::PrefObject>();
+  settings_api::PrefObject pref_object;
 
-  pref_object->key = pref_name_;
-  pref_object->type = settings_api::PREF_TYPE_NUMBER;
-  pref_object->value = std::make_unique<base::Value>(static_cast<int>(
+  pref_object.key = pref_name_;
+  pref_object.type = settings_api::PrefType::kNumber;
+  pref_object.value = base::Value(static_cast<int>(
       g_browser_process->platform_part()
           ->GetTimezoneResolverManager()
           ->GetEffectiveUserTimeZoneResolveMethod(profile_->GetPrefs(), true)));
-  UpdateTimeZonePrefControlledBy(pref_object.get());
+  UpdateTimeZonePrefControlledBy(&pref_object);
 
   return pref_object;
 }
@@ -80,7 +79,7 @@ SetPrefResult GeneratedResolveTimezoneByGeolocationMethodShort::SetPref(
   // (kResolveTimezoneByGeolocationOnOff must be modified first.)
   if (!g_browser_process->platform_part()
            ->GetTimezoneResolverManager()
-           ->TimeZoneResolverShouldBeRunning()) {
+           ->TimeZoneResolverAllowedByTimeZoneConfigData()) {
     return SetPrefResult::PREF_NOT_MODIFIABLE;
   }
 

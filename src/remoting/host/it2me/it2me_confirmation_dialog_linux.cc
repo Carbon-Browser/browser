@@ -1,6 +1,8 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "remoting/host/it2me/it2me_confirmation_dialog.h"
 
 #include <gtk/gtk.h>
 
@@ -8,17 +10,17 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/i18n/message_formatter.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "remoting/base/string_resources.h"
-#include "remoting/host/it2me/it2me_confirmation_dialog.h"
-#include "ui/base/glib/glib_signal.h"
+#include "ui/base/glib/scoped_gsignal.h"
 #include "ui/base/l10n/l10n_util.h"
 
 namespace remoting {
@@ -50,14 +52,15 @@ class It2MeConfirmationDialogLinux : public It2MeConfirmationDialog {
   void Hide();
 
   // Handles user input from the dialog.
-  CHROMEG_CALLBACK_1(It2MeConfirmationDialogLinux, void, OnResponse, GtkDialog*,
-                     int);
+  void OnResponse(GtkDialog* dialog, int response_id);
 
-  GtkWidget* confirmation_window_ = nullptr;
+  raw_ptr<GtkWidget> confirmation_window_ = nullptr;
 
   ResultCallback result_callback_;
 
   base::OneShotTimer dialog_timer_;
+
+  ScopedGSignal signal_;
 };
 
 It2MeConfirmationDialogLinux::It2MeConfirmationDialogLinux() {}
@@ -97,26 +100,27 @@ void It2MeConfirmationDialogLinux::CreateWindow(
 
   confirmation_window_ = gtk_dialog_new_with_buttons(
       l10n_util::GetStringUTF8(IDS_PRODUCT_NAME).c_str(),
-      /*parent=*/nullptr,
-      static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL),
+      /*parent=*/nullptr, static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL),
       l10n_util::GetStringUTF8(IDS_SHARE_CONFIRM_DIALOG_DECLINE).c_str(),
       GTK_RESPONSE_CANCEL,
       l10n_util::GetStringUTF8(IDS_SHARE_CONFIRM_DIALOG_CONFIRM).c_str(),
       GTK_RESPONSE_OK,
       /*next_button=*/nullptr);
 
-  gtk_dialog_set_default_response(GTK_DIALOG(confirmation_window_),
+  gtk_dialog_set_default_response(GTK_DIALOG(confirmation_window_.get()),
                                   GTK_RESPONSE_CANCEL);
 
-  gtk_window_set_resizable(GTK_WINDOW(confirmation_window_), false);
+  gtk_window_set_resizable(GTK_WINDOW(confirmation_window_.get()), false);
 
-  gtk_window_set_keep_above(GTK_WINDOW(confirmation_window_), true);
+  gtk_window_set_keep_above(GTK_WINDOW(confirmation_window_.get()), true);
 
-  g_signal_connect(confirmation_window_, "response",
-                   G_CALLBACK(OnResponseThunk), this);
+  signal_ = ScopedGSignal(
+      GTK_DIALOG(confirmation_window_.get()), "response",
+      base::BindRepeating(&It2MeConfirmationDialogLinux::OnResponse,
+                          base::Unretained(this)));
 
   GtkWidget* content_area =
-      gtk_dialog_get_content_area(GTK_DIALOG(confirmation_window_));
+      gtk_dialog_get_content_area(GTK_DIALOG(confirmation_window_.get()));
 
   std::u16string dialog_text =
       base::i18n::MessageFormatter::FormatWithNumberedArgs(
@@ -141,8 +145,8 @@ void It2MeConfirmationDialogLinux::CreateWindow(
   gtk_widget_show_all(content_area);
 #endif
 
-  gtk_window_set_urgency_hint(GTK_WINDOW(confirmation_window_), true);
-  gtk_window_present(GTK_WINDOW(confirmation_window_));
+  gtk_window_set_urgency_hint(GTK_WINDOW(confirmation_window_.get()), true);
+  gtk_window_present(GTK_WINDOW(confirmation_window_.get()));
 }
 
 void It2MeConfirmationDialogLinux::OnResponse(GtkDialog* dialog,

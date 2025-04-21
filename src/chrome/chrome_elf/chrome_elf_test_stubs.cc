@@ -1,6 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "base/command_line.h"
 #include "base/files/file_path.h"
@@ -35,6 +40,10 @@ bool GetUserDataDirectoryThunk(wchar_t* user_data_dir,
             _TRUNCATE);
 
   return !user_data_dir_path.empty();
+}
+
+bool IsTemporaryUserDataDirectoryCreatedForHeadless() {
+  return false;
 }
 
 void SetMetricsClientId(const char* client_id) {}
@@ -112,4 +121,8 @@ void DisableHook() {}
 
 int32_t GetApplyHookResult() {
   return 0;
+}
+
+bool IsExtensionPointDisableSet() {
+  return false;
 }

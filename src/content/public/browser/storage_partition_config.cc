@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,10 +47,10 @@ StoragePartitionConfig::StoragePartitionConfig(
       partition_name_(partition_name),
       in_memory_(in_memory) {}
 
-absl::optional<StoragePartitionConfig>
+std::optional<StoragePartitionConfig>
 StoragePartitionConfig::GetFallbackForBlobUrls() const {
   if (fallback_to_partition_domain_for_blob_urls_ == FallbackMode::kNone)
-    return absl::nullopt;
+    return std::nullopt;
 
   return StoragePartitionConfig(
       partition_domain_, "",

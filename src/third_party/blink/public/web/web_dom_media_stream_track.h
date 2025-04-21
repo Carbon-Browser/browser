@@ -34,18 +34,17 @@
 #include "third_party/blink/public/platform/modules/mediastream/web_media_stream_track.h"
 #include "third_party/blink/public/platform/web_common.h"
 #include "third_party/blink/public/platform/web_private_ptr.h"
+#include "v8/include/v8-local-handle.h"
 
 namespace v8 {
 class Value;
-template <class T>
-class Local;
 }
 
 namespace blink {
 
 class MediaStreamTrack;
 
-class WebDOMMediaStreamTrack {
+class BLINK_EXPORT WebDOMMediaStreamTrack {
  public:
   WebDOMMediaStreamTrack(const WebDOMMediaStreamTrack& b) { Assign(b); }
   ~WebDOMMediaStreamTrack() { Reset(); }
@@ -57,18 +56,18 @@ class WebDOMMediaStreamTrack {
 
   bool IsNull() const { return private_.IsNull(); }
 
-  BLINK_EXPORT static WebDOMMediaStreamTrack FromV8Value(v8::Local<v8::Value>);
+  static WebDOMMediaStreamTrack FromV8Value(v8::Isolate*, v8::Local<v8::Value>);
 
-  BLINK_EXPORT void Reset();
-  BLINK_EXPORT void Assign(const WebDOMMediaStreamTrack&);
-  BLINK_EXPORT WebMediaStreamTrack Component() const;
+  void Reset();
+  void Assign(const WebDOMMediaStreamTrack&);
+  WebMediaStreamTrack Component() const;
 
  private:
 #if INSIDE_BLINK
   WebDOMMediaStreamTrack(MediaStreamTrack*);
 #endif
 
-  WebPrivatePtr<MediaStreamTrack> private_;
+  WebPrivatePtrForGC<MediaStreamTrack> private_;
 };
 
 }  // namespace blink

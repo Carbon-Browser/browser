@@ -1,16 +1,17 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/html/closewatcher/close_watcher.h"
 
 #include "base/auto_reset.h"
+#include "base/containers/adapters.h"
 #include "third_party/blink/public/mojom/frame/frame.mojom-blink.h"
-#include "third_party/blink/public/platform/interface_registry.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_close_watcher_options.h"
 #include "third_party/blink/renderer/core/dom/abort_signal.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
 #include "third_party/blink/renderer/core/event_target_names.h"
+#include "third_party/blink/renderer/core/event_type_names.h"
 #include "third_party/blink/renderer/core/events/keyboard_event.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
@@ -43,59 +44,121 @@ CloseWatcher::WatcherStack::WatcherStack(LocalDOMWindow* window)
     : receiver_(this, window), window_(window) {}
 
 void CloseWatcher::WatcherStack::Add(CloseWatcher* watcher) {
-  if (watchers_.IsEmpty()) {
+  if (watcher_groups_.empty()) {
     auto& host = window_->GetFrame()->GetLocalFrameHostRemote();
     host.SetCloseListener(receiver_.BindNewPipeAndPassRemote(
         window_->GetTaskRunner(TaskType::kMiscPlatformAPI)));
   }
-  watchers_.insert(watcher);
+
+  if (watcher_groups_.size() < allowed_groups_) {
+    HeapVector<Member<CloseWatcher>> group;
+    group.push_back(watcher);
+    watcher_groups_.push_back(group);
+  } else {
+    // watcher_groups_ should never be empty in this branch, because
+    // allowed_groups_ should always be >= 1 and so if watcher_groups_ is empty
+    // we would have taken the above branch.
+    CHECK(!watcher_groups_.empty());
+    watcher_groups_.back().push_back(watcher);
+  }
+
+  next_user_interaction_creates_a_new_allowed_group_ = true;
 }
 
 void CloseWatcher::WatcherStack::Remove(CloseWatcher* watcher) {
-  watchers_.erase(watcher);
-  if (watchers_.IsEmpty()) {
+  for (auto& group : watcher_groups_) {
+    auto watcher_it = std::find(group.begin(), group.end(), watcher);
+    if (watcher_it != group.end()) {
+      group.erase(watcher_it);
+      if (group.empty()) {
+        auto group_it =
+            std::find(watcher_groups_.begin(), watcher_groups_.end(), group);
+        watcher_groups_.erase(group_it);
+      }
+      break;
+    }
+  }
+
+  if (watcher_groups_.empty()) {
     receiver_.reset();
   }
 }
 
-void CloseWatcher::WatcherStack::Trace(Visitor* visitor) const {
-  visitor->Trace(watchers_);
-  visitor->Trace(receiver_);
-  visitor->Trace(window_);
+void CloseWatcher::WatcherStack::SetHadUserInteraction(
+    bool had_user_interaction) {
+  if (had_user_interaction) {
+    // We don't quite want to give one new allowed group for every user
+    // interaction. That would allow "banking" user interactions in a way that's
+    // a bit user-hostile: e.g., if the user clicks 20 times in a row with the
+    // page not responding at all, then the page would get 20 allowed groups,
+    // which at some later time it could use to create 20 close watchers.
+    // Instead, each time the user interacts with the page, the page has an
+    // *opportunity* to create a new ungrouped close watcher. But if the page
+    // doesn't use it, we don't bank the user interaction for the future. This
+    // ties close watcher creation to specific user interactions.
+    //
+    // In short:
+    // - OK: user interaction -> create ungrouped close watcher ->
+    //       user interaction -> create ungrouped close watcher
+    // - Not OK: user interaction x2 -> create ungrouped close watcher x2
+    //
+    // This does not prevent determined abuse and is not important for upholding
+    // our ultimate invariant, of (# of back presses to escape the page) <= (#
+    // of user interactions) + 2. A determined abuser will just create one close
+    // watcher per user interaction, banking them for future abuse. But it
+    // causes more predictable behavior for the normal case, and encourages
+    // non-abusive developers to create close watchers directly corresponding to
+    // user interactions.
+    if (next_user_interaction_creates_a_new_allowed_group_) {
+      ++allowed_groups_;
+    }
+    next_user_interaction_creates_a_new_allowed_group_ = false;
+  } else {
+    allowed_groups_ = 1;
+    next_user_interaction_creates_a_new_allowed_group_ = true;
+  }
+}
+
+bool CloseWatcher::WatcherStack::CancelEventCanBeCancelable() const {
+  return watcher_groups_.size() < allowed_groups_ &&
+         window_->GetFrame()->IsHistoryUserActivationActive();
 }
 
 void CloseWatcher::WatcherStack::EscapeKeyHandler(KeyboardEvent* event) {
-  if (!watchers_.IsEmpty() && !event->DefaultHandled() && event->isTrusted() &&
-      event->keyCode() == VKEY_ESCAPE) {
+  if (!watcher_groups_.empty() && !event->DefaultHandled() &&
+      event->isTrusted() && event->keyCode() == VKEY_ESCAPE) {
     Signal();
   }
 }
 
 void CloseWatcher::WatcherStack::Signal() {
-  while (!watchers_.IsEmpty()) {
-    CloseWatcher* watcher = watchers_.back();
-    watcher->close();
-    if (!watcher->IsGroupedWithPrevious()) {
-      break;
+  if (!watcher_groups_.empty()) {
+    auto& group = watcher_groups_.back();
+    for (auto& watcher : base::Reversed(group)) {
+      if (!watcher->RequestClose(AllowCancel::kWithUserActivation)) {
+        break;
+      }
     }
+  }
+
+  if (allowed_groups_ > 1) {
+    --allowed_groups_;
   }
 }
 
-bool CloseWatcher::WatcherStack::HasConsumedFreeWatcher() const {
-  for (const auto& watcher : watchers_) {
-    if (!watcher->created_with_user_activation_) {
-      return true;
-    }
-  }
-  return false;
+void CloseWatcher::WatcherStack::Trace(Visitor* visitor) const {
+  visitor->Trace(watcher_groups_);
+  visitor->Trace(receiver_);
+  visitor->Trace(window_);
 }
 
 // static
-CloseWatcher* CloseWatcher::Create(LocalDOMWindow* window) {
-  if (!window->GetFrame())
+CloseWatcher* CloseWatcher::Create(LocalDOMWindow& window) {
+  if (!window.GetFrame()) {
     return nullptr;
+  }
 
-  WatcherStack& stack = *window->closewatcher_stack();
+  WatcherStack& stack = *window.closewatcher_stack();
   return CreateInternal(window, stack, nullptr);
 }
 
@@ -104,7 +167,7 @@ CloseWatcher* CloseWatcher::Create(ScriptState* script_state,
                                    CloseWatcherOptions* options,
                                    ExceptionState& exception_state) {
   LocalDOMWindow* window = LocalDOMWindow::From(script_state);
-  if (!window->GetFrame()) {
+  if (!window || !window->GetFrame()) {
     exception_state.ThrowDOMException(
         DOMExceptionCode::kInvalidStateError,
         "CloseWatchers cannot be created in detached Windows.");
@@ -112,27 +175,16 @@ CloseWatcher* CloseWatcher::Create(ScriptState* script_state,
   }
 
   WatcherStack& stack = *window->closewatcher_stack();
-  return CreateInternal(window, stack, options);
+  return CreateInternal(*window, stack, options);
 }
 
 // static
-CloseWatcher* CloseWatcher::CreateInternal(LocalDOMWindow* window,
+CloseWatcher* CloseWatcher::CreateInternal(LocalDOMWindow& window,
                                            WatcherStack& stack,
                                            CloseWatcherOptions* options) {
+  CHECK(window.document()->IsActive());
+
   CloseWatcher* watcher = MakeGarbageCollected<CloseWatcher>(window);
-
-  if (LocalFrame::ConsumeTransientUserActivation(window->GetFrame())) {
-    watcher->created_with_user_activation_ = true;
-    watcher->grouped_with_previous_ = false;
-  } else if (!stack.HasConsumedFreeWatcher()) {
-    watcher->created_with_user_activation_ = false;
-    watcher->grouped_with_previous_ = false;
-  } else {
-    watcher->created_with_user_activation_ = false;
-    watcher->grouped_with_previous_ = true;
-  }
-
-  stack.ConsumeCloseWatcherCancelability();
 
   if (options && options->hasSignal()) {
     AbortSignal* signal = options->signal();
@@ -140,7 +192,7 @@ CloseWatcher* CloseWatcher::CreateInternal(LocalDOMWindow* window,
       watcher->state_ = State::kClosed;
       return watcher;
     }
-    signal->AddAlgorithm(
+    watcher->abort_handle_ = signal->AddAlgorithm(
         MakeGarbageCollected<DestroyOnAbortAlgorithm>(watcher));
   }
 
@@ -148,41 +200,76 @@ CloseWatcher* CloseWatcher::CreateInternal(LocalDOMWindow* window,
   return watcher;
 }
 
-CloseWatcher::CloseWatcher(LocalDOMWindow* window)
-    : ExecutionContextClient(window) {}
+CloseWatcher::CloseWatcher(LocalDOMWindow& window)
+    : ExecutionContextClient(&window) {}
 
-void CloseWatcher::close() {
-  if (IsClosed() || dispatching_cancel_ || !DomWindow())
-    return;
+void CloseWatcher::requestCloseForBinding() {
+  // This behavior is being changes as part of the shipment of the dialog light
+  // dismiss feature, simply because it maintains the parallelism between
+  // dialog.requestClose() and closeWatcher.requestClose(). If there are compat
+  // problems, the flag will be disabled and this part can be rolled back.
+  RequestClose(RuntimeEnabledFeatures::HTMLDialogLightDismissEnabled()
+                   ? AllowCancel::kAlways
+                   : AllowCancel::kWithUserActivation);
+}
+
+bool CloseWatcher::RequestClose(AllowCancel allow_cancel) {
+  if (IsClosed() || dispatching_cancel_ || !DomWindow()) {
+    return true;
+  }
+  if (!enabled_) {
+    CHECK(RuntimeEnabledFeatures::HTMLDialogLightDismissEnabled());
+    return true;
+  }
+  CHECK(allow_cancel == AllowCancel::kWithUserActivation ||
+        RuntimeEnabledFeatures::HTMLDialogLightDismissEnabled());
 
   WatcherStack& stack = *DomWindow()->closewatcher_stack();
+  Event& cancel_event =
+      (allow_cancel == AllowCancel::kAlways ||
+       stack.CancelEventCanBeCancelable())
+          ? *Event::CreateCancelable(event_type_names::kCancel)
+          : *Event::Create(event_type_names::kCancel);
 
-  if (stack.CanCloseWatcherFireCancel()) {
-    stack.ConsumeCloseWatcherCancelability();
-    Event& cancel_event = *Event::CreateCancelable(event_type_names::kCancel);
-    {
-      base::AutoReset<bool> scoped_committing(&dispatching_cancel_, true);
-      DispatchEvent(cancel_event);
-    }
-    if (cancel_event.defaultPrevented())
-      return;
+  {
+    base::AutoReset<bool> scoped_committing(&dispatching_cancel_, true);
+    DispatchEvent(cancel_event);
   }
 
-  // These might have changed because of the event firing.
-  if (IsClosed())
-    return;
-  if (DomWindow())
-    DomWindow()->closewatcher_stack()->Remove(this);
+  if (cancel_event.defaultPrevented()) {
+    if (DomWindow()) {
+      DomWindow()->GetFrame()->ConsumeHistoryUserActivation();
+    }
+    return false;
+  }
 
-  state_ = State::kClosed;
+  close();
+  return true;
+}
+
+void CloseWatcher::close() {
+  if (IsClosed() || !DomWindow() || !DomWindow()->document()->IsActive()) {
+    return;
+  }
+  if (!enabled_) {
+    CHECK(RuntimeEnabledFeatures::HTMLDialogLightDismissEnabled());
+    return;
+  }
+
+  destroy();
+
   DispatchEvent(*Event::Create(event_type_names::kClose));
 }
+
 void CloseWatcher::destroy() {
-  if (IsClosed())
+  if (IsClosed()) {
     return;
-  if (DomWindow())
+  }
+  if (DomWindow()) {
     DomWindow()->closewatcher_stack()->Remove(this);
+  }
   state_ = State::kClosed;
+  abort_handle_.Clear();
 }
 
 const AtomicString& CloseWatcher::InterfaceName() const {
@@ -190,7 +277,8 @@ const AtomicString& CloseWatcher::InterfaceName() const {
 }
 
 void CloseWatcher::Trace(Visitor* visitor) const {
-  EventTargetWithInlineData::Trace(visitor);
+  visitor->Trace(abort_handle_);
+  EventTarget::Trace(visitor);
   ExecutionContextClient::Trace(visitor);
 }
 

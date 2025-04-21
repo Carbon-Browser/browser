@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,17 +9,18 @@
 #include <stdint.h>
 
 #include <map>
+#include <optional>
+#include <string_view>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/containers/flat_set.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
-#include "base/strings/string_piece_forward.h"
 #include "components/url_pattern_index/closed_hash_map.h"
 #include "components/url_pattern_index/flat/url_pattern_index_generated.h"
 #include "components/url_pattern_index/proto/rules.pb.h"
 #include "components/url_pattern_index/uint64_hasher.h"
 #include "components/url_pattern_index/url_pattern.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/flatbuffers/src/include/flatbuffers/flatbuffers.h"
 
 class GURL;
@@ -80,13 +81,13 @@ UrlRuleOffset SerializeUrlRule(const proto::UrlRule& rule,
 // Returns a negative value if |lhs_domain| should be ordered before
 // |rhs_domain|, zero if |lhs_domain| is equal to |rhs_domain| and a positive
 // value if |lhs_domain| should be ordered after |rhs_domain|.
-int CompareDomains(base::StringPiece lhs_domain, base::StringPiece rhs_domain);
+int CompareDomains(std::string_view lhs_domain, std::string_view rhs_domain);
 
 // The current format version of UrlPatternIndex.
 // Increase this value when introducing an incompatible change to the
 // UrlPatternIndex schema (flat/url_pattern_index.fbs). url_pattern_index
 // clients can use this as a signal to rebuild rulesets.
-constexpr int kUrlPatternIndexFormatVersion = 14;
+constexpr int kUrlPatternIndexFormatVersion = 15;
 
 // The class used to construct an index over the URL patterns of a set of URL
 // rules. The rules themselves need to be converted to FlatBuffers format by the
@@ -119,7 +120,7 @@ class UrlPatternIndexBuilder {
   // N-gram is picked using a greedy heuristic, i.e. the one is chosen which
   // corresponds to the shortest list of rules within the index. If there are no
   // valid N-grams in the |pattern|, the return value is 0.
-  NGram GetMostDistinctiveNGram(base::StringPiece pattern);
+  NGram GetMostDistinctiveNGram(std::string_view pattern);
 
   // This index contains all non-REGEXP rules that have at least one acceptable
   // N-gram. For each given rule, the N-gram used as an index key is picked
@@ -201,7 +202,8 @@ class UrlPatternIndexMatcher {
       bool is_third_party,
       bool disable_generic_rules,
       const EmbedderConditionsMatcher& embedder_conditions_matcher,
-      FindRuleStrategy strategy) const;
+      FindRuleStrategy strategy,
+      const base::flat_set<int>& disabled_rule_ids) const;
 
   // Helper function to work with flat::*Type(s). If the index contains one or
   // more UrlRules that match the request, returns one of them depending on
@@ -215,7 +217,8 @@ class UrlPatternIndexMatcher {
       bool is_third_party,
       bool disable_generic_rules,
       const EmbedderConditionsMatcher& embedder_conditions_matcher,
-      FindRuleStrategy strategy) const;
+      FindRuleStrategy strategy,
+      const base::flat_set<int>& disabled_rule_ids) const;
 
   // Same as FindMatch, except this function returns all UrlRules that match the
   // request for the index. If no UrlRules match, returns an empty vector.
@@ -226,7 +229,8 @@ class UrlPatternIndexMatcher {
       proto::ActivationType activation_type,
       bool is_third_party,
       bool disable_generic_rules,
-      const EmbedderConditionsMatcher& embedder_conditions_matcher) const;
+      const EmbedderConditionsMatcher& embedder_conditions_matcher,
+      const base::flat_set<int>& disabled_rule_ids) const;
 
   // Helper function to work with flat::*Type(s). Returns all UrlRules that
   // match the request for the index. If no UrlRules match, returns an empty
@@ -239,14 +243,15 @@ class UrlPatternIndexMatcher {
       flat::RequestMethod request_method,
       bool is_third_party,
       bool disable_generic_rules,
-      const EmbedderConditionsMatcher& embedder_conditions_matcher) const;
+      const EmbedderConditionsMatcher& embedder_conditions_matcher,
+      const base::flat_set<int>& disabled_rule_ids) const;
 
  private:
   // Must outlive this instance.
-  const flat::UrlPatternIndex* flat_index_;
+  raw_ptr<const flat::UrlPatternIndex> flat_index_;
 
   // The number of rules in this index. Mutable since this is lazily computed.
-  mutable absl::optional<size_t> rules_count_;
+  mutable std::optional<size_t> rules_count_;
 };
 
 // Returns whether the `rule` is considered "generic". A generic rule is one

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -106,7 +106,7 @@ TEST_F(ArcSupportMessageHostTest, SendMessage) {
   message_host()->SendMessage(value);
 
   ASSERT_EQ(1u, client()->messages().size());
-  absl::optional<base::Value> recieved_value =
+  std::optional<base::Value> recieved_value =
       base::JSONReader::Read(client()->messages()[0]);
   EXPECT_EQ(value, recieved_value->GetDict());
 }

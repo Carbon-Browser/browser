@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,13 +20,10 @@ import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.components.module_installer.engine.InstallEngine;
 import org.chromium.components.module_installer.engine.InstallListener;
 
-/**
- * Test suite for the Module class.
- */
+/** Test suite for the Module class. */
 @RunWith(BaseRobolectricTestRunner.class)
 public class ModuleTest {
-    @Mock
-    private InstallEngine mInstallEngineMock;
+    @Mock private InstallEngine mInstallEngineMock;
 
     private final String mModuleName = "module_stub";
     private final Class mInterface = ModuleTestStubInterface.class;
@@ -39,6 +36,7 @@ public class ModuleTest {
      * https://stackoverflow.com/questions/31396758/why-i-get-java-lang-instantiationexception-here
      */
     public static class ModuleTestStub implements ModuleTestStubInterface {}
+
     private interface ModuleTestStubInterface {}
 
     @Before

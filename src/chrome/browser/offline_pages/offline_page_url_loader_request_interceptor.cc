@@ -1,10 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/offline_pages/offline_page_url_loader_request_interceptor.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/offline_pages/offline_page_url_loader.h"
 #include "content/public/browser/browser_thread.h"
 
@@ -12,12 +12,12 @@ namespace offline_pages {
 
 OfflinePageURLLoaderRequestInterceptor::OfflinePageURLLoaderRequestInterceptor(
     content::NavigationUIData* navigation_ui_data,
-    int frame_tree_node_id)
+    content::FrameTreeNodeId frame_tree_node_id)
     : navigation_ui_data_(navigation_ui_data),
       frame_tree_node_id_(frame_tree_node_id) {}
 
 OfflinePageURLLoaderRequestInterceptor::
-    ~OfflinePageURLLoaderRequestInterceptor() {}
+    ~OfflinePageURLLoaderRequestInterceptor() = default;
 
 void OfflinePageURLLoaderRequestInterceptor::MaybeCreateLoader(
     const network::ResourceRequest& tentative_resource_request,

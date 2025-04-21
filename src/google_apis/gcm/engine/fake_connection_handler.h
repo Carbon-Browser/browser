@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,8 @@ class FakeConnectionHandler : public ConnectionHandler {
  public:
   FakeConnectionHandler(
       const ConnectionHandler::ProtoReceivedCallback& read_callback,
-      const ConnectionHandler::ProtoSentCallback& write_callback);
+      const ConnectionHandler::ProtoSentCallback& write_callback,
+      const ConnectionHandler::ConnectionChangedCallback& connection_callback);
 
   FakeConnectionHandler(const FakeConnectionHandler&) = delete;
   FakeConnectionHandler& operator=(const FakeConnectionHandler&) = delete;
@@ -67,6 +68,7 @@ class FakeConnectionHandler : public ConnectionHandler {
  private:
   ConnectionHandler::ProtoReceivedCallback read_callback_;
   ConnectionHandler::ProtoSentCallback write_callback_;
+  ConnectionHandler::ConnectionChangedCallback connection_callback_;
 
   std::list<MCSMessage> expected_outgoing_messages_;
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy_feature.mojom-blink.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_permission_state.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
 #include "third_party/blink/renderer/modules/device_orientation/device_motion_data.h"
@@ -122,7 +123,7 @@ void DeviceMotionController::Trace(Visitor* visitor) const {
   Supplement<LocalDOMWindow>::Trace(visitor);
 }
 
-ScriptPromise DeviceMotionController::RequestPermission(
+ScriptPromise<V8PermissionState> DeviceMotionController::RequestPermission(
     ScriptState* script_state) {
   ExecutionContext* context = GetSupplementable();
   DCHECK_EQ(context, ExecutionContext::From(script_state));
@@ -135,18 +136,20 @@ ScriptPromise DeviceMotionController::RequestPermission(
                                    context->GetTaskRunner(TaskType::kSensor)));
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
-  ScriptPromise promise = resolver->Promise();
+  auto* resolver =
+      MakeGarbageCollected<ScriptPromiseResolver<V8PermissionState>>(
+          script_state);
+  auto promise = resolver->Promise();
 
   permission_service_->HasPermission(
       CreatePermissionDescriptor(mojom::blink::PermissionName::SENSORS),
       resolver->WrapCallbackInScriptScope(
-          WTF::Bind([](ScriptPromiseResolver* resolver,
-                       mojom::blink::PermissionStatus status) {
+          WTF::BindOnce([](ScriptPromiseResolver<V8PermissionState>* resolver,
+                           mojom::blink::PermissionStatus status) {
             switch (status) {
               case mojom::blink::PermissionStatus::GRANTED:
               case mojom::blink::PermissionStatus::DENIED:
-                resolver->Resolve(PermissionStatusToString(status));
+                resolver->Resolve(ToV8PermissionState(status));
                 break;
               case mojom::blink::PermissionStatus::ASK:
                 // At the moment, this state is not reachable because there
@@ -154,7 +157,6 @@ ScriptPromise DeviceMotionController::RequestPermission(
                 // permissions UI for sensors, so HasPermissionStatus() will
                 // always return GRANTED or DENIED.
                 NOTREACHED();
-                break;
             }
           })));
 

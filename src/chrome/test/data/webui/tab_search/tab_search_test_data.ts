@@ -1,9 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {Token} from 'chrome://resources/mojo/mojo/public/mojom/base/token.mojom-webui.js';
-import {ProfileData, RecentlyClosedTab, Tab, TabAlertState, Window} from 'chrome://tab-search.top-chrome/tab_search.js';
+import {stringToMojoString16} from 'chrome://resources/js/mojo_type_util.js';
+import type {Token} from 'chrome://resources/mojo/mojo/public/mojom/base/token.mojom-webui.js';
+import type {ProfileData, RecentlyClosedTab, Tab, TabOrganizationSession, Window} from 'chrome://tab-search.top-chrome/tab_search.js';
+import {TabAlertState, TabOrganizationError, TabOrganizationState} from 'chrome://tab-search.top-chrome/tab_search.js';
 
 export const SAMPLE_WINDOW_HEIGHT: number = 448;
 
@@ -11,9 +13,9 @@ export function createTab(overrides: Partial<Tab>): Tab {
   return Object.assign(
       {
         active: false,
+        faviconUrl: null,
+        groupId: null,
         alertStates: [],
-        faviconUrl: undefined,
-        groupId: undefined,
         index: 0,
         isDefaultFavicon: false,
         lastActiveElapsedText: '',
@@ -116,20 +118,20 @@ export const SAMPLE_WINDOW_DATA: Window[] = [
 
 export const SAMPLE_RECENTLY_CLOSED_DATA: RecentlyClosedTab[] = [
   {
+    groupId: null,
     tabId: 100,
     title: 'PayPal',
     url: {url: 'https://www.paypal.com'},
     lastActiveTime: {internalValue: BigInt(11)},
     lastActiveElapsedText: '',
-    groupId: undefined,
   },
   {
+    groupId: null,
     tabId: 101,
     title: 'Stripe',
     url: {url: 'https://www.stripe.com'},
     lastActiveTime: {internalValue: BigInt(12)},
     lastActiveElapsedText: '',
-    groupId: undefined,
   },
 ];
 
@@ -160,6 +162,7 @@ export function generateSampleTabsFromSiteNames(
   return siteNames.map((siteName, i) => {
     return createTab({
       tabId: i + 1,
+      groupId: null,
       title: siteName,
       url: {url: 'https://www.' + siteName.toLowerCase() + '.com'},
       lastActiveTimeTicks: {internalValue: BigInt(siteNames.length - i)},
@@ -173,7 +176,7 @@ export function generateSampleRecentlyClosedTabsFromSiteNames(
   return siteNames.map((siteName, i) => {
     return {
       tabId: i + 1,
-      groupId: undefined,
+      groupId: null,
       title: siteName,
       url: {url: 'https://www.' + siteName.toLowerCase() + '.com'},
       lastActiveTimeTicks: {internalValue: BigInt(siteNames.length - i)},
@@ -189,11 +192,11 @@ export function generateSampleRecentlyClosedTabs(
     const tabId = i + 1;
     const tab: RecentlyClosedTab = {
       tabId,
+      groupId: null,
       title: `${titlePrefix} ${tabId}`,
       url: {url: `https://www.sampletab.com?q=${tabId}`},
       lastActiveTime: {internalValue: BigInt(count - i)},
       lastActiveElapsedText: '',
-      groupId: undefined,
     };
 
     if (groupId !== undefined) {
@@ -223,10 +226,29 @@ export function generateSampleDataFromSiteNames(siteNames: string[]):
 }
 
 export function sampleToken(high: bigint, low: bigint): Token {
-  const token = new Token();
-  token.high = high;
-  token.low = low;
+  const token: Token = {high, low};
   Object.freeze(token);
 
   return token;
+}
+
+export function createTabOrganizationSession(
+    override: Partial<TabOrganizationSession> = {}): TabOrganizationSession {
+  return Object.assign(
+      {
+        activeTabId: -1,
+        sessionId: 1,
+        state: TabOrganizationState.kNotStarted,
+        organizations: [{
+          organizationId: 1,
+          name: stringToMojoString16('foo'),
+          tabs: [
+            createTab({title: 'Tab 1', url: {url: 'https://tab-1.com/'}}),
+            createTab({title: 'Tab 2', url: {url: 'https://tab-2.com/'}}),
+            createTab({title: 'Tab 3', url: {url: 'https://tab-3.com/'}}),
+          ],
+        }],
+        error: TabOrganizationError.kNone,
+      },
+      override);
 }

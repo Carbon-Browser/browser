@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,18 @@
 
 #include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/notification_utils.h"
-#include "chrome/app/vector_icons/vector_icons.h"
+#include "ash/resources/vector_icons/vector_icons.h"
+#include "chrome/browser/ash/app_list/app_list_client_impl.h"
 #include "chrome/browser/ash/crostini/crostini_package_service.h"
-#include "chrome/browser/ash/crostini/crostini_terminal.h"
 #include "chrome/browser/ash/crostini/crostini_util.h"
 #include "chrome/browser/ash/guest_os/guest_os_registry_service_factory.h"
+#include "chrome/browser/ash/guest_os/guest_os_terminal.h"
 #include "chrome/browser/notifications/notification_display_service.h"
-#include "chrome/browser/ui/app_list/app_list_client_impl.h"
+#include "chrome/browser/notifications/notification_display_service_factory.h"
+#include "chrome/browser/ui/views/crostini/crostini_package_install_failure_view.h"
 #include "chrome/grit/generated_resources.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
 #include "ui/message_center/public/cpp/notification.h"
@@ -38,10 +41,12 @@ const std::string& CrostiniPackageNotification::GetErrorMessageForTesting()
   return error_message_;
 }
 
-CrostiniPackageNotification::NotificationSettings::NotificationSettings() {}
+CrostiniPackageNotification::NotificationSettings::NotificationSettings() =
+    default;
 CrostiniPackageNotification::NotificationSettings::NotificationSettings(
     const NotificationSettings& rhs) = default;
-CrostiniPackageNotification::NotificationSettings::~NotificationSettings() {}
+CrostiniPackageNotification::NotificationSettings::~NotificationSettings() =
+    default;
 
 CrostiniPackageNotification::CrostiniPackageNotification(
     Profile* profile,
@@ -66,9 +71,9 @@ CrostiniPackageNotification::CrostiniPackageNotification(
         ->AddObserver(this);
   }
   message_center::RichNotificationData rich_notification_data;
-  rich_notification_data.vector_small_image = &kNotificationLinuxIcon;
+  rich_notification_data.vector_small_image = &ash::kNotificationLinuxIcon;
   rich_notification_data.never_timeout = true;
-  rich_notification_data.accent_color = ash::kSystemNotificationColorNormal;
+  rich_notification_data.accent_color_id = cros_tokens::kCrosSysPrimary;
 
   notification_ = std::make_unique<message_center::Notification>(
       message_center::NOTIFICATION_TYPE_PROGRESS, notification_id,
@@ -217,13 +222,13 @@ void CrostiniPackageNotification::UpdateProgress(
 
       break;
 
-    case PackageOperationStatus::FAILED:
+    case PackageOperationStatus::FAILED: {
       title = notification_settings_.failure_title;
       body = notification_settings_.failure_body;
       error_message_ = error_message;
-      notification_->set_accent_color(
-          ash::kSystemNotificationColorCriticalWarning);
+      notification_->set_accent_color_id(cros_tokens::kCrosSysError);
       break;
+    }
 
     case PackageOperationStatus::WAITING_FOR_APP_REGISTRY_UPDATE:
       // If a notification progress bar is set to a value outside of [0, 100],
@@ -282,14 +287,15 @@ void CrostiniPackageNotification::Close(bool by_user) {
 }
 
 void CrostiniPackageNotification::Click(
-    const absl::optional<int>& button_index,
-    const absl::optional<std::u16string>& reply) {
+    const std::optional<int>& button_index,
+    const std::optional<std::u16string>& reply) {
   if (current_status_ == PackageOperationStatus::FAILED) {
     crostini::ShowCrostiniPackageInstallFailureView(error_message_);
   }
 
-  if (current_status_ != PackageOperationStatus::SUCCEEDED)
+  if (current_status_ != PackageOperationStatus::SUCCEEDED) {
     return;
+  }
 
   if (app_count_ == 0) {
     LaunchTerminal(profile_,
@@ -300,7 +306,8 @@ void CrostiniPackageNotification::Click(
     LaunchCrostiniApp(profile_, app_id_,
                       display::Screen::GetScreen()->GetPrimaryDisplay().id());
   } else {
-    AppListClientImpl::GetInstance()->ShowAppList();
+    AppListClientImpl::GetInstance()->ShowAppList(
+        ash::AppListShowSource::kBrowser);
   }
 }
 
@@ -321,7 +328,7 @@ void CrostiniPackageNotification::UpdateDisplayedNotification() {
   }
 
   NotificationDisplayService* display_service =
-      NotificationDisplayService::GetForProfile(profile_);
+      NotificationDisplayServiceFactory::GetForProfile(profile_);
   display_service->Display(NotificationHandler::Type::TRANSIENT, *notification_,
                            /*metadata=*/nullptr);
 }

@@ -1,10 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "fuchsia_web/webengine/browser/navigation_controller_impl.h"
 
-#include "base/strings/string_piece.h"
+#include <string_view>
+
 #include "base/test/gtest_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
@@ -18,7 +19,7 @@ const char kTitle2[] = "title2";
 
 fuchsia::web::NavigationState CreateNavigationState(
     const GURL& url,
-    base::StringPiece title,
+    std::string_view title,
     fuchsia::web::PageType page_type,
     bool can_go_back,
     bool can_go_forward,

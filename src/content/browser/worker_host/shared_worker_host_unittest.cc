@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <string>
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
@@ -22,6 +22,7 @@
 #include "content/browser/worker_host/mock_shared_worker.h"
 #include "content/browser/worker_host/shared_worker_connector_impl.h"
 #include "content/browser/worker_host/shared_worker_service_impl.h"
+#include "content/browser/worker_host/worker_script_fetcher.h"
 #include "content/public/browser/shared_worker_instance.h"
 #include "content/public/common/content_features.h"
 #include "content/public/test/browser_task_environment.h"
@@ -29,14 +30,13 @@
 #include "content/public/test/test_browser_context.h"
 #include "content/public/test/test_utils.h"
 #include "content/test/test_content_browser_client.h"
-#include "mojo/public/cpp/bindings/pending_associated_receiver.h"
-#include "mojo/public/cpp/bindings/pending_associated_remote.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "mojo/public/cpp/test_support/test_utils.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
 #include "services/network/public/cpp/cross_origin_embedder_policy.h"
 #include "services/network/public/cpp/features.h"
 #include "services/network/public/cpp/not_implemented_url_loader_factory.h"
+#include "services/network/public/mojom/parsed_headers.mojom.h"
 #include "services/network/test/client_security_state_builder.h"
 #include "testing/gmock/include/gmock/gmock-matchers.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -85,13 +85,13 @@ class SharedWorkerHostTest : public testing::Test {
     SharedWorkerInstance instance(
         kWorkerUrl, blink::mojom::ScriptType::kClassic,
         network::mojom::CredentialsMode::kSameOrigin, "name",
-        blink::StorageKey(url::Origin::Create(kWorkerUrl)),
-        blink::mojom::SharedWorkerCreationContextType::kSecure);
+        blink::StorageKey::CreateFirstParty(url::Origin::Create(kWorkerUrl)),
+        blink::mojom::SharedWorkerCreationContextType::kSecure,
+        blink::mojom::SharedWorkerSameSiteCookies::kAll);
     auto host = std::make_unique<SharedWorkerHost>(
         &service_, instance, site_instance_,
         std::vector<network::mojom::ContentSecurityPolicyPtr>(),
-        base::MakeRefCounted<PolicyContainerHost>(),
-        network::mojom::ClientSecurityState::New());
+        base::MakeRefCounted<PolicyContainerHost>());
     auto weak_host = host->AsWeakPtr();
     service_.worker_hosts_.insert(std::move(host));
     return weak_host;
@@ -105,6 +105,9 @@ class SharedWorkerHostTest : public testing::Test {
           network::mojom::URLResponseHead::New()) {
     auto main_script_load_params =
         blink::mojom::WorkerMainScriptLoadParams::New();
+    if (!response_head->parsed_headers) {
+      response_head->parsed_headers = network::mojom::ParsedHeaders::New();
+    }
     main_script_load_params->response_head = std::move(response_head);
     mojo::ScopedDataPipeProducerHandle producer_handle;
     mojo::ScopedDataPipeConsumerHandle consumer_handle;
@@ -115,7 +118,7 @@ class SharedWorkerHostTest : public testing::Test {
     auto subresource_loader_factories =
         std::make_unique<blink::PendingURLLoaderFactoryBundle>();
 
-    absl::optional<SubresourceLoaderParams> subresource_loader_params =
+    SubresourceLoaderParams subresource_loader_params =
         SubresourceLoaderParams();
     mojo::PendingRemote<network::mojom::URLLoaderFactory>
         loader_factory_remote =
@@ -124,41 +127,34 @@ class SharedWorkerHostTest : public testing::Test {
     // Set up for service worker.
     auto service_worker_handle =
         std::make_unique<ServiceWorkerMainResourceHandle>(
-            helper_->context_wrapper(), base::DoNothing());
-    mojo::PendingAssociatedRemote<blink::mojom::ServiceWorkerContainer>
-        client_remote;
-    mojo::PendingAssociatedReceiver<blink::mojom::ServiceWorkerContainerHost>
-        host_receiver;
-    auto container_info =
-        blink::mojom::ServiceWorkerContainerInfoForClient::New();
-    container_info->client_receiver =
-        client_remote.InitWithNewEndpointAndPassReceiver();
-    host_receiver =
-        container_info->host_remote.InitWithNewEndpointAndPassReceiver();
-
-    helper_->context()->CreateContainerHostForWorker(
-        std::move(host_receiver), mock_render_process_host_->GetID(),
-        std::move(client_remote), ServiceWorkerClientInfo(host->token()));
-    service_worker_handle->OnCreatedContainerHost(std::move(container_info));
+            helper_->context_wrapper(), base::DoNothing(),
+            /*fetch_event_client_id=*/"");
+    service_worker_handle->set_service_worker_client(
+        helper_->context()
+            ->service_worker_client_owner()
+            .CreateServiceWorkerClientForWorker(
+                mock_render_process_host_->GetDeprecatedID(),
+                ServiceWorkerClientInfo(host->token())));
     host->SetServiceWorkerHandle(std::move(service_worker_handle));
 
     TestContentBrowserClient client;
-    host->Start(std::move(factory), std::move(main_script_load_params),
-                std::move(subresource_loader_factories),
-                nullptr /* controller */,
-                nullptr /* controller_service_worker_object_host */,
+    host->Start(std::move(factory),
                 blink::mojom::FetchClientSettingsObject::New(
                     network::mojom::ReferrerPolicy::kDefault,
-                    GURL() /* outgoing_referrer */,
+                    /*outgoing_referrer=*/GURL(),
                     blink::mojom::InsecureRequestsPolicy::kDoNotUpgrade),
-                final_response_url, &client);
+                &client,
+                WorkerScriptFetcherResult(
+                    std::move(subresource_loader_factories),
+                    std::move(main_script_load_params),
+                    PolicyContainerPolicies(), final_response_url));
   }
 
   MessagePortChannel AddClient(
       SharedWorkerHost* host,
       mojo::PendingRemote<blink::mojom::SharedWorkerClient> client) {
     GlobalRenderFrameHostId dummy_render_frame_host_id(
-        mock_render_process_host_->GetID(), 22);
+        mock_render_process_host_->GetDeprecatedID(), 22);
 
     blink::MessagePortDescriptorPair port_pair;
     MessagePortChannel local_port(port_pair.TakePort0());
@@ -381,12 +377,12 @@ TEST_F(SharedWorkerHostTest,
       network::mojom::CredentialsMode::kSameOrigin, "name",
       blink::StorageKey::CreateWithNonce(url::Origin::Create(kWorkerUrl),
                                          nonce),
-      blink::mojom::SharedWorkerCreationContextType::kSecure);
+      blink::mojom::SharedWorkerCreationContextType::kSecure,
+      blink::mojom::SharedWorkerSameSiteCookies::kNone);
   auto host = std::make_unique<SharedWorkerHost>(
       &service_, instance, site_instance_,
       std::vector<network::mojom::ContentSecurityPolicyPtr>(),
-      base::MakeRefCounted<PolicyContainerHost>(),
-      network::mojom::ClientSecurityState::New());
+      base::MakeRefCounted<PolicyContainerHost>());
 
   // Start the worker.
   mojo::PendingRemote<blink::mojom::SharedWorkerFactory> factory;
@@ -424,19 +420,14 @@ TEST_F(SharedWorkerHostTestWithPNAEnabled,
   SharedWorkerInstance instance(
       kWorkerUrl, blink::mojom::ScriptType::kClassic,
       network::mojom::CredentialsMode::kSameOrigin, "name",
-      blink::StorageKey(url::Origin::Create(kWorkerUrl)),
-      blink::mojom::SharedWorkerCreationContextType::kSecure);
-  network::CrossOriginEmbedderPolicy creator_cross_origin_embedder_policy;
-  creator_cross_origin_embedder_policy.value =
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(kWorkerUrl)),
+      blink::mojom::SharedWorkerCreationContextType::kSecure,
+      blink::mojom::SharedWorkerSameSiteCookies::kAll);
+  PolicyContainerPolicies policies;
+  policies.cross_origin_embedder_policy.value =
       network::mojom::CrossOriginEmbedderPolicyValue::kRequireCorp;
-  network::mojom::ClientSecurityStatePtr client_security_state =
-      network::ClientSecurityStateBuilder()
-          .WithPrivateNetworkRequestPolicy(
-              network::mojom::PrivateNetworkRequestPolicy::kPreflightBlock)
-          .WithIPAddressSpace(network::mojom::IPAddressSpace::kPublic)
-          .WithIsSecureContext(true)
-          .WithCrossOriginEmbedderPolicy(creator_cross_origin_embedder_policy)
-          .Build();
+  policies.ip_address_space = network::mojom::IPAddressSpace::kPublic;
+  policies.is_web_secure_context = true;
   network::CrossOriginEmbedderPolicy worker_cross_origin_embedder_policy;
   worker_cross_origin_embedder_policy.value =
       network::mojom::CrossOriginEmbedderPolicyValue::kCredentialless;
@@ -448,8 +439,7 @@ TEST_F(SharedWorkerHostTestWithPNAEnabled,
   auto host = std::make_unique<SharedWorkerHost>(
       &service_, instance, site_instance_,
       std::vector<network::mojom::ContentSecurityPolicyPtr>(),
-      base::MakeRefCounted<PolicyContainerHost>(),
-      std::move(client_security_state));
+      base::MakeRefCounted<PolicyContainerHost>(std::move(policies)));
 
   // Start the worker.
   mojo::PendingRemote<blink::mojom::SharedWorkerFactory> factory;

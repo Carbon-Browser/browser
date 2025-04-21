@@ -1,38 +1,31 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // Include test fixture.
-GEN_INCLUDE(['../testing/chromevox_next_e2e_test_base.js']);
+GEN_INCLUDE(['../testing/chromevox_e2e_test_base.js']);
 
 GEN_INCLUDE(['../testing/mock_feedback.js', '../testing/fake_objects.js']);
 
 /**
  * Test fixture involving settings pages.
  */
-ChromeVoxSettingsPagesTest = class extends ChromeVoxNextE2ETest {
+ChromeVoxSettingsPagesTest = class extends ChromeVoxE2ETest {
   /** @override */
   testGenCppIncludes() {
     super.testGenCppIncludes();
     GEN(`
       #include "chrome/browser/ash/system_web_apps/system_web_app_manager.h"
-      #include "chrome/browser/web_applications/web_app_provider.h"
     `);
   }
 
   /** @override */
   testGenPreamble() {
     GEN(`
-    ash::SystemWebAppManager::GetForTest(browser()->profile())
+    ash::SystemWebAppManager::GetForTest(GetProfile())
         ->InstallSystemAppsForTesting();
   `);
     super.testGenPreamble();
-  }
-
-  /** @override */
-  async setUpDeferred() {
-    await super.setUpDeferred();
-    await importModule('AbstractTts', '/chromevox/common/abstract_tts.js');
   }
 };
 
@@ -43,9 +36,9 @@ AX_TEST_F(
       const mockFeedback = this.createMockFeedback();
       await this.runWithLoadedTree(`unused`);
       const increaseRate = realTts.increaseOrDecreaseProperty.bind(
-          realTts, AbstractTts.RATE, true);
+          realTts, TtsSettings.RATE, true);
       const decreaseRate = realTts.increaseOrDecreaseProperty.bind(
-          realTts, AbstractTts.RATE, false);
+          realTts, TtsSettings.RATE, false);
 
       mockFeedback.call(doCmd('showTtsSettings'))
           .expectSpeech(
@@ -86,7 +79,7 @@ AX_TEST_F(
           .call(increaseRate)
           .expectSpeech('Rate 2 percent')
           .call(increaseRate)
-          .expectSpeech('Rate 4 percent')
+          .expectSpeech('Rate 4 percent');
 
-          .replay();
+      await mockFeedback.replay();
     });

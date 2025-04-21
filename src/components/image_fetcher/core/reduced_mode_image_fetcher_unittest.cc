@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,15 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/mock_callback.h"
 #include "base/test/simple_test_clock.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "components/image_fetcher/core/cache/image_cache.h"
 #include "components/image_fetcher/core/cache/image_data_store_disk.h"
 #include "components/image_fetcher/core/cache/image_metadata_store_leveldb.h"
@@ -53,7 +53,7 @@ const char kImageFetcherEventHistogramName[] = "ImageFetcher.Events";
 
 class ReducedModeImageFetcherTest : public testing::Test {
  public:
-  ReducedModeImageFetcherTest() {}
+  ReducedModeImageFetcherTest() = default;
 
   ReducedModeImageFetcherTest(const ReducedModeImageFetcherTest&) = delete;
   ReducedModeImageFetcherTest& operator=(const ReducedModeImageFetcherTest&) =
@@ -80,16 +80,16 @@ class ReducedModeImageFetcherTest : public testing::Test {
     auto metadata_store =
         std::make_unique<ImageMetadataStoreLevelDB>(std::move(db), &clock_);
     auto data_store = std::make_unique<ImageDataStoreDisk>(
-        data_dir_.GetPath(), base::SequencedTaskRunnerHandle::Get());
+        data_dir_.GetPath(), base::SequencedTaskRunner::GetCurrentDefault());
 
     image_cache_ = base::MakeRefCounted<ImageCache>(
         std::move(data_store), std::move(metadata_store), &test_prefs_, &clock_,
-        base::SequencedTaskRunnerHandle::Get());
+        base::SequencedTaskRunner::GetCurrentDefault());
 
     // Use an initial request to start the cache up.
     image_cache_->SaveImage(kImageUrl.spec(), kImageData,
                             /* needs_transcoding */ false,
-                            /* expiration_interval */ absl::nullopt);
+                            /* expiration_interval */ std::nullopt);
     RunUntilIdle();
     db_->InitStatusCallback(leveldb_proto::Enums::InitStatus::kOK);
     image_cache_->DeleteImage(kImageUrl.spec());
@@ -166,7 +166,7 @@ TEST_F(ReducedModeImageFetcherTest, FetchNeedsTranscodingImageFromCache) {
   // Save the image that needs transcoding in the database.
   image_cache()->SaveImage(kImageUrl.spec(), kImageData,
                            /* needs_transcoding */ true,
-                           /* expiration_interval */ absl::nullopt);
+                           /* expiration_interval */ std::nullopt);
   VerifyCacheHit();
 }
 
@@ -174,7 +174,7 @@ TEST_F(ReducedModeImageFetcherTest, FetchImageFromCache) {
   // Save the image that doesn't need transcoding in the database.
   image_cache()->SaveImage(kImageUrl.spec(), kImageData,
                            /* needs_transcoding */ false,
-                           /* expiration_interval */ absl::nullopt);
+                           /* expiration_interval */ std::nullopt);
   VerifyCacheHit();
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,18 +14,22 @@
 #include "ash/assistant/model/assistant_interaction_model_observer.h"
 #include "ash/assistant/model/assistant_ui_model_observer.h"
 #include "ash/assistant/ui/assistant_view_delegate.h"
-#include "ash/highlighter/highlighter_controller.h"
 #include "ash/public/cpp/assistant/controller/assistant_controller.h"
 #include "ash/public/cpp/assistant/controller/assistant_controller_observer.h"
 #include "ash/public/cpp/assistant/controller/assistant_interaction_controller.h"
-#include "ash/public/cpp/tablet_mode_observer.h"
-#include "ash/wm/tablet_mode/tablet_mode_controller.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
 #include "mojo/public/cpp/bindings/receiver.h"
+#include "ui/display/display_observer.h"
+#include "ui/display/screen.h"
 
 class PrefRegistrySimple;
+
+namespace display {
+enum class TabletState;
+}  // namespace display
 
 namespace ash {
 
@@ -34,23 +38,20 @@ enum class AssistantButtonId;
 
 class AssistantInteractionControllerImpl
     : public AssistantInteractionController,
-      public chromeos::assistant::AssistantInteractionSubscriber,
+      public assistant::AssistantInteractionSubscriber,
       public AssistantControllerObserver,
       public AssistantInteractionModelObserver,
       public AssistantUiModelObserver,
       public AssistantViewDelegateObserver,
-      public TabletModeObserver,
-      public HighlighterController::Observer {
+      public display::DisplayObserver {
  public:
-  using AssistantInteractionMetadata =
-      chromeos::assistant::AssistantInteractionMetadata;
+  using AssistantInteractionMetadata = assistant::AssistantInteractionMetadata;
   using AssistantInteractionResolution =
-      chromeos::assistant::AssistantInteractionResolution;
-  using AssistantInteractionType =
-      chromeos::assistant::AssistantInteractionType;
-  using AssistantQuerySource = chromeos::assistant::AssistantQuerySource;
-  using AssistantSuggestion = chromeos::assistant::AssistantSuggestion;
-  using AssistantSuggestionType = chromeos::assistant::AssistantSuggestionType;
+      assistant::AssistantInteractionResolution;
+  using AssistantInteractionType = assistant::AssistantInteractionType;
+  using AssistantQuerySource = assistant::AssistantQuerySource;
+  using AssistantSuggestion = assistant::AssistantSuggestion;
+  using AssistantSuggestionType = assistant::AssistantSuggestionType;
 
   explicit AssistantInteractionControllerImpl(
       AssistantControllerImpl* assistant_controller);
@@ -65,7 +66,7 @@ class AssistantInteractionControllerImpl
   static void RegisterProfilePrefs(PrefRegistrySimple* registry);
 
   // Provides a pointer to the |assistant| owned by AssistantService.
-  void SetAssistant(chromeos::assistant::Assistant* assistant);
+  void SetAssistant(assistant::Assistant* assistant);
 
   // AssistantInteractionController:
   const AssistantInteractionModel* GetModel() const override;
@@ -83,7 +84,6 @@ class AssistantInteractionControllerImpl
       const std::map<std::string, std::string>& params) override;
 
   // AssistantInteractionModelObserver:
-  void OnInteractionStateChanged(InteractionState interaction_state) override;
   void OnInputModalityChanged(InputModality input_modality) override;
   void OnMicStateChanged(MicState mic_state) override;
   void OnCommittedQueryChanged(const AssistantQuery& assistant_query) override;
@@ -92,13 +92,10 @@ class AssistantInteractionControllerImpl
   void OnUiVisibilityChanged(
       AssistantVisibility new_visibility,
       AssistantVisibility old_visibility,
-      absl::optional<AssistantEntryPoint> entry_point,
-      absl::optional<AssistantExitPoint> exit_point) override;
+      std::optional<AssistantEntryPoint> entry_point,
+      std::optional<AssistantExitPoint> exit_point) override;
 
-  // HighlighterController::Observer:
-  void OnHighlighterSelectionRecognized(const gfx::Rect& rect) override;
-
-  // chromeos::assistant::AssistantInteractionSubscriber:
+  // assistant::AssistantInteractionSubscriber:
   void OnInteractionStarted(
       const AssistantInteractionMetadata& metadata) override;
   void OnInteractionFinished(
@@ -109,8 +106,7 @@ class AssistantInteractionControllerImpl
       const std::vector<AssistantSuggestion>& response) override;
   void OnTextResponse(const std::string& response) override;
   void OnOpenUrlResponse(const GURL& url, bool in_background) override;
-  void OnOpenAppResponse(
-      const chromeos::assistant::AndroidAppInfo& app_info) override;
+  void OnOpenAppResponse(const assistant::AndroidAppInfo& app_info) override;
   void OnSpeechRecognitionStarted() override;
   void OnSpeechRecognitionIntermediateResult(
       const std::string& high_confidence_text,
@@ -127,16 +123,12 @@ class AssistantInteractionControllerImpl
   void OnSuggestionPressed(
       const base::UnguessableToken& suggestion_id) override;
 
-  // TabletModeObserver:
-  void OnTabletModeStarted() override;
-  void OnTabletModeEnded() override;
+  // display::DisplayObserver:
+  void OnDisplayTabletStateChanged(display::TabletState state) override;
 
  private:
-  void OnTabletModeChanged();
   bool HasActiveInteraction() const;
   void OnUiVisible(AssistantEntryPoint entry_point);
-  void StartScreenContextInteraction(const gfx::Rect& region,
-                                     AssistantQuerySource query_source);
   void StartVoiceInteraction();
   void StopActiveInteraction(bool cancel_conversation);
 
@@ -145,25 +137,20 @@ class AssistantInteractionControllerImpl
   AssistantVisibility GetVisibility() const;
   bool IsVisible() const;
 
-  AssistantControllerImpl* const assistant_controller_;  // Owned by Shell.
+  const raw_ptr<AssistantControllerImpl>
+      assistant_controller_;  // Owned by Shell.
   AssistantInteractionModel model_;
   bool has_had_interaction_ = false;
 
   // Owned by AssistantService.
-  chromeos::assistant::Assistant* assistant_ = nullptr;
+  raw_ptr<assistant::Assistant> assistant_ = nullptr;
 
   base::ScopedObservation<AssistantController, AssistantControllerObserver>
       assistant_controller_observation_{this};
 
-  base::ScopedObservation<HighlighterController,
-                          HighlighterController::Observer>
-      highlighter_controller_observation_{this};
+  base::ScopedObservation<display::Screen, display::DisplayObserver>
+      display_observation_{this};
 
-  base::ScopedObservation<TabletModeController, TabletModeObserver>
-      tablet_mode_controller_observation_{this};
-
-  base::WeakPtrFactory<AssistantInteractionControllerImpl>
-      screen_context_request_factory_{this};
   base::WeakPtrFactory<AssistantInteractionControllerImpl> weak_factory_{this};
 };
 

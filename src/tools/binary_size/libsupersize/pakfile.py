@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Size analysis of .pak files."""
@@ -155,8 +155,9 @@ def CreatePakSymbolsFromApk(section_ranges, apk_path, apk_pak_paths,
         logging.warning(
             'Expected .pak files to be STORED, but this one is compressed: %s',
             zip_info.filename)
-      section_name = _CreateSymbolsFromFile(zip_info.filename, contents,
-                                            res_info, symbols_by_id)
+      path = archive_util.RemoveAssetSuffix(zip_info.filename)
+      section_name = _CreateSymbolsFromFile(path, contents, res_info,
+                                            symbols_by_id)
       archive_util.ExtendSectionRange(section_ranges, section_name,
                                       zip_info.compress_size)
   return _FinalizeSymbols(symbols_by_id, pak_id_map)

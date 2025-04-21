@@ -1,62 +1,65 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/autofill/core/browser/data_model/autofill_data_model.h"
 
-#include <math.h>
+#include <algorithm>
+#include <cmath>
 
-#include "components/autofill/core/browser/autofill_type.h"
-#include "components/autofill/core/browser/data_model/autofill_metadata.h"
+#include "base/check_op.h"
+#include "base/feature_list.h"
 #include "components/autofill/core/common/autofill_clock.h"
-#include "components/autofill/core/common/autofill_constants.h"
 #include "components/autofill/core/common/autofill_features.h"
-#include "url/gurl.h"
 
 namespace autofill {
 
-AutofillDataModel::AutofillDataModel(const std::string& guid,
-                                     const std::string& origin)
-    : guid_(guid), origin_(origin), use_count_(1) {
+AutofillDataModel::AutofillDataModel(size_t usage_history_size)
+    : usage_history_size_(usage_history_size), use_dates_(usage_history_size_) {
+  CHECK_NE(usage_history_size_, 0u);
   set_use_date(AutofillClock::Now());
   set_modification_date(AutofillClock::Now());
 }
-AutofillDataModel::~AutofillDataModel() {}
+
+AutofillDataModel::~AutofillDataModel() = default;
+AutofillDataModel::AutofillDataModel(const AutofillDataModel&) = default;
 
 int AutofillDataModel::GetDaysSinceLastUse(base::Time current_time) const {
-  if (current_time <= use_date_)
-    return 0;
-
-  return (current_time - use_date_).InDays();
+  return current_time <= use_date() ? 0 : (current_time - use_date()).InDays();
 }
 
-bool AutofillDataModel::IsVerified() const {
-  return !origin_.empty() && !GURL(origin_).is_valid();
+std::optional<base::Time> AutofillDataModel::use_date(size_t i) const {
+  CHECK(1 <= i && i <= usage_history_size());
+  return use_dates_[i - 1];
+}
+
+void AutofillDataModel::set_use_date(std::optional<base::Time> time, size_t i) {
+  CHECK(1 <= i && i <= usage_history_size());
+  CHECK(time.has_value() || i > 1);
+  use_dates_[i - 1] = time;
+}
+
+void AutofillDataModel::RecordUseDate(base::Time time) {
+  std::rotate(use_dates_.rbegin(), use_dates_.rbegin() + 1, use_dates_.rend());
+  set_use_date(time, 1);
 }
 
 double AutofillDataModel::GetRankingScore(base::Time current_time) const {
-  if (base::FeatureList::IsEnabled(features::kAutofillEnableRankingFormula)) {
-    // Exponentially decay the use count by the days since the data model was
-    // last used.
-    return log10(use_count_ + 1) *
-           exp(-GetDaysSinceLastUse(current_time) /
-               features::kAutofillRankingFormulaUsageHalfLife.Get());
-  }
-
-  // Default to legacy frecency scoring.
   return -log(static_cast<double>(GetDaysSinceLastUse(current_time)) + 2) /
          log(use_count_ + 1);
 }
 
-// TODO(crbug.com/629507): Add support for injected mock clock for testing.
-void AutofillDataModel::RecordUse() {
-  ++use_count_;
-  set_use_date(AutofillClock::Now());
+void AutofillDataModel::MergeUseDates(const AutofillDataModel& other) {
+  // Take the `usage_history_size()` latest use dates (nullopts go last).
+  use_dates_.insert(use_dates_.end(), other.use_dates_.begin(),
+                    other.use_dates_.end());
+  std::ranges::sort(use_dates_, std::greater<>());
+  use_dates_.resize(usage_history_size());
 }
 
 bool AutofillDataModel::UseDateEqualsInSeconds(
     const AutofillDataModel* other) const {
-  return !((other->use_date() - use_date()).InSeconds());
+  return (other->use_date() - use_date()).InSeconds() == 0;
 }
 
 bool AutofillDataModel::HasGreaterRankingThan(
@@ -64,33 +67,18 @@ bool AutofillDataModel::HasGreaterRankingThan(
     base::Time comparison_time) const {
   double score = GetRankingScore(comparison_time);
   double other_score = other->GetRankingScore(comparison_time);
+  return AutofillDataModel::CompareRankingScores(score, other_score,
+                                                 other->use_date());
+}
 
-  // Ties are broken by MRU, then by GUID comparison.
+bool AutofillDataModel::CompareRankingScores(double score,
+                                             double other_score,
+                                             base::Time other_use_date) const {
   const double kEpsilon = 0.00001;
-  if (std::fabs(score - other_score) > kEpsilon)
+  if (std::fabs(score - other_score) > kEpsilon) {
     return score > other_score;
-
-  if (use_date_ != other->use_date_)
-    return use_date_ > other->use_date_;
-
-  return guid_ > other->guid_;
-}
-
-AutofillMetadata AutofillDataModel::GetMetadata() const {
-  AutofillMetadata metadata;
-  metadata.use_count = use_count_;
-  metadata.use_date = use_date_;
-  return metadata;
-}
-
-bool AutofillDataModel::SetMetadata(const AutofillMetadata metadata) {
-  use_count_ = metadata.use_count;
-  use_date_ = metadata.use_date;
-  return true;
-}
-
-bool AutofillDataModel::IsDeletable() const {
-  return IsAutofillEntryWithUseDateDeletable(use_date_);
+  }
+  return use_date() > other_use_date;
 }
 
 }  // namespace autofill

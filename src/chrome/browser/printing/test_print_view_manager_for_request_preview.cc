@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/callback.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/printing/print_view_manager.h"
 #include "components/printing/common/print.mojom.h"
 #include "content/public/browser/web_contents.h"
@@ -47,8 +47,8 @@ void TestPrintViewManagerForRequestPreview::set_quit_closure(
 
 void TestPrintViewManagerForRequestPreview::RequestPrintPreview(
     mojom::RequestPrintPreviewParamsPtr params) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                std::move(quit_closure_));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, std::move(quit_closure_));
   PrintViewManager::RequestPrintPreview(std::move(params));
 }
 

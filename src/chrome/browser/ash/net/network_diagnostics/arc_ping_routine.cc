@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,11 @@
 #include <utility>
 
 #include "ash/components/arc/session/arc_service_manager.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/ash/net/network_diagnostics/arc_ping_routine.h"
 #include "chrome/browser/ash/net/network_diagnostics/network_diagnostics_util.h"
-#include "chromeos/services/network_config/in_process_instance.h"
+#include "chromeos/ash/services/network_config/in_process_instance.h"
 #include "chromeos/services/network_config/public/cpp/cros_network_config_util.h"
 
 namespace ash {
@@ -18,19 +19,17 @@ namespace network_diagnostics {
 
 namespace {
 
-// TODO(https://crbug.com/1164001): remove when migrated to namespace ash.
 namespace mojom = ::chromeos::network_diagnostics::mojom;
-namespace network_config = ::chromeos::network_config;
-
-using chromeos::network_config::mojom::CrosNetworkConfig;
-using chromeos::network_config::mojom::FilterType;
-using chromeos::network_config::mojom::NetworkFilter;
-using chromeos::network_config::mojom::NetworkStatePropertiesPtr;
-using chromeos::network_config::mojom::NetworkType;
+using ::chromeos::network_config::mojom::CrosNetworkConfig;
+using ::chromeos::network_config::mojom::FilterType;
+using ::chromeos::network_config::mojom::ManagedPropertiesPtr;
+using ::chromeos::network_config::mojom::NetworkFilter;
+using ::chromeos::network_config::mojom::NetworkStatePropertiesPtr;
+using ::chromeos::network_config::mojom::NetworkType;
 
 void GetNetworkConfigService(
     mojo::PendingReceiver<CrosNetworkConfig> receiver) {
-  chromeos::network_config::BindToInProcessInstance(std::move(receiver));
+  network_config::BindToInProcessInstance(std::move(receiver));
 }
 
 // Requests taking longer than 1500 ms are problematic.
@@ -41,7 +40,8 @@ constexpr int kTimeoutGetManagedPropertiesSeconds = 180;
 
 }  // namespace
 
-ArcPingRoutine::ArcPingRoutine() {
+ArcPingRoutine::ArcPingRoutine(mojom::RoutineCallSource source)
+    : NetworkDiagnosticsRoutine(source) {
   set_verdict(mojom::RoutineVerdict::kNotRun);
   GetNetworkConfigService(
       remote_cros_network_config_.BindNewPipeAndPassReceiver());
@@ -98,7 +98,7 @@ void ArcPingRoutine::FetchActiveNetworks() {
   DCHECK(remote_cros_network_config_);
   remote_cros_network_config_->GetNetworkStateList(
       NetworkFilter::New(FilterType::kActive, NetworkType::kAll,
-                         network_config::mojom::kNoLimit),
+                         chromeos::network_config::mojom::kNoLimit),
       base::BindOnce(&ArcPingRoutine::OnNetworkStateListReceived,
                      weak_ptr_factory_.GetWeakPtr()));
 }
@@ -109,7 +109,7 @@ void ArcPingRoutine::FetchManagedProperties(
   guids_remaining_ = guids.size();
 
   // Post delayed task to handle timeout error on GetManagedProperties.
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&ArcPingRoutine::HandleTimeout,
                      weak_ptr_factory_.GetWeakPtr()),
@@ -140,7 +140,8 @@ void ArcPingRoutine::OnNetworkStateListReceived(
   bool connected = false;
   std::vector<std::string> guids;
   for (const auto& network : networks) {
-    if (!network_config::StateIsConnected(network->connection_state)) {
+    if (!chromeos::network_config::StateIsConnected(
+            network->connection_state)) {
       continue;
     }
     connected = true;
@@ -164,7 +165,10 @@ void ArcPingRoutine::OnManagedPropertiesReceived(
   if (managed_properties && managed_properties->ip_configs.has_value() &&
       managed_properties->ip_configs->size() != 0) {
     for (const auto& ip_config : managed_properties->ip_configs.value()) {
-      if (ip_config->gateway.has_value()) {
+      // Link-local addresses are not reachable from ARC, so skip them here.
+      // TODO(b/277696397): Find a better signal.
+      if (ip_config->gateway.has_value() &&
+          !ip_config->gateway->starts_with("fe80::")) {
         const std::string& gateway = ip_config->gateway.value();
         if (managed_properties->guid == default_network_guid_) {
           default_network_gateway_ = gateway;

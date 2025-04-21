@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,19 +6,21 @@
 #define IOS_CHROME_BROWSER_UI_CONTENT_SUGGESTIONS_CELLS_CONTENT_SUGGESTIONS_SHORTCUT_TILE_VIEW_H_
 
 #import "ios/chrome/browser/ui/content_suggestions/cells/content_suggestions_tile_view.h"
+#import "ios/chrome/browser/ui/content_suggestions/cells/shortcuts_consumer.h"
 
 @class ContentSuggestionsMostVisitedActionItem;
 
 // A tile view displaying a collection shortcut. Accepts a simple icon and
 // optionally supports a badge, for example for reading list new item count.
-@interface ContentSuggestionsShortcutTileView : ContentSuggestionsTileView
+@interface ContentSuggestionsShortcutTileView
+    : ContentSuggestionsTileView <ShortcutsConsumer>
 
 // Initializes and configures the view with `config`.
 - (instancetype)initWithConfiguration:
     (ContentSuggestionsMostVisitedActionItem*)config;
 
-// Update the number shown in badge.
-- (void)updateCount:(NSInteger)count;
+// Updates the configuration for this view to the new `config`.
+- (void)updateConfiguration:(ContentSuggestionsMostVisitedActionItem*)config;
 
 // View for action icon.
 @property(nonatomic, strong, readonly) UIImageView* iconView;
@@ -32,6 +34,9 @@
 // Configuration for this view.
 @property(nonatomic, strong, readonly)
     ContentSuggestionsMostVisitedActionItem* config;
+
+// Tap gesture recognizer for this view.
+@property(nonatomic, strong) UITapGestureRecognizer* tapRecognizer;
 
 @end
 

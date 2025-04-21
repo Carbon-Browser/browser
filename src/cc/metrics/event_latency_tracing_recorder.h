@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,11 +15,43 @@ class EventMetrics;
 
 class EventLatencyTracingRecorder {
  public:
+  // Returns the name of the event dispatch breakdown of EventLatency trace
+  // events between `start_stage` and `end_stage`.
+  static const char* GetDispatchBreakdownName(
+      EventMetrics::DispatchStage start_stage,
+      EventMetrics::DispatchStage end_stage);
+
+  // Returns the name of EventLatency breakdown between `dispatch_stage` and
+  // `compositor_stage`.
+  static const char* GetDispatchToCompositorBreakdownName(
+      EventMetrics::DispatchStage dispatch_stage,
+      CompositorFrameReporter::StageType compositor_stage);
+
+  // Returns the name of EventLatency breakdown between `dispatch_stage` and
+  // termination for events not associated with a frame update.
+  static const char* GetDispatchToTerminationBreakdownName(
+      EventMetrics::DispatchStage dispatch_stage);
+
   static void RecordEventLatencyTraceEvent(
       EventMetrics* event_metrics,
       base::TimeTicks termination_time,
+      const viz::BeginFrameArgs* args,
       const std::vector<CompositorFrameReporter::StageData>* stage_history,
-      const CompositorFrameReporter::ProcessedVizBreakdown* viz_breakdown);
+      const CompositorFrameReporter::ProcessedVizBreakdown* viz_breakdown,
+      std::optional<int64_t> display_trace_id);
+
+  static bool IsEventLatencyTracingEnabled();
+
+ private:
+  // We do not want the emitting of traces to have any side-effects, so the
+  // actual emitting uses `const EventMetrics*`.
+  static void RecordEventLatencyTraceEventInternal(
+      const EventMetrics* event_metrics,
+      base::TimeTicks termination_time,
+      const viz::BeginFrameArgs* args,
+      const std::vector<CompositorFrameReporter::StageData>* stage_history,
+      const CompositorFrameReporter::ProcessedVizBreakdown* viz_breakdown,
+      std::optional<int64_t> display_trace_id);
 };
 
 }  // namespace cc

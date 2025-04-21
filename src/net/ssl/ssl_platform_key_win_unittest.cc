@@ -1,6 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "net/ssl/ssl_platform_key_win.h"
 
@@ -9,8 +14,12 @@
 
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "crypto/scoped_capi_types.h"
+#include "crypto/scoped_cng_types.h"
+#include "crypto/unexportable_key.h"
+#include "net/base/features.h"
 #include "net/cert/x509_certificate.h"
 #include "net/ssl/ssl_private_key.h"
 #include "net/ssl/ssl_private_key_test_util.h"
@@ -39,24 +48,31 @@ struct TestKey {
 };
 
 const TestKey kTestKeys[] = {
-    {"RSA", "client_1.pem", "client_1.pk8", EVP_PKEY_RSA},
-    {"ECDSA_P256", "client_4.pem", "client_4.pk8", EVP_PKEY_EC},
-    {"ECDSA_P384", "client_5.pem", "client_5.pk8", EVP_PKEY_EC},
-    {"ECDSA_P521", "client_6.pem", "client_6.pk8", EVP_PKEY_EC},
+    {.name = "RSA",
+     .cert_file = "client_1.pem",
+     .key_file = "client_1.pk8",
+     .type = EVP_PKEY_RSA},
+    {.name = "P256",
+     .cert_file = "client_4.pem",
+     .key_file = "client_4.pk8",
+     .type = EVP_PKEY_EC},
+    {.name = "P384",
+     .cert_file = "client_5.pem",
+     .key_file = "client_5.pk8",
+     .type = EVP_PKEY_EC},
+    {.name = "P521",
+     .cert_file = "client_6.pem",
+     .key_file = "client_6.pk8",
+     .type = EVP_PKEY_EC},
+    {.name = "RSA1024",
+     .cert_file = "client_7.pem",
+     .key_file = "client_7.pk8",
+     .type = EVP_PKEY_RSA},
 };
 
-std::string TestKeyToString(const testing::TestParamInfo<TestKey>& params) {
+std::string TestParamsToString(const testing::TestParamInfo<TestKey>& params) {
   return params.param.name;
 }
-
-class ScopedNCRYPT_PROV_HANDLE {
- public:
-  ScopedNCRYPT_PROV_HANDLE(NCRYPT_PROV_HANDLE prov) : prov_(prov) {}
-  ~ScopedNCRYPT_PROV_HANDLE() { NCryptFreeObject(prov_); }
-
- private:
-  NCRYPT_PROV_HANDLE prov_;
-};
 
 // Appends |bn| to |cbb|, represented as |len| bytes in little-endian order,
 // zero-padded as needed. Returns true on success and false if |len| is too
@@ -229,11 +245,15 @@ bool PKCS8ToBLOBForCNG(const std::string& pkcs8,
 
 }  // namespace
 
-class SSLPlatformKeyCNGTest : public testing::TestWithParam<TestKey>,
-                              public WithTaskEnvironment {};
+class SSLPlatformKeyWinTest
+    : public testing::TestWithParam<TestKey>,
+      public WithTaskEnvironment {
+ public:
+  const TestKey& GetTestKey() const { return GetParam(); }
+};
 
-TEST_P(SSLPlatformKeyCNGTest, KeyMatches) {
-  const TestKey& test_key = GetParam();
+TEST_P(SSLPlatformKeyWinTest, KeyMatchesCNG) {
+  const TestKey& test_key = GetTestKey();
 
   // Load test data.
   scoped_refptr<X509Certificate> cert =
@@ -250,47 +270,46 @@ TEST_P(SSLPlatformKeyCNGTest, KeyMatches) {
   // types we use), the Microsoft Software KSP will treat the key as ephemeral.
   //
   // https://msdn.microsoft.com/en-us/library/windows/desktop/aa376276(v=vs.85).aspx
-  NCRYPT_PROV_HANDLE prov;
-  SECURITY_STATUS status =
-      NCryptOpenStorageProvider(&prov, MS_KEY_STORAGE_PROVIDER, 0);
+  crypto::ScopedNCryptProvider prov;
+  SECURITY_STATUS status = NCryptOpenStorageProvider(
+      crypto::ScopedNCryptProvider::Receiver(prov).get(),
+      MS_KEY_STORAGE_PROVIDER, 0);
   ASSERT_FALSE(FAILED(status)) << status;
-  ScopedNCRYPT_PROV_HANDLE scoped_prov(prov);
 
   LPCWSTR blob_type;
   std::vector<uint8_t> blob;
   ASSERT_TRUE(PKCS8ToBLOBForCNG(pkcs8, &blob_type, &blob));
-  NCRYPT_KEY_HANDLE ncrypt_key;
-  status = NCryptImportKey(prov, 0 /* hImportKey */, blob_type,
-                           nullptr /* pParameterList */, &ncrypt_key,
+  crypto::ScopedNCryptKey ncrypt_key;
+  status = NCryptImportKey(prov.get(), /*hImportKey=*/0, blob_type,
+                           /*pParameterList=*/nullptr,
+                           crypto::ScopedNCryptKey::Receiver(ncrypt_key).get(),
                            blob.data(), blob.size(), NCRYPT_SILENT_FLAG);
   ASSERT_FALSE(FAILED(status)) << status;
 
-  scoped_refptr<SSLPrivateKey> key = WrapCNGPrivateKey(cert.get(), ncrypt_key);
+  scoped_refptr<SSLPrivateKey> key =
+      WrapCNGPrivateKey(cert.get(), std::move(ncrypt_key));
   ASSERT_TRUE(key);
 
   EXPECT_EQ(SSLPrivateKey::DefaultAlgorithmPreferences(test_key.type,
-                                                       true /* supports PSS */),
+                                                       /*supports_pss=*/true),
             key->GetAlgorithmPreferences());
-
   TestSSLPrivateKeyMatches(key.get(), pkcs8);
 }
 
-INSTANTIATE_TEST_SUITE_P(All,
-                         SSLPlatformKeyCNGTest,
-                         testing::ValuesIn(kTestKeys),
-                         TestKeyToString);
-
-TEST(SSLPlatformKeyCAPITest, KeyMatches) {
-  base::test::TaskEnvironment task_environment;
+TEST_P(SSLPlatformKeyWinTest, KeyMatchesCAPI) {
+  const TestKey& test_key = GetTestKey();
+  if (test_key.type != EVP_PKEY_RSA) {
+    GTEST_SKIP() << "CAPI only supports RSA keys";
+  }
 
   // Load test data.
   scoped_refptr<X509Certificate> cert =
-      ImportCertFromFile(GetTestCertsDirectory(), "client_1.pem");
+      ImportCertFromFile(GetTestCertsDirectory(), test_key.cert_file);
   ASSERT_TRUE(cert);
 
   std::string pkcs8;
   base::FilePath pkcs8_path =
-      GetTestCertsDirectory().AppendASCII("client_1.pk8");
+      GetTestCertsDirectory().AppendASCII(test_key.key_file);
   ASSERT_TRUE(base::ReadFileToString(pkcs8_path, &pkcs8));
 
   // Import the key into CAPI. Use CRYPT_VERIFYCONTEXT for an ephemeral key.
@@ -307,7 +326,7 @@ TEST(SSLPlatformKeyCAPITest, KeyMatches) {
   crypto::ScopedHCRYPTKEY hcryptkey;
   ASSERT_NE(FALSE,
             CryptImportKey(prov.get(), blob.data(), blob.size(),
-                           0 /* hPubKey */, 0 /* dwFlags */,
+                           /*hPubKey=*/0, /*dwFlags=*/0,
                            crypto::ScopedHCRYPTKEY::Receiver(hcryptkey).get()))
       << GetLastError();
   // Release |hcryptkey| so it does not outlive |prov|.
@@ -318,12 +337,39 @@ TEST(SSLPlatformKeyCAPITest, KeyMatches) {
   ASSERT_TRUE(key);
 
   std::vector<uint16_t> expected = {
-      SSL_SIGN_RSA_PKCS1_SHA1, SSL_SIGN_RSA_PKCS1_SHA256,
-      SSL_SIGN_RSA_PKCS1_SHA384, SSL_SIGN_RSA_PKCS1_SHA512,
+      SSL_SIGN_RSA_PKCS1_SHA256,
+      SSL_SIGN_RSA_PKCS1_SHA384,
+      SSL_SIGN_RSA_PKCS1_SHA512,
+      SSL_SIGN_RSA_PKCS1_SHA1,
   };
   EXPECT_EQ(expected, key->GetAlgorithmPreferences());
-
   TestSSLPrivateKeyMatches(key.get(), pkcs8);
+}
+
+INSTANTIATE_TEST_SUITE_P(All,
+                         SSLPlatformKeyWinTest,
+                         testing::ValuesIn(kTestKeys),
+                         TestParamsToString);
+
+TEST(UnexportableSSLPlatformKeyWinTest, WrapUnexportableKeySlowly) {
+  auto provider = crypto::GetUnexportableKeyProvider({});
+  if (!provider) {
+    GTEST_SKIP() << "Hardware-backed keys are not supported.";
+  }
+
+  const crypto::SignatureVerifier::SignatureAlgorithm algorithms[] = {
+      crypto::SignatureVerifier::SignatureAlgorithm::ECDSA_SHA256,
+      crypto::SignatureVerifier::SignatureAlgorithm::RSA_PKCS1_SHA256};
+  auto key = provider->GenerateSigningKeySlowly(algorithms);
+  if (!key) {
+    // Could be hitting crbug.com/41494935. Fine to skip the test as the
+    // UnexportableKeyProvider logic is covered in another test suite.
+    GTEST_SKIP()
+        << "Workaround for https://issues.chromium.org/issues/41494935";
+  }
+
+  auto ssl_private_key = WrapUnexportableKeySlowly(*key);
+  ASSERT_TRUE(ssl_private_key);
 }
 
 }  // namespace net

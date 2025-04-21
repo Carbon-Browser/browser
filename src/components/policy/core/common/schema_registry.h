@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -130,7 +130,7 @@ class POLICY_EXPORT CombinedSchemaRegistry
  private:
   void Combine(bool has_new_schemas);
 
-  std::set<SchemaRegistry*> registries_;
+  std::set<raw_ptr<SchemaRegistry, SetExperimental>> registries_;
   scoped_refptr<SchemaMap> own_schema_map_;
 };
 

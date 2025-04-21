@@ -26,8 +26,8 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_HTML_CANVAS_CANVAS_RENDERING_CONTEXT_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_HTML_CANVAS_CANVAS_RENDERING_CONTEXT_H_
 
-#include "base/callback_forward.h"
 #include "base/containers/span.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/notreached.h"
 #include "cc/paint/paint_flags.h"
@@ -38,7 +38,8 @@
 #include "third_party/blink/renderer/core/html/canvas/canvas_performance_monitor.h"
 #include "third_party/blink/renderer/core/html/canvas/canvas_rendering_context_host.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
-#include "third_party/blink/renderer/platform/graphics/canvas_color_params.h"
+#include "third_party/blink/renderer/platform/graphics/canvas_resource_provider.h"
+#include "third_party/blink/renderer/platform/graphics/graphics_types.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_types_3d.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/heap/prefinalizer.h"
@@ -69,14 +70,13 @@ class VideoFrame;
 
 namespace blink {
 
-class CanvasImageSource;
 class CanvasResourceProvider;
 class ComputedStyle;
 class Document;
 class Element;
+class ExceptionState;
 class ExecutionContext;
 class ImageBitmap;
-class NoAllocDirectCallHost;
 class ScriptState;
 class StaticBitmapImage;
 class
@@ -128,7 +128,18 @@ class CORE_EXPORT CanvasRenderingContext
     return canvas_rendering_type_ == CanvasRenderingAPI::kWebgpu;
   }
 
-  virtual NoAllocDirectCallHost* AsNoAllocDirectCallHost();
+  // ---------------------------------------------------------------------- //
+  // ctx.placeElement() API. Used exclusively with CanvasRenderingContext2D.
+
+  // Elements placed with ctx.placeElement() hold CanvasDeferredPaintRecords,
+  // which are painted into with this function during
+  // HTMLCanvasElement::PaintInternal.
+  virtual void PaintPlacedElements() {}
+  // Returns true if any element has been drawn to the canvas.
+  virtual bool HasPlacedElements() const { return false; }
+  // Element needs to be redrawn
+  virtual void MarkPlacedElementDirty(Element* element) {}
+  // ---------------------------------------------------------------------- //
 
   // ActiveScriptWrappable
   // As this class inherits from ActiveScriptWrappable, as long as
@@ -137,9 +148,11 @@ class CORE_EXPORT CanvasRenderingContext
   // offscreencanvas use case.
   bool HasPendingActivity() const override { return false; }
   ExecutionContext* GetExecutionContext() const {
-    if (!Host())
+    const CanvasRenderingContextHost* host = Host();
+    if (host == nullptr) [[unlikely]] {
       return nullptr;
-    return Host()->GetTopExecutionContext();
+    }
+    return host->GetTopExecutionContext();
   }
 
   void RecordUKMCanvasRenderingAPI();
@@ -148,61 +161,62 @@ class CORE_EXPORT CanvasRenderingContext
   // This is only used in WebGL
   void RecordUKMCanvasDrawnToRenderingAPI();
 
-  static CanvasRenderingAPI RenderingAPIFromId(
-      const String& id,
-      const ExecutionContext* execution_context);
+  static CanvasRenderingAPI RenderingAPIFromId(const String& id);
 
-  CanvasRenderingContextHost* Host() const { return host_; }
-  virtual SkColorInfo CanvasRenderingContextSkColorInfo() const;
+  CanvasRenderingContextHost* Host() const { return host_.Get(); }
 
-  virtual scoped_refptr<StaticBitmapImage> GetImage() = 0;
-  virtual bool IsComposited() const = 0;
-  virtual bool IsAccelerated() const = 0;
-  virtual bool IsOriginTopLeft() const {
-    // Canvas contexts have the origin of coordinates on the top left corner.
-    // Accelerated resources (e.g. GPU textures) have their origin of
-    // coordinates in the upper left corner.
-    return !IsAccelerated();
+  const CanvasResourceProvider* ResourceProvider() const {
+    if (const CanvasRenderingContextHost* host = Host()) [[likely]] {
+      return host->ResourceProvider();
+    }
+    return nullptr;
   }
-  virtual bool ShouldAntialias() const { return false; }
-  // Indicates whether the entire tab is backgrounded. Passing false
-  // to this method may cause some canvas context implementations to
-  // aggressively discard resources, which is not desired for canvases
+  CanvasResourceProvider* ResourceProvider() {
+    if (const CanvasRenderingContextHost* host = Host()) [[likely]] {
+      return host->ResourceProvider();
+    }
+    return nullptr;
+  }
+
+  SkColorInfo CanvasRenderingContextSkColorInfo() const {
+    return SkColorInfo(GetSkColorType(), GetAlphaType(), GetSkColorSpace());
+  }
+  virtual SkAlphaType GetAlphaType() const = 0;
+  virtual SkColorType GetSkColorType() const = 0;
+  virtual sk_sp<SkColorSpace> GetSkColorSpace() const = 0;
+
+  virtual scoped_refptr<StaticBitmapImage> GetImage(FlushReason) = 0;
+  virtual bool IsComposited() const = 0;
+
+  // Called when the entire tab is backgrounded or unbackgrounded.
+  // The page's visibility status can be queried at any time via
+  // Host()->IsPageVisible().
+  // Some canvas context implementations may aggressively discard
+  // when the page is not visible, which is not desired for canvases
   // which are being rendered to, just not being displayed in the
   // page.
-  virtual void SetIsInHiddenPage(bool) = 0;
-  // Indicates whether the canvas is being displayed in the page;
-  // i.e., doesn't have display:none, and is visible. The initial
-  // value for all context types is assumed to be false; this will be
-  // called when the context is first displayed.
-  virtual void SetIsBeingDisplayed(bool) = 0;
+  virtual void PageVisibilityChanged() = 0;
   virtual bool isContextLost() const { return true; }
   // TODO(fserb): remove AsV8RenderingContext and AsV8OffscreenRenderingContext.
   virtual V8UnionCanvasRenderingContext2DOrGPUCanvasContextOrImageBitmapRenderingContextOrWebGL2RenderingContextOrWebGLRenderingContext*
   AsV8RenderingContext() {
     NOTREACHED();
-    return nullptr;
   }
   virtual V8UnionGPUCanvasContextOrImageBitmapRenderingContextOrOffscreenCanvasRenderingContext2DOrWebGL2RenderingContextOrWebGLRenderingContext*
   AsV8OffscreenRenderingContext() {
     NOTREACHED();
-    return nullptr;
   }
   virtual bool IsPaintable() const = 0;
   void DidDraw(CanvasPerformanceMonitor::DrawType draw_type) {
-    return DidDraw(Host() ? SkIRect::MakeWH(Host()->width(), Host()->height())
-                          : SkIRect::MakeEmpty(),
+    const CanvasRenderingContextHost* const host = Host();
+    return DidDraw(host ? SkIRect::MakeWH(host->width(), host->height())
+                        : SkIRect::MakeEmpty(),
                    draw_type);
   }
   void DidDraw(const SkIRect& dirty_rect, CanvasPerformanceMonitor::DrawType);
 
   // Return true if the content is updated.
   virtual bool PaintRenderingResultsToCanvas(SourceDrawingBuffer) {
-    return false;
-  }
-
-  virtual bool CopyRenderingResultsFromDrawingBuffer(CanvasResourceProvider*,
-                                                     SourceDrawingBuffer) {
     return false;
   }
 
@@ -241,7 +255,7 @@ class CORE_EXPORT CanvasRenderingContext
   // This method gets called at the end of script tasks that modified
   // the contents of the canvas (called didDraw). It marks the completion
   // of a presentable frame.
-  virtual void FinalizeFrame(bool printing = false) {}
+  virtual void FinalizeFrame(FlushReason) {}
 
   // Thread::TaskObserver implementation
   void DidProcessTask(const base::PendingTask&) override;
@@ -251,40 +265,39 @@ class CORE_EXPORT CanvasRenderingContext
   virtual void RestoreCanvasMatrixClipStack(cc::PaintCanvas*) const {}
   virtual void Reset() {}
   virtual void ClearRect(double x, double y, double width, double height) {}
-  virtual void DidSetSurfaceSize() {}
+  virtual void RestoreProviderAndContextIfPossible() {}
   virtual void SetShouldAntialias(bool) {}
-  virtual void setFont(const String&) {}
   virtual void StyleDidChange(const ComputedStyle* old_style,
                               const ComputedStyle& new_style) {}
   virtual String GetIdFromControl(const Element* element) { return String(); }
   virtual void ResetUsageTracking() {}
+  virtual int LayerCount() const { return 0; }
+
+  virtual void setFontForTesting(const String&) { NOTREACHED(); }
 
   // WebGL-specific interface
   virtual bool UsingSwapChain() const { return false; }
   virtual void MarkLayerComposited() { NOTREACHED(); }
   virtual sk_sp<SkData> PaintRenderingResultsToDataArray(SourceDrawingBuffer) {
     NOTREACHED();
-    return nullptr;
   }
-  virtual gfx::Size DrawingBufferSize() const {
-    NOTREACHED();
-    return gfx::Size(0, 0);
-  }
+  virtual gfx::Size DrawingBufferSize() const { NOTREACHED(); }
 
   // WebGL & WebGPU-specific interface
-  virtual void SetFilterQuality(cc::PaintFlags::FilterQuality) { NOTREACHED(); }
+  virtual void SetHdrMetadata(const gfx::HDRMetadata& hdr_metadata) {}
   virtual void Reshape(int width, int height) {}
-  virtual int ExternallyAllocatedBufferCountPerPixel() {
-    NOTREACHED();
-    return 0;
-  }
+  virtual int ExternallyAllocatedBufferCountPerPixel() { NOTREACHED(); }
 
   // OffscreenCanvas-specific methods.
   virtual bool PushFrame() { return false; }
-  virtual ImageBitmap* TransferToImageBitmap(ScriptState*) { return nullptr; }
+  virtual ImageBitmap* TransferToImageBitmap(ScriptState* script_state,
+                                             ExceptionState& exception_state) {
+    return nullptr;
+  }
 
+  // Notification the color scheme of the HTMLCanvasElement may have changed.
+  virtual void ColorSchemeMayHaveChanged() {}
 
-  bool WouldTaintOrigin(CanvasImageSource*);
   void DidMoveToNewDocument(Document*);
 
   void DetachHost() { host_ = nullptr; }
@@ -311,6 +324,8 @@ class CORE_EXPORT CanvasRenderingContext
     return false;
   }
 
+  bool did_print_in_current_task() const { return did_print_in_current_task_; }
+
  protected:
   CanvasRenderingContext(CanvasRenderingContextHost*,
                          const CanvasContextCreationAttributesCore&,
@@ -320,7 +335,6 @@ class CORE_EXPORT CanvasRenderingContext
 
  private:
   Member<CanvasRenderingContextHost> host_;
-  CanvasColorParams color_params_;
   CanvasContextCreationAttributesCore creation_attributes_;
 
   void RenderTaskEnded();

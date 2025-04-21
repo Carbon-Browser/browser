@@ -1,8 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/websockets/websocket_deflate_parameters.h"
+
+#include <vector>  // for iterating over extension.parameters()
 
 #include "base/strings/string_number_conversions.h"
 
@@ -15,11 +17,11 @@ const WebSocketDeflater::ContextTakeOverMode kTakeOverContext =
 const WebSocketDeflater::ContextTakeOverMode kDoNotTakeOverContext =
     WebSocketDeflater::DO_NOT_TAKE_OVER_CONTEXT;
 
-const char kServerNoContextTakeOver[] = "server_no_context_takeover";
-const char kClientNoContextTakeOver[] = "client_no_context_takeover";
-const char kServerMaxWindowBits[] = "server_max_window_bits";
-const char kClientMaxWindowBits[] = "client_max_window_bits";
-const char kExtensionName[] = "permessage-deflate";
+constexpr char kServerNoContextTakeOver[] = "server_no_context_takeover";
+constexpr char kClientNoContextTakeOver[] = "client_no_context_takeover";
+constexpr char kServerMaxWindowBits[] = "server_max_window_bits";
+constexpr char kClientMaxWindowBits[] = "client_max_window_bits";
+constexpr char kExtensionName[] = "permessage-deflate";
 
 bool GetWindowBits(const std::string& value, int* window_bits) {
   return !value.empty() && value[0] != '0' &&

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,7 +50,7 @@ class SyncProcessRunner {
 
   class Client {
    public:
-    virtual ~Client() {}
+    virtual ~Client() = default;
     virtual void OnSyncIdle() {}
     virtual SyncServiceState GetSyncServiceState() = 0;
     virtual SyncFileSystemService* GetSyncService() = 0;
@@ -58,7 +58,7 @@ class SyncProcessRunner {
 
   class TimerHelper {
    public:
-    virtual ~TimerHelper() {}
+    virtual ~TimerHelper() = default;
     virtual bool IsRunning() = 0;
     virtual void Start(const base::Location& from_here,
                        const base::TimeDelta& delay,
@@ -66,7 +66,7 @@ class SyncProcessRunner {
     virtual base::TimeTicks Now() const = 0;
 
    protected:
-    TimerHelper() {}
+    TimerHelper() = default;
   };
 
   SyncProcessRunner(const std::string& name,

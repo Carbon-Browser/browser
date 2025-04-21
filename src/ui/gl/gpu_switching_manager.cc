@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,23 +27,20 @@ void GpuSwitchingManager::RemoveObserver(GpuSwitchingObserver* observer) {
 
 void GpuSwitchingManager::NotifyGpuSwitched(
     gl::GpuPreference active_gpu_heuristic) {
-  for (GpuSwitchingObserver& observer : observer_list_)
-    observer.OnGpuSwitched(active_gpu_heuristic);
+  observer_list_.Notify(&GpuSwitchingObserver::OnGpuSwitched,
+                        active_gpu_heuristic);
 }
 
 void GpuSwitchingManager::NotifyDisplayAdded() {
-  for (GpuSwitchingObserver& observer : observer_list_)
-    observer.OnDisplayAdded();
+  observer_list_.Notify(&GpuSwitchingObserver::OnDisplayAdded);
 }
 
 void GpuSwitchingManager::NotifyDisplayRemoved() {
-  for (GpuSwitchingObserver& observer : observer_list_)
-    observer.OnDisplayRemoved();
+  observer_list_.Notify(&GpuSwitchingObserver::OnDisplayRemoved);
 }
 
 void GpuSwitchingManager::NotifyDisplayMetricsChanged() {
-  for (GpuSwitchingObserver& observer : observer_list_)
-    observer.OnDisplayMetricsChanged();
+  observer_list_.Notify(&GpuSwitchingObserver::OnDisplayMetricsChanged);
 }
 
 }  // namespace ui

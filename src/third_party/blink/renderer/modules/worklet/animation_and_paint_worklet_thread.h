@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,9 +27,6 @@ class MODULES_EXPORT AnimationAndPaintWorkletThread final
   ~AnimationAndPaintWorkletThread() override;
 
   WorkerBackingThread& GetWorkerBackingThread() override;
-
-  // The backing thread is cleared by ClearSharedBackingThread().
-  void ClearWorkerBackingThread() override {}
 
   // This may block the main thread.
   static void CollectAllGarbageForTesting();

@@ -1,13 +1,14 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/safe_browsing/core/browser/tailored_security_service/tailored_security_service.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/memory/raw_ptr.h"
@@ -18,33 +19,36 @@
 #include "base/time/time.h"
 #include "base/values.h"
 #include "components/prefs/pref_service.h"
+#include "components/safe_browsing/core/browser/tailored_security_service/tailored_security_notification_result.h"
 #include "components/safe_browsing/core/browser/tailored_security_service/tailored_security_service_observer.h"
+#include "components/safe_browsing/core/browser/tailored_security_service/tailored_security_service_util.h"
 #include "components/safe_browsing/core/common/features.h"
+#include "components/safe_browsing/core/common/safe_browsing_policy_handler.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
+#include "components/safe_browsing/core/common/utils.h"
 #include "components/signin/public/identity_manager/access_token_info.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/signin/public/identity_manager/primary_account_access_token_fetcher.h"
 #include "components/signin/public/identity_manager/scope_set.h"
+#include "components/sync/base/user_selectable_type.h"
+#include "components/sync/service/sync_service.h"
+#include "components/sync/service/sync_user_settings.h"
+#include "google_apis/gaia/gaia_constants.h"
 #include "google_apis/gaia/gaia_urls.h"
 #include "google_apis/gaia/google_service_auth_error.h"
 #include "net/base/load_flags.h"
 #include "net/base/url_util.h"
 #include "net/http/http_status_code.h"
-#include "net/http/http_util.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/simple_url_loader.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace safe_browsing {
 namespace {
 
 const int kRepeatingCheckTailoredSecurityBitDelayInMinutes = 5;
-
-constexpr char kAPIScope[] =
-    "https://www.googleapis.com/auth/chrome-safe-browsing";
 
 const char kQueryTailoredSecurityServiceUrl[] =
     "https://history.google.com/history/api/lookup?client=aesb";
@@ -142,7 +146,8 @@ class RequestImpl : public TailoredSecurityService::Request {
     access_token_fetcher_ =
         identity_manager_->CreateAccessTokenFetcherForAccount(
             GetAccountForRequest(identity_manager_),
-            /*oauth_consumer_name=*/"tailored_security_service", {kAPIScope},
+            /*oauth_consumer_name=*/"tailored_security_service",
+            {GaiaConstants::kChromeSafeBrowsingOAuth2Scope},
             base::BindOnce(&RequestImpl::OnAccessTokenFetchComplete,
                            base::Unretained(this)),
             signin::AccessTokenFetcher::Mode::kImmediate);
@@ -152,24 +157,22 @@ class RequestImpl : public TailoredSecurityService::Request {
   void Shutdown() override {}
 
   void OnSimpleLoaderComplete(std::unique_ptr<std::string> response_body) {
-    response_code_ = -1;
+    response_code_ = 0;
     if (simple_url_loader_->ResponseInfo() &&
         simple_url_loader_->ResponseInfo()->headers) {
       response_code_ =
           simple_url_loader_->ResponseInfo()->headers->response_code();
     }
+    RecordHttpResponseOrErrorCode(
+        "SafeBrowsing.TailoredSecurityService.OAuthTokenNetworkResult",
+        simple_url_loader_->NetError(), response_code_);
     simple_url_loader_.reset();
-
-    UMA_HISTOGRAM_CUSTOM_ENUMERATION(
-        "SafeBrowsing.TailoredSecurityService.OAuthTokenResponseCode",
-        net::HttpUtil::MapStatusCodeForHistogram(response_code_),
-        net::HttpUtil::GetStatusCodesForHistogram());
 
     // If the response code indicates that the token might not be valid,
     // invalidate the token and try again.
     if (response_code_ == net::HTTP_UNAUTHORIZED && ++auth_retry_count_ <= 1) {
       signin::ScopeSet oauth_scopes;
-      oauth_scopes.insert(kAPIScope);
+      oauth_scopes.insert(GaiaConstants::kChromeSafeBrowsingOAuth2Scope);
       identity_manager_->RemoveAccessTokenFromCache(
           GetAccountForRequest(identity_manager_), oauth_scopes, access_token_);
       access_token_.clear();
@@ -194,7 +197,7 @@ class RequestImpl : public TailoredSecurityService::Request {
   // The URL of the API endpoint.
   GURL url_;
   // POST data to be sent with the request (may be empty).
-  absl::optional<std::string> post_data_;
+  std::optional<std::string> post_data_;
 
   std::unique_ptr<signin::AccessTokenFetcher> access_token_fetcher_;
 
@@ -233,8 +236,11 @@ TailoredSecurityService::Request::~Request() = default;
 
 TailoredSecurityService::TailoredSecurityService(
     signin::IdentityManager* identity_manager,
+    syncer::SyncService* sync_service,
     PrefService* prefs)
-    : identity_manager_(identity_manager), prefs_(prefs) {
+    : identity_manager_(identity_manager),
+      sync_service_(sync_service),
+      prefs_(prefs) {
   // `prefs` can be nullptr in unit tests.
   if (prefs_) {
     pref_registrar_.Init(prefs_);
@@ -277,8 +283,12 @@ TailoredSecurityService::GetNumberOfPendingTailoredSecurityServiceRequests() {
   return pending_tailored_security_requests_.size();
 }
 
-void TailoredSecurityService::AddQueryRequest() {
+bool TailoredSecurityService::AddQueryRequest() {
   DCHECK(!is_shut_down_);
+  if (!can_query_) {
+    return false;
+  }
+
   active_query_request_++;
   if (active_query_request_ == 1) {
     if (base::Time::Now() - last_updated_ <=
@@ -299,11 +309,12 @@ void TailoredSecurityService::AddQueryRequest() {
           &TailoredSecurityService::QueryTailoredSecurityBit);
     }
   }
+  return true;
 }
 
 void TailoredSecurityService::RemoveQueryRequest() {
   DCHECK(!is_shut_down_);
-  DCHECK(active_query_request_ >= 0);
+  DCHECK_GE(active_query_request_, 0UL);
   active_query_request_--;
   if (active_query_request_ == 0) {
     timer_.Stop();
@@ -319,11 +330,16 @@ void TailoredSecurityService::QueryTailoredSecurityBit() {
 void TailoredSecurityService::StartRequest(
     QueryTailoredSecurityBitCallback callback) {
   DCHECK(!is_shut_down_);
+  if (!can_query_) {
+    saved_callback_ = std::move(callback);
+    return;
+  }
 
   // Wrap the original callback into a generic completion callback.
-  CompletionCallback completion_callback = base::BindOnce(
-      &TailoredSecurityService::QueryTailoredSecurityBitCompletionCallback,
-      weak_ptr_factory_.GetWeakPtr(), std::move(callback));
+  CompletionCallback completion_callback =
+      base::BindOnce(&TailoredSecurityService::
+                         ExtractTailoredSecurityBitFromResponseAndRunCallback,
+                     weak_ptr_factory_.GetWeakPtr(), std::move(callback));
   GURL url(kQueryTailoredSecurityServiceUrl);
 
   static constexpr net::NetworkTrafficAnnotationTag traffic_annotation =
@@ -381,10 +397,63 @@ void TailoredSecurityService::OnTailoredSecurityBitRetrieved(
   }
 }
 
-void TailoredSecurityService::QueryTailoredSecurityBitCompletionCallback(
-    QueryTailoredSecurityBitCallback callback,
-    Request* request,
-    bool success) {
+void TailoredSecurityService::MaybeNotifySyncUser(bool is_enabled,
+                                                  base::Time previous_update) {
+  if (!base::FeatureList::IsEnabled(kTailoredSecurityIntegration))
+    return;
+
+  if (!HistorySyncEnabledForUser()) {
+    if (is_enabled) {
+      RecordEnabledNotificationResult(
+          TailoredSecurityNotificationResult::kHistoryNotSynced);
+    }
+    SaveRetryState(TailoredSecurityRetryState::NO_RETRY_NEEDED);
+    return;
+  }
+
+  if (SafeBrowsingPolicyHandler::IsSafeBrowsingProtectionLevelSetByPolicy(
+          prefs())) {
+    if (is_enabled) {
+      RecordEnabledNotificationResult(
+          TailoredSecurityNotificationResult::kSafeBrowsingControlledByPolicy);
+    }
+    SaveRetryState(TailoredSecurityRetryState::NO_RETRY_NEEDED);
+    return;
+  }
+
+  if (is_enabled && IsEnhancedProtectionEnabled(*prefs())) {
+    RecordEnabledNotificationResult(
+        TailoredSecurityNotificationResult::kEnhancedProtectionAlreadyEnabled);
+    SaveRetryState(TailoredSecurityRetryState::NO_RETRY_NEEDED);
+    return;
+  }
+
+  if (is_enabled && !IsEnhancedProtectionEnabled(*prefs())) {
+    for (auto& observer : observer_list_) {
+      observer.OnSyncNotificationMessageRequest(true);
+    }
+  }
+
+  if (!is_enabled && IsEnhancedProtectionEnabled(*prefs()) &&
+      prefs()->GetBoolean(
+          prefs::kEnhancedProtectionEnabledViaTailoredSecurity)) {
+    for (auto& observer : observer_list_) {
+      observer.OnSyncNotificationMessageRequest(false);
+    }
+  }
+}
+
+bool TailoredSecurityService::HistorySyncEnabledForUser() {
+  return sync_service_ &&
+         sync_service_->GetUserSettings()->GetSelectedTypes().Has(
+             syncer::UserSelectableType::kHistory);
+}
+
+void TailoredSecurityService::
+    ExtractTailoredSecurityBitFromResponseAndRunCallback(
+        QueryTailoredSecurityBitCallback callback,
+        Request* request,
+        bool success) {
   DCHECK(!is_shut_down_);
 
   std::unique_ptr<Request> request_ptr =
@@ -394,11 +463,9 @@ void TailoredSecurityService::QueryTailoredSecurityBitCompletionCallback(
   bool is_enabled = is_tailored_security_enabled_;
   base::Time previous_update = last_updated_;
   if (success) {
-    base::Value response_value = ReadResponse(request);
-    is_enabled = response_value.is_none()
-                     ? false
-                     : response_value.FindBoolKey("history_recording_enabled")
-                           .value_or(false);
+    base::Value::Dict response_value = ReadResponse(request);
+    is_enabled =
+        response_value.FindBool("history_recording_enabled").value_or(false);
   }
 
   std::move(callback).Run(is_enabled, previous_update);
@@ -409,17 +476,17 @@ void TailoredSecurityService::SetTailoredSecurityBitForTesting(
     QueryTailoredSecurityBitCallback callback,
     const net::NetworkTrafficAnnotationTag& traffic_annotation) {
   // Wrap the original callback into a generic completion callback.
-  CompletionCallback completion_callback = base::BindOnce(
-      &TailoredSecurityService::QueryTailoredSecurityBitCompletionCallback,
-      weak_ptr_factory_.GetWeakPtr(), std::move(callback));
+  CompletionCallback completion_callback =
+      base::BindOnce(&TailoredSecurityService::
+                         ExtractTailoredSecurityBitFromResponseAndRunCallback,
+                     weak_ptr_factory_.GetWeakPtr(), std::move(callback));
 
   GURL url(kQueryTailoredSecurityServiceUrl);
   std::unique_ptr<Request> request =
       CreateRequest(url, std::move(completion_callback), traffic_annotation);
 
-  base::Value enable_tailored_security_service(base::Value::Type::DICTIONARY);
-  enable_tailored_security_service.SetBoolKey("history_recording_enabled",
-                                              is_enabled);
+  auto enable_tailored_security_service =
+      base::Value::Dict().Set("history_recording_enabled", is_enabled);
   std::string post_data;
   base::JSONWriter::Write(enable_tailored_security_service, &post_data);
   request->SetPostData(post_data);
@@ -430,13 +497,13 @@ void TailoredSecurityService::SetTailoredSecurityBitForTesting(
 }
 
 // static
-base::Value TailoredSecurityService::ReadResponse(Request* request) {
-  base::Value result = base::Value();
+base::Value::Dict TailoredSecurityService::ReadResponse(Request* request) {
+  base::Value::Dict result;
   if (request->GetResponseCode() == net::HTTP_OK) {
-    absl::optional<base::Value> json_value =
+    std::optional<base::Value> json_value =
         base::JSONReader::Read(request->GetResponseBody());
     if (json_value && json_value.value().is_dict())
-      result = std::move(*json_value);
+      result = std::move(json_value->GetDict());
     else
       DLOG(WARNING) << "Non-JSON response received from server.";
   }
@@ -449,11 +516,39 @@ void TailoredSecurityService::Shutdown() {
   pending_tailored_security_requests_.clear();
   timer_.Stop();
   is_shut_down_ = true;
+  identity_manager_ = nullptr;
+  sync_service_ = nullptr;
 }
 
 void TailoredSecurityService::TailoredSecurityTimestampUpdateCallback() {
+  // TODO(crbug.com/40925236): remove sync flow last user interaction pref.
+  prefs_->SetInteger(prefs::kTailoredSecuritySyncFlowLastUserInteractionState,
+                     TailoredSecurityRetryState::UNKNOWN);
+  prefs_->SetTime(prefs::kTailoredSecuritySyncFlowLastRunTime,
+                  base::Time::Now());
+  // If this method fails, then a retry is needed. If it succeeds, the
+  // ChromeTailoredSecurityService will set this value to NO_RETRY_NEEDED for
+  // us.
+  prefs_->SetInteger(prefs::kTailoredSecuritySyncFlowRetryState,
+                     TailoredSecurityRetryState::RETRY_NEEDED);
+
   StartRequest(base::BindOnce(&TailoredSecurityService::MaybeNotifySyncUser,
                               weak_ptr_factory_.GetWeakPtr()));
+}
+
+void TailoredSecurityService::SaveRetryState(TailoredSecurityRetryState state) {
+  prefs_->SetInteger(prefs::kTailoredSecuritySyncFlowRetryState, state);
+}
+
+void TailoredSecurityService::SetCanQuery(bool can_query) {
+  can_query_ = can_query;
+  if (can_query) {
+    if (!saved_callback_.is_null()) {
+      StartRequest(std::move(saved_callback_));
+    }
+  } else {
+    timer_.Stop();
+  }
 }
 
 }  // namespace safe_browsing

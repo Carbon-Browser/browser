@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ class PlatformEventDispatcher;
 // override-dispatcher, and restores the previous override-dispatcher.
 class EVENTS_EXPORT ScopedEventDispatcher {
  public:
-  ScopedEventDispatcher(PlatformEventDispatcher** scoped_dispatcher,
+  ScopedEventDispatcher(raw_ptr<PlatformEventDispatcher>* scoped_dispatcher,
                         PlatformEventDispatcher* new_dispatcher);
 
   ScopedEventDispatcher(const ScopedEventDispatcher&) = delete;
@@ -34,7 +34,7 @@ class EVENTS_EXPORT ScopedEventDispatcher {
 
  private:
   raw_ptr<PlatformEventDispatcher> original_;
-  base::AutoReset<PlatformEventDispatcher*> restore_;
+  base::AutoReset<raw_ptr<PlatformEventDispatcher>> restore_;
 };
 
 }  // namespace ui

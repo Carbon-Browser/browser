@@ -1,6 +1,11 @@
-// Copyright (c) 2006-2010 The Chromium Authors. All rights reserved.
+// Copyright 2006-2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 // For information about interceptions as a whole see
 // http://dev.chromium.org/developers/design-documents/sandbox .
@@ -55,7 +60,7 @@ InterceptionAgent* InterceptionAgent::GetInterceptionAgent() {
 
 bool InterceptionAgent::Init(SharedMemory* shared_memory) {
   interceptions_ = shared_memory;
-  for (int i = 0; i < shared_memory->num_intercepted_dlls; i++)
+  for (size_t i = 0; i < shared_memory->num_intercepted_dlls; i++)
     dlls_[i] = nullptr;
   return true;
 }
@@ -82,7 +87,7 @@ bool InterceptionAgent::OnDllLoad(const UNICODE_STRING* full_path,
                                   const UNICODE_STRING* name,
                                   void* base_address) {
   DllPatchInfo* dll_info = interceptions_->dll_list;
-  int i = 0;
+  size_t i = 0;
   for (; i < interceptions_->num_intercepted_dlls; i++) {
     if (DllMatch(full_path, name, dll_info))
       break;
@@ -129,7 +134,7 @@ bool InterceptionAgent::OnDllLoad(const UNICODE_STRING* full_path,
 }
 
 void InterceptionAgent::OnDllUnload(void* base_address) {
-  for (int i = 0; i < interceptions_->num_intercepted_dlls; i++) {
+  for (size_t i = 0; i < interceptions_->num_intercepted_dlls; i++) {
     if (dlls_[i] && dlls_[i]->base == base_address) {
       operator delete(dlls_[i], NT_PAGE);
       dlls_[i] = nullptr;
@@ -150,7 +155,7 @@ bool InterceptionAgent::PatchDll(const DllPatchInfo* dll_info,
   const FunctionInfo* function = reinterpret_cast<const FunctionInfo*>(
       reinterpret_cast<const char*>(dll_info) + dll_info->offset_to_functions);
 
-  for (int i = 0; i < dll_info->num_functions; i++) {
+  for (size_t i = 0; i < dll_info->num_functions; i++) {
     if (!IsWithinRange(dll_info, dll_info->record_bytes, function->function)) {
       NOTREACHED_NT();
       return false;
@@ -178,9 +183,9 @@ bool InterceptionAgent::PatchDll(const DllPatchInfo* dll_info,
       return false;
     }
 
-    DCHECK_NT(!g_originals[function->id] ||
-              g_originals[function->id] == &thunks->thunks[i]);
-    g_originals[function->id] = &thunks->thunks[i];
+    DCHECK_NT(!g_originals.functions[function->id] ||
+              g_originals.functions[function->id] == &thunks->thunks[i]);
+    g_originals.functions[function->id] = &thunks->thunks[i];
 
     thunks->num_thunks++;
     thunks->used_bytes += sizeof(ThunkData);

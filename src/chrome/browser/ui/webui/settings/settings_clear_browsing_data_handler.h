@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,10 +22,9 @@
 #include "components/search/search_provider_observer.h"
 #include "components/search_engines/template_url_service_observer.h"
 #include "components/signin/core/browser/account_reconcilor.h"
-#include "components/sync/driver/sync_service.h"
+#include "components/sync/service/sync_service.h"
 
 namespace content {
-class BrowsingDataFilterBuilder;
 class WebUI;
 }
 
@@ -51,11 +50,6 @@ class ClearBrowsingDataHandler : public SettingsPageUIHandler,
   // Calls |HandleClearBrowsingData| with test data for browser test.
   void HandleClearBrowsingDataForTest();
 
- protected:
-  // Fetches a list of installed apps to be displayed in the clear browsing
-  // data confirmation dialog. Called by Javascript.
-  void GetRecentlyLaunchedInstalledApps(const base::Value::List& args);
-
  private:
   friend class TestingClearBrowsingDataHandler;
   friend class ClearBrowsingDataHandlerUnitTest;
@@ -65,19 +59,6 @@ class ClearBrowsingDataHandler : public SettingsPageUIHandler,
                            UpdateSyncState_NonGoogleDsePrepopulated);
   FRIEND_TEST_ALL_PREFIXES(ClearBrowsingDataHandlerUnitTest,
                            UpdateSyncState_NonGoogleDseNotPrepopulated);
-
-  // Respond to the WebUI callback with the list of installed apps.
-  void OnGotInstalledApps(
-      const std::string& webui_callback_id,
-      const std::vector<
-          site_engagement::ImportantSitesUtil::ImportantDomainInfo>&
-          installed_apps);
-
-  // Build a filter of sites to include and exclude from site data removal
-  // based on whether installed apps were marked for deletion by the checkbox on
-  // the installed apps warning dialog.
-  std::unique_ptr<content::BrowsingDataFilterBuilder> ProcessInstalledApps(
-      base::Value::ConstListView installed_apps);
 
   // Clears browsing data, called by Javascript.
   void HandleClearBrowsingData(const base::Value::List& value);
@@ -98,6 +79,16 @@ class ClearBrowsingDataHandler : public SettingsPageUIHandler,
   // Returns the current sync state to the WebUI.
   void HandleGetSyncState(const base::Value::List& args);
 
+  // Called by WebUI when the user takes an action that warrants restarting
+  // counters.
+  // TODO(crbug.com/331925113): Currently, this only happens when the time
+  // range dropdown is changed. However, it would make sense to also restart
+  // timers when a checkbox state changes. If that's not the case, this method
+  // should be reconciled with `HandleTimePeriodChanged` below which likewise
+  // triggers on the dropdown change, but only after the deletion has been
+  // executed and prefs updated.
+  void HandleRestartCounters(const base::Value::List& args);
+
   // Implementation of SyncServiceObserver.
   void OnStateChanged(syncer::SyncService* sync) override;
 
@@ -105,7 +96,7 @@ class ClearBrowsingDataHandler : public SettingsPageUIHandler,
   virtual void UpdateSyncState();
 
   // Create a SyncStateEvent containing the current sync state.
-  base::DictionaryValue CreateSyncStateEvent();
+  base::Value::Dict CreateSyncStateEvent();
 
   // Finds out whether we should show notice about other forms of history stored
   // in user's account.
@@ -124,6 +115,11 @@ class ClearBrowsingDataHandler : public SettingsPageUIHandler,
   void UpdateCounterText(
       std::unique_ptr<browsing_data::BrowsingDataCounter::Result> result);
 
+  // Restarts |counters_basic_| or |counters_advanced_| depending on the |basic|
+  // argument, and instructs them to calculate the data volume for
+  // the |time_period|.
+  void RestartCounters(bool basic, browsing_data::TimePeriod time_period);
+
   // Record changes to the time period preferences.
   void HandleTimePeriodChanged(const std::string& pref_name);
 
@@ -134,7 +130,10 @@ class ClearBrowsingDataHandler : public SettingsPageUIHandler,
   raw_ptr<Profile> profile_;
 
   // Counters that calculate the data volume for individual data types.
-  std::vector<std::unique_ptr<browsing_data::BrowsingDataCounter>> counters_;
+  std::vector<std::unique_ptr<browsing_data::BrowsingDataCounter>>
+      counters_basic_;
+  std::vector<std::unique_ptr<browsing_data::BrowsingDataCounter>>
+      counters_advanced_;
 
   // SyncService to observe sync state changes.
   raw_ptr<syncer::SyncService> sync_service_;
@@ -147,10 +146,6 @@ class ClearBrowsingDataHandler : public SettingsPageUIHandler,
   // Whether we should show a dialog informing the user about other forms of
   // history stored in their account after the history deletion is finished.
   bool show_history_deletion_dialog_;
-
-  // The TimePeriod preferences.
-  std::unique_ptr<IntegerPrefMember> period_;
-  std::unique_ptr<IntegerPrefMember> periodBasic_;
 
   // A weak pointer factory for asynchronous calls referencing this class.
   // The weak pointers are invalidated in |OnJavascriptDisallowed()| and

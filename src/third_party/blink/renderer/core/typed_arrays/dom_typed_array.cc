@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,17 +10,14 @@
 namespace blink {
 
 template <typename T, typename V8TypedArray, bool clamped>
-v8::MaybeLocal<v8::Value> DOMTypedArray<T, V8TypedArray, clamped>::Wrap(
+v8::Local<v8::Value> DOMTypedArray<T, V8TypedArray, clamped>::Wrap(
     ScriptState* script_state) {
-  DCHECK(!DOMDataStore::ContainsWrapper(this, script_state->GetIsolate()));
+  DCHECK(!DOMDataStore::ContainsWrapper(script_state->GetIsolate(), this));
 
   const WrapperTypeInfo* wrapper_type_info = GetWrapperTypeInfo();
   DOMArrayBufferBase* buffer = BufferBase();
-  v8::Local<v8::Value> v8_buffer;
-  if (!ToV8Traits<DOMArrayBufferBase>::ToV8(script_state, buffer)
-           .ToLocal(&v8_buffer)) {
-    return v8::MaybeLocal<v8::Value>();
-  }
+  v8::Local<v8::Value> v8_buffer =
+      ToV8Traits<DOMArrayBufferBase>::ToV8(script_state, buffer);
   DCHECK_EQ(IsShared(), v8_buffer->IsSharedArrayBuffer());
 
   v8::Local<v8::Object> wrapper;
@@ -47,6 +44,7 @@ v8::MaybeLocal<v8::Value> DOMTypedArray<T, V8TypedArray, clamped>::Wrap(
   V(uint8_t, Uint8Clamped, true)           \
   V(uint16_t, Uint16, false)               \
   V(uint32_t, Uint32, false)               \
+  V(uint16_t, Float16, false)              \
   V(float, Float32, false)                 \
   V(double, Float64, false)                \
   V(int64_t, BigInt64, false)              \
@@ -61,6 +59,8 @@ v8::MaybeLocal<v8::Value> DOMTypedArray<T, V8TypedArray, clamped>::Wrap(
           nullptr,                                                             \
           #Type "Array",                                                       \
           nullptr,                                                             \
+          kDOMWrappersTag,                                                     \
+          kDOMWrappersTag,                                                     \
           WrapperTypeInfo::kWrapperTypeObjectPrototype,                        \
           WrapperTypeInfo::kObjectClassId,                                     \
           WrapperTypeInfo::kNotInheritFromActiveScriptWrappable,               \

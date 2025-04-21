@@ -1,38 +1,70 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // clang-format off
-import {webUIListenerCallback} from 'chrome://resources/js/cr.m.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {webUIListenerCallback} from 'chrome://resources/js/cr.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {ContentSetting, defaultSettingLabel, NotificationSetting, SettingsSiteSettingsPageElement, SiteSettingsPrefsBrowserProxyImpl} from 'chrome://settings/lazy_load.js';
-import {CrLinkRowElement} from 'chrome://settings/settings.js';
+import type {CrExpandButtonElement, SettingsSiteSettingsPageElement} from 'chrome://settings/lazy_load.js';
+import {ContentSetting, CookieControlsMode, ContentSettingsTypes, defaultSettingLabel, SettingsState, SafetyHubBrowserProxyImpl, SafetyHubEvent} from 'chrome://settings/lazy_load.js';
+import type {CrLinkRowElement, SettingsToggleButtonElement} from 'chrome://settings/settings.js';
+import {Router, routes} from 'chrome://settings/settings.js';
+import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import {isChildVisible} from 'chrome://webui-test/test_util.js';
+import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
 
-import {assertEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {flushTasks, isChildVisible} from 'chrome://webui-test/test_util.js';
-
-import {TestSiteSettingsPrefsBrowserProxy} from './test_site_settings_prefs_browser_proxy.js';
+import {TestSafetyHubBrowserProxy} from './test_safety_hub_browser_proxy.js';
 
 // clang-format on
 
 suite('SiteSettingsPage', function() {
-  let siteSettingsBrowserProxy: TestSiteSettingsPrefsBrowserProxy;
   let page: SettingsSiteSettingsPageElement;
 
-  const testLabels: string[] = ['test label 1', 'test label 2'];
-
   function setupPage() {
-    siteSettingsBrowserProxy = new TestSiteSettingsPrefsBrowserProxy();
-    SiteSettingsPrefsBrowserProxyImpl.setInstance(siteSettingsBrowserProxy);
-    siteSettingsBrowserProxy.setCookieSettingDescription(testLabels[0]!);
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     page = document.createElement('settings-site-settings-page');
     page.prefs = {
       generated: {
         notification: {
           type: chrome.settingsPrivate.PrefType.NUMBER,
-          value: NotificationSetting.ASK,
+          value: SettingsState.LOUD,
+        },
+        cookie_default_content_setting: {
+          type: chrome.settingsPrivate.PrefType.STRING,
+          value: ContentSetting.ALLOW,
+        },
+        geolocation: {
+          type: chrome.settingsPrivate.PrefType.NUMBER,
+          value: SettingsState.LOUD,
+        },
+      },
+      profile: {
+        cookie_controls_mode: {
+          type: chrome.settingsPrivate.PrefType.NUMBER,
+          value: CookieControlsMode.OFF,
+        },
+      },
+      safety_hub: {
+        unused_site_permissions_revocation: {
+          enabled: {
+            type: chrome.settingsPrivate.PrefType.BOOLEAN,
+            value: true,
+          },
+        },
+      },
+      compose: {
+        proactive_nudge_enabled: {
+          enabled: {
+            type: chrome.settingsPrivate.PrefType.BOOLEAN,
+            value: true,
+          },
+        },
+      },
+      tracking_protection: {
+        block_all_3pc_toggle_enabled: {
+          type: chrome.settingsPrivate.PrefType.BOOLEAN,
+          value: true,
         },
       },
     };
@@ -45,6 +77,17 @@ suite('SiteSettingsPage', function() {
   teardown(function() {
     page.remove();
   });
+
+  function getCookiesLinkRow() {
+    const basicContentList =
+        page.shadowRoot!.querySelector('#basicContentList');
+    assertTrue(!!basicContentList);
+    const cookiesLinkRow =
+        basicContentList.shadowRoot!.querySelector<CrLinkRowElement>(
+            '#cookies');
+    assertTrue(!!cookiesLinkRow);
+    return cookiesLinkRow;
+  }
 
   test('DefaultLabels', function() {
     assertEquals('a', defaultSettingLabel(ContentSetting.ALLOW, 'a', 'b'));
@@ -62,50 +105,301 @@ suite('SiteSettingsPage', function() {
   });
 
   test('CookiesLinkRowSublabel', async function() {
+    // This test verifies the pre-3PCD label.
+    loadTimeData.overrideValues({
+      is3pcdCookieSettingsRedesignEnabled: false,
+    });
     setupPage();
-    await siteSettingsBrowserProxy.whenCalled('getCookieSettingDescription');
-    flush();
-    const cookiesLinkRow =
-        page.shadowRoot!.querySelector('#basicContentList')!.shadowRoot!
-            .querySelector<CrLinkRowElement>('#cookies')!;
-    assertEquals(testLabels[0], cookiesLinkRow.subLabel);
+    const cookiesLinkRow = getCookiesLinkRow();
 
-    webUIListenerCallback('cookieSettingDescriptionChanged', testLabels[1]);
-    assertEquals(testLabels[1], cookiesLinkRow.subLabel);
+    page.set(
+        'prefs.profile.cookie_controls_mode.value',
+        CookieControlsMode.BLOCK_THIRD_PARTY);
+    await flushTasks();
+    assertEquals(
+        loadTimeData.getString('thirdPartyCookiesLinkRowSublabelDisabled'),
+        cookiesLinkRow.subLabel);
+
+    page.set(
+        'prefs.profile.cookie_controls_mode.value',
+        CookieControlsMode.INCOGNITO_ONLY);
+    await flushTasks();
+    assertEquals(
+        loadTimeData.getString(
+            'thirdPartyCookiesLinkRowSublabelDisabledIncognito'),
+        cookiesLinkRow.subLabel);
+
+    page.set(
+        'prefs.profile.cookie_controls_mode.value', CookieControlsMode.OFF);
+    await flushTasks();
+    assertEquals(
+        loadTimeData.getString('thirdPartyCookiesLinkRowSublabelEnabled'),
+        cookiesLinkRow.subLabel);
+  });
+
+  test('CookiesLinkRowSublabelInModeB', async function() {
+    // This test verifies the Tracking Protection rewind label.
+    loadTimeData.overrideValues({
+      is3pcdCookieSettingsRedesignEnabled: true,
+    });
+    setupPage();
+    const cookiesLinkRow = getCookiesLinkRow();
+
+    page.set(
+        'prefs.tracking_protection.block_all_3pc_toggle_enabled.value', true);
+    await flushTasks;
+    assertTrue(Boolean(page.get(
+        'prefs.tracking_protection.block_all_3pc_toggle_enabled.value')));
+    assertEquals(
+        loadTimeData.getString('thirdPartyCookiesLinkRowSublabelDisabled'),
+        cookiesLinkRow.subLabel);
+
+    page.set(
+        'prefs.tracking_protection.block_all_3pc_toggle_enabled.value', false);
+    await flushTasks;
+    assertFalse(Boolean(page.get(
+        'prefs.tracking_protection.block_all_3pc_toggle_enabled.value')));
+    assertEquals(
+        loadTimeData.getString('thirdPartyCookiesLinkRowSublabelLimited'),
+        cookiesLinkRow.subLabel);
+  });
+
+  test('CookiesLinkRowSublabelAlwaysBlock3pcsIncognito', async function() {
+    loadTimeData.overrideValues({
+      is3pcdCookieSettingsRedesignEnabled: false,
+      isAlwaysBlock3pcsIncognitoEnabled: true,
+    });
+    setupPage();
+    const cookiesLinkRow = getCookiesLinkRow();
+
+    page.set(
+        'prefs.profile.cookie_controls_mode.value',
+        CookieControlsMode.INCOGNITO_ONLY);
+    await flushTasks();
+    assertEquals(
+        loadTimeData.getString('thirdPartyCookiesLinkRowSublabelEnabled'),
+        cookiesLinkRow.subLabel);
   });
 
   test('NotificationsLinkRowSublabel', async function() {
+    const basicPermissionsList =
+        page.shadowRoot!.querySelector('#basicPermissionsList');
+    assertTrue(!!basicPermissionsList);
     const notificationsLinkRow =
-        page.shadowRoot!.querySelector('#basicPermissionsList')!.shadowRoot!
-            .querySelector<CrLinkRowElement>('#notifications')!;
+        basicPermissionsList.shadowRoot!.querySelector<CrLinkRowElement>(
+            '#notifications')!;
+    assertTrue(!!notificationsLinkRow);
 
-    page.set('prefs.generated.notification.value', NotificationSetting.BLOCK);
+    page.set('prefs.generated.notification.value', SettingsState.BLOCK);
     await flushTasks();
     assertEquals(
         loadTimeData.getString('siteSettingsNotificationsBlocked'),
         notificationsLinkRow.subLabel);
 
-    page.set(
-        'prefs.generated.notification.value',
-        NotificationSetting.QUIETER_MESSAGING);
+    page.set('prefs.generated.notification.value', SettingsState.QUIET);
     await flushTasks();
     assertEquals(
-        loadTimeData.getString('siteSettingsNotificationsPartial'),
+        loadTimeData.getString('siteSettingsNotificationsAskQuiet'),
         notificationsLinkRow.subLabel);
 
-    page.set('prefs.generated.notification.value', NotificationSetting.ASK);
+    page.set('prefs.generated.notification.value', SettingsState.LOUD);
     await flushTasks();
     assertEquals(
-        loadTimeData.getString('siteSettingsNotificationsAllowed'),
+        loadTimeData.getString('siteSettingsNotificationsAskLoud'),
         notificationsLinkRow.subLabel);
   });
 
-  test('ProtectedContentRow', function() {
+  test('ProtectedContentRow', async function() {
     setupPage();
-    page.shadowRoot!.querySelector<HTMLElement>('#expandContent')!.click();
+    const expandButton =
+        page.shadowRoot!.querySelector<CrExpandButtonElement>('#expandContent');
+    assertTrue(!!expandButton);
+    expandButton.click();
+    await expandButton.updateComplete;
+    const advancedContentList =
+        page.shadowRoot!.querySelector('#advancedContentList');
+    assertTrue(!!advancedContentList);
+    assertTrue(isChildVisible(advancedContentList, '#protected-content'));
+  });
+
+  test('SiteDataLinkRowSublabel', async function() {
+    setupPage();
+    const expandContent =
+        page.shadowRoot!.querySelector<HTMLElement>('#expandContent');
+    assertTrue(!!expandContent);
+    expandContent.click();
     flush();
+
+    const advancedContentList =
+        page.shadowRoot!.querySelector('#advancedContentList');
+    assertTrue(!!advancedContentList);
+    const siteDataLinkRow =
+        advancedContentList.shadowRoot!.querySelector<CrLinkRowElement>(
+            '#site-data');
+    assertTrue(!!siteDataLinkRow);
+
+    page.set(
+        'prefs.generated.cookie_default_content_setting.value',
+        ContentSetting.BLOCK);
+    await flushTasks();
+    assertEquals(
+        loadTimeData.getString('siteSettingsSiteDataBlockedSubLabel'),
+        siteDataLinkRow.subLabel);
+
+    page.set(
+        'prefs.generated.cookie_default_content_setting.value',
+        ContentSetting.SESSION_ONLY);
+    await flushTasks();
+    assertEquals(
+        loadTimeData.getString('siteSettingsSiteDataDeleteOnExitSubLabel'),
+        siteDataLinkRow.subLabel);
+
+    page.set(
+        'prefs.generated.cookie_default_content_setting.value',
+        ContentSetting.ALLOW);
+    await flushTasks();
+    assertEquals(
+        loadTimeData.getString('siteSettingsSiteDataAllowedSubLabel'),
+        siteDataLinkRow.subLabel);
+  });
+
+  test('StorageAccessLinkRow', function() {
     assertTrue(isChildVisible(
-        page.shadowRoot!.querySelector('#advancedContentList')!,
-        '#protected-content'));
+        page.shadowRoot!.querySelector('#basicPermissionsList')!,
+        '#storage-access'));
+  });
+
+  test('AutomaticFullscreenRow', async function() {
+    const expandButton =
+        page.shadowRoot!.querySelector<CrExpandButtonElement>('#expandContent');
+    assertTrue(!!expandButton);
+    expandButton.click();
+    await expandButton.updateComplete;
+    assertTrue(isChildVisible(
+      page.shadowRoot!.querySelector('#advancedContentList')!,
+      '#automatic-fullscreen'));
+  });
+
+  // TODO(crbug.com/40267370): Remove after SafetyHub is launched.
+  test('UnusedSitePermissionsControlToggleExists', function() {
+    assertTrue(isChildVisible(page, '#unusedSitePermissionsRevocationToggle'));
+  });
+
+  test('UnusedSitePermissionsControlToggleUpdatesPrefs', function() {
+    const unusedSitePermissionsRevocationToggle =
+        page.shadowRoot!.querySelector<SettingsToggleButtonElement>(
+            '#unusedSitePermissionsRevocationToggle');
+    assertTrue(!!unusedSitePermissionsRevocationToggle);
+
+    unusedSitePermissionsRevocationToggle.click();
+    flush();
+    assertFalse(Boolean(page.get(
+        'prefs.safety_hub.unused_site_permissions_revocation.enabled.value')));
+
+    unusedSitePermissionsRevocationToggle.click();
+    flush();
+    assertTrue(Boolean(page.get(
+        'prefs.safety_hub.unused_site_permissions_revocation.enabled.value')));
+  });
+});
+
+const unusedSitePermissionMockData = [{
+  origin: 'www.example.com',
+  permissions: [ContentSettingsTypes.CAMERA],
+  expiration: '13317004800000000',  // Represents 2023-01-01T00:00:00.
+}];
+
+suite('UnusedSitePermissionsReview', function() {
+  let page: SettingsSiteSettingsPageElement;
+  let safetyHubBrowserProxy: TestSafetyHubBrowserProxy;
+
+  setup(async function() {
+    safetyHubBrowserProxy = new TestSafetyHubBrowserProxy();
+    SafetyHubBrowserProxyImpl.setInstance(safetyHubBrowserProxy);
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
+    page = document.createElement('settings-site-settings-page');
+    document.body.appendChild(page);
+    await flushTasks();
+  });
+
+  test('VisibilityWithChangingPermissionList', async function() {
+    // The element is not visible when there is nothing to review.
+    assertFalse(isChildVisible(page, '#safetyHubModule'));
+
+    // The element becomes visible if the list of permissions is no longer
+    // empty.
+    webUIListenerCallback(
+        SafetyHubEvent.UNUSED_PERMISSIONS_MAYBE_CHANGED,
+        unusedSitePermissionMockData);
+    await flushTasks();
+    assertTrue(isChildVisible(page, '#safetyHubModule'));
+
+    // Once visible, it remains visible regardless of list length.
+    webUIListenerCallback(SafetyHubEvent.UNUSED_PERMISSIONS_MAYBE_CHANGED, []);
+    await flushTasks();
+    assertTrue(isChildVisible(page, '#safetyHubModule'));
+
+    webUIListenerCallback(
+        SafetyHubEvent.UNUSED_PERMISSIONS_MAYBE_CHANGED,
+        unusedSitePermissionMockData);
+    await flushTasks();
+    assertTrue(isChildVisible(page, '#safetyHubModule'));
+  });
+
+  test('Button Click', async function() {
+    // The element becomes visible if the list of permissions isn't empty.
+    webUIListenerCallback(
+        SafetyHubEvent.UNUSED_PERMISSIONS_MAYBE_CHANGED,
+        unusedSitePermissionMockData);
+    await flushTasks();
+
+    const safetyHubButton =
+        page.shadowRoot!.querySelector<HTMLElement>('#safetyHubButton');
+    assertTrue(!!safetyHubButton);
+    safetyHubButton.click();
+    // Ensure the safety hub page is shown.
+    assertEquals(routes.SAFETY_HUB, Router.getInstance().getCurrentRoute());
+  });
+
+  test('InvisibleWhenGuestMode', async function() {
+    loadTimeData.overrideValues({
+      isGuest: true,
+    });
+
+    // The element is not visible since it is guest mode.
+    webUIListenerCallback(
+        SafetyHubEvent.UNUSED_PERMISSIONS_MAYBE_CHANGED,
+        unusedSitePermissionMockData);
+    await flushTasks();
+    assertFalse(isChildVisible(page, '#safetyHubModule'));
+
+    // Reset loadTimeData values.
+    loadTimeData.overrideValues({
+      isGuest: false,
+    });
+  });
+});
+
+// TODO(crbug.com/40267370): Remove after SafetyHub is launched.
+suite('SafetyHubDisabled', function() {
+  let page: SettingsSiteSettingsPageElement;
+
+  suiteSetup(function() {
+    loadTimeData.overrideValues({
+      enableSafetyHub: false,
+    });
+  });
+
+  setup(function() {
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
+    page = document.createElement('settings-site-settings-page');
+    document.body.appendChild(page);
+    flush();
+  });
+
+  test('NoUnusedSitePermissionsControlToggle', function() {
+    assertFalse(
+        Boolean(page.shadowRoot!.querySelector<SettingsToggleButtonElement>(
+            '#unusedSitePermissionsRevocationToggle')));
   });
 });

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,9 @@
 #include "third_party/blink/renderer/core/frame/user_activation.h"
 #include "third_party/blink/renderer/core/imagebitmap/image_bitmap.h"
 #include "third_party/blink/renderer/platform/blob/blob_data.h"
+#include "third_party/blink/renderer/platform/graphics/accelerated_static_bitmap_image.h"
 #include "third_party/blink/renderer/platform/graphics/unaccelerated_static_bitmap_image.h"
+#include "third_party/skia/include/core/SkImage.h"
 
 namespace blink {
 
@@ -20,9 +22,7 @@ namespace blink {
 BlinkTransferableMessage BlinkTransferableMessage::FromTransferableMessage(
     TransferableMessage message) {
   BlinkTransferableMessage result;
-  result.message = SerializedScriptValue::Create(
-      reinterpret_cast<const char*>(message.encoded_message.data()),
-      message.encoded_message.size());
+  result.message = SerializedScriptValue::Create(message.encoded_message);
   for (auto& blob : message.blobs) {
     result.message->BlobDataHandles().Set(
         String::FromUTF8(blob->uuid),
@@ -39,7 +39,9 @@ BlinkTransferableMessage BlinkTransferableMessage::FromTransferableMessage(
       std::make_pair(message.stack_trace_debugger_id_first,
                      message.stack_trace_debugger_id_second),
       message.stack_trace_should_pause);
-  result.locked_agent_cluster_id = message.locked_agent_cluster_id;
+  result.sender_agent_cluster_id = message.sender_agent_cluster_id;
+  result.locked_to_sender_agent_cluster =
+      message.locked_to_sender_agent_cluster;
   result.ports.AppendRange(message.ports.begin(), message.ports.end());
   for (auto& channel : message.stream_channels) {
     result.message->GetStreams().push_back(
@@ -52,6 +54,8 @@ BlinkTransferableMessage BlinkTransferableMessage::FromTransferableMessage(
   }
   result.delegated_capability = message.delegated_capability;
 
+  result.parent_task_id = message.parent_task_id;
+
   if (!message.array_buffer_contents_array.empty()) {
     SerializedScriptValue::ArrayBufferContentsArray array_buffer_contents_array;
     array_buffer_contents_array.ReserveInitialCapacity(
@@ -60,9 +64,14 @@ BlinkTransferableMessage BlinkTransferableMessage::FromTransferableMessage(
 
     for (auto& item : message.array_buffer_contents_array) {
       mojo_base::BigBuffer& big_buffer = item->contents;
-      ArrayBufferContents contents(big_buffer.size(), 1,
-                                   ArrayBufferContents::kNotShared,
-                                   ArrayBufferContents::kDontInitialize);
+      std::optional<size_t> max_byte_length;
+      if (item->is_resizable_by_user_javascript) {
+        max_byte_length = base::checked_cast<size_t>(item->max_byte_length);
+      }
+      ArrayBufferContents contents(
+          big_buffer.size(), max_byte_length, 1,
+          ArrayBufferContents::kNotShared, ArrayBufferContents::kDontInitialize,
+          ArrayBufferContents::AllocationFailureBehavior::kCrash);
       // Check if we allocated the backing store of the ArrayBufferContents
       // correctly.
       CHECK_EQ(contents.DataLength(), big_buffer.size());
@@ -79,12 +88,23 @@ BlinkTransferableMessage BlinkTransferableMessage::FromTransferableMessage(
         base::checked_cast<wtf_size_t>(
             message.image_bitmap_contents_array.size()));
 
-    for (auto& sk_bitmap : message.image_bitmap_contents_array) {
-      const scoped_refptr<StaticBitmapImage> bitmap_contents =
-          ToStaticBitmapImage(sk_bitmap);
-      if (!bitmap_contents)
-        continue;
-      image_bitmap_contents_array.push_back(bitmap_contents);
+    for (auto& image : message.image_bitmap_contents_array) {
+      if (image->is_bitmap()) {
+        const scoped_refptr<StaticBitmapImage> bitmap_contents =
+            ToStaticBitmapImage(image->get_bitmap());
+        if (!bitmap_contents) {
+          continue;
+        }
+        image_bitmap_contents_array.push_back(bitmap_contents);
+      } else if (image->is_accelerated_image()) {
+        const scoped_refptr<StaticBitmapImage> accelerated_image =
+            WrapAcceleratedBitmapImage(
+                std::move(image->get_accelerated_image()));
+        if (!accelerated_image) {
+          continue;
+        }
+        image_bitmap_contents_array.push_back(accelerated_image);
+      }
     }
     result.message->SetImageBitmapContentsArray(
         std::move(image_bitmap_contents_array));
@@ -109,11 +129,18 @@ BlinkTransferableMessage& BlinkTransferableMessage::operator=(
 
 scoped_refptr<StaticBitmapImage> ToStaticBitmapImage(
     const SkBitmap& sk_bitmap) {
-  sk_sp<SkImage> image = SkImage::MakeFromBitmap(sk_bitmap);
+  sk_sp<SkImage> image = SkImages::RasterFromBitmap(sk_bitmap);
   if (!image)
     return nullptr;
 
   return UnacceleratedStaticBitmapImage::Create(std::move(image));
 }
 
+scoped_refptr<StaticBitmapImage> WrapAcceleratedBitmapImage(
+    AcceleratedImageInfo image) {
+  return AcceleratedStaticBitmapImage::CreateFromExternalSharedImage(
+      image.shared_image, image.sync_token, image.image_info,
+      image.supports_display_compositing, image.is_overlay_candidate,
+      std::move(image.release_callback));
+}
 }  // namespace blink

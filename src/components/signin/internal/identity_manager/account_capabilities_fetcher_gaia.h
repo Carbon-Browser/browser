@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,6 +41,7 @@ class AccountCapabilitiesFetcherGaia
       ProfileOAuth2TokenService* token_service,
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
       const CoreAccountInfo& account_info,
+      AccountCapabilitiesFetcher::FetchPriority fetch_priority,
       AccountCapabilitiesFetcher::OnCompleteCallback on_complete_callback);
   ~AccountCapabilitiesFetcherGaia() override;
 
@@ -58,7 +59,7 @@ class AccountCapabilitiesFetcherGaia
 
   // gaia::GaiaOAuthClient::Delegate:
   void OnGetAccountCapabilitiesResponse(
-      std::unique_ptr<base::Value> account_capabilities) override;
+      const base::Value::Dict& account_capabilities) override;
   void OnOAuthError() override;
   void OnNetworkError(int response_code) override;
 

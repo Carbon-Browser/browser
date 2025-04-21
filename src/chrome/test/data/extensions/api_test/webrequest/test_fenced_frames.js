@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,8 +30,7 @@ runTests([
   function simpleLoadHttp() {
     // MPArch assigns an opaque origin as the initiator.
     // Opaque initiators serialize to "null".
-    var fencedFrameInitiator = mparchEnabled ? "null" :
-        getServerDomain(initiators.WEB_INITIATED, "a.test", "https");
+    var fencedFrameInitiator = "null";
 
     expect(
       [

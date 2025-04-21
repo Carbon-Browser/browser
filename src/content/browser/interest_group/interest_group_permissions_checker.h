@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include <memory>
 #include <tuple>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "content/browser/interest_group/interest_group_permissions_cache.h"
@@ -33,7 +33,7 @@ namespace content {
 // Groups permissions checks that can be handled by the same .well-known fetch,
 // to avoid redundant fetches.
 //
-// TODO(https://crbug.com/1315805):
+// TODO(crbug.com/40221941):
 // * Consider adding a per-NIK / per-page / per-frame LRU cache. Roundtrip to
 //   the HTTP cache are slow, and we'll likely want to limit the number of
 //   pending operations the renderer sends to the browser process at a time.

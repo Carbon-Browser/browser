@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,9 @@
 
 namespace blink {
 
-GPUTextureView::GPUTextureView(GPUDevice* device, WGPUTextureView texture_view)
-    : DawnObject<WGPUTextureView>(device, texture_view) {}
+GPUTextureView::GPUTextureView(GPUDevice* device,
+                               wgpu::TextureView texture_view,
+                               const String& label)
+    : DawnObject<wgpu::TextureView>(device, std::move(texture_view), label) {}
 
 }  // namespace blink

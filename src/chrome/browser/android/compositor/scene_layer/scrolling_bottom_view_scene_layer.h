@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,13 @@
 #include "base/android/jni_weak_ref.h"
 #include "base/android/scoped_java_ref.h"
 #include "chrome/browser/ui/android/layouts/scene_layer.h"
+#include "components/viz/common/quads/offset_tag.h"
 #include "ui/android/resources/resource_manager_impl.h"
 
-namespace cc {
+namespace cc::slim {
 class Layer;
 class UIResourceLayer;
-}  // namespace cc
+}  // namespace cc::slim
 
 namespace android {
 
@@ -38,7 +39,8 @@ class ScrollingBottomViewSceneLayer : public SceneLayer {
       jint shadow_height,
       jfloat x_offset,
       jfloat y_offset,
-      bool show_shadow);
+      bool show_shadow,
+      const base::android::JavaParamRef<jobject>& joffset_tag);
 
   void SetContentTree(
       JNIEnv* env,
@@ -52,8 +54,8 @@ class ScrollingBottomViewSceneLayer : public SceneLayer {
  private:
   bool should_show_background_;
   SkColor background_color_;
-  scoped_refptr<cc::Layer> view_container_;
-  scoped_refptr<cc::UIResourceLayer> view_layer_;
+  scoped_refptr<cc::slim::Layer> view_container_;
+  scoped_refptr<cc::slim::UIResourceLayer> view_layer_;
 };
 
 }  // namespace android

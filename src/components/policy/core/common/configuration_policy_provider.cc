@@ -1,10 +1,10 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/policy/core/common/configuration_policy_provider.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/lazy_instance.h"
 #include "base/observer_list.h"
 #include "build/build_config.h"
@@ -48,13 +48,8 @@ bool ConfigurationPolicyProvider::IsFirstPolicyLoadComplete(
   return true;
 }
 
-void ConfigurationPolicyProvider::UpdatePolicy(
-    std::unique_ptr<PolicyBundle> bundle) {
-  if (bundle) {
-    policy_bundle_.Swap(bundle.get());
-  } else {
-    policy_bundle_.Clear();
-  }
+void ConfigurationPolicyProvider::UpdatePolicy(PolicyBundle bundle) {
+  policy_bundle_ = std::move(bundle);
   for (auto& observer : observer_list_)
     observer.OnUpdatePolicy(this);
 }

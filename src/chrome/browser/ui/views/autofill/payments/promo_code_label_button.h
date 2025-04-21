@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,17 +15,15 @@ namespace autofill {
 // LabelButton that displays a merchant promo code in an emphasized format with
 // a copy button icon.
 class PromoCodeLabelButton : public views::LabelButton {
+  METADATA_HEADER(PromoCodeLabelButton, views::LabelButton)
+
  public:
-  METADATA_HEADER(PromoCodeLabelButton);
   PromoCodeLabelButton(PressedCallback callback, const std::u16string& text);
 
   PromoCodeLabelButton(const PromoCodeLabelButton&) = delete;
   PromoCodeLabelButton& operator=(const PromoCodeLabelButton&) = delete;
 
   ~PromoCodeLabelButton() override;
-
-  // views::Button:
-  void OnThemeChanged() override;
 };
 
 }  // namespace autofill

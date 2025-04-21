@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,8 +16,8 @@ IN_PROC_BROWSER_TEST_F(ExtensionApiTest, WindowOpenFocus) {
 
 // The test uses the chrome.browserAction.openPopup API, which requires that the
 // window can automatically be activated.
-// Fails flakily on Linux and Lacros. https://crbug.com/477691.
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
+// TODO(crbug.com/41168657): Fails flakily on Linux.
+#if BUILDFLAG(IS_LINUX)
 #define MAYBE_WindowOpen DISABLED_WindowOpen
 #else
 #define MAYBE_WindowOpen WindowOpen

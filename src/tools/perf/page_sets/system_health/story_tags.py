@@ -1,4 +1,4 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -63,6 +63,7 @@ YEAR_2018 = Tag('2018', 'Story was created or updated in 2018.')
 YEAR_2019 = Tag('2019', 'Story was created or updated in 2019.')
 YEAR_2020 = Tag('2020', 'Story was created or updated in 2020.')
 YEAR_2021 = Tag('2021', 'Story was created or updated in 2021.')
+YEAR_2023 = Tag('2023', 'Story was created or updated in 2023.')
 
 
 def _ExtractAllTags():

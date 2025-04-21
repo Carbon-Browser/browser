@@ -1,11 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_RENDERER_MEDIA_WIN_DCOMP_TEXTURE_WRAPPER_IMPL_H_
 #define CONTENT_RENDERER_MEDIA_WIN_DCOMP_TEXTURE_WRAPPER_IMPL_H_
 
-#include "base/task/single_thread_task_runner.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/unguessable_token.h"
 #include "content/common/content_export.h"
 #include "content/renderer/media/win/dcomp_texture_factory.h"
@@ -13,6 +13,10 @@
 #include "media/base/video_frame.h"
 #include "media/base/win/dcomp_texture_wrapper.h"
 #include "ui/gfx/geometry/rect.h"
+
+namespace gpu {
+class ClientSharedImage;
+}  // namespace gpu
 
 namespace content {
 
@@ -36,9 +40,11 @@ class CONTENT_EXPORT DCOMPTextureWrapperImpl
     : public media::DCOMPTextureWrapper,
       public DCOMPTextureHost::Listener {
  public:
+  // Creates a media::DCOMPTextureWrapper implementation. Can return nullptr if
+  // `factory` is null.
   static std::unique_ptr<media::DCOMPTextureWrapper> Create(
       scoped_refptr<DCOMPTextureFactory> factory,
-      scoped_refptr<base::SingleThreadTaskRunner> media_task_runner);
+      scoped_refptr<base::SequencedTaskRunner> media_task_runner);
 
   ~DCOMPTextureWrapperImpl() override;
 
@@ -61,7 +67,7 @@ class CONTENT_EXPORT DCOMPTextureWrapperImpl
  private:
   DCOMPTextureWrapperImpl(
       scoped_refptr<DCOMPTextureFactory> factory,
-      scoped_refptr<base::SingleThreadTaskRunner> media_task_runner);
+      scoped_refptr<base::SequencedTaskRunner> media_task_runner);
   DCOMPTextureWrapperImpl(const DCOMPTextureWrapperImpl&) = delete;
   DCOMPTextureWrapperImpl& operator=(const DCOMPTextureWrapperImpl&) = delete;
 
@@ -69,11 +75,12 @@ class CONTENT_EXPORT DCOMPTextureWrapperImpl
   void OnSharedImageMailboxBound(gpu::Mailbox mailbox) override;
   void OnOutputRectChange(gfx::Rect output_rect) override;
 
-  void OnDXVideoFrameDestruction(const gpu::SyncToken& sync_token,
-                                 const gpu::Mailbox& image_mailbox);
+  void OnDXVideoFrameDestruction(
+      const gpu::SyncToken& sync_token,
+      scoped_refptr<gpu::ClientSharedImage> shared_image);
 
   scoped_refptr<DCOMPTextureFactory> factory_;
-  scoped_refptr<base::SingleThreadTaskRunner> media_task_runner_;
+  scoped_refptr<base::SequencedTaskRunner> media_task_runner_;
 
   gfx::Size natural_size_;  // Size of the video frames.
   gfx::Size output_size_;   // Size of the video output (on-screen size).
@@ -81,7 +88,6 @@ class CONTENT_EXPORT DCOMPTextureWrapperImpl
 
   std::unique_ptr<DCOMPTextureHost> dcomp_texture_host_;
 
-  bool mailbox_added_ = false;
   gpu::Mailbox mailbox_;
 
   CreateVideoFrameCB create_video_frame_cb_;

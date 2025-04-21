@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,12 +24,16 @@ SyncMixingGraphInput::~SyncMixingGraphInput() {
 // Either calls Render() directly to produce the requested input audio, or - in
 // the case of a frames per buffer mismatch - pulls audio from the |fifo_| which
 // in turn calls Render() as needed.
-double SyncMixingGraphInput::ProvideInput(media::AudioBus* audio_bus,
-                                          uint32_t frames_delayed) {
+double SyncMixingGraphInput::ProvideInput(
+    media::AudioBus* audio_bus,
+    uint32_t frames_delayed,
+    const media::AudioGlitchInfo& glitch_info) {
   DCHECK_EQ(audio_bus->channels(), params_.channels());
-  TRACE_EVENT2(TRACE_DISABLED_BY_DEFAULT("audio"),
-               "SyncMixingGraphInput::ProvideInput", "frames_delayed",
-               frames_delayed, "bus frames", audio_bus->frames());
+  TRACE_EVENT(TRACE_DISABLED_BY_DEFAULT("audio"),
+              "SyncMixingGraphInput::ProvideInput", "delay (frames)",
+              frames_delayed, "bus frames", audio_bus->frames());
+
+  glitch_info_accumulator_.Add(glitch_info);
 
   if (!fifo_ && audio_bus->frames() != params_.frames_per_buffer()) {
     fifo_ = std::make_unique<media::AudioPullFifo>(
@@ -78,19 +82,17 @@ void SyncMixingGraphInput::Stop() {
 void SyncMixingGraphInput::Render(int fifo_frame_delay,
                                   media::AudioBus* audio_bus) {
   DCHECK(source_callback_);
-  TRACE_EVENT_BEGIN1(TRACE_DISABLED_BY_DEFAULT("audio"),
-                     "SyncMixingGraphInput::Render", "this",
-                     static_cast<void*>(this));
+  TRACE_EVENT(TRACE_DISABLED_BY_DEFAULT("audio"),
+              "SyncMixingGraphInput::Render", "this", static_cast<void*>(this),
+              "delay (frames)", fifo_frame_delay, "bus frames",
+              audio_bus->frames());
 
   base::TimeDelta delay = media::AudioTimestampHelper::FramesToTime(
       converter_render_frame_delay_ + fifo_frame_delay, params_.sample_rate());
-  source_callback_->OnMoreData(delay, base::TimeTicks::Now(), 0, audio_bus,
+  source_callback_->OnMoreData(delay, base::TimeTicks::Now(),
+                               glitch_info_accumulator_.GetAndReset(),
+                               audio_bus,
                                /*is_mixing=*/true);
-
-  TRACE_EVENT_END2(TRACE_DISABLED_BY_DEFAULT("audio"),
-                   "SyncMixingGraphInput::Render", "total frames delay",
-                   converter_render_frame_delay_ + fifo_frame_delay,
-                   "bus frames", audio_bus->frames());
 }
 
 }  // namespace audio

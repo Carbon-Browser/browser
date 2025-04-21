@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Parses allocation profiles from a trace and computes the internal
@@ -102,7 +102,7 @@ def _SummarizeStatsForAllocators(result_for_pid: dict, allocators: dict,
     slot_size = trace_utils.GetAllocatorAttr(attrs, 'slot_size')
     if allocated_objects_size != 0:
       # See: |CanStoreRawSize| in
-      # base/allocator/partition_allocator/partition_bucket.h
+      # base/allocator/partition_allocator/src/partition_alloc/partition_bucket.h
       # The single slot span size below assumes we have 4 KiB pages.
       if slot_size >= 0xE0000:  # Direct Mapped, so not affected by bucket size
         rounded_allocated_objects_size = allocated_objects_size

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/task/bind_post_task.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
+#include "net/cert/nss_cert_database.h"
 
 // Note: This file contains the platform-agnostic components of NssService;
 // platform-specific portions are implemented in the _linux.cc and
@@ -41,6 +42,5 @@ void NssService::UnsafelyGetNSSCertDatabaseForTesting(
       FROM_HERE,
       base::BindOnce(&GetCertDBOnIOThread,
                      CreateNSSCertDatabaseGetterForIOThread(),
-                     base::BindPostTask(base::SequencedTaskRunnerHandle::Get(),
-                                        std::move(callback))));
+                     base::BindPostTaskToCurrentDefault(std::move(callback))));
 }

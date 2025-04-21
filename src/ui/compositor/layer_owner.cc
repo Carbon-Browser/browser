@@ -1,16 +1,12 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/compositor/layer_owner.h"
 
-// layer_owner.h is a widely included header and its size impacts build
-// time. Try not to raise this limit unless necessary. See
-// https://chromium.googlesource.com/chromium/src/+/HEAD/docs/wmax_tokens.md
-#pragma clang max_tokens_here 550000
-
 #include <utility>
 
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "ui/compositor/compositor.h"
 #include "ui/compositor/layer.h"
@@ -77,10 +73,11 @@ std::unique_ptr<Layer> LayerOwner::RecreateLayer() {
 
   // Migrate all the child layers over to the new layer. Copy the list because
   // the items are removed during iteration.
-  std::vector<ui::Layer*> children_copy = old_layer->children();
-  for (std::vector<ui::Layer*>::const_iterator it = children_copy.begin();
-       it != children_copy.end();
-       ++it) {
+  std::vector<raw_ptr<ui::Layer, VectorExperimental>> children_copy =
+      old_layer->children();
+  for (std::vector<raw_ptr<ui::Layer, VectorExperimental>>::const_iterator it =
+           children_copy.begin();
+       it != children_copy.end(); ++it) {
     ui::Layer* child = *it;
     layer_->Add(child);
   }
@@ -89,8 +86,7 @@ std::unique_ptr<Layer> LayerOwner::RecreateLayer() {
   // state to the new layer.
   layer_->set_delegate(old_delegate);
 
-  for (auto& observer : observers_)
-    observer.OnLayerRecreated(old_layer.get());
+  observers_.Notify(&Observer::OnLayerRecreated, old_layer.get());
 
   return old_layer;
 }

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,9 +42,9 @@ class CORE_EXPORT InspectorDOMSnapshotAgent final
   protocol::Response disable() override;
   protocol::Response getSnapshot(
       std::unique_ptr<protocol::Array<String>> style_filter,
-      protocol::Maybe<bool> include_event_listeners,
-      protocol::Maybe<bool> include_paint_order,
-      protocol::Maybe<bool> include_user_agent_shadow_tree,
+      std::optional<bool> include_event_listeners,
+      std::optional<bool> include_paint_order,
+      std::optional<bool> include_user_agent_shadow_tree,
       std::unique_ptr<protocol::Array<protocol::DOMSnapshot::DOMNode>>*
           dom_nodes,
       std::unique_ptr<protocol::Array<protocol::DOMSnapshot::LayoutTreeNode>>*
@@ -53,10 +53,10 @@ class CORE_EXPORT InspectorDOMSnapshotAgent final
           computed_styles) override;
   protocol::Response captureSnapshot(
       std::unique_ptr<protocol::Array<String>> computed_styles,
-      protocol::Maybe<bool> include_paint_order,
-      protocol::Maybe<bool> include_dom_rects,
-      protocol::Maybe<bool> include_blended_background_colors,
-      protocol::Maybe<bool> include_text_color_opacities,
+      std::optional<bool> include_paint_order,
+      std::optional<bool> include_dom_rects,
+      std::optional<bool> include_blended_background_colors,
+      std::optional<bool> include_text_color_opacities,
       std::unique_ptr<protocol::Array<protocol::DOMSnapshot::DocumentSnapshot>>*
           documents,
       std::unique_ptr<protocol::Array<String>>* strings) override;
@@ -118,8 +118,7 @@ class CORE_EXPORT InspectorDOMSnapshotAgent final
   WTF::HashMap<String, int> string_table_;
 
   HeapHashMap<Member<const CSSValue>, int> css_value_cache_;
-  HashMap<scoped_refptr<const ComputedStyle>, protocol::Array<int>*>
-      style_cache_;
+  HeapHashMap<Member<const ComputedStyle>, protocol::Array<int>*> style_cache_;
 
   std::unique_ptr<protocol::Array<protocol::DOMSnapshot::DocumentSnapshot>>
       documents_;

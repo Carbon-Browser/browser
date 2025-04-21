@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,12 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/circular_deque.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/assist_ranker/proto/ranker_model.pb.h"
 #include "components/assist_ranker/proto/translate_ranker_model.pb.h"
 #include "components/assist_ranker/ranker_model.h"
@@ -31,7 +30,6 @@ using assist_ranker::RankerModelLoaderImpl;
 using assist_ranker::RankerModelStatus;
 
 const char kInvalidModelData[] = "not a valid model";
-const int kInvalidModelSize = sizeof(kInvalidModelData) - 1;
 
 class RankerModelLoaderImplTest : public ::testing::Test {
  public:
@@ -198,9 +196,7 @@ void RankerModelLoaderImplTest::InitLocalModels() {
             base::Days(30), &expired_model_);
   SaveModel(local_model_, local_model_path_);
   SaveModel(expired_model_, expired_model_path_);
-  ASSERT_EQ(base::WriteFile(invalid_model_path_, kInvalidModelData,
-                            kInvalidModelSize),
-            kInvalidModelSize);
+  ASSERT_TRUE(base::WriteFile(invalid_model_path_, kInvalidModelData));
 }
 
 void RankerModelLoaderImplTest::InitModel(const GURL& model_url,
@@ -233,14 +229,13 @@ void RankerModelLoaderImplTest::InitModel(const GURL& model_url,
 void RankerModelLoaderImplTest::SaveModel(const RankerModel& model,
                                           const base::FilePath& model_path) {
   std::string model_str = model.SerializeAsString();
-  ASSERT_EQ(base::WriteFile(model_path, model_str.data(), model_str.size()),
-            static_cast<int>(model_str.size()));
+  ASSERT_TRUE(base::WriteFile(model_path, model_str));
 }
 
 RankerModelStatus RankerModelLoaderImplTest::ValidateModel(
     const RankerModel& model) {
   validated_models_.push_back(Clone(model));
-  RankerModelStatus response = RankerModelStatus::OK;
+  RankerModelStatus response = RankerModelStatus::kOk;
   if (!validate_model_response_.empty()) {
     response = validate_model_response_.front();
     validate_model_response_.pop_front();
@@ -322,7 +317,7 @@ TEST_F(RankerModelLoaderImplTest, LoadFromBadFileTriggersDownload) {
 }
 
 TEST_F(RankerModelLoaderImplTest, IncompatibleCachedFileTriggersDownload) {
-  validate_model_response_.push_back(RankerModelStatus::INCOMPATIBLE);
+  validate_model_response_.push_back(RankerModelStatus::kIncompatible);
 
   ASSERT_TRUE(DoLoaderTest(local_model_path_, remote_model_url_));
   ASSERT_EQ(2U, validated_models_.size());
@@ -333,8 +328,8 @@ TEST_F(RankerModelLoaderImplTest, IncompatibleCachedFileTriggersDownload) {
 }
 
 TEST_F(RankerModelLoaderImplTest, IncompatibleDownloadedFileKeepsExpired) {
-  validate_model_response_.push_back(RankerModelStatus::OK);
-  validate_model_response_.push_back(RankerModelStatus::INCOMPATIBLE);
+  validate_model_response_.push_back(RankerModelStatus::kOk);
+  validate_model_response_.push_back(RankerModelStatus::kIncompatible);
 
   ASSERT_TRUE(DoLoaderTest(expired_model_path_, remote_model_url_));
   ASSERT_EQ(2U, validated_models_.size());

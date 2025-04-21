@@ -1,13 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_APP_LIST_VIEWS_APPS_GRID_VIEW_FOLDER_DELEGATE_H_
 #define ASH_APP_LIST_VIEWS_APPS_GRID_VIEW_FOLDER_DELEGATE_H_
 
-#include <memory>
-
-#include "ash/app_list/views/app_drag_icon_proxy.h"
 #include "ash/app_list/views/apps_grid_view.h"
 #include "ash/ash_export.h"
 
@@ -31,23 +28,17 @@ class ASH_EXPORT AppsGridViewFolderDelegate {
                             AppListItemView* original_drag_view,
                             const gfx::Point& drag_point_in_folder_grid) = 0;
 
-  // Dispatches drag event from the hidden grid view to the root level grid view
-  // for re-parenting a folder item.
-  virtual void DispatchDragEventForReparent(
-      AppsGridView::Pointer pointer,
-      const gfx::Point& drag_point_in_folder_grid) = 0;
-
   // Dispatches EndDrag event from the hidden grid view to the root level grid
   // view for reparenting a folder item.
   // |events_forwarded_to_drag_drop_host|: True if the dragged item is dropped
   // to the drag_drop_host, eg. dropped on shelf.
   // |cancel_drag|: True if the drag is ending because it has been canceled.
-  // |drag_icon_proxy|: The drag icon proxy that was created for the dragged app
-  // item view, if any.
   virtual void DispatchEndDragEventForReparent(
       bool events_forwarded_to_drag_drop_host,
-      bool cancel_drag,
-      std::unique_ptr<AppDragIconProxy> drag_icon_proxy) = 0;
+      bool cancel_drag) = 0;
+
+  // Close the associated folder and goes back to top level page grid.
+  virtual void Close() = 0;
 
   // Returns whether |drag_point| in the folder apps grid bounds is within the
   // folder view's bounds.

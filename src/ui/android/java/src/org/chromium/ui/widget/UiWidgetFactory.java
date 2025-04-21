@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,18 +9,20 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.widget.PopupWindow;
 
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
+
 /**
  * The factory that creates UI widgets. Instead of direct creation of Android popups
  * we should ask this factory to create the object for us.
  */
+@NullMarked
 public class UiWidgetFactory {
-    private static UiWidgetFactory sFactory;
+    private static @Nullable UiWidgetFactory sFactory;
 
     protected UiWidgetFactory() {}
 
-    /**
-     * returns a UiWidgetFactory.
-     */
+    /** returns a UiWidgetFactory. */
     public static UiWidgetFactory getInstance() {
         if (sFactory == null) sFactory = new UiWidgetFactory();
         return sFactory;

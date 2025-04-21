@@ -18,10 +18,12 @@ source_set("classifier") {
     "resource_classifier_impl.h",
   ]
 
+  deps = [ "//components/adblock/core/common:utils" ]
+
   public_deps = [
     "//base",
-    "//components/adblock/core/subscription:subscription",
     "//components/adblock/core/common",
+    "//components/adblock/core/subscription:subscription",
     "//net:net",
     "//url:url",
   ]
@@ -43,9 +45,7 @@ source_set("test_support") {
 
 source_set("unit_tests") {
   testonly = true
-  sources = [
-    "test/resource_classifier_impl_test.cc",
-  ]
+  sources = [ "test/resource_classifier_impl_test.cc" ]
 
   deps = [
     ":test_support",
@@ -58,20 +58,20 @@ source_set("unit_tests") {
 
 source_set("perf_tests") {
   testonly = true
-  sources = [
-    "test/resource_classifier_perftest.cc",
-  ]
+  sources = [ "test/resource_classifier_perftest.cc" ]
 
   deps = [
     ":classifier",
     "//components/adblock/core/converter",
     "//testing/gtest",
+    "//testing/perf:perf",
+    "//third_party/zlib/google:compression_utils",
   ]
 
   data = [
-    "//components/test/data/adblock/easylist.txt",
-    "//components/test/data/adblock/exceptionrules.txt",
-    "//components/test/data/adblock/anticv.txt",
-    "//components/test/data/adblock/longurl.txt",
+    "//components/test/data/adblock/easylist.txt.gz",
+    "//components/test/data/adblock/exceptionrules.txt.gz",
+    "//components/test/data/adblock/anticv.txt.gz",
+    "//components/test/data/adblock/longurl.txt.gz",
   ]
 }

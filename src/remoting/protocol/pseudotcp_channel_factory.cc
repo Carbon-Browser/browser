@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,20 +6,19 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "net/base/net_errors.h"
 #include "remoting/base/constants.h"
 #include "remoting/protocol/datagram_channel_factory.h"
 #include "remoting/protocol/p2p_datagram_socket.h"
 #include "remoting/protocol/pseudotcp_adapter.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 namespace {
 
-// Value is chosen to balance the extra latency against the reduced
-// load due to ACK traffic.
+// Value is chosen to balance the extra latency against the reduced load due to
+// ACK traffic.
 const int kTcpAckDelayMilliseconds = 10;
 
 // Values for the TCP send and receive buffer size. This should be tuned to
@@ -31,8 +30,7 @@ const int kTcpSendBufferSize = kTcpReceiveBufferSize + 30 * 1024;
 
 PseudoTcpChannelFactory::PseudoTcpChannelFactory(
     DatagramChannelFactory* datagram_channel_factory)
-    : datagram_channel_factory_(datagram_channel_factory) {
-}
+    : datagram_channel_factory_(datagram_channel_factory) {}
 
 PseudoTcpChannelFactory::~PseudoTcpChannelFactory() {
   // CancelChannelCreation() is expected to be called before destruction.
@@ -70,14 +68,16 @@ void PseudoTcpChannelFactory::OnDatagramChannelCreated(
 
   // TODO(sergeyu): This is a hack to improve latency of the video channel.
   // Consider removing it once we have better flow control implemented.
-  if (name == kVideoChannelName)
+  if (name == kVideoChannelName) {
     adapter->SetWriteWaitsForSend(true);
+  }
 
   net::CompletionOnceCallback returned_callback = adapter->Connect(
       base::BindOnce(&PseudoTcpChannelFactory::OnPseudoTcpConnected,
                      base::Unretained(this), name, std::move(callback)));
-  if (returned_callback)
+  if (returned_callback) {
     std::move(returned_callback).Run(net::ERR_FAILED);
+  }
 }
 
 void PseudoTcpChannelFactory::OnPseudoTcpConnected(
@@ -89,11 +89,11 @@ void PseudoTcpChannelFactory::OnPseudoTcpConnected(
   std::unique_ptr<P2PStreamSocket> socket(it->second);
   pending_sockets_.erase(it);
 
-  if (result != net::OK)
+  if (result != net::OK) {
     socket.reset();
+  }
 
   std::move(callback).Run(std::move(socket));
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

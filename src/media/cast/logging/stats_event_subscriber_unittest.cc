@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,8 +43,9 @@ class StatsEventSubscriberTest : public ::testing::Test {
   }
 
   ~StatsEventSubscriberTest() override {
-    if (subscriber_.get())
+    if (subscriber_.get()) {
       cast_environment_->logger()->Unsubscribe(subscriber_.get());
+    }
     cast_environment_->logger()->Unsubscribe(&fake_offset_estimator_);
   }
 
@@ -253,8 +254,9 @@ TEST_F(StatsEventSubscriberTest, PlayoutDelay) {
   int late_frames = 0;
   for (int i = 0, delay_ms = -50; i < num_frames; i++, delay_ms += 10) {
     base::TimeDelta delay = base::Milliseconds(delay_ms);
-    if (delay_ms > 0)
+    if (delay_ms > 0) {
       late_frames++;
+    }
     std::unique_ptr<FrameEvent> playout_event(new FrameEvent());
     playout_event->timestamp = receiver_clock_.NowTicks();
     playout_event->type = FRAME_PLAYOUT;
@@ -528,11 +530,17 @@ bool CheckHistogramHasValue(const base::Value::List& values,
                             const std::string& bucket,
                             int expected_count) {
   for (const base::Value& value : values) {
-    if (!value.is_dict() || !value.FindKey(bucket))
+    if (!value.is_dict()) {
       continue;
-    absl::optional<int> bucket_count = value.FindIntKey(bucket);
-    if (!bucket_count.has_value())
+    }
+    const base::Value::Dict& dict = value.GetDict();
+    if (!dict.contains(bucket)) {
+      continue;
+    }
+    std::optional<int> bucket_count = dict.FindInt(bucket);
+    if (!bucket_count.has_value()) {
       return false;
+    }
     return bucket_count == expected_count;
   }
   return false;

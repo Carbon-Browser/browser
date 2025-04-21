@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/events/event.h"
 #include "ui/events/keyboard_hook.h"
@@ -101,10 +101,10 @@ void VerifyKeyEvent(KeyEvent* key_event,
                     bool key_down,
                     bool is_repeat) {
   if (key_down) {
-    ASSERT_EQ(key_event->type(), ET_KEY_PRESSED);
+    ASSERT_EQ(key_event->type(), EventType::kKeyPressed);
     ASSERT_EQ(key_event->is_repeat(), is_repeat);
   } else {
-    ASSERT_EQ(key_event->type(), ET_KEY_RELEASED);
+    ASSERT_EQ(key_event->type(), EventType::kKeyReleased);
     ASSERT_FALSE(key_event->is_repeat());
   }
   ASSERT_EQ(key_event->key_code(), non_located_key_code);

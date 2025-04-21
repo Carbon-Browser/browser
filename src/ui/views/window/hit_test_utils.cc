@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,16 +15,19 @@ int GetHitTestComponent(View* view, const gfx::Point& point_in_widget) {
   gfx::Point point_in_view(point_in_widget);
   View::ConvertPointFromWidget(view, &point_in_view);
 
-  if (!view->GetLocalBounds().Contains(point_in_view))
+  if (!view->GetLocalBounds().Contains(point_in_view)) {
     return HTNOWHERE;
+  }
 
   View* target_view = view->GetEventHandlerForPoint(point_in_view);
   while (target_view) {
     int component = target_view->GetProperty(kHitTestComponentKey);
-    if (component != HTNOWHERE)
+    if (component != HTNOWHERE) {
       return component;
-    if (target_view == view)
+    }
+    if (target_view == view) {
       break;
+    }
     target_view = target_view->parent();
   }
 

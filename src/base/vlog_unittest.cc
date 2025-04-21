@@ -1,4 +1,4 @@
-// Copyright (c) 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,9 +13,8 @@ namespace {
 
 TEST(VlogTest, NoVmodule) {
   int min_log_level = 0;
-  EXPECT_EQ(0,
-            VlogInfo(std::string(), std::string(), &min_log_level)
-                .GetVlogLevel("test1"));
+  EXPECT_EQ(0, VlogInfo(std::string(), std::string(), &min_log_level)
+                   .GetVlogLevel("test1"));
   EXPECT_EQ(0,
             VlogInfo("0", std::string(), &min_log_level).GetVlogLevel("test2"));
   EXPECT_EQ(

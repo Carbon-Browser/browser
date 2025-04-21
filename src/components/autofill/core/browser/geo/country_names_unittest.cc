@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,13 +22,12 @@ class TestCountryNames : public CountryNames {
   ~TestCountryNames() = default;
 };
 
-}  // namespace
-
 // Test mapping of localized country names to country codes.
 TEST(CountryNamesTest, GetCountryCode_BasicMapping) {
   TestCountryNames en_us_names("en_US");
   EXPECT_EQ("US", en_us_names.GetCountryCode(u"United States"));
   EXPECT_EQ("CA", en_us_names.GetCountryCode(u"Canada"));
+  EXPECT_EQ("CZ", en_us_names.GetCountryCode(u"Czech Republic"));
 }
 
 TEST(CountryNamesTest, GetCountryCode_CaseInsensitiveMapping) {
@@ -97,4 +96,5 @@ TEST(CountryNamesTest, EmptyCountryNameHasEmptyCountryCode) {
   EXPECT_TRUE(country_code.empty()) << country_code;
 }
 
+}  // namespace
 }  // namespace autofill

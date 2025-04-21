@@ -1,8 +1,8 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ash/test/ui_controls_factory_ash.h"
+#include "ash/test/ui_controls_ash.h"
 #include "base/command_line.h"
 #include "base/test/launcher/test_launcher.h"
 #include "chrome/test/base/chrome_test_launcher.h"
@@ -12,7 +12,7 @@
 
 // This class is introduced to provide ui_controls since some test cases use
 // it. Ideally such tests should be moved into interactive_ui_tests.
-// TODO(mukai): remove this after moving such tests.
+// TODO(crbug.com/40268116): remove this after moving such tests.
 class BrowserTestSuiteChromeOS : public ChromeTestSuite {
  public:
   BrowserTestSuiteChromeOS(int argc, char** argv)
@@ -23,7 +23,7 @@ class BrowserTestSuiteChromeOS : public ChromeTestSuite {
   // ChromeTestSuite overrides:
   void Initialize() override {
     ChromeTestSuite::Initialize();
-    ui_controls::InstallUIControlsAura(ash::test::CreateAshUIControls());
+    ash::test::EnableUIControlsAsh();
   }
 };
 
@@ -45,12 +45,6 @@ int main(int argc, char** argv) {
 
   BrowserTestSuiteRunnerChromeOS runner;
   ChromeTestLauncherDelegate delegate(&runner);
-
-  // Disable system tracing for browser tests by default. This prevents breakage
-  // of tests that spin the run loop until idle on platforms with system tracing
-  // (e.g. Chrome OS). Browser tests exercising this feature re-enable it with a
-  // custom system tracing service.
-  tracing::PerfettoTracedProcess::SetSystemProducerEnabledForTesting(false);
 
   return LaunchChromeTests(parallel_jobs, &delegate, argc, argv);
 }

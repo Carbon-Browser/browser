@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,6 +57,9 @@ struct NET_EXPORT_PRIVATE NetworkID {
   // poor signal strength while 4 represents a very strong signal strength. The
   // range is capped between 0 and 4 to ensure that a change in the value
   // indicates a non-negligible change in the signal quality.
+  //
+  // TODO(crbug.com/40937712): This should use std::optional instead of a magic
+  // value.
   int32_t signal_strength;
 };
 

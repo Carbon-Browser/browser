@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include <utility>
 
 #include "base/memory/raw_ptr.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -39,7 +38,7 @@ class TestSurfaceOzoneCanvas : public ui::SurfaceOzoneCanvas {
   // ui::SurfaceOzoneCanvas override:
   SkCanvas* GetCanvas() override { return surface_->getCanvas(); }
   void ResizeCanvas(const gfx::Size& viewport_size, float scale) override {
-    surface_ = SkSurface::MakeRaster(SkImageInfo::MakeN32Premul(
+    surface_ = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(
         viewport_size.width(), viewport_size.height()));
   }
   std::unique_ptr<gfx::VSyncProvider> CreateVSyncProvider() override {
@@ -84,6 +83,7 @@ void SoftwareOutputDeviceOzoneTest::SetUp() {
 }
 
 void SoftwareOutputDeviceOzoneTest::TearDown() {
+  surface_ozone_ = nullptr;
   output_device_.reset();
 }
 

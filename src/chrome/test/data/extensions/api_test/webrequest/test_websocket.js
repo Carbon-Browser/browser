@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -289,8 +289,9 @@ chrome.tabs.getCurrent(function(tab) {
 
         // Test modification.
         for (var i = 0; i < details.requestHeaders.length; i++) {
-          if (details.requestHeaders[i].name == 'User-Agent')
+          if (details.requestHeaders[i].name == 'User-Agent') {
             details.requestHeaders[i].value = 'Foo';
+          }
         }
 
         // Test addition.

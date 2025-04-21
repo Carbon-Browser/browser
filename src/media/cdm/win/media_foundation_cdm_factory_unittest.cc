@@ -1,12 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/cdm/win/media_foundation_cdm_factory.h"
 
 #include <memory>
+#include <optional>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/gmock_callback_support.h"
 #include "base/test/mock_callback.h"
@@ -15,10 +16,10 @@
 #include "media/base/test_helpers.h"
 #include "media/base/win/mf_helpers.h"
 #include "media/base/win/mf_mocks.h"
+#include "media/cdm/clear_key_cdm_common.h"
 #include "media/cdm/mock_helpers.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 using base::test::RunOnceCallback;
 using ::testing::_;
@@ -31,7 +32,6 @@ using ::testing::StrictMock;
 
 namespace media {
 
-const char kClearKeyKeySystem[] = "org.w3.clearkey";
 const CdmConfig kClearKeyHardwareSecureCdmConfig = {kClearKeyKeySystem, true,
                                                     true, true};
 
@@ -91,7 +91,8 @@ class MediaFoundationCdmFactoryTest : public testing::Test {
   ComPtr<MockMFCdmFactory> mf_cdm_factory_;
   ComPtr<MockMFCdmAccess> mf_cdm_access_;
   ComPtr<MockMFCdm> mf_cdm_;
-  raw_ptr<StrictMock<MockCdmAuxiliaryHelper>> cdm_helper_ = nullptr;
+  raw_ptr<StrictMock<MockCdmAuxiliaryHelper>, DanglingUntriaged> cdm_helper_ =
+      nullptr;
   std::unique_ptr<MediaFoundationCdmFactory> cdm_factory_;
   base::MockCallback<CdmCreatedCB> cdm_created_cb_;
 };
@@ -106,7 +107,7 @@ TEST_F(MediaFoundationCdmFactoryTest, Create) {
       .WillOnce(DoAll(SetComPointee<3>(mf_cdm_access_.Get()), Return(S_OK)));
   EXPECT_CALL(*cdm_helper_, GetMediaFoundationCdmData(_))
       .WillOnce(RunOnceCallback<0>(std::make_unique<MediaFoundationCdmData>(
-          base::UnguessableToken::Create(), absl::nullopt, base::FilePath())));
+          base::UnguessableToken::Create(), std::nullopt, base::FilePath())));
   COM_EXPECT_CALL(mf_cdm_access_, CreateContentDecryptionModule(NotNull(), _))
       .WillOnce(DoAll(SetComPointee<1>(mf_cdm_.Get()), Return(S_OK)));
 
@@ -119,7 +120,7 @@ TEST_F(MediaFoundationCdmFactoryTest, CreateCdmFactoryFail) {
 
   EXPECT_CALL(*cdm_helper_, GetMediaFoundationCdmData(_))
       .WillOnce(RunOnceCallback<0>(std::make_unique<MediaFoundationCdmData>(
-          base::UnguessableToken::Create(), absl::nullopt, base::FilePath())));
+          base::UnguessableToken::Create(), std::nullopt, base::FilePath())));
 
   EXPECT_CALL(cdm_created_cb_, Run(IsNull(), _));
   Create();
@@ -132,7 +133,7 @@ TEST_F(MediaFoundationCdmFactoryTest, IsTypeSupportedFail) {
       .WillOnce(Return(FALSE));
   EXPECT_CALL(*cdm_helper_, GetMediaFoundationCdmData(_))
       .WillOnce(RunOnceCallback<0>(std::make_unique<MediaFoundationCdmData>(
-          base::UnguessableToken::Create(), absl::nullopt, base::FilePath())));
+          base::UnguessableToken::Create(), std::nullopt, base::FilePath())));
 
   EXPECT_CALL(cdm_created_cb_, Run(IsNull(), _));
   Create();
@@ -148,7 +149,7 @@ TEST_F(MediaFoundationCdmFactoryTest, CreateCdmAccessFail) {
       .WillOnce(Return(E_FAIL));
   EXPECT_CALL(*cdm_helper_, GetMediaFoundationCdmData(_))
       .WillOnce(RunOnceCallback<0>(std::make_unique<MediaFoundationCdmData>(
-          base::UnguessableToken::Create(), absl::nullopt, base::FilePath())));
+          base::UnguessableToken::Create(), std::nullopt, base::FilePath())));
 
   EXPECT_CALL(cdm_created_cb_, Run(IsNull(), _));
   Create();
@@ -159,7 +160,7 @@ TEST_F(MediaFoundationCdmFactoryTest, NullCdmOriginIdFail) {
 
   EXPECT_CALL(*cdm_helper_, GetMediaFoundationCdmData(_))
       .WillOnce(RunOnceCallback<0>(std::make_unique<MediaFoundationCdmData>(
-          base::UnguessableToken::Null(), absl::nullopt, base::FilePath())));
+          base::UnguessableToken::Null(), std::nullopt, base::FilePath())));
 
   EXPECT_CALL(cdm_created_cb_, Run(IsNull(), _));
   Create();
@@ -175,7 +176,7 @@ TEST_F(MediaFoundationCdmFactoryTest, CreateCdmFail) {
       .WillOnce(DoAll(SetComPointee<3>(mf_cdm_access_.Get()), Return(S_OK)));
   EXPECT_CALL(*cdm_helper_, GetMediaFoundationCdmData(_))
       .WillOnce(RunOnceCallback<0>(std::make_unique<MediaFoundationCdmData>(
-          base::UnguessableToken::Create(), absl::nullopt, base::FilePath())));
+          base::UnguessableToken::Create(), std::nullopt, base::FilePath())));
   COM_EXPECT_CALL(mf_cdm_access_, CreateContentDecryptionModule(NotNull(), _))
       .WillOnce(DoAll(SetComPointee<1>(mf_cdm_.Get()), Return(E_FAIL)));
 

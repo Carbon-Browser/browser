@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,13 @@ struct Configuration {
   // its graph of interconnected Mojo-embedder processes. This setting is only
   // relevant in multiprocess environments.
   bool is_broker_process = false;
+
+  // Forcibly disables the Mojo's ipcz-based implementation. This is an
+  // alternative to manual feature override for applications which don't use
+  // base::FeatureList.
+  //
+  // TODO(crbug.com/40058840): Remove this once dependents are gone.
+  bool disable_ipcz = false;
 
   // If |true|, this process will always attempt to allocate shared memory
   // directly rather than synchronously delegating to a broker process where

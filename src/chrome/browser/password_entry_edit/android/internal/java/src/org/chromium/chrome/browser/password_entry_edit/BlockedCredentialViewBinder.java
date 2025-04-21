@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,16 +20,20 @@ import org.chromium.ui.modelutil.PropertyModel;
  * in {@link BlockedCredentialFragmentView}.
  */
 public class BlockedCredentialViewBinder {
-    static void bindBlockedCredentialView(PropertyModel model,
-            BlockedCredentialFragmentView fragmentView, PropertyKey propertyKey) {
+    static void bindBlockedCredentialView(
+            PropertyModel model,
+            BlockedCredentialFragmentView fragmentView,
+            PropertyKey propertyKey) {
         if (propertyKey == UI_ACTION_HANDLER) {
             fragmentView.setUiActionHandler(model.get(UI_ACTION_HANDLER));
         } else if (propertyKey == URL_OR_APP) {
             fragmentView.setUrlOrApp(model.get(URL_OR_APP));
         } else if (propertyKey == UI_DISMISSED_BY_NATIVE) {
             fragmentView.dismiss();
-        } else if (propertyKey == FEDERATION_ORIGIN || propertyKey == USERNAME
-                || propertyKey == PASSWORD || propertyKey == PASSWORD_VISIBLE) {
+        } else if (propertyKey == FEDERATION_ORIGIN
+                || propertyKey == USERNAME
+                || propertyKey == PASSWORD
+                || propertyKey == PASSWORD_VISIBLE) {
             // These properties are not relevant for the blocked credential view.
         } else {
             assert false : "Unhandled update to property: " + propertyKey;

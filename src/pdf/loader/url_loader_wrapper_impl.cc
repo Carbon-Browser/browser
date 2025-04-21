@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,12 +11,14 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/compiler_specific.h"
 #include "base/containers/span.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
@@ -90,14 +92,20 @@ bool IsDoubleEndLineAtEnd(const char* buffer, int size) {
   if (size < 2)
     return false;
 
-  if (buffer[size - 1] == '\n' && buffer[size - 2] == '\n')
-    return true;
+  UNSAFE_TODO({
+    if (buffer[size - 1] == '\n' && buffer[size - 2] == '\n') {
+      return true;
+    }
+  });
 
-  if (size < 4)
+  if (size < 4) {
     return false;
+  }
 
-  return buffer[size - 1] == '\n' && buffer[size - 2] == '\r' &&
-         buffer[size - 3] == '\n' && buffer[size - 4] == '\r';
+  UNSAFE_TODO({
+    return buffer[size - 1] == '\n' && buffer[size - 2] == '\r' &&
+           buffer[size - 3] == '\n' && buffer[size - 4] == '\r';
+  });
 }
 
 }  // namespace
@@ -162,11 +170,9 @@ void URLLoaderWrapperImpl::OpenRange(const std::string& url,
 }
 
 void URLLoaderWrapperImpl::ReadResponseBody(
-    char* buffer,
-    int buffer_size,
+    base::span<char> buffer,
     base::OnceCallback<void(int)> callback) {
   buffer_ = buffer;
-  buffer_size_ = buffer_size;
   read_starter_.Start(
       FROM_HERE, kReadDelayMs,
       base::BindOnce(&URLLoaderWrapperImpl::ReadResponseBodyImpl,
@@ -176,9 +182,8 @@ void URLLoaderWrapperImpl::ReadResponseBody(
 void URLLoaderWrapperImpl::ReadResponseBodyImpl(
     base::OnceCallback<void(int)> callback) {
   url_loader_->ReadResponseBody(
-      base::make_span(buffer_.get(), buffer_size_),
-      base::BindOnce(&URLLoaderWrapperImpl::DidRead, weak_factory_.GetWeakPtr(),
-                     std::move(callback)));
+      buffer_, base::BindOnce(&URLLoaderWrapperImpl::DidRead,
+                              weak_factory_.GetWeakPtr(), std::move(callback)));
 }
 
 void URLLoaderWrapperImpl::ParseHeaders(const std::string& response_headers) {
@@ -197,7 +202,7 @@ void URLLoaderWrapperImpl::ParseHeaders(const std::string& response_headers) {
   net::HttpUtil::HeadersIterator it(response_headers.begin(),
                                     response_headers.end(), "\n");
   while (it.GetNext()) {
-    base::StringPiece name = it.name_piece();
+    std::string_view name = it.name_piece();
     if (base::EqualsCaseInsensitiveASCII(name, "content-length")) {
       content_length_ = atoi(it.values().c_str());
     } else if (base::EqualsCaseInsensitiveASCII(name, "accept-ranges")) {
@@ -218,7 +223,7 @@ void URLLoaderWrapperImpl::ParseHeaders(const std::string& response_headers) {
         const char* boundary = strstr(type.c_str(), "boundary=");
         DCHECK(boundary);
         if (boundary) {
-          multipart_boundary_ = std::string(boundary + 9);
+          UNSAFE_TODO({ multipart_boundary_ = std::string(boundary + 9); });
           is_multipart_ = !multipart_boundary_.empty();
         }
       }
@@ -259,17 +264,17 @@ void URLLoaderWrapperImpl::DidRead(base::OnceCallback<void(int)> callback,
     return;
   }
 
-  char* start = buffer_;
+  char* start = buffer_.data();
   size_t length = result;
   multi_part_processed_ = true;
   for (int i = 2; i < result; ++i) {
-    if (IsDoubleEndLineAtEnd(buffer_, i)) {
+    if (IsDoubleEndLineAtEnd(buffer_.data(), i)) {
       int start_pos = 0;
       int end_pos = 0;
-      if (GetByteRangeFromHeaders(std::string(buffer_.get(), i), &start_pos,
+      if (GetByteRangeFromHeaders(std::string(buffer_.data(), i), &start_pos,
                                   &end_pos)) {
         byte_range_ = gfx::Range(start_pos, end_pos);
-        start += i;
+        UNSAFE_TODO({ start += i; });
         length -= i;
       }
       break;
@@ -281,7 +286,7 @@ void URLLoaderWrapperImpl::DidRead(base::OnceCallback<void(int)> callback,
     return ReadResponseBodyImpl(std::move(callback));
   }
   DCHECK_GT(result, 0);
-  memmove(buffer_, start, result);
+  memmove(buffer_.data(), start, result);
 
   std::move(callback).Run(result);
 }

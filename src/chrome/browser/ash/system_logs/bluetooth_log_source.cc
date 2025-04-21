@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@ constexpr char kBluetoothFlossLogEntry[] = "CHROMEOS_BLUETOOTH_FLOSS";
 
 BluetoothLogSource::BluetoothLogSource() : SystemLogsSource("BluetoothLog") {}
 
-BluetoothLogSource::~BluetoothLogSource() {}
+BluetoothLogSource::~BluetoothLogSource() = default;
 
 void BluetoothLogSource::Fetch(SysLogsSourceCallback callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "base/files/file_path.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "storage/browser/blob/shareable_file_reference.h"
 #include "storage/browser/file_system/async_file_util.h"
 #include "storage/browser/file_system/watcher_manager.h"
@@ -63,7 +64,7 @@ class DeviceMediaAsyncFileUtil : public storage::AsyncFileUtil {
       StatusCallback callback) override;
   void GetFileInfo(std::unique_ptr<storage::FileSystemOperationContext> context,
                    const storage::FileSystemURL& url,
-                   int /* flags */,
+                   GetMetadataFieldSet fields,
                    GetFileInfoCallback callback) override;
   void ReadDirectory(
       std::unique_ptr<storage::FileSystemOperationContext> context,

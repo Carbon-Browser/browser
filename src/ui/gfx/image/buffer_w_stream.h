@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,17 @@
 #define UI_GFX_IMAGE_BUFFER_W_STREAM_H_
 
 #include <stdint.h>
+
 #include <vector>
 
+#include "base/component_export.h"
 #include "third_party/skia/include/core/SkStream.h"
-#include "ui/gfx/gfx_export.h"
 
 namespace gfx {
 
 // Writes bytes to a std::vector that can be fetched. This is used to record the
 // output of skia image encoding.
-class GFX_EXPORT BufferWStream : public SkWStream {
+class COMPONENT_EXPORT(GFX) BufferWStream : public SkWStream {
  public:
   BufferWStream();
   BufferWStream(const BufferWStream&) = delete;

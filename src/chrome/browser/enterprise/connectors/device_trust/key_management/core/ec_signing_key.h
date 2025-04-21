@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,7 @@ class ECSigningKeyProvider : public crypto::UnexportableKeyProvider {
   ~ECSigningKeyProvider() override;
 
   // crypto::UnexportableKeyProvider:
-  absl::optional<crypto::SignatureVerifier::SignatureAlgorithm> SelectAlgorithm(
+  std::optional<crypto::SignatureVerifier::SignatureAlgorithm> SelectAlgorithm(
       base::span<const crypto::SignatureVerifier::SignatureAlgorithm>
           acceptable_algorithms) override;
   std::unique_ptr<crypto::UnexportableSigningKey> GenerateSigningKeySlowly(
@@ -29,6 +29,7 @@ class ECSigningKeyProvider : public crypto::UnexportableKeyProvider {
           acceptable_algorithms) override;
   std::unique_ptr<crypto::UnexportableSigningKey> FromWrappedSigningKeySlowly(
       base::span<const uint8_t> wrapped_key) override;
+  bool DeleteSigningKeySlowly(base::span<const uint8_t> wrapped_key) override;
 };
 
 }  // namespace enterprise_connectors

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,14 +15,17 @@ std::unique_ptr<LayerImpl> MirrorLayer::CreateLayerImpl(
   return MirrorLayerImpl::Create(tree_impl, id());
 }
 
-void MirrorLayer::PushPropertiesTo(
+void MirrorLayer::PushDirtyPropertiesTo(
     LayerImpl* layer,
+    uint8_t dirty_flag,
     const CommitState& commit_state,
     const ThreadUnsafeCommitState& unsafe_state) {
-  Layer::PushPropertiesTo(layer, commit_state, unsafe_state);
+  Layer::PushDirtyPropertiesTo(layer, dirty_flag, commit_state, unsafe_state);
 
-  auto* mirror_layer = static_cast<MirrorLayerImpl*>(layer);
-  mirror_layer->SetMirroredLayerId(mirrored_layer_->id());
+  if (dirty_flag & kChangedGeneralProperty) {
+    auto* mirror_layer = static_cast<MirrorLayerImpl*>(layer);
+    mirror_layer->SetMirroredLayerId(mirrored_layer_->id());
+  }
 }
 
 void MirrorLayer::SetLayerTreeHost(LayerTreeHost* host) {

@@ -1,12 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/services/sharing/nearby/platform/atomic_boolean.h"
 
-namespace location {
-namespace nearby {
-namespace chrome {
+namespace nearby::chrome {
 
 AtomicBoolean::AtomicBoolean(bool initial_value) : value_(initial_value) {}
 
@@ -20,6 +18,4 @@ bool AtomicBoolean::Set(bool value) {
   return value_.exchange(value);
 }
 
-}  // namespace chrome
-}  // namespace nearby
-}  // namespace location
+}  // namespace nearby::chrome

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -78,10 +78,12 @@ std::set<std::string> GetMimeTypesFromFileHandler(
     const FileHandler& file_handler);
 
 // Get a set of all file extensions supported by any of |file_handlers|.
+// Note: These are always transformed to lower-case.
 std::set<std::string> GetFileExtensionsFromFileHandlers(
     const FileHandlers& file_handlers);
 
 // Get a set of all file extensions supported by |file_handler|.
+// Note: These are always transformed to lower-case.
 std::set<std::string> GetFileExtensionsFromFileHandler(
     const FileHandler& file_handler);
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,7 +34,6 @@ network::mojom::ReferrerPolicy ReferrerUtils::NetToMojoReferrerPolicy(
       return network::mojom::ReferrerPolicy::kNever;
   }
   NOTREACHED();
-  return network::mojom::ReferrerPolicy::kDefault;
 }
 
 net::ReferrerPolicy ReferrerUtils::GetDefaultNetReferrerPolicy() {

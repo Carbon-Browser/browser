@@ -1,29 +1,31 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/sharing/sharing_dialog_view.h"
 
-#include "base/bind.h"
+#include <optional>
+
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/app/vector_icons/vector_icons.h"
-#include "chrome/browser/sharing/sharing_app.h"
-#include "chrome/browser/sharing/sharing_metrics.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/views/accessibility/theme_tracking_non_accessible_image_view.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/browser/ui/views/chrome_typography.h"
+#include "chrome/browser/ui/views/controls/hover_button.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/toolbar_button_provider.h"
-#include "chrome/browser/ui/views/hover_button.h"
+#include "components/sharing_message/sharing_app.h"
+#include "components/sharing_message/sharing_metrics.h"
 #include "components/sync/protocol/sync_enums.pb.h"
 #include "components/sync_device_info/device_info.h"
 #include "components/url_formatter/elide_url.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/models/image_model.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/color/color_id.h"
 #include "ui/gfx/color_utils.h"
@@ -91,14 +93,28 @@ std::unique_ptr<views::View> CreateOriginView(const SharingDialogData& data) {
   return label;
 }
 
+const gfx::VectorIcon& GetIconType(
+    const syncer::DeviceInfo::FormFactor& device_form_factor) {
+  switch (device_form_factor) {
+    case syncer::DeviceInfo::FormFactor::kPhone:
+      return kHardwareSmartphoneIcon;
+    case syncer::DeviceInfo::FormFactor::kTablet:
+      return kTabletIcon;
+    default:
+      return kHardwareComputerIcon;
+  }
+}
+
 }  // namespace
 
 SharingDialogView::SharingDialogView(views::View* anchor_view,
                                      content::WebContents* web_contents,
                                      SharingDialogData data)
-    : LocationBarBubbleDelegateView(anchor_view, web_contents),
+    : LocationBarBubbleDelegateView(anchor_view,
+                                    web_contents,
+                                    /*autosize=*/true),
       data_(std::move(data)) {
-  SetButtons(ui::DIALOG_BUTTON_NONE);
+  SetButtons(static_cast<int>(ui::mojom::DialogButton::kNone));
 
   set_fixed_width(views::LayoutProvider::Get()->GetDistanceMetric(
       views::DISTANCE_BUBBLE_PREFERRED_WIDTH));
@@ -128,8 +144,9 @@ std::u16string SharingDialogView::GetWindowTitle() const {
 }
 
 void SharingDialogView::WindowClosing() {
-  if (data_.close_callback)
+  if (data_.close_callback) {
     std::move(data_.close_callback).Run(this);
+  }
 }
 
 void SharingDialogView::WebContentsDestroyed() {
@@ -164,7 +181,7 @@ SharingDialogType SharingDialogView::GetDialogType() const {
 void SharingDialogView::DeviceButtonPressed(size_t index) {
   DCHECK_LT(index, data_.devices.size());
   LogSharingSelectedIndex(data_.prefix, kSharingUiDialog, index);
-  std::move(data_.device_callback).Run(*data_.devices[index]);
+  std::move(data_.device_callback).Run(data_.devices[index]);
   CloseBubble();
 }
 
@@ -189,8 +206,9 @@ views::BubbleDialogDelegateView* SharingDialogView::GetAsBubbleForClickToCall(
   if (!dialog) {
     auto* bubble = IntentPickerBubbleView::intent_picker_bubble();
     if (bubble && bubble->bubble_type() ==
-                      IntentPickerBubbleView::BubbleType::kClickToCall)
+                      IntentPickerBubbleView::BubbleType::kClickToCall) {
       return bubble;
+    }
   }
 #endif
   return static_cast<SharingDialogView*>(dialog);
@@ -225,9 +243,6 @@ void SharingDialogView::Init() {
   set_margins(gfx::Insets::TLBR(insets.top(), 0, insets.bottom(), 0));
   SetBorder(views::CreateEmptyBorder(
       gfx::Insets::TLBR(0, insets.left(), 0, insets.right())));
-
-  if (GetWidget())
-    SizeToContents();
 }
 
 void SharingDialogView::InitListView() {
@@ -245,20 +260,17 @@ void SharingDialogView::InitListView() {
   // Devices:
   LogSharingDevicesToShow(data_.prefix, kSharingUiDialog, data_.devices.size());
   size_t index = 0;
-  for (const auto& device : data_.devices) {
-    auto icon =
-        std::make_unique<views::ImageView>(ui::ImageModel::FromVectorIcon(
-            device->device_type() == sync_pb::SyncEnums::TYPE_TABLET
-                ? kTabletIcon
-                : kHardwareSmartphoneIcon,
-            ui::kColorIcon, kPrimaryIconSize));
+  for (const SharingTargetDeviceInfo& device : data_.devices) {
+    auto icon = std::make_unique<views::ImageView>(
+        ui::ImageModel::FromVectorIcon(GetIconType(device.form_factor()),
+                                       ui::kColorIcon, kPrimaryIconSize));
 
     auto* dialog_button =
         button_list->AddChildView(std::make_unique<HoverButton>(
             base::BindRepeating(&SharingDialogView::DeviceButtonPressed,
                                 base::Unretained(this), index++),
-            std::move(icon), base::UTF8ToUTF16(device->client_name()),
-            GetLastUpdatedTimeInDays(device->last_updated_timestamp())));
+            std::move(icon), base::UTF8ToUTF16(device.client_name()),
+            GetLastUpdatedTimeInDays(device.last_updated_timestamp())));
     dialog_button->SetEnabled(true);
     dialog_button->SetBorder(views::CreateEmptyBorder(device_border));
   }
@@ -273,7 +285,7 @@ void SharingDialogView::InitListView() {
           *app.vector_icon, ui::kColorIcon, kPrimaryIconSize));
     } else {
       icon = std::make_unique<views::ImageView>();
-      icon->SetImage(app.image.AsImageSkia());
+      icon->SetImage(ui::ImageModel::FromImage(app.image));
     }
 
     auto* dialog_button =

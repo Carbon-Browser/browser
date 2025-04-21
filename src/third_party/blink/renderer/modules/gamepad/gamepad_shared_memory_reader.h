@@ -1,13 +1,13 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_GAMEPAD_GAMEPAD_SHARED_MEMORY_READER_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_GAMEPAD_GAMEPAD_SHARED_MEMORY_READER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "device/gamepad/public/mojom/gamepad.mojom-blink.h"
 #include "device/gamepad/public/mojom/gamepad_hardware_buffer.h"
-#include "mojo/public/cpp/system/buffer.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_receiver.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
@@ -18,7 +18,9 @@ class ReadOnlySharedMemoryRegion;
 }
 
 namespace device {
-class Gamepad;
+template <class T>
+class GamepadImpl;
+using Gamepad = GamepadImpl<void>;
 class Gamepads;
 }  // namespace device
 
@@ -53,11 +55,11 @@ class GamepadSharedMemoryReader
                         const device::Gamepad& gamepad) override;
   void GamepadDisconnected(uint32_t index,
                            const device::Gamepad& gamepad) override;
-  void GamepadChanged(device::mojom::blink::GamepadChangesPtr changes) override;
 
   base::ReadOnlySharedMemoryRegion renderer_shared_buffer_region_;
   base::ReadOnlySharedMemoryMapping renderer_shared_buffer_mapping_;
-  const device::GamepadHardwareBuffer* gamepad_hardware_buffer_ = nullptr;
+  raw_ptr<const device::GamepadHardwareBuffer> gamepad_hardware_buffer_ =
+      nullptr;
 
   bool ever_interacted_with_ = false;
 
@@ -65,7 +67,7 @@ class GamepadSharedMemoryReader
                    GamepadSharedMemoryReader>
       receiver_;
   HeapMojoRemote<device::mojom::blink::GamepadMonitor> gamepad_monitor_remote_;
-  blink::GamepadListener* listener_ = nullptr;
+  raw_ptr<blink::GamepadListener> listener_ = nullptr;
 };
 
 }  // namespace blink

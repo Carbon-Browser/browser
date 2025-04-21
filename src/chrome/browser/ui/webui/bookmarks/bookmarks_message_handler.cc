@@ -1,20 +1,20 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/webui/bookmarks/bookmarks_message_handler.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/common/pref_names.h"
 #include "components/bookmarks/common/bookmark_pref_names.h"
+#include "components/policy/core/common/policy_pref_names.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
 
-BookmarksMessageHandler::BookmarksMessageHandler() {}
+BookmarksMessageHandler::BookmarksMessageHandler() = default;
 
-BookmarksMessageHandler::~BookmarksMessageHandler() {}
+BookmarksMessageHandler::~BookmarksMessageHandler() = default;
 
 void BookmarksMessageHandler::RegisterMessages() {
   web_ui()->RegisterMessageCallback(
@@ -32,7 +32,7 @@ void BookmarksMessageHandler::OnJavascriptAllowed() {
   PrefService* prefs = Profile::FromWebUI(web_ui())->GetPrefs();
   pref_change_registrar_.Init(prefs);
   pref_change_registrar_.Add(
-      prefs::kIncognitoModeAvailability,
+      policy::policy_prefs::kIncognitoModeAvailability,
       base::BindRepeating(&BookmarksMessageHandler::UpdateIncognitoAvailability,
                           base::Unretained(this)));
   pref_change_registrar_.Add(
@@ -47,7 +47,7 @@ void BookmarksMessageHandler::OnJavascriptDisallowed() {
 
 int BookmarksMessageHandler::GetIncognitoAvailability() {
   PrefService* prefs = Profile::FromWebUI(web_ui())->GetPrefs();
-  return prefs->GetInteger(prefs::kIncognitoModeAvailability);
+  return prefs->GetInteger(policy::policy_prefs::kIncognitoModeAvailability);
 }
 
 void BookmarksMessageHandler::HandleGetIncognitoAvailability(

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,7 @@ class CORE_EXPORT ReadableStreamBytesConsumer final : public BytesConsumer {
       delete;
   ~ReadableStreamBytesConsumer() override;
 
-  Result BeginRead(const char** buffer, size_t* available) override;
+  Result BeginRead(base::span<const char>& buffer) override;
   Result EndRead(size_t read_size) override;
   void SetClient(BytesConsumer::Client*) override;
   void ClearClient() override;
@@ -43,8 +43,7 @@ class CORE_EXPORT ReadableStreamBytesConsumer final : public BytesConsumer {
   void Trace(Visitor*) const override;
 
  private:
-  class Fulfilled;
-  class Rejected;
+  class BytesConsumerReadRequest;
 
   void OnRead(DOMUint8Array*);
   void OnReadDone();
@@ -59,6 +58,7 @@ class CORE_EXPORT ReadableStreamBytesConsumer final : public BytesConsumer {
   size_t pending_offset_ = 0;
   PublicState state_ = PublicState::kReadableOrWaiting;
   bool is_reading_ = false;
+  bool is_inside_read_ = false;
 };
 
 }  // namespace blink

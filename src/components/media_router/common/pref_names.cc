@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,10 @@ namespace prefs {
 
 // Whether the enterprise policy allows Cast devices on all IPs.
 const char kMediaRouterCastAllowAllIPs[] = "media_router.cast_allow_all_ips";
+// Whether the local discovery permission rejected error should be suppressed in
+// the GMC UI.
+const char kSuppressLocalDiscoveryPermissionError[] =
+    "media_router.suppress_local_discovery_permission_error";
 // Whether or not the user has enabled Media Remoting. Defaults to true.
 const char kMediaRouterMediaRemotingEnabled[] =
     "media_router.media_remoting.enabled";
@@ -21,9 +25,6 @@ const char kMediaRouterReceiverIdHashToken[] =
 // dialog. Defaults to true.
 const char kMediaRouterShowCastSessionsStartedByOtherDevices[] =
     "media_router.show_cast_sessions_started_by_other_devices.enabled";
-// A list of website origins on which the user has chosen to use tab mirroring.
-const char kMediaRouterTabMirroringSources[] =
-    "media_router.tab_mirroring_sources";
 
 }  // namespace prefs
 }  // namespace media_router

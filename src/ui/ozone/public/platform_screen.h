@@ -1,10 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_OZONE_PUBLIC_PLATFORM_SCREEN_H_
 #define UI_OZONE_PUBLIC_PLATFORM_SCREEN_H_
 
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -51,7 +52,7 @@ class COMPONENT_EXPORT(OZONE_BASE) PlatformScreen {
 
   virtual ~PlatformScreen();
 
-  // Provide a |display:;Display| for each physical display available to Chrome.
+  // Provide a |display::Display| for each physical display available to Chrome.
   virtual const std::vector<display::Display>& GetAllDisplays() const = 0;
 
   // Returns the |Display| whose origin (top left corner) is 0,0 in the
@@ -72,16 +73,16 @@ class COMPONENT_EXPORT(OZONE_BASE) PlatformScreen {
       gfx::AcceleratedWidget widget) const;
 
   virtual gfx::AcceleratedWidget GetAcceleratedWidgetAtScreenPoint(
-      const gfx::Point& point) const = 0;
+      const gfx::Point& point_in_dip) const = 0;
 
   // Returns top level accelerated widget at |point| ignoring |ignore|.
   virtual gfx::AcceleratedWidget GetLocalProcessWidgetAtPoint(
-      const gfx::Point& point,
+      const gfx::Point& point_in_dip,
       const std::set<gfx::AcceleratedWidget>& ignore) const;
 
   // Returns the |Display| nearest the specified point. |point| must be in DIPs.
   virtual display::Display GetDisplayNearestPoint(
-      const gfx::Point& point) const = 0;
+      const gfx::Point& point_in_dip) const = 0;
 
   // Returns the |Display| that most closely intersects the provided rect if one
   // exists.
@@ -130,9 +131,11 @@ class COMPONENT_EXPORT(OZONE_BASE) PlatformScreen {
   virtual base::Value::List GetGpuExtraInfo(
       const gfx::GpuExtraInfo& gpu_extra_info);
 
-  // Sets device scale factor received from external sources such as toolkits.
-  // Currently only used by Linux.
-  virtual void SetDeviceScaleFactor(float scale);
+  // Returns the preferred scale factor for a |widget|, if any. Used, for
+  // example, in Wayland implementation when wp-fractional-scale protocol is
+  // available.
+  virtual std::optional<float> GetPreferredScaleFactorForAcceleratedWidget(
+      gfx::AcceleratedWidget widget) const;
 
  protected:
   void StorePlatformNameIntoListOfValues(base::Value::List& values,

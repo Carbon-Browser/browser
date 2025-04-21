@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,8 +28,7 @@ public class TypeOfflineItemFilter extends OfflineItemFilter {
     // OfflineItemFilter implementation.
     @Override
     protected boolean isFilteredOut(OfflineItem item) {
-        @Filters.FilterType
-        int type = Filters.fromOfflineItem(item);
+        @Filters.FilterType int type = Filters.fromOfflineItem(item);
 
         // Prefetched articles are not subject to the FilterType.NONE section.  We have to prune
         // those out unless the filter matches exactly.

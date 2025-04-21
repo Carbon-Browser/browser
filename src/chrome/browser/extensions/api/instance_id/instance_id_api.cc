@@ -1,12 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/extensions/api/instance_id/instance_id_api.h"
 
-#include <memory>
-
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
 #include "base/time/time.h"
@@ -44,10 +42,9 @@ const char* InstanceIDResultToError(instance_id::InstanceID::Result result) {
     case instance_id::InstanceID::UNKNOWN_ERROR:
       return kUnknownError;
     default:
-       NOTREACHED() << "Unexpected value of result cannot be converted: "
-                    << result;
+      NOTREACHED() << "Unexpected value of result cannot be converted: "
+                   << result;
   }
-  return "";
 }
 
 }  // namespace
@@ -70,9 +67,9 @@ instance_id::InstanceID* InstanceIDApiFunction::GetInstanceID() const {
           GetInstanceID(extension()->id());
 }
 
-InstanceIDGetIDFunction::InstanceIDGetIDFunction() {}
+InstanceIDGetIDFunction::InstanceIDGetIDFunction() = default;
 
-InstanceIDGetIDFunction::~InstanceIDGetIDFunction() {}
+InstanceIDGetIDFunction::~InstanceIDGetIDFunction() = default;
 
 ExtensionFunction::ResponseAction InstanceIDGetIDFunction::DoWork() {
   GetInstanceID()->GetID(
@@ -81,12 +78,14 @@ ExtensionFunction::ResponseAction InstanceIDGetIDFunction::DoWork() {
 }
 
 void InstanceIDGetIDFunction::GetIDCompleted(const std::string& id) {
-  Respond(OneArgument(base::Value(id)));
+  Respond(WithArguments(id));
 }
 
-InstanceIDGetCreationTimeFunction::InstanceIDGetCreationTimeFunction() {}
+InstanceIDGetCreationTimeFunction::InstanceIDGetCreationTimeFunction() =
+    default;
 
-InstanceIDGetCreationTimeFunction::~InstanceIDGetCreationTimeFunction() {}
+InstanceIDGetCreationTimeFunction::~InstanceIDGetCreationTimeFunction() =
+    default;
 
 ExtensionFunction::ResponseAction InstanceIDGetCreationTimeFunction::DoWork() {
   GetInstanceID()->GetCreationTime(base::BindOnce(
@@ -96,17 +95,17 @@ ExtensionFunction::ResponseAction InstanceIDGetCreationTimeFunction::DoWork() {
 
 void InstanceIDGetCreationTimeFunction::GetCreationTimeCompleted(
     const base::Time& creation_time) {
-  Respond(OneArgument(base::Value(creation_time.ToDoubleT())));
+  Respond(WithArguments(creation_time.InSecondsFSinceUnixEpoch()));
 }
 
-InstanceIDGetTokenFunction::InstanceIDGetTokenFunction() {}
+InstanceIDGetTokenFunction::InstanceIDGetTokenFunction() = default;
 
-InstanceIDGetTokenFunction::~InstanceIDGetTokenFunction() {}
+InstanceIDGetTokenFunction::~InstanceIDGetTokenFunction() = default;
 
 ExtensionFunction::ResponseAction InstanceIDGetTokenFunction::DoWork() {
-  std::unique_ptr<api::instance_id::GetToken::Params> params =
+  std::optional<api::instance_id::GetToken::Params> params =
       api::instance_id::GetToken::Params::Create(args());
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   GetInstanceID()->GetToken(
       params->get_token_params.authorized_entity,
@@ -121,19 +120,19 @@ void InstanceIDGetTokenFunction::GetTokenCompleted(
     const std::string& token,
     instance_id::InstanceID::Result result) {
   if (result == instance_id::InstanceID::SUCCESS)
-    Respond(OneArgument(base::Value(token)));
+    Respond(WithArguments(token));
   else
     Respond(Error(InstanceIDResultToError(result)));
 }
 
-InstanceIDDeleteTokenFunction::InstanceIDDeleteTokenFunction() {}
+InstanceIDDeleteTokenFunction::InstanceIDDeleteTokenFunction() = default;
 
-InstanceIDDeleteTokenFunction::~InstanceIDDeleteTokenFunction() {}
+InstanceIDDeleteTokenFunction::~InstanceIDDeleteTokenFunction() = default;
 
 ExtensionFunction::ResponseAction InstanceIDDeleteTokenFunction::DoWork() {
-  std::unique_ptr<api::instance_id::DeleteToken::Params> params =
+  std::optional<api::instance_id::DeleteToken::Params> params =
       api::instance_id::DeleteToken::Params::Create(args());
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   GetInstanceID()->DeleteToken(
       params->delete_token_params.authorized_entity,
@@ -152,9 +151,9 @@ void InstanceIDDeleteTokenFunction::DeleteTokenCompleted(
     Respond(Error(InstanceIDResultToError(result)));
 }
 
-InstanceIDDeleteIDFunction::InstanceIDDeleteIDFunction() {}
+InstanceIDDeleteIDFunction::InstanceIDDeleteIDFunction() = default;
 
-InstanceIDDeleteIDFunction::~InstanceIDDeleteIDFunction() {}
+InstanceIDDeleteIDFunction::~InstanceIDDeleteIDFunction() = default;
 
 ExtensionFunction::ResponseAction InstanceIDDeleteIDFunction::DoWork() {
   GetInstanceID()->DeleteID(

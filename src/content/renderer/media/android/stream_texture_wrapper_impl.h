@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -104,7 +104,7 @@ class CONTENT_EXPORT StreamTextureWrapperImpl
   void CreateVideoFrame(const gpu::Mailbox& mailbox,
                         const gfx::Size& coded_size,
                         const gfx::Rect& visible_rect,
-                        const absl::optional<gpu::VulkanYCbCrInfo>& ycbcr_info);
+                        const std::optional<gpu::VulkanYCbCrInfo>& ycbcr_info);
 
   void SetCurrentFrameInternal(scoped_refptr<media::VideoFrame> video_frame);
 

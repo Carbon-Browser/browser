@@ -87,6 +87,7 @@ class CORE_EXPORT HTMLOptionElement final : public HTMLElement {
 
   bool IsDisabledFormControl() const override;
   String DefaultToolTip() const override;
+  void DefaultEventHandler(Event&) override;
 
   String TextIndentedToRespectGroupLabel() const;
 
@@ -98,7 +99,7 @@ class CORE_EXPORT HTMLOptionElement final : public HTMLElement {
   HTMLFormElement* form() const;
   bool SpatialNavigationFocused() const;
 
-  bool IsDisplayNone() const;
+  bool IsDisplayNone(bool ensure_style);
 
   int ListIndex() const;
 
@@ -110,8 +111,19 @@ class CORE_EXPORT HTMLOptionElement final : public HTMLElement {
   }
   bool WasOptionInsertedCalled() const { return was_option_inserted_called_; }
 
-  void OptionInsertedIntoSelectMenuElement();
-  void OptionRemovedFromSelectMenuElement();
+  Node::InsertionNotificationRequest InsertedInto(ContainerNode&) override;
+  void RemovedFrom(ContainerNode&) override;
+
+  void FinishParsingChildren() override;
+
+  // These methods mutate the shadowroot to switch between rendering all
+  // children or only text content. SetTextOnlyRendering is used for
+  // appearance:base-select. The mechanism by which these methods render all
+  // children or only text content is that the UA shadowroot has a manually
+  // updated text node for text-only mode or a slot element which just slots all
+  // nodes into it for the render everything mode. SetTextOnlyRendering switches
+  // the ShadowRoot state based on the provided argument.
+  void SetTextOnlyRendering(bool);
 
   // Callback for OptionTextObserver.
   void DidChangeTextContent();
@@ -119,7 +131,7 @@ class CORE_EXPORT HTMLOptionElement final : public HTMLElement {
   bool IsRichlyEditableForAccessibility() const override { return false; }
 
  private:
-  bool SupportsFocus() const override;
+  FocusableState SupportsFocus(UpdateBehavior update_behavior) const override;
   bool MatchesDefaultPseudoClass() const override;
   bool MatchesEnabledPseudoClass() const override;
   void ParseAttribute(const AttributeModificationParams&) override;
@@ -131,6 +143,8 @@ class CORE_EXPORT HTMLOptionElement final : public HTMLElement {
   String CollectOptionInnerText() const;
 
   void UpdateLabel();
+
+  void DefaultEventHandlerInternal(Event&);
 
   Member<OptionTextObserver> text_observer_;
 
@@ -149,9 +163,7 @@ class CORE_EXPORT HTMLOptionElement final : public HTMLElement {
   // OptionInserted() is not called yet.
   bool was_option_inserted_called_ = false;
 
-  // This flag is necessary to detect when an option is a descendant of
-  // <selectmenu> in order to be able to render arbitrary content.
-  bool is_descendant_of_select_menu_ = false;
+  friend class HTMLOptionElementTest;
 };
 
 }  // namespace blink

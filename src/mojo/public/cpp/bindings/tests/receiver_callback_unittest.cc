@@ -1,12 +1,13 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <stdint.h>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/notreached.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/gtest_util.h"
@@ -16,7 +17,7 @@
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/system/message_pipe.h"
 #include "mojo/public/cpp/test_support/test_support.h"
-#include "mojo/public/interfaces/bindings/tests/sample_interfaces.mojom.h"
+#include "mojo/public/interfaces/bindings/tests/sample_interfaces.test-mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -67,22 +68,22 @@ class InterfaceImpl : public sample::Provider {
   }
 
   void EchoString(const std::string& a, EchoStringCallback callback) override {
-    CHECK(false) << "Not implemented.";
+    NOTREACHED() << "Not implemented.";
   }
 
   void EchoStrings(const std::string& a,
                    const std::string& b,
                    EchoStringsCallback callback) override {
-    CHECK(false) << "Not implemented.";
+    NOTREACHED() << "Not implemented.";
   }
 
   void EchoMessagePipeHandle(ScopedMessagePipeHandle a,
                              EchoMessagePipeHandleCallback callback) override {
-    CHECK(false) << "Not implemented.";
+    NOTREACHED() << "Not implemented.";
   }
 
   void EchoEnum(sample::Enum a, EchoEnumCallback callback) override {
-    CHECK(false) << "Not implemented.";
+    NOTREACHED() << "Not implemented.";
   }
 
   void ResetLastServerValueSeen() { last_server_value_seen_ = 0; }

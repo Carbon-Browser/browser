@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define ASH_SYSTEM_PALETTE_PALETTE_TRAY_TEST_API_H_
 
 #include "ash/system/palette/palette_tray.h"
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 
@@ -42,8 +43,12 @@ class PaletteTrayTestApi {
   // Have the tray act as though it is on a display with a stylus
   void SetDisplayHasStylus() { palette_tray_->SetDisplayHasStylusForTesting(); }
 
+  std::u16string GetAccessibleNameForBubble() {
+    return palette_tray_->GetAccessibleNameForBubble();
+  }
+
  private:
-  PaletteTray* palette_tray_ = nullptr;
+  raw_ptr<PaletteTray, DanglingUntriaged> palette_tray_ = nullptr;
 };
 
 }  // namespace ash

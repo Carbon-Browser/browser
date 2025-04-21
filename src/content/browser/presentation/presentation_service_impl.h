@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -45,8 +45,8 @@ class RenderFrameHost;
 //   SetClient()
 //   StartPresentation()
 //   ...
-// TODO(crbug.com/749327): Split the controller and receiver logic into separate
-// classes so that each is easier to reason about.
+// TODO(crbug.com/41336031): Split the controller and receiver logic into
+// separate classes so that each is easier to reason about.
 class CONTENT_EXPORT PresentationServiceImpl
     : public blink::mojom::PresentationService,
       public WebContentsObserver,
@@ -221,11 +221,7 @@ class CONTENT_EXPORT PresentationServiceImpl
   // the PresentationServiceImpl for the presentation receiver is initialized.
   // Calls |receiver_| to create a new PresentationConnection on receiver page.
   void OnReceiverConnectionAvailable(
-      blink::mojom::PresentationInfoPtr presentation_info,
-      mojo::PendingRemote<blink::mojom::PresentationConnection>
-          controller_connection_remote,
-      mojo::PendingReceiver<blink::mojom::PresentationConnection>
-          receiver_connection_receiver);
+      blink::mojom::PresentationConnectionResultPtr result);
 
   // Associates a ReconnectPresentation |callback| with a unique request ID and
   // stores it in a map. Moves out |callback| object if |callback| is registered

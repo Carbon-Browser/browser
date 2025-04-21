@@ -20,6 +20,7 @@ import org.chromium.chrome.R;
 import android.graphics.Color;
 import android.graphics.Shader;
 import android.graphics.LinearGradient;
+import org.chromium.chrome.browser.firstrun.FirstRunFragment;
 
 /** A {@link Fragment} that presents a set of search engines for the user to choose from. */
 public class PrivacyOnboardingMessageFragment extends Fragment implements FirstRunFragment {

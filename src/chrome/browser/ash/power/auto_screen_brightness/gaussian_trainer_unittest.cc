@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -574,7 +574,7 @@ TEST_F(GaussianTrainerTest, TrainedCurveValue) {
 
   const MonotoneCubicSpline trained_curve =
       *(gaussian_trainer_->Train({data}).new_curve);
-  const absl::optional<MonotoneCubicSpline> expected_curve =
+  const std::optional<MonotoneCubicSpline> expected_curve =
       MonotoneCubicSpline::CreateMonotoneCubicSpline(
           log_lux_, {3.0,   8.0,   12.48, 18.72, 24.96, 31.2, 37.44,
                      43.68, 49.92, 56.16, 62.4,  62.4,  62.4, 66.0,

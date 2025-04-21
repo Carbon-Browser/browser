@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,14 @@
 #include "base/command_line.h"
 #include "base/path_service.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/extensions/api/desktop_capture/desktop_capture_api.h"
 #include "chrome/browser/extensions/extension_apitest.h"
 #include "chrome/browser/media/webrtc/fake_desktop_media_picker_factory.h"
+#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/chrome_switches.h"
@@ -24,10 +26,7 @@
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "third_party/webrtc/modules/desktop_capture/desktop_capture_types.h"
-
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ui/ozone/buildflags.h"
-#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ui/base/ozone_buildflags.h"
 
 namespace extensions {
 
@@ -35,6 +34,8 @@ namespace {
 
 using content::DesktopMediaID;
 using content::WebContentsMediaCaptureId;
+using testing::Combine;
+using testing::Values;
 
 class DesktopCaptureApiTest : public ExtensionApiTest {
  public:
@@ -43,8 +44,7 @@ class DesktopCaptureApiTest : public ExtensionApiTest {
         SetPickerFactoryForTests(&picker_factory_);
   }
   ~DesktopCaptureApiTest() override {
-    DesktopCaptureChooseDesktopMediaFunction::
-        SetPickerFactoryForTests(NULL);
+    DesktopCaptureChooseDesktopMediaFunction::SetPickerFactoryForTests(nullptr);
   }
 
   void SetUpOnMainThread() override {
@@ -75,19 +75,9 @@ class DesktopCaptureApiTest : public ExtensionApiTest {
 
 }  // namespace
 
-// The build flag OZONE_PLATFORM_WAYLAND is only available on
-// Linux or ChromeOS, so this simplifies the next set of ifdefs.
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)
-#if BUILDFLAG(OZONE_PLATFORM_WAYLAND)
-#define OZONE_PLATFORM_WAYLAND
-#endif  // BUILDFLAG(OZONE_PLATFORM_WAYLAND)
-#endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_ASH)
-
-// TODO(https://crbug.com/1271673): Crashes on Lacros.
-// TODO(https://crbug.com/1271680): Fails on the linux-wayland-rel bot.
-// TODO(https://crbug.com/1271711): Fails on Mac.
-#if BUILDFLAG(IS_MAC) || defined(OZONE_PLATFORM_WAYLAND) || \
-    BUILDFLAG(IS_CHROMEOS_LACROS)
+// TODO(crbug.com/40805704): Fails on the linux-wayland-rel bot.
+// TODO(crbug.com/40805725): Fails on Mac.
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_OZONE_WAYLAND)
 #define MAYBE_ChooseDesktopMedia DISABLED_ChooseDesktopMedia
 #else
 #define MAYBE_ChooseDesktopMedia ChooseDesktopMedia
@@ -135,7 +125,7 @@ IN_PROC_BROWSER_TEST_F(DesktopCaptureApiTest, MAYBE_ChooseDesktopMedia) {
                                        webrtc::kFullDesktopScreenId)},
     // cancelDialog()
     {.expect_screens = true, .expect_windows = true, .cancelled = true},
-  // TODO(crbug.com/805145): Test fails; invalid device IDs being generated.
+  // TODO(crbug.com/41366624): Test fails; invalid device IDs being generated.
 #if 0
       // tabShareWithAudioPermissionGetStream()
       {.expect_tabs = true,
@@ -152,7 +142,7 @@ IN_PROC_BROWSER_TEST_F(DesktopCaptureApiTest, MAYBE_ChooseDesktopMedia) {
      .expect_audio = true,
      .selected_source = DesktopMediaID(DesktopMediaID::TYPE_SCREEN,
                                        webrtc::kFullDesktopScreenId, true)},
-  // TODO(crbug.com/805145): Test fails; invalid device IDs being generated.
+  // TODO(crbug.com/41366624): Test fails; invalid device IDs being generated.
 #if 0
       // tabShareWithoutAudioPermissionGetStream()
       {.expect_tabs = true,
@@ -174,11 +164,9 @@ IN_PROC_BROWSER_TEST_F(DesktopCaptureApiTest, MAYBE_ChooseDesktopMedia) {
   ASSERT_TRUE(RunExtensionTest("desktop_capture")) << message_;
 }
 
-// TODO(https://crbug.com/1271673): Crashes on Lacros.
-// TODO(https://crbug.com/1271680): Fails on the linux-wayland-rel bot.
-// TODO(https://crbug.com/1271711): Fails on Mac.
-#if BUILDFLAG(IS_MAC) || defined(OZONE_PLATFORM_WAYLAND) || \
-    BUILDFLAG(IS_CHROMEOS_LACROS)
+// TODO(crbug.com/40805704): Fails on the linux-wayland-rel bot.
+// TODO(crbug.com/40805725): Fails on Mac.
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_OZONE_WAYLAND)
 #define MAYBE_Delegation DISABLED_Delegation
 #else
 #define MAYBE_Delegation Delegation
@@ -217,24 +205,16 @@ IN_PROC_BROWSER_TEST_F(DesktopCaptureApiTest, MAYBE_Delegation) {
   };
   picker_factory_.SetTestFlags(test_flags, std::size(test_flags));
 
-  bool result;
-
   content::WebContents* web_contents =
       browser()->tab_strip_model()->GetActiveWebContents();
 
-  ASSERT_TRUE(content::ExecuteScriptAndExtractBool(
-      web_contents, "getStream()", &result));
-  EXPECT_TRUE(result);
+  EXPECT_EQ(true, content::EvalJs(web_contents, "getStream()"));
 
-  ASSERT_TRUE(content::ExecuteScriptAndExtractBool(
-      web_contents, "getStreamWithInvalidId()", &result));
-  EXPECT_TRUE(result);
+  EXPECT_EQ(true, content::EvalJs(web_contents, "getStreamWithInvalidId()"));
 
   // Verify that the picker is closed once the tab is closed.
   content::WebContentsDestroyedWatcher destroyed_watcher(web_contents);
-  ASSERT_TRUE(content::ExecuteScriptAndExtractBool(
-      web_contents, "openPickerDialogAndReturn()", &result));
-  EXPECT_TRUE(result);
+  EXPECT_EQ(true, content::EvalJs(web_contents, "openPickerDialogAndReturn()"));
   EXPECT_TRUE(test_flags[2].picker_created);
   EXPECT_FALSE(test_flags[2].picker_deleted);
 
@@ -276,33 +256,21 @@ IN_PROC_BROWSER_TEST_F(DesktopCaptureApiTest, ServiceWorkerMustSpecifyTab) {
   ASSERT_TRUE(RunExtensionTest(test_dir.UnpackedPath(), {}, {})) << message_;
 }
 
-class DesktopCaptureApiTestWithSystemAudioValue
-    : public DesktopCaptureApiTest,
-      public testing::WithParamInterface<std::string> {
+class DesktopCaptureApiMediaPickerOptionsBaseTest
+    : public DesktopCaptureApiTest {
  public:
-  DesktopCaptureApiTestWithSystemAudioValue()
-      : system_audio_preference_(GetParam()) {
+  DesktopCaptureApiMediaPickerOptionsBaseTest() {
     DesktopCaptureChooseDesktopMediaFunction::SetPickerFactoryForTests(
         &picker_factory_);
   }
 
-  ~DesktopCaptureApiTestWithSystemAudioValue() override = default;
+  void FromServiceWorker(const std::string& options);
 
- protected:
-  const std::string system_audio_preference_;
+  ~DesktopCaptureApiMediaPickerOptionsBaseTest() override = default;
 };
 
-// |options| itself is optional, as is its member (systemAudio), and so will
-// future members be (e.g. selfBrowserSurface).
-INSTANTIATE_TEST_SUITE_P(_,
-                         DesktopCaptureApiTestWithSystemAudioValue,
-                         ::testing::Values("",
-                                           "{},",
-                                           "{systemAudio: \"include\"},",
-                                           "{systemAudio: \"exclude\"},"));
-
-IN_PROC_BROWSER_TEST_P(DesktopCaptureApiTestWithSystemAudioValue,
-                       FromServiceWorker) {
+void DesktopCaptureApiMediaPickerOptionsBaseTest::FromServiceWorker(
+    const std::string& options) {
   static constexpr char kManifest[] =
       R"({
            "name": "Desktop Capture",
@@ -327,7 +295,7 @@ IN_PROC_BROWSER_TEST_P(DesktopCaptureApiTestWithSystemAudioValue,
                  });
              });
         }]))",
-      system_audio_preference_.c_str());
+      options.c_str());
 
   TestExtensionDir test_dir;
   test_dir.WriteManifest(kManifest);
@@ -346,6 +314,59 @@ IN_PROC_BROWSER_TEST_P(DesktopCaptureApiTestWithSystemAudioValue,
   picker_factory_.SetTestFlags(test_flags, std::size(test_flags));
 
   ASSERT_TRUE(RunExtensionTest(test_dir.UnpackedPath(), {}, {})) << message_;
+}
+
+class DesktopCaptureApiMediaPickerWithOptionsTest
+    : public DesktopCaptureApiMediaPickerOptionsBaseTest,
+      public testing::WithParamInterface<
+          std::tuple<std::string, std::string, std::string>> {
+ public:
+  static std::string ParseParams(
+      const std::tuple<std::string, std::string, std::string>& params) {
+    std::vector<std::string> options;
+
+    if (!std::get<0>(params).empty()) {
+      options.push_back("systemAudio: \"" + std::get<0>(params) + "\"");
+    }
+
+    if (!std::get<1>(params).empty()) {
+      options.push_back("selfBrowserSurface: \"" + std::get<1>(params) + "\"");
+    }
+
+    if (!std::get<2>(params).empty()) {
+      options.push_back("suppressLocalAudioPlaybackIntended: " +
+                        std::get<2>(params));
+    }
+
+    return "{" + base::JoinString(options, ", ") + "},";
+  }
+
+  ~DesktopCaptureApiMediaPickerWithOptionsTest() override = default;
+};
+
+INSTANTIATE_TEST_SUITE_P(_,
+                         DesktopCaptureApiMediaPickerWithOptionsTest,
+                         Combine(/*systemAudio*/
+                                 Values("", "exclude", "include"),
+                                 /*selfBrowserSurface*/
+                                 Values("", "exclude", "include"),
+                                 /*suppressLocalAudioPlaybackIntended*/
+                                 Values("", "false", "true")));
+
+IN_PROC_BROWSER_TEST_P(DesktopCaptureApiMediaPickerWithOptionsTest,
+                       FromServiceWorker) {
+  FromServiceWorker(ParseParams(GetParam()));
+}
+
+class DesktopCaptureApiMediaPickerWithoutOptionsTest
+    : public DesktopCaptureApiMediaPickerOptionsBaseTest {
+ public:
+  ~DesktopCaptureApiMediaPickerWithoutOptionsTest() override = default;
+};
+
+IN_PROC_BROWSER_TEST_F(DesktopCaptureApiMediaPickerWithoutOptionsTest,
+                       FromServiceWorker) {
+  FromServiceWorker("");
 }
 
 }  // namespace extensions

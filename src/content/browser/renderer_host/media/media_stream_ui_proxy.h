@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,15 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
+#include "base/types/expected.h"
 #include "build/build_config.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/desktop_media_id.h"
 #include "content/public/browser/media_stream_request.h"
+#include "content/public/browser/select_audio_output_request.h"
 #include "third_party/blink/public/common/mediastream/media_stream_request.h"
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom-shared.h"
 #include "ui/gfx/geometry/rect.h"
@@ -52,6 +54,12 @@ class CONTENT_EXPORT MediaStreamUIProxy {
   virtual void RequestAccess(std::unique_ptr<MediaStreamRequest> request,
                              ResponseCallback response_callback);
 
+  // Forwards the request to select an audio output device to the
+  // RenderFrameHostDelegate associated with the given render frame.
+  virtual void RequestSelectAudioOutput(
+      std::unique_ptr<SelectAudioOutputRequest> request,
+      SelectAudioOutputCallback callback);
+
   // Notifies the UI that the MediaStream has started. Must be called after
   // access has been approved using RequestAccess().
   // |stop_callback| is called on the IO thread when the user requests to stop
@@ -86,10 +94,11 @@ class CONTENT_EXPORT MediaStreamUIProxy {
   virtual void OnDeviceStoppedForSourceChange(
       const std::string& label,
       const DesktopMediaID& old_media_id,
-      const DesktopMediaID& new_media_id);
+      const DesktopMediaID& new_media_id,
+      bool captured_surface_control_active);
 
   virtual void OnRegionCaptureRectChanged(
-      const absl::optional<gfx::Rect>& region_capture_rect);
+      const std::optional<gfx::Rect>& region_capture_rect);
 
 #if !BUILDFLAG(IS_ANDROID)
   // Determines whether the captured display surface represented by |media_id|
@@ -120,7 +129,8 @@ class CONTENT_EXPORT MediaStreamUIProxy {
       blink::mojom::StreamDevicesSetPtr stream_devices_set,
       blink::mojom::MediaStreamRequestResult result);
   void ProcessStopRequestFromUI();
-  void ProcessChangeSourceRequestFromUI(const DesktopMediaID& media_id);
+  void ProcessChangeSourceRequestFromUI(const DesktopMediaID& media_id,
+                                        bool captured_surface_control_active);
   void ProcessStateChangeFromUI(const DesktopMediaID& media_id,
                                 blink::mojom::MediaStreamStateChange new_state);
   void OnWindowId(WindowIdCallback window_id_callback,
@@ -150,10 +160,16 @@ class CONTENT_EXPORT FakeMediaStreamUIProxy : public MediaStreamUIProxy {
   void SetAvailableDevices(const blink::MediaStreamDevices& devices);
   void SetMicAccess(bool access);
   void SetCameraAccess(bool access);
+  void SetAudioShare(bool audio_share);
 
   // MediaStreamUIProxy overrides.
   void RequestAccess(std::unique_ptr<MediaStreamRequest> request,
                      ResponseCallback response_callback) override;
+
+  void RequestSelectAudioOutput(
+      std::unique_ptr<SelectAudioOutputRequest> request,
+      SelectAudioOutputCallback callback) override;
+
   void OnStarted(
       base::OnceClosure stop_callback,
       MediaStreamUI::SourceCallback source_callback,
@@ -166,17 +182,19 @@ class CONTENT_EXPORT FakeMediaStreamUIProxy : public MediaStreamUIProxy {
   void OnDeviceStoppedForSourceChange(
       const std::string& label,
       const DesktopMediaID& old_media_id,
-      const DesktopMediaID& new_media_id) override;
+      const DesktopMediaID& new_media_id,
+      bool captured_surface_control_active) override;
 
  private:
   // This is used for RequestAccess().
-  // TODO(crbug.com/1313021): Use blink::mojom::StreamDevices instead of
+  // TODO(crbug.com/40220802): Use blink::mojom::StreamDevices instead of
   // blink::MediaStreamDevices.
   blink::MediaStreamDevices devices_;
 
   // These are used for CheckAccess().
-  bool mic_access_;
-  bool camera_access_;
+  bool mic_access_ = true;
+  bool camera_access_ = true;
+  bool audio_share_ = true;
 };
 
 }  // namespace content

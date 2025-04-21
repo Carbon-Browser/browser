@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,19 +10,19 @@
 #include "base/logging.h"
 #include "build/build_config.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/buildflags.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/webui_js_error_resources.h"
 #include "chrome/grit/webui_js_error_resources_map.h"
 #include "content/public/browser/web_ui_data_source.h"
+#include "ui/webui/webui_util.h"
 
 WebUIJsErrorUI::WebUIJsErrorUI(content::WebUI* web_ui)
     : content::WebUIController(web_ui) {
   VLOG(3) << "chrome://webuijserror loading.";
 
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(chrome::kChromeUIWebUIJsErrorHost);
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      Profile::FromWebUI(web_ui), chrome::kChromeUIWebUIJsErrorHost);
 
   // As this is just a debugging page, we don't waste the translators' time by
   // actually translating the i18n strings. However, we still want to be able to
@@ -36,12 +36,8 @@ WebUIJsErrorUI::WebUIJsErrorUI(content::WebUI* web_ui)
   source->AddString("uncaughtErrorButton", "Throw Uncaught Error");
   source->AddString("promiseRejectButton", "Unhandled Promise Rejection");
 
-  webui::SetupWebUIDataSource(
-      source,
-      base::make_span(kWebuiJsErrorResources, kWebuiJsErrorResourcesSize),
-      IDR_WEBUI_JS_ERROR_WEBUI_JS_ERROR_HTML);
-  Profile* profile = Profile::FromWebUI(web_ui);
-  content::WebUIDataSource::Add(profile, source);
+  webui::SetupWebUIDataSource(source, kWebuiJsErrorResources,
+                              IDR_WEBUI_JS_ERROR_WEBUI_JS_ERROR_HTML);
 }
 
 WebUIJsErrorUI::~WebUIJsErrorUI() = default;

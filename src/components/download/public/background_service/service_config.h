@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 #define COMPONENTS_DOWNLOAD_PUBLIC_BACKGROUND_SERVICE_SERVICE_CONFIG_H_
 
 #include <stdint.h>
+
+#include "base/component_export.h"
 
 namespace base {
 class TimeDelta;
@@ -16,7 +18,8 @@ namespace download {
 // Contains the configuration used by this DownloadService for internal download
 // operations.  Meant to be used by Clients for any tweaking they might want to
 // do based on the configuration parameters.
-class ServiceConfig {
+class COMPONENT_EXPORT(COMPONENTS_DOWNLOAD_PUBLIC_BACKGROUND_SERVICE)
+    ServiceConfig {
  public:
   virtual ~ServiceConfig() = default;
 

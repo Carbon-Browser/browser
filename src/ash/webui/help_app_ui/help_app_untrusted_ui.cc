@@ -1,6 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ash/webui/help_app_ui/help_app_untrusted_ui.h"
 
@@ -15,16 +20,18 @@
 #include "content/public/browser/web_ui_data_source.h"
 #include "content/public/common/url_constants.h"
 #include "services/network/public/mojom/content_security_policy.mojom.h"
+#include "ui/webui/color_change_listener/color_change_handler.h"
 
 namespace ash {
 
 namespace {
 
-content::WebUIDataSource* CreateHelpAppUntrustedDataSource(
+void CreateAndAddHelpAppUntrustedDataSource(
+    content::BrowserContext* browser_context,
     base::RepeatingCallback<void(content::WebUIDataSource*)>
         populate_load_time_data_callback) {
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(kChromeUIHelpAppUntrustedURL);
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      browser_context, kChromeUIHelpAppUntrustedURL);
   // app.html is the default resource because it has routing logic to handle all
   // the other paths.
   source->SetDefaultResource(IDR_HELP_APP_APP_HTML);
@@ -33,10 +40,9 @@ content::WebUIDataSource* CreateHelpAppUntrustedDataSource(
   source->DisableTrustedTypesCSP();
 
   // Add all resources from chromeos_help_app_bundle.pak.
-  source->AddResourcePaths(base::make_span(
-      kChromeosHelpAppBundleResources, kChromeosHelpAppBundleResourcesSize));
+  source->AddResourcePaths(kChromeosHelpAppBundleResources);
 
-  MaybeConfigureTestableDataSource(source);
+  MaybeConfigureTestableDataSource(source, "help_app/untrusted");
 
   // Add device and feature flags.
   populate_load_time_data_callback.Run(source);
@@ -51,7 +57,6 @@ content::WebUIDataSource* CreateHelpAppUntrustedDataSource(
   source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::ChildSrc,
       "child-src 'self' chrome-untrusted://help-app-kids-magazine;");
-  return source;
 }
 
 }  // namespace
@@ -61,13 +66,18 @@ HelpAppUntrustedUI::HelpAppUntrustedUI(
     base::RepeatingCallback<void(content::WebUIDataSource* source)>
         populate_load_time_data_callback)
     : ui::UntrustedWebUIController(web_ui) {
-  content::WebUIDataSource* untrusted_source =
-      CreateHelpAppUntrustedDataSource(populate_load_time_data_callback);
-
-  auto* browser_context = web_ui->GetWebContents()->GetBrowserContext();
-  content::WebUIDataSource::Add(browser_context, untrusted_source);
+  CreateAndAddHelpAppUntrustedDataSource(
+      web_ui->GetWebContents()->GetBrowserContext(),
+      populate_load_time_data_callback);
 }
 
 HelpAppUntrustedUI::~HelpAppUntrustedUI() = default;
 
+void HelpAppUntrustedUI::BindInterface(
+    mojo::PendingReceiver<color_change_listener::mojom::PageHandler> receiver) {
+  color_provider_handler_ = std::make_unique<ui::ColorChangeHandler>(
+      web_ui()->GetWebContents(), std::move(receiver));
+}
+
+WEB_UI_CONTROLLER_TYPE_IMPL(HelpAppUntrustedUI)
 }  // namespace ash

@@ -1,23 +1,31 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // Include test fixture.
-GEN_INCLUDE([
-  '//chrome/browser/resources/chromeos/accessibility/chromevox/testing/chromevox_next_e2e_test_base.js',
-]);
+GEN_INCLUDE(['../testing/common_e2e_test_base.js']);
 
 /**
  * Test fixture for recovery strategy tests.
  */
-AccessibilityExtensionRecoveryStrategyTest =
-    class extends ChromeVoxNextE2ETest {
-  constructor() {
-    super();
+AccessibilityExtensionRecoveryStrategyTest = class extends CommonE2ETestBase {
+  /** @override */
+  async setUpDeferred() {
+    await super.setUpDeferred();
+    await importModule(
+        [
+          'RecoveryStrategy',
+          'AncestryRecoveryStrategy',
+          'TreePathRecoveryStrategy',
+        ],
+        '/common/cursors/recovery_strategy.js');
+    globalThis.RoleType = chrome.automation.RoleType;
   }
 };
 
 
+// TODO(https://issuetracker.google.com/issues/263127143) Recovery can likely be
+// simplified now that most ids are stable.
 AX_TEST_F(
     'AccessibilityExtensionRecoveryStrategyTest', 'ReparentedRecovery',
     async function() {
@@ -48,30 +56,21 @@ AX_TEST_F(
       assertFalse(
           bAncestryRecovery.requiresRecovery(),
           'bAncestryRecovery.requiresRecovery');
-      assertTrue(
+      assertFalse(
           pAncestryRecovery.requiresRecovery(),
           'pAncestryRecovery.requiresRecovery()');
-      assertTrue(
+      assertFalse(
           sAncestryRecovery.requiresRecovery(),
           'sAncestryRecovery.requiresRecovery()');
       assertFalse(
           bTreePathRecovery.requiresRecovery(),
           'bTreePathRecovery.requiresRecovery()');
-      assertTrue(
+      assertFalse(
           pTreePathRecovery.requiresRecovery(),
           'pTreePathRecovery.requiresRecovery()');
-      assertTrue(
+      assertFalse(
           sTreePathRecovery.requiresRecovery(),
           'sTreePathRecovery.requiresRecovery()');
-
-      assertEquals(RoleType.BUTTON, bAncestryRecovery.node.role);
-      assertEquals(root, pAncestryRecovery.node);
-      assertEquals(root, sAncestryRecovery.node);
-
-      assertEquals(b, bTreePathRecovery.node);
-      assertEquals(b, pTreePathRecovery.node);
-      assertEquals(b, sTreePathRecovery.node);
-
       assertFalse(
           bAncestryRecovery.requiresRecovery(),
           'bAncestryRecovery.requiresRecovery()');

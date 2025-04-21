@@ -1,24 +1,21 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <fuchsia/sys/cpp/fidl.h>
 #include <fuchsia/web/cpp/fidl.h>
 #include <lib/fidl/cpp/binding.h>
 #include <lib/fidl/cpp/binding_set.h>
-#include <lib/sys/cpp/component_context.h>
 
-#include "base/files/file_enumerator.h"
-#include "base/files/file_util.h"
+#include "base/containers/contains.h"
 #include "base/fuchsia/file_utils.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_future.h"
 #include "fuchsia_web/common/test/fit_adapter.h"
 #include "fuchsia_web/common/test/frame_test_util.h"
+#include "fuchsia_web/common/test/test_debug_listener.h"
 #include "fuchsia_web/common/test/test_devtools_list_fetcher.h"
 #include "fuchsia_web/common/test/test_navigation_listener.h"
-#include "fuchsia_web/webengine/test/context_provider_test_connector.h"
-#include "fuchsia_web/webengine/test_debug_listener.h"
+#include "fuchsia_web/webengine/test/context_provider_for_test.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -31,7 +28,12 @@ const char kTestServerRoot[] = "fuchsia_web/webengine/test/data";
 class WebEngineDebugIntegrationTest : public testing::Test {
  public:
   WebEngineDebugIntegrationTest()
-      : dev_tools_listener_binding_(&dev_tools_listener_) {}
+      : web_context_provider_(ContextProviderForDebugTest::Create(
+            base::CommandLine(base::CommandLine::NO_PROGRAM))),
+        dev_tools_listener_binding_(&dev_tools_listener_) {
+    web_context_provider_.ptr().set_error_handler(
+        [](zx_status_t status) { FAIL() << zx_status_get_string(status); });
+  }
 
   WebEngineDebugIntegrationTest(const WebEngineDebugIntegrationTest&) = delete;
   WebEngineDebugIntegrationTest& operator=(
@@ -40,59 +42,8 @@ class WebEngineDebugIntegrationTest : public testing::Test {
   ~WebEngineDebugIntegrationTest() override = default;
 
   void SetUp() override {
-    // Add a switch to the WebEngine instance to distinguish it from other
-    // instances that may be started by other tests.
-    std::string test_switch =
-        std::string("--test-name=") +
-        testing::UnitTest::GetInstance()->current_test_info()->name();
-
-    base::CommandLine command_line(base::CommandLine::NO_PROGRAM);
-    command_line.AppendSwitch(test_switch);
-
-    web_context_provider_ = ConnectContextProvider(
-        web_engine_controller_.NewRequest(), command_line);
-    web_context_provider_.set_error_handler(
-        [](zx_status_t status) { ADD_FAILURE(); });
-
-    // Wait for the OnDirectoryReady event, which indicates that the component's
-    // outgoing directory is available, including the "/debug" contents accessed
-    // via the Hub.
-    base::RunLoop directory_loop;
-    web_engine_controller_.events().OnDirectoryReady =
-        [quit_loop = directory_loop.QuitClosure()]() { quit_loop.Run(); };
-    directory_loop.Run();
-
-    // Enumerate all entries in /hub/c/context_provider.cmx to find WebEngine
-    // instance with |test_switch|.
-    base::FileEnumerator file_enum(
-        base::FilePath("/hub/c/context_provider.cmx"), false,
-        base::FileEnumerator::DIRECTORIES);
-    base::FilePath web_engine_path;
-
-    for (auto dir = file_enum.Next(); !dir.empty(); dir = file_enum.Next()) {
-      std::string args;
-      if (!base::ReadFileToString(dir.Append("args"), &args)) {
-        // WebEngine may shutdown while we are enumerating the directory, so
-        // it's safe to ignore this error.
-        continue;
-      }
-
-      if (args.find(test_switch) != std::string::npos) {
-        // There should only one instance of WebEngine with |test_switch|.
-        EXPECT_TRUE(web_engine_path.empty());
-
-        web_engine_path = dir;
-
-        // Keep iterating to check that there are no other matching instances.
-      }
-    }
-
-    // Check that we've found the WebEngine instance with |test_switch|.
-    ASSERT_FALSE(web_engine_path.empty());
-
-    debug_dir_ = std::make_unique<sys::ServiceDirectory>(
-        base::OpenDirectoryHandle(web_engine_path.Append("out/debug")));
-    debug_dir_->Connect(debug_.NewRequest());
+    ASSERT_NO_FATAL_FAILURE(
+        web_context_provider_.ConnectToDebug(debug_.NewRequest()));
 
     // Attach the DevToolsListener. EnableDevTools has an acknowledgement
     // callback so the listener will have been added after this call returns.
@@ -106,11 +57,9 @@ class WebEngineDebugIntegrationTest : public testing::Test {
   base::test::SingleThreadTaskEnvironment task_environment_{
       base::test::SingleThreadTaskEnvironment::MainThreadType::IO};
 
+  ContextProviderForDebugTest web_context_provider_;
   TestDebugListener dev_tools_listener_;
   fidl::Binding<fuchsia::web::DevToolsListener> dev_tools_listener_binding_;
-  std::unique_ptr<sys::ServiceDirectory> debug_dir_;
-  fuchsia::web::ContextProviderPtr web_context_provider_;
-  fuchsia::sys::ComponentControllerPtr web_engine_controller_;
   fuchsia::web::DebugSyncPtr debug_;
 
   base::OnceClosure on_url_fetch_complete_ack_;
@@ -168,27 +117,25 @@ TEST_F(WebEngineDebugIntegrationTest, DebugService) {
   ASSERT_TRUE(frame_data.context);
 
   // Test the debug information is correct.
-  dev_tools_listener_.RunUntilNumberOfPortsIs(1u);
+  ASSERT_NO_FATAL_FAILURE(dev_tools_listener_.RunUntilNumberOfPortsIs(1u));
 
-  base::Value devtools_list =
+  base::Value::List devtools_list =
       GetDevToolsListFromPort(*dev_tools_listener_.debug_ports().begin());
-  ASSERT_TRUE(devtools_list.is_list());
-  EXPECT_EQ(devtools_list.GetListDeprecated().size(), 1u);
+  EXPECT_EQ(devtools_list.size(), 1u);
 
-  base::Value* devtools_url =
-      devtools_list.GetListDeprecated()[0].FindPath("url");
-  ASSERT_TRUE(devtools_url->is_string());
-  EXPECT_EQ(devtools_url->GetString(), url);
+  const auto& devtools_dict = devtools_list[0].GetDict();
+  const auto* devtools_url = devtools_dict.FindString("url");
+  ASSERT_TRUE(devtools_url);
+  EXPECT_EQ(*devtools_url, url);
 
-  base::Value* devtools_title =
-      devtools_list.GetListDeprecated()[0].FindPath("title");
-  ASSERT_TRUE(devtools_title->is_string());
-  EXPECT_EQ(devtools_title->GetString(), "title 1");
+  const auto* devtools_title = devtools_dict.FindString("title");
+  ASSERT_TRUE(devtools_title);
+  EXPECT_EQ(*devtools_title, "title 1");
 
   // Unbind the context and wait for the listener to no longer have any active
   // DevTools port.
   frame_data.context.Unbind();
-  dev_tools_listener_.RunUntilNumberOfPortsIs(0);
+  ASSERT_NO_FATAL_FAILURE(dev_tools_listener_.RunUntilNumberOfPortsIs(0));
 }
 
 TEST_F(WebEngineDebugIntegrationTest, MultipleDebugClients) {
@@ -198,26 +145,25 @@ TEST_F(WebEngineDebugIntegrationTest, MultipleDebugClients) {
   ASSERT_TRUE(frame_data1.context);
 
   // Test the debug information is correct.
-  dev_tools_listener_.RunUntilNumberOfPortsIs(1u);
+  ASSERT_NO_FATAL_FAILURE(dev_tools_listener_.RunUntilNumberOfPortsIs(1u));
   uint16_t port1 = *dev_tools_listener_.debug_ports().begin();
 
-  base::Value devtools_list1 = GetDevToolsListFromPort(port1);
-  ASSERT_TRUE(devtools_list1.is_list());
-  EXPECT_EQ(devtools_list1.GetListDeprecated().size(), 1u);
+  base::Value::List devtools_list1 = GetDevToolsListFromPort(port1);
+  EXPECT_EQ(devtools_list1.size(), 1u);
 
-  base::Value* devtools_url1 =
-      devtools_list1.GetListDeprecated()[0].FindPath("url");
-  ASSERT_TRUE(devtools_url1->is_string());
-  EXPECT_EQ(devtools_url1->GetString(), url1);
+  const auto& devtools_dict1 = devtools_list1[0].GetDict();
+  const auto* devtools_url1 = devtools_dict1.FindString("url");
+  ASSERT_TRUE(devtools_url1);
+  EXPECT_EQ(*devtools_url1, url1);
 
-  base::Value* devtools_title1 =
-      devtools_list1.GetListDeprecated()[0].FindPath("title");
-  ASSERT_TRUE(devtools_title1->is_string());
-  EXPECT_EQ(devtools_title1->GetString(), "title 1");
+  const auto* devtools_title1 = devtools_dict1.FindString("title");
+  ASSERT_TRUE(devtools_title1);
+  EXPECT_EQ(*devtools_title1, "title 1");
 
   // Connect a second Debug interface.
   fuchsia::web::DebugSyncPtr debug2;
-  debug_dir_->Connect(debug2.NewRequest());
+  ASSERT_NO_FATAL_FAILURE(
+      web_context_provider_.ConnectToDebug(debug2.NewRequest()));
   TestDebugListener dev_tools_listener2;
   fidl::Binding<fuchsia::web::DevToolsListener> dev_tools_listener_binding2(
       &dev_tools_listener2);
@@ -230,37 +176,34 @@ TEST_F(WebEngineDebugIntegrationTest, MultipleDebugClients) {
   ASSERT_TRUE(frame_data2.context);
 
   // Ensure each DevTools listener has the right information.
-  dev_tools_listener_.RunUntilNumberOfPortsIs(2u);
-  dev_tools_listener2.RunUntilNumberOfPortsIs(1u);
+  ASSERT_NO_FATAL_FAILURE(dev_tools_listener_.RunUntilNumberOfPortsIs(2u));
+  ASSERT_NO_FATAL_FAILURE(dev_tools_listener2.RunUntilNumberOfPortsIs(1u));
 
   uint16_t port2 = *dev_tools_listener2.debug_ports().begin();
   ASSERT_NE(port1, port2);
-  ASSERT_NE(dev_tools_listener_.debug_ports().find(port2),
-            dev_tools_listener_.debug_ports().end());
+  ASSERT_TRUE(base::Contains(dev_tools_listener_.debug_ports(), port2));
 
-  base::Value devtools_list2 = GetDevToolsListFromPort(port2);
-  ASSERT_TRUE(devtools_list2.is_list());
-  EXPECT_EQ(devtools_list2.GetListDeprecated().size(), 1u);
+  base::Value::List devtools_list2 = GetDevToolsListFromPort(port2);
+  EXPECT_EQ(devtools_list2.size(), 1u);
 
-  base::Value* devtools_url2 =
-      devtools_list2.GetListDeprecated()[0].FindPath("url");
-  ASSERT_TRUE(devtools_url2->is_string());
-  EXPECT_EQ(devtools_url2->GetString(), url2);
+  const auto& devtools_dict2 = devtools_list2[0].GetDict();
+  const auto* devtools_url2 = devtools_dict2.FindString("url");
+  ASSERT_TRUE(devtools_url2);
+  EXPECT_EQ(*devtools_url2, url2);
 
-  base::Value* devtools_title2 =
-      devtools_list2.GetListDeprecated()[0].FindPath("title");
-  ASSERT_TRUE(devtools_title2->is_string());
-  EXPECT_EQ(devtools_title2->GetString(), "title 2");
+  const auto* devtools_title2 = devtools_dict2.FindString("title");
+  ASSERT_TRUE(devtools_title2);
+  EXPECT_EQ(*devtools_title2, "title 2");
 
   // Unbind the first Context, each listener should still have one open port.
   frame_data1.context.Unbind();
-  dev_tools_listener_.RunUntilNumberOfPortsIs(1u);
-  dev_tools_listener2.RunUntilNumberOfPortsIs(1u);
+  ASSERT_NO_FATAL_FAILURE(dev_tools_listener_.RunUntilNumberOfPortsIs(1u));
+  ASSERT_NO_FATAL_FAILURE(dev_tools_listener2.RunUntilNumberOfPortsIs(1u));
 
   // Unbind the second Context, no listener should have any open port.
   frame_data2.context.Unbind();
-  dev_tools_listener_.RunUntilNumberOfPortsIs(0);
-  dev_tools_listener2.RunUntilNumberOfPortsIs(0);
+  ASSERT_NO_FATAL_FAILURE(dev_tools_listener_.RunUntilNumberOfPortsIs(0));
+  ASSERT_NO_FATAL_FAILURE(dev_tools_listener2.RunUntilNumberOfPortsIs(0));
 }
 
 // Test the Debug service is accessible when the User service is requested.
@@ -270,7 +213,7 @@ TEST_F(WebEngineDebugIntegrationTest, DebugAndUserService) {
                                  UserModeDebugging::kEnabled, url);
   ASSERT_TRUE(frame_data.context);
 
-  dev_tools_listener_.RunUntilNumberOfPortsIs(1u);
+  ASSERT_NO_FATAL_FAILURE(dev_tools_listener_.RunUntilNumberOfPortsIs(1u));
 
   // Check we are getting the same port on both the debug and user APIs.
   base::test::TestFuture<fuchsia::web::Context_GetRemoteDebuggingPort_Result>
@@ -284,22 +227,21 @@ TEST_F(WebEngineDebugIntegrationTest, DebugAndUserService) {
   ASSERT_EQ(remote_debugging_port, *dev_tools_listener_.debug_ports().begin());
 
   // Test the debug information is correct.
-  base::Value devtools_list = GetDevToolsListFromPort(remote_debugging_port);
-  ASSERT_TRUE(devtools_list.is_list());
-  EXPECT_EQ(devtools_list.GetListDeprecated().size(), 1u);
+  base::Value::List devtools_list =
+      GetDevToolsListFromPort(remote_debugging_port);
+  EXPECT_EQ(devtools_list.size(), 1u);
 
-  base::Value* devtools_url =
-      devtools_list.GetListDeprecated()[0].FindPath("url");
-  ASSERT_TRUE(devtools_url->is_string());
-  EXPECT_EQ(devtools_url->GetString(), url);
+  const auto& devtools_dict = devtools_list[0].GetDict();
+  const auto* devtools_url = devtools_dict.FindString("url");
+  ASSERT_TRUE(devtools_url);
+  EXPECT_EQ(*devtools_url, url);
 
-  base::Value* devtools_title =
-      devtools_list.GetListDeprecated()[0].FindPath("title");
-  ASSERT_TRUE(devtools_title->is_string());
-  EXPECT_EQ(devtools_title->GetString(), "title 1");
+  const auto* devtools_title = devtools_dict.FindString("title");
+  ASSERT_TRUE(devtools_title);
+  EXPECT_EQ(*devtools_title, "title 1");
 
   // Unbind the context and wait for the listener to no longer have any active
   // DevTools port.
   frame_data.context.Unbind();
-  dev_tools_listener_.RunUntilNumberOfPortsIs(0);
+  ASSERT_NO_FATAL_FAILURE(dev_tools_listener_.RunUntilNumberOfPortsIs(0));
 }

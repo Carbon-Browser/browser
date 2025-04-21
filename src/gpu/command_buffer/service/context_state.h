@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 // This file contains the ContextState class.
 
@@ -95,7 +100,6 @@ struct GPU_GLES2_EXPORT TextureUnit {
         return bound_texture_2d_array.get();
       default:
         NOTREACHED();
-        return nullptr;
     }
   }
 
@@ -115,7 +119,6 @@ struct GPU_GLES2_EXPORT TextureUnit {
         return bound_texture_2d_array.get();
       default:
         NOTREACHED();
-        return nullptr;
     }
   }
 
@@ -276,7 +279,6 @@ struct GPU_GLES2_EXPORT ContextState {
       cached_stencil_back_writemask = mask;
     } else {
       NOTREACHED();
-      return;
     }
     api()->glStencilMaskSeparateFn(op, mask);
   }
@@ -422,8 +424,8 @@ struct GPU_GLES2_EXPORT ContextState {
   // vector<[x,y,w,h]>. Always has space for MAX_WINDOW_RECTANGLES rectangles.
   std::vector<GLint> window_rectangles_;
 
-  raw_ptr<gl::GLApi> api_ = nullptr;
-  raw_ptr<FeatureInfo> feature_info_;
+  raw_ptr<gl::GLApi, DanglingUntriaged> api_ = nullptr;
+  raw_ptr<FeatureInfo, DanglingUntriaged> feature_info_;
 
   bool context_lost_ = false;
 };

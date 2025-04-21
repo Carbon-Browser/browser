@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -115,7 +115,7 @@ class MtpManagerClientChromeOSTest : public testing::Test {
   MtpManagerClientChromeOSTest& operator=(const MtpManagerClientChromeOSTest&) =
       delete;
 
-  ~MtpManagerClientChromeOSTest() override {}
+  ~MtpManagerClientChromeOSTest() override = default;
 
  protected:
   void SetUp() override {

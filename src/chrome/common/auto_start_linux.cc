@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,10 +42,7 @@ bool AutoStart::AddApplication(const std::string& autostart_filename,
       "Terminal=" + terminal + "\n"
       "Exec=" + command_line + "\n"
       "Name=" + application_name + "\n";
-  std::string::size_type content_length = autostart_file_contents.length();
-  if (base::WriteFile(autostart_file, autostart_file_contents.c_str(),
-                      content_length) !=
-      static_cast<int>(content_length)) {
+  if (!base::WriteFile(autostart_file, autostart_file_contents)) {
     base::DeleteFile(autostart_file);
     return false;
   }

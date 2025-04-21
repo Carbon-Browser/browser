@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/values.h"
 #include "components/guest_view/common/guest_view_constants.h"
 #include "content/public/browser/media_stream_request.h"
 #include "content/public/browser/web_contents.h"
@@ -17,9 +18,9 @@
 #include "ppapi/buildflags/buildflags.h"
 #include "third_party/blink/public/common/mediastream/media_stream_request.h"
 
-namespace base {
-class DictionaryValue;
-}
+namespace url {
+class Origin;
+}  // namespace url
 
 namespace extensions {
 
@@ -58,35 +59,54 @@ class WebViewPermissionHelper {
   using RequestMap = std::map<int, PermissionResponseInfo>;
 
   int RequestPermission(WebViewPermissionType permission_type,
-                        const base::DictionaryValue& request_info,
+                        base::Value::Dict request_info,
                         PermissionResponseCallback callback,
                         bool allowed_by_default);
 
-  static WebViewPermissionHelper* FromWebContents(
-      content::WebContents* web_contents);
-  static WebViewPermissionHelper* FromFrameID(int render_process_id,
-                                              int render_frame_id);
+  static WebViewPermissionHelper* FromRenderFrameHost(
+      content::RenderFrameHost* render_frame_host);
+  static WebViewPermissionHelper* FromRenderFrameHostId(
+      const content::GlobalRenderFrameHostId& render_frame_host_id);
+
   void RequestMediaAccessPermission(content::WebContents* source,
                                     const content::MediaStreamRequest& request,
                                     content::MediaResponseCallback callback);
+
+  void RequestMediaAccessPermissionForControlledFrame(
+      content::WebContents* source,
+      const content::MediaStreamRequest& request,
+      content::MediaResponseCallback callback);
+
   bool CheckMediaAccessPermission(content::RenderFrameHost* render_frame_host,
-                                  const GURL& security_origin,
+                                  const url::Origin& security_origin,
                                   blink::mojom::MediaStreamType type);
+
+  bool CheckMediaAccessPermissionForControlledFrame(
+      content::RenderFrameHost* render_frame_host,
+      const url::Origin& security_origin,
+      blink::mojom::MediaStreamType type);
+
   void CanDownload(const GURL& url,
                    const std::string& request_method,
                    base::OnceCallback<void(bool)> callback);
   void RequestPointerLockPermission(bool user_gesture,
-                                    bool last_unlocked_by_target,
-                                    base::OnceCallback<void(bool)> callback);
+                                    bool last_unlocked_by_target);
 
   // Requests Geolocation Permission from the embedder.
   void RequestGeolocationPermission(const GURL& requesting_frame,
                                     bool user_gesture,
                                     base::OnceCallback<void(bool)> callback);
+  // Requests permission from the embedder to request access to Human
+  // Interface Devices.
+  void RequestHidPermission(const GURL& requesting_frame,
+                            base::OnceCallback<void(bool)> callback);
 
   void RequestFileSystemPermission(const GURL& url,
                                    bool allowed_by_default,
                                    base::OnceCallback<void(bool)> callback);
+
+  void RequestFullscreenPermission(const url::Origin& requesting_origin,
+                                   PermissionResponseCallback callback);
 
   enum PermissionResponseAction { DENY, ALLOW, DEFAULT };
 
@@ -111,10 +131,6 @@ class WebViewPermissionHelper {
     return web_view_permission_helper_delegate_.get();
   }
 
-  void set_default_media_access_permission(bool allow_media_access) {
-    default_media_access_permission_ = allow_media_access;
-  }
-
  private:
   void OnMediaPermissionResponse(const content::MediaStreamRequest& request,
                                  content::MediaResponseCallback callback,
@@ -131,8 +147,6 @@ class WebViewPermissionHelper {
       web_view_permission_helper_delegate_;
 
   const raw_ptr<WebViewGuest> web_view_guest_;
-
-  bool default_media_access_permission_;
 
   base::WeakPtrFactory<WebViewPermissionHelper> weak_factory_{this};
 };

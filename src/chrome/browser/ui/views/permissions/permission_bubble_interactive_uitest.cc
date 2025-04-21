@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,22 +10,30 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/exclusive_access/exclusive_access_test.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
-#include "chrome/browser/ui/views/permissions/permission_chip.h"
-#include "chrome/browser/ui/views/permissions/permission_request_chip.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/interactive_test_utils.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "chrome/test/permissions/permission_request_manager_test_api.h"
+#include "components/permissions/features.h"
 #include "components/permissions/request_type.h"
+#include "components/strings/grit/components_strings.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
 #include "ui/base/test/ui_controls.h"
 #include "ui/events/base_event_utils.h"
 #include "ui/views/test/button_test_api.h"
+#include "ui/views/test/views_test_utils.h"
+#include "ui/views/test/widget_activation_waiter.h"
 #include "ui/views/test/widget_test.h"
+
+enum ChipFeatureConfig {
+  REQUEST_CHIP,
+  REQUEST_CHIP_LOCATION_BAR_ICON_OVERRIDE
+};
 
 class PermissionBubbleInteractiveUITest : public InProcessBrowserTest {
  public:
@@ -46,8 +54,7 @@ class PermissionBubbleInteractiveUITest : public InProcessBrowserTest {
     SCOPED_TRACE(message);
     EXPECT_TRUE(widget);
 
-    views::test::WidgetActivationWaiter waiter(widget, true);
-    waiter.Wait();
+    views::test::WaitForWidgetActive(widget, true);
   }
 
   // Send Ctrl/Cmd+keycode in the key window to the browser.
@@ -60,8 +67,12 @@ class PermissionBubbleInteractiveUITest : public InProcessBrowserTest {
     bool command = false;
 #endif
 
-    ASSERT_TRUE(ui_test_utils::SendKeyPressSync(browser(), keycode, control,
-                                                shift, alt, command));
+    // Wait for "key press" instead of "key release" because some tests destroy
+    // the target in response to "key press", which prevents "key release" from
+    // being observed.
+    ASSERT_TRUE(ui_test_utils::SendKeyPressSync(
+        browser(), keycode, control, shift, alt, command,
+        /* wait_for=*/ui_controls::KeyEventType::kKeyPress));
   }
 
   void SetUpOnMainThread() override {
@@ -101,6 +112,8 @@ class PermissionBubbleInteractiveUITest : public InProcessBrowserTest {
 #else
     SendAcceleratorSync(ui::VKEY_TAB, true, false);
 #endif
+    views::test::RunScheduledLayout(
+        BrowserView::GetBrowserViewForBrowser(browser()));
   }
 
   void OpenBubbleIfRequestChipUiIsShown() {
@@ -109,11 +122,12 @@ class PermissionBubbleInteractiveUITest : public InProcessBrowserTest {
     BrowserView* browser_view =
         BrowserView::GetBrowserViewForBrowser(browser());
     LocationBarView* lbv = browser_view->toolbar()->location_bar();
-    if (lbv->IsChipActive() && !lbv->chip()->IsBubbleShowing()) {
-      views::test::ButtonTestApi(lbv->chip()->button())
-          .NotifyClick(ui::MouseEvent(ui::ET_MOUSE_PRESSED, gfx::Point(),
-                                      gfx::Point(), ui::EventTimeForNow(),
-                                      ui::EF_LEFT_MOUSE_BUTTON, 0));
+    if (lbv->GetChipController()->IsPermissionPromptChipVisible() &&
+        !lbv->GetChipController()->IsBubbleShowing()) {
+      views::test::ButtonTestApi(lbv->GetChipController()->chip())
+          .NotifyClick(ui::MouseEvent(
+              ui::EventType::kMousePressed, gfx::Point(), gfx::Point(),
+              ui::EventTimeForNow(), ui::EF_LEFT_MOUSE_BUTTON, 0));
       base::RunLoop().RunUntilIdle();
     }
   }
@@ -156,14 +170,42 @@ IN_PROC_BROWSER_TEST_F(PermissionBubbleInteractiveUITest,
                        MAYBE_CmdWClosesWindow) {
   EXPECT_TRUE(browser()->window()->IsVisible());
 
-  SendAcceleratorSync(ui::VKEY_W, false, false);
+  class NoWidgetsWaiter : public views::WidgetObserver {
+   public:
+    NoWidgetsWaiter() {
+      EXPECT_NE(views::test::WidgetTest::GetAllWidgets().size(), 0U);
+      for (views::Widget* widget : views::test::WidgetTest::GetAllWidgets()) {
+        widget->AddObserver(this);
+      }
+    }
 
-  // The window has been destroyed so there should be no widgets hanging around.
-  EXPECT_EQ(0u, views::test::WidgetTest::GetAllWidgets().size());
+    void Wait() {
+      run_loop_.Run();
+      EXPECT_EQ(views::test::WidgetTest::GetAllWidgets().size(), 0U);
+    }
+
+   private:
+    // views::WidgetObserver:
+    void OnWidgetDestroyed(views::Widget*) override {
+      if (views::test::WidgetTest::GetAllWidgets().empty()) {
+        run_loop_.Quit();
+      }
+    }
+
+    base::RunLoop run_loop_;
+  };
+
+  // On Windows, the WM_NCDESTROY message triggering Widget destruction may not
+  // have been processed by the time `SendAcceleratorSync` returns (only waits
+  // for WM_KEYDOWN). For that reason, wait until there are no more widgets
+  // instead of checking immediately that there are no more widgets.
+  NoWidgetsWaiter waiter;
+  SendAcceleratorSync(ui::VKEY_W, false, false);
+  waiter.Wait();
 }
 
 #if BUILDFLAG(IS_MAC)
-// TODO(crbug.com/1324444): For Mac builders, the test fails after activating
+// TODO(crbug.com/40839289): For Mac builders, the test fails after activating
 // the browser and cannot spot the widget. Needs investigation and fix.
 #define MAYBE_SwitchTabs DISABLED_SwitchTabs
 #else

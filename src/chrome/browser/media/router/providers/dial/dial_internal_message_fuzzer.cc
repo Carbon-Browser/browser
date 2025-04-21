@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,19 +13,22 @@ namespace media_router {
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   // Limit input size to prevent out-of-memory failures like the one seen in
   // crbug.com/964715.
-  if (size > 16 * 1024)
+  if (size > 16 * 1024) {
     return 0;
+  }
 
-  absl::optional<base::Value> input = base::JSONReader::Read(
+  std::optional<base::Value> input = base::JSONReader::Read(
       std::string(reinterpret_cast<const char*>(data), size));
-  if (!input)
+  if (!input || !input.value().is_dict()) {
     return 0;
+  }
 
   std::string error_unused;
-  auto dial_internal_message =
-      DialInternalMessage::From(std::move(input.value()), &error_unused);
-  if (!dial_internal_message)
+  auto dial_internal_message = DialInternalMessage::From(
+      std::move(input.value().GetDict()), &error_unused);
+  if (!dial_internal_message) {
     return 0;
+  }
 
   DialInternalMessageUtil::IsStopSessionMessage(*dial_internal_message);
 

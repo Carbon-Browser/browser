@@ -2,10 +2,11 @@ Name: ZXing Scanner View
 Short Name: zxing
 URL: https://github.com/dm77/barcodescanner
 Version: 1.9
-License: Apache Version 2.0
+License: Apache-2.0
 License File: LICENSE
 CPEPrefix: unknown
 Security Critical: yes
+Shipped: yes
 
 Description:
 An android library project which contains the zxing barcode scanner view

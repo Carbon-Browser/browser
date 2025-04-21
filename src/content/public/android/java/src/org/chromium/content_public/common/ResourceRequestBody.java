@@ -1,17 +1,20 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.content_public.common;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
+import androidx.annotation.VisibleForTesting;
 
-/**
- * Wrapper around the native content::ResourceRequestBody.
- */
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
+import org.chromium.build.annotations.NullMarked;
+
+/** Wrapper around the native content::ResourceRequestBody. */
 @JNINamespace("content")
+@NullMarked
 public final class ResourceRequestBody {
     /**
      * Result of EncodeResourceRequestBody call from page_state_serialization.h.
@@ -42,8 +45,9 @@ public final class ResourceRequestBody {
         return new ResourceRequestBody(encodedNativeForm);
     }
 
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
     @CalledByNative
-    private byte[] getEncodedNativeForm() {
+    public byte[] getEncodedNativeForm() {
         return mEncodedNativeForm;
     }
 
@@ -59,8 +63,9 @@ public final class ResourceRequestBody {
         return createFromEncodedNativeForm(encodedNativeForm);
     }
 
+    @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
     @NativeMethods
-    interface Natives {
+    public interface Natives {
         /**
          * Equivalent of the native content::ResourceRequestBody::CreateFromBytes.
          *

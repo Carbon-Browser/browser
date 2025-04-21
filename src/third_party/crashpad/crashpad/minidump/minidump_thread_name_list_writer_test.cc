@@ -1,4 +1,4 @@
-// Copyright 2022 The Crashpad Authors. All rights reserved.
+// Copyright 2022 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@
 
 #include "base/compiler_specific.h"
 #include "base/format_macros.h"
-#include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "gtest/gtest.h"
 #include "minidump/minidump_file_writer.h"

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,7 @@ class SliderTrackElement final : public HTMLDivElement {
   explicit SliderTrackElement(Document& document);
 
  private:
-  LayoutObject* CreateLayoutObject(const ComputedStyle& style,
-                                   LegacyLayout legacy) override;
+  LayoutObject* CreateLayoutObject(const ComputedStyle& style) override;
 };
 
 }  // namespace blink

@@ -24,7 +24,7 @@
 namespace adblock {
 
 // Controls whether ad-blocking feature is enabled.
-extern const base::Feature kAdblockPlusFeature;
+BASE_DECLARE_FEATURE(kAdblockPlusFeature);
 
 }  // namespace adblock
 

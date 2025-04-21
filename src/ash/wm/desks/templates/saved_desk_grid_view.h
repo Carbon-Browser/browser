@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 
 #include <vector>
 
-#include "base/guid.h"
+#include "base/memory/raw_ptr.h"
+#include "base/uuid.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/animation/bounds_animator.h"
 #include "ui/views/view.h"
@@ -20,57 +21,60 @@ class SavedDeskItemView;
 // A view that shows a grid of saved desks. Each saved desk is a
 // `SavedDeskItemView`.
 class SavedDeskGridView : public views::View {
+  METADATA_HEADER(SavedDeskGridView, views::View)
+
  public:
   enum class LayoutMode {
     LANDSCAPE = 0,
     PORTRAIT,
   };
 
-  METADATA_HEADER(SavedDeskGridView);
-
   SavedDeskGridView();
   SavedDeskGridView(const SavedDeskGridView&) = delete;
   SavedDeskGridView& operator=(const SavedDeskGridView&) = delete;
   ~SavedDeskGridView() override;
 
-  const std::vector<SavedDeskItemView*>& grid_items() const {
+  const std::vector<raw_ptr<SavedDeskItemView, VectorExperimental>>&
+  grid_items() const {
     return grid_items_;
   }
 
   // Sets the grid to show items in landscape or portrait mode.
   void set_layout_mode(LayoutMode layout_mode) { layout_mode_ = layout_mode; }
 
-  // Updates the UI by creating a grid layout and populating the grid with the
-  // provided list of saved desks.
-  void PopulateGridUI(const std::vector<const DeskTemplate*>& desk_templates,
-                      const base::GUID& last_saved_template_uuid);
-
-  // Updates `grid_items_` to ensure the saved desk grid is sorted.
-  void SortTemplateGridItems(const base::GUID& last_saved_template_uuid);
+  // Sorts entries in alphabetical order. If `order_first_uuid` is valid, the
+  // corresponding entry will be placed first.
+  void SortEntries(const base::Uuid& order_first_uuid);
 
   // Updates existing saved desks and adds new saved desks to the grid. Also
-  // sorts `grid_items_` in alphabetical order. This will animate the
-  // `grid_items_` to their final positions if `initializing_grid_view` is
-  // false. Currently only allows a maximum of 6 saved desks to be shown in the
-  // grid.
-  void AddOrUpdateTemplates(const std::vector<const DeskTemplate*>& entries,
-                            bool initializing_grid_view,
-                            const base::GUID& last_saved_template_uuid);
+  // sorts entries in alphabetical order. If `order_first_uuid` is valid, the
+  // corresponding entry will be placed first. This will animate the entries to
+  // their final positions if `animate` is true. Currently only allows a maximum
+  // of 6 saved desks to be shown in the grid.
+  void AddOrUpdateEntries(
+      const std::vector<raw_ptr<const DeskTemplate, VectorExperimental>>&
+          entries,
+      const base::Uuid& order_first_uuid,
+      bool animate);
 
-  // Removes templates from the grid by UUID. Will trigger an animation to
-  // shuffle `grid_items_` to their final positions.
-  void DeleteTemplates(const std::vector<std::string>& uuids);
+  // Removes saved desks from the grid by UUID. Will trigger an animation to
+  // shuffle `grid_items_` to their final positions. If `delete_animation` is
+  // false, then deleted items will simply disappear (shuffled items will still
+  // animate).
+  void DeleteEntries(const std::vector<base::Uuid>& uuids,
+                     bool delete_animation);
 
-  // Returns true if a template name is being modified using an item view's
+  // Returns true if a saved desk name is being modified using an item view's
   // `SavedDeskNameView` in this grid.
-  bool IsTemplateNameBeingModified() const;
+  bool IsSavedDeskNameBeingModified() const;
 
   // Returns the item view associated with `uuid`.
-  SavedDeskItemView* GetItemForUUID(const base::GUID& uuid);
+  SavedDeskItemView* GetItemForUUID(const base::Uuid& uuid);
 
   // views::View:
-  gfx::Size CalculatePreferredSize() const override;
-  void Layout() override;
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override;
+  void Layout(PassKey) override;
   void OnBoundsChanged(const gfx::Rect& previous_bounds) override;
 
   bool IsAnimating() const;
@@ -97,7 +101,7 @@ class SavedDeskGridView : public views::View {
   void AnimateGridItems(const std::vector<SavedDeskItemView*>& new_grid_items);
 
   // The views representing saved desks. They're owned by views hierarchy.
-  std::vector<SavedDeskItemView*> grid_items_;
+  std::vector<raw_ptr<SavedDeskItemView, VectorExperimental>> grid_items_;
 
   // Controls how the grid items are laid out.
   LayoutMode layout_mode_ = LayoutMode::LANDSCAPE;

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,10 @@
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/supports_user_data.h"
+#include "components/autofill/core/browser/data_model/autofill_profile.h"
 #include "components/autofill/core/browser/webdata/autofill_change.h"
 #include "components/autofill/core/common/form_field_data.h"
-#include "components/sync/base/model_type.h"
+#include "components/sync/base/data_type.h"
 #include "components/webdata/common/web_data_results.h"
 #include "components/webdata/common/web_data_service_base.h"
 #include "components/webdata/common/web_data_service_consumer.h"
@@ -23,13 +24,12 @@
 class WebDatabaseService;
 
 namespace base {
-class SingleThreadTaskRunner;
+class SequencedTaskRunner;
 }
 
 namespace autofill {
 
-class AutofillEntry;
-class AutofillProfile;
+class AutocompleteEntry;
 class AutofillWebDataBackend;
 class AutofillWebDataBackendImpl;
 class AutofillWebDataServiceObserverOnDBSequence;
@@ -40,13 +40,10 @@ class Iban;
 // API for Autofill web data.
 class AutofillWebDataService : public WebDataServiceBase {
  public:
-  AutofillWebDataService(
-      scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner,
-      scoped_refptr<base::SingleThreadTaskRunner> db_task_runner);
+  // Runs db tasks on the wdbs db task runner.
   AutofillWebDataService(
       scoped_refptr<WebDatabaseService> wdbs,
-      scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner,
-      scoped_refptr<base::SingleThreadTaskRunner> db_task_runner);
+      scoped_refptr<base::SequencedTaskRunner> ui_task_runner);
 
   AutofillWebDataService(const AutofillWebDataService&) = delete;
   AutofillWebDataService& operator=(const AutofillWebDataService&) = delete;
@@ -68,8 +65,8 @@ class AutofillWebDataService : public WebDataServiceBase {
       WebDataServiceConsumer* consumer);
 
   // Removes form elements recorded for Autocomplete from the database.
-  void RemoveFormElementsAddedBetween(const base::Time& delete_begin,
-                                      const base::Time& delete_end);
+  void RemoveFormElementsAddedBetween(base::Time delete_begin,
+                                      base::Time delete_end);
   void RemoveFormValueForElementName(const std::u16string& name,
                                      const std::u16string& value);
 
@@ -83,53 +80,46 @@ class AutofillWebDataService : public WebDataServiceBase {
   // |guid| is the identifier of the profile to remove.
   void RemoveAutofillProfile(const std::string& guid);
 
-  // Initiates the request for local/server Autofill profiles.  The method
+  // Initiates the request for Autofill profiles. The method
   // OnWebDataServiceRequestDone of |consumer| gets called when the request is
-  // finished, with the profiles included in the argument |result|.  The
+  // finished, with the profiles included in the argument |result|.
   WebDataServiceBase::Handle GetAutofillProfiles(
       WebDataServiceConsumer* consumer);
-  WebDataServiceBase::Handle GetServerProfiles(
-      WebDataServiceConsumer* consumer);
-
-  // Schedules a task to convert server profiles to local profiles, comparing
-  // profiles using |app_locale| and filling in |primary_account_email| into
-  // newly converted profiles. The task only converts profiles that have not
-  // been converted before.
-  void ConvertWalletAddressesAndUpdateWalletCards(
-      const std::string& app_locale,
-      const std::string& primary_account_email);
 
   // Schedules a task to count the number of unique autofill values contained
   // in the time interval [|begin|, |end|). |begin| and |end| can be null
   // to indicate no time limitation.
   WebDataServiceBase::Handle GetCountOfValuesContainedBetween(
-      const base::Time& begin,
-      const base::Time& end,
+      base::Time begin,
+      base::Time end,
       WebDataServiceConsumer* consumer);
 
-  // Schedules a task to update autofill entries in the web database.
-  void UpdateAutofillEntries(
-      const std::vector<AutofillEntry>& autofill_entries);
+  // Schedules a task to update autocomplete entries in the web database.
+  void UpdateAutocompleteEntries(
+      const std::vector<AutocompleteEntry>& autocomplete_entries);
 
   void SetAutofillProfileChangedCallback(
-      base::RepeatingCallback<void(const AutofillProfileDeepChange&)>
-          change_cb);
+      base::RepeatingCallback<void(const AutofillProfileChange&)> change_cb);
 
-  // Schedules a task to add Iban to the web database.
-  void AddIban(const Iban& iban);
+  // Schedules a task to add a local IBAN to the web database.
+  void AddLocalIban(const Iban& iban);
 
-  // Initiates the request for local Ibans. The method
+  // Initiates the request for local/server IBANs. The method
   // OnWebDataServiceRequestDone of |consumer| gets called when the request is
-  // finished, with the Iban included in the argument |result|. The consumer
-  // owns the Iban.
-  WebDataServiceBase::Handle GetIbans(WebDataServiceConsumer* consumer);
+  // finished, with the IBAN included in the argument |result|. The consumer
+  // owns the IBAN.
+  WebDataServiceBase::Handle GetLocalIbans(WebDataServiceConsumer* consumer);
+  WebDataServiceBase::Handle GetServerIbans(WebDataServiceConsumer* consumer);
 
-  // Schedules a task to update iban in the web database.
-  void UpdateIban(const Iban& iban);
+  // Schedules a task to update a local IBAN in the web database.
+  void UpdateLocalIban(const Iban& iban);
 
-  // Schedules a task to remove an iban from the web database.
-  // |guid| is the identifier of the iban to remove.
-  void RemoveIban(const std::string& guid);
+  // Schedules a task to remove an existing local IBAN from the web database.
+  // `guid` is the identifier of the IBAN to remove.
+  void RemoveLocalIban(const std::string& guid);
+
+  // Updates the metadata for a server IBAN.
+  void UpdateServerIbanMetadata(const Iban& iban);
 
   // Schedules a task to add credit card to the web database.
   void AddCreditCard(const CreditCard& credit_card);
@@ -137,12 +127,22 @@ class AutofillWebDataService : public WebDataServiceBase {
   // Schedules a task to update credit card in the web database.
   void UpdateCreditCard(const CreditCard& credit_card);
 
+  // Schedules a task to update a local CVC in the web database.
+  void UpdateLocalCvc(const std::string& guid, const std::u16string& cvc);
+
   // Schedules a task to remove a credit card from the web database.
   // |guid| is identifier of the credit card to remove.
   void RemoveCreditCard(const std::string& guid);
 
-  // Schedules a task to add a full server credit card to the web database.
-  void AddFullServerCreditCard(const CreditCard& credit_card);
+  // Methods to schedule a task to add, update, remove, clear server cvc in the
+  // web database.
+  void AddServerCvc(int64_t instrument_id, const std::u16string& cvc);
+  void UpdateServerCvc(int64_t instrument_id, const std::u16string& cvc);
+  void RemoveServerCvc(int64_t instrument_id);
+  void ClearServerCvcs();
+
+  // Method to clear all the local CVCs from the web database.
+  void ClearLocalCvcs();
 
   // Initiates the request for local/server credit cards.  The method
   // OnWebDataServiceRequestDone of |consumer| gets called when the request is
@@ -151,18 +151,6 @@ class AutofillWebDataService : public WebDataServiceBase {
   WebDataServiceBase::Handle GetCreditCards(WebDataServiceConsumer* consumer);
   WebDataServiceBase::Handle GetServerCreditCards(
       WebDataServiceConsumer* consumer);
-
-  // Toggles the record for a server credit card between masked (only last 4
-  // digits) and full (all digits).
-  void UnmaskServerCreditCard(const CreditCard& card,
-                              const std::u16string& full_number);
-  void MaskServerCreditCard(const std::string& id);
-
-  // Store a UPI ID.
-  void AddUpiId(const std::string& upi_id);
-
-  // Gets all the UPI IDs stored in the database.
-  WebDataServiceBase::Handle GetAllUpiIds(WebDataServiceConsumer* consumer);
 
   // Initiates the request for Payments customer data.  The method
   // OnWebDataServiceRequestDone of |consumer| gets called when the request is
@@ -185,27 +173,48 @@ class AutofillWebDataService : public WebDataServiceBase {
   WebDataServiceBase::Handle GetAutofillOffers(
       WebDataServiceConsumer* consumer);
 
+  // Initiates the request for virtual card usage data. The method
+  // OnWebDataServiceRequestDone() of `consumer` gets called when the request is
+  // finished, with the virtual card usage data included in the argument
+  // `result`. The consumer owns the data.
+  WebDataServiceBase::Handle GetVirtualCardUsageData(
+      WebDataServiceConsumer* consumer);
+
+  // Initiates the request for credit card benefits. The method
+  // OnWebDataServiceRequestDone() of `consumer` gets called when the request is
+  // finished, with the credit card benefits included in the argument `result`.
+  // The consumer owns the data.
+  WebDataServiceBase::Handle GetCreditCardBenefits(
+      WebDataServiceConsumer* consumer);
+
+  // Initiates the request for masked bank accounts. The method
+  // OnWebDataServiceRequestDone() of `consumer` gets called when the request is
+  // finished, with the masked bank accounts included in the argument `result`.
+  // The consumer owns the data.
+  WebDataServiceBase::Handle GetMaskedBankAccounts(
+      WebDataServiceConsumer* consumer);
+
+  // Initiates the request for payment instruments. The method
+  // OnWebDataServiceRequestDone() of `consumer` gets called when the request is
+  // finished, with the payment instruments included in the argument `result`.
+  // The consumer owns the data.
+  WebDataServiceBase::Handle GetPaymentInstruments(
+      WebDataServiceConsumer* consumer);
+
+  // Initiates the request for payment instrument creation options from local
+  // storage. The method OnWebDataServiceRequestDone() of `consumer` gets called
+  // when the request is finished, with the payment instrument creation options
+  // included in the argument `result`. The consumer owns the data.
+  WebDataServiceBase::Handle GetPaymentInstrumentCreationOptions(
+      WebDataServiceConsumer* consumer);
+
+  // Clears all the credit card benefits from the database.
+  void ClearAllCreditCardBenefits();
+
   void ClearAllServerData();
-  void ClearAllLocalData();
 
   // Updates the metadata for a server card (masked or not).
   void UpdateServerCardMetadata(const CreditCard& credit_card);
-
-  // Updates the metadata for a server address.
-  void UpdateServerAddressMetadata(const AutofillProfile& profile);
-
-  // Removes Autofill records from the database.
-  void RemoveAutofillDataModifiedBetween(const base::Time& delete_begin,
-                                         const base::Time& delete_end);
-
-  // Removes origin URLs associated with Autofill profiles and credit cards from
-  // the database.
-  void RemoveOriginURLsModifiedBetween(const base::Time& delete_begin,
-                                       const base::Time& delete_end);
-
-  // Removes the orphan rows in the autofill_profile_names,
-  // autofill_profile_emails and autofill_profile_phones tables.
-  void RemoveOrphanAutofillTableRows();
 
   void AddObserver(AutofillWebDataServiceObserverOnDBSequence* observer);
   void RemoveObserver(AutofillWebDataServiceObserverOnDBSequence* observer);
@@ -227,19 +236,23 @@ class AutofillWebDataService : public WebDataServiceBase {
 
   // Returns a task runner that can be used to schedule tasks on the DB
   // sequence.
-  base::SingleThreadTaskRunner* GetDBTaskRunner();
+  scoped_refptr<base::SequencedTaskRunner> GetDBTaskRunner();
 
   // Triggers an Autocomplete retention policy run which will cleanup data that
   // hasn't been used since over the retention threshold.
   virtual WebDataServiceBase::Handle RemoveExpiredAutocompleteEntries(
       WebDataServiceConsumer* consumer);
 
+  // Schedules a task to add a server credit card to the web database.
+  //
+  // This is used for tests only. In production, server cards are set directly
+  // by Chrome Sync code.
+  void AddServerCreditCardForTesting(const CreditCard& credit_card);
+
  protected:
   ~AutofillWebDataService() override;
 
-  void NotifyAutofillMultipleChangedOnUISequence();
-  void NotifyAutofillAddressConversionCompletedOnUISequence();
-  void NotifySyncStartedOnUISequence(syncer::ModelType model_type);
+  void NotifyOnAutofillChangedBySyncOnUISequence(syncer::DataType data_type);
 
   base::WeakPtr<AutofillWebDataService> AsWeakPtr() {
     return weak_ptr_factory_.GetWeakPtr();
@@ -250,10 +263,7 @@ class AutofillWebDataService : public WebDataServiceBase {
       ui_observer_list_;
 
   // The task runner that this class uses for UI tasks.
-  scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner_;
-
-  // The task runner that this class uses for DB tasks.
-  scoped_refptr<base::SingleThreadTaskRunner> db_task_runner_;
+  scoped_refptr<base::SequencedTaskRunner> ui_task_runner_;
 
   scoped_refptr<AutofillWebDataBackendImpl> autofill_backend_;
 

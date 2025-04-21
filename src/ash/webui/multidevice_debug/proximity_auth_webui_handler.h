@@ -1,17 +1,19 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_WEBUI_MULTIDEVICE_DEBUG_PROXIMITY_AUTH_WEBUI_HANDLER_H_
 #define ASH_WEBUI_MULTIDEVICE_DEBUG_PROXIMITY_AUTH_WEBUI_HANDLER_H_
 
-#include "ash/components/multidevice/logging/log_buffer.h"
-#include "ash/components/multidevice/remote_device_ref.h"
-#include "ash/services/device_sync/public/cpp/device_sync_client.h"
+#include <optional>
+
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/values.h"
+#include "chromeos/ash/components/multidevice/logging/log_buffer.h"
+#include "chromeos/ash/components/multidevice/remote_device_ref.h"
+#include "chromeos/ash/services/device_sync/public/cpp/device_sync_client.h"
 #include "content/public/browser/web_ui_message_handler.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -63,24 +65,21 @@ class ProximityAuthWebUIHandler
       device_sync::mojom::NetworkRequestResult result_code);
   void OnGetDebugInfo(device_sync::mojom::DebugInfoPtr debug_info_ptr);
 
-  void NotifyOnEnrollmentFinished(
-      bool success,
-      std::unique_ptr<base::DictionaryValue> enrollment_state);
-  void NotifyOnSyncFinished(
-      bool was_sync_successful,
-      bool changed,
-      std::unique_ptr<base::DictionaryValue> device_sync_state);
-  void NotifyGotLocalState(
-      std::unique_ptr<base::Value> truncated_local_device_id,
-      std::unique_ptr<base::DictionaryValue> enrollment_state,
-      std::unique_ptr<base::DictionaryValue> device_sync_state,
-      std::unique_ptr<base::ListValue> synced_devices);
+  void NotifyOnEnrollmentFinished(bool success,
+                                  base::Value::Dict enrollment_state);
+  void NotifyOnSyncFinished(bool was_sync_successful,
+                            bool changed,
+                            base::Value::Dict device_sync_state);
+  void NotifyGotLocalState(base::Value truncated_local_device_id,
+                           base::Value::Dict enrollment_state,
+                           base::Value::Dict device_sync_state,
+                           base::Value::List synced_devices);
 
-  std::unique_ptr<base::Value> GetTruncatedLocalDeviceId();
-  std::unique_ptr<base::ListValue> GetRemoteDevicesList();
+  base::Value GetTruncatedLocalDeviceId();
+  base::Value::List GetRemoteDevicesList();
 
   // The delegate used to fetch dependencies. Must outlive this instance.
-  device_sync::DeviceSyncClient* device_sync_client_;
+  raw_ptr<device_sync::DeviceSyncClient> device_sync_client_;
 
   // True if we get a message from the loaded WebContents to know that it is
   // initialized, and we can inject JavaScript.

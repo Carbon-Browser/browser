@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,6 @@
 #include "components/history/core/browser/history_backend.h"
 #include "components/history/core/browser/history_db_task.h"
 #include "components/sync/model/sync_change.h"
-#include "components/sync/model/sync_error_factory.h"
 #include "components/sync/protocol/entity_specifics.pb.h"
 #include "components/sync/protocol/history_delete_directive_specifics.pb.h"
 #include "components/sync/protocol/proto_value_conversions.h"
@@ -39,10 +38,10 @@ std::string RandASCIIString(size_t length) {
 
 std::string DeleteDirectiveToString(
     const sync_pb::HistoryDeleteDirectiveSpecifics& delete_directive) {
-  std::unique_ptr<base::Value> value(
-      syncer::HistoryDeleteDirectiveSpecificsToValue(delete_directive));
+  base::Value value =
+      syncer::HistoryDeleteDirectiveSpecificsToValue(delete_directive);
   std::string str;
-  base::JSONWriter::Write(*value, &str);
+  base::JSONWriter::Write(value, &str);
   return str;
 }
 
@@ -161,11 +160,19 @@ class DeleteDirectiveHandler::DeleteDirectiveTask : public HistoryDBTask {
       HistoryBackend* history_backend,
       const syncer::SyncDataList& global_id_directives);
 
-  // Process a list of time range directives, all history entries within the
-  // time ranges are deleted. `time_range_directives` should be sorted by
+  // Process a list of time range directives, all history entries matching any
+  // of the directives are deleted. `time_range_directives` should be sorted by
   // `start_time_usec` and `end_time_usec` already.
   void ProcessTimeRangeDeleteDirectives(
       HistoryBackend* history_backend,
+      const syncer::SyncDataList& time_range_directives);
+
+  // Process a list of time range directives with all have the same (possibly
+  // empty) `restrict_app_id`. If `restrict_app_id` is empty, delete all
+  // history entries within the time ranges.
+  void ProcessTimeRangeDeleteDirectivesByApp(
+      HistoryBackend* history_backend,
+      std::optional<std::string> restrict_app_id,
       const syncer::SyncDataList& time_range_directives);
 
   // Process a list of url directives, all history entries matching the
@@ -264,6 +271,31 @@ void DeleteDirectiveHandler::DeleteDirectiveTask::
     ProcessTimeRangeDeleteDirectives(
         HistoryBackend* history_backend,
         const syncer::SyncDataList& time_range_directives) {
+  // For efficient operation, the deletion logic merges the time range of
+  // directives if they overlap. But the directives of different `app_id` must
+  // not be merged since they are targeting different sets of entries in a
+  // given time range. For that, directives are grouped by `app_id` first. Then
+  // each group is fed to the deletion logic separately.
+  std::map<std::optional<std::string>, syncer::SyncDataList> app_directives_map;
+  for (const syncer::SyncData& data : time_range_directives) {
+    const sync_pb::TimeRangeDirective& time_range_directive =
+        data.GetSpecifics().history_delete_directive().time_range_directive();
+    const std::optional<std::string>& app_id =
+        time_range_directive.has_app_id() ? time_range_directive.app_id()
+                                          : kNoAppIdFilter;
+    app_directives_map[app_id].push_back(data);
+  }
+
+  for (const auto& [app_id, directives] : app_directives_map) {
+    ProcessTimeRangeDeleteDirectivesByApp(history_backend, app_id, directives);
+  }
+}
+
+void DeleteDirectiveHandler::DeleteDirectiveTask::
+    ProcessTimeRangeDeleteDirectivesByApp(
+        HistoryBackend* history_backend,
+        std::optional<std::string> restrict_app_id,
+        const syncer::SyncDataList& time_range_directives) {
   if (time_range_directives.empty()) {
     return;
   }
@@ -280,6 +312,9 @@ void DeleteDirectiveHandler::DeleteDirectiveTask::
 
     const sync_pb::TimeRangeDirective& time_range_directive =
         delete_directive.time_range_directive();
+    CHECK((!time_range_directive.has_app_id() &&
+           restrict_app_id == kNoAppIdFilter) ||
+          time_range_directive.app_id() == *restrict_app_id);
     if (!time_range_directive.has_start_time_usec() ||
         !time_range_directive.has_end_time_usec() ||
         time_range_directive.start_time_usec() >=
@@ -297,7 +332,7 @@ void DeleteDirectiveHandler::DeleteDirectiveTask::
         // Add 1us to cover history entries visited at the end time because
         // time range in directive is inclusive.
         history_backend->ExpireHistoryBetween(
-            std::set<GURL>(), current_start_time,
+            std::set<GURL>(), restrict_app_id, current_start_time,
             current_end_time + base::Microseconds(1),
             /*user_initiated*/ true);
       }
@@ -310,7 +345,7 @@ void DeleteDirectiveHandler::DeleteDirectiveTask::
 
   if (!current_start_time.is_null()) {
     history_backend->ExpireHistoryBetween(
-        std::set<GURL>(), current_start_time,
+        std::set<GURL>(), restrict_app_id, current_start_time,
         current_end_time + base::Microseconds(1),
         /*user_initiated*/ true);
   }
@@ -377,7 +412,7 @@ bool DeleteDirectiveHandler::CreateTimeRangeDeleteDirective(
   time_range_directive->set_start_time_usec(begin_time_usecs);
   time_range_directive->set_end_time_usec(end_time_usecs);
 
-  absl::optional<syncer::ModelError> error =
+  std::optional<syncer::ModelError> error =
       ProcessLocalDeleteDirective(delete_directive);
   return !error.has_value();
 }
@@ -391,12 +426,12 @@ bool DeleteDirectiveHandler::CreateUrlDeleteDirective(const GURL& url) {
   url_directive->set_url(url.spec());
   url_directive->set_end_time_usec(TimeToUnixUsec(base::Time::Now()));
 
-  absl::optional<syncer::ModelError> error =
+  std::optional<syncer::ModelError> error =
       ProcessLocalDeleteDirective(delete_directive);
   return !error.has_value();
 }
 
-absl::optional<syncer::ModelError>
+std::optional<syncer::ModelError>
 DeleteDirectiveHandler::ProcessLocalDeleteDirective(
     const sync_pb::HistoryDeleteDirectiveSpecifics& delete_directive) {
   DCHECK(thread_checker_.CalledOnValidThread());
@@ -432,12 +467,11 @@ void DeleteDirectiveHandler::WaitUntilReadyToSync(base::OnceClosure done) {
   }
 }
 
-absl::optional<syncer::ModelError>
+std::optional<syncer::ModelError>
 DeleteDirectiveHandler::MergeDataAndStartSyncing(
-    syncer::ModelType type,
+    syncer::DataType type,
     const syncer::SyncDataList& initial_sync_data,
-    std::unique_ptr<syncer::SyncChangeProcessor> sync_processor,
-    std::unique_ptr<syncer::SyncErrorFactory> error_handler) {
+    std::unique_ptr<syncer::SyncChangeProcessor> sync_processor) {
   DCHECK_EQ(type, syncer::HISTORY_DELETE_DIRECTIVES);
   DCHECK(thread_checker_.CalledOnValidThread());
 
@@ -451,16 +485,16 @@ DeleteDirectiveHandler::MergeDataAndStartSyncing(
                                 &internal_tracker_);
   }
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
-void DeleteDirectiveHandler::StopSyncing(syncer::ModelType type) {
+void DeleteDirectiveHandler::StopSyncing(syncer::DataType type) {
   DCHECK_EQ(type, syncer::HISTORY_DELETE_DIRECTIVES);
   DCHECK(thread_checker_.CalledOnValidThread());
   sync_processor_.reset();
 }
 
-absl::optional<syncer::ModelError> DeleteDirectiveHandler::ProcessSyncChanges(
+std::optional<syncer::ModelError> DeleteDirectiveHandler::ProcessSyncChanges(
     const base::Location& from_here,
     const syncer::SyncChangeList& change_list) {
   DCHECK(thread_checker_.CalledOnValidThread());
@@ -480,7 +514,6 @@ absl::optional<syncer::ModelError> DeleteDirectiveHandler::ProcessSyncChanges(
         break;
       default:
         NOTREACHED();
-        break;
     }
   }
 
@@ -495,7 +528,11 @@ absl::optional<syncer::ModelError> DeleteDirectiveHandler::ProcessSyncChanges(
                                 &internal_tracker_);
   }
 
-  return absl::nullopt;
+  return std::nullopt;
+}
+
+base::WeakPtr<syncer::SyncableService> DeleteDirectiveHandler::AsWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
 }
 
 void DeleteDirectiveHandler::FinishProcessing(

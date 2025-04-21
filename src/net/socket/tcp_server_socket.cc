@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/notreached.h"
 #include "net/base/net_errors.h"
 #include "net/socket/socket_descriptor.h"
@@ -19,23 +19,39 @@ namespace net {
 
 TCPServerSocket::TCPServerSocket(NetLog* net_log, const NetLogSource& source)
     : TCPServerSocket(
-          std::make_unique<TCPSocket>(nullptr /* socket_performance_watcher */,
-                                      net_log,
-                                      source)) {}
+          TCPSocket::Create(nullptr /* socket_performance_watcher */,
+                            net_log,
+                            source)) {}
 
 TCPServerSocket::TCPServerSocket(std::unique_ptr<TCPSocket> socket)
     : socket_(std::move(socket)) {}
 
 int TCPServerSocket::AdoptSocket(SocketDescriptor socket) {
+  adopted_opened_socket_ = true;
   return socket_->AdoptUnconnectedSocket(socket);
 }
 
 TCPServerSocket::~TCPServerSocket() = default;
 
-int TCPServerSocket::Listen(const IPEndPoint& address, int backlog) {
-  int result = socket_->Open(address.GetFamily());
-  if (result != OK)
-    return result;
+int TCPServerSocket::Listen(const IPEndPoint& address,
+                            int backlog,
+                            std::optional<bool> ipv6_only) {
+  int result = OK;
+  if (!adopted_opened_socket_) {
+    result = socket_->Open(address.GetFamily());
+    if (result != OK) {
+      return result;
+    }
+  }
+
+  if (ipv6_only.has_value()) {
+    CHECK_EQ(address.address(), net::IPAddress::IPv6AllZeros());
+    result = socket_->SetIPv6Only(*ipv6_only);
+    if (result != OK) {
+      socket_->Close();
+      return result;
+    }
+  }
 
   result = socket_->SetDefaultOptionsForServer();
   if (result != OK) {
@@ -75,7 +91,6 @@ int TCPServerSocket::Accept(std::unique_ptr<StreamSocket>* socket,
 
   if (pending_accept_) {
     NOTREACHED();
-    return ERR_UNEXPECTED;
   }
 
   // It is safe to use base::Unretained(this). |socket_| is owned by this class,

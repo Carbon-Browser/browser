@@ -48,9 +48,9 @@
       disabled="[[controlsDisabled_]]"
       available class="settings-section">
   </print-preview-destination-settings>
-<if expr="chromeos_ash or chromeos_lacros">
+<if expr="is_chromeos">
   <print-preview-pin-settings state="[[state]]" settings="[[settings]]"
-      disabled="[[controlsDisabled_]]"
+      disabled="[[controlsDisabled_]]" is-pin-valid="{{isPinValid_}}"
       hidden$="[[!settings.pin.available]]" class="settings-section">
   </print-preview-pin-settings>
 </if>
@@ -76,7 +76,7 @@
       disabled="[[controlsDisabled_]]"
       hidden$="[[!shouldShowMoreSettings_]]">
   </print-preview-more-settings>
-  <iron-collapse id="moreSettings"
+  <cr-collapse id="moreSettings"
       opened="[[shouldExpandSettings_(
           settingsExpandedByUser_, shouldShowMoreSettings_)]]">
     <print-preview-media-size-settings settings="[[settings]]"
@@ -85,6 +85,11 @@
         hidden$="[[!settings.mediaSize.available]]"
         class="settings-section">
     </print-preview-media-size-settings>
+    <print-preview-media-type-settings settings="[[settings]]" state="[[state]]"
+        capability="[[destination.capabilities.printer.media_type]]"
+        disabled="[[controlsDisabled_]]"
+        hidden$="[[!settings.mediaType.available]]" class="settings-section">
+    </print-preview-media-type-settings>
     <print-preview-pages-per-sheet-settings settings="[[settings]]"
         disabled="[[controlsDisabled_]]"
         hidden$="[[!settings.pagesPerSheet.available]]"
@@ -121,16 +126,16 @@
         hidden$="[[!settings.vendorItems.available]]"
         class="settings-section">
     </print-preview-advanced-options-settings>
-<if expr="not chromeos_ash and not chromeos_lacros">
+<if expr="not is_chromeos">
     <print-preview-link-container destination="[[destination]]"
         app-kiosk-mode="[[isInAppKioskMode_]]"
         disabled="[[controlsDisabled_]]">
     </print-preview-link-container>
 </if>
-  </iron-collapse>
+  </cr-collapse>
 </div>
 <print-preview-button-strip destination="[[destination]]"
-    state="[[state]]" first-load="[[firstLoad_]]"
+    state="[[state]]" first-load="[[firstLoad_]]" is-pin-valid="[[isPinValid_]]"
     sheet-count="[[sheetCount_]]" max-sheets="[[maxSheets]]"
     on-print-button-focused="onPrintButtonFocused_">
 </print-preview-button-strip>

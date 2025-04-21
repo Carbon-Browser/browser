@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_MEDIASTREAM_MEDIA_STREAM_RENDERER_FACTORY_H_
 
 #include "base/memory/scoped_refptr.h"
-#include "third_party/blink/public/platform/modules/mediastream/web_media_stream_audio_renderer.h"
-#include "third_party/blink/public/platform/modules/mediastream/web_media_stream_video_renderer.h"
+#include "base/task/sequenced_task_runner.h"
 #include "third_party/blink/public/platform/web_string.h"
+#include "third_party/blink/renderer/modules/mediastream/media_stream_audio_renderer.h"
+#include "third_party/blink/renderer/modules/mediastream/media_stream_video_renderer.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 
 namespace base {
@@ -33,13 +34,13 @@ class MODULES_EXPORT MediaStreamRendererFactory {
 
   virtual ~MediaStreamRendererFactory();
 
-  virtual scoped_refptr<WebMediaStreamVideoRenderer> GetVideoRenderer(
+  virtual scoped_refptr<MediaStreamVideoRenderer> GetVideoRenderer(
       const WebMediaStream& web_stream,
-      const WebMediaStreamVideoRenderer::RepaintCB& repaint_cb,
-      scoped_refptr<base::SingleThreadTaskRunner> io_task_runner,
+      const MediaStreamVideoRenderer::RepaintCB& repaint_cb,
+      scoped_refptr<base::SequencedTaskRunner> video_task_runner,
       scoped_refptr<base::SingleThreadTaskRunner> main_render_task_runner);
 
-  virtual scoped_refptr<WebMediaStreamAudioRenderer> GetAudioRenderer(
+  virtual scoped_refptr<MediaStreamAudioRenderer> GetAudioRenderer(
       const WebMediaStream& web_stream,
       WebLocalFrame* web_frame,
       const WebString& device_id,

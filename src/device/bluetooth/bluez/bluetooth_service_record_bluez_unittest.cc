@@ -1,14 +1,15 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "device/bluetooth/bluez/bluetooth_service_record_bluez.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
@@ -21,7 +22,6 @@
 #include "device/bluetooth/dbus/fake_bluetooth_device_client.h"
 #include "device/bluetooth/test/bluetooth_test_bluez.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace bluez {
 
@@ -135,14 +135,14 @@ class BluetoothServiceRecordBlueZTest : public device::BluetoothTestBlueZ {
  protected:
   BluetoothServiceRecordBlueZ CreateaServiceRecord(const std::string uuid) {
     BluetoothServiceRecordBlueZ record;
-    record.AddRecordEntry(kServiceUuidAttributeId,
-                          BluetoothServiceAttributeValueBlueZ(
-                              BluetoothServiceAttributeValueBlueZ::UUID, 16,
-                              std::make_unique<base::Value>(uuid)));
+    record.AddRecordEntry(
+        kServiceUuidAttributeId,
+        BluetoothServiceAttributeValueBlueZ(
+            BluetoothServiceAttributeValueBlueZ::UUID, 16, base::Value(uuid)));
     return record;
   }
 
-  raw_ptr<BluetoothAdapterBlueZ> adapter_bluez_;
+  raw_ptr<BluetoothAdapterBlueZ, DanglingUntriaged> adapter_bluez_;
   size_t success_callbacks_;
   size_t error_callbacks_;
 
@@ -194,7 +194,7 @@ TEST_F(BluetoothServiceRecordBlueZTest, GetServiceRecords) {
   device->Connect(
       nullptr,
       base::BindLambdaForTesting(
-          [&run_loop](absl::optional<device::BluetoothDevice::ConnectErrorCode>
+          [&run_loop](std::optional<device::BluetoothDevice::ConnectErrorCode>
                           error_code) {
             EXPECT_FALSE(error_code.has_value());
             run_loop.Quit();

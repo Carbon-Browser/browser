@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,8 +40,8 @@ bool IsWordBounded(EphemeralRangeInFlatTree range, bool start, bool end) {
   if (start_position != 0 && start) {
     String start_text = range.StartPosition().AnchorNode()->textContent();
     start_text.Ensure16Bit();
-    wtf_size_t word_start = FindWordStartBoundary(
-        start_text.Characters16(), start_text.length(), start_position);
+    wtf_size_t word_start =
+        FindWordStartBoundary(start_text.Span16(), start_position);
     if (word_start != start_position)
       return false;
   }
@@ -53,8 +53,8 @@ bool IsWordBounded(EphemeralRangeInFlatTree range, bool start, bool end) {
     end_text.Ensure16Bit();
     // We expect end_position to be a word boundary, and FindWordEndBoundary
     // finds the next word boundary, so start from end_position - 1.
-    wtf_size_t word_end = FindWordEndBoundary(
-        end_text.Characters16(), end_text.length(), end_position - 1);
+    wtf_size_t word_end =
+        FindWordEndBoundary(end_text.Span16(), end_position - 1);
     if (word_end != end_position)
       return false;
   }
@@ -76,8 +76,7 @@ PositionInFlatTree FirstWordBoundaryAfter(PositionInFlatTree position) {
   }
 
   text.Ensure16Bit();
-  wtf_size_t word_end =
-      FindWordEndBoundary(text.Characters16(), text.length(), offset);
+  wtf_size_t word_end = FindWordEndBoundary(text.Span16(), offset);
 
   PositionInFlatTree end_pos(position.AnchorNode(), word_end);
   PositionIteratorInFlatTree itr(end_pos);
@@ -163,11 +162,11 @@ void TextFragmentFinder::FindMatchInRange(String search_text,
                                           bool word_start_bounded,
                                           bool word_end_bounded) {
   find_buffer_runner_->FindMatchInRange(
-      search_range, search_text, kCaseInsensitive,
-      WTF::Bind(&TextFragmentFinder::OnFindMatchInRangeComplete,
-                WrapWeakPersistent(this), search_text,
-                WrapWeakPersistent(search_range), word_start_bounded,
-                word_end_bounded));
+      search_range, search_text, FindOptions().SetCaseInsensitive(true),
+      WTF::BindOnce(&TextFragmentFinder::OnFindMatchInRangeComplete,
+                    WrapWeakPersistent(this), search_text,
+                    WrapWeakPersistent(search_range), word_start_bounded,
+                    word_end_bounded));
 }
 
 void TextFragmentFinder::FindPrefix() {
@@ -177,7 +176,7 @@ void TextFragmentFinder::FindPrefix() {
     return;
   }
 
-  if (selector_.Prefix().IsEmpty()) {
+  if (selector_.Prefix().empty()) {
     GoToStep(kMatchTextStart);
     return;
   }
@@ -209,7 +208,7 @@ void TextFragmentFinder::OnPrefixMatchComplete(
 }
 
 void TextFragmentFinder::FindTextStart() {
-  DCHECK(!selector_.Start().IsEmpty());
+  DCHECK(!selector_.Start().empty());
 
   // The match text need not be bounded at the end. If this is an exact
   // match (i.e. no |end_text|) and we have a suffix then the suffix will
@@ -218,7 +217,7 @@ void TextFragmentFinder::FindTextStart() {
   // https://github.com/WICG/scroll-to-text-fragment/issues/137 for
   // details.
   const bool end_at_word_boundary =
-      !selector_.End().IsEmpty() || selector_.Suffix().IsEmpty();
+      !selector_.End().empty() || selector_.Suffix().empty();
   if (prefix_match_) {
     search_range_->SetStart(NextTextPosition(prefix_match_->EndPosition(),
                                              match_range_->EndPosition()));
@@ -268,10 +267,10 @@ void TextFragmentFinder::FindTextEnd() {
   // If we've gotten here, we've found a |prefix| (if one was specified)
   // that's followed by the |start_text|. We'll now try to expand that into
   // a range match if |end_text| is specified.
-  if (!selector_.End().IsEmpty()) {
+  if (!selector_.End().empty()) {
     search_range_->SetStart(
         ToPositionInFlatTree(range_end_search_start_->GetPosition()));
-    const bool end_at_word_boundary = selector_.Suffix().IsEmpty();
+    const bool end_at_word_boundary = selector_.Suffix().empty();
 
     FindMatchInRange(selector_.End(), search_range_,
                      /*word_start_bounded=*/true, end_at_word_boundary);
@@ -295,7 +294,7 @@ void TextFragmentFinder::OnTextEndMatchComplete(
 void TextFragmentFinder::FindSuffix() {
   DCHECK(!potential_match_->IsNull());
 
-  if (selector_.Suffix().IsEmpty()) {
+  if (selector_.Suffix().empty()) {
     OnMatchComplete();
     return;
   }
@@ -327,7 +326,7 @@ void TextFragmentFinder::OnSuffixMatchComplete(
   // If this is an exact match(e.g. |end_text| is not specified), and we
   // didn't match on suffix, continue searching for a new potential_match
   // from it's start.
-  if (selector_.End().IsEmpty()) {
+  if (selector_.End().empty()) {
     potential_match_.Clear();
     GoToStep(kMatchPrefix);
     return;
@@ -363,11 +362,13 @@ void TextFragmentFinder::GoToStep(SelectorMatchStep step) {
 bool TextFragmentFinder::IsInSameUninterruptedBlock(
     const PositionInFlatTree& start,
     const PositionInFlatTree& end) {
-  if (!start.ComputeContainerNode()->GetLayoutObject() ||
-      !end.ComputeContainerNode()->GetLayoutObject())
+  Node* start_node = start.ComputeContainerNode();
+  Node* end_node = end.ComputeContainerNode();
+  if (!start_node || !start_node->GetLayoutObject() || !end_node ||
+      !end_node->GetLayoutObject()) {
     return true;
-  return FindBuffer::IsInSameUninterruptedBlock(*start.ComputeContainerNode(),
-                                                *end.ComputeContainerNode());
+  }
+  return FindBuffer::IsInSameUninterruptedBlock(*start_node, *end_node);
 }
 
 TextFragmentFinder::TextFragmentFinder(Client& client,
@@ -375,7 +376,7 @@ TextFragmentFinder::TextFragmentFinder(Client& client,
                                        Document* document,
                                        FindBufferRunnerType runner_type)
     : client_(client), selector_(selector), document_(document) {
-  DCHECK(!selector_.Start().IsEmpty());
+  DCHECK(!selector_.Start().empty());
   DCHECK(selector_.Type() != TextFragmentSelector::SelectorType::kInvalid);
   if (runner_type == TextFragmentFinder::FindBufferRunnerType::kAsynchronous) {
     find_buffer_runner_ = MakeGarbageCollected<AsyncFindBuffer>();

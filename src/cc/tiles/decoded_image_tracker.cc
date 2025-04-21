@@ -1,8 +1,9 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "cc/tiles/decoded_image_tracker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/default_tick_clock.h"
 #include "base/trace_event/trace_event.h"
 
@@ -37,24 +38,18 @@ DecodedImageTracker::~DecodedImageTracker() {
 }
 
 void DecodedImageTracker::QueueImageDecode(
-    const PaintImage& image,
-    const TargetColorParams& target_color_params,
+    const DrawImage& image,
     base::OnceCallback<void(bool)> callback) {
-  size_t frame_index = PaintImage::kDefaultFrameIndex;
   TRACE_EVENT1(TRACE_DISABLED_BY_DEFAULT("cc.debug"),
                "DecodedImageTracker::QueueImageDecode", "frame_key",
-               image.GetKeyForFrame(frame_index).ToString());
+               image.frame_key().ToString());
   DCHECK(image_controller_);
   // Queue the decode in the image controller, but switch out the callback for
   // our own.
-  auto image_bounds = SkIRect::MakeWH(image.width(), image.height());
-  DrawImage draw_image(image, false, image_bounds,
-                       PaintFlags::FilterQuality::kNone, SkM44(), frame_index,
-                       target_color_params);
   image_controller_->QueueImageDecode(
-      draw_image, base::BindOnce(&DecodedImageTracker::ImageDecodeFinished,
-                                 base::Unretained(this), std::move(callback),
-                                 image.stable_id()));
+      image, base::BindOnce(&DecodedImageTracker::ImageDecodeFinished,
+                            base::Unretained(this), std::move(callback),
+                            image.paint_image().stable_id()));
 }
 
 void DecodedImageTracker::UnlockAllImages() {

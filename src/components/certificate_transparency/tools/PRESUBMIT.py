@@ -1,11 +1,9 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 
 """Chromium presubmit script for src/net/tools/ct_log_list."""
-
-USE_PYTHON3 = True
 
 def _RunMakeCTLogListTests(input_api, output_api):
   """Runs make_ct_known_logs_list unittests if related files were modified."""

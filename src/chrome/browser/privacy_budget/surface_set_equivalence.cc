@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,14 @@
 
 #include <iterator>
 #include <set>
+#include <string_view>
 
 #include "base/containers/contains.h"
 #include "chrome/common/privacy_budget/field_trial_param_conversions.h"
 #include "chrome/common/privacy_budget/privacy_budget_features.h"
 
 SurfaceSetEquivalence::EquivalenceClassIdentifierMap
-SurfaceSetEquivalence::DecodeEquivalenceClassSet(
-    base::StringPiece param_value) {
+SurfaceSetEquivalence::DecodeEquivalenceClassSet(std::string_view param_value) {
   EquivalenceClassIdentifierMap representative_map;
   auto surface_set_set =
       DecodeIdentifiabilityFieldTrialParam<SurfaceSetEquivalentClassesList>(

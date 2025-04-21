@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,15 @@ import android.graphics.Bitmap;
 import android.graphics.NinePatch;
 import android.graphics.Rect;
 
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
+
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
-/**
- * A helper class to decode and expose relevant 9-patch data from a Bitmap.
- */
+/** A helper class to decode and expose relevant 9-patch data from a Bitmap. */
+@NullMarked
 public class NinePatchData {
     private final int mWidth;
     private final int mHeight;
@@ -39,8 +41,12 @@ public class NinePatchData {
     private NinePatchData(int width, int height, Rect padding, int[] divX, int[] divY) {
         mWidth = width;
         mHeight = height;
-        mPadding = new Rect(
-                padding.left, padding.top, mWidth - padding.right, mHeight - padding.bottom);
+        mPadding =
+                new Rect(
+                        padding.left,
+                        padding.top,
+                        mWidth - padding.right,
+                        mHeight - padding.bottom);
 
         mDivX = new int[divX.length];
         mDivY = new int[divY.length];
@@ -74,7 +80,7 @@ public class NinePatchData {
      *               encoded in {@code bitmap} or {@code null} if the {@link Bitmap} wasn't a
      *               9-patch.
      */
-    public static NinePatchData create(Bitmap bitmap) {
+    public static @Nullable NinePatchData create(Bitmap bitmap) {
         if (bitmap == null) return null;
 
         try {

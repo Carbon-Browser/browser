@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,10 @@
 #include "base/base_export.h"
 
 namespace base {
+
+// Get the maximum number of inotify watches can be used by a FilePathWatcher
+// instance. This is based on /proc/sys/fs/inotify/max_user_watches entry.
+BASE_EXPORT size_t GetMaxNumberOfInotifyWatches();
 
 // Overrides max inotify watcher counter for test.
 class BASE_EXPORT ScopedMaxNumberOfInotifyWatchesOverrideForTest {

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,7 @@ void FakeWifiNetworkConfigurationHandler::ConfigureWifiNetwork(
 }
 
 void FakeWifiNetworkConfigurationHandler::SetOutput(
-    const absl::optional<std::string>& network_guid,
+    const std::optional<std::string>& network_guid,
     const std::string& error_message) {
   guid_ = network_guid;
   error_message_ = error_message;

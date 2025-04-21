@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,7 +55,7 @@ base::Time ULLFileTimeToTime(ULONGLONG time_ulonglong) {
 SystemSessionAnalyzer::SystemSessionAnalyzer(uint32_t max_session_cnt)
     : max_session_cnt_(max_session_cnt), sessions_queried_(0) {}
 
-SystemSessionAnalyzer::~SystemSessionAnalyzer() {}
+SystemSessionAnalyzer::~SystemSessionAnalyzer() = default;
 
 SystemSessionAnalyzer::ExtendedStatus
 SystemSessionAnalyzer::GetExtendedFailureStatus() const {

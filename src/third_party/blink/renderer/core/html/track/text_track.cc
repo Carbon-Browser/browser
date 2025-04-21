@@ -37,6 +37,7 @@
 #include "third_party/blink/renderer/core/html/track/text_track_cue_list.h"
 #include "third_party/blink/renderer/core/html/track/text_track_list.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "ui/accessibility/accessibility_features.h"
 
 namespace blink {
 
@@ -67,19 +68,22 @@ const AtomicString& TextTrack::MetadataKeyword() {
   return metadata;
 }
 
-TextTrack::TextTrack(const AtomicString& kind,
+TextTrack::TextTrack(const V8TextTrackKind& kind,
                      const AtomicString& label,
                      const AtomicString& language,
+                     HTMLElement& source_element,
                      const AtomicString& id,
                      TextTrackType type)
-    : TrackBase(WebMediaPlayer::kTextTrack, kind, label, language, id),
+    : TrackBase(WebMediaPlayer::kTextTrack, label, language, id),
       active_cues_(nullptr),
       track_list_(nullptr),
+      source_element_(source_element),
       track_type_(type),
       readiness_state_(kNotLoaded),
       track_index_(kInvalidTrackIndex),
       rendered_track_index_(kInvalidTrackIndex),
-      has_been_configured_(false) {}
+      has_been_configured_(false),
+      kind_(kind.AsEnum()) {}
 
 TextTrack::~TextTrack() = default;
 
@@ -108,6 +112,10 @@ void TextTrack::SetTrackList(TextTrackList* track_list) {
 
 bool TextTrack::IsVisualKind() const {
   return kind() == SubtitlesKeyword() || kind() == CaptionsKeyword();
+}
+
+bool TextTrack::IsSpokenKind() const {
+  return kind() == DescriptionsKeyword();
 }
 
 void TextTrack::setMode(const V8TextTrackMode& mode) {
@@ -196,7 +204,7 @@ TextTrackCueList* TextTrack::activeCues() {
   }
 
   cues_->CollectActiveCues(*active_cues_);
-  return active_cues_;
+  return active_cues_.Get();
 }
 
 void TextTrack::addCue(TextTrackCue* cue) {
@@ -229,7 +237,7 @@ void TextTrack::addCue(TextTrackCue* cue) {
 
 void TextTrack::SetCSSStyleSheets(
     HeapVector<Member<CSSStyleSheet>> style_sheets) {
-  DCHECK(style_sheets_.IsEmpty());
+  DCHECK(style_sheets_.empty());
   style_sheets_ = std::move(style_sheets);
 }
 
@@ -314,12 +322,20 @@ void TextTrack::InvalidateTrackIndex() {
 }
 
 bool TextTrack::IsRendered() const {
+  if (features::IsTextBasedAudioDescriptionEnabled()) {
+    return mode_ == TextTrackMode::kShowing &&
+           (IsVisualKind() || IsSpokenKind());
+  }
   return mode_ == TextTrackMode::kShowing && IsVisualKind();
 }
 
 bool TextTrack::CanBeRendered() const {
-  // A track can be displayed when it's of kind captions or subtitles and hasn't
-  // failed to load.
+  // A track can be displayed when it's of kind captions, subtitles, or
+  // descriptions and hasn't failed to load.
+  if (features::IsTextBasedAudioDescriptionEnabled()) {
+    return GetReadinessState() != kFailedToLoad &&
+           (IsVisualKind() || IsSpokenKind());
+  }
   return GetReadinessState() != kFailedToLoad && IsVisualKind();
 }
 
@@ -346,8 +362,10 @@ const AtomicString& TextTrack::InterfaceName() const {
 }
 
 ExecutionContext* TextTrack::GetExecutionContext() const {
-  HTMLMediaElement* owner = MediaElement();
-  return owner ? owner->GetExecutionContext() : nullptr;
+  DCHECK(source_element_);
+  DCHECK(!MediaElement() || source_element_->GetExecutionContext() ==
+                                MediaElement()->GetExecutionContext());
+  return source_element_->GetExecutionContext();
 }
 
 HTMLMediaElement* TextTrack::MediaElement() const {
@@ -367,8 +385,9 @@ void TextTrack::Trace(Visitor* visitor) const {
   visitor->Trace(active_cues_);
   visitor->Trace(track_list_);
   visitor->Trace(style_sheets_);
+  visitor->Trace(source_element_);
   TrackBase::Trace(visitor);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
 }
 
 }  // namespace blink

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <utility>
 
 #include "apps/saved_files_service.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/test_extension_system.h"
@@ -37,22 +37,18 @@ using testing::Eq;
 
 class AppInfoPermissionsPanelTest : public testing::Test {
  protected:
-  AppInfoPermissionsPanelTest() {}
+  AppInfoPermissionsPanelTest() = default;
 
-  std::unique_ptr<base::DictionaryValue> ValidAppManifest() {
-    return extensions::DictionaryBuilder()
+  base::Value::Dict ValidAppManifest() {
+    return base::Value::Dict()
         .Set("name", "Test App Name")
         .Set("version", "2.0")
         .Set("manifest_version", 2)
-        .Set("app", extensions::DictionaryBuilder()
-                        .Set("background",
-                             extensions::DictionaryBuilder()
-                                 .Set("scripts", extensions::ListBuilder()
-                                                     .Append("background.js")
-                                                     .Build())
-                                 .Build())
-                        .Build())
-        .Build();
+        .Set("app",
+             base::Value::Dict().Set(
+                 "background",
+                 base::Value::Dict().Set(
+                     "scripts", base::Value::List().Append("background.js"))));
   }
 
   // We need the UI thread in order to construct UI elements in the view.
@@ -80,19 +76,16 @@ TEST_F(AppInfoPermissionsPanelTest, RequiredPermissionsObtainedCorrectly) {
   scoped_refptr<const extensions::Extension> app =
       extensions::ExtensionBuilder()
           .SetManifest(ValidAppManifest())
-          .MergeManifest(
-              extensions::DictionaryBuilder()
-                  .Set("permissions", extensions::ListBuilder()
-                                          // A valid permission with a message
-                                          .Append("desktopCapture")
-                                          // An invalid permission
-                                          .Append("bad_perm")
-                                          // An valid permission with no message
-                                          .Append("cookies")
-                                          // A valid permission with a message
-                                          .Append("serial")
-                                          .Build())
-                  .Build())
+          .MergeManifest(base::Value::Dict().Set(
+              "permissions", base::Value::List()
+                                 // A valid permission with a message
+                                 .Append("desktopCapture")
+                                 // An invalid permission
+                                 .Append("bad_perm")
+                                 // An valid permission with no message
+                                 .Append("cookies")
+                                 // A valid permission with a message
+                                 .Append("serial")))
           .SetID(kTestExtensionId)
           .Build();
   AppInfoPermissionsPanel panel(&profile_, app.get());
@@ -100,8 +93,7 @@ TEST_F(AppInfoPermissionsPanelTest, RequiredPermissionsObtainedCorrectly) {
   EXPECT_TRUE(VerifyTwoPermissionMessages(
       panel.app_->permissions_data(),
       l10n_util::GetStringUTF8(IDS_EXTENSION_PROMPT_WARNING_DESKTOP_CAPTURE),
-      l10n_util::GetStringUTF8(IDS_EXTENSION_PROMPT_WARNING_SERIAL),
-      false));
+      l10n_util::GetStringUTF8(IDS_EXTENSION_PROMPT_WARNING_SERIAL), false));
 }
 
 // Tests that an app's optional permissions are detected and converted to
@@ -110,19 +102,17 @@ TEST_F(AppInfoPermissionsPanelTest, OptionalPermissionsObtainedCorrectly) {
   scoped_refptr<const extensions::Extension> app =
       extensions::ExtensionBuilder()
           .SetManifest(ValidAppManifest())
-          .MergeManifest(extensions::DictionaryBuilder()
-                             .Set("optional_permissions",
-                                  extensions::ListBuilder()
-                                      // A valid permission with a message
-                                      .Append("clipboardRead")
-                                      // An invalid permission
-                                      .Append("bad_perm")
-                                      // A valid permission with no message
-                                      .Append("idle")
-                                      // Another valid permission with a message
-                                      .Append("serial")
-                                      .Build())
-                             .Build())
+          .MergeManifest(base::Value::Dict().Set(
+              "optional_permissions",
+              base::Value::List()
+                  // A valid permission with a message
+                  .Append("clipboardRead")
+                  // An invalid permission
+                  .Append("bad_perm")
+                  // A valid permission with no message
+                  .Append("idle")
+                  // Another valid permission with a message
+                  .Append("serial")))
           .SetID(kTestExtensionId)
           .Build();
   AppInfoPermissionsPanel panel(&profile_, app.get());
@@ -140,18 +130,10 @@ TEST_F(AppInfoPermissionsPanelTest, RetainedFilePermissionsObtainedCorrectly) {
   scoped_refptr<const extensions::Extension> app =
       extensions::ExtensionBuilder()
           .SetManifest(ValidAppManifest())
-          .MergeManifest(
-              extensions::DictionaryBuilder()
-                  .Set("permissions",
-                       extensions::ListBuilder()
-                           .Append(extensions::DictionaryBuilder()
-                                       .Set("fileSystem",
-                                            extensions::ListBuilder()
-                                                .Append("retainEntries")
-                                                .Build())
-                                       .Build())
-                           .Build())
-                  .Build())
+          .MergeManifest(base::Value::Dict().Set(
+              "permissions",
+              base::Value::List().Append(base::Value::Dict().Set(
+                  "fileSystem", base::Value::List().Append("retainEntries")))))
           .SetID(kTestExtensionId)
           .Build();
   AppInfoPermissionsPanel panel(&profile_, app.get());

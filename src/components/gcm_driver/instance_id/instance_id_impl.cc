@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,13 @@
 
 #include <algorithm>
 #include <memory>
+#include <string>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/gcm_driver/gcm_driver.h"
 #include "crypto/random.h"
 
@@ -41,7 +41,6 @@ InstanceID::Result GCMClientResultToInstanceIDResult(
       return InstanceID::UNKNOWN_ERROR;
     case gcm::GCMClient::TTL_EXCEEDED:
       NOTREACHED();
-      break;
   }
   return InstanceID::UNKNOWN_ERROR;
 }
@@ -234,7 +233,7 @@ void InstanceIDImpl::EnsureIDGenerated() {
   //    We don't want to be strictly cryptographically secure. The server might
   //    reject the ID if there is a conflict or problem.
   uint8_t bytes[kInstanceIDByteLength];
-  crypto::RandBytes(bytes, sizeof(bytes));
+  crypto::RandBytes(bytes);
 
   // 2) Transforms the first 4 bits to 0x7. Note that this is required by the
   //    server.
@@ -244,12 +243,10 @@ void InstanceIDImpl::EnsureIDGenerated() {
   // 3) Encode the value in Android-compatible base64 scheme:
   //    * URL safe: '/' replaced by '_' and '+' replaced by '-'.
   //    * No padding: any trailing '=' will be removed.
-  base::Base64Encode(
-      base::StringPiece(reinterpret_cast<const char*>(bytes), sizeof(bytes)),
-      &id_);
+  id_ = base::Base64Encode(bytes);
   std::replace(id_.begin(), id_.end(), '+', '-');
   std::replace(id_.begin(), id_.end(), '/', '_');
-  base::Erase(id_, '=');
+  std::erase(id_, '=');
 
   creation_time_ = base::Time::Now();
 
@@ -269,7 +266,8 @@ void InstanceIDImpl::RunWhenReady(base::OnceClosure task) {
   if (!delayed_task_controller_.CanRunTaskWithoutDelay())
     delayed_task_controller_.AddTask(std::move(task));
   else
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE, std::move(task));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(task));
 }
 
 }  // namespace instance_id

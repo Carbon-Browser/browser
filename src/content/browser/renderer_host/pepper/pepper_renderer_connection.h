@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -67,7 +67,7 @@ class PepperRendererConnection : public BrowserMessageFilter {
   void OpenChannelToPepperPlugin(
       const url::Origin& embedder_origin,
       const base::FilePath& path,
-      const absl::optional<url::Origin>& origin_lock,
+      const std::optional<url::Origin>& origin_lock,
       mojom::PepperHost::OpenChannelToPepperPluginCallback callback);
 
  private:
@@ -95,7 +95,7 @@ class PepperRendererConnection : public BrowserMessageFilter {
   // information (like the plugin name) won't be available.
   std::unique_ptr<BrowserPpapiHostImpl> in_process_host_;
 
-  const raw_ptr<PluginServiceImpl> plugin_service_;
+  const raw_ptr<PluginServiceImpl, LeakedDanglingUntriaged> plugin_service_;
   const base::FilePath profile_data_directory_;
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,11 @@
 #include <string>
 #include <vector>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/scoped_refptr.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "components/guest_view/buildflags/buildflags.h"
 #include "extensions/browser/api/clipboard/clipboard_api.h"
 #include "extensions/browser/api/declarative_content/content_rules_registry.h"
 #include "extensions/browser/api/storage/settings_namespace.h"
@@ -64,6 +66,10 @@ class WebViewGuestDelegate;
 class WebViewPermissionHelper;
 class WebViewPermissionHelperDelegate;
 
+#if BUILDFLAG(IS_CHROMEOS)
+class ConsentProvider;
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
 // Allows the embedder of the extensions module to customize its support for
 // API features. The embedder must create a single instance in the browser
 // process. Provides a default implementation that does nothing.
@@ -86,7 +92,8 @@ class ExtensionsAPIClient {
       content::BrowserContext* context,
       const scoped_refptr<value_store::ValueStoreFactory>& factory,
       SettingsChangedCallback observer,
-      std::map<settings_namespace::Namespace, ValueStoreCache*>* caches);
+      std::map<settings_namespace::Namespace,
+               raw_ptr<ValueStoreCache, CtnExperimental>>* caches);
 
   // Attaches any extra web contents helpers (like ExtensionWebContentsObserver)
   // to |web_contents|.
@@ -122,6 +129,11 @@ class ExtensionsAPIClient {
   virtual void ClearActionCount(content::BrowserContext* context,
                                 const Extension& extension);
 
+  // A method to open file: URL for tests.
+  virtual void OpenFileUrl(const GURL& file_url,
+                           content::BrowserContext* browser_context);
+
+#if BUILDFLAG(ENABLE_GUEST_VIEW)
   // Creates the AppViewGuestDelegate.
   virtual AppViewGuestDelegate* CreateAppViewGuestDelegate() const;
 
@@ -132,7 +144,7 @@ class ExtensionsAPIClient {
 
   // Returns a delegate for GuestViewManagerDelegate.
   virtual std::unique_ptr<guest_view::GuestViewManagerDelegate>
-  CreateGuestViewManagerDelegate(content::BrowserContext* context) const;
+  CreateGuestViewManagerDelegate() const;
 
   // Creates a delegate for MimeHandlerViewGuest.
   virtual std::unique_ptr<MimeHandlerViewGuestDelegate>
@@ -148,6 +160,14 @@ class ExtensionsAPIClient {
   virtual WebViewPermissionHelperDelegate*
   CreateWebViewPermissionHelperDelegate(
       WebViewPermissionHelper* web_view_permission_helper) const;
+#endif
+
+#if BUILDFLAG(IS_CHROMEOS)
+  // Returns an interface for requesting consent for file system API. The caller
+  // owns the returned ConsentProvider.
+  virtual std::unique_ptr<ConsentProvider> CreateConsentProvider(
+      content::BrowserContext* browser_context) const;
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
   // TODO(wjmaclean): Remove this when (if) ContentRulesRegistry code moves
   // to extensions/browser/api.
@@ -174,7 +194,8 @@ class ExtensionsAPIClient {
   // Creates a delegate for calling into the SupervisedUserService from the
   // Management API.
   virtual std::unique_ptr<SupervisedUserExtensionsDelegate>
-  CreateSupervisedUserExtensionsDelegate() const;
+  CreateSupervisedUserExtensionsDelegate(
+      content::BrowserContext* browser_context) const;
 
   // Creates and returns the DisplayInfoProvider used by the
   // chrome.system.display extension API.
@@ -194,7 +215,7 @@ class ExtensionsAPIClient {
   // Returns a delegate for the chrome.feedbackPrivate API.
   virtual FeedbackPrivateDelegate* GetFeedbackPrivateDelegate();
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   // If supported by the embedder, returns a delegate for querying non-native
   // file systems.
   virtual NonNativeFileSystemDelegate* GetNonNativeFileSystemDelegate();
@@ -202,9 +223,7 @@ class ExtensionsAPIClient {
   // Returns a delegate for embedder-specific chrome.mediaPerceptionPrivate API
   // behavior.
   virtual MediaPerceptionAPIDelegate* GetMediaPerceptionAPIDelegate();
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
-#if BUILDFLAG(IS_CHROMEOS)
   // Saves image data on clipboard.
   virtual void SaveImageDataToClipboard(
       std::vector<uint8_t> image_data,

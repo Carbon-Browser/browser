@@ -1,16 +1,16 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_GPU_VAAPI_VP9_VAAPI_VIDEO_DECODER_DELEGATE_H_
 #define MEDIA_GPU_VAAPI_VP9_VAAPI_VIDEO_DECODER_DELEGATE_H_
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
-#include "media/filters/vp9_parser.h"
 #include "media/gpu/vaapi/vaapi_video_decoder_delegate.h"
 #include "media/gpu/vp9_decoder.h"
+#include "media/parsers/vp9_parser.h"
 
 namespace media {
 
@@ -21,7 +21,7 @@ class VP9VaapiVideoDecoderDelegate : public VP9Decoder::VP9Accelerator,
                                      public VaapiVideoDecoderDelegate {
  public:
   VP9VaapiVideoDecoderDelegate(
-      DecodeSurfaceHandler<VASurface>* const vaapi_dec,
+      VaapiDecodeSurfaceHandler* const vaapi_dec,
       scoped_refptr<VaapiWrapper> vaapi_wrapper,
       ProtectedSessionUpdateCB on_protected_session_update_cb =
           base::DoNothing(),
@@ -39,13 +39,10 @@ class VP9VaapiVideoDecoderDelegate : public VP9Decoder::VP9Accelerator,
   Status SubmitDecode(scoped_refptr<VP9Picture> pic,
                       const Vp9SegmentationParams& seg,
                       const Vp9LoopFilterParams& lf,
-                      const Vp9ReferenceFrameVector& reference_frames,
-                      base::OnceClosure done_cb) override;
+                      const Vp9ReferenceFrameVector& reference_frames) override;
 
   bool OutputPicture(scoped_refptr<VP9Picture> pic) override;
   bool NeedsCompressedHeaderParsed() const override;
-  bool GetFrameContext(scoped_refptr<VP9Picture> pic,
-                       Vp9FrameContext* frame_ctx) override;
 
   // VaapiVideoDecoderDelegate impl.
   void OnVAContextDestructionSoon() override;

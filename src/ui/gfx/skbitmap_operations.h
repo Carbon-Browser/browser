@@ -1,18 +1,18 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_GFX_SKBITMAP_OPERATIONS_H_
 #define UI_GFX_SKBITMAP_OPERATIONS_H_
 
+#include "base/component_export.h"
 #include "base/gtest_prod_util.h"
 #include "ui/gfx/color_utils.h"
-#include "ui/gfx/gfx_export.h"
 #include "ui/gfx/shadow_value.h"
 
 class SkBitmap;
 
-class GFX_EXPORT SkBitmapOperations {
+class COMPONENT_EXPORT(GFX) SkBitmapOperations {
  public:
   // Enum for use in rotating images (must be in 90 degree increments),
   // see: Rotate.

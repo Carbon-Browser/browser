@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,19 +9,17 @@
 namespace base {
 
 HighResolutionTimerManager::HighResolutionTimerManager()
-    : hi_res_clock_available_(false) {
-}
+    : hi_res_clock_available_(false) {}
 
 HighResolutionTimerManager::~HighResolutionTimerManager() = default;
 
-void HighResolutionTimerManager::OnPowerStateChange(bool on_battery_power) {
-}
+void HighResolutionTimerManager::OnBatteryPowerStatusChange(
+    PowerStateObserver::BatteryPowerStatus battery_power_status) {}
 
 void HighResolutionTimerManager::OnSuspend() {}
 
 void HighResolutionTimerManager::OnResume() {}
 
-void HighResolutionTimerManager::UseHiResClock(bool use) {
-}
+void HighResolutionTimerManager::UseHiResClock(bool use) {}
 
 }  // namespace base

@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_PUBLIC_BROWSER_FILE_SYSTEM_ACCESS_PERMISSION_GRANT_H_
 #define CONTENT_PUBLIC_BROWSER_FILE_SYSTEM_ACCESS_PERMISSION_GRANT_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
@@ -43,6 +43,9 @@ class CONTENT_EXPORT FileSystemAccessPermissionGrant
   // path.
   virtual base::FilePath GetPath() = 0;
 
+  // The display name for path. If empty, basename of path should be used.
+  virtual std::string GetDisplayName() = 0;
+
   // These values are persisted to logs. Entries should not be renumbered and
   // numeric values should never be reused.
   enum class PermissionRequestOutcome {
@@ -57,7 +60,8 @@ class CONTENT_EXPORT FileSystemAccessPermissionGrant
     kGrantedByContentSetting = 8,
     kGrantedByPersistentPermission = 9,
     kGrantedByAncestorPersistentPermission = 10,
-    kMaxValue = kGrantedByAncestorPersistentPermission
+    kGrantedByRestorePrompt = 11,
+    kMaxValue = kGrantedByRestorePrompt
   };
 
   // Passed to |RequestPermission| to indicate if for this particular permission

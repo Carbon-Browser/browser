@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,10 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "gin/object_template_builder.h"
 #include "gin/wrappable.h"
+#include "third_party/blink/public/web/web_ax_context.h"
 #include "third_party/blink/public/web/web_ax_object.h"
 #include "ui/accessibility/ax_event_intent.h"
 #include "v8/include/v8.h"
@@ -29,6 +31,7 @@ class WebAXObjectProxy : public gin::Wrappable<WebAXObjectProxy> {
     virtual ~Factory() {}
     virtual v8::Local<v8::Object> GetOrCreate(
         const blink::WebAXObject& object) = 0;
+    virtual blink::WebAXContext* GetAXContext() = 0;
   };
 
   static gin::WrapperInfo kWrapperInfo;
@@ -54,19 +57,20 @@ class WebAXObjectProxy : public gin::Wrappable<WebAXObjectProxy> {
       const std::vector<ui::AXEventIntent>& event_intents);
   void Reset();
 
- protected:
   const blink::WebAXObject& accessibility_object() const {
     return accessibility_object_;
   }
 
+ protected:
   Factory* factory() const { return factory_; }
 
-  bool IsDetached() const { return !factory_; }
+  bool IsDetached() const { return !factory_ || !factory_->GetAXContext(); }
 
  private:
   friend class WebAXObjectProxyBindings;
 
-  void UpdateLayout();
+  // Returns true if successful.
+  bool UpdateLayout();
   ui::AXNodeData GetAXNodeData() const;
 
   // Bound properties.
@@ -77,7 +81,7 @@ class WebAXObjectProxy : public gin::Wrappable<WebAXObjectProxy> {
   int Y();
   int Width();
   int Height();
-  v8::Local<v8::Value> InPageLinkTarget();
+  v8::Local<v8::Value> InPageLinkTarget(v8::Isolate* isolate);
   int IntValue();
   int MinValue();
   int MaxValue();
@@ -88,10 +92,10 @@ class WebAXObjectProxy : public gin::Wrappable<WebAXObjectProxy> {
   // The following selection functions return global information about the
   // current selection and can be called on any object in the tree.
   bool SelectionIsBackward();
-  v8::Local<v8::Value> SelectionAnchorObject();
+  v8::Local<v8::Value> SelectionAnchorObject(v8::Isolate* isolate);
   int SelectionAnchorOffset();
   std::string SelectionAnchorAffinity();
-  v8::Local<v8::Value> SelectionFocusObject();
+  v8::Local<v8::Value> SelectionFocusObject(v8::Isolate* isolate);
   int SelectionFocusOffset();
   std::string SelectionFocusAffinity();
 
@@ -117,13 +121,11 @@ class WebAXObjectProxy : public gin::Wrappable<WebAXObjectProxy> {
   bool IsSelectable();
   bool IsMultiLine();
   bool IsMultiSelectable();
-  bool IsSelectedOptionActive();
   bool IsExpanded();
   std::string Checked();
   bool IsVisible();
   // Exposes the visited state of a link.
   bool IsVisited();
-  bool IsOffScreen();
   bool IsCollapsed();
   bool IsValid();
   bool IsReadOnly();
@@ -172,7 +174,7 @@ class WebAXObjectProxy : public gin::Wrappable<WebAXObjectProxy> {
   v8::Local<v8::Object> AriaActiveDescendantElement();
   v8::Local<v8::Object> AriaControlsElementAtIndex(unsigned index);
   v8::Local<v8::Object> AriaDetailsElementAtIndex(unsigned index);
-  v8::Local<v8::Object> AriaErrorMessageElement();
+  v8::Local<v8::Object> AriaErrorMessageElementAtIndex(unsigned index);
   v8::Local<v8::Object> AriaFlowToElementAtIndex(unsigned index);
   v8::Local<v8::Object> AriaOwnsElementAtIndex(unsigned index);
   std::string AllAttributes();
@@ -187,7 +189,8 @@ class WebAXObjectProxy : public gin::Wrappable<WebAXObjectProxy> {
   std::string ColumnIndexRange();
   v8::Local<v8::Object> CellForColumnAndRow(int column, int row);
   void SetSelectedTextRange(int selection_start, int length);
-  bool SetSelection(v8::Local<v8::Value> anchor_object,
+  bool SetSelection(v8::Isolate* isolate,
+                    v8::Local<v8::Value> anchor_object,
                     int anchor_offset,
                     v8::Local<v8::Value> focus_object,
                     int focus_offset);
@@ -195,14 +198,16 @@ class WebAXObjectProxy : public gin::Wrappable<WebAXObjectProxy> {
   bool IsPressActionSupported();
   bool IsIncrementActionSupported();
   bool IsDecrementActionSupported();
+  bool HasDefaultAction();
   v8::Local<v8::Object> ParentElement();
   void Increment();
   void Decrement();
   void ShowMenu();
   void Press();
   bool SetValue(const std::string& value);
-  bool IsEqual(v8::Local<v8::Object> proxy);
-  void SetNotificationListener(v8::Local<v8::Function> callback);
+  bool IsEqual(v8::Isolate* isolate, v8::Local<v8::Object> proxy);
+  void SetNotificationListener(v8::Isolate* isolate,
+                               v8::Local<v8::Function> callback);
   void UnsetNotificationListener();
   void TakeFocus();
   void ScrollToMakeVisible();
@@ -241,7 +246,7 @@ class WebAXObjectProxy : public gin::Wrappable<WebAXObjectProxy> {
   std::string Placeholder();
 
   blink::WebAXObject accessibility_object_;
-  Factory* factory_;
+  raw_ptr<Factory> factory_;
 
   v8::Global<v8::Function> notification_callback_;
 };
@@ -254,19 +259,21 @@ class RootWebAXObjectProxy : public WebAXObjectProxy {
   bool IsRoot() const override;
 };
 
-// Provides simple lifetime management of the WebAXObjectProxy instances: all
-// WebAXObjectProxys ever created from the controller are stored in a list and
-// cleared explicitly.
 class WebAXObjectProxyList : public WebAXObjectProxy::Factory {
  public:
-  WebAXObjectProxyList();
+  explicit WebAXObjectProxyList(v8::Isolate* isolate, blink::WebAXContext&);
   ~WebAXObjectProxyList() override;
 
   void Clear();
+  void Remove(unsigned axid);
   v8::Local<v8::Object> GetOrCreate(const blink::WebAXObject&) override;
+  blink::WebAXContext* GetAXContext() override;
 
  private:
-  std::vector<v8::Global<v8::Object>> elements_;
+  raw_ptr<v8::Isolate, DanglingUntriaged> isolate_;
+  // Maps from AxID to corresponding v8 wrapper object for an AX object..
+  std::unordered_map<unsigned, v8::Global<v8::Object>> ax_objects_;
+  const raw_ptr<blink::WebAXContext, DanglingUntriaged> ax_context_;
 };
 
 }  // namespace content

@@ -1,9 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_GL_SCOPED_BINDERS_H_
 #define UI_GL_SCOPED_BINDERS_H_
+
+#include <array>
 
 #include "base/memory/raw_ptr.h"
 #include "ui/gl/gl_export.h"
@@ -111,7 +113,7 @@ class GL_EXPORT ScopedVertexAttribArray {
   int type_;
   int normalized_;
   int stride_;
-  void* pointer_;
+  raw_ptr<void> pointer_;
 };
 
 class GL_EXPORT ScopedBufferBinder {
@@ -143,7 +145,7 @@ class GL_EXPORT ScopedViewport {
   ~ScopedViewport();
 
  private:
-  int data_[4] = {};
+  std::array<int, 4> data_ = {};
 };
 
 class GL_EXPORT ScopedVertexAttribPointer {
@@ -172,7 +174,7 @@ class GL_EXPORT ScopedColorMask {
   ~ScopedColorMask();
 
  private:
-  unsigned char colors_[4] = {};
+  std::array<unsigned char, 4> colors_ = {};
 };
 
 class GL_EXPORT ScopedCapability {

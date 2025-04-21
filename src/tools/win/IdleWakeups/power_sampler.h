@@ -1,14 +1,14 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef TOOLS_WIN_IDLEWAKEUPS_POWER_SAMPLER_H_
 #define TOOLS_WIN_IDLEWAKEUPS_POWER_SAMPLER_H_
 
+#include <windows.h>
+
 #include <map>
 #include <string>
-
-#include <windows.h>
 
 // https://software.intel.com/en-us/blogs/2012/12/13/using-the-intel-power-gadget-api-on-mac-os-x
 typedef int (*IntelEnergyLibInitialize_t)();

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,9 @@
 
 #include <linux/magic.h>
 #include <sys/statfs.h>
+
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
@@ -16,42 +18,51 @@
 #include "ash/components/arc/arc_util.h"
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/lazy_instance.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/strings/string_util.h"
 #include "base/system/sys_info.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "chrome/browser/ash/arc/policy/arc_policy_util.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
 #include "chrome/browser/ash/file_manager/path_util.h"
+#include "chrome/browser/ash/guest_os/guest_os_session_tracker.h"
+#include "chrome/browser/ash/guest_os/guest_os_session_tracker_factory.h"
 #include "chrome/browser/ash/guest_os/guest_os_share_path.h"
+#include "chrome/browser/ash/guest_os/guest_os_share_path_factory.h"
 #include "chrome/browser/ash/login/configuration_keys.h"
 #include "chrome/browser/ash/login/demo_mode/demo_session.h"
 #include "chrome/browser/ash/login/demo_mode/demo_setup_controller.h"
 #include "chrome/browser/ash/login/oobe_configuration.h"
-#include "chrome/browser/ash/login/ui/login_display_host.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
-#include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/chromeos/arc/arc_web_contents_data.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/profiles/profiles_state.h"
 #include "chrome/browser/tab_contents/tab_util.h"
+#include "chrome/browser/ui/ash/login/login_display_host.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller.h"
 #include "chrome/browser/ui/simple_message_box.h"
 #include "chrome/grit/generated_resources.h"
+#include "chromeos/ash/components/browser_context_helper/browser_context_helper.h"
+#include "chromeos/ash/components/install_attributes/install_attributes.h"
+#include "chromeos/ash/components/settings/cros_settings.h"
+#include "chromeos/components/mgs/managed_guest_session_utils.h"
 #include "components/embedder_support/user_agent_utils.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/known_user.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/site_instance.h"
 #include "content/public/browser/web_contents.h"
@@ -68,6 +79,54 @@ namespace arc {
 
 namespace {
 
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+// Status of ARC based on device affiliation.
+enum class DeviceAffiliationBasedArcStatus {
+  // ARC allowed on affiliated device
+  kAllowedOnAffiliatedDevice,
+
+  // ARC allowed on unaffiliated device
+  kAllowedOnUnaffiliatedDevice,
+
+  // ARC not allowed on unaffiliated device
+  kDisallowedOnUnaffiliatedDevice,
+
+  kMaxValue = kDisallowedOnUnaffiliatedDevice,
+};
+
+enum class ArcStatus {
+  // ARC disallowed for testing
+  kDisallowedForTesting,
+
+  // ARC is not available
+  kNotAvailable,
+
+  // Non-primary users are not supported in ARC
+  kNonPrimaryUsersNotSupported,
+
+  // ARC is disabled by flag for managed user
+  kDisabledByFlagForManagedUser,
+
+  // ARC is not allowed for the user
+  kDisallowedForUser,
+
+  // Device admin disallowed ARC for unaffiliated user
+  kDisallowedByDevicePolicyRestriction,
+
+  // ARC disallowed for unaffiliated users
+  kDisallowedByUserPolicyRestriction,
+
+  // ARC allowed on affiliated device
+  kAllowedOnAffiliatedDevice,
+
+  // ARC allowed on unaffilated device
+  kAllowedOnUnaffiliatedDevice,
+
+  // ARC allowed
+  kAllowed,
+};
+
 // Contains map of profile to check result of ARC allowed. Contains true if ARC
 // allowed check was performed and ARC is allowed. If map does not contain
 // a value then this means that check has not been performed yet.
@@ -78,8 +137,20 @@ base::LazyInstance<std::map<const Profile*, bool>>::DestructorAtExit
 bool g_disallow_for_testing = false;
 
 // Let IsArcBlockedDueToIncompatibleFileSystem() return the specified value
-// during test runs. Doesn't affect ARC kiosk and public session.
+// during test runs. Doesn't affect public session.
 bool g_arc_blocked_due_to_incompatible_filesystem_for_testing = false;
+
+// Indicates whether the ARCVM DLC image is available on the device with the
+// arcvm_dlc USE flag. This value must be updated before calling
+// IsArcAllowedForProfile() to maintain consistency.
+//
+// 1. Regular login: The check is performed in UserSessionManager when the user
+// logs in.
+// 2. Chrome restart: On ash-chrome restart, the session bypasses
+// UserSessionManager. In this case, the check is done in
+// ArcServiceLauncher, blocking the main thread to ensure the check
+// completes before calling IsArcAllowedForProfile().
+std::optional<bool> g_is_arcvm_dlc_image_available;
 
 // TODO(kinaba): Temporary workaround for crbug.com/729034.
 //
@@ -102,17 +173,39 @@ bool IsArcCompatibleFilesystem(const base::FilePath& path) {
 
   // If it can be verified it is not on ecryptfs, then it is ok.
   struct statfs statfs_buf;
-  if (statfs(path.value().c_str(), &statfs_buf) < 0)
+  if (statfs(path.value().c_str(), &statfs_buf) < 0) {
+    VPLOG(1) << "statfs failed";
     return false;
+  }
   return statfs_buf.f_type != ECRYPTFS_SUPER_MAGIC;
 }
 
 FileSystemCompatibilityState GetFileSystemCompatibilityPref(
     const AccountId& account_id) {
   user_manager::KnownUser known_user(g_browser_process->local_state());
-  return static_cast<FileSystemCompatibilityState>(
-      known_user.FindIntPath(account_id, prefs::kArcCompatibleFilesystemChosen)
-          .value_or(kFileSystemIncompatible));
+  if (auto pref = known_user.FindIntPath(account_id,
+                                         prefs::kArcCompatibleFilesystemChosen);
+      pref) {
+    return static_cast<FileSystemCompatibilityState>(pref.value());
+  }
+  VLOG(1) << "arc.compatible_filesystem.chosen not set. Assuming incompatible.";
+  return kFileSystemIncompatible;
+}
+
+// Similar to GetFileSystemCompatibilityPref, but when the pref is not found,
+// it optimistically assumes that the file system is compatible. This is for
+// the mitigation of issues like b/327969092 that unexpectedly clears the pref
+// during the initial sign-in.
+FileSystemCompatibilityState GetFileSystemCompatibilityPrefOptimistic(
+    const AccountId& account_id) {
+  user_manager::KnownUser known_user(g_browser_process->local_state());
+  if (auto pref = known_user.FindIntPath(account_id,
+                                         prefs::kArcCompatibleFilesystemChosen);
+      pref) {
+    return static_cast<FileSystemCompatibilityState>(pref.value());
+  }
+  VLOG(1) << "arc.compatible_filesystem.chosen not set. Assuming compatible.";
+  return kFileSystemCompatible;
 }
 
 // Stores the result of IsArcCompatibleFilesystem posted back from the blocking
@@ -127,9 +220,30 @@ void StoreCompatibilityCheckResult(const AccountId& account_id,
 
     // TODO(kinaba): Remove this code for accounts without user prefs.
     // See the comment for |g_known_compatible_users| for the detail.
-    if (GetFileSystemCompatibilityPref(account_id) != kFileSystemCompatible)
+    if (GetFileSystemCompatibilityPref(account_id) != kFileSystemCompatible) {
       g_known_compatible_users.Get().insert(account_id);
+    }
   }
+  std::move(callback).Run();
+}
+
+// Returns whether the ARCVM DLC image is already installed on the reven device.
+// This function performs a blocking IO operation and should only be called on
+// threads that allow blocking IO, such as worker threads or IO threads. It
+// must not be called on the UI thread.
+bool IsArcVmDlcImageExist() {
+  DCHECK(!content::BrowserThread::CurrentlyOn(content::BrowserThread::UI));
+  base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
+                                                base::BlockingType::MAY_BLOCK);
+  const char arc_vm_dlc_image_path[] = "/opt/google/vms/android/system.raw.img";
+  return base::PathExists(base::FilePath(arc_vm_dlc_image_path));
+}
+
+// Stores the result of IsArcVmDlcImageExist posted back from the blocking
+// task runner.
+void StoreArcVmDlcImageCheckResult(base::OnceClosure callback,
+                                   bool is_available) {
+  g_is_arcvm_dlc_image_available = is_available;
   std::move(callback).Run();
 }
 
@@ -142,9 +256,10 @@ bool IsUnaffiliatedArcAllowed() {
       case ArcSessionManager::State::STOPPED:
         // Apply logic below
         break;
-      case ArcSessionManager::State::NEGOTIATING_TERMS_OF_SERVICE:
-      case ArcSessionManager::State::CHECKING_ANDROID_MANAGEMENT:
+      case ArcSessionManager::State::CHECKING_REQUIREMENTS:
       case ArcSessionManager::State::REMOVING_DATA_DIR:
+      case ArcSessionManager::State::CHECKING_DATA_MIGRATION_NECESSITY:
+      case ArcSessionManager::State::READY:
       case ArcSessionManager::State::ACTIVE:
       case ArcSessionManager::State::STOPPING:
         // Never forbid unaffiliated ARC while ARC is running
@@ -159,52 +274,92 @@ bool IsUnaffiliatedArcAllowed() {
   return true;
 }
 
-bool IsArcAllowedForProfileInternal(const Profile* profile,
-                                    bool should_report_reason) {
+ArcStatus GetArcStatusForProfile(const Profile* profile,
+                                 bool should_report_reason) {
   if (g_disallow_for_testing) {
     VLOG_IF(1, should_report_reason) << "ARC is disallowed for testing.";
-    return false;
+    return ArcStatus::kDisallowedForTesting;
   }
 
-  // ARC Kiosk can be enabled even if ARC is not yet supported on the device.
-  // In that case IsArcKioskMode() should return true as profile is already
-  // created.
-  if (!IsArcAvailable() && !(IsArcKioskMode() && IsArcKioskAvailable())) {
+  if (!IsArcAvailable()) {
     VLOG_IF(1, should_report_reason) << "ARC is not available.";
-    return false;
+    return ArcStatus::kNotAvailable;
+  }
+
+  if (ash::switches::IsRevenBranding()) {
+    CHECK(g_is_arcvm_dlc_image_available.has_value());
+
+    if (!g_is_arcvm_dlc_image_available.value()) {
+      VLOG_IF(1, should_report_reason)
+          << "ARC unavailable on reven board due to no arcvm dlc images.";
+      return ArcStatus::kNotAvailable;
+    }
+
+    if (!policy_util::IsAccountManaged(profile) ||
+        !ash::InstallAttributes::Get()->IsEnterpriseManaged()) {
+      VLOG_IF(1, should_report_reason) << "ARC unavailable on reven board due "
+                                          "to unmanaged device or account.";
+      return ArcStatus::kNotAvailable;
+    }
   }
 
   if (!ash::ProfileHelper::IsPrimaryProfile(profile)) {
     VLOG_IF(1, should_report_reason)
         << "Non-primary users are not supported in ARC.";
-    return false;
+    return ArcStatus::kNonPrimaryUsersNotSupported;
   }
 
   if (policy_util::IsArcDisabledForEnterprise() &&
       policy_util::IsAccountManaged(profile)) {
     VLOG_IF(1, should_report_reason)
         << "ARC is disabled by flag for managed users.";
-    return false;
+    return ArcStatus::kDisabledByFlagForManagedUser;
   }
 
   // Play Store requires an appropriate application install mechanism. Normal
-  // users do this through GAIA, but Kiosk and Active Directory users use
-  // different application install mechanism. ARC is not allowed otherwise
-  // (e.g. in public sessions). cf) crbug.com/605545
+  // users do this through GAIA, but Kiosk users use a different application
+  // install mechanism. ARC is not allowed otherwise (e.g. in public sessions,
+  // as described in crbug.com/605545).
   const user_manager::User* user =
       ash::ProfileHelper::Get()->GetUserByProfile(profile);
   if (!IsArcAllowedForUser(user)) {
     VLOG_IF(1, should_report_reason) << "ARC is not allowed for the user.";
-    return false;
+    return ArcStatus::kDisallowedForUser;
   }
 
   if (!user->IsAffiliated() && !IsUnaffiliatedArcAllowed()) {
     VLOG_IF(1, should_report_reason)
         << "Device admin disallowed ARC for unaffiliated users.";
-    return false;
+    return ArcStatus::kDisallowedByDevicePolicyRestriction;
   }
 
-  return true;
+  if (!user->IsAffiliated() &&
+      !profile->GetPrefs()->GetBoolean(prefs::kUnaffiliatedDeviceArcAllowed) &&
+      policy_util::IsAccountManaged(profile)) {
+    VLOG_IF(1, should_report_reason) << "ARC disallowed for unaffiliated users";
+    return arc::ArcStatus::kDisallowedByUserPolicyRestriction;
+  }
+
+  // Please add any condition that disallows ARC above this check.
+  const bool is_arc_allowed_on_unaffiliated_devices =
+      profile->GetPrefs()->GetBoolean(prefs::kUnaffiliatedDeviceArcAllowed);
+  if (user->IsAffiliated() && !is_arc_allowed_on_unaffiliated_devices) {
+    return ArcStatus::kAllowedOnAffiliatedDevice;
+  }
+  if (!user->IsAffiliated() && is_arc_allowed_on_unaffiliated_devices) {
+    return ArcStatus::kAllowedOnUnaffiliatedDevice;
+  }
+
+  return ArcStatus::kAllowed;
+}
+
+bool IsArcAllowedForProfileInternal(const Profile* profile,
+                                    bool should_report_reason) {
+  const ArcStatus status =
+      GetArcStatusForProfile(profile, should_report_reason);
+  return status == ArcStatus::kAllowed ||
+         status == ArcStatus::kAllowedOnAffiliatedDevice ||
+         status == ArcStatus::kAllowedOnUnaffiliatedDevice;
 }
 
 void ShowContactAdminDialog() {
@@ -218,10 +373,11 @@ void SharePathIfRequired(ConvertToContentUrlsAndShareCallback callback,
                          const std::vector<base::FilePath>& paths_to_share) {
   DCHECK(arc::IsArcVmEnabled() || paths_to_share.empty());
   std::vector<base::FilePath> path_list;
+  Profile* const profile = ProfileManager::GetPrimaryUserProfile();
+  DCHECK(profile);
   for (const auto& path : paths_to_share) {
-    if (!guest_os::GuestOsSharePath::GetForProfile(
-             ProfileManager::GetPrimaryUserProfile())
-             ->IsPathShared(arc::kArcVmName, path)) {
+    if (!guest_os::GuestOsSharePathFactory::GetForProfile(profile)
+             ->IsPathShared(kArcVmName, path)) {
       path_list.push_back(path);
     }
   }
@@ -230,35 +386,70 @@ void SharePathIfRequired(ConvertToContentUrlsAndShareCallback callback,
     return;
   }
 
-  guest_os::GuestOsSharePath::GetForProfile(
-      ProfileManager::GetPrimaryUserProfile())
-      ->SharePaths(arc::kArcVmName, path_list, /*persist=*/false,
-                   base::BindOnce(
-                       [](ConvertToContentUrlsAndShareCallback callback,
-                          const std::vector<GURL>& content_urls, bool success,
-                          const std::string& failure_reason) {
-                         if (success) {
-                           std::move(callback).Run(content_urls);
-                         } else {
-                           LOG(ERROR) << "Error sharing ARC content URLs: "
-                                      << failure_reason;
-                           std::move(callback).Run(std::vector<GURL>());
-                         }
-                       },
-                       std::move(callback), content_urls));
+  const auto& vm_info =
+      guest_os::GuestOsSessionTrackerFactory::GetForProfile(profile)->GetVmInfo(
+          kArcVmName);
+  if (!vm_info) {
+    LOG(WARNING) << "ARCVM not running, cannot share paths";
+    std::move(callback).Run(std::vector<GURL>());
+    return;
+  }
+  guest_os::GuestOsSharePathFactory::GetForProfile(profile)->SharePaths(
+      kArcVmName, vm_info->seneschal_server_handle(), path_list,
+      base::BindOnce(
+          [](ConvertToContentUrlsAndShareCallback callback,
+             const std::vector<GURL>& content_urls, bool success,
+             const std::string& failure_reason) {
+            if (success) {
+              std::move(callback).Run(content_urls);
+            } else {
+              LOG(ERROR) << "Error sharing ARC content URLs: "
+                         << failure_reason;
+              std::move(callback).Run(std::vector<GURL>());
+            }
+          },
+          std::move(callback), content_urls));
 }
 
 }  // namespace
 
+void RecordArcStatusBasedOnDeviceAffiliationUMA(Profile* profile) {
+  if (!policy_util::IsAccountManaged(profile) ||
+      !profile->GetPrefs()->GetBoolean(prefs::kArcEnabled)) {
+    return;
+  }
+
+  switch (GetArcStatusForProfile(profile, /*should_report_reason=*/false)) {
+    case arc::ArcStatus::kAllowedOnAffiliatedDevice:
+      base::UmaHistogramEnumeration(
+          "Arc.Provisioning.DeviceAffiliationAction",
+          arc::DeviceAffiliationBasedArcStatus::kAllowedOnAffiliatedDevice);
+      break;
+    case arc::ArcStatus::kAllowedOnUnaffiliatedDevice:
+      base::UmaHistogramEnumeration(
+          "Arc.Provisioning.DeviceAffiliationAction",
+          arc::DeviceAffiliationBasedArcStatus::kAllowedOnUnaffiliatedDevice);
+      break;
+    case arc::ArcStatus::kDisallowedByUserPolicyRestriction:
+      base::UmaHistogramEnumeration("Arc.Provisioning.DeviceAffiliationAction",
+                                    arc::DeviceAffiliationBasedArcStatus::
+                                        kDisallowedOnUnaffiliatedDevice);
+      break;
+    default:
+      break;
+  }
+}
+
 bool IsRealUserProfile(const Profile* profile) {
   // Return false for signin, lock screen and incognito profiles.
-  return profile && ash::ProfileHelper::IsRegularProfile(profile) &&
+  return profile && ash::ProfileHelper::IsUserProfile(profile) &&
          !profile->IsOffTheRecord();
 }
 
 bool IsArcAllowedForProfile(const Profile* profile) {
-  if (!IsRealUserProfile(profile))
+  if (!IsRealUserProfile(profile)) {
     return false;
+  }
 
   auto it = g_profile_status_check.Get().find(profile);
 
@@ -298,19 +489,18 @@ bool IsArcBlockedDueToIncompatibleFileSystem(const Profile* profile) {
   const user_manager::User* user =
       ash::ProfileHelper::Get()->GetUserByProfile(profile);
 
-  // Return true for public accounts as they only have ext4 and
-  // for ARC kiosk as migration to ext4 should always be triggered.
-  // Without this check it fails to start after browser crash as
-  // compatibility info is stored in RAM.
-  if (user && (user->GetType() == user_manager::USER_TYPE_PUBLIC_ACCOUNT ||
-               user->GetType() == user_manager::USER_TYPE_ARC_KIOSK_APP)) {
+  // Do not block ARC for public accounts as they only have ext4.
+  // Without this check it fails to start after browser crash as compatibility
+  // info is stored in RAM.
+  if (user && user->GetType() == user_manager::UserType::kPublicAccount) {
     return false;
   }
 
   // Test runs on Linux workstation does not have expected /etc/lsb-release
   // field nor profile creation step. Hence it returns a dummy test value.
-  if (!base::SysInfo::IsRunningOnChromeOS())
+  if (!base::SysInfo::IsRunningOnChromeOS()) {
     return g_arc_blocked_due_to_incompatible_filesystem_for_testing;
+  }
 
   // Conducts the actual check, only when running on a real Chrome OS device.
   return !IsArcCompatibleFileSystemUsedForUser(user);
@@ -320,15 +510,20 @@ void SetArcBlockedDueToIncompatibleFileSystemForTesting(bool block) {
   g_arc_blocked_due_to_incompatible_filesystem_for_testing = block;
 }
 
+void SetArcvmDlcImageStatusForTesting(std::optional<bool> availability) {
+  g_is_arcvm_dlc_image_available = availability;
+}
+
 bool IsArcCompatibleFileSystemUsedForUser(const user_manager::User* user) {
   // Returns false for profiles not associated with users (like sign-in profile)
-  if (!user)
+  if (!user) {
     return false;
+  }
 
   // ash::UserSessionManager does the actual file system check and stores
   // the result to prefs, so that it survives crash-restart.
   FileSystemCompatibilityState filesystem_compatibility =
-      GetFileSystemCompatibilityPref(user->GetAccountId());
+      GetFileSystemCompatibilityPrefOptimistic(user->GetAccountId());
   const bool is_filesystem_compatible =
       filesystem_compatibility != kFileSystemIncompatible ||
       g_known_compatible_users.Get().count(user->GetAccountId()) != 0;
@@ -370,7 +565,7 @@ bool SetArcPlayStoreEnabledForProfile(Profile* profile, bool enabled) {
       if (ash::switches::IsTabletFormFactor()) {
         VLOG(1) << "Showing contact admin dialog managed user of tablet form "
                    "factor devices.";
-        base::ThreadTaskRunnerHandle::Get()->PostTask(
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
             FROM_HERE, base::BindOnce(&ShowContactAdminDialog));
       }
       return false;
@@ -383,12 +578,16 @@ bool SetArcPlayStoreEnabledForProfile(Profile* profile, bool enabled) {
     // TODO(khmel): Consider finding the better way handling this.
     ArcSessionManager* arc_session_manager = ArcSessionManager::Get();
     // |arc_session_manager| can be nullptr in unit_tests.
-    if (!arc_session_manager)
+    if (!arc_session_manager) {
       return false;
-    if (enabled)
+    }
+    if (enabled) {
+      arc_session_manager->AllowActivation(
+          ArcSessionManager::AllowActivationReason::kUserEnableAction);
       arc_session_manager->RequestEnable();
-    else
+    } else {
       arc_session_manager->RequestDisableWithArcDataRemoval();
+    }
 
     return true;
   }
@@ -397,35 +596,32 @@ bool SetArcPlayStoreEnabledForProfile(Profile* profile, bool enabled) {
 }
 
 bool AreArcAllOptInPreferencesIgnorableForProfile(const Profile* profile) {
-  // For Active Directory users, a LaForge account is created, where
-  // backup&restore and location services are not supported, hence the policies
-  // are unused.
-  if (IsActiveDirectoryUserForProfile(profile))
-    return true;
-
-  // Otherwise, the preferences are ignorable iff both backup&restore and
-  // location services are set by policy.
+  // The preferences are ignorable iff both backup&restore and location services
+  // are set by policy.
   const PrefService* prefs = profile->GetPrefs();
-  return prefs->IsManagedPreference(prefs::kArcBackupRestoreEnabled) &&
-         prefs->IsManagedPreference(prefs::kArcLocationServiceEnabled);
-}
 
-bool IsActiveDirectoryUserForProfile(const Profile* profile) {
-  const user_manager::User* user =
-      ash::ProfileHelper::Get()->GetUserByProfile(profile);
-  return user ? user->IsActiveDirectoryUser() : false;
+  if (ash::features::IsCrosPrivacyHubLocationEnabled()) {
+    // When PH is enabled, location toggle is no longer ARC specific (applies to
+    // entire ChromeOS);
+    return prefs->IsManagedPreference(prefs::kArcBackupRestoreEnabled);
+  } else {
+    return prefs->IsManagedPreference(prefs::kArcBackupRestoreEnabled) &&
+           prefs->IsManagedPreference(prefs::kArcLocationServiceEnabled);
+  }
 }
 
 bool IsArcOobeOptInActive() {
   // No OOBE is expected in case Play Store is not available.
-  if (!IsPlayStoreAvailable())
+  if (!IsPlayStoreAvailable()) {
     return false;
+  }
 
   // Check if Chrome OS OOBE flow is currently showing.
   // TODO(b/65861628): Redesign the OptIn flow since there is no longer reason
   // to have two different OptIn flows.
-  if (!ash::LoginDisplayHost::default_host())
+  if (!ash::LoginDisplayHost::default_host()) {
     return false;
+  }
 
   // ARC OOBE opt-in will only be active if the user did not complete the
   // onboarding flow yet. The OnboardingCompletedVersion preference will only be
@@ -438,21 +634,25 @@ bool IsArcOobeOptInActive() {
 
 bool IsArcOobeOptInConfigurationBased() {
   // Ignore if not applicable.
-  if (!IsArcOobeOptInActive())
+  if (!IsArcOobeOptInActive()) {
     return false;
+  }
   // Check that configuration exist.
   auto* oobe_configuration = ash::OobeConfiguration::Get();
-  if (!oobe_configuration)
+  if (!oobe_configuration) {
     return false;
-  if (!oobe_configuration->CheckCompleted())
+  }
+  if (!oobe_configuration->CheckCompleted()) {
     return false;
+  }
   // Check configuration value that triggers automatic ARC TOS acceptance.
-  auto& configuration = oobe_configuration->GetConfiguration();
-  auto* auto_accept = configuration.FindKeyOfType(
-      ash::configuration::kArcTosAutoAccept, base::Value::Type::BOOLEAN);
-  if (!auto_accept)
+  auto& configuration = oobe_configuration->configuration();
+  auto auto_accept =
+      configuration.FindBool(ash::configuration::kArcTosAutoAccept);
+  if (!auto_accept) {
     return false;
-  return auto_accept->GetBool();
+  }
+  return *auto_accept;
 }
 
 bool IsArcTermsOfServiceNegotiationNeeded(const Profile* profile) {
@@ -493,8 +693,9 @@ bool IsArcTermsOfServiceOobeNegotiationNeeded() {
 
   // Demo mode setup flow runs before user is created, therefore this condition
   // needs to be checked before any user related ones.
-  if (IsArcDemoModeSetupFlow())
+  if (IsArcDemoModeSetupFlow()) {
     return true;
+  }
 
   if (!user_manager::UserManager::Get()->IsUserLoggedIn()) {
     VLOG(1) << "Skip ARC Terms of Service screen because user is not "
@@ -514,12 +715,6 @@ bool IsArcTermsOfServiceOobeNegotiationNeeded() {
     return false;
   }
 
-  if (IsActiveDirectoryUserForProfile(profile)) {
-    VLOG(1) << "Skip ARC Terms of Service screen because it does not apply to "
-               "Active Directory users.";
-    return false;
-  }
-
   if (!IsArcTermsOfServiceNegotiationNeeded(profile)) {
     VLOG(1) << "Skip ARC Terms of Service screen because it is already "
                "accepted or fully controlled by policy.";
@@ -530,9 +725,9 @@ bool IsArcTermsOfServiceOobeNegotiationNeeded() {
 }
 
 bool IsArcStatsReportingEnabled() {
-  // Public session users never saw the consent for stats reporting even if the
-  // admin forced the pref by a policy.
-  if (profiles::IsPublicSession()) {
+  // Managed guest session users never saw the consent for stats reporting even
+  // if the admin forced the pref by a policy.
+  if (chromeos::IsManagedGuestSession()) {
     return false;
   }
 
@@ -552,11 +747,11 @@ void UpdateArcFileSystemCompatibilityPrefIfNeeded(
   DCHECK(callback);
 
   // If ARC is not available, skip the check.
-  // This shortcut is just for merginally improving the log-in performance on
+  // This shortcut is just for marginally improving the log-in performance on
   // old devices without ARC. We can always safely remove the following 4 lines
   // without changing any functionality when, say, the code clarity becomes
   // more important in the future.
-  if (!IsArcAvailable() && !IsArcKioskAvailable()) {
+  if (!IsArcAvailable()) {
     std::move(callback).Run();
     return;
   }
@@ -577,6 +772,24 @@ void UpdateArcFileSystemCompatibilityPrefIfNeeded(
                      std::move(callback)));
 }
 
+void CheckArcVmDlcImageExist(base::OnceClosure callback) {
+  if (!arc::IsArcVmDlcEnabled()) {
+    std::move(callback).Run();
+    return;
+  }
+
+  base::ThreadPool::PostTaskAndReplyWithResult(
+      FROM_HERE,
+      {base::MayBlock(), base::TaskPriority::USER_BLOCKING,
+       base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
+      base::BindOnce(&IsArcVmDlcImageExist),
+      base::BindOnce(&StoreArcVmDlcImageCheckResult, std::move(callback)));
+}
+
+void SetArcvmDlcImageStatus(bool availability) {
+  g_is_arcvm_dlc_image_available = availability;
+}
+
 ArcManagementTransition GetManagementTransition(const Profile* profile) {
   DCHECK(profile);
   DCHECK(profile->GetPrefs());
@@ -584,27 +797,24 @@ ArcManagementTransition GetManagementTransition(const Profile* profile) {
   const ArcManagementTransition management_transition =
       static_cast<ArcManagementTransition>(
           profile->GetPrefs()->GetInteger(prefs::kArcManagementTransition));
-  const bool is_unmanaged_to_managed_enabled =
-      base::FeatureList::IsEnabled(kEnableUnmanagedToManagedTransitionFeature);
-  if (management_transition == ArcManagementTransition::UNMANAGED_TO_MANAGED &&
-      !is_unmanaged_to_managed_enabled) {
-    return ArcManagementTransition::NO_TRANSITION;
-  }
   return management_transition;
 }
 
 bool IsPlayStoreAvailable() {
-  if (ShouldArcAlwaysStartWithNoPlayStore())
+  if (ShouldArcAlwaysStartWithNoPlayStore()) {
     return false;
+  }
 
-  if (!IsRobotOrOfflineDemoAccountMode())
+  if (!IsRobotOrOfflineDemoAccountMode()) {
     return true;
+  }
 
   // Demo Mode is the only public session scenario that can launch Play.
-  if (!ash::DemoSession::IsDeviceInDemoMode())
+  if (!ash::DemoSession::IsDeviceInDemoMode()) {
     return false;
+  }
 
-  return chromeos::features::ShouldShowPlayStoreInDemoMode();
+  return ash::features::ShouldShowPlayStoreInDemoMode();
 }
 
 bool ShouldStartArcSilentlyForManagedProfile(const Profile* profile) {
@@ -615,8 +825,9 @@ bool ShouldStartArcSilentlyForManagedProfile(const Profile* profile) {
 
 aura::Window* GetArcWindow(int32_t task_id) {
   for (auto* window : ChromeShelfController::instance()->GetArcWindows()) {
-    if (arc::GetWindowTaskId(window) == task_id)
+    if (arc::GetWindowTaskId(window) == task_id) {
       return window;
+    }
   }
 
   return nullptr;
@@ -679,10 +890,10 @@ std::string GetHistogramNameByUserType(const std::string& base_name,
     }
     return base_name + ".RobotAccount";
   }
-  if (profile->IsChild())
+  if (profile->IsChild()) {
     return base_name + ".Child";
-  if (IsActiveDirectoryUserForProfile(profile))
-    return base_name + ".ActiveDirectory";
+  }
+
   return base_name +
          (policy_util::IsAccountManaged(profile) ? ".Managed" : ".Unmanaged");
 }

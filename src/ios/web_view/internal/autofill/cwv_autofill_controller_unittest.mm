@@ -1,57 +1,55 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#import "ios/web_view/internal/autofill/cwv_autofill_controller_internal.h"
-
 #import <Foundation/Foundation.h>
 
-#include <memory>
+#import <memory>
 
-#include "base/run_loop.h"
-#include "base/strings/sys_string_conversions.h"
+#import "base/run_loop.h"
+#import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
-#include "components/autofill/core/browser/autofill_test_utils.h"
-#include "components/autofill/core/browser/logging/stub_log_manager.h"
-#include "components/autofill/core/browser/payments/test_strike_database.h"
-#include "components/autofill/core/browser/test_personal_data_manager.h"
-#include "components/autofill/core/common/autofill_prefs.h"
+#import "components/autofill/core/browser/data_manager/test_personal_data_manager.h"
+#import "components/autofill/core/browser/single_field_fillers/autocomplete/mock_autocomplete_history_manager.h"
+#import "components/autofill/core/browser/strike_databases/payments/test_strike_database.h"
+#import "components/autofill/core/browser/test_utils/autofill_test_utils.h"
+#import "components/autofill/core/common/autofill_prefs.h"
+#import "components/autofill/core/common/form_data.h"
 #import "components/autofill/ios/browser/autofill_java_script_feature.h"
 #import "components/autofill/ios/browser/fake_autofill_agent.h"
 #import "components/autofill/ios/browser/form_suggestion.h"
-#include "components/autofill/ios/form_util/form_activity_params.h"
+#import "components/autofill/ios/browser/test_autofill_client_ios.h"
+#import "components/autofill/ios/form_util/form_activity_params.h"
 #import "components/autofill/ios/form_util/form_activity_tab_helper.h"
 #import "components/autofill/ios/form_util/test_form_activity_tab_helper.h"
-#include "components/autofill/ios/form_util/unique_id_data_tab_helper.h"
-#include "components/password_manager/core/browser/leak_detection_dialog_utils.h"
-#include "components/password_manager/core/browser/password_manager.h"
-#include "components/password_manager/core/common/password_manager_pref_names.h"
+#import "components/password_manager/core/browser/leak_detection_dialog_utils.h"
+#import "components/password_manager/core/browser/password_manager.h"
+#import "components/password_manager/core/common/password_manager_pref_names.h"
+#import "components/password_manager/ios/ios_password_manager_driver.h"
+#import "components/password_manager/ios/ios_password_manager_driver_factory.h"
 #import "components/password_manager/ios/shared_password_controller.h"
-#include "components/prefs/pref_registry_simple.h"
-#include "components/prefs/testing_pref_service.h"
-#include "components/sync/driver/test_sync_service.h"
-#include "ios/web/public/js_messaging/web_frames_manager.h"
-#include "ios/web/public/test/fakes/fake_browser_state.h"
+#import "components/prefs/pref_registry_simple.h"
+#import "components/prefs/testing_pref_service.h"
+#import "components/sync/test/test_sync_service.h"
+#import "ios/web/public/js_messaging/web_frames_manager.h"
+#import "ios/web/public/test/fakes/fake_browser_state.h"
 #import "ios/web/public/test/fakes/fake_web_frame.h"
 #import "ios/web/public/test/fakes/fake_web_frames_manager.h"
 #import "ios/web/public/test/fakes/fake_web_state.h"
-#include "ios/web/public/test/web_test.h"
+#import "ios/web/public/test/web_test.h"
+#import "ios/web_view/internal/autofill/cwv_autofill_controller+testing.h"
+#import "ios/web_view/internal/autofill/cwv_autofill_controller_internal.h"
 #import "ios/web_view/internal/autofill/cwv_autofill_profile_internal.h"
 #import "ios/web_view/internal/autofill/cwv_autofill_suggestion_internal.h"
 #import "ios/web_view/internal/autofill/web_view_autofill_client_ios.h"
 #import "ios/web_view/internal/passwords/web_view_password_manager_client.h"
-#import "ios/web_view/internal/passwords/web_view_password_manager_driver.h"
-#include "ios/web_view/internal/web_view_browser_state.h"
+#import "ios/web_view/internal/web_view_browser_state.h"
 #import "ios/web_view/public/cwv_autofill_controller_delegate.h"
-#import "net/base/mac/url_conversions.h"
-#include "testing/gtest/include/gtest/gtest.h"
+#import "net/base/apple/url_conversions.h"
+#import "testing/gtest/include/gtest/gtest.h"
 #import "testing/gtest_mac.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
-#include "third_party/ocmock/gtest_support.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "third_party/ocmock/gtest_support.h"
 
 using autofill::FormRendererId;
 using autofill::FieldRendererId;
@@ -59,18 +57,14 @@ using base::test::ios::kWaitForActionTimeout;
 using base::test::ios::WaitUntilConditionOrTimeout;
 
 namespace ios_web_view {
-
 namespace {
 
-const char kApplicationLocale[] = "en-US";
 NSString* const kTestFormName = @"FormName";
-FormRendererId kTestUniqueFormID = FormRendererId(0);
+FormRendererId kTestFormRendererID = FormRendererId(0);
 NSString* const kTestFieldIdentifier = @"FieldIdentifier";
-FieldRendererId kTestUniqueFieldID = FieldRendererId(1);
+FieldRendererId kTestFieldRendererID = FieldRendererId(1);
 NSString* const kTestFieldValue = @"FieldValue";
 NSString* const kTestDisplayDescription = @"DisplayDescription";
-
-}  // namespace
 
 class CWVAutofillControllerTest : public web::WebTest {
  protected:
@@ -82,47 +76,49 @@ class CWVAutofillControllerTest : public web::WebTest {
 
     web_state_.SetBrowserState(&browser_state_);
 
-    UniqueIDDataTabHelper::CreateForWebState(&web_state_);
+    frame_id_ = base::SysUTF8ToNSString(web::kMainFakeFrameId);
+
+    for (auto content_world : {web::ContentWorld::kIsolatedWorld,
+                               web::ContentWorld::kPageContentWorld}) {
+      auto frames_manager = std::make_unique<web::FakeWebFramesManager>();
+      web_state_.SetWebFramesManager(content_world, std::move(frames_manager));
+    }
+
+    web_frames_manager_ =
+        static_cast<web::FakeWebFramesManager*>(web_state_.GetWebFramesManager(
+            autofill::AutofillJavaScriptFeature::GetInstance()
+                ->GetSupportedContentWorld()));
 
     autofill_agent_ =
         [[FakeAutofillAgent alloc] initWithPrefService:&pref_service_
                                               webState:&web_state_];
 
-    frame_id_ = base::SysUTF8ToNSString(web::kMainFakeFrameId);
-
-    auto frames_manager = std::make_unique<web::FakeWebFramesManager>();
-    web_frames_manager_ = frames_manager.get();
-    web_state_.SetWebFramesManager(std::move(frames_manager));
-
     auto password_manager_client =
         std::make_unique<WebViewPasswordManagerClient>(
             &web_state_, /*sync_service=*/nullptr, &pref_service_,
-            /*identity_manager=*/nullptr, /*log_manager=*/nullptr,
+            /*identity_manager=*/nullptr, /*log_router=*/nullptr,
             /*profile_store=*/nullptr, /*account_store=*/nullptr,
             /*reuse_manager=*/nullptr,
-            /*requirements_service=*/nullptr,
-            /*password_change_success_tracker=*/nullptr);
+            /*requirements_service=*/nullptr);
     auto password_manager = std::make_unique<password_manager::PasswordManager>(
         password_manager_client.get());
-    auto password_manager_driver =
-        std::make_unique<WebViewPasswordManagerDriver>(password_manager.get());
     password_controller_ = OCMClassMock([SharedPasswordController class]);
+    IOSPasswordManagerDriverFactory::CreateForWebState(
+        &web_state_, password_controller_, password_manager.get());
     password_manager_client_ = password_manager_client.get();
 
-    auto autofill_client = std::make_unique<autofill::WebViewAutofillClientIOS>(
-        kApplicationLocale, &pref_service_, &personal_data_manager_,
-        /*autocomplete_history_manager=*/nullptr, &web_state_,
-        /*identity_manager=*/nullptr, &strike_database_, &sync_service_,
-        std::make_unique<autofill::StubLogManager>());
+    auto autofill_client = std::make_unique<
+        autofill::WithFakedFromWebState<autofill::WebViewAutofillClientIOS>>(
+        &pref_service_, &personal_data_manager_, &autocomplete_history_manager_,
+        &web_state_, /*bridge=*/nil, /*identity_manager=*/nullptr,
+        &strike_database_, &sync_service_, /*log_router=*/nullptr);
     autofill_controller_ = [[CWVAutofillController alloc]
              initWithWebState:&web_state_
-               autofillClient:std::move(autofill_client)
+        autofillClientForTest:std::move(autofill_client)
                 autofillAgent:autofill_agent_
               passwordManager:std::move(password_manager)
         passwordManagerClient:std::move(password_manager_client)
-        passwordManagerDriver:std::move(password_manager_driver)
-           passwordController:password_controller_
-            applicationLocale:kApplicationLocale];
+           passwordController:password_controller_];
     form_activity_tab_helper_ =
         std::make_unique<autofill::TestFormActivityTabHelper>(&web_state_);
   }
@@ -135,19 +131,18 @@ class CWVAutofillControllerTest : public web::WebTest {
   }
 
   void AddWebFrame(std::unique_ptr<web::WebFrame> frame) {
-    web::WebFrame* frame_ptr = frame.get();
     web_frames_manager_->AddWebFrame(std::move(frame));
-    web_state_.OnWebFrameDidBecomeAvailable(frame_ptr);
   }
 
   TestingPrefServiceSimple pref_service_;
   web::FakeBrowserState browser_state_;
-  web::FakeWebState web_state_;
   autofill::TestPersonalDataManager personal_data_manager_;
   autofill::TestStrikeDatabase strike_database_;
   syncer::TestSyncService sync_service_;
+  web::FakeWebState web_state_;
   NSString* frame_id_;
   web::FakeWebFramesManager* web_frames_manager_;
+  autofill::MockAutocompleteHistoryManager autocomplete_history_manager_;
   CWVAutofillController* autofill_controller_;
   FakeAutofillAgent* autofill_agent_;
   id password_controller_;
@@ -158,12 +153,13 @@ class CWVAutofillControllerTest : public web::WebTest {
 
 // Tests CWVAutofillController fetch suggestions for profiles.
 TEST_F(CWVAutofillControllerTest, FetchProfileSuggestions) {
-  FormSuggestion* suggestion =
-      [FormSuggestion suggestionWithValue:kTestFieldValue
-                       displayDescription:kTestDisplayDescription
-                                     icon:nil
-                               identifier:0
-                           requiresReauth:NO];
+  FormSuggestion* suggestion = [FormSuggestion
+      suggestionWithValue:kTestFieldValue
+       displayDescription:kTestDisplayDescription
+                     icon:nil
+                     type:autofill::SuggestionType::kAutocompleteEntry
+                  payload:autofill::Suggestion::Payload()
+           requiresReauth:NO];
   [autofill_agent_ addSuggestion:suggestion
                      forFormName:kTestFormName
                  fieldIdentifier:kTestFieldIdentifier
@@ -171,7 +167,6 @@ TEST_F(CWVAutofillControllerTest, FetchProfileSuggestions) {
 
   OCMExpect([password_controller_
       checkIfSuggestionsAvailableForForm:[OCMArg any]
-                             isMainFrame:NO
                           hasUserGesture:YES
                                 webState:&web_state_
                        completionHandler:[OCMArg checkWithBlock:^(void (
@@ -183,10 +178,10 @@ TEST_F(CWVAutofillControllerTest, FetchProfileSuggestions) {
   __block BOOL fetch_completion_was_called = NO;
   id fetch_completion = ^(NSArray<CWVAutofillSuggestion*>* suggestions) {
     ASSERT_EQ(1U, suggestions.count);
-    CWVAutofillSuggestion* suggestion = suggestions.firstObject;
-    EXPECT_NSEQ(kTestFieldValue, suggestion.value);
-    EXPECT_NSEQ(kTestDisplayDescription, suggestion.displayDescription);
-    EXPECT_NSEQ(kTestFormName, suggestion.formName);
+    CWVAutofillSuggestion* autofillSuggestion = suggestions.firstObject;
+    EXPECT_NSEQ(kTestFieldValue, autofillSuggestion.value);
+    EXPECT_NSEQ(kTestDisplayDescription, autofillSuggestion.displayDescription);
+    EXPECT_NSEQ(kTestFormName, autofillSuggestion.formName);
     fetch_completion_was_called = YES;
   };
   [autofill_controller_ fetchSuggestionsForFormWithName:kTestFormName
@@ -205,15 +200,15 @@ TEST_F(CWVAutofillControllerTest, FetchProfileSuggestions) {
 
 // Tests CWVAutofillController fetch suggestions for passwords.
 TEST_F(CWVAutofillControllerTest, FetchPasswordSuggestions) {
-  FormSuggestion* suggestion =
-      [FormSuggestion suggestionWithValue:kTestFieldValue
-                       displayDescription:nil
-                                     icon:nil
-                               identifier:0
-                           requiresReauth:NO];
+  FormSuggestion* suggestion = [FormSuggestion
+      suggestionWithValue:kTestFieldValue
+       displayDescription:nil
+                     icon:nil
+                     type:autofill::SuggestionType::kAutocompleteEntry
+                  payload:autofill::Suggestion::Payload()
+           requiresReauth:NO];
   OCMExpect([password_controller_
       checkIfSuggestionsAvailableForForm:[OCMArg any]
-                             isMainFrame:NO
                           hasUserGesture:YES
                                 webState:&web_state_
                        completionHandler:[OCMArg checkWithBlock:^(void (
@@ -233,10 +228,10 @@ TEST_F(CWVAutofillControllerTest, FetchPasswordSuggestions) {
   __block BOOL fetch_completion_was_called = NO;
   id fetch_completion = ^(NSArray<CWVAutofillSuggestion*>* suggestions) {
     ASSERT_EQ(1U, suggestions.count);
-    CWVAutofillSuggestion* suggestion = suggestions.firstObject;
-    EXPECT_TRUE([suggestion isPasswordSuggestion]);
-    EXPECT_NSEQ(kTestFieldValue, suggestion.value);
-    EXPECT_NSEQ(kTestFormName, suggestion.formName);
+    CWVAutofillSuggestion* autofillSuggestion = suggestions.firstObject;
+    EXPECT_TRUE([autofillSuggestion isPasswordSuggestion]);
+    EXPECT_NSEQ(kTestFieldValue, autofillSuggestion.value);
+    EXPECT_NSEQ(kTestFormName, autofillSuggestion.formName);
     fetch_completion_was_called = YES;
   };
   [autofill_controller_ fetchSuggestionsForFormWithName:kTestFormName
@@ -255,12 +250,13 @@ TEST_F(CWVAutofillControllerTest, FetchPasswordSuggestions) {
 
 // Tests CWVAutofillController accepts suggestion.
 TEST_F(CWVAutofillControllerTest, AcceptSuggestion) {
-  FormSuggestion* form_suggestion =
-      [FormSuggestion suggestionWithValue:kTestFieldValue
-                       displayDescription:nil
-                                     icon:nil
-                               identifier:0
-                           requiresReauth:NO];
+  FormSuggestion* form_suggestion = [FormSuggestion
+      suggestionWithValue:kTestFieldValue
+       displayDescription:nil
+                     icon:nil
+                     type:autofill::SuggestionType::kAutocompleteEntry
+                  payload:autofill::Suggestion::Payload()
+           requiresReauth:NO];
   CWVAutofillSuggestion* suggestion =
       [[CWVAutofillSuggestion alloc] initWithFormSuggestion:form_suggestion
                                                    formName:kTestFormName
@@ -269,6 +265,7 @@ TEST_F(CWVAutofillControllerTest, AcceptSuggestion) {
                                        isPasswordSuggestion:NO];
   __block BOOL accept_completion_was_called = NO;
   [autofill_controller_ acceptSuggestion:suggestion
+                                 atIndex:0
                        completionHandler:^{
                          accept_completion_was_called = YES;
                        }];
@@ -299,14 +296,14 @@ TEST_F(CWVAutofillControllerTest, FocusCallback) {
 
     autofill::FormActivityParams params;
     params.form_name = base::SysNSStringToUTF8(kTestFormName);
-    params.unique_form_id = kTestUniqueFormID;
+    params.form_renderer_id = kTestFormRendererID;
     params.field_identifier = base::SysNSStringToUTF8(kTestFieldIdentifier);
-    params.unique_field_id = kTestUniqueFieldID;
+    params.field_renderer_id = kTestFieldRendererID;
     params.value = base::SysNSStringToUTF8(kTestFieldValue);
     params.frame_id = web::kMainFakeFrameId;
     params.has_user_gesture = true;
     params.type = "focus";
-    auto frame = web::FakeWebFrame::CreateMainWebFrame(GURL::EmptyGURL());
+    auto frame = web::FakeWebFrame::CreateMainWebFrame(GURL());
     form_activity_tab_helper_->FormActivityRegistered(frame.get(), params);
     [delegate verify];
 }
@@ -331,7 +328,7 @@ TEST_F(CWVAutofillControllerTest, InputCallback) {
     params.frame_id = web::kMainFakeFrameId;
     params.type = "input";
     params.has_user_gesture = true;
-    auto frame = web::FakeWebFrame::CreateMainWebFrame(GURL::EmptyGURL());
+    auto frame = web::FakeWebFrame::CreateMainWebFrame(GURL());
     form_activity_tab_helper_->FormActivityRegistered(frame.get(), params);
     [delegate verify];
 }
@@ -357,7 +354,7 @@ TEST_F(CWVAutofillControllerTest, InputCallbackFromKeyup) {
   params.frame_id = web::kMainFakeFrameId;
   params.type = "keyup";
   params.has_user_gesture = true;
-  auto frame = web::FakeWebFrame::CreateMainWebFrame(GURL::EmptyGURL());
+  auto frame = web::FakeWebFrame::CreateMainWebFrame(GURL());
   form_activity_tab_helper_->FormActivityRegistered(frame.get(), params);
   [delegate verify];
 }
@@ -382,7 +379,7 @@ TEST_F(CWVAutofillControllerTest, BlurCallback) {
   params.frame_id = web::kMainFakeFrameId;
   params.type = "blur";
   params.has_user_gesture = true;
-  auto frame = web::FakeWebFrame::CreateMainWebFrame(GURL::EmptyGURL());
+  auto frame = web::FakeWebFrame::CreateMainWebFrame(GURL());
   form_activity_tab_helper_->FormActivityRegistered(frame.get(), params);
 
   [delegate verify];
@@ -397,12 +394,13 @@ TEST_F(CWVAutofillControllerTest, SubmitCallback) {
                   didSubmitFormWithName:kTestFormName
                                 frameID:frame_id_
                           userInitiated:YES];
-  auto frame = web::FakeWebFrame::CreateMainWebFrame(GURL::EmptyGURL());
+  auto frame = web::FakeWebFrame::CreateMainWebFrame(GURL());
+  autofill::FormData test_form_data;
+  test_form_data.set_name(base::SysNSStringToUTF16(kTestFormName));
+
   form_activity_tab_helper_->DocumentSubmitted(
-      /*sender_frame*/ frame.get(), base::SysNSStringToUTF8(kTestFormName),
-      /*form_data=*/"",
-      /*user_initiated=*/true,
-      /*is_main_frame=*/true);
+      /*sender_frame*/ frame.get(), /*form_data=*/test_form_data,
+      /*user_initiated=*/true);
 
   [[delegate expect] autofillController:autofill_controller_
                   didSubmitFormWithName:kTestFormName
@@ -410,10 +408,9 @@ TEST_F(CWVAutofillControllerTest, SubmitCallback) {
                           userInitiated:NO];
 
   form_activity_tab_helper_->DocumentSubmitted(
-      /*sender_frame*/ frame.get(), base::SysNSStringToUTF8(kTestFormName),
-      /*form_data=*/"",
-      /*user_initiated=*/false,
-      /*is_main_frame=*/true);
+      /*sender_frame*/ frame.get(),
+      /*form_data=*/test_form_data,
+      /*user_initiated=*/false);
 
   [delegate verify];
 }
@@ -425,13 +422,12 @@ TEST_F(CWVAutofillControllerTest, NotifyUserOfLeak) {
 
   GURL leak_url("https://www.chromium.org");
   password_manager::CredentialLeakType leak_type =
-      password_manager::CreateLeakType(
-          password_manager::IsSaved(true), password_manager::IsReused(true),
-          password_manager::IsSyncing(true),
-          password_manager::HasChangeScript(false));
+      password_manager::CreateLeakType(password_manager::IsSaved(true),
+                                       password_manager::IsReused(true),
+                                       password_manager::IsSyncing(true));
   CWVPasswordLeakType expected_leak_type = CWVPasswordLeakTypeSaved |
                                            CWVPasswordLeakTypeUsedOnOtherSites |
-                                           CWVPasswordLeakTypeSyncingNormally;
+                                           CWVPasswordLeakTypeSynced;
   OCMExpect([delegate autofillController:autofill_controller_
            notifyUserOfPasswordLeakOnURL:net::NSURLWithGURL(leak_url)
                                 leakType:expected_leak_type]);
@@ -441,7 +437,9 @@ TEST_F(CWVAutofillControllerTest, NotifyUserOfLeak) {
                                 username:@"fake-username"]);
 
   password_manager_client_->NotifyUserCredentialsWereLeaked(
-      leak_type, leak_url, base::SysNSStringToUTF16(@"fake-username"));
+      password_manager::LeakedPasswordDetails(leak_type, leak_url,
+                                              u"fake-username", u"password",
+                                              /* in_account_store = */ false));
 
   [delegate verify];
 }
@@ -461,6 +459,8 @@ TEST_F(CWVAutofillControllerTest, SuggestPasswordCallback) {
   __block BOOL decision_handler_called = NO;
   [autofill_controller_ sharedPasswordController:password_controller_
                   showGeneratedPotentialPassword:fake_generated_password
+                                       proactive:NO
+                                           frame:nullptr
                                  decisionHandler:^(BOOL accept) {
                                    decision_handler_called = YES;
                                    EXPECT_TRUE(accept);
@@ -476,12 +476,12 @@ TEST_F(CWVAutofillControllerTest, AutoSaveNewAutofillProfile) {
   auto new_profile = autofill::test::GetFullProfile();
   __block BOOL decision_handler_called = NO;
   auto callback = base::BindOnce(
-      ^(autofill::AutofillClient::SaveAddressProfileOfferUserDecision decision,
-        autofill::AutofillProfile profile) {
-        EXPECT_EQ(autofill::AutofillClient::
-                      SaveAddressProfileOfferUserDecision::kUserNotAsked,
-                  decision);
-        EXPECT_EQ(new_profile, profile);
+      ^(autofill::AutofillClient::AddressPromptUserDecision decision,
+        base::optional_ref<const autofill::AutofillProfile> profile) {
+        EXPECT_EQ(
+            autofill::AutofillClient::AddressPromptUserDecision::kUserNotAsked,
+            decision);
+        EXPECT_EQ(new_profile, profile.value());
         decision_handler_called = YES;
       });
   [autofill_controller_ confirmSaveAddressProfile:new_profile
@@ -512,15 +512,14 @@ TEST_F(CWVAutofillControllerTest, SaveNewAutofillProfile) {
                            return YES;
                          }]]);
   __block BOOL decision_handler_called = NO;
-  auto callback = base::BindOnce(
-      ^(autofill::AutofillClient::SaveAddressProfileOfferUserDecision decision,
-        autofill::AutofillProfile profile) {
-        EXPECT_EQ(autofill::AutofillClient::
-                      SaveAddressProfileOfferUserDecision::kAccepted,
-                  decision);
-        EXPECT_EQ(new_profile, profile);
-        decision_handler_called = YES;
-      });
+  auto callback = base::BindOnce(^(
+      autofill::AutofillClient::AddressPromptUserDecision decision,
+      base::optional_ref<const autofill::AutofillProfile> profile) {
+    EXPECT_EQ(autofill::AutofillClient::AddressPromptUserDecision::kAccepted,
+              decision);
+    EXPECT_EQ(new_profile, profile.value());
+    decision_handler_called = YES;
+  });
   [autofill_controller_ confirmSaveAddressProfile:new_profile
                                   originalProfile:nil
                                          callback:std::move(callback)];
@@ -529,4 +528,5 @@ TEST_F(CWVAutofillControllerTest, SaveNewAutofillProfile) {
   [delegate verify];
 }
 
+}  // namespace
 }  // namespace ios_web_view

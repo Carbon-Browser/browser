@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,6 @@
 #include "base/test/metrics/histogram_tester.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/notifications/notification_display_service.h"
 #include "chrome/browser/notifications/notification_display_service_tester.h"
 #include "chrome/browser/notifications/system_notification_helper.h"
@@ -30,20 +29,11 @@
 #include "ui/message_center/public/cpp/notification_delegate.h"
 #include "url/gurl.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
-#include "components/user_manager/scoped_user_manager.h"
-#include "components/user_manager/user_manager.h"
-#include "components/user_manager/user_names.h"
-#endif
-
 // These tests are disabled because WebUsbDetector::Initialize is a noop on
 // Windows due to jank and hangs caused by enumerating devices.
 // https://crbug.com/656702
 #if !BUILDFLAG(IS_WIN)
 namespace {
-
-const char* kProfileName = "test@example.com";
 
 // USB device product name.
 const char* kProductName_1 = "Google Product A";
@@ -65,21 +55,9 @@ class WebUsbDetectorTest : public BrowserWithTestWindowTest {
   WebUsbDetectorTest& operator=(const WebUsbDetectorTest&) = delete;
   ~WebUsbDetectorTest() override = default;
 
-  TestingProfile* CreateProfile() override {
-    return profile_manager()->CreateTestingProfile(kProfileName);
-  }
-
   void SetUp() override {
     BrowserWithTestWindowTest::SetUp();
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-    user_manager_enabler_ = std::make_unique<user_manager::ScopedUserManager>(
-        std::make_unique<ash::FakeChromeUserManager>());
 
-    GetFakeUserManager()->AddUser(user_manager::StubAccountId());
-    GetFakeUserManager()->LoginUser(user_manager::StubAccountId());
-
-    ash::ProfileHelper::Get()->SetActiveUserIdForTesting(kProfileName);
-#endif
     BrowserList::SetLastActive(browser());
     TestingBrowserProcess::GetGlobal()->SetSystemNotificationHelper(
         std::make_unique<SystemNotificationHelper>());
@@ -95,25 +73,13 @@ class WebUsbDetectorTest : public BrowserWithTestWindowTest {
   }
 
   void TearDown() override {
-    BrowserWithTestWindowTest::TearDown();
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-    user_manager_enabler_.reset();
-#endif
     web_usb_detector_.reset();
+    BrowserWithTestWindowTest::TearDown();
   }
 
   void Initialize() { web_usb_detector_->Initialize(); }
 
  protected:
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  ash::FakeChromeUserManager* GetFakeUserManager() {
-    return static_cast<ash::FakeChromeUserManager*>(
-        user_manager::UserManager::Get());
-  }
-
-  std::unique_ptr<user_manager::ScopedUserManager> user_manager_enabler_;
-#endif
-
   device::FakeUsbDeviceManager device_manager_;
   std::unique_ptr<WebUsbDetector> web_usb_detector_;
   std::unique_ptr<NotificationDisplayServiceTester> display_service_;
@@ -129,7 +95,7 @@ TEST_F(WebUsbDetectorTest, UsbDeviceAddedAndRemoved) {
   device_manager_.AddDevice(device);
   base::RunLoop().RunUntilIdle();
 
-  absl::optional<message_center::Notification> notification =
+  std::optional<message_center::Notification> notification =
       display_service_->GetNotification(device->guid());
   ASSERT_TRUE(notification);
   std::u16string expected_title = u"Google Product A detected";
@@ -325,7 +291,7 @@ TEST_F(WebUsbDetectorTest,
 
   device_manager_.AddDevice(device_2);
   base::RunLoop().RunUntilIdle();
-  absl::optional<message_center::Notification> notification =
+  std::optional<message_center::Notification> notification =
       display_service_->GetNotification(guid_2);
   ASSERT_TRUE(notification);
   std::u16string expected_title = u"Google Product B detected";
@@ -360,7 +326,7 @@ TEST_F(WebUsbDetectorTest, ThreeUsbDevicesAddedAndRemoved) {
 
   device_manager_.AddDevice(device_1);
   base::RunLoop().RunUntilIdle();
-  absl::optional<message_center::Notification> notification_1 =
+  std::optional<message_center::Notification> notification_1 =
       display_service_->GetNotification(guid_1);
   ASSERT_TRUE(notification_1);
   std::u16string expected_title_1 = u"Google Product A detected";
@@ -375,7 +341,7 @@ TEST_F(WebUsbDetectorTest, ThreeUsbDevicesAddedAndRemoved) {
 
   device_manager_.AddDevice(device_2);
   base::RunLoop().RunUntilIdle();
-  absl::optional<message_center::Notification> notification_2 =
+  std::optional<message_center::Notification> notification_2 =
       display_service_->GetNotification(guid_2);
   ASSERT_TRUE(notification_2);
   std::u16string expected_title_2 = u"Google Product B detected";
@@ -390,7 +356,7 @@ TEST_F(WebUsbDetectorTest, ThreeUsbDevicesAddedAndRemoved) {
 
   device_manager_.AddDevice(device_3);
   base::RunLoop().RunUntilIdle();
-  absl::optional<message_center::Notification> notification_3 =
+  std::optional<message_center::Notification> notification_3 =
       display_service_->GetNotification(guid_3);
   ASSERT_TRUE(notification_3);
   std::u16string expected_title_3 = u"Google Product C detected";
@@ -425,7 +391,7 @@ TEST_F(WebUsbDetectorTest, ThreeUsbDeviceAddedAndRemovedDifferentOrder) {
 
   device_manager_.AddDevice(device_1);
   base::RunLoop().RunUntilIdle();
-  absl::optional<message_center::Notification> notification_1 =
+  std::optional<message_center::Notification> notification_1 =
       display_service_->GetNotification(guid_1);
   ASSERT_TRUE(notification_1);
   std::u16string expected_title_1 = u"Google Product A detected";
@@ -436,7 +402,7 @@ TEST_F(WebUsbDetectorTest, ThreeUsbDeviceAddedAndRemovedDifferentOrder) {
 
   device_manager_.AddDevice(device_2);
   base::RunLoop().RunUntilIdle();
-  absl::optional<message_center::Notification> notification_2 =
+  std::optional<message_center::Notification> notification_2 =
       display_service_->GetNotification(guid_2);
   ASSERT_TRUE(notification_2);
   std::u16string expected_title_2 = u"Google Product B detected";
@@ -451,7 +417,7 @@ TEST_F(WebUsbDetectorTest, ThreeUsbDeviceAddedAndRemovedDifferentOrder) {
 
   device_manager_.AddDevice(device_3);
   base::RunLoop().RunUntilIdle();
-  absl::optional<message_center::Notification> notification_3 =
+  std::optional<message_center::Notification> notification_3 =
       display_service_->GetNotification(guid_3);
   ASSERT_TRUE(notification_3);
   std::u16string expected_title_3 = u"Google Product C detected";
@@ -522,12 +488,12 @@ TEST_F(WebUsbDetectorTest,
 
   device_manager_.AddDevice(device_1);
   base::RunLoop().RunUntilIdle();
-  absl::optional<message_center::Notification> notification_1 =
+  std::optional<message_center::Notification> notification_1 =
       display_service_->GetNotification(guid_1);
   ASSERT_TRUE(notification_1);
   EXPECT_EQ(2, tab_strip_model->count());
 
-  notification_1->delegate()->Click(absl::nullopt, absl::nullopt);
+  notification_1->delegate()->Click(std::nullopt, std::nullopt);
   EXPECT_EQ(2, tab_strip_model->count());
   content::WebContents* web_contents =
       tab_strip_model->GetWebContentsAt(tab_strip_model->active_index());
@@ -549,12 +515,12 @@ TEST_F(WebUsbDetectorTest, NotificationClickedWhileNoTabUrlIsLandingPage) {
 
   device_manager_.AddDevice(device_1);
   base::RunLoop().RunUntilIdle();
-  absl::optional<message_center::Notification> notification_1 =
+  std::optional<message_center::Notification> notification_1 =
       display_service_->GetNotification(guid_1);
   ASSERT_TRUE(notification_1);
   EXPECT_EQ(0, tab_strip_model->count());
 
-  notification_1->delegate()->Click(absl::nullopt, absl::nullopt);
+  notification_1->delegate()->Click(std::nullopt, std::nullopt);
   EXPECT_EQ(1, tab_strip_model->count());
   content::WebContents* web_contents =
       tab_strip_model->GetWebContentsAt(tab_strip_model->active_index());
@@ -615,7 +581,7 @@ TEST_F(WebUsbDetectorTest, TwoDevicesSameLandingPageAddedRemovedAndAddedAgain) {
 
   device_manager_.AddDevice(device_1);
   base::RunLoop().RunUntilIdle();
-  absl::optional<message_center::Notification> notification_1 =
+  std::optional<message_center::Notification> notification_1 =
       display_service_->GetNotification(guid_1);
   ASSERT_TRUE(notification_1);
   std::u16string expected_title_1 = u"Google Product A detected";
@@ -638,7 +604,7 @@ TEST_F(WebUsbDetectorTest, TwoDevicesSameLandingPageAddedRemovedAndAddedAgain) {
 
   device_manager_.AddDevice(device_2);
   base::RunLoop().RunUntilIdle();
-  absl::optional<message_center::Notification> notification_2 =
+  std::optional<message_center::Notification> notification_2 =
       display_service_->GetNotification(guid_2);
   ASSERT_TRUE(notification_2);
   std::u16string expected_title_2 = u"Google Product B detected";
@@ -673,12 +639,12 @@ TEST_F(
 
   device_manager_.AddDevice(device_1);
   base::RunLoop().RunUntilIdle();
-  absl::optional<message_center::Notification> notification_1 =
+  std::optional<message_center::Notification> notification_1 =
       display_service_->GetNotification(guid_1);
   ASSERT_TRUE(notification_1);
   EXPECT_EQ(0, tab_strip_model->count());
 
-  notification_1->delegate()->Click(absl::nullopt, absl::nullopt);
+  notification_1->delegate()->Click(std::nullopt, std::nullopt);
   EXPECT_EQ(1, tab_strip_model->count());
   content::WebContents* web_contents =
       tab_strip_model->GetWebContentsAt(tab_strip_model->active_index());
@@ -712,12 +678,12 @@ TEST_F(WebUsbDetectorTest,
 
   device_manager_.AddDevice(device_1);
   base::RunLoop().RunUntilIdle();
-  absl::optional<message_center::Notification> notification_1 =
+  std::optional<message_center::Notification> notification_1 =
       display_service_->GetNotification(guid_1);
   ASSERT_TRUE(notification_1);
   EXPECT_EQ(2, tab_strip_model->count());
 
-  notification_1->delegate()->Click(absl::nullopt, absl::nullopt);
+  notification_1->delegate()->Click(std::nullopt, std::nullopt);
   EXPECT_EQ(2, tab_strip_model->count());
   content::WebContents* web_contents =
       tab_strip_model->GetWebContentsAt(tab_strip_model->active_index());

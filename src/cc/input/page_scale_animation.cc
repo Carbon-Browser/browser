@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,7 @@ namespace {
 // between 0 and 1, representing the percentage position within the viewport.
 gfx::Vector2dF NormalizeFromViewport(const gfx::Vector2dF& denormalized,
                                      const gfx::SizeF& viewport_size) {
+  DCHECK(!viewport_size.IsEmpty());
   return gfx::ScaleVector2d(denormalized,
                             1.f / viewport_size.width(),
                             1.f / viewport_size.height());

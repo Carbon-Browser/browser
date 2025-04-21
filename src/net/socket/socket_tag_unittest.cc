@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -70,7 +70,7 @@ TEST(SocketTagTest, Apply) {
   AddressList addr_list;
   ASSERT_TRUE(test_server.GetAddressList(&addr_list));
   SockaddrStorage addr;
-  ASSERT_TRUE(addr_list[0].ToSockAddr(addr.addr, &addr.addr_len));
+  ASSERT_TRUE(addr_list[0].ToSockAddr(addr.addr(), &addr.addr_len));
 
   // Create socket.
   int s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -81,7 +81,7 @@ TEST(SocketTagTest, Apply) {
   uint64_t old_traffic = GetTaggedBytes(tag_val1);
   SocketTag tag1(SocketTag::UNSET_UID, tag_val1);
   tag1.Apply(s);
-  ASSERT_EQ(connect(s, addr.addr, addr.addr_len), 0);
+  ASSERT_EQ(connect(s, addr.addr(), addr.addr_len), 0);
   EXPECT_GT(GetTaggedBytes(tag_val1), old_traffic);
 
   // Verify socket can be retagged with a new value and the current process's

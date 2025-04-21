@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,7 +47,7 @@ gfx::NativeView WakeLockContextHost::GetNativeViewForContext(int context_id) {
   WakeLockContextHost* context_host = ContextHostFromId(context_id);
   if (context_host)
     return context_host->web_contents_->GetNativeView();
-  return nullptr;
+  return gfx::NativeView();
 }
 
 }  // namespace content

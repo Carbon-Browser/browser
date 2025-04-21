@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,6 +35,10 @@ cc::Layer* CcLayerByCcElementId(cc::Layer* root, const CompositorElementId&);
 
 const cc::Layer* CcLayerByCcElementId(const cc::Layer* root,
                                       const CompositorElementId&);
+
+cc::Layer* CcLayerByOwnerNodeId(cc::Layer* root, DOMNodeId);
+
+const cc::Layer* CcLayerByOwnerNodeId(const cc::Layer* root, DOMNodeId);
 
 cc::Layer* ScrollingContentsCcLayerByScrollElementId(
     cc::Layer* root,

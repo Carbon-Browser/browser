@@ -1,10 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 import {PARENT_PAGE_ORIGIN, parentPage} from './untrusted_page_interface.js';
 
 const header = document.querySelector<HTMLTitleElement>('#untrusted-title')!;
-header.textContent = 'Untrusted Sample System Web App';
+header.textContent = 'Sample System Web App Untrusted Page';
 
 // For testing purposes: notify the parent window the iframe has been embedded
 // successfully.

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,9 +27,7 @@ public class FadingShadow {
     private Matrix mShadowMatrix = new Matrix();
     private Shader mShadowShader;
 
-    /**
-     * @param shadowColor The color of the shadow, e.g. 0x11000000.
-     */
+    /** @param shadowColor The color of the shadow, e.g. 0x11000000. */
     FadingShadow(int shadowColor) {
         final int n = SMOOTH_ALGORITHM_INTERPOLATION_POINTS_NUM;
         float[] positions = new float[n];

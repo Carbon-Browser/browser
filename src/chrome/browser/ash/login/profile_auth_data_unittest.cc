@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,10 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
@@ -23,7 +24,7 @@
 #include "content/public/test/test_utils.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "net/base/network_isolation_key.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/cookies/canonical_cookie.h"
 #include "net/cookies/cookie_constants.h"
 #include "net/http/http_auth.h"
@@ -114,7 +115,7 @@ class ProfileAuthDataTest : public testing::Test {
 
   content::BrowserTaskEnvironment task_environment_;
 
-  network::NetworkService* network_service_;
+  raw_ptr<network::NetworkService> network_service_;
   TestingProfile login_browser_context_;
   TestingProfile user_browser_context_;
   std::unique_ptr<network::NetworkContext> login_network_context_;
@@ -143,11 +144,10 @@ void ProfileAuthDataTest::Transfer(
     bool transfer_auth_cookies_on_first_login,
     bool transfer_saml_auth_cookies_on_subsequent_login) {
   base::RunLoop run_loop;
-  ProfileAuthData::Transfer(login_browser_context_.GetDefaultStoragePartition(),
-                            user_browser_context_.GetDefaultStoragePartition(),
-                            transfer_auth_cookies_on_first_login,
-                            transfer_saml_auth_cookies_on_subsequent_login,
-                            run_loop.QuitClosure());
+  ProfileAuthData::Transfer(
+      login_browser_context_.GetDefaultStoragePartition(),
+      &user_browser_context_, transfer_auth_cookies_on_first_login,
+      transfer_saml_auth_cookies_on_subsequent_login, run_loop.QuitClosure());
   run_loop.Run();
   if (!transfer_auth_cookies_on_first_login &&
       !transfer_saml_auth_cookies_on_subsequent_login) {
@@ -177,7 +177,7 @@ void ProfileAuthDataTest::VerifyTransferredUserProxyAuthEntry() {
           ->Lookup(url::SchemeHostPort(GURL(kProxyAuthURL)),
                    net::HttpAuth::AUTH_PROXY, kProxyAuthRealm,
                    net::HttpAuth::AUTH_SCHEME_BASIC,
-                   net::NetworkIsolationKey());
+                   net::NetworkAnonymizationKey());
   ASSERT_TRUE(entry);
   EXPECT_EQ(kProxyAuthPassword1, entry->credentials().password());
 }
@@ -213,7 +213,7 @@ void ProfileAuthDataTest::PopulateBrowserContext(
   GetAuthCache(network_context)
       ->Add(url::SchemeHostPort(GURL(kProxyAuthURL)), net::HttpAuth::AUTH_PROXY,
             kProxyAuthRealm, net::HttpAuth::AUTH_SCHEME_BASIC,
-            net::NetworkIsolationKey(), kProxyAuthChallenge,
+            net::NetworkAnonymizationKey(), kProxyAuthChallenge,
             net::AuthCredentials(std::u16string(), proxy_auth_password),
             std::string());
 
@@ -232,7 +232,7 @@ void ProfileAuthDataTest::PopulateBrowserContext(
           kSAMLIdPCookieDomainWithWildcard, std::string(), base::Time(),
           base::Time(), base::Time(), true, false,
           net::CookieSameSite::NO_RESTRICTION, net::COOKIE_PRIORITY_DEFAULT,
-          false, absl::nullopt),
+          std::nullopt, /*status=*/nullptr),
       GURL(kSAMLIdPCookieURL), options, base::DoNothing());
 
   cookies->SetCanonicalCookie(
@@ -240,7 +240,7 @@ void ProfileAuthDataTest::PopulateBrowserContext(
           GURL(kSAMLIdPCookieURL), kCookieName, cookie_value, std::string(),
           std::string(), base::Time(), base::Time(), base::Time(), true, false,
           net::CookieSameSite::NO_RESTRICTION, net::COOKIE_PRIORITY_DEFAULT,
-          false, absl::nullopt),
+          std::nullopt, /*status=*/nullptr),
       GURL(kSAMLIdPCookieURL), options, base::DoNothing());
 
   cookies->SetCanonicalCookie(
@@ -248,7 +248,7 @@ void ProfileAuthDataTest::PopulateBrowserContext(
           GURL(kGAIACookieURL), kCookieName, cookie_value, std::string(),
           std::string(), base::Time(), base::Time(), base::Time(), true, false,
           net::CookieSameSite::NO_RESTRICTION, net::COOKIE_PRIORITY_DEFAULT,
-          false, absl::nullopt),
+          std::nullopt, /*status=*/nullptr),
       GURL(kGAIACookieURL), options, base::DoNothing());
 }
 

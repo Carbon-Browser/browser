@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,6 @@ EnumTraits<display::mojom::Position, display::DisplayPlacement::Position>::
       return display::mojom::Position::LEFT;
   }
   NOTREACHED();
-  return display::mojom::Position::TOP;
 }
 
 bool EnumTraits<display::mojom::Position, display::DisplayPlacement::Position>::
@@ -54,7 +53,6 @@ EnumTraits<display::mojom::OffsetReference,
       return display::mojom::OffsetReference::BOTTOM_RIGHT;
   }
   NOTREACHED();
-  return display::mojom::OffsetReference::TOP_LEFT;
 }
 
 bool EnumTraits<display::mojom::OffsetReference,

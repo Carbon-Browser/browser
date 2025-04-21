@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,30 +7,28 @@
 #include <string>
 #include <vector>
 
-#include "ash/components/cryptohome/cryptohome_parameters.h"
-#include "ash/components/settings/cros_settings_names.h"
-#include "base/bind.h"
 #include "base/command_line.h"
-#include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_util.h"
 #include "chrome/browser/ash/login/existing_user_controller.h"
 #include "chrome/browser/ash/login/session/user_session_manager.h"
 #include "chrome/browser/ash/login/session/user_session_manager_test_api.h"
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/ash/login/test/oobe_base_test.h"
 #include "chrome/browser/ash/login/test/session_manager_state_waiter.h"
 #include "chrome/browser/ash/login/test/user_policy_mixin.h"
-#include "chrome/browser/ash/login/ui/login_display_host.h"
-#include "chrome/browser/ash/login/users/chrome_user_manager_impl.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/site_isolation/about_flags.h"
-#include "chrome/browser/ui/webui/chromeos/login/gaia_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/oobe_ui.h"
+#include "chrome/browser/ui/ash/login/login_display_host.h"
+#include "chrome/browser/ui/webui/ash/login/gaia_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/oobe_ui.h"
+#include "chrome/test/base/fake_gaia_mixin.h"
 #include "chrome/test/base/in_process_browser_test.h"
+#include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
 #include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
 #include "components/flags_ui/pref_service_flags_storage.h"
 #include "components/policy/core/browser/browser_policy_connector.h"
 #include "components/policy/core/common/mock_configuration_policy_provider.h"
@@ -43,6 +41,7 @@
 #include "content/public/browser/child_process_security_policy.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/browser_test.h"
+#include "google_apis/gaia/gaia_id.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/cros_system_api/switches/chrome_switches.h"
 
@@ -178,7 +177,7 @@ class SiteIsolationFlagHandlingTest
  protected:
   SiteIsolationFlagHandlingTest()
       : account_id_(AccountId::FromUserEmailGaiaId("username@examle.com",
-                                                   "1111111111")) {}
+                                                   GaiaId("1111111111"))) {}
 
   void SetUpInProcessBrowserTestFixture() override {
     ash::SessionManagerClient::InitializeFakeInMemory();
@@ -222,7 +221,7 @@ class SiteIsolationFlagHandlingTest
   void SetUpOnMainThread() override {
     fake_gaia_.SetupFakeGaiaForLogin(account_id_.GetUserEmail(),
                                      account_id_.GetGaiaId(),
-                                     ash::FakeGaiaMixin::kFakeRefreshToken);
+                                     FakeGaiaMixin::kFakeRefreshToken);
 
     OobeBaseTest::SetUpOnMainThread();
 
@@ -237,11 +236,6 @@ class SiteIsolationFlagHandlingTest
     // Observe for user session start.
     user_session_started_observer_ =
         std::make_unique<ash::SessionStateWaiter>();
-  }
-
-  ash::ChromeUserManagerImpl* GetChromeUserManager() const {
-    return static_cast<ash::ChromeUserManagerImpl*>(
-        user_manager::UserManager::Get());
   }
 
   bool HasAttemptRestartBeenCalled() const { return attempt_restart_called_; }
@@ -279,7 +273,7 @@ class SiteIsolationFlagHandlingTest
   const ash::LoginManagerMixin::TestUserInfo user_{account_id_};
   ash::LoginManagerMixin login_manager_{&mixin_host_, {user_}};
 
-  ash::FakeGaiaMixin fake_gaia_{&mixin_host_};
+  FakeGaiaMixin fake_gaia_{&mixin_host_};
 
   // Observes for user session start.
   std::unique_ptr<ash::SessionStateWaiter> user_session_started_observer_;
@@ -335,7 +329,7 @@ IN_PROC_BROWSER_TEST_P(SiteIsolationFlagHandlingTest, FlagHandlingTest) {
 
   // Remove flag sentinels. Keep whatever is between those sentinels, to
   // verify that we don't pass additional parameters in there.
-  base::EraseIf(switches_for_user, [](const std::string& flag) {
+  std::erase_if(switches_for_user, [](const std::string& flag) {
     return flag == "--flag-switches-begin" || flag == "--flag-switches-end";
   });
   EXPECT_EQ(GetParam().expected_switches_for_user, switches_for_user);

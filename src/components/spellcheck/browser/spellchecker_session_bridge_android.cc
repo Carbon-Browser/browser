@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,12 @@
 
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
-#include "components/spellcheck/browser/android/jni_headers/SpellCheckerSessionBridge_jni.h"
 #include "components/spellcheck/common/spellcheck_result.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/render_process_host.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "components/spellcheck/browser/android/jni_headers/SpellCheckerSessionBridge_jni.h"
 
 using base::android::JavaParamRef;
 
@@ -100,7 +102,6 @@ void SpellCheckerSessionBridge::ProcessSpellCheckResults(
 
   active_request_ = std::move(pending_request_);
   if (active_request_) {
-    JNIEnv* env = base::android::AttachCurrentThread();
     Java_SpellCheckerSessionBridge_requestTextCheck(
         env, java_object_,
         base::android::ConvertUTF16ToJavaString(env, active_request_->text_));

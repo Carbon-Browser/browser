@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@ bool StructTraits<gfx::mojom::MaskFilterInfoDataView, gfx::MaskFilterInfo>::
   if (!data.ReadRoundedCornerBounds(&bounds))
     return false;
 
-  absl::optional<gfx::LinearGradient> gradient_mask;
+  std::optional<gfx::LinearGradient> gradient_mask;
   if (!data.ReadGradientMask(&gradient_mask))
     return false;
 

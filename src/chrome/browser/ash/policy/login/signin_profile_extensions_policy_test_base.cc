@@ -1,17 +1,17 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/policy/login/signin_profile_extensions_policy_test_base.h"
 
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_util.h"
-#include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/extensions/policy_test_utils.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chromeos/ash/components/browser_context_helper/browser_context_helper.h"
 #include "components/policy/proto/chrome_device_policy.pb.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -31,11 +31,15 @@ void SigninProfileExtensionsPolicyTestBase::SetUpCommandLine(
 }
 
 void SigninProfileExtensionsPolicyTestBase::SetUpOnMainThread() {
-  DevicePolicyCrosBrowserTest::SetUpOnMainThread();
-
+  // Mixins might configure and start test server
   extensions::policy_test_utils::SetUpEmbeddedTestServer(
       embedded_test_server());
-  ASSERT_TRUE(embedded_test_server()->Start());
+
+  DevicePolicyCrosBrowserTest::SetUpOnMainThread();
+
+  if (!embedded_test_server()->Started()) {
+    ASSERT_TRUE(embedded_test_server()->Start());
+  }
 }
 
 void SigninProfileExtensionsPolicyTestBase::AddExtensionForForceInstallation(
@@ -53,15 +57,10 @@ void SigninProfileExtensionsPolicyTestBase::AddExtensionForForceInstallation(
 }
 
 Profile* SigninProfileExtensionsPolicyTestBase::GetInitialProfile() {
-  // Intentionally not using the |ash::ProfileHelper::GetSigninProfile|
-  // method here, as it performs the lazy construction of the profile, while for
-  // the testing purposes it's better to assert that it has been created before.
-  Profile* const profile =
-      g_browser_process->profile_manager()->GetProfileByPath(
-          ash::ProfileHelper::GetSigninProfileDir());
-  DCHECK(profile);
-
-  return profile;
+  auto* browser_context =
+      ash::BrowserContextHelper::Get()->GetSigninBrowserContext();
+  CHECK(browser_context);
+  return Profile::FromBrowserContext(browser_context)->GetOriginalProfile();
 }
 
 }  // namespace policy

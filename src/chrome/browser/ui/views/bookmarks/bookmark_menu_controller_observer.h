@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@ class BookmarkMenuControllerObserver {
       BookmarkMenuController* controller) = 0;
 
  protected:
-  virtual ~BookmarkMenuControllerObserver() {}
+  virtual ~BookmarkMenuControllerObserver() = default;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_BOOKMARKS_BOOKMARK_MENU_CONTROLLER_OBSERVER_H_

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,7 @@ ChromeManifestTest::ChromeManifestTest()
     // CHANNEL_UNKNOWN == trunk.
     : current_channel_(version_info::Channel::UNKNOWN) {}
 
-ChromeManifestTest::~ChromeManifestTest() {
-}
+ChromeManifestTest::~ChromeManifestTest() = default;
 
 base::FilePath ChromeManifestTest::GetTestDataDir() {
   base::FilePath path;

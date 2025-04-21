@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "ash/app_list/model/search/search_box_model_observer.h"
+#include "ash/public/cpp/app_list/app_list_client.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
 
@@ -17,11 +18,53 @@ SearchBoxModel::SearchBoxModel() = default;
 SearchBoxModel::~SearchBoxModel() = default;
 
 void SearchBoxModel::SetShowAssistantButton(bool show) {
-  if (show_assistant_button_ == show)
+  if (show_assistant_button_ == show) {
     return;
+  }
+
   show_assistant_button_ = show;
-  for (auto& observer : observers_)
+
+  CHECK(!show_assistant_button_ || !show_assistant_new_entry_point_button_)
+      << "Only one of AssistantButton or AssistantNewEntryPointButton can be "
+         "shown";
+
+  for (auto& observer : observers_) {
     observer.ShowAssistantChanged();
+  }
+}
+
+void SearchBoxModel::SetShowAssistantNewEntryPointButton(bool show) {
+  if (show_assistant_new_entry_point_button_ == show) {
+    return;
+  }
+
+  show_assistant_new_entry_point_button_ = show;
+
+  CHECK(!show_assistant_button_ || !show_assistant_new_entry_point_button_)
+      << "Only one of AssistantButton or AssistantNewEntryPointButton can be "
+         "shown";
+
+  for (SearchBoxModelObserver& observer : observers_) {
+    observer.ShowAssistantNewEntryPointChanged();
+  }
+}
+
+void SearchBoxModel::SetShowSunfishButton(bool show) {
+  if (show_sunfish_button_ == show) {
+    return;
+  }
+  show_sunfish_button_ = show;
+  for (SearchBoxModelObserver& observer : observers_) {
+    observer.ShowSunfishChanged();
+  }
+}
+
+void SearchBoxModel::SetWouldTriggerIph(bool would_trigger_iph) {
+  if (would_trigger_iph_ == would_trigger_iph) {
+    return;
+  }
+
+  would_trigger_iph_ = would_trigger_iph;
 }
 
 void SearchBoxModel::SetSearchEngineIsGoogle(bool is_google) {
@@ -30,26 +73,6 @@ void SearchBoxModel::SetSearchEngineIsGoogle(bool is_google) {
   search_engine_is_google_ = is_google;
   for (auto& observer : observers_)
     observer.SearchEngineChanged();
-}
-
-void SearchBoxModel::Update(const std::u16string& text,
-                            bool initiated_by_user) {
-  if (text_ == text)
-    return;
-
-  if (initiated_by_user) {
-    if (text_.empty() && !text.empty()) {
-      UMA_HISTOGRAM_ENUMERATION("Apps.AppListSearchCommenced", 1, 2);
-      base::RecordAction(base::UserMetricsAction("AppList_EnterSearch"));
-    } else if (!text_.empty() && text.empty()) {
-      // The user ended a search interaction. Reset search start time.
-      base::RecordAction(base::UserMetricsAction("AppList_LeaveSearch"));
-    }
-  }
-
-  text_ = text;
-  for (auto& observer : observers_)
-    observer.Update();
 }
 
 void SearchBoxModel::AddObserver(SearchBoxModelObserver* observer) {

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@
 
 #include <string>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "chrome/browser/nearby_sharing/fast_initiation/constants.h"
-#include "chrome/browser/nearby_sharing/logging/logging.h"
+#include "components/cross_device/logging/logging.h"
 #include "device/bluetooth/bluetooth_advertisement.h"
 
 namespace {
@@ -96,17 +96,16 @@ void FastInitiationAdvertiser::RegisterAdvertisement(
       std::make_unique<device::BluetoothAdvertisement::Data>(
           device::BluetoothAdvertisement::ADVERTISEMENT_TYPE_BROADCAST);
 
-  auto list = std::make_unique<device::BluetoothAdvertisement::UUIDList>();
-  list->push_back(kFastInitiationServiceUuid);
+  device::BluetoothAdvertisement::UUIDList list;
+  list.push_back(kFastInitiationServiceUuid);
   advertisement_data->set_service_uuids(std::move(list));
 
-  auto service_data =
-      std::make_unique<device::BluetoothAdvertisement::ServiceData>();
+  device::BluetoothAdvertisement::ServiceData service_data;
   auto payload = std::vector<uint8_t>(std::begin(kFastInitiationModelId),
                                       std::end(kFastInitiationModelId));
   auto metadata = GenerateFastInitV1Metadata(type);
   payload.insert(std::end(payload), std::begin(metadata), std::end(metadata));
-  service_data->insert(std::pair<std::string, std::vector<uint8_t>>(
+  service_data.insert(std::pair<std::string, std::vector<uint8_t>>(
       kFastInitiationServiceUuid, payload));
   advertisement_data->set_service_data(std::move(service_data));
 
@@ -130,9 +129,10 @@ void FastInitiationAdvertiser::OnRegisterAdvertisement(
 void FastInitiationAdvertiser::OnRegisterAdvertisementError(
     base::OnceClosure error_callback,
     device::BluetoothAdvertisement::ErrorCode error_code) {
-  NS_LOG(ERROR) << "FastInitiationAdvertiser::StartAdvertising() failed with "
-                   "error code = "
-                << error_code;
+  CD_LOG(ERROR, Feature::NS)
+      << "FastInitiationAdvertiser::StartAdvertising() failed with "
+         "error code = "
+      << error_code;
   std::move(error_callback).Run();
   // |this| might be destroyed here, do not access local fields.
 }
@@ -156,7 +156,7 @@ void FastInitiationAdvertiser::OnUnregisterAdvertisement() {
 
 void FastInitiationAdvertiser::OnUnregisterAdvertisementError(
     device::BluetoothAdvertisement::ErrorCode error_code) {
-  NS_LOG(WARNING)
+  CD_LOG(WARNING, Feature::NS)
       << "FastInitiationAdvertiser::StopAdvertising() failed with error code = "
       << error_code;
   advertisement_.reset();

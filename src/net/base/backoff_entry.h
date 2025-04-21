@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,7 @@ class NET_EXPORT BackoffEntry {
     // always_use_initial_delay.  It's either how long we wait between
     // requests before backoff starts, or how much we delay the first request
     // after backoff starts.
-    int initial_delay_ms;
+    int64_t initial_delay_ms;
 
     // Factor by which the waiting time will be multiplied.
     double multiply_factor;

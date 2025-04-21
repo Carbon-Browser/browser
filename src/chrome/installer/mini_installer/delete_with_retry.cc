@@ -1,12 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/installer/mini_installer/delete_with_retry.h"
 
-#include <utility>
-
 #include <windows.h>
+
+#include <utility>
 
 namespace mini_installer {
 

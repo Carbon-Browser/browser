@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 #define ASH_QUICK_PAIR_REPOSITORY_FAST_PAIR_PAIRING_METADATA_H_
 
 #include <vector>
+
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 namespace quick_pair {
@@ -22,7 +24,7 @@ struct PairingMetadata {
   PairingMetadata(PairingMetadata&&);
   ~PairingMetadata();
 
-  DeviceMetadata* device_metadata;
+  raw_ptr<DeviceMetadata, DanglingUntriaged> device_metadata;
   std::vector<uint8_t> account_key;
 };
 

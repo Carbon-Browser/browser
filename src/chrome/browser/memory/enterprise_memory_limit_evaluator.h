@@ -1,15 +1,15 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_MEMORY_ENTERPRISE_MEMORY_LIMIT_EVALUATOR_H_
 #define CHROME_BROWSER_MEMORY_ENTERPRISE_MEMORY_LIMIT_EVALUATOR_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/memory_pressure/memory_pressure_voter.h"
 #include "components/performance_manager/public/decorators/process_metrics_decorator.h"
 #include "components/performance_manager/public/graph/graph.h"
@@ -74,7 +74,7 @@ class EnterpriseMemoryLimitEvaluator {
 // They are then passed to the Performance Manager's Graph and a task gets
 // posted to the proper task runner when new data is available.
 class EnterpriseMemoryLimitEvaluator::GraphObserver
-    : public performance_manager::SystemNode::ObserverDefaultImpl,
+    : public performance_manager::SystemNodeObserver,
       public performance_manager::GraphOwned {
  public:
   // The constructor of this class takes 2 parameters: the callback to run each
@@ -85,11 +85,11 @@ class EnterpriseMemoryLimitEvaluator::GraphObserver
 
   ~GraphObserver() override;
 
-  // GraphOwned implementation, called on the PM sequence:
+  // GraphOwned, called on the PM sequence:
   void OnPassedToGraph(performance_manager::Graph* graph) override;
   void OnTakenFromGraph(performance_manager::Graph* graph) override;
 
-  // SystemNode::ObserverDefaultImpl, called on the PM sequence:
+  // SystemNodeObserver, called on the PM sequence:
   void OnProcessMemoryMetricsAvailable(
       const performance_manager::SystemNode* system_node) override;
 

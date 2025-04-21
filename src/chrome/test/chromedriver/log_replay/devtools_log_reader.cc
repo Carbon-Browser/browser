@@ -1,6 +1,7 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
 #include "chrome/test/chromedriver/log_replay/devtools_log_reader.h"
 
 #include <iostream>
@@ -8,6 +9,7 @@
 
 #include "base/logging.h"
 #include "base/strings/pattern.h"
+#include "base/strings/string_util.h"
 
 namespace {
 // Parses the word (id=X) and just returns the id number
@@ -18,6 +20,36 @@ int GetId(std::istringstream& header_stream) {
   header_stream.ignore(1);  // ignore the final parenthesis
   return id;
 }
+
+void putback(std::istringstream& stream, const std::string& str) {
+  for (auto it = str.rbegin(); it != str.rend(); ++it) {
+    stream.putback(*it);
+  }
+}
+
+// Parses the word (session_id=X) and just returns the session_id string
+bool GetSessionId(std::istringstream& header_stream, std::string* session_id) {
+  std::string spaces;
+  while (base::IsAsciiWhitespace(header_stream.peek())) {
+    char ch;
+    header_stream.get(ch);
+    spaces.push_back(ch);
+  }
+  std::string sid;  // (session_id=X)
+  header_stream >> sid;
+  if (sid.size() < 13  // (session_id=) is also valid
+      || sid.find("(session_id=") != 0 || sid.back() != ')') {
+    putback(header_stream, sid);
+    putback(header_stream, spaces);
+    return false;
+  }
+
+  // skip 12 leading characters: (session_id=
+  // and one trailing character: )
+  *session_id = sid.substr(12, sid.size() - 12 - 1);
+  return true;
+}
+
 }  // namespace
 
 LogEntry::LogEntry(std::istringstream& header_stream) {
@@ -66,6 +98,13 @@ LogEntry::LogEntry(std::istringstream& header_stream) {
           return;
         }
       }
+
+      session_id.clear();
+      if (!GetSessionId(header_stream, &session_id)) {
+        error = true;
+        LOG(ERROR) << "Could not read session_id from log entry header.";
+      }
+
       header_stream >> socket_id;
       if (socket_id == "") {
         error = true;
@@ -75,12 +114,12 @@ LogEntry::LogEntry(std::istringstream& header_stream) {
   }
 }
 
-LogEntry::~LogEntry() {}
+LogEntry::~LogEntry() = default;
 
 DevToolsLogReader::DevToolsLogReader(const base::FilePath& log_path)
     : log_file(log_path.value().c_str(), std::ios::in) {}
 
-DevToolsLogReader::~DevToolsLogReader() {}
+DevToolsLogReader::~DevToolsLogReader() = default;
 
 bool DevToolsLogReader::IsHeader(std::istringstream& header_stream) const {
   std::string word;

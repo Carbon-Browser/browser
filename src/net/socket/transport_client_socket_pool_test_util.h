@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,20 +10,21 @@
 #define NET_SOCKET_TRANSPORT_CLIENT_SOCKET_POOL_TEST_UTIL_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
 #include "base/containers/queue.h"
 #include "base/containers/span.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_span.h"
 #include "base/time/time.h"
 #include "net/base/address_list.h"
 #include "net/socket/client_socket_factory.h"
 #include "net/socket/client_socket_handle.h"
 #include "net/socket/socket_performance_watcher.h"
 #include "net/socket/stream_socket.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace net {
 
@@ -76,8 +77,8 @@ class MockTransportClientSocketFactory : public ClientSocketFactory {
   // A rule describing a mock `TransportClientSocket` to create.
   struct Rule {
     explicit Rule(Type type,
-                  absl::optional<std::vector<IPEndPoint>> expected_addresses =
-                      absl::nullopt,
+                  std::optional<std::vector<IPEndPoint>> expected_addresses =
+                      std::nullopt,
                   Error connect_error = ERR_CONNECTION_FAILED);
     ~Rule();
     Rule(const Rule&);
@@ -86,7 +87,7 @@ class MockTransportClientSocketFactory : public ClientSocketFactory {
     Type type;
     // If specified, the addresses that should be passed into
     // `CreateTransportClientSocket`.
-    absl::optional<std::vector<IPEndPoint>> expected_addresses;
+    std::optional<std::vector<IPEndPoint>> expected_addresses;
     // The error to use if `type` specifies a failing connection. Ignored
     // otherwise.
     Error connect_error;
@@ -147,7 +148,7 @@ class MockTransportClientSocketFactory : public ClientSocketFactory {
   raw_ptr<NetLog> net_log_;
   int allocation_count_ = 0;
   Type client_socket_type_ = Type::kSynchronous;
-  base::span<const Rule> rules_;
+  base::raw_span<const Rule, DanglingUntriaged> rules_;
   base::TimeDelta delay_;
   base::queue<base::OnceClosure> triggerable_sockets_;
   base::OnceClosure run_loop_quit_closure_;

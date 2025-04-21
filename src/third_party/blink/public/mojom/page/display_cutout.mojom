@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,21 +27,14 @@ enum ViewportFit {
 interface DisplayCutoutHost {
   // Notify the browser that the ViewportFit for the renderer has changed.
   NotifyViewportFitChanged(blink.mojom.ViewportFit value);
-};
 
-// Contains the four safe areas for the display cutout. These are insets from
-// each edge of the display measured in pixels.
-// TODO(beccahughes): Replace with gfx::Insets
-struct DisplayCutoutSafeArea {
-  int32 top;
-  int32 left;
-  int32 bottom;
-  int32 right;
+  // Notify the browser that the page's slow safe area constraint state changed.
+  NotifyComplexSafeAreaConstraintChanged(bool value);
 };
 
 // Used for browser -> renderer calls about display cutout. This is associated
 // with a frame.
 interface DisplayCutoutClient {
   // Notify the renderer that the safe areas have changed.
-  SetSafeArea(DisplayCutoutSafeArea safe_area);
+  SetSafeArea(gfx.mojom.Insets safe_area);
 };

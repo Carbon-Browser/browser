@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,15 +15,20 @@
 @interface ContentSuggestionsMostVisitedTileView
     : ContentSuggestionsTileView <UIContextMenuInteractionDelegate>
 
-// Initializes and configures the view with `config`.
-- (instancetype)initWithConfiguration:
-    (ContentSuggestionsMostVisitedItem*)config;
+// Initializes and configures the view with `config`. If `inMagicStack`, the
+// view will be inside the magic stack, otherwise it will be in content
+// suggestions view.
+- (instancetype)initInMagicStack:(BOOL)inMagicStack
+               withConfiguration:(ContentSuggestionsMostVisitedItem*)config;
 
 // FaviconView displaying the favicon.
 @property(nonatomic, strong, readonly) FaviconView* faviconView;
 
 // Provider of menu configurations for this tile.
 @property(nonatomic, weak) id<ContentSuggestionsMenuProvider> menuProvider;
+
+// Tap gesture recognizer for this view.
+@property(nonatomic, strong) UITapGestureRecognizer* tapRecognizer;
 
 // Configuration for this view.
 @property(nonatomic, strong, readonly)

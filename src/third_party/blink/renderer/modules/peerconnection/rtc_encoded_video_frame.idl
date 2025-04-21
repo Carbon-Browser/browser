@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,13 @@ enum RTCEncodedVideoFrameType {
 [
     Exposed=(Window, DedicatedWorker)
 ] interface RTCEncodedVideoFrame {
+    [Measure, RaisesException]
+    constructor (RTCEncodedVideoFrame originalFrame, optional RTCEncodedVideoFrameOptions options = {});
     readonly attribute RTCEncodedVideoFrameType type;
-    readonly attribute unsigned long timestamp;  // RTP timestamp. 
-    attribute ArrayBuffer data;
+    [Measure] readonly attribute unsigned long timestamp;  // RTP timestamp.
+    [CallWith=ExecutionContext] attribute ArrayBuffer data;
     RTCEncodedVideoFrameMetadata getMetadata();
-    stringifier;
+    [RuntimeEnabled=RTCEncodedFrameSetMetadata, Measure, RaisesException]
+    void setMetadata(RTCEncodedVideoFrameMetadata metadata);
+    [CallWith=ExecutionContext] stringifier;
 };

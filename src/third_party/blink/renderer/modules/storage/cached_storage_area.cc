@@ -1,6 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "third_party/blink/renderer/modules/storage/cached_storage_area.h"
 
@@ -8,15 +13,16 @@
 
 #include <algorithm>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/not_fatal_until.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/rand_util.h"
 #include "base/trace_event/memory_dump_manager.h"
-#include "third_party/blink/public/platform/scheduler/web_thread_scheduler.h"
+#include "third_party/blink/renderer/core/execution_context/agent.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
-#include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
+#include "third_party/blink/renderer/platform/scheduler/public/main_thread.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_buffer.h"
@@ -57,8 +63,8 @@ base::OnceCallback<void(bool)> MakeSuccessCallback(
           "CachedStorageArea",
           WebScopedVirtualTimePauser::VirtualTaskDuration::kNonInstant);
   virtual_time_pauser.PauseVirtualTime();
-  return WTF::Bind([](WebScopedVirtualTimePauser, bool) {},
-                   std::move(virtual_time_pauser));
+  return WTF::BindOnce([](WebScopedVirtualTimePauser, bool) {},
+                       std::move(virtual_time_pauser));
 }
 
 }  // namespace
@@ -96,7 +102,7 @@ bool CachedStorageArea::SetItem(const String& key,
     return false;
 
   const FormatOption value_format = GetValueFormat();
-  absl::optional<Vector<uint8_t>> optional_old_value;
+  std::optional<Vector<uint8_t>> optional_old_value;
   if (!old_value.IsNull() && should_send_old_value_on_mutations_)
     optional_old_value = StringToUint8Vector(old_value, value_format);
   KURL page_url = source->GetPageUrl();
@@ -108,12 +114,35 @@ bool CachedStorageArea::SetItem(const String& key,
                       StringToUint8Vector(value, value_format),
                       optional_old_value, source_string,
                       MakeSuccessCallback(source));
+    EnqueueCheckpointMicrotask(source);
   }
   if (!IsSessionStorage())
     EnqueuePendingMutation(key, value, old_value, source_string);
   else if (old_value != value)
     EnqueueStorageEvent(key, old_value, value, page_url, source_id);
   return true;
+}
+
+void CachedStorageArea::EnqueueCheckpointMicrotask(Source* source) {
+  if (checkpoint_queued_) {
+    return;
+  }
+
+  LocalDOMWindow* window = source->GetDOMWindow();
+  if (!window) {
+    return;
+  }
+
+  checkpoint_queued_ = true;
+  window->GetAgent()->event_loop()->EnqueueMicrotask(WTF::BindOnce(
+      &CachedStorageArea::NotifyCheckpoint, weak_factory_.GetWeakPtr()));
+}
+
+void CachedStorageArea::NotifyCheckpoint() {
+  checkpoint_queued_ = false;
+  if (remote_area_) {
+    remote_area_->Checkpoint();
+  }
 }
 
 void CachedStorageArea::RemoveItem(const String& key, Source* source) {
@@ -124,7 +153,7 @@ void CachedStorageArea::RemoveItem(const String& key, Source* source) {
   if (!map_->RemoveItem(key, &old_value))
     return;
 
-  absl::optional<Vector<uint8_t>> optional_old_value;
+  std::optional<Vector<uint8_t>> optional_old_value;
   if (should_send_old_value_on_mutations_)
     optional_old_value = StringToUint8Vector(old_value, GetValueFormat());
   KURL page_url = source->GetPageUrl();
@@ -134,6 +163,7 @@ void CachedStorageArea::RemoveItem(const String& key, Source* source) {
     remote_area_->Delete(StringToUint8Vector(key, GetKeyFormat()),
                          optional_old_value, source_string,
                          MakeSuccessCallback(source));
+    EnqueueCheckpointMicrotask(source);
   }
   if (!IsSessionStorage())
     EnqueuePendingMutation(key, String(), old_value, source_string);
@@ -157,8 +187,8 @@ void CachedStorageArea::Clear(Source* source) {
     // backend from the exact point at which the impending |DeleteAll()|
     // operation takes place. The first event observed after this will always
     // be a corresponding |AllDeleted()| from |source|.
-    DCHECK(pending_mutations_by_source_.IsEmpty());
-    DCHECK(pending_mutations_by_key_.IsEmpty());
+    DCHECK(pending_mutations_by_source_.empty());
+    DCHECK(pending_mutations_by_key_.empty());
     receiver_.reset();
     new_observer = receiver_.BindNewPipeAndPassRemote();
   }
@@ -172,6 +202,7 @@ void CachedStorageArea::Clear(Source* source) {
   if (!is_session_storage_for_prerendering_) {
     remote_area_->DeleteAll(source_string, std::move(new_observer),
                             MakeSuccessCallback(source));
+    EnqueueCheckpointMicrotask(source);
   }
   if (!IsSessionStorage())
     EnqueuePendingMutation(String(), String(), String(), source_string);
@@ -188,8 +219,7 @@ String CachedStorageArea::RegisterSource(Source* source) {
 CachedStorageArea::CachedStorageArea(
     AreaType type,
     const BlinkStorageKey& storage_key,
-    const LocalDOMWindow* local_dom_window,
-    scoped_refptr<base::SingleThreadTaskRunner> task_runner,
+    LocalDOMWindow* local_dom_window,
     StorageNamespace* storage_namespace,
     bool is_session_storage_for_prerendering,
     mojo::PendingRemote<mojom::blink::StorageArea> storage_area)
@@ -197,12 +227,11 @@ CachedStorageArea::CachedStorageArea(
       storage_key_(storage_key),
       storage_namespace_(storage_namespace),
       is_session_storage_for_prerendering_(is_session_storage_for_prerendering),
-      task_runner_(std::move(task_runner)),
       areas_(MakeGarbageCollected<HeapHashMap<WeakMember<Source>, String>>()) {
   BindStorageArea(std::move(storage_area), local_dom_window);
   base::trace_event::MemoryDumpManager::GetInstance()->RegisterDumpProvider(
       this, "DOMStorage",
-      ThreadScheduler::Current()->DeprecatedDefaultTaskRunner());
+      Thread::MainThread()->GetTaskRunner(MainThreadTaskRunnerRestricted()));
 }
 
 CachedStorageArea::~CachedStorageArea() {
@@ -210,7 +239,7 @@ CachedStorageArea::~CachedStorageArea() {
       this);
 }
 
-const LocalDOMWindow* CachedStorageArea::GetBestCurrentDOMWindow() {
+LocalDOMWindow* CachedStorageArea::GetBestCurrentDOMWindow() {
   for (auto key : areas_->Keys()) {
     if (!key->GetDOMWindow()) {
       continue;
@@ -222,7 +251,7 @@ const LocalDOMWindow* CachedStorageArea::GetBestCurrentDOMWindow() {
 
 void CachedStorageArea::BindStorageArea(
     mojo::PendingRemote<mojom::blink::StorageArea> new_area,
-    const LocalDOMWindow* local_dom_window) {
+    LocalDOMWindow* local_dom_window) {
   // Some tests may not provide a StorageNamespace.
   DCHECK(!remote_area_);
   if (!local_dom_window)
@@ -234,18 +263,27 @@ void CachedStorageArea::BindStorageArea(
     pending_mutations_by_key_.clear();
     pending_mutations_by_source_.clear();
     return;
-  } else if (new_area) {
-    remote_area_.Bind(std::move(new_area), task_runner_);
+  }
+
+  // Because the storage area is keyed by the BlinkStorageKey it could be
+  // reused by other frames in the same agent cluster so we use the
+  // associated AgentGroupScheduler's task runner.
+  auto task_runner = local_dom_window->GetFrame()
+                         ->GetFrameScheduler()
+                         ->GetAgentGroupScheduler()
+                         ->DefaultTaskRunner();
+  if (new_area) {
+    remote_area_.Bind(std::move(new_area), task_runner);
   } else if (storage_namespace_) {
     storage_namespace_->BindStorageArea(
-        *local_dom_window,
-        remote_area_.BindNewPipeAndPassReceiver(task_runner_));
+        storage_key_, local_dom_window->GetLocalFrameToken(),
+        remote_area_.BindNewPipeAndPassReceiver(task_runner));
   } else {
     return;
   }
 
   receiver_.reset();
-  remote_area_->AddObserver(receiver_.BindNewPipeAndPassRemote(task_runner_));
+  remote_area_->AddObserver(receiver_.BindNewPipeAndPassRemote(task_runner));
 }
 
 void CachedStorageArea::ResetConnection(
@@ -332,7 +370,7 @@ void CachedStorageArea::ResetConnection(
 void CachedStorageArea::KeyChanged(
     const Vector<uint8_t>& key,
     const Vector<uint8_t>& new_value,
-    const absl::optional<Vector<uint8_t>>& old_value,
+    const std::optional<Vector<uint8_t>>& old_value,
     const String& source) {
   DCHECK(!IsSessionStorage());
 
@@ -412,7 +450,7 @@ void CachedStorageArea::KeyChangeFailed(const Vector<uint8_t>& key,
 
 void CachedStorageArea::KeyDeleted(
     const Vector<uint8_t>& key,
-    const absl::optional<Vector<uint8_t>>& old_value,
+    const std::optional<Vector<uint8_t>>& old_value,
     const String& source) {
   DCHECK(!IsSessionStorage());
 
@@ -536,7 +574,7 @@ CachedStorageArea::PopPendingMutation(const String& source) {
     return nullptr;
 
   OwnedPendingMutationQueue& mutations_for_source = source_queue_iter->value;
-  DCHECK(!mutations_for_source.IsEmpty());
+  DCHECK(!mutations_for_source.empty());
   std::unique_ptr<PendingMutation> mutation =
       std::move(mutations_for_source.front());
   mutations_for_source.pop_front();
@@ -550,7 +588,8 @@ CachedStorageArea::PopPendingMutation(const String& source) {
   const String key = mutation->key;
   if (!key.IsNull()) {
     auto key_queue_iter = pending_mutations_by_key_.find(key);
-    DCHECK(key_queue_iter != pending_mutations_by_key_.end());
+    CHECK(key_queue_iter != pending_mutations_by_key_.end(),
+          base::NotFatalUntil::M130);
     DCHECK_EQ(key_queue_iter->value.front(), mutation.get());
     key_queue_iter->value.pop_front();
     if (key_queue_iter->value.empty())
@@ -683,7 +722,7 @@ void CachedStorageArea::EnqueueStorageEvent(const String& key,
 // static
 String CachedStorageArea::Uint8VectorToString(const Vector<uint8_t>& input,
                                               FormatOption format_option) {
-  if (input.IsEmpty())
+  if (input.empty())
     return g_empty_string;
   const wtf_size_t input_size = input.size();
   String result;
@@ -703,7 +742,7 @@ String CachedStorageArea::Uint8VectorToString(const Vector<uint8_t>& input,
       // TODO(mek): When this lived in content it used to do a "lenient"
       // conversion, while this is a strict conversion. Figure out if that
       // difference actually matters in practice.
-      result = String::FromUTF8(input.data(), input_size);
+      result = String::FromUTF8(base::span(input));
       if (result.IsNull()) {
         corrupt = true;
         break;
@@ -725,8 +764,7 @@ String CachedStorageArea::Uint8VectorToString(const Vector<uint8_t>& input,
           break;
         }
         case StorageFormat::Latin1:
-          result = String(reinterpret_cast<const char*>(input.data() + 1),
-                          payload_size);
+          result = String(base::span(input).subspan<1>());
           break;
         default:
           corrupt = true;
@@ -751,7 +789,9 @@ Vector<uint8_t> CachedStorageArea::StringToUint8Vector(
   switch (format_option) {
     case FormatOption::kSessionStorageForceUTF16: {
       Vector<uint8_t> result(input.length() * sizeof(UChar));
-      input.CopyTo(reinterpret_cast<UChar*>(result.data()), 0, input.length());
+      input.CopyTo(
+          base::span(reinterpret_cast<UChar*>(result.data()), input.length()),
+          0);
       return result;
     }
     case FormatOption::kSessionStorageForceUTF8: {
@@ -770,25 +810,20 @@ Vector<uint8_t> CachedStorageArea::StringToUint8Vector(
         if (length > std::numeric_limits<unsigned>::max() / 3)
           return Vector<uint8_t>();
         Vector<uint8_t> buffer_vector(length * 3);
-        uint8_t* buffer = buffer_vector.data();
-        const LChar* characters = input.Characters8();
 
         WTF::unicode::ConversionResult result =
-            WTF::unicode::ConvertLatin1ToUTF8(
-                &characters, characters + length,
-                reinterpret_cast<char**>(&buffer),
-                reinterpret_cast<char*>(buffer + buffer_vector.size()));
+            WTF::unicode::ConvertLatin1ToUTF8(input.Span8(),
+                                              base::span(buffer_vector));
         // (length * 3) should be sufficient for any conversion
-        DCHECK_NE(result, WTF::unicode::kTargetExhausted);
-        buffer_vector.Shrink(
-            static_cast<wtf_size_t>(buffer - buffer_vector.data()));
+        DCHECK_NE(result.status, WTF::unicode::kTargetExhausted);
+        buffer_vector.Shrink(static_cast<wtf_size_t>(result.converted.size()));
         return buffer_vector;
       }
 
       // TODO(dmurph): Figure out how to avoid a copy here.
       // TODO(dmurph): Handle invalid UTF16 better. https://crbug.com/873280.
-      StringUTF8Adaptor utf8(
-          input, WTF::kStrictUTF8ConversionReplacingUnpairedSurrogatesWithFFFD);
+      StringUTF8Adaptor utf8(input,
+                             WTF::Utf8ConversionMode::kStrictReplacingErrors);
       Vector<uint8_t> result(utf8.size());
       std::memcpy(result.data(), utf8.data(), utf8.size());
       return result;

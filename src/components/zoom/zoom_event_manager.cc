@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,9 +26,9 @@ ZoomEventManager* ZoomEventManager::GetForBrowserContext(
       context->GetUserData(kBrowserZoomEventManager));
 }
 
-ZoomEventManager::ZoomEventManager() {}
+ZoomEventManager::ZoomEventManager() = default;
 
-ZoomEventManager::~ZoomEventManager() {}
+ZoomEventManager::~ZoomEventManager() = default;
 
 void ZoomEventManager::OnZoomLevelChanged(
     const content::HostZoomMap::ZoomLevelChange& change) {

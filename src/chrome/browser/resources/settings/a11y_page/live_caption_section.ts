@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,40 +6,62 @@
  * @fileoverview 'settings-live-caption' is a component for showing Live Caption
  * settings. It appears on the accessibility subpage
  * (chrome://settings/accessibility) on Mac and some versions of Windows and on
- * the captions subpage (chrome://settings/captions) on Linux, ChromeOS, and
- * other versions of Windows.
+ * the captions subpage (chrome://settings/captions) on Linux and other versions
+ * of Windows.
  */
 
-import '//resources/cr_elements/shared_style_css.m.js';
+import '//resources/cr_elements/cr_shared_style.css.js';
+import '//resources/cr_elements/cr_collapse/cr_collapse.js';
 import '../controls/settings_toggle_button.js';
 import '../settings_shared.css.js';
 
-import {WebUIListenerMixin} from '//resources/js/web_ui_listener_mixin.js';
+import {WebUiListenerMixin} from '//resources/cr_elements/web_ui_listener_mixin.js';
 import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import type {CaptionsBrowserProxy, LiveCaptionLanguage, LiveCaptionLanguageList} from '/shared/settings/a11y_page/captions_browser_proxy.js';
+import {CaptionsBrowserProxyImpl} from '/shared/settings/a11y_page/captions_browser_proxy.js';
+import {PrefsMixin} from '/shared/settings/prefs/prefs_mixin.js';
 
-import {SettingsToggleButtonElement} from '../controls/settings_toggle_button.js';
+import type {SettingsToggleButtonElement} from '../controls/settings_toggle_button.js';
 import {loadTimeData} from '../i18n_setup.js';
-import {PrefsMixin} from '../prefs/prefs_mixin.js';
 
 import {getTemplate} from './live_caption_section.html.js';
 
+// clang-format off
+// <if expr="not is_chromeos">
+import 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
+import 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.js';
 
-/**
- * |name| is the display name of a language, ex. German.
- * |code| is the language code, ex. de-DE.
- * |downloadProgress| is the display-friendly download progress as the language
- *     model is being downloaded.
- */
-type LiveCaptionLanguage = {
-  displayName: string,
-  code: string,
-  downloadProgress: string,
-};
+import type {CrActionMenuElement} from '//resources/cr_elements/cr_action_menu/cr_action_menu.js';
+import type {CrLazyRenderElement} from 'chrome://resources/cr_elements/cr_lazy_render/cr_lazy_render.js';
 
-type LiveCaptionLanguageList = LiveCaptionLanguage[];
+import './live_translate_section.js';
+import '../languages_page/add_languages_dialog.js';
 
+import type {LanguageHelper, LanguagesModel} from '../languages_page/languages_types.js';
+
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {ListPropertyUpdateMixin} from 'chrome://resources/cr_elements/list_property_update_mixin.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {focusWithoutInk} from 'chrome://resources/js/focus_without_ink.js';
+import type {DomRepeatEvent} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+// </if>
+// clang-format on
+
+
+// <if expr="is_chromeos">
 const SettingsLiveCaptionElementBase =
-    WebUIListenerMixin(PrefsMixin(PolymerElement));
+    WebUiListenerMixin(PrefsMixin(PolymerElement));
+// </if>
+// <if expr="not is_chromeos">
+const SettingsLiveCaptionElementBase = WebUiListenerMixin(
+    ListPropertyUpdateMixin(PrefsMixin(I18nMixin(PolymerElement))));
+
+export interface SettingsLiveCaptionElement {
+  $: {
+    menu: CrLazyRenderElement<CrActionMenuElement>,
+  };
+}
+// </if>
 
 export class SettingsLiveCaptionElement extends SettingsLiveCaptionElementBase {
   static get is() {
@@ -57,13 +79,6 @@ export class SettingsLiveCaptionElement extends SettingsLiveCaptionElementBase {
         notify: true,
       },
 
-      enableLiveCaptionMultiLanguage_: {
-        type: Boolean,
-        value: function() {
-          return loadTimeData.getBoolean('enableLiveCaptionMultiLanguage');
-        },
-      },
-
       /**
        * The subtitle to display under the Live Caption heading. Generally, this
        * is a generic subtitle describing the feature. While the SODA model is
@@ -74,68 +89,95 @@ export class SettingsLiveCaptionElement extends SettingsLiveCaptionElementBase {
         value: loadTimeData.getString('captionsEnableLiveCaptionSubtitle'),
       },
 
-      /**
-       * List of languages available for Live Caption.
-       */
-      liveCaptionLanguages_: {
-        type: Array,
-        value() {
-          return [
-            {
-              displayName:
-                  loadTimeData.getString('sodaLanguageDisplayNameEnglish'),
-              code: loadTimeData.getString('sodaLanguageCodeEnglish'),
-              downloadProgress: '',
-            },
-            {
-              displayName:
-                  loadTimeData.getString('sodaLanguageDisplayNameFrench'),
-              code: loadTimeData.getString('sodaLanguageCodeFrench'),
-              downloadProgress: '',
-            },
-            {
-              displayName:
-                  loadTimeData.getString('sodaLanguageDisplayNameGerman'),
-              code: loadTimeData.getString('sodaLanguageCodeGerman'),
-              downloadProgress: '',
-            },
-            {
-              displayName:
-                  loadTimeData.getString('sodaLanguageDisplayNameItalian'),
-              code: loadTimeData.getString('sodaLanguageCodeItalian'),
-              downloadProgress: '',
-            },
-            {
-              displayName:
-                  loadTimeData.getString('sodaLanguageDisplayNameJapanese'),
-              code: loadTimeData.getString('sodaLanguageCodeJapanese'),
-              downloadProgress: '',
-            },
-            {
-              displayName:
-                  loadTimeData.getString('sodaLanguageDisplayNameSpanish'),
-              code: loadTimeData.getString('sodaLanguageCodeSpanish'),
-              downloadProgress: '',
-            },
-          ];
+      enableLiveCaptionMultiLanguage_: {
+        type: Boolean,
+        value: function() {
+          return loadTimeData.getBoolean('enableLiveCaptionMultiLanguage');
         },
       },
+
+      // <if expr="not is_chromeos">
+      /**
+       * Read-only reference to the languages model provided by the
+       * 'settings-languages' instance.
+       */
+      languages: {
+        type: Object,
+        notify: true,
+      },
+
+      languageHelper: Object,
+
+      enableLiveTranslate_: {
+        type: Boolean,
+        value: function() {
+          return loadTimeData.getBoolean('enableLiveTranslate');
+        },
+      },
+
+      installedLanguagePacks_: {
+        type: Array,
+        value: () => [],
+      },
+
+      availableLanguagePacks_: {
+        type: Array,
+        value: () => [],
+      },
+
+      /**
+       * The language to display the details for.
+       */
+      detailLanguage_: Object,
+
+      showAddLanguagesDialog_: Boolean,
+      // </if>
     };
   }
 
-  private enableLiveCaptionMultiLanguage_: boolean;
+  // <if expr="not is_chromeos">
+  languages: LanguagesModel;
+  languageHelper: LanguageHelper;
+  private enableLiveTranslate_: boolean;
+  private installedLanguagePacks_: LiveCaptionLanguageList;
+  private availableLanguagePacks_: LiveCaptionLanguageList;
+  private detailLanguage_?: LiveCaptionLanguage;
+  private showAddLanguagesDialog_: boolean;
+  // </if>
+  private browserProxy_: CaptionsBrowserProxy =
+      CaptionsBrowserProxyImpl.getInstance();
   private enableLiveCaptionSubtitle_: string;
-  private liveCaptionLanguages_: LiveCaptionLanguageList;
+  private enableLiveCaptionMultiLanguage_: boolean;
 
   override ready() {
     super.ready();
+    // <if expr="not is_chromeos">
+    this.browserProxy_.getInstalledLanguagePacks().then(
+        (installedLanguagePacks: LiveCaptionLanguageList) => {
+          this.installedLanguagePacks_ = installedLanguagePacks;
+        });
 
-    this.addWebUIListener(
+    this.browserProxy_.getAvailableLanguagePacks().then(
+        (availableLanguagePacks: LiveCaptionLanguageList) => {
+          this.availableLanguagePacks_ = availableLanguagePacks;
+        });
+    // </if>
+
+    // <if expr="is_chromeos">
+    this.addWebUiListener(
+        'soda-download-progress-changed',
+        (sodaDownloadProgress: string) =>
+            this.onSodaDownloadProgressChanged_(sodaDownloadProgress));
+    // </if>
+    // <if expr="not is_chromeos">
+    this.addWebUiListener(
         'soda-download-progress-changed',
         (sodaDownloadProgress: string, languageCode: string) =>
-            this.onSodaDownloadProgressChanged_(
+            this.onSodaDownloadProgressChangedForLanguage_(
                 sodaDownloadProgress, languageCode));
-    chrome.send('liveCaptionSectionReady');
+    // </if>
+
+    this.browserProxy_.liveCaptionSectionReady();
   }
 
   /**
@@ -151,8 +193,136 @@ export class SettingsLiveCaptionElement extends SettingsLiveCaptionElementBase {
         (event.target as SettingsToggleButtonElement).checked;
     chrome.metricsPrivate.recordBoolean(
         'Accessibility.LiveCaption.EnableFromSettings', liveCaptionEnabled);
+
+    // <if expr="not is_chromeos">
+    if (this.installedLanguagePacks_.length === 0) {
+      this.installLanguagePacks_(
+          [this.getPref('accessibility.captions.live_caption_language').value]);
+    }
+    // </if>
   }
 
+  private onLiveCaptionMaskOffensiveWordsChanged_(event: Event) {
+    const liveCaptionMaskOffensiveWords =
+        (event.target as SettingsToggleButtonElement).checked;
+    chrome.metricsPrivate.recordBoolean(
+        'Accessibility.LiveCaption.MaskOffensiveWords',
+        liveCaptionMaskOffensiveWords);
+  }
+
+  // <if expr="not is_chromeos">
+  private onAddLanguagesClick_(e: Event) {
+    e.preventDefault();
+    this.showAddLanguagesDialog_ = true;
+  }
+
+  private onAddLanguagesDialogClose_() {
+    this.showAddLanguagesDialog_ = false;
+    const toFocus = this.shadowRoot!.querySelector<HTMLElement>('#addLanguage');
+    assert(toFocus);
+    focusWithoutInk(toFocus);
+  }
+
+  private onDotsClick_(e: DomRepeatEvent<LiveCaptionLanguage>) {
+    this.detailLanguage_ = Object.assign({}, e.model.item);
+    this.$.menu.get().showAt(e.target as HTMLElement);
+  }
+
+  private isDefaultLanguage_(languageCode: string): boolean {
+    if (this.prefs === undefined) {
+      return false;
+    }
+
+    return languageCode ===
+        this.prefs.accessibility.captions.live_caption_language.value;
+  }
+
+  private onMakeDefaultClick_() {
+    this.$.menu.get().close();
+    this.setPrefValue(
+        'accessibility.captions.live_caption_language',
+        this.detailLanguage_!.code);
+  }
+
+  private onRemoveLanguageClick_() {
+    if (!this.detailLanguage_) {
+      return;
+    }
+
+    this.$.menu.get().close();
+    this.installedLanguagePacks_ = this.installedLanguagePacks_.filter(
+        languagePack => languagePack.code !== this.detailLanguage_!.code);
+    this.browserProxy_.removeLanguagePack(this.detailLanguage_!.code);
+
+    if (this.installedLanguagePacks_.length === 0) {
+      this.setPrefValue('accessibility.captions.live_caption_enabled', false);
+      return;
+    }
+
+    if (!this.installedLanguagePacks_.some(
+            languagePack => languagePack.code ===
+                this.getPref('accessibility.captions.live_caption_language')
+                    .value)) {
+      this.setPrefValue(
+          'accessibility.captions.live_caption_language',
+          this.installedLanguagePacks_[0].code);
+    }
+  }
+
+  private onLanguagesAdded_(e: CustomEvent<string[]>) {
+    this.installLanguagePacks_(e.detail);
+  }
+
+  private installLanguagePacks_(languageCodes: string[]) {
+    const newLanguagePacks: LiveCaptionLanguageList = [];
+    languageCodes.forEach(languageCode => {
+      const languagePackToAdd = this.availableLanguagePacks_.find(
+          languagePack => languagePack.code === languageCode);
+      if (languagePackToAdd) {
+        newLanguagePacks.push(languagePackToAdd);
+      }
+    });
+
+    this.updateList(
+        `installedLanguagePacks_`, item => item.code,
+        this.installedLanguagePacks_.concat(newLanguagePacks));
+    this.browserProxy_.installLanguagePacks(languageCodes);
+  }
+
+  private filterAvailableLanguagePacks_(
+      availableLanguagePacks: LiveCaptionLanguageList,
+      installedLanguagePacks: LiveCaptionLanguageList):
+      chrome.languageSettingsPrivate.Language[] {
+    const filteredLanguagePacks =
+        availableLanguagePacks.filter(availableLanguagePack => {
+          return !installedLanguagePacks.some(
+              installedLanguagePack =>
+                  installedLanguagePack.code === availableLanguagePack.code);
+        });
+
+    return filteredLanguagePacks.map(
+        languagePack => ({
+          code: languagePack.code,
+          displayName: languagePack.displayName,
+
+          // The native display name for language packs is not shown.
+          nativeDisplayName: languagePack.nativeDisplayName,
+        }));
+  }
+  // </if>
+
+  // <if expr="is_chromeos">
+  /**
+   * Displays SODA download progress in the UI.
+   * @param sodaDownloadProgress The message sent from the webui to be displayed
+   *     as download progress for Live Caption.
+   */
+  private onSodaDownloadProgressChanged_(sodaDownloadProgress: string) {
+    this.enableLiveCaptionSubtitle_ = sodaDownloadProgress;
+  }
+  // </if>
+
+  // <if expr="not is_chromeos">
   /**
    * Displays SODA download progress in the UI. When the language UI is visible,
    * which occurs when the kLiveCaptionMultiLanguage feature is enabled and when
@@ -164,21 +334,23 @@ export class SettingsLiveCaptionElement extends SettingsLiveCaptionElementBase {
    * @param languageCode The language code indicating which language pack the
    *     message applies to.
    */
-  private onSodaDownloadProgressChanged_(
+  private onSodaDownloadProgressChangedForLanguage_(
       sodaDownloadProgress: string, languageCode: string) {
-    if (this.enableLiveCaptionMultiLanguage_) {
-      for (let i = 0; i < this.liveCaptionLanguages_.length; i++) {
-        const language = this.liveCaptionLanguages_[i];
-        if (language.code === languageCode) {
-          language.downloadProgress = sodaDownloadProgress;
-          this.notifyPath('liveCaptionLanguages_.' + i + '.downloadProgress');
-          return;
-        }
-      }
-    } else {
+    if (!this.enableLiveCaptionMultiLanguage_) {
       this.enableLiveCaptionSubtitle_ = sodaDownloadProgress;
+      return;
+    }
+
+    for (let i = 0; i < this.installedLanguagePacks_.length; i++) {
+      const language = this.installedLanguagePacks_[i];
+      if (language.code === languageCode) {
+        language.downloadProgress = sodaDownloadProgress;
+        this.notifyPath('installedLanguagePacks_.' + i + '.downloadProgress');
+        break;
+      }
     }
   }
+  // </if>
 }
 
 declare global {

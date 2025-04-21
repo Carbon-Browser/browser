@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -73,9 +73,9 @@ class TestDisplayRemoveObserver : public display::DisplayObserver {
     ++added_displays_;
   }
 
-  void OnDisplayRemoved(const display::Display& old_display) override {
+  void OnDisplaysRemoved(const display::Displays& removed_displays) override {
     TestPrimaryDisplay();
-    ++removed_displays_;
+    removed_displays_ += removed_displays.size();
   }
 
  private:
@@ -100,7 +100,7 @@ TEST_F(ScreenAshTest, TestNoCrashesOnGettingPrimaryDisplayOnDisplayRemoved) {
   UpdateDisplay("400x500,300x200");
 
   TestDisplayRemoveObserver observer;
-  display_manager()->AddObserver(&observer);
+  display_manager()->AddDisplayObserver(&observer);
 
   // Enter Unified Mode.
   display_manager()->SetUnifiedDesktopEnabled(true);
@@ -116,7 +116,7 @@ TEST_F(ScreenAshTest, TestNoCrashesOnGettingPrimaryDisplayOnDisplayRemoved) {
   EXPECT_EQ(observer.added_displays(), 3);
   EXPECT_EQ(observer.removed_displays(), 3);
 
-  display_manager()->RemoveObserver(&observer);
+  display_manager()->RemoveDisplayObserver(&observer);
 }
 
 }  // namespace ash

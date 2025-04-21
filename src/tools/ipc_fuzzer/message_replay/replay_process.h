@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include <memory>
 
+#include "base/run_loop.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/single_thread_task_executor.h"
 #include "base/threading/thread.h"
@@ -63,6 +64,7 @@ class ReplayProcess : public IPC::Listener {
   base::SingleThreadTaskExecutor main_task_executor_;
   base::Thread io_thread_;
   base::WaitableEvent shutdown_event_;
+  base::RunLoop loop_;
   MessageVector messages_;
   size_t message_index_;
 };

@@ -1,9 +1,9 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 /** @fileoverview Definitions for chrome.resourcesPrivate API. */
-// TODO(crbug.com/1203307): Auto-generate this file.
+// TODO(crbug.com/40179454): Auto-generate this file.
 
 declare namespace chrome {
   export namespace resourcesPrivate {

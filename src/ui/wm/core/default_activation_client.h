@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -60,12 +60,12 @@ class COMPONENT_EXPORT(UI_WM) DefaultActivationClient
   // to make sure that ActivationChangeObserver is not treated as part of the
   // aura API. Assumptions to that end will cause tests that use this client to
   // fail.
-  std::vector<aura::Window*> active_windows_;
+  std::vector<raw_ptr<aura::Window, VectorExperimental>> active_windows_;
 
   // The window which was active before the currently active one.
-  raw_ptr<aura::Window> last_active_;
+  raw_ptr<aura::Window, DanglingUntriaged> last_active_;
 
-  base::ObserverList<ActivationChangeObserver>::Unchecked observers_;
+  base::ObserverList<ActivationChangeObserver> observers_;
 };
 
 }  // namespace wm

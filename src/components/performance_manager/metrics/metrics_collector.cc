@@ -1,17 +1,24 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/performance_manager/public/metrics/metrics_collector.h"
 
+#include <array>
+#include <optional>
 #include <set>
 #include <string>
 
+#include "base/check_op.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
+#include "base/numerics/clamped_math.h"
+#include "base/strings/strcat.h"
 #include "base/time/time.h"
+#include "base/timer/timer.h"
 #include "components/performance_manager/public/graph/graph_operations.h"
 #include "components/performance_manager/public/graph/node_attached_data.h"
 #include "content/public/common/process_type.h"
@@ -59,6 +66,19 @@ void OnRendererDestroyed(const ProcessNode* process_node,
   }
 }
 
+bool LoadingStateIsQuiescent(PageNode::LoadingState loading_state) {
+  switch (loading_state) {
+    case PageNode::LoadingState::kLoadingNotStarted:
+    case PageNode::LoadingState::kLoadingTimedOut:
+    case PageNode::LoadingState::kLoadedIdle:
+      return true;
+    case PageNode::LoadingState::kLoading:
+    case PageNode::LoadingState::kLoadedBusy:
+      return false;
+  }
+  NOTREACHED();
+}
+
 }  // namespace
 
 class MetricsReportRecordHolder
@@ -81,13 +101,8 @@ class UkmCollectionStateHolder
 // navigation is committed.
 const base::TimeDelta kMetricsReportDelayTimeout = base::Minutes(5);
 
-const char kTabFromBackgroundedToFirstFaviconUpdatedUMA[] =
-    "TabManager.Heuristics.FromBackgroundedToFirstFaviconUpdated";
-const char kTabFromBackgroundedToFirstTitleUpdatedUMA[] =
-    "TabManager.Heuristics.FromBackgroundedToFirstTitleUpdated";
-const char kTabFromBackgroundedToFirstNonPersistentNotificationCreatedUMA[] =
-    "TabManager.Heuristics."
-    "FromBackgroundedToFirstNonPersistentNotificationCreated";
+const char kTabNavigationWithSameOriginTabHistogramName[] =
+    "Tabs.NewNavigationWithSameOriginTab";
 
 const int kDefaultFrequencyUkmEQTReported = 5u;
 
@@ -95,58 +110,127 @@ MetricsCollector::MetricsCollector() = default;
 
 MetricsCollector::~MetricsCollector() = default;
 
-void MetricsCollector::OnNonPersistentNotificationCreated(
-    const FrameNode* frame_node) {
-  // Only record metrics while a page is backgrounded.
-  auto* page_node = frame_node->GetPageNode();
-  if (page_node->IsVisible() || !ShouldReportMetrics(page_node))
-    return;
-
-  auto* record = GetMetricsReportRecord(page_node);
-  record->first_non_persistent_notification_created.OnSignalReceived(
-      frame_node->IsMainFrame(), page_node->GetTimeSinceLastVisibilityChange(),
-      graph_->GetUkmRecorder());
-}
-
 void MetricsCollector::OnPassedToGraph(Graph* graph) {
-  graph_ = graph;
   RegisterObservers(graph);
+
+  loading_page_counts_.fill(0);
+
+  // Unretained is safe because `this` owns the timer.
+  page_loading_state_timer_.Start(
+      FROM_HERE, base::Seconds(30),
+      base::BindRepeating(&MetricsCollector::RecordLoadingAndQuiescentPageCount,
+                          base::Unretained(this)));
 }
 
 void MetricsCollector::OnTakenFromGraph(Graph* graph) {
+  page_loading_state_timer_.Stop();
   UnregisterObservers(graph);
-  graph_ = nullptr;
+}
+
+void MetricsCollector::OnPageNodeAdded(const PageNode* page_node) {
+  // Record the initial state of the page.
+  DCHECK(!base::Contains(mixed_state_pages_, page_node));
+  const auto loading_state =
+      LoadingStateIsQuiescent(page_node->GetLoadingState())
+          ? PageLoadingState::kQuiescent
+          : (page_node->IsVisible() ? PageLoadingState::kLoadingVisible
+                                    : PageLoadingState::kLoadingHidden);
+  UpdateLoadingPageCounts(std::nullopt, loading_state);
+}
+
+void MetricsCollector::OnBeforePageNodeRemoved(const PageNode* page_node) {
+  // Remove the page from all counts.
+  PageLoadingState previous_state;
+  if (LoadingStateIsQuiescent(page_node->GetLoadingState())) {
+    DCHECK(!base::Contains(mixed_state_pages_, page_node));
+    previous_state = PageLoadingState::kQuiescent;
+  } else {
+    size_t erased = mixed_state_pages_.erase(page_node);
+    previous_state =
+        erased ? PageLoadingState::kLoadingMixed
+               : (page_node->IsVisible() ? PageLoadingState::kLoadingVisible
+                                         : PageLoadingState::kLoadingHidden);
+  }
+  UpdateLoadingPageCounts(previous_state, std::nullopt);
 }
 
 void MetricsCollector::OnIsVisibleChanged(const PageNode* page_node) {
-  // The page becomes visible again, clear all records in order to
-  // report metrics when page becomes invisible next time.
-  if (page_node->IsVisible())
-    ResetMetricsReportRecord(page_node);
+  if (LoadingStateIsQuiescent(page_node->GetLoadingState())) {
+    return;
+  }
+  // Change of visibility makes the state kLoadingMixed if it wasn't already.
+  const auto [_, inserted] = mixed_state_pages_.insert(page_node);
+  if (inserted) {
+    const auto previous_state = page_node->IsVisible()
+                                    ? PageLoadingState::kLoadingHidden
+                                    : PageLoadingState::kLoadingVisible;
+    UpdateLoadingPageCounts(previous_state, PageLoadingState::kLoadingMixed);
+  }
+}
+
+void MetricsCollector::OnLoadingStateChanged(
+    const PageNode* page_node,
+    PageNode::LoadingState previous_state) {
+  const bool is_quiescent =
+      LoadingStateIsQuiescent(page_node->GetLoadingState());
+  const bool was_quiescent = LoadingStateIsQuiescent(previous_state);
+  if (is_quiescent == was_quiescent) {
+    return;
+  }
+  PageLoadingState old_state;
+  PageLoadingState new_state;
+  if (is_quiescent) {
+    size_t erased = mixed_state_pages_.erase(page_node);
+    old_state =
+        erased ? PageLoadingState::kLoadingMixed
+               : (page_node->IsVisible() ? PageLoadingState::kLoadingVisible
+                                         : PageLoadingState::kLoadingHidden);
+    new_state = PageLoadingState::kQuiescent;
+  } else {
+    DCHECK(!base::Contains(mixed_state_pages_, page_node));
+    old_state = PageLoadingState::kQuiescent;
+    new_state = page_node->IsVisible() ? PageLoadingState::kLoadingVisible
+                                       : PageLoadingState::kLoadingHidden;
+  }
+  UpdateLoadingPageCounts(old_state, new_state);
 }
 
 void MetricsCollector::OnUkmSourceIdChanged(const PageNode* page_node) {
   ukm::SourceId ukm_source_id = page_node->GetUkmSourceID();
   UpdateUkmSourceIdForPage(page_node, ukm_source_id);
-  auto* record = GetMetricsReportRecord(page_node);
-  record->UpdateUkmSourceID(ukm_source_id);
 }
 
-void MetricsCollector::OnFaviconUpdated(const PageNode* page_node) {
-  // Only record metrics while it is backgrounded.
-  if (page_node->IsVisible() || !ShouldReportMetrics(page_node))
-    return;
+void MetricsCollector::OnMainFrameDocumentChanged(const PageNode* page_node) {
+  bool found_same_origin_page = false;
   auto* record = GetMetricsReportRecord(page_node);
-  record->first_favicon_updated.OnSignalReceived(
-      true, page_node->GetTimeSinceLastVisibilityChange(),
-      graph_->GetUkmRecorder());
+  if (!page_node->GetMainFrameUrl().SchemeIsHTTPOrHTTPS() ||
+      url::IsSameOriginWith(record->previous_url,
+                            page_node->GetMainFrameUrl())) {
+    record->previous_url = page_node->GetMainFrameUrl();
+    return;
+  }
+
+  for (const PageNode* page : GetOwningGraph()->GetAllPageNodes()) {
+    if (page != page_node) {
+      if (page->GetBrowserContextID() == page_node->GetBrowserContextID() &&
+          url::IsSameOriginWith(page->GetMainFrameUrl(),
+                                page_node->GetMainFrameUrl())) {
+        found_same_origin_page = true;
+        break;
+      }
+    }
+  }
+  record->previous_url = page_node->GetMainFrameUrl();
+  base::UmaHistogramBoolean(kTabNavigationWithSameOriginTabHistogramName,
+                            found_same_origin_page);
 }
 
 void MetricsCollector::OnProcessLifetimeChange(
     const ProcessNode* process_node) {
   // Ignore process creation.
-  if (!process_node->GetExitStatus().has_value())
+  if (!process_node->GetExitStatus().has_value()) {
     return;
+  }
 
   OnProcessDestroyed(process_node);
 }
@@ -155,18 +239,9 @@ void MetricsCollector::OnBeforeProcessNodeRemoved(
     const ProcessNode* process_node) {
   // If the ProcessNode is destroyed with a valid process handle, consider this
   // the end of the process' life.
-  if (process_node->GetProcess().IsValid())
+  if (process_node->GetProcess().IsValid()) {
     OnProcessDestroyed(process_node);
-}
-
-void MetricsCollector::OnTitleUpdated(const PageNode* page_node) {
-  // Only record metrics while it is backgrounded.
-  if (page_node->IsVisible() || !ShouldReportMetrics(page_node))
-    return;
-  auto* record = GetMetricsReportRecord(page_node);
-  record->first_title_updated.OnSignalReceived(
-      true, page_node->GetTimeSinceLastVisibilityChange(),
-      graph_->GetUkmRecorder());
+  }
 }
 
 // static
@@ -205,28 +280,10 @@ void MetricsCollector::UpdateUkmSourceIdForPage(const PageNode* page_node,
   state->ukm_source_id = ukm_source_id;
 }
 
-void MetricsCollector::ResetMetricsReportRecord(const PageNode* page_node) {
-  auto* record = GetMetricsReportRecord(page_node);
-  record->Reset();
-}
-
 MetricsCollector::MetricsReportRecord::MetricsReportRecord() = default;
 
 MetricsCollector::MetricsReportRecord::MetricsReportRecord(
     const MetricsReportRecord& other) = default;
-
-void MetricsCollector::MetricsReportRecord::UpdateUkmSourceID(
-    ukm::SourceId ukm_source_id) {
-  first_favicon_updated.SetUkmSourceID(ukm_source_id);
-  first_non_persistent_notification_created.SetUkmSourceID(ukm_source_id);
-  first_title_updated.SetUkmSourceID(ukm_source_id);
-}
-
-void MetricsCollector::MetricsReportRecord::Reset() {
-  first_favicon_updated.Reset();
-  first_non_persistent_notification_created.Reset();
-  first_title_updated.Reset();
-}
 
 void MetricsCollector::OnProcessDestroyed(const ProcessNode* process_node) {
   const base::TimeTicks now = base::TimeTicks::Now();
@@ -253,6 +310,56 @@ void MetricsCollector::OnProcessDestroyed(const ProcessNode* process_node) {
     RecordShortProcessLifetime("ChildProcess.ProcessLifetime.Utility",
                                lifetime);
   }
+}
+
+void MetricsCollector::UpdateLoadingPageCounts(
+    std::optional<PageLoadingState> old_state,
+    std::optional<PageLoadingState> new_state) {
+  CHECK(old_state != new_state);
+  if (old_state.has_value()) {
+    loading_page_counts_.at(static_cast<size_t>(old_state.value())) -= 1;
+  }
+  if (new_state.has_value()) {
+    loading_page_counts_.at(static_cast<size_t>(new_state.value())) += 1;
+  }
+}
+
+void MetricsCollector::RecordLoadingAndQuiescentPageCount() const {
+  // Record all loading state counts.
+  constexpr char kLoadingPageCountHistogram[] =
+      "PerformanceManager.LoadingNotQuiescentPageCount";
+  base::ClampedNumeric<size_t> total_count = 0;
+  for (size_t i = 0; i < loading_page_counts_.size(); ++i) {
+    const auto loading_state = static_cast<PageLoadingState>(i);
+    CHECK_LE(loading_state, PageLoadingState::kMaxValue);
+    const auto count = loading_page_counts_.at(i);
+    const char* visibility_string = [loading_state]() -> const char* {
+      switch (loading_state) {
+        case PageLoadingState::kLoadingVisible:
+          return ".Visible";
+        case PageLoadingState::kLoadingHidden:
+          return ".Hidden";
+        case PageLoadingState::kLoadingMixed:
+          return ".MixedVisibility";
+        case PageLoadingState::kQuiescent:
+          // Don't log here, not loading.
+          return nullptr;
+      }
+      NOTREACHED();
+    }();
+    if (visibility_string) {
+      base::UmaHistogramCounts1000(
+          base::StrCat({kLoadingPageCountHistogram, visibility_string}), count);
+      total_count += count;
+    }
+  }
+  base::UmaHistogramCounts1000(
+      base::StrCat({kLoadingPageCountHistogram, ".All"}), total_count);
+
+  // Record quiescent state count.
+  base::UmaHistogramCounts1000("PerformanceManager.QuiescentPageCount",
+                               loading_page_counts_.at(static_cast<size_t>(
+                                   PageLoadingState::kQuiescent)));
 }
 
 }  // namespace performance_manager

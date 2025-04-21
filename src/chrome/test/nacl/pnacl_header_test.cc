@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "base/test/scoped_path_override.h"
 #include "chrome/browser/ui/browser.h"
@@ -24,28 +24,9 @@ using net::test_server::BasicHttpResponse;
 using net::test_server::HttpRequest;
 using net::test_server::HttpResponse;
 
-/*
-void TestDispatcherHostDelegate::RequestBeginning(
-    net::URLRequest* request,
-    content::ResourceContext* resource_context,
-    blink::mojom::ResourceType resource_type,
-    std::vector<std::unique_ptr<content::ResourceThrottle>>* throttles) {
-  // This checks the same condition as the one for PNaCl in
-  // AppendComponentUpdaterThrottles.
-  if (resource_type == blink::mojom::ResourceType::kObject) {
-    const net::HttpRequestHeaders& headers = request->extra_request_headers();
-    std::string accept_headers;
-    if (headers.GetHeader("Accept", &accept_headers)) {
-      if (accept_headers.find("application/x-pnacl") != std::string::npos)
-        found_pnacl_header_ = true;
-    }
-  }
-}
-*/
-
 PnaclHeaderTest::PnaclHeaderTest() : noncors_loads_(0), cors_loads_(0) {}
 
-PnaclHeaderTest::~PnaclHeaderTest() {}
+PnaclHeaderTest::~PnaclHeaderTest() = default;
 
 void PnaclHeaderTest::StartServer() {
   // For most requests, just serve files, but register a special test handler

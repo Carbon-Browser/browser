@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,7 @@ class ONCUserPolicyValueValidator
 
  protected:
   // ONCPolicyValueValidatorBase:
-  absl::optional<std::string> GetONCStringFromPayload(
+  std::optional<std::string> GetONCStringFromPayload(
       const enterprise_management::CloudPolicySettings& policy_payload)
       const override;
 };

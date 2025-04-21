@@ -1,25 +1,30 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "gpu/command_buffer/service/surface_texture_gl_owner.h"
 
 #include <memory>
 
 #include "base/android/scoped_hardware_buffer_fence_sync.h"
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/debug/alias.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
 #include "base/synchronization/waitable_event.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "gpu/command_buffer/service/abstract_texture.h"
+#include "gpu/command_buffer/service/abstract_texture_android.h"
 #include "gpu/config/gpu_finch_features.h"
 #include "ui/gl/scoped_binders.h"
 #include "ui/gl/scoped_make_current.h"
+#include "ui/gl/scoped_restore_texture.h"
 
 namespace gpu {
 namespace {
@@ -48,7 +53,7 @@ std::unique_ptr<ui::ScopedMakeCurrent> MakeCurrentIfNeeded(
 }  // namespace
 
 SurfaceTextureGLOwner::SurfaceTextureGLOwner(
-    std::unique_ptr<gles2::AbstractTexture> texture,
+    std::unique_ptr<AbstractTextureAndroid> texture,
     scoped_refptr<SharedContextState> context_state)
     : TextureOwner(true /*binds_texture_on_update */,
                    std::move(texture),
@@ -58,7 +63,6 @@ SurfaceTextureGLOwner::SurfaceTextureGLOwner(
       surface_(gl::GLSurface::GetCurrent()) {
   DCHECK(context_);
   DCHECK(surface_);
-  DCHECK(!features::NeedThreadSafeAndroidMedia());
 }
 
 SurfaceTextureGLOwner::~SurfaceTextureGLOwner() {
@@ -74,6 +78,7 @@ void SurfaceTextureGLOwner::ReleaseResources() {
 
   // Make sure that the SurfaceTexture isn't using the GL objects.
   surface_texture_ = nullptr;
+  last_coded_size_for_memory_dumps_.reset();
 }
 
 void SurfaceTextureGLOwner::SetFrameAvailableCallback(
@@ -109,20 +114,18 @@ void SurfaceTextureGLOwner::UpdateTexImage() {
     // UpdateTexImage might change gl binding and we never should alter gl
     // binding without updating state tracking, which we can't do here, so
     // restore previous after we done.
-    ScopedRestoreTextureBinding scoped_restore_texture;
+    gl::ScopedRestoreTexture scoped_restore_texture(gl::g_current_gl_context,
+                                                    GL_TEXTURE_EXTERNAL_OES);
     surface_texture_->UpdateTexImage();
   }
 }
 
-void SurfaceTextureGLOwner::EnsureTexImageBound(GLuint service_id) {
-  // We can't bind SurfaceTexture to different ids.
-  DCHECK_EQ(service_id, GetTextureId());
-}
-
 void SurfaceTextureGLOwner::ReleaseBackBuffers() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  if (surface_texture_)
+  if (surface_texture_) {
     surface_texture_->ReleaseBackBuffers();
+  }
+  last_coded_size_for_memory_dumps_.reset();
 }
 
 gl::GLContext* SurfaceTextureGLOwner::GetContext() const {
@@ -138,7 +141,6 @@ gl::GLSurface* SurfaceTextureGLOwner::GetSurface() const {
 std::unique_ptr<base::android::ScopedHardwareBufferFenceSync>
 SurfaceTextureGLOwner::GetAHardwareBuffer() {
   NOTREACHED() << "Don't use AHardwareBuffers with SurfaceTextureGLOwner";
-  return nullptr;
 }
 
 bool SurfaceTextureGLOwner::GetCodedSizeAndVisibleRect(
@@ -186,6 +188,8 @@ bool SurfaceTextureGLOwner::GetCodedSizeAndVisibleRect(
 
     base::debug::DumpWithoutCrashing();
   }
+
+  last_coded_size_for_memory_dumps_ = *coded_size;
 
   return true;
 }
@@ -289,6 +293,37 @@ bool SurfaceTextureGLOwner::DecomposeTransform(float mtx[16],
     if (visible_rect->x() >= 0 && visible_rect->y() >= 0) {
       break;
     }
+  }
+  return true;
+}
+
+bool SurfaceTextureGLOwner::OnMemoryDump(
+    const base::trace_event::MemoryDumpArgs& args,
+    base::trace_event::ProcessMemoryDump* pmd) {
+  auto dump_name =
+      base::StringPrintf("gpu/media_texture_owner_%d", tracing_id());
+
+  // We don't know the exact format of the image so we use NV12 as approximation
+  // as the most popular format.
+  constexpr auto format = viz::MultiPlaneFormat::kNV12;
+  size_t total_size = 0;
+
+  if (last_coded_size_for_memory_dumps_) {
+    total_size =
+        format.EstimatedSizeInBytes(last_coded_size_for_memory_dumps_.value());
+  }
+
+  base::trace_event::MemoryAllocatorDump* dump =
+      pmd->CreateAllocatorDump(dump_name);
+  dump->AddScalar(base::trace_event::MemoryAllocatorDump::kNameSize,
+                  base::trace_event::MemoryAllocatorDump::kUnitsBytes,
+                  total_size);
+
+  if (args.level_of_detail !=
+      base::trace_event::MemoryDumpLevelOfDetail::kBackground) {
+    dump->AddString(
+        "dimensions", "",
+        last_coded_size_for_memory_dumps_.value_or(gfx::Size()).ToString());
   }
   return true;
 }

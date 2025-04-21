@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,32 +7,40 @@
 #include <string>
 
 #include "base/strings/utf_string_conversions.h"
+#include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/url_identity.h"
 #include "chrome/grit/generated_resources.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/site_instance.h"
-#include "extensions/browser/extension_registry.h"
-#include "extensions/common/constants.h"
-#include "extensions/common/extension.h"
-#include "extensions/common/extension_set.h"
 #include "ui/base/l10n/l10n_util.h"
 
 namespace task_manager {
 
+namespace {
+
+// Expected URL types for `UrlIdentity::CreateFromUrl(`.
+constexpr UrlIdentity::TypeSet kUrlIdentityAllowedTypes = {
+    UrlIdentity::Type::kDefault, UrlIdentity::Type::kFile,
+    UrlIdentity::Type::kIsolatedWebApp, UrlIdentity::Type::kChromeExtension};
+constexpr UrlIdentity::FormatOptions kUrlIdentityOptions = {
+    .default_options = {UrlIdentity::DefaultFormatOptions::kRawSpec}};
+
+}  // namespace
+
 SubframeTask::SubframeTask(content::RenderFrameHost* render_frame_host,
-                           RendererTask* main_task)
+                           base::WeakPtr<RendererTask> main_task)
     : RendererTask(std::u16string(), nullptr, render_frame_host),
       site_instance_(render_frame_host->GetSiteInstance()),
-      main_task_(main_task) {
+      main_task_(std::move(main_task)) {
   set_title(GetTitle());
   // Note that we didn't get the RenderProcessHost from the WebContents, but
   // rather from the RenderFrameHost. Out-of-process iframes reside on
   // different processes than that of their main frame.
 }
 
-SubframeTask::~SubframeTask() {
-}
+SubframeTask::~SubframeTask() = default;
 
 void SubframeTask::UpdateTitle() {
   set_title(GetTitle());
@@ -43,7 +51,7 @@ void SubframeTask::UpdateFavicon() {
   // frame, but this Task represents other frames, so we don't care.
 }
 
-Task* SubframeTask::GetParentTask() const {
+base::WeakPtr<Task> SubframeTask::GetParentTask() const {
   return main_task_;
 }
 
@@ -55,26 +63,27 @@ void SubframeTask::Activate() {
 std::u16string SubframeTask::GetTitle() {
   DCHECK(site_instance_);
 
+  // Subframe rows display the UrlIdentity of the SiteInstance URL.
+  //
   // By default, subframe rows display the site, like this:
   //     "Subframe: http://example.com/"
+  // For Extensions, subframe rows display extension name:
+  //     "Subframe: Example Extension"
+  // For Isolated Web Apps, subframe rows display IWA name:
+  //     "Subframe: Example Isolated Web App"
+
   const GURL& site_url = site_instance_->GetSiteURL();
-  std::string name = site_url.spec();
+  Profile* profile =
+      Profile::FromBrowserContext(site_instance_->GetBrowserContext());
 
-  // If |site_url| wraps a chrome extension id, we can display the extension
-  // name instead, which is more human-readable.
-  if (site_url.SchemeIs(extensions::kExtensionScheme)) {
-    const extensions::Extension* extension =
-        extensions::ExtensionRegistry::Get(site_instance_->GetBrowserContext())
-            ->enabled_extensions()
-            .GetExtensionOrAppByURL(site_url);
-    if (extension)
-      name = extension->name();
-  }
-
-  int message_id = site_instance_->GetBrowserContext()->IsOffTheRecord()
+  int message_id = profile->IsOffTheRecord()
                        ? IDS_TASK_MANAGER_SUBFRAME_INCOGNITO_PREFIX
                        : IDS_TASK_MANAGER_SUBFRAME_PREFIX;
-  return l10n_util::GetStringFUTF16(message_id, base::UTF8ToUTF16(name));
+  return l10n_util::GetStringFUTF16(
+      message_id,
+      UrlIdentity::CreateFromUrl(profile, site_url, kUrlIdentityAllowedTypes,
+                                 kUrlIdentityOptions)
+          .name);
 }
 
 }  // namespace task_manager

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Finds unused assets in Chromium code base.
@@ -55,7 +55,6 @@ IGNORED_PATHSPECS = [
     ':!testing/**',
     ':!third_party/**',
     ':!tools/perf/page_sets/**',
-    ':!tools/stats_viewer/**',
 ]
 
 logger = logging.getLogger(__name__)

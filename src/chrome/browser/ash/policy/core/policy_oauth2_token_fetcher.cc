@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <vector>
 
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_util.h"
@@ -131,7 +131,7 @@ PolicyOAuth2TokenFetcherImpl::PolicyOAuth2TokenFetcherImpl(
     const std::string& consumer_name)
     : consumer_name_(consumer_name) {}
 
-PolicyOAuth2TokenFetcherImpl::~PolicyOAuth2TokenFetcherImpl() {}
+PolicyOAuth2TokenFetcherImpl::~PolicyOAuth2TokenFetcherImpl() = default;
 
 void PolicyOAuth2TokenFetcherImpl::StartWithAuthCode(
     const std::string& auth_code,
@@ -252,13 +252,13 @@ void PolicyOAuth2TokenFetcherImpl::ForwardPolicyToken(
 // requests.
 class PolicyOAuth2TokenFetcherFake : public PolicyOAuth2TokenFetcher {
  public:
-  PolicyOAuth2TokenFetcherFake() {}
+  PolicyOAuth2TokenFetcherFake() = default;
 
   PolicyOAuth2TokenFetcherFake(const PolicyOAuth2TokenFetcherFake&) = delete;
   PolicyOAuth2TokenFetcherFake& operator=(const PolicyOAuth2TokenFetcherFake&) =
       delete;
 
-  ~PolicyOAuth2TokenFetcherFake() override {}
+  ~PolicyOAuth2TokenFetcherFake() override = default;
 
  private:
   void StartWithAuthCode(
@@ -309,8 +309,8 @@ PolicyOAuth2TokenFetcher::CreateInstance(const std::string& consumer_name) {
   return std::make_unique<PolicyOAuth2TokenFetcherImpl>(consumer_name);
 }
 
-PolicyOAuth2TokenFetcher::PolicyOAuth2TokenFetcher() {}
+PolicyOAuth2TokenFetcher::PolicyOAuth2TokenFetcher() = default;
 
-PolicyOAuth2TokenFetcher::~PolicyOAuth2TokenFetcher() {}
+PolicyOAuth2TokenFetcher::~PolicyOAuth2TokenFetcher() = default;
 
 }  // namespace policy

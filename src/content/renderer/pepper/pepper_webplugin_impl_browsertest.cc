@@ -1,6 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/342213636): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "content/renderer/pepper/pepper_webplugin_impl.h"
 
@@ -10,8 +15,8 @@
 #include "base/memory/ptr_util.h"
 #include "content/public/common/content_client.h"
 #include "content/public/common/content_constants.h"
+#include "content/public/common/content_plugin_info.h"
 #include "content/public/common/content_switches.h"
-#include "content/public/common/pepper_plugin_info.h"
 #include "content/public/renderer/content_renderer_client.h"
 #include "content/public/test/render_view_test.h"
 #include "content/renderer/pepper/plugin_module.h"
@@ -124,8 +129,8 @@ class PepperWebPluginImplBrowserTest : public RenderViewTest {
     return PP_FALSE;
   }
 
-  static PepperPluginInfo GetPluginInfo() {
-    PepperPluginInfo info;
+  static ContentPluginInfo GetPluginInfo() {
+    ContentPluginInfo info;
     info.is_internal = true;
     info.path = base::FilePath(FILE_PATH_LITERAL("internal-always-throttle"));
     info.name = "Always Throttle";
@@ -142,7 +147,7 @@ class PepperWebPluginImplBrowserTest : public RenderViewTest {
 
   class MockContentClient : public TestContentClient {
    public:
-    void AddPepperPlugins(std::vector<PepperPluginInfo>* plugins) override {
+    void AddPlugins(std::vector<ContentPluginInfo>* plugins) override {
       plugins->push_back(GetPluginInfo());
     }
   };

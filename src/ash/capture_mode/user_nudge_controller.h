@@ -1,10 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_CAPTURE_MODE_USER_NUDGE_CONTROLLER_H_
 #define ASH_CAPTURE_MODE_USER_NUDGE_CONTROLLER_H_
 
+#include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
 #include "ui/compositor/layer.h"
 
@@ -75,10 +77,10 @@ class UserNudgeController {
 
   // The session that owns `this`. Guaranteed to be non null for the lifetime of
   // `this`.
-  CaptureModeSession* const capture_session_;
+  const raw_ptr<CaptureModeSession> capture_session_;
 
   // The view to which we're trying to grab the user's attention.
-  views::View* const view_to_be_highlighted_;
+  const raw_ptr<views::View> view_to_be_highlighted_;
 
   // These are the two animation layers that will be used to highlight
   // `view_to_be_highlighted_` to nudge the user towards it.
@@ -94,6 +96,8 @@ class UserNudgeController {
   // If set to true, we will set a user pref to disable this nudge forever at
   // the time when `this` is destroyed.
   bool should_dismiss_nudge_forever_ = false;
+
+  base::WeakPtrFactory<UserNudgeController> weak_ptr_factory_{this};
 };
 
 }  // namespace ash

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/rand_util.h"
@@ -43,7 +43,7 @@ class TestDelegate : public SessionRestorePolicy::Delegate {
   TestDelegate(const TestDelegate&) = delete;
   TestDelegate& operator=(const TestDelegate&) = delete;
 
-  ~TestDelegate() override {}
+  ~TestDelegate() override = default;
 
   size_t GetNumberOfCores() const override { return number_of_cores_; }
   size_t GetFreeMemoryMiB() const override { return free_memory_mb_; }
@@ -112,7 +112,7 @@ class TestSessionRestorePolicy : public SessionRestorePolicy {
   TestSessionRestorePolicy(const TestSessionRestorePolicy&) = delete;
   TestSessionRestorePolicy& operator=(const TestSessionRestorePolicy&) = delete;
 
-  ~TestSessionRestorePolicy() override {}
+  ~TestSessionRestorePolicy() override = default;
 
   using RescoreTabCallback =
       base::RepeatingCallback<bool(content::WebContents*, TabData*)>;
@@ -148,7 +148,7 @@ class SessionRestorePolicyTest : public ChromeRenderViewHostTestHarness {
   SessionRestorePolicyTest(const SessionRestorePolicyTest&) = delete;
   SessionRestorePolicyTest& operator=(const SessionRestorePolicyTest&) = delete;
 
-  ~SessionRestorePolicyTest() override {}
+  ~SessionRestorePolicyTest() override = default;
 
   void SetUp() override {
     ChromeRenderViewHostTestHarness::SetUp();
@@ -211,7 +211,7 @@ class SessionRestorePolicyTest : public ChromeRenderViewHostTestHarness {
       const base::TimeTicks& last_active) {
     auto contents = CreateTestWebContents();
     auto* tester = content::WebContentsTester::For(contents.get());
-    tester->SetLastActiveTime(last_active);
+    tester->SetLastActiveTimeTicks(last_active);
 
 #if !BUILDFLAG(IS_ANDROID)
     tester->NavigateAndCommit(url);
@@ -235,7 +235,8 @@ class SessionRestorePolicyTest : public ChromeRenderViewHostTestHarness {
     policy_->max_tabs_to_restore_ = 30;
     policy_->mb_free_memory_per_tab_to_restore_ = 150;
     policy_->max_time_since_last_use_to_restore_ = base::Hours(6);
-    policy_->min_site_engagement_to_restore_ = 15;
+    policy_->min_site_engagement_to_restore_ =
+        SessionRestorePolicy::kMinSiteEngagementToRestore;
 
     // Ensure the simultaneous tab loads is properly calculated wrt the above
     // parameters.
@@ -244,8 +245,9 @@ class SessionRestorePolicyTest : public ChromeRenderViewHostTestHarness {
     policy_->SetTabScoreChangedCallback(base::BindRepeating(
         &TabScoreChangeMock::NotifyTabScoreChanged, base::Unretained(&mock_)));
 
-    for (auto* tab : tab_for_scoring_)
+    for (content::WebContents* tab : tab_for_scoring_) {
       policy_->AddTabForScoring(tab);
+    }
   }
 
   void WaitForFinalTabScores() {
@@ -275,7 +277,8 @@ class SessionRestorePolicyTest : public ChromeRenderViewHostTestHarness {
   std::unique_ptr<content::WebContents> contents2_;
   std::unique_ptr<content::WebContents> contents3_;
 
-  std::vector<content::WebContents*> tab_for_scoring_;
+  std::vector<raw_ptr<content::WebContents, VectorExperimental>>
+      tab_for_scoring_;
 };
 
 TEST_F(SessionRestorePolicyTest, CalculateSimultaneousTabLoads) {
@@ -369,16 +372,16 @@ TEST_F(SessionRestorePolicyTest, ShouldLoadFeatureEnabled) {
 
   // Reset and impose a site engagement policy.
   policy_->SetTabLoadsStartedForTesting(0);
-  constexpr size_t kEngagementLimit = 15;
-  policy_->min_site_engagement_to_restore_ = kEngagementLimit;
-  policy_->UpdateSiteEngagementScoreForTesting(contents1_.get(),
-                                               kEngagementLimit + 1);
+  policy_->min_site_engagement_to_restore_ =
+      SessionRestorePolicy::kMinSiteEngagementToRestore;
+  policy_->UpdateSiteEngagementScoreForTesting(
+      contents1_.get(), SessionRestorePolicy::kMinSiteEngagementToRestore + 1);
   EXPECT_TRUE(policy_->ShouldLoad(contents1_.get()));
-  policy_->UpdateSiteEngagementScoreForTesting(contents1_.get(),
-                                               kEngagementLimit);
+  policy_->UpdateSiteEngagementScoreForTesting(
+      contents1_.get(), SessionRestorePolicy::kMinSiteEngagementToRestore);
   EXPECT_TRUE(policy_->ShouldLoad(contents1_.get()));
-  policy_->UpdateSiteEngagementScoreForTesting(contents1_.get(),
-                                               kEngagementLimit - 1);
+  policy_->UpdateSiteEngagementScoreForTesting(
+      contents1_.get(), SessionRestorePolicy::kMinSiteEngagementToRestore - 1);
   EXPECT_FALSE(policy_->ShouldLoad(contents1_.get()));
 }
 
@@ -426,16 +429,16 @@ TEST_F(SessionRestorePolicyTest, ShouldLoadBackgroundData) {
   policy_->mb_free_memory_per_tab_to_restore_ = 0;
   policy_->max_time_since_last_use_to_restore_ = base::TimeDelta();
 
-  constexpr size_t kEngagementLimit = 15;
-  policy_->min_site_engagement_to_restore_ = kEngagementLimit;
-  policy_->UpdateSiteEngagementScoreForTesting(contents1_.get(),
-                                               kEngagementLimit + 1);
+  policy_->min_site_engagement_to_restore_ =
+      SessionRestorePolicy::kMinSiteEngagementToRestore;
+  policy_->UpdateSiteEngagementScoreForTesting(
+      contents1_.get(), SessionRestorePolicy::kMinSiteEngagementToRestore + 1);
   EXPECT_TRUE(policy_->ShouldLoad(contents1_.get()));
-  policy_->UpdateSiteEngagementScoreForTesting(contents1_.get(),
-                                               kEngagementLimit);
+  policy_->UpdateSiteEngagementScoreForTesting(
+      contents1_.get(), SessionRestorePolicy::kMinSiteEngagementToRestore);
   EXPECT_TRUE(policy_->ShouldLoad(contents1_.get()));
-  policy_->UpdateSiteEngagementScoreForTesting(contents1_.get(),
-                                               kEngagementLimit - 1);
+  policy_->UpdateSiteEngagementScoreForTesting(
+      contents1_.get(), SessionRestorePolicy::kMinSiteEngagementToRestore - 1);
   EXPECT_FALSE(policy_->ShouldLoad(contents1_.get()));
 
   // Mark the tab as using background communication mechanisms, and expect the

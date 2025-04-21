@@ -1,15 +1,16 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_PLATFORM_KEYS_PLATFORM_KEYS_SERVICE_FACTORY_H_
 #define CHROME_BROWSER_ASH_PLATFORM_KEYS_PLATFORM_KEYS_SERVICE_FACTORY_H_
 
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "base/memory/raw_ptr.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 namespace base {
 template <typename T>
-struct DefaultSingletonTraits;
+class NoDestructor;
 }  // namespace base
 
 namespace ash {
@@ -18,7 +19,7 @@ namespace platform_keys {
 class PlatformKeysService;
 
 // Factory to create PlatformKeysService.
-class PlatformKeysServiceFactory : public BrowserContextKeyedServiceFactory {
+class PlatformKeysServiceFactory : public ProfileKeyedServiceFactory {
  public:
   static PlatformKeysService* GetForBrowserContext(
       content::BrowserContext* context);
@@ -53,7 +54,7 @@ class PlatformKeysServiceFactory : public BrowserContextKeyedServiceFactory {
   void SetTestingMode(bool is_testing_mode);
 
  private:
-  friend struct base::DefaultSingletonTraits<PlatformKeysServiceFactory>;
+  friend base::NoDestructor<PlatformKeysServiceFactory>;
 
   PlatformKeysServiceFactory();
   PlatformKeysServiceFactory(const PlatformKeysServiceFactory&) = delete;
@@ -62,9 +63,7 @@ class PlatformKeysServiceFactory : public BrowserContextKeyedServiceFactory {
   ~PlatformKeysServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  content::BrowserContext* GetBrowserContextToUse(
-      content::BrowserContext* context) const override;
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   void BrowserContextShutdown(content::BrowserContext* context) override;
 
@@ -75,9 +74,11 @@ class PlatformKeysServiceFactory : public BrowserContextKeyedServiceFactory {
   // Initialized lazily.
   std::unique_ptr<PlatformKeysService> device_wide_service_;
 
-  PlatformKeysService* device_wide_service_for_testing_ = nullptr;
+  raw_ptr<PlatformKeysService, DanglingUntriaged>
+      device_wide_service_for_testing_ = nullptr;
 
   bool map_to_softoken_attrs_for_testing_ = false;
+  bool allow_alternative_params_for_testing_ = false;
 };
 }  // namespace platform_keys
 }  // namespace ash

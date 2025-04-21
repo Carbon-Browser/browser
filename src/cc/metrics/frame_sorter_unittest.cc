@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "cc/metrics/frame_info.h"
 #include "cc/test/fake_frame_info.h"
@@ -26,7 +26,7 @@ class FrameSorterTest : public testing::Test {
   }
   ~FrameSorterTest() override = default;
 
-  const viz::BeginFrameArgs GetNextFrameArgs() {
+  viz::BeginFrameArgs GetNextFrameArgs() {
     uint64_t sequence_number = next_frame_sequence_number_++;
     return viz::BeginFrameArgs::Create(
         BEGINFRAME_FROM_HERE, next_frame_source_id_, sequence_number,
@@ -131,7 +131,7 @@ class FrameSorterTest : public testing::Test {
   uint64_t next_frame_source_id_ = 0;
   uint64_t next_frame_sequence_number_ =
       viz::BeginFrameArgs::kStartingFrameNumber;
-  std::vector<const viz::BeginFrameArgs> args_ = {};
+  std::vector<viz::BeginFrameArgs> args_ = {};
   int current_frame_id_ = -1;
 };
 

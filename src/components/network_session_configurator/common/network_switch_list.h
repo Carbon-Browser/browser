@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,6 +24,9 @@ NETWORK_SWITCH(kIgnoreCertificateErrors, "ignore-certificate-errors")
 
 // Specifies a comma separated list of host-port pairs to force use of QUIC on.
 NETWORK_SWITCH(kOriginToForceQuicOn, "origin-to-force-quic-on")
+
+// Disables known-root checks for outgoing WebTransport connections.
+NETWORK_SWITCH(kWebTransportDeveloperMode, "webtransport-developer-mode")
 
 // Specifies a comma separated list of QUIC connection options to send to
 // the server.

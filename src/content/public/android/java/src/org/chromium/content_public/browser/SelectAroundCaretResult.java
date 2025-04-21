@@ -1,13 +1,16 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.content_public.browser;
 
+import org.chromium.build.annotations.NullMarked;
+
 /**
  * A list of parameters about a selection attempt. This data is generated from
  * third_party/blink/public/mojom/input/input_handler.mojom's SelectAroundCaretResult.
  */
+@NullMarked
 public class SelectAroundCaretResult {
     private final int mExtendedStartAdjust;
     private final int mExtendedEndAdjust;
@@ -57,8 +60,11 @@ public class SelectAroundCaretResult {
      * @param wordEndAdjust The end offset difference between the word selection (regardless of the
      *         extended selection granularity) and the initial selection (caret).
      */
-    public SelectAroundCaretResult(int extendedStartAdjust, int extendedEndAdjust,
-            int wordStartAdjust, int wordEndAdjust) {
+    public SelectAroundCaretResult(
+            int extendedStartAdjust,
+            int extendedEndAdjust,
+            int wordStartAdjust,
+            int wordEndAdjust) {
         mExtendedStartAdjust = extendedStartAdjust;
         mExtendedEndAdjust = extendedEndAdjust;
         mWordStartAdjust = wordStartAdjust;

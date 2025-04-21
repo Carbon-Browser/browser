@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,10 @@
 #include <memory>
 #include <queue>
 #include <string>
+#include <string_view>
 
-#include "base/callback.h"
+#include "base/callback_list.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -23,11 +25,11 @@
 #include "chrome/browser/metrics/incognito_observer.h"
 #include "chrome/browser/metrics/metrics_memory_details.h"
 #include "chrome/browser/privacy_budget/identifiability_study_state.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_manager_observer.h"
 #include "components/metrics/file_metrics_provider.h"
 #include "components/metrics/metrics_log_uploader.h"
 #include "components/metrics/metrics_service_client.h"
+#include "components/metrics/persistent_synthetic_trial_observer.h"
 #include "components/omnibox/browser/omnibox_event_global_tracker.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/ukm/observers/history_delete_observer.h"
@@ -38,13 +40,16 @@
 #include "content/public/browser/render_process_host_observer.h"
 #include "ppapi/buildflags/buildflags.h"
 #include "third_party/metrics_proto/system_profile.pb.h"
+#include "ui/base/user_activity/user_activity_detector.h"
+#include "ui/base/user_activity/user_activity_observer.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/metrics/per_user_state_manager_chromeos.h"
+#include "chrome/browser/metrics/cros_pre_consent_metrics_manager.h"
 #endif
 
 class BrowserActivityWatcher;
 class Profile;
+class ProfileManager;
 class PrefRegistrySimple;
 
 namespace network_time {
@@ -54,6 +59,10 @@ class NetworkTimeTracker;
 namespace metrics {
 class MetricsService;
 class MetricsStateManager;
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+class PerUserStateManagerChromeOS;
+#endif
 }  // namespace metrics
 
 // ChromeMetricsServiceClient provides an implementation of MetricsServiceClient
@@ -64,7 +73,8 @@ class ChromeMetricsServiceClient
       public ukm::UkmConsentStateObserver,
       public content::RenderProcessHostObserver,
       public content::RenderProcessHostCreationObserver,
-      public ProfileManagerObserver {
+      public ProfileManagerObserver,
+      public ui::UserActivityObserver {
  public:
   ChromeMetricsServiceClient(const ChromeMetricsServiceClient&) = delete;
   ChromeMetricsServiceClient& operator=(const ChromeMetricsServiceClient&) =
@@ -74,7 +84,8 @@ class ChromeMetricsServiceClient
 
   // Factory function.
   static std::unique_ptr<ChromeMetricsServiceClient> Create(
-      metrics::MetricsStateManager* state_manager);
+      metrics::MetricsStateManager* state_manager,
+      variations::SyntheticTrialRegistry* synthetic_trial_registry);
 
   // Registers local state prefs used by this class.
   static void RegisterPrefs(PrefRegistrySimple* registry);
@@ -88,6 +99,10 @@ class ChromeMetricsServiceClient
   variations::SyntheticTrialRegistry* GetSyntheticTrialRegistry() override;
   metrics::MetricsService* GetMetricsService() override;
   ukm::UkmService* GetUkmService() override;
+  metrics::dwa::DwaService* GetDwaService() override;
+  IdentifiabilityStudyState* GetIdentifiabilityStudyState() override;
+  metrics::structured::StructuredMetricsService* GetStructuredMetricsService()
+      override;
   void SetMetricsClientId(const std::string& client_id) override;
   int32_t GetProduct() override;
   std::string GetApplicationLocale() override;
@@ -97,41 +112,46 @@ class ChromeMetricsServiceClient
   bool IsExtendedStableChannel() override;
   std::string GetVersionString() override;
   void OnEnvironmentUpdate(std::string* serialized_environment) override;
+  void MergeSubprocessHistograms() override;
   void CollectFinalMetricsForLog(base::OnceClosure done_callback) override;
   std::unique_ptr<metrics::MetricsLogUploader> CreateUploader(
       const GURL& server_url,
       const GURL& insecure_server_url,
-      base::StringPiece mime_type,
+      std::string_view mime_type,
       metrics::MetricsLogUploader::MetricServiceType service_type,
       const metrics::MetricsLogUploader::UploadCallback& on_upload_complete)
       override;
   base::TimeDelta GetStandardUploadInterval() override;
+  std::optional<base::TimeDelta> GetCustomUploadInterval() const override;
   void LoadingStateChanged(bool is_loading) override;
   bool IsReportingPolicyManaged() override;
   metrics::EnableMetricsDefault GetMetricsReportingDefaultState() override;
-  bool IsUMACellularUploadLogicEnabled() override;
+  bool IsOnCellularConnection() override;
   bool IsUkmAllowedForAllProfiles() override;
-  bool IsUkmAllowedWithAppsForAllProfiles() override;
-  bool IsUkmAllowedWithExtensionsForAllProfiles() override;
+  bool IsDwaAllowedForAllProfiles() override;
   bool AreNotificationListenersEnabledOnAllProfiles() override;
   std::string GetAppPackageNameIfLoggable() override;
   std::string GetUploadSigningKey() override;
   static void SetNotificationListenerSetupFailedForTesting(
       bool simulate_failure);
   bool ShouldResetClientIdsOnClonedInstall() override;
+  base::CallbackListSubscription AddOnClonedInstallDetectedCallback(
+      base::OnceClosure callback) override;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   bool ShouldUploadMetricsForUserId(const uint64_t user_id) override;
   void InitPerUserMetrics() override;
   void UpdateCurrentUserMetricsConsent(bool user_metrics_consent) override;
-  absl::optional<bool> GetCurrentUserMetricsConsent() const override;
-  absl::optional<std::string> GetCurrentUserId() const override;
+  std::optional<bool> GetCurrentUserMetricsConsent() const override;
+  std::optional<std::string> GetCurrentUserId() const override;
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   // ukm::HistoryDeleteObserver:
   void OnHistoryDeleted() override;
 
   // ukm::UkmConsentStateObserver:
-  void OnUkmAllowedStateChanged(bool must_purge) override;
+  void OnUkmAllowedStateChanged(
+      bool must_purge,
+      ukm::UkmConsentState previous_consent_state) override;
 
   // content::RenderProcessHostCreationObserver:
   void OnRenderProcessHostCreated(content::RenderProcessHost* host) override;
@@ -146,20 +166,28 @@ class ChromeMetricsServiceClient
   void OnProfileAdded(Profile* profile) override;
   void OnProfileManagerDestroying() override;
 
+  // ui::UserActivityObserver:
+  void OnUserActivity(const ui::Event* event) override;
+
   // Determine what to do with a file based on filename. Visible for testing.
   using IsProcessRunningFunction = bool (*)(base::ProcessId);
   static metrics::FileMetricsProvider::FilterAction FilterBrowserMetricsFiles(
       const base::FilePath& path);
   static void SetIsProcessRunningForTesting(IsProcessRunningFunction func);
 
- private:
-  FRIEND_TEST_ALL_PREFIXES(ChromeMetricsServiceClientTest, IsWebstoreExtension);
-
+ protected:
   explicit ChromeMetricsServiceClient(
-      metrics::MetricsStateManager* state_manager);
+      metrics::MetricsStateManager* state_manager,
+      variations::SyntheticTrialRegistry* synthetic_trial_registry);
 
   // Completes the two-phase initialization of ChromeMetricsServiceClient.
   void Initialize();
+
+ private:
+  friend class ChromeMetricsServiceClientTest;
+  friend class ChromeMetricsServiceClientTestIgnoredForAppMetrics;
+  friend class ChromeMetricsServiceClientTestWithoutUKMProviders;
+  FRIEND_TEST_ALL_PREFIXES(ChromeMetricsServiceClientTest, IsWebstoreExtension);
 
   // Registers providers to the MetricsService. These provide data from
   // alternate sources.
@@ -167,7 +195,10 @@ class ChromeMetricsServiceClient
 
   // Registers providers to the UkmService. These provide data from alternate
   // sources.
-  void RegisterUKMProviders();
+  virtual void RegisterUKMProviders();
+
+  // Notifies the metrics service that user activity has been detected.
+  virtual void NotifyApplicationNotIdle();
 
   // Returns true iff profiler data should be included in the next metrics log.
   // NOTE: This method is probabilistic and also updates internal state as a
@@ -179,9 +210,6 @@ class ChromeMetricsServiceClient
   void CollectFinalHistograms();
   void OnMemoryDetailCollectionDone();
   void OnHistogramSynchronizationDone();
-
-  // Records metrics about the switches present on the command line.
-  void RecordCommandLineMetrics();
 
   // Registers |this| as an observer for notifications which indicate that a
   // user is performing work. This is useful to allow some features to sleep,
@@ -197,14 +225,21 @@ class ChromeMetricsServiceClient
   // Called when a URL is opened from the Omnibox.
   void OnURLOpenedFromOmnibox(OmniboxLog* log);
 
-#if BUILDFLAG(IS_WIN)
-  // Counts (and removes) the browser crash dump attempt signals left behind by
-  // any previous browser processes which generated a crash dump.
-  void CountBrowserCrashDumpAttempts();
-#endif  // BUILDFLAG(IS_WIN)
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // Helper function for initialization of system profile provider.
+  virtual void AsyncInitSystemProfileProvider();
+#endif
 
   // Check if an extension is installed via the Web Store.
-  static bool IsWebstoreExtension(base::StringPiece id);
+  static bool IsWebstoreExtension(std::string_view id);
+
+  // Resets client state (i.e. client id) if MSBB or App-sync consent
+  // is changed from on to off. For non-ChromeOS platforms, this will no-op.
+  void ResetClientStateWhenMsbbOrAppConsentIsRevoked(
+      ukm::UkmConsentState previous_consent_state);
+
+  // Creates the Structured Metrics Service based on the platform.
+  void CreateStructuredMetricsService();
 
   SEQUENCE_CHECKER(sequence_checker_);
 
@@ -215,13 +250,32 @@ class ChromeMetricsServiceClient
   const raw_ptr<metrics::MetricsStateManager> metrics_state_manager_;
 
   // The synthetic trial registry shared by metrics_service_ and ukm_service_.
-  std::unique_ptr<variations::SyntheticTrialRegistry> synthetic_trial_registry_;
+  const raw_ptr<variations::SyntheticTrialRegistry> synthetic_trial_registry_;
+
+  // Metrics service observer for synthetic trials.
+  metrics::PersistentSyntheticTrialObserver synthetic_trial_observer_;
+  base::ScopedObservation<variations::SyntheticTrialRegistry,
+                          variations::SyntheticTrialObserver>
+      synthetic_trial_observation_{&synthetic_trial_observer_};
+
+  // |cros_system_profile_provider_| must be declared before |ukm_service_| due
+  // to some metrics providers have a dependency on |system_profile_provider_|
+  // and it must be destroyed after they are. Manages SystemProfile information
+  // needed by other metrics providers.
+  std::unique_ptr<metrics::MetricsProvider> cros_system_profile_provider_;
+
+  // The StructuredMetricsService that |this| is a client of.
+  std::unique_ptr<metrics::structured::StructuredMetricsService>
+      structured_metrics_service_;
 
   // The MetricsService that |this| is a client of.
   std::unique_ptr<metrics::MetricsService> metrics_service_;
 
   // The UkmService that |this| is a client of.
   std::unique_ptr<ukm::UkmService> ukm_service_;
+
+  // The DwaService that |this| is a client of.
+  std::unique_ptr<metrics::dwa::DwaService> dwa_service_;
 
   // Listener for changes in incognito activity.
   std::unique_ptr<IncognitoObserver> incognito_observer_;
@@ -252,6 +306,17 @@ class ChromeMetricsServiceClient
 
   // Subscription for receiving callbacks that user metrics consent has changed.
   base::CallbackListSubscription per_user_consent_change_subscription_;
+
+  // Used to notify metrics service if user activity has been detected on the
+  // system.
+  base::ScopedObservation<ui::UserActivityDetector, ui::UserActivityObserver>
+      user_activity_observation_{this};
+
+  // Manages the consent of UMA before the user has been created. This object is
+  // only created during OOBE before the primary user has given intent to
+  // metrics consent.
+  std::unique_ptr<metrics::CrOSPreConsentMetricsManager>
+      cros_pre_consent_manager_;
 #endif
 
   base::ScopedMultiSourceObservation<content::RenderProcessHost,

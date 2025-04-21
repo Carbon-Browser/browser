@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,6 +56,14 @@ chrome.test.runTests([
           createBuffer(state.textColumnCount + 1, 1), state.textColumnCount, 1);
       chrome.brailleDisplayPrivate.writeDots(
           createBuffer(1000000, 2), 1000000, 1);
+      chrome.brailleDisplayPrivate.getDisplayState(pass());
+    }));
+  },
+
+  function testWriteUndersizedCellsNoCrash() {
+    waitForDisplay(pass(function(state) {
+      chrome.brailleDisplayPrivate.writeDots(
+          createBuffer(state.textColumnCount - 2, 3), state.textColumnCount, 1);
       chrome.brailleDisplayPrivate.getDisplayState(pass());
     }));
   }

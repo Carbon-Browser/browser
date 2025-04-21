@@ -1,15 +1,15 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "storage/browser/blob/blob_url_utils.h"
 
-namespace storage {
+#include "base/containers/contains.h"
 
-namespace BlobUrlUtils {
+namespace storage::BlobUrlUtils {
 
 bool UrlHasFragment(const GURL& url) {
-  return url.spec().find('#') != std::string::npos;
+  return base::Contains(url.spec(), '#');
 }
 
 GURL ClearUrlFragment(const GURL& url) {
@@ -19,5 +19,4 @@ GURL ClearUrlFragment(const GURL& url) {
   return GURL(url.spec().substr(0, hash_pos));
 }
 
-}  // namespace BlobUrlUtils
-}  // namespace storage
+}  // namespace storage::BlobUrlUtils

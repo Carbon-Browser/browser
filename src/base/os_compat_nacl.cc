@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <time.h>
 
-#if !defined (__GLIBC__)
+#if !defined(__GLIBC__)
 
 extern "C" {
 // Native Client has no timegm().
@@ -18,10 +18,11 @@ time_t timegm(struct tm* tm) {
   setenv("TZ", "", 1);
   tzset();
   ret = mktime(tm);
-  if (tz)
+  if (tz) {
     setenv("TZ", tz, 1);
-  else
+  } else {
     unsetenv("TZ");
+  }
   tzset();
   return ret;
 }

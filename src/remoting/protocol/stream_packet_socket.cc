@@ -1,10 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "remoting/protocol/stream_packet_socket.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/webrtc/net_address_utils.h"
 #include "net/base/address_list.h"
 #include "net/base/io_buffer.h"
@@ -14,8 +14,7 @@
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "remoting/protocol/stun_tcp_packet_processor.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 namespace {
 
@@ -114,15 +113,7 @@ bool StreamPacketSocket::Init(std::unique_ptr<net::StreamSocket> socket,
 bool StreamPacketSocket::InitClientTcp(
     const rtc::SocketAddress& local_address,
     const rtc::SocketAddress& remote_address,
-    const rtc::ProxyInfo& proxy_info,
-    const std::string& user_agent,
     const rtc::PacketSocketTcpOptions& tcp_options) {
-  if (proxy_info.type != rtc::PROXY_NONE) {
-    // TODO(yuweih): Add support for proxied connections.
-    NOTIMPLEMENTED();
-    return false;
-  }
-
   int tls_opts =
       tcp_options.opts & (rtc::PacketSocketFactory::OPT_TLS |
                           rtc::PacketSocketFactory::OPT_TLS_FAKE |
@@ -243,7 +234,6 @@ int StreamPacketSocket::GetOption(rtc::Socket::Option option, int* value) {
 int StreamPacketSocket::SetOption(rtc::Socket::Option option, int value) {
   if (!socket_) {
     NOTREACHED();
-    return -1;
   }
 
   switch (option) {
@@ -264,7 +254,6 @@ int StreamPacketSocket::SetOption(rtc::Socket::Option option, int value) {
     case rtc::Socket::OPT_NODELAY:
       // Should call TCPClientSocket::SetNoDelay directly.
       NOTREACHED();
-      return -1;
 
     case rtc::Socket::OPT_IPV6_V6ONLY:
       NOTIMPLEMENTED();
@@ -277,10 +266,13 @@ int StreamPacketSocket::SetOption(rtc::Socket::Option option, int value) {
     case rtc::Socket::OPT_RTP_SENDTIME_EXTN_ID:
       NOTIMPLEMENTED();
       return -1;
+
+    default:
+      NOTIMPLEMENTED() << "Unexpected socket option: " << option;
+      return -1;
   }
 
   NOTREACHED();
-  return -1;
 }
 
 int StreamPacketSocket::GetError() const {
@@ -311,9 +303,9 @@ void StreamPacketSocket::DoWrite() {
     if (packet.data->BytesConsumed() == 0) {
       // Only apply packet options when we are about to send the head of the
       // packet.
-      packet_processor_->ApplyPacketOptions(
-          reinterpret_cast<uint8_t*>(packet.data->data()), packet.data->size(),
-          packet.options.packet_time_params);
+      packet_processor_->ApplyPacketOptions(packet.data->bytes(),
+                                            packet.data->size(),
+                                            packet.options.packet_time_params);
     }
     int result = socket_->Write(
         packet.data.get(), packet.data->BytesRemaining(),
@@ -343,9 +335,13 @@ bool StreamPacketSocket::HandleWriteResult(int result) {
   PendingPacket& packet = send_queue_.front();
   packet.data->DidConsume(result);
   if (packet.data->BytesRemaining() == 0) {
-    SignalSentPacket(
-        this, rtc::SentPacket(packet.options.packet_id, rtc::TimeMillis()));
+    // Pop the queue before SignalSentPacket just in case SignalSentPacket
+    // ends up reentrant. This is a speculative fix for a hardening crash when
+    // send_queue_.pop_front() was called after SignalSentPacket.
+    const rtc::SentPacket sent_packet(packet.options.packet_id,
+                                      rtc::TimeMillis());
     send_queue_.pop_front();
+    SignalSentPacket(this, sent_packet);
   }
   return true;
 }
@@ -394,26 +390,26 @@ bool StreamPacketSocket::HandleReadResult(int result) {
   }
 
   read_buffer_->set_offset(read_buffer_->offset() + result);
-  uint8_t* head = reinterpret_cast<uint8_t*>(read_buffer_->StartOfBuffer());
-  int pos = 0;
-  while (pos < read_buffer_->offset()) {
+  base::span<uint8_t> span = read_buffer_->span_before_offset();
+  while (!span.empty()) {
     size_t bytes_consumed = 0;
-    auto packet = packet_processor_->Unpack(
-        head + pos, read_buffer_->offset() - pos, &bytes_consumed);
+    auto packet =
+        packet_processor_->Unpack(span.data(), span.size(), &bytes_consumed);
     if (packet) {
-      SignalReadPacket(this, packet->data(), packet->size(), GetRemoteAddress(),
-                       rtc::TimeMicros());
+      NotifyPacketReceived(rtc::ReceivedPacket(
+          rtc::MakeArrayView(packet->bytes(), packet->size()),
+          GetRemoteAddress(), webrtc::Timestamp::Micros(rtc::TimeMicros())));
     }
     if (!bytes_consumed) {
       break;
     }
-    pos += bytes_consumed;
+    span = span.subspan(bytes_consumed);
   }
   // We've consumed all complete packets from the buffer; now move any remaining
   // bytes to the head of the buffer and set offset to reflect this.
-  if (pos && pos <= read_buffer_->offset()) {
-    memmove(head, head + pos, read_buffer_->offset() - pos);
-    read_buffer_->set_offset(read_buffer_->offset() - pos);
+  if (!span.empty()) {
+    read_buffer_->everything().copy_prefix_from(span);
+    read_buffer_->set_offset(span.size());
   }
 
   return true;
@@ -445,5 +441,4 @@ void StreamPacketSocket::CloseWithNetError(int net_error) {
   SignalClose(this, error_);
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

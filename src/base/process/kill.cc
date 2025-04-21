@@ -1,10 +1,10 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/process/kill.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/process/process_iterator.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
@@ -38,16 +38,18 @@ bool KillProcesses(const FilePath::StringType& executable_name,
 void EnsureProcessTerminated(Process process) {
   DCHECK(!process.is_current());
 
-  if (process.WaitForExitWithTimeout(TimeDelta(), nullptr))
+  if (process.WaitForExitWithTimeout(TimeDelta(), nullptr)) {
     return;
+  }
 
   ThreadPool::PostDelayedTask(
       FROM_HERE,
       {TaskPriority::BEST_EFFORT, TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
       BindOnce(
           [](Process process) {
-            if (process.WaitForExitWithTimeout(TimeDelta(), nullptr))
+            if (process.WaitForExitWithTimeout(TimeDelta(), nullptr)) {
               return;
+            }
 #if BUILDFLAG(IS_WIN)
             process.Terminate(win::kProcessKilledExitCode, false);
 #else

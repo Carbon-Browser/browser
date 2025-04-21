@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -21,7 +21,9 @@
 #include <list>
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
+#include "media/base/audio_glitch_info.h"
 #include "media/base/audio_parameters.h"
 #include "media/base/media_export.h"
 
@@ -56,7 +58,8 @@ class MEDIA_EXPORT AudioConverter {
     // the volume level will be used to scale the provided audio data.
     // |frames_delayed| is given in terms of the input sample rate.
     virtual double ProvideInput(AudioBus* audio_bus,
-                                uint32_t frames_delayed) = 0;
+                                uint32_t frames_delayed,
+                                const AudioGlitchInfo& glitch_info) = 0;
 
    protected:
     virtual ~InputCallback() {}
@@ -79,9 +82,13 @@ class MEDIA_EXPORT AudioConverter {
 
   // Converts audio from all inputs into the |dest|. If |frames_delayed| is
   // specified, it will be propagated to each input. Count of frames must be
-  // given in terms of the output sample rate.
+  // given in terms of the output sample rate. If |glitch_info| is specified, it
+  // will be accumulated and propagated to all inputs on the next call to
+  // InputCallback::ProvideInput().
   void Convert(AudioBus* dest);
-  void ConvertWithDelay(uint32_t frames_delayed, AudioBus* dest);
+  void ConvertWithInfo(uint32_t frames_delayed,
+                       const AudioGlitchInfo& glitch_info,
+                       AudioBus* dest);
 
   // Adds or removes an input from the converter.  RemoveInput() will call
   // Reset() if no inputs remain after the specified input is removed.
@@ -119,7 +126,7 @@ class MEDIA_EXPORT AudioConverter {
   void CreateUnmixedAudioIfNecessary(int frames);
 
   // Set of inputs for Convert().
-  typedef std::list<InputCallback*> InputCallbackSet;
+  typedef std::list<raw_ptr<InputCallback, CtnExperimental>> InputCallbackSet;
   InputCallbackSet transform_inputs_;
 
   // Used to buffer data between the client and the output device in cases where
@@ -151,6 +158,10 @@ class MEDIA_EXPORT AudioConverter {
   // value from the input AudioParameters class.  Preserved to recreate internal
   // AudioBus structures on demand in response to varying frame size requests.
   const int input_channel_count_;
+
+  // Accumulates glitch info in ConvertWithInfo() and passes it on to all inputs
+  // in SourceCallback().
+  AudioGlitchInfo::Accumulator glitch_info_accumulator_;
 };
 
 }  // namespace media

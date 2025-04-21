@@ -1,10 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/webui/settings/languages_handler.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -80,7 +80,7 @@ void LanguagesHandler::HandleSetProspectiveUILanguage(
   const std::string& language_code = args[0].GetString();
   if (user &&
       user->GetAccountId() == user_manager->GetPrimaryUser()->GetAccountId() &&
-      user->GetType() != user_manager::USER_TYPE_PUBLIC_ACCOUNT) {
+      user->GetType() != user_manager::UserType::kPublicAccount) {
     profile_->ChangeAppLocale(language_code,
                               Profile::APP_LOCALE_CHANGED_VIA_SETTINGS);
   }

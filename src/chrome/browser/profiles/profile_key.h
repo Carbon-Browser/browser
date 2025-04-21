@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,11 @@
 #include "components/keyed_service/core/simple_factory_key.h"
 #include "components/leveldb_proto/public/proto_database_provider.h"
 
-#if BUILDFLAG(IS_ANDROID)
-#include "chrome/browser/profiles/profile_key_android.h"
-#endif  // BUILDFLAG(IS_ANDROID)
-
 class PrefService;
+
+#if BUILDFLAG(IS_ANDROID)
+class ProfileKeyAndroid;
+#endif  // BUILDFLAG(IS_ANDROID)
 
 // An embryonic Profile with only fields accessible in reduced mode.
 // Used as a SimpleFactoryKey.
@@ -49,7 +49,8 @@ class ProfileKey : public SimpleFactoryKey {
 
  private:
   raw_ptr<PrefService> prefs_ = nullptr;
-  raw_ptr<leveldb_proto::ProtoDatabaseProvider> db_provider_ = nullptr;
+  raw_ptr<leveldb_proto::ProtoDatabaseProvider, AcrossTasksDanglingUntriaged>
+      db_provider_ = nullptr;
 
   // Points to the original (non off-the-record) ProfileKey.
   raw_ptr<ProfileKey> original_key_ = nullptr;

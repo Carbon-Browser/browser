@@ -1,24 +1,23 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/performance_manager/persistence/site_data/leveldb_site_data_store.h"
 
+#include <atomic>
 #include <limits>
 #include <string>
 
-#include "base/auto_reset.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/hash/md5.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/metrics/histogram_macros.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "build/build_config.h"
@@ -31,7 +30,7 @@ namespace performance_manager {
 
 namespace {
 
-bool g_use_in_memory_db_for_testing = false;
+std::atomic<bool> g_use_in_memory_db_for_testing = false;
 
 // The name of the following histograms is the same as the one used in the
 // //c/b/resource_coordinator version of this file. It's fine to keep the same
@@ -39,13 +38,14 @@ bool g_use_in_memory_db_for_testing = false;
 // histograms should be removed once it has been confirmed that the data is
 // similar to the one from the other implementation.
 //
-// TODO(sebmarchand): Remove these histograms.
+// TODO(crbug.com/40902006): Remove these histograms when SiteDB is confirmed to
+// be working for BackgroundTabLoadingPolicy.
 const char kInitStatusHistogramLabel[] =
-    "ResourceCoordinator.LocalDB.DatabaseInit";
+    "PerformanceManager.SiteDB.DatabaseInit";
 const char kInitStatusAfterRepairHistogramLabel[] =
-    "ResourceCoordinator.LocalDB.DatabaseInitAfterRepair";
+    "PerformanceManager.SiteDB.DatabaseInitAfterRepair";
 const char kInitStatusAfterDeleteHistogramLabel[] =
-    "ResourceCoordinator.LocalDB.DatabaseInitAfterDelete";
+    "PerformanceManager.SiteDB.DatabaseInitAfterDelete";
 
 enum class InitStatus {
   kInitStatusOk,
@@ -82,8 +82,8 @@ bool RepairDatabase(const std::string& db_path) {
   options.reuse_logs = false;
   options.max_open_files = 0;
   bool repair_succeeded = leveldb::RepairDB(db_path, options).ok();
-  UMA_HISTOGRAM_BOOLEAN("ResourceCoordinator.LocalDB.DatabaseRepair",
-                        repair_succeeded);
+  base::UmaHistogramBoolean("PerformanceManager.SiteDB.DatabaseRepair",
+                            repair_succeeded);
   return repair_succeeded;
 }
 
@@ -101,8 +101,8 @@ bool ShouldAttemptDbRepair(const leveldb::Status& status) {
 }
 
 struct DatabaseSizeResult {
-  absl::optional<int64_t> num_rows;
-  absl::optional<int64_t> on_disk_size_kb;
+  std::optional<int64_t> num_rows;
+  std::optional<int64_t> on_disk_size_kb;
 };
 
 std::string SerializeOriginIntoDatabaseKey(const url::Origin& origin) {
@@ -155,7 +155,7 @@ class LevelDBSiteDataStore::AsyncHelper {
 
   // Implementations of the DB manipulation functions of
   // LevelDBSiteDataStore that run on a blocking sequence.
-  absl::optional<SiteDataProto> ReadSiteDataFromDB(const url::Origin& origin);
+  std::optional<SiteDataProto> ReadSiteDataFromDB(const url::Origin& origin);
   void WriteSiteDataIntoDB(const url::Origin& origin,
                            const SiteDataProto& site_characteristic_proto);
   void RemoveSiteDataFromDB(const std::vector<url::Origin>& site_origin);
@@ -191,6 +191,9 @@ class LevelDBSiteDataStore::AsyncHelper {
 
   // Implementation for the OpenOrCreateDatabase function.
   OpeningType OpenOrCreateDatabaseImpl();
+
+  // Implementation for the ClearDatabase function.
+  void ClearDatabaseImpl();
 
   // A levelDB environment that gets used for testing. This allows using an
   // in-memory database when needed.
@@ -237,7 +240,7 @@ void LevelDBSiteDataStore::AsyncHelper::OpenOrCreateDatabase() {
   // for every version change, https://crbug.com/866540.
   if ((opening_type == OpeningType::kExistingDb) && !is_expected_version) {
     DLOG(ERROR) << "Invalid DB version, recreating it.";
-    ClearDatabase();
+    ClearDatabaseImpl();
     // The database might fail to open.
     if (!db_)
       return;
@@ -255,13 +258,13 @@ void LevelDBSiteDataStore::AsyncHelper::OpenOrCreateDatabase() {
   }
 }
 
-absl::optional<SiteDataProto>
+std::optional<SiteDataProto>
 LevelDBSiteDataStore::AsyncHelper::ReadSiteDataFromDB(
     const url::Origin& origin) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (!db_)
-    return absl::nullopt;
+    return std::nullopt;
 
   leveldb::Status s;
   std::string protobuf_value;
@@ -271,11 +274,11 @@ LevelDBSiteDataStore::AsyncHelper::ReadSiteDataFromDB(
     s = db_->Get(read_options_, SerializeOriginIntoDatabaseKey(origin),
                  &protobuf_value);
   }
-  absl::optional<SiteDataProto> site_characteristic_proto;
+  std::optional<SiteDataProto> site_characteristic_proto;
   if (s.ok()) {
     site_characteristic_proto = SiteDataProto();
     if (!site_characteristic_proto->ParseFromString(protobuf_value)) {
-      site_characteristic_proto = absl::nullopt;
+      site_characteristic_proto = std::nullopt;
       DLOG(ERROR) << "Error while trying to parse a SiteDataProto "
                   << "protobuf.";
     }
@@ -304,6 +307,8 @@ void LevelDBSiteDataStore::AsyncHelper::WriteSiteDataIntoDB(
         << "Error while inserting an element in the site characteristics "
         << "database: " << s.ToString();
   }
+  base::UmaHistogramBoolean(
+      "PerformanceManager.SiteDB.WriteCompleted.WriteSiteDataIntoStore", true);
 }
 
 void LevelDBSiteDataStore::AsyncHelper::RemoveSiteDataFromDB(
@@ -323,24 +328,19 @@ void LevelDBSiteDataStore::AsyncHelper::RemoveSiteDataFromDB(
     LOG(WARNING) << "Failed to remove some entries from the site "
                  << "characteristics database: " << status.ToString();
   }
+  base::UmaHistogramBoolean(
+      "PerformanceManager.SiteDB.WriteCompleted.ClearSiteDataForOrigins", true);
 }
 
 void LevelDBSiteDataStore::AsyncHelper::ClearDatabase() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (!db_)
+  if (!db_) {
     return;
-
-  base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
-                                                base::BlockingType::MAY_BLOCK);
-  db_.reset();
-  leveldb_env::Options options;
-  leveldb::Status status = leveldb::DestroyDB(db_path_.AsUTF8Unsafe(), options);
-  if (status.ok()) {
-    OpenOrCreateDatabaseImpl();
-  } else {
-    LOG(WARNING) << "Failed to destroy the site characteristics database: "
-                 << status.ToString();
   }
+
+  ClearDatabaseImpl();
+  base::UmaHistogramBoolean(
+      "PerformanceManager.SiteDB.WriteCompleted.ClearAllSiteData", true);
 }
 
 DatabaseSizeResult LevelDBSiteDataStore::AsyncHelper::GetDatabaseSize() {
@@ -389,15 +389,12 @@ LevelDBSiteDataStore::AsyncHelper::OpenOrCreateDatabaseImpl() {
   // Report the on disk size of the database if it already exists.
   if (base::DirectoryExists(db_path_)) {
     opening_type = OpeningType::kExistingDb;
-    int64_t db_ondisk_size_in_bytes = base::ComputeDirectorySize(db_path_);
-    UMA_HISTOGRAM_MEMORY_KB("ResourceCoordinator.LocalDB.OnDiskSize",
-                            db_ondisk_size_in_bytes / 1024);
   }
 
   leveldb_env::Options options;
   options.create_if_missing = true;
 
-  if (g_use_in_memory_db_for_testing) {
+  if (g_use_in_memory_db_for_testing.load(std::memory_order_relaxed)) {
     env_for_testing_ = leveldb_chrome::NewMemEnv("LevelDBSiteDataStore");
     options.env = env_for_testing_.get();
   }
@@ -431,6 +428,23 @@ LevelDBSiteDataStore::AsyncHelper::OpenOrCreateDatabaseImpl() {
   return opening_type;
 }
 
+void LevelDBSiteDataStore::AsyncHelper::ClearDatabaseImpl() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK(db_) << "Database not open";
+
+  base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
+                                                base::BlockingType::MAY_BLOCK);
+  db_.reset();
+  leveldb_env::Options options;
+  leveldb::Status status = leveldb::DestroyDB(db_path_.AsUTF8Unsafe(), options);
+  if (status.ok()) {
+    OpenOrCreateDatabaseImpl();
+  } else {
+    LOG(WARNING) << "Failed to destroy the site characteristics database: "
+                 << status.ToString();
+  }
+}
+
 LevelDBSiteDataStore::LevelDBSiteDataStore(const base::FilePath& db_path)
     : blocking_task_runner_(base::ThreadPool::CreateSequencedTaskRunner(
           // The |BLOCK_SHUTDOWN| trait is required to ensure that a clearing of
@@ -455,8 +469,8 @@ void LevelDBSiteDataStore::ReadSiteDataFromStore(
 
   // Trigger the asynchronous task and make it run the callback on this thread
   // once it returns.
-  base::PostTaskAndReplyWithResult(
-      blocking_task_runner_.get(), FROM_HERE,
+  blocking_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&LevelDBSiteDataStore::AsyncHelper::ReadSiteDataFromDB,
                      base::Unretained(async_helper_.get()), origin),
       std::move(callback));
@@ -501,8 +515,8 @@ void LevelDBSiteDataStore::GetStoreSize(GetStoreSizeCallback callback) {
       },
       std::move(callback));
 
-  base::PostTaskAndReplyWithResult(
-      blocking_task_runner_.get(), FROM_HERE,
+  blocking_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&LevelDBSiteDataStore::AsyncHelper::GetDatabaseSize,
                      base::Unretained(async_helper_.get())),
       std::move(reply_callback));
@@ -544,10 +558,11 @@ void LevelDBSiteDataStore::RunTaskWithRawDBForTesting(
 }
 
 // static
-std::unique_ptr<base::AutoReset<bool>>
-LevelDBSiteDataStore::UseInMemoryDBForTesting() {
-  return std::make_unique<base::AutoReset<bool>>(
-      &g_use_in_memory_db_for_testing, true);
+base::ScopedClosureRunner LevelDBSiteDataStore::UseInMemoryDBForTesting() {
+  g_use_in_memory_db_for_testing.store(true, std::memory_order_relaxed);
+  return base::ScopedClosureRunner(base::BindOnce([] {
+    g_use_in_memory_db_for_testing.store(false, std::memory_order_relaxed);
+  }));
 }
 
 }  // namespace performance_manager

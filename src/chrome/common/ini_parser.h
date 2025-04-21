@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CHROME_COMMON_INI_PARSER_H_
 
 #include <string>
+#include <string_view>
 
 #include "base/values.h"
 
@@ -33,9 +34,9 @@ class INIParser {
   void Parse(const std::string& content);
 
  private:
-  virtual void HandleTriplet(base::StringPiece section,
-                             base::StringPiece key,
-                             base::StringPiece value) = 0;
+  virtual void HandleTriplet(std::string_view section,
+                             std::string_view key,
+                             std::string_view value) = 0;
 
   bool used_;
 };
@@ -51,15 +52,15 @@ class DictionaryValueINIParser : public INIParser {
 
   ~DictionaryValueINIParser() override;
 
-  const base::DictionaryValue& root() const { return root_; }
+  const base::Value::Dict& root() const { return root_; }
 
  private:
   // INIParser implementation.
-  void HandleTriplet(base::StringPiece section,
-                     base::StringPiece key,
-                     base::StringPiece value) override;
+  void HandleTriplet(std::string_view section,
+                     std::string_view key,
+                     std::string_view value) override;
 
-  base::DictionaryValue root_;
+  base::Value::Dict root_;
 };
 
 #endif  // CHROME_COMMON_INI_PARSER_H_

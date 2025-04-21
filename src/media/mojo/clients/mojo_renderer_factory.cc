@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <utility>
 
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "media/mojo/clients/mojo_renderer.h"
@@ -25,7 +26,7 @@ MojoRendererFactory::MojoRendererFactory(
 MojoRendererFactory::~MojoRendererFactory() = default;
 
 std::unique_ptr<Renderer> MojoRendererFactory::CreateRenderer(
-    const scoped_refptr<base::SingleThreadTaskRunner>& media_task_runner,
+    const scoped_refptr<base::SequencedTaskRunner>& media_task_runner,
     const scoped_refptr<base::TaskRunner>& worker_task_runner,
     AudioRendererSink* audio_renderer_sink,
     VideoRendererSink* video_renderer_sink,
@@ -52,7 +53,7 @@ MojoRendererFactory::CreateMediaFoundationRenderer(
         renderer_extension_receiver,
     mojo::PendingRemote<mojom::MediaFoundationRendererClientExtension>
         client_extension_remote,
-    const scoped_refptr<base::SingleThreadTaskRunner>& media_task_runner,
+    const scoped_refptr<base::SequencedTaskRunner>& media_task_runner,
     VideoRendererSink* video_renderer_sink) {
   DCHECK(interface_factory_);
   mojo::PendingRemote<mojom::Renderer> renderer_remote;
@@ -70,7 +71,7 @@ MojoRendererFactory::CreateMediaFoundationRenderer(
 
 #if BUILDFLAG(ENABLE_CAST_RENDERER)
 std::unique_ptr<MojoRenderer> MojoRendererFactory::CreateCastRenderer(
-    const scoped_refptr<base::SingleThreadTaskRunner>& media_task_runner,
+    const scoped_refptr<base::SequencedTaskRunner>& media_task_runner,
     VideoRendererSink* video_renderer_sink) {
   DCHECK(interface_factory_);
 
@@ -92,7 +93,7 @@ std::unique_ptr<MojoRenderer> MojoRendererFactory::CreateFlingingRenderer(
     const std::string& presentation_id,
     mojo::PendingRemote<mojom::FlingingRendererClientExtension>
         client_extension_remote,
-    const scoped_refptr<base::SingleThreadTaskRunner>& media_task_runner,
+    const scoped_refptr<base::SequencedTaskRunner>& media_task_runner,
     VideoRendererSink* video_renderer_sink) {
   DCHECK(interface_factory_);
   mojo::PendingRemote<mojom::Renderer> renderer_remote;
@@ -111,7 +112,7 @@ std::unique_ptr<MojoRenderer> MojoRendererFactory::CreateMediaPlayerRenderer(
         renderer_extension_receiver,
     mojo::PendingRemote<mojom::MediaPlayerRendererClientExtension>
         client_extension_remote,
-    const scoped_refptr<base::SingleThreadTaskRunner>& media_task_runner,
+    const scoped_refptr<base::SequencedTaskRunner>& media_task_runner,
     VideoRendererSink* video_renderer_sink) {
   DCHECK(interface_factory_);
   mojo::PendingRemote<mojom::Renderer> renderer_remote;

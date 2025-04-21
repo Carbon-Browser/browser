@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,23 +13,6 @@
 #include "components/password_manager/core/browser/password_save_manager_impl.h"
 
 namespace password_manager {
-
-namespace {
-
-// Object which holds a vector of MovePasswordToAccountStoreHelper.
-class MovePasswordOperations {
- public:
-  void ClearAllOperations() { helpers_.clear(); }
-
-  void AddHelper(std::unique_ptr<MovePasswordToAccountStoreHelper> helper) {
-    helpers_.push_back(std::move(helper));
-  }
-
- private:
-  std::vector<std::unique_ptr<MovePasswordToAccountStoreHelper>> helpers_;
-};
-
-}  // namespace
 
 MovePasswordToAccountStoreHelper::MovePasswordToAccountStoreHelper(
     const PasswordForm& form,
@@ -59,27 +42,11 @@ void MovePasswordToAccountStoreHelper::OnFetchCompleted() {
   save_manager->CreatePendingCredentials(form_, {}, {}, /*is_http_auth=*/false,
                                          /*is_credential_api_save=*/false);
   save_manager->MoveCredentialsToAccountStore(trigger_);
+  // `form_fetcher_` will be destroyed when `done_callback_` is run below but
+  // must outlive `save_manager`. So destroy `save_manager` now.
+  save_manager.reset();
   std::move(done_callback_).Run();
   // |this| might be deleted now!
-}
-
-void MovePasswordsToAccountStore(
-    const std::vector<PasswordForm>& forms,
-    PasswordManagerClient* client,
-    metrics_util::MoveToAccountStoreTrigger trigger) {
-  std::unique_ptr<MovePasswordOperations> operations =
-      std::make_unique<MovePasswordOperations>();
-
-  const raw_ptr<MovePasswordOperations> raw_helper = operations.get();
-
-  auto repeating_callback = base::BarrierClosure(
-      forms.size(), base::BindOnce(&MovePasswordOperations::ClearAllOperations,
-                                   base::Owned(std::move(operations))));
-
-  for (const auto& form : forms) {
-    raw_helper->AddHelper(std::make_unique<MovePasswordToAccountStoreHelper>(
-        form, client, trigger, repeating_callback));
-  }
 }
 
 }  // namespace password_manager

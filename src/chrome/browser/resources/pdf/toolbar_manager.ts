@@ -1,9 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {isRTL} from 'chrome://resources/js/util.m.js';
-import {ViewerZoomToolbarElement} from './elements/viewer-zoom-toolbar.js';
+import {isRTL} from 'chrome://resources/js/util.js';
+
+import type {ViewerZoomToolbarElement} from './elements/viewer_zoom_toolbar.js';
 
 /**
  * Idle time in ms before the UI is hidden.

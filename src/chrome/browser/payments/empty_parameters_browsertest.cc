@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@ class EmptyParametersTest : public PaymentRequestPlatformBrowserTestBase {
 
   void SetUpOnMainThread() override {
     kylepay_server_.ServeFilesFromSourceDirectory(
-        "components/test/data/payments/kylepay.com/");
+        "components/test/data/payments/kylepay.test/");
     ASSERT_TRUE(kylepay_server_.Start());
 
     PaymentRequestPlatformBrowserTestBase::SetUpOnMainThread();
@@ -28,10 +28,10 @@ class EmptyParametersTest : public PaymentRequestPlatformBrowserTestBase {
     content::BrowserContext* context =
         GetActiveWebContents()->GetBrowserContext();
     auto downloader = std::make_unique<TestDownloader>(
-        context->GetDefaultStoragePartition()
-            ->GetURLLoaderFactoryForBrowserProcess());
-    downloader->AddTestServerURL("https://kylepay.com/",
-                                 kylepay_server_.GetURL("kylepay.com", "/"));
+        GetCSPCheckerForTests(), context->GetDefaultStoragePartition()
+                                     ->GetURLLoaderFactoryForBrowserProcess());
+    downloader->AddTestServerURL("https://kylepay.test/",
+                                 kylepay_server_.GetURL("kylepay.test", "/"));
     ServiceWorkerPaymentAppFinder::GetOrCreateForCurrentDocument(
         GetActiveWebContents()->GetPrimaryMainFrame())
         ->SetDownloaderAndIgnorePortInOriginComparisonForTesting(

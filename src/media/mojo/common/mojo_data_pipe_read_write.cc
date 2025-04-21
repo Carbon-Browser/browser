@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,11 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/mojo/common/mojo_pipe_read_write_util.h"
 
 using media::mojo_pipe_read_write_util::IsPipeReadWriteError;
@@ -22,7 +24,7 @@ MojoDataPipeReader::MojoDataPipeReader(
     : consumer_handle_(std::move(consumer_handle)),
       pipe_watcher_(FROM_HERE,
                     mojo::SimpleWatcher::ArmingPolicy::MANUAL,
-                    base::SequencedTaskRunnerHandle::Get()) {
+                    base::SequencedTaskRunner::GetCurrentDefault()) {
   DVLOG(1) << __func__;
 
   MojoResult result = pipe_watcher_.Watch(
@@ -43,6 +45,7 @@ MojoDataPipeReader::~MojoDataPipeReader() {
 void MojoDataPipeReader::CompleteCurrentRead() {
   DVLOG(4) << __func__;
   DCHECK(done_cb_);
+  current_buffer_ = nullptr;
   current_buffer_size_ = 0;
   std::move(done_cb_).Run(true);
 }
@@ -80,13 +83,21 @@ void MojoDataPipeReader::TryReadData(MojoResult result) {
   }
 
   DCHECK_GT(current_buffer_size_, bytes_read_);
-  uint32_t num_bytes = current_buffer_size_ - bytes_read_;
+  size_t num_bytes = current_buffer_size_ - bytes_read_;
   if (current_buffer_) {
-    result = consumer_handle_->ReadData(current_buffer_ + bytes_read_,
-                                        &num_bytes, MOJO_READ_DATA_FLAG_NONE);
+    // SAFETY: Depending on the caller of Read to provide a valid ptr+size.
+    //
+    // TODO(lukasza): Consider removing the whole `MojoDataPipeReader` class:
+    // * It is only used from test code (from unit tests of
+    //   `MojoDataPipeWriter`)
+    // * It uses `UNSAFE_BUFFERS` + it is the only caller of `DiscardData`
+    base::span<uint8_t> buffer =
+        UNSAFE_BUFFERS(base::span(current_buffer_.get(), current_buffer_size_));
+    buffer = buffer.subspan(bytes_read_);
+    result =
+        consumer_handle_->ReadData(MOJO_READ_DATA_FLAG_NONE, buffer, num_bytes);
   } else {
-    result = consumer_handle_->ReadData(nullptr, &num_bytes,
-                                        MOJO_READ_DATA_FLAG_DISCARD);
+    result = consumer_handle_->DiscardData(num_bytes, num_bytes);
   }
 
   if (IsPipeReadWriteError(result)) {
@@ -137,7 +148,7 @@ MojoDataPipeWriter::MojoDataPipeWriter(
     : producer_handle_(std::move(producer_handle)),
       pipe_watcher_(FROM_HERE,
                     mojo::SimpleWatcher::ArmingPolicy::MANUAL,
-                    base::SequencedTaskRunnerHandle::Get()) {
+                    base::SequencedTaskRunner::GetCurrentDefault()) {
   DVLOG(1) << __func__;
 
   MojoResult result =
@@ -160,7 +171,7 @@ void MojoDataPipeWriter::Write(const uint8_t* buffer,
                                DoneCB done_cb) {
   DVLOG(3) << __func__;
   // Write() can not be called when another writing request is in process.
-  DCHECK(!current_buffer_);
+  DCHECK(current_buffer_.empty());
   DCHECK(done_cb);
   if (!buffer_size) {
     std::move(done_cb).Run(true);
@@ -176,9 +187,9 @@ void MojoDataPipeWriter::Write(const uint8_t* buffer,
     return;
   }
 
-  current_buffer_ = buffer;
-  current_buffer_size_ = buffer_size;
-  bytes_written_ = 0;
+  // TODO(lukasza): Take `span` instead of `buffer` + `buffer_size`.
+  current_buffer_ =
+      UNSAFE_TODO(base::span<const uint8_t>(buffer, size_t{buffer_size}));
   done_cb_ = std::move(done_cb);
   // Try writing data immediately to reduce latency.
   TryWriteData(MOJO_RESULT_OK);
@@ -190,19 +201,17 @@ void MojoDataPipeWriter::TryWriteData(MojoResult result) {
     return;
   }
 
-  DCHECK(current_buffer_);
-  DCHECK_GT(current_buffer_size_, bytes_written_);
-  uint32_t num_bytes = current_buffer_size_ - bytes_written_;
-
-  result = producer_handle_->WriteData(current_buffer_ + bytes_written_,
-                                       &num_bytes, MOJO_WRITE_DATA_FLAG_NONE);
+  DCHECK(!current_buffer_.empty());
+  size_t actually_written_bytes = 0;
+  result = producer_handle_->WriteData(
+      current_buffer_, MOJO_WRITE_DATA_FLAG_NONE, actually_written_bytes);
   if (IsPipeReadWriteError(result)) {
     OnPipeError(result);
   } else {
     if (result == MOJO_RESULT_OK) {
-      DCHECK_GT(num_bytes, 0u);
-      bytes_written_ += num_bytes;
-      if (bytes_written_ == current_buffer_size_) {
+      DCHECK_GT(actually_written_bytes, 0u);
+      current_buffer_ = current_buffer_.subspan(actually_written_bytes);
+      if (current_buffer_.empty()) {
         CompleteCurrentWrite();
         return;
       }
@@ -214,7 +223,7 @@ void MojoDataPipeWriter::TryWriteData(MojoResult result) {
 void MojoDataPipeWriter::CompleteCurrentWrite() {
   DVLOG(4) << __func__;
   DCHECK(done_cb_);
-  current_buffer_ = nullptr;
+  current_buffer_ = base::span<const uint8_t>();
   std::move(done_cb_).Run(true);
 }
 
@@ -224,13 +233,10 @@ void MojoDataPipeWriter::OnPipeError(MojoResult result) {
 
   producer_handle_.reset();
 
-  if (current_buffer_) {
+  if (!current_buffer_.empty()) {
     DVLOG(1) << __func__ << ": writing to data pipe failed. result=" << result
-             << ", buffer size=" << current_buffer_size_
-             << ", num_bytes(written)=" << bytes_written_;
-    current_buffer_ = nullptr;
-    current_buffer_size_ = 0;
-    bytes_written_ = 0;
+             << ", current_buffer_.size()=" << current_buffer_.size();
+    current_buffer_ = base::span<const uint8_t>();
     DCHECK(done_cb_);
     std::move(done_cb_).Run(false);
   }

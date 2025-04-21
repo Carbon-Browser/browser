@@ -1,17 +1,22 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_HEAP_COLLECTION_SUPPORT_HEAP_VECTOR_BACKING_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_HEAP_COLLECTION_SUPPORT_HEAP_VECTOR_BACKING_H_
 
+#include <type_traits>
 #include "base/check_op.h"
 #include "third_party/blink/renderer/platform/heap/custom_spaces.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/heap/thread_state_storage.h"
 #include "third_party/blink/renderer/platform/heap/trace_traits.h"
-#include "third_party/blink/renderer/platform/wtf/conditional_destructor.h"
 #include "third_party/blink/renderer/platform/wtf/container_annotations.h"
 #include "third_party/blink/renderer/platform/wtf/sanitizers.h"
 #include "third_party/blink/renderer/platform/wtf/type_traits.h"
@@ -34,17 +39,16 @@ inline bool VTableInitialized(const void* object_payload) {
 
 template <typename T, typename Traits = WTF::VectorTraits<T>>
 class HeapVectorBacking final
-    : public GarbageCollected<HeapVectorBacking<T, Traits>>,
-      public WTF::ConditionalDestructor<HeapVectorBacking<T, Traits>,
-                                        !Traits::kNeedsDestruction> {
-  using ClassType = HeapVectorBacking<T, Traits>;
-
+    : public GarbageCollected<HeapVectorBacking<T, Traits>> {
  public:
+  using ClassType = HeapVectorBacking<T, Traits>;
+  using TraitsType = Traits;
+
   // Although the HeapVectorBacking is fully constructed, the array resulting
   // from ToArray may not be fully constructed as the elements of the array are
   // not initialized and may have null vtable pointers. Null vtable pointer
   // violates CFI for polymorphic types.
-  NO_SANITIZE_UNRELATED_CAST ALWAYS_INLINE static T* ToArray(
+  ALWAYS_INLINE NO_SANITIZE_UNRELATED_CAST static T* ToArray(
       ClassType* backing) {
     return reinterpret_cast<T*>(backing);
   }
@@ -61,8 +65,11 @@ class HeapVectorBacking final
     return cppgc::subtle::Resize(*this, GetAdditionalBytes(new_size));
   }
 
-  // Conditionally invoked via destructor.
-  void Finalize();
+  ~HeapVectorBacking()
+    requires(!Traits::kNeedsDestruction)
+  = default;
+  ~HeapVectorBacking()
+    requires(Traits::kNeedsDestruction);
 
  private:
   static cppgc::AdditionalBytes GetAdditionalBytes(size_t wanted_array_size) {
@@ -75,10 +82,9 @@ class HeapVectorBacking final
 };
 
 template <typename T, typename Traits>
-void HeapVectorBacking<T, Traits>::Finalize() {
-  static_assert(Traits::kNeedsDestruction,
-                "Only vector buffers with items requiring destruction should "
-                "be finalized");
+HeapVectorBacking<T, Traits>::~HeapVectorBacking()
+  requires(Traits::kNeedsDestruction)
+{
   static_assert(
       Traits::kCanClearUnusedSlotsWithMemset || std::is_polymorphic<T>::value,
       "HeapVectorBacking doesn't support objects that cannot be cleared as "
@@ -151,8 +157,9 @@ struct TraceInCollectionTrait<kNoWeakHandling,
         "cleared as unused with memset.");
 
     // Bail out early if the contents are not actually traceable.
-    if constexpr (!IsTraceableInCollectionTrait<Traits>::value)
+    if constexpr (!IsTraceable<T>::value) {
       return;
+    }
 
     const T* array = reinterpret_cast<const T*>(self);
     const size_t length =
@@ -164,19 +171,12 @@ struct TraceInCollectionTrait<kNoWeakHandling,
     // already zeroed out).
     ANNOTATE_CHANGE_SIZE(array, length, 0, length);
 #endif  // ANNOTATE_CONTIGUOUS_CONTAINER
-    if (std::is_polymorphic<T>::value) {
+    if constexpr (IsTraceable<T>::value) {
       for (unsigned i = 0; i < length; ++i) {
-        if (blink::internal::VTableInitialized(&array[i])) {
-          blink::TraceIfNeeded<
-              T, IsTraceableInCollectionTrait<Traits>::value>::Trace(visitor,
-                                                                     array[i]);
+        if (!std::is_polymorphic_v<T> ||
+            blink::internal::VTableInitialized(&array[i])) {
+          visitor->Trace(array[i]);
         }
-      }
-    } else {
-      for (size_t i = 0; i < length; ++i) {
-        blink::TraceIfNeeded<
-            T, IsTraceableInCollectionTrait<Traits>::value>::Trace(visitor,
-                                                                   array[i]);
       }
     }
   }
@@ -186,10 +186,13 @@ struct TraceInCollectionTrait<kNoWeakHandling,
 
 namespace cppgc {
 
-// Assign HeapVector to the custom HeapVectorBackingSpace.
+// The space trait rewires allocations for HeapVector with `kCanMoveWithMemcpy`
+// into a space supporting compaction.
 template <typename T>
-struct SpaceTrait<blink::HeapVectorBacking<T>> {
-  using Space = blink::HeapVectorBackingSpace;
+struct SpaceTrait<blink::HeapVectorBacking<T>,
+                  std::enable_if_t<blink::HeapVectorBacking<
+                      T>::TraitsType::kCanMoveWithMemcpy>> {
+  using Space = blink::CompactableHeapVectorBackingSpace;
 };
 
 // Custom allocation accounts for inlined storage of the actual elements of the
@@ -236,7 +239,7 @@ struct TraceTrait<blink::HeapVectorBacking<T, Traits>> {
 
     static_assert(!WTF::IsWeak<T>::value,
                   "Weakness is not supported in HeapVector and HeapDeque");
-    if (WTF::IsTraceableInCollectionTrait<Traits>::value) {
+    if (WTF::IsTraceable<T>::value) {
       WTF::TraceInCollectionTrait<WTF::kNoWeakHandling,
                                   blink::HeapVectorBacking<T, Traits>,
                                   void>::Trace(visitor, self);

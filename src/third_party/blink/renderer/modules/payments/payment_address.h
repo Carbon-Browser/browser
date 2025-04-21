@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,7 @@ class MODULES_EXPORT PaymentAddress : public ScriptWrappable {
 
   ~PaymentAddress() override;
 
-  ScriptValue toJSONForBinding(ScriptState*) const;
+  ScriptObject toJSONForBinding(ScriptState*) const;
 
   const String& country() const { return country_; }
   const Vector<String>& addressLine() const { return address_line_; }

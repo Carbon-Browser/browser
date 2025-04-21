@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,20 +9,21 @@ import android.os.Handler;
 import android.view.View;
 import android.widget.PopupWindow;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JniType;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.chrome.R;
 import org.chromium.ui.DropdownPopupWindow;
 import org.chromium.ui.base.WindowAndroid;
 
-/**
- * JNI call glue for password generation between native and Java objects.
- */
+/** JNI call glue for password generation between native and Java objects. */
 public class PasswordGenerationPopupBridge implements PopupWindow.OnDismissListener {
     private final long mNativePasswordGenerationEditingPopupViewAndroid;
     private final Context mContext;
     private final DropdownPopupWindow mPopup;
     private final View mAnchorView;
+
     /**
      * A convenience method for the constructor to be invoked from the native counterpart.
      * @param anchorView View anchored for popup.
@@ -67,19 +68,21 @@ public class PasswordGenerationPopupBridge implements PopupWindow.OnDismissListe
      */
     @Override
     public void onDismiss() {
-        PasswordGenerationPopupBridgeJni.get().dismissed(
-                mNativePasswordGenerationEditingPopupViewAndroid,
-                PasswordGenerationPopupBridge.this);
+        PasswordGenerationPopupBridgeJni.get()
+                .dismissed(
+                        mNativePasswordGenerationEditingPopupViewAndroid,
+                        PasswordGenerationPopupBridge.this);
     }
 
     /**
      * Shows a password generation popup with specified data. Should be called after
      * setAnchorRect().
+     *
      * @param isRtl True if the popup should be RTL.
      * @param explanationText The translated text that explains the popup.
      */
     @CalledByNative
-    private void show(boolean isRtl, String explanationText) {
+    private void show(boolean isRtl, @JniType("std::u16string") String explanationText) {
         if (mPopup != null) {
             float anchorWidth = mAnchorView.getLayoutParams().width;
             assert anchorWidth > 0;
@@ -91,9 +94,7 @@ public class PasswordGenerationPopupBridge implements PopupWindow.OnDismissListe
         }
     }
 
-    /**
-     * Hides the password generation popup.
-     */
+    /** Hides the password generation popup. */
     @CalledByNative
     private void hide() {
         if (mPopup != null) mPopup.dismiss();
@@ -101,7 +102,8 @@ public class PasswordGenerationPopupBridge implements PopupWindow.OnDismissListe
 
     @NativeMethods
     interface Natives {
-        void dismissed(long nativePasswordGenerationEditingPopupViewAndroid,
+        void dismissed(
+                long nativePasswordGenerationEditingPopupViewAndroid,
                 PasswordGenerationPopupBridge caller);
     }
 }

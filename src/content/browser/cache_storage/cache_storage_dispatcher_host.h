@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,7 @@
 
 namespace network {
 struct CrossOriginEmbedderPolicy;
+struct DocumentIsolationPolicy;
 }
 
 namespace storage {
@@ -35,7 +36,9 @@ class CacheStorageContextImpl;
 // from other sequences.
 class CacheStorageDispatcherHost {
  public:
-  explicit CacheStorageDispatcherHost(CacheStorageContextImpl* context);
+  CacheStorageDispatcherHost(
+      CacheStorageContextImpl* context,
+      scoped_refptr<storage::QuotaManagerProxy> quota_manager_proxy);
 
   CacheStorageDispatcherHost(const CacheStorageDispatcherHost&) = delete;
   CacheStorageDispatcherHost& operator=(const CacheStorageDispatcherHost&) =
@@ -53,10 +56,20 @@ class CacheStorageDispatcherHost {
       const network::CrossOriginEmbedderPolicy& cross_origin_embedder_policy,
       mojo::PendingRemote<network::mojom::CrossOriginEmbedderPolicyReporter>
           coep_reporter,
+      const network::DocumentIsolationPolicy& document_isolation_policy,
       const blink::StorageKey& storage_key,
-      const absl::optional<storage::BucketLocator>& bucket,
+      const std::optional<storage::BucketLocator>& bucket,
       storage::mojom::CacheStorageOwner owner,
       mojo::PendingReceiver<blink::mojom::CacheStorage> receiver);
+
+  base::WeakPtr<CacheStorageDispatcherHost> AsWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
+  bool WasNotifiedOfBucketDataDeletion(
+      const storage::BucketLocator& bucket_locator);
+
+  void NotifyBucketDataDeleted(const storage::BucketLocator& bucket_locator);
 
  private:
   class CacheStorageImpl;
@@ -70,15 +83,24 @@ class CacheStorageDispatcherHost {
   CacheStorageHandle OpenCacheStorage(
       const storage::BucketLocator& bucket_locator,
       storage::mojom::CacheStorageOwner owner);
+  void UpdateOrCreateDefaultBucket(
+      const blink::StorageKey& storage_key,
+      base::OnceCallback<void(storage::QuotaErrorOr<storage::BucketInfo>)>
+          callback);
 
   // `this` is owned by `context_`.
   const raw_ptr<CacheStorageContextImpl> context_;
+  scoped_refptr<storage::QuotaManagerProxy> quota_manager_proxy_;
 
   mojo::UniqueReceiverSet<blink::mojom::CacheStorage> receivers_;
   mojo::UniqueAssociatedReceiverSet<blink::mojom::CacheStorageCache>
       cache_receivers_;
 
+  std::set<storage::BucketLocator> deleted_buckets_;
+
   SEQUENCE_CHECKER(sequence_checker_);
+
+  base::WeakPtrFactory<CacheStorageDispatcherHost> weak_ptr_factory_{this};
 };
 
 }  // namespace content

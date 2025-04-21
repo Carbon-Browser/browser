@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,11 @@ var testSteps = [
         chrome.test.callbackPass(testSteps.shift()));
   },
   function (status) {
-    chrome.test.assertEq('authentication_required', status);
+    chrome.test.getConfig(function(config) {
+      featureEnabled = config.customArg == "enabled";
+      expectedStatus = featureEnabled ? 'authentication_required' : 'disabled';
+      chrome.test.assertEq(expectedStatus, status);
+    })
   }
 ];
 

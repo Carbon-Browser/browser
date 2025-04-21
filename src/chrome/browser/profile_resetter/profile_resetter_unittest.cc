@@ -1,6 +1,11 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/profile_resetter/profile_resetter.h"
 
@@ -12,8 +17,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
@@ -24,6 +29,7 @@
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/extension_service_test_base.h"
 #include "chrome/browser/extensions/tab_helper.h"
+#include "chrome/browser/google/google_brand.h"
 #include "chrome/browser/prefs/session_startup_pref.h"
 #include "chrome/browser/profile_resetter/brandcode_config_fetcher.h"
 #include "chrome/browser/profile_resetter/profile_reset_report.pb.h"
@@ -36,7 +42,7 @@
 #include "chrome/browser/themes/theme_service.h"
 #include "chrome/browser/themes/theme_service_factory.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
-#include "chrome/browser/web_data_service_factory.h"
+#include "chrome/browser/webdata_services/web_data_service_factory.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/browser_with_test_window_test.h"
 #include "components/content_settings/core/browser/content_settings_info.h"
@@ -69,6 +75,17 @@
 #include "base/win/scoped_com_initializer.h"
 #include "base/win/shortcut.h"
 #endif
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "base/containers/to_vector.h"
+#include "chromeos/ash/components/dbus/hermes/hermes_euicc_client.h"
+#include "chromeos/ash/components/dbus/hermes/hermes_manager_client.h"
+#include "chromeos/ash/components/dbus/hermes/hermes_profile_client.h"
+#include "chromeos/ash/components/dbus/shill/shill_clients.h"
+#include "chromeos/ash/components/dbus/shill/shill_service_client.h"
+#include "chromeos/ash/components/network/managed_network_configuration_handler_impl.h"
+#include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 using extensions::mojom::ManifestLocation;
 
@@ -116,6 +133,19 @@ const char kXmlConfig[] = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
 using extensions::Extension;
 using extensions::Manifest;
 
+class FakeNtpCustomBackgroundService : public NtpCustomBackgroundService {
+ public:
+  using NtpCustomBackgroundService::NtpCustomBackgroundService;
+  void FetchCustomBackgroundAndExtractBackgroundColor(
+      const GURL& image_url,
+      const GURL& fetch_url) override {}
+};
+
+std::unique_ptr<KeyedService> CreateFakeNtpCustomBackgroundService(
+    content::BrowserContext* context) {
+  Profile* profile = Profile::FromBrowserContext(context);
+  return std::make_unique<FakeNtpCustomBackgroundService>(profile);
+}
 
 // ProfileResetterTest --------------------------------------------------------
 
@@ -150,15 +180,20 @@ ProfileResetterTest::ProfileResetterTest()
 #endif
 {}
 
-ProfileResetterTest::~ProfileResetterTest() {
-}
+ProfileResetterTest::~ProfileResetterTest() = default;
 
 void ProfileResetterTest::SetUp() {
   extensions::ExtensionServiceTestBase::SetUp();
-  InitializeEmptyExtensionService();
+  ExtensionServiceInitParams params;
+  params.testing_factories = {TestingProfile::TestingFactory(
+      NtpCustomBackgroundServiceFactory::GetInstance(),
+      base::BindRepeating(&CreateFakeNtpCustomBackgroundService))};
+
+  InitializeExtensionService(std::move(params));
 
   TemplateURLServiceFactory::GetInstance()->SetTestingFactory(
       profile(), base::BindRepeating(&CreateTemplateURLServiceForTesting));
+  google_brand::BrandForTesting brand_for_testing("");
   resetter_ = std::make_unique<ProfileResetter>(profile());
 }
 
@@ -182,6 +217,40 @@ std::unique_ptr<content::WebContents> PinnedTabsResetTest::CreateWebContents() {
       content::WebContents::CreateParams(profile()));
 }
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+// DnsConfigResetTest --------------------------------------------------------
+
+class DnsConfigResetTest : public BrowserWithTestWindowTest,
+                           public ProfileResetterTestBase {
+ protected:
+  void SetUp() override {
+    BrowserWithTestWindowTest::SetUp();
+
+    // Required for initializing NetworkHandler.
+    ash::HermesProfileClient::InitializeFake();
+    ash::HermesManagerClient::InitializeFake();
+    ash::HermesEuiccClient::InitializeFake();
+
+    ash::shill_clients::InitializeFakes();
+    ash::NetworkHandler::InitializeFake();
+
+    // Run the message loop to run the signal connection result callback.
+    base::RunLoop().RunUntilIdle();
+
+    resetter_ = std::make_unique<ProfileResetter>(profile());
+  }
+  void TearDown() override {
+    ash::NetworkHandler::Shutdown();
+    ash::shill_clients::Shutdown();
+
+    ash::HermesEuiccClient::Shutdown();
+    ash::HermesManagerClient::Shutdown();
+    ash::HermesProfileClient::Shutdown();
+
+    BrowserWithTestWindowTest::TearDown();
+  }
+};
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 // ConfigParserTest -----------------------------------------------------------
 
@@ -207,7 +276,7 @@ class ConfigParserTest : public testing::Test {
 ConfigParserTest::ConfigParserTest()
     : task_environment_(content::BrowserTaskEnvironment::IO_MAINLOOP) {}
 
-ConfigParserTest::~ConfigParserTest() {}
+ConfigParserTest::~ConfigParserTest() = default;
 
 std::unique_ptr<BrandcodeConfigFetcher> ConfigParserTest::WaitForRequest(
     const GURL& url) {
@@ -253,8 +322,7 @@ class ShortcutHandler {
 };
 
 #if BUILDFLAG(IS_WIN)
-ShortcutHandler::ShortcutHandler() {
-}
+ShortcutHandler::ShortcutHandler() = default;
 
 ShortcutHandler::~ShortcutHandler() {
   if (!shortcut_path_.empty())
@@ -315,9 +383,9 @@ bool ShortcutHandler::IsFileHidden() const {
 }
 
 #else
-ShortcutHandler::ShortcutHandler() {}
+ShortcutHandler::ShortcutHandler() = default;
 
-ShortcutHandler::~ShortcutHandler() {}
+ShortcutHandler::~ShortcutHandler() = default;
 
 // static
 bool ShortcutHandler::IsSupported() {
@@ -349,20 +417,19 @@ scoped_refptr<Extension> CreateExtension(const std::u16string& name,
                                          ManifestLocation location,
                                          extensions::Manifest::Type type,
                                          bool installed_by_default) {
-  base::DictionaryValue manifest;
-  manifest.SetStringPath(extensions::manifest_keys::kVersion, "1.0.0.0");
-  manifest.SetStringPath(extensions::manifest_keys::kName, name);
-  manifest.SetIntPath(extensions::manifest_keys::kManifestVersion, 2);
+  base::Value::Dict manifest;
+  manifest.Set(extensions::manifest_keys::kVersion, "1.0.0.0");
+  manifest.Set(extensions::manifest_keys::kName, name);
+  manifest.Set(extensions::manifest_keys::kManifestVersion, 2);
   switch (type) {
     case extensions::Manifest::TYPE_THEME:
-      manifest.SetKey(extensions::manifest_keys::kTheme,
-                      base::DictionaryValue());
+      manifest.Set(extensions::manifest_keys::kTheme, base::Value::Dict());
       break;
     case extensions::Manifest::TYPE_HOSTED_APP:
-      manifest.SetStringPath(extensions::manifest_keys::kLaunchWebURL,
-                             "http://www.google.com");
-      manifest.SetStringPath(extensions::manifest_keys::kUpdateURL,
-                             "http://clients2.google.com/service/update2/crx");
+      manifest.SetByDottedPath(extensions::manifest_keys::kLaunchWebURL,
+                               "http://www.google.com");
+      manifest.Set(extensions::manifest_keys::kUpdateURL,
+                   "http://clients2.google.com/service/update2/crx");
       break;
     case extensions::Manifest::TYPE_EXTENSION:
       // do nothing
@@ -370,7 +437,7 @@ scoped_refptr<Extension> CreateExtension(const std::u16string& name,
     default:
       NOTREACHED();
   }
-  manifest.SetStringPath(extensions::manifest_keys::kOmniboxKeyword, name);
+  manifest.SetByDottedPath(extensions::manifest_keys::kOmniboxKeyword, name);
   std::string error;
   scoped_refptr<Extension> extension = Extension::Create(
       path,
@@ -379,19 +446,39 @@ scoped_refptr<Extension> CreateExtension(const std::u16string& name,
       installed_by_default ? Extension::WAS_INSTALLED_BY_DEFAULT
                            : Extension::NO_FLAGS,
       &error);
-  EXPECT_TRUE(extension.get() != NULL) << error;
+  EXPECT_TRUE(extension.get() != nullptr) << error;
   return extension;
 }
 
 void ReplaceString(std::string* str,
                    const std::string& placeholder,
                    const std::string& substitution) {
-  ASSERT_NE(static_cast<std::string*>(NULL), str);
+  ASSERT_NE(static_cast<std::string*>(nullptr), str);
   size_t placeholder_pos = str->find(placeholder);
   ASSERT_NE(std::string::npos, placeholder_pos);
   str->replace(placeholder_pos, placeholder.size(), substitution);
 }
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+// Returns the configured static name servers from `shill_properties`, or an
+// empty vector if no static name servers are configured.
+std::vector<std::string> GetStaticNameServersFromShillProperties(
+    const base::Value::Dict& shill_properties) {
+  const base::Value::Dict* static_ip_config =
+      shill_properties.FindDict(shill::kStaticIPConfigProperty);
+  if (!static_ip_config) {
+    return {};
+  }
+  const base::Value::List* nameservers =
+      static_ip_config->FindList(shill::kNameServersProperty);
+  if (!nameservers) {
+    return {};
+  }
+  return base::ToVector(*nameservers, [](const base::Value& nameserver) {
+    return nameserver.GetString();
+  });
+}
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 /********************* Tests *********************/
 
@@ -406,7 +493,7 @@ TEST_F(ProfileResetterTest, ResetDefaultSearchEngineNonOrganic) {
   TemplateURLService* model =
       TemplateURLServiceFactory::GetForProfile(profile());
   const TemplateURL* default_engine = model->GetDefaultSearchProvider();
-  ASSERT_NE(static_cast<TemplateURL*>(NULL), default_engine);
+  ASSERT_NE(static_cast<TemplateURL*>(nullptr), default_engine);
   EXPECT_EQ(u"first", default_engine->short_name());
   EXPECT_EQ(u"firstkey", default_engine->keyword());
   EXPECT_EQ("http://www.foo.com/s?q={searchTerms}", default_engine->url());
@@ -475,7 +562,8 @@ TEST_F(ProfileResetterTest, ResetContentSettings) {
       continue;
     }
     ContentSetting default_setting =
-        host_content_settings_map->GetDefaultContentSetting(content_type, NULL);
+        host_content_settings_map->GetDefaultContentSetting(content_type,
+                                                            nullptr);
     default_settings[content_type] = default_setting;
     ContentSetting wildcard_setting = default_setting == CONTENT_SETTING_BLOCK
                                           ? CONTENT_SETTING_ALLOW
@@ -490,9 +578,8 @@ TEST_F(ProfileResetterTest, ResetContentSettings) {
     if (info->IsSettingValid(site_setting)) {
       host_content_settings_map->SetContentSettingDefaultScope(
           url, url, content_type, site_setting);
-      ContentSettingsForOneType host_settings;
-      host_content_settings_map->GetSettingsForOneType(content_type,
-                                                       &host_settings);
+      ContentSettingsForOneType host_settings =
+          host_content_settings_map->GetSettingsForOneType(content_type);
       EXPECT_EQ(2U, host_settings.size());
     }
   }
@@ -506,16 +593,15 @@ TEST_F(ProfileResetterTest, ResetContentSettings) {
       continue;
     ContentSetting default_setting =
         host_content_settings_map->GetDefaultContentSetting(content_type,
-                                                              NULL);
+                                                            nullptr);
     EXPECT_TRUE(default_settings.count(content_type));
     EXPECT_EQ(default_settings[content_type], default_setting);
     ContentSetting site_setting = host_content_settings_map->GetContentSetting(
         GURL("example.org"), GURL(), content_type);
     EXPECT_EQ(default_setting, site_setting);
 
-    ContentSettingsForOneType host_settings;
-    host_content_settings_map->GetSettingsForOneType(content_type,
-                                                     &host_settings);
+    ContentSettingsForOneType host_settings =
+        host_content_settings_map->GetSettingsForOneType(content_type);
     EXPECT_EQ(1U, host_settings.size());
   }
 }
@@ -750,7 +836,7 @@ TEST_F(ConfigParserTest, NoConnectivity) {
       url, network::mojom::URLResponseHead::New(), "",
       network::URLLoaderCompletionStatus(net::HTTP_INTERNAL_SERVER_ERROR));
 
-  std::unique_ptr<BrandcodeConfigFetcher> fetcher = WaitForRequest(GURL(url));
+  std::unique_ptr<BrandcodeConfigFetcher> fetcher = WaitForRequest(url);
   EXPECT_FALSE(fetcher->GetSettings());
 }
 
@@ -772,7 +858,7 @@ TEST_F(ConfigParserTest, ParseConfig) {
   test_url_loader_factory().AddResponse(url, std::move(head), xml_config,
                                         status);
 
-  std::unique_ptr<BrandcodeConfigFetcher> fetcher = WaitForRequest(GURL(url));
+  std::unique_ptr<BrandcodeConfigFetcher> fetcher = WaitForRequest(url);
   std::unique_ptr<BrandcodedDefaultSettings> settings = fetcher->GetSettings();
   ASSERT_TRUE(settings);
 
@@ -785,17 +871,43 @@ TEST_F(ConfigParserTest, ParseConfig) {
   EXPECT_TRUE(settings->GetHomepage(&homepage));
   EXPECT_EQ("http://www.foo.com", homepage);
 
-  std::unique_ptr<base::ListValue> startup_list(
+  std::optional<base::Value::List> startup_list(
       settings->GetUrlsToRestoreOnStartup());
-  EXPECT_TRUE(startup_list);
+  EXPECT_TRUE(startup_list.has_value());
   std::vector<std::string> startup_pages;
-  for (const auto& entry : startup_list->GetListDeprecated()) {
+  for (const auto& entry : *startup_list) {
     ASSERT_TRUE(entry.is_string());
     startup_pages.push_back(entry.GetString());
   }
   ASSERT_EQ(2u, startup_pages.size());
   EXPECT_EQ("http://goo.gl", startup_pages[0]);
   EXPECT_EQ("http://foo.de", startup_pages[1]);
+}
+
+// Return an invalid response from the fetch request and delete the
+// Fetcher object in the callback, which mimics how ResetSettingsHandler uses
+// the class. See https://crbug.com/1491296.
+TEST_F(ConfigParserTest, InvalidResponseDeleteFromCallback) {
+  const GURL url("http://test");
+  auto head = network::mojom::URLResponseHead::New();
+  head->headers = base::MakeRefCounted<net::HttpResponseHeaders>(
+      net::HttpUtil::AssembleRawHeaders(
+          "HTTP/1.1 200 OK\nContent-type: application/custom\n\n"));
+  head->mime_type = "application/custom";
+  test_url_loader_factory().AddResponse(url, std::move(head),
+                                        "Custom app data, not XML",
+                                        network::URLLoaderCompletionStatus());
+
+  base::RunLoop run_loop;
+  std::unique_ptr<BrandcodeConfigFetcher> fetcher;
+  auto callback = base::BindLambdaForTesting([&fetcher, &run_loop] {
+    EXPECT_FALSE(fetcher->GetSettings());
+    fetcher.reset();
+    run_loop.Quit();
+  });
+  fetcher = std::make_unique<BrandcodeConfigFetcher>(&test_url_loader_factory(),
+                                           std::move(callback), url, "ABCD");
+  run_loop.Run();
 }
 
 TEST_F(ProfileResetterTest, CheckSnapshots) {
@@ -941,7 +1053,7 @@ struct FeedbackCapture {
 
   MOCK_METHOD0(OnUpdatedList, void(void));
 
-  std::unique_ptr<base::ListValue> list_;
+  base::Value::List list_;
 };
 
 // Make sure GetReadableFeedback handles non-ascii letters.
@@ -980,22 +1092,21 @@ TEST_F(ProfileResetterTest, GetReadableFeedback) {
   ::testing::Mock::VerifyAndClearExpectations(&capture);
   // The homepage and the startup page are in punycode. They are unreadable.
   // Trying to find the extension name.
-  std::unique_ptr<base::ListValue> list = std::move(capture.list_);
-  ASSERT_TRUE(list);
+  base::Value::List list = std::move(capture.list_);
   bool checked_extensions = false;
   bool checked_shortcuts = false;
-  for (size_t i = 0; i < list->GetListDeprecated().size(); ++i) {
-    const base::Value& dict = list->GetListDeprecated()[i];
-    ASSERT_TRUE(dict.is_dict());
-    const std::string* value = dict.FindStringKey("key");
+  for (const auto& entry : list) {
+    const base::Value::Dict* dict = entry.GetIfDict();
+    ASSERT_TRUE(dict);
+    const std::string* value = dict->FindString("key");
     ASSERT_TRUE(value);
     if (*value == "Extensions") {
-      const std::string* extensions = dict.FindStringKey("value");
+      const std::string* extensions = dict->FindString("value");
       ASSERT_TRUE(extensions);
       EXPECT_EQ(*extensions, "Tiësto");
       checked_extensions = true;
     } else if (*value == "Shortcut targets") {
-      const std::string* targets = dict.FindStringKey("value");
+      const std::string* targets = dict->FindString("value");
       ASSERT_TRUE(targets);
       EXPECT_NE(std::string::npos, targets->find("foo.com")) << *targets;
       checked_shortcuts = true;
@@ -1024,6 +1135,7 @@ TEST_F(ProfileResetterTest, ResetNTPCustomizationsTest) {
       GURL("https://background.com"));
   ntp_custom_background_service->SetCustomBackgroundInfo(
       /*background_url=*/GURL("https://background.com"),
+      /*thumbnail_url=*/GURL("https://thumbnail.com"),
       /*attribution_line_1=*/"line 1",
       /*attribution_line_2=*/"line 2",
       /*action_url=*/GURL("https://action.com"),
@@ -1033,5 +1145,45 @@ TEST_F(ProfileResetterTest, ResetNTPCustomizationsTest) {
   EXPECT_FALSE(
       ntp_custom_background_service->GetCustomBackground().has_value());
 }
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+TEST_F(DnsConfigResetTest, ResetDnsConfigurations) {
+  ash::ShillServiceClient::TestInterface* shill_service_client =
+      ash::ShillServiceClient::Get()->GetTestInterface();
+
+  // DNS settings.
+  // Set the profile so this shows up as a configured network.
+  const std::string kWifi1Path = "/service/wifi1";
+  ash::NetworkHandler::Get()
+      ->managed_network_configuration_handler()
+      ->SetPolicy(::onc::ONC_SOURCE_DEVICE_POLICY, std::string(),
+                  base::Value::List(), base::Value::Dict());
+  // Set a static NameServers config.
+  base::Value::Dict static_ip_config;
+  base::Value::List name_servers;
+  name_servers.Append("8.8.3.1");
+  name_servers.Append("8.8.2.1");
+  name_servers.Append("0.0.0.0");
+  name_servers.Append("0.0.0.0");
+  static_ip_config.Set(shill::kNameServersProperty, std::move(name_servers));
+  shill_service_client->SetServiceProperty(
+      kWifi1Path, shill::kStaticIPConfigProperty,
+      base::Value(std::move(static_ip_config)));
+
+  // Verify that network exists and the custom name server has been applied.
+  const base::Value::Dict* shill_properties =
+      shill_service_client->GetServiceProperties(kWifi1Path);
+  ASSERT_TRUE(shill_properties);
+  EXPECT_THAT(GetStaticNameServersFromShillProperties(*shill_properties),
+              testing::ElementsAre("8.8.3.1", "8.8.2.1", "0.0.0.0", "0.0.0.0"));
+
+  ResetAndWait(ProfileResetter::DNS_CONFIGURATIONS);
+
+  // Check DNS settings have changed to expected defaults.
+  // Verify that the given network has it's NameServers field cleared.
+  EXPECT_THAT(GetStaticNameServersFromShillProperties(*shill_properties),
+              testing::IsEmpty());
+}
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 }  // namespace

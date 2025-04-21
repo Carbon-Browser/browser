@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,14 @@
 
 #include <stdint.h>
 
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "chromeos/ash/services/assistant/public/mojom/assistant_audio_decoder.mojom.h"
 #include "media/base/data_source.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 // Provides data source to the audio stream decoder. Class must be created and
 // destroyed on a same thread. The thread must not be blocked for read
@@ -41,6 +41,8 @@ class IPCDataSource : public media::DataSource {
   bool GetSize(int64_t* size_out) override;
   bool IsStreaming() override;
   void SetBitrate(int bitrate) override;
+  bool PassedTimingAllowOriginCheck() override;
+  bool WouldTaintOrigin() override;
 
  private:
   // Media data read helpers: must be run on the utility thread.
@@ -60,7 +62,6 @@ class IPCDataSource : public media::DataSource {
   THREAD_CHECKER(data_source_thread_checker_);
 };
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant
 
 #endif  // CHROMEOS_ASH_SERVICES_ASSISTANT_AUDIO_DECODER_IPC_DATA_SOURCE_H_

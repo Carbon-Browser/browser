@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,8 @@
 #include "components/background_task_scheduler/background_task.h"
 
 using base::android::JavaParamRef;
+
+class Profile;
 
 // A task managing the background activity of the offline page prefetcher.
 class ProxyNativeTask {
@@ -27,14 +29,13 @@ class ProxyNativeTask {
                                         const JavaParamRef<jobject>& jcaller,
                                         const JavaParamRef<jobject>& jkey);
 
-  void StartBackgroundTaskWithFullBrowser(
-      JNIEnv* env,
-      const JavaParamRef<jobject>& jcaller,
-      const JavaParamRef<jobject>& jprofile);
+  void StartBackgroundTaskWithFullBrowser(JNIEnv* env,
+                                          const JavaParamRef<jobject>& jcaller,
+                                          Profile* profile);
 
   void OnFullBrowserLoaded(JNIEnv* env,
                            const JavaParamRef<jobject>& jcaller,
-                           const JavaParamRef<jobject>& jprofile);
+                           Profile* profile);
 
   jboolean StopBackgroundTask(JNIEnv* env,
                               const JavaParamRef<jobject>& jcaller);

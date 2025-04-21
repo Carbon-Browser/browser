@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include <memory>
 #include <string>
 
-#include "components/sync/base/model_type.h"
+#include "components/sync/base/data_type.h"
 #include "components/sync/engine/loopback_server/loopback_server_entity.h"
 #include "components/sync/protocol/unique_position.pb.h"
 
@@ -37,7 +37,7 @@ class PersistentBookmarkEntity : public LoopbackServerEntity {
       const std::string& originator_cache_guid);
 
   // Factory function for PersistentBookmarkEntity. The server's current entity
-  // for this ID, |current_server_entity|, is passed here because the client
+  // for this ID, `current_server_entity`, is passed here because the client
   // does not always send the complete entity over the wire. This requires
   // copying of some of the existing entity when creating a new entity.
   static std::unique_ptr<LoopbackServerEntity> CreateUpdatedVersion(

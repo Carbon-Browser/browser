@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,8 @@ private:
 
 class HeapObject : public GarbageCollected<HeapObject> {
 public:
+ explicit HeapObject(Persistent<HeapObject>& ref) : m_ref(ref) {}
+
  void Trace(Visitor*) const;
 
 private:
@@ -27,6 +29,8 @@ private:
     std::unique_ptr<PartObject> m_unique_part;
     Persistent<HeapVector<Member<HeapObject>>> m_objs;
     WeakPersistent<HeapObject> m_weakPersistent;
+    Persistent<HeapObject>& m_ref;
+    Persistent<HeapObject>* m_ptr;
 };
 
 }

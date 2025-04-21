@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,7 @@ using ::testing::ElementsAre;
 // transition to LoadingState::kLoadedIdle. Collects all intermediate states
 // observed in-between. Generates an error if transitions are observed for
 // another PageNode than |page_node|.
-class PageLoadingStateObserver : public PageNode::ObserverDefaultImpl,
+class PageLoadingStateObserver : public PageNodeObserver,
                                  public GraphOwnedDefaultImpl {
  public:
   PageLoadingStateObserver(base::WeakPtr<PageNode> page_node,
@@ -104,11 +104,7 @@ class PageLoadingStateObserver : public PageNode::ObserverDefaultImpl,
 
 }  // namespace
 
-class PageLoadTrackerDecoratorTest : public InProcessBrowserTest {
- public:
-  PageLoadTrackerDecoratorTest() = default;
-  ~PageLoadTrackerDecoratorTest() override = default;
-};
+using PageLoadTrackerDecoratorTest = InProcessBrowserTest;
 
 // Integration test verifying that everything is hooked up in Chrome to update
 // PageNode::GetLoadingState() is updated on navigation. See
@@ -134,9 +130,11 @@ IN_PROC_BROWSER_TEST_F(PageLoadTrackerDecoratorTest, PageNodeLoadingState) {
                                     /* exit_if_already_loaded_idle=*/false);
 
   // Navigate.
-  browser()->OpenURL(content::OpenURLParams(
-      embedded_test_server()->GetURL("/empty.html"), content::Referrer(),
-      WindowOpenDisposition::CURRENT_TAB, ui::PAGE_TRANSITION_TYPED, false));
+  browser()->OpenURL(
+      content::OpenURLParams(
+          embedded_test_server()->GetURL("/empty.html"), content::Referrer(),
+          WindowOpenDisposition::CURRENT_TAB, ui::PAGE_TRANSITION_TYPED, false),
+      /*navigation_handle_callback=*/{});
 
   // Wait until GetLoadingState() transitions to LoadingState::kLoadedIdle.
   observer.Wait();

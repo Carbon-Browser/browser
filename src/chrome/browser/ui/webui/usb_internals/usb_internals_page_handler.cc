@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@ UsbInternalsPageHandler::UsbInternalsPageHandler(
     mojo::PendingReceiver<mojom::UsbInternalsPageHandler> receiver)
     : receiver_(this, std::move(receiver)) {}
 
-UsbInternalsPageHandler::~UsbInternalsPageHandler() {}
+UsbInternalsPageHandler::~UsbInternalsPageHandler() = default;
 
 void UsbInternalsPageHandler::BindTestInterface(
     mojo::PendingReceiver<device::mojom::UsbDeviceManagerTest> receiver) {

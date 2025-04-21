@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "services/device/usb/usb_service_impl.h"
 
@@ -12,9 +17,9 @@
 #include <utility>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/memory/weak_ptr.h"
@@ -50,7 +55,7 @@ scoped_refptr<UsbContext> InitializeUsbContextBlocking() {
   return nullptr;
 }
 
-absl::optional<std::vector<ScopedLibusbDeviceRef>> GetDeviceListBlocking(
+std::optional<std::vector<ScopedLibusbDeviceRef>> GetDeviceListBlocking(
     scoped_refptr<UsbContext> usb_context) {
   base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
                                                 base::BlockingType::MAY_BLOCK);
@@ -61,7 +66,7 @@ absl::optional<std::vector<ScopedLibusbDeviceRef>> GetDeviceListBlocking(
   if (device_count < 0) {
     USB_LOG(ERROR) << "Failed to get device list: "
                    << ConvertPlatformUsbErrorToString(device_count);
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   std::vector<ScopedLibusbDeviceRef> scoped_devices;
@@ -173,7 +178,7 @@ void OnDeviceOpenedReadDescriptors(
 }  // namespace
 
 UsbServiceImpl::UsbServiceImpl()
-    : task_runner_(base::SequencedTaskRunnerHandle::Get()) {
+    : task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {
   weak_self_ = weak_factory_.GetWeakPtr();
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE, kBlockingTaskTraits,
@@ -247,7 +252,7 @@ void UsbServiceImpl::RefreshDevices() {
 }
 
 void UsbServiceImpl::OnDeviceList(
-    absl::optional<std::vector<ScopedLibusbDeviceRef>> devices) {
+    std::optional<std::vector<ScopedLibusbDeviceRef>> devices) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (!devices) {
     RefreshDevicesComplete();

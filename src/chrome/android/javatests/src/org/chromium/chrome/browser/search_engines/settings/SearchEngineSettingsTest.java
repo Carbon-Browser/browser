@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,13 +15,15 @@ import org.junit.Test;
 import org.junit.rules.RuleChain;
 import org.junit.runner.RunWith;
 
+import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.util.CallbackHelper;
 import org.chromium.base.test.util.Criteria;
 import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.base.test.util.DisableIf;
+import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.Feature;
-import org.chromium.base.test.util.FlakyTest;
 import org.chromium.chrome.browser.init.ChromeBrowserInitializer;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.search_engines.TemplateUrlServiceFactory;
 import org.chromium.chrome.browser.settings.MainSettings;
 import org.chromium.chrome.browser.settings.SettingsActivityTestRule;
@@ -32,14 +34,10 @@ import org.chromium.components.policy.test.annotations.Policies;
 import org.chromium.components.search_engines.TemplateUrl;
 import org.chromium.components.search_engines.TemplateUrlService;
 import org.chromium.components.search_engines.TemplateUrlService.LoadListener;
-import org.chromium.content_public.browser.test.util.TestThreadUtils;
 
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 
-/**
- * Tests for Search Engine Settings.
- */
+/** Tests for Search Engine Settings. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 public class SearchEngineSettingsTest {
     private final ChromeBrowserTestRule mBrowserTestRule = new ChromeBrowserTestRule();
@@ -53,13 +51,14 @@ public class SearchEngineSettingsTest {
     // We need to destroy the SettingsActivity before tearing down the mock sign-in environment
     // setup in ChromeBrowserTestRule to avoid code crash.
     @Rule
-    public final RuleChain mRuleChain = RuleChain.outerRule(mBrowserTestRule)
-                                                .around(mMainSettingsTestRule)
-                                                .around(mSearchEngineSettingsTestRule);
+    public final RuleChain mRuleChain =
+            RuleChain.outerRule(mBrowserTestRule)
+                    .around(mMainSettingsTestRule)
+                    .around(mSearchEngineSettingsTestRule);
 
-    /**
-     * Change search engine and make sure it works correctly.
-     */
+    private TemplateUrlService mTemplateUrlService;
+
+    /** Change search engine and make sure it works correctly. */
     @Test
     @SmallTest
     @Feature({"Preferences"})
@@ -70,42 +69,44 @@ public class SearchEngineSettingsTest {
         mSearchEngineSettingsTestRule.startSettingsActivity();
 
         // Set the second search engine as the default using TemplateUrlService.
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            SearchEngineSettings pref = mSearchEngineSettingsTestRule.getFragment();
-            pref.setValueForTesting("1");
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    SearchEngineSettings pref = mSearchEngineSettingsTestRule.getFragment();
+                    pref.setValueForTesting("1");
 
-            // Ensure that the second search engine in the list is selected.
-            Assert.assertNotNull(pref);
-            Assert.assertEquals("1", pref.getValueForTesting());
+                    // Ensure that the second search engine in the list is selected.
+                    Assert.assertNotNull(pref);
+                    Assert.assertEquals("1", pref.getValueForTesting());
 
-            // Simulate selecting the third search engine, ensure that TemplateUrlService is
-            // updated.
-            String keyword2 = pref.setValueForTesting("2");
-            TemplateUrlService templateUrlService = TemplateUrlServiceFactory.get();
-            Assert.assertEquals(
-                    keyword2, templateUrlService.getDefaultSearchEngineTemplateUrl().getKeyword());
+                    // Simulate selecting the third search engine, ensure that TemplateUrlService is
+                    // updated.
+                    String keyword2 = pref.setValueForTesting("2");
+                    Assert.assertEquals(
+                            keyword2,
+                            mTemplateUrlService.getDefaultSearchEngineTemplateUrl().getKeyword());
 
-            // Simulate selecting the fourth search engine.
-            String keyword3 = pref.getKeywordFromIndexForTesting(3);
-            String url = templateUrlService.getSearchEngineUrlFromTemplateUrl(keyword3);
-            keyword3 = pref.setValueForTesting("3");
-            Assert.assertEquals(keyword3,
-                    TemplateUrlServiceFactory.get()
-                            .getDefaultSearchEngineTemplateUrl()
-                            .getKeyword());
-        });
+                    // Simulate selecting the fourth search engine.
+                    String keyword3 = pref.getKeywordFromIndexForTesting(3);
+                    String url = mTemplateUrlService.getSearchEngineUrlFromTemplateUrl(keyword3);
+                    keyword3 = pref.setValueForTesting("3");
+                    Assert.assertEquals(
+                            keyword3,
+                            mTemplateUrlService.getDefaultSearchEngineTemplateUrl().getKeyword());
+                });
     }
 
     @Test
     @SmallTest
     @Feature({"Preferences"})
-    @Policies.Add({ @Policies.Item(key = "DefaultSearchProviderEnabled", string = "false") })
+    @Policies.Add({@Policies.Item(key = "DefaultSearchProviderEnabled", string = "false")})
     public void testSearchEnginePreference_DisabledIfNoDefaultSearchEngine() throws Exception {
-        TestThreadUtils.runOnUiThreadBlocking(
-                () -> { ChromeBrowserInitializer.getInstance().handleSynchronousStartup(); });
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    ChromeBrowserInitializer.getInstance().handleSynchronousStartup();
+                });
 
         ensureTemplateUrlServiceLoaded();
-        CriteriaHelper.pollUiThread(() -> TemplateUrlServiceFactory.get().isDefaultSearchManaged());
+        CriteriaHelper.pollUiThread(() -> mTemplateUrlService.isDefaultSearchManaged());
 
         mMainSettingsTestRule.startSettingsActivity();
 
@@ -114,14 +115,17 @@ public class SearchEngineSettingsTest {
         final Preference searchEnginePref =
                 waitForPreference(mainSettings, MainSettings.PREF_SEARCH_ENGINE);
 
-        CriteriaHelper.pollUiThread(() -> {
-            Criteria.checkThat(searchEnginePref.getFragment(), Matchers.nullValue());
-        });
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            ManagedPreferenceDelegate managedPrefDelegate =
-                    mainSettings.getManagedPreferenceDelegateForTest();
-            Assert.assertTrue(managedPrefDelegate.isPreferenceControlledByPolicy(searchEnginePref));
-        });
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    Criteria.checkThat(searchEnginePref.getFragment(), Matchers.nullValue());
+                });
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    ManagedPreferenceDelegate managedPrefDelegate =
+                            mainSettings.getManagedPreferenceDelegateForTest();
+                    Assert.assertTrue(
+                            managedPrefDelegate.isPreferenceControlledByPolicy(searchEnginePref));
+                });
     }
 
     /**
@@ -131,7 +135,7 @@ public class SearchEngineSettingsTest {
     @Test
     @SmallTest
     @Feature({"Preferences"})
-    @FlakyTest(message = "crbug.com/540706")
+    @DisabledTest(message = "crbug.com/540706")
     @DisableIf.Build(hardware_is = "sprout", message = "fails on android-one: crbug.com/540706")
     public void testSearchEnginePreferenceHttp() throws Exception {
         ensureTemplateUrlServiceLoaded();
@@ -139,34 +143,35 @@ public class SearchEngineSettingsTest {
         mSearchEngineSettingsTestRule.startSettingsActivity();
 
         // Set the first search engine as the default using TemplateUrlService.
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            SearchEngineSettings pref = mSearchEngineSettingsTestRule.getFragment();
-            pref.setValueForTesting("0");
-        });
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    SearchEngineSettings pref = mSearchEngineSettingsTestRule.getFragment();
+                    pref.setValueForTesting("0");
+                });
 
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            // Ensure that the first search engine in the list is selected.
-            SearchEngineSettings pref = mSearchEngineSettingsTestRule.getFragment();
-            Assert.assertNotNull(pref);
-            Assert.assertEquals("0", pref.getValueForTesting());
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    // Ensure that the first search engine in the list is selected.
+                    SearchEngineSettings pref = mSearchEngineSettingsTestRule.getFragment();
+                    Assert.assertNotNull(pref);
+                    Assert.assertEquals("0", pref.getValueForTesting());
 
-            // Simulate selecting a search engine that uses HTTP.
-            int index = indexOfFirstHttpSearchEngine(pref);
-            String keyword = pref.setValueForTesting(Integer.toString(index));
+                    // Simulate selecting a search engine that uses HTTP.
+                    int index = indexOfFirstHttpSearchEngine(pref);
+                    String keyword = pref.setValueForTesting(Integer.toString(index));
 
-            TemplateUrlService templateUrlService = TemplateUrlServiceFactory.get();
-            Assert.assertEquals(
-                    keyword, templateUrlService.getDefaultSearchEngineTemplateUrl().getKeyword());
-        });
+                    Assert.assertEquals(
+                            keyword,
+                            mTemplateUrlService.getDefaultSearchEngineTemplateUrl().getKeyword());
+                });
     }
 
     private int indexOfFirstHttpSearchEngine(SearchEngineSettings pref) {
-        TemplateUrlService templateUrlService = TemplateUrlServiceFactory.get();
-        List<TemplateUrl> urls = templateUrlService.getTemplateUrls();
+        List<TemplateUrl> urls = mTemplateUrlService.getTemplateUrls();
         int index;
         for (index = 0; index < urls.size(); ++index) {
             String keyword = pref.getKeywordFromIndexForTesting(index);
-            String url = templateUrlService.getSearchEngineUrlFromTemplateUrl(keyword);
+            String url = mTemplateUrlService.getSearchEngineUrlFromTemplateUrl(keyword);
             if (url.startsWith("http:")) {
                 return index;
             }
@@ -178,30 +183,39 @@ public class SearchEngineSettingsTest {
     private void ensureTemplateUrlServiceLoaded() throws Exception {
         // Make sure the template_url_service is loaded.
         final CallbackHelper onTemplateUrlServiceLoadedHelper = new CallbackHelper();
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            if (TemplateUrlServiceFactory.get().isLoaded()) {
-                onTemplateUrlServiceLoadedHelper.notifyCalled();
-            } else {
-                TemplateUrlServiceFactory.get().registerLoadListener(new LoadListener() {
-                    @Override
-                    public void onTemplateUrlServiceLoaded() {
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    if (mTemplateUrlService == null) {
+                        mTemplateUrlService =
+                                TemplateUrlServiceFactory.getForProfile(
+                                        ProfileManager.getLastUsedRegularProfile());
+                    }
+                    if (mTemplateUrlService.isLoaded()) {
                         onTemplateUrlServiceLoadedHelper.notifyCalled();
+                    } else {
+                        mTemplateUrlService.registerLoadListener(
+                                new LoadListener() {
+                                    @Override
+                                    public void onTemplateUrlServiceLoaded() {
+                                        onTemplateUrlServiceLoadedHelper.notifyCalled();
+                                    }
+                                });
+                        mTemplateUrlService.load();
                     }
                 });
-                TemplateUrlServiceFactory.get().load();
-            }
-        });
         onTemplateUrlServiceLoadedHelper.waitForCallback(0);
     }
 
-    private static Preference waitForPreference(final PreferenceFragmentCompat prefFragment,
-            final String preferenceKey) throws ExecutionException {
-        CriteriaHelper.pollUiThread(() -> {
-            Criteria.checkThat("Expected valid preference for: " + preferenceKey,
-                    prefFragment.findPreference(preferenceKey), Matchers.notNullValue());
-        });
+    private static Preference waitForPreference(
+            final PreferenceFragmentCompat prefFragment, final String preferenceKey) {
+        CriteriaHelper.pollUiThread(
+                () -> {
+                    Criteria.checkThat(
+                            "Expected valid preference for: " + preferenceKey,
+                            prefFragment.findPreference(preferenceKey),
+                            Matchers.notNullValue());
+                });
 
-        return TestThreadUtils.runOnUiThreadBlocking(
-                () -> prefFragment.findPreference(preferenceKey));
+        return ThreadUtils.runOnUiThreadBlocking(() -> prefFragment.findPreference(preferenceKey));
     }
 }

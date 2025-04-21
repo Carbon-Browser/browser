@@ -1,6 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "components/crash/content/browser/crash_handler_host_linux.h"
 
@@ -13,14 +18,15 @@
 #include <unistd.h>
 
 #include <memory>
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/linux_util.h"
 #include "base/location.h"
 #include "base/logging.h"
@@ -30,10 +36,10 @@
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/current_thread.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -45,8 +51,6 @@
 #endif  // ! BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(IS_ANDROID) && !defined(__LP64__)
-#include <sys/syscall.h>
-
 #define SYS_read __NR_read
 #endif
 
@@ -176,9 +180,9 @@ void CrashHandlerHostLinux::OnFileCanReadWithoutBlocking(int fd) {
   struct msghdr msg = {nullptr};
   struct iovec iov[kCrashIovSize];
 
-  auto crash_context = std::make_unique<char[]>(kCrashContextSize);
+  auto crash_context = base::HeapArray<char>::Uninit(kCrashContextSize);
 #if defined(ADDRESS_SANITIZER)
-  auto asan_report = std::make_unique<char[]>(kMaxAsanReportSize + 1);
+  auto asan_report = base::HeapArray<char>::Uninit(kMaxAsanReportSize + 1);
 #endif
 
   auto crash_keys =
@@ -202,8 +206,8 @@ void CrashHandlerHostLinux::OnFileCanReadWithoutBlocking(int fd) {
 #endif
       sizeof(oom_size) +
       crash_keys_size;
-  iov[0].iov_base = crash_context.get();
-  iov[0].iov_len = kCrashContextSize;
+  iov[0].iov_base = crash_context.data();
+  iov[0].iov_len = crash_context.size();
   iov[1].iov_base = &tid_buf_addr;
   iov[1].iov_len = sizeof(tid_buf_addr);
   iov[2].iov_base = &tid_fd;
@@ -217,8 +221,8 @@ void CrashHandlerHostLinux::OnFileCanReadWithoutBlocking(int fd) {
 #if !defined(ADDRESS_SANITIZER)
   static_assert(5 == kCrashIovSize - 1, "kCrashIovSize should equal 6");
 #else
-  iov[6].iov_base = asan_report.get();
-  iov[6].iov_len = kMaxAsanReportSize + 1;
+  iov[6].iov_base = asan_report.data();
+  iov[6].iov_len = asan_report.size();
   static_assert(6 == kCrashIovSize - 1, "kCrashIovSize should equal 7");
 #endif
   msg.msg_iov = iov;
@@ -261,9 +265,9 @@ void CrashHandlerHostLinux::OnFileCanReadWithoutBlocking(int fd) {
           return;
         }
         DCHECK(!signal_fd.is_valid());
-        int fd = reinterpret_cast<int*>(CMSG_DATA(hdr))[0];
-        DCHECK_GE(fd, 0);  // The kernel should never send a negative fd.
-        signal_fd.reset(fd);
+        int kernel_fd = reinterpret_cast<int*>(CMSG_DATA(hdr))[0];
+        DCHECK_GE(kernel_fd, 0);  // The kernel should never send a negative fd.
+        signal_fd.reset(kernel_fd);
       } else if (hdr->cmsg_type == SCM_CREDENTIALS) {
         DCHECK_EQ(-1, crashing_pid);
         const struct ucred *cred =
@@ -321,11 +325,11 @@ void CrashHandlerHostLinux::OnFileCanReadWithoutBlocking(int fd) {
 void CrashHandlerHostLinux::FindCrashingThreadAndDump(
     pid_t crashing_pid,
     const std::string& expected_syscall_data,
-    std::unique_ptr<char[]> crash_context,
+    base::HeapArray<char> crash_context,
     std::unique_ptr<crash_reporter::internal::TransitionalCrashKeyStorage>
         crash_keys,
 #if defined(ADDRESS_SANITIZER)
-    std::unique_ptr<char[]> asan_report,
+    base::HeapArray<char> asan_report,
 #endif
     uint64_t uptime,
     size_t oom_size,
@@ -339,7 +343,7 @@ void CrashHandlerHostLinux::FindCrashingThreadAndDump(
       attempt <= kNumAttemptsTranslatingTid) {
     LOG(WARNING) << "Could not translate tid, attempt = " << attempt
                  << " retry ...";
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&CrashHandlerHostLinux::FindCrashingThreadAndDump,
                        base::Unretained(this), crashing_pid,
@@ -367,7 +371,7 @@ void CrashHandlerHostLinux::FindCrashingThreadAndDump(
   }
 
   ExceptionHandler::CrashContext* bad_context =
-      reinterpret_cast<ExceptionHandler::CrashContext*>(crash_context.get());
+      reinterpret_cast<ExceptionHandler::CrashContext*>(crash_context.data());
   bad_context->tid = crashing_tid;
 
   auto info = std::make_unique<BreakpadInfo>();
@@ -408,7 +412,7 @@ void CrashHandlerHostLinux::FindCrashingThreadAndDump(
 }
 
 void CrashHandlerHostLinux::WriteDumpFile(BreakpadInfo* info,
-                                          std::unique_ptr<char[]> crash_context,
+                                          base::HeapArray<char> crash_context,
                                           pid_t crashing_pid) {
   base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
                                                 base::BlockingType::MAY_BLOCK);
@@ -433,20 +437,18 @@ void CrashHandlerHostLinux::WriteDumpFile(BreakpadInfo* info,
                          process_type_.c_str(),
                          base::RandUint64());
 
-  if (!google_breakpad::WriteMinidump(minidump_filename.c_str(),
-                                      kMaxMinidumpFileSize,
-                                      crashing_pid,
-                                      crash_context.get(),
-                                      kCrashContextSize,
-                                      google_breakpad::MappingList(),
-                                      google_breakpad::AppMemoryList())) {
+  if (!google_breakpad::WriteMinidump(
+          minidump_filename.c_str(), kMaxMinidumpFileSize, crashing_pid,
+          crash_context.data(), crash_context.size(),
+          google_breakpad::MappingList(), google_breakpad::AppMemoryList())) {
     LOG(ERROR) << "Failed to write crash dump for pid " << crashing_pid;
   }
 #if defined(ADDRESS_SANITIZER)
   // Create a temporary file holding the AddressSanitizer report.
   const base::FilePath log_path =
       base::FilePath(minidump_filename).ReplaceExtension("log");
-  base::WriteFile(log_path, info->asan_report_str, info->asan_report_length);
+  base::WriteFile(log_path, std::string_view(info->asan_report_str,
+                                             info->asan_report_length));
 #endif
 
   // Freed in CrashDumpTask().

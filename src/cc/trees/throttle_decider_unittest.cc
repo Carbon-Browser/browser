@@ -1,6 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "cc/trees/throttle_decider.h"
 #include "components/viz/common/quads/compositor_render_pass_draw_quad.h"
@@ -61,7 +66,7 @@ TEST_F(ThrottleDeciderTest, BackdropFilter) {
   surface_quad->shared_quad_state = &sqs2;
   surface_quad->material = viz::DrawQuad::Material::kSurfaceContent;
   surface_quad->surface_range = viz::SurfaceRange(
-      absl::nullopt,
+      std::nullopt,
       viz::SurfaceId(frame_sink_id, viz::LocalSurfaceId(
                                         1u, base::UnguessableToken::Create())));
   surface_quad->rect = quad_rect;
@@ -75,7 +80,7 @@ TEST_F(ThrottleDeciderTest, BackdropFilter) {
 
   // Put the backdrop filter within bounds (0,10 50x50).
   render_passes[0]->backdrop_filter_bounds =
-      absl::optional<gfx::RRectF>(gfx::RRectF(0.0f, 10.0f, 50.0f, 50.0f, 1.0f));
+      std::optional<gfx::RRectF>(gfx::RRectF(0.0f, 10.0f, 50.0f, 50.0f, 1.0f));
   // The surface quad (0,0 100x100) is partially behind the backdrop filter on
   // the rpdq (0,10 50x50) so it should not be throttled.
   RunThrottleDecider(render_passes);
@@ -92,8 +97,7 @@ TEST_F(ThrottleDeciderTest, BackdropFilter) {
   EXPECT_EQ(GetFrameSinksToThrottle(), expected_frame_sinks);
 
   // Add a mask to the backdrop filter.
-  rpdq->resources.ids[viz::RenderPassDrawQuadInternal::kMaskResourceIdIndex] =
-      viz::ResourceId::FromUnsafeValue(1u);
+  rpdq->resource_id = viz::ResourceId::FromUnsafeValue(1u);
 
   // As the mask would make the backdrop filter to be ignored, the surface
   // should not be throttled.

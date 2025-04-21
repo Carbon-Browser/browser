@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,7 @@
 
 #include "base/feature_list.h"
 #include "chrome/browser/accessibility/accessibility_state_utils.h"
-#include "chrome/browser/browser_process.h"
-#include "chrome/browser/component_updater/desktop_screenshot_editor_component_installer.h"
 #include "chrome/browser/image_editor/screenshot_flow.h"
-#include "chrome/browser/share/share_features.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_window.h"
@@ -38,7 +35,7 @@ void ScreenshotCapturedBubbleController::ShowBubble(
   ui::ScopedClipboardWriter(ui::ClipboardBuffer::kCopyPaste)
       .WriteImage(*captured_image.ToSkBitmap());
 
-  Browser* browser = chrome::FindBrowserWithWebContents(&GetWebContents());
+  Browser* browser = chrome::FindBrowserWithTab(&GetWebContents());
   browser->window()->ShowScreenshotCapturedBubble(&GetWebContents(),
                                                   captured_image);
 }
@@ -52,15 +49,6 @@ void ScreenshotCapturedBubbleController::OnBubbleClosed() {
 }
 
 void ScreenshotCapturedBubbleController::Capture(Browser* browser) {
-  // User has engaged with the screenshot feature; request installation of the
-  // optional editor component.
-  if (base::FeatureList::IsEnabled(share::kSharingDesktopScreenshotsEdit)) {
-    component_updater::ComponentUpdateService* cus =
-        g_browser_process->component_updater();
-    if (cus)
-      component_updater::RegisterDesktopScreenshotEditorComponent(cus);
-  }
-
   content::WebContents* web_contents =
       browser->tab_strip_model()->GetActiveWebContents();
   screenshot_flow_ =
@@ -70,8 +58,9 @@ void ScreenshotCapturedBubbleController::Capture(Browser* browser) {
       callback = base::BindOnce(
           [](base::WeakPtr<content::WebContents> web_contents,
              const image_editor::ScreenshotCaptureResult& image) {
-            if (image.image.IsEmpty() || !web_contents)
+            if (image.image.IsEmpty() || !web_contents) {
               return;
+            }
             sharing_hub::ScreenshotCapturedBubbleController* controller =
                 sharing_hub::ScreenshotCapturedBubbleController::Get(
                     web_contents.get());

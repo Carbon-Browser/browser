@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,11 +10,13 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
 #include "components/gcm_driver/instance_id/android/jni_headers/InstanceIDBridge_jni.h"
 
 using base::android::AttachCurrentThread;
@@ -119,7 +121,7 @@ void InstanceIDAndroid::ValidateToken(const std::string& authorized_entity,
                                       const std::string& token,
                                       ValidateTokenCallback callback) {
   // gcm_driver doesn't store tokens on Android, so assume it's valid.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), true /* is_valid */));
 }
 

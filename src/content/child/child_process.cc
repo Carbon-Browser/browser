@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,24 +6,19 @@
 
 #include <string.h>
 
-#include "base/bind.h"
 #include "base/clang_profiling_buildflags.h"
-#include "base/command_line.h"
-#include "base/lazy_instance.h"
+#include "base/functional/bind.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/process/process_handle.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/threading/hang_watcher.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_local.h"
 #include "build/build_config.h"
 #include "build/config/compiler/compiler_buildflags.h"
 #include "content/child/child_thread_impl.h"
-#include "content/common/android/cpu_time_metrics.h"
-#include "content/common/mojo_core_library_support.h"
-#include "content/public/common/content_switches.h"
-#include "mojo/public/cpp/system/dynamic_library_support.h"
+#include "content/common/process_visibility_tracker.h"
+#include "mojo/public/cpp/bindings/interface_endpoint_client.h"
 #include "sandbox/policy/sandbox_type.h"
 #include "services/tracing/public/cpp/trace_startup.h"
 #include "third_party/blink/public/common/features.h"
@@ -32,11 +27,19 @@
 #include "base/test/clang_profiling.h"
 #endif
 
+#if BUILDFLAG(IS_ANDROID)
+#include "content/common/android/cpu_time_metrics.h"
+#endif
+
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+#include "content/child/sandboxed_process_thread_type_handler.h"
+#endif
+
 namespace content {
 
 namespace {
-base::LazyInstance<base::ThreadLocalPointer<ChildProcess>>::DestructorAtExit
-    g_lazy_child_process_tls = LAZY_INSTANCE_INITIALIZER;
+
+constinit thread_local ChildProcess* child_process = nullptr;
 
 class ChildIOThread : public base::Thread {
  public:
@@ -47,6 +50,8 @@ class ChildIOThread : public base::Thread {
   ChildIOThread& operator=(ChildIOThread&&) = delete;
 
   void Run(base::RunLoop* run_loop) override {
+    mojo::InterfaceEndpointClient::SetThreadNameSuffixForMetrics(
+        "ChildIOThread");
     base::ScopedClosureRunner unregister_thread_closure;
     if (base::HangWatcher::IsIOThreadHangWatchingEnabled()) {
       unregister_thread_closure = base::HangWatcher::RegisterThread(
@@ -55,37 +60,14 @@ class ChildIOThread : public base::Thread {
     base::Thread::Run(run_loop);
   }
 };
-}
+
+}  // namespace
 
 ChildProcess::ChildProcess(base::ThreadType io_thread_type,
                            std::unique_ptr<base::ThreadPoolInstance::InitParams>
                                thread_pool_init_params)
-    : ref_count_(0),
-      shutdown_event_(base::WaitableEvent::ResetPolicy::MANUAL,
-                      base::WaitableEvent::InitialState::NOT_SIGNALED),
+    : resetter_(&child_process, this, nullptr),
       io_thread_(std::make_unique<ChildIOThread>()) {
-  DCHECK(!g_lazy_child_process_tls.Pointer()->Get());
-  g_lazy_child_process_tls.Pointer()->Set(this);
-
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-  const base::CommandLine& command_line =
-      *base::CommandLine::ForCurrentProcess();
-  const bool is_embedded_in_browser_process =
-      !command_line.HasSwitch(switches::kProcessType);
-  if (IsMojoCoreSharedLibraryEnabled() && !is_embedded_in_browser_process) {
-    // If we're in a child process on Linux and dynamic Mojo Core is in use, we
-    // expect early process startup code (see ContentMainRunnerImpl::Run()) to
-    // have already loaded the library via |mojo::LoadCoreLibrary()|, rendering
-    // this call safe even from within a strict sandbox.
-    MojoInitializeFlags flags = MOJO_INITIALIZE_FLAG_NONE;
-    if (sandbox::policy::IsUnsandboxedSandboxType(
-            sandbox::policy::SandboxTypeFromCommandLine(command_line))) {
-      flags |= MOJO_INITIALIZE_FLAG_FORCE_DIRECT_SHARED_MEMORY_ALLOCATION;
-    }
-    CHECK_EQ(MOJO_RESULT_OK, mojo::InitializeCoreLibrary(flags));
-  }
-#endif
-
   // Start ThreadPoolInstance if not already done. A ThreadPoolInstance
   // should already exist, and may already be running when ChildProcess is
   // instantiated in the browser process or in a test process.
@@ -125,6 +107,9 @@ ChildProcess::ChildProcess(base::ThreadType io_thread_type,
   tracing::InitTracingPostThreadPoolStartAndFeatureList(
       /* enable_consumer */ false);
 
+  // Ensure the visibility tracker is created on the main thread.
+  ProcessVisibilityTracker::GetInstance();
+
 #if BUILDFLAG(IS_ANDROID)
   SetupCpuTimeMetrics();
 #endif
@@ -132,17 +117,23 @@ ChildProcess::ChildProcess(base::ThreadType io_thread_type,
   // We can't recover from failing to start the IO thread.
   base::Thread::Options thread_options(base::MessagePumpType::IO, 0);
   thread_options.thread_type = io_thread_type;
-// TODO(1329208): Figure out whether IS_ANDROID can be lifted here.
+// TODO(crbug.com/40226692): Figure out whether IS_ANDROID can be lifted here.
 #if BUILDFLAG(IS_ANDROID)
   // TODO(reveman): Remove this in favor of setting it explicitly for each type
   // of process.
-  thread_options.thread_type = base::ThreadType::kCompositing;
+  thread_options.thread_type = base::ThreadType::kDisplayCritical;
 #endif
   CHECK(io_thread_->StartWithOptions(std::move(thread_options)));
+  io_thread_runner_ = io_thread_->task_runner();
 }
 
+ChildProcess::ChildProcess(
+    scoped_refptr<base::SingleThreadTaskRunner> io_thread_runner)
+    : resetter_(&child_process, this, nullptr),
+      io_thread_runner_(std::move(io_thread_runner)) {}
+
 ChildProcess::~ChildProcess() {
-  DCHECK(g_lazy_child_process_tls.Pointer()->Get() == this);
+  DCHECK_EQ(child_process, this);
 
   // Signal this event before destroying the child process.  That way all
   // background threads can cleanup.
@@ -161,9 +152,10 @@ ChildProcess::~ChildProcess() {
     }
   }
 
-  g_lazy_child_process_tls.Pointer()->Set(nullptr);
-  io_thread_->Stop();
-  io_thread_.reset();
+  if (io_thread_) {
+    io_thread_->Stop();
+    io_thread_.reset();
+  }
 
   if (initialized_thread_pool_) {
     DCHECK(base::ThreadPoolInstance::Get());
@@ -186,6 +178,23 @@ void ChildProcess::set_main_thread(ChildThreadImpl* thread) {
   main_thread_.reset(thread);
 }
 
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+void ChildProcess::SetIOThreadType(base::ThreadType thread_type) {
+  if (!io_thread_) {
+    return;
+  }
+
+  // The SandboxedProcessThreadTypeHandler isn't created in
+  // in --single-process mode or if certain base::Features are disabled. See
+  // instances of SandboxedProcessThreadTypeHandler::Create() for more details.
+  if (SandboxedProcessThreadTypeHandler* sandboxed_process_thread_type_handler =
+          SandboxedProcessThreadTypeHandler::Get()) {
+    sandboxed_process_thread_type_handler->HandleThreadTypeChange(
+        io_thread_->GetThreadId(), base::ThreadType::kDisplayCritical);
+  }
+}
+#endif
+
 void ChildProcess::AddRefProcess() {
   DCHECK(!main_thread_.get() ||  // null in unittests.
          main_thread_->main_thread_runner()->BelongsToCurrentThread());
@@ -204,7 +213,7 @@ void ChildProcess::ReleaseProcess() {
 }
 
 ChildProcess* ChildProcess::current() {
-  return g_lazy_child_process_tls.Pointer()->Get();
+  return child_process;
 }
 
 base::WaitableEvent* ChildProcess::GetShutDownEvent() {

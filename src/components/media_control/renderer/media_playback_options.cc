@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "components/media_control/renderer/media_control_buildflags.h"
 #include "content/public/renderer/render_frame.h"
@@ -28,7 +28,7 @@ MediaPlaybackOptions::MediaPlaybackOptions(content::RenderFrame* render_frame)
     : content::RenderFrameObserver(render_frame),
       content::RenderFrameObserverTracker<MediaPlaybackOptions>(render_frame),
       render_frame_action_blocked_(false) {
-  // TODO(https://crbug.com/1057860): Extract to callers and remove
+  // TODO(crbug.com/40120884): Extract to callers and remove
   // renderer_media_playback_options_.
   // Override default content MediaPlaybackOptions
   renderer_media_playback_options_
@@ -36,10 +36,11 @@ MediaPlaybackOptions::MediaPlaybackOptions(content::RenderFrame* render_frame)
   render_frame->SetRenderFrameMediaPlaybackOptions(
       renderer_media_playback_options_);
 
-  render_frame->GetAssociatedInterfaceRegistry()->AddInterface(
-      base::BindRepeating(
-          &MediaPlaybackOptions::OnMediaPlaybackOptionsAssociatedReceiver,
-          base::Unretained(this)));
+  render_frame->GetAssociatedInterfaceRegistry()
+      ->AddInterface<components::media_control::mojom::MediaPlaybackOptions>(
+          base::BindRepeating(
+              &MediaPlaybackOptions::OnMediaPlaybackOptionsAssociatedReceiver,
+              base::Unretained(this)));
 }
 
 MediaPlaybackOptions::~MediaPlaybackOptions() {

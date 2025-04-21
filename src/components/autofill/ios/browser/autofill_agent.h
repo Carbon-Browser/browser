@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #ifndef COMPONENTS_AUTOFILL_IOS_BROWSER_AUTOFILL_AGENT_H_
@@ -11,6 +11,7 @@
 #import "components/autofill/ios/browser/form_suggestion_provider.h"
 
 class PrefService;
+@protocol SnackbarCommands;
 
 namespace web {
 class WebState;
@@ -23,6 +24,9 @@ class WebState;
 @interface AutofillAgent : NSObject <AutofillClientIOSBridge,
                                      AutofillDriverIOSBridge,
                                      FormSuggestionProvider>
+
+// Used to show a snackbar.
+@property(nonatomic, weak) id<SnackbarCommands> snackbarHandler;
 
 // Designated initializer. Arguments |prefService| and |webState| should not be
 // null.

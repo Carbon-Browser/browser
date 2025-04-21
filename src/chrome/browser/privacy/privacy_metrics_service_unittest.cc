@@ -1,15 +1,17 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/privacy/privacy_metrics_service.h"
 
+#include "base/notreached.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "build/build_config.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/signin/public/identity_manager/identity_test_environment.h"
-#include "components/sync/driver/test_sync_service.h"
+#include "components/sync/test/test_sync_service.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -24,8 +26,8 @@ class PrivacyMetricsServiceTest : public testing::Test {
   void CreateService(bool clear_on_exit_enabled,
                      signin::ConsentLevel consent_level) {
     SetClearOnExitEnabled(clear_on_exit_enabled);
-    SetPrimaryAccountountConsentLevel(consent_level);
-    sync_service()->SetTransportState(
+    SetPrimaryAccountConsentLevel(consent_level);
+    sync_service()->SetMaxTransportState(
         syncer::SyncService::TransportState::INITIALIZING);
 
     privacy_metrics_service_ = std::make_unique<PrivacyMetricsService>(
@@ -43,42 +45,52 @@ class PrivacyMetricsServiceTest : public testing::Test {
   }
 
   void ActivateSync() {
-    SetPrimaryAccountountConsentLevel(signin::ConsentLevel::kSync);
-    sync_service()->SetTransportState(
+    SetPrimaryAccountConsentLevel(signin::ConsentLevel::kSync);
+    sync_service()->ClearAuthError();
+    sync_service()->SetMaxTransportState(
         syncer::SyncService::TransportState::ACTIVE);
-    sync_service()->SetDisableReasons({});
+    ASSERT_EQ(sync_service()->GetTransportState(),
+              syncer::SyncService::TransportState::ACTIVE);
     sync_service()->FireStateChanged();
   }
 
   void PauseSync() {
-    SetPrimaryAccountountConsentLevel(signin::ConsentLevel::kSync);
-    sync_service()->SetTransportState(
-        syncer::SyncService::TransportState::PAUSED);
-    sync_service()->SetDisableReasons({});
+    SetPrimaryAccountConsentLevel(signin::ConsentLevel::kSync);
+    sync_service()->SetPersistentAuthError();
+    ASSERT_EQ(sync_service()->GetTransportState(),
+              syncer::SyncService::TransportState::PAUSED);
     sync_service()->FireStateChanged();
   }
 
   void DisableSync() {
-    SetPrimaryAccountountConsentLevel(signin::ConsentLevel::kSignin);
-    sync_service()->SetTransportState(
-        syncer::SyncService::TransportState::DISABLED);
-    sync_service()->SetDisableReasons(
-        syncer::SyncService::DISABLE_REASON_NOT_SIGNED_IN);
+    identity_test_env_.ClearPrimaryAccount();
+    sync_service()->SetSignedOut();
+    ASSERT_EQ(sync_service()->GetTransportState(),
+              syncer::SyncService::TransportState::DISABLED);
     sync_service()->FireStateChanged();
   }
 
-  void SetPrimaryAccountountConsentLevel(signin::ConsentLevel consent_level) {
+  void SetPrimaryAccountConsentLevel(signin::ConsentLevel consent_level) {
     if (consent_level == signin::ConsentLevel::kSignin &&
         identity_test_env()->identity_manager()->HasPrimaryAccount(
             signin::ConsentLevel::kSync)) {
+#if !BUILDFLAG(IS_CHROMEOS_ASH)
       identity_test_env()->RevokeSyncConsent();
       return;
+#else
+      NOTREACHED() << "It is not possible to unconsent from Sync on Ash";
+#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
     }
 
-    if (!identity_test_env()->identity_manager()->HasPrimaryAccount(
-            consent_level)) {
-      identity_test_env()->SetPrimaryAccount("test@test.com", consent_level);
+    CoreAccountInfo account_info =
+        identity_test_env()->identity_manager()->GetPrimaryAccountInfo(
+            consent_level);
+    if (account_info.IsEmpty()) {
+      account_info = identity_test_env()->SetPrimaryAccount("test@test.com",
+                                                            consent_level);
     }
+
+    sync_service_.SetSignedIn(consent_level, account_info);
   }
 
   TestingProfile* profile() { return &profile_; }
@@ -116,10 +128,13 @@ TEST_F(PrivacyMetricsServiceTest, BasicShutdownMetrics) {
   privacy_metrics_service()->Shutdown();
   histogram_tester.ExpectTotalCount(kClearOnExitSyncEventHistogram, 0);
 
+#if !BUILDFLAG(IS_CHROMEOS_ASH)
+  // Disabling Sync is not possible on Ash.
   SetClearOnExitEnabled(true);
   DisableSync();
   privacy_metrics_service()->Shutdown();
   histogram_tester.ExpectTotalCount(kClearOnExitSyncEventHistogram, 0);
+#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
 
   // If COE is enabled, and sync is paused, an event should be recorded.
   SetClearOnExitEnabled(true);
@@ -154,9 +169,11 @@ TEST_F(PrivacyMetricsServiceTest, FixSyncPausedThroughReLogin) {
   histogram_tester.ExpectTotalCount(kClearOnExitSyncEventHistogram, 3);
 }
 
+#if !BUILDFLAG(IS_CHROMEOS_ASH)
+// Confirm that when the user fixes the sync paused state by logging out of
+// the affected account, the appropriate events are recorded.
+// Logging out of the Sync account is not possible on Ash.
 TEST_F(PrivacyMetricsServiceTest, FixSyncPausedThroughLogout) {
-  // Confirm that when the user fixes the sync paused state by logging out of
-  // the affected account, the appropriate events are recorded.
   CreateService(/*clear_on_exit_enabled=*/true, signin::ConsentLevel::kSync);
   base::HistogramTester histogram_tester;
   PauseSync();
@@ -178,6 +195,7 @@ TEST_F(PrivacyMetricsServiceTest, FixSyncPausedThroughLogout) {
       1);
   histogram_tester.ExpectTotalCount(kClearOnExitSyncEventHistogram, 3);
 }
+#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
 
 TEST_F(PrivacyMetricsServiceTest, NoSyncIssues) {
   // Check that if a user has Clear on Exit enabled, but does not experience
@@ -203,8 +221,8 @@ TEST_F(PrivacyMetricsServiceTest, AccountChangeNoSyncIssues) {
   // Check that if the profile is shutting down with sync & COE enabled, but
   // didn't start paused, and the account consent changed, the correct event
   // is recorded.
-  base::HistogramTester histogram_tester;
   CreateService(/*clear_on_exit_enabled=*/true, signin::ConsentLevel::kSignin);
+  base::HistogramTester histogram_tester;
 
   ActivateSync();
   privacy_metrics_service()->Shutdown();
@@ -219,7 +237,6 @@ TEST_F(PrivacyMetricsServiceTest, StartupNoSync) {
   // Check if the user has COE enabled, but not sync, the appropriate event is
   // recorded.
   base::HistogramTester histogram_tester;
-  DisableSync();
   CreateService(/*clear_on_exit_enabled=*/true, signin::ConsentLevel::kSignin);
   histogram_tester.ExpectUniqueSample(
       kClearOnExitSyncEventHistogram,

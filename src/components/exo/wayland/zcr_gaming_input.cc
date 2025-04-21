@@ -1,6 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "components/exo/wayland/zcr_gaming_input.h"
 
@@ -11,6 +16,7 @@
 #include <memory>
 
 #include "base/feature_list.h"
+#include "base/memory/raw_ptr.h"
 #include "components/exo/gamepad.h"
 #include "components/exo/gamepad_delegate.h"
 #include "components/exo/gamepad_observer.h"
@@ -86,7 +92,7 @@ class WaylandGamepadVibratorImpl : public GamepadObserver {
   }
 
  private:
-  Gamepad* gamepad_;
+  raw_ptr<Gamepad> gamepad_;
 };
 
 void gamepad_vibrator_vibrate(wl_client* client,
@@ -224,7 +230,7 @@ class WaylandGamepadDelegate : public GamepadDelegate {
   }
 
   // The gamepad resource associated with the gamepad.
-  wl_resource* gamepad_resource_;
+  raw_ptr<wl_resource> gamepad_resource_;
 };
 
 void gamepad_destroy(wl_client* client, wl_resource* resource) {
@@ -278,7 +284,7 @@ class WaylandGamingSeatDelegate : public GamingSeatDelegate {
 
  private:
   // The gaming seat resource associated with the gaming seat.
-  wl_resource* const gaming_seat_resource_;
+  const raw_ptr<wl_resource> gaming_seat_resource_;
 };
 
 void gaming_seat_destroy(wl_client* client, wl_resource* resource) {

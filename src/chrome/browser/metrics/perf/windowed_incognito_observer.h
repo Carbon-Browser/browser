@@ -1,10 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_METRICS_PERF_WINDOWED_INCOGNITO_OBSERVER_H_
 #define CHROME_BROWSER_METRICS_PERF_WINDOWED_INCOGNITO_OBSERVER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
 #include "base/sequence_checker.h"
 #include "base/synchronization/lock.h"
@@ -49,7 +50,7 @@ class WindowedIncognitoObserver {
   bool IncognitoActive() const;
 
  private:
-  WindowedIncognitoMonitor* windowed_incognito_monitor_;
+  raw_ptr<WindowedIncognitoMonitor> windowed_incognito_monitor_;
 
   // The number of incognito windows that has been opened when the observer is
   // created.

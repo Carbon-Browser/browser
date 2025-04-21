@@ -1,10 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
+#include "chrome/browser/ui/webui/profile_helper.h"
+
 #include "base/containers/contains.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_feature_list.h"
@@ -16,11 +18,12 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/profiles/profile_test_util.h"
 #include "chrome/browser/profiles/profile_window.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_list_observer.h"
-#include "chrome/browser/ui/webui/profile_helper.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/profile_deletion_observer.h"
 #include "chrome/test/base/ui_test_utils.h"
@@ -30,25 +33,16 @@
 #include "content/public/test/test_utils.h"
 #include "content/public/test/test_web_ui.h"
 
-namespace {
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "chrome/browser/lacros/browser_test_util.h"
+#endif
 
-// An observer that returns back to test code after a new profile is
-// initialized.
-void UnblockOnProfileCreation(base::RunLoop* run_loop,
-                              Profile* profile,
-                              Profile::CreateStatus status) {
-  if (status == Profile::CREATE_STATUS_INITIALIZED)
-    run_loop->Quit();
-}
+namespace {
 
 Profile* CreateProfile() {
   ProfileManager* profile_manager = g_browser_process->profile_manager();
   base::FilePath new_path = profile_manager->GenerateNextProfileDirectoryPath();
-  base::RunLoop run_loop;
-  profile_manager->CreateProfileAsync(
-      new_path, base::BindRepeating(&UnblockOnProfileCreation, &run_loop));
-  run_loop.Run();
-  return profile_manager->GetProfileByPath(new_path);
+  return &profiles::testing::CreateProfileSync(profile_manager, new_path);
 }
 
 // An observer returns back to test code after brower window associated with
@@ -64,14 +58,13 @@ class ExpectBrowserActivationForProfile : public BrowserListObserver {
     BrowserList::RemoveObserver(this);
   }
 
-  void Wait() {
-    loop_.Run();
-  }
+  void Wait() { loop_.Run(); }
 
  protected:
   void OnBrowserSetLastActive(Browser* browser) override {
-    if (browser->profile() == profile_)
+    if (browser->profile() == profile_) {
       loop_.Quit();
+    }
   }
 
  private:
@@ -137,14 +130,19 @@ IN_PROC_BROWSER_TEST_F(ProfileHelperTest, OpenNewWindowForProfile) {
   EXPECT_EQ(1u, browser_list->size());
   EXPECT_EQ(original_browser, browser_list->GetLastActive());
 
-  // Open additional browser will add new window and activates it.
+  // Opening additional browser will add new window and activate it.
   Profile* additional_profile = CreateProfile();
   activation_observer =
       std::make_unique<ExpectBrowserActivationForProfile>(additional_profile);
   webui::OpenNewWindowForProfile(additional_profile);
   EXPECT_EQ(2u, browser_list->size());
   activation_observer->Wait();
-  EXPECT_EQ(additional_profile, browser_list->GetLastActive()->profile());
+  Browser* additional_browser = browser_list->GetLastActive();
+  EXPECT_EQ(additional_profile, additional_browser->profile());
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  // Await complete window creation to avoid interference with the next steps.
+  ASSERT_TRUE(browser_test_util::WaitForWindowCreation(additional_browser));
+#endif
 
 // On Macs OpenNewWindowForProfile does not activate existing browser
 // while non of the browser windows have focus. BrowserWindowCocoa::Show() got
@@ -214,8 +212,17 @@ IN_PROC_BROWSER_TEST_F(ProfileHelperTest, DeleteActiveProfile) {
   CloseBrowserSynchronously(original_browser);
   EXPECT_EQ(1u, browser_list->size());
   EXPECT_EQ(additional_profile, browser_list->get(0)->profile());
+  // ProfileManager will switch active profile upon observing
+  // BrowserListObserver::OnBrowserSetLastActive(). Wait until the event
+  // is observed if the active profile has not switched to `additional_profile`
+  // yet.
+  bool wait_for_set_last_active_observed =
+      ProfileManager::GetLastUsedProfileIfLoaded() != additional_profile;
+  ui_test_utils::WaitForBrowserSetLastActive(browser_list->get(0),
+                                             wait_for_set_last_active_observed);
+
   // Ensure the last active browser and the`LastUsedProfile` is set.
-  browser_list->get(0)->window()->Show();
+  EXPECT_EQ(chrome::FindLastActive(), browser_list->get(0));
   EXPECT_EQ(g_browser_process->profile_manager()->GetLastUsedProfileDir(),
             additional_profile->GetPath());
 
@@ -257,8 +264,9 @@ class ProfileHelperTestWithDestroyProfile
   base::test::ScopedFeatureList feature_list_;
 };
 
+// TODO(crbug.com/40945232): Fix this flaky test. Probably a timing issue.
 IN_PROC_BROWSER_TEST_P(ProfileHelperTestWithDestroyProfile,
-                       DeleteInactiveProfile) {
+                       DISABLED_DeleteInactiveProfile) {
   content::TestWebUI web_ui;
   Browser* original_browser = browser();
   ProfileAttributesStorage& storage =

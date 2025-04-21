@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,7 +51,7 @@ const char kActiveProfileName2[] = "active_profile2";
 
 }  // namespace
 
-// TODO(crbug.com/1103732): Get rid of chrome/browser dependencies and then
+// TODO(crbug.com/40704763): Get rid of chrome/browser dependencies and then
 // move this file to components/enterprise/browser.
 class ReportRequestQueueGeneratorTest : public ::testing::Test {
  public:
@@ -119,7 +119,7 @@ class ReportRequestQueueGeneratorTest : public ::testing::Test {
         profile_name, {}, base::UTF8ToUTF16(profile_name), 0,
         IdentityTestEnvironmentProfileAdaptor::
             GetIdentityTestEnvironmentFactories(),
-        /*is_supervised_profile=*/false, absl::nullopt,
+        /*is_supervised_profile=*/false, std::nullopt,
         std::move(policy_service));
   }
 

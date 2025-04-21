@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <algorithm>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
@@ -28,6 +28,10 @@ namespace policy {
 namespace {
 
 constexpr char kPoliciesSourceMetricsName[] = "Enterprise.Policies.Sources";
+#if !BUILDFLAG(IS_CHROMEOS)
+constexpr char kBrowserSigninModeMetricsName[] =
+    "Enterprise.BrowserSigninPolicy";
+#endif
 
 constexpr const char* kCBCMEnrollmentPolicies[] = {
     "CloudManagementEnrollmentToken", "CloudManagementEnrollmentMandatory"};
@@ -85,7 +89,17 @@ void RecordPoliciesSources(SimplePolicySource source) {
                                   PoliciesSources::kEnrollmentOnly);
   }
 }
-
+#if !BUILDFLAG(IS_CHROMEOS)
+// Records UMA metrics for signin mode
+void RecordBrowserSigninMode(const base::Value* value) {
+  if (value && value->is_int() && 0 <= value->GetInt() &&
+      value->GetInt() <= static_cast<int>(BrowserSigninMode::kMaxValue)) {
+    base::UmaHistogramEnumeration(
+        kBrowserSigninModeMetricsName,
+        static_cast<BrowserSigninMode>(value->GetInt()));
+  };
+}
+#endif
 }  // namespace
 
 const base::TimeDelta PolicyStatisticsCollector::kStatisticsUpdateRate =
@@ -132,9 +146,6 @@ void PolicyStatisticsCollector::RecordPolicyUse(int id, Condition condition) {
     case kRecommended:
       suffix = ".Recommended";
       break;
-    case kIgnoredByAtomicGroup:
-      suffix = ".IgnoredByPolicyGroup";
-      break;
   }
   base::UmaHistogramSparse("Enterprise.Policies" + suffix, id);
 }
@@ -164,23 +175,11 @@ void PolicyStatisticsCollector::CollectStatistics() {
     source |= SimplifyPolicySource(policy_entry->source, it.key());
   }
 
-  for (size_t i = 0; i < kPolicyAtomicGroupMappingsLength; ++i) {
-    const AtomicGroup& group = kPolicyAtomicGroupMappings[i];
-    // Find the policy with the highest priority that is both in |policies|
-    // and |group.policies|, an array ending with a nullptr.
-    for (const char* const* policy_name = group.policies; *policy_name;
-         ++policy_name) {
-      if (policies.IsPolicyIgnoredByAtomicGroup(*policy_name)) {
-        const PolicyDetails* details = get_details_.Run(*policy_name);
-        if (details)
-          RecordPolicyUse(details->id, kIgnoredByAtomicGroup);
-        else
-          NOTREACHED();
-      }
-    }
-  }
-
   RecordPoliciesSources(static_cast<SimplePolicySource>(source));
+#if !BUILDFLAG(IS_CHROMEOS)
+  RecordBrowserSigninMode(
+      policies.GetValue(key::kBrowserSignin, base::Value::Type::INTEGER));
+#endif
 
   // Take care of next update.
   prefs_->SetTime(policy_prefs::kLastPolicyStatisticsUpdate, base::Time::Now());

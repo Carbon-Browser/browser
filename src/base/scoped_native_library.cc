@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,8 +28,9 @@ ScopedNativeLibrary::ScopedNativeLibrary(ScopedNativeLibrary&& scoped_library)
     : BaseClass(scoped_library.release()), error_() {}
 
 void* ScopedNativeLibrary::GetFunctionPointer(const char* function_name) const {
-  if (!is_valid())
+  if (!is_valid()) {
     return nullptr;
+  }
   return GetFunctionPointerFromNativeLibrary(get(), function_name);
 }
 

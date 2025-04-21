@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,12 +29,15 @@ class TargetHandler : public DomainHandler, public Target::Backend {
 
   // Target::Backend implementation
   Response CreateTarget(const std::string& url,
-                        Maybe<int> width,
-                        Maybe<int> height,
-                        Maybe<std::string> context_id,
-                        Maybe<bool> enable_begin_frame_control,
-                        Maybe<bool> new_window,
-                        Maybe<bool> background,
+                        std::optional<int> left,
+                        std::optional<int> top,
+                        std::optional<int> width,
+                        std::optional<int> height,
+                        std::optional<std::string> context_id,
+                        std::optional<bool> enable_begin_frame_control,
+                        std::optional<bool> new_window,
+                        std::optional<bool> background,
+                        std::optional<bool> for_tab,
                         std::string* out_target_id) override;
   Response CloseTarget(const std::string& target_id,
                        bool* out_success) override;

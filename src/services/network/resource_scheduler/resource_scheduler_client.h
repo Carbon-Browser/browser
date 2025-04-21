@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,10 +18,8 @@ class NetworkQualityEstimator;
 
 namespace network {
 
-// ResourceSchedulerClient represents ResourceScheduler::Client. At this
-// moment it uses two integers (child_id and route_id) to specify a client
-// for compatibility with content/browser/loader users, but this should be
-// changed to a less error-prone interface once Network Service is launched.
+// ResourceSchedulerClient represents ResourceScheduler::Client. It uses
+// ResourceScheduler::ClientId to specify a client.
 // A ResourceSchedulerClient instance can be shared, but it must not outlive
 // the associated ResourceScheduler. Failing to keep the contract will be
 // detected by a DCHECK in ResourceScheduler's destructor which checks if all

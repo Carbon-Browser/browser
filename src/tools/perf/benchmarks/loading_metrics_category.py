@@ -1,4 +1,4 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -26,5 +26,6 @@ def AugmentOptionsForLoadingMetrics(tbm_options):
   # properly compute time-to-interactive.
   cat_filter.AddDisabledByDefault('disabled-by-default-network')
 
-  tbm_options.AddTimelineBasedMetric('loadingMetric')
+  tbm_options.ExtendTimelineBasedMetric(
+      ['loadingMetric', 'coreWebVitalsMetric'])
   return tbm_options

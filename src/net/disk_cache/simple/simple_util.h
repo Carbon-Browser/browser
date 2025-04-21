@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,9 @@
 #include <stdint.h>
 
 #include <string>
+#include <string_view>
 
-#include "base/strings/string_piece.h"
+#include "base/containers/span.h"
 #include "net/base/net_export.h"
 #include "net/disk_cache/simple/simple_file_tracker.h"
 
@@ -33,9 +34,8 @@ NET_EXPORT_PRIVATE uint64_t GetEntryHashKey(const std::string& key);
 
 // Parses the |hash_key| string into a uint64_t buffer.
 // |hash_key| string must be of the form: FFFFFFFFFFFFFFFF .
-NET_EXPORT_PRIVATE bool GetEntryHashKeyFromHexString(
-    const base::StringPiece& hash_key,
-    uint64_t* hash_key_out);
+NET_EXPORT_PRIVATE bool GetEntryHashKeyFromHexString(std::string_view hash_key,
+                                                     uint64_t* hash_key_out);
 
 // Given a |key| for a (potential) entry in the simple backend and the |index|
 // of a stream on that entry, returns the filename in which that stream would be
@@ -77,6 +77,8 @@ NET_EXPORT_PRIVATE int GetFileIndexFromStreamIndex(int stream_index);
 // file, it is possible to immediately create a new file with the same name.
 NET_EXPORT_PRIVATE bool SimpleCacheDeleteFile(const base::FilePath& path);
 
+// Prefer span form for new code.
+uint32_t Crc32(base::span<const uint8_t> data);
 uint32_t Crc32(const char* data, int length);
 
 uint32_t IncrementalCrc32(uint32_t previous_crc, const char* data, int length);

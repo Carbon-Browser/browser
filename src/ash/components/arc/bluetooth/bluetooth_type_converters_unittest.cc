@@ -1,6 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ash/components/arc/bluetooth/bluetooth_type_converters.h"
 
@@ -62,7 +67,7 @@ bluez::BluetoothServiceAttributeValueBlueZ CreateDeepBlueZSequenceAttribute(
   } else {
     return bluez::BluetoothServiceAttributeValueBlueZ(
         bluez::BluetoothServiceAttributeValueBlueZ::UINT, sizeof(uint16_t),
-        std::make_unique<base::Value>(3));
+        base::Value(3));
   }
 }
 
@@ -230,7 +235,7 @@ TEST(BluetoothTypeConverterTest, ConvertMojoSequenceAttributeToBlueZAttribute) {
     sequence_mojo->sequence.push_back(std::move(value_channel));
   }
   sequence_mojo->type_size = sequence_mojo->sequence.size();
-  sequence_mojo->value = absl::nullopt;
+  sequence_mojo->value = std::nullopt;
 
   auto sequence_blue_z =
       sequence_mojo.To<bluez::BluetoothServiceAttributeValueBlueZ>();
@@ -264,7 +269,7 @@ TEST(BluetoothTypeConverterTest,
   auto mojo = arc::mojom::BluetoothSdpAttribute::New();
   mojo->type = bluez::BluetoothServiceAttributeValueBlueZ::UINT;
   mojo->type_size = static_cast<uint32_t>(sizeof(uint32_t));
-  mojo->value = absl::nullopt;
+  mojo->value = std::nullopt;
 
   auto blue_z = mojo.To<bluez::BluetoothServiceAttributeValueBlueZ>();
 
@@ -280,7 +285,7 @@ TEST(BluetoothTypeConverterTest,
   auto mojo = arc::mojom::BluetoothSdpAttribute::New();
   mojo->type = bluez::BluetoothServiceAttributeValueBlueZ::SEQUENCE;
   mojo->type_size = 0;
-  mojo->value = absl::nullopt;
+  mojo->value = std::nullopt;
 
   auto blue_z = mojo.To<bluez::BluetoothServiceAttributeValueBlueZ>();
 
@@ -323,7 +328,7 @@ TEST(BluetoothTypeConverterTest,
   constexpr uint16_t kValue = 10;
   auto blue_z = bluez::BluetoothServiceAttributeValueBlueZ(
       bluez::BluetoothServiceAttributeValueBlueZ::UINT, sizeof(kValue),
-      std::make_unique<base::Value>(static_cast<int>(kValue)));
+      base::Value(static_cast<int>(kValue)));
 
   auto mojo = ConvertTo<arc::mojom::BluetoothSdpAttributePtr>(blue_z);
 
@@ -340,7 +345,7 @@ TEST(BluetoothTypeConverterTest,
   // Check bool type.
   auto blue_z = bluez::BluetoothServiceAttributeValueBlueZ(
       bluez::BluetoothServiceAttributeValueBlueZ::BOOL, sizeof(bool),
-      std::make_unique<base::Value>(false));
+      base::Value(false));
 
   auto mojo = ConvertTo<arc::mojom::BluetoothSdpAttributePtr>(blue_z);
 
@@ -358,7 +363,7 @@ TEST(BluetoothTypeConverterTest,
   constexpr char kValue[] = "00000100-0000-1000-8000-00805f9b34fb";
   auto blue_z = bluez::BluetoothServiceAttributeValueBlueZ(
       bluez::BluetoothServiceAttributeValueBlueZ::UUID, sizeof(uint16_t),
-      std::make_unique<base::Value>(kValue));
+      base::Value(kValue));
 
   auto mojo = ConvertTo<arc::mojom::BluetoothSdpAttributePtr>(blue_z);
 
@@ -377,7 +382,7 @@ TEST(BluetoothTypeConverterTest,
   constexpr size_t kValueSize = sizeof(kValue) - 1;  // Subtract '\0' size.
   auto blue_z = bluez::BluetoothServiceAttributeValueBlueZ(
       bluez::BluetoothServiceAttributeValueBlueZ::STRING, kValueSize,
-      std::make_unique<base::Value>(kValue));
+      base::Value(kValue));
 
   auto mojo = ConvertTo<arc::mojom::BluetoothSdpAttributePtr>(blue_z);
 
@@ -397,10 +402,10 @@ TEST(BluetoothTypeConverterTest, ConvertBlueZSequenceAttributeToMojoAttribute) {
       std::make_unique<bluez::BluetoothServiceAttributeValueBlueZ::Sequence>();
   sequence->push_back(bluez::BluetoothServiceAttributeValueBlueZ(
       bluez::BluetoothServiceAttributeValueBlueZ::UUID, sizeof(uint16_t),
-      std::make_unique<base::Value>(kL2capUuid)));
+      base::Value(kL2capUuid)));
   sequence->push_back(bluez::BluetoothServiceAttributeValueBlueZ(
       bluez::BluetoothServiceAttributeValueBlueZ::UINT, sizeof(uint16_t),
-      std::make_unique<base::Value>(kL2capChannel)));
+      base::Value(kL2capChannel)));
 
   auto blue_z = bluez::BluetoothServiceAttributeValueBlueZ(std::move(sequence));
   ASSERT_EQ(2u, blue_z.sequence().size());

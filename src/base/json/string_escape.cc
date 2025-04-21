@@ -1,4 +1,4 @@
-// Copyright (c) 2006-2008 The Chromium Authors. All rights reserved.
+// Copyright 2006-2008 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include <limits>
 #include <string>
+#include <string_view>
 
 #include "base/check_op.h"
 #include "base/strings/string_util.h"
@@ -82,8 +83,9 @@ template <typename S>
 bool EscapeJSONStringImpl(const S& str, bool put_in_quotes, std::string* dest) {
   bool did_replacement = false;
 
-  if (put_in_quotes)
+  if (put_in_quotes) {
     dest->push_back('"');
+  }
 
   const size_t length = str.length();
   for (size_t i = 0; i < length; ++i) {
@@ -94,56 +96,63 @@ bool EscapeJSONStringImpl(const S& str, bool put_in_quotes, std::string* dest) {
       did_replacement = true;
     }
 
-    if (EscapeSpecialCodePoint(code_point, dest))
+    if (EscapeSpecialCodePoint(code_point, dest)) {
       continue;
+    }
 
     // Escape non-printing characters.
-    if (code_point < 32)
+    if (code_point < 32) {
       base::StringAppendF(dest, kU16EscapeFormat, code_point);
-    else
+    } else {
       WriteUnicodeCharacter(code_point, dest);
+    }
   }
 
-  if (put_in_quotes)
+  if (put_in_quotes) {
     dest->push_back('"');
+  }
 
   return !did_replacement;
 }
 
 }  // namespace
 
-bool EscapeJSONString(StringPiece str, bool put_in_quotes, std::string* dest) {
-  return EscapeJSONStringImpl(str, put_in_quotes, dest);
-}
-
-bool EscapeJSONString(StringPiece16 str,
+bool EscapeJSONString(std::string_view str,
                       bool put_in_quotes,
                       std::string* dest) {
   return EscapeJSONStringImpl(str, put_in_quotes, dest);
 }
 
-std::string GetQuotedJSONString(StringPiece str) {
+bool EscapeJSONString(std::u16string_view str,
+                      bool put_in_quotes,
+                      std::string* dest) {
+  return EscapeJSONStringImpl(str, put_in_quotes, dest);
+}
+
+std::string GetQuotedJSONString(std::string_view str) {
   std::string dest;
   EscapeJSONStringImpl(str, true, &dest);
   return dest;
 }
 
-std::string GetQuotedJSONString(StringPiece16 str) {
+std::string GetQuotedJSONString(std::u16string_view str) {
   std::string dest;
   EscapeJSONStringImpl(str, true, &dest);
   return dest;
 }
 
-std::string EscapeBytesAsInvalidJSONString(StringPiece str,
+std::string EscapeBytesAsInvalidJSONString(std::string_view str,
                                            bool put_in_quotes) {
   std::string dest;
 
-  if (put_in_quotes)
+  if (put_in_quotes) {
     dest.push_back('"');
+  }
 
   for (char c : str) {
-    if (EscapeSpecialCodePoint(c, &dest))
+    if (EscapeSpecialCodePoint(c, &dest)) {
       continue;
+    }
 
     if (c < 32 || c > 126) {
       base::StringAppendF(&dest, kU16EscapeFormat,
@@ -153,8 +162,9 @@ std::string EscapeBytesAsInvalidJSONString(StringPiece str,
     }
   }
 
-  if (put_in_quotes)
+  if (put_in_quotes) {
     dest.push_back('"');
+  }
 
   return dest;
 }

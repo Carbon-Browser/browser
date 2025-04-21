@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,18 +6,17 @@
  * @fileoverview 'managed-dialog' is a dialog that is displayed when a user
  * interact with some UI features which are managed by the user's organization.
  */
-import '../../cr_elements/cr_button/cr_button.m.js';
-import '../../cr_elements/cr_dialog/cr_dialog.m.js';
-import '../../cr_elements/icons.m.js';
-import '../../cr_elements/shared_vars_css.m.js';
-import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
+import '//resources/cr_elements/cr_button/cr_button.js';
+import '//resources/cr_elements/cr_dialog/cr_dialog.js';
+import '//resources/cr_elements/cr_icon/cr_icon.js';
+import '//resources/cr_elements/icons.html.js';
 
-import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import type {CrDialogElement} from '//resources/cr_elements/cr_dialog/cr_dialog.js';
+import {I18nMixinLit} from '//resources/cr_elements/i18n_mixin_lit.js';
+import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
 
-import {CrDialogElement} from '../../cr_elements/cr_dialog/cr_dialog.m.js';
-import {I18nMixin} from '../../js/i18n_mixin.js';
-
-import {getTemplate} from './managed_dialog.html.js';
+import {getCss} from './managed_dialog.css.js';
+import {getHtml} from './managed_dialog.html.js';
 
 export interface ManagedDialogElement {
   $: {
@@ -25,31 +24,35 @@ export interface ManagedDialogElement {
   };
 }
 
-const ManagedDialogElementBase = I18nMixin(PolymerElement);
+const ManagedDialogElementBase = I18nMixinLit(CrLitElement);
 
 export class ManagedDialogElement extends ManagedDialogElementBase {
   static get is() {
     return 'managed-dialog';
   }
 
-  static get template() {
-    return getTemplate();
+  static override get styles() {
+    return getCss();
   }
 
-  static get properties() {
+  override render() {
+    return getHtml.bind(this)();
+  }
+
+  static override get properties() {
     return {
       /** Managed dialog title text. */
-      title: String,
+      title: {type: String},
 
       /** Managed dialog body text. */
-      body: String,
+      body: {type: String},
     };
   }
 
-  override title: string;
-  body: string;
+  override title: string = '';
+  body: string = '';
 
-  private onOkClick_() {
+  protected onOkClick_() {
     this.$.dialog.close();
   }
 }

@@ -1,12 +1,17 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "extensions/browser/api/webcam_private/visca_webcam.h"
 
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/gmock_callback_support.h"
@@ -79,10 +84,10 @@ TEST_F(ViscaWebcamTest, Zoom) {
 
   EXPECT_CALL(*serial_connection(), Send(ToByteVector(kGetZoomCommand), _))
       .WillOnce(RunOnceCallback<1>(sizeof(kGetZoomCommand),
-                                   api::serial::SEND_ERROR_NONE));
+                                   api::serial::SendError::kNone));
   EXPECT_CALL(*serial_connection(), StartPolling(_))
       .WillOnce(RunCallback<0>(ToByteVector(kGetZoomResponse),
-                               api::serial::RECEIVE_ERROR_NONE));
+                               api::serial::ReceiveError::kNone));
 
   {
     base::RunLoop loop;
@@ -109,10 +114,10 @@ TEST_F(ViscaWebcamTest, Zoom) {
 
   EXPECT_CALL(*serial_connection(), Send(ToByteVector(kSetZoomCommand), _))
       .WillOnce(RunOnceCallback<1>(sizeof(kSetZoomCommand),
-                                   api::serial::SEND_ERROR_NONE));
+                                   api::serial::SendError::kNone));
   EXPECT_CALL(*serial_connection(), StartPolling(_))
       .WillOnce(RunCallback<0>(ToByteVector(kSetZoomResponse),
-                               api::serial::RECEIVE_ERROR_NONE));
+                               api::serial::ReceiveError::kNone));
 
   {
     base::RunLoop loop;

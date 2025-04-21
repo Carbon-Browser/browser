@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 
 #include "base/memory/ref_counted.h"
 #include "components/policy/core/browser/browser_policy_connector_base.h"
@@ -67,15 +68,8 @@ class POLICY_EXPORT BrowserPolicyConnector : public BrowserPolicyConnectorBase {
   // Returns the URL for the encrypted reporting service endpoint.
   std::string GetEncryptedReportingUrl() const;
 
-  // Check whether a user is known to be non-enterprise. Domains such as
-  // gmail.com and googlemail.com are known to not be managed. Also returns
-  // false if the username is empty.
-  static bool IsNonEnterpriseUser(const std::string& username);
-
-  // Allows to register domain for tests that is recognized as non-enterprise.
-  // Note that |domain| basically needs to live until this method is invoked
-  // with a nullptr.
-  static void SetNonEnterpriseDomainForTesting(const char* domain);
+  // Returns the URL for the File Storage Server endpoint for uploads.
+  std::string GetFileStorageServerUploadUrl() const;
 
   // Registers refresh rate prefs.
   static void RegisterPrefs(PrefRegistrySimple* registry);
@@ -101,7 +95,8 @@ class POLICY_EXPORT BrowserPolicyConnector : public BrowserPolicyConnectorBase {
   // Helper function to read URL overriding flags. If `flag` isn't set or if the
   // Chrome channel doesn't allowing overriding, `default_value` is returned
   // instead.
-  std::string GetUrlOverride(const char* flag, const char* default_value) const;
+  std::string GetUrlOverride(const char* flag,
+                             std::string_view default_value) const;
 
   std::unique_ptr<PolicyStatisticsCollector> policy_statistics_collector_;
 

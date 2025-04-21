@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@ TestLocationBarModel::TestLocationBarModel()
       should_display_url_(true) {
 }
 
-TestLocationBarModel::~TestLocationBarModel() {}
+TestLocationBarModel::~TestLocationBarModel() = default;
 
 std::u16string TestLocationBarModel::GetFormattedFullURL() const {
   if (!formatted_full_url_)
@@ -47,7 +47,7 @@ net::CertStatus TestLocationBarModel::GetCertStatus() const {
 }
 
 metrics::OmniboxEventProto::PageClassification
-TestLocationBarModel::GetPageClassification(OmniboxFocusSource focus_source) {
+TestLocationBarModel::GetPageClassification(bool is_prefetch) const {
   return metrics::OmniboxEventProto::OTHER;
 }
 
@@ -73,9 +73,4 @@ bool TestLocationBarModel::IsOfflinePage() const {
 
 bool TestLocationBarModel::ShouldPreventElision() const {
   return should_prevent_elision_;
-}
-
-bool TestLocationBarModel::ShouldUseUpdatedConnectionSecurityIndicators()
-    const {
-  return false;
 }

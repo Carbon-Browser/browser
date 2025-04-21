@@ -1,14 +1,24 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
+#include "chrome/browser/ash/crosapi/screen_manager_ash.h"
 
 #include <memory>
 
 #include "ash/public/cpp/test/shell_test_api.h"
+#include "base/functional/callback_forward.h"
+#include "base/location.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "chrome/browser/ash/crosapi/screen_manager_ash.h"
+#include "base/test/test_future.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/test/base/in_process_browser_test.h"
@@ -69,6 +79,13 @@ class ScreenManagerAshBrowserTest : public InProcessBrowserTest {
     background_sequence_->PostTask(FROM_HERE, std::move(bind_background));
   }
 
+  void PostTaskAndWait(base::OnceClosure closure) {
+    base::test::TestFuture<void> future;
+    background_sequence_->PostTaskAndReply(FROM_HERE, std::move(closure),
+                                           future.GetCallback());
+    EXPECT_TRUE(future.Wait());
+  }
+
   // Affine to main sequence.
   std::unique_ptr<ScreenManagerAsh> screen_manager_;
 
@@ -80,7 +97,6 @@ class ScreenManagerAshBrowserTest : public InProcessBrowserTest {
 };
 
 IN_PROC_BROWSER_TEST_F(ScreenManagerAshBrowserTest, ScreenCapturer) {
-  base::RunLoop run_loop;
   bool success;
   SkBitmap snapshot;
 
@@ -104,9 +120,7 @@ IN_PROC_BROWSER_TEST_F(ScreenManagerAshBrowserTest, ScreenCapturer) {
         }
       },
       screen_manager_remote_.get(), &success, &snapshot);
-  background_sequence_->PostTaskAndReply(
-      FROM_HERE, std::move(take_snapshot_background), run_loop.QuitClosure());
-  run_loop.Run();
+  PostTaskAndWait(std::move(take_snapshot_background));
 
   // Check that the IPC succeeded.
   ASSERT_TRUE(success);
@@ -120,7 +134,6 @@ IN_PROC_BROWSER_TEST_F(ScreenManagerAshBrowserTest, ScreenCapturer) {
 
 IN_PROC_BROWSER_TEST_F(ScreenManagerAshBrowserTest,
                        ScreenCapturer_MultipleDisplays) {
-  base::RunLoop run_loop;
   bool success[2];
   SkBitmap snapshot[2];
 
@@ -148,9 +161,7 @@ IN_PROC_BROWSER_TEST_F(ScreenManagerAshBrowserTest,
         }
       },
       screen_manager_remote_.get(), success, snapshot);
-  background_sequence_->PostTaskAndReply(
-      FROM_HERE, std::move(take_snapshot_background), run_loop.QuitClosure());
-  run_loop.Run();
+  PostTaskAndWait(std::move(take_snapshot_background));
 
   // Check that the IPCs succeeded.
   ASSERT_TRUE(success[0]);
@@ -164,7 +175,6 @@ IN_PROC_BROWSER_TEST_F(ScreenManagerAshBrowserTest,
 }
 
 IN_PROC_BROWSER_TEST_F(ScreenManagerAshBrowserTest, WindowCapturer) {
-  base::RunLoop run_loop;
   bool success;
   SkBitmap snapshot;
 
@@ -188,9 +198,7 @@ IN_PROC_BROWSER_TEST_F(ScreenManagerAshBrowserTest, WindowCapturer) {
         }
       },
       screen_manager_remote_.get(), &success, &snapshot);
-  background_sequence_->PostTaskAndReply(
-      FROM_HERE, std::move(take_snapshot_background), run_loop.QuitClosure());
-  run_loop.Run();
+  PostTaskAndWait(std::move(take_snapshot_background));
 
   // Check that the IPC succeeded.
   ASSERT_TRUE(success);

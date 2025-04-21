@@ -1,16 +1,18 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_OZONE_PLATFORM_WAYLAND_HOST_ORG_GNOME_MUTTER_IDLE_MONITOR_H_
 #define UI_OZONE_PLATFORM_WAYLAND_HOST_ORG_GNOME_MUTTER_IDLE_MONITOR_H_
 
+#include <optional>
+
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace dbus {
 class Bus;
@@ -31,7 +33,7 @@ class OrgGnomeMutterIdleMonitor {
   // Returns the idle time.
   //
   // If called on the instance that is off, will return 0.
-  absl::optional<base::TimeDelta> GetIdleTime() const;
+  std::optional<base::TimeDelta> GetIdleTime() const;
 
  private:
   enum class ServiceState {

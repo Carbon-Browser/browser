@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,6 +62,10 @@ class AppListModelDelegate {
   // Invoked when the ash side requests to revert the app list temporary sort
   // order (i.e. the order that has not been committed yet).
   virtual void RequestAppListSortRevert() = 0;
+
+  // Requests to commit the app list item positions under the temporary sort
+  // order.
+  virtual void RequestCommitTemporarySortOrder() = 0;
 
  protected:
   virtual ~AppListModelDelegate() = default;

@@ -1,34 +1,38 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_PUBLIC_BROWSER_ANDROID_COMPOSITOR_H_
 #define CONTENT_PUBLIC_BROWSER_ANDROID_COMPOSITOR_H_
 
+#include <optional>
+
 #include "base/android/scoped_java_ref.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/weak_ptr.h"
 #include "cc/resources/ui_resource_bitmap.h"
-#include "cc/trees/layer_tree_host_client.h"
+#include "cc/slim/layer.h"
+#include "components/viz/common/frame_timing_details.h"
 #include "content/common/content_export.h"
 #include "gpu/ipc/common/surface_handle.h"
 #include "ui/android/resources/ui_resource_provider.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/native_widget_types.h"
+#include "ui/gfx/presentation_feedback.h"
 
-namespace cc {
+namespace cc::slim {
 class Layer;
 }
 
 namespace gpu {
-struct ContextCreationAttribs;
 struct SharedMemoryLimits;
-}
+}  // namespace gpu
 
 namespace ui {
 class ResourceManager;
 class UIResourceProvider;
-}
+}  // namespace ui
 
 namespace viz {
 class ContextProvider;
@@ -46,13 +50,10 @@ class CONTENT_EXPORT Compositor {
   // instance can be used. This should be called only once.
   static void Initialize();
 
-  // Creates a GL context for the provided |handle|. If a null handle is passed,
-  // an offscreen context is created. This must be called on the UI thread.
+  // Creates an offscreen GL context. This must be called on the UI thread.
   using ContextProviderCallback =
       base::OnceCallback<void(scoped_refptr<viz::ContextProvider>)>;
   static void CreateContextProvider(
-      gpu::SurfaceHandle handle,
-      gpu::ContextCreationAttribs attributes,
       gpu::SharedMemoryLimits shared_memory_limits,
       ContextProviderCallback callback);
 
@@ -64,7 +65,7 @@ class CONTENT_EXPORT Compositor {
   virtual void SetRootWindow(gfx::NativeWindow root_window) = 0;
 
   // Attaches the layer tree.
-  virtual void SetRootLayer(scoped_refptr<cc::Layer> root) = 0;
+  virtual void SetRootLayer(scoped_refptr<cc::slim::Layer> root) = 0;
 
   // Set the output surface bounds.
   virtual void SetWindowBounds(const gfx::Size& size) = 0;
@@ -73,8 +74,10 @@ class CONTENT_EXPORT Compositor {
   virtual const gfx::Size& GetWindowBounds() = 0;
 
   // Set the output surface which the compositor renders into.
-  virtual void SetSurface(const base::android::JavaRef<jobject>& surface,
-                          bool can_be_used_with_surface_control) = 0;
+  virtual std::optional<gpu::SurfaceHandle> SetSurface(
+      const base::android::JavaRef<jobject>& surface,
+      bool can_be_used_with_surface_control,
+      const base::android::JavaRef<jobject>& host_input_token) = 0;
 
   // Set the background color used by the layer tree host.
   virtual void SetBackgroundColor(int color) = 0;
@@ -88,11 +91,8 @@ class CONTENT_EXPORT Compositor {
   // Composite *without* having modified the layer tree.
   virtual void SetNeedsComposite() = 0;
 
-  // Request a draw and swap even if there is no change to the layer tree.
-  virtual void SetNeedsRedraw() = 0;
-
   // Returns the UI resource provider associated with the compositor.
-  virtual ui::UIResourceProvider& GetUIResourceProvider() = 0;
+  virtual base::WeakPtr<ui::UIResourceProvider> GetUIResourceProvider() = 0;
 
   // Returns the resource manager associated with the compositor.
   virtual ui::ResourceManager& GetResourceManager() = 0;
@@ -109,19 +109,30 @@ class CONTENT_EXPORT Compositor {
   // destruction.
   virtual void PreserveChildSurfaceControls() = 0;
 
-  // Registers a callback that is run when the next frame successfully makes it
-  // to the screen (it's entirely possible some frames may be dropped between
-  // the time this is called and the callback is run).
+  // Registers a callback that is run when the presentation feedback for the
+  // next submitted frame is received (it's entirely possible some frames may be
+  // dropped between the time this is called and the callback is run).
+  // Note that since this might be called on failed presentations, it is
+  // deprecated in favor of `RequestSuccessfulPresentationTimeForNextFrame()`
+  // which will be called only after a successful presentation.
   using PresentationTimeCallback =
       base::OnceCallback<void(const gfx::PresentationFeedback&)>;
   virtual void RequestPresentationTimeForNextFrame(
       PresentationTimeCallback callback) = 0;
 
+  // Registers a callback that is run when the next frame successfully makes it
+  // to the screen (it's entirely possible some frames may be dropped between
+  // the time this is called and the callback is run).
+  using SuccessfulPresentationTimeCallback =
+      base::OnceCallback<void(const viz::FrameTimingDetails&)>;
+  virtual void RequestSuccessfulPresentationTimeForNextFrame(
+      SuccessfulPresentationTimeCallback callback) = 0;
+
   // Control whether `CompositorClient::DidSwapBuffers` should be called. The
   // default is false. Note this is asynchronous. Any pending callbacks may
   // immediately after enabling may still be missed; best way to avoid this is
-  // to call this before calling `SetNeedsComposite` or `SetNeedsRedraw`. Also
-  // there may be trailing calls to `DidSwapBuffers` after unsetting this.
+  // to call this before calling `SetNeedsComposite`. Also there may be trailing
+  // calls to `DidSwapBuffers` after unsetting this.
   virtual void SetDidSwapBuffersCallbackEnabled(bool enable) = 0;
 
  protected:

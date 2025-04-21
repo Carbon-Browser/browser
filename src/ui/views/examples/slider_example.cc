@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,8 +18,7 @@
 #include "ui/views/layout/box_layout_view.h"
 #include "ui/views/view.h"
 
-namespace views {
-namespace examples {
+namespace views::examples {
 
 SliderExample::SliderExample()
     : ExampleBase(l10n_util::GetStringUTF8(IDS_SLIDER_SELECT_LABEL).c_str()) {}
@@ -40,7 +39,8 @@ void SliderExample::CreateExampleView(View* container) {
   slider_default_ =
       container_default->AddChildView(std::make_unique<Slider>(this));
   slider_default_->SetValue(0.5);
-  slider_default_->GetViewAccessibility().OverrideName(default_name);
+  slider_default_->GetViewAccessibility().SetName(
+      default_name, ax::mojom::NameFrom::kAttribute);
 
   auto* const container_minimal =
       container->AddChildView(std::make_unique<BoxLayoutView>());
@@ -53,7 +53,8 @@ void SliderExample::CreateExampleView(View* container) {
       container_minimal->AddChildView(std::make_unique<Slider>(this));
   slider_minimal_->SetValue(0.5);
   slider_minimal_->SetRenderingStyle(Slider::RenderingStyle::kMinimalStyle);
-  slider_minimal_->GetViewAccessibility().OverrideName(minimal_name);
+  slider_minimal_->GetViewAccessibility().SetName(
+      minimal_name, ax::mojom::NameFrom::kAttribute);
 }
 
 void SliderExample::SliderValueChanged(Slider* sender,
@@ -65,5 +66,4 @@ void SliderExample::SliderValueChanged(Slider* sender,
   label->SetText(base::ASCIIToUTF16(base::StringPrintf("%.3lf", value)));
 }
 
-}  // namespace examples
-}  // namespace views
+}  // namespace views::examples

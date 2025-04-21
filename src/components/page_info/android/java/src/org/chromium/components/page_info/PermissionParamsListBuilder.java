@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -78,7 +78,7 @@ public class PermissionParamsListBuilder {
                 permissionParams.warningTextResource =
                         R.string.page_info_android_permission_blocked;
             } else if (!AndroidPermissionRequester.hasRequiredAndroidPermissionsForContentSetting(
-                               mPermissionDelegate, permission.type)) {
+                    mPermissionDelegate, permission.type)) {
                 if (permission.type == ContentSettingsType.AR) {
                     permissionParams.warningTextResource =
                             R.string.page_info_android_ar_camera_blocked;
@@ -101,14 +101,18 @@ public class PermissionParamsListBuilder {
 
         switch (permission.setting) {
             case ContentSettingValues.ALLOW:
+            case ContentSettingValues.ASK:
                 permissionParams.allowed = true;
                 break;
             case ContentSettingValues.BLOCK:
                 permissionParams.allowed = false;
                 break;
             default:
-                assert false : "Invalid setting " + permission.setting + " for permission "
-                               + permission.type;
+                assert false
+                        : "Invalid setting "
+                                + permission.setting
+                                + " for permission "
+                                + permission.type;
         }
 
         return permissionParams;

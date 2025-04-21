@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,9 @@
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
 #include "base/metrics/histogram_macros_local.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
 #include "chrome/android/chrome_jni_headers/MinidumpUploadServiceImpl_jni.h"
-#include "ui/base/text/bytes_formatting.h"
 
 namespace {
 
@@ -43,7 +44,7 @@ CrashUploadListAndroid::CrashUploadListAndroid(
     const base::FilePath& upload_log_path)
     : TextLogUploadList(upload_log_path) {}
 
-CrashUploadListAndroid::~CrashUploadListAndroid() {}
+CrashUploadListAndroid::~CrashUploadListAndroid() = default;
 
 // static
 bool CrashUploadListAndroid::BrowserCrashMetricsInitialized() {
@@ -57,27 +58,25 @@ bool CrashUploadListAndroid::DidBrowserCrashRecently() {
   return Java_MinidumpUploadServiceImpl_didBrowserCrashRecently(env);
 }
 
-std::vector<UploadList::UploadInfo> CrashUploadListAndroid::LoadUploadList() {
-  std::vector<UploadInfo> uploads;
+std::vector<std::unique_ptr<UploadList::UploadInfo>>
+CrashUploadListAndroid::LoadUploadList() {
+  std::vector<std::unique_ptr<UploadInfo>> uploads;
   LoadUnsuccessfulUploadList(&uploads);
 
-  std::vector<UploadInfo> complete_uploads =
-      TextLogUploadList::LoadUploadList();
-  for (auto info : complete_uploads) {
-    uploads.push_back(info);
+  auto complete_uploads = TextLogUploadList::LoadUploadList();
+  for (auto& info : complete_uploads) {
+    uploads.push_back(std::move(info));
   }
   return uploads;
 }
 
 void CrashUploadListAndroid::RequestSingleUpload(const std::string& local_id) {
   JNIEnv* env = base::android::AttachCurrentThread();
-  base::android::ScopedJavaLocalRef<jstring> j_local_id =
-      base::android::ConvertUTF8ToJavaString(env, local_id);
-  Java_MinidumpUploadServiceImpl_tryUploadCrashDumpWithLocalId(env, j_local_id);
+  Java_MinidumpUploadServiceImpl_tryUploadCrashDumpWithLocalId(env, local_id);
 }
 
 void CrashUploadListAndroid::LoadUnsuccessfulUploadList(
-    std::vector<UploadInfo>* uploads) {
+    std::vector<std::unique_ptr<UploadInfo>>* uploads) {
   const char pending_uploads[] = ".dmp";
   const char skipped_uploads[] = ".skipped";
   const char manually_forced_uploads[] = ".forced";
@@ -110,8 +109,8 @@ void CrashUploadListAndroid::LoadUnsuccessfulUploadList(
       continue;
     }
 
-    int64_t file_size = 0;
-    if (!base::GetFileSize(file, &file_size)) {
+    std::optional<int64_t> file_size = base::GetFileSize(file);
+    if (!file_size.has_value()) {
       RecordUnsuccessfulUploadListState(
           UnsuccessfulUploadListState::FAILED_TO_LOAD_FILE_SIZE);
       continue;
@@ -136,8 +135,7 @@ void CrashUploadListAndroid::LoadUnsuccessfulUploadList(
     RecordUnsuccessfulUploadListState(
         UnsuccessfulUploadListState::ADDING_AN_UPLOAD_ENTRY);
     id = id.substr(pos + 1);
-    UploadList::UploadInfo upload(id, info.creation_time, upload_state,
-                                  ui::FormatBytes(file_size));
-    uploads->push_back(upload);
+    uploads->push_back(std::make_unique<UploadList::UploadInfo>(
+        id, info.creation_time, upload_state, file_size.value()));
   }
 }

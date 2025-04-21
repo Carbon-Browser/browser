@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,6 @@
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
-#include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "components/viz/common/frame_sinks/begin_frame_source.h"
 #include "components/viz/common/quads/compositor_frame.h"
@@ -60,6 +59,8 @@ class CONTENT_EXPORT SynchronousCompositorHost
   ~SynchronousCompositorHost() override;
 
   // SynchronousCompositor overrides.
+  void OnCompositorVisible() override;
+  void OnCompositorHidden() override;
   scoped_refptr<FrameFuture> DemandDrawHwAsync(
       const gfx::Size& viewport_size,
       const gfx::Rect& viewport_rect_for_tile_priority,
@@ -73,6 +74,7 @@ class CONTENT_EXPORT SynchronousCompositorHost
   void DidPresentCompositorFrames(viz::FrameTimingDetailsMap timing_details,
                                   uint32_t frame_token) override;
   void SetMemoryPolicy(size_t bytes_limit) override;
+  float GetVelocityInPixelsPerSecond() override;
   void DidBecomeActive() override;
   void DidChangeRootLayerScrollOffset(const gfx::PointF& root_offset) override;
   void SynchronouslyZoomBy(float zoom_delta, const gfx::Point& anchor) override;
@@ -88,7 +90,9 @@ class CONTENT_EXPORT SynchronousCompositorHost
   void UpdateFrameMetaData(
       uint32_t version,
       viz::CompositorFrameMetadata frame_metadata,
-      absl::optional<viz::LocalSurfaceId> new_local_surface_id);
+      std::optional<viz::LocalSurfaceId> new_local_surface_id);
+  void BeginFrameComplete(
+      blink::mojom::SyncCompositorCommonRendererParamsPtr params);
 
   // Called when the mojo channel should be created.
   void InitMojo();
@@ -109,6 +113,7 @@ class CONTENT_EXPORT SynchronousCompositorHost
   void UpdateState(
       blink::mojom::SyncCompositorCommonRendererParamsPtr params) override;
   void SetNeedsBeginFrames(bool needs_begin_frames) override;
+  void SetThreads(const std::vector<viz::Thread>& threads) override;
 
   // viz::BeginFrameObserver implementation.
   void OnBeginFrame(const viz::BeginFrameArgs& args) override;
@@ -180,10 +185,16 @@ class CONTENT_EXPORT SynchronousCompositorHost
   // Updated by both renderer and browser. This is in physical pixels.
   gfx::PointF root_scroll_offset_;
 
+  float velocity_in_pixels_per_second_ = 0.f;
+  base::TimeDelta last_begin_frame_time_delta_;
+
   // Indicates that whether OnComputeScroll is called or overridden. The
   // fling_controller should advance the fling only when OnComputeScroll is not
   // overridden.
   bool on_compute_scroll_called_ = false;
+
+  // Whether `DemandDrawHwAsync` has ever been called.
+  bool draw_hw_called_ = false;
 
   // From renderer.
   uint32_t renderer_param_version_;
@@ -206,6 +217,9 @@ class CONTENT_EXPORT SynchronousCompositorHost
   // Indicates whether and for what reason a request for begin frames has been
   // issued. Used to control action dispatch at the next |OnBeginFrame()| call.
   uint32_t outstanding_begin_frame_requests_ = 0;
+
+  uint32_t num_invalidates_since_last_draw_ = 0u;
+  uint32_t num_begin_frames_to_skip_ = 0u;
 
   // The begin frame source being observed.  Null if none.
   raw_ptr<viz::BeginFrameSource> begin_frame_source_ = nullptr;

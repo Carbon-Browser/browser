@@ -29,6 +29,7 @@
 #include "third_party/blink/public/common/page/drag_operation.h"
 #include "third_party/blink/renderer/core/clipboard/data_object.h"
 #include "third_party/blink/renderer/core/core_export.h"
+#include "third_party/blink/renderer/core/keywords.h"
 #include "third_party/blink/renderer/core/loader/resource/image_resource_content.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -81,7 +82,7 @@ class CORE_EXPORT DataTransfer final : public ScriptWrappable,
   bool IsForDragAndDrop() const { return transfer_type_ == kDragAndDrop; }
 
   AtomicString dropEffect() const {
-    return DropEffectIsInitialized() ? drop_effect_ : "none";
+    return DropEffectIsInitialized() ? drop_effect_ : keywords::kNone;
   }
   void setDropEffect(const AtomicString&);
   bool DropEffectIsInitialized() const { return !drop_effect_.IsNull(); }
@@ -98,13 +99,17 @@ class CORE_EXPORT DataTransfer final : public ScriptWrappable,
   Vector<String> types();
   FileList* files() const;
 
+  // Returns drag location (offset) within the dragged object.  This is (0,0)
+  // unless set by setDragImage().
   gfx::Point DragLocation() const { return drag_loc_; }
+
   void setDragImage(Element*, int x, int y);
   void ClearDragImage();
   void SetDragImageResource(ImageResourceContent*, const gfx::Point&);
   void SetDragImageElement(Node*, const gfx::Point&);
 
   std::unique_ptr<DragImage> CreateDragImage(gfx::Point& drag_location,
+                                             float device_scale_factor,
                                              LocalFrame*) const;
   void DeclareAndWriteDragImage(Element*,
                                 const KURL& link_url,
@@ -173,6 +178,7 @@ class CORE_EXPORT DataTransfer final : public ScriptWrappable,
   gfx::Point drag_loc_;
   Member<ImageResourceContent> drag_image_;
   Member<Node> drag_image_element_;
+  Member<FileList> files_;
 };
 
 }  // namespace blink

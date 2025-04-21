@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,11 @@
 
 class Browser;
 class FullscreenController;
-class FullscreenNotificationObserver;
 
 // Utility definition for mapping enum values to strings in switch statements.
-#define ENUM_TO_STRING(enum) case enum: return #enum
+#define ENUM_TO_STRING(enum) \
+  case enum:                 \
+    return #enum
 
 // Test fixture used to test Fullscreen Controller through exhaustive sequences
 // of events in unit and interactive tests.
@@ -30,11 +31,11 @@ class FullscreenControllerStateTest {
  public:
   // Events names for FullscreenController methods.
   enum Event {
-    TOGGLE_FULLSCREEN,         // ToggleBrowserFullscreenMode()
-    TAB_FULLSCREEN_TRUE,       // ToggleFullscreenModeForTab(, true)
-    TAB_FULLSCREEN_FALSE,      // ToggleFullscreenModeForTab(, false)
-    BUBBLE_EXIT_LINK,          // ExitTabOrBrowserFullscreenToPreviousState()
-    WINDOW_CHANGE,             // ChangeWindowFullscreenState()
+    TOGGLE_FULLSCREEN,     // ToggleBrowserFullscreenMode()
+    ENTER_TAB_FULLSCREEN,  // EnterFullscreenModeForTab()
+    EXIT_TAB_FULLSCREEN,   // ExitFullscreenModeForTab()
+    BUBBLE_EXIT_LINK,      // ExitTabOrBrowserFullscreenToPreviousState()
+    WINDOW_CHANGE,         // ChangeWindowFullscreenState()
     NUM_EVENTS,
     EVENT_INVALID,
   };
@@ -77,10 +78,6 @@ class FullscreenControllerStateTest {
   // FullscreenController methods complete.
   static bool IsWindowFullscreenStateChangedReentrant();
 
-  // Returns true if |state| can be persistent. This is true for all of the
-  // states without "_TO_" in their name.
-  static bool IsPersistentState(State state);
-
   // Causes Fullscreen Controller to transition to an arbitrary state.
   void TransitionToState(State state);
 
@@ -103,10 +100,6 @@ class FullscreenControllerStateTest {
   // Checks that window state matches the expected controller state.
   virtual void VerifyWindowState();
 
-  // Wait for a fullscreen change if a notification should have been sent in
-  // transitioning to |state_| from the previous persistent state.
-  void MaybeWaitForNotification();
-
   // Tests all states with all permutations of multiple events to detect
   // lingering state issues that would bleed over to other states.
   // I.E. for each state test all combinations of events E1, E2, E3.
@@ -123,25 +116,23 @@ class FullscreenControllerStateTest {
   std::string GetStateTransitionsAsString() const;
 
  protected:
-  // Set of enumerations (created with a helper macro) for _FALSE, _TRUE, and
-  // _NO_EXPECTATION values to be passed to VerifyWindowStateExpectations().
-  #define EXPECTATION_ENUM(enum_name, enum_prefix) \
-      enum enum_name { \
-        enum_prefix##_FALSE, \
-        enum_prefix##_TRUE, \
-        enum_prefix##_NO_EXPECTATION \
-      }
+// Set of enumerations (created with a helper macro) for _FALSE, _TRUE, and
+// _NO_EXPECTATION values to be passed to VerifyWindowStateExpectations().
+#define EXPECTATION_ENUM(enum_name, enum_prefix) \
+  enum enum_name {                               \
+    enum_prefix##_FALSE,                         \
+    enum_prefix##_TRUE,                          \
+    enum_prefix##_NO_EXPECTATION                 \
+  }
   EXPECTATION_ENUM(FullscreenForBrowserExpectation, FULLSCREEN_FOR_BROWSER);
   EXPECTATION_ENUM(FullscreenForTabExpectation, FULLSCREEN_FOR_TAB);
 
   // Generated information about the transitions between states.
   struct StateTransitionInfo {
     StateTransitionInfo()
-        : event(EVENT_INVALID),
-          state(STATE_INVALID),
-          distance(NUM_STATES) {}
-    Event event;  // The |Event| that will cause the state transition.
-    State state;  // The adjacent |State| transitioned to; not the final state.
+        : event(EVENT_INVALID), state(STATE_INVALID), distance(NUM_STATES) {}
+    Event event;   // The |Event| that will cause the state transition.
+    State state;   // The adjacent |State| transitioned to; not the final state.
     int distance;  // Steps to final state. NUM_STATES represents unknown.
   };
 
@@ -178,15 +169,7 @@ class FullscreenControllerStateTest {
 
  private:
   // The state the FullscreenController is expected to be in.
-  State state_;
-
-  // The state when the previous NOTIFICATION_FULLSCREEN_CHANGED notification
-  // was received.
-  State last_notification_received_state_;
-
-  // Listens for the NOTIFICATION_FULLSCREEN_CHANGED notification.
-  std::unique_ptr<FullscreenNotificationObserver>
-      fullscreen_notification_observer_;
+  State state_ = STATE_NORMAL;
 
   // Human defined |State| that results given each [state][event] pair.
   State transition_table_[NUM_STATES][NUM_EVENTS];

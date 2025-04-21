@@ -1,15 +1,18 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef BASE_FUCHSIA_PROCESS_LIFECYCLE_H_
 #define BASE_FUCHSIA_PROCESS_LIFECYCLE_H_
 
-#include <fuchsia/process/lifecycle/cpp/fidl.h>
+#include <fidl/fuchsia.process.lifecycle/cpp/fidl.h>
 #include <lib/fidl/cpp/binding.h>
+#include <lib/fidl/cpp/wire/channel.h>
+
+#include <optional>
 
 #include "base/base_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 
 namespace base {
 
@@ -21,7 +24,7 @@ namespace base {
 // will provide only if the Component manifest contains a lifecycle/stop_event
 // registration.
 class BASE_EXPORT ProcessLifecycle final
-    : public fuchsia::process::lifecycle::Lifecycle {
+    : public fidl::Server<fuchsia_process_lifecycle::Lifecycle> {
  public:
   explicit ProcessLifecycle(base::OnceClosure on_stop);
   ~ProcessLifecycle() override;
@@ -29,13 +32,14 @@ class BASE_EXPORT ProcessLifecycle final
   ProcessLifecycle(const ProcessLifecycle&) = delete;
   ProcessLifecycle& operator=(const ProcessLifecycle&) = delete;
 
-  // fuchsia::process::lifecycle::Lifecycle implementation.
-  void Stop() override;
+  // fuchsia_process_lifecycle::Lifecycle implementation.
+  void Stop(StopCompleter::Sync& completer) override;
 
  private:
   base::OnceClosure on_stop_;
 
-  fidl::Binding<fuchsia::process::lifecycle::Lifecycle> binding_;
+  std::optional<fidl::ServerBinding<fuchsia_process_lifecycle::Lifecycle>>
+      binding_;
 };
 
 }  // namespace base

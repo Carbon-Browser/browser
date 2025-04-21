@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_PRIVACY_BUDGET_SURFACE_SET_VALUATION_H_
 #define CHROME_BROWSER_PRIVACY_BUDGET_SURFACE_SET_VALUATION_H_
 
+#include "base/memory/raw_ref.h"
 #include "chrome/browser/privacy_budget/representative_surface_set.h"
 #include "chrome/browser/privacy_budget/surface_set_equivalence.h"
 #include "chrome/common/privacy_budget/privacy_budget_settings_provider.h"
@@ -84,7 +85,9 @@ class SurfaceSetValuation {
 
   // Returns a reference to the underlying identifiable surface equivalence
   // model.
-  const SurfaceSetEquivalence& equivalence() const { return equivalence_sets_; }
+  const SurfaceSetEquivalence& equivalence() const {
+    return *equivalence_sets_;
+  }
 
   // Returns the expected number of surfaces that would fit in `cost`. This is
   // a naive estimate that assumes that the surfaces will be of average cost and
@@ -94,7 +97,7 @@ class SurfaceSetValuation {
   static size_t ExpectedSurfaceCountForCost(PrivacyBudgetCost cost);
 
  private:
-  const SurfaceSetEquivalence& equivalence_sets_;
+  const raw_ref<const SurfaceSetEquivalence> equivalence_sets_;
 
   // Per surface relative cost.
   const IdentifiableSurfaceCostMap per_surface_costs_;

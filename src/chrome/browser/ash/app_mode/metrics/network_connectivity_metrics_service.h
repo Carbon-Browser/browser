@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <utility>
 
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_state_handler_observer.h"
@@ -19,8 +20,7 @@ extern const char kKioskNetworkDropsPerSessionHistogram[];
 
 // NetworkConnectivityMetricsService counts and reports network connectivity
 // drop events.
-class NetworkConnectivityMetricsService
-    : public chromeos::NetworkStateHandlerObserver {
+class NetworkConnectivityMetricsService : public NetworkStateHandlerObserver {
  public:
   NetworkConnectivityMetricsService();
   NetworkConnectivityMetricsService(NetworkConnectivityMetricsService&) =
@@ -37,9 +37,8 @@ class NetworkConnectivityMetricsService
  private:
   explicit NetworkConnectivityMetricsService(PrefService* prefs);
 
-  // chromeos::NetworkStateHandlerObserver:
-  void NetworkConnectionStateChanged(
-      const chromeos::NetworkState* network) override;
+  // NetworkStateHandlerObserver:
+  void NetworkConnectionStateChanged(const NetworkState* network) override;
 
   // Update a number of network connectivity drops for the current session.
   void LogNetworkDrops(int network_drops);
@@ -47,11 +46,11 @@ class NetworkConnectivityMetricsService
   // Report a number of network connectivity drops during the previous session.
   void ReportPreviousSessionNetworkDrops();
 
-  PrefService* prefs_;
+  raw_ptr<PrefService> prefs_;
   bool is_online_;
   int network_drops_ = 0;
 
-  NetworkStateHandler* network_state_handler_;
+  raw_ptr<NetworkStateHandler> network_state_handler_;
 };
 
 }  // namespace ash

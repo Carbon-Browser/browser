@@ -1,11 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_MEDIA_MEDIA_ACCESS_HANDLER_H_
 #define CHROME_BROWSER_MEDIA_MEDIA_ACCESS_HANDLER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "content/public/browser/media_request_state.h"
 #include "content/public/browser/media_stream_request.h"
 #include "third_party/blink/public/common/mediastream/media_stream_request.h"
@@ -23,8 +23,8 @@ class Extension;
 // MediaCaptureDevicesDispatcher.
 class MediaAccessHandler {
  public:
-  MediaAccessHandler() {}
-  virtual ~MediaAccessHandler() {}
+  MediaAccessHandler() = default;
+  virtual ~MediaAccessHandler() = default;
 
   // Check if the media stream type is supported by MediaAccessHandler.
   virtual bool SupportsStreamType(content::WebContents* web_contents,
@@ -35,7 +35,7 @@ class MediaAccessHandler {
   // made from a drive-by page.
   virtual bool CheckMediaAccessPermission(
       content::RenderFrameHost* render_frame_host,
-      const GURL& security_origin,
+      const url::Origin& security_origin,
       blink::mojom::MediaStreamType type,
       const extensions::Extension* extension) = 0;
 

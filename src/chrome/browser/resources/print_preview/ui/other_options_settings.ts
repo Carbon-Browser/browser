@@ -1,27 +1,30 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/hidden_style_css.m.js';
-import 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.m.js';
+import 'chrome://resources/cr_elements/cr_hidden_style.css.js';
+import 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
 import './print_preview_shared.css.js';
 import './settings_section.js';
-import '../strings.m.js';
+import '/strings.m.js';
 
-import {CrCheckboxElement} from 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.m.js';
-import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
-import {DomRepeatEvent, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import type {CrCheckboxElement} from 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import type {DomRepeatEvent} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import type {Settings} from '../data/model.js';
 
 import {getTemplate} from './other_options_settings.html.js';
 import {SettingsMixin} from './settings_mixin.js';
 
-type CheckboxOption = {
-  name: string,
-  label: string,
-  value?: boolean,
-  managed?: boolean,
-  available?: boolean,
-};
+interface CheckboxOption {
+  name: keyof Settings;
+  label: string;
+  value?: boolean;
+  managed?: boolean;
+  available?: boolean;
+}
 
 const PrintPreviewOtherOptionsSettingsElementBase =
     SettingsMixin(I18nMixin(PolymerElement));
@@ -81,7 +84,8 @@ export class PrintPreviewOtherOptionsSettingsElement extends
    * @param settingName The name of the setting to updated.
    * @param newValue The new value for the setting.
    */
-  private updateSettingWithTimeout_(settingName: string, newValue: boolean) {
+  private updateSettingWithTimeout_(
+      settingName: keyof Settings, newValue: boolean) {
     const timeout = this.timeouts_.get(settingName);
     if (timeout !== null) {
       clearTimeout(timeout);

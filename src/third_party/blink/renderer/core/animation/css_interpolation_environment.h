@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,19 +16,27 @@ class StyleCascade;
 
 class CSSInterpolationEnvironment : public InterpolationEnvironment {
  public:
-  explicit CSSInterpolationEnvironment(const InterpolationTypesMap& map,
-                                       StyleResolverState& state,
-                                       StyleCascade* cascade,
-                                       CascadeResolver* cascade_resolver)
+  CSSInterpolationEnvironment(const InterpolationTypesMap& map,
+                              StyleResolverState& state,
+                              StyleCascade* cascade,
+                              CascadeResolver* cascade_resolver)
       : InterpolationEnvironment(map),
         state_(&state),
-        style_(state.Style()),
+        base_style_(state.StyleBuilder().GetBaseComputedStyle()),
+        animation_controls_style_(base_style_),
         cascade_(cascade),
         cascade_resolver_(cascade_resolver) {}
 
-  explicit CSSInterpolationEnvironment(const InterpolationTypesMap& map,
-                                       const ComputedStyle& style)
-      : InterpolationEnvironment(map), style_(&style) {}
+  CSSInterpolationEnvironment(const InterpolationTypesMap& map,
+                              StyleResolverState& state)
+      : InterpolationEnvironment(map), state_(&state) {}
+
+  CSSInterpolationEnvironment(const InterpolationTypesMap& map,
+                              const ComputedStyle& base_style,
+                              const ComputedStyle& animation_controls_style)
+      : InterpolationEnvironment(map),
+        base_style_(&base_style),
+        animation_controls_style_(&animation_controls_style) {}
 
   bool IsCSS() const final { return true; }
 
@@ -41,9 +49,22 @@ class CSSInterpolationEnvironment : public InterpolationEnvironment {
     return *state_;
   }
 
-  const ComputedStyle& Style() const {
-    DCHECK(style_);
-    return *style_;
+  StyleResolverState* GetOptionalState() { return state_; }
+  const StyleResolverState* GetOptionalState() const { return state_; }
+
+  const ComputedStyle& BaseStyle() const {
+    DCHECK(base_style_);
+    return *base_style_;
+  }
+
+  // This is the style that should be used for properties that control
+  // animation behavior.  This is usually the same as BaseStyle, except in the
+  // case of the interpolation environment used for the before-change style
+  // for CSS transitions.  In that case, the AnimationControlsStyle() is the
+  // after-change style.
+  const ComputedStyle& AnimationControlsStyle() const {
+    DCHECK(animation_controls_style_);
+    return *animation_controls_style_;
   }
 
   // TODO(crbug.com/985023): This effective violates const.
@@ -51,7 +72,8 @@ class CSSInterpolationEnvironment : public InterpolationEnvironment {
 
  private:
   StyleResolverState* state_ = nullptr;
-  const ComputedStyle* style_ = nullptr;
+  const ComputedStyle* base_style_ = nullptr;
+  const ComputedStyle* animation_controls_style_ = nullptr;
   StyleCascade* cascade_ = nullptr;
   CascadeResolver* cascade_resolver_ = nullptr;
 };

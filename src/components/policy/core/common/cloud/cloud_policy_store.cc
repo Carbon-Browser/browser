@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,6 +50,12 @@ void CloudPolicyStore::RemoveObserver(CloudPolicyStore::Observer* observer) {
   observers_.RemoveObserver(observer);
 }
 
+bool CloudPolicyStore::HasObserver(CloudPolicyStore::Observer* observer) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  return observers_.HasObserver(observer);
+}
+
 void CloudPolicyStore::NotifyStoreLoaded() {
   is_initialized_ = true;
   UpdateFirstPoliciesLoaded();
@@ -69,18 +75,13 @@ void CloudPolicyStore::UpdateFirstPoliciesLoaded() {
 }
 
 void CloudPolicyStore::SetPolicy(
-    std::unique_ptr<enterprise_management::PolicyFetchResponse>
-        policy_fetch_response,
     std::unique_ptr<enterprise_management::PolicyData> policy_data) {
-  DCHECK(policy_fetch_response);
   DCHECK(policy_data);
-  policy_fetch_response_ = std::move(policy_fetch_response);
   policy_ = std::move(policy_data);
 }
 
 void CloudPolicyStore::ResetPolicy() {
   policy_.reset();
-  policy_fetch_response_.reset();
 }
 
 void CloudPolicyStore::NotifyStoreError() {
@@ -113,13 +114,11 @@ void CloudPolicyStore::SetFirstPoliciesLoaded(bool loaded) {
 void CloudPolicyStore::set_policy_data_for_testing(
     std::unique_ptr<enterprise_management::PolicyData> policy) {
   policy_ = std::move(policy);
-  if (policy_) {
-    policy_fetch_response_ =
-        std::make_unique<enterprise_management::PolicyFetchResponse>();
-    policy_fetch_response_->set_policy_data(policy_->SerializeAsString());
-  } else {
-    policy_fetch_response_.reset();
-  }
+}
+
+void CloudPolicyStore::set_policy_signature_public_key_for_testing(
+    const std::string& key) {
+  policy_signature_public_key_ = key;
 }
 
 }  // namespace policy

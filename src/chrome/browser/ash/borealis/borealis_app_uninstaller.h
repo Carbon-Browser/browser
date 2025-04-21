@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 
 #include <string>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 
 class Profile;
 
@@ -32,7 +33,7 @@ class BorealisAppUninstaller {
   void Uninstall(std::string app_id, OnUninstalledCallback callback);
 
  private:
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
 };
 
 }  // namespace borealis

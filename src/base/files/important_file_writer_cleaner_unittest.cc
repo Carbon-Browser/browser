@@ -1,8 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/files/important_file_writer_cleaner.h"
+
+#include <optional>
 
 #include "base/check.h"
 #include "base/files/file.h"
@@ -13,11 +15,9 @@
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_waitable_event.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 using ::testing::ElementsAre;
 
@@ -99,7 +99,7 @@ class ImportantFileWriterCleanerTest : public ::testing::Test {
   FilePath dir_2_file_new_;
   FilePath dir_2_file_old_;
   FilePath dir_2_file_other_;
-  absl::optional<ScopedCleanerLifetime> cleaner_lifetime_;
+  std::optional<ScopedCleanerLifetime> cleaner_lifetime_;
 };
 
 void ImportantFileWriterCleanerTest::SetUp() {
@@ -252,7 +252,7 @@ TEST_F(ImportantFileWriterCleanerTest, StartAddFromOtherThread) {
 
   // Add from the ThreadPool and wait for it to finish.
   TestWaitableEvent waitable_event;
-  ThreadPool::PostTask(FROM_HERE, BindLambdaForTesting([&]() {
+  ThreadPool::PostTask(FROM_HERE, BindLambdaForTesting([&] {
                          ImportantFileWriterCleaner::AddDirectory(dir_1());
                          waitable_event.Signal();
                        }));

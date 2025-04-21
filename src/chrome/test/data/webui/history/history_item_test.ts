@@ -1,13 +1,15 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://history/history.js';
 
-import {BrowserServiceImpl, HistoryItemElement, HistoryListElement} from 'chrome://history/history.js';
+import type {HistoryItemElement, HistoryListElement} from 'chrome://history/history.js';
+import {BrowserServiceImpl} from 'chrome://history/history.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 import {assertEquals, assertFalse, assertNotEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {flushTasks} from 'chrome://webui-test/test_util.js';
+import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
+import {microtasksFinished} from 'chrome://webui-test/test_util.js';
 
 import {TestBrowserService} from './test_browser_service.js';
 import {createHistoryEntry, createSearchEntry} from './test_util.js';
@@ -31,7 +33,7 @@ suite('<history-item> unit test', function() {
   let item: HistoryItemElement;
 
   setup(function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     BrowserServiceImpl.setInstance(new TestBrowserService());
 
     item = document.createElement('history-item');
@@ -39,7 +41,7 @@ suite('<history-item> unit test', function() {
     document.body.appendChild(item);
   });
 
-  test('click targets for selection', function() {
+  test('click targets for selection', async function() {
     let selectionCount = 0;
     item.addEventListener('history-checkbox-select', function() {
       selectionCount++;
@@ -47,6 +49,7 @@ suite('<history-item> unit test', function() {
 
     // Checkbox should trigger selection.
     item.$.checkbox.click();
+    await microtasksFinished();
     assertEquals(1, selectionCount);
 
     // Non-interactive text should trigger selection.
@@ -74,7 +77,7 @@ suite('<history-item> integration test', function() {
   let element: HistoryListElement;
 
   setup(function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     const testService = new TestBrowserService();
     BrowserServiceImpl.setInstance(testService);
 

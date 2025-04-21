@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,12 @@
 #include <stddef.h>
 
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "base/check_op.h"
 #include "base/compiler_specific.h"
 #include "base/values.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace chrome_browser_net {
 
@@ -110,7 +110,7 @@ void Referrer::Deserialize(const base::Value& value) {
   if (value.type() != base::Value::Type::LIST)
     return;
 
-  base::Value::ConstListView list = value.GetListDeprecated();
+  const base::Value::List& list = value.GetList();
   for (auto it = list.begin(); it != list.end() && it + 1 != list.end();
        it += 2) {
     const std::string* url = it->GetIfString();
@@ -119,7 +119,7 @@ void Referrer::Deserialize(const base::Value& value) {
       return;
     }
 
-    absl::optional<double> rate = (it + 1)->GetIfDouble();
+    std::optional<double> rate = (it + 1)->GetIfDouble();
     if (!rate) {
       // Invalid rate, stop parsing.
       return;
@@ -135,8 +135,8 @@ void Referrer::Deserialize(const base::Value& value) {
   }
 }
 
-std::unique_ptr<base::ListValue> Referrer::Serialize() const {
-  auto subresource_list = std::make_unique<base::ListValue>();
+std::unique_ptr<base::Value::List> Referrer::Serialize() const {
+  auto subresource_list = std::make_unique<base::Value::List>();
   for (auto it = begin(); it != end(); ++it) {
     subresource_list->Append(it->first.spec());
     subresource_list->Append(it->second.subresource_use_rate());

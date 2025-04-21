@@ -79,10 +79,9 @@ bool Value::ToBoolean() const {
     case kNumberValue:
       return number_ && !std::isnan(number_);
     case kStringValue:
-      return !data_->string_.IsEmpty();
+      return !data_->string_.empty();
   }
   NOTREACHED();
-  return false;
 }
 
 double Value::ToNumber() const {
@@ -113,7 +112,6 @@ double Value::ToNumber() const {
       return bool_;
   }
   NOTREACHED();
-  return 0.0;
 }
 
 String Value::ToString() const {
@@ -136,7 +134,6 @@ String Value::ToString() const {
       return bool_ ? "true" : "false";
   }
   NOTREACHED();
-  return String();
 }
 
 }  // namespace xpath

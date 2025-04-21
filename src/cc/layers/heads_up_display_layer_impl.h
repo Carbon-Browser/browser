@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,15 +10,15 @@
 #include <vector>
 
 #include "base/memory/ptr_util.h"
-#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/time/time.h"
 #include "cc/cc_export.h"
 #include "cc/layers/layer_impl.h"
-#include "cc/metrics/web_vital_metrics.h"
 #include "cc/resources/memory_history.h"
 #include "cc/resources/resource_pool.h"
 #include "cc/trees/debug_rect_history.h"
 #include "cc/trees/layer_tree_impl.h"
+#include "cc/trees/raster_capabilities.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
 
 class SkTypeface;
@@ -40,8 +40,10 @@ class CC_EXPORT HeadsUpDisplayLayerImpl : public LayerImpl {
  public:
   static std::unique_ptr<HeadsUpDisplayLayerImpl> Create(
       LayerTreeImpl* tree_impl,
-      int id) {
-    return base::WrapUnique(new HeadsUpDisplayLayerImpl(tree_impl, id));
+      int id,
+      const std::string& paused_localized_message) {
+    return base::WrapUnique(
+        new HeadsUpDisplayLayerImpl(tree_impl, id, paused_localized_message));
   }
   HeadsUpDisplayLayerImpl(const HeadsUpDisplayLayerImpl&) = delete;
   ~HeadsUpDisplayLayerImpl() override;
@@ -51,14 +53,16 @@ class CC_EXPORT HeadsUpDisplayLayerImpl : public LayerImpl {
   std::unique_ptr<LayerImpl> CreateLayerImpl(
       LayerTreeImpl* tree_impl) const override;
 
+  mojom::LayerType GetLayerType() const override;
   bool WillDraw(DrawMode draw_mode,
                 viz::ClientResourceProvider* resource_provider) override;
+  void DidDraw(viz::ClientResourceProvider* resource_provider) override;
   void AppendQuads(viz::CompositorRenderPass* render_pass,
                    AppendQuadsData* append_quads_data) override;
   void UpdateHudTexture(DrawMode draw_mode,
                         LayerTreeFrameSink* frame_sink,
                         viz::ClientResourceProvider* resource_provider,
-                        bool gpu_raster,
+                        const RasterCapabilities& raster_caps,
                         const viz::CompositorRenderPassList& list);
 
   void ReleaseResources() override;
@@ -73,7 +77,6 @@ class CC_EXPORT HeadsUpDisplayLayerImpl : public LayerImpl {
   void SetLayoutShiftRects(const std::vector<gfx::Rect>& rects);
   void ClearLayoutShiftRects();
   const std::vector<gfx::Rect>& LayoutShiftRects() const;
-  void SetWebVitalMetrics(std::unique_ptr<WebVitalMetrics> web_vital_metrics);
 
   // This evicts hud quad appended during render pass preparation.
   void EvictHudQuad(const viz::CompositorRenderPassList& list);
@@ -82,14 +85,15 @@ class CC_EXPORT HeadsUpDisplayLayerImpl : public LayerImpl {
   void PushPropertiesTo(LayerImpl* layer) override;
 
  private:
-  HeadsUpDisplayLayerImpl(LayerTreeImpl* tree_impl, int id);
-
-  const char* LayerTypeAsString() const override;
+  HeadsUpDisplayLayerImpl(LayerTreeImpl* tree_impl,
+                          int id,
+                          const std::string& paused_localized_message);
 
   void AsValueInto(base::trace_event::TracedValue* dict) const override;
 
   void UpdateHudContents();
   void DrawHudContents(PaintCanvas* canvas);
+  void DrawDebuggerPaused(PaintCanvas* canvas);
   void DrawText(PaintCanvas* canvas,
                 const PaintFlags& flags,
                 const std::string& text,
@@ -137,34 +141,6 @@ class CC_EXPORT HeadsUpDisplayLayerImpl : public LayerImpl {
   void DrawDebugRects(PaintCanvas* canvas,
                       DebugRectHistory* debug_rect_history);
 
-  // This function draws a single web vital metric. If the metrics doesn't have
-  // a valid value, the value is set to -1. This function returns the height
-  // of the current draw so it can be used to calculate the top of the next
-  // draw.
-  int DrawSingleMetric(PaintCanvas* canvas,
-                       int left,
-                       int right,
-                       int top,
-                       std::string name,
-                       const WebVitalMetrics::MetricsInfo& info,
-                       bool has_value,
-                       double value) const;
-  SkRect DrawWebVitalMetrics(PaintCanvas* canvas,
-                             int left,
-                             int top,
-                             int width) const;
-
-  // This function draws a single smoothness related metric.
-  int DrawSinglePercentageMetric(PaintCanvas* canvas,
-                                 int left,
-                                 int right,
-                                 int top,
-                                 std::string name,
-                                 double value) const;
-  SkRect DrawSmoothnessMetrics(PaintCanvas* canvas,
-                               int left,
-                               int top,
-                               int width) const;
 
   int bounds_width_in_dips() const {
     // bounds() is specified in layout coordinates, which is painted dsf away
@@ -174,7 +150,14 @@ class CC_EXPORT HeadsUpDisplayLayerImpl : public LayerImpl {
 
   ResourcePool::InUsePoolResource in_flight_resource_;
   std::unique_ptr<ResourcePool> pool_;
-  raw_ptr<viz::DrawQuad> current_quad_ = nullptr;
+  // A reference to the DrawQuad that will be replaced by a quad containing the
+  // HUD's contents. The actual quad can't be created until UpdateHudTexture()
+  // which happens during draw, so we hold this reference to it when
+  // constructing the placeholder between these two steps in the draw process.
+  //
+  // RAW_PTR_EXCLUSION: Renderer performance: visible in sampling profiler
+  // stacks.
+  RAW_PTR_EXCLUSION viz::DrawQuad* placeholder_quad_ = nullptr;
   // Used for software raster when it will be uploaded to a texture.
   sk_sp<SkSurface> staging_surface_;
 
@@ -186,16 +169,16 @@ class CC_EXPORT HeadsUpDisplayLayerImpl : public LayerImpl {
 
   uint32_t throughput_value_ = 0.0f;
   // Obtained from the current BeginFrameArgs.
-  absl::optional<base::TimeDelta> frame_interval_;
+  std::optional<base::TimeDelta> frame_interval_;
   MemoryHistory::Entry memory_entry_;
   int paint_rects_fade_step_ = 0;
   int layout_shift_rects_fade_step_ = 0;
   std::vector<DebugRect> paint_rects_;
   std::vector<DebugRect> layout_shift_debug_rects_;
 
-  std::unique_ptr<WebVitalMetrics> web_vital_metrics_;
-
   base::TimeTicks time_of_last_graph_update_;
+
+  std::string paused_localized_message_;
 };
 
 }  // namespace cc

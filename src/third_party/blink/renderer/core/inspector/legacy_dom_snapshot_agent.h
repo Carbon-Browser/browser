@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,9 +36,9 @@ class CORE_EXPORT LegacyDOMSnapshotAgent {
   protocol::Response GetSnapshot(
       Document* document,
       std::unique_ptr<protocol::Array<String>> style_filter,
-      protocol::Maybe<bool> include_event_listeners,
-      protocol::Maybe<bool> include_paint_order,
-      protocol::Maybe<bool> include_user_agent_shadow_tree,
+      std::optional<bool> include_event_listeners,
+      std::optional<bool> include_paint_order,
+      std::optional<bool> include_user_agent_shadow_tree,
       std::unique_ptr<protocol::Array<protocol::DOMSnapshot::DOMNode>>*
           dom_nodes,
       std::unique_ptr<protocol::Array<protocol::DOMSnapshot::LayoutTreeNode>>*
@@ -77,10 +77,8 @@ class CORE_EXPORT LegacyDOMSnapshotAgent {
   int GetStyleIndexForNode(Node*);
 
   struct VectorStringHashTraits;
-  using ComputedStylesMap = WTF::HashMap<Vector<String>,
-                                         int,
-                                         VectorStringHashTraits,
-                                         VectorStringHashTraits>;
+  using ComputedStylesMap =
+      WTF::HashMap<Vector<String>, int, VectorStringHashTraits>;
   using CSSPropertyFilter = Vector<std::pair<String, CSSPropertyID>>;
   using PaintOrderMap = HeapHashMap<Member<PaintLayer>, int>;
 

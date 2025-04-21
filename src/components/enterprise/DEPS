@@ -1,8 +1,10 @@
 include_rules = [
+  "+components/download/public/common",
   "+components/policy",
   "+components/prefs",
   "+components/reporting/client",
-  "+components/safe_browsing/core/common/proto",
+  "+components/reporting/proto",
+  "+components/safe_browsing/core/common",
   "+components/strings/grit",
   "+components/version_info",
   "+crypto/sha2.h",
@@ -10,5 +12,6 @@ include_rules = [
   "+net",
   "+services/network/public",
   "+third_party/protobuf",
-  "+third_party/content_analysis_sdk"
+  "+third_party/content_analysis_sdk",
+  "+ui/gfx",
 ]

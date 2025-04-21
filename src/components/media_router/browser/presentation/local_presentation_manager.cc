@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,14 +12,15 @@
 #include "content/public/browser/web_contents.h"
 #include "url/gurl.h"
 
+using blink::mojom::PresentationConnectionResult;
 using blink::mojom::PresentationInfo;
 
 namespace media_router {
 
 // LocalPresentationManager implementation.
-LocalPresentationManager::LocalPresentationManager() {}
+LocalPresentationManager::LocalPresentationManager() = default;
 
-LocalPresentationManager::~LocalPresentationManager() {}
+LocalPresentationManager::~LocalPresentationManager() = default;
 
 LocalPresentationManager::LocalPresentation*
 LocalPresentationManager::GetOrCreateLocalPresentation(
@@ -55,8 +56,9 @@ void LocalPresentationManager::UnregisterLocalPresentationController(
     const content::GlobalRenderFrameHostId& render_frame_host_id) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   auto it = local_presentations_.find(presentation_id);
-  if (it == local_presentations_.end())
+  if (it == local_presentations_.end()) {
     return;
+  }
 
   // Remove presentation if no controller and receiver.
   it->second->UnregisterController(render_frame_host_id);
@@ -88,8 +90,9 @@ bool LocalPresentationManager::IsLocalPresentation(
 bool LocalPresentationManager::IsLocalPresentation(
     content::WebContents* web_contents) {
   for (auto& local_presentation : local_presentations_) {
-    if (local_presentation.second->receiver_web_contents_ == web_contents)
+    if (local_presentation.second->receiver_web_contents_ == web_contents) {
       return true;
+    }
   }
   return false;
 }
@@ -107,7 +110,7 @@ LocalPresentationManager::LocalPresentation::LocalPresentation(
     const PresentationInfo& presentation_info)
     : presentation_info_(presentation_info) {}
 
-LocalPresentationManager::LocalPresentation::~LocalPresentation() {}
+LocalPresentationManager::LocalPresentation::~LocalPresentation() = default;
 
 void LocalPresentationManager::LocalPresentation::RegisterController(
     const content::GlobalRenderFrameHostId& render_frame_host_id,
@@ -117,9 +120,10 @@ void LocalPresentationManager::LocalPresentation::RegisterController(
         receiver_connection_receiver,
     const MediaRoute& route) {
   if (!receiver_callback_.is_null()) {
-    receiver_callback_.Run(PresentationInfo::New(presentation_info_),
-                           std::move(controller_connection_remote),
-                           std::move(receiver_connection_receiver));
+    receiver_callback_.Run(PresentationConnectionResult::New(
+        PresentationInfo::New(presentation_info_),
+        std::move(controller_connection_remote),
+        std::move(receiver_connection_receiver)));
   } else {
     pending_controllers_.insert(std::make_pair(
         render_frame_host_id, std::make_unique<ControllerConnection>(
@@ -140,10 +144,10 @@ void LocalPresentationManager::LocalPresentation::RegisterReceiver(
   DCHECK(receiver_callback_.is_null());
   DCHECK(receiver_web_contents);
   for (auto& controller : pending_controllers_) {
-    receiver_callback.Run(
+    receiver_callback.Run(PresentationConnectionResult::New(
         PresentationInfo::New(presentation_info_),
         std::move(controller.second->controller_connection_remote),
-        std::move(controller.second->receiver_connection_receiver));
+        std::move(controller.second->receiver_connection_receiver)));
   }
   receiver_callback_ = receiver_callback;
   receiver_web_contents_ = receiver_web_contents;
@@ -164,6 +168,6 @@ LocalPresentationManager::LocalPresentation::ControllerConnection::
       receiver_connection_receiver(std::move(receiver_connection_receiver)) {}
 
 LocalPresentationManager::LocalPresentation::ControllerConnection::
-    ~ControllerConnection() {}
+    ~ControllerConnection() = default;
 
 }  // namespace media_router

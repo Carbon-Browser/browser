@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,7 @@ ChannelSplitterHandler::ChannelSplitterHandler(AudioNode& node,
     : AudioHandler(kNodeTypeChannelSplitter, node, sample_rate) {
   // These properties are fixed and cannot be changed by the user.
   channel_count_ = number_of_outputs;
-  SetInternalChannelCountMode(kExplicit);
+  SetInternalChannelCountMode(V8ChannelCountMode::Enum::kExplicit);
   SetInternalChannelInterpretation(AudioBus::kDiscrete);
   AddInput();
 
@@ -70,7 +70,7 @@ void ChannelSplitterHandler::Process(uint32_t frames_to_process) {
 void ChannelSplitterHandler::SetChannelCount(unsigned channel_count,
                                              ExceptionState& exception_state) {
   DCHECK(IsMainThread());
-  BaseAudioContext::GraphAutoLocker locker(Context());
+  DeferredTaskHandler::GraphAutoLocker locker(Context());
 
   // channelCount cannot be changed from the number of outputs.
   if (channel_count != NumberOfOutputs()) {
@@ -82,13 +82,13 @@ void ChannelSplitterHandler::SetChannelCount(unsigned channel_count,
 }
 
 void ChannelSplitterHandler::SetChannelCountMode(
-    const String& mode,
+    V8ChannelCountMode::Enum mode,
     ExceptionState& exception_state) {
   DCHECK(IsMainThread());
-  BaseAudioContext::GraphAutoLocker locker(Context());
+  DeferredTaskHandler::GraphAutoLocker locker(Context());
 
   // channcelCountMode must be 'explicit'.
-  if (mode != "explicit") {
+  if (mode != V8ChannelCountMode::Enum::kExplicit) {
     exception_state.ThrowDOMException(
         DOMExceptionCode::kInvalidStateError,
         "ChannelSplitter: channelCountMode cannot be changed from 'explicit'");
@@ -96,13 +96,13 @@ void ChannelSplitterHandler::SetChannelCountMode(
 }
 
 void ChannelSplitterHandler::SetChannelInterpretation(
-    const String& mode,
+    V8ChannelInterpretation::Enum mode,
     ExceptionState& exception_state) {
   DCHECK(IsMainThread());
-  BaseAudioContext::GraphAutoLocker locker(Context());
+  DeferredTaskHandler::GraphAutoLocker locker(Context());
 
   // channelInterpretation must be "discrete"
-  if (mode != "discrete") {
+  if (mode != V8ChannelInterpretation::Enum::kDiscrete) {
     exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
                                       "ChannelSplitter: channelInterpretation "
                                       "cannot be changed from 'discrete'");

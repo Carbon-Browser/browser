@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@
 // determination.
 class AutocompleteSchemeClassifier {
  public:
-  virtual ~AutocompleteSchemeClassifier() {}
+  virtual ~AutocompleteSchemeClassifier() = default;
 
   // Checks |scheme| and returns the type of the input if the scheme is known
   // and not blocked. Returns metrics::OmniboxInputType::EMPTY if it's unknown

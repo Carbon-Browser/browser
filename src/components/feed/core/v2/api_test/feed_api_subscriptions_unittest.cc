@@ -1,9 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/test/protobuf_matchers.h"
 #include "components/feed/core/proto/v2/wire/web_feeds.pb.h"
 #include "components/feed/core/v2/api_test/feed_api_test.h"
 #include "components/feed/core/v2/config.h"
@@ -19,6 +20,7 @@
 #include "components/feed/core/v2/test/stream_builder.h"
 #include "components/feed/core/v2/web_feed_subscription_coordinator.h"
 #include "components/feed/feed_feature_list.h"
+#include "google_apis/gaia/gaia_id.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -29,7 +31,7 @@ using feedwire::webfeed::WebFeedChangeReason;
 using testing::PrintToString;
 
 AccountInfo TestAccountInfo() {
-  return {"examplegaia", "example@foo.com"};
+  return {GaiaId("examplegaia"), "example@foo.com"};
 }
 
 FeedNetwork::RawResponse MakeFailedResponse() {
@@ -111,7 +113,8 @@ class FeedApiSubscriptionsTest : public FeedApiTest {
     };
     std::sort(stored.begin(), stored.end(), sort_fn);
     std::sort(in_memory.begin(), in_memory.end(), sort_fn);
-    EXPECT_EQ(PrintToString(stored), PrintToString(in_memory));
+    EXPECT_THAT(stored,
+                ::testing::Pointwise(::base::test::EqualsProto(), in_memory));
   }
 
   std::vector<feedstore::PendingWebFeedOperation> GetAllPendingOperations() {
@@ -212,7 +215,8 @@ TEST_F(FeedApiSubscriptionsTest, FollowWebFeedSuccess) {
       PrintToString(callback.RunAndGetResult().web_feed_metadata));
   EXPECT_EQ(1, callback.RunAndGetResult().subscription_count);
   EXPECT_EQ("follow-ct", stream_->GetMetadata().consistency_token());
-  EXPECT_TRUE(feedstore::IsKnownStale(stream_->GetMetadata(), kWebFeedStream));
+  EXPECT_TRUE(feedstore::IsKnownStale(stream_->GetMetadata(),
+                                      StreamType(StreamKind::kFollowing)));
   ASSERT_THAT(
       network_.GetApiRequestSent<FollowWebFeedDiscoverApi>()->page_rss_uris(),
       testing::ElementsAre("http://rss1/", "http://rss2/"));
@@ -223,6 +227,63 @@ TEST_F(FeedApiSubscriptionsTest, FollowWebFeedSuccess) {
       "ContentSuggestions.Feed.WebFeed.FollowCount.AfterFollow", 1, 1);
   histograms.ExpectUniqueSample(
       "ContentSuggestions.Feed.WebFeed.NewFollow.IsRecommended", 0, 1);
+  histograms.ExpectUniqueSample(
+      "ContentSuggestions.Feed.WebFeed.NewFollow.ChangeReason",
+      WebFeedChangeReason::WEB_PAGE_MENU, 1);
+}
+
+TEST_F(FeedApiSubscriptionsTest, QueryWebFeedSuccess) {
+  {
+    auto metadata = stream_->GetMetadata();
+    metadata.set_consistency_token("token");
+    stream_->SetMetadata(metadata);
+  }
+
+  base::HistogramTester histograms;
+  network_.InjectResponse(SuccessfulQueryResponse("cats"));
+  CallbackReceiver<WebFeedSubscriptions::QueryWebFeedResult> callback;
+
+  WebFeedPageInformation page_info =
+      MakeWebFeedPageInformation("http://cats.com");
+  subscriptions().QueryWebFeed(page_info.url(), callback.Bind());
+  EXPECT_EQ(WebFeedQueryRequestStatus::kSuccess,
+            callback.RunAndGetResult().request_status);
+  auto sent_request = network_.GetApiRequestSent<QueryWebFeedDiscoverApi>();
+  EXPECT_STREQ("http://cats.com/",
+               sent_request->web_feed_uris().web_page_uri().c_str());
+  EXPECT_EQ("token", sent_request->consistency_token().token());
+  EXPECT_EQ("id_cats", callback.RunAndGetResult().web_feed_id);
+  EXPECT_EQ("query-ct", stream_->GetMetadata().consistency_token());
+
+  histograms.ExpectUniqueSample("ContentSuggestions.Feed.WebFeed.QueryResult",
+                                WebFeedSubscriptionRequestStatus::kSuccess, 1);
+}
+
+TEST_F(FeedApiSubscriptionsTest, QueryWebFeedError) {
+  base::HistogramTester histograms;
+  network_.InjectQueryResponse(MakeFailedResponse());
+  CallbackReceiver<WebFeedSubscriptions::QueryWebFeedResult> callback;
+  subscriptions().QueryWebFeed(GURL("http://cats.com"), callback.Bind());
+
+  EXPECT_EQ(WebFeedQueryRequestStatus::kFailedUnknownError,
+            callback.RunAndGetResult().request_status);
+
+  histograms.ExpectUniqueSample("ContentSuggestions.Feed.WebFeed.QueryResult",
+                                WebFeedQueryRequestStatus::kFailedUnknownError,
+                                1);
+}
+
+TEST_F(FeedApiSubscriptionsTest, QueryWebFeedInvalidUrlError) {
+  base::HistogramTester histograms;
+  CallbackReceiver<WebFeedSubscriptions::QueryWebFeedResult> callback;
+  subscriptions().QueryWebFeed(GURL(), callback.Bind());
+
+  EXPECT_EQ(WebFeedQueryRequestStatus::kFailedInvalidUrl,
+            callback.RunAndGetResult().request_status);
+
+  histograms.ExpectUniqueSample("ContentSuggestions.Feed.WebFeed.QueryResult",
+                                WebFeedQueryRequestStatus::kFailedInvalidUrl,
+                                1);
 }
 
 TEST_F(FeedApiSubscriptionsTest, FollowWebFeedAbortOnClearAll) {
@@ -504,7 +565,8 @@ TEST_F(FeedApiSubscriptionsTest, FollowWebFeedNetworkError) {
   base::HistogramTester histograms;
   network_.InjectFollowResponse(MakeFailedResponse());
   CallbackReceiver<WebFeedSubscriptions::FollowWebFeedResult> callback;
-  EXPECT_FALSE(feedstore::IsKnownStale(stream_->GetMetadata(), kWebFeedStream));
+  EXPECT_FALSE(feedstore::IsKnownStale(stream_->GetMetadata(),
+                                       StreamType(StreamKind::kFollowing)));
 
   subscriptions().FollowWebFeed(MakeWebFeedPageInformation("http://cats.com"),
                                 WebFeedChangeReason::WEB_PAGE_MENU,
@@ -513,7 +575,8 @@ TEST_F(FeedApiSubscriptionsTest, FollowWebFeedNetworkError) {
   EXPECT_EQ(WebFeedSubscriptionRequestStatus::kFailedUnknownError,
             callback.RunAndGetResult().request_status);
   EXPECT_EQ("{}", PrintToString(CheckAllSubscriptions()));
-  EXPECT_FALSE(feedstore::IsKnownStale(stream_->GetMetadata(), kWebFeedStream));
+  EXPECT_FALSE(feedstore::IsKnownStale(stream_->GetMetadata(),
+                                       StreamType(StreamKind::kFollowing)));
   histograms.ExpectUniqueSample(
       "ContentSuggestions.Feed.WebFeed.FollowUriResult",
       WebFeedSubscriptionRequestStatus::kFailedUnknownError, 1);
@@ -529,7 +592,7 @@ TEST_F(FeedApiSubscriptionsTest, UnfollowAFollowedWebFeed) {
                                 follow_callback.Bind());
   follow_callback.RunUntilCalled();
   // Un-mark stream as stale, to verify unsubscribe also marks stream as stale.
-  stream_->SetStreamStale(kWebFeedStream, false);
+  stream_->SetStreamStale(StreamType(StreamKind::kFollowing), false);
   CallbackReceiver<WebFeedSubscriptions::UnfollowWebFeedResult>
       unfollow_callback;
   network_.InjectResponse(SuccessfulUnfollowResponse());
@@ -552,7 +615,8 @@ TEST_F(FeedApiSubscriptionsTest, UnfollowAFollowedWebFeed) {
   EXPECT_EQ(0, unfollow_callback.RunAndGetResult().subscription_count);
   EXPECT_EQ("unfollow-ct", stream_->GetMetadata().consistency_token());
   EXPECT_EQ("{}", PrintToString(CheckAllSubscriptions()));
-  EXPECT_TRUE(feedstore::IsKnownStale(stream_->GetMetadata(), kWebFeedStream));
+  EXPECT_TRUE(feedstore::IsKnownStale(stream_->GetMetadata(),
+                                      StreamType(StreamKind::kFollowing)));
   histograms.ExpectUniqueSample(
       "ContentSuggestions.Feed.WebFeed.UnfollowResult",
       WebFeedSubscriptionRequestStatus::kSuccess, 1);
@@ -604,7 +668,7 @@ TEST_F(FeedApiSubscriptionsTest, UnfollowNetworkFailure) {
       unfollow_callback;
   network_.InjectUnfollowResponse(MakeFailedResponse());
   // Un-mark stream as stale, to verify unsubscribe also marks stream as stale.
-  stream_->SetStreamStale(kWebFeedStream, false);
+  stream_->SetStreamStale(StreamType(StreamKind::kFollowing), false);
   subscriptions().UnfollowWebFeed(
       follow_callback.GetResult()->web_feed_metadata.web_feed_id,
       /*is_durable_request=*/false, WebFeedChangeReason::WEB_PAGE_MENU,
@@ -618,7 +682,8 @@ TEST_F(FeedApiSubscriptionsTest, UnfollowNetworkFailure) {
       "{ WebFeedMetadata{ id=id_cats title=Title cats "
       "publisher_url=https://cats.com/ status=kSubscribed } }",
       PrintToString(CheckAllSubscriptions()));
-  EXPECT_FALSE(feedstore::IsKnownStale(stream_->GetMetadata(), kWebFeedStream));
+  EXPECT_FALSE(feedstore::IsKnownStale(stream_->GetMetadata(),
+                                       StreamType(StreamKind::kFollowing)));
 }
 
 TEST_F(FeedApiSubscriptionsTest, UnfollowWhileOffline) {
@@ -886,8 +951,8 @@ TEST_F(FeedApiSubscriptionsTest, GetAllSubscriptionsWithSomeSubscriptions) {
 
 TEST_F(FeedApiSubscriptionsTest,
        RecommendedWebFeedsAreNotFetchedAfterStartupWhenFeatureIsDisabled) {
-  base::test::ScopedFeatureList features;
-  features.InitAndDisableFeature(kWebFeed);
+  // Set to a non-launched country to disable web feed feature.
+  SetCountry("FR");
 
   SetUpWithDefaultConfig();
 
@@ -896,6 +961,9 @@ TEST_F(FeedApiSubscriptionsTest,
                                   base::Seconds(1));
   WaitForIdleTaskQueue();
   ASSERT_EQ(0, network_.GetListRecommendedWebFeedsRequestCount());
+
+  // Restore the country.
+  SetCountry("US");
 }
 
 TEST_F(
@@ -1042,8 +1110,8 @@ TEST_F(FeedApiSubscriptionsTest,
 
 TEST_F(FeedApiSubscriptionsTest,
        SubscribedWebFeedsAreNotFetchedAfterStartupWhenFeatureIsDisabled) {
-  base::test::ScopedFeatureList features;
-  features.InitAndDisableFeature(kWebFeed);
+  // Set to a non-launched country to disable web feed feature.
+  SetCountry("FR");
 
   SetUpWithDefaultConfig();
 
@@ -1052,6 +1120,9 @@ TEST_F(FeedApiSubscriptionsTest,
                                   base::Seconds(1));
   WaitForIdleTaskQueue();
   ASSERT_EQ(0, network_.GetListFollowedWebFeedsRequestCount());
+
+  // Restore the country.
+  SetCountry("US");
 }
 
 TEST_F(FeedApiSubscriptionsTest, SubscribedWebFeedsAreFetchedAfterStartup) {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2013 The Chromium Authors. All rights reserved.
+# Copyright 2013 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -47,7 +47,7 @@ else:
 
 
 def MultiFileFindReplace(original, replacement, file_globs):
-  """Implements fast multi-file find and replace.
+  r"""Implements fast multi-file find and replace.
 
   Given an |original| string and a |replacement| string, find matching
   files by running git grep on |original| in files matching any

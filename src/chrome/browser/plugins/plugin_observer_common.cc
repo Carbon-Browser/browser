@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include "content/public/browser/child_process_security_policy.h"
 #include "content/public/browser/render_frame_host.h"
+#include "content/public/browser/render_process_host.h"
 #include "content/public/common/referrer.h"
 
 bool CanOpenPdfUrl(content::RenderFrameHost* render_frame_host,
@@ -13,7 +14,7 @@ bool CanOpenPdfUrl(content::RenderFrameHost* render_frame_host,
                    const GURL& last_committed_url,
                    content::Referrer* referrer) {
   if (!content::ChildProcessSecurityPolicy::GetInstance()->CanRequestURL(
-          render_frame_host->GetRoutingID(), url)) {
+          render_frame_host->GetProcess()->GetDeprecatedID(), url)) {
     return false;
   }
 

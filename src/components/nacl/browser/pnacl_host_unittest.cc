@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,12 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
+
 #include <string>
 
-#include "base/bind.h"
+#include "base/compiler_specific.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"
@@ -21,10 +23,6 @@
 #include "net/base/test_completion_callback.h"
 #include "net/disk_cache/disk_cache.h"
 #include "testing/gtest/include/gtest/gtest.h"
-
-#if BUILDFLAG(IS_WIN)
-#define snprintf _snprintf
-#endif
 
 namespace pnacl {
 namespace {
@@ -82,8 +80,8 @@ class PnaclHostTest : public testing::Test {
     char str[kBufferSize];
     memset(str, 0x0, kBufferSize);
     snprintf(str, kBufferSize, "testdata%d", ++write_callback_count_);
-    EXPECT_EQ(kBufferSize,
-              static_cast<size_t>(mutable_file->Write(0, str, kBufferSize)));
+    EXPECT_EQ(kBufferSize, static_cast<size_t>(UNSAFE_TODO(
+                               mutable_file->Write(0, str, kBufferSize))));
     temp_callback_count_++;
   }
   void CallbackExpectHit(const base::File& file, bool is_hit) {
@@ -99,8 +97,8 @@ class PnaclHostTest : public testing::Test {
     char str[kBufferSize];
     memset(str, 0x0, kBufferSize);
     snprintf(str, kBufferSize, "testdata%d", write_callback_count_);
-    EXPECT_EQ(kBufferSize,
-              static_cast<size_t>(mutable_file->Read(0, data, kBufferSize)));
+    EXPECT_EQ(kBufferSize, static_cast<size_t>(UNSAFE_TODO(
+                               mutable_file->Read(0, data, kBufferSize))));
     EXPECT_STREQ(str, data);
     temp_callback_count_++;
   }

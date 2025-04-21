@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define UI_VIEWS_WIN_HWND_MESSAGE_HANDLER_DELEGATE_H_
 
 #include "base/win/windows_types.h"
-#include "ui/base/ui_base_types.h"
+#include "ui/base/mojom/window_show_state.mojom-forward.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/views/views_export.h"
 
@@ -26,6 +26,7 @@ class KeyEvent;
 class MouseEvent;
 class ScrollEvent;
 class TouchEvent;
+class GestureEvent;
 }  // namespace ui
 
 namespace views {
@@ -154,7 +155,7 @@ class VIEWS_EXPORT HWNDMessageHandlerDelegate {
   // Called when the HWND is to be focused for the first time. This is called
   // when the window is shown for the first time. Returns true if the delegate
   // set focus and no default processing should be done by the message handler.
-  virtual bool HandleInitialFocus(ui::WindowShowState show_state) = 0;
+  virtual bool HandleInitialFocus(ui::mojom::WindowShowState show_state) = 0;
 
   // Called when display settings are adjusted on the system.
   virtual void HandleDisplayChange() = 0;
@@ -215,11 +216,6 @@ class VIEWS_EXPORT HWNDMessageHandlerDelegate {
   // Called to compel the delegate to paint |invalid_rect| accelerated.
   virtual void HandlePaintAccelerated(const gfx::Rect& invalid_rect) = 0;
 
-  // Called to forward a WM_NOTIFY message to the tooltip manager.
-  virtual bool HandleTooltipNotify(int w_param,
-                                   NMHDR* l_param,
-                                   LRESULT* l_result) = 0;
-
   // Invoked on entering/exiting a menu loop.
   virtual void HandleMenuLoop(bool in_menu_loop) = 0;
 
@@ -255,6 +251,9 @@ class VIEWS_EXPORT HWNDMessageHandlerDelegate {
 
   // Called when the window scale factor has changed.
   virtual void HandleWindowScaleFactorChanged(float window_scale_factor) = 0;
+
+  // Called when the headless window bounds has changed.
+  virtual void HandleHeadlessWindowBoundsChanged(const gfx::Rect& bounds) = 0;
 
  protected:
   virtual ~HWNDMessageHandlerDelegate() = default;

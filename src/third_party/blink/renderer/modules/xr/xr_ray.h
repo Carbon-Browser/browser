@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,12 @@
 
 #include <memory>
 
+#include "third_party/blink/renderer/core/typed_arrays/array_buffer_view_helpers.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_typed_array.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
-#include "third_party/blink/renderer/platform/transforms/transformation_matrix.h"
 #include "ui/gfx/geometry/point3_f.h"
+#include "ui/gfx/geometry/transform.h"
 #include "ui/gfx/geometry/vector3d_f.h"
 
 namespace blink {
@@ -33,13 +34,13 @@ class XRRay final : public ScriptWrappable {
         ExceptionState& exception_state);
   ~XRRay() override;
 
-  DOMPointReadOnly* origin() const { return origin_; }
-  DOMPointReadOnly* direction() const { return direction_; }
-  DOMFloat32Array* matrix();
+  DOMPointReadOnly* origin() const { return origin_.Get(); }
+  DOMPointReadOnly* direction() const { return direction_.Get(); }
+  NotShared<DOMFloat32Array> matrix();
 
   // Calling |RawMatrix()| is equivalent to calling |matrix()| w.r.t. the data
   // that will be returned, the only difference is the returned type.
-  TransformationMatrix RawMatrix();
+  gfx::Transform RawMatrix();
 
   static XRRay* Create(DOMPointInit* origin,
                        XRRayDirectionInit* direction,
@@ -50,15 +51,15 @@ class XRRay final : public ScriptWrappable {
   void Trace(Visitor*) const override;
 
  private:
-  void Set(const TransformationMatrix& matrix, ExceptionState& exception_state);
+  void Set(const gfx::Transform& matrix, ExceptionState& exception_state);
   void Set(gfx::Point3F origin,
            gfx::Vector3dF direction,
            ExceptionState& exception_state);
 
   Member<DOMPointReadOnly> origin_;
   Member<DOMPointReadOnly> direction_;
-  Member<DOMFloat32Array> matrix_;
-  std::unique_ptr<TransformationMatrix> raw_matrix_;
+  NotShared<DOMFloat32Array> matrix_;
+  std::unique_ptr<gfx::Transform> raw_matrix_;
 };
 
 }  // namespace blink

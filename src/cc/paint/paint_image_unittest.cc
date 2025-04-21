@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,7 +34,8 @@ TEST(PaintImageTest, DecodesCorrectFrames) {
   // The recorded index is 0u but ask for 1u frame.
   SkImageInfo info = SkImageInfo::MakeN32Premul(10, 10);
   std::vector<size_t> memory(info.computeMinByteSize());
-  image.Decode(memory.data(), &info, nullptr, 1u,
+  SkPixmap pixmap(info, memory.data(), info.minRowBytes());
+  image.Decode(pixmap, 1u, AuxImage::kDefault,
                PaintImage::GetNextGeneratorClientId());
   ASSERT_EQ(generator->frames_decoded().size(), 1u);
   EXPECT_EQ(generator->frames_decoded().count(1u), 1u);
@@ -43,7 +44,8 @@ TEST(PaintImageTest, DecodesCorrectFrames) {
   // Not N32 color type.
   info.makeColorType(kRGB_565_SkColorType);
   memory = std::vector<size_t>(info.computeMinByteSize());
-  image.Decode(memory.data(), &info, nullptr, 1u,
+  pixmap = SkPixmap(info, memory.data(), info.minRowBytes());
+  image.Decode(pixmap, 1u, AuxImage::kDefault,
                PaintImage::GetNextGeneratorClientId());
   ASSERT_EQ(generator->frames_decoded().size(), 1u);
   EXPECT_EQ(generator->frames_decoded().count(1u), 1u);
@@ -95,10 +97,10 @@ TEST(PaintImageTest, DecodeToYuv420NoAlpha) {
 
   SkYUVAPixmapInfo image_yuva_pixmap_info;
   ASSERT_TRUE(image.IsYuv(SkYUVAPixmapInfo::SupportedDataTypes::All(),
-                          &image_yuva_pixmap_info));
+                          AuxImage::kDefault, &image_yuva_pixmap_info));
   ASSERT_EQ(yuva_pixmap_info, image_yuva_pixmap_info);
 
-  image.DecodeYuv(pixmaps, 1u /* frame_index */,
+  image.DecodeYuv(pixmaps, 1u /* frame_index */, AuxImage::kDefault,
                   PaintImage::GetNextGeneratorClientId());
   ASSERT_EQ(yuv_generator->frames_decoded().size(), 1u);
   EXPECT_EQ(yuv_generator->frames_decoded().count(1u), 1u);
@@ -111,9 +113,9 @@ TEST(PaintImageTest, BuildPaintWorkletImage) {
       base::MakeRefCounted<TestPaintWorkletInput>(size);
   PaintImage paint_image = PaintImageBuilder::WithDefault()
                                .set_id(1)
-                               .set_paint_worklet_input(std::move(input))
+                               .set_deferred_paint_record(std::move(input))
                                .TakePaintImage();
-  EXPECT_TRUE(paint_image.paint_worklet_input());
+  EXPECT_TRUE(paint_image.deferred_paint_record());
   EXPECT_EQ(paint_image.width(), size.width());
   EXPECT_EQ(paint_image.height(), size.height());
   EXPECT_EQ(paint_image.GetContentColorUsage(), gfx::ContentColorUsage::kSRGB);

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
@@ -121,7 +121,7 @@ const std::string& FakeWebHistoryService::FakeRequest::GetResponseBody() {
                                              &more_results_left);
     std::vector<std::string> results;
     for (const FakeWebHistoryService::Visit& visit : visits) {
-      std::string unix_time = std::to_string(
+      std::string unix_time = base::NumberToString(
           (visit.timestamp - base::Time::UnixEpoch()).InMicroseconds());
       results.push_back(base::StringPrintf(
           "{\"result\":[{\"id\":[{\"timestamp_usec\":\"%s\"}"
@@ -217,7 +217,7 @@ FakeWebHistoryService::GetVisitsBetween(base::Time begin,
   // return anything. This means that the most recent results are returned
   // first.
   std::sort(visits_.begin(), visits_.end(),
-            [](const Visit& lhs, const Visit rhs) -> bool {
+            [](const Visit& lhs, const Visit& rhs) -> bool {
               return lhs.timestamp > rhs.timestamp;
             });
   *more_results_left = false;

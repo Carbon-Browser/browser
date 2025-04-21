@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <set>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "content/public/browser/bluetooth_chooser.h"
 
@@ -35,7 +36,7 @@ class WebTestBluetoothChooserFactory {
   std::vector<std::string> events_;
 
   // Contains the set of live choosers, in order to send them events.
-  std::set<Chooser*> choosers_;
+  std::set<raw_ptr<Chooser, SetExperimental>> choosers_;
 
   base::WeakPtrFactory<WebTestBluetoothChooserFactory> weak_this_{this};
 };

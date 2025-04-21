@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,8 +24,9 @@ ProcessId GetParentProcessId(ProcessHandle process) {
           process, internal::VM_PPID));
 #endif
   // TODO(zijiehe): Returns 0 if |process| does not have a parent process.
-  if (pid)
+  if (pid) {
     return pid;
+  }
   return -1;
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 #define CHROME_BROWSER_DOM_DISTILLER_DOM_DISTILLER_SERVICE_FACTORY_ANDROID_H_
 
 #include "base/android/scoped_java_ref.h"
+
+class Profile;
 
 namespace dom_distiller {
 namespace android {
@@ -16,7 +18,7 @@ class DomDistillerServiceFactoryAndroid {
  public:
   static base::android::ScopedJavaLocalRef<jobject> GetForProfile(
       JNIEnv* env,
-      const base::android::JavaRef<jobject>& j_profile);
+      Profile* profile);
 };
 
 }  // namespace android

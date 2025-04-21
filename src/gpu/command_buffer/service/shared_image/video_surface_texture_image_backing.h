@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define GPU_COMMAND_BUFFER_SERVICE_SHARED_IMAGE_VIDEO_SURFACE_TEXTURE_IMAGE_BACKING_H_
 
 #include <memory>
+#include <string>
 
 #include "base/memory/scoped_refptr.h"
 #include "base/synchronization/waitable_event.h"
@@ -18,8 +19,6 @@
 #include "gpu/gpu_gles2_export.h"
 
 namespace gpu {
-class GLTextureImageRepresentation;
-class SkiaImageRepresentation;
 struct Mailbox;
 
 // Implementation of SharedImageBacking that renders MediaCodec buffers to a
@@ -34,6 +33,7 @@ class GPU_GLES2_EXPORT VideoSurfaceTextureImageBacking
       const gfx::ColorSpace color_space,
       GrSurfaceOrigin surface_origin,
       SkAlphaType alpha_type,
+      std::string debug_label,
       scoped_refptr<StreamTextureSharedImageInterface> stream_texture_sii,
       scoped_refptr<SharedContextState> shared_context_state);
 
@@ -44,9 +44,6 @@ class GPU_GLES2_EXPORT VideoSurfaceTextureImageBacking
       delete;
   VideoSurfaceTextureImageBacking& operator=(
       const VideoSurfaceTextureImageBacking&) = delete;
-
-  // SharedImageBacking implementation.
-  size_t EstimatedSizeForMemTracking() const override;
 
   // SharedContextState::ContextLostObserver implementation.
   void OnContextLost() override;
@@ -60,7 +57,7 @@ class GPU_GLES2_EXPORT VideoSurfaceTextureImageBacking
   ProduceGLTexturePassthrough(SharedImageManager* manager,
                               MemoryTypeTracker* tracker) override;
 
-  std::unique_ptr<SkiaImageRepresentation> ProduceSkia(
+  std::unique_ptr<SkiaGaneshImageRepresentation> ProduceSkiaGanesh(
       SharedImageManager* manager,
       MemoryTypeTracker* tracker,
       scoped_refptr<SharedContextState> context_state) override;

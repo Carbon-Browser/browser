@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,11 +17,11 @@ class WebContents;
 namespace sessions {
 
 // A //content-specific subclass of PlatformSpecificTabData that is used to
-// associate TabRestoreService::Tab instances with the
+// associate tab_restore::Tab instances with the
 // content::SessionStorageNamespace of the WebContents from which they were
 // created.
 class SESSIONS_EXPORT ContentPlatformSpecificTabData
-    : public PlatformSpecificTabData {
+    : public tab_restore::PlatformSpecificTabData {
  public:
   explicit ContentPlatformSpecificTabData(content::WebContents* web_contents);
   ContentPlatformSpecificTabData();

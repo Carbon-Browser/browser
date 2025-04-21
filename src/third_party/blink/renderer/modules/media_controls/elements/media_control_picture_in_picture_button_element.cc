@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,13 @@
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/strings/grit/blink_strings.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
+#include "third_party/blink/renderer/core/frame/picture_in_picture_controller.h"
 #include "third_party/blink/renderer/core/html/media/html_media_element.h"
 #include "third_party/blink/renderer/core/html/media/html_video_element.h"
 #include "third_party/blink/renderer/core/input_type_names.h"
 #include "third_party/blink/renderer/modules/media_controls/media_controls_impl.h"
-#include "third_party/blink/renderer/modules/picture_in_picture/picture_in_picture_controller_impl.h"
 #include "third_party/blink/renderer/platform/text/platform_locale.h"
+#include "ui/strings/grit/ax_strings.h"
 
 namespace blink {
 
@@ -20,7 +21,7 @@ MediaControlPictureInPictureButtonElement::
     MediaControlPictureInPictureButtonElement(MediaControlsImpl& media_controls)
     : MediaControlInputElement(media_controls) {
   setType(input_type_names::kButton);
-  setAttribute(html_names::kRoleAttr, "button");
+  setAttribute(html_names::kRoleAttr, AtomicString("button"));
 
   bool isInPictureInPicture =
       PictureInPictureController::IsElementInPictureInPicture(
@@ -44,9 +45,9 @@ void MediaControlPictureInPictureButtonElement::UpdateDisplayType() {
       PictureInPictureController::IsElementInPictureInPicture(
           &To<HTMLVideoElement>(MediaElement()));
   SetClass("on", isInPictureInPicture);
-  UpdateOverflowString();
 
   UpdateAriaString(isInPictureInPicture);
+  UpdateOverflowString();
 
   MediaControlInputElement::UpdateDisplayType();
 }
@@ -80,8 +81,8 @@ void MediaControlPictureInPictureButtonElement::DefaultEventHandler(
     Event& event) {
   if (event.type() == event_type_names::kClick ||
       event.type() == event_type_names::kGesturetap) {
-    PictureInPictureControllerImpl& controller =
-        PictureInPictureControllerImpl::From(MediaElement().GetDocument());
+    PictureInPictureController& controller =
+        PictureInPictureController::From(MediaElement().GetDocument());
 
     auto* video_element = &To<HTMLVideoElement>(MediaElement());
     if (PictureInPictureController::IsElementInPictureInPicture(
@@ -104,6 +105,7 @@ void MediaControlPictureInPictureButtonElement::UpdateAriaString(
                 IDS_AX_MEDIA_ENTER_PICTURE_IN_PICTURE_BUTTON);
 
   setAttribute(html_names::kAriaLabelAttr, WTF::AtomicString(aria_string));
+  UpdateAriaLabel(aria_string);
 }
 
 }  // namespace blink

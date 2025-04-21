@@ -1,6 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/chrome_elf/nt_registry/nt_registry.h"
 
@@ -9,10 +14,9 @@
 #include <rpc.h>
 #include <stddef.h>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/test/test_reg_util_win.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/cleanup/cleanup.h"
 
 namespace {
 
@@ -330,8 +334,7 @@ TEST_F(NtRegistryTest, ApiDword) {
                                &key_handle));
   ASSERT_NE(key_handle, INVALID_HANDLE_VALUE);
   ASSERT_NE(key_handle, nullptr);
-  base::ScopedClosureRunner key_closer(
-      base::BindOnce(&nt::CloseRegKey, key_handle));
+  absl::Cleanup key_closer = [key_handle] { nt::CloseRegKey(key_handle); };
 
   DWORD get_dword = 0;
   EXPECT_FALSE(nt::QueryRegValueDWORD(key_handle, dword_val_name, &get_dword));
@@ -367,8 +370,7 @@ TEST_F(NtRegistryTest, ApiSz) {
                                &key_handle));
   ASSERT_NE(key_handle, INVALID_HANDLE_VALUE);
   ASSERT_NE(key_handle, nullptr);
-  base::ScopedClosureRunner key_closer(
-      base::BindOnce(&nt::CloseRegKey, key_handle));
+  absl::Cleanup key_closer = [key_handle] { nt::CloseRegKey(key_handle); };
 
   std::wstring get_sz;
   EXPECT_FALSE(nt::QueryRegValueSZ(key_handle, sz_val_name, &get_sz));
@@ -419,8 +421,7 @@ TEST_F(NtRegistryTest, ApiMultiSz) {
                                &key_handle));
   ASSERT_NE(key_handle, INVALID_HANDLE_VALUE);
   ASSERT_NE(key_handle, nullptr);
-  base::ScopedClosureRunner key_closer(
-      base::BindOnce(&nt::CloseRegKey, key_handle));
+  absl::Cleanup key_closer = [key_handle] { nt::CloseRegKey(key_handle); };
 
   // Test 1 - Success
   // ------------------------------
@@ -563,90 +564,6 @@ TEST_F(NtRegistryTest, CreateRegKeyRecursion) {
   ASSERT_NE(key_handle, INVALID_HANDLE_VALUE);
   ASSERT_NE(key_handle, nullptr);
   nt::CloseRegKey(key_handle);
-
-  // Clean up done by NtRegistryTest.
-}
-
-TEST_F(NtRegistryTest, ApiEnumeration) {
-  HANDLE key_handle;
-  HANDLE subkey_handle;
-  static constexpr wchar_t key[] = L"NTRegistry\\enum";
-  static constexpr wchar_t subkey1[] = L"NTRegistry\\enum\\subkey1";
-  static constexpr wchar_t subkey2[] = L"NTRegistry\\enum\\subkey2";
-  static constexpr wchar_t subkey3[] = L"NTRegistry\\enum\\subkey3";
-  static constexpr const wchar_t* check_names[] = {
-      L"subkey1",
-      L"subkey2",
-      L"subkey3",
-  };
-  // Test out the "(Default)" value name in this suite.
-  static constexpr wchar_t subkey_val_name[] = L"";
-  DWORD subkey_val = 1234;
-
-  // Create a subkey to play under.
-  // ------------------------------
-  ASSERT_TRUE(nt::CreateRegKey(nt::HKCU, key, KEY_ALL_ACCESS, &key_handle));
-  ASSERT_NE(key_handle, INVALID_HANDLE_VALUE);
-  ASSERT_NE(key_handle, nullptr);
-  base::ScopedClosureRunner key_closer(
-      base::BindOnce(&nt::CloseRegKey, key_handle));
-
-  // Set
-  // ------------------------------
-  // Sub-subkey with a default value.
-  ASSERT_TRUE(
-      nt::CreateRegKey(nt::HKCU, subkey1, KEY_ALL_ACCESS, &subkey_handle));
-  ASSERT_NE(subkey_handle, INVALID_HANDLE_VALUE);
-  ASSERT_NE(subkey_handle, nullptr);
-  EXPECT_TRUE(nt::SetRegValueDWORD(subkey_handle, subkey_val_name, subkey_val));
-  nt::CloseRegKey(subkey_handle);
-
-  // Sub-subkey with a default value.
-  ASSERT_TRUE(
-      nt::CreateRegKey(nt::HKCU, subkey2, KEY_ALL_ACCESS, &subkey_handle));
-  ASSERT_NE(subkey_handle, INVALID_HANDLE_VALUE);
-  ASSERT_NE(subkey_handle, nullptr);
-  EXPECT_TRUE(nt::SetRegValueDWORD(subkey_handle, subkey_val_name, subkey_val));
-  nt::CloseRegKey(subkey_handle);
-
-  // Sub-subkey with a default value.
-  ASSERT_TRUE(
-      nt::CreateRegKey(nt::HKCU, subkey3, KEY_ALL_ACCESS, &subkey_handle));
-  ASSERT_NE(subkey_handle, INVALID_HANDLE_VALUE);
-  ASSERT_NE(subkey_handle, nullptr);
-  EXPECT_TRUE(nt::SetRegValueDWORD(subkey_handle, subkey_val_name, subkey_val));
-  nt::CloseRegKey(subkey_handle);
-
-  // Get (via enumeration)
-  // ------------------------------
-  ULONG subkey_count = 0;
-  EXPECT_TRUE(nt::QueryRegEnumerationInfo(key_handle, &subkey_count));
-  ASSERT_EQ(subkey_count, ULONG{3});
-
-  std::wstring subkey_name;
-  for (ULONG i = 0; i < subkey_count; i++) {
-    ASSERT_TRUE(nt::QueryRegSubkey(key_handle, i, &subkey_name));
-
-    bool found = false;
-    for (size_t index = 0; index < std::size(check_names); index++) {
-      if (0 == subkey_name.compare(check_names[index])) {
-        found = true;
-        break;
-      }
-    }
-    ASSERT_TRUE(found);
-
-    // Grab the default DWORD value out of this subkey.
-    DWORD value = 0;
-    std::wstring temp(key);
-    temp.append(L"\\");
-    temp.append(subkey_name);
-    EXPECT_TRUE(nt::QueryRegValueDWORD(nt::HKCU, nt::NONE, temp.c_str(),
-                                       subkey_val_name, &value));
-    EXPECT_EQ(value, subkey_val);
-  }
-  // Also test a known bad index.
-  EXPECT_FALSE(nt::QueryRegSubkey(key_handle, subkey_count, &subkey_name));
 
   // Clean up done by NtRegistryTest.
 }

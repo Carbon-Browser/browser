@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,10 @@
 #include <iterator>
 #include <string>
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
@@ -42,9 +42,8 @@ class QuarantineTest : public testing::Test {
     ASSERT_TRUE(com_initializer_.Succeeded());
 #endif
     ASSERT_TRUE(test_dir_.CreateUniqueTempDir());
-    ASSERT_EQ(
-        static_cast<int>(std::size(kTestData)),
-        base::WriteFile(GetTestFilePath(), kTestData, std::size(kTestData)));
+    ASSERT_TRUE(
+        base::WriteFile(GetTestFilePath(), {kTestData, std::size(kTestData)}));
   }
 
  protected:
@@ -65,7 +64,8 @@ class QuarantineTest : public testing::Test {
 TEST_F(QuarantineTest, FileCanBeOpenedForReadAfterAnnotation) {
   base::FilePath test_file = GetTestFilePath();
   QuarantineFile(
-      test_file, GURL(kInternetURL), GURL(kInternetReferrerURL), kTestGUID,
+      test_file, GURL(kInternetURL), GURL(kInternetReferrerURL),
+      /*request_initiator=*/std::nullopt, kTestGUID,
       base::BindOnce(&CheckQuarantineResult, QuarantineFileResult::OK));
   base::RunLoop().RunUntilIdle();
 
@@ -77,7 +77,7 @@ TEST_F(QuarantineTest, FileCanBeOpenedForReadAfterAnnotation) {
 TEST_F(QuarantineTest, FileCanBeAnnotatedWithNoGUID) {
   QuarantineFile(
       GetTestFilePath(), GURL(kInternetURL), GURL(kInternetReferrerURL),
-      std::string(),
+      /*request_initiator=*/std::nullopt, std::string(),
       base::BindOnce(&CheckQuarantineResult, QuarantineFileResult::OK));
   base::RunLoop().RunUntilIdle();
 }

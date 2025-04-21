@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,18 +6,24 @@
 #define UI_GL_GL_SURFACE_EGL_SURFACE_CONTROL_H_
 
 #include <android/native_window.h>
+
 #include <memory>
+#include <optional>
+#include <queue>
 
 #include "base/android/scoped_hardware_buffer_handle.h"
 #include "base/cancelable_callback.h"
+#include "base/containers/circular_deque.h"
 #include "base/containers/flat_map.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/types/id_type.h"
 #include "ui/gfx/android/android_surface_control_compat.h"
+#include "ui/gfx/color_space.h"
+#include "ui/gfx/frame_data.h"
 #include "ui/gl/gl_export.h"
-#include "ui/gl/gl_surface_egl.h"
+#include "ui/gl/presenter.h"
 
 namespace base {
 class SingleThreadTaskRunner;
@@ -29,66 +35,45 @@ class ScopedHardwareBufferFenceSync;
 
 namespace gl {
 
-class GL_EXPORT GLSurfaceEGLSurfaceControl : public GLSurfaceEGL {
+class ScopedANativeWindow;
+class ScopedJavaSurfaceControl;
+
+class GL_EXPORT GLSurfaceEGLSurfaceControl : public Presenter {
  public:
   GLSurfaceEGLSurfaceControl(
-      GLDisplayEGL* display,
-      ANativeWindow* window,
+      gl::ScopedANativeWindow window,
+      scoped_refptr<base::SingleThreadTaskRunner> task_runner);
+  GLSurfaceEGLSurfaceControl(
+      gl::ScopedJavaSurfaceControl scoped_java_surface_control,
       scoped_refptr<base::SingleThreadTaskRunner> task_runner);
 
-  // GLSurface implementation.
-  int GetBufferCount() const override;
-  bool Initialize(GLSurfaceFormat format) override;
-  void PrepareToDestroy(bool have_context) override;
-  void Destroy() override;
+  bool Initialize();
+  void Destroy();
+  // Presenter implementation.
   bool Resize(const gfx::Size& size,
               float scale_factor,
               const gfx::ColorSpace& color_space,
               bool has_alpha) override;
-  bool IsOffscreen() override;
 
-  gfx::Size GetSize() override;
-  bool OnMakeCurrent(GLContext* context) override;
   bool ScheduleOverlayPlane(
-      GLImage* image,
+      OverlayImage image,
       std::unique_ptr<gfx::GpuFence> gpu_fence,
       const gfx::OverlayPlaneData& overlay_plane_data) override;
-  bool IsSurfaceless() const override;
-  void* GetHandle() override;
   void PreserveChildSurfaceControls() override;
 
-  // Sync versions of frame update, should never be used.
-  gfx::SwapResult SwapBuffers(PresentationCallback callback) override;
-  gfx::SwapResult CommitOverlayPlanes(PresentationCallback callback) override;
-  gfx::SwapResult PostSubBuffer(int x,
-                                int y,
-                                int width,
-                                int height,
-                                PresentationCallback callback) override;
+  void Present(SwapCompletionCallback completion_callback,
+               PresentationCallback presentation_callback,
+               gfx::FrameData data) override;
 
-  void SwapBuffersAsync(SwapCompletionCallback completion_callback,
-                        PresentationCallback presentation_callback) override;
-  void CommitOverlayPlanesAsync(
-      SwapCompletionCallback completion_callback,
-      PresentationCallback presentation_callback) override;
-  void PostSubBufferAsync(int x,
-                          int y,
-                          int width,
-                          int height,
-                          SwapCompletionCallback completion_callback,
-                          PresentationCallback presentation_callback) override;
-
-  bool SupportsAsyncSwap() override;
   bool SupportsPlaneGpuFences() const override;
-  bool SupportsPostSubBuffer() override;
-  bool SupportsCommitOverlayPlanes() override;
-  void SetDisplayTransform(gfx::OverlayTransform transform) override;
-  gfx::SurfaceOrigin GetOrigin() const override;
   void SetFrameRate(float frame_rate) override;
   void SetChoreographerVsyncIdForNextFrame(
-      absl::optional<int64_t> choreographer_vsync_id) override;
+      std::optional<int64_t> choreographer_vsync_id) override;
 
  private:
+  GLSurfaceEGLSurfaceControl(
+      scoped_refptr<gfx::SurfaceControl::Surface> root_surface,
+      scoped_refptr<base::SingleThreadTaskRunner> task_runner);
   ~GLSurfaceEGLSurfaceControl() override;
 
   struct SurfaceState {
@@ -107,12 +92,7 @@ class GL_EXPORT GLSurfaceEGLSurfaceControl : public GLSurfaceEGL {
     gfx::OverlayTransform transform = gfx::OVERLAY_TRANSFORM_NONE;
     bool opaque = true;
     gfx::ColorSpace color_space;
-    absl::optional<gfx::HDRMetadata> hdr_metadata;
-
-    // Indicates whether buffer for this layer was updated in the currently
-    // pending transaction, or the last transaction submitted if there isn't
-    // one pending.
-    bool buffer_updated_in_pending_transaction = true;
+    std::optional<gfx::HDRMetadata> hdr_metadata;
 
     // Indicates whether the |surface| will be visible or hidden.
     bool visibility = true;
@@ -181,17 +161,51 @@ class GL_EXPORT GLSurfaceEGLSurfaceControl : public GLSurfaceEGL {
     base::CancelableOnceClosure hang_detection_cb_;
   };
 
-  void CommitPendingTransaction(const gfx::Rect& damage_rect,
-                                SwapCompletionCallback completion_callback,
+  struct OnTransactionAckArgs {
+    using SequenceId = base::IdTypeU32<OnTransactionAckArgs>;
+
+    OnTransactionAckArgs(
+        SequenceId id,
+        SwapCompletionCallback completion_callback,
+        PresentationCallback presentation_callback,
+        ResourceRefs released_resources,
+        std::optional<PrimaryPlaneFences> primary_plane_fences);
+
+    OnTransactionAckArgs(const OnTransactionAckArgs&) = delete;
+    OnTransactionAckArgs& operator=(const OnTransactionAckArgs&) = delete;
+    OnTransactionAckArgs(OnTransactionAckArgs&& other);
+    OnTransactionAckArgs& operator=(OnTransactionAckArgs&& other);
+    ~OnTransactionAckArgs();
+
+    SequenceId id;  // Id is not used for ordering, only uniqueness.
+    SwapCompletionCallback completion_callback;
+    PresentationCallback presentation_callback;
+    ResourceRefs released_resources;
+    std::optional<PrimaryPlaneFences> primary_plane_fences;
+    std::optional<gfx::SurfaceControl::TransactionStats> transaction_stats;
+  };
+
+  void CommitPendingTransaction(SwapCompletionCallback completion_callback,
                                 PresentationCallback callback);
+
+  // This ensures `OrderedOnTransactionAckOnGpuThread` are called on the order
+  // it's scheduled. This is needed because android does not guarantee
+  // transaction acks are called in order and code above may assume they are
+  // ordered. This is achieved by storing the actual arguments in a queue and
+  // only pass an id to look up the args to android. Then use the queue to
+  // order the callbacks. Note it's the order in the queue that's used; the id
+  // is sorted though it's only used for uniqueniess, not for ordering.
+  void OnTransactionAckOnGpuThread(
+      OnTransactionAckArgs::SequenceId id,
+      gfx::SurfaceControl::TransactionStats transaction_stats);
 
   // Called on the |gpu_task_runner_| when a transaction is acked by the
   // framework.
-  void OnTransactionAckOnGpuThread(
+  void OrderedOnTransactionAckOnGpuThread(
       SwapCompletionCallback completion_callback,
       PresentationCallback presentation_callback,
       ResourceRefs released_resources,
-      absl::optional<PrimaryPlaneFences> primary_plane_fences,
+      std::optional<PrimaryPlaneFences> primary_plane_fences,
       gfx::SurfaceControl::TransactionStats transaction_stats);
 
   // Called on the |gpu_task_runner_| when a transaction is committed by the
@@ -201,18 +215,10 @@ class GL_EXPORT GLSurfaceEGLSurfaceControl : public GLSurfaceEGL {
   void AdvanceTransactionQueue();
   void CheckPendingPresentationCallbacks();
 
-  gfx::Rect ApplyDisplayInverse(const gfx::Rect& input) const;
-  const gfx::ColorSpace& GetNearestSupportedColorSpace(
-      const gfx::ColorSpace& buffer_color_space) const;
-
-  const std::string root_surface_name_;
   const std::string child_surface_name_;
 
-  // The rect of the native window backing this surface.
-  gfx::Rect window_rect_;
-
   // Holds the surface state changes made since the last call to SwapBuffers.
-  absl::optional<gfx::SurfaceControl::Transaction> pending_transaction_;
+  std::optional<gfx::SurfaceControl::Transaction> pending_transaction_;
   size_t pending_surfaces_count_ = 0u;
   // Resources in the pending frame, for which updates are being
   // collected in |pending_transaction_|. These are resources for which the
@@ -222,10 +228,17 @@ class GL_EXPORT GLSurfaceEGLSurfaceControl : public GLSurfaceEGL {
 
   // The fences associated with the primary plane (renderer by the display
   // compositor) for the pending frame.
-  absl::optional<PrimaryPlaneFences> primary_plane_fences_;
+  std::optional<PrimaryPlaneFences> primary_plane_fences_;
 
   // Transactions waiting to be applied once the previous transaction is acked.
   std::queue<gfx::SurfaceControl::Transaction> pending_transaction_queue_;
+
+  // Arguments for pending OrderedOnTransactionAckOnGpuThread calls. This is
+  // needed to ensure OrderedOnTransactionAckOnGpuThread are called in the order
+  // they are scheduled, since Android does not make that guarantee.
+  OnTransactionAckArgs::SequenceId::Generator
+      pending_transaction_ack_id_generator_;
+  base::circular_deque<OnTransactionAckArgs> pending_transaction_acks_;
 
   // PresentationCallbacks for transactions which have been acked but their
   // present fence has not fired yet.
@@ -241,21 +254,16 @@ class GL_EXPORT GLSurfaceEGLSurfaceControl : public GLSurfaceEGL {
   ResourceRefs current_frame_resources_;
 
   // The root surface tied to the ANativeWindow that places the content of this
-  // GLSurface in the java view tree.
+  // Presenter in the java view tree.
   scoped_refptr<gfx::SurfaceControl::Surface> root_surface_;
 
-  // The last context made current with this surface.
-  scoped_refptr<GLContext> context_;
-
-  // Set if a transaction was applied and we are waiting for it to be acked.
-  bool transaction_ack_pending_ = false;
-
-  gfx::OverlayTransform display_transform_ = gfx::OVERLAY_TRANSFORM_NONE;
+  // Numberf of transactions that was applied and we are waiting for it to be
+  // committed (if commit is enabled) or acked (if commit is not enabled).
+  uint32_t num_transaction_commit_or_ack_pending_ = 0u;
 
   float frame_rate_ = 0;
   bool frame_rate_update_pending_ = false;
 
-  EGLSurface offscreen_surface_ = nullptr;
   base::CancelableOnceClosure check_pending_presentation_callback_queue_task_;
 
   // Set if a swap failed and the surface is no longer usable.
@@ -272,7 +280,7 @@ class GL_EXPORT GLSurfaceEGLSurfaceControl : public GLSurfaceEGL {
   const bool use_target_deadline_;
   const bool using_on_commit_callback_;
 
-  absl::optional<int64_t> choreographer_vsync_id_for_next_frame_;
+  std::optional<int64_t> choreographer_vsync_id_for_next_frame_;
 
   base::WeakPtrFactory<GLSurfaceEGLSurfaceControl> weak_factory_{this};
 };

@@ -1,10 +1,10 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ppapi/proxy/network_proxy_resource.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "ppapi/proxy/dispatch_reply_message.h"
 #include "ppapi/proxy/ppapi_messages.h"
 #include "ppapi/shared_impl/tracked_callback.h"
@@ -52,7 +52,6 @@ void NetworkProxyResource::OnPluginMsgGetProxyForURLReply(
     // deleted, LastPluginRefWasReleased in PluginResource should abort the
     // callback and should not run this callback.
     NOTREACHED();
-    return;
   }
   if (params.result() == PP_OK) {
     *proxy_string_out_param = (new StringVar(proxy_string))->GetPPVar();

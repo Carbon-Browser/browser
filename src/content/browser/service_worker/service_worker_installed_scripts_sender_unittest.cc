@@ -1,24 +1,23 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/service_worker/service_worker_installed_scripts_sender.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "content/browser/service_worker/embedded_worker_test_helper.h"
 #include "content/browser/service_worker/service_worker_context_core.h"
 #include "content/browser/service_worker/service_worker_test_utils.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/test/browser_task_environment.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "net/base/io_buffer.h"
 #include "net/base/test_completion_callback.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/blob/blob_utils.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_registration.mojom.h"
@@ -134,15 +133,16 @@ class ServiceWorkerInstalledScriptsSenderTest : public testing::Test {
     scope_ = GURL("http://www.example.com/test/");
     blink::mojom::ServiceWorkerRegistrationOptions options;
     options.scope = scope_;
-    registration_ = base::MakeRefCounted<ServiceWorkerRegistration>(
-        options, blink::StorageKey(url::Origin::Create(scope_)), 1L,
+    registration_ = ServiceWorkerRegistration::Create(
+        options,
+        blink::StorageKey::CreateFirstParty(url::Origin::Create(scope_)), 1L,
         context()->AsWeakPtr(), blink::mojom::AncestorFrameType::kNormalFrame);
     version_ = CreateNewServiceWorkerVersion(
         context()->registry(), registration_.get(),
         GURL("http://www.example.com/test/service_worker.js"),
         blink::mojom::ScriptType::kClassic);
-    version_->set_fetch_handler_existence(
-        ServiceWorkerVersion::FetchHandlerExistence::EXISTS);
+    version_->set_fetch_handler_type(
+        ServiceWorkerVersion::FetchHandlerType::kNotSkippable);
     version_->SetStatus(ServiceWorkerVersion::INSTALLED);
   }
 

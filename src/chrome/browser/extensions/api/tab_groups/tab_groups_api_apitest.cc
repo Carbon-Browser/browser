@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,19 @@
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/extensions/extension_apitest.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/tabs/tab_group.h"
+#include "chrome/browser/ui/tabs/tab_group_model.h"
+#include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/common/extensions/api/tab_groups.h"
+#include "components/tab_groups/tab_group_visual_data.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/test_event_router_observer.h"
+#include "extensions/test/extension_test_message_listener.h"
 
 namespace extensions {
 
@@ -19,17 +26,9 @@ namespace {
 
 using TabGroupsApiTest = ExtensionApiTest;
 
+// TODO(crbug.com/40910190): Test is flaky.
 IN_PROC_BROWSER_TEST_F(TabGroupsApiTest, TestTabGroupsWorks) {
-// TODO(crbug.com/1052397): Revisit once build flag switch of lacros-chrome is
-// complete.
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
-  // TODO(crbug.com/1148195): Fix flakiness of this text on Linux.
-  return;
-#endif
-
-  ASSERT_TRUE(
-      RunExtensionTest("tab_groups", {}, {.ignore_manifest_warnings = true}))
-      << message_;
+  ASSERT_TRUE(RunExtensionTest("tab_groups/basics")) << message_;
 }
 
 // Tests that events are restricted to their respective browser contexts,
@@ -62,6 +61,22 @@ IN_PROC_BROWSER_TEST_F(TabGroupsApiTest, TestTabGroupEventsAcrossProfiles) {
       event_observer.events().at(api::tab_groups::OnCreated::kEventName).get();
   EXPECT_EQ(incognito_event->restrict_to_browser_context,
             incognito_browser->profile());
+}
+
+IN_PROC_BROWSER_TEST_F(TabGroupsApiTest, SetGroupTitleToEmoji) {
+  ASSERT_TRUE(RunExtensionTest("tab_groups/emoji",
+                               {.extension_url = "emoji_title.html"}))
+      << message_;
+
+  std::optional<tab_groups::TabGroupId> group =
+      browser()->tab_strip_model()->GetTabGroupForTab(0);
+  ASSERT_TRUE(group.has_value());
+  const tab_groups::TabGroupVisualData* visual_data = browser()
+                                                          ->tab_strip_model()
+                                                          ->group_model()
+                                                          ->GetTabGroup(*group)
+                                                          ->visual_data();
+  EXPECT_EQ(visual_data->title(), std::u16string(u"🤡"));
 }
 
 }  // namespace

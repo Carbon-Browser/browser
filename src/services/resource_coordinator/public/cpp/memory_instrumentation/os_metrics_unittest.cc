@@ -1,6 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 #include "services/resource_coordinator/public/cpp/memory_instrumentation/os_metrics.h"
 
 #include <set>
@@ -132,17 +137,17 @@ void CreateTempFileWithContents(const char* contents, base::ScopedFILE* file) {
         // BUILDFLAG(IS_ANDROID)
 
 TEST(OSMetricsTest, GivesNonZeroResults) {
-  base::ProcessId pid = base::kNullProcessId;
+  base::ProcessHandle handle = base::kNullProcessHandle;
   mojom::RawOSMemDump dump;
   dump.platform_private_footprint = mojom::PlatformPrivateFootprint::New();
-  EXPECT_TRUE(OSMetrics::FillOSMemoryDump(pid, &dump));
+  EXPECT_TRUE(OSMetrics::FillOSMemoryDump(handle, &dump));
   EXPECT_TRUE(dump.platform_private_footprint);
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID) || \
     BUILDFLAG(IS_FUCHSIA)
   EXPECT_GT(dump.platform_private_footprint->rss_anon_bytes, 0u);
 #elif BUILDFLAG(IS_WIN)
   EXPECT_GT(dump.platform_private_footprint->private_bytes, 0u);
-#elif BUILDFLAG(IS_MAC)
+#elif BUILDFLAG(IS_APPLE)
   EXPECT_GT(dump.platform_private_footprint->internal_bytes, 0u);
 #endif
 }
@@ -157,14 +162,14 @@ TEST(OSMetricsTest, ParseProcSmaps) {
   base::ScopedFILE empty_file(OpenFile(base::FilePath("/dev/null"), "r"));
   ASSERT_TRUE(empty_file.get());
   OSMetrics::SetProcSmapsForTesting(empty_file.get());
-  auto no_maps = OSMetrics::GetProcessMemoryMaps(base::kNullProcessId);
+  auto no_maps = OSMetrics::GetProcessMemoryMaps(base::kNullProcessHandle);
   ASSERT_TRUE(no_maps.empty());
 
   // Parse the 1st smaps file.
   base::ScopedFILE temp_file1;
   CreateTempFileWithContents(kTestSmaps1, &temp_file1);
   OSMetrics::SetProcSmapsForTesting(temp_file1.get());
-  auto maps_1 = OSMetrics::GetProcessMemoryMaps(base::kNullProcessId);
+  auto maps_1 = OSMetrics::GetProcessMemoryMaps(base::kNullProcessHandle);
   ASSERT_EQ(2UL, maps_1.size());
 
   EXPECT_EQ(0x00400000UL, maps_1[0]->start_address);
@@ -195,7 +200,7 @@ TEST(OSMetricsTest, ParseProcSmaps) {
   base::ScopedFILE temp_file2;
   CreateTempFileWithContents(kTestSmaps2, &temp_file2);
   OSMetrics::SetProcSmapsForTesting(temp_file2.get());
-  auto maps_2 = OSMetrics::GetProcessMemoryMaps(base::kNullProcessId);
+  auto maps_2 = OSMetrics::GetProcessMemoryMaps(base::kNullProcessHandle);
   ASSERT_EQ(1UL, maps_2.size());
   EXPECT_EQ(0x7fe7ce79c000UL, maps_2[0]->start_address);
   EXPECT_EQ(0x7fe7ce7a8000UL - 0x7fe7ce79c000UL, maps_2[0]->size_in_bytes);
@@ -261,7 +266,7 @@ TEST(OSMetricsTest, GetMappedAndResidentPages) {
 void DummyFunction() {}
 
 TEST(OSMetricsTest, TestWinModuleReading) {
-  auto maps = OSMetrics::GetProcessMemoryMaps(base::kNullProcessId);
+  auto maps = OSMetrics::GetProcessMemoryMaps(base::kNullProcessHandle);
 
   wchar_t module_name[MAX_PATH];
   DWORD result = GetModuleFileName(nullptr, module_name, MAX_PATH);
@@ -312,9 +317,10 @@ TEST(OSMetricsTest, TestWinModuleReading) {
 namespace {
 
 void CheckMachORegions(const std::vector<mojom::VmRegionPtr>& maps) {
-  uint32_t size = 100;
-  char full_path[size];
-  int result = _NSGetExecutablePath(full_path, &size);
+  constexpr uint32_t kSize = 100;
+  char full_path[kSize];
+  uint32_t buf_size = kSize;
+  int result = _NSGetExecutablePath(full_path, &buf_size);
   ASSERT_EQ(0, result);
   std::string name = basename(full_path);
 
@@ -344,9 +350,9 @@ void CheckMachORegions(const std::vector<mojom::VmRegionPtr>& maps) {
 
 // Test failing on Mac ASan 64: https://crbug.com/852690
 TEST(OSMetricsTest, DISABLED_TestMachOReading) {
-  auto maps = OSMetrics::GetProcessMemoryMaps(base::kNullProcessId);
+  auto maps = OSMetrics::GetProcessMemoryMaps(base::kNullProcessHandle);
   CheckMachORegions(maps);
-  maps = OSMetrics::GetProcessModules(base::kNullProcessId);
+  maps = OSMetrics::GetProcessModules(base::kNullProcessHandle);
   CheckMachORegions(maps);
 }
 #endif  // BUILDFLAG(IS_MAC)

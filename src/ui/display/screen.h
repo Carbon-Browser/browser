@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define UI_DISPLAY_SCREEN_H_
 
 #include <memory>
+#include <optional>
 #include <set>
 #include <vector>
 
@@ -30,6 +31,7 @@ class Rect;
 
 namespace display {
 class DisplayObserver;
+enum class TabletState;
 
 // A utility class for getting various info about screen size, displays,
 // cursor position, etc.
@@ -51,7 +53,8 @@ class DISPLAY_EXPORT Screen {
 
   // Retrieves the single Screen object; this may be null if it's not already
   // created, except for IOS where it creates a native screen instance
-  // automatically.
+  // automatically. On ChromeOS ash the return value is only null on startup.
+
   static Screen* GetScreen();
 
   // Returns whether a Screen singleton exists or not.
@@ -97,11 +100,19 @@ class DISPLAY_EXPORT Screen {
   // Returns the display nearest the specified window.
   // If the window is NULL or the window is not rooted to a display this will
   // return the primary display.
+  //
+  // Warning: When determining which scale factor to use for a given native
+  // window, use `GetPreferredScaleFactorForWindow` instead, as it properly
+  // supports system-controlled per-window scaling, such as Wayland.
   virtual Display GetDisplayNearestWindow(gfx::NativeWindow window) const = 0;
 
   // Returns the display nearest the specified view. It may still use the window
   // that contains the view (i.e. if a window is spread over two displays,
   // the location of the view within that window won't influence the result).
+  //
+  // Warning: When determining which scale factor to use for a given native
+  // view, use `GetPreferredScaleFactorForView` instead, as it properly
+  // supports system-controlled per-window scaling, such as Wayland.
   virtual Display GetDisplayNearestView(gfx::NativeView view) const;
 
   // Returns the display nearest the specified DIP |point|.
@@ -120,7 +131,7 @@ class DISPLAY_EXPORT Screen {
   Display GetDisplayForNewWindows() const;
 
   // Sets the suggested display to use when creating a new window.
-  void SetDisplayForNewWindows(int64_t display_id);
+  virtual void SetDisplayForNewWindows(int64_t display_id);
 
   // Returns ScreenInfos, attempting to set the current ScreenInfo to the
   // display corresponding to `nearest_id`.  The returned result is guaranteed
@@ -129,7 +140,7 @@ class DISPLAY_EXPORT Screen {
   // (both of which may or may not be `nearest_id`).
   display::ScreenInfos GetScreenInfosNearestDisplay(int64_t nearest_id) const;
 
-#if BUILDFLAG(IS_CHROMEOS_LACROS) || BUILDFLAG(IS_LINUX)
+#if BUILDFLAG(IS_LINUX)
   // Object which suspends the platform-specific screensaver for the duration of
   // its existence.
   class ScreenSaverSuspender {
@@ -150,7 +161,7 @@ class DISPLAY_EXPORT Screen {
   // the platform-specific screensaver will not be un-suspended until all
   // returned |ScreenSaverSuspender| instances have been destructed.
   virtual std::unique_ptr<ScreenSaverSuspender> SuspendScreenSaver();
-#endif  // BUILDFLAG(IS_CHROMEOS_LACROS) || BUILDFLAG(IS_LINUX)
+#endif  // BUILDFLAG(IS_LINUX)
 
   // Returns whether the screensaver is currently running.
   virtual bool IsScreenSaverActive() const;
@@ -194,8 +205,27 @@ class DISPLAY_EXPORT Screen {
   virtual base::Value::List GetGpuExtraInfo(
       const gfx::GpuExtraInfo& gpu_extra_info);
 
+  // Returns the preferred scale factor for |window|, if the underlying platform
+  // supports per-window scaling, otherwise returns the scale factor of display
+  // nearst to |window|, using GetDisplayNearest[Window|View].
+  virtual std::optional<float> GetPreferredScaleFactorForWindow(
+      gfx::NativeWindow window) const;
+  virtual std::optional<float> GetPreferredScaleFactorForView(
+      gfx::NativeView view) const;
+
+#if BUILDFLAG(IS_CHROMEOS)
+  // Returns tablet state.
+  virtual TabletState GetTabletState() const;
+
+  // Returns true if the system is in tablet mode.
+  bool InTabletMode() const;
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
  protected:
   void set_shutdown(bool shutdown) { shutdown_ = shutdown; }
+  int64_t display_id_for_new_windows() const {
+    return display_id_for_new_windows_;
+  }
 
  private:
   friend class ScopedDisplayForNewWindows;
@@ -213,42 +243,29 @@ class DISPLAY_EXPORT Screen {
   int64_t display_id_for_new_windows_;
   int64_t scoped_display_id_for_new_windows_ = display::kInvalidDisplayId;
 
-#if BUILDFLAG(IS_CHROMEOS_LACROS) || BUILDFLAG(IS_LINUX)
+#if BUILDFLAG(IS_LINUX)
   uint32_t screen_saver_suspension_count_ = 0;
-#endif  // BUILDFLAG(IS_CHROMEOS_LACROS) || BUILDFLAG(IS_LINUX)
+#endif  // BUILDFLAG(IS_LINUX)
 };
 
-// TODO(crbug.com/1317416): Make this static private member of
+#if BUILDFLAG(IS_APPLE)
+
+// TODO(oshima): move this to separate apple specific file.
+
+// TODO(crbug.com/40222482): Make this static private member of
 // ScopedNativeScreen.
 DISPLAY_EXPORT Screen* CreateNativeScreen();
 
-// Android does not have `CreateNativeScreen()`.
-#if !BUILDFLAG(IS_ANDROID)
-
 // ScopedNativeScreen creates a native screen if there is no screen created yet
 // (e.g. by a unit test).
-class DISPLAY_EXPORT ScopedNativeScreen {
+class DISPLAY_EXPORT ScopedNativeScreen final {
  public:
   explicit ScopedNativeScreen(const base::Location& location = FROM_HERE);
   ScopedNativeScreen(const ScopedNativeScreen&) = delete;
   ScopedNativeScreen& operator=(const ScopedNativeScreen&) = delete;
-  virtual ~ScopedNativeScreen();
-
-  // Create and initialize the screen instance if the screen instance does not
-  // exist yet.
-  void MaybeInit(const base::Location& location = FROM_HERE);
-  void Shutdown();
-
-  Screen* screen() { return screen_.get(); }
-
-  virtual Screen* CreateScreen();
-
- protected:
-  explicit ScopedNativeScreen(bool call_maybe_init,
-                              const base::Location& location = FROM_HERE);
+  ~ScopedNativeScreen();
 
  private:
-  bool maybe_init_called_{false};
   std::unique_ptr<Screen> screen_;
 };
 

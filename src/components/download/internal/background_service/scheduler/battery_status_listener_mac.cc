@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,9 @@ int BatteryStatusListenerMac::GetBatteryPercentage() {
   return 100;
 }
 
-bool BatteryStatusListenerMac::IsOnBatteryPower() {
-  return false;
+base::PowerStateObserver::BatteryPowerStatus
+BatteryStatusListenerMac::GetBatteryPowerStatus() const {
+  return base::PowerStateObserver::BatteryPowerStatus::kUnknown;
 }
 
 void BatteryStatusListenerMac::Start(Observer* observer) {}

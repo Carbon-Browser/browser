@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,9 +16,9 @@
 class MockSharingService;
 class NotificationDisplayServiceTester;
 
-namespace chrome_browser_sharing {
+namespace components_sharing_message {
 class SharingMessage;
-}  // namespace chrome_browser_sharing
+}  // namespace components_sharing_message
 
 namespace message_center {
 class Notification;
@@ -37,7 +37,7 @@ class SharedClipboardTestBase : public testing::Test {
 
   void TearDown() override;
 
-  chrome_browser_sharing::SharingMessage CreateMessage(
+  components_sharing_message::SharingMessage CreateMessage(
       const std::string& guid,
       const std::string& device_name);
 

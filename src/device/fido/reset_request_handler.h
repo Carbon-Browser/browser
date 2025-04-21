@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "device/fido/fido_discovery_factory.h"
@@ -58,7 +58,7 @@ class COMPONENT_EXPORT(DEVICE_FIDO) ResetRequestHandler
 
   void OnTouch(FidoAuthenticator* authenticator);
   void OnResetComplete(CtapDeviceResponseCode status,
-                       absl::optional<pin::EmptyResponse> response);
+                       std::optional<pin::EmptyResponse> response);
 
   ResetSentCallback reset_sent_callback_;
   FinishedCallback finished_callback_;

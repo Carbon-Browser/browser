@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -28,15 +28,18 @@
 #include "chrome/test/base/testing_profile_manager.h"
 #include "components/prefs/pref_service.h"
 #include "components/profile_metrics/state.h"
+#include "components/signin/public/base/consent_level.h"
 #include "components/signin/public/base/signin_pref_names.h"
+#include "components/signin/public/base/signin_prefs.h"
 #include "components/signin/public/identity_manager/account_info.h"
+#include "components/signin/public/identity_manager/signin_constants.h"
 #include "components/sync_preferences/pref_service_syncable.h"
 #include "content/public/test/browser_task_environment.h"
-#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gfx/image/image.h"
 #include "ui/gfx/image/image_unittest_util.h"
 
+using signin::constants::kNoHostedDomainFound;
 using ::testing::Return;
 
 namespace {
@@ -62,21 +65,24 @@ AccountInfo GetValidAccountInfo(std::string email,
 const char kChromiumOrgDomain[] = "chromium.org";
 #endif  // BUILDFLAG(ENABLE_DICE_SUPPORT)
 
-class GAIAInfoUpdateServiceTestBase : public testing::Test {
+}  // namespace
+
+class GAIAInfoUpdateServiceTest : public testing::Test {
  protected:
-  explicit GAIAInfoUpdateServiceTestBase(
-      signin::AccountConsistencyMethod account_consistency)
+  GAIAInfoUpdateServiceTest()
       : testing_profile_manager_(TestingBrowserProcess::GetGlobal()),
-        identity_test_env_(/*test_url_loader_factory=*/nullptr,
-                           /*pref_service=*/nullptr,
-                           account_consistency,
-                           /*test_signin_client=*/nullptr) {}
+        identity_test_env_(
+            /*test_url_loader_factory=*/nullptr,
+            /*pref_service=*/nullptr,
+            /*test_signin_client=*/nullptr) {
+    SigninPrefs::RegisterProfilePrefs(pref_service_.registry());
+  }
 
-  GAIAInfoUpdateServiceTestBase(const GAIAInfoUpdateServiceTestBase&) = delete;
-  GAIAInfoUpdateServiceTestBase& operator=(
-      const GAIAInfoUpdateServiceTestBase&) = delete;
+  GAIAInfoUpdateServiceTest(const GAIAInfoUpdateServiceTest&) = delete;
+  GAIAInfoUpdateServiceTest& operator=(const GAIAInfoUpdateServiceTest&) =
+      delete;
 
-  ~GAIAInfoUpdateServiceTestBase() override = default;
+  ~GAIAInfoUpdateServiceTest() override = default;
 
   void SetUp() override {
     testing::Test::SetUp();
@@ -90,7 +96,7 @@ class GAIAInfoUpdateServiceTestBase : public testing::Test {
 
     service_ = std::make_unique<GAIAInfoUpdateService>(
         identity_test_env_.identity_manager(),
-        testing_profile_manager_.profile_attributes_storage(),
+        testing_profile_manager_.profile_attributes_storage(), pref_service_,
         profile()->GetPath());
   }
 
@@ -123,27 +129,24 @@ class GAIAInfoUpdateServiceTestBase : public testing::Test {
         base::UTF8ToUTF16(name), 0, TestingProfile::TestingFactories());
   }
 
+  bool HasAccountPrefs(const std::string& gaia_id) {
+    return SigninPrefs(pref_service_).HasAccountPrefs(gaia_id);
+  }
+
+  void InitializeAccountPref(const std::string& gaia_id) {
+    // Set any pref value to create the pref container.
+    SigninPrefs(pref_service_)
+        .SetChromeSigninInterceptionUserChoice(gaia_id,
+                                               ChromeSigninUserChoice::kSignin);
+  }
+
   content::BrowserTaskEnvironment task_environment_;
   TestingProfileManager testing_profile_manager_;
   raw_ptr<TestingProfile> profile_ = nullptr;
   signin::IdentityTestEnvironment identity_test_env_;
+  TestingPrefServiceSimple pref_service_;
   std::unique_ptr<GAIAInfoUpdateService> service_;
 };
-
-class GAIAInfoUpdateServiceTest : public GAIAInfoUpdateServiceTestBase {
- public:
-  GAIAInfoUpdateServiceTest(const GAIAInfoUpdateServiceTest&) = delete;
-  GAIAInfoUpdateServiceTest& operator=(const GAIAInfoUpdateServiceTest&) =
-      delete;
-
- protected:
-  GAIAInfoUpdateServiceTest()
-      : GAIAInfoUpdateServiceTestBase(
-            signin::AccountConsistencyMethod::kDisabled) {}
-  ~GAIAInfoUpdateServiceTest() override = default;
-};
-
-}  // namespace
 
 TEST_F(GAIAInfoUpdateServiceTest, SyncOnSyncOff) {
   AccountInfo info =
@@ -162,9 +165,6 @@ TEST_F(GAIAInfoUpdateServiceTest, SyncOnSyncOff) {
   EXPECT_EQ(entry->GetGAIAGivenName(), u"Pat");
   EXPECT_EQ(entry->GetGAIAName(), u"Pat Foo");
   EXPECT_EQ(entry->GetHostedDomain(), kNoHostedDomainFound);
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  EXPECT_EQ(entry->GetLocalProfileName(), u"Pat");
-#endif
 
   gfx::Image gaia_picture = gfx::test::CreateImage(256, 256);
   signin::SimulateAccountImageFetch(identity_test_env()->identity_manager(),
@@ -182,22 +182,7 @@ TEST_F(GAIAInfoUpdateServiceTest, SyncOnSyncOff) {
 }
 
 #if BUILDFLAG(ENABLE_DICE_SUPPORT)
-namespace {
-class GAIAInfoUpdateServiceDiceTest : public GAIAInfoUpdateServiceTestBase {
- public:
-  GAIAInfoUpdateServiceDiceTest(const GAIAInfoUpdateServiceDiceTest&) = delete;
-  GAIAInfoUpdateServiceDiceTest& operator=(
-      const GAIAInfoUpdateServiceDiceTest&) = delete;
-
- protected:
-  GAIAInfoUpdateServiceDiceTest()
-      : GAIAInfoUpdateServiceTestBase(signin::AccountConsistencyMethod::kDice) {
-  }
-  ~GAIAInfoUpdateServiceDiceTest() override = default;
-};
-}  // namespace
-
-TEST_F(GAIAInfoUpdateServiceDiceTest, RevokeSyncConsent) {
+TEST_F(GAIAInfoUpdateServiceTest, RevokeSyncConsent) {
   AccountInfo info =
       identity_test_env()->MakeAccountAvailable("pat@example.com");
   base::RunLoop().RunUntilIdle();
@@ -266,8 +251,8 @@ TEST_F(GAIAInfoUpdateServiceTest, LogInLogOut) {
 
 TEST_F(GAIAInfoUpdateServiceTest, LogInLogOutLogIn) {
   std::string email1 = "pat1@example.com";
-  AccountInfo info1 = identity_test_env()->MakeAccountAvailableWithCookies(
-      email1, signin::GetTestGaiaIdForEmail(email1));
+  AccountInfo info1 =
+      identity_test_env()->MakeAccountAvailable(email1, {.set_cookie = true});
   base::RunLoop().RunUntilIdle();
   info1 = GetValidAccountInfo(info1.email, info1.account_id, "Pat 1",
                               "Pat Foo The First", kNoHostedDomainFound);
@@ -279,32 +264,24 @@ TEST_F(GAIAInfoUpdateServiceTest, LogInLogOutLogIn) {
 
   // Test correct histogram recording for all accounts info that has no getters.
   base::HistogramTester tester;
-  entry->RecordAccountMetrics();
+  entry->RecordAccountNamesMetric();
   tester.ExpectBucketCount(
       "Profile.AllAccounts.Names",
       /*sample=*/profile_metrics::AllAccountsNames::kLikelySingleName,
-      /*expected_count=*/1);
-  tester.ExpectBucketCount(
-      "Profile.AllAccounts.Categories",
-      /*sample=*/profile_metrics::AllAccountsCategories::kSingleCategory,
       /*expected_count=*/1);
 
   // Log out and record the metric again, sign-out wipes previous info in the
   // entry so again the default values get reported.
   identity_test_env()->SetCookieAccounts({});
-  entry->RecordAccountMetrics();
+  entry->RecordAccountNamesMetric();
   tester.ExpectBucketCount(
       "Profile.AllAccounts.Names",
       /*sample=*/profile_metrics::AllAccountsNames::kLikelySingleName,
       /*expected_count=*/2);
-  tester.ExpectBucketCount(
-      "Profile.AllAccounts.Categories",
-      /*sample=*/profile_metrics::AllAccountsCategories::kSingleCategory,
-      /*expected_count=*/2);
 
   std::string email2 = "pat2@example.com";
-  AccountInfo info2 = identity_test_env()->MakeAccountAvailableWithCookies(
-      email2, signin::GetTestGaiaIdForEmail(email2));
+  AccountInfo info2 =
+      identity_test_env()->MakeAccountAvailable(email2, {.set_cookie = true});
   base::RunLoop().RunUntilIdle();
   info2 = GetValidAccountInfo(info2.email, info2.account_id, "Pat 2",
                               "Pat Foo The Second", kChromiumOrgDomain);
@@ -315,20 +292,13 @@ TEST_F(GAIAInfoUpdateServiceTest, LogInLogOutLogIn) {
 
   // Because due to the complete sign-out, the info about the previous account
   // got wiped. Thus the same default metrics get recorded again, despite the
-  // second account has a different gaia name and a different account category
-  // than the first one.
-  entry->RecordAccountMetrics();
+  // second account has a different gaia name than the first one.
+  entry->RecordAccountNamesMetric();
   tester.ExpectBucketCount(
       "Profile.AllAccounts.Names",
       /*sample=*/profile_metrics::AllAccountsNames::kLikelySingleName,
       /*expected_count=*/3);
-  tester.ExpectBucketCount(
-      "Profile.AllAccounts.Categories",
-      /*sample=*/profile_metrics::AllAccountsCategories::kSingleCategory,
-      /*expected_count=*/3);
   tester.ExpectTotalCount("Profile.AllAccounts.Names", /*expected_count=*/3);
-  tester.ExpectTotalCount("Profile.AllAccounts.Categories",
-                          /*expected_count=*/3);
 }
 
 TEST_F(GAIAInfoUpdateServiceTest, MultiLoginAndLogOut) {
@@ -354,34 +324,23 @@ TEST_F(GAIAInfoUpdateServiceTest, MultiLoginAndLogOut) {
   ProfileAttributesEntry* entry = storage()->GetAllProfilesAttributes().front();
 
   // Test correct histogram recording for all accounts info that has no getters.
-  // The two accounts have both different gaia names and account categories.
+  // The two accounts have different gaia names.
   base::HistogramTester tester;
-  entry->RecordAccountMetrics();
+  entry->RecordAccountNamesMetric();
   tester.ExpectBucketCount(
       "Profile.AllAccounts.Names",
       /*sample=*/profile_metrics::AllAccountsNames::kMultipleNamesWithoutSync,
-      /*expected_count=*/1);
-  tester.ExpectBucketCount(
-      "Profile.AllAccounts.Categories",
-      /*sample=*/
-      profile_metrics::AllAccountsCategories::kBothConsumerAndEnterpriseNoSync,
       /*expected_count=*/1);
 
   // Log out and record the metric again, sign-out wipes previous info in the
   // entry so the default values get reported.
   identity_test_env()->SetCookieAccounts({});
-  entry->RecordAccountMetrics();
+  entry->RecordAccountNamesMetric();
   tester.ExpectBucketCount(
       "Profile.AllAccounts.Names",
       /*sample=*/profile_metrics::AllAccountsNames::kLikelySingleName,
       /*expected_count=*/1);
-  tester.ExpectBucketCount(
-      "Profile.AllAccounts.Categories",
-      /*sample=*/profile_metrics::AllAccountsCategories::kSingleCategory,
-      /*expected_count=*/1);
   tester.ExpectTotalCount("Profile.AllAccounts.Names", /*expected_count=*/2);
-  tester.ExpectTotalCount("Profile.AllAccounts.Categories",
-                          /*expected_count=*/2);
 }
 #endif  // !BUILDFLAG(ENABLE_DICE_SUPPORT)
 
@@ -410,69 +369,121 @@ TEST_F(GAIAInfoUpdateServiceTest, ClearGaiaInfoOnStartup) {
   EXPECT_TRUE(entry->GetHostedDomain().empty());
 }
 
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
 TEST_F(GAIAInfoUpdateServiceTest,
-       LocalProfileNameCustomized_NoUpdateOnPrimaryAccountChange) {
-  ProfileAttributesEntry* entry = storage()->GetAllProfilesAttributes().front();
-  // Customized local profile name, shouldn't be overridden on
-  // `UpdatePrimaryAccount()`.
-  std::u16string updatedLocalName(u"UpdatedPat");
-  entry->SetLocalProfileName(updatedLocalName, false);
-  ASSERT_FALSE(
-      storage()->IsDefaultProfileName(entry->GetLocalProfileName(), false));
+       SigninPrefsWithSignedInAccountAndSecondaryAccount) {
+  base::HistogramTester histogram_tester;
+  const std::string primary_gaia_id = "primary_gaia_id";
+  ASSERT_FALSE(HasAccountPrefs(primary_gaia_id));
 
-  AccountInfo info = identity_test_env()->MakePrimaryAccountAvailable(
-      "pat@example.com", signin::ConsentLevel::kSync);
-  info = GetValidAccountInfo(info.email, info.account_id, "Pat", "Pat Foo",
-                             kNoHostedDomainFound);
+  AccountInfo primary_info = identity_test_env()->MakeAccountAvailable(
+      "primary@example.com",
+      {.primary_account_consent_level = signin::ConsentLevel::kSignin,
+       .set_cookie = true,
+       .gaia_id = primary_gaia_id});
+  ASSERT_EQ(primary_gaia_id, primary_info.gaia);
+  InitializeAccountPref(primary_gaia_id);
+  EXPECT_TRUE(HasAccountPrefs(primary_gaia_id));
 
-  signin::UpdateAccountInfoForAccount(identity_test_env()->identity_manager(),
-                                      info);
+  // Add a secondary account.
+  const std::string secondary_gaia_id = "secondary_gaia_id";
+  ASSERT_FALSE(HasAccountPrefs(secondary_gaia_id));
+  AccountInfo secondary_info = identity_test_env()->MakeAccountAvailable(
+      "secondary@gmail.com",
+      {.set_cookie = true, .gaia_id = secondary_gaia_id});
+  ASSERT_EQ(secondary_gaia_id, secondary_info.gaia);
+  InitializeAccountPref(secondary_gaia_id);
+  EXPECT_TRUE(HasAccountPrefs(secondary_gaia_id));
 
-  EXPECT_EQ(entry->GetLocalProfileName(), updatedLocalName);
-  EXPECT_NE(base::UTF16ToUTF8(entry->GetLocalProfileName()), info.given_name);
+  // Set the accounts as signed out.
+  identity_test_env()->SetCookieAccounts(
+      {{primary_info.email, primary_info.gaia, /*signed_out=*/true},
+       {secondary_info.email, secondary_info.gaia, /*signed_out=*/true}});
+  // Prefs should remain as the cookies are not cleared yet.
+  EXPECT_TRUE(HasAccountPrefs(primary_gaia_id));
+  EXPECT_TRUE(HasAccountPrefs(secondary_gaia_id));
+
+  // Clear all cookies.
+  identity_test_env()->SetCookieAccounts({});
+  ASSERT_TRUE(identity_test_env()->identity_manager()->HasPrimaryAccount(
+      signin::ConsentLevel::kSignin));
+  // Primary account prefs should remain since the account is still signed in.
+  EXPECT_TRUE(HasAccountPrefs(primary_gaia_id));
+  // Secondary account prefs should be cleared.
+  EXPECT_FALSE(HasAccountPrefs(secondary_gaia_id));
+
+  histogram_tester.ExpectUniqueSample("Signin.AccountPref.RemovedCount",
+                                      /*sample=*/1,
+                                      /*expected_bucket_count=*/1);
+  histogram_tester.ExpectUniqueSample(
+      "Signin.AccountPref.RemovedCount.SignedIn",
+      /*sample=*/1,
+      /*expected_bucket_count=*/1);
+  histogram_tester.ExpectTotalCount("Signin.AccountPref.RemovedCount.SignedOut",
+                                    /*expected_count=*/0);
+
+  // Clearing primary account should now clear the account prefs as well
+  // since the cookie is already cleared.
+  identity_test_env()->ClearPrimaryAccount();
+  EXPECT_FALSE(HasAccountPrefs(primary_gaia_id));
+
+  histogram_tester.ExpectUniqueSample("Signin.AccountPref.RemovedCount",
+                                      /*sample=*/1,
+                                      /*expected_bucket_count=*/2);
+  histogram_tester.ExpectUniqueSample(
+      "Signin.AccountPref.RemovedCount.SignedIn",
+      /*sample=*/1,
+      /*expected_bucket_count=*/1);
+  histogram_tester.ExpectUniqueSample(
+      "Signin.AccountPref.RemovedCount.SignedOut",
+      /*sample=*/1,
+      /*expected_bucket_count=*/1);
 }
 
-TEST_F(GAIAInfoUpdateServiceTest,
-       LocalProfileNameCustomizedToDefaultName_NoUpdateOnPrimaryAccountChange) {
-  ProfileAttributesEntry* entry = storage()->GetAllProfilesAttributes().front();
-  // Customized local profile name to the default naming.
-  // Shouldn't be overridden on `UpdatePrimaryAccount()`.
-  std::u16string updatedLocalName(u"Person 1");
-  entry->SetLocalProfileName(updatedLocalName, false);
-  ASSERT_TRUE(
-      storage()->IsDefaultProfileName(entry->GetLocalProfileName(), false));
-  ASSERT_FALSE(entry->IsUsingDefaultName());
+TEST_F(GAIAInfoUpdateServiceTest, SigninPrefsWithSignedInWebOnly) {
+  const std::string gaia_id = "gaia_id";
+  ASSERT_FALSE(HasAccountPrefs(gaia_id));
+  AccountInfo info = identity_test_env()->MakeAccountAvailable(
+      "test@gmail.com", {.set_cookie = true, .gaia_id = gaia_id});
+  ASSERT_EQ(gaia_id, info.gaia);
+  ASSERT_FALSE(identity_test_env()->identity_manager()->HasPrimaryAccount(
+      signin::ConsentLevel::kSignin));
+  InitializeAccountPref(gaia_id);
+  EXPECT_TRUE(HasAccountPrefs(gaia_id));
 
-  AccountInfo info = identity_test_env()->MakePrimaryAccountAvailable(
-      "pat@example.com", signin::ConsentLevel::kSync);
-  info = GetValidAccountInfo(info.email, info.account_id, "Pat", "Pat Foo",
-                             kNoHostedDomainFound);
+  // Web sign out keeps the prefs.
+  identity_test_env()->SetCookieAccounts(
+      {{info.email, info.gaia, /*signed_out=*/true}});
+  EXPECT_TRUE(HasAccountPrefs(gaia_id));
 
-  signin::UpdateAccountInfoForAccount(identity_test_env()->identity_manager(),
-                                      info);
-
-  EXPECT_EQ(entry->GetLocalProfileName(), updatedLocalName);
-  EXPECT_NE(base::UTF16ToUTF8(entry->GetLocalProfileName()), info.given_name);
+  // Clearing the cookie removes the prefs.
+  identity_test_env()->SetCookieAccounts({});
+  EXPECT_FALSE(HasAccountPrefs(gaia_id));
 }
 
-TEST_F(GAIAInfoUpdateServiceTest,
-       LocalProfileNameDefaulted_UpdateOnPrimaryAccountChange) {
-  ProfileAttributesEntry* entry = storage()->GetAllProfilesAttributes().front();
-  // Local Profile Name defaulted, should be overridden on
-  // `UpdatePrimaryAccount()`.
-  ASSERT_TRUE(
-      storage()->IsDefaultProfileName(entry->GetLocalProfileName(), false));
-  ASSERT_TRUE(entry->IsUsingDefaultName());
+TEST_F(GAIAInfoUpdateServiceTest, SigninPrefsWithGaiaIdNotInChrome) {
+  // Use an account in Chrome.
+  const std::string gaia_id = "gaia_id";
+  ASSERT_FALSE(HasAccountPrefs(gaia_id));
+  AccountInfo info = identity_test_env()->MakeAccountAvailable(
+      "test@gmail.com", {.set_cookie = true, .gaia_id = gaia_id});
+  ASSERT_EQ(gaia_id, info.gaia);
+  ASSERT_FALSE(identity_test_env()->identity_manager()->HasPrimaryAccount(
+      signin::ConsentLevel::kSignin));
+  InitializeAccountPref(gaia_id);
+  ASSERT_TRUE(HasAccountPrefs(gaia_id));
 
-  AccountInfo info = identity_test_env()->MakePrimaryAccountAvailable(
-      "pat@example.com", signin::ConsentLevel::kSync);
-  info = GetValidAccountInfo(info.email, info.account_id, "Pat", "Pat Foo",
-                             kNoHostedDomainFound);
+  // Use an account that is not in Chrome.
+  const std::string gaia_id_not_in_chrome = "gaia_id_not_in_chrome";
+  ASSERT_FALSE(HasAccountPrefs(gaia_id_not_in_chrome));
 
-  signin::UpdateAccountInfoForAccount(identity_test_env()->identity_manager(),
-                                      info);
+  // This is possible even if the account is not in Chrome.
+  InitializeAccountPref(gaia_id_not_in_chrome);
+  EXPECT_TRUE(HasAccountPrefs(gaia_id_not_in_chrome));
 
-  EXPECT_EQ(base::UTF16ToUTF8(entry->GetLocalProfileName()), info.given_name);
+  // Refreshing the cookie jar should remove the account not in Chrome.
+  identity_test_env()->TriggerListAccount();
+
+  // Prefs for the Account in Chrome remains, not for the account not in Chrome.
+  EXPECT_TRUE(HasAccountPrefs(gaia_id));
+  EXPECT_FALSE(HasAccountPrefs(gaia_id_not_in_chrome));
 }
-#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)

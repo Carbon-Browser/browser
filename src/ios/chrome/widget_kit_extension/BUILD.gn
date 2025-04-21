@@ -1,65 +1,81 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//build/apple/compile_entitlements.gni")
-import("//build/apple/tweak_info_plist.gni")
-import("//build/config/ios/rules.gni")
+import("//build/config/apple/swift_source_set.gni")
+import("//build/config/ios/ios_sdk.gni")
 import("//build/config/locales.gni")
 import("//ios/build/chrome_build.gni")
-import("//ios/build/config.gni")
 import("//ios/chrome/extension_repack.gni")
 import("//ios/chrome/tools/strings/generate_localizable_strings.gni")
-import("//ios/public/provider/chrome/browser/build_config.gni")
 
-tweak_info_plist("tweak_info_plist") {
-  info_plist = "Info.plist"
+config("ios_available_lockscreen_widget") {
+  swiftflags = [ "-DIOS_AVAILABLE_LOCKSCREEN_WIDGET" ]
 }
 
-compile_entitlements("entitlements") {
-  substitutions = [
-    "IOS_BUNDLE_ID_PREFIX=$ios_app_bundle_id_prefix",
-    "CHROMIUM_BUNDLE_ID=$chromium_bundle_id",
-  ]
-  output_name = "$target_gen_dir/widget_kit_extension.appex.entitlements"
-  entitlements_templates =
-      [ "entitlements/external/widget_kit_extension.appex.entitlements" ]
+config("ios_enable_lockscreen_widget") {
+  swiftflags = [ "-DIOS_ENABLE_LOCKSCREEN_WIDGET" ]
 }
 
-ios_appex_bundle("widget_kit_extension") {
+config("ios_enable_widgets_for_mim") {
+  swiftflags = [ "-DIOS_ENABLE_WIDGETS_FOR_MIM" ]
+}
+
+source_set("crash_helper") {
   sources = [
+    "crash_helper.h",
+    "crash_helper.mm",
+  ]
+
+  deps = [ "//ios/chrome/common/crash_report" ]
+  frameworks = [ "Foundation.framework" ]
+}
+
+swift_source_set("widget_kit_extension_swift") {
+  sources = [
+    "compat_util.swift",
     "dino_game_widget.swift",
+    "lockscreen_launcher_widget.swift",
     "main.swift",
     "quick_actions_widget.swift",
+    "search_passwords_widget.swift",
     "search_widget.swift",
+    "shortcuts_widget.swift",
+    "timeline_provider_util.swift",
     "widget_constants.swift",
   ]
+  bridge_header = "widget_kit_swift_bridge.h"
 
   deps = [
+    ":crash_helper",
     ":system_strings",
-    "resources:widget_actions_row_background_color",
-    "resources:widget_background_color",
-    "resources:widget_chrome_logo",
-    "resources:widget_dino_background",
-    "resources:widget_dino_background_placeholder",
-    "resources:widget_incognito_icon",
-    "resources:widget_qr_icon",
-    "resources:widget_search_bar_color",
-    "resources:widget_separator_color",
-    "resources:widget_text_color",
-    "resources:widget_voice_search_icon",
+    "//ios/chrome/common/app_group:helper",
+    "//ios/chrome/common/ntp_tile",
+    "//ios/chrome/widget_kit_extension/resources",
+    "//ui/base:base",
   ]
 
-  configs += [ "//build/config/compiler:enable_arc" ]
+  # Swift does not have the equivalent of __IPHONE_16_0, so use a
+  # custom define instead.
+  if (xcode_version_int >= 1400) {
+    configs += [ ":ios_available_lockscreen_widget" ]
+  }
+
+  if (ios_enable_lockscreen_widget) {
+    configs += [ ":ios_enable_lockscreen_widget" ]
+  }
+
+  if (ios_enable_widgets_for_mim) {
+    configs += [ ":ios_enable_widgets_for_mim" ]
+    generate_intents = true
+    sources += [ "select_profile_intent.swift" ]
+  }
 
   frameworks = [
     "WidgetKit.framework",
     "Foundation.framework",
     "SwiftUI.framework",
   ]
-  entitlements_target = ":entitlements"
-  info_plist_target = ":tweak_info_plist"
-  bundle_identifier = "$chromium_bundle_id.WidgetKitExtension"
 }
 
 extension_repack_all_locales("packed_resources") {

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "net/base/net_errors.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "remoting/base/buffered_socket_writer.h"
@@ -16,8 +16,7 @@
 #include "remoting/protocol/p2p_stream_socket.h"
 #include "remoting/protocol/stream_channel_factory.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 StreamMessagePipeAdapter::StreamMessagePipeAdapter(
     std::unique_ptr<P2PStreamSocket> socket,
@@ -76,9 +75,10 @@ void StreamMessagePipeAdapter::Send(google::protobuf::MessageLite* message,
             "the request to all domains. Please refer to help desk for other "
             "approaches to manage this feature."
         })");
-  if (writer_)
+  if (writer_) {
     writer_->Write(SerializeAndFrameMessage(*message), std::move(done),
                    traffic_annotation);
+  }
 }
 
 void StreamMessagePipeAdapter::CloseOnError(int error) {
@@ -127,5 +127,4 @@ void StreamMessageChannelFactoryAdapter::OnChannelCreated(
       std::move(socket), error_callback_));
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

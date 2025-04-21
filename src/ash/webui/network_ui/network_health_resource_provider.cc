@@ -1,13 +1,14 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/webui/network_ui/network_health_resource_provider.h"
 
+#include "ash/constants/ash_features.h"
+#include "ash/webui/grit/ash_webui_common_resources.h"
 #include "chromeos/strings/grit/chromeos_strings.h"
 #include "content/public/browser/web_ui_data_source.h"
 #include "ui/base/webui/web_ui_util.h"
-#include "ui/resources/grit/webui_generated_resources.h"
 
 namespace ash {
 namespace network_health {
@@ -56,16 +57,21 @@ struct WebUiResource {
 };
 
 constexpr WebUiResource kResources[] = {
-    {"ethernet.svg", IDR_CR_COMPONENTS_CHROMEOS_NETWORK_ETHERNET_SVG},
-    {"vpn.svg", IDR_CR_COMPONENTS_CHROMEOS_NETWORK_VPN_SVG},
-    {"wifi_0.svg", IDR_CR_COMPONENTS_CHROMEOS_NETWORK_WIFI_0_SVG},
-    {"cellular_0.svg", IDR_CR_COMPONENTS_CHROMEOS_NETWORK_CELLULAR_0_SVG},
+    {"ethernet.svg", IDR_ASH_WEBUI_COMMON_NETWORK_ETHERNET_SVG},
+    {"vpn.svg", IDR_ASH_WEBUI_COMMON_NETWORK_VPN_SVG},
+    {"wifi_0.svg", IDR_ASH_WEBUI_COMMON_NETWORK_WIFI_0_SVG},
+    {"cellular_0.svg", IDR_ASH_WEBUI_COMMON_NETWORK_CELLULAR_0_SVG},
 };
 
 }  // namespace
 
 void AddResources(content::WebUIDataSource* html_source) {
   html_source->AddLocalizedStrings(kLocalizedStrings);
+
+  html_source->AddLocalizedString(
+      "OncTypeTether", ash::features::IsInstantHotspotRebrandEnabled()
+                           ? IDS_NETWORK_TYPE_HOTSPOT
+                           : IDS_NETWORK_TYPE_TETHER);
 
   for (const auto& resource : kResources)
     html_source->AddResourcePath(resource.name, resource.id);

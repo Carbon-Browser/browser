@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,11 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/component_export.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/system/data_pipe.h"
@@ -21,7 +22,6 @@
 #include "net/base/upload_data_stream.h"
 #include "services/network/public/cpp/resource_request_body.h"
 #include "services/network/public/mojom/chunked_data_pipe_getter.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace net {
 class IOBuffer;
@@ -83,7 +83,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) ChunkedDataPipeUploadDataStream
 
   void OnDataPipeGetterClosed();
 
-  void WriteToCacheIfNeeded(net::IOBuffer* buf, uint32_t num_bytes);
+  void WriteToCacheIfNeeded(net::IOBuffer* buf, size_t num_bytes);
   int ReadFromCacheIfNeeded(net::IOBuffer* buf, int buf_len);
 
   scoped_refptr<ResourceRequestBody> resource_request_body_;
@@ -100,7 +100,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) ChunkedDataPipeUploadDataStream
 
   // Total size of input, as passed to ReadCallback(). nullptr until size is
   // received.
-  absl::optional<uint64_t> size_;
+  std::optional<uint64_t> size_;
 
   uint64_t bytes_read_ = 0;
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,12 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chromeos/ash/components/dbus/chunneld/fake_chunneld_client.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
@@ -56,17 +56,17 @@ class ChunneldClientImpl : public ChunneldClient {
 
  private:
   template <typename ResponseProto>
-  void OnDBusProtoResponse(DBusMethodCallback<ResponseProto> callback,
+  void OnDBusProtoResponse(chromeos::DBusMethodCallback<ResponseProto> callback,
                            dbus::Response* dbus_response) {
     if (!dbus_response) {
-      std::move(callback).Run(absl::nullopt);
+      std::move(callback).Run(std::nullopt);
       return;
     }
     ResponseProto reponse_proto;
     dbus::MessageReader reader(dbus_response);
     if (!reader.PopArrayOfBytesAsProto(&reponse_proto)) {
       LOG(ERROR) << "Failed to parse proto from " << dbus_response->GetMember();
-      std::move(callback).Run(absl::nullopt);
+      std::move(callback).Run(std::nullopt);
       return;
     }
     std::move(callback).Run(std::move(reponse_proto));
@@ -88,7 +88,7 @@ class ChunneldClientImpl : public ChunneldClient {
 
   base::ObserverList<Observer> observer_list_;
 
-  dbus::ObjectProxy* chunneld_proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy> chunneld_proxy_ = nullptr;
 
   // Note: This should remain the last member so it'll be destroyed and
   // invalidate its weak pointers before any other members are destroyed.

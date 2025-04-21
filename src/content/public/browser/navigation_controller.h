@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,14 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "content/common/content_export.h"
+#include "content/public/browser/child_process_host.h"
 #include "content/public/browser/global_request_id.h"
 #include "content/public/browser/navigation_ui_data.h"
 #include "content/public/browser/reload_type.h"
@@ -21,14 +23,13 @@
 #include "content/public/browser/restore_type.h"
 #include "content/public/browser/session_storage_namespace.h"
 #include "content/public/browser/site_instance.h"
-#include "content/public/common/child_process_host.h"
 #include "content/public/common/referrer.h"
-#include "net/base/net_errors.h"
 #include "services/network/public/cpp/resource_request_body.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/navigation/impression.h"
 #include "third_party/blink/public/common/navigation/navigation_policy.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
+#include "third_party/blink/public/mojom/navigation/navigation_initiator_activation_and_ad_status.mojom.h"
+#include "third_party/blink/public/mojom/navigation/system_entropy.mojom.h"
 #include "third_party/blink/public/mojom/navigation/was_activated_option.mojom.h"
 #include "ui/base/page_transition_types.h"
 #include "url/gurl.h"
@@ -48,7 +49,6 @@ class BackForwardCache;
 class BrowserContext;
 class NavigationEntry;
 class RenderFrameHost;
-class WebContents;
 class NavigationHandle;
 struct OpenURLParams;
 
@@ -70,7 +70,7 @@ struct OpenURLParams;
 // WebContents, so there can be multiple NavigationControllers associated with
 // a WebContents. However only the primary one, and the
 // NavigationEntries/events originating from it, is exposed to //content
-// embedders.
+// embedders. See docs/frame_trees.md for more details.
 class NavigationController {
  public:
   using DeletionPredicate =
@@ -92,8 +92,13 @@ class NavigationController {
     // Loads a 'data:' scheme URL with specified base URL and a history entry
     // URL. This is only safe to be used for browser-initiated data: URL
     // navigations, since it shows arbitrary content as if it comes from
-    // |virtual_url_for_data_url|.
-    LOAD_TYPE_DATA
+    // |virtual_url_for_special_cases|.
+    LOAD_TYPE_DATA,
+
+#if BUILDFLAG(IS_ANDROID)
+    // Load a pdf page. Used on Android only.
+    LOAD_TYPE_PDF_ANDROID
+#endif
 
     // Adding new LoadURLType? Also update LoadUrlParams.java static constants.
   };
@@ -125,7 +130,8 @@ class NavigationController {
   CONTENT_EXPORT static std::unique_ptr<NavigationEntry> CreateNavigationEntry(
       const GURL& url,
       Referrer referrer,
-      absl::optional<url::Origin> initiator_origin,
+      std::optional<url::Origin> initiator_origin,
+      std::optional<GURL> initiator_base_url,
       ui::PageTransition transition,
       bool is_renderer_initiated,
       const std::string& extra_headers,
@@ -156,14 +162,14 @@ class NavigationController {
     // was not associated with a frame, or if the initiating frame did not exist
     // by the time navigation started. This parameter is defined if and only if
     // |initiator_process_id| below is.
-    absl::optional<blink::LocalFrameToken> initiator_frame_token;
+    std::optional<blink::LocalFrameToken> initiator_frame_token;
 
     // ID of the renderer process of the frame host that initiated the
     // navigation. This is defined if and only if |initiator_frame_token| above
     // is, and it is only valid in conjunction with it.
     int initiator_process_id = ChildProcessHost::kInvalidUniqueID;
 
-    // The origin of the initiator of the navigation or absl::nullopt if the
+    // The origin of the initiator of the navigation or std::nullopt if the
     // navigation was initiated through trusted, non-web-influenced UI
     // (e.g. via omnibox, the bookmarks bar, local NTP, etc.).
     //
@@ -172,7 +178,13 @@ class NavigationController {
     // browser-initiated navigations may also use a non-null |initiator_origin|
     // (if these navigations can be somehow triggered or influenced by web
     // content).
-    absl::optional<url::Origin> initiator_origin;
+    std::optional<url::Origin> initiator_origin;
+
+    // The base url of the initiator, to be passed to about:blank and srcdoc
+    // frames. As with `initiator_origin`, some browser-initiated navigations
+    // may not have an initiator, and in those cases this will be null. It will
+    // also be null for non-about:blank/about:srcdoc navigations.
+    std::optional<GURL> initiator_base_url;
 
     // SiteInstance of the frame that initiated the navigation or null if we
     // don't know it.
@@ -185,9 +197,9 @@ class NavigationController {
     // Note the default value in constructor below.
     ui::PageTransition transition_type = ui::PAGE_TRANSITION_LINK;
 
-    // The browser-global FrameTreeNode ID for the frame to navigate, or
-    // RenderFrameHost::kNoFrameTreeNodeId for the main frame.
-    int frame_tree_node_id = RenderFrameHost::kNoFrameTreeNodeId;
+    // The browser-global FrameTreeNode ID for the frame to navigate, or the
+    // default-constructed invalid value to indicate the main frame.
+    FrameTreeNodeId frame_tree_node_id;
 
     // Referrer for this load. Empty if none.
     Referrer referrer;
@@ -201,7 +213,7 @@ class NavigationController {
 
     // True for renderer-initiated navigations. This is
     // important for tracking whether to display pending URLs.
-    bool is_renderer_initiated;
+    bool is_renderer_initiated = false;
 
     // Whether a navigation in a new window has the opener suppressed. False if
     // the navigation is not in a new window. Can only be true when
@@ -216,9 +228,9 @@ class NavigationController {
     // for pages loaded via data URLs.
     GURL base_url_for_data_url;
 
-    // Used in LOAD_TYPE_DATA loads only. URL displayed to the user for
-    // data loads.
-    GURL virtual_url_for_data_url;
+    // Used in LOAD_TYPE_DATA and LOAD_TYPE_PDF_ANDROID loads only. URL
+    // displayed to the user for data or pdf loads.
+    GURL virtual_url_for_special_cases;
 
 #if BUILDFLAG(IS_ANDROID)
     // Used in LOAD_TYPE_DATA loads only. The real data URI is represented
@@ -291,15 +303,26 @@ class NavigationController {
     // Indicates the reload type of this navigation.
     ReloadType reload_type = ReloadType::NONE;
 
+    // Indicates the suggested system entropy captured when the navigation
+    // began.
+    blink::mojom::SystemEntropy suggested_system_entropy =
+        blink::mojom::SystemEntropy::kNormal;
+
     // Indicates a form submission created this navigation.
     bool is_form_submission = false;
 
     // Impression info associated with this navigation. Should only be populated
     // for navigations originating from a link click.
-    absl::optional<blink::Impression> impression;
+    std::optional<blink::Impression> impression;
 
     // Download policy to be applied if this navigation turns into a download.
     blink::NavigationDownloadPolicy download_policy;
+
+    // Common begin navigation status.
+    blink::mojom::NavigationInitiatorActivationAndAdStatus
+        initiator_activation_and_ad_status =
+            blink::mojom::NavigationInitiatorActivationAndAdStatus::
+                kDidNotStartWithTransientActivation;
 
     // Indicates that this navigation is for PDF content in a renderer.
     bool is_pdf = false;
@@ -308,20 +331,28 @@ class NavigationController {
     // this is used in web platform tests to guarantee that each test starts in
     // a fresh BrowsingInstance.
     bool force_new_browsing_instance = false;
+
+    // Indicates this navigation should use a new compositor. This is used by
+    // web tests to ensure that input state is fully reset between tests. This
+    // should only be set on the main frame.
+    bool force_new_compositor = false;
+
+    // True if the initiator explicitly asked for opener relationships to be
+    // preserved, via rel="opener".
+    bool has_rel_opener = false;
+
+    // True if the navigation should not be upgraded to HTTPS. This should only
+    // be set in very specific circumstances like navigations to captive portal
+    // login URLs which may be broken by HTTPS Upgrades due to the portal's
+    // unconventional handling of HTTPS URLs.
+    bool force_no_https_upgrade = false;
   };
 
   // Disables checking for a repost and prompting the user. This is used during
   // testing.
   CONTENT_EXPORT static void DisablePromptOnRepost();
 
-  virtual ~NavigationController() {}
-
-  // Returns the web contents associated with this controller. It can never be
-  // nullptr.
-  //
-  // TODO(crbug.com/1225205): Remove this. It is a layering violation as it is
-  // implemented in renderer_host/ which cannot depend on WebContents.
-  virtual WebContents* DeprecatedGetWebContents() = 0;
+  virtual ~NavigationController() = default;
 
   // Get the browser context for this controller. It can never be nullptr.
   virtual BrowserContext* GetBrowserContext() = 0;
@@ -350,13 +381,12 @@ class NavigationController {
   // See http://crbug.com/273710.
   //
   // Returns the active entry, which is the pending entry if a navigation is in
-  // progress or the last committed entry otherwise. NOTE: This can be nullptr!!
+  // progress or the last committed entry otherwise.
   virtual NavigationEntry* GetActiveEntry() = 0;
 
   // Returns the entry that should be displayed to the user in the address bar.
   // This is the pending entry if a navigation is in progress *and* is safe to
   // display to the user (see below), or the last committed entry otherwise.
-  // NOTE: This can be nullptr if no entry has been committed!
   //
   // A pending entry is safe to display if it started in the browser process or
   // if it's a renderer-initiated navigation in a new tab which hasn't been
@@ -368,12 +398,13 @@ class NavigationController {
   // it is the pending_entry_index_.
   virtual int GetCurrentEntryIndex() = 0;
 
-  // Returns the last committed entry, which may be null if there are no
-  // committed entries.
+  // Returns the last "committed" entry. Note that even when no navigation has
+  // actually committed, this will never return null as long as the FrameTree
+  // associated with the NavigationController is already initialized, as a
+  // FrameTree will always start with the initial NavigationEntry.
   virtual NavigationEntry* GetLastCommittedEntry() = 0;
 
-  // Returns the index of the last committed entry.  It will be -1 if there are
-  // no entries.
+  // Returns the index of the last committed entry.
   virtual int GetLastCommittedEntryIndex() = 0;
 
   // Returns true if the source for the current entry can be viewed.
@@ -429,6 +460,17 @@ class NavigationController {
   // explicitly requested using SetNeedsReload().
   virtual void LoadIfNecessary() = 0;
 
+  // Reloads the current entry using the original URL used to create it. This is
+  // used for cases where the user wants to refresh a page using a different
+  // user agent after following a redirect. It is also used in the case of an
+  // intervention (e.g., preview) being served on the page and the user
+  // requesting the page without the intervention.
+  //
+  // If the current entry's original URL matches the current URL, is invalid, or
+  // contains POST data, this will result in a normal reload rather than an
+  // attempt to load the original URL.
+  virtual void LoadOriginalRequestURL() = 0;
+
   // Navigates directly to an error page in response to an event on the last
   // committed page (e.g., triggered by a subresource), with |error_page_html|
   // as the contents and |url| as the URL.
@@ -442,8 +484,7 @@ class NavigationController {
   virtual base::WeakPtr<NavigationHandle> LoadPostCommitErrorPage(
       RenderFrameHost* render_frame_host,
       const GURL& url,
-      const std::string& error_page_html,
-      net::Error error) = 0;
+      const std::string& error_page_html) = 0;
 
   // Renavigation --------------------------------------------------------------
 
@@ -451,6 +492,7 @@ class NavigationController {
   virtual bool CanGoBack() = 0;
   virtual bool CanGoForward() = 0;
   virtual bool CanGoToOffset(int offset) = 0;
+  // `CanGoBack`/`CanGoForward` are preconditions for these respective methods.
   virtual void GoBack() = 0;
   virtual void GoForward() = 0;
 
@@ -528,29 +570,10 @@ class NavigationController {
   virtual void CopyStateFrom(NavigationController* source,
                              bool needs_reload) = 0;
 
-  // A variant of CopyStateFrom. Removes all entries from this except the last
-  // committed entry, and inserts all entries from |source| before and including
-  // its last committed entry. For example:
-  // source: A B *C* D
-  // this:   E F *G*
-  // result: A B C *G*
-  // If there is a pending entry after *G* in |this|, it is also preserved.
-  // If |replace_entry| is true, the current entry in |source| is replaced. So
-  // the result above would be A B *G*.
-  // This ignores any pending entry in |source|.  Callers must ensure that
-  // |CanPruneAllButLastCommitted| returns true before calling this, or it will
-  // crash.
-  virtual void CopyStateFromAndPrune(NavigationController* source,
-                                     bool replace_entry) = 0;
-
-  // Returns whether it is safe to call PruneAllButLastCommitted or
-  // CopyStateFromAndPrune.  There must be a last committed entry, and if there
-  // is a pending entry, it must be new and not an existing entry.
+  // Returns whether it is safe to call PruneAllButLastCommitted. There must be
+  // a last committed entry, and if there is a pending entry, it must be new and
+  // not an existing entry.
   //
-  // If there were no last committed entry, the pending entry might not commit,
-  // leaving us with a blank page.  This is unsafe when used with
-  // |CopyStateFromAndPrune|, which would show an existing entry above the blank
-  // page.
   // If there were an existing pending entry, we could not prune the last
   // committed entry, in case it did not commit.  That would leave us with no
   // sensible place to put the pending entry when it did commit, after all other
@@ -570,13 +593,6 @@ class NavigationController {
   // calling this, or it will crash.
   virtual void DeleteNavigationEntries(
       const DeletionPredicate& deletionPredicate) = 0;
-
-  // Returns whether entry at the given index is marked to be skipped on
-  // back/forward UI. The history manipulation intervention marks entries to be
-  // skipped in order to intervene against pages that manipulate browser history
-  // such that the user is not able to use the back button to go to the previous
-  // page they interacted with.
-  virtual bool IsEntryMarkedToBeSkipped(int index) = 0;
 
   // Gets the BackForwardCache for this NavigationController.
   virtual BackForwardCache& GetBackForwardCache() = 0;

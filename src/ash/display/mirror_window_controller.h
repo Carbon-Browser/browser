@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 
 #include "ash/ash_export.h"
 #include "ash/host/ash_window_tree_host_delegate.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_tree_host_observer.h"
 #include "ui/display/manager/display_manager.h"
@@ -80,6 +81,10 @@ class ASH_EXPORT MirrorWindowController : public aura::WindowTreeHostObserver,
     return current_event_targeter_src_host_;
   }
 
+  // Returns the mirroring window created to mirror the `display_id`'s root
+  // window.
+  const aura::Window* GetMirrorWindowForDisplayIdForTest(int64_t display_id);
+
  private:
   friend class MirrorWindowTestApi;
 
@@ -93,10 +98,12 @@ class ASH_EXPORT MirrorWindowController : public aura::WindowTreeHostObserver,
   void CloseAndDeleteHost(MirroringHostInfo* host_info,
                           bool delay_host_deletion);
 
-  typedef std::map<int64_t, MirroringHostInfo*> MirroringHostInfoMap;
+  typedef std::map<int64_t, raw_ptr<MirroringHostInfo, CtnExperimental>>
+      MirroringHostInfoMap;
   MirroringHostInfoMap mirroring_host_info_map_;
 
-  aura::WindowTreeHost* current_event_targeter_src_host_;
+  raw_ptr<aura::WindowTreeHost, DanglingUntriaged>
+      current_event_targeter_src_host_;
 
   display::DisplayManager::MultiDisplayMode multi_display_mode_;
 

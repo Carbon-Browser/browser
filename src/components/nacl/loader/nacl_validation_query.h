@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <stddef.h>
 
 #include <string>
+#include <string_view>
 
 #include "base/memory/raw_ptr.h"
-#include "base/strings/string_piece.h"
 #include "crypto/hmac.h"
 
 struct NaClValidationCache;
@@ -49,7 +49,7 @@ class NaClValidationQuery {
 
   void AddData(const char* data, size_t length);
   void AddData(const unsigned char* data, size_t length);
-  void AddData(const base::StringPiece& data);
+  void AddData(std::string_view data);
 
   int QueryKnownToValidate();
 

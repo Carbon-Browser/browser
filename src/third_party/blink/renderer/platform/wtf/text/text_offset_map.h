@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,17 @@ class WTF_EXPORT TextOffsetMap {
     wtf_size_t target;
   };
 
-  bool IsEmpty() const { return entries_.IsEmpty(); }
+  // Create an empty TextOffsetMap instance.
+  TextOffsetMap() = default;
+
+  // Suppose that we mapped string-1 to string-2 with producing map12, and
+  // we mapped string-2 to string-3 with producing map23. This constructor
+  // creates a TextOffsetMap instance for mapping string-1 to string-3.
+  TextOffsetMap(const TextOffsetMap& map12,
+                const TextOffsetMap& map23,
+                bool fix_crash);
+
+  bool IsEmpty() const { return entries_.empty(); }
 
   const Vector<Entry>& Entries() const { return entries_; }
 
@@ -50,6 +60,9 @@ class WTF_EXPORT TextOffsetMap {
 };
 
 WTF_EXPORT std::ostream& operator<<(std::ostream&, const TextOffsetMap::Entry&);
+WTF_EXPORT std::ostream& operator<<(
+    std::ostream& stream,
+    const Vector<TextOffsetMap::Entry>& entries);
 
 }  // namespace WTF
 

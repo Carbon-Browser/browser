@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,25 +31,40 @@ public class ServiceNamesTest {
     @Test
     @SmallTest
     public void testServiceNamesValid() {
-        Assert.assertEquals("Incorrect class name constant",
+        Assert.assertEquals(
+                "Incorrect class name constant",
                 AwMinidumpUploadJobService.class.getName(),
                 ServiceNames.AW_MINIDUMP_UPLOAD_JOB_SERVICE);
-        Assert.assertEquals("Incorrect class name constant", CrashReceiverService.class.getName(),
+        Assert.assertEquals(
+                "Incorrect class name constant",
+                CrashReceiverService.class.getName(),
                 ServiceNames.CRASH_RECEIVER_SERVICE);
-        Assert.assertEquals("Incorrect class name constant",
+        Assert.assertEquals(
+                "Incorrect class name constant",
                 DeveloperModeContentProvider.class.getName(),
                 ServiceNames.DEVELOPER_MODE_CONTENT_PROVIDER);
-        Assert.assertEquals("Incorrect class name constant", DeveloperUiService.class.getName(),
+        Assert.assertEquals(
+                "Incorrect class name constant",
+                DeveloperUiService.class.getName(),
                 ServiceNames.DEVELOPER_UI_SERVICE);
-        Assert.assertEquals("Incorrect class name constant", MetricsBridgeService.class.getName(),
+        Assert.assertEquals(
+                "Incorrect class name constant",
+                MetricsBridgeService.class.getName(),
                 ServiceNames.METRICS_BRIDGE_SERVICE);
-        Assert.assertEquals("Incorrect class name constant", MetricsUploadService.class.getName(),
+        Assert.assertEquals(
+                "Incorrect class name constant",
+                MetricsUploadService.class.getName(),
                 ServiceNames.METRICS_UPLOAD_SERVICE);
-        Assert.assertEquals("Incorrect class name constant", VariationsSeedServer.class.getName(),
+        Assert.assertEquals(
+                "Incorrect class name constant",
+                VariationsSeedServer.class.getName(),
                 ServiceNames.VARIATIONS_SEED_SERVER);
-        Assert.assertEquals("Incorrect class name constant",
-                AwComponentUpdateService.class.getName(), ServiceNames.AW_COMPONENT_UPDATE_SERVICE);
-        Assert.assertEquals("Incorrect class name constant",
+        Assert.assertEquals(
+                "Incorrect class name constant",
+                AwComponentUpdateService.class.getName(),
+                ServiceNames.AW_COMPONENT_UPDATE_SERVICE);
+        Assert.assertEquals(
+                "Incorrect class name constant",
                 ComponentsProviderService.class.getName(),
                 EmbeddedComponentLoader.AW_COMPONENTS_PROVIDER_SERVICE);
     }

@@ -1,19 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
-#include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/memory_pressure_listener.h"
-#include "base/memory/memory_pressure_monitor.h"
-#include "base/notreached.h"
-#include "base/run_loop.h"
-#include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
+#include "chrome/browser/performance_manager/mechanisms/page_discarder.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
@@ -24,6 +20,7 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/common/content_features.h"
+#include "content/public/test/back_forward_cache_util.h"
 #include "content/public/test/browser_test.h"
 #include "net/dns/mock_host_resolver.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -88,15 +85,6 @@ class BFCachePolicyBrowserTest
   ~BFCachePolicyBrowserTest() override = default;
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
-    EnableFeature(::features::kBackForwardCache,
-                  {{"foreground_cache_size", "10"},
-                   {"cache_size", "10"},
-                   {"TimeToLiveInBackForwardCacheInSeconds", "3600"},
-                   {"ignore_outstanding_network_request_for_testing", "true"}});
-    DisableFeature(::features::kBackForwardCacheMemoryControls);
-    // Disable discarding of pages directly from PerformanceManager for test.
-    DisableFeature(::performance_manager::features::
-                       kUrgentDiscardingFromPerformanceManager);
     // Occlusion can cause the web_contents to be marked visible between the
     // time the test calls WasHidden and BFCachePolicy::MaybeFlushBFCache is
     // called, which kills the timer set by BFCachePolicy::OnIsVisibleChanged.
@@ -123,14 +111,19 @@ class BFCachePolicyBrowserTest
           performance_manager::features::kBFCachePerformanceManagerPolicy);
     }
 
-    feature_list_.InitWithFeaturesAndParameters(enabled_features_,
-                                                disabled_features_);
+    feature_list_.InitWithFeaturesAndParameters(
+        content::GetDefaultEnabledBackForwardCacheFeaturesForTesting(
+            enabled_features_, /*cache_size=*/10, /*foreground_cache_size=*/10),
+        content::GetDefaultDisabledBackForwardCacheFeaturesForTesting(
+            disabled_features_));
   }
 
   void SetUpOnMainThread() override {
     InProcessBrowserTest::SetUpOnMainThread();
     host_resolver()->AddRule("*", "127.0.0.1");
     ASSERT_TRUE(embedded_test_server()->Start());
+    // Disable tab discarding to avoid interference.
+    mechanism::PageDiscarder::DisableForTesting();
   }
 
  protected:
@@ -173,15 +166,14 @@ class BFCachePolicyBrowserTest
 
  private:
   base::test::ScopedFeatureList feature_list_;
-  std::vector<base::test::ScopedFeatureList::FeatureAndParams>
-      enabled_features_;
-  std::vector<base::Feature> disabled_features_;
+  std::vector<base::test::FeatureRefAndParams> enabled_features_;
+  std::vector<base::test::FeatureRef> disabled_features_;
 };
 
 }  // namespace
 
-// TODO(https://crbug.com/1335514): Flaky.
-#if BUILDFLAG(IS_WIN)
+// TODO(https://crbug.com/1335514, https://crbug.com/1494579): Flaky.
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
 #define MAYBE_CacheFlushed DISABLED_CacheFlushed
 #else
 #define MAYBE_CacheFlushed CacheFlushed

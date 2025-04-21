@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 
 #include <map>
 #include <memory>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -22,7 +23,9 @@
 #include "printing/backend/cups_ipp_constants.h"
 #include "printing/backend/cups_ipp_helper.h"
 #include "printing/backend/cups_printer.h"
+#include "printing/backend/print_backend_utils.h"
 #include "printing/buildflags/buildflags.h"
+#include "printing/client_info_helpers.h"
 #include "printing/metafile.h"
 #include "printing/mojom/print.mojom.h"
 #include "printing/print_job_constants.h"
@@ -40,71 +43,118 @@ const char kUsernamePlaceholder[] = "chronos";
 // We only support sending document name for secure printers.
 const char kDocumentNamePlaceholder[] = "-";
 
-bool IsUriSecure(base::StringPiece uri) {
+bool IsUriSecure(std::string_view uri) {
   return base::StartsWith(uri, "ipps:") || base::StartsWith(uri, "https:") ||
          base::StartsWith(uri, "usb:") || base::StartsWith(uri, "ippusb:");
 }
 
-// Returns a new char buffer which is a null-terminated copy of `value`.  The
-// caller owns the returned string.
-char* DuplicateString(base::StringPiece value) {
-  char* dst = new char[value.size() + 1];
-  value.copy(dst, value.size());
-  dst[value.size()] = '\0';
-  return dst;
-}
+// Populates the 'client-info' attribute of the IPP collection `options`. Each
+// item in `client_infos` represents one collection in 'client-info'.
+// Invalid 'client-info' items will be dropped.
+void EncodeClientInfo(const std::vector<mojom::IppClientInfo>& client_infos,
+                      ipp_t* options) {
+  std::vector<ScopedIppPtr> option_values;
+  std::vector<const ipp_t*> raw_option_values;
+  option_values.reserve(client_infos.size());
+  raw_option_values.reserve(client_infos.size());
 
-ScopedCupsOption ConstructOption(base::StringPiece name,
-                                 base::StringPiece value) {
-  // ScopedCupsOption frees the name and value buffers on deletion
-  ScopedCupsOption option = ScopedCupsOption(new cups_option_t);
-  option->name = DuplicateString(name);
-  option->value = DuplicateString(value);
-  return option;
-}
+  for (const mojom::IppClientInfo& client_info : client_infos) {
+    if (!ValidateClientInfoItem(client_info)) {
+      LOG(WARNING) << "Invalid client-info item skipped";
+      continue;
+    }
 
-base::StringPiece GetCollateString(bool collate) {
-  return collate ? kCollated : kUncollated;
-}
+    // Create a temporary collection object owned by this function.
+    ipp_t* collection = ippNew();
+    option_values.emplace_back(WrapIpp(collection));
+    raw_option_values.emplace_back(collection);
 
-// Given an integral `value` expressed in PWG units (1/100 mm), returns
-// the same value expressed in device units.
-int PwgUnitsToDeviceUnits(int value, float micrometers_per_device_unit) {
-  return ConvertUnitFloat(value, micrometers_per_device_unit, 10);
-}
+    ippAddString(collection, IPP_TAG_ZERO, IPP_TAG_NAME, kIppClientName,
+                 nullptr, client_info.client_name.c_str());
+    ippAddInteger(collection, IPP_TAG_ZERO, IPP_TAG_ENUM, kIppClientType,
+                  static_cast<int>(client_info.client_type));
+    ippAddString(collection, IPP_TAG_ZERO, IPP_TAG_TEXT,
+                 kIppClientStringVersion, nullptr,
+                 client_info.client_string_version.c_str());
 
-// Given a `media_size`, the specification of the media's `margins`, and
-// the number of micrometers per device unit, returns the rectangle
-// bounding the apparent printable area of said media.
-gfx::Rect RepresentPrintableArea(const gfx::Size& media_size,
-                                 const CupsPrinter::CupsMediaMargins& margins,
-                                 float micrometers_per_device_unit) {
-  // These values express inward encroachment by margins, away from the
-  // edges of the `media_size`.
-  int left_bound =
-      PwgUnitsToDeviceUnits(margins.left, micrometers_per_device_unit);
-  int bottom_bound =
-      PwgUnitsToDeviceUnits(margins.bottom, micrometers_per_device_unit);
-  int right_bound =
-      PwgUnitsToDeviceUnits(margins.right, micrometers_per_device_unit);
-  int top_bound =
-      PwgUnitsToDeviceUnits(margins.top, micrometers_per_device_unit);
+    if (client_info.client_version.has_value()) {
+      ippAddOctetString(collection, IPP_TAG_ZERO, kIppClientVersion,
+                        client_info.client_version.value().data(),
+                        client_info.client_version.value().size());
+    }
 
-  // These values express the bounding box of the printable area on the
-  // page.
-  int printable_width = media_size.width() - (left_bound + right_bound);
-  int printable_height = media_size.height() - (top_bound + bottom_bound);
-
-  if (printable_width > 0 && printable_height > 0) {
-    return {left_bound, bottom_bound, printable_width, printable_height};
+    if (client_info.client_patches.has_value()) {
+      ippAddString(collection, IPP_TAG_ZERO, IPP_TAG_TEXT, kIppClientPatches,
+                   nullptr, client_info.client_patches.value().c_str());
+    }
   }
 
-  return {0, 0, media_size.width(), media_size.height()};
+  if (raw_option_values.empty()) {
+    return;
+  }
+
+  // Now add the client-info list to the options.
+  ippAddCollections(options, IPP_TAG_OPERATION, kIppClientInfo,
+                    raw_option_values.size(), raw_option_values.data());
+}
+
+// Construct the IPP media-col attribute specifying media size, margins, source,
+// etc., and add it to 'options'.
+void EncodeMediaCol(ipp_t* options,
+                    const gfx::Size& size_um,
+                    const gfx::Rect& printable_area_um,
+                    bool borderless,
+                    const std::string& source,
+                    const std::string& type) {
+  // The size and printable area in microns were calculated from the size and
+  // margins in PWG units, so we can losslessly convert them back. If
+  // borderless printing was requested, though, set all margins to zero.
+  DCHECK_EQ(size_um.width() % kMicronsPerPwgUnit, 0);
+  DCHECK_EQ(size_um.height() % kMicronsPerPwgUnit, 0);
+  int width = size_um.width() / kMicronsPerPwgUnit;
+  int height = size_um.height() / kMicronsPerPwgUnit;
+  int bottom_margin = 0, left_margin = 0, right_margin = 0, top_margin = 0;
+  if (!borderless) {
+    PwgMarginsFromSizeAndPrintableArea(size_um, printable_area_um,
+                                       &bottom_margin, &left_margin,
+                                       &right_margin, &top_margin);
+  }
+
+  ScopedIppPtr media_col = WrapIpp(ippNew());
+  ScopedIppPtr media_size = WrapIpp(ippNew());
+  ippAddInteger(media_size.get(), IPP_TAG_ZERO, IPP_TAG_INTEGER, kIppXDimension,
+                width);
+  ippAddInteger(media_size.get(), IPP_TAG_ZERO, IPP_TAG_INTEGER, kIppYDimension,
+                height);
+  ippAddCollection(media_col.get(), IPP_TAG_ZERO, kIppMediaSize,
+                   media_size.get());
+  ippAddInteger(media_col.get(), IPP_TAG_ZERO, IPP_TAG_INTEGER,
+                kIppMediaBottomMargin, bottom_margin);
+  ippAddInteger(media_col.get(), IPP_TAG_ZERO, IPP_TAG_INTEGER,
+                kIppMediaLeftMargin, left_margin);
+  ippAddInteger(media_col.get(), IPP_TAG_ZERO, IPP_TAG_INTEGER,
+                kIppMediaRightMargin, right_margin);
+  ippAddInteger(media_col.get(), IPP_TAG_ZERO, IPP_TAG_INTEGER,
+                kIppMediaTopMargin, top_margin);
+  if (!source.empty()) {
+    ippAddString(media_col.get(), IPP_TAG_ZERO, IPP_TAG_KEYWORD,
+                 kIppMediaSource, nullptr, source.c_str());
+  }
+  if (!type.empty()) {
+    ippAddString(media_col.get(), IPP_TAG_ZERO, IPP_TAG_KEYWORD, kIppMediaType,
+                 nullptr, type.c_str());
+  }
+
+  ippAddCollection(options, IPP_TAG_JOB, kIppMediaCol, media_col.get());
+}
+
+std::string GetCollateString(bool collate) {
+  return collate ? kCollated : kUncollated;
 }
 
 void SetPrintableArea(PrintSettings* settings,
                       const PrintSettings::RequestedMedia& media,
-                      const CupsPrinter::CupsMediaMargins& margins) {
+                      const gfx::Rect& printable_area_um) {
   if (!media.size_microns.IsEmpty()) {
     float device_microns_per_device_unit =
         static_cast<float>(kMicronsPerInch) / settings->device_units_per_inch();
@@ -112,8 +162,11 @@ void SetPrintableArea(PrintSettings* settings,
         gfx::Size(media.size_microns.width() / device_microns_per_device_unit,
                   media.size_microns.height() / device_microns_per_device_unit);
 
-    gfx::Rect paper_rect = RepresentPrintableArea(
-        paper_size, margins, device_microns_per_device_unit);
+    gfx::Rect paper_rect =
+        gfx::Rect(printable_area_um.x() / device_microns_per_device_unit,
+                  printable_area_um.y() / device_microns_per_device_unit,
+                  printable_area_um.width() / device_microns_per_device_unit,
+                  printable_area_um.height() / device_microns_per_device_unit);
     settings->SetPrinterPrintableArea(paper_size, paper_rect,
                                       /*landscape_needs_flip=*/true);
   }
@@ -121,8 +174,35 @@ void SetPrintableArea(PrintSettings* settings,
 
 }  // namespace
 
-std::vector<ScopedCupsOption> SettingsToCupsOptions(
-    const PrintSettings& settings) {
+ScopedIppPtr SettingsToIPPOptions(const PrintSettings& settings,
+                                  gfx::Rect printable_area_um) {
+  ScopedIppPtr scoped_options = WrapIpp(ippNew());
+  ipp_t* options = scoped_options.get();
+
+  // The media width/height may have been swapped to ensure the media is
+  // portrait (height greater than width).  When sending the IPP attributes to
+  // CUPS, the media needs to be in the original format.  The way to determine
+  // if the media size was swapped is to look at the vendor ID (which does not
+  // get altered).  If its width is greater than its height, that means the
+  // media size was swapped and needs to be swapped back when creating the IPP
+  // attributes.
+  gfx::Size media_size_microns = settings.requested_media().size_microns;
+  const gfx::Size vendor_id_paper_size =
+      ParsePaperSize(settings.requested_media().vendor_id);
+  if (!vendor_id_paper_size.IsEmpty() &&
+      vendor_id_paper_size.width() > vendor_id_paper_size.height()) {
+    // Rotate 90 degrees counter-clockwise to undo the rotation in
+    // cloud_print_cdd_conversion.cc.
+    int new_x = media_size_microns.height() - printable_area_um.height() -
+                printable_area_um.y();
+    int new_y = printable_area_um.x();
+
+    printable_area_um.SetRect(new_x, new_y, printable_area_um.height(),
+                              printable_area_um.width());
+    media_size_microns.SetSize(media_size_microns.height(),
+                               media_size_microns.width());
+  }
+
   const char* sides = nullptr;
   switch (settings.duplex_mode()) {
     case mojom::DuplexMode::kSimplex:
@@ -138,90 +218,121 @@ std::vector<ScopedCupsOption> SettingsToCupsOptions(
       NOTREACHED();
   }
 
-  std::vector<ScopedCupsOption> options;
-  options.push_back(
-      ConstructOption(kIppColor,
-                      GetIppColorModelForModel(settings.color())));  // color
-  options.push_back(ConstructOption(kIppDuplex, sides));  // duplexing
-  options.push_back(
-      ConstructOption(kIppMedia,
-                      settings.requested_media().vendor_id));  // paper size
-  options.push_back(
-      ConstructOption(kIppCopies,
-                      base::NumberToString(settings.copies())));  // copies
-  options.push_back(
-      ConstructOption(kIppCollate,
-                      GetCollateString(settings.collate())));  // collate
+  // duplexing
+  ippAddString(options, IPP_TAG_JOB, IPP_TAG_KEYWORD, kIppDuplex, nullptr,
+               sides);
+  // color
+  ippAddString(options, IPP_TAG_JOB, IPP_TAG_KEYWORD, kIppColor, nullptr,
+               GetIppColorModelForModel(settings.color()).c_str());
+  // copies
+  ippAddInteger(options, IPP_TAG_JOB, IPP_TAG_INTEGER, kIppCopies,
+                settings.copies());
+  // collate
+  ippAddString(options, IPP_TAG_JOB, IPP_TAG_KEYWORD, kIppCollate, nullptr,
+               GetCollateString(settings.collate()).c_str());
+
   if (!settings.pin_value().empty()) {
-    options.push_back(ConstructOption(kIppPin, settings.pin_value()));
-    options.push_back(ConstructOption(kIppPinEncryption, kPinEncryptionNone));
+    ippAddOctetString(options, IPP_TAG_OPERATION, kIppPin,
+                      settings.pin_value().data(), settings.pin_value().size());
+    ippAddString(options, IPP_TAG_OPERATION, IPP_TAG_KEYWORD, kIppPinEncryption,
+                 nullptr, kPinEncryptionNone);
   }
 
+  // resolution
   if (settings.dpi_horizontal() > 0 && settings.dpi_vertical() > 0) {
-    std::string dpi = base::NumberToString(settings.dpi_horizontal());
-    if (settings.dpi_horizontal() != settings.dpi_vertical())
-      dpi += "x" + base::NumberToString(settings.dpi_vertical());
-    options.push_back(ConstructOption(kIppResolution, dpi + "dpi"));
+    ippAddResolution(options, IPP_TAG_JOB, kIppResolution, IPP_RES_PER_INCH,
+                     settings.dpi_horizontal(), settings.dpi_vertical());
   }
 
-  std::map<std::string, std::vector<std::string>> multival;
+  std::map<std::string, std::vector<int>> multival;
+  std::string media_source;
   for (const auto& setting : settings.advanced_settings()) {
     const std::string& key = setting.first;
     const std::string& value = setting.second.GetString();
-    if (value.empty())
+    if (value.empty()) {
       continue;
+    }
+    if (key == kIppMediaSource) {
+      media_source = value;
+      continue;
+    }
 
     // Check for multivalue enum ("attribute/value").
     size_t pos = key.find('/');
     if (pos == std::string::npos) {
       // Regular value.
-      options.push_back(ConstructOption(key, value));
+      ippAddString(options, IPP_TAG_JOB, IPP_TAG_KEYWORD, key.c_str(), nullptr,
+                   value.c_str());
       continue;
     }
     // Store selected enum values.
-    if (value == kOptionTrue)
-      multival[key.substr(0, pos)].push_back(key.substr(pos + 1));
+    if (value == kOptionTrue) {
+      std::string option_name = key.substr(0, pos);
+      std::string enum_string = key.substr(pos + 1);
+      int enum_value = ippEnumValue(option_name.c_str(), enum_string.c_str());
+      DCHECK_NE(enum_value, -1);
+      multival[option_name].push_back(enum_value);
+    }
   }
 
-  // Pass multivalue enums as comma-separated lists.
+  // Construct the IPP media-col attribute specifying media size, margins,
+  // source, etc.
+  EncodeMediaCol(options, media_size_microns, printable_area_um,
+                 settings.borderless(), media_source, settings.media_type());
+
+  // Add multivalue enum options.
   for (const auto& it : multival) {
-    options.push_back(
-        ConstructOption(it.first, base::JoinString(it.second, ",")));
+    ippAddIntegers(options, IPP_TAG_JOB, IPP_TAG_ENUM, it.first.c_str(),
+                   it.second.size(), it.second.data());
   }
 
-  return options;
+  // OAuth access token
+  if (!settings.oauth_token().empty()) {
+    ippAddString(options, IPP_TAG_JOB, IPP_TAG_NAME,
+                 kSettingChromeOSAccessOAuthToken, nullptr,
+                 settings.oauth_token().c_str());
+  }
+
+  // IPP client-info attribute.
+  if (!settings.client_infos().empty()) {
+    EncodeClientInfo(settings.client_infos(), options);
+  }
+
+  return scoped_options;
 }
 
 // static
 std::unique_ptr<PrintingContext> PrintingContext::CreateImpl(
     Delegate* delegate,
-    bool skip_system_calls) {
-  auto context = std::make_unique<PrintingContextChromeos>(delegate);
-#if BUILDFLAG(ENABLE_OOP_PRINTING)
-  if (skip_system_calls)
-    context->set_skip_system_calls();
-#endif
-  return context;
+    ProcessBehavior process_behavior) {
+  return std::make_unique<PrintingContextChromeos>(delegate, process_behavior);
 }
 
 // static
 std::unique_ptr<PrintingContextChromeos>
 PrintingContextChromeos::CreateForTesting(
     Delegate* delegate,
+    ProcessBehavior process_behavior,
     std::unique_ptr<CupsConnection> connection) {
   // Private ctor.
-  return base::WrapUnique(
-      new PrintingContextChromeos(delegate, std::move(connection)));
+  return base::WrapUnique(new PrintingContextChromeos(
+      delegate, process_behavior, std::move(connection)));
 }
-
-PrintingContextChromeos::PrintingContextChromeos(Delegate* delegate)
-    : PrintingContext(delegate),
-      connection_(CupsConnection::Create(GURL(), HTTP_ENCRYPT_NEVER, true)) {}
 
 PrintingContextChromeos::PrintingContextChromeos(
     Delegate* delegate,
+    ProcessBehavior process_behavior)
+    : PrintingContext(delegate, process_behavior),
+      connection_(CupsConnection::Create()),
+      ipp_options_(WrapIpp(nullptr)) {}
+
+PrintingContextChromeos::PrintingContextChromeos(
+    Delegate* delegate,
+    ProcessBehavior process_behavior,
     std::unique_ptr<CupsConnection> connection)
-    : PrintingContext(delegate), connection_(std::move(connection)) {}
+    : PrintingContext(delegate, process_behavior),
+      connection_(std::move(connection)),
+      ipp_options_(WrapIpp(nullptr)) {}
 
 PrintingContextChromeos::~PrintingContextChromeos() {
   ReleaseContext();
@@ -263,13 +374,10 @@ mojom::ResultCode PrintingContextChromeos::UseDefaultSettings() {
   PrinterSemanticCapsAndDefaults::Paper paper = DefaultPaper(*printer_);
 
   PrintSettings::RequestedMedia media;
-  media.vendor_id = paper.vendor_id;
-  media.size_microns = paper.size_um;
+  media.vendor_id = paper.vendor_id();
+  media.size_microns = paper.size_um();
   settings_->set_requested_media(media);
-
-  CupsPrinter::CupsMediaMargins margins =
-      printer_->GetMediaMarginsByName(paper.vendor_id);
-  SetPrintableArea(settings_.get(), media, margins);
+  SetPrintableArea(settings_.get(), media, paper.printable_area_um());
 
   return mojom::ResultCode::kSuccess;
 }
@@ -323,15 +431,15 @@ mojom::ResultCode PrintingContextChromeos::UpdatePrinterSettings(
   if (media.IsDefault()) {
     PrinterSemanticCapsAndDefaults::Paper paper = DefaultPaper(*printer_);
 
-    media.vendor_id = paper.vendor_id;
-    media.size_microns = paper.size_um;
+    media.vendor_id = paper.vendor_id();
+    media.size_microns = paper.size_um();
     settings_->set_requested_media(media);
   }
 
-  CupsPrinter::CupsMediaMargins margins =
-      printer_->GetMediaMarginsByName(media.vendor_id);
-  SetPrintableArea(settings_.get(), media, margins);
-  cups_options_ = SettingsToCupsOptions(*settings_);
+  gfx::Rect printable_area_um =
+      GetPrintableAreaForSize(*printer_, media.size_microns);
+  SetPrintableArea(settings_.get(), media, printable_area_um);
+  ipp_options_ = SettingsToIPPOptions(*settings_, std::move(printable_area_um));
   send_user_info_ = settings_->send_user_info();
   if (send_user_info_) {
     DCHECK(printer_);
@@ -362,8 +470,11 @@ mojom::ResultCode PrintingContextChromeos::NewDocument(
   DCHECK(!in_print_job_);
   in_print_job_ = true;
 
-  if (skip_system_calls())
+#if BUILDFLAG(ENABLE_OOP_PRINTING)
+  if (process_behavior() == ProcessBehavior::kOopEnabledSkipSystemCalls) {
     return mojom::ResultCode::kSuccess;
+  }
+#endif
 
   std::string converted_name;
   if (send_user_info_) {
@@ -373,18 +484,8 @@ mojom::ResultCode PrintingContextChromeos::NewDocument(
                          : kDocumentNamePlaceholder;
   }
 
-  std::vector<cups_option_t> options;
-  for (const ScopedCupsOption& option : cups_options_) {
-    if (printer_->CheckOptionSupported(option->name, option->value)) {
-      options.push_back(*(option.get()));
-    } else {
-      DVLOG(1) << "Unsupported option skipped " << option->name << ", "
-               << option->value;
-    }
-  }
-
-  ipp_status_t create_status =
-      printer_->CreateJob(&job_id_, converted_name, username_, options);
+  ipp_status_t create_status = printer_->CreateJob(
+      &job_id_, converted_name, username_, ipp_options_.get());
 
   if (job_id_ == 0) {
     DLOG(WARNING) << "Creating cups job failed"
@@ -394,7 +495,7 @@ mojom::ResultCode PrintingContextChromeos::NewDocument(
 
   // we only send one document, so it's always the last one
   if (!printer_->StartDocument(job_id_, converted_name, true, username_,
-                               options)) {
+                               ipp_options_.get())) {
     LOG(ERROR) << "Starting document failed";
     return OnError();
   }
@@ -410,7 +511,7 @@ mojom::ResultCode PrintingContextChromeos::PrintDocument(
     return mojom::ResultCode::kCanceled;
   DCHECK(in_print_job_);
 
-#if defined(USE_CUPS)
+#if BUILDFLAG(USE_CUPS)
   std::vector<char> buffer;
   if (!metafile.GetDataAsVector(&buffer))
     return mojom::ResultCode::kFailed;
@@ -418,8 +519,7 @@ mojom::ResultCode PrintingContextChromeos::PrintDocument(
   return StreamData(buffer);
 #else
   NOTREACHED();
-  return mojom::ResultCode::kFailed;
-#endif  // defined(USE_CUPS)
+#endif  // BUILDFLAG(USE_CUPS)
 }
 
 mojom::ResultCode PrintingContextChromeos::DocumentDone() {

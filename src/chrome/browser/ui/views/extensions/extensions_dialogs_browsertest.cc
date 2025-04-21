@@ -1,16 +1,17 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/extensions/extensions_dialogs_browsertest.h"
 
 #include "chrome/browser/extensions/extension_service.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/views/extensions/extensions_toolbar_container.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
 #include "extensions/browser/extension_system.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/extension_builder.h"
-#include "extensions_toolbar_container.h"
 #include "ui/views/layout/animating_layout_manager_test_util.h"
 
 scoped_refptr<const extensions::Extension>
@@ -26,7 +27,5 @@ ExtensionsDialogBrowserTest::InstallExtension(const std::string& name) {
 
 ExtensionsToolbarContainer*
 ExtensionsDialogBrowserTest::extensions_container() {
-  return BrowserView::GetBrowserViewForBrowser(browser())
-      ->toolbar()
-      ->extensions_container();
+  return browser()->GetBrowserView().toolbar()->extensions_container();
 }

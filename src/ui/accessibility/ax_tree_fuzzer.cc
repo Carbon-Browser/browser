@@ -1,14 +1,19 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ui/accessibility/ax_tree.h"
 #include "ui/accessibility/ax_tree_observer.h"
 
 class EmptyAXTreeObserver : public ui::AXTreeObserver {
  public:
-  EmptyAXTreeObserver() {}
-  ~EmptyAXTreeObserver() override {}
+  EmptyAXTreeObserver() = default;
+  ~EmptyAXTreeObserver() override = default;
 };
 
 // Entry point for LibFuzzer.

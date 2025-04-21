@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,28 +7,24 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
-#include "base/containers/contains.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
-#include "base/stl_util.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
-#include "base/trace_event/trace_event.h"
-#include "base/values.h"
 #include "net/base/features.h"
 #include "net/base/host_port_pair.h"
 #include "net/base/ip_endpoint.h"
 #include "net/base/net_errors.h"
 #include "net/base/trace_constants.h"
-#include "net/dns/host_resolver_results.h"
+#include "net/base/tracing.h"
+#include "net/dns/public/host_resolver_results.h"
 #include "net/dns/public/secure_dns_policy.h"
 #include "net/log/net_log_event_type.h"
-#include "net/log/net_log_source.h"
 #include "net/socket/socket_tag.h"
 #include "net/socket/transport_connect_sub_job.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
@@ -39,7 +35,7 @@ namespace net {
 
 namespace {
 
-// TODO(crbug.com/1206799): Delete once endpoint usage is converted to using
+// TODO(crbug.com/40181080): Delete once endpoint usage is converted to using
 // url::SchemeHostPort when available.
 HostPortPair ToLegacyDestinationEndpoint(
     const TransportSocketParams::Endpoint& endpoint) {
@@ -56,12 +52,12 @@ HostPortPair ToLegacyDestinationEndpoint(
 
 TransportSocketParams::TransportSocketParams(
     Endpoint destination,
-    NetworkIsolationKey network_isolation_key,
+    NetworkAnonymizationKey network_anonymization_key,
     SecureDnsPolicy secure_dns_policy,
     OnHostResolutionCallback host_resolution_callback,
     base::flat_set<std::string> supported_alpns)
     : destination_(std::move(destination)),
-      network_isolation_key_(std::move(network_isolation_key)),
+      network_anonymization_key_(std::move(network_anonymization_key)),
       secure_dns_policy_(secure_dns_policy),
       host_resolution_callback_(std::move(host_resolution_callback)),
       supported_alpns_(std::move(supported_alpns)) {
@@ -123,7 +119,7 @@ TransportConnectJob::TransportConnectJob(
     const scoped_refptr<TransportSocketParams>& params,
     Delegate* delegate,
     const NetLogWithSource* net_log,
-    absl::optional<EndpointResultOverride> endpoint_result_override)
+    std::optional<EndpointResultOverride> endpoint_result_override)
     : ConnectJob(priority,
                  socket_tag,
                  ConnectionTimeout(),
@@ -187,7 +183,7 @@ ResolveErrorInfo TransportConnectJob::GetResolveErrorInfo() const {
   return resolve_error_info_;
 }
 
-absl::optional<HostResolverEndpointResult>
+std::optional<HostResolverEndpointResult>
 TransportConnectJob::GetHostResolverEndpointResult() const {
   CHECK_LT(current_endpoint_result_, endpoint_results_.size());
   return endpoint_results_[current_endpoint_result_];
@@ -237,8 +233,6 @@ int TransportConnectJob::DoLoop(int result) {
         break;
       default:
         NOTREACHED();
-        rv = ERR_FAILED;
-        break;
     }
   } while (rv != ERR_IO_PENDING && next_state_ != STATE_NONE);
 
@@ -246,11 +240,11 @@ int TransportConnectJob::DoLoop(int result) {
 }
 
 int TransportConnectJob::DoResolveHost() {
-  connect_timing_.dns_start = base::TimeTicks::Now();
+  connect_timing_.domain_lookup_start = base::TimeTicks::Now();
 
   if (has_dns_override_) {
     DCHECK_EQ(1u, endpoint_results_.size());
-    connect_timing_.dns_end = connect_timing_.dns_start;
+    connect_timing_.domain_lookup_end = connect_timing_.domain_lookup_start;
     next_state_ = STATE_TRANSPORT_CONNECT;
     return OK;
   }
@@ -263,11 +257,11 @@ int TransportConnectJob::DoResolveHost() {
   if (absl::holds_alternative<url::SchemeHostPort>(params_->destination())) {
     request_ = host_resolver()->CreateRequest(
         absl::get<url::SchemeHostPort>(params_->destination()),
-        params_->network_isolation_key(), net_log(), parameters);
+        params_->network_anonymization_key(), net_log(), parameters);
   } else {
     request_ = host_resolver()->CreateRequest(
         absl::get<HostPortPair>(params_->destination()),
-        params_->network_isolation_key(), net_log(), parameters);
+        params_->network_anonymization_key(), net_log(), parameters);
   }
 
   return request_->Start(base::BindOnce(&TransportConnectJob::OnIOComplete,
@@ -277,10 +271,10 @@ int TransportConnectJob::DoResolveHost() {
 int TransportConnectJob::DoResolveHostComplete(int result) {
   TRACE_EVENT0(NetTracingCategory(),
                "TransportConnectJob::DoResolveHostComplete");
-  connect_timing_.dns_end = base::TimeTicks::Now();
+  connect_timing_.domain_lookup_end = base::TimeTicks::Now();
   // Overwrite connection start time, since for connections that do not go
   // through proxies, |connect_start| should not include dns lookup time.
-  connect_timing_.connect_start = connect_timing_.dns_end;
+  connect_timing_.connect_start = connect_timing_.domain_lookup_end;
   resolve_error_info_ = request_->GetResolveErrorInfo();
 
   if (result != OK) {
@@ -297,14 +291,12 @@ int TransportConnectJob::DoResolveHostComplete(int result) {
   // only continue after a PostTask.
   next_state_ = STATE_RESOLVE_HOST_CALLBACK_COMPLETE;
   if (!params_->host_resolution_callback().is_null()) {
-    // TODO(https://crbug.com/1287240): Switch `OnHostResolutionCallbackResult`
-    // to `request_->GetEndpointResults()` and `request_->GetDnsAliasResults()`.
     OnHostResolutionCallbackResult callback_result =
         params_->host_resolution_callback().Run(
             ToLegacyDestinationEndpoint(params_->destination()),
-            *request_->GetAddressResults());
+            *request_->GetEndpointResults(), *request_->GetDnsAliasResults());
     if (callback_result == OnHostResolutionCallbackResult::kMayBeDeletedAsync) {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(&TransportConnectJob::OnIOComplete,
                                     weak_ptr_factory_.GetWeakPtr(), OK));
       return ERR_IO_PENDING;
@@ -417,11 +409,11 @@ int TransportConnectJob::DoTransportConnectComplete(int result) {
 
   if (result == OK) {
     DCHECK(!connect_timing_.connect_start.is_null());
-    DCHECK(!connect_timing_.dns_start.is_null());
+    DCHECK(!connect_timing_.domain_lookup_start.is_null());
     // `HandleSubJobComplete` should have called `SetSocket`.
     DCHECK(socket());
     base::TimeTicks now = base::TimeTicks::Now();
-    base::TimeDelta total_duration = now - connect_timing_.dns_start;
+    base::TimeDelta total_duration = now - connect_timing_.domain_lookup_start;
     UMA_HISTOGRAM_CUSTOM_TIMES("Net.DNS_Resolution_And_TCP_Connection_Latency2",
                                total_duration, base::Milliseconds(1),
                                base::Minutes(10), 100);
@@ -493,6 +485,7 @@ void TransportConnectJob::OnSubJobComplete(int result,
 
 void TransportConnectJob::StartIPv4JobAsync() {
   DCHECK(ipv4_job_);
+  net_log().AddEvent(NetLogEventType::TRANSPORT_CONNECT_JOB_IPV6_FALLBACK);
   int result = ipv4_job_->Start();
   if (result != ERR_IO_PENDING)
     OnSubJobComplete(result, ipv4_job_.get());
@@ -516,25 +509,19 @@ bool TransportConnectJob::IsSvcbOptional(
   // If SVCB/HTTPS resolution succeeded, the client supports ECH, and all routes
   // support ECH, disable the A/AAAA fallback. See Section 10.1 of
   // draft-ietf-dnsop-svcb-https-08.
+
   auto* scheme_host_port =
       absl::get_if<url::SchemeHostPort>(&params_->destination());
-  if (!base::FeatureList::IsEnabled(features::kEncryptedClientHello) ||
-      !scheme_host_port || scheme_host_port->scheme() != url::kHttpsScheme) {
+  if (!scheme_host_port || scheme_host_port->scheme() != url::kHttpsScheme) {
+    return true;  // This is not a SVCB-capable request at all.
+  }
+
+  if (!common_connect_job_params()->ssl_client_context ||
+      !common_connect_job_params()->ssl_client_context->config().ech_enabled) {
     return true;  // ECH is not supported for this request.
   }
 
-  bool has_svcb = false;
-  for (const auto& result : results) {
-    if (!result.metadata.supported_protocol_alpns.empty()) {
-      has_svcb = true;
-      if (result.metadata.ech_config_list.empty()) {
-        return true;  // There is a non-ECH SVCB/HTTPS route.
-      }
-    }
-  }
-  // Either there were no SVCB/HTTPS records (should be SVCB-optional), or there
-  // were and all supported ECH (should be SVCB-reliant).
-  return !has_svcb;
+  return !HostResolver::AllProtocolEndpointsHaveEch(results);
 }
 
 bool TransportConnectJob::IsEndpointResultUsable(

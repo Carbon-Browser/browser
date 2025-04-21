@@ -1,13 +1,13 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/metrics/perf/perf_output.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/task/thread_pool.h"
-#include "chromeos/dbus/debug_daemon/debug_daemon_client.h"
+#include "chromeos/ash/components/dbus/debug_daemon/debug_daemon_client.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
 #include "dbus/object_path.h"
@@ -16,7 +16,7 @@
 
 namespace metrics {
 
-PerfOutputCall::PerfOutputCall(chromeos::DebugDaemonClient* debug_daemon_client,
+PerfOutputCall::PerfOutputCall(ash::DebugDaemonClient* debug_daemon_client,
                                const std::vector<std::string>& quipper_args,
                                bool disable_cpu_idle,
                                DoneCallback callback)
@@ -47,7 +47,7 @@ PerfOutputCall::PerfOutputCall()
       pending_stop_(false),
       weak_factory_(this) {}
 
-PerfOutputCall::~PerfOutputCall() {}
+PerfOutputCall::~PerfOutputCall() = default;
 
 void PerfOutputCall::Stop() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -62,18 +62,18 @@ void PerfOutputCall::Stop() {
   StopImpl();
 }
 
-void PerfOutputCall::OnIOComplete(absl::optional<std::string> result) {
+void PerfOutputCall::OnIOComplete(std::optional<std::string> result) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   perf_data_pipe_reader_.reset();
-  // Use the r-value variant of absl::optional::value_or() to move |result| to
+  // Use the r-value variant of std::optional::value_or() to move |result| to
   // the callback argument. Callback can safely use |result| after |this| is
   // deleted.
   std::move(done_callback_).Run(std::move(result).value_or(std::string()));
   // NOTE: |this| may be deleted at this point!
 }
 
-void PerfOutputCall::OnGetPerfOutput(absl::optional<uint64_t> result) {
+void PerfOutputCall::OnGetPerfOutput(std::optional<uint64_t> result) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   // Signal pipe reader to shut down.

@@ -1,9 +1,9 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <algorithm>
-
+#include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
@@ -29,14 +29,14 @@ class ExtensionTagsTest : public extensions::ExtensionBrowserTest {
   // If no extension task was found, a nullptr will be returned.
   Task* FindAndGetExtensionTask(
       const MockWebContentsTaskManager& task_manager) {
-    auto itr = std::find_if(
-        task_manager.tasks().begin(), task_manager.tasks().end(),
-        [](Task* task) { return task->GetType() == Task::EXTENSION; });
+    auto itr = base::ranges::find(task_manager.tasks(), Task::EXTENSION,
+                                  &Task::GetType);
 
     return itr != task_manager.tasks().end() ? *itr : nullptr;
   }
 
-  const std::vector<WebContentsTag*>& tracked_tags() const {
+  const std::vector<raw_ptr<WebContentsTag, VectorExperimental>>& tracked_tags()
+      const {
     return WebContentsTagsManager::GetInstance()->tracked_tags();
   }
 };

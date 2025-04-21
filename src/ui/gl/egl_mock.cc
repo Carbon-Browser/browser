@@ -1,4 +1,4 @@
-// Copyright (c) 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 namespace gl {
 
-MockEGLInterface::MockEGLInterface() {}
+MockEGLInterface::MockEGLInterface() = default;
 
-MockEGLInterface::~MockEGLInterface() {}
+MockEGLInterface::~MockEGLInterface() = default;
 
 MockEGLInterface* MockEGLInterface::interface_;
 

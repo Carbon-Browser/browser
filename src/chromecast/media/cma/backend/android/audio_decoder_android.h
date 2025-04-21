@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/bind.h"
 #include "chromecast/media/api/cast_audio_decoder.h"
 #include "chromecast/media/cma/backend/android/audio_sink_android.h"
 #include "chromecast/media/cma/backend/android/audio_sink_manager.h"
@@ -40,7 +40,7 @@ class AudioDecoderAndroid : public MediaPipelineBackend::AudioDecoder,
  public:
   using BufferStatus = MediaPipelineBackend::BufferStatus;
 
-  explicit AudioDecoderAndroid(MediaPipelineBackendAndroid* backend);
+  AudioDecoderAndroid(MediaPipelineBackendAndroid* backend, bool is_apk_audio);
 
   AudioDecoderAndroid(const AudioDecoderAndroid&) = delete;
   AudioDecoderAndroid& operator=(const AudioDecoderAndroid&) = delete;
@@ -64,6 +64,7 @@ class AudioDecoderAndroid : public MediaPipelineBackend::AudioDecoder,
   bool SetVolume(float multiplier) override;
   RenderingDelay GetRenderingDelay() override;
   AudioTrackTimestamp GetAudioTrackTimestamp() override;
+  int GetStartThresholdInFrames() override;
 
  private:
   struct RateShifterInfo {
@@ -79,7 +80,7 @@ class AudioDecoderAndroid : public MediaPipelineBackend::AudioDecoder,
   void OnSinkError(SinkError error) override;
 
   void CleanUpPcm();
-  void ResetSinkForNewConfig(const AudioConfig& config);
+  bool ResetSinkForNewConfig(const AudioConfig& config) ABSL_MUST_USE_RESULT;
   void CreateDecoder();
   void CreateRateShifter(const AudioConfig& config);
   void OnBufferDecoded(uint64_t input_bytes,
@@ -95,6 +96,7 @@ class AudioDecoderAndroid : public MediaPipelineBackend::AudioDecoder,
   void UpdateStatistics(Statistics delta);
 
   MediaPipelineBackendAndroid* const backend_;
+  const bool is_apk_audio_;
   const scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
   MediaPipelineBackend::Decoder::Delegate* delegate_;
 

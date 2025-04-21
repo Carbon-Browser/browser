@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,9 +23,9 @@ class Textfield;
 // AuthenticatorClientPinEntrySheetModel.
 class AuthenticatorClientPinEntryView : public views::View,
                                         public views::TextfieldController {
- public:
-  METADATA_HEADER(AuthenticatorClientPinEntryView);
+  METADATA_HEADER(AuthenticatorClientPinEntryView, views::View)
 
+ public:
   class Delegate {
    public:
     virtual void OnPincodeChanged(std::u16string pin_code) = 0;

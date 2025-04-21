@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,17 +11,20 @@
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/document_init.h"
 #include "third_party/blink/renderer/core/testing/null_execution_context.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 namespace blink {
 
 TEST(CSSInterpolationTypesMapTest, RegisteredCustomProperty) {
+  test::TaskEnvironment task_environment;
   auto* execution_context = MakeGarbageCollected<NullExecutionContext>();
   execution_context->SetUpSecurityContextForTesting();
   execution_context->GetSecurityContext().SetDocumentPolicy(
       DocumentPolicy::CreateWithHeaderPolicy({}));
 
-  DocumentInit init =
-      DocumentInit::Create().WithExecutionContext(execution_context);
+  DocumentInit init = DocumentInit::Create()
+                          .WithExecutionContext(execution_context)
+                          .WithAgent(*execution_context->GetAgent());
   auto* document1 = MakeGarbageCollected<Document>(init);
   auto* document2 = MakeGarbageCollected<Document>(init);
 

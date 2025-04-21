@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -59,10 +59,10 @@ constexpr char kFailedUserCertProfileName[] =
 void SetupMockCertProvisioningWorker(
     ash::cert_provisioning::MockCertProvisioningWorker* worker,
     ash::cert_provisioning::CertProvisioningWorkerState state,
-    const std::string* public_key,
+    const std::vector<uint8_t>* public_key,
     ash::cert_provisioning::CertProfile& cert_profile,
     base::Time last_update_time,
-    absl::optional<ash::cert_provisioning::BackendServerError>& backend_error) {
+    std::optional<ash::cert_provisioning::BackendServerError>& backend_error) {
   EXPECT_CALL(*worker, GetState).WillRepeatedly(Return(state));
   EXPECT_CALL(*worker, GetLastUpdateTime)
       .WillRepeatedly(Return(last_update_time));
@@ -86,8 +86,6 @@ class CertProvisioningAshTest : public ::testing::Test {
  public:
   void SetUp() override {
     der_encoded_spki_ = base::Base64Decode(kDerEncodedSpkiBase64).value();
-    der_encoded_spki_str_ =
-        std::string(der_encoded_spki_.begin(), der_encoded_spki_.end());
 
     ON_CALL(user_scheduler_, GetWorkers)
         .WillByDefault(ReturnRef(user_workers_));
@@ -125,7 +123,6 @@ class CertProvisioningAshTest : public ::testing::Test {
   void ExecuteAsyncTasks() { task_environment_.RunUntilIdle(); }
 
   std::vector<uint8_t> der_encoded_spki_;
-  std::string der_encoded_spki_str_;
 
   content::BrowserTaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
@@ -244,7 +241,7 @@ TEST_F(CertProvisioningAshTest, GetStatusEmpty) {
   TestFuture<std::vector<mojom::CertProvisioningProcessStatusPtr>> result;
   service_.GetStatus(result.GetCallback());
 
-  EXPECT_EQ(0, result.Get().size());
+  EXPECT_EQ(0u, result.Get().size());
 }
 
 TEST_F(CertProvisioningAshTest, GetStatusAliveUserWorker) {
@@ -253,10 +250,12 @@ TEST_F(CertProvisioningAshTest, GetStatusAliveUserWorker) {
   // Setup a user mock worker.
   ash::cert_provisioning::CertProfile user_cert_profile(
       kUserCertProfileId, kUserCertProfileName, kCertProfileVersion,
-      /*is_va_enabled=*/true, kCertProfileRenewalPeriod);
+      ash::cert_provisioning::KeyType::kRsa,
+      /*is_va_enabled=*/true, kCertProfileRenewalPeriod,
+      ash::cert_provisioning::ProtocolVersion::kStatic);
   // Any time should work. Any time in the past is a realistic value.
   base::Time last_update_time = base::Time::Now() - base::Hours(1);
-  absl::optional<ash::cert_provisioning::BackendServerError> backend_error =
+  std::optional<ash::cert_provisioning::BackendServerError> backend_error =
       ash::cert_provisioning::BackendServerError(
           policy::DM_STATUS_REQUEST_INVALID, last_update_time);
   auto user_cert_worker =
@@ -264,8 +263,7 @@ TEST_F(CertProvisioningAshTest, GetStatusAliveUserWorker) {
   SetupMockCertProvisioningWorker(
       user_cert_worker.get(),
       ash::cert_provisioning::CertProvisioningWorkerState::kKeypairGenerated,
-      &der_encoded_spki_str_, user_cert_profile, last_update_time,
-      backend_error);
+      &der_encoded_spki_, user_cert_profile, last_update_time, backend_error);
   user_workers_[kUserCertProfileId] = std::move(user_cert_worker);
 
   auto expected_user_status = mojom::CertProvisioningProcessStatus::New();
@@ -280,12 +278,12 @@ TEST_F(CertProvisioningAshTest, GetStatusAliveUserWorker) {
       mojom::CertProvisioningProcessState::kKeypairGenerated;
   expected_user_status->did_fail = false;
   expected_user_status->is_device_wide = false;
-  expected_user_status->failure_message = absl::nullopt;
+  expected_user_status->failure_message = std::nullopt;
 
   TestFuture<std::vector<mojom::CertProvisioningProcessStatusPtr>> result;
   service_.GetStatus(result.GetCallback());
 
-  ASSERT_EQ(1, result.Get().size());
+  ASSERT_EQ(1u, result.Get().size());
   EXPECT_EQ(*result.Get()[0], *expected_user_status);
 }
 
@@ -295,9 +293,11 @@ TEST_F(CertProvisioningAshTest, GetStatusAliveDeviceWorker) {
   // Setup a device mock worker.
   ash::cert_provisioning::CertProfile device_cert_profile(
       kDeviceCertProfileId, kDeviceCertProfileName, kCertProfileVersion,
-      /*is_va_enabled=*/true, kCertProfileRenewalPeriod);
+      ash::cert_provisioning::KeyType::kRsa,
+      /*is_va_enabled=*/true, kCertProfileRenewalPeriod,
+      ash::cert_provisioning::ProtocolVersion::kStatic);
   base::Time last_update_time = base::Time::Now() - base::Hours(2);
-  absl::optional<ash::cert_provisioning::BackendServerError> backend_error =
+  std::optional<ash::cert_provisioning::BackendServerError> backend_error =
       ash::cert_provisioning::BackendServerError(
           policy::DM_STATUS_REQUEST_FAILED, last_update_time);
   auto device_cert_worker =
@@ -305,8 +305,7 @@ TEST_F(CertProvisioningAshTest, GetStatusAliveDeviceWorker) {
   SetupMockCertProvisioningWorker(
       device_cert_worker.get(),
       ash::cert_provisioning::CertProvisioningWorkerState::kSignCsrFinished,
-      &der_encoded_spki_str_, device_cert_profile, last_update_time,
-      backend_error);
+      &der_encoded_spki_, device_cert_profile, last_update_time, backend_error);
   device_workers_[kDeviceCertProfileId] = std::move(device_cert_worker);
 
   auto expected_device_status = mojom::CertProvisioningProcessStatus::New();
@@ -321,12 +320,12 @@ TEST_F(CertProvisioningAshTest, GetStatusAliveDeviceWorker) {
       mojom::CertProvisioningProcessState::kSignCsrFinished;
   expected_device_status->did_fail = false;
   expected_device_status->is_device_wide = true;
-  expected_device_status->failure_message = absl::nullopt;
+  expected_device_status->failure_message = std::nullopt;
 
   TestFuture<std::vector<mojom::CertProvisioningProcessStatusPtr>> result;
   service_.GetStatus(result.GetCallback());
 
-  ASSERT_EQ(1, result.Get().size());
+  ASSERT_EQ(1u, result.Get().size());
   EXPECT_EQ(*result.Get()[0], *expected_device_status);
 }
 
@@ -339,7 +338,7 @@ TEST_F(CertProvisioningAshTest, GetStatusFailedUserWorker) {
       user_failed_workers_[kFailedUserCertProfileId];
   info.state_before_failure =
       ash::cert_provisioning::CertProvisioningWorkerState::kVaChallengeFinished;
-  info.public_key = der_encoded_spki_str_;
+  info.public_key = der_encoded_spki_;
   info.cert_profile_name = kFailedUserCertProfileName;
   info.last_update_time = last_update_time;
   info.failure_message = kFakeFailureMessage;
@@ -358,7 +357,7 @@ TEST_F(CertProvisioningAshTest, GetStatusFailedUserWorker) {
   TestFuture<std::vector<mojom::CertProvisioningProcessStatusPtr>> result;
   service_.GetStatus(result.GetCallback());
 
-  ASSERT_EQ(1, result.Get().size());
+  ASSERT_EQ(1u, result.Get().size());
   EXPECT_EQ(*result.Get()[0], *expected_user_status);
 }
 
@@ -371,7 +370,7 @@ TEST_F(CertProvisioningAshTest, GetStatusFailedDeviceWorker) {
       device_failed_workers_[kFailedDeviceCertProfileId];
   info.state_before_failure = ash::cert_provisioning::
       CertProvisioningWorkerState::kFinishCsrResponseReceived;
-  info.public_key = der_encoded_spki_str_;
+  info.public_key = der_encoded_spki_;
   info.cert_profile_name = kFailedDeviceCertProfileName;
   info.last_update_time = last_update_time;
   info.failure_message = kFakeFailureMessage;
@@ -390,7 +389,7 @@ TEST_F(CertProvisioningAshTest, GetStatusFailedDeviceWorker) {
   TestFuture<std::vector<mojom::CertProvisioningProcessStatusPtr>> result;
   service_.GetStatus(result.GetCallback());
 
-  ASSERT_EQ(1, result.Get().size());
+  ASSERT_EQ(1u, result.Get().size());
   EXPECT_EQ(*result.Get()[0], *expected_device_status);
 }
 

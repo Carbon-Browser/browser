@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -102,7 +102,7 @@ class LargeAddressValidatorTest : public testing::Test {
   LargeAddressValidatorTest() {}
   virtual ~LargeAddressValidatorTest() {}
 
-  static void SetUpTestCase() {
+  static void SetUpTestSuite() {
     validator_ =
         new AddressValidator(std::unique_ptr<Source>(new TestdataSource(true)),
                              std::unique_ptr<Storage>(new NullStorage), NULL);

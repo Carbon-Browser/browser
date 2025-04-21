@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define SERVICES_TRACING_TRACING_SERVICE_H_
 
 #include "base/memory/raw_ptr.h"
+#include "build/blink_buildflags.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -27,7 +28,7 @@ class TracingService : public mojom::TracingService {
   // mojom::TracingService implementation:
   void Initialize(std::vector<mojom::ClientInfoPtr> clients) override;
   void AddClient(mojom::ClientInfoPtr client) override;
-#if !BUILDFLAG(IS_NACL) && !BUILDFLAG(IS_IOS)
+#if !BUILDFLAG(IS_NACL) && BUILDFLAG(USE_BLINK)
   void BindConsumerHost(
       mojo::PendingReceiver<mojom::ConsumerHost> receiver) override;
 #endif

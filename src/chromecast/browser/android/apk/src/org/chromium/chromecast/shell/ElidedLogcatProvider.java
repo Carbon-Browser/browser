@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,8 +54,7 @@ abstract class ElidedLogcatProvider {
             Log.i(TAG, "elideLogcat took " + elapsedMillis + " ms");
         } catch (IOException e) {
             Log.e(TAG, "Can't read logs", e);
-        } finally {
-            return builder.toString();
         }
+        return builder.toString();
     }
 }

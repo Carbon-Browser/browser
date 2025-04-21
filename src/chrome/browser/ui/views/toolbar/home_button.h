@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_button.h"
 #include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/compositor/layer_tree_owner.h"
 #include "ui/views/metadata/view_factory.h"
 #include "ui/views/view_tracker.h"
 
@@ -30,9 +31,9 @@ class HomePageUndoBubbleCoordinator {
 };
 
 class HomeButton : public ToolbarButton {
- public:
-  METADATA_HEADER(HomeButton);
+  METADATA_HEADER(HomeButton, ToolbarButton)
 
+ public:
   explicit HomeButton(PressedCallback callback = PressedCallback(),
                       PrefService* prefs = nullptr);
   HomeButton(const HomeButton&) = delete;
@@ -48,8 +49,10 @@ class HomeButton : public ToolbarButton {
       const ui::DropTargetEvent& event) override;
 
  private:
-  void UpdateHomePage(const ui::DropTargetEvent& event,
-                      ui::mojom::DragOperation& output_drag_op);
+  void UpdateHomePage(
+      const ui::DropTargetEvent& event,
+      ui::mojom::DragOperation& output_drag_op,
+      std::unique_ptr<ui::LayerTreeOwner> drag_image_layer_owner);
 
   const raw_ptr<PrefService> prefs_;
   HomePageUndoBubbleCoordinator coordinator_;

@@ -1,19 +1,57 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/streams/readable_stream_default_reader.h"
 
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_readable_stream_read_result.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
+#include "third_party/blink/renderer/core/streams/read_request.h"
 #include "third_party/blink/renderer/core/streams/readable_stream.h"
 #include "third_party/blink/renderer/core/streams/readable_stream_default_controller.h"
-#include "third_party/blink/renderer/core/streams/stream_promise_resolver.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/v8_throw_exception.h"
 
 namespace blink {
+
+class ReadableStreamDefaultReader::DefaultReaderReadRequest final
+    : public ReadRequest {
+ public:
+  explicit DefaultReaderReadRequest(
+      ScriptPromiseResolver<ReadableStreamReadResult>* resolver)
+      : resolver_(resolver) {}
+
+  void ChunkSteps(ScriptState* script_state,
+                  v8::Local<v8::Value> chunk,
+                  ExceptionState&) const override {
+    auto* read_result = ReadableStreamReadResult::Create();
+    read_result->setValue(ScriptValue(script_state->GetIsolate(), chunk));
+    read_result->setDone(false);
+    resolver_->Resolve(read_result);
+  }
+
+  void CloseSteps(ScriptState* script_state) const override {
+    auto* read_result = ReadableStreamReadResult::Create();
+    read_result->setValue(ScriptValue(
+        script_state->GetIsolate(), v8::Undefined(script_state->GetIsolate())));
+    read_result->setDone(true);
+    resolver_->ResolveOverridingToCurrentContext(read_result);
+  }
+
+  void ErrorSteps(ScriptState*, v8::Local<v8::Value> e) const override {
+    resolver_->Reject(e);
+  }
+
+  void Trace(Visitor* visitor) const override {
+    visitor->Trace(resolver_);
+    ReadRequest::Trace(visitor);
+  }
+
+ private:
+  Member<ScriptPromiseResolver<ReadableStreamReadResult>> resolver_;
+};
 
 ReadableStreamDefaultReader* ReadableStreamDefaultReader::Create(
     ScriptState* script_state,
@@ -31,7 +69,8 @@ ReadableStreamDefaultReader::ReadableStreamDefaultReader(
     ScriptState* script_state,
     ReadableStream* stream,
     ExceptionState& exception_state)
-    : ExecutionContextClient(ExecutionContext::From(script_state)) {
+    : ActiveScriptWrappable<ReadableStreamDefaultReader>({}),
+      ExecutionContextClient(ExecutionContext::From(script_state)) {
   // https://streams.spec.whatwg.org/#default-reader-constructor
   // 1. Perform ? SetUpReadableStreamDefaultReader(this, stream).
   SetUpDefaultReader(script_state, this, stream, exception_state);
@@ -39,29 +78,52 @@ ReadableStreamDefaultReader::ReadableStreamDefaultReader(
 
 ReadableStreamDefaultReader::~ReadableStreamDefaultReader() = default;
 
-ScriptPromise ReadableStreamDefaultReader::read(
+ScriptPromise<ReadableStreamReadResult> ReadableStreamDefaultReader::read(
     ScriptState* script_state,
     ExceptionState& exception_state) {
   // https://streams.spec.whatwg.org/#default-reader-read
-  // 2. If this.[[ownerReadableStream]] is undefined, return a promise rejected
+  // 1. If this.[[stream]] is undefined, return a promise rejected
   //  with a TypeError exception.
   if (!owner_readable_stream_) {
     exception_state.ThrowTypeError(
         "This readable stream reader has been released and cannot be used to "
         "read from its previous owner stream");
-    return ScriptPromise();
+    return EmptyPromise();
   }
 
-  // 3. Return ! ReadableStreamReaderRead(this).
-  return Read(script_state, this)->GetScriptPromise(script_state);
+  if (!script_state->ContextIsValid()) {
+    exception_state.ThrowTypeError("Context is detached");
+    return EmptyPromise();
+  }
+
+  // 2. Let promise be a new promise.
+  auto* resolver =
+      MakeGarbageCollected<ScriptPromiseResolver<ReadableStreamReadResult>>(
+          script_state, exception_state.GetContext());
+
+  // 3. Let readRequest be a new read request with the following items:
+  //    chunk steps, given chunk
+  //      1. Resolve promise with «[ "value" → chunk, "done" → false ]».
+  //    close steps
+  //      1. Resolve promise with «[ "value" → undefined, "done" → true ]».
+  //    error steps, given e
+  //      1. Reject promise with e.
+  auto* read_request = MakeGarbageCollected<DefaultReaderReadRequest>(resolver);
+
+  // 4. Perform ! ReadableStreamReaderRead(this).
+  Read(script_state, this, read_request, exception_state);
+
+  // 5. Return promise.
+  return resolver->Promise();
 }
 
-StreamPromiseResolver* ReadableStreamDefaultReader::Read(
-    ScriptState* script_state,
-    ReadableStreamDefaultReader* reader) {
+void ReadableStreamDefaultReader::Read(ScriptState* script_state,
+                                       ReadableStreamDefaultReader* reader,
+                                       ReadRequest* read_request,
+                                       ExceptionState& exception_state) {
   auto* isolate = script_state->GetIsolate();
   // https://streams.spec.whatwg.org/#readable-stream-default-reader-read
-  // 1. Let stream be reader.[[ownerReadableStream]].
+  // 1. Let stream be reader.[[stream]].
   ReadableStream* stream = reader->owner_readable_stream_;
 
   // 2. Assert: stream is not undefined.
@@ -71,27 +133,27 @@ StreamPromiseResolver* ReadableStreamDefaultReader::Read(
   stream->is_disturbed_ = true;
 
   switch (stream->state_) {
-    // 4. If stream.[[state]] is "closed", return a promise resolved with !
-    //    ReadableStreamCreateReadResult(undefined, true,
-    //    reader.[[forAuthorCode]]).
+    // 4. If stream.[[state]] is "closed", perform readRequest's close steps.
     case ReadableStream::kClosed:
-      return StreamPromiseResolver::CreateResolved(
-          script_state,
-          ReadableStream::CreateReadResult(script_state, v8::Undefined(isolate),
-                                           true, reader->for_author_code_));
+      read_request->CloseSteps(script_state);
+      break;
 
-    // 5. If stream.[[state]] is "errored", return a promise rejected with
-    //    stream.[[storedError]].
+    // 5. Otherwise, if stream.[[state]] is "errored", perform readRequest's
+    // error steps
+    //    given stream.[[storedError]].
     case ReadableStream::kErrored:
-      return StreamPromiseResolver::CreateRejected(
-          script_state, stream->GetStoredError(isolate));
+      read_request->ErrorSteps(script_state, stream->GetStoredError(isolate));
+      break;
 
     case ReadableStream::kReadable:
-      // 6. Assert: stream.[[state]] is "readable".
+      // 6. Otherwise,
+      //   1. Assert: stream.[[state]] is "readable".
       DCHECK_EQ(stream->state_, ReadableStream::kReadable);
 
-      // 7. Return ! stream.[[readableStreamController]].[[PullSteps]]().
-      return stream->GetController()->PullSteps(script_state);
+      //   2. Perform ! stream.[[controller]].[[PullSteps]](readRequest).
+      stream->GetController()->PullSteps(script_state, read_request,
+                                         exception_state);
+      break;
   }
 }
 
@@ -102,12 +164,13 @@ void ReadableStreamDefaultReader::ErrorReadRequests(
   // https://streams.spec.whatwg.org/#abstract-opdef-readablestreamdefaultreadererrorreadrequests
   // 1. Let readRequests be reader.[[readRequests]].
   // 2. Set reader.[[readRequests]] to a new empty list.
+  HeapDeque<Member<ReadRequest>> read_requests;
+  read_requests.Swap(reader->read_requests_);
   // 3. For each readRequest of readRequests,
-  for (StreamPromiseResolver* promise : reader->read_requests_) {
+  for (ReadRequest* read_request : read_requests) {
     //   a. Perform readRequest’s error steps, given e.
-    promise->Reject(script_state, e);
+    read_request->ErrorSteps(script_state, e);
   }
-  reader->read_requests_.clear();
 }
 
 void ReadableStreamDefaultReader::Release(ScriptState* script_state,
@@ -151,8 +214,6 @@ void ReadableStreamDefaultReader::SetUpDefaultReader(
         "that are not yet locked to a reader");
     return;
   }
-
-  DCHECK(reader->for_author_code_);
 
   // 2. Perform ! ReadableStreamReaderGenericInitialize(reader, stream).
   ReadableStreamGenericReader::GenericInitialize(script_state, reader, stream);

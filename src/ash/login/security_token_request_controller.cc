@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 #include "ash/login/ui/pin_request_widget.h"
 #include "ash/public/cpp/login_types.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/i18n/number_formatting.h"
 #include "chromeos/components/security_token_pin/error_generator.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -117,8 +117,9 @@ bool SecurityTokenRequestController::SetPinUiState(
 }
 
 void SecurityTokenRequestController::ClosePinUi() {
-  if (!security_token_request_in_progress_)
+  if (!security_token_request_in_progress_) {
     return;
+  }
 
   if (PinRequestWidget::Get()) {
     PinRequestWidget::Get()->Close(false);  // Parameter will be ignored.

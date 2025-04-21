@@ -1,15 +1,19 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/system/sys_info.h"
+
 #include <stdint.h>
 
+#include <optional>
+#include <string_view>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/environment.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/process/process_metrics.h"
 #include "base/run_loop.h"
@@ -19,7 +23,6 @@
 #include "base/strings/string_util.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/system/sys_info.h"
 #include "base/test/scoped_chromeos_version_info.h"
 #include "base/test/scoped_running_on_chromeos.h"
 #include "base/test/task_environment.h"
@@ -30,7 +33,6 @@
 #include "testing/gtest/include/gtest/gtest-death-test.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/platform_test.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_WIN)
 #include "base/win/com_init_util.h"
@@ -39,6 +41,11 @@
 #include "base/win/scoped_variant.h"
 #include "base/win/wmi.h"
 #endif  // BUILDFLAG(IS_WIN)
+
+#if BUILDFLAG(IS_MAC)
+#include "base/system/sys_info_internal.h"
+#include "base/test/scoped_feature_list.h"
+#endif  // BUILDFLAG(IS_MAC)
 
 namespace base {
 
@@ -54,7 +61,31 @@ using SysInfoTest = PlatformTest;
 TEST_F(SysInfoTest, NumProcs) {
   // We aren't actually testing that it's correct, just that it's sane.
   EXPECT_GE(SysInfo::NumberOfProcessors(), 1);
+
+  EXPECT_GE(SysInfo::NumberOfEfficientProcessors(), 0);
+  EXPECT_LT(SysInfo::NumberOfEfficientProcessors(),
+            SysInfo::NumberOfProcessors());
 }
+
+#if BUILDFLAG(IS_MAC)
+TEST_F(SysInfoTest, NumProcsWithSecurityMitigationEnabled) {
+  // Reset state so that the call to SetCpuSecurityMitigationsEnabled() below
+  // succeeds even if SysInfo::NumberOfProcessors() was previously called.
+  SysInfo::ResetCpuSecurityMitigationsEnabledForTesting();
+
+  // Verify that the number of number of available processors available when CPU
+  // security mitigation is enabled is the number of available "physical"
+  // processors.
+  test::ScopedFeatureList feature_list_;
+  feature_list_.InitAndEnableFeature(kNumberOfCoresWithCpuSecurityMitigation);
+  SysInfo::SetCpuSecurityMitigationsEnabled();
+  EXPECT_EQ(SysInfo::NumberOfProcessors(),
+            internal::NumberOfPhysicalProcessors());
+
+  // Reset state set by this test.
+  SysInfo::ResetCpuSecurityMitigationsEnabledForTesting();
+}
+#endif  // BUILDFLAG(IS_MAC)
 
 TEST_F(SysInfoTest, AmountOfMem) {
   // We aren't actually testing that it's correct, just that it's sane.
@@ -192,10 +223,10 @@ TEST_F(SysInfoTest, HardwareModelNameFormatMacAndiOS) {
   // a number.
   EXPECT_TRUE(base::MatchPattern(hardware_model, "iOS Simulator (*)"))
       << hardware_model;
-  std::vector<StringPiece> mainPieces =
+  std::vector<std::string_view> mainPieces =
       SplitStringPiece(hardware_model, "()", KEEP_WHITESPACE, SPLIT_WANT_ALL);
   ASSERT_EQ(3u, mainPieces.size()) << hardware_model;
-  std::vector<StringPiece> modelPieces =
+  std::vector<std::string_view> modelPieces =
       SplitStringPiece(mainPieces[1], ",", KEEP_WHITESPACE, SPLIT_WANT_ALL);
   ASSERT_GE(modelPieces.size(), 1u) << hardware_model;
   if (modelPieces.size() == 1u) {
@@ -209,7 +240,7 @@ TEST_F(SysInfoTest, HardwareModelNameFormatMacAndiOS) {
 #else
   // The expected format is "Foo,Bar" where Foo is "iPhone" or "iPad" and Bar is
   // a number.
-  std::vector<StringPiece> pieces =
+  std::vector<std::string_view> pieces =
       SplitStringPiece(hardware_model, ",", KEEP_WHITESPACE, SPLIT_WANT_ALL);
   ASSERT_EQ(2u, pieces.size()) << hardware_model;
   int value;
@@ -220,10 +251,10 @@ TEST_F(SysInfoTest, HardwareModelNameFormatMacAndiOS) {
 
 TEST_F(SysInfoTest, GetHardwareInfo) {
   test::TaskEnvironment task_environment;
-  absl::optional<SysInfo::HardwareInfo> hardware_info;
+  std::optional<SysInfo::HardwareInfo> hardware_info;
 
   auto callback = base::BindOnce(
-      [](absl::optional<SysInfo::HardwareInfo>* target_info,
+      [](std::optional<SysInfo::HardwareInfo>* target_info,
          SysInfo::HardwareInfo info) { *target_info = std::move(info); },
       &hardware_info);
   SysInfo::GetHardwareInfo(std::move(callback));
@@ -247,10 +278,10 @@ TEST_F(SysInfoTest, GetHardwareInfo) {
 TEST_F(SysInfoTest, GetHardwareInfoWMIMatchRegistry) {
   base::win::ScopedCOMInitializer com_initializer;
   test::TaskEnvironment task_environment;
-  absl::optional<SysInfo::HardwareInfo> hardware_info;
+  std::optional<SysInfo::HardwareInfo> hardware_info;
 
   auto callback = base::BindOnce(
-      [](absl::optional<SysInfo::HardwareInfo>* target_info,
+      [](std::optional<SysInfo::HardwareInfo>* target_info,
          SysInfo::HardwareInfo info) { *target_info = std::move(info); },
       &hardware_info);
   SysInfo::GetHardwareInfo(std::move(callback));
@@ -347,11 +378,11 @@ TEST_F(SysInfoTest, GoogleChromeOSNoVersionNumbers) {
 TEST_F(SysInfoTest, GoogleChromeOSLsbReleaseTime) {
   const char kLsbRelease[] = "CHROMEOS_RELEASE_VERSION=1.2.3.4";
   // Use a fake time that can be safely displayed as a string.
-  const Time lsb_release_time(Time::FromDoubleT(12345.6));
+  const Time lsb_release_time(Time::FromSecondsSinceUnixEpoch(12345.6));
   test::ScopedChromeOSVersionInfo version(kLsbRelease, lsb_release_time);
   Time parsed_lsb_release_time = SysInfo::GetLsbReleaseTime();
-  EXPECT_DOUBLE_EQ(lsb_release_time.ToDoubleT(),
-                   parsed_lsb_release_time.ToDoubleT());
+  EXPECT_DOUBLE_EQ(lsb_release_time.InSecondsFSinceUnixEpoch(),
+                   parsed_lsb_release_time.InSecondsFSinceUnixEpoch());
 }
 
 TEST_F(SysInfoTest, IsRunningOnChromeOS) {

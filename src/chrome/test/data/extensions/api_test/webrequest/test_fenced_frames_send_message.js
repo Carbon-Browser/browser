@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,7 @@ runTests([
       if (EVENT_MESSAGE_EXTENSION_STRING != details.message) {
         chrome.test.fail('Invalid message: ' + details.message);
       }
-      chrome.test.assertEq(mparchEnabled ? 6 : 5, details.frameId);
+      chrome.test.assertEq(6, details.frameId);
       chrome.test.assertEq(4, details.parentFrameId);
       chrome.test.assertEq('sub_frame', details.type);
       chrome.test.assertEq('fenced_frame', details.frameType);
@@ -35,8 +35,9 @@ runTests([
       chrome.test.assertFalse('documentId' in details);
       chrome.test.assertEq(getURLFencedFrame(), details.url);
       chrome.test.assertEq(details.stage, expectedEvents.shift());
-      if (expectedEvents.length == 0)
+      if (expectedEvents.length == 0) {
         chrome.test.succeed();
+      }
     });
 
     var rule = {

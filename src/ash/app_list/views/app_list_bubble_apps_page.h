@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,12 @@
 #include <memory>
 
 #include "ash/app_list/app_list_model_provider.h"
+#include "ash/app_list/app_list_view_provider.h"
 #include "ash/app_list/views/app_list_nudge_controller.h"
 #include "ash/app_list/views/app_list_toast_container_view.h"
-#include "ash/app_list/views/apps_grid_view_focus_delegate.h"
-#include "ash/app_list/views/recent_apps_view.h"
 #include "ash/ash_export.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/gfx/animation/tween.h"
@@ -35,7 +35,6 @@ class Separator;
 
 namespace ash {
 
-class ApplicationDragAndDropHost;
 class AppListA11yAnnouncer;
 class AppListConfig;
 class AppListFolderController;
@@ -59,14 +58,12 @@ class ASH_EXPORT AppListBubbleAppsPage
     : public views::View,
       public views::ViewObserver,
       public AppListModelProvider::Observer,
-      public RecentAppsView::Delegate,
       public AppListToastContainerView::Delegate,
-      public AppsGridViewFocusDelegate {
- public:
-  METADATA_HEADER(AppListBubbleAppsPage);
+      public AppListViewProvider {
+  METADATA_HEADER(AppListBubbleAppsPage, views::View)
 
+ public:
   AppListBubbleAppsPage(AppListViewDelegate* view_delegate,
-                        ApplicationDragAndDropHost* drag_and_drop_host,
                         AppListConfig* app_list_config,
                         AppListA11yAnnouncer* a11y_announcer,
                         AppListFolderController* folder_controller,
@@ -104,7 +101,7 @@ class ASH_EXPORT AppListBubbleAppsPage
   // Handles `AppListController::UpdateAppListWithNewSortingOrder()` for the
   // bubble launcher apps page.
   void UpdateForNewSortingOrder(
-      const absl::optional<AppListSortOrder>& new_order,
+      const std::optional<AppListSortOrder>& new_order,
       bool animate,
       base::OnceClosure update_position_closure,
       base::OnceClosure animation_done_closure);
@@ -114,9 +111,9 @@ class ASH_EXPORT AppListBubbleAppsPage
   bool MaybeScrollToShowToast();
 
   // views::View:
-  void Layout() override;
+  void Layout(PassKey) override;
   void VisibilityChanged(views::View* starting_from, bool is_visible) override;
-  void OnThemeChanged() override;
+  void OnBoundsChanged(const gfx::Rect& old_bounds) override;
 
   // view::ViewObserver:
   void OnViewVisibilityChanged(views::View* observed_view,
@@ -126,20 +123,22 @@ class ASH_EXPORT AppListBubbleAppsPage
   void OnActiveAppListModelsChanged(AppListModel* model,
                                     SearchModel* search_model) override;
 
-  // RecentAppsView::Delegate:
-  void MoveFocusUpFromRecents() override;
-  void MoveFocusDownFromRecents(int column) override;
-
   // AppListToastContainerView::Delegate:
-  bool MoveFocusUpFromToast(int column) override;
-  bool MoveFocusDownFromToast(int column) override;
   void OnNudgeRemoved() override;
 
-  // AppsGridViewFocusDelegate:
-  bool MoveFocusUpFromAppsGrid(int column) override;
+  // AppListViewProvider:
+  ContinueSectionView* GetContinueSectionView() override;
+  RecentAppsView* GetRecentAppsView() override;
+  AppsGridView* GetAppsGridView() override;
+  AppListToastContainerView* GetToastContainerView() override;
 
   // Updates the visibility of the continue section based on user preference.
   void UpdateContinueSectionVisibility();
+
+  // Invoked when the `scroll_view_` received an scrolling event.
+  void OnPageScrolled();
+
+  void RecordAboveTheFoldMetrics();
 
   views::ScrollView* scroll_view() { return scroll_view_; }
   IconButton* toggle_continue_section_button() {
@@ -195,7 +194,7 @@ class ASH_EXPORT AppListBubbleAppsPage
   // Called when the animation to fade out app list items is completed.
   // `aborted` indicates whether the fade out animation is aborted.
   void OnAppsGridViewFadeOutAnimationEnded(
-      const absl::optional<AppListSortOrder>& new_order,
+      const std::optional<AppListSortOrder>& new_order,
       bool aborted);
 
   // Called when the animation to fade in app list items is completed.
@@ -224,24 +223,23 @@ class ASH_EXPORT AppListBubbleAppsPage
   // Pressed callback for `toggle_continue_section_button_`.
   void OnToggleContinueSection();
 
-  AppListViewDelegate* view_delegate_ = nullptr;
-  views::ScrollView* scroll_view_ = nullptr;
-  RoundedScrollBar* scroll_bar_ = nullptr;
+  raw_ptr<AppListViewDelegate> view_delegate_ = nullptr;
+  raw_ptr<views::ScrollView> scroll_view_ = nullptr;
+  raw_ptr<RoundedScrollBar> scroll_bar_ = nullptr;
 
   // Wraps both the continue label and the toggle continue section button.
-  // Only exists when feature LauncherHideContinueSection is enabled.
-  views::View* continue_label_container_ = nullptr;
-  views::Label* continue_label_ = nullptr;
-  IconButton* toggle_continue_section_button_ = nullptr;
+  raw_ptr<views::View> continue_label_container_ = nullptr;
+  raw_ptr<views::Label> continue_label_ = nullptr;
+  raw_ptr<IconButton> toggle_continue_section_button_ = nullptr;
 
-  ContinueSectionView* continue_section_ = nullptr;
-  RecentAppsView* recent_apps_ = nullptr;
-  views::Separator* separator_ = nullptr;
-  AppListToastContainerView* toast_container_ = nullptr;
-  ScrollableAppsGridView* scrollable_apps_grid_view_ = nullptr;
+  raw_ptr<ContinueSectionView> continue_section_ = nullptr;
+  raw_ptr<RecentAppsView> recent_apps_ = nullptr;
+  raw_ptr<views::Separator> separator_ = nullptr;
+  raw_ptr<AppListToastContainerView> toast_container_ = nullptr;
+  raw_ptr<ScrollableAppsGridView> scrollable_apps_grid_view_ = nullptr;
 
   // The search box owned by AppListBubbleView.
-  SearchBoxView* search_box_ = nullptr;
+  raw_ptr<SearchBoxView, DanglingUntriaged> search_box_ = nullptr;
 
   std::unique_ptr<AppListKeyboardController> app_list_keyboard_controller_;
   std::unique_ptr<AppListNudgeController> app_list_nudge_controller_;
@@ -255,6 +253,9 @@ class ASH_EXPORT AppListBubbleAppsPage
 
   // A closure that runs at the end of the reorder animation.
   base::OnceClosure reorder_animation_done_closure_;
+
+  // Subscription to notify of scrolling events.
+  base::CallbackListSubscription on_contents_scrolled_subscription_;
 
   base::WeakPtrFactory<AppListBubbleAppsPage> weak_factory_{this};
 };

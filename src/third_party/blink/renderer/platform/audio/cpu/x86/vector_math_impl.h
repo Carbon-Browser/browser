@@ -1,6 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 // This file intentionally does not have header guards, it's included from
 // vector_math_avx.h and from vector_math_sse.h with different macro
@@ -13,6 +18,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 #include "base/check_op.h"
 #include "third_party/blink/renderer/platform/audio/audio_array.h"
@@ -208,13 +214,14 @@ void Vclip(const float* source_p,
 // source_max = max(abs(source[k])) for all k
 void Vmaxmgv(const float* source_p, float* max_p, uint32_t frames_to_process) {
   constexpr uint32_t kMask = 0x7FFFFFFFu;
-
+  float kMask_float;
+  std::memcpy(&kMask_float, &kMask, 4);
   const float* const source_end_p = source_p + frames_to_process;
 
   DCHECK(IsAligned(source_p));
   DCHECK_EQ(0u, frames_to_process % kPackedFloatsPerRegister);
 
-  MType m_mask = MM_PS(set1)(*reinterpret_cast<const float*>(&kMask));
+  MType m_mask = MM_PS(set1)(kMask_float);
   MType m_max = MM_PS(setzero)();
 
   while (source_p < source_end_p) {

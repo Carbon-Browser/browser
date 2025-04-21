@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "content/public/browser/browser_ppapi_host.h"
 
 class GURL;
@@ -27,7 +27,7 @@ class HostFactory;
 // otherwise noted.
 class NaClBrowserDelegate {
  public:
-  virtual ~NaClBrowserDelegate() {}
+  virtual ~NaClBrowserDelegate() = default;
 
   // Show an infobar to the user to indicate the client architecture was not
   // covered by the manifest.

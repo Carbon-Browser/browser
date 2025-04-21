@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/weak_ptr.h"
+#include "base/sequence_checker.h"
 #include "base/threading/thread_checker.h"
 #include "third_party/blink/public/platform/modules/mediastream/web_media_stream_track.h"
 #include "third_party/blink/public/web/modules/mediastream/media_stream_video_sink.h"
@@ -50,7 +51,7 @@ class MODULES_EXPORT MediaStreamVideoWebRtcSink : public MediaStreamVideoSink {
     return video_track_.get();
   }
 
-  absl::optional<bool> SourceNeedsDenoisingForTesting() const;
+  std::optional<bool> SourceNeedsDenoisingForTesting() const;
 
   double GetRequiredMinFramesPerSec() const override { return 1; }
 
@@ -59,8 +60,8 @@ class MODULES_EXPORT MediaStreamVideoWebRtcSink : public MediaStreamVideoSink {
   void OnEnabledChanged(bool enabled) override;
   void OnContentHintChanged(
       WebMediaStreamTrack::ContentHintType content_hint) override;
-  void OnVideoConstraintsChanged(absl::optional<double> min_fps,
-                                 absl::optional<double> max_fps) override;
+  void OnVideoConstraintsChanged(std::optional<double> min_fps,
+                                 std::optional<double> max_fps) override;
 
  private:
   FRIEND_TEST_ALL_PREFIXES(
@@ -68,7 +69,7 @@ class MODULES_EXPORT MediaStreamVideoWebRtcSink : public MediaStreamVideoSink {
       ForwardsConstraintsChangeToWebRtcVideoTrackSourceProxy);
 
   // Used to DCHECK that we are called on the correct thread.
-  THREAD_CHECKER(thread_checker_);
+  SEQUENCE_CHECKER(sequence_checker_);
 
   // |video_source_| and |video_source_proxy_| are held as
   // references to outlive |video_track_| since the interfaces between them

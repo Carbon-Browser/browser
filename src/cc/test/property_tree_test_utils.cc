@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -121,10 +121,12 @@ EffectNode& CreateEffectNodeInternal(LayerType* layer,
   auto* node = effect_tree.Node(id);
   if (layer) {
     layer->SetEffectTreeIndex(id);
-    node->stable_id = layer->id();
+    node->element_id = layer->element_id()
+                           ? layer->element_id()
+                           : LayerIdToElementIdForTesting(layer->id());
     if (layer->element_id()) {
       property_trees->effect_tree_mutable().SetElementIdForNodeId(
-          node->id, layer->element_id());
+          node->id, node->element_id);
     }
   }
   node->transform_id =
@@ -151,9 +153,8 @@ ScrollNode& CreateScrollNodeInternal(LayerType* layer,
   }
   node->bounds = layer->bounds();
   node->container_bounds = scroll_container_bounds;
-  node->scrollable = !scroll_container_bounds.IsEmpty();
-  node->user_scrollable_horizontal = true;
-  node->user_scrollable_vertical = true;
+  node->user_scrollable_horizontal = node->user_scrollable_vertical =
+      !scroll_container_bounds.IsEmpty();
   node->is_composited = true;
 
   DCHECK(layer->has_transform_node());
@@ -162,6 +163,8 @@ ScrollNode& CreateScrollNodeInternal(LayerType* layer,
   transform_node->should_be_snapped = true;
   transform_node->scrolls = true;
 
+  if (!property_trees->is_main_thread())
+    scroll_tree.GetOrCreateSyncedScrollOffsetForTesting(layer->element_id());
   scroll_tree.SetScrollOffset(layer->element_id(), gfx::PointF());
   return *node;
 }
@@ -319,18 +322,16 @@ ScrollNode& CreateScrollNode(Layer* layer,
 ScrollNode& CreateScrollNode(LayerImpl* layer,
                              const gfx::Size& scroll_container_bounds,
                              int parent_id) {
-  auto& node =
-      CreateScrollNodeInternal(layer, scroll_container_bounds, parent_id);
-  layer->UpdateScrollable();
-  return node;
+  return CreateScrollNodeInternal(layer, scroll_container_bounds, parent_id);
 }
 
-ScrollNode& CreateScrollNodeForUncompositedScroller(
+ScrollNode& CreateScrollNodeForNonCompositedScroller(
     PropertyTrees* property_trees,
     int parent_id,
     ElementId element_id,
     const gfx::Size& bounds,
-    const gfx::Size& scroll_container_bounds) {
+    const gfx::Size& scroll_container_bounds,
+    const gfx::Point& scroll_container_origin) {
   auto& scroll_tree = property_trees->scroll_tree_mutable();
   int id = scroll_tree.Insert(ScrollNode(), parent_id);
 
@@ -343,9 +344,9 @@ ScrollNode& CreateScrollNodeForUncompositedScroller(
 
   node->bounds = bounds;
   node->container_bounds = scroll_container_bounds;
-  node->scrollable = !scroll_container_bounds.IsEmpty();
-  node->user_scrollable_horizontal = true;
-  node->user_scrollable_vertical = true;
+  node->container_origin = scroll_container_origin;
+  node->user_scrollable_horizontal = node->user_scrollable_vertical =
+      !scroll_container_bounds.IsEmpty();
   node->is_composited = false;
 
   // Create a matching transform node.
@@ -372,6 +373,8 @@ ScrollNode& CreateScrollNodeForUncompositedScroller(
     node->transform_id = transform_node->id;
   }
 
+  if (!property_trees->is_main_thread())
+    scroll_tree.GetOrCreateSyncedScrollOffsetForTesting(element_id);
   scroll_tree.SetScrollOffset(element_id, gfx::PointF());
   return *node;
 }
@@ -455,7 +458,7 @@ void SetupViewport(LayerImpl* root,
   std::unique_ptr<LayerImpl> inner_viewport_scroll_layer =
       LayerImpl::Create(layer_tree_impl, 10000);
   inner_viewport_scroll_layer->SetBounds(outer_viewport_size);
-  inner_viewport_scroll_layer->SetHitTestable(true);
+  inner_viewport_scroll_layer->SetHitTestOpaqueness(HitTestOpaqueness::kOpaque);
   inner_viewport_scroll_layer->SetElementId(
       LayerIdToElementIdForTesting(inner_viewport_scroll_layer->id()));
 
@@ -463,7 +466,7 @@ void SetupViewport(LayerImpl* root,
       LayerImpl::Create(layer_tree_impl, 10001);
   outer_viewport_scroll_layer->SetBounds(content_size);
   outer_viewport_scroll_layer->SetDrawsContent(true);
-  outer_viewport_scroll_layer->SetHitTestable(true);
+  outer_viewport_scroll_layer->SetHitTestOpaqueness(HitTestOpaqueness::kOpaque);
   outer_viewport_scroll_layer->SetElementId(
       LayerIdToElementIdForTesting(outer_viewport_scroll_layer->id()));
 

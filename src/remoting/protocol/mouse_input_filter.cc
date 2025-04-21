@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,11 @@
 
 #include <algorithm>
 
-#include "base/cxx17_backports.h"
 #include "base/logging.h"
 #include "remoting/base/logging.h"
 #include "remoting/proto/event.pb.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 MouseInputFilter::MouseInputFilter() = default;
 
@@ -22,8 +20,29 @@ MouseInputFilter::MouseInputFilter(InputStub* input_stub)
 MouseInputFilter::~MouseInputFilter() = default;
 
 void MouseInputFilter::InjectMouseEvent(const MouseEvent& event) {
-  if (input_bounds_.is_zero() || output_bounds_.is_zero()) {
+  // Pass unchanged any event which has fractional-coordinates. These events
+  // will be handled by FractionalInputFilter.
+  if (event.has_fractional_coordinate()) {
+    InputFilter::InjectMouseEvent(event);
     return;
+  }
+
+  if (input_bounds_.is_zero()) {
+    HOST_LOG << "Dropping mouse event because input bounds are unset";
+    return;
+  }
+  if (output_bounds_.is_zero()) {
+    HOST_LOG << "Dropping mouse event because output bounds are unset";
+    return;
+  }
+
+  if (event.has_x() && event.x() > input_bounds_.x() && event.has_y() &&
+      event.y() > input_bounds_.y()) {
+    // Mouse events are scaled by the client to what it believes the desktop
+    // size to be, so receiving an event outside this rect should be rare.
+    HOST_LOG << "Mouse event (" << event.x() << "," << event.y()
+             << ") is outside input rect " << input_bounds_.x() << "x"
+             << input_bounds_.y();
   }
 
   // We scale based on the max input and output coordinates (which are equal
@@ -68,7 +87,7 @@ int32_t MouseInputFilter::GetScaledX(int32_t x) {
     x = ((x * output_bounds_.x()) + (input_bounds_.x() / 2)) /
         input_bounds_.x();
   }
-  return base::clamp(x, 0, output_bounds_.x());
+  return std::clamp(x, 0, output_bounds_.x());
 }
 
 int32_t MouseInputFilter::GetScaledY(int32_t y) {
@@ -76,8 +95,7 @@ int32_t MouseInputFilter::GetScaledY(int32_t y) {
     y = ((y * output_bounds_.y()) + (input_bounds_.y() / 2)) /
         input_bounds_.y();
   }
-  return base::clamp(y, 0, output_bounds_.y());
+  return std::clamp(y, 0, output_bounds_.y());
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

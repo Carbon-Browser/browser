@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,15 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "base/strings/string_util.h"
 #include "base/threading/thread_restrictions.h"
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
 #include "chrome/common/chrome_paths.h"
+#include "chrome/test/base/fake_gaia_mixin.h"
+#include "chrome/test/base/mixin_based_in_process_browser_test.h"
 #include "google_apis/gaia/fake_gaia.h"
 #include "net/base/url_util.h"
 #include "net/http/http_status_code.h"
@@ -86,7 +87,7 @@ TestClientCertSamlIdpMixin::TestClientCertSamlIdpMixin(
   net::SSLServerConfig ssl_config;
   ssl_config.client_cert_type =
       net::SSLServerConfig::ClientCertType::REQUIRE_CLIENT_CERT;
-  // TODO(crbug.com/792204): Enable TLS 1.3 after the
+  // TODO(crbug.com/41359506): Enable TLS 1.3 after the
   // chrome.certificateProvider API supports it.
   ssl_config.version_max = net::SSL_PROTOCOL_VERSION_TLS1_2;
   ssl_config.cert_authorities = client_cert_authorities;

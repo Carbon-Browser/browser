@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 
 #include "base/check.h"
 #include "base/debug/alias.h"
-#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/profiler/native_unwinder_win.h"
 #include "build/build_config.h"
 
@@ -41,11 +41,12 @@ win::ScopedHandle GetCurrentThreadHandle() {
 }
 
 win::ScopedHandle GetThreadHandle(PlatformThreadId thread_id) {
-  // TODO(https://crbug.com/947459): Move this logic to
+  // TODO(crbug.com/40620762): Move this logic to
   // GetSamplingProfilerCurrentThreadToken() and pass the handle in
   // SamplingProfilerThreadToken.
-  if (thread_id == ::GetCurrentThreadId())
+  if (thread_id == ::GetCurrentThreadId()) {
     return GetCurrentThreadHandle();
+  }
 
   // TODO(http://crbug.com/947459): Remove the test_handle* CHECKs once we
   // understand which flag is triggering the failure.
@@ -69,44 +70,32 @@ win::ScopedHandle GetThreadHandle(PlatformThreadId thread_id) {
 // Returns the thread environment block pointer for |thread_handle|.
 const TEB* GetThreadEnvironmentBlock(PlatformThreadId thread_id,
                                      HANDLE thread_handle) {
-  // TODO(https://crbug.com/947459): Move this logic to
+  // TODO(crbug.com/40620762): Move this logic to
   // GetSamplingProfilerCurrentThreadToken() and pass the TEB* in
   // SamplingProfilerThreadToken.
-  if (thread_id == ::GetCurrentThreadId())
+  if (thread_id == ::GetCurrentThreadId()) {
     return reinterpret_cast<TEB*>(NtCurrentTeb());
+  }
 
-  // Define the internal types we need to invoke NtQueryInformationThread.
-  enum THREAD_INFORMATION_CLASS { ThreadBasicInformation };
-
-  struct CLIENT_ID {
-    HANDLE UniqueProcess;
-    HANDLE UniqueThread;
-  };
-
+  // Define types not in winternl.h needed to invoke NtQueryInformationThread().
+  constexpr auto ThreadBasicInformation = static_cast<THREADINFOCLASS>(0);
   struct THREAD_BASIC_INFORMATION {
     NTSTATUS ExitStatus;
-    raw_ptr<TEB> Teb;
+    // RAW_PTR_EXCLUSION: Filled in by the OS so cannot use raw_ptr<>.
+    RAW_PTR_EXCLUSION TEB* Teb;
     CLIENT_ID ClientId;
     KAFFINITY AffinityMask;
     LONG Priority;
     LONG BasePriority;
   };
 
-  using NtQueryInformationThreadFunction =
-      NTSTATUS(WINAPI*)(HANDLE, THREAD_INFORMATION_CLASS, PVOID, ULONG, PULONG);
-
-  static const auto nt_query_information_thread =
-      reinterpret_cast<NtQueryInformationThreadFunction>(::GetProcAddress(
-          ::GetModuleHandle(L"ntdll.dll"), "NtQueryInformationThread"));
-  if (!nt_query_information_thread)
-    return nullptr;
-
   THREAD_BASIC_INFORMATION basic_info = {0};
-  NTSTATUS status = nt_query_information_thread(
+  NTSTATUS status = ::NtQueryInformationThread(
       thread_handle, ThreadBasicInformation, &basic_info,
       sizeof(THREAD_BASIC_INFORMATION), nullptr);
-  if (status != 0)
+  if (status != 0) {
     return nullptr;
+  }
 
   return basic_info.Teb;
 }
@@ -153,8 +142,9 @@ ScopedDisablePriorityBoost::ScopedDisablePriorityBoost(HANDLE thread_handle)
 }
 
 ScopedDisablePriorityBoost::~ScopedDisablePriorityBoost() {
-  if (got_previous_boost_state_)
+  if (got_previous_boost_state_) {
     ::SetThreadPriorityBoost(thread_handle_, boost_state_was_disabled_);
+  }
 }
 
 }  // namespace
@@ -171,8 +161,9 @@ SuspendableThreadDelegateWin::ScopedSuspendThread::ScopedSuspendThread(
 // NO HEAP ALLOCATIONS. The CHECK is OK because it provides a more noisy failure
 // mode than deadlocking.
 SuspendableThreadDelegateWin::ScopedSuspendThread::~ScopedSuspendThread() {
-  if (!was_successful_)
+  if (!was_successful_) {
     return;
+  }
 
   // Disable the priority boost that the thread would otherwise receive on
   // resume. We do this to avoid artificially altering the dynamics of the
@@ -187,7 +178,7 @@ SuspendableThreadDelegateWin::ScopedSuspendThread::~ScopedSuspendThread() {
   ScopedDisablePriorityBoost disable_priority_boost(thread_handle_);
   bool resume_thread_succeeded =
       ::ResumeThread(thread_handle_) != static_cast<DWORD>(-1);
-  CHECK(resume_thread_succeeded) << "ResumeThread failed: " << GetLastError();
+  PCHECK(resume_thread_succeeded) << "ResumeThread failed";
 }
 
 bool SuspendableThreadDelegateWin::ScopedSuspendThread::WasSuccessful() const {
@@ -242,15 +233,17 @@ std::vector<uintptr_t*> SuspendableThreadDelegateWin::GetRegistersToRewrite(
   // Return the set of non-volatile registers.
   return {
 #if defined(ARCH_CPU_X86_64)
-    &thread_context->R12, &thread_context->R13, &thread_context->R14,
-        &thread_context->R15, &thread_context->Rdi, &thread_context->Rsi,
-        &thread_context->Rbx, &thread_context->Rbp, &thread_context->Rsp
+      &thread_context->R12, &thread_context->R13,
+      &thread_context->R14, &thread_context->R15,
+      &thread_context->Rdi, &thread_context->Rsi,
+      &thread_context->Rbx, &thread_context->Rbp,
+      &thread_context->Rsp
 #elif defined(ARCH_CPU_ARM64)
-    &thread_context->X19, &thread_context->X20, &thread_context->X21,
-        &thread_context->X22, &thread_context->X23, &thread_context->X24,
-        &thread_context->X25, &thread_context->X26, &thread_context->X27,
-        &thread_context->X28, &thread_context->Fp, &thread_context->Lr,
-        &thread_context->Sp
+      &thread_context->X19, &thread_context->X20, &thread_context->X21,
+      &thread_context->X22, &thread_context->X23, &thread_context->X24,
+      &thread_context->X25, &thread_context->X26, &thread_context->X27,
+      &thread_context->X28, &thread_context->Fp,  &thread_context->Lr,
+      &thread_context->Sp
 #endif
   };
 }

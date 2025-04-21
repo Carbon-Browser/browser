@@ -1,12 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "media/gpu/h265_dpb.h"
 
 #include <algorithm>
 
 #include "base/logging.h"
-#include "media/gpu/h265_dpb.h"
-#include "media/video/h265_parser.h"
+#include "media/parsers/h265_parser.h"
 
 namespace media {
 
@@ -15,6 +16,10 @@ H265Picture::~H265Picture() = default;
 
 H265DPB::H265DPB() = default;
 H265DPB::~H265DPB() = default;
+
+V4L2H265Picture* H265Picture::AsV4L2H265Picture() {
+  return nullptr;
+}
 
 VaapiH265Picture* H265Picture::AsVaapiH265Picture() {
   return nullptr;

@@ -1,12 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/browser/api/messaging/channel_endpoint.h"
 
+#include "content/public/browser/child_process_host.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
-#include "content/public/common/child_process_host.h"
 #include "extensions/browser/process_manager.h"
 #include "extensions/common/constants.h"
 
@@ -60,8 +60,9 @@ bool ChannelEndpoint::IsValid() const {
         ->HasServiceWorker(GetWorkerId());
   }
 
-  if (is_for_render_frame())
+  if (is_for_render_frame()) {
     return GetRenderFrameHost() != nullptr;
+  }
 
   DCHECK(is_for_native_host());
   return true;

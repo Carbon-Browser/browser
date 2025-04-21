@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -13,6 +13,7 @@ if len(Path(__file__).parents) > 2:
 from style_variable_generator.model import Modes
 from style_variable_generator.css_generator import CSSStyleGenerator
 from style_variable_generator.proto_generator import ProtoStyleGenerator, ProtoJSONStyleGenerator
+from style_variable_generator.json_generator import JSONStyleGenerator
 from style_variable_generator.views_generator import ViewsHStyleGenerator, ViewsCCStyleGenerator
 from style_variable_generator.ts_generator import TSStyleGenerator
 from style_variable_generator.color_mappings_generator import ColorMappingsHStyleGenerator, ColorMappingsCCStyleGenerator
@@ -20,13 +21,12 @@ import unittest
 
 print(os.path.join(os.path.dirname(__file__)))
 
-
 class BaseStyleGeneratorTest:
     def assertEqualToFile(self, value, filename):
         path = os.path.join(os.path.dirname(__file__), 'goldens', filename)
         with open(path, 'r') as f:
             self.maxDiff = None
-            self.assertEqual(value, f.read())
+            self.assertEqual(value, f.read(), f'Did not match golden: {path}')
 
     def AddJSONFilesToModel(self, files):
         relpaths_from_cwd = [
@@ -123,6 +123,12 @@ class CSSStyleGeneratorTest(unittest.TestCase, BaseStyleGeneratorTest):
         expected_file_name = 'colors_tokens_test_expected.css'
         self.assertEqualToFile(self.generator.Render(), expected_file_name)
 
+    def testLegacyColors(self):
+        self.generator = CSSStyleGenerator()
+        self.AddJSONFilesToModel(['legacy_mappings_test.json5'])
+        expected_file_name = 'legacy_mappings_test_expected.css'
+        self.assertEqualToFile(self.generator.Render(), expected_file_name)
+
 
 class TSStyleGeneratorTest(unittest.TestCase, BaseStyleGeneratorTest):
     def setUp(self):
@@ -173,6 +179,28 @@ class TSStyleGeneratorTest(unittest.TestCase, BaseStyleGeneratorTest):
         self.assertEqualToFile(self.generator.Render(), expected_file_name)
 
 
+class JSONStyleGeneratorTest(unittest.TestCase, BaseStyleGeneratorTest):
+    def setUp(self):
+        self.generator = JSONStyleGenerator()
+        paths = [
+            'colors_test_palette.json5',
+            'colors_test.json5',
+        ]
+        self.AddJSONFilesToModel(paths)
+        self.expected_output_file = 'colors_test_expected.json'
+
+    def testColorTestJSON(self):
+        self.assertEqualToFile(self.generator.Render(),
+                               self.expected_output_file)
+
+    def testTokenStyleNames(self):
+        self.generator = JSONStyleGenerator()
+        self.AddJSONFilesToModel(
+            ['colors_ref_tokens_test.json5', 'colors_sys_tokens_test.json5'])
+        expected_file_name = 'colors_tokens_test_expected.json'
+        self.assertEqualToFile(self.generator.Render(), expected_file_name)
+
+
 class ProtoStyleGeneratorTest(unittest.TestCase, BaseStyleGeneratorTest):
     def setUp(self):
         self.generator = ProtoStyleGenerator()
@@ -183,6 +211,13 @@ class ProtoStyleGeneratorTest(unittest.TestCase, BaseStyleGeneratorTest):
     def testColorTestJSON(self):
         self.assertEqualToFile(self.generator.Render(),
                                self.expected_output_file)
+
+    def testTokenStyleNames(self):
+        self.generator = ProtoStyleGenerator()
+        self.AddJSONFilesToModel(
+            ['colors_ref_tokens_test.json5', 'colors_sys_tokens_test.json5'])
+        expected_file_name = 'colors_tokens_test_expected.proto'
+        self.assertEqualToFile(self.generator.Render(), expected_file_name)
 
 
 class ProtoJSONStyleGeneratorTest(unittest.TestCase, BaseStyleGeneratorTest):
@@ -201,6 +236,13 @@ class ProtoJSONStyleGeneratorTest(unittest.TestCase, BaseStyleGeneratorTest):
     def testColorTestJSON(self):
         self.assertEqualToFile(self.generator.Render(),
                                self.expected_output_file)
+
+    def testTokenStyleNames(self):
+        self.generator = ProtoJSONStyleGenerator()
+        self.AddJSONFilesToModel(
+            ['colors_ref_tokens_test.json5', 'colors_sys_tokens_test.json5'])
+        expected_file_name = 'colors_tokens_test_expected.protojson'
+        self.assertEqualToFile(self.generator.Render(), expected_file_name)
 
 
 class ColorMappingsStyleGeneratorTest(unittest.TestCase,
@@ -236,6 +278,18 @@ class BlendStyleGeneratorTest(unittest.TestCase, BaseStyleGeneratorTest):
         self.AddJSONFilesToModel(
             ['colors_test_palette.json5', 'blend_colors_test.json5'])
         self.expected_output_file = 'blend_colors_test_expected.css'
+
+    def testColorTestJSON(self):
+        self.assertEqualToFile(self.generator.Render(),
+                               self.expected_output_file)
+
+
+class PreBlendStyleGeneratorTest(unittest.TestCase, BaseStyleGeneratorTest):
+    def setUp(self):
+        self.generator = CSSStyleGenerator()
+        self.AddJSONFilesToModel(
+            ['colors_test_palette.json5', 'preblend_colors_test.json5'])
+        self.expected_output_file = 'preblend_colors_test_expected.css'
 
     def testColorTestJSON(self):
         self.assertEqualToFile(self.generator.Render(),

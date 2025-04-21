@@ -1,9 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/fetch/bytes_uploader.h"
 
+#include "base/compiler_specific.h"
+#include "base/containers/span.h"
 #include "base/numerics/checked_math.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/task/single_thread_task_runner.h"
@@ -26,13 +28,15 @@ BytesUploader::BytesUploader(
     : ExecutionContextLifecycleObserver(execution_context),
       consumer_(consumer),
       client_(client),
-      receiver_(this, std::move(pending_receiver)),
+      receiver_(this, execution_context),
       upload_pipe_watcher_(FROM_HERE,
                            mojo::SimpleWatcher::ArmingPolicy::MANUAL,
-                           std::move(task_runner)) {
+                           task_runner) {
   DCHECK(consumer_);
   DCHECK_EQ(consumer_->GetPublicState(),
             BytesConsumer::PublicState::kReadableOrWaiting);
+
+  receiver_.Bind(std::move(pending_receiver), std::move(task_runner));
 }
 
 BytesUploader::~BytesUploader() = default;
@@ -40,6 +44,7 @@ BytesUploader::~BytesUploader() = default;
 void BytesUploader::Trace(blink::Visitor* visitor) const {
   visitor->Trace(consumer_);
   visitor->Trace(client_);
+  visitor->Trace(receiver_);
   BytesConsumer::Client::Trace(visitor);
   ExecutionContextLifecycleObserver::Trace(visitor);
 }
@@ -104,11 +109,10 @@ void BytesUploader::WriteDataOnPipe() {
     return;
 
   while (true) {
-    const char* buffer;
-    size_t available;
-    auto consumer_result = consumer_->BeginRead(&buffer, &available);
+    base::span<const char> buffer;
+    auto consumer_result = consumer_->BeginRead(buffer);
     DVLOG(3) << "  consumer_->BeginRead()=" << consumer_result
-             << ", available=" << available;
+             << ", available=" << buffer.size();
     switch (consumer_result) {
       case BytesConsumer::Result::kError:
         CloseOnError();
@@ -122,11 +126,13 @@ void BytesUploader::WriteDataOnPipe() {
         break;
     }
     DCHECK_EQ(consumer_result, BytesConsumer::Result::kOk);
-    uint32_t written_bytes = base::saturated_cast<uint32_t>(available);
+
+    size_t actually_written_bytes = 0;
     const MojoResult mojo_result = upload_pipe_->WriteData(
-        buffer, &written_bytes, MOJO_WRITE_DATA_FLAG_NONE);
+        base::as_bytes(buffer), MOJO_WRITE_DATA_FLAG_NONE,
+        actually_written_bytes);
     DVLOG(3) << "  upload_pipe_->WriteData()=" << mojo_result
-             << ", mojo_written=" << written_bytes;
+             << ", mojo_written=" << actually_written_bytes;
     if (mojo_result == MOJO_RESULT_SHOULD_WAIT) {
       // Wait for the pipe to have more capacity available
       consumer_result = consumer_->EndRead(0);
@@ -138,10 +144,10 @@ void BytesUploader::WriteDataOnPipe() {
       return;
     }
 
-    consumer_result = consumer_->EndRead(written_bytes);
+    consumer_result = consumer_->EndRead(actually_written_bytes);
     DVLOG(3) << "  consumer_->EndRead()=" << consumer_result;
 
-    if (!base::CheckAdd(total_size_, written_bytes)
+    if (!base::CheckAdd(total_size_, actually_written_bytes)
              .AssignIfValid(&total_size_)) {
       CloseOnError();
       return;
@@ -153,7 +159,6 @@ void BytesUploader::WriteDataOnPipe() {
         return;
       case BytesConsumer::Result::kShouldWait:
         NOTREACHED();
-        return;
       case BytesConsumer::Result::kDone:
         Close();
         return;

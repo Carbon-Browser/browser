@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,10 @@
 
 #include "base/task/sequence_manager/sequence_manager_impl.h"
 #include "base/task/sequence_manager/task_queue.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/default_tick_clock.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/traced_value.h"
-#include "third_party/blink/renderer/platform/scheduler/common/ukm_task_sampler.h"
 
 namespace blink {
 namespace scheduler {
@@ -22,10 +22,7 @@ using base::sequence_manager::TaskTimeObserver;
 using base::sequence_manager::TimeDomain;
 
 SchedulerHelper::SchedulerHelper(SequenceManager* sequence_manager)
-    : sequence_manager_(sequence_manager),
-      observer_(nullptr),
-      ukm_task_sampler_(sequence_manager_->GetMetricRecordingSettings()
-                            .task_sampling_rate_for_recording_cpu_time) {
+    : sequence_manager_(sequence_manager), observer_(nullptr) {
   sequence_manager_->SetWorkBatchSize(4);
 }
 
@@ -45,8 +42,6 @@ void SchedulerHelper::AttachToCurrentThread() {
   CheckOnValidThread();
   DCHECK(default_task_runner_)
       << "Must be invoked after InitDefaultTaskRunner().";
-  DCHECK(!simple_task_executor_.has_value());
-  simple_task_executor_.emplace(default_task_runner_);
 }
 
 SchedulerHelper::~SchedulerHelper() {
@@ -55,8 +50,6 @@ SchedulerHelper::~SchedulerHelper() {
 
 void SchedulerHelper::Shutdown() {
   CheckOnValidThread();
-  DCHECK(simple_task_executor_.has_value())
-      << "AttachToCurrentThread() was not invoked.";
   if (!sequence_manager_)
     return;
   ShutdownAllQueues();
@@ -119,7 +112,7 @@ void SchedulerHelper::ReclaimMemory() {
   sequence_manager_->ReclaimMemory();
 }
 
-absl::optional<base::sequence_manager::WakeUp> SchedulerHelper::GetNextWakeUp()
+std::optional<base::sequence_manager::WakeUp> SchedulerHelper::GetNextWakeUp()
     const {
   CheckOnValidThread();
   DCHECK(sequence_manager_);
@@ -163,22 +156,6 @@ base::TimeTicks SchedulerHelper::NowTicks() const {
     return sequence_manager_->NowTicks();
   // We may need current time for tracing when shutting down worker thread.
   return base::TimeTicks::Now();
-}
-
-void SchedulerHelper::SetTimerSlack(base::TimerSlack timer_slack) {
-  if (sequence_manager_) {
-    static_cast<base::sequence_manager::internal::SequenceManagerImpl*>(
-        sequence_manager_)
-        ->SetTimerSlack(timer_slack);
-  }
-}
-
-bool SchedulerHelper::HasCPUTimingForEachTask() const {
-  if (sequence_manager_) {
-    return sequence_manager_->GetMetricRecordingSettings()
-        .records_cpu_time_for_all_tasks();
-  }
-  return false;
 }
 
 }  // namespace scheduler

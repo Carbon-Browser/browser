@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,16 +28,18 @@ void ArcValueEventTrimmer::MaybeAdd(int64_t timestamp, int value) {
 }
 
 void ArcValueEventTrimmer::ArcValueEventTrimmer::ResetIfConstant(int value) {
-  if (events_->size() != 1 || (*events_)[0].value != value)
+  if (events_->size() != 1 || (*events_)[0].value != value) {
     return;
+  }
 
   was_trimmed_ = false;
   events_->clear();
 }
 
 void ArcValueEventTrimmer::Flush() {
-  if (was_trimmed_)
+  if (was_trimmed_) {
     events_->emplace_back(last_trimmed_timestamp_, type_, last_value_);
+  }
   was_trimmed_ = false;
 }
 

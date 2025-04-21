@@ -24,6 +24,7 @@ import gitlab
 import subprocess
 import re
 import requests
+import minio_download_files
 from urllib.parse import urlparse
 from urllib3.exceptions import ReadTimeoutError
 
@@ -38,7 +39,6 @@ def get_pipeline_job(project, pipeline, job_name: str):
         if pipeline_job.name == job_name and pipeline_job.finished_at:
             return project.jobs.get(pipeline_job.id)
     return None
-
 
 def get_gitlab_job(project, branch_name: str, job_name: str):
     """This takes a branch/tag name and returns a GitLab job object.
@@ -87,6 +87,14 @@ def get_vanilla_test_gitlab_job(project, version: str, job_name: str):
     # No exact or approximate match found
     return None
 
+def get_minio_test_files_folder(job):
+    job_id=getattr(job, "id")
+    pipeline_id=getattr(job, "pipeline")['id']
+    project_path= os.environ.get("CI_PROJECT_PATH")
+    return f"{project_path}/{pipeline_id}/{job_id}/out/Release/"
+
+def download_artifacts_from_minio(bucket, minio_object, download_dir):
+    minio_download_files.download_all_files_from_bucket(bucket, minio_object, download_dir)
 
 def download_artifacts_from_gitlab(job, download_dir=None):
     """Downloads artifacts from the provided GitLab job into the download_dir
@@ -113,35 +121,45 @@ def download_artifacts_from_gitlab(job, download_dir=None):
 
 
 def main(args):
-    download_timeout = 600  # Default timeout (in seconds) for APK downloads
+    if (args.download_vanilla_reports_from_gitlab):
+        download_timeout = 600  # Default timeout (in seconds) for APK downloads
+        gl = gitlab.Gitlab(
+            args.gitlab_host,
+            private_token=args.gitlab_private_token,
+            timeout=download_timeout
+        )
+        project = gl.projects.get(args.project_id)
 
-    gl = gitlab.Gitlab(
-        args.gitlab_host,
-        private_token=args.gitlab_private_token,
-        timeout=download_timeout
-    )
-    project = gl.projects.get(args.project_id)
+        job = get_vanilla_test_gitlab_job(
+            project, args.chromium_version, args.job_name
+        )
 
-    job = get_vanilla_test_gitlab_job(
-        project, args.chromium_version, args.job_name
-    )
+        if not job:
+            print(f"Could not find a matching job for {args.job_name}")
+            exit(1)
 
-    if not job:
-        print(f"Could not find a matching job for {args.job_name}")
-        exit(1)
+        if not hasattr(job, "artifacts_file"):
+            print(f"Could not find artifacts for job {args.job_name}")
+            exit(2)
 
-    if not hasattr(job, "artifacts_file"):
-        print(f"Could not find artifacts for job {args.job_name}")
-        exit(2)
-
-    download_artifacts_from_gitlab(job)
-    print("Test reports successfully downloaded")
+        download_artifacts_from_gitlab(job)
+        print("Test reports successfully downloaded")
+    else:
+        bucket="chromium-sdk-archive"
+        minio_prefix="chromium-"+args.chromium_version+"-vanilla-automated/out/Release/"
+        minio_download_files.download_test_reports_from_bucket(bucket,minio_prefix,args.download_dir)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+
+    parser.add_argument(
+        "--download_vanilla_reports_from_gitlab",
+        action='store_true',
+        help="(int) Download vanilla test reports from gitlab",
     )
 
     parser.add_argument(

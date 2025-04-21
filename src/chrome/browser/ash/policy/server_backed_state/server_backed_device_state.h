@@ -1,4 +1,4 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,11 +13,13 @@ extern const char kDeviceStateMode[];
 extern const char kDeviceStateDisabledMessage[];
 extern const char kDeviceStatePackagedLicense[];
 extern const char kDeviceStateLicenseType[];
+extern const char kDeviceStateAssignedUpgradeType[];
 
 // String constants used to persist the initial state action in the
 // kDeviceStateMode dictionary entry.
 extern const char kDeviceStateInitialModeEnrollmentEnforced[];
 extern const char kDeviceStateInitialModeEnrollmentZeroTouch[];
+extern const char kDeviceStateInitialModeTokenEnrollment[];
 // String constants used to persist the restorative action in the
 // kDeviceStateMode dictionary entry.
 extern const char kDeviceStateRestoreModeReEnrollmentRequested[];
@@ -31,6 +33,11 @@ extern const char kDeviceStateLicenseTypeTerminal[];
 // String constants used to persist either the initial state action
 // or the restorative action in the kDeviceStateMode dictionary entry.
 extern const char kDeviceStateModeDisabled[];
+
+// String constants used to persist the assigned upgrade type in the
+// kDeviceStateAssignedUpgradeType dictionary entry.
+extern const char kDeviceStateAssignedUpgradeTypeChromeEnterprise[];
+extern const char kDeviceStateAssignedUpgradeTypeKiosk[];
 
 // Mode that a device needs to start in.
 enum DeviceStateMode {
@@ -50,6 +57,9 @@ enum DeviceStateMode {
   INITIAL_MODE_ENROLLMENT_ENFORCED = 5,
   // Enterprise initial enrollment is enforced and cannot be skipped.
   INITIAL_MODE_ENROLLMENT_ZERO_TOUCH = 6,
+  // Enterprise initial enrollment is enforced by presence of enrollment
+  // token, and cannot be skipped.
+  INITIAL_MODE_ENROLLMENT_TOKEN_ENROLLMENT = 7
 };
 
 // Parses the contents of the kDeviceStateMode dictionary entry and

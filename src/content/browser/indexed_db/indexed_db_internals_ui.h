@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,24 +10,20 @@
 #include <memory>
 #include <vector>
 
-#include "base/memory/ref_counted.h"
-#include "base/values.h"
+#include "base/files/file_path.h"
 #include "components/download/public/common/download_interrupt_reasons.h"
 #include "components/services/storage/privileged/mojom/indexed_db_control.mojom.h"
+#include "components/services/storage/public/cpp/buckets/bucket_id.h"
+#include "content/browser/indexed_db/indexed_db_internals.mojom.h"
 #include "content/public/browser/web_ui_controller.h"
-#include "content/public/browser/web_ui_message_handler.h"
 #include "content/public/browser/webui_config.h"
 #include "content/public/common/url_constants.h"
-
-namespace blink {
-class StorageKey;
-}
 
 namespace download {
 class DownloadItem;
 }
 
-namespace content {
+namespace content::indexed_db {
 
 class IndexedDBInternalsUI;
 
@@ -39,7 +35,8 @@ class IndexedDBInternalsUIConfig
 };
 
 // The implementation for the chrome://indexeddb-internals page.
-class IndexedDBInternalsUI : public WebUIController {
+class IndexedDBInternalsUI : public WebUIController,
+                             public storage::mojom::IdbInternalsHandler {
  public:
   explicit IndexedDBInternalsUI(WebUI* web_ui);
 
@@ -48,56 +45,48 @@ class IndexedDBInternalsUI : public WebUIController {
 
   ~IndexedDBInternalsUI() override;
 
+  void BindInterface(
+      mojo::PendingReceiver<storage::mojom::IdbInternalsHandler> receiver);
+
+  // WebUIController:
+  void WebUIRenderFrameCreated(RenderFrameHost* rfh) override;
+
+  // storage::mojom::IdbInternalsHandler:
+  void GetAllBucketsAcrossAllStorageKeys(
+      GetAllBucketsAcrossAllStorageKeysCallback callback) override;
+  void DownloadBucketData(storage::BucketId bucket_id,
+                          DownloadBucketDataCallback callback) override;
+  void ForceClose(storage::BucketId bucket_id,
+                  ForceCloseCallback callback) override;
+  void StartMetadataRecording(storage::BucketId bucket_id,
+                              StartMetadataRecordingCallback callback) override;
+  void StopMetadataRecording(storage::BucketId bucket_id,
+                             StopMetadataRecordingCallback callback) override;
+  void InspectClient(const storage::BucketClientInfo& client_info,
+                     InspectClientCallback callback) override;
+
  private:
-  base::WeakPtrFactory<IndexedDBInternalsUI> weak_factory_{this};
-};
-
-class IndexedDBInternalsHandler : public WebUIMessageHandler {
- public:
-  IndexedDBInternalsHandler();
-
-  IndexedDBInternalsHandler(const IndexedDBInternalsHandler&) = delete;
-  IndexedDBInternalsHandler& operator=(const IndexedDBInternalsHandler&) =
-      delete;
-
-  ~IndexedDBInternalsHandler() override;
-
-  // WebUIMessageHandler implementation.
-  void RegisterMessages() override;
-  void OnJavascriptDisallowed() override;
-
- private:
-  void GetAllBuckets(const base::Value::List& args);
-  void OnBucketsReady(const base::Value& storage_keys,
-                      const base::FilePath& path);
-
-  void DownloadBucketData(const base::Value::List& args);
-  void OnDownloadDataReady(const std::string& callback_id,
-                           uint64_t connection_count,
+  void OnDownloadDataReady(DownloadBucketDataCallback callback,
                            bool success,
                            const base::FilePath& temp_path,
                            const base::FilePath& zip_path);
   void OnDownloadStarted(const base::FilePath& temp_path,
-                         const std::string& callback_id,
-                         size_t connection_count,
+                         DownloadBucketDataCallback callback,
                          download::DownloadItem* item,
                          download::DownloadInterruptReason interrupt_reason);
 
-  void ForceCloseBucket(const base::Value::List& args);
-  void OnForcedClose(const std::string& callback_id, uint64_t connection_count);
+  storage::mojom::IndexedDBControl* GetBucketControl(
+      storage::BucketId bucket_id);
 
-  bool GetBucketControl(const base::FilePath& path,
-                        const blink::StorageKey& storage_key,
-                        storage::mojom::IndexedDBControl** control);
-  bool GetBucketData(const base::Value::List& args,
-                     std::string* callback_id,
-                     base::FilePath* path,
-                     blink::StorageKey* storage_key,
-                     storage::mojom::IndexedDBControl** control);
+  std::map<storage::BucketId, base::FilePath> bucket_to_partition_path_map_;
+  bool devtools_agent_hosts_created_ = false;
 
-  base::WeakPtrFactory<IndexedDBInternalsHandler> weak_factory_{this};
+  std::unique_ptr<mojo::Receiver<storage::mojom::IdbInternalsHandler>>
+      receiver_;
+  base::WeakPtrFactory<IndexedDBInternalsUI> weak_factory_{this};
+  WEB_UI_CONTROLLER_TYPE_DECL();
 };
 
-}  // namespace content
+}  // namespace content::indexed_db
 
 #endif  // CONTENT_BROWSER_INDEXED_DB_INDEXED_DB_INTERNALS_UI_H_

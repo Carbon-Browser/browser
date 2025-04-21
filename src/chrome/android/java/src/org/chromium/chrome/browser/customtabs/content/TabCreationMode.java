@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,14 @@ import org.chromium.chrome.browser.customtabs.CustomTabsConnection;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
-/**
- * Specifies the way the initial Tab in a Custom Tab activity was created.
- */
-@IntDef({TabCreationMode.NONE, TabCreationMode.DEFAULT, TabCreationMode.EARLY,
-        TabCreationMode.RESTORED, TabCreationMode.HIDDEN})
+/** Specifies the way the initial Tab in a Custom Tab activity was created. */
+@IntDef({
+    TabCreationMode.NONE,
+    TabCreationMode.DEFAULT,
+    TabCreationMode.EARLY,
+    TabCreationMode.RESTORED,
+    TabCreationMode.HIDDEN
+})
 @Retention(RetentionPolicy.SOURCE)
 public @interface TabCreationMode {
     /** The tab has not been created yet */
@@ -33,8 +36,6 @@ public @interface TabCreationMode {
      */
     int EARLY = 3;
 
-    /**
-     * A hidden tab that was created preemptively via {@link CustomTabsConnection#mayLaunchUrl}.
-     */
+    /** A hidden tab that was created preemptively via {@link CustomTabsConnection#mayLaunchUrl}. */
     int HIDDEN = 4;
 }

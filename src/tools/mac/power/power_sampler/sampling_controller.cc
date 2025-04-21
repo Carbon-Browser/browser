@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 
 #include "base/check.h"
 #include "base/containers/contains.h"
-#include "base/strings/string_piece.h"
 #include "base/time/time.h"
 #include "tools/mac/power/power_sampler/monitor.h"
 #include "tools/mac/power/power_sampler/sampler.h"
@@ -58,6 +57,10 @@ void SamplingController::StartSession() {
     monitor->OnStartSession(data_columns_units_);
 
   started_ = true;
+}
+
+bool SamplingController::HasSamplers() {
+  return !samplers_.empty();
 }
 
 bool SamplingController::OnSamplingEvent() {

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,7 @@ package org.chromium.chrome.browser.lens;
 
 import android.text.TextUtils;
 
-/**
- * A wrapper class for the Lens image query result from Lens Prime SDK.
- */
+/** A wrapper class for the Lens image query result from Lens Prime SDK. */
 public class LensQueryResult {
     private boolean mIsShoppyIntent;
     private boolean mIsTranslateIntent;
@@ -16,9 +14,7 @@ public class LensQueryResult {
     private String mSessionId;
     private int mQueryId;
 
-    /**
-     * Builder class for LensQueryParams.
-     */
+    /** Builder class for LensQueryParams. */
     public static class Builder {
         private boolean mIsShoppyIntent;
         private boolean mIsTranslateIntent;

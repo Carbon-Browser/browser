@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ bool StructTraits<network::mojom::IPAddressDataView, net::IPAddress>::Read(
     return false;
   }
 
-  *out = net::IPAddress(bytes.data(), bytes.size());
+  *out = net::IPAddress(bytes);
   return true;
 }
 

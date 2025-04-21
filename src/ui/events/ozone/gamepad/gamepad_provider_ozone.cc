@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 
 namespace ui {
 
-GamepadProviderOzone::GamepadProviderOzone() {}
+GamepadProviderOzone::GamepadProviderOzone() = default;
 
-GamepadProviderOzone::~GamepadProviderOzone() {}
+GamepadProviderOzone::~GamepadProviderOzone() = default;
 
 GamepadProviderOzone* GamepadProviderOzone::GetInstance() {
   // GamepadProviderOzone is not holding any important resource. It's best to be
@@ -24,15 +24,11 @@ GamepadProviderOzone* GamepadProviderOzone::GetInstance() {
 void GamepadProviderOzone::DispatchGamepadDevicesUpdated(
     std::vector<GamepadDevice> gamepad_devices) {
   gamepad_devices_.swap(gamepad_devices);
-  for (auto& observer : observers_) {
-    observer.OnGamepadDevicesUpdated();
-  }
+  observers_.Notify(&GamepadObserver::OnGamepadDevicesUpdated);
 }
 
 void GamepadProviderOzone::DispatchGamepadEvent(const GamepadEvent& event) {
-  for (auto& observer : observers_) {
-    observer.OnGamepadEvent(event);
-  }
+  observers_.Notify(&GamepadObserver::OnGamepadEvent, event);
 }
 
 void GamepadProviderOzone::AddGamepadObserver(GamepadObserver* observer) {

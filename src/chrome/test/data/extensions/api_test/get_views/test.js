@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ function popupCallback() {
   // We have now added a popup so the total count goes up one.
   assertEq(2, chrome.extension.getViews().length);
   assertEq(1, chrome.extension.getViews({windowId: popupWindowId}).length);
-  chrome.tabs.create({url: chrome.extension.getURL("options.html")},
+  chrome.tabs.create({url: chrome.runtime.getURL("options.html")},
                      function(tab) {
     optionsTabId = tab.id;
   });
@@ -69,7 +69,7 @@ var tests = [
 
       // TODO (catmullings): Fix potential race condition when/if
       // popupCallback() is called before popupWindowId is set below
-      chrome.windows.create({url: chrome.extension.getURL("popup.html"),
+      chrome.windows.create({url: chrome.runtime.getURL("popup.html"),
                              type: "popup"}, function(window) {
         assertTrue(window.id > 0);
         popupWindowId = window.id;

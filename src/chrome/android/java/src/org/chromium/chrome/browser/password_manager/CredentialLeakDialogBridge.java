@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,12 @@ import android.app.Activity;
 
 import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JniType;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.feedback.HelpAndFeedbackLauncherImpl;
 import org.chromium.chrome.browser.fullscreen.BrowserControlsManagerSupplier;
@@ -32,7 +35,8 @@ public class CredentialLeakDialogBridge {
         mWindowAndroid = windowAndroid;
 
         mCredentialLeakDialog =
-                new PasswordManagerDialogCoordinator(windowAndroid.getModalDialogManager(),
+                new PasswordManagerDialogCoordinator(
+                        windowAndroid.getModalDialogManager(),
                         windowAndroid.getActivity().get().findViewById(android.R.id.content),
                         BrowserControlsManagerSupplier.getValueOrNullFrom(windowAndroid));
     }
@@ -44,25 +48,24 @@ public class CredentialLeakDialogBridge {
     }
 
     @CalledByNative
-    public void showDialog(String credentialLeakTitle, String credentialLeakDetails,
-            boolean isChangeAutomaticallyAvailable, String positiveButton, String negativeButton) {
+    public void showDialog(
+            @JniType("std::u16string") String credentialLeakTitle,
+            @JniType("std::u16string") String credentialLeakDetails,
+            @JniType("std::u16string") String positiveButton,
+            @Nullable String negativeButton) {
         Activity activity = mWindowAndroid.getActivity().get();
         if (activity == null) return;
 
-        @DrawableRes
-        int headerDrawableId;
-        if (isChangeAutomaticallyAvailable) {
-            headerDrawableId = R.drawable.password_checkup_change_automatically;
-        } else {
-            headerDrawableId = PasswordManagerHelper.usesUnifiedPasswordManagerUI()
-                    ? R.drawable.password_check_header_red
-                    : R.drawable.password_checkup_warning;
-        };
+        @DrawableRes int headerDrawableId;
+        headerDrawableId = R.drawable.password_check_header_red;
 
-        PasswordManagerDialogContents contents = createDialogContents(credentialLeakTitle,
-                credentialLeakDetails, headerDrawableId, positiveButton,
-                isChangeAutomaticallyAvailable ? R.drawable.ic_autofill_assistant_white_24dp : 0,
-                negativeButton);
+        PasswordManagerDialogContents contents =
+                createDialogContents(
+                        credentialLeakTitle,
+                        credentialLeakDetails,
+                        headerDrawableId,
+                        positiveButton,
+                        negativeButton);
         contents.setPrimaryButtonFilled(negativeButton != null);
         contents.setHelpButtonCallback(this::showHelpArticle);
 
@@ -70,11 +73,18 @@ public class CredentialLeakDialogBridge {
         mCredentialLeakDialog.showDialog();
     }
 
-    private PasswordManagerDialogContents createDialogContents(String credentialLeakTitle,
-            String credentialLeakDetails, int illustrationId, String positiveButton,
-            int positiveButtonIconId, String negativeButton) {
-        return new PasswordManagerDialogContents(credentialLeakTitle, credentialLeakDetails,
-                illustrationId, positiveButton, positiveButtonIconId, negativeButton,
+    private PasswordManagerDialogContents createDialogContents(
+            String credentialLeakTitle,
+            String credentialLeakDetails,
+            int illustrationId,
+            String positiveButton,
+            String negativeButton) {
+        return new PasswordManagerDialogContents(
+                credentialLeakTitle,
+                credentialLeakDetails,
+                illustrationId,
+                positiveButton,
+                negativeButton,
                 this::onClick);
     }
 
@@ -88,16 +98,22 @@ public class CredentialLeakDialogBridge {
         if (mNativeCredentialLeakDialogViewAndroid == 0) return;
         switch (dismissalCause) {
             case DialogDismissalCause.POSITIVE_BUTTON_CLICKED:
-                CredentialLeakDialogBridgeJni.get().accepted(
-                        mNativeCredentialLeakDialogViewAndroid, CredentialLeakDialogBridge.this);
+                CredentialLeakDialogBridgeJni.get()
+                        .accepted(
+                                mNativeCredentialLeakDialogViewAndroid,
+                                CredentialLeakDialogBridge.this);
                 return;
             case DialogDismissalCause.NEGATIVE_BUTTON_CLICKED:
-                CredentialLeakDialogBridgeJni.get().cancelled(
-                        mNativeCredentialLeakDialogViewAndroid, CredentialLeakDialogBridge.this);
+                CredentialLeakDialogBridgeJni.get()
+                        .cancelled(
+                                mNativeCredentialLeakDialogViewAndroid,
+                                CredentialLeakDialogBridge.this);
                 return;
             default:
-                CredentialLeakDialogBridgeJni.get().closed(
-                        mNativeCredentialLeakDialogViewAndroid, CredentialLeakDialogBridge.this);
+                CredentialLeakDialogBridgeJni.get()
+                        .closed(
+                                mNativeCredentialLeakDialogViewAndroid,
+                                CredentialLeakDialogBridge.this);
         }
     }
 
@@ -108,17 +124,22 @@ public class CredentialLeakDialogBridge {
         Tab currentTab = TabModelSelectorSupplier.getCurrentTabFrom(mWindowAndroid);
         if (currentTab == null) return;
 
-        Profile profile = Profile.fromWebContents(currentTab.getWebContents());
-        HelpAndFeedbackLauncherImpl.getInstance().show(activity,
-                activity.getString(R.string.help_context_password_leak_detection), profile, null);
+        Profile profile = currentTab.getProfile();
+        HelpAndFeedbackLauncherImpl.getForProfile(profile)
+                .show(
+                        activity,
+                        activity.getString(R.string.help_context_password_leak_detection),
+                        null);
     }
 
     @NativeMethods
     interface Natives {
         void accepted(
                 long nativeCredentialLeakDialogViewAndroid, CredentialLeakDialogBridge caller);
+
         void cancelled(
                 long nativeCredentialLeakDialogViewAndroid, CredentialLeakDialogBridge caller);
+
         void closed(long nativeCredentialLeakDialogViewAndroid, CredentialLeakDialogBridge caller);
     }
 }

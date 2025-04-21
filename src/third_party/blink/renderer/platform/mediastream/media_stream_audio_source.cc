@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,15 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
+#include "media/base/audio_glitch_info.h"
+#include "third_party/blink/public/common/thread_safe_browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/modules/webrtc/webrtc_logging.h"
+#include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_audio_track.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_component.h"
@@ -74,26 +76,6 @@ MediaStreamAudioSource* MediaStreamAudioSource::From(
   return static_cast<MediaStreamAudioSource*>(source->GetPlatformSource());
 }
 
-bool MediaStreamAudioSource::ConnectToTrack(MediaStreamComponent* component) {
-  DCHECK(GetTaskRunner()->BelongsToCurrentThread());
-  DCHECK(component);
-
-  // Sanity-check that there is not already a MediaStreamAudioTrack instance
-  // associated with |component|.
-  if (MediaStreamAudioTrack::From(component)) {
-    LOG(DFATAL) << "Attempting to connect another source to a "
-                   "WebMediaStreamTrack/MediaStreamComponent.";
-    return false;
-  }
-
-  // Create and initialize a new MediaStreamAudioTrack and pass ownership of it
-  // to the MediaStreamComponent.
-  component->SetPlatformTrack(
-      CreateMediaStreamAudioTrack(component->Id().Utf8()));
-
-  return ConnectToInitializedTrack(component);
-}
-
 bool MediaStreamAudioSource::ConnectToInitializedTrack(
     MediaStreamComponent* component) {
   DCHECK(GetTaskRunner()->BelongsToCurrentThread());
@@ -120,13 +102,14 @@ bool MediaStreamAudioSource::ConnectToInitializedTrack(
   if (is_stopped_)
     return false;
 
-  track->Start(WTF::Bind(&MediaStreamAudioSource::StopAudioDeliveryTo,
-                         weak_factory_.GetWeakPtr(), WTF::Unretained(track)));
+  track->Start(WTF::BindOnce(&MediaStreamAudioSource::StopAudioDeliveryTo,
+                             weak_factory_.GetWeakPtr(),
+                             WTF::Unretained(track)));
   deliverer_.AddConsumer(track);
   LogMessage(
       base::StringPrintf("%s => (added new MediaStreamAudioTrack as consumer, "
-                         "total number of consumers=%d)",
-                         __func__, NumConsumers()));
+                         "total number of consumers=%zu)",
+                         __func__, NumTracks()));
   return true;
 }
 
@@ -145,7 +128,7 @@ void* MediaStreamAudioSource::GetClassIdentifier() const {
 
 bool MediaStreamAudioSource::HasSameReconfigurableSettings(
     const blink::AudioProcessingProperties& selected_properties) const {
-  absl::optional<blink::AudioProcessingProperties> configured_properties =
+  std::optional<blink::AudioProcessingProperties> configured_properties =
       GetAudioProcessingProperties();
   if (!configured_properties)
     return false;
@@ -159,9 +142,9 @@ bool MediaStreamAudioSource::HasSameNonReconfigurableSettings(
   if (!other_source)
     return false;
 
-  absl::optional<blink::AudioProcessingProperties> others_properties =
+  std::optional<blink::AudioProcessingProperties> others_properties =
       other_source->GetAudioProcessingProperties();
-  absl::optional<blink::AudioProcessingProperties> this_properties =
+  std::optional<blink::AudioProcessingProperties> this_properties =
       GetAudioProcessingProperties();
 
   if (!others_properties || !this_properties)
@@ -217,8 +200,9 @@ void MediaStreamAudioSource::SetFormat(const media::AudioParameters& params) {
 
 void MediaStreamAudioSource::DeliverDataToTracks(
     const media::AudioBus& audio_bus,
-    base::TimeTicks reference_time) {
-  deliverer_.OnData(audio_bus, reference_time);
+    base::TimeTicks reference_time,
+    const media::AudioGlitchInfo& glitch_info) {
+  deliverer_.OnData(audio_bus, reference_time, glitch_info);
 }
 
 void MediaStreamAudioSource::DoStopSource() {
@@ -233,8 +217,8 @@ void MediaStreamAudioSource::StopAudioDeliveryTo(MediaStreamAudioTrack* track) {
   const bool did_remove_last_track = deliverer_.RemoveConsumer(track);
   LogMessage(
       base::StringPrintf("%s => (removed MediaStreamAudioTrack as consumer, "
-                         "total number of consumers=%u)",
-                         __func__, NumConsumers()));
+                         "total number of consumers=%zu)",
+                         __func__, NumTracks()));
 
   // The W3C spec requires a source automatically stop when the last track is
   // stopped.
@@ -278,7 +262,7 @@ int MediaStreamAudioSource::NumPreferredChannels() const {
   return deliverer_.NumPreferredChannels();
 }
 
-int MediaStreamAudioSource::NumConsumers() const {
+size_t MediaStreamAudioSource::NumTracks() const {
   DCHECK(GetTaskRunner()->BelongsToCurrentThread());
   Vector<MediaStreamAudioTrack*> audio_tracks;
   deliverer_.GetConsumerList(&audio_tracks);

@@ -1,6 +1,11 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "remoting/base/compound_buffer.h"
 
@@ -10,12 +15,14 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/containers/heap_array.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "net/base/io_buffer.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 using net::IOBuffer;
+using net::IOBufferWithSize;
 
 namespace remoting {
 
@@ -36,7 +43,6 @@ const int kCropSizes[] = {1, -1};
 
 class CompoundBufferTest : public testing::Test {
  public:
-
   // Following 5 methods are used with IterateOverPieces().
   void Append(int pos, int size) {
     target_.Append(data_, data_->data() + pos, size);
@@ -64,21 +70,21 @@ class CompoundBufferTest : public testing::Test {
     CompoundBuffer cropped;
     cropped.CopyFrom(target_, 0, target_.total_bytes());
     cropped.CropFront(pos);
-    EXPECT_TRUE(CompareData(cropped, data_->data() + pos,
-                            target_.total_bytes() - pos));
+    EXPECT_TRUE(
+        CompareData(cropped, data_->data() + pos, target_.total_bytes() - pos));
   }
 
   void TestCropBack(int pos, int size) {
     CompoundBuffer cropped;
     cropped.CopyFrom(target_, 0, target_.total_bytes());
     cropped.CropBack(pos);
-    EXPECT_TRUE(CompareData(cropped, data_->data(),
-                            target_.total_bytes() - pos));
+    EXPECT_TRUE(
+        CompareData(cropped, data_->data(), target_.total_bytes() - pos));
   }
 
  protected:
   void SetUp() override {
-    data_ = base::MakeRefCounted<IOBuffer>(kDataSize);
+    data_ = base::MakeRefCounted<IOBufferWithSize>(kDataSize);
     for (int i = 0; i < kDataSize; ++i) {
       data_->data()[i] = i;
     }
@@ -96,8 +102,9 @@ class CompoundBufferTest : public testing::Test {
     while (pos < kDataSize) {
       int size = std::min(sizes[index], kDataSize - pos);
       ++index;
-      if (sizes[index] <= 0)
+      if (sizes[index] <= 0) {
         index = 0;
+      }
 
       function.Run(pos, size);
 
@@ -108,11 +115,12 @@ class CompoundBufferTest : public testing::Test {
   bool CompareData(const CompoundBuffer& buffer, char* data, int size) {
     scoped_refptr<IOBuffer> buffer_data = buffer.ToIOBufferWithSize();
     return buffer.total_bytes() == size &&
-        memcmp(buffer_data->data(), data, size) == 0;
+           memcmp(buffer_data->data(), data, size) == 0;
   }
 
   static size_t ReadFromInput(CompoundBufferInputStream* input,
-                              void* data, size_t size) {
+                              void* data,
+                              size_t size) {
     uint8_t* out = reinterpret_cast<uint8_t*>(data);
     int out_size = size;
 
@@ -142,10 +150,10 @@ class CompoundBufferTest : public testing::Test {
   static void ReadString(CompoundBufferInputStream* input,
                          const std::string& str) {
     SCOPED_TRACE(str);
-    std::unique_ptr<char[]> buffer(new char[str.size() + 1]);
+    auto buffer = base::HeapArray<char>::Uninit(str.size() + 1);
     buffer[str.size()] = '\0';
-    EXPECT_EQ(ReadFromInput(input, buffer.get(), str.size()), str.size());
-    EXPECT_STREQ(str.data(), buffer.get());
+    EXPECT_EQ(ReadFromInput(input, buffer.data(), str.size()), str.size());
+    EXPECT_STREQ(str.data(), buffer.data());
   }
 
   // Construct and prepare data in the |buffer|.
@@ -161,17 +169,20 @@ class CompoundBufferTest : public testing::Test {
     int segments = (kTestData.length() / 3) * 2;
     int remaining_chars = kTestData.length() % 3;
     if (remaining_chars) {
-      if (remaining_chars == 1)
+      if (remaining_chars == 1) {
         ++segments;
-      else
+      } else {
         segments += 2;
+      }
     }
 
     CompoundBuffer* result = new CompoundBuffer();
     const char* data = kTestData.data();
     for (int i = 0; i < segments; ++i) {
-      int size = i % 2 == 0 ? 1 : 2;
-      result->Append(base::MakeRefCounted<net::WrappedIOBuffer>(data), size);
+      size_t size = i % 2 == 0 ? 1 : 2;
+      result->Append(
+          base::MakeRefCounted<net::WrappedIOBuffer>(base::span(data, size)),
+          size);
       data += size;
     }
     result->Lock();

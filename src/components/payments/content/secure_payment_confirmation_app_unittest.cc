@@ -1,20 +1,26 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/payments/content/secure_payment_confirmation_app.h"
 
+#include <cstdint>
+#include <map>
 #include <memory>
+#include <optional>
 #include <utility>
+#include <vector>
 
 #include "base/base64.h"
 #include "base/memory/raw_ptr.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/gmock_callback_support.h"
 #include "base/test/scoped_feature_list.h"
+#include "components/payments/content/browser_binding/fake_browser_bound_key.h"
+#include "components/payments/content/browser_binding/fake_browser_bound_key_store.h"
 #include "components/payments/content/payment_request_spec.h"
 #include "components/payments/core/method_strings.h"
-#include "components/webauthn/core/browser/internal_authenticator.h"
+#include "components/webauthn/core/browser/mock_internal_authenticator.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_features.h"
 #include "content/public/test/browser_task_environment.h"
@@ -23,6 +29,7 @@
 #include "content/public/test/test_web_contents_factory.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/payments/payment_request.mojom.h"
 #include "third_party/blink/public/mojom/webauthn/authenticator.mojom.h"
 #include "url/origin.h"
@@ -30,63 +37,24 @@
 namespace payments {
 namespace {
 
+using ::base::test::RunOnceCallback;
 using ::testing::_;
+using ::testing::ElementsAre;
+using ::testing::ElementsAreArray;
 using ::testing::Eq;
+using ::testing::Field;
+using ::testing::Optional;
+using ::testing::Property;
 
 static constexpr char kChallengeBase64[] = "aaaa";
 static constexpr char kCredentialIdBase64[] = "cccc";
 
-class MockAuthenticator : public webauthn::InternalAuthenticator {
- public:
-  explicit MockAuthenticator(bool should_succeed)
-      : web_contents_(web_contents_factory_.CreateWebContents(&context_)),
-        should_succeed_(should_succeed) {}
-  ~MockAuthenticator() override = default;
-
-  MOCK_METHOD1(SetEffectiveOrigin, void(const url::Origin&));
-  MOCK_METHOD1(SetPaymentOptions, void(blink::mojom::PaymentOptionsPtr));
-  MOCK_METHOD2(
-      MakeCredential,
-      void(blink::mojom::PublicKeyCredentialCreationOptionsPtr options,
-           blink::mojom::Authenticator::MakeCredentialCallback callback));
-  MOCK_METHOD1(IsUserVerifyingPlatformAuthenticatorAvailable,
-               void(blink::mojom::Authenticator::
-                        IsUserVerifyingPlatformAuthenticatorAvailableCallback));
-  MOCK_METHOD0(Cancel, void());
-  MOCK_METHOD1(VerifyChallenge, void(const std::vector<uint8_t>&));
-
-  content::RenderFrameHost* GetRenderFrameHost() override {
-    return web_contents_->GetPrimaryMainFrame();
-  }
-
-  // Implements an webauthn::InternalAuthenticator method to delegate fields of
-  // |options| to gmock methods for easier verification.
-  void GetAssertion(
-      blink::mojom::PublicKeyCredentialRequestOptionsPtr options,
-      blink::mojom::Authenticator::GetAssertionCallback callback) override {
-    VerifyChallenge(options->challenge);
-    std::move(callback).Run(
-        should_succeed_ ? blink::mojom::AuthenticatorStatus::SUCCESS
-                        : blink::mojom::AuthenticatorStatus::NOT_ALLOWED_ERROR,
-        blink::mojom::GetAssertionAuthenticatorResponse::New(),
-        /*dom_exception_details=*/nullptr);
-  }
-
-  content::WebContents* web_contents() { return web_contents_; }
-
- private:
-  content::BrowserTaskEnvironment task_environment_;
-  content::TestBrowserContext context_;
-  content::TestWebContentsFactory web_contents_factory_;
-  raw_ptr<content::WebContents>
-      web_contents_;  // Owned by `web_contents_factory_`.
-  bool should_succeed_;
-};
-
 class SecurePaymentConfirmationAppTest : public testing::Test,
                                          public PaymentApp::Delegate {
  protected:
-  SecurePaymentConfirmationAppTest() : label_(u"test instrument") {
+  SecurePaymentConfirmationAppTest()
+      : payment_instrument_label_(u"test instrument"),
+        web_contents_(web_contents_factory_.CreateWebContents(&context_)) {
     mojom::PaymentDetailsPtr details = mojom::PaymentDetails::New();
     details->total = mojom::PaymentItem::New();
     details->total->amount = mojom::PaymentCurrencyAmount::New();
@@ -108,6 +76,12 @@ class SecurePaymentConfirmationAppTest : public testing::Test,
     request->challenge =
         std::vector<uint8_t>(challenge_bytes_.begin(), challenge_bytes_.end());
     return request;
+  }
+
+  std::unique_ptr<BrowserBoundKeyStore> MakeFakeBrowserBoundKeyStore() {
+    FakeBrowserBoundKeyStore* key_store = new FakeBrowserBoundKeyStore();
+    browser_bound_key_store_ = key_store->GetWeakPtr();
+    return base::WrapUnique(static_cast<BrowserBoundKeyStore*>(key_store));
   }
 
   // PaymentApp::Delegate:
@@ -133,12 +107,18 @@ class SecurePaymentConfirmationAppTest : public testing::Test,
     on_instrument_details_error_called_ = true;
   }
 
-  std::u16string label_;
+  std::u16string payment_instrument_label_;
   std::unique_ptr<PaymentRequestSpec> spec_;
   std::string challenge_bytes_;
   std::string credential_id_bytes_;
   bool on_instrument_details_ready_called_ = false;
   bool on_instrument_details_error_called_ = false;
+
+  base::WeakPtr<FakeBrowserBoundKeyStore> browser_bound_key_store_;
+  content::BrowserTaskEnvironment task_environment_;
+  content::TestBrowserContext context_;
+  content::TestWebContentsFactory web_contents_factory_;
+  raw_ptr<content::WebContents> web_contents_;
 
   base::WeakPtrFactory<SecurePaymentConfirmationAppTest> weak_ptr_factory_{
       this};
@@ -149,24 +129,105 @@ TEST_F(SecurePaymentConfirmationAppTest, Smoke) {
                                      credential_id_bytes_.end());
 
   auto authenticator =
-      std::make_unique<MockAuthenticator>(/*should_succeed=*/true);
-  MockAuthenticator* mock_authenticator = authenticator.get();
-  content::WebContents* web_contents = authenticator->web_contents();
+      std::make_unique<webauthn::MockInternalAuthenticator>(web_contents_);
+  webauthn::MockInternalAuthenticator* mock_authenticator = authenticator.get();
 
   SecurePaymentConfirmationApp app(
-      web_contents, "effective_rp.example",
-      /*Icon=*/std::make_unique<SkBitmap>(), label_, std::move(credential_id),
+      web_contents_, "effective_rp.example", payment_instrument_label_,
+      /*payment_instrument_icon=*/std::make_unique<SkBitmap>(),
+      std::move(credential_id),
+      /*browser_bound_key_id=*/std::nullopt,
       url::Origin::Create(GURL("https://merchant.example")), spec_->AsWeakPtr(),
-      MakeRequest(), std::move(authenticator));
+      MakeRequest(), std::move(authenticator),
+      /*network_label=*/u"", /*network_icon=*/SkBitmap(),
+      /*issuer_label=*/u"", /*issuer_icon=*/SkBitmap());
 
   std::vector<uint8_t> expected_bytes =
       std::vector<uint8_t>(challenge_bytes_.begin(), challenge_bytes_.end());
 
-  EXPECT_CALL(*mock_authenticator, VerifyChallenge(Eq(expected_bytes)));
+  EXPECT_CALL(*mock_authenticator, GetAssertion(_, _))
+      .WillOnce(
+          [&expected_bytes](
+              blink::mojom::PublicKeyCredentialRequestOptionsPtr options,
+              blink::mojom::Authenticator::GetAssertionCallback callback) {
+            EXPECT_EQ(options->challenge, expected_bytes);
+            auto struct_ptr_is_not_null = Property(
+                &mojo::StructPtr<
+                    blink::mojom::AuthenticationExtensionsClientInputs>::
+                    is_null,
+                false);
+            EXPECT_THAT(options->extensions, struct_ptr_is_not_null);
+            std::move(callback).Run(
+                blink::mojom::AuthenticatorStatus::SUCCESS,
+                blink::mojom::GetAssertionAuthenticatorResponse::New(),
+                /*dom_exception_details=*/nullptr);
+          });
   app.InvokePaymentApp(/*delegate=*/weak_ptr_factory_.GetWeakPtr());
   EXPECT_TRUE(on_instrument_details_ready_called_);
   EXPECT_FALSE(on_instrument_details_error_called_);
 }
+
+#if BUILDFLAG(IS_ANDROID)
+TEST_F(SecurePaymentConfirmationAppTest, AddsBrowserBoundKeyAndSignature) {
+  base::test::ScopedFeatureList features(
+      blink::features::kSecurePaymentConfirmationBrowserBoundKeys);
+  auto authenticator =
+      std::make_unique<webauthn::MockInternalAuthenticator>(web_contents_);
+  webauthn::MockInternalAuthenticator* mock_authenticator = authenticator.get();
+  std::vector<uint8_t> credential_id(credential_id_bytes_.begin(),
+                                     credential_id_bytes_.end());
+  const std::vector<uint8_t> client_data_json({0x01, 0x02, 0x03, 0x04});
+  const std::vector<uint8_t> public_key_as_cose_key({0x05, 0x06, 0x07, 0x08});
+  const std::vector<uint8_t> signature({0x09, 0x0a, 0x0b, 0x0c});
+  const std::vector<uint8_t> browser_bound_key_id({0x0d, 0x0e, 0x0f, 0x10});
+  FakeBrowserBoundKey browser_bound_key(public_key_as_cose_key, signature,
+                                        client_data_json);
+  SecurePaymentConfirmationApp app(
+      web_contents_, "effective_rp.example", payment_instrument_label_,
+      /*payment_instrument_icon=*/std::make_unique<SkBitmap>(), credential_id,
+      browser_bound_key_id,
+      url::Origin::Create(GURL("https://merchant.example")), spec_->AsWeakPtr(),
+      MakeRequest(), std::move(authenticator),
+      /*network_label=*/u"", /*network_icon=*/SkBitmap(),
+      /*issuer_label=*/u"", /*issuer_icon=*/SkBitmap());
+  app.SetBrowserBoundKeyStoreForTesting(MakeFakeBrowserBoundKeyStore());
+  browser_bound_key_store_->PutFakeKey(browser_bound_key_id, browser_bound_key);
+
+  EXPECT_CALL(*mock_authenticator,
+              SetPaymentOptions(Pointee(
+                  Field("browser_bound_public_key",
+                        &blink::mojom::PaymentOptions::browser_bound_public_key,
+                        Optional(ElementsAreArray(public_key_as_cose_key))))));
+  EXPECT_CALL(*mock_authenticator, GetAssertion(_, _))
+      .WillOnce(
+          [client_data_json](
+              blink::mojom::PublicKeyCredentialRequestOptionsPtr options,
+              blink::mojom::Authenticator::GetAssertionCallback callback) {
+            auto authenticator_response =
+                blink::mojom::GetAssertionAuthenticatorResponse::New();
+            authenticator_response->info =
+                blink::mojom::CommonCredentialInfo::New();
+            authenticator_response->info->client_data_json = client_data_json;
+            authenticator_response->extensions =
+                blink::mojom::AuthenticationExtensionsClientOutputs::New();
+            std::move(callback).Run(blink::mojom::AuthenticatorStatus::SUCCESS,
+                                    std::move(authenticator_response),
+                                    /*dom_exception_details=*/nullptr);
+          });
+  app.InvokePaymentApp(/*delegate=*/weak_ptr_factory_.GetWeakPtr());
+  ASSERT_TRUE(on_instrument_details_ready_called_);
+  mojom::PaymentResponsePtr payment_response =
+      app.SetAppSpecificResponseFields(mojom::PaymentResponse::New());
+
+  EXPECT_THAT(
+      payment_response->get_assertion_authenticator_response->extensions
+          ->payment,
+      Pointee(Field("browser_bound_signatures",
+                    &blink::mojom::AuthenticationExtensionsPaymentResponse::
+                        browser_bound_signatures,
+                    ElementsAre(ElementsAreArray(signature)))));
+}
+#endif  // BUILDFLAG(IS_ANDROID)
 
 // Test that OnInstrumentDetailsError is called when the authenticator returns
 // an error.
@@ -175,15 +236,24 @@ TEST_F(SecurePaymentConfirmationAppTest, OnInstrumentDetailsError) {
                                      credential_id_bytes_.end());
 
   auto authenticator =
-      std::make_unique<MockAuthenticator>(/*should_succeed=*/false);
-  content::WebContents* web_contents = authenticator->web_contents();
+      std::make_unique<webauthn::MockInternalAuthenticator>(web_contents_);
+  webauthn::MockInternalAuthenticator* mock_authenticator = authenticator.get();
 
   SecurePaymentConfirmationApp app(
-      web_contents, "effective_rp.example",
-      /*Icon=*/std::make_unique<SkBitmap>(), label_, std::move(credential_id),
+      web_contents_, "effective_rp.example", payment_instrument_label_,
+      /*payment_instrument_icon=*/std::make_unique<SkBitmap>(),
+      std::move(credential_id),
+      /*browser_bound_key_id=*/std::nullopt,
       url::Origin::Create(GURL("https://merchant.example")), spec_->AsWeakPtr(),
-      MakeRequest(), std::move(authenticator));
+      MakeRequest(), std::move(authenticator),
+      /*network_label=*/u"", /*network_icon=*/SkBitmap(),
+      /*issuer_label=*/u"", /*issuer_icon=*/SkBitmap());
 
+  EXPECT_CALL(*mock_authenticator, GetAssertion(_, _))
+      .WillOnce(RunOnceCallback<1>(
+          blink::mojom::AuthenticatorStatus::NOT_ALLOWED_ERROR,
+          blink::mojom::GetAssertionAuthenticatorResponse::New(),
+          /*dom_exception_details=*/nullptr));
   app.InvokePaymentApp(/*delegate=*/weak_ptr_factory_.GetWeakPtr());
   EXPECT_FALSE(on_instrument_details_ready_called_);
   EXPECT_TRUE(on_instrument_details_error_called_);

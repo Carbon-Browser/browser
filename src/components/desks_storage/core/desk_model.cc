@@ -1,17 +1,19 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/desks_storage/core/desk_model.h"
 
+#include <string_view>
+
 #include "ash/public/cpp/desk_template.h"
-#include "base/guid.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
+#include "base/uuid.h"
 #include "components/desks_storage/core/desk_model_observer.h"
 #include "components/desks_storage/core/desk_template_conversion.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace desks_storage {
 
@@ -32,6 +34,20 @@ DeskModel::GetTemplateJsonStatus ConvertGetEntryStatusToTemplateJsonStatus(
 
 }  // namespace
 
+DeskModel::GetAllEntriesResult::GetAllEntriesResult(
+    GetAllEntriesStatus status,
+    std::vector<raw_ptr<const ash::DeskTemplate, VectorExperimental>> entries)
+    : status(status), entries(std::move(entries)) {}
+DeskModel::GetAllEntriesResult::GetAllEntriesResult(
+    GetAllEntriesResult& other) = default;
+DeskModel::GetAllEntriesResult::~GetAllEntriesResult() = default;
+
+DeskModel::GetEntryByUuidResult::GetEntryByUuidResult(
+    GetEntryByUuidStatus status,
+    std::unique_ptr<ash::DeskTemplate> entry)
+    : status(status), entry(std::move(entry)) {}
+DeskModel::GetEntryByUuidResult::~GetEntryByUuidResult() = default;
+
 DeskModel::DeskModel() = default;
 
 DeskModel::~DeskModel() {
@@ -48,19 +64,18 @@ void DeskModel::RemoveObserver(DeskModelObserver* observer) {
   observers_.RemoveObserver(observer);
 }
 
-void DeskModel::GetTemplateJson(const std::string& uuid,
+void DeskModel::GetTemplateJson(const base::Uuid& uuid,
                                 apps::AppRegistryCache* app_cache,
                                 GetTemplateJsonCallback callback) {
-  GetEntryByUUID(
-      uuid,
-      base::BindOnce(&DeskModel::HandleTemplateConversionToPolicyJson,
-                     base::Unretained(this), std::move(callback), app_cache));
+  auto result = GetEntryByUUID(uuid);
+  HandleTemplateConversionToPolicyJson(std::move(callback), app_cache,
+                                       result.status, std::move(result.entry));
 }
 
 void DeskModel::SetPolicyDeskTemplates(const std::string& policy_json) {
   policy_entries_.clear();
 
-  base::StringPiece raw_json = base::StringPiece(policy_json);
+  std::string_view raw_json = std::string_view(policy_json);
   auto parsed_list = base::JSONReader::ReadAndReturnValueWithError(raw_json);
   if (!parsed_list.has_value())
     return;
@@ -70,12 +85,11 @@ void DeskModel::SetPolicyDeskTemplates(const std::string& policy_json) {
     return;
   }
 
-  for (auto& desk_template : parsed_list->GetListDeprecated()) {
-    std::unique_ptr<ash::DeskTemplate> dt =
-        desk_template_conversion::ParseDeskTemplateFromSource(
-            desk_template, ash::DeskTemplateSource::kPolicy);
-    if (dt) {
-      policy_entries_.push_back(std::move(dt));
+  for (auto& desk_template : parsed_list->GetList()) {
+    auto dt = desk_template_conversion::ParseDeskTemplateFromBaseValue(
+        desk_template, ash::DeskTemplateSource::kPolicy);
+    if (dt.has_value()) {
+      policy_entries_.push_back(std::move(dt.value()));
     } else {
       LOG(WARNING) << "Failed to parse admin template from JSON: "
                    << desk_template;
@@ -88,9 +102,7 @@ void DeskModel::RemovePolicyDeskTemplates() {
 }
 
 std::unique_ptr<ash::DeskTemplate> DeskModel::GetAdminDeskTemplateByUUID(
-    const std::string& uuid_str) const {
-  const base::GUID uuid = base::GUID::ParseCaseInsensitive(uuid_str);
-
+    const base::Uuid& uuid) const {
   for (const std::unique_ptr<ash::DeskTemplate>& policy_entry :
        policy_entries_) {
     if (policy_entry->uuid() == uuid)
@@ -107,22 +119,17 @@ void DeskModel::HandleTemplateConversionToPolicyJson(
     std::unique_ptr<ash::DeskTemplate> entry) {
   if (status != GetEntryByUuidStatus::kOk) {
     std::move(callback).Run(ConvertGetEntryStatusToTemplateJsonStatus(status),
-                            "");
+                            {});
     return;
   }
 
-  std::string raw_json;
-  base::Value template_list(base::Value::Type::LIST);
-  template_list.Append(desk_template_conversion::SerializeDeskTemplateAsPolicy(
-      entry.get(), app_cache));
+  base::Value::List template_list;
+  template_list.Append(
+      desk_template_conversion::SerializeDeskTemplateAsBaseValue(entry.get(),
+                                                                 app_cache));
 
-  const bool conversion_success =
-      base::JSONWriter::Write(template_list, &raw_json);
-
-  if (conversion_success)
-    std::move(callback).Run(GetTemplateJsonStatus::kOk, raw_json);
-  else
-    std::move(callback).Run(GetTemplateJsonStatus::kFailure, "");
+  std::move(callback).Run(GetTemplateJsonStatus::kOk,
+                          base::Value(std::move(template_list)));
 }
 
 }  // namespace desks_storage

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,8 +19,8 @@ ChromeExtensionOptionsGuestDelegate::ChromeExtensionOptionsGuestDelegate(
     : ExtensionOptionsGuestDelegate(guest) {
 }
 
-ChromeExtensionOptionsGuestDelegate::~ChromeExtensionOptionsGuestDelegate() {
-}
+ChromeExtensionOptionsGuestDelegate::~ChromeExtensionOptionsGuestDelegate() =
+    default;
 
 bool ChromeExtensionOptionsGuestDelegate::HandleContextMenu(
     content::RenderFrameHost& render_frame_host,
@@ -40,10 +40,12 @@ bool ChromeExtensionOptionsGuestDelegate::HandleContextMenu(
 }
 
 content::WebContents* ChromeExtensionOptionsGuestDelegate::OpenURLInNewTab(
-    const content::OpenURLParams& params) {
-  Browser* browser = chrome::FindBrowserWithWebContents(
+    const content::OpenURLParams& params,
+    base::OnceCallback<void(content::NavigationHandle&)>
+        navigation_handle_callback) {
+  Browser* browser = chrome::FindBrowserWithTab(
       extension_options_guest()->embedder_web_contents());
-  return browser->OpenURL(params);
+  return browser->OpenURL(params, std::move(navigation_handle_callback));
 }
 
 }  // namespace extensions

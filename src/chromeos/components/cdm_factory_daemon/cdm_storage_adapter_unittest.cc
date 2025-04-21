@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -67,6 +67,7 @@ class MockFrameInterfaceFactory : public media::mojom::FrameInterfaceFactory {
   MOCK_METHOD(void, CreateCdmStorage, (mojo::PendingReceiver<BrowserStorage>));
   MOCK_METHOD(bool, GetCdmOrigin, (url::Origin*));
   MOCK_METHOD(void, GetCdmOrigin, (GetCdmOriginCallback));
+  MOCK_METHOD(void, GetPageUkmSourceId, (GetPageUkmSourceIdCallback callback));
   MOCK_METHOD(void, BindEmbedderReceiver, (mojo::GenericPendingReceiver));
 };
 

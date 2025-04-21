@@ -24,7 +24,8 @@
 # TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-import six
+
+import textwrap
 
 from blinkpy.common.host_mock import MockHost
 from blinkpy.common.path_finder import RELATIVE_WEB_TESTS
@@ -35,7 +36,7 @@ from blinkpy.w3c.test_copier import TestCopier
 
 MOCK_WEB_TESTS = '/mock-checkout/' + RELATIVE_WEB_TESTS
 
-FAKE_SOURCE_REPO_DIR = '/blink'
+FAKE_SOURCE_REPO_DIR = '/blink/w3c'
 
 FAKE_FILES = {
     MOCK_WEB_TESTS + 'external/OWNERS': b'',
@@ -62,41 +63,39 @@ class TestCopierTest(LoggingTestCase):
         host = MockHost()
         host.filesystem = MockFileSystem(files=FAKE_FILES)
         copier = TestCopier(host, FAKE_SOURCE_REPO_DIR)
-        copier.find_importable_tests()
-        self.assertEqual(copier.import_list, [{
-            'copy_list': [{
-                'dest': 'run.bat',
-                'src': '/blink/w3c/dir/run.bat'
-            }, {
-                'dest': 'has_shebang.txt',
-                'src': '/blink/w3c/dir/has_shebang.txt'
-            }, {
-                'dest': 'README.txt',
-                'src': '/blink/w3c/dir/README.txt'
-            }],
-            'dirname':
-            '/blink/w3c/dir',
-        }])
+        copy_by_dir = copier.find_importable_tests()
+        self.assertEqual(
+            copy_by_dir, {
+                '/blink/w3c/dir': [{
+                    'dest': 'run.bat',
+                    'src': '/blink/w3c/dir/run.bat'
+                }, {
+                    'dest': 'has_shebang.txt',
+                    'src': '/blink/w3c/dir/has_shebang.txt'
+                }, {
+                    'dest': 'README.txt',
+                    'src': '/blink/w3c/dir/README.txt'
+                }],
+            })
 
     def test_does_not_import_reftestlist_file(self):
         host = MockHost()
         host.filesystem = MockFileSystem(files=FAKE_FILES)
         copier = TestCopier(host, FAKE_SOURCE_REPO_DIR)
-        copier.find_importable_tests()
-        self.assertEqual(copier.import_list, [{
-            'copy_list': [{
-                'dest': 'run.bat',
-                'src': '/blink/w3c/dir/run.bat'
-            }, {
-                'dest': 'has_shebang.txt',
-                'src': '/blink/w3c/dir/has_shebang.txt'
-            }, {
-                'dest': 'README.txt',
-                'src': '/blink/w3c/dir/README.txt'
-            }],
-            'dirname':
-            '/blink/w3c/dir',
-        }])
+        copy_by_dir = copier.find_importable_tests()
+        self.assertEqual(
+            copy_by_dir, {
+                '/blink/w3c/dir': [{
+                    'dest': 'run.bat',
+                    'src': '/blink/w3c/dir/run.bat'
+                }, {
+                    'dest': 'has_shebang.txt',
+                    'src': '/blink/w3c/dir/has_shebang.txt'
+                }, {
+                    'dest': 'README.txt',
+                    'src': '/blink/w3c/dir/README.txt'
+                }],
+            })
 
     def test_executable_files(self):
         # Files with shebangs or .bat files need to be made executable.
@@ -106,8 +105,8 @@ class TestCopierTest(LoggingTestCase):
         copier.do_import()
         self.assertEqual(
             host.filesystem.executable_files, {
-                MOCK_WEB_TESTS + 'external/blink/w3c/dir/run.bat',
-                MOCK_WEB_TESTS + 'external/blink/w3c/dir/has_shebang.txt'
+                MOCK_WEB_TESTS + 'external/w3c/dir/run.bat',
+                MOCK_WEB_TESTS + 'external/w3c/dir/has_shebang.txt'
             })
 
     def test_ref_test_with_ref_is_copied(self):
@@ -122,27 +121,35 @@ class TestCopierTest(LoggingTestCase):
                 b'',
             })
         copier = TestCopier(host, FAKE_SOURCE_REPO_DIR)
-        copier.find_importable_tests()
-        self.assertEqual(len(copier.import_list), 1)
+        copy_by_dir = copier.find_importable_tests()
+        self.assertEqual(len(copy_by_dir), 1)
         # The order of copy_list depends on the implementation of
         # filesystem.walk, so don't check the order
-        if six.PY3:
-            self.assertCountEqual(copier.import_list[0]['copy_list'],
-                                  [{
-                                      'src': '/blink/w3c/dir1/ref-file.html',
-                                      'dest': 'ref-file.html'
-                                  }, {
-                                      'src': '/blink/w3c/dir1/my-ref-test.html',
-                                      'dest': 'my-ref-test.html'
-                                  }])
-        else:
-            self.assertItemsEqual(copier.import_list[0]['copy_list'],
-                                  [{
-                                      'src': '/blink/w3c/dir1/ref-file.html',
-                                      'dest': 'ref-file.html'
-                                  }, {
-                                      'src': '/blink/w3c/dir1/my-ref-test.html',
-                                      'dest': 'my-ref-test.html'
-                                  }])
-        self.assertEqual(copier.import_list[0]['dirname'],
-                         '/blink/w3c/dir1')
+        self.assertCountEqual(copy_by_dir['/blink/w3c/dir1'],
+                              [{
+                                  'src': '/blink/w3c/dir1/ref-file.html',
+                                  'dest': 'ref-file.html'
+                              }, {
+                                  'src': '/blink/w3c/dir1/my-ref-test.html',
+                                  'dest': 'my-ref-test.html'
+                              }])
+
+    def test_skip_dir_but_copy_child_file(self):
+        host = MockHost()
+        host.filesystem = MockFileSystem(files=FAKE_FILES)
+        host.filesystem.write_text_file(
+            MOCK_WEB_TESTS + 'W3CImportExpectations',
+            textwrap.dedent("""\
+                # results: [ Pass Skip ]
+                external/w3c/dir [ Skip ]
+                external/w3c/dir/run.bat [ Pass ]
+                """))
+        copier = TestCopier(host, FAKE_SOURCE_REPO_DIR)
+        copy_by_dir = copier.find_importable_tests()
+        self.assertEqual(
+            copy_by_dir, {
+                '/blink/w3c/dir': [{
+                    'dest': 'run.bat',
+                    'src': '/blink/w3c/dir/run.bat',
+                }],
+            })

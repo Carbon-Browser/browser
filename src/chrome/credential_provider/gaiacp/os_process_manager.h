@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -58,7 +58,7 @@ class [[clang::lto_visibility_public]] OSProcessManager {
   static void SetInstanceForTesting(OSProcessManager* instance);
 
  protected:
-  OSProcessManager() {}
+  OSProcessManager() = default;
 
   // Returns the storage used for the instance pointer.
   static OSProcessManager** GetInstanceStorage();

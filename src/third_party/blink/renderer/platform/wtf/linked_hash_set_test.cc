@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,7 @@ TEST(LinkedHashSetTest, CopyConstructAndAssignInt) {
   int counter3 = 0;
   Set set1;
   EXPECT_EQ(set1.size(), 0u);
-  EXPECT_TRUE(set1.IsEmpty());
+  EXPECT_TRUE(set1.empty());
   set1.insert(ValueInstanceCount<int>(&counter1, 1));
   set1.insert(ValueInstanceCount<int>(&counter2, 2));
   set1.insert(ValueInstanceCount<int>(&counter3, 3));
@@ -62,7 +62,7 @@ TEST(LinkedHashSetTest, CopyConstructAndAssignIntPtr) {
   using Set = LinkedHashSet<int*>;
   Set set1;
   EXPECT_EQ(set1.size(), 0u);
-  EXPECT_TRUE(set1.IsEmpty());
+  EXPECT_TRUE(set1.empty());
   std::unique_ptr<int> int1 = std::make_unique<int>(1);
   std::unique_ptr<int> int2 = std::make_unique<int>(2);
   std::unique_ptr<int> int3 = std::make_unique<int>(3);
@@ -108,7 +108,7 @@ TEST(LinkedHashSetTest, CopyConstructAndAssignString) {
   using Set = LinkedHashSet<String>;
   Set set1;
   EXPECT_EQ(set1.size(), 0u);
-  EXPECT_TRUE(set1.IsEmpty());
+  EXPECT_TRUE(set1.empty());
   set1.insert("1");
   set1.insert("2");
   set1.insert("3");
@@ -156,7 +156,7 @@ TEST(LinkedHashSetTest, MoveConstructAndAssignInt) {
   int counter3 = 0;
   Set set1;
   EXPECT_EQ(set1.size(), 0u);
-  EXPECT_TRUE(set1.IsEmpty());
+  EXPECT_TRUE(set1.empty());
   set1.insert(ValueInstanceCount<int>(&counter1, 1));
   set1.insert(ValueInstanceCount<int>(&counter2, 2));
   set1.insert(ValueInstanceCount<int>(&counter3, 3));
@@ -193,7 +193,7 @@ TEST(LinkedHashSetTest, MoveConstructAndAssignString) {
   int counter3 = 0;
   Set set1;
   EXPECT_EQ(set1.size(), 0u);
-  EXPECT_TRUE(set1.IsEmpty());
+  EXPECT_TRUE(set1.empty());
   set1.insert(ValueInstanceCount<String>(&counter1, "1"));
   set1.insert(ValueInstanceCount<String>(&counter2, "2"));
   set1.insert(ValueInstanceCount<String>(&counter3, "3"));
@@ -223,26 +223,248 @@ TEST(LinkedHashSetTest, MoveConstructAndAssignString) {
   EXPECT_EQ(counter3, 4);
 }
 
-struct CustomHashTraitsForInt : public HashTraits<int> {
-  static const bool kEmptyValueIsZero = false;
-  static int EmptyValue() { return INT_MAX; }
+struct CustomHashTraitsForInt : public IntHashTraits<int, INT_MAX, INT_MIN> {};
 
-  static void ConstructDeletedValue(int& slot, bool) { slot = INT_MIN; }
-  static bool IsDeletedValue(const int& value) { return value == INT_MIN; }
-};
-
-TEST(LinkedHashSetTest, Iterator) {
+TEST(LinkedHashSetTest, BeginEnd) {
   using Set = LinkedHashSet<int, CustomHashTraitsForInt>;
   Set set;
-  EXPECT_TRUE(set.begin() == set.end());
-  EXPECT_TRUE(set.rbegin() == set.rend());
+  EXPECT_EQ(set.begin(), set.end());
+  EXPECT_EQ(set.rbegin(), set.rend());
+
+  set.insert(1);
+  EXPECT_EQ(*set.begin(), 1);
+  EXPECT_NE(set.begin(), set.end());
+  EXPECT_EQ(*set.rbegin(), 1);
+  EXPECT_NE(set.rbegin(), set.rend());
+
+  set.insert(2);
+  EXPECT_EQ(*set.begin(), 1);
+  EXPECT_NE(set.begin(), set.end());
+  EXPECT_EQ(*set.rbegin(), 2);
+  EXPECT_NE(set.rbegin(), set.rend());
+
+  set.insert(3);
+  EXPECT_EQ(*set.begin(), 1);
+  EXPECT_NE(set.begin(), set.end());
+  EXPECT_EQ(*set.rbegin(), 3);
+  EXPECT_NE(set.rbegin(), set.rend());
+
+  set.erase(2);
+  EXPECT_EQ(*set.begin(), 1);
+  EXPECT_NE(set.begin(), set.end());
+  EXPECT_EQ(*set.rbegin(), 3);
+  EXPECT_NE(set.rbegin(), set.rend());
+
+  set.erase(1);
+  EXPECT_EQ(*set.begin(), 3);
+  EXPECT_NE(set.begin(), set.end());
+  EXPECT_EQ(*set.rbegin(), 3);
+  EXPECT_NE(set.rbegin(), set.rend());
+
+  set.erase(3);
+  EXPECT_EQ(set.begin(), set.end());
+  EXPECT_EQ(set.rbegin(), set.rend());
+}
+
+TEST(LinkedHashSetTest, IteratorPre) {
+  using Set = LinkedHashSet<int, CustomHashTraitsForInt>;
+  Set set;
+
+  set.insert(1);
+  {
+    auto it = set.begin();
+    EXPECT_EQ(1, *it);
+    EXPECT_EQ(set.end(), ++it);
+  }
+  {
+    auto it = set.end();
+    EXPECT_EQ(1, *--it);
+    EXPECT_EQ(set.begin(), it);
+  }
+
+  set.insert(2);
+  {
+    auto it = set.begin();
+    EXPECT_EQ(1, *it);
+    EXPECT_EQ(2, *++it);
+    EXPECT_EQ(set.end(), ++it);
+  }
+  {
+    auto it = set.end();
+    EXPECT_EQ(2, *--it);
+    EXPECT_EQ(1, *--it);
+    EXPECT_EQ(set.begin(), it);
+  }
+
+  set.insert(3);
+  {
+    auto it = set.begin();
+    EXPECT_EQ(1, *it);
+    EXPECT_EQ(2, *++it);
+    EXPECT_EQ(3, *++it);
+    EXPECT_EQ(set.end(), ++it);
+  }
+  {
+    auto it = set.end();
+    EXPECT_EQ(3, *--it);
+    EXPECT_EQ(2, *--it);
+    EXPECT_EQ(1, *--it);
+    EXPECT_EQ(set.begin(), it);
+  }
+}
+
+TEST(LinkedHashSetTest, ReverseIteratorPre) {
+  using Set = LinkedHashSet<int, CustomHashTraitsForInt>;
+  Set set;
+
+  set.insert(1);
+  {
+    auto it = set.rbegin();
+    EXPECT_EQ(1, *it);
+    EXPECT_EQ(set.rend(), ++it);
+  }
+  {
+    auto it = set.rend();
+    EXPECT_EQ(1, *--it);
+    EXPECT_EQ(set.rbegin(), it);
+  }
+
+  set.insert(2);
+  {
+    auto it = set.rbegin();
+    EXPECT_EQ(2, *it);
+    EXPECT_EQ(1, *++it);
+    EXPECT_EQ(set.rend(), ++it);
+  }
+  {
+    auto it = set.rend();
+    EXPECT_EQ(1, *--it);
+    EXPECT_EQ(2, *--it);
+    EXPECT_EQ(set.rbegin(), it);
+  }
+
+  set.insert(3);
+  {
+    auto it = set.rbegin();
+    EXPECT_EQ(3, *it);
+    EXPECT_EQ(2, *++it);
+    EXPECT_EQ(1, *++it);
+    EXPECT_EQ(set.rend(), ++it);
+  }
+  {
+    auto it = set.rend();
+    EXPECT_EQ(1, *--it);
+    EXPECT_EQ(2, *--it);
+    EXPECT_EQ(3, *--it);
+    EXPECT_EQ(set.rbegin(), it);
+  }
+}
+
+TEST(LinkedHashSetTest, IteratorPost) {
+  using Set = LinkedHashSet<int, CustomHashTraitsForInt>;
+  Set set;
+
+  set.insert(1);
+  {
+    auto it = set.begin();
+    EXPECT_EQ(1, *it++);
+    EXPECT_EQ(set.end(), it);
+  }
+  {
+    auto it = set.end();
+    it--;
+    EXPECT_EQ(1, *it);
+    EXPECT_EQ(set.begin(), it);
+  }
+
+  set.insert(2);
+  {
+    auto it = set.begin();
+    EXPECT_EQ(1, *it++);
+    EXPECT_EQ(2, *it++);
+    EXPECT_EQ(set.end(), it);
+  }
+  {
+    auto it = set.end();
+    it--;
+    EXPECT_EQ(2, *it--);
+    EXPECT_EQ(1, *it);
+    EXPECT_EQ(set.begin(), it);
+  }
+
+  set.insert(3);
+  {
+    auto it = set.begin();
+    EXPECT_EQ(1, *it++);
+    EXPECT_EQ(2, *it++);
+    EXPECT_EQ(3, *it++);
+    EXPECT_EQ(set.end(), it);
+  }
+  {
+    auto it = set.end();
+    it--;
+    EXPECT_EQ(3, *it--);
+    EXPECT_EQ(2, *it--);
+    EXPECT_EQ(1, *it);
+    EXPECT_EQ(set.begin(), it);
+  }
+}
+
+TEST(LinkedHashSetTest, ReverseIteratorPost) {
+  using Set = LinkedHashSet<int, CustomHashTraitsForInt>;
+  Set set;
+
+  set.insert(1);
+  {
+    auto it = set.rbegin();
+    EXPECT_EQ(1, *it++);
+    EXPECT_EQ(set.rend(), it);
+  }
+  {
+    auto it = set.rend();
+    it--;
+    EXPECT_EQ(1, *it);
+    EXPECT_EQ(set.rbegin(), it);
+  }
+
+  set.insert(2);
+  {
+    auto it = set.rbegin();
+    EXPECT_EQ(2, *it++);
+    EXPECT_EQ(1, *it++);
+    EXPECT_EQ(set.rend(), it);
+  }
+  {
+    auto it = set.rend();
+    it--;
+    EXPECT_EQ(1, *it--);
+    EXPECT_EQ(2, *it);
+    EXPECT_EQ(set.rbegin(), it);
+  }
+
+  set.insert(3);
+  {
+    auto it = set.rbegin();
+    EXPECT_EQ(3, *it++);
+    EXPECT_EQ(2, *it++);
+    EXPECT_EQ(1, *it++);
+    EXPECT_EQ(set.rend(), it);
+  }
+  {
+    auto it = set.rend();
+    it--;
+    EXPECT_EQ(1, *it--);
+    EXPECT_EQ(2, *it--);
+    EXPECT_EQ(3, *it);
+    EXPECT_EQ(set.rbegin(), it);
+  }
 }
 
 TEST(LinkedHashSetTest, FrontAndBack) {
   using Set = LinkedHashSet<int, CustomHashTraitsForInt>;
   Set set;
   EXPECT_EQ(set.size(), 0u);
-  EXPECT_TRUE(set.IsEmpty());
+  EXPECT_TRUE(set.empty());
 
   set.PrependOrMoveToFirst(1);
   EXPECT_EQ(set.front(), 1);
@@ -591,7 +813,7 @@ TEST(LinkedHashSetTest, RemoveFirst) {
   EXPECT_EQ(*it, 2);
 
   set.RemoveFirst();
-  EXPECT_TRUE(set.IsEmpty());
+  EXPECT_TRUE(set.empty());
 }
 
 TEST(LinkedHashSetTest, pop_back) {
@@ -653,6 +875,7 @@ struct EmptyString {
 
 template <>
 struct HashTraits<EmptyString> : SimpleClassHashTraits<EmptyString> {
+  static unsigned GetHash(const EmptyString&) { return 0; }
   static const bool kEmptyValueIsZero = false;
 
   // This overrides SimpleClassHashTraits<EmptyString>::EmptyValue() which
@@ -662,17 +885,6 @@ struct HashTraits<EmptyString> : SimpleClassHashTraits<EmptyString> {
     empty.empty_ = true;
     return empty;
   }
-};
-
-template <>
-struct DefaultHash<EmptyString> {
-  struct Hash {
-    static unsigned GetHash(const EmptyString&) { return 0; }
-    static bool Equal(const EmptyString& value1, const EmptyString& value2) {
-      return value1 == value2;
-    }
-    static const bool safe_to_compare_to_empty_or_deleted = true;
-  };
 };
 
 TEST(LinkedHashSetTest, Swap) {
@@ -746,28 +958,28 @@ TEST(LinkedHashSetRefPtrTest, WithRefPtr) {
     expected = 2;
   bool is_deleted = false;
   DummyRefCounted::ref_invokes_count_ = 0;
-  scoped_refptr<DummyRefCounted> ptr =
+  scoped_refptr<DummyRefCounted> object =
       base::AdoptRef(new DummyRefCounted(is_deleted));
   EXPECT_EQ(0, DummyRefCounted::ref_invokes_count_);
 
   Set set;
-  set.insert(ptr);
+  set.insert(object);
   // Referenced only once (to store a copy in the container).
   EXPECT_EQ(expected, DummyRefCounted::ref_invokes_count_);
-  EXPECT_EQ(ptr, set.front());
+  EXPECT_EQ(object, set.front());
   EXPECT_EQ(expected, DummyRefCounted::ref_invokes_count_);
 
-  DummyRefCounted* raw_ptr = ptr.get();
+  DummyRefCounted* ptr = object.get();
 
+  EXPECT_TRUE(set.Contains(object));
   EXPECT_TRUE(set.Contains(ptr));
-  EXPECT_TRUE(set.Contains(raw_ptr));
   EXPECT_EQ(expected, DummyRefCounted::ref_invokes_count_);
 
-  ptr = nullptr;
+  object = nullptr;
   EXPECT_FALSE(is_deleted);
   EXPECT_EQ(expected, DummyRefCounted::ref_invokes_count_);
 
-  set.erase(raw_ptr);
+  set.erase(ptr);
   EXPECT_TRUE(is_deleted);
 
   EXPECT_EQ(expected, DummyRefCounted::ref_invokes_count_);
@@ -825,22 +1037,13 @@ struct Complicated {
 };
 
 struct ComplicatedHashTraits : GenericHashTraits<Complicated> {
-  static const bool kEmptyValueIsZero = false;
-  static const Complicated EmptyValue() { return static_cast<Complicated>(0); }
-  static void ConstructDeletedValue(Complicated& slot, bool) {
-    slot = static_cast<Complicated>(-1);
-  }
-  static bool IsDeletedValue(const Complicated value) {
-    return value == static_cast<Complicated>(-1);
-  }
-};
-
-struct ComplicatedHashFunctions {
   static unsigned GetHash(const Complicated& key) { return key.simple_.value_; }
   static bool Equal(const Complicated& a, const Complicated& b) {
     return a.simple_.value_ == b.simple_.value_;
   }
-  static const bool safe_to_compare_to_empty_or_deleted = true;
+  static constexpr bool kEmptyValueIsZero = false;
+  static Complicated EmptyValue() { return static_cast<Complicated>(0); }
+  static Complicated DeletedValue() { return static_cast<Complicated>(-1); }
 };
 
 struct ComplexityTranslator {
@@ -851,8 +1054,7 @@ struct ComplexityTranslator {
 };
 
 TEST(LinkedHashSetHashFunctionsTest, CustomHashFunction) {
-  using Set = LinkedHashSet<Complicated, ComplicatedHashTraits,
-                            ComplicatedHashFunctions>;
+  using Set = LinkedHashSet<Complicated, ComplicatedHashTraits>;
   Set set;
   set.insert(Complicated(42));
 
@@ -872,8 +1074,7 @@ TEST(LinkedHashSetHashFunctionsTest, CustomHashFunction) {
 }
 
 TEST(LinkedHashSetTranslatorTest, ComplexityTranslator) {
-  using Set = LinkedHashSet<Complicated, ComplicatedHashTraits,
-                            ComplicatedHashFunctions>;
+  using Set = LinkedHashSet<Complicated, ComplicatedHashTraits>;
   Set set;
   set.insert(Complicated(42));
 

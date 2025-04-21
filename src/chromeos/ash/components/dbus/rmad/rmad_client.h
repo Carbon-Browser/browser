@@ -1,15 +1,17 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMEOS_ASH_COMPONENTS_DBUS_RMAD_RMAD_CLIENT_H_
 #define CHROMEOS_ASH_COMPONENTS_DBUS_RMAD_RMAD_CLIENT_H_
 
-#include "base/callback_forward.h"
+#include <string>
+
 #include "base/component_export.h"
+#include "base/functional/callback_forward.h"
 #include "base/observer_list_types.h"
 #include "chromeos/ash/components/dbus/rmad/rmad.pb.h"
-#include "chromeos/dbus/common/dbus_method_call_status.h"
+#include "chromeos/dbus/common/dbus_callback.h"
 
 namespace dbus {
 class Bus;
@@ -48,6 +50,9 @@ class COMPONENT_EXPORT(RMAD) RmadClient {
     // Called when power cable is plugged in or removed.
     virtual void PowerCableState(bool plugged_in) {}
 
+    // Called when an external disk is plugged in or removed.
+    virtual void ExternalDiskState(bool detected) {}
+
     // Called when hardware verification completes.
     virtual void HardwareVerificationResult(
         const rmad::HardwareVerificationResult& result) {}
@@ -81,35 +86,56 @@ class COMPONENT_EXPORT(RMAD) RmadClient {
   // The response contains an error code and the current state of the RMA
   // process.
   virtual void GetCurrentState(
-      DBusMethodCallback<rmad::GetStateReply> callback) = 0;
+      chromeos::DBusMethodCallback<rmad::GetStateReply> callback) = 0;
   // Asynchronously attempts to transition to the next RMA state.
   // The response contains an error code and the current state of the RMA
   // process.
   virtual void TransitionNextState(
       const rmad::RmadState& state,
-      DBusMethodCallback<rmad::GetStateReply> callback) = 0;
+      chromeos::DBusMethodCallback<rmad::GetStateReply> callback) = 0;
   // Asynchronously attempts to transition to the previous RMA state.
   // The response contains an error code and the current state of the RMA
   // process.
   virtual void TransitionPreviousState(
-      DBusMethodCallback<rmad::GetStateReply> callback) = 0;
+      chromeos::DBusMethodCallback<rmad::GetStateReply> callback) = 0;
 
   // Request the RMA process be cancelled.
   // There is no guarantee the callback is called if abort is successful because
   // the device will reboot.
   // Returns RMAD_ERROR_OK on success or an error code.
-  virtual void AbortRma(DBusMethodCallback<rmad::AbortRmaReply> callback) = 0;
+  virtual void AbortRma(
+      chromeos::DBusMethodCallback<rmad::AbortRmaReply> callback) = 0;
 
   // Request the RMA process logs.
-  virtual void GetLog(DBusMethodCallback<rmad::GetLogReply> callback) = 0;
+  virtual void GetLog(
+      chromeos::DBusMethodCallback<rmad::GetLogReply> callback) = 0;
 
   // Save RMA logs to a USB drive.
-  virtual void SaveLog(DBusMethodCallback<rmad::SaveLogReply> callback) = 0;
+  virtual void SaveLog(
+      const std::string& diagnostics_log_text,
+      chromeos::DBusMethodCallback<rmad::SaveLogReply> callback) = 0;
 
   // Send metrics to the platform side, which will upload them.
   virtual void RecordBrowserActionMetric(
       const rmad::RecordBrowserActionMetricRequest request,
-      DBusMethodCallback<rmad::RecordBrowserActionMetricReply> callback) = 0;
+      chromeos::DBusMethodCallback<rmad::RecordBrowserActionMetricReply>
+          callback) = 0;
+
+  // Extracts the diagnostics app from external sources.
+  virtual void ExtractExternalDiagnosticsApp(
+      chromeos::DBusMethodCallback<rmad::ExtractExternalDiagnosticsAppReply>
+          callback) = 0;
+
+  // Installs the diagnostics app extracted by last
+  // `ExtractExternalDiagnosticsApp` call.
+  virtual void InstallExtractedDiagnosticsApp(
+      chromeos::DBusMethodCallback<rmad::InstallExtractedDiagnosticsAppReply>
+          callback) = 0;
+
+  // Gets the installed diagnostics app.
+  virtual void GetInstalledDiagnosticsApp(
+      chromeos::DBusMethodCallback<rmad::GetInstalledDiagnosticsAppReply>
+          callback) = 0;
 
   // Adds and removes the observer.
   virtual void AddObserver(Observer* observer) = 0;

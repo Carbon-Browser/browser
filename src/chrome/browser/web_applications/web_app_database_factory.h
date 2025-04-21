@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define CHROME_BROWSER_WEB_APPLICATIONS_WEB_APP_DATABASE_FACTORY_H_
 
 #include "base/memory/raw_ptr.h"
-#include "components/sync/model/model_type_store.h"
+#include "components/sync/model/data_type_store.h"
 
 class Profile;
 
@@ -15,7 +15,8 @@ namespace web_app {
 class AbstractWebAppDatabaseFactory {
  public:
   virtual ~AbstractWebAppDatabaseFactory() = default;
-  virtual syncer::OnceModelTypeStoreFactory GetStoreFactory() = 0;
+  virtual syncer::OnceDataTypeStoreFactory GetStoreFactory() = 0;
+  virtual bool IsSyncingApps() = 0;
 };
 
 class WebAppDatabaseFactory : public AbstractWebAppDatabaseFactory {
@@ -26,7 +27,8 @@ class WebAppDatabaseFactory : public AbstractWebAppDatabaseFactory {
   ~WebAppDatabaseFactory() override;
 
   // AbstractWebAppDatabaseFactory implementation.
-  syncer::OnceModelTypeStoreFactory GetStoreFactory() override;
+  syncer::OnceDataTypeStoreFactory GetStoreFactory() override;
+  bool IsSyncingApps() override;
 
  private:
   const raw_ptr<Profile> profile_;

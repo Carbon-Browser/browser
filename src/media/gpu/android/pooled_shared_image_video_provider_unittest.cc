@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,11 @@
 
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "gpu/command_buffer/service/ref_counted_lock_for_test.h"
+#include "gpu/config/gpu_finch_features.h"
 #include "gpu/ipc/common/command_buffer_id.h"
 #include "media/gpu/android/mock_shared_image_video_provider.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -45,7 +47,7 @@ class PooledSharedImageVideoProviderTest : public testing::Test {
   PooledSharedImageVideoProviderTest() = default;
 
   void SetUp() override {
-    task_runner_ = base::SequencedTaskRunnerHandle::Get();
+    task_runner_ = base::SequencedTaskRunner::GetCurrentDefault();
     base::SequenceBound<MockGpuHelper> mock_gpu_helper(task_runner_,
                                                        &sync_token_);
 
@@ -55,7 +57,9 @@ class PooledSharedImageVideoProviderTest : public testing::Test {
 
     provider_ = base::WrapUnique(new PooledSharedImageVideoProvider(
         std::move(mock_gpu_helper), std::move(mock_provider),
-        /*lock=*/nullptr));
+        features::NeedThreadSafeAndroidMedia()
+            ? base::MakeRefCounted<gpu::RefCountedLockForTest>()
+            : nullptr));
   }
 
   // Return an ImageReadyCB that saves the ImageRecord in |image_records_|.

@@ -1,12 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/utils/pdf_conversion.h"
 
+#include "base/check.h"
 #include "base/files/file_path.h"
 #include "base/logging.h"
 #include "printing/units.h"
+#include "third_party/skia/include/codec/SkCodec.h"
+#include "third_party/skia/include/codec/SkJpegDecoder.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkData.h"
 #include "third_party/skia/include/core/SkImage.h"
@@ -27,10 +30,18 @@ constexpr int kRotationDegrees = 180;
 // `rotate` indicates whether the page should be rotated 180 degrees.
 // Returns whether the page was successfully created.
 bool AddPdfPage(sk_sp<SkDocument> pdf_doc,
-                const sk_sp<SkData>& image_data,
+                const sk_sp<SkData>& jpeg_image_data,
                 bool rotate,
-                absl::optional<int> dpi) {
-  const sk_sp<SkImage> image = SkImage::MakeFromEncoded(image_data);
+                std::optional<int> dpi) {
+  if (!SkJpegDecoder::IsJpeg(jpeg_image_data->data(),
+                             jpeg_image_data->size())) {
+    LOG(ERROR) << "Not a valid JPEG image.";
+    return false;
+  }
+  CHECK(
+      SkJpegDecoder::IsJpeg(jpeg_image_data->data(), jpeg_image_data->size()));
+  const sk_sp<SkImage> image =
+      SkImages::DeferredFromEncodedData(jpeg_image_data);
   if (!image) {
     LOG(ERROR) << "Unable to generate image from encoded image data.";
     return false;
@@ -72,8 +83,11 @@ bool AddPdfPage(sk_sp<SkDocument> pdf_doc,
 bool ConvertJpgImagesToPdf(const std::vector<std::string>& jpg_images,
                            const base::FilePath& file_path,
                            bool rotate_alternate_pages,
-                           absl::optional<int> dpi) {
+                           std::optional<int> dpi) {
   DCHECK(!file_path.empty());
+
+  // Register Jpeg Decoder for use by DeferredFromEncodedData in AddPdfPage.
+  SkCodecs::Register(SkJpegDecoder::Decoder());
 
   SkFILEWStream pdf_outfile(file_path.value().c_str());
   if (!pdf_outfile.isValid()) {
@@ -113,27 +127,30 @@ bool ConvertJpgImagesToPdf(const std::vector<std::string>& jpg_images,
   return true;
 }
 
-bool ConvertJpgImageToPdf(const std::vector<uint8_t>& jpg_image,
-                          std::vector<uint8_t>* output) {
+bool ConvertJpgImagesToPdf(const std::vector<std::vector<uint8_t>>& jpg_images,
+                           std::vector<uint8_t>* output) {
   gfx::BufferWStream output_stream;
   sk_sp<SkDocument> pdf_doc = SkPDF::MakeDocument(&output_stream);
   DCHECK(pdf_doc);
 
-  SkDynamicMemoryWStream img_stream;
-  if (!img_stream.write(jpg_image.data(), jpg_image.size())) {
-    LOG(ERROR) << "Unable to write image to dynamic memory stream.";
-    return false;
-  }
+  // Register Jpeg Decoder for use by DeferredFromEncodedData in AddPdfPage.
+  SkCodecs::Register(SkJpegDecoder::Decoder());
 
-  const sk_sp<SkData> img_data = img_stream.detachAsData();
-  if (img_data->isEmpty()) {
-    LOG(ERROR) << "Stream data is empty.";
-    return false;
-  }
+  for (const auto& jpg_image : jpg_images) {
+    SkDynamicMemoryWStream img_stream;
+    bool result = img_stream.write(jpg_image.data(), jpg_image.size());
+    CHECK(result);
 
-  if (!AddPdfPage(pdf_doc, img_data, false, absl::nullopt)) {
-    LOG(ERROR) << "Unable to add new PDF page.";
-    return false;
+    const sk_sp<SkData> img_data = img_stream.detachAsData();
+    if (img_data->isEmpty()) {
+      LOG(ERROR) << "Stream data is empty.";
+      return false;
+    }
+
+    if (!AddPdfPage(pdf_doc, img_data, false, std::nullopt)) {
+      LOG(ERROR) << "Unable to add new PDF page.";
+      return false;
+    }
   }
 
   pdf_doc->close();

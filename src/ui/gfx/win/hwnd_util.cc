@@ -1,10 +1,12 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/gfx/win/hwnd_util.h"
 
 #include <windows.h>
+
+#include <dwmapi.h>  // DWMWA_CLOAKED
 
 #include "base/debug/gdi_debug_util_win.h"
 #include "base/logging.h"
@@ -41,7 +43,6 @@ void AdjustWindowToFit(HWND hwnd, const RECT& bounds, bool fit_to_monitor) {
       // Else fall through.
     } else {
       NOTREACHED() << "Unable to find default monitor";
-      // Fall through.
     }
   }  // Else fall through.
 
@@ -114,13 +115,20 @@ void* GetWindowUserData(HWND hwnd) {
   return reinterpret_cast<void*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
 }
 
-absl::optional<bool> IsWindowOnCurrentVirtualDesktop(
+bool IsWindowCloaked(HWND hwnd) {
+  BOOL is_cloaked = FALSE;
+  return SUCCEEDED(DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &is_cloaked,
+                                         sizeof(is_cloaked))) &&
+         is_cloaked;
+}
+
+std::optional<bool> IsWindowOnCurrentVirtualDesktop(
     HWND window,
     Microsoft::WRL::ComPtr<IVirtualDesktopManager> virtual_desktop_manager) {
   BOOL on_current_desktop;
   if (FAILED(virtual_desktop_manager->IsWindowOnCurrentVirtualDesktop(
           window, &on_current_desktop))) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   if (on_current_desktop)
     return true;
@@ -132,7 +140,7 @@ absl::optional<bool> IsWindowOnCurrentVirtualDesktop(
   GUID workspace_guid;
   if (FAILED(virtual_desktop_manager->GetWindowDesktopId(window,
                                                          &workspace_guid))) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return workspace_guid == GUID_NULL;
 }
@@ -209,6 +217,7 @@ void CheckWindowCreated(HWND hwnd, DWORD last_error) {
   if (!hwnd) {
     switch (last_error) {
       case ERROR_NOT_ENOUGH_MEMORY:
+      case ERROR_NO_MORE_USER_HANDLES:
         base::debug::CollectGDIUsageAndDie();
         break;
       case ERROR_ACCESS_DENIED:

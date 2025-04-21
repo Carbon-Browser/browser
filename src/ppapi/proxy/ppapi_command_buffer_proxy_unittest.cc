@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,7 @@ class PpapiCommandBufferProxyTest : public testing::Test,
                &flush_info_,
                this,
                gpu::Capabilities(),
+               gpu::GLCapabilities(),
                proxy::SerializedHandle(
                    proxy::SerializedHandle::SHARED_MEMORY_REGION),
                gpu::CommandBufferId()) {}

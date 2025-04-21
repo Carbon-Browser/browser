@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,20 +6,21 @@
  * @fileoverview 'settings-search-engine-edit-dialog' is a component for adding
  * or editing a search engine entry.
  */
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import 'chrome://resources/cr_elements/cr_input/cr_input.js';
 
-import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
-import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import type {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import type {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import type {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
 import {microTask, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {loadTimeData} from '../i18n_setup.js';
 
 import {getTemplate} from './search_engine_edit_dialog.html.js';
-import {SearchEngine, SearchEnginesBrowserProxy, SearchEnginesBrowserProxyImpl, SearchEnginesInfo} from './search_engines_browser_proxy.js';
+import type {SearchEngine, SearchEnginesBrowserProxy, SearchEnginesInfo} from './search_engines_browser_proxy.js';
+import {SearchEnginesBrowserProxyImpl} from './search_engines_browser_proxy.js';
 
 /**
  * The |modelIndex| to use when a new search engine is added. Must match
@@ -40,7 +41,7 @@ export interface SettingsSearchEngineEditDialogElement {
 }
 
 const SettingsSearchEngineEditDialogElementBase =
-    WebUIListenerMixin(PolymerElement);
+    WebUiListenerMixin(PolymerElement);
 
 export class SettingsSearchEngineEditDialogElement extends
     SettingsSearchEngineEditDialogElementBase {
@@ -64,13 +65,12 @@ export class SettingsSearchEngineEditDialogElement extends
       keyword_: String,
       queryUrl_: String,
       dialogTitle_: String,
-      keywordFieldLabel_: String,
       actionButtonText_: String,
-
-      isActiveSearchEnginesFlagEnabled_: {
+      cancelButtonHidden_: Boolean,
+      readonly_: Boolean,
+      urlIsReadonly_: {
         type: Boolean,
-        value: () =>
-            loadTimeData.getBoolean('isActiveSearchEnginesFlagEnabled'),
+        computed: 'computeUrlIsReadonly_(model, readonly_)',
       },
     };
   }
@@ -80,39 +80,46 @@ export class SettingsSearchEngineEditDialogElement extends
   private keyword_: string;
   private queryUrl_: string;
   private dialogTitle_: string;
-  private keywordFieldLabel_: string;
   private actionButtonText_: string;
+  private cancelButtonHidden_: boolean;
+  private readonly_: boolean;
+  private urlIsReadonly_: boolean;
   private browserProxy_: SearchEnginesBrowserProxy =
       SearchEnginesBrowserProxyImpl.getInstance();
-  private isActiveSearchEnginesFlagEnabled_: boolean;
 
   override ready() {
     super.ready();
 
     if (this.model) {
-      this.dialogTitle_ =
-          loadTimeData.getString('searchEnginesEditSearchEngine');
-      this.actionButtonText_ = loadTimeData.getString('save');
+      if (this.model.isPrepopulated || this.model.default) {
+        this.dialogTitle_ =
+            loadTimeData.getString('searchEnginesEditSearchEngine');
+      } else {
+        this.dialogTitle_ = loadTimeData.getString(
+            this.model.isManaged ? 'searchEnginesViewSiteSearch' :
+                                   'searchEnginesEditSiteSearch');
+      }
+
+      this.actionButtonText_ =
+          loadTimeData.getString(this.model.isManaged ? 'done' : 'save');
+      this.cancelButtonHidden_ = this.model.isManaged;
 
       // If editing an existing search engine, pre-populate the input fields.
       this.searchEngine_ = this.model.name;
       this.keyword_ = this.model.keyword;
       this.queryUrl_ = this.model.url;
+      this.readonly_ = this.model.isManaged;
     } else {
-      this.dialogTitle_ =
-          loadTimeData.getString('searchEnginesAddSearchEngine');
+      this.dialogTitle_ = loadTimeData.getString('searchEnginesAddSiteSearch');
       this.actionButtonText_ = loadTimeData.getString('add');
+      this.readonly_ = false;
     }
-
-    this.keywordFieldLabel_ = this.isActiveSearchEnginesFlagEnabled_ ?
-        loadTimeData.getString('searchEnginesShortcut') :
-        loadTimeData.getString('searchEnginesKeyword');
 
     this.addEventListener('cancel', () => {
       this.browserProxy_.searchEngineEditCancelled();
     });
 
-    this.addWebUIListener(
+    this.addWebUiListener(
         'search-engines-changed', this.enginesChanged_.bind(this));
   }
 
@@ -145,13 +152,20 @@ export class SettingsSearchEngineEditDialogElement extends
     this.$.dialog.cancel();
   }
 
-  private onActionButtonTap_() {
+  private onActionButtonClick_() {
     this.browserProxy_.searchEngineEditCompleted(
         this.searchEngine_, this.keyword_, this.queryUrl_);
     this.$.dialog.close();
   }
 
   private validateElement_(inputElement: CrInputElement) {
+    // No need to validate fields if the search engine is read-only, i.e.
+    // created by policy. Those have been validated when the policy was
+    // processed (b/348165485).
+    if (this.readonly_) {
+      return;
+    }
+
     // If element is empty, disable the action button, but don't show the red
     // invalid message.
     if (inputElement.value === '') {
@@ -182,6 +196,10 @@ export class SettingsSearchEngineEditDialogElement extends
       return !inputElement.invalid && inputElement.value.length > 0;
     });
     this.$.actionButton.disabled = !allValid;
+  }
+
+  private computeUrlIsReadonly_(): boolean {
+    return this.readonly_ || (!!this.model && this.model!.urlLocked);
   }
 }
 

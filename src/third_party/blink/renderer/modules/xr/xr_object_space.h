@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 #include "device/vr/public/mojom/vr_service.mojom-blink-forward.h"
 #include "third_party/blink/renderer/modules/xr/xr_space.h"
-#include "third_party/blink/renderer/platform/transforms/transformation_matrix.h"
+#include "ui/gfx/geometry/transform.h"
 
 namespace blink {
 
@@ -19,11 +19,11 @@ class XRSession;
 // type T (for example XRPlane, XRAnchor). The type T has to have a
 // NativeOrigin() method, returning a
 // device::mojom::blink::XRNativeOriginInformationPtr, a MojoFromObject()
-// method, returning a absl::Optional<TransformationMatrix>, and IsStationary()
+// method, returning a std::optional<gfx::Transform>, and IsStationary()
 // method returning true if the object is supposed to be treated as stationary
 // for the purposes of anchor creation.
 //
-// If the object's MojoFromObject() method returns a absl::nullopt, it means
+// If the object's MojoFromObject() method returns a std::nullopt, it means
 // that the object is not localizable in the current frame (i.e. its pose is
 // unknown) - the `frame.getPose(objectSpace, otherSpace)` will return null.
 // That does not necessarily mean that object tracking is lost - it may be that
@@ -36,7 +36,7 @@ class XRObjectSpace final : public XRSpace {
         object_(object),
         is_stationary_(object->IsStationary()) {}
 
-  absl::optional<TransformationMatrix> MojoFromNative() const override {
+  std::optional<gfx::Transform> MojoFromNative() const override {
     return object_->MojoFromObject();
   }
 

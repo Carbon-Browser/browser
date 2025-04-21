@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include "base/check.h"
 #include "base/system/system_monitor.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "media/base/video_types.h"
 #include "media/capture/video/video_capture_device_descriptor.h"
 #include "media/capture/video_capture_types.h"
@@ -111,8 +111,11 @@ void FakeVideoSourceProvider::GetSourceInfos(GetSourceInfosCallback callback) {
 
   // Simulate the asynchronously behavior of the actual VideoSourceProvider
   // which does a lot of asynchronous and mojo calls.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(std::move(callback), devices));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(std::move(callback),
+                                video_capture::mojom::VideoSourceProvider::
+                                    GetSourceInfosResult::kSuccess,
+                                devices));
 
   if (on_replied_with_source_infos_)
     std::move(on_replied_with_source_infos_).Run();

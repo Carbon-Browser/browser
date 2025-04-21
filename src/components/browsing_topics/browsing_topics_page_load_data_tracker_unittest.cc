@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 #include "components/history/core/browser/history_service.h"
 #include "components/history/core/test/test_history_database.h"
 #include "components/ukm/test_ukm_recorder.h"
+#include "content/public/browser/browser_context.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/test/back_forward_cache_util.h"
 #include "content/public/test/browsing_topics_test_util.h"
@@ -23,6 +24,7 @@
 #include "content/test/test_render_view_host.h"
 #include "services/metrics/public/cpp/metrics_utils.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
+#include "third_party/blink/public/common/permissions_policy/origin_with_possible_wildcards.h"
 
 namespace browsing_topics {
 
@@ -67,10 +69,19 @@ class BrowsingTopicsPageLoadDataTrackerTest
   void NavigateToPage(const GURL& url,
                       bool publicly_routable,
                       bool browsing_topics_permissions_policy_allowed,
-                      bool interest_cohort_permissions_policy_allowed) {
-    auto simulator = content::NavigationSimulator::CreateBrowserInitiated(
-        url, web_contents());
-    simulator->SetTransition(ui::PageTransition::PAGE_TRANSITION_TYPED);
+                      bool interest_cohort_permissions_policy_allowed,
+                      bool browser_initiated = true,
+                      bool has_user_gesture = false,
+                      bool add_same_document_nav = false) {
+    std::unique_ptr<content::NavigationSimulator> simulator;
+    if (browser_initiated) {
+      simulator = content::NavigationSimulator::CreateBrowserInitiated(
+          url, web_contents());
+    } else {
+      simulator = content::NavigationSimulator::CreateRendererInitiated(
+          url, main_rfh());
+    }
+    simulator->SetHasUserGesture(has_user_gesture);
 
     if (!publicly_routable) {
       net::IPAddress address;
@@ -83,21 +94,29 @@ class BrowsingTopicsPageLoadDataTrackerTest
     if (!browsing_topics_permissions_policy_allowed) {
       policy.emplace_back(
           blink::mojom::PermissionsPolicyFeature::kBrowsingTopics,
-          /*values=*/std::vector<url::Origin>(), /*matches_all_origins=*/false,
+          /*allowed_origins=*/std::vector<blink::OriginWithPossibleWildcards>(),
+          /*self_if_matches=*/std::nullopt,
+          /*matches_all_origins=*/false,
           /*matches_opaque_src=*/false);
     }
 
     if (!interest_cohort_permissions_policy_allowed) {
-      policy.emplace_back(blink::mojom::PermissionsPolicyFeature::
-                              kBrowsingTopicsBackwardCompatible,
-                          /*values=*/std::vector<url::Origin>(),
-                          /*matches_all_origins=*/false,
-                          /*matches_opaque_src=*/false);
+      policy.emplace_back(
+          blink::mojom::PermissionsPolicyFeature::
+              kBrowsingTopicsBackwardCompatible,
+          /*allowed_origins=*/std::vector<blink::OriginWithPossibleWildcards>(),
+          /*self_if_matches=*/std::nullopt,
+          /*matches_all_origins=*/false,
+          /*matches_opaque_src=*/false);
     }
 
     simulator->SetPermissionsPolicyHeader(std::move(policy));
 
     simulator->Commit();
+    if (add_same_document_nav) {
+      content::NavigationSimulator::CreateRendererInitiated(url, main_rfh())
+          ->CommitSameDocument();
+    }
 
     history_service_->AddPage(
         url, base::Time::Now(),
@@ -106,8 +125,7 @@ class BrowsingTopicsPageLoadDataTrackerTest
         /*referrer=*/GURL(),
         /*redirects=*/{}, ui::PageTransition::PAGE_TRANSITION_TYPED,
         history::VisitSource::SOURCE_BROWSED,
-        /*did_replace_entry=*/false,
-        /*floc_allowed=*/false);
+        /*did_replace_entry=*/false);
   }
 
   BrowsingTopicsPageLoadDataTracker* GetBrowsingTopicsPageLoadDataTracker() {
@@ -117,9 +135,8 @@ class BrowsingTopicsPageLoadDataTrackerTest
 
   content::BrowsingTopicsSiteDataManager* topics_site_data_manager() {
     return web_contents()
-        ->GetPrimaryMainFrame()
-        ->GetProcess()
-        ->GetStoragePartition()
+        ->GetBrowserContext()
+        ->GetDefaultStoragePartition()
         ->GetBrowsingTopicsSiteDataManager();
   }
 
@@ -130,6 +147,31 @@ class BrowsingTopicsPageLoadDataTrackerTest
 
   base::ScopedTempDir temp_dir_;
 };
+
+TEST_F(BrowsingTopicsPageLoadDataTrackerTest, IniializeWithRedirectStatus) {
+  GURL url("https://foo.com");
+  NavigateToPage(url, /*publicly_routable=*/true,
+                 /*browsing_topics_permissions_policy_allowed=*/true,
+                 /*interest_cohort_permissions_policy_allowed=*/true);
+
+  ukm::SourceId source_id = ukm::UkmRecorder::GetNewSourceID();
+  BrowsingTopicsPageLoadDataTracker::CreateForPage(
+      web_contents()->GetPrimaryMainFrame()->GetPage(),
+      /*redirect_count=*/10,
+      /*redirect_with_topics_invoked_count=*/5, source_id);
+
+  auto* tracker = GetBrowsingTopicsPageLoadDataTracker();
+
+  EXPECT_EQ(tracker->redirect_count(), 10);
+  EXPECT_EQ(tracker->redirect_with_topics_invoked_count(), 5);
+  EXPECT_EQ(tracker->source_id_before_redirects(), source_id);
+  EXPECT_FALSE(tracker->topics_invoked());
+
+  GetBrowsingTopicsPageLoadDataTracker()->OnBrowsingTopicsApiUsed(
+      HashedDomain(123), "bar.com", history_service_.get(), /*observe=*/false);
+
+  EXPECT_TRUE(tracker->topics_invoked());
+}
 
 TEST_F(BrowsingTopicsPageLoadDataTrackerTest, OneUsage) {
   GURL url("https://foo.com");
@@ -142,7 +184,7 @@ TEST_F(BrowsingTopicsPageLoadDataTrackerTest, OneUsage) {
       content::GetBrowsingTopicsApiUsage(topics_site_data_manager()).empty());
 
   GetBrowsingTopicsPageLoadDataTracker()->OnBrowsingTopicsApiUsed(
-      HashedDomain(123), history_service_.get());
+      HashedDomain(123), "bar.com", history_service_.get(), /*observe=*/true);
 
   EXPECT_TRUE(BrowsingTopicsEligibleForURLVisit(history_service_.get(), url));
 
@@ -154,6 +196,26 @@ TEST_F(BrowsingTopicsPageLoadDataTrackerTest, OneUsage) {
   EXPECT_EQ(api_usage_contexts[0].hashed_context_domain, HashedDomain(123));
 }
 
+TEST_F(BrowsingTopicsPageLoadDataTrackerTest, OneUsage_DoesNotObserve) {
+  GURL url("https://foo.com");
+  NavigateToPage(url, /*publicly_routable=*/true,
+                 /*browsing_topics_permissions_policy_allowed=*/true,
+                 /*interest_cohort_permissions_policy_allowed=*/true);
+
+  EXPECT_FALSE(BrowsingTopicsEligibleForURLVisit(history_service_.get(), url));
+  EXPECT_TRUE(
+      content::GetBrowsingTopicsApiUsage(topics_site_data_manager()).empty());
+
+  GetBrowsingTopicsPageLoadDataTracker()->OnBrowsingTopicsApiUsed(
+      HashedDomain(123), "bar.com", history_service_.get(), /*observe=*/false);
+
+  EXPECT_FALSE(BrowsingTopicsEligibleForURLVisit(history_service_.get(), url));
+
+  std::vector<ApiUsageContext> api_usage_contexts =
+      content::GetBrowsingTopicsApiUsage(topics_site_data_manager());
+  EXPECT_EQ(api_usage_contexts.size(), 0u);
+}
+
 TEST_F(BrowsingTopicsPageLoadDataTrackerTest, TwoUsages) {
   GURL url("https://foo.com");
   NavigateToPage(url, /*publicly_routable=*/true,
@@ -161,9 +223,9 @@ TEST_F(BrowsingTopicsPageLoadDataTrackerTest, TwoUsages) {
                  /*interest_cohort_permissions_policy_allowed=*/true);
 
   GetBrowsingTopicsPageLoadDataTracker()->OnBrowsingTopicsApiUsed(
-      HashedDomain(123), history_service_.get());
+      HashedDomain(123), "bar.com", history_service_.get(), /*observe=*/true);
   GetBrowsingTopicsPageLoadDataTracker()->OnBrowsingTopicsApiUsed(
-      HashedDomain(456), history_service_.get());
+      HashedDomain(456), "buzz.com", history_service_.get(), /*observe=*/true);
 
   EXPECT_TRUE(BrowsingTopicsEligibleForURLVisit(history_service_.get(), url));
 
@@ -186,7 +248,7 @@ TEST_F(BrowsingTopicsPageLoadDataTrackerTest, OneUsage_PageLoadUkm) {
                  /*interest_cohort_permissions_policy_allowed=*/true);
 
   GetBrowsingTopicsPageLoadDataTracker()->OnBrowsingTopicsApiUsed(
-      HashedDomain(123), history_service_.get());
+      HashedDomain(123), "bar.com", history_service_.get(), /*observe=*/true);
 
   NavigateToPage(GURL(url::kAboutBlankURL), /*publicly_routable=*/true,
                  /*browsing_topics_permissions_policy_allowed=*/true,
@@ -213,7 +275,7 @@ TEST_F(BrowsingTopicsPageLoadDataTrackerTest, OneThousandUsages_PageLoadUkm) {
 
   for (int i = 0; i < 1000; ++i) {
     GetBrowsingTopicsPageLoadDataTracker()->OnBrowsingTopicsApiUsed(
-        HashedDomain(i), history_service_.get());
+        HashedDomain(i), "i.com", history_service_.get(), /*observe=*/true);
   }
 
   NavigateToPage(GURL(url::kAboutBlankURL), /*publicly_routable=*/true,
@@ -241,7 +303,7 @@ TEST_F(BrowsingTopicsPageLoadDataTrackerTest, TwoThousandUsages_PageLoadUkm) {
 
   for (int i = 0; i < 2000; ++i) {
     GetBrowsingTopicsPageLoadDataTracker()->OnBrowsingTopicsApiUsed(
-        HashedDomain(i), history_service_.get());
+        HashedDomain(i), "i.com", history_service_.get(), /*observe=*/true);
   }
 
   NavigateToPage(GURL(url::kAboutBlankURL), /*publicly_routable=*/true,
@@ -268,11 +330,11 @@ TEST_F(BrowsingTopicsPageLoadDataTrackerTest, DuplicateDomains) {
                  /*interest_cohort_permissions_policy_allowed=*/true);
 
   GetBrowsingTopicsPageLoadDataTracker()->OnBrowsingTopicsApiUsed(
-      HashedDomain(123), history_service_.get());
+      HashedDomain(123), "bar.com", history_service_.get(), /*observe=*/true);
   GetBrowsingTopicsPageLoadDataTracker()->OnBrowsingTopicsApiUsed(
-      HashedDomain(456), history_service_.get());
+      HashedDomain(456), "buzz.com", history_service_.get(), /*observe=*/true);
   GetBrowsingTopicsPageLoadDataTracker()->OnBrowsingTopicsApiUsed(
-      HashedDomain(123), history_service_.get());
+      HashedDomain(123), "bar.com", history_service_.get(), /*observe=*/true);
 
   EXPECT_TRUE(BrowsingTopicsEligibleForURLVisit(history_service_.get(), url));
 
@@ -300,7 +362,7 @@ TEST_F(BrowsingTopicsPageLoadDataTrackerTest, NumberOfDomainsExceedsLimit) {
 
   for (int i = 0; i < 31; ++i) {
     GetBrowsingTopicsPageLoadDataTracker()->OnBrowsingTopicsApiUsed(
-        HashedDomain(i), history_service_.get());
+        HashedDomain(i), "i.com", history_service_.get(), /*observe=*/true);
   }
 
   EXPECT_TRUE(BrowsingTopicsEligibleForURLVisit(history_service_.get(), url));
@@ -324,7 +386,7 @@ TEST_F(BrowsingTopicsPageLoadDataTrackerTest, NotPubliclyRoutable) {
                  /*interest_cohort_permissions_policy_allowed=*/true);
 
   GetBrowsingTopicsPageLoadDataTracker()->OnBrowsingTopicsApiUsed(
-      HashedDomain(123), history_service_.get());
+      HashedDomain(123), "bar.com", history_service_.get(), /*observe=*/true);
 
   EXPECT_FALSE(BrowsingTopicsEligibleForURLVisit(history_service_.get(), url));
   EXPECT_TRUE(
@@ -339,7 +401,7 @@ TEST_F(BrowsingTopicsPageLoadDataTrackerTest,
                  /*interest_cohort_permissions_policy_allowed=*/true);
 
   GetBrowsingTopicsPageLoadDataTracker()->OnBrowsingTopicsApiUsed(
-      HashedDomain(123), history_service_.get());
+      HashedDomain(123), "bar.com", history_service_.get(), /*observe=*/true);
 
   EXPECT_FALSE(BrowsingTopicsEligibleForURLVisit(history_service_.get(), url));
   EXPECT_TRUE(
@@ -354,11 +416,72 @@ TEST_F(BrowsingTopicsPageLoadDataTrackerTest,
                  /*interest_cohort_permissions_policy_allowed=*/false);
 
   GetBrowsingTopicsPageLoadDataTracker()->OnBrowsingTopicsApiUsed(
-      HashedDomain(123), history_service_.get());
+      HashedDomain(123), "bar.com", history_service_.get(), /*observe=*/true);
 
   EXPECT_FALSE(BrowsingTopicsEligibleForURLVisit(history_service_.get(), url));
   EXPECT_TRUE(
       content::GetBrowsingTopicsApiUsage(topics_site_data_manager()).empty());
+}
+
+TEST_F(BrowsingTopicsPageLoadDataTrackerTest,
+       RendererInitiatedWithUserGesture) {
+  GURL url("https://foo.com");
+  NavigateToPage(url, /*publicly_routable=*/true,
+                 /*browsing_topics_permissions_policy_allowed=*/true,
+                 /*interest_cohort_permissions_policy_allowed=*/true,
+                 /*browser_initiated=*/false,
+                 /*has_user_gesture=*/true);
+
+  GetBrowsingTopicsPageLoadDataTracker()->OnBrowsingTopicsApiUsed(
+      HashedDomain(123), "bar.com", history_service_.get(), /*observe=*/true);
+
+  EXPECT_TRUE(BrowsingTopicsEligibleForURLVisit(history_service_.get(), url));
+
+  std::vector<ApiUsageContext> api_usage_contexts =
+      content::GetBrowsingTopicsApiUsage(topics_site_data_manager());
+  EXPECT_EQ(api_usage_contexts.size(), 1u);
+  EXPECT_EQ(api_usage_contexts[0].hashed_main_frame_host,
+            HashMainFrameHostForStorage("foo.com"));
+  EXPECT_EQ(api_usage_contexts[0].hashed_context_domain, HashedDomain(123));
+}
+
+TEST_F(BrowsingTopicsPageLoadDataTrackerTest, RendererInitiatedNoUserGesture) {
+  GURL url("https://foo.com");
+  NavigateToPage(url, /*publicly_routable=*/true,
+                 /*browsing_topics_permissions_policy_allowed=*/true,
+                 /*interest_cohort_permissions_policy_allowed=*/true,
+                 /*browser_initiated=*/false,
+                 /*has_user_gesture=*/false);
+
+  GetBrowsingTopicsPageLoadDataTracker()->OnBrowsingTopicsApiUsed(
+      HashedDomain(123), "bar.com", history_service_.get(), /*observe=*/true);
+
+  EXPECT_FALSE(BrowsingTopicsEligibleForURLVisit(history_service_.get(), url));
+  EXPECT_TRUE(
+      content::GetBrowsingTopicsApiUsage(topics_site_data_manager()).empty());
+}
+
+TEST_F(BrowsingTopicsPageLoadDataTrackerTest,
+       RendererInitiatedPlusExtraSamePageNav) {
+  GURL url("https://foo.com");
+  NavigateToPage(url, /*publicly_routable=*/true,
+                 /*browsing_topics_permissions_policy_allowed=*/true,
+                 /*interest_cohort_permissions_policy_allowed=*/true,
+                 /*browser_initiated=*/false,
+                 /*has_user_gesture=*/true,
+                 /*add_same_document_nav=*/true);
+
+  GetBrowsingTopicsPageLoadDataTracker()->OnBrowsingTopicsApiUsed(
+      HashedDomain(123), "bar.com", history_service_.get(), /*observe=*/true);
+
+  EXPECT_TRUE(BrowsingTopicsEligibleForURLVisit(history_service_.get(), url));
+
+  std::vector<ApiUsageContext> api_usage_contexts =
+      content::GetBrowsingTopicsApiUsage(topics_site_data_manager());
+  EXPECT_EQ(api_usage_contexts.size(), 1u);
+  EXPECT_EQ(api_usage_contexts[0].hashed_main_frame_host,
+            HashMainFrameHostForStorage("foo.com"));
+  EXPECT_EQ(api_usage_contexts[0].hashed_context_domain, HashedDomain(123));
 }
 
 }  // namespace browsing_topics

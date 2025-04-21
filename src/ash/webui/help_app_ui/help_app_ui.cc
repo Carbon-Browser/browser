@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,12 +13,13 @@
 #include "ash/webui/help_app_ui/help_app_page_handler.h"
 #include "ash/webui/help_app_ui/help_app_untrusted_ui.h"
 #include "ash/webui/help_app_ui/search/search_handler.h"
-#include "ash/webui/help_app_ui/url_constants.h"
 #include "ash/webui/web_applications/webui_test_prod_util.h"
+#include "base/check_deref.h"
+#include "base/strings/strcat.h"
 #include "chromeos/ash/components/local_search_service/public/cpp/local_search_service_proxy.h"
 #include "chromeos/ash/components/local_search_service/public/cpp/local_search_service_proxy_factory.h"
 #include "chromeos/ash/components/local_search_service/public/mojom/types.mojom.h"
-#include "chromeos/constants/chromeos_features.h"
+#include "chromeos/constants/url_constants.h"
 #include "chromeos/strings/grit/chromeos_strings.h"
 #include "components/content_settings/core/common/content_settings_types.h"
 #include "content/public/browser/web_contents.h"
@@ -31,16 +32,12 @@
 namespace ash {
 
 namespace {
-content::WebUIDataSource* CreateHostDataSource() {
-  auto* source = content::WebUIDataSource::Create(kChromeUIHelpAppHost);
+content::WebUIDataSource* CreateAndAddHostDataSource(
+    content::BrowserContext* browser_context) {
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      browser_context, kChromeUIHelpAppHost);
 
-  // TODO(b/218419680): Remove index_dark_light_html when the dark/light flag is
-  // no longer needed.
-  if (chromeos::features::IsDarkLightModeEnabled()) {
-    source->SetDefaultResource(IDR_HELP_APP_HOST_INDEX_DARK_LIGHT_HTML);
-  } else {
-    source->SetDefaultResource(IDR_HELP_APP_HOST_INDEX_HTML);
-  }
+  source->SetDefaultResource(IDR_HELP_APP_HOST_INDEX_DARK_LIGHT_HTML);
   source->AddResourcePath("app_icon_192.png", IDR_HELP_APP_ICON_192);
   source->AddResourcePath("app_icon_512.png", IDR_HELP_APP_ICON_512);
   source->AddResourcePath("browser_proxy.js", IDR_HELP_APP_BROWSER_PROXY_JS);
@@ -51,15 +48,19 @@ content::WebUIDataSource* CreateHostDataSource() {
 }  // namespace
 
 HelpAppUI::HelpAppUI(content::WebUI* web_ui,
-                     std::unique_ptr<HelpAppUIDelegate> delegate)
-    : MojoWebUIController(web_ui), delegate_(std::move(delegate)) {
+                     std::unique_ptr<HelpAppUIDelegate> delegate,
+                     PrefService* pref_service)
+    : MojoWebUIController(web_ui),
+      delegate_(std::move(delegate)),
+      pref_service_(CHECK_DEREF(pref_service)) {
   content::BrowserContext* browser_context =
       web_ui->GetWebContents()->GetBrowserContext();
-  content::WebUIDataSource* host_source = CreateHostDataSource();
-  content::WebUIDataSource::Add(browser_context, host_source);
-  // We need a CSP override to use the chrome-untrusted:// scheme in the host.
-  std::string csp =
-      std::string("frame-src ") + kChromeUIHelpAppUntrustedURL + ";";
+  content::WebUIDataSource* host_source =
+      CreateAndAddHostDataSource(browser_context);
+  // We need a CSP override to use the chrome-untrusted://, almanac:// and
+  // cros-apps:// schemes in the host.
+  std::string csp = base::StrCat({"frame-src ", kChromeUIHelpAppUntrustedURL,
+                                  " ", chromeos::kAppInstallUriScheme, ":;"});
   host_source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::FrameSrc, csp);
 
@@ -67,7 +68,7 @@ HelpAppUI::HelpAppUI(content::WebUI* web_ui,
   web_ui->AddRequestableScheme(content::kChromeUIUntrustedScheme);
 
   // Register common permissions for chrome-untrusted:// pages.
-  // TODO(https://crbug.com/1113568): Remove this after common permissions are
+  // TODO(crbug.com/40710326): Remove this after common permissions are
   // granted by default.
   auto* permissions_allowlist = WebUIAllowlist::GetOrCreate(browser_context);
   const url::Origin untrusted_origin =
@@ -82,12 +83,15 @@ HelpAppUI::HelpAppUI(content::WebUI* web_ui,
 
   if (MaybeConfigureTestableDataSource(host_source)) {
     host_source->OverrideContentSecurityPolicy(
+        network::mojom::CSPDirectiveName::ScriptSrc,
+        "script-src chrome://resources chrome://webui-test 'self';");
+    host_source->OverrideContentSecurityPolicy(
         network::mojom::CSPDirectiveName::TrustedTypes,
         std::string("trusted-types test-harness;"));
   }
 
   // Register common permissions for chrome-untrusted:// pages.
-  // TODO(https://crbug.com/1113568): Remove this after common permissions are
+  // TODO(crbug.com/40710326): Remove this after common permissions are
   // granted by default.
   auto* magazine_permissions_allowlist =
       WebUIAllowlist::GetOrCreate(browser_context);
@@ -111,17 +115,13 @@ void HelpAppUI::BindInterface(
 }
 
 void HelpAppUI::BindInterface(
-    mojo::PendingReceiver<chromeos::local_search_service::mojom::Index>
-        index_receiver) {
-  if (base::FeatureList::IsEnabled(features::kEnableLocalSearchService)) {
-    auto* const factory = chromeos::local_search_service::
-        LocalSearchServiceProxyFactory::GetForBrowserContext(
-            web_ui()->GetWebContents()->GetBrowserContext());
-    factory->SetLocalState(delegate_->GetLocalState());
-    factory->GetIndex(chromeos::local_search_service::IndexId::kHelpApp,
-                      chromeos::local_search_service::Backend::kInvertedIndex,
-                      std::move(index_receiver));
-  }
+    mojo::PendingReceiver<local_search_service::mojom::Index> index_receiver) {
+  auto* const factory = local_search_service::LocalSearchServiceProxyFactory::
+      GetForBrowserContext(web_ui()->GetWebContents()->GetBrowserContext());
+  factory->SetLocalState(delegate_->GetLocalState());
+  factory->GetIndex(local_search_service::IndexId::kHelpApp,
+                    local_search_service::Backend::kInvertedIndex,
+                    std::move(index_receiver));
 }
 
 void HelpAppUI::BindInterface(
@@ -136,8 +136,8 @@ void HelpAppUI::BindInterface(
 
 void HelpAppUI::CreatePageHandler(
     mojo::PendingReceiver<help_app::mojom::PageHandler> receiver) {
-  page_handler_ =
-      std::make_unique<HelpAppPageHandler>(this, std::move(receiver));
+  page_handler_ = std::make_unique<HelpAppPageHandler>(
+      this, std::move(receiver), pref_service_);
 }
 
 bool HelpAppUI::IsJavascriptErrorReportingEnabled() {

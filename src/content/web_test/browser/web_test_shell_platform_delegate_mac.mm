@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/web_test/browser/web_test_shell_platform_delegate.h"
 
+#import "base/apple/foundation_util.h"
 #include "base/containers/contains.h"
-#import "base/mac/foundation_util.h"
 #include "content/browser/renderer_host/render_widget_host_view_mac.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_widget_host.h"
@@ -50,7 +50,6 @@ gfx::NativeWindow WebTestShellPlatformDelegate::GetNativeWindow(Shell* shell) {
     return ShellPlatformDelegate::GetNativeWindow(shell);
 
   NOTREACHED();
-  return {};
 }
 
 void WebTestShellPlatformDelegate::CleanUp(Shell* shell) {
@@ -116,9 +115,9 @@ void WebTestShellPlatformDelegate::MainFrameCreated(Shell* shell) {
   // RenderWidgetHostView to be created would leave the WebContents with invalid
   // sizes (such as the window screen rect).
   //
-  // We use the signal that the RenderView has been created in the renderer as
-  // a proxy for knowing when the top level RenderWidgetHostView is created,
-  // since they are created at the same time.
+  // We use the signal that the `blink::WebView` has been created in the
+  // renderer as a proxy for knowing when the top level RenderWidgetHostView is
+  // created, since they are created at the same time.
   DCHECK(shell->web_contents()->GetPrimaryMainFrame()->GetView());
   ResizeWebContent(shell, shell_data.initial_size);
 }
@@ -138,13 +137,13 @@ void WebTestShellPlatformDelegate::ResizeWebContent(
   }
 
   NSView* web_view = shell->web_contents()->GetNativeView().GetNativeNSView();
-  NSRect frame = NSMakeRect(0, 0, content_size.width(), content_size.height());
-  [web_view setFrame:frame];
+  web_view.frame =
+      NSMakeRect(0, 0, content_size.width(), content_size.height());
 
   // The above code changes the RenderWidgetHostView's size, but does not change
-  // the widget's screen rects, since the RenerWidgetHostView is not attached to
-  // a window in headless mode. So this call causes them to be updated so they
-  // are not left as 0x0.
+  // the widget's screen rects, since the RenderWidgetHostView is not attached
+  // to a window in headless mode. So this call causes them to be updated so
+  // they are not left as 0x0.
   auto* rwhv_mac = shell->web_contents()->GetPrimaryMainFrame()->GetView();
   if (rwhv_mac)
     rwhv_mac->SetWindowFrameInScreen(gfx::Rect(content_size));
@@ -200,7 +199,7 @@ void WebTestShellPlatformDelegate::DidNavigatePrimaryMainFramePostCommit(
 bool WebTestShellPlatformDelegate::HandleKeyboardEvent(
     Shell* shell,
     WebContents* source,
-    const NativeWebKeyboardEvent& event) {
+    const input::NativeWebKeyboardEvent& event) {
   if (IsHeadless())
     return false;
   return ShellPlatformDelegate::HandleKeyboardEvent(shell, source, event);

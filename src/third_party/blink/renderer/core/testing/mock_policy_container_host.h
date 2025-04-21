@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,11 +23,6 @@ class MockPolicyContainerHost : public mojom::blink::PolicyContainerHost {
               AddContentSecurityPolicies,
               (Vector<network::mojom::blink::ContentSecurityPolicyPtr>),
               (override));
-  MOCK_METHOD(
-      void,
-      IssueKeepAliveHandle,
-      (mojo::PendingReceiver<mojom::blink::PolicyContainerHostKeepAliveHandle>),
-      (override));
   MockPolicyContainerHost() = default;
 
   // Wrapper around AssociatedReceiver::BindNewEndpointAndPassDedicatedRemote.

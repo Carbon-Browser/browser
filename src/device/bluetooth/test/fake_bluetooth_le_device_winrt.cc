@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/not_fatal_until.h"
+#include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/win/async_operation.h"
 #include "base/win/scoped_hstring.h"
 #include "device/bluetooth/bluetooth_remote_gatt_service_winrt.h"
@@ -52,6 +54,10 @@ using ABI::Windows::Devices::Bluetooth::GenericAttributeProfile::
 using ABI::Windows::Devices::Enumeration::DeviceAccessStatus;
 using ABI::Windows::Devices::Enumeration::IDeviceAccessInformation;
 using ABI::Windows::Devices::Enumeration::IDeviceInformation;
+using ABI::Windows::Devices::Enumeration::DevicePairingKinds::
+    DevicePairingKinds_ConfirmOnly;
+using ABI::Windows::Devices::Enumeration::DevicePairingKinds::
+    DevicePairingKinds_ConfirmPinMatch;
 using ABI::Windows::Foundation::IAsyncOperation;
 using ABI::Windows::Foundation::ITypedEventHandler;
 using ABI::Windows::Foundation::Collections::IVectorView;
@@ -205,7 +211,11 @@ HRESULT FakeBluetoothLEDeviceWinrt::GetGattServicesAsync(
 HRESULT FakeBluetoothLEDeviceWinrt::GetGattServicesWithCacheModeAsync(
     BluetoothCacheMode cache_mode,
     IAsyncOperation<GattDeviceServicesResult*>** operation) {
-  return E_NOTIMPL;
+  auto hr = GetGattServicesAsync(operation);
+  bluetooth_test_winrt_
+      ->OnFakeBluetoothDeviceGattServiceDiscoveryAttemptWithCacheMode(
+          cache_mode);
+  return hr;
 }
 
 HRESULT FakeBluetoothLEDeviceWinrt::GetGattServicesForUuidAsync(
@@ -226,7 +236,11 @@ HRESULT FakeBluetoothLEDeviceWinrt::GetGattServicesForUuidWithCacheModeAsync(
     GUID service_uuid,
     BluetoothCacheMode cache_mode,
     IAsyncOperation<GattDeviceServicesResult*>** operation) {
-  return E_NOTIMPL;
+  auto hr = GetGattServicesForUuidAsync(service_uuid, operation);
+  bluetooth_test_winrt_
+      ->OnFakeBluetoothDeviceGattServiceDiscoveryAttemptWithCacheMode(
+          cache_mode);
+  return hr;
 }
 
 HRESULT FakeBluetoothLEDeviceWinrt::get_BluetoothDeviceId(
@@ -259,16 +273,22 @@ void FakeBluetoothLEDeviceWinrt::SimulatePairingPinCode(std::string pin_code) {
       Make<FakeDeviceInformationPairingWinrt>(std::move(pin_code)));
 }
 
-void FakeBluetoothLEDeviceWinrt::SimulatePairingKind(
-    ABI::Windows::Devices::Enumeration::DevicePairingKinds pairing_kind) {
+void FakeBluetoothLEDeviceWinrt::SimulateConfirmOnly() {
   device_information_ = Make<FakeDeviceInformationWinrt>(
-      Make<FakeDeviceInformationPairingWinrt>(pairing_kind));
+      Make<FakeDeviceInformationPairingWinrt>(DevicePairingKinds_ConfirmOnly));
 }
 
-absl::optional<BluetoothUUID> FakeBluetoothLEDeviceWinrt::GetTargetGattService()
+void FakeBluetoothLEDeviceWinrt::SimulateDisplayPin(
+    std::string_view display_pin) {
+  device_information_ =
+      Make<FakeDeviceInformationWinrt>(Make<FakeDeviceInformationPairingWinrt>(
+          DevicePairingKinds_ConfirmPinMatch, display_pin));
+}
+
+std::optional<BluetoothUUID> FakeBluetoothLEDeviceWinrt::GetTargetGattService()
     const {
   if (!service_uuid_)
-    return absl::nullopt;
+    return std::nullopt;
   return BluetoothUUID(*service_uuid_);
 }
 
@@ -359,11 +379,10 @@ void FakeBluetoothLEDeviceWinrt::SimulateGattServiceRemoved(
     BluetoothRemoteGattService* service) {
   auto* device_service = static_cast<BluetoothRemoteGattServiceWinrt*>(service)
                              ->GetDeviceServiceForTesting();
-  auto iter = std::find_if(fake_services_.begin(), fake_services_.end(),
-                           [device_service](const auto& fake_service) {
-                             return device_service == fake_service.Get();
-                           });
-  DCHECK(iter != fake_services_.end());
+  auto iter = base::ranges::find(
+      fake_services_, device_service,
+      &Microsoft::WRL::ComPtr<FakeGattDeviceServiceWinrt>::Get);
+  CHECK(iter != fake_services_.end(), base::NotFatalUntil::M130);
   fake_services_.erase(iter);
   SimulateGattServicesChanged();
   DCHECK(gatt_services_callback_);
@@ -436,7 +455,7 @@ HRESULT FakeBluetoothLEDeviceStaticsWinrt::FromBluetoothAddressAsync(
     uint64_t bluetooth_address,
     IAsyncOperation<BluetoothLEDevice*>** operation) {
   auto async_op = Make<base::win::AsyncOperation<BluetoothLEDevice*>>();
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(async_op->callback(),
                      Make<FakeBluetoothLEDeviceWinrt>(bluetooth_test_winrt_)));

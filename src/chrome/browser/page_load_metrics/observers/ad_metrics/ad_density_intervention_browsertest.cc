@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,10 +43,10 @@ class AdDensityViolationBrowserTest
   AdDensityViolationBrowserTest() = default;
 
   void SetUp() override {
-    std::vector<base::Feature> enabled = {
+    std::vector<base::test::FeatureRef> enabled = {
         subresource_filter::kAdTagging,
         subresource_filter::kAdsInterventionsEnforced};
-    std::vector<base::Feature> disabled = {};
+    std::vector<base::test::FeatureRef> disabled = {};
 
     feature_list_.InitWithFeatures(enabled, disabled);
     subresource_filter::SubresourceFilterBrowserTest::SetUp();
@@ -85,11 +85,19 @@ class AdDensityViolationBrowserTest
   base::test::ScopedFeatureList feature_list_;
 };
 
-// TODO(https://crbug.com/1142592): Replace this heavy-weight browsertest with
+// TODO(crbug.com/40916871): Fix this test on Mac.
+#if BUILDFLAG(IS_MAC)
+#define MAYBE_DesktopPageAdDensityByHeightAbove30_AdInterventionNotTriggered \
+  DISABLED_DesktopPageAdDensityByHeightAbove30_AdInterventionNotTriggered
+#else
+#define MAYBE_DesktopPageAdDensityByHeightAbove30_AdInterventionNotTriggered \
+  DesktopPageAdDensityByHeightAbove30_AdInterventionNotTriggered
+#endif
+// TODO(crbug.com/40727827): Replace this heavy-weight browsertest with
 // a unit test.
 IN_PROC_BROWSER_TEST_F(
     AdDensityViolationBrowserTest,
-    DesktopPageAdDensityByHeightAbove30_AdInterventionNotTriggered) {
+    MAYBE_DesktopPageAdDensityByHeightAbove30_AdInterventionNotTriggered) {
   base::HistogramTester histogram_tester;
   ukm::TestAutoSetUkmRecorder ukm_recorder;
 

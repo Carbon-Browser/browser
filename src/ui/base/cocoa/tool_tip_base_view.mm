@@ -1,10 +1,16 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #import "ui/base/cocoa/tool_tip_base_view.h"
 
 #include "base/check.h"
+#include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 
 // Below is the nasty tooltip stuff -- copied from WebKit's WebHTMLView.mm
@@ -49,11 +55,17 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+@implementation ToolTipBaseView {
+  // These are part of the magic tooltip code from WebKit's WebHTMLView:
+  id __weak _trackingRectOwner;
+  raw_ptr<void, DanglingUntriaged> _trackingRectUserData;
+  NSTrackingRectTag _lastToolTipTag;
+  NSString* __strong _toolTip;
+}
+
 // Any non-zero value will do, but using something recognizable might help us
 // debug some day.
 const NSTrackingRectTag kTrackingRectTag = 0xBADFACE;
-
-@implementation ToolTipBaseView
 
 // Override of a public NSView method, replacing the inherited functionality.
 // See above for rationale.
@@ -120,7 +132,7 @@ const NSTrackingRectTag kTrackingRectTag = 0xBADFACE;
 // Override of (apparently) a private NSView method(!)
 - (void)_removeTrackingRects:(NSTrackingRectTag *)tags count:(int)count {
   for (int i = 0; i < count; ++i) {
-    int tag = tags[i];
+    NSTrackingRectTag tag = tags[i];
     if (tag == 0)
       continue;
     DCHECK(tag == kTrackingRectTag);
@@ -132,50 +144,74 @@ const NSTrackingRectTag kTrackingRectTag = 0xBADFACE;
 // tracking rect.
 - (void)_sendToolTipMouseExited {
   // Nothing matters except window, trackingNumber, and userData.
-  int windowNumber = [[self window] windowNumber];
-  NSTimeInterval eventTime = [[NSApp currentEvent] timestamp];
-  NSEvent* fakeEvent = [NSEvent enterExitEventWithType:NSEventTypeMouseExited
-                                              location:NSZeroPoint
-                                         modifierFlags:0
-                                             timestamp:eventTime
-                                          windowNumber:windowNumber
-                                               context:NULL
-                                           eventNumber:0
-                                        trackingNumber:kTrackingRectTag
-                                              userData:_trackingRectUserData];
-  [_trackingRectOwner mouseExited:fakeEvent];
+  NSEvent* fakeEvent =
+      [NSEvent enterExitEventWithType:NSEventTypeMouseExited
+                             location:NSZeroPoint
+                        modifierFlags:0
+                            timestamp:NSApp.currentEvent.timestamp
+                         windowNumber:self.window.windowNumber
+                              context:nullptr
+                          eventNumber:0
+                       trackingNumber:kTrackingRectTag
+                             userData:_trackingRectUserData];
+  [self._toolTipOwnerForSendingMouseEvents mouseExited:fakeEvent];
 }
 
 // Sends a fake NSEventTypeMouseEntered event to the view for its current
 // tracking rect.
 - (void)_sendToolTipMouseEntered {
-  int windowNumber = [[self window] windowNumber];
+  NSInteger windowNumber = self.window.windowNumber;
 
   // Only send a fake mouse enter if the mouse is actually over the window,
   // versus over a window which overlaps it (see http://crbug.com/883269).
-  if ([NSWindow windowNumberAtPoint:[NSEvent mouseLocation]
-          belowWindowWithWindowNumber:0] != windowNumber)
+  if ([NSWindow windowNumberAtPoint:NSEvent.mouseLocation
+          belowWindowWithWindowNumber:0] != windowNumber) {
     return;
+  }
 
   // Nothing matters except window, trackingNumber, and userData.
-  NSTimeInterval eventTime = [[NSApp currentEvent] timestamp];
-  NSEvent* fakeEvent = [NSEvent enterExitEventWithType:NSEventTypeMouseEntered
-                                              location:NSZeroPoint
-                                         modifierFlags:0
-                                             timestamp:eventTime
-                                          windowNumber:windowNumber
-                                               context:NULL
-                                           eventNumber:0
-                                        trackingNumber:kTrackingRectTag
-                                              userData:_trackingRectUserData];
-  [_trackingRectOwner mouseEntered:fakeEvent];
+  NSEvent* fakeEvent =
+      [NSEvent enterExitEventWithType:NSEventTypeMouseEntered
+                             location:NSZeroPoint
+                        modifierFlags:0
+                            timestamp:NSApp.currentEvent.timestamp
+                         windowNumber:windowNumber
+                              context:nullptr
+                          eventNumber:0
+                       trackingNumber:kTrackingRectTag
+                             userData:_trackingRectUserData];
+  [self._toolTipOwnerForSendingMouseEvents mouseEntered:fakeEvent];
+}
+
+// Identifies the owner responsible for handling mouse events related to
+// tooltips. This method ensures correct tooltip behavior by checking the
+// primary tracking rect owner and, if not found, searching through
+// `NSTrackingArea` objects to find the tooltip manager.
+- (id)_toolTipOwnerForSendingMouseEvents {
+  if (id owner = _trackingRectOwner) {
+    return owner;
+  }
+
+  static Class managerClass = nil;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    managerClass = NSClassFromString(@"NSToolTipManager");
+  });
+
+  for (CrTrackingArea* trackingArea in self.trackingAreas) {
+    id owner = trackingArea.owner;
+    if ([owner isKindOfClass:managerClass]) {
+      return owner;
+    }
+  }
+  return nil;
 }
 
 // Sets the view's current tooltip, to be displayed at the current mouse
 // location. (This does not make the tooltip appear -- as usual, it only
 // appears after a delay.) Pass null to remove the tooltip.
 - (void)setToolTipAtMousePoint:(NSString *)string {
-  NSString *toolTip = [string length] == 0 ? nil : string;
+  NSString* toolTip = string.length == 0 ? nil : string;
   if ((toolTip && _toolTip && [toolTip isEqualToString:_toolTip]) ||
       (!toolTip && !_toolTip)) {
     return;
@@ -185,16 +221,28 @@ const NSTrackingRectTag kTrackingRectTag = 0xBADFACE;
     [self _sendToolTipMouseExited];
   }
 
-  _toolTip.reset([toolTip copy]);
+  _toolTip = [toolTip copy];
 
+  // The logic below was
+  //
+  //   if (tooltip) {
+  //     [self removeAllTooltips];
+  //     ...
+  //   }
+  //
+  // By moving the call to -removeAllTooltips outside of the conditional,
+  // we can ensure any visible tooltip will be removed from the screen.
+  // See crbug.com/1409942.
+  //
+  // The strategy of removing all tooltips rather than the single one that
+  // was added comes from WebKit, like the rest of the code here. It
+  // apparently works around some AppKit bug.
+  [self removeAllToolTips];
   if (toolTip) {
-    // See radar 3500217 for why we remove all tooltips
-    // rather than just the single one we created.
-    [self removeAllToolTips];
     NSRect wideOpenRect = NSMakeRect(-100000, -100000, 200000, 200000);
     _lastToolTipTag = [self addToolTipRect:wideOpenRect
                                      owner:self
-                                  userData:NULL];
+                                  userData:nullptr];
     [self _sendToolTipMouseEntered];
   }
 }
@@ -204,7 +252,7 @@ const NSTrackingRectTag kTrackingRectTag = 0xBADFACE;
   stringForToolTip:(NSToolTipTag)tag
              point:(NSPoint)point
           userData:(void *)data {
-  return [[_toolTip copy] autorelease];
+  return [_toolTip copy];
 }
 
 @end

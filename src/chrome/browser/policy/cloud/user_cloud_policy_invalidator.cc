@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,15 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/default_clock.h"
 #include "build/build_config.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/invalidation/profile_invalidation_provider_factory.h"
-#include "components/invalidation/impl/profile_invalidation_provider.h"
-#include "components/policy/core/common/cloud/cloud_policy_constants.h"
+#include "chrome/browser/policy/policy_util.h"
+#include "chrome/browser/profiles/profile.h"
+#include "components/invalidation/profile_invalidation_provider.h"
 #include "components/policy/core/common/cloud/cloud_policy_manager.h"
-#include "content/public/browser/notification_source.h"
 
 namespace {
 
@@ -34,10 +33,9 @@ UserCloudPolicyInvalidator::UserCloudPolicyInvalidator(
     CloudPolicyManager* policy_manager)
     : CloudPolicyInvalidator(PolicyInvalidationScope::kUser,
                              policy_manager->core(),
-                             base::ThreadTaskRunnerHandle::Get(),
+                             base::SingleThreadTaskRunner::GetCurrentDefault(),
                              base::DefaultClock::GetInstance(),
-                             0 /* highest_handled_invalidation_version */),
-      profile_(profile) {
+                             0 /* highest_handled_invalidation_version */) {
   DCHECK(profile);
 
   // Register for notification that profile creation is complete. The
@@ -47,28 +45,32 @@ UserCloudPolicyInvalidator::UserCloudPolicyInvalidator(
   // TODO(stepco): Delayed initialization can be removed once the request
   // context can be accessed during profile-keyed service creation. Tracked by
   // bug 286209.
-  registrar_.Add(this,
-                 chrome::NOTIFICATION_PROFILE_ADDED,
-                 content::Source<Profile>(profile));
+  // TODO(crbug.com/40113187): Investigate if this is still required.
+  profile_observation_.Observe(profile);
 }
 
+UserCloudPolicyInvalidator::~UserCloudPolicyInvalidator() = default;
+
 void UserCloudPolicyInvalidator::Shutdown() {
+  profile_observation_.Reset();
   CloudPolicyInvalidator::Shutdown();
 }
 
-void UserCloudPolicyInvalidator::Observe(
-    int type,
-    const content::NotificationSource& source,
-    const content::NotificationDetails& details) {
+void UserCloudPolicyInvalidator::OnProfileInitializationComplete(
+    Profile* profile) {
+  DCHECK(profile_observation_.IsObservingSource(profile));
+  profile_observation_.Reset();
+
   // Initialize now that profile creation is complete and the invalidation
   // service can safely be initialized.
-  DCHECK_EQ(chrome::NOTIFICATION_PROFILE_ADDED, type);
   invalidation::ProfileInvalidationProvider* invalidation_provider =
-      GetInvalidationProvider(profile_);
-  if (!invalidation_provider)
+      GetInvalidationProvider(profile);
+  if (!invalidation_provider) {
     return;
-  Initialize(invalidation_provider->GetInvalidationServiceForCustomSender(
-      policy::kPolicyFCMInvalidationSenderID));
+  }
+
+  Initialize(invalidation_provider->GetInvalidationServiceOrListener(
+      GetPolicyInvalidationProjectNumber(PolicyInvalidationScope::kUser)));
 }
 
 }  // namespace policy

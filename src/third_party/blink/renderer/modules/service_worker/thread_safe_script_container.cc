@@ -1,10 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/service_worker/thread_safe_script_container.h"
 
+#include "base/containers/contains.h"
 #include "base/memory/ptr_util.h"
+#include "base/not_fatal_until.h"
 
 namespace blink {
 
@@ -31,7 +33,7 @@ void ThreadSafeScriptContainer::AddOnIOThread(
     const KURL& url,
     std::unique_ptr<RawScriptData> data) {
   base::AutoLock locker(lock_);
-  DCHECK_EQ(script_data_.end(), script_data_.find(url));
+  DCHECK(!base::Contains(script_data_, url));
   ScriptStatus status = data ? ScriptStatus::kReceived : ScriptStatus::kFailed;
   script_data_.Set(url, std::make_pair(status, std::move(data)));
   if (url == waiting_url_)
@@ -57,7 +59,7 @@ bool ThreadSafeScriptContainer::WaitOnWorkerThread(const KURL& url) {
   DCHECK(!waiting_url_.IsValid())
       << "The script container is unexpectedly shared among worker threads.";
   waiting_url_ = url;
-  while (script_data_.find(url) == script_data_.end()) {
+  while (!base::Contains(script_data_, url)) {
     // If waiting script hasn't been added yet though all data are received,
     // that means something went wrong.
     if (are_all_data_added_) {
@@ -76,7 +78,7 @@ std::unique_ptr<ThreadSafeScriptContainer::RawScriptData>
 ThreadSafeScriptContainer::TakeOnWorkerThread(const KURL& url) {
   base::AutoLock locker(lock_);
   auto it = script_data_.find(url);
-  DCHECK(it != script_data_.end())
+  CHECK(it != script_data_.end(), base::NotFatalUntil::M130)
       << "Script should have been received before calling Take";
   std::pair<ScriptStatus, std::unique_ptr<RawScriptData>>& pair = it->value;
   DCHECK_EQ(ScriptStatus::kReceived, pair.first);

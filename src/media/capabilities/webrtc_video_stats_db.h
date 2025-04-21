@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,16 @@
 #define MEDIA_CAPABILITIES_WEBRTC_VIDEO_STATS_DB_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/check.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback_forward.h"
 #include "base/time/time.h"
 #include "media/base/media_export.h"
 #include "media/base/video_codecs.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/size.h"
 
 namespace media {
@@ -42,7 +42,7 @@ class MEDIA_EXPORT WebrtcVideoStatsDB {
     // For debug logging. NOT interchangeable with Serialize().
     std::string ToLogStringForDebug() const;
 
-    static absl::optional<int> ParsePixelsFromKey(std::string key);
+    static std::optional<int> ParsePixelsFromKey(std::string key);
 
     // Note: operator == and != are defined outside this class.
     const bool is_decode_stats;
@@ -146,7 +146,7 @@ class MEDIA_EXPORT WebrtcVideoStatsDB {
   // the stats in addition to a boolean signaling if the call was successful.
   // VideoStatsEntry can be nullopt if there was no data associated with `key`.
   using GetVideoStatsCB =
-      base::OnceCallback<void(bool, absl::optional<VideoStatsEntry>)>;
+      base::OnceCallback<void(bool, std::optional<VideoStatsEntry>)>;
   virtual void GetVideoStats(const VideoDescKey& key,
                              GetVideoStatsCB get_stats_cb) = 0;
 
@@ -155,7 +155,7 @@ class MEDIA_EXPORT WebrtcVideoStatsDB {
   // signaling if the call was successful. VideoStatsEntry can be nullopt if
   // there was no data associated with `key`.
   using GetVideoStatsCollectionCB =
-      base::OnceCallback<void(bool, absl::optional<VideoStatsCollection>)>;
+      base::OnceCallback<void(bool, std::optional<VideoStatsCollection>)>;
   virtual void GetVideoStatsCollection(
       const VideoDescKey& key,
       GetVideoStatsCollectionCB get_stats_cb) = 0;

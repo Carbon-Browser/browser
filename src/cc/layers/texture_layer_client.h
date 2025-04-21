@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@ struct TransferableResource;
 }
 
 namespace cc {
-class SharedBitmapIdRegistrar;
 
 class TextureLayerClient {
  public:
@@ -20,7 +19,6 @@ class TextureLayerClient {
   // Returns false if no new data is available
   // and the old mailbox is to be reused.
   virtual bool PrepareTransferableResource(
-      SharedBitmapIdRegistrar* bitmap_registar,
       viz::TransferableResource* transferable_resource,
       viz::ReleaseCallback* release_callback) = 0;
 

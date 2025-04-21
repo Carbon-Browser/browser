@@ -1,18 +1,20 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_DISPLAY_LOCK_DISPLAY_LOCK_CONTEXT_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_DISPLAY_LOCK_DISPLAY_LOCK_CONTEXT_H_
 
+#include <array>
 #include <utility>
 
 #include "third_party/blink/renderer/core/core_export.h"
+#include "third_party/blink/renderer/core/css/style_engine.h"
 #include "third_party/blink/renderer/core/css/style_recalc_change.h"
+#include "third_party/blink/renderer/core/dom/element_rare_data_field.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
 #include "third_party/blink/renderer/core/scroll/scroll_types.h"
 #include "third_party/blink/renderer/core/style/computed_style_base_constants.h"
-#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cancellable_task.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
@@ -55,7 +57,7 @@ enum class DisplayLockActivationReason {
          static_cast<uint16_t>(kSelection) |
          static_cast<uint16_t>(kSimulatedClick) |
          static_cast<uint16_t>(kUserFocus) |
-         static_cast<uint16_t>(kViewportIntersection)
+         static_cast<uint16_t>(kViewportIntersection),
 };
 
 // Instead of specifying an underlying type, which would propagate throughout
@@ -67,7 +69,8 @@ static_assert(static_cast<uint32_t>(DisplayLockActivationReason::kAny) <
 
 class CORE_EXPORT DisplayLockContext final
     : public GarbageCollected<DisplayLockContext>,
-      public LocalFrameView::LifecycleNotificationObserver {
+      public LocalFrameView::LifecycleNotificationObserver,
+      public ElementRareDataField {
  public:
   // Note the order of the phases matters. Each phase implies all previous ones
   // as well.
@@ -79,7 +82,7 @@ class CORE_EXPORT DisplayLockContext final
   // Called by style to update the current state of content-visibility.
   void SetRequestedState(EContentVisibility state);
   // Called by style to adjust the element's style based on the current state.
-  void AdjustElementStyle(ComputedStyle* style) const;
+  const ComputedStyle* AdjustElementStyle(const ComputedStyle*) const;
 
   // Is called by the intersection observer callback to inform us of the
   // intersection state.
@@ -87,16 +90,32 @@ class CORE_EXPORT DisplayLockContext final
   void NotifyIsNotIntersectingViewport();
 
   // Lifecycle state functions.
-  bool ShouldStyleChildren() const;
+  ALWAYS_INLINE bool ShouldStyleChildren() const {
+    return !is_locked_ ||
+           forced_info_.is_forced(ForcedPhase::kStyleAndLayoutTree) ||
+           (IsActivatable(DisplayLockActivationReason::kAny) &&
+            ActivatableDisplayLocksForced()) ||
+           (IsActivatable(DisplayLockActivationReason::kAccessibility) &&
+            document_->ExistingAXObjectCache());
+  }
+
   void DidStyleSelf();
   void DidStyleChildren();
-  // This returns |true| for an IsShapingDeferred element.
-  bool ShouldLayoutChildren() const;
+  ALWAYS_INLINE bool ShouldLayoutChildren() const {
+    return !is_locked_ || forced_info_.is_forced(ForcedPhase::kLayout) ||
+           (IsActivatable(DisplayLockActivationReason::kAny) &&
+            ActivatableDisplayLocksForced()) ||
+           (IsActivatable(DisplayLockActivationReason::kAccessibility) &&
+            document_->ExistingAXObjectCache() &&
+            document_->GetStyleEngine().SkippedContainerRecalc());
+  }
   void DidLayoutChildren();
-  // This returns |true| for an IsShapingDeferred element.
-  bool ShouldPrePaintChildren() const;
-  // This returns |true| for an IsShapingDeferred element.
-  bool ShouldPaintChildren() const;
+  ALWAYS_INLINE bool ShouldPrePaintChildren() const {
+    return !is_locked_ || forced_info_.is_forced(ForcedPhase::kPrePaint) ||
+           (IsActivatable(DisplayLockActivationReason::kAny) &&
+            ActivatableDisplayLocksForced());
+  }
+  ALWAYS_INLINE bool ShouldPaintChildren() const { return !is_locked_; }
 
   // Returns true if the last style recalc traversal was blocked at this
   // element.
@@ -108,7 +127,9 @@ class CORE_EXPORT DisplayLockContext final
   // from and activatable by a specified reason. Note that passing
   // kAny will return true if the lock is activatable for any
   // reason.
-  bool IsActivatable(DisplayLockActivationReason reason) const;
+  ALWAYS_INLINE bool IsActivatable(DisplayLockActivationReason reason) const {
+    return activatable_mask_ & static_cast<uint16_t>(reason);
+  }
 
   // Trigger commit because of activation from tab order, url fragment,
   // find-in-page, scrolling, etc.
@@ -129,6 +150,7 @@ class CORE_EXPORT DisplayLockContext final
 
   // LifecycleNotificationObserver overrides.
   void WillStartLifecycleUpdate(const LocalFrameView&) override;
+  void DidFinishLayout() override;
 
   // Inform the display lock that it prevented a style change. This is used to
   // invalidate style when we need to update it in the future.
@@ -180,6 +202,7 @@ class CORE_EXPORT DisplayLockContext final
     if (IsLocked() && IsActivatable(DisplayLockActivationReason::kAny)) {
       MarkForStyleRecalcIfNeeded();
       MarkForLayoutIfNeeded();
+      MarkAncestorsForPrePaintIfNeeded();
     }
   }
 
@@ -209,7 +232,7 @@ class CORE_EXPORT DisplayLockContext final
     is_details_slot_ = is_details_slot;
   }
 
-  bool HasElement() const { return element_; }
+  bool HasElement() const { return element_ != nullptr; }
 
   // Top layer implementation.
   void NotifyHasTopLayerElement();
@@ -217,8 +240,19 @@ class CORE_EXPORT DisplayLockContext final
 
   void ScheduleTopLayerCheck();
 
-  bool IsShapingDeferred() const;
-  bool IsInclusiveDescendantOf(const LayoutObject& ancestor) const;
+  // State control for view transition element render affecting state.
+  void ResetDescendantIsViewTransitionElement();
+  void SetDescendantIsViewTransitionElement();
+
+  void SetAffectedByAnchorPositioning(bool);
+
+  // Mark this display lock as needing to recompute whether it has anchors
+  // below it that prevent it from becoming skipped.
+  void SetAnchorPositioningRenderStateMayHaveChanged();
+
+  // Computes whether there is a descendant that is the anchor target of
+  // an OOF positioned element from outside the display lock's subtree.
+  bool DescendantIsAnchorTargetFromOutsideDisplayLock();
 
  private:
   // Give access to |NotifyForcedUpdateScopeStarted()| and
@@ -258,6 +292,9 @@ class CORE_EXPORT DisplayLockContext final
 
   // Clear the activated flag.
   void ResetActivation();
+
+  // Returns true if activatable display locks are being currently forced.
+  bool ActivatableDisplayLocksForced() const;
 
   // The following functions propagate dirty bits from the locked element up to
   // the ancestors in order to be reached, and update dirty bits for the element
@@ -324,6 +361,10 @@ class CORE_EXPORT DisplayLockContext final
   // top layer node up the ancestor chain looking for `element_`.
   void DetermineIfSubtreeHasTopLayerElement();
 
+  // Determines if there are view transition elements in the subtree of this
+  // element.
+  void DetermineIfDescendantIsViewTransitionElement();
+
   // Detaching the layout tree from the top layers nested under this lock.
   void DetachDescendantTopLayerElements();
 
@@ -349,6 +390,7 @@ class CORE_EXPORT DisplayLockContext final
   bool SubtreeHasTopLayerElement() const;
 
   void ScheduleStateChangeEventIfNeeded();
+  void DispatchStateChangeEventIfNeeded();
 
   WeakMember<Element> element_;
   WeakMember<Document> document_;
@@ -360,7 +402,6 @@ class CORE_EXPORT DisplayLockContext final
       switch (phase) {
         case ForcedPhase::kNone:
           NOTREACHED();
-          return false;
         case ForcedPhase::kStyleAndLayoutTree:
           return style_update_forced_ || layout_update_forced_ ||
                  prepaint_update_forced_;
@@ -465,14 +506,17 @@ class CORE_EXPORT DisplayLockContext final
     kAutoStateUnlockedUntilLifecycle,
     kAutoUnlockedForPrint,
     kSubtreeHasTopLayerElement,
+    kDescendantIsViewTransitionElement,
+    kDescendantIsAnchorTarget,
     kNumRenderAffectingStates
   };
   void SetRenderAffectingState(RenderAffectingState state, bool flag);
   void NotifyRenderAffectingStateChanged();
   const char* RenderAffectingStateName(int state) const;
 
-  bool render_affecting_state_[static_cast<int>(
-      RenderAffectingState::kNumRenderAffectingStates)] = {false};
+  std::array<bool,
+             static_cast<int>(RenderAffectingState::kNumRenderAffectingStates)>
+      render_affecting_state_ = {false};
   int keep_unlocked_count_ = 0;
 
   bool had_lifecycle_update_since_last_unlock_ = false;
@@ -483,7 +527,7 @@ class CORE_EXPORT DisplayLockContext final
   // computed style).
   bool set_requested_state_scope_ = false;
 
-  absl::optional<ScrollOffset> stashed_scroll_offset_;
+  std::optional<ScrollOffset> stashed_scroll_offset_;
 
   // When we use content-visibility:hidden for the <details> element's content
   // slot or the hidden=until-found attribute, then this lock must activate
@@ -503,9 +547,22 @@ class CORE_EXPORT DisplayLockContext final
   // the next frame.
   bool has_pending_clear_has_top_layer_ = false;
 
-  // If ture, we need to check if this subtree has any top layer elements at the
+  // If true, we need to check if this subtree has any top layer elements at the
   // start of the next frame.
   bool has_pending_top_layer_check_ = false;
+
+  // This is set to the last value for which ContentVisibilityAutoStateChange
+  // event has been dispatched (if any).
+  std::optional<bool> last_notified_skipped_state_;
+
+  // If true, there is a pending task that will dispatch a state change event if
+  // needed.
+  bool state_change_task_pending_ = false;
+
+  // True if this lock needs to recompute whether kDescendantIsAnchorTarget
+  // applies. If so, after layout is complete it's necessary to actually
+  // compute whether that is the case.
+  bool anchor_positioning_render_state_may_have_changed_ = false;
 };
 
 }  // namespace blink

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,15 +53,15 @@ class CORE_EXPORT DisplayLockUtilities {
     friend void Document::UpdateStyleAndLayoutForRange(
         const Range* range,
         DocumentUpdateReason reason);
-    friend void Document::UpdateStyleAndLayoutTreeForNode(const Node*);
-    friend void Document::UpdateStyleAndLayoutTreeForSubtree(const Node* node);
-    friend void Document::EnsurePaintLocationDataValidForNode(
-        const Node* node,
+    friend void Document::UpdateStyleAndLayoutTreeForElement(
+        const Element* node,
+        DocumentUpdateReason reason);
+    friend void Document::UpdateStyleAndLayoutTreeForSubtree(
+        const Element* node,
         DocumentUpdateReason reason);
     friend void Document::EnsurePaintLocationDataValidForNode(
         const Node* node,
-        DocumentUpdateReason reason,
-        CSSPropertyID property_id);
+        DocumentUpdateReason reason);
     friend VisibleSelection
     FrameSelection::ComputeVisibleSelectionInDOMTreeDeprecated() const;
     friend gfx::RectF Range::BoundingRect() const;
@@ -156,20 +156,20 @@ class CORE_EXPORT DisplayLockUtilities {
         DisplayLockUtilities::memoizer_ = this;
     }
 
-    absl::optional<bool> IsNodeLocked(const Node* node) {
+    std::optional<bool> IsNodeLocked(const Node* node) {
       if (nodes_preventing_paint.Contains(node))
         return true;
       if (unlocked_nodes.Contains(node))
         return false;
-      return absl::nullopt;
+      return std::nullopt;
     }
 
-    absl::optional<bool> IsNodeLockedForAccessibility(const Node* node) {
+    std::optional<bool> IsNodeLockedForAccessibility(const Node* node) {
       if (nodes_preventing_accessibility.Contains(node))
         return true;
       if (unlocked_nodes.Contains(node))
         return false;
-      return absl::nullopt;
+      return std::nullopt;
     }
 
     void NotifyLocked(const Node* node) {
@@ -211,6 +211,8 @@ class CORE_EXPORT DisplayLockUtilities {
   // See: http://bit.ly/2RXULVi, "beforeactivate Event" part.
   static bool ActivateFindInPageMatchRangeIfNeeded(
       const EphemeralRangeInFlatTree& range);
+  static bool NeedsActivationForFindInPage(
+      const EphemeralRangeInFlatTree& range);
 
   // Returns activatable-locked inclusive ancestors of |node|.
   // Note that this function will return an empty list if |node| is inside a
@@ -219,11 +221,6 @@ class CORE_EXPORT DisplayLockUtilities {
   static const HeapVector<Member<Element>> ActivatableLockedInclusiveAncestors(
       const Node& node,
       DisplayLockActivationReason reason);
-
-  // Returns the nearest inclusive ancestor of |element| that has
-  // content-visibility: hidden-matchable.
-  // TODO(crbug.com/1249939): Remove this.
-  static Element* NearestHiddenMatchableInclusiveAncestor(Element& element);
 
   // Ancestor navigation functions.
 
@@ -298,6 +295,8 @@ class CORE_EXPORT DisplayLockUtilities {
   static void ElementLostFocus(Element*);
   static void ElementGainedFocus(Element*);
 
+  // Returns true if the selection changed functions need to be called.
+  static bool NeedsSelectionChangedUpdate(const Document& document);
   static void SelectionChanged(const EphemeralRangeInFlatTree& old_selection,
                                const EphemeralRangeInFlatTree& new_selection);
   static void SelectionRemovedFromDocument(Document& document);
@@ -321,7 +320,16 @@ class CORE_EXPORT DisplayLockUtilities {
   // LockedAncestorPreventing*.
   static bool IsUnlockedQuickCheck(const Node& node);
 
+  // True if unlocking would invalidate style and produce a style recalc root at
+  // the specified node.
+  //
+  // See StyleEngine::style_recalc_root_.
+  static bool IsPotentialStyleRecalcRoot(const Node& node);
+
  private:
+  static bool IsDisplayLockedPreventingPaintUnmemoized(const Node& node,
+                                                       bool inclusive_check);
+
   // This is a helper function for ShouldIgnoreNodeDueToDisplayLock() when the
   // activation reason is kAccessibility. Note that it's private because it
   // assumes certain conditions (specifically the presence of `memoizer_`, which

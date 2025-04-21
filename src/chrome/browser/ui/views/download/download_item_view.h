@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,13 @@
 
 #include <stddef.h>
 
+#include <optional>
 #include <string>
 #include <utility>
 
 #include "base/files/file_path.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/cancelable_task_tracker.h"
 #include "base/time/time.h"
@@ -21,11 +23,10 @@
 #include "chrome/browser/icon_loader.h"
 #include "chrome/browser/ui/download/download_item_mode.h"
 #include "chrome/browser/ui/views/download/download_shelf_context_menu_view.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/models/image_model.h"
+#include "ui/base/mojom/menu_source_type.mojom-forward.h"
 #include "ui/base/resource/resource_bundle.h"
-#include "ui/base/ui_base_types.h"
 #include "ui/gfx/animation/slide_animation.h"
 #include "ui/gfx/animation/throb_animation.h"
 #include "ui/gfx/geometry/size.h"
@@ -68,9 +69,9 @@ class DownloadItemView : public views::View,
                          public views::ContextMenuController,
                          public DownloadUIModel::Delegate,
                          public views::AnimationDelegateViews {
- public:
-  METADATA_HEADER(DownloadItemView);
+  METADATA_HEADER(DownloadItemView, views::View)
 
+ public:
   DownloadItemView(DownloadUIModel::DownloadUIModelPtr model,
                    DownloadShelfView* shelf,
                    views::View* accessible_alert);
@@ -80,16 +81,15 @@ class DownloadItemView : public views::View,
 
   // views::View:
   void AddedToWidget() override;
-  void Layout() override;
+  void Layout(PassKey) override;
   bool OnMouseDragged(const ui::MouseEvent& event) override;
   void OnMouseCaptureLost() override;
-  std::u16string GetTooltipText(const gfx::Point& p) const override;
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
 
   // views::ContextMenuController:
-  void ShowContextMenuForViewImpl(View* source,
-                                  const gfx::Point& point,
-                                  ui::MenuSourceType source_type) override;
+  void ShowContextMenuForViewImpl(
+      View* source,
+      const gfx::Point& point,
+      ui::mojom::MenuSourceType source_type) override;
 
   // DownloadUIModel::Delegate:
   void OnDownloadUpdated() override;
@@ -104,17 +104,16 @@ class DownloadItemView : public views::View,
   DownloadUIModel* model() { return model_.get(); }
   const DownloadUIModel* model() const { return model_.get(); }
 
-  // Submits download to download feedback service if the user has approved and
-  // the download is suitable for submission, then applies |command|.
-  // If user hasn't seen SBER opt-in text before, show SBER opt-in dialog first.
-  void MaybeSubmitDownloadToFeedbackService(DownloadCommands::Command command);
-
   std::u16string GetStatusTextForTesting() const;
   void OpenItemForTesting();
 
+  // Tooltip text is only displayed when not showing a warning dialog.
+  void UpdateTooltipText();
+
  protected:
   // views::View:
-  gfx::Size CalculatePreferredSize() const override;
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& /*available_size*/) const override;
   void OnPaintBackground(gfx::Canvas* canvas) override;
   void OnPaint(gfx::Canvas* canvas) override;
   void OnThemeChanged() override;
@@ -209,7 +208,6 @@ class DownloadItemView : public views::View,
 
   // Called when various buttons are pressed.
   void OpenButtonPressed();
-  void SaveOrDiscardButtonPressed(DownloadCommands::Command command);
   void DropdownButtonPressed(const ui::Event& event);
   void ReviewButtonPressed();
 
@@ -220,18 +218,17 @@ class DownloadItemView : public views::View,
   // Shows the context menu at the specified location. |point| is in the view's
   // coordinate system.
   void ShowContextMenuImpl(const gfx::Rect& rect,
-                           ui::MenuSourceType source_type);
+                           ui::mojom::MenuSourceType source_type);
 
   // Opens a file while async scanning is still pending.
   void OpenDownloadDuringAsyncScanning();
 
-  // Submits the downloaded file to the safebrowsing download feedback service.
-  // Applies |command| if submission succeeds. Returns whether submission was
-  // successful.
-  bool SubmitDownloadToFeedbackService(DownloadCommands::Command command) const;
-
   // Forwards |command| to |commands_|; useful for callbacks.
   void ExecuteCommand(DownloadCommands::Command command);
+
+  void UpdateAccessibleName();
+
+  std::u16string CalculateAccessibleName() const;
 
   // The model controlling this object's state.
   const DownloadUIModel::DownloadUIModelPtr model_;
@@ -257,7 +254,7 @@ class DownloadItemView : public views::View,
   bool dragging_ = false;
 
   // Position that a possible drag started at.
-  absl::optional<gfx::Point> drag_start_point_;
+  std::optional<gfx::Point> drag_start_point_;
 
   gfx::ImageSkia file_icon_;
 
@@ -273,11 +270,11 @@ class DownloadItemView : public views::View,
   raw_ptr<views::StyledLabel> warning_label_;
   raw_ptr<views::StyledLabel> deep_scanning_label_;
 
-  views::MdTextButton* open_now_button_;
-  views::MdTextButton* save_button_;
-  views::MdTextButton* discard_button_;
-  views::MdTextButton* scan_button_;
-  views::MdTextButton* review_button_;
+  raw_ptr<views::MdTextButton> open_now_button_;
+  raw_ptr<views::MdTextButton> save_button_;
+  raw_ptr<views::MdTextButton> discard_button_;
+  raw_ptr<views::MdTextButton> scan_button_;
+  raw_ptr<views::MdTextButton> review_button_;
   raw_ptr<views::ImageButton> dropdown_button_;
 
   // Whether the dropdown is currently pressed.
@@ -300,8 +297,6 @@ class DownloadItemView : public views::View,
 
   // The tooltip.  Only displayed when not showing a warning dialog.
   std::u16string tooltip_text_;
-
-  std::u16string accessible_name_;
 
   // A hidden view for accessible status alerts that are spoken by screen
   // readers when a download changes state.

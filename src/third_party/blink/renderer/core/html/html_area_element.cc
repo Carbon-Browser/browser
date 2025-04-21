@@ -21,6 +21,7 @@
 
 #include "third_party/blink/renderer/core/html/html_area_element.h"
 
+#include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/dom/element_traversal.h"
 #include "third_party/blink/renderer/core/html/html_image_element.h"
 #include "third_party/blink/renderer/core/html/html_map_element.h"
@@ -43,7 +44,7 @@ float ClampCoordinate(double value) {
 }
 
 HTMLAreaElement::HTMLAreaElement(Document& document)
-    : HTMLAnchorElement(html_names::kAreaTag, document), shape_(kRect) {}
+    : HTMLAnchorElementBase(html_names::kAreaTag, document), shape_(kRect) {}
 
 // An explicit empty destructor should be in html_area_element.cc, because
 // if an implicit destructor is used or an empty destructor is defined in
@@ -77,7 +78,7 @@ void HTMLAreaElement::ParseAttribute(
              params.name == html_names::kAccesskeyAttr) {
     // Do nothing.
   } else {
-    HTMLAnchorElement::ParseAttribute(params);
+    HTMLAnchorElementBase::ParseAttribute(params);
   }
 }
 
@@ -113,9 +114,9 @@ Path HTMLAreaElement::GetPath(const LayoutObject* container_object) const {
   if (shape_ == kDefault) {
     Path path;
     // No need to zoom because it is already applied in
-    // containerObject->borderBoxRect().
+    // container_object->PhysicalBorderBoxRect().
     if (const auto* box = DynamicTo<LayoutBox>(container_object))
-      path.AddRect(gfx::RectF(box->BorderBoxRect()));
+      path.AddRect(gfx::RectF(box->PhysicalBorderBoxRect()));
     path_ = nullptr;
     return path;
   }
@@ -124,7 +125,7 @@ Path HTMLAreaElement::GetPath(const LayoutObject* container_object) const {
   if (path_) {
     path = *path_;
   } else {
-    if (coords_.IsEmpty())
+    if (coords_.empty())
       return path;
 
     switch (shape_) {
@@ -160,7 +161,6 @@ Path HTMLAreaElement::GetPath(const LayoutObject* container_object) const {
         break;
       default:
         NOTREACHED();
-        break;
     }
 
     // Cache the original path, not depending on containerObject.
@@ -184,23 +184,32 @@ HTMLImageElement* HTMLAreaElement::ImageElement() const {
   return nullptr;
 }
 
-bool HTMLAreaElement::IsKeyboardFocusable() const {
-  return IsBaseElementFocusable();
+bool HTMLAreaElement::IsKeyboardFocusableSlow(
+    UpdateBehavior update_behavior) const {
+  // Explicitly skip over the HTMLAnchorElementBase's keyboard focus behavior.
+  return Element::IsKeyboardFocusableSlow(update_behavior);
 }
 
-bool HTMLAreaElement::IsMouseFocusable() const {
-  return IsBaseElementFocusable();
+FocusableState HTMLAreaElement::IsFocusableState(
+    UpdateBehavior update_behavior) const {
+  // Explicitly skip over the HTMLAnchorElementBase's mouse focus behavior.
+  return HTMLElement::IsFocusableState(update_behavior);
 }
 
-bool HTMLAreaElement::IsFocusableStyle() const {
-  if (HTMLImageElement* image = ImageElement()) {
-    if (LayoutObject* layout_object = image->GetLayoutObject()) {
-      const ComputedStyle& style = layout_object->StyleRef();
-      return !style.IsInert() && style.Visibility() == EVisibility::kVisible &&
-             SupportsFocus() && Element::tabIndex() >= 0;
-    }
+bool HTMLAreaElement::IsFocusableStyle(UpdateBehavior update_behavior) const {
+  HTMLImageElement* image = ImageElement();
+  if (!image) {
+    return false;
   }
-  return false;
+  LayoutObject* layout_object = image->GetLayoutObject();
+  if (!layout_object) {
+    return false;
+  }
+  const ComputedStyle& style = layout_object->StyleRef();
+  // TODO(crbug.com/40911863): Why is this not just image->IsFocusableStyle()?
+  return !style.IsInert() && style.Visibility() == EVisibility::kVisible &&
+         Element::tabIndex() >= 0 &&
+         SupportsFocus(update_behavior) != FocusableState::kNotFocusable;
 }
 
 void HTMLAreaElement::SetFocused(bool should_be_focused,
@@ -208,7 +217,7 @@ void HTMLAreaElement::SetFocused(bool should_be_focused,
   if (IsFocused() == should_be_focused)
     return;
 
-  HTMLAnchorElement::SetFocused(should_be_focused, focus_type);
+  HTMLAnchorElementBase::SetFocused(should_be_focused, focus_type);
 
   HTMLImageElement* image_element = ImageElement();
   if (!image_element)
@@ -219,10 +228,33 @@ void HTMLAreaElement::SetFocused(bool should_be_focused,
     layout_image->AreaElementFocusChanged(this);
 }
 
+Element* HTMLAreaElement::interestTargetElement() {
+  CHECK(RuntimeEnabledFeatures::HTMLInterestTargetAttributeEnabled());
+
+  if (!IsInTreeScope()) {
+    return nullptr;
+  }
+
+  return GetElementAttributeResolvingReferenceTarget(
+      html_names::kInteresttargetAttr);
+}
+
+AtomicString HTMLAreaElement::interestAction() const {
+  CHECK(RuntimeEnabledFeatures::HTMLInterestTargetAttributeEnabled());
+  const AtomicString& attribute_value =
+      FastGetAttribute(html_names::kInterestactionAttr);
+  if (attribute_value && !attribute_value.IsNull() &&
+      !attribute_value.empty()) {
+    return attribute_value;
+  }
+  return g_empty_atom;
+}
+
 void HTMLAreaElement::UpdateSelectionOnFocus(
     SelectionBehaviorOnFocus selection_behavior,
     const FocusOptions* options) {
-  GetDocument().UpdateStyleAndLayoutTreeForNode(this);
+  GetDocument().UpdateStyleAndLayoutTreeForElement(
+      this, DocumentUpdateReason::kFocus);
   if (!IsFocusable())
     return;
 

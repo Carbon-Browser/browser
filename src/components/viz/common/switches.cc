@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,30 +10,33 @@
 #include "base/command_line.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
-#include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "components/viz/common/constants.h"
 
 namespace switches {
-
-// Screen width is useful for debugging. Shipping implementations should detect
-// this.
-const char kDeJellyScreenWidth[] = "de-jelly-screen-width";
 
 // The default number of the BeginFrames to wait to activate a surface with
 // dependencies.
 const char kDeadlineToSynchronizeSurfaces[] =
     "deadline-to-synchronize-surfaces";
 
+// Force the use of a Delegated Ink renderer as specified by
+// the command line argument, rather than using system details. Acceptable
+// values are: skia, system, none. Default to skia.
+const char kDelegatedInkRenderer[] = "delegated-ink-renderer";
+
+// Disables reporting of frame timing via ADPF, even if supported on the device.
+const char kDisableAdpf[] = "disable-adpf";
+
 // Disables begin frame limiting in both cc scheduler and display scheduler.
 // Also implies --disable-gpu-vsync (see //ui/gl/gl_switches.h).
+// TODO(ananta/jonross/sunnyps)
+// http://crbug.com/346931323
+// We should remove or change this once VRR support is implemented for
+// Windows and other platforms potentially.
 const char kDisableFrameRateLimit[] = "disable-frame-rate-limit";
 
 // Sets the number of max pending frames in the GL buffer queue to 1.
 const char kDoubleBufferCompositing[] = "double-buffer-compositing";
-
-// Experimental de-jelly support.
-const char kEnableDeJelly[] = "enable-de-jelly";
 
 // Enable compositing individual elements via hardware overlays when
 // permitted by device.
@@ -63,11 +66,11 @@ const char kTintCompositedContentModulate[] =
 // The debug borders are offset from the layer rect by a few pixels for clarity.
 const char kShowDCLayerDebugBorders[] = "show-dc-layer-debug-borders";
 
-absl::optional<uint32_t> GetDeadlineToSynchronizeSurfaces() {
+std::optional<uint32_t> GetDeadlineToSynchronizeSurfaces() {
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
   if (command_line->HasSwitch(switches::kRunAllCompositorStagesBeforeDraw)) {
     // In full-pipeline mode, surface deadlines should always be unlimited.
-    return absl::nullopt;
+    return std::nullopt;
   }
   std::string deadline_to_synchronize_surfaces_string =
       command_line->GetSwitchValueASCII(
@@ -78,9 +81,29 @@ absl::optional<uint32_t> GetDeadlineToSynchronizeSurfaces() {
   uint32_t activation_deadline_in_frames;
   if (!base::StringToUint(deadline_to_synchronize_surfaces_string,
                           &activation_deadline_in_frames)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return activation_deadline_in_frames;
+}
+
+std::optional<DelegatedInkRendererMode> GetDelegatedInkRendererMode() {
+  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
+  if (!command_line->HasSwitch(switches::kDelegatedInkRenderer)) {
+    return std::nullopt;
+  }
+  std::string mode =
+      command_line->GetSwitchValueASCII(switches::kDelegatedInkRenderer);
+  if (mode == "system") {
+    return DelegatedInkRendererMode::kSystem;
+  }
+  if (mode == "none") {
+    return DelegatedInkRendererMode::kNone;
+  }
+  if (mode == "skia") {
+    return DelegatedInkRendererMode::kSkia;
+  }
+  // Default to system.
+  return DelegatedInkRendererMode::kSystem;
 }
 
 }  // namespace switches

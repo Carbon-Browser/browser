@@ -46,7 +46,7 @@ base::Lock& ExplicitlyAllowedPortsLock() {
 }  // namespace
 
 bool IsDefaultPortForProtocol(uint16_t port, const WTF::String& protocol) {
-  if (protocol.IsEmpty())
+  if (protocol.empty())
     return false;
 
   switch (port) {
@@ -86,7 +86,7 @@ bool IsPortAllowedForScheme(const KURL& url) {
     effective_port = DefaultPortForProtocol(protocol);
   StringUTF8Adaptor utf8(protocol);
   base::AutoLock locker(ExplicitlyAllowedPortsLock());
-  return net::IsPortAllowedForScheme(effective_port, utf8.AsStringPiece());
+  return net::IsPortAllowedForScheme(effective_port, utf8.AsStringView());
 }
 
 void SetExplicitlyAllowedPorts(base::span<const uint16_t> allowed_ports) {

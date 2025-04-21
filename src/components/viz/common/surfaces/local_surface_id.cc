@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,12 +53,27 @@ bool LocalSurfaceId::IsNewerThan(const LocalSurfaceId& other) const {
           parent_sequence_number_ != other.parent_sequence_number_);
 }
 
+bool LocalSurfaceId::IsNewerThanOrEmbeddingChanged(
+    const LocalSurfaceId& other) const {
+  return IsNewerThan(other) || embed_token_ != other.embed_token_;
+}
+
 bool LocalSurfaceId::IsSameOrNewerThan(const LocalSurfaceId& other) const {
   return IsNewerThan(other) || *this == other;
 }
 
 LocalSurfaceId LocalSurfaceId::ToSmallestId() const {
   return LocalSurfaceId(1, 1, embed_token_);
+}
+
+void LocalSurfaceId::WriteIntoTrace(
+    perfetto::TracedProto<TraceProto> proto) const {
+  proto->set_parent_sequence_number(parent_sequence_number_);
+  proto->set_child_sequence_number(child_sequence_number_);
+  perfetto::protos::pbzero::ChromeUnguessableToken& unguessable_token =
+      *(proto->set_unguessable_token());
+  unguessable_token.set_low_token(embed_token_.GetLowForSerialization());
+  unguessable_token.set_high_token(embed_token_.GetHighForSerialization());
 }
 
 }  // namespace viz

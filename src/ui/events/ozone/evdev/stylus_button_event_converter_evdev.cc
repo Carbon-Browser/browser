@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -69,6 +69,14 @@ void StylusButtonEventConverterEvdev::ProcessEvent(const input_event& input) {
                        0 /* scan_code */, down, true /* suppress_auto_repeat */,
                        TimeTicksFromInputEvent(input)));
   }
+}
+
+std::ostream& StylusButtonEventConverterEvdev::DescribeForLog(
+    std::ostream& os) const {
+  os << "class=ui::StylusButtonEventConverterEvdev id=" << input_device_.id
+     << std::endl
+     << "base ";
+  return EventConverterEvdev::DescribeForLog(os);
 }
 
 }  // namespace ui

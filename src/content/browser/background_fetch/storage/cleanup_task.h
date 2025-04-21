@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,8 +38,6 @@ class CleanupTask : public background_fetch::DatabaseTask {
       blink::ServiceWorkerStatusCode status);
 
   void FinishWithError(blink::mojom::BackgroundFetchError error) override;
-
-  std::string HistogramName() const override;
 
   base::WeakPtrFactory<CleanupTask> weak_factory_{this};  // Keep as last.
 };

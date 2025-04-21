@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
  */
 import './site_list.js';
 
-import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {loadTimeData} from '../i18n_setup.js';
@@ -17,10 +17,10 @@ import {loadTimeData} from '../i18n_setup.js';
 import {getTemplate} from './category_setting_exceptions.html.js';
 import {ContentSetting, ContentSettingsTypes} from './constants.js';
 import {SiteSettingsMixin} from './site_settings_mixin.js';
-import {ContentSettingProvider} from './site_settings_prefs_browser_proxy.js';
+import {DefaultSettingSource} from './site_settings_prefs_browser_proxy.js';
 
 const CategorySettingExceptionsElementBase =
-    SiteSettingsMixin(WebUIListenerMixin(PolymerElement));
+    SiteSettingsMixin(WebUiListenerMixin(PolymerElement));
 
 export class CategorySettingExceptionsElement extends
     CategorySettingExceptionsElementBase {
@@ -106,7 +106,7 @@ export class CategorySettingExceptionsElement extends
   override ready() {
     super.ready();
 
-    this.addWebUIListener(
+    this.addWebUiListener(
         'contentSettingCategoryChanged', () => this.updateDefaultManaged_());
   }
 
@@ -115,6 +115,8 @@ export class CategorySettingExceptionsElement extends
    * content setting of that type.
    */
   private computeShowAllowSiteList_(): boolean {
+    // TODO(crbug.com/40101962): This function should return true when the
+    // feature flag for Persistent Permissions is removed.
     return this.category !== ContentSettingsTypes.FILE_SYSTEM_WRITE;
   }
 
@@ -128,8 +130,7 @@ export class CategorySettingExceptionsElement extends
 
     this.browserProxy.getDefaultValueForContentType(this.category)
         .then(update => {
-          this.defaultManaged_ =
-              update.source === ContentSettingProvider.POLICY;
+          this.defaultManaged_ = update.source === DefaultSettingSource.POLICY;
         });
   }
 

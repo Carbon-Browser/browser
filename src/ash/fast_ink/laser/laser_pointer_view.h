@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@ namespace ash {
 // LaserPointerView displays the palette tool laser pointer. It draws the laser,
 // which consists of a point where the mouse cursor should be, as well as a
 // trail of lines to help users track.
-class LaserPointerView : public fast_ink::FastInkView {
+class LaserPointerView : public FastInkView {
  public:
   LaserPointerView(const LaserPointerView&) = delete;
   LaserPointerView& operator=(const LaserPointerView&) = delete;
@@ -50,8 +50,8 @@ class LaserPointerView : public fast_ink::FastInkView {
   gfx::Rect GetBoundingBox();
   void Draw(gfx::Canvas& canvas);
 
-  fast_ink::FastInkPoints laser_points_;
-  fast_ink::FastInkPoints predicted_laser_points_;
+  FastInkPoints laser_points_;
+  FastInkPoints predicted_laser_points_;
   const base::TimeDelta presentation_delay_;
   // Timer which will add a new stationary point when the stylus stops moving.
   // This will remove points that are too old.

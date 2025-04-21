@@ -1,11 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/media/router/discovery/dial/dial_app_discovery_service.h"
 
-#include "base/bind.h"
-#include "base/containers/cxx20_erase.h"
+#include <vector>
+
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
@@ -39,7 +40,7 @@ DialAppInfoResult::DialAppInfoResult(
     std::unique_ptr<ParsedDialAppInfo> app_info,
     DialAppInfoResultCode result_code,
     const std::string& error_message,
-    absl::optional<int> http_error_code)
+    std::optional<int> http_error_code)
     : app_info(std::move(app_info)),
       result_code(result_code),
       error_message(error_message),
@@ -69,15 +70,6 @@ void DialAppDiscoveryService::FetchDialAppInfo(
   pending_requests_.back()->Start();
 }
 
-void DialAppDiscoveryService::BindLogger(
-    mojo::PendingRemote<mojom::Logger> pending_remote) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (logger_.is_bound())
-    return;
-  logger_.Bind(std::move(pending_remote));
-  logger_.reset_on_disconnect();
-}
-
 void DialAppDiscoveryService::SetParserForTest(
     std::unique_ptr<SafeDialAppInfoParser> parser) {
   parser_ = std::move(parser);
@@ -85,7 +77,7 @@ void DialAppDiscoveryService::SetParserForTest(
 
 void DialAppDiscoveryService::RemovePendingRequest(
     DialAppDiscoveryService::PendingRequest* request) {
-  base::EraseIf(pending_requests_, [&request](const auto& entry) {
+  std::erase_if(pending_requests_, [&request](const auto& entry) {
     return entry.get() == request;
   });
 }
@@ -130,7 +122,7 @@ void DialAppDiscoveryService::PendingRequest::OnDialAppInfoFetchComplete(
 
 void DialAppDiscoveryService::PendingRequest::OnDialAppInfoFetchError(
     const std::string& error_message,
-    absl::optional<int> http_response_code) {
+    std::optional<int> http_response_code) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   auto result_code = DialAppInfoResultCode::kNetworkError;
   if (http_response_code) {
@@ -158,13 +150,12 @@ void DialAppDiscoveryService::PendingRequest::OnDialAppInfoParsed(
         .Run(sink_id_, app_name_,
              DialAppInfoResult(nullptr, DialAppInfoResultCode::kParsingError));
   } else {
-    if (service_->logger_.is_bound()) {
-      service_->logger_->LogInfo(
-          mojom::LogCategory::kDiscovery, kLoggerComponent,
-          base::StringPrintf("DIAL sink supports disconnect: %s",
-                             parsed_app_info->allow_stop ? "true" : "false"),
-          sink_id_, "", "");
-    }
+    LoggerList::GetInstance()->Log(
+        LoggerImpl::Severity::kInfo, mojom::LogCategory::kDiscovery,
+        kLoggerComponent,
+        base::StringPrintf("DIAL sink supports disconnect: %s",
+                           parsed_app_info->allow_stop ? "true" : "false"),
+        sink_id_, "", "");
 
     RecordDialFetchAppInfo(DialAppInfoResultCode::kOk);
     std::move(app_info_cb_)

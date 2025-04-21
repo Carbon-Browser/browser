@@ -1,13 +1,14 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/preloading/navigation_ablation_throttle.h"
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/strings/pattern.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/profiles/profile.h"
@@ -19,12 +20,17 @@
 #include "content/public/browser/web_contents.h"
 
 namespace {
-const base::Feature kNavigationLatencyAblation{
-    "NavigationLatencyAblation", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kNavigationLatencyAblation,
+             "NavigationLatencyAblation",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 // The amount of time to stall before resuming loading.
 const base::FeatureParam<base::TimeDelta> kNavigationLatencyAblationDuration{
     &kNavigationLatencyAblation, "duration", base::Milliseconds(250)};
+
+// The `base::MatchPattern` pattern that identifies the URLs should be ablated.
+const base::FeatureParam<std::string> kAblationTargetPattern{
+    &kNavigationLatencyAblation, "pattern", ""};
 
 // Whether default search Search queries should be ablated.
 const base::FeatureParam<bool> kShouldAblateDefaultSearchQueries{
@@ -103,18 +109,25 @@ bool ShouldCreateThrottle(content::NavigationHandle* navigation) {
     return false;
   }
 
+  const GURL& url = navigation->GetURL();
+
   // Ignore navigations that are not HTTP(S).
-  if (!navigation->GetURL().SchemeIsHTTPOrHTTPS()) {
+  if (!url.SchemeIsHTTPOrHTTPS()) {
     return false;
   }
 
   // Ignore navigations to IP addresses as these may be local network.
-  if (navigation->GetURL().HostIsIPAddress()) {
+  if (url.HostIsIPAddress()) {
     return false;
   }
 
-  auto ablation_type = GetAblationType(
-      navigation->GetURL(), navigation->GetWebContents()->GetBrowserContext());
+  std::string pattern = kAblationTargetPattern.Get();
+  if (!pattern.empty() && base::MatchPattern(url.spec(), pattern)) {
+    return true;
+  }
+
+  auto ablation_type =
+      GetAblationType(url, navigation->GetWebContents()->GetBrowserContext());
   switch (ablation_type) {
     case AblationType::kDefaultSearchQuery:
       return kShouldAblateDefaultSearchQueries.Get();

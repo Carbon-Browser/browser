@@ -1,8 +1,7 @@
-# Copyright 2015 The Chromium Authors. All rights reserved.
+# Copyright 2015 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//build/config/chromeos/ui_mode.gni")
 import("//build/config/ui.gni")
 
 source_set("text_input_types") {
@@ -17,6 +16,7 @@ source_set("text_input_types") {
 component("ime_types") {
   output_name = "ui_base_ime_types"
   sources = [
+    "autocorrect_info.h",
     "candidate_window.cc",
     "candidate_window.h",
     "composition_text.cc",
@@ -27,12 +27,15 @@ component("ime_types") {
     "ime_text_span.h",
     "infolist_entry.cc",
     "infolist_entry.h",
+    "text_edit_commands.h",
   ]
 
   defines = [ "IS_UI_BASE_IME_TYPES_IMPL" ]
 
   deps = [
+    ":text_edit_commands",
     "//base",
+    "//ui/gfx/geometry",
     "//ui/gfx/range",
   ]
 
@@ -41,7 +44,7 @@ component("ime_types") {
     "//skia",
   ]
 
-  if (is_chromeos_ash || use_ozone) {
+  if (use_ozone) {
     sources += [
       "character_composer.cc",
       "character_composer.h",
@@ -59,16 +62,19 @@ component("ime") {
   sources = [
     "constants.cc",
     "constants.h",
+    "events.cc",
+    "events.h",
+    "ime_key_event_dispatcher.h",
     "input_method.h",
     "input_method_base.cc",
     "input_method_base.h",
-    "input_method_delegate.h",
     "input_method_minimal.cc",
     "input_method_minimal.h",
     "input_method_observer.h",
     "mock_input_method.cc",
     "mock_input_method.h",
-    "text_edit_commands.h",
+    "surrounding_text_tracker.cc",
+    "surrounding_text_tracker.h",
     "text_input_client.cc",
     "text_input_client.h",
     "virtual_keyboard_controller.h",
@@ -94,6 +100,8 @@ component("ime") {
     "//ui/gfx/geometry",
     "//ui/gfx/range",
   ]
+}
 
-  deps = [ "//build:chromeos_buildflags" ]
+source_set("text_edit_commands") {
+  sources = [ "text_edit_commands.inc" ]
 }

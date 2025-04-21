@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/values.h"
-#include "chrome/browser/extensions/api/bookmarks/bookmarks_api.h"
+#include "chrome/browser/extensions/api/bookmarks_core/bookmarks_function.h"
 #include "chrome/browser/ui/bookmarks/bookmark_tab_helper.h"
 #include "chrome/browser/undo/bookmark_undo_service_factory.h"
 #include "components/bookmarks/browser/base_bookmark_model_observer.h"
@@ -21,6 +21,7 @@
 #include "extensions/browser/browser_context_keyed_api_factory.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extension_function.h"
+#include "ui/shell_dialogs/select_file_dialog.h"
 
 class Profile;
 
@@ -44,7 +45,7 @@ class BookmarkManagerPrivateEventRouter
 
   // bookmarks::BaseBookmarkModelObserver:
   void BookmarkModelChanged() override;
-  void BookmarkModelBeingDeleted(bookmarks::BookmarkModel* model) override;
+  void BookmarkModelBeingDeleted() override;
 
  private:
   // Helper to actually dispatch an event to extension listeners.
@@ -302,6 +303,59 @@ class BookmarkManagerPrivateOpenInNewWindowFunction
  protected:
   ~BookmarkManagerPrivateOpenInNewWindowFunction() override = default;
 
+  // BookmarksFunction:
+  ResponseValue RunOnReady() override;
+};
+
+class BookmarkManagerPrivateIOFunction : public BookmarksFunction,
+                                         public ui::SelectFileDialog::Listener {
+ public:
+  BookmarkManagerPrivateIOFunction();
+
+  // ui::SelectFileDialog::Listener:
+  void FileSelected(const ui::SelectedFileInfo& file, int index) override = 0;
+  void FileSelectionCanceled() override;
+
+  void ShowSelectFileDialog(
+      ui::SelectFileDialog::Type type,
+      const base::FilePath& default_path);
+
+ protected:
+  ~BookmarkManagerPrivateIOFunction() override;
+
+  scoped_refptr<ui::SelectFileDialog> select_file_dialog_;
+};
+
+class BookmarkManagerPrivateImportFunction
+    : public BookmarkManagerPrivateIOFunction {
+ public:
+  DECLARE_EXTENSION_FUNCTION("bookmarkManagerPrivate.import",
+                             BOOKMARKMANAGERPRIVATE_IMPORT)
+
+  // BookmarkManagerIOFunction:
+  void FileSelected(const ui::SelectedFileInfo& file, int index) override;
+
+ protected:
+  ~BookmarkManagerPrivateImportFunction() override = default;
+
+ private:
+  // BookmarksFunction:
+  ResponseValue RunOnReady() override;
+};
+
+class BookmarkManagerPrivateExportFunction
+    : public BookmarkManagerPrivateIOFunction {
+ public:
+  DECLARE_EXTENSION_FUNCTION("bookmarkManagerPrivate.export",
+                             BOOKMARKMANAGERPRIVATE_EXPORT)
+
+  // BookmarkManagerIOFunction:
+  void FileSelected(const ui::SelectedFileInfo& file, int index) override;
+
+ protected:
+  ~BookmarkManagerPrivateExportFunction() override = default;
+
+ private:
   // BookmarksFunction:
   ResponseValue RunOnReady() override;
 };

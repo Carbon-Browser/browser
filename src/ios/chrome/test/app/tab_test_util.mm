@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,38 +6,33 @@
 
 #import <Foundation/Foundation.h>
 
-#import "base/mac/foundation_util.h"
-#import "ios/chrome/app/main_controller_private.h"
-#include "ios/chrome/browser/chrome_url_constants.h"
-#import "ios/chrome/browser/main/browser.h"
-#import "ios/chrome/browser/metrics/tab_usage_recorder_browser_agent.h"
-#import "ios/chrome/browser/sessions/session_restoration_browser_agent.h"
-#include "ios/chrome/browser/system_flags.h"
-#import "ios/chrome/browser/tabs/tab_title_util.h"
-#import "ios/chrome/browser/ui/commands/browser_commands.h"
-#import "ios/chrome/browser/ui/commands/open_new_tab_command.h"
-#import "ios/chrome/browser/ui/commands/show_signin_command.h"
-#import "ios/chrome/browser/ui/main/scene_controller.h"
-#import "ios/chrome/browser/ui/main/scene_controller_testing.h"
-#import "ios/chrome/browser/ui/tab_switcher/tab_grid/tab_grid_coordinator.h"
-#import "ios/chrome/browser/url_loading/url_loading_params.h"
-#import "ios/chrome/browser/web_state_list/web_state_list.h"
-#import "ios/chrome/browser/web_state_list/web_usage_enabler/web_usage_enabler_browser_agent.h"
+#import "base/apple/foundation_util.h"
+#import "ios/chrome/app/main_controller.h"
+#import "ios/chrome/browser/metrics/model/tab_usage_recorder_browser_agent.h"
+#import "ios/chrome/browser/sessions/model/session_restoration_service.h"
+#import "ios/chrome/browser/sessions/model/session_restoration_service_factory.h"
+#import "ios/chrome/browser/shared/coordinator/scene/scene_controller.h"
+#import "ios/chrome/browser/shared/coordinator/scene/scene_controller_testing.h"
+#import "ios/chrome/browser/shared/model/browser/browser.h"
+#import "ios/chrome/browser/shared/model/browser/browser_provider.h"
+#import "ios/chrome/browser/shared/model/browser/browser_provider_interface.h"
+#import "ios/chrome/browser/shared/model/profile/profile_ios.h"
+#import "ios/chrome/browser/shared/model/url/chrome_url_constants.h"
+#import "ios/chrome/browser/shared/model/web_state_list/web_state_list.h"
+#import "ios/chrome/browser/shared/public/commands/browser_commands.h"
+#import "ios/chrome/browser/shared/public/commands/open_new_tab_command.h"
+#import "ios/chrome/browser/shared/public/commands/show_signin_command.h"
+#import "ios/chrome/browser/shared/public/features/system_flags.h"
+#import "ios/chrome/browser/tab_switcher/ui_bundled/tab_grid/tab_grid_coordinator.h"
+#import "ios/chrome/browser/tabs/model/tab_title_util.h"
+#import "ios/chrome/browser/url_loading/model/url_loading_params.h"
+#import "ios/chrome/browser/web_state_list/model/web_usage_enabler/web_usage_enabler_browser_agent.h"
 #import "ios/chrome/test/app/chrome_test_util.h"
 #import "ios/testing/open_url_context.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace chrome_test_util {
 
 namespace {
-
-// Returns the browser for the current mode.
-Browser* GetCurrentBrowser() {
-  return GetMainController().interfaceProvider.currentInterface.browser;
-}
 
 // Returns the WebStateList for the current mode. Or nullptr of there is no
 // browser.
@@ -46,10 +41,21 @@ WebStateList* GetCurrentWebStateList() {
   return browser ? browser->GetWebStateList() : nullptr;
 }
 
+// Close all tabs for `browser` and request the session to be saved.
+void CloseAllTabsForBrowser(Browser* browser) {
+  DCHECK(browser);
+  const int close_flags = WebStateList::CLOSE_USER_ACTION;
+  CloseAllWebStates(*browser->GetWebStateList(), close_flags);
+  ProfileIOS* profile = browser->GetProfile();
+  SessionRestorationServiceFactory::GetForProfile(profile)->SaveSessions();
+}
+
 }  // namespace
 
 BOOL IsIncognitoMode() {
-  return GetMainController().interfaceProvider.currentInterface.incognito;
+  return GetForegroundActiveScene()
+      .browserProviderInterface.currentBrowserProvider.browser->GetProfile()
+      ->IsOffTheRecord();
 }
 
 void OpenNewTab() {
@@ -57,29 +63,16 @@ void OpenNewTab() {
     OpenNewTabCommand* command = [OpenNewTabCommand command];
     if (GetForegroundActiveSceneController().mainCoordinator.isTabGridActive) {
       // The TabGrid is currently presented.
-      Browser* browser =
-          GetForegroundActiveScene().interfaceProvider.mainInterface.browser;
       UrlLoadParams params = UrlLoadParams::InNewTab(GURL(kChromeUINewTabURL));
-      [GetForegroundActiveSceneController() addANewTabAndPresentBrowser:browser
-                                                      withURLLoadParams:params];
+      [GetForegroundActiveSceneController()
+          addANewTabAndPresentBrowser:GetMainBrowser()
+                    withURLLoadParams:params];
       return;
     }
     id<ApplicationCommands, BrowserCommands> handler =
         chrome_test_util::HandlerForActiveBrowser();
     [handler openURLInNewTab:command];
   }
-}
-
-NSURL* SimulateExternalAppURLOpening() {
-  NSURL* url = [NSURL URLWithString:@"http://www.example.com"];
-  TestOpenURLContext* context = [[TestOpenURLContext alloc] init];
-  context.URL = url;
-
-  UIApplication* application = UIApplication.sharedApplication;
-  UIScene* scene = application.connectedScenes.anyObject;
-  [scene.delegate scene:scene openURLContexts:[NSSet setWithObject:context]];
-
-  return url;
 }
 
 void SimulateExternalAppURLOpeningWithURL(NSURL* URL) {
@@ -95,10 +88,11 @@ void SimulateAddAccountFromWeb() {
   id<ApplicationCommands, BrowserCommands> handler =
       chrome_test_util::HandlerForActiveBrowser();
   ShowSigninCommand* command = [[ShowSigninCommand alloc]
-      initWithOperation:AuthenticationOperationAddAccount
+      initWithOperation:AuthenticationOperation::kAddAccount
             accessPoint:signin_metrics::AccessPoint::ACCESS_POINT_UNKNOWN];
-  UIViewController* baseViewController = base::mac::ObjCCast<UIViewController>(
-      GetForegroundActiveScene().interfaceProvider.mainInterface.bvc);
+  UIViewController* baseViewController =
+      GetForegroundActiveScene()
+          .browserProviderInterface.mainBrowserProvider.viewController;
   [handler showSignin:command baseViewController:baseViewController];
 }
 
@@ -107,8 +101,9 @@ void OpenNewIncognitoTab() {
     OpenNewTabCommand* command = [OpenNewTabCommand incognitoTabCommand];
     if (GetForegroundActiveSceneController().mainCoordinator.isTabGridActive) {
       // The TabGrid is currently presented.
-      Browser* browser = GetForegroundActiveScene()
-                             .interfaceProvider.incognitoInterface.browser;
+      Browser* browser =
+          GetForegroundActiveScene()
+              .browserProviderInterface.incognitoBrowserProvider.browser;
       UrlLoadParams params = UrlLoadParams::InNewTab(GURL(kChromeUINewTabURL));
       [GetForegroundActiveSceneController() addANewTabAndPresentBrowser:browser
                                                       withURLLoadParams:params];
@@ -159,6 +154,16 @@ void CloseCurrentTab() {
                                   WebStateList::CLOSE_USER_ACTION);
 }
 
+void PinCurrentTab() {
+  WebStateList* web_state_list = GetCurrentWebStateList();
+  if (!web_state_list ||
+      web_state_list->active_index() == WebStateList::kInvalidIndex) {
+    return;
+  }
+  web_state_list->SetWebStatePinnedAt(web_state_list->active_index(),
+                                      /*pinned =*/true);
+}
+
 void CloseTabAtIndex(NSUInteger index) {
   @autoreleasepool {  // Make sure that all internals are deallocated.
     DCHECK_LE(index, static_cast<NSUInteger>(INT_MAX));
@@ -168,29 +173,26 @@ void CloseTabAtIndex(NSUInteger index) {
 }
 
 NSUInteger GetIndexOfActiveNormalTab() {
-  Browser* browser = chrome_test_util::GetForegroundActiveSceneController()
-                         .interfaceProvider.mainInterface.browser;
-  return browser->GetWebStateList()->active_index();
+  return GetMainBrowser()->GetWebStateList()->active_index();
 }
 
 void CloseAllTabsInCurrentMode() {
-  GetCurrentWebStateList()->CloseAllWebStates(WebStateList::CLOSE_USER_ACTION);
+  CloseAllWebStates(*GetCurrentWebStateList(), WebStateList::CLOSE_USER_ACTION);
 }
 
 void CloseAllTabs() {
   if (GetIncognitoTabCount() && GetForegroundActiveSceneController()) {
-    Browser* browser = GetForegroundActiveSceneController()
-                           .interfaceProvider.incognitoInterface.browser;
-    DCHECK(browser);
-    browser->GetWebStateList()->CloseAllWebStates(
-        WebStateList::CLOSE_USER_ACTION);
+    CloseAllTabsForBrowser(
+        GetForegroundActiveScene()
+            .browserProviderInterface.incognitoBrowserProvider.browser);
   }
   if (GetMainTabCount() && GetForegroundActiveScene()) {
-    Browser* browser =
-        GetForegroundActiveScene().interfaceProvider.mainInterface.browser;
-    DCHECK(browser);
-    browser->GetWebStateList()->CloseAllWebStates(
-        WebStateList::CLOSE_USER_ACTION);
+    CloseAllTabsForBrowser(GetMainBrowser());
+  }
+  if (GetInactiveTabCount() && GetForegroundActiveScene()) {
+    CloseAllTabsForBrowser(
+        GetForegroundActiveScene()
+            .browserProviderInterface.mainBrowserProvider.inactiveBrowser);
   }
 }
 
@@ -203,14 +205,20 @@ void SelectTabAtIndexInCurrentMode(NSUInteger index) {
 }
 
 NSUInteger GetMainTabCount() {
-  return GetMainController()
-      .interfaceProvider.mainInterface.browser->GetWebStateList()
+  return GetMainBrowser() ? GetMainBrowser()->GetWebStateList()->count() : 0;
+}
+
+NSUInteger GetInactiveTabCount() {
+  return GetForegroundActiveScene()
+      .browserProviderInterface.mainBrowserProvider.inactiveBrowser
+      ->GetWebStateList()
       ->count();
 }
 
 NSUInteger GetIncognitoTabCount() {
-  return GetMainController()
-      .interfaceProvider.incognitoInterface.browser->GetWebStateList()
+  return GetForegroundActiveScene()
+      .browserProviderInterface.incognitoBrowserProvider.browser
+      ->GetWebStateList()
       ->count();
 }
 
@@ -250,16 +258,12 @@ BOOL SimulateTabsBackgrounding() {
   return YES;
 }
 
-void SaveSessionImmediately() {
-  SessionRestorationBrowserAgent::FromBrowser(GetCurrentBrowser())
-      ->SaveSession(true);
-}
-
 void EvictOtherBrowserTabs() {
-  id<BrowserInterfaceProvider> provider = GetMainController().interfaceProvider;
+  id<BrowserProviderInterface> provider =
+      GetForegroundActiveScene().browserProviderInterface;
   Browser* otherBrowser = IsIncognitoMode()
-                              ? provider.mainInterface.browser
-                              : provider.incognitoInterface.browser;
+                              ? provider.mainBrowserProvider.browser
+                              : provider.incognitoBrowserProvider.browser;
   // Disabling and enabling web usage will evict all web views.
   WebUsageEnablerBrowserAgent* enabler =
       WebUsageEnablerBrowserAgent::FromBrowser(otherBrowser);
@@ -269,32 +273,28 @@ void EvictOtherBrowserTabs() {
 }
 
 BOOL CloseAllNormalTabs() {
-  MainController* main_controller = GetMainController();
-  DCHECK(main_controller);
-
-  Browser* browser = main_controller.interfaceProvider.mainInterface.browser;
+  Browser* browser = GetMainBrowser();
   DCHECK(browser);
-  browser->GetWebStateList()->CloseAllWebStates(
-      WebStateList::CLOSE_USER_ACTION);
+  CloseAllWebStates(*browser->GetWebStateList(),
+                    WebStateList::CLOSE_USER_ACTION);
   return YES;
 }
 
 BOOL CloseAllIncognitoTabs() {
-  MainController* main_controller = GetMainController();
-  DCHECK(main_controller);
+  SceneState* scene_state = GetForegroundActiveScene();
+  DCHECK(scene_state);
+
   Browser* browser =
-      GetMainController().interfaceProvider.incognitoInterface.browser;
+      scene_state.browserProviderInterface.incognitoBrowserProvider.browser;
   DCHECK(browser);
-  browser->GetWebStateList()->CloseAllWebStates(
-      WebStateList::CLOSE_USER_ACTION);
+  CloseAllWebStates(*browser->GetWebStateList(),
+                    WebStateList::CLOSE_USER_ACTION);
   return YES;
 }
 
 NSUInteger GetEvictedMainTabCount() {
-  Browser* browser =
-      GetMainController().interfaceProvider.mainInterface.browser;
   TabUsageRecorderBrowserAgent* tab_usage_recorder =
-      TabUsageRecorderBrowserAgent::FromBrowser(browser);
+      TabUsageRecorderBrowserAgent::FromBrowser(GetMainBrowser());
   if (!tab_usage_recorder)
     return 0;
   return tab_usage_recorder->EvictedTabsMapSize();

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,13 +26,13 @@ bool AXScriptInstruction::IsEvent() const {
   return !IsComment() && EventNameStartIndex() != std::string::npos;
 }
 bool AXScriptInstruction::IsKeyEvent() const {
-  return base::StartsWith(instruction_, kPress);
+  return instruction_.starts_with(kPress);
 }
 bool AXScriptInstruction::IsScript() const {
   return !IsComment() && !IsEvent() && !IsKeyEvent() && !IsPrintTree();
 }
 bool AXScriptInstruction::IsComment() const {
-  return base::StartsWith(instruction_, "//");
+  return instruction_.starts_with("//");
 }
 bool AXScriptInstruction::IsPrintTree() const {
   return instruction_ == kPrintTree;

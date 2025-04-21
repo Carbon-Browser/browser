@@ -1,6 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "third_party/blink/renderer/modules/indexeddb/idb_value_wrapping.h"
 
@@ -9,12 +14,18 @@
 #include <memory>
 
 #include "base/memory/scoped_refptr.h"
+#include "base/strings/strcat.h"
+#include "base/test/scoped_feature_list.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/public/common/features.h"
+#include "third_party/blink/renderer/bindings/core/v8/script_value.h"
+#include "third_party/blink/renderer/bindings/core/v8/serialization/serialization_tag.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_testing.h"
 #include "third_party/blink/renderer/core/fileapi/blob.h"
 #include "third_party/blink/renderer/modules/indexeddb/idb_key.h"
 #include "third_party/blink/renderer/modules/indexeddb/idb_key_path.h"
 #include "third_party/blink/renderer/modules/indexeddb/idb_value.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "v8/include/v8.h"
@@ -150,35 +161,6 @@ TEST(IDBValueWrapperTest, WriteVarIntMultiByteEdgeCases) {
   EXPECT_EQ('\xff', output.data()[2]);
   EXPECT_EQ('\xff', output.data()[3]);
   EXPECT_EQ('\x0f', output.data()[4]);
-  output.clear();
-}
-
-TEST(IDBValueWrapperTest, WriteBytes) {
-  Vector<char> output;
-
-  Vector<uint8_t> empty;
-  IDBValueWrapper::WriteBytes(empty, output);
-  ASSERT_EQ(1U, output.size());
-  EXPECT_EQ('\x00', output.data()[0]);
-  output.clear();
-
-  Vector<uint8_t> one_char;
-  one_char.Append("\x42", 1);
-  IDBValueWrapper::WriteBytes(one_char, output);
-  ASSERT_EQ(2U, output.size());
-  EXPECT_EQ('\x01', output.data()[0]);
-  EXPECT_EQ('\x42', output.data()[1]);
-  output.clear();
-
-  Vector<uint8_t> long_vector;
-  for (int i = 0; i < 256; ++i)
-    long_vector.push_back(static_cast<uint8_t>(i));
-  IDBValueWrapper::WriteBytes(long_vector, output);
-  ASSERT_EQ(258U, output.size());
-  EXPECT_EQ('\x80', output.data()[0]);
-  EXPECT_EQ('\x02', output.data()[1]);
-  EXPECT_TRUE(std::equal(long_vector.begin(), long_vector.end(),
-                         reinterpret_cast<const uint8_t*>(output.data() + 2)));
   output.clear();
 }
 
@@ -472,24 +454,20 @@ TEST(IDBValueUnwrapperTest, ReadBytesDenormalizedInput) {
 }
 
 TEST(IDBValueUnwrapperTest, IsWrapped) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   NonThrowableExceptionState non_throwable_exception_state;
   v8::Local<v8::Value> v8_true = v8::True(scope.GetIsolate());
   IDBValueWrapper wrapper(scope.GetIsolate(), v8_true,
                           SerializedScriptValue::SerializeOptions::kSerialize,
                           non_throwable_exception_state);
+  wrapper.set_wrapping_threshold_for_test(0);
   wrapper.DoneCloning();
-  wrapper.WrapIfBiggerThan(0);
-  Vector<scoped_refptr<BlobDataHandle>> blob_data_handles =
-      wrapper.TakeBlobDataHandles();
   Vector<WebBlobInfo> blob_infos = wrapper.TakeBlobInfo();
-  scoped_refptr<SharedBuffer> wrapped_marker_buffer = wrapper.TakeWireBytes();
+  Vector<char> wrapped_marker_buffer = wrapper.TakeWireBytes();
   IDBKeyPath key_path(String("primaryKey"));
 
-  Vector<char> wrapped_marker_bytes(
-      static_cast<wtf_size_t>(wrapped_marker_buffer->size()));
-  ASSERT_TRUE(wrapped_marker_buffer->GetBytes(wrapped_marker_bytes.data(),
-                                              wrapped_marker_bytes.size()));
+  const Vector<char> wrapped_marker_bytes = wrapped_marker_buffer;
 
   auto wrapped_value = std::make_unique<IDBValue>(
       std::move(wrapped_marker_buffer), std::move(blob_infos));
@@ -502,7 +480,7 @@ TEST(IDBValueUnwrapperTest, IsWrapped) {
   ASSERT_LT(3U, wrapped_marker_bytes.size());
   for (wtf_size_t i = 0; i < 3; ++i) {
     auto mutant_value = std::make_unique<IDBValue>(
-        SharedBuffer::Create(wrapped_marker_bytes.data(), i),
+        Vector<char>(base::span(wrapped_marker_bytes).first(i)),
         std::move(blob_infos));
     mutant_value->SetIsolate(scope.GetIsolate());
 
@@ -515,16 +493,129 @@ TEST(IDBValueUnwrapperTest, IsWrapped) {
   for (wtf_size_t i = 0; i < 3; ++i) {
     for (int j = 0; j < 8; ++j) {
       char mask = 1 << j;
-      wrapped_marker_bytes[i] ^= mask;
-      auto mutant_value = std::make_unique<IDBValue>(
-          SharedBuffer::Create(wrapped_marker_bytes.data(),
-                               wrapped_marker_bytes.size()),
-          std::move(blob_infos));
+      Vector<char> copy = wrapped_marker_bytes;
+      copy[i] ^= mask;
+      auto mutant_value =
+          std::make_unique<IDBValue>(std::move(copy), std::move(blob_infos));
       mutant_value->SetIsolate(scope.GetIsolate());
       EXPECT_FALSE(IDBValueUnwrapper::IsWrapped(mutant_value.get()));
-
-      wrapped_marker_bytes[i] ^= mask;
     }
+  }
+}
+
+TEST(IDBValueUnwrapperTest, Compression) {
+  test::TaskEnvironment task_environment;
+
+  struct {
+    bool should_compress;
+    std::string bytes;
+    int32_t compression_threshold;
+    // Wrapping threshold is tested here to ensure it does not interfere
+    // with the compression threshold.
+    int32_t wrapping_threshold;
+  } test_cases[] = {
+      {false,
+       "abcdefghijcklmnopqrstuvwxyz123456789?/"
+       ".,'[]!@#$%^&*(&)asjdflkajnwefkajwneflkacoiw93lkm",
+       /* compression_threshold = */ 0, /*wrapping_threshold = */ 500},
+      {false, base::StrCat(std::vector<std::string>(100u, "abcd")),
+       /* compression_threshold = */ 500, /*wrapping_threshold = */ 500},
+      {true, base::StrCat(std::vector<std::string>(500, "abcd")),
+       /* compression_threshold = */ 500, /*wrapping_threshold = */ 500},
+      {true, base::StrCat(std::vector<std::string>(500, "abcd")),
+       /* compression_threshold = */ 500, /*wrapping_threshold = */ 400},
+      {true, base::StrCat(std::vector<std::string>(500, "abcd")),
+       /* compression_threshold = */ 500, /*wrapping_threshold = */ 600}};
+
+  for (const auto& test_case : test_cases) {
+    SCOPED_TRACE(testing::Message() << "Testing string " << test_case.bytes);
+
+    base::test::ScopedFeatureList enable_feature_list;
+    enable_feature_list.InitAndEnableFeatureWithParameters(
+        features::kIndexedDBCompressValuesWithSnappy,
+        {{"compression-threshold",
+          base::StringPrintf("%i", test_case.compression_threshold)}});
+
+    V8TestingScope scope;
+    NonThrowableExceptionState non_throwable_exception_state;
+    v8::Local<v8::Value> v8_value =
+        v8::String::NewFromUtf8(scope.GetIsolate(), test_case.bytes.c_str(),
+                                v8::NewStringType::kNormal)
+            .ToLocalChecked();
+    IDBValueWrapper wrapper(scope.GetIsolate(), v8_value,
+                            SerializedScriptValue::SerializeOptions::kSerialize,
+                            non_throwable_exception_state);
+    wrapper.set_wrapping_threshold_for_test(test_case.wrapping_threshold);
+    wrapper.set_compression_threshold_for_test(test_case.compression_threshold);
+    wrapper.DoneCloning();
+    Vector<WebBlobInfo> blob_infos = wrapper.TakeBlobInfo();
+    Vector<char> buffer = wrapper.TakeWireBytes();
+
+    // Verify whether the serialized bytes show the compression marker.
+    base::span<const char> serialized_bytes = base::span(buffer);
+    ASSERT_GT(serialized_bytes.size(), 3u);
+    if (test_case.should_compress) {
+      EXPECT_EQ(serialized_bytes[0], static_cast<char>(kVersionTag));
+      EXPECT_EQ(serialized_bytes[1], 0x11);
+      EXPECT_EQ(serialized_bytes[2], 2);
+    }
+
+    // Verify whether the decompressed bytes show the standard serialization
+    // marker.
+    Vector<char> decompressed;
+    ASSERT_EQ(test_case.should_compress,
+              IDBValueUnwrapper::Decompress(buffer, &decompressed));
+
+    // Round trip to v8 value.
+    auto value =
+        std::make_unique<IDBValue>(std::move(buffer), std::move(blob_infos));
+    value->SetIsolate(scope.GetIsolate());
+    auto serialized_string = value->CreateSerializedValue();
+    EXPECT_TRUE(serialized_string->Deserialize(scope.GetIsolate())
+                    ->StrictEquals(v8_value));
+  }
+}
+
+// Verifies that the decompression code should still run and succeed on
+// compressed data even if the flag is disabled. This is required to be able to
+// decompress existing data that has been persisted to disk if/when compression
+// is later disabled.
+TEST(IDBValueUnwrapperTest, Decompression) {
+  test::TaskEnvironment task_environment;
+  Vector<WebBlobInfo> blob_infos;
+  Vector<char> buffer;
+  V8TestingScope scope;
+  v8::Local<v8::Value> v8_value;
+  {
+    base::test::ScopedFeatureList enable_feature_list{
+        features::kIndexedDBCompressValuesWithSnappy};
+    NonThrowableExceptionState non_throwable_exception_state;
+    std::string bytes = base::StrCat(std::vector<std::string>(100u, "abcd"));
+    v8_value = v8::String::NewFromUtf8(scope.GetIsolate(), bytes.c_str(),
+                                       v8::NewStringType::kNormal)
+                   .ToLocalChecked();
+    IDBValueWrapper wrapper(scope.GetIsolate(), v8_value,
+                            SerializedScriptValue::SerializeOptions::kSerialize,
+                            non_throwable_exception_state);
+    wrapper.DoneCloning();
+    blob_infos = wrapper.TakeBlobInfo();
+    buffer = wrapper.TakeWireBytes();
+  }
+
+  {
+    base::test::ScopedFeatureList disable_feature_list;
+    disable_feature_list.InitAndDisableFeature(
+        features::kIndexedDBCompressValuesWithSnappy);
+    EXPECT_FALSE(base::FeatureList::IsEnabled(
+        features::kIndexedDBCompressValuesWithSnappy));
+
+    // Complete round trip to v8 value with compression disabled.
+    auto value =
+        std::make_unique<IDBValue>(std::move(buffer), std::move(blob_infos));
+    value->SetIsolate(scope.GetIsolate());
+    auto serialized_string = value->CreateSerializedValue();
+    EXPECT_TRUE(serialized_string->Deserialize(scope.GetIsolate())
+                    ->StrictEquals(v8_value));
   }
 }
 

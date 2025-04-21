@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,7 @@ namespace base {
 class WaitableEvent;
 }  // namespace base
 
-namespace content {
+namespace content::indexed_db {
 
 // Encapsulates a leveldb database and comparator, allowing them to be used
 // safely across thread boundaries.
@@ -88,6 +88,6 @@ class LevelDBState : public base::RefCountedThreadSafe<LevelDBState> {
   raw_ptr<base::WaitableEvent> signal_on_destruction_ = nullptr;
 };
 
-}  // namespace content
+}  // namespace content::indexed_db
 
 #endif  // COMPONENTS_SERVICES_STORAGE_INDEXED_DB_LEVELDB_LEVELDB_STATE_H_

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,6 @@ interface IViewTypeCallback {
     // prediction of the views.
     void onViewTypeAvailable(in List<ViewType> viewTypes);
 
-    // Invoked when the query fails, mostly because of the connection or server
-    // error.
+    // @deprecated - no longer called by WebView. Do not use, will be removed.
     void onQueryFailed();
 }

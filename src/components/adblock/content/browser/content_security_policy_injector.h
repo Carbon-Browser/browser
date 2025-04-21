@@ -20,10 +20,12 @@
 
 #include <string>
 
-#include "components/adblock/content/common/mojom/adblock.mojom.h"
+#include "components/adblock/content/browser/adblock_filter_match.h"
+#include "components/adblock/content/browser/request_initiator.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "content/public/browser/global_routing_id.h"
 #include "net/http/http_response_headers.h"
+#include "services/network/public/mojom/parsed_headers.mojom-forward.h"
 #include "url/gurl.h"
 
 namespace adblock {
@@ -44,13 +46,12 @@ class ContentSecurityPolicyInjector : public KeyedService {
   // If a CSP filter exists for this URL in any of currently installed filter
   // lists, inserts its payload into |headers| as a Content-Security-Policy
   // header type.
-  // |callback| will be posted, never called in-stack. If |headers| were
-  // changed, |callback| will receive a ParsedHeaders object that matches the
-  // new state of the response headers - otherwise |callback| will receive
-  // nullptr.
+  // If |headers| were changed, |callback| will receive a ParsedHeaders object
+  // that matches the new state of the response headers - otherwise |callback|
+  // will receive nullptr.
   virtual void InsertContentSecurityPolicyHeadersIfApplicable(
       const GURL& request_url,
-      content::GlobalRenderFrameHostId render_frame_host_id,
+      const RequestInitiator& request_initiator,
       const scoped_refptr<net::HttpResponseHeaders>& headers,
       InsertContentSecurityPolicyHeadersCallback callback) = 0;
 };

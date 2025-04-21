@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 // All data that is passed through a WebSocket with type "Text" needs to be
 // validated as UTF8. Since this is done on the IO thread, it needs to be
@@ -15,9 +20,10 @@
 #include <stddef.h>
 
 #include <string>
+#include <string_view>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/perf_time_logger.h"
@@ -51,8 +57,9 @@ const size_t kTestLengths[] = {1, 32, 256, 32768, 1 << 20};
 // top-bit-set bytes.
 bool IsString7Bit(const std::string& s) {
   for (auto it : s) {
-    if (it & 0x80)
+    if (it & 0x80) {
       return false;
+    }
   }
   return true;
 }
@@ -136,13 +143,14 @@ struct TestFunctionDescription {
 };
 
 bool IsStringUTF8(const std::string& str) {
-  return base::IsStringUTF8(base::StringPiece(str));
+  return base::IsStringUTF8(std::string_view(str));
 }
 
 // IsString7Bit is intentionally placed last so it can be excluded easily.
 const TestFunctionDescription kTestFunctions[] = {
     {&StreamingUtf8Validator::Validate, "StreamingUtf8Validator"},
-    {&IsStringUTF8, "IsStringUTF8"}, {&IsString7Bit, "IsString7Bit"}};
+    {&IsStringUTF8, "IsStringUTF8"},
+    {&IsString7Bit, "IsString7Bit"}};
 
 // Construct a test string from |construct_test_string| for each of the lengths
 // in |kTestLengths| in turn. For each string, run each test in |test_functions|
@@ -158,12 +166,10 @@ void RunSomeTests(
     const int real_length = static_cast<int>(test_string.length());
     const int times = (1 << 24) / real_length;
     for (size_t test_index = 0; test_index < test_count; ++test_index) {
-      EXPECT_TRUE(RunTest(StringPrintf(format,
-                                       test_functions[test_index].function_name,
-                                       real_length,
-                                       times),
-                          test_functions[test_index].function,
-                          test_string,
+      EXPECT_TRUE(RunTest(StringPrintfNonConstexpr(
+                              format, test_functions[test_index].function_name,
+                              real_length, times),
+                          test_functions[test_index].function, test_string,
                           times));
     }
   }

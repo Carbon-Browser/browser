@@ -1,11 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "components/autofill/ios/form_util/form_activity_tab_helper.h"
+
 #include "base/logging.h"
+#import "base/memory/raw_ptr.h"
 #include "base/rand_util.h"
 #import "base/test/ios/wait_util.h"
-#include "components/autofill/ios/form_util/form_activity_tab_helper.h"
 #include "ios/web/public/js_messaging/fuzzer_support/fuzzer_util.h"
 #include "ios/web/public/js_messaging/fuzzer_support/js_message.pb.h"
 #include "ios/web/public/js_messaging/script_message.h"
@@ -16,10 +18,6 @@
 #import "ios/web/public/web_state.h"
 #include "testing/libfuzzer/proto/lpm_interface.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 using base::test::ios::kWaitForJSCompletionTimeout;
 using base::test::ios::WaitUntilConditionOrTimeout;
 
@@ -28,7 +26,7 @@ namespace {
 web::WebFrame* WaitForMainFrame(web::WebState* web_state) {
   __block web::WebFrame* main_frame = nullptr;
   DCHECK(WaitUntilConditionOrTimeout(kWaitForJSCompletionTimeout, ^bool {
-    main_frame = web_state->GetWebFramesManager()->GetMainWebFrame();
+    main_frame = web_state->GetPageWorldWebFramesManager()->GetMainWebFrame();
     return main_frame != nullptr;
   }));
   return main_frame;
@@ -48,7 +46,7 @@ class Env : public web::FuzzerEnvWithWebState {
         autofill::FormActivityTabHelper::GetOrCreateForWebState(web_state());
   }
   // The object will be deconstructed at deconstructing the WebState.
-  autofill::FormActivityTabHelper* tab_helper_;
+  raw_ptr<autofill::FormActivityTabHelper> tab_helper_;
   std::string main_frame_id_;
 };
 
@@ -70,7 +68,7 @@ DEFINE_PROTO_FUZZER(const web::ScriptMessageProto& proto_js_message) {
     // Insert the |frameID| at 98% probability. We still want to check how API
     // behaves at an invalid |frameID|.
     if (base::RandDouble() < 0.98) {
-      script_message->body()->SetStringKey("frameID", env.main_frame_id_);
+      script_message->body()->GetDict().Set("frameID", env.main_frame_id_);
     }
   }
 

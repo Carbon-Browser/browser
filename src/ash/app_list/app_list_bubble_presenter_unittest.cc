@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "ash/app_list/views/app_list_bubble_apps_page.h"
 #include "ash/app_list/views/app_list_bubble_view.h"
 #include "ash/app_list/views/search_box_view.h"
+#include "ash/assistant/ui/assistant_view_ids.h"
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/public/cpp/test/app_list_test_api.h"
@@ -24,16 +25,19 @@
 #include "ash/shell.h"
 #include "ash/system/unified/unified_system_tray.h"
 #include "ash/test/ash_test_base.h"
-#include "ash/test/layer_animation_stopped_waiter.h"
 #include "ash/test/test_widget_builder.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/icu_test_util.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
+#include "ui/compositor/test/layer_animation_stopped_waiter.h"
 #include "ui/display/display.h"
+#include "ui/events/event_constants.h"
 #include "ui/events/keycodes/keyboard_codes.h"
 #include "ui/gfx/geometry/vector2d.h"
 #include "ui/views/controls/textfield/textfield.h"
@@ -66,7 +70,7 @@ size_t NumberOfWidgetsInAppListContainer(int64_t display_id) {
   aura::Window* root = Shell::GetRootWindowForDisplayId(display_id);
   aura::Window* container =
       Shell::GetContainer(root, kShellWindowId_AppListContainer);
-  std::set<views::Widget*> widgets;
+  std::set<raw_ptr<views::Widget, SetExperimental>> widgets;
   views::Widget::GetAllChildWidgets(container, &widgets);
   return widgets.size();
 }
@@ -74,9 +78,7 @@ size_t NumberOfWidgetsInAppListContainer(int64_t display_id) {
 class AppListBubblePresenterTest : public AshTestBase {
  public:
   AppListBubblePresenterTest()
-      : assistant_test_api_(AssistantTestApi::Create()) {
-    scoped_features_.InitAndEnableFeature(features::kProductivityLauncher);
-  }
+      : assistant_test_api_(AssistantTestApi::Create()) {}
   ~AppListBubblePresenterTest() override = default;
 
   // testing::Test:
@@ -105,7 +107,6 @@ class AppListBubblePresenterTest : public AshTestBase {
     }
   }
 
-  base::test::ScopedFeatureList scoped_features_;
   std::unique_ptr<AssistantTestApi> assistant_test_api_;
 };
 
@@ -275,8 +276,10 @@ TEST_F(AppListBubblePresenterTest, ShowAfterDisconnectingDisplay) {
 TEST_F(AppListBubblePresenterTest, ToggleByFocusingWindowOnSecondaryDisplay) {
   UpdateDisplay("1600x1200,1366x768");
 
-  std::unique_ptr<views::Widget> primary_display_widget = CreateTestWidget();
-  std::unique_ptr<views::Widget> secondary_display_widget = CreateTestWidget();
+  std::unique_ptr<views::Widget> primary_display_widget =
+      CreateTestWidget(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET);
+  std::unique_ptr<views::Widget> secondary_display_widget =
+      CreateTestWidget(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET);
   secondary_display_widget->SetBounds(
       gfx::Rect(gfx::Point(1600, 0), gfx::Size(1366, 768)));
 
@@ -354,6 +357,17 @@ TEST_F(AppListBubblePresenterTest, BubbleIsNotShowingAfterDismiss) {
   EXPECT_FALSE(presenter->GetWindow());
 }
 
+TEST_F(AppListBubblePresenterTest, BubbleDoesNotCloseWhenShelfFocused) {
+  AppListBubblePresenter* presenter = GetBubblePresenter();
+  presenter->Show(GetPrimaryDisplay().id());
+
+  // Press Alt-Shift-L to focus the home button on the shelf.
+  PressAndReleaseKey(ui::VKEY_L, ui::EF_ALT_DOWN | ui::EF_SHIFT_DOWN);
+
+  EXPECT_TRUE(presenter->IsShowing());
+  EXPECT_TRUE(presenter->GetWindow());
+}
+
 TEST_F(AppListBubblePresenterTest, CanShowWhileAnimatingClosed) {
   AppListBubblePresenter* presenter = GetBubblePresenter();
   presenter->Show(GetPrimaryDisplay().id());
@@ -408,7 +422,7 @@ TEST_F(AppListBubblePresenterTest, DismissWhileWaitingForZeroStateSearch) {
 
   // Toggle one last time should Dismiss() and hide the widget.
   presenter->Toggle(GetPrimaryDisplay().id());
-  LayerAnimationStoppedWaiter().Wait(
+  ui::LayerAnimationStoppedWaiter().Wait(
       presenter->bubble_view_for_test()->layer());
   EXPECT_FALSE(presenter->IsShowing());
   EXPECT_FALSE(presenter->bubble_widget_for_test()->IsVisible());
@@ -431,6 +445,16 @@ TEST_F(AppListBubblePresenterTest, AssistantKeyOpensToAssistantPage) {
   EXPECT_FALSE(
       presenter->bubble_view_for_test()->apps_page_for_test()->GetVisible());
   EXPECT_TRUE(presenter->IsShowingEmbeddedAssistantUI());
+
+  views::View* progress_indicator =
+      presenter->bubble_view_for_test()->GetViewByID(
+          AssistantViewID::kProgressIndicator);
+  EXPECT_FLOAT_EQ(0.f, progress_indicator->layer()->opacity());
+
+  // Check target opacity as footer is animating.
+  views::View* footer = presenter->bubble_view_for_test()->GetViewByID(
+      AssistantViewID::kFooterView);
+  EXPECT_FLOAT_EQ(1.f, footer->layer()->GetTargetOpacity());
 }
 
 TEST_F(AppListBubblePresenterTest, AssistantKeyOpensAssistantPageWhenCached) {
@@ -590,6 +614,24 @@ TEST_F(AppListBubblePresenterTest, CreatingActiveWidgetClosesBubble) {
   EXPECT_FALSE(presenter->IsShowing());
 }
 
+// Verifies that a child window of the help bubble container can gain focus
+// from the app list bubble without closing the bubble.
+TEST_F(AppListBubblePresenterTest, FocusHelpBubbleContainerChild) {
+  AppListBubblePresenter* const presenter = GetBubblePresenter();
+  presenter->Show(GetPrimaryDisplay().id());
+  ASSERT_TRUE(presenter->IsShowing());
+
+  std::unique_ptr<views::Widget> widget = CreateTestWidget(
+      views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET,
+      /*delegate=*/nullptr, kShellWindowId_HelpBubbleContainer);
+  EXPECT_TRUE(widget->GetNativeView()->HasFocus());
+
+  // Bubble is shown without focus.
+  EXPECT_TRUE(presenter->IsShowing());
+  EXPECT_FALSE(
+      presenter->bubble_widget_for_test()->GetNativeView()->HasFocus());
+}
+
 // Regression test for https://crbug.com/1268220.
 TEST_F(AppListBubblePresenterTest, CreatingChildWidgetDoesNotCloseBubble) {
   AppListBubblePresenter* presenter = GetBubblePresenter();
@@ -632,12 +674,124 @@ TEST_F(AppListBubblePresenterTest, CanOpenBubbleThenOpenSystemTray) {
   LeftClickOn(GetPrimaryUnifiedSystemTray());
 
   // Wait for launcher animations to end.
-  LayerAnimationStoppedWaiter().Wait(
+  ui::LayerAnimationStoppedWaiter().Wait(
       presenter->bubble_view_for_test()->layer());
 
   // Launcher is closed and system tray is open.
   EXPECT_FALSE(presenter->IsShowing());
   EXPECT_TRUE(GetPrimaryUnifiedSystemTray()->IsBubbleShown());
+}
+
+class AppListBubblePresenterFocusFollowsCursorTest
+    : public AppListBubblePresenterTest {
+ public:
+  AppListBubblePresenterFocusFollowsCursorTest() {
+    scoped_features_.InitAndEnableFeature(::features::kFocusFollowsCursor);
+  }
+  ~AppListBubblePresenterFocusFollowsCursorTest() override = default;
+
+  base::test::ScopedFeatureList scoped_features_;
+};
+
+// Regression test for https://crbug.com/1316250.
+TEST_F(AppListBubblePresenterFocusFollowsCursorTest,
+       HoverOverWindowDoesNotHideBubble) {
+  // Create a widget, which will activate itself when the launcher closes.
+  std::unique_ptr<views::Widget> widget =
+      TestWidgetBuilder()
+          .SetBounds(gfx::Rect(gfx::Point(1, 1), gfx::Size(100, 100)))
+          .SetShow(true)
+          .BuildOwnsNativeWidget();
+
+  AppListBubblePresenter* presenter = GetBubblePresenter();
+  EXPECT_FALSE(presenter->IsShowing());
+  EXPECT_TRUE(widget->IsActive());
+
+  // Show the bubble and verify that it is active.
+  presenter->Show(GetPrimaryDisplay().id());
+  views::Widget* bubble_widget = presenter->bubble_widget_for_test();
+  auto* search_box_view = GetAppListTestHelper()->GetBubbleSearchBoxView();
+  GetEventGenerator()->MoveMouseTo(
+      bubble_widget->GetWindowBoundsInScreen().CenterPoint());
+  EXPECT_TRUE(presenter->IsShowing());
+  EXPECT_TRUE(bubble_widget->IsActive());
+  EXPECT_TRUE(search_box_view->search_box()->HasFocus());
+  EXPECT_FALSE(widget->IsActive());
+
+  // Move the mouse onto an empty space. Activation of the bubble shouldn't be
+  // lost.
+  ASSERT_FALSE(widget->GetWindowBoundsInScreen().Contains(0, 0));
+  ASSERT_FALSE(bubble_widget->GetWindowBoundsInScreen().Contains(0, 0));
+  GetEventGenerator()->MoveMouseTo(0, 0);
+  EXPECT_TRUE(presenter->IsShowing());
+  EXPECT_TRUE(bubble_widget->IsActive());
+  EXPECT_TRUE(search_box_view->search_box()->HasFocus());
+  EXPECT_FALSE(widget->IsActive());
+
+  // Move the mouse onto the window. Verify that the bubble is still showing,
+  // but activation has moved to the window.
+  gfx::Point widget_center = widget->GetWindowBoundsInScreen().CenterPoint();
+  ASSERT_FALSE(
+      bubble_widget->GetWindowBoundsInScreen().Contains(widget_center));
+  GetEventGenerator()->MoveMouseTo(widget_center);
+  EXPECT_TRUE(presenter->IsShowing());
+  EXPECT_FALSE(bubble_widget->IsActive());
+  EXPECT_FALSE(search_box_view->search_box()->HasFocus());
+  EXPECT_TRUE(widget->IsActive());
+
+  // Verify that user inputs do not go to the bubble search box while it is not
+  // focused even though the bubble is showing.
+  PressAndReleaseKey(ui::VKEY_A);
+  PressAndReleaseKey(ui::VKEY_B);
+  PressAndReleaseKey(ui::VKEY_C);
+  EXPECT_TRUE(search_box_view->search_box()->GetText().empty());
+
+  // Clicking outside the bubble should close it.
+  GetEventGenerator()->ClickLeftButton();
+  EXPECT_FALSE(presenter->IsShowing());
+  EXPECT_TRUE(widget->IsActive());
+}
+
+// Tests that creating a new window while the bubble is showing will hide it,
+// regardless of if it was active or not.
+TEST_F(AppListBubblePresenterFocusFollowsCursorTest,
+       CreatingNewWindowHidesBubble) {
+  AppListBubblePresenter* presenter = GetBubblePresenter();
+  presenter->Show(GetPrimaryDisplay().id());
+  EXPECT_TRUE(presenter->IsShowing());
+
+  // Create a new widget and verify it is active and that the bubble is hidden.
+  std::unique_ptr<views::Widget> widget =
+      TestWidgetBuilder()
+          .SetBounds(gfx::Rect(gfx::Point(1, 1), gfx::Size(100, 100)))
+          .SetShow(true)
+          .BuildOwnsNativeWidget();
+  EXPECT_FALSE(presenter->IsShowing());
+  EXPECT_TRUE(widget->IsActive());
+
+  // Show the bubble and verify that it is active.
+  presenter->Show(GetPrimaryDisplay().id());
+  views::Widget* bubble_widget = presenter->bubble_widget_for_test();
+  GetEventGenerator()->MoveMouseTo(
+      bubble_widget->GetWindowBoundsInScreen().CenterPoint());
+  EXPECT_TRUE(presenter->IsShowing());
+  EXPECT_TRUE(bubble_widget->IsActive());
+  EXPECT_FALSE(widget->IsActive());
+
+  // Hover over the window. Verify that the bubble is still showing, but
+  // activation has moved to the window.
+  gfx::Point widget_center = widget->GetWindowBoundsInScreen().CenterPoint();
+  ASSERT_FALSE(
+      bubble_widget->GetWindowBoundsInScreen().Contains(widget_center));
+  GetEventGenerator()->MoveMouseTo(widget_center);
+  EXPECT_TRUE(presenter->IsShowing());
+  EXPECT_FALSE(bubble_widget->IsActive());
+  EXPECT_TRUE(widget->IsActive());
+
+  // Create another widget, which will hide the bubble.
+  std::unique_ptr<views::Widget> widget_2 =
+      TestWidgetBuilder().SetShow(true).BuildOwnsNativeWidget();
+  EXPECT_FALSE(presenter->IsShowing());
 }
 
 TEST_P(AppListBubbleBoundsTest, BubbleOpensInBottomLeftForBottomShelf) {
@@ -935,15 +1089,15 @@ TEST_F(AppListBubblePresenterTest, ContextMenuStaysOpenAfterDismissAppList) {
   generator->ClickRightButton();
 
   auto* rwc = RootWindowController::ForWindow(bubble_widget->GetNativeWindow());
-  ASSERT_TRUE(rwc->IsContextMenuShown());
+  ASSERT_TRUE(rwc->IsContextMenuShownForTest());
 
   // Wait for bubble to animate closed.
-  LayerAnimationStoppedWaiter().Wait(
+  ui::LayerAnimationStoppedWaiter().Wait(
       presenter->bubble_view_for_test()->layer());
   ASSERT_FALSE(presenter->IsShowing());
 
   // Context menu is still open.
-  EXPECT_TRUE(rwc->IsContextMenuShown());
+  EXPECT_TRUE(rwc->IsContextMenuShownForTest());
 }
 
 }  // namespace

@@ -1,4 +1,4 @@
-// Copyright 2015 The Crashpad Authors. All rights reserved.
+// Copyright 2015 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,9 +21,9 @@
 #include <libproc.h>
 #include <strings.h>
 
+#include "base/apple/mach_logging.h"
 #include "base/check_op.h"
 #include "base/logging.h"
-#include "base/mac/mach_logging.h"
 #include "util/mac/mac_util.h"
 #include "util/mach/mach_extensions.h"
 #include "util/misc/no_cfi_icall.h"

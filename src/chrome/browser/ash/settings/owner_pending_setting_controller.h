@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,13 @@
 #define CHROME_BROWSER_ASH_SETTINGS_OWNER_PENDING_SETTING_CONTROLLER_H_
 
 #include "base/callback_list.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/sequence_checker.h"
 #include "base/values.h"
-#include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/ash/settings/device_settings_service.h"
+#include "chromeos/ash/components/settings/cros_settings.h"
 #include "components/ownership/owner_settings_service.h"
 
 class PrefService;
@@ -56,8 +57,8 @@ class OwnerPendingSettingController
 
   // Returns the latest value - regardless of whether this has been successfully
   // signed and persisted, or if it is still stored as a pending write. Can
-  // return absl::nullopt if there is no pending write and no signed value.
-  absl::optional<base::Value> GetValue() const;
+  // return std::nullopt if there is no pending write and no signed value.
+  std::optional<base::Value> GetValue() const;
 
   // Add an observer |callback| for changes to the setting.
   [[nodiscard]] base::CallbackListSubscription AddObserver(
@@ -111,8 +112,8 @@ class OwnerPendingSettingController
 
   SEQUENCE_CHECKER(sequence_checker_);
 
-  PrefService* local_state_;
-  absl::optional<base::Value> value_notified_to_observers_;
+  raw_ptr<PrefService> local_state_;
+  std::optional<base::Value> value_notified_to_observers_;
   base::RepeatingClosureList callback_list_;
   base::CallbackListSubscription setting_subscription_;
 
@@ -143,10 +144,10 @@ class OwnerPendingSettingController
 
   // Return the value waiting to be written (stored in local_state), if one
   // exists.
-  absl::optional<base::Value> GetPendingValue() const;
+  std::optional<base::Value> GetPendingValue() const;
 
   // Return the value signed and stored in CrosSettings, if one exists.
-  absl::optional<base::Value> GetSignedStoredValue() const;
+  std::optional<base::Value> GetSignedStoredValue() const;
 
   // Returns whether pending value should be used when determining the value
   // of `GetValue`.

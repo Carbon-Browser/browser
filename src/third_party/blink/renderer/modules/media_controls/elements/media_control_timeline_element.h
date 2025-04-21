@@ -1,12 +1,13 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_MEDIA_CONTROLS_ELEMENTS_MEDIA_CONTROL_TIMELINE_ELEMENT_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_MEDIA_CONTROLS_ELEMENTS_MEDIA_CONTROL_TIMELINE_ELEMENT_H_
 
+#include <optional>
+
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/modules/media_controls/elements/media_control_slider_element.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/timer.h"
@@ -76,7 +77,7 @@ class MediaControlTimelineElement : public MediaControlSliderElement {
 
   bool is_live_ = false;
 
-  absl::optional<LiveAnchorTime> live_anchor_time_;
+  std::optional<LiveAnchorTime> live_anchor_time_;
 
   HeapTaskRunnerTimer<MediaControlTimelineElement> render_timeline_timer_;
 };

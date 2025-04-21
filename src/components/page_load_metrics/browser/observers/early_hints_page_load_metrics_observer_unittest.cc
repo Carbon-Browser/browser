@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,7 +41,7 @@ class EarlyHintsPageLoadMetricsObserverTest
     timing.paint_timing->first_contentful_paint = base::Milliseconds(100);
 
     auto largest_contentful_paint =
-        page_load_metrics::mojom::LargestContentfulPaintTiming::New();
+        page_load_metrics::CreateLargestContentfulPaintTiming();
     largest_contentful_paint->largest_image_paint = base::Milliseconds(100);
     largest_contentful_paint->largest_image_paint_size = 100;
     timing.paint_timing->largest_contentful_paint =

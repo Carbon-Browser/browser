@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,27 +20,29 @@ import org.robolectric.annotation.Config;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.CallbackHelper;
 import org.chromium.chrome.browser.layouts.scene_layer.SceneLayer;
+import org.chromium.ui.modelutil.PropertyKey;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
 
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/**
- * Unit tests for {@link CompositorModelChangeProcessor}.
- */
+/** Unit tests for {@link CompositorModelChangeProcessor}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class CompositorModelChangeProcessorUnitTest {
     private static final PropertyModel.WritableBooleanPropertyKey PROPERTY_CHANGED =
             new PropertyModel.WritableBooleanPropertyKey();
 
+    private static final PropertyModel.WritableBooleanPropertyKey PROPERTY_EXCLUDED =
+            new PropertyModel.WritableBooleanPropertyKey();
+
     private final CallbackHelper mRequestRenderCallbackHelper = new CallbackHelper();
 
-    @Mock
-    private SceneLayer mView;
-    @Mock
-    private PropertyModelChangeProcessor.ViewBinder mViewBinder;
+    @Mock private SceneLayer mView;
+    @Mock private PropertyModelChangeProcessor.ViewBinder mViewBinder;
 
     private CompositorModelChangeProcessor.FrameRequestSupplier mFrameSupplier;
     private CompositorModelChangeProcessor mCompositorMCP;
@@ -51,12 +53,16 @@ public class CompositorModelChangeProcessorUnitTest {
     public void setUp() {
         MockitoAnnotations.initMocks(this);
 
-        mFrameSupplier = new CompositorModelChangeProcessor.FrameRequestSupplier(
-                mRequestRenderCallbackHelper::notifyCalled);
-        mModel = new PropertyModel(PROPERTY_CHANGED);
+        mFrameSupplier =
+                new CompositorModelChangeProcessor.FrameRequestSupplier(
+                        mRequestRenderCallbackHelper::notifyCalled);
+        mModel = new PropertyModel(PROPERTY_CHANGED, PROPERTY_EXCLUDED);
 
-        mCompositorMCP = CompositorModelChangeProcessor.create(
-                mModel, mView, mViewBinder, mFrameSupplier, false);
+        Set<PropertyKey> exclusions = new HashSet();
+        exclusions.add(PROPERTY_EXCLUDED);
+        mCompositorMCP =
+                CompositorModelChangeProcessor.create(
+                        mModel, mView, mViewBinder, mFrameSupplier, false, exclusions);
     }
 
     @Test
@@ -75,7 +81,9 @@ public class CompositorModelChangeProcessorUnitTest {
         mFrameSupplier.set(System.currentTimeMillis());
 
         verify(mViewBinder).bind(eq(mModel), eq(mView), eq(null));
-        Assert.assertEquals("A render should not have been requested!", callCount,
+        Assert.assertEquals(
+                "A render should not have been requested!",
+                callCount,
                 mRequestRenderCallbackHelper.getCallCount());
     }
 
@@ -86,5 +94,19 @@ public class CompositorModelChangeProcessorUnitTest {
         mRequestRenderCallbackHelper.waitForCallback(callCount, 1);
 
         verify(mViewBinder, never()).bind(any(), any(), any());
+    }
+
+    @Test
+    public void testMCPWithExclusions() {
+        int callCount = mRequestRenderCallbackHelper.getCallCount();
+        mModel.set(
+                PROPERTY_EXCLUDED, mPropertyChangedValue.getAndSet(!mPropertyChangedValue.get()));
+
+        mFrameSupplier.set(System.currentTimeMillis());
+        verify(mViewBinder).bind(eq(mModel), eq(mView), eq(null));
+        Assert.assertEquals(
+                "A render should not have been requested!",
+                callCount,
+                mRequestRenderCallbackHelper.getCallCount());
     }
 }

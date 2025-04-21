@@ -1,15 +1,17 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "storage/browser/blob/blob_builder_from_stream.h"
 
-#include "base/bind.h"
 #include "base/containers/span.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/numerics/safe_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
+#include "base/uuid.h"
 #include "mojo/public/c/system/types.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "storage/browser/blob/blob_data_item.h"
@@ -44,7 +46,7 @@ void RunCallbackWhenDataPipeReady(
     base::OnceCallback<void(mojo::ScopedDataPipeConsumerHandle)> callback) {
   auto watcher = std::make_unique<mojo::SimpleWatcher>(
       FROM_HERE, mojo::SimpleWatcher::ArmingPolicy::AUTOMATIC,
-      base::SequencedTaskRunnerHandle::Get());
+      base::SequencedTaskRunner::GetCurrentDefault());
   auto* watcher_ptr = watcher.get();
   auto raw_pipe = pipe.get();
   watcher_ptr->Watch(
@@ -67,7 +69,7 @@ class DataPipeConsumerHelper {
         progress_client_(std::move(progress_client)),
         watcher_(FROM_HERE,
                  mojo::SimpleWatcher::ArmingPolicy::MANUAL,
-                 base::SequencedTaskRunnerHandle::Get()),
+                 base::SequencedTaskRunner::GetCurrentDefault()),
         max_bytes_to_read_(max_bytes_to_read) {
     watcher_.Watch(pipe_.get(), MOJO_HANDLE_SIGNAL_READABLE,
                    MOJO_WATCH_CONDITION_SATISFIED,
@@ -100,9 +102,8 @@ class DataPipeConsumerHelper {
     }
 
     while (current_offset_ < max_bytes_to_read_) {
-      const void* data;
-      uint32_t size;
-      result = pipe_->BeginReadData(&data, &size, MOJO_READ_DATA_FLAG_NONE);
+      base::span<const uint8_t> data;
+      result = pipe_->BeginReadData(MOJO_READ_DATA_FLAG_NONE, data);
       if (result == MOJO_RESULT_INVALID_ARGUMENT) {
         // `pipe_` is not actually a ScopedDataPipeConsumerHandle.
         InvokeDone(mojo::ScopedDataPipeConsumerHandle(), PassProgressClient(),
@@ -122,18 +123,18 @@ class DataPipeConsumerHelper {
         break;
       }
       DCHECK_EQ(MOJO_RESULT_OK, result);
-      size = std::min<uint64_t>(size, max_bytes_to_read_ - current_offset_);
-      if (!Populate(base::make_span(static_cast<const char*>(data), size),
-                    current_offset_)) {
+      data = data.first(base::checked_cast<size_t>(std::min(
+          uint64_t{data.size()}, max_bytes_to_read_ - current_offset_)));
+      if (!Populate(base::as_chars(data), current_offset_)) {
         InvokeDone(mojo::ScopedDataPipeConsumerHandle(), PassProgressClient(),
                    false, current_offset_);
         delete this;
         return;
       }
       if (progress_client_)
-        progress_client_->OnProgress(size);
-      current_offset_ += size;
-      result = pipe_->EndReadData(size);
+        progress_client_->OnProgress(data.size());
+      current_offset_ += data.size();
+      result = pipe_->EndReadData(data.size());
       DCHECK_EQ(MOJO_RESULT_OK, result);
     }
 
@@ -180,13 +181,13 @@ class BlobBuilderFromStream::WritePipeToFileHelper
       uint64_t max_file_size,
       DoneCallback callback) {
     base::ThreadPool::CreateSequencedTaskRunner({base::MayBlock()})
-        ->PostTask(
-            FROM_HERE,
-            base::BindOnce(
-                &WritePipeToFileHelper::CreateAndAppendOnFileSequence,
-                std::move(pipe), std::move(progress_client),
-                std::move(file_path), max_file_size,
-                base::SequencedTaskRunnerHandle::Get(), std::move(callback)));
+        ->PostTask(FROM_HERE,
+                   base::BindOnce(
+                       &WritePipeToFileHelper::CreateAndAppendOnFileSequence,
+                       std::move(pipe), std::move(progress_client),
+                       std::move(file_path), max_file_size,
+                       base::SequencedTaskRunner::GetCurrentDefault(),
+                       std::move(callback)));
   }
 
   static void CreateAndStart(
@@ -202,7 +203,7 @@ class BlobBuilderFromStream::WritePipeToFileHelper
             base::BindOnce(&WritePipeToFileHelper::CreateAndStartOnFileSequence,
                            std::move(pipe), std::move(progress_client),
                            std::move(file), max_file_size,
-                           base::SequencedTaskRunnerHandle::Get(),
+                           base::SequencedTaskRunner::GetCurrentDefault(),
                            std::move(callback)));
   }
 
@@ -251,7 +252,7 @@ class BlobBuilderFromStream::WritePipeToFileHelper
 
   bool Populate(base::span<const char> data,
                 uint64_t bytes_previously_written) override {
-    return file_.WriteAtCurrentPos(data.data(), data.size()) >= 0;
+    return file_.WriteAtCurrentPos(base::as_bytes(data)).has_value();
   }
 
   void InvokeDone(mojo::ScopedDataPipeConsumerHandle pipe,
@@ -314,10 +315,12 @@ class BlobBuilderFromStream::WritePipeToFutureDataHelper
                 uint64_t bytes_previously_written) override {
     if (item_->type() == BlobDataItem::Type::kBytesDescription)
       item_->AllocateBytes();
-    std::memcpy(item_->mutable_bytes()
-                    .subspan(bytes_previously_written, data.size())
-                    .data(),
-                data.data(), data.size());
+    std::memcpy(
+        item_->mutable_bytes()
+            .subspan(base::checked_cast<size_t>(bytes_previously_written),
+                     data.size())
+            .data(),
+        data.data(), data.size());
     return true;
   }
 
@@ -675,8 +678,9 @@ void BlobBuilderFromStream::OnSuccess() {
   DCHECK(context_);
   DCHECK(callback_);
   std::move(callback_).Run(
-      this, context_->AddFinishedBlob(base::GenerateGUID(), content_type_,
-                                      content_disposition_, std::move(items_)));
+      this, context_->AddFinishedBlob(
+                base::Uuid::GenerateRandomV4().AsLowercaseString(),
+                content_type_, content_disposition_, std::move(items_)));
 }
 
 bool BlobBuilderFromStream::ShouldStoreNextBlockOnDisk(uint64_t length_hint) {

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -96,7 +96,8 @@ IN_PROC_BROWSER_TEST_F(TwoClientThemesSyncTest,
 //
 // Most other tests have significant coverage of model association.  This test
 // is intended to test steady-state scenarios.
-IN_PROC_BROWSER_TEST_F(TwoClientThemesSyncTest, E2E_ENABLED(CycleOptions)) {
+IN_PROC_BROWSER_TEST_F(TwoClientThemesSyncTest,
+                       E2E_ENABLED(CycleOptions)) {
   ResetSyncForPrimaryAccount();
   ASSERT_TRUE(SetupSync()) << "SetupSync() failed.";
 

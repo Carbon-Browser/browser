@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,8 @@
 
 namespace floss {
 
+// FakeFlossManagerClient is the fake FlossManagerClient that is currently
+// used by both the unit tests and the emulator.
 class DEVICE_BLUETOOTH_EXPORT FakeFlossManagerClient
     : public FlossManagerClient {
  public:
@@ -21,7 +23,18 @@ class DEVICE_BLUETOOTH_EXPORT FakeFlossManagerClient
   void NotifyObservers(
       const base::RepeatingCallback<void(Observer*)>& notify) const;
 
-  void SetAdapterPowered(int adapter, bool powered);
+  // Test utility to set the status of the default adapter, without invoking
+  // Floss callbacks.
+  void SetDefaultEnabled(bool enabled);
+
+  void Init(dbus::Bus* bus,
+            const std::string& service_name,
+            const int adapter_index,
+            base::Version version,
+            base::OnceClosure on_ready) override;
+  void SetAdapterEnabled(int adapter,
+                         bool enabled,
+                         ResponseCallback<Void> callback) override;
 
  private:
   base::WeakPtrFactory<FakeFlossManagerClient> weak_ptr_factory_{this};

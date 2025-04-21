@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,9 @@
 #include <string>
 
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
-#include "chrome/browser/ash/policy/core/device_cloud_policy_store_ash.h"
 #include "chrome/browser/ash/policy/core/device_policy_builder.h"
+#include "chrome/browser/ash/policy/core/device_policy_cros_test_helper.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
-#include "components/policy/core/common/cloud/mock_cloud_policy_store.h"
-#include "components/policy/core/common/cloud/test/policy_builder.h"
 #include "components/prefs/pref_change_registrar.h"
 
 namespace ash {
@@ -74,39 +71,6 @@ class DictionaryLocalStateValueWaiter : public LocalStateValueWaiter {
   bool ExpectedValueFound() override;
 
   const std::string key_;
-};
-
-class DevicePolicyCrosTestHelper {
- public:
-  DevicePolicyCrosTestHelper();
-  DevicePolicyCrosTestHelper(const DevicePolicyCrosTestHelper&) = delete;
-  DevicePolicyCrosTestHelper& operator=(const DevicePolicyCrosTestHelper&) =
-      delete;
-  ~DevicePolicyCrosTestHelper();
-
-  DevicePolicyBuilder* device_policy() { return &device_policy_; }
-  const std::string device_policy_blob();
-
-  // Writes the owner key to disk. To be called before installing a policy.
-  void InstallOwnerKey();
-
-  // Reinstalls |device_policy_| as the policy (to be used when it was
-  // recently changed).
-  void RefreshDevicePolicy();
-  // Refreshes the Device Settings policies given in the settings vector.
-  // Example: {chromeos::kDeviceDisplayResolution} refreshes the display
-  //   resolution setting.
-  void RefreshPolicyAndWaitUntilDeviceSettingsUpdated(
-      const std::vector<std::string>& settings);
-  // Refreshes the whole device cloud policies.
-  void RefreshPolicyAndWaitUntilDeviceCloudPolicyUpdated();
-  void UnsetPolicy(const std::vector<std::string>& settings);
-
- private:
-  static void OverridePaths();
-
-  // Carries Chrome OS device policies for tests.
-  DevicePolicyBuilder device_policy_;
 };
 
 // Used to test Device policy changes in Chrome OS.

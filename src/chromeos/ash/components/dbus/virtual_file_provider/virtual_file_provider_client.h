@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,13 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/callback_forward.h"
 #include "chromeos/dbus/common/dbus_client.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -24,10 +24,10 @@ namespace ash {
 // file descriptor behaves like a regular file descriptor (unlike a pipe, it
 // supports seek), while actually there is no real file associated with it.
 class COMPONENT_EXPORT(ASH_DBUS_VIRTUAL_FILE_PROVIDER) VirtualFileProviderClient
-    : public DBusClient {
+    : public chromeos::DBusClient {
  public:
   using GenerateVirtualFileIdCallback =
-      base::OnceCallback<void(const absl::optional<std::string>& id)>;
+      base::OnceCallback<void(const std::optional<std::string>& id)>;
   using OpenFileByIdCallback = base::OnceCallback<void(base::ScopedFD fd)>;
 
   // Returns the global instance if initialized. May return null.

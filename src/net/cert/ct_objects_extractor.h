@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,17 @@
 #define NET_CERT_CT_OBJECTS_EXTRACTOR_H_
 
 #include <string>
+#include <string_view>
 
-#include "base/strings/string_piece.h"
 #include "net/base/net_export.h"
 #include "net/cert/x509_certificate.h"
 
 namespace net::ct {
+
+// The wire form of the OID 1.3.6.1.4.1.11129.2.4.2. See Section 3.3 of
+// RFC6962.
+inline constexpr uint8_t kEmbeddedSCTOid[] = {0x2B, 0x06, 0x01, 0x04, 0x01,
+                                              0xD6, 0x79, 0x02, 0x04, 0x02};
 
 struct SignedEntryData;
 
@@ -52,7 +57,7 @@ NET_EXPORT_PRIVATE bool GetX509SignedEntry(const CRYPTO_BUFFER* leaf,
 NET_EXPORT_PRIVATE bool ExtractSCTListFromOCSPResponse(
     const CRYPTO_BUFFER* issuer,
     const std::string& cert_serial_number,
-    base::StringPiece ocsp_response,
+    std::string_view ocsp_response,
     std::string* sct_list);
 
 }  // namespace net::ct

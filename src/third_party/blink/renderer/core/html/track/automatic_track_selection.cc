@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,7 @@ class TrackGroup {
 };
 
 static int TextTrackLanguageSelectionScore(const TextTrack& track) {
-  if (track.language().IsEmpty())
+  if (track.language().empty())
     return 0;
 
   Vector<AtomicString> languages = UserPreferredLanguages();
@@ -167,18 +167,23 @@ void AutomaticTrackSelection::Perform(TextTrackList& text_tracks) {
     if (!text_track)
       continue;
 
-    String kind = text_track->kind();
     TrackGroup* current_group;
-    if (kind == TextTrack::SubtitlesKeyword() ||
-        kind == TextTrack::CaptionsKeyword()) {
-      current_group = &caption_and_subtitle_tracks;
-    } else if (kind == TextTrack::DescriptionsKeyword()) {
-      current_group = &description_tracks;
-    } else if (kind == TextTrack::ChaptersKeyword()) {
-      current_group = &chapter_tracks;
-    } else {
-      DCHECK_EQ(kind, TextTrack::MetadataKeyword());
-      current_group = &metadata_tracks;
+    switch (text_track->kind().AsEnum()) {
+      case V8TextTrackKind::Enum::kSubtitles:
+      case V8TextTrackKind::Enum::kCaptions:
+        current_group = &caption_and_subtitle_tracks;
+        break;
+      case V8TextTrackKind::Enum::kDescriptions:
+        current_group = &description_tracks;
+        break;
+      case V8TextTrackKind::Enum::kChapters:
+        current_group = &chapter_tracks;
+        break;
+      case V8TextTrackKind::Enum::kMetadata:
+        current_group = &metadata_tracks;
+        break;
+      default:
+        NOTREACHED();
     }
 
     if (!current_group->visible_track &&

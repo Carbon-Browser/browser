@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,7 +34,6 @@ struct GPU_EXPORT
         return gpu::mojom::GpuFeatureStatus::Max;
     }
     NOTREACHED();
-    return gpu::mojom::GpuFeatureStatus::Max;
   }
 
   static bool FromMojom(gpu::mojom::GpuFeatureStatus input,
@@ -69,10 +68,10 @@ struct GPU_EXPORT
   static bool Read(gpu::mojom::GpuFeatureInfoDataView data,
                    gpu::GpuFeatureInfo* out);
 
-  static std::vector<gpu::GpuFeatureStatus> status_values(
-      const gpu::GpuFeatureInfo& info) {
-    return std::vector<gpu::GpuFeatureStatus>(info.status_values,
-                                              std::end(info.status_values));
+  static const std::array<gpu::GpuFeatureStatus,
+                          gpu::NUMBER_OF_GPU_FEATURE_TYPES>&
+  status_values(const gpu::GpuFeatureInfo& info) {
+    return info.status_values;
   }
 
   static const std::vector<int32_t>& enabled_gpu_driver_bug_workarounds(

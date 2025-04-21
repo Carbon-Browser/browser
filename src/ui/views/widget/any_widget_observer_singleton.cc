@@ -1,15 +1,14 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/views/widget/any_widget_observer_singleton.h"
-#include "ui/views/widget/any_widget_observer.h"
 
 #include "base/no_destructor.h"
 #include "base/observer_list.h"
+#include "ui/views/widget/any_widget_observer.h"
 
-namespace views {
-namespace internal {
+namespace views::internal {
 
 // static
 AnyWidgetObserverSingleton* AnyWidgetObserverSingleton::GetInstance() {
@@ -19,8 +18,7 @@ AnyWidgetObserverSingleton* AnyWidgetObserverSingleton::GetInstance() {
 
 #define PROPAGATE_NOTIFICATION(method)                      \
   void AnyWidgetObserverSingleton::method(Widget* widget) { \
-    for (AnyWidgetObserver & obs : observers_)              \
-      obs.method(widget);                                   \
+    observers_.Notify(&AnyWidgetObserver::method, widget);  \
   }
 
 PROPAGATE_NOTIFICATION(OnAnyWidgetInitialized)
@@ -41,5 +39,4 @@ void AnyWidgetObserverSingleton::RemoveObserver(AnyWidgetObserver* observer) {
 AnyWidgetObserverSingleton::AnyWidgetObserverSingleton() = default;
 AnyWidgetObserverSingleton::~AnyWidgetObserverSingleton() = default;
 
-}  // namespace internal
-}  // namespace views
+}  // namespace views::internal

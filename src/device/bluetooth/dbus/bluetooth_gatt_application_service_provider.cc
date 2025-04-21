@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,8 @@
 
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "device/bluetooth/bluetooth_gatt_characteristic.h"
 #include "device/bluetooth/bluez/bluetooth_gatt_service_bluez.h"
 #include "device/bluetooth/dbus/bluetooth_gatt_application_service_provider_impl.h"
@@ -124,7 +126,8 @@ BluetoothGattApplicationServiceProvider::
 
 void BluetoothGattApplicationServiceProvider::CreateAttributeServiceProviders(
     dbus::Bus* bus,
-    const std::map<dbus::ObjectPath, BluetoothLocalGattServiceBlueZ*>&
+    const std::map<dbus::ObjectPath,
+                   raw_ptr<BluetoothLocalGattServiceBlueZ, CtnExperimental>>&
         services) {
   for (const auto& service : services) {
     service_providers_.push_back(
@@ -143,12 +146,14 @@ void BluetoothGattApplicationServiceProvider::CreateAttributeServiceProviders(
                   characteristic.second->GetProperties(),
                   characteristic.second->GetPermissions()),
               service.second->object_path())));
-      for (const auto& descriptor : characteristic.second->GetDescriptors()) {
+      for (auto desc : characteristic.second->GetDescriptors()) {
+        auto* descriptor =
+            static_cast<BluetoothLocalGattDescriptorBlueZ*>(desc);
         descriptor_providers_.push_back(
             base::WrapUnique(BluetoothGattDescriptorServiceProvider::Create(
                 bus, descriptor->object_path(),
                 std::make_unique<BluetoothGattDescriptorDelegateWrapper>(
-                    service.second, descriptor.get()),
+                    service.second, descriptor),
                 descriptor->GetUUID().value(),
                 FlagsFromPermissions(descriptor->GetPermissions()),
                 characteristic.second->object_path())));
@@ -160,10 +165,9 @@ void BluetoothGattApplicationServiceProvider::CreateAttributeServiceProviders(
 void BluetoothGattApplicationServiceProvider::SendValueChanged(
     const dbus::ObjectPath& characteristic_path,
     const std::vector<uint8_t>& value) {
-  auto characteristic = std::find_if(
-      characteristic_providers_.begin(), characteristic_providers_.end(),
-      [&](const std::unique_ptr<BluetoothGattCharacteristicServiceProvider>&
-              p) { return p->object_path() == characteristic_path; });
+  auto characteristic = base::ranges::find(
+      characteristic_providers_, characteristic_path,
+      &BluetoothGattCharacteristicServiceProvider::object_path);
   if (characteristic == characteristic_providers_.end()) {
     LOG(ERROR) << "Couldn't find characteristic provider for: "
                << characteristic_path.value();
@@ -177,7 +181,8 @@ std::unique_ptr<BluetoothGattApplicationServiceProvider>
 BluetoothGattApplicationServiceProvider::Create(
     dbus::Bus* bus,
     const dbus::ObjectPath& object_path,
-    const std::map<dbus::ObjectPath, BluetoothLocalGattServiceBlueZ*>&
+    const std::map<dbus::ObjectPath,
+                   raw_ptr<BluetoothLocalGattServiceBlueZ, CtnExperimental>>&
         services) {
   if (!bluez::BluezDBusManager::Get()->IsUsingFakes()) {
     return base::WrapUnique(new BluetoothGattApplicationServiceProviderImpl(
@@ -185,7 +190,6 @@ BluetoothGattApplicationServiceProvider::Create(
   }
 #if defined(USE_REAL_DBUS_CLIENTS)
   LOG(FATAL) << "Fake is unavailable if USE_REAL_DBUS_CLIENTS is defined.";
-  return nullptr;
 #else
   return std::make_unique<FakeBluetoothGattApplicationServiceProvider>(
       object_path, services);

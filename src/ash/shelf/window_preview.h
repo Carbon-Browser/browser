@@ -1,10 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_SHELF_WINDOW_PREVIEW_H_
 #define ASH_SHELF_WINDOW_PREVIEW_H_
 
+#include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
 
 namespace aura {
@@ -26,6 +28,7 @@ class WindowPreviewView;
 // click events will activate the window and dismiss the bubble which holds this
 // view.
 class WindowPreview : public views::View {
+  METADATA_HEADER(WindowPreview, views::View)
  public:
   class Delegate {
    public:
@@ -50,10 +53,10 @@ class WindowPreview : public views::View {
   ~WindowPreview() override;
 
   // views::View:
-  gfx::Size CalculatePreferredSize() const override;
-  void Layout() override;
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override;
+  void Layout(PassKey) override;
   bool OnMousePressed(const ui::MouseEvent& event) override;
-  const char* GetClassName() const override;
   void OnThemeChanged() override;
 
   const WindowPreviewView* preview_view() const { return preview_view_; }
@@ -65,13 +68,13 @@ class WindowPreview : public views::View {
   void CloseButtonPressed();
 
   // Child views.
-  views::ImageButton* close_button_ = nullptr;
-  views::Label* title_ = nullptr;
-  views::View* preview_container_view_ = nullptr;
-  WindowPreviewView* preview_view_ = nullptr;
+  raw_ptr<views::ImageButton> close_button_ = nullptr;
+  raw_ptr<views::Label> title_ = nullptr;
+  raw_ptr<views::View> preview_container_view_ = nullptr;
+  raw_ptr<WindowPreviewView> preview_view_ = nullptr;
 
   // Unowned pointer to the delegate. The delegate should outlive this instance.
-  Delegate* delegate_;
+  raw_ptr<Delegate> delegate_;
 };
 
 }  // namespace ash

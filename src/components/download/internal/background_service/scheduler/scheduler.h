@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,7 @@ class Scheduler {
   virtual Entry* Next(const Model::EntryList& entries,
                       const DeviceStatus& device_status) = 0;
 
-  virtual ~Scheduler() {}
+  virtual ~Scheduler() = default;
 };
 
 }  // namespace download

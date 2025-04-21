@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include "chrome/browser/media/webrtc/desktop_media_list.h"
 #include "chrome/browser/ui/views/desktop_capture/desktop_media_list_view.h"
 #include "chrome/browser/ui/views/desktop_capture/desktop_media_picker_views.h"
+#include "chrome/browser/ui/views/desktop_capture/rounded_corner_image_view.h"
 #include "chrome/grit/generated_resources.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
@@ -15,11 +16,17 @@
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
 #include "ui/gfx/canvas.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/background.h"
 #include "ui/views/controls/focus_ring.h"
+#include "ui/views/controls/highlight_path_generator.h"
 #include "ui/views/controls/image_view.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/view_utils.h"
+
+namespace {
+constexpr int kCornerRadius = 8;
+}
 
 using content::DesktopMediaID;
 
@@ -32,72 +39,78 @@ DesktopMediaSourceViewStyle::DesktopMediaSourceViewStyle(
     const gfx::Rect& icon_rect,
     const gfx::Rect& label_rect,
     gfx::HorizontalAlignment text_alignment,
-    const gfx::Rect& image_rect,
-    int focus_rectangle_inset)
+    const gfx::Rect& image_rect)
     : columns(columns),
       item_size(item_size),
       icon_rect(icon_rect),
       label_rect(label_rect),
       text_alignment(text_alignment),
-      image_rect(image_rect),
-      focus_rectangle_inset(focus_rectangle_inset) {}
+      image_rect(image_rect) {}
 
 DesktopMediaSourceView::DesktopMediaSourceView(
     DesktopMediaListView* parent,
     DesktopMediaID source_id,
     DesktopMediaSourceViewStyle style)
-    : parent_(parent),
-      source_id_(source_id),
-      selected_(false) {
-  AddChildView(icon_view_.get());
-  AddChildView(image_view_.get());
-  AddChildView(label_.get());
+    : parent_(parent), source_id_(source_id), selected_(false) {
+  icon_view_ = AddChildView(std::make_unique<views::ImageView>());
+  image_view_ = AddChildView(std::make_unique<RoundedCornerImageView>());
+  label_ = AddChildView(std::make_unique<views::Label>());
   icon_view_->SetCanProcessEventsWithinSubtree(false);
   image_view_->SetCanProcessEventsWithinSubtree(false);
   SetFocusBehavior(FocusBehavior::ALWAYS);
   SetStyle(style);
   views::FocusRing::Install(this);
+  views::InstallRoundRectHighlightPathGenerator(this, gfx::Insets(),
+                                                kCornerRadius);
+
+  GetViewAccessibility().SetRole(ax::mojom::Role::kButton);
+  UpdateAccessibleName();
+  label_text_changed_callback_ =
+      label_->AddTextChangedCallback(base::BindRepeating(
+          &DesktopMediaSourceView::OnLabelTextChanged, base::Unretained(this)));
 }
 
-DesktopMediaSourceView::~DesktopMediaSourceView() {}
+DesktopMediaSourceView::~DesktopMediaSourceView() = default;
 
 void DesktopMediaSourceView::SetName(const std::u16string& name) {
   label_->SetText(name);
 }
 
 void DesktopMediaSourceView::SetThumbnail(const gfx::ImageSkia& thumbnail) {
-  image_view_->SetImage(thumbnail);
+  image_view_->SetImage(ui::ImageModel::FromImageSkia(thumbnail));
 }
 
 void DesktopMediaSourceView::SetIcon(const gfx::ImageSkia& icon) {
-  icon_view_->SetImage(icon);
+  icon_view_->SetImage(ui::ImageModel::FromImageSkia(icon));
 }
 
 void DesktopMediaSourceView::SetSelected(bool selected) {
-  if (selected == selected_)
+  if (selected == selected_) {
     return;
+  }
   selected_ = selected;
 
   if (selected) {
     // Unselect all other sources.
     Views neighbours;
     parent()->GetViewsInGroup(GetGroup(), &neighbours);
-    for (auto i(neighbours.begin()); i != neighbours.end(); ++i) {
-      if (*i != this) {
-        DCHECK(views::IsViewClass<DesktopMediaSourceView>(*i));
+    for (auto& neighbour : neighbours) {
+      if (neighbour != this) {
+        DCHECK(views::IsViewClass<DesktopMediaSourceView>(neighbour));
         DesktopMediaSourceView* source_view =
-            static_cast<DesktopMediaSourceView*>(*i);
+            static_cast<DesktopMediaSourceView*>(neighbour);
         source_view->SetSelected(false);
       }
     }
 
-    image_view_->SetBackground(views::CreateSolidBackground(
-        GetColorProvider()->GetColor(ui::kColorMenuItemBackgroundSelected)));
+    SetBackground(views::CreateRoundedRectBackground(
+        GetColorProvider()->GetColor(ui::kColorSysTonalContainer),
+        kCornerRadius));
     label_->SetFontList(label_->font_list().Derive(0, gfx::Font::NORMAL,
                                                    gfx::Font::Weight::BOLD));
     parent_->OnSelectionChanged();
   } else {
-    image_view_->SetBackground(nullptr);
+    SetBackground(nullptr);
     label_->SetFontList(label_->font_list().Derive(0, gfx::Font::NORMAL,
                                                    gfx::Font::Weight::NORMAL));
   }
@@ -117,18 +130,28 @@ bool DesktopMediaSourceView::GetSelected() const {
   return selected_;
 }
 
+void DesktopMediaSourceView::ClearSelection() {
+  if (!GetSelected()) {
+    return;
+  }
+  SetSelected(false);
+  parent_->OnSelectionChanged();
+}
+
 views::View* DesktopMediaSourceView::GetSelectedViewForGroup(int group) {
   Views neighbours;
   parent()->GetViewsInGroup(group, &neighbours);
-  if (neighbours.empty())
+  if (neighbours.empty()) {
     return nullptr;
+  }
 
-  for (auto i(neighbours.begin()); i != neighbours.end(); ++i) {
-    DCHECK(views::IsViewClass<DesktopMediaSourceView>(*i));
+  for (auto& neighbour : neighbours) {
+    DCHECK(views::IsViewClass<DesktopMediaSourceView>(neighbour));
     DesktopMediaSourceView* source_view =
-        static_cast<DesktopMediaSourceView*>(*i);
-    if (source_view->selected_)
+        static_cast<DesktopMediaSourceView*>(neighbour);
+    if (source_view->selected_) {
       return source_view;
+    }
   }
   return nullptr;
 }
@@ -149,22 +172,27 @@ bool DesktopMediaSourceView::OnMousePressed(const ui::MouseEvent& event) {
 }
 
 void DesktopMediaSourceView::OnGestureEvent(ui::GestureEvent* event) {
-  // Detect tap gesture using ET_GESTURE_TAP_DOWN so the view also gets focused
-  // on the long tap (when the tap gesture starts).
-  if (event->type() == ui::ET_GESTURE_TAP_DOWN) {
+  // Detect tap gesture using EventType::kGestureTapDown so the view also gets
+  // focused on the long tap (when the tap gesture starts).
+  if (event->type() == ui::EventType::kGestureTapDown) {
     RequestFocus();
     event->SetHandled();
   }
 }
 
-void DesktopMediaSourceView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
-  node_data->role = ax::mojom::Role::kButton;
-  node_data->SetName(label_->GetText().empty()
-                         ? l10n_util::GetStringUTF16(
-                               IDS_DESKTOP_MEDIA_SOURCE_EMPTY_ACCESSIBLE_NAME)
-                         : label_->GetText());
+void DesktopMediaSourceView::OnLabelTextChanged() {
+  UpdateAccessibleName();
 }
 
-BEGIN_METADATA(DesktopMediaSourceView, views::View)
+void DesktopMediaSourceView::UpdateAccessibleName() {
+  if (label_->GetText().empty()) {
+    GetViewAccessibility().SetName(l10n_util::GetStringUTF16(
+        IDS_DESKTOP_MEDIA_SOURCE_EMPTY_ACCESSIBLE_NAME));
+  } else {
+    GetViewAccessibility().SetName(label_->GetText());
+  }
+}
+
+BEGIN_METADATA(DesktopMediaSourceView)
 ADD_PROPERTY_METADATA(bool, Selected)
 END_METADATA

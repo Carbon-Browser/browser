@@ -1,11 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/crash/core/app/crash_switches.h"
 
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 
 namespace crash_reporter {
 namespace switches {
@@ -23,7 +22,7 @@ const char kCrashpadHandler[] = "crashpad-handler";
 const char kCrashpadHandlerPid[] = "crashpad-handler-pid";
 #endif
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 // A time_t. Passed by session_manager into the Chrome user session, indicating
 // that if Chrome crashes before the indicated time, session_manager will
 // consider this to be a crash-loop situation and log the user out. Chrome

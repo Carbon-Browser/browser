@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ class GLES2CmdHelper;
 
 class ReadbackBufferShadowTracker {
  public:
-  class Buffer : public base::SupportsWeakPtr<Buffer> {
+  class Buffer final {
    public:
     explicit Buffer(GLuint buffer_id,
                     MappedMemoryManager* mapped_memory,
@@ -44,6 +44,8 @@ class ReadbackBufferShadowTracker {
 
     GLuint id() const { return buffer_id_; }
 
+    base::WeakPtr<Buffer> AsWeakPtr() { return weak_ptr_factory_.GetWeakPtr(); }
+
    private:
     friend class ReadbackBufferShadowTracker;
 
@@ -57,6 +59,7 @@ class ReadbackBufferShadowTracker {
     uint64_t serial_of_readback_data_ = 0;
     uint32_t size_ = 0;
     bool is_mapped_ = false;
+    base::WeakPtrFactory<Buffer> weak_ptr_factory_{this};
   };
 
   ReadbackBufferShadowTracker(MappedMemoryManager* mapped_memory,

@@ -1,14 +1,21 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/in_session_auth/webauthn_dialog_controller_impl.h"
 
+#include <memory>
+#include <string>
+#include <utility>
+
 #include "ash/in_session_auth/mock_in_session_auth_dialog_client.h"
+#include "ash/public/cpp/webauthn_dialog_controller.h"
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/test/bind.h"
+#include "testing/gmock/include/gmock/gmock.h"
+#include "testing/gtest/include/gtest/gtest.h"
 
 using ::testing::_;
 

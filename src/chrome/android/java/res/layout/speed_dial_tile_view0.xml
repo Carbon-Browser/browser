@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/speed_dial_tile_view"
+    android:layout_width="@dimen/tile_view_width"
+    android:layout_height="wrap_content"
+    android:paddingStart="4dp"
+    android:paddingEnd="4dp" >
+
+    <FrameLayout
+        android:id="@+id/speed_dial_tile_view_icon_background"
+        android:layout_width="@dimen/speed_dial_tile_view_icon_size"
+        android:layout_height="@dimen/speed_dial_tile_view_icon_size"
+        android:elevation="10dp"
+        android:layout_marginTop="6dp"
+        android:layout_gravity="center_horizontal"
+        android:background="@drawable/speed_dial_icon_background">
+        <ImageView
+            android:id="@+id/speed_dial_tile_view_icon"
+            android:layout_width="@dimen/speed_dial_tile_view_icon_size"
+            android:layout_height="@dimen/speed_dial_tile_view_icon_size"
+            android:layout_gravity="center"
+            android:tint="#50515B"
+            android:contentDescription="@null" />
+    </FrameLayout>
+
+    <ImageView
+        android:id="@+id/speed_dial_delete"
+        android:layout_width="25dp"
+        android:layout_height="25dp"
+        android:elevation="10dp"
+        android:layout_gravity="end"
+        android:layout_marginTop="0dp"
+        android:visibility="gone"
+        android:background="@drawable/ic_close"
+        android:contentDescription="@null" />
+
+    <!-- The touch highlight. -->
+    <View
+        android:id="@+id/speed_dial_tile_view_highlight"
+        android:layout_width="@dimen/speed_dial_tile_view_icon_size"
+        android:layout_height="@dimen/speed_dial_tile_view_icon_size"
+        android:layout_gravity="center_horizontal"
+        android:elevation="10dp"
+        android:layout_marginTop="6dp"
+        android:background="@drawable/tile_view_highlight" />
+
+    <!-- The title. -->
+    <TextView
+        android:id="@+id/speed_dial_tile_textview"
+        style="@style/Theme.AppCompat.DayNight"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="70dp"
+        android:fontFamily="sans-serif"
+        android:layout_marginBottom="6dp"
+        android:ellipsize="end"
+        android:gravity="center_horizontal"
+        android:textColor="#000000"
+        android:lines="1"
+        android:textAlignment="center"
+        android:lineSpacingMultiplier="1.17"
+        android:textSize="13sp" />
+</FrameLayout>

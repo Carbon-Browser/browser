@@ -1,24 +1,20 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ios/chrome/test/earl_grey/scoped_allow_crash_on_startup.h"
+#import "ios/chrome/test/earl_grey/scoped_allow_crash_on_startup.h"
 
-#include <atomic>
+#import <atomic>
 
 #import "ios/testing/earl_grey/earl_grey_test.h"
 #import "ios/third_party/earl_grey2/src/CommonLib/Assertion/GREYFatalAsserts.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
 std::atomic_int g_instance_count;
 
-// Uses |swizzler| to replace the implementation of |originalMethodName| in
-// |originalClassName| with that of |swizzledMethodName| of |swizzledClassName|.
+// Uses `swizzler` to replace the implementation of `originalMethodName` in
+// `originalClassName` with that of `swizzledMethodName` of `swizzledClassName`.
 // Asserts that the replacement was successful.
 void SwizzleMethod(GREYSwizzler* swizzler,
                    NSString* originalClassName,
@@ -77,9 +73,10 @@ const GREYHostApplicationCrashHandler kHostApplicationCrashHandler = ^{
           containsString:@"Couldn’t communicate with a helper application. Try "
                          @"your operation again. If that fails, quit and "
                          @"relaunch the application and try again."] ||
-      [description containsString:@" crashed in "]) {
-    [[NSException exceptionWithName:@"XCTIssue" reason:description
-                           userInfo:nil] raise];
+      [description containsString:@" crashed in "] ||
+      [description containsString:@"Failed to get matching snapshot"]) {
+    // Ignore these exceptions, since we expect to crash.
+    return;
   }
   INVOKE_ORIGINAL_IMP1(void, @selector(swizzledRecordIssue:), issue);
 }

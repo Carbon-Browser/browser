@@ -106,13 +106,19 @@ class SVGScriptElement final : public SVGElement,
   Type GetScriptElementType() override;
 
   Element& CloneWithoutAttributesAndChildren(Document&) const override;
-  bool LayoutObjectIsNeeded(const ComputedStyle&) const override {
+  bool LayoutObjectIsNeeded(const DisplayStyle&) const override {
     return false;
   }
 
+  SVGAnimatedPropertyBase* PropertyFromAttribute(
+      const QualifiedName& attribute_name) const override;
+  void SynchronizeAllSVGAttributes() const override;
+
   bool have_fired_load_ = false;
 
+  // https://w3c.github.io/trusted-types/dist/spec/#script-scripttext
   ParkableString script_text_internal_slot_;
+  bool children_changed_by_api_ = false;
 
   Member<ScriptLoader> loader_;
 };

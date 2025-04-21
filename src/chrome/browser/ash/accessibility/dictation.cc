@@ -1,14 +1,14 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/accessibility/dictation.h"
 
-#include "ash/constants/ash_pref_names.h"
+#include <string_view>
+
 #include "base/containers/contains.h"
 #include "base/containers/fixed_flat_map.h"
 #include "base/containers/flat_map.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
@@ -50,18 +50,6 @@ std::string GetUserLangOrLocaleFromSystem(Profile* profile) {
   return user_language.empty() ? kDefaultProfileLocale : user_language;
 }
 
-std::string GetUserLocale(Profile* profile) {
-  // Get the user's chosen dictation locale from their preference in settings.
-  // This is guaranteed to be a supported locale and won't be empty, since
-  // the pref is set using DetermineDefaultSupportedLocale() as soon as
-  // Dictation is enabled, assuming that supported languages are never removed
-  // from this list.
-  std::string locale =
-      profile->GetPrefs()->GetString(prefs::kAccessibilityDictationLocale);
-  DCHECK(!locale.empty());
-  return locale;
-}
-
 std::string GetSupportedLocale(const std::string& lang_or_locale) {
   if (lang_or_locale.empty())
     return std::string();
@@ -71,7 +59,7 @@ std::string GetSupportedLocale(const std::string& lang_or_locale) {
   // map also includes a map from Open Speech API "cmn" languages to
   // their equivalent default locale.
   static constexpr auto kLangsToDefaultLocales =
-      base::MakeFixedFlatMap<base::StringPiece, base::StringPiece>(
+      base::MakeFixedFlatMap<std::string_view, std::string_view>(
           {{"af", "af-ZA"},          {"am", "am-ET"},
            {"ar", "ar-001"},         {"az", "az-AZ"},
            {"bg", "bg-BG"},          {"bn", "bn-IN"},
@@ -118,13 +106,13 @@ std::string GetSupportedLocale(const std::string& lang_or_locale) {
            {"cmn-TW", "zh-TW"}});
 
   // First check if this is a language code supported in the map above.
-  auto* iter = kLangsToDefaultLocales.find(lang_or_locale);
+  auto iter = kLangsToDefaultLocales.find(lang_or_locale);
   if (iter != kLangsToDefaultLocales.end())
     return std::string(iter->second);
 
   // If it's only a language code, we can return early, because no other
   // language-only codes are supported.
-  std::pair<base::StringPiece, base::StringPiece> lang_and_locale_pair =
+  std::pair<std::string_view, std::string_view> lang_and_locale_pair =
       language::SplitIntoMainAndTail(lang_or_locale);
   if (lang_and_locale_pair.second.size() == 0)
     return std::string();

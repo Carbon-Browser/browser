@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,17 +7,19 @@
 #include <set>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "components/file_access/scoped_file_access_delegate.h"
 #include "components/services/app_service/public/cpp/file_handler.h"
 #include "components/services/app_service/public/cpp/file_handler_info.h"
 #include "content/public/browser/browser_context.h"
@@ -33,7 +35,7 @@
 #include "storage/common/file_system/file_system_mount_option.h"
 #include "storage/common/file_system/file_system_types.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 #include "extensions/browser/api/file_handlers/non_native_file_system_delegate.h"
 #endif
 
@@ -195,8 +197,8 @@ WritableFileChecker::WritableFileChecker(
 void WritableFileChecker::Check() {
   outstanding_tasks_ = paths_.size();
   for (const auto& path : paths_) {
-    bool is_directory = directory_paths_.find(path) != directory_paths_.end();
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+    bool is_directory = base::Contains(directory_paths_, path);
+#if BUILDFLAG(IS_CHROMEOS)
     NonNativeFileSystemDelegate* delegate =
         ExtensionsAPIClient::Get()->GetNonNativeFileSystemDelegate();
     if (delegate && delegate->IsUnderNonNativeLocalPath(context_, path)) {
@@ -214,15 +216,28 @@ void WritableFileChecker::Check() {
       continue;
     }
 #endif
-    base::ThreadPool::PostTaskAndReplyWithResult(
-        FROM_HERE, {base::TaskPriority::USER_BLOCKING, base::MayBlock()},
-        base::BindOnce(&PrepareNativeLocalFileForWritableApp, path,
-                       is_directory),
-        base::BindOnce(&WritableFileChecker::OnPrepareFileDone, this, path));
+    base::TaskTraits traits = {base::TaskPriority::USER_BLOCKING,
+                               base::MayBlock()};
+    base::OnceCallback<bool()> task = base::BindOnce(
+        &PrepareNativeLocalFileForWritableApp, path, is_directory);
+    base::OnceCallback<void(bool)> reply = base::BindOnce(
+        &WritableFileChecker::OnPrepareFileDone, base::RetainedRef(this), path);
+
+    // If ChromeOS dlp is used (dlp policies are configured) we have to gain dlp
+    // file access rights for `path` by the dlp daemon to be able to access the
+    // file in PrepareNativeLocalFileForWritableApp.
+    if (file_access::ScopedFileAccessDelegate::HasInstance()) {
+      file_access::ScopedFileAccessDelegate::Get()
+          ->AccessScopedPostTaskAndReplyWithResult(
+              path, FROM_HERE, traits, std::move(task), std::move(reply));
+    } else {
+      base::ThreadPool::PostTaskAndReplyWithResult(
+          FROM_HERE, traits, std::move(task), std::move(reply));
+    }
   }
 }
 
-WritableFileChecker::~WritableFileChecker() {}
+WritableFileChecker::~WritableFileChecker() = default;
 
 void WritableFileChecker::TaskDone() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
@@ -272,7 +287,7 @@ bool WebAppFileHandlerMatch::matched_file_extension() const {
 }
 
 bool WebAppFileHandlerMatch::DoMatch(const EntryInfo& entry) {
-  // TODO(crbug.com/1060026): At the moment, apps::FileHandler doesn't have
+  // TODO(crbug.com/40678811): At the moment, apps::FileHandler doesn't have
   // an include_directories flag. It may be necessary to add one as this new
   // representation replaces apps::FileHandlerInfo.
   if (entry.is_directory)
@@ -296,13 +311,13 @@ const apps::FileHandlerInfo* FileHandlerForId(const Extension& app,
                                               const std::string& handler_id) {
   const FileHandlersInfo* file_handlers = FileHandlers::GetFileHandlers(&app);
   if (!file_handlers)
-    return NULL;
+    return nullptr;
 
-  for (auto i = file_handlers->cbegin(); i != file_handlers->cend(); i++) {
-    if (i->id == handler_id)
-      return &*i;
+  for (const auto& file_handler : *file_handlers) {
+    if (file_handler.id == handler_id)
+      return &file_handler;
   }
-  return NULL;
+  return nullptr;
 }
 
 std::vector<FileHandlerMatch> FindFileHandlerMatchesForEntries(
@@ -396,7 +411,7 @@ bool FileHandlerCanHandleEntry(const apps::FileHandlerInfo& handler,
 
 bool WebAppFileHandlerCanHandleEntry(const apps::FileHandler& handler,
                                      const EntryInfo& entry) {
-  // TODO(crbug.com/938103): At the moment, apps::FileHandler doesn't have an
+  // TODO(crbug.com/41444843): At the moment, apps::FileHandler doesn't have an
   // include_directories flag. It may be necessary to add one as this new
   // representation replaces apps::FileHandlerInfo.
   if (entry.is_directory)

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 
 #include <tuple>
 
-#include "base/bind.h"
 #include "base/containers/lru_cache.h"
+#include "base/functional/bind.h"
+#include "base/not_fatal_until.h"
 #include "components/favicon/core/favicon_service.h"
 #include "components/omnibox/browser/autocomplete_result.h"
 
@@ -42,7 +43,7 @@ FaviconCache::FaviconCache(favicon::FaviconService* favicon_service,
   }
 }
 
-FaviconCache::~FaviconCache() {}
+FaviconCache::~FaviconCache() = default;
 
 gfx::Image FaviconCache::GetFaviconForPageUrl(
     const GURL& page_url,
@@ -152,7 +153,7 @@ void FaviconCache::InvokeRequestCallbackWithFavicon(const Request& request,
   lru_cache_.Put(request, image);
 
   auto it = pending_requests_.find(request);
-  DCHECK(it != pending_requests_.end());
+  CHECK(it != pending_requests_.end(), base::NotFatalUntil::M130);
   for (auto& callback : it->second) {
     std::move(callback).Run(image);
   }
@@ -160,11 +161,10 @@ void FaviconCache::InvokeRequestCallbackWithFavicon(const Request& request,
 }
 
 void FaviconCache::OnURLVisited(history::HistoryService* history_service,
-                                ui::PageTransition transition,
-                                const history::URLRow& row,
-                                base::Time visit_time) {
-  auto it =
-      responses_without_favicons_.Peek({RequestType::BY_PAGE_URL, row.url()});
+                                const history::URLRow& url_row,
+                                const history::VisitRow& new_visit) {
+  auto it = responses_without_favicons_.Peek(
+      {RequestType::BY_PAGE_URL, url_row.url()});
   if (it != responses_without_favicons_.end())
     responses_without_favicons_.Erase(it);
 }
@@ -183,8 +183,9 @@ void FaviconCache::InvalidateCachedRequests(const Request& request) {
   }
 }
 
-void FaviconCache::OnURLsDeleted(history::HistoryService* history_service,
-                                 const history::DeletionInfo& deletion_info) {
+void FaviconCache::OnHistoryDeletions(
+    history::HistoryService* history_service,
+    const history::DeletionInfo& deletion_info) {
   // We only care about actual user (or sync) deletions.
   if (deletion_info.is_from_expiration())
     return;

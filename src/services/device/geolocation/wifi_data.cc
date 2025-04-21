@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,16 +14,11 @@
 
 namespace device {
 
-AccessPointData::AccessPointData()
-    : radio_signal_strength(std::numeric_limits<int32_t>::min()),
-      channel(std::numeric_limits<int32_t>::min()),
-      signal_to_noise(std::numeric_limits<int32_t>::min()) {}
-
-AccessPointData::~AccessPointData() = default;
-
 WifiData::WifiData() = default;
 
 WifiData::WifiData(const WifiData& other) = default;
+
+WifiData& WifiData::operator=(const WifiData& other) = default;
 
 WifiData::~WifiData() = default;
 

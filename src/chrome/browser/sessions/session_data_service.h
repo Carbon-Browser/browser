@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 
 #include "base/memory/raw_ptr.h"
-#include "base/time/time.h"
+#include "base/memory/weak_ptr.h"
 #include "chrome/browser/ui/browser_list_observer.h"
 #include "components/keyed_service/core/keyed_service.h"
 
@@ -61,15 +61,13 @@ class SessionDataService : public BrowserListObserver, public KeyedService {
   // content setting are removed.
   void StartCleanupInternal(bool skip_session_cookies);
 
-  // Records the Status of the last session.
-  void RecordHistogramForLastSession(Status last_status);
   // Starts another data deletion if the deletion at the end of the last session
   // did not finish.
   void MaybeContinueDeletionFromLastSesssion(Status last_status);
 
   void SetStatusPref(Status status);
-  void OnCleanupAtStartupFinished(base::TimeTicks time_started);
-  void OnCleanupAtSessionEndFinished(base::TimeTicks time_started);
+  void OnCleanupAtStartupFinished();
+  void OnCleanupAtSessionEndFinished();
 
   raw_ptr<Profile> profile_;
   std::unique_ptr<SessionDataDeleter> deleter_;
@@ -78,6 +76,8 @@ class SessionDataService : public BrowserListObserver, public KeyedService {
   // A flag to indicate that a deletion was started and further requests for
   // cleanup should be ignored.
   bool cleanup_started_ = false;
+
+  base::WeakPtrFactory<SessionDataService> weak_factory_{this};
 };
 
 #endif  // CHROME_BROWSER_SESSIONS_SESSION_DATA_SERVICE_H_

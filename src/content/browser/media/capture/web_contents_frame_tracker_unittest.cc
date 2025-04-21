@@ -1,10 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/media/capture/web_contents_frame_tracker.h"
+
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "content/browser/media/capture/mouse_cursor_overlay_controller.h"
@@ -16,6 +19,8 @@
 #include "content/test/test_render_view_host.h"
 #include "content/test/test_web_contents.h"
 #include "media/base/media_switches.h"
+#include "media/capture/mojom/video_capture_types.mojom.h"
+#include "media/capture/video/video_capture_feedback.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/display/screen_info.h"
@@ -38,14 +43,14 @@ constexpr gfx::Size kSizeWsxgaPlus{1680, 1050};
 
 class SimpleContext : public WebContentsFrameTracker::Context {
  public:
+  SimpleContext() = default;
   ~SimpleContext() override = default;
 
   // WebContentsFrameTracker::Context overrides.
-  absl::optional<gfx::Rect> GetScreenBounds() override {
-    return screen_bounds_;
-  }
-  viz::FrameSinkId GetFrameSinkIdForCapture() override {
-    return frame_sink_id_;
+  std::optional<gfx::Rect> GetScreenBounds() override { return screen_bounds_; }
+
+  WebContentsImpl::CaptureTarget GetCaptureTarget() override {
+    return WebContentsImpl::CaptureTarget{frame_sink_id_, gfx::NativeView{}};
   }
   void IncrementCapturerCount(const gfx::Size& capture_size) override {
     ++capturer_count_;
@@ -53,17 +58,17 @@ class SimpleContext : public WebContentsFrameTracker::Context {
   }
   void DecrementCapturerCount() override { --capturer_count_; }
 
-  void SetScaleOverrideForCapture(float scale) override {
+  void SetCaptureScaleOverride(float scale) override {
     scale_override_ = scale;
   }
-  float GetScaleOverrideForCapture() const override { return scale_override_; }
+  float GetCaptureScaleOverride() const override { return scale_override_; }
   int capturer_count() const { return capturer_count_; }
   const gfx::Size& last_capture_size() const { return last_capture_size_; }
 
   void set_frame_sink_id(viz::FrameSinkId frame_sink_id) {
     frame_sink_id_ = frame_sink_id;
   }
-  void set_screen_bounds(absl::optional<gfx::Rect> screen_bounds) {
+  void set_screen_bounds(std::optional<gfx::Rect> screen_bounds) {
     screen_bounds_ = std::move(screen_bounds);
   }
   float scale_override() const { return scale_override_; }
@@ -72,18 +77,24 @@ class SimpleContext : public WebContentsFrameTracker::Context {
   int capturer_count_ = 0;
   viz::FrameSinkId frame_sink_id_ = kInitSinkId;
   gfx::Size last_capture_size_;
-  absl::optional<gfx::Rect> screen_bounds_;
+  std::optional<gfx::Rect> screen_bounds_;
   float scale_override_ = 1.0f;
 };
 
 // The capture device is mostly for interacting with the frame tracker. We do
 // care about the frame tracker pushing back target updates, however.
-class MockCaptureDevice : public WebContentsVideoCaptureDevice,
-                          public base::SupportsWeakPtr<MockCaptureDevice> {
+class MockCaptureDevice : public WebContentsVideoCaptureDevice {
  public:
   MOCK_METHOD2(OnTargetChanged,
-               void(const absl::optional<viz::VideoCaptureTarget>&, uint32_t));
+               void(const std::optional<viz::VideoCaptureTarget>&, uint32_t));
   MOCK_METHOD0(OnTargetPermanentlyLost, void());
+
+  base::WeakPtr<MockCaptureDevice> AsWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
+ private:
+  base::WeakPtrFactory<MockCaptureDevice> weak_ptr_factory_{this};
 };
 
 // This test class is intentionally quite similar to
@@ -116,9 +127,10 @@ class WebContentsFrameTrackerTest : public RenderViewHostTestHarness {
     // cleaner to do so in case we want to switch to a different threading model
     // for the tests in the future.
     GetUIThreadTaskRunner({})->PostTask(
-        FROM_HERE, base::BindOnce(&WebContentsFrameTrackerTest::SetUpOnUIThread,
-                                  base::Unretained(this),
-                                  base::ThreadTaskRunnerHandle::Get()));
+        FROM_HERE,
+        base::BindOnce(&WebContentsFrameTrackerTest::SetUpOnUIThread,
+                       base::Unretained(this),
+                       base::SingleThreadTaskRunner::GetCurrentDefault()));
     RunAllTasksUntilIdle();
   }
 
@@ -152,7 +164,7 @@ class WebContentsFrameTrackerTest : public RenderViewHostTestHarness {
     raw_context_->set_screen_bounds(gfx::Rect{size});
   }
 
-  void SetFrameSinkId(const viz::FrameSinkId id) {
+  void SetFrameSinkId(viz::FrameSinkId id) {
     raw_context_->set_frame_sink_id(id);
   }
 
@@ -162,7 +174,8 @@ class WebContentsFrameTrackerTest : public RenderViewHostTestHarness {
     GetUIThreadTaskRunner({})->PostTask(
         FROM_HERE,
         base::BindOnce(&WebContentsFrameTracker::WillStartCapturingWebContents,
-                       base::Unretained(tracker_.get()), capture_size));
+                       base::Unretained(tracker_.get()), capture_size,
+                       true /* is_high_dpi_enabled */));
   }
 
   void StopTrackerOnUIThread() {
@@ -177,7 +190,7 @@ class WebContentsFrameTrackerTest : public RenderViewHostTestHarness {
   // The controller is ignored on Android, and must be initialized on all
   // other platforms.
   MouseCursorOverlayController* controller() {
-#if BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
     return nullptr;
 #else
     return &controller_;
@@ -188,7 +201,7 @@ class WebContentsFrameTrackerTest : public RenderViewHostTestHarness {
   StrictMock<MockCaptureDevice>* device() { return device_.get(); }
 
  private:
-#if !BUILDFLAG(IS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
   MouseCursorOverlayController controller_;
 #endif
 
@@ -197,7 +210,7 @@ class WebContentsFrameTrackerTest : public RenderViewHostTestHarness {
   std::unique_ptr<WebContentsFrameTracker> tracker_;
 
   // Save because the pointed-to location should not change during testing.
-  raw_ptr<SimpleContext> raw_context_;
+  raw_ptr<SimpleContext, AcrossTasksDanglingUntriaged> raw_context_;
 };
 
 TEST_F(WebContentsFrameTrackerTest, CalculatesPreferredSizeClampsToView) {
@@ -341,8 +354,8 @@ TEST_F(WebContentsFrameTrackerTest, NotifiesOfTargetChanges) {
   SetFrameSinkId(kNewId);
   EXPECT_CALL(
       *device(),
-      OnTargetChanged(absl::make_optional<viz::VideoCaptureTarget>(kNewId),
-                      /*crop_version=*/0))
+      OnTargetChanged(std::make_optional<viz::VideoCaptureTarget>(kNewId),
+                      /*sub_capture_target_version=*/0))
       .Times(1);
 
   // The tracker doesn't actually use the frame host information, just
@@ -357,183 +370,27 @@ TEST_F(WebContentsFrameTrackerTest,
 
   // Expect the callback handed to Crop() to be invoke with kSuccess.
   bool success = false;
-  base::OnceCallback<void(media::mojom::CropRequestResult)> callback =
+  base::OnceCallback<void(media::mojom::ApplySubCaptureTargetResult)> callback =
       base::BindOnce(
-          [](bool* success, media::mojom::CropRequestResult result) {
-            *success = (result == media::mojom::CropRequestResult::kSuccess);
+          [](bool* success, media::mojom::ApplySubCaptureTargetResult result) {
+            *success =
+                (result == media::mojom::ApplySubCaptureTargetResult::kSuccess);
           },
           &success);
 
   // Expect OnTargetChanged() to be invoked once with the crop-ID.
   EXPECT_CALL(*device(),
-              OnTargetChanged(absl::make_optional<viz::VideoCaptureTarget>(
+              OnTargetChanged(std::make_optional<viz::VideoCaptureTarget>(
                                   kInitSinkId, kCropId),
-                              /*crop_version=*/1))
+                              /*sub_capture_target_version=*/1))
       .Times(1);
 
-  tracker()->Crop(kCropId, /*crop_version=*/1, std::move(callback));
+  tracker()->ApplySubCaptureTarget(
+      media::mojom::SubCaptureTargetType::kCropTarget, kCropId,
+      /*sub_capture_target_version=*/1, std::move(callback));
 
   RunAllTasksUntilIdle();
   EXPECT_TRUE(success);
-}
-
-TEST_F(WebContentsFrameTrackerTest, SetsScaleOverride) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(media::kWebContentsCaptureHiDpi);
-
-  StartTrackerOnUIThread(kSize1080p);
-  RunAllTasksUntilIdle();
-
-  // Capture starts at 1080p size, there should be no scale override.
-  EXPECT_EQ(kSize1080p, context()->last_capture_size());
-  EXPECT_EQ(context()->capturer_count(), 1);
-  EXPECT_EQ(context()->scale_override(), 1.0f);
-
-  // Calling SetCapturedContentSize with that size is a no-op.
-  tracker()->SetCapturedContentSize(kSize1080p);
-  EXPECT_EQ(context()->scale_override(), 1.0f);
-
-  // Adjust the captured content size to a smaller size. This should activate a
-  // scale override correlative to the difference between the two resolutions.
-  tracker()->SetCapturedContentSize(kSize720p);
-  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.5);
-
-  // Scaling should go up to a maximum of 2.0.
-  tracker()->SetCapturedContentSize(gfx::Size(960, 540));
-  EXPECT_DOUBLE_EQ(context()->scale_override(), 2.0f);
-
-  // The tracker should assume that we are now already scaled by the override
-  // value, and so shouldn't change the override if we start getting frames that
-  // are large enough.
-  tracker()->SetCapturedContentSize(gfx::Size(1920, 1080));
-  EXPECT_DOUBLE_EQ(context()->scale_override(), 2.0f);
-
-  // If a frame ends up being larger than the capture_size, the scale
-  // should get adjusted downwards so that the post-scaling size matches
-  // the capture size. This assumes a current scale override of 2.0f.
-  tracker()->SetCapturedContentSize(gfx::Size(2560, 1440));
-  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.5f);
-
-  // The scaled size should now match the capture size with a scale
-  // override of 1.5.
-  tracker()->SetCapturedContentSize(gfx::Size(1920, 1080));
-  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.5f);
-
-  // The scaling calculation is based on fitting a scaled copy of the
-  // source rectangle within the capture region, preserving aspect ratio.
-  // If the content size changes in a way that doesn't affect the scale
-  // factor (i.e. letterboxing or pillarboxing), the scale override remains
-  // unchanged.
-  tracker()->SetCapturedContentSize(gfx::Size(1080, 1080));
-  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.5f);
-  tracker()->SetCapturedContentSize(gfx::Size(1920, 540));
-  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.5f);
-
-  // When we stop the tracker, the web contents issues a preferred size change
-  // of the "old" size--so it shouldn't change.
-  StopTrackerOnUIThread();
-  RunAllTasksUntilIdle();
-  EXPECT_EQ(kSize1080p, context()->last_capture_size());
-  EXPECT_EQ(context()->capturer_count(), 0);
-}
-
-TEST_F(WebContentsFrameTrackerTest, SettingScaleFactorMaintainsStableCapture) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(media::kWebContentsCaptureHiDpi);
-
-  StartTrackerOnUIThread(kSize1080p);
-  RunAllTasksUntilIdle();
-
-  // Adjust the captured content size to a smaller size. This should activate a
-  // scale override correlative to the difference between the two resolutions.
-  tracker()->SetCapturedContentSize(kSize720p);
-  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.5);
-
-  // It should now be scaled to the capture_size, meaning 1080P. The
-  // scale override factor should be unaffected.
-  tracker()->SetCapturedContentSize(kSize1080p);
-  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.5);
-}
-
-TEST_F(WebContentsFrameTrackerTest, HighDpiIsRoundedIfBetweenBounds) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(media::kWebContentsCaptureHiDpi);
-
-  StartTrackerOnUIThread(kSize1080p);
-  RunAllTasksUntilIdle();
-
-  // Both factors should be 1.4f, which should be between bounds and rounded
-  // up.
-  tracker()->SetCapturedContentSize(gfx::Size{1370, 771});
-  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.5);
-}
-
-TEST_F(WebContentsFrameTrackerTest, HighDpiIsRoundedIfBetweenDifferentBounds) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(media::kWebContentsCaptureHiDpi);
-
-  StartTrackerOnUIThread(kSize1080p);
-  RunAllTasksUntilIdle();
-
-  // Both factors should be 1.6f, which should be between bounds and rounded
-  // down.
-  tracker()->SetCapturedContentSize(gfx::Size{1200, 675});
-  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.5f);
-}
-
-TEST_F(WebContentsFrameTrackerTest, HighDpiIsRoundedToMinimum) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(media::kWebContentsCaptureHiDpi);
-
-  StartTrackerOnUIThread(kSize1080p);
-  RunAllTasksUntilIdle();
-
-  // Both factors should be 1.3f, which should be between bounds and rounded
-  // down.
-  tracker()->SetCapturedContentSize(gfx::Size{1477, 831});
-  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.25f);
-}
-
-TEST_F(WebContentsFrameTrackerTest, HighDpiIsRoundedToMaximum) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(media::kWebContentsCaptureHiDpi);
-
-  StartTrackerOnUIThread(kSize1080p);
-  RunAllTasksUntilIdle();
-
-  // Both factors should be well over the maximum of 2.0f.
-  tracker()->SetCapturedContentSize(gfx::Size{320, 240});
-  EXPECT_DOUBLE_EQ(context()->scale_override(), 2.0f);
-}
-
-TEST_F(WebContentsFrameTrackerTest, HighDpiScalingIsStable) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(media::kWebContentsCaptureHiDpi);
-
-  StartTrackerOnUIThread(kSize1080p);
-  RunAllTasksUntilIdle();
-
-  // Both factors should be 1.25f, which should be exactly a scaling factor.
-  static constexpr gfx::Size kContentSize(1536, 864);
-  tracker()->SetCapturedContentSize(kContentSize);
-  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.25f);
-
-  // Now that its applied, it should stay the same.
-  static const gfx::Size kScaledContentSize =
-      gfx::ScaleToRoundedSize(kContentSize, 1.25f);
-  tracker()->SetCapturedContentSize(kScaledContentSize);
-  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.25f);
-
-  // If it varies slightly that shouldn't result in any changes.
-  static const gfx::Size kScaledLargerContentSize =
-      gfx::ScaleToRoundedSize(kContentSize, 1.27f);
-  tracker()->SetCapturedContentSize(kScaledLargerContentSize);
-  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.25f);
-
-  static const gfx::Size kScaledSmallerContentSize =
-      gfx::ScaleToRoundedSize(kContentSize, 1.23f);
-  tracker()->SetCapturedContentSize(kScaledSmallerContentSize);
-  EXPECT_DOUBLE_EQ(context()->scale_override(), 1.25f);
 }
 
 }  // namespace

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,7 @@ class HostFrameSinkManagerTestApi {
   // Clears out the currently set hit test queries, and overrides it with |map|.
   // The HostFrameSinkManager will take ownership of |map|. There should only be
   // one HitTestQuery per root FrameSinkId.
-  void SetDisplayHitTestQuery(HostFrameSinkManager::DisplayHitTestQueryMap map);
+  void SetDisplayHitTestQuery(DisplayHitTestQueryMap map);
 
  private:
   // Not owned.

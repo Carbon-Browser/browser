@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,6 @@
 #include "media/base/media_export.h"
 #include "media/cdm/api/content_decryption_module_ext.h"
 #include "media/cdm/cdm_host_file.h"
-#include "media/cdm/cdm_paths.h"
 
 namespace base {
 class FilePath;

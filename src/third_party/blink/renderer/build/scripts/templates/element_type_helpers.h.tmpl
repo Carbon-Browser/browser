@@ -18,14 +18,6 @@ class Document;
 {% for tag in tags|sort(attribute='name') if not tag.multipleTagNames and not tag.noTypeHelpers %}
 class {{tag.interface}};
 template <>
-inline bool IsElementOfType<const {{tag.interface}}>(const Node& node) {
-  return IsA<{{tag.interface}}>(node);
-}
-template <>
-inline bool IsElementOfType<const {{tag.interface}}>(const {{namespace}}Element& element) {
-  return IsA<{{tag.interface}}>(element);
-}
-template <>
 struct DowncastTraits<{{tag.interface}}> {
   static bool AllowFrom(const Element& element) {
     {% if tag.runtimeEnabled %}
@@ -37,8 +29,14 @@ struct DowncastTraits<{{tag.interface}}> {
     {% endif %}
     return element.HasTagName({{cpp_namespace}}::{{tag|symbol}}Tag);
   }
+  // Force this helper to only be instantiated when used. Otherwise, the
+  // `IsA<...>` calls will always trigger a build failure since
+  // {{tag.interface}} is forward declared and not included.
+  template <typename T = {{tag.interface}}>
   static bool AllowFrom(const Node& node) {
-    return node.Is{{namespace}}Element() && IsA<{{tag.interface}}>(To<{{namespace}}Element>(node));
+    // UnsafeTo<> is safe because Is*Element(), by definition, only returns
+    // true if `node` is derived from `Element`.
+    return node.Is{{namespace}}Element() && IsA<{{tag.interface}}>(UnsafeTo<{{namespace}}Element>(node));
   }
 };
 
@@ -52,11 +50,11 @@ enum class HTMLElementType {
 };
 
 // Tag checking.
-// tagName is the local name for an html element in lowercase
-// The corresponding HTMLElement type for the tag name will be returned
-// Do NOT use this function with SVG tag names and SVGElements
-// If tagName is an undefined html tag name HTMLUnknownElement is returned
-HTMLElementType htmlElementTypeForTag(const AtomicString& tagName, const Document*);
+// |tag_name| is the local name for an HTML element in lowercase.
+// The corresponding HTMLElement type for the tag name will be returned.
+// Do NOT use this function with SVG tag names and SVGElements.
+// If |tag_name| is an undefined HTML tag name HTMLUnknownElement is returned.
+HTMLElementType HtmlElementTypeForTag(const AtomicString& tag_name, const Document*);
 
 bool IsKnownBuiltinTagName(const AtomicString& tag_name);
 

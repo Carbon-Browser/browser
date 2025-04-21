@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """This script measures the compiler input size for a build target and each
@@ -21,10 +21,10 @@ information. On a fast machine, it should take less than a minute for the
 
 This currently doesnt work on Windows due to different deps handling.
 
-Example usage: (Set use_goma=false if you don't have goma access.)
+Example usage: (Remove use_remoteexec=true if you don't have reclient access.)
 
 $ gn gen out/Debug --args="system_headers_in_deps=true enable_nacl=false
-      symbol_level=0 use_goma=true"
+      symbol_level=0 use_remoteexec=true"
 $ autoninja -C out/Debug chrome
 $ tools/clang/scripts/compiler_inputs_size.py out/Debug \
       <(ninja -C out/Debug -t commands chrome) <(ninja -C out/Debug -t deps)
@@ -142,6 +142,10 @@ def parse_deps(build_dir, deps_output):
         next(deps_iter)
       continue
 
+    if num_deps == 0:
+      next(deps_iter)
+      continue
+
     # Read the main file line.
     line = next(deps_iter)
     if not line.startswith('    '):
@@ -171,7 +175,7 @@ def parse_commands(build_dir, commands_output):
   'bar.cc'}.
 
   >>> sorted(parse_commands('dir1/dir2',
-  ...  '/x/gomacc ../y/clang++ -a -b -c ../../foo.cc -o foo.o\n'
+  ...  '/x/rewrapper ../y/clang++ -a -b -c ../../foo.cc -o foo.o\n'
   ...  'clang -x blah -c ../../bar.c -o bar.o\n'
   ...  'clang-cl.exe /Fobaz.o /c baz.cc\n'.splitlines(keepends=True)))
   ['bar.c', 'dir1/dir2/baz.cc', 'foo.cc']
@@ -193,10 +197,10 @@ def main():
                                    'for a build target.')
   parser.add_argument('build_dir', type=str, help='Chromium build dir')
   parser.add_argument('commands',
-                      type=argparse.FileType('r'),
+                      type=argparse.FileType('r', errors='ignore'),
                       help='File with the output of "ninja -t commands"')
   parser.add_argument('deps',
-                      type=argparse.FileType('r'),
+                      type=argparse.FileType('r', errors='ignore'),
                       help='File with the output of "ninja -t deps"')
   args = parser.parse_args()
 

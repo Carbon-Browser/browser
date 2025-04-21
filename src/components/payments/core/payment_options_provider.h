@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,7 @@ enum class PaymentShippingType : int32_t {
 // possibly the method by which the order will be fulfilled.
 class PaymentOptionsProvider {
  public:
-  virtual ~PaymentOptionsProvider() {}
+  virtual ~PaymentOptionsProvider() = default;
 
   // Returns true if this transaction requires the payer's name.
   virtual bool request_payer_name() const = 0;

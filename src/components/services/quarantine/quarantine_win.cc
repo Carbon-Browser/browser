@@ -1,32 +1,31 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/services/quarantine/quarantine.h"
 
+#include <objbase.h>
+
+#include <shobjidl.h>
 #include <windows.h>
-#include <wrl/client.h>
 
 #include <cguid.h>
-#include <objbase.h>
 #include <shellapi.h>
 #include <shlobj.h>
-#include <shobjidl.h>
 #include <wininet.h>
-
+#include <wrl/client.h>
 
 #include "base/check_op.h"
 #include "base/feature_list.h"
 #include "base/files/file_util.h"
-#include "base/guid.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/threading/scoped_blocking_call.h"
+#include "base/uuid.h"
 #include "base/win/scoped_handle.h"
 #include "base/win/win_util.h"
-#include "base/win/windows_version.h"
 #include "components/services/quarantine/common.h"
 #include "components/services/quarantine/common_win.h"
 #include "url/gurl.h"
@@ -201,18 +200,16 @@ QuarantineFileResult SetInternetZoneIdentifierDirectly(
   static const char kHostUrlFormat[] = "HostUrl=%s\r\n";
 
   std::string identifier = "[ZoneTransfer]\r\nZoneId=3\r\n";
-  if (base::win::GetVersion() >= base::win::Version::WIN10) {
-    // Match what the InvokeAttachmentServices() function will output, including
-    // the order of the values.
-    if (IsValidUrlForAttachmentServices(referrer_url)) {
-      identifier.append(
-          base::StringPrintf(kReferrerUrlFormat, referrer_url.spec().c_str()));
-    }
-    identifier.append(base::StringPrintf(
-        kHostUrlFormat, IsValidUrlForAttachmentServices(source_url)
-                            ? source_url.spec().c_str()
-                            : "about:internet"));
+  // Match what the InvokeAttachmentServices() function will output, including
+  // the order of the values.
+  if (IsValidUrlForAttachmentServices(referrer_url)) {
+    identifier.append(
+        base::StringPrintf(kReferrerUrlFormat, referrer_url.spec().c_str()));
   }
+  identifier.append(base::StringPrintf(
+      kHostUrlFormat, IsValidUrlForAttachmentServices(source_url)
+                          ? source_url.spec().c_str()
+                          : "about:internet"));
 
   // Don't include trailing null in data written.
   DWORD written = 0;
@@ -228,29 +225,34 @@ QuarantineFileResult SetInternetZoneIdentifierDirectly(
 void QuarantineFile(const base::FilePath& file,
                     const GURL& source_url_unsafe,
                     const GURL& referrer_url_unsafe,
+                    const std::optional<url::Origin>& request_initiator,
                     const std::string& client_guid,
                     mojom::Quarantine::QuarantineFileCallback callback) {
   base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
                                                 base::BlockingType::MAY_BLOCK);
 
-  int64_t file_size = 0;
-  if (!base::PathExists(file) || !base::GetFileSize(file, &file_size)) {
+  std::optional<int64_t> file_size = base::GetFileSize(file);
+  if (!file_size.has_value()) {
     std::move(callback).Run(QuarantineFileResult::FILE_MISSING);
     return;
   }
 
   std::string braces_guid = "{" + client_guid + "}";
   GUID guid = GUID_NULL;
-  if (base::IsValidGUID(client_guid)) {
+  if (base::Uuid::ParseCaseInsensitive(client_guid).is_valid()) {
     HRESULT hr = CLSIDFromString(base::UTF8ToWide(braces_guid).c_str(), &guid);
     if (FAILED(hr))
       guid = GUID_NULL;
   }
 
   GURL source_url = SanitizeUrlForQuarantine(source_url_unsafe);
+  if (source_url.is_empty() && request_initiator.has_value()) {
+    source_url = SanitizeUrlForQuarantine(request_initiator->GetURL());
+  }
+
   GURL referrer_url = SanitizeUrlForQuarantine(referrer_url_unsafe);
 
-  if (file_size == 0 || IsEqualGUID(guid, GUID_NULL)) {
+  if (file_size.value() == 0 || IsEqualGUID(guid, GUID_NULL)) {
     // Calling InvokeAttachmentServices on an empty file can result in the file
     // being deleted.  Also an anti-virus scan doesn't make a lot of sense to
     // perform on an empty file.

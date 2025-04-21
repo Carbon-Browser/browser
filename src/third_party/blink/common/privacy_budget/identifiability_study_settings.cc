@@ -1,9 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/public/common/privacy_budget/identifiability_study_settings.h"
 
+#include <initializer_list>
+#include <optional>
 #include <random>
 
 #include "base/check.h"
@@ -11,12 +13,21 @@
 #include "base/no_destructor.h"
 #include "base/synchronization/atomic_flag.h"
 #include "base/threading/sequence_local_storage_slot.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/trace_event/common/trace_event_common.h"
+#include "base/trace_event/trace_event.h"
 #include "third_party/blink/public/common/privacy_budget/identifiability_study_settings_provider.h"
+#include "third_party/blink/public/common/privacy_budget/identifiable_surface.h"
 
 namespace blink {
 
 namespace {
+
+bool IdentifiabilityTracingEnabled() {
+  bool tracing_enabled;
+  TRACE_EVENT_CATEGORY_GROUP_ENABLED(
+      TRACE_DISABLED_BY_DEFAULT("identifiability"), &tracing_enabled);
+  return tracing_enabled;
+}
 
 // IdentifiabilityStudySettings is meant to be used as a global singleton. Its
 // use is subject to the following constraints.
@@ -78,7 +89,7 @@ class ThreadsafeSettingsWrapper {
   }
 
  private:
-  absl::optional<IdentifiabilityStudySettings> initialized_settings_;
+  std::optional<IdentifiabilityStudySettings> initialized_settings_;
   const IdentifiabilityStudySettings default_settings_;
   base::AtomicFlag initialized_;
 };
@@ -94,7 +105,8 @@ IdentifiabilityStudySettings::IdentifiabilityStudySettings(
     std::unique_ptr<IdentifiabilityStudySettingsProvider> provider)
     : provider_(std::move(provider)),
       is_enabled_(provider_->IsActive()),
-      is_any_surface_or_type_blocked_(provider_->IsAnyTypeOrSurfaceBlocked()) {}
+      is_any_surface_or_type_blocked_(provider_->IsAnyTypeOrSurfaceBlocked()),
+      is_meta_experiment_active_(provider_->IsMetaExperimentActive()) {}
 
 IdentifiabilityStudySettings::~IdentifiabilityStudySettings() = default;
 
@@ -114,7 +126,7 @@ void IdentifiabilityStudySettings::ResetStateForTesting() {
 }
 
 bool IdentifiabilityStudySettings::IsActive() const {
-  return is_enabled_;
+  return is_enabled_ || is_meta_experiment_active_;
 }
 
 bool IdentifiabilityStudySettings::ShouldSampleWebFeature(
@@ -125,35 +137,62 @@ bool IdentifiabilityStudySettings::ShouldSampleWebFeature(
 
 bool IdentifiabilityStudySettings::ShouldSampleSurface(
     IdentifiableSurface surface) const {
-  if (LIKELY(!is_enabled_))
+  if (!ShouldSampleAnything()) [[likely]] {
     return false;
+  }
 
-  if (LIKELY(!is_any_surface_or_type_blocked_))
+  if (!is_any_surface_or_type_blocked_) [[likely]] {
     return true;
+  }
+
+  if (is_meta_experiment_active_) {
+    return true;
+  }
 
   return provider_->IsSurfaceAllowed(surface);
 }
 
 bool IdentifiabilityStudySettings::ShouldSampleType(
     IdentifiableSurface::Type type) const {
-  if (LIKELY(!is_enabled_))
+  if (!ShouldSampleAnything()) [[likely]] {
     return false;
+  }
 
-  if (LIKELY(!is_any_surface_or_type_blocked_))
+  if (!is_any_surface_or_type_blocked_) [[likely]] {
     return true;
+  }
+
+  if (is_meta_experiment_active_) {
+    return true;
+  }
 
   return provider_->IsTypeAllowed(type);
 }
 
-bool IdentifiabilityStudySettings::ShouldActivelySample() const {
-  if (LIKELY(!is_enabled_))
+bool IdentifiabilityStudySettings::ShouldSampleAnyType(
+    std::initializer_list<IdentifiableSurface::Type> types) const {
+  if (!ShouldSampleAnything()) [[likely]] {
     return false;
-  return provider_->ShouldActivelySample();
+  }
+
+  if (!is_any_surface_or_type_blocked_) [[likely]] {
+    return true;
+  }
+
+  if (is_meta_experiment_active_) {
+    return true;
+  }
+
+  for (IdentifiableSurface::Type type : types) {
+    if (provider_->IsTypeAllowed(type))
+      return true;
+  }
+
+  return false;
 }
 
-std::vector<std::string>
-IdentifiabilityStudySettings::FontFamiliesToActivelySample() const {
-  return provider_->FontFamiliesToActivelySample();
+bool IdentifiabilityStudySettings::ShouldSampleAnything() const {
+  return IsActive() || IdentifiabilityTracingEnabled();
 }
 
 }  // namespace blink

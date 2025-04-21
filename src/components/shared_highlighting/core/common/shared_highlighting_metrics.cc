@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -76,7 +76,6 @@ void LogTextFragmentLinkOpenSource(const GURL& referrer) {
 void LogTextFragmentMatchRate(int matches, int text_fragments) {
   if (text_fragments == 0) {
     NOTREACHED();
-    return;
   }
 
   const int match_rate_percent =

@@ -1,6 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <dlfcn.h>
 #include <fcntl.h>
@@ -25,6 +30,7 @@
 #include "base/threading/thread_restrictions.h"
 #include "build/build_config.h"
 #include "services/resource_coordinator/public/cpp/memory_instrumentation/os_metrics.h"
+#include "third_party/abseil-cpp/absl/strings/ascii.h"
 
 // Symbol with virtual address of the start of ELF header of the current binary.
 extern char __ehdr_start;
@@ -48,20 +54,6 @@ base::FilePath GetProcPidDir(base::ProcessId pid) {
       pid == base::kNullProcessId ? "self" : base::NumberToString(pid));
 }
 
-bool GetResidentAndSharedPagesFromStatmFile(int fd,
-                                            uint64_t* resident_pages,
-                                            uint64_t* shared_pages) {
-  lseek(fd, 0, SEEK_SET);
-  char line[kMaxLineSize];
-  int res = read(fd, line, kMaxLineSize - 1);
-  if (res <= 0)
-    return false;
-  line[res] = '\0';
-  int num_scanned =
-      sscanf(line, "%*s %" SCNu64 " %" SCNu64, resident_pages, shared_pages);
-  return num_scanned == 2;
-}
-
 bool ResetPeakRSSIfPossible(base::ProcessId pid) {
   static bool is_peak_rss_resettable = true;
   if (!is_peak_rss_resettable)
@@ -72,14 +64,6 @@ bool ResetPeakRSSIfPossible(base::ProcessId pid) {
       clear_refs_fd.get() >= 0 &&
       base::WriteFileDescriptor(clear_refs_fd.get(), kClearPeakRssCommand);
   return is_peak_rss_resettable;
-}
-
-std::unique_ptr<base::ProcessMetrics> CreateProcessMetrics(
-    base::ProcessId pid) {
-  if (pid == base::kNullProcessId) {
-    return base::ProcessMetrics::CreateCurrentProcessMetrics();
-  }
-  return base::ProcessMetrics::CreateProcessMetrics(pid);
 }
 
 struct ModuleData {
@@ -95,7 +79,12 @@ ModuleData GetMainModuleData() {
     size_t build_id_length =
         base::debug::ReadElfBuildId(&__ehdr_start, true, build_id);
     if (build_id_length) {
-      module_data.path = dl_info.dli_fname;
+      base::FilePath module_data_path = base::FilePath(dl_info.dli_fname);
+      if (module_data_path.IsAbsolute()) {
+        module_data.path = dl_info.dli_fname;
+      } else {
+        module_data.path = base::MakeAbsoluteFilePath(module_data_path).value();
+      }
       module_data.build_id = std::string(build_id, build_id_length);
     }
   }
@@ -108,7 +97,7 @@ bool ParseSmapsHeader(const char* header_line,
   // e.g., "00400000-00421000 r-xp 00000000 fc:01 1234  /foo.so\n"
   bool res = true;  // Whether this region should be appended or skipped.
   uint64_t end_addr = 0;
-  char protection_flags[5] = {0};
+  char protection_flags[5] = {};
   char mapped_file[kMaxLineSize];
 
   if (sscanf(header_line, "%" SCNx64 "-%" SCNx64 " %4c %*s %*s %*s%4095[^\n]\n",
@@ -211,7 +200,8 @@ uint32_t ReadLinuxProcSmapsFile(FILE* smaps_file,
     line[0] = '\0';
     if (fgets(line, kMaxLineSize, smaps_file) == nullptr || !strlen(line))
       break;
-    if (isxdigit(line[0]) && !isupper(line[0])) {
+    if (absl::ascii_isxdigit(static_cast<unsigned char>(line[0])) &&
+        !absl::ascii_isupper(static_cast<unsigned char>(line[0]))) {
       region = VmRegion();
       counters_parsed_for_current_region = 0;
       should_add_current_region =
@@ -278,36 +268,19 @@ void OSMetrics::SetProcSmapsForTesting(FILE* f) {
 }
 
 // static
-bool OSMetrics::FillOSMemoryDump(base::ProcessId pid,
+bool OSMetrics::FillOSMemoryDump(base::ProcessHandle handle,
                                  mojom::RawOSMemDump* dump) {
-  // TODO(chiniforooshan): There is no need to read both /statm and /status
-  // files. Refactor to get everything from /status using ProcessMetric.
-  auto statm_file = GetProcPidDir(pid).Append("statm");
-  auto autoclose = base::ScopedFD(open(statm_file.value().c_str(), O_RDONLY));
-  int statm_fd = autoclose.get();
-
-  if (statm_fd == -1)
+  auto info = GetMemoryInfo(handle);
+  if (!info.has_value()) {
     return false;
+  }
 
-  uint64_t resident_pages;
-  uint64_t shared_pages;
-  bool success = GetResidentAndSharedPagesFromStatmFile(
-      statm_fd, &resident_pages, &shared_pages);
-
-  if (!success)
-    return false;
-
-  auto process_metrics = CreateProcessMetrics(pid);
-
-  static const size_t page_size = base::GetPageSize();
-  uint64_t rss_anon_bytes = (resident_pages - shared_pages) * page_size;
-  uint64_t vm_swap_bytes = process_metrics->GetVmSwapBytes();
-
-  dump->platform_private_footprint->rss_anon_bytes = rss_anon_bytes;
-  dump->platform_private_footprint->vm_swap_bytes = vm_swap_bytes;
-  dump->resident_set_kb = process_metrics->GetResidentSetSize() / 1024;
-  dump->peak_resident_set_kb = GetPeakResidentSetSize(pid);
-  dump->is_peak_rss_resettable = ResetPeakRSSIfPossible(pid);
+  dump->platform_private_footprint->rss_anon_bytes = info->rss_anon_bytes;
+  dump->platform_private_footprint->vm_swap_bytes = info->vm_swap_bytes;
+  dump->resident_set_kb =
+      base::saturated_cast<uint32_t>(info->resident_set_bytes / 1024);
+  dump->peak_resident_set_kb = GetPeakResidentSetSize(handle);
+  dump->is_peak_rss_resettable = ResetPeakRSSIfPossible(handle);
 
 #if BUILDFLAG(IS_ANDROID)
 #if BUILDFLAG(SUPPORTS_CODE_ORDERING)
@@ -339,7 +312,8 @@ bool OSMetrics::FillOSMemoryDump(base::ProcessId pid,
 }
 
 // static
-std::vector<VmRegionPtr> OSMetrics::GetProcessMemoryMaps(base::ProcessId pid) {
+std::vector<VmRegionPtr> OSMetrics::GetProcessMemoryMaps(
+    base::ProcessHandle handle) {
   std::vector<VmRegionPtr> maps;
   uint32_t res = 0;
   if (g_proc_smaps_for_testing) {
@@ -347,7 +321,8 @@ std::vector<VmRegionPtr> OSMetrics::GetProcessMemoryMaps(base::ProcessId pid) {
   } else {
     std::string file_name =
         "/proc/" +
-        (pid == base::kNullProcessId ? "self" : base::NumberToString(pid)) +
+        (handle == base::kNullProcessHandle ? "self"
+                                            : base::NumberToString(handle)) +
         "/smaps";
     base::ScopedFILE smaps_file(fopen(file_name.c_str(), "r"));
     res = ReadLinuxProcSmapsFile(smaps_file.get(), &maps);
@@ -434,12 +409,10 @@ size_t OSMetrics::GetPeakResidentSetSize(base::ProcessId pid) {
           pair.second, " ", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
       if (split_value_str.size() != 2 || split_value_str[1] != "kB") {
         NOTREACHED();
-        return 0;
       }
       size_t res;
       if (!base::StringToSizeT(split_value_str[0], &res)) {
         NOTREACHED();
-        return 0;
       }
       return res;
     }

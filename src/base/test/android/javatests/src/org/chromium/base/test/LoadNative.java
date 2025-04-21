@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-/**
- * Indicates that a test method is intended to load native libraries.
- */
+/** Indicates that a test method is intended to load native libraries. */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD) // can use in method only.
 public @interface LoadNative {}

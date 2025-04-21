@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,8 @@
 
 namespace blink {
 
-ScopedPromiseResolver::ScopedPromiseResolver(ScriptPromiseResolver* resolver)
+ScopedPromiseResolver::ScopedPromiseResolver(
+    ScriptPromiseResolverBase* resolver)
     : resolver_(resolver) {}
 
 ScopedPromiseResolver::~ScopedPromiseResolver() {
@@ -18,7 +19,7 @@ ScopedPromiseResolver::~ScopedPromiseResolver() {
     OnConnectionError();
 }
 
-ScriptPromiseResolver* ScopedPromiseResolver::Release() {
+ScriptPromiseResolverBase* ScopedPromiseResolver::Release() {
   return resolver_.Release();
 }
 

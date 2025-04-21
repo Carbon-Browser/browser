@@ -1,14 +1,14 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_EVENTS_OZONE_EVDEV_INPUT_DEVICE_OPENER_EVDEV_H_
 #define UI_EVENTS_OZONE_EVDEV_INPUT_DEVICE_OPENER_EVDEV_H_
 
-#include "ui/events/ozone/evdev/input_device_opener.h"
-
+#include "base/component_export.h"
 #include "base/files/scoped_file.h"
 #include "ui/events/ozone/evdev/event_device_info.h"
+#include "ui/events/ozone/evdev/input_device_opener.h"
 
 namespace ui {
 

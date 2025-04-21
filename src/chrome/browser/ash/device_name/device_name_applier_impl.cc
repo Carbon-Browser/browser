@@ -1,12 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/device_name/device_name_applier_impl.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace ash {
 
@@ -67,7 +67,7 @@ void DeviceNameApplierImpl::OnBluetoothAdapterSetNameError() {
   LOG(WARNING) << "Scheduling setting Bluetooth adapter name to retry in: "
                << retry_backoff_.GetTimeUntilRelease() << " seconds.";
 
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&DeviceNameApplierImpl::SetBluetoothAdapterName,
                      bluetooth_set_name_weak_factory_.GetWeakPtr()),

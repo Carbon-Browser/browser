@@ -1,25 +1,39 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_MOJO_MOJOM_CDM_CAPABILITY_MOJOM_TRAITS_H_
 #define MEDIA_MOJO_MOJOM_CDM_CAPABILITY_MOJOM_TRAITS_H_
 
-#include <vector>
-
 #include "base/containers/flat_set.h"
 #include "media/base/audio_codecs.h"
+#include "media/base/cdm_capability.h"
 #include "media/base/content_decryption_module.h"
 #include "media/base/encryption_scheme.h"
 #include "media/base/video_codecs.h"
-#include "media/cdm/cdm_capability.h"
 #include "media/mojo/mojom/key_system_support.mojom.h"
 
 namespace mojo {
 
 template <>
+struct StructTraits<media::mojom::VideoCodecInfoDataView,
+                    media::VideoCodecInfo> {
+  static const base::flat_set<media::VideoCodecProfile>& supported_profiles(
+      const media::VideoCodecInfo& input) {
+    return input.supported_profiles;
+  }
+
+  static const bool& supports_clear_lead(const media::VideoCodecInfo& input) {
+    return input.supports_clear_lead;
+  }
+
+  static bool Read(media::mojom::VideoCodecInfoDataView input,
+                   media::VideoCodecInfo* output);
+};
+
+template <>
 struct StructTraits<media::mojom::CdmCapabilityDataView, media::CdmCapability> {
-  static const std::vector<media::AudioCodec>& audio_codecs(
+  static const base::flat_set<media::AudioCodec>& audio_codecs(
       const media::CdmCapability& input) {
     return input.audio_codecs;
   }
@@ -43,6 +57,18 @@ struct StructTraits<media::mojom::CdmCapabilityDataView, media::CdmCapability> {
 
   static bool Read(media::mojom::CdmCapabilityDataView input,
                    media::CdmCapability* output);
+};
+
+template <>
+struct EnumTraits<media::mojom::CdmCapabilityQueryStatus,
+                  media::CdmCapabilityQueryStatus> {
+  static media::mojom::CdmCapabilityQueryStatus ToMojom(
+      media::CdmCapabilityQueryStatus input);
+
+  // Returning false results in deserialization failure and causes the
+  // message pipe receiving it to be disconnected.
+  static bool FromMojom(media::mojom::CdmCapabilityQueryStatus input,
+                        media::CdmCapabilityQueryStatus* output);
 };
 
 }  // namespace mojo

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,23 +8,16 @@ import android.content.Context;
 import android.util.AttributeSet;
 import android.widget.Button;
 
-import org.chromium.base.ApiCompatibilityUtils;
 import org.chromium.components.browser_ui.widget.selectable_list.SelectableListToolbar;
 import org.chromium.components.browser_ui.widget.selectable_list.SelectionDelegate;
 
 import java.util.List;
 
-/**
- * Handles toolbar functionality for the Photo Picker class.
- */
+/** Handles toolbar functionality for the Photo Picker class. */
 public class PhotoPickerToolbar extends SelectableListToolbar<PickerBitmap> {
-    /**
-     * A delegate that handles dialog actions.
-     */
+    /** A delegate that handles dialog actions. */
     public interface PhotoPickerToolbarDelegate {
-        /**
-         * Called when the back arrow is clicked in the toolbar.
-         */
+        /** Called when the back arrow is clicked in the toolbar. */
         void onNavigationBackCallback();
     }
 
@@ -35,18 +28,14 @@ public class PhotoPickerToolbar extends SelectableListToolbar<PickerBitmap> {
         super(context, attrs);
     }
 
-    /**
-     * Set the {@PhotoPickerToolbarDelegate} for this toolbar.
-     */
+    /** Set the {@PhotoPickerToolbarDelegate} for this toolbar. */
     public void setDelegate(PhotoPickerToolbarDelegate delegate) {
         mDelegate = delegate;
     }
 
-    /**
-     * Shows the Back arrow navigation button in the upper left corner.
-     */
+    /** Shows the Back arrow navigation button in the upper left corner. */
     public void showBackArrow() {
-        setNavigationButton(NAVIGATION_BUTTON_BACK);
+        setNavigationButton(NavigationButton.SEARCH_BACK);
     }
 
     @Override
@@ -62,8 +51,12 @@ public class PhotoPickerToolbar extends SelectableListToolbar<PickerBitmap> {
     }
 
     @Override
-    public void initialize(SelectionDelegate<PickerBitmap> delegate, int titleResId,
-            int normalGroupResId, int selectedGroupResId, boolean updateStatusBarColor) {
+    public void initialize(
+            SelectionDelegate<PickerBitmap> delegate,
+            int titleResId,
+            int normalGroupResId,
+            int selectedGroupResId,
+            boolean updateStatusBarColor) {
         super.initialize(
                 delegate, titleResId, normalGroupResId, selectedGroupResId, updateStatusBarColor);
 
@@ -79,11 +72,9 @@ public class PhotoPickerToolbar extends SelectableListToolbar<PickerBitmap> {
         done.setEnabled(selectedItems.size() > 0);
 
         if (selectCount > 0) {
-            ApiCompatibilityUtils.setTextAppearance(
-                    done, R.style.TextAppearance_TextMedium_Secondary);
+            done.setTextAppearance(R.style.TextAppearance_TextMedium_Secondary);
         } else {
-            ApiCompatibilityUtils.setTextAppearance(
-                    done, R.style.TextAppearance_TextMedium_Disabled);
+            done.setTextAppearance(R.style.TextAppearance_TextMedium_Disabled);
 
             showBackArrow();
         }

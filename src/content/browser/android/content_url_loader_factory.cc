@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,15 @@
 #include <vector>
 
 #include "base/android/content_uri_utils.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
-#include "content/browser/web_package/web_bundle_utils.h"
 #include "content/public/browser/content_browser_client.h"
 #include "content/public/browser/file_url_loader.h"
 #include "content/public/common/content_client.h"
@@ -27,6 +27,7 @@
 #include "mojo/public/cpp/system/data_pipe.h"
 #include "mojo/public/cpp/system/data_pipe_producer.h"
 #include "mojo/public/cpp/system/file_data_source.h"
+#include "mojo/public/cpp/system/file_stream_data_source.h"
 #include "net/base/net_errors.h"
 #include "net/http/http_byte_range.h"
 #include "net/http/http_util.h"
@@ -56,12 +57,12 @@ bool GetRequestedByteRange(const network::ResourceRequest& request,
   *first_byte_to_send = 0;
   *total_bytes_to_send = content_size;
 
-  std::string range_header;
+  std::optional<std::string> range_header =
+      request.headers.GetHeader(net::HttpRequestHeaders::kRange);
   std::vector<net::HttpByteRange> ranges;
 
-  if (!request.headers.GetHeader(net::HttpRequestHeaders::kRange,
-                                 &range_header) ||
-      !net::HttpUtil::ParseRangeHeader(range_header, &ranges)) {
+  if (!range_header ||
+      !net::HttpUtil::ParseRangeHeader(*range_header, &ranges)) {
     return true;
   }
 
@@ -85,11 +86,13 @@ void GetMimeType(const network::ResourceRequest& request,
                  std::string* out_mime_type) {
   out_mime_type->clear();
 
-  std::string intent_type_header;
-  if ((request.resource_type ==
-       static_cast<int>(blink::mojom::ResourceType::kMainFrame)) &&
-      request.headers.GetHeader("X-Chrome-intent-type", &intent_type_header)) {
-    *out_mime_type = intent_type_header;
+  if (request.resource_type ==
+      static_cast<int>(blink::mojom::ResourceType::kMainFrame)) {
+    std::optional<std::string> intent_type_header =
+        request.headers.GetHeader("X-Chrome-intent-type");
+    if (intent_type_header) {
+      *out_mime_type = std::move(intent_type_header).value();
+    }
   }
 
   if (out_mime_type->empty())
@@ -118,7 +121,7 @@ class ContentURLLoader : public network::mojom::URLLoader {
       const std::vector<std::string>& removed_headers,
       const net::HttpRequestHeaders& modified_headers,
       const net::HttpRequestHeaders& modified_cors_exempt_headers,
-      const absl::optional<GURL>& new_url) override {}
+      const std::optional<GURL>& new_url) override {}
   void SetPriority(net::RequestPriority priority,
                    int32_t intra_priority_value) override {}
   void PauseReadingBodyFromNet() override {}
@@ -186,7 +189,7 @@ class ContentURLLoader : public network::mojom::URLLoader {
       return CompleteWithFailure(std::move(client), net::ERR_FAILED);
     }
 
-    base::File file = base::OpenContentUriForRead(path);
+    base::File file(path, base::File::FLAG_OPEN | base::File::FLAG_READ);
     if (!file.IsValid()) {
       return CompleteWithFailure(
           std::move(client), net::FileErrorToNetError(file.error_details()));
@@ -197,31 +200,6 @@ class ContentURLLoader : public network::mojom::URLLoader {
 
     // Set the mimetype of the response.
     GetMimeType(request, path, &head->mime_type);
-    if (head->mime_type.empty() ||
-        head->mime_type == "application/octet-stream") {
-      // When a Web Bundle file is downloaded with
-      // "content-type: application/webbundle;v=b1" header, Chrome saves it as
-      // "application/webbundle" MIME type. The MIME type is stored to Android's
-      // DownloadManager. If the file is opened from a URI which is under
-      // DownloadManager's control and the ContentProvider can get the MIME
-      // type, |head.mime_type| is set to "application/webbundle". But otherwise
-      // ContentResolver.getType() returns null or the default type
-      // [1]"application/octet-stream" even if the file extension is ".wbn".
-      // (eg: opening the file from "Internal Storage")
-      // This is because the Media type of Web Bundles isn't registered
-      // to the IANA registry (https://www.iana.org/assignments/media-types/),
-      // and it is not listed in the mime.types files [2][3] which was referd by
-      // MimeTypeMap.getMimeTypeFromExtension().
-      // So we set the MIME type if the file extension is ".wbn" by calling
-      // web_bundle_utils::GetWebBundleFileMimeTypeFromFile().
-      // [1]
-      // https://android.googlesource.com/platform/frameworks/base/+/1b817f6/core/java/android/content/ContentResolver.java#481
-      // [2] https://android.googlesource.com/platform/external/mime-support/
-      // [3]
-      // https://android.googlesource.com/platform/libcore/+/master/luni/src/main/java/libcore/net/android.mime.types
-      web_bundle_utils::GetWebBundleFileMimeTypeFromFile(path,
-                                                         &head->mime_type);
-    }
 
     if (!head->mime_type.empty()) {
       head->headers = base::MakeRefCounted<net::HttpResponseHeaders>("");
@@ -229,7 +207,8 @@ class ContentURLLoader : public network::mojom::URLLoader {
                                head->mime_type);
     }
 
-    client->OnReceiveResponse(std::move(head), std::move(consumer_handle));
+    client->OnReceiveResponse(std::move(head), std::move(consumer_handle),
+                              std::nullopt);
     client_ = std::move(client);
 
     if (total_bytes_to_send == 0) {
@@ -238,12 +217,20 @@ class ContentURLLoader : public network::mojom::URLLoader {
       return;
     }
 
-    // In case of a range request, seek to the appropriate position before
-    // sending the remaining bytes asynchronously. Under normal conditions
-    // (i.e., no range request) this Seek is effectively a no-op.
-    auto data_source = std::make_unique<mojo::FileDataSource>(std::move(file));
-    data_source->SetRange(first_byte_to_send,
-                          first_byte_to_send + total_bytes_to_send);
+    // Content-URIs backed by local files usually support range requests using
+    // seek(), but not all do, so we prefer to use FileStreamDataSource.
+    std::unique_ptr<mojo::DataPipeProducer::DataSource> data_source;
+    if (first_byte_to_send == 0 &&
+        total_bytes_to_send == static_cast<uint64_t>(info.size)) {
+      data_source = std::make_unique<mojo::FileStreamDataSource>(
+          std::move(file), info.size);
+    } else {
+      auto file_data_source =
+          std::make_unique<mojo::FileDataSource>(std::move(file));
+      file_data_source->SetRange(first_byte_to_send,
+                                 first_byte_to_send + total_bytes_to_send);
+      data_source = std::move(file_data_source);
+    }
 
     data_producer_ =
         std::make_unique<mojo::DataPipeProducer>(std::move(producer_handle));

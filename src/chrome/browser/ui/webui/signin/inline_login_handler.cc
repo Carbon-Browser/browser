@@ -1,15 +1,17 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/webui/signin/inline_login_handler.h"
 
 #include <limits.h>
+
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/check_deref.h"
+#include "base/functional/bind.h"
 #include "base/metrics/user_metrics.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
@@ -22,8 +24,7 @@
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_navigator.h"
 #include "chrome/browser/ui/browser_navigator_params.h"
-#include "chrome/browser/ui/profile_picker.h"
-#include "chrome/browser/ui/webui/signin/signin_utils.h"
+#include "chrome/browser/ui/profiles/profile_picker.h"
 #include "chrome/common/pref_names.h"
 #include "components/metrics/metrics_pref_names.h"
 #include "components/prefs/pref_service.h"
@@ -31,6 +32,7 @@
 #include "content/public/browser/storage_partition.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
+#include "google_apis/gaia/gaia_id.h"
 #include "google_apis/gaia/gaia_urls.h"
 #include "net/base/url_util.h"
 #include "services/network/public/mojom/cookie_manager.mojom.h"
@@ -60,8 +62,8 @@ void InlineLoginHandler::RegisterMessages() {
       base::BindRepeating(&InlineLoginHandler::HandleInitializeMessage,
                           base::Unretained(this)));
   web_ui()->RegisterMessageCallback(
-      "authExtensionReady",
-      base::BindRepeating(&InlineLoginHandler::HandleAuthExtensionReadyMessage,
+      "authenticatorReady",
+      base::BindRepeating(&InlineLoginHandler::HandleAuthenticatorReadyMessage,
                           base::Unretained(this)));
   web_ui()->RegisterMessageCallback(
       "completeLogin",
@@ -93,9 +95,8 @@ void InlineLoginHandler::HandleInitializeMessage(
     // present and its value is zero, this means we don't want to keep the
     // the data.
     std::string value;
-    if (!net::GetValueForKeyInQuery(current_url,
-                                    signin::kSignInPromoQueryKeyForceKeepData,
-                                    &value) ||
+    if (!net::GetValueForKeyInQuery(
+            current_url, signin::kSignInPromoQueryKeyForceKeepData, &value) ||
         value == "0") {
       partition->ClearData(
           content::StoragePartition::REMOVE_DATA_MASK_ALL,
@@ -138,14 +139,16 @@ void InlineLoginHandler::ContinueHandleInitializeMessage() {
   std::string default_email;
   if (reason == signin_metrics::Reason::kSigninPrimaryAccount ||
       reason == signin_metrics::Reason::kForcedSigninPrimaryAccount) {
-    default_email =
-        profile->GetPrefs()->GetString(prefs::kGoogleServicesLastUsername);
+    default_email = profile->GetPrefs()->GetString(
+        prefs::kGoogleServicesLastSyncingUsername);
   } else {
-    if (!net::GetValueForKeyInQuery(current_url, "email", &default_email))
+    if (!net::GetValueForKeyInQuery(current_url, "email", &default_email)) {
       default_email.clear();
+    }
   }
-  if (!default_email.empty())
+  if (!default_email.empty()) {
     params.Set("email", default_email);
+  }
 
   // The legacy full-tab Chrome sign-in page is no longer used as it was relying
   // on exchanging cookies for refresh tokens and that endpoint is no longer
@@ -158,7 +161,7 @@ void InlineLoginHandler::ContinueHandleInitializeMessage() {
   params.Set("readOnlyEmail", !read_only_email.empty());
 
   SetExtraInitParams(params);
-  FireWebUIListener("load-auth-extension", base::Value(std::move(params)));
+  FireWebUIListener("load-authenticator", params);
 }
 
 void InlineLoginHandler::HandleCompleteLoginMessage(
@@ -182,35 +185,34 @@ void InlineLoginHandler::HandleCompleteLoginMessageWithCookies(
     const base::Value::List& args,
     const net::CookieAccessResultList& cookies,
     const net::CookieAccessResultList& excluded_cookies) {
-  const base::Value& dict = args[0];
+  CHECK_EQ(args.size(), 1u);
+  const base::Value::Dict& dict = args[0].GetDict();
 
   CompleteLoginParams params;
-  params.email = dict.FindKey("email")->GetString();
-  params.password = dict.FindKey("password")->GetString();
-  params.gaia_id = dict.FindKey("gaiaId")->GetString();
+  params.email = CHECK_DEREF(dict.FindString("email"));
+  params.password = CHECK_DEREF(dict.FindString("password"));
+  params.gaia_id = GaiaId(CHECK_DEREF(dict.FindString("gaiaId")));
 
   for (const auto& cookie_with_access_result : cookies) {
-    if (cookie_with_access_result.cookie.Name() == "oauth_code")
+    if (cookie_with_access_result.cookie.Name() == "oauth_code") {
       params.auth_code = cookie_with_access_result.cookie.Value();
+    }
   }
 
-  params.skip_for_now = dict.FindBoolKey("skipForNow").value_or(false);
-  absl::optional<bool> trusted = dict.FindBoolKey("trusted");
+  params.skip_for_now = dict.FindBool("skipForNow").value_or(false);
+  std::optional<bool> trusted = dict.FindBool("trusted");
   params.trusted_value = trusted.value_or(false);
   params.trusted_found = trusted.has_value();
 
-  params.choose_what_to_sync =
-      dict.FindBoolKey("chooseWhatToSync").value_or(false);
   params.is_available_in_arc =
-      dict.FindBoolKey("isAvailableInArc").value_or(false);
+      dict.FindBool("isAvailableInArc").value_or(false);
 
   CompleteLogin(params);
 }
 
 void InlineLoginHandler::HandleSwitchToFullTabMessage(
     const base::Value::List& args) {
-  Browser* browser =
-      chrome::FindBrowserWithWebContents(web_ui()->GetWebContents());
+  Browser* browser = chrome::FindBrowserWithTab(web_ui()->GetWebContents());
   if (browser) {
     // |web_ui| is already presented in a full tab. Ignore this call.
     return;
@@ -240,13 +242,12 @@ void InlineLoginHandler::HandleSwitchToFullTabMessage(
 }
 
 void InlineLoginHandler::HandleDialogClose(const base::Value::List& args) {
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
-  // Does nothing if profile picker is not showing.
-  ProfilePickerForceSigninDialog::HideDialog();
-#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
+  // TODO(crbug.com/381231566): This is now dead code, it should be removed in
+  // upcoming changes along with associated code.
 }
 
 void InlineLoginHandler::CloseDialogFromJavascript() {
-  if (IsJavascriptAllowed())
+  if (IsJavascriptAllowed()) {
     FireWebUIListener("close-dialog");
+  }
 }

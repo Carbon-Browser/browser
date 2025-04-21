@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,149 +8,100 @@
 
 #include "base/run_loop.h"
 #include "base/test/bind.h"
+#include "base/test/test_future.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace network {
+namespace {
+using NetErrorFuture = base::test::TestFuture<int32_t>;
+using NetErrorWithOptionalIPEndPointFuture =
+    base::test::TestFuture<int32_t, const std::optional<net::IPEndPoint>&>;
+}  // namespace
 
-namespace test {
+namespace network::test {
 
 UDPSocketTestHelper::UDPSocketTestHelper(mojo::Remote<mojom::UDPSocket>* socket)
-    : socket_(socket) {}
+    : socket_(*socket->get()) {}
 
-UDPSocketTestHelper::~UDPSocketTestHelper() {}
+UDPSocketTestHelper::~UDPSocketTestHelper() = default;
 
 int UDPSocketTestHelper::ConnectSync(const net::IPEndPoint& remote_addr,
                                      mojom::UDPSocketOptionsPtr options,
                                      net::IPEndPoint* local_addr_out) {
-  base::RunLoop run_loop;
-  int net_error = net::ERR_FAILED;
-  socket_->get()->Connect(
-      remote_addr, std::move(options),
-      base::BindLambdaForTesting(
-          [&](int result, const absl::optional<net::IPEndPoint>& local_addr) {
-            net_error = result;
-            if (local_addr) {
-              *local_addr_out = local_addr.value();
-            }
-            run_loop.Quit();
-          }));
-  run_loop.Run();
+  NetErrorWithOptionalIPEndPointFuture future;
+  socket_->Connect(remote_addr, std::move(options), future.GetCallback());
+  auto [net_error, local_addr_result] = future.Take();
+  if (local_addr_result) {
+    *local_addr_out = *local_addr_result;
+  }
   return net_error;
 }
 
 int UDPSocketTestHelper::BindSync(const net::IPEndPoint& local_addr,
                                   mojom::UDPSocketOptionsPtr options,
                                   net::IPEndPoint* local_addr_out) {
-  base::RunLoop run_loop;
-  int net_error = net::ERR_FAILED;
-  socket_->get()->Bind(
-      local_addr, std::move(options),
-      base::BindLambdaForTesting(
-          [&](int result, const absl::optional<net::IPEndPoint>& local_addr) {
-            net_error = result;
-            if (local_addr) {
-              *local_addr_out = local_addr.value();
-            }
-            run_loop.Quit();
-          }));
-  run_loop.Run();
+  NetErrorWithOptionalIPEndPointFuture future;
+  socket_->Bind(local_addr, std::move(options), future.GetCallback());
+  auto [net_error, local_addr_result] = future.Take();
+  if (local_addr_result) {
+    *local_addr_out = *local_addr_result;
+  }
   return net_error;
 }
 
 int UDPSocketTestHelper::SendToSync(const net::IPEndPoint& remote_addr,
-                                    const std::vector<uint8_t>& input) {
-  base::RunLoop run_loop;
-  int net_error = net::ERR_FAILED;
-  socket_->get()->SendTo(
-      remote_addr, input,
+                                    base::span<const uint8_t> data) {
+  NetErrorFuture future;
+  socket_->SendTo(
+      remote_addr, data,
       net::MutableNetworkTrafficAnnotationTag(TRAFFIC_ANNOTATION_FOR_TESTS),
-      base::BindLambdaForTesting([&](int result) {
-        net_error = result;
-        run_loop.Quit();
-      }));
-  run_loop.Run();
-  return net_error;
+      future.GetCallback());
+  return future.Take();
 }
 
-int UDPSocketTestHelper::SendSync(const std::vector<uint8_t>& input) {
-  base::RunLoop run_loop;
-  int net_error = net::ERR_FAILED;
-  socket_->get()->Send(
-      input,
+int UDPSocketTestHelper::SendSync(base::span<const uint8_t> data) {
+  NetErrorFuture future;
+  socket_->Send(
+      data,
       net::MutableNetworkTrafficAnnotationTag(TRAFFIC_ANNOTATION_FOR_TESTS),
-      base::BindLambdaForTesting([&](int result) {
-        net_error = result;
-        run_loop.Quit();
-      }));
-  run_loop.Run();
-  return net_error;
+      future.GetCallback());
+  return future.Take();
 }
 
 int UDPSocketTestHelper::SetBroadcastSync(bool broadcast) {
-  base::RunLoop run_loop;
-  int net_error = net::ERR_FAILED;
-  socket_->get()->SetBroadcast(broadcast,
-                               base::BindLambdaForTesting([&](int result) {
-                                 net_error = result;
-                                 run_loop.Quit();
-                               }));
-  run_loop.Run();
-  return net_error;
+  NetErrorFuture future;
+  socket_->SetBroadcast(broadcast, future.GetCallback());
+  return future.Take();
 }
 
 int UDPSocketTestHelper::SetSendBufferSizeSync(int send_buffer_size) {
-  base::RunLoop run_loop;
-  int net_error = net::ERR_FAILED;
-  socket_->get()->SetSendBufferSize(send_buffer_size,
-                                    base::BindLambdaForTesting([&](int result) {
-                                      net_error = result;
-                                      run_loop.Quit();
-                                    }));
-  run_loop.Run();
-  return net_error;
+  NetErrorFuture future;
+  socket_->SetSendBufferSize(send_buffer_size, future.GetCallback());
+  return future.Take();
 }
 
 int UDPSocketTestHelper::SetReceiveBufferSizeSync(int receive_buffer_size) {
-  base::RunLoop run_loop;
-  int net_error = net::ERR_FAILED;
-  socket_->get()->SetReceiveBufferSize(
-      receive_buffer_size, base::BindLambdaForTesting([&](int result) {
-        net_error = result;
-        run_loop.Quit();
-      }));
-  run_loop.Run();
-  return net_error;
+  NetErrorFuture future;
+  socket_->SetReceiveBufferSize(receive_buffer_size, future.GetCallback());
+  return future.Take();
 }
 
 int UDPSocketTestHelper::JoinGroupSync(const net::IPAddress& group_address) {
-  base::RunLoop run_loop;
-  int net_error = net::ERR_FAILED;
-  socket_->get()->JoinGroup(group_address,
-                            base::BindLambdaForTesting([&](int result) {
-                              net_error = result;
-                              run_loop.Quit();
-                            }));
-  run_loop.Run();
-  return net_error;
+  NetErrorFuture future;
+  socket_->JoinGroup(group_address, future.GetCallback());
+  return future.Take();
 }
 
 int UDPSocketTestHelper::LeaveGroupSync(const net::IPAddress& group_address) {
-  base::RunLoop run_loop;
-  int net_error = net::ERR_FAILED;
-  socket_->get()->LeaveGroup(group_address,
-                             base::BindLambdaForTesting([&](int result) {
-                               net_error = result;
-                               run_loop.Quit();
-                             }));
-  run_loop.Run();
-  return net_error;
+  NetErrorFuture future;
+  socket_->LeaveGroup(group_address, future.GetCallback());
+  return future.Take();
 }
 
 UDPSocketListenerImpl::ReceivedResult::ReceivedResult(
     int net_error_arg,
-    const absl::optional<net::IPEndPoint>& src_addr_arg,
-    absl::optional<std::vector<uint8_t>> data_arg)
+    const std::optional<net::IPEndPoint>& src_addr_arg,
+    std::optional<std::vector<uint8_t>> data_arg)
     : net_error(net_error_arg),
       src_addr(src_addr_arg),
       data(std::move(data_arg)) {}
@@ -180,23 +131,21 @@ void UDPSocketListenerImpl::WaitForReceivedResults(size_t count) {
 
 void UDPSocketListenerImpl::OnReceived(
     int32_t result,
-    const absl::optional<net::IPEndPoint>& src_addr,
-    absl::optional<base::span<const uint8_t>> data) {
+    const std::optional<net::IPEndPoint>& src_addr,
+    std::optional<base::span<const uint8_t>> data) {
   // OnReceive() API contracts specifies that this method will not be called
   // with a |result| that is > 0.
   DCHECK_GE(0, result);
   DCHECK(result < 0 || data);
 
   results_.emplace_back(result, src_addr,
-                        data ? absl::make_optional(std::vector<uint8_t>(
+                        data ? std::make_optional(std::vector<uint8_t>(
                                    data.value().begin(), data.value().end()))
-                             : absl::nullopt);
+                             : std::nullopt);
   if (results_.size() == expected_receive_count_) {
     expected_receive_count_ = 0;
     run_loop_->Quit();
   }
 }
 
-}  // namespace test
-
-}  // namespace network
+}  // namespace network::test

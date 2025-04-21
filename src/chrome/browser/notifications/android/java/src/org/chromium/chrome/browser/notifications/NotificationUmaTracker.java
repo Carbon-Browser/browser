@@ -1,40 +1,38 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.notifications;
 
 import android.app.Notification;
-import android.content.pm.PackageManager;
 import android.os.Build;
 import android.text.format.DateUtils;
 
 import androidx.annotation.IntDef;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
-import androidx.core.app.NotificationChannelCompat;
 import androidx.core.app.NotificationManagerCompat;
 
-import org.chromium.base.ContextUtils;
+import org.chromium.base.Callback;
 import org.chromium.base.MathUtils;
-import org.chromium.base.compat.ApiHelperForO;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.metrics.RecordUserAction;
+import org.chromium.base.shared_preferences.SharedPreferencesManager;
 import org.chromium.chrome.browser.notifications.channels.ChromeChannelDefinitions;
 import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
-import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
-import org.chromium.ui.permissions.PermissionConstants;
+import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
+import org.chromium.components.browser_ui.notifications.BaseNotificationManagerProxy;
+import org.chromium.components.browser_ui.notifications.BaseNotificationManagerProxyFactory;
+import org.chromium.components.browser_ui.notifications.NotificationProxyUtils;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
 /**
- * Helper class to make tracking notification UMA stats easier for various features.  Having a
- * single entry point here to make more complex tracking easier to add in the future.
+ * Helper class to make tracking notification UMA stats easier for various features. Having a single
+ * entry point here to make more complex tracking easier to add in the future.
  */
 public class NotificationUmaTracker {
-    private static final String TAG = "NotifsUMATracker";
-
     /*
      * A list of notification types.  To add a type to this list please update
      * SystemNotificationType in enums.xml and make sure to keep this list in sync.  Additions
@@ -42,30 +40,50 @@ public class NotificationUmaTracker {
      *
      * A SystemNotificationType value can also be saved in shared preferences.
      */
-    @IntDef({SystemNotificationType.UNKNOWN, SystemNotificationType.DOWNLOAD_FILES,
-            SystemNotificationType.DOWNLOAD_PAGES, SystemNotificationType.CLOSE_INCOGNITO,
-            SystemNotificationType.CONTENT_SUGGESTION, SystemNotificationType.MEDIA_CAPTURE,
-            SystemNotificationType.PHYSICAL_WEB, SystemNotificationType.MEDIA,
-            SystemNotificationType.SITES, SystemNotificationType.SYNC,
-            SystemNotificationType.WEBAPK, SystemNotificationType.BROWSER_ACTIONS,
-            SystemNotificationType.WEBAPP_ACTIONS,
-            SystemNotificationType.OFFLINE_CONTENT_SUGGESTION,
-            SystemNotificationType.TRUSTED_WEB_ACTIVITY_SITES, SystemNotificationType.OFFLINE_PAGES,
-            SystemNotificationType.SEND_TAB_TO_SELF, SystemNotificationType.UPDATES,
-            SystemNotificationType.CLICK_TO_CALL, SystemNotificationType.SHARED_CLIPBOARD,
-            SystemNotificationType.SMS_FETCHER, SystemNotificationType.PERMISSION_REQUESTS,
-            SystemNotificationType.PERMISSION_REQUESTS_HIGH, SystemNotificationType.ANNOUNCEMENT,
-            SystemNotificationType.SHARE_SAVE_IMAGE, SystemNotificationType.TWA_DISCLOSURE_INITIAL,
-            SystemNotificationType.TWA_DISCLOSURE_SUBSEQUENT,
-            SystemNotificationType.CHROME_REENGAGEMENT_1,
-            SystemNotificationType.CHROME_REENGAGEMENT_2,
-            SystemNotificationType.CHROME_REENGAGEMENT_3, SystemNotificationType.PRICE_DROP_ALERTS,
-            SystemNotificationType.WEBAPK_INSTALL_IN_PROGRESS,
-            SystemNotificationType.WEBAPK_INSTALL_COMPLETE,
-            SystemNotificationType.PRICE_DROP_ALERTS_CHROME_MANAGED,
-            SystemNotificationType.PRICE_DROP_ALERTS_USER_MANAGED,
-            SystemNotificationType.CHROME_TIPS, SystemNotificationType.BLUETOOTH,
-            SystemNotificationType.USB, SystemNotificationType.UPM_ERROR})
+    @IntDef({
+        SystemNotificationType.UNKNOWN,
+        SystemNotificationType.DOWNLOAD_FILES,
+        SystemNotificationType.DOWNLOAD_PAGES,
+        SystemNotificationType.CLOSE_INCOGNITO,
+        SystemNotificationType.CONTENT_SUGGESTION,
+        SystemNotificationType.MEDIA_CAPTURE,
+        SystemNotificationType.PHYSICAL_WEB,
+        SystemNotificationType.MEDIA,
+        SystemNotificationType.SITES,
+        SystemNotificationType.SYNC,
+        SystemNotificationType.WEBAPK,
+        SystemNotificationType.BROWSER_ACTIONS,
+        SystemNotificationType.WEBAPP_ACTIONS,
+        SystemNotificationType.OFFLINE_CONTENT_SUGGESTION,
+        SystemNotificationType.TRUSTED_WEB_ACTIVITY_SITES,
+        SystemNotificationType.OFFLINE_PAGES,
+        SystemNotificationType.SEND_TAB_TO_SELF,
+        SystemNotificationType.UPDATES,
+        SystemNotificationType.CLICK_TO_CALL,
+        SystemNotificationType.SHARED_CLIPBOARD,
+        SystemNotificationType.SMS_FETCHER,
+        SystemNotificationType.PERMISSION_REQUESTS,
+        SystemNotificationType.PERMISSION_REQUESTS_HIGH,
+        SystemNotificationType.ANNOUNCEMENT,
+        SystemNotificationType.SHARE_SAVE_IMAGE,
+        SystemNotificationType.TWA_DISCLOSURE_INITIAL,
+        SystemNotificationType.TWA_DISCLOSURE_SUBSEQUENT,
+        SystemNotificationType.CHROME_REENGAGEMENT_1,
+        SystemNotificationType.CHROME_REENGAGEMENT_2,
+        SystemNotificationType.CHROME_REENGAGEMENT_3,
+        SystemNotificationType.PRICE_DROP_ALERTS,
+        SystemNotificationType.WEBAPK_INSTALL_IN_PROGRESS,
+        SystemNotificationType.WEBAPK_INSTALL_COMPLETE,
+        SystemNotificationType.PRICE_DROP_ALERTS_CHROME_MANAGED,
+        SystemNotificationType.PRICE_DROP_ALERTS_USER_MANAGED,
+        SystemNotificationType.CHROME_TIPS,
+        SystemNotificationType.BLUETOOTH,
+        SystemNotificationType.USB,
+        SystemNotificationType.UPM_ERROR,
+        SystemNotificationType.WEBAPK_INSTALL_FAILED,
+        SystemNotificationType.DATA_SHARING,
+        SystemNotificationType.UPM_ACCESS_LOSS_WARNING
+    })
     @Retention(RetentionPolicy.SOURCE)
     public @interface SystemNotificationType {
         int UNKNOWN = -1;
@@ -107,8 +125,11 @@ public class NotificationUmaTracker {
         int BLUETOOTH = 35;
         int USB = 36;
         int UPM_ERROR = 37;
+        int WEBAPK_INSTALL_FAILED = 38;
+        int DATA_SHARING = 39;
+        int UPM_ACCESS_LOSS_WARNING = 40;
 
-        int NUM_ENTRIES = 38;
+        int NUM_ENTRIES = 41;
     }
 
     /*
@@ -117,14 +138,32 @@ public class NotificationUmaTracker {
      * sure to keep this list in sync.  Additions should be treated as APPEND ONLY to keep the UMA
      * metric semantics the same over time.
      */
-    @IntDef({ActionType.UNKNOWN, ActionType.DOWNLOAD_PAUSE, ActionType.DOWNLOAD_RESUME,
-            ActionType.DOWNLOAD_CANCEL, ActionType.DOWNLOAD_PAGE_PAUSE,
-            ActionType.DOWNLOAD_PAGE_RESUME, ActionType.DOWNLOAD_PAGE_CANCEL,
-            ActionType.CONTENT_SUGGESTION_SETTINGS, ActionType.WEB_APP_ACTION_SHARE,
-            ActionType.WEB_APP_ACTION_OPEN_IN_CHROME,
-            ActionType.OFFLINE_CONTENT_SUGGESTION_SETTINGS, ActionType.SHARING_TRY_AGAIN,
-            ActionType.SETTINGS, ActionType.ANNOUNCEMENT_ACK, ActionType.ANNOUNCEMENT_OPEN,
-            ActionType.PRICE_DROP_VISIT_SITE, ActionType.PRICE_DROP_TURN_OFF_ALERT})
+    @IntDef({
+        ActionType.UNKNOWN,
+        ActionType.DOWNLOAD_PAUSE,
+        ActionType.DOWNLOAD_RESUME,
+        ActionType.DOWNLOAD_CANCEL,
+        ActionType.DOWNLOAD_PAGE_PAUSE,
+        ActionType.DOWNLOAD_PAGE_RESUME,
+        ActionType.DOWNLOAD_PAGE_CANCEL,
+        ActionType.CONTENT_SUGGESTION_SETTINGS,
+        ActionType.WEB_APP_ACTION_SHARE,
+        ActionType.WEB_APP_ACTION_OPEN_IN_CHROME,
+        ActionType.OFFLINE_CONTENT_SUGGESTION_SETTINGS,
+        ActionType.SHARING_TRY_AGAIN,
+        ActionType.SETTINGS,
+        ActionType.ANNOUNCEMENT_ACK,
+        ActionType.ANNOUNCEMENT_OPEN,
+        ActionType.PRICE_DROP_VISIT_SITE,
+        ActionType.PRICE_DROP_TURN_OFF_ALERT,
+        ActionType.WEB_APK_ACTION_BACK_TO_SITE,
+        ActionType.WEB_APK_ACTION_RETRY,
+        ActionType.PRE_UNSUBSCRIBE,
+        ActionType.UNDO_UNSUBSCRIBE,
+        ActionType.COMMIT_UNSUBSCRIBE_IMPLICIT,
+        ActionType.COMMIT_UNSUBSCRIBE_EXPLICIT,
+        ActionType.SHOW_ORIGINAL_NOTIFICATION
+    })
     @Retention(RetentionPolicy.SOURCE)
     public @interface ActionType {
         int UNKNOWN = -1;
@@ -181,7 +220,31 @@ public class NotificationUmaTracker {
         // Cancel button on sharing notification.
         int SHARING_CANCEL = 27;
 
-        int NUM_ENTRIES = 28;
+        // Back to site button on WebAPK install error notification.
+        int WEB_APK_ACTION_BACK_TO_SITE = 28;
+        // Retry button on WebAPK install error notification.
+        int WEB_APK_ACTION_RETRY = 29;
+
+        // The one-tap "Unsubscribe" button, used only for persistent web notifications in lieu of
+        // the `SETTINGS` button.
+        int PRE_UNSUBSCRIBE = 30;
+
+        // The "Undo" button to revert `PRE_UNSUBSCRIBE`.
+        int UNDO_UNSUBSCRIBE = 31;
+
+        // The "Okay" button to affirmatively commit `PRE_UNSUBSCRIBE`.
+        int COMMIT_UNSUBSCRIBE_EXPLICIT = 32;
+
+        // The "Provisionally Unsubscribed" service notification is dismissed or times out, leading
+        // to implicitly committing `PRE_UNSUBSCRIBE`.
+        int COMMIT_UNSUBSCRIBE_IMPLICIT = 33;
+
+        // The "Show notification" button, used only for persistent web notifications that are
+        // suspicious.
+        int SHOW_ORIGINAL_NOTIFICATION = 34;
+
+        // Number of real entries, excluding `UNKNOWN`.
+        int NUM_ENTRIES = 35;
     }
 
     /**
@@ -189,12 +252,21 @@ public class NotificationUmaTracker {
      * enums.xml These values are persisted to logs. Entries should not be renumbered and numeric
      * values should never be reused.
      */
-    @IntDef({NotificationRationaleResult.POSITIVE_BUTTON_CLICKED,
-            NotificationRationaleResult.NEGATIVE_BUTTON_CLICKED,
-            NotificationRationaleResult.NAVIGATE_BACK_OR_TOUCH_OUTSIDE,
-            NotificationRationaleResult.NOT_ATTACHED_TO_WINDOW,
-            NotificationRationaleResult.ACTIVITY_DESTROYED,
-            NotificationRationaleResult.NUM_ENTRIES})
+    @IntDef({
+        NotificationRationaleResult.POSITIVE_BUTTON_CLICKED,
+        NotificationRationaleResult.NEGATIVE_BUTTON_CLICKED,
+        NotificationRationaleResult.NAVIGATE_BACK_OR_TOUCH_OUTSIDE,
+        NotificationRationaleResult.NOT_ATTACHED_TO_WINDOW,
+        NotificationRationaleResult.ACTIVITY_DESTROYED,
+        NotificationRationaleResult.BOTTOM_SHEET_BACK_PRESS,
+        NotificationRationaleResult.BOTTOM_SHEET_SWIPE,
+        NotificationRationaleResult.BOTTOM_SHEET_TAP_SCRIM,
+        NotificationRationaleResult.BOTTOM_SHEET_FAILED_TO_OPEN,
+        NotificationRationaleResult.BOTTOM_SHEET_DESTROYED,
+        NotificationRationaleResult.BOTTOM_SHEET_CLOSED_UNKNOWN,
+        NotificationRationaleResult.BOTTOM_SHEET_NEVER_OPENED,
+        NotificationRationaleResult.NUM_ENTRIES
+    })
     @Retention(RetentionPolicy.SOURCE)
     public @interface NotificationRationaleResult {
         int POSITIVE_BUTTON_CLICKED = 0;
@@ -202,8 +274,15 @@ public class NotificationUmaTracker {
         int NAVIGATE_BACK_OR_TOUCH_OUTSIDE = 2;
         int ACTIVITY_DESTROYED = 3;
         int NOT_ATTACHED_TO_WINDOW = 4;
+        int BOTTOM_SHEET_BACK_PRESS = 5;
+        int BOTTOM_SHEET_SWIPE = 6;
+        int BOTTOM_SHEET_TAP_SCRIM = 7;
+        int BOTTOM_SHEET_FAILED_TO_OPEN = 8;
+        int BOTTOM_SHEET_DESTROYED = 9;
+        int BOTTOM_SHEET_CLOSED_UNKNOWN = 10;
+        int BOTTOM_SHEET_NEVER_OPENED = 11;
 
-        int NUM_ENTRIES = 5;
+        int NUM_ENTRIES = 12;
     }
 
     /**
@@ -211,13 +290,15 @@ public class NotificationUmaTracker {
      * in enums.xml These values are persisted to logs. Entries should not be renumbered and numeric
      * values should never be reused.
      */
-    @IntDef({NotificationPermissionState.ALLOWED,
-            NotificationPermissionState.DENIED_BY_DEVICE_POLICY,
-            NotificationPermissionState.DENIED_NEVER_ASKED,
-            NotificationPermissionState.DENIED_ASKED_ONCE,
-            NotificationPermissionState.DENIED_ASKED_TWICE,
-            NotificationPermissionState.DENIED_ASKED_MORE_THAN_TWICE,
-            NotificationPermissionState.NUM_ENTRIES})
+    @IntDef({
+        NotificationPermissionState.ALLOWED,
+        NotificationPermissionState.DENIED_BY_DEVICE_POLICY,
+        NotificationPermissionState.DENIED_NEVER_ASKED,
+        NotificationPermissionState.DENIED_ASKED_ONCE,
+        NotificationPermissionState.DENIED_ASKED_TWICE,
+        NotificationPermissionState.DENIED_ASKED_MORE_THAN_TWICE,
+        NotificationPermissionState.NUM_ENTRIES
+    })
     @Retention(RetentionPolicy.SOURCE)
     public @interface NotificationPermissionState {
         int ALLOWED = 0;
@@ -230,27 +311,59 @@ public class NotificationUmaTracker {
         int NUM_ENTRIES = 6;
     }
 
+    /** The stages of the job handling a notification intent. */
+    @IntDef({
+        IntentHandlerJobStage.SCHEDULE_JOB,
+        IntentHandlerJobStage.SCHEDULE_JOB_FAILED,
+        IntentHandlerJobStage.ON_START_JOB,
+        IntentHandlerJobStage.ON_STOP_JOB,
+        IntentHandlerJobStage.DISPATCH_EVENT,
+        IntentHandlerJobStage.NATIVE_STARTUP
+    })
+    @Retention(RetentionPolicy.SOURCE)
+    public @interface IntentHandlerJobStage {
+        int SCHEDULE_JOB = 0;
+        int SCHEDULE_JOB_FAILED = 1;
+        int ON_START_JOB = 2;
+        int ON_STOP_JOB = 3;
+        int NATIVE_STARTUP = 4;
+        int DISPATCH_EVENT = 5;
+
+        int NUM_ENTRIES = 6;
+    }
+
+    /** The action during which the `WasGlobalStatePreserved` histogram is recorded. */
+    @IntDef({GlobalStatePreservedActionSuffix.UNDO, GlobalStatePreservedActionSuffix.COMMIT})
+    @Retention(RetentionPolicy.SOURCE)
+    public @interface GlobalStatePreservedActionSuffix {
+        int UNDO = 0;
+        int COMMIT = 1;
+
+        int NUM_ENTRIES = 2;
+    }
+
     private static class LazyHolder {
         private static final NotificationUmaTracker INSTANCE = new NotificationUmaTracker();
     }
 
-    /** Cached objects. */
+    // Cached objects.
     private final SharedPreferencesManager mSharedPreferences;
-    private final NotificationManagerCompat mNotificationManager;
+    private final BaseNotificationManagerProxy mNotificationManager;
 
     public static NotificationUmaTracker getInstance() {
         return LazyHolder.INSTANCE;
     }
 
     private NotificationUmaTracker() {
-        mSharedPreferences = SharedPreferencesManager.getInstance();
-        mNotificationManager = NotificationManagerCompat.from(ContextUtils.getApplicationContext());
+        mSharedPreferences = ChromeSharedPreferences.getInstance();
+        mNotificationManager = BaseNotificationManagerProxyFactory.create();
     }
 
     /**
      * Logs {@link android.app.Notification} usage, categorized into {@link SystemNotificationType}
-     * types.  Splits the logs by the global enabled state of notifications and also logs the last
+     * types. Splits the logs by the global enabled state of notifications and also logs the last
      * notification shown prior to the global notifications state being disabled by the user.
+     *
      * @param type The type of notification that was shown.
      * @param notification The notification that was shown.
      * @see SystemNotificationType
@@ -260,7 +373,7 @@ public class NotificationUmaTracker {
         if (type == SystemNotificationType.UNKNOWN || notification == null) return;
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            logNotificationShown(type, ApiHelperForO.getNotificationChannelId(notification));
+            logNotificationShown(type, notification.getChannelId());
         } else {
             logNotificationShown(type, null);
         }
@@ -268,13 +381,16 @@ public class NotificationUmaTracker {
 
     /**
      * Logs notification click event when the user taps on the notification body.
+     *
      * @param type Type of the notification.
      * @param createTime The notification creation timestamp.
      */
     public void onNotificationContentClick(@SystemNotificationType int type, long createTime) {
         if (type == SystemNotificationType.UNKNOWN) return;
 
-        RecordHistogram.recordEnumeratedHistogram("Mobile.SystemNotification.Content.Click", type,
+        RecordHistogram.recordEnumeratedHistogram(
+                "Mobile.SystemNotification.Content.Click",
+                type,
                 SystemNotificationType.NUM_ENTRIES);
         if (type == SystemNotificationType.DOWNLOAD_FILES) {
             RecordUserAction.record("Mobile.SystemNotification.Content.Click.Downloads_Files");
@@ -313,6 +429,7 @@ public class NotificationUmaTracker {
 
     /**
      * Logs notification dismiss event the user swipes away the notification.
+     *
      * @param type Type of the notification.
      * @param createTime The notification creation timestamp.
      */
@@ -355,12 +472,15 @@ public class NotificationUmaTracker {
 
     /**
      * Logs notification button click event.
+     *
      * @param actionType Type of the notification action button.
      * @param notificationType Type of the notification.
      * @param createTime The notification creation timestamp.
      */
-    public void onNotificationActionClick(@ActionType int actionType,
-            @SystemNotificationType int notificationType, long createTime) {
+    public void onNotificationActionClick(
+            @ActionType int actionType,
+            @SystemNotificationType int notificationType,
+            long createTime) {
         if (actionType == ActionType.UNKNOWN) return;
 
         // TODO(xingliu): This may not work if Android kill Chrome before native library is loaded.
@@ -404,27 +524,19 @@ public class NotificationUmaTracker {
      * OS prompt or Chrome's permission rationale.
      */
     public void onNotificationPermissionRequested() {
-        int requestCount = mSharedPreferences.readInt(
-                ChromePreferenceKeys.NOTIFICATION_PERMISSION_REQUEST_COUNT);
+        int requestCount =
+                mSharedPreferences.readInt(
+                        ChromePreferenceKeys.NOTIFICATION_PERMISSION_REQUEST_COUNT);
         RecordHistogram.recordExactLinearHistogram(
                 "Mobile.SystemNotification.Permission.StartupRequestCount", requestCount, 50);
     }
 
     /**
      * Records the result of an OS prompt for notification permissions.
-     * @param permissions List of permissions requested, the only element should be the notification
-     *         permission.
-     * @param grantResults List of grant results.
+     *
+     * @param isPermissionGranted Whether permission is granted.
      */
-    public void onNotificationPermissionRequestResult(String[] permissions, int[] grantResults) {
-        if (permissions.length != 1 || grantResults.length != 1
-                || !permissions[0].equals(PermissionConstants.NOTIFICATION_PERMISSION)) {
-            assert false;
-            return;
-        }
-
-        boolean isPermissionGranted = grantResults[0] == PackageManager.PERMISSION_GRANTED;
-
+    public void recordNotificationPermissionRequestResult(boolean isPermissionGranted) {
         RecordHistogram.recordBooleanHistogram(
                 "Mobile.SystemNotification.Permission.OSPromptResult", isPermissionGranted);
     }
@@ -432,6 +544,7 @@ public class NotificationUmaTracker {
     /**
      * Called when the app's notifications are blocked or allowed through Android settings or when
      * allowed through the OS prompt.
+     *
      * @param blockedState If true all notifications are blocked.
      */
     public void onNotificationPermissionSettingChange(boolean blockedState) {
@@ -441,46 +554,142 @@ public class NotificationUmaTracker {
                 "Mobile.SystemNotification.Permission.Change", isPermissionGranted);
     }
 
-    /**
-     * Records the result of showing the notification permission rationale dialog.
-     */
+    /** Records the result of showing the notification permission rationale dialog. */
     public void onNotificationPermissionRationaleResult(@NotificationRationaleResult int result) {
         RecordHistogram.recordEnumeratedHistogram(
-                "Mobile.SystemNotification.Permission.RationaleResult", result,
+                "Mobile.SystemNotification.Permission.RationaleResult",
+                result,
                 NotificationRationaleResult.NUM_ENTRIES);
     }
 
-    /**
-     * Records a metric indicating the state of notification permissions on startup.
-     */
+    /** Records a metric indicating the state of notification permissions on startup. */
     public void recordNotificationPermissionState(@NotificationPermissionState int state) {
         RecordHistogram.recordEnumeratedHistogram(
-                "Mobile.SystemNotification.Permission.StartupState", state,
+                "Mobile.SystemNotification.Permission.StartupState",
+                state,
                 NotificationPermissionState.NUM_ENTRIES);
     }
 
-    private void logNotificationShown(@SystemNotificationType int type,
+    /**
+     * Records whether the origin was already in the provisionally unsubscribed state when
+     * processing a tap on the `PRE_UNSUBSCRIBE` action button.
+     */
+    public void recordIsDuplicatePreUnsubscribe(boolean isDuplicate) {
+        RecordHistogram.recordBooleanHistogram(
+                "Mobile.SystemNotification.Permission.OneTapUnsubscribe.IsDuplicatePreUnsubscribe",
+                isDuplicate);
+    }
+
+    /**
+     * Records how long the pre-native processing for the `PRE_UNSUBSCRIBE` action button took in
+     * real time, which includes time spent in power-saving modes and/or display being dark.
+     */
+    public void recordPreUnsubscribeRealDuration(long durationMillis) {
+        RecordHistogram.deprecatedRecordMediumTimesHistogram(
+                "Mobile.SystemNotification.Permission.OneTapUnsubscribe."
+                        + "PreUnsubscribePreNativeRealDuration",
+                durationMillis);
+    }
+
+    /**
+     * Records how long the pre-native processing for the `PRE_UNSUBSCRIBE` action button took in
+     * `uptimeMillis`, which stops the clock when in power-saving modes and/or display being dark.
+     */
+    public void recordPreUnsubscribeDuration(long durationMillis) {
+        RecordHistogram.deprecatedRecordMediumTimesHistogram(
+                "Mobile.SystemNotification.Permission.OneTapUnsubscribe."
+                        + "PreUnsubscribePreNativeDuration",
+                durationMillis);
+    }
+
+    /**
+     * Records the time, as perceived by the user, that has elapsed between the most recent
+     * non-duplicate `PRE_UNSUBSCRIBE` intent and the current, duplicate `PRE_UNSUBSCRIBE` intent,
+     * including time spent in power-saving modes and/or display being dark.
+     */
+    public void recordDuplicatePreUnsubscribeRealDelay(long delayMillis) {
+        RecordHistogram.deprecatedRecordMediumTimesHistogram(
+                "Mobile.SystemNotification.Permission.OneTapUnsubscribe."
+                        + "DuplicatePreUnsubscribeRealDelay",
+                delayMillis);
+    }
+
+    /**
+     * Records whether the Java global state was preserved between `PRE_UNSUBSCRIBE` and the
+     * `UNDO_UNSUBSCRIBE`/`COMMIT_UNSUBSCRIBE_*` events.
+     */
+    public void recordWasGlobalStatePreserved(
+            @GlobalStatePreservedActionSuffix int action, boolean wasPreserved) {
+        RecordHistogram.recordBooleanHistogram(
+                "Mobile.SystemNotification.Permission.OneTapUnsubscribe.WasGlobalStatePreserved."
+                        + (action == GlobalStatePreservedActionSuffix.UNDO ? "Undo" : "Commit"),
+                wasPreserved);
+    }
+
+    /**
+     * Records a sample to indicate that the job to handle a notification intent has reached a given
+     * stage.
+     *
+     * @param stage The stage reached.
+     * @param intentAction The action of the intent being processed.
+     */
+    public void recordIntentHandlerJobStage(@IntentHandlerJobStage int stage, String intentAction) {
+        RecordHistogram.recordSparseHistogram("Notifications.Android.JobStage", stage);
+        if (NotificationConstants.ACTION_PRE_UNSUBSCRIBE.equals(intentAction)) {
+            RecordHistogram.recordSparseHistogram(
+                    "Notifications.Android.JobStage.PreUnsubscribe", stage);
+        }
+    }
+
+    /**
+     * Records the number of notifications that were suspended every time the user hits the
+     * `PRE_UNSUBSCRIBE` action button.
+     *
+     * @param count The number of notifications suspended, including the clicked notification.
+     */
+    public void recordSuspendedNotificationCountOnUnsubscribe(int count) {
+        RecordHistogram.recordCount100Histogram(
+                "Mobile.SystemNotification.Permission.OneTapUnsubscribe.SuspendedNotificationCount",
+                count);
+    }
+
+    private void logNotificationShown(
+            @SystemNotificationType int type,
             @ChromeChannelDefinitions.ChannelId String channelId) {
-        if (!mNotificationManager.areNotificationsEnabled()) {
+        if (!NotificationProxyUtils.areNotificationsEnabled()) {
             logPotentialBlockedCause();
             recordHistogram("Mobile.SystemNotification.Blocked", type);
             return;
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && channelId != null
-                && isChannelBlocked(channelId)) {
-            recordHistogram("Mobile.SystemNotification.ChannelBlocked", type);
+        if (channelId == null) {
+            saveLastShownNotification(type);
+            recordHistogram("Mobile.SystemNotification.Shown", type);
             return;
         }
-        saveLastShownNotification(type);
-        recordHistogram("Mobile.SystemNotification.Shown", type);
+
+        isChannelBlocked(
+                channelId,
+                (blocked) -> {
+                    if (blocked) {
+                        recordHistogram("Mobile.SystemNotification.ChannelBlocked", type);
+                    } else {
+                        saveLastShownNotification(type);
+                        recordHistogram("Mobile.SystemNotification.Shown", type);
+                    }
+                });
     }
 
     @RequiresApi(26)
-    private boolean isChannelBlocked(@ChromeChannelDefinitions.ChannelId String channelId) {
-        NotificationChannelCompat channel =
-                mNotificationManager.getNotificationChannelCompat(channelId);
-        return channel != null
-                && channel.getImportance() == NotificationManagerCompat.IMPORTANCE_NONE;
+    private void isChannelBlocked(
+            @ChromeChannelDefinitions.ChannelId String channelId, Callback<Boolean> callback) {
+        mNotificationManager.getNotificationChannel(
+                channelId,
+                (channel) -> {
+                    callback.onResult(
+                            channel != null
+                                    && channel.getImportance()
+                                            == NotificationManagerCompat.IMPORTANCE_NONE);
+                });
     }
 
     private void saveLastShownNotification(@SystemNotificationType int type) {
@@ -489,9 +698,10 @@ public class NotificationUmaTracker {
     }
 
     private void logPotentialBlockedCause() {
-        int lastType = mSharedPreferences.readInt(
-                ChromePreferenceKeys.NOTIFICATIONS_LAST_SHOWN_NOTIFICATION_TYPE,
-                SystemNotificationType.UNKNOWN);
+        int lastType =
+                mSharedPreferences.readInt(
+                        ChromePreferenceKeys.NOTIFICATIONS_LAST_SHOWN_NOTIFICATION_TYPE,
+                        SystemNotificationType.UNKNOWN);
         if (lastType == -1) return;
         mSharedPreferences.removeKey(
                 ChromePreferenceKeys.NOTIFICATIONS_LAST_SHOWN_NOTIFICATION_TYPE);
@@ -508,18 +718,27 @@ public class NotificationUmaTracker {
     /**
      * Records the notification age, defined as the duration from the notification shown to the time
      * when an user interaction happens.
+     *
      * @param name The histogram name.
-     * @param createTime The creation timestamp of the notification, generated by
-     *                   {@link System#currentTimeMillis()}.
+     * @param createTime The creation timestamp of the notification, generated by {@link
+     *     System#currentTimeMillis()}.
      */
     private static void recordNotificationAgeHistogram(String name, long createTime) {
         // If we didn't get shared preference data, do nothing.
         if (createTime == NotificationIntentInterceptor.INVALID_CREATE_TIME) return;
 
-        int ageSample = (int) MathUtils.clamp(
-                (System.currentTimeMillis() - createTime) / DateUtils.MINUTE_IN_MILLIS, 0,
-                Integer.MAX_VALUE);
-        RecordHistogram.recordCustomCountHistogram(name, ageSample, 1,
-                (int) (DateUtils.WEEK_IN_MILLIS / DateUtils.MINUTE_IN_MILLIS), 50);
+        int ageSample =
+                (int)
+                        MathUtils.clamp(
+                                (System.currentTimeMillis() - createTime)
+                                        / DateUtils.MINUTE_IN_MILLIS,
+                                0,
+                                Integer.MAX_VALUE);
+        RecordHistogram.recordCustomCountHistogram(
+                name,
+                ageSample,
+                1,
+                (int) (DateUtils.WEEK_IN_MILLIS / DateUtils.MINUTE_IN_MILLIS),
+                50);
     }
 }

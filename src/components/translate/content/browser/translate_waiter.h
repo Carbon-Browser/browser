@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,20 +44,16 @@ class TranslateWaiter : TranslateDriver::LanguageDetectionObserver,
   // ContentTranslateDriver::TranslationObserver:
   void OnPageTranslated(const std::string& source_lang,
                         const std::string& translated_lang,
-                        TranslateErrors::Type error_type) override;
+                        TranslateErrors error_type) override;
   void OnIsPageTranslatedChanged(content::WebContents* source) override;
 
  private:
   WaitEvent wait_event_;
   base::ScopedObservation<TranslateDriver,
-                          TranslateDriver::LanguageDetectionObserver,
-                          &TranslateDriver::AddLanguageDetectionObserver,
-                          &TranslateDriver::RemoveLanguageDetectionObserver>
+                          TranslateDriver::LanguageDetectionObserver>
       scoped_language_detection_observation_{this};
   base::ScopedObservation<ContentTranslateDriver,
-                          ContentTranslateDriver::TranslationObserver,
-                          &ContentTranslateDriver::AddTranslationObserver,
-                          &ContentTranslateDriver::RemoveTranslationObserver>
+                          ContentTranslateDriver::TranslationObserver>
       scoped_translation_observation_{this};
   base::RunLoop run_loop_;
 };

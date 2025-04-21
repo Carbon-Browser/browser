@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,15 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/mock_callback.h"
 #include "base/test/simple_test_clock.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "components/image_fetcher/core/cache/image_cache.h"
 #include "components/image_fetcher/core/cache/image_data_store_disk.h"
 #include "components/image_fetcher/core/cache/image_metadata_store_leveldb.h"
@@ -59,7 +59,7 @@ const char kNetworkLoadHistogramName[] =
 
 class CachedImageFetcherTest : public testing::Test {
  public:
-  CachedImageFetcherTest() {}
+  CachedImageFetcherTest() = default;
 
   CachedImageFetcherTest(const CachedImageFetcherTest&) = delete;
   CachedImageFetcherTest& operator=(const CachedImageFetcherTest&) = delete;
@@ -85,17 +85,17 @@ class CachedImageFetcherTest : public testing::Test {
     auto metadata_store =
         std::make_unique<ImageMetadataStoreLevelDB>(std::move(db), &clock_);
     auto data_store = std::make_unique<ImageDataStoreDisk>(
-        data_dir_.GetPath(), base::SequencedTaskRunnerHandle::Get());
+        data_dir_.GetPath(), base::SequencedTaskRunner::GetCurrentDefault());
 
     image_cache_ = base::MakeRefCounted<ImageCache>(
         std::move(data_store), std::move(metadata_store), &test_prefs_, &clock_,
-        base::SequencedTaskRunnerHandle::Get());
+        base::SequencedTaskRunner::GetCurrentDefault());
 
     // Use an initial request to start the cache up.
     const std::string kImageUrl("http://gstatic.img.com/foo.jpg");
     image_cache_->SaveImage(kImageUrl, kImageData,
                             /* needs_transcoding */ false,
-                            /* expiration_interval */ absl::nullopt);
+                            /* expiration_interval */ std::nullopt);
     RunUntilIdle();
     db_->InitStatusCallback(leveldb_proto::Enums::InitStatus::kOK);
     image_cache_->DeleteImage(kImageUrl);
@@ -168,7 +168,7 @@ TEST_F(CachedImageFetcherTest, FetchImageFromCache) {
   const GURL kImageUrl("http://gstatic.img.com/foo.jpg");
   image_cache()->SaveImage(kImageUrl.spec(), kImageData,
                            /* needs_transcoding */ false,
-                           /* expiration_interval */ absl::nullopt);
+                           /* expiration_interval */ std::nullopt);
   RunUntilIdle();
 
   base::MockCallback<ImageDataFetcherCallback> data_callback;
@@ -194,7 +194,7 @@ TEST_F(CachedImageFetcherTest, FetchImageFromCacheNeedsTranscoding) {
   const GURL kImageUrl("http://gstatic.img.com/foo.jpg");
   image_cache()->SaveImage(kImageUrl.spec(), kImageData,
                            /* needs_transcoding */ true,
-                           /* expiration_interval */ absl::nullopt);
+                           /* expiration_interval */ std::nullopt);
   RunUntilIdle();
 
   base::MockCallback<ImageDataFetcherCallback> data_callback;
@@ -222,7 +222,7 @@ TEST_F(CachedImageFetcherTest, FetchImageFromCacheReadOnly) {
   const GURL kImageUrl("http://gstatic.img.com/foo.jpg");
   image_cache()->SaveImage(kImageUrl.spec(), kImageData,
                            /* needs_transcoding */ false,
-                           /* expiration_interval */ absl::nullopt);
+                           /* expiration_interval */ std::nullopt);
   test_url_loader_factory()->AddResponse(kImageUrl.spec(), kImageData);
   RunUntilIdle();
   {
@@ -379,7 +379,7 @@ TEST_F(CachedImageFetcherTest, FetchImageWithSkipDiskCache) {
   const GURL kImageUrl("http://gstatic.img.com/foo.jpg");
   image_cache()->SaveImage(kImageUrl.spec(), kImageDataOther,
                            /* needs_transcoding */ false,
-                           /* expiration_interval */ absl::nullopt);
+                           /* expiration_interval */ std::nullopt);
   RunUntilIdle();
   test_url_loader_factory()->AddResponse(kImageUrl.spec(), kImageData);
 

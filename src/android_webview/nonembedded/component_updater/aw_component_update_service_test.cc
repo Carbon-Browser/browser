@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,22 +8,25 @@
 
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "android_webview/common/aw_paths.h"
 #include "android_webview/nonembedded/component_updater/aw_component_updater_configurator.h"
 #include "base/android/path_utils.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/containers/contains.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/android/url_utils.h"
 #include "base/test/task_environment.h"
 #include "base/values.h"
 #include "base/version.h"
+#include "components/component_updater/android/component_loader_policy.h"
 #include "components/component_updater/component_installer.h"
 #include "components/component_updater/component_updater_paths.h"
 #include "components/component_updater/component_updater_service.h"
@@ -31,7 +34,6 @@
 #include "components/update_client/network.h"
 #include "components/update_client/update_client.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace android_webview {
@@ -50,6 +52,8 @@ constexpr uint8_t kSha256Hash[] = {
     0x0b, 0x50, 0x60, 0x2b, 0x7f, 0x6c, 0x64, 0x80, 0x09, 0x04};
 
 constexpr char kTestVersion[] = "1.0.0.6";
+constexpr char kTestVersionWithSeqNum[] = "0_1.0.0.6";
+constexpr char kCohortId[] = "test_cohort_id";
 
 base::FilePath GetTestFile(const std::string& file_name) {
   return base::android::GetIsolatedTestRoot()
@@ -67,13 +71,13 @@ void CreateTestFiles(const base::FilePath& install_dir) {
 void AssertOnDemandRequest(bool on_demand, std::string post_data) {
   const auto root = base::JSONReader::Read(post_data);
   ASSERT_TRUE(root);
-  const auto* request = root->FindKey("request");
+  const auto* request = root->GetDict().FindDict("request");
   ASSERT_TRUE(request);
-  const auto& app = request->FindKey("app")->GetListDeprecated()[0];
+  const auto& app = (*request->FindList("app"))[0].GetDict();
   if (on_demand) {
-    EXPECT_EQ("ondemand", app.FindKey("installsource")->GetString());
+    EXPECT_EQ("ondemand", *app.FindString("installsource"));
   } else {
-    EXPECT_EQ(nullptr, app.FindKey("installsource"));
+    EXPECT_EQ(nullptr, app.FindString("installsource"));
   }
 }
 
@@ -102,16 +106,18 @@ class FailingNetworkFetcher : public update_client::NetworkFetcher {
              /* x_header_retry_after_sec= */ 0ll);
   }
 
-  void DownloadToFile(const GURL& url,
-                      const base::FilePath& file_path,
-                      ResponseStartedCallback response_started_callback,
-                      ProgressCallback progress_callback,
-                      DownloadToFileCompleteCallback
-                          download_to_file_complete_callback) override {
+  base::OnceClosure DownloadToFile(
+      const GURL& url,
+      const base::FilePath& file_path,
+      ResponseStartedCallback response_started_callback,
+      ProgressCallback progress_callback,
+      DownloadToFileCompleteCallback download_to_file_complete_callback)
+      override {
     std::move(download_to_file_complete_callback)
         .Run(
             /* network_error= */ -2,
             /* content_size= */ 0);
+    return base::DoNothing();
   }
 };
 
@@ -141,21 +147,23 @@ class OnDemandNetworkFetcher : public update_client::NetworkFetcher {
              /* x_header_retry_after_sec= */ 0ll);
   }
 
-  void DownloadToFile(const GURL& url,
-                      const base::FilePath& file_path,
-                      ResponseStartedCallback response_started_callback,
-                      ProgressCallback progress_callback,
-                      DownloadToFileCompleteCallback
-                          download_to_file_complete_callback) override {
+  base::OnceClosure DownloadToFile(
+      const GURL& url,
+      const base::FilePath& file_path,
+      ResponseStartedCallback response_started_callback,
+      ProgressCallback progress_callback,
+      DownloadToFileCompleteCallback download_to_file_complete_callback)
+      override {
     std::move(download_to_file_complete_callback)
         .Run(
             /* network_error= */ -2,
             /* content_size= */ 0);
+    return base::DoNothing();
   }
 };
 
 // A NetworkFetcher that fakes downloading a CRX file.
-// TODO(crbug.com/1190310) use EmbeddedTestServer instead of Mocking the
+// TODO(crbug.com/40755924) use EmbeddedTestServer instead of Mocking the
 // NetworkFetcher.
 class FakeCrxNetworkFetcher : public update_client::NetworkFetcher {
  public:
@@ -178,10 +186,10 @@ class FakeCrxNetworkFetcher : public update_client::NetworkFetcher {
         .Run(/* responseCode= */ 200, /* content_size= */ 0);
     std::string response_body;
     int network_error = 0;
-    if (post_data.find("updatecheck") != std::string::npos) {
+    if (base::Contains(post_data, "updatecheck")) {
       ASSERT_TRUE(base::ReadFileToString(
           GetTestFile("fake_component_update_response.json"), &response_body));
-    } else if (post_data.find("eventtype") != std::string::npos) {
+    } else if (base::Contains(post_data, "eventtype")) {
       ASSERT_TRUE(base::ReadFileToString(
           GetTestFile("fake_component_ping_response.json"), &response_body));
     } else {  // error post request not a ping nor update.
@@ -195,19 +203,21 @@ class FakeCrxNetworkFetcher : public update_client::NetworkFetcher {
              /* x_header_retry_after_sec= */ 0ll);
   }
 
-  void DownloadToFile(const GURL& url,
-                      const base::FilePath& file_path,
-                      ResponseStartedCallback response_started_callback,
-                      ProgressCallback progress_callback,
-                      DownloadToFileCompleteCallback
-                          download_to_file_complete_callback) override {
-    ASSERT_TRUE(base::CopyFile(GetTestFile("fake_component.crx"), file_path));
+  base::OnceClosure DownloadToFile(
+      const GURL& url,
+      const base::FilePath& file_path,
+      ResponseStartedCallback response_started_callback,
+      ProgressCallback progress_callback,
+      DownloadToFileCompleteCallback download_to_file_complete_callback)
+      override {
+    EXPECT_TRUE(base::CopyFile(GetTestFile("fake_component.crx"), file_path));
     std::move(response_started_callback)
         .Run(/* responseCode= */ 200, /* content_size= */ kCrxContentLength);
     std::move(download_to_file_complete_callback)
         .Run(
             /* network_error= */ 0,
             /* content_size= */ kCrxContentLength);
+    return base::DoNothing();
   }
 };
 
@@ -266,7 +276,7 @@ class MockInstallerPolicy : public component_updater::ComponentInstallerPolicy {
   bool RequiresNetworkEncryption() const override { return false; }
 
   update_client::CrxInstaller::Result OnCustomInstall(
-      const base::Value& manifest,
+      const base::Value::Dict& manifest,
       const base::FilePath& install_dir) override {
     return update_client::CrxInstaller::Result(0);
   }
@@ -275,13 +285,13 @@ class MockInstallerPolicy : public component_updater::ComponentInstallerPolicy {
 
   void ComponentReady(const base::Version& version,
                       const base::FilePath& install_dir,
-                      base::Value manifest) override {
+                      base::Value::Dict manifest) override {
     version_ = version;
     install_dir_ = install_dir;
     manifest_ = std::move(manifest);
   }
 
-  bool VerifyInstallation(const base::Value& manifest,
+  bool VerifyInstallation(const base::Value::Dict& manifest,
                           const base::FilePath& install_dir) const override {
     return true;
   }
@@ -301,12 +311,12 @@ class MockInstallerPolicy : public component_updater::ComponentInstallerPolicy {
   }
 
   bool IsComponentReadyInvoked() { return !!manifest_; }
-  base::Value& GetManifest() { return *manifest_; }
+  base::Value::Dict& GetManifest() { return *manifest_; }
   base::FilePath GetInstallDir() const { return install_dir_; }
   base::Version GetVersion() const { return version_; }
 
  private:
-  absl::optional<base::Value> manifest_;
+  std::optional<base::Value::Dict> manifest_;
   base::FilePath install_dir_;
   base::Version version_;
 };
@@ -358,20 +368,36 @@ class AwComponentUpdateServiceTest : public testing::Test {
   // Override from testing::Test
   void SetUp() override {
     update_client::RegisterPrefs(test_pref_->registry());
+    auto persisted_data = update_client::CreatePersistedData(
+        base::BindRepeating(
+            [](PrefService* pref_service) { return pref_service; },
+            test_pref_.get()),
+        nullptr);
+    persisted_data->SetCohort(kComponentId, kCohortId);
 
     ASSERT_TRUE(base::android::GetDataDirectory(&component_install_dir_));
     component_install_dir_ = component_install_dir_.AppendASCII("components")
                                  .AppendASCII("cus")
                                  .AppendASCII(kComponentId);
+
+    ASSERT_TRUE(base::android::GetDataDirectory(&component_provider_dir_));
+    component_provider_dir_ = component_provider_dir_.AppendASCII("components")
+                                  .AppendASCII("cps")
+                                  .AppendASCII(kComponentId);
   }
 
   void TearDown() override {
     if (base::PathExists(component_install_dir_))
       ASSERT_TRUE(base::DeletePathRecursively(component_install_dir_));
+
+    if (base::PathExists(component_provider_dir_)) {
+      ASSERT_TRUE(base::DeletePathRecursively(component_provider_dir_));
+    }
   }
 
  protected:
   base::FilePath component_install_dir_;
+  base::FilePath component_provider_dir_;
   std::unique_ptr<TestingPrefServiceSimple> test_pref_ =
       std::make_unique<TestingPrefServiceSimple>();
 
@@ -425,7 +451,7 @@ TEST_F(AwComponentUpdateServiceTest, TestFreshDownloadingFakeApk) {
   // Assert that the manifest is valid by asserting a field in it other than
   // version.
   std::string* minimum_chrome_version =
-      service.GetMockPolicy()->GetManifest().FindStringKey(
+      service.GetMockPolicy()->GetManifest().FindString(
           "minimum_chrome_version");
   ASSERT_TRUE(minimum_chrome_version);
   EXPECT_EQ(*minimum_chrome_version, "50");
@@ -450,6 +476,35 @@ TEST_F(AwComponentUpdateServiceTest, TestOnDemandUpdateRequest) {
   EXPECT_EQ(service.GetMockPolicy()->GetVersion().GetString(), kTestVersion);
   EXPECT_EQ(service.GetMockPolicy()->GetInstallDir(),
             component_install_dir_.AppendASCII(kTestVersion));
+}
+
+TEST_F(AwComponentUpdateServiceTest, TestExtraMetadataFile) {
+  CreateTestFiles(component_install_dir_.AppendASCII(kTestVersion));
+  CreateTestFiles(component_provider_dir_.AppendASCII(kTestVersionWithSeqNum));
+  base::RunLoop run_loop;
+  TestAwComponentUpdateService service(base::MakeRefCounted<MockConfigurator>(
+      test_pref_.get(),
+      base::MakeRefCounted<
+          MockNetworkFetcherFactory<OnDemandNetworkFetcher>>()));
+  base::OnceClosure closure = run_loop.QuitClosure();
+  service.StartComponentUpdateService(
+      base::BindOnce(
+          [](base::OnceClosure closure, int) { std::move(closure).Run(); },
+          std::move(closure)),
+      true);
+  run_loop.Run();
+
+  base::FilePath metadata_file_path =
+      component_provider_dir_.AppendASCII(kTestVersionWithSeqNum)
+          .AppendASCII("aw_extra_component_metadata.json");
+  std::string metadata_file_contents;
+
+  EXPECT_TRUE(base::PathExists(metadata_file_path));
+  ASSERT_TRUE(
+      base::ReadFileToString(metadata_file_path, &metadata_file_contents));
+  EXPECT_EQ(metadata_file_contents,
+            "{\"" + std::string(component_updater::kMetadataFileCohortIdKey) +
+                "\":\"" + std::string(kCohortId) + "\"}");
 }
 
 }  // namespace android_webview

@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,14 @@
 #define CHROME_TEST_BASE_MENU_MODEL_TEST_H_
 
 #include "ui/base/accelerators/accelerator.h"
-#include "ui/base/models/simple_menu_model.h"
+#include "ui/menus/simple_menu_model.h"
 
 // A mix-in class to be used in addition to something that derrives from
 // testing::Test to provide some extra functionality for testing menu models.
 class MenuModelTest {
  public:
-  MenuModelTest() {}
-  virtual ~MenuModelTest() {}
+  MenuModelTest() = default;
+  virtual ~MenuModelTest() = default;
 
  protected:
   // A menu delegate that counts the number of times certain things are called

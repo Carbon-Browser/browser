@@ -1,20 +1,25 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/nearby_sharing/certificates/nearby_share_encrypted_metadata_key.h"
 
+#include <stdint.h>
+
+#include <array>
 #include <utility>
 
 #include "base/check.h"
+#include "base/containers/span.h"
 #include "chrome/browser/nearby_sharing/certificates/constants.h"
 
 NearbyShareEncryptedMetadataKey::NearbyShareEncryptedMetadataKey(
-    std::vector<uint8_t> salt,
-    std::vector<uint8_t> encrypted_key)
-    : salt_(std::move(salt)), encrypted_key_(std::move(encrypted_key)) {
-  DCHECK_EQ(kNearbyShareNumBytesMetadataEncryptionKeySalt, salt_.size());
-  DCHECK_EQ(kNearbyShareNumBytesMetadataEncryptionKey, encrypted_key_.size());
+    base::span<const uint8_t, kNearbyShareNumBytesMetadataEncryptionKeySalt>
+        salt,
+    base::span<const uint8_t, kNearbyShareNumBytesMetadataEncryptionKey>
+        encrypted_key) {
+  base::span(salt_).copy_from(salt);
+  base::span(encrypted_key_).copy_from(encrypted_key);
 }
 
 NearbyShareEncryptedMetadataKey::NearbyShareEncryptedMetadataKey(

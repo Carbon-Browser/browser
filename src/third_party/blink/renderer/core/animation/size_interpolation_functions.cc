@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -65,7 +65,7 @@ struct DowncastTraits<CSSSizeNonInterpolableValue> {
 };
 
 static InterpolationValue ConvertKeyword(CSSValueID keyword) {
-  return InterpolationValue(std::make_unique<InterpolableList>(0),
+  return InterpolationValue(MakeGarbageCollected<InterpolableList>(0),
                             CSSSizeNonInterpolableValue::Create(keyword));
 }
 
@@ -80,6 +80,7 @@ static InterpolationValue WrapConvertedLength(
 
 InterpolationValue SizeInterpolationFunctions::ConvertFillSizeSide(
     const FillSize& fill_size,
+    const CSSProperty& property,
     float zoom,
     bool convert_width) {
   switch (fill_size.type) {
@@ -88,8 +89,9 @@ InterpolationValue SizeInterpolationFunctions::ConvertFillSizeSide(
           convert_width ? fill_size.size.Width() : fill_size.size.Height();
       if (side.IsAuto())
         return ConvertKeyword(CSSValueID::kAuto);
-      return WrapConvertedLength(InterpolationValue(
-          InterpolableLength::MaybeConvertLength(side, zoom)));
+      return WrapConvertedLength(
+          InterpolationValue(InterpolableLength::MaybeConvertLength(
+              side, property, zoom, /*interpolate_size=*/std::nullopt)));
     }
     case EFillSizeType::kContain:
       return ConvertKeyword(CSSValueID::kContain);
@@ -98,7 +100,6 @@ InterpolationValue SizeInterpolationFunctions::ConvertFillSizeSide(
     case EFillSizeType::kSizeNone:
     default:
       NOTREACHED();
-      return nullptr;
   }
 }
 
@@ -208,7 +209,6 @@ FillSize SizeInterpolationFunctions::CreateFillSize(
         break;
       default:
         NOTREACHED();
-        break;
     }
   }
   return FillSize(

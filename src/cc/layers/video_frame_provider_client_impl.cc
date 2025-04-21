@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -97,6 +97,15 @@ void VideoFrameProviderClientImpl::ReleaseLock() {
 bool VideoFrameProviderClientImpl::HasCurrentFrame() {
   base::AutoLock locker(provider_lock_);
   return provider_ && provider_->HasCurrentFrame();
+}
+
+std::optional<base::TimeDelta>
+VideoFrameProviderClientImpl::GetPreferredRenderInterval() {
+  provider_lock_.AssertAcquired();
+  if (!provider_) {
+    return std::nullopt;
+  }
+  return provider_->GetPreferredRenderInterval();
 }
 
 void VideoFrameProviderClientImpl::StopUsingProvider() {

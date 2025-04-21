@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@
 namespace blink {
 
 class DOMRectInit;
-class ScriptValue;
+class ScriptObject;
 class ScriptState;
 
 class CORE_EXPORT DOMRectReadOnly : public ScriptWrappable {
@@ -41,7 +41,11 @@ class CORE_EXPORT DOMRectReadOnly : public ScriptWrappable {
   double bottom() const { return geometry_util::NanSafeMax(y_, y_ + height_); }
   double left() const { return geometry_util::NanSafeMin(x_, x_ + width_); }
 
-  ScriptValue toJSONForBinding(ScriptState*) const;
+  ScriptObject toJSONForBinding(ScriptState*) const;
+
+  bool IsPointInside(double x, double y) const {
+    return x >= left() && x < right() && y >= top() && y < bottom();
+  }
 
  protected:
   double x_;

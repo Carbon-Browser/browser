@@ -1,14 +1,15 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/accessibility/chromevox/key_accessibility_enabler.h"
 
-#include "ash/accessibility/accessibility_controller_impl.h"
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/accessibility/accessibility_observer.h"
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "ui/events/base_event_utils.h"
@@ -52,21 +53,22 @@ class KeyAccessibilityEnablerTest : public AshTestBase,
   void OnAccessibilityStatusChanged() override { run_loop_->Quit(); }
 
   std::unique_ptr<base::RunLoop> run_loop_;
-  KeyAccessibilityEnabler* key_accessibility_enabler_;
+  raw_ptr<KeyAccessibilityEnabler, DanglingUntriaged>
+      key_accessibility_enabler_;
   base::SimpleTestTickClock clock_;
 };
 
 TEST_F(KeyAccessibilityEnablerTest, TwoVolumeKeyDown) {
-  ui::KeyEvent vol_down_press(ui::ET_KEY_PRESSED, ui::VKEY_VOLUME_DOWN,
+  ui::KeyEvent vol_down_press(ui::EventType::kKeyPressed, ui::VKEY_VOLUME_DOWN,
                               ui::EF_NONE);
-  ui::KeyEvent vol_up_press(ui::ET_KEY_PRESSED, ui::VKEY_VOLUME_UP,
+  ui::KeyEvent vol_up_press(ui::EventType::kKeyPressed, ui::VKEY_VOLUME_UP,
                             ui::EF_NONE);
-  ui::KeyEvent vol_down_release(ui::ET_KEY_RELEASED, ui::VKEY_VOLUME_DOWN,
-                                ui::EF_NONE);
-  ui::KeyEvent vol_up_release(ui::ET_KEY_RELEASED, ui::VKEY_VOLUME_UP,
+  ui::KeyEvent vol_down_release(ui::EventType::kKeyReleased,
+                                ui::VKEY_VOLUME_DOWN, ui::EF_NONE);
+  ui::KeyEvent vol_up_release(ui::EventType::kKeyReleased, ui::VKEY_VOLUME_UP,
                               ui::EF_NONE);
 
-  AccessibilityControllerImpl* controller =
+  AccessibilityController* controller =
       Shell::Get()->accessibility_controller();
 
   ASSERT_FALSE(controller->spoken_feedback().enabled());

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -69,8 +69,8 @@ class COMPONENT_EXPORT(CHROMEOS_PRINTING) Printer {
     bool IsFilled() const;
 
     // If non-empty, this is the url of a specific PPD the user has specified
-    // for use with this printer.  The ppd can be gzipped or uncompressed.  This
-    // url must use a file:// scheme.
+    // for use with this printer.  The ppd can be gzipped or uncompressed.
+    // Supported schemes for this url are file://, http:// and https://.
     std::string user_supplied_ppd_url;
 
     // String that identifies which ppd to use from the ppd server.
@@ -80,6 +80,59 @@ class COMPONENT_EXPORT(CHROMEOS_PRINTING) Printer {
 
     // True if the printer should be auto-configured and a PPD is unnecessary.
     bool autoconf = false;
+  };
+
+  template <typename T>
+  struct PrintOption {
+    std::optional<T> default_value;
+    std::vector<T> allowed_values;
+  };
+
+  struct Size {
+    bool operator==(const Size&) const = default;
+
+    int width;
+    int height;
+  };
+
+  // This enum can be modified (adding new values, changing the order of values,
+  // etc.).
+  enum DuplexType {
+    kUnknownDuplexType = 0,
+    kOneSided = 1,
+    kShortEdge = 2,
+    kLongEdge = 3
+  };
+
+  struct Dpi {
+    bool operator==(const Dpi&) const = default;
+
+    int horizontal;
+    int vertical;
+  };
+
+  // This enum can be modified (adding new values, changing the order of values,
+  // etc.).
+  enum QualityType {
+    kUnknownQualityType = 0,
+    kDraft = 1,
+    kNormal = 2,
+    kHigh = 3
+  };
+
+  struct ManagedPrintOptions {
+    ManagedPrintOptions();
+    ManagedPrintOptions(const ManagedPrintOptions& other);
+    ManagedPrintOptions& operator=(const ManagedPrintOptions& other);
+    ~ManagedPrintOptions();
+
+    PrintOption<Size> media_size;
+    PrintOption<std::string> media_type;
+    PrintOption<DuplexType> duplex;
+    PrintOption<bool> color;
+    PrintOption<Dpi> dpi;
+    PrintOption<QualityType> quality;
+    PrintOption<bool> print_as_image;
   };
 
   // The location where the printer is stored.
@@ -141,6 +194,11 @@ class COMPONENT_EXPORT(CHROMEOS_PRINTING) Printer {
     make_and_model_ = make_and_model;
   }
 
+  ManagedPrintOptions print_job_options() const { return print_job_options_; }
+  void set_print_job_options(const ManagedPrintOptions& print_job_options) {
+    print_job_options_ = print_job_options;
+  }
+
   const Uri& uri() const { return uri_; }
 
   // These methods set |uri| as a new uri. If |uri| is incorrect or does not
@@ -169,6 +227,10 @@ class COMPONENT_EXPORT(CHROMEOS_PRINTING) Printer {
   // Returns true if the printer should be automatically configured using IPP
   // Everywhere.  Computed using information from |ppd_reference_| and |uri_|.
   bool IsIppEverywhere() const;
+
+  // Returns true if the printer should use driverless autoconfiguration through
+  // IPP-USB instead of the USB printer class.
+  bool RequiresDriverlessUsb() const;
 
   // Returns the hostname and port for |uri_|.  Assumes that the uri is
   // well formed.  Returns an empty string if |uri_| is not set.
@@ -210,6 +272,15 @@ class COMPONENT_EXPORT(CHROMEOS_PRINTING) Printer {
     printer_status_ = printer_status;
   }
 
+  // Setter and getter for flag marking that the printer is used in the finch
+  // experiment created for b:184293121.
+  bool AffectedByIppUsbMigration() const {
+    return experimental_setup_of_usb_printer_with_ipp_and_ppd_;
+  }
+  void SetAffectedByIppUsbMigration(bool flag) {
+    experimental_setup_of_usb_printer_with_ipp_and_ppd_ = flag;
+  }
+
  private:
   // Globally unique identifier. Empty indicates a new printer.
   std::string id_;
@@ -232,6 +303,9 @@ class COMPONENT_EXPORT(CHROMEOS_PRINTING) Printer {
   // Contains protocol, hostname, port, and queue.
   Uri uri_;
 
+  // Holds allowed/default values of print job options set by policy.
+  ManagedPrintOptions print_job_options_;
+
   // How to find the associated postscript printer description.
   PpdReference ppd_reference_;
 
@@ -250,6 +324,10 @@ class COMPONENT_EXPORT(CHROMEOS_PRINTING) Printer {
 
   // The current status of the printer
   chromeos::CupsPrinterStatus printer_status_;
+
+  // This flag is set for printers that take part in the finch experiment
+  // created for b/184293121.
+  bool experimental_setup_of_usb_printer_with_ipp_and_ppd_ = false;
 };
 
 }  // namespace chromeos

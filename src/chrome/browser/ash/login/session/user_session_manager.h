@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,45 +8,38 @@
 #include <bitset>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
 
 #include "ash/components/arc/net/always_on_vpn_manager.h"
-#include "ash/components/login/auth/authenticator.h"
-#include "ash/components/login/auth/public/user_context.h"
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/singleton.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
+#include "base/scoped_observation_traits.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/base/locale_util.h"
 #include "chrome/browser/ash/child_accounts/child_policy_observer.h"
 #include "chrome/browser/ash/hats/hats_notification_controller.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ash/login/easy_unlock/easy_unlock_key_manager.h"
-#include "chrome/browser/ash/login/oobe_screen.h"
 #include "chrome/browser/ash/login/signin/oauth2_login_manager.h"
 #include "chrome/browser/ash/login/signin/token_handle_util.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ash/login/ui/input_events_blocker.h"
-#include "chrome/browser/ash/net/secure_dns_manager.h"
+#include "chrome/browser/ash/net/xdr_manager.h"
 #include "chrome/browser/ash/release_notes/release_notes_notification.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ash/eol_notification.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chrome/browser/ash/u2f_notification.h"
-#include "chrome/browser/ash/web_applications/help_app/help_app_notification_controller.h"
+#include "chrome/browser/ash/system_web_apps/apps/help_app/help_app_notification_controller.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
+#include "chromeos/ash/components/login/auth/authenticator.h"
+#include "chromeos/ash/components/login/auth/public/user_context.h"
 #include "chromeos/dbus/tpm_manager/tpm_manager.pb.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
 #include "services/network/public/cpp/network_connection_tracker.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
 #include "ui/base/ime/ash/input_method_manager.h"
 
 class AccountId;
@@ -57,14 +50,18 @@ class Profile;
 
 namespace user_manager {
 class User;
+class KnownUser;
 }  // namespace user_manager
 
 namespace ash {
+
 class AuthStatusConsumer;
 class OnboardingUserActivityCounter;
-class StubAuthenticatorBuilder;
+class AuthenticatorBuilder;
 class TokenHandleFetcher;
-class EasyUnlockNotificationController;
+class EolNotification;
+class InputEventsBlocker;
+class U2FNotification;
 
 namespace test {
 class UserSessionManagerTestApi;
@@ -76,6 +73,8 @@ class UserSessionManagerDelegate {
   // `browser_launched` will be true is browser has been launched, otherwise
   // it will return false and client is responsible on launching browser.
   virtual void OnProfilePrepared(Profile* profile, bool browser_launched) = 0;
+
+  virtual base::WeakPtr<UserSessionManagerDelegate> AsWeakPtr() = 0;
 
  protected:
   virtual ~UserSessionManagerDelegate();
@@ -106,10 +105,8 @@ class UserAuthenticatorObserver : public base::CheckedObserver {
 class UserSessionManager
     : public OAuth2LoginManager::Observer,
       public network::NetworkConnectionTracker::NetworkConnectionObserver,
-      public base::SupportsWeakPtr<UserSessionManager>,
       public UserSessionManagerDelegate,
-      public user_manager::UserManager::UserSessionStateObserver,
-      public user_manager::UserManager::Observer {
+      public user_manager::UserManager::UserSessionStateObserver {
  public:
   // Context of StartSession calls.
   enum class StartSessionType {
@@ -164,9 +161,6 @@ class UserSessionManager
   UserSessionManager(const UserSessionManager&) = delete;
   UserSessionManager& operator=(const UserSessionManager&) = delete;
 
-  // Called when user is logged in to override base::DIR_HOME path.
-  static void OverrideHomedir();
-
   // Registers session related preferences.
   static void RegisterPrefs(PrefRegistrySimple* registry);
 
@@ -194,14 +188,7 @@ class UserSessionManager
                     StartSessionType start_session_type,
                     bool has_auth_cookies,
                     bool has_active_session,
-                    UserSessionManagerDelegate* delegate);
-
-  // Invalidates `delegate`, which was passed to StartSession method call.
-  void DelegateDeleted(UserSessionManagerDelegate* delegate);
-
-  // Perform additional actions once system wide notification
-  // "UserLoggedIn" has been sent.
-  void PerformPostUserLoggedInActions();
+                    base::WeakPtr<UserSessionManagerDelegate> delegate);
 
   // Restores authentication session after crash.
   void RestoreAuthenticationSession(Profile* profile);
@@ -221,10 +208,10 @@ class UserSessionManager
   // user sessions restoration is in progress.
   bool UserSessionsRestoreInProgress() const;
 
-  // Send the notification before creating the browser so additional objects
-  // that need the profile (e.g. the launcher) can be created first.
-  void NotifyUserProfileLoaded(Profile* profile,
-                               const user_manager::User* user);
+  // Called when user profile is loaded. Send the notification before creating
+  // the browser so additional objects that need the profile (e.g. the launcher)
+  // can be created first.
+  void OnUserProfileLoaded(Profile* profile, const user_manager::User* user);
 
   // Start the Tether service if it is ready.
   void StartTetherServiceIfPossible(Profile* profile);
@@ -232,21 +219,15 @@ class UserSessionManager
   // Show various notifications if applicable.
   void ShowNotificationsIfNeeded(Profile* profile);
 
-  // Launch various setting pages (or dialogs) if applicable.
-  void MaybeLaunchSettings(Profile* profile);
+  // Perform actions that were deferred from OOBE or onboarding flow once the
+  // browser is launched if applicable.
+  void PerformPostBrowserLaunchOOBEActions(Profile* profile);
 
   // Invoked when the user is logging in for the first time, or is logging in to
   // an ephemeral session type, such as guest or a public session.
   void SetFirstLoginPrefs(Profile* profile,
                           const std::string& public_session_locale,
                           const std::string& public_session_input_method);
-
-  // Gets/sets Chrome OAuth client id and secret for kiosk app mode. The default
-  // values can be overridden with kiosk auth file.
-  bool GetAppModeChromeClientOAuthInfo(std::string* chrome_client_id,
-                                       std::string* chrome_client_secret);
-  void SetAppModeChromeClientOAuthInfo(const std::string& chrome_client_id,
-                                       const std::string& chrome_client_secret);
 
   // Thin wrapper around StartupBrowserCreator::LaunchBrowser().  Meant to be
   // used in a Task posted to the UI thread.  Once the browser is launched the
@@ -277,15 +258,11 @@ class UserSessionManager
   bool RestartToApplyPerSessionFlagsIfNeed(Profile* profile,
                                            bool early_restart);
 
-  // Returns true if Easy unlock keys needs to be updated.
-  bool NeedsToUpdateEasyUnlockKeys() const;
-
   void AddSessionStateObserver(ash::UserSessionStateObserver* observer);
   void RemoveSessionStateObserver(ash::UserSessionStateObserver* observer);
 
-  void AddUserAuthenticatorObserver(ash::UserAuthenticatorObserver* observer);
-  void RemoveUserAuthenticatorObserver(
-      ash::UserAuthenticatorObserver* observer);
+  void AddUserAuthenticatorObserver(UserAuthenticatorObserver* observer);
+  void RemoveUserAuthenticatorObserver(UserAuthenticatorObserver* observer);
 
   void ActiveUserChanged(user_manager::User* active_user) override;
 
@@ -297,12 +274,6 @@ class UserSessionManager
   // and show the message accordingly.
   void CheckEolInfo(Profile* profile);
 
-  // Note this could return NULL if not enabled.
-  EasyUnlockKeyManager* GetEasyUnlockKeyManager();
-
-  // Update Easy unlock cryptohome keys for given user context.
-  void UpdateEasyUnlockKeys(const UserContext& user_context);
-
   // Removes a profile from the per-user input methods states map.
   void RemoveProfileForTesting(Profile* profile);
 
@@ -310,8 +281,6 @@ class UserSessionManager
   bool has_auth_cookies() const { return has_auth_cookies_; }
 
   const base::Time& ui_shown_time() const { return ui_shown_time_; }
-
-  void WaitForEasyUnlockKeyOpsFinished(base::OnceClosure callback);
 
   void Shutdown();
 
@@ -360,10 +329,13 @@ class UserSessionManager
   // app has not yet been shown in the current milestone.
   void MaybeShowHelpAppReleaseNotesNotification(Profile* profile);
 
-  // Shows Help App discover notification if the profile meets the criteria and
-  // if a notification for the help app has not yet been shown in the current
-  // milestone.
-  void MaybeShowHelpAppDiscoverNotification(Profile* profile);
+  using EolNotificationHandlerFactoryCallback =
+      base::RepeatingCallback<std::unique_ptr<EolNotification>(
+          Profile* profile)>;
+  void SetEolNotificationHandlerFactoryForTesting(
+      const EolNotificationHandlerFactoryCallback& eol_notification_factory);
+
+  base::WeakPtr<UserSessionManager> GetUserSessionManagerAsWeakPtr();
 
  protected:
   // Protected for testability reasons.
@@ -392,9 +364,7 @@ class UserSessionManager
   // UserSessionManagerDelegate overrides:
   // Used when restoring user sessions after crash.
   void OnProfilePrepared(Profile* profile, bool browser_launched) override;
-
-  // user_manager::UserManager::Observer overrides:
-  void OnUsersSignInConstraintsChanged() override;
+  base::WeakPtr<UserSessionManagerDelegate> AsWeakPtr() override;
 
   void ChildAccountStatusReceivedCallback(Profile* profile);
 
@@ -424,10 +394,8 @@ class UserSessionManager
   void StartCrosSession();
   void PrepareProfile(const base::FilePath& profile_path);
 
-  // Callback for asynchronous profile creation.
-  void OnProfileCreated(const UserContext& user_context,
-                        Profile* profile,
-                        Profile::CreateStatus status);
+  // Check if the ARCVM DLC image was installed on the device.
+  void CheckArcVmDlcImageExist();
 
   // Callback for Profile::CREATE_STATUS_CREATED profile state.
   // Initializes basic preferences for newly created profile. Any other
@@ -436,10 +404,15 @@ class UserSessionManager
   void InitProfilePreferences(Profile* profile,
                               const UserContext& user_context);
 
+  // Initializes `user_context` and `known_user` with a device id. Does not
+  // overwrite the device id in `known_user` if it already exists.
+  void InitializeDeviceId(bool is_ephemeral_user,
+                          UserContext& user_context,
+                          user_manager::KnownUser& known_user);
+
   // Callback for Profile::CREATE_STATUS_INITIALIZED profile state.
   // Profile is created, extensions and promo resources are initialized.
-  void UserProfileInitialized(Profile* profile,
-                              const AccountId& account_id);
+  void UserProfileInitialized(Profile* profile, const AccountId& account_id);
 
   // Callback to resume profile creation after transferring auth data from
   // the authentication profile.
@@ -452,8 +425,13 @@ class UserSessionManager
   // profile is ready.
   void InitializeBrowser(Profile* profile);
 
-  // Launches the Help App depending on flags / prefs / user.
-  void MaybeLaunchHelpApp(Profile* profile) const;
+  // Launches the Help App depending on flags / prefs / user. This should only
+  // be used for the first run experience, i.e. after the user completed the
+  // OOBE setup.
+  void MaybeLaunchHelpAppForFirstRun(Profile* profile) const;
+
+  // Start user onboarding if the user is new.
+  bool MaybeStartNewUserOnboarding(Profile* profile);
 
   // Perform session initialization and either move to additional login flows
   // such as TOS (public sessions), priority pref sync UI (new users) or
@@ -467,17 +445,9 @@ class UserSessionManager
   // Restores GAIA auth cookies for the created user profile from OAuth2 token.
   void RestoreAuthSessionImpl(Profile* profile, bool restore_from_auth_cookies);
 
-  // If `user` is not a kiosk app, sets session type as seen by extensions
-  // feature system according to `user`'s type.
-  // The value should eventually be set for kiosk users, too - that's done as
-  // part of special, kiosk user session bring-up.
-  // NOTE: This has to be called before profile is initialized - so it is set up
-  // when extension are loaded during profile initialization.
-  void InitNonKioskExtensionFeaturesSessionType(const user_manager::User* user);
-
   // Callback to process RetrieveActiveSessions() request results.
   void OnRestoreActiveSessions(
-      absl::optional<SessionManagerClient::ActiveSessionsMap> sessions);
+      std::optional<SessionManagerClient::ActiveSessionsMap> sessions);
 
   // Called by OnRestoreActiveSessions() when there're user sessions in
   // `pending_user_sessions_` that has to be restored one by one.
@@ -487,9 +457,6 @@ class UserSessionManager
 
   // Notifies observers that user pending sessions restore has finished.
   void NotifyPendingUserSessionsRestoreFinished();
-
-  // Callback invoked when Easy unlock key operations are finished.
-  void OnEasyUnlockKeyOpsFinished(const AccountId& account_id, bool success);
 
   // Callback invoked when child policy is ready and the session for child user
   // can be started.
@@ -508,10 +475,6 @@ class UserSessionManager
       InputEventsBlocker* input_events_blocker,
       const locale_util::LanguageSwitchResult& result);
 
-  // Returns `true` if policy mandates that all mounts on device should
-  // be ephemeral.
-  bool IsEphemeralMountForced();
-
   // Callback invoked when `token_handle_util_` has finished.
   void OnTokenHandleObtained(const AccountId& account_id, bool success);
 
@@ -529,7 +492,7 @@ class UserSessionManager
 
   // Test API methods.
   void InjectAuthenticatorBuilder(
-      std::unique_ptr<StubAuthenticatorBuilder> builder);
+      std::unique_ptr<AuthenticatorBuilder> builder);
 
   // Controls whether browser instance should be launched after sign in
   // (used in tests).
@@ -544,8 +507,6 @@ class UserSessionManager
   void SetAttemptRestartClosureInTests(
       const base::RepeatingClosure& attempt_restart_closure);
 
-  void NotifyEasyUnlockKeyOpsFinished();
-
   bool IsFullRestoreEnabled(Profile* profile);
 
   void OnUserEligibleForOnboardingSurvey(Profile* profile);
@@ -559,17 +520,18 @@ class UserSessionManager
   HelpAppNotificationController* GetHelpAppNotificationController(
       Profile* profile);
 
-  UserSessionManagerDelegate* delegate_;
+  base::WeakPtr<UserSessionManagerDelegate> delegate_;
 
   // Used to listen to network changes.
-  network::NetworkConnectionTracker* network_connection_tracker_;
+  raw_ptr<network::NetworkConnectionTracker, LeakedDanglingUntriaged>
+      network_connection_tracker_;
 
   // Authentication/user context.
   UserContext user_context_;
   scoped_refptr<Authenticator> authenticator_;
   StartSessionType start_session_type_ = StartSessionType::kNone;
 
-  std::unique_ptr<StubAuthenticatorBuilder> injected_authenticator_builder_;
+  std::unique_ptr<AuthenticatorBuilder> injected_authenticator_builder_;
 
   // True if the authentication context's cookie jar contains authentication
   // cookies from the authentication extension login flow.
@@ -593,17 +555,11 @@ class UserSessionManager
   base::ObserverList<ash::UserSessionStateObserver>::Unchecked
       session_state_observer_list_;
 
-  base::ObserverList<ash::UserAuthenticatorObserver>
-      authenticator_observer_list_;
+  base::ObserverList<UserAuthenticatorObserver> authenticator_observer_list_;
 
   // Set of user_id for those users that we should restore authentication
   // session when notified about online state change.
   SigninSessionRestoreStateSet pending_signin_restore_sessions_;
-
-  // Kiosk mode related members.
-  // Chrome oauth client id and secret - override values for kiosk mode.
-  std::string chrome_client_id_;
-  std::string chrome_client_secret_;
 
   // Per-user-session Input Methods states.
   std::map<Profile*,
@@ -629,10 +585,6 @@ class UserSessionManager
   base::flat_map<CommandLineSwitchesType, std::vector<std::string>>
       command_line_switches_;
 
-  // Manages Easy unlock cryptohome keys.
-  std::unique_ptr<EasyUnlockKeyManager> easy_unlock_key_manager_;
-  bool running_easy_unlock_key_ops_;
-
   // Whether should fetch token handles, tests may override this value.
   bool should_obtain_handles_;
 
@@ -652,18 +604,15 @@ class UserSessionManager
 
   scoped_refptr<HatsNotificationController> hats_notification_controller_;
 
-  bool easy_unlock_key_ops_finished_ = true;
-
-  std::vector<base::OnceClosure> easy_unlock_key_ops_finished_callbacks_;
-
   // Mapped to `chrome::AttemptRestart`, except in tests.
   base::RepeatingClosure attempt_restart_closure_;
 
-  base::flat_set<Profile*> user_profile_initialized_called_;
+  base::flat_set<raw_ptr<Profile, CtnExperimental>>
+      user_profile_initialized_called_;
 
   std::unique_ptr<arc::AlwaysOnVpnManager> always_on_vpn_manager_;
 
-  std::unique_ptr<SecureDnsManager> secure_dns_manager_;
+  std::unique_ptr<XdrManager> xdr_manager_;
 
   std::unique_ptr<ChildPolicyObserver> child_policy_observer_;
 
@@ -672,27 +621,38 @@ class UserSessionManager
   std::unique_ptr<HelpAppNotificationController>
       help_app_notification_controller_;
 
-  // TODO(b/227674947): Eventually delete this after Sign in with Smart Lock has
-  // been removed and enough time has elapsed for users to be notified.
-  std::unique_ptr<EasyUnlockNotificationController>
-      easy_unlock_notification_controller_;
-
   bool token_handle_backfill_tried_for_testing_ = false;
 
   std::unique_ptr<OnboardingUserActivityCounter>
       onboarding_user_activity_counter_;
+
+  // Callback that allows tests to inject a test EolNotification implementation.
+  EolNotificationHandlerFactoryCallback eol_notification_handler_test_factory_;
+
+  // Whether `metrics::BeginFirstWebContentsProfiling()` has been called. Should
+  // only be called once per program lifetime.
+  bool has_recorded_first_web_contents_metrics_ = false;
 
   base::WeakPtrFactory<UserSessionManager> weak_factory_{this};
 };
 
 }  // namespace ash
 
-// TODO(https://crbug.com/1164001): remove after //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::UserSessionManager;
-using ::ash::UserSessionManagerDelegate;
-using ::ash::UserSessionStateObserver;
-}  // namespace chromeos
+namespace base {
+
+template <>
+struct ScopedObservationTraits<ash::UserSessionManager,
+                               ash::UserAuthenticatorObserver> {
+  static void AddObserver(ash::UserSessionManager* source,
+                          ash::UserAuthenticatorObserver* observer) {
+    source->AddUserAuthenticatorObserver(observer);
+  }
+  static void RemoveObserver(ash::UserSessionManager* source,
+                             ash::UserAuthenticatorObserver* observer) {
+    source->RemoveUserAuthenticatorObserver(observer);
+  }
+};
+
+}  // namespace base
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SESSION_USER_SESSION_MANAGER_H_

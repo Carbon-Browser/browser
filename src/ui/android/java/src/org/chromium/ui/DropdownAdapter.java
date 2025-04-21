@@ -1,8 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.ui;
+
+import static org.chromium.build.NullUtil.assumeNonNull;
 
 import android.content.Context;
 import android.graphics.Color;
@@ -22,15 +24,17 @@ import androidx.appcompat.content.res.AppCompatResources;
 import androidx.core.view.MarginLayoutParamsCompat;
 import androidx.core.view.ViewCompat;
 
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
+
 import java.util.List;
 import java.util.Set;
 
-/**
- * Dropdown item adapter for DropdownPopupWindow.
- */
+/** Dropdown item adapter for DropdownPopupWindow. */
+@NullMarked
 public class DropdownAdapter extends ArrayAdapter<DropdownItem> {
     private final Context mContext;
-    private final Set<Integer> mSeparators;
+    private final @Nullable Set<Integer> mSeparators;
     private final boolean mAreAllItemsEnabled;
     private final int mLabelMargin;
 
@@ -41,7 +45,9 @@ public class DropdownAdapter extends ArrayAdapter<DropdownItem> {
      * @param separators Set of positions that separate {@code items}.
      */
     public DropdownAdapter(
-            Context context, List<? extends DropdownItem> items, Set<Integer> separators) {
+            Context context,
+            List<? extends DropdownItem> items,
+            @Nullable Set<Integer> separators) {
         super(context, R.layout.dropdown_item);
         mContext = context;
         addAll(items);
@@ -53,7 +59,7 @@ public class DropdownAdapter extends ArrayAdapter<DropdownItem> {
 
     private boolean checkAreAllItemsEnabled() {
         for (int i = 0; i < getCount(); i++) {
-            DropdownItem item = getItem(i);
+            DropdownItem item = assumeNonNull(getItem(i));
             if (item.isEnabled() && !item.isGroupHeader()) {
                 return false;
             }
@@ -62,13 +68,15 @@ public class DropdownAdapter extends ArrayAdapter<DropdownItem> {
     }
 
     @Override
-    public View getView(int position, View convertView, ViewGroup parent) {
-        View layout = convertView;
-        if (convertView == null) {
+    public View getView(int position, @Nullable View convertView, ViewGroup parent) {
+        View layout;
+        if (convertView != null) {
+            layout = convertView;
+        } else {
             LayoutInflater inflater =
                     (LayoutInflater) mContext.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
             layout = inflater.inflate(R.layout.dropdown_item, null);
-            layout.setBackground(new DropdownDividerDrawable(/*backgroundColor=*/null));
+            layout.setBackground(new DropdownDividerDrawable(/* backgroundColor= */ null));
         }
         DropdownDividerDrawable divider = (DropdownDividerDrawable) layout.getBackground();
         int height = mContext.getResources().getDimensionPixelSize(R.dimen.dropdown_item_height);
@@ -76,8 +84,9 @@ public class DropdownAdapter extends ArrayAdapter<DropdownItem> {
         if (position == 0) {
             divider.setDividerColor(Color.TRANSPARENT);
         } else {
-            int dividerHeight = mContext.getResources().getDimensionPixelSize(
-                    R.dimen.dropdown_item_divider_height);
+            int dividerHeight =
+                    mContext.getResources()
+                            .getDimensionPixelSize(R.dimen.dropdown_item_divider_height);
             height += dividerHeight;
             divider.setHeight(dividerHeight);
             int dividerColor;
@@ -89,7 +98,7 @@ public class DropdownAdapter extends ArrayAdapter<DropdownItem> {
             divider.setDividerColor(dividerColor);
         }
 
-        DropdownItem item = getItem(position);
+        DropdownItem item = assumeNonNull(getItem(position));
 
         // Note: trying to set the height of the root LinearLayout breaks accessibility,
         // so we have to adjust the height of this LinearLayout that wraps the TextViews instead.
@@ -110,8 +119,7 @@ public class DropdownAdapter extends ArrayAdapter<DropdownItem> {
             // WRAP_CONTENT, defined above for multiline labels, leaves none.
             int existingStart = ViewCompat.getPaddingStart(labelView);
             int existingEnd = ViewCompat.getPaddingEnd(labelView);
-            ViewCompat.setPaddingRelative(
-                    labelView, existingStart, mLabelMargin, existingEnd, mLabelMargin);
+            labelView.setPaddingRelative(existingStart, mLabelMargin, existingEnd, mLabelMargin);
         }
 
         labelView.setEnabled(item.isEnabled());
@@ -122,7 +130,8 @@ public class DropdownAdapter extends ArrayAdapter<DropdownItem> {
         }
 
         labelView.setTextColor(mContext.getColor(item.getLabelFontColorResId()));
-        labelView.setTextSize(TypedValue.COMPLEX_UNIT_PX,
+        labelView.setTextSize(
+                TypedValue.COMPLEX_UNIT_PX,
                 mContext.getResources().getDimension(R.dimen.text_size_large));
 
         // Layout of the sublabel view, which has a smaller font and usually sits below the main
@@ -133,7 +142,8 @@ public class DropdownAdapter extends ArrayAdapter<DropdownItem> {
             sublabelView.setVisibility(View.GONE);
         } else {
             sublabelView.setText(sublabel);
-            sublabelView.setTextSize(TypedValue.COMPLEX_UNIT_PX,
+            sublabelView.setTextSize(
+                    TypedValue.COMPLEX_UNIT_PX,
                     mContext.getResources().getDimension(item.getSublabelFontSizeResId()));
             sublabelView.setVisibility(View.VISIBLE);
         }
@@ -151,9 +161,10 @@ public class DropdownAdapter extends ArrayAdapter<DropdownItem> {
             iconView.setVisibility(View.GONE);
         } else {
             int iconSizeResId = item.getIconSizeResId();
-            int iconSize = iconSizeResId == 0
-                    ? LayoutParams.WRAP_CONTENT
-                    : mContext.getResources().getDimensionPixelSize(iconSizeResId);
+            int iconSize =
+                    iconSizeResId == 0
+                            ? LayoutParams.WRAP_CONTENT
+                            : mContext.getResources().getDimensionPixelSize(iconSizeResId);
             ViewGroup.MarginLayoutParams iconLayoutParams =
                     (ViewGroup.MarginLayoutParams) iconView.getLayoutParams();
             iconLayoutParams.width = iconSize;
@@ -178,7 +189,7 @@ public class DropdownAdapter extends ArrayAdapter<DropdownItem> {
     @Override
     public boolean isEnabled(int position) {
         if (position < 0 || position >= getCount()) return false;
-        DropdownItem item = getItem(position);
+        DropdownItem item = assumeNonNull(getItem(position));
         return item.isEnabled() && !item.isGroupHeader();
     }
 }

@@ -1,11 +1,10 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//third_party/protobuf/proto_library.gni")
 
 source_set("fuzzer_support") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
   sources = [
     "fuzzer_env_with_java_script_feature.h",

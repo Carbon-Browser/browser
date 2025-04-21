@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,6 +46,7 @@
 #define MEDIA_AUDIO_AUDIO_INPUT_DEVICE_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "base/compiler_specific.h"
@@ -59,7 +60,6 @@
 #include "media/base/audio_capturer_source.h"
 #include "media/base/audio_parameters.h"
 #include "media/base/media_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace media {
 
@@ -118,7 +118,7 @@ class MEDIA_EXPORT AudioInputDevice : public AudioCapturerSource,
   ~AudioInputDevice() override;
 
   // AudioInputIPCDelegate implementation.
-  void OnStreamCreated(base::ReadOnlySharedMemoryRegion shared_memory_region,
+  void OnStreamCreated(base::UnsafeSharedMemoryRegion shared_memory_region,
                        base::SyncSocket::ScopedHandle socket_handle,
                        bool initially_muted) override;
   void OnError(AudioCapturerSource::ErrorCode code) override;
@@ -165,7 +165,7 @@ class MEDIA_EXPORT AudioInputDevice : public AudioCapturerSource,
 
   // Cache the output device used for AEC in case it's called before the stream
   // is created.
-  absl::optional<std::string> output_device_id_for_aec_;
+  std::optional<std::string> output_device_id_for_aec_;
 };
 
 }  // namespace media

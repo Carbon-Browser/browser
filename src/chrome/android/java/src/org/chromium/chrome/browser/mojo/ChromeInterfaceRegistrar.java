@@ -1,16 +1,17 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.mojo;
 
-import org.chromium.base.annotations.CalledByNative;
+import org.jni_zero.CalledByNative;
+
 import org.chromium.blink.mojom.Authenticator;
 import org.chromium.chrome.browser.browserservices.digitalgoods.DigitalGoodsFactoryFactory;
 import org.chromium.chrome.browser.installedapp.InstalledAppProviderFactory;
 import org.chromium.chrome.browser.payments.ChromePaymentRequestFactory;
+import org.chromium.chrome.browser.webauthn.ChromeAuthenticatorFactory;
 import org.chromium.chrome.browser.webshare.ShareServiceImplementationFactory;
-import org.chromium.components.webauthn.AuthenticatorFactory;
 import org.chromium.content_public.browser.InterfaceRegistrar;
 import org.chromium.content_public.browser.RenderFrameHost;
 import org.chromium.content_public.browser.WebContents;
@@ -48,7 +49,8 @@ class ChromeInterfaceRegistrar {
                     PaymentRequest.MANAGER, new ChromePaymentRequestFactory(renderFrameHost));
             registry.addInterface(
                     InstalledAppProvider.MANAGER, new InstalledAppProviderFactory(renderFrameHost));
-            registry.addInterface(Authenticator.MANAGER, new AuthenticatorFactory(renderFrameHost));
+            registry.addInterface(
+                    Authenticator.MANAGER, new ChromeAuthenticatorFactory(renderFrameHost));
             registry.addInterface(
                     DigitalGoodsFactory.MANAGER, new DigitalGoodsFactoryFactory(renderFrameHost));
         }

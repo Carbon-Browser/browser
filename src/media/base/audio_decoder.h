@@ -1,12 +1,12 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_BASE_AUDIO_DECODER_H_
 #define MEDIA_BASE_AUDIO_DECODER_H_
 
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
+#include "base/memory/scoped_refptr.h"
 #include "media/base/audio_decoder_config.h"
 #include "media/base/channel_layout.h"
 #include "media/base/decoder.h"

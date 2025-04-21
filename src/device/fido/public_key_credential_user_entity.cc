@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,21 +6,24 @@
 
 #include <utility>
 
+#include "device/fido/features.h"
 #include "device/fido/fido_constants.h"
 
 namespace device {
 
 // static
-absl::optional<PublicKeyCredentialUserEntity>
+std::optional<PublicKeyCredentialUserEntity>
 PublicKeyCredentialUserEntity::CreateFromCBORValue(const cbor::Value& cbor) {
-  if (!cbor.is_map())
-    return absl::nullopt;
+  if (!cbor.is_map()) {
+    return std::nullopt;
+  }
 
   const cbor::Value::MapValue& cbor_map = cbor.GetMap();
 
   auto id_it = cbor_map.find(cbor::Value(kEntityIdMapKey));
-  if (id_it == cbor_map.end() || !id_it->second.is_bytestring())
-    return absl::nullopt;
+  if (id_it == cbor_map.end() || !id_it->second.is_bytestring()) {
+    return std::nullopt;
+  }
 
   PublicKeyCredentialUserEntity user(id_it->second.GetBytestring());
 
@@ -30,7 +33,7 @@ PublicKeyCredentialUserEntity::CreateFromCBORValue(const cbor::Value& cbor) {
   auto name_it = cbor_map.find(cbor::Value(kEntityNameMapKey));
   if (name_it != cbor_map.end()) {
     if (!name_it->second.is_string()) {
-      return absl::nullopt;
+      return std::nullopt;
     }
     user.name = name_it->second.GetString();
   }
@@ -38,20 +41,9 @@ PublicKeyCredentialUserEntity::CreateFromCBORValue(const cbor::Value& cbor) {
   auto display_name_it = cbor_map.find(cbor::Value(kDisplayNameMapKey));
   if (display_name_it != cbor_map.end()) {
     if (!display_name_it->second.is_string()) {
-      return absl::nullopt;
+      return std::nullopt;
     }
     user.display_name = display_name_it->second.GetString();
-  }
-
-  auto icon_it = cbor_map.find(cbor::Value(kIconUrlMapKey));
-  if (icon_it != cbor_map.end()) {
-    if (!icon_it->second.is_string()) {
-      return absl::nullopt;
-    }
-    user.icon_url = GURL(icon_it->second.GetString());
-    if (!user.icon_url->is_valid()) {
-      return absl::nullopt;
-    }
   }
 
   return user;
@@ -65,13 +57,11 @@ PublicKeyCredentialUserEntity::PublicKeyCredentialUserEntity(
 
 PublicKeyCredentialUserEntity::PublicKeyCredentialUserEntity(
     std::vector<uint8_t> id_,
-    absl::optional<std::string> name_,
-    absl::optional<std::string> display_name_,
-    absl::optional<GURL> icon_url_)
+    std::optional<std::string> name_,
+    std::optional<std::string> display_name_)
     : id(std::move(id_)),
       name(std::move(name_)),
-      display_name(std::move(display_name_)),
-      icon_url(std::move(icon_url_)) {}
+      display_name(std::move(display_name_)) {}
 
 PublicKeyCredentialUserEntity::PublicKeyCredentialUserEntity(
     const PublicKeyCredentialUserEntity& other) = default;
@@ -90,19 +80,20 @@ PublicKeyCredentialUserEntity::~PublicKeyCredentialUserEntity() = default;
 bool PublicKeyCredentialUserEntity::operator==(
     const PublicKeyCredentialUserEntity& other) const {
   return id == other.id && name == other.name &&
-         display_name == other.display_name && icon_url == other.icon_url;
+         display_name == other.display_name;
 }
 
 cbor::Value AsCBOR(const PublicKeyCredentialUserEntity& user) {
   cbor::Value::MapValue user_map;
   user_map.emplace(kEntityIdMapKey, user.id);
-  if (user.name)
+  if (user.name) {
     user_map.emplace(kEntityNameMapKey, *user.name);
-  // Empty icon URLs result in CTAP1_ERR_INVALID_LENGTH on some security keys.
-  if (user.icon_url && !user.icon_url->is_empty())
-    user_map.emplace(kIconUrlMapKey, user.icon_url->spec());
-  if (user.display_name)
+  }
+  if (user.display_name &&
+      (!user.display_name->empty() ||
+       user.serialization_options.include_empty_display_name)) {
     user_map.emplace(kDisplayNameMapKey, *user.display_name);
+  }
   return cbor::Value(std::move(user_map));
 }
 

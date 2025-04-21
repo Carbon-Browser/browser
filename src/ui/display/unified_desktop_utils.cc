@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,8 @@
 #include "base/containers/contains.h"
 #include "base/containers/stack.h"
 #include "base/logging.h"
+#include "base/not_fatal_until.h"
+#include "base/ranges/algorithm.h"
 #include "ui/display/types/display_constants.h"
 
 namespace display {
@@ -83,12 +85,11 @@ UnifiedDesktopLayoutMatrix BuildDisplayMatrix(const DisplayLayout& layout) {
     int64_t current_display_id = placement.display_id;
     base::stack<DisplayPlacement> unhandled_displays;
     while (displays_cells.count(current_display_id) == 0) {
-      auto placement_iter = std::find_if(
-          layout.placement_list.begin(), layout.placement_list.end(),
-          [current_display_id](const DisplayPlacement& p) {
-            return p.display_id == current_display_id;
-          });
-      DCHECK(placement_iter != layout.placement_list.end());
+      auto placement_iter =
+          base::ranges::find(layout.placement_list, current_display_id,
+                             &DisplayPlacement::display_id);
+      CHECK(placement_iter != layout.placement_list.end(),
+            base::NotFatalUntil::M130);
       unhandled_displays.emplace(*placement_iter);
       current_display_id = placement_iter->parent_display_id;
     }
@@ -153,7 +154,7 @@ UnifiedDesktopLayoutMatrix BuildDisplayMatrix(const DisplayLayout& layout) {
   const size_t num_columns = max_column - min_column + 1;
 
   if (displays_cells.size() != num_rows * num_columns) {
-    LOG(ERROR) << "Unified Desktop layout matrix has wrong dimentions";
+    LOG(ERROR) << "Unified Desktop layout matrix has wrong dimensions";
     // Return an empty matrix, ValidateMatrix() will catch it as invalid.
     return matrix;
   }
@@ -215,12 +216,8 @@ bool BuildUnifiedDesktopMatrix(const DisplayIdList& ids_list,
   for (const auto& id : ids_list) {
     if (id == layout.primary_id)
       continue;
-    const auto iter =
-        std::find_if(layout.placement_list.begin(), layout.placement_list.end(),
-                     [id](const DisplayPlacement& placement) {
-                       return placement.display_id == id;
-                     });
-    if (iter == layout.placement_list.end()) {
+    if (!base::Contains(layout.placement_list, id,
+                        &DisplayPlacement::display_id)) {
       LOG(ERROR) << "Display with ID: " << id << " has no placement.";
       return false;
     }
@@ -232,7 +229,7 @@ bool BuildUnifiedDesktopMatrix(const DisplayIdList& ids_list,
   }
 
   // This map is used to validate that each display has no more than one child
-  // on eithr of its sides.
+  // on either of its sides.
   std::map<int64_t, std::set<DisplayPlacement::Position>> displays_filled_sides;
 
   // This map is used to validate that all displays has a path to the primary

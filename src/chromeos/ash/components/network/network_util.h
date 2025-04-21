@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,16 +16,15 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "base/values.h"
-// TODO(https://crbug.com/1164001): move to forward declaration
-#include "chromeos/ash/components/network/network_state.h"
-// TODO(https://crbug.com/1164001): move to forward declaration
-#include "chromeos/ash/components/network/network_type_pattern.h"
 
 namespace ash {
+
+class NetworkState;
+class NetworkTypePattern;
 
 // Struct for passing wifi access point data.
 struct COMPONENT_EXPORT(CHROMEOS_NETWORK) WifiAccessPoint {
@@ -112,21 +111,21 @@ std::string FormattedMacAddress(const std::string& shill_mac_address);
 // CellularScanResult in |scan_results|. Returns false if parsing fails,
 // in which case the contents of |scan_results| will be undefined.
 COMPONENT_EXPORT(CHROMEOS_NETWORK)
-bool ParseCellularScanResults(const base::Value::ConstListView list,
+bool ParseCellularScanResults(const base::Value::List& list,
                               std::vector<CellularScanResult>* scan_results);
 
 // Parses |list|, which contains dictionary Values and returns a vector of
 // CellularSIMSlotInfo in |sim_slot_infos|. Returns false if parsing fails,
 // in which case the contents of |sim_slot_infos| will be undefined.
 COMPONENT_EXPORT(CHROMEOS_NETWORK)
-bool ParseCellularSIMSlotInfo(const base::Value::ConstListView list,
+bool ParseCellularSIMSlotInfo(const base::Value::List& list,
                               std::vector<CellularSIMSlotInfo>* sim_slot_infos);
 
 // Retrieves the ONC state dictionary for |network| using GetStateProperties.
 // This includes properties from the corresponding NetworkState if it exists.
 // Assumed to be called from the primary user profile.
 COMPONENT_EXPORT(CHROMEOS_NETWORK)
-base::Value TranslateNetworkStateToONC(const NetworkState* network);
+base::Value::Dict TranslateNetworkStateToONC(const NetworkState* network);
 
 // Retrieves the list of network services by passing |pattern|,
 // |configured_only|, and |visible_only| to NetworkStateHandler::
@@ -134,10 +133,10 @@ base::Value TranslateNetworkStateToONC(const NetworkState* network);
 // dictionaries using TranslateShillServiceToONCPart. |limit| is used to limit
 // the number of results.
 COMPONENT_EXPORT(CHROMEOS_NETWORK)
-base::Value TranslateNetworkListToONC(NetworkTypePattern pattern,
-                                      bool configured_only,
-                                      bool visible_only,
-                                      int limit);
+base::Value::List TranslateNetworkListToONC(NetworkTypePattern pattern,
+                                            bool configured_only,
+                                            bool visible_only,
+                                            int limit);
 
 // Returns the Shill type corresponding to ONC |type| or an empty string if
 // there is no match. Only valid for ethernet, wifi, cellular, and vpn.
@@ -155,16 +154,5 @@ std::string TranslateShillTypeToONC(const std::string& type);
 
 }  // namespace network_util
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::CellTower;
-using ::ash::CellTowerVector;
-using ::ash::CellularScanResult;
-using ::ash::CellularSIMSlotInfo;
-using ::ash::WifiAccessPoint;
-using ::ash::WifiAccessPointVector;
-namespace network_util = ::ash::network_util;
-}  // namespace chromeos
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_UTIL_H_

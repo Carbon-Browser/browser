@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,6 @@ bool StructTraits<gpu::mojom::GpuDeviceDataView, gpu::GPUInfo::GPUDevice>::Read(
   out->sub_sys_id = data.sub_sys_id();
 #endif  // BUILDFLAG(IS_WIN)
   out->active = data.active();
-  out->cuda_compute_capability_major = data.cuda_compute_capability_major();
   return data.ReadVendorString(&out->vendor_string) &&
          data.ReadDeviceString(&out->device_string) &&
 #if BUILDFLAG(IS_WIN)
@@ -103,8 +102,6 @@ EnumTraits<gpu::mojom::VideoCodecProfile, gpu::VideoCodecProfile>::ToMojom(
           HEVCPROFILE_HIGH_THROUGHPUT_SCREEN_EXTENDED;
     case gpu::VideoCodecProfile::DOLBYVISION_PROFILE0:
       return gpu::mojom::VideoCodecProfile::DOLBYVISION_PROFILE0;
-    case gpu::VideoCodecProfile::DOLBYVISION_PROFILE4:
-      return gpu::mojom::VideoCodecProfile::DOLBYVISION_PROFILE4;
     case gpu::VideoCodecProfile::DOLBYVISION_PROFILE5:
       return gpu::mojom::VideoCodecProfile::DOLBYVISION_PROFILE5;
     case gpu::VideoCodecProfile::DOLBYVISION_PROFILE7:
@@ -121,9 +118,38 @@ EnumTraits<gpu::mojom::VideoCodecProfile, gpu::VideoCodecProfile>::ToMojom(
       return gpu::mojom::VideoCodecProfile::AV1PROFILE_PROFILE_HIGH;
     case gpu::VideoCodecProfile::AV1PROFILE_PROFILE_PRO:
       return gpu::mojom::VideoCodecProfile::AV1PROFILE_PROFILE_PRO;
+    case gpu::VideoCodecProfile::VVCPROFILE_MAIN10:
+      return gpu::mojom::VideoCodecProfile::VVCPROFILE_MAIN10;
+    case gpu::VideoCodecProfile::VVCPROFILE_MAIN12:
+      return gpu::mojom::VideoCodecProfile::VVCPROFILE_MAIN12;
+    case gpu::VideoCodecProfile::VVCPROFILE_MAIN12_INTRA:
+      return gpu::mojom::VideoCodecProfile::VVCPROFILE_MAIN12_INTRA;
+    case gpu::VideoCodecProfile::VVCPROIFLE_MULTILAYER_MAIN10:
+      return gpu::mojom::VideoCodecProfile::VVCPROIFLE_MULTILAYER_MAIN10;
+    case gpu::VideoCodecProfile::VVCPROFILE_MAIN10_444:
+      return gpu::mojom::VideoCodecProfile::VVCPROFILE_MAIN10_444;
+    case gpu::VideoCodecProfile::VVCPROFILE_MAIN12_444:
+      return gpu::mojom::VideoCodecProfile::VVCPROFILE_MAIN12_444;
+    case gpu::VideoCodecProfile::VVCPROFILE_MAIN16_444:
+      return gpu::mojom::VideoCodecProfile::VVCPROFILE_MAIN16_444;
+    case gpu::VideoCodecProfile::VVCPROFILE_MAIN12_444_INTRA:
+      return gpu::mojom::VideoCodecProfile::VVCPROFILE_MAIN12_444_INTRA;
+    case gpu::VideoCodecProfile::VVCPROFILE_MAIN16_444_INTRA:
+      return gpu::mojom::VideoCodecProfile::VVCPROFILE_MAIN16_444_INTRA;
+    case gpu::VideoCodecProfile::VVCPROFILE_MULTILAYER_MAIN10_444:
+      return gpu::mojom::VideoCodecProfile::VVCPROFILE_MULTILAYER_MAIN10_444;
+    case gpu::VideoCodecProfile::VVCPROFILE_MAIN10_STILL_PICTURE:
+      return gpu::mojom::VideoCodecProfile::VVCPROFILE_MAIN10_STILL_PICTURE;
+    case gpu::VideoCodecProfile::VVCPROFILE_MAIN12_STILL_PICTURE:
+      return gpu::mojom::VideoCodecProfile::VVCPROFILE_MAIN12_STILL_PICTURE;
+    case gpu::VideoCodecProfile::VVCPROFILE_MAIN10_444_STILL_PICTURE:
+      return gpu::mojom::VideoCodecProfile::VVCPROFILE_MAIN10_444_STILL_PICTURE;
+    case gpu::VideoCodecProfile::VVCPROFILE_MAIN12_444_STILL_PICTURE:
+      return gpu::mojom::VideoCodecProfile::VVCPROFILE_MAIN12_444_STILL_PICTURE;
+    case gpu::VideoCodecProfile::VVCPROFILE_MAIN16_444_STILL_PICTURE:
+      return gpu::mojom::VideoCodecProfile::VVCPROFILE_MAIN12_444_STILL_PICTURE;
   }
   NOTREACHED() << "Invalid VideoCodecProfile:" << video_codec_profile;
-  return gpu::mojom::VideoCodecProfile::VIDEO_CODEC_PROFILE_UNKNOWN;
 }
 
 // static
@@ -220,9 +246,6 @@ bool EnumTraits<gpu::mojom::VideoCodecProfile, gpu::VideoCodecProfile>::
     case gpu::mojom::VideoCodecProfile::DOLBYVISION_PROFILE0:
       *out = gpu::VideoCodecProfile::DOLBYVISION_PROFILE0;
       return true;
-    case gpu::mojom::VideoCodecProfile::DOLBYVISION_PROFILE4:
-      *out = gpu::VideoCodecProfile::DOLBYVISION_PROFILE4;
-      return true;
     case gpu::mojom::VideoCodecProfile::DOLBYVISION_PROFILE5:
       *out = gpu::VideoCodecProfile::DOLBYVISION_PROFILE5;
       return true;
@@ -247,9 +270,53 @@ bool EnumTraits<gpu::mojom::VideoCodecProfile, gpu::VideoCodecProfile>::
     case gpu::mojom::VideoCodecProfile::AV1PROFILE_PROFILE_PRO:
       *out = gpu::VideoCodecProfile::AV1PROFILE_PROFILE_PRO;
       return true;
+    case gpu::mojom::VideoCodecProfile::VVCPROFILE_MAIN10:
+      *out = gpu::VideoCodecProfile::VVCPROFILE_MAIN10;
+      return true;
+    case gpu::mojom::VideoCodecProfile::VVCPROFILE_MAIN12:
+      *out = gpu::VideoCodecProfile::VVCPROFILE_MAIN12;
+      return true;
+    case gpu::mojom::VideoCodecProfile::VVCPROFILE_MAIN12_INTRA:
+      *out = gpu::VideoCodecProfile::VVCPROFILE_MAIN12_INTRA;
+      return true;
+    case gpu::mojom::VideoCodecProfile::VVCPROIFLE_MULTILAYER_MAIN10:
+      *out = gpu::VideoCodecProfile::VVCPROIFLE_MULTILAYER_MAIN10;
+      return true;
+    case gpu::mojom::VideoCodecProfile::VVCPROFILE_MAIN10_444:
+      *out = gpu::VideoCodecProfile::VVCPROFILE_MAIN10_444;
+      return true;
+    case gpu::mojom::VideoCodecProfile::VVCPROFILE_MAIN12_444:
+      *out = gpu::VideoCodecProfile::VVCPROFILE_MAIN12_444;
+      return true;
+    case gpu::mojom::VideoCodecProfile::VVCPROFILE_MAIN16_444:
+      *out = gpu::VideoCodecProfile::VVCPROFILE_MAIN16_444;
+      return true;
+    case gpu::mojom::VideoCodecProfile::VVCPROFILE_MAIN12_444_INTRA:
+      *out = gpu::VideoCodecProfile::VVCPROFILE_MAIN12_444_INTRA;
+      return true;
+    case gpu::mojom::VideoCodecProfile::VVCPROFILE_MAIN16_444_INTRA:
+      *out = gpu::VideoCodecProfile::VVCPROFILE_MAIN16_444_INTRA;
+      return true;
+    case gpu::mojom::VideoCodecProfile::VVCPROFILE_MULTILAYER_MAIN10_444:
+      *out = gpu::VideoCodecProfile::VVCPROFILE_MULTILAYER_MAIN10_444;
+      return true;
+    case gpu::mojom::VideoCodecProfile::VVCPROFILE_MAIN10_STILL_PICTURE:
+      *out = gpu::VideoCodecProfile::VVCPROFILE_MAIN10_STILL_PICTURE;
+      return true;
+    case gpu::mojom::VideoCodecProfile::VVCPROFILE_MAIN12_STILL_PICTURE:
+      *out = gpu::VideoCodecProfile::VVCPROFILE_MAIN12_STILL_PICTURE;
+      return true;
+    case gpu::mojom::VideoCodecProfile::VVCPROFILE_MAIN10_444_STILL_PICTURE:
+      *out = gpu::VideoCodecProfile::VVCPROFILE_MAIN10_444_STILL_PICTURE;
+      return true;
+    case gpu::mojom::VideoCodecProfile::VVCPROFILE_MAIN12_444_STILL_PICTURE:
+      *out = gpu::VideoCodecProfile::VVCPROFILE_MAIN12_444_STILL_PICTURE;
+      return true;
+    case gpu::mojom::VideoCodecProfile::VVCPROFILE_MAIN16_444_STILL_PICTURE:
+      *out = gpu::VideoCodecProfile::VVCPROFILE_MAIN12_444_STILL_PICTURE;
+      return true;
   }
   NOTREACHED() << "Invalid VideoCodecProfile: " << input;
-  return false;
 }
 
 // static
@@ -318,7 +385,6 @@ bool EnumTraits<gpu::mojom::ImageDecodeAcceleratorType,
       return true;
   }
   NOTREACHED() << "Invalid ImageDecodeAcceleratorType: " << input;
-  return false;
 }
 
 // static
@@ -353,7 +419,6 @@ bool EnumTraits<gpu::mojom::ImageDecodeAcceleratorSubsampling,
       return true;
   }
   NOTREACHED() << "Invalid ImageDecodeAcceleratorSubsampling: " << input;
-  return false;
 }
 
 // static
@@ -412,7 +477,8 @@ bool StructTraits<gpu::mojom::OverlayInfoDataView, gpu::OverlayInfo>::Read(
   return data.ReadYuy2OverlaySupport(&out->yuy2_overlay_support) &&
          data.ReadNv12OverlaySupport(&out->nv12_overlay_support) &&
          data.ReadBgra8OverlaySupport(&out->bgra8_overlay_support) &&
-         data.ReadRgb10a2OverlaySupport(&out->rgb10a2_overlay_support);
+         data.ReadRgb10a2OverlaySupport(&out->rgb10a2_overlay_support) &&
+         data.ReadP010OverlaySupport(&out->p010_overlay_support);
 }
 #endif
 
@@ -422,19 +488,11 @@ bool StructTraits<gpu::mojom::GpuInfoDataView, gpu::GPUInfo>::Read(
   out->optimus = data.optimus();
   out->amd_switchable = data.amd_switchable();
   out->gl_reset_notification_strategy = data.gl_reset_notification_strategy();
-  out->software_rendering = data.software_rendering();
   out->sandboxed = data.sandboxed();
   out->in_process_gpu = data.in_process_gpu();
   out->passthrough_cmd_decoder = data.passthrough_cmd_decoder();
   out->can_support_threaded_texture_mailbox =
       data.can_support_threaded_texture_mailbox();
-#if BUILDFLAG(IS_MAC)
-  if (!gpu::ValidateMacOSSpecificTextureTarget(
-          data.macos_specific_texture_target())) {
-    return false;
-  }
-  out->macos_specific_texture_target = data.macos_specific_texture_target();
-#endif  // BUILDFLAG(IS_MAC)
   out->jpeg_decode_accelerator_supported =
       data.jpeg_decode_accelerator_supported();
 
@@ -442,18 +500,25 @@ bool StructTraits<gpu::mojom::GpuInfoDataView, gpu::GPUInfo>::Read(
   out->visibility_callback_call_count = data.visibility_callback_call_count();
 
 #if BUILDFLAG(IS_WIN)
+  out->directml_feature_level = data.directml_feature_level();
   out->d3d12_feature_level = data.d3d12_feature_level();
   out->vulkan_version = data.vulkan_version();
+  out->shared_image_d3d = data.shared_image_d3d();
+#endif
+#if BUILDFLAG(ENABLE_VULKAN)
+  out->hardware_supports_vulkan = data.hardware_supports_vulkan();
 #endif
 
   return data.ReadInitializationTime(&out->initialization_time) &&
          data.ReadGpu(&out->gpu) &&
          data.ReadSecondaryGpus(&out->secondary_gpus) &&
+         data.ReadNpus(&out->npus) &&
          data.ReadPixelShaderVersion(&out->pixel_shader_version) &&
          data.ReadVertexShaderVersion(&out->vertex_shader_version) &&
          data.ReadMaxMsaaSamples(&out->max_msaa_samples) &&
          data.ReadMachineModelName(&out->machine_model_name) &&
          data.ReadMachineModelVersion(&out->machine_model_version) &&
+         data.ReadDisplayType(&out->display_type) &&
          data.ReadGlVersion(&out->gl_version) &&
          data.ReadGlVendor(&out->gl_vendor) &&
          data.ReadGlRenderer(&out->gl_renderer) &&
@@ -461,10 +526,10 @@ bool StructTraits<gpu::mojom::GpuInfoDataView, gpu::GPUInfo>::Read(
          data.ReadGlWsVendor(&out->gl_ws_vendor) &&
          data.ReadGlWsVersion(&out->gl_ws_version) &&
          data.ReadGlWsExtensions(&out->gl_ws_extensions) &&
+         data.ReadGlImplementationParts(&out->gl_implementation_parts) &&
          data.ReadDirectRenderingVersion(&out->direct_rendering_version) &&
 #if BUILDFLAG(IS_WIN)
          data.ReadOverlayInfo(&out->overlay_info) &&
-         data.ReadDxDiagnostics(&out->dx_diagnostics) &&
 #endif
          data.ReadVideoDecodeAcceleratorSupportedProfiles(
              &out->video_decode_accelerator_supported_profiles) &&

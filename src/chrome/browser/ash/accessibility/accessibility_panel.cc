@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 #include <memory>
 
 #include "ash/public/cpp/shell_window_ids.h"
-#include "chrome/browser/ui/ash/ash_util.h"
+#include "ash/utility/wm_util.h"
+#include "base/memory/raw_ptr.h"
 #include "content/public/browser/web_contents.h"
 #include "extensions/browser/view_type_utils.h"
 #include "extensions/common/mojom/view_type.mojom.h"
@@ -43,12 +44,12 @@ class AccessibilityPanel::AccessibilityPanelWebContentsObserver
   }
 
  private:
-  AccessibilityPanel* panel_;
+  raw_ptr<AccessibilityPanel> panel_;
 };
 
 AccessibilityPanel::AccessibilityPanel(content::BrowserContext* browser_context,
-                                       std::string content_url,
-                                       std::string widget_name) {
+                                       const std::string& content_url,
+                                       const std::string& widget_name) {
   SetOwnedByWidget(true);
 
   views::WebView* web_view = new views::WebView(browser_context);
@@ -64,10 +65,12 @@ AccessibilityPanel::AccessibilityPanel(content::BrowserContext* browser_context,
 
   widget_ = new views::Widget();
   views::Widget::InitParams params(
+      views::Widget::InitParams::NATIVE_WIDGET_OWNS_WIDGET,
       views::Widget::InitParams::TYPE_WINDOW_FRAMELESS);
   // Placing the panel in the accessibility panel container allows ash to manage
   // both the window bounds and display work area.
-  ash_util::SetupWidgetInitParamsForContainer(
+  // The AccessibilityPanel is only shown in the primary root window.
+  ash_util::SetupWidgetInitParamsForContainerInPrimary(
       &params, ShellWindowId::kShellWindowId_AccessibilityPanelContainer);
   params.bounds = display::Screen::GetScreen()->GetPrimaryDisplay().bounds();
   params.delegate = this;

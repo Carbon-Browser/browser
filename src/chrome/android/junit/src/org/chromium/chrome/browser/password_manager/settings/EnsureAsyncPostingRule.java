@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,10 +26,10 @@ public class EnsureAsyncPostingRule extends ExternalResource {
         // Pause the scheduler, otherwise tasks which should run asynchronously will run
         // synchronously and confuse the tests.
         mScheduler.pause();
-    };
+    }
 
     @Override
     protected void after() {
         if (!mWasSchedulerPaused) mScheduler.unPause();
-    };
+    }
 }

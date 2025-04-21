@@ -1,9 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.mojo;
 
+import org.chromium.build.annotations.Nullable;
 import org.chromium.mojo.system.Core;
 import org.chromium.mojo.system.Core.HandleSignalsState;
 import org.chromium.mojo.system.DataPipe;
@@ -20,11 +21,13 @@ import org.chromium.mojo.system.impl.CoreImpl;
 import java.nio.ByteBuffer;
 import java.util.List;
 
-/**
- * A mock handle, that does nothing.
- */
-public class HandleMock implements UntypedHandle, MessagePipeHandle, ProducerHandle, ConsumerHandle,
-                                   SharedBufferHandle {
+/** A mock handle, that does nothing. */
+public class HandleMock
+        implements UntypedHandle,
+                MessagePipeHandle,
+                ProducerHandle,
+                ConsumerHandle,
+                SharedBufferHandle {
     /**
      * @see Handle#close()
      */
@@ -147,7 +150,10 @@ public class HandleMock implements UntypedHandle, MessagePipeHandle, ProducerHan
      *      MessagePipeHandle.WriteFlags)
      */
     @Override
-    public void writeMessage(ByteBuffer bytes, List<? extends Handle> handles, WriteFlags flags) {
+    public void writeMessage(
+            @Nullable ByteBuffer bytes,
+            @Nullable List<? extends Handle> handles,
+            WriteFlags flags) {
         // Do nothing.
     }
 

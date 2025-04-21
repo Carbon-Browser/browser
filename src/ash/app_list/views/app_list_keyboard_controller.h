@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,25 +6,17 @@
 #define ASH_APP_LIST_VIEWS_APP_LIST_KEYBOARD_CONTROLLER_H_
 
 #include "ash/ash_export.h"
-
-namespace views {
-class View;
-}  // namespace views
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 
-class AppListToastContainerView;
-class AppsGridView;
-class RecentAppsView;
+class AppListViewProvider;
 
 // Common code that implements keyboard traversal logic in
 // `AppListBubbleAppsPage` and `AppsContainerView`.
 class ASH_EXPORT AppListKeyboardController {
  public:
-  AppListKeyboardController(views::View* app_list_view,
-                            RecentAppsView* recent_apps,
-                            AppListToastContainerView* toast_container,
-                            AppsGridView* apps_grid_view);
+  explicit AppListKeyboardController(AppListViewProvider* view_provider);
   AppListKeyboardController(const AppListKeyboardController&) = delete;
   AppListKeyboardController& operator=(const AppListKeyboardController&) =
       delete;
@@ -52,10 +44,7 @@ class ASH_EXPORT AppListKeyboardController {
   bool HandleMovingFocusToAppsGrid(int column);
   bool HandleMovingFocusToRecents(int column);
 
-  views::View* const app_list_view_;
-  RecentAppsView* const recent_apps_;
-  AppListToastContainerView* const toast_container_;
-  AppsGridView* const apps_grid_view_;
+  const raw_ptr<AppListViewProvider> view_provider_;
 };
 
 }  // namespace ash

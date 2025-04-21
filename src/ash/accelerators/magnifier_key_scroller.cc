@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,7 +46,7 @@ bool MagnifierKeyScroller::ShouldProcessEvent(const ui::KeyEvent* event) const {
 }
 
 bool MagnifierKeyScroller::IsStartEvent(const ui::KeyEvent* event) const {
-  return event->type() == ui::ET_KEY_PRESSED &&
+  return event->type() == ui::EventType::kKeyPressed &&
          event->flags() & ui::EF_SHIFT_DOWN;
 }
 

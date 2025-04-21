@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -100,24 +100,5 @@ chrome.test.runTests([
       engineID: 'test',
       items: menuItemsUpdate
     });
-  },
-  function testNotifyMenuItems() {
-    var onMenuItemActivatedCount = 0;
-    chrome.input.ime.onMenuItemActivated.addListener(
-      function(engineID, name) {
-        chrome.test.assertEq('test', engineID);
-        if (onMenuItemActivatedCount == 0) {
-          chrome.test.assertEq('menu_a', name);
-          ++onMenuItemActivatedCount;
-        }
-        else {
-          chrome.test.assertEq('menu_b', name);
-          chrome.test.sendMessage('get_menu_activated');
-          chrome.test.succeed();
-        }
-      }
-    );
-    chrome.inputMethodPrivate.notifyImeMenuItemActivated('test', 'menu_a');
-    chrome.inputMethodPrivate.notifyImeMenuItemActivated('test', 'menu_b');
   }
 ]);

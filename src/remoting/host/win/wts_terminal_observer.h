@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define REMOTING_HOST_WIN_WTS_TERMINAL_OBSERVER_H_
 
 #include <windows.h>
+
 #include <stdint.h>
 
 namespace remoting {

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,8 @@
 
 #include <vector>
 
+#include "base/containers/heap_array.h"
+#include "base/containers/span.h"
 #include "media/base/audio_codecs.h"
 #include "media/base/channel_layout.h"
 #include "media/base/media_export.h"
@@ -26,6 +28,12 @@ namespace mp4 {
 // for more details.
 class MEDIA_EXPORT AAC {
  public:
+  // AAC has a few nested profile types, and we often have to add special
+  // behavior for XHE AAC typed media. Specifically, this is the USAC
+  // Audio-Object type from
+  // https://wiki.multimedia.cx/index.php/MPEG-4_Audio#Audio_Object_Types.
+  static constexpr uint8_t kXHeAAcType = 42;
+
   AAC();
   AAC(const AAC& other);
   ~AAC();
@@ -34,7 +42,7 @@ class MEDIA_EXPORT AAC {
   // The function will parse the data and get the ElementaryStreamDescriptor,
   // then it will parse the ElementaryStreamDescriptor to get audio stream
   // configurations.
-  bool Parse(const std::vector<uint8_t>& data, MediaLog* media_log);
+  bool Parse(base::span<const uint8_t> data, MediaLog* media_log);
 
   // Gets the output sample rate for the AAC stream.
   // |sbr_in_mimetype| should be set to true if the SBR mode is
@@ -50,11 +58,12 @@ class MEDIA_EXPORT AAC {
   // AudioDecoderConfig.
   ChannelLayout GetChannelLayout(bool sbr_in_mimetype) const;
 
-  // This function converts a raw AAC frame into an AAC frame with an ADTS
-  // header. On success, the function returns true and stores the converted data
-  // in the buffer. The function returns false on failure and leaves the buffer
-  // unchanged.
-  bool ConvertEsdsToADTS(std::vector<uint8_t>* buffer) const;
+  // Converts a raw AAC frame into an AAC frame with an ADTS header. Allocates
+  // new memory and copies the data from `buffer`, with the appropriate ADTS
+  // header. The size of the returned array is `buffer.size` +
+  // `adts_header_size`. Returns an empty HeapArray<uint8_t> on failure.
+  base::HeapArray<uint8_t> CreateAdtsFromEsds(base::span<const uint8_t> buffer,
+                                              int* adts_header_size) const;
 
   // If known, returns the AudioCodecProfile.
   AudioCodecProfile GetProfile() const;
@@ -68,6 +77,9 @@ class MEDIA_EXPORT AAC {
   bool SkipDecoderGASpecificConfig(BitReader* bit_reader) const;
   bool SkipErrorSpecificConfig() const;
   bool SkipGASpecificConfig(BitReader* bit_reader) const;
+
+  // Sets the ADTS header into the given span.
+  void SetAdtsHeader(base::span<uint8_t> adts, size_t total_size) const;
 
   // The following variables store the AAC specific configuration information
   // that are used to generate the ADTS header.

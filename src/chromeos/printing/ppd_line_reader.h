@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,12 +18,14 @@ namespace chromeos {
 class COMPONENT_EXPORT(CHROMEOS_PRINTING) PpdLineReader {
  public:
   // Create a new PpdLineReader using ppd contents in |contents|.  The max
-  // allowed line length in the ppd is also parameterized.
+  // allowed line length in the ppd is also parameterized.  The default value
+  // was taken from "PostScript Printer Description File Format Specification"
+  // in version 4.3.
   //
   // |contents| may or may not be gzip-compressed, and must remain valid and
   // unchanged while the Created PpdReader exists.
   static std::unique_ptr<PpdLineReader> Create(const std::string& contents,
-                                               size_t max_line_length);
+                                               size_t max_line_length = 255);
 
   // Checks to see whether the file contents in |contents| contains the magic
   // number which is found at the beginning of every PPD file. To verify this,
@@ -39,6 +41,12 @@ class COMPONENT_EXPORT(CHROMEOS_PRINTING) PpdLineReader {
   // error occurred.  Lines longer than max_line_length are skipped.  To
   // distinguish between end of input and error, use Error().
   virtual bool NextLine(std::string* line) = 0;
+
+  // Return everything from the current position to the end of the PPD file or
+  // to the first error. Validity of the read content is not verified (lengths
+  // of lines are not checked). To distinguish between end of input and error,
+  // use Error().
+  virtual std::string RemainingContent() = 0;
 
   // Return true if we encountered an error while reading.
   virtual bool Error() const = 0;

@@ -1,19 +1,22 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_PUBLIC_RENDERER_RENDER_THREAD_OBSERVER_H_
 #define CONTENT_PUBLIC_RENDERER_RENDER_THREAD_OBSERVER_H_
 
+#include "content/common/buildflags.h"
 #include "content/common/content_export.h"
 
 namespace blink {
 class AssociatedInterfaceRegistry;
 }
 
+#if BUILDFLAG(CONTENT_ENABLE_LEGACY_IPC)
 namespace IPC {
 class Message;
 }
+#endif
 
 namespace content {
 
@@ -34,8 +37,10 @@ class CONTENT_EXPORT RenderThreadObserver {
   virtual void UnregisterMojoInterfaces(
       blink::AssociatedInterfaceRegistry* associated_interfaces) {}
 
+#if BUILDFLAG(CONTENT_ENABLE_LEGACY_IPC)
   // Allows filtering of control messages.
   virtual bool OnControlMessageReceived(const IPC::Message& message);
+#endif
 
   // Called when the renderer cache of the plugin list has changed.
   virtual void PluginListChanged() {}

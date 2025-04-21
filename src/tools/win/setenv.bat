@@ -1,6 +1,6 @@
 @ECHO off
 
-REM Copyright (c) 2017 The Chromium Authors. All rights reserved.
+REM Copyright 2017 The Chromium Authors
 REM Use of this source code is governed by a BSD-style license that can be
 REM found in the LICENSE file.
 
@@ -11,4 +11,4 @@ REM break things.
 
 REM Execute whatever is printed by setenv.py. Use "CALL" to ensure that the
 REM command title is reset when this script finishes executing.
-FOR /f "usebackq tokens=*" %%a in (`python %~dp0setenv.py`) do CALL %%a
+FOR /f "usebackq tokens=*" %%a in (`python3 %~dp0setenv.py`) do CALL %%a

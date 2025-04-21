@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "base/base_export.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/synchronization/lock.h"
 #include "base/threading/platform_thread.h"
@@ -71,7 +71,8 @@ class BASE_EXPORT ThreadIdNameManager {
       ThreadIdToHandleMap;
   typedef std::map<PlatformThreadHandle::Handle, std::string*>
       ThreadHandleToInternedNameMap;
-  typedef std::map<std::string, std::string*> NameToInternedNameMap;
+  typedef std::map<std::string, raw_ptr<std::string, CtnExperimental>>
+      NameToInternedNameMap;
 
   ThreadIdNameManager();
   ~ThreadIdNameManager();
@@ -90,7 +91,7 @@ class BASE_EXPORT ThreadIdNameManager {
 
   // There's no point using a base::ObserverList behind a lock, so we just use
   // an std::vector instead.
-  std::vector<Observer*> observers_;
+  std::vector<raw_ptr<Observer, VectorExperimental>> observers_;
 };
 
 }  // namespace base

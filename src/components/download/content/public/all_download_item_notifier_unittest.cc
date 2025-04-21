@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,12 +20,12 @@ namespace {
 
 class MockNotifierObserver : public AllDownloadItemNotifier::Observer {
  public:
-  MockNotifierObserver() {}
+  MockNotifierObserver() = default;
 
   MockNotifierObserver(const MockNotifierObserver&) = delete;
   MockNotifierObserver& operator=(const MockNotifierObserver&) = delete;
 
-  ~MockNotifierObserver() override {}
+  ~MockNotifierObserver() override = default;
 
   MOCK_METHOD(void,
               OnDownloadCreated,
@@ -58,7 +58,7 @@ class AllDownloadItemNotifierTest : public testing::Test {
   AllDownloadItemNotifierTest& operator=(const AllDownloadItemNotifierTest&) =
       delete;
 
-  ~AllDownloadItemNotifierTest() override {}
+  ~AllDownloadItemNotifierTest() override = default;
 
   content::MockDownloadManager& manager() { return *download_manager_; }
 

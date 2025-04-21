@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,13 @@
 #include "base/android/jni_android.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "cc/input/browser_controls_offset_tags_info.h"
+#include "content/browser/android/render_widget_host_connector.h"
+#include "content/browser/navigation_transitions/back_forward_transition_animator.h"
 #include "content/browser/renderer_host/navigation_controller_android.h"
 #include "content/browser/renderer_host/render_widget_host_view_android.h"
 #include "content/common/content_export.h"
+#include "content/public/browser/back_forward_transition_animation_manager.h"
 #include "third_party/blink/public/mojom/input/input_handler.mojom-forward.h"
 
 class GURL;
@@ -25,6 +29,7 @@ struct AXTreeUpdate;
 
 namespace content {
 
+class WebContents;
 class WebContentsImpl;
 
 // Android wrapper around WebContents that provides safer passage from java and
@@ -39,11 +44,13 @@ class CONTENT_EXPORT WebContentsAndroid {
 
   ~WebContentsAndroid();
 
+  void Init();
+
   WebContentsImpl* web_contents() const { return web_contents_; }
 
   base::android::ScopedJavaLocalRef<jobject> GetJavaObject();
 
-  // Ensure that the render frame host etc are ready to handle JS eval
+  // Ensure that the RenderFrameHost etc are ready to handle JS eval
   // (e.g. recover from a crashed state).
   bool InitializeRenderFrameForJavaScript();
 
@@ -59,6 +66,7 @@ class CONTENT_EXPORT WebContentsAndroid {
       const base::android::JavaParamRef<jobject>& jview_delegate);
   base::android::ScopedJavaLocalRef<jobject> GetMainFrame(JNIEnv* env) const;
   base::android::ScopedJavaLocalRef<jobject> GetFocusedFrame(JNIEnv* env) const;
+  bool IsFocusedElementEditable(JNIEnv* env);
   base::android::ScopedJavaLocalRef<jobject> GetRenderFrameHostFromId(
       JNIEnv* env,
       jint render_process_id,
@@ -67,9 +75,11 @@ class CONTENT_EXPORT WebContentsAndroid {
       JNIEnv* env) const;
   base::android::ScopedJavaLocalRef<jstring> GetTitle(JNIEnv* env) const;
   base::android::ScopedJavaLocalRef<jobject> GetVisibleURL(JNIEnv* env) const;
+  jint GetVirtualKeyboardMode(JNIEnv* env) const;
 
   bool IsLoading(JNIEnv* env) const;
   bool ShouldShowLoadingUI(JNIEnv* env) const;
+  bool HasUncommittedNavigationInPrimaryMainFrame(JNIEnv* env) const;
 
   void DispatchBeforeUnload(JNIEnv* env, bool auto_cancel);
 
@@ -88,11 +98,10 @@ class CONTENT_EXPORT WebContentsAndroid {
 
   void ResumeLoadingCreatedWebContents(JNIEnv* env);
 
-  void OnHide(JNIEnv* env);
-  void OnShow(JNIEnv* env);
   void SetImportance(JNIEnv* env, jint importance);
   void SuspendAllMediaPlayers(JNIEnv* env);
   void SetAudioMuted(JNIEnv* env, jboolean mute);
+  jboolean IsAudioMuted(JNIEnv* env);
 
   jboolean FocusLocationBarByDefault(JNIEnv* env);
   bool IsFullscreenForCurrentTab(JNIEnv* env);
@@ -101,7 +110,10 @@ class CONTENT_EXPORT WebContentsAndroid {
   void SelectAroundCaret(JNIEnv* env,
                          jint granularity,
                          jboolean should_show_handle,
-                         jboolean should_show_context_menu);
+                         jboolean should_show_context_menu,
+                         jint startOffset,
+                         jint endOffset,
+                         jint surroundingTextLength);
   void AdjustSelectionByCharacterOffset(JNIEnv* env,
                                         jint start_adjust,
                                         jint end_adjust,
@@ -121,12 +133,14 @@ class CONTENT_EXPORT WebContentsAndroid {
 
   void PostMessageToMainFrame(
       JNIEnv* env,
-      const base::android::JavaParamRef<jstring>& jmessage,
+      const base::android::JavaParamRef<jobject>& jmessage,
       const base::android::JavaParamRef<jstring>& jsource_origin,
       const base::android::JavaParamRef<jstring>& jtarget_origin,
       const base::android::JavaParamRef<jobjectArray>& jports);
 
   jboolean HasAccessedInitialDocument(JNIEnv* env);
+
+  jboolean HasViewTransitionOptIn(JNIEnv* env);
 
   // No theme color is represented by SK_ColorTRANSPARENT.
   jint GetThemeColor(JNIEnv* env);
@@ -176,9 +190,6 @@ class CONTENT_EXPORT WebContentsAndroid {
   base::android::ScopedJavaLocalRef<jobject> GetOrCreateEventForwarder(
       JNIEnv* env);
 
-  void SetMediaSession(
-      const base::android::ScopedJavaLocalRef<jobject>& j_media_session);
-
   void SendOrientationChangeEvent(JNIEnv* env, jint orientation);
 
   void OnScaleFactorChanged(JNIEnv* env);
@@ -194,13 +205,21 @@ class CONTENT_EXPORT WebContentsAndroid {
 
   void NotifyBrowserControlsHeightChanged(JNIEnv* env);
 
+  bool NeedToFireBeforeUnloadOrUnloadEvents(JNIEnv* env);
+
   base::android::ScopedJavaLocalRef<jobject> GetRenderWidgetHostView(
       JNIEnv* env);
 
-  base::android::ScopedJavaLocalRef<jobjectArray> GetInnerWebContents(
-      JNIEnv* env);
-
   jint GetVisibility(JNIEnv* env);
+
+  void UpdateWebContentsVisibility(JNIEnv* env, jint visibility);
+
+  void NotifyControlsConstraintsChanged(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jobject>& jold_offset_tag_bundle,
+      const base::android::JavaParamRef<jobject>& joffset_tag_bundle);
+
+  void DisconnectFileSelectListenerIfAny(JNIEnv* env);
 
   RenderWidgetHostViewAndroid* GetRenderWidgetHostViewAndroid();
 
@@ -214,6 +233,24 @@ class CONTENT_EXPORT WebContentsAndroid {
   void AddDestructionObserver(DestructionObserver* observer);
   void RemoveDestructionObserver(DestructionObserver* observer);
 
+  void OnContentForNavigationEntryShown(JNIEnv* env);
+  jint GetCurrentBackForwardTransitionStage(JNIEnv* env);
+
+  void CaptureContentAsBitmapForTesting(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jobject>& jcallback);
+  void OnFinishGetContentBitmapForTesting(
+      const base::android::JavaRef<jobject>& callback,
+      gfx::Image snapshot);
+
+  void SetLongPressLinkSelectText(JNIEnv* env, jboolean enabled);
+
+  // Adds a crash report, like DumpWithoutCrashing(), including the Java stack
+  // trace from which `web_contents` was created. This is meant to help debug
+  // cases where BrowserContext is destroyed before its WebContents.
+  static void ReportDanglingPtrToBrowserContext(JNIEnv* env,
+                                                WebContents* web_contents);
+
  private:
   void OnFinishDownloadImage(const base::android::JavaRef<jobject>& obj,
                              const base::android::JavaRef<jobject>& callback,
@@ -222,13 +259,16 @@ class CONTENT_EXPORT WebContentsAndroid {
                              const GURL& url,
                              const std::vector<SkBitmap>& bitmaps,
                              const std::vector<gfx::Size>& sizes);
-  void SelectAroundCaretAck(blink::mojom::SelectAroundCaretResultPtr result);
+  void SelectAroundCaretAck(int startOffset,
+                            int endOffset,
+                            int surroundingTextLength,
+                            blink::mojom::SelectAroundCaretResultPtr result);
   // Walks over the AXTreeUpdate and creates a light weight snapshot.
   void AXTreeSnapshotCallback(
       const base::android::JavaRef<jobject>& view_structure_root,
       const base::android::JavaRef<jobject>& view_structure_builder,
       const base::android::JavaRef<jobject>& callback,
-      const ui::AXTreeUpdate& result);
+      ui::AXTreeUpdate& result);
 
   raw_ptr<WebContentsImpl> web_contents_;
 
@@ -236,6 +276,25 @@ class CONTENT_EXPORT WebContentsAndroid {
   base::android::ScopedJavaGlobalRef<jobject> obj_;
 
   base::ObserverList<DestructionObserver> destruction_observers_;
+
+  class BrowserControlsOffsetTagMediator : public RenderWidgetHostConnector {
+   public:
+    explicit BrowserControlsOffsetTagMediator(WebContents* web_contents);
+    ~BrowserControlsOffsetTagMediator() override;
+
+    void SetOffsetTagsInfo(
+        const cc::BrowserControlsOffsetTagsInfo& new_offset_tags_info);
+
+    void UpdateRenderProcessConnection(
+        RenderWidgetHostViewAndroid* old_rwhva,
+        RenderWidgetHostViewAndroid* new_rhwva) override;
+
+   private:
+    raw_ptr<RenderWidgetHostViewAndroid> rwhva_ = nullptr;
+    cc::BrowserControlsOffsetTagsInfo offset_tags_info_;
+  };
+
+  raw_ptr<BrowserControlsOffsetTagMediator> offset_tag_mediator_ = nullptr;
 
   base::WeakPtrFactory<WebContentsAndroid> weak_factory_{this};
 };

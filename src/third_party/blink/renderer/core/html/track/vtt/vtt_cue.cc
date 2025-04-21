@@ -29,15 +29,18 @@
 
 #include "third_party/blink/renderer/core/html/track/vtt/vtt_cue.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/v8_direction_setting.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_autokeyword_double.h"
 #include "third_party/blink/renderer/core/css/css_property_names.h"
 #include "third_party/blink/renderer/core/css_value_keywords.h"
 #include "third_party/blink/renderer/core/dom/document_fragment.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
+#include "third_party/blink/renderer/core/dom/node_cloning_data.h"
 #include "third_party/blink/renderer/core/dom/node_traversal.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
 #include "third_party/blink/renderer/core/frame/web_feature.h"
 #include "third_party/blink/renderer/core/html/html_div_element.h"
+#include "third_party/blink/renderer/core/html/media/html_media_element.h"
 #include "third_party/blink/renderer/core/html/track/text_track.h"
 #include "third_party/blink/renderer/core/html/track/text_track_cue_list.h"
 #include "third_party/blink/renderer/core/html/track/vtt/vtt_cue_box.h"
@@ -50,8 +53,7 @@
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
-#include "third_party/blink/renderer/platform/text/bidi_resolver.h"
-#include "third_party/blink/renderer/platform/text/text_run_iterator.h"
+#include "third_party/blink/renderer/platform/text/bidi_paragraph.h"
 #include "third_party/blink/renderer/platform/wtf/math_extras.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
@@ -59,49 +61,45 @@ namespace blink {
 
 namespace {
 
-bool ScanRun(const VTTScanner::Run& value_run,
-             AlignSetting align,
-             VTTScanner& scanner) {
-  return scanner.ScanRun(value_run, V8AlignSetting(align).AsString());
+bool ScanRun(VTTScanner& scanner, StringView str) {
+  return scanner.Scan(str) && scanner.IsAtEnd();
 }
 
-}  // namespace
+bool ScanRun(VTTScanner& scanner, AlignSetting align) {
+  return ScanRun(scanner, V8AlignSetting(align).AsString());
+}
 
-static const CSSValueID kDisplayWritingModeMap[] = {CSSValueID::kHorizontalTb,
-                                                    CSSValueID::kVerticalRl,
-                                                    CSSValueID::kVerticalLr};
+const auto kDisplayWritingModeMap = std::to_array<CSSValueID>(
+    {CSSValueID::kHorizontalTb, CSSValueID::kVerticalRl,
+     CSSValueID::kVerticalLr});
 static_assert(std::size(kDisplayWritingModeMap) ==
-                  VTTCue::kNumberOfWritingDirections,
+                  static_cast<size_t>(VTTCue::WritingDirection::kMaxValue) + 1,
               "displayWritingModeMap should have the same number of elements "
               "as VTTCue::NumberOfWritingDirections");
 
-static const CSSValueID kDisplayAlignmentMap[] = {
-    CSSValueID::kStart, CSSValueID::kCenter, CSSValueID::kEnd,
-    CSSValueID::kLeft, CSSValueID::kRight};
+const auto kDisplayAlignmentMap = std::to_array<CSSValueID>(
+    {CSSValueID::kStart, CSSValueID::kCenter, CSSValueID::kEnd,
+     CSSValueID::kLeft, CSSValueID::kRight});
 static_assert(std::size(kDisplayAlignmentMap) == V8AlignSetting::kEnumSize,
               "displayAlignmentMap should have the same number of elements as "
               "VTTCue::NumberOfAlignments");
 
-static const String& HorizontalKeyword() {
-  return g_empty_string;
-}
-
-static const String& VerticalGrowingLeftKeyword() {
+const String& VerticalGrowingLeftKeyword() {
   DEFINE_STATIC_LOCAL(const String, verticalrl, ("rl"));
   return verticalrl;
 }
 
-static const String& VerticalGrowingRightKeyword() {
+const String& VerticalGrowingRightKeyword() {
   DEFINE_STATIC_LOCAL(const String, verticallr, ("lr"));
   return verticallr;
 }
 
-static bool IsInvalidPercentage(double value) {
+bool IsInvalidPercentage(double value) {
   DCHECK(std::isfinite(value));
   return value < 0 || value > 100;
 }
 
-static bool IsInvalidPercentage(double value, ExceptionState& exception_state) {
+bool IsInvalidPercentage(double value, ExceptionState& exception_state) {
   if (IsInvalidPercentage(value)) {
     exception_state.ThrowDOMException(
         DOMExceptionCode::kIndexSizeError,
@@ -112,6 +110,8 @@ static bool IsInvalidPercentage(double value, ExceptionState& exception_state) {
   }
   return false;
 }
+
+}  // namespace
 
 VTTCueBackgroundBox::VTTCueBackgroundBox(Document& document)
     : HTMLDivElement(document) {
@@ -143,7 +143,7 @@ VTTCue::VTTCue(Document& document,
       line_position_(std::numeric_limits<double>::quiet_NaN()),
       text_position_(std::numeric_limits<double>::quiet_NaN()),
       cue_size_(100),
-      writing_direction_(kHorizontal),
+      writing_direction_(WritingDirection::kHorizontal),
       vtt_node_tree_(nullptr),
       cue_background_box_(MakeGarbageCollected<VTTCueBackgroundBox>(document)),
       snap_to_lines_(true),
@@ -166,30 +166,33 @@ void VTTCue::CueDidChange(CueMutationAffectsOrder affects_order) {
   display_tree_should_change_ = true;
 }
 
-const String& VTTCue::vertical() const {
+V8DirectionSetting VTTCue::vertical() const {
   switch (writing_direction_) {
-    case kHorizontal:
-      return HorizontalKeyword();
-    case kVerticalGrowingLeft:
-      return VerticalGrowingLeftKeyword();
-    case kVerticalGrowingRight:
-      return VerticalGrowingRightKeyword();
-    default:
-      NOTREACHED();
-      return g_empty_string;
+    case WritingDirection::kHorizontal:
+      return V8DirectionSetting(V8DirectionSetting::Enum::k);
+    case WritingDirection::kVerticalGrowingLeft:
+      return V8DirectionSetting(V8DirectionSetting::Enum::kRl);
+    case WritingDirection::kVerticalGrowingRight:
+      return V8DirectionSetting(V8DirectionSetting::Enum::kLr);
   }
+  NOTREACHED();
 }
 
-void VTTCue::setVertical(const String& value) {
+void VTTCue::setVertical(const V8DirectionSetting& value) {
   WritingDirection direction = writing_direction_;
-  if (value == HorizontalKeyword())
-    direction = kHorizontal;
-  else if (value == VerticalGrowingLeftKeyword())
-    direction = kVerticalGrowingLeft;
-  else if (value == VerticalGrowingRightKeyword())
-    direction = kVerticalGrowingRight;
-  else
-    NOTREACHED();
+  switch (value.AsEnum()) {
+    case V8DirectionSetting::Enum::k:
+      direction = WritingDirection::kHorizontal;
+      break;
+    case V8DirectionSetting::Enum::kRl:
+      direction = WritingDirection::kVerticalGrowingLeft;
+      break;
+    case V8DirectionSetting::Enum::kLr:
+      direction = WritingDirection::kVerticalGrowingRight;
+      break;
+    default:
+      NOTREACHED();
+  }
 
   if (direction == writing_direction_)
     return;
@@ -412,32 +415,6 @@ double VTTCue::CalculateComputedLinePosition() const {
   return n;
 }
 
-class VTTTextRunIterator : public TextRunIterator {
- public:
-  VTTTextRunIterator() = default;
-  VTTTextRunIterator(const TextRun* text_run, unsigned offset)
-      : TextRunIterator(text_run, offset) {}
-
-  bool AtParagraphSeparator() const {
-    // Within a cue, paragraph boundaries are only denoted by Type B characters,
-    // such as U+000A LINE FEED (LF), U+0085 NEXT LINE (NEL),
-    // and U+2029 PARAGRAPH SEPARATOR.
-    return WTF::unicode::Category(Current()) &
-           WTF::unicode::kSeparator_Paragraph;
-  }
-};
-
-// Almost the same as determineDirectionality in core/html/html_element.cc, but
-// that one uses a "plain" TextRunIterator (which only checks for '\n').
-static TextDirection DetermineDirectionality(const String& value,
-                                             bool& has_strong_directionality) {
-  TextRun run(value);
-  BidiResolver<VTTTextRunIterator, BidiCharacterRun> bidi_resolver;
-  bidi_resolver.SetStatus(BidiStatus(TextDirection::kLtr, false));
-  bidi_resolver.SetPositionIgnoringNestedIsolates(VTTTextRunIterator(&run, 0));
-  return bidi_resolver.DetermineDirectionality(&has_strong_directionality);
-}
-
 static CSSValueID DetermineTextDirection(DocumentFragment* vtt_root) {
   DCHECK(vtt_root);
 
@@ -451,13 +428,13 @@ static CSSValueID DetermineTextDirection(DocumentFragment* vtt_root) {
     DCHECK(node->IsDescendantOf(vtt_root));
 
     if (node->IsTextNode()) {
-      bool has_strong_directionality;
-      text_direction =
-          DetermineDirectionality(node->nodeValue(), has_strong_directionality);
-      if (has_strong_directionality)
+      if (const std::optional<TextDirection> node_direction =
+              BidiParagraph::BaseDirectionForString(node->nodeValue())) {
+        text_direction = *node_direction;
         break;
+      }
     } else if (auto* vtt_element = DynamicTo<VTTElement>(node)) {
-      if (vtt_element->WebVTTNodeType() == kVTTNodeTypeRubyText) {
+      if (vtt_element->GetVttNodeType() == VttNodeType::kRubyText) {
         node = NodeTraversal::NextSkippingChildren(*node);
         continue;
       }
@@ -492,7 +469,6 @@ double VTTCue::CalculateComputedTextPosition() const {
       return 50;
     default:
       NOTREACHED();
-      return 0;
   }
 }
 
@@ -534,7 +510,8 @@ VTTDisplayParameters VTTCue::CalculateDisplayParameters() const {
   // 'tb'. Otherwise, if the cue writing direction is vertical growing left,
   // then let block-flow be 'lr'. Otherwise, the cue writing direction is
   // vertical growing right; let block-flow be 'rl'.
-  display_parameters.writing_mode = kDisplayWritingModeMap[writing_direction_];
+  display_parameters.writing_mode =
+      kDisplayWritingModeMap[static_cast<size_t>(writing_direction_)];
 
   // Resolve the cue alignment to one of the values {start, end, center}.
   AlignSetting computed_cue_alignment = CalculateComputedCueAlignment();
@@ -568,7 +545,7 @@ VTTDisplayParameters VTTCue::CalculateDisplayParameters() const {
 
   // 7. Determine the value of x-position or y-position for cue as per the
   // appropriate rules from the following list:
-  if (writing_direction_ == kHorizontal) {
+  if (writing_direction_ == WritingDirection::kHorizontal) {
     switch (computed_cue_alignment) {
       case AlignSetting::kStart:
         display_parameters.position.set_x(computed_text_position);
@@ -611,12 +588,12 @@ VTTDisplayParameters VTTCue::CalculateDisplayParameters() const {
   // yet calculated for cue as per the appropriate rules from the following
   // list:
   if (!snap_to_lines_) {
-    if (writing_direction_ == kHorizontal)
+    if (writing_direction_ == WritingDirection::kHorizontal)
       display_parameters.position.set_y(computed_line_position);
     else
       display_parameters.position.set_x(computed_line_position);
   } else {
-    if (writing_direction_ == kHorizontal)
+    if (writing_direction_ == WritingDirection::kHorizontal)
       display_parameters.position.set_y(0);
     else
       display_parameters.position.set_x(0);
@@ -624,7 +601,7 @@ VTTDisplayParameters VTTCue::CalculateDisplayParameters() const {
 
   // Step 9 not implemented (margin == 0).
 
-  // The snap-to-lines position is propagated to LayoutVTTCue.
+  // The snap-to-lines position is propagated to VttCueLayoutAlgorithm.
   display_parameters.snap_to_lines_position =
       snap_to_lines_ ? computed_line_position
                      : std::numeric_limits<float>::quiet_NaN();
@@ -667,16 +644,16 @@ void VTTCue::UpdatePastAndFutureNodes(double movie_time) {
 
     if (auto* child_vtt_element = DynamicTo<VTTElement>(child)) {
       child_vtt_element->SetIsPastNode(is_past_node);
-      // Make an elemenet id match a cue id for style matching purposes.
-      if (!id().IsEmpty())
+      // Make an element id match a cue id for style matching purposes.
+      if (!id().empty())
         To<Element>(child).SetIdAttribute(id());
     }
   }
 }
 
-absl::optional<double> VTTCue::GetNextIntraCueTime(double movie_time) const {
+std::optional<double> VTTCue::GetNextIntraCueTime(double movie_time) const {
   if (!display_tree_) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   // Iterate through children once, since in a well-formed VTTCue
@@ -693,13 +670,13 @@ absl::optional<double> VTTCue::GetNextIntraCueTime(double movie_time) const {
           return timestamp;
         } else {
           // Timestamps should never be greater than the end time of the VTTCue.
-          return absl::nullopt;
+          return std::nullopt;
         }
       }
     }
   }
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 VTTCueBox* VTTCue::GetDisplayTree() {
@@ -713,13 +690,13 @@ VTTCueBox* VTTCue::GetDisplayTree() {
   DCHECK_EQ(display_tree_->firstChild(), cue_background_box_);
 
   if (!display_tree_should_change_)
-    return display_tree_;
+    return display_tree_.Get();
 
   CreateVTTNodeTree();
 
   cue_background_box_->RemoveChildren();
-  cue_background_box_->CloneChildNodesFrom(*vtt_node_tree_,
-                                           CloneChildrenFlag::kClone);
+  NodeCloningData data{CloneOption::kIncludeDescendants};
+  cue_background_box_->CloneChildNodesFrom(*vtt_node_tree_, data);
 
   if (!region()) {
     VTTDisplayParameters display_parameters = CalculateDisplayParameters();
@@ -731,7 +708,7 @@ VTTCueBox* VTTCue::GetDisplayTree() {
 
   display_tree_should_change_ = false;
 
-  return display_tree_;
+  return display_tree_.Get();
 }
 
 void VTTCue::RemoveDisplayTree(RemovalNotification removal_notification) {
@@ -745,12 +722,33 @@ void VTTCue::RemoveDisplayTree(RemovalNotification removal_notification) {
   display_tree_->remove(ASSERT_NO_EXCEPTION);
 }
 
+void VTTCue::OnEnter(HTMLMediaElement& video) {
+  if (!track()->IsSpokenKind())
+    return;
+
+  // Clear the queue of utterances before speaking a current cue.
+  video.SpeechSynthesis()->Cancel();
+
+  video.SpeechSynthesis()->Speak(text_, track()->Language());
+}
+
+void VTTCue::OnExit(HTMLMediaElement& video) {
+  if (!track()->IsSpokenKind())
+    return;
+
+  // If SpeechSynthesis is speaking audio descriptions at the end time
+  // specified (when onExit runs), call PauseToLetDescriptionFinish so that only
+  // the video is paused and the audio descriptions can finish.
+  if (video.SpeechSynthesis()->Speaking())
+    video.PauseToLetDescriptionFinish();
+}
+
 void VTTCue::UpdateDisplay(HTMLDivElement& container) {
   DCHECK(track() && track()->IsRendered() && IsActive());
 
   UseCounter::Count(GetDocument(), WebFeature::kVTTCueRender);
 
-  if (writing_direction_ != kHorizontal)
+  if (writing_direction_ != WritingDirection::kHorizontal)
     UseCounter::Count(GetDocument(), WebFeature::kVTTCueRenderVertical);
 
   if (!snap_to_lines_)
@@ -787,24 +785,25 @@ void VTTCue::UpdateDisplay(HTMLDivElement& container) {
 }
 
 VTTCue::CueSetting VTTCue::SettingName(VTTScanner& input) const {
-  CueSetting parsed_setting = kNone;
-  if (input.Scan("vertical"))
-    parsed_setting = kVertical;
-  else if (input.Scan("line"))
-    parsed_setting = kLine;
-  else if (input.Scan("position"))
-    parsed_setting = kPosition;
-  else if (input.Scan("size"))
-    parsed_setting = kSize;
-  else if (input.Scan("align"))
-    parsed_setting = kAlign;
-  else if (RuntimeEnabledFeatures::WebVTTRegionsEnabled() &&
-           input.Scan("region"))
-    parsed_setting = kRegionId;
+  CueSetting parsed_setting = CueSetting::kNone;
+  if (input.Scan("vertical")) {
+    parsed_setting = CueSetting::kVertical;
+  } else if (input.Scan("line")) {
+    parsed_setting = CueSetting::kLine;
+  } else if (input.Scan("position")) {
+    parsed_setting = CueSetting::kPosition;
+  } else if (input.Scan("size")) {
+    parsed_setting = CueSetting::kSize;
+  } else if (input.Scan("align")) {
+    parsed_setting = CueSetting::kAlign;
+  } else if (RuntimeEnabledFeatures::WebVTTRegionsEnabled() &&
+             input.Scan("region")) {
+    parsed_setting = CueSetting::kRegionId;
+  }
   // Verify that a ':' follows.
-  if (parsed_setting != kNone && input.Scan(':'))
+  if (parsed_setting != CueSetting::kNone && input.Scan(':'))
     return parsed_setting;
-  return kNone;
+  return CueSetting::kNone;
 }
 
 static bool ScanPercentage(VTTScanner& input, double& number) {
@@ -858,28 +857,30 @@ void VTTCue::ParseSettings(const VTTRegionMap* region_map,
     // 3. Let value be the trailing substring of setting starting from the
     //    character immediately after the first U+003A COLON character (:) in
     //    that string.
-    VTTScanner::Run value_run =
-        input.CollectUntil<VTTParser::IsValidSettingDelimiter>();
+    VTTScanner value_input =
+        input.SubrangeUntil<VTTParser::IsValidSettingDelimiter>();
 
     // 4. Run the appropriate substeps that apply for the value of name, as
     //    follows:
     switch (name) {
-      case kVertical: {
+      case CueSetting::kVertical: {
         // If name is a case-sensitive match for "vertical"
         // 1. If value is a case-sensitive match for the string "rl", then
         //    let cue's WebVTT cue writing direction be vertical
         //    growing left.
-        if (input.ScanRun(value_run, VerticalGrowingLeftKeyword()))
-          writing_direction_ = kVerticalGrowingLeft;
+        if (ScanRun(value_input, VerticalGrowingLeftKeyword())) {
+          writing_direction_ = WritingDirection::kVerticalGrowingLeft;
+        }
 
         // 2. Otherwise, if value is a case-sensitive match for the string
         //    "lr", then let cue's WebVTT cue writing direction be
         //    vertical growing right.
-        else if (input.ScanRun(value_run, VerticalGrowingRightKeyword()))
-          writing_direction_ = kVerticalGrowingRight;
+        else if (ScanRun(value_input, VerticalGrowingRightKeyword())) {
+          writing_direction_ = WritingDirection::kVerticalGrowingRight;
+        }
         break;
       }
-      case kLine: {
+      case CueSetting::kLine: {
         // If name is a case-sensitive match for "line"
         // Steps 1 - 2 skipped.
         double number;
@@ -891,7 +892,7 @@ void VTTCue::ParseSettings(const VTTRegionMap* region_map,
         //    If parse a percentage string from linepos doesn't fail, let
         //    number be the returned percentage, otherwise jump to the step
         //    labeled next setting.
-        bool is_percentage = input.ScanPercentage(number);
+        bool is_percentage = value_input.ScanPercentage(number);
         if (is_percentage) {
           if (IsInvalidPercentage(number))
             break;
@@ -916,16 +917,18 @@ void VTTCue::ParseSettings(const VTTRegionMap* region_map,
           //
           // 5. Interpret linepos as a (potentially signed) real number, and
           //    let number be that number.
-          bool is_negative = input.Scan('-');
-          if (!input.ScanDouble(number))
+          bool is_negative = value_input.Scan('-');
+          if (!value_input.ScanDouble(number)) {
             break;
+          }
           // Negate number if it was preceded by a hyphen-minus - unless it's
           // zero.
           if (is_negative && number)
             number = -number;
         }
-        if (!input.IsAt(value_run.end()))
+        if (!value_input.IsAtEnd()) {
           break;
+        }
         // 5. Let cue's WebVTT cue line be number.
         line_position_ = number;
         // 6. If the last character in linepos is a U+0025 PERCENT SIGN
@@ -935,7 +938,7 @@ void VTTCue::ParseSettings(const VTTRegionMap* region_map,
         // Steps 7 - 9 skipped.
         break;
       }
-      case kPosition: {
+      case CueSetting::kPosition: {
         // If name is a case-sensitive match for "position".
         double number;
         // Steps 1 - 2 skipped.
@@ -943,69 +946,75 @@ void VTTCue::ParseSettings(const VTTRegionMap* region_map,
         //    number be the returned percentage, otherwise jump to the step
         //    labeled next setting (text track cue text position's value
         //    remains the special value auto).
-        if (!ScanPercentage(input, number))
+        if (!ScanPercentage(value_input, number)) {
           break;
-        if (!input.IsAt(value_run.end()))
+        }
+        if (!value_input.IsAtEnd()) {
           break;
+        }
         // 4. Let cue's cue position be number.
         text_position_ = number;
         // Steps 5 - 7 skipped.
         break;
       }
-      case kSize: {
+      case CueSetting::kSize: {
         // If name is a case-sensitive match for "size"
         double number;
         // 1. If parse a percentage string from value doesn't fail, let
         //    number be the returned percentage, otherwise jump to the step
         //    labeled next setting.
-        if (!ScanPercentage(input, number))
+        if (!ScanPercentage(value_input, number)) {
           break;
-        if (!input.IsAt(value_run.end()))
+        }
+        if (!value_input.IsAtEnd()) {
           break;
+        }
         // 2. Let cue's WebVTT cue size be number.
         cue_size_ = number;
         break;
       }
-      case kAlign: {
+      case CueSetting::kAlign: {
         // If name is a case-sensitive match for "align"
         // 1. If value is a case-sensitive match for the string "start",
         //    then let cue's WebVTT cue text alignment be start alignment.
-        if (ScanRun(value_run, AlignSetting::kStart, input))
+        if (ScanRun(value_input, AlignSetting::kStart)) {
           cue_alignment_ = AlignSetting::kStart;
+        }
 
         // 2. If value is a case-sensitive match for the string "center",
         //    then let cue's WebVTT cue text alignment be center alignment.
-        else if (ScanRun(value_run, AlignSetting::kCenter, input))
+        else if (ScanRun(value_input, AlignSetting::kCenter)) {
           cue_alignment_ = AlignSetting::kCenter;
+        }
 
         // 3. If value is a case-sensitive match for the string "end", then
         //    let cue's WebVTT cue text alignment be end alignment.
-        else if (ScanRun(value_run, AlignSetting::kEnd, input))
+        else if (ScanRun(value_input, AlignSetting::kEnd)) {
           cue_alignment_ = AlignSetting::kEnd;
+        }
 
         // 4. If value is a case-sensitive match for the string "left",
         //    then let cue's WebVTT cue text alignment be left alignment.
-        else if (ScanRun(value_run, AlignSetting::kLeft, input))
+        else if (ScanRun(value_input, AlignSetting::kLeft)) {
           cue_alignment_ = AlignSetting::kLeft;
+        }
 
         // 5. If value is a case-sensitive match for the string "right",
         //    then let cue's WebVTT cue text alignment be right alignment.
-        else if (ScanRun(value_run, AlignSetting::kRight, input))
+        else if (ScanRun(value_input, AlignSetting::kRight)) {
           cue_alignment_ = AlignSetting::kRight;
+        }
         break;
       }
-      case kRegionId:
+      case CueSetting::kRegionId:
         if (region_map) {
-          auto it = region_map->find(input.ExtractString(value_run));
+          auto it = region_map->find(value_input.RestOfInputAsString());
           region_ = it != region_map->end() ? it->value : nullptr;
         }
         break;
-      case kNone:
+      case CueSetting::kNone:
         break;
     }
-
-    // Make sure the entire run is consumed.
-    input.SkipRun(value_run);
   }
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 // spellcheck_per_process_browsertest.cc
 
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
@@ -34,6 +34,7 @@
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "services/service_manager/public/cpp/interface_provider.h"
 
@@ -52,7 +53,7 @@ class MockSpellCheckHost : spellcheck::mojom::SpellCheckHost {
   MockSpellCheckHost(const MockSpellCheckHost&) = delete;
   MockSpellCheckHost& operator=(const MockSpellCheckHost&) = delete;
 
-  ~MockSpellCheckHost() override {}
+  ~MockSpellCheckHost() override = default;
 
   content::RenderProcessHost* process_host() const { return process_host_; }
 
@@ -105,7 +106,6 @@ class MockSpellCheckHost : spellcheck::mojom::SpellCheckHost {
   }
 
   // spellcheck::mojom::SpellCheckHost:
-  void RequestDictionary() override {}
   void NotifyChecked(const std::u16string& word, bool misspelled) override {}
 
 #if BUILDFLAG(USE_RENDERER_SPELLCHECKER)
@@ -119,7 +119,6 @@ class MockSpellCheckHost : spellcheck::mojom::SpellCheckHost {
 
 #if BUILDFLAG(USE_BROWSER_SPELLCHECKER)
   void RequestTextCheck(const std::u16string& text,
-                        int route_id,
                         RequestTextCheckCallback callback) override {
     DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
     std::move(callback).Run(std::vector<SpellCheckResult>());
@@ -127,7 +126,6 @@ class MockSpellCheckHost : spellcheck::mojom::SpellCheckHost {
   }
 
   void CheckSpelling(const std::u16string& word,
-                     int,
                      CheckSpellingCallback) override {}
   void FillSuggestionList(const std::u16string& word,
                           FillSuggestionListCallback) override {}
@@ -155,8 +153,6 @@ class MockSpellCheckHost : spellcheck::mojom::SpellCheckHost {
     }
 
     NOTREACHED();
-    std::move(callback).Run(/*dictionaries=*/{}, /*custom_words=*/{},
-                            /*enable=*/false);
   }
 
   void OnDictionariesInitialized() {
@@ -273,9 +269,8 @@ class ChromeSitePerProcessSpellCheckTest : public ChromeSitePerProcessTest {
     // When delayed initialization of the spellcheck service is enabled by
     // default, want to maintain test coverage for the older code path that
     // initializes spellcheck on browser startup.
-    feature_list_.InitWithFeatures(
-        /*enabled_features=*/{spellcheck::kWinUseBrowserSpellChecker},
-        /*disabled_features=*/{spellcheck::kWinDelaySpellcheckServiceInit});
+    feature_list_.InitAndDisableFeature(
+        spellcheck::kWinDelaySpellcheckServiceInit);
 #endif  // BUILDFLAG(IS_WIN) && BUILDFLAG(USE_BROWSER_SPELLCHECKER)
 
     ChromeSitePerProcessTest::SetUp();
@@ -395,10 +390,8 @@ class ChromeSitePerProcessSpellCheckTestDelayInit
 
   void SetUp() override {
     // Don't initialize the SpellcheckService on browser launch.
-    feature_list_.InitWithFeatures(
-        /*enabled_features=*/{spellcheck::kWinUseBrowserSpellChecker,
-                              spellcheck::kWinDelaySpellcheckServiceInit},
-        /*disabled_features=*/{});
+    feature_list_.InitAndEnableFeature(
+        spellcheck::kWinDelaySpellcheckServiceInit);
 
     ChromeSitePerProcessTest::SetUp();
   }

@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_BROWSER_BACKGROUND_FETCH_STORAGE_START_NEXT_PENDING_REQUEST_TASK_H_
 #define CONTENT_BROWSER_BACKGROUND_FETCH_STORAGE_START_NEXT_PENDING_REQUEST_TASK_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "content/browser/background_fetch/background_fetch.pb.h"
 #include "content/browser/background_fetch/background_fetch_request_info.h"
 #include "content/browser/background_fetch/storage/database_task.h"
@@ -51,8 +51,6 @@ class StartNextPendingRequestTask : public DatabaseTask {
   void DidDeletePendingRequest(blink::ServiceWorkerStatusCode status);
 
   void FinishWithError(blink::mojom::BackgroundFetchError error) override;
-
-  std::string HistogramName() const override;
 
   BackgroundFetchRegistrationId registration_id_;
   NextRequestCallback callback_;

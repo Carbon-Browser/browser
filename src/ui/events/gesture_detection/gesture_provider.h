@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,10 +46,11 @@ class GESTURE_DETECTION_EXPORT GestureProvider {
     // there will be no delay before tap events. Defaults to true.
     bool double_tap_support_for_platform_enabled;
 
-    // If |gesture_begin_end_types_enabled| is true, fire an ET_GESTURE_BEGIN
-    // event for every added touch point, and an ET_GESTURE_END event for every
-    // removed touch point. This requires one ACTION_CANCEL event to be sent per
-    // touch point, which only occurs on Aura. Defaults to false.
+    // If |gesture_begin_end_types_enabled| is true, fire an
+    // EventType::kGestureBegin event for every added touch point, and an
+    // EventType::kGestureEnd event for every removed touch point. This requires
+    // one ACTION_CANCEL event to be sent per touch point, which only occurs on
+    // Aura. Defaults to false.
     bool gesture_begin_end_types_enabled;
 
     // The min and max size (both length and width, in dips) of the generated

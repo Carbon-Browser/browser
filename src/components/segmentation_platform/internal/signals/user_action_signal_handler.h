@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,9 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/user_metrics.h"
+#include "base/observer_list.h"
 #include "base/time/time.h"
+#include "components/segmentation_platform/internal/database/ukm_database.h"
 
 namespace segmentation_platform {
 
@@ -20,7 +22,21 @@ class SignalDatabase;
 // internal database for future processing.
 class UserActionSignalHandler {
  public:
-  explicit UserActionSignalHandler(SignalDatabase* signal_database);
+  class Observer : public base::CheckedObserver {
+   public:
+    // Called when a histogram signal tracked by segmentation platform is
+    // updated and written to database.
+    virtual void OnUserAction(const std::string& user_action,
+                              base::TimeTicks action_time) = 0;
+    ~Observer() override = default;
+
+   protected:
+    Observer() = default;
+  };
+
+  UserActionSignalHandler(const std::string& profile_id,
+                          SignalDatabase* signal_database,
+                          UkmDatabase* ukm_db);
   virtual ~UserActionSignalHandler();
 
   // Disallow copy/assign.
@@ -35,12 +51,22 @@ class UserActionSignalHandler {
   // This can be called early even before relevant user actions are known.
   virtual void EnableMetrics(bool enable_metrics);
 
+  // Add/Remove observer for histogram update events.
+  virtual void AddObserver(Observer* observer);
+  virtual void RemoveObserver(Observer* observer);
+
  private:
   void OnUserAction(const std::string& user_action,
                     base::TimeTicks action_time);
+  void OnSampleWritten(const std::string& user_action,
+                       base::TimeTicks action_time,
+                       bool success);
+
+  const std::string profile_id_;
 
   // The database storing relevant user actions.
-  raw_ptr<SignalDatabase> db_;
+  const raw_ptr<SignalDatabase> db_;
+  const raw_ptr<UkmDatabase> ukm_db_;
 
   // The callback registered with user metrics module that gets invoked for
   // every user action.
@@ -49,6 +75,8 @@ class UserActionSignalHandler {
   // The set of user actions relevant to the segmentation platform. Everything
   // else will be filtered out.
   std::set<uint64_t> user_actions_;
+
+  base::ObserverList<Observer> observers_;
 
   // Whether or not the segmentation platform should record metrics events.
   bool metrics_enabled_;

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,11 @@
 
 namespace blink {
 
-// RAIL mode as defined in [1].
+// A subset of RAIL mode as defined in [1].
 // [1] https://developers.google.com/web/fundamentals/performance/rail
 enum class RAILMode {
-  kResponse,
-  kAnimation,
-  kIdle,
+  // Covers all modes except Load.
+  kDefault,
   kLoad,
 };
 

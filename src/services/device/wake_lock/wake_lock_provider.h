@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include <memory>
 #include <string>
 
-#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -17,8 +16,6 @@
 #include "services/device/public/mojom/wake_lock_context.mojom.h"
 #include "services/device/public/mojom/wake_lock_provider.mojom.h"
 #include "services/device/wake_lock/wake_lock.h"
-#include "services/device/wake_lock/wake_lock_context.h"
-#include "ui/gfx/native_widget_types.h"
 
 namespace device {
 

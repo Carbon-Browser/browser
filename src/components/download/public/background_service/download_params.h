@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,17 @@
 #define COMPONENTS_DOWNLOAD_PUBLIC_BACKGROUND_SERVICE_DOWNLOAD_PARAMS_H_
 
 #include <map>
+#include <optional>
 #include <string>
 
-#include "base/callback.h"
+#include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "components/download/public/background_service/clients.h"
 #include "net/base/isolation_info.h"
 #include "net/http/http_request_headers.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/public/mojom/fetch_api.mojom-shared.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace download {
@@ -24,7 +25,8 @@ namespace download {
 // specify restrictions on what impact this download will have on the device
 // (battery, network conditions, priority, etc.). On iOS, the network and
 // battery requirements are mapped to NSURLSessionConfiguration.discretionary.
-struct SchedulingParams {
+struct COMPONENT_EXPORT(COMPONENTS_DOWNLOAD_PUBLIC_BACKGROUND_SERVICE)
+    SchedulingParams {
  public:
   enum class NetworkRequirements {
     // The download can occur under all network conditions.
@@ -99,7 +101,8 @@ struct SchedulingParams {
 };
 
 // The parameters describing how to build the request when starting a download.
-struct RequestParams {
+struct COMPONENT_EXPORT(COMPONENTS_DOWNLOAD_PUBLIC_BACKGROUND_SERVICE)
+    RequestParams {
  public:
   RequestParams();
   RequestParams(const RequestParams& other);
@@ -125,7 +128,7 @@ struct RequestParams {
   // The isolation info of the request, this won't be persisted to db and will
   // be invalidate during download resumption in new browser session. Not
   // supported on iOS.
-  absl::optional<net::IsolationInfo> isolation_info;
+  std::optional<net::IsolationInfo> isolation_info;
 
   // First-party URL redirect policy: During server redirects, whether the
   // first-party URL for cookies will need to be changed. Download is normally
@@ -137,7 +140,8 @@ struct RequestParams {
 // The parameters that describe a download request made to the DownloadService.
 // The |client| needs to be properly created and registered for this service for
 // the download to be accepted.
-struct DownloadParams {
+struct COMPONENT_EXPORT(COMPONENTS_DOWNLOAD_PUBLIC_BACKGROUND_SERVICE)
+    DownloadParams {
   using CustomData = std::map<std::string, std::string>;
 
   enum StartResult {
@@ -178,7 +182,8 @@ struct DownloadParams {
   // The feature that is requesting this download.
   DownloadClient client;
 
-  // A unique GUID that represents this download.  See |base::GenerateGUID()|.
+  // A unique GUID that represents this download.  See
+  // `base::Uuid::GenerateRandomV4().AsLowercaseString()`.
   std::string guid;
 
   // A callback that will be notified if this download has been accepted and

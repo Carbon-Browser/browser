@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,10 +35,10 @@ AmbientLightSensor::AmbientLightSensor(ExecutionContext* execution_context,
              SensorType::AMBIENT_LIGHT,
              {mojom::blink::PermissionsPolicyFeature::kAmbientLightSensor}) {}
 
-absl::optional<double> AmbientLightSensor::illuminance() const {
+std::optional<double> AmbientLightSensor::illuminance() const {
   if (hasReading())
     return GetReading().als.value;
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 }  // namespace blink

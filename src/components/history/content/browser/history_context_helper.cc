@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,12 +28,8 @@ WEB_CONTENTS_USER_DATA_KEY_IMPL(WebContentsContext);
 namespace history {
 
 ContextID ContextIDForWebContents(content::WebContents* web_contents) {
-  ContextID context_id = WebContentsContext::FromWebContents(web_contents);
-  if (!context_id) {
-    WebContentsContext::CreateForWebContents(web_contents);
-    context_id = WebContentsContext::FromWebContents(web_contents);
-  }
-  return context_id;
+  WebContentsContext::CreateForWebContents(web_contents);
+  return WebContentsContext::FromWebContents(web_contents)->GetContextID();
 }
 
 }  // namespace history

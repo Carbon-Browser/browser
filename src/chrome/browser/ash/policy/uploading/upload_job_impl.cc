@@ -1,4 +1,4 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/strings/stringprintf.h"
 #include "base/syslog_logging.h"
@@ -46,11 +46,12 @@ long g_retry_delay_ms = 25000;
 
 }  // namespace
 
-UploadJobImpl::Delegate::~Delegate() {}
+UploadJobImpl::Delegate::~Delegate() = default;
 
-UploadJobImpl::MimeBoundaryGenerator::~MimeBoundaryGenerator() {}
+UploadJobImpl::MimeBoundaryGenerator::~MimeBoundaryGenerator() = default;
 
-UploadJobImpl::RandomMimeBoundaryGenerator::~RandomMimeBoundaryGenerator() {}
+UploadJobImpl::RandomMimeBoundaryGenerator::~RandomMimeBoundaryGenerator() =
+    default;
 
 // multipart/form-data POST request to upload the data. A DataSegment
 // corresponds to one "Content-Disposition" in the "multipart" request.
@@ -154,7 +155,6 @@ UploadJobImpl::UploadJobImpl(
   DCHECK(delegate_);
   SYSLOG(INFO) << "Upload job created.";
   if (!upload_url_.is_valid()) {
-    state_ = ERROR;
     NOTREACHED() << upload_url_ << " is not a valid URL.";
   }
 }

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@ namespace network {
 URLLoaderContextForTests::URLLoaderContextForTests() = default;
 URLLoaderContextForTests::~URLLoaderContextForTests() = default;
 
-bool URLLoaderContextForTests::ShouldRequireNetworkIsolationKey() const {
+bool URLLoaderContextForTests::ShouldRequireIsolationInfo() const {
   return false;
 }
 
@@ -28,12 +28,22 @@ mojom::CookieAccessObserver* URLLoaderContextForTests::GetCookieAccessObserver()
   return nullptr;
 }
 
+mojom::TrustTokenAccessObserver*
+URLLoaderContextForTests::GetTrustTokenAccessObserver() const {
+  return nullptr;
+}
+
 mojom::CrossOriginEmbedderPolicyReporter*
 URLLoaderContextForTests::GetCoepReporter() const {
   return nullptr;
 }
 
 mojom::DevToolsObserver* URLLoaderContextForTests::GetDevToolsObserver() const {
+  return nullptr;
+}
+
+mojom::DeviceBoundSessionAccessObserver*
+URLLoaderContextForTests::GetDeviceBoundSessionAccessObserver() const {
   return nullptr;
 }
 
@@ -61,8 +71,12 @@ URLLoaderContextForTests::GetResourceSchedulerClient() const {
   return resource_scheduler_client_;
 }
 
-corb::PerFactoryState& URLLoaderContextForTests::GetMutableCorbState() {
-  return corb_state_;
+orb::PerFactoryState& URLLoaderContextForTests::GetMutableOrbState() {
+  return orb_state_;
+}
+
+bool URLLoaderContextForTests::DataUseUpdatesEnabled() {
+  return false;
 }
 
 }  // namespace network

@@ -1,16 +1,16 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_DOWNLOAD_INTERNAL_BACKGROUND_SERVICE_TEST_TEST_STORE_H_
 #define COMPONENTS_DOWNLOAD_INTERNAL_BACKGROUND_SERVICE_TEST_TEST_STORE_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/download/internal/background_service/store.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace download {
 
@@ -58,7 +58,7 @@ class TestStore : public Store {
   std::vector<Entry> updated_entries_;
   std::vector<std::string> removed_entries_;
 
-  absl::optional<bool> automatic_callback_response_;
+  std::optional<bool> automatic_callback_response_;
   InitCallback init_callback_;
   StoreCallback hard_recover_callback_;
   StoreCallback update_callback_;

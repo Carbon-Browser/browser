@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,7 @@ import android.content.Context;
 import org.chromium.components.thinwebview.internal.CompositorViewImpl;
 import org.chromium.ui.base.WindowAndroid;
 
-/**
- * Factory for creating a {@link CompositorView}.
- */
+/** Factory for creating a {@link CompositorView}. */
 public class CompositorViewFactory {
     /**
      * Creates a {@link CompositorView} backed by a {@link Surface}. The surface is provided by

@@ -1,10 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_ARC_PIP_ARC_PICTURE_IN_PICTURE_WINDOW_CONTROLLER_IMPL_H_
 #define CHROME_BROWSER_ASH_ARC_PIP_ARC_PICTURE_IN_PICTURE_WINDOW_CONTROLLER_IMPL_H_
 
+#include "base/memory/raw_ptr.h"
 #include "content/public/browser/picture_in_picture_window_controller.h"
 #include "ui/gfx/geometry/size.h"
 
@@ -40,9 +41,12 @@ class ArcPictureInPictureWindowControllerImpl
   void CloseAndFocusInitiator() override;
   void OnWindowDestroyed(bool should_pause_video) override;
   content::WebContents* GetWebContents() override;
+  std::optional<gfx::Rect> GetWindowBounds() override;
+  content::WebContents* GetChildWebContents() override;
+  std::optional<url::Origin> GetOrigin() override;
 
  private:
-  arc::ArcPipBridge* const arc_pip_bridge_;
+  const raw_ptr<arc::ArcPipBridge> arc_pip_bridge_;
 };
 
 }  // namespace arc

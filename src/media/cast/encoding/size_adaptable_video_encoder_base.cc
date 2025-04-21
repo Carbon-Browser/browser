@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "media/base/video_encoder_metrics_provider.h"
 #include "media/base/video_frame.h"
 #include "media/cast/common/sender_encoded_frame.h"
 
@@ -18,9 +19,11 @@ namespace cast {
 SizeAdaptableVideoEncoderBase::SizeAdaptableVideoEncoderBase(
     const scoped_refptr<CastEnvironment>& cast_environment,
     const FrameSenderConfig& video_config,
+    std::unique_ptr<VideoEncoderMetricsProvider> metrics_provider,
     StatusChangeCallback status_change_cb)
     : cast_environment_(cast_environment),
       video_config_(video_config),
+      metrics_provider_(std::move(metrics_provider)),
       status_change_cb_(std::move(status_change_cb)),
       frames_in_encoder_(0),
       next_frame_id_(FrameId::first()) {
@@ -82,19 +85,6 @@ void SizeAdaptableVideoEncoderBase::GenerateKeyFrame() {
   }
 }
 
-std::unique_ptr<VideoFrameFactory>
-SizeAdaptableVideoEncoderBase::CreateVideoFrameFactory() {
-  DCHECK(cast_environment_->CurrentlyOn(CastEnvironment::MAIN));
-  return nullptr;
-}
-
-void SizeAdaptableVideoEncoderBase::EmitFrames() {
-  DCHECK(cast_environment_->CurrentlyOn(CastEnvironment::MAIN));
-  if (encoder_) {
-    encoder_->EmitFrames();
-  }
-}
-
 StatusChangeCallback
 SizeAdaptableVideoEncoderBase::CreateEncoderStatusChangeCallback() {
   DCHECK(cast_environment_->CurrentlyOn(CastEnvironment::MAIN));
@@ -122,12 +112,7 @@ void SizeAdaptableVideoEncoderBase::TrySpawningReplacementEncoder(
   // If prior frames are still encoding in the current encoder, let them finish
   // first.
   if (frames_in_encoder_ > 0) {
-    encoder_->EmitFrames();
-    // Check again, since EmitFrames() is a synchronous operation for some
-    // encoders.
-    if (frames_in_encoder_ > 0) {
-      return;
-    }
+    return;
   }
 
   if (frames_in_encoder_ == kEncoderIsInitializing) {
@@ -163,9 +148,11 @@ void SizeAdaptableVideoEncoderBase::OnEncodedVideoFrame(
   --frames_in_encoder_;
   DCHECK_GE(frames_in_encoder_, 0);
 
-  if (encoded_frame) {
+  if (encoded_frame && !encoded_frame->data.empty()) {
     next_frame_id_ = encoded_frame->frame_id + 1;
+    metrics_provider_->IncrementEncodedFrameCount();
   }
+
   std::move(frame_encoded_callback).Run(std::move(encoded_frame));
 }
 

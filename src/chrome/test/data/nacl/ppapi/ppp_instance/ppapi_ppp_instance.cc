@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -73,7 +73,6 @@ PP_Bool HandleDocumentLoad(PP_Instance instance,
   // Only called for full-frame plugins. For coverage see:
   // tests/ppapi_browser/extension_mime_handler/
   NACL_NOTREACHED();
-  return PP_FALSE;
 }
 
 const PPP_Instance ppp_instance_interface = {

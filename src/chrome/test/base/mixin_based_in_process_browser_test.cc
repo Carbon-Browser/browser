@@ -1,4 +1,4 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,6 +31,8 @@ void InProcessBrowserTestMixin::CreatedBrowserMainParts(
     content::BrowserMainParts* browser_main_parts) {}
 
 void InProcessBrowserTestMixin::SetUpOnMainThread() {}
+
+void InProcessBrowserTestMixin::PostRunTestOnMainThread() {}
 
 void InProcessBrowserTestMixin::TearDownOnMainThread() {}
 
@@ -81,6 +83,12 @@ void InProcessBrowserTestMixinHost::CreatedBrowserMainParts(
 void InProcessBrowserTestMixinHost::SetUpOnMainThread() {
   for (InProcessBrowserTestMixin* mixin : mixins_)
     mixin->SetUpOnMainThread();
+}
+
+void InProcessBrowserTestMixinHost::PostRunTestOnMainThread() {
+  for (InProcessBrowserTestMixin* mixin : mixins_) {
+    mixin->PostRunTestOnMainThread();
+  }
 }
 
 void InProcessBrowserTestMixinHost::TearDownOnMainThread() {
@@ -137,6 +145,11 @@ void MixinBasedInProcessBrowserTest::CreatedBrowserMainParts(
 void MixinBasedInProcessBrowserTest::SetUpOnMainThread() {
   mixin_host_.SetUpOnMainThread();
   InProcessBrowserTest::SetUpOnMainThread();
+}
+
+void MixinBasedInProcessBrowserTest::PostRunTestOnMainThread() {
+  mixin_host_.PostRunTestOnMainThread();
+  InProcessBrowserTest::PostRunTestOnMainThread();
 }
 
 void MixinBasedInProcessBrowserTest::TearDownOnMainThread() {

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,8 +16,6 @@ namespace feedstore {
 class Metadata;
 }
 namespace feed {
-constexpr base::TimeDelta kSuppressRefreshDuration = base::Minutes(30);
-
 // A schedule for making Feed refresh requests.
 // |anchor_time| + |refresh_offsets[i]| is the time each fetch should be made.
 struct RequestSchedule {

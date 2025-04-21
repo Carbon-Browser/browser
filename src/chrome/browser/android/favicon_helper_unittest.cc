@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "components/favicon/core/test/mock_favicon_service.h"
 #include "components/favicon_base/favicon_callback.h"
@@ -16,6 +17,7 @@
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/codec/png_codec.h"
+#include "ui/gfx/image/image_unittest_util.h"
 #include "url/gurl.h"
 
 using ::testing::_;
@@ -27,13 +29,11 @@ CreateTestBitmapResult(GURL url, int size, SkColor color = SK_ColorRED) {
   result.expired = false;
 
   // Create bitmap and fill with |color|.
-  scoped_refptr<base::RefCountedBytes> data(new base::RefCountedBytes());
-  SkBitmap bitmap;
-  bitmap.allocN32Pixels(size, size);
-  bitmap.eraseColor(color);
-  gfx::PNGCodec::EncodeBGRASkBitmap(bitmap, false, &data->data());
+  std::optional<std::vector<uint8_t>> data = gfx::PNGCodec::EncodeBGRASkBitmap(
+      gfx::test::CreateBitmap(size, color), /*discard_transparency=*/false);
 
-  result.bitmap_data = data;
+  result.bitmap_data =
+      base::MakeRefCounted<base::RefCountedBytes>(std::move(data).value());
   result.pixel_size = gfx::Size(size, size);
   result.icon_url = url;
   result.icon_type = favicon_base::IconType::kFavicon;
@@ -158,7 +158,7 @@ TEST_F(FaviconHelperTest, GetComposedFaviconImageOrderMatchesInput) {
                    favicon_base::FaviconRawBitmapCallback callback,
                    base::CancelableTaskTracker* tracker) {
         tracker->PostTask(
-            base::ThreadTaskRunnerHandle::Get().get(), FROM_HERE,
+            base::SingleThreadTaskRunner::GetCurrentDefault().get(), FROM_HERE,
             base::BindOnce(
                 [](favicon_base::FaviconRawBitmapCallback callback, GURL url,
                    int size) {

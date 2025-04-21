@@ -1,21 +1,33 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+//
+// If you are looking to write a new browser test, you are probably looking for
+// one of the already-implemented subclasses, e.g. `content::ContentBrowserTest`
+// for tests that can run directly on top of content_shell,
+// `InProcessBrowserTest` for tests that require `//chrome`-layer functionality,
+// et cetera. See `//content/public/test/browser_test.h` for more information.
+//
+// `content::BrowserTestBase` is a base class that provides shared functionality
+// across various types of browser tests. It is not intended for direct use in
+// tests, as it does not actually define how to launch a browser, nor how to run
+// a test in said browser.
 
 #ifndef CONTENT_PUBLIC_TEST_BROWSER_TEST_BASE_H_
 #define CONTENT_PUBLIC_TEST_BROWSER_TEST_BASE_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/metrics/field_trial.h"
+#include "base/test/scoped_path_override.h"
 #include "base/threading/thread.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
-#include "content/public/test/no_renderer_crashes_assertion.h"
 #include "content/public/test/test_host_resolver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/dns/public/dns_over_https_config.h"
@@ -24,11 +36,7 @@
 #include "services/network/public/mojom/network_service_test.mojom.h"
 #include "storage/browser/quota/quota_settings.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-
-#if defined(RUST_ENABLED)
-#include "testing/rust_gtest_interop/rust_gtest_interop.h"
-#endif
+#include "ui/gfx/animation/animation_test_api.h"
 
 namespace base {
 class CommandLine;
@@ -36,12 +44,20 @@ class FilePath;
 class TimeDelta;
 }  // namespace base
 
-namespace chromeos {
-class ScopedDisableCrosapiForTesting;
+#if BUILDFLAG(IS_ANDROID)
+namespace discardable_memory {
+class DiscardableSharedMemoryManager;
+}
+#endif
+
+namespace ui {
+class ScopedAnimationDurationScaleMode;
 }
 
 namespace content {
 class BrowserMainParts;
+class ContentMainDelegate;
+class NoRendererCrashesAssertion;
 class WebContents;
 
 class BrowserTestBase : public ::testing::Test {
@@ -78,7 +94,7 @@ class BrowserTestBase : public ::testing::Test {
   virtual bool UseProductionQuotaSettings();
 
   // This is invoked if the test receives SIGTERM or SIGSEGV.
-  virtual void SignalRunTestOnMainThread(int signal){};
+  virtual void SignalRunTestOnMainThread(int signal) {}
 
   // Crash the Network Service process. Should only be called when
   // out-of-process Network Service is enabled. Re-applies any added host
@@ -122,6 +138,11 @@ class BrowserTestBase : public ::testing::Test {
   // PreEarlyInitialization() has been called.
   virtual void CreatedBrowserMainParts(BrowserMainParts* browser_main_parts) {}
 
+  // Returns a custom ContentMainDelegate to use for the test, or nullptr to use
+  // the standard delegate. The returned object must live at least until
+  // TearDownInProcessBrowserTextFixture is called.
+  virtual ContentMainDelegate* GetOptionalContentMainDelegateOverride();
+
   // GTest assertions that the connection to `network_service_test_` did not get
   // dropped unexpectedly.
   void AssertThatNetworkServiceDidNotCrash();
@@ -158,7 +179,7 @@ class BrowserTestBase : public ::testing::Test {
   // Sets expected browser exit code, in case it's different than 0 (success).
   void set_expected_exit_code(int code) { expected_exit_code_ = code; }
 
-  // Returns the embedded test server. Guaranteed to be non-NULL.
+  // Returns the HTTP embedded test server. Guaranteed to be non-NULL.
   const net::EmbeddedTestServer* embedded_test_server() const {
     return embedded_test_server_.get();
   }
@@ -215,6 +236,11 @@ class BrowserTestBase : public ::testing::Test {
   // Performs a bunch of setup, and then runs the browser test body.
   void ProxyRunTestOnMainThreadLoop();
 
+  // Sets `initialized_network_process_` to false and calls
+  // InitializeNetworkProcess(). Used when restarting the network service
+  // process.
+  void ForceInitializeNetworkProcess();
+
   // When using the network process, update the host resolver rules that were
   // added in SetUpOnMainThread.
   void InitializeNetworkProcess();
@@ -223,7 +249,11 @@ class BrowserTestBase : public ::testing::Test {
   // CreatedBrowserMainParts().
   void CreatedBrowserMainPartsImpl(BrowserMainParts* browser_main_parts);
 
-  // Embedded test server, cheap to create, started on demand.
+#if BUILDFLAG(IS_WIN)
+  std::optional<base::ScopedPathOverride> system_temp_override_;
+#endif
+
+  // Embedded HTTP test server, cheap to create, started on demand.
   std::unique_ptr<net::EmbeddedTestServer> embedded_test_server_;
 
   // Host resolver used during tests.
@@ -235,7 +265,7 @@ class BrowserTestBase : public ::testing::Test {
 
   // DoH configuration used during tests. When it contains a value,
   // `InitializeNetworkProcess` will pass it to the network service.
-  absl::optional<std::pair<net::SecureDnsMode, net::DnsOverHttpsConfig>>
+  std::optional<std::pair<net::SecureDnsMode, net::DnsOverHttpsConfig>>
       test_doh_config_;
 
   // A field trial list that's used to support field trials activated prior to
@@ -254,20 +284,21 @@ class BrowserTestBase : public ::testing::Test {
   // the --force-device-scale-factor flag in SetUp.
   float force_device_scale_factor_ = 0.f;
 
+  // When verifying pixel output, animations are disabled to reduce flakiness.
+  std::unique_ptr<ui::ScopedAnimationDurationScaleMode>
+      disable_layer_animations_;
+  gfx::AnimationTestApi::RenderModeResetter disable_rich_animations_;
+
   // When true, do compositing with the software backend instead of using GL.
   bool use_software_compositing_ = false;
 
   // Initial WebContents to watch for navigations during SetUpOnMainThread.
-  raw_ptr<WebContents> initial_web_contents_ = nullptr;
+  base::WeakPtr<WebContents> initial_web_contents_;
 
   // Whether SetUp was called. This value is checked in the destructor of this
   // class to ensure that SetUp was called. If it's not called, the test will
   // not run and report a false positive result.
   bool set_up_called_ = false;
-
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  std::unique_ptr<chromeos::ScopedDisableCrosapiForTesting> disable_crosapi_;
-#endif
 
   std::unique_ptr<storage::QuotaSettings> quota_settings_;
 
@@ -279,58 +310,23 @@ class BrowserTestBase : public ::testing::Test {
 
   bool allow_network_access_to_host_resolutions_ = false;
 
-  raw_ptr<BrowserMainParts, DanglingUntriaged> browser_main_parts_ = nullptr;
+  raw_ptr<BrowserMainParts, AcrossTasksDanglingUntriaged> browser_main_parts_ =
+      nullptr;
 
 #if BUILDFLAG(IS_POSIX)
   bool handle_sigterm_;
 #endif
+
+#if BUILDFLAG(IS_ANDROID)
+  // Mimic the destruction order of ContentMain:
+  // - ContentMainRunnerImpl::Shutdown() resets ipc support and shuts down the
+  //   BrowserTaskExecutor.
+  // - ContentMainRunnerImpl::~ContentMainRunnerImpl().
+  // - DiscardableSharedMemoryManager, owned by ContentMainRunnerImpl, is reset.
+  std::unique_ptr<discardable_memory::DiscardableSharedMemoryManager>
+      discardable_shared_memory_manager_;
+#endif
 };
-
-#if defined(RUST_ENABLED)
-// Macro to make an extern "C" function which acts as a Gtest factory for a
-// BrowserTestBase subclass T. Invoke this macro once for each subclass of
-// BrowserTestBase that should be used as a TestSuite class from a Rust browser
-// test, which can be specified with `#[gtest_suite(T)]`.
-//
-// The function generated by the macro is used by the
-// rust_gtest_interop::TestSuite trait implementation to connect a Rust test to
-// the C++ class.
-#define RUST_BROWSERTEST_TEST_SUITE_FACTORY(T)                     \
-  extern "C" T* RustBrowserTestFactory_##T(void (*f)(T*)) {        \
-    return ::content::rust_browsertest_factory_for_subclass<T>(f); \
-  }
-
-// This class provides Rust access to BrowserTestBase and its subclasses. It
-// replaces rust_gtest_interop::RustTest because TestBody() is not used by the
-// the BrowserTestBase class. Instead, the test is run from within the
-// RunTestOnMainThread() override.
-template <class BrowserTestBaseSubclass>
-class RustBrowserTest : public BrowserTestBaseSubclass {
- public:
-  explicit RustBrowserTest(void (&test_fn)(BrowserTestBaseSubclass*))
-      : test_fn_(test_fn) {
-    static_assert(std::is_convertible_v<BrowserTestBaseSubclass*,
-                                        ::content::BrowserTestBase*>,
-                  "RustBrowserTest's Subclass parameter must be a subclass"
-                  " of content::BrowserTestBase");
-  }
-  void RunTestOnMainThread() override { test_fn_(this); }
-
- private:
-  void TestBody() override {}
-
-  void (&test_fn_)(BrowserTestBaseSubclass*);
-};
-
-// Templated implementation of GtestFactoryFunction for browser tests. Rust
-// can't use templated methods currently, so other fully-typed functions need to
-// exist which can make use of this function, via the
-// RUST_BROWSERTEST_TEST_SUITE_FACTORY() macro.
-template <class Subclass>
-Subclass* rust_browsertest_factory_for_subclass(void (*body)(Subclass*)) {
-  return new RustBrowserTest<Subclass>(*body);
-}
-#endif  // RUST_ENABLED
 
 }  // namespace content
 

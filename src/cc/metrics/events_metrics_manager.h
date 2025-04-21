@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,8 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "cc/cc_export.h"
 #include "cc/metrics/event_metrics.h"
 
@@ -80,7 +81,8 @@ class CC_EXPORT EventsMetricsManager {
   void OnScopedMonitorEnded(std::unique_ptr<EventMetrics> metrics);
 
   // Stack of active, potentially nested, scoped monitors.
-  std::vector<ScopedMonitorImpl*> active_scoped_monitors_;
+  std::vector<raw_ptr<ScopedMonitorImpl, VectorExperimental>>
+      active_scoped_monitors_;
 
   // List of event metrics saved for reporting.
   EventMetrics::List saved_events_;

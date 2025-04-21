@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,19 +11,21 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/notreached.h"
 #include "base/sequence_checker.h"
+#include "base/strings/string_split.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "chromeos/crosapi/mojom/remoting.mojom.h"
 #include "chromeos/lacros/lacros_service.h"
 #include "extensions/browser/api/messaging/native_message_host.h"
+#include "google_apis/gaia/gaia_auth_util.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -38,9 +40,9 @@ namespace {
 
 constexpr int kInvalidMessageId = -1;
 
-int GetMessageId(const base::Value& message) {
-  const auto* message_id = message.FindPath(kMessageId);
-  return message_id ? message_id->GetInt() : kInvalidMessageId;
+int GetMessageId(const base::Value::Dict& message) {
+  std::optional<int> message_id = message.FindInt(kMessageId);
+  return message_id.value_or(kInvalidMessageId);
 }
 
 protocol::ErrorCode SupportSessionErrorToProtocolError(
@@ -51,6 +53,15 @@ protocol::ErrorCode SupportSessionErrorToProtocolError(
     default:
       return protocol::ErrorCode::UNKNOWN_ERROR;
   }
+}
+
+// This function checks the email address provided to see if it is properly
+// formatted. It does not validate the username or domain sections.
+// TODO(joedow): Move to a shared location.
+bool IsValidEmailAddress(const std::string& email) {
+  return base::SplitString(email, "@", base::KEEP_WHITESPACE,
+                           base::SPLIT_WANT_ALL)
+             .size() == 2U;
 }
 
 // This class is JSON <-> Mojo message converter which enables communication
@@ -78,7 +89,7 @@ class It2MeNativeMessagingHostLacros : public extensions::NativeMessageHost,
   void OnHostStateConnecting() override;
   void OnHostStateConnected(const std::string& remote_username) override;
   void OnHostStateDisconnected(
-      const absl::optional<std::string>& disconnect_reason) override;
+      const std::optional<std::string>& disconnect_reason) override;
   void OnNatPolicyChanged(mojom::NatPolicyStatePtr policy_state) override;
   void OnHostStateError(int64_t error_code) override;
   void OnPolicyError() override;
@@ -90,7 +101,7 @@ class It2MeNativeMessagingHostLacros : public extensions::NativeMessageHost,
 
  private:
   void ProcessHello(int message_id);
-  void ProcessConnect(int message_id, base::Value message);
+  void ProcessConnect(int message_id, base::Value::Dict message);
   void ProcessDisconnect(int message_id);
   void SendMessageToClient(base::Value::Dict message) const;
   void SendErrorAndExit(const protocol::ErrorCode error_code,
@@ -126,7 +137,7 @@ It2MeNativeMessagingHostLacros::~It2MeNativeMessagingHostLacros() = default;
 void It2MeNativeMessagingHostLacros::OnMessage(const std::string& message) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   std::string type;
-  base::Value contents;
+  base::Value::Dict contents;
   if (!ParseNativeMessageJson(message, type, contents)) {
     client_->CloseChannel(std::string());
     return;
@@ -208,11 +219,11 @@ void It2MeNativeMessagingHostLacros::OnHostStateConnected(
 }
 
 void It2MeNativeMessagingHostLacros::OnHostStateDisconnected(
-    const absl::optional<std::string>& disconnect_reason) {
+    const std::optional<std::string>& disconnect_reason) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   base::Value::Dict message;
   if (disconnect_reason.has_value()) {
-    message.Set(kDisconnectReason, disconnect_reason.value());
+    message.Set(kDisconnectReason, *disconnect_reason);
   }
   HandleHostStateChange(It2MeHostState::kDisconnected, std::move(message));
 }
@@ -231,7 +242,8 @@ void It2MeNativeMessagingHostLacros::OnNatPolicyChanged(
 void It2MeNativeMessagingHostLacros::OnHostStateError(int64_t error_code) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK_GE(error_code, 0);
-  LOG_IF(WARNING, error_code >= protocol::ErrorCode::ERROR_CODE_MAX)
+  LOG_IF(WARNING, static_cast<int>(error_code) >=
+                      static_cast<int>(protocol::ErrorCode::ERROR_CODE_MAX))
       << "|error_code| is greater than the max known error_code.";
   SendErrorAndExit(static_cast<protocol::ErrorCode>(error_code));
 }
@@ -285,7 +297,6 @@ void It2MeNativeMessagingHostLacros::HandleHostStateChange(
 
     default:
       NOTREACHED();
-      break;
   }
 
   SendMessageToClient(std::move(message));
@@ -354,7 +365,7 @@ void It2MeNativeMessagingHostLacros::ProcessHello(int message_id) {
 }
 
 void It2MeNativeMessagingHostLacros::ProcessConnect(int message_id,
-                                                    base::Value message) {
+                                                    base::Value::Dict message) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (message_id != kInvalidMessageId) {
@@ -364,20 +375,48 @@ void It2MeNativeMessagingHostLacros::ProcessConnect(int message_id,
   mojom::SupportSessionParamsPtr session_params =
       mojom::SupportSessionParams::New();
 
-  const std::string* user_name = message.GetDict().FindString(kUserName);
+  const std::string* user_name = message.FindString(kUserName);
   if (!user_name) {
     SendErrorAndExit(protocol::ErrorCode::INCOMPATIBLE_PROTOCOL, message_id);
     return;
   }
   session_params->user_name = *user_name;
 
-  const std::string* access_token =
-      message.GetDict().FindString(kAuthServiceWithToken);
-  if (!access_token) {
+  // The code to extract and forward the access_token needs to handle a couple
+  // of conditions due to Lacros/Ash version skew. The M121 CRD host
+  // implementation can handle `oauth_access_token` values which are raw or
+  // prefixed by 'oauth2:' however Lacros can run on older versions of Ash which
+  // only handle the prefixed variant. This compat code can be removed in M124
+  // based on the current version skew policy.
+  // This code also handles the case where an older webclient does not send the
+  // kAccessToken field however that will resolve in a few weeks and the code
+  // can safely be removed in M122.
+  std::string access_token;
+  const std::string* access_token_ptr = message.FindString(kAccessToken);
+  const std::string* auth_service_with_token_ptr =
+      message.FindString(kAuthServiceWithToken);
+  if (access_token_ptr) {
+    // TODO(b/309958013): Remove the prefix shim.
+    access_token = "oauth2:" + *access_token_ptr;
+  } else if (auth_service_with_token_ptr) {
+    // kAuthServiceWithToken always starts with 'oauth2:'.
+    access_token = *auth_service_with_token_ptr;
+  }
+  if (access_token.empty()) {
     SendErrorAndExit(protocol::ErrorCode::INCOMPATIBLE_PROTOCOL, message_id);
     return;
   }
-  session_params->oauth_access_token = *access_token;
+  session_params->oauth_access_token = std::move(access_token);
+
+  const std::string* authorized_helper = message.FindString(kAuthorizedHelper);
+  if (authorized_helper) {
+    session_params->authorized_helper =
+        gaia::CanonicalizeEmail(*authorized_helper);
+    if (!IsValidEmailAddress(session_params->authorized_helper.value())) {
+      SendErrorAndExit(protocol::ErrorCode::INCOMPATIBLE_PROTOCOL, message_id);
+      return;
+    }
+  }
 
   // TODO(joedow): Add the ability to toggle the RemoteCommand settings for
   // testing purposes. This should probably be encapsulated in a check that the
@@ -387,7 +426,7 @@ void It2MeNativeMessagingHostLacros::ProcessConnect(int message_id,
   lacros_service->GetRemote<crosapi::mojom::Remoting>()->StartSupportSession(
       std::move(session_params),
       base::BindOnce(&It2MeNativeMessagingHostLacros::OnSupportSessionStarted,
-                     base::Unretained(this)));
+                     weak_factory_.GetWeakPtr()));
 }
 
 void It2MeNativeMessagingHostLacros::ProcessDisconnect(int message_id) {
@@ -431,7 +470,6 @@ void It2MeNativeMessagingHostLacros::SendErrorAndExit(
     message.Set(kMessageId, message_id);
   }
   message.Set(kErrorMessageCode, ErrorCodeToString(error_code));
-  message.Set(kErrorMessageDescription, ErrorCodeToString(error_code));
 
   SendMessageToClient(std::move(message));
 
@@ -444,8 +482,7 @@ void It2MeNativeMessagingHostLacros::SendErrorAndExit(
 std::unique_ptr<extensions::NativeMessageHost>
 CreateIt2MeNativeMessagingHostForLacros(
     scoped_refptr<base::SingleThreadTaskRunner> ui_runner) {
-  return std::make_unique<It2MeNativeMessagingHostLacros>(
-      std::move(ui_runner));
+  return std::make_unique<It2MeNativeMessagingHostLacros>(std::move(ui_runner));
 }
 
 }  // namespace remoting

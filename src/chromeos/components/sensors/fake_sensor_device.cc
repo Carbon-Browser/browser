@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/bind.h"
+#include "base/not_fatal_until.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/ranges/algorithm.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 
 namespace chromeos {
 namespace sensors {
@@ -142,7 +143,7 @@ void FakeSensorDevice::SetChannelsEnabledWithId(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   auto it = clients_.find(id);
-  DCHECK(it != clients_.end());
+  CHECK(it != clients_.end(), base::NotFatalUntil::M130);
 
   for (int32_t index : iio_chn_indices) {
     DCHECK_LT(static_cast<size_t>(index), it->second.channels_enabled.size());
@@ -157,17 +158,17 @@ void FakeSensorDevice::GetAttributes(const std::vector<std::string>& attr_names,
                                      GetAttributesCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  std::vector<absl::optional<std::string>> values;
+  std::vector<std::optional<std::string>> values;
   values.reserve(attr_names.size());
   for (const auto& attr_name : attr_names) {
     auto it = attributes_.find(attr_name);
     if (it != attributes_.end())
       values.push_back(it->second);
     else
-      values.push_back(absl::nullopt);
+      values.push_back(std::nullopt);
   }
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), std::move(values)));
 }
 
@@ -181,7 +182,7 @@ void FakeSensorDevice::SetFrequency(double frequency,
   auto& client = clients_[receiver_set_.current_receiver()];
 
   client.frequency = frequency;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), std::move(frequency)));
 
   SendSampleIfReady(client);
@@ -235,7 +236,7 @@ void FakeSensorDevice::GetAllChannelIds(GetAllChannelIdsCallback callback) {
   for (const ChannelData& channel : channels_)
     channel_ids.push_back(channel.id);
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), std::move(channel_ids)));
 }
 
@@ -257,7 +258,7 @@ void FakeSensorDevice::SetChannelsEnabled(
     client.channels_enabled[index] = en;
   }
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), std::move(failed_indices)));
 
@@ -281,7 +282,7 @@ void FakeSensorDevice::GetChannelsEnabled(
     enabled.push_back(client.channels_enabled[index]);
   }
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), std::move(enabled)));
 }
 
@@ -291,19 +292,19 @@ void FakeSensorDevice::GetChannelsAttributes(
     GetChannelsAttributesCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  std::vector<absl::optional<std::string>> attrs;
+  std::vector<std::optional<std::string>> attrs;
 
   for (const ChannelData& channel : channels_) {
     auto it = channel.attrs.find(attr_name);
     if (it == channel.attrs.end()) {
-      attrs.push_back(absl::nullopt);
+      attrs.push_back(std::nullopt);
       continue;
     }
 
     attrs.push_back(it->second);
   }
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), std::move(attrs)));
 }
 

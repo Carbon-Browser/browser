@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,23 +7,15 @@
 #include "chrome/browser/ash/crostini/crostini_pref_names.h"
 #include "chrome/browser/ash/policy/core/device_local_account_policy_service.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
-#include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chromeos/ash/components/settings/cros_settings.h"
 #include "components/policy/policy_constants.h"
 #include "components/prefs/pref_service.h"
 
 namespace policy {
 
 CrostiniAnsiblePlaybookExternalDataHandler::
-    CrostiniAnsiblePlaybookExternalDataHandler(
-        ash::CrosSettings* cros_settings,
-        DeviceLocalAccountPolicyService* policy_service)
-    : crostini_ansible_observer_(cros_settings,
-                                 policy_service,
-                                 key::kCrostiniAnsiblePlaybook,
-                                 this) {
-  crostini_ansible_observer_.Init();
-}
+    CrostiniAnsiblePlaybookExternalDataHandler() = default;
 
 CrostiniAnsiblePlaybookExternalDataHandler::
     ~CrostiniAnsiblePlaybookExternalDataHandler() = default;
@@ -31,8 +23,8 @@ CrostiniAnsiblePlaybookExternalDataHandler::
 void CrostiniAnsiblePlaybookExternalDataHandler::OnExternalDataCleared(
     const std::string& policy,
     const std::string& user_id) {
-  Profile* profile =
-      ash::ProfileHelper::Get()->GetProfileByAccountId(GetAccountId(user_id));
+  Profile* profile = ash::ProfileHelper::Get()->GetProfileByAccountId(
+      CloudExternalDataPolicyObserver::GetAccountId(user_id));
   if (!profile) {
     LOG(ERROR) << "No profile for user is specified";
     return;
@@ -48,8 +40,8 @@ void CrostiniAnsiblePlaybookExternalDataHandler::OnExternalDataFetched(
     const std::string& user_id,
     std::unique_ptr<std::string> data,
     const base::FilePath& file_path) {
-  Profile* profile =
-      ash::ProfileHelper::Get()->GetProfileByAccountId(GetAccountId(user_id));
+  Profile* profile = ash::ProfileHelper::Get()->GetProfileByAccountId(
+      CloudExternalDataPolicyObserver::GetAccountId(user_id));
   if (!profile) {
     LOG(ERROR) << "No profile for user is specified";
     return;

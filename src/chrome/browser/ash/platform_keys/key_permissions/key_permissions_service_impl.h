@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,14 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/platform_keys/key_permissions/key_permissions_service.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/platform_keys/platform_keys.h"
+#include "chrome/browser/chromeos/platform_keys/platform_keys.h"
 
-namespace ash {
-namespace platform_keys {
+namespace ash::platform_keys {
 
 class KeyPermissionsManager;
 class PlatformKeysService;
@@ -41,13 +40,13 @@ class KeyPermissionsServiceImpl : public KeyPermissionsService {
       delete;
 
   void CanUserGrantPermissionForKey(
-      const std::string& public_key_spki_der,
+      std::vector<uint8_t> public_key_spki_der,
       CanUserGrantPermissionForKeyCallback callback) override;
 
-  void IsCorporateKey(const std::string& public_key_spki_der,
+  void IsCorporateKey(std::vector<uint8_t> public_key_spki_der,
                       IsCorporateKeyCallback callback) override;
 
-  void SetCorporateKey(const std::string& public_key_spki_der,
+  void SetCorporateKey(std::vector<uint8_t> public_key_spki_der,
                        SetCorporateKeyCallback callback) override;
 
   PlatformKeysService* platform_keys_service() {
@@ -60,40 +59,40 @@ class KeyPermissionsServiceImpl : public KeyPermissionsService {
   bool IsUserKeyCorporate(const std::string& public_key_spki_der_b64) const;
 
   void CanUserGrantPermissionForKeyWithLocations(
-      const std::string& public_key_spki_der,
+      std::vector<uint8_t> public_key_spki_der,
       CanUserGrantPermissionForKeyCallback callback,
       const std::vector<chromeos::platform_keys::TokenId>& key_locations,
       chromeos::platform_keys::Status key_locations_retrieval_status);
   void CanUserGrantPermissionForKeyWithLocationsAndFlag(
-      const std::string& public_key_spki_der,
+      std::vector<uint8_t> public_key_spki_der,
       CanUserGrantPermissionForKeyCallback callback,
       const std::vector<chromeos::platform_keys::TokenId>& key_locations,
-      absl::optional<bool> corporate_key,
+      std::optional<bool> corporate_key,
       chromeos::platform_keys::Status status);
 
   void IsCorporateKeyWithLocations(
-      const std::string& public_key_spki_der,
+      std::vector<uint8_t> public_key_spki_der,
       IsCorporateKeyCallback callback,
       const std::vector<chromeos::platform_keys::TokenId>& key_locations,
       chromeos::platform_keys::Status key_locations_retrieval_status);
   void IsCorporateKeyWithKpmResponse(IsCorporateKeyCallback callback,
-                                     absl::optional<bool> allowed,
+                                     std::optional<bool> allowed,
                                      chromeos::platform_keys::Status status);
 
   void SetCorporateKeyWithLocations(
-      const std::string& public_key_spki_der,
+      std::vector<uint8_t> public_key_spki_der,
       SetCorporateKeyCallback callback,
       const std::vector<chromeos::platform_keys::TokenId>& key_locations,
       chromeos::platform_keys::Status key_locations_retrieval_status);
 
   const bool is_regular_user_profile_;
   const bool profile_is_managed_;
-  const raw_ptr<PlatformKeysService> platform_keys_service_;
-  const raw_ptr<KeyPermissionsManager> profile_key_permissions_manager_;
+  const raw_ptr<PlatformKeysService, DanglingUntriaged> platform_keys_service_;
+  const raw_ptr<KeyPermissionsManager, DanglingUntriaged>
+      profile_key_permissions_manager_;
   base::WeakPtrFactory<KeyPermissionsServiceImpl> weak_factory_{this};
 };
 
-}  // namespace platform_keys
-}  // namespace ash
+}  // namespace ash::platform_keys
 
 #endif  // CHROME_BROWSER_ASH_PLATFORM_KEYS_KEY_PERMISSIONS_KEY_PERMISSIONS_SERVICE_IMPL_H_

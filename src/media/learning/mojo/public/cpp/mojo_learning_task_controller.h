@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,17 +30,16 @@ class COMPONENT_EXPORT(MEDIA_LEARNING_MOJO) MojoLearningTaskController
   ~MojoLearningTaskController() override;
 
   // LearningTaskController
-  void BeginObservation(
-      base::UnguessableToken id,
-      const FeatureVector& features,
-      const absl::optional<TargetValue>& default_target,
-      const absl::optional<ukm::SourceId>& source_id) override;
+  void BeginObservation(base::UnguessableToken id,
+                        const FeatureVector& features,
+                        const std::optional<TargetValue>& default_target,
+                        const std::optional<ukm::SourceId>& source_id) override;
   void CompleteObservation(base::UnguessableToken id,
                            const ObservationCompletion& completion) override;
   void CancelObservation(base::UnguessableToken id) override;
   void UpdateDefaultTarget(
       base::UnguessableToken id,
-      const absl::optional<TargetValue>& default_target) override;
+      const std::optional<TargetValue>& default_target) override;
   const LearningTask& GetLearningTask() override;
   void PredictDistribution(const FeatureVector& features,
                            PredictionCB callback) override;

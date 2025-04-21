@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,7 @@
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 
-namespace chrome {
-namespace mac {
+namespace chrome::mac {
 
 namespace {
 
@@ -25,7 +24,7 @@ void AppendValueToListDescriptor(NSAppleEventDescriptor* list,
   // Note that index 0 means "append to end of list"; see the docs for
   // -[NSAppleEventDescriptor insertDescriptor:atIndex:] and ultimately for
   // AEPutDesc().
-  [list insertDescriptor:ValueToAppleEventDescriptor(&value) atIndex:0];
+  [list insertDescriptor:ValueToAppleEventDescriptor(value) atIndex:0];
 }
 
 NSAppleEventDescriptor* RecordDescriptorForKeyValuePairs(
@@ -55,28 +54,28 @@ NSAppleEventDescriptor* RecordDescriptorForKeyValuePairs(
 
 }  // namespace
 
-NSAppleEventDescriptor* ValueToAppleEventDescriptor(const base::Value* value) {
+NSAppleEventDescriptor* ValueToAppleEventDescriptor(const base::Value& value) {
   NSAppleEventDescriptor* descriptor = nil;
 
-  switch (value->type()) {
+  switch (value.type()) {
     case base::Value::Type::NONE:
-      descriptor = [NSAppleEventDescriptor
-          descriptorWithTypeCode:cMissingValue];
+      descriptor =
+          [NSAppleEventDescriptor descriptorWithTypeCode:cMissingValue];
       break;
 
     case base::Value::Type::BOOLEAN: {
       descriptor =
-          [NSAppleEventDescriptor descriptorWithBoolean:value->GetBool()];
+          [NSAppleEventDescriptor descriptorWithBoolean:value.GetBool()];
       break;
     }
 
     case base::Value::Type::INTEGER: {
-      descriptor = [NSAppleEventDescriptor descriptorWithInt32:value->GetInt()];
+      descriptor = [NSAppleEventDescriptor descriptorWithInt32:value.GetInt()];
       break;
     }
 
     case base::Value::Type::DOUBLE: {
-      double double_value = value->GetDouble();
+      double double_value = value.GetDouble();
       descriptor = [NSAppleEventDescriptor
           descriptorWithDescriptorType:typeIEEE64BitFloatingPoint
                                  bytes:&double_value
@@ -86,18 +85,17 @@ NSAppleEventDescriptor* ValueToAppleEventDescriptor(const base::Value* value) {
 
     case base::Value::Type::STRING: {
       descriptor = [NSAppleEventDescriptor
-          descriptorWithString:base::SysUTF8ToNSString(value->GetString())];
+          descriptorWithString:base::SysUTF8ToNSString(value.GetString())];
       break;
     }
 
     case base::Value::Type::BINARY:
       NOTREACHED();
-      break;
 
-    case base::Value::Type::DICTIONARY: {
+    case base::Value::Type::DICT: {
       NSAppleEventDescriptor* keyValuePairs =
           [NSAppleEventDescriptor listDescriptor];
-      for (auto iter : value->DictItems()) {
+      for (auto iter : value.GetDict()) {
         AppendValueToListDescriptor(keyValuePairs, base::Value(iter.first));
         AppendValueToListDescriptor(keyValuePairs, iter.second);
       }
@@ -107,7 +105,7 @@ NSAppleEventDescriptor* ValueToAppleEventDescriptor(const base::Value* value) {
 
     case base::Value::Type::LIST: {
       descriptor = [NSAppleEventDescriptor listDescriptor];
-      for (const auto& item : value->GetListDeprecated()) {
+      for (const auto& item : value.GetList()) {
         AppendValueToListDescriptor(descriptor, item);
       }
       break;
@@ -123,5 +121,4 @@ bool IsJavaScriptEnabledForProfile(Profile* profile) {
   return prefs->GetBoolean(prefs::kAllowJavascriptAppleEvents);
 }
 
-}  // namespace mac
-}  // namespace chrome
+}  // namespace chrome::mac

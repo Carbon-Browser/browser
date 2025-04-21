@@ -1,4 +1,4 @@
-// Copyright (c) 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,16 @@
 #define SERVICES_AUDIO_AUDIO_PROCESSOR_HANDLER_H_
 
 #include <atomic>
+#include <string_view>
 
 #include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
+#include "media/audio/aecdump_recording_manager.h"
+#include "media/base/audio_glitch_info.h"
 #include "media/base/audio_processing.h"
 #include "media/mojo/mojom/audio_processing.mojom.h"
 #include "media/webrtc/audio_processor.h"
 #include "mojo/public/cpp/bindings/receiver.h"
-#include "services/audio/aecdump_recording_manager.h"
 #include "services/audio/reference_output.h"
 
 namespace media {
@@ -39,12 +41,15 @@ namespace audio {
 // destruction.
 class AudioProcessorHandler final : public ReferenceOutput::Listener,
                                     public media::mojom::AudioProcessorControls,
-                                    public AecdumpRecordingSource {
+                                    public media::AecdumpRecordingSource {
  public:
-  using DeliverProcessedAudioCallback =
-      media::AudioProcessor::DeliverProcessedAudioCallback;
+  using DeliverProcessedAudioCallback = base::RepeatingCallback<void(
+      const media::AudioBus& audio_bus,
+      base::TimeTicks audio_capture_time,
+      std::optional<double> new_volume,
+      const media::AudioGlitchInfo& audio_glitch_info)>;
 
-  using LogCallback = base::RepeatingCallback<void(base::StringPiece)>;
+  using LogCallback = base::RepeatingCallback<void(std::string_view)>;
 
   // |settings| specifies which audio processing effects to apply. Some effect
   // must be required, i.e. the AudioProcessorHandler may only be created if
@@ -66,7 +71,7 @@ class AudioProcessorHandler final : public ReferenceOutput::Listener,
       DeliverProcessedAudioCallback deliver_processed_audio_callback,
       mojo::PendingReceiver<media::mojom::AudioProcessorControls>
           controls_receiver,
-      AecdumpRecordingManager* aecdump_recording_manager);
+      media::AecdumpRecordingManager* aecdump_recording_manager);
 
   AudioProcessorHandler(const AudioProcessorHandler&) = delete;
   AudioProcessorHandler& operator=(const AudioProcessorHandler&) = delete;
@@ -78,12 +83,18 @@ class AudioProcessorHandler final : public ReferenceOutput::Listener,
   void ProcessCapturedAudio(const media::AudioBus& audio_source,
                             base::TimeTicks audio_capture_time,
                             double volume,
-                            bool key_pressed);
+                            const media::AudioGlitchInfo& audio_glitch_info);
 
   // The format of audio input to the processor; constant throughout its
   // lifetime.
   const media::AudioParameters& input_format() const {
     return audio_processor_->input_format();
+  }
+
+  // If true, `audio::ReferenceOutput::Listener::OnPlayoutData()` should be
+  // called.
+  bool needs_playout_reference() const {
+    return audio_processor_->needs_playout_reference();
   }
 
  private:
@@ -101,9 +112,13 @@ class AudioProcessorHandler final : public ReferenceOutput::Listener,
   void GetStats(GetStatsCallback callback) final;
   void SetPreferredNumCaptureChannels(int32_t num_preferred_channels) final;
 
-  // AecdumpRecordingSource implementation.
+  // media::AecdumpRecordingSource implementation.
   void StartAecdump(base::File aecdump_file) final;
   void StopAecdump() final;
+
+  void DeliverProcessedAudio(const media::AudioBus& audio_bus,
+                             base::TimeTicks audio_capture_time,
+                             std::optional<double> new_volume);
 
   SEQUENCE_CHECKER(owning_sequence_);
 
@@ -112,11 +127,13 @@ class AudioProcessorHandler final : public ReferenceOutput::Listener,
   // sequence.
   const std::unique_ptr<media::AudioProcessor> audio_processor_;
 
+  const DeliverProcessedAudioCallback deliver_processed_audio_callback_;
+
   mojo::Receiver<media::mojom::AudioProcessorControls> receiver_
       GUARDED_BY_CONTEXT(owning_sequence_);
 
   // Used to deregister as an aecdump recording source upon destruction.
-  const raw_ptr<AecdumpRecordingManager> aecdump_recording_manager_
+  const raw_ptr<media::AecdumpRecordingManager> aecdump_recording_manager_
       GUARDED_BY_CONTEXT(owning_sequence_);
 
   // The number of channels preferred by consumers of the captured audio.
@@ -127,6 +144,8 @@ class AudioProcessorHandler final : public ReferenceOutput::Listener,
   // We use an atomic instead of a lock in order to avoid blocking on the
   // real-time thread.
   std::atomic<int32_t> num_preferred_channels_ = 1;
+
+  media::AudioGlitchInfo::Accumulator glitch_info_accumulator_;
 };
 
 }  // namespace audio

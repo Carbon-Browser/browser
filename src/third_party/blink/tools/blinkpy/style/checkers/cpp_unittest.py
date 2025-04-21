@@ -35,7 +35,6 @@
 # FIXME: Add a good test that tests UpdateIncludeState.
 
 import os
-import random
 import re
 import unittest
 
@@ -1578,37 +1577,6 @@ class CppStyleTest(CppStyleTestBase):
         self.assert_lint('const char a : 6;', errmsg)
         self.assert_lint('int a = 1 ? 0 : 30;', '')
 
-    # Bitfields which are not declared unsigned or bool will generate a warning.
-    def test_unsigned_bool_bitfields(self):
-        def errmsg(member, name, bit_type):
-            return (
-                'Member %s of class %s defined as a bitfield of type %s. '
-                'Please declare all bitfields as unsigned.  [runtime/bitfields] [4]'
-                % (member, name, bit_type))
-
-        def warning_bitfield_test(member, name, bit_type, bits):
-            self.assert_multi_line_lint(
-                'class %s {\n%s %s: %d;\n}\n' % (name, bit_type, member, bits),
-                errmsg(member, name, bit_type))
-
-        def safe_bitfield_test(member, name, bit_type, bits):
-            self.assert_multi_line_lint(
-                'class %s {\n%s %s: %d;\n}\n' % (name, bit_type, member, bits),
-                '')
-
-        warning_bitfield_test('a', 'A', 'int32_t', 25)
-        warning_bitfield_test('m_someField', 'SomeClass', 'signed', 4)
-        warning_bitfield_test('m_someField', 'SomeClass', 'SomeEnum', 2)
-
-        safe_bitfield_test('a', 'A', 'unsigned', 22)
-        safe_bitfield_test('m_someField', 'SomeClass', 'bool', 1)
-        safe_bitfield_test('m_someField', 'SomeClass', 'unsigned', 2)
-
-        # Declarations in 'Expected' or 'SameSizeAs' classes are OK.
-        warning_bitfield_test('m_bitfields', 'SomeClass', 'int32_t', 32)
-        safe_bitfield_test('m_bitfields', 'ExpectedSomeClass', 'int32_t', 32)
-        safe_bitfield_test('m_bitfields', 'SameSizeAsSomeClass', 'int32_t', 32)
-
 
 class CleansedLinesTest(unittest.TestCase):
     def test_init(self):
@@ -1654,45 +1622,6 @@ class CleansedLinesTest(unittest.TestCase):
                          collapse('StringReplace(body, "\\\\", "\\\\\\\\");'))
         self.assertEqual('\'\' ""', collapse('\'"\' "foo"'))
         self.assertEqual('""', collapse('"a" "b" "c"'))
-
-
-class OrderOfIncludesTest(CppStyleTestBase):
-    def setUp(self):
-        self.include_state = cpp_style._IncludeState()
-
-        # Cheat os.path.abspath called in FileInfo class.
-        self.os_path_abspath_orig = os.path.abspath
-        os.path.abspath = lambda value: value
-
-    def tearDown(self):
-        os.path.abspath = self.os_path_abspath_orig
-
-    def test_try_drop_common_suffixes(self):
-        self.assertEqual('foo/foo',
-                         cpp_style._drop_common_suffixes('foo/foo-inl.h'))
-        self.assertEqual('foo/bar/foo',
-                         cpp_style._drop_common_suffixes('foo/bar/foo_inl.h'))
-        self.assertEqual('foo/foo',
-                         cpp_style._drop_common_suffixes('foo/foo.cpp'))
-        self.assertEqual(
-            'foo/foo_unusualinternal',
-            cpp_style._drop_common_suffixes('foo/foo_unusualinternal.h'))
-        self.assertEqual('', cpp_style._drop_common_suffixes('_test.cpp'))
-        self.assertEqual('test', cpp_style._drop_common_suffixes('test.cpp'))
-
-
-class OrderOfIncludesTest(CppStyleTestBase):
-    def setUp(self):
-        self.include_state = cpp_style._IncludeState()
-
-        # Cheat os.path.abspath called in FileInfo class.
-        self.os_path_abspath_orig = os.path.abspath
-        self.os_path_isfile_orig = os.path.isfile
-        os.path.abspath = lambda value: value
-
-    def tearDown(self):
-        os.path.abspath = self.os_path_abspath_orig
-        os.path.isfile = self.os_path_isfile_orig
 
 
 class CheckForFunctionLengthsTest(CppStyleTestBase):
@@ -2231,6 +2160,20 @@ class WebKitStyleTest(CppStyleTestBase):
             '  doSomethingElse();\n', '')
         self.assert_multi_line_lint(
             'if (condition) {\n'
+            '  doSomething();\n'
+            '} else {\n'
+            '  doSomethingElse();\n'
+            '  doSomethingElseAgain();\n'
+            '}\n', '')
+        self.assert_multi_line_lint(
+            'if (condition) {\n'
+            '  doSomething();\n'
+            '} else [[likely]] {\n'
+            '  doSomethingElse();\n'
+            '}\n', '')
+        self.assert_multi_line_lint(
+            'if (condition)\n'
+            '    [[unlikely]] {\n'
             '  doSomething();\n'
             '} else {\n'
             '  doSomethingElse();\n'

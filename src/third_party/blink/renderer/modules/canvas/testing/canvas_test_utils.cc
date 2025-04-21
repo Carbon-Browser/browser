@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,15 +16,14 @@ namespace blink {
 
 bool IsAcceleratedCanvasImageSource(v8::Isolate* isolate,
                                     v8::Local<v8::Value> value) {
-  ExceptionState exception_state(isolate, ExceptionState::kUnknownContext,
-                                 "IsAcceleratedCanvasImageSource");
-  auto* v8_image_source =
-      V8CanvasImageSource::Create(isolate, value, exception_state);
-  if (exception_state.HadException()) {
+  auto* v8_image_source = V8CanvasImageSource::Create(
+      isolate, value, PassThroughException(isolate));
+  if (isolate->HasPendingException()) {
     return false;
   }
-  auto* image_source = ToCanvasImageSource(v8_image_source, exception_state);
-  if (exception_state.HadException()) {
+  auto* image_source =
+      ToCanvasImageSource(v8_image_source, PassThroughException(isolate));
+  if (isolate->HasPendingException()) {
     return false;
   }
 

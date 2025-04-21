@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 #import <Foundation/Foundation.h>
 
-#import "ios/chrome/browser/ui/overscroll_actions/overscroll_actions_controller.h"
-#import "ios/chrome/browser/ui/overscroll_actions/overscroll_actions_view.h"
+#import "ios/chrome/browser/overscroll_actions/ui_bundled/overscroll_actions_controller.h"
+#import "ios/chrome/browser/overscroll_actions/ui_bundled/overscroll_actions_view.h"
 
 // Fake OverscrollActionsControllerDelegate used for testing.
 // The delegate saves the last triggered action, and provide a view to be used
@@ -17,7 +17,7 @@
     : NSObject <OverscrollActionsControllerDelegate>
 
 // The OverscrollAction parameter that was used to call
-// |overscrollActionsController:didTriggerAction:| with.
+// `overscrollActionsController:didTriggerAction:` with.
 @property(nonatomic, assign) OverscrollAction selectedAction;
 
 // The header view, acts as the superview for overscrollActionsView.

@@ -1,16 +1,15 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/memory/raw_ptr.h"
-#include "extensions/browser/app_window/native_app_window.h"
-
 #import <Cocoa/Cocoa.h>
+
 #include <memory>
 
-#import "base/mac/foundation_util.h"
-#import "base/mac/scoped_cftyperef.h"
-#import "base/mac/scoped_nsobject.h"
+#import "base/apple/foundation_util.h"
+#import "base/apple/scoped_cftyperef.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/apps/app_service/app_launch_params.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
@@ -24,11 +23,11 @@
 #include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/chrome_switches.h"
-#include "content/public/browser/notification_service.h"
-#include "content/public/browser/notification_types.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "content/public/test/test_utils.h"
 #include "extensions/browser/app_window/app_window_registry.h"
+#include "extensions/browser/app_window/native_app_window.h"
 #include "extensions/common/constants.h"
 #include "skia/ext/skia_utils_mac.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -37,6 +36,7 @@
 #import "ui/base/test/scoped_fake_nswindow_focus.h"
 #include "ui/base/test/scoped_fake_nswindow_fullscreen.h"
 #import "ui/base/test/windowed_nsnotification_observer.h"
+#include "ui/views/widget/widget_interactive_uitest_utils.h"
 
 using extensions::AppWindow;
 using extensions::PlatformAppBrowserTest;
@@ -62,25 +62,23 @@ class NativeAppWindowCocoaBrowserTest : public PlatformAppBrowserTest {
   NativeAppWindowCocoaBrowserTest() = default;
 
   void SetUpAppWithWindows(int num_windows) {
-    app_ = InstallExtension(
+    const extensions::Extension* app = InstallExtension(
         test_data_dir_.AppendASCII("platform_apps").AppendASCII("minimal"), 1);
-    EXPECT_TRUE(app_);
+    EXPECT_TRUE(app);
 
     for (int i = 0; i < num_windows; ++i) {
-      content::WindowedNotificationObserver app_loaded_observer(
-          content::NOTIFICATION_LOAD_COMPLETED_MAIN_FRAME,
-          content::NotificationService::AllSources());
+      content::CreateAndLoadWebContentsObserver app_loaded_observer;
       apps::AppServiceProxyFactory::GetForProfile(profile())
           ->BrowserAppLauncher()
-          ->LaunchAppWithParams(apps::AppLaunchParams(
-              app_->id(), apps::LaunchContainer::kLaunchContainerNone,
-              WindowOpenDisposition::NEW_WINDOW,
-              apps::LaunchSource::kFromTest));
+          ->LaunchAppWithParams(
+              apps::AppLaunchParams(app->id(),
+                                    apps::LaunchContainer::kLaunchContainerNone,
+                                    WindowOpenDisposition::NEW_WINDOW,
+                                    apps::LaunchSource::kFromTest),
+              base::DoNothing());
       app_loaded_observer.Wait();
     }
   }
-
-  raw_ptr<const extensions::Extension> app_;
 };
 
 }  // namespace
@@ -246,23 +244,44 @@ IN_PROC_BROWSER_TEST_F(NativeAppWindowCocoaBrowserTest, Minimize) {
   EXPECT_FALSE([ns_window isMiniaturized]);
 
   // Native minimize, Restore.
+  WindowedNSNotificationObserver* miniaturizationObserver =
+      [[WindowedNSNotificationObserver alloc]
+          initForNotification:NSWindowDidMiniaturizeNotification
+                       object:ns_window];
   [ns_window miniaturize:nil];
+  [miniaturizationObserver wait];
   EXPECT_NSEQ(initial_frame, [ns_window frame]);
   EXPECT_TRUE(window->IsMinimized());
   EXPECT_TRUE([ns_window isMiniaturized]);
 
+  views::test::PropertyWaiter deminimize_waiter(
+      base::BindRepeating(&extensions::NativeAppWindow::IsMinimized,
+                          base::Unretained(window)),
+      false);
   app_window->Restore();
+  EXPECT_TRUE(deminimize_waiter.Wait());
+
   EXPECT_NSEQ(initial_frame, [ns_window frame]);
   EXPECT_FALSE(window->IsMinimized());
   EXPECT_FALSE([ns_window isMiniaturized]);
 
   // Minimize, native restore.
+  views::test::PropertyWaiter minimize_waiter(
+      base::BindRepeating(&extensions::NativeAppWindow::IsMinimized,
+                          base::Unretained(window)),
+      true);
   app_window->Minimize();
+  EXPECT_TRUE(minimize_waiter.Wait());
   EXPECT_NSEQ(initial_frame, [ns_window frame]);
   EXPECT_TRUE(window->IsMinimized());
   EXPECT_TRUE([ns_window isMiniaturized]);
 
+  WindowedNSNotificationObserver* deminiaturizationObserver =
+      [[WindowedNSNotificationObserver alloc]
+          initForNotification:NSWindowDidDeminiaturizeNotification
+                       object:ns_window];
   [ns_window deminiaturize:nil];
+  [deminiaturizationObserver wait];
   EXPECT_NSEQ(initial_frame, [ns_window frame]);
   EXPECT_FALSE(window->IsMinimized());
   EXPECT_FALSE([ns_window isMiniaturized]);
@@ -274,7 +293,6 @@ IN_PROC_BROWSER_TEST_F(NativeAppWindowCocoaBrowserTest, Maximize) {
   AppWindow* app_window = GetFirstAppWindow();
   extensions::NativeAppWindow* window = app_window->GetBaseWindow();
   NSWindow* ns_window = app_window->GetNativeWindow().GetNativeNSWindow();
-  base::scoped_nsobject<WindowedNSNotificationObserver> watcher;
 
   gfx::Rect initial_restored_bounds = window->GetRestoredBounds();
   NSRect initial_frame = [ns_window frame];
@@ -283,18 +301,19 @@ IN_PROC_BROWSER_TEST_F(NativeAppWindowCocoaBrowserTest, Maximize) {
   EXPECT_FALSE(window->IsMaximized());
 
   // Native maximize, Restore.
-  watcher.reset([[WindowedNSNotificationObserver alloc]
-      initForNotification:NSWindowDidResizeNotification
-                   object:ns_window]);
+  WindowedNSNotificationObserver* watcher =
+      [[WindowedNSNotificationObserver alloc]
+          initForNotification:NSWindowDidResizeNotification
+                       object:ns_window];
   [ns_window zoom:nil];
   [watcher wait];
   EXPECT_EQ(initial_restored_bounds, window->GetRestoredBounds());
   EXPECT_NSEQ(maximized_frame, [ns_window frame]);
   EXPECT_TRUE(window->IsMaximized());
 
-  watcher.reset([[WindowedNSNotificationObserver alloc]
+  watcher = [[WindowedNSNotificationObserver alloc]
       initForNotification:NSWindowDidResizeNotification
-                   object:ns_window]);
+                   object:ns_window];
   app_window->Restore();
   [watcher wait];
   EXPECT_EQ(initial_restored_bounds, window->GetRestoredBounds());
@@ -302,18 +321,18 @@ IN_PROC_BROWSER_TEST_F(NativeAppWindowCocoaBrowserTest, Maximize) {
   EXPECT_FALSE(window->IsMaximized());
 
   // Maximize, native restore.
-  watcher.reset([[WindowedNSNotificationObserver alloc]
+  watcher = [[WindowedNSNotificationObserver alloc]
       initForNotification:NSWindowDidResizeNotification
-                   object:ns_window]);
+                   object:ns_window];
   app_window->Maximize();
   [watcher wait];
   EXPECT_EQ(initial_restored_bounds, window->GetRestoredBounds());
   EXPECT_NSEQ(maximized_frame, [ns_window frame]);
   EXPECT_TRUE(window->IsMaximized());
 
-  watcher.reset([[WindowedNSNotificationObserver alloc]
+  watcher = [[WindowedNSNotificationObserver alloc]
       initForNotification:NSWindowDidResizeNotification
-                   object:ns_window]);
+                   object:ns_window];
   [ns_window zoom:nil];
   [watcher wait];
   EXPECT_EQ(initial_restored_bounds, window->GetRestoredBounds());
@@ -330,7 +349,6 @@ IN_PROC_BROWSER_TEST_F(NativeAppWindowCocoaBrowserTest, MaximizeConstrained) {
       "{\"outerBounds\": {\"maxWidth\":200, \"maxHeight\":300}}");
   extensions::NativeAppWindow* window = app_window->GetBaseWindow();
   NSWindow* ns_window = app_window->GetNativeWindow().GetNativeNSWindow();
-  base::scoped_nsobject<WindowedNSNotificationObserver> watcher;
 
   gfx::Rect initial_restored_bounds = window->GetRestoredBounds();
   NSRect initial_frame = [ns_window frame];
@@ -339,18 +357,19 @@ IN_PROC_BROWSER_TEST_F(NativeAppWindowCocoaBrowserTest, MaximizeConstrained) {
   EXPECT_FALSE(window->IsMaximized());
 
   // Maximize, Restore.
-  watcher.reset([[WindowedNSNotificationObserver alloc]
-      initForNotification:NSWindowDidResizeNotification
-                   object:ns_window]);
+  WindowedNSNotificationObserver* watcher =
+      [[WindowedNSNotificationObserver alloc]
+          initForNotification:NSWindowDidResizeNotification
+                       object:ns_window];
   app_window->Maximize();
   [watcher wait];
   EXPECT_EQ(initial_restored_bounds, window->GetRestoredBounds());
   EXPECT_NSEQ(maximized_frame, [ns_window frame]);
   EXPECT_TRUE(window->IsMaximized());
 
-  watcher.reset([[WindowedNSNotificationObserver alloc]
+  watcher = [[WindowedNSNotificationObserver alloc]
       initForNotification:NSWindowDidResizeNotification
-                   object:ns_window]);
+                   object:ns_window];
   app_window->Restore();
   [watcher wait];
   EXPECT_EQ(initial_restored_bounds, window->GetRestoredBounds());
@@ -364,7 +383,6 @@ IN_PROC_BROWSER_TEST_F(NativeAppWindowCocoaBrowserTest, MinimizeMaximize) {
   AppWindow* app_window = GetFirstAppWindow();
   extensions::NativeAppWindow* window = app_window->GetBaseWindow();
   NSWindow* ns_window = app_window->GetNativeWindow().GetNativeNSWindow();
-  base::scoped_nsobject<WindowedNSNotificationObserver> watcher;
 
   NSRect initial_frame = [ns_window frame];
   NSRect maximized_frame = [[ns_window screen] visibleFrame];
@@ -374,33 +392,58 @@ IN_PROC_BROWSER_TEST_F(NativeAppWindowCocoaBrowserTest, MinimizeMaximize) {
   EXPECT_FALSE([ns_window isMiniaturized]);
 
   // Maximize, Minimize, Restore.
-  watcher.reset([[WindowedNSNotificationObserver alloc]
-      initForNotification:NSWindowDidResizeNotification
-                   object:ns_window]);
+  WindowedNSNotificationObserver* watcher =
+      [[WindowedNSNotificationObserver alloc]
+          initForNotification:NSWindowDidResizeNotification
+                       object:ns_window];
   app_window->Maximize();
   [watcher wait];
   EXPECT_NSEQ(maximized_frame, [ns_window frame]);
   EXPECT_TRUE(window->IsMaximized());
 
-  app_window->Minimize();
+  {
+    views::test::PropertyWaiter minimize_waiter(
+        base::BindRepeating(&extensions::NativeAppWindow::IsMinimized,
+                            base::Unretained(window)),
+        true);
+    app_window->Minimize();
+    EXPECT_TRUE(minimize_waiter.Wait());
+  }
   EXPECT_NSEQ(maximized_frame, [ns_window frame]);
   EXPECT_FALSE(window->IsMaximized());
   EXPECT_TRUE(window->IsMinimized());
   EXPECT_TRUE([ns_window isMiniaturized]);
 
+  views::test::PropertyWaiter deminimize_waiter(
+      base::BindRepeating(&extensions::NativeAppWindow::IsMinimized,
+                          base::Unretained(window)),
+      false);
   app_window->Restore();
+  EXPECT_TRUE(deminimize_waiter.Wait());
   EXPECT_NSEQ(initial_frame, [ns_window frame]);
   EXPECT_FALSE(window->IsMaximized());
   EXPECT_FALSE(window->IsMinimized());
   EXPECT_FALSE([ns_window isMiniaturized]);
 
   // Minimize, Maximize.
-  app_window->Minimize();
+  {
+    views::test::PropertyWaiter minimize_waiter(
+        base::BindRepeating(&extensions::NativeAppWindow::IsMinimized,
+                            base::Unretained(window)),
+        true);
+    app_window->Minimize();
+    EXPECT_TRUE(minimize_waiter.Wait());
+  }
   EXPECT_NSEQ(initial_frame, [ns_window frame]);
   EXPECT_TRUE(window->IsMinimized());
   EXPECT_TRUE([ns_window isMiniaturized]);
 
+  WindowedNSNotificationObserver* deminiaturizationObserver =
+      [[WindowedNSNotificationObserver alloc]
+          initForNotification:NSWindowDidDeminiaturizeNotification
+                       object:ns_window];
   app_window->Maximize();
+  [deminiaturizationObserver wait];
   EXPECT_TRUE([ns_window isVisible]);
   EXPECT_NSEQ(maximized_frame, [ns_window frame]);
   EXPECT_TRUE(window->IsMaximized());
@@ -416,7 +459,6 @@ IN_PROC_BROWSER_TEST_F(NativeAppWindowCocoaBrowserTest, MaximizeFullscreen) {
   AppWindow* app_window = GetFirstAppWindow();
   extensions::NativeAppWindow* window = app_window->GetBaseWindow();
   NSWindow* ns_window = app_window->GetNativeWindow().GetNativeNSWindow();
-  base::scoped_nsobject<WindowedNSNotificationObserver> watcher;
   ui::NSWindowFullscreenNotificationWaiter waiter(
       app_window->GetNativeWindow());
 
@@ -427,9 +469,10 @@ IN_PROC_BROWSER_TEST_F(NativeAppWindowCocoaBrowserTest, MaximizeFullscreen) {
   EXPECT_FALSE(window->IsFullscreen());
 
   // Maximize, Fullscreen, Restore, Restore.
-  watcher.reset([[WindowedNSNotificationObserver alloc]
-      initForNotification:NSWindowDidResizeNotification
-                   object:ns_window]);
+  WindowedNSNotificationObserver* watcher =
+      [[WindowedNSNotificationObserver alloc]
+          initForNotification:NSWindowDidResizeNotification
+                       object:ns_window];
   app_window->Maximize();
   [watcher wait];
   EXPECT_NSEQ(maximized_frame, [ns_window frame]);
@@ -590,19 +633,27 @@ NSBitmapImageRep* ScreenshotNSWindow(NSWindow* window) {
 // Test that the colored frames have the correct color when active and inactive.
 // Disabled; https://crbug.com/1322741.
 IN_PROC_BROWSER_TEST_F(NativeAppWindowCocoaBrowserTest, DISABLED_FrameColor) {
+  EXPECT_EQ(NSApp.activationPolicy, NSApplicationActivationPolicyAccessory);
+
   // The hex values indicate an RGB color. When we get the NSColor later, the
   // components are CGFloats in the range [0, 1].
   extensions::AppWindow* app_window = CreateTestAppWindow(
       "{\"frame\": {\"color\": \"#FF0000\", \"inactiveColor\": \"#0000FF\"}}");
   NSWindow* ns_window = app_window->GetNativeWindow().GetNativeNSWindow();
+
   // No color correction in the default case.
   [ns_window setColorSpace:[NSColorSpace sRGBColorSpace]];
 
-  int half_width = NSWidth([ns_window frame]) / 2;
+  // Make sure the window is inactive before color sampling.
+  ui::test::ScopedFakeNSWindowFocus fake_focus;
+  [ns_window resignMainWindow];
+  [ns_window resignKeyWindow];
 
   NSBitmapImageRep* bitmap = ScreenshotNSWindow(ns_window);
-  // The window is currently inactive so it should be blue (#0000FF).
+  // The window is currently inactive so it should be blue (#0000FF). We are
+  // assuming the Light appearance is being used.
   NSColor* expected_color = ColorInBitmapColorSpace(0xFF0000FF, bitmap);
+  int half_width = NSWidth([ns_window frame]) / 2;
   NSColor* color = [bitmap colorAtX:half_width y:5];
   CGFloat expected_components[4], color_components[4];
   [expected_color getComponents:expected_components];
@@ -611,11 +662,12 @@ IN_PROC_BROWSER_TEST_F(NativeAppWindowCocoaBrowserTest, DISABLED_FrameColor) {
   EXPECT_NEAR(expected_components[1], color_components[1], 0.01);
   EXPECT_NEAR(expected_components[2], color_components[2], 0.01);
 
-  ui::test::ScopedFakeNSWindowFocus fake_focus;
+  // Activate the window.
   [ns_window makeMainWindow];
 
   bitmap = ScreenshotNSWindow(ns_window);
-  // The window is now active so it should be red (#FF0000).
+  // The window is now active so it should be red (#FF0000). Again, this is
+  // assuming the Light appearance is being used.
   expected_color = ColorInBitmapColorSpace(0xFFFF0000, bitmap);
   color = [bitmap colorAtX:half_width y:5];
   [expected_color getComponents:expected_components];

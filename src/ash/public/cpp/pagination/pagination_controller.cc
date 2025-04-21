@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,12 +23,10 @@ const double kFinishTransitionThreshold = 0.33;
 
 PaginationController::PaginationController(PaginationModel* model,
                                            ScrollAxis scroll_axis,
-                                           const RecordMetrics& record_metrics,
-                                           bool is_tablet_mode)
+                                           const RecordMetrics& record_metrics)
     : pagination_model_(model),
       scroll_axis_(scroll_axis),
-      record_metrics_(record_metrics),
-      is_tablet_mode_(is_tablet_mode) {
+      record_metrics_(record_metrics) {
   DCHECK(pagination_model_);
   DCHECK(record_metrics_);
 }
@@ -65,22 +63,22 @@ bool PaginationController::OnGestureEvent(const ui::GestureEvent& event,
                                           const gfx::Rect& bounds) {
   const ui::GestureEventDetails& details = event.details();
   switch (event.type()) {
-    case ui::ET_GESTURE_SCROLL_BEGIN: {
+    case ui::EventType::kGestureScrollBegin: {
       float scroll = scroll_axis_ == SCROLL_AXIS_HORIZONTAL
                          ? details.scroll_x_hint()
                          : details.scroll_y_hint();
       return StartDrag(scroll);
     }
-    case ui::ET_GESTURE_SCROLL_UPDATE: {
+    case ui::EventType::kGestureScrollUpdate: {
       float scroll = scroll_axis_ == SCROLL_AXIS_HORIZONTAL
                          ? details.scroll_x()
                          : details.scroll_y();
       return UpdateDrag(scroll, bounds);
     }
-    case ui::ET_GESTURE_SCROLL_END: {
+    case ui::EventType::kGestureScrollEnd: {
       return EndDrag(event);
     }
-    case ui::ET_SCROLL_FLING_START: {
+    case ui::EventType::kScrollFlingStart: {
       float velocity = scroll_axis_ == SCROLL_AXIS_HORIZONTAL
                            ? details.velocity_x()
                            : details.velocity_y();
@@ -149,7 +147,7 @@ bool PaginationController::EndDrag(const ui::LocatedEvent& event) {
   pagination_model_->EndScroll(cancel_transition);
 
   if (!cancel_transition)
-    record_metrics_.Run(event.type(), is_tablet_mode_);
+    record_metrics_.Run(event.type());
 
   return true;
 }
@@ -157,7 +155,7 @@ bool PaginationController::EndDrag(const ui::LocatedEvent& event) {
 void PaginationController::SelectPageAndRecordMetric(int delta,
                                                      ui::EventType type) {
   if (pagination_model_->IsValidPageRelative(delta)) {
-    record_metrics_.Run(type, is_tablet_mode_);
+    record_metrics_.Run(type);
   }
   pagination_model_->SelectPageRelative(delta, true);
 }

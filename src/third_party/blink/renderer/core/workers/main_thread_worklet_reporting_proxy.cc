@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,14 @@ void MainThreadWorkletReportingProxy::CountFeature(WebFeature feature) {
   // A parent context is on the same thread, so just record API use in the
   // context's UseCounter.
   UseCounter::Count(context_, feature);
+}
+
+void MainThreadWorkletReportingProxy::CountWebDXFeature(
+    mojom::blink::WebDXFeature feature) {
+  DCHECK(IsMainThread());
+  // A parent context is on the same thread, so just record API use in the
+  // context's UseCounter.
+  UseCounter::CountWebDXFeature(context_, feature);
 }
 
 void MainThreadWorkletReportingProxy::DidTerminateWorkerThread() {

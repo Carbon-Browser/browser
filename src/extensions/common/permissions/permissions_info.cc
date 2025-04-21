@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,14 +43,14 @@ const APIPermissionInfo* PermissionsInfo::GetByName(
   return (i == name_map_.end()) ? nullptr : i->second;
 }
 
-APIPermissionSet PermissionsInfo::GetAll() const {
+APIPermissionSet PermissionsInfo::GetAllForTest() const {
   APIPermissionSet permissions;
   for (auto i = id_map_.cbegin(); i != id_map_.cend(); ++i)
     permissions.insert(i->second->id());
   return permissions;
 }
 
-APIPermissionSet PermissionsInfo::GetAllByName(
+APIPermissionSet PermissionsInfo::GetAllByNameForTest(
     const std::set<std::string>& permission_names) const {
   APIPermissionSet permissions;
   for (auto i = permission_names.cbegin(); i != permission_names.cend(); ++i) {

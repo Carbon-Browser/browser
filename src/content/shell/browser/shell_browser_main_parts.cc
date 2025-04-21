@@ -1,25 +1,30 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+//
+// This source code is a part of eyeo Chromium SDK.
+// Use of this source code is governed by the GPLv3 that can be found in the
+// components/adblock/LICENSE file.
 
 #include "content/shell/browser/shell_browser_main_parts.h"
 
 #include <utility>
 
 #include "base/base_switches.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted_memory.h"
+#include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/current_thread.h"
 #include "base/threading/thread.h"
 #include "base/threading/thread_restrictions.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "cc/base/switches.h"
+#include "components/adblock/content/browser/adblock_web_ui_controller_factory.h"
 #include "components/performance_manager/embedder/graph_features.h"
 #include "components/performance_manager/embedder/performance_manager_lifetime.h"
 #include "content/public/browser/browser_thread.h"
@@ -30,6 +35,7 @@
 #include "content/public/common/result_codes.h"
 #include "content/public/common/url_constants.h"
 #include "content/shell/android/shell_descriptors.h"
+#include "content/shell/browser/adblock/adblock_shell_browser_context.h"
 #include "content/shell/browser/shell.h"
 #include "content/shell/browser/shell_browser_context.h"
 #include "content/shell/browser/shell_devtools_manager_delegate.h"
@@ -50,30 +56,30 @@
 #include "net/base/network_change_notifier.h"
 #endif
 
-#if defined(USE_AURA) && (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS))
+#if BUILDFLAG(IS_LINUX) && defined(USE_AURA)
 #include "ui/base/ime/init/input_method_initializer.h"
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS)
-#include "chromeos/dbus/dbus_thread_manager.h"
+#include "chromeos/ash/components/dbus/dbus_thread_manager.h"
 #include "device/bluetooth/dbus/bluez_dbus_manager.h"
-#elif BUILDFLAG(IS_LINUX)
-#include "device/bluetooth/dbus/dbus_bluez_manager_wrapper_linux.h"
-#endif
-
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-#include "chromeos/lacros/dbus/lacros_dbus_thread_manager.h"
+#include "device/bluetooth/floss/floss_dbus_manager.h"
+#include "device/bluetooth/floss/floss_features.h"
 #endif
 
 #if BUILDFLAG(IS_LINUX)
+#include "device/bluetooth/dbus/dbus_bluez_manager_wrapper_linux.h"
 #include "ui/linux/linux_ui.h"          // nogncheck
 #include "ui/linux/linux_ui_factory.h"  // nogncheck
+#endif
+
+#if BUILDFLAG(IS_FUCHSIA)
+#include "content/shell/browser/fuchsia_view_presenter.h"
 #endif
 
 namespace content {
 
 namespace {
-
 GURL GetStartupURL() {
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
   if (command_line->HasSwitch(switches::kBrowserTest))
@@ -115,24 +121,22 @@ ShellBrowserMainParts::ShellBrowserMainParts() = default;
 ShellBrowserMainParts::~ShellBrowserMainParts() = default;
 
 void ShellBrowserMainParts::PostCreateMainMessageLoop() {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  chromeos::DBusThreadManager::Initialize();
-#elif BUILDFLAG(IS_CHROMEOS_LACROS)
-  chromeos::LacrosDBusThreadManager::Initialize();
-#endif
-
 #if BUILDFLAG(IS_CHROMEOS)
-  bluez::BluezDBusManager::InitializeFake();
+  ash::DBusThreadManager::Initialize();
+  if (floss::features::IsFlossEnabled()) {
+    floss::FlossDBusManager::InitializeFake();
+  } else {
+    bluez::BluezDBusManager::InitializeFake();
+  }
 #elif BUILDFLAG(IS_LINUX)
   bluez::DBusBluezManagerWrapperLinux::Initialize();
 #endif
 }
 
 int ShellBrowserMainParts::PreEarlyInitialization() {
-#if defined(USE_AURA) && (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS))
+#if BUILDFLAG(IS_LINUX) && defined(USE_AURA)
   ui::InitializeInputMethodForTesting();
-#endif
-#if BUILDFLAG(IS_ANDROID)
+#elif BUILDFLAG(IS_ANDROID)
   net::NetworkChangeNotifier::SetFactory(
       new net::NetworkChangeNotifierFactoryAndroid());
 #endif
@@ -140,8 +144,13 @@ int ShellBrowserMainParts::PreEarlyInitialization() {
 }
 
 void ShellBrowserMainParts::InitializeBrowserContexts() {
-  set_browser_context(new ShellBrowserContext(false));
+  set_browser_context(new AdblockShellBrowserContext());
   set_off_the_record_browser_context(new ShellBrowserContext(true));
+  // Persistent Origin Trials needs to be instantiated as soon as possible
+  // during browser startup, to ensure data is available prior to the first
+  // request.
+  browser_context_->GetOriginTrialsControllerDelegate();
+  off_the_record_browser_context_->GetOriginTrialsControllerDelegate();
 }
 
 void ShellBrowserMainParts::InitializeMessageLoopContext() {
@@ -154,7 +163,7 @@ void ShellBrowserMainParts::ToolkitInitialized() {
     return;
 
 #if BUILDFLAG(IS_LINUX)
-  ui::LinuxUi::SetInstance(ui::CreateLinuxUi());
+  ui::LinuxUi::SetInstance(ui::GetDefaultLinuxUi());
 #endif
 }
 
@@ -178,7 +187,13 @@ void ShellBrowserMainParts::PostCreateThreads() {
 }
 
 int ShellBrowserMainParts::PreMainMessageLoopRun() {
+#if BUILDFLAG(IS_FUCHSIA)
+  fuchsia_view_presenter_ = std::make_unique<FuchsiaViewPresenter>();
+#endif
+
   InitializeBrowserContexts();
+  content::WebUIControllerFactory::RegisterFactory(
+      adblock::AdblockWebUIControllerFactory::GetInstance());
   Shell::Initialize(CreateShellPlatformDelegate());
   net::NetModule::SetResourceProvider(PlatformResourceProvider);
   ShellDevToolsManagerDelegate::StartHttpHandler(browser_context_.get());
@@ -200,21 +215,23 @@ void ShellBrowserMainParts::PostMainMessageLoopRun() {
   ui::LinuxUi::SetInstance(nullptr);
 #endif
   performance_manager_lifetime_.reset();
+#if BUILDFLAG(IS_FUCHSIA)
+  fuchsia_view_presenter_.reset();
+#endif
 }
 
 void ShellBrowserMainParts::PostDestroyThreads() {
 #if BUILDFLAG(IS_CHROMEOS)
   device::BluetoothAdapterFactory::Shutdown();
-  bluez::BluezDBusManager::Shutdown();
+  if (floss::features::IsFlossEnabled()) {
+    floss::FlossDBusManager::Shutdown();
+  } else {
+    bluez::BluezDBusManager::Shutdown();
+  }
+  ash::DBusThreadManager::Shutdown();
 #elif BUILDFLAG(IS_LINUX)
   device::BluetoothAdapterFactory::Shutdown();
   bluez::DBusBluezManagerWrapperLinux::Shutdown();
-#endif
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  chromeos::DBusThreadManager::Shutdown();
-#elif BUILDFLAG(IS_CHROMEOS_LACROS)
-  chromeos::LacrosDBusThreadManager::Shutdown();
 #endif
 }
 

@@ -1,24 +1,27 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_WALLPAPER_WALLPAPER_PREF_MANAGER_H_
 #define ASH_WALLPAPER_WALLPAPER_PREF_MANAGER_H_
 
+#include <optional>
 #include <string>
+#include <string_view>
 
 #include "ash/ash_export.h"
 #include "ash/public/cpp/session/session_observer.h"
 #include "ash/public/cpp/style/color_mode_observer.h"
 #include "ash/public/cpp/wallpaper/wallpaper_controller.h"
 #include "ash/public/cpp/wallpaper/wallpaper_info.h"
+#include "ash/wallpaper/wallpaper_utils/wallpaper_calculated_colors.h"
 #include "base/containers/flat_map.h"
 #include "base/files/file_path.h"
-#include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
 #include "base/time/time.h"
 #include "base/timer/wall_clock_timer.h"
+#include "base/values.h"
 #include "components/account_id/account_id.h"
 
 class PrefService;
@@ -48,29 +51,22 @@ class WallpaperProfileHelper {
 
   // Returns true if at least one user is logged in.
   virtual bool IsActiveUserSessionStarted() const = 0;
+
+  // Returns true if the user should store data in memory only.
+  virtual bool IsEphemeral(const AccountId& id) const = 0;
 };
 
 // Manages wallpaper preferences and tracks the currently configured wallpaper.
-class ASH_EXPORT WallpaperPrefManager
-    : public base::SupportsWeakPtr<WallpaperPrefManager>,
-      public ColorModeObserver,
-      public SessionObserver {
+class ASH_EXPORT WallpaperPrefManager : public SessionObserver {
  public:
-  // Names of nodes with wallpaper info in |kUserWallpaperInfo| dictionary.
-  static const char kNewWallpaperAssetIdNodeName[];
-  static const char kNewWallpaperCollectionIdNodeName[];
-  static const char kNewWallpaperDateNodeName[];
-  static const char kNewWallpaperDedupKeyNodeName[];
-  static const char kNewWallpaperLayoutNodeName[];
-  static const char kNewWallpaperLocationNodeName[];
-  static const char kNewWallpaperUserFilePathNodeName[];
-  static const char kNewWallpaperTypeNodeName[];
-  static const char kNewWallpaperUnitIdNodeName[];
-  static const char kNewWallpaperVariantListNodeName[];
-
-  // Names of nodes for the online wallpaper variant dictionary.
-  static const char kOnlineWallpaperTypeNodeName[];
-  static const char kOnlineWallpaperUrlNodeName[];
+  // Determines whether the wallpaper info is syncable and should be stored in
+  // synced prefs.
+  static bool ShouldSyncOut(const WallpaperInfo& local_info);
+  // Determines whether the local wallpaper info should by overriden by the
+  // synced prefs.
+  static bool ShouldSyncIn(const WallpaperInfo& synced_info,
+                           const WallpaperInfo& local_info,
+                           const bool is_oobe);
 
   static std::unique_ptr<WallpaperPrefManager> Create(PrefService* local_state);
 
@@ -90,41 +86,57 @@ class ASH_EXPORT WallpaperPrefManager
   virtual void SetClient(WallpaperControllerClient* client) = 0;
 
   // Retrieve the wallpaper preference value for |account_id| and use it to
-  // populate |info|. If |ephemeral| is true, data is stored in an in memory
-  // map. If |ephemeral| is false, |info| is persisted to user prefs. Returns
-  // true if |info| was populated successfully.
+  // populate |info|. Returns true if |info| was populated successfully.
   //
   // NOTE: WallpaperPrefManager does not enforce any checks for policy
   // enforcement. Callers must check that the user is allowed to commit the pref
   // change.
-  //
-  // TODO(crbug.com/1329567): Remove the |ephemeral| parameter when we've safely
-  // moved to SessionController for user type.
   virtual bool GetUserWallpaperInfo(const AccountId& account_id,
-                                    bool ephemeral,
                                     WallpaperInfo* info) const = 0;
   virtual bool SetUserWallpaperInfo(const AccountId& account_id,
-                                    bool ephemeral,
+                                    const WallpaperInfo& info) = 0;
+
+  // Overload for |GetUserWallpaperInfo| that allow callers to specify
+  // whether |account_id| is ephemeral. Used for callers before signin has
+  // occurred and |is_ephemeral| cannot be determined by session controller.
+  virtual bool GetUserWallpaperInfo(const AccountId& account_id,
+                                    bool is_ephemeral,
+                                    WallpaperInfo* info) const = 0;
+  // Overload for |SetUserWallpaperInfo| that allow callers to specify
+  // whether |account_id| is ephemeral. Used for callers before signin has
+  // occurred and |is_ephemeral| cannot be determined by session controller.
+  virtual bool SetUserWallpaperInfo(const AccountId& account_id,
+                                    bool is_ephemeral,
                                     const WallpaperInfo& info) = 0;
 
   // Remove the wallpaper entry for |account_id|.
   virtual void RemoveUserWallpaperInfo(const AccountId& account_id) = 0;
 
-  virtual void CacheProminentColors(const AccountId& account_id,
-                                    const std::vector<SkColor>& colors) = 0;
+  // Returns a WallpaperCalculatedColors for a wallpaper with the corresponding
+  // `location`, if one can be found. The result is synthesized from Prominent
+  // and KMean colors.
+  virtual std::optional<WallpaperCalculatedColors> GetCachedWallpaperColors(
+      std::string_view location) const = 0;
 
+  // DEPRECATED: Will be removed soon.
   virtual void RemoveProminentColors(const AccountId& account_id) = 0;
 
-  virtual absl::optional<std::vector<SkColor>> GetCachedProminentColors(
-      const AccountId& account_id) const = 0;
-
-  virtual void CacheKMeanColor(const AccountId& account_id,
+  virtual void CacheKMeanColor(std::string_view location,
                                SkColor k_mean_color) = 0;
 
-  virtual absl::optional<SkColor> GetCachedKMeanColor(
-      const AccountId& account_id) const = 0;
+  // Returns the cached KMeans color value for the wallpaper at `location`.
+  virtual std::optional<SkColor> GetCachedKMeanColor(
+      std::string_view location) const = 0;
 
   virtual void RemoveKMeanColor(const AccountId& account_id) = 0;
+
+  // Cache the prominent color sampled with the 'Celebi' algorithm.
+  virtual void CacheCelebiColor(std::string_view location,
+                                SkColor celebi_color) = 0;
+  // Returns the cached celebi color for the wallpaper at `location`.
+  virtual std::optional<SkColor> GetCelebiColor(
+      std::string_view location) const = 0;
+  virtual void RemoveCelebiColor(const AccountId& account_id) = 0;
 
   virtual bool SetDailyGooglePhotosWallpaperIdCache(
       const AccountId& account_id,
@@ -149,10 +161,14 @@ class ASH_EXPORT WallpaperPrefManager
   virtual bool SetSyncedWallpaperInfo(const AccountId& account_id,
                                       const WallpaperInfo& info) = 0;
 
+  // Returns the delta for the next daily refresh update for `account_id`.
+  virtual base::TimeDelta GetTimeToNextDailyRefreshUpdate(
+      const AccountId& account_id) const = 0;
+
  protected:
   WallpaperPrefManager() = default;
 };
 
 }  // namespace ash
 
-#endif  //  ASH_WALLPAPER_WALLPAPER_PREF_MANAGER_H_
+#endif  // ASH_WALLPAPER_WALLPAPER_PREF_MANAGER_H_

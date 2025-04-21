@@ -1,15 +1,20 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/utility/image_writer/image_writer.h"
 
 #include <string.h>
 
+#include "base/containers/heap_array.h"
 #include "base/location.h"
 #include "base/memory/aligned_memory.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "chrome/utility/image_writer/error_message_strings.h"
 #include "chrome/utility/image_writer/image_writer_handler.h"
@@ -75,7 +80,8 @@ const base::FilePath& ImageWriter::GetImagePath() { return image_path_; }
 const base::FilePath& ImageWriter::GetDevicePath() { return device_path_; }
 
 void ImageWriter::PostTask(base::OnceClosure task) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE, std::move(task));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE,
+                                                              std::move(task));
 }
 
 void ImageWriter::PostProgress(int64_t progress) {
@@ -160,13 +166,13 @@ void ImageWriter::VerifyChunk() {
     return;
   }
 
-  std::unique_ptr<char[]> image_buffer(new char[kBurningBlockSize]);
+  auto image_buffer = base::HeapArray<char>::Uninit(kBurningBlockSize);
   // DASD buffers require memory alignment on some systems.
   std::unique_ptr<char, base::AlignedFreeDeleter> device_buffer(
       static_cast<char*>(
           base::AlignedAlloc(kBurningBlockSize, kMemoryAlignment)));
 
-  int bytes_read = image_file_.Read(bytes_processed_, image_buffer.get(),
+  int bytes_read = image_file_.Read(bytes_processed_, image_buffer.data(),
                                     kBurningBlockSize);
 
   if (bytes_read > 0) {
@@ -179,7 +185,7 @@ void ImageWriter::VerifyChunk() {
       return;
     }
 
-    if (memcmp(image_buffer.get(), device_buffer.get(), bytes_read) != 0) {
+    if (memcmp(image_buffer.data(), device_buffer.get(), bytes_read) != 0) {
       LOG(ERROR) << "Write verification failed when comparing " << bytes_read
                  << " bytes at " << bytes_processed_;
       Error(error::kVerificationFailed);

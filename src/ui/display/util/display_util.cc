@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ui/display/util/display_util.h"
 
@@ -12,9 +17,14 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
+#include "components/device_event_log/device_event_log.h"
 #include "ui/display/types/display_snapshot.h"
 #include "ui/display/util/edid_parser.h"
 #include "ui/gfx/icc_profile.h"
+
+#if BUILDFLAG(IS_CHROMEOS)
+#include "ui/display/display_features.h"
+#endif
 
 namespace display {
 
@@ -23,12 +33,12 @@ namespace {
 base::flat_set<int64_t>* internal_display_ids() {
   static base::NoDestructor<base::flat_set<int64_t>> display_ids;
   return display_ids.get();
-};
+}
 
 // A list of bogus sizes in mm that should be ignored.
 // See crbug.com/136533. The first element maintains the minimum
 // size required to be valid size.
-const int kInvalidDisplaySizeList[][2] = {
+constexpr int kInvalidDisplaySizeList[][2] = {
     {40, 30},
     {50, 40},
     {160, 90},
@@ -130,13 +140,17 @@ gfx::ColorSpace GetColorSpaceFromEdid(const display::EdidParser& edid_parser) {
     return gfx::ColorSpace();
   }
 
-  // Snap the primaries to those of BT.709/sRGB for performance purposes, see
-  // crbug.com/1073467. kPrimariesTolerance is an educated guess from various
-  // ChromeOS panels observations.
+  // Snap the primaries to known standard ones (e.g. BT.709, DCI-P3) for
+  // performance purposes, see crbug.com/1073467. kPrimariesTolerance is an
+  // educated guess from various ChromeOS panels observations.
   auto color_space_primaries = gfx::ColorSpace::PrimaryID::INVALID;
   constexpr float kPrimariesTolerance = 0.025;
-  if (NearlyEqual(primaries_matrix, SkNamedGamut::kSRGB, kPrimariesTolerance))
+  if (NearlyEqual(primaries_matrix, SkNamedGamut::kSRGB, kPrimariesTolerance)) {
     color_space_primaries = gfx::ColorSpace::PrimaryID::BT709;
+  } else if (NearlyEqual(primaries_matrix, SkNamedGamut::kDisplayP3,
+                         kPrimariesTolerance)) {
+    color_space_primaries = gfx::ColorSpace::PrimaryID::P3;
+  }
 
   const float gamma = edid_parser.gamma();
   if (gamma < 1.0f) {
@@ -147,15 +161,40 @@ gfx::ColorSpace GetColorSpaceFromEdid(const display::EdidParser& edid_parser) {
   EmitEdidColorSpaceChecksOutcomeUma(EdidColorSpaceChecksOutcome::kSuccess);
 
   auto transfer_id = gfx::ColorSpace::TransferID::INVALID;
-  if (base::Contains(edid_parser.supported_color_primary_ids(),
-                     gfx::ColorSpace::PrimaryID::BT2020)) {
+  if (base::Contains(
+          edid_parser.supported_color_primary_matrix_ids(),
+          EdidParser::PrimaryMatrixPair(gfx::ColorSpace::PrimaryID::BT2020,
+                                        gfx::ColorSpace::MatrixID::RGB)) ||
+      base::Contains(edid_parser.supported_color_primary_matrix_ids(),
+                     EdidParser::PrimaryMatrixPair(
+                         gfx::ColorSpace::PrimaryID::BT2020,
+                         gfx::ColorSpace::MatrixID::BT2020_NCL))) {
     if (base::Contains(edid_parser.supported_color_transfer_ids(),
                        gfx::ColorSpace::TransferID::PQ)) {
       transfer_id = gfx::ColorSpace::TransferID::PQ;
+#if BUILDFLAG(IS_CHROMEOS)
+      if (base::FeatureList::IsEnabled(
+              display::features::kEnableExternalDisplayHDR10Mode) &&
+          edid_parser.is_external_display() &&
+          base::Contains(
+              edid_parser.supported_color_primary_matrix_ids(),
+              EdidParser::PrimaryMatrixPair(gfx::ColorSpace::PrimaryID::BT2020,
+                                            gfx::ColorSpace::MatrixID::RGB))) {
+        return gfx::ColorSpace::CreateHDR10();
+      }
+#endif
     } else if (base::Contains(edid_parser.supported_color_transfer_ids(),
                               gfx::ColorSpace::TransferID::HLG)) {
       transfer_id = gfx::ColorSpace::TransferID::HLG;
     }
+    // If we reach here: CDB has {BT2020,RGB} or {BT2020,NCL},
+    // but HDR Static Metadata Data Block does not contain PQ.
+    // transfer == INVALID
+  } else if (base::Contains(edid_parser.supported_color_primary_matrix_ids(),
+                            EdidParser::PrimaryMatrixPair(
+                                gfx::ColorSpace::PrimaryID::P3,
+                                gfx::ColorSpace::MatrixID::RGB))) {
+    return gfx::ColorSpace::CreateDisplayP3D65();
   } else if (gamma == 2.2f) {
     transfer_id = gfx::ColorSpace::TransferID::GAMMA22;
   } else if (gamma == 2.4f) {
@@ -212,11 +251,23 @@ void SetInternalDisplayIds(base::flat_set<int64_t> display_ids) {
   *internal_display_ids() = std::move(display_ids);
 }
 
+void AddInternalDisplayId(int64_t display_id) {
+  internal_display_ids()->insert(display_id);
+}
+
+void RemoveInternalDisplayId(int64_t display_id) {
+  internal_display_ids()->erase(display_id);
+}
+
 gfx::ColorSpace ForcedColorProfileStringToColorSpace(const std::string& value) {
   if (value == "srgb")
     return gfx::ColorSpace::CreateSRGB();
   if (value == "display-p3-d65")
     return gfx::ColorSpace::CreateDisplayP3D65();
+  if (value == "rec2020") {
+    return gfx::ColorSpace(gfx::ColorSpace::PrimaryID::BT2020,
+                           gfx::ColorSpace::TransferID::BT2020_10);
+  }
   if (value == "scrgb-linear")
     return gfx::ColorSpace::CreateSRGBLinear();
   if (value == "hdr10")
@@ -230,7 +281,7 @@ gfx::ColorSpace ForcedColorProfileStringToColorSpace(const std::string& value) {
   if (value == "color-spin-gamma24") {
     // Run this color profile through an ICC profile. The resulting color space
     // is slightly different from the input color space, and removing the ICC
-    // profile would require rebaselineing many layout tests.
+    // profile would require rebaselining many layout tests.
     gfx::ColorSpace color_space(
         gfx::ColorSpace::PrimaryID::WIDE_GAMUT_COLOR_SPIN,
         gfx::ColorSpace::TransferID::GAMMA24);
@@ -259,7 +310,7 @@ bool HasForceDisplayColorProfile() {
 gfx::DisplayColorSpaces CreateDisplayColorSpaces(
     const gfx::ColorSpace& snapshot_color_space,
     bool allow_high_bit_depth,
-    const absl::optional<gfx::HDRStaticMetadata>& hdr_static_metadata) {
+    const std::optional<gfx::HDRStaticMetadata>& hdr_static_metadata) {
   if (HasForceDisplayColorProfile()) {
     return gfx::DisplayColorSpaces(GetForcedDisplayColorProfile(),
                                    DisplaySnapshot::PrimaryFormat());
@@ -272,34 +323,23 @@ gfx::DisplayColorSpaces CreateDisplayColorSpaces(
                                    DisplaySnapshot::PrimaryFormat());
   }
 
-  const auto primary_id = snapshot_color_space.GetPrimaryID();
-
-  skcms_Matrix3x3 primary_matrix{};
-  if (primary_id == gfx::ColorSpace::PrimaryID::CUSTOM)
-    snapshot_color_space.GetPrimaryMatrix(&primary_matrix);
+  // Make all displays report that they have sRGB primaries. Hardware color
+  // management will convert to the device's color primaries.
+  skcms_Matrix3x3 primary_matrix = SkNamedGamut::kSRGB;
 
   // Reconstruct the native colorspace with an IEC61966 2.1 transfer function
   // for SDR content (matching that of sRGB).
-  gfx::ColorSpace sdr_color_space;
-  if (primary_id == gfx::ColorSpace::PrimaryID::CUSTOM) {
-    sdr_color_space = gfx::ColorSpace::CreateCustom(
-        primary_matrix, gfx::ColorSpace::TransferID::SRGB);
-  } else {
-    sdr_color_space =
-        gfx::ColorSpace(primary_id, gfx::ColorSpace::TransferID::SRGB);
-  }
+  gfx::ColorSpace sdr_color_space = gfx::ColorSpace::CreateCustom(
+      primary_matrix, gfx::ColorSpace::TransferID::SRGB);
+
+  // Use that color space for all content.
   gfx::DisplayColorSpaces display_color_spaces = gfx::DisplayColorSpaces(
       sdr_color_space, DisplaySnapshot::PrimaryFormat());
 
+  // Claim 10% HDR headroom if HDR is available.
   if (allow_high_bit_depth && snapshot_color_space.IsHDR()) {
-    gfx::ColorSpace hdr_color_space;
-    if (primary_id == gfx::ColorSpace::PrimaryID::CUSTOM) {
-      hdr_color_space = gfx::ColorSpace::CreatePiecewiseHDR(
-          primary_id, display::kSDRJoint, display::kHDRLevel, &primary_matrix);
-    } else {
-      hdr_color_space = gfx::ColorSpace::CreatePiecewiseHDR(
-          primary_id, display::kSDRJoint, display::kHDRLevel);
-    }
+    gfx::ColorSpace hdr_color_space = gfx::ColorSpace::CreateCustom(
+        primary_matrix, gfx::ColorSpace::TransferID::SRGB_HDR);
 
     display_color_spaces.SetOutputColorSpaceAndBufferFormat(
         gfx::ContentColorUsage::kHDR, false /* needs_alpha */, hdr_color_space,
@@ -307,15 +347,39 @@ gfx::DisplayColorSpaces CreateDisplayColorSpaces(
     display_color_spaces.SetOutputColorSpaceAndBufferFormat(
         gfx::ContentColorUsage::kHDR, true /* needs_alpha */, hdr_color_space,
         gfx::BufferFormat::RGBA_1010102);
-
-    // TODO(https://crbug.com/1286074): Populate maximum luminance based on
-    // `hdr_static_metadata`. For now, assume that the HDR maximum luminance
-    // is 1,000% of the SDR maximum luminance.
-    constexpr float kHDRMaxLuminanceRelative = 10.f;
-    display_color_spaces.SetHDRMaxLuminanceRelative(kHDRMaxLuminanceRelative);
+    display_color_spaces.SetHDRMaxLuminanceRelative(1.1f);
   }
+
+#if BUILDFLAG(IS_CHROMEOS)
+  if (allow_high_bit_depth &&
+      snapshot_color_space == gfx::ColorSpace::CreateHDR10() &&
+      base::FeatureList::IsEnabled(
+          display::features::kEnableExternalDisplayHDR10Mode)) {
+    // This forces the main UI plane to be always HDR10 regardless of
+    // ContentColorUsage. BT2020 primaries and PQ transfer function require a
+    // 10-bit buffer.
+    display_color_spaces = gfx::DisplayColorSpaces(
+        gfx::ColorSpace::CreateHDR10(), gfx::BufferFormat::RGBA_1010102);
+    // TODO(b/165822222): Set initial luminance values based on display
+    // brightness
+    display_color_spaces.SetSDRMaxLuminanceNits(
+        hdr_static_metadata->max / kDefaultHdrMaxLuminanceRelative);
+    display_color_spaces.SetHDRMaxLuminanceRelative(
+        kDefaultHdrMaxLuminanceRelative);
+  }
+#endif
   return display_color_spaces;
 }
 #endif  // BUILDFLAG(IS_CHROMEOS)
+
+int ConnectorIndex8(int device_index, int display_index) {
+  DCHECK_LT(device_index, 16);
+  DCHECK_LT(display_index, 16);
+  return ((device_index << 4) + display_index) & 0xFF;
+}
+
+uint16_t ConnectorIndex16(uint8_t device_index, uint8_t display_index) {
+  return ((device_index << 8) + display_index) & 0xFFFF;
+}
 
 }  // namespace display

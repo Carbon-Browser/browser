@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "components/webrtc/fake_ssl_client_socket.h"
 
@@ -9,10 +14,11 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
@@ -65,8 +71,8 @@ static const uint8_t kSslServerHello[] = {
     0x00                                             // null compression
 };
 
-// TODO(crbug/1183244): This annotation is not test specific but is for test. We
-// should fix it.
+// TODO(crbug.com/40171113): This annotation is not test specific but is for
+// test. We should fix it.
 constexpr net::NetworkTrafficAnnotationTag kTrafficAnnotation =
     net::DefineNetworkTrafficAnnotation(
         "test",
@@ -74,19 +80,19 @@ constexpr net::NetworkTrafficAnnotationTag kTrafficAnnotation =
 
 scoped_refptr<net::DrainableIOBuffer> NewDrainableIOBufferWithSize(int size) {
   return base::MakeRefCounted<net::DrainableIOBuffer>(
-      base::MakeRefCounted<net::IOBuffer>(size), size);
+      base::MakeRefCounted<net::IOBufferWithSize>(size), size);
 }
 
 }  // namespace
 
-base::StringPiece FakeSSLClientSocket::GetSslClientHello() {
-  return base::StringPiece(reinterpret_cast<const char*>(kSslClientHello),
-                           std::size(kSslClientHello));
+std::string_view FakeSSLClientSocket::GetSslClientHello() {
+  return std::string_view(reinterpret_cast<const char*>(kSslClientHello),
+                          std::size(kSslClientHello));
 }
 
-base::StringPiece FakeSSLClientSocket::GetSslServerHello() {
-  return base::StringPiece(reinterpret_cast<const char*>(kSslServerHello),
-                           std::size(kSslServerHello));
+std::string_view FakeSSLClientSocket::GetSslServerHello() {
+  return std::string_view(reinterpret_cast<const char*>(kSslServerHello),
+                          std::size(kSslServerHello));
 }
 
 FakeSSLClientSocket::FakeSSLClientSocket(
@@ -100,7 +106,7 @@ FakeSSLClientSocket::FakeSSLClientSocket(
   std::memcpy(write_buf_->data(), kSslClientHello, std::size(kSslClientHello));
 }
 
-FakeSSLClientSocket::~FakeSSLClientSocket() {}
+FakeSSLClientSocket::~FakeSSLClientSocket() = default;
 
 int FakeSSLClientSocket::Read(net::IOBuffer* buf,
                               int buf_len,
@@ -347,10 +353,6 @@ const net::NetLogWithSource& FakeSSLClientSocket::NetLog() const {
 
 bool FakeSSLClientSocket::WasEverUsed() const {
   return transport_socket_->WasEverUsed();
-}
-
-bool FakeSSLClientSocket::WasAlpnNegotiated() const {
-  return transport_socket_->WasAlpnNegotiated();
 }
 
 net::NextProto FakeSSLClientSocket::GetNegotiatedProtocol() const {

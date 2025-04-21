@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,10 @@
 #define COMPONENTS_CAST_MESSAGE_PORT_TEST_MESSAGE_PORT_RECEIVER_H_
 
 #include <memory>
+#include <string_view>
 #include <vector>
 
-#include "base/callback.h"
-#include "base/strings/string_piece.h"
+#include "base/functional/callback.h"
 #include "components/cast/message_port/message_port.h"
 
 namespace cast_api_bindings {
@@ -40,7 +40,7 @@ class TestMessagePortReceiver
 
  private:
   // MessagePort::Receiver implementation.
-  bool OnMessage(base::StringPiece message,
+  bool OnMessage(std::string_view message,
                  std::vector<std::unique_ptr<MessagePort>> ports) final;
   void OnPipeError() final;
 

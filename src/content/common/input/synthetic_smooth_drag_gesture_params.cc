@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,13 +23,6 @@ SyntheticSmoothDragGestureParams::~SyntheticSmoothDragGestureParams() = default;
 SyntheticGestureParams::GestureType
 SyntheticSmoothDragGestureParams::GetGestureType() const {
   return SMOOTH_DRAG_GESTURE;
-}
-
-const SyntheticSmoothDragGestureParams* SyntheticSmoothDragGestureParams::Cast(
-    const SyntheticGestureParams* gesture_params) {
-  DCHECK(gesture_params);
-  DCHECK_EQ(SMOOTH_DRAG_GESTURE, gesture_params->GetGestureType());
-  return static_cast<const SyntheticSmoothDragGestureParams*>(gesture_params);
 }
 
 }  // namespace content

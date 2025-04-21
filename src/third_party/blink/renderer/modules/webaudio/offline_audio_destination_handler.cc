@@ -1,23 +1,31 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "third_party/blink/renderer/modules/webaudio/offline_audio_destination_handler.h"
 
 #include <algorithm>
 
+#include "base/trace_event/typed_macros.h"
+#include "media/base/audio_glitch_info.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_node_input.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_node_output.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_worklet.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_worklet_messaging_proxy.h"
 #include "third_party/blink/renderer/modules/webaudio/base_audio_context.h"
+#include "third_party/blink/renderer/modules/webaudio/cross_thread_audio_worklet_processor_info.h"
 #include "third_party/blink/renderer/modules/webaudio/offline_audio_context.h"
 #include "third_party/blink/renderer/platform/audio/audio_bus.h"
 #include "third_party/blink/renderer/platform/audio/audio_utilities.h"
 #include "third_party/blink/renderer/platform/audio/denormal_disabler.h"
 #include "third_party/blink/renderer/platform/audio/hrtf_database_loader.h"
-#include "third_party/blink/renderer/platform/scheduler/public/thread.h"
+#include "third_party/blink/renderer/platform/scheduler/public/non_main_thread.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_copier_base.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 
@@ -37,7 +45,7 @@ OfflineAudioDestinationHandler::OfflineAudioDestinationHandler(
   DCHECK(main_thread_task_runner_->BelongsToCurrentThread());
 
   channel_count_ = number_of_channels;
-  SetInternalChannelCountMode(kExplicit);
+  SetInternalChannelCountMode(V8ChannelCountMode::Enum::kExplicit);
   SetInternalChannelInterpretation(AudioBus::kSpeakers);
 }
 
@@ -94,6 +102,10 @@ void OfflineAudioDestinationHandler::StartRendering() {
   DCHECK(IsMainThread());
   DCHECK(shared_render_target_);
   DCHECK(render_thread_task_runner_);
+
+  TRACE_EVENT(TRACE_DISABLED_BY_DEFAULT("webaudio.audionode"),
+              "OfflineAudioDestinationHandler::StartRendering", "this",
+              reinterpret_cast<void*>(this));
 
   // Rendering was not started. Starting now.
   if (!is_rendering_started_) {
@@ -158,6 +170,9 @@ void OfflineAudioDestinationHandler::StartOfflineRendering() {
 
 void OfflineAudioDestinationHandler::DoOfflineRendering() {
   DCHECK(!IsMainThread());
+  TRACE_EVENT(TRACE_DISABLED_BY_DEFAULT("webaudio.audionode"),
+              "OfflineAudioDestinationHandler::DoOfflineRendering", "this",
+              reinterpret_cast<void*>(this));
 
   unsigned number_of_channels = shared_render_target_->numberOfChannels();
   Vector<float*> destinations;
@@ -277,7 +292,9 @@ bool OfflineAudioDestinationHandler::RenderIfNotSuspended(
   // Take care pre-render tasks at the beginning of each render quantum. Then
   // it will stop the rendering loop if the context needs to be suspended
   // at the beginning of the next render quantum.
-  if (Context()->HandlePreRenderTasks(nullptr, nullptr)) {
+  if (Context()->HandlePreRenderTasks(number_of_frames, nullptr, nullptr,
+                                      base::TimeDelta(),
+                                      media::AudioGlitchInfo())) {
     SuspendOfflineRendering();
     return true;
   }
@@ -339,7 +356,7 @@ void OfflineAudioDestinationHandler::PrepareTaskRunnerForRendering() {
   } else {
     if (!render_thread_) {
       // The context started from the non-AudioWorklet mode.
-      render_thread_ = Thread::CreateThread(
+      render_thread_ = NonMainThread::CreateThread(
           ThreadCreationParams(ThreadType::kOfflineAudioRenderThread));
       render_thread_task_runner_ = render_thread_->GetTaskRunner();
     }

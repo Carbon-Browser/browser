@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,11 @@
 
 #include "base/time/time.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/size.h"
+#include "ui/views/highlight_border.h"
 
 namespace ash::capture_mode {
 
@@ -35,11 +37,8 @@ constexpr SkColor kRegionBorderColor = SK_ColorWHITE;
 
 // Color of the dimming shield layer. It is set to dim the region that is
 // outside of the region will be recorded, either in the capture session or
-// video recording is in progress. This color is set to be the same in both dark
-// and light mode. We will investigate whether to do this kind of change to
-// ShieldLayer globally.
-constexpr SkColor kDimmingShieldColor =
-    SkColorSetA(gfx::kGoogleGrey900, 102);  // 40%
+// video recording is in progress.
+constexpr ui::ColorId kDimmingShieldColor = cros_tokens::kCrosSysScrim;
 
 // The space between the `image_toggle_button_` and `video_toggle_button_`.
 constexpr int kSpaceBetweenCaptureModeTypeButtons = 2;
@@ -84,6 +83,97 @@ constexpr base::TimeDelta kResizeButtonShowDuration = base::Milliseconds(4500);
 // capture UI, drop the opacity to this value to make the region or camera
 // preview easier to see.
 constexpr float kCaptureUiOverlapOpacity = 0.15f;
+
+// Size of the icon in the capture mode settings menu.
+constexpr gfx::Size kSettingsIconSize{20, 20};
+
+// Border value used for each section of the settings menu.
+constexpr auto kSettingsMenuBorderSize = gfx::Insets::VH(8, 16);
+
+// The distance between the bottom of the key combo viewer and the bottom of the
+// confined bounds.
+constexpr int kKeyWidgetDistanceFromBottom = 24;
+
+// Border value applied between the right edge of the key combo viewer when it's
+// approaching the right edge of the recording area.
+constexpr int kKeyWidgetBorderPadding = 16;
+
+// The duration to continue showing the key combo view on key up of the
+// non-modifier key with no modifier keys pressed or on key up of the last
+// modifier key up with no non-modifier key that can be displayed independently
+// pressed.
+constexpr base::TimeDelta kRefreshKeyComboWidgetLongDelay =
+    base::Milliseconds(1500);
+
+// The duration to hold on the update of the key combo view on key up.
+constexpr base::TimeDelta kRefreshKeyComboWidgetShortDelay =
+    base::Milliseconds(100);
+
+// The radius of the highlight layer generated on mouse or touch event when the
+// demo tools feature is enabled.
+constexpr int kHighlightLayerRadius = 36;
+
+// The thickness of the highlight border that will be applied to the
+// `PointerHighlightLayer`.
+constexpr float kInnerHightlightBorderThickness =
+    0.5 * views::kHighlightBorderThickness;
+constexpr float kOuterHightlightBorderThickness =
+    1.5 * views::kHighlightBorderThickness;
+
+// Distance from the bottom of the capture bar to the bottom of the anchor
+// bounds of the bar. See `GetBarAnchorBoundsInScreen` for more details of the
+// bar's anchor bounds.
+constexpr int kCaptureBarBottomPadding = 16;
+constexpr int kGameCaptureBarBottomPadding = 24;
+
+// Height of the capture bar.
+constexpr int kCaptureBarHeight = 64;
+
+// The minimum distance from the top of the screen to the top of the settings
+// menu.
+constexpr int kMinDistanceFromSettingsToScreen = 8;
+
+// The minimum height of the settings menu while constrained and scrollable.
+constexpr int kSettingsMenuMinHeight = 50;
+
+// Animation parameters for capture UI (capture bar, capture label) overlapping
+// the user capture region or camera preview. The default animation duration for
+// opacity changes to the capture UI.
+inline constexpr base::TimeDelta kCaptureUIOpacityChangeDuration =
+    base::Milliseconds(100);
+
+// Search result panel dimensions.
+constexpr int kSearchResultsPanelWidth = 360;
+constexpr int kSearchResultsPanelHeight = 492;
+
+// The distance between the search result panel and the work area.
+constexpr int kPanelWorkAreaSpacing = 10;
+
+// The distance between the search result panel and the feedback button (if
+// available).
+constexpr int kPanelButtonSpacing = 10;
+
+// The name of a boolean pref that records whether the sunfish consent
+// disclaimer has been accepted.
+inline constexpr char kSunfishConsentDisclaimerAccepted[] =
+    "ash.capture_mode.sunfish_consent_disclaimer_accepted";
+
+// The ID for the nudge anchored to the Sunfish button in the launcher.
+inline constexpr char kSunfishLauncherNudgeId[] = "kSunfishLauncherNudge";
+
+// The nudge will not be shown if it already been shown 3 times, or if 24
+// hours have not yet passed since it was last shown.
+constexpr int kSunfishNudgeMaxShownCount = 3;
+inline constexpr base::TimeDelta kSunfishNudgeTimeBetweenShown =
+    base::Hours(24);
+
+// The minimum and maximum region glow blur amount.
+inline constexpr float kRegionGlowAnimationMinBlurDp = 16.0f;
+inline constexpr float kRegionGlowAnimationMaxBlurDp = 32.0f;
+
+// The minimum and maximum glow outset from the edge of the capture region.
+inline constexpr int kRegionGlowMinOutsetDp = 0;
+inline constexpr int kRegionGlowMaxOutsetDp = 6;
 
 }  // namespace ash::capture_mode
 

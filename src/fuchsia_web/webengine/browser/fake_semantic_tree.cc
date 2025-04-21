@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,14 @@
 #include <lib/fidl/cpp/binding.h>
 #include <zircon/types.h>
 
+#include <string_view>
+
 #include "base/auto_reset.h"
 #include "base/notreached.h"
 #include "base/run_loop.h"
-#include "base/strings/string_piece.h"
 #include "base/test/bind.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/accessibility/platform/fuchsia/semantic_provider.h"
 
 FakeSemanticTree::FakeSemanticTree() : semantic_tree_binding_(this) {}
 FakeSemanticTree::~FakeSemanticTree() = default;
@@ -62,7 +64,7 @@ void FakeSemanticTree::RunUntilNodeCountAtLeast(size_t count) {
   run_loop.Run();
 }
 
-void FakeSemanticTree::RunUntilNodeWithLabelIsInTree(base::StringPiece label) {
+void FakeSemanticTree::RunUntilNodeWithLabelIsInTree(std::string_view label) {
   DCHECK(!on_commit_updates_);
   if (GetNodeFromLabel(label))
     return;
@@ -107,24 +109,42 @@ fuchsia::accessibility::semantics::Node* FakeSemanticTree::GetNodeWithId(
 }
 
 fuchsia::accessibility::semantics::Node* FakeSemanticTree::GetNodeFromLabel(
-    base::StringPiece label) {
-  fuchsia::accessibility::semantics::Node* to_return = nullptr;
-  for (auto& n : nodes_) {
-    auto* node = &n.second;
-    if (node->has_attributes() && node->attributes().has_label() &&
-        node->attributes().label() == label) {
-      // There are sometimes multiple semantic nodes with the same label. Hit
-      // testing should return the node with the smallest node ID so behaviour
-      // is consistent with the hit testing API being called.
-      if (!to_return) {
-        to_return = node;
-      } else if (node->node_id() < to_return->node_id()) {
-        to_return = node;
-      }
-    }
+    std::string_view label) {
+  auto it = nodes_.find(ui::AXFuchsiaSemanticProvider::kFuchsiaRootNodeId);
+  if (it == nodes_.end()) {
+    DCHECK(nodes_.empty()) << "Missing root.";
+    return nullptr;
   }
 
-  return to_return;
+  fuchsia::accessibility::semantics::Node& root = it->second;
+
+  return GetNodeFromLabelRecursive(root, label);
+}
+
+fuchsia::accessibility::semantics::Node*
+FakeSemanticTree::GetNodeFromLabelRecursive(
+    fuchsia::accessibility::semantics::Node& node,
+    std::string_view label) {
+  if (node.has_attributes() && node.attributes().has_label() &&
+      node.attributes().label() == label) {
+    return &node;
+  }
+
+  if (!node.has_child_ids())
+    return nullptr;
+
+  for (auto child_id : node.child_ids()) {
+    fuchsia::accessibility::semantics::Node* child = GetNodeWithId(child_id);
+    if (!child)
+      return nullptr;
+
+    fuchsia::accessibility::semantics::Node* matching_node =
+        GetNodeFromLabelRecursive(*child, label);
+    if (matching_node)
+      return matching_node;
+  }
+
+  return nullptr;
 }
 
 fuchsia::accessibility::semantics::Node* FakeSemanticTree::GetNodeFromRole(

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,14 @@
 #include <memory>
 #include <tuple>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/observer_list.h"
 #include "base/process/process_handle.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "ipc/ipc_sync_channel.h"
 #include "ipc/message_filter.h"
 #include "ppapi/c/pp_errors.h"
@@ -36,7 +35,6 @@ void PluginCrashed(PP_Module module) {
 PP_Instance GetInstanceForResource(PP_Resource resource) {
   // If a test relies on this, we need to implement it.
   NOTREACHED();
-  return 0;
 }
 
 void SetReserveInstanceIDCallback(PP_Module module,
@@ -326,7 +324,7 @@ PluginProxyMultiThreadTest::~PluginProxyMultiThreadTest() {
 void PluginProxyMultiThreadTest::RunTest() {
   main_thread_task_runner_ = PpapiGlobals::Get()->GetMainThreadMessageLoop();
   ASSERT_EQ(main_thread_task_runner_.get(),
-            base::ThreadTaskRunnerHandle::Get().get());
+            base::SingleThreadTaskRunner::GetCurrentDefault().get());
   nested_main_thread_message_loop_ = std::make_unique<base::RunLoop>();
 
   secondary_thread_ = std::make_unique<base::DelegateSimpleThread>(
@@ -448,9 +446,9 @@ void HostProxyTestHarness::SetUpHarnessWithChannel(
   host_dispatcher_ = std::make_unique<HostDispatcher>(
       pp_module(), &MockGetInterface, PpapiPermissions::AllPermissions());
   ppapi::Preferences preferences;
-  host_dispatcher_->InitHostWithChannel(&delegate_mock_, base::kNullProcessId,
-                                        channel_handle, is_client, preferences,
-                                        base::ThreadTaskRunnerHandle::Get());
+  host_dispatcher_->InitHostWithChannel(
+      &delegate_mock_, base::kNullProcessId, channel_handle, is_client,
+      preferences, base::SingleThreadTaskRunner::GetCurrentDefault());
   HostDispatcher::SetForInstance(pp_instance(), host_dispatcher_.get());
 }
 

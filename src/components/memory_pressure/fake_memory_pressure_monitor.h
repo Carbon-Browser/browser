@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,11 +29,10 @@ class FakeMemoryPressureMonitor
 
   // base::MemoryPressureMonitor overrides:
   MemoryPressureLevel GetCurrentPressureLevel() const override;
-  void SetDispatchCallback(const DispatchCallback& callback) override;
 
  private:
   MemoryPressureLevel memory_pressure_level_{
-    MemoryPressureLevel::MEMORY_PRESSURE_LEVEL_NONE};
+      MemoryPressureLevel::MEMORY_PRESSURE_LEVEL_NONE};
 };
 
 }  // namespace test

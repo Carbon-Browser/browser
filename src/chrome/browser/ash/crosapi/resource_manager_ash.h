@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,11 +28,15 @@ class ResourceManagerAsh : public mojom::ResourceManager,
 
   // ash::ResourcedClient::Observer:
   void OnMemoryPressure(ash::ResourcedClient::PressureLevel level,
-                        uint64_t reclaim_target_kb) override;
+                        memory_pressure::ReclaimTarget target) override;
 
   // crosapi::mojom::ResourceManager:
   void AddMemoryPressureObserver(
       mojo::PendingRemote<mojom::MemoryPressureObserver> observer) override;
+  void DEPRECATED_ReportBackgroundProcesses(
+      const std::vector<int32_t>& pids) override;
+  void ReportPageProcesses(
+      std::vector<mojom::PageProcessPtr> processes) override;
 
  private:
   // Support any number of connections.

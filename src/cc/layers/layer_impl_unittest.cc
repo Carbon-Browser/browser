@@ -1,4 +1,4 @@
-// Copyright 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -147,9 +147,9 @@ TEST_F(LayerImplTest, VerifyPendingLayerChangesAreTrackedProperly) {
 
 TEST_F(LayerImplTest, VerifyNeedsUpdateDrawProperties) {
   LayerImpl* root = root_layer();
-  LayerImpl* layer = AddLayer<LayerImpl>();
+  LayerImpl* layer = AddLayerInActiveTree<LayerImpl>();
   layer->SetBounds(gfx::Size(100, 100));
-  LayerImpl* layer2 = AddLayer<LayerImpl>();
+  LayerImpl* layer2 = AddLayerInActiveTree<LayerImpl>();
   SetElementIdsForTesting();
 
   CopyProperties(root, layer);
@@ -205,7 +205,8 @@ TEST_F(LayerImplTest, VerifyNeedsUpdateDrawProperties) {
   VERIFY_NEEDS_UPDATE_DRAW_PROPERTIES(layer->ScrollBy(arbitrary_vector2d));
   VERIFY_NO_NEEDS_UPDATE_DRAW_PROPERTIES(layer->ScrollBy(gfx::Vector2d()));
   VERIFY_NEEDS_UPDATE_DRAW_PROPERTIES(
-      layer->layer_tree_impl()->DidUpdateScrollOffset(layer->element_id()));
+      layer->layer_tree_impl()->DidUpdateScrollOffset(
+          layer->element_id(), /*pushed_from_main_or_pending_tree=*/false));
   layer->layer_tree_impl()
       ->property_trees()
       ->scroll_tree_mutable()
@@ -286,10 +287,11 @@ TEST_F(LayerImplTest, PerspectiveTransformHasReasonableScale) {
   }
   // Test case from crbug.com/766021.
   {
-    gfx::Transform transform(-0.9397f, -0.7019f, 0.2796f, 2383.4521f,   // row 1
-                             -0.0038f, 0.0785f, 1.0613f, 1876.4553f,    // row 2
-                             -0.0835f, 0.9081f, -0.4105f, -2208.3035f,  // row 3
-                             0.0001f, -0.0008f, 0.0003f, 2.8435f);      // row 4
+    auto transform = gfx::Transform::RowMajor(
+        -0.9397f, -0.7019f, 0.2796f, 2383.4521f,   // row 1
+        -0.0038f, 0.0785f, 1.0613f, 1876.4553f,    // row 2
+        -0.0835f, 0.9081f, -0.4105f, -2208.3035f,  // row 3
+        0.0001f, -0.0008f, 0.0003f, 2.8435f);      // row 4
     layer->draw_properties().screen_space_transform = transform;
 
     ASSERT_TRUE(layer->ScreenSpaceTransform().HasPerspective());
@@ -297,16 +299,33 @@ TEST_F(LayerImplTest, PerspectiveTransformHasReasonableScale) {
   }
 }
 
+TEST_F(LayerImplTest, GetDamageReasons) {
+  LayerImpl* root = root_layer();
+
+  root->layer_tree_impl()->ResetAllChangeTracking();
+  EXPECT_TRUE(root->GetDamageReasons().empty());
+  root->SetBounds(gfx::Size(10, 10));
+  EXPECT_EQ(root->GetDamageReasons(),
+            DamageReasonSet{DamageReason::kUntracked});
+
+  root->layer_tree_impl()->ResetAllChangeTracking();
+  EXPECT_TRUE(root->GetDamageReasons().empty());
+  root->UnionUpdateRect(gfx::Rect(10, 10));
+  EXPECT_EQ(root->GetDamageReasons(),
+            DamageReasonSet{DamageReason::kUntracked});
+}
+
 class LayerImplScrollTest : public LayerImplTest {
  public:
-  LayerImplScrollTest() : LayerImplScrollTest(LayerListSettings()) {}
+  LayerImplScrollTest()
+      : LayerImplScrollTest(CommitToPendingTreeLayerListSettings()) {}
 
   explicit LayerImplScrollTest(const LayerTreeSettings& settings)
       : LayerImplTest(settings) {
     LayerImpl* root = root_layer();
     root->SetBounds(gfx::Size(1, 1));
 
-    layer_ = AddLayer<LayerImpl>();
+    layer_ = AddLayerInActiveTree<LayerImpl>();
     SetElementIdsForTesting();
     // Set the max scroll offset by noting that the root layer has bounds (1,1),
     // thus whatever bounds are set for the layer will be the max scroll
@@ -330,18 +349,13 @@ class LayerImplScrollTest : public LayerImplTest {
   raw_ptr<LayerImpl> layer_;
 };
 
-class CommitToPendingTreeLayerImplScrollTest : public LayerImplScrollTest {
+class CommitToActiveTreeLayerImplScrollTest : public LayerImplScrollTest {
  public:
-  CommitToPendingTreeLayerImplScrollTest() : LayerImplScrollTest(settings()) {}
-
-  LayerTreeSettings settings() {
-    LayerListSettings settings;
-    settings.commit_to_active_tree = false;
-    return settings;
-  }
+  CommitToActiveTreeLayerImplScrollTest()
+      : LayerImplScrollTest(CommitToActiveTreeLayerListSettings()) {}
 };
 
-TEST_F(LayerImplScrollTest, ScrollByWithZeroOffset) {
+TEST_F(CommitToActiveTreeLayerImplScrollTest, ScrollByWithZeroOffset) {
   // Test that LayerImpl::ScrollBy only affects ScrollDelta and total scroll
   // offset is bounded by the range [0, max scroll offset].
 
@@ -370,7 +384,7 @@ TEST_F(LayerImplScrollTest, ScrollByWithZeroOffset) {
                        layer()->element_id()));
 }
 
-TEST_F(LayerImplScrollTest, ScrollByWithNonZeroOffset) {
+TEST_F(CommitToActiveTreeLayerImplScrollTest, ScrollByWithNonZeroOffset) {
   gfx::PointF scroll_offset(10, 5);
   scroll_tree(layer())->UpdateScrollOffsetBaseForTesting(layer()->element_id(),
                                                          scroll_offset);
@@ -400,7 +414,7 @@ TEST_F(LayerImplScrollTest, ScrollByWithNonZeroOffset) {
                        layer()->element_id()));
 }
 
-TEST_F(LayerImplScrollTest, ApplySentScrollsNoListener) {
+TEST_F(CommitToActiveTreeLayerImplScrollTest, ApplySentScrollsNoListener) {
   gfx::PointF scroll_offset(10, 5);
   gfx::Vector2dF scroll_delta(20.5f, 8.5f);
   gfx::Vector2d sent_scroll_delta(12, -3);
@@ -417,7 +431,8 @@ TEST_F(LayerImplScrollTest, ApplySentScrollsNoListener) {
                    scroll_tree(layer())->GetScrollOffsetBaseForTesting(
                        layer()->element_id()));
 
-  scroll_tree(layer())->ApplySentScrollDeltasFromAbortedCommit();
+  scroll_tree(layer())->ApplySentScrollDeltasFromAbortedCommit(
+      /* next_bmf */ false, /* main_frame_applied_deltas */ true);
 
   EXPECT_POINTF_EQ(scroll_offset + scroll_delta, CurrentScrollOffset(layer()));
   EXPECT_VECTOR2DF_EQ(scroll_delta - sent_scroll_delta, ScrollDelta(layer()));
@@ -426,7 +441,7 @@ TEST_F(LayerImplScrollTest, ApplySentScrollsNoListener) {
                        layer()->element_id()));
 }
 
-TEST_F(LayerImplScrollTest, ScrollUserUnscrollableLayer) {
+TEST_F(CommitToActiveTreeLayerImplScrollTest, ScrollUserUnscrollableLayer) {
   gfx::PointF scroll_offset(10, 5);
   gfx::Vector2dF scroll_delta(20.5f, 8.5f);
 
@@ -446,6 +461,8 @@ TEST_F(LayerImplScrollTest, TouchActionRegionCacheInvalidation) {
   host_impl()->CreatePendingTree();
   std::unique_ptr<LayerImpl> pending_layer =
       LayerImpl::Create(host_impl()->pending_tree(), 2);
+  pending_layer->SetElementId(
+      LayerIdToElementIdForTesting(pending_layer->id()));
 
   TouchActionRegion region;
   region.Union(TouchAction::kNone, gfx::Rect(0, 0, 50, 50));
@@ -465,8 +482,7 @@ TEST_F(LayerImplScrollTest, TouchActionRegionCacheInvalidation) {
   EXPECT_EQ(layer()->GetAllTouchActionRegions(), region.GetAllRegions());
 }
 
-TEST_F(CommitToPendingTreeLayerImplScrollTest,
-       PushPropertiesToMirrorsCurrentScrollOffset) {
+TEST_F(LayerImplScrollTest, PushPropertiesToMirrorsCurrentScrollOffset) {
   gfx::PointF scroll_offset(10, 5);
   gfx::Vector2dF scroll_delta(12, 18);
 
@@ -494,55 +510,6 @@ TEST_F(CommitToPendingTreeLayerImplScrollTest,
   EXPECT_POINTF_EQ(gfx::PointF(22, 23), CurrentScrollOffset(layer()));
   EXPECT_POINTF_EQ(CurrentScrollOffset(layer()),
                    CurrentScrollOffset(pending_layer.get()));
-}
-
-TEST_F(LayerImplTest, JitterTest) {
-  host_impl()->CreatePendingTree();
-  auto* root_layer = EnsureRootLayerInPendingTree();
-  root_layer->SetBounds(gfx::Size(50, 50));
-  SetupViewport(root_layer, gfx::Size(100, 100), gfx::Size(100, 100));
-  auto* scroll_layer =
-      host_impl()->pending_tree()->InnerViewportScrollLayerForTesting();
-  auto* content_layer = AddLayerInPendingTree<LayerImpl>();
-  content_layer->SetBounds(gfx::Size(100, 100));
-  content_layer->SetDrawsContent(true);
-  CopyProperties(
-      host_impl()->pending_tree()->OuterViewportScrollLayerForTesting(),
-      content_layer);
-  UpdatePendingTreeDrawProperties();
-
-  host_impl()->pending_tree()->PushPageScaleFromMainThread(1.f, 1.f, 1.f);
-  const int scroll = 5;
-  int accumulated_scroll = 0;
-  for (int i = 0; i < LayerTreeImpl::kFixedPointHitsThreshold + 1; ++i) {
-    host_impl()->ActivateSyncTree();
-    accumulated_scroll += scroll;
-    SetScrollOffset(
-        host_impl()->active_tree()->InnerViewportScrollLayerForTesting(),
-        gfx::PointF(0, accumulated_scroll));
-    UpdateActiveTreeDrawProperties();
-
-    host_impl()->CreatePendingTree();
-    LayerTreeImpl* pending_tree = host_impl()->pending_tree();
-    pending_tree->set_source_frame_number(i + 1);
-    pending_tree->PushPageScaleFromMainThread(1.f, 1.f, 1.f);
-    // Simulate scroll offset pushed from the main thread.
-    SetScrollOffset(scroll_layer, gfx::PointF(0, accumulated_scroll));
-    // The scroll done on the active tree is undone on the pending tree.
-    content_layer->SetOffsetToTransformParent(
-        gfx::Vector2dF(0, accumulated_scroll));
-    content_layer->SetNeedsPushProperties();
-    UpdateDrawProperties(pending_tree);
-
-    float jitter = content_layer->CalculateJitter();
-    // There should not be any jitter measured till we hit the fixed point hits
-    // threshold. 250 is sqrt(50 * 50) * 5. 50x50 is the visible bounds of
-    // content (clipped by the viewport). 5 is the distance between the
-    // locations of the content in the pending tree and the active tree.
-    float expected_jitter =
-        (i == pending_tree->kFixedPointHitsThreshold) ? 250 : 0;
-    EXPECT_EQ(jitter, expected_jitter);
-  }
 }
 
 }  // namespace

@@ -1,10 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef SERVICES_DEVICE_GENERIC_SENSOR_PLATFORM_SENSOR_LINUX_H_
 #define SERVICES_DEVICE_GENERIC_SENSOR_PLATFORM_SENSOR_LINUX_H_
 
+#include "base/memory/weak_ptr.h"
 #include "services/device/generic_sensor/platform_sensor.h"
 
 namespace device {
@@ -16,7 +17,7 @@ class PlatformSensorLinux : public PlatformSensor {
  public:
   PlatformSensorLinux(mojom::SensorType type,
                       SensorReadingSharedBuffer* reading_buffer,
-                      PlatformSensorProvider* provider,
+                      base::WeakPtr<PlatformSensorProvider> provider,
                       const SensorInfoLinux* sensor_device);
 
   PlatformSensorLinux(const PlatformSensorLinux&) = delete;

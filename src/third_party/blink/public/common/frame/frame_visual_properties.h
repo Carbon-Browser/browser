@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,17 @@ struct BLINK_COMMON_EXPORT FrameVisualProperties {
 
   FrameVisualProperties& operator=(const FrameVisualProperties& other);
 
+  static double MaxChildFrameScreenRectMovement();
+  static int MinScreenRectStableTimeMs();
+
+  // TODO(szager): These values override the above two values for frames that
+  // utilize IntersectionObserver V2 (i.e. occlusion detection). The purpose of
+  // this specialization is to preserve existing behavior while the above two
+  // parameters are experimentally dialed in.
+  // See kTargetFrameMovedRecentlyForIOv2 in web_input_event.h.
+  static int MaxChildFrameScreenRectMovementForIOv2();
+  static int MinScreenRectStableTimeMsForIOv2();
+
   // These fields are values from VisualProperties, see comments there for
   // descriptions. They exist here to propagate from each RenderWidget to its
   // child RenderWidgets. Here they are flowing from RenderWidget in a parent
@@ -32,18 +43,20 @@ struct BLINK_COMMON_EXPORT FrameVisualProperties {
   bool is_pinch_gesture_active = false;
   uint32_t capture_sequence_number = 0u;
   double zoom_level = 0;
+  double css_zoom_factor = 1.f;
   float page_scale_factor = 1.f;
   float compositing_scale_factor = 1.f;
+  float cursor_accessibility_scale_factor = 1.f;
   gfx::Size visible_viewport_size;
   gfx::Size min_size_for_auto_resize;
   gfx::Size max_size_for_auto_resize;
-  std::vector<gfx::Rect> root_widget_window_segments;
+  std::vector<gfx::Rect> root_widget_viewport_segments;
 
   // The size of the compositor viewport, to match the sub-frame's surface.
   gfx::Rect compositor_viewport;
 
-  // The screen's coordinate space.
-  gfx::Rect screen_space_rect;
+  // The frame's rect relative to the first ancestor local root frame.
+  gfx::Rect rect_in_local_root;
 
   // The size of the frame in its parent's coordinate space.
   gfx::Size local_frame_size;

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,7 +35,37 @@ LogicalOffset WritingModeConverter::SlowToLogical(
       return LogicalOffset(offset.top, offset.left);
   }
   NOTREACHED();
-  return LogicalOffset();
+}
+
+gfx::PointF WritingModeConverter::SlowToLogical(
+    const gfx::PointF& offset,
+    const gfx::SizeF& inner_size) const {
+  switch (GetWritingMode()) {
+    case WritingMode::kHorizontalTb:
+      DCHECK(!IsLtr());  // LTR is in the fast code path.
+      return {outer_size_.width - offset.x() - inner_size.width(), offset.y()};
+    case WritingMode::kVerticalRl:
+    case WritingMode::kSidewaysRl:
+      if (IsLtr()) {
+        return {offset.y(),
+                outer_size_.width - offset.x() - inner_size.width()};
+      }
+      return {outer_size_.height - offset.y() - inner_size.height(),
+              outer_size_.width - offset.x() - inner_size.width()};
+    case WritingMode::kVerticalLr:
+      if (IsLtr()) {
+        return {offset.y(), offset.x()};
+      }
+      return {outer_size_.height - offset.y() - inner_size.height(),
+              offset.x()};
+    case WritingMode::kSidewaysLr:
+      if (IsLtr()) {
+        return {outer_size_.height - offset.y() - inner_size.height(),
+                offset.x()};
+      }
+      return {offset.y(), offset.x()};
+  }
+  NOTREACHED();
 }
 
 PhysicalOffset WritingModeConverter::SlowToPhysical(
@@ -72,13 +102,16 @@ PhysicalOffset WritingModeConverter::SlowToPhysical(
       return PhysicalOffset(offset.block_offset, offset.inline_offset);
   }
   NOTREACHED();
-  return PhysicalOffset();
 }
 
 LogicalRect WritingModeConverter::SlowToLogical(
     const PhysicalRect& rect) const {
   return LogicalRect(SlowToLogical(rect.offset, rect.size),
                      ToLogical(rect.size));
+}
+
+gfx::RectF WritingModeConverter::SlowToLogical(const gfx::RectF& rect) const {
+  return {SlowToLogical(rect.origin(), rect.size()), ToLogical(rect.size())};
 }
 
 PhysicalRect WritingModeConverter::SlowToPhysical(

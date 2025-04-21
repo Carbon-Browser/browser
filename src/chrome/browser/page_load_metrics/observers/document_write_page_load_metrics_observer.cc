@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,6 +29,19 @@ DocumentWritePageLoadMetricsObserver::OnFencedFramesStart(
   // This class is interested in events that are dispatched only for the primary
   // page or preprocessed by PageLoadTracker to be per-outermost page. So, no
   // need to forward events at the observer layer.
+  return STOP_OBSERVING;
+}
+
+page_load_metrics::PageLoadMetricsObserver::ObservePolicy
+DocumentWritePageLoadMetricsObserver::OnPrerenderStart(
+    content::NavigationHandle* navigation_handle,
+    const GURL& currently_committed_url) {
+  // This class measures effect of `document.write()` on parsing and FCP.
+  // As `document.write()` is strongly discouraged [1], we think it is enough to
+  // record non prerendered case and this class doesn't support prerendering.
+  //
+  // [1]
+  // https://html.spec.whatwg.org/multipage/dynamic-markup-insertion.html#dom-document-write-dev
   return STOP_OBSERVING;
 }
 

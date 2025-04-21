@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,13 @@
 #include <array>
 #include <bitset>
 #include <vector>
+
 #include "third_party/blink/public/common/common_export.h"
 #include "third_party/blink/public/common/use_counter/use_counter_feature.h"
-#include "third_party/blink/public/common/user_agent/user_agent_metadata.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy_feature.mojom-shared.h"
 #include "third_party/blink/public/mojom/use_counter/metrics/css_property_id.mojom-shared.h"
 #include "third_party/blink/public/mojom/use_counter/metrics/web_feature.mojom-shared.h"
+#include "third_party/blink/public/mojom/use_counter/metrics/webdx_feature.mojom-shared.h"
 
 namespace blink {
 
@@ -33,8 +34,10 @@ class BLINK_COMMON_EXPORT UseCounterFeatureTracker {
   void Set(const UseCounterFeature&, bool);
 
   // Track what features have been recorded.
-  std::bitset<static_cast<size_t>(mojom::WebFeature::kNumberOfFeatures)>
+  std::bitset<static_cast<size_t>(mojom::WebFeature::kMaxValue) + 1>
       web_features_;
+  std::bitset<static_cast<size_t>(mojom::WebDXFeature::kMaxValue) + 1>
+      webdx_features_;
   std::bitset<static_cast<size_t>(mojom::CSSSampleId::kMaxValue) + 1>
       css_properties_;
   std::bitset<static_cast<size_t>(mojom::CSSSampleId::kMaxValue) + 1>
@@ -50,10 +53,6 @@ class BLINK_COMMON_EXPORT UseCounterFeatureTracker {
                   blink::mojom::PermissionsPolicyFeature::kMaxValue) +
               1>
       header_permissions_policy_features_;
-  std::bitset<static_cast<size_t>(
-                  UserAgentOverride::UserAgentOverrideHistogram::kMaxValue) +
-              1>
-      user_agent_override_features_;
 };
 
 }  // namespace blink

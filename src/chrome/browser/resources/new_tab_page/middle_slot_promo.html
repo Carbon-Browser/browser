@@ -1,61 +1,28 @@
-<style>
-  :host {
-    font-size: 12px;
-    max-width: 537px;
-    white-space: pre;
-  }
-
-  #container {
-    align-items: center;
-    background-color: var(--ntp-background-override-color);
-    border: solid var(--ntp-border-color) 1px;
-    border-radius: 24px;
-    box-sizing: border-box;
-    color: var(--cr-primary-text-color);
-    display: flex;
-    flex-direction: row;
-    height: 30px;
-    justify-content: center;
-    padding-inline-end: 8px;
-    padding-inline-start: 8px;
-  }
-
-  a {
-    color: var(--cr-link-color);
-    cursor: pointer;
-    text-decoration: none;
-  }
-
-  a:focus {
-    border-radius: 2px;
-    box-shadow: var(--ntp-focus-shadow);
-    outline: none;
-  }
-
-  * + .image {
-    margin-inline-start: 8px;
-  }
-
-  .image + * {
-    margin-inline-start: 8px;
-  }
-
-  img {
-    border-radius: 50%;
-    height: 24px;
-    pointer-events: none;
-    width: 24px;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    img {
-      background-color: var(--google-grey-200);
-    }
-  }
-
-  #container > :last-child {
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-</style>
-<!-- Promo parts are added by JS. -->
+<!-- Visibility is toggled in TS -->
+<div id="promoAndDismissContainer" hidden>
+  <!-- Promo parts are added by TS. -->
+  ${this.shownMiddleSlotPromoId_ ? html`
+    <cr-icon-button id="dismissPromoButton"
+        class="icon-clear"
+        aria-label="$i18n{close}"
+        title="$i18n{close}"
+        @click="${this.onDismissPromoButtonClick_}">
+    </cr-icon-button>
+  ` : ''}
+</div>
+${this.mobilePromoEnabled_ ? html`
+  <!-- Visibility is toggled in TS -->
+  <ntp-mobile-promo id="mobilePromo"
+      @qr-code-changed="${this.onMobilePromoQrCodeChanged_}" hidden>
+  </ntp-mobile-promo>
+` : ''}
+<cr-toast id="dismissPromoButtonToast" duration="10000">
+  <div id="dismissPromoButtonToastMessage">
+    $i18n{undoDismissPromoButtonToast}
+  </div>
+  <cr-button id="undoDismissPromoButton"
+      aria-label="$i18n{undoDescription}"
+      @click="${this.onUndoDismissPromoButtonClick_}">
+    $i18n{undo}
+  </cr-button>
+</cr-toast>

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,15 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
+#include "base/types/pass_key.h"
 #include "base/values.h"
 #include "net/log/file_net_log_observer.h"
 #include "net/log/net_log_util.h"
@@ -71,8 +72,9 @@ void NetLogExporter::Start(base::File destination,
         // Note: this a static method which takes a weak pointer as an argument,
         // so it will run if |this| is deleted.
         base::BindOnce(&NetLogExporter::StartWithScratchDirOrCleanup,
-                       AsWeakPtr(), std::move(extra_constants), capture_mode,
-                       max_file_size, std::move(callback)));
+                       weak_ptr_factory_.GetWeakPtr(),
+                       std::move(extra_constants), capture_mode, max_file_size,
+                       std::move(callback)));
   } else {
     StartWithScratchDir(std::move(extra_constants), capture_mode, max_file_size,
                         std::move(callback), base::FilePath());
@@ -98,6 +100,12 @@ void NetLogExporter::Stop(base::Value::Dict polled_data,
                      std::move(callback)));
   file_net_observer_ = nullptr;
   state_ = STATE_IDLE;
+}
+
+// static
+base::FilePath NetLogExporter::CreateScratchDirForNetworkService(
+    base::PassKey<NetworkService>) {
+  return CreateScratchDir(base::RepeatingCallback<base::FilePath()>());
 }
 
 void NetLogExporter::SetCreateScratchDirHandlerForTesting(
@@ -172,17 +180,16 @@ void NetLogExporter::StartWithScratchDir(
 
   base::Value::Dict constants = net::GetNetConstants();
   constants.Merge(std::move(extra_constants));
-  std::unique_ptr<base::Value> constants_value =
-      std::make_unique<base::Value>(std::move(constants));
 
   if (max_file_size != kUnlimitedFileSize) {
     file_net_observer_ = net::FileNetLogObserver::CreateBoundedPreExisting(
         scratch_dir_path, std::move(destination_), max_file_size, capture_mode,
-        std::move(constants_value));
+        std::make_unique<base::Value::Dict>(std::move(constants)));
   } else {
     DCHECK(scratch_dir_path.empty());
     file_net_observer_ = net::FileNetLogObserver::CreateUnboundedPreExisting(
-        std::move(destination_), capture_mode, std::move(constants_value));
+        std::move(destination_), capture_mode,
+        std::make_unique<base::Value::Dict>(std::move(constants)));
   }
 
   // There might not be a NetworkService object e.g. on iOS; in that case

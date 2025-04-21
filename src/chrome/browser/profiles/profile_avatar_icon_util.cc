@@ -1,11 +1,18 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/profiles/profile_avatar_icon_util.h"
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -16,7 +23,6 @@
 #include "base/path_service.h"
 #include "base/rand_util.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/values.h"
@@ -26,18 +32,32 @@
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/avatar_menu.h"
+#include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/ui/profiles/profile_colors_util.h"
 #include "chrome/browser/ui/ui_features.h"
+#include "chrome/browser/ui/views/dotted_icon.h"
 #include "chrome/common/chrome_paths.h"
+#include "chrome/common/pref_names.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/grit/theme_resources.h"
+#include "components/prefs/pref_service.h"
+#include "components/signin/public/base/signin_switches.h"
+#include "components/vector_icons/vector_icons.h"
 #include "skia/ext/image_operations.h"
+#include "third_party/skia/include/core/SkColor.h"
 #include "third_party/skia/include/core/SkPaint.h"
 #include "third_party/skia/include/core/SkPath.h"
 #include "third_party/skia/include/core/SkScalar.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/models/image_model.h"
 #include "ui/base/resource/resource_bundle.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/base/webui/web_ui_util.h"
 #include "ui/color/color_id.h"
+#include "ui/color/color_provider.h"
+#include "ui/color/color_provider_key.h"
+#include "ui/color/dynamic_color/palette_factory.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/favicon_size.h"
@@ -45,8 +65,10 @@
 #include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/gfx/image/canvas_image_source.h"
 #include "ui/gfx/image/image.h"
+#include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/image/image_skia_operations.h"
 #include "ui/gfx/paint_vector_icon.h"
+#include "ui/native_theme/native_theme.h"
 #include "url/url_canon.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -65,12 +87,17 @@
 // Helper methods for transforming and drawing avatar icons.
 namespace {
 
+// Palette color tones for the material color utils used to select a
+// material-appropriate color for a given profile color,
+constexpr float kIconToneDark = 40.f;
+constexpr float kIconToneLight = 80.f;
+
 #if BUILDFLAG(IS_WIN)
 const int kOldAvatarIconWidth = 38;
 const int kOldAvatarIconHeight = 31;
 
 // 2x sized versions of the old profile avatar icons.
-// TODO(crbug.com/937834): Clean this up.
+// TODO(crbug.com/41444689): Clean this up.
 const int kProfileAvatarIconResources2x[] = {
     IDR_PROFILE_AVATAR_2X_0,  IDR_PROFILE_AVATAR_2X_1,
     IDR_PROFILE_AVATAR_2X_2,  IDR_PROFILE_AVATAR_2X_3,
@@ -174,8 +201,7 @@ AvatarImageSource::AvatarImageSource(gfx::ImageSkia avatar,
                         position,
                         profiles::SHAPE_SQUARE) {}
 
-AvatarImageSource::~AvatarImageSource() {
-}
+AvatarImageSource::~AvatarImageSource() = default;
 
 void AvatarImageSource::Draw(gfx::Canvas* canvas) {
   // Center the avatar horizontally.
@@ -237,6 +263,102 @@ class ImageWithBackgroundSource : public gfx::CanvasImageSource {
   const SkColor background_;
 };
 
+#if !BUILDFLAG(IS_ANDROID)
+class ImageWithDottedCircleSource : public gfx::CanvasImageSource {
+ public:
+  ImageWithDottedCircleSource(const gfx::ImageSkia& image,
+                              int ring_radius,
+                              float ring_stroke_width,
+                              SkColor ring_color)
+      : gfx::CanvasImageSource(image.size()),
+        image_(image),
+        ring_size_(2 * ring_radius),
+        ring_stroke_width_(ring_stroke_width),
+        ring_color_(ring_color) {}
+
+  ImageWithDottedCircleSource(const ImageWithDottedCircleSource&) = delete;
+  ImageWithDottedCircleSource& operator=(const ImageWithDottedCircleSource&) =
+      delete;
+
+  ~ImageWithDottedCircleSource() override = default;
+
+  // gfx::CanvasImageSource override.
+  void Draw(gfx::Canvas* canvas) override {
+    canvas->DrawImageInt(image_, 0, 0);
+    float padding = (image_.width() - ring_size_) / 2;
+    PaintRingDottedPath(canvas,
+                        gfx::Rect(padding, padding, ring_size_, ring_size_),
+                        ring_color_,
+                        /*opacity_ratio=*/1,
+                        /*stroke_width=*/ring_stroke_width_);
+  }
+
+ private:
+  const gfx::ImageSkia image_;
+  const int ring_size_;
+  const float ring_stroke_width_;
+  const SkColor ring_color_;
+};
+#endif  // !BUILDFLAG(IS_ANDROID)
+
+// Returns icon with padding with no background.
+const gfx::ImageSkia CreatePaddedIcon(const gfx::VectorIcon& icon,
+                                      int size,
+                                      SkColor color,
+                                      float icon_to_image_ratio) {
+  const int padding =
+      static_cast<int>(size * (1.0f - icon_to_image_ratio) / 2.0f);
+
+  const gfx::ImageSkia sized_icon =
+      gfx::CreateVectorIcon(icon, size - 2 * padding, color);
+  return gfx::CanvasImageSource::CreatePadded(sized_icon, gfx::Insets(padding));
+}
+
+// Returns a filled person avatar icon.
+gfx::Image GetLegacyPlaceholderAvatarIconWithColors(SkColor fill_color,
+                                                    SkColor stroke_color,
+                                                    int size) {
+  CHECK(!base::FeatureList::IsEnabled(kOutlineSilhouetteIcon));
+
+  const gfx::VectorIcon& person_icon =
+      size >= 40 ? kPersonFilledPaddedLargeIcon : kPersonFilledPaddedSmallIcon;
+  const gfx::ImageSkia icon_without_background = gfx::CreateVectorIcon(
+      gfx::IconDescription(person_icon, size, stroke_color));
+  return gfx::Image(
+      profiles::AddBackgroundToImage(icon_without_background, fill_color));
+}
+
+class CircleImageSource : public gfx::CanvasImageSource {
+ public:
+  CircleImageSource(int size, SkColor color)
+      : gfx::CanvasImageSource(gfx::Size(size, size)), color_(color) {}
+
+  CircleImageSource(const CircleImageSource&) = delete;
+  CircleImageSource& operator=(const CircleImageSource&) = delete;
+
+  ~CircleImageSource() override = default;
+
+  void Draw(gfx::Canvas* canvas) override {
+    float radius = size().width() / 2.0f;
+    cc::PaintFlags flags;
+    flags.setStyle(cc::PaintFlags::kFill_Style);
+    flags.setAntiAlias(true);
+    flags.setColor(color_);
+    canvas->DrawCircle(gfx::PointF(radius, radius), radius, flags);
+  }
+
+  static gfx::ImageSkia CropCircle(const gfx::ImageSkia& image) {
+    CHECK_EQ(image.width(), image.height());
+    // The color here is irrelevant as long as it's opaque; only alpha matters.
+    return gfx::ImageSkiaOperations::CreateMaskedImage(
+        image, gfx::CanvasImageSource::MakeImageSkia<CircleImageSource>(
+                   image.width(), SK_ColorWHITE));
+  }
+
+ private:
+  const SkColor color_;
+};
+
 }  // namespace
 
 namespace profiles {
@@ -288,8 +410,12 @@ constexpr size_t kPlaceholderAvatarIndex = 0;
 #endif
 
 ui::ImageModel GetGuestAvatar(int size) {
-  return ui::ImageModel::FromVectorIcon(kUserAccountAvatarIcon,
-                                        ui::kColorAvatarIconGuest, size);
+  return ui::ImageModel::FromVectorIcon(
+      kUserAccountAvatarRefreshIcon,
+      switches::IsExplicitBrowserSigninUIOnDesktopEnabled()
+          ? ui::kColorMenuIcon
+          : ui::kColorAvatarIconGuest,
+      size);
 }
 
 gfx::Image GetSizedAvatarIcon(const gfx::Image& image,
@@ -297,6 +423,20 @@ gfx::Image GetSizedAvatarIcon(const gfx::Image& image,
                               int height,
                               AvatarShape shape) {
   gfx::Size size(width, height);
+
+  // No need to resize.
+  if (image.Size() == size) {
+    switch (shape) {
+      case AvatarShape::SHAPE_CIRCLE:
+        if (width == height) {
+          return gfx::Image(
+              CircleImageSource::CropCircle(*image.ToImageSkia()));
+        }
+        break;
+      case AvatarShape::SHAPE_SQUARE:
+        return image;
+    }
+  }
 
   // Source for a centered, sized icon.
   std::unique_ptr<gfx::ImageSkiaSource> source(
@@ -309,6 +449,70 @@ gfx::Image GetSizedAvatarIcon(const gfx::Image& image,
 gfx::Image GetSizedAvatarIcon(const gfx::Image& image, int width, int height) {
   return GetSizedAvatarIcon(image, width, height, profiles::SHAPE_SQUARE);
 }
+
+ui::ImageModel GetSizedAvatarImageModel(const ui::ImageModel& image, int size) {
+  DCHECK(!image.IsImageGenerator());  // Not prepared to handle these.
+  if (image.IsImage()) {
+    gfx::ImageSkia image_skia = image.GetImage().AsImageSkia();
+    return ui::ImageModel::FromImageSkia(
+        gfx::ImageSkiaOperations::CreateResizedImage(
+            image_skia, skia::ImageOperations::RESIZE_BEST,
+            gfx::Size(size, size)));
+  }
+  const ui::VectorIconModel& model = image.GetVectorIcon();
+  if (model.has_color()) {
+    return ui::ImageModel::FromVectorIcon(*model.vector_icon(), model.color(),
+                                          size);
+  }
+  return ui::ImageModel::FromVectorIcon(*model.vector_icon(), model.color_id(),
+                                        size);
+}
+
+#if !BUILDFLAG(IS_ANDROID)
+gfx::ImageSkia GetAvatarWithDottedRing(const ui::ImageModel& image,
+                                       int size_with_padding,
+                                       ui::ColorProvider* color_provider) {
+  DCHECK(!image.IsEmpty());
+  // Values are expressed as a proportion of `size`.
+  // Radius of the dotted ring.
+  constexpr float kAvatarDottedRingRadius = 0.29;
+  // Padding around the image to fit it inside the ring.
+  constexpr float kAvatarPaddingForRing = 0.3;
+  // The stroke is fully inside `kAvatarDottedRingRadius`.
+  constexpr float kAvatarRingStrokeWidth = 0.05;
+  // Sanity check: the dotted ring is smaller than the full image.
+  static_assert(kAvatarDottedRingRadius < 0.5);
+  // Sanity check: the avatar image fits inside the dotted ring (taking the ring
+  // stroke width into account).
+  static_assert(kAvatarDottedRingRadius >
+                0.5 - kAvatarPaddingForRing + kAvatarRingStrokeWidth);
+
+  const int avatar_padding =
+      std::nearbyint(kAvatarPaddingForRing * size_with_padding);
+  const int avatar_ring_radius =
+      std::nearbyint(kAvatarDottedRingRadius * size_with_padding);
+  const int avatar_size = size_with_padding - 2 * avatar_padding;
+  const float avatar_ring_stroke = kAvatarRingStrokeWidth * size_with_padding;
+
+  // Shrink the avatar to fit inside the dotted ring.
+  gfx::ImageSkia sized_avatar_image =
+      GetSizedAvatarImageModel(image, avatar_size).Rasterize(color_provider);
+  // Crop to a circle.
+  sized_avatar_image = CircleImageSource::CropCircle(sized_avatar_image);
+  // Add padding.
+  gfx::ImageSkia padded_image = gfx::CanvasImageSource::CreatePadded(
+      sized_avatar_image, gfx::Insets(avatar_padding));
+  // Add background color.
+  gfx::ImageSkia padded_image_with_background = AddBackgroundToImage(
+      padded_image, color_provider->GetColor(ui::kColorBubbleBackground));
+  // Add dotted ring.
+  return gfx::ImageSkia(
+      std::make_unique<ImageWithDottedCircleSource>(
+          padded_image_with_background, avatar_ring_radius, avatar_ring_stroke,
+          color_provider->GetColor(ui::kColorSysStateInactiveRing)),
+      gfx::Size(size_with_padding, size_with_padding));
+}
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 gfx::Image GetAvatarIconForWebUI(const gfx::Image& image) {
   return GetSizedAvatarIcon(image, kAvatarIconSize, kAvatarIconSize);
@@ -344,9 +548,14 @@ gfx::Image GetAvatarIconForNSMenu(const base::FilePath& profile_path) {
     return gfx::Image();
   }
 
+  PlaceholderAvatarIconParams icon_params =
+      GetPlaceholderAvatarIconParamsVisibleAgainstColor(
+          ui::NativeTheme::GetInstanceForNativeUi()->ShouldUseDarkColors()
+              ? SK_ColorBLACK
+              : SK_ColorWHITE);
   // Get a higher res than 16px so it looks good after cropping to a circle.
-  gfx::Image icon =
-      entry->GetAvatarIcon(kAvatarIconSize, /*download_high_res=*/false);
+  gfx::Image icon = entry->GetAvatarIcon(
+      kAvatarIconSize, /*download_high_res=*/false, icon_params);
   return profiles::GetSizedAvatarIcon(
       icon, kMenuAvatarIconSize, kMenuAvatarIconSize, profiles::SHAPE_CIRCLE);
 }
@@ -370,7 +579,7 @@ size_t GetModernAvatarIconStartIndex() {
   return GetPlaceholderAvatarIndex() + 1;
 #else
   // Only use the placeholder avatar on ChromeOS and Android.
-  // TODO(crbug.com/937834): Clean up code and remove code dependencies from
+  // TODO(crbug.com/41444689): Clean up code and remove code dependencies from
   // Android and ChromeOS. Avatar icons from this file are not used on these
   // platforms.
   return GetPlaceholderAvatarIndex();
@@ -383,7 +592,7 @@ bool IsModernAvatarIconIndex(size_t icon_index) {
 }
 
 int GetPlaceholderAvatarIconResourceID() {
-  // TODO(crbug.com/1100835): Replace with the new icon. Consider coloring the
+  // TODO(crbug.com/40138086): Replace with the new icon. Consider coloring the
   // icon (i.e. providing the image through
   // ProfileAttributesEntry::GetAvatarIcon(), instead) which would require more
   // refactoring.
@@ -391,7 +600,7 @@ int GetPlaceholderAvatarIconResourceID() {
 }
 
 std::string GetPlaceholderAvatarIconUrl() {
-  // TODO(crbug.com/1100835): Replace with the new icon. Consider coloring the
+  // TODO(crbug.com/40138086): Replace with the new icon. Consider coloring the
   // icon (i.e. providing the image through
   // ProfileAttributesEntry::GetAvatarIcon(), instead) which would require more
   // refactoring.
@@ -510,18 +719,60 @@ const IconResourceInfo* GetDefaultAvatarIconResourceInfo(size_t index) {
   return &resource_info[index];
 }
 
-gfx::Image GetPlaceholderAvatarIconWithColors(SkColor fill_color,
-                                              SkColor stroke_color,
-                                              int size) {
+gfx::Image GetPlaceholderAvatarIconVisibleAgainstBackground(
+    SkColor profile_color_seed,
+    int size,
+    AvatarVisibilityAgainstBackground visibility) {
+  CHECK(base::FeatureList::IsEnabled(kOutlineSilhouetteIcon));
+
   const gfx::VectorIcon& person_icon =
-      size >= 40 ? kPersonFilledPaddedLargeIcon : kPersonFilledPaddedSmallIcon;
-  gfx::ImageSkia icon_without_background = gfx::CreateVectorIcon(
-      gfx::IconDescription(person_icon, size, stroke_color));
-  gfx::ImageSkia icon_with_background(
-      std::make_unique<ImageWithBackgroundSource>(icon_without_background,
-                                                  fill_color),
-      gfx::Size(size, size));
-  return gfx::Image(icon_with_background);
+      vector_icons::kAccountCircleChromeRefreshIcon;
+
+  // The palette is generated using the user color, which is independent of the
+  // profile's light or dark theme.
+  const ui::TonalPalette color_palette =
+      ui::GeneratePalette(profile_color_seed,
+                          ui::ColorProviderKey::SchemeVariant::kTonalSpot)
+          ->primary();
+  const SkColor visible_stroke_color =
+      visibility == AvatarVisibilityAgainstBackground::kVisibleAgainstDarkTheme
+          ? color_palette.get(kIconToneLight)
+          : color_palette.get(kIconToneDark);
+
+  const gfx::ImageSkia icon_without_background = gfx::CreateVectorIcon(
+      gfx::IconDescription(person_icon, size, visible_stroke_color));
+  return gfx::Image(icon_without_background);
+}
+
+gfx::Image GetPlaceholderAvatarIconWithColors(
+    SkColor fill_color,
+    SkColor stroke_color,
+    int size,
+    const PlaceholderAvatarIconParams& icon_params) {
+  if (!base::FeatureList::IsEnabled(kOutlineSilhouetteIcon)) {
+    return GetLegacyPlaceholderAvatarIconWithColors(fill_color, stroke_color,
+                                                    size);
+  }
+
+  // If the icon should be an outline icon visible against the background, use
+  // `GetPlaceholderAvatarIconVisibleAgainstBackground()` instead.
+  CHECK(!icon_params.visibility_against_background.has_value());
+
+  const gfx::VectorIcon& person_icon =
+      vector_icons::kAccountCircleChromeRefreshIcon;
+
+  const gfx::ImageSkia avatar_icon_without_background =
+      icon_params.has_padding
+          ? CreatePaddedIcon(person_icon, size, stroke_color, 0.5f)
+          : gfx::CreateVectorIcon(
+                gfx::IconDescription(person_icon, size, stroke_color));
+
+  if (icon_params.has_background) {
+    return gfx::Image(
+        AddBackgroundToImage(avatar_icon_without_background, fill_color));
+  } else {
+    return gfx::Image(avatar_icon_without_background);
+  }
 }
 
 int GetDefaultAvatarIconResourceIDAtIndex(size_t index) {
@@ -640,10 +891,67 @@ size_t GetRandomAvatarIconIndex(
   return interval_begin + random_offset;
 }
 
+#if !BUILDFLAG(IS_ANDROID)
+base::Value::List GetIconsAndLabelsForProfileAvatarSelector(
+    const base::FilePath& profile_path) {
+  ProfileAttributesEntry* entry =
+      g_browser_process->profile_manager()
+          ->GetProfileAttributesStorage()
+          .GetProfileAttributesWithPath(profile_path);
+  DCHECK(entry);
+
+  bool using_gaia = entry->IsUsingGAIAPicture();
+  size_t selected_avatar_idx =
+      using_gaia ? SIZE_MAX : entry->GetAvatarIconIndex();
+
+  // Obtain a list of the modern avatar icons.
+  base::Value::List avatars(
+      GetCustomProfileAvatarIconsAndLabels(selected_avatar_idx));
+
+  if (entry->GetSigninState() == SigninState::kNotSignedIn) {
+    ProfileThemeColors colors = entry->GetProfileThemeColors();
+    auto generic_avatar_info = GetDefaultProfileAvatarIconAndLabel(
+        colors.default_avatar_fill_color, colors.default_avatar_stroke_color,
+        selected_avatar_idx == GetPlaceholderAvatarIndex());
+    avatars.Insert(avatars.begin(),
+                   base::Value(std::move(generic_avatar_info)));
+    return avatars;
+  }
+
+  // Add the GAIA picture to the beginning of the list if it is available.
+  const gfx::Image* icon = entry->GetGAIAPicture();
+  if (icon) {
+    gfx::Image avatar_icon = GetAvatarIconForWebUI(*icon);
+    auto gaia_picture_info = GetAvatarIconAndLabelDict(
+        /*url=*/webui::GetBitmapDataUrl(avatar_icon.AsBitmap()),
+        /*label=*/
+        l10n_util::GetStringUTF16(IDS_SETTINGS_CHANGE_PICTURE_PROFILE_PHOTO),
+        /*index=*/0, using_gaia, /*is_gaia_avatar=*/true);
+    avatars.Insert(avatars.begin(), base::Value(std::move(gaia_picture_info)));
+  }
+
+  return avatars;
+}
+#endif  // !BUILDFLAG(IS_ANDROID)
+
+void SetDefaultProfileAvatarIndex(Profile* profile, size_t avatar_icon_index) {
+  CHECK(IsDefaultAvatarIconIndex(avatar_icon_index));
+
+  PrefService* pref_service = profile->GetPrefs();
+  pref_service->SetInteger(prefs::kProfileAvatarIndex, avatar_icon_index);
+  pref_service->SetBoolean(prefs::kProfileUsingDefaultAvatar,
+                           avatar_icon_index == GetPlaceholderAvatarIndex());
+  pref_service->SetBoolean(prefs::kProfileUsingGAIAAvatar, false);
+
+  ProfileMetrics::LogProfileAvatarSelection(avatar_icon_index);
+}
+
 #if BUILDFLAG(IS_WIN)
 SkBitmap GetWin2xAvatarImage(ProfileAttributesEntry* entry) {
   // Request just one size large enough for all uses.
-  return GetSkBitmapCopy(entry->GetAvatarIcon(IconUtil::kLargeIconSize));
+  return GetSkBitmapCopy(
+      entry->GetAvatarIcon(IconUtil::kLargeIconSize, /*use_high_res_file=*/true,
+                           /*icon_params=*/{.has_padding = false}));
 }
 
 SkBitmap GetWin2xAvatarIconAsSquare(const SkBitmap& source_bitmap) {
@@ -721,5 +1029,12 @@ SkBitmap GetBadgedWinIconBitmapForAvatar(const SkBitmap& app_icon_bitmap,
   return badged_bitmap;
 }
 #endif  // BUILDFLAG(IS_WIN)
+
+gfx::ImageSkia AddBackgroundToImage(const gfx::ImageSkia& image,
+                                    SkColor background_color) {
+  return gfx::ImageSkia(
+      std::make_unique<ImageWithBackgroundSource>(image, background_color),
+      image.size());
+}
 
 }  // namespace profiles

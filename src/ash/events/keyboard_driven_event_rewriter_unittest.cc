@@ -1,6 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ash/events/keyboard_driven_event_rewriter.h"
 
@@ -28,12 +33,12 @@ class TestEventRewriterContinuation
   ~TestEventRewriterContinuation() override = default;
 
   ui::EventDispatchDetails SendEvent(const ui::Event* event) override {
-    passthrough_event = ui::Event::Clone(*event);
+    passthrough_event = event->Clone();
     return ui::EventDispatchDetails();
   }
 
   ui::EventDispatchDetails SendEventFinally(const ui::Event* event) override {
-    rewritten_event = ui::Event::Clone(*event);
+    rewritten_event = event->Clone();
     return ui::EventDispatchDetails();
   }
 
@@ -115,9 +120,10 @@ TEST_F(KeyboardDrivenEventRewriterTest, PassThrough) {
   };
 
   for (size_t i = 0; i < std::size(kTests); ++i) {
-    EXPECT_EQ(base::StringPrintf("PassThrough ui_flags=%d", kTests[i].ui_flags),
-              GetRewrittenEventAsString(kTests[i].ui_keycode,
-                                        kTests[i].ui_flags, ui::ET_KEY_PRESSED))
+    EXPECT_EQ(
+        base::StringPrintf("PassThrough ui_flags=%d", kTests[i].ui_flags),
+        GetRewrittenEventAsString(kTests[i].ui_keycode, kTests[i].ui_flags,
+                                  ui::EventType::kKeyPressed))
         << "Test case " << i;
   }
 }
@@ -138,9 +144,10 @@ TEST_F(KeyboardDrivenEventRewriterTest, Rewrite) {
   };
 
   for (size_t i = 0; i < std::size(kTests); ++i) {
-    EXPECT_EQ("Rewritten ui_flags=0",
-              GetRewrittenEventAsString(kTests[i].ui_keycode,
-                                        kTests[i].ui_flags, ui::ET_KEY_PRESSED))
+    EXPECT_EQ(
+        "Rewritten ui_flags=0",
+        GetRewrittenEventAsString(kTests[i].ui_keycode, kTests[i].ui_flags,
+                                  ui::EventType::kKeyPressed))
         << "Test case " << i;
   }
 }

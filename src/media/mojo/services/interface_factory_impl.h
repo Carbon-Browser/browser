@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,6 +56,11 @@ class InterfaceFactoryImpl final
       mojo::PendingReceiver<mojom::VideoDecoder> receiver,
       mojo::PendingRemote<media::stable::mojom::StableVideoDecoder>
           dst_video_decoder) final;
+#if BUILDFLAG(ALLOW_OOP_VIDEO_DECODER)
+  void CreateStableVideoDecoder(
+      mojo::PendingReceiver<media::stable::mojom::StableVideoDecoder>
+          video_decoder) final;
+#endif  // BUILDFLAG(ALLOW_OOP_VIDEO_DECODER)
 
   void CreateAudioEncoder(
       mojo::PendingReceiver<mojom::AudioEncoder> receiver) final;
@@ -93,7 +98,7 @@ class InterfaceFactoryImpl final
 
   void CreateCdm(const CdmConfig& cdm_config, CreateCdmCallback callback) final;
 
-  // DeferredDestroy<mojom::InterfaceFactory> implemenation.
+  // DeferredDestroy<mojom::InterfaceFactory> implementation.
   void OnDestroyPending(base::OnceClosure destroy_cb) final;
 
  private:
@@ -117,8 +122,15 @@ class InterfaceFactoryImpl final
   void OnCdmServiceInitialized(MojoCdmService* raw_mojo_cdm_service,
                                CreateCdmCallback callback,
                                mojom::CdmContextPtr cdm_context,
-                               const std::string& error_message);
+                               CreateCdmStatus status);
 #endif  // BUILDFLAG(ENABLE_MOJO_CDM)
+
+#if BUILDFLAG(ALLOW_OOP_VIDEO_DECODER)
+  void FinishCreatingVideoDecoder(
+      mojo::PendingReceiver<mojom::VideoDecoder> receiver,
+      mojo::PendingRemote<media::stable::mojom::StableVideoDecoder>
+          dst_video_decoder);
+#endif  // BUILDFLAG(ALLOW_OOP_VIDEO_DECODER)
 
   // Must be declared before the receivers below because the bound objects might
   // take a raw pointer of |cdm_service_context_| and assume it's always
@@ -126,7 +138,8 @@ class InterfaceFactoryImpl final
   MojoCdmServiceContext cdm_service_context_;
 
 #if BUILDFLAG(ENABLE_MOJO_AUDIO_DECODER)
-  mojo::UniqueReceiverSet<mojom::AudioDecoder> audio_decoder_receivers_;
+  class AudioDecoderReceivers;
+  std::unique_ptr<AudioDecoderReceivers> audio_decoder_receivers_;
 #endif  // BUILDFLAG(ENABLE_MOJO_AUDIO_DECODER)
 
 #if BUILDFLAG(ENABLE_MOJO_VIDEO_DECODER)

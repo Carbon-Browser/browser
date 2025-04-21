@@ -1,4 +1,4 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -9,17 +9,16 @@ import("//media/gpu/args.gni")
 import("//media/media_options.gni")
 import("//testing/test.gni")
 import("//tools/generate_stubs/rules.gni")
-import("//ui/gl/features.gni")
 
 assert(is_linux || is_chromeos)
 assert(use_vaapi)
 
+# Ensure Ozone is the default configuration.
+assert(use_ozone)
+
 generate_stubs("libva_stubs") {
   extra_header = "va_stub_header.fragment"
   sigs = [ "va.sigs" ]
-  if (use_vaapi_x11) {
-    sigs += [ "va_x11.sigs" ]
-  }
   if (is_chromeos_ash) {
     sigs += [ "va_prot.sigs" ]
   }
@@ -33,15 +32,17 @@ generate_stubs("libva_stubs") {
 }
 
 source_set("vaapi") {
-  assert(use_libgav1_parser)
   defines = [ "MEDIA_GPU_IMPLEMENTATION" ]
   sources = [
     "av1_vaapi_video_decoder_delegate.cc",
     "av1_vaapi_video_decoder_delegate.h",
+    "av1_vaapi_video_encoder_delegate.cc",
+    "av1_vaapi_video_encoder_delegate.h",
     "h264_vaapi_video_decoder_delegate.cc",
     "h264_vaapi_video_decoder_delegate.h",
     "h264_vaapi_video_encoder_delegate.cc",
     "h264_vaapi_video_encoder_delegate.h",
+    "vaapi_decode_surface_handler.h",
     "vaapi_dmabuf_video_frame_mapper.cc",
     "vaapi_dmabuf_video_frame_mapper.h",
     "vaapi_image_decode_accelerator_worker.cc",
@@ -54,12 +55,6 @@ source_set("vaapi") {
     "vaapi_jpeg_decoder.h",
     "vaapi_jpeg_encoder.cc",
     "vaapi_jpeg_encoder.h",
-    "vaapi_picture.cc",
-    "vaapi_picture.h",
-    "vaapi_picture_factory.cc",
-    "vaapi_picture_factory.h",
-    "vaapi_video_decode_accelerator.cc",
-    "vaapi_video_decode_accelerator.h",
     "vaapi_video_decoder.cc",
     "vaapi_video_decoder.h",
     "vaapi_video_decoder_delegate.cc",
@@ -86,24 +81,22 @@ source_set("vaapi") {
     ]
   }
 
-  configs += [
-    "//build/config/linux/libva",
-    "//third_party/libvpx:libvpx_config",
-  ]
+  configs += [ "//build/config/linux/libva" ]
 
   deps = [
     ":common",
     ":vaapi_status",
     "//base",
     "//build:chromeos_buildflags",
+    "//gpu/command_buffer/service:gles2",
     "//gpu/config",
     "//gpu/ipc/common",
     "//gpu/ipc/service",
     "//media/gpu:common",
     "//media/gpu:video_frame_mapper_common",
     "//media/gpu/chromeos:common",
-    "//media/parsers",
     "//mojo/public/cpp/bindings",
+    "//third_party/libaom:libaomrc",
     "//third_party/libvpx:libvpxrc",
     "//third_party/libyuv",
     "//ui/gfx",
@@ -113,7 +106,6 @@ source_set("vaapi") {
   public_deps = [
     "//media",
     "//skia",
-    "//ui/gl",
   ]
 
   if (is_chromeos_ash) {
@@ -128,41 +120,6 @@ source_set("vaapi") {
       "//chromeos/components/cdm_factory_daemon:cdm_factory_daemon_gpu",
       "//components/chromeos_camera:jpeg_encode_accelerator",
       "//components/chromeos_camera:mjpeg_decode_accelerator",
-    ]
-  }
-
-  if (use_ozone || use_egl) {
-    sources += [
-      "vaapi_picture_native_pixmap.cc",
-      "vaapi_picture_native_pixmap.h",
-    ]
-  }
-
-  if (use_vaapi_x11) {
-    deps += [ "//ui/gfx/x" ]
-    sources += [
-      "vaapi_picture_native_pixmap_angle.cc",
-      "vaapi_picture_native_pixmap_angle.h",
-      "vaapi_picture_tfp.cc",
-      "vaapi_picture_tfp.h",
-    ]
-  }
-
-  if (use_ozone) {
-    deps += [
-      "//media/gpu:buffer_validation",
-      "//ui/ozone",
-    ]
-    sources += [
-      "vaapi_picture_native_pixmap_ozone.cc",
-      "vaapi_picture_native_pixmap_ozone.h",
-    ]
-  }
-
-  if (use_egl) {
-    sources += [
-      "vaapi_picture_native_pixmap_egl.cc",
-      "vaapi_picture_native_pixmap_egl.h",
     ]
   }
 }
@@ -183,8 +140,6 @@ source_set("vaapi_status") {
 source_set("common") {
   defines = [ "MEDIA_GPU_IMPLEMENTATION" ]
   sources = [
-    "va_surface.cc",
-    "va_surface.h",
     "vaapi_common.cc",
     "vaapi_common.h",
     "vaapi_utils.cc",
@@ -204,19 +159,12 @@ source_set("common") {
   deps = [
     ":libva_stubs",
     "//build:chromeos_buildflags",
+    "//media/gpu/chromeos:video_frame_resource",
     "//third_party/libyuv",
     "//ui/base:features",
     "//ui/gfx:memory_buffer",
     "//ui/gfx/linux:drm",
-    "//ui/gl",
   ]
-  if (use_ozone) {
-    deps += [ "//ui/ozone" ]
-  }
-
-  if (use_vaapi_x11) {
-    deps += [ "//ui/gfx/x" ]
-  }
 
   configs += [ "//build/config/linux/libva" ]
 }
@@ -233,6 +181,9 @@ source_set("vaapi_test_utils") {
     "//testing/gtest",
     "//third_party/libyuv:libyuv",
   ]
+  if (is_chromeos_ash) {
+    deps += [ "//media/gpu/test:local_gpu_memory_buffer_manager" ]
+  }
   public_deps = [ "//ui/gfx/geometry" ]
 }
 
@@ -241,12 +192,10 @@ source_set("unit_test") {
   sources = [
     "h264_vaapi_video_encoder_delegate_unittest.cc",
     "vaapi_image_decode_accelerator_worker_unittest.cc",
-    "vaapi_video_decode_accelerator_unittest.cc",
     "vaapi_video_encode_accelerator_unittest.cc",
     "vaapi_wrapper_unittest.cc",
     "vp9_vaapi_video_encoder_delegate_unittest.cc",
   ]
-  configs += [ "//third_party/libvpx:libvpx_config" ]
   deps = [
     ":common",
     ":vaapi",
@@ -264,6 +213,11 @@ source_set("unit_test") {
     "//ui/gfx:test_support",
     "//ui/gfx/geometry",
   ]
+  if (is_chromeos_ash) {
+    sources += [ "vaapi_video_decoder_unittest.cc" ]
+    deps +=
+        [ "//chromeos/components/cdm_factory_daemon:cdm_factory_daemon_gpu" ]
+  }
 }
 
 source_set("vaapi_image_decoder_test_common") {
@@ -281,7 +235,7 @@ source_set("vaapi_image_decoder_test_common") {
   ]
 }
 
-# TODO(https://crbug.com/1043007): remove is_chromeos.
+# TODO(crbug.com/40115082): remove is_chromeos.
 if (is_chromeos_ash) {
   source_set("jpeg_decoder_unit_test") {
     testonly = true
@@ -293,7 +247,6 @@ if (is_chromeos_ash) {
       ":vaapi_test_utils",
       "//base",
       "//media/gpu/test:local_gpu_memory_buffer_manager",
-      "//media/parsers",
       "//testing/gtest",
       "//third_party/libyuv:libyuv",
       "//ui/gfx:memory_buffer",
@@ -312,7 +265,6 @@ if (is_chromeos_ash) {
       ":vaapi_test_utils",
       "//base",
       "//media/gpu/test:local_gpu_memory_buffer_manager",
-      "//media/parsers",
       "//testing/gtest",
       "//third_party/libwebp",
       "//ui/gfx:memory_buffer",
@@ -348,16 +300,18 @@ test("vaapi_unittest") {
     "//ui/gfx/linux:gbm",
   ]
 
-  # TODO(https://crbug.com/1043007): remove is_chromeos.
+  # TODO(andrescj): the Chrome bots run vaapi_unittest with the fake driver, but
+  # the ChromeOS tests rely on a real driver. Therefore, we shouldn't need this
+  # unconditional data_deps. Instead, we should try to re-structure things so
+  # that ChromeOS can build the vaapi_unittest without building the fake driver.
+  data_deps = [ "//media/gpu/vaapi/test/fake_libva_driver:fake_drv_video" ]
+
+  # TODO(crbug.com/40115082): remove is_chromeos.
   if (is_chromeos_ash) {
     deps += [
       ":jpeg_decoder_unit_test",
       ":webp_decoder_unit_test",
     ]
-  }
-
-  if (use_ozone && is_linux) {
-    deps += [ "//ui/ozone" ]
   }
 }
 
@@ -395,14 +349,26 @@ executable("decode_test") {
     "test/vp9_decoder.cc",
     "test/vp9_decoder.h",
   ]
+
+  if (enable_platform_hevc) {
+    sources += [
+      "test/h265_decoder.cc",
+      "test/h265_decoder.h",
+      "test/h265_dpb.cc",
+      "test/h265_dpb.h",
+      "test/h265_vaapi_wrapper.cc",
+      "test/h265_vaapi_wrapper.h",
+    ]
+  }
+
   deps = [
     ":libva_stubs",
     "//base",
+    "//build/config/linux/libdrm",
     "//media",
     "//media:test_support",
     "//media/gpu:common",
-    "//media/parsers:parsers",
-    "//third_party/libgav1:libgav1",
+    "//third_party/libgav1:libgav1_parser",
     "//third_party/libyuv",
     "//ui/gfx/codec:codec",
     "//ui/gfx/geometry",

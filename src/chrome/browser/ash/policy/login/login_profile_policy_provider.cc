@@ -1,15 +1,16 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/policy/login/login_profile_policy_provider.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/values.h"
 #include "chromeos/dbus/power/power_policy_controller.h"
 #include "components/policy/core/browser/policy_error_map.h"
@@ -37,7 +38,7 @@ const char kActionShutdown[] = "Shutdown";
 const char kActionDoNothing[] = "DoNothing";
 
 // All policies in this list should have a pref mapping test case in
-// chrome/test/data/policy/policy_test_cases.json with location
+// components/policy/test/data/pref_mapping/[PolicyName].json with location
 // "signin_profile".
 const DevicePolicyToUserPolicyMapEntry kDevicePoliciesWithPolicyOptionsMap[] = {
     {key::kDeviceLoginScreenAutoSelectCertificateForUrls,
@@ -68,8 +69,22 @@ const DevicePolicyToUserPolicyMapEntry kDevicePoliciesWithPolicyOptionsMap[] = {
     {key::kDeviceLoginScreenWebUsbAllowDevicesForUrls,
      key::kWebUsbAllowDevicesForUrls},
     {key::kDeviceLoginScreenExtensions, key::kExtensionInstallForcelist},
+    {key::kDeviceLoginScreenExtensionManifestV2Availability,
+     key::kExtensionManifestV2Availability},
     {key::kDeviceLoginScreenPromptOnMultipleMatchingCertificates,
      key::kPromptOnMultipleMatchingCertificates},
+    {key::kDeviceLoginScreenContextAwareAccessSignalsAllowlist,
+     key::kUserContextAwareAccessSignalsAllowlist},
+    {key::kDeviceLoginScreenTouchVirtualKeyboardEnabled,
+     key::kTouchVirtualKeyboardEnabled},
+
+    // The authentication URL blocklist and allowlist policies implement content
+    // control for authentication flows, including in the login screen and lock
+    // screen.  Since these use the SigninProfile and LockScreenProfile, content
+    // control is already possible there through the URLBlocklist/URLAllowlist
+    // user policies.
+    {key::kDeviceAuthenticationURLBlocklist, key::kURLBlocklist},
+    {key::kDeviceAuthenticationURLAllowlist, key::kURLAllowlist},
 
     // key::kDeviceLoginScreenLocales maps to the ash::kDeviceLoginScreenLocales
     // CrosSetting elsewhere. Also map it to the key::kForcedLanguages policy in
@@ -77,6 +92,14 @@ const DevicePolicyToUserPolicyMapEntry kDevicePoliciesWithPolicyOptionsMap[] = {
     // generate a corresponding Accept-Languages header
     // (https://crbug.com/1336382).
     {key::kDeviceLoginScreenLocales, key::kForcedLanguages},
+    {key::kDeviceScreensaverLoginScreenEnabled,
+     key::kScreensaverLockScreenEnabled},
+    {key::kDeviceScreensaverLoginScreenIdleTimeoutSeconds,
+     key::kScreensaverLockScreenIdleTimeoutSeconds},
+    {key::kDeviceScreensaverLoginScreenImageDisplayIntervalSeconds,
+     key::kScreensaverLockScreenImageDisplayIntervalSeconds},
+    {key::kDeviceScreensaverLoginScreenImages,
+     key::kScreensaverLockScreenImages},
 };
 
 const DevicePolicyToUserPolicyMapEntry kRecommendedDevicePoliciesMap[] = {
@@ -92,24 +115,20 @@ const DevicePolicyToUserPolicyMapEntry kRecommendedDevicePoliciesMap[] = {
      key::kVirtualKeyboardEnabled},
 };
 
-std::unique_ptr<base::Value> GetAction(const std::string& action) {
+std::optional<base::Value> GetAction(const std::string& action) {
   if (action == kActionSuspend) {
-    return std::make_unique<base::Value>(
-        chromeos::PowerPolicyController::ACTION_SUSPEND);
+    return base::Value(chromeos::PowerPolicyController::ACTION_SUSPEND);
   }
   if (action == kActionLogout) {
-    return std::make_unique<base::Value>(
-        chromeos::PowerPolicyController::ACTION_STOP_SESSION);
+    return base::Value(chromeos::PowerPolicyController::ACTION_STOP_SESSION);
   }
   if (action == kActionShutdown) {
-    return std::make_unique<base::Value>(
-        chromeos::PowerPolicyController::ACTION_SHUT_DOWN);
+    return base::Value(chromeos::PowerPolicyController::ACTION_SHUT_DOWN);
   }
   if (action == kActionDoNothing) {
-    return std::make_unique<base::Value>(
-        chromeos::PowerPolicyController::ACTION_DO_NOTHING);
+    return base::Value(chromeos::PowerPolicyController::ACTION_DO_NOTHING);
   }
-  return nullptr;
+  return std::nullopt;
 }
 
 // Applies |value| as the recommended value of |user_policy| in
@@ -163,7 +182,7 @@ LoginProfilePolicyProvider::LoginProfilePolicyProvider(
     : device_policy_service_(device_policy_service),
       waiting_for_device_policy_refresh_(false) {}
 
-LoginProfilePolicyProvider::~LoginProfilePolicyProvider() {}
+LoginProfilePolicyProvider::~LoginProfilePolicyProvider() = default;
 
 void LoginProfilePolicyProvider::Init(SchemaRegistry* registry) {
   ConfigurationPolicyProvider::Init(registry);
@@ -178,12 +197,13 @@ void LoginProfilePolicyProvider::Shutdown() {
   ConfigurationPolicyProvider::Shutdown();
 }
 
-void LoginProfilePolicyProvider::RefreshPolicies() {
+void LoginProfilePolicyProvider::RefreshPolicies(PolicyFetchReason reason) {
   waiting_for_device_policy_refresh_ = true;
   weak_factory_.InvalidateWeakPtrs();
   device_policy_service_->RefreshPolicies(
       base::BindOnce(&LoginProfilePolicyProvider::OnDevicePolicyRefreshDone,
-                     weak_factory_.GetWeakPtr()));
+                     weak_factory_.GetWeakPtr()),
+      reason);
 }
 
 void LoginProfilePolicyProvider::OnPolicyUpdated(const PolicyNamespace& ns,
@@ -212,8 +232,14 @@ void LoginProfilePolicyProvider::UpdateFromDevicePolicy() {
   const PolicyNamespace chrome_namespaces(POLICY_DOMAIN_CHROME, std::string());
   const PolicyMap& device_policy_map =
       device_policy_service_->GetPolicies(chrome_namespaces);
-  std::unique_ptr<PolicyBundle> bundle(new PolicyBundle);
-  PolicyMap& user_policy_map = bundle->Get(chrome_namespaces);
+  PolicyBundle bundle;
+  PolicyMap& user_policy_map = bundle.Get(chrome_namespaces);
+
+  // We generally do not want the dino game being played on the login screen,
+  // see crbug.com/375062959.
+  user_policy_map.Set(key::kAllowDinosaurEasterEgg,
+                      PolicyLevel::POLICY_LEVEL_MANDATORY, POLICY_SCOPE_USER,
+                      POLICY_SOURCE_CLOUD, base::Value(false), nullptr);
 
   // The device policies which includes the policy options
   // |kDevicePoliciesWithPolicyOptionsMap| should be applied after
@@ -234,33 +260,34 @@ void LoginProfilePolicyProvider::UpdateFromDevicePolicy() {
   const base::Value* value = device_policy_map.GetValue(
       key::kDeviceLoginScreenPowerManagement, base::Value::Type::DICT);
   if (value) {
-    base::Value policy_value = value->Clone();
+    base::Value::Dict policy_dict = value->GetDict().Clone();
     const std::string* lid_close_action =
-        policy_value.FindStringKey(kLidCloseAction);
+        policy_dict.FindString(kLidCloseAction);
 
     if (lid_close_action) {
-      std::unique_ptr<base::Value> action = GetAction(*lid_close_action);
+      std::optional<base::Value> action = GetAction(*lid_close_action);
       if (action) {
         ApplyValueAsMandatoryPolicy(*action, key::kLidCloseAction,
                                     &user_policy_map);
       }
-      policy_value.RemoveKey(kLidCloseAction);
+      policy_dict.Remove(kLidCloseAction);
     }
 
     const base::Value* screen_dim_delay_scale =
-        policy_value.FindKey(kUserActivityScreenDimDelayScale);
+        policy_dict.Find(kUserActivityScreenDimDelayScale);
     if (screen_dim_delay_scale) {
       ApplyValueAsMandatoryPolicy(*screen_dim_delay_scale,
                                   key::kUserActivityScreenDimDelayScale,
                                   &user_policy_map);
-      policy_value.RemoveKey(kUserActivityScreenDimDelayScale);
+      policy_dict.Remove(kUserActivityScreenDimDelayScale);
     }
 
-    // |policy_value| is expected to be a valid value for the
+    // |policy_dict| is expected to be a valid value for the
     // PowerManagementIdleSettings policy now.
-    if (!policy_value.DictEmpty()) {
-      ApplyValueAsMandatoryPolicy(
-          policy_value, key::kPowerManagementIdleSettings, &user_policy_map);
+    if (!policy_dict.empty()) {
+      ApplyValueAsMandatoryPolicy(base::Value(std::move(policy_dict)),
+                                  key::kPowerManagementIdleSettings,
+                                  &user_policy_map);
     }
   }
 

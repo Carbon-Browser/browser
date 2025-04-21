@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,17 @@
 #include <memory>
 
 #include "base/memory/scoped_refptr.h"
+#include "components/content_settings/core/browser/cookie_settings.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 
 class HostContentSettingsMap;
 
 namespace content {
 class WebContents;
+}
+
+namespace content_settings {
+class CookieSettings;
 }
 
 namespace subresource_filter {
@@ -42,6 +47,7 @@ class ThrottleManagerTestSupport {
  private:
   sync_preferences::TestingPrefServiceSyncable prefs_;
   scoped_refptr<HostContentSettingsMap> settings_map_;
+  scoped_refptr<content_settings::CookieSettings> cookie_settings_;
   std::unique_ptr<SubresourceFilterProfileContext> profile_context_;
 };
 

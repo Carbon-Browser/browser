@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 
 namespace blink {
 
+class CSSProperty;
 class CSSToLengthConversionData;
 class CSSValue;
 class UnderlyingValue;
@@ -20,6 +21,7 @@ class SizeInterpolationFunctions {
 
  public:
   static InterpolationValue ConvertFillSizeSide(const FillSize&,
+                                                const CSSProperty& property,
                                                 float zoom,
                                                 bool convert_width);
   static InterpolationValue MaybeConvertCSSSizeSide(const CSSValue&,

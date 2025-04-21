@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,6 +26,7 @@ class MockSerialDelegate : public SerialDelegate {
   std::unique_ptr<SerialChooser> RunChooser(
       RenderFrameHost* frame,
       std::vector<blink::mojom::SerialPortFilterPtr> filters,
+      std::vector<device::BluetoothUUID> allowed_bluetooth_service_class_ids,
       SerialChooser::Callback callback) override;
 
   MOCK_METHOD0(RunChooserInternal, device::mojom::SerialPortInfoPtr());

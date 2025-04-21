@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,12 +29,12 @@ class ContentSettingsInfo {
     // with an initial value of ASK will be inherited if it is set to BLOCK or
     // ASK but ALLOW will become ASK in incognito mode. This should be used for
     // all settings that allow access to user data, e.g. geolocation.
-    INHERIT_IF_LESS_PERMISSIVE
-  };
+    INHERIT_IF_LESS_PERMISSIVE,
 
-  enum StorageBehavior {
-    // The setting is stored and used in future sessions.
-    PERSISTENT,
+    // Content settings will not be inherited from regular to incognito
+    // profiles. This should only be used in special cases, for settings that
+    // are not controlled-by/exposed-to the user.
+    DONT_INHERIT_IN_INCOGNITO
   };
 
   enum OriginRestriction {
@@ -47,12 +47,12 @@ class ContentSettingsInfo {
   };
 
   // This object does not take ownership of |website_settings_info|.
-  ContentSettingsInfo(const WebsiteSettingsInfo* website_settings_info,
-                      const std::vector<std::string>& allowlisted_schemes,
-                      const std::set<ContentSetting>& valid_settings,
-                      IncognitoBehavior incognito_behavior,
-                      StorageBehavior storage_behavior,
-                      OriginRestriction origin_restriction);
+  ContentSettingsInfo(
+      const WebsiteSettingsInfo* website_settings_info,
+      const std::vector<std::string>& allowlisted_primary_schemes,
+      const std::set<ContentSetting>& valid_settings,
+      IncognitoBehavior incognito_behavior,
+      OriginRestriction origin_restriction);
 
   ContentSettingsInfo(const ContentSettingsInfo&) = delete;
   ContentSettingsInfo& operator=(const ContentSettingsInfo&) = delete;
@@ -62,8 +62,17 @@ class ContentSettingsInfo {
   const WebsiteSettingsInfo* website_settings_info() const {
     return website_settings_info_;
   }
-  const std::vector<std::string>& allowlisted_schemes() const {
-    return allowlisted_schemes_;
+  const std::vector<std::string>& allowlisted_primary_schemes() const {
+    return allowlisted_primary_schemes_;
+  }
+
+  void set_third_party_cookie_allowed_secondary_schemes(
+      const std::vector<std::string>& allowed_schemes) {
+    third_party_cookie_allowed_secondary_schemes_ = allowed_schemes;
+  }
+  const std::vector<std::string>& third_party_cookie_allowed_secondary_schemes()
+      const {
+    return third_party_cookie_allowed_secondary_schemes_;
   }
 
   // Gets the original default setting for a particular content type.
@@ -73,15 +82,14 @@ class ContentSettingsInfo {
   bool IsDefaultSettingValid(ContentSetting setting) const;
 
   IncognitoBehavior incognito_behavior() const { return incognito_behavior_; }
-  StorageBehavior storage_behavior() const { return storage_behavior_; }
   OriginRestriction origin_restriction() const { return origin_restriction_; }
 
  private:
-  raw_ptr<const WebsiteSettingsInfo> website_settings_info_;
-  const std::vector<std::string> allowlisted_schemes_;
+  raw_ptr<const WebsiteSettingsInfo, DanglingUntriaged> website_settings_info_;
+  const std::vector<std::string> allowlisted_primary_schemes_;
+  std::vector<std::string> third_party_cookie_allowed_secondary_schemes_;
   const std::set<ContentSetting> valid_settings_;
   const IncognitoBehavior incognito_behavior_;
-  const StorageBehavior storage_behavior_;
   const OriginRestriction origin_restriction_;
 };
 

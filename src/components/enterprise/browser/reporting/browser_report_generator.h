@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "components/enterprise/browser/reporting/report_type.h"
 
 namespace enterprise_management {
@@ -48,9 +48,6 @@ class BrowserReportGenerator {
     virtual bool IsExtendedStableChannel() = 0;
     virtual void GenerateBuildStateInfo(
         enterprise_management::BrowserReport* report) = 0;
-    virtual void GeneratePluginsIfNeeded(
-        ReportCallback callback,
-        std::unique_ptr<enterprise_management::BrowserReport> report) = 0;
   };
 
   explicit BrowserReportGenerator(ReportingDelegateFactory* delegate_factory);

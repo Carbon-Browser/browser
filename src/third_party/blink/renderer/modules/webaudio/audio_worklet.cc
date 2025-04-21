@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,8 +46,7 @@ BaseAudioContext* AudioWorklet::GetBaseAudioContext() const {
   return context_.Get();
 }
 
-const Vector<CrossThreadAudioParamInfo>
-    AudioWorklet::GetParamInfoListForProcessor(
+Vector<CrossThreadAudioParamInfo> AudioWorklet::GetParamInfoListForProcessor(
     const String& name) {
   DCHECK(IsMainThread());
   DCHECK(GetMessagingProxy());
@@ -80,7 +79,8 @@ WorkletGlobalScopeProxy* AudioWorklet::CreateGlobalScope() {
       MakeGarbageCollected<AudioWorkletMessagingProxy>(GetExecutionContext(),
                                                        this);
   proxy->Initialize(MakeGarbageCollected<WorkerClients>(),
-                    ModuleResponsesMap());
+                    ModuleResponsesMap(),
+                    WorkerBackingThreadStartupData::CreateDefault());
   return proxy;
 }
 

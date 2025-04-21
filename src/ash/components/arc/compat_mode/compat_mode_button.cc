@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,8 +18,9 @@ bool CompatModeButton::OnMousePressed(const ui::MouseEvent& event) {
 }
 
 void CompatModeButton::OnGestureEvent(ui::GestureEvent* event) {
-  if (event->type() == ui::ET_GESTURE_TAP_DOWN)
+  if (event->type() == ui::EventType::kGestureTapDown) {
     controller_->OnButtonPressed();
+  }
   chromeos::FrameCenterButton::OnGestureEvent(event);
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CHROMEOS_ASH_COMPONENTS_DBUS_KERBEROS_FAKE_KERBEROS_CLIENT_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -13,7 +14,6 @@
 #include "chromeos/ash/components/dbus/kerberos/kerberos_client.h"
 #include "chromeos/ash/components/dbus/kerberos/kerberos_service.pb.h"
 #include "dbus/object_proxy.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -111,7 +111,7 @@ class COMPONENT_EXPORT(CHROMEOS_DBUS) FakeKerberosClient
   std::vector<AccountData> accounts_;
 
   // For recording which methods have been called (for testing).
-  absl::optional<std::string> recorded_function_calls_;
+  std::optional<std::string> recorded_function_calls_;
 
   // Fake delay for any asynchronous operation.
   base::TimeDelta task_delay_ = base::Milliseconds(100);

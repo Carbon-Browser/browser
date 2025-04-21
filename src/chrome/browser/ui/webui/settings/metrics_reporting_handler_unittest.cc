@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,9 @@
 
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING) && !BUILDFLAG(IS_CHROMEOS_ASH)
 
-#include "chrome/browser/ui/webui/settings/metrics_reporting_handler.h"
-
 #include "base/run_loop.h"
 #include "base/values.h"
+#include "chrome/browser/ui/webui/settings/metrics_reporting_handler.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "components/metrics/metrics_pref_names.h"
@@ -24,8 +23,8 @@ namespace settings {
 
 class TestingMetricsReportingHandler : public MetricsReportingHandler {
  public:
-  using MetricsReportingHandler::set_web_ui;
   using MetricsReportingHandler::HandleGetMetricsReporting;
+  using MetricsReportingHandler::set_web_ui;
 };
 
 class MetricsReportingHandlerTest : public testing::Test {

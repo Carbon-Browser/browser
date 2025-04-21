@@ -1,10 +1,9 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/base/ime/fuchsia/input_method_fuchsia.h"
 
-#include <fuchsia/ui/input/cpp/fidl.h>
 #include <lib/sys/cpp/component_context.h>
 #include <memory>
 #include <utility>
@@ -18,10 +17,11 @@
 
 namespace ui {
 
-InputMethodFuchsia::InputMethodFuchsia(bool enable_virtual_keyboard,
-                                       internal::InputMethodDelegate* delegate,
-                                       fuchsia::ui::views::ViewRef view_ref)
-    : InputMethodBase(delegate) {
+InputMethodFuchsia::InputMethodFuchsia(
+    bool enable_virtual_keyboard,
+    ImeKeyEventDispatcher* ime_key_event_dispatcher,
+    fuchsia_ui_views::ViewRef view_ref)
+    : InputMethodBase(ime_key_event_dispatcher) {
   if (enable_virtual_keyboard)
     virtual_keyboard_controller_.emplace(std::move(view_ref), this);
 }
@@ -35,7 +35,8 @@ VirtualKeyboardController* InputMethodFuchsia::GetVirtualKeyboardController() {
 
 ui::EventDispatchDetails InputMethodFuchsia::DispatchKeyEvent(
     ui::KeyEvent* event) {
-  DCHECK(event->type() == ET_KEY_PRESSED || event->type() == ET_KEY_RELEASED);
+  DCHECK(event->type() == EventType::kKeyPressed ||
+         event->type() == EventType::kKeyReleased);
 
   // If no text input client, do nothing.
   if (!GetTextInputClient())
@@ -44,7 +45,7 @@ ui::EventDispatchDetails InputMethodFuchsia::DispatchKeyEvent(
   // Insert the character.
   ui::EventDispatchDetails dispatch_details = DispatchKeyEventPostIME(event);
   if (!event->stopped_propagation() && !dispatch_details.dispatcher_destroyed &&
-      event->type() == ET_KEY_PRESSED && GetTextInputClient()) {
+      event->type() == EventType::kKeyPressed && GetTextInputClient()) {
     const uint16_t ch = event->GetCharacter();
     if (ch) {
       GetTextInputClient()->InsertChar(*event);

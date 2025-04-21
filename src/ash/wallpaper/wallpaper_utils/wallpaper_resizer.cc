@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,28 +7,70 @@
 #include <utility>
 
 #include "ash/utility/cropping_util.h"
-#include "ash/wallpaper/wallpaper_utils/wallpaper_resizer_observer.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
 #include "base/location.h"
 #include "base/logging.h"
-#include "base/metrics/histogram_macros.h"
+#include "base/metrics/histogram_functions.h"
+#include "base/task/task_traits.h"
+#include "base/task/thread_pool.h"
 #include "base/threading/thread_restrictions.h"
+#include "base/time/time.h"
+#include "cc/paint/color_filter.h"
+#include "cc/paint/paint_flags.h"
+#include "cc/paint/record_paint_canvas.h"
+#include "third_party/skia/include/core/SkBlendMode.h"
+#include "third_party/skia/include/core/SkColor.h"
 #include "third_party/skia/include/core/SkImage.h"
+#include "ui/gfx/canvas.h"
 #include "ui/gfx/geometry/skia_conversions.h"
+#include "ui/gfx/image/image_skia.h"
+#include "ui/gfx/image/image_skia_operations.h"
 #include "ui/gfx/image/image_skia_rep.h"
 
 namespace ash {
 namespace {
 
-// Resizes |image| to |target_size| using |layout| and stores the
-// resulting bitmap at |resized_bitmap_out|.
+// Kilobyte granularity is unnecessary because this metric is purely to prove
+// that decoded wallpaper typically occupies several MBs, rather than 20 or 40.
+constexpr int kDecodedWallpaperMetricMinMB = 1;
+// Assuming 4 bytes per pixel (RGBA), 50 MB should be an image that's roughly
+// 3630x3620. This exceeds the expected wallpaper size by a large margin.
+constexpr int kDecodedWallpaperMetricMaxMB = 50;
+constexpr int kDecodedWallpaperMetricNumBuckets = 10;
+
+// Wallpapers with png format could be partially transparent. Ensures image
+// pixels are opaque before painting.
 //
-// NOTE: |image| is intentionally a copy to ensure it exists for the duration of
+// If `generate_immediate_bitmap` is true, the return value is backed by an
+// `SkBitmap`. If false, it's backed by a sequence of paint operations, which,
+// when evaluated later in the graphics pipeline, will generate the exact same
+// opaque image.
+gfx::ImageSkia MakeOpaque(const gfx::ImageSkia& image_in,
+                          bool generate_immediate_bitmap) {
+  cc::RecordPaintCanvas record_canvas;
+  gfx::Canvas canvas(&record_canvas, /*image_scale=*/1.f);
+  cc::PaintFlags flags;
+
+  // Color filter ensures image pixels are opaque when drawn.
+  flags.setColorFilter(cc::ColorFilter::MakeBlend(
+      SkColor4f::FromColor(SK_ColorBLACK), SkBlendMode::kDstOver));
+  canvas.DrawImageInt(image_in, 0, 0, flags);
+  gfx::ImageSkiaRep opaque_image_rep(record_canvas.ReleaseAsRecord(),
+                                     image_in.size(),
+                                     /*scale=*/1.f);
+  return generate_immediate_bitmap
+             ? gfx::ImageSkia::CreateFrom1xBitmap(opaque_image_rep.GetBitmap())
+             : gfx::ImageSkia(opaque_image_rep);
+}
+
+// Resizes `image` to `target_size` using `layout`.
+//
+// NOTE: `image` is intentionally a copy to ensure it exists for the duration of
 // the function.
-void Resize(const gfx::ImageSkia image,
-            const gfx::Size& target_size,
-            WallpaperLayout layout,
-            SkBitmap* resized_bitmap_out) {
+gfx::ImageSkia Resize(const gfx::ImageSkia image,
+                      const gfx::Size& target_size,
+                      WallpaperLayout layout) {
   base::AssertLongCPUWorkAllowed();
 
   SkBitmap orig_bitmap = *image.bitmap();
@@ -68,12 +110,13 @@ void Resize(const gfx::ImageSkia image,
         break;
       case NUM_WALLPAPER_LAYOUT:
         NOTREACHED();
-        break;
     }
   }
-
-  *resized_bitmap_out = new_bitmap;
-  resized_bitmap_out->setImmutable();
+  // Generating the bitmap right now is both acceptable and desirable since it's
+  // on a blocking thread that can handle potentially long cpu work and ensures
+  // the opaque bitmap is only ever generated once.
+  return MakeOpaque(gfx::ImageSkia::CreateFrom1xBitmap(new_bitmap),
+                    /*generate_immediate_bitmap=*/true);
 }
 
 }  // namespace
@@ -84,51 +127,81 @@ uint32_t WallpaperResizer::GetImageId(const gfx::ImageSkia& image) {
   return image_rep.is_null() ? 0 : image_rep.GetBitmap().getGenerationID();
 }
 
+// static
+gfx::ImageSkia WallpaperResizer::GetResizedImage(const gfx::ImageSkia& image,
+                                                 int max_size_in_dips) {
+  float aspect_ratio =
+      static_cast<float>(image.width()) / static_cast<float>(image.height());
+  int height = max_size_in_dips;
+  int width = static_cast<int>(aspect_ratio * height);
+  if (width > max_size_in_dips) {
+    width = max_size_in_dips;
+    height = static_cast<int>(width / aspect_ratio);
+  }
+  return gfx::ImageSkiaOperations::CreateResizedImage(
+      image, skia::ImageOperations::RESIZE_BEST, gfx::Size(width, height));
+}
+
 WallpaperResizer::WallpaperResizer(const gfx::ImageSkia& image,
                                    const gfx::Size& target_size,
-                                   const WallpaperInfo& wallpaper_info,
-                                   scoped_refptr<base::TaskRunner> task_runner)
-    : image_(image),
-      original_image_id_(GetImageId(image_)),
+                                   const WallpaperInfo& wallpaper_info)
+    // Generating the opaque bitmap could potentially require long cpu work,
+    // which is not appropriate on the main thread. The bitmap will be
+    // generated later in the compositor on a more appropriate thread. This
+    // non-resized version of the `image_` is short-lived anyways and will be
+    // replaced with the resized opaque version imminently.
+    : image_(MakeOpaque(image, /*generate_immediate_bitmap=*/false)),
+      original_image_id_(GetImageId(image)),
       target_size_(target_size),
       wallpaper_info_(wallpaper_info),
-      task_runner_(std::move(task_runner)) {
+      sequenced_task_runner_(base::ThreadPool::CreateSequencedTaskRunner(
+          {base::MayBlock(), base::TaskPriority::USER_VISIBLE,
+           base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN})) {
   image_.MakeThreadSafe();
 }
 
-WallpaperResizer::~WallpaperResizer() {}
+WallpaperResizer::~WallpaperResizer() = default;
 
-void WallpaperResizer::StartResize() {
+void WallpaperResizer::StartResize(base::OnceClosure on_resize_done) {
+  weak_ptr_factory_.InvalidateWeakPtrs();
+
   start_calculation_time_ = base::TimeTicks::Now();
 
-  SkBitmap* resized_bitmap = new SkBitmap;
-  if (!task_runner_->PostTaskAndReply(
+  if (!sequenced_task_runner_->PostTaskAndReplyWithResult(
           FROM_HERE,
-          base::BindOnce(&Resize, image_, target_size_, wallpaper_info_.layout,
-                         resized_bitmap),
+          // The `DeepCopy()` of `image_` is necessary otherwise there's a
+          // potential race condition if `ImageSkiaRep::GetBitmap()` gets
+          // called concurrently from `sequenced_task_runner_`'s thread and the
+          // main thread. Note in this case, the deep copy is actually cheap
+          // because the `image_` is still backed by a paint record at this
+          // point (not actual pixels), and paint records are cheap to copy.
+          base::BindOnce(&Resize, image_.DeepCopy(), target_size_,
+                         wallpaper_info_.layout),
           base::BindOnce(&WallpaperResizer::OnResizeFinished,
                          weak_ptr_factory_.GetWeakPtr(),
-                         base::Owned(resized_bitmap)))) {
+                         std::move(on_resize_done)))) {
     LOG(WARNING) << "PostSequencedWorkerTask failed. "
                  << "Wallpaper may not be resized.";
   }
 }
 
-void WallpaperResizer::AddObserver(WallpaperResizerObserver* observer) {
-  observers_.AddObserver(observer);
-}
+void WallpaperResizer::OnResizeFinished(base::OnceClosure on_resize_done,
+                                        gfx::ImageSkia resized_image) {
+  static constexpr size_t kBytesPerMegabyte = 1024 * 1024;
+  base::UmaHistogramCustomCounts(
+      "Ash.Wallpaper.DecodedSizeMB",
+      base::ClampRound(
+          static_cast<float>(resized_image.bitmap()->computeByteSize()) /
+          kBytesPerMegabyte),
+      kDecodedWallpaperMetricMinMB, kDecodedWallpaperMetricMaxMB,
+      kDecodedWallpaperMetricNumBuckets);
 
-void WallpaperResizer::RemoveObserver(WallpaperResizerObserver* observer) {
-  observers_.RemoveObserver(observer);
-}
+  DVLOG(2) << __func__ << " old=" << image_.size().ToString()
+           << " new=" << resized_image.size().ToString()
+           << " time=" << base::TimeTicks::Now() - start_calculation_time_;
 
-void WallpaperResizer::OnResizeFinished(SkBitmap* resized_bitmap) {
-  image_ = gfx::ImageSkia::CreateFrom1xBitmap(*resized_bitmap);
-  UMA_HISTOGRAM_TIMES("Ash.Wallpaper.TimeSpentResizing",
-                      base::TimeTicks::Now() - start_calculation_time_);
-
-  for (auto& observer : observers_)
-    observer.OnWallpaperResized();
+  image_ = std::move(resized_image);
+  std::move(on_resize_done).Run();
 }
 
 }  // namespace ash

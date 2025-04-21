@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "components/pdf/browser/pdf_stream_delegate.h"
 #include "mojo/public/c/system/types.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -48,6 +48,7 @@ class PluginResponseWriter final {
   std::string body_;
   mojo::Remote<network::mojom::URLLoaderClient> client_;
   std::unique_ptr<mojo::DataPipeProducer> producer_;
+  bool require_corp_ = false;
 };
 
 }  // namespace pdf

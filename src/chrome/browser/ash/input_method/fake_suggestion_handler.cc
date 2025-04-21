@@ -1,8 +1,9 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/input_method/fake_suggestion_handler.h"
+
 #include "base/strings/string_util.h"
 
 namespace ash {
@@ -81,6 +82,10 @@ bool FakeSuggestionHandler::SetAssistiveWindowProperties(
     int context_id,
     const AssistiveWindowProperties& assistive_window,
     std::string* error) {
+  if (!assistive_window.announce_string.empty()) {
+    announcements_.push_back(assistive_window.announce_string);
+  }
+
   if (assistive_window.visible) {
     context_id_ = context_id;
     showing_suggestion_ = true;

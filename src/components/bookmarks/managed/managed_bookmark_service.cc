@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,9 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/values.h"
 #include "components/bookmarks/browser/bookmark_model.h"
 #include "components/bookmarks/browser/bookmark_utils.h"
@@ -29,40 +29,39 @@ namespace {
 class BookmarkPermanentNodeLoader {
  public:
   BookmarkPermanentNodeLoader(std::unique_ptr<BookmarkPermanentNode> node,
-                              base::Value initial_bookmarks,
+                              base::Value::List initial_bookmarks,
                               int title_id)
       : node_(std::move(node)),
         initial_bookmarks_(std::move(initial_bookmarks)),
         title_id_(title_id) {
     DCHECK(node_);
-    DCHECK(initial_bookmarks_.is_list());
   }
 
   BookmarkPermanentNodeLoader(const BookmarkPermanentNodeLoader&) = delete;
   BookmarkPermanentNodeLoader& operator=(const BookmarkPermanentNodeLoader&) =
       delete;
 
-  ~BookmarkPermanentNodeLoader() {}
+  ~BookmarkPermanentNodeLoader() = default;
 
-  // Initializes |node_| from |initial_bookmarks_| and |title_id_| and returns
-  // it. The ids are assigned starting at |next_node_id| and the value is
+  // Initializes `node_` from `initial_bookmarks_` and `title_id_` and returns
+  // it. The ids are assigned starting at `next_node_id` and the value is
   // updated as a side-effect.
   std::unique_ptr<BookmarkPermanentNode> Load(int64_t* next_node_id) {
     node_->set_id(*next_node_id);
     *next_node_id = ManagedBookmarksTracker::LoadInitial(
-        node_.get(), &initial_bookmarks_, node_->id() + 1);
+        node_.get(), initial_bookmarks_, node_->id() + 1);
     node_->SetTitle(l10n_util::GetStringUTF16(title_id_));
     return std::move(node_);
   }
 
  private:
   std::unique_ptr<BookmarkPermanentNode> node_;
-  base::Value initial_bookmarks_;
+  base::Value::List initial_bookmarks_;
   int title_id_;
 };
 
-// Returns a std::unique_ptr<BookmarkPermanentNode> using |next_node_id| for
-// assigning an id. |next_node_id| is updated as a side effect of calling this
+// Returns a std::unique_ptr<BookmarkPermanentNode> using `next_node_id` for
+// assigning an id. `next_node_id` is updated as a side effect of calling this
 // method.
 std::unique_ptr<BookmarkPermanentNode> LoadManagedNode(
     std::unique_ptr<BookmarkPermanentNodeLoader> loader,
@@ -89,7 +88,7 @@ void ManagedBookmarkService::BookmarkModelCreated(
   DCHECK(bookmark_model);
   DCHECK(!bookmark_model_);
   bookmark_model_ = bookmark_model;
-  bookmark_model_->AddObserver(this);
+  bookmark_model_observation_.Observe(bookmark_model_);
 
   managed_bookmarks_tracker_ = std::make_unique<ManagedBookmarksTracker>(
       bookmark_model_, prefs_, managed_domain_callback_);
@@ -114,7 +113,7 @@ LoadManagedNodeCallback ManagedBookmarkService::GetLoadManagedNodeCallback() {
 
 bool ManagedBookmarkService::CanSetPermanentNodeTitle(
     const BookmarkNode* node) {
-  // |managed_node_| can have its title updated if the user signs in or out,
+  // `managed_node_` can have its title updated if the user signs in or out,
   // since the name of the managed domain can appear in it. It can also have
   // its title updated on locale changes (http://crbug.com/459448).
   if (node == managed_node_)
@@ -122,12 +121,8 @@ bool ManagedBookmarkService::CanSetPermanentNodeTitle(
   return !IsDescendantOf(node, managed_node_);
 }
 
-bool ManagedBookmarkService::CanSyncNode(const BookmarkNode* node) {
-  return !IsDescendantOf(node, managed_node_);
-}
-
-bool ManagedBookmarkService::CanBeEditedByUser(const BookmarkNode* node) {
-  return !IsDescendantOf(node, managed_node_);
+bool ManagedBookmarkService::IsNodeManaged(const BookmarkNode* node) {
+  return IsDescendantOf(node, managed_node_);
 }
 
 void ManagedBookmarkService::Shutdown() {
@@ -136,24 +131,21 @@ void ManagedBookmarkService::Shutdown() {
 
 void ManagedBookmarkService::BookmarkModelChanged() {}
 
-void ManagedBookmarkService::BookmarkModelLoaded(BookmarkModel* bookmark_model,
-                                                 bool ids_reassigned) {
-  BaseBookmarkModelObserver::BookmarkModelLoaded(bookmark_model,
-                                                 ids_reassigned);
+void ManagedBookmarkService::BookmarkModelLoaded(bool ids_reassigned) {
+  BaseBookmarkModelObserver::BookmarkModelLoaded(ids_reassigned);
   // Start tracking the managed bookmarks. This will detect any changes that may
   // have occurred while the initial managed bookmarks were being loaded on the
   // background.
   managed_bookmarks_tracker_->Init(managed_node_);
 }
 
-void ManagedBookmarkService::BookmarkModelBeingDeleted(
-    BookmarkModel* bookmark_model) {
+void ManagedBookmarkService::BookmarkModelBeingDeleted() {
   Cleanup();
 }
 
 void ManagedBookmarkService::Cleanup() {
+  bookmark_model_observation_.Reset();
   if (bookmark_model_) {
-    bookmark_model_->RemoveObserver(this);
     bookmark_model_ = nullptr;
   }
 

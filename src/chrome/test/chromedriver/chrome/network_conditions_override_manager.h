@@ -1,4 +1,4 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,8 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
+#include "base/values.h"
 #include "chrome/test/chromedriver/chrome/devtools_event_listener.h"
-
-namespace base {
-class DictionaryValue;
-}
 
 class DevToolsClient;
 struct NetworkConditions;
@@ -38,7 +35,7 @@ class NetworkConditionsOverrideManager : public DevToolsEventListener {
   Status OnConnected(DevToolsClient* client) override;
   Status OnEvent(DevToolsClient* client,
                  const std::string& method,
-                 const base::DictionaryValue& params) override;
+                 const base::Value::Dict& params) override;
 
  private:
   Status ApplyOverrideIfNeeded();

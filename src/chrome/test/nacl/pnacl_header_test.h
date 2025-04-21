@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@ class HttpResponse;
 }
 
 /*
-TODO(https://crbug.com/711289): port to work with network service if this
+TODO(crbug.com/41312886): port to work with network service if this
 check matters.
 
 using content::ResourceDispatcherHostDelegate;
@@ -33,7 +33,7 @@ TestDispatcherHostDelegate& operator=(const TestDispatcherHostDelegate&) =
 delete;
 
 
-  ~TestDispatcherHostDelegate() override {}
+  ~TestDispatcherHostDelegate() override = default;
 
   void RequestBeginning(net::URLRequest* request,
                         content::ResourceContext* resource_context,

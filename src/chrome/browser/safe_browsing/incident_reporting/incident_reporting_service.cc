@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,21 +7,22 @@
 #include <math.h>
 #include <stddef.h>
 
-#include <algorithm>
+#include <array>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/not_fatal_until.h"
 #include "base/process/process.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
@@ -48,14 +49,14 @@
 
 namespace safe_browsing {
 
-const base::Feature kIncidentReportingEnableUpload {
-  "IncidentReportingEnableUpload",
+BASE_FEATURE(kIncidentReportingEnableUpload,
+             "IncidentReportingEnableUpload",
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
-      base::FEATURE_ENABLED_BY_DEFAULT
+             base::FEATURE_ENABLED_BY_DEFAULT
 #else
-      base::FEATURE_DISABLED_BY_DEFAULT
+             base::FEATURE_DISABLED_BY_DEFAULT
 #endif
-};
+);
 
 namespace {
 
@@ -93,14 +94,14 @@ const int64_t kDefaultCallbackIntervalMs = 1000 * 20;
 // Logs the type of incident in |incident_data| to a user metrics histogram.
 void LogIncidentDataType(IncidentDisposition disposition,
                          const Incident& incident) {
-  static const char* const kHistogramNames[] = {
+  static auto const kHistogramNames = std::to_array({
       "SBIRS.ReceivedIncident",
       "SBIRS.DroppedIncident",
       "SBIRS.Incident",
       "SBIRS.PrunedIncident",
       "SBIRS.DiscardedIncident",
       "SBIRS.NoDownloadIncident",
-  };
+  });
   static_assert(std::size(kHistogramNames) == NUM_DISPOSITIONS,
                 "Keep kHistogramNames in sync with enum IncidentDisposition.");
   DCHECK_GE(disposition, 0);
@@ -215,11 +216,9 @@ class IncidentReportingService::Receiver : public IncidentReceiver {
 IncidentReportingService::Receiver::Receiver(
     const base::WeakPtr<IncidentReportingService>& service)
     : service_(service),
-      thread_runner_(base::ThreadTaskRunnerHandle::Get()) {
-}
+      thread_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {}
 
-IncidentReportingService::Receiver::~Receiver() {
-}
+IncidentReportingService::Receiver::~Receiver() = default;
 
 void IncidentReportingService::Receiver::AddIncidentForProfile(
     Profile* profile,
@@ -301,8 +300,7 @@ IncidentReportingService::UploadContext::UploadContext(
     std::unique_ptr<ClientIncidentReport> report)
     : report(std::move(report)) {}
 
-IncidentReportingService::UploadContext::~UploadContext() {
-}
+IncidentReportingService::UploadContext::~UploadContext() = default;
 
 // static
 bool IncidentReportingService::IsEnabledForProfile(Profile* profile) {
@@ -314,7 +312,7 @@ bool IncidentReportingService::IsEnabledForProfile(Profile* profile) {
 }
 
 IncidentReportingService::IncidentReportingService(
-    SafeBrowsingService* safe_browsing_service)
+    SafeBrowsingServiceImpl* safe_browsing_service)
     : IncidentReportingService(safe_browsing_service,
                                base::Milliseconds(kDefaultCallbackIntervalMs),
                                GetBackgroundTaskRunner()) {
@@ -390,7 +388,7 @@ void IncidentReportingService::AddDownloadManager(
 }
 
 IncidentReportingService::IncidentReportingService(
-    SafeBrowsingService* safe_browsing_service,
+    SafeBrowsingServiceImpl* safe_browsing_service,
     base::TimeDelta delayed_task_interval,
     const scoped_refptr<base::TaskRunner>& delayed_task_runner)
     : url_loader_factory_(nullptr),
@@ -489,7 +487,7 @@ void IncidentReportingService::OnProfileWillBeDestroyed(Profile* profile) {
   profile->RemoveObserver(this);
 
   auto it = profiles_.find(profile);
-  DCHECK(it != profiles_.end());
+  CHECK(it != profiles_.end(), base::NotFatalUntil::M130);
 
   // Take ownership of the context.
   std::unique_ptr<ProfileContext> context = std::move(it->second);
@@ -587,14 +585,6 @@ void IncidentReportingService::AddIncident(Profile* profile,
   // Remember when the first incident for this report arrived.
   if (first_incident_time_.is_null())
     first_incident_time_ = base::Time::Now();
-  // Log the time between the previous incident and this one.
-  if (!last_incident_time_.is_null()) {
-    UMA_HISTOGRAM_TIMES("SBIRS.InterIncidentTime",
-                        base::TimeTicks::Now() - last_incident_time_);
-  }
-  last_incident_time_ = base::TimeTicks::Now();
-
-  // Persist the incident data.
 
   // Start assembling a new report if this is the first incident ever or the
   // first since the last upload.
@@ -635,7 +625,6 @@ bool IncidentReportingService::WaitingToCollateIncidents() {
 
 void IncidentReportingService::CancelIncidentCollection() {
   collation_timeout_pending_ = false;
-  last_incident_time_ = base::TimeTicks();
   report_.reset();
 }
 
@@ -671,7 +660,6 @@ void IncidentReportingService::BeginEnvironmentCollection() {
     return;
   }
 
-  environment_collection_begin_ = base::TimeTicks::Now();
   ClientIncidentReport_EnvironmentData* environment_data =
       new ClientIncidentReport_EnvironmentData();
   environment_collection_pending_ =
@@ -692,7 +680,6 @@ bool IncidentReportingService::WaitingForEnvironmentCollection() {
 }
 
 void IncidentReportingService::CancelEnvironmentCollection() {
-  environment_collection_begin_ = base::TimeTicks();
   environment_collection_pending_ = false;
   if (report_)
     report_->clear_environment();
@@ -714,11 +701,6 @@ void IncidentReportingService::OnEnvironmentDataCollected(
 #endif
 
   report_->set_allocated_environment(environment_data.release());
-
-  UMA_HISTOGRAM_TIMES("SBIRS.EnvCollectionTime",
-                      base::TimeTicks::Now() - environment_collection_begin_);
-  environment_collection_begin_ = base::TimeTicks();
-
   ProcessIncidentsIfCollectionComplete();
 }
 
@@ -732,15 +714,12 @@ void IncidentReportingService::BeginDownloadCollection() {
     return;
   }
 
-  last_download_begin_ = base::TimeTicks::Now();
-  last_download_finder_ = CreateDownloadFinder(
-      base::BindOnce(&IncidentReportingService::OnLastDownloadFound,
-                     weak_ptr_factory_.GetWeakPtr()));
   // No instance is returned if there are no eligible loaded profiles. Another
   // search will be attempted in OnProfileAdded() if another profile appears on
   // the scene.
-  if (!last_download_finder_)
-    last_download_begin_ = base::TimeTicks();
+  last_download_finder_ = CreateDownloadFinder(
+      base::BindOnce(&IncidentReportingService::OnLastDownloadFound,
+                     weak_ptr_factory_.GetWeakPtr()));
 }
 
 bool IncidentReportingService::WaitingForMostRecentDownload() {
@@ -766,7 +745,6 @@ bool IncidentReportingService::WaitingForMostRecentDownload() {
 
 void IncidentReportingService::CancelDownloadCollection() {
   last_download_finder_.reset();
-  last_download_begin_ = base::TimeTicks();
   if (report_)
     report_->clear_download();
 }
@@ -777,10 +755,6 @@ void IncidentReportingService::OnLastDownloadFound(
         last_non_binary_download) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   DCHECK(report_);
-
-  UMA_HISTOGRAM_TIMES("SBIRS.FindDownloadedBinaryTime",
-                      base::TimeTicks::Now() - last_download_begin_);
-  last_download_begin_ = base::TimeTicks();
 
   // Harvest the finder.
   last_download_finder_.reset();
@@ -808,7 +782,6 @@ void IncidentReportingService::ProcessIncidentsIfCollectionComplete() {
   // Take ownership of the report and clear things for future reports.
   std::unique_ptr<ClientIncidentReport> report(std::move(report_));
   first_incident_time_ = base::Time();
-  last_incident_time_ = base::TimeTicks();
 
   ClientIncidentReport_EnvironmentData_Process* process =
       report->mutable_environment()->mutable_process();
@@ -980,12 +953,9 @@ void IncidentReportingService::OnReportUploadResult(
 
   // The upload is no longer outstanding, so take ownership of the context (from
   // the collection of outstanding uploads) in this scope.
-  auto it =
-      std::find_if(uploads_.begin(), uploads_.end(),
-                   [context](const std::unique_ptr<UploadContext>& value) {
-                     return value.get() == context;
-                   });
-  DCHECK(it != uploads_.end());
+  auto it = base::ranges::find(uploads_, context,
+                               &std::unique_ptr<UploadContext>::get);
+  CHECK(it != uploads_.end(), base::NotFatalUntil::M130);
   std::unique_ptr<UploadContext> upload(std::move(*it));
   uploads_.erase(it);
 

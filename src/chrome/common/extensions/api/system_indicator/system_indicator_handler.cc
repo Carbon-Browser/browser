@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include "base/values.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/extension.h"
-#include "extensions/common/extension_icon_set.h"
+#include "extensions/common/icons/extension_icon_set.h"
 #include "extensions/common/manifest_constants.h"
 #include "extensions/common/manifest_handler_helpers.h"
 
@@ -29,16 +29,14 @@ struct SystemIndicatorInfo : public Extension::ManifestData {
   ExtensionIconSet icon_set;
 };
 
-SystemIndicatorInfo::SystemIndicatorInfo() {}
+SystemIndicatorInfo::SystemIndicatorInfo() = default;
 SystemIndicatorInfo::~SystemIndicatorInfo() = default;
 
 }  // namespace
 
-SystemIndicatorHandler::SystemIndicatorHandler() {
-}
+SystemIndicatorHandler::SystemIndicatorHandler() = default;
 
-SystemIndicatorHandler::~SystemIndicatorHandler() {
-}
+SystemIndicatorHandler::~SystemIndicatorHandler() = default;
 
 const ExtensionIconSet* SystemIndicatorHandler::GetSystemIndicatorIcon(
     const Extension& extension) {
@@ -49,9 +47,10 @@ const ExtensionIconSet* SystemIndicatorHandler::GetSystemIndicatorIcon(
 
 bool SystemIndicatorHandler::Parse(Extension* extension,
                                    std::u16string* error) {
-  const base::DictionaryValue* system_indicator_value = nullptr;
-  if (!extension->manifest()->GetDictionary(
-          manifest_keys::kSystemIndicator, &system_indicator_value)) {
+  const base::Value::Dict* system_indicator_dict =
+      extension->manifest()->available_values().FindDict(
+          manifest_keys::kSystemIndicator);
+  if (!system_indicator_dict) {
     *error = manifest_errors::kInvalidSystemIndicator;
     return false;
   }
@@ -64,7 +63,7 @@ bool SystemIndicatorHandler::Parse(Extension* extension,
   };
 
   const base::Value* icon_value =
-      system_indicator_value->FindKey(manifest_keys::kActionDefaultIcon);
+      system_indicator_dict->Find(manifest_keys::kActionDefaultIcon);
   if (!icon_value) {
     // Empty icon set.
     set_manifest_data(ExtensionIconSet());
@@ -76,8 +75,7 @@ bool SystemIndicatorHandler::Parse(Extension* extension,
   ExtensionIconSet icons;
   if (icon_value->is_dict()) {
     if (!manifest_handler_helpers::LoadIconsFromDictionary(
-            static_cast<const base::DictionaryValue*>(icon_value), &icons,
-            error)) {
+            icon_value->GetDict(), &icons, error)) {
       return false;
     }
     set_manifest_data(icons);

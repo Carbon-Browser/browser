@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,10 +20,15 @@ class Font;
 // contains the following data for horizontal (respectively vertical) operators:
 // - Glyph variants: h0, h1, h2, h3 (respectively v0, v1, v2, v3).
 // - Glyph parts: non-extender h2 and extender h1 (respectively v2 and v1).
+// stretchy.woff and stretchy-centered-on-baseline.woff contain similar stretchy
+// constructions for horizontal and vertical arrows only. For the latter, the
+// glyphs are centered on the baseline.
 // For details, see createSizeVariants() and createStretchy() from
 // third_party/blink/web_tests/external/wpt/mathml/tools/operator-dictionary.py
 const UChar32 kLeftBraceCodePoint = '{';
 const UChar32 kOverBraceCodePoint = 0x23DE;
+const UChar32 kVerticalArrow = 0x295C;
+const UChar32 kHorizontalArrow = 0x295A;
 PLATFORM_EXPORT void retrieveGlyphForStretchyOperators(
     const blink::Font operatorsWoff,
     Vector<UChar32>& verticalGlyphs,

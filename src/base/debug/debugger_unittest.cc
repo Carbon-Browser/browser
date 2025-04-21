@@ -1,8 +1,9 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/debug/debugger.h"
+
 #include "build/build_config.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -42,6 +43,5 @@ TEST(Debugger, DoesntExecuteBeyondBreakpoint) {
 #endif  // BUILDFLAG(IS_WIN)
 
 #else   // defined(GTEST_HAS_DEATH_TEST) && !BUILDFLAG(IS_ANDROID)
-TEST(Debugger, NoTest) {
-}
+TEST(Debugger, NoTest) {}
 #endif  // defined(GTEST_HAS_DEATH_TEST) && !BUILDFLAG(IS_ANDROID)

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,7 @@ namespace content {
 
 class FrameNavigationEntry;
 class RenderFrameHostImpl;
+class StoragePartition;
 
 // Keeps track of a few important sets of policies during a navigation: those of
 // the parent document, of the navigation initiator, etc. Computes the policies
@@ -47,14 +48,21 @@ class CONTENT_EXPORT NavigationPolicyContainerBuilder {
   // All arguments may be nullptr and need only outlive this call.
   //
   // If `parent` is not nullptr, its policies are copied.
-  // If `initiator_frame_token` is not nullptr and maps to a
-  // `PolicyContainerHost`, then its policies are copied.
+  // If `initiator_frame_token` is not nullptr, the policies are copied from the
+  // corresponding RenderFrameHost.
+  // `initiator_process_id` is used with the frame token to look up the
+  // initiator frame.
+  // If `storage_partition` is not nullptr, it may contain a
+  // NavigationStateKeepAlive that is keeping the PolicyContainerHost of the
+  // initiator alive.
   // If `history_entry` is not nullptr and contains policies, those are copied.
   //
   // This must only be called on the browser's UI thread.
   NavigationPolicyContainerBuilder(
       RenderFrameHostImpl* parent,
       const blink::LocalFrameToken* initiator_frame_token,
+      int initiator_process_id,
+      StoragePartition* storage_partition,
       const FrameNavigationEntry* history_entry);
 
   ~NavigationPolicyContainerBuilder();
@@ -91,6 +99,11 @@ class CONTENT_EXPORT NavigationPolicyContainerBuilder {
   // This must be called before `ComputePolicies()`.
   void SetCrossOriginEmbedderPolicy(network::CrossOriginEmbedderPolicy coep);
 
+  // Sets the document isolation policy of the new document.
+  //
+  // This must be called before `ComputePolicies()`.
+  void SetDocumentIsolationPolicy(const network::DocumentIsolationPolicy& dip);
+
   // Sets the IP address space of the delivered policies of the new document.
   //
   // This must be called before `ComputePolicies()`.
@@ -102,6 +115,10 @@ class CONTENT_EXPORT NavigationPolicyContainerBuilder {
   //
   // This must be called before `ComputePolicies()`.
   void SetIsOriginPotentiallyTrustworthy(bool value);
+
+  // Sets whether COOP origins allow the document to be crossOriginIsolated.
+  // This must be called before `ComputePolicies()`.
+  void SetAllowCrossOriginIsolation(bool value);
 
   // Records an additional Content Security Policy that will apply to the new
   // document. `policy` must not be null. Policies added this way are ignored
@@ -144,7 +161,7 @@ class CONTENT_EXPORT NavigationPolicyContainerBuilder {
   void ComputePolicies(const GURL& url,
                        bool is_inside_mhtml,
                        network::mojom::WebSandboxFlags frame_sandbox_flags,
-                       bool is_anonymous);
+                       bool is_credentialless);
 
   // Returns a reference to the policies of the new document, i.e. the policies
   // in the policy container host to be committed.
@@ -158,6 +175,13 @@ class CONTENT_EXPORT NavigationPolicyContainerBuilder {
   // Should only be called once. `ComputePolicies()` or
   // `ComputePoliciesForError()` must have been called previously.
   blink::mojom::PolicyContainerPtr CreatePolicyContainerForBlink();
+
+  // Returns a new refptr to the `PolicyContainerHost`.
+  //
+  // `ComputePolicies()` or `ComputePoliciesForError()` must have been called
+  // previously.
+  // It is invalid to call after `TakePolicyContainerHost()`.
+  scoped_refptr<PolicyContainerHost> GetPolicyContainerHost();
 
   // Moves the `PolicyContainerHost` out of this builder. The returned host
   // contains the same policies as `FinalPolicies()`.
@@ -176,6 +200,10 @@ class CONTENT_EXPORT NavigationPolicyContainerBuilder {
   // Whether either of `ComputePolicies()` or `ComputePoliciesForError()` has
   // been called yet.
   bool HasComputedPolicies() const;
+
+  // Modifies the bit that would allow top-level navigation without sticky
+  // user activation.
+  void SetAllowTopNavigationWithoutUserGesture(bool allow_top);
 
  private:
   // Sets `delivered_policies_.is_web_secure_context` to its final value.
@@ -216,7 +244,7 @@ class CONTENT_EXPORT NavigationPolicyContainerBuilder {
       const GURL& url,
       bool is_inside_mhtml,
       network::mojom::WebSandboxFlags frame_sandbox_flags,
-      bool is_anonymous);
+      bool is_credentialless);
 
   // The policies of the parent document, if any.
   const std::unique_ptr<PolicyContainerPolicies> parent_policies_;

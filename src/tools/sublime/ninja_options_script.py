@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 #
@@ -19,7 +19,7 @@ from __future__ import print_function
 import imp
 import optparse
 import os
-import pipes
+import shlex
 
 ycm_module_path = os.path.normpath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -43,7 +43,7 @@ def main():
   for flag in results['flags']:
     # The sublimeclang plugin expects to parse its input with shlex.
     # Defines and include path names may have spaces or quotes.
-    print(pipes.quote(flag))
+    print(shlex.quote(flag))
 
 
 if __name__ == "__main__":

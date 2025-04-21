@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,8 +33,9 @@ class ScopedLeakSanitizerDisabler {
   ~ScopedLeakSanitizerDisabler() { __lsan_enable(); }
 };
 
-#define ANNOTATE_SCOPED_MEMORY_LEAK \
-    ScopedLeakSanitizerDisabler leak_sanitizer_disabler; static_cast<void>(0)
+#define ANNOTATE_SCOPED_MEMORY_LEAK                    \
+  ScopedLeakSanitizerDisabler leak_sanitizer_disabler; \
+  static_cast<void>(0)
 
 #define ANNOTATE_LEAKING_OBJECT_PTR(X) __lsan_ignore_object(X);
 

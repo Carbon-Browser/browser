@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -66,10 +66,10 @@ ManifestService::ManifestService(
     scoped_refptr<base::SingleThreadTaskRunner> io_task_runner,
     base::WaitableEvent* shutdown_event) {
   filter_ = new ManifestMessageFilter(shutdown_event);
-  channel_ = IPC::ChannelProxy::Create(handle, IPC::Channel::MODE_SERVER,
-                                       NULL,  // Listener
-                                       io_task_runner.get(),
-                                       base::ThreadTaskRunnerHandle::Get());
+  channel_ = IPC::ChannelProxy::Create(
+      handle, IPC::Channel::MODE_SERVER,
+      NULL,  // Listener
+      io_task_runner.get(), base::SingleThreadTaskRunner::GetCurrentDefault());
   channel_->AddFilter(filter_.get());
 }
 

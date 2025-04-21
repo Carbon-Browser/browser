@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,9 +24,8 @@ public class NativeUnitTestNativeActivity extends NativeActivity {
     @Override
     public void onStart() {
         super.onStart();
-        // Force running in sub thread,
-        // since NativeActivity processes Looper messages in native code,
-        // which makes invoking the test runner Handler problematic.
+        // Force running in sub thread, since NativeActivity processes Looper messages in native
+        // code, which makes invoking the test runner Handler problematic.
         mTest.postStart(this, true);
     }
 }

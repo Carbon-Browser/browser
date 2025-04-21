@@ -1,10 +1,12 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_MEDIA_PROTECTED_MEDIA_IDENTIFIER_PERMISSION_CONTEXT_H_
 #define CHROME_BROWSER_MEDIA_PROTECTED_MEDIA_IDENTIFIER_PERMISSION_CONTEXT_H_
 
+#include "build/chromeos_buildflags.h"
+#include "chrome/browser/profiles/profile.h"
 #include "components/permissions/permission_context_base.h"
 #include "components/permissions/permission_request_id.h"
 
@@ -29,6 +31,12 @@ class ProtectedMediaIdentifierPermissionContext
       const GURL& requesting_origin,
       const GURL& embedding_origin) const override;
 
+  // Returns whether "Protected content" is enabled based on factors other than
+  // what 'ContentSettingsType::PROTECTED_MEDIA_IDENTIFIER' is set to. For
+  // example, it can be disabled by a switch in the content settings page, in
+  // incognito or guest mode, or by the device policy.
+  static bool IsProtectedMediaIdentifierEnabled(Profile* profile = nullptr);
+
  private:
   friend class ProtectedMediaIdentifierPermissionContextTest;
   static bool IsOriginAllowed(const GURL& origin);
@@ -36,13 +44,6 @@ class ProtectedMediaIdentifierPermissionContext
   void UpdateTabContext(const permissions::PermissionRequestID& id,
                         const GURL& requesting_frame,
                         bool allowed) override;
-  bool IsRestrictedToSecureOrigins() const override;
-
-  // Returns whether "Protected content" is enabled based on factors other
-  // than the protected media identifier content setting itself. For example,
-  // it can be disabled by a switch in content settings, in incognito or guest
-  // mode, or by the device policy.
-  bool IsProtectedMediaIdentifierEnabled() const;
 };
 
 #endif  // CHROME_BROWSER_MEDIA_PROTECTED_MEDIA_IDENTIFIER_PERMISSION_CONTEXT_H_

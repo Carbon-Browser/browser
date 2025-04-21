@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,6 @@ import android.content.Context;
 import android.widget.TextView;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
@@ -22,32 +21,24 @@ import org.robolectric.Robolectric;
 import org.robolectric.annotation.Config;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
-import org.chromium.base.test.util.JniMocker;
 import org.chromium.chrome.browser.feed.FeedServiceBridge;
+import org.chromium.chrome.browser.feed.FeedServiceBridgeJni;
 import org.chromium.chrome.browser.feed.v2.ContentOrder;
 import org.chromium.components.browser_ui.widget.chips.ChipProperties;
 import org.chromium.components.browser_ui.widget.chips.ChipView;
 import org.chromium.ui.modelutil.PropertyModel;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-/**
- * Tests for {@link FeedOptionsCoordinator}.
- */
+/** Tests for {@link FeedOptionsCoordinator}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class FeedOptionsCoordinatorTest {
-    @Mock
-    private FeedServiceBridge.Natives mFeedServiceBridgeJniMock;
-    @Mock
-    private FeedOptionsView mView;
-    @Mock
-    private ChipView mChipView;
-    @Mock
-    private TextView mTextView;
-
-    @Rule
-    public JniMocker mMocker = new JniMocker();
+    @Mock private FeedServiceBridge.Natives mFeedServiceBridgeJniMock;
+    @Mock private FeedOptionsView mView;
+    @Mock private ChipView mChipView;
+    @Mock private TextView mTextView;
 
     private FeedOptionsCoordinator mCoordinator;
     private Context mContext;
@@ -56,7 +47,7 @@ public class FeedOptionsCoordinatorTest {
     public void setUp() {
         MockitoAnnotations.initMocks(this);
         mContext = Robolectric.buildActivity(Activity.class).get();
-        mMocker.mock(FeedServiceBridge.getTestHooksForTesting(), mFeedServiceBridgeJniMock);
+        FeedServiceBridgeJni.setInstanceForTesting(mFeedServiceBridgeJniMock);
         when(mFeedServiceBridgeJniMock.getContentOrderForWebFeed())
                 .thenReturn(ContentOrder.REVERSE_CHRON);
         when(mView.createNewChip()).thenReturn(mChipView);
@@ -123,6 +114,11 @@ public class FeedOptionsCoordinatorTest {
 
     @Test
     public void testOptionsSelected() {
+        AtomicBoolean listenerCalled = new AtomicBoolean(false);
+        mCoordinator.setOptionsListener(
+                () -> {
+                    listenerCalled.set(true);
+                });
         List<PropertyModel> chipModels = mCoordinator.getChipModelsForTest();
         chipModels.get(0).set(ChipProperties.SELECTED, false);
         chipModels.get(1).set(ChipProperties.SELECTED, true);
@@ -131,5 +127,6 @@ public class FeedOptionsCoordinatorTest {
 
         assertFalse(chipModels.get(1).get(ChipProperties.SELECTED));
         assertTrue(chipModels.get(0).get(ChipProperties.SELECTED));
+        assertTrue(listenerCalled.get());
     }
 }

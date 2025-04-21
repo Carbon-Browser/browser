@@ -1,75 +1,67 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/base/ime/ash/ime_bridge.h"
 
-namespace ui {
+namespace ash {
 
 static IMEBridge* g_ime_bridge = nullptr;
 
-IMEBridge::IMEBridge()
-    : current_input_context_(ui::TEXT_INPUT_TYPE_NONE,
-                             ui::TEXT_INPUT_MODE_DEFAULT,
-                             0,
-                             ui::TextInputClient::FOCUS_REASON_NONE,
-                             false /* should_do_learning */) {}
+IMEBridge::IMEBridge() : current_input_context_(ui::TEXT_INPUT_TYPE_NONE) {}
 
 IMEBridge::~IMEBridge() = default;
 
-IMEInputContextHandlerInterface* IMEBridge::GetInputContextHandler() const {
+TextInputTarget* IMEBridge::GetInputContextHandler() const {
   return input_context_handler_;
 }
 
-void IMEBridge::SetInputContextHandler(
-    IMEInputContextHandlerInterface* handler) {
+void IMEBridge::SetInputContextHandler(TextInputTarget* handler) {
   input_context_handler_ = handler;
-  for (auto& observer : observers_)
-    observer.OnInputContextHandlerChanged();
+  observers_.Notify(&IMEBridgeObserver::OnInputContextHandlerChanged);
 }
 
-void IMEBridge::SetCurrentEngineHandler(IMEEngineHandlerInterface* handler) {
+void IMEBridge::SetCurrentEngineHandler(TextInputMethod* handler) {
   engine_handler_ = handler;
 }
 
-IMEEngineHandlerInterface* IMEBridge::GetCurrentEngineHandler() const {
+TextInputMethod* IMEBridge::GetCurrentEngineHandler() const {
   return engine_handler_;
 }
 
 void IMEBridge::SetCurrentInputContext(
-    const IMEEngineHandlerInterface::InputContext& input_context) {
+    const TextInputMethod::InputContext& input_context) {
   current_input_context_ = input_context;
 }
 
-const IMEEngineHandlerInterface::InputContext&
-IMEBridge::GetCurrentInputContext() const {
+const TextInputMethod::InputContext& IMEBridge::GetCurrentInputContext() const {
   return current_input_context_;
 }
 
-void IMEBridge::AddObserver(ui::IMEBridgeObserver* observer) {
+void IMEBridge::AddObserver(IMEBridgeObserver* observer) {
   observers_.AddObserver(observer);
 }
 
-void IMEBridge::RemoveObserver(ui::IMEBridgeObserver* observer) {
+void IMEBridge::RemoveObserver(IMEBridgeObserver* observer) {
   observers_.RemoveObserver(observer);
 }
 
 void IMEBridge::SetCandidateWindowHandler(
-    ash::IMECandidateWindowHandlerInterface* handler) {
+    IMECandidateWindowHandlerInterface* handler) {
   candidate_window_handler_ = handler;
 }
 
-ash::IMECandidateWindowHandlerInterface* IMEBridge::GetCandidateWindowHandler()
+IMECandidateWindowHandlerInterface* IMEBridge::GetCandidateWindowHandler()
     const {
   return candidate_window_handler_;
 }
 
 void IMEBridge::SetAssistiveWindowHandler(
-    ash::IMEAssistiveWindowHandlerInterface* handler) {
+    IMEAssistiveWindowHandlerInterface* handler) {
   assistive_window_handler_ = handler;
 }
 
-ash::IMEAssistiveWindowHandlerInterface* IMEBridge::GetAssistiveWindowHandler()
+IMEAssistiveWindowHandlerInterface* IMEBridge::GetAssistiveWindowHandler()
     const {
   return assistive_window_handler_;
 }
@@ -82,4 +74,4 @@ IMEBridge* IMEBridge::Get() {
   return g_ime_bridge;
 }
 
-}  // namespace ui
+}  // namespace ash

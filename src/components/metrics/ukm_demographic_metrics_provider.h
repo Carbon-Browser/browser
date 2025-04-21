@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@ class Report;
 
 namespace metrics {
 
-// TODO(crbug/1015094): The UkmDemographicMetricsProvider interface is only
+// TODO(crbug.com/40103560): The UkmDemographicMetricsProvider interface is only
 // needed to break the dependency cycle `views -> ukm -> demographic metrics
 // provider -> sync -> policy -> bookmarks -> views` by removing the dependency
 // on the demographic metrics provider target to build the ukm service. This

@@ -1,6 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <mfidl.h>
 
@@ -14,14 +19,19 @@
 #include <wrl.h>
 #include <wrl/client.h>
 
-#include "base/bind.h"
+#include <map>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
-#include "base/win/windows_version.h"
 #include "media/base/media_switches.h"
 #include "media/capture/video/win/video_capture_device_factory_win.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -74,10 +84,10 @@ using iterator = std::vector<VideoCaptureDeviceInfo>::const_iterator;
 iterator FindDeviceInRange(iterator begin,
                            iterator end,
                            const std::string& device_id) {
-  return std::find_if(begin, end,
-                      [device_id](const VideoCaptureDeviceInfo& device_info) {
-                        return device_id == device_info.descriptor.device_id;
-                      });
+  return base::ranges::find(begin, end, device_id,
+                            [](const VideoCaptureDeviceInfo& device_info) {
+                              return device_info.descriptor.device_id;
+                            });
 }
 
 template <class Interface>
@@ -949,7 +959,6 @@ class StubKsTopologyInfo final : public StubDeviceInterface<IKsTopologyInfo> {
       return S_OK;
     }
     NOTREACHED();
-    return E_NOTIMPL;
   }
   IFACEMETHODIMP get_Category(DWORD index, GUID* category) override {
     return E_NOTIMPL;
@@ -980,7 +989,6 @@ class StubKsTopologyInfo final : public StubDeviceInterface<IKsTopologyInfo> {
         return S_OK;
     }
     NOTREACHED();
-    return E_NOTIMPL;
   }
   IFACEMETHODIMP get_NumCategories(DWORD* num_categories) override {
     return E_NOTIMPL;
@@ -1225,6 +1233,7 @@ class FakeVideoCaptureDeviceFactoryWin : public VideoCaptureDeviceFactoryWin {
   }
   MFSourceOutcome CreateDeviceSourceMediaFoundation(
       Microsoft::WRL::ComPtr<IMFAttributes> attributes,
+      const bool banned_for_d3d11,
       IMFMediaSource** source) override {
     UINT32 length;
     if (FAILED(attributes->GetStringLength(
@@ -1239,7 +1248,7 @@ class FakeVideoCaptureDeviceFactoryWin : public VideoCaptureDeviceFactoryWin {
       return MFSourceOutcome::kFailed;
     }
     const bool has_dxgi_device_manager =
-        static_cast<bool>(GetDxgiDeviceManager());
+        static_cast<bool>(GetDxgiDeviceManager()) && !banned_for_d3d11;
     if (use_d3d11_with_media_foundation_for_testing() !=
         has_dxgi_device_manager) {
       return MFSourceOutcome::kFailed;
@@ -1299,10 +1308,11 @@ class FakeVideoCaptureDeviceFactoryWin : public VideoCaptureDeviceFactoryWin {
 
   VideoCaptureFormats GetSupportedFormatsMediaFoundation(
       Microsoft::WRL::ComPtr<IMFMediaSource> source,
+      const bool banned_for_d3d11,
       const std::string& display_name) override {
     if (disable_get_supported_formats_mf_mocking_) {
       return VideoCaptureDeviceFactoryWin::GetSupportedFormatsMediaFoundation(
-          source, display_name);
+          source, banned_for_d3d11, display_name);
     }
     VideoCaptureFormats supported_formats;
     if (display_name == base::SysWideToUTF8(kMFDeviceName6)) {
@@ -1333,16 +1343,6 @@ class VideoCaptureDeviceFactoryWinTest : public ::testing::Test {
     return true;
   }
 
-  bool ShouldSkipD3D11Test() {
-    // D3D11 is only supported with Media Foundation on Windows 8 or later
-    if (base::win::GetVersion() >= base::win::Version::WIN8)
-      return false;
-    DVLOG(1) << "D3D11 with Media foundation is not supported by the current "
-                "platform. "
-                "Skipping test.";
-    return true;
-  }
-
   base::test::TaskEnvironment task_environment_;
   FakeVideoCaptureDeviceFactoryWin factory_;
   const bool media_foundation_supported_;
@@ -1362,8 +1362,6 @@ TEST_P(VideoCaptureDeviceFactoryMFWinTest, GetDevicesInfo) {
     return;
 
   const bool use_d3d11 = GetParam();
-  if (use_d3d11 && ShouldSkipD3D11Test())
-    return;
   factory_.set_use_d3d11_with_media_foundation_for_testing(use_d3d11);
 
   std::vector<VideoCaptureDeviceInfo> devices_info;
@@ -1460,8 +1458,6 @@ TEST_P(VideoCaptureDeviceFactoryMFWinTest, GetDevicesInfo_IncludeIRCameras) {
     return;
 
   const bool use_d3d11 = GetParam();
-  if (use_d3d11 && ShouldSkipD3D11Test())
-    return;
   factory_.set_use_d3d11_with_media_foundation_for_testing(use_d3d11);
 
   std::vector<VideoCaptureDeviceInfo> devices_info;
@@ -1563,9 +1559,6 @@ TEST_P(VideoCaptureDeviceFactoryMFWinTest, GetDevicesInfo_IncludeIRCameras) {
 TEST_P(VideoCaptureDeviceFactoryMFWinTest,
        DeviceSupportedFormatNV12Passthrough) {
   if (ShouldSkipMFTest())
-    return;
-
-  if (ShouldSkipD3D11Test())
     return;
 
   // Test whether the VideoCaptureDeviceFactory passes through NV12 as the

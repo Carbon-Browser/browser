@@ -1,11 +1,14 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/password_manager/android/auto_signin_first_run_dialog_android.h"
 
+#include "base/android/jni_android.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/sync/sync_service_factory.h"
+#include "chrome/browser/trusted_vault/trusted_vault_service_factory.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
 #include "components/password_manager/core/browser/password_manager_metrics_util.h"
 #include "components/password_manager/core/common/password_manager_pref_names.h"
@@ -17,19 +20,28 @@
 class AutoSigninFirstRunDialogAndroidTest
     : public ChromeRenderViewHostTestHarness {
  public:
-  AutoSigninFirstRunDialogAndroidTest() {}
+  AutoSigninFirstRunDialogAndroidTest() = default;
 
   AutoSigninFirstRunDialogAndroidTest(
       const AutoSigninFirstRunDialogAndroidTest&) = delete;
   AutoSigninFirstRunDialogAndroidTest& operator=(
       const AutoSigninFirstRunDialogAndroidTest&) = delete;
 
-  ~AutoSigninFirstRunDialogAndroidTest() override {}
+  ~AutoSigninFirstRunDialogAndroidTest() override = default;
 
   PrefService* prefs();
 
  protected:
   AutoSigninFirstRunDialogAndroid* CreateDialog();
+
+  TestingProfile::TestingFactories GetTestingFactories() const override {
+    return {TestingProfile::TestingFactory{
+                TrustedVaultServiceFactory::GetInstance(),
+                TrustedVaultServiceFactory::GetDefaultFactory()},
+            TestingProfile::TestingFactory{
+                SyncServiceFactory::GetInstance(),
+                SyncServiceFactory::GetDefaultFactory()}};
+  }
 };
 
 AutoSigninFirstRunDialogAndroid*

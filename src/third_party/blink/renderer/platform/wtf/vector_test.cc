@@ -23,13 +23,20 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
 #include <memory>
+#include <optional>
+
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
+#include "third_party/blink/renderer/platform/wtf/size_assertions.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/wtf_test_helper.h"
 
@@ -40,9 +47,29 @@ unsigned LivenessCounter::live_ = 0;
 
 namespace {
 
+struct SameSizeAsVector {
+  void* buffer;
+  wtf_size_t capacity;
+  wtf_size_t size;
+};
+
+ASSERT_SIZE(Vector<int>, SameSizeAsVector);
+
+#define FAIL_COMPILE 0
+#if FAIL_COMPILE
+// This code should trigger static_assert failure in Vector::TypeConstraints.
+struct StackAllocatedType {
+  STACK_ALLOCATED();
+};
+
+TEST(VectorTest, FailCompile) {
+  Vector<StackAllocatedType> v;
+}
+#endif
+
 TEST(VectorTest, Basic) {
   Vector<int> int_vector;
-  EXPECT_TRUE(int_vector.IsEmpty());
+  EXPECT_TRUE(int_vector.empty());
   EXPECT_EQ(0ul, int_vector.size());
   EXPECT_EQ(0ul, int_vector.capacity());
 }
@@ -111,18 +138,18 @@ TEST(VectorTest, Erase) {
   EXPECT_EQ(4, int_vector[4]);
   EXPECT_EQ(5, int_vector[5]);
 
-  auto* first = int_vector.erase(int_vector.begin());
+  auto first = int_vector.erase(int_vector.begin());
   EXPECT_EQ(5u, int_vector.size());
   EXPECT_EQ(1, *first);
   EXPECT_EQ(int_vector.begin(), first);
 
-  auto* last = std::lower_bound(int_vector.begin(), int_vector.end(), 5);
-  auto* end = int_vector.erase(last);
+  auto last = std::lower_bound(int_vector.begin(), int_vector.end(), 5);
+  auto end = int_vector.erase(last);
   EXPECT_EQ(4u, int_vector.size());
   EXPECT_EQ(int_vector.end(), end);
 
-  auto* item2 = std::lower_bound(int_vector.begin(), int_vector.end(), 2);
-  auto* item4 = int_vector.erase(item2, item2 + 2);
+  auto item2 = std::lower_bound(int_vector.begin(), int_vector.end(), 2);
+  auto item4 = int_vector.erase(item2, item2 + 2);
   EXPECT_EQ(2u, int_vector.size());
   EXPECT_EQ(4, *item4);
 
@@ -211,9 +238,9 @@ TEST(VectorTest, OwnPtr) {
   wtf_size_t index = 0;
   for (OwnPtrVector::iterator iter = vector.begin(); iter != vector.end();
        ++iter) {
-    std::unique_ptr<DestructCounter>* ref_counter = iter;
-    EXPECT_EQ(index, static_cast<wtf_size_t>(ref_counter->get()->Get()));
-    EXPECT_EQ(index, static_cast<wtf_size_t>((*ref_counter)->Get()));
+    std::unique_ptr<DestructCounter>& ref_counter = *iter;
+    EXPECT_EQ(index, static_cast<wtf_size_t>(ref_counter.get()->Get()));
+    EXPECT_EQ(index, static_cast<wtf_size_t>(ref_counter->Get()));
     index++;
   }
   EXPECT_EQ(0, destruct_number);
@@ -349,7 +376,7 @@ TEST(VectorTest, SwapWithInlineCapacity) {
 TEST(VectorTest, ContainerAnnotations) {
   Vector<int> vector_a;
   vector_a.push_back(10);
-  vector_a.ReserveCapacity(32);
+  vector_a.reserve(32);
 
   volatile int* int_pointer_a = vector_a.data();
   EXPECT_DEATH(int_pointer_a[1] = 11, "container-overflow");
@@ -357,13 +384,13 @@ TEST(VectorTest, ContainerAnnotations) {
   int_pointer_a[1] = 11;
   EXPECT_DEATH(int_pointer_a[2] = 12, "container-overflow");
   EXPECT_DEATH((void)int_pointer_a[2], "container-overflow");
-  vector_a.ShrinkToFit();
-  vector_a.ReserveCapacity(16);
+  vector_a.shrink_to_fit();
+  vector_a.reserve(16);
   int_pointer_a = vector_a.data();
   EXPECT_DEATH((void)int_pointer_a[2], "container-overflow");
 
   Vector<int> vector_b(vector_a);
-  vector_b.ReserveCapacity(16);
+  vector_b.reserve(16);
   volatile int* int_pointer_b = vector_b.data();
   EXPECT_DEATH((void)int_pointer_b[2], "container-overflow");
 
@@ -544,7 +571,7 @@ TEST(VectorTest, UniquePtr) {
   using Pointer = std::unique_ptr<int>;
   Vector<Pointer> vector;
   vector.push_back(std::make_unique<int>(1));
-  vector.ReserveCapacity(2);
+  vector.reserve(2);
   vector.UncheckedAppend(std::make_unique<int>(2));
   vector.insert(2, std::make_unique<int>(3));
   vector.push_front(std::make_unique<int>(0));
@@ -575,9 +602,26 @@ Vector<int> ReturnOneTwoThree() {
   return {1, 2, 3};
 }
 
+TEST(VectorTest, AppendContainers) {
+  Vector<int> result;
+  Vector<int> empty_vector;
+  Vector<int> other_vector({1, 2});
+  std::array<int, 3> other_array = {{3, 4, 5}};
+  int other_c_array[4] = {6, 7, 8, 9};
+  result.AppendVector(other_vector);
+  result.AppendRange(other_array.begin(), other_array.end());
+  result.AppendSpan(base::span(other_c_array));
+  EXPECT_THAT(result, ::testing::ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
+
+  result.AppendVector(empty_vector);
+  result.AppendRange(other_array.end(), other_array.end());
+  result.AppendSpan(base::span(other_c_array).subspan<4>());
+  EXPECT_THAT(result, ::testing::ElementsAre(1, 2, 3, 4, 5, 6, 7, 8, 9));
+}
+
 TEST(VectorTest, InitializerList) {
   Vector<int> empty({});
-  EXPECT_TRUE(empty.IsEmpty());
+  EXPECT_TRUE(empty.empty());
 
   Vector<int> one({1});
   ASSERT_EQ(1u, one.size());
@@ -595,7 +639,7 @@ TEST(VectorTest, InitializerList) {
   one_two_three.push_back(9999);
 
   empty = {};
-  EXPECT_TRUE(empty.IsEmpty());
+  EXPECT_TRUE(empty.empty());
 
   one = {1};
   ASSERT_EQ(1u, one.size());
@@ -641,7 +685,7 @@ TEST(VectorTest, InitializerList) {
 }
 
 TEST(VectorTest, Optional) {
-  absl::optional<Vector<int>> vector;
+  std::optional<Vector<int>> vector;
   EXPECT_FALSE(vector);
   vector.emplace(3);
   EXPECT_TRUE(vector);
@@ -710,6 +754,32 @@ TEST(VectorTest, IteratorMultipleInsertion) {
 
   EXPECT_THAT(v, testing::ElementsAre(0, 0, 0, 1, 1, 1, 1, 3, 3, 3));
   EXPECT_TRUE(std::is_sorted(v.begin(), v.end()));
+}
+
+TEST(VectorTest, WTFErase) {
+  Vector<int> v = {1, 2, 3, 3, 5, 3};
+  WTF::Erase(v, 3);
+  EXPECT_THAT(v, testing::ElementsAre(1, 2, 5));
+}
+
+TEST(VectorTest, WTFEraseIf) {
+  Vector<int> v = {1, 2, 3, 4, 5, 6};
+  WTF::EraseIf(v, [](int x) { return x % 2 == 0; });
+  EXPECT_THAT(v, testing::ElementsAre(1, 3, 5));
+}
+
+TEST(VectorTest, CopyWithProjection) {
+  {
+    using ValueType = std::pair<int, int>;
+    Vector<ValueType> v1 = {{1, 2}, {3, 4}, {5, 6}};
+    Vector<int> v2(v1, &ValueType::second);
+    EXPECT_THAT(v2, testing::ElementsAre(2, 4, 6));
+  }
+  {
+    Vector<int> v1 = {1, 2, 3, 4, 5, 6};
+    Vector<int> v2(v1, std::negate<>());
+    EXPECT_THAT(v2, testing::ElementsAre(-1, -2, -3, -4, -5, -6));
+  }
 }
 
 static_assert(VectorTraits<int>::kCanCopyWithMemcpy,

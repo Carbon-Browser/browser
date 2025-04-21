@@ -1,21 +1,20 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/win/conflicts/third_party_conflicts_manager.h"
 
+#include <optional>
 #include <utility>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_feature_list.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "base/win/windows_version.h"
 #include "chrome/browser/win/conflicts/module_info.h"
 #include "chrome/browser/win/conflicts/proto/module_list.pb.h"
 #include "chrome/common/chrome_features.h"
@@ -23,7 +22,6 @@
 #include "chrome/test/base/testing_browser_process.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class ThirdPartyConflictsManagerTest : public testing::Test,
                                        public ModuleDatabaseEventSource {
@@ -61,9 +59,7 @@ class ThirdPartyConflictsManagerTest : public testing::Test,
 
     std::string contents;
     ASSERT_TRUE(module_list.SerializeToString(&contents));
-    ASSERT_EQ(base::WriteFile(GetModuleListPath(), contents.data(),
-                              static_cast<int>(contents.size())),
-              static_cast<int>(contents.size()));
+    ASSERT_TRUE(base::WriteFile(GetModuleListPath(), contents));
   }
 
   void OnManagerInitializationComplete(
@@ -73,7 +69,7 @@ class ThirdPartyConflictsManagerTest : public testing::Test,
     std::move(quit_closure).Run();
   }
 
-  const absl::optional<ThirdPartyConflictsManager::State>& final_state() {
+  const std::optional<ThirdPartyConflictsManager::State>& final_state() {
     return final_state_;
   }
 
@@ -90,7 +86,7 @@ class ThirdPartyConflictsManagerTest : public testing::Test,
 
   base::test::ScopedFeatureList scoped_feature_list_;
 
-  absl::optional<ThirdPartyConflictsManager::State> final_state_;
+  std::optional<ThirdPartyConflictsManager::State> final_state_;
 };
 
 std::pair<ModuleInfoKey, ModuleInfoData> CreateExeModuleInfo() {
@@ -103,7 +99,7 @@ std::pair<ModuleInfoKey, ModuleInfoData> CreateExeModuleInfo() {
       std::forward_as_tuple());
 
   module_info.second.inspection_result =
-      absl::make_optional<ModuleInspectionResult>();
+      std::make_optional<ModuleInspectionResult>();
 
   return module_info;
 }
@@ -130,11 +126,8 @@ TEST_F(ThirdPartyConflictsManagerTest, InitializeUpdaters) {
 
   ASSERT_TRUE(final_state().has_value());
 
-  const auto kExpectedFinalState =
-      base::win::GetVersion() >= base::win::Version::WIN10
-          ? ThirdPartyConflictsManager::State::kWarningAndBlockingInitialized
-          : ThirdPartyConflictsManager::State::kBlockingInitialized;
-  EXPECT_EQ(final_state().value(), kExpectedFinalState);
+  EXPECT_EQ(final_state().value(),
+            ThirdPartyConflictsManager::State::kWarningAndBlockingInitialized);
 }
 
 TEST_F(ThirdPartyConflictsManagerTest, InvalidModuleList) {

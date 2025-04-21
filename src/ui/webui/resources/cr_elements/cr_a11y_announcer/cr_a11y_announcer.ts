@@ -1,9 +1,9 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert} from 'chrome://resources/js/assert.m.js';
-import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {assert} from '//resources/js/assert.js';
+import {CustomElement} from '//resources/js/custom_element.js';
 
 import {getTemplate} from './cr_a11y_announcer.html.js';
 
@@ -50,20 +50,19 @@ export function getInstance(container: HTMLElement = document.body):
   return instance;
 }
 
-export class CrA11yAnnouncerElement extends PolymerElement {
+export class CrA11yAnnouncerElement extends CustomElement {
   static get is() {
     return 'cr-a11y-announcer';
   }
 
-  static get template() {
+  static override get template() {
     return getTemplate();
   }
 
   private currentTimeout_: number|null = null;
   private messages_: string[] = [];
 
-  override disconnectedCallback() {
-    super.disconnectedCallback();
+  disconnectedCallback() {
     if (this.currentTimeout_ !== null) {
       clearTimeout(this.currentTimeout_);
       this.currentTimeout_ = null;
@@ -77,7 +76,7 @@ export class CrA11yAnnouncerElement extends PolymerElement {
     }
   }
 
-  announce(message: string) {
+  announce(message: string, timeout: number = TIMEOUT_MS) {
     if (this.currentTimeout_ !== null) {
       clearTimeout(this.currentTimeout_);
       this.currentTimeout_ = null;
@@ -87,7 +86,7 @@ export class CrA11yAnnouncerElement extends PolymerElement {
 
     this.currentTimeout_ = setTimeout(() => {
       const messagesDiv = this.shadowRoot!.querySelector('#messages')!;
-      messagesDiv.innerHTML = '';
+      messagesDiv.innerHTML = window.trustedTypes!.emptyHTML;
 
       // <if expr="is_macosx">
       // VoiceOver on Mac does not seem to consistently read out the contents of
@@ -111,7 +110,7 @@ export class CrA11yAnnouncerElement extends PolymerElement {
 
       this.messages_.length = 0;
       this.currentTimeout_ = null;
-    }, TIMEOUT_MS);
+    }, timeout);
   }
 }
 

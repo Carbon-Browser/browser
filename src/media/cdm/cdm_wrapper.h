@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -59,7 +59,7 @@ typedef void* (*CreateCdmFunc)(int cdm_interface_version,
 // Since this file is highly templated and default implementations are short
 // (just a shim layer in most cases), everything is done in this header file.
 //
-// TODO(crbug.com/799169): After pepper CDM support is removed, this file can
+// TODO(crbug.com/41363203): After pepper CDM support is removed, this file can
 // depend on media/ and we can clean this class up, e.g. pass in CdmConfig.
 class CdmWrapper {
  public:
@@ -174,7 +174,7 @@ class CdmWrapperImpl : public CdmWrapper {
   CdmWrapperImpl(const CdmWrapperImpl&) = delete;
   CdmWrapperImpl& operator=(const CdmWrapperImpl&) = delete;
 
-  ~CdmWrapperImpl() override { cdm_->Destroy(); }
+  ~CdmWrapperImpl() override = default;
 
   int GetInterfaceVersion() override { return CdmInterfaceVersion; }
 
@@ -292,15 +292,28 @@ class CdmWrapperImpl : public CdmWrapper {
   }
 
  private:
-  CdmWrapperImpl(CdmInterface* cdm) : cdm_(cdm) { DCHECK(cdm_); }
+  // Used to clean up a CDM instance owned by a std::unique_ptr.
+  struct CdmDeleter {
+    void operator()(CdmInterface* cdm) const { cdm->Destroy(); }
+  };
 
-  raw_ptr<CdmInterface> cdm_;
+  explicit CdmWrapperImpl(CdmInterface* cdm) : cdm_(cdm) { DCHECK(cdm_); }
+
+  std::unique_ptr<CdmInterface, CdmDeleter> cdm_;
 };
 
-// Specialization for cdm::ContentDecryptionModule_10 methods.
+// Specialization for cdm::ContentDecryptionModule_10 methods and
+// cdm::ContentDecryptionModule_11 methods.
 
 template <>
 cdm::Status CdmWrapperImpl<10>::InitializeVideoDecoder(
+    const cdm::VideoDecoderConfig_3& video_decoder_config) {
+  return cdm_->InitializeVideoDecoder(
+      ToVideoDecoderConfig_2(video_decoder_config));
+}
+
+template <>
+cdm::Status CdmWrapperImpl<11>::InitializeVideoDecoder(
     const cdm::VideoDecoderConfig_3& video_decoder_config) {
   return cdm_->InitializeVideoDecoder(
       ToVideoDecoderConfig_2(video_decoder_config));
@@ -312,7 +325,7 @@ CdmWrapper* CdmWrapper::Create(CreateCdmFunc create_cdm_func,
                                uint32_t key_system_size,
                                GetCdmHostFunc get_cdm_host_func,
                                void* user_data) {
-  static_assert(CheckSupportedCdmInterfaceVersions(10, 11),
+  static_assert(CheckSupportedCdmInterfaceVersions(10, 12),
                 "Mismatch between CdmWrapper::Create() and "
                 "IsSupportedCdmInterfaceVersion()");
 
@@ -325,7 +338,14 @@ CdmWrapper* CdmWrapper::Create(CreateCdmFunc create_cdm_func,
   // Try to use the latest supported and enabled CDM interface first. If it's
   // not supported by the CDM, try to create the CDM using older supported
   // versions.
-  if (IsSupportedAndEnabledCdmInterfaceVersion(11)) {
+
+  if (IsSupportedAndEnabledCdmInterfaceVersion(12)) {
+    cdm_wrapper =
+        CdmWrapperImpl<12>::Create(create_cdm_func, key_system, key_system_size,
+                                   get_cdm_host_func, user_data);
+  }
+
+  if (!cdm_wrapper && IsSupportedAndEnabledCdmInterfaceVersion(11)) {
     cdm_wrapper =
         CdmWrapperImpl<11>::Create(create_cdm_func, key_system, key_system_size,
                                    get_cdm_host_func, user_data);

@@ -1,8 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/system_web_apps/types/system_web_app_delegate.h"
+
+#include "ui/gfx/geometry/rect.h"
 
 namespace ash {
 
@@ -26,11 +28,7 @@ SystemWebAppDelegate::SystemWebAppDelegate(
       internal_name_(internal_name),
       install_url_(install_url),
       profile_(profile),
-      origin_trials_map_(origin_trials_map) {
-  DCHECK(!(ShouldShowNewWindowMenuOption() && ShouldReuseExistingWindow()))
-      << "App can't show 'new window' menu option and be a single window at "
-         "the same time.";
-}
+      origin_trials_map_(origin_trials_map) {}
 
 SystemWebAppDelegate::~SystemWebAppDelegate() = default;
 
@@ -41,10 +39,6 @@ std::vector<std::string> SystemWebAppDelegate::GetAppIdsToUninstallAndReplace()
 
 gfx::Size SystemWebAppDelegate::GetMinimumWindowSize() const {
   return gfx::Size();
-}
-
-bool SystemWebAppDelegate::ShouldReuseExistingWindow() const {
-  return true;
 }
 
 bool SystemWebAppDelegate::ShouldShowNewWindowMenuOption() const {
@@ -64,7 +58,7 @@ bool SystemWebAppDelegate::ShouldShowInLauncher() const {
   return true;
 }
 
-bool SystemWebAppDelegate::ShouldShowInSearch() const {
+bool SystemWebAppDelegate::ShouldShowInSearchAndShelf() const {
   return true;
 }
 
@@ -80,7 +74,15 @@ bool SystemWebAppDelegate::ShouldAllowMaximize() const {
   return true;
 }
 
+bool SystemWebAppDelegate::ShouldAllowFullscreen() const {
+  return true;
+}
+
 bool SystemWebAppDelegate::ShouldHaveTabStrip() const {
+  return false;
+}
+
+bool SystemWebAppDelegate::ShouldHideNewTabButton() const {
   return false;
 }
 
@@ -96,9 +98,9 @@ bool SystemWebAppDelegate::ShouldHandleFileOpenIntents() const {
   return ShouldShowInLauncher();
 }
 
-absl::optional<SystemWebAppBackgroundTaskInfo>
+std::optional<SystemWebAppBackgroundTaskInfo>
 SystemWebAppDelegate::GetTimerInfo() const {
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 bool SystemWebAppDelegate::IsAppEnabled() const {
@@ -124,12 +126,16 @@ bool SystemWebAppDelegate::ShouldShowTabContextMenuShortcut(
   return true;
 }
 
+bool SystemWebAppDelegate::ShouldRestoreOverrideUrl() const {
+  return false;
+}
+
 bool SystemWebAppDelegate::IsUrlInSystemAppScope(const GURL& url) const {
   return false;
 }
 
-bool SystemWebAppDelegate::PreferManifestBackgroundColor() const {
-  return false;
+bool SystemWebAppDelegate::UseSystemThemeColor() const {
+  return true;
 }
 
 #if BUILDFLAG(IS_CHROMEOS)

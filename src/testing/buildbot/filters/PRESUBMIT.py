@@ -1,4 +1,4 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Presubmit script for //testing/buildbot/filters.
@@ -11,7 +11,6 @@ import os
 import re
 
 
-USE_PYTHON3 = True
 
 
 def _CheckFilterFileFormat(input_api, output_api):

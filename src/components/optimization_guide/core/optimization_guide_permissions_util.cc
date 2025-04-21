@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "components/optimization_guide/core/optimization_guide_features.h"
 #include "components/optimization_guide/core/optimization_guide_switches.h"
 #include "components/unified_consent/url_keyed_data_collection_consent_helper.h"
+#include "google_apis/google_api_keys.h"
 
 namespace {
 
@@ -40,11 +41,14 @@ bool IsUserPermittedToFetchFromRemoteOptimizationGuide(
     return true;
   }
 
-  if (!features::IsRemoteFetchingEnabled())
+  if (!features::IsRemoteFetchingEnabled()) {
     return false;
+  }
 
-  if (features::IsRemoteFetchingExplicitlyAllowedForPerformanceInfo())
-    return true;
+  if (!switches::ShouldSkipGoogleApiKeyConfigurationCheck() &&
+      !google_apis::HasAPIKeyConfigured()) {
+    return false;
+  }
 
   return IsUserConsentedToAnonymousDataCollectionAndAllowedToFetchFromRemoteService(
       pref_service);

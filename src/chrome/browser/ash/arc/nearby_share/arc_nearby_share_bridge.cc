@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 
 #include "ash/components/arc/arc_browser_context_keyed_service_factory_base.h"
 #include "ash/components/arc/arc_util.h"
+#include "ash/components/arc/intent_helper/custom_tab.h"
 #include "ash/components/arc/mojom/nearby_share.mojom.h"
 #include "ash/components/arc/session/arc_bridge_service.h"
 #include "ash/public/cpp/app_types_util.h"
@@ -19,7 +20,6 @@
 #include "chrome/browser/ash/arc/nearby_share/nearby_share_session_impl.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
-#include "components/arc/intent_helper/custom_tab.h"
 #include "content/public/browser/browser_thread.h"
 
 // Enable VLOG level 1.
@@ -125,6 +125,11 @@ void ArcNearbyShareBridge::StartNearbyShare(
           base::BindOnce(&ArcNearbyShareBridge::OnNearbyShareSessionFinished,
                          weak_ptr_factory_.GetWeakPtr())));
   std::move(callback).Run(std::move(remote));
+}
+
+// static
+void ArcNearbyShareBridge::EnsureFactoryBuilt() {
+  ArcNearbyShareBridgeFactory::GetInstance();
 }
 
 }  // namespace arc

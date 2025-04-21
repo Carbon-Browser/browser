@@ -1,4 +1,4 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -25,14 +25,14 @@ class _LeakDetectionBase(perf_benchmark.PerfBenchmark):
     return tbm_options
 
   def CustomizeOptions(self, finder_options, possible_browser=None):
-    # TODO(crbug.com/936805): Note this is a hack. Perf benchmarks should not
+    # TODO(crbug.com/40615991): Note this is a hack. Perf benchmarks should not
     # override the CustomizeOptions method.
     finder_options.browser_options.AppendExtraBrowserArgs(
         '--js-flags=--expose-gc')
     finder_options.browser_options.AppendExtraBrowserArgs('--disable-perfetto')
 
   def CustomizeBrowserOptions(self, _):
-    # TODO(crbug.com/936805): Note this is a hack. Perf benchmarks should not
+    # TODO(crbug.com/40615991): Note this is a hack. Perf benchmarks should not
     # override the CustomizeBrowserOptions method.
     pass
 

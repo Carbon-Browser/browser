@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@ class EditingTestBaseTest : public EditingTestBase {};
 
 TEST_F(EditingTestBaseTest, GetCaretTextFromBody) {
   SetBodyContent("<div>foo</div>");
-  Element* const div = GetDocument().QuerySelector("div");
+  Element* const div = GetDocument().QuerySelector(AtomicString("div"));
   Node* const foo = div->firstChild();
   EXPECT_EQ("|<div>foo</div>",
             GetCaretTextFromBody(Position::BeforeNode(*div)));

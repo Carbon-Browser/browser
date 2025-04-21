@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,8 +20,7 @@
 using l10n_util::GetStringUTF16;
 using l10n_util::GetStringUTF8;
 
-namespace views {
-namespace examples {
+namespace views::examples {
 
 MessageBoxExample::MessageBoxExample()
     : ExampleBase(GetStringUTF8(IDS_MESSAGE_SELECT_LABEL).c_str()) {}
@@ -60,10 +59,8 @@ void MessageBoxExample::StatusButtonPressed() {
   const bool selected = message_box_view_->IsCheckBoxSelected();
   message_box_view_->SetCheckBoxLabel(
       GetStringUTF16(selected ? IDS_MESSAGE_ON_LABEL : IDS_MESSAGE_OFF_LABEL));
-  LogStatus(GetStringUTF8(selected ? IDS_MESSAGE_CHECK_SELECTED_LABEL
-                                   : IDS_MESSAGE_CHECK_NOT_SELECTED_LABEL)
-                .c_str());
+  PrintStatus(GetStringUTF8(selected ? IDS_MESSAGE_CHECK_SELECTED_LABEL
+                                     : IDS_MESSAGE_CHECK_NOT_SELECTED_LABEL));
 }
 
-}  // namespace examples
-}  // namespace views
+}  // namespace views::examples

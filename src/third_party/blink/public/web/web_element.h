@@ -57,7 +57,7 @@ class BLINK_EXPORT WebElement : public WebNode {
   WebElement(const WebElement& e) = default;
 
   // Returns the empty WebElement if the argument doesn't represent an Element.
-  static WebElement FromV8Value(v8::Local<v8::Value>);
+  static WebElement FromV8Value(v8::Isolate*, v8::Local<v8::Value>);
 
   WebElement& operator=(const WebElement& e) {
     WebNode::Assign(e);
@@ -80,10 +80,40 @@ class BLINK_EXPORT WebElement : public WebNode {
   WebString GetAttribute(const WebString&) const;
   void SetAttribute(const WebString& name, const WebString& value);
   WebString TextContent() const;
+  WebString TextContentAbridged(unsigned int max_length) const;
   WebString InnerHTML() const;
-  WebString AttributeLocalName(unsigned index) const;
-  WebString AttributeValue(unsigned index) const;
-  unsigned AttributeCount() const;
+
+  // Returns true if the element's computed writing suggestions value is true.
+  // https://html.spec.whatwg.org/#writing-suggestions:computed-writing-suggestions-value
+  bool WritingSuggestions() const;
+
+  // Returns true if the frame's selection is inside this editable element.
+  bool ContainsFrameSelection() const;
+
+  // Returns the selected text if this element contains the selection.
+  // Otherwise returns the empty string.
+  WebString SelectedText() const;
+
+  // Selects the text in this element.
+  // If `select_all`, then the entire contents of the element is selected.
+  // If `!select_all`, then selects only the empty range at the end of the
+  // element
+  void SelectText(bool select_all);
+
+  // Simulates a paste of `text` event into `this` element.
+  //
+  // There are three different behaviors depending on `replace_all` and which
+  // text is currently selected:
+  // - If `replace_all`, the entire contents of the element is selected first,
+  //   so that the paste action replaces it.
+  // - If `!replace_all` and the selection is not currently in the element, an
+  //   empty range at the end of the element is selected, so that the paste
+  //   action appends to the element.
+  // - Otherwise, the current selection is unchanged, so that the paste replaces
+  //   the selected text.
+  //
+  // This is a no-op if the element is not editable.
+  void PasteText(const WebString& text, bool replace_all);
 
   // Returns all <label> elements associated to this element.
   WebVector<WebLabelElement> Labels() const;
@@ -105,7 +135,7 @@ class BLINK_EXPORT WebElement : public WebNode {
   // Returns the bounds of the element in Visual Viewport. The bounds
   // have been adjusted to include any transformations, including page scale.
   // This function will update the layout if required.
-  gfx::Rect BoundsInViewport() const;
+  gfx::Rect BoundsInWidget() const;
 
   // Returns the image contents of this element or a null SkBitmap
   // if there isn't any.
@@ -135,10 +165,6 @@ class BLINK_EXPORT WebElement : public WebNode {
   // strings directly to WebElement and enable public component usage through
   // /public/web interfaces.
   WebString GetComputedValue(const WebString& property_name);
-
-  // TODO(crbug.com/1286950) Remove this once a decision is made on deprecation
-  // of the <param> URL functionality.
-  void UseCountParamUrlUsageIfNeeded(bool is_pdf) const;
 
 #if INSIDE_BLINK
   WebElement(Element*);

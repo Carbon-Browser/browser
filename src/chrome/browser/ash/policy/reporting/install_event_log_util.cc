@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,13 @@
 #include <set>
 
 #include "base/hash/md5.h"
+#include "base/i18n/time_formatting.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/stringprintf.h"
 #include "base/time/time.h"
 #include "base/values.h"
-#include "chromeos/system/statistics_provider.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 
 namespace em = enterprise_management;
 
@@ -63,20 +63,23 @@ constexpr char kFetchTries[] = "fetchTries";
 bool GetHash(const base::Value::Dict& event,
              const base::Value::Dict& context,
              std::string* hash) {
-  if (hash == nullptr)
+  if (hash == nullptr) {
     return false;
+  }
 
   std::string serialized_string;
   JSONStringValueSerializer serializer(&serialized_string);
-  if (!serializer.Serialize(event))
+  if (!serializer.Serialize(event)) {
     return false;
+  }
 
   base::MD5Context ctx;
   base::MD5Init(&ctx);
   base::MD5Update(&ctx, serialized_string);
 
-  if (!serializer.Serialize(context))
+  if (!serializer.Serialize(context)) {
     return false;
+  }
   base::MD5Update(&ctx, serialized_string);
 
   base::MD5Digest digest;
@@ -85,21 +88,12 @@ bool GetHash(const base::Value::Dict& event,
   return true;
 }
 
-std::string GetTimeString(const base::Time& timestamp) {
-  base::Time::Exploded time_exploded;
-  timestamp.UTCExplode(&time_exploded);
-  std::string time_str = base::StringPrintf(
-      "%d-%02d-%02dT%02d:%02d:%02d.%03dZ", time_exploded.year,
-      time_exploded.month, time_exploded.day_of_month, time_exploded.hour,
-      time_exploded.minute, time_exploded.second, time_exploded.millisecond);
-  return time_str;
-}
-
 }  // namespace
 
 std::string GetSerialNumber() {
-  return chromeos::system::StatisticsProvider::GetInstance()
-      ->GetEnterpriseMachineID();
+  return std::string(
+      ash::system::StatisticsProvider::GetInstance()->GetMachineID().value_or(
+          ""));
 }
 
 base::Value::List ConvertExtensionProtoToValue(
@@ -142,8 +136,9 @@ base::Value::Dict ConvertExtensionEventToValue(
         extension_install_report_log_event,
     const base::Value::Dict& context) {
   base::Value::Dict event;
-  if (!extension_id.empty())
+  if (!extension_id.empty()) {
     event.Set(kExtensionId, extension_id);
+  }
 
   if (extension_install_report_log_event.has_event_type()) {
     event.Set(kEventType, extension_install_report_log_event.event_type());
@@ -163,8 +158,9 @@ base::Value::Dict ConvertExtensionEventToValue(
                   extension_install_report_log_event.stateful_free()));
   }
 
-  if (extension_install_report_log_event.has_online())
+  if (extension_install_report_log_event.has_online()) {
     event.Set(kOnline, extension_install_report_log_event.online());
+  }
 
   if (extension_install_report_log_event.has_session_state_change_type()) {
     event.Set(kSessionStateChangeType,
@@ -238,15 +234,15 @@ base::Value::Dict ConvertExtensionEventToValue(
               extension_install_report_log_event.crx_install_error_detail());
   }
 
-  base::Value::Dict wrapper;
-  wrapper.Set(kExtensionInstallEvent, std::move(event));
+  auto wrapper =
+      base::Value::Dict().Set(kExtensionInstallEvent, std::move(event));
 
   if (extension_install_report_log_event.has_timestamp()) {
     // Format the current time (UTC) in RFC3339 format
     base::Time timestamp =
         base::Time::UnixEpoch() +
         base::Microseconds(extension_install_report_log_event.timestamp());
-    wrapper.Set(kTime, GetTimeString(timestamp));
+    wrapper.Set(kTime, base::TimeFormatAsIso8601(timestamp));
   }
 
   std::string event_id;
@@ -294,8 +290,9 @@ base::Value::Dict ConvertArcAppEventToValue(
     const base::Value::Dict& context) {
   base::Value::Dict event;
 
-  if (!package.empty())
+  if (!package.empty()) {
     event.Set(kAppPackage, package);
+  }
 
   if (app_install_report_log_event.has_event_type()) {
     event.Set(kEventType, app_install_report_log_event.event_type());
@@ -319,8 +316,9 @@ base::Value::Dict ConvertArcAppEventToValue(
               app_install_report_log_event.clouddps_response());
   }
 
-  if (app_install_report_log_event.has_online())
+  if (app_install_report_log_event.has_online()) {
     event.Set(kOnline, app_install_report_log_event.online());
+  }
 
   if (app_install_report_log_event.has_session_state_change_type()) {
     event.Set(kSessionStateChangeType,
@@ -335,15 +333,15 @@ base::Value::Dict ConvertArcAppEventToValue(
 
   event.Set(kSerialNumber, GetSerialNumber());
 
-  base::Value::Dict wrapper;
-  wrapper.Set(kAndroidAppInstallEvent, std::move(event));
+  auto wrapper =
+      base::Value::Dict().Set(kAndroidAppInstallEvent, std::move(event));
 
   if (app_install_report_log_event.has_timestamp()) {
     // Format the current time (UTC) in RFC3339 format
     base::Time timestamp =
         base::Time::UnixEpoch() +
         base::Microseconds(app_install_report_log_event.timestamp());
-    wrapper.Set(kTime, GetTimeString(timestamp));
+    wrapper.Set(kTime, base::TimeFormatAsIso8601(timestamp));
   }
 
   std::string event_id;
@@ -352,6 +350,22 @@ base::Value::Dict ConvertArcAppEventToValue(
   }
 
   return wrapper;
+}
+
+reporting::AndroidAppInstallEvent CreateAndroidAppInstallEvent(
+    const std::string& package,
+    const enterprise_management::AppInstallReportLogEvent& event) {
+  auto result = reporting::AndroidAppInstallEvent();
+  result.set_app_package(package);
+  result.set_serial_number(GetSerialNumber());
+  result.set_event_type(event.event_type());
+  result.set_stateful_total(event.stateful_total());
+  result.set_stateful_free(event.stateful_free());
+  result.set_clouddps_response(event.clouddps_response());
+  result.set_online(event.online());
+  result.set_session_state_change_type(event.session_state_change_type());
+  result.set_android_id(event.android_id());
+  return result;
 }
 
 }  // namespace policy

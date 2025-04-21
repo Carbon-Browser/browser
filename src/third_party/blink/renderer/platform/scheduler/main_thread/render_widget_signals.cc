@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,7 @@ namespace blink {
 namespace scheduler {
 
 RenderWidgetSignals::RenderWidgetSignals(Observer* observer)
-    : observer_(observer),
-      num_visible_render_widgets_(0),
-      num_visible_render_widgets_with_touch_handlers_(0) {}
+    : observer_(observer) {}
 
 void RenderWidgetSignals::IncNumVisibleRenderWidgets() {
   num_visible_render_widgets_++;
@@ -31,26 +29,9 @@ void RenderWidgetSignals::DecNumVisibleRenderWidgets() {
     observer_->SetAllRenderWidgetsHidden(true);
 }
 
-void RenderWidgetSignals::IncNumVisibleRenderWidgetsWithTouchHandlers() {
-  num_visible_render_widgets_with_touch_handlers_++;
-
-  if (num_visible_render_widgets_with_touch_handlers_ == 1)
-    observer_->SetHasVisibleRenderWidgetWithTouchHandler(true);
-}
-
-void RenderWidgetSignals::DecNumVisibleRenderWidgetsWithTouchHandlers() {
-  num_visible_render_widgets_with_touch_handlers_--;
-  DCHECK_GE(num_visible_render_widgets_with_touch_handlers_, 0);
-
-  if (num_visible_render_widgets_with_touch_handlers_ == 0)
-    observer_->SetHasVisibleRenderWidgetWithTouchHandler(false);
-}
-
 void RenderWidgetSignals::WriteIntoTrace(perfetto::TracedValue context) const {
   auto dict = std::move(context).WriteDictionary();
   dict.Add("num_visible_render_widgets", num_visible_render_widgets_);
-  dict.Add("num_visible_render_widgets_with_touch_handlers",
-           num_visible_render_widgets_with_touch_handlers_);
 }
 
 }  // namespace scheduler

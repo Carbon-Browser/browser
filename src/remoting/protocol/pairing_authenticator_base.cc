@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,23 +6,34 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/location.h"
 #include "base/logging.h"
 #include "remoting/base/constants.h"
+#include "remoting/protocol/authenticator.h"
 #include "remoting/protocol/channel_authenticator.h"
+#include "remoting/protocol/credentials_type.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 namespace {
-const jingle_xmpp::StaticQName kPairingFailedTag =
-    { kChromotingXmlNamespace, "pairing-failed" };
-const jingle_xmpp::StaticQName kPairingErrorAttribute = { "", "error" };
+const jingle_xmpp::StaticQName kPairingFailedTag = {kChromotingXmlNamespace,
+                                                    "pairing-failed"};
+const jingle_xmpp::StaticQName kPairingErrorAttribute = {"", "error"};
 }  // namespace
 
 PairingAuthenticatorBase::PairingAuthenticatorBase() {}
 PairingAuthenticatorBase::~PairingAuthenticatorBase() = default;
+
+CredentialsType PairingAuthenticatorBase::credentials_type() const {
+  return CredentialsType::PAIRED;
+}
+
+const Authenticator& PairingAuthenticatorBase::implementing_authenticator()
+    const {
+  return *this;
+}
 
 Authenticator::State PairingAuthenticatorBase::state() const {
   DCHECK(spake2_authenticator_);
@@ -36,12 +47,25 @@ bool PairingAuthenticatorBase::started() const {
   return spake2_authenticator_->started();
 }
 
-Authenticator::RejectionReason
-PairingAuthenticatorBase::rejection_reason() const {
+Authenticator::RejectionReason PairingAuthenticatorBase::rejection_reason()
+    const {
   if (!spake2_authenticator_) {
-    return PROTOCOL_ERROR;
+    return RejectionReason::PROTOCOL_ERROR;
   }
   return spake2_authenticator_->rejection_reason();
+}
+
+Authenticator::RejectionDetails PairingAuthenticatorBase::rejection_details()
+    const {
+  if (spake2_authenticator_ &&
+      spake2_authenticator_->state() == State::REJECTED) {
+    Authenticator::RejectionDetails spake2_rejection_details =
+        spake2_authenticator_->rejection_details();
+    if (!spake2_rejection_details.is_null()) {
+      return spake2_rejection_details;
+    }
+  }
+  return RejectionDetails(error_message_);
 }
 
 void PairingAuthenticatorBase::ProcessMessage(
@@ -77,7 +101,8 @@ void PairingAuthenticatorBase::ProcessMessage(
                      weak_factory_.GetWeakPtr(), std::move(resume_callback)));
 }
 
-std::unique_ptr<jingle_xmpp::XmlElement> PairingAuthenticatorBase::GetNextMessage() {
+std::unique_ptr<jingle_xmpp::XmlElement>
+PairingAuthenticatorBase::GetNextMessage() {
   DCHECK_EQ(state(), MESSAGE_READY);
   std::unique_ptr<jingle_xmpp::XmlElement> result =
       spake2_authenticator_->GetNextMessage();
@@ -89,12 +114,17 @@ const std::string& PairingAuthenticatorBase::GetAuthKey() const {
   return spake2_authenticator_->GetAuthKey();
 }
 
+const SessionPolicies* PairingAuthenticatorBase::GetSessionPolicies() const {
+  return nullptr;
+}
+
 std::unique_ptr<ChannelAuthenticator>
 PairingAuthenticatorBase::CreateChannelAuthenticator() const {
   return spake2_authenticator_->CreateChannelAuthenticator();
 }
 
-void PairingAuthenticatorBase::MaybeAddErrorMessage(jingle_xmpp::XmlElement* message) {
+void PairingAuthenticatorBase::MaybeAddErrorMessage(
+    jingle_xmpp::XmlElement* message) {
   if (!error_message_.empty()) {
     jingle_xmpp::XmlElement* pairing_failed_tag =
         new jingle_xmpp::XmlElement(kPairingFailedTag);
@@ -121,7 +151,8 @@ void PairingAuthenticatorBase::CheckForFailedSpakeExchange(
   // credentials were the paired secret, then notify the peer that the
   // PIN-less connection failed and retry using the PIN.
   if (spake2_authenticator_->state() == REJECTED &&
-      spake2_authenticator_->rejection_reason() == INVALID_CREDENTIALS &&
+      spake2_authenticator_->rejection_reason() ==
+          RejectionReason::INVALID_CREDENTIALS &&
       using_paired_secret_) {
     using_paired_secret_ = false;
     error_message_ = "invalid-shared-secret";
@@ -133,5 +164,4 @@ void PairingAuthenticatorBase::CheckForFailedSpakeExchange(
   std::move(resume_callback).Run();
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

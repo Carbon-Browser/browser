@@ -1,33 +1,21 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {Destination, DestinationOrigin, getSelectDropdownBackground, IronMeta, PrintPreviewDestinationSelectElement} from 'chrome://print/print_preview.js';
-import {assert} from 'chrome://resources/js/assert.m.js';
-
+import type {PrintPreviewDestinationSelectElement} from 'chrome://print/print_preview.js';
+import {Destination, DestinationOrigin, getSelectDropdownBackground, IconsetMap} from 'chrome://print/print_preview.js';
 import {assertEquals} from 'chrome://webui-test/chai_assert.js';
-import {waitAfterNextRender} from 'chrome://webui-test/test_util.js';
+import {waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
 
 import {selectOption} from './print_preview_test_utils.js';
 
-const destination_select_test = {
-  suiteName: 'DestinationSelectTest',
-  TestNames: {
-    ChangeIcon: 'change icon',
-  },
-};
-
-Object.assign(window, {destination_select_test: destination_select_test});
-
-suite(destination_select_test.suiteName, function() {
+suite('DestinationSelectTest', function() {
   let destinationSelect: PrintPreviewDestinationSelectElement;
 
   let recentDestinationList: Destination[] = [];
 
-  const meta = new IronMeta({type: 'iconset', value: undefined});
-
   setup(function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     destinationSelect =
         document.createElement('print-preview-destination-select');
     destinationSelect.disabled = false;
@@ -54,11 +42,12 @@ suite(destination_select_test.suiteName, function() {
     const icon =
         selectEl.style.getPropertyValue('background-image').replace(/ /gi, '');
     const expected = getSelectDropdownBackground(
-        meta.byKey('print-preview'), expectedIcon, destinationSelect);
+        IconsetMap.getInstance().get('print-preview')!, expectedIcon,
+        destinationSelect);
     assertEquals(expected, icon);
   }
 
-  test(assert(destination_select_test.TestNames.ChangeIcon), function() {
+  test('change icon', function() {
     populateRecentDestinationList();
     destinationSelect.recentDestinationList = recentDestinationList;
 

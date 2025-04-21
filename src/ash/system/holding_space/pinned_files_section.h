@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,25 +8,22 @@
 #include <memory>
 
 #include "ash/system/holding_space/holding_space_item_views_section.h"
-
-class PrefService;
+#include "ui/base/metadata/metadata_header_macros.h"
 
 namespace ash {
 
 // Section for pinned files in the `PinnedFilesBubble`.
 class PinnedFilesSection : public HoldingSpaceItemViewsSection {
+  METADATA_HEADER(PinnedFilesSection, HoldingSpaceItemViewsSection)
+
  public:
   explicit PinnedFilesSection(HoldingSpaceViewDelegate* delegate);
   PinnedFilesSection(const PinnedFilesSection& other) = delete;
   PinnedFilesSection& operator=(const PinnedFilesSection& other) = delete;
   ~PinnedFilesSection() override;
 
-  // Returns whether or not the pinned files section should show a placeholder.
-  static bool ShouldShowPlaceholder(PrefService* prefs);
-
  private:
   // HoldingSpaceItemViewsSection:
-  const char* GetClassName() const override;
   gfx::Size GetMinimumSize() const override;
   std::unique_ptr<views::View> CreateHeader() override;
   std::unique_ptr<views::View> CreateContainer() override;

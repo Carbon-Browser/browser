@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/values.h"
 #include "third_party/abseil-cpp/absl/numeric/int128.h"
 #include "url/origin.h"
@@ -34,7 +34,7 @@ namespace content {
 // dependencies. Supports configuring public keys at runtime.
 class TestAggregationService {
  public:
-  // TODO(crbug.com/1260388): Consider exposing AggregatableReportRequest in
+  // TODO(crbug.com/40201850): Consider exposing AggregatableReportRequest in
   // content/public to avoid this translation.
 
   // This is 1-1 mapping of AggregationServicePayloadContents::Operation.

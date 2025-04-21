@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <deque>
 #include <memory>
+#include <string_view>
 
 #include "base/cancelable_callback.h"
 #include "base/memory/scoped_refptr.h"
@@ -14,12 +15,15 @@
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
 #include "components/cast/message_port/message_port.h"
+#include "components/cast_receiver/common/public/status.h"
 #include "third_party/cast_core/public/src/proto/v2/core_message_port_application_service.castcore.pb.h"
 #include "third_party/cast_core/public/src/proto/web/message_channel.pb.h"
 
-namespace chromecast {
-
+namespace cast_receiver {
 class MessagePortService;
+}
+
+namespace chromecast {
 
 class MessagePortHandler final
     : public cast_api_bindings::MessagePort::Receiver {
@@ -29,7 +33,7 @@ class MessagePortHandler final
   MessagePortHandler(
       std::unique_ptr<cast_api_bindings::MessagePort> message_port,
       uint32_t channel_id,
-      MessagePortService* message_port_service,
+      cast_receiver::MessagePortService* message_port_service,
       cast::v2::CoreMessagePortApplicationServiceStub* core_app_stub,
       scoped_refptr<base::SequencedTaskRunner> task_runner);
   ~MessagePortHandler() override;
@@ -41,7 +45,7 @@ class MessagePortHandler final
 
   // Handles a message incoming from the gRPC API.  Returns true if it was able
   // to be handled successfully, false otherwise.
-  bool HandleMessage(const cast::web::Message& message);
+  cast_receiver::Status HandleMessage(const cast::web::Message& message);
 
  private:
   enum class CloseError {
@@ -83,13 +87,13 @@ class MessagePortHandler final
       cast::utils::GrpcStatusOr<cast::web::MessagePortStatus> response_or);
 
   // cast_api_bindings::MessagePort::Receiver overrides.
-  bool OnMessage(base::StringPiece message,
+  bool OnMessage(std::string_view message,
                  std::vector<std::unique_ptr<cast_api_bindings::MessagePort>>
                      ports) override;
   void OnPipeError() override;
 
   scoped_refptr<base::SequencedTaskRunner> task_runner_;
-  MessagePortService* const message_port_service_;
+  cast_receiver::MessagePortService* const message_port_service_;
   cast::v2::CoreMessagePortApplicationServiceStub* const core_app_stub_;
   std::unique_ptr<cast_api_bindings::MessagePort> message_port_;
   uint32_t channel_id_;

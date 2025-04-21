@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,7 +42,8 @@ bool BlockAllocatorPool::Add(BufferId buffer_id,
   if (previous_tail) {
     previous_tail->next = new_entry;
   } else {
-    active_entry_ = new_entry;
+    // Balanced by a load-acquire in Allocate().
+    active_entry_.store(new_entry, std::memory_order_release);
   }
 
   return true;
@@ -50,8 +51,9 @@ bool BlockAllocatorPool::Add(BufferId buffer_id,
 
 Fragment BlockAllocatorPool::Allocate() {
   // For the fast common case, we always start by trying to reuse the most
-  // recently used allocator.
-  Entry* entry = active_entry_.load(std::memory_order_relaxed);
+  // recently used allocator. This load-acquire is balanced by a store-release
+  // below (via compare_exchange_weak) and in Add() above.
+  Entry* entry = active_entry_.load(std::memory_order_acquire);
   if (!entry) {
     return {};
   }
@@ -77,13 +79,14 @@ Fragment BlockAllocatorPool::Allocate() {
         // is only meant as a helpful hint for future allocations, we don't
         // really care whether it succeeds.
         active_entry_.compare_exchange_weak(starting_entry, entry,
+                                            std::memory_order_release,
                                             std::memory_order_relaxed);
       }
 
       FragmentDescriptor descriptor(
           entry->buffer_id, checked_cast<uint32_t>(offset),
           checked_cast<uint32_t>(allocator.block_size()));
-      return Fragment(descriptor, block);
+      return Fragment::FromDescriptorUnsafe(descriptor, block);
     }
 
     // Allocation from the active allocator failed. Try another if available.

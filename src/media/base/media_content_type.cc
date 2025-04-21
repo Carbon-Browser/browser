@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,8 @@ MediaContentType DurationToMediaContentType(base::TimeDelta duration) {
   // should be used in this case.
   return (duration.is_zero() ||
           duration > base::Seconds(kMinimumContentDurationSecs))
-             ? MediaContentType::Persistent
-             : MediaContentType::Transient;
+             ? MediaContentType::kPersistent
+             : MediaContentType::kTransient;
 }
 
 }  // namespace media

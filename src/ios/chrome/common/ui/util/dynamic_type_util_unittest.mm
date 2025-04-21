@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,9 @@
 
 #import <UIKit/UIKit.h>
 
-#include "testing/gtest_mac.h"
-#include "testing/platform_test.h"
-#include "third_party/ocmock/gtest_support.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "testing/gtest_mac.h"
+#import "testing/platform_test.h"
+#import "third_party/ocmock/gtest_support.h"
 
 // Test fixture for DynamicTypeUtil class.
 class CommonDynamicTypeUtilTest : public PlatformTest {
@@ -31,7 +27,7 @@ class CommonDynamicTypeUtilTest : public PlatformTest {
   }
 };
 
-// Tests that |PreferredFontForTextStyleWithMaxCategory| works well with various
+// Tests that `PreferredFontForTextStyleWithMaxCategory` works well with various
 // input scenarios.
 TEST_F(CommonDynamicTypeUtilTest, PreferredFontSize) {
   // Use normal category as maxmium category.

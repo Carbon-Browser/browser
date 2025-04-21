@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -8,14 +8,14 @@ static_library("renderer") {
   sources = [
     "isolated_world_util.cc",
     "isolated_world_util.h",
-    "per_frame_translate_agent.cc",
-    "per_frame_translate_agent.h",
     "translate_agent.cc",
     "translate_agent.h",
   ]
 
   deps = [
     "//base",
+    "//components/language_detection/content/renderer:agent",
+    "//components/language_detection/core",
     "//components/translate/content/common",
     "//components/translate/core/common",
     "//components/translate/core/language_detection",

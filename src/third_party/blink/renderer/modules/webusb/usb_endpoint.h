@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,7 @@ namespace blink {
 class ExceptionState;
 class USBAlternateInterface;
 class V8USBDirection;
+class V8USBEndpointType;
 
 class USBEndpoint : public ScriptWrappable {
   DEFINE_WRAPPERTYPEINFO();
@@ -32,8 +33,8 @@ class USBEndpoint : public ScriptWrappable {
   const device::mojom::blink::UsbEndpointInfo& Info() const;
 
   uint8_t endpointNumber() const { return Info().endpoint_number; }
-  String direction() const;
-  String type() const;
+  V8USBDirection direction() const;
+  V8USBEndpointType type() const;
   unsigned packetSize() const { return Info().packet_size; }
 
   void Trace(Visitor*) const override;

@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright 2021 The Chromium Authors. All rights reserved.
-     Use of this source code is governed by a BSD-style license that can be
-     found in the LICENSE file. -->
+<!--
+Copyright 2021 The Chromium Authors
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
+-->
 
 <org.chromium.chrome.browser.keyboard_accessory.sheet_tabs.PromoCodeAccessoryInfoView
     xmlns:android="http://schemas.android.com/apk/res/android"
@@ -49,7 +51,7 @@
         <ImageView
             android:id="@+id/icon"
             android:layout_marginTop="@dimen/keyboard_accessory_image_top_padding"
-            android:layout_width="@dimen/keyboard_accessory_bar_item_cc_icon_width"
+            android:layout_width="@dimen/keyboard_accessory_bar_item_icon_width"
             android:layout_height="@dimen/keyboard_accessory_suggestion_icon_size"
             android:layout_weight="0"
             android:importantForAccessibility="no"

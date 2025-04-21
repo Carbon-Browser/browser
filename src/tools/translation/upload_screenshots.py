@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -33,6 +33,14 @@ import helper.git_helper as git_helper
 
 here = os.path.dirname(os.path.realpath(__file__))
 src_path = os.path.normpath(os.path.join(here, '..', '..'))
+
+# To keep cog workspaces clean by not creatiing .pyc files
+if (
+    here.startswith('/google/cog/cloud')
+    and not os.environ.get('PYTHONPYCACHEPREFIX')
+  ):
+  os.environ.setdefault('PYTHONDONTWRITEBYTECODE', '1')
+
 
 depot_tools_path = os.path.normpath(
     os.path.join(src_path, 'third_party', 'depot_tools'))
@@ -107,6 +115,7 @@ def find_screenshots(repo_root, translation_expectations):
     src_paths.extend(grd.structure_paths)
 
   screenshots = []
+  rename_to_lowercase_png = None
   for grd_path in src_paths:
     # Convert grd_path.grd to grd_path_grd/ directory.
     name, ext = os.path.splitext(os.path.basename(grd_path))
@@ -124,6 +133,20 @@ def find_screenshots(repo_root, translation_expectations):
     for f in os.listdir(screenshots_dir):
       if f in ('OWNERS', 'README.md', 'DIR_METADATA') or f.endswith('.sha1'):
         continue
+
+      # Rename any files ending in .PNG to .png. File extensions on some
+      # platforms are case-sensitive, so renaming to .png ensures that created
+      # .png.sha1 files are the same type on all platforms.
+      if f.endswith('.PNG'):
+        if rename_to_lowercase_png is None:
+          rename_to_lowercase_png = query_yes_no(
+              '.PNG file(s) found, rename to .png for upload?')
+        if rename_to_lowercase_png:
+          f_path = os.path.join(screenshots_dir, f)
+          f = os.path.splitext(f)[0] + '.png'
+          f_path_lowercase_png = os.path.join(screenshots_dir, f)
+          os.rename(f_path, f_path_lowercase_png)
+
       if not f.endswith('.png'):
         print('File with unexpected extension: %s in %s' % (f, screenshots_dir))
         continue

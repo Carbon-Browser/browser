@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,6 +27,11 @@ class CORE_EXPORT PropertyRegistry : public GarbageCollected<PropertyRegistry> {
   // properties originating from CSS.registerProperty.
   void RemoveDeclaredProperties();
 
+  // Register property for devtools inspector.
+  void AddRegistrationForInspector(const AtomicString&, PropertyRegistration&);
+  // Removes property registration for devtools inspector.
+  void RemoveRegistrationForInspector(const AtomicString&);
+
   // Returns the registration originating from CSS.registerProperty if present,
   // otherwise returns the registration originating from @property (which may
   // be nullptr).
@@ -35,6 +40,13 @@ class CORE_EXPORT PropertyRegistry : public GarbageCollected<PropertyRegistry> {
   const PropertyRegistration* Registration(const AtomicString&) const;
 
   bool IsEmpty() const;
+
+  // The viewport unit flags across all registration and declarations.
+  //
+  // See `ViewportUnitFlag`.
+  unsigned GetViewportUnitFlags() const {
+    return registered_viewport_unit_flags_ | declared_viewport_unit_flags_;
+  }
 
   // Returns a number that increases by one every time there's a change to the
   // PropertyRegistry.
@@ -97,6 +109,8 @@ class CORE_EXPORT PropertyRegistry : public GarbageCollected<PropertyRegistry> {
  private:
   RegistrationMap registered_properties_;
   RegistrationMap declared_properties_;
+  unsigned registered_viewport_unit_flags_ = 0;
+  unsigned declared_viewport_unit_flags_ = 0;
   size_t version_ = 0;
 };
 

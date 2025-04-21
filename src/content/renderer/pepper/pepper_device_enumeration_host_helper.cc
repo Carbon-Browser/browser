@@ -1,15 +1,15 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/renderer/pepper/pepper_device_enumeration_host_helper.h"
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "ipc/ipc_message.h"
 #include "ppapi/c/pp_errors.h"
 #include "ppapi/host/dispatch_host_message.h"
@@ -24,8 +24,7 @@ using ppapi::host::HostMessageContext;
 namespace content {
 
 // Makes sure that StopEnumerateDevices() is called for each EnumerateDevices().
-class PepperDeviceEnumerationHostHelper::ScopedEnumerationRequest
-    : public base::SupportsWeakPtr<ScopedEnumerationRequest> {
+class PepperDeviceEnumerationHostHelper::ScopedEnumerationRequest final {
  public:
   // |owner| must outlive this object.
   ScopedEnumerationRequest(PepperDeviceEnumerationHostHelper* owner,
@@ -33,11 +32,12 @@ class PepperDeviceEnumerationHostHelper::ScopedEnumerationRequest
       : callback_(std::move(callback)), requested_(false), sync_call_(false) {
     if (!owner->delegate_) {
       // If no delegate, return an empty list of devices.
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(
               &ScopedEnumerationRequest::EnumerateDevicesCallbackBody,
-              AsWeakPtr(), std::vector<ppapi::DeviceRefData>()));
+              weak_ptr_factory_.GetWeakPtr(),
+              std::vector<ppapi::DeviceRefData>()));
       return;
     }
 
@@ -53,7 +53,7 @@ class PepperDeviceEnumerationHostHelper::ScopedEnumerationRequest
     owner->delegate_->EnumerateDevices(
         owner->device_type_,
         base::BindOnce(&ScopedEnumerationRequest::EnumerateDevicesCallbackBody,
-                       AsWeakPtr()));
+                       weak_ptr_factory_.GetWeakPtr()));
     sync_call_ = false;
   }
 
@@ -66,11 +66,11 @@ class PepperDeviceEnumerationHostHelper::ScopedEnumerationRequest
   void EnumerateDevicesCallbackBody(
       const std::vector<ppapi::DeviceRefData>& devices) {
     if (sync_call_) {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(
               &ScopedEnumerationRequest::EnumerateDevicesCallbackBody,
-              AsWeakPtr(), devices));
+              weak_ptr_factory_.GetWeakPtr(), devices));
     } else {
       std::move(callback_).Run(devices);
       // This object may have been destroyed at this point.
@@ -80,12 +80,12 @@ class PepperDeviceEnumerationHostHelper::ScopedEnumerationRequest
   PepperDeviceEnumerationHostHelper::Delegate::DevicesOnceCallback callback_;
   bool requested_;
   bool sync_call_;
+  base::WeakPtrFactory<ScopedEnumerationRequest> weak_ptr_factory_{this};
 };
 
 // Makes sure that StopMonitoringDevices() is called for each
 // StartMonitoringDevices().
-class PepperDeviceEnumerationHostHelper::ScopedMonitoringRequest
-    : public base::SupportsWeakPtr<ScopedMonitoringRequest> {
+class PepperDeviceEnumerationHostHelper::ScopedMonitoringRequest {
  public:
   // |owner| must outlive this object.
   ScopedMonitoringRequest(PepperDeviceEnumerationHostHelper* owner,
@@ -120,7 +120,7 @@ class PepperDeviceEnumerationHostHelper::ScopedMonitoringRequest
   bool requested() const { return requested_; }
 
  private:
-  PepperDeviceEnumerationHostHelper* const owner_;
+  const raw_ptr<PepperDeviceEnumerationHostHelper> owner_;
   PepperDeviceEnumerationHostHelper::Delegate::DevicesCallback callback_;
   bool requested_;
   size_t subscription_id_;

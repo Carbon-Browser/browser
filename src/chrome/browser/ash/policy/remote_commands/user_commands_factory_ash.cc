@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,6 @@ std::unique_ptr<RemoteCommandJob> UserCommandsFactoryAsh::BuildJobForType(
       // Other types of commands should be sent to DeviceCommandsFactoryAsh
       // instead of here.
       NOTREACHED();
-      return nullptr;
   }
 }
 

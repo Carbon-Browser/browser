@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include <memory>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "base/timer/timer.h"
@@ -50,10 +51,10 @@ class WEB_ENGINE_EXPORT WebEngineAudioRenderer final
   void Flush(base::OnceClosure callback) override;
   void StartPlaying() override;
   void SetVolume(float volume) override;
-  void SetLatencyHint(absl::optional<base::TimeDelta> latency_hint) override;
+  void SetLatencyHint(std::optional<base::TimeDelta> latency_hint) override;
   void SetPreservesPitch(bool preserves_pitch) override;
-  void SetWasPlayedWithUserActivation(
-      bool was_played_with_user_activation) override;
+  void SetWasPlayedWithUserActivationAndHighMediaEngagement(
+      bool was_played_with_user_activation_and_high_media_engagement) override;
 
   // TimeSource implementation.
   void StartTicking() override;
@@ -81,6 +82,11 @@ class WEB_ENGINE_EXPORT WebEngineAudioRenderer final
     // Playback is active. When the stream reaches EOS it stays in the kPlaying
     // state.
     kPlaying,
+
+    // AudioConsumer was started, but the rate is set to 0. This state is used
+    // to avoid stopping AudioConsumer unnecessarily between StopTicking() and
+    // StartTicking().
+    kPaused,
   };
 
   void StartAudioConsumer();
@@ -106,21 +112,36 @@ class WEB_ENGINE_EXPORT WebEngineAudioRenderer final
   // Callback for input_buffer_collection_.AcquireBuffers().
   void OnBuffersAcquired(
       std::vector<media::VmoBuffer> buffers,
-      const fuchsia::sysmem::SingleBufferSettings& buffer_settings);
+      const fuchsia::sysmem2::SingleBufferSettings& buffer_settings);
 
   // Initializes |stream_sink_|. Called during initialization and every time
   // configuration changes.
   void InitializeStreamSink();
 
+  // Calculates desirable playback rate based on `playback_rate_` and
+  // `playback_state_` and sends it to the AudioConsumer.
+  void UpdatePlaybackRate();
+
   // Helpers to receive AudioConsumerStatus from the |audio_consumer_|.
   void RequestAudioConsumerStatus();
   void OnAudioConsumerStatusChanged(fuchsia::media::AudioConsumerStatus status);
 
+  // Calls `ScheduleReadDemuxerStream()` and `ScheduleOutOfBufferTimer()` to
+  // schedule the corresponding timers.
+  void ScheduleBufferTimers();
+
   // Helpers to pump data from |demuxer_stream_| to |stream_sink_|.
-  void ScheduleReadDemuxerStream();
+  void ScheduleReadDemuxerStream(bool is_time_moving,
+                                 base::TimeTicks end_of_buffer_time);
   void ReadDemuxerStream();
-  void OnDemuxerStreamReadDone(media::DemuxerStream::Status status,
-                               scoped_refptr<media::DecoderBuffer> buffer);
+  void OnDemuxerStreamReadDone(
+      media::DemuxerStream::Status status,
+      media::DemuxerStream::DecoderBufferVector buffers);
+
+  // Schedules `out_of_buffer_timer_` timer, which transitions the renderer to
+  // the `BUFFERING_HAVE_NOTHING` state.
+  void ScheduleOutOfBufferTimer(bool is_time_moving,
+                                base::TimeTicks end_of_buffer_time);
 
   // Sends the specified packet to |stream_sink_|.
   void SendInputPacket(media::StreamProcessorHelper::IoPacket packet);
@@ -141,13 +162,6 @@ class WEB_ENGINE_EXPORT WebEngineAudioRenderer final
   // Returns true if media clock is ticking and the rate is above 0.0.
   bool IsTimeMoving() EXCLUSIVE_LOCKS_REQUIRED(timeline_lock_);
 
-  // Updates TimelineFunction parameters after StopTicking() or
-  // SetPlaybackRate(0.0). Normally these parameters are provided by
-  // AudioConsumer, but this happens asynchronously and we need to make sure
-  // that StopTicking() and SetPlaybackRate(0.0) stop the media clock
-  // synchronously. Must be called before updating the |state_|.
-  void UpdateTimelineOnStop() EXCLUSIVE_LOCKS_REQUIRED(timeline_lock_);
-
   // Calculates media position based on the TimelineFunction returned from
   // AudioConsumer. Must be called only when IsTimeMoving() is true.
   base::TimeDelta CurrentMediaTimeLocked()
@@ -155,7 +169,7 @@ class WEB_ENGINE_EXPORT WebEngineAudioRenderer final
 
   // SysmemBufferStream::Sink implementation.
   void OnSysmemBufferStreamBufferCollectionToken(
-      fuchsia::sysmem::BufferCollectionTokenPtr token) override;
+      fuchsia::sysmem2::BufferCollectionTokenPtr token) override;
   void OnSysmemBufferStreamOutputPacket(
       media::StreamProcessorHelper::IoPacket packet) override;
   void OnSysmemBufferStreamEndOfStream() override;
@@ -172,12 +186,14 @@ class WEB_ENGINE_EXPORT WebEngineAudioRenderer final
 
   float volume_ = 1.0;
 
-  media::CdmContext* cdm_context_ = nullptr;
-  media::DemuxerStream* demuxer_stream_ = nullptr;
+  double playback_rate_ = 1.0;
+
+  raw_ptr<media::CdmContext> cdm_context_ = nullptr;
+  raw_ptr<media::DemuxerStream> demuxer_stream_ = nullptr;
   bool is_demuxer_read_pending_ = false;
   bool drop_next_demuxer_read_result_ = false;
 
-  media::RendererClient* client_ = nullptr;
+  raw_ptr<media::RendererClient> client_ = nullptr;
 
   // Initialize() completion callback.
   media::PipelineStatusCallback init_cb_;
@@ -189,7 +205,8 @@ class WEB_ENGINE_EXPORT WebEngineAudioRenderer final
   media::BufferingState buffer_state_ = media::BUFFERING_HAVE_NOTHING;
 
   base::TimeDelta last_packet_timestamp_ = base::TimeDelta::Min();
-  base::OneShotTimer read_timer_;
+  base::DeadlineTimer read_timer_;
+  base::DeadlineTimer out_of_buffer_timer_;
 
   media::SysmemAllocatorClient sysmem_allocator_{"WebEngineAudioRenderer"};
   std::unique_ptr<media::SysmemCollectionClient> input_buffer_collection_;
@@ -227,7 +244,10 @@ class WEB_ENGINE_EXPORT WebEngineAudioRenderer final
   // Values from TimelineFunction returned by AudioConsumer.
   base::TimeTicks reference_time_ GUARDED_BY(timeline_lock_);
   base::TimeDelta media_pos_ GUARDED_BY(timeline_lock_);
-  int32_t media_delta_ GUARDED_BY(timeline_lock_) = 1;
+
+  // Initialize `media_delta_` to 0 because media clock isn't ticking until
+  // playback has started.
+  int32_t media_delta_ GUARDED_BY(timeline_lock_) = 0;
   int32_t reference_delta_ GUARDED_BY(timeline_lock_) = 1;
 
   THREAD_CHECKER(thread_checker_);

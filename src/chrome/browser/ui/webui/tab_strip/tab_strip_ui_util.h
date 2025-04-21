@@ -1,14 +1,14 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_WEBUI_TAB_STRIP_TAB_STRIP_UI_UTIL_H_
 #define CHROME_BROWSER_UI_WEBUI_TAB_STRIP_TAB_STRIP_UI_UTIL_H_
 
+#include <optional>
 #include <string>
 
 #include "components/tab_groups/tab_group_id.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class Browser;
 class Profile;
@@ -20,18 +20,32 @@ class OSExchangeData;
 
 namespace tab_strip_ui {
 
-absl::optional<tab_groups::TabGroupId> GetTabGroupIdFromString(
+std::optional<tab_groups::TabGroupId> GetTabGroupIdFromString(
     TabGroupModel* tab_group_model,
     std::string group_id_string);
 
+// Find the browser containing the group with ID |group_id_string| or nullptr if
+// none. If the profile is not specified, find any browser containing the
+// |group_id|.
 Browser* GetBrowserWithGroupId(Profile* profile, std::string group_id_string);
 
+// Moves all the tabs in a group from `source_browser`to `target_browser` at
+// `to_index`. If the operation results in a split tab group in the destination
+// browser, noop instead.
+void MoveGroupAcrossWindows(Browser* source_browser,
+                            Browser* target_browser,
+                            int to_index,
+                            const tab_groups::TabGroupId& group_id);
+
+// Moves a tab at `source_browser` in `source_browser`to `target_browser` at
+// `to_index`. If the operation results in a split tab group in the destination
+// browser, noop instead.
 void MoveTabAcrossWindows(
     Browser* source_browser,
     int from_index,
     Browser* target_browser,
     int to_index,
-    absl::optional<tab_groups::TabGroupId> to_group_id = absl::nullopt);
+    std::optional<tab_groups::TabGroupId> to_group_id = std::nullopt);
 
 // Returns whether |drop_data| is a tab drag originating from a WebUI
 // tab strip.

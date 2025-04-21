@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,8 +40,8 @@ IN_PROC_BROWSER_TEST_F(ChromeAcceptEncodingHeaderTest, Check) {
   navigation_loop.Run();
   subresource_loop.Run();
 
-  ASSERT_EQ("gzip, deflate, br", navigation_accept_encoding_header);
-  ASSERT_EQ("gzip, deflate, br", subresource_accept_encoding_header);
+  ASSERT_EQ("gzip, deflate, br, zstd", navigation_accept_encoding_header);
+  ASSERT_EQ("gzip, deflate, br, zstd", subresource_accept_encoding_header);
 
   // Since the server uses local variables.
   ASSERT_TRUE(server.ShutdownAndWaitUntilComplete());

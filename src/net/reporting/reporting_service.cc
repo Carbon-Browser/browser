@@ -1,15 +1,17 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/reporting/reporting_service.h"
 
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
@@ -24,7 +26,6 @@
 #include "net/reporting/reporting_delivery_agent.h"
 #include "net/reporting/reporting_header_parser.h"
 #include "net/reporting/reporting_uploader.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
@@ -63,11 +64,21 @@ class ReportingServiceImpl : public ReportingService {
       const IsolationInfo& isolation_info,
       const base::flat_map<std::string, std::string>& endpoints) override {
     DCHECK(!reporting_source.is_empty());
-    DoOrBacklogTask(base::BindOnce(
-        &ReportingServiceImpl::DoSetDocumentReportingEndpoints,
-        base::Unretained(this), reporting_source, isolation_info,
-        FixupNetworkIsolationKey(isolation_info.network_isolation_key()),
-        origin, std::move(endpoints)));
+    DoOrBacklogTask(
+        base::BindOnce(&ReportingServiceImpl::DoSetDocumentReportingEndpoints,
+                       base::Unretained(this), reporting_source, isolation_info,
+                       FixupNetworkAnonymizationKey(
+                           isolation_info.network_anonymization_key()),
+                       origin, std::move(endpoints)));
+  }
+
+  void SetEnterpriseReportingEndpoints(
+      const base::flat_map<std::string, GURL>& endpoints) override {
+    if (!base::FeatureList::IsEnabled(
+            net::features::kReportingApiEnableEnterpriseCookieIssues)) {
+      return;
+    }
+    context_->cache()->SetEnterpriseReportingEndpoints(endpoints);
   }
 
   void SendReportsAndRemoveSource(
@@ -79,13 +90,14 @@ class ReportingServiceImpl : public ReportingService {
 
   void QueueReport(
       const GURL& url,
-      const absl::optional<base::UnguessableToken>& reporting_source,
-      const NetworkIsolationKey& network_isolation_key,
+      const std::optional<base::UnguessableToken>& reporting_source,
+      const NetworkAnonymizationKey& network_anonymization_key,
       const std::string& user_agent,
       const std::string& group,
       const std::string& type,
       base::Value::Dict body,
-      int depth) override {
+      int depth,
+      ReportingTargetType target_type) override {
     DCHECK(context_);
     DCHECK(context_->delegate());
     // If |reporting_source| is provided, it must not be empty.
@@ -103,20 +115,22 @@ class ReportingServiceImpl : public ReportingService {
 
     // base::Unretained is safe because the callback is stored in
     // |task_backlog_| which will not outlive |this|.
-    DoOrBacklogTask(base::BindOnce(
-        &ReportingServiceImpl::DoQueueReport, base::Unretained(this),
-        reporting_source, FixupNetworkIsolationKey(network_isolation_key),
-        std::move(sanitized_url), user_agent, group, type, std::move(body),
-        depth, queued_ticks));
+    DoOrBacklogTask(
+        base::BindOnce(&ReportingServiceImpl::DoQueueReport,
+                       base::Unretained(this), reporting_source,
+                       FixupNetworkAnonymizationKey(network_anonymization_key),
+                       std::move(sanitized_url), user_agent, group, type,
+                       std::move(body), depth, queued_ticks, target_type));
   }
 
-  void ProcessReportToHeader(const url::Origin& origin,
-                             const NetworkIsolationKey& network_isolation_key,
-                             const std::string& header_string) override {
+  void ProcessReportToHeader(
+      const url::Origin& origin,
+      const NetworkAnonymizationKey& network_anonymization_key,
+      const std::string& header_string) override {
     if (header_string.size() > kMaxJsonSize)
       return;
 
-    absl::optional<base::Value> header_value = base::JSONReader::Read(
+    std::optional<base::Value> header_value = base::JSONReader::Read(
         "[" + header_string + "]", base::JSON_PARSE_RFC, kMaxJsonDepth);
     if (!header_value)
       return;
@@ -124,7 +138,7 @@ class ReportingServiceImpl : public ReportingService {
     DVLOG(1) << "Received Reporting policy for " << origin;
     DoOrBacklogTask(base::BindOnce(
         &ReportingServiceImpl::DoProcessReportToHeader, base::Unretained(this),
-        FixupNetworkIsolationKey(network_isolation_key), origin,
+        FixupNetworkAnonymizationKey(network_anonymization_key), origin,
         std::move(header_value).value()));
   }
 
@@ -160,8 +174,10 @@ class ReportingServiceImpl : public ReportingService {
     return base::Value(std::move(dict));
   }
 
-  std::vector<const ReportingReport*> GetReports() const override {
-    std::vector<const net::ReportingReport*> reports;
+  std::vector<raw_ptr<const ReportingReport, VectorExperimental>> GetReports()
+      const override {
+    std::vector<raw_ptr<const net::ReportingReport, VectorExperimental>>
+        reports;
     context_->cache()->GetReports(&reports);
     return reports;
   }
@@ -199,40 +215,44 @@ class ReportingServiceImpl : public ReportingService {
   }
 
   void DoQueueReport(
-      const absl::optional<base::UnguessableToken>& reporting_source,
-      const NetworkIsolationKey& network_isolation_key,
+      const std::optional<base::UnguessableToken>& reporting_source,
+      const NetworkAnonymizationKey& network_anonymization_key,
       GURL sanitized_url,
       const std::string& user_agent,
       const std::string& group,
       const std::string& type,
       base::Value::Dict body,
       int depth,
-      base::TimeTicks queued_ticks) {
+      base::TimeTicks queued_ticks,
+      ReportingTargetType target_type) {
     DCHECK(initialized_);
-    context_->cache()->AddReport(
-        reporting_source, network_isolation_key, sanitized_url, user_agent,
-        group, type, std::move(body), depth, queued_ticks, 0 /* attempts */);
+    context_->cache()->AddReport(reporting_source, network_anonymization_key,
+                                 sanitized_url, user_agent, group, type,
+                                 std::move(body), depth, queued_ticks,
+                                 0 /* attempts */, target_type);
   }
 
-  void DoProcessReportToHeader(const NetworkIsolationKey& network_isolation_key,
-                               const url::Origin& origin,
-                               const base::Value& header_value) {
+  void DoProcessReportToHeader(
+      const NetworkAnonymizationKey& network_anonymization_key,
+      const url::Origin& origin,
+      const base::Value& header_value) {
     DCHECK(initialized_);
     DCHECK(header_value.is_list());
-    ReportingHeaderParser::ParseReportToHeader(
-        context_.get(), network_isolation_key, origin, header_value.GetList());
+    ReportingHeaderParser::ParseReportToHeader(context_.get(),
+                                               network_anonymization_key,
+                                               origin, header_value.GetList());
   }
 
   void DoSetDocumentReportingEndpoints(
       const base::UnguessableToken& reporting_source,
       const IsolationInfo& isolation_info,
-      const NetworkIsolationKey& network_isolation_key,
+      const NetworkAnonymizationKey& network_anonymization_key,
       const url::Origin& origin,
       base::flat_map<std::string, std::string> header_value) {
     DCHECK(initialized_);
     ReportingHeaderParser::ProcessParsedReportingEndpointsHeader(
-        context_.get(), reporting_source, isolation_info, network_isolation_key,
-        origin, std::move(header_value));
+        context_.get(), reporting_source, isolation_info,
+        network_anonymization_key, origin, std::move(header_value));
   }
 
   void DoRemoveBrowsingData(
@@ -287,14 +307,15 @@ class ReportingServiceImpl : public ReportingService {
     ExecuteBacklog();
   }
 
-  // Returns either |network_isolation_key| or an empty NetworkIsolationKey,
-  // based on |respect_network_isolation_key_|. Should be used on all
-  // NetworkIsolationKeys passed in through public API calls.
-  const NetworkIsolationKey& FixupNetworkIsolationKey(
-      const NetworkIsolationKey& network_isolation_key) {
-    if (respect_network_isolation_key_)
-      return network_isolation_key;
-    return empty_nik_;
+  // Returns either |network_anonymization_key| or an empty
+  // NetworkAnonymizationKey, based on |respect_network_anonymization_key_|.
+  // Should be used on all NetworkAnonymizationKeys passed in through public API
+  // calls.
+  const NetworkAnonymizationKey& FixupNetworkAnonymizationKey(
+      const NetworkAnonymizationKey& network_anonymization_key) {
+    if (respect_network_anonymization_key_)
+      return network_anonymization_key;
+    return empty_nak_;
   }
 
   std::unique_ptr<ReportingContext> context_;
@@ -303,12 +324,12 @@ class ReportingServiceImpl : public ReportingService {
   bool initialized_ = false;
   std::vector<base::OnceClosure> task_backlog_;
 
-  bool respect_network_isolation_key_ = base::FeatureList::IsEnabled(
-      features::kPartitionNelAndReportingByNetworkIsolationKey);
+  bool respect_network_anonymization_key_ =
+      NetworkAnonymizationKey::IsPartitioningEnabled();
 
-  // Allows returning a NetworkIsolationKey by reference when
-  // |respect_network_isolation_key_| is false.
-  NetworkIsolationKey empty_nik_;
+  // Allows returning a NetworkAnonymizationKey by reference when
+  // |respect_network_anonymization_key_| is false.
+  NetworkAnonymizationKey empty_nak_;
 
   base::WeakPtrFactory<ReportingServiceImpl> weak_factory_{this};
 };
@@ -321,9 +342,10 @@ ReportingService::~ReportingService() = default;
 std::unique_ptr<ReportingService> ReportingService::Create(
     const ReportingPolicy& policy,
     URLRequestContext* request_context,
-    ReportingCache::PersistentReportingStore* store) {
-  return std::make_unique<ReportingServiceImpl>(
-      ReportingContext::Create(policy, request_context, store));
+    ReportingCache::PersistentReportingStore* store,
+    const base::flat_map<std::string, GURL>& enterprise_reporting_endpoints) {
+  return std::make_unique<ReportingServiceImpl>(ReportingContext::Create(
+      policy, request_context, store, enterprise_reporting_endpoints));
 }
 
 // static

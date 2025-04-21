@@ -1,63 +1,62 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/cast/cast_config.h"
 
-namespace media {
-namespace cast {
+namespace media::cast {
 
-VideoCodecParams::VideoCodecParams()
-    : max_qp(kDefaultMaxQp),
-      min_qp(kDefaultMinQp),
-      max_cpu_saver_qp(kDefaultMaxCpuSaverQp),
-      max_number_of_video_buffers_used(kDefaultNumberOfVideoBuffers),
-      number_of_encode_threads(1) {}
-
+VideoCodecParams::VideoCodecParams() = default;
+VideoCodecParams::VideoCodecParams(VideoCodec codec) : codec(codec) {}
 VideoCodecParams::VideoCodecParams(const VideoCodecParams& other) = default;
-
+VideoCodecParams::VideoCodecParams(VideoCodecParams&& other) = default;
+VideoCodecParams& VideoCodecParams::operator=(const VideoCodecParams& other) =
+    default;
+VideoCodecParams& VideoCodecParams::operator=(VideoCodecParams&& other) =
+    default;
 VideoCodecParams::~VideoCodecParams() = default;
 
-FrameSenderConfig::FrameSenderConfig()
-    : sender_ssrc(0),
-      receiver_ssrc(0),
-      // In production, these values are overridden by the mirror settings
-      // and potentially the mirroring session parameters, however we provide
-      // a reasonable default here for some use cases, such as tests.
-      // All three delays are set to the same value due to adaptive latency
-      // being disabled in Chrome. This will be fixed as part of the migration
-      // to libcast.
-      min_playout_delay(kDefaultTargetPlayoutDelay),
-      max_playout_delay(kDefaultTargetPlayoutDelay),
-      animated_playout_delay(min_playout_delay),
-      rtp_payload_type(RtpPayloadType::UNKNOWN),
-      use_external_encoder(false),
-      rtp_timebase(0),
-      channels(0),
-      max_bitrate(0),
-      min_bitrate(0),
-      start_bitrate(0),
-      max_frame_rate(kDefaultMaxFrameRate),
-      codec(CODEC_UNKNOWN) {}
+FrameSenderConfig::FrameSenderConfig() = default;
+FrameSenderConfig::FrameSenderConfig(
+    uint32_t sender_ssrc,
+    uint32_t receiver_ssrc,
+    base::TimeDelta min_playout_delay,
+    base::TimeDelta max_playout_delay,
+    bool use_hardware_encoder,
+    int rtp_timebase,
+    int channels,
+    int max_bitrate,
+    int min_bitrate,
+    int start_bitrate,
+    double max_frame_rate,
+    std::string aes_key,
+    std::string aes_iv_mask,
+    std::optional<VideoCodecParams> video_codec_params,
+    std::optional<AudioCodecParams> audio_codec_params)
+    : sender_ssrc(sender_ssrc),
+      receiver_ssrc(receiver_ssrc),
+      min_playout_delay(min_playout_delay),
+      max_playout_delay(max_playout_delay),
+      use_hardware_encoder(use_hardware_encoder),
+      rtp_timebase(rtp_timebase),
+      channels(channels),
+      max_bitrate(max_bitrate),
+      min_bitrate(min_bitrate),
+      start_bitrate(start_bitrate),
+      max_frame_rate(max_frame_rate),
+      aes_key(aes_key),
+      aes_iv_mask(aes_iv_mask),
+      video_codec_params(video_codec_params),
+      audio_codec_params(audio_codec_params) {
+  CHECK(video_codec_params || audio_codec_params);
+}
 
 FrameSenderConfig::FrameSenderConfig(const FrameSenderConfig& other) = default;
-
+FrameSenderConfig::FrameSenderConfig(FrameSenderConfig&& other) = default;
+FrameSenderConfig& FrameSenderConfig::operator=(
+    const FrameSenderConfig& other) = default;
+FrameSenderConfig& FrameSenderConfig::operator=(FrameSenderConfig&& other) =
+    default;
 FrameSenderConfig::~FrameSenderConfig() = default;
 
-FrameReceiverConfig::FrameReceiverConfig()
-    : receiver_ssrc(0),
-      sender_ssrc(0),
-      rtp_max_delay_ms(kDefaultTargetPlayoutDelay.InMilliseconds()),
-      rtp_payload_type(RtpPayloadType::UNKNOWN),
-      rtp_timebase(0),
-      channels(0),
-      target_frame_rate(0),
-      codec(CODEC_UNKNOWN) {}
-
-FrameReceiverConfig::FrameReceiverConfig(const FrameReceiverConfig& other) =
-    default;
-
-FrameReceiverConfig::~FrameReceiverConfig() = default;
-
-}  // namespace cast
-}  // namespace media
+}  // namespace media::cast

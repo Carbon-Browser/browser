@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "net/base/completion_once_callback.h"
@@ -29,7 +30,13 @@ class NET_EXPORT ServerSocket {
 
   // Binds the socket and starts listening. Destroys the socket to stop
   // listening.
-  virtual int Listen(const IPEndPoint& address, int backlog) = 0;
+  // |ipv6_only| can be used by inheritors to control whether the server listens
+  // on IPv4/IPv6 or just IPv6 -- |true| limits connections to IPv6 only,
+  // |false| allows both IPv4/IPv6 connections; leaving the value unset implies
+  // default behavior (|true| on Windows, |false| on Posix).
+  virtual int Listen(const IPEndPoint& address,
+                     int backlog,
+                     std::optional<bool> ipv6_only) = 0;
 
   // Binds the socket with address and port, and starts listening. It expects
   // a valid IPv4 or IPv6 address. Otherwise, it returns ERR_ADDRESS_INVALID.

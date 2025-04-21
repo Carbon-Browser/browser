@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -79,7 +79,7 @@ class CAPTURE_EXPORT VideoCaptureDeviceFactory {
 
 #if BUILDFLAG(IS_WIN)
   // Returns used DXGI device manager.
-  // This is used for testing and to allow sharing the same DXGI device manger
+  // This is used for testing and to allow sharing the same DXGI device manager
   // with GpuMemoryBufferTracker in VideoCaptureBufferPool. Default
   // implementation always returns nullptr. Should be overridden by actual
   // factory implementation on Windows.

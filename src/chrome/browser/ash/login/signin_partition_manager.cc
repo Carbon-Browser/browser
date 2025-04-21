@@ -1,12 +1,12 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/signin_partition_manager.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/uuid.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/net/system_network_context_manager.h"
 #include "chrome/browser/profiles/incognito_helpers.h"
@@ -26,7 +26,7 @@ namespace {
 
 // Generates a new unique StoragePartition name.
 std::string GeneratePartitionName() {
-  return base::GenerateGUID();
+  return base::Uuid::GenerateRandomV4().AsLowercaseString();
 }
 
 // Clears data from the passed storage partition. `partition_data_cleared`
@@ -98,7 +98,7 @@ void SigninPartitionManager::StartSigninSession(
   current_storage_partition_ =
       browser_context_->GetStoragePartition(storage_partition_config, true);
   if (on_create_new_storage_partition_) {
-    on_create_new_storage_partition_.Run(current_storage_partition_);
+    on_create_new_storage_partition_.Run(current_storage_partition_.get());
   }
 
   TransferHttpAuthCacheProxyEntries(
@@ -113,11 +113,8 @@ void SigninPartitionManager::CloseCurrentSigninSession(
     std::move(partition_data_cleared).Run();
     return;
   }
-  clear_storage_partition_task_.Run(
-      current_storage_partition_,
-      base::BindOnce(&SigninPartitionManager::OnStoragePartitionCleared,
-                     weak_ptr_factory_.GetWeakPtr(), current_storage_partition_,
-                     std::move(partition_data_cleared)));
+  clear_storage_partition_task_.Run(current_storage_partition_.get(),
+                                    std::move(partition_data_cleared));
   current_storage_partition_ = nullptr;
   current_storage_partition_name_.clear();
 }
@@ -132,8 +129,8 @@ void SigninPartitionManager::SetClearStoragePartitionTaskForTesting(
 }
 
 void SigninPartitionManager::SetGetSystemNetworkContextForTesting(
-    GetSystemNetworkContextTask get_system_network_context_task) {
-  get_system_network_context_task_ = get_system_network_context_task;
+    network::NetworkContextGetter get_system_network_context_task) {
+  get_system_network_context_task_ = std::move(get_system_network_context_task);
 }
 
 void SigninPartitionManager::SetOnCreateNewStoragePartitionForTesting(
@@ -158,35 +155,18 @@ bool SigninPartitionManager::IsCurrentSigninStoragePartition(
   return IsInSigninSession() && storage_partition == current_storage_partition_;
 }
 
-void SigninPartitionManager::DisposeOldStoragePartitions() {
-  if (pending_removal_partitions_.empty())
-    return;
-
-  // Disposes all but the last storage partition. The last storage partition
-  // represents the last gaia load and there might still be references to it,
-  // e.g. fast gaia reload in All/SshWarningTest.VisibilityOnEnrollment/0 test.
-
-  content::StoragePartition* last = pending_removal_partitions_.back();
-  pending_removal_partitions_.pop_back();
-
-  for (auto* partition : pending_removal_partitions_)
-    browser_context_->DisposeStoragePartition(partition);
-
-  pending_removal_partitions_.clear();
-  pending_removal_partitions_.push_back(last);
-}
-
-void SigninPartitionManager::OnStoragePartitionCleared(
-    content::StoragePartition* storage_partition,
-    base::OnceClosure partition_data_cleared) {
-  pending_removal_partitions_.push_back(storage_partition);
-  std::move(partition_data_cleared).Run();
-}
-
 SigninPartitionManager::Factory::Factory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "SigninPartitionManager",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/40257657): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/41488885): Check if this service is needed for
+              // Ash Internals.
+              .WithAshInternals(ProfileSelection::kOwnInstance)
+              .Build()) {}
 
 SigninPartitionManager::Factory::~Factory() = default;
 
@@ -204,15 +184,10 @@ SigninPartitionManager::Factory::GetInstance() {
   return base::Singleton<SigninPartitionManager::Factory>::get();
 }
 
-KeyedService* SigninPartitionManager::Factory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+SigninPartitionManager::Factory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new SigninPartitionManager(context);
-}
-
-content::BrowserContext*
-SigninPartitionManager::Factory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextOwnInstanceInIncognito(context);
+  return std::make_unique<SigninPartitionManager>(context);
 }
 
 }  // namespace login

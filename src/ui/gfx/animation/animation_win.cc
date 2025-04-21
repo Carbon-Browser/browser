@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,8 @@ bool Animation::ScrollAnimationsEnabledBySystem() {
 // static
 void Animation::UpdatePrefersReducedMotion() {
   // prefers_reduced_motion_ should only be modified on the UI thread.
-  // TODO(crbug.com/927163): DCHECK this assertion once tests are well-behaved.
+  // TODO(crbug.com/40611878): DCHECK this assertion once tests are
+  // well-behaved.
 
   // We default to assuming that animations are enabled, to avoid impacting the
   // experience for users on systems that don't have SPI_GETCLIENTAREAANIMATION.

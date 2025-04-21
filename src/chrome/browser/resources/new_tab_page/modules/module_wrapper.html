@@ -1,11 +1,12 @@
 <style>
   :host {
-    background-color: var(--ntp-background-override-color);
-    border: solid var(--ntp-border-color) 1px;
+    background-color: var(--color-new-tab-page-module-background);
+    border: none;
     border-radius: var(--ntp-module-border-radius);
     box-sizing: border-box;
     display: block;
-    overflow: hidden;
+    height: fit-content;
+    overflow: visible;
     position: relative;
   }
 
@@ -18,6 +19,8 @@
 
   #moduleElement {
     align-items: center;
+    background: var(--color-new-tab-page-module-background);
+    border-radius: var(--ntp-module-border-radius);
     display: flex;
     height: 100%;
     justify-content: center;

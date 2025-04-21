@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,7 @@ class UrlListManager {
  public:
   class Observer {
    public:
-    virtual ~Observer() {}
+    virtual ~Observer() = default;
     virtual void BlockedUrlAdded(int32_t id, const GURL& url) = 0;
   };
 

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,8 +30,8 @@ int GetPrivateMemoryKB(base::ProcessHandle handle) {
   auto dump = memory_instrumentation::mojom::RawOSMemDump::New();
   dump->platform_private_footprint =
       memory_instrumentation::mojom::PlatformPrivateFootprint::New();
-  bool success = memory_instrumentation::OSMetrics::FillOSMemoryDump(
-      base::GetProcId(handle), dump.get());
+  bool success =
+      memory_instrumentation::OSMetrics::FillOSMemoryDump(handle, dump.get());
 
   // Failed to get private memory for the process, e.g. the process has died.
   if (!success)

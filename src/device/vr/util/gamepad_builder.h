@@ -1,14 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #ifndef DEVICE_VR_UTIL_GAMEPAD_BUILDER_H_
 #define DEVICE_VR_UTIL_GAMEPAD_BUILDER_H_
 
+#include <optional>
 #include <string>
 
 #include "device/gamepad/public/cpp/gamepads.h"
 #include "device/vr/public/mojom/isolated_xr_service.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace device {
 
@@ -38,7 +38,7 @@ class GamepadBuilder {
   virtual ~GamepadBuilder();
 
   virtual bool IsValid() const;
-  virtual absl::optional<Gamepad> GetGamepad();
+  virtual std::optional<Gamepad> GetGamepad();
 
   void AddButton(const GamepadButton& button);
   void AddButton(const ButtonData& data);

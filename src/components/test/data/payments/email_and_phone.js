@@ -1,19 +1,17 @@
 /*
- * Copyright 2016 The Chromium Authors. All rights reserved.
+ * Copyright 2016 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
-/* global PaymentRequest:false */
-
 /**
  * Launches the PaymentRequest UI that requests email address and phone number.
  */
-function buy() { // eslint-disable-line no-unused-vars
+function buy() {
   try {
     new PaymentRequest(
         [
-          {supportedMethods: 'https://bobpay.com'},
+          {supportedMethods: 'https://bobpay.test'},
           {
             supportedMethods: 'basic-card',
             data: {supportedNetworks: ['visa']},

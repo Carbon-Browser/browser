@@ -33,9 +33,9 @@
 
 #include <memory>
 #include "third_party/blink/public/mojom/devtools/console_message.mojom-blink-forward.h"
-#include "third_party/blink/renderer/bindings/core/v8/source_location.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/frame/web_feature_forward.h"
+#include "third_party/blink/renderer/platform/bindings/source_location.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
 
 namespace blink {
@@ -51,6 +51,7 @@ class CORE_EXPORT WorkerReportingProxy {
   virtual ~WorkerReportingProxy() = default;
 
   virtual void CountFeature(WebFeature) {}
+  virtual void CountWebDXFeature(mojom::blink::WebDXFeature) {}
   virtual void ReportException(const String& error_message,
                                std::unique_ptr<SourceLocation>,
                                int exception_id) {}

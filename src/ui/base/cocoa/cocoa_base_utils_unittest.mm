@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #import <objc/objc-class.h>
 
-#import "base/mac/scoped_objc_class_swizzler.h"
+#import "base/apple/scoped_objc_class_swizzler.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/platform_test.h"
 #import "ui/base/test/cocoa_helper.h"
@@ -45,7 +45,7 @@ TEST_F(CocoaBaseUtilsTest, WindowOpenDispositionFromNSEvent) {
 
   // Shift+Middle Click = new foreground tab.
   {
-    base::mac::ScopedObjCClassSwizzler swizzler(
+    base::apple::ScopedObjCClassSwizzler swizzler(
         [NSEvent class], [TestEvent class], @selector(modifierFlags));
     me = cocoa_test_event_utils::MouseEventWithType(NSEventTypeOtherMouseUp,
                                                     NSEventModifierFlagShift);

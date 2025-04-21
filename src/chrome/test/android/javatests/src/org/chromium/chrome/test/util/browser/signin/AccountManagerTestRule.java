@@ -1,48 +1,59 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.test.util.browser.signin;
 
+import static androidx.test.espresso.matcher.ViewMatchers.withId;
+
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
+import android.view.View;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.content.res.AppCompatResources;
 
+import org.hamcrest.Matcher;
 import org.junit.rules.TestRule;
 import org.junit.runner.Description;
 import org.junit.runners.model.Statement;
 
 import org.chromium.base.ContextUtils;
+import org.chromium.base.ThreadUtils;
+import org.chromium.chrome.R;
 import org.chromium.components.signin.AccountManagerFacadeProvider;
-import org.chromium.components.signin.AccountUtils;
 import org.chromium.components.signin.base.AccountCapabilities;
 import org.chromium.components.signin.base.AccountInfo;
-import org.chromium.components.signin.base.CoreAccountInfo;
+import org.chromium.components.signin.base.CoreAccountId;
 import org.chromium.components.signin.identitymanager.AccountInfoServiceProvider;
 import org.chromium.components.signin.identitymanager.IdentityManager;
 import org.chromium.components.signin.test.util.FakeAccountInfoService;
 import org.chromium.components.signin.test.util.FakeAccountManagerFacade;
-import org.chromium.components.signin.test.util.R;
-import org.chromium.content_public.browser.test.util.TestThreadUtils;
-
-import java.util.HashMap;
+import org.chromium.components.signin.test.util.TestAccounts;
 
 /**
  * This test rule mocks AccountManagerFacade.
  *
- * TODO(crbug.com/1334286): Migrate usages that need native to {@link SigninTestRule} and remove
+ * <p>TODO(crbug.com/40228092): Migrate usages that need native to {@link SigninTestRule} and remove
  * the methods that call native from this rule.
  *
- * The rule will not invoke any native code, therefore it is safe to use it in Robolectric tests.
+ * <p>The rule will not invoke any native code, therefore it is safe to use it in Robolectric tests.
  */
 public class AccountManagerTestRule implements TestRule {
-    public static final String TEST_ACCOUNT_EMAIL = "test@gmail.com";
+    // The matcher for the add account button in the fake add account activity.
+    public static final Matcher<View> ADD_ACCOUNT_BUTTON_MATCHER =
+            withId(FakeAccountManagerFacade.AddAccountActivityStub.OK_BUTTON_ID);
+    // The matcher for the cancel button in the fake add account activity.
+    public static final Matcher<View> CANCEL_ADD_ACCOUNT_BUTTON_MATCHER =
+            withId(FakeAccountManagerFacade.AddAccountActivityStub.CANCEL_BUTTON_ID);
+
+    // TODO(crbug.com/40890215): Use TEST_ACCOUNT_1 instead.
+    @Deprecated public static final String TEST_ACCOUNT_EMAIL = "test@gmail.com";
 
     private final @NonNull FakeAccountManagerFacade mFakeAccountManagerFacade;
+    // TODO(crbug.com/40234741): Revise this test rule and make this non-nullable.
     private final @Nullable FakeAccountInfoService mFakeAccountInfoService;
 
     public AccountManagerTestRule() {
@@ -53,8 +64,9 @@ public class AccountManagerTestRule implements TestRule {
         this(fakeAccountManagerFacade, new FakeAccountInfoService());
     }
 
-    public AccountManagerTestRule(@NonNull FakeAccountManagerFacade fakeAccountManagerFacade,
-            @NonNull FakeAccountInfoService fakeAccountInfoService) {
+    public AccountManagerTestRule(
+            @NonNull FakeAccountManagerFacade fakeAccountManagerFacade,
+            @Nullable FakeAccountInfoService fakeAccountInfoService) {
         mFakeAccountManagerFacade = fakeAccountManagerFacade;
         mFakeAccountInfoService = fakeAccountInfoService;
     }
@@ -74,108 +86,136 @@ public class AccountManagerTestRule implements TestRule {
         };
     }
 
-    /**
-     * Sets up the AccountManagerFacade mock.
-     */
+    /** Sets up the AccountManagerFacade mock. */
     public void setUpRule() {
-        TestThreadUtils.runOnUiThreadBlocking(
-                () -> { AccountInfoServiceProvider.setInstanceForTests(mFakeAccountInfoService); });
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    if (mFakeAccountInfoService != null) {
+                        AccountInfoServiceProvider.setInstanceForTests(mFakeAccountInfoService);
+                    }
+                });
         AccountManagerFacadeProvider.setInstanceForTests(mFakeAccountManagerFacade);
     }
 
-    /**
-     * Tears down the AccountManagerFacade mock and signs out if user is signed in.
-     */
+    /** Tears down the AccountManagerFacade mock and signs out if user is signed in. */
     public void tearDownRule() {
-        AccountManagerFacadeProvider.resetInstanceForTests();
-        AccountInfoServiceProvider.resetForTests();
+        if (mFakeAccountInfoService != null) AccountInfoServiceProvider.resetForTests();
     }
 
     /**
-     * Adds an observer that detects changes in the account state propagated by the
-     * IdentityManager object.
+     * Adds an observer that detects changes in the account state propagated by the IdentityManager
+     * object.
      */
     public void observeIdentityManager(IdentityManager identityManager) {
         identityManager.addObserver(mFakeAccountInfoService);
     }
 
+    // TODO(crbug.com/40890215): Remove deprecated `addAccount` overloads.
     /**
      * Adds an account of the given accountName to the fake AccountManagerFacade.
+     *
      * @return The CoreAccountInfo for the account added.
      */
+    @Deprecated
     public AccountInfo addAccount(String accountName) {
-        return addAccount(accountName, new AccountCapabilities(new HashMap<>()));
-    }
-
-    /**
-     * Adds an account of the given accountName and capabilities to the fake AccountManagerFacade.
-     * @return The CoreAccountInfo for the account added.
-     */
-    public AccountInfo addAccount(String accountName, @NonNull AccountCapabilities capabilities) {
-        assert mFakeAccountInfoService != null;
         final String baseName = accountName.split("@", 2)[0];
-        return addAccount(
-                accountName, baseName + ".full", baseName + ".given", createAvatar(), capabilities);
+        AccountInfo accountInfo =
+                new AccountInfo.Builder(accountName, FakeAccountManagerFacade.toGaiaId(accountName))
+                        .fullName(baseName + ".full")
+                        .givenName(baseName + ".given")
+                        .accountImage(createAvatar())
+                        .build();
+        addAccount(accountInfo);
+        return accountInfo;
     }
 
     /**
-     * Adds an account to the fake AccountManagerFacade and {@link AccountInfo} to
-     * {@link FakeAccountInfoService}.
+     * Adds an account to the fake AccountManagerFacade and {@link AccountInfo} to {@link
+     * FakeAccountInfoService}.
      */
+    @Deprecated
     public AccountInfo addAccount(
             String email, String fullName, String givenName, @Nullable Bitmap avatar) {
-        return addAccount(
-                email, fullName, givenName, avatar, new AccountCapabilities(new HashMap<>()));
+        AccountInfo accountInfo =
+                new AccountInfo.Builder(email, FakeAccountManagerFacade.toGaiaId(email))
+                        .fullName(fullName)
+                        .givenName(givenName)
+                        .accountImage(avatar)
+                        .build();
+        addAccount(accountInfo);
+        return accountInfo;
     }
 
     /**
-     * Adds an account to the fake AccountManagerFacade and {@link AccountInfo} to
-     * {@link FakeAccountInfoService}.
+     * Adds an account to the fake AccountManagerFacade and {@link AccountInfo} to {@link
+     * FakeAccountInfoService}.
      */
-    public AccountInfo addAccount(String email, String fullName, String givenName,
-            @Nullable Bitmap avatar, @NonNull AccountCapabilities capabilities) {
-        assert mFakeAccountInfoService != null;
-        mFakeAccountManagerFacade.addAccount(AccountUtils.createAccountFromName(email));
-        return mFakeAccountInfoService.addAccountInfo(
-                email, fullName, givenName, avatar, capabilities);
+    public void addAccount(AccountInfo accountInfo) {
+        mFakeAccountManagerFacade.addAccount(accountInfo);
+        // TODO(crbug.com/40234741): Revise this test rule and remove the condition here.
+        if (mFakeAccountInfoService != null) mFakeAccountInfoService.addAccountInfo(accountInfo);
+    }
+
+    /** Updates an account in the fake AccountManagerFacade and {@link FakeAccountInfoService}. */
+    public void updateAccount(AccountInfo accountInfo) {
+        mFakeAccountManagerFacade.updateAccount(accountInfo);
     }
 
     /**
-     * Removes an account with the given account email.
+     * Initializes the next add account flow with a given account to add.
+     *
+     * @param newAccount The account that should be added by the add account flow.
      */
-    public void removeAccount(String accountEmail) {
-        mFakeAccountManagerFacade.removeAccount(AccountUtils.createAccountFromName(accountEmail));
+    public void setAddAccountFlowResult(@Nullable AccountInfo newAccount) {
+        mFakeAccountManagerFacade.setAddAccountFlowResult(newAccount);
     }
 
-    /**
-     * Converts an account email to its corresponding CoreAccountInfo object.
-     */
-    public CoreAccountInfo toCoreAccountInfo(String accountEmail) {
-        String accountGaiaId = mFakeAccountManagerFacade.getAccountGaiaId(accountEmail);
-        return CoreAccountInfo.createFromEmailAndGaiaId(accountEmail, accountGaiaId);
+    /** Removes an account with the given {@link CoreAccountId}. */
+    public void removeAccount(CoreAccountId accountId) {
+        mFakeAccountManagerFacade.removeAccount(accountId);
     }
 
-    /**
-     * Creates an email used to identify child accounts in tests.
-     * A child-specific prefix will be appended to the base name so that the created account
-     * will be considered as {@link ChildAccountStatus#REGULAR_CHILD} in
-     * {@link FakeAccountManagerFacade}.
-     */
-    public static String generateChildEmail(String baseName) {
-        return FakeAccountManagerFacade.generateChildEmail(baseName);
+    public void setAccountFetchFailed() {
+        mFakeAccountManagerFacade.setAccountFetchFailed();
+    }
+
+    /** See {@link FakeAccountManagerFacade#blockGetCoreAccountInfos(boolean)}. */
+    public FakeAccountManagerFacade.UpdateBlocker blockGetCoreAccountInfosUpdate(
+            boolean populateCache) {
+        return mFakeAccountManagerFacade.blockGetCoreAccountInfos(populateCache);
     }
 
     /**
      * Returns an avatar image created from test resource.
+     *
+     * <p>TODO(crbug.com/40890215): Remove this after deleting the deprecated `addAccount` overload
+     * which calls it.
      */
     private static Bitmap createAvatar() {
-        Drawable drawable = AppCompatResources.getDrawable(
-                ContextUtils.getApplicationContext(), R.drawable.test_profile_picture);
-        Bitmap bitmap = Bitmap.createBitmap(drawable.getIntrinsicWidth(),
-                drawable.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
+        Drawable drawable =
+                AppCompatResources.getDrawable(
+                        ContextUtils.getApplicationContext(), R.drawable.test_profile_picture);
+        Bitmap bitmap =
+                Bitmap.createBitmap(
+                        drawable.getIntrinsicWidth(),
+                        drawable.getIntrinsicHeight(),
+                        Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
         drawable.draw(canvas);
         return bitmap;
+    }
+
+    /**
+     * Resolves the minor mode of {@param accountInfo} to restricted, so that the UI will be safe to
+     * show to minors.
+     */
+    public void resolveMinorModeToRestricted(CoreAccountId accountId) {
+        // TODO(b/343384614): append instead of overriding
+        overrideCapabilities(accountId, TestAccounts.MINOR_MODE_REQUIRED);
+    }
+
+    private void overrideCapabilities(CoreAccountId accountId, AccountCapabilities capabilities) {
+        mFakeAccountManagerFacade.setAccountCapabilities(accountId, capabilities);
     }
 }

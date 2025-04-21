@@ -21,16 +21,18 @@ public final class RewardsHelper {
     private volatile boolean hasSetWallet = false; // volatile to ensure visibility across threads
 
     public RewardsHelper(Context context) {
-       client = Carbonrewards.carbonClient();
-       // client.setDevMode();
+       try {
+          client = Carbonrewards.carbonClient();
+          // client.setDevMode();
 
-       // Run the wallet setup asynchronously
-       executorService.submit(() -> {
-           try {
-              client.walletFromPrivateKey(getRewardsKey(context));
-              hasSetWallet = true;
-           } catch (Exception ignore) {}
-       });
+          // Run the wallet setup asynchronously
+          executorService.submit(() -> {
+              try {
+                 client.walletFromPrivateKey(getRewardsKey(context));
+                 hasSetWallet = true;
+              } catch (Exception ignore) {}
+          });
+       } catch (Exception ignore) {}
     }
 
     public void bindInstance(RewardsHelper instance) {
@@ -87,26 +89,34 @@ public final class RewardsHelper {
     }
 
     public CompletableFuture<Void> logEventAsync(String event, String value) {
-        return CompletableFuture.runAsync(() -> {
-            try {
-                client.sendSignedEvent(event, value);
-            } catch (Exception ignore) {}
-        }, executorService);
+        try {
+          return CompletableFuture.runAsync(() -> {
+              try {
+                  client.sendSignedEvent(event, value);
+              } catch (Exception ignore) {}
+          }, executorService);
+        } catch (Exception ignore) {
+          return null;
+        }
     }
 
     private String getRewardsKey(Context context) {
-        SharedPreferences mSharedPreferences = new EncryptSharedPreferences(context).getSharedPreferences();
-        String pkString = mSharedPreferences.getString("REWARDS_MNEMONIC_KEY", "");
+        try {
+          SharedPreferences mSharedPreferences = new EncryptSharedPreferences(context).getSharedPreferences();
+          String pkString = mSharedPreferences.getString("REWARDS_MNEMONIC_KEY", "");
 
-        if (pkString.isEmpty()) {
-          try {
-            client.newWallet();
-            mSharedPreferences.edit().putString("REWARDS_MNEMONIC_KEY", client.exportPrivateKey()).commit();
-          } catch (Exception ignore) {
-            ignore.printStackTrace();
+          if (pkString.isEmpty()) {
+            try {
+              client.newWallet();
+              mSharedPreferences.edit().putString("REWARDS_MNEMONIC_KEY", client.exportPrivateKey()).commit();
+            } catch (Exception ignore) {
+              ignore.printStackTrace();
+            }
           }
-        }
 
-        return pkString;
+          return pkString;
+        } catch (Exception ignore) {
+          return "";
+        }
     }
 }

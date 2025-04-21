@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,26 +9,26 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/containers/span.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
-#include "chrome/browser/certificate_provider/certificate_info.h"
 #include "chrome/browser/certificate_provider/certificate_requests.h"
 #include "chrome/browser/certificate_provider/pin_dialog_manager.h"
 #include "chrome/browser/certificate_provider/sign_requests.h"
 #include "chrome/browser/certificate_provider/thread_safe_certificate_map.h"
+#include "chromeos/components/certificate_provider/certificate_info.h"
 #include "components/account_id/account_id.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "net/cert/x509_certificate.h"
 #include "net/ssl/client_cert_identity.h"
 #include "net/ssl/ssl_private_key.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace chromeos {
 
@@ -70,12 +70,12 @@ class CertificateProviderService : public KeyedService {
 
   class Delegate {
    public:
-    Delegate() {}
+    Delegate() = default;
 
     Delegate(const Delegate&) = delete;
     Delegate& operator=(const Delegate&) = delete;
 
-    virtual ~Delegate() {}
+    virtual ~Delegate() = default;
 
     // Returns the ids of the extensions that want to provide certificates and
     // therefore want to be notified about certificate requests. This is called
@@ -193,7 +193,7 @@ class CertificateProviderService : public KeyedService {
       const std::string& subject_public_key_info,
       uint16_t algorithm,
       base::span<const uint8_t> input,
-      const absl::optional<AccountId>& authenticating_user_account_id,
+      const std::optional<AccountId>& authenticating_user_account_id,
       net::SSLPrivateKey::SignCallback callback);
 
   // Looks up the certificate identified by |subject_public_key_info|. If any
@@ -244,7 +244,7 @@ class CertificateProviderService : public KeyedService {
       const scoped_refptr<net::X509Certificate>& certificate,
       uint16_t algorithm,
       base::span<const uint8_t> input,
-      const absl::optional<AccountId>& authenticating_user_account_id,
+      const std::optional<AccountId>& authenticating_user_account_id,
       net::SSLPrivateKey::SignCallback callback);
 
   std::unique_ptr<Delegate> delegate_;

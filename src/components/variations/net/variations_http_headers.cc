@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_util.h"
 #include "build/build_config.h"
 #include "components/google/core/common/google_util.h"
-#include "components/variations/net/omnibox_http_headers.h"
 #include "components/variations/variations_features.h"
 #include "components/variations/variations_ids_provider.h"
 #include "net/base/isolation_info.h"
@@ -175,7 +173,7 @@ bool IsFirstPartyContext(Owner owner,
         &resource_request.trusted_params->isolation_info;
 
     if (isolation_info->IsEmpty()) {
-      // TODO(crbug/1094303): If TrustedParams are present, it appears that
+      // TODO(crbug.com/40135370): If TrustedParams are present, it appears that
       // IsolationInfo is too. Maybe deprecate kNoIsolationInfo if this bucket
       // is never used.
       LogRequestContextHistogram(kNoIsolationInfo);
@@ -206,24 +204,17 @@ bool IsFirstPartyContext(Owner owner,
   return false;
 }
 
-// Returns GoogleWebVisibility::FIRST_PARTY if kRestrictGoogleWebVisibility is
-// enabled and the request is from a first-party context; otherwise, returns
-// GoogleWebVisibility::ANY.
+// Returns GoogleWebVisibility::FIRST_PARTY if the request is from a first-party
+// context; otherwise, returns GoogleWebVisibility::ANY.
 variations::mojom::GoogleWebVisibility GetVisibilityKey(
     Owner owner,
     const network::ResourceRequest& resource_request) {
-  bool use_first_party_visibility =
-      IsFirstPartyContext(owner, resource_request) &&
-      base::FeatureList::IsEnabled(internal::kRestrictGoogleWebVisibility);
-
-  return use_first_party_visibility
+  return IsFirstPartyContext(owner, resource_request)
              ? variations::mojom::GoogleWebVisibility::FIRST_PARTY
              : variations::mojom::GoogleWebVisibility::ANY;
 }
 
-// Returns a variations header from |variations_headers|. When
-// kRestrictGoogleWebVisibility is enabled, the request context is considered
-// and may be used to select a header with a more limited set of IDs.
+// Returns a variations header from |variations_headers|.
 std::string SelectVariationsHeader(
     variations::mojom::VariationsHeadersPtr variations_headers,
     Owner owner,
@@ -257,8 +248,6 @@ class VariationsHeaderHelper {
   VariationsHeaderHelper& operator=(const VariationsHeaderHelper&) = delete;
 
   bool AppendHeaderIfNeeded(const GURL& url, InIncognito incognito) {
-    AppendOmniboxOnDeviceSuggestionsHeaderIfNeeded(url, resource_request_);
-
     // Note the criteria for attaching client experiment headers:
     // 1. We only transmit to Google owned domains which can evaluate
     // experiments.
@@ -285,9 +274,6 @@ class VariationsHeaderHelper {
 
  private:
   // Returns a variations header containing IDs appropriate for |signed_in|.
-  // When kRestrictGoogleWebVisibility is enabled, the request context is
-  // considered and may be used to select a header with a more limited set of
-  // IDs.
   //
   // Can be used only by code running in the browser process, which is where
   // the populated VariationsIdsProvider exists.
@@ -315,7 +301,7 @@ bool AppendVariationsHeader(const GURL& url,
                             InIncognito incognito,
                             SignedIn signed_in,
                             network::ResourceRequest* request) {
-  // TODO(crbug.com/1094303): Consider passing the Owner if we can get it.
+  // TODO(crbug.com/40135370): Consider passing the Owner if we can get it.
   // However, we really only care about having the owner for requests initiated
   // on the renderer side.
   return VariationsHeaderHelper(signed_in, request)
@@ -337,7 +323,7 @@ bool AppendVariationsHeaderWithCustomValue(
 bool AppendVariationsHeaderUnknownSignedIn(const GURL& url,
                                            InIncognito incognito,
                                            network::ResourceRequest* request) {
-  // TODO(crbug.com/1094303): Consider passing the Owner if we can get it.
+  // TODO(crbug.com/40135370): Consider passing the Owner if we can get it.
   // However, we really only care about having the owner for requests initiated
   // on the renderer side.
   return VariationsHeaderHelper(SignedIn::kNo, request)
@@ -363,8 +349,14 @@ CreateSimpleURLLoaderWithVariationsHeader(
   std::unique_ptr<network::SimpleURLLoader> simple_url_loader =
       network::SimpleURLLoader::Create(std::move(request), annotation_tag);
   if (variations_headers_added) {
-    simple_url_loader->SetOnRedirectCallback(
-        base::BindRepeating(&RemoveVariationsHeaderIfNeeded));
+    simple_url_loader->SetOnRedirectCallback(base::BindRepeating(
+        [](const GURL& url_before_redirect,
+           const net::RedirectInfo& redirect_info,
+           const network::mojom::URLResponseHead& response_head,
+           std::vector<std::string>* to_be_removed_headers) {
+          RemoveVariationsHeaderIfNeeded(redirect_info, response_head,
+                                         to_be_removed_headers);
+        }));
   }
   return simple_url_loader;
 }
@@ -379,9 +371,18 @@ CreateSimpleURLLoaderWithVariationsHeaderUnknownSignedIn(
 }
 
 bool HasVariationsHeader(const network::ResourceRequest& request) {
-  // Note: kOmniboxOnDeviceSuggestionsHeader is not listed because this function
-  // is only used for testing.
-  return request.cors_exempt_headers.HasHeader(kClientDataHeader);
+  std::string unused_header;
+  return GetVariationsHeader(request, &unused_header);
+}
+
+bool GetVariationsHeader(const network::ResourceRequest& request,
+                         std::string* out) {
+  std::optional<std::string> header_value =
+      request.cors_exempt_headers.GetHeader(kClientDataHeader);
+  if (header_value) {
+    out->swap(header_value.value());
+  }
+  return header_value.has_value();
 }
 
 bool ShouldAppendVariationsHeaderForTesting(
@@ -393,11 +394,6 @@ bool ShouldAppendVariationsHeaderForTesting(
 void UpdateCorsExemptHeaderForVariations(
     network::mojom::NetworkContextParams* params) {
   params->cors_exempt_header_list.push_back(kClientDataHeader);
-
-  if (base::FeatureList::IsEnabled(kReportOmniboxOnDeviceSuggestionsHeader)) {
-    params->cors_exempt_header_list.push_back(
-        kOmniboxOnDeviceSuggestionsHeader);
-  }
 }
 
 }  // namespace variations

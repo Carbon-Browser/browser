@@ -1,17 +1,18 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_MATHML_MATHML_OPERATOR_ELEMENT_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_MATHML_MATHML_OPERATOR_ELEMENT_H_
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
+
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/mathml/mathml_token_element.h"
 
 namespace blink {
 
-class ComputedStyle;
+class ComputedStyleBuilder;
 class CSSToLengthConversionData;
 class Document;
 
@@ -33,10 +34,14 @@ class CORE_EXPORT MathMLOperatorElement final : public MathMLTokenElement {
   // Query whether given flag is set in the operator dictionary.
   bool HasBooleanProperty(OperatorPropertyFlag);
 
-  void AddMathLSpaceIfNeeded(ComputedStyle&, const CSSToLengthConversionData&);
-  void AddMathRSpaceIfNeeded(ComputedStyle&, const CSSToLengthConversionData&);
-  void AddMathMinSizeIfNeeded(ComputedStyle&, const CSSToLengthConversionData&);
-  void AddMathMaxSizeIfNeeded(ComputedStyle&, const CSSToLengthConversionData&);
+  void AddMathLSpaceIfNeeded(ComputedStyleBuilder&,
+                             const CSSToLengthConversionData&);
+  void AddMathRSpaceIfNeeded(ComputedStyleBuilder&,
+                             const CSSToLengthConversionData&);
+  void AddMathMinSizeIfNeeded(ComputedStyleBuilder&,
+                              const CSSToLengthConversionData&);
+  void AddMathMaxSizeIfNeeded(ComputedStyleBuilder&,
+                              const CSSToLengthConversionData&);
   bool IsVertical();
 
   double DefaultLeadingSpace();
@@ -47,7 +52,7 @@ class CORE_EXPORT MathMLOperatorElement final : public MathMLTokenElement {
  private:
   // Whether the operator stretches along the block or inline axis.
   // https://w3c.github.io/mathml-core/#dfn-stretch-axis
-  absl::optional<bool> is_vertical_;
+  std::optional<bool> is_vertical_;
   // Operator properties calculated from dictionary and attributes.
   // It contains dirty flags to allow efficient dictionary updating.
   // https://w3c.github.io/mathml-core/#dictionary-based-attributes

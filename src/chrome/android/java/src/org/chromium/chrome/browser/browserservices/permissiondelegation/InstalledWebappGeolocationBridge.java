@@ -1,23 +1,23 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.browserservices.permissiondelegation;
 
-import android.net.Uri;
 import android.os.Bundle;
 import android.text.TextUtils;
 
 import androidx.annotation.Nullable;
 import androidx.browser.trusted.TrustedWebActivityCallback;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JniType;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.task.PostTask;
-import org.chromium.chrome.browser.ChromeApplicationImpl;
+import org.chromium.base.task.TaskTraits;
 import org.chromium.chrome.browser.browserservices.TrustedWebActivityClient;
-import org.chromium.components.embedder_support.util.Origin;
-import org.chromium.content_public.browser.UiThreadTaskTraits;
+import org.chromium.url.GURL;
 
 /**
  * Provides Trusted Web Activity Client App location for native. The C++ counterpart is the
@@ -34,53 +34,52 @@ public class InstalledWebappGeolocationBridge {
     public static final String EXTRA_NEW_LOCATION_ERROR_CALLBACK = "onNewLocationError";
 
     private long mNativePointer;
-    private final Origin mOrigin;
-
-    private final TrustedWebActivityClient mTwaClient;
+    private final GURL mUrl;
 
     private final TrustedWebActivityCallback mLocationUpdateCallback =
             new TrustedWebActivityCallback() {
                 @Override
                 public void onExtraCallback(String callbackName, @Nullable Bundle bundle) {
                     // Hop back over to the UI thread to deal with the result.
-                    PostTask.postTask(UiThreadTaskTraits.USER_VISIBLE, () -> {
-                        if (TextUtils.equals(callbackName, EXTRA_NEW_LOCATION_AVAILABLE_CALLBACK)) {
-                            notifyNewGeoposition(bundle);
-                        } else if (TextUtils.equals(
-                                           callbackName, EXTRA_NEW_LOCATION_ERROR_CALLBACK)) {
-                            String message = bundle != null ? bundle.getString("message", "") : "";
-                            notifyNewGeopositionError(message);
-                        }
-                    });
+                    PostTask.postTask(
+                            TaskTraits.UI_USER_VISIBLE,
+                            () -> {
+                                if (TextUtils.equals(
+                                        callbackName, EXTRA_NEW_LOCATION_AVAILABLE_CALLBACK)) {
+                                    notifyNewGeoposition(bundle);
+                                } else if (TextUtils.equals(
+                                        callbackName, EXTRA_NEW_LOCATION_ERROR_CALLBACK)) {
+                                    String message =
+                                            bundle != null ? bundle.getString("message", "") : "";
+                                    notifyNewGeopositionError(message);
+                                }
+                            });
                 }
             };
 
-    InstalledWebappGeolocationBridge(
-            long nativePtr, Origin origin, TrustedWebActivityClient client) {
+    InstalledWebappGeolocationBridge(long nativePtr, GURL url) {
         mNativePointer = nativePtr;
-        mOrigin = origin;
-        mTwaClient = client;
+        mUrl = url;
     }
 
     @CalledByNative
-    @Nullable
-    public static InstalledWebappGeolocationBridge create(long nativePtr, String url) {
-        Origin origin = Origin.create(Uri.parse(url));
-        if (origin == null) return null;
+    public static @Nullable InstalledWebappGeolocationBridge create(long nativePtr, GURL url) {
+        if (url == null) return null;
 
-        return new InstalledWebappGeolocationBridge(nativePtr, origin,
-                ChromeApplicationImpl.getComponent().resolveTrustedWebActivityClient());
+        return new InstalledWebappGeolocationBridge(nativePtr, url);
     }
 
     @CalledByNative
     public void start(boolean highAccuracy) {
-        mTwaClient.startListeningLocationUpdates(mOrigin, highAccuracy, mLocationUpdateCallback);
+        TrustedWebActivityClient.getInstance()
+                .startListeningLocationUpdates(
+                        mUrl.getSpec(), highAccuracy, mLocationUpdateCallback);
     }
 
     @CalledByNative
     public void stopAndDestroy() {
         mNativePointer = 0;
-        mTwaClient.stopLocationUpdates(mOrigin);
+        TrustedWebActivityClient.getInstance().stopLocationUpdates(mUrl.getSpec());
     }
 
     private void notifyNewGeoposition(@Nullable Bundle bundle) {
@@ -99,9 +98,20 @@ public class InstalledWebappGeolocationBridge {
         double bearing = bundle.getDouble("bearing");
         boolean hasSpeed = bundle.containsKey("speed");
         double speed = bundle.getDouble("speed");
-        InstalledWebappGeolocationBridgeJni.get().onNewLocationAvailable(mNativePointer, latitude,
-                longitude, timeStamp, hasAltitude, altitude, hasAccuracy, accuracy, hasBearing,
-                bearing, hasSpeed, speed);
+        InstalledWebappGeolocationBridgeJni.get()
+                .onNewLocationAvailable(
+                        mNativePointer,
+                        latitude,
+                        longitude,
+                        timeStamp,
+                        hasAltitude,
+                        altitude,
+                        hasAccuracy,
+                        accuracy,
+                        hasBearing,
+                        bearing,
+                        hasSpeed,
+                        speed);
     }
 
     private void notifyNewGeopositionError(String message) {
@@ -111,10 +121,22 @@ public class InstalledWebappGeolocationBridge {
 
     @NativeMethods
     interface Natives {
-        void onNewLocationAvailable(long nativeInstalledWebappGeolocationBridge, double latitude,
-                double longitude, double timeStamp, boolean hasAltitude, double altitude,
-                boolean hasAccuracy, double accuracy, boolean hasHeading, double heading,
-                boolean hasSpeed, double speed);
-        void onNewErrorAvailable(long nativeInstalledWebappGeolocationBridge, String message);
+        void onNewLocationAvailable(
+                long nativeInstalledWebappGeolocationBridge,
+                double latitude,
+                double longitude,
+                double timeStamp,
+                boolean hasAltitude,
+                double altitude,
+                boolean hasAccuracy,
+                double accuracy,
+                boolean hasHeading,
+                double heading,
+                boolean hasSpeed,
+                double speed);
+
+        void onNewErrorAvailable(
+                long nativeInstalledWebappGeolocationBridge,
+                @JniType("std::string") String message);
     }
 }

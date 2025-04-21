@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CC_TREES_DRAW_PROPERTY_UTILS_H_
 
 #include <vector>
+#include "base/memory/raw_ptr.h"
 #include "cc/cc_export.h"
 #include "cc/layers/layer_collections.h"
 
@@ -75,13 +76,9 @@ bool CC_EXPORT LayerShouldBeSkippedForDrawPropertiesComputation(
     LayerImpl* layer,
     const PropertyTrees* property_trees);
 
-bool CC_EXPORT IsLayerBackFaceVisible(LayerImpl* layer,
-                                      int transform_tree_index,
-                                      const PropertyTrees* property_trees);
-
-bool CC_EXPORT IsLayerBackFaceVisible(Layer* layer,
-                                      int transform_tree_index,
-                                      const PropertyTrees* property_trees);
+bool CC_EXPORT
+IsLayerBackFaceVisibleForTesting(const LayerImpl* layer,
+                                 const PropertyTrees* property_trees);
 
 #if DCHECK_IS_ON()
 // Checks and logs if double background blur exists in any layers. Returns

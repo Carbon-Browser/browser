@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include <memory>
 #include <unordered_map>
 
-#include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
 #include "components/download/internal/common/download_job_impl.h"
 #include "components/download/internal/common/download_worker.h"

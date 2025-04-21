@@ -1,13 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/bind.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
@@ -16,7 +17,6 @@
 #include "device/bluetooth/dbus/bluetooth_gatt_characteristic_delegate_wrapper.h"
 #include "device/bluetooth/dbus/bluetooth_gatt_characteristic_service_provider_impl.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace bluez {
 
@@ -49,7 +49,7 @@ TEST(BluetoothGattCharacteristicServiceProviderTest, ReadValueSuccess) {
         EXPECT_EQ(length, read_value.size());
         callback_called = true;
       }),
-      /*error_code=*/absl::nullopt, read_value);
+      /*error_code=*/std::nullopt, read_value);
 
   EXPECT_TRUE(callback_called);
 }
@@ -82,7 +82,7 @@ TEST(BluetoothGattCharacteristicServiceProviderTest, ReadValueFailure) {
             EXPECT_FALSE(reader.PopArrayOfBytes(&bytes, &length));
             callback_called = true;
           }),
-      device::BluetoothGattService::GATT_ERROR_FAILED, read_value);
+      device::BluetoothGattService::GattErrorCode::kFailed, read_value);
 
   EXPECT_TRUE(callback_called);
 }

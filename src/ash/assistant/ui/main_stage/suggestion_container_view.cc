@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,12 +18,14 @@
 #include "ash/assistant/ui/main_stage/element_animator.h"
 #include "ash/assistant/util/animation_util.h"
 #include "ash/assistant/util/assistant_util.h"
-#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/assistant/assistant_state.h"
 #include "ash/public/cpp/assistant/controller/assistant_suggestions_controller.h"
 #include "ash/public/cpp/assistant/controller/assistant_ui_controller.h"
-#include "base/bind.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
+#include "components/feature_engagement/public/feature_constants.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/callback_layer_animation_observer.h"
 #include "ui/compositor/layer.h"
@@ -46,11 +48,7 @@ constexpr base::TimeDelta kChipFadeOutDuration = base::Milliseconds(200);
 constexpr char kAssistantSuggestionChipHistogram[] =
     "Ash.Assistant.AnimationSmoothness.SuggestionChip";
 
-// Returns the preferred height in DIPs. Not named GetPreferredHeight() so it
-// looks less like a views::View method.
-int GetPreferredHeightDip() {
-  return features::IsProductivityLauncherEnabled() ? 64 : 48;
-}
+constexpr int kPreferredHeightDip = 64;
 
 }  // namespace
 
@@ -70,14 +68,14 @@ class SuggestionChipAnimator : public ElementAnimator {
   void AnimateIn(ui::CallbackLayerAnimationObserver* observer) override {
     StartLayerAnimationSequence(
         layer()->GetAnimator(), CreateAnimateInAnimation(), observer,
-        base::BindRepeating<void(const std::string&, int)>(
+        base::BindRepeating<void(const std::string_view, int)>(
             base::UmaHistogramPercentage, kAssistantSuggestionChipHistogram));
   }
 
   void AnimateOut(ui::CallbackLayerAnimationObserver* observer) override {
     StartLayerAnimationSequence(
         layer()->GetAnimator(), CreateAnimateOutAnimation(), observer,
-        base::BindRepeating<void(const std::string&, int)>(
+        base::BindRepeating<void(const std::string_view, int)>(
             base::UmaHistogramPercentage, kAssistantSuggestionChipHistogram));
   }
 
@@ -100,7 +98,8 @@ class SuggestionChipAnimator : public ElementAnimator {
         0.f, kChipFadeOutDuration, gfx::Tween::Type::FAST_OUT_SLOW_IN));
   }
 
-  const SuggestionContainerView* const parent_;  // |parent_| owns |this|.
+  const raw_ptr<const SuggestionContainerView>
+      parent_;  // |parent_| owns |this|.
 };
 
 // SuggestionContainerView -----------------------------------------------------
@@ -123,12 +122,9 @@ SuggestionContainerView::~SuggestionContainerView() {
     AssistantSuggestionsController::Get()->GetModel()->RemoveObserver(this);
 }
 
-gfx::Size SuggestionContainerView::CalculatePreferredSize() const {
-  return gfx::Size(INT_MAX, GetHeightForWidth(INT_MAX));
-}
-
-int SuggestionContainerView::GetHeightForWidth(int width) const {
-  return GetPreferredHeightDip();
+gfx::Size SuggestionContainerView::CalculatePreferredSize(
+    const views::SizeBounds& available_size) const {
+  return gfx::Size(INT_MAX, kPreferredHeightDip);
 }
 
 void SuggestionContainerView::OnContentsPreferredSizeChanged(
@@ -137,7 +133,7 @@ void SuggestionContainerView::OnContentsPreferredSizeChanged(
   // showing conversation starters we will be center aligned.
   const int width =
       std::max(content_view->GetPreferredSize().width(), this->width());
-  content_view->SetSize(gfx::Size(width, GetPreferredHeightDip()));
+  content_view->SetSize(gfx::Size(width, kPreferredHeightDip));
 }
 
 void SuggestionContainerView::OnAssistantControllerDestroying() {
@@ -160,7 +156,7 @@ void SuggestionContainerView::InitLayout() {
   layout_manager_ =
       content_view()->SetLayoutManager(std::make_unique<views::BoxLayout>(
           views::BoxLayout::Orientation::kHorizontal,
-          gfx::Insets::VH(0, assistant::ui::GetHorizontalPadding()),
+          gfx::Insets::VH(0, assistant::ui::kHorizontalPadding),
           /*between_child_spacing=*/kSpacingDip));
 
   layout_manager_->set_cross_axis_alignment(
@@ -175,15 +171,22 @@ void SuggestionContainerView::OnConversationStartersChanged(
     const std::vector<AssistantSuggestion>& conversation_starters) {
   // We don't show conversation starters when showing onboarding since the
   // onboarding experience already provides the user w/ suggestions.
-  if (delegate()->ShouldShowOnboarding())
+  if (delegate()->ShouldShowOnboarding()) {
     return;
+  }
+
+  if (base::FeatureList::IsEnabled(
+          feature_engagement::kIPHLauncherSearchHelpUiFeature)) {
+    return;
+  }
 
   // If we've committed a query we should ignore changes to the cache of
   // conversation starters as we are past the state in which they should be
   // presented. To present them now could incorrectly associate the conversation
   // starters with a response.
-  if (has_committed_query_)
+  if (has_committed_query_) {
     return;
+  }
 
   RemoveAllViews();
   OnSuggestionsAdded(conversation_starters);
@@ -225,8 +228,8 @@ std::unique_ptr<ElementAnimator> SuggestionContainerView::AddSuggestionChip(
 void SuggestionContainerView::OnUiVisibilityChanged(
     AssistantVisibility new_visibility,
     AssistantVisibility old_visibility,
-    absl::optional<AssistantEntryPoint> entry_point,
-    absl::optional<AssistantExitPoint> exit_point) {
+    std::optional<AssistantEntryPoint> entry_point,
+    std::optional<AssistantExitPoint> exit_point) {
   if (assistant::util::IsStartingSession(new_visibility, old_visibility) &&
       entry_point.value() != AssistantEntryPoint::kLauncherSearchResult) {
     // Show conversation starters at the start of a new Assistant session except
@@ -249,13 +252,19 @@ void SuggestionContainerView::OnUiVisibilityChanged(
       views::BoxLayout::MainAxisAlignment::kCenter);
 }
 
+void SuggestionContainerView::InitializeUIForBubbleView() {
+  OnConversationStartersChanged(AssistantSuggestionsController::Get()
+                                    ->GetModel()
+                                    ->GetConversationStarters());
+}
+
 void SuggestionContainerView::OnButtonPressed(SuggestionChipView* chip_view) {
   // Remember which chip was selected, so we can give it a special animation.
   selected_chip_ = chip_view;
   delegate()->OnSuggestionPressed(selected_chip_->suggestion_id());
 }
 
-BEGIN_METADATA(SuggestionContainerView, AnimatedContainerView)
+BEGIN_METADATA(SuggestionContainerView)
 END_METADATA
 
 }  // namespace ash

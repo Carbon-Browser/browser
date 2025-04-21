@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,8 @@
 
 #include "base/check.h"
 #include "base/no_destructor.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
+#include "base/trace_event/trace_event.h"
+#include "chromeos/ash/components/dbus/dbus_thread_manager.h"
 #include "components/session_manager/core/session_manager.h"
 
 namespace ash {
@@ -27,7 +28,7 @@ UsageTimeStateNotifier::UsageTimeState GetCurrentState() {
 UsageTimeStateNotifier::UsageTimeStateNotifier()
     : last_state_(GetCurrentState()) {}
 
-UsageTimeStateNotifier::~UsageTimeStateNotifier() {}
+UsageTimeStateNotifier::~UsageTimeStateNotifier() = default;
 
 // static
 UsageTimeStateNotifier* UsageTimeStateNotifier::GetInstance() {
@@ -40,7 +41,7 @@ void UsageTimeStateNotifier::AddObserver(
   DCHECK(observer);
   if (observers_.empty()) {
     session_manager::SessionManager::Get()->AddObserver(this);
-    PowerManagerClient::Get()->AddObserver(this);
+    chromeos::PowerManagerClient::Get()->AddObserver(this);
     last_state_ = GetCurrentState();
   }
   observers_.AddObserver(observer);
@@ -52,7 +53,7 @@ void UsageTimeStateNotifier::RemoveObserver(
   observers_.RemoveObserver(observer);
   if (observers_.empty()) {
     session_manager::SessionManager::Get()->RemoveObserver(this);
-    PowerManagerClient::Get()->RemoveObserver(this);
+    chromeos::PowerManagerClient::Get()->RemoveObserver(this);
   }
 }
 
@@ -72,6 +73,7 @@ void UsageTimeStateNotifier::ChangeUsageTimeState(
 }
 
 void UsageTimeStateNotifier::OnSessionStateChanged() {
+  TRACE_EVENT0("ui", "UsageTimeStateNotifier::OnSessionStateChanged");
   ChangeUsageTimeState(GetCurrentState());
 }
 

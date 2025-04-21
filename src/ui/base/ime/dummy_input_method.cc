@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,13 +14,11 @@ DummyInputMethod::DummyInputMethod() {
 DummyInputMethod::~DummyInputMethod() {
 }
 
-void DummyInputMethod::SetDelegate(internal::InputMethodDelegate* delegate) {
-}
+void DummyInputMethod::SetImeKeyEventDispatcher(
+    ImeKeyEventDispatcher* ime_key_event_dispatcher) {}
 
 void DummyInputMethod::OnFocus() {
 }
-
-void DummyInputMethod::OnTouch(ui::EventPointerType pointerType) {}
 
 void DummyInputMethod::OnBlur() {
 }
@@ -36,6 +34,8 @@ void DummyInputMethod::OnInputLocaleChanged() {}
 bool DummyInputMethod::IsInputLocaleCJK() const {
   return false;
 }
+
+void DummyInputMethod::OnUrlChanged() {}
 #endif
 
 void DummyInputMethod::SetFocusedTextInputClient(TextInputClient* client) {
@@ -81,5 +81,8 @@ void DummyInputMethod::RemoveObserver(InputMethodObserver* observer) {
 VirtualKeyboardController* DummyInputMethod::GetVirtualKeyboardController() {
   return nullptr;
 }
+
+void DummyInputMethod::SetVirtualKeyboardControllerForTesting(
+    std::unique_ptr<VirtualKeyboardController> controller) {}
 
 }  // namespace ui

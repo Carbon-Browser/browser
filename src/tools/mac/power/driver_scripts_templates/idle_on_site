@@ -2,7 +2,7 @@
 {%- from 'macros' import make_maximized with context -%}
 {{ hash_bang() }}
 
--- Copyright 2021 The Chromium Authors. All rights reserved.
+-- Copyright 2021 The Chromium Authors
 -- Use of this source code is governed by a BSD-style license that can be
 -- found in the LICENSE file.
 
@@ -22,6 +22,11 @@ tell application "{{ browser }}"
     delay 10
 
     open location "{{ idle_site }}"
+
+    {% if send_full_screen_key %}
+    delay 10
+    tell application "System Events" to keystroke "f"
+    {% endif %}
 
     delay {{ delay }}
 

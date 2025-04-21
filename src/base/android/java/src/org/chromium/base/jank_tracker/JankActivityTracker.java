@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2023 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@ import org.chromium.base.ApplicationStatus;
 import org.chromium.base.ApplicationStatus.ActivityStateListener;
 import org.chromium.base.ThreadUtils.ThreadChecker;
 import org.chromium.base.lifetime.DestroyChecker;
+import org.chromium.build.annotations.NullMarked;
 
 import java.lang.ref.WeakReference;
 
@@ -22,65 +23,44 @@ import java.lang.ref.WeakReference;
  * periodic jank metric reporting and frame metric recording based on the Activity's lifecycle
  * events.
  */
+@NullMarked
 @RequiresApi(api = VERSION_CODES.N)
-class JankActivityTracker implements ActivityStateListener {
-    private final FrameMetricsListener mFrameMetricsListener;
-    private final JankReportingScheduler mReportingScheduler;
+class JankActivityTracker extends JankTrackerStateController implements ActivityStateListener {
     private final ThreadChecker mThreadChecker = new ThreadChecker();
     private final DestroyChecker mDestroyChecker = new DestroyChecker();
 
     private WeakReference<Activity> mActivityReference;
 
-    JankActivityTracker(Activity context, FrameMetricsListener listener,
+    JankActivityTracker(
+            Activity context,
+            FrameMetricsListener listener,
             JankReportingScheduler reportingScheduler) {
+        super(listener, reportingScheduler);
         mActivityReference = new WeakReference<>(context);
-        mFrameMetricsListener = listener;
-        mReportingScheduler = reportingScheduler;
     }
 
-    void initialize() {
+    @Override
+    public void initialize() {
         assertValidState();
         Activity activity = mActivityReference.get();
         if (activity != null) {
             ApplicationStatus.registerStateListenerForActivity(this, activity);
-            @ActivityState
-            int activityState = ApplicationStatus.getStateForActivity(activity);
+            @ActivityState int activityState = ApplicationStatus.getStateForActivity(activity);
             onActivityStateChange(activity, activityState);
-            activity.getWindow().addOnFrameMetricsAvailableListener(
-                    mFrameMetricsListener, mReportingScheduler.getOrCreateHandler());
+            startMetricCollection(activity.getWindow());
         }
     }
 
-    void destroy() {
+    @Override
+    public void destroy() {
         mThreadChecker.assertOnValidThread();
         ApplicationStatus.unregisterActivityStateListener(this);
-        stopMetricRecording();
-        stopReportingTimer();
+        stopPeriodicReporting();
         Activity activity = mActivityReference.get();
         if (activity != null) {
-            activity.getWindow().removeOnFrameMetricsAvailableListener(mFrameMetricsListener);
+            stopMetricCollection(activity.getWindow());
         }
         mDestroyChecker.destroy();
-    }
-
-    private void startReportingTimer() {
-        assertValidState();
-        mReportingScheduler.startReportingPeriodicMetrics();
-    }
-
-    private void stopReportingTimer() {
-        assertValidState();
-        mReportingScheduler.stopReportingPeriodicMetrics();
-    }
-
-    private void startMetricRecording() {
-        assertValidState();
-        mFrameMetricsListener.setIsListenerRecording(true);
-    }
-
-    private void stopMetricRecording() {
-        assertValidState();
-        mFrameMetricsListener.setIsListenerRecording(false);
     }
 
     private void assertValidState() {
@@ -94,18 +74,18 @@ class JankActivityTracker implements ActivityStateListener {
         switch (newState) {
             case ActivityState.STARTED: // Intentional fallthrough.
             case ActivityState.RESUMED:
-                startReportingTimer();
-                startMetricRecording();
+                startPeriodicReporting();
+                startMetricCollection(null);
                 break;
             case ActivityState.PAUSED:
                 // This method can be called at any moment safely, we want to report metrics even
                 // when the activity is paused.
-                startReportingTimer();
-                stopMetricRecording();
+                startPeriodicReporting();
+                stopMetricCollection(null);
                 break;
             case ActivityState.STOPPED:
-                stopMetricRecording();
-                stopReportingTimer();
+                stopPeriodicReporting();
+                stopMetricCollection(null);
                 break;
         }
     }

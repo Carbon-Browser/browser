@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,8 +40,6 @@ std::string GetDecoderName(VideoDecoderType type) {
       return "FuchsiaVideoDecoder";
     case VideoDecoderType::kMediaCodec:
       return "MediaCodecVideoDecoder";
-    case VideoDecoderType::kGav1:
-      return "Gav1VideoDecoder";
     case VideoDecoderType::kD3D11:
       return "D3D11VideoDecoder";
     case VideoDecoderType::kVaapi:
@@ -54,6 +52,10 @@ std::string GetDecoderName(VideoDecoderType type) {
       return "V4L2VideoDecoder";
     case VideoDecoderType::kTesting:
       return "Testing or Mock Video decoder";
+    case VideoDecoderType::kOutOfProcess:
+      return "OOPVideoDecoder";
+    case VideoDecoderType::kVideoToolbox:
+      return "VideoToolboxVideoDecoder";
   }
 }
 
@@ -71,10 +73,12 @@ std::string GetDecoderName(AudioDecoderType type) {
       return "MediaCodecAudioDecoder";
     case AudioDecoderType::kBroker:
       return "AudioDecoderBroker";
+    case AudioDecoderType::kPassthroughDTS:
+      return "PassthroughDTSAudioDecoder";
     case AudioDecoderType::kTesting:
       return "Testing or Mock Audio decoder";
     case AudioDecoderType::kAudioToolbox:
-      return "AudioToolbox";
+      return "AudioToolboxAudioDecoder";
     case AudioDecoderType::kMediaFoundation:
       return "MediaFoundationAudioDecoder";
   }

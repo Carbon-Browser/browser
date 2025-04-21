@@ -1,8 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.content_public.browser;
+
+import org.chromium.build.annotations.NullMarked;
 
 /**
  * Marker interface for WebContents internal objects that should be managed by
@@ -13,4 +15,5 @@ package org.chromium.content_public.browser;
  * address the requirements that there not be any gc root to webview in content
  * layer after webview gets detached from view tree. See https://crbug.com/755174.
  */
+@NullMarked
 public interface WebContentsInternals {}

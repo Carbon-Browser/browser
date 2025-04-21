@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,10 +45,10 @@ class NativeViewHostTestBase : public ViewsTestBase {
   // |contents_view|, and is attached to |host| which is added as a child to
   // |parent_view|. This effectively borrows the native content view from a
   // newly created child Widget, and attaches it to |host|.
-  Widget* CreateChildForHost(gfx::NativeView native_parent_view,
-                             View* parent_view,
-                             View* contents_view,
-                             NativeViewHost* host);
+  std::unique_ptr<Widget> CreateChildForHost(gfx::NativeView native_parent_view,
+                                             View* parent_view,
+                                             View* contents_view,
+                                             NativeViewHost* host);
 
   Widget* toplevel() { return toplevel_.get(); }
   void DestroyTopLevel();

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/singleton.h"
@@ -34,9 +34,10 @@ class SessionChangeObserver::WtsRegistrationNotificationManager {
         base::BindRepeating(&WtsRegistrationNotificationManager::OnWndProc,
                             base::Unretained(this)));
 
-    base::OnceClosure wts_register = base::BindOnce(
-        base::IgnoreResult(&WTSRegisterSessionNotification),
-        gfx::SingletonHwnd::GetInstance()->hwnd(), NOTIFY_FOR_THIS_SESSION);
+    base::OnceClosure wts_register =
+        base::BindOnce(base::IgnoreResult(&WTSRegisterSessionNotification),
+                       gfx::SingletonHwnd::GetInstance()->hwnd(),
+                       DWORD{NOTIFY_FOR_THIS_SESSION});
 
     base::ThreadPool::CreateCOMSTATaskRunner({})->PostTask(
         FROM_HERE, std::move(wts_register));
@@ -77,8 +78,8 @@ class SessionChangeObserver::WtsRegistrationNotificationManager {
             is_current_session =
                 (static_cast<DWORD>(lparam) == current_session_id);
           }
-          for (SessionChangeObserver& observer : observer_list_)
-            observer.OnSessionChange(wparam, is_current_session_ptr);
+          observer_list_.Notify(&SessionChangeObserver::OnSessionChange, wparam,
+                                is_current_session_ptr);
         }
         break;
       case WM_DESTROY:
@@ -99,8 +100,7 @@ class SessionChangeObserver::WtsRegistrationNotificationManager {
     // Under both cases we are in shutdown, which means no other worker threads
     // can be running.
     WTSUnRegisterSessionNotification(gfx::SingletonHwnd::GetInstance()->hwnd());
-    for (SessionChangeObserver& observer : observer_list_)
-      observer.ClearCallback();
+    observer_list_.Notify(&SessionChangeObserver::ClearCallback);
   }
 
   base::ObserverList<SessionChangeObserver, true>::Unchecked observer_list_;

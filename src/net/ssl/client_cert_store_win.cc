@@ -1,6 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "net/ssl/client_cert_store_win.h"
 
@@ -9,19 +14,18 @@
 #include <memory>
 #include <string>
 
-#define SECURITY_WIN32  // Needs to be defined before including security.h
 #include <windows.h>
+
+#define SECURITY_WIN32
 #include <security.h>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/scoped_generic.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/task/task_runner_util.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/win/wincrypt_shim.h"
 #include "net/cert/x509_util.h"
 #include "net/cert/x509_util_win.h"
@@ -52,8 +56,8 @@ class ClientCertIdentityWin : public ClientCertIdentity {
 
   void AcquirePrivateKey(base::OnceCallback<void(scoped_refptr<SSLPrivateKey>)>
                              private_key_callback) override {
-    base::PostTaskAndReplyWithResult(
-        key_task_runner_.get(), FROM_HERE,
+    key_task_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE,
         base::BindOnce(&FetchClientCertPrivateKey,
                        base::Unretained(certificate()), cert_context_.get()),
         std::move(private_key_callback));
@@ -112,7 +116,7 @@ ClientCertIdentityList GetClientCertsImpl(HCERTSTORE cert_store,
   ClientCertIdentityList selected_identities;
 
   scoped_refptr<base::SingleThreadTaskRunner> current_thread =
-      base::ThreadTaskRunnerHandle::Get();
+      base::SingleThreadTaskRunner::GetCurrentDefault();
 
   const size_t auth_count = request.cert_authorities.size();
   std::vector<CERT_NAME_BLOB> issuers(auth_count);
@@ -159,7 +163,6 @@ ClientCertIdentityList GetClientCertsImpl(HCERTSTORE cert_store,
         nullptr, cert_context, CERT_STORE_ADD_USE_EXISTING, &raw);
     if (!ok) {
       NOTREACHED();
-      continue;
     }
     cert_context2.reset(raw);
 
@@ -225,20 +228,26 @@ ClientCertStoreWin::ClientCertStoreWin(
 
 ClientCertStoreWin::~ClientCertStoreWin() = default;
 
-void ClientCertStoreWin::GetClientCerts(const SSLCertRequestInfo& request,
-                                        ClientCertListCallback callback) {
-  base::PostTaskAndReplyWithResult(
-      GetSSLPlatformKeyTaskRunner().get(), FROM_HERE,
-      // Caller is responsible for keeping the |request| alive
-      // until the callback is run, so std::cref is safe.
+void ClientCertStoreWin::GetClientCerts(
+    scoped_refptr<const SSLCertRequestInfo> request,
+    ClientCertListCallback callback) {
+  GetSSLPlatformKeyTaskRunner()->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&ClientCertStoreWin::GetClientCertsWithCertStore,
-                     std::cref(request), cert_store_callback_),
-      std::move(callback));
+                     std::move(request), cert_store_callback_),
+      base::BindOnce(&ClientCertStoreWin::OnClientCertsResponse,
+                     weak_factory_.GetWeakPtr(), std::move(callback)));
+}
+
+void ClientCertStoreWin::OnClientCertsResponse(
+    ClientCertListCallback callback,
+    ClientCertIdentityList identities) {
+  std::move(callback).Run(std::move(identities));
 }
 
 // static
 ClientCertIdentityList ClientCertStoreWin::GetClientCertsWithCertStore(
-    const SSLCertRequestInfo& request,
+    scoped_refptr<const SSLCertRequestInfo> request,
     const base::RepeatingCallback<crypto::ScopedHCERTSTORE()>&
         cert_store_callback) {
   ScopedHCERTSTOREWithChecks cert_store;
@@ -257,7 +266,7 @@ ClientCertIdentityList ClientCertStoreWin::GetClientCertsWithCertStore(
     PLOG(ERROR) << "Could not open certificate store: ";
     return ClientCertIdentityList();
   }
-  return GetClientCertsImpl(cert_store.get(), request);
+  return GetClientCertsImpl(cert_store.get(), *request);
 }
 
 bool ClientCertStoreWin::SelectClientCertsForTesting(

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -58,8 +58,11 @@ class BASE_EXPORT LogEventProvider : public base::win::EtwTraceProvider {
   LogEventProvider& operator=(const LogEventProvider&) = delete;
   static LogEventProvider* GetInstance();
 
-  static bool LogMessage(logging::LogSeverity severity, const char* file,
-      int line, size_t message_start, const std::string& str);
+  static bool LogMessage(logging::LogSeverity severity,
+                         const char* file,
+                         int line,
+                         size_t message_start,
+                         const std::string& str);
 
   static void Initialize(const GUID& provider_name);
   static void Uninitialize();

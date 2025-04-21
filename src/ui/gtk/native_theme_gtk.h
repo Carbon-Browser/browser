@@ -1,14 +1,14 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_GTK_NATIVE_THEME_GTK_H_
 #define UI_GTK_NATIVE_THEME_GTK_H_
 
+#include <optional>
+
 #include "base/callback_list.h"
 #include "base/no_destructor.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-#include "ui/base/glib/glib_signal.h"
 #include "ui/base/glib/scoped_gobject.h"
 #include "ui/native_theme/native_theme_base.h"
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,11 +33,11 @@ class LoginDetectionKeyedServiceFactory : public ProfileKeyedServiceFactory {
   ~LoginDetectionKeyedServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   bool ServiceIsCreatedWithBrowserContext() const override;
 };
 
 }  // namespace login_detection
 
-#endif  //  CHROME_BROWSER_LOGIN_DETECTION_LOGIN_DETECTION_KEYED_SERVICE_FACTORY_H_
+#endif  // CHROME_BROWSER_LOGIN_DETECTION_LOGIN_DETECTION_KEYED_SERVICE_FACTORY_H_

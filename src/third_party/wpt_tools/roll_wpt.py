@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Pulls the latest revisions of the wpt tooling."""
@@ -10,10 +10,10 @@ import subprocess
 import sys
 import time
 
-BUG_QUERY_URLS = ["https://bugs.chromium.org/p/chromium/issues/list?"
-                 "q=component%3ABlink%3EInfra%3EEcosystem%20%22WPT%20Tooling%20Roll%22&can=2",
-                 "https://bugs.chromium.org/p/chromium/issues/list?"
-                 "q=component%3ABlink%3EInfra%3EEcosystem%20%22WPT%20JS%20Roll%22&can=2"]
+BUG_QUERY_URLS = ["https://issues.chromium.org/issues?"
+                  "q=status:open%20componentid:1456176%20customfield1223031:%20WPT-Tooling-Roll",
+                  "https://issues.chromium.org/issues?"
+                  "q=status:open%20componentid:1456176%20customfield1223031:%20WPT-JS-Roll"]
 
 
 def main():
@@ -59,10 +59,9 @@ def main():
         return 0
 
     subprocess.check_call(['git', 'add', path_to_wpt_tools_dir])
-    wpt_try_bots = ["linux-wpt-identity-fyi-rel",
-                    "linux-wpt-input-fyi-rel",
-                    "android-weblayer-pie-x86-wpt-smoketest",
-                    "linux-blink-rel"]
+    # Trigger linux-blink-rel should be good enough because webdriver tests are also
+    # using Wptrunner now
+    wpt_try_bots = ["linux-blink-rel"]
     upstream_url = "https://github.com/web-platform-tests/wpt"
     message = "Roll wpt tooling\n\nThis rolls wpt to latest commit at\n%s.\n" % upstream_url
     message += "REMOTE-WPT-HEAD: %s\n\n" % remote_head
@@ -71,6 +70,7 @@ def main():
     subprocess.check_call(['git',
                            'cl',
                            'upload',
+                           '--enable-auto-submit',
                            '--cq-dry-run',
                            '--bypass-hooks',
                            '-f'])
@@ -126,6 +126,7 @@ def main():
         subprocess.check_call(['git',
                                'cl',
                                'upload',
+                               '--enable-auto-submit',
                                '--cq-dry-run',
                                '--bypass-hooks',
                                '-f'])

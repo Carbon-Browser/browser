@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include "base/no_destructor.h"
 #include "base/strings/string_util.h"
+#include "base/strings/utf_string_conversions.h"
 #include "third_party/blink/public/common/manifest/manifest.h"
 #include "third_party/blink/public/common/permissions_policy/permissions_policy.h"
 #include "third_party/blink/public/mojom/manifest/capture_links.mojom.h"
@@ -26,6 +27,35 @@ bool IsEmptyManifest(const mojom::ManifestPtr& manifest) {
   return !manifest || IsEmptyManifest(*manifest);
 }
 
+bool IsDefaultManifest(const mojom::Manifest& manifest,
+                       const GURL& document_url) {
+  blink::mojom::ManifestPtr expected_manifest = blink::mojom::Manifest::New();
+  expected_manifest->start_url = document_url;
+  expected_manifest->id = document_url.GetWithoutRef();
+  expected_manifest->scope = document_url.GetWithoutFilename();
+  return manifest == *expected_manifest;
+}
+
+bool IsDefaultManifest(const mojom::ManifestPtr& manifest,
+                       const GURL& document_url) {
+  return manifest && IsDefaultManifest(*manifest, document_url);
+}
+
+std::optional<blink::mojom::Manifest_TextDirection> TextDirectionFromString(
+    const std::string& dir) {
+  using TextDirection = blink::mojom::Manifest_TextDirection;
+  if (base::EqualsCaseInsensitiveASCII(dir, "auto")) {
+    return TextDirection::kAuto;
+  }
+  if (base::EqualsCaseInsensitiveASCII(dir, "ltr")) {
+    return TextDirection::kLTR;
+  }
+  if (base::EqualsCaseInsensitiveASCII(dir, "rtl")) {
+    return TextDirection::kRTL;
+  }
+  return std::nullopt;
+}
+
 std::string DisplayModeToString(blink::mojom::DisplayMode display) {
   switch (display) {
     case blink::mojom::DisplayMode::kUndefined:
@@ -42,6 +72,10 @@ std::string DisplayModeToString(blink::mojom::DisplayMode display) {
       return "window-controls-overlay";
     case blink::mojom::DisplayMode::kTabbed:
       return "tabbed";
+    case blink::mojom::DisplayMode::kBorderless:
+      return "borderless";
+    case blink::mojom::DisplayMode::kPictureInPicture:
+      return "picture-in-picture";
   }
   return "";
 }
@@ -59,6 +93,11 @@ blink::mojom::DisplayMode DisplayModeFromString(const std::string& display) {
     return blink::mojom::DisplayMode::kWindowControlsOverlay;
   if (base::EqualsCaseInsensitiveASCII(display, "tabbed"))
     return blink::mojom::DisplayMode::kTabbed;
+  if (base::EqualsCaseInsensitiveASCII(display, "borderless"))
+    return blink::mojom::DisplayMode::kBorderless;
+  if (base::EqualsCaseInsensitiveASCII(display, "picture-in-picture")) {
+    return blink::mojom::DisplayMode::kPictureInPicture;
+  }
   return blink::mojom::DisplayMode::kUndefined;
 }
 
@@ -130,39 +169,18 @@ mojom::CaptureLinks CaptureLinksFromString(const std::string& capture_links) {
   return mojom::CaptureLinks::kUndefined;
 }
 
-bool ParsedRouteTo::operator==(const ParsedRouteTo& other) const {
-  auto AsTuple = [](const auto& item) {
-    return std::tie(item.route_to, item.legacy_existing_client_value);
-  };
-  return AsTuple(*this) == AsTuple(other);
-}
-
-bool ParsedRouteTo::operator!=(const ParsedRouteTo& other) const {
-  return !(*this == other);
-}
-
-absl::optional<ParsedRouteTo> RouteToFromString(const std::string& route_to) {
-  using RouteTo = Manifest::LaunchHandler::RouteTo;
-  if (base::EqualsCaseInsensitiveASCII(route_to, "auto"))
-    return ParsedRouteTo{.route_to = RouteTo::kAuto};
-  if (base::EqualsCaseInsensitiveASCII(route_to, "new-client"))
-    return ParsedRouteTo{.route_to = RouteTo::kNewClient};
-  if (base::EqualsCaseInsensitiveASCII(route_to, "existing-client"))
-    return ParsedRouteTo{.legacy_existing_client_value = true};
-  if (base::EqualsCaseInsensitiveASCII(route_to, "existing-client-navigate"))
-    return ParsedRouteTo{.route_to = RouteTo::kExistingClientNavigate};
-  if (base::EqualsCaseInsensitiveASCII(route_to, "existing-client-retain"))
-    return ParsedRouteTo{.route_to = RouteTo::kExistingClientRetain};
-  return absl::nullopt;
-}
-
-absl::optional<NavigateExistingClient> NavigateExistingClientFromString(
-    const std::string& navigate_existing_client) {
-  if (base::EqualsCaseInsensitiveASCII(navigate_existing_client, "always"))
-    return NavigateExistingClient::kAlways;
-  if (base::EqualsCaseInsensitiveASCII(navigate_existing_client, "never"))
-    return NavigateExistingClient::kNever;
-  return absl::nullopt;
+std::optional<mojom::ManifestLaunchHandler::ClientMode> ClientModeFromString(
+    const std::string& client_mode) {
+  using ClientMode = Manifest::LaunchHandler::ClientMode;
+  if (base::EqualsCaseInsensitiveASCII(client_mode, "auto"))
+    return ClientMode::kAuto;
+  if (base::EqualsCaseInsensitiveASCII(client_mode, "navigate-new"))
+    return ClientMode::kNavigateNew;
+  if (base::EqualsCaseInsensitiveASCII(client_mode, "navigate-existing"))
+    return ClientMode::kNavigateExisting;
+  if (base::EqualsCaseInsensitiveASCII(client_mode, "focus-existing"))
+    return ClientMode::kFocusExisting;
+  return std::nullopt;
 }
 
 }  // namespace blink

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,7 @@ class StorageServicePartitionImplTest : public testing::Test {
 
   void SetUp() override {
     remote_service_->BindPartition(
-        absl::nullopt, remote_test_partition_.BindNewPipeAndPassReceiver());
+        std::nullopt, remote_test_partition_.BindNewPipeAndPassReceiver());
     remote_test_partition_.FlushForTesting();
 
     ASSERT_EQ(1u, service_.partitions().size());

@@ -10,7 +10,7 @@
 
       #toggleButton {
         /** Use the minimum row height as the minimum click-target height. */
-        min-height: var(--settings-row-min-height);
+        min-height: var(--cr-section-min-height);
       }
 
       .site-representation {
@@ -45,7 +45,7 @@
     <div id="collapseParent" focus-row-container>
       <div class$="list-item [[getClassForIndex_(listIndex)]]">
         <div id="toggleButton" class="start row-aligned two-line text-elide"
-            on-click="onSiteEntryTap_" actionable aria-expanded="false">
+            on-click="onSiteEntryClick_" actionable aria-expanded="false">
           <site-favicon url="[[getSiteGroupIcon_(siteGroup)]]"></site-favicon>
           <div class="middle text-elide" id="displayName">
             <div class="site-representation">
@@ -66,29 +66,52 @@
               <span id="cookies" hidden$="[[!siteGroup.numCookies]]">
                 &middot; [[cookieString_]]
               </span>
+              <span id="rwsMembership"
+                  hidden$="[[!isRwsMember_(siteGroup.rwsOwner)]]">
+                &middot; [[rwsMembershipLabel_]]
+              </span>
+              <span id="extensionIdDescription"
+                  hidden$="[[!isExtension_(siteGroup)]]">
+                &middot; [[extensionIdDescription_(siteGroup)]]
+              </span>
             </div>
           </div>
+          <template is="dom-if" restamp if="[[shouldShowPolicyPrefIndicator_(
+                            siteGroup.rwsEnterpriseManaged)]]">
+            <cr-policy-pref-indicator
+                id="rwsPolicy" pref="[[rwsEnterprisePref_]]"
+                icon-aria-label="[[label]]"
+                focus-row-control focus-type="policy">
+            </cr-policy-pref-indicator>
+          </template>
           <cr-icon-button id="expandIcon" class="icon-expand-more"
               hidden$="[[!grouped_(siteGroup)]]" aria-label$="[[displayName_]]"
-              aria-describedby="displayName" focus-row-control
-              focus-type="expand"></cr-icon-button>
+              aria-describedby="displayName" aria-expanded="false"
+              focus-row-control focus-type="expand"></cr-icon-button>
           <cr-icon-button class="subpage-arrow"
-              hidden$="[[grouped_(siteGroup)]]" aria-label$="[[displayName_]]"
-              aria-describedby="displayName"
+              hidden$="[[grouped_(siteGroup)]]"
+              aria-label$="[[getSubpageLabel_(siteGroup.displayName)]]"
+              aria-roledescription="$i18n{subpageArrowRoleDescription}"
               focus-row-control focus-type="show-detail"></cr-icon-button>
         </div>
         <div class="row-aligned">
-          <template is="dom-if"
-              if="[[!enableConsolidatedSiteStorageControls_]]">
+          <template is="dom-if" if=
+              "[[shouldShowOverflowMenu(siteGroup.rwsOwner, isRwsFiltered)]]">
             <div class="separator"></div>
-            <cr-icon-button class="icon-more-vert" id="overflowMenuButton"
-                title="$i18n{moreActions}" on-click="showOverflowMenu_"
-                focus-row-control focus-type="more-actions"></cr-icon-button>
+            <cr-icon-button class="icon-more-vert"
+                id="rwsOverflowMenuButton"
+                title="$i18n{moreActions}"
+                on-click="showOverflowMenu_"
+                focus-row-control focus-type="more-actions"
+                aria-label$="[[getMoreActionsLabel_(siteGroup)]]">
+            </cr-icon-button>
           </template>
-          <template is="dom-if" if="[[enableConsolidatedSiteStorageControls_]]">
+          <template is="dom-if" if=
+              "[[!shouldShowOverflowMenu(siteGroup.rwsOwner, isRwsFiltered)]]">
             <div class="separator"></div>
             <cr-icon-button class="icon-delete-gray" id="removeSiteButton"
-                title$="[[i18n('siteSettingsCookieRemoveSite', displayName_)]]"
+                title$=
+                  "[[i18n('siteSettingsCookieRemoveSite', displayName_)]]"
                 on-click="onRemove_" focus-row-control focus-type="remove">
             </cr-icon-button>
           </template>
@@ -97,12 +120,12 @@
 
       <cr-lazy-render id="originList">
         <template>
-          <iron-collapse id="collapseChild" no-animation>
+          <cr-collapse id="collapseChild" no-animation>
             <div class="list-frame">
               <template is="dom-repeat" items="[[siteGroup.origins]]">
                 <div class="list-item hr">
                   <div class="start row-aligned list-item origin-link"
-                       on-click="onOriginTap_"
+                       on-click="onOriginClick_"
                        actionable$="[[!item.isPartitioned]]">
                     <site-favicon url="[[item.origin]]"></site-favicon>
                     <div class="site-representation middle text-elide">
@@ -141,41 +164,27 @@
                     </div>
                     <cr-icon-button class="subpage-arrow"
                         hidden$="[[item.isPartitioned]]"
-                        aria-labelledby$="originSiteRepresentation"
+                        aria-label$="[[getSubpageLabel_(item.origin)]]"
                         aria-roledescription=
                             "$i18n{subpageArrowRoleDescription}"
                         focus-row-control focus-type="detailed-sites">
                     </cr-icon-button>
                   </div>
                   <div class="row-aligned">
-                    <template is="dom-if"
-                        if="[[!enableConsolidatedSiteStorageControls_]]">
-                      <div class="separator"></div>
-                      <cr-icon-button class="icon-more-vert"
-                          id="originOverflowMenuButton"
-                          data-origin$="[[item.origin]]" data-context="origin"
-                          title="$i18n{moreActions}"
-                          on-click="showOverflowMenu_"
-                          focus-row-control focus-type="more-actions">
-                      </cr-icon-button>
-                    </template>
-                    <template is="dom-if"
-                        if="[[enableConsolidatedSiteStorageControls_]]">
-                      <div class="separator"></div>
-                      <cr-icon-button class="icon-delete-gray"
-                          id="removeOriginButton"
-                          title$="[[getRemoveOriginButtonTitle_(item.origin)]]"
-                          data-origin$="[[item.origin]]" data-context="origin"
-                          data-partitioned$="[[item.isPartitioned]]"
-                          on-click="onRemove_" focus-row-control
-                          focus-type="remove">
-                      </cr-icon-button>
-                    </template>
+                    <div class="separator"></div>
+                    <cr-icon-button class="icon-delete-gray"
+                        id="removeOriginButton"
+                        title$="[[getRemoveOriginButtonTitle_(item.origin)]]"
+                        data-origin$="[[item.origin]]" data-context="origin"
+                        data-partitioned$="[[item.isPartitioned]]"
+                        on-click="onRemove_" focus-row-control
+                        focus-type="remove">
+                    </cr-icon-button>
                   </div>
                 </div>
               </template>
             </div>
-          </iron-collapse>
+          </cr-collapse>
       </template>
     </cr-lazy-render>
     </div>

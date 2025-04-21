@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -106,22 +106,6 @@ TEST(WebThemeEngineTest, NativeColorScheme) {
 
   for (size_t i = 0; i < blink_inputs.size(); ++i)
     EXPECT_EQ(NativeColorScheme(blink_inputs[i]), native_theme_outputs[i]);
-}
-
-TEST(WebThemeEngineTest, NativeThemeScrollbarOverlayColorTheme) {
-  std::vector<blink::WebScrollbarOverlayColorTheme> blink_inputs = {
-      blink::WebScrollbarOverlayColorTheme::kWebScrollbarOverlayColorThemeLight,
-      blink::WebScrollbarOverlayColorTheme::kWebScrollbarOverlayColorThemeDark};
-
-  std::vector<ui::NativeTheme::ScrollbarOverlayColorTheme>
-      native_theme_outputs = {
-          ui::NativeTheme::ScrollbarOverlayColorTheme::kLight,
-          ui::NativeTheme::ScrollbarOverlayColorTheme::kDark};
-
-  for (size_t i = 0; i < blink_inputs.size(); ++i) {
-    EXPECT_EQ(NativeThemeScrollbarOverlayColorTheme(blink_inputs[i]),
-              native_theme_outputs[i]);
-  }
 }
 
 }  // namespace blink

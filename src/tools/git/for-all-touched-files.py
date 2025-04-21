@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-# Copyright (c) 2011 The Chromium Authors. All rights reserved.
+#!/usr/bin/env python3
+# Copyright 2011 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -22,8 +22,6 @@ Examples:
   %prog -t "~~BINGO~~" "echo I modified ~~BINGO~~"
 """
 
-from __future__ import print_function
-
 import optparse
 import os
 import subprocess
@@ -43,7 +41,8 @@ def GitShell(args, ignore_return=False):
   job = subprocess.Popen(args,
                          shell=True,
                          stdout=subprocess.PIPE,
-                         stderr=subprocess.STDOUT)
+                         stderr=subprocess.STDOUT,
+                         text=True)
   (out, err) = job.communicate()
   if job.returncode != 0 and not ignore_return:
     print(out)

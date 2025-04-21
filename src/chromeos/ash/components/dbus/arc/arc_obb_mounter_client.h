@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,16 +10,18 @@
 #include <string>
 
 #include "base/component_export.h"
+#include "chromeos/dbus/common/dbus_callback.h"
 #include "chromeos/dbus/common/dbus_client.h"
-#include "chromeos/dbus/common/dbus_method_call_status.h"
 
 namespace ash {
 
 // ArcObbMounterClient is used to communicate with the ArcObbMounter service
-// which mounts OBB (opaque binary blob - https://goo.gl/ja8aN1) files.
+// which mounts OBB (opaque binary blob) files. See:
+// https://developer.android.com/google/play/expansion-files
 // All method should be called from the origin thread (UI thread) which
 // initializes the DBusThreadManager instance.
-class COMPONENT_EXPORT(ASH_DBUS_ARC) ArcObbMounterClient : public DBusClient {
+class COMPONENT_EXPORT(ASH_DBUS_ARC) ArcObbMounterClient
+    : public chromeos::DBusClient {
  public:
   // Returns the global instance if initialized. May return null.
   static ArcObbMounterClient* Get();
@@ -38,11 +40,11 @@ class COMPONENT_EXPORT(ASH_DBUS_ARC) ArcObbMounterClient : public DBusClient {
   virtual void MountObb(const std::string& obb_file,
                         const std::string& mount_path,
                         int32_t owner_gid,
-                        VoidDBusMethodCallback callback) = 0;
+                        chromeos::VoidDBusMethodCallback callback) = 0;
 
   // Unmounts the OBB mounted at the specified path.
   virtual void UnmountObb(const std::string& mount_path,
-                          VoidDBusMethodCallback callback) = 0;
+                          chromeos::VoidDBusMethodCallback callback) = 0;
 
  protected:
   // Initialize() should be used instead.

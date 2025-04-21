@@ -1,18 +1,18 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "chromeos/services/machine_learning/public/cpp/service_connection.h"
-
 #include <utility>
 
-#include "base/bind.h"
 #include "base/component_export.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
 #include "chromeos/dbus/machine_learning/machine_learning_client.h"
+#include "chromeos/services/machine_learning/public/cpp/service_connection.h"
 #include "chromeos/services/machine_learning/public/mojom/machine_learning_service.mojom.h"
+#include "mojo/core/configuration.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/platform/platform_channel.h"
 #include "mojo/public/cpp/system/invitation.h"
@@ -98,7 +98,7 @@ void ServiceConnectionAsh::Initialize() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!task_runner_) << "Initialize must be called only once.";
 
-  task_runner_ = base::SequencedTaskRunnerHandle::Get();
+  task_runner_ = base::SequencedTaskRunner::GetCurrentDefault();
 }
 
 void ServiceConnectionAsh::BindPrimordialMachineLearningServiceIfNeeded() {
@@ -114,6 +114,12 @@ void ServiceConnectionAsh::BindPrimordialMachineLearningServiceIfNeeded() {
   // Include an initial Mojo pipe in the invitation.
   mojo::ScopedMessagePipeHandle pipe =
       invitation.AttachMessagePipe(ml::kBootstrapMojoConnectionChannelToken);
+  if (!mojo::core::GetConfiguration().is_broker_process) {
+    // IPCz requires an application to explicitly opt in to broker sharing
+    // and inheritance when establishing a direct connection between two
+    // non-broker nodes.
+    invitation.set_extra_flags(MOJO_SEND_INVITATION_FLAG_SHARE_BROKER);
+  }
   mojo::OutgoingInvitation::Send(std::move(invitation),
                                  base::kNullProcessHandle,
                                  platform_channel.TakeLocalEndpoint());

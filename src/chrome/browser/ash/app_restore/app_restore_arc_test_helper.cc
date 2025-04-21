@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,11 @@
 #include "ash/components/arc/test/fake_app_instance.h"
 #include "base/command_line.h"
 #include "base/run_loop.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ash/app_restore/app_restore_test_util.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
 
 namespace mojo {
 
@@ -78,7 +78,6 @@ void AppRestoreArcTestHelper::SendPackageAdded(
   package_info.last_backup_android_id = 1;
   package_info.last_backup_time = 1;
   package_info.sync = false;
-  package_info.system = false;
   GetAppHost()->OnPackageAdded(arc::mojom::ArcPackageInfo::From(package_info));
 
   base::RunLoop().RunUntilIdle();

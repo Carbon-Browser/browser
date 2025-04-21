@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,7 +68,8 @@ class VIEWS_EXPORT LabelButtonAssetBorder : public LabelButtonBorder {
 
  private:
   // The painters used for each unfocused or focused button state.
-  std::unique_ptr<Painter> painters_[2][Button::STATE_COUNT];
+  std::array<std::array<std::unique_ptr<Painter>, Button::STATE_COUNT>, 2>
+      painters_;
 };
 
 }  // namespace views

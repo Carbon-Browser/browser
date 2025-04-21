@@ -1,24 +1,23 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_KERBEROS_KERBEROS_CREDENTIALS_MANAGER_H_
 #define CHROME_BROWSER_ASH_KERBEROS_KERBEROS_CREDENTIALS_MANAGER_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/callback_list.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
 #include "base/timer/timer.h"
-#include "chrome/browser/ash/authpolicy/kerberos_files_handler.h"
+#include "chrome/browser/ash/kerberos/kerberos_files_handler.h"
 #include "chromeos/ash/components/dbus/kerberos/kerberos_service.pb.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-// TODO(https://crbug.com/1164001): forward declare when moved ash
-#include "chromeos/components/onc/variable_expander.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/policy/core/common/policy_namespace.h"
 #include "components/policy/core/common/policy_service.h"
@@ -28,6 +27,10 @@ class PrefRegistrySimple;
 class PrefService;
 class PrefChangeRegistrar;
 class Profile;
+
+namespace chromeos {
+class VariableExpander;
+}
 
 namespace policy {
 class PolicyMap;
@@ -117,7 +120,7 @@ class KerberosCredentialsManager : public KeyedService,
   // existing account is updated.
   void AddAccountAndAuthenticate(std::string principal_name,
                                  bool is_managed,
-                                 const absl::optional<std::string>& password,
+                                 const std::optional<std::string>& password,
                                  bool remember_password,
                                  const std::string& krb5_conf,
                                  bool allow_existing,
@@ -262,13 +265,13 @@ class KerberosCredentialsManager : public KeyedService,
   void OnTicketExpiryNotificationClick(const std::string& principal_name);
 
   // Local state prefs, not owned.
-  PrefService* local_state_ = nullptr;
+  raw_ptr<PrefService> local_state_ = nullptr;
 
   // Primary profile, not owned.
-  Profile* primary_profile_ = nullptr;
+  raw_ptr<Profile> primary_profile_ = nullptr;
 
   // Policy service of the primary profile, not owned.
-  policy::PolicyService* policy_service_ = nullptr;
+  raw_ptr<policy::PolicyService> policy_service_ = nullptr;
 
   // Called by OnSignalConnected(), puts Kerberos files where GSSAPI finds them.
   std::unique_ptr<KerberosFilesHandler> kerberos_files_handler_;
@@ -285,7 +288,7 @@ class KerberosCredentialsManager : public KeyedService,
   std::vector<std::unique_ptr<KerberosAddAccountRunner>> add_account_runners_;
 
   // Variable expander for the principal name (replaces ${LOGIN_ID} etc.).
-  std::unique_ptr<VariableExpander> principal_expander_;
+  std::unique_ptr<chromeos::VariableExpander> principal_expander_;
 
   // List of objects that observe this instance.
   base::ObserverList<Observer, true /* check_empty */> observers_;
@@ -304,10 +307,5 @@ class KerberosCredentialsManager : public KeyedService,
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromOS code migration is done.
-namespace chromeos {
-using ::ash::KerberosCredentialsManager;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_KERBEROS_KERBEROS_CREDENTIALS_MANAGER_H_

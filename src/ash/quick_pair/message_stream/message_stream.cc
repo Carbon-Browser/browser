@@ -1,15 +1,20 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ash/quick_pair/message_stream/message_stream.h"
 
 #include "ash/quick_pair/common/fast_pair/fast_pair_metrics.h"
-#include "ash/quick_pair/common/logging.h"
-#include "ash/services/quick_pair/quick_pair_process.h"
-#include "ash/services/quick_pair/quick_pair_process_manager.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
+#include "chromeos/ash/services/quick_pair/quick_pair_process.h"
+#include "chromeos/ash/services/quick_pair/quick_pair_process_manager.h"
+#include "components/cross_device/logging/logging.h"
 #include "device/bluetooth/bluetooth_socket.h"
 #include "net/base/io_buffer.h"
 
@@ -49,7 +54,7 @@ void MessageStream::RemoveObserver(Observer* observer) {
 
 void MessageStream::Receive() {
   if (receive_retry_counter_ == kMaxRetryCount) {
-    QP_LOG(WARNING)
+    CD_LOG(WARNING, Feature::FP)
         << __func__
         << ": Failed to receive or parse data from socket more than "
         << kMaxRetryCount << " times.";
@@ -97,7 +102,7 @@ void MessageStream::ReceiveDataSuccess(int buffer_size,
 
 void MessageStream::ReceiveDataError(device::BluetoothSocket::ErrorReason error,
                                      const std::string& error_message) {
-  QP_LOG(INFO) << __func__ << ": Error: " << error_message;
+  CD_LOG(INFO, Feature::FP) << __func__ << ": Error: " << error_message;
   RecordMessageStreamReceiveResult(/*success=*/false);
   RecordMessageStreamReceiveError(error);
 
@@ -110,6 +115,8 @@ void MessageStream::ReceiveDataError(device::BluetoothSocket::ErrorReason error,
 }
 
 void MessageStream::Disconnect(base::OnceClosure on_disconnect_callback) {
+  CD_LOG(INFO, Feature::FP) << __func__;
+
   // If we already have disconnected the socket, then we can run the callback.
   // This can happen since the socket might have disconnected previously but
   // we kept the MessageStream instance alive to preserve messages from the
@@ -137,9 +144,10 @@ void MessageStream::OnSocketDisconnectedWithCallback(
 
 void MessageStream::ParseMessageStreamSuccess(
     std::vector<mojom::MessageStreamMessagePtr> messages) {
-  QP_LOG(VERBOSE) << __func__;
+  CD_LOG(VERBOSE, Feature::FP) << __func__;
 
   if (messages.empty()) {
+    CD_LOG(WARNING, Feature::FP) << __func__ << ": no messages";
     Receive();
     return;
   }
@@ -157,8 +165,46 @@ void MessageStream::ParseMessageStreamSuccess(
   Receive();
 }
 
+std::string MessageStream::MessageStreamMessageTypeToString(
+    const mojom::MessageStreamMessagePtr& message) {
+  if (message->is_model_id())
+    return "Model ID";
+
+  if (message->is_ble_address_update())
+    return "BLE address update";
+
+  if (message->is_battery_update())
+    return "Battery Update";
+
+  if (message->is_remaining_battery_time())
+    return "Remaining Battery Time";
+
+  if (message->is_enable_silence_mode())
+    return "Enable Silence Mode";
+
+  if (message->is_companion_app_log_buffer_full())
+    return "Companion App Log Buffer Full";
+
+  if (message->is_active_components_byte())
+    return "Active Components Byte";
+
+  if (message->is_ring_device_event())
+    return "Ring Device Event";
+
+  if (message->is_acknowledgement())
+    return "Acknowledgement";
+
+  if (message->is_sdk_version())
+    return "SDK version";
+
+  NOTREACHED();
+}
+
 void MessageStream::NotifyObservers(
     const mojom::MessageStreamMessagePtr& message) {
+  CD_LOG(VERBOSE, Feature::FP) << __func__ << ": MessageStreamMessagePtr is "
+                               << MessageStreamMessageTypeToString(message);
+
   if (message->is_model_id()) {
     for (auto& obs : observers_)
       obs.OnModelIdMessage(device_address_, message->get_model_id());
@@ -236,11 +282,14 @@ void MessageStream::NotifyObservers(
 
     return;
   }
+
+  CD_LOG(WARNING, Feature::FP) << __func__ << ": unexpected message type.";
+  NOTREACHED();
 }
 
 void MessageStream::OnUtilityProcessStopped(
     QuickPairProcessManager::ShutdownReason shutdown_reason) {
-  QP_LOG(INFO) << __func__ << ": Error: " << shutdown_reason;
+  CD_LOG(INFO, Feature::FP) << __func__ << ": Error: " << shutdown_reason;
 
   receive_retry_counter_++;
   Receive();

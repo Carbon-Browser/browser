@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,8 +39,7 @@ TEST(ChromeMetricsExtensionsHelperTest, Basic) {
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   // Tag |host| so that it's an extensions host.
-  extensions::ProcessMap::Get(profile)->Insert("1", host->GetID(),
-                                               site_instance->GetId());
+  extensions::ProcessMap::Get(profile)->Insert("1", host->GetDeprecatedID());
   EXPECT_TRUE(extensions_helper.IsExtensionProcess(host));
 #endif
   rph_factory.reset();

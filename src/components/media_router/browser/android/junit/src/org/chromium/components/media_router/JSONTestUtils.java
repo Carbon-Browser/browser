@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,8 @@ import org.mockito.ArgumentMatcher;
 
 import java.util.Iterator;
 
-/**
- * Utilities for comparing JSON objects and strings.
- */
+/** Utilities for comparing JSON objects and strings. */
 public class JSONTestUtils {
-    private static final String TAG = "MediaRouter";
     private static final String ANY_PREFIX = "ANY_";
 
     private static boolean isPureJSONObjectEqual(JSONObject expected, JSONObject actual) {

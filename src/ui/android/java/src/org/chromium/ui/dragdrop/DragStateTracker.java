@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,10 @@ package org.chromium.ui.dragdrop;
 
 import android.view.View;
 
+import org.chromium.build.annotations.NullMarked;
+
 /** Helper class the listen and track the latest drag event for the view. */
+@NullMarked
 public interface DragStateTracker extends View.OnDragListener {
     /** Return whether there's an active drag process started. */
     default boolean isDragStarted() {

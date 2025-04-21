@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,13 +15,13 @@ namespace send_tab_to_self {
 class SendTabToSelfEntry;
 
 // Interface implemented by platforms to handle changes to the SendTabToSelf
-// model. sImplementors of this interface should override all functions and
+// model. Implementors of this interface should override all functions and
 // update the UI accordingly. They should also register themselves with the
 // ReceivingUIRegistry.
 class ReceivingUiHandler {
  public:
-  ReceivingUiHandler() {}
-  virtual ~ReceivingUiHandler() {}
+  ReceivingUiHandler() = default;
+  virtual ~ReceivingUiHandler() = default;
 
   // Display the new entries passed in as an argument. The entries are owned by
   // the model and should not be modified.

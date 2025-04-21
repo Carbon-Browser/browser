@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,16 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/containers/stack.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/sync_file_system/drive_backend/callback_helper.h"
 #include "chrome/browser/sync_file_system/drive_backend/drive_backend_constants.h"
 #include "chrome/browser/sync_file_system/drive_backend/fake_drive_service_helper.h"
@@ -87,7 +88,7 @@ class DriveBackendSyncTest : public testing::Test,
   DriveBackendSyncTest(const DriveBackendSyncTest&) = delete;
   DriveBackendSyncTest& operator=(const DriveBackendSyncTest&) = delete;
 
-  ~DriveBackendSyncTest() override {}
+  ~DriveBackendSyncTest() override = default;
 
   void SetUp() override {
     ASSERT_TRUE(base_dir_.CreateUniqueTempDir());
@@ -108,7 +109,7 @@ class DriveBackendSyncTest : public testing::Test,
 
     std::unique_ptr<drive::FakeDriveService> drive_service(
         new drive::FakeDriveService);
-    drive_service->Initialize(CoreAccountId("account_id"));
+    drive_service->Initialize(CoreAccountId::FromGaiaId("account_id"));
     ASSERT_TRUE(drive::test_util::SetUpTestEntries(drive_service.get()));
 
     std::unique_ptr<drive::DriveUploaderInterface> uploader(
@@ -119,7 +120,7 @@ class DriveBackendSyncTest : public testing::Test,
         drive_service.get(), uploader.get(), kSyncRootFolderTitle);
 
     remote_sync_service_.reset(new SyncEngine(
-        base::ThreadTaskRunnerHandle::Get(),  // ui_task_runner
+        base::SingleThreadTaskRunner::GetCurrentDefault(),  // ui_task_runner
         worker_task_runner_.get(), drive_task_runner.get(), base_dir_.GetPath(),
         nullptr,  // task_logger
         nullptr,  // notification_manager
@@ -180,8 +181,8 @@ class DriveBackendSyncTest : public testing::Test,
     base::RunLoop run_loop;
     bool success = false;
     FileTracker tracker;
-    PostTaskAndReplyWithResult(
-        worker_task_runner_.get(), FROM_HERE,
+    worker_task_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE,
         base::BindOnce(&MetadataDatabase::FindAppRootTracker,
                        base::Unretained(metadata_database()), app_id, &tracker),
         base::BindOnce(&SetValueAndCallClosure<bool>, run_loop.QuitClosure(),
@@ -205,8 +206,8 @@ class DriveBackendSyncTest : public testing::Test,
     FileTracker tracker;
     base::FilePath result_path;
     base::FilePath normalized_path = path.NormalizePathSeparators();
-    PostTaskAndReplyWithResult(
-        worker_task_runner_.get(), FROM_HERE,
+    worker_task_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE,
         base::BindOnce(&MetadataDatabase::FindNearestActiveAncestor,
                        base::Unretained(metadata_database()), app_id,
                        normalized_path, &tracker, &result_path),
@@ -224,10 +225,7 @@ class DriveBackendSyncTest : public testing::Test,
       CannedSyncableFileSystem* file_system = new CannedSyncableFileSystem(
           origin, in_memory_env_.get(), io_task_runner_.get(),
           file_task_runner_.get());
-      // TODO(https://crbug.com/1344144): Refactor
-      // CannedSyncableFileSystem::SetUp() to remove Quota Enabling/Disabling
-      // flag.
-      file_system->SetUp(CannedSyncableFileSystem::QUOTA_ENABLED);
+      file_system->SetUp();
 
       SyncStatusCode status = SYNC_STATUS_UNKNOWN;
       base::RunLoop run_loop;
@@ -368,8 +366,8 @@ class DriveBackendSyncTest : public testing::Test,
 
         base::RunLoop run_loop;
         int64_t largest_fetched_change_id = -1;
-        PostTaskAndReplyWithResult(
-            worker_task_runner_.get(), FROM_HERE,
+        worker_task_runner_->PostTaskAndReplyWithResult(
+            FROM_HERE,
             base::BindOnce(&MetadataDatabase::GetLargestFetchedChangeID,
                            base::Unretained(metadata_database())),
             base::BindOnce(&SetValueAndCallClosure<int64_t>,
@@ -413,7 +411,8 @@ class DriveBackendSyncTest : public testing::Test,
       app_root_by_title[remote_entry->title()] = remote_entry.get();
     }
 
-    for (std::map<std::string, CannedSyncableFileSystem*>::const_iterator itr =
+    for (std::map<std::string, raw_ptr<CannedSyncableFileSystem,
+                                       CtnExperimental>>::const_iterator itr =
              file_systems_.begin();
          itr != file_systems_.end(); ++itr) {
       const std::string& app_id = itr->first;
@@ -536,8 +535,8 @@ class DriveBackendSyncTest : public testing::Test,
   size_t CountMetadata() {
     size_t count = 0;
     base::RunLoop run_loop;
-    PostTaskAndReplyWithResult(
-        worker_task_runner_.get(), FROM_HERE,
+    worker_task_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE,
         base::BindOnce(&MetadataDatabase::CountFileMetadata,
                        base::Unretained(metadata_database())),
         base::BindOnce(&SetValueAndCallClosure<size_t>, run_loop.QuitClosure(),
@@ -549,8 +548,8 @@ class DriveBackendSyncTest : public testing::Test,
   size_t CountTracker() {
     size_t count = 0;
     base::RunLoop run_loop;
-    PostTaskAndReplyWithResult(
-        worker_task_runner_.get(), FROM_HERE,
+    worker_task_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE,
         base::BindOnce(&MetadataDatabase::CountFileTracker,
                        base::Unretained(metadata_database())),
         base::BindOnce(&SetValueAndCallClosure<size_t>, run_loop.QuitClosure(),
@@ -602,7 +601,8 @@ class DriveBackendSyncTest : public testing::Test,
   int64_t pending_local_changes_;
 
   std::unique_ptr<FakeDriveServiceHelper> fake_drive_service_helper_;
-  std::map<std::string, CannedSyncableFileSystem*> file_systems_;
+  std::map<std::string, raw_ptr<CannedSyncableFileSystem, CtnExperimental>>
+      file_systems_;
 
   scoped_refptr<base::SingleThreadTaskRunner> io_task_runner_;
   scoped_refptr<base::SequencedTaskRunner> worker_task_runner_;

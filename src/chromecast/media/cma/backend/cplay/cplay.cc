@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-#include "base/cxx17_backports.h"
+#include "base/containers/span.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
@@ -87,7 +87,8 @@ class WavMixerInputSource : public MixerInput::Source {
  public:
   WavMixerInputSource(const Parameters& params)
       : wav_data_(ReadInputFile(params)),
-        input_handler_(::media::WavAudioHandler::Create(wav_data_)),
+        input_handler_(
+            ::media::WavAudioHandler::Create(base::as_byte_span(wav_data_))),
         device_id_(params.device_id),
         bytes_per_frame_(input_handler_->num_channels() *
                          input_handler_->bits_per_sample() / 8) {
@@ -181,8 +182,7 @@ class WavOutputHandler : public OutputHandler {
 
     // Write wav file header to fill space. We'll need to go back and fill in
     // the size later.
-    wav_file_.WriteAtCurrentPos(reinterpret_cast<char*>(&header_),
-                                sizeof(header_));
+    wav_file_.WriteAtCurrentPos(base::byte_span_from_ref(header_));
   }
 
   WavOutputHandler(const WavOutputHandler&) = delete;
@@ -204,11 +204,10 @@ class WavOutputHandler : public OutputHandler {
                 clipped_data.size() * sizeof(clipped_data[0]));
     if (saturate_output) {
       for (size_t i = 0; i < clipped_data.size(); ++i) {
-        clipped_data[i] = base::clamp(clipped_data[i], -1.0f, 1.0f);
+        clipped_data[i] = std::clamp(clipped_data[i], -1.0f, 1.0f);
       }
     }
-    wav_file_.WriteAtCurrentPos(reinterpret_cast<char*>(clipped_data.data()),
-                                sizeof(clipped_data[0]) * clipped_data.size());
+    wav_file_.WriteAtCurrentPos(base::as_byte_span(clipped_data));
   }
 
  private:
@@ -340,7 +339,12 @@ int CplayMain(int argc, char* argv[]) {
   // Set volume.
   std::string contents;
   base::ReadFileToString(params.cast_audio_json_path, &contents);
-  GetVolumeMap().LoadVolumeMap(base::JSONReader::ReadDeprecated(contents));
+  std::optional<base::Value> parsed_json = base::JSONReader::Read(contents);
+  if (parsed_json && parsed_json->is_dict()) {
+    GetVolumeMap().LoadVolumeMap(std::move(*parsed_json).TakeDict());
+  } else {
+    GetVolumeMap().LoadVolumeMap(std::nullopt);
+  }
   float volume_dbfs = GetVolumeMap().VolumeToDbFS(params.cast_volume);
   float volume_multiplier = std::pow(10.0, volume_dbfs / 20.0);
   mixer_input.SetVolumeMultiplier(1.0);

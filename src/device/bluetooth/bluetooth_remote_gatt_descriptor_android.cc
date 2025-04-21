@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,17 @@
 #include "base/android/jni_android.h"
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/notreached.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "device/bluetooth/bluetooth_remote_gatt_service_android.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
 #include "device/bluetooth/jni_headers/ChromeBluetoothRemoteGattDescriptor_jni.h"
 
 using base::android::AttachCurrentThread;
+using base::android::ConvertJavaStringToUTF8;
 using base::android::JavaParamRef;
 using base::android::JavaRef;
 
@@ -82,18 +84,19 @@ BluetoothRemoteGattDescriptorAndroid::GetPermissions() const {
 void BluetoothRemoteGattDescriptorAndroid::ReadRemoteDescriptor(
     ValueCallback callback) {
   if (read_pending_ || write_pending_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
-        FROM_HERE, base::BindOnce(std::move(callback),
-                                  BluetoothGattService::GATT_ERROR_IN_PROGRESS,
-                                  /*value=*/std::vector<uint8_t>()));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE,
+        base::BindOnce(std::move(callback),
+                       BluetoothGattService::GattErrorCode::kInProgress,
+                       /*value=*/std::vector<uint8_t>()));
     return;
   }
 
   if (!Java_ChromeBluetoothRemoteGattDescriptor_readRemoteDescriptor(
           AttachCurrentThread(), j_descriptor_)) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback),
-                                  BluetoothGattService::GATT_ERROR_FAILED,
+                                  BluetoothGattService::GattErrorCode::kFailed,
                                   /*value=*/std::vector<uint8_t>()));
     return;
   }
@@ -103,24 +106,25 @@ void BluetoothRemoteGattDescriptorAndroid::ReadRemoteDescriptor(
 }
 
 void BluetoothRemoteGattDescriptorAndroid::WriteRemoteDescriptor(
-    const std::vector<uint8_t>& new_value,
+    base::span<const uint8_t> new_value,
     base::OnceClosure callback,
     ErrorCallback error_callback) {
   if (read_pending_ || write_pending_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(error_callback),
-                       BluetoothGattService::GATT_ERROR_IN_PROGRESS));
+                       BluetoothGattService::GattErrorCode::kInProgress));
     return;
   }
 
   JNIEnv* env = AttachCurrentThread();
   if (!Java_ChromeBluetoothRemoteGattDescriptor_writeRemoteDescriptor(
           env, j_descriptor_, base::android::ToJavaByteArray(env, new_value))) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
-        base::BindOnce(std::move(error_callback),
-                       BluetoothRemoteGattServiceAndroid::GATT_ERROR_FAILED));
+        base::BindOnce(
+            std::move(error_callback),
+            BluetoothRemoteGattServiceAndroid::GattErrorCode::kFailed));
     return;
   }
 
@@ -143,8 +147,8 @@ void BluetoothRemoteGattDescriptorAndroid::OnRead(
 
   if (status == 0) {  // android.bluetooth.BluetoothGatt.GATT_SUCCESS
     base::android::JavaByteArrayToByteVector(env, value, &value_);
-    std::move(read_callback).Run(/*error_code=*/absl::nullopt, value_);
-    // TODO(https://crbug.com/584369): Call GattDescriptorValueChanged.
+    std::move(read_callback).Run(/*error_code=*/std::nullopt, value_);
+    // TODO(crbug.com/40455639): Call GattDescriptorValueChanged.
   } else {
     std::move(read_callback)
         .Run(BluetoothRemoteGattServiceAndroid::GetGattErrorCode(status),
@@ -165,7 +169,7 @@ void BluetoothRemoteGattDescriptorAndroid::OnWrite(
   if (status == 0  // android.bluetooth.BluetoothGatt.GATT_SUCCESS
       && !write_callback.is_null()) {
     std::move(write_callback).Run();
-    // TODO(https://crbug.com/584369): Call GattDescriptorValueChanged.
+    // TODO(crbug.com/40455639): Call GattDescriptorValueChanged.
   } else if (!write_error_callback.is_null()) {
     std::move(write_error_callback)
         .Run(BluetoothRemoteGattServiceAndroid::GetGattErrorCode(status));

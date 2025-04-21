@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,6 +39,7 @@ class CrossThreadMediaSourceAttachment;
 class SameThreadMediaSourceAttachment;
 class SourceBufferConfig;
 class TrackBase;
+class V8EndOfStreamError;
 class WebSourceBuffer;
 
 // Media Source Extensions (MSE) API's MediaSource object implementation (see
@@ -50,7 +51,7 @@ class WebSourceBuffer;
 // the srcObject of the media element. A MediaSourceAttachmentSupplement
 // encapsulates the linkage of that object URL or handle to a MediaSource
 // instance, and allows communication between the media element and the MSE API.
-class MediaSource final : public EventTargetWithInlineData,
+class MediaSource final : public EventTarget,
                           public ActiveScriptWrappable<MediaSource>,
                           public ExecutionContextLifecycleObserver {
   DEFINE_WRAPPERTYPEINFO();
@@ -90,16 +91,15 @@ class MediaSource final : public EventTargetWithInlineData,
   DEFINE_ATTRIBUTE_EVENT_LISTENER(sourceclose, kSourceclose)
 
   AtomicString readyState() const;
-  void endOfStream(const AtomicString& error, ExceptionState&)
-      LOCKS_EXCLUDED(attachment_link_lock_);
   void endOfStream(ExceptionState&) LOCKS_EXCLUDED(attachment_link_lock_);
+  void endOfStream(std::optional<V8EndOfStreamError> error, ExceptionState&)
+      LOCKS_EXCLUDED(attachment_link_lock_);
   void setLiveSeekableRange(double start, double end, ExceptionState&)
       LOCKS_EXCLUDED(attachment_link_lock_);
   void clearLiveSeekableRange(ExceptionState&)
       LOCKS_EXCLUDED(attachment_link_lock_);
 
-  MediaSourceHandleImpl* handle(ExceptionState&)
-      LOCKS_EXCLUDED(attachment_link_lock_);
+  MediaSourceHandleImpl* handle() LOCKS_EXCLUDED(attachment_link_lock_);
 
   static bool isTypeSupported(ExecutionContext* context, const String& type);
 

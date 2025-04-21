@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,15 @@
 #define CHROME_COMMON_MAC_APP_MODE_COMMON_H_
 
 #include <CoreServices/CoreServices.h>
+#include <string>
 
+#include "base/files/file_path.h"
+#include "base/macros/concat.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/strings/stringize_macros.h"
 
 #ifdef __OBJC__
 @class NSString;
-#else
-class NSString;
 #endif
 
 // This file contains constants, interfaces, etc. which are common to the
@@ -20,14 +22,13 @@ class NSString;
 
 // The version of the ChromeAppModeInfo struct below. If the format of the
 // struct ever changes, be sure to update the APP_SHIM_VERSION_NUMBER here and
-// the corresponding line in //chrome/app/framework.order .
-#define APP_SHIM_VERSION_NUMBER 6
+// the corresponding lines in //chrome/app/framework.order and
+// //chrome/app/framework.exports .
+#define APP_SHIM_VERSION_NUMBER 7
 
 // All the other macro magic to make APP_SHIM_VERSION_NUMBER usable.
-#define APP_MODE_CONCAT(a, b) a##b
-#define APP_MODE_CONCAT2(a, b) APP_MODE_CONCAT(a, b)
 #define APP_SHIM_ENTRY_POINT_NAME \
-  APP_MODE_CONCAT2(ChromeAppModeStart_v, APP_SHIM_VERSION_NUMBER)
+  BASE_CONCAT(ChromeAppModeStart_v, APP_SHIM_VERSION_NUMBER)
 #define APP_SHIM_ENTRY_POINT_NAME_STRING STRINGIZE(APP_SHIM_ENTRY_POINT_NAME)
 
 namespace app_mode {
@@ -41,9 +42,16 @@ constexpr mach_msg_id_t kBootstrapMsgId = 'apps';
 // of the full profile directory path.
 extern const char kAppShimBootstrapNameFragment[];
 
-// A symlink used to store the version string of the currently running Chrome.
-// The shim will read this to determine which version of the framework to load.
+// A symlink used to store the version string of the currently running Chrome,
+// along with any other necessary configuration. The shim will read this to
+// determine which version of the framework to load.
 extern const char kRunningChromeVersionSymlinkName[];
+
+// A file used to store feature and field trial state of the currently or most
+// recently running Chrome. The shim will read this to determine what features
+// to enable if it wasn't launched by Chrome, until it can get the current state
+// from Chrome.
+extern const char kFeatureStateFileName[];
 
 // The process ID of the Chrome process that launched the app shim.
 // The presence of this switch instructs the app shim to send LaunchApp with
@@ -67,9 +75,19 @@ extern const char kLaunchedForTest[];
 // it fails to launch again, don't trigger another rebuild.
 extern const char kLaunchedAfterRebuild[];
 
-// Path to an app shim bundle. Indicates to Chrome that this shim attempted to
-// launch but failed.
-extern const char kAppShimError[];
+// Indicates to the shim that even if `kLaunchedByChromeProcessId` was also
+// specified, this should still be considered a "normal" launch as opposed to a
+// "register only" launch. This is used by tests to launch a shim as if the user
+// launched it, while still making sure it connects to the correct chrome
+// process.
+extern const char kIsNormalLaunch[];
+
+// Normally when running tests app shims are not supposed to try to launch
+// Chrome. Pass this flag to specify the executable to launch when the app shim
+// would normally launch Chrome.
+extern const char kLaunchChromeForTest[];
+
+#ifdef __OBJC__
 
 // Keys for specifying the file types handled by an app.
 extern NSString* const kCFBundleDocumentTypesKey;
@@ -139,12 +157,31 @@ extern NSString* const kLastRunAppBundlePathPrefsKey;
 extern NSString* const kCrAppModeMajorVersionKey;
 extern NSString* const kCrAppModeMinorVersionKey;
 
+// Info.plist key that indicates whether a PWA is ad-hoc signed.
+// Intended for use by `app_mode_loader` prior to checking in with the browser.
+extern NSString* const kCrAppModeIsAdHocSignedKey;
+
 // Placeholders used in the app mode loader bundle' Info.plist:
 extern NSString* const kShortcutIdPlaceholder; // Extension shortcut ID.
 extern NSString* const kShortcutNamePlaceholder; // Extension name.
 extern NSString* const kShortcutURLPlaceholder;
 // Bundle ID of the Chrome browser bundle.
 extern NSString* const kShortcutBrowserBundleIDPlaceholder;
+
+#endif  // __OBJC__
+
+// Indicates the MojoIpcz feature configuration for a launched shim process.
+enum class MojoIpczConfig {
+  // MojoIpcz is enabled.
+  kEnabled,
+
+  // MojoIpcz is disabled.
+  kDisabled,
+
+  // The MojoIpcz configuration should be determined by feature flags on the
+  // CommandLine once parsed by the shim.
+  kUseCommandLineFeatures,
+};
 
 // The structure used to pass information from the app mode loader to the
 // (browser) framework via the entry point ChromeAppModeStart_vN.
@@ -160,7 +197,9 @@ extern NSString* const kShortcutBrowserBundleIDPlaceholder;
 struct ChromeAppModeInfo {
   // Original |argc| and |argv| of the App Mode shortcut.
   int argc;
-  char** argv;
+  // This field is not a raw_ptr<> because this struct is part of separate
+  // binary and must be a POD.
+  RAW_PTR_EXCLUSION char** argv;
 
   // Path of the Chromium Framework, as UTF-8. This will be the input to
   // SetOverrideFrameworkBundlePath().
@@ -190,6 +229,29 @@ struct ChromeAppModeInfo {
 
   // Directory of the profile associated with the app, as UTF-8.
   const char* profile_dir;
+
+  // Indicates whether MojoIpcz must be enabled in the shim.
+  MojoIpczConfig mojo_ipcz_config;
+};
+
+// Conveys the configuration for a connection to be established between a shim
+// process and a running Chrome process.
+struct ChromeConnectionConfig {
+  // The version of the Chromium framework to use.
+  std::string framework_version;
+
+  // Indicates whether or not the MojoIpcz feature must be enabled.
+  bool is_mojo_ipcz_enabled;
+
+  // Returns a new configuration appropriate for the calling Chrome process to
+  // encode and convey to a shim.
+  static ChromeConnectionConfig GenerateForCurrentProcess();
+
+  // Generates a path value which encodes the contents of this structure.
+  base::FilePath EncodeAsPath() const;
+
+  // Parses a path value into a configuration.
+  static ChromeConnectionConfig DecodeFromPath(const base::FilePath& path);
 };
 
 }  // namespace app_mode

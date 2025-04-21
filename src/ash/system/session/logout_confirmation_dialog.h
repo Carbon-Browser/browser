@@ -1,12 +1,14 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_SYSTEM_SESSION_LOGOUT_CONFIRMATION_DIALOG_H_
 #define ASH_SYSTEM_SESSION_LOGOUT_CONFIRMATION_DIALOG_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/window/dialog_delegate.h"
 
 namespace views {
@@ -21,6 +23,7 @@ class LogoutConfirmationController;
 // countdown and informs the user that a logout will happen automatically if no
 // choice is made before the countdown has expired.
 class LogoutConfirmationDialog : public views::DialogDelegateView {
+  METADATA_HEADER(LogoutConfirmationDialog, views::DialogDelegateView)
  public:
   LogoutConfirmationDialog(LogoutConfirmationController* controller,
                            base::TimeTicks logout_time);
@@ -39,17 +42,17 @@ class LogoutConfirmationDialog : public views::DialogDelegateView {
   void WindowClosing() override;
 
   // views::View:
-  gfx::Size CalculatePreferredSize() const override;
-  const char* GetClassName() const override;
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override;
 
  private:
   void UpdateLabel();
   void OnDialogAccepted();
 
-  LogoutConfirmationController* controller_;
+  raw_ptr<LogoutConfirmationController> controller_;
   base::TimeTicks logout_time_;
 
-  views::Label* label_;
+  raw_ptr<views::Label> label_;
 
   base::RepeatingTimer update_timer_;
 };

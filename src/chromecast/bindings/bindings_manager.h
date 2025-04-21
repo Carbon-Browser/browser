@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 namespace chromecast {
 namespace bindings {
 
-// TODO(crbug.com/1104369): Remove this alias when all callers are migrated to
+// TODO(crbug.com/40139651): Remove this alias when all callers are migrated to
 // use cast_api_bindings::Manager directly.
 class BindingsManager : public cast_api_bindings::Manager {};
 

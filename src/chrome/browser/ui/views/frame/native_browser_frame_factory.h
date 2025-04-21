@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,8 +29,8 @@ class NativeBrowserFrameFactory {
                                      BrowserView* browser_view);
 
  protected:
-  NativeBrowserFrameFactory() {}
-  virtual ~NativeBrowserFrameFactory() {}
+  NativeBrowserFrameFactory() = default;
+  virtual ~NativeBrowserFrameFactory() = default;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_FRAME_NATIVE_BROWSER_FRAME_FACTORY_H_

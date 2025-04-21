@@ -17,90 +17,12 @@
 
 #include "components/adblock/core/common/adblock_utils.h"
 
-#include <numeric>
-
-#include "base/containers/flat_map.h"
-#include "base/json/string_escape.h"
 #include "base/logging.h"
-#include "base/memory/scoped_refptr.h"
-#include "base/strings/safe_sprintf.h"
-#include "base/strings/string_split.h"
-#include "base/strings/string_util.h"
-#include "base/strings/utf_string_conversions.h"
-#include "components/adblock/core/common/adblock_constants.h"
-#include "components/grit/components_resources.h"
-#include "components/version_info/version_info.h"
-#include "net/http/http_response_headers.h"
 #include "third_party/icu/source/i18n/unicode/regex.h"
 #include "third_party/re2/src/re2/re2.h"
 #include "ui/base/resource/resource_bundle.h"
-#include "url/gurl.h"
 
-namespace adblock {
-namespace utils {
-namespace {
-constexpr char kLanguagesSeparator[] = ",";
-}
-
-std::string CreateDomainAllowlistingFilter(const std::string& domain) {
-  return "@@||" + base::ToLowerASCII(domain) +
-         "^$document,domain=" + base::ToLowerASCII(domain);
-}
-
-SiteKey GetSitekeyHeader(
-    const scoped_refptr<net::HttpResponseHeaders>& headers) {
-  size_t iterator = 0;
-  std::string name;
-  std::string value;
-  while (headers->EnumerateHeaderLines(&iterator, &name, &value)) {
-    std::transform(name.begin(), name.end(), name.begin(),
-                   [](unsigned char c) { return std::tolower(c); });
-    if (name == adblock::kSiteKeyHeaderKey) {
-      return SiteKey{value};
-    }
-  }
-  return {};
-}
-
-AppInfo::AppInfo() = default;
-
-AppInfo::~AppInfo() = default;
-
-AppInfo::AppInfo(const AppInfo&) = default;
-
-AppInfo GetAppInfo() {
-  AppInfo info;
-
-#if defined(EYEO_APPLICATION_NAME)
-  info.name = EYEO_APPLICATION_NAME;
-#else
-  info.name = version_info::GetProductName();
-#endif
-#if defined(EYEO_APPLICATION_VERSION)
-  info.version = EYEO_APPLICATION_VERSION;
-#else
-  info.version = version_info::GetVersionNumber();
-#endif
-  base::ReplaceChars(version_info::GetOSType(), base::kWhitespaceASCII, "",
-                     &info.client_os);
-  return info;
-}
-
-std::string SerializeLanguages(const std::vector<std::string> languages) {
-  if (languages.empty())
-    return {};
-
-  return std::accumulate(std::next(languages.begin()), languages.end(),
-                         languages[0],
-                         [](const std::string& a, const std::string& b) {
-                           return a + kLanguagesSeparator + b;
-                         });
-}
-
-std::vector<std::string> DeserializeLanguages(const std::string languages) {
-  return base::SplitString(languages, kLanguagesSeparator,
-                           base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
-}
+namespace adblock::utils {
 
 std::vector<std::string> ConvertURLs(const std::vector<GURL>& input) {
   std::vector<std::string> output;
@@ -110,17 +32,6 @@ std::vector<std::string> ConvertURLs(const std::vector<GURL>& input) {
   return output;
 }
 
-std::string ConvertBaseTimeToABPFilterVersionFormat(const base::Time& date) {
-  base::Time::Exploded exploded;
-  // we receive in GMT and convert to UTC ( which has the same time )
-  date.UTCExplode(&exploded);
-  char buff[16];
-  base::strings::SafeSPrintf(buff, "%04d%02d%02d%02d%02d", exploded.year,
-                             exploded.month, exploded.day_of_month,
-                             exploded.hour, exploded.minute);
-  return std::string(buff);
-}
-
 std::unique_ptr<FlatbufferData> MakeFlatbufferDataFromResourceBundle(
     int resource_id) {
   return std::make_unique<InMemoryFlatbufferData>(
@@ -128,23 +39,26 @@ std::unique_ptr<FlatbufferData> MakeFlatbufferDataFromResourceBundle(
           resource_id));
 }
 
-bool RegexMatches(base::StringPiece pattern,
-                  base::StringPiece input,
+bool RegexMatches(std::string_view pattern,
+                  std::string_view input,
                   bool case_sensitive) {
   re2::RE2::Options options;
   options.set_case_sensitive(case_sensitive);
   options.set_never_capture(true);
   options.set_log_errors(false);
+  options.set_encoding(re2::RE2::Options::EncodingLatin1);
   const re2::RE2 re2_pattern(pattern.data(), options);
-  if (re2_pattern.ok())
+  if (re2_pattern.ok()) {
     return re2::RE2::PartialMatch(input.data(), re2_pattern);
+  }
   VLOG(2) << "[eyeo] RE2 does not support filter pattern " << pattern
           << " and return with error message: " << re2_pattern.error();
 
   // Maximum length of the string to match to avoid causing an icu::RegexMatcher
   // stack overflow. (crbug.com/1198219)
-  if (input.size() > url::kMaxURLChars)
+  if (input.size() > url::kMaxURLChars) {
     return false;
+  }
   const icu::UnicodeString icu_pattern(pattern.data(), pattern.length());
   const icu::UnicodeString icu_input(input.data(), input.length());
   UErrorCode status = U_ZERO_ERROR;
@@ -163,5 +77,4 @@ bool RegexMatches(base::StringPiece pattern,
   return matcher.find(0, status);
 }
 
-}  // namespace utils
-}  // namespace adblock
+}  // namespace adblock::utils

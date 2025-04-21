@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -147,13 +147,6 @@ void SerializedNavigationEntryTestHelper::SetTimestamp(
     base::Time timestamp,
     SerializedNavigationEntry* navigation) {
   navigation->timestamp_ = timestamp;
-}
-
-// static
-void SerializedNavigationEntryTestHelper::SetReplacedEntryData(
-    const SerializedNavigationEntry::ReplacedNavigationEntryData& data,
-    SerializedNavigationEntry* navigation) {
-  navigation->replaced_entry_data_ = data;
 }
 
 }  // namespace sessions

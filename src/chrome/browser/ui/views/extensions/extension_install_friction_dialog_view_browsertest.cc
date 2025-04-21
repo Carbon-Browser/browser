@@ -1,19 +1,20 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <string>
-
 #include "chrome/browser/ui/views/extensions/extension_install_friction_dialog_view.h"
 
-#include "base/callback_helpers.h"
+#include <string>
+
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/extensions/extension_browsertest.h"
 #include "chrome/browser/platform_util.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/browser/ui/browser_dialogs.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/extensions/extensions_dialogs.h"
+#include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/test/test_browser_dialog.h"
 #include "chrome/common/url_constants.h"
 #include "content/public/test/browser_test.h"
@@ -37,7 +38,7 @@ class ExtensionInstallFrictionDialogTest : public DialogBrowserTest {
   ExtensionInstallFrictionDialogTest() = default;
 
   void ShowUi(const std::string& name) override {
-    chrome::ShowExtensionInstallFrictionDialog(
+    extensions::ShowExtensionInstallFrictionDialog(
         browser()->tab_strip_model()->GetActiveWebContents(),
         base::DoNothing());
   }
@@ -82,8 +83,8 @@ class ExtensionInstallFrictionDialogViewTest
   content::WebContents* web_contents() { return web_contents_; }
 
  private:
-  raw_ptr<const extensions::Extension> extension_ = nullptr;
-  raw_ptr<content::WebContents> web_contents_ = nullptr;
+  raw_ptr<const extensions::Extension, DanglingUntriaged> extension_ = nullptr;
+  raw_ptr<content::WebContents, DanglingUntriaged> web_contents_ = nullptr;
 };
 
 // Regression test for https://crbug.com/1201031: Ensures that while an
@@ -106,8 +107,9 @@ IN_PROC_BROWSER_TEST_F(ExtensionInstallFrictionDialogViewTest,
     int tab1_idx = tab_strip_model->GetIndexOfWebContents(originator_contents);
     content::WebContentsDestroyedWatcher tab_destroyed_watcher(
         tab_strip_model->GetWebContentsAt(tab1_idx));
-    EXPECT_TRUE(tab_strip_model->CloseWebContentsAt(tab1_idx,
-                                                    TabStripModel::CLOSE_NONE));
+    int previous_tab_count = tab_strip_model->count();
+    tab_strip_model->CloseWebContentsAt(tab1_idx, TabCloseTypes::CLOSE_NONE);
+    EXPECT_EQ(previous_tab_count - 1, tab_strip_model->count());
     tab_destroyed_watcher.Wait();
   }
 
@@ -136,8 +138,9 @@ IN_PROC_BROWSER_TEST_F(ExtensionInstallFrictionDialogViewTest,
         TabStripModel* tab_strip_model,
         const TabStripModelChange& change,
         const TabStripSelectionChange& selection) override {
-      if (change.type() != TabStripModelChange::kInserted)
+      if (change.type() != TabStripModelChange::kInserted) {
         return;
+      }
 
       GURL learn_more_url(chrome::kCwsEnhancedSafeBrowsingLearnMoreURL);
       for (const auto& contents : change.GetInsert()->contents) {

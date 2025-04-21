@@ -1,11 +1,13 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/html/client_hints_util.h"
 
+#include "base/containers/contains.h"
 #include "services/network/public/cpp/client_hints.h"
 #include "third_party/blink/public/common/client_hints/client_hints.h"
+#include "third_party/blink/public/common/permissions_policy/origin_with_possible_wildcards.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/inspector/inspector_audits_issue.h"
 #include "third_party/blink/renderer/core/permissions_policy/permissions_policy_parser.h"
@@ -22,12 +24,12 @@ void UpdateWindowPermissionsPolicyWithDelegationSupportForClientHints(
     const KURL& url,
     ClientHintsPreferences::Context* context,
     network::MetaCHType type,
-    bool is_doc_preloader_or_sync_parser) {
+    bool is_doc_preloader,
+    bool is_sync_parser) {
   // If it's not http-equiv="accept-ch" and it's not a preload-or-sync-parser
   // visible meta tag, then we need to warn the dev that js injected the tag.
-  if (type != network::MetaCHType::HttpEquivAcceptCH &&
-      !is_doc_preloader_or_sync_parser && local_dom_window &&
-      RuntimeEnabledFeatures::ClientHintThirdPartyDelegationEnabled()) {
+  if (type != network::MetaCHType::HttpEquivAcceptCH && !is_doc_preloader &&
+      !is_sync_parser && local_dom_window) {
     AuditsIssue::ReportClientHintIssue(
         local_dom_window, ClientHintIssueReason::kMetaTagModifiedHTML);
   }
@@ -36,10 +38,9 @@ void UpdateWindowPermissionsPolicyWithDelegationSupportForClientHints(
   // added by js, the `local_dom_window` is missing, or the feature is disabled,
   // there's nothing more to do.
   if (!client_hints_preferences.UpdateFromMetaCH(
-          header_value, url, context, type, is_doc_preloader_or_sync_parser) ||
+          header_value, url, context, type, is_doc_preloader, is_sync_parser) ||
       type == network::MetaCHType::HttpEquivAcceptCH ||
-      !is_doc_preloader_or_sync_parser || !local_dom_window ||
-      !RuntimeEnabledFeatures::ClientHintThirdPartyDelegationEnabled()) {
+      !(is_doc_preloader || is_sync_parser) || !local_dom_window) {
     return;
   }
 
@@ -65,17 +66,24 @@ void UpdateWindowPermissionsPolicyWithDelegationSupportForClientHints(
     // We need to retain any preexisting settings, just adding new origins.
     const auto& allow_list =
         current_policy->GetAllowlistForFeature(policy_name);
-    std::set<url::Origin> origin_set(allow_list.AllowedOrigins().begin(),
-                                     allow_list.AllowedOrigins().end());
-    origin_set.insert(pair.second.begin(), pair.second.end());
+    std::set<blink::OriginWithPossibleWildcards> origin_set(
+        allow_list.AllowedOrigins().begin(), allow_list.AllowedOrigins().end());
+    for (const auto& origin : pair.second) {
+      if (auto origin_with_possible_wildcards =
+              blink::OriginWithPossibleWildcards::FromOrigin(origin);
+          origin_with_possible_wildcards.has_value()) {
+        origin_set.insert(*origin_with_possible_wildcards);
+      }
+    }
     auto declaration = ParsedPermissionsPolicyDeclaration(
         policy_name,
-        std::vector<url::Origin>(origin_set.begin(), origin_set.end()),
-        allow_list.MatchesAll(), allow_list.MatchesOpaqueSrc());
+        std::vector<blink::OriginWithPossibleWildcards>(origin_set.begin(),
+                                                        origin_set.end()),
+        allow_list.SelfIfMatches(), allow_list.MatchesAll(),
+        allow_list.MatchesOpaqueSrc());
     container_policy.push_back(declaration);
   }
-  auto new_policy = PermissionsPolicy::CopyStateFrom(current_policy);
-  new_policy->OverwriteHeaderPolicyForClientHints(container_policy);
+  auto new_policy = current_policy->WithClientHints(container_policy);
 
   // Update third-party delegation permissions for each client hint.
   local_dom_window->GetSecurityContext().SetPermissionsPolicy(
@@ -85,8 +93,7 @@ void UpdateWindowPermissionsPolicyWithDelegationSupportForClientHints(
 void UpdateIFrameContainerPolicyWithDelegationSupportForClientHints(
     ParsedPermissionsPolicy& container_policy,
     LocalDOMWindow* local_dom_window) {
-  if (!RuntimeEnabledFeatures::ClientHintThirdPartyDelegationEnabled() ||
-      !local_dom_window ||
+  if (!local_dom_window ||
       !local_dom_window->GetSecurityContext().GetPermissionsPolicy()) {
     return;
   }
@@ -98,8 +105,8 @@ void UpdateIFrameContainerPolicyWithDelegationSupportForClientHints(
            ParsedPermissionsPolicyDeclaration>
       feature_to_container_policy;
   for (const auto& candidate_policy : container_policy) {
-    if (feature_to_container_policy.find(candidate_policy.feature) ==
-        feature_to_container_policy.end()) {
+    if (!base::Contains(feature_to_container_policy,
+                        candidate_policy.feature)) {
       feature_to_container_policy[candidate_policy.feature] = candidate_policy;
     }
   }
@@ -130,11 +137,13 @@ void UpdateIFrameContainerPolicyWithDelegationSupportForClientHints(
 
     // Now we apply the changes from the parent policy to ensure any changes
     // since it was set are respected;
+    merged_policy.self_if_matches =
+        maybe_window_allow_list.value().SelfIfMatches();
     merged_policy.matches_all_origins |=
         maybe_window_allow_list.value().MatchesAll();
     merged_policy.matches_opaque_src |=
         maybe_window_allow_list.value().MatchesOpaqueSrc();
-    std::set<url::Origin> origin_set;
+    std::set<blink::OriginWithPossibleWildcards> origin_set;
     if (!merged_policy.matches_all_origins) {
       origin_set.insert(merged_policy.allowed_origins.begin(),
                         merged_policy.allowed_origins.end());
@@ -143,7 +152,7 @@ void UpdateIFrameContainerPolicyWithDelegationSupportForClientHints(
           maybe_window_allow_list.value().AllowedOrigins().end());
     }
     merged_policy.allowed_origins =
-        std::vector<url::Origin>(origin_set.begin(), origin_set.end());
+        std::vector(origin_set.begin(), origin_set.end());
     container_policy.push_back(merged_policy);
   }
 }

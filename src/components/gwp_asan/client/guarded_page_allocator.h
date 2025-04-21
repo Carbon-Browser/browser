@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,17 +11,18 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/synchronization/lock.h"
 #include "base/thread_annotations.h"
+#include "build/build_config.h"
 #include "components/gwp_asan/client/export.h"
+#include "components/gwp_asan/client/gwp_asan.h"
 #include "components/gwp_asan/common/allocator_state.h"
 
 namespace gwp_asan {
 namespace internal {
-
 // This class encompasses the allocation and deallocation logic on top of the
 // AllocatorState. Its members are not inspected or used by the crash handler.
 //
@@ -47,17 +48,15 @@ class GWP_ASAN_EXPORT GuardedPageAllocator {
   GuardedPageAllocator(const GuardedPageAllocator&) = delete;
   GuardedPageAllocator& operator=(const GuardedPageAllocator&) = delete;
 
-  // Configures this allocator to allocate up to max_alloced_pages pages at a
-  // time, holding metadata for up to num_metadata allocations, from a pool of
-  // total_pages pages, where:
+  // Configures this allocator to allocate up to `settings.max_alloced_pages`
+  // pages at a time, holding metadata for up to `settings.num_metadata`
+  // allocations, from a pool of `settings.total_pages` pages, where:
   //   1 <= max_alloced_pages <= num_metadata <= kMaxMetadata
   //   num_metadata <= total_pages <= kMaxSlots
   //
   // The OOM callback is called the first time the allocator fails to allocate
   // kOutOfMemoryCount allocations consecutively due to lack of memory.
-  void Init(size_t max_alloced_pages,
-            size_t num_metadata,
-            size_t total_pages,
+  void Init(const AllocatorSettings& settings,
             OutOfMemoryCallback oom_callback,
             bool is_partition_alloc);
 
@@ -104,6 +103,7 @@ class GWP_ASAN_EXPORT GuardedPageAllocator {
     FreeList() = default;
     virtual ~FreeList() = default;
     virtual void Initialize(T max_entries) = 0;
+    virtual void Initialize(T max_entries, std::vector<T>&& free_list) = 0;
     virtual bool Allocate(T* out, const char* type) = 0;
     virtual void Free(T entry) = 0;
   };
@@ -118,6 +118,7 @@ class GWP_ASAN_EXPORT GuardedPageAllocator {
    public:
     ~SimpleFreeList() final = default;
     void Initialize(T max_entries) final;
+    void Initialize(T max_entries, std::vector<T>&& free_list) final;
     bool Allocate(T* out, const char* type) final;
     void Free(T entry) final;
 
@@ -148,12 +149,15 @@ class GWP_ASAN_EXPORT GuardedPageAllocator {
     PartitionAllocSlotFreeList();
     ~PartitionAllocSlotFreeList() final;
     void Initialize(AllocatorState::SlotIdx max_entries) final;
+    void Initialize(AllocatorState::SlotIdx max_entries,
+                    std::vector<AllocatorState::SlotIdx>&& free_list) final;
     bool Allocate(AllocatorState::SlotIdx* out, const char* type) final;
     void Free(AllocatorState::SlotIdx entry) final;
 
    private:
     std::vector<const char*> type_mapping_;
     std::map<const char*, std::vector<AllocatorState::SlotIdx>> free_list_;
+    std::vector<AllocatorState::SlotIdx> initial_free_list_;
 
     // Number of used entries. This counter ensures all free entries are used
     // before starting to use random eviction.
@@ -227,14 +231,14 @@ class GWP_ASAN_EXPORT GuardedPageAllocator {
   // Maintain a count of total allocations and consecutive failed allocations
   // to report allocator OOM.
   size_t total_allocations_ GUARDED_BY(lock_) = 0;
-  size_t consecutive_failed_allocations_ GUARDED_BY(lock_) = 0;
+  size_t consecutive_oom_hits_ GUARDED_BY(lock_) = 0;
   bool oom_hit_ GUARDED_BY(lock_) = false;
   OutOfMemoryCallback oom_callback_;
 
   bool is_partition_alloc_ = false;
 
   friend class BaseGpaTest;
-  friend class CrashAnalyzerTest;
+  friend class BaseCrashAnalyzerTest;
   FRIEND_TEST_ALL_PREFIXES(CrashAnalyzerTest, InternalError);
   FRIEND_TEST_ALL_PREFIXES(CrashAnalyzerTest, StackTraceCollection);
 };

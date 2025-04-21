@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 #include <set>
 #include <string>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/containers/unique_ptr_adapters.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -24,7 +24,7 @@ namespace net {
 class HostResolver;
 class HostPortPair;
 class NetLog;
-class NetworkIsolationKey;
+class NetworkAnonymizationKey;
 }  // namespace net
 
 namespace network {
@@ -41,9 +41,13 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) HostResolver
   // directly calling ResolveHost()) with ERR_FAILED. Also on pipe close, calls
   // |connection_shutdown_callback| and passes |this| to notify that the
   // resolver has cancelled all receivers and may be cleaned up.
+  //
+  // `owned_internal_resolver` if set should be equal to `internal_resolver` and
+  // denotes that `this` takes ownership.
   HostResolver(mojo::PendingReceiver<mojom::HostResolver> resolver_receiver,
                ConnectionShutdownCallback connection_shutdown_callback,
                net::HostResolver* internal_resolver,
+               std::unique_ptr<net::HostResolver> owned_internal_resolver,
                net::NetLog* net_log);
   // Constructor for when the resolver will not be bound to a
   // mojom::HostResolver pipe, eg because it is handling ResolveHost requests
@@ -56,8 +60,8 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) HostResolver
   ~HostResolver() override;
 
   void ResolveHost(
-      const net::HostPortPair& host,
-      const net::NetworkIsolationKey& network_isolation_key,
+      mojom::HostResolverHostPtr host,
+      const net::NetworkAnonymizationKey& network_anonymization_key,
       mojom::ResolveHostParametersPtr optional_parameters,
       mojo::PendingRemote<mojom::ResolveHostClient> response_client) override;
   void MdnsListen(const net::HostPortPair& host,
@@ -86,6 +90,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) HostResolver
   std::set<std::unique_ptr<HostResolverMdnsListener>, base::UniquePtrComparator>
       listeners_;
 
+  const std::unique_ptr<net::HostResolver> owned_internal_resolver_;
   const raw_ptr<net::HostResolver> internal_resolver_;
   const raw_ptr<net::NetLog> net_log_;
 

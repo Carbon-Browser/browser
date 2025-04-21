@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,11 +10,11 @@
 
 namespace blink {
 
-class ScriptPromiseResolver;
+class ScriptPromiseResolverBase;
 
 // Reject the |resolver| with the appropriate error given |web_error|.
 // When no |message| is provided, the standard one is chosen.
-void RejectCacheStorageWithError(ScriptPromiseResolver* resolver,
+void RejectCacheStorageWithError(ScriptPromiseResolverBase* resolver,
                                  mojom::blink::CacheStorageError web_error,
                                  const String& message = String());
 }  // namespace blink

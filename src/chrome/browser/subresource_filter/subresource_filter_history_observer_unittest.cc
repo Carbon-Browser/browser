@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -133,9 +133,9 @@ TEST_F(SubresourceFilterHistoryObserverTest,
   // Deleting all the URLs should clear everything.
   base::RunLoop run_loop;
   base::CancelableTaskTracker task_tracker;
-  history_service->ExpireHistoryBetween(std::set<GURL>(), base::Time(),
-                                        base::Time(), /*user_initiated*/ true,
-                                        run_loop.QuitClosure(), &task_tracker);
+  history_service->ExpireHistoryBetween(
+      std::set<GURL>(), history::kNoAppIdFilter, base::Time(), base::Time(),
+      /*user_initiated*/ true, run_loop.QuitClosure(), &task_tracker);
   run_loop.Run();
 
   EXPECT_TRUE(settings_manager()->ShouldShowUIForSite(url1));

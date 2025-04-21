@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@ BrowsingHistoryPolicyHandler::BrowsingHistoryPolicyHandler()
     : TypeCheckingPolicyHandler(key::kAllowDeletingBrowserHistory,
                                 base::Value::Type::BOOLEAN) {}
 
-BrowsingHistoryPolicyHandler::~BrowsingHistoryPolicyHandler() {}
+BrowsingHistoryPolicyHandler::~BrowsingHistoryPolicyHandler() = default;
 
 void BrowsingHistoryPolicyHandler::ApplyPolicySettings(
     const PolicyMap& policies,

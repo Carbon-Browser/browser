@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,8 +62,6 @@ const char* StatusCodeToString(StatusCode code) {
       return "chrome not reachable";
     case kDisconnected:
       return "disconnected";
-    case kForbidden:
-      return "forbidden";
     case kTabCrashed:
       return "tab crashed";
     case kNoSuchCookie:
@@ -78,6 +76,10 @@ const char* StatusCodeToString(StatusCode code) {
       return "no such shadow root";
     case kDetachedShadowRoot:
       return "detached shadow root";
+    case kAbortedByNavigation:
+      return "aborted by navigation";
+    case kTestError:
+      return "test error";
     default:
       return "<unknown>";
   }
@@ -111,7 +113,7 @@ Status::Status(StatusCode code, const std::string& details, const Status& cause)
     stack_trace_ = cause.stack_trace();
 }
 
-Status::~Status() {}
+Status::~Status() = default;
 
 void Status::AddDetails(const std::string& details) {
   msg_ += base::StringPrintf("\n  (%s)", details.c_str());

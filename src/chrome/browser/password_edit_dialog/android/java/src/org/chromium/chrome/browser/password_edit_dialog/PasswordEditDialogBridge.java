@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,10 @@ package org.chromium.chrome.browser.password_edit_dialog;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JniType;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.ui.base.WindowAndroid;
 
 /**
@@ -31,9 +33,12 @@ public class PasswordEditDialogBridge implements PasswordEditDialogCoordinator.D
     }
 
     @CalledByNative
-    void show(@NonNull String[] usernames, int selectedUsernameIndex, @NonNull String password,
-            @NonNull String origin, @Nullable String account) {
-        mDialogCoordinator.show(usernames, selectedUsernameIndex, password, origin, account);
+    void showPasswordEditDialog(
+            @NonNull String[] savedUsernames,
+            @NonNull @JniType("std::u16string") String username,
+            @NonNull @JniType("std::u16string") String password,
+            @Nullable String account) {
+        mDialogCoordinator.showPasswordEditDialog(savedUsernames, username, password, account);
     }
 
     @CalledByNative
@@ -54,10 +59,22 @@ public class PasswordEditDialogBridge implements PasswordEditDialogCoordinator.D
         mNativeDialog = 0;
     }
 
+    @Override
+    public boolean isUsingAccountStorage(String username) {
+        assert mNativeDialog != 0;
+        return PasswordEditDialogBridgeJni.get().isUsingAccountStorage(mNativeDialog, username);
+    }
+
     @NativeMethods
     interface Natives {
         void onDialogAccepted(
-                long nativePasswordEditDialogBridge, String username, String password);
+                long nativePasswordEditDialogBridge,
+                @JniType("std::u16string") String username,
+                @JniType("std::u16string") String password);
+
         void onDialogDismissed(long nativePasswordEditDialogBridge, boolean dialogAccepted);
+
+        boolean isUsingAccountStorage(
+                long nativePasswordEditDialogBridge, @JniType("std::u16string") String username);
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include "chrome/browser/content_settings/cookie_settings_factory.h"
 #include "chrome/browser/predictors/loading_predictor.h"
 #include "chrome/browser/predictors/loading_predictor_factory.h"
-#include "chrome/browser/prefetch/prefetch_prefs.h"
 #include "chrome/browser/preloading/prefetch/no_state_prefetch/chrome_no_state_prefetch_contents_delegate.h"
+#include "chrome/browser/preloading/preloading_prefs.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/chrome_features.h"
 #include "components/content_settings/core/browser/cookie_settings.h"
@@ -43,7 +43,8 @@ void ChromeNoStatePrefetchManagerDelegate::MaybePreconnect(const GURL& url) {
       predictors::LoadingPredictorFactory::GetForProfile(profile_);
   if (loading_predictor) {
     loading_predictor->PrepareForPageLoad(
-        url, predictors::HintOrigin::OMNIBOX_PRERENDER_FALLBACK, true);
+        /*initiator_origin=*/std::nullopt, url,
+        predictors::HintOrigin::OMNIBOX_PRERENDER_FALLBACK, true);
   }
 }
 
@@ -54,7 +55,8 @@ ChromeNoStatePrefetchManagerDelegate::GetNoStatePrefetchContentsDelegate() {
 
 bool ChromeNoStatePrefetchManagerDelegate::
     IsNetworkPredictionPreferenceEnabled() {
-  return prefetch::IsSomePreloadingEnabled(*profile_->GetPrefs());
+  return prefetch::IsSomePreloadingEnabled(*profile_->GetPrefs()) ==
+         content::PreloadingEligibility::kEligible;
 }
 
 std::string

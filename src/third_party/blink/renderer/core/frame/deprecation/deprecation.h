@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,7 +52,7 @@ class CORE_EXPORT Deprecation final {
 
   // To minimize the report/console spam from frames coming and going, report
   // each deprecation at most once per page load per renderer process.
-  std::bitset<static_cast<size_t>(WebFeature::kNumberOfFeatures)>
+  std::bitset<static_cast<size_t>(WebFeature::kMaxValue) + 1>
       features_deprecation_bits_;
   unsigned mute_count_;
 };

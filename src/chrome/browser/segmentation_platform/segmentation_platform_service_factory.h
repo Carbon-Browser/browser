@@ -1,15 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_SEGMENTATION_PLATFORM_SEGMENTATION_PLATFORM_SERVICE_FACTORY_H_
 #define CHROME_BROWSER_SEGMENTATION_PLATFORM_SEGMENTATION_PLATFORM_SERVICE_FACTORY_H_
 
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 namespace base {
 template <typename T>
-struct DefaultSingletonTraits;
+class NoDestructor;
 }  // namespace base
 
 namespace content {
@@ -19,11 +19,15 @@ class BrowserContext;
 class Profile;
 
 namespace segmentation_platform {
+
+namespace home_modules {
+class HomeModulesCardRegistry;
+}
+
 class SegmentationPlatformService;
 
 // A factory to create a unique SegmentationPlatformService.
-class SegmentationPlatformServiceFactory
-    : public BrowserContextKeyedServiceFactory {
+class SegmentationPlatformServiceFactory : public ProfileKeyedServiceFactory {
  public:
   // Gets the SegmentationPlatformService for the profile. Returns a dummy one
   // if the feature isn't enabled.
@@ -32,6 +36,9 @@ class SegmentationPlatformServiceFactory
   // Gets the lazy singleton instance of SegmentationPlatformService.
   static SegmentationPlatformServiceFactory* GetInstance();
 
+  static home_modules::HomeModulesCardRegistry* GetHomeModulesCardRegistry(
+      content::BrowserContext* context);
+
   // Disallow copy/assign.
   SegmentationPlatformServiceFactory(
       const SegmentationPlatformServiceFactory&) = delete;
@@ -39,15 +46,17 @@ class SegmentationPlatformServiceFactory
       const SegmentationPlatformServiceFactory&) = delete;
 
  private:
-  friend struct base::DefaultSingletonTraits<
-      SegmentationPlatformServiceFactory>;
+  friend base::NoDestructor<SegmentationPlatformServiceFactory>;
 
   SegmentationPlatformServiceFactory();
   ~SegmentationPlatformServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory overrides.
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
+
+  void RegisterProfilePrefs(
+      user_prefs::PrefRegistrySyncable* registry) override;
 };
 
 }  // namespace segmentation_platform

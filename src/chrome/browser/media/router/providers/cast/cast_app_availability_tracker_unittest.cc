@@ -1,17 +1,18 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/media/router/providers/cast/cast_app_availability_tracker.h"
 
+#include "base/ranges/algorithm.h"
 #include "base/test/simple_test_tick_clock.h"
-#include "components/cast_channel/cast_message_util.h"
-#include "components/cast_channel/cast_socket.h"
 #include "components/media_router/common/discovery/media_sink_internal.h"
 #include "components/media_router/common/media_route_provider_helper.h"
 #include "components/media_router/common/media_sink.h"
 #include "components/media_router/common/mojom/media_router.mojom.h"
 #include "components/media_router/common/providers/cast/cast_media_source.h"
+#include "components/media_router/common/providers/cast/channel/cast_device_capability.h"
+#include "components/media_router/common/providers/cast/channel/cast_message_util.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -22,13 +23,9 @@ namespace media_router {
 namespace {
 
 MATCHER_P(CastMediaSourcesEqual, expected, "") {
-  if (expected.size() != arg.size())
-    return false;
-  return std::equal(
-      expected.begin(), expected.end(), arg.begin(),
-      [](const CastMediaSource& source1, const CastMediaSource& source2) {
-        return source1.source_id() == source2.source_id();
-      });
+  return base::ranges::equal(expected, arg, std::equal_to<>(),
+                             &CastMediaSource::source_id,
+                             &CastMediaSource::source_id);
 }
 
 MediaSinkInternal CreateSink(const std::string& id) {
@@ -197,10 +194,12 @@ TEST_F(CastAppAvailabilityTrackerTest, FilterByCapability) {
       "cast:AUDIOSRC?clientId=3&capabilities=audio_out");
 
   MediaSinkInternal video_sink = CreateSink("video-sink");
-  video_sink.cast_data().capabilities =
-      cast_channel::VIDEO_OUT | cast_channel::AUDIO_OUT;
+  video_sink.cast_data().capabilities = {
+      cast_channel::CastDeviceCapability::kVideoOut,
+      cast_channel::CastDeviceCapability::kAudioOut};
   MediaSinkInternal audio_sink = CreateSink("audio-sink");
-  audio_sink.cast_data().capabilities = cast_channel::AUDIO_OUT;
+  audio_sink.cast_data().capabilities = {
+      cast_channel::CastDeviceCapability::kAudioOut};
 
   // Make both sinks claim that they're compatible with the two sources.
   SetAvailable({video_sink, audio_sink}, "VIDEOSRC");

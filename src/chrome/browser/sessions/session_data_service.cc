@@ -1,13 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/sessions/session_data_service.h"
 
-#include "base/bind.h"
 #include "base/feature_list.h"
-#include "base/metrics/histogram_functions.h"
-#include "base/time/time.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/defaults.h"
 #include "chrome/browser/lifetime/browser_shutdown.h"
 #include "chrome/browser/profiles/profile.h"
@@ -50,9 +48,7 @@ SessionDataService::SessionDataService(
   SetStatusPref(Status::kInitialized);
   auto* policy = profile_->GetSpecialStoragePolicy();
   if (policy && policy->HasSessionOnlyOrigins()) {
-    RecordHistogramForLastSession(last_status);
-    if (base::FeatureList::IsEnabled(kDeleteSessionOnlyDataOnStartup))
-      MaybeContinueDeletionFromLastSesssion(last_status);
+    MaybeContinueDeletionFromLastSesssion(last_status);
   }
 
   for (Browser* browser : *BrowserList::GetInstance())
@@ -63,13 +59,6 @@ SessionDataService::SessionDataService(
 
 SessionDataService::~SessionDataService() {
   BrowserList::RemoveObserver(this);
-}
-
-void SessionDataService::RecordHistogramForLastSession(Status last_status) {
-  if (last_status == Status::kUninitialized)
-    return;
-  base::UmaHistogramEnumeration("Session.SessionData.StatusFromLastSession",
-                                last_status);
 }
 
 void SessionDataService::MaybeContinueDeletionFromLastSesssion(
@@ -104,14 +93,10 @@ void SessionDataService::MaybeContinueDeletionFromLastSesssion(
   deleter_->DeleteSessionOnlyData(
       /*skip_session_cookies=*/true,
       base::BindOnce(&SessionDataService::OnCleanupAtStartupFinished,
-                     base::Unretained(this), base::TimeTicks::Now()));
+                     weak_factory_.GetWeakPtr()));
 }
 
-void SessionDataService::OnCleanupAtStartupFinished(
-    base::TimeTicks time_started) {
-  base::UmaHistogramMediumTimes("Session.SessionData.StartupCleanupTime",
-                                base::TimeTicks::Now() - time_started);
-}
+void SessionDataService::OnCleanupAtStartupFinished() {}
 
 void SessionDataService::SetStatusPref(Status status) {
   profile_->GetPrefs()->SetInteger(kSessionDataStatusPref,
@@ -133,7 +118,7 @@ void SessionDataService::OnBrowserRemoved(Browser* browser) {
     return;
 
   // Check for any open windows for the current profile.
-  for (auto* open_browser : *BrowserList::GetInstance()) {
+  for (Browser* open_browser : *BrowserList::GetInstance()) {
     if (open_browser->profile() == profile_)
       return;
   }
@@ -165,22 +150,14 @@ void SessionDataService::StartCleanupInternal(bool skip_session_cookies) {
   cleanup_started_ = true;
   SetStatusPref(Status::kDeletionStarted);
 
-  // Using base::Unretained is safe as DeleteSessionOnlyData() uses a
-  // ScopedProfileKeepAlive.
   deleter_->DeleteSessionOnlyData(
       skip_session_cookies,
       base::BindOnce(&SessionDataService::OnCleanupAtSessionEndFinished,
-                     base::Unretained(this), base::TimeTicks::Now()));
+                     weak_factory_.GetWeakPtr()));
 }
 
-void SessionDataService::OnCleanupAtSessionEndFinished(
-    base::TimeTicks time_started) {
+void SessionDataService::OnCleanupAtSessionEndFinished() {
   SetStatusPref(Status::kDeletionFinished);
-  auto* policy = profile_->GetSpecialStoragePolicy();
-  if (policy && policy->HasSessionOnlyOrigins()) {
-    base::UmaHistogramMediumTimes("Session.SessionData.CleanupTime",
-                                  base::TimeTicks::Now() - time_started);
-  }
 }
 
 void SessionDataService::SetForceKeepSessionState() {

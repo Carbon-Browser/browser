@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,16 +8,15 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "storage/browser/file_system/quota/quota_reservation.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
@@ -53,7 +52,7 @@ class FakeBackend : public QuotaReservationManager::QuotaBackend {
       storage::FileSystemType type,
       int64_t delta,
       QuotaReservationManager::ReserveQuotaCallback callback) override {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(base::IgnoreResult(std::move(callback)),
                                   base::File::FILE_OK, delta));
   }

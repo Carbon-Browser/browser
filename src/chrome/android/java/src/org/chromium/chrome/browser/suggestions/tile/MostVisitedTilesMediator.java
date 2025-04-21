@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,48 +6,40 @@ package org.chromium.chrome.browser.suggestions.tile;
 
 import static org.chromium.chrome.browser.suggestions.tile.MostVisitedTilesProperties.HORIZONTAL_EDGE_PADDINGS;
 import static org.chromium.chrome.browser.suggestions.tile.MostVisitedTilesProperties.HORIZONTAL_INTERVAL_PADDINGS;
+import static org.chromium.chrome.browser.suggestions.tile.MostVisitedTilesProperties.IS_CONTAINER_VISIBLE;
 import static org.chromium.chrome.browser.suggestions.tile.MostVisitedTilesProperties.IS_MVT_LAYOUT_VISIBLE;
 import static org.chromium.chrome.browser.suggestions.tile.MostVisitedTilesProperties.PLACEHOLDER_VIEW;
 
 import android.content.res.Configuration;
 import android.content.res.Resources;
-import android.view.ViewGroup;
 import android.view.ViewStub;
 
 import androidx.annotation.Nullable;
 
-import org.chromium.base.Log;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.native_page.ContextMenuManager;
 import org.chromium.chrome.browser.offlinepages.OfflinePageBridge;
+import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.search_engines.TemplateUrlServiceFactory;
 import org.chromium.chrome.browser.suggestions.SiteSuggestion;
 import org.chromium.chrome.browser.suggestions.SuggestionsUiDelegate;
 import org.chromium.chrome.browser.suggestions.mostvisited.MostVisitedSitesMetadataUtils;
 import org.chromium.components.browser_ui.widget.displaystyle.UiConfig;
+import org.chromium.components.search_engines.TemplateUrlService;
 import org.chromium.components.search_engines.TemplateUrlService.TemplateUrlServiceObserver;
 import org.chromium.ui.modelutil.PropertyModel;
 
-import java.io.IOException;
-import java.util.List;
-
-/**
- *  Mediator for handling {@link MostVisitedTilesCarouselLayout} when {@link
- * org.chromium.chrome.browser.flags.ChromeFeatureList#SHOW_SCROLLABLE_MVT_ON_NTP_ANDROID} is
- * enabled or {@link MostVisitedTilesGridLayout} when the feature is disabled -related logic.
- */
+/** Mediator for handling {@link MostVisitedTilesLayout} related logic. */
 public class MostVisitedTilesMediator implements TileGroup.Observer, TemplateUrlServiceObserver {
-    private static final String TAG = "TopSites";
 
     // There's a limit of 12 in {@link MostVisitedSitesBridge#setObserver}.
-    private static final int MAX_RESULTS = 12;
+    static final int MAX_RESULTS = 12;
 
     private final Resources mResources;
     private final UiConfig mUiConfig;
-    private final ViewGroup mMvTilesLayout;
+    private final MostVisitedTilesLayout mMvTilesLayout;
     private final ViewStub mNoMvPlaceholderStub;
     private final PropertyModel mModel;
-    private final boolean mIsScrollableMVTEnabled;
     private final boolean mIsTablet;
     private final int mTileViewLandscapePadding;
     private final int mTileViewPortraitEdgePadding;
@@ -57,19 +49,27 @@ public class MostVisitedTilesMediator implements TileGroup.Observer, TemplateUrl
 
     private TileRenderer mRenderer;
     private TileGroup mTileGroup;
-    private boolean mInitializationComplete;
     private boolean mSearchProviderHasLogo = true;
+    private TemplateUrlService mTemplateUrlService;
 
-    public MostVisitedTilesMediator(Resources resources, UiConfig uiConfig, ViewGroup mvTilesLayout,
-            ViewStub noMvPlaceholderStub, TileRenderer renderer, PropertyModel propertyModel,
-            boolean shouldShowSkeletonUIPreNative, boolean isScrollableMVTEnabled, boolean isTablet,
+    private int mLateralMarginSum;
+    private final int mTileViewEdgePaddingForTablet;
+    private int mTileViewIntervalPaddingForTablet;
+
+    public MostVisitedTilesMediator(
+            Resources resources,
+            UiConfig uiConfig,
+            MostVisitedTilesLayout mvTilesLayout,
+            ViewStub noMvPlaceholderStub,
+            TileRenderer renderer,
+            PropertyModel propertyModel,
+            boolean isTablet,
             @Nullable Runnable snapshotTileGridChangedRunnable,
             @Nullable Runnable tileCountChangedRunnable) {
         mResources = resources;
         mUiConfig = uiConfig;
         mRenderer = renderer;
         mModel = propertyModel;
-        mIsScrollableMVTEnabled = isScrollableMVTEnabled;
         mIsTablet = isTablet;
         mSnapshotTileGridChangedRunnable = snapshotTileGridChangedRunnable;
         mTileCountChangedRunnable = tileCountChangedRunnable;
@@ -80,27 +80,40 @@ public class MostVisitedTilesMediator implements TileGroup.Observer, TemplateUrl
                 mResources.getDimensionPixelSize(R.dimen.tile_view_padding_landscape);
         mTileViewPortraitEdgePadding =
                 mResources.getDimensionPixelSize(R.dimen.tile_view_padding_edge_portrait);
+        mLateralMarginSum =
+                mResources.getDimensionPixelSize(R.dimen.mvt_container_lateral_margin) * 2;
 
-        maybeSetPortraitIntervalPaddingsForCarousel();
+        mTileViewEdgePaddingForTablet =
+                mResources.getDimensionPixelSize(R.dimen.tile_view_padding_edge_tablet);
+        mTileViewIntervalPaddingForTablet =
+                mResources.getDimensionPixelSize(R.dimen.tile_view_padding_interval_tablet);
 
-        if (shouldShowSkeletonUIPreNative) maybeShowMvTilesPreNative();
+        maybeSetPortraitIntervalPaddings();
     }
 
-    /**
-     * Called to initialize this mediator when native is ready.
-     */
-    public void initWithNative(SuggestionsUiDelegate suggestionsUiDelegate,
-            ContextMenuManager contextMenuManager, TileGroup.Delegate tileGroupDelegate,
-            OfflinePageBridge offlinePageBridge, TileRenderer renderer) {
+    /** Called to initialize this mediator when native is ready. */
+    public void initWithNative(
+            Profile profile,
+            SuggestionsUiDelegate suggestionsUiDelegate,
+            ContextMenuManager contextMenuManager,
+            TileGroup.Delegate tileGroupDelegate,
+            OfflinePageBridge offlinePageBridge,
+            TileRenderer renderer) {
         mRenderer = renderer;
-        mTileGroup = new TileGroup(renderer, suggestionsUiDelegate, contextMenuManager,
-                tileGroupDelegate, /*observer=*/this, offlinePageBridge);
+        mTileGroup =
+                new TileGroup(
+                        renderer,
+                        suggestionsUiDelegate,
+                        contextMenuManager,
+                        tileGroupDelegate,
+                        /* observer= */ this,
+                        offlinePageBridge);
         mTileGroup.startObserving(MAX_RESULTS);
 
-        onSearchEngineHasLogoChanged();
-        TemplateUrlServiceFactory.get().addObserver(this);
+        mTemplateUrlService = TemplateUrlServiceFactory.getForProfile(profile);
+        mTemplateUrlService.addObserver(this);
 
-        mInitializationComplete = true;
+        onSearchEngineHasLogoChanged();
     }
 
     // TemplateUrlServiceObserver overrides
@@ -114,20 +127,25 @@ public class MostVisitedTilesMediator implements TileGroup.Observer, TemplateUrl
     public void onTileDataChanged() {
         if (mTileGroup.getTileSections().size() < 1) return;
 
-        mRenderer.renderTileSection(mTileGroup.getTileSections().get(TileSectionType.PERSONALIZED),
-                mMvTilesLayout, mTileGroup.getTileSetupDelegate());
+        mRenderer.renderTileSection(
+                mTileGroup.getTileSections().get(TileSectionType.PERSONALIZED),
+                mMvTilesLayout,
+                mTileGroup.getTileSetupDelegate());
         mTileGroup.notifyTilesRendered();
-        updateTilesViewForCarouselLayout();
+        updateTilesView();
 
         if (mSnapshotTileGridChangedRunnable != null) mSnapshotTileGridChangedRunnable.run();
-        MostVisitedSitesMetadataUtils.getInstance().saveSuggestionListsToFile(
-                mTileGroup.getTileSections().get(TileSectionType.PERSONALIZED));
+        MostVisitedSitesMetadataUtils.getInstance()
+                .saveSuggestionListsToFile(
+                        mTileGroup.getTileSections().get(TileSectionType.PERSONALIZED));
     }
 
     @Override
     public void onTileCountChanged() {
         if (mTileCountChangedRunnable != null) mTileCountChangedRunnable.run();
         updateTilePlaceholderVisibility();
+
+        mModel.set(IS_CONTAINER_VISIBLE, !mTileGroup.isEmpty());
     }
 
     @Override
@@ -143,20 +161,20 @@ public class MostVisitedTilesMediator implements TileGroup.Observer, TemplateUrl
     }
 
     public void onConfigurationChanged() {
-        maybeSetPortraitIntervalPaddingsForCarousel();
-        updateTilesViewForCarouselLayout();
+        maybeSetPortraitIntervalPaddings();
+        updateTilesView();
     }
 
     public void destroy() {
-        if (mMvTilesLayout != null && mIsScrollableMVTEnabled) {
-            ((MostVisitedTilesCarouselLayout) mMvTilesLayout).destroy();
+        if (mMvTilesLayout != null) {
+            mMvTilesLayout.destroy();
         }
 
         if (mTileGroup != null) {
             mTileGroup.destroy();
             mTileGroup = null;
         }
-        TemplateUrlServiceFactory.get().removeObserver(this);
+        if (mTemplateUrlService != null) mTemplateUrlService.removeObserver(this);
     }
 
     public boolean isMVTilesCleanedUp() {
@@ -164,23 +182,7 @@ public class MostVisitedTilesMediator implements TileGroup.Observer, TemplateUrl
     }
 
     public void onSwitchToForeground() {
-        mTileGroup.onSwitchToForeground(/* trackLoadTask = */ false);
-    }
-
-    /**
-     * Maybe render MV tiles skeleton icon pre-native.
-     */
-    private void maybeShowMvTilesPreNative() {
-        if (mInitializationComplete) return;
-        try {
-            List<Tile> tiles =
-                    MostVisitedSitesMetadataUtils.restoreFileToSuggestionListsOnUiThread();
-            if (tiles == null) return;
-            mRenderer.renderTileSection(tiles, mMvTilesLayout, null);
-            updateTilesViewForCarouselLayout();
-        } catch (IOException e) {
-            Log.i(TAG, "No cached MV tiles file.");
-        }
+        mTileGroup.onSwitchToForeground(/* trackLoadTask= */ false);
     }
 
     private void updateTileIcon(Tile tile) {
@@ -204,34 +206,41 @@ public class MostVisitedTilesMediator implements TileGroup.Observer, TemplateUrl
         return null;
     }
 
-    private void maybeSetPortraitIntervalPaddingsForCarousel() {
-        // If it's gird layout (mIsScrollableMVTEnabled is false), the paddings are handled in
-        // {@link MostVisitedTilesGridLayout}
-        if (!mIsScrollableMVTEnabled
-                || mResources.getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE
+    private void maybeSetPortraitIntervalPaddings() {
+        if (mResources.getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE
                 || mTileViewPortraitIntervalPadding != 0) {
             return;
         }
-        if (mIsTablet) {
-            mTileViewPortraitIntervalPadding = mTileViewPortraitEdgePadding;
-        } else {
+        if (!mIsTablet) {
             boolean isSmallDevice = mUiConfig.getCurrentDisplayStyle().isSmall();
-            int screenWidth = mResources.getDisplayMetrics().widthPixels;
-            int tileViewWidth = mResources.getDimensionPixelOffset(
-                    isSmallDevice ? R.dimen.tile_view_width_condensed : R.dimen.tile_view_width);
+            int screenWidth = mResources.getDisplayMetrics().widthPixels - mLateralMarginSum;
+            int tileViewWidth =
+                    mResources.getDimensionPixelOffset(
+                            isSmallDevice
+                                    ? R.dimen.tile_view_width_condensed
+                                    : R.dimen.tile_view_width);
             // We want to show four and a half tile view to make users know the MV tiles are
             // scrollable. But the padding should be equal to or larger than tile_view_padding,
             // otherwise the titles among tiles would be overlapped.
-            mTileViewPortraitIntervalPadding = Integer.max(
-                    -mResources.getDimensionPixelOffset(R.dimen.tile_view_padding),
-                    (int) ((screenWidth - mTileViewPortraitEdgePadding - tileViewWidth * 4.5) / 4));
+            mTileViewPortraitIntervalPadding =
+                    Integer.max(
+                            -mResources.getDimensionPixelOffset(R.dimen.tile_view_padding),
+                            (int)
+                                    ((screenWidth
+                                                    - mTileViewPortraitEdgePadding
+                                                    - tileViewWidth * 4.5)
+                                            / 4));
         }
     }
 
-    private void updateTilesViewForCarouselLayout() {
-        // If it's gird layout (mIsScrollableMVTEnabled is false), the paddings are handled in
-        // {@link MostVisitedTilesGridLayout}
-        if (!mIsScrollableMVTEnabled || mMvTilesLayout.getChildCount() < 1) return;
+    private void updateTilesView() {
+        if (mMvTilesLayout.getChildCount() < 1) return;
+
+        if (mIsTablet) {
+            mModel.set(HORIZONTAL_EDGE_PADDINGS, mTileViewEdgePaddingForTablet);
+            mModel.set(HORIZONTAL_INTERVAL_PADDINGS, mTileViewIntervalPaddingForTablet);
+            return;
+        }
 
         if (mResources.getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
             mModel.set(HORIZONTAL_EDGE_PADDINGS, mTileViewLandscapePadding);
@@ -244,19 +253,11 @@ public class MostVisitedTilesMediator implements TileGroup.Observer, TemplateUrl
     }
 
     private void onSearchEngineHasLogoChanged() {
-        boolean searchEngineHasLogo =
-                TemplateUrlServiceFactory.get().doesDefaultSearchEngineHaveLogo();
+        boolean searchEngineHasLogo = mTemplateUrlService.doesDefaultSearchEngineHaveLogo();
         if (mSearchProviderHasLogo == searchEngineHasLogo) return;
 
         mSearchProviderHasLogo = searchEngineHasLogo;
         updateTilePlaceholderVisibility();
-
-        // TODO(crbug.com/1329288): Remove this when the Feed position experiment is cleaned up.
-        if (!mIsScrollableMVTEnabled) {
-            ((MostVisitedTilesGridLayout) mMvTilesLayout)
-                    .setSearchProviderHasLogo(mSearchProviderHasLogo);
-            mMvTilesLayout.requestLayout();
-        }
     }
 
     /**

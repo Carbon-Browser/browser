@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,11 @@
 
 namespace device {
 
-// TODO(https://crbug.com/917526): add support for unloading the SDK.
+// TODO(crbug.com/41433109): add support for unloading the SDK.
 COMPONENT_EXPORT(VR_ARCORE) bool LoadArCoreSdk(const std::string& libraryPath);
 
 // Determines whether AR Core features are supported.
-// TODO(https://crbug.com/924380): Currently, this is very simplistic. It should
+// TODO(crbug.com/41436902): Currently, this is very simplistic. It should
 // consider whether the device can support ARCore.
 // Calling this method won't load AR Core SDK and does not depend on AR Core SDK
 // to be loaded.

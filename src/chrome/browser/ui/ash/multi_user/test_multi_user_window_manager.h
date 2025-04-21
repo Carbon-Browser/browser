@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,21 +42,19 @@ class TestMultiUserWindowManager : public ash::MultiUserWindowManager {
   const AccountId& GetUserPresentingWindow(
       const aura::Window* window) const override;
   const AccountId& CurrentAccountId() const override;
-  void AddObserver(ash::MultiUserWindowManagerObserver* observer) override;
-  void RemoveObserver(ash::MultiUserWindowManagerObserver* observer) override;
 
  private:
   TestMultiUserWindowManager(Browser* visiting_browser,
                              const AccountId& desktop_owner);
 
   // The window of the visiting browser.
-  raw_ptr<aura::Window> browser_window_;
+  raw_ptr<aura::Window, AcrossTasksDanglingUntriaged> browser_window_;
   // The owner of the visiting browser.
   AccountId browser_owner_;
   // The owner of the currently shown desktop.
   AccountId desktop_owner_;
   // The created window.
-  raw_ptr<aura::Window> created_window_ = nullptr;
+  raw_ptr<aura::Window, AcrossTasksDanglingUntriaged> created_window_ = nullptr;
   // The location of the window.
   AccountId created_window_shown_for_;
   // The current selected active user.

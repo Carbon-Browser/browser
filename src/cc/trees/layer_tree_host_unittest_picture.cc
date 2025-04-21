@@ -1,10 +1,10 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "cc/trees/layer_tree_host.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/time/time.h"
 #include "cc/test/fake_content_layer_client.h"
 #include "cc/test/fake_picture_layer.h"
@@ -13,7 +13,6 @@
 #include "cc/test/property_tree_test_utils.h"
 #include "cc/trees/layer_tree_impl.h"
 #include "components/viz/test/test_context_provider.h"
-#include "components/viz/test/test_gles2_interface.h"
 #include "components/viz/test/test_raster_interface.h"
 
 namespace cc {
@@ -154,7 +153,7 @@ class LayerTreeHostPictureTestResizeViewportWithGpuRaster
   void SetUpUnboundContextProviders(
       viz::TestContextProvider* context_provider,
       viz::TestContextProvider* worker_provider) override {
-    context_provider->UnboundTestContextGL()->set_gpu_rasterization(true);
+    context_provider->UnboundTestRasterInterface()->set_gpu_rasterization(true);
     worker_provider->UnboundTestRasterInterface()->set_gpu_rasterization(true);
   }
 
@@ -570,7 +569,7 @@ class LayerTreeHostPictureTestRSLLMembershipWithScale
 
 // Multi-thread only because in single thread you can't pinch zoom on the
 // compositor thread.
-// TODO(https://crbug.com/997866): Flaky on several platforms.
+// TODO(crbug.com/41478255): Flaky on several platforms.
 // MULTI_THREAD_TEST_F(LayerTreeHostPictureTestRSLLMembershipWithScale);
 
 class LayerTreeHostPictureTestForceRecalculateScales

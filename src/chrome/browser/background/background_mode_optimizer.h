@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 
 #include <memory>
 
-#include "base/time/time.h"
 #include "chrome/browser/ui/browser_list_observer.h"
 #include "components/keep_alive_registry/keep_alive_state_observer.h"
 
@@ -20,14 +19,14 @@ class Browser;
 class BackgroundModeOptimizer : public KeepAliveStateObserver,
                                 BrowserListObserver {
  public:
+  // Creates a new BackgroundModeOptimizer. Can return null if optimizations
+  // are not supported.
+  static std::unique_ptr<BackgroundModeOptimizer> Create();
+
   BackgroundModeOptimizer(const BackgroundModeOptimizer&) = delete;
   BackgroundModeOptimizer& operator=(const BackgroundModeOptimizer&) = delete;
 
   ~BackgroundModeOptimizer() override;
-
-  // Creates a new BackgroundModeOptimizer. Can return null if optimizations
-  // are not supported.
-  static std::unique_ptr<BackgroundModeOptimizer> Create();
 
   // KeepAliveStateObserver implementation
   void OnKeepAliveStateChanged(bool is_keeping_alive) override;
@@ -39,6 +38,7 @@ class BackgroundModeOptimizer : public KeepAliveStateObserver,
  private:
   friend class DummyBackgroundModeOptimizer;
 
+  // Use `Create()` above.
   BackgroundModeOptimizer();
 
   // Calls DoRestart() if the current state of the process allows it.
@@ -48,11 +48,7 @@ class BackgroundModeOptimizer : public KeepAliveStateObserver,
   // Virtual for testing purposes.
   virtual void DoRestart();
 
-  // Used for a histogram that records the duration of a session before
-  // browser got restarted into background mode.
-  base::TimeTicks creation_time_;
-
-  bool browser_was_added_;
+  bool browser_was_added_ = false;
 };
 
 #endif  // CHROME_BROWSER_BACKGROUND_BACKGROUND_MODE_OPTIMIZER_H_

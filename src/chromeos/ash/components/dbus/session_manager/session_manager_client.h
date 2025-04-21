@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,23 @@
 #define CHROMEOS_ASH_COMPONENTS_DBUS_SESSION_MANAGER_SESSION_MANAGER_CLIENT_H_
 
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/observer_list.h"
 #include "base/time/time.h"
-#include "chromeos/dbus/common/dbus_method_call_status.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/types/expected.h"
+#include "chromeos/dbus/common/dbus_callback.h"
+#include "components/policy/proto/device_management_backend.pb.h"
 #include "third_party/cros_system_api/dbus/login_manager/dbus-constants.h"
+
+namespace arc {
+class StartArcMiniInstanceRequest;
+class UpgradeArcContainerRequest;
+}  // namespace arc
 
 namespace cryptohome {
 class AccountIdentifier;
@@ -32,8 +39,6 @@ class SignedData;
 namespace login_manager {
 class LoginScreenStorageMetadata;
 class PolicyDescriptor;
-class StartArcMiniContainerRequest;
-class UpgradeArcContainerRequest;
 }  // namespace login_manager
 
 namespace ash {
@@ -82,6 +87,17 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
     kUserless = 1,
   };
 
+  // Error type encountered while retrieving state keys. These values are
+  // persisted to logs. Entries should not be renumbered and numeric values
+  // should never be reused.
+  enum class StateKeyErrorType {
+    kNoError = 0,
+    kInvalidResponse = 1,
+    kCommunicationError = 2,
+    kMissingIdentifiers = 3,
+    kMaxValue = kMissingIdentifiers
+  };
+
   // Interface for observing changes from the session manager.
   class Observer {
    public:
@@ -96,12 +112,21 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
     // Called after EmitLoginPromptVisible is called.
     virtual void EmitLoginPromptVisibleCalled() {}
 
+    // Called after StartSessionEx is called.
+    virtual void StartSessionExCalled() {}
+
     // Called when the ARC instance is stopped after it had already started.
     virtual void ArcInstanceStopped(
         login_manager::ArcContainerStopReason reason) {}
 
     // Called when screen lock state is updated.
     virtual void ScreenLockedStateUpdated() {}
+
+    // Called when a powerwash is requested.
+    virtual void PowerwashRequested(bool admin_requested) {}
+
+    // Called when session stopping signal is received
+    virtual void SessionStopping() {}
   };
 
   // Interface for performing actions on behalf of the stub implementation.
@@ -145,7 +170,7 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
 
   // Runs the callback as soon as the service becomes available.
   virtual void WaitForServiceToBeAvailable(
-      WaitForServiceToBeAvailableCallback callback) = 0;
+      chromeos::WaitForServiceToBeAvailableCallback callback) = 0;
 
   // Returns the most recent screen-lock state received from session_manager.
   // This method should only be called by low-level code that is unable to
@@ -170,7 +195,7 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
   virtual void RestartJob(int socket_fd,
                           const std::vector<std::string>& argv,
                           RestartJobReason reason,
-                          VoidDBusMethodCallback callback) = 0;
+                          chromeos::VoidDBusMethodCallback callback) = 0;
 
   // Sends the user's password to the session manager.
   virtual void SaveLoginPassword(const std::string& password) = 0;
@@ -178,7 +203,7 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
   // Used to report errors from |LoginScreenStorageStore()|. |error| should
   // contain an error message if an error occurred.
   using LoginScreenStorageStoreCallback =
-      DBusMethodCallback<std::string /* error */>;
+      chromeos::DBusMethodCallback<std::string /* error */>;
 
   // Stores data to the login screen storage. login screen storage is a D-Bus
   // API that is used by the custom login screen implementations to inject
@@ -194,8 +219,8 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
   // returned by the session manager. |error| contains an error message if an
   // error occurred, otherwise empty.
   using LoginScreenStorageRetrieveCallback =
-      base::OnceCallback<void(absl::optional<std::string> /* data */,
-                              absl::optional<std::string> /* error */)>;
+      base::OnceCallback<void(std::optional<std::string> /* data */,
+                              std::optional<std::string> /* error */)>;
 
   // Retrieve data stored earlier with the |LoginScreenStorageStore()| method.
   virtual void LoginScreenStorageRetrieve(
@@ -207,7 +232,7 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
   // |keys| is empty and |error| contains the error message.
   using LoginScreenStorageListKeysCallback =
       base::OnceCallback<void(std::vector<std::string> /* keys */,
-                              absl::optional<std::string> /* error */)>;
+                              std::optional<std::string> /* error */)>;
 
   // List all keys currently stored in the login screen storage.
   virtual void LoginScreenStorageListKeys(
@@ -220,6 +245,16 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
   // Starts the session for the user.
   virtual void StartSession(
       const cryptohome::AccountIdentifier& cryptohome_id) = 0;
+  // Same as |StartSession|, but also tells session_manager whether Chrome will
+  // handle owner key generation or not (based on |chrome_side_key_generation|).
+  virtual void StartSessionEx(
+      const cryptohome::AccountIdentifier& cryptohome_id,
+      bool chrome_side_key_generation) = 0;
+
+  // Emits the "started-user-session" upstart signal to notify all the critical
+  // login tasks are completed.
+  virtual void EmitStartedUserSession(
+      const cryptohome::AccountIdentifier& cryptohome_id) = 0;
 
   // Stops the current session. Don't call directly unless there's no user on
   // the device. Use SessionTerminationManager::StopSession instead.
@@ -230,15 +265,17 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
       const cryptohome::AccountIdentifier& cryptohome_id) = 0;
 
   // Starts the factory reset.
-  virtual void StartDeviceWipe() = 0;
+  virtual void StartDeviceWipe(chromeos::VoidDBusMethodCallback callback) = 0;
 
   // Starts a remotely initiated factory reset, similar to |StartDeviceWipe|
   // above, but also performs additional checks on Chrome OS side.
+  // session_manager validates |signed_command| against SHA256_RSA.
   virtual void StartRemoteDeviceWipe(
       const enterprise_management::SignedData& signed_command) = 0;
 
   // Set the block_demode and check_enrollment flags to 0 in the VPD.
-  virtual void ClearForcedReEnrollmentVpd(VoidDBusMethodCallback callback) = 0;
+  virtual void ClearForcedReEnrollmentVpd(
+      chromeos::VoidDBusMethodCallback callback) = 0;
 
   // Triggers a TPM firmware update.
   virtual void StartTPMFirmwareUpdate(const std::string& update_mode) = 0;
@@ -257,9 +294,18 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
   // upon next ash-chrome restart. The method returns true if the DBus call was
   // successful. The callback is passed true if the DBus call is successful and
   // false otherwise.
-  virtual bool RequestBrowserDataMigration(
+  // This method is blocking. Do not use unless necessary.
+  virtual bool BlockingRequestBrowserDataMigration(
       const cryptohome::AccountIdentifier& cryptohome_id,
-      const bool is_move) = 0;
+      const std::string& mode) = 0;
+
+  // Makes session_manager add some flags to carry out browser data backward
+  // migration upon next ash-chrome restart. The method returns true if the DBus
+  // call was successful. The callback is passed true if the DBus call is
+  // successful and false otherwise.
+  // This method is blocking. Do not use unless necessary.
+  virtual bool BlockingRequestBrowserDataBackwardMigration(
+      const cryptohome::AccountIdentifier& cryptohome_id) = 0;
 
   // Map that is used to describe the set of active user sessions where |key|
   // is cryptohome id and |value| is user_id_hash.
@@ -269,7 +315,7 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
   // method. It receives |sessions| argument where the keys are cryptohome_ids
   // for all users that are currently active.
   using ActiveSessionsCallback =
-      DBusMethodCallback<ActiveSessionsMap /* sessions */>;
+      chromeos::DBusMethodCallback<ActiveSessionsMap /* sessions */>;
 
   // Enumerates active user sessions. Usually Chrome naturally keeps track of
   // active users when they are added into current session. When Chrome is
@@ -278,8 +324,8 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
   // active users.
   virtual void RetrieveActiveSessions(ActiveSessionsCallback callback) = 0;
 
-  // TODO(crbug.com/765644): Change the policy storage interface so that it has
-  // a single StorePolicy, RetrievePolicy, BlockingRetrivePolicy method that
+  // TODO(crbug.com/41344863): Change the policy storage interface so that it
+  // has a single StorePolicy, RetrievePolicy, BlockingRetrivePolicy method that
   // takes a PolicyDescriptor.
 
   // Used for RetrieveDevicePolicy, RetrievePolicyForUser and
@@ -290,61 +336,6 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
   using RetrievePolicyCallback =
       base::OnceCallback<void(RetrievePolicyResponseType response_type,
                               const std::string& protobuf)>;
-
-  // Fetches the device policy blob stored by the session manager.  Upon
-  // completion of the retrieve attempt, we will call the provided callback.
-  // DEPRECATED, use RetrievePolicy() instead.
-  virtual void RetrieveDevicePolicy(RetrievePolicyCallback callback) = 0;
-
-  // Same as RetrieveDevicePolicy() but blocks until a reply is received, and
-  // populates the policy synchronously. Returns SUCCESS when successful, or
-  // the corresponding error from enum in case of a failure.
-  // This may only be called in situations where blocking the UI thread is
-  // considered acceptable (e.g. restarting the browser after a crash or after
-  // a flag change).
-  // TODO(crbug.com/160522): Get rid of blocking calls.
-  // DEPRECATED, use BlockingRetrievePolicy() instead.
-  virtual RetrievePolicyResponseType BlockingRetrieveDevicePolicy(
-      std::string* policy_out) = 0;
-
-  // Fetches the user policy blob stored by the session manager for the given
-  // |cryptohome_id|. Upon completion of the retrieve attempt, we will call the
-  // provided callback.
-  // DEPRECATED, use RetrievePolicy() instead.
-  virtual void RetrievePolicyForUser(
-      const cryptohome::AccountIdentifier& cryptohome_id,
-      RetrievePolicyCallback callback) = 0;
-
-  // Same as RetrievePolicyForUser() but blocks until a reply is received, and
-  // populates the policy synchronously. Returns SUCCESS when successful, or
-  // the corresponding error from enum in case of a failure.
-  // This may only be called in situations where blocking the UI thread is
-  // considered acceptable (e.g. restarting the browser after a crash or after
-  // a flag change).
-  // TODO(crbug.com/160522): Get rid of blocking calls.
-  // DEPRECATED, use BlockingRetrievePolicy() instead.
-  virtual RetrievePolicyResponseType BlockingRetrievePolicyForUser(
-      const cryptohome::AccountIdentifier& cryptohome_id,
-      std::string* policy_out) = 0;
-
-  // Fetches the policy blob associated with the specified device-local account
-  // from session manager.  |callback| is invoked up on completion.
-  // DEPRECATED, use RetrievePolicy() instead.
-  virtual void RetrieveDeviceLocalAccountPolicy(
-      const std::string& account_id,
-      RetrievePolicyCallback callback) = 0;
-
-  // Same as RetrieveDeviceLocalAccountPolicy() but blocks until a reply is
-  // received, and populates the policy synchronously. Returns SUCCESS when
-  // successful, or the corresponding error from enum in case of a failure.
-  // This may only be called in situations where blocking the UI thread is
-  // considered acceptable (e.g. restarting the browser after a crash or after
-  // a flag change).
-  // TODO(crbug.com/165022): Get rid of blocking calls.
-  // DEPRECATED, use BlockingRetrievePolicy() instead.
-  virtual RetrievePolicyResponseType BlockingRetrieveDeviceLocalAccountPolicy(
-      const std::string& account_id,
-      std::string* policy_out) = 0;
 
   // Fetches a policy blob stored by the session manager. Invokes |callback|
   // upon completion.
@@ -357,7 +348,7 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
   // This may only be called in situations where blocking the UI thread is
   // considered acceptable (e.g. restarting the browser after a crash or after
   // a flag change).
-  // TODO(crbug.com/165022): Get rid of blocking calls.
+  // TODO(crbug.com/40296212): Get rid of blocking calls.
   virtual RetrievePolicyResponseType BlockingRetrievePolicy(
       const login_manager::PolicyDescriptor& descriptor,
       std::string* policy_out) = 0;
@@ -365,7 +356,7 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
   // Attempts to asynchronously store |policy_blob| as device policy.  Upon
   // completion of the store attempt, we will call callback.
   virtual void StoreDevicePolicy(const std::string& policy_blob,
-                                 VoidDBusMethodCallback callback) = 0;
+                                 chromeos::VoidDBusMethodCallback callback) = 0;
 
   // Attempts to asynchronously store |policy_blob| as user policy for the
   // given |cryptohome_id|. Upon completion of the store attempt, we will call
@@ -373,21 +364,21 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
   virtual void StorePolicyForUser(
       const cryptohome::AccountIdentifier& cryptohome_id,
       const std::string& policy_blob,
-      VoidDBusMethodCallback callback) = 0;
+      chromeos::VoidDBusMethodCallback callback) = 0;
 
   // Sends a request to store a policy blob for the specified device-local
   // account. The result of the operation is reported through |callback|.
   virtual void StoreDeviceLocalAccountPolicy(
       const std::string& account_id,
       const std::string& policy_blob,
-      VoidDBusMethodCallback callback) = 0;
+      chromeos::VoidDBusMethodCallback callback) = 0;
 
   // Sends a request to store a |policy_blob| to Session Manager. The storage
   // location is determined by |descriptor|. The result of the operation is
   // reported through |callback|.
   virtual void StorePolicy(const login_manager::PolicyDescriptor& descriptor,
                            const std::string& policy_blob,
-                           VoidDBusMethodCallback callback) = 0;
+                           chromeos::VoidDBusMethodCallback callback) = 0;
 
   // Returns whether session manager can be used to restart Chrome in order to
   // apply per-user session flags, or start guest session.
@@ -408,8 +399,9 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
       const std::vector<std::string>& feature_flags,
       const std::map<std::string, std::string>& origin_list_flags) = 0;
 
-  using StateKeysCallback =
-      base::OnceCallback<void(const std::vector<std::string>& state_keys)>;
+  using StateKeysCallback = base::OnceCallback<void(
+      const base::expected<std::vector<std::string>, StateKeyErrorType>&
+          state_keys)>;
 
   // Get the currently valid server-backed state keys for the device.
   // Server-backed state keys are opaque, device-unique, time-dependent,
@@ -436,8 +428,8 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
   // StartArcMiniContainer starts a container with only a handful of ARC
   // processes for Chrome OS login screen.
   virtual void StartArcMiniContainer(
-      const login_manager::StartArcMiniContainerRequest& request,
-      VoidDBusMethodCallback callback) = 0;
+      const arc::StartArcMiniInstanceRequest& request,
+      chromeos::VoidDBusMethodCallback callback) = 0;
 
   // UpgradeArcContainer upgrades a mini-container to a full ARC container. On
   // upgrade failure, the container will be shutdown. The container shutdown
@@ -445,8 +437,8 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
   // guarantees over whether this |callback| is invoked or the
   // ArcInstanceStopped signal is received first.
   virtual void UpgradeArcContainer(
-      const login_manager::UpgradeArcContainerRequest& request,
-      VoidDBusMethodCallback callback) = 0;
+      const arc::UpgradeArcContainerRequest& request,
+      chromeos::VoidDBusMethodCallback callback) = 0;
 
   // Asynchronously stops the ARC instance. When |should_backup_log| is set to
   // true it also initiates ARC log back up operation on debugd for the given
@@ -455,7 +447,7 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
   // stop an instance or session manager can not be reached).
   virtual void StopArcInstance(const std::string& account_id,
                                bool should_backup_log,
-                               VoidDBusMethodCallback callback) = 0;
+                               chromeos::VoidDBusMethodCallback callback) = 0;
 
   // Adjusts the amount of CPU the ARC instance is allowed to use. When
   // |restriction_state| is CONTAINER_CPU_RESTRICTION_FOREGROUND the limit is
@@ -466,16 +458,16 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
   // supported, the function asynchronously runs the |callback| with false.
   virtual void SetArcCpuRestriction(
       login_manager::ContainerCpuRestrictionState restriction_state,
-      VoidDBusMethodCallback callback) = 0;
+      chromeos::VoidDBusMethodCallback callback) = 0;
 
   // Emits the "arc-booted" upstart signal.
   virtual void EmitArcBooted(const cryptohome::AccountIdentifier& cryptohome_id,
-                             VoidDBusMethodCallback callback) = 0;
+                             chromeos::VoidDBusMethodCallback callback) = 0;
 
   // Asynchronously retrieves the timestamp which ARC instance is invoked.
   // Returns nullopt if there is no ARC instance or ARC is not available.
   virtual void GetArcStartTime(
-      DBusMethodCallback<base::TimeTicks> callback) = 0;
+      chromeos::DBusMethodCallback<base::TimeTicks> callback) = 0;
 
   using EnableAdbSideloadCallback =
       base::OnceCallback<void(AdbSideloadResponseCode response_code)>;
@@ -503,10 +495,5 @@ class COMPONENT_EXPORT(SESSION_MANAGER) SessionManagerClient {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ash::SessionManagerClient;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_DBUS_SESSION_MANAGER_SESSION_MANAGER_CLIENT_H_

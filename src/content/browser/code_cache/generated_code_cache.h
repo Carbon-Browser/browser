@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,7 +68,8 @@ class CONTENT_EXPORT GeneratedCodeCache {
   };
 
   // Used for collecting statistics about cache behaviour.
-  enum CacheEntryStatus {
+  // Since it's uploaded to UMA, its values must never change.
+  enum CacheEntryStatus : uint8_t {
     kHit,
     kMiss,
     kClear,
@@ -134,6 +135,10 @@ class CONTENT_EXPORT GeneratedCodeCache {
 
   // Clears the in-memory cache.
   void ClearInMemoryCache();
+
+  void CollectStatisticsForTest(const GURL& resource_url,
+                                const GURL& origin_lock,
+                                GeneratedCodeCache::CacheEntryStatus status);
 
   const base::FilePath& path() const { return path_; }
 
@@ -205,7 +210,9 @@ class CONTENT_EXPORT GeneratedCodeCache {
                                          base::OnceClosure callback,
                                          disk_cache::EntryResult result);
 
-  void CollectStatistics(GeneratedCodeCache::CacheEntryStatus status);
+  void CollectStatistics(const GURL& resource_url,
+                         const GURL& origin_lock,
+                         GeneratedCodeCache::CacheEntryStatus status);
 
   // Whether very large cache entries are deduplicated in this cache.
   // Deduplication is disabled in the WebUI code cache, as an additional defense

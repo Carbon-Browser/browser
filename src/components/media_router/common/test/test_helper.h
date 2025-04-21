@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,9 @@
 #include "build/build_config.h"
 #include "components/media_router/common/discovery/media_sink_service_base.h"
 
-class MediaSink;
-
 namespace media_router {
+
+class MediaSink;
 
 MediaSink CreateCastSink(const std::string& id, const std::string& name);
 MediaSink CreateDialSink(const std::string& id, const std::string& name);

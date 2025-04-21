@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,32 @@
 // See
 // https://chromium.googlesource.com/chromium/src/+/main/docs/closure_compilation.md
 
-/** @fileoverview Externs generated from namespace: ttsEngine */
+/**
+ * @fileoverview Externs generated from namespace: ttsEngine
+ * @externs
+ */
 
 /** @const */
 chrome.ttsEngine = {};
+
+/**
+ * @enum {string}
+ * @see https://developer.chrome.com/extensions/ttsEngine#type-TtsClientSource
+ */
+chrome.ttsEngine.TtsClientSource = {
+  CHROMEFEATURE: 'chromefeature',
+  EXTENSION: 'extension',
+};
+
+/**
+ * Identifier for the client requesting status.
+ * @typedef {{
+ *   id: string,
+ *   source: !chrome.ttsEngine.TtsClientSource
+ * }}
+ * @see https://developer.chrome.com/extensions/ttsEngine#type-TtsClient
+ */
+chrome.ttsEngine.TtsClient;
 
 /**
  * @enum {string}
@@ -23,6 +45,37 @@ chrome.ttsEngine.VoiceGender = {
   MALE: 'male',
   FEMALE: 'female',
 };
+
+/**
+ * Options for removing a given language.
+ * @typedef {{
+ *   uninstallImmediately: boolean
+ * }}
+ * @see https://developer.chrome.com/extensions/ttsEngine#type-LanguageUninstallOptions
+ */
+chrome.ttsEngine.LanguageUninstallOptions;
+
+/**
+ * @enum {string}
+ * @see https://developer.chrome.com/extensions/ttsEngine#type-LanguageInstallStatus
+ */
+chrome.ttsEngine.LanguageInstallStatus = {
+  NOT_INSTALLED: 'notInstalled',
+  INSTALLING: 'installing',
+  INSTALLED: 'installed',
+  FAILED: 'failed',
+};
+
+/**
+ * Install status of a language.
+ * @typedef {{
+ *   lang: string,
+ *   installStatus: !chrome.ttsEngine.LanguageInstallStatus,
+ *   error: (string|undefined)
+ * }}
+ * @see https://developer.chrome.com/extensions/ttsEngine#type-LanguageStatus
+ */
+chrome.ttsEngine.LanguageStatus;
 
 /**
  * Options specified to the tts.speak() method.
@@ -51,7 +104,7 @@ chrome.ttsEngine.AudioStreamOptions;
 /**
  * Parameters containing an audio buffer and associated data.
  * @typedef {{
- *   audioBuffer: Float32Array,
+ *   audioBuffer: ArrayBuffer,
  *   charIndex: (number|undefined),
  *   isLastBuffer: (boolean|undefined)
  * }}
@@ -62,7 +115,7 @@ chrome.ttsEngine.AudioBuffer;
 /**
  * Called by an engine to update its list of voices. This list overrides any
  * voices declared in this extension's manifest.
- * @param {!Array<!chrome.tts.TtsVoice>} voices Array of
+ * @param {!Array<!chrome.ttsEngine.tts.TtsVoice>} voices Array of
  *     $(ref:tts.TtsVoice) objects representing the available voices for speech
  *     synthesis.
  * @see https://developer.chrome.com/extensions/ttsEngine#method-updateVoices
@@ -72,7 +125,7 @@ chrome.ttsEngine.updateVoices = function(voices) {};
 /**
  * Routes a TTS event from a speech engine to a client.
  * @param {number} requestId
- * @param {!chrome.tts.TtsEvent} event The update event from the
+ * @param {!chrome.ttsEngine.tts.TtsEvent} event The update event from the
  *     text-to-speech engine indicating the status of this utterance.
  * @see https://developer.chrome.com/extensions/ttsEngine#method-sendTtsEvent
  */
@@ -86,6 +139,17 @@ chrome.ttsEngine.sendTtsEvent = function(requestId, event) {};
  * @see https://developer.chrome.com/extensions/ttsEngine#method-sendTtsAudio
  */
 chrome.ttsEngine.sendTtsAudio = function(requestId, audio) {};
+
+/**
+ * Called by an engine when a language install is attempted, and when a language
+ * is uninstalled. Also called in response to a status request from a client.
+ * When a voice is installed or uninstalled, the engine should also call
+ * ttsEngine.updateVoices to register the voice.
+ * @param {!chrome.ttsEngine.LanguageStatus} status The install status of the
+ *     language.
+ * @see https://developer.chrome.com/extensions/ttsEngine#method-updateLanguage
+ */
+chrome.ttsEngine.updateLanguage = function(status) {};
 
 /**
  * Called when the user makes a call to tts.speak() and one of the voices from
@@ -132,3 +196,27 @@ chrome.ttsEngine.onPause;
  * @see https://developer.chrome.com/extensions/ttsEngine#event-onResume
  */
 chrome.ttsEngine.onResume;
+
+/**
+ * Fired when a TTS client requests to install a new language. The engine should
+ * attempt to download and install the language, and call
+ * ttsEngine.updateLanguage with the result. On success, the engine should also
+ * call ttsEngine.updateVoices to register the newly available voices.
+ * @type {!ChromeEvent}
+ * @see https://developer.chrome.com/extensions/ttsEngine#event-onInstallLanguageRequest
+ */
+chrome.ttsEngine.onInstallLanguageRequest;
+
+/**
+ * Fired when a TTS client indicates a language is no longer needed.
+ * @type {!ChromeEvent}
+ * @see https://developer.chrome.com/extensions/ttsEngine#event-onUninstallLanguageRequest
+ */
+chrome.ttsEngine.onUninstallLanguageRequest;
+
+/**
+ * Fired when a TTS client requests the install status of a language.
+ * @type {!ChromeEvent}
+ * @see https://developer.chrome.com/extensions/ttsEngine#event-onLanguageStatusRequest
+ */
+chrome.ttsEngine.onLanguageStatusRequest;

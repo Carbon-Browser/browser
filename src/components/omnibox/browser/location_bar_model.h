@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,7 +52,7 @@ class LocationBarModel {
   // UMA opted-in users.  Examines the user's profile to determine if the
   // current page is the user's home page.
   virtual metrics::OmniboxEventProto::PageClassification GetPageClassification(
-      OmniboxFocusSource focus_source) = 0;
+      bool is_prefetch = false) const = 0;
 
   // Returns the id of the icon to show to the left of the address, based on the
   // current URL.  When search term replacement is active, this returns a search
@@ -78,10 +78,6 @@ class LocationBarModel {
   // user has a specified extension or pref enabled. If true, the only elisions
   // should be username/password and trailing slash on bare hostname.
   virtual bool ShouldPreventElision() const = 0;
-
-  // Returns whether the omnibox should use the new security indicators for
-  // secure HTTPS connections.
-  virtual bool ShouldUseUpdatedConnectionSecurityIndicators() const = 0;
 
  protected:
   LocationBarModel() = default;

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_PUBLIC_COMMON_NAVIGATION_IMPRESSION_MOJOM_TRAITS_H_
 
 #include "mojo/public/cpp/bindings/struct_traits.h"
+#include "services/network/public/mojom/attribution.mojom-shared.h"
 #include "third_party/blink/public/common/common_export.h"
 #include "third_party/blink/public/common/navigation/impression.h"
 #include "third_party/blink/public/common/tokens/tokens.h"

@@ -1,19 +1,30 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/frame/browser_frame_view_linux.h"
 
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
+#include "chrome/browser/ui/views/frame/browser_frame_view_paint_utils_linux.h"
+#include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/desktop_browser_frame_aura_linux.h"
-#include "ui/color/color_id.h"
-#include "ui/color/color_provider.h"
+#include "ui/base/hit_test.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/geometry/skia_conversions.h"
-#include "ui/gfx/scoped_canvas.h"
-#include "ui/gfx/skia_paint_util.h"
+#include "ui/gfx/shadow_value.h"
+#include "ui/linux/linux_ui.h"
+#include "ui/ozone/public/ozone_platform.h"
 #include "ui/views/layout/layout_provider.h"
-#include "ui/views/window/frame_background.h"
 #include "ui/views/window/window_button_order_provider.h"
+
+namespace {
+
+// The resize border at the top of the caption area. Only used when frame
+// shadows are disabled. The value is chosen to match the left, right, and
+// bottom resize borders.
+constexpr int kResizeTopBorderThickness = 4;
+
+}  // namespace
 
 BrowserFrameViewLinux::BrowserFrameViewLinux(
     BrowserFrame* frame,
@@ -21,21 +32,26 @@ BrowserFrameViewLinux::BrowserFrameViewLinux(
     BrowserFrameViewLayoutLinux* layout)
     : OpaqueBrowserFrameView(frame, browser_view, layout), layout_(layout) {
   layout->set_view(this);
-  if (ui::LinuxUi* ui = ui::LinuxUi::instance()) {
-    ui->AddWindowButtonOrderObserver(this);
+  if (auto* linux_ui = ui::LinuxUi::instance()) {
+    window_button_order_observation_.Observe(linux_ui);
     OnWindowButtonOrderingChange();
   }
 }
 
-BrowserFrameViewLinux::~BrowserFrameViewLinux() {
-  if (ui::LinuxUi* ui = ui::LinuxUi::instance())
-    ui->RemoveWindowButtonOrderObserver(this);
+BrowserFrameViewLinux::~BrowserFrameViewLinux() = default;
+
+gfx::Insets BrowserFrameViewLinux::RestoredMirroredFrameBorderInsets() const {
+  return layout_->RestoredMirroredFrameBorderInsets();
+}
+
+gfx::Insets BrowserFrameViewLinux::GetInputInsets() const {
+  return layout_->GetInputInsets();
 }
 
 SkRRect BrowserFrameViewLinux::GetRestoredClipRegion() const {
   gfx::RectF bounds_dip(GetLocalBounds());
   if (ShouldDrawRestoredFrameShadow()) {
-    gfx::InsetsF border(layout_->MirroredFrameBorderInsets());
+    gfx::InsetsF border(layout_->RestoredMirroredFrameBorderInsets());
     bounds_dip.Inset(border);
   }
   float radius_dip = GetRestoredCornerRadiusDip();
@@ -46,10 +62,37 @@ SkRRect BrowserFrameViewLinux::GetRestoredClipRegion() const {
 }
 
 // static
-gfx::ShadowValues BrowserFrameViewLinux::GetShadowValues() {
+gfx::ShadowValues BrowserFrameViewLinux::GetShadowValues(bool active) {
   int elevation = ChromeLayoutProvider::Get()->GetShadowElevationMetric(
-      views::Emphasis::kMaximum);
+      active ? views::Emphasis::kMaximum : views::Emphasis::kMedium);
   return gfx::ShadowValue::MakeMdShadowValues(elevation);
+}
+
+void BrowserFrameViewLinux::PaintRestoredFrameBorder(
+    gfx::Canvas* canvas) const {
+#if BUILDFLAG(IS_LINUX)
+  const bool tiled = frame()->tiled();
+#else
+  const bool tiled = false;
+#endif
+  auto shadow_values =
+      tiled ? gfx::ShadowValues() : GetShadowValues(ShouldPaintAsActive());
+  PaintRestoredFrameBorderLinux(
+      *canvas, *this, frame_background(), GetRestoredClipRegion(),
+      ShouldDrawRestoredFrameShadow(), ShouldPaintAsActive(),
+      layout_->RestoredMirroredFrameBorderInsets(), shadow_values, tiled);
+}
+
+void BrowserFrameViewLinux::GetWindowMask(const gfx::Size& size,
+                                          SkPath* window_mask) {
+  // This class uses transparency to draw rounded corners, so a
+  // window mask is not necessary.
+}
+
+bool BrowserFrameViewLinux::ShouldDrawRestoredFrameShadow() const {
+  return static_cast<DesktopBrowserFrameAuraLinux*>(
+             frame()->native_browser_frame())
+      ->ShouldDrawRestoredFrameShadow();
 }
 
 void BrowserFrameViewLinux::OnWindowButtonOrderingChange() {
@@ -65,66 +108,39 @@ void BrowserFrameViewLinux::OnWindowButtonOrderingChange() {
     // a relayout of the tabstrip.  Do a full relayout to handle the
     // frame buttons as well as open tabs.
     views::View* root_view = widget->GetRootView();
-    root_view->Layout();
+    root_view->DeprecatedLayoutImmediately();
     root_view->SchedulePaint();
   }
 }
 
-void BrowserFrameViewLinux::PaintRestoredFrameBorder(
-    gfx::Canvas* canvas) const {
-  auto clip = GetRestoredClipRegion();
-  bool showing_shadow = ShouldDrawRestoredFrameShadow();
-
-  if (auto* frame_bg = frame_background()) {
-    gfx::ScopedCanvas scoped_canvas(canvas);
-    canvas->sk_canvas()->clipRRect(clip, SkClipOp::kIntersect, true);
-    auto border = layout_->MirroredFrameBorderInsets();
-    auto shadow_inset = showing_shadow ? border : gfx::Insets();
-    frame_bg->PaintMaximized(canvas, GetNativeTheme(), GetColorProvider(),
-                             shadow_inset.left(), shadow_inset.top(),
-                             width() - shadow_inset.width());
-    if (!showing_shadow)
-      frame_bg->FillFrameBorders(canvas, this, border.left(), border.right(),
-                                 border.bottom());
+int BrowserFrameViewLinux::NonClientHitTest(const gfx::Point& point) {
+  int frame_component = OpaqueBrowserFrameView::NonClientHitTest(point);
+  // Allow resizing at the top of the caption area. This is only done when
+  // shadows are not drawn, since the resize area is on the shadows otherwise.
+  if (frame_component == HTCAPTION && !ShouldDrawRestoredFrameShadow() &&
+      !IsFrameCondensed() && point.y() < kResizeTopBorderThickness) {
+    return HTTOP;
   }
-
-  // If rendering shadows, draw a 1px exterior border, otherwise
-  // draw a 1px interior border.
-  const SkScalar one_pixel = SkFloatToScalar(1 / canvas->image_scale());
-  auto rect = clip;
-  if (showing_shadow)
-    rect.outset(one_pixel, one_pixel);
-  else
-    clip.inset(one_pixel, one_pixel);
-
-  cc::PaintFlags flags;
-  flags.setColor(GetColorProvider()->GetColor(
-      showing_shadow ? ui::kColorBubbleBorderWhenShadowPresent
-                     : ui::kColorBubbleBorder));
-  flags.setAntiAlias(true);
-  if (showing_shadow)
-    flags.setLooper(gfx::CreateShadowDrawLooper(GetShadowValues()));
-
-  gfx::ScopedCanvas scoped_canvas(canvas);
-  canvas->sk_canvas()->clipRRect(clip, SkClipOp::kDifference, true);
-  canvas->sk_canvas()->drawRRect(rect, flags);
-}
-
-void BrowserFrameViewLinux::GetWindowMask(const gfx::Size& size,
-                                          SkPath* window_mask) {
-  // This class uses transparency to draw rounded corners, so a
-  // window mask is not necessary.
-}
-
-bool BrowserFrameViewLinux::ShouldDrawRestoredFrameShadow() const {
-  return static_cast<DesktopBrowserFrameAuraLinux*>(
-             frame()->native_browser_frame())
-      ->ShouldDrawRestoredFrameShadow();
+  return frame_component;
 }
 
 float BrowserFrameViewLinux::GetRestoredCornerRadiusDip() const {
-  if (!UseCustomFrame() || !IsTranslucentWindowOpacitySupported())
+#if BUILDFLAG(IS_LINUX)
+  const bool tiled = frame()->tiled();
+#else
+  const bool tiled = false;
+#endif
+  if (tiled || !UseCustomFrame() ||
+      !views::Widget::IsWindowCompositingSupported()) {
     return 0;
+  }
   return ChromeLayoutProvider::Get()->GetCornerRadiusMetric(
       views::Emphasis::kHigh);
 }
+
+int BrowserFrameViewLinux::GetTranslucentTopAreaHeight() const {
+  return 0;
+}
+
+BEGIN_METADATA(BrowserFrameViewLinux)
+END_METADATA

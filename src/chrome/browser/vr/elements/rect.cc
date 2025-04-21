@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,10 +62,6 @@ void Rect::OnFloatAnimated(const float& value,
   } else {
     UiElement::OnFloatAnimated(value, target_property_id, keyframe_model);
   }
-}
-
-float Rect::ComputedAndLocalOpacityForTest() const {
-  return computed_opacity() * local_opacity_;
 }
 
 }  // namespace vr

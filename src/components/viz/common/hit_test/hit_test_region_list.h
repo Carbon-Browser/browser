@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ namespace viz {
 enum HitTestRegionFlags : uint32_t {
   // Region maps to this surface (me).
   kHitTestMine = 0x01,
-  // Region ignored for hit testing (transparent backgrounds & hover:none).
+  // Region ignored for hit testing (e.g. pointer-events:none).
   kHitTestIgnore = 0x02,
   // Region maps to child surface (OOPIF).
   kHitTestChildSurface = 0x04,

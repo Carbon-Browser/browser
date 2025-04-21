@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -9,8 +9,8 @@ assert(is_chromeos_ash,
 
 source_set("repository") {
   sources = [
-    "fast_pair/device_id_map.cc",
-    "fast_pair/device_id_map.h",
+    "fast_pair/device_address_map.cc",
+    "fast_pair/device_address_map.h",
     "fast_pair/device_image_store.cc",
     "fast_pair/device_image_store.h",
     "fast_pair/device_metadata.cc",
@@ -45,14 +45,18 @@ source_set("repository") {
   ]
 
   deps = [
+    "//ash/constants:constants",
     "//ash/quick_pair/common",
     "//ash/quick_pair/proto:fastpair_proto",
-    "//ash/services/quick_pair/public/cpp",
     "//base",
-    "//chromeos/services/bluetooth_config/public/cpp",
+    "//chromeos/ash/components/network",
+    "//chromeos/ash/services/bluetooth_config/public/cpp",
+    "//chromeos/ash/services/quick_pair/public/cpp",
+    "//components/cross_device/logging:logging",
     "//components/image_fetcher/core",
     "//components/prefs",
     "//components/signin/public/identity_manager",
+    "//crypto",
     "//device/bluetooth",
     "//google_apis",
     "//net/traffic_annotation",
@@ -88,7 +92,8 @@ static_library("test_support") {
     "//ash/quick_pair/proto:fastpair_proto",
     "//base",
     "//base/test:test_support",
-    "//chromeos/services/bluetooth_config/public/cpp",
+    "//chromeos/ash/components/network:test_support",
+    "//chromeos/ash/services/bluetooth_config/public/cpp",
     "//device/bluetooth",
     "//net",
     "//net/traffic_annotation:test_support",
@@ -104,12 +109,13 @@ source_set("unit_tests") {
   testonly = true
 
   sources = [
-    "fast_pair/device_id_map_unittest.cc",
+    "fast_pair/device_address_map_unittest.cc",
     "fast_pair/device_image_store_unittest.cc",
     "fast_pair/device_metadata_fetcher_unittest.cc",
     "fast_pair/pending_write_store_unittest.cc",
     "fast_pair/saved_device_registry_unittest.cc",
     "fast_pair_repository_impl_unittest.cc",
+    "fast_pair_repository_unittest.cc",
     "oauth_http_fetcher_unittest.cc",
     "unauthenticated_http_fetcher_unittest.cc",
   ]
@@ -121,12 +127,13 @@ source_set("unit_tests") {
     "//ash/quick_pair/common",
     "//ash/quick_pair/common:test_support",
     "//ash/quick_pair/proto:fastpair_proto",
-    "//ash/services/quick_pair/public/cpp",
     "//base",
     "//base/test:test_support",
-    "//chromeos/services/bluetooth_config/public/cpp",
+    "//chromeos/ash/services/bluetooth_config/public/cpp",
+    "//chromeos/ash/services/quick_pair/public/cpp",
     "//components/prefs:test_support",
     "//components/signin/public/identity_manager:test_support",
+    "//crypto",
     "//device/bluetooth:mocks",
     "//net",
     "//net/traffic_annotation:test_support",

@@ -37,11 +37,9 @@ class RectF;
 
 namespace blink {
 
-class AffineTransform;
-class LayoutBoxModelObject;
-class LayoutObject;
 class ComputedStyle;
-class SVGLengthContext;
+class LayoutBoxModelObject;
+class SVGViewportResolver;
 class StrokeData;
 class TransformState;
 
@@ -65,14 +63,6 @@ class CORE_EXPORT SVGLayoutSupport {
   // Compute the visual rect for the a text content LayoutObject.
   static gfx::RectF ComputeVisualRectForText(const LayoutObject&,
                                              const gfx::RectF& text_bounds);
-
-  // Determine whether the passed location intersects a clip path referenced by
-  // the passed LayoutObject.
-  // |reference_box| is used to resolve 'objectBoundingBox' units/percentages,
-  // and can differ from the reference box of the passed LayoutObject.
-  static bool IntersectsClipPath(const LayoutObject&,
-                                 const gfx::RectF& reference_box,
-                                 const HitTestLocation&);
 
   // Important functions used by nearly all SVG layoutObjects centralizing
   // coordinate transformations / visual rect calculations
@@ -104,13 +94,7 @@ class CORE_EXPORT SVGLayoutSupport {
 
   static DashArray ResolveSVGDashArray(const SVGDashArray&,
                                        const ComputedStyle&,
-                                       const SVGLengthContext&);
-
-  // Determines if any ancestor has adjusted the scale factor.
-  static bool ScreenScaleFactorChanged(const LayoutObject*);
-
-  // Determines if any ancestor's layout size has changed.
-  static bool LayoutSizeOfNearestViewportChanged(const LayoutObject*);
+                                       const SVGViewportResolver&);
 
   // Helper method for determining if a LayoutObject marked as text (isText()==
   // true) can/will be laid out as part of a <text>.
@@ -121,11 +105,9 @@ class CORE_EXPORT SVGLayoutSupport {
   static bool WillIsolateBlendingDescendantsForObject(const LayoutObject*);
   static bool IsIsolationRequired(const LayoutObject*);
 
-  static AffineTransform DeprecatedCalculateTransformToLayer(
-      const LayoutObject*);
   static float CalculateScreenFontSizeScalingFactor(const LayoutObject*);
 
-  // This returns a LayoutSVGText, a LayoutNGSVGText, or nullptr.
+  // This returns a LayoutSVGText or nullptr.
   static LayoutObject* FindClosestLayoutSVGText(const LayoutObject*,
                                                 const gfx::PointF&);
 };
@@ -137,12 +119,12 @@ class SubtreeContentTransformScope {
   SubtreeContentTransformScope(const AffineTransform&);
   ~SubtreeContentTransformScope();
 
-  static AffineTransform CurrentContentTransformation() {
-    return AffineTransform(current_content_transformation_);
+  static const AffineTransform& CurrentContentTransformation() {
+    return current_content_transformation_;
   }
 
  private:
-  static AffineTransform::Transform current_content_transformation_;
+  static AffineTransform current_content_transformation_;
   AffineTransform saved_content_transformation_;
 };
 

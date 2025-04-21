@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/unsafe_shared_memory_region.h"
+#include "base/not_fatal_until.h"
 #include "base/numerics/safe_conversions.h"
 #include "ppapi/c/pp_array_output.h"
 #include "ppapi/proxy/ppapi_messages.h"
@@ -367,7 +368,7 @@ void VideoEncoderResource::OnPluginMsgEncodeReply(
   encoder_last_error_ = params.result();
 
   EncodeMap::iterator it = encode_callbacks_.find(video_frame);
-  DCHECK(encode_callbacks_.end() != it);
+  CHECK(encode_callbacks_.end() != it, base::NotFatalUntil::M130);
 
   scoped_refptr<TrackedCallback> callback = it->second;
   encode_callbacks_.erase(it);

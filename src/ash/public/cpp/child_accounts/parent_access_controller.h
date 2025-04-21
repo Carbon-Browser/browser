@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define ASH_PUBLIC_CPP_CHILD_ACCOUNTS_PARENT_ACCESS_CONTROLLER_H_
 
 #include "ash/public/cpp/ash_public_export.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/time/time.h"
 
 class AccountId;
@@ -25,6 +25,8 @@ enum class SupervisedAction {
   kUpdateTimezone,
   // Add user flow.
   kAddUser,
+  // TODO(b.corp.google.com/384763864): Deprecate the re-auth action once the
+  // feature `kSkipParentAccessCodeForReauth` is rolled out.
   // Re-authentication flow.
   kReauth,
 };

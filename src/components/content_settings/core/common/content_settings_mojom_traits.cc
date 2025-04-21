@@ -1,8 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/content_settings/core/common/content_settings_mojom_traits.h"
+#include "components/content_settings/core/common/content_settings_constraints.h"
+#include "components/content_settings/core/common/content_settings_metadata.h"
 
 namespace mojo {
 
@@ -50,7 +52,6 @@ EnumTraits<content_settings::mojom::ContentSetting, ContentSetting>::ToMojom(
       break;
   }
   NOTREACHED();
-  return content_settings::mojom::ContentSetting::DEFAULT;
 }
 
 // static
@@ -81,6 +82,32 @@ bool EnumTraits<content_settings::mojom::ContentSetting, ContentSetting>::
 }
 
 // static
+bool StructTraits<content_settings::mojom::RuleMetaDataDataView,
+                  content_settings::RuleMetaData>::
+    Read(content_settings::mojom::RuleMetaDataDataView data,
+         content_settings::RuleMetaData* out) {
+  base::Time expiration;
+  base::TimeDelta lifetime;
+  if (!data.ReadExpiration(&expiration) || !data.ReadLifetime(&lifetime)) {
+    return false;
+  }
+  if (lifetime.is_zero() != expiration.is_null() ||
+      lifetime < base::TimeDelta()) {
+    return false;
+  }
+  out->SetExpirationAndLifetime(expiration, lifetime);
+  out->set_decided_by_related_website_sets(
+      data.decided_by_related_website_sets());
+
+  return data.ReadLastModified(&out->last_modified_) &&
+         data.ReadLastUsed(&out->last_used_) &&
+         data.ReadLastVisited(&out->last_visited_) &&
+         data.ReadSessionModel(&out->session_model_) &&
+         data.ReadTpcdMetadataRuleSource(&out->tpcd_metadata_rule_source_) &&
+         data.ReadTpcdMetadataCohort(&out->tpcd_metadata_cohort_);
+}
+
+// static
 bool StructTraits<content_settings::mojom::ContentSettingPatternSourceDataView,
                   ContentSettingPatternSource>::
     Read(content_settings::mojom::ContentSettingPatternSourceDataView data,
@@ -89,7 +116,7 @@ bool StructTraits<content_settings::mojom::ContentSettingPatternSourceDataView,
   return data.ReadPrimaryPattern(&out->primary_pattern) &&
          data.ReadSecondaryPattern(&out->secondary_pattern) &&
          data.ReadSettingValue(&out->setting_value) &&
-         data.ReadExpiration(&out->expiration) && data.ReadSource(&out->source);
+         data.ReadMetadata(&out->metadata) && data.ReadSource(&out->source);
 }
 
 // static
@@ -97,11 +124,7 @@ bool StructTraits<content_settings::mojom::RendererContentSettingRulesDataView,
                   RendererContentSettingRules>::
     Read(content_settings::mojom::RendererContentSettingRulesDataView data,
          RendererContentSettingRules* out) {
-  return data.ReadImageRules(&out->image_rules) &&
-         data.ReadScriptRules(&out->script_rules) &&
-         data.ReadPopupRedirectRules(&out->popup_redirect_rules) &&
-         data.ReadMixedContentRules(&out->mixed_content_rules) &&
-         data.ReadAutoDarkContentRules(&out->auto_dark_content_rules);
+  return data.ReadMixedContentRules(&out->mixed_content_rules);
 }
 
 }  // namespace mojo

@@ -28,26 +28,26 @@
 
 #include "third_party/blink/renderer/core/html/canvas/image_data.h"
 
-#include "base/sys_byteorder.h"
 #include "third_party/blink/renderer/bindings/core/v8/to_v8_traits.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_image_bitmap_options.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_float32array_uint16array_uint8clampedarray.h"
 #include "third_party/blink/renderer/core/html/canvas/predefined_color_space.h"
 #include "third_party/blink/renderer/core/imagebitmap/image_bitmap.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "v8/include/v8.h"
 
 namespace blink {
 
 ImageData* ImageData::ValidateAndCreate(
     unsigned width,
-    absl::optional<unsigned> height,
-    absl::optional<NotShared<DOMArrayBufferView>> data,
+    std::optional<unsigned> height,
+    std::optional<NotShared<DOMArrayBufferView>> data,
     const ImageDataSettings* settings,
     ValidateAndCreateParams params,
     ExceptionState& exception_state) {
   gfx::Size size;
-  if (params.require_canvas_color_management_v2 &&
-      !RuntimeEnabledFeatures::CanvasColorManagementV2Enabled()) {
+  if (params.require_canvas_floating_point &&
+      !RuntimeEnabledFeatures::CanvasFloatingPointEnabled()) {
     exception_state.ThrowTypeError("Overload resolution failed.");
     return nullptr;
   }
@@ -102,7 +102,8 @@ ImageData* ImageData::ValidateAndCreate(
       }
     }
     if (!size_in_elements_checked.IsValid() ||
-        size_in_elements_checked.ValueOrDie() > v8::TypedArray::kMaxLength) {
+        size_in_elements_checked.ValueOrDie() >
+            v8::TypedArray::kMaxByteLength) {
       exception_state.ThrowRangeError("Out of memory at ImageData creation.");
       return nullptr;
     }
@@ -264,8 +265,9 @@ ImageData* ImageData::CreateForTest(const gfx::Size& size) {
   data_size *= size.width();
   data_size *= size.height();
   if (!data_size.IsValid() ||
-      data_size.ValueOrDie() > v8::TypedArray::kMaxLength)
+      data_size.ValueOrDie() > v8::TypedArray::kMaxByteLength) {
     return nullptr;
+  }
 
   NotShared<DOMUint8ClampedArray> byte_array(
       DOMUint8ClampedArray::CreateOrNull(data_size.ValueOrDie()));
@@ -287,18 +289,19 @@ ImageData* ImageData::CreateForTest(const gfx::Size& size,
                                          storage_format);
 }
 
-ScriptPromise ImageData::CreateImageBitmap(ScriptState* script_state,
-                                           absl::optional<gfx::Rect> crop_rect,
-                                           const ImageBitmapOptions* options,
-                                           ExceptionState& exception_state) {
+ScriptPromise<ImageBitmap> ImageData::CreateImageBitmap(
+    ScriptState* script_state,
+    std::optional<gfx::Rect> crop_rect,
+    const ImageBitmapOptions* options,
+    ExceptionState& exception_state) {
   if (IsBufferBaseDetached()) {
     exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
                                       "The source data has been detached.");
-    return ScriptPromise();
+    return EmptyPromise();
   }
   return ImageBitmapSource::FulfillImageBitmap(
       script_state, MakeGarbageCollected<ImageBitmap>(this, crop_rect, options),
-      exception_state);
+      options, exception_state);
 }
 
 PredefinedColorSpace ImageData::GetPredefinedColorSpace() const {
@@ -309,20 +312,34 @@ ImageDataStorageFormat ImageData::GetImageDataStorageFormat() const {
   return storage_format_;
 }
 
-String ImageData::colorSpace() const {
-  return PredefinedColorSpaceName(color_space_);
+V8PredefinedColorSpace ImageData::colorSpace() const {
+  switch (color_space_) {
+    case PredefinedColorSpace::kSRGB:
+      return V8PredefinedColorSpace(V8PredefinedColorSpace::Enum::kSRGB);
+    case PredefinedColorSpace::kRec2020:
+      return V8PredefinedColorSpace(V8PredefinedColorSpace::Enum::kRec2020);
+    case PredefinedColorSpace::kP3:
+      return V8PredefinedColorSpace(V8PredefinedColorSpace::Enum::kDisplayP3);
+    case PredefinedColorSpace::kRec2100HLG:
+      return V8PredefinedColorSpace(V8PredefinedColorSpace::Enum::kRec2100Hlg);
+    case PredefinedColorSpace::kRec2100PQ:
+      return V8PredefinedColorSpace(V8PredefinedColorSpace::Enum::kRec2100Pq);
+    case PredefinedColorSpace::kSRGBLinear:
+      return V8PredefinedColorSpace(V8PredefinedColorSpace::Enum::kSRGBLinear);
+  }
+  NOTREACHED();
 }
 
-String ImageData::storageFormat() const {
-  return ImageDataStorageFormatName(storage_format_);
-}
-
-ImageDataSettings* ImageData::getSettings() const {
-  // TODO(https://crbug.com/1198606): Remove this.
-  ImageDataSettings* settings = ImageDataSettings::Create();
-  settings->setColorSpace(colorSpace());
-  settings->setStorageFormat(storageFormat());
-  return settings;
+V8ImageDataStorageFormat ImageData::storageFormat() const {
+  switch (storage_format_) {
+    case ImageDataStorageFormat::kUint8:
+      return V8ImageDataStorageFormat(V8ImageDataStorageFormat::Enum::kUint8);
+    case ImageDataStorageFormat::kUint16:
+      return V8ImageDataStorageFormat(V8ImageDataStorageFormat::Enum::kUint16);
+    case ImageDataStorageFormat::kFloat32:
+      return V8ImageDataStorageFormat(V8ImageDataStorageFormat::Enum::kFloat32);
+  }
+  NOTREACHED();
 }
 
 bool ImageData::IsBufferBaseDetached() const {
@@ -336,7 +353,6 @@ bool ImageData::IsBufferBaseDetached() const {
   }
 
   NOTREACHED();
-  return false;
 }
 
 SkPixmap ImageData::GetSkPixmap() const {
@@ -386,13 +402,9 @@ v8::Local<v8::Object> ImageData::AssociateWithWrapper(
     //
     // This is a perf hack breaking the web interop.
 
-    v8::Local<v8::Value> v8_data;
-    ScriptState* script_state =
-        ScriptState::From(wrapper->GetCreationContextChecked());
-    if (!ToV8Traits<V8ImageDataArray>::ToV8(script_state, data_)
-             .ToLocal(&v8_data)) {
-      return wrapper;
-    }
+    ScriptState* script_state = ScriptState::ForRelevantRealm(isolate, wrapper);
+    v8::Local<v8::Value> v8_data =
+        ToV8Traits<V8ImageDataArray>::ToV8(script_state, data_);
     bool defined_property;
     if (!wrapper
              ->DefineOwnProperty(isolate->GetCurrentContext(),

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,12 +12,15 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/adapters.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
+#include "base/not_fatal_until.h"
 #include "base/task/thread_pool.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "chrome/browser/browser_process.h"
 #include "chrome/browser/task_manager/providers/browser_process_task_provider.h"
 #include "chrome/browser/task_manager/providers/child_process_task_provider.h"
 #include "chrome/browser/task_manager/providers/fallback_task_provider.h"
@@ -28,14 +31,15 @@
 #include "chrome/browser/task_manager/sampling/shared_sampler.h"
 #include "components/nacl/common/buildflags.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/child_process_host.h"
 #include "content/public/browser/gpu_data_manager.h"
 #include "content/public/browser/network_service_instance.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/web_contents.h"
-#include "content/public/common/child_process_host.h"
 #include "content/public/common/content_features.h"
 #include "services/network/public/cpp/features.h"
+#include "services/network/public/mojom/network_service.mojom.h"
 #include "services/resource_coordinator/public/cpp/memory_instrumentation/memory_instrumentation.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -51,8 +55,8 @@ namespace task_manager {
 
 namespace {
 
-base::LazyInstance<TaskManagerImpl>::DestructorAtExit
-    lazy_task_manager_instance = LAZY_INSTANCE_INITIALIZER;
+base::LazyInstance<TaskManagerImpl>::Leaky lazy_task_manager_instance =
+    LAZY_INSTANCE_INITIALIZER;
 
 }  // namespace
 
@@ -76,10 +80,13 @@ TaskManagerImpl::TaskManagerImpl()
   // FallbackTaskProvider, so that a fallback task can be shown for a renderer
   // process if no other provider is shown for it.
   std::vector<std::unique_ptr<TaskProvider>> primary_subproviders;
+
   primary_subproviders.push_back(
       std::make_unique<SpareRenderProcessHostTaskProvider>());
   primary_subproviders.push_back(std::make_unique<WorkerTaskProvider>());
+
   primary_subproviders.push_back(std::make_unique<WebContentsTaskProvider>());
+
   task_providers_.push_back(std::make_unique<FallbackTaskProvider>(
       std::move(primary_subproviders),
       std::make_unique<RenderProcessHostTaskProvider>()));
@@ -111,7 +118,10 @@ TaskManagerImpl* TaskManagerImpl::GetInstance() {
 }
 
 bool TaskManagerImpl::IsCreated() {
-  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+  // In minimal mode, BrowserThread doesn't exist.
+  if (g_browser_process) {
+    DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+  }
   return lazy_task_manager_instance.IsCreated();
 }
 
@@ -252,6 +262,10 @@ Task::Type TaskManagerImpl::GetType(TaskId task_id) const {
   return GetTaskByTaskId(task_id)->GetType();
 }
 
+Task::SubType TaskManagerImpl::GetSubType(TaskId task_id) const {
+  return GetTaskByTaskId(task_id)->GetSubType();
+}
+
 SessionID TaskManagerImpl::GetTabId(TaskId task_id) const {
   return GetTaskByTaskId(task_id)->GetTabId();
 }
@@ -354,7 +368,8 @@ const TaskIdList& TaskManagerImpl::GetTaskIdsList() const {
     for (const auto& groups_pair : task_groups_by_proc_id_) {
       // The first task in the group (per |comparator|) is the one used for
       // sorting the group relative to other groups.
-      const std::vector<Task*>& tasks = groups_pair.second->tasks();
+      const std::vector<raw_ptr<Task, VectorExperimental>>& tasks =
+          groups_pair.second->tasks();
       Task* group_task =
           *std::min_element(tasks.begin(), tasks.end(), comparator);
       tasks_to_visit.push_back(group_task);
@@ -362,14 +377,15 @@ const TaskIdList& TaskManagerImpl::GetTaskIdsList() const {
       // Build the parent-to-child map, for use later.
       for (const Task* task : tasks) {
         if (task->HasParentTask())
-          children[task->GetParentTask()].push_back(task);
+          children[task->GetParentTask().get()].push_back(task);
         else
           DCHECK(!group_task->HasParentTask());
       }
     }
 
     for (const auto& groups_pair : arc_vm_task_groups_by_proc_id_) {
-      const std::vector<Task*>& tasks = groups_pair.second->tasks();
+      const std::vector<raw_ptr<Task, VectorExperimental>>& tasks =
+          groups_pair.second->tasks();
       Task* group_task =
           *std::min_element(tasks.begin(), tasks.end(), comparator);
       tasks_to_visit.push_back(group_task);
@@ -386,7 +402,8 @@ const TaskIdList& TaskManagerImpl::GetTaskIdsList() const {
     sorted_task_ids_.reserve(num_tasks);
     std::unordered_set<TaskGroup*> visited_groups;
     visited_groups.reserve(num_groups);
-    std::vector<Task*> current_group_tasks;  // Outside loop for fewer mallocs.
+    std::vector<raw_ptr<Task, VectorExperimental>>
+        current_group_tasks;  // Outside loop for fewer mallocs.
     while (visited_groups.size() < num_groups) {
       DCHECK(!tasks_to_visit.empty());
       TaskGroup* current_group =
@@ -492,7 +509,7 @@ void TaskManagerImpl::TaskAdded(Task* task) {
         task->process_handle(), proc_id, is_running_in_vm,
         on_background_data_ready_callback_, shared_sampler_,
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-        is_running_in_lacros ? crosapi_task_provider_ : nullptr,
+        is_running_in_lacros ? crosapi_task_provider_.get() : nullptr,
 #endif
         blocking_pool_runner_);
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -542,6 +559,10 @@ void TaskManagerImpl::TaskRemoved(Task* task) {
 void TaskManagerImpl::TaskUnresponsive(Task* task) {
   DCHECK(task);
   NotifyObserversOnTaskUnresponsive(task->task_id());
+}
+
+void TaskManagerImpl::ActiveTaskFetched(TaskId active_task_id) {
+  NotifyObserversOnActiveTaskFetched(active_task_id);
 }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -643,6 +664,8 @@ void TaskManagerImpl::StartUpdating() {
 
   is_running_ = true;
 
+  content::GetNetworkService()->EnableDataUseUpdates(true);
+
   for (const auto& provider : task_providers_)
     provider->SetObserver(this);
 
@@ -656,6 +679,8 @@ void TaskManagerImpl::StopUpdating() {
     return;
 
   is_running_ = false;
+
+  content::GetNetworkService()->EnableDataUseUpdates(false);
 
   for (const auto& provider : task_providers_)
     provider->ClearObserver();
@@ -680,7 +705,7 @@ Task* TaskManagerImpl::GetTaskByRoute(
 
 TaskGroup* TaskManagerImpl::GetTaskGroupByTaskId(TaskId task_id) const {
   auto it = task_groups_by_task_id_.find(task_id);
-  DCHECK(it != task_groups_by_task_id_.end());
+  CHECK(it != task_groups_by_task_id_.end(), base::NotFatalUntil::M130);
   return it->second;
 }
 

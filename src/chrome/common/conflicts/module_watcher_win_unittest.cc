@@ -1,16 +1,17 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/common/conflicts/module_watcher_win.h"
 
+#include <windows.h>
+
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/task_environment.h"
+#include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
-
-#include <windows.h>
 
 class ModuleWatcherTest : public testing::Test {
  public:
@@ -86,7 +87,13 @@ TEST_F(ModuleWatcherTest, SingleModuleWatcherOnly) {
   EXPECT_FALSE(mw2.get());
 }
 
-TEST_F(ModuleWatcherTest, ModuleEvents) {
+// TODO: crbug.com/347201817 - Fix ODR violation.
+#if BUILDFLAG(IS_WIN) && defined(ADDRESS_SANITIZER)
+#define MAYBE_ModuleEvents DISABLED_ModuleEvents
+#else
+#define MAYBE_ModuleEvents ModuleEvents
+#endif
+TEST_F(ModuleWatcherTest, MAYBE_ModuleEvents) {
   // Create the module watcher. This should immediately enumerate all already
   // loaded modules on a background task.
   std::unique_ptr<ModuleWatcher> mw(Create());

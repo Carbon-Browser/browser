@@ -1,10 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_STORAGE_CACHED_STORAGE_AREA_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_STORAGE_CACHED_STORAGE_AREA_H_
 
+#include "base/memory/weak_ptr.h"
 #include "base/trace_event/memory_dump_provider.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -54,7 +55,7 @@ class MODULES_EXPORT CachedStorageArea
     virtual blink::WebScopedVirtualTimePauser CreateWebScopedVirtualTimePauser(
         const char* name,
         WebScopedVirtualTimePauser::VirtualTaskDuration duration) = 0;
-    virtual const LocalDOMWindow* GetDOMWindow() = 0;
+    virtual LocalDOMWindow* GetDOMWindow() = 0;
   };
 
   enum class AreaType {
@@ -65,8 +66,7 @@ class MODULES_EXPORT CachedStorageArea
   CachedStorageArea(
       AreaType type,
       const BlinkStorageKey& storage_key,
-      const LocalDOMWindow* local_dom_window,
-      scoped_refptr<base::SingleThreadTaskRunner> ipc_runner,
+      LocalDOMWindow* local_dom_window,
       StorageNamespace* storage_namespace,
       bool is_session_storage_for_prerendering,
       mojo::PendingRemote<mojom::blink::StorageArea> storage_area = {});
@@ -135,21 +135,21 @@ class MODULES_EXPORT CachedStorageArea
     String old_value;
   };
 
-  const LocalDOMWindow* GetBestCurrentDOMWindow();
+  LocalDOMWindow* GetBestCurrentDOMWindow();
 
   void BindStorageArea(
       mojo::PendingRemote<mojom::blink::StorageArea> new_area = {},
-      const LocalDOMWindow* local_dom_window = nullptr);
+      LocalDOMWindow* local_dom_window = nullptr);
 
   // mojom::blink::StorageAreaObserver:
   void KeyChanged(const Vector<uint8_t>& key,
                   const Vector<uint8_t>& new_value,
-                  const absl::optional<Vector<uint8_t>>& old_value,
+                  const std::optional<Vector<uint8_t>>& old_value,
                   const String& source) override;
   void KeyChangeFailed(const Vector<uint8_t>& key,
                        const String& source) override;
   void KeyDeleted(const Vector<uint8_t>& key,
-                  const absl::optional<Vector<uint8_t>>& old_value,
+                  const std::optional<Vector<uint8_t>>& old_value,
                   const String& source) override;
   void AllDeleted(bool was_nonempty, const String& source) override;
   void ShouldSendOldValueOnMutations(bool value) override;
@@ -187,6 +187,9 @@ class MODULES_EXPORT CachedStorageArea
                            const String& url,
                            const String& storage_area_id);
 
+  void EnqueueCheckpointMicrotask(Source* source);
+  void NotifyCheckpoint();
+
   static String Uint8VectorToString(const Vector<uint8_t>& input,
                                     FormatOption format_option);
   static Vector<uint8_t> StringToUint8Vector(const String& input,
@@ -201,7 +204,6 @@ class MODULES_EXPORT CachedStorageArea
   // remote_area_). For more details:
   // https://docs.google.com/document/d/1I5Hr8I20-C1GBr4tAXdm0U8a1RDUKHt4n7WcH4fxiSE/edit?usp=sharing
   const bool is_session_storage_for_prerendering_;
-  const scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
 
   std::unique_ptr<StorageAreaMap> map_;
 
@@ -232,6 +234,8 @@ class MODULES_EXPORT CachedStorageArea
   // See ShouldSendOldValueOnMutations().
   bool should_send_old_value_on_mutations_ = true;
 
+  bool checkpoint_queued_ = false;
+
   // Connection to the backing implementation of this StorageArea. This is
   // always bound.
   mojo::Remote<mojom::blink::StorageArea> remote_area_;
@@ -241,6 +245,8 @@ class MODULES_EXPORT CachedStorageArea
   mojo::Receiver<mojom::blink::StorageAreaObserver> receiver_{this};
 
   Persistent<HeapHashMap<WeakMember<Source>, String>> areas_;
+
+  base::WeakPtrFactory<CachedStorageArea> weak_factory_{this};
 };
 
 }  // namespace blink

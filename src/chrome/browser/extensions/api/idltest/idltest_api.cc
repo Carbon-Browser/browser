@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,10 @@
 #include <stddef.h>
 
 #include <memory>
+#include <string_view>
 #include <utility>
 
 #include "base/containers/span.h"
-#include "base/strings/string_piece.h"
 #include "base/values.h"
 
 namespace {
@@ -30,18 +30,19 @@ ExtensionFunction::ResponseAction IdltestSendArrayBufferFunction::Run() {
   EXTENSION_FUNCTION_VALIDATE(has_args() && !args().empty());
   const auto& value = args()[0];
   EXTENSION_FUNCTION_VALIDATE(value.is_blob());
-  return RespondNow(OneArgument(CopyBinaryValueToIntegerList(value.GetBlob())));
+  return RespondNow(
+      WithArguments(CopyBinaryValueToIntegerList(value.GetBlob())));
 }
 
 ExtensionFunction::ResponseAction IdltestSendArrayBufferViewFunction::Run() {
   EXTENSION_FUNCTION_VALIDATE(has_args() && !args().empty());
   const auto& value = args()[0];
   EXTENSION_FUNCTION_VALIDATE(value.is_blob());
-  return RespondNow(OneArgument(CopyBinaryValueToIntegerList(value.GetBlob())));
+  return RespondNow(
+      WithArguments(CopyBinaryValueToIntegerList(value.GetBlob())));
 }
 
 ExtensionFunction::ResponseAction IdltestGetArrayBufferFunction::Run() {
-  static constexpr base::StringPiece kHello = "hello world";
-  return RespondNow(
-      OneArgument(base::Value(base::as_bytes(base::make_span(kHello)))));
+  static constexpr std::string_view kHello = "hello world";
+  return RespondNow(WithArguments(base::Value(base::as_byte_span(kHello))));
 }

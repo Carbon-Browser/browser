@@ -59,7 +59,7 @@ class MediaStreamAudioSourceNode final
                              std::unique_ptr<AudioSourceProvider>);
 
   // V8 binding
-  MediaStream* getMediaStream() const { return media_stream_; }
+  MediaStream* getMediaStream() const { return media_stream_.Get(); }
 
   // AudioSourceProviderClient
   void SetFormat(uint32_t number_of_channels, float sample_rate) override;
@@ -74,6 +74,9 @@ class MediaStreamAudioSourceNode final
 
  private:
   MediaStreamAudioSourceHandler& GetMediaStreamAudioSourceHandler() const;
+
+  // https://chromium.googlesource.com/chromium/src/+/refs/heads/main/docs/media/capture/README.md#logs
+  void SendLogMessage(const char* const function_name, const String& message);
 
   Member<MediaStreamTrack> audio_track_;
   Member<MediaStream> media_stream_;

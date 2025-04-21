@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
@@ -192,7 +193,7 @@ class InMemoryDownloadImpl : public network::SimpleURLLoaderStreamConsumer,
   size_t EstimateMemoryUsage() const override;
 
   // network::SimpleURLLoaderStreamConsumer implementation.
-  void OnDataReceived(base::StringPiece string_piece,
+  void OnDataReceived(std::string_view string_piece,
                       base::OnceClosure resume) override;
   void OnComplete(bool success) override;
   void OnRetry(base::OnceClosure start_retry) override;
@@ -211,7 +212,8 @@ class InMemoryDownloadImpl : public network::SimpleURLLoaderStreamConsumer,
   void SendRequest();
 
   // Called when the server redirects to another URL.
-  void OnRedirect(const net::RedirectInfo& redirect_info,
+  void OnRedirect(const GURL& url_before_redirect,
+                  const net::RedirectInfo& redirect_info,
                   const network::mojom::URLResponseHead& response_head,
                   std::vector<std::string>* to_be_removed_headers);
 
@@ -249,7 +251,7 @@ class InMemoryDownloadImpl : public network::SimpleURLLoaderStreamConsumer,
   // Used to access blob storage context.
   scoped_refptr<base::SingleThreadTaskRunner> io_task_runner_;
 
-  raw_ptr<Delegate> delegate_;
+  raw_ptr<Delegate, DanglingUntriaged> delegate_;
 
   // Data downloaded from network, should be moved to avoid extra copy.
   std::string data_;

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 #define UI_OZONE_PLATFORM_WAYLAND_HOST_SHELL_POPUP_WRAPPER_H_
 
 #include <cstdint>
+#include <optional>
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/base/owned_window_anchor.h"
 #include "ui/base/ui_base_types.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/ozone/platform/wayland/common/wayland_object.h"
@@ -16,7 +17,7 @@
 namespace ui {
 
 class WaylandConnection;
-class WaylandWindow;
+class XDGPopupWrapperImpl;
 
 struct ShellPopupParams {
   ShellPopupParams();
@@ -25,14 +26,20 @@ struct ShellPopupParams {
   ~ShellPopupParams();
 
   gfx::Rect bounds;
-  MenuType menu_type = MenuType::kRootContextMenu;
-
   // This parameter is temporarily optional. Later, when all the clients
-  // start to pass these parameters, absl::optional type will be removed.
-  absl::optional<ui::OwnedWindowAnchor> anchor;
+  // start to pass these parameters, std::optional type will be removed.
+  std::optional<OwnedWindowAnchor> anchor;
 };
 
-// A wrapper around different versions of xdg popups.
+// Wrapper interface for shell popups.
+//
+// This is one of three wrapper classes: Shell{Surface,Toplevel,Popup}Wrapper.
+// It has the only sub-class in Chromium, but should not be removed because it
+// eases downstream implementations.
+// See https://crbug.com/1402672
+//
+// Allows WaylandPopup to do stuff specific to popups, such as anchoring the
+// window and grabbing the pointer.
 class ShellPopupWrapper {
  public:
   virtual ~ShellPopupWrapper() = default;
@@ -61,20 +68,20 @@ class ShellPopupWrapper {
                       OwnedWindowAnchorGravity* anchor_gravity,
                       OwnedWindowConstraintAdjustment* constraints) const;
 
-  // Whether the protocol supports surface decoration.
-  virtual bool SupportsDecoration() = 0;
+  // Casts `this` to XDGPopupWrapperImpl, if it is of that type.
+  virtual XDGPopupWrapperImpl* AsXDGPopupWrapper();
 
-  // Must only be called if SupportsDecoration() returns true.
-  // Decorates the surface with a drop shadow.
-  virtual void Decorate() = 0;
+  bool has_grab() const { return has_grab_; }
 
  protected:
   // Asks the compositor to take explicit-grab for this popup.
   virtual void Grab(uint32_t serial) = 0;
 
   // Returns the serial value for a popup grab, if there is one available.
+  // `parent_shell_popup_has_grab` has value if this popup is dangling off
+  // another shell_popup, true if that popup has grab.
   void GrabIfPossible(WaylandConnection* connection,
-                      WaylandWindow* parent_window);
+                      std::optional<bool> parent_shell_popup_has_grab);
 
  private:
   // Tells if explicit grab was taken for this popup. As per

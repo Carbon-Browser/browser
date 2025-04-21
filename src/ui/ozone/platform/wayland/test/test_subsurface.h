@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,6 @@
 struct wl_resource;
 
 namespace wl {
-
-class TestAugmentedSubSurface;
 
 extern const struct wl_subsurface_interface kTestSubSurfaceImpl;
 
@@ -41,13 +39,6 @@ class TestSubSurface : public ServerObject {
 
   wl_resource* parent_resource() const { return parent_resource_; }
 
-  void set_augmented_subsurface(TestAugmentedSubSurface* augmented_subsurface) {
-    augmented_subsurface_ = augmented_subsurface;
-  }
-  TestAugmentedSubSurface* augmented_subsurface() const {
-    return augmented_subsurface_;
-  }
-
  private:
   gfx::PointF position_;
   bool sync_ = false;
@@ -56,9 +47,7 @@ class TestSubSurface : public ServerObject {
   raw_ptr<wl_resource> surface_ = nullptr;
 
   // Parent surface resource.
-  raw_ptr<wl_resource> parent_resource_ = nullptr;
-
-  raw_ptr<TestAugmentedSubSurface> augmented_subsurface_ = nullptr;
+  raw_ptr<wl_resource, DanglingUntriaged> parent_resource_ = nullptr;
 };
 
 }  // namespace wl

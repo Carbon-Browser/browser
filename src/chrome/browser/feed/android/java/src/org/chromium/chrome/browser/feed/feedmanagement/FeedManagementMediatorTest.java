@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@ import android.content.Intent;
 import android.net.Uri;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
@@ -22,17 +21,17 @@ import org.robolectric.Shadows;
 import org.robolectric.shadows.ShadowActivity;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
-import org.chromium.base.test.util.JniMocker;
+import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.chrome.browser.feed.FeedServiceBridge;
 import org.chromium.chrome.browser.feed.FeedServiceBridgeJni;
 import org.chromium.chrome.browser.feed.StreamKind;
 import org.chromium.chrome.browser.feed.v2.FeedUserActionType;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
 
-/**
- * Tests {@link FeedManagementMediator}.
- */
+/** Tests {@link FeedManagementMediator}. */
 @RunWith(BaseRobolectricTestRunner.class)
+@EnableFeatures(ChromeFeatureList.FEED_FOLLOW_UI_UPDATE)
 public class FeedManagementMediatorTest {
     private static final @StreamKind int TEST_STREAM_KIND = StreamKind.FOR_YOU;
     private Activity mActivity;
@@ -40,17 +39,7 @@ public class FeedManagementMediatorTest {
     private ModelList mModelList;
     private FeedManagementMediator mFeedManagementMediator;
 
-    @Rule
-    public JniMocker mocker = new JniMocker();
-
-    @Mock
-    private FeedServiceBridge.Natives mFeedServiceBridgeJniMock;
-
-    @Mock
-    private FeedManagementMediator.FollowManagementLauncher mFollowManagementLauncher;
-
-    @Mock
-    private FeedManagementMediator.AutoplayManagementLauncher mAutoplayManagementLauncher;
+    @Mock private FeedServiceBridge.Natives mFeedServiceBridgeJniMock;
 
     @Before
     public void setUpTest() {
@@ -58,12 +47,10 @@ public class FeedManagementMediatorTest {
         mShadowActivity = Shadows.shadowOf(mActivity);
         mModelList = new ModelList();
         MockitoAnnotations.initMocks(this);
-        mocker.mock(FeedServiceBridgeJni.TEST_HOOKS, mFeedServiceBridgeJniMock);
+        FeedServiceBridgeJni.setInstanceForTesting(mFeedServiceBridgeJniMock);
 
-        mFeedManagementMediator = new FeedManagementMediator(mActivity, mModelList,
-                mFollowManagementLauncher, mAutoplayManagementLauncher, TEST_STREAM_KIND);
-
-        verify(mFeedServiceBridgeJniMock).isAutoplayEnabled();
+        mFeedManagementMediator =
+                new FeedManagementMediator(mActivity, mModelList, TEST_STREAM_KIND);
     }
 
     @Test
@@ -80,13 +67,14 @@ public class FeedManagementMediatorTest {
     }
 
     @Test
-    public void testHandleInterestsClick() {
+    public void testHandleFollowingClick() {
         // Act
-        mFeedManagementMediator.handleInterestsClick(null);
+        mFeedManagementMediator.handleFollowingClick(null);
 
         // Assert
         Intent intent = mShadowActivity.peekNextStartedActivityForResult().intent;
-        assertEquals(intent.getData(),
+        assertEquals(
+                intent.getData(),
                 Uri.parse("https://www.google.com/preferences/interests/yourinterests?sh=n"));
         verify(mFeedServiceBridgeJniMock)
                 .reportOtherUserAction(
@@ -100,34 +88,11 @@ public class FeedManagementMediatorTest {
 
         // Assert
         Intent intent = mShadowActivity.peekNextStartedActivityForResult().intent;
-        assertEquals(intent.getData(),
+        assertEquals(
+                intent.getData(),
                 Uri.parse("https://www.google.com/preferences/interests/hidden?sh=n"));
         verify(mFeedServiceBridgeJniMock)
                 .reportOtherUserAction(
                         TEST_STREAM_KIND, FeedUserActionType.TAPPED_MANAGE_INTERESTS);
-    }
-
-    @Test
-    public void testHandleFollowingClick() {
-        // Act
-        mFeedManagementMediator.handleFollowingClick(null);
-
-        // Assert
-        verify(mFollowManagementLauncher).launchFollowManagement(mActivity);
-        verify(mFeedServiceBridgeJniMock)
-                .reportOtherUserAction(
-                        TEST_STREAM_KIND, FeedUserActionType.TAPPED_MANAGE_FOLLOWING);
-    }
-
-    @Test
-    public void testHandleAutoplayClick() {
-        // Act
-        mFeedManagementMediator.handleAutoplayClick(null);
-
-        // Assert
-        verify(mAutoplayManagementLauncher).launchAutoplayManagement(mActivity);
-        verify(mFeedServiceBridgeJniMock)
-                .reportOtherUserAction(
-                        TEST_STREAM_KIND, FeedUserActionType.OPENED_AUTOPLAY_SETTINGS);
     }
 }

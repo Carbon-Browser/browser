@@ -1,6 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "components/policy/core/common/schema.h"
 
@@ -13,6 +18,7 @@
 #include <memory>
 #include <ostream>
 #include <set>
+#include <sstream>
 #include <string>
 #include <utility>
 
@@ -23,7 +29,11 @@
 #include "base/json/json_reader.h"
 #include "base/memory/ptr_util.h"
 #include "base/notreached.h"
+#include "base/strings/strcat.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
+#include "base/types/expected.h"
+#include "base/types/expected_macros.h"
 #include "base/values.h"
 #include "components/policy/core/common/json_schema_constants.h"
 #include "components/policy/core/common/schema_internal.h"
@@ -38,6 +48,25 @@ using internal::PropertyNode;
 using internal::RestrictionNode;
 using internal::SchemaData;
 using internal::SchemaNode;
+
+std::string ErrorPathToString(const std::string& policy_name,
+                              PolicyErrorPath error_path) {
+  if (error_path.empty())
+    return std::string();
+
+  std::stringstream error_path_string{policy_name};
+  error_path_string << policy_name;
+  for (auto& entry : error_path) {
+    if (absl::holds_alternative<int>(entry)) {
+      error_path_string << "[" << absl::get<int>(entry) << "]";
+    } else if (absl::holds_alternative<std::string>(entry)) {
+      error_path_string << "." << absl::get<std::string>(entry);
+    }
+  }
+  return error_path_string.str();
+}
+
+const char kSensitiveValueMask[] = "********";
 
 namespace {
 
@@ -56,29 +85,15 @@ struct ReferencesAndIDs {
 // pointers into their contents (i.e. string's c_str() and address of indices
 // for "$ref" attributes).
 struct StorageSizes {
-  StorageSizes()
-      : strings(0),
-        schema_nodes(0),
-        property_nodes(0),
-        properties_nodes(0),
-        restriction_nodes(0),
-        required_properties(0),
-        int_enums(0),
-        string_enums(0) {}
-  size_t strings;
-  size_t schema_nodes;
-  size_t property_nodes;
-  size_t properties_nodes;
-  size_t restriction_nodes;
-  size_t required_properties;
-  size_t int_enums;
-  size_t string_enums;
+  size_t strings = 0;
+  size_t schema_nodes = 0;
+  size_t property_nodes = 0;
+  size_t properties_nodes = 0;
+  size_t restriction_nodes = 0;
+  size_t required_properties = 0;
+  size_t int_enums = 0;
+  size_t string_enums = 0;
 };
-
-// |Schema::MaskSensitiveValues| will replace sensitive values with this string.
-// It should be consistent with the mask |NetworkConfigurationPolicyHandler|
-// uses for network credential fields.
-constexpr char kSensitiveValueMask[] = "********";
 
 // An invalid index, indicating that a node is not present; similar to a NULL
 // pointer.
@@ -97,7 +112,7 @@ const SchemaKeyToValueType kSchemaTypesToValueTypes[] = {
     {schema::kBoolean, base::Value::Type::BOOLEAN},
     {schema::kInteger, base::Value::Type::INTEGER},
     {schema::kNumber, base::Value::Type::DOUBLE},
-    {schema::kObject, base::Value::Type::DICTIONARY},
+    {schema::kObject, base::Value::Type::DICT},
     {schema::kString, base::Value::Type::STRING},
 };
 const SchemaKeyToValueType* kSchemaTypesToValueTypesEnd =
@@ -108,7 +123,7 @@ const SchemaKeyToValueType* kSchemaTypesToValueTypesEnd =
 const SchemaKeyToValueType kAttributesAndTypesForArray[] = {
     {schema::kDescription, base::Value::Type::STRING},
     {schema::kId, base::Value::Type::STRING},
-    {schema::kItems, base::Value::Type::DICTIONARY},
+    {schema::kItems, base::Value::Type::DICT},
     {schema::kSensitiveValue, base::Value::Type::BOOLEAN},
     {schema::kTitle, base::Value::Type::STRING},
     {schema::kType, base::Value::Type::STRING},
@@ -158,11 +173,11 @@ const SchemaKeyToValueType* kAttributesAndTypesForNumberEnd =
 // Allowed attributes and types for type 'object'. These are ordered
 // alphabetically to perform binary search.
 const SchemaKeyToValueType kAttributesAndTypesForObject[] = {
-    {schema::kAdditionalProperties, base::Value::Type::DICTIONARY},
+    {schema::kAdditionalProperties, base::Value::Type::DICT},
     {schema::kDescription, base::Value::Type::STRING},
     {schema::kId, base::Value::Type::STRING},
-    {schema::kPatternProperties, base::Value::Type::DICTIONARY},
-    {schema::kProperties, base::Value::Type::DICTIONARY},
+    {schema::kPatternProperties, base::Value::Type::DICT},
+    {schema::kProperties, base::Value::Type::DICT},
     {schema::kRequired, base::Value::Type::LIST},
     {schema::kSensitiveValue, base::Value::Type::BOOLEAN},
     {schema::kTitle, base::Value::Type::STRING},
@@ -237,30 +252,24 @@ bool StrategyAllowUnknownWithoutWarning(SchemaOnErrorStrategy strategy) {
   return strategy == SCHEMA_ALLOW_UNKNOWN_WITHOUT_WARNING;
 }
 
-void SchemaErrorFound(std::string* out_error_path,
+void SchemaErrorFound(PolicyErrorPath* out_error_path,
                       std::string* out_error,
                       const std::string& msg) {
   if (out_error_path)
-    *out_error_path = "";
+    *out_error_path = {};
   if (out_error)
     *out_error = msg;
 }
 
-void AddListIndexPrefixToPath(int index, std::string* path) {
+void AddListIndexPrefixToPath(int index, PolicyErrorPath* path) {
   if (path) {
-    if (path->empty())
-      *path = base::StringPrintf("items[%d]", index);
-    else
-      *path = base::StringPrintf("items[%d].", index) + *path;
+    path->emplace(path->begin(), index);
   }
 }
 
-void AddDictKeyPrefixToPath(const std::string& key, std::string* path) {
+void AddDictKeyPrefixToPath(const std::string& key, PolicyErrorPath* path) {
   if (path) {
-    if (path->empty())
-      *path = key;
-    else
-      *path = key + "." + *path;
+    path->emplace(path->begin(), key);
   }
 }
 
@@ -284,10 +293,10 @@ bool IsValidType(const std::string& type) {
 // Validate that |dict| only contains attributes that are allowed for the
 // corresponding value of 'type'. Also ensure that all of those attributes are
 // of the expected type. |options| can be used to ignore unknown attributes.
-bool ValidateAttributesAndTypes(const base::Value& dict,
-                                const std::string& type,
-                                int options,
-                                std::string* error) {
+base::expected<void, std::string> ValidateAttributesAndTypes(
+    const base::Value::Dict& dict,
+    const std::string& type,
+    int options) {
   const SchemaKeyToValueType* begin = nullptr;
   const SchemaKeyToValueType* end = nullptr;
   if (type == schema::kArray) {
@@ -316,61 +325,65 @@ bool ValidateAttributesAndTypes(const base::Value& dict,
   }
 
   base::Value::Type expected_type = base::Value::Type::NONE;
-  for (auto it : dict.DictItems()) {
+  for (auto it : dict) {
     if (MapSchemaKeyToValueType(it.first, begin, end, &expected_type)) {
       if (!CheckType(&it.second, expected_type)) {
-        *error = base::StringPrintf("Invalid type for attribute '%s'",
-                                    it.first.c_str());
-        return false;
+        return base::unexpected(base::StringPrintf(
+            "Invalid type for attribute '%s'", it.first.c_str()));
       }
     } else if (!IgnoreUnknownAttributes(options)) {
-      *error = base::StringPrintf("Unknown attribute '%s'", it.first.c_str());
-      return false;
+      return base::unexpected(
+          base::StringPrintf("Unknown attribute '%s'", it.first.c_str()));
     }
   }
-  return true;
+  return base::ok();
 }
 
 // Validates that |enum_list| is a list and its items are all of type |type|.
-bool ValidateEnum(const base::Value* enum_list,
-                  const std::string& type,
-                  std::string* error) {
-  if (enum_list->type() != base::Value::Type::LIST ||
-      enum_list->GetListDeprecated().empty()) {
-    *error = "Attribute 'enum' must be a non-empty list.";
-    return false;
+base::expected<void, std::string> ValidateEnum(const base::Value* enum_list,
+                                               const std::string& type) {
+  if (!enum_list->is_list() || enum_list->GetList().empty()) {
+    return base::unexpected("Attribute 'enum' must be a non-empty list.");
   }
   base::Value::Type expected_item_type = base::Value::Type::NONE;
   MapSchemaKeyToValueType(type, kSchemaTypesToValueTypes,
                           kSchemaTypesToValueTypesEnd, &expected_item_type);
-  for (const base::Value& item : enum_list->GetListDeprecated()) {
+  for (const base::Value& item : enum_list->GetList()) {
     if (item.type() != expected_item_type) {
-      *error = base::StringPrintf(
+      return base::unexpected(base::StringPrintf(
           "Attribute 'enum' for type '%s' contains items with invalid types",
-          type.c_str());
-      return false;
+          type.c_str()));
     }
   }
-  return true;
+  return base::ok();
 }
 
 // Forward declaration (used in ValidateProperties).
-bool IsValidSchema(const base::Value& dict, int options, std::string* error);
+base::expected<void, std::string> IsValidSchema(const base::Value::Dict& dict,
+                                                int options);
 
 // Validates that the values in the |properties| dict are valid schemas.
-bool ValidateProperties(const base::Value& properties,
-                        int options,
-                        std::string* error) {
-  for (auto dict_it : properties.DictItems()) {
-    if (dict_it.second.type() != base::Value::Type::DICTIONARY) {
-      *error = base::StringPrintf("Schema for property '%s' must be a dict.",
-                                  dict_it.first.c_str());
-      return false;
+base::expected<void, std::string> ValidateProperties(
+    const base::Value::Dict& properties,
+    int options) {
+  for (auto dict_it : properties) {
+    if (!dict_it.second.is_dict()) {
+      return base::unexpected(base::StringPrintf(
+          "Schema for property '%s' must be a dict.", dict_it.first.c_str()));
     }
-    if (!IsValidSchema(dict_it.second, options, error))
-      return false;
+    RETURN_IF_ERROR(IsValidSchema(dict_it.second.GetDict(), options));
   }
-  return true;
+  return base::ok();
+}
+
+base::expected<void, std::string> IsFieldTypeObject(
+    const base::Value& field,
+    const std::string& field_name) {
+  if (!field.is_dict()) {
+    return base::unexpected(base::StringPrintf("Field '%s' must be an object.",
+                                               field_name.c_str()));
+  }
+  return base::ok();
 }
 
 // Checks whether the passed dict is a valid schema. See
@@ -378,106 +391,104 @@ bool ValidateProperties(const base::Value& properties,
 // attributes and their expected types. Values for 'minimum' and 'maximum' for
 // type 'integer' can be of type int or double. Referenced IDs ($ref) are not
 // checked for existence and IDs are not checked for duplicates. The 'pattern'
-// attribute and keys for 'patternProperties' are not checked for valid regulax
+// attribute and keys for 'patternProperties' are not checked for valid regular
 // expression syntax. Invalid regular expressions will cause a value validation
 // error.
-bool IsValidSchema(const base::Value& dict, int options, std::string* error) {
-  DCHECK(dict.is_dict());
+base::expected<void, std::string> IsValidSchema(const base::Value::Dict& dict,
+                                                int options) {
   // Validate '$ref'.
-  const base::Value* ref_id = dict.FindKey(schema::kRef);
-  if (ref_id)
-    return ValidateAttributesAndTypes(dict, schema::kRef, options, error);
+  if (dict.contains(schema::kRef)) {
+    return ValidateAttributesAndTypes(dict, schema::kRef, options);
+  }
 
   // Validate 'type'.
-  const base::Value* type = dict.FindKey(schema::kType);
+  if (!dict.contains(schema::kType)) {
+    return base::unexpected("Each schema must have a 'type' or '$ref'.");
+  }
+
+  const std::string* type = dict.FindString(schema::kType);
   if (!type) {
-    *error = "Each schema must have a 'type' or '$ref'.";
-    return false;
+    return base::unexpected("Attribute 'type' must be a string.");
   }
-  if (type->type() != base::Value::Type::STRING) {
-    *error = "Attribute 'type' must be a string.";
-    return false;
-  }
-  const std::string type_string = type->GetString();
+  const std::string& type_string = *type;
   if (!IsValidType(type_string)) {
-    *error = base::StringPrintf("Unknown type '%s'.", type_string.c_str());
-    return false;
+    return base::unexpected(
+        base::StringPrintf("Unknown type '%s'.", type_string.c_str()));
   }
 
   // Validate attributes and expected types.
-  if (!ValidateAttributesAndTypes(dict, type_string, options, error))
-    return false;
+  RETURN_IF_ERROR(ValidateAttributesAndTypes(dict, type_string, options));
 
   // Validate 'enum' attribute.
   if (type_string == schema::kString || type_string == schema::kInteger) {
-    const base::Value* enum_list = dict.FindKey(schema::kEnum);
-    if (enum_list && !ValidateEnum(enum_list, type_string, error))
-      return false;
+    if (const base::Value* enum_list = dict.Find(schema::kEnum)) {
+      RETURN_IF_ERROR(ValidateEnum(enum_list, type_string));
+    }
   }
 
+  // TODO(b/341873894): Refactor type validation to helper functions.
   if (type_string == schema::kInteger) {
     // Validate 'minimum' > 'maximum'.
-    const base::Value* minimum_value = dict.FindKey(schema::kMinimum);
-    const base::Value* maximum_value = dict.FindKey(schema::kMaximum);
+    const std::optional<double> minimum_value =
+        dict.FindDouble(schema::kMinimum);
+    const std::optional<double> maximum_value =
+        dict.FindDouble(schema::kMaximum);
     if (minimum_value && maximum_value) {
-      double minimum = minimum_value->is_int() ? minimum_value->GetInt()
-                                               : minimum_value->GetDouble();
-      double maximum = maximum_value->is_int() ? maximum_value->GetInt()
-                                               : maximum_value->GetDouble();
-      if (minimum > maximum) {
-        *error = base::StringPrintf("Invalid range specified [%f;%f].", minimum,
-                                    maximum);
-        return false;
+      if (minimum_value.value() > maximum_value.value()) {
+        return base::unexpected(
+            base::StringPrintf("Invalid range specified [%f;%f].",
+                               minimum_value.value(), maximum_value.value()));
       }
     }
   } else if (type_string == schema::kArray) {
     // Validate type 'array'.
-    const base::Value* items = dict.FindKey(schema::kItems);
-    if (!items) {
-      *error = "Schema of type 'array' must have a schema in 'items'.";
-      return false;
+    const base::Value* items = dict.Find(schema::kItems);
+    if (!items || !items->is_dict()) {
+      return base::unexpected(
+          "Schema of type 'array' must have a schema in 'items' of type "
+          "dictionary.");
     }
-    if (!IsValidSchema(*items, options, error))
-      return false;
+    RETURN_IF_ERROR(IsValidSchema(items->GetDict(), options));
   } else if (type_string == schema::kObject) {
     // Validate type 'object'.
-    const base::Value* properties = dict.FindKey(schema::kProperties);
-    if (properties && !ValidateProperties(*properties, options, error))
-      return false;
-
-    const base::Value* pattern_properties =
-        dict.FindKey(schema::kPatternProperties);
-    if (pattern_properties &&
-        !ValidateProperties(*pattern_properties, options, error)) {
-      return false;
+    const base::Value* properties = dict.Find(schema::kProperties);
+    if (properties) {
+      RETURN_IF_ERROR(IsFieldTypeObject(*properties, schema::kProperties));
+      RETURN_IF_ERROR(ValidateProperties(properties->GetDict(), options));
     }
 
-    const base::Value* additional_properties =
-        dict.FindKey(schema::kAdditionalProperties);
-    if (additional_properties) {
-      if (!IsValidSchema(*additional_properties, options, error))
-        return false;
+    if (const base::Value* pattern_properties =
+            dict.Find(schema::kPatternProperties)) {
+      RETURN_IF_ERROR(
+          IsFieldTypeObject(*pattern_properties, schema::kPatternProperties));
+      RETURN_IF_ERROR(
+          ValidateProperties(pattern_properties->GetDict(), options));
     }
 
-    const base::Value* required = dict.FindKey(schema::kRequired);
-    if (required) {
-      for (const base::Value& item : required->GetListDeprecated()) {
+    if (const base::Value* additional_properties =
+            dict.Find(schema::kAdditionalProperties)) {
+      RETURN_IF_ERROR(IsFieldTypeObject(*additional_properties,
+                                        schema::kAdditionalProperties));
+      RETURN_IF_ERROR(IsValidSchema(additional_properties->GetDict(), options));
+    }
+
+    if (const base::Value::List* required = dict.FindList(schema::kRequired)) {
+      for (const base::Value& item : *required) {
         if (!item.is_string()) {
-          *error = "Attribute 'required' may only contain strings.";
-          return false;
+          return base::unexpected(
+              "Attribute 'required' may only contain strings.");
         }
         const std::string property_name = item.GetString();
-        if (!properties || !properties->FindKey(property_name)) {
-          *error = base::StringPrintf(
+        if (!properties || !properties->GetDict().contains(property_name)) {
+          return base::unexpected(base::StringPrintf(
               "Attribute 'required' contains unknown property '%s'.",
-              property_name.c_str());
-          return false;
+              property_name.c_str()));
         }
       }
     }
   }
 
-  return true;
+  return base::ok();
 }
 
 }  // namespace
@@ -493,9 +504,8 @@ class Schema::InternalStorage
 
   static scoped_refptr<const InternalStorage> Wrap(const SchemaData* data);
 
-  static scoped_refptr<const InternalStorage> ParseSchema(
-      const base::Value& schema,
-      std::string* error);
+  static base::expected<scoped_refptr<const InternalStorage>, std::string>
+  ParseSchema(const base::Value::Dict& schema);
 
   const SchemaData* data() const { return &schema_data_; }
 
@@ -555,7 +565,7 @@ class Schema::InternalStorage
 
   // Determines the expected |sizes| of the storage for the representation
   // of |schema|.
-  static void DetermineStorageSizes(const base::Value& schema,
+  static void DetermineStorageSizes(const base::Value::Dict& schema,
                                     StorageSizes* sizes);
 
   // Parses the JSON schema in |schema|.
@@ -567,39 +577,36 @@ class Schema::InternalStorage
   // in |schema_nodes_|. If the |schema| contains an "id" then that ID is mapped
   // to the |index| in the |id_map|.
   //
-  // If |schema| is invalid then |error| gets the error reason and false is
-  // returned. Otherwise returns true.
-  bool Parse(const base::Value& schema,
-             short* index,
-             ReferencesAndIDs* references_and_ids,
-             std::string* error);
+  // If |schema| is invalid, it returns an error reason.
+  base::expected<void, std::string> Parse(const base::Value::Dict& schema,
+                                          short* index,
+                                          ReferencesAndIDs* references_and_ids);
 
   // Helper for Parse() that gets an already assigned |schema_node| instead of
   // an |index| pointer.
-  bool ParseDictionary(const base::Value& schema,
-                       SchemaNode* schema_node,
-                       ReferencesAndIDs* references_and_ids,
-                       std::string* error);
+  base::expected<void, std::string> ParseDictionary(
+      const base::Value::Dict& schema,
+      SchemaNode* schema_node,
+      ReferencesAndIDs* references_and_ids);
 
   // Helper for Parse() that gets an already assigned |schema_node| instead of
   // an |index| pointer.
-  bool ParseList(const base::Value& schema,
-                 SchemaNode* schema_node,
-                 ReferencesAndIDs* references_and_ids,
-                 std::string* error);
+  base::expected<void, std::string> ParseList(
+      const base::Value::Dict& schema,
+      SchemaNode* schema_node,
+      ReferencesAndIDs* references_and_ids);
 
-  bool ParseEnum(const base::Value& schema,
-                 base::Value::Type type,
-                 SchemaNode* schema_node,
-                 std::string* error);
+  base::expected<void, std::string> ParseEnum(const base::Value::Dict& schema,
+                                              base::Value::Type type,
+                                              SchemaNode* schema_node);
 
-  bool ParseRangedInt(const base::Value& schema,
-                      SchemaNode* schema_node,
-                      std::string* error);
+  base::expected<void, std::string> ParseRangedInt(
+      const base::Value::Dict& schema,
+      SchemaNode* schema_node);
 
-  bool ParseStringPattern(const base::Value& schema,
-                          SchemaNode* schema_node,
-                          std::string* error);
+  base::expected<void, std::string> ParseStringPattern(
+      const base::Value::Dict& schema,
+      SchemaNode* schema_node);
 
   // Assigns the IDs in |id_map| to the pending references in the
   // |reference_list|. If an ID is missing then |error| is set and false is
@@ -630,9 +637,9 @@ class Schema::InternalStorage
   std::vector<const char*> string_enums_;
 };
 
-Schema::InternalStorage::InternalStorage() {}
+Schema::InternalStorage::InternalStorage() = default;
 
-Schema::InternalStorage::~InternalStorage() {}
+Schema::InternalStorage::~InternalStorage() = default;
 
 // static
 scoped_refptr<const Schema::InternalStorage> Schema::InternalStorage::Wrap(
@@ -643,9 +650,8 @@ scoped_refptr<const Schema::InternalStorage> Schema::InternalStorage::Wrap(
 }
 
 // static
-scoped_refptr<const Schema::InternalStorage>
-Schema::InternalStorage::ParseSchema(const base::Value& schema,
-                                     std::string* error) {
+base::expected<scoped_refptr<const Schema::InternalStorage>, std::string>
+Schema::InternalStorage::ParseSchema(const base::Value::Dict& schema) {
   // Determine the sizes of the storage arrays and reserve the capacity before
   // starting to append nodes and strings. This is important to prevent the
   // arrays from being reallocated, which would invalidate the c_str() pointers
@@ -665,12 +671,11 @@ Schema::InternalStorage::ParseSchema(const base::Value& schema,
 
   short root_index = kInvalid;
   ReferencesAndIDs references_and_ids;
-  if (!storage->Parse(schema, &root_index, &references_and_ids, error))
-    return nullptr;
+
+  RETURN_IF_ERROR(storage->Parse(schema, &root_index, &references_and_ids));
 
   if (root_index == kInvalid) {
-    *error = "The main schema can't have a $ref";
-    return nullptr;
+    return base::unexpected("The main schema can't have a $ref");
   }
 
   // None of this should ever happen without having been already detected.
@@ -684,14 +689,15 @@ Schema::InternalStorage::ParseSchema(const base::Value& schema,
       sizes.required_properties != storage->required_properties_.size() ||
       sizes.int_enums != storage->int_enums_.size() ||
       sizes.string_enums != storage->string_enums_.size()) {
-    *error =
+    return base::unexpected(
         "Failed to parse the schema due to a Chrome bug. Please file a "
-        "new issue at http://crbug.com";
-    return nullptr;
+        "new issue at http://crbug.com");
   }
 
-  if (!ResolveReferences(references_and_ids, error))
-    return nullptr;
+  std::string error;
+  if (!ResolveReferences(references_and_ids, &error)) {
+    return base::unexpected(error);
+  }
 
   storage->FindSensitiveChildren();
 
@@ -705,7 +711,7 @@ Schema::InternalStorage::ParseSchema(const base::Value& schema,
   data->string_enums = storage->string_enums_.data();
   data->validation_schema_root_index = -1;
 
-  return storage;
+  return base::ok(std::move(storage));
 }
 
 re2::RE2* Schema::InternalStorage::CompileRegex(
@@ -721,15 +727,16 @@ re2::RE2* Schema::InternalStorage::CompileRegex(
 }
 
 // static
-void Schema::InternalStorage::DetermineStorageSizes(const base::Value& schema,
-                                                    StorageSizes* sizes) {
-  if (schema.FindStringKey(schema::kRef)) {
+void Schema::InternalStorage::DetermineStorageSizes(
+    const base::Value::Dict& schema,
+    StorageSizes* sizes) {
+  if (schema.FindString(schema::kRef)) {
     // Schemas with a "$ref" attribute don't take additional storage.
     return;
   }
 
   base::Value::Type type = base::Value::Type::NONE;
-  const std::string* type_string = schema.FindStringKey(schema::kType);
+  const std::string* type_string = schema.FindString(schema::kType);
   if (!type_string || !SchemaTypeToValueType(*type_string, &type)) {
     // This schema is invalid.
     return;
@@ -738,46 +745,52 @@ void Schema::InternalStorage::DetermineStorageSizes(const base::Value& schema,
   sizes->schema_nodes++;
 
   if (type == base::Value::Type::LIST) {
-    const base::Value* items = schema.FindDictKey(schema::kItems);
-    if (items)
-      DetermineStorageSizes(*items, sizes);
-  } else if (type == base::Value::Type::DICTIONARY) {
+    const base::Value* items = schema.Find(schema::kItems);
+    if (items && items->is_dict()) {
+      DetermineStorageSizes(items->GetDict(), sizes);
+    }
+  } else if (type == base::Value::Type::DICT) {
     sizes->properties_nodes++;
 
     const base::Value* additional_properties =
-        schema.FindDictKey(schema::kAdditionalProperties);
-    if (additional_properties)
-      DetermineStorageSizes(*additional_properties, sizes);
+        schema.Find(schema::kAdditionalProperties);
+    if (additional_properties && additional_properties->is_dict()) {
+      DetermineStorageSizes(additional_properties->GetDict(), sizes);
+    }
 
-    const base::Value* properties = schema.FindDictKey(schema::kProperties);
+    const base::Value::Dict* properties = schema.FindDict(schema::kProperties);
     if (properties) {
-      for (auto property : properties->DictItems()) {
-        DetermineStorageSizes(property.second, sizes);
+      for (auto property : *properties) {
+        if (property.second.is_dict()) {
+          DetermineStorageSizes(property.second.GetDict(), sizes);
+        }
         sizes->strings++;
         sizes->property_nodes++;
       }
     }
 
-    const base::Value* pattern_properties =
-        schema.FindDictKey(schema::kPatternProperties);
+    const base::Value::Dict* pattern_properties =
+        schema.FindDict(schema::kPatternProperties);
     if (pattern_properties) {
-      for (auto pattern_property : pattern_properties->DictItems()) {
-        DetermineStorageSizes(pattern_property.second, sizes);
+      for (auto pattern_property : *pattern_properties) {
+        if (pattern_property.second.is_dict()) {
+          DetermineStorageSizes(pattern_property.second.GetDict(), sizes);
+        }
         sizes->strings++;
         sizes->property_nodes++;
       }
     }
 
-    const base::Value* required_properties = schema.FindKey(schema::kRequired);
+    const base::Value::List* required_properties =
+        schema.FindList(schema::kRequired);
     if (required_properties) {
-      sizes->strings += required_properties->GetListDeprecated().size();
-      sizes->required_properties +=
-          required_properties->GetListDeprecated().size();
+      sizes->strings += required_properties->size();
+      sizes->required_properties += required_properties->size();
     }
-  } else if (schema.FindKey(schema::kEnum)) {
-    const base::Value* possible_values = schema.FindListKey(schema::kEnum);
+  } else if (schema.FindList(schema::kEnum)) {
+    const base::Value::List* possible_values = schema.FindList(schema::kEnum);
     if (possible_values) {
-      size_t num_possible_values = possible_values->GetListDeprecated().size();
+      size_t num_possible_values = possible_values->size();
       if (type == base::Value::Type::INTEGER) {
         sizes->int_enums += num_possible_values;
       } else if (type == base::Value::Type::STRING) {
@@ -787,10 +800,12 @@ void Schema::InternalStorage::DetermineStorageSizes(const base::Value& schema,
       sizes->restriction_nodes++;
     }
   } else if (type == base::Value::Type::INTEGER) {
-    if (schema.FindKey(schema::kMinimum) || schema.FindKey(schema::kMaximum))
+    if (schema.contains(schema::kMinimum) ||
+        schema.contains(schema::kMaximum)) {
       sizes->restriction_nodes++;
+    }
   } else if (type == base::Value::Type::STRING) {
-    if (schema.FindKey(schema::kPattern)) {
+    if (schema.contains(schema::kPattern)) {
       sizes->strings++;
       sizes->string_enums++;
       sizes->restriction_nodes++;
@@ -798,120 +813,102 @@ void Schema::InternalStorage::DetermineStorageSizes(const base::Value& schema,
   }
 }
 
-bool Schema::InternalStorage::Parse(const base::Value& schema,
-                                    short* index,
-                                    ReferencesAndIDs* references_and_ids,
-                                    std::string* error) {
-  const std::string* ref = schema.FindStringKey(schema::kRef);
+base::expected<void, std::string> Schema::InternalStorage::Parse(
+    const base::Value::Dict& schema,
+    short* index,
+    ReferencesAndIDs* references_and_ids) {
+  const std::string* ref = schema.FindString(schema::kRef);
   if (ref) {
-    if (schema.FindStringKey(schema::kId)) {
-      *error = "Schemas with a $ref can't have an id";
-      return false;
+    if (schema.FindString(schema::kId)) {
+      return base::unexpected("Schemas with a $ref can't have an id");
     }
     references_and_ids->reference_list.emplace_back(*ref, index);
-    return true;
+    return base::ok();
   }
 
-  const std::string* type_string = schema.FindStringKey(schema::kType);
+  const std::string* type_string = schema.FindString(schema::kType);
   if (!type_string) {
-    *error = "The schema type must be declared.";
-    return false;
+    return base::unexpected("The schema type must be declared.");
   }
 
   base::Value::Type type = base::Value::Type::NONE;
   if (!SchemaTypeToValueType(*type_string, &type)) {
-    *error = "Type not supported: " + *type_string;
-    return false;
+    return base::unexpected("Type not supported: " + *type_string);
   }
 
   if (schema_nodes_.size() > std::numeric_limits<short>::max()) {
-    *error = "Can't have more than " +
-             std::to_string(std::numeric_limits<short>::max()) +
-             " schema nodes.";
-    return false;
+    return base::unexpected(
+        "Can't have more than " +
+        base::NumberToString(std::numeric_limits<short>::max()) +
+        " schema nodes.");
   }
   *index = static_cast<short>(schema_nodes_.size());
-  schema_nodes_.push_back(SchemaNode());
+  schema_nodes_.push_back(
+      {.type = type,
+       .extra = kInvalid,
+       .is_sensitive_value =
+           schema.FindBool(schema::kSensitiveValue).value_or(false)});
   SchemaNode* schema_node = &schema_nodes_.back();
-  schema_node->type = type;
-  schema_node->extra = kInvalid;
-  schema_node->is_sensitive_value = false;
 
-  absl::optional<bool> is_sensitive_value =
-      schema.FindBoolKey(schema::kSensitiveValue);
-  if (is_sensitive_value)
-    schema_node->is_sensitive_value = *is_sensitive_value;
-
-  if (type == base::Value::Type::DICTIONARY) {
-    if (!ParseDictionary(schema, schema_node, references_and_ids, error))
-      return false;
+  if (type == base::Value::Type::DICT) {
+    RETURN_IF_ERROR(ParseDictionary(schema, schema_node, references_and_ids));
   } else if (type == base::Value::Type::LIST) {
-    if (!ParseList(schema, schema_node, references_and_ids, error))
-      return false;
-  } else if (schema.FindKey(schema::kEnum)) {
-    if (!ParseEnum(schema, type, schema_node, error))
-      return false;
-  } else if (schema.FindKey(schema::kPattern)) {
-    if (!ParseStringPattern(schema, schema_node, error))
-      return false;
-  } else if (schema.FindKey(schema::kMinimum) ||
-             schema.FindKey(schema::kMaximum)) {
+    RETURN_IF_ERROR(ParseList(schema, schema_node, references_and_ids));
+  } else if (schema.contains(schema::kEnum)) {
+    RETURN_IF_ERROR(ParseEnum(schema, type, schema_node));
+  } else if (schema.contains(schema::kPattern)) {
+    RETURN_IF_ERROR(ParseStringPattern(schema, schema_node));
+  } else if (schema.contains(schema::kMinimum) ||
+             schema.contains(schema::kMaximum)) {
     if (type != base::Value::Type::INTEGER) {
-      *error = "Only integers can have minimum and maximum";
-      return false;
+      return base::unexpected("Only integers can have minimum and maximum");
     }
-    if (!ParseRangedInt(schema, schema_node, error))
-      return false;
+    RETURN_IF_ERROR(ParseRangedInt(schema, schema_node));
   }
-  const std::string* id = schema.FindStringKey(schema::kId);
+  const std::string* id = schema.FindString(schema::kId);
   if (id) {
     auto& id_map = references_and_ids->id_map;
     if (base::Contains(id_map, *id)) {
-      *error = "Duplicated id: " + *id;
-      return false;
+      return base::unexpected("Duplicated id: " + *id);
     }
     id_map[*id] = *index;
   }
 
-  return true;
+  return base::ok();
 }
 
-bool Schema::InternalStorage::ParseDictionary(
-    const base::Value& schema,
+base::expected<void, std::string> Schema::InternalStorage::ParseDictionary(
+    const base::Value::Dict& schema,
     SchemaNode* schema_node,
-    ReferencesAndIDs* references_and_ids,
-    std::string* error) {
+    ReferencesAndIDs* references_and_ids) {
   int extra = static_cast<int>(properties_nodes_.size());
-  properties_nodes_.push_back(PropertiesNode());
-  properties_nodes_[extra].additional = kInvalid;
+  properties_nodes_.push_back({.additional = kInvalid});
   schema_node->extra = extra;
 
-  const base::Value* additional_properties =
-      schema.FindDictKey(schema::kAdditionalProperties);
+  const base::Value::Dict* additional_properties =
+      schema.FindDict(schema::kAdditionalProperties);
   if (additional_properties) {
-    if (!Parse(*additional_properties, &properties_nodes_[extra].additional,
-               references_and_ids, error)) {
-      return false;
-    }
+    RETURN_IF_ERROR(Parse(*additional_properties,
+                          &properties_nodes_[extra].additional,
+                          references_and_ids));
   }
 
   properties_nodes_[extra].begin = static_cast<int>(property_nodes_.size());
 
-  const base::Value* properties = schema.FindDictKey(schema::kProperties);
+  const base::Value::Dict* properties = schema.FindDict(schema::kProperties);
   if (properties) {
     // This and below reserves nodes for all of the |properties|, and makes sure
     // they are contiguous. Recursive calls to Parse() will append after these
     // elements.
-    property_nodes_.resize(property_nodes_.size() + properties->DictSize());
+    property_nodes_.resize(property_nodes_.size() + properties->size());
   }
 
   properties_nodes_[extra].end = static_cast<int>(property_nodes_.size());
 
-  const base::Value* pattern_properties =
-      schema.FindDictKey(schema::kPatternProperties);
+  const base::Value::Dict* pattern_properties =
+      schema.FindDict(schema::kPatternProperties);
   if (pattern_properties) {
-    property_nodes_.resize(property_nodes_.size() +
-                           pattern_properties->DictSize());
+    property_nodes_.resize(property_nodes_.size() + pattern_properties->size());
   }
 
   properties_nodes_[extra].pattern_end =
@@ -921,45 +918,49 @@ bool Schema::InternalStorage::ParseDictionary(
     int base_index = properties_nodes_[extra].begin;
     int index = base_index;
 
-    for (auto property : properties->DictItems()) {
+    for (auto property : *properties) {
       strings_.push_back(property.first);
       property_nodes_[index].key = strings_.back().c_str();
-      if (!Parse(property.second, &property_nodes_[index].schema,
-                 references_and_ids, error)) {
-        return false;
+      if (!property.second.is_dict()) {
+        return base::unexpected(std::string());
       }
+      RETURN_IF_ERROR(Parse(property.second.GetDict(),
+                            &property_nodes_[index].schema,
+                            references_and_ids));
       ++index;
     }
-    CHECK_EQ(static_cast<int>(properties->DictSize()), index - base_index);
+    CHECK_EQ(static_cast<int>(properties->size()), index - base_index);
   }
 
   if (pattern_properties != nullptr) {
     int base_index = properties_nodes_[extra].end;
     int index = base_index;
 
-    for (auto pattern_property : pattern_properties->DictItems()) {
+    for (auto pattern_property : *pattern_properties) {
       re2::RE2* compiled_regex = CompileRegex(pattern_property.first);
       if (!compiled_regex->ok()) {
-        *error = "/" + pattern_property.first +
-                 "/ is a invalid regex: " + compiled_regex->error();
-        return false;
+        return base::unexpected(
+            "/" + pattern_property.first +
+            "/ is a invalid regex: " + compiled_regex->error());
       }
       strings_.push_back(pattern_property.first);
       property_nodes_[index].key = strings_.back().c_str();
-      if (!Parse(pattern_property.second, &property_nodes_[index].schema,
-                 references_and_ids, error)) {
-        return false;
+      if (!pattern_property.second.is_dict()) {
+        return base::unexpected(std::string());
       }
+      RETURN_IF_ERROR(Parse(pattern_property.second.GetDict(),
+                            &property_nodes_[index].schema,
+                            references_and_ids));
       ++index;
     }
-    CHECK_EQ(static_cast<int>(pattern_properties->DictSize()),
-             index - base_index);
+    CHECK_EQ(static_cast<int>(pattern_properties->size()), index - base_index);
   }
 
   properties_nodes_[extra].required_begin = required_properties_.size();
-  const base::Value* required_properties = schema.FindKey(schema::kRequired);
+  const base::Value::List* required_properties =
+      schema.FindList(schema::kRequired);
   if (required_properties) {
-    for (const base::Value& val : required_properties->GetListDeprecated()) {
+    for (const base::Value& val : *required_properties) {
       strings_.push_back(val.GetString());
       required_properties_.push_back(strings_.back().c_str());
     }
@@ -974,106 +975,99 @@ bool Schema::InternalStorage::ParseDictionary(
     properties_nodes_[extra].required_end = kInvalid;
   }
 
-  return true;
+  return base::ok();
 }
 
-bool Schema::InternalStorage::ParseList(const base::Value& schema,
-                                        SchemaNode* schema_node,
-                                        ReferencesAndIDs* references_and_ids,
-                                        std::string* error) {
-  const base::Value* items = schema.FindDictKey(schema::kItems);
+base::expected<void, std::string> Schema::InternalStorage::ParseList(
+    const base::Value::Dict& schema,
+    SchemaNode* schema_node,
+    ReferencesAndIDs* references_and_ids) {
+  const base::Value::Dict* items = schema.FindDict(schema::kItems);
   if (!items) {
-    *error = "Arrays must declare a single schema for their items.";
-    return false;
+    return base::unexpected(
+        "Arrays must declare a single schema for their items.");
   }
-  return Parse(*items, &schema_node->extra, references_and_ids, error);
+  return Parse(*items, &schema_node->extra, references_and_ids);
 }
 
-bool Schema::InternalStorage::ParseEnum(const base::Value& schema,
-                                        base::Value::Type type,
-                                        SchemaNode* schema_node,
-                                        std::string* error) {
-  const base::Value* possible_values = schema.FindListKey(schema::kEnum);
+base::expected<void, std::string> Schema::InternalStorage::ParseEnum(
+    const base::Value::Dict& schema,
+    base::Value::Type type,
+    SchemaNode* schema_node) {
+  const base::Value::List* possible_values = schema.FindList(schema::kEnum);
   if (!possible_values) {
-    *error = "Enum attribute must be a list value";
-    return false;
+    return base::unexpected("Enum attribute must be a list value");
   }
-  if (possible_values->GetListDeprecated().empty()) {
-    *error = "Enum attribute must be non-empty";
-    return false;
+  if (possible_values->empty()) {
+    return base::unexpected("Enum attribute must be non-empty");
   }
   int offset_begin;
   int offset_end;
   if (type == base::Value::Type::INTEGER) {
     offset_begin = static_cast<int>(int_enums_.size());
-    for (const auto& possible_value : possible_values->GetListDeprecated()) {
+    for (const auto& possible_value : *possible_values) {
       if (!possible_value.is_int()) {
-        *error = "Invalid enumeration member type";
-        return false;
+        return base::unexpected("Invalid enumeration member type");
       }
       int_enums_.push_back(possible_value.GetInt());
     }
     offset_end = static_cast<int>(int_enums_.size());
   } else if (type == base::Value::Type::STRING) {
     offset_begin = static_cast<int>(string_enums_.size());
-    for (const auto& possible_value : possible_values->GetListDeprecated()) {
+    for (const auto& possible_value : *possible_values) {
       if (!possible_value.is_string()) {
-        *error = "Invalid enumeration member type";
-        return false;
+        return base::unexpected("Invalid enumeration member type");
       }
       strings_.push_back(possible_value.GetString());
       string_enums_.push_back(strings_.back().c_str());
     }
     offset_end = static_cast<int>(string_enums_.size());
   } else {
-    *error = "Enumeration is only supported for integer and string.";
-    return false;
+    return base::unexpected(
+        "Enumeration is only supported for integer and string.");
   }
   schema_node->extra = static_cast<int>(restriction_nodes_.size());
-  restriction_nodes_.push_back(RestrictionNode());
-  restriction_nodes_.back().enumeration_restriction.offset_begin = offset_begin;
-  restriction_nodes_.back().enumeration_restriction.offset_end = offset_end;
-  return true;
+  restriction_nodes_.push_back(RestrictionNode{
+      .enumeration_restriction = RestrictionNode::EnumerationRestriction{
+          .offset_begin = offset_begin, .offset_end = offset_end}});
+  return base::ok();
 }
 
-bool Schema::InternalStorage::ParseRangedInt(const base::Value& schema,
-                                             SchemaNode* schema_node,
-                                             std::string* error) {
-  int min_value = schema.FindIntKey(schema::kMinimum).value_or(INT_MIN);
-  int max_value = schema.FindIntKey(schema::kMaximum).value_or(INT_MAX);
+base::expected<void, std::string> Schema::InternalStorage::ParseRangedInt(
+    const base::Value::Dict& schema,
+    SchemaNode* schema_node) {
+  int min_value = schema.FindInt(schema::kMinimum).value_or(INT_MIN);
+  int max_value = schema.FindInt(schema::kMaximum).value_or(INT_MAX);
   if (min_value > max_value) {
-    *error = "Invalid range restriction for int type.";
-    return false;
+    return base::unexpected("Invalid range restriction for int type.");
   }
   schema_node->extra = static_cast<int>(restriction_nodes_.size());
-  restriction_nodes_.push_back(RestrictionNode());
-  restriction_nodes_.back().ranged_restriction.max_value = max_value;
-  restriction_nodes_.back().ranged_restriction.min_value = min_value;
-  return true;
+  restriction_nodes_.push_back(
+      RestrictionNode{.ranged_restriction = RestrictionNode::RangedRestriction{
+                          .max_value = max_value, .min_value = min_value}});
+  return base::ok();
 }
 
-bool Schema::InternalStorage::ParseStringPattern(const base::Value& schema,
-                                                 SchemaNode* schema_node,
-                                                 std::string* error) {
-  const std::string* pattern = schema.FindStringKey(schema::kPattern);
+base::expected<void, std::string> Schema::InternalStorage::ParseStringPattern(
+    const base::Value::Dict& schema,
+    SchemaNode* schema_node) {
+  const std::string* pattern = schema.FindString(schema::kPattern);
   if (!pattern) {
-    *error = "Schema pattern must be a string.";
-    return false;
+    return base::unexpected("Schema pattern must be a string.");
   }
   re2::RE2* compiled_regex = CompileRegex(*pattern);
   if (!compiled_regex->ok()) {
-    *error = "/" + *pattern + "/ is invalid regex: " + compiled_regex->error();
-    return false;
+    return base::unexpected("/" + *pattern +
+                            "/ is invalid regex: " + compiled_regex->error());
   }
   int index = static_cast<int>(string_enums_.size());
   strings_.push_back(*pattern);
   string_enums_.push_back(strings_.back().c_str());
   schema_node->extra = static_cast<int>(restriction_nodes_.size());
-  restriction_nodes_.push_back(RestrictionNode());
-  restriction_nodes_.back().string_pattern_restriction.pattern_index = index;
-  restriction_nodes_.back().string_pattern_restriction.pattern_index_backup =
-      index;
-  return true;
+  restriction_nodes_.push_back(RestrictionNode{
+      .string_pattern_restriction = RestrictionNode::StringPatternRestriction{
+          .pattern_index = index, .pattern_index_backup = index}});
+  return base::ok();
 }
 
 // static
@@ -1111,7 +1105,7 @@ bool Schema::InternalStorage::FindSensitiveChildrenRecursive(
 
   handled_schema_nodes->insert(index);
   bool has_sensitive_children = false;
-  if (schema_node.type == base::Value::Type::DICTIONARY) {
+  if (schema_node.type == base::Value::Type::DICT) {
     const PropertiesNode& properties_node =
         properties_nodes_[schema_node.extra];
     // Iterate through properties and patternProperties.
@@ -1149,7 +1143,7 @@ Schema::Iterator::Iterator(const scoped_refptr<const InternalStorage>& storage,
 Schema::Iterator::Iterator(const Iterator& iterator)
     : storage_(iterator.storage_), it_(iterator.it_), end_(iterator.end_) {}
 
-Schema::Iterator::~Iterator() {}
+Schema::Iterator::~Iterator() = default;
 
 Schema::Iterator& Schema::Iterator::operator=(const Iterator& iterator) {
   storage_ = iterator.storage_;
@@ -1184,7 +1178,7 @@ Schema::Schema(const scoped_refptr<const InternalStorage>& storage,
 Schema::Schema(const Schema& schema)
     : storage_(schema.storage_), node_(schema.node_) {}
 
-Schema::~Schema() {}
+Schema::~Schema() = default;
 
 Schema& Schema::operator=(const Schema& schema) {
   storage_ = schema.storage_;
@@ -1200,7 +1194,7 @@ Schema Schema::Wrap(const SchemaData* data) {
 
 bool Schema::Validate(const base::Value& value,
                       SchemaOnErrorStrategy strategy,
-                      std::string* out_error_path,
+                      PolicyErrorPath* out_error_path,
                       std::string* out_error) const {
   if (!valid()) {
     SchemaErrorFound(out_error_path, out_error, "The schema is invalid.");
@@ -1225,7 +1219,7 @@ bool Schema::Validate(const base::Value& value,
 
   if (value.is_dict()) {
     base::flat_set<std::string> present_properties;
-    for (auto dict_item : value.DictItems()) {
+    for (auto dict_item : value.GetDict()) {
       SchemaList schema_list = GetMatchingProperties(dict_item.first);
       if (schema_list.empty()) {
         // Unknown property was detected.
@@ -1264,8 +1258,8 @@ bool Schema::Validate(const base::Value& value,
       return false;
     }
   } else if (value.is_list()) {
-    for (size_t index = 0; index < value.GetListDeprecated().size(); ++index) {
-      const base::Value& list_item = value.GetListDeprecated()[index];
+    for (size_t index = 0; index < value.GetList().size(); ++index) {
+      const base::Value& list_item = value.GetList()[index];
       std::string new_error;
       const bool validation_result =
           GetItems().Validate(list_item, strategy, out_error_path, &new_error);
@@ -1296,7 +1290,7 @@ bool Schema::Validate(const base::Value& value,
 
 bool Schema::Normalize(base::Value* value,
                        SchemaOnErrorStrategy strategy,
-                       std::string* out_error_path,
+                       PolicyErrorPath* out_error_path,
                        std::string* out_error,
                        bool* out_changed) const {
   if (!valid()) {
@@ -1323,7 +1317,7 @@ bool Schema::Normalize(base::Value* value,
   if (value->is_dict()) {
     base::flat_set<std::string> present_properties;
     std::vector<std::string> drop_list;  // Contains the keys to drop.
-    for (auto dict_item : value->DictItems()) {
+    for (auto dict_item : value->GetDict()) {
       SchemaList schema_list = GetMatchingProperties(dict_item.first);
       if (schema_list.empty()) {
         // Unknown property was detected.
@@ -1369,7 +1363,7 @@ bool Schema::Normalize(base::Value* value,
     if (out_changed && !drop_list.empty())
       *out_changed = true;
     for (const auto& drop_key : drop_list)
-      value->RemoveKey(drop_key);
+      value->GetDict().Remove(drop_key);
     return true;
   } else if (value->is_list()) {
     base::Value::List& list = value->GetList();
@@ -1418,59 +1412,49 @@ void Schema::MaskSensitiveValues(base::Value* value) const {
 }
 
 // static
-Schema Schema::Parse(const std::string& content, std::string* error) {
+base::expected<Schema, std::string> Schema::Parse(const std::string& content) {
   // Validate as a generic JSON schema, and ignore unknown attributes; they
   // may become used in a future version of the schema format.
-  absl::optional<base::Value> dict = Schema::ParseToDictAndValidate(
-      content, kSchemaOptionsIgnoreUnknownAttributes, error);
-  if (!dict.has_value())
-    return Schema();
+  ASSIGN_OR_RETURN(auto dict,
+                   Schema::ParseToDictAndValidate(
+                       content, kSchemaOptionsIgnoreUnknownAttributes));
 
   // Validate the main type.
-  const std::string* type = dict->FindStringKey(schema::kType);
+  const std::string* type = dict.FindString(schema::kType);
   if (!type || *type != schema::kObject) {
-    *error =
-        "The main schema must have a type attribute with \"object\" value.";
-    return Schema();
+    return base::unexpected(
+        "The main schema must have a type attribute with \"object\" value.");
   }
 
   // Checks for invalid attributes at the top-level.
-  if (dict.value().FindKey(schema::kAdditionalProperties) ||
-      dict.value().FindKey(schema::kPatternProperties)) {
-    *error =
+  if (dict.contains(schema::kAdditionalProperties) ||
+      dict.contains(schema::kPatternProperties)) {
+    return base::unexpected(
         "\"additionalProperties\" and \"patternProperties\" are not "
-        "supported at the main schema.";
-    return Schema();
+        "supported at the main schema.");
   }
 
-  scoped_refptr<const InternalStorage> storage =
-      InternalStorage::ParseSchema(dict.value(), error);
-  if (!storage)
-    return Schema();
-  return Schema(storage, storage->root_node());
+  ASSIGN_OR_RETURN(auto storage, InternalStorage::ParseSchema(dict));
+  return base::ok(Schema(storage, storage->root_node()));
 }
 
 // static
-absl::optional<base::Value> Schema::ParseToDictAndValidate(
+base::expected<base::Value::Dict, std::string> Schema::ParseToDictAndValidate(
     const std::string& schema,
-    int validator_options,
-    std::string* error) {
-  auto value_with_error = base::JSONReader::ReadAndReturnValueWithError(
-      schema, base::JSONParserOptions::JSON_ALLOW_TRAILING_COMMAS |
-                  base::JSONParserOptions::JSON_PARSE_CHROMIUM_EXTENSIONS);
+    int validator_options) {
+  ASSIGN_OR_RETURN(
+      auto json,
+      base::JSONReader::ReadAndReturnValueWithError(
+          schema, base::JSONParserOptions::JSON_ALLOW_TRAILING_COMMAS |
+                      base::JSONParserOptions::JSON_PARSE_CHROMIUM_EXTENSIONS),
+      [](auto e) { return std::move(e.ToString()); });
 
-  if (!value_with_error.has_value()) {
-    *error = value_with_error.error().message;
-    return absl::nullopt;
-  }
-  base::Value json = std::move(*value_with_error);
   if (!json.is_dict()) {
-    *error = "Schema must be a JSON object";
-    return absl::nullopt;
+    return base::unexpected("Schema must be a JSON object");
   }
-  if (!IsValidSchema(json, validator_options, error))
-    return absl::nullopt;
-  return json;
+  RETURN_IF_ERROR(IsValidSchema(json.GetDict(), validator_options));
+
+  return base::ok(std::move(json).TakeDict());
 }
 
 base::Value::Type Schema::type() const {
@@ -1480,7 +1464,7 @@ base::Value::Type Schema::type() const {
 
 Schema::Iterator Schema::GetPropertiesIterator() const {
   CHECK(valid());
-  CHECK_EQ(base::Value::Type::DICTIONARY, type());
+  CHECK_EQ(base::Value::Type::DICT, type());
   return Iterator(storage_, storage_->properties(node_->extra));
 }
 
@@ -1494,7 +1478,7 @@ bool CompareKeys(const PropertyNode& node, const std::string& key) {
 
 Schema Schema::GetKnownProperty(const std::string& key) const {
   CHECK(valid());
-  CHECK_EQ(base::Value::Type::DICTIONARY, type());
+  CHECK_EQ(base::Value::Type::DICT, type());
   const PropertiesNode* node = storage_->properties(node_->extra);
   if (node->begin == kInvalid || node->end == kInvalid)
     return Schema();
@@ -1508,7 +1492,7 @@ Schema Schema::GetKnownProperty(const std::string& key) const {
 
 Schema Schema::GetAdditionalProperties() const {
   CHECK(valid());
-  CHECK_EQ(base::Value::Type::DICTIONARY, type());
+  CHECK_EQ(base::Value::Type::DICT, type());
   const PropertiesNode* node = storage_->properties(node_->extra);
   if (node->additional == kInvalid)
     return Schema();
@@ -1517,7 +1501,7 @@ Schema Schema::GetAdditionalProperties() const {
 
 SchemaList Schema::GetPatternProperties(const std::string& key) const {
   CHECK(valid());
-  CHECK_EQ(base::Value::Type::DICTIONARY, type());
+  CHECK_EQ(base::Value::Type::DICT, type());
   const PropertiesNode* node = storage_->properties(node_->extra);
   if (node->end == kInvalid || node->pattern_end == kInvalid)
     return {};
@@ -1535,7 +1519,7 @@ SchemaList Schema::GetPatternProperties(const std::string& key) const {
 
 std::vector<std::string> Schema::GetRequiredProperties() const {
   CHECK(valid());
-  CHECK_EQ(base::Value::Type::DICTIONARY, type());
+  CHECK_EQ(base::Value::Type::DICT, type());
   const PropertiesNode* node = storage_->properties(node_->extra);
   if (node->required_begin == kInvalid || node->required_end == kInvalid)
     return {};
@@ -1628,14 +1612,13 @@ void Schema::MaskSensitiveValuesRecursive(base::Value* value) const {
     return;
 
   if (value->is_dict()) {
-    for (auto dict_item : value->DictItems()) {
-      auto& sub_value = dict_item.second;
-      SchemaList schema_list = GetMatchingProperties(dict_item.first);
+    for (auto [key, sub_value] : value->GetDict()) {
+      SchemaList schema_list = GetMatchingProperties(key);
       for (const auto& schema_item : schema_list)
         schema_item.MaskSensitiveValuesRecursive(&sub_value);
     }
   } else if (value->is_list()) {
-    for (auto& list_elem : value->GetListDeprecated())
+    for (auto& list_elem : value->GetList())
       GetItems().MaskSensitiveValuesRecursive(&list_elem);
   }
 }

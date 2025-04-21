@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_UI_VIEWS_OMNIBOX_OMNIBOX_RESULT_VIEW_H_
 
 #include <stddef.h>
+
 #include <memory>
 #include <utility>
 
@@ -24,11 +25,11 @@
 #include "ui/views/controls/image_view.h"
 #include "ui/views/view.h"
 
-class OmniboxEditModel;
+class OmniboxLocalAnswerHeaderView;
 class OmniboxMatchCellView;
-class OmniboxPopupContentsView;
-class OmniboxSuggestionButtonRowView;
+class OmniboxPopupViewViews;
 class OmniboxResultSelectionIndicator;
+class OmniboxSuggestionButtonRowView;
 enum class OmniboxPart;
 enum class OmniboxPartState;
 
@@ -42,18 +43,17 @@ class ImageButton;
 }  // namespace views
 
 class OmniboxResultView : public views::View {
+  METADATA_HEADER(OmniboxResultView, views::View)
+
  public:
-  METADATA_HEADER(OmniboxResultView);
-  OmniboxResultView(OmniboxPopupContentsView* popup_contents_view,
-                    OmniboxEditModel* model,
-                    size_t model_index);
+  OmniboxResultView(OmniboxPopupViewViews* popup_view, size_t model_index);
   OmniboxResultView(const OmniboxResultView&) = delete;
   OmniboxResultView& operator=(const OmniboxResultView&) = delete;
   ~OmniboxResultView() override;
 
   // Static method to share logic about how to set backgrounds of popup cells.
   static std::unique_ptr<views::Background> GetPopupCellBackground(
-      views::View* view,
+      const views::View* view,
       OmniboxPartState part_state);
 
   // Updates the match used to paint the contents of this result view. We copy
@@ -74,6 +74,7 @@ class OmniboxResultView : public views::View {
 
   // Returns the focused button or nullptr if none exists for this suggestion.
   views::Button* GetActiveAuxiliaryButtonForAccessibility();
+  const views::Button* GetActiveAuxiliaryButtonForAccessibility() const;
 
   OmniboxPartState GetThemeState() const;
 
@@ -86,8 +87,9 @@ class OmniboxResultView : public views::View {
   void ButtonPressed(OmniboxPopupSelection::LineState state,
                      const ui::Event& event);
 
-  // Helper to emit accessibility events (may only emit if conditions are met).
-  void EmitTextChangedAccessiblityEvent();
+  void UpdateAccessibilityProperties();
+
+  void UpdateAccessibleName();
 
   // views::View:
   bool OnMousePressed(const ui::MouseEvent& event) override;
@@ -95,58 +97,69 @@ class OmniboxResultView : public views::View {
   void OnMouseReleased(const ui::MouseEvent& event) override;
   void OnMouseEntered(const ui::MouseEvent& event) override;
   void OnMouseExited(const ui::MouseEvent& event) override;
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
   void OnThemeChanged() override;
 
  private:
+  FRIEND_TEST_ALL_PREFIXES(OmniboxPopupViewViewsTest, DeleteSuggestion);
+
+  void OpenIphLink();
+
   gfx::Image GetIcon() const;
 
   // Updates the highlight state of the row, as well as conditionally shows
   // controls that are only visible on row hover.
   void UpdateHoverState();
 
+  // Sets the visibility of the |thumbs_up_button_| and |thumbs_down_button_|
+  // based on the current state.
+  void UpdateFeedbackButtonsVisibility();
+
   // Sets the visibility of the |remove_suggestion_button_| based on the current
   // state.
   void UpdateRemoveSuggestionVisibility();
 
-  // Sets the widths of the suggestion and keyword and calls Layout().
-  void SetWidths();
+  // Updates the 'selected' state of the view as applicable based on whether or
+  // not the view is selected.
+  void UpdateAccessibilitySelectedState();
 
   // views::View:
   void OnBoundsChanged(const gfx::Rect& previous_bounds) override;
 
   // The parent view.
-  const raw_ptr<OmniboxPopupContentsView> popup_contents_view_;
-
-  // The model containing results.
-  raw_ptr<OmniboxEditModel> model_;
+  const raw_ptr<OmniboxPopupViewViews> popup_view_;
 
   // This result's model index.
-  size_t model_index_;
+  const size_t model_index_;
 
   // The data this class is built to display (the "Omnibox Result").
   AutocompleteMatch match_;
 
-  // Accessible name (enables to emit certain events).
-  std::u16string accessible_name_;
-
-  // Container for the first row (for everything expect |button_row_|).
-  raw_ptr<views::View> suggestion_container_;
-
   // Weak pointers for easy reference.
-  raw_ptr<OmniboxMatchCellView>
-      suggestion_view_;                         // The leading (or left) view.
-  raw_ptr<OmniboxMatchCellView> keyword_view_;  // The trailing (or right) view.
 
   // The blue bar used to indicate selection.
   raw_ptr<OmniboxResultSelectionIndicator> selection_indicator_ = nullptr;
 
-  // The "X" button at the end of the match cell, used to remove suggestions.
-  raw_ptr<views::ImageButton> remove_suggestion_button_;
+  // A container view for layout.
+  raw_ptr<views::View> local_answer_header_and_suggestion_and_buttons_;
+
+  // The answer header; e.g. 'Summary' or 'Generating...'. Lazily initialized.
+  raw_ptr<OmniboxLocalAnswerHeaderView> local_answer_header_ = nullptr;
+
+  // The icon, contents, description, etc depicting the match.
+  raw_ptr<OmniboxMatchCellView> suggestion_view_;
 
   // The row of buttons that appears when actions such as tab switch or Pedals
   // are on the suggestion. It is owned by the base view, not this raw pointer.
   raw_ptr<OmniboxSuggestionButtonRowView> button_row_ = nullptr;
+
+  // The thumbs up button used to submit feedback for suggestions.
+  raw_ptr<views::ImageButton> thumbs_up_button_;
+
+  // The thumbs down button used to submit feedback for suggestions.
+  raw_ptr<views::ImageButton> thumbs_down_button_;
+
+  // The "X" button at the end of the match cell, used to remove suggestions.
+  raw_ptr<views::ImageButton> remove_suggestion_button_;
 
   // Keeps track of mouse-enter and mouse-exit events of child Views.
   OmniboxMouseEnterExitHandler mouse_enter_exit_handler_;

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,14 +28,19 @@ struct BaseSetOperatorsTraits {};
 template <typename T>
 class BaseSetOperators {
  public:
-  typedef typename BaseSetOperatorsTraits<T>::ElementType ElementType;
-  typedef typename BaseSetOperatorsTraits<T>::ElementIDType ElementIDType;
+  using ElementType = typename BaseSetOperatorsTraits<T>::ElementType;
+  using ElementIDType = typename BaseSetOperatorsTraits<T>::ElementIDType;
 
   using Map = std::map<ElementIDType, std::unique_ptr<ElementType>>;
 
-  class const_iterator :
-    public std::iterator<std::input_iterator_tag, const ElementType*> {
+  class const_iterator {
    public:
+    using iterator_category = std::input_iterator_tag;
+    using value_type = const ElementType*;
+    using difference_type = std::ptrdiff_t;
+    using pointer = const ElementType**;
+    using reference = const ElementType*&;
+
     const_iterator(const typename Map::const_iterator& it) : it_(it) {}
     const_iterator(const const_iterator& ids_it) : it_(ids_it.it_) {}
 

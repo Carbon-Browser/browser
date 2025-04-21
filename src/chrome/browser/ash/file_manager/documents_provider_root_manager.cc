@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,15 @@
 
 #include <algorithm>
 #include <iterator>
+#include <string_view>
 #include <tuple>
 #include <utility>
 
 #include "ash/components/arc/arc_features.h"
 #include "ash/components/arc/mojom/bitmap.mojom.h"
 #include "base/base64.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_util.h"
 #include "chrome/browser/ash/arc/fileapi/arc_file_system_operation_runner.h"
 #include "chrome/browser/profiles/profile.h"
@@ -42,8 +44,9 @@ constexpr const char* kAuthoritiesToExclude[] = {
 
 bool IsAuthorityToExclude(const std::string& authority) {
   for (const char* authority_to_exclude : kAuthoritiesToExclude) {
-    if (base::EqualsCaseInsensitiveASCII(authority, authority_to_exclude))
+    if (base::EqualsCaseInsensitiveASCII(authority, authority_to_exclude)) {
       return true;
+    }
   }
   return false;
 }
@@ -51,13 +54,10 @@ bool IsAuthorityToExclude(const std::string& authority) {
 GURL EncodeIconAsUrl(const SkBitmap& bitmap) {
   // Root icons are resized to 32px*32px in the ARC container. We use the given
   // bitmaps without resizing in Chrome side.
-  std::vector<unsigned char> output;
-  gfx::PNGCodec::EncodeBGRASkBitmap(bitmap, false, &output);
-  std::string encoded;
-  base::Base64Encode(
-      base::StringPiece(reinterpret_cast<const char*>(output.data()),
-                        output.size()),
-      &encoded);
+  std::optional<std::vector<uint8_t>> output =
+      gfx::PNGCodec::EncodeBGRASkBitmap(bitmap, /*discard_transparency=*/false);
+  std::string encoded =
+      base::Base64Encode(output.value_or(std::vector<uint8_t>()));
   return GURL("data:image/png;base64," + encoded);
 }
 
@@ -72,16 +72,18 @@ class BitmapWrapper {
   bool operator<(const BitmapWrapper& other) const {
     const size_t size1 = bitmap_->computeByteSize();
     const size_t size2 = other.bitmap_->computeByteSize();
-    if (size1 == 0 && size2 == 0)
+    if (size1 == 0 && size2 == 0) {
       return false;
-    if (size1 != size2)
+    }
+    if (size1 != size2) {
       return size1 < size2;
+    }
     return memcmp(bitmap_->getAddr32(0, 0), other.bitmap_->getAddr32(0, 0),
                   size1) < 0;
   }
 
  private:
-  const SkBitmap* const bitmap_;
+  const raw_ptr<const SkBitmap> bitmap_;
 };
 
 }  // namespace
@@ -94,8 +96,9 @@ DocumentsProviderRootManager::DocumentsProviderRootManager(
 DocumentsProviderRootManager::~DocumentsProviderRootManager() {
   arc::ArcFileSystemBridge* bridge =
       arc::ArcFileSystemBridge::GetForBrowserContext(profile_);
-  if (bridge)
+  if (bridge) {
     bridge->RemoveObserver(this);
+  }
 }
 
 void DocumentsProviderRootManager::AddObserver(Observer* observer) {
@@ -112,19 +115,22 @@ void DocumentsProviderRootManager::RemoveObserver(Observer* observer) {
 
 void DocumentsProviderRootManager::SetEnabled(bool enabled) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  if (enabled == is_enabled_)
+  if (enabled == is_enabled_) {
     return;
+  }
 
   is_enabled_ = enabled;
   arc::ArcFileSystemBridge* bridge =
       arc::ArcFileSystemBridge::GetForBrowserContext(profile_);
   if (enabled) {
-    if (bridge)
+    if (bridge) {
       bridge->AddObserver(this);
+    }
     RequestGetRoots();
   } else {
-    if (bridge)
+    if (bridge) {
       bridge->RemoveObserver(this);
+    }
     ClearRoots();
   }
 }
@@ -148,11 +154,13 @@ DocumentsProviderRootManager::RootInfo::RootInfo(RootInfo&& that) noexcept =
 
 DocumentsProviderRootManager::RootInfo::~RootInfo() = default;
 
-DocumentsProviderRootManager::RootInfo& DocumentsProviderRootManager::RootInfo::
-operator=(const RootInfo& that) = default;
+DocumentsProviderRootManager::RootInfo&
+DocumentsProviderRootManager::RootInfo::operator=(const RootInfo& that) =
+    default;
 
-DocumentsProviderRootManager::RootInfo& DocumentsProviderRootManager::RootInfo::
-operator=(RootInfo&& that) noexcept = default;
+DocumentsProviderRootManager::RootInfo&
+DocumentsProviderRootManager::RootInfo::operator=(RootInfo&& that) noexcept =
+    default;
 
 bool DocumentsProviderRootManager::RootInfo::operator<(
     const RootInfo& rhs) const {
@@ -170,27 +178,47 @@ void DocumentsProviderRootManager::RequestGetRoots() {
 }
 
 void DocumentsProviderRootManager::OnGetRoots(
-    absl::optional<std::vector<arc::mojom::RootPtr>> maybe_roots) {
-  if (!maybe_roots.has_value())
+    std::optional<std::vector<arc::mojom::RootPtr>> maybe_roots) {
+  if (!maybe_roots.has_value()) {
     return;
+  }
 
   std::vector<RootInfo> roots_info;
   for (const auto& root : maybe_roots.value()) {
-    if (IsAuthorityToExclude(root->authority))
+    if (IsAuthorityToExclude(root->authority)) {
       continue;
+    }
 
     RootInfo root_info;
     root_info.authority = root->authority;
-    root_info.root_id = root->root_id;
-    root_info.document_id = root->document_id;
     root_info.title = root->title;
-    if (root->summary.has_value())
+    if (root->summary.has_value()) {
       root_info.summary = root->summary.value();
-    if (root->icon.has_value())
+    }
+    if (root->icon.has_value()) {
       root_info.icon = root->icon.value();
+    }
     root_info.supports_create = root->supports_create;
-    if (root->mime_types.has_value())
+    if (root->mime_types.has_value()) {
       root_info.mime_types = root->mime_types.value();
+    }
+
+    // Strip new lines from the Root and Document IDs.
+    //
+    // Some Android Documents Provider implementations (e.g. Dropbox) have
+    // long, base-64 encoded IDs broken up by '\n' bytes, presumably to help
+    // human readability. However, these IDs become part of URLs (represented
+    // by GURL or storage::FileSystemURL objects) but passed between processes
+    // (e.g. Fusebox) as strings, not C++ objects. Various URL parsing and
+    // unparsing along the way can strip out the '\n' bytes, which breaks exact
+    // string match on the IDs (e.g. ArcDocumentsProviderRootMap map keys).
+    //
+    // New lines within a serialized GURL or storage::FileSystemURL also makes
+    // it harder for line-based tools (e.g. grep) to process log messages.
+    //
+    // To avoid those problems, we strip the '\n' bytes eagerly, here.
+    base::RemoveChars(root->root_id, "\n", &root_info.root_id);
+    base::RemoveChars(root->document_id, "\n", &root_info.document_id);
 
     roots_info.emplace_back(std::move(root_info));
   }
@@ -229,16 +257,14 @@ void DocumentsProviderRootManager::NotifyRootAdded(const RootInfo& info) {
   for (auto& observer : observer_list_) {
     observer.OnDocumentsProviderRootAdded(
         info.authority, info.root_id, info.document_id, info.title,
-        info.summary,
-        !info.icon.empty() ? EncodeIconAsUrl(info.icon) : GURL::EmptyGURL(),
+        info.summary, !info.icon.empty() ? EncodeIconAsUrl(info.icon) : GURL(),
         !info.supports_create, info.mime_types);
   }
 }
 
 void DocumentsProviderRootManager::NotifyRootRemoved(const RootInfo& info) {
   for (auto& observer : observer_list_) {
-    observer.OnDocumentsProviderRootRemoved(info.authority, info.root_id,
-                                            info.document_id);
+    observer.OnDocumentsProviderRootRemoved(info.authority, info.root_id);
   }
 }
 

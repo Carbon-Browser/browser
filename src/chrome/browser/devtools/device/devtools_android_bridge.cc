@@ -1,11 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/devtools/device/devtools_android_bridge.h"
 
 #include <stddef.h>
-#include <algorithm>
+
 #include <map>
 #include <memory>
 #include <set>
@@ -13,13 +13,15 @@
 #include <vector>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/lazy_instance.h"
 #include "base/memory/singleton.h"
+#include "base/not_fatal_until.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/escape.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
@@ -38,7 +40,6 @@
 #include "chrome/common/buildflags.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/pref_names.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/devtools_external_agent_proxy.h"
@@ -80,23 +81,32 @@ DevToolsAndroidBridge::Factory* DevToolsAndroidBridge::Factory::GetInstance() {
 // static
 DevToolsAndroidBridge* DevToolsAndroidBridge::Factory::GetForProfile(
     Profile* profile) {
-  return static_cast<DevToolsAndroidBridge*>(GetInstance()->
-          GetServiceForBrowserContext(profile->GetOriginalProfile(), true));
+  return static_cast<DevToolsAndroidBridge*>(
+      GetInstance()->GetServiceForBrowserContext(profile->GetOriginalProfile(),
+                                                 true));
 }
 
 DevToolsAndroidBridge::Factory::Factory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "DevToolsAndroidBridge",
-          BrowserContextDependencyManager::GetInstance()) {
-}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/40257657): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/41488885): Check if this service is needed for
+              // Ash Internals.
+              .WithAshInternals(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
-DevToolsAndroidBridge::Factory::~Factory() {}
+DevToolsAndroidBridge::Factory::~Factory() = default;
 
-KeyedService* DevToolsAndroidBridge::Factory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+DevToolsAndroidBridge::Factory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
 
-  return new DevToolsAndroidBridge(profile);
+  return std::make_unique<DevToolsAndroidBridge>(profile);
 }
 
 void DevToolsAndroidBridge::Shutdown() {
@@ -167,11 +177,12 @@ DevToolsAndroidBridge::DevToolsAndroidBridge(Profile* profile)
       prefs::kDevToolsDiscoverTCPTargetsEnabled,
       base::BindRepeating(&DevToolsAndroidBridge::CreateDeviceProviders,
                           base::Unretained(this)));
-  base::Value target_discovery(base::Value::Type::LIST);
+  base::Value::List target_discovery;
   target_discovery.Append(kChromeDiscoveryURL);
   target_discovery.Append(kNodeDiscoveryURL);
-  profile->GetPrefs()->SetDefaultPrefValue(prefs::kDevToolsTCPDiscoveryConfig,
-                                           std::move(target_discovery));
+  profile->GetPrefs()->SetDefaultPrefValue(
+      prefs::kDevToolsTCPDiscoveryConfig,
+      base::Value(std::move(target_discovery)));
   CreateDeviceProviders();
 }
 
@@ -187,9 +198,8 @@ void DevToolsAndroidBridge::AddDeviceListListener(
 void DevToolsAndroidBridge::RemoveDeviceListListener(
     DeviceListListener* listener) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  auto it = std::find(device_list_listeners_.begin(),
-                      device_list_listeners_.end(), listener);
-  DCHECK(it != device_list_listeners_.end());
+  auto it = base::ranges::find(device_list_listeners_, listener);
+  CHECK(it != device_list_listeners_.end(), base::NotFatalUntil::M130);
   device_list_listeners_.erase(it);
   if (!NeedsDeviceListPolling())
     StopDeviceListPolling();
@@ -205,9 +215,8 @@ void DevToolsAndroidBridge::AddDeviceCountListener(
 void DevToolsAndroidBridge::RemoveDeviceCountListener(
     DeviceCountListener* listener) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  auto it = std::find(device_count_listeners_.begin(),
-                      device_count_listeners_.end(), listener);
-  DCHECK(it != device_count_listeners_.end());
+  auto it = base::ranges::find(device_count_listeners_, listener);
+  CHECK(it != device_count_listeners_.end(), base::NotFatalUntil::M130);
   device_count_listeners_.erase(it);
   if (device_count_listeners_.empty())
     StopDeviceCountPolling();
@@ -223,9 +232,8 @@ void DevToolsAndroidBridge::AddPortForwardingListener(
 
 void DevToolsAndroidBridge::RemovePortForwardingListener(
     PortForwardingListener* listener) {
-  auto it = std::find(port_forwarding_listeners_.begin(),
-                      port_forwarding_listeners_.end(), listener);
-  DCHECK(it != port_forwarding_listeners_.end());
+  auto it = base::ranges::find(port_forwarding_listeners_, listener);
+  CHECK(it != port_forwarding_listeners_.end(), base::NotFatalUntil::M130);
   port_forwarding_listeners_.erase(it);
   if (!NeedsDeviceListPolling())
     StopDeviceListPolling();
@@ -269,14 +277,17 @@ void DevToolsAndroidBridge::ReceivedDeviceList(
   }
 
   DeviceListListeners copy(device_list_listeners_);
-  for (auto* listener : copy)
+  for (DevToolsAndroidBridge::DeviceListListener* listener : copy) {
     listener->DeviceListChanged(remote_devices);
+  }
 
   ForwardingStatus status =
       port_forwarding_controller_->DeviceListChanged(complete_devices);
   PortForwardingListeners forwarding_listeners(port_forwarding_listeners_);
-  for (auto* listener : forwarding_listeners)
+  for (DevToolsAndroidBridge::PortForwardingListener* listener :
+       forwarding_listeners) {
     listener->PortStatusChanged(status);
+  }
 }
 
 void DevToolsAndroidBridge::StartDeviceCountPolling() {
@@ -303,11 +314,12 @@ void DevToolsAndroidBridge::ReceivedDeviceCount(int count) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
   DeviceCountListeners copy(device_count_listeners_);
-  for (auto* listener : copy)
+  for (DevToolsAndroidBridge::DeviceCountListener* listener : copy) {
     listener->DeviceCountChanged(count);
+  }
 
   if (device_count_listeners_.empty())
-     return;
+    return;
 
   task_scheduler_.Run(base::BindOnce(&DevToolsAndroidBridge::RequestDeviceCount,
                                      AsWeakPtr(),
@@ -315,12 +327,11 @@ void DevToolsAndroidBridge::ReceivedDeviceCount(int count) {
 }
 
 static std::set<net::HostPortPair> ParseTargetDiscoveryPreferenceValue(
-    const base::Value* preferenceValue) {
+    const base::Value::List* preferenceValue) {
   std::set<net::HostPortPair> targets;
-  if (!preferenceValue || preferenceValue->GetListDeprecated().empty())
+  if (!preferenceValue || preferenceValue->empty())
     return targets;
-  std::string address;
-  for (const auto& address : preferenceValue->GetListDeprecated()) {
+  for (const auto& address : *preferenceValue) {
     if (!address.is_string())
       continue;
     net::HostPortPair target =
@@ -335,7 +346,7 @@ static std::set<net::HostPortPair> ParseTargetDiscoveryPreferenceValue(
 }
 
 static scoped_refptr<TCPDeviceProvider> CreateTCPDeviceProvider(
-    const base::Value* targetDiscoveryConfig) {
+    const base::Value::List* targetDiscoveryConfig) {
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
   std::set<net::HostPortPair> targets =
       ParseTargetDiscoveryPreferenceValue(targetDiscoveryConfig);
@@ -362,9 +373,9 @@ static scoped_refptr<TCPDeviceProvider> CreateTCPDeviceProvider(
 void DevToolsAndroidBridge::CreateDeviceProviders() {
   AndroidDeviceManager::DeviceProviders device_providers;
   PrefService* service = profile_->GetPrefs();
-  const base::Value* targets =
+  const base::Value::List* targets =
       service->GetBoolean(prefs::kDevToolsDiscoverTCPTargetsEnabled)
-          ? service->GetList(prefs::kDevToolsTCPDiscoveryConfig)
+          ? std::addressof(service->GetList(prefs::kDevToolsTCPDiscoveryConfig))
           : nullptr;
   scoped_refptr<TCPDeviceProvider> provider = CreateTCPDeviceProvider(targets);
   if (tcp_provider_callback_)

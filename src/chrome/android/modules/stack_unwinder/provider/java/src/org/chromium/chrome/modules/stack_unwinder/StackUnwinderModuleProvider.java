@@ -1,10 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.modules.stack_unwinder;
 
-import org.chromium.base.annotations.CalledByNative;
+import org.jni_zero.CalledByNative;
 
 /** Installs and loads the stack unwinder module. */
 public class StackUnwinderModuleProvider {
@@ -33,21 +33,8 @@ public class StackUnwinderModuleProvider {
         StackUnwinderModule.ensureNativeLoaded();
     }
 
-    /**
-     * Returns the pointer to the CreateMemoryRegionsMap native function within the module, encoded
-     * as a long. Can be called only if the module is installed.
-     */
     @CalledByNative
-    public static long getCreateMemoryRegionsMapFunction() {
-        return StackUnwinderModule.getImpl().getCreateMemoryRegionsMapFunction();
-    }
-
-    /**
-     * Returns the pointer to the CreateNativeUnwinder native function within the module, encoded as
-     * a long. Can be called only if the module is installed.
-     */
-    @CalledByNative
-    public static long getCreateNativeUnwinderFunction() {
-        return StackUnwinderModule.getImpl().getCreateNativeUnwinderFunction();
+    public static long getDoNothingFunction() {
+        return StackUnwinderModule.getImpl().getDoNothingFunction();
     }
 }

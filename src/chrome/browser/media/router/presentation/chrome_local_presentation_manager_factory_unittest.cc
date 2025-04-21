@@ -1,8 +1,9 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/media/router/presentation/chrome_local_presentation_manager_factory.h"
+
 #include "chrome/test/base/testing_profile.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/test/browser_task_environment.h"

@@ -1,10 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SESSIONS_IOS_IOS_WEBSTATE_LIVE_TAB_H_
 #define COMPONENTS_SESSIONS_IOS_IOS_WEBSTATE_LIVE_TAB_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/supports_user_data.h"
 #include "components/sessions/ios/ios_live_tab.h"
 #include "components/sessions/ios/ios_serialized_navigation_builder.h"
@@ -50,7 +51,7 @@ class SESSIONS_EXPORT IOSWebStateLiveTab : public IOSLiveTab,
     return web_state_->GetNavigationManager();
   }
 
-  web::WebState* web_state_;
+  raw_ptr<web::WebState> web_state_;
 };
 
 }  // namespace sessions

@@ -1,24 +1,20 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "components/metrics/metrics_log.h"
 
 #include "base/command_line.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/common/chrome_switches.h"
+#include "chrome/test/base/platform_browser_test.h"
 #include "components/flags_ui/flags_ui_switches.h"
-#include "components/metrics/metrics_log.h"
 #include "components/metrics/test/test_metrics_service_client.h"
 #include "components/variations/hashing.h"
 #include "content/public/test/browser_test.h"
 #include "third_party/metrics_proto/chrome_user_metrics_extension.pb.h"
 #include "third_party/metrics_proto/system_profile.pb.h"
-
-#if BUILDFLAG(IS_ANDROID)
-#include "chrome/test/base/android/android_browser_test.h"
-#else
-#include "chrome/test/base/in_process_browser_test.h"
-#endif
 
 namespace metrics {
 
@@ -38,10 +34,15 @@ class MetricsLogBrowserTest : public PlatformBrowserTest {
 // Verify that system profile contains filtered command line keys.
 IN_PROC_BROWSER_TEST_F(MetricsLogBrowserTest, CommandLineKeyHash) {
   TestMetricsServiceClient client;
-  MetricsLog log("id", 0, MetricsLog::INITIAL_STABILITY_LOG, &client);
-  log.CloseLog();
-  ChromeUserMetricsExtension* uma_proto = log.UmaProtoForTest();
-  const auto hashes = uma_proto->system_profile().command_line_key_hash();
+  MetricsLog log("0a94430b-18e5-43c8-a657-580f7e855ce1", 0,
+                 MetricsLog::INITIAL_STABILITY_LOG, &client);
+  std::string encoded;
+  // Don't set the close_time param since this is an initial stability log.
+  log.FinalizeLog(/*truncate_events=*/false, client.GetVersionString(),
+                  /*close_time=*/std::nullopt, &encoded);
+  ChromeUserMetricsExtension uma_proto;
+  uma_proto.ParseFromString(encoded);
+  const auto hashes = uma_proto.system_profile().command_line_key_hash();
 
   bool found_startup_window_cmd = false;
   for (const auto hash : hashes) {

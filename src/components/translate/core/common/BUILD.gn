@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 if (is_android) {
@@ -23,6 +23,7 @@ static_library("common") {
   deps = [
     "//base",
     "//components/language/core/common",
+    "//components/language_detection/core:core",
     "//third_party/metrics_proto",
     "//url",
   ]
@@ -45,7 +46,7 @@ source_set("unit_tests") {
 
 if (is_android) {
   java_cpp_enum("translate_infobar_event_enum") {
-    sources = [ "translate_constants.h" ]
+    sources = [ "translate_metrics.h" ]
   }
 
   android_library("translate_infobar_event_enum_java") {

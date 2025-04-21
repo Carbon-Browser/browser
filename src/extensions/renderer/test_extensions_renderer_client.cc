@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,16 +21,6 @@ bool TestExtensionsRendererClient::IsIncognitoProcess() const {
 int TestExtensionsRendererClient::GetLowestIsolatedWorldId() const {
   // Note that 0 is reserved for the global world.
   return 1;
-}
-
-Dispatcher* TestExtensionsRendererClient::GetDispatcher() {
-  return nullptr;
-}
-
-bool TestExtensionsRendererClient::ExtensionAPIEnabledForServiceWorkerScript(
-    const GURL& scope,
-    const GURL& script_url) const {
-  return false;
 }
 
 }  // namespace extensions

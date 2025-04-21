@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ class WebContentsCloseHandlerDelegate {
   virtual void DestroyClonedLayer() = 0;
 
  protected:
-  virtual ~WebContentsCloseHandlerDelegate() {}
+  virtual ~WebContentsCloseHandlerDelegate() = default;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_FRAME_WEB_CONTENTS_CLOSE_HANDLER_DELEGATE_H_

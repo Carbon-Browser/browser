@@ -1,15 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/ozone/platform/wayland/host/xdg_popup_wrapper_impl.h"
 
-#include <aura-shell-client-protocol.h>
 #include <xdg-shell-client-protocol.h>
-#include <xdg-shell-unstable-v6-client-protocol.h>
 
 #include <memory>
 
+#include "base/bit_cast.h"
 #include "base/environment.h"
 #include "base/logging.h"
 #include "base/nix/xdg_util.h"
@@ -20,6 +19,7 @@
 #include "ui/gfx/geometry/rect.h"
 #include "ui/ozone/common/features.h"
 #include "ui/ozone/platform/wayland/common/wayland_util.h"
+#include "ui/ozone/platform/wayland/host/wayland_bubble.h"
 #include "ui/ozone/platform/wayland/host/wayland_connection.h"
 #include "ui/ozone/platform/wayland/host/wayland_event_source.h"
 #include "ui/ozone/platform/wayland/host/wayland_pointer.h"
@@ -27,7 +27,7 @@
 #include "ui/ozone/platform/wayland/host/wayland_seat.h"
 #include "ui/ozone/platform/wayland/host/wayland_serial_tracker.h"
 #include "ui/ozone/platform/wayland/host/wayland_toplevel_window.h"
-#include "ui/ozone/platform/wayland/host/wayland_zaura_shell.h"
+#include "ui/ozone/platform/wayland/host/wayland_window.h"
 #include "ui/ozone/platform/wayland/host/xdg_surface_wrapper_impl.h"
 #include "ui/ozone/platform/wayland/host/xdg_toplevel_wrapper_impl.h"
 
@@ -129,23 +129,27 @@ XDGPopupWrapperImpl::~XDGPopupWrapperImpl() = default;
 bool XDGPopupWrapperImpl::Initialize(const ShellPopupParams& params) {
   if (!connection_->shell()) {
     NOTREACHED() << "Wrong shell protocol";
-    return false;
+  }
+
+  auto* xdg_parent = wayland_window_->AsWaylandPopup()->GetXdgParentWindow();
+  if (!xdg_parent) {
+    NOTREACHED() << "xdg_popup does not have a valid parent xdg_surface";
   }
 
   XDGSurfaceWrapperImpl* parent_xdg_surface = nullptr;
-  // If the parent window is a popup, the surface of that popup must be used as
-  // a parent.
-  if (auto* parent_popup = wayland_window_->parent_window()->AsWaylandPopup()) {
-    XDGPopupWrapperImpl* popup =
-        static_cast<XDGPopupWrapperImpl*>(parent_popup->shell_popup());
-    parent_xdg_surface = popup->xdg_surface_wrapper();
-  } else {
-    WaylandToplevelWindow* wayland_surface =
-        static_cast<WaylandToplevelWindow*>(wayland_window_->parent_window());
+  // If the xdg_parent window is a popup, the surface of that popup must be used
+  // as a parent to create this xdg_popup.
+  if (auto* parent_popup = xdg_parent->AsWaylandPopup()) {
     parent_xdg_surface =
-        static_cast<XDGToplevelWrapperImpl*>(wayland_surface->shell_toplevel())
+        static_cast<XDGPopupWrapperImpl*>(parent_popup->shell_popup())
+            ->xdg_surface_wrapper();
+  } else if (auto* parent_toplevel = xdg_parent->AsWaylandToplevelWindow()) {
+    parent_xdg_surface =
+        static_cast<XDGToplevelWrapperImpl*>(parent_toplevel->shell_toplevel())
             ->xdg_surface_wrapper();
   }
+
+  CHECK(xdg_surface_wrapper_ && parent_xdg_surface);
 
   if (!xdg_surface_wrapper_ || !parent_xdg_surface)
     return false;
@@ -157,12 +161,6 @@ bool XDGPopupWrapperImpl::Initialize(const ShellPopupParams& params) {
   if (params_.bounds.IsEmpty())
     params_.bounds.set_size({1, 1});
 
-  static constexpr struct xdg_popup_listener xdg_popup_listener = {
-      &XDGPopupWrapperImpl::Configure,
-      &XDGPopupWrapperImpl::PopupDone,
-      &XDGPopupWrapperImpl::Repositioned,
-  };
-
   auto positioner = CreatePositioner();
   if (!positioner)
     return false;
@@ -172,28 +170,21 @@ bool XDGPopupWrapperImpl::Initialize(const ShellPopupParams& params) {
                                          positioner.get()));
   if (!xdg_popup_)
     return false;
+  connection_->window_manager()->NotifyWindowRoleAssigned(wayland_window_);
 
-  if (connection_->zaura_shell()) {
-    uint32_t version =
-        zaura_shell_get_version(connection_->zaura_shell()->wl_object());
-    if (version >= ZAURA_SHELL_GET_AURA_POPUP_FOR_XDG_POPUP_SINCE_VERSION) {
-      aura_popup_.reset(zaura_shell_get_aura_popup_for_xdg_popup(
-          connection_->zaura_shell()->wl_object(), xdg_popup_.get()));
-      if (IsWaylandSurfaceSubmissionInPixelCoordinatesEnabled() &&
-          version >=
-              ZAURA_POPUP_SURFACE_SUBMISSION_IN_PIXEL_COORDINATES_SINCE_VERSION) {
-        zaura_popup_surface_submission_in_pixel_coordinates(aura_popup_.get());
-      }
-      if (version >= ZAURA_POPUP_SET_MENU_SINCE_VERSION &&
-          wayland_window_->type() == PlatformWindowType::kMenu) {
-        zaura_popup_set_menu(aura_popup_.get());
-      }
-    }
+  std::optional<bool> parent_shell_popup_has_grab;
+  if (auto* parent_popup = xdg_parent->AsWaylandPopup()) {
+    parent_shell_popup_has_grab.emplace(
+        parent_popup->shell_popup()->has_grab());
   }
+  GrabIfPossible(connection_, parent_shell_popup_has_grab);
 
-  GrabIfPossible(connection_, wayland_window_->parent_window());
-
-  xdg_popup_add_listener(xdg_popup_.get(), &xdg_popup_listener, this);
+  static constexpr xdg_popup_listener kXdgPopupListener = {
+      .configure = &OnConfigure,
+      .popup_done = &OnPopupDone,
+      .repositioned = &OnRepositioned,
+  };
+  xdg_popup_add_listener(xdg_popup_.get(), &kXdgPopupListener, this);
 
   wayland_window_->root_surface()->Commit();
   return true;
@@ -228,7 +219,7 @@ bool XDGPopupWrapperImpl::SetBounds(const gfx::Rect& new_bounds) {
   xdg_popup_reposition(xdg_popup_.get(), positioner.get(),
                        ++next_reposition_token_);
 
-  connection_->ScheduleFlush();
+  connection_->Flush();
   return true;
 }
 
@@ -242,16 +233,8 @@ void XDGPopupWrapperImpl::Grab(uint32_t serial) {
   xdg_popup_grab(xdg_popup_.get(), connection_->seat()->wl_object(), serial);
 }
 
-bool XDGPopupWrapperImpl::SupportsDecoration() {
-  if (!aura_popup_)
-    return false;
-  uint32_t version = zaura_popup_get_version(aura_popup_.get());
-  return version >= ZAURA_POPUP_SET_DECORATION_SINCE_VERSION;
-}
-
-void XDGPopupWrapperImpl::Decorate() {
-  zaura_popup_set_decoration(aura_popup_.get(),
-                             ZAURA_POPUP_DECORATION_TYPE_SHADOW);
+XDGPopupWrapperImpl* XDGPopupWrapperImpl::AsXDGPopupWrapper() {
+  return this;
 }
 
 wl::Object<xdg_positioner> XDGPopupWrapperImpl::CreatePositioner() {
@@ -267,9 +250,19 @@ wl::Object<xdg_positioner> XDGPopupWrapperImpl::CreatePositioner() {
   FillAnchorData(params_, &anchor_rect, &anchor_position, &anchor_gravity,
                  &constraint_adjustment);
 
+  // XDG protocol does not allow empty geometries, but Chrome does. Set a dummy
+  // {1, 1} size to prevent protocol error.
+  if (anchor_rect.IsEmpty()) {
+    anchor_rect.set_size({1, 1});
+  }
   xdg_positioner_set_anchor_rect(positioner.get(), anchor_rect.x(),
                                  anchor_rect.y(), anchor_rect.width(),
                                  anchor_rect.height());
+  // XDG protocol does not allow empty geometries, but Chrome does. Set a dummy
+  // {1, 1} size to prevent protocol error.
+  if (params_.bounds.IsEmpty()) {
+    params_.bounds.set_size({1, 1});
+  }
   xdg_positioner_set_size(positioner.get(), params_.bounds.width(),
                           params_.bounds.height());
   xdg_positioner_set_anchor(positioner.get(), TranslateAnchor(anchor_position));
@@ -281,37 +274,37 @@ wl::Object<xdg_positioner> XDGPopupWrapperImpl::CreatePositioner() {
 }
 
 // static
-void XDGPopupWrapperImpl::Configure(void* data,
-                                    struct xdg_popup* xdg_popup,
-                                    int32_t x,
-                                    int32_t y,
-                                    int32_t width,
-                                    int32_t height) {
+void XDGPopupWrapperImpl::OnConfigure(void* data,
+                                      xdg_popup* popup,
+                                      int32_t x,
+                                      int32_t y,
+                                      int32_t width,
+                                      int32_t height) {
   // As long as the Wayland compositor repositions/requires to position windows
   // relative to their parents, do not propagate final bounds information to
   // Chromium. The browser places windows in respect to screen origin, but
   // Wayland requires doing so in respect to parent window's origin. To properly
   // place windows, the bounds are translated and adjusted according to the
   // Wayland compositor needs during WaylandWindow::CreateXdgPopup call.
-  WaylandWindow* window =
-      static_cast<XDGPopupWrapperImpl*>(data)->wayland_window_;
+  auto* self = static_cast<XDGPopupWrapperImpl*>(data);
+  WaylandWindow* window = self->wayland_window_;
   DCHECK(window);
   window->HandlePopupConfigure({x, y, width, height});
 }
 
 // static
-void XDGPopupWrapperImpl::PopupDone(void* data, struct xdg_popup* xdg_popup) {
-  WaylandWindow* window =
-      static_cast<XDGPopupWrapperImpl*>(data)->wayland_window_;
+void XDGPopupWrapperImpl::OnPopupDone(void* data, xdg_popup* popup) {
+  auto* self = static_cast<XDGPopupWrapperImpl*>(data);
+  WaylandWindow* window = self->wayland_window_;
   DCHECK(window);
   window->Hide();
   window->OnCloseRequest();
 }
 
 // static
-void XDGPopupWrapperImpl::Repositioned(void* data,
-                                       struct xdg_popup* xdg_popup,
-                                       uint32_t token) {
+void XDGPopupWrapperImpl::OnRepositioned(void* data,
+                                         xdg_popup* popup,
+                                         uint32_t token) {
   NOTIMPLEMENTED_LOG_ONCE();
 }
 

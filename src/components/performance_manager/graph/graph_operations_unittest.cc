@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <algorithm>
 
-#include "base/bind.h"
+#include "base/functional/function_ref.h"
 #include "components/performance_manager/test_support/graph_test_harness.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -26,6 +26,7 @@ class GraphOperationsTest : public GraphTestHarness {
     process2_ = CreateNode<ProcessNodeImpl>();
     page1_ = CreateNode<PageNodeImpl>();
     page2_ = CreateNode<PageNodeImpl>();
+    page3_ = CreateNode<PageNodeImpl>();
     mainframe1_ = CreateFrameNodeAutoId(process1_.get(), page1_.get(), nullptr);
     mainframe2_ = CreateFrameNodeAutoId(process2_.get(), page2_.get(), nullptr);
     childframe1a_ =
@@ -36,12 +37,15 @@ class GraphOperationsTest : public GraphTestHarness {
         CreateFrameNodeAutoId(process1_.get(), page2_.get(), mainframe2_.get());
     childframe2b_ =
         CreateFrameNodeAutoId(process1_.get(), page2_.get(), mainframe2_.get());
+    page3_->SetEmbedderFrameNodeAndEmbeddingType(
+        mainframe1_.get(), PageNode::EmbeddingType::kGuestView);
   }
 
   TestNodeWrapper<ProcessNodeImpl> process1_;
   TestNodeWrapper<ProcessNodeImpl> process2_;
   TestNodeWrapper<PageNodeImpl> page1_;
   TestNodeWrapper<PageNodeImpl> page2_;
+  TestNodeWrapper<PageNodeImpl> page3_;  // A guest of `page1_`.
 
   // Root nodes. |mainframeX_| is in |processX_|.
   TestNodeWrapper<FrameNodeImpl> mainframe1_;
@@ -101,13 +105,10 @@ TEST_F(GraphOperationsTest, VisitFrameTree) {
 
   std::vector<const FrameNode*> visited;
   EXPECT_TRUE(GraphOperations::VisitFrameTreePreOrder(
-      page1_.get(), base::BindRepeating(
-                        [](std::vector<const FrameNode*>* visited,
-                           const FrameNode* frame_node) -> bool {
-                          visited->push_back(frame_node);
-                          return true;
-                        },
-                        base::Unretained(&visited))));
+      page1_.get(), [&visited](const FrameNode* frame_node) -> bool {
+        visited.push_back(frame_node);
+        return true;
+      }));
   EXPECT_THAT(visited,
               testing::UnorderedElementsAre(ToPublic(mainframe1_.get()),
                                             ToPublic(childframe1a_.get()),
@@ -118,24 +119,18 @@ TEST_F(GraphOperationsTest, VisitFrameTree) {
   // Do an aborted pre-order visit.
   visited.clear();
   EXPECT_FALSE(GraphOperations::VisitFrameTreePreOrder(
-      page1_.get(), base::BindRepeating(
-                        [](std::vector<const FrameNode*>* visited,
-                           const FrameNode* frame_node) -> bool {
-                          visited->push_back(frame_node);
-                          return false;
-                        },
-                        base::Unretained(&visited))));
+      page1_.get(), [&visited](const FrameNode* frame_node) -> bool {
+        visited.push_back(frame_node);
+        return false;
+      }));
   EXPECT_EQ(1u, visited.size());
 
   visited.clear();
   EXPECT_TRUE(GraphOperations::VisitFrameTreePostOrder(
-      page1_.get(), base::BindRepeating(
-                        [](std::vector<const FrameNode*>* visited,
-                           const FrameNode* frame_node) -> bool {
-                          visited->push_back(frame_node);
-                          return true;
-                        },
-                        base::Unretained(&visited))));
+      page1_.get(), [&visited](const FrameNode* frame_node) -> bool {
+        visited.push_back(frame_node);
+        return true;
+      }));
   EXPECT_THAT(visited,
               testing::UnorderedElementsAre(ToPublic(mainframe1_.get()),
                                             ToPublic(childframe1a_.get()),
@@ -146,14 +141,32 @@ TEST_F(GraphOperationsTest, VisitFrameTree) {
   // Do an aborted post-order visit.
   visited.clear();
   EXPECT_FALSE(GraphOperations::VisitFrameTreePostOrder(
-      page1_.get(), base::BindRepeating(
-                        [](std::vector<const FrameNode*>* visited,
-                           const FrameNode* frame_node) -> bool {
-                          visited->push_back(frame_node);
-                          return false;
-                        },
-                        base::Unretained(&visited))));
+      page1_.get(), [&visited](const FrameNode* frame_node) -> bool {
+        visited.push_back(frame_node);
+        return false;
+      }));
   EXPECT_EQ(1u, visited.size());
+}
+
+TEST_F(GraphOperationsTest, VisitPageEmbeds) {
+  // Pages are visited embedder-to-embedded.
+  std::vector<const PageNode*> visited;
+  ASSERT_TRUE(GraphOperations::VisitPageAndEmbedsPreOrder(
+      page1_.get(), [&visited](const PageNode* page_node) {
+        visited.push_back(page_node);
+        return true;
+      }));
+  EXPECT_THAT(visited, testing::ElementsAre(ToPublic(page1_.get()),
+                                            ToPublic(page3_.get())));
+
+  // Stop after the first item.
+  visited.clear();
+  ASSERT_FALSE(GraphOperations::VisitPageAndEmbedsPreOrder(
+      page1_.get(), [&visited](const PageNode* page_node) {
+        visited.push_back(page_node);
+        return false;
+      }));
+  EXPECT_THAT(visited, testing::ElementsAre(ToPublic(page1_.get())));
 }
 
 TEST_F(GraphOperationsTest, HasFrame) {

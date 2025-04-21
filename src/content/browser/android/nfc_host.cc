@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,6 @@
 #include <utility>
 
 #include "base/atomic_sequence_num.h"
-#include "content/browser/permissions/permission_controller_impl.h"
-#include "content/public/android/content_jni_headers/NfcHost_jni.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/device_service.h"
 #include "content/public/browser/navigation_handle.h"
@@ -17,6 +15,9 @@
 #include "services/device/public/mojom/nfc.mojom.h"
 #include "third_party/blink/public/common/permissions/permission_utils.h"
 #include "third_party/blink/public/mojom/permissions/permission_status.mojom.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "content/public/android/content_jni_headers/NfcHost_jni.h"
 
 namespace content {
 
@@ -28,8 +29,8 @@ NFCHost::NFCHost(WebContents* web_contents)
     : WebContentsObserver(web_contents) {
   DCHECK(web_contents);
 
-  permission_controller_ = PermissionControllerImpl::FromBrowserContext(
-      web_contents->GetBrowserContext());
+  permission_controller_ =
+      web_contents->GetBrowserContext()->GetPermissionController();
 }
 
 NFCHost::~NFCHost() {
@@ -68,14 +69,16 @@ void NFCHost::GetNFC(RenderFrameHost* render_frame_host,
   if (!subscription_id_) {
     // base::Unretained() is safe here because the subscription is canceled when
     // this object is destroyed.
-    // TODO(crbug.com/1271543) : Move `SubscribePermissionStatusChange` to
-    // `PermissionController`.
-    subscription_id_ = permission_controller_->SubscribePermissionStatusChange(
-        blink::PermissionType::NFC, /*render_process_host=*/nullptr,
-        render_frame_host,
-        render_frame_host->GetMainFrame()->GetLastCommittedOrigin().GetURL(),
-        base::BindRepeating(&NFCHost::OnPermissionStatusChange,
-                            base::Unretained(this)));
+    subscription_id_ =
+        permission_controller_->SubscribeToPermissionStatusChange(
+            blink::PermissionType::NFC, /*render_process_host=*/nullptr,
+            render_frame_host,
+            render_frame_host->GetMainFrame()
+                ->GetLastCommittedOrigin()
+                .GetURL(),
+            /*should_include_device_status=*/false,
+            base::BindRepeating(&NFCHost::OnPermissionStatusChange,
+                                base::Unretained(this)));
   }
 
   if (!nfc_provider_) {
@@ -125,7 +128,8 @@ void NFCHost::OnPermissionStatusChange(blink::mojom::PermissionStatus status) {
 
 void NFCHost::Close() {
   nfc_provider_.reset();
-  permission_controller_->UnsubscribePermissionStatusChange(subscription_id_);
+  permission_controller_->UnsubscribeFromPermissionStatusChange(
+      subscription_id_);
   subscription_id_ = PermissionController::SubscriptionId();
 }
 

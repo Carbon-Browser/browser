@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,7 @@ class MockPrescientNetworking : public WebPrescientNetworking {
   bool DidPreconnect() const { return did_preconnect_; }
 
  private:
-  void PrefetchDNS(const WebString&) override { did_dns_prefetch_ = true; }
+  void PrefetchDNS(const WebURL&) override { did_dns_prefetch_ = true; }
   void Preconnect(const WebURL&, bool) override { did_preconnect_ = true; }
 
   bool did_dns_prefetch_ = false;
@@ -64,7 +64,13 @@ class HTMLPreloadScannerDocumentTest : public SimTest {
   std::unique_ptr<SimRequest> main_resource_;
 };
 
-TEST_F(HTMLPreloadScannerDocumentTest, DOMParser) {
+#if BUILDFLAG(IS_IOS)
+// TODO(crbug.com/1141478)
+#define MAYBE_DOMParser DISABLED_DOMParser
+#else
+#define MAYBE_DOMParser DOMParser
+#endif  // BUILDFLAG(IS_IOS)
+TEST_F(HTMLPreloadScannerDocumentTest, MAYBE_DOMParser) {
   main_resource_->Complete(R"(<script>
     var p = new DOMParser();
     p.parseFromString(
@@ -101,20 +107,21 @@ TEST_F(HTMLPreloadScannerDocumentTest, XHRResponseDocument) {
 }
 
 TEST_F(HTMLPreloadScannerDocumentTest,
-       SetsClientHintsPreferencesOnFrameMetaName) {
+       SetsClientHintsPreferencesOnFrameDelegateCH) {
   // Create a prefetch only document since that will ensure only the preload
   // scanner runs.
   ProvideNoStatePrefetchClientTo(
       *GetDocument().GetPage(), MakeGarbageCollected<MockNoStatePrefetchClient>(
                                     *GetDocument().GetPage()));
   EXPECT_TRUE(GetDocument().IsPrefetchOnly());
-  main_resource_->Complete(R"(<meta name="Accept-CH" content="sec-ch-dpr">)");
+  main_resource_->Complete(
+      R"(<meta http-equiv="Delegate-CH" content="sec-ch-dpr">)");
   EXPECT_TRUE(GetDocument().GetFrame()->GetClientHintsPreferences().ShouldSend(
       network::mojom::WebClientHintsType::kDpr));
 }
 
 TEST_F(HTMLPreloadScannerDocumentTest,
-       SetsClientHintsPreferencesOnFrameHttpEquiv) {
+       SetsClientHintsPreferencesOnFrameAcceptCH) {
   // Create a prefetch only document since that will ensure only the preload
   // scanner runs.
   ProvideNoStatePrefetchClientTo(

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <stddef.h>
 
+#include <array>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -21,12 +22,11 @@
 #include "remoting/protocol/fake_audio_source.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 namespace {
 
-// Creates a dummy packet with 1k data
+// Creates a dummy packet with 1k data.
 std::unique_ptr<AudioPacket> MakeAudioPacket(int channel_count = 2) {
   std::unique_ptr<AudioPacket> packet(new AudioPacket);
   packet->add_data()->resize(1024);
@@ -78,8 +78,8 @@ class AudioPumpTest : public testing::Test, public protocol::AudioStub {
   base::test::SingleThreadTaskEnvironment task_environment_;
 
   // |source_| and |encoder_| are owned by the |pump_|.
-  raw_ptr<FakeAudioSource> source_;
-  raw_ptr<FakeAudioEncoder> encoder_;
+  raw_ptr<FakeAudioSource, AcrossTasksDanglingUntriaged> source_;
+  raw_ptr<FakeAudioEncoder, AcrossTasksDanglingUntriaged> encoder_;
 
   std::unique_ptr<AudioPump> pump_;
 
@@ -143,33 +143,21 @@ TEST_F(AudioPumpTest, DownmixAudioPacket) {
   ASSERT_TRUE(source_->callback());
 
   // Generate several audio packets with different channel counts.
-  static const int kChannels[] = {
-    AudioPacket::CHANNELS_7_1,
-    AudioPacket::CHANNELS_6_1,
-    AudioPacket::CHANNELS_5_1,
-    AudioPacket::CHANNELS_STEREO,
-    AudioPacket::CHANNELS_MONO,
-    AudioPacket::CHANNELS_7_1,
-    AudioPacket::CHANNELS_7_1,
-    AudioPacket::CHANNELS_7_1,
-    AudioPacket::CHANNELS_7_1,
-    AudioPacket::CHANNELS_6_1,
-    AudioPacket::CHANNELS_6_1,
-    AudioPacket::CHANNELS_6_1,
-    AudioPacket::CHANNELS_6_1,
-    AudioPacket::CHANNELS_5_1,
-    AudioPacket::CHANNELS_5_1,
-    AudioPacket::CHANNELS_5_1,
-    AudioPacket::CHANNELS_5_1,
-    AudioPacket::CHANNELS_STEREO,
-    AudioPacket::CHANNELS_STEREO,
-    AudioPacket::CHANNELS_STEREO,
-    AudioPacket::CHANNELS_STEREO,
-    AudioPacket::CHANNELS_MONO,
-    AudioPacket::CHANNELS_MONO,
-    AudioPacket::CHANNELS_MONO,
-    AudioPacket::CHANNELS_MONO,
-  };
+  static const auto kChannels = std::to_array<int>({
+      AudioPacket::CHANNELS_7_1,    AudioPacket::CHANNELS_6_1,
+      AudioPacket::CHANNELS_5_1,    AudioPacket::CHANNELS_STEREO,
+      AudioPacket::CHANNELS_MONO,   AudioPacket::CHANNELS_7_1,
+      AudioPacket::CHANNELS_7_1,    AudioPacket::CHANNELS_7_1,
+      AudioPacket::CHANNELS_7_1,    AudioPacket::CHANNELS_6_1,
+      AudioPacket::CHANNELS_6_1,    AudioPacket::CHANNELS_6_1,
+      AudioPacket::CHANNELS_6_1,    AudioPacket::CHANNELS_5_1,
+      AudioPacket::CHANNELS_5_1,    AudioPacket::CHANNELS_5_1,
+      AudioPacket::CHANNELS_5_1,    AudioPacket::CHANNELS_STEREO,
+      AudioPacket::CHANNELS_STEREO, AudioPacket::CHANNELS_STEREO,
+      AudioPacket::CHANNELS_STEREO, AudioPacket::CHANNELS_MONO,
+      AudioPacket::CHANNELS_MONO,   AudioPacket::CHANNELS_MONO,
+      AudioPacket::CHANNELS_MONO,
+  });
 
   for (size_t i = 0; i < std::size(kChannels); i++) {
     source_->callback().Run(MakeAudioPacket(kChannels[i]));
@@ -186,5 +174,4 @@ TEST_F(AudioPumpTest, DownmixAudioPacket) {
   ASSERT_EQ(sent_packets_.size(), std::size(kChannels));
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

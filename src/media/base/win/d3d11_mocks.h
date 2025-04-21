@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -882,8 +882,8 @@ class D3D11VideoDecoderMock
   MOCK_STDCALL_METHOD1(GetDriverHandle, HRESULT(HANDLE*));
 };
 
-// This classs must mock QueryInterface, since a lot of things are
-// QueryInterfac()ed thru this class.
+// This class must mock QueryInterface, since a lot of things are
+// QueryInterface()ed thru this class.
 class D3D11DeviceContextMock
     : public Microsoft::WRL::RuntimeClass<
           Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>,

@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,8 +31,8 @@ void WidgetFocusManager::RemoveFocusChangeListener(
 
 void WidgetFocusManager::OnNativeFocusChanged(gfx::NativeView focused_now) {
   if (enabled_) {
-    for (WidgetFocusChangeListener& observer : focus_change_listeners_)
-      observer.OnNativeFocusChanged(focused_now);
+    focus_change_listeners_.Notify(
+        &WidgetFocusChangeListener::OnNativeFocusChanged, focused_now);
   }
 }
 

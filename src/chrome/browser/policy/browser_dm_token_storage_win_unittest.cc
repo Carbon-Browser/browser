@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,8 +30,8 @@ constexpr char kDMToken2[] = "fake-dm-token-2";
 
 class BrowserDMTokenStorageWinTest : public testing::Test {
  protected:
-  BrowserDMTokenStorageWinTest() {}
-  ~BrowserDMTokenStorageWinTest() override {}
+  BrowserDMTokenStorageWinTest() = default;
+  ~BrowserDMTokenStorageWinTest() override = default;
 
   void SetUp() override {
     ASSERT_NO_FATAL_FAILURE(

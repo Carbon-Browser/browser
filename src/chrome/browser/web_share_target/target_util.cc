@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "net/base/mime_util.h"
+#include "services/network/public/cpp/resource_request_body.h"
 
 namespace {
 
@@ -19,12 +20,9 @@ void AddFile(const std::string& value_name,
              const std::string& file_uri,
              const std::string& file_name,
              const std::string& content_type,
-             absl::optional<mojo::PendingRemote<network::mojom::DataPipeGetter>>
-                 data_pipe_getter,
              const std::string& boundary,
              scoped_refptr<network::ResourceRequestBody> request_body) {
   const char delimiter[] = "\r\n";
-  const size_t delimiter_length = 2;
   std::string mime_header;
   // First line is the boundary.
   mime_header.append("--" + boundary + delimiter);
@@ -43,21 +41,17 @@ void AddFile(const std::string& value_name,
   // Leave an empty line before appending the file_uri.
   mime_header.append(delimiter);
 
-  request_body->AppendBytes(mime_header.c_str(), mime_header.length());
+  request_body->AppendCopyOfBytes(base::as_byte_span(mime_header));
 
-  if (data_pipe_getter.has_value()) {
-    request_body->AppendDataPipe(std::move(*data_pipe_getter));
-  } else {
-    request_body->AppendFileRange(
+  request_body->AppendFileRange(
 #if BUILDFLAG(IS_WIN)
-        base::FilePath::FromUTF8Unsafe(file_uri),
+      base::FilePath::FromUTF8Unsafe(file_uri),
 #else
-        base::FilePath(file_uri),
+      base::FilePath(file_uri),
 #endif
-        0, -1, base::Time());
-  }
+      0, -1, base::Time());
 
-  request_body->AppendBytes(delimiter, delimiter_length);
+  request_body->AppendCopyOfBytes(base::byte_span_from_cstring(delimiter));
 }
 
 void AddPlainText(const std::string& value_name,
@@ -74,7 +68,7 @@ void AddPlainText(const std::string& value_name,
     net::AddMultipartValueForUploadWithFileName(value_name, file_name, value,
                                                 boundary, content_type, &item);
   }
-  request_body->AppendBytes(item.c_str(), item.length());
+  request_body->AppendCopyOfBytes(base::as_byte_span(item));
 }
 
 }  // namespace
@@ -103,15 +97,10 @@ scoped_refptr<network::ResourceRequestBody> ComputeMultipartBody(
     const std::vector<bool>& is_value_file_uris,
     const std::vector<std::string>& filenames,
     const std::vector<std::string>& types,
-    absl::optional<
-        std::vector<mojo::PendingRemote<network::mojom::DataPipeGetter>>>
-        data_pipe_getters,
     const std::string& boundary) {
   const size_t num_files = names.size();
   if (num_files != values.size() || num_files != is_value_file_uris.size() ||
-      num_files != filenames.size() || num_files != types.size() ||
-      (data_pipe_getters.has_value() &&
-       num_files != data_pipe_getters->size())) {
+      num_files != filenames.size() || num_files != types.size()) {
     // The length of all arrays should always be the same for multipart POST.
     // This should never happen.
     return nullptr;
@@ -120,14 +109,10 @@ scoped_refptr<network::ResourceRequestBody> ComputeMultipartBody(
       new network::ResourceRequestBody();
 
   for (size_t i = 0; i < num_files; i++) {
-    if (data_pipe_getters.has_value() && (*data_pipe_getters)[i].is_valid()) {
+    if (is_value_file_uris[i]) {
       AddFile(PercentEscapeString(names[i]), values[i],
-              PercentEscapeString(filenames[i]), types[i],
-              std::move((*data_pipe_getters)[i]), boundary, request_body);
-    } else if (is_value_file_uris[i]) {
-      AddFile(PercentEscapeString(names[i]), values[i],
-              PercentEscapeString(filenames[i]), types[i],
-              /*data_pipe_getter=*/absl::nullopt, boundary, request_body);
+              PercentEscapeString(filenames[i]), types[i], boundary,
+              request_body);
     } else {
       AddPlainText(PercentEscapeString(names[i]), values[i],
                    PercentEscapeString(filenames[i]), types[i], boundary,
@@ -137,7 +122,7 @@ scoped_refptr<network::ResourceRequestBody> ComputeMultipartBody(
 
   std::string final_delimiter;
   net::AddMultipartFinalDelimiterForUpload(boundary, &final_delimiter);
-  request_body->AppendBytes(final_delimiter.c_str(), final_delimiter.length());
+  request_body->AppendCopyOfBytes(base::as_byte_span(final_delimiter));
 
   return request_body;
 }

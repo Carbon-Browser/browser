@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ SystemGestureEventFilter::SystemGestureEventFilter()
 SystemGestureEventFilter::~SystemGestureEventFilter() = default;
 
 void SystemGestureEventFilter::OnMouseEvent(ui::MouseEvent* event) {
-  if (event->type() == ui::ET_MOUSE_PRESSED &&
+  if (event->type() == ui::EventType::kMousePressed &&
       ui::GetTouchScreensAvailability() ==
           ui::TouchScreensAvailability::ENABLED) {
     base::RecordAction(base::UserMetricsAction("Mouse_Down"));

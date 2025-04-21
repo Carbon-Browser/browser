@@ -1,11 +1,17 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/base/channel_mixer.h"
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/strings/stringprintf.h"
 #include "media/base/audio_bus.h"
 #include "media/base/audio_parameters.h"
@@ -39,7 +45,9 @@ TEST(ChannelMixerTest, ConstructAllPossibleLayouts) {
 
       SCOPED_TRACE(base::StringPrintf(
           "Input Layout: %d, Output Layout: %d", input_layout, output_layout));
-      ChannelMixer mixer(input_layout, output_layout);
+      ChannelMixer mixer(
+          input_layout, ChannelLayoutToChannelCount(input_layout),
+          output_layout, ChannelLayoutToChannelCount(output_layout));
       std::unique_ptr<AudioBus> input_bus =
           AudioBus::Create(ChannelLayoutToChannelCount(input_layout), kFrames);
       std::unique_ptr<AudioBus> output_bus =
@@ -87,7 +95,7 @@ struct ChannelMixerTestData {
   int input_channels;
   ChannelLayout output_layout;
   int output_channels;
-  const float* channel_values;
+  raw_ptr<const float> channel_values;
   int num_channel_values;
   float scale;
 };
@@ -105,19 +113,17 @@ TEST_P(ChannelMixerTest, Mixing) {
   int input_channels = GetParam().input_channels;
   std::unique_ptr<AudioBus> input_bus =
       AudioBus::Create(input_channels, kFrames);
-  AudioParameters input_audio(AudioParameters::AUDIO_PCM_LINEAR, input_layout,
+  AudioParameters input_audio(AudioParameters::AUDIO_PCM_LINEAR,
+                              {input_layout, input_channels},
                               AudioParameters::kAudioCDSampleRate, kFrames);
-  if (input_layout == CHANNEL_LAYOUT_DISCRETE)
-    input_audio.set_channels_for_discrete(input_channels);
 
   ChannelLayout output_layout = GetParam().output_layout;
   int output_channels = GetParam().output_channels;
   std::unique_ptr<AudioBus> output_bus =
       AudioBus::Create(output_channels, kFrames);
-  AudioParameters output_audio(AudioParameters::AUDIO_PCM_LINEAR, output_layout,
+  AudioParameters output_audio(AudioParameters::AUDIO_PCM_LINEAR,
+                               {output_layout, output_channels},
                                AudioParameters::kAudioCDSampleRate, kFrames);
-  if (output_layout == CHANNEL_LAYOUT_DISCRETE)
-    output_audio.set_channels_for_discrete(output_channels);
 
   const float* channel_values = GetParam().channel_values;
   ASSERT_EQ(input_bus->channels(), GetParam().num_channel_values);

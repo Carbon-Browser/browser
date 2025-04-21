@@ -1,15 +1,15 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_NEARBY_SHARING_NEARBY_SHARING_SERVICE_FACTORY_H_
 #define CHROME_BROWSER_NEARBY_SHARING_NEARBY_SHARING_SERVICE_FACTORY_H_
 
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 namespace base {
 template <typename T>
-struct DefaultSingletonTraits;
+class NoDestructor;
 }  // namespace base
 
 namespace content {
@@ -19,7 +19,7 @@ class BrowserContext;
 class NearbySharingService;
 
 // Factory for NearbySharingService.
-class NearbySharingServiceFactory : public BrowserContextKeyedServiceFactory {
+class NearbySharingServiceFactory : public ProfileKeyedServiceFactory {
  public:
   // Disallow copy and assignment.
   NearbySharingServiceFactory(const NearbySharingServiceFactory&) = delete;
@@ -42,20 +42,16 @@ class NearbySharingServiceFactory : public BrowserContextKeyedServiceFactory {
       bool is_supported);
 
  private:
-  friend struct base::DefaultSingletonTraits<NearbySharingServiceFactory>;
+  friend base::NoDestructor<NearbySharingServiceFactory>;
 
   NearbySharingServiceFactory();
   ~NearbySharingServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory overrides:
-  KeyedService* BuildServiceInstanceFor(
-      content::BrowserContext* context) const override;
-  content::BrowserContext* GetBrowserContextToUse(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   void RegisterProfilePrefs(
       user_prefs::PrefRegistrySyncable* registry) override;
-  bool ServiceIsCreatedWithBrowserContext() const override;
-  bool ServiceIsNULLWhileTesting() const override;
 };
 
 #endif  // CHROME_BROWSER_NEARBY_SHARING_NEARBY_SHARING_SERVICE_FACTORY_H_

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/compiler_specific.h"
@@ -30,7 +31,8 @@ class OWNERSHIP_EXPORT MockOwnerKeyUtil : public OwnerKeyUtil {
   MockOwnerKeyUtil& operator=(const MockOwnerKeyUtil&) = delete;
 
   // OwnerKeyUtil implementation:
-  bool ImportPublicKey(std::vector<uint8_t>* output) override;
+  scoped_refptr<PublicKey> ImportPublicKey() override;
+  crypto::ScopedSECKEYPrivateKey GenerateKeyPair(PK11SlotInfo* slot) override;
   crypto::ScopedSECKEYPrivateKey FindPrivateKeyInSlot(
       const std::vector<uint8_t>& key,
       PK11SlotInfo* slot) override;
@@ -46,13 +48,32 @@ class OWNERSHIP_EXPORT MockOwnerKeyUtil : public OwnerKeyUtil {
   // configure the private key.
   void SetPublicKeyFromPrivateKey(const crypto::RSAPrivateKey& key);
 
-  // Sets the private key (also configures the public key).
-  void SetPrivateKey(std::unique_ptr<crypto::RSAPrivateKey> key);
+  // Imports the private key into NSS, so it can be found later.
+  // Also extracts the public key and sets it for this mock object (equivalent
+  // to calling `SetPublicKeyFromPrivateKey`).
+  void ImportPrivateKeyAndSetPublicKey(
+      std::unique_ptr<crypto::RSAPrivateKey> key);
+
+  // Same as ImportPrivateKeyAndSetPublicKey, but remembers in which slot the
+  // key is supposed to be. FindPrivateKeyInSlot will take this into account.
+  void ImportPrivateKeyInSlotAndSetPublicKey(
+      std::unique_ptr<crypto::RSAPrivateKey> key,
+      PK11SlotInfo* slot);
+
+  // Makes next `fail_times` number of calls to OwnerKeyUtil::GenerateKeyPair
+  // fail.
+  void SimulateGenerateKeyFailure(int fail_times);
 
  private:
   ~MockOwnerKeyUtil() override;
 
+  void ImportPrivateKeyAndSetPublicKeyImpl(
+      std::unique_ptr<crypto::RSAPrivateKey> key,
+      PK11SlotInfo* slot);
+
+  int generate_key_fail_times_ = 0;
   std::vector<uint8_t> public_key_;
+  std::optional<CK_SLOT_ID> private_key_slot_id_;
   crypto::ScopedSECKEYPrivateKey private_key_;
 };
 

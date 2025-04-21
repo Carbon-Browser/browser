@@ -1,8 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/arc/input_method_manager/input_method_prefs.h"
+
+#include <optional>
 
 #include "base/strings/stringprintf.h"
 #include "chrome/common/pref_names.h"
@@ -74,10 +76,12 @@ TEST_F(InputMethodPrefsTest, UpdateEnabledImes) {
                           component_extension_ime_id);
 
   InputMethodPrefs prefs(profile());
-  InputMethodDescriptor arc_ime_descriptor1(arc_ime_id1, "", "", {}, {}, false,
-                                            GURL(), GURL());
-  InputMethodDescriptor arc_ime_descriptor2(arc_ime_id2, "", "", {}, {}, false,
-                                            GURL(), GURL());
+  InputMethodDescriptor arc_ime_descriptor1(
+      arc_ime_id1, "", "", {}, {}, false, GURL(), GURL(),
+      /*handwriting_language=*/std::nullopt);
+  InputMethodDescriptor arc_ime_descriptor2(
+      arc_ime_id2, "", "", {}, {}, false, GURL(), GURL(),
+      /*handwriting_language=*/std::nullopt);
 
   {
     prefs.UpdateEnabledImes({arc_ime_descriptor1});

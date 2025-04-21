@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,9 @@
 #include <string>
 
 #include "ash/public/cpp/shelf_types.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/base_window.h"
+#include "ui/base/mojom/window_show_state.mojom-forward.h"
 
 class AppWindowShelfItemController;
 
@@ -61,7 +63,7 @@ class AppWindowBase : public ui::BaseWindow {
   bool IsFullscreen() const override;
   gfx::NativeWindow GetNativeWindow() const override;
   gfx::Rect GetRestoredBounds() const override;
-  ui::WindowShowState GetRestoredState() const override;
+  ui::mojom::WindowShowState GetRestoredState() const override;
   gfx::Rect GetBounds() const override;
   void Show() override;
   void ShowInactive() override;
@@ -80,8 +82,8 @@ class AppWindowBase : public ui::BaseWindow {
 
  private:
   ash::ShelfID shelf_id_;
-  views::Widget* const widget_;
-  AppWindowShelfItemController* controller_ = nullptr;
+  const raw_ptr<views::Widget> widget_;
+  raw_ptr<AppWindowShelfItemController> controller_ = nullptr;
 };
 
 #endif  // CHROME_BROWSER_UI_ASH_SHELF_APP_WINDOW_BASE_H_

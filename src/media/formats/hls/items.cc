@@ -1,13 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/formats/hls/items.h"
 
-#include "base/strings/string_piece.h"
+#include <optional>
+#include <string_view>
+
 #include "base/strings/string_util.h"
 #include "media/formats/hls/parse_status.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
 
 namespace media::hls {
@@ -22,8 +23,8 @@ TagItem GetTagItem(SourceString tag) {
   // Extract name and content
   const auto name_str = tag.Substr(0, colon_index);
 
-  absl::optional<SourceString> content;
-  if (colon_index != base::StringPiece::npos) {
+  std::optional<SourceString> content;
+  if (colon_index != std::string_view::npos) {
     content = tag.Substr(colon_index + 1);
   }
 
@@ -38,7 +39,7 @@ TagItem GetTagItem(SourceString tag) {
 
 }  // namespace
 
-base::StringPiece TagItem::GetNameStr() {
+std::string_view TagItem::GetNameStr() {
   if (!name_.has_value()) {
     return content_or_name_->Str();
   }
@@ -50,7 +51,7 @@ ParseStatus::Or<GetNextLineItemResult> GetNextLineItem(
     SourceLineIterator* src) {
   while (true) {
     auto result = src->Next();
-    if (result.has_error()) {
+    if (!result.has_value()) {
       // Forward error to caller
       return std::move(result).error();
     }

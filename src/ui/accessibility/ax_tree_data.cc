@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,12 +26,12 @@ AXTreeData::~AXTreeData() = default;
 std::string AXTreeData::ToString() const {
   std::string result;
 
-  if (tree_id != AXTreeIDUnknown())
-    result += " tree_id=" + tree_id.ToString().substr(0, 8);
+  // The exact value of the tree ids are not added to the string as it varies,
+  // and adding it would cause test failures.
   if (parent_tree_id != AXTreeIDUnknown())
-    result += " parent_tree_id=" + parent_tree_id.ToString().substr(0, 8);
+    result += " has_parent_tree";
   if (focused_tree_id != AXTreeIDUnknown())
-    result += " focused_tree_id=" + focused_tree_id.ToString().substr(0, 8);
+    result += " has_focused_tree";
 
   if (!doctype.empty())
     result += " doctype=" + doctype;
@@ -93,6 +93,11 @@ bool operator==(const AXTreeData& lhs, const AXTreeData& rhs) {
 
 bool operator!=(const AXTreeData& lhs, const AXTreeData& rhs) {
   return !(lhs == rhs);
+}
+
+const AXTreeData& AXTreeDataUnknown() {
+  static const AXTreeData ax_tree_data_unknown;
+  return ax_tree_data_unknown;
 }
 
 }  // namespace ui

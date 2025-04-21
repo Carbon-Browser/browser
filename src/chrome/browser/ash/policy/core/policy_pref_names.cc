@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,10 @@ namespace prefs {
 // for the purpose of throttling log uploads.
 const char kStoreLogStatesAcrossReboots[] =
     "policy_store_log_states_across_reboots";
+
+// A preference to keep track of upload times of event based logs.
+const char kEventBasedLogLastUploadTimes[] =
+    "ash.policy.event_based_log_last_upload_times";
 
 }  // namespace prefs
 }  // namespace policy

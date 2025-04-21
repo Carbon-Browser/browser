@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -28,7 +28,7 @@ def _GetTokenFromOfficialFile(token_name):
   if not os.path.isfile(official_path):
     return None
 
-  line_regexp = '^#define\s*%s\s*"([^"]+)"' % token_name
+  line_regexp = r'^#define\s*%s\s*"([^"]+)"' % token_name
   line_pattern = re.compile(line_regexp)
   def ParseLine(current_line):
     result = line_pattern.match(current_line)
@@ -96,5 +96,3 @@ if __name__ == "__main__":
   print('GOOGLE_CLIENT_ID_REMOTING_HOST=%s' % GetClientID('REMOTING_HOST'))
   print('GOOGLE_CLIENT_SECRET_REMOTING_HOST=%s' % GetClientSecret(
       'REMOTING_HOST'))
-  print('GOOGLE_CLIENT_ID_REMOTING_IDENTITY_API=%s' %GetClientID(
-      'REMOTING_IDENTITY_API'))

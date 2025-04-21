@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,8 @@
 #include <ostream>
 
 #include "base/check.h"
+#include "base/containers/contains.h"
+#include "base/not_fatal_until.h"
 
 namespace storage {
 
@@ -32,7 +34,7 @@ bool DatabaseConnections::IsDatabaseOpened(
 
 bool DatabaseConnections::IsOriginUsed(
     const std::string& origin_identifier) const {
-  return (connections_.find(origin_identifier) != connections_.end());
+  return base::Contains(connections_, origin_identifier);
 }
 
 bool DatabaseConnections::AddConnection(const std::string& origin_identifier,
@@ -72,9 +74,11 @@ int64_t DatabaseConnections::GetOpenDatabaseSize(
     const std::string& origin_identifier,
     const std::u16string& database_name) const {
   auto origin_it = connections_.find(origin_identifier);
-  DCHECK(origin_it != connections_.end()) << "Database not opened";
+  CHECK(origin_it != connections_.end(), base::NotFatalUntil::M130)
+      << "Database not opened";
   auto it = origin_it->second.find(database_name);
-  DCHECK(it != origin_it->second.end()) << "Database not opened";
+  CHECK(it != origin_it->second.end(), base::NotFatalUntil::M130)
+      << "Database not opened";
   return it->second.second;
 }
 
@@ -102,7 +106,7 @@ bool DatabaseConnections::RemoveConnectionsHelper(
     const std::u16string& database_name,
     int num_connections) {
   auto origin_iterator = connections_.find(origin_identifier);
-  DCHECK(origin_iterator != connections_.end());
+  CHECK(origin_iterator != connections_.end(), base::NotFatalUntil::M130);
   DBConnections& db_connections = origin_iterator->second;
   int& count = db_connections[database_name].first;
   DCHECK(count >= num_connections);

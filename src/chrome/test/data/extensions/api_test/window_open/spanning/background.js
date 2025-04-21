@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,7 @@ function openFromExtensionHostInIncognitoBrowserShouldOpenInNormalBrowser() {
       // Remove the normal window. We keep running because of the incognito
       // window.
       chrome.windows.remove(normalWin.id, function() {
-        chrome.tabs.getAllInWindow(incognitoWin.id, function(tabs) {
+        chrome.tabs.query({windowId:incognitoWin.id}, function(tabs) {
           chrome.test.assertEq(1, tabs.length);
           chrome.browserAction.openPopup(function(popupWindow) {
             chrome.test.assertTrue(!!popupWindow);

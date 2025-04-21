@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "remoting/protocol/authenticator.h"
 #include "remoting/protocol/content_description.h"
 #include "remoting/protocol/jingle_messages.h"
 #include "remoting/protocol/jingle_session.h"
+#include "remoting/protocol/session_observer.h"
 #include "remoting/protocol/transport.h"
 #include "remoting/signaling/iq_sender.h"
 #include "remoting/signaling/signal_strategy.h"
@@ -20,8 +21,7 @@
 
 using jingle_xmpp::QName;
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 JingleSessionManager::JingleSessionManager(SignalStrategy* signal_strategy)
     : signal_strategy_(signal_strategy),
@@ -60,15 +60,28 @@ void JingleSessionManager::set_authenticator_factory(
   authenticator_factory_ = std::move(authenticator_factory);
 }
 
+SessionObserver::Subscription JingleSessionManager::AddSessionObserver(
+    SessionObserver* observer) {
+  observers_.AddObserver(observer);
+  return SessionObserver::Subscription(
+      base::BindOnce(&JingleSessionManager::RemoveSessionObserver,
+                     weak_factory_.GetWeakPtr(), observer));
+}
+void JingleSessionManager::RemoveSessionObserver(SessionObserver* observer) {
+  observers_.RemoveObserver(observer);
+}
+
 void JingleSessionManager::OnSignalStrategyStateChange(
     SignalStrategy::State state) {}
 
 bool JingleSessionManager::OnSignalStrategyIncomingStanza(
     const jingle_xmpp::XmlElement* stanza) {
-  if (!JingleMessage::IsJingleMessage(stanza))
+  if (!JingleMessage::IsJingleMessage(stanza)) {
     return false;
+  }
 
-  std::unique_ptr<jingle_xmpp::XmlElement> stanza_copy(new jingle_xmpp::XmlElement(*stanza));
+  std::unique_ptr<jingle_xmpp::XmlElement> stanza_copy(
+      new jingle_xmpp::XmlElement(*stanza));
   std::unique_ptr<JingleMessage> message(new JingleMessage());
   std::string error_msg;
   if (!message->ParseXml(stanza, &error_msg)) {
@@ -99,8 +112,9 @@ bool JingleSessionManager::OnSignalStrategyIncomingStanza(
     }
 
     IncomingSessionResponse response = SessionManager::DECLINE;
-    if (!incoming_session_callback_.is_null())
+    if (!incoming_session_callback_.is_null()) {
       incoming_session_callback_.Run(session, &response);
+    }
 
     if (response == SessionManager::ACCEPT) {
       session->AcceptIncomingConnection(*message);
@@ -108,16 +122,15 @@ bool JingleSessionManager::OnSignalStrategyIncomingStanza(
       ErrorCode error;
       switch (response) {
         case OVERLOAD:
-          error = HOST_OVERLOAD;
+          error = ErrorCode::HOST_OVERLOAD;
           break;
 
         case DECLINE:
-          error = SESSION_REJECTED;
+          error = ErrorCode::SESSION_REJECTED;
           break;
 
         default:
           NOTREACHED();
-          error = SESSION_REJECTED;
       }
 
       session->Close(error);
@@ -152,5 +165,4 @@ void JingleSessionManager::SessionDestroyed(JingleSession* session) {
   sessions_.erase(session->session_id_);
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

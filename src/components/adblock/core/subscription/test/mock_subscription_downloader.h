@@ -18,20 +18,22 @@
 #ifndef COMPONENTS_ADBLOCK_CORE_SUBSCRIPTION_TEST_MOCK_SUBSCRIPTION_DOWNLOADER_H_
 #define COMPONENTS_ADBLOCK_CORE_SUBSCRIPTION_TEST_MOCK_SUBSCRIPTION_DOWNLOADER_H_
 
+#include "base/functional/callback.h"
 #include "components/adblock/core/subscription/subscription_downloader.h"
-
 #include "testing/gmock/include/gmock/gmock.h"
+
+using testing::NiceMock;
 
 namespace adblock {
 
-class MockSubscriptionDownloader : public SubscriptionDownloader {
+class MockSubscriptionDownloader : public NiceMock<SubscriptionDownloader> {
  public:
   MockSubscriptionDownloader();
   ~MockSubscriptionDownloader() override;
   MOCK_METHOD(void,
               StartDownload,
               (const GURL& subscription_url,
-               RetryPolicy retry_policy,
+               AdblockResourceRequest::RetryPolicy retry_policy,
                DownloadCompletedCallback on_finished),
               (override));
   MOCK_METHOD(void,

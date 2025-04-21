@@ -1,15 +1,20 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "storage/browser/blob/blob_storage_context.h"
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_simple_task_runner.h"
@@ -73,8 +78,7 @@ class BlobFlattenerTest : public testing::Test {
   }
 
   scoped_refptr<BlobDataItem> CreateDataItem(const char* memory, size_t size) {
-    return BlobDataItem::CreateBytes(
-        base::as_bytes(base::make_span(memory, size)));
+    return BlobDataItem::CreateBytes(base::as_bytes(base::span(memory, size)));
   }
 
   scoped_refptr<BlobDataItem> CreateFileItem(size_t offset, size_t size) {

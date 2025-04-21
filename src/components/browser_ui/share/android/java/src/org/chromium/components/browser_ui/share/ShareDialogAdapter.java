@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,9 +16,7 @@ import android.widget.TextView;
 
 import java.util.List;
 
-/**
- * Adapter that provides the list of activities via which a web page can be shared.
- */
+/** Adapter that provides the list of activities via which a web page can be shared. */
 class ShareDialogAdapter extends ArrayAdapter<ResolveInfo> {
     private final LayoutInflater mInflater;
     private final PackageManager mManager;

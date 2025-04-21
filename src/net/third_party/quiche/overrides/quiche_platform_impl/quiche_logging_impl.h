@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,12 @@
 #define QUICHE_CHROMIUM_LOG_INFO VLOG(1)
 #define QUICHE_CHROMIUM_LOG_WARNING DLOG(WARNING)
 #define QUICHE_CHROMIUM_LOG_ERROR DLOG(ERROR)
-#define QUICHE_CHROMIUM_LOG_FATAL LOG(FATAL)
+// TODO(pbos): Make QUICHE_LOG(FATAL) [[noreturn]] when quiche can build with
+// -Wunreachable-code-aggressive if LOG(FATAL) is [[noreturn]] which will need
+// to be resolved upstream
+#define QUICHE_CHROMIUM_LOG_FATAL \
+  LAZY_STREAM(LOG_STREAM(FATAL),  \
+              ::logging::ShouldCreateLogMessage(::logging::LOGGING_FATAL))
 #define QUICHE_CHROMIUM_LOG_DFATAL LOG(DFATAL)
 
 #define QUICHE_CHROMIUM_DLOG_INFO DVLOG(1)
@@ -73,17 +78,33 @@
 #define QUICHE_CHROMIUM_DLOG_IF_0 QUICHE_CHROMIUM_DLOG_IF_ERROR
 #endif
 
-#define QUICHE_NOTREACHED_IMPL() NOTREACHED()
+namespace quic {
+// TODO(crbug.com/40580068): Make QUICHE CHECK/NOTREACHED failures [[noreturn]]
+// upstream (and clean up dead code), then use NOTREACHED(). The current
+// implementation of CHECK() makes sure that CHECK(false) is [[noreturn]], so we
+// need to trick -Wunreachable-code to avoid dead-code warnings in QUIC.
+// Currently a function call seems to be enough to do that, but this may turn
+// into an arms race. :(
+inline bool LoggingInternalReturnParam(bool param) {
+  return param;
+}
+}  // namespace quic
+
+#define QUICHE_NOTREACHED_IMPL() CHECK(quic::LoggingInternalReturnParam(false))
 
 #define QUICHE_PLOG_IMPL(severity) DVLOG(1)
 
-#define QUICHE_CHECK_IMPL(condition) CHECK(condition)
+// This has a weird ternary to permit only contextual conversion to bool, i.e.
+// no static_cast<bool>().
+#define QUICHE_CHECK_IMPL(condition) \
+  CHECK(quic::LoggingInternalReturnParam((condition) ? true : false))
 #define QUICHE_CHECK_EQ_IMPL(val1, val2) CHECK_EQ(val1, val2)
 #define QUICHE_CHECK_NE_IMPL(val1, val2) CHECK_NE(val1, val2)
 #define QUICHE_CHECK_LE_IMPL(val1, val2) CHECK_LE(val1, val2)
 #define QUICHE_CHECK_LT_IMPL(val1, val2) CHECK_LT(val1, val2)
 #define QUICHE_CHECK_GE_IMPL(val1, val2) CHECK_GE(val1, val2)
 #define QUICHE_CHECK_GT_IMPL(val1, val2) CHECK_GT(val1, val2)
+#define QUICHE_CHECK_OK_IMPL(value) CHECK((value).ok())
 
 #define QUICHE_DCHECK_IMPL(condition) DCHECK(condition)
 #define QUICHE_DCHECK_EQ_IMPL(val1, val2) DCHECK_EQ(val1, val2)
@@ -95,8 +116,8 @@
 
 namespace quic {
 template <typename T>
-QUICHE_EXPORT_PRIVATE inline std::ostream& operator<<(std::ostream& out,
-                                                      const std::vector<T>& v) {
+QUICHE_EXPORT inline std::ostream& operator<<(std::ostream& out,
+                                              const std::vector<T>& v) {
   out << "[";
   const char* sep = "";
   for (size_t i = 0; i < v.size(); ++i) {

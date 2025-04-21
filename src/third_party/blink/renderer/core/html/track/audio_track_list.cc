@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@ AudioTrackList::AudioTrackList(HTMLMediaElement& media_element)
     : TrackListBase<AudioTrack>(&media_element) {}
 
 bool AudioTrackList::HasEnabledTrack() const {
-  for (unsigned i = 0; i < length(); ++i) {
+  for (size_t i = 0; i < length(); ++i) {
     if (AnonymousIndexedGetter(i)->enabled())
       return true;
   }
@@ -23,6 +23,19 @@ bool AudioTrackList::HasEnabledTrack() const {
 
 const AtomicString& AudioTrackList::InterfaceName() const {
   return event_target_names::kAudioTrackList;
+}
+
+void AudioTrackList::TrackEnabled(const String& track_id, bool exclusive) {
+  for (size_t i = 0; i < length(); ++i) {
+    AudioTrack* track = AnonymousIndexedGetter(i);
+    if (track->id() != track_id) {
+      if (exclusive || track->IsExclusive()) {
+        track->ClearEnabled();
+      }
+    } else {
+      DCHECK(track->enabled());
+    }
+  }
 }
 
 }  // namespace blink

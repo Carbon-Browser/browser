@@ -1,8 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/common/apps/platform_apps/chrome_apps_api_provider.h"
+
+#include <string_view>
 
 #include "chrome/common/apps/platform_apps/api/api_features.h"
 #include "chrome/common/apps/platform_apps/api/generated_schemas.h"
@@ -47,7 +49,7 @@ bool ChromeAppsAPIProvider::IsAPISchemaGenerated(const std::string& name) {
   return api::ChromeAppsGeneratedSchemas::IsGenerated(name);
 }
 
-base::StringPiece ChromeAppsAPIProvider::GetAPISchema(const std::string& name) {
+std::string_view ChromeAppsAPIProvider::GetAPISchema(const std::string& name) {
   return api::ChromeAppsGeneratedSchemas::Get(name);
 }
 

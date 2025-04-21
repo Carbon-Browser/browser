@@ -1,10 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_MEDIA_CAST_REMOTING_CONNECTOR_H_
 #define CHROME_BROWSER_MEDIA_CAST_REMOTING_CONNECTOR_H_
 
+#include <optional>
 #include <set>
 #include <vector>
 
@@ -19,16 +20,27 @@
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
 class RenderFrameHost;
 class WebContents;
 }  // namespace content
 
-namespace media_router {
-class MediaRouter;
-}
+class MediaRemotingDialogCoordinator {
+ public:
+  using PermissionCallback = base::OnceCallback<void(bool)>;
+
+  MediaRemotingDialogCoordinator() = default;
+  MediaRemotingDialogCoordinator(const MediaRemotingDialogCoordinator&) =
+      delete;
+  MediaRemotingDialogCoordinator& operator=(
+      const MediaRemotingDialogCoordinator&) = delete;
+  virtual ~MediaRemotingDialogCoordinator() = default;
+
+  virtual bool Show(PermissionCallback permission_callback);
+  virtual void Hide();
+  virtual bool IsShowing() const;
+};
 
 // CastRemotingConnector connects a single source (a media element in a render
 // frame) with a single sink (a media player in a remote device). There is one
@@ -36,7 +48,7 @@ class MediaRouter;
 // collection of render frames), and it is created on-demand. The source in the
 // render process represents itself by providing a media::mojom::RemotingSource
 // service instance. The sink is represented by a MediaRemoter in the Cast Media
-// Router Provider that handles the communication with the remote device. The
+// Route Provider that handles the communication with the remote device. The
 // CastRemotingConnector and the MediaRemoter can communicate with each other
 // through the media::mojom::Remoter and media::mojom::RemotingSource interfaces
 // when a sink that is capable of remoting is available.
@@ -49,10 +61,8 @@ class MediaRouter;
 // notify when a sink becomes available for remoting, and to pass binary
 // messages from the sink back to the source.
 //
-// When the CastRemotingConnector is created, it registers itself in the
-// media_router::MediaRouter with a tab ID that uniquely identifies it. When a
-// mirroring route is created and available for remoting, the Cast MRP will
-// create a MediaRemoter and notify MediaRouter, which notifies the
+// When a mirroring route is created and available for remoting, the Cast MRP
+// will create a MediaRemoter and notify MediaRouter, which notifies the
 // CastRemotingConnector registered under the tab ID being remoted. At this
 // point, the CastRemotingConnector can communicate with the MediaRemoter. When
 // CastRemotingConnector gets notified that a sink is available, it notifies all
@@ -119,16 +129,10 @@ class CastRemotingConnector final : public base::SupportsUserData::Data,
 
   // Main constructor. |tab_id| refers to any remoted content managed
   // by this instance (i.e., any remoted content from one tab/WebContents).
-  using CancelPermissionRequestCallback = base::OnceClosure;
-  // Called with true to mean "allowed", false to mean "not allowed".
-  using PermissionResultCallback = base::OnceCallback<void(bool)>;
-  using PermissionRequestCallback =
-      base::RepeatingCallback<CancelPermissionRequestCallback(
-          PermissionResultCallback)>;
-  CastRemotingConnector(media_router::MediaRouter* router,
-                        PrefService* pref_service,
-                        SessionID tab_id,
-                        PermissionRequestCallback request_callback);
+  CastRemotingConnector(
+      PrefService* pref_service,
+      SessionID tab_id,
+      std::unique_ptr<MediaRemotingDialogCoordinator> dialog_coordinator);
 
   // Creates a RemotingBridge that implements the requested Remoter service, and
   // binds it to the interface |receiver|.
@@ -158,6 +162,8 @@ class CastRemotingConnector final : public base::SupportsUserData::Data,
   // source is allowed to be in a remoting session at a time, and that no source
   // may interfere with any other.
   void StartRemoting(RemotingBridge* bridge);
+  void StartWithPermissionAlreadyGranted(RemotingBridge* bridge);
+  bool StartRemotingCommon(RemotingBridge* bridge);
   void StartRemotingDataStreams(
       RemotingBridge* bridge,
       mojo::ScopedDataPipeConsumerHandle audio_pipe,
@@ -173,6 +179,10 @@ class CastRemotingConnector final : public base::SupportsUserData::Data,
                          const std::vector<uint8_t>& message);
   void EstimateTransmissionCapacity(
       media::mojom::Remoter::EstimateTransmissionCapacityCallback callback);
+
+  // Called by the permission dialog when it closes, to signal whether
+  // permission is allowed.
+  void OnDialogClosed(bool remoting_allowed);
 
   // Called after permission check. Either call |remoter_| to start remoting or
   // notify the source that start fails due to no permission.
@@ -204,12 +214,17 @@ class CastRemotingConnector final : public base::SupportsUserData::Data,
   // remoting if necessary.
   void OnPrefChanged();
 
-  const raw_ptr<media_router::MediaRouter> media_router_;
+  // Returns the user's remoting preference, or nullopt if it isn't set.
+  std::optional<bool> GetRemotingAllowedUserPref() const;
 
+  void set_remoting_allowed_for_testing(bool remoting_allowed) {
+    remoting_allowed_ = remoting_allowed;
+  }
+
+  const raw_ptr<PrefService> pref_service_;
   const SessionID tab_id_;
 
-  // The callback to get permission.
-  const PermissionRequestCallback permission_request_callback_;
+  std::unique_ptr<MediaRemotingDialogCoordinator> dialog_coordinator_;
 
   // Describes the remoting sink's metadata and its enabled features. The sink's
   // metadata is updated by the mirror service calling OnSinkAvailable() and
@@ -219,24 +234,19 @@ class CastRemotingConnector final : public base::SupportsUserData::Data,
   // Set of registered RemotingBridges, maintained by RegisterBridge() and
   // DeregisterBridge(). These pointers are always valid while they are in this
   // set.
-  std::set<RemotingBridge*> bridges_;
+  std::set<raw_ptr<RemotingBridge, SetExperimental>> bridges_;
 
   // When non-null, an active remoting session is taking place, with this
   // pointing to the RemotingBridge being used to communicate with the source.
-  raw_ptr<RemotingBridge> active_bridge_;
+  raw_ptr<RemotingBridge> active_bridge_ = nullptr;
 
   mojo::Receiver<media::mojom::RemotingSource> receiver_{this};
   mojo::Remote<media::mojom::Remoter> remoter_;
 
   // Permission is checked the first time remoting requested to start for each
   // casting session.
-  absl::optional<bool> remoting_allowed_;
+  std::optional<bool> remoting_allowed_;
 
-  // This callback is non-null when a dialog is showing to get user's
-  // permission, and is reset when the dialog closes.
-  CancelPermissionRequestCallback permission_request_cancel_callback_;
-
-  const raw_ptr<PrefService> pref_service_;
   PrefChangeRegistrar pref_change_registrar_;
 
   // Produces weak pointers that are only valid for the current remoting

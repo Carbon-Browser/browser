@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,8 +31,8 @@ void MicrophoneMuteSwitchMonitor::SetMicrophoneMuteSwitchValue(bool switch_on) {
   if (microphone_mute_switch_on_ == switch_on)
     return;
   microphone_mute_switch_on_ = switch_on;
-  for (auto& observer : observers_)
-    observer.OnMicrophoneMuteSwitchValueChanged(microphone_mute_switch_on_);
+  observers_.Notify(&Observer::OnMicrophoneMuteSwitchValueChanged,
+                    microphone_mute_switch_on_);
 }
 
 }  // namespace ui

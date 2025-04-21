@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include <utility>
 
 #include <xdg-shell-server-protocol.h>
-#include <xdg-shell-unstable-v6-server-protocol.h>
 
 #include "base/memory/raw_ptr.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -53,7 +52,7 @@ class MockXdgSurface : public ServerObject {
   // Has either toplevel role..
   std::unique_ptr<MockXdgTopLevel> xdg_toplevel_;
   // Or popup role.
-  raw_ptr<TestXdgPopup> xdg_popup_ = nullptr;
+  raw_ptr<TestXdgPopup, DanglingUntriaged> xdg_popup_ = nullptr;
 
   // MockSurface that is the ground for this xdg_surface.
   raw_ptr<wl_resource> surface_ = nullptr;

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -80,7 +80,7 @@ void SafeBrowsingHandler::CanShowModule(CanShowModuleCallback callback) {
     return;
   }
 
-  absl::optional<base::Time> latest_event_time =
+  std::optional<base::Time> latest_event_time =
       metrics_collector_->GetLatestSecuritySensitiveEventTimestamp();
   // Do not show if there is no security sensitive event after the latest
   // cooldown.

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -83,13 +83,11 @@ class VIEWS_EXPORT AXAuraObjCache : public aura::client::FocusChangeObserver {
 
   // Get all top level windows this cache knows about. Under classic ash and
   // SingleProcessMash this is a list of per-display root windows.
-  void GetTopLevelWindows(std::vector<AXAuraObjWrapper*>* children);
+  void GetTopLevelWindows(
+      std::vector<raw_ptr<AXAuraObjWrapper, VectorExperimental>>* children);
 
   // Get the object that has focus.
   AXAuraObjWrapper* GetFocus();
-
-  // Send a notification that the focused view may have changed.
-  void OnFocusedViewChanged();
 
   // Tell our delegate to fire an event on a given object.
   void FireEvent(AXAuraObjWrapper* aura_obj, ax::mojom::Event event_type);
@@ -122,6 +120,9 @@ class VIEWS_EXPORT AXAuraObjCache : public aura::client::FocusChangeObserver {
 
   View* GetFocusedView();
 
+  // Send a notification that the focused view may have changed.
+  void OnFocusedViewChanged();
+
   // aura::client::FocusChangeObserver override.
   void OnWindowFocused(aura::Window* gained_focus,
                        aura::Window* lost_focus) override;
@@ -141,7 +142,7 @@ class VIEWS_EXPORT AXAuraObjCache : public aura::client::FocusChangeObserver {
                       std::map<AuraView*, ui::AXNodeID>* aura_view_to_id_map);
 
   // The window that should take a11y focus. This is for a window that needs to
-  // work with accessiblity features, but cannot take real focus. Gets set to
+  // work with accessibility features, but cannot take real focus. Gets set to
   // null if the window is destroyed.
   raw_ptr<aura::Window> a11y_override_window_ = nullptr;
 
@@ -158,7 +159,7 @@ class VIEWS_EXPORT AXAuraObjCache : public aura::client::FocusChangeObserver {
 
   raw_ptr<Delegate> delegate_ = nullptr;
 
-  std::vector<aura::Window*> root_windows_;
+  std::vector<raw_ptr<aura::Window, VectorExperimental>> root_windows_;
 
   raw_ptr<aura::Window> focused_window_ = nullptr;
 

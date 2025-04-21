@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,7 @@ class MainThreadWorkletReportingProxyForTest final
   }
 
  private:
-  std::bitset<static_cast<size_t>(WebFeature::kNumberOfFeatures)>
+  std::bitset<static_cast<size_t>(WebFeature::kMaxValue) + 1>
       reported_features_;
 };
 
@@ -78,17 +78,19 @@ class MainThreadWorkletTest : public PageTestBase {
         MakeGarbageCollected<WorkletModuleResponsesMap>(),
         mojo::NullRemote() /* browser_interface_broker */,
         window->GetFrame()->Loader().CreateWorkerCodeCacheHost(),
-        BeginFrameProviderParams(), nullptr /* parent_permissions_policy */,
-        window->GetAgentClusterID(), ukm::kInvalidSourceId,
-        window->GetExecutionContextToken());
+        mojo::NullRemote() /* blob_url_store */, BeginFrameProviderParams(),
+        nullptr /* parent_permissions_policy */, window->GetAgentClusterID(),
+        ukm::kInvalidSourceId, window->GetExecutionContextToken());
     global_scope_ = MakeGarbageCollected<FakeWorkletGlobalScope>(
-        std::move(creation_params), *reporting_proxy_, &GetFrame(),
-        false /* create_microtask_queue */);
+        std::move(creation_params), *reporting_proxy_, &GetFrame());
     EXPECT_TRUE(global_scope_->IsMainThreadWorkletGlobalScope());
     EXPECT_FALSE(global_scope_->IsThreadedWorkletGlobalScope());
   }
 
-  void TearDown() override { global_scope_->Dispose(); }
+  void TearDown() override {
+    global_scope_->Dispose();
+    global_scope_->NotifyContextDestroyed();
+  }
 
  protected:
   std::unique_ptr<MainThreadWorkletReportingProxyForTest> reporting_proxy_;
@@ -150,7 +152,7 @@ TEST_F(MainThreadWorkletTest, UseCounter) {
   UseCounter::Count(global_scope_, kFeature1);
 
   // This feature is randomly selected from Deprecation::deprecationMessage().
-  const WebFeature kFeature2 = WebFeature::kPrefixedStorageInfo;
+  const WebFeature kFeature2 = WebFeature::kPaymentInstruments;
 
   // Deprecated API use on WorkletGlobalScope for the main thread should be
   // recorded in UseCounter on the Document.

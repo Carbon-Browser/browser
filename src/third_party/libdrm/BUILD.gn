@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 assert(is_linux || is_chromeos)
@@ -36,6 +36,9 @@ config("libdrm_config") {
 
   # glibc version >= 2.25 explicitly include <sys/sysmacros.h>
   cflags += [ "-DMAJOR_IN_SYSMACROS=1" ]
+
+  # TODO(b/357680612): unused function 'swap32'.
+  cflags += [ "-Wno-unused-function" ]
 
   if (is_clang) {
     cflags += [

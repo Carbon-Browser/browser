@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,9 +44,11 @@ void ShellAppDelegate::ResizeWebContents(content::WebContents* web_contents,
 content::WebContents* ShellAppDelegate::OpenURLFromTab(
     content::BrowserContext* context,
     content::WebContents* source,
-    const content::OpenURLParams& params) {
+    const content::OpenURLParams& params,
+    base::OnceCallback<void(content::NavigationHandle&)>
+        navigation_handle_callback) {
   NOTIMPLEMENTED();
-  return NULL;
+  return nullptr;
 }
 
 void ShellAppDelegate::AddNewContents(
@@ -54,7 +56,7 @@ void ShellAppDelegate::AddNewContents(
     std::unique_ptr<content::WebContents> new_contents,
     const GURL& target_url,
     WindowOpenDisposition disposition,
-    const gfx::Rect& initial_rect,
+    const blink::mojom::WindowFeatures& window_features,
     bool user_gesture) {
   NOTIMPLEMENTED();
 }
@@ -78,7 +80,7 @@ void ShellAppDelegate::RequestMediaAccessPermission(
 
 bool ShellAppDelegate::CheckMediaAccessPermission(
     content::RenderFrameHost* render_frame_host,
-    const GURL& security_origin,
+    const url::Origin& security_origin,
     blink::mojom::MediaStreamType type,
     const Extension* extension) {
   media_capture_util::VerifyMediaAccessPermission(type, extension);
@@ -113,7 +115,6 @@ bool ShellAppDelegate::TakeFocus(content::WebContents* web_contents,
 content::PictureInPictureResult ShellAppDelegate::EnterPictureInPicture(
     content::WebContents* web_contents) {
   NOTREACHED();
-  return content::PictureInPictureResult::kNotSupported;
 }
 
 void ShellAppDelegate::ExitPictureInPicture() {

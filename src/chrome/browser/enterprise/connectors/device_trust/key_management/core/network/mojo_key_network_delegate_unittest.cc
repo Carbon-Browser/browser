@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "base/test/task_environment.h"
 #include "base/test/test_future.h"
 #include "net/http/http_status_code.h"
+#include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/test/test_url_loader_factory.h"
 #include "services/network/test/test_utils.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -35,29 +36,29 @@ constexpr HttpResponseCode kHardFailureCode = 404;
 }  // namespace
 
 class MojoKeyNetworkDelegateTest : public testing::Test {
- public:
-  base::test::TaskEnvironment task_environment_{
-      base::test::TaskEnvironment::TimeSource::MOCK_TIME};
-
+ protected:
   void SetUp() override {
-    network_delegate =
-        std::make_unique<MojoKeyNetworkDelegate>(&test_url_loader_factory);
+    network_delegate_ = std::make_unique<MojoKeyNetworkDelegate>(
+        base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
+            &test_url_loader_factory_));
   }
 
   HttpResponseCode SendRequest() {
     base::test::TestFuture<HttpResponseCode> future;
-    network_delegate->SendPublicKeyToDmServer(
+    network_delegate_->SendPublicKeyToDmServer(
         GURL(kFakeDMServerUrl), kFakeDMToken, kFakeBody, future.GetCallback());
     return future.Get();
   }
 
-  void AddResponse(net::HttpStatusCode http_status) {
-    test_url_loader_factory.AddResponse(kFakeDMServerUrl, "", http_status);
+  void AddResponse(net::HttpStatusCode http_status,
+                   const std::string& body = "") {
+    test_url_loader_factory_.AddResponse(kFakeDMServerUrl, body, http_status);
   }
 
- protected:
-  network::TestURLLoaderFactory test_url_loader_factory;
-  std::unique_ptr<MojoKeyNetworkDelegate> network_delegate;
+  base::test::TaskEnvironment task_environment_{
+      base::test::TaskEnvironment::TimeSource::MOCK_TIME};
+  network::TestURLLoaderFactory test_url_loader_factory_;
+  std::unique_ptr<MojoKeyNetworkDelegate> network_delegate_;
 };
 
 // Tests a successful upload request.
@@ -75,10 +76,39 @@ TEST_F(MojoKeyNetworkDelegateTest, UploadRequest_MultipleSequentialRequests) {
   EXPECT_EQ(kSuccessCode, SendRequest());
 }
 
+// Tests two parallel requests.
+TEST_F(MojoKeyNetworkDelegateTest, UploadRequest_ParallelSuccess) {
+  base::test::TestFuture<HttpResponseCode> first_future;
+  network_delegate_->SendPublicKeyToDmServer(GURL(kFakeDMServerUrl),
+                                             kFakeDMToken, kFakeBody,
+                                             first_future.GetCallback());
+
+  base::test::TestFuture<HttpResponseCode> second_future;
+  network_delegate_->SendPublicKeyToDmServer(GURL(kFakeDMServerUrl),
+                                             kFakeDMToken, kFakeBody,
+                                             second_future.GetCallback());
+
+  ASSERT_EQ(test_url_loader_factory_.NumPending(), 2);
+
+  auto* first_pending_request = test_url_loader_factory_.GetPendingRequest(0U);
+  auto* second_pending_request = test_url_loader_factory_.GetPendingRequest(1U);
+
+  test_url_loader_factory_.SimulateResponseWithoutRemovingFromPendingList(
+      first_pending_request,
+      network::CreateURLResponseHead(net::HTTP_NOT_FOUND), "",
+      network::URLLoaderCompletionStatus(net::OK));
+  test_url_loader_factory_.SimulateResponseWithoutRemovingFromPendingList(
+      second_pending_request, network::CreateURLResponseHead(net::HTTP_OK), "",
+      network::URLLoaderCompletionStatus(net::OK));
+
+  EXPECT_EQ(first_future.Get(), kHardFailureCode);
+  EXPECT_EQ(second_future.Get(), kSuccessCode);
+}
+
 // Tests an upload request when no response headers were returned from
 // the url loader.
 TEST_F(MojoKeyNetworkDelegateTest, UploadRequest_EmptyHeader) {
-  test_url_loader_factory.AddResponse(
+  test_url_loader_factory_.AddResponse(
       GURL(kFakeDMServerUrl), network::mojom::URLResponseHead::New(), "",
       network::URLLoaderCompletionStatus(net::OK),
       network::TestURLLoaderFactory::Redirects());

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,14 @@
 
 #include "ash/public/cpp/ash_web_view.h"
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/gfx/geometry/rounded_corners_f.h"
 #include "ui/views/widget/widget_delegate.h"
+
+namespace views {
+class ClientView;
+}  // namespace views
 
 namespace ash {
 
@@ -18,9 +24,9 @@ class AssistantWebViewDelegate;
 class COMPONENT_EXPORT(ASSISTANT_UI) AssistantWebContainerView
     : public views::WidgetDelegateView,
       public AshWebView::Observer {
- public:
-  METADATA_HEADER(AssistantWebContainerView);
+  METADATA_HEADER(AssistantWebContainerView, views::WidgetDelegateView)
 
+ public:
   explicit AssistantWebContainerView(
       AssistantWebViewDelegate* web_container_view_delegate);
 
@@ -30,9 +36,16 @@ class COMPONENT_EXPORT(ASSISTANT_UI) AssistantWebContainerView
 
   ~AssistantWebContainerView() override;
 
+  AshWebView* web_view() {
+    return web_view_ptr_ ? web_view_ptr_.get() : web_view_.get();
+  }
+
   // views::WidgetDelegateView:
-  gfx::Size CalculatePreferredSize() const override;
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override;
   void ChildPreferredSizeChanged(views::View* child) override;
+  views::ClientView* CreateClientView(views::Widget* widget) override;
+  void OnThemeChanged() override;
 
   // AssistantWebView::Observer:
   void DidStopLoading() override;
@@ -49,17 +62,21 @@ class COMPONENT_EXPORT(ASSISTANT_UI) AssistantWebContainerView
   // Invoke to open the specified |url|.
   void OpenUrl(const GURL& url);
 
+  void SetBackgroundRadii(const gfx::RoundedCornersF& radii);
+
   void SetCanGoBackForTesting(bool can_go_back);
 
  private:
-  AshWebView* ContentsView();
   void InitLayout();
   void RemoveContents();
+  void UpdateBackground();
 
-  AssistantWebViewDelegate* const web_container_view_delegate_;
+  const raw_ptr<AssistantWebViewDelegate> web_container_view_delegate_;
 
-  std::unique_ptr<AshWebView> contents_view_;
-  AshWebView* contents_view_ptr_ = nullptr;
+  std::unique_ptr<AshWebView> web_view_;
+  raw_ptr<AshWebView, DanglingUntriaged> web_view_ptr_ = nullptr;
+
+  gfx::RoundedCornersF background_radii_;
 };
 
 }  // namespace ash

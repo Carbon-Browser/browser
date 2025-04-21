@@ -1,15 +1,15 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "chrome/browser/ui/webui/nearby_share/nearby_share_dialog_ui.h"
+
 #include "base/strings/stringprintf.h"
-#include "base/test/scoped_feature_list.h"
 #include "chrome/browser/nearby_sharing/common/nearby_share_features.h"
 #include "chrome/browser/sharesheet/sharesheet_controller.h"
 #include "chrome/browser/sharesheet/sharesheet_types.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
-#include "chrome/browser/ui/webui/nearby_share/nearby_share_dialog_ui.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
@@ -21,7 +21,8 @@
 
 namespace {
 
-// Keep in sync with //chrome/browser/resources/nearby_share/shared/types.js
+// Keep in sync with
+// chrome/browser/resources/chromeos/nearby_share/shared/types.ts
 enum class CloseReason {
   kUnknown = 0,
   kTransferStarted = 1,
@@ -39,16 +40,10 @@ class TestSharesheetController : public sharesheet::SharesheetController {
   }
   bool IsBubbleVisible() const override { return !last_result; }
 
-  absl::optional<::sharesheet::SharesheetResult> last_result;
+  std::optional<::sharesheet::SharesheetResult> last_result;
 };
 
 class NearbyShareDialogUITest : public InProcessBrowserTest {
- public:
-  NearbyShareDialogUITest() {
-    scoped_feature_list_.InitWithFeatures({features::kNearbySharing}, {});
-  }
-  ~NearbyShareDialogUITest() override = default;
-
  protected:
   content::WebContents* GetWebContentsForNearbyShareHost() const {
     GURL kUrl(content::GetWebUIURL(chrome::kChromeUINearbyShareHost));
@@ -62,12 +57,12 @@ class NearbyShareDialogUITest : public InProcessBrowserTest {
     return web_contents;
   }
 
-  base::test::ScopedFeatureList scoped_feature_list_;
   TestSharesheetController sharesheet_controller_;
 };
 
 std::string BuildCloseScript(CloseReason reason) {
-  return base::StringPrintf("chrome.send('close',[%d]);", reason);
+  return base::StringPrintf("chrome.send('close',[%d]);",
+                            static_cast<int>(reason));
 }
 
 }  // namespace
@@ -76,13 +71,9 @@ IN_PROC_BROWSER_TEST_F(NearbyShareDialogUITest, RendersComponent) {
   content::WebContents* web_contents = GetWebContentsForNearbyShareHost();
 
   // Assert that we render the nearby-share-app component.
-  int num_nearby_share_app = -1;
-  ASSERT_TRUE(content::ExecuteScriptAndExtractInt(
-      web_contents,
-      "domAutomationController.send("
-      "document.getElementsByTagName('nearby-share-app').length)",
-      &num_nearby_share_app));
-  EXPECT_EQ(1, num_nearby_share_app);
+  EXPECT_EQ(1, content::EvalJs(
+                   web_contents,
+                   "document.getElementsByTagName('nearby-share-app').length"));
 }
 
 IN_PROC_BROWSER_TEST_F(NearbyShareDialogUITest,
@@ -100,19 +91,19 @@ IN_PROC_BROWSER_TEST_F(NearbyShareDialogUITest,
   // Calling 'close' before a Sharesheet controller is registered via
   // |SetSharesheetController| does not result in a crash.
   std::string script = BuildCloseScript(CloseReason::kCancelled);
-  EXPECT_TRUE(content::ExecuteScript(web_contents, script));
+  EXPECT_TRUE(content::ExecJs(web_contents, script));
   EXPECT_FALSE(sharesheet_controller_.last_result);
 
   // The Sharesheet controller gets called on 'close' if it's been registered.
   nearby_ui->SetSharesheetController(&sharesheet_controller_);
-  EXPECT_TRUE(content::ExecuteScript(web_contents, script));
+  EXPECT_TRUE(content::ExecJs(web_contents, script));
   EXPECT_EQ(::sharesheet::SharesheetResult::kCancel,
             sharesheet_controller_.last_result);
 
   // Any subsequent calls to 'close' do not call the Sharesheet controller,
   // since that would result in a crash.
   sharesheet_controller_.last_result.reset();
-  EXPECT_TRUE(content::ExecuteScript(web_contents, script));
+  EXPECT_TRUE(content::ExecJs(web_contents, script));
   EXPECT_FALSE(sharesheet_controller_.last_result);
 }
 
@@ -128,7 +119,7 @@ IN_PROC_BROWSER_TEST_F(NearbyShareDialogUITest, CloseBubbleResults) {
 
     sharesheet_controller_.last_result.reset();
     nearby_ui->SetSharesheetController(&sharesheet_controller_);
-    EXPECT_TRUE(content::ExecuteScript(web_contents, BuildCloseScript(reason)));
+    EXPECT_TRUE(content::ExecJs(web_contents, BuildCloseScript(reason)));
 
     // Verify that the page-closed reason is translated into the correct
     // SharesheetResult and passed into CloseBubble().

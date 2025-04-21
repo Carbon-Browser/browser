@@ -1,10 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/display/display_list.h"
 
 #include "base/memory/ptr_util.h"
+#include "base/not_fatal_until.h"
 #include "base/observer_list.h"
 #include "ui/display/display_observer.h"
 
@@ -47,7 +48,7 @@ uint32_t DisplayList::UpdateDisplay(const Display& display) {
 
 uint32_t DisplayList::UpdateDisplay(const Display& display, Type type) {
   auto iter = FindDisplayByIdInternal(display.id());
-  DCHECK(iter != displays_.end());
+  CHECK(iter != displays_.end(), base::NotFatalUntil::M130);
 
   Display* local_display = &(*iter);
   uint32_t changed_values = 0;
@@ -84,10 +85,10 @@ uint32_t DisplayList::UpdateDisplay(const Display& display, Type type) {
     local_display->set_device_scale_factor(display.device_scale_factor());
     changed_values |= DisplayObserver::DISPLAY_METRIC_DEVICE_SCALE_FACTOR;
   }
-  if (local_display->color_spaces() != display.color_spaces() ||
+  if (local_display->GetColorSpaces() != display.GetColorSpaces() ||
       local_display->depth_per_component() != display.depth_per_component() ||
       local_display->color_depth() != display.color_depth()) {
-    local_display->set_color_spaces(display.color_spaces());
+    local_display->SetColorSpaces(display.GetColorSpaces());
     local_display->set_depth_per_component(display.depth_per_component());
     local_display->set_color_depth(display.color_depth());
     changed_values |= DisplayObserver::DISPLAY_METRIC_COLOR_SPACE;
@@ -98,6 +99,9 @@ uint32_t DisplayList::UpdateDisplay(const Display& display, Type type) {
   }
   if (local_display->GetSizeInPixel() != display.GetSizeInPixel()) {
     local_display->set_size_in_pixels(display.GetSizeInPixel());
+  }
+  if (local_display->native_origin() != display.native_origin()) {
+    local_display->set_native_origin(display.native_origin());
   }
   for (DisplayObserver& observer : observers_)
     observer.OnDisplayMetricsChanged(*local_display, changed_values);
@@ -120,7 +124,7 @@ void DisplayList::AddDisplay(const Display& display, Type type) {
 
 void DisplayList::RemoveDisplay(int64_t id) {
   auto iter = FindDisplayByIdInternal(id);
-  DCHECK(displays_.end() != iter);
+  CHECK(displays_.end() != iter, base::NotFatalUntil::M130);
   if (id == primary_id_) {
     // The primary display can only be removed if it is the last display.
     // Users must choose a new primary before removing an old primary display.
@@ -130,8 +134,7 @@ void DisplayList::RemoveDisplay(int64_t id) {
   const Display display = *iter;
   displays_.erase(iter);
   for (DisplayObserver& observer : observers_) {
-    observer.OnDisplayRemoved(display);
-    observer.OnDidRemoveDisplays();
+    observer.OnDisplaysRemoved({display});
   }
   DCHECK(IsValid());
 }

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <memory>
 #include <vector>
 
+#include "chromeos/dbus/common/dbus_callback.h"
 #include "chromeos/dbus/common/dbus_client.h"
-#include "chromeos/dbus/common/dbus_method_call_status.h"
 
 namespace ash {
 
@@ -21,7 +21,7 @@ namespace ash {
 // All methods should be called from the origin thread (UI thread)
 // which initializes the DBusThreadManager instance.
 class COMPONENT_EXPORT(ASH_DBUS_CEC_SERVICE) CecServiceClient
-    : public DBusClient {
+    : public chromeos::DBusClient {
  public:
   // Returns the global instance if initialized. May return null.
   static CecServiceClient* Get();
@@ -77,7 +77,7 @@ class COMPONENT_EXPORT(ASH_DBUS_CEC_SERVICE) CecServiceClient
   virtual void QueryDisplayCecPowerState(PowerStateCallback callback) = 0;
 
  protected:
-  // Let test code call protected DBusClient::Init().
+  // Let test code call protected chromeos::DBusClient::Init().
   friend class CecServiceClientTest;
 
   CecServiceClient();

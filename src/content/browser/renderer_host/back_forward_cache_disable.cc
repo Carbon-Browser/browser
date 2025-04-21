@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,8 +20,6 @@ std::string ReasonIdToString(
       return "FileChooser";
     case BackForwardCacheDisable::DisabledReasonId::kSerial:
       return "Serial";
-    case BackForwardCacheDisable::DisabledReasonId::kFileSystemAccess:
-      return "FileSystemAccess";
     case BackForwardCacheDisable::DisabledReasonId::kMediaDevicesDispatcherHost:
       return "MediaDevicesDispatcherHost";
     case BackForwardCacheDisable::DisabledReasonId::kWebBluetooth:
@@ -32,6 +30,8 @@ std::string ReasonIdToString(
       return "MediaSessionService";
     case BackForwardCacheDisable::DisabledReasonId::kScreenReader:
       return "ScreenReader";
+    case BackForwardCacheDisable::DisabledReasonId::kDiscarded:
+      return "Discarded";
   }
 }
 
@@ -39,8 +39,8 @@ std::string ReasonIdToString(
 BackForwardCache::DisabledReason BackForwardCacheDisable::DisabledReason(
     DisabledReasonId reason_id) {
   return BackForwardCache::DisabledReason(
-      {content::BackForwardCache::DisabledSource::kContent,
-       static_cast<BackForwardCache::DisabledReasonType>(reason_id),
-       ReasonIdToString(reason_id)});
+      content::BackForwardCache::DisabledSource::kContent,
+      static_cast<BackForwardCache::DisabledReasonType>(reason_id),
+      ReasonIdToString(reason_id), /*context=*/"", ReasonIdToString(reason_id));
 }
 }  // namespace content

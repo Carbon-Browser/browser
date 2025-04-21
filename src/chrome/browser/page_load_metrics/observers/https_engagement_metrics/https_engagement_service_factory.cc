@@ -1,13 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/page_load_metrics/observers/https_engagement_metrics/https_engagement_service_factory.h"
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/page_load_metrics/observers/https_engagement_metrics/https_engagement_service.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 // static
 HttpsEngagementService* HttpsEngagementServiceFactory::GetForBrowserContext(
@@ -18,24 +16,29 @@ HttpsEngagementService* HttpsEngagementServiceFactory::GetForBrowserContext(
 
 // static
 HttpsEngagementServiceFactory* HttpsEngagementServiceFactory::GetInstance() {
-  return base::Singleton<HttpsEngagementServiceFactory>::get();
+  static base::NoDestructor<HttpsEngagementServiceFactory> instance;
+  return instance.get();
 }
 
 HttpsEngagementServiceFactory::HttpsEngagementServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "HttpEngagementKeyService",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/40257657): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/41488885): Check if this service is needed for
+              // Ash Internals.
+              .WithAshInternals(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {}
 
-HttpsEngagementServiceFactory::~HttpsEngagementServiceFactory() {}
+HttpsEngagementServiceFactory::~HttpsEngagementServiceFactory() = default;
 
-KeyedService* HttpsEngagementServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+HttpsEngagementServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new HttpsEngagementService();
-}
-
-content::BrowserContext* HttpsEngagementServiceFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextRedirectedInIncognito(context);
+  return std::make_unique<HttpsEngagementService>();
 }
 
 bool HttpsEngagementServiceFactory::ServiceIsCreatedWithBrowserContext() const {

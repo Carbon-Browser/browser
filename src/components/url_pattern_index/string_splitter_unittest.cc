@@ -1,13 +1,13 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/url_pattern_index/string_splitter.h"
 
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "base/strings/string_piece.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace url_pattern_index {
@@ -68,13 +68,15 @@ TEST(StringSplitterTest, SplitThreeWords) {
       "one two three",     " one two three ",   "   one  two, three",
       "one,two\t\t three", "one, two, three, ",
   };
-  const std::vector<base::StringPiece> kResults = {
-      "one", "two", "three",
+  const std::vector<std::string_view> kResults = {
+      "one",
+      "two",
+      "three",
   };
 
   for (const char* string : kStrings) {
     auto splitter = CreateStringSplitter(string, IsTestSeparator);
-    std::vector<base::StringPiece> tokens(splitter.begin(), splitter.end());
+    std::vector<std::string_view> tokens(splitter.begin(), splitter.end());
     EXPECT_EQ(kResults, tokens);
   }
 }

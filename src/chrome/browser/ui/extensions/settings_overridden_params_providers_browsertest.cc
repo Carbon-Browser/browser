@@ -1,18 +1,23 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/extensions/settings_overridden_params_providers.h"
 
+#include "base/containers/contains.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "chrome/browser/extensions/extension_browsertest.h"
 #include "chrome/browser/extensions/extension_service.h"
+#include "chrome/browser/extensions/extension_util.h"
 #include "chrome/browser/extensions/settings_api_helpers.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/ui_features.h"
 #include "chrome/test/base/search_test_utils.h"
 #include "components/search_engines/search_engines_test_util.h"
 #include "components/search_engines/template_url.h"
@@ -20,7 +25,6 @@
 #include "content/public/test/browser_test.h"
 #include "extensions/browser/extension_system.h"
 #include "extensions/common/extension_builder.h"
-#include "extensions/common/value_builder.h"
 #include "extensions/test/test_extension_dir.h"
 
 class SettingsOverriddenParamsProvidersBrowserTest
@@ -36,8 +40,8 @@ class SettingsOverriddenParamsProvidersBrowserTest
   const extensions::Extension* AddExtensionControllingSearch(
       const char* path = "search_provider_override") {
     const extensions::Extension* extension =
-        InstallExtensionWithPermissionsGranted(
-            test_data_dir_.AppendASCII("search_provider_override"), 1);
+        InstallExtensionWithPermissionsGranted(test_data_dir_.AppendASCII(path),
+                                               1);
     EXPECT_EQ(extension,
               extensions::GetExtensionOverridingSearchEngine(profile()));
     return extension;
@@ -64,20 +68,20 @@ class SettingsOverriddenParamsProvidersBrowserTest
     TemplateURLService* const template_url_service = GetTemplateURLService();
     TemplateURLService::TemplateURLVector template_urls =
         template_url_service->GetTemplateURLs();
-    auto iter =
-        std::find_if(template_urls.begin(), template_urls.end(),
-                     [template_url_service, new_search_shows_in_default_list](
-                         const TemplateURL* turl) {
-                       return !turl->HasGoogleBaseURLs(
-                                  template_url_service->search_terms_data()) &&
-                              template_url_service->ShowInDefaultList(turl) ==
-                                  new_search_shows_in_default_list;
-                     });
+    auto iter = base::ranges::find_if(
+        template_urls, [template_url_service, new_search_shows_in_default_list](
+                           const TemplateURL* turl) {
+          return !turl->HasGoogleBaseURLs(
+                     template_url_service->search_terms_data()) &&
+                 template_url_service->ShowInDefaultList(turl) ==
+                     new_search_shows_in_default_list;
+        });
     ASSERT_NE(template_urls.end(), iter);
     // iter != template_urls.end());
     template_url_service->SetUserSelectedDefaultSearchProvider(*iter);
-    if (new_turl_out)
+    if (new_turl_out) {
       *new_turl_out = *iter;
+    }
   }
 
   TemplateURLService* GetTemplateURLService() {
@@ -95,21 +99,21 @@ class SettingsOverriddenParamsProvidersBrowserTest
 IN_PROC_BROWSER_TEST_F(SettingsOverriddenParamsProvidersBrowserTest,
                        GetExtensionControllingSearch) {
   // With no extensions installed, there should be no controlling extension.
-  EXPECT_EQ(absl::nullopt,
+  EXPECT_EQ(std::nullopt,
             settings_overridden_params::GetSearchOverriddenParams(profile()));
 
   // Install an extension, but not one that overrides the default search engine.
   // There should still be no controlling extension.
   InstallExtensionWithPermissionsGranted(
       test_data_dir_.AppendASCII("simple_with_icon"), 1);
-  EXPECT_EQ(absl::nullopt,
+  EXPECT_EQ(std::nullopt,
             settings_overridden_params::GetSearchOverriddenParams(profile()));
 
   // Finally, install an extension that overrides the default search engine.
   // It should be the controlling extension.
   const extensions::Extension* search_extension =
       AddExtensionControllingSearch();
-  absl::optional<ExtensionSettingsOverriddenDialog::Params> params =
+  std::optional<ExtensionSettingsOverriddenDialog::Params> params =
       settings_overridden_params::GetSearchOverriddenParams(profile());
   ASSERT_TRUE(params);
   EXPECT_EQ(search_extension->id(), params->controlling_extension_id);
@@ -124,6 +128,32 @@ IN_PROC_BROWSER_TEST_F(SettingsOverriddenParamsProvidersBrowserTest,
 }
 
 IN_PROC_BROWSER_TEST_F(SettingsOverriddenParamsProvidersBrowserTest,
+                       LongNameExtensionControllingSearch) {
+  // With no extensions installed, there should be no controlling extension.
+  ASSERT_EQ(std::nullopt,
+            settings_overridden_params::GetSearchOverriddenParams(profile()));
+
+  // Install an extensions which overrides the default search engine and has a
+  // long name.
+  const extensions::Extension* search_extension =
+      AddExtensionControllingSearch("search_provider_override_long_name");
+  std::optional<const ExtensionSettingsOverriddenDialog::Params> params =
+      settings_overridden_params::GetSearchOverriddenParams(profile());
+  ASSERT_TRUE(params);
+  EXPECT_EQ(search_extension->id(), params->controlling_extension_id);
+
+  const std::u16string extension_name =
+      base::UTF8ToUTF16(search_extension->name());
+  const std::u16string truncated_name =
+      extensions::util::GetFixupExtensionNameForUIDisplay(extension_name);
+  ASSERT_LT(truncated_name.size(), extension_name.size());
+
+  // The dialog message should contain the truncated name.
+  EXPECT_TRUE(base::Contains(params->dialog_message, truncated_name));
+  EXPECT_FALSE(base::Contains(params->dialog_message, extension_name));
+}
+
+IN_PROC_BROWSER_TEST_F(SettingsOverriddenParamsProvidersBrowserTest,
                        GetExtensionControllingSearch_NonGoogleSearch) {
   constexpr bool kNewSearchShowsInDefaultList = true;
   const TemplateURL* new_turl = nullptr;
@@ -134,7 +164,7 @@ IN_PROC_BROWSER_TEST_F(SettingsOverriddenParamsProvidersBrowserTest,
   const extensions::Extension* extension = AddExtensionControllingSearch();
   ASSERT_TRUE(extension);
 
-  absl::optional<ExtensionSettingsOverriddenDialog::Params> params =
+  std::optional<ExtensionSettingsOverriddenDialog::Params> params =
       settings_overridden_params::GetSearchOverriddenParams(profile());
   ASSERT_TRUE(params);
   EXPECT_EQ(base::StringPrintf("Change back to %s?", new_search_name.c_str()),
@@ -155,7 +185,7 @@ IN_PROC_BROWSER_TEST_F(SettingsOverriddenParamsProvidersBrowserTest,
   const extensions::Extension* extension = AddExtensionControllingSearch();
   ASSERT_TRUE(extension);
 
-  absl::optional<ExtensionSettingsOverriddenDialog::Params> params =
+  std::optional<ExtensionSettingsOverriddenDialog::Params> params =
       settings_overridden_params::GetSearchOverriddenParams(profile());
   ASSERT_TRUE(params);
   EXPECT_EQ("Did you mean to change your search provider?",
@@ -169,10 +199,10 @@ IN_PROC_BROWSER_TEST_F(
   ASSERT_TRUE(first);
 
   const extensions::Extension* second =
-      AddExtensionControllingSearch("search_provider_override2");
+      AddExtensionControllingSearch("search_provider_override_2");
   ASSERT_TRUE(second);
 
-  absl::optional<ExtensionSettingsOverriddenDialog::Params> params =
+  std::optional<ExtensionSettingsOverriddenDialog::Params> params =
       settings_overridden_params::GetSearchOverriddenParams(profile());
   ASSERT_TRUE(params);
   EXPECT_EQ(u"Did you mean to change your search provider?",
@@ -203,7 +233,8 @@ IN_PROC_BROWSER_TEST_F(SettingsOverriddenParamsProvidersBrowserTest,
                "prepopulated_id": %d,
                "is_default": true
              }
-           }
+           },
+           "permissions": ["storage"]
          })";
   extensions::TestExtensionDir test_dir;
 
@@ -219,7 +250,7 @@ IN_PROC_BROWSER_TEST_F(SettingsOverriddenParamsProvidersBrowserTest,
   EXPECT_EQ(extension,
             extensions::GetExtensionOverridingSearchEngine(profile()));
 
-  absl::optional<ExtensionSettingsOverriddenDialog::Params> params =
+  std::optional<ExtensionSettingsOverriddenDialog::Params> params =
       settings_overridden_params::GetSearchOverriddenParams(profile());
   EXPECT_FALSE(params) << "Unexpected params: " << params->dialog_title;
 }
@@ -251,7 +282,8 @@ IN_PROC_BROWSER_TEST_F(SettingsOverriddenParamsProvidersBrowserTest,
                "favicon_url": "https://example.com/favicon.ico",
                "is_default": true
              }
-           }
+           },
+           "permissions": ["storage"]
          })";
 
   extensions::TestExtensionDir test_dir;
@@ -267,9 +299,110 @@ IN_PROC_BROWSER_TEST_F(SettingsOverriddenParamsProvidersBrowserTest,
   EXPECT_EQ(extension,
             extensions::GetExtensionOverridingSearchEngine(profile()));
 
-  absl::optional<ExtensionSettingsOverriddenDialog::Params> params =
+  std::optional<ExtensionSettingsOverriddenDialog::Params> params =
       settings_overridden_params::GetSearchOverriddenParams(profile());
   EXPECT_FALSE(params) << "Unexpected params: " << params->dialog_title;
+}
+
+class LightweightSettingsOverriddenParamsProvidersBrowserTest
+    : public SettingsOverriddenParamsProvidersBrowserTest {
+ public:
+  LightweightSettingsOverriddenParamsProvidersBrowserTest() {
+    feature_list_.InitAndEnableFeature(
+        features::kLightweightExtensionOverrideConfirmations);
+  }
+
+ private:
+  base::test::ScopedFeatureList feature_list_;
+};
+
+// Tests that, with the lightweight settings overrides feature enabled, the
+// settings overridden dialog isn't shown for a simple override extension, but
+// would be if the extension is then updated to have more capabilities.
+IN_PROC_BROWSER_TEST_F(LightweightSettingsOverriddenParamsProvidersBrowserTest,
+                       DialogNotShownForSimpleOverridesAndIsAfterUpdate) {
+  extensions::TestExtensionDir dir_v1;
+  static constexpr char kManifestV1[] =
+      R"({
+           "name": "Search Override",
+           "version": "0.1",
+           "manifest_version": 3,
+           "chrome_settings_overrides": {
+             "search_provider": {
+               "search_url": "https://example.com/?q={searchTerms}",
+               "name": "New Search",
+               "keyword": "word",
+               "encoding": "UTF-8",
+               "favicon_url": "https://example.com/favicon.ico",
+               "is_default": true
+             }
+           }
+         })";
+  dir_v1.WriteManifest(kManifestV1);
+  dir_v1.WriteFile(FILE_PATH_LITERAL("page.html"), "hello world!");
+
+  extensions::TestExtensionDir dir_v2;
+  static constexpr char kManifestV2[] =
+      R"({
+           "name": "Search Override",
+           "version": "0.2",
+           "manifest_version": 3,
+           "chrome_settings_overrides": {
+             "search_provider": {
+               "search_url": "https://example.com/?q={searchTerms}",
+               "name": "New Search",
+               "keyword": "word",
+               "encoding": "UTF-8",
+               "favicon_url": "https://example.com/favicon.ico",
+               "is_default": true
+             }
+           },
+           "permissions": ["storage"]
+         })";
+  dir_v2.WriteManifest(kManifestV2);
+  dir_v2.WriteFile(FILE_PATH_LITERAL("page.html"), "hello world!");
+
+  // Borrow a .pem file to have consistent IDs in the .crx files.
+  base::FilePath pem_path =
+      test_data_dir_.AppendASCII("permissions/update.pem");
+
+  base::ScopedAllowBlockingForTesting allow_blocking;
+  base::ScopedTempDir scoped_temp_dir;
+  EXPECT_TRUE(scoped_temp_dir.CreateUniqueTempDir());
+
+  base::FilePath v1_crx_path = PackExtensionWithOptions(
+      dir_v1.UnpackedPath(), scoped_temp_dir.GetPath().AppendASCII("v1.crx"),
+      pem_path, base::FilePath());
+  base::FilePath v2_crx_path = PackExtensionWithOptions(
+      dir_v2.UnpackedPath(), scoped_temp_dir.GetPath().AppendASCII("v2.crx"),
+      pem_path, base::FilePath());
+
+  // Install v1 of the extension. Since this is a simple override, the dialog
+  // should not display.
+  const extensions::Extension* extension =
+      InstallExtensionWithPermissionsGranted(v1_crx_path, 1);
+  ASSERT_TRUE(extension);
+
+  {
+    std::optional<ExtensionSettingsOverriddenDialog::Params> params =
+        settings_overridden_params::GetSearchOverriddenParams(profile());
+    ASSERT_TRUE(params);
+    ExtensionSettingsOverriddenDialog controller(std::move(*params), profile());
+    EXPECT_FALSE(controller.ShouldShow());
+  }
+
+  // Update the extension to v2. Now, the dialog *should* show, since the
+  // extension is no longer considered a simple override.
+  extension = UpdateExtension(extension->id(), v2_crx_path, 0);
+  EXPECT_TRUE(extension);
+
+  {
+    std::optional<ExtensionSettingsOverriddenDialog::Params> params =
+        settings_overridden_params::GetSearchOverriddenParams(profile());
+    ASSERT_TRUE(params);
+    ExtensionSettingsOverriddenDialog controller(std::move(*params), profile());
+    EXPECT_TRUE(controller.ShouldShow());
+  }
 }
 
 #endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
@@ -282,14 +415,13 @@ IN_PROC_BROWSER_TEST_F(SettingsOverriddenParamsProvidersBrowserTest,
   TemplateURLService* const template_url_service = GetTemplateURLService();
   TemplateURLService::TemplateURLVector template_urls =
       template_url_service->GetTemplateURLs();
-  auto iter = std::find_if(template_urls.begin(), template_urls.end(),
-                           [template_url_service](const TemplateURL* turl) {
-                             // For the test, we can be a bit lazier and just
-                             // use HasGoogleBaseURLs() instead of getting the
-                             // full search URL.
-                             return !turl->HasGoogleBaseURLs(
-                                 template_url_service->search_terms_data());
-                           });
+  auto iter = base::ranges::find_if_not(
+      template_urls, [template_url_service](const TemplateURL* turl) {
+        // For the test, we can be a bit lazier and just use HasGoogleBaseURLs()
+        // instead of getting the full search URL.
+        return turl->HasGoogleBaseURLs(
+            template_url_service->search_terms_data());
+      });
   ASSERT_TRUE(iter != template_urls.end());
   template_url_service->SetUserSelectedDefaultSearchProvider(*iter);
 
@@ -297,7 +429,7 @@ IN_PROC_BROWSER_TEST_F(SettingsOverriddenParamsProvidersBrowserTest,
 
   // The dialog should be the generic version, rather than prompting to go back
   // to the default.
-  absl::optional<ExtensionSettingsOverriddenDialog::Params> params =
+  std::optional<ExtensionSettingsOverriddenDialog::Params> params =
       settings_overridden_params::GetNtpOverriddenParams(profile());
   ASSERT_TRUE(params);
   EXPECT_EQ(extension->id(), params->controlling_extension_id);

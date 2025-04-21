@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/browser.h"
@@ -21,7 +21,7 @@
 #include "ui/views/window/dialog_delegate.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ash/login/ui/login_display_host.h"
+#include "chrome/browser/ui/ash/login/login_display_host.h"
 #endif
 
 namespace chromeos {
@@ -30,8 +30,8 @@ namespace {
 
 gfx::NativeWindow GetBrowserParentWindow() {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  if (LoginDisplayHost::default_host())
-    return LoginDisplayHost::default_host()->GetNativeWindow();
+  if (ash::LoginDisplayHost::default_host())
+    return ash::LoginDisplayHost::default_host()->GetNativeWindow();
 #endif
   Browser* browser =
       chrome::FindTabbedBrowser(ProfileManager::GetPrimaryUserProfile(), true);
@@ -55,7 +55,7 @@ void SecurityTokenPinDialogHostPopupImpl::ShowSecurityTokenPinDialog(
     bool enable_user_input,
     security_token_pin::ErrorLabel error_label,
     int attempts_left,
-    const absl::optional<AccountId>& /*authenticating_user_account_id*/,
+    const std::optional<AccountId>& /*authenticating_user_account_id*/,
     SecurityTokenPinEnteredCallback pin_entered_callback,
     SecurityTokenPinDialogClosedCallback pin_dialog_closed_callback) {
   DCHECK(!caller_extension_name.empty());

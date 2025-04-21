@@ -30,6 +30,7 @@
 #include "third_party/blink/renderer/core/html/forms/type_ahead.h"
 
 #include "third_party/blink/renderer/core/events/keyboard_event.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/wtf/text/character_names.h"
 #include "third_party/blink/renderer/platform/wtf/text/unicode.h"
 
@@ -53,6 +54,7 @@ static String StripLeadingWhiteSpace(const String& string) {
 }
 
 int TypeAhead::HandleEvent(const KeyboardEvent& event,
+                           UChar charCode,
                            MatchModeFlags match_mode) {
   if (last_type_time_) {
     if (event.PlatformTimeStamp() < *last_type_time_)
@@ -64,12 +66,11 @@ int TypeAhead::HandleEvent(const KeyboardEvent& event,
     // If |last_type_time_| is null, there should be no type ahead session in
     // progress. Thus, |buffer_|, which represents a partial match, should be
     // empty.
-    DCHECK(buffer_.IsEmpty());
+    DCHECK(buffer_.empty());
   }
   last_type_time_ = event.PlatformTimeStamp();
 
-  UChar c = event.charCode();
-  buffer_.Append(c);
+  buffer_.Append(charCode);
 
   int option_count = data_source_->OptionCount();
   if (option_count < 1)
@@ -77,38 +78,31 @@ int TypeAhead::HandleEvent(const KeyboardEvent& event,
 
   int search_start_offset = 1;
   String prefix;
-  if (match_mode & kCycleFirstChar && c == repeating_char_) {
+  if (match_mode & kCycleFirstChar && charCode == repeating_char_) {
     // The user is likely trying to cycle through all the items starting
     // with this character, so just search on the character.
-    prefix = String(&c, 1u);
-    repeating_char_ = c;
+    prefix = String(base::span_from_ref(charCode));
+    repeating_char_ = charCode;
   } else if (match_mode & kMatchPrefix) {
     prefix = buffer_.ToString();
     if (buffer_.length() > 1) {
       repeating_char_ = 0;
       search_start_offset = 0;
     } else {
-      repeating_char_ = c;
+      repeating_char_ = charCode;
     }
   }
 
-  if (!prefix.IsEmpty()) {
+  if (!prefix.empty()) {
     int selected = data_source_->IndexOfSelectedOption();
     int index = (selected < 0 ? 0 : selected) + search_start_offset;
     index %= option_count;
 
-    // Compute a case-folded copy of the prefix string before beginning the
-    // search for a matching element. This code uses foldCase to work around the
-    // fact that String::startWith does not fold non-ASCII characters. This code
-    // can be changed to use startWith once that is fixed.
-    String prefix_with_case_folded(prefix.FoldCase());
     for (int i = 0; i < option_count; ++i, index = (index + 1) % option_count) {
-      // Fold the option string and check if its prefix is equal to the folded
-      // prefix.
-      String text = data_source_->OptionAtIndex(index);
-      if (StripLeadingWhiteSpace(text).FoldCase().StartsWith(
-              prefix_with_case_folded))
+      String text = StripLeadingWhiteSpace(data_source_->OptionAtIndex(index));
+      if (text.StartsWithIgnoringCaseAndAccents(prefix)) {
         return index;
+      }
     }
   }
 

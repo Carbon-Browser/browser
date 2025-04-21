@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -131,7 +131,7 @@ ui::EventDispatchDetails SideSwipeDetector::RewriteEvent(
     }
 
     // Detect the beginning of a system gesture swipe.
-    if (touch_event->type() != ui::ET_TOUCH_PRESSED) {
+    if (touch_event->type() != ui::EventType::kTouchPressed) {
       return SendEvent(continuation, &event);
     }
 
@@ -173,7 +173,7 @@ ui::EventDispatchDetails SideSwipeDetector::RewriteEvent(
 
   // The finger has lifted, which means the end of the gesture, or if the finger
   // hasn't travelled far enough, replay the original events.
-  if (touch_event->type() == ui::ET_TOUCH_RELEASED) {
+  if (touch_event->type() == ui::EventType::kTouchReleased) {
     DVLOG(1) << "gesture release; time since press: "
              << current_swipe_time_.Elapsed().InMilliseconds() << "ms @ "
              << touch_location.ToString();

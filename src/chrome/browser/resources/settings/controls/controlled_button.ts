@@ -1,17 +1,16 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import '//resources/cr_elements/cr_button/cr_button.m.js';
-import '//resources/cr_elements/policy/cr_policy_pref_indicator.m.js';
-import '//resources/cr_elements/shared_vars_css.m.js';
-import '../settings_shared.css.js';
+import '//resources/cr_elements/cr_button/cr_button.js';
+import '/shared/settings/controls/cr_policy_pref_indicator.js';
+import '//resources/cr_elements/cr_shared_vars.css.js';
 
 import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {CrPolicyPrefMixin} from '/shared/settings/controls/cr_policy_pref_mixin.js';
+import {PrefControlMixin} from '/shared/settings/controls/pref_control_mixin.js';
 
 import {getTemplate} from './controlled_button.html.js';
-import {CrPolicyPrefMixin} from './cr_policy_pref_mixin.js';
-import {PrefControlMixin} from './pref_control_mixin.js';
 
 const ControlledButtonElementBase =
     CrPolicyPrefMixin(PrefControlMixin(PolymerElement));

@@ -1,15 +1,21 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "third_party/blink/renderer/platform/audio/vector_math.h"
 
-#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <numeric>
 #include <random>
 
+#include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
@@ -76,13 +82,15 @@ class TestVector {
     STACK_ALLOCATED();
 
    public:
-    // These types are used by std::iterator_traits used by std::equal used by
-    // TestVector::operator==.
+    // These types are used by std::iterator_traits used by base::ranges::equal
+    // used by TestVector::operator==.
     using difference_type = ptrdiff_t;
     using iterator_category = std::bidirectional_iterator_tag;
     using pointer = T*;
     using reference = T&;
     using value_type = T;
+
+    constexpr Iterator() = default;
 
     Iterator(T* p, int stride) : p_(p), stride_(stride) {}
 
@@ -109,8 +117,8 @@ class TestVector {
     T& operator*() const { return *p_; }
 
    private:
-    T* p_;
-    size_t stride_;
+    T* p_ = nullptr;
+    size_t stride_ = 0;
   };
 
  public:
@@ -130,7 +138,7 @@ class TestVector {
                    primary_vector.memory_layout(),
                    primary_vector.size()) {}
 
-  Iterator begin() const { return Iterator(p_, stride()); }
+  Iterator begin() const { return Iterator(p_.get(), stride()); }
   Iterator end() const { return Iterator(p_ + size() * stride(), stride()); }
   ReverseIterator rbegin() const { return ReverseIterator(end()); }
   ReverseIterator rend() const { return ReverseIterator(begin()); }
@@ -140,7 +148,7 @@ class TestVector {
   int stride() const { return static_cast<int>(memory_layout()->stride); }
 
   bool operator==(const TestVector& other) const {
-    return std::equal(begin(), end(), other.begin(), other.end(), Equal);
+    return base::ranges::equal(*this, other, Equal);
   }
   T& operator[](size_t i) const { return p_[i * stride()]; }
 
@@ -159,8 +167,8 @@ class TestVector {
     return reinterpret_cast<size_t>(p) % kMaxByteAlignment;
   }
 
-  T* p_;
-  const MemoryLayout* memory_layout_;
+  raw_ptr<T, AllowPtrArithmetic> p_;
+  raw_ptr<const MemoryLayout> memory_layout_;
   size_t size_;
 };
 
@@ -235,7 +243,7 @@ class VectorMathTest : public testing::Test {
     return sources_[i];
   }
 
-  static void SetUpTestCase() {
+  static void SetUpTestSuite() {
     std::minstd_rand generator(3141592653u);
     // Fill in source buffers with finite random floats.
     std::uniform_real_distribution<float> float_distribution(-10.0f, 10.0f);
@@ -401,7 +409,7 @@ TEST_F(VectorMathTest, Vsma) {
       expected_dest[i] = dest_source[i] + scale * source[i];
     }
     for (auto& dest : GetSecondaryVectors(GetDestination(1u), source)) {
-      std::copy(dest_source.begin(), dest_source.end(), dest.begin());
+      base::ranges::copy(dest_source, dest.begin());
       Vsma(source.p(), source.stride(), &scale, dest.p(), dest.stride(),
            source.size());
       // Different optimizations may use different precisions for intermediate

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,8 +16,13 @@ HelpBubbleWebUI::HelpBubbleWebUI(HelpBubbleHandlerBase* handler,
     : handler_(handler), anchor_id_(anchor_id) {
   CHECK(handler_);
 }
+
 HelpBubbleWebUI::~HelpBubbleWebUI() {
-  Close();
+  Close(HelpBubble::CloseReason::kBubbleDestroyed);
+}
+
+content::WebContents* HelpBubbleWebUI::GetWebContents() {
+  return is_open() ? handler_->GetWebContents() : nullptr;
 }
 
 bool HelpBubbleWebUI::ToggleFocusForAccessibility() {

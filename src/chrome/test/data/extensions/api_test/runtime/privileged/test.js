@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@ var succeed = chrome.test.succeed;
 
 const isServiceWorker = ('ServiceWorkerGlobalScope' in self);
 const extensionId = 'iegclhlplifhodhkoafiokenjoapiobj';
-const serviceWorkerScriptName = 'generated_service_worker__.js';
+const serviceWorkerScriptName = 'test.js';
 
 function checkIsDefined(prop) {
   if (!chrome.runtime) {
@@ -60,7 +60,11 @@ chrome.test.runTests([
     }
     assertEq('chrome.runtime API Test', manifest.name);
     assertEq('1', manifest.version);
-    assertEq(2, manifest.manifest_version);
+    if (isServiceWorker) {
+      assertEq(3, manifest.manifest_version);
+    } else {
+      assertEq(2, manifest.manifest_version);
+    }
     if (manifest.background.scripts) {
       assertEq(['test.js'], manifest.background.scripts);
     } else {

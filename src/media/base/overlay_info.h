@@ -1,21 +1,22 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_BASE_OVERLAY_INFO_H_
 #define MEDIA_BASE_OVERLAY_INFO_H_
 
-#include "base/callback_forward.h"
+#include <optional>
+
+#include "base/functional/callback_forward.h"
 #include "base/unguessable_token.h"
 #include "media/base/media_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace media {
 
 struct MEDIA_EXPORT OverlayInfo {
   // An unset routing token indicates "do not use any routing token".  A null
   // routing token isn't serializable, else we'd probably use that instead.
-  using RoutingToken = absl::optional<base::UnguessableToken>;
+  using RoutingToken = std::optional<base::UnguessableToken>;
 
   OverlayInfo();
   OverlayInfo(const OverlayInfo&);

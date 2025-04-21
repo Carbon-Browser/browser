@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,20 @@ import "safebrowsing.proto";
 option optimize_for = LITE_RUNTIME;
 
 package safe_browsing;
+
+message HashFile {
+  // The size of hash prefixes stored in this file.
+  optional int32 prefix_size = 1;
+
+  // The file extension of this file. This extension should be added to the end
+  // of the store path.
+  optional string extension = 2;
+
+  reserved 3;
+
+  // The total size of the file.
+  optional uint64 file_size = 4;
+}
 
 // The message that's serialized to disk when a store update is processed.
 message V4StoreFileFormat {
@@ -24,4 +38,7 @@ message V4StoreFileFormat {
   // Information about the store and the hash-prefix updates.
   optional FetchThreatListUpdatesResponse.ListUpdateResponse
       list_update_response = 3;
+
+  // Information on hashes stored in separate files.
+  repeated HashFile hash_files = 4;
 }

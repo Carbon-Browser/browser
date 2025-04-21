@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,9 +28,8 @@ std::vector<uint8_t> MediaStorageIdSalt::GetSalt(PrefService* pref_service) {
     }
 
     // If the salt doesn't exist, generate a new one.
-    salt.resize(kSaltLength);
-    crypto::RandBytes(salt.data(), salt.size());
-    encoded_salt = base::HexEncode(salt.data(), salt.size());
+    salt = crypto::RandBytesAsVector(kSaltLength);
+    encoded_salt = base::HexEncode(salt);
     pref_service->SetString(prefs::kMediaStorageIdSalt, encoded_salt);
   }
 

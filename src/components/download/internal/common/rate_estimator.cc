@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,7 @@ RateEstimator::RateEstimator(base::TimeDelta bucket_time,
   ResetBuckets(now);
 }
 
-RateEstimator::~RateEstimator() {}
+RateEstimator::~RateEstimator() = default;
 
 void RateEstimator::Increment(uint32_t count) {
   Increment(count, TimeTicks::Now());

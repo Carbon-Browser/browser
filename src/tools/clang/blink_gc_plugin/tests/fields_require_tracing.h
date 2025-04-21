@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,11 +36,18 @@ private:
 };
 
 class HeapObject : public GarbageCollected<HeapObject> {
+  static constexpr int array_size = 2;
 public:
  void Trace(Visitor*) const;
 
 private:
     PartObject m_part;
+    Member<HeapObject> m_array1[array_size];
+    std::array<Member<HeapObject>, array_size> m_array2;
+    Member<HeapObject> m_traced_array1[array_size];
+    Member<HeapObject> m_traced_array2[array_size];
+    std::array<Member<HeapObject>, array_size> m_traced_array3;
+    std::array<Member<HeapObject>, array_size> m_traced_array4;
     Member<HeapObject> m_obj;
 };
 

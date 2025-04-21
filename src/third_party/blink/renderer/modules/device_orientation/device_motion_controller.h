@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,7 @@ namespace blink {
 class DeviceMotionEventPump;
 class Event;
 class ScriptState;
+class V8PermissionState;
 
 class MODULES_EXPORT DeviceMotionController final
     : public DeviceSingleWindowEventController,
@@ -34,7 +35,7 @@ class MODULES_EXPORT DeviceMotionController final
 
   void Trace(Visitor*) const override;
 
-  ScriptPromise RequestPermission(ScriptState*);
+  ScriptPromise<V8PermissionState> RequestPermission(ScriptState*);
 
  private:
   // Inherited from PlatformEventController.

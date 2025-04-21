@@ -1,12 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.components.offline_items_collection.bridges;
 
+import org.jni_zero.CalledByNative;
 import org.junit.Assert;
 
-import org.chromium.base.annotations.CalledByNative;
 import org.chromium.components.offline_items_collection.FailState;
 import org.chromium.components.offline_items_collection.OfflineItem;
 import org.chromium.components.offline_items_collection.OfflineItemFilter;
@@ -31,15 +31,5 @@ public class OfflineItemBridgeUnitTest {
         Assert.assertEquals(OfflineItemState.COMPLETE, item.state);
         Assert.assertEquals(FailState.NO_FAILURE, item.failState);
         Assert.assertEquals(PendingState.NOT_PENDING, item.pendingState);
-        Assert.assertNull(item.schedule);
-    }
-
-    @CalledByNative
-    public void testOfflineItemSchedule(
-            OfflineItem item, boolean expectedOnlyOnWifi, long expectedStartTime) {
-        Assert.assertNotNull(item);
-        Assert.assertNotNull(item.schedule);
-        Assert.assertEquals(expectedOnlyOnWifi, item.schedule.onlyOnWifi);
-        Assert.assertEquals(expectedStartTime, item.schedule.startTimeMs);
     }
 }

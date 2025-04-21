@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,8 @@ FakeMaskLayerImpl::FakeMaskLayerImpl(LayerTreeImpl* tree_impl,
                                      int id,
                                      scoped_refptr<RasterSource> raster_source)
     : PictureLayerImpl(tree_impl, id) {
-  SetBounds(raster_source->GetSize());
-  Region region;
-  UpdateRasterSource(raster_source, &region, nullptr, nullptr);
+  SetBounds(raster_source->size());
+  SetRasterSourceForTesting(raster_source);
 }
 
 std::unique_ptr<FakeMaskLayerImpl> FakeMaskLayerImpl::Create(

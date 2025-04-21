@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 
 #include "ash/components/arc/test/fake_app_instance.h"
 #include "base/strings/stringprintf.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_test.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_test.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "content/public/test/browser_task_environment.h"
@@ -52,7 +52,7 @@ am::ArcPackageInfoPtr CreateArcPackage(const std::string& package_name,
   return am::ArcPackageInfo::New(
       package_name, package_version, 1 /* last_backup_android_id */,
       1 /* last_backup_time */, true /* sync */, false /* system */,
-      false /* vpn_provider */, nullptr /* web_app_info */, absl::nullopt,
+      false /* vpn_provider */, nullptr /* web_app_info */, std::nullopt,
       std::move(permissions) /* permission states */);
 }
 

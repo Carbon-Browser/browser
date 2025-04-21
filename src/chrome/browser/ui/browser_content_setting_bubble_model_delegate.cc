@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,7 @@ BrowserContentSettingBubbleModelDelegate::
     : browser_(browser) {}
 
 BrowserContentSettingBubbleModelDelegate::
-    ~BrowserContentSettingBubbleModelDelegate() {}
+    ~BrowserContentSettingBubbleModelDelegate() = default;
 
 void BrowserContentSettingBubbleModelDelegate::ShowCollectedCookiesDialog(
     content::WebContents* web_contents) {
@@ -43,12 +43,13 @@ void BrowserContentSettingBubbleModelDelegate::ShowMediaSettingsPage() {
 
 void BrowserContentSettingBubbleModelDelegate::ShowContentSettingsPage(
     ContentSettingsType type) {
-  if (type == ContentSettingsType::PROTOCOL_HANDLERS)
+  if (type == ContentSettingsType::PROTOCOL_HANDLERS) {
     chrome::ShowSettingsSubPage(browser_, chrome::kHandlerSettingsSubPage);
-  else if (type == ContentSettingsType::COOKIES)
+  } else if (type == ContentSettingsType::COOKIES) {
     chrome::ShowSettingsSubPage(browser_, chrome::kCookieSettingsSubPage);
-  else
+  } else {
     chrome::ShowContentSettingsExceptions(browser_, type);
+  }
 }
 
 void BrowserContentSettingBubbleModelDelegate::ShowLearnMorePage(

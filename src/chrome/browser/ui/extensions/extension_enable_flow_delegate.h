@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@ class ExtensionEnableFlowDelegate {
   virtual void ExtensionEnableFlowAborted(bool user_initiated) = 0;
 
  protected:
-  virtual ~ExtensionEnableFlowDelegate() {}
+  virtual ~ExtensionEnableFlowDelegate() = default;
 };
 
 #endif  // CHROME_BROWSER_UI_EXTENSIONS_EXTENSION_ENABLE_FLOW_DELEGATE_H_

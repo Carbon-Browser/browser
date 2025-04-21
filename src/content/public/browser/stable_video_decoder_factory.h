@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,8 @@
 
 namespace content {
 
-// Binds a StableVideoDecoderFactory PendingReceiver by either using the
-// crosapi (on LaCrOS) or starting a new utility process (on non-LaCrOS).
+// Binds a StableVideoDecoderFactory PendingReceiver by starting a new utility
+// process. This function can be called from any thread.
 CONTENT_EXPORT void LaunchStableVideoDecoderFactory(
     mojo::PendingReceiver<media::stable::mojom::StableVideoDecoderFactory>
         receiver);

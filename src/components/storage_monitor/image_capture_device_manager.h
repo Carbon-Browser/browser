@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 #define COMPONENTS_STORAGE_MONITOR_IMAGE_CAPTURE_DEVICE_MANAGER_H_
 
 #import <Foundation/Foundation.h>
+
 #include <string>
 
-#include "base/mac/scoped_nsobject.h"
 #include "components/storage_monitor/storage_monitor.h"
 
 class MTPDeviceDelegateImplMacTest;
@@ -48,7 +48,7 @@ class ImageCaptureDeviceManager {
       base::OnceCallback<void(StorageMonitor::EjectStatus)> callback);
 
  private:
-  base::scoped_nsobject<ImageCaptureDeviceManagerImpl> device_browser_;
+  ImageCaptureDeviceManagerImpl* __strong device_browser_;
 
   // Returns a weak pointer to the internal device browser.
   ICDeviceBrowser* device_browser_for_test();

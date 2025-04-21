@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,8 +48,11 @@ void HostFrameRateThrottler::UpdateHostFrameSinkManager() {
   ids.reserve(hosts_.size());
   for (WindowTreeHost* host : hosts_)
     ids.push_back(host->compositor()->frame_sink_id());
-  Env::GetInstance()->context_factory()->GetHostFrameSinkManager()->Throttle(
-      ids, base::Hertz(kDefaultThrottleFps));
+  // `ContextFactory` may be null on shutdown.
+  if (Env::GetInstance()->context_factory()) {
+    Env::GetInstance()->context_factory()->GetHostFrameSinkManager()->Throttle(
+        ids, base::Hertz(kDefaultThrottleFps));
+  }
 }
 
 }  // namespace aura

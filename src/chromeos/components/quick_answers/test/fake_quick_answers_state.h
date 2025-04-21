@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,10 @@
 
 #include <memory>
 
+#include "base/types/expected.h"
 #include "chromeos/components/quick_answers/public/cpp/quick_answers_state.h"
+
+// TODO(b/340628526): Put this under quick_answers namespace.
 
 class FakeQuickAnswersState : public QuickAnswersState {
  public:
@@ -18,12 +21,25 @@ class FakeQuickAnswersState : public QuickAnswersState {
 
   ~FakeQuickAnswersState() override;
 
-  void set_application_locale(const std::string& locale) {
-    resolved_application_locale_ = locale;
-  }
-  void set_preferred_languages(const std::string& preferred_languages) {
-    preferred_languages_ = preferred_languages;
-  }
+  void SetSettingsEnabled(bool enabled);
+  void SetApplicationLocale(const std::string& locale);
+  void SetPreferredLanguages(const std::string& preferred_languages);
+  void OnPrefsInitialized();
+  void SetDefinitionEligible(bool eligible);
+  void SetTranslationEligible(bool eligible);
+  void SetUnitConversionEligible(bool eligible);
+  void OverrideFeatureType(QuickAnswersState::FeatureType feature_type);
+
+ protected:
+  void AsyncWriteConsentUiImpressionCount(int32_t count) override;
+  void AsyncWriteConsentStatus(
+      quick_answers::prefs::ConsentStatus consent_status) override;
+  void AsyncWriteEnabled(bool enabled) override;
+  base::expected<QuickAnswersState::FeatureType, QuickAnswersState::Error>
+  GetFeatureTypeExpected() const override;
+
+ private:
+  std::optional<QuickAnswersState::FeatureType> feature_type_;
 };
 
 #endif  // CHROMEOS_COMPONENTS_QUICK_ANSWERS_TEST_FAKE_QUICK_ANSWERS_STATE_H_

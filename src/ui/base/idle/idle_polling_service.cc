@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,6 @@
 namespace ui {
 
 namespace {
-
-constexpr base::TimeDelta kPollInterval = base::Seconds(1);
 
 // Default provider implementation. Everything is delegated to
 // ui::CalculateIdleTime and ui::CheckIdleStateIsLocked.
@@ -51,7 +49,9 @@ void IdlePollingService::AddObserver(Observer* observer) {
   if (observers_.empty()) {
     DCHECK(!timer_.IsRunning());
     PollIdleState();
-    timer_.Reset();
+    timer_.Start(FROM_HERE, poll_interval_,
+                 base::BindRepeating(&IdlePollingService::PollIdleState,
+                                     base::Unretained(this)));
   }
 
   observers_.AddObserver(observer);
@@ -75,6 +75,11 @@ void IdlePollingService::SetProviderForTest(
   }
 }
 
+void IdlePollingService::SetPollIntervalForTest(base::TimeDelta poll_interval) {
+  DCHECK(!timer_.IsRunning());
+  poll_interval_ = poll_interval;
+}
+
 bool IdlePollingService::IsPollingForTest() {
   return timer_.IsRunning();
 }
@@ -85,10 +90,7 @@ void IdlePollingService::SetTaskRunnerForTest(
 }
 
 IdlePollingService::IdlePollingService()
-    : timer_(FROM_HERE,
-             kPollInterval,
-             base::BindRepeating(&IdlePollingService::PollIdleState,
-                                 base::Unretained(this))),
+    : poll_interval_(kPollInterval),
       provider_(std::make_unique<DefaultIdleProvider>()) {
   DCHECK(!timer_.IsRunning());
 }
@@ -99,10 +101,8 @@ void IdlePollingService::PollIdleState() {
   last_state_.idle_time = provider_->CalculateIdleTime();
   last_state_.locked = provider_->CheckIdleStateIsLocked();
 
-  // TODO(https://crbug.com/939870): Only notify observers on change.
-  for (Observer& observer : observers_) {
-    observer.OnIdleStateChange(last_state_);
-  }
+  // TODO(crbug.com/41445751): Only notify observers on change.
+  observers_.Notify(&Observer::OnIdleStateChange, last_state_);
 }
 
 }  // namespace ui

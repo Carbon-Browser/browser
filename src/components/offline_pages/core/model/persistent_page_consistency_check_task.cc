@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
 #include "components/offline_pages/core/archive_manager.h"
@@ -18,7 +18,6 @@
 #include "components/offline_pages/core/model/get_pages_task.h"
 #include "components/offline_pages/core/offline_page_client_policy.h"
 #include "components/offline_pages/core/offline_page_metadata_store.h"
-#include "components/offline_pages/core/offline_store_utils.h"
 #include "components/offline_pages/core/page_criteria.h"
 #include "sql/database.h"
 #include "sql/statement.h"
@@ -50,7 +49,7 @@ bool SetItemsFileMissingTimeSync(const std::vector<int64_t>& item_ids,
 
   for (auto offline_id : item_ids) {
     sql::Statement statement(db->GetCachedStatement(SQL_FROM_HERE, kSql));
-    statement.BindInt64(0, store_utils::ToDatabaseTime(missing_time));
+    statement.BindTime(0, missing_time);
     statement.BindInt64(1, offline_id);
     if (!statement.Run())
       return false;
@@ -113,22 +112,6 @@ PersistentPageConsistencyCheckSync(
             publish_ids_of_deleted_pages};
   }
 
-  if (page_ids_to_delete.size() > 0) {
-    UMA_HISTOGRAM_COUNTS_1M(
-        "OfflinePages.ConsistencyCheck.Persistent.ExpiredEntryCount",
-        base::saturated_cast<int32_t>(page_ids_to_delete.size()));
-  }
-  if (pages_found_missing.size() > 0) {
-    UMA_HISTOGRAM_COUNTS_1M(
-        "OfflinePages.ConsistencyCheck.Persistent.MissingFileCount",
-        base::saturated_cast<int32_t>(pages_found_missing.size()));
-  }
-  if (pages_reappeared.size() > 0) {
-    UMA_HISTOGRAM_COUNTS_1M(
-        "OfflinePages.ConsistencyCheck.Persistent.ReappearedFileCount",
-        base::saturated_cast<int32_t>(pages_reappeared.size()));
-  }
-
   if (!transaction.Commit())
     return {SyncOperationResult::TRANSACTION_COMMIT_ERROR,
             publish_ids_of_deleted_pages};
@@ -152,7 +135,7 @@ PersistentPageConsistencyCheckTask::CheckResult&
 PersistentPageConsistencyCheckTask::CheckResult::operator=(
     const CheckResult& other) = default;
 
-PersistentPageConsistencyCheckTask::CheckResult::~CheckResult() {}
+PersistentPageConsistencyCheckTask::CheckResult::~CheckResult() = default;
 
 PersistentPageConsistencyCheckTask::PersistentPageConsistencyCheckTask(
     OfflinePageMetadataStore* store,
@@ -183,8 +166,6 @@ void PersistentPageConsistencyCheckTask::Run() {
 
 void PersistentPageConsistencyCheckTask::OnPersistentPageConsistencyCheckDone(
     CheckResult check_result) {
-  UMA_HISTOGRAM_ENUMERATION("OfflinePages.ConsistencyCheck.Persistent.Result",
-                            check_result.result);
   // If sync operation failed, invoke the callback with an empty list of
   // download ids.
   if (check_result.result != SyncOperationResult::SUCCESS) {

@@ -1,18 +1,19 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/components/network/network_connection_handler.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
+#include "chromeos/ash/components/dbus/shill/shill_manager_client.h"
+#include "chromeos/ash/components/dbus/shill/shill_service_client.h"
 #include "chromeos/ash/components/network/client_cert_resolver.h"
 #include "chromeos/ash/components/network/client_cert_util.h"
 #include "chromeos/ash/components/network/managed_network_configuration_handler.h"
@@ -23,13 +24,11 @@
 #include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/shill_property_util.h"
-#include "chromeos/dbus/shill/shill_manager_client.h"
-#include "chromeos/dbus/shill/shill_service_client.h"
 #include "dbus/object_path.h"
 #include "net/cert/x509_certificate.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
-namespace chromeos {
+namespace ash {
 
 // Static constants.
 const char NetworkConnectionHandler::kErrorNotFound[] = "not-found";
@@ -69,7 +68,9 @@ const char NetworkConnectionHandler::kErrorCellularOutOfCredits[] =
     "cellular-out-of-credits";
 const char NetworkConnectionHandler::kErrorESimProfileIssue[] =
     "esim-profile-issue";
-const char NetworkConnectionHandler::kErrorSimLocked[] = "sim-locked";
+const char NetworkConnectionHandler::kErrorSimPinPukLocked[] = "sim-locked";
+const char NetworkConnectionHandler::kErrorSimCarrierLocked[] =
+    "sim-carrier-locked";
 const char NetworkConnectionHandler::kErrorCellularDeviceBusy[] =
     "cellular-device-busy";
 const char NetworkConnectionHandler::kErrorConnectTimeout[] = "connect-timeout";
@@ -161,4 +162,4 @@ NetworkConnectionHandler::InitializeForTesting(
   return base::WrapUnique(handler);
 }
 
-}  // namespace chromeos
+}  // namespace ash

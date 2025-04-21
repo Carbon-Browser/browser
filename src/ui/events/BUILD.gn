@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -10,6 +10,7 @@ import("//ui/base/ui_features.gni")
 
 if (is_android) {
   import("//build/config/android/rules.gni")
+  import("//third_party/jni_zero/jni_zero.gni")
 }
 
 if (is_ios) {
@@ -98,6 +99,7 @@ component("events_base") {
   sources = [
     "base_event_utils.cc",
     "base_event_utils.h",
+    "event_latency_metadata.h",
     "event_switches.cc",
     "event_switches.h",
     "events_base_export.h",
@@ -127,13 +129,6 @@ component("events_base") {
     ]
   }
 
-  if (is_mac) {
-    sources += [
-      "keycodes/keyboard_code_conversion_mac.h",
-      "keycodes/keyboard_code_conversion_mac.mm",
-    ]
-  }
-
   if (is_win) {
     sources += [
       "keycodes/keyboard_code_conversion_win.cc",
@@ -145,11 +140,7 @@ component("events_base") {
 
   defines = [ "EVENTS_BASE_IMPLEMENTATION" ]
 
-  deps = [
-    ":dom_keycode_converter",
-    "//base/third_party/dynamic_annotations",
-    "//build:chromeos_buildflags",
-  ]
+  deps = [ ":dom_keycode_converter" ]
 
   public_deps = [
     ":event_constants",
@@ -160,19 +151,27 @@ component("events_base") {
     "//ui/gfx/geometry",
   ]
 
+  if (is_mac) {
+    sources += [
+      "keycodes/keyboard_code_conversion_mac.h",
+      "keycodes/keyboard_code_conversion_mac.mm",
+    ]
+    deps += [ "//base:i18n" ]
+  }
+
   if (is_fuchsia) {
     sources += [
       "keycodes/keyboard_code_conversion_fuchsia.cc",
       "keycodes/keyboard_code_conversion_fuchsia.h",
     ]
 
-    deps += [ "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.ui.input3" ]
+    deps += [ "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.ui.input3:fuchsia.ui.input3_cpp" ]
   }
 
   if (ozone_platform_x11) {
     public_deps += [ "//ui/events/keycodes:x11" ]
 
-    # TODO(https://crbug.com/1076277): This dependency on //ui/gfx/x
+    # TODO(crbug.com/40688148): This dependency on //ui/gfx/x
     # is unnecessary and should be removed.  It is included for now
     # to work around a bug in lld that introduces unnecessary
     # nondeterminism in the DSO (see c#6 on the bug for an
@@ -202,6 +201,7 @@ component("events") {
     "event_observer.h",
     "event_processor.h",
     "event_rewriter.h",
+    "event_rewriter_continuation.h",
     "event_sink.h",
     "event_source.h",
     "event_target.h",
@@ -222,9 +222,9 @@ component("events") {
     "event_modifiers.cc",
     "event_processor.cc",
     "event_rewriter.cc",
-    "event_rewriter_continuation.h",
     "event_source.cc",
     "event_target.cc",
+    "event_targeter.cc",
     "event_utils.cc",
     "events_exports.cc",
     "events_stub.cc",
@@ -237,6 +237,7 @@ component("events") {
   if (is_win) {
     public += [
       "win/events_win_utils.h",
+      "win/stylus_handwriting_properties_win.h",
       "win/system_event_state_lookup.h",
     ]
 
@@ -245,6 +246,7 @@ component("events") {
       "keycodes/platform_key_map_win.h",
       "win/events_win.cc",
       "win/events_win_utils.cc",
+      "win/stylus_handwriting_properties_win.cc",
       "win/system_event_state_lookup.cc",
     ]
   }
@@ -257,6 +259,11 @@ component("events") {
       "cocoa/events_mac.mm",
       "gestures/gesture_recognizer_impl_mac.cc",
     ]
+  }
+
+  if (is_ios) {
+    sources += [ "ios/events_ios.mm" ]
+    frameworks = [ "UIKit.framework" ]
   }
 
   if (is_linux || is_chromeos || is_win) {
@@ -274,7 +281,6 @@ component("events") {
   deps = [
     ":dom_keycode_converter",
     ":gesture_detection",
-    "//base/third_party/dynamic_annotations",
     "//skia",
     "//ui/base:features",
     "//ui/gfx",
@@ -311,6 +317,12 @@ component("events") {
     sources -= [ "win/events_win.cc" ]
   }
 
+  # Used for the feature flag check. Should be deleted once the feature is
+  # enabled by default.
+  if (is_win) {
+    deps += [ "//components/stylus_handwriting/win:win" ]
+  }
+
   if (use_ozone) {
     public += [ "ozone/events_ozone.h" ]
     sources += [ "ozone/events_ozone.cc" ]
@@ -331,11 +343,9 @@ component("events") {
       "gestures/gesture_recognizer_impl.cc",
       "gestures/motion_event_aura.cc",
     ]
-
-    deps += [ "//build:chromeos_buildflags" ]
   }
 
-  if (is_win || is_mac || use_ozone) {
+  if (is_win || is_apple || use_ozone) {
     sources -= [ "events_stub.cc" ]
   }
 
@@ -348,6 +358,12 @@ component("events") {
       "android/key_event_android.h",
       "android/key_event_utils.h",
       "android/motion_event_android.h",
+      "android/motion_event_android_java.h",
+      "android/motion_event_android_native.h",
+
+      # TODO(crbug.com/40255699): Move this outside is_android block when
+      # consuming cross-platform code which uses it lands.
+      "back_gesture_event.h",
     ]
     sources += [
       "android/drag_event_android.cc",
@@ -356,6 +372,9 @@ component("events") {
       "android/key_event_android.cc",
       "android/key_event_utils.cc",
       "android/motion_event_android.cc",
+      "android/motion_event_android_java.cc",
+      "android/motion_event_android_native.cc",
+      "back_gesture_event.cc",
     ]
     deps += [
       ":keyevent_jni_headers",
@@ -369,17 +388,13 @@ component("events") {
 
   if (is_fuchsia) {
     public += [
-      "fuchsia/input_event_dispatcher.h",
       "fuchsia/input_event_sink.h",
       "fuchsia/pointer_events_handler.h",
     ]
-    sources += [
-      "fuchsia/input_event_dispatcher.cc",
-      "fuchsia/pointer_events_handler.cc",
-    ]
+    sources += [ "fuchsia/pointer_events_handler.cc" ]
     public_deps += [
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.ui.input",
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.ui.pointer",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.ui.input:fuchsia.ui.input_hlcpp",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.ui.pointer:fuchsia.ui.pointer_cpp",
     ]
   }
 }
@@ -426,7 +441,6 @@ component("keyboard_hook") {
   }
 
   if (use_ozone) {
-    public += [ "ozone/keyboard_hook_ozone.h" ]
     sources += [ "ozone/keyboard_hook_ozone.cc" ]
     deps += [
       "//ui/base:features",
@@ -441,7 +455,6 @@ component("keyboard_hook") {
 
 component("gesture_detection") {
   sources = [
-    "gesture_detection/bitset_32.h",
     "gesture_detection/filtered_gesture_provider.cc",
     "gesture_detection/filtered_gesture_provider.h",
     "gesture_detection/gesture_configuration.cc",
@@ -461,12 +474,6 @@ component("gesture_detection") {
     "gesture_detection/gesture_provider_config_helper.h",
     "gesture_detection/gesture_touch_uma_histogram.cc",
     "gesture_detection/gesture_touch_uma_histogram.h",
-    "gesture_detection/motion_event.cc",
-    "gesture_detection/motion_event.h",
-    "gesture_detection/motion_event_buffer.cc",
-    "gesture_detection/motion_event_buffer.h",
-    "gesture_detection/motion_event_generic.cc",
-    "gesture_detection/motion_event_generic.h",
     "gesture_detection/scale_gesture_detector.cc",
     "gesture_detection/scale_gesture_detector.h",
     "gesture_detection/scale_gesture_listeners.cc",
@@ -475,26 +482,26 @@ component("gesture_detection") {
     "gesture_detection/snap_scroll_controller.h",
     "gesture_detection/touch_disposition_gesture_filter.cc",
     "gesture_detection/touch_disposition_gesture_filter.h",
-    "gesture_detection/velocity_tracker.cc",
-    "gesture_detection/velocity_tracker.h",
-    "gesture_detection/velocity_tracker_state.cc",
-    "gesture_detection/velocity_tracker_state.h",
   ]
+
+  public_deps = [ ":velocity_tracker" ]
 
   deps = [
     ":events_base",
     "//base",
-    "//base/third_party/dynamic_annotations",
-    "//build:chromeos_buildflags",
+    "//ui/base:features",
     "//ui/display",
     "//ui/gfx",
     "//ui/gfx/geometry",
+    "//ui/latency",
   ]
 
   defines = [ "GESTURE_DETECTION_IMPLEMENTATION" ]
 
   if (is_android) {
     sources += [ "gesture_detection/gesture_configuration_android.cc" ]
+  } else if (is_ios) {
+    sources += [ "gesture_detection/gesture_configuration_ios.cc" ]
   } else if (is_castos) {
     sources += [ "gesture_detection/gesture_configuration_cast.cc" ]
   } else if (use_aura) {
@@ -502,6 +509,29 @@ component("gesture_detection") {
   } else {
     sources += [ "gesture_detection/gesture_configuration_default.cc" ]
   }
+}
+
+component("velocity_tracker") {
+  sources = [
+    "velocity_tracker/bitset_32.h",
+    "velocity_tracker/motion_event.cc",
+    "velocity_tracker/motion_event.h",
+    "velocity_tracker/motion_event_generic.cc",
+    "velocity_tracker/motion_event_generic.h",
+    "velocity_tracker/velocity_tracker.cc",
+    "velocity_tracker/velocity_tracker.h",
+    "velocity_tracker/velocity_tracker_state.cc",
+    "velocity_tracker/velocity_tracker_state.h",
+  ]
+
+  defines = [ "IS_VELOCITY_TRACKER_IMPL" ]
+
+  deps = [
+    ":events_base",
+    "//base",
+    "//ui/gfx",
+    "//ui/gfx/geometry",
+  ]
 }
 
 static_library("test_support") {
@@ -514,8 +544,10 @@ static_library("test_support") {
     "test/keyboard_layout.h",
     "test/motion_event_test_utils.cc",
     "test/motion_event_test_utils.h",
-    "test/platform_event_source_test_api.cc",
-    "test/platform_event_source_test_api.h",
+    "test/scoped_event_waiter.cc",
+    "test/scoped_event_waiter.h",
+    "test/test_event.cc",
+    "test/test_event.h",
     "test/test_event_handler.cc",
     "test/test_event_handler.h",
     "test/test_event_processor.cc",
@@ -548,7 +580,6 @@ static_library("test_support") {
   ]
   deps = [
     "//base",
-    "//build:chromeos_buildflags",
     "//skia",
     "//ui/events/platform",
     "//ui/gfx",
@@ -593,19 +624,15 @@ static_library("test_support") {
 
   if (is_fuchsia) {
     sources += [
-      "fuchsia/fakes/fake_mouse_source.cc",
-      "fuchsia/fakes/fake_mouse_source.h",
-      "fuchsia/fakes/fake_touch_source.cc",
-      "fuchsia/fakes/fake_touch_source.h",
-      "fuchsia/fakes/pointer_event_utility.cc",
-      "fuchsia/fakes/pointer_event_utility.h",
+      "fuchsia/util/pointer_event_utility.cc",
+      "fuchsia/util/pointer_event_utility.h",
     ]
 
-    deps += [ "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.ui.pointer" ]
+    deps += [ "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.ui.pointer:fuchsia.ui.pointer_cpp" ]
   }
 }
 
-if (!is_ios) {
+if (use_blink) {
   test("events_unittests") {
     use_xvfb = use_xvfb_in_this_config
 
@@ -619,15 +646,11 @@ if (!is_ios) {
       "event_rewriter_unittest.cc",
       "event_target_unittest.cc",
       "event_unittest.cc",
-      "gesture_detection/bitset_32_unittest.cc",
       "gesture_detection/filtered_gesture_provider_unittest.cc",
       "gesture_detection/gesture_event_data_packet_unittest.cc",
       "gesture_detection/gesture_provider_unittest.cc",
-      "gesture_detection/motion_event_buffer_unittest.cc",
-      "gesture_detection/motion_event_generic_unittest.cc",
       "gesture_detection/snap_scroll_controller_unittest.cc",
       "gesture_detection/touch_disposition_gesture_filter_unittest.cc",
-      "gesture_detection/velocity_tracker_unittest.cc",
       "gestures/blink/web_gesture_curve_impl_unittest.cc",
       "gestures/fling_curve_unittest.cc",
       "gestures/physics_based_fling_curve_unittest.cc",
@@ -637,6 +660,10 @@ if (!is_ios) {
       "mojom/mojom_traits_unittest.cc",
       "platform/platform_event_source_unittest.cc",
       "scoped_target_handler_unittest.cc",
+      "test/scoped_event_waiter_unittest.cc",
+      "velocity_tracker/bitset_32_unittest.cc",
+      "velocity_tracker/motion_event_generic_unittest.cc",
+      "velocity_tracker/velocity_tracker_unittest.cc",
     ]
 
     if (is_mac) {
@@ -654,6 +681,7 @@ if (!is_ios) {
       ":events_base",
       ":gesture_detection",
       ":test_support",
+      ":velocity_tracker",
       "//base",
       "//base/test:test_support",
       "//cc",
@@ -678,9 +706,12 @@ if (!is_ios) {
 
     if (is_android) {
       sources += [ "android/motion_event_android_unittest.cc" ]
-      deps += [ "//ui/android:ui_full_java" ]
+      deps += [
+        ":motionevent_jni_headers",
+        "//ui/android:ui_full_java",
+      ]
     } else {
-      data_deps = [ "//third_party/mesa_headers" ]
+      data_deps = [ "//third_party/angle:includes" ]
     }
 
     if (use_ozone) {
@@ -692,6 +723,9 @@ if (!is_ios) {
         "//ui/events/ozone:unittests",
         "//ui/events/ozone/layout",
       ]
+    }
+    if (use_ozone || (is_ios && use_blink)) {
+      deps += [ "//ui/events/devices:unittests" ]
     }
 
     if (use_aura) {
@@ -708,6 +742,7 @@ if (!is_ios) {
         "win/event_utils_win_unittest.cc",
         "win/media_keyboard_hook_win_unittest.cc",
         "win/modifier_keyboard_hook_win_unittest.cc",
+        "win/stylus_handwriting_properties_win_unittest.cc",
       ]
       deps += [ "//ui/events:keyboard_hook" ]
     }
@@ -718,15 +753,16 @@ if (!is_ios) {
 
     if (is_fuchsia) {
       sources += [
-        "fuchsia/input_event_dispatcher_unittest.cc",
         "fuchsia/pointer_events_handler_unittest.cc",
         "keycodes/keyboard_code_conversion_fuchsia_unittest.cc",
       ]
 
       deps += [
-        "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.ui.input",
-        "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.ui.input3",
-        "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.ui.pointer",
+        "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.ui.input:fuchsia.ui.input_hlcpp",
+        "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.ui.input3:fuchsia.ui.input3_cpp",
+        "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.ui.pointer:fuchsia.ui.pointer_cpp",
+        "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.ui.pointer:fuchsia.ui.pointer_cpp_hlcpp_conversion",
+        "//third_party/fuchsia-sdk/sdk/pkg/scenic_cpp_testing",
       ]
     }
 

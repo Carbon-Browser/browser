@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "net/base/net_errors.h"
 #include "net/socket/stream_socket.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
@@ -111,4 +111,4 @@ class ConnectionTracker {
 
 }  // namespace net::test_server
 
-#endif  // NET_TEST_EMBEDDED_TEST_SERVER_SIMPLE_CONNECTION_TRACKER_H_
+#endif  // NET_TEST_EMBEDDED_TEST_SERVER_CONNECTION_TRACKER_H_

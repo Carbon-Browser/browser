@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,9 +13,9 @@
 #include "ash/quick_pair/common/device.h"
 #include "ash/quick_pair/fast_pair_handshake/fast_pair_data_encryptor.h"
 #include "ash/quick_pair/fast_pair_handshake/fast_pair_key_pair.h"
-#include "ash/services/quick_pair/quick_pair_process_manager.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "chromeos/ash/services/quick_pair/quick_pair_process_manager.h"
 
 namespace ash {
 namespace quick_pair {
@@ -62,21 +62,29 @@ class FastPairDataEncryptorImpl : public FastPairDataEncryptor {
         bool has_retryable_error);
   };
 
+  // FastPairDataEncryptor
   const std::array<uint8_t, kBlockSizeBytes> EncryptBytes(
       const std::array<uint8_t, kBlockSizeBytes>& bytes_to_encrypt) override;
-
-  const absl::optional<std::array<uint8_t, kPublicKeyByteSize>>& GetPublicKey()
+  const std::optional<std::array<uint8_t, kPublicKeyByteSize>>& GetPublicKey()
       override;
-
   void ParseDecryptedResponse(
       const std::vector<uint8_t>& encrypted_response_bytes,
-      base::OnceCallback<void(const absl::optional<DecryptedResponse>&)>
+      base::OnceCallback<void(const std::optional<DecryptedResponse>&)>
           callback) override;
-
   void ParseDecryptedPasskey(
       const std::vector<uint8_t>& encrypted_passkey_bytes,
-      base::OnceCallback<void(const absl::optional<DecryptedPasskey>&)>
-          callback) override;
+      base::OnceCallback<void(const std::optional<DecryptedPasskey>&)> callback)
+      override;
+  std::vector<uint8_t> CreateAdditionalDataPacket(
+      std::array<uint8_t, kNonceSizeBytes> nonce,
+      const std::vector<uint8_t>& additional_data) override;
+  bool VerifyEncryptedAdditionalData(
+      const std::array<uint8_t, kHmacVerifyLenBytes> hmacSha256First8Bytes,
+      std::array<uint8_t, kNonceSizeBytes> nonce,
+      const std::vector<uint8_t>& encrypted_additional_data) override;
+  std::vector<uint8_t> EncryptAdditionalDataWithSecretKey(
+      std::array<uint8_t, kNonceSizeBytes> nonce,
+      const std::vector<uint8_t>& additional_data) override;
 
   ~FastPairDataEncryptorImpl() override;
 
@@ -99,8 +107,8 @@ class FastPairDataEncryptorImpl : public FastPairDataEncryptor {
 
   // The public key is only required during initial pairing and optional during
   // communication with paired devices.
-  absl::optional<std::array<uint8_t, kPublicKeyByteSize>> public_key_ =
-      absl::nullopt;
+  std::optional<std::array<uint8_t, kPublicKeyByteSize>> public_key_ =
+      std::nullopt;
 
   base::WeakPtrFactory<FastPairDataEncryptorImpl> weak_ptr_factory_{this};
 };

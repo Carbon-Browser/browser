@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMEOS_ASH_COMPONENTS_NETWORK_SYSTEM_TOKEN_CERT_DB_STORAGE_TEST_UTIL_H_
 #define CHROMEOS_ASH_COMPONENTS_NETWORK_SYSTEM_TOKEN_CERT_DB_STORAGE_TEST_UTIL_H_
 
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/components/network/system_token_cert_db_storage.h"
 
 #include "memory"
@@ -16,7 +17,7 @@ namespace net {
 class NSSCertDatabase;
 }
 
-namespace chromeos {
+namespace ash {
 
 // A helper that wraps the callback passed to
 // SystemTokenCertDbStorage::GetDatabase and can answer queries
@@ -43,7 +44,7 @@ class GetSystemTokenCertDbCallbackWrapper {
 
   base::RunLoop run_loop_;
   bool done_ = false;
-  net::NSSCertDatabase* nss_cert_database_ = nullptr;
+  raw_ptr<net::NSSCertDatabase> nss_cert_database_ = nullptr;
 
   base::WeakPtrFactory<GetSystemTokenCertDbCallbackWrapper> weak_ptr_factory_{
       this};
@@ -69,11 +70,6 @@ class FakeSystemTokenCertDbStorageObserver
   bool has_been_notified_ = false;
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove after the migration is finished.
-namespace ash {
-using ::chromeos::GetSystemTokenCertDbCallbackWrapper;
-}
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_SYSTEM_TOKEN_CERT_DB_STORAGE_TEST_UTIL_H_

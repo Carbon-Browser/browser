@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,9 +15,7 @@ import java.util.Locale;
  * multi-instance support on Android S.
  */
 final class InstanceInfo {
-    /**
-     * Type of the instance necessary for UI.
-     */
+    /** Type of the instance necessary for UI. */
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({Type.CURRENT, Type.ADJACENT, Type.OTHER})
     public @interface Type {
@@ -53,8 +51,15 @@ final class InstanceInfo {
     /** {@code true} if the active tab is of incognito type */
     public final boolean isIncognitoSelected;
 
-    public InstanceInfo(int instanceId, int taskId, @Type int type, String url, String title,
-            int tabCount, int incognitoTabCount, boolean isIncognitoSelected) {
+    public InstanceInfo(
+            int instanceId,
+            int taskId,
+            @Type int type,
+            String url,
+            String title,
+            int tabCount,
+            int incognitoTabCount,
+            boolean isIncognitoSelected) {
         this.instanceId = instanceId;
         this.taskId = taskId;
         this.type = type;
@@ -67,8 +72,15 @@ final class InstanceInfo {
 
     @Override
     public String toString() {
-        return String.format(Locale.ENGLISH, "(%d,%3d) incognito: %s ntab:%d itab:%d (%s,%s)",
-                instanceId, taskId, isIncognitoSelected ? "O" : "-", tabCount, incognitoTabCount,
-                title, url);
+        return String.format(
+                Locale.ENGLISH,
+                "(%d,%3d) incognito: %s ntab:%d itab:%d (%s,%s)",
+                instanceId,
+                taskId,
+                isIncognitoSelected ? "O" : "-",
+                tabCount,
+                incognitoTabCount,
+                title,
+                url);
     }
 }

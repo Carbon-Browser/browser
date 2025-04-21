@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,6 +46,9 @@ class SESSION_EXPORT SessionManager {
   // or restart after crash.
   bool IsSessionStarted() const;
 
+  // Returns true if user session start up tasks are completed.
+  bool IsUserSessionStartUpTaskCompleted() const;
+
   // Called when browser session is started i.e. after
   // browser_creator.LaunchBrowser(...) was called after user sign in.
   // When user is at the image screen IsUserLoggedIn() will return true
@@ -65,10 +68,13 @@ class SESSION_EXPORT SessionManager {
   void AddObserver(SessionManagerObserver* observer);
   void RemoveObserver(SessionManagerObserver* observer);
 
+  void HandleUserSessionStartUpTaskCompleted();
+
   // Various helpers to notify observers.
   void NotifyUserProfileLoaded(const AccountId& account_id);
   void NotifyNetworkErrorScreenShown();
   void NotifyLoginOrLockScreenVisible();
+  void NotifyUnlockAttempt(const bool success, const UnlockType unlock_type);
 
   SessionState session_state() const { return session_state_; }
   const std::vector<Session>& sessions() const { return sessions_; }
@@ -104,6 +110,9 @@ class SESSION_EXPORT SessionManager {
 
   // True if SessionStarted() has been called.
   bool session_started_ = false;
+
+  // True if HandleUserSessionStartUpTaskCompleted() has been called.
+  bool user_session_start_up_task_completed_ = false;
 
   // True if `NotifyLoginOrLockScreenVisible()` has been called. Used by test
   // classes to determine whether they should observe the session manager, as

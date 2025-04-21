@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,35 +13,15 @@ float GetExtent(const UiElement& element, bool horizontal) {
   gfx::Point3F p = horizontal ? gfx::Point3F(element.size().width(), 0, 0)
                               : gfx::Point3F(0, element.size().height(), 0);
   gfx::Point3F o;
-  element.LocalTransform().TransformPoint(&p);
-  element.LocalTransform().TransformPoint(&o);
+  p = element.LocalTransform().MapPoint(p);
+  o = element.LocalTransform().MapPoint(o);
   return (p - o).Length();
 }
 
 }  // namespace
 
 LinearLayout::LinearLayout(Direction direction) : direction_(direction) {}
-LinearLayout::~LinearLayout() {}
-
-bool LinearLayout::SizeAndLayOutChildren() {
-  bool changed = UiElement::SizeAndLayOutChildren();
-  if (layout_length_ == 0.0f)
-    return changed;
-
-  // We need to adjust one of the elements' size to ensure a fixed total layout
-  // width.  Find that element, set its size, and lay it out again.
-  UiElement* element_to_resize = nullptr;
-  for (auto& child : children()) {
-    if (child->resizable_by_layout()) {
-      element_to_resize = child.get();
-      break;
-    }
-  }
-  DCHECK_NE(element_to_resize, nullptr);
-  changed |= AdjustResizableElement(element_to_resize);
-  changed |= element_to_resize->SizeAndLayOut();
-  return changed;
-}
+LinearLayout::~LinearLayout() = default;
 
 void LinearLayout::LayOutContributingChildren() {
   float x_factor = 0.f;
@@ -121,27 +101,6 @@ void LinearLayout::GetTotalExtent(const UiElement* element_to_exclude,
       }
     }
   }
-}
-
-bool LinearLayout::AdjustResizableElement(UiElement* element_to_resize) {
-  // Figure out how much space is available for the variable element.
-  float minimum_total = 0;
-  float minor = 0;
-  GetTotalExtent(element_to_resize, &minimum_total, &minor);
-
-  float extent = layout_length_ - minimum_total;
-  extent = std::max(extent, 0.f);
-
-  auto new_size = element_to_resize->size();
-  if (Horizontal())
-    new_size.set_width(extent);
-  else
-    new_size.set_height(extent);
-  if (element_to_resize->size() == new_size)
-    return false;
-
-  element_to_resize->SetSize(new_size.width(), new_size.height());
-  return true;
 }
 
 }  // namespace vr

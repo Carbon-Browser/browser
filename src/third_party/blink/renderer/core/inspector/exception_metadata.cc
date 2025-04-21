@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,18 +7,17 @@
 
 #include "third_party/blink/renderer/core/inspector/exception_metadata.h"
 
-#include "third_party/blink/renderer/core/inspector/thread_debugger.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/bindings/thread_debugger.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "v8/include/v8.h"
 
 namespace blink {
 
-void MaybeAssociateExceptionMetaData(ExceptionState& state,
+void MaybeAssociateExceptionMetaData(v8::Local<v8::Value> exception,
                                      const String& key,
                                      const String& value) {
-  v8::Local<v8::Value> exception = state.GetException();
   if (exception.IsEmpty()) {
     // Should only happen in tests.
     return;

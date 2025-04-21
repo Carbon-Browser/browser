@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,7 @@ import org.chromium.chrome.browser.browserservices.intents.WebappConstants;
 import org.chromium.chrome.browser.document.ChromeLauncherActivity;
 import org.chromium.components.webapps.ShortcutSource;
 
-/**
- * Proxy that responds to tapping on the Bookmarks widget.
- */
+/** Proxy that responds to tapping on the Bookmarks widget. */
 public class BookmarkWidgetProxy extends Activity {
     private static final String TAG = "BookmarkWidgetProxy";
 

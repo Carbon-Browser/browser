@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,18 +31,12 @@ class MockGpuMemoryBufferManager : public gpu::GpuMemoryBufferManager {
                    gpu::SurfaceHandle surface_handle,
                    base::WaitableEvent* shutdown_event));
 
-  MOCK_METHOD2(SetDestructionSyncToken,
-               void(gfx::GpuMemoryBuffer* buffer,
-                    const gpu::SyncToken& sync_token));
-
   MOCK_METHOD3(CopyGpuMemoryBufferAsync,
                void(gfx::GpuMemoryBufferHandle buffer_handle,
                     base::UnsafeSharedMemoryRegion memory_region,
                     base::OnceCallback<void(bool)> callback));
 
-  MOCK_METHOD2(CopyGpuMemoryBufferSync,
-               bool(gfx::GpuMemoryBufferHandle buffer_handle,
-                    base::UnsafeSharedMemoryRegion memory_region));
+  MOCK_METHOD0(IsConnected, bool());
 
   static std::unique_ptr<gfx::GpuMemoryBuffer> CreateFakeGpuMemoryBuffer(
       const gfx::Size& size,

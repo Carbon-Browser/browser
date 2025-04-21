@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "net/ssl/openssl_private_key.h"
 #include "net/ssl/ssl_private_key.h"
 #include "net/ssl/test_ssl_private_key.h"
 #include "net/test/cert_test_util.h"

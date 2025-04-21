@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,8 +16,8 @@ DisplaySchedulerWebView::DisplaySchedulerWebView(
     OverlaysInfoProvider* overlays_info_provider)
     : root_frame_sink_(root_frame_sink),
       overlays_info_provider_(overlays_info_provider),
-      use_new_invalidate_heuristic_(base::FeatureList::IsEnabled(
-          features::kWebViewNewInvalidateHeuristic)) {
+      use_new_invalidate_heuristic_(
+          features::UseWebViewNewInvalidateHeuristic()) {
   auto* frame_sink_manager =
       VizCompositorThreadRunnerWebView::GetInstance()->GetFrameSinkManager();
 
@@ -34,7 +34,6 @@ void DisplaySchedulerWebView::ForceImmediateSwapIfPossible() {
   NOTREACHED();
 }
 void DisplaySchedulerWebView::SetNeedsOneBeginFrame(bool needs_draw) {
-  // Used with De-Jelly and headless begin frames
   NOTREACHED();
 }
 void DisplaySchedulerWebView::DidSwapBuffers() {
@@ -110,9 +109,14 @@ void DisplaySchedulerWebView::OnSurfaceHasNewUncommittedFrame(
   // We don't need to track damage of root frame sink as we submit frame to it
   // at DrawAndSwap and Root Renderer sink because Android View.Invalidation is
   // handled by SynchronousCompositorHost.
-  if (surface_id.frame_sink_id() != root_frame_sink_->root_frame_sink_id() &&
-      !root_frame_sink_->IsChildSurface(surface_id.frame_sink_id()) &&
-      !IsFrameSinkOverlayed(surface_id.frame_sink_id())) {
+  const bool is_root =
+      surface_id.frame_sink_id() == root_frame_sink_->root_frame_sink_id();
+  const bool is_root_renderer =
+      root_frame_sink_->IsChildSurface(surface_id.frame_sink_id());
+  const bool is_overlay = IsFrameSinkOverlayed(surface_id.frame_sink_id());
+
+  if (!is_root && !is_root_renderer && !is_overlay &&
+      damage_tracker_->CheckForDisplayDamage(surface_id)) {
     root_frame_sink_->OnNewUncommittedFrame(surface_id);
   }
 }

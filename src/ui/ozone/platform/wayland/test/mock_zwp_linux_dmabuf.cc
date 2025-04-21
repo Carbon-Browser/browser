@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,9 @@
 #include <linux-dmabuf-unstable-v1-server-protocol.h>
 #include <wayland-server-core.h>
 
-#include "ui/ozone/platform/wayland/test/mock_buffer.h"
+#include "base/not_fatal_until.h"
+#include "base/ranges/algorithm.h"
+#include "ui/ozone/platform/wayland/test/test_buffer.h"
 #include "ui/ozone/platform/wayland/test/test_zwp_linux_buffer_params.h"
 
 namespace wl {
@@ -56,8 +58,8 @@ void MockZwpLinuxDmabufV1::StoreBufferParams(
 
 void MockZwpLinuxDmabufV1::OnBufferParamsDestroyed(
     TestZwpLinuxBufferParamsV1* params) {
-  auto it = std::find(buffer_params_.begin(), buffer_params_.end(), params);
-  DCHECK(it != buffer_params_.end());
+  auto it = base::ranges::find(buffer_params_, params);
+  CHECK(it != buffer_params_.end(), base::NotFatalUntil::M130);
   buffer_params_.erase(it);
 }
 

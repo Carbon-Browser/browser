@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,7 @@ class TestLinuxSurfaceSynchronization : public ServerObject {
   wl_resource* surface_resource() const { return surface_resource_; }
 
  private:
-  raw_ptr<wl_resource> surface_resource_;
+  raw_ptr<wl_resource, DanglingUntriaged> surface_resource_;
 };
 
 // Manage wl_viewporter object.

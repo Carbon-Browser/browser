@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,11 @@
 #include "base/memory/ptr_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/vector2d.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/background.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/button/checkbox.h"
@@ -33,10 +36,13 @@ namespace views::examples {
 
 namespace {
 
-const char* kAlignments[] = {"Left", "Center", "Right", "Head"};
+constexpr auto kAlignments =
+    std::to_array<const char* const>({"Left", "Center", "Right", "Head"});
 
 // A Label with a clamped preferred width to demonstrate eliding or wrapping.
 class ExamplePreferredSizeLabel : public Label {
+  METADATA_HEADER(ExamplePreferredSizeLabel, Label)
+
  public:
   ExamplePreferredSizeLabel() {
     SetBorder(
@@ -50,17 +56,20 @@ class ExamplePreferredSizeLabel : public Label {
   ~ExamplePreferredSizeLabel() override = default;
 
   // Label:
-  gfx::Size CalculatePreferredSize() const override {
-    return gfx::Size(50, Label::CalculatePreferredSize().height());
+  gfx::Size CalculatePreferredSize(
+      const SizeBounds& available_size) const override {
+    return gfx::Size(50,
+                     Label::CalculatePreferredSize(available_size).height());
   }
-
-  static const char* kElideBehaviors[];
 };
 
+BEGIN_METADATA(ExamplePreferredSizeLabel)
+END_METADATA
+
 // static
-const char* ExamplePreferredSizeLabel::kElideBehaviors[] = {
-    "No Elide",   "Truncate",    "Elide Head", "Elide Middle",
-    "Elide Tail", "Elide Email", "Fade Tail"};
+constexpr auto kElideBehaviors = std::to_array<const char* const>(
+    {"No Elide", "Truncate", "Elide Head", "Elide Middle", "Elide Tail",
+     "Elide Email", "Fade Tail"});
 
 }  // namespace
 
@@ -68,6 +77,9 @@ LabelExample::LabelExample()
     : ExampleBase(l10n_util::GetStringUTF8(IDS_LABEL_SELECT_LABEL).c_str()) {}
 
 LabelExample::~LabelExample() {
+  if (textfield_) {
+    textfield_->set_controller(nullptr);
+  }
   observer_.Reset();
 }
 
@@ -186,15 +198,12 @@ void LabelExample::AddCustomLabel(View* container) {
       u"this custom label.");
   textfield_->SetEditableSelectionRange(gfx::Range());
   textfield_->set_controller(this);
-  textfield_->SetAssociatedLabel(content_label);
+  textfield_->GetViewAccessibility().SetName(*content_label);
 
-  alignment_ =
-      AddCombobox(table, u"Alignment: ", kAlignments, std::size(kAlignments),
-                  &LabelExample::AlignmentChanged);
-  elide_behavior_ = AddCombobox(
-      table, u"Elide Behavior: ", ExamplePreferredSizeLabel::kElideBehaviors,
-      std::size(ExamplePreferredSizeLabel::kElideBehaviors),
-      &LabelExample::ElidingChanged);
+  alignment_ = AddCombobox(table, u"Alignment: ", kAlignments,
+                           &LabelExample::AlignmentChanged);
+  elide_behavior_ = AddCombobox(table, u"Elide Behavior: ", kElideBehaviors,
+                                &LabelExample::ElidingChanged);
 
   auto* checkboxes =
       control_container->AddChildView(std::make_unique<BoxLayoutView>());
@@ -227,14 +236,13 @@ void LabelExample::AddCustomLabel(View* container) {
 
 Combobox* LabelExample::AddCombobox(View* parent,
                                     std::u16string name,
-                                    const char** strings,
-                                    int count,
+                                    base::span<const char* const> items,
                                     void (LabelExample::*function)()) {
   parent->AddChildView(std::make_unique<Label>(name));
   auto* combobox = parent->AddChildView(std::make_unique<Combobox>(
-      std::make_unique<ExampleComboboxModel>(strings, count)));
+      std::make_unique<ExampleComboboxModel>(items)));
   combobox->SetSelectedIndex(0);
-  combobox->SetAccessibleName(name);
+  combobox->GetViewAccessibility().SetName(name);
   combobox->SetCallback(base::BindRepeating(function, base::Unretained(this)));
   return parent->AddChildView(std::move(combobox));
 }

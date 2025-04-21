@@ -1,6 +1,6 @@
 #!/usr/bin/env vpython3
 #
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -11,10 +11,11 @@ import contextlib
 import json
 import logging
 import os
+import os.path
 import shutil
+import subprocess
 import sys
 import tempfile
-import zipfile
 
 sys.path.append(os.path.join(
     os.path.dirname(__file__), os.pardir, os.pardir, 'build', 'android'))
@@ -25,6 +26,8 @@ from devil.android.sdk import version_codes
 from devil.android.tools import script_common
 from devil.utils import cmd_helper
 from devil.utils import logging_common
+from pylib.constants import ANDROID_SDK_ROOT
+from pylib.constants import ANDROID_SDK_TOOLS
 from pylib.local.emulator import avd
 from pylib.utils import test_filter
 
@@ -39,20 +42,21 @@ _TEST_RUNNER_PATH = os.path.join(
     os.path.dirname(__file__), os.pardir, os.pardir,
     'build', 'android', 'test_runner.py')
 
-_WEBVIEW_CTS_GCS_PATH_FILE = os.path.join(
-    os.path.dirname(__file__), 'cts_config', 'webview_cts_gcs_path.json')
 _ARCH_SPECIFIC_CTS_INFO = ["filename", "unzip_dir", "_origin"]
 
-_CTS_ARCHIVE_DIR = os.path.join(os.path.dirname(__file__), 'cts_archive')
+_DEFAULT_CTS_GCS_PATH_FILE = os.path.join(os.path.dirname(__file__),
+                                          'cts_config',
+                                          'webview_cts_gcs_path.json')
+_DEFAULT_CTS_ARCHIVE_DIR = os.path.join(os.path.dirname(__file__),
+                                        'cts_archive', 'cipd')
+_DEFAULT_TRADEFED_AAPT_PATH = ANDROID_SDK_TOOLS
+_DEFAULT_TRADEFED_ADB_PATH = os.path.join(ANDROID_SDK_ROOT, 'platform-tools')
 
 _CTS_WEBKIT_PACKAGES = ["com.android.cts.webkit", "android.webkit.cts"]
 
 _TEST_APK_AS_INSTANT_ARG = '--test-apk-as-instant'
 
 SDK_PLATFORM_DICT = {
-    version_codes.MARSHMALLOW: 'M',
-    version_codes.NOUGAT: 'N',
-    version_codes.NOUGAT_MR1: 'N',
     version_codes.OREO: 'O',
     version_codes.OREO_MR1: 'O',
     version_codes.PIE: 'P',
@@ -60,6 +64,9 @@ SDK_PLATFORM_DICT = {
     version_codes.R: 'R',
     version_codes.S: 'S',
     version_codes.S_V2: 'S',
+    version_codes.TIRAMISU: 'T',
+    version_codes.UPSIDE_DOWN_CAKE: 'U',
+    # TODO: b/353915320 - Update cts-release arg's choices once 'V' is added.
 }
 
 # The test apks are apparently compatible across all architectures, the
@@ -80,12 +87,14 @@ _SUPPORTED_ARCH_DICT = {
 
 TEST_FILTER_OPT = '--test-filter'
 
-def GetCtsInfo(arch, cts_release, item):
-  """Gets contents of CTS Info for arch and cts_release.
 
-  See _WEBVIEW_CTS_GCS_PATH_FILE
+def GetCtsInfo(cts_gcs_path, arch, cts_release, item):
+  """Gets contents of CTS Info for arch and cts_release from the
+  CTS configuration file.
+
+  See --cts-gcs-path
   """
-  with open(_WEBVIEW_CTS_GCS_PATH_FILE) as f:
+  with open(cts_gcs_path) as f:
     cts_gcs_path_info = json.load(f)
   try:
     if item in _ARCH_SPECIFIC_CTS_INFO:
@@ -98,9 +107,11 @@ def GetCtsInfo(arch, cts_release, item):
                     (item, arch, cts_release))
 
 
-def GetCTSModuleNames(arch, cts_release):
-  """Gets the module apk name of the arch and cts_release"""
-  test_runs = GetCtsInfo(arch, cts_release, 'test_runs')
+def GetCTSModuleNames(cts_gcs_path, arch, cts_release):
+  """Gets the module apk name of the arch and cts_release from the CTS
+  configuration file.
+  """
+  test_runs = GetCtsInfo(cts_gcs_path, arch, cts_release, 'test_runs')
   return [os.path.basename(r['apk']) for r in test_runs]
 
 
@@ -112,7 +123,7 @@ def GetTestRunFilterArg(args, test_run, test_app_mode=None, arch=None):
   test_app_mode = test_app_mode or _APP_MODE_FULL
 
   # Convert cmdline filters to test-filter style
-  filter_string = test_filter.InitializeFilterFromArgs(args)
+  filter_strings = test_filter.InitializeFiltersFromArgs(args)
 
   # Get all the filters for either include or exclude patterns
   # and filter where an architecture is provided and does not match
@@ -125,20 +136,25 @@ def GetTestRunFilterArg(args, test_run, test_app_mode=None, arch=None):
         if 'mode' not in filter_ or filter_['mode'] == test_app_mode
     ]
 
-  # Only add inclusion filters if there's not already one specified, since
-  # they would conflict, see test_filter.ConflictingPositiveFiltersException.
-  if not test_filter.HasPositivePatterns(filter_string):
+  if not filter_strings or not any(
+      test_filter.HasPositivePatterns(filt) for filt in filter_strings):
     patterns = getTestRunFilters("includes")
-    filter_string = test_filter.AppendPatternsToFilter(
-        filter_string, positive_patterns=patterns)
+    positive_string = test_filter.AppendPatternsToFilter(
+        '', positive_patterns=patterns)
+    if positive_string:
+      filter_strings.append(positive_string)
 
   if args.skip_expected_failures:
     patterns = getTestRunFilters("excludes")
-    filter_string = test_filter.AppendPatternsToFilter(
-        filter_string, negative_patterns=patterns)
+    negative_string = test_filter.AppendPatternsToFilter(
+        '', negative_patterns=patterns)
+    filter_strings.append(negative_string)
 
-  if filter_string:
-    return [TEST_FILTER_OPT + '=' + filter_string]
+  if filter_strings:
+    return [
+        TEST_FILTER_OPT + '=' + filter_string
+        for filter_string in filter_strings
+    ]
   return []
 
 
@@ -147,9 +163,14 @@ def RunCTS(
     local_cts_dir,
     apk,
     *,  # Optional parameters must be passed by keyword (PEP 3102)
+    is_hostside=False,
+    tradefed_aapt_path=None,
+    tradefed_adb_path=None,
     voice_service=None,
     additional_apks=None,
     test_app_mode=None,
+    setup_commands=None,
+    teardown_commands=None,
     json_results_file=None):
   """Run tests in apk using test_runner script at _TEST_RUNNER_PATH.
 
@@ -158,6 +179,21 @@ def RunCTS(
   """
 
   test_app_mode = test_app_mode or _APP_MODE_FULL
+
+  if is_hostside:
+    suite_name, _ = os.path.splitext(os.path.basename(apk))
+    local_test_runner_args = test_runner_args + [
+        '--test-suite', suite_name,
+        '--tradefed-executable',
+        os.path.join(local_cts_dir, 'android-cts/tools/cts-tradefed'),
+        '--tradefed-aapt-path', tradefed_aapt_path,
+        '--tradefed-adb-path', tradefed_adb_path,
+    ]
+    if json_results_file:
+      local_test_runner_args += ['--json-results-file=%s' %
+                                 json_results_file]
+    return cmd_helper.RunCmd(
+        [_TEST_RUNNER_PATH, 'hostside'] + local_test_runner_args)
 
   local_test_runner_args = test_runner_args + ['--test-apk',
                                                os.path.join(local_cts_dir, apk)]
@@ -180,6 +216,14 @@ def RunCTS(
         local_test_runner_args += [
             '--instant-additional-apk', additional_apk_tmp
         ]
+
+  if setup_commands:
+    for cmd in setup_commands:
+      local_test_runner_args += ['--run-setup-command', cmd]
+
+  if teardown_commands:
+    for cmd in teardown_commands:
+      local_test_runner_args += ['--run-teardown-command', cmd]
 
   if json_results_file:
     local_test_runner_args += ['--json-results-file=%s' %
@@ -213,7 +257,7 @@ def MergeTestResults(existing_results_json, additional_results_json):
 def ExtractCTSZip(args, arch, cts_release):
   """Extract the CTS tests for cts_release.
 
-  Extract the CTS zip file from _CTS_ARCHIVE_DIR to
+  Extract the CTS zip file from --cts-archive-dir to
   apk_dir if specified, or a new temporary directory if not.
   Returns following tuple (local_cts_dir, base_cts_dir, delete_cts_dir):
     local_cts_dir - CTS extraction location for current arch and cts_release
@@ -223,7 +267,8 @@ def ExtractCTSZip(args, arch, cts_release):
   """
   base_cts_dir = None
   delete_cts_dir = False
-  relative_cts_zip_path = GetCtsInfo(arch, cts_release, 'filename')
+  relative_cts_zip_path = GetCtsInfo(args.cts_gcs_path, arch, cts_release,
+                                     'filename')
 
   if args.apk_dir:
     base_cts_dir = args.apk_dir
@@ -231,13 +276,15 @@ def ExtractCTSZip(args, arch, cts_release):
     base_cts_dir = tempfile.mkdtemp()
     delete_cts_dir = True
 
-  cts_zip_path = os.path.join(_CTS_ARCHIVE_DIR, relative_cts_zip_path)
-  local_cts_dir = os.path.join(base_cts_dir,
-                               GetCtsInfo(arch, cts_release,
-                                          'unzip_dir')
-                              )
-  zf = zipfile.ZipFile(cts_zip_path, 'r')
-  zf.extractall(local_cts_dir)
+  cts_zip_path = os.path.join(args.cts_archive_dir, relative_cts_zip_path)
+  local_cts_dir = os.path.join(
+      base_cts_dir, GetCtsInfo(args.cts_gcs_path, arch, cts_release,
+                               'unzip_dir'))
+  # We can't simply use standard library zipfile module as that doesn't
+  # preserve the permissions, in particular the executable bit.
+  # TODO(zbikowski): replace with a Python perms-preserving implementation
+  os.makedirs(local_cts_dir, exist_ok=True)
+  subprocess.run(["unzip", cts_zip_path, "-d", local_cts_dir], check=True)
   return (local_cts_dir, base_cts_dir, delete_cts_dir)
 
 
@@ -251,21 +298,29 @@ def RunAllCTSTests(args, arch, cts_release, test_runner_args):
   returns the failure code of the last failing
   test.
   """
-  local_cts_dir, base_cts_dir, delete_cts_dir = ExtractCTSZip(args, arch,
-                                                              cts_release)
+  local_cts_dir, base_cts_dir, delete_cts_dir = ExtractCTSZip(
+      args, arch, cts_release)
   cts_result = 0
   json_results_file = args.json_results_file
   try:
-    cts_test_runs = GetCtsInfo(arch, cts_release, 'test_runs')
+    cts_test_runs = GetCtsInfo(args.cts_gcs_path, arch, cts_release,
+                               'test_runs')
     cts_results_json = {}
     for cts_test_run in cts_test_runs:
       iteration_cts_result = 0
 
       test_apk = cts_test_run['apk']
+      is_hostside = cts_test_run.get('is_hostside', False)
+      tradefed_aapt_path = args.tradefed_aapt_path if is_hostside else None
+      tradefed_adb_path = args.tradefed_adb_path if is_hostside else None
       voice_service = cts_test_run.get('voice_service')
       # Some tests need additional APKs that providing mocking
       # services to run
       additional_apks = cts_test_run.get('additional_apks')
+
+      # Some tests require custom setup and/or teardown steps
+      setup_commands = cts_test_run.get('setup_commands')
+      teardown_commands = cts_test_run.get('teardown_commands')
 
       test_app_mode = (_APP_MODE_INSTANT
                        if args.test_apk_as_instant else _APP_MODE_FULL)
@@ -283,9 +338,14 @@ def RunAllCTSTests(args, arch, cts_release, test_runner_args):
               test_runner_args=iter_test_runner_args,
               local_cts_dir=local_cts_dir,
               apk=test_apk,
+              is_hostside=is_hostside,
+              tradefed_aapt_path=tradefed_aapt_path,
+              tradefed_adb_path=tradefed_adb_path,
               voice_service=voice_service,
               additional_apks=additional_apks,
               test_app_mode=test_app_mode,
+              setup_commands=setup_commands,
+              teardown_commands=teardown_commands,
               json_results_file=iteration_json_file.name)
           with open(iteration_json_file.name) as f:
             additional_results_json = json.load(f)
@@ -294,9 +354,14 @@ def RunAllCTSTests(args, arch, cts_release, test_runner_args):
         iteration_cts_result = RunCTS(test_runner_args=iter_test_runner_args,
                                       local_cts_dir=local_cts_dir,
                                       apk=test_apk,
+                                      is_hostside=is_hostside,
+                                      tradefed_aapt_path=tradefed_aapt_path,
+                                      tradefed_adb_path=tradefed_adb_path,
                                       voice_service=voice_service,
                                       additional_apks=additional_apks,
-                                      test_app_mode=test_app_mode)
+                                      test_app_mode=test_app_mode,
+                                      setup_commands=setup_commands,
+                                      teardown_commands=teardown_commands)
       if iteration_cts_result:
         cts_result = iteration_cts_result
     if json_results_file:
@@ -380,6 +445,9 @@ def ForwardArgsToTestRunner(known_args):
   if known_args.verbose:
     forwarded_args.extend(['-' + 'v' * known_args.verbose])
   #TODO: Pass quiet to test runner when it becomes supported
+  if known_args.variations_test_seed_path:
+    forwarded_args.extend(
+        ['--variations-test-seed-path', known_args.variations_test_seed_path])
   return forwarded_args
 
 
@@ -392,8 +460,9 @@ def GetDevice(args):
       avd_config.Install()
       emulator_instance = avd_config.CreateInstance()
       # Start the emulator w/ -writable-system s.t. we can remount the system
-      # partition r/w and install our own webview provider.
-      emulator_instance.Start(writable_system=True)
+      # partition r/w and install our own webview provider. Require fast start
+      # to avoid startup regressions.
+      emulator_instance.Start(writable_system=True, enable_network=True)
 
     devices = script_common.GetDevices(args.devices, args.denylist_file)
     device = devices[0]
@@ -404,6 +473,17 @@ def GetDevice(args):
   finally:
     if emulator_instance:
       emulator_instance.Stop()
+
+
+@contextlib.contextmanager
+def GetTemporaryRunTimeDepsFile(known_args):
+  with tempfile.NamedTemporaryFile(mode='w+') as tmpfile:
+    if known_args.variations_test_seed_path:
+      tmpfile.write(known_args.variations_test_seed_path)
+      tmpfile.flush()
+      yield tmpfile.name
+    else:
+      yield None
 
 
 def main():
@@ -419,7 +499,8 @@ def main():
       '--cts-release',
       # TODO(aluo): --platform is deprecated (the meaning is unclear).
       '--platform',
-      choices=sorted(set(SDK_PLATFORM_DICT.values())),
+      # TODO: b/353915320 - Remove 'V' once added to SDK_PLATFORM_DICT.
+      choices=sorted(set(SDK_PLATFORM_DICT.values()) | {'V'}),
       required=False,
       default=None,
       help='Which CTS release to use for the run. This should generally be <= '
@@ -444,18 +525,56 @@ def main():
       help='If set, will dump results in JSON form to the specified file. '
            'Note that this will also trigger saving per-test logcats to '
            'logdog.')
-  parser.add_argument(
-      '-m',
-      '--module-apk',
-      dest='module_apk',
-      help='CTS module apk name in ' + _WEBVIEW_CTS_GCS_PATH_FILE +
-      ' file, without the path prefix.')
+  parser.add_argument('-m',
+                      '--module-apk',
+                      dest='module_apk',
+                      help='CTS module apk name in the --cts-gcs-path'
+                      ' file, without the path prefix.')
   parser.add_argument(
       '--avd-config',
       type=os.path.realpath,
       help='Path to the avd config textpb. '
            '(See //tools/android/avd/proto for message definition'
            ' and existing textpb files.)')
+  # Emulator log will be routed to stdout when "--emulator-debug-tags" is set
+  # without an output_manager.
+  # Mark this arg as unused for run_cts to avoid dumping too much swarming log.
+  parser.add_argument('--emulator-debug-tags', help='Unused')
+  # The CTS config and archive paths are suitable defaults that
+  # normally won't need to change, this is available for if we
+  # want to re-use the run_cts.py script with alternative configurations.
+  parser.add_argument(
+      '--cts-gcs-path',
+      type=os.path.realpath,
+      default=_DEFAULT_CTS_GCS_PATH_FILE,
+      help='Path to the JSON file used to configure WebView CTS '
+      'test suites per Android version. Defaults to: ' +
+      _DEFAULT_CTS_GCS_PATH_FILE)
+  parser.add_argument('--cts-archive-dir',
+                      type=os.path.realpath,
+                      default=_DEFAULT_CTS_ARCHIVE_DIR,
+                      help='Path to where CTS archives are stored. '
+                      'Defaults to: ' + _DEFAULT_CTS_ARCHIVE_DIR)
+  parser.add_argument('--tradefed-aapt-path',
+                      type=os.path.realpath,
+                      default=_DEFAULT_TRADEFED_AAPT_PATH,
+                      help='Path to where AAPT binary is located. '
+                      'Defaults to: ' + _DEFAULT_TRADEFED_AAPT_PATH)
+  parser.add_argument('--tradefed-adb-path',
+                      type=os.path.realpath,
+                      default=_DEFAULT_TRADEFED_ADB_PATH,
+                      help='Path to where ADB binary is located. '
+                      'Defaults to: ' + _DEFAULT_TRADEFED_ADB_PATH)
+
+  # The variations test seed file should be in JSON format. Please look
+  # in //third_party/chromium-variations for examples of variations
+  # test seeds.
+  parser.add_argument('--variations-test-seed-path',
+                      type=os.path.relpath,
+                      default=None,
+                      help='Path to a JSON file that contains the '
+                      'variations test seed. Defaults to running CTS tests '
+                      'without a variations test seed.')
   # We are re-using this argument that is used by our test runner
   # to detect if we are testing against an instant app
   # This allows us to know if we should filter tests based off the app
@@ -485,14 +604,14 @@ def main():
     arch = args.arch or DetermineArch(device)
     cts_release = args.cts_release or DetermineCtsRelease(device)
 
-    if (args.test_filter_files or args.test_filter
-        or args.isolated_script_test_filter):
+    if (args.test_filter_files or args.test_filters
+        or args.isolated_script_test_filters):
       # TODO(aluo): auto-determine the module based on the test filter and the
       # available tests in each module
       if not args.module_apk:
         args.module_apk = 'CtsWebkitTestCases.apk'
 
-    platform_modules = GetCTSModuleNames(arch, cts_release)
+    platform_modules = GetCTSModuleNames(args.cts_gcs_path, arch, cts_release)
     if args.module_apk and args.module_apk not in platform_modules:
       raise Exception('--module-apk for arch==' + arch + 'and cts_release=='
                       + cts_release + ' must be one of: '
@@ -505,7 +624,10 @@ def main():
     # MockContentProvider's authority string the same.
     UninstallAnyCtsWebkitPackages(device)
 
-    return RunAllCTSTests(args, arch, cts_release, test_runner_args)
+    with GetTemporaryRunTimeDepsFile(args) as runtime_deps_file:
+      if runtime_deps_file:
+        test_runner_args.extend(['--runtime-deps-path', runtime_deps_file])
+      return RunAllCTSTests(args, arch, cts_release, test_runner_args)
 
 
 if __name__ == '__main__':

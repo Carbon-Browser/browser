@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,18 +9,19 @@
 #include <CoreServices/CoreServices.h>
 
 #include <memory>
+#include <optional>
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/apple/scoped_cftyperef.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
-#include "base/mac/scoped_cftyperef.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "remoting/proto/control.pb.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/events/keycodes/dom/dom_code.h"
 #include "ui/events/keycodes/dom/keycode_converter.h"
 
@@ -30,7 +31,7 @@ namespace {
 
 class KeyboardLayoutMonitorMac : public KeyboardLayoutMonitor {
  public:
-  KeyboardLayoutMonitorMac(
+  explicit KeyboardLayoutMonitorMac(
       base::RepeatingCallback<void(const protocol::KeyboardLayout&)> callback);
 
   ~KeyboardLayoutMonitorMac() override;
@@ -59,9 +60,9 @@ class KeyboardLayoutMonitorMac : public KeyboardLayoutMonitor {
   base::WeakPtrFactory<KeyboardLayoutMonitorMac> weak_ptr_factory_;
 };
 
-absl::optional<protocol::LayoutKeyFunction> GetFixedKeyFunction(int keycode);
-absl::optional<protocol::LayoutKeyFunction> GetCharFunction(UniChar char_code,
-                                                            int keycode);
+std::optional<protocol::LayoutKeyFunction> GetFixedKeyFunction(int keycode);
+std::optional<protocol::LayoutKeyFunction> GetCharFunction(UniChar char_code,
+                                                           int keycode);
 
 KeyboardLayoutMonitorMac::KeyboardLayoutMonitorMac(
     base::RepeatingCallback<void(const protocol::KeyboardLayout&)> callback)
@@ -93,8 +94,9 @@ KeyboardLayoutMonitorMac::~KeyboardLayoutMonitorMac() {
 
 void KeyboardLayoutMonitorMac::Start() {
   DCHECK(!callback_context_);
-  callback_context_ = std::make_unique<CallbackContext>(CallbackContext{
-      base::SequencedTaskRunnerHandle::Get(), weak_ptr_factory_.GetWeakPtr()});
+  callback_context_ = std::make_unique<CallbackContext>(
+      CallbackContext{base::SequencedTaskRunner::GetCurrentDefault(),
+                      weak_ptr_factory_.GetWeakPtr()});
   CFNotificationCenterAddObserver(
       CFNotificationCenterGetDistributedCenter(), callback_context_.get(),
       SelectedKeyboardInputSourceChangedCallback,
@@ -105,12 +107,12 @@ void KeyboardLayoutMonitorMac::Start() {
   // Store the callback context pointer in a local variable so the block
   // captures it directly instead of capturing this.
   CallbackContext* callback_context = callback_context_.get();
-  base::ScopedCFTypeRef<CFRunLoopRef> main_loop(CFRunLoopGetMain(),
-                                                base::scoped_policy::RETAIN);
-  CFRunLoopPerformBlock(main_loop, kCFRunLoopCommonModes, ^(void) {
+  base::apple::ScopedCFTypeRef<CFRunLoopRef> main_loop(
+      CFRunLoopGetMain(), base::scoped_policy::RETAIN);
+  CFRunLoopPerformBlock(main_loop.get(), kCFRunLoopCommonModes, ^(void) {
     QueryLayoutOnMainLoop(callback_context);
   });
-  CFRunLoopWakeUp(main_loop);
+  CFRunLoopWakeUp(main_loop.get());
 }
 
 void KeyboardLayoutMonitorMac::OnLayoutChanged(
@@ -132,11 +134,11 @@ void KeyboardLayoutMonitorMac::SelectedKeyboardInputSourceChangedCallback(
 // static
 void KeyboardLayoutMonitorMac::QueryLayoutOnMainLoop(
     KeyboardLayoutMonitorMac::CallbackContext* callback_context) {
-  base::ScopedCFTypeRef<TISInputSourceRef> input_source(
+  base::apple::ScopedCFTypeRef<TISInputSourceRef> input_source(
       TISCopyCurrentKeyboardLayoutInputSource());
-  base::ScopedCFTypeRef<CFDataRef> layout_data(
+  base::apple::ScopedCFTypeRef<CFDataRef> layout_data(
       static_cast<CFDataRef>(TISGetInputSourceProperty(
-          input_source, kTISPropertyUnicodeKeyLayoutData)),
+          input_source.get(), kTISPropertyUnicodeKeyLayoutData)),
       base::scoped_policy::RETAIN);
 
   if (!layout_data) {
@@ -168,7 +170,7 @@ void KeyboardLayoutMonitorMac::QueryLayoutOnMainLoop(
         *(*layout_message.mutable_keys())[usb_code].mutable_actions();
 
     for (int shift_level = 0; shift_level < 4; ++shift_level) {
-      absl::optional<protocol::LayoutKeyFunction> fixed_function =
+      std::optional<protocol::LayoutKeyFunction> fixed_function =
           GetFixedKeyFunction(keycode);
       if (fixed_function) {
         key_actions[shift_level].set_function(*fixed_function);
@@ -186,7 +188,7 @@ void KeyboardLayoutMonitorMac::QueryLayoutOnMainLoop(
       UniChar result_array[255];
       UniCharCount result_length = 0;
       UCKeyTranslate(reinterpret_cast<const UCKeyboardLayout*>(
-                         CFDataGetBytePtr(layout_data)),
+                         CFDataGetBytePtr(layout_data.get())),
                      keycode, kUCKeyActionDown, modifier_state >> 8,
                      keyboard_type, kUCKeyTranslateNoDeadKeysMask,
                      &deadkey_state, std::size(result_array), &result_length,
@@ -197,7 +199,7 @@ void KeyboardLayoutMonitorMac::QueryLayoutOnMainLoop(
       }
 
       if (result_length == 1) {
-        absl::optional<protocol::LayoutKeyFunction> char_function =
+        std::optional<protocol::LayoutKeyFunction> char_function =
             GetCharFunction(result_array[0], keycode);
         if (char_function) {
           key_actions[shift_level].set_function(*char_function);
@@ -206,7 +208,7 @@ void KeyboardLayoutMonitorMac::QueryLayoutOnMainLoop(
       }
 
       key_actions[shift_level].set_character(
-          base::UTF16ToUTF8(base::StringPiece16(
+          base::UTF16ToUTF8(std::u16string_view(
               reinterpret_cast<const char16_t*>(result_array), result_length)));
     }
 
@@ -221,7 +223,7 @@ void KeyboardLayoutMonitorMac::QueryLayoutOnMainLoop(
                      callback_context->weak_ptr, std::move(layout_message)));
 }
 
-absl::optional<protocol::LayoutKeyFunction> GetFixedKeyFunction(int keycode) {
+std::optional<protocol::LayoutKeyFunction> GetFixedKeyFunction(int keycode) {
   // Some keys are not represented in the layout and always have the same
   // function.
   switch (keycode) {
@@ -282,12 +284,12 @@ absl::optional<protocol::LayoutKeyFunction> GetFixedKeyFunction(int keycode) {
     case kVK_JIS_Eisu:
       return protocol::LayoutKeyFunction::EISU;
     default:
-      return absl::nullopt;
+      return std::nullopt;
   }
 }
 
-absl::optional<protocol::LayoutKeyFunction> GetCharFunction(UniChar char_code,
-                                                            int keycode) {
+std::optional<protocol::LayoutKeyFunction> GetCharFunction(UniChar char_code,
+                                                           int keycode) {
   switch (char_code) {
     case kHomeCharCode:
       return protocol::LayoutKeyFunction::HOME;
@@ -332,7 +334,7 @@ absl::optional<protocol::LayoutKeyFunction> GetCharFunction(UniChar char_code,
     case kDeleteCharCode:
       return protocol::LayoutKeyFunction::DELETE_;
     default:
-      return absl::nullopt;
+      return std::nullopt;
   }
 }
 

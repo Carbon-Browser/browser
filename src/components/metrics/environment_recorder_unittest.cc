@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ class EnvironmentRecorderTest : public testing::Test {
   EnvironmentRecorderTest(const EnvironmentRecorderTest&) = delete;
   EnvironmentRecorderTest& operator=(const EnvironmentRecorderTest&) = delete;
 
-  ~EnvironmentRecorderTest() override {}
+  ~EnvironmentRecorderTest() override = default;
 
  protected:
   TestingPrefServiceSimple prefs_;

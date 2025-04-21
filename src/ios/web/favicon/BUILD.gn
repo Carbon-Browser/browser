@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -7,7 +7,6 @@ import("//ios/web/public/js_messaging/compile_ts.gni")
 import("//ios/web/public/js_messaging/optimize_js.gni")
 
 source_set("favicon") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   deps = [
     ":favicon_event_listeners_js",
     ":favicon_js",
@@ -18,7 +17,6 @@ source_set("favicon") {
   sources = [
     "favicon_java_script_feature.h",
     "favicon_java_script_feature.mm",
-    "favicon_status.cc",
     "favicon_url.cc",
     "favicon_util.h",
     "favicon_util.mm",
@@ -57,7 +55,6 @@ optimize_js("favicon_event_listeners_js") {
 }
 
 source_set("unittests") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
   deps = [
     "//base",
@@ -70,7 +67,6 @@ source_set("unittests") {
 }
 
 source_set("inttests") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
   deps = [
     "//base",

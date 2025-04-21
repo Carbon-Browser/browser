@@ -1,14 +1,16 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "device/bluetooth/cast/bluetooth_remote_gatt_descriptor_cast.h"
 
 #include <stdint.h>
+
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/containers/to_vector.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "chromecast/device/bluetooth/le/remote_descriptor.h"
 #include "device/bluetooth/bluetooth_gatt_service.h"
 #include "device/bluetooth/cast/bluetooth_remote_gatt_characteristic_cast.h"
@@ -57,14 +59,15 @@ void BluetoothRemoteGattDescriptorCast::ReadRemoteDescriptor(
 }
 
 void BluetoothRemoteGattDescriptorCast::WriteRemoteDescriptor(
-    const std::vector<uint8_t>& new_value,
+    base::span<const uint8_t> new_value,
     base::OnceClosure callback,
     ErrorCallback error_callback) {
+  std::vector<uint8_t> new_value_vector = base::ToVector(new_value);
   remote_descriptor_->Write(
-      new_value,
+      new_value_vector,
       base::BindOnce(
           &BluetoothRemoteGattDescriptorCast::OnWriteRemoteDescriptor,
-          weak_factory_.GetWeakPtr(), new_value, std::move(callback),
+          weak_factory_.GetWeakPtr(), new_value_vector, std::move(callback),
           std::move(error_callback)));
 }
 
@@ -74,10 +77,10 @@ void BluetoothRemoteGattDescriptorCast::OnReadRemoteDescriptor(
     const std::vector<uint8_t>& result) {
   if (success) {
     value_ = result;
-    std::move(callback).Run(/*error_code=*/absl::nullopt, result);
+    std::move(callback).Run(/*error_code=*/std::nullopt, result);
     return;
   }
-  std::move(callback).Run(BluetoothGattService::GATT_ERROR_FAILED,
+  std::move(callback).Run(BluetoothGattService::GattErrorCode::kFailed,
                           /*value=*/std::vector<uint8_t>());
 }
 
@@ -91,7 +94,7 @@ void BluetoothRemoteGattDescriptorCast::OnWriteRemoteDescriptor(
     std::move(callback).Run();
     return;
   }
-  std::move(error_callback).Run(BluetoothGattService::GATT_ERROR_FAILED);
+  std::move(error_callback).Run(BluetoothGattService::GattErrorCode::kFailed);
 }
 
 }  // namespace device

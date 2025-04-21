@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,9 @@ CredentialsCleanerRunner::~CredentialsCleanerRunner() = default;
 
 void CredentialsCleanerRunner::MaybeAddCleaningTask(
     std::unique_ptr<CredentialsCleaner> cleaning_task) {
-  if (cleaning_task->NeedsCleaning())
+  if (cleaning_task->NeedsCleaning()) {
     cleaning_tasks_queue_.push(std::move(cleaning_task));
+  }
 }
 
 bool CredentialsCleanerRunner::HasPendingTasks() const {
@@ -23,8 +24,9 @@ bool CredentialsCleanerRunner::HasPendingTasks() const {
 }
 
 void CredentialsCleanerRunner::StartCleaning() {
-  if (cleaning_in_progress_)
+  if (cleaning_in_progress_) {
     return;
+  }
   StartCleaningTask();
 }
 
@@ -37,8 +39,9 @@ void CredentialsCleanerRunner::CleaningCompleted() {
 
 void CredentialsCleanerRunner::StartCleaningTask() {
   cleaning_in_progress_ = HasPendingTasks();
-  if (!cleaning_in_progress_)
+  if (!cleaning_in_progress_) {
     return;
+  }
 
   cleaning_tasks_queue_.front()->StartCleaning(this);
 }

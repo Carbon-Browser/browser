@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -107,6 +107,9 @@ function addPromptListener(action) {
         e.preventDefault();
         setTimeout(() => e.prompt(), 0);
         break;
+      case Action.CANCEL_PROMPT:
+        e.preventDefault();
+        break;
       case Action.CANCEL_PROMPT_AND_NAVIGATE:
         e.preventDefault();
         // Navigate the window to trigger cancellation in the renderer.
@@ -137,6 +140,15 @@ function addManifestLinkTag(optionalCustomUrl) {
   document.head.append(linkTag);
 }
 
+function addFavicon(favicon_url) {
+  var linkTag = document.createElement("link");
+  linkTag.id = "new-icon";
+  linkTag.rel = "icon";
+  linkTag.type = "image/x-icon";
+  linkTag.href = favicon_url;
+  document.head.append(linkTag);
+}
+
 function removeAllManifestTags() {
   for (let i = 0; i < document.head.children.length; ++i) {
     let child = document.head.children[i];
@@ -147,7 +159,11 @@ function removeAllManifestTags() {
 
 function initialize() {
   const url = new URL(window.location.href);
-  const action = url.searchParams.get('action');
+  initializeActions(url.searchParams.get('action'));
+  addOtherTags(url);
+}
+
+function initializeActions(action) {
   if (!action) {
     return;
   }
@@ -197,4 +213,25 @@ function initializeWithWorker(worker) {
 function changeManifestUrl(newManifestUrl) {
   var linkTag = document.getElementById("manifest");
   linkTag.href = newManifestUrl;
+}
+
+function addOtherTags(url) {
+  for (const [key, value] of url.searchParams) {
+    if (key === "manifest" || key === "action" || !value) {
+      continue;
+    }
+    if (key === 'icon') {
+      var linkTag = document.createElement("link");
+      linkTag.id = key
+      linkTag.rel = key;
+      linkTag.href = value;
+      document.head.append(linkTag);
+    }
+    else {
+      var meta = document.createElement('meta');
+      meta.name = key
+      meta.content = value
+      document.head.append(meta);
+    }
+  }
 }

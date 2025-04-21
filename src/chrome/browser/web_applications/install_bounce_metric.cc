@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,8 @@
 
 namespace {
 
-absl::optional<base::Time>& GetTimeOverride() {
-  static absl::optional<base::Time> time_override;
+std::optional<base::Time>& GetTimeOverride() {
+  static std::optional<base::Time> time_override;
   return time_override;
 }
 
@@ -27,13 +27,13 @@ base::Time GetTime() {
 
 // TODO(alancutter): Dedupe Time/Value conversion logic with
 // app_banner_settings_helper.cc and PrefService.
-absl::optional<base::Time> ParseTime(const base::Value* value) {
+std::optional<base::Time> ParseTime(const base::Value* value) {
   if (!value || !value->is_string())
-    return absl::nullopt;
+    return std::nullopt;
 
   int64_t integer;
   if (!base::StringToInt64(value->GetString(), &integer))
-    return absl::nullopt;
+    return std::nullopt;
 
   return base::Time::FromDeltaSinceWindowsEpoch(base::Microseconds(integer));
 }
@@ -51,28 +51,26 @@ struct InstallMetrics {
   webapps::WebappInstallSource source;
 };
 
-absl::optional<InstallMetrics> ParseInstallMetricsFromPrefs(
+std::optional<InstallMetrics> ParseInstallMetricsFromPrefs(
     const PrefService* pref_service,
-    const web_app::AppId& app_id) {
+    const webapps::AppId& app_id) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  const base::Value* ids_to_metrics =
-      pref_service->GetDictionary(prefs::kWebAppInstallMetrics);
-  if (!ids_to_metrics)
-    return absl::nullopt;
+  const base::Value::Dict& ids_to_metrics =
+      pref_service->GetDict(prefs::kWebAppInstallMetrics);
 
-  const base::Value* metrics = ids_to_metrics->FindDictKey(app_id);
+  const base::Value::Dict* metrics = ids_to_metrics.FindDict(app_id);
   if (!metrics)
-    return absl::nullopt;
+    return std::nullopt;
 
-  absl::optional<base::Time> timestamp =
-      ParseTime(metrics->FindKey(kInstallTimestamp));
+  std::optional<base::Time> timestamp =
+      ParseTime(metrics->Find(kInstallTimestamp));
   if (!timestamp)
-    return absl::nullopt;
+    return std::nullopt;
 
-  const base::Value* source = metrics->FindKey(kInstallSource);
+  const base::Value* source = metrics->Find(kInstallSource);
   if (!source || !source->is_int())
-    return absl::nullopt;
+    return std::nullopt;
 
   return InstallMetrics{
       *timestamp, static_cast<webapps::WebappInstallSource>(source->GetInt())};
@@ -80,22 +78,21 @@ absl::optional<InstallMetrics> ParseInstallMetricsFromPrefs(
 
 void WriteInstallMetricsToPrefs(const InstallMetrics& install_metrics,
                                 PrefService* pref_service,
-                                const web_app::AppId& app_id) {
+                                const webapps::AppId& app_id) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetKey(kInstallTimestamp, SerializeTime(install_metrics.timestamp));
-  dict.SetKey(kInstallSource,
-              base::Value(static_cast<int>(install_metrics.source)));
+  base::Value::Dict dict;
+  dict.Set(kInstallTimestamp, SerializeTime(install_metrics.timestamp));
+  dict.Set(kInstallSource, static_cast<int>(install_metrics.source));
 
-  DictionaryPrefUpdate update(pref_service, prefs::kWebAppInstallMetrics);
-  update->SetKey(app_id, std::move(dict));
+  ScopedDictPrefUpdate update(pref_service, prefs::kWebAppInstallMetrics);
+  update->Set(app_id, std::move(dict));
 }
 
 }  // namespace
 
 namespace web_app {
 
-void SetInstallBounceMetricTimeForTesting(absl::optional<base::Time> time) {
+void SetInstallBounceMetricTimeForTesting(std::optional<base::Time> time) {
   GetTimeOverride() = time;
 }
 
@@ -105,15 +102,15 @@ void RegisterInstallBounceMetricProfilePrefs(PrefRegistrySimple* registry) {
 
 void RecordWebAppInstallationTimestamp(
     PrefService* pref_service,
-    const AppId& app_id,
+    const webapps::AppId& app_id,
     webapps::WebappInstallSource install_source) {
   WriteInstallMetricsToPrefs(InstallMetrics{GetTime(), install_source},
                              pref_service, app_id);
 }
 
 void RecordWebAppUninstallation(PrefService* pref_service,
-                                const AppId& app_id) {
-  absl::optional<InstallMetrics> metrics =
+                                const webapps::AppId& app_id) {
+  std::optional<InstallMetrics> metrics =
       ParseInstallMetricsFromPrefs(pref_service, app_id);
   if (!metrics)
     return;

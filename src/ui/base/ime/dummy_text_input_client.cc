@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 #include "base/notreached.h"
 #include "base/strings/string_util.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "ui/events/event.h"
 #include "ui/gfx/geometry/rect.h"
 
@@ -23,9 +22,14 @@ DummyTextInputClient::DummyTextInputClient(TextInputType text_input_type,
                                            TextInputMode text_input_mode)
     : text_input_type_(text_input_type),
       text_input_mode_(text_input_mode),
-      insert_char_count_(0) {}
+      insert_char_count_(0),
+      autocorrect_enabled_(true) {}
 
 DummyTextInputClient::~DummyTextInputClient() {
+}
+
+base::WeakPtr<ui::TextInputClient> DummyTextInputClient::AsWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
 }
 
 void DummyTextInputClient::SetCompositionText(
@@ -33,8 +37,8 @@ void DummyTextInputClient::SetCompositionText(
   composition_history_.push_back(composition);
 }
 
-uint32_t DummyTextInputClient::ConfirmCompositionText(bool keep_selection) {
-  return UINT32_MAX;
+size_t DummyTextInputClient::ConfirmCompositionText(bool keep_selection) {
+  return std::numeric_limits<size_t>::max();
 }
 
 void DummyTextInputClient::ClearCompositionText() {
@@ -81,8 +85,21 @@ gfx::Rect DummyTextInputClient::GetSelectionBoundingBox() const {
   return gfx::Rect();
 }
 
+#if BUILDFLAG(IS_WIN)
+std::optional<gfx::Rect> DummyTextInputClient::GetProximateCharacterBounds(
+    const gfx::Range& range) const {
+  return std::nullopt;
+}
+
+std::optional<size_t> DummyTextInputClient::GetProximateCharacterIndexFromPoint(
+    const gfx::Point& point,
+    IndexFromPointFlags flags) const {
+  return std::nullopt;
+}
+#endif  // BUILDFLAG(IS_WIN)
+
 bool DummyTextInputClient::GetCompositionCharacterBounds(
-    uint32_t index,
+    size_t index,
     gfx::Rect* rect) const {
   return false;
 }
@@ -176,18 +193,20 @@ gfx::Rect DummyTextInputClient::GetAutocorrectCharacterBounds() const {
 
 bool DummyTextInputClient::SetAutocorrectRange(
     const gfx::Range& range) {
-  autocorrect_range_ = range;
-  return true;
+  if (autocorrect_enabled_) {
+    autocorrect_range_ = range;
+  }
+  return autocorrect_enabled_;
 }
 
-absl::optional<GrammarFragment>
+std::optional<GrammarFragment>
 DummyTextInputClient::GetGrammarFragmentAtCursor() const {
   for (const auto& fragment : grammar_fragments_) {
     if (fragment.range.Contains(cursor_range_)) {
       return fragment;
     }
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 bool DummyTextInputClient::ClearGrammarFragments(const gfx::Range& range) {
@@ -205,8 +224,8 @@ bool DummyTextInputClient::AddGrammarFragments(
 
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_CHROMEOS)
 void DummyTextInputClient::GetActiveTextInputControlLayoutBounds(
-    absl::optional<gfx::Rect>* control_bounds,
-    absl::optional<gfx::Rect>* selection_bounds) {}
+    std::optional<gfx::Rect>* control_bounds,
+    std::optional<gfx::Rect>* selection_bounds) {}
 #endif
 
 #if BUILDFLAG(IS_WIN)

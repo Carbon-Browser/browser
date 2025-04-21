@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,7 @@
 #define CHROME_BROWSER_POLICY_RESTRICTED_MGS_POLICY_PROVIDER_H_
 
 #include <memory>
-#include <string>
 
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "components/policy/core/common/configuration_policy_provider.h"
 
@@ -33,7 +31,7 @@ class RestrictedMGSPolicyProvider : public ConfigurationPolicyProvider {
   ~RestrictedMGSPolicyProvider() override;
 
   // ConfigurationPolicyProvider:
-  void RefreshPolicies() override;
+  void RefreshPolicies(PolicyFetchReason reason) override;
 
   // Factory function to create and initialize a provider. Returns nullptr if we
   // are not in a Managed Guest Session.

@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,156 +11,285 @@
 #include "base/metrics/field_trial_params.h"
 #include "base/values.h"
 
-namespace base {
-class ListValue;
-}  // namespace base
-
 namespace safe_browsing {
-// Features list, in alphabetical order.
-
-// Controls whether accuracy tips should be enabled.
-extern const base::Feature kAccuracyTipsFeature;
+// Features list
+//
+// sticky_prefixes attach to the lines after them, and group_prefixes
+// attach to the lines before them. These prefixes were chosen to sort
+// by feature name. See https://github.com/google/keep-sorted for
+// detailed semantics.
+//
+// keep-sorted start sticky_prefixes=["#if"] group_prefixes=["#else", "#endif", "extern const base::FeatureParam"] newline_separated=yes
 
 // Controls various parameters related to occasionally collecting ad samples,
 // for example to control how often collection should occur.
-extern const base::Feature kAdSamplerTriggerFeature;
+BASE_DECLARE_FEATURE(kAdSamplerTriggerFeature);
 
-// Enables including some information in protection requests sent to Safe
-// Browsing.
-extern const base::Feature kBetterTelemetryAcrossReports;
+#if BUILDFLAG(IS_ANDROID)
+// Enables adding an Android app referrer to Protego pings.
+BASE_DECLARE_FEATURE(kAddReferringAppInfoToProtegoPings);
+#endif
 
-// The client side detection model is a flatbuffer.
-extern const base::Feature kClientSideDetectionModelIsFlatBuffer;
+// Enables adding warning shown timestamp to client safe browsing report.
+BASE_DECLARE_FEATURE(kAddWarningShownTSToClientSafeBrowsingReport);
 
-// Determines the tag to pass to Omaha to get a client side detection model.
-extern const base::Feature kClientSideDetectionModelTag;
+// Expand allowlist usage beyond CSPP allowlist by using the high confidence
+// allowlist as well.
+BASE_DECLARE_FEATURE(kClientSideDetectionAcceptHCAllowlist);
 
-// The parameter name used for getting the tag values from client side detection
-// features, `kClientSideDetectionModelTag` and
-// `kClientSideDetectionModelHighMemoryTag`.
-const char kClientSideDetectionTagParamName[] = "reporter_omaha_tag";
+// Create a response containing the brand and the intent of the page using the
+// on-device model LLM.
+BASE_DECLARE_FEATURE(kClientSideDetectionBrandAndIntentForScamDetection);
 
-// Enables client side detection referrer chain.
-extern const base::Feature kClientSideDetectionReferrerChain;
+BASE_DECLARE_FEATURE(kClientSideDetectionDebuggingMetadataCache);
 
 // Killswitch for client side phishing detection. Since client side models are
 // run on a large fraction of navigations, crashes due to the model are very
 // impactful, even if only a small fraction of users have a bad version of the
 // model. This Finch flag allows us to remediate long-tail component versions
-// while we fix the root cause.
-extern const base::Feature kClientSideDetectionKillswitch;
+// while we fix the root cause. This will also halt the model distribution from
+// OptimizationGuide.
+BASE_DECLARE_FEATURE(kClientSideDetectionKillswitch);
 
-// Controls whether an access token is attached to scanning requests triggered
-// by enterprise Connectors.
-extern const base::Feature kConnectorsScanningAccessToken;
+// Expand CSPP beyond phishing and trigger when keyboard or pointer lock request
+// occurs on the page.
+BASE_DECLARE_FEATURE(kClientSideDetectionKeyboardPointerLockRequest);
 
-// Controls the non-blocking scanning UI for Connectors scanning requests. If
-// this is enabled, the downloaded file(s) will be renamed immediately and the
-// scanning will take place without UI when the policy is set to "non-blocking"
-// instead of just showing an "Open Now" button with the blocking UI.
-extern const base::Feature kConnectorsScanningReportOnlyUI;
+// Expand CSD-Phishing beyond phishing and trigger when a notification prompt
+// occurs on the page.
+BASE_DECLARE_FEATURE(kClientSideDetectionNotificationPrompt);
 
-// Controls whether to connect to the Safe Browsing service early on startup.
-// The alternative is to connect as soon as the first Safe Browsing check is
-// made associated with a URK request. Android only. On this platform getting
-// the notification about the success of establishing the connection can be
-// delayed by several seconds.
-extern const base::Feature kCreateSafebrowsingOnStartup;
+// Send a sample CSPP ping when a URL matches the CSD allowlist and all other
+// preclassification check conditions pass.
+BASE_DECLARE_FEATURE(kClientSideDetectionSamplePing);
+
+// Show a warning to the user that factors in the IntelligentScanVerdict from
+// ClientPhishingResponse.
+BASE_DECLARE_FEATURE(kClientSideDetectionShowScamVerdictWarning);
+
+// Expand CSPP beyond phishing and trigger when vibration API is called on the
+// web page.
+BASE_DECLARE_FEATURE(kClientSideDetectionVibrationApi);
+
+// Set a RESIZE_BEST preference for image resizing algorithm in Client Side
+// Detection renderer processes for both image classification and image
+// embedding. This experiment is done to see if the resizing algorithm
+// preference will send clearer screenshots for server side evaluation.
+BASE_DECLARE_FEATURE(kConditionalImageResize);
+
+// Creates and sends CSBRRs when notification permissions are accepted for an
+// abusive site whose interstitial has been bypassed.
+BASE_DECLARE_FEATURE(kCreateNotificationsAcceptedClientSafeBrowsingReports);
+
+// Creates and sends CSBRRs when warnings are first shown to users.
+BASE_DECLARE_FEATURE(kCreateWarningShownClientSafeBrowsingReports);
+
+// Enables the interstitial warning prompt on dangerous downloads. This replaces
+// the current prompt which is a dialog/modal.
+BASE_DECLARE_FEATURE(kDangerousDownloadInterstitial);
+
+// Controls whether we use new broader criteria for deep scans.
+BASE_DECLARE_FEATURE(kDeepScanningCriteria);
+
+// Controls whether we prompt the user on unencrypted deep scans.
+BASE_DECLARE_FEATURE(kDeepScanningPromptRemoval);
 
 // Controls whether the delayed warning experiment is enabled.
-extern const base::Feature kDelayedWarnings;
+BASE_DECLARE_FEATURE(kDelayedWarnings);
 // True if mouse clicks should undelay the warnings immediately when delayed
 // warnings feature is enabled.
 extern const base::FeatureParam<bool> kDelayedWarningsEnableMouseClicks;
 
-// Whether to use download bubble instead of download shelf.
-extern const base::Feature kDownloadBubble;
+// Sends the WebProtect content scanning request to the corresponding regional
+// DLP endpoint based on ChromeDataRegionSetting policy.
+BASE_DECLARE_FEATURE(kDlpRegionalizedEndpoints);
 
-// The V2 of the download bubble, consisting of features that were not available
-// on the download shelf. This is only eligible to be enabled when
-// kDownloadBubble is already enabled.
-extern const base::Feature kDownloadBubbleV2;
+// Show referrer URL on download item on chrome://downloads page. This will
+// replace the downloads url.
+BASE_DECLARE_FEATURE(kDownloadsPageReferrerUrl);
 
-// Enables Enhanced Safe Browsing.
-extern const base::Feature kEnhancedProtection;
+// The kill switch for download tailored warnings. The main control is on the
+// server-side.
+BASE_DECLARE_FEATURE(kDownloadTailoredWarnings);
 
-// Phase 2 of Enhanced Safe Browsing changes.
-extern const base::Feature kEnhancedProtectionPhase2IOS;
+// Enables HaTS surveys for users encountering desktop download warnings on the
+// download bubble or the downloads page.
+BASE_DECLARE_FEATURE(kDownloadWarningSurvey);
 
-// Enables collection of signals related to extension activity and uploads
-// of telemetry reports to SB servers.
-extern const base::Feature kExtensionTelemetry;
+// Gives the type of the download warning HaTS survey that the user is eligible
+// for. This should be set in the fieldtrial config along with the trigger ID
+// for the corresponding survey (as en_site_id). The int value corresponds to
+// the value of DownloadWarningHatsType enum (see
+// //c/b/download/download_warning_desktop_hats_util.h).
+extern const base::FeatureParam<int> kDownloadWarningSurveyType;
 
-// Enables data collected by the kExtensionTelemetry to be written and read to
-// disk. This data will be uploaded for analysis.
-extern const base::Feature kExtensionTelemetryPersistence;
+// The time interval after which to consider a download warning ignored, and
+// potentially show the survey for ignoring a download bubble warning.
+extern const base::FeatureParam<int> kDownloadWarningSurveyIgnoreDelaySeconds;
 
-// Specifies the upload interval for extension telemetry reports.
-extern const base::FeatureParam<int> kExtensionTelemetryUploadIntervalSeconds;
+// Enables Enhanced Safe Browsing promos for iOS.
+BASE_DECLARE_FEATURE(kEnhancedSafeBrowsingPromo);
 
-// Specifies the number of writes the telemetry service will perform during
-// a full upload interval.
-extern const base::FeatureParam<int> kExtensionTelemetryWritesPerInterval;
+// Enables showing an updated Password Reuse UI for enterprise users.
+BASE_DECLARE_FEATURE(kEnterprisePasswordReuseUiRefresh);
+
+// When on, enterprise policy EnterpriseRealTimeUrlCheckMode on Android is
+// supported.
+BASE_DECLARE_FEATURE(kEnterpriseRealTimeUrlCheckOnAndroid);
+
+// Enables string update on the enhanced protection description on
+// chrome://settings/security to mention the use of AI.
+BASE_DECLARE_FEATURE(kEsbAiStringUpdate);
+
+// Makes the Enhanced Protection a syncable setting.
+// Check the design doc (go/esb-as-a-synced-setting-dd) for further details.
+BASE_DECLARE_FEATURE(kEsbAsASyncedSetting);
+
+// Controls whether Safe Browsing Extended Reporting (SBER) is deprecated.
+// When this feature flag is enabled:
+// - the Extended Reporting toggle will not be displayed on
+//   chrome://settings/security
+// - features will not depend on the SBER preference value,
+//   safebrowsing.scout_reporting_enabled
+BASE_DECLARE_FEATURE(kExtendedReportingRemovePrefDependency);
+
+// Allows the Extension Telemetry Service to accept and use configurations
+// sent by the server.
+BASE_DECLARE_FEATURE(kExtensionTelemetryConfiguration);
+
+// Enables collection of telemetry signal whenever an extension invokes the
+// declarativeNetRequest actions.
+BASE_DECLARE_FEATURE(kExtensionTelemetryDeclarativeNetRequestActionSignal);
+
+// Allows the Extension Telemetry Service to include file data of extensions
+// specified in the --load-extension commandline switch in telemetry reports.
+BASE_DECLARE_FEATURE(kExtensionTelemetryFileDataForCommandLineExtensions);
+
+// Enables the telemetry service to collect signals and generate reports to send
+// for enterprise.
+BASE_DECLARE_FEATURE(kExtensionTelemetryForEnterprise);
+
+// Specifies the reporting interval for enterprise telemetry reports.
+extern const base::FeatureParam<int>
+    kExtensionTelemetryEnterpriseReportingIntervalSeconds;
 
 // Enables collection of telemetry signal whenever an extension invokes the
 // tabs.executeScript API call.
-extern const base::Feature kExtensionTelemetryTabsExecuteScriptSignal;
+BASE_DECLARE_FEATURE(kExtensionTelemetryTabsExecuteScriptSignal);
 
-// Enables reporting of remote hosts contacted by extensions in telemetry.
-extern const base::Feature kExtensionTelemetryReportContactedHosts;
+// Enables intercepting remote hosts contacted by extensions in renderer
+// throttles.
+BASE_DECLARE_FEATURE(
+    kExtensionTelemetryInterceptRemoteHostsContactedInRenderer);
 
-// Determines the tag to pass to Omaha to get a file type policy.
-extern const base::Feature kFileTypePoliciesTag;
+// Enables reporting of external app redirects
+BASE_DECLARE_FEATURE(kExternalAppRedirectTelemetry);
 
-// The parameter name used for getting the tag value from
-// `kFileTypePoliciesTag`.
-const char kFileTypePoliciesTagParamName[] = "policy_omaha_tag";
+// Whether to provide Google Play Protect status in APK telemetry pings
+BASE_DECLARE_FEATURE(kGooglePlayProtectInApkTelemetry);
 
-// Enable logging of the account enhanced protection setting in Protego pings.
-extern const base::Feature kLogAccountEnhancedProtectionStateInProtegoPings;
+// Whether Google Play Protect should supercede file-type warnings
+BASE_DECLARE_FEATURE(kGooglePlayProtectReducesWarnings);
 
-// Enable omitting non-user gesture from referrer chain.
-extern const base::Feature kOmitNonUserGesturesFromReferrerChain;
+// Sends hash-prefix real-time lookup requests on navigations for Standard Safe
+// Browsing users instead of hash-prefix database lookups.
+BASE_DECLARE_FEATURE(kHashPrefixRealTimeLookups);
 
-// Controls whether Client Safe Browsing Reports are sent with a GAIA-tied token
-// for Enhanced Safe Browsing users
-extern const base::Feature kSafeBrowsingCsbrrWithToken;
+// This parameter controls the relay URL that will forward the lookup requests
+// to the Safe Browsing server.
+extern const base::FeatureParam<std::string> kHashPrefixRealTimeLookupsRelayUrl;
 
-// Controls whether we are performing enterprise download checks for users
-// with the appropriate policies enabled.
-extern const base::Feature kSafeBrowsingEnterpriseCsd;
+// Enable faster OHTTP key rotation for hash-prefix real-time lookups.
+BASE_DECLARE_FEATURE(kHashPrefixRealTimeLookupsFasterOhttpKeyRotation);
 
-// Controls whether we are disabling consumer download checks for users using
-// the enterprise download checks.
-extern const base::Feature kSafeBrowsingDisableConsumerCsdForEnterprise;
+// Send sample hash-prefix real-time lookups for real-time lookups to catch
+// "false positives" where real-time lookup says safe but hash-prefix lookup
+// says unsafe.
+// Check the design doc (go/sample-esb-ping-send-hprt) for further
+// details.
+BASE_DECLARE_FEATURE(kHashPrefixRealTimeLookupsSamplePing);
+// Determines the percentage of ESB lookups that we sample to send a background
+// HPRT lookup. The value should be between 0 and 100.
+extern const base::FeatureParam<int> kHashPrefixRealTimeLookupsSampleRate;
 
-// Controls whether page load tokens are added to Safe Browsing requests.
-extern const base::Feature kSafeBrowsingPageLoadToken;
+// If enabled, fetching lists from Safe Browsing and performing checks on those
+// lists uses the v5 APIs instead of the v4 Update API. There is no change to
+// how often the checks are triggered (they are still not in real time).
+BASE_DECLARE_FEATURE(kLocalListsUseSBv5);
+
+// Killswitch for fetching and executing the notification content detection
+// model. This also gates logging metrics related to this model.
+BASE_DECLARE_FEATURE(kOnDeviceNotificationContentDetectionModel);
+// Determines the percentage of notifications from allowlisted sites that we
+// will check the model for. The value should be between 0 and 100.
+extern const base::FeatureParam<int>
+    kOnDeviceNotificationContentDetectionModelAllowlistSamplingRate;
+
+// Enable movement of password leak toggle out of standard protection and into
+// its own section.
+BASE_DECLARE_FEATURE(kPasswordLeakToggleMove);
+
+// Enables HaTS surveys for users encountering red warnings.
+BASE_DECLARE_FEATURE(kRedWarningSurvey);
+
+// Specifies whether we want to show HaTS surveys based on if the user bypassed
+// the warning or not. Note: specifying any combination of TRUE and FALSE
+// corresponds to "don't care."
+extern const base::FeatureParam<std::string> kRedWarningSurveyDidProceedFilter;
+
+// Specifies which CSBRR report types (and thus, red warning types) we want to
+// show HaTS surveys for.
+extern const base::FeatureParam<std::string> kRedWarningSurveyReportTypeFilter;
+
+// Specifies the HaTS survey's identifier.
+extern const base::FeatureParam<std::string> kRedWarningSurveyTriggerId;
+
+// Controls whether asynchronous real-time check is enabled. When enabled, the
+// navigation can be committed before real-time Safe Browsing check is
+// completed.
+BASE_DECLARE_FEATURE(kSafeBrowsingAsyncRealTimeCheck);
+
+// Enables client side phishing daily reports limit to be configured via Finch
+// for ESB and SBER users
+BASE_DECLARE_FEATURE(kSafeBrowsingDailyPhishingReportsLimit);
+
+// Specifies the CSD-Phishing daily reports limit for ESB users
+extern const base::FeatureParam<int> kSafeBrowsingDailyPhishingReportsLimitESB;
+
+// Enables new ESB specific threshold fields in Visual TF Lite model files
+BASE_DECLARE_FEATURE(kSafeBrowsingPhishingClassificationESBThreshold);
 
 // Controls whether cookies are removed when the access token is present.
-extern const base::Feature kSafeBrowsingRemoveCookiesInAuthRequests;
+BASE_DECLARE_FEATURE(kSafeBrowsingRemoveCookiesInAuthRequests);
+
+#if BUILDFLAG(IS_ANDROID)
+// Enables sync checker to check allowlist first on Chrome on Android. This is
+// an optimization to improve the speed of Safe Browsing checks.
+// See go/skip-sync-hpd-allowlist-android for details.
+BASE_DECLARE_FEATURE(kSafeBrowsingSyncCheckerCheckAllowlist);
+#endif
+
+// Automatically revoke abusive notifications in Safety Hub.
+BASE_DECLARE_FEATURE(kSafetyHubAbusiveNotificationRevocation);
+
+// Enables saving gaia password hash from the Profile Picker sign-in flow.
+BASE_DECLARE_FEATURE(kSavePasswordHashFromProfilePicker);
+
+// Enables replacing notification contents with a Chrome warning when the
+// on-device model returns a sufficiently suspicious verdict.
+BASE_DECLARE_FEATURE(kShowWarningsForSuspiciousNotifications);
+// Determines the minimum "suspicious" score returned from the notification
+// content LiteRT model that warrants showing a warning. If the score is higher
+// than this threshold, then the notification contents will be replaced with a
+// warning. By default, no notifications will be replaced by a warning.
+extern const base::FeatureParam<int>
+    kShowWarningsForSuspiciousNotificationsScoreThreshold;
 
 // Controls the daily quota for the suspicious site trigger.
-extern const base::Feature kSuspiciousSiteTriggerQuotaFeature;
-
-// Controls whether to send sample pings of Protego allowlist domains on
-// the allowlist to Safe Browsing.
-extern const base::Feature kSendSampledPingsForProtegoAllowlistDomains;
-
-// Status of the SimplifiedUrlDisplay experiments. This does not control the
-// individual experiments, those are controlled by their own feature flags.
-// The feature is only set by Finch so that we can differentiate between
-// default and control groups of the experiment.
-extern const base::Feature kSimplifiedUrlDisplay;
-
-// Controls whether to automatically enable Enhanced Protection for desktop
-// tailored security users. If not enabled, users of tailored security are
-// notified that they can enable Enhanced Protection through an operating system
-// notification.
-extern const base::Feature kTailoredSecurityDesktopNotice;
+BASE_DECLARE_FEATURE(kSuspiciousSiteTriggerQuotaFeature);
 
 // Controls whether the integration of tailored security settings is enabled.
-extern const base::Feature kTailoredSecurityIntegration;
+BASE_DECLARE_FEATURE(kTailoredSecurityIntegration);
 
 // Specifies which non-resource HTML Elements to collect based on their tag and
 // attributes. It's a single param containing a comma-separated list of pairs.
@@ -168,28 +297,16 @@ extern const base::Feature kTailoredSecurityIntegration;
 // tag "tag1" that have attribute "id" or "height" set, and elements of tag
 // "tag2" if they have attribute "foo" set. All tag names and attributes should
 // be lower case.
-extern const base::Feature kThreatDomDetailsTagAndAttributeFeature;
-
-// Controls whether Chrome uses new download warning UX.
-extern const base::Feature kUseNewDownloadWarnings;
+BASE_DECLARE_FEATURE(kThreatDomDetailsTagAndAttributeFeature);
 
 // Controls the behavior of visual features in CSD pings. This feature is
 // checked for the final size of the visual features and the minimum size of
 // the screen.
-extern const base::Feature kVisualFeaturesSizes;
+BASE_DECLARE_FEATURE(kVisualFeaturesSizes);
 
-// Controls whether we send visual features in CSPP pings.
-extern const base::Feature kVisualFeaturesInCsppPings;
+// keep-sorted end
 
-base::ListValue GetFeatureStatusList();
-
-// Returns the tag used for Client Side Phishing Detection models, as
-// computed from the current feature flags.
-std::string GetClientSideDetectionTag();
-
-// Returns the tag used for file type policies, as computed from the current
-// feature flag.
-std::string GetFileTypePoliciesTag();
+base::Value::List GetFeatureStatusList();
 
 }  // namespace safe_browsing
 #endif  // COMPONENTS_SAFE_BROWSING_CORE_COMMON_FEATURES_H_

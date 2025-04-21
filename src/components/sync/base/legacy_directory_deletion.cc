@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,8 +18,8 @@ void DeleteLegacyDirectoryFilesAndNigoriStorage(
     const base::FilePath& directory_path) {
   // We assume that the directory database files are all top level files, and
   // use no folders. We also assume that there might be child folders under
-  // |directory_path| that are used for non-directory things, like storing
-  // ModelTypeStore/LevelDB data, and we expressly do not want to delete those.
+  // `directory_path` that are used for non-directory things, like storing
+  // DataTypeStore/LevelDB data, and we expressly do not want to delete those.
   if (!base::DirectoryExists(directory_path)) {
     return;
   }

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,9 +21,9 @@ enum class HUDDisplayMode;
 
 // GraphsContainerView class draws a bunch of graphs.
 class GraphsContainerView : public views::View {
- public:
-  METADATA_HEADER(GraphsContainerView);
+  METADATA_HEADER(GraphsContainerView, views::View)
 
+ public:
   GraphsContainerView();
   GraphsContainerView(const GraphsContainerView&) = delete;
   GraphsContainerView& operator=(const GraphsContainerView&) = delete;

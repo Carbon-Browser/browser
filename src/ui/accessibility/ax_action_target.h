@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,6 @@ class AXActionTarget {
   virtual gfx::Point MinimumScrollOffset() const = 0;
   virtual gfx::Point MaximumScrollOffset() const = 0;
   virtual void SetScrollOffset(const gfx::Point& point) const = 0;
-  virtual bool SetSelected(bool selected) const = 0;
   virtual bool SetSelection(const AXActionTarget* anchor_object,
                             int anchor_offset,
                             const AXActionTarget* focus_object,

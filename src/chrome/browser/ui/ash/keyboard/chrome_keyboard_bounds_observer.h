@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <set>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/ash/keyboard/chrome_keyboard_controller_client.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/views/widget/widget_observer.h"
@@ -51,8 +52,8 @@ class ChromeKeyboardBoundsObserver
   bool ShouldWindowOverscroll(aura::Window* window);
   bool ShouldEnableInsets(aura::Window* window);
 
-  aura::Window* const keyboard_window_;
-  std::set<views::Widget*> observed_widgets_;
+  const raw_ptr<aura::Window> keyboard_window_;
+  std::set<raw_ptr<views::Widget, SetExperimental>> observed_widgets_;
   gfx::Rect occluded_bounds_in_screen_;
 };
 

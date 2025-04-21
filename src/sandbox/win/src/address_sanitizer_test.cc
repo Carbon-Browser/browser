@@ -1,6 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <stdio.h>
 
@@ -13,7 +18,6 @@
 #include "base/logging.h"
 #include "base/path_service.h"
 #include "base/win/scoped_handle.h"
-#include "base/win/windows_version.h"
 #include "sandbox/win/tests/common/controller.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -73,16 +77,16 @@ TEST_F(AddressSanitizerTests, TestAddressSanitizer) {
       CreateFile(temp_file_name.value().c_str(), GENERIC_WRITE,
                  FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE, &attrs,
                  OPEN_EXISTING, 0, nullptr));
-  EXPECT_TRUE(tmp_handle.IsValid());
+  EXPECT_TRUE(tmp_handle.is_valid());
 
   TestRunner runner;
-  ASSERT_EQ(SBOX_ALL_OK, runner.GetPolicy()->SetStderrHandle(tmp_handle.Get()));
+  ASSERT_EQ(SBOX_ALL_OK, runner.GetPolicy()->SetStderrHandle(tmp_handle.get()));
 
   base::FilePath exe;
   ASSERT_TRUE(base::PathService::Get(base::FILE_EXE, &exe));
   base::FilePath pdb_path = exe.DirName().Append(L"*.pdb");
-  ASSERT_TRUE(runner.AddFsRule(Semantics::kFilesAllowReadonly,
-                               pdb_path.value().c_str()));
+  ASSERT_TRUE(runner.AllowFileAccess(FileSemantics::kAllowReadonly,
+                                     pdb_path.value().c_str()));
 
   env_->SetVar("ASAN_OPTIONS", "exitcode=123");
   if (asan_build) {

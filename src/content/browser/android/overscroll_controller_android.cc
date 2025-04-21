@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -245,7 +245,7 @@ void OverscrollControllerAndroid::OnOverscrolled(
 }
 
 bool OverscrollControllerAndroid::Animate(base::TimeTicks current_time,
-                                          cc::Layer* parent_layer) {
+                                          cc::slim::Layer* parent_layer) {
   DCHECK(parent_layer);
   if (!enabled_ || !glow_effect_)
     return false;
@@ -274,7 +274,7 @@ void OverscrollControllerAndroid::OnFrameMetadataUpdated(
 
   if (refresh_effect_) {
     refresh_effect_->OnFrameUpdated(viewport_size, content_scroll_offset,
-                                    root_overflow_y_hidden);
+                                    content_size, root_overflow_y_hidden);
   }
 
   if (glow_effect_) {

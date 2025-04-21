@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -327,8 +327,9 @@ function expectMockedTabNavigationEvents(url) {
 var requestsIntercepted = [];
 var onBeforeRequest = function(details) {
   // Ignore favicon requests.
-  if (details.url.match(/\/favicon.ico$/))
+  if (details.url.match(/\/favicon.ico$/)) {
     return;
+  }
 
   requestsIntercepted.push(details.url);
 };

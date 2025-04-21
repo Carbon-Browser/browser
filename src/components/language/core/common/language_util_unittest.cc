@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,13 @@ TEST_F(LanguageUtilTest, ToTranslateLanguageSynonym) {
   language = std::string("zh-MO");
   language::ToTranslateLanguageSynonym(&language);
   EXPECT_EQ("zh-TW", language);
+  language = std::string("cmn-hant-tw");
+  language::ToTranslateLanguageSynonym(&language);
+  EXPECT_EQ("zh-TW", language);
   language = std::string("zh-SG");
+  language::ToTranslateLanguageSynonym(&language);
+  EXPECT_EQ("zh-CN", language);
+  language = std::string("cmn-hans-cn");
   language::ToTranslateLanguageSynonym(&language);
   EXPECT_EQ("zh-CN", language);
   language = std::string("zh");

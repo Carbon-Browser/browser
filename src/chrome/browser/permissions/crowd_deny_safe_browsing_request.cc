@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,17 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_runner.h"
 #include "base/task/task_traits.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/clock.h"
 #include "base/timer/timer.h"
 #include "components/safe_browsing/core/browser/db/database_manager.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "components/safe_browsing/core/common/features.h"
+#include "content/public/browser/browser_thread.h"
 #include "url/origin.h"
 
 namespace {
@@ -33,11 +34,15 @@ constexpr base::TimeDelta kSafeBrowsingCheckTimeout = base::Seconds(2);
 class CrowdDenySafeBrowsingRequest::SafeBrowsingClient
     : public safe_browsing::SafeBrowsingDatabaseManager::Client {
  public:
-  SafeBrowsingClient(scoped_refptr<safe_browsing::SafeBrowsingDatabaseManager>
-                         database_manager,
-                     base::WeakPtr<CrowdDenySafeBrowsingRequest> handler,
-                     scoped_refptr<base::TaskRunner> handler_task_runner)
-      : database_manager_(database_manager),
+  SafeBrowsingClient(
+      base::PassKey<safe_browsing::SafeBrowsingDatabaseManager::Client>
+          pass_key,
+      scoped_refptr<safe_browsing::SafeBrowsingDatabaseManager>
+          database_manager,
+      base::WeakPtr<CrowdDenySafeBrowsingRequest> handler,
+      scoped_refptr<base::TaskRunner> handler_task_runner)
+      : safe_browsing::SafeBrowsingDatabaseManager::Client(std::move(pass_key)),
+        database_manager_(database_manager),
         handler_(handler),
         handler_task_runner_(handler_task_runner) {}
 
@@ -47,7 +52,7 @@ class CrowdDenySafeBrowsingRequest::SafeBrowsingClient
   }
 
   void CheckOrigin(const url::Origin& origin) {
-    DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
+    DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
     // Start the timer before the call to CheckApiBlocklistUrl(), as it may
     // call back into OnCheckApiBlocklistUrlResult() synchronously.
@@ -55,7 +60,7 @@ class CrowdDenySafeBrowsingRequest::SafeBrowsingClient
                    &SafeBrowsingClient::OnTimeout);
 
     if (database_manager_->CheckApiBlocklistUrl(origin.GetURL(), this)) {
-      timeout_.AbandonAndStop();
+      timeout_.Stop();
       SendResultToHandler(Verdict::kAcceptable);
     }
   }
@@ -88,7 +93,7 @@ class CrowdDenySafeBrowsingRequest::SafeBrowsingClient
   void OnCheckApiBlocklistUrlResult(
       const GURL& url,
       const safe_browsing::ThreatMetadata& metadata) override {
-    timeout_.AbandonAndStop();
+    timeout_.Stop();
     SendResultToHandler(ExtractVerdictFromMetadata(metadata));
   }
 
@@ -109,17 +114,13 @@ CrowdDenySafeBrowsingRequest::CrowdDenySafeBrowsingRequest(
       clock_(clock),
       request_start_time_(clock->Now()) {
   client_ = std::make_unique<SafeBrowsingClient>(
+      safe_browsing::SafeBrowsingDatabaseManager::Client::GetPassKey(),
       database_manager, weak_factory_.GetWeakPtr(),
-      base::SequencedTaskRunnerHandle::Get());
-  content::GetIOThreadTaskRunner({})->PostTask(
-      FROM_HERE, base::BindOnce(&SafeBrowsingClient::CheckOrigin,
-                                base::Unretained(client_.get()), origin));
+      base::SequencedTaskRunner::GetCurrentDefault());
+  client_->CheckOrigin(origin);
 }
 
-CrowdDenySafeBrowsingRequest::~CrowdDenySafeBrowsingRequest() {
-  content::BrowserThread::DeleteSoon(content::BrowserThread::IO, FROM_HERE,
-                                     client_.release());
-}
+CrowdDenySafeBrowsingRequest::~CrowdDenySafeBrowsingRequest() = default;
 
 void CrowdDenySafeBrowsingRequest::OnReceivedResult(Verdict verdict) {
   base::UmaHistogramTimes("Permissions.CrowdDeny.SafeBrowsing.RequestDuration",

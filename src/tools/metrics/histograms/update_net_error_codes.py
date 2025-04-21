@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -58,15 +58,15 @@ def main():
     sys.exit(1)
 
   update_histogram_enum.UpdateHistogramFromDict(
-      'NetErrorCodes',
+      'tools/metrics/histograms/enums.xml', 'NetErrorCodes',
       ReadNetErrorCodes(NET_ERROR_LIST_PATH, POSITIVE_ERROR_REGEX),
-      NET_ERROR_LIST_PATH,
-      os.path.basename(__file__))
+      NET_ERROR_LIST_PATH, os.path.basename(__file__))
 
   update_histogram_enum.UpdateHistogramFromDict(
+      'tools/metrics/histograms/enums.xml',
       'CombinedHttpResponseAndNetErrorCode',
-      ReadNetErrorCodes(NET_ERROR_LIST_PATH, NEGATIVE_ERROR_REGEX),
-      NET_ERROR_LIST_PATH,
+      ReadNetErrorCodes(NET_ERROR_LIST_PATH,
+                        NEGATIVE_ERROR_REGEX), NET_ERROR_LIST_PATH,
       os.path.basename(__file__))
 
 if __name__ == '__main__':

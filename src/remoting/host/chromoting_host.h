@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,24 @@
 #define REMOTING_HOST_CHROMOTING_HOST_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/process/process_handle.h"
 #include "base/sequence_checker.h"
 #include "base/threading/thread.h"
 #include "base/time/time.h"
+#include "build/build_config.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
+#include "mojo/public/cpp/bindings/receiver_set.h"
 #include "net/base/backoff_entry.h"
+#include "remoting/base/errors.h"
+#include "remoting/base/local_session_policies_provider.h"
 #include "remoting/host/base/desktop_environment_options.h"
 #include "remoting/host/client_session.h"
 #include "remoting/host/host_extension.h"
@@ -27,6 +34,11 @@
 #include "remoting/protocol/connection_to_client.h"
 #include "remoting/protocol/pairing_registry.h"
 #include "remoting/protocol/session_manager.h"
+#include "remoting/protocol/transport_context.h"
+
+#if BUILDFLAG(IS_LINUX)
+#include "remoting/host/chromoting_host_services_server.h"
+#endif
 
 namespace base {
 class SingleThreadTaskRunner;
@@ -36,11 +48,9 @@ namespace remoting {
 
 namespace protocol {
 class InputStub;
-class TransportContext;
 }  // namespace protocol
 
 class DesktopEnvironmentFactory;
-class IpcServer;
 
 // A class to implement the functionality of a host process.
 //
@@ -68,8 +78,17 @@ class IpcServer;
 class ChromotingHost : public ClientSession::EventHandler,
                        public mojom::ChromotingHostServices {
  public:
-  typedef std::vector<std::unique_ptr<ClientSession>> ClientSessions;
+  using ClientSessions = std::vector<std::unique_ptr<ClientSession>>;
 
+  // Callback for validating session policies. The return value will be nullopt
+  // if the session policies are valid; otherwise the session will be closed
+  // and an error code will be reported to the client.
+  using SessionPoliciesValidator =
+      base::RepeatingCallback<std::optional<ErrorCode>(const SessionPolicies&)>;
+
+  // |per_session_policies_validator|: Extra SessionPolicies validator in
+  //   addition to the ones in ClientSession. Pass base::NullCallback() if there
+  //   is no extra validator.
   // |desktop_environment_factory| must outlive this object.
   ChromotingHost(
       DesktopEnvironmentFactory* desktop_environment_factory,
@@ -77,7 +96,9 @@ class ChromotingHost : public ClientSession::EventHandler,
       scoped_refptr<protocol::TransportContext> transport_context,
       scoped_refptr<base::SingleThreadTaskRunner> audio_task_runner,
       scoped_refptr<base::SingleThreadTaskRunner> video_encode_task_runner,
-      const DesktopEnvironmentOptions& options);
+      const DesktopEnvironmentOptions& options,
+      const SessionPoliciesValidator& per_session_policies_validator,
+      const LocalSessionPoliciesProvider* local_session_policies_provider);
 
   ChromotingHost(const ChromotingHost&) = delete;
   ChromotingHost& operator=(const ChromotingHost&) = delete;
@@ -91,10 +112,17 @@ class ChromotingHost : public ClientSession::EventHandler,
   // This method can only be called once during the lifetime of this object.
   void Start(const std::string& host_owner);
 
+#if BUILDFLAG(IS_LINUX)
   // Starts running the ChromotingHostServices server and listening for incoming
   // IPC binding requests.
-  // It must be started exactly once across all Chromoting processes.
+  // Currently only Linux runs the ChromotingHostServices server on the host
+  // process.
   void StartChromotingHostServices();
+#endif
+
+  void BindChromotingHostServices(
+      mojo::PendingReceiver<mojom::ChromotingHostServices> receiver,
+      base::ProcessId peer_pid);
 
   scoped_refptr<HostStatusMonitor> status_monitor() { return status_monitor_; }
   const DesktopEnvironmentOptions& desktop_environment_options() const {
@@ -113,10 +141,6 @@ class ChromotingHost : public ClientSession::EventHandler,
   void SetAuthenticatorFactory(
       std::unique_ptr<protocol::AuthenticatorFactory> authenticator_factory);
 
-  // Sets the maximum duration of any session. By default, a session has no
-  // maximum duration.
-  void SetMaximumSessionDuration(const base::TimeDelta& max_session_duration);
-
   ////////////////////////////////////////////////////////////////////////////
   // ClientSession::EventHandler implementation.
   void OnSessionAuthenticating(ClientSession* client) override;
@@ -127,6 +151,8 @@ class ChromotingHost : public ClientSession::EventHandler,
   void OnSessionRouteChange(ClientSession* session,
                             const std::string& channel_name,
                             const protocol::TransportRoute& route) override;
+  std::optional<ErrorCode> OnSessionPoliciesReceived(
+      const SessionPolicies& policies) override;
 
   // mojom::ChromotingHostServices implementation.
   void BindSessionServices(
@@ -184,8 +210,9 @@ class ChromotingHost : public ClientSession::EventHandler,
   // Options to initialize a DesktopEnvironment.
   const DesktopEnvironmentOptions desktop_environment_options_;
 
-  // The maximum duration of any session.
-  base::TimeDelta max_session_duration_;
+  raw_ptr<const LocalSessionPoliciesProvider> local_session_policies_provider_;
+
+  SessionPoliciesValidator per_session_policies_validator_;
 
   // The pairing registry for PIN-less authentication.
   scoped_refptr<protocol::PairingRegistry> pairing_registry_;
@@ -193,9 +220,15 @@ class ChromotingHost : public ClientSession::EventHandler,
   // List of host extensions.
   std::vector<std::unique_ptr<HostExtension>> extensions_;
 
+#if BUILDFLAG(IS_LINUX)
   // IPC server that runs the CRD host service API. Non-null if the server name
   // is set and the host is started.
-  std::unique_ptr<IpcServer> ipc_server_;
+  // Currently only Linux runs the ChromotingHostServices server on the host
+  // process.
+  std::unique_ptr<ChromotingHostServicesServer> ipc_server_;
+#endif
+
+  mojo::ReceiverSet<mojom::ChromotingHostServices, base::ProcessId> receivers_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 

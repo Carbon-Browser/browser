@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,14 @@
 
 #include <functional>
 #include <string>
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_forward.h"
 #include "base/check.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/logging.h"
 #include "base/run_loop.h"
@@ -31,16 +32,16 @@ namespace aggregation_service {
 
 namespace {
 
-absl::optional<content::TestAggregationService::Operation> ConvertToOperation(
-    const std::string& operation_string) {
+std::optional<content::TestAggregationService::Operation> ConvertToOperation(
+    std::string_view operation_string) {
   if (operation_string == "histogram")
     return content::TestAggregationService::Operation::kHistogram;
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
-absl::optional<content::TestAggregationService::AggregationMode>
-ConvertToAggregationMode(const std::string& aggregation_mode_string) {
+std::optional<content::TestAggregationService::AggregationMode>
+ConvertToAggregationMode(std::string_view aggregation_mode_string) {
   if (aggregation_mode_string == "tee-based")
     return content::TestAggregationService::AggregationMode::kTeeBased;
   if (aggregation_mode_string == "experimental-poplar")
@@ -49,7 +50,7 @@ ConvertToAggregationMode(const std::string& aggregation_mode_string) {
   if (aggregation_mode_string == "default")
     return content::TestAggregationService::AggregationMode::kDefault;
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 }  // namespace
@@ -92,7 +93,7 @@ bool AggregationServiceTool::SetPublicKeys(
 
 bool AggregationServiceTool::SetPublicKeysFromFile(
     const GURL& url,
-    const std::string& json_file_path) {
+    std::string_view json_file_path) {
 #if BUILDFLAG(IS_WIN)
   base::FilePath json_file(base::UTF8ToWide(json_file_path));
 #else
@@ -128,7 +129,7 @@ base::Value::Dict AggregationServiceTool::AssembleReport(
     std::string api_identifier) {
   base::Value::Dict result;
 
-  absl::optional<content::TestAggregationService::Operation> operation =
+  std::optional<content::TestAggregationService::Operation> operation =
       ConvertToOperation(operation_str);
   if (!operation.has_value()) {
     LOG(ERROR) << "Invalid operation: " << operation_str;
@@ -147,7 +148,7 @@ base::Value::Dict AggregationServiceTool::AssembleReport(
     return result;
   }
 
-  absl::optional<content::TestAggregationService::AggregationMode>
+  std::optional<content::TestAggregationService::AggregationMode>
       aggregation_mode = ConvertToAggregationMode(aggregation_mode_str);
   if (!aggregation_mode.has_value()) {
     LOG(ERROR) << "Invalid aggregation mode: " << aggregation_mode_str;
@@ -212,7 +213,7 @@ bool AggregationServiceTool::WriteReportToFile(const base::Value& contents,
 
   std::string contents_json;
   JSONStringValueSerializer serializer(&contents_json);
-  DCHECK(serializer.Serialize(contents));
+  CHECK(serializer.Serialize(contents));
 
   return base::WriteFile(filename, contents_json);
 }

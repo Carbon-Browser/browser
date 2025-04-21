@@ -1,9 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/web_applications/chrome_pwa_launcher/launcher_update.h"
 
+#include <string_view>
 #include <vector>
 
 #include "base/files/file_util.h"
@@ -17,16 +18,15 @@ namespace web_app {
 namespace {
 
 void CreateFileAndWriteData(const base::FilePath& file_path,
-                            const base::StringPiece& data) {
-  const int size = base::saturated_cast<int>(data.size());
-  ASSERT_EQ(base::WriteFile(file_path, data.data(), size), size);
+                            std::string_view data) {
+  ASSERT_TRUE(base::WriteFile(file_path, data));
 }
 
 }  // namespace
 
 class WebAppLauncherUpdateTest : public testing::Test {
  protected:
-  WebAppLauncherUpdateTest() {}
+  WebAppLauncherUpdateTest() = default;
 
   void SetUp() override {
     // Create mock chrome_pwa_launcher.exe in <current dir>/<current version>/,

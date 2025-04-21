@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,7 +52,8 @@ void FakeBluetoothDelegate::ShowDevicePairPrompt(
     RenderFrameHost* frame,
     const std::u16string& device_identifier,
     PairPromptCallback callback,
-    PairingKind pairing_kind) {
+    PairingKind pairing_kind,
+    const std::optional<std::u16string>& pin) {
   std::move(callback).Run(content::BluetoothDelegate::PairPromptResult(
       content::BluetoothDelegate::PairPromptStatus::kCancelled));
 }
@@ -111,6 +112,10 @@ void FakeBluetoothDelegate::RevokeDevicePermissionWebInitiated(
   auto& device_address_to_id_map = GetAddressToIdMapForOrigin(frame);
   base::EraseIf(device_address_to_id_map,
                 [device_id](auto& entry) { return entry.second == device_id; });
+}
+
+bool FakeBluetoothDelegate::MayUseBluetooth(RenderFrameHost* rfh) {
+  return true;
 }
 
 bool FakeBluetoothDelegate::IsAllowedToAccessService(

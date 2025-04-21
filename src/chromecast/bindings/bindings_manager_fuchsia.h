@@ -1,18 +1,19 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMECAST_BINDINGS_BINDINGS_MANAGER_FUCHSIA_H_
 #define CHROMECAST_BINDINGS_BINDINGS_MANAGER_FUCHSIA_H_
 
+#include <chromium/cast/cpp/fidl.h>
 #include <fuchsia/mem/cpp/fidl.h>
 
 #include <list>
 #include <map>
 #include <string>
+#include <string_view>
 
 #include "chromecast/bindings/bindings_manager.h"
-#include "fuchsia_web/runners/cast/fidl/fidl/chromium/cast/cpp/fidl.h"
 
 namespace chromecast {
 namespace bindings {
@@ -29,8 +30,8 @@ class BindingsManagerFuchsia : public chromium::cast::ApiBindings,
   ~BindingsManagerFuchsia() override;
 
   // BindingsManager implementation:
-  void AddBinding(base::StringPiece binding_name,
-                  base::StringPiece binding_script) override;
+  void AddBinding(std::string_view binding_name,
+                  std::string_view binding_script) override;
 
  protected:
   // chromium::cast::ApiBindings implementation:

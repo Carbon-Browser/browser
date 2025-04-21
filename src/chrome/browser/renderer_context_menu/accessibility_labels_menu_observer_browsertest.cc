@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/ash/accessibility/accessibility_manager.h"
 #else
-#include "content/public/browser/browser_accessibility_state.h"
+#include "content/public/test/scoped_accessibility_mode_override.h"
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 namespace {
@@ -64,9 +64,11 @@ class AccessibilityLabelsMenuObserverTest : public InProcessBrowserTest {
   std::unique_ptr<MockRenderViewContextMenu> menu_;
 };
 
-AccessibilityLabelsMenuObserverTest::AccessibilityLabelsMenuObserverTest() {}
+AccessibilityLabelsMenuObserverTest::AccessibilityLabelsMenuObserverTest() =
+    default;
 
-AccessibilityLabelsMenuObserverTest::~AccessibilityLabelsMenuObserverTest() {}
+AccessibilityLabelsMenuObserverTest::~AccessibilityLabelsMenuObserverTest() =
+    default;
 
 }  // namespace
 
@@ -91,7 +93,7 @@ IN_PROC_BROWSER_TEST_F(AccessibilityLabelsMenuObserverTest,
   ash::AccessibilityManager::Get()->EnableSpokenFeedback(true);
 #else
   // Spoof a screen reader.
-  content::testing::ScopedContentAXModeSetter scoped_accessibility_mode(
+  content::ScopedAccessibilityModeOverride scoped_accessibility_mode(
       ui::AXMode::kScreenReader);
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   menu()->GetPrefs()->SetBoolean(prefs::kAccessibilityImageLabelsEnabled,

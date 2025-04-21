@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -9,7 +9,6 @@
 
 #include "base/files/file.h"
 #include "base/files/file_path.h"
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "components/download/public/common/download_export.h"
 #include "components/download/public/common/input_stream.h"
@@ -29,6 +28,7 @@ class COMPONENTS_DOWNLOAD_EXPORT DownloadFileFactory {
       const base::FilePath& default_downloads_directory,
       std::unique_ptr<InputStream> stream,
       uint32_t download_id,
+      const base::FilePath& duplicate_download_file_path,
       base::WeakPtr<DownloadDestinationObserver> observer);
 };
 

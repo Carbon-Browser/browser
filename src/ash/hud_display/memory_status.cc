@@ -1,10 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/hud_display/memory_status.h"
 
 #include <unistd.h>
+
+#include <string_view>
 
 #include "base/files/file_util.h"
 #include "base/logging.h"
@@ -51,7 +53,7 @@ std::string GetProcCmdline(pid_t pid) {
 
 int64_t GetProcVM_RSS(pid_t pid) {
   const std::string statm = ReadProcFile(GetProcPidDir(pid).Append("statm"));
-  const std::vector<base::StringPiece> parts = base::SplitStringPiece(
+  const std::vector<std::string_view> parts = base::SplitStringPiece(
       statm, " \n", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
 
   if (parts.size() <= static_cast<size_t>(ProcStatMFields::VM_RSS)) {
@@ -66,7 +68,7 @@ int64_t GetProcVM_RSS(pid_t pid) {
 
 int64_t GetProcVM_SHARED(pid_t pid) {
   const std::string statm = ReadProcFile(GetProcPidDir(pid).Append("statm"));
-  const std::vector<base::StringPiece> parts = base::SplitStringPiece(
+  const std::vector<std::string_view> parts = base::SplitStringPiece(
       statm, " \n", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
 
   if (parts.size() <= static_cast<size_t>(ProcStatMFields::VM_SHARED)) {
@@ -112,7 +114,7 @@ MemoryStatus::ProcessMemoryCountersByCgroup::ProcessMemoryCountersByCgroup(
     // Ignore read failures.
     return;
   }
-  const std::vector<base::StringPiece> pids = base::SplitStringPiece(
+  const std::vector<std::string_view> pids = base::SplitStringPiece(
       pids_list_str, "\n", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
   for (const auto& p : pids) {
     int64_t pid;

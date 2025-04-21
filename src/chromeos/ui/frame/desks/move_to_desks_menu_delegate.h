@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define CHROMEOS_UI_FRAME_DESKS_MOVE_TO_DESKS_MENU_DELEGATE_H_
 
 #include "base/memory/raw_ptr.h"
-#include "ui/base/models/simple_menu_model.h"
+#include "ui/menus/simple_menu_model.h"
 
 namespace aura {
 class Window;

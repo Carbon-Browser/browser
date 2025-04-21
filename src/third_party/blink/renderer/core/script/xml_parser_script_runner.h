@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,9 @@ class XMLParserScriptRunner final
   XMLParserScriptRunner& operator=(const XMLParserScriptRunner&) = delete;
   ~XMLParserScriptRunner() override;
 
-  bool HasParserBlockingScript() const { return parser_blocking_script_; }
+  bool HasParserBlockingScript() const {
+    return parser_blocking_script_ != nullptr;
+  }
 
   void ProcessScriptElement(Document&, Element*, TextPosition);
   void Detach();

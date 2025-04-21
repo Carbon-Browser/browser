@@ -1,10 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_SERVICE_WORKER_FETCH_RESPOND_WITH_OBSERVER_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_SERVICE_WORKER_FETCH_RESPOND_WITH_OBSERVER_H_
 
+#include "base/task/single_thread_task_runner.h"
 #include "services/network/public/cpp/cross_origin_embedder_policy.h"
 #include "services/network/public/mojom/fetch_api.mojom-blink-forward.h"
 #include "third_party/blink/public/platform/web_url_request.h"
@@ -19,7 +20,7 @@ class CrossOriginResourcePolicyChecker;
 class ExecutionContext;
 class FetchEvent;
 class ReadableStream;
-class ScriptValue;
+class Response;
 class WaitUntilObserver;
 
 namespace mojom {
@@ -40,10 +41,8 @@ class MODULES_EXPORT FetchRespondWithObserver : public RespondWithObserver {
       WaitUntilObserver*);
   ~FetchRespondWithObserver() override = default;
 
+  void OnResponseFulfilled(ScriptState*, Response*);
   void OnResponseRejected(mojom::ServiceWorkerResponseError) override;
-  void OnResponseFulfilled(ScriptState*,
-                           const ScriptValue&,
-                           const ExceptionContext& exception_context) override;
   void OnNoResponse(ScriptState*) override;
 
   void SetEvent(FetchEvent* event);

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_TEST_FAKE_PAGE_SCHEDULER_H_
 
 #include "third_party/blink/public/platform/scheduler/web_agent_group_scheduler.h"
+#include "third_party/blink/renderer/platform/scheduler/public/dummy_schedulers.h"
 #include "third_party/blink/renderer/platform/scheduler/public/page_scheduler.h"
 
 namespace blink {
@@ -16,7 +17,7 @@ class FakePageScheduler : public PageScheduler {
   FakePageScheduler(bool is_audio_playing, bool is_throttling_exempt)
       : is_audio_playing_(is_audio_playing),
         is_throttling_exempt_(is_throttling_exempt),
-        agent_group_scheduler_(WebAgentGroupScheduler::CreateForTesting()) {}
+        agent_group_scheduler_(CreateDummyAgentGroupScheduler()) {}
   FakePageScheduler(const FakePageScheduler&) = delete;
   FakePageScheduler& operator=(const FakePageScheduler&) = delete;
 
@@ -55,6 +56,7 @@ class FakePageScheduler : public PageScheduler {
   // PageScheduler implementation:
   void OnTitleOrFaviconUpdated() override {}
   void SetPageVisible(bool is_page_visible) override {}
+  bool IsPageVisible() const override { return true; }
   void SetPageFrozen(bool is_page_frozen) override {}
   void SetPageBackForwardCached(bool) override {}
   bool IsMainFrameLocal() const override { return true; }
@@ -62,7 +64,6 @@ class FakePageScheduler : public PageScheduler {
 
   std::unique_ptr<FrameScheduler> CreateFrameScheduler(
       FrameScheduler::Delegate* delegate,
-      BlameContext* blame_context,
       bool is_in_embedded_frame_tree,
       FrameScheduler::FrameType frame_type) override {
     return nullptr;
@@ -74,7 +75,7 @@ class FakePageScheduler : public PageScheduler {
   bool RequestBeginMainFrameNotExpected(bool new_state) override {
     return false;
   }
-  scheduler::WebAgentGroupScheduler& GetAgentGroupScheduler() override {
+  AgentGroupScheduler& GetAgentGroupScheduler() override {
     return *agent_group_scheduler_;
   }
   VirtualTimeController* GetVirtualTimeController() override { return nullptr; }
@@ -87,7 +88,7 @@ class FakePageScheduler : public PageScheduler {
  private:
   bool is_audio_playing_;
   bool is_throttling_exempt_;
-  std::unique_ptr<WebAgentGroupScheduler> agent_group_scheduler_;
+  Persistent<AgentGroupScheduler> agent_group_scheduler_;
 };
 
 }  // namespace scheduler

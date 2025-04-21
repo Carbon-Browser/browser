@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include <vector>
 
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chrome/browser/predictors/autocomplete_action_predictor_table.h"
 #include "chrome/browser/predictors/predictor_database.h"
@@ -18,6 +17,7 @@
 #include "content/public/test/test_utils.h"
 #include "sql/statement.h"
 
+#include "base/task/sequenced_task_runner.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 using base::Time;
@@ -70,14 +70,15 @@ class AutocompleteActionPredictorTableReopenTest
   }
 };
 
-AutocompleteActionPredictorTableTest::AutocompleteActionPredictorTableTest() {}
+AutocompleteActionPredictorTableTest::AutocompleteActionPredictorTableTest() =
+    default;
 
-AutocompleteActionPredictorTableTest::~AutocompleteActionPredictorTableTest() {
-}
+AutocompleteActionPredictorTableTest::~AutocompleteActionPredictorTableTest() =
+    default;
 
 void AutocompleteActionPredictorTableTest::SetUp() {
   db_ = std::make_unique<PredictorDatabase>(
-      &profile_, base::SequencedTaskRunnerHandle::Get());
+      &profile_, base::SequencedTaskRunner::GetCurrentDefault());
   content::RunAllTasksUntilIdle();
 
   test_db_.push_back(AutocompleteActionPredictorTable::Row(

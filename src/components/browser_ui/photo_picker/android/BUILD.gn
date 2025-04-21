@@ -1,8 +1,9 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//build/config/android/rules.gni")
+import("//third_party/jni_zero/jni_zero.gni")
 
 source_set("android") {
   sources = [
@@ -37,26 +38,30 @@ android_library("java") {
     "java/src/org/chromium/components/browser_ui/photo_picker/PickerCategoryView.java",
     "java/src/org/chromium/components/browser_ui/photo_picker/PickerVideoPlayer.java",
   ]
-  annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
+
   resources_package = "org.chromium.components.browser_ui.photo_picker"
   deps = [
     ":java_resources",
     "//base:base_java",
-    "//base:jni_java",
     "//build/android:build_java",
     "//components/browser_ui/util/android:java",
     "//components/browser_ui/widget/android:java",
     "//content/public/android:content_java",
     "//net/android:net_java",
+    "//third_party/androidx:androidx_activity_activity_java",
     "//third_party/androidx:androidx_annotation_annotation_java",
     "//third_party/androidx:androidx_appcompat_appcompat_java",
     "//third_party/androidx:androidx_appcompat_appcompat_resources_java",
     "//third_party/androidx:androidx_core_core_java",
     "//third_party/androidx:androidx_recyclerview_recyclerview_java",
     "//third_party/androidx:androidx_vectordrawable_vectordrawable_java",
+    "//third_party/jni_zero:jni_zero_java",
     "//ui/android:ui_java",
   ]
-  srcjar_deps = [ ":photo_picker_aidl" ]
+  srcjar_deps = [
+    ":photo_picker_aidl",
+    ":photo_picker_jni_headers",
+  ]
 }
 
 generate_jni("photo_picker_jni_headers") {
@@ -107,6 +112,7 @@ android_resources("java_resources") {
 }
 
 robolectric_library("junit") {
+  resources_package = "org.chromium.components.browser_ui.photo_picker"
   sources = [
     "java/src/org/chromium/components/browser_ui/photo_picker/FileEnumWorkerTaskTest.java",
     "java/src/org/chromium/components/browser_ui/photo_picker/PickerBitmapViewTest.java",
@@ -130,6 +136,8 @@ android_library("test_support_java") {
   testonly = true
 
   sources = [ "java/src/org/chromium/components/browser_ui/photo_picker/TestImageDecoderService.java" ]
+  mergeable_android_manifests =
+      [ "java/AndroidManifest_TestImageDecoderService.xml" ]
 
   deps = [
     ":java",
@@ -158,12 +166,12 @@ android_library("unit_device_javatests") {
     "//components/browser_ui/widget/android:java",
     "//components/browser_ui/widget/android:test_support_java",
     "//content/public/test/android:content_java_test_support",
-    "//third_party/android_support_test_runner:rules_java",
-    "//third_party/android_support_test_runner:runner_java",
+    "//third_party/androidx:androidx_activity_activity_java",
     "//third_party/androidx:androidx_appcompat_appcompat_java",
     "//third_party/androidx:androidx_appcompat_appcompat_resources_java",
     "//third_party/androidx:androidx_core_core_java",
     "//third_party/androidx:androidx_recyclerview_recyclerview_java",
+    "//third_party/androidx:androidx_test_monitor_java",
     "//third_party/androidx:androidx_test_runner_java",
     "//third_party/hamcrest:hamcrest_java",
     "//third_party/junit",
@@ -171,5 +179,5 @@ android_library("unit_device_javatests") {
     "//ui/android:ui_java",
     "//ui/android:ui_java_test_support",
   ]
-  resources_package = "org.chromium.components.browser_ui.photo_picker.test"
+  resources_package = "org.chromium.components.browser_ui.photo_picker"
 }

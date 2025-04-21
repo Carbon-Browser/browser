@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,8 +25,7 @@ class AppServiceInternalsPageHandlerImpl
   ~AppServiceInternalsPageHandlerImpl() override;
 
   // mojom::app_service_internals::AppServiceInternalsPageHandler:
-  void GetApps(GetAppsCallback callback) override;
-  void GetPreferredApps(GetPreferredAppsCallback callback) override;
+  void GetDebugInfo(GetDebugInfoCallback callback) override;
 
  private:
   raw_ptr<Profile> profile_;

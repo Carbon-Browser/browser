@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,9 +13,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/callback_list.h"
+#include "base/check_deref.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
@@ -57,6 +59,7 @@ namespace policy {
 
 class EnterpriseActivityStorage;
 class DeviceStatusCollectorState;
+class ReportingUserTracker;
 
 // TODO(b/216131674): Remove this.
 enum class CrosHealthdCollectionMode { kFull, kBattery };
@@ -110,11 +113,11 @@ class DeviceStatusCollector : public StatusCollector,
 
   // Format of the function that asynchronously receives data from cros_healthd.
   using CrosHealthdDataReceiver = base::OnceCallback<void(
-      chromeos::cros_healthd::mojom::TelemetryInfoPtr,
+      ash::cros_healthd::mojom::TelemetryInfoPtr,
       const base::circular_deque<std::unique_ptr<SampledData>>&)>;
   // Gets the data from cros_healthd and passes it to CrosHealthdDataReceiver.
   using CrosHealthdDataFetcher = base::RepeatingCallback<void(
-      std::vector<chromeos::cros_healthd::mojom::ProbeCategoryEnum>,
+      std::vector<ash::cros_healthd::mojom::ProbeCategoryEnum>,
       CrosHealthdDataReceiver)>;
 
   // Asynchronously receives the graphics status.
@@ -148,7 +151,8 @@ class DeviceStatusCollector : public StatusCollector,
   // Pool. Caller is responsible for passing already initialized |pref_service|.
   DeviceStatusCollector(
       PrefService* pref_service,
-      chromeos::system::StatisticsProvider* provider,
+      ReportingUserTracker* reporting_user_tracker,
+      ash::system::StatisticsProvider* provider,
       ManagedSessionService* managed_session_service,
       const VolumeInfoFetcher& volume_info_fetcher,
       const CPUStatisticsFetcher& cpu_statistics_fetcher,
@@ -158,6 +162,13 @@ class DeviceStatusCollector : public StatusCollector,
       const EMMCLifetimeFetcher& emmc_lifetime_fetcher,
       const StatefulPartitionInfoFetcher& stateful_partition_info_fetcher,
       const GraphicsStatusFetcher& graphics_status_fetcher,
+      // Please do not add new code that uses the crashes reported here. These
+      // crashes are now reported via the Encrypted Reporting Pipeline (ERP)
+      // located at
+      // chrome/browser/ash/policy/reporting/metrics_reporting/fatal_crash/.
+      // However, the crash reported via this pipeline may still be used by the
+      // server and some customers. Please consult relevant parties if cleaning
+      // up crash reporting here is desired.
       const CrashReportInfoFetcher& crash_report_info_fetcher,
       base::Clock* clock = base::DefaultClock::GetInstance());
 
@@ -165,7 +176,8 @@ class DeviceStatusCollector : public StatusCollector,
   // Blocking Pool. Caller is responsible for passing already initialized
   // |pref_service|.
   DeviceStatusCollector(PrefService* pref_service,
-                        chromeos::system::StatisticsProvider* provider,
+                        ReportingUserTracker* reporting_user_tracker,
+                        ash::system::StatisticsProvider* provider,
                         ManagedSessionService* managed_session_service);
 
   DeviceStatusCollector(const DeviceStatusCollector&) = delete;
@@ -191,6 +203,10 @@ class DeviceStatusCollector : public StatusCollector,
   // The total number of hardware resource usage samples cached internally.
   static const unsigned int kMaxResourceUsageSamples = 10;
 
+  EnterpriseActivityStorage& GetActivityStorageForTesting() {
+    return CHECK_DEREF(activity_storage_.get());
+  }
+
  protected:
   using PowerStatusCallback = base::OnceCallback<void(
       const power_manager::PowerSupplyProperties& prop)>;
@@ -212,14 +228,14 @@ class DeviceStatusCollector : public StatusCollector,
   // update.
   void SampleMemoryUsage();
 
-  // power_manager::PowerManagerClient::Observer:
+  // chromeos::PowerManagerClient::Observer:
   void PowerChanged(const power_manager::PowerSupplyProperties& prop) override;
 
  private:
   // Callbacks used during sampling data collection, that allows to pass
   // additional data using partial function application.
   using SamplingProbeResultCallback =
-      base::OnceCallback<void(chromeos::cros_healthd::mojom::TelemetryInfoPtr)>;
+      base::OnceCallback<void(ash::cros_healthd::mojom::TelemetryInfoPtr)>;
   using SamplingCallback = base::OnceCallback<void()>;
 
   // Clears the cached cpu resource usage.
@@ -229,7 +245,7 @@ class DeviceStatusCollector : public StatusCollector,
   void ClearCachedMemoryUsage();
 
   // Callbacks from chromeos::VersionLoader.
-  void OnOSVersion(const std::string& version);
+  void OnOSVersion(const std::optional<std::string>& version);
   void OnOSFirmware(std::pair<const std::string&, const std::string&> version);
 
   // Callbacks from `chromeos::TpmManagerClient`.
@@ -264,6 +280,8 @@ class DeviceStatusCollector : public StatusCollector,
       enterprise_management::DeviceStatusReportRequest* status);
   bool GetDeviceBootMode(
       enterprise_management::DeviceStatusReportRequest* status);
+  bool GetDemoModeDimensions(
+      enterprise_management::DeviceStatusReportRequest* status);
   void GetStorageStatus(scoped_refptr<DeviceStatusCollectorState> state);
   void GetGraphicsStatus(scoped_refptr<DeviceStatusCollectorState>
                              state);  // Queues async queries!
@@ -293,7 +311,7 @@ class DeviceStatusCollector : public StatusCollector,
   // be called once all sampling is finished.
   void SampleProbeData(std::unique_ptr<SampledData> sample,
                        SamplingProbeResultCallback callback,
-                       chromeos::cros_healthd::mojom::TelemetryInfoPtr result);
+                       ash::cros_healthd::mojom::TelemetryInfoPtr result);
 
   // Callback triggered from PowerManagedClient that samples battery discharge
   // rate. |callback| will be called once all sampling is finished.
@@ -314,15 +332,14 @@ class DeviceStatusCollector : public StatusCollector,
   // cros_healthd and passes it to |callback|. The data collected depends on
   // the categories in |categories_to_probe|.
   void FetchCrosHealthdData(
-      std::vector<chromeos::cros_healthd::mojom::ProbeCategoryEnum>
+      std::vector<ash::cros_healthd::mojom::ProbeCategoryEnum>
           categories_to_probe,
       CrosHealthdDataReceiver callback);
 
   // Callback for CrosHealthd that performs final sampling and
   // actually invokes |callback|.
-  void OnProbeDataFetched(
-      CrosHealthdDataReceiver callback,
-      chromeos::cros_healthd::mojom::TelemetryInfoPtr reply);
+  void OnProbeDataFetched(CrosHealthdDataReceiver callback,
+                          ash::cros_healthd::mojom::TelemetryInfoPtr reply);
 
   // Callback invoked when reporting users pref is changed.
   void ReportingUsersChanged();
@@ -337,7 +354,9 @@ class DeviceStatusCollector : public StatusCollector,
   bool IncludeEmailsInActivityReports() const;
 
   // Pref service that is mainly used to store activity periods for reporting.
-  PrefService* const pref_service_;
+  const raw_ptr<PrefService> pref_service_;
+
+  const raw_ptr<ReportingUserTracker> reporting_user_tracker_;
 
   // The last time an idle state check was performed.
   base::Time last_idle_check_;
@@ -417,7 +436,7 @@ class DeviceStatusCollector : public StatusCollector,
   PowerStatusCallback power_status_callback_;
 
   // Power manager client. Used to listen to power changed events.
-  chromeos::PowerManagerClient* const power_manager_;
+  const raw_ptr<chromeos::PowerManagerClient> power_manager_;
 
   base::ScopedObservation<chromeos::PowerManagerClient,
                           chromeos::PowerManagerClient::Observer>

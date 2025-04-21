@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "base/trace_event/memory_dump_request_args.h"
 #include "base/trace_event/process_memory_dump.h"
 #include "sql/database.h"
+#include "sql/test/test_helpers.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace sql {
@@ -16,8 +17,6 @@ namespace {
 
 class SQLMemoryDumpProviderTest : public testing::Test {
  public:
-  ~SQLMemoryDumpProviderTest() override = default;
-
   void SetUp() override {
     ASSERT_TRUE(temp_dir_.CreateUniqueTempDir());
     ASSERT_TRUE(db_.Open(
@@ -28,12 +27,12 @@ class SQLMemoryDumpProviderTest : public testing::Test {
 
  protected:
   base::ScopedTempDir temp_dir_;
-  Database db_;
+  Database db_{test::kTestTag};
 };
 
 TEST_F(SQLMemoryDumpProviderTest, OnMemoryDump) {
   base::trace_event::MemoryDumpArgs args = {
-      base::trace_event::MemoryDumpLevelOfDetail::DETAILED};
+      base::trace_event::MemoryDumpLevelOfDetail::kDetailed};
   base::trace_event::ProcessMemoryDump pmd(args);
   ASSERT_TRUE(SqlMemoryDumpProvider::GetInstance()->OnMemoryDump(args, &pmd));
   ASSERT_TRUE(pmd.GetAllocatorDump("sqlite"));

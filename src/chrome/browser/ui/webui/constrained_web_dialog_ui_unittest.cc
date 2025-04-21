@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -17,37 +17,18 @@
 
 namespace {
 
-class OnDialogClosedWebDialogDelegate : public ui::test::TestWebDialogDelegate {
- public:
-  OnDialogClosedWebDialogDelegate() : ui::test::TestWebDialogDelegate(GURL()) {}
-  ~OnDialogClosedWebDialogDelegate() override = default;
-
-  // Overridden ui::test::TestWebDialogDelegate behavior:
-  void OnDialogClosed(const std::string& json_retval) override {
-    if (callback_)
-      std::move(callback_).Run(json_retval);
-  }
-
-  void RegisterOnDialogClosedCallback(
-      base::OnceCallback<void(const std::string&)> cb) {
-    callback_ = std::move(cb);
-  }
-
- private:
-  base::OnceCallback<void(const std::string&)> callback_;
-};
-
 class TestConstrainedWebDialogDelegate : public ConstrainedWebDialogDelegate {
  public:
   TestConstrainedWebDialogDelegate() {
-    web_dialog_delegate_ = std::make_unique<OnDialogClosedWebDialogDelegate>();
+    web_dialog_delegate_ = std::make_unique<ui::WebDialogDelegate>();
+    web_dialog_delegate_->set_delete_on_close(false);
   }
 
   // ConstrainedWebDialogDelegate::GetWebDialogDelegate w/ covariant returns
-  const OnDialogClosedWebDialogDelegate* GetWebDialogDelegate() const override {
+  const ui::WebDialogDelegate* GetWebDialogDelegate() const override {
     return web_dialog_delegate_.get();
   }
-  OnDialogClosedWebDialogDelegate* GetWebDialogDelegate() override {
+  ui::WebDialogDelegate* GetWebDialogDelegate() override {
     return web_dialog_delegate_.get();
   }
 
@@ -57,36 +38,26 @@ class TestConstrainedWebDialogDelegate : public ConstrainedWebDialogDelegate {
 
   std::unique_ptr<content::WebContents> ReleaseWebContents() override {
     NOTREACHED();
-    return nullptr;
   }
 
-  content::WebContents* GetWebContents() override {
-    NOTREACHED();
-    return nullptr;
-  }
+  content::WebContents* GetWebContents() override { NOTREACHED(); }
 
-  gfx::NativeWindow GetNativeDialog() override {
-    NOTREACHED();
-    return nullptr;
-  }
+  gfx::NativeWindow GetNativeDialog() override { NOTREACHED(); }
 
   gfx::Size GetConstrainedWebDialogMinimumSize() const override {
     NOTREACHED();
-    return gfx::Size();
   }
 
   gfx::Size GetConstrainedWebDialogMaximumSize() const override {
     NOTREACHED();
-    return gfx::Size();
   }
 
   gfx::Size GetConstrainedWebDialogPreferredSize() const override {
     NOTREACHED();
-    return gfx::Size();
   }
 
  private:
-  std::unique_ptr<OnDialogClosedWebDialogDelegate> web_dialog_delegate_;
+  std::unique_ptr<ui::WebDialogDelegate> web_dialog_delegate_;
 };
 
 }  // namespace
@@ -138,9 +109,8 @@ TEST_F(ConstrainedWebDialogUITest, DialogCloseWithEmptyArgs) {
         ASSERT_EQ(json_retval, "");
         run_loop.Quit();
       }));
-  base::Value args(base::Value::Type::LIST);
-  web_ui()->HandleReceivedMessage("dialogClose",
-                                  &base::Value::AsListValue(args));
+  base::Value::List args;
+  web_ui()->HandleReceivedMessage("dialogClose", args);
   run_loop.Run();
 }
 
@@ -153,10 +123,9 @@ TEST_F(ConstrainedWebDialogUITest, DialogCloseWithJsonInArgs) {
         json_retval = cb_json_retval;
         run_loop.Quit();
       }));
-  base::Value args(base::Value::Type::LIST);
+  base::Value::List args;
   args.Append(kJsonRetval);
-  web_ui()->HandleReceivedMessage("dialogClose",
-                                  &base::Value::AsListValue(args));
+  web_ui()->HandleReceivedMessage("dialogClose", args);
   run_loop.Run();
   ASSERT_EQ(json_retval, kJsonRetval);
 }

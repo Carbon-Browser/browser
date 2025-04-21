@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,10 @@
 
 #include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/notification_utils.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/i18n/time_formatting.h"
-#include "base/memory/ref_counted.h"
 #include "chrome/browser/notifications/notification_display_service.h"
+#include "chrome/browser/notifications/notification_display_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/grit/generated_resources.h"
 #include "chromeos/ui/vector_icons/vector_icons.h"
@@ -51,22 +51,19 @@ void ShowNotification(std::u16string title,
   message_center::RichNotificationData option_fields;
   option_fields.fullscreen_visibility =
       message_center::FullscreenVisibility::OVER_USER;
-  std::unique_ptr<message_center::Notification> notification =
-      ash::CreateSystemNotification(
-          message_center::NOTIFICATION_TYPE_SIMPLE, notification_id, title,
-          message,
-          l10n_util::GetStringUTF16(IDS_TIME_LIMIT_NOTIFICATION_DISPLAY_SOURCE),
-          GURL(),
-          message_center::NotifierId(
-              message_center::NotifierType::SYSTEM_COMPONENT,
-              kTimeLimitNotifierId, catalog_name),
-          option_fields,
-          base::MakeRefCounted<message_center::NotificationDelegate>(),
-          chromeos::kNotificationSupervisedUserIcon,
-          message_center::SystemNotificationWarningLevel::NORMAL);
-  NotificationDisplayService::GetForProfile(
+  message_center::Notification notification = CreateSystemNotification(
+      message_center::NOTIFICATION_TYPE_SIMPLE, notification_id, title, message,
+      l10n_util::GetStringUTF16(IDS_TIME_LIMIT_NOTIFICATION_DISPLAY_SOURCE),
+      GURL(),
+      message_center::NotifierId(message_center::NotifierType::SYSTEM_COMPONENT,
+                                 kTimeLimitNotifierId, catalog_name),
+      option_fields,
+      base::MakeRefCounted<message_center::NotificationDelegate>(),
+      chromeos::kNotificationSupervisedUserIcon,
+      message_center::SystemNotificationWarningLevel::NORMAL);
+  NotificationDisplayServiceFactory::GetForProfile(
       Profile::FromBrowserContext(context))
-      ->Display(NotificationHandler::Type::TRANSIENT, *notification,
+      ->Display(NotificationHandler::Type::TRANSIENT, notification,
                 /*metadata=*/nullptr);
 }
 
@@ -78,8 +75,7 @@ std::u16string RemainingTimeString(base::TimeDelta time_remaining) {
 }  // namespace
 
 TimeLimitNotifier::TimeLimitNotifier(content::BrowserContext* context)
-    : TimeLimitNotifier(context, nullptr /* task_runner */) {}
-
+    : context_(context) {}
 TimeLimitNotifier::~TimeLimitNotifier() = default;
 
 void TimeLimitNotifier::MaybeScheduleLockNotifications(
@@ -122,7 +118,7 @@ void TimeLimitNotifier::MaybeScheduleLockNotifications(
 
 void TimeLimitNotifier::ShowPolicyUpdateNotification(
     LimitType limit_type,
-    absl::optional<base::Time> lock_time) {
+    std::optional<base::Time> lock_time) {
   int title_id;
   std::u16string message;
   std::string notification_id;
@@ -158,20 +154,8 @@ void TimeLimitNotifier::ShowPolicyUpdateNotification(
 }
 
 void TimeLimitNotifier::UnscheduleNotifications() {
-  // TODO(crbug.com/897975): Stop() should be sufficient, but doesn't have the
-  // expected effect in tests.
-  warning_notification_timer_.AbandonAndStop();
-  exit_notification_timer_.AbandonAndStop();
-}
-
-TimeLimitNotifier::TimeLimitNotifier(
-    content::BrowserContext* context,
-    scoped_refptr<base::SequencedTaskRunner> task_runner)
-    : context_(context) {
-  if (task_runner.get()) {
-    warning_notification_timer_.SetTaskRunner(task_runner);
-    exit_notification_timer_.SetTaskRunner(task_runner);
-  }
+  warning_notification_timer_.Stop();
+  exit_notification_timer_.Stop();
 }
 
 }  // namespace ash

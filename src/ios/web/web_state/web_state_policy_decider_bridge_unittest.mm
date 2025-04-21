@@ -1,17 +1,13 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/web/public/navigation/web_state_policy_decider_bridge.h"
 
-#include "base/callback_helpers.h"
+#import "base/functional/callback_helpers.h"
 #import "ios/web/public/test/fakes/crw_fake_web_state_policy_decider.h"
 #import "ios/web/public/test/fakes/fake_web_state.h"
-#include "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "testing/platform_test.h"
 
 namespace web {
 
@@ -28,7 +24,7 @@ class WebStatePolicyDeciderBridgeTest : public PlatformTest {
   WebStatePolicyDeciderBridge decider_bridge_;
 };
 
-// Tests |shouldAllowRequest:requestInfo:| forwarding.
+// Tests `shouldAllowRequest:requestInfo:` forwarding.
 TEST_F(WebStatePolicyDeciderBridgeTest, ShouldAllowRequest) {
   ASSERT_FALSE([decider_ shouldAllowRequestInfo]);
   NSURL* url = [NSURL URLWithString:@"http://test.url"];
@@ -37,10 +33,12 @@ TEST_F(WebStatePolicyDeciderBridgeTest, ShouldAllowRequest) {
       ui::PageTransition::PAGE_TRANSITION_LINK;
   const bool target_frame_is_main = true;
   const bool target_frame_is_cross_origin = false;
-  const bool has_user_gesture = false;
+  const bool target_window_is_cross_origin = false;
+  const bool is_user_initiated = false;
+  const bool user_tapped_recently = false;
   const WebStatePolicyDecider::RequestInfo request_info(
       transition_type, target_frame_is_main, target_frame_is_cross_origin,
-      has_user_gesture);
+      target_window_is_cross_origin, is_user_initiated, user_tapped_recently);
   decider_bridge_.ShouldAllowRequest(request, request_info, base::DoNothing());
   const FakeShouldAllowRequestInfo* should_allow_request_info =
       [decider_ shouldAllowRequestInfo];
@@ -48,14 +46,16 @@ TEST_F(WebStatePolicyDeciderBridgeTest, ShouldAllowRequest) {
   EXPECT_EQ(request, should_allow_request_info->request);
   EXPECT_EQ(target_frame_is_main,
             should_allow_request_info->request_info.target_frame_is_main);
-  EXPECT_EQ(has_user_gesture,
-            should_allow_request_info->request_info.has_user_gesture);
+  EXPECT_EQ(is_user_initiated,
+            should_allow_request_info->request_info.is_user_initiated);
+  EXPECT_EQ(user_tapped_recently,
+            should_allow_request_info->request_info.user_tapped_recently);
   EXPECT_TRUE(ui::PageTransitionTypeIncludingQualifiersIs(
       transition_type,
       should_allow_request_info->request_info.transition_type));
 }
 
-// Tests |decidePolicyForNavigationResponse:responseInfo:completionHandler:|
+// Tests `decidePolicyForNavigationResponse:responseInfo:completionHandler:`
 // forwarding.
 TEST_F(WebStatePolicyDeciderBridgeTest, DecidePolicyForNavigationResponse) {
   ASSERT_FALSE([decider_ decidePolicyForNavigationResponseInfo]);

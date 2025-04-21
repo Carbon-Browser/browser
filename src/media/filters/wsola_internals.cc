@@ -1,6 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/filters/wsola_internals.h"
 
@@ -9,9 +14,9 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <numbers>
 
 #include "base/check_op.h"
-#include "base/numerics/math_constants.h"
 #include "build/build_config.h"
 #include "media/base/audio_bus.h"
 
@@ -164,7 +169,7 @@ int DecimatedSearch(int decimation,
   int channels = search_segment->channels();
   int block_size = target_block->frames();
   int num_candidate_blocks = search_segment->frames() - (block_size - 1);
-  std::unique_ptr<float[]> dot_prod(new float[channels]);
+  auto dot_prod = std::make_unique<float[]>(channels);
   float similarity[3];  // Three elements for cubic interpolation.
 
   int n = 0;
@@ -242,7 +247,7 @@ int FullSearch(int low_limit,
                const float* energy_candidate_blocks) {
   int channels = search_block->channels();
   int block_size = target_block->frames();
-  std::unique_ptr<float[]> dot_prod(new float[channels]);
+  auto dot_prod = std::make_unique<float[]>(channels);
 
   float best_similarity = std::numeric_limits<float>::min();
   int optimal_index = 0;
@@ -283,9 +288,9 @@ int OptimalIndex(const AudioBus* search_block,
   // heuristically based on experiments.
   const int kSearchDecimation = 5;
 
-  std::unique_ptr<float[]> energy_target_block(new float[channels]);
-  std::unique_ptr<float[]> energy_candidate_blocks(
-      new float[channels * num_candidate_blocks]);
+  auto energy_target_block = std::make_unique<float[]>(channels);
+  auto energy_candidate_blocks =
+      std::make_unique<float[]>(channels * num_candidate_blocks);
 
   // Energy of all candid frames.
   MultiChannelMovingBlockEnergies(search_block, target_size,
@@ -309,7 +314,7 @@ int OptimalIndex(const AudioBus* search_block,
 }
 
 void GetPeriodicHanningWindow(int window_length, float* window) {
-  const float scale = 2.0f * base::kPiFloat / window_length;
+  const float scale = 2.0f * std::numbers::pi_v<float> / window_length;
   for (int n = 0; n < window_length; ++n)
     window[n] = 0.5f * (1.0f - std::cos(n * scale));
 }

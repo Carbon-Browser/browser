@@ -1,4 +1,4 @@
-// Copyright 2020 The Crashpad Authors. All rights reserved.
+// Copyright 2020 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,16 +14,37 @@
 
 #import <XCTest/XCTest.h>
 #include <objc/runtime.h>
+#include <sys/sysctl.h>
+
+#include <vector>
 
 #import "Service/Sources/EDOClientService.h"
 #include "build/build_config.h"
+#include "client/length_delimited_ring_buffer.h"
 #import "test/ios/host/cptest_shared_object.h"
+#include "util/mac/sysctl.h"
 #include "util/mach/exception_types.h"
 #include "util/mach/mach_extensions.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
+namespace crashpad {
+namespace {
+
+#if TARGET_OS_SIMULATOR
+// macOS 14.0 is 23A344, macOS 13.6.5 is 22G621, so if the first two characters
+// in the kern.osversion are > 22, this build will reproduce the simulator bug
+// in crbug.com/328282286
+bool IsMacOSVersion143OrGreaterAndiOS16OrLess() {
+  if (__builtin_available(iOS 17, *)) {
+    return false;
+  }
+
+  std::string build = crashpad::ReadStringSysctlByName("kern.osversion", false);
+  return std::stoi(build.substr(0, 2)) > 22;
+}
 #endif
+
+}  // namespace
+}  // namespace crashpad
 
 @interface CPTestTestCase : XCTestCase {
   XCUIApplication* app_;
@@ -147,10 +168,19 @@
 
 - (void)testException {
   [rootObject_ crashException];
+  // After https://reviews.llvm.org/D141222 exceptions call
+  // __libcpp_verbose_abort, which Chromium sets to `brk 0` in release.
+  // After https://crrev.com/c/5375084, Chromium does not set `brk 0` for local
+  // release builds and official DCHECK builds.
+#if defined(CRASHPAD_IS_IN_CHROMIUM) && defined(NDEBUG) && \
+    defined(OFFICIAL_BUILD) && !defined(DCHECK_ALWAYS_ON)
+  [self verifyCrashReportException:SIGABRT];
+#else
   [self verifyCrashReportException:EXC_SOFT_SIGNAL];
   NSNumber* report_exception;
   XCTAssertTrue([rootObject_ pendingReportExceptionInfo:&report_exception]);
   XCTAssertEqual(report_exception.intValue, SIGABRT);
+#endif
 }
 
 - (void)testNSException {
@@ -164,6 +194,16 @@
       isEqualToString:@"Intentionally throwing error."]);
   XCTAssertTrue([[dict[@"objects"][2] valueForKeyPath:@"exceptionName"]
       isEqualToString:@"NSInternalInconsistencyException"]);
+}
+
+- (void)testNotAnNSException {
+  [rootObject_ crashNotAnNSException];
+  // When @throwing something other than an NSException the
+  // UncaughtExceptionHandler is not called, so the application SIGABRTs.
+  [self verifyCrashReportException:EXC_SOFT_SIGNAL];
+  NSNumber* report_exception;
+  XCTAssertTrue([rootObject_ pendingReportExceptionInfo:&report_exception]);
+  XCTAssertEqual(report_exception.intValue, SIGABRT);
 }
 
 - (void)testUnhandledNSException {
@@ -302,6 +342,14 @@
 #endif
 
 - (void)testCrashWithAnnotations {
+#if TARGET_OS_SIMULATOR
+  // This test will fail on older (<iOS17 simulators) when running on macOS 14.3
+  // or newer due to a bug in Simulator. crbug.com/328282286
+  if (crashpad::IsMacOSVersion143OrGreaterAndiOS16OrLess()) {
+    return;
+  }
+#endif
+
   [rootObject_ crashWithAnnotations];
   [self verifyCrashReportException:EXC_SOFT_SIGNAL];
   NSNumber* report_exception;
@@ -322,6 +370,31 @@
       isEqualToString:@"same-name 3"]);
   XCTAssertTrue([[dict[@"objects"][2] valueForKeyPath:@"#TEST# one"]
       isEqualToString:@"moocow"]);
+  // Ensure `ring_buffer` is present but not `busy_ring_buffer`.
+  XCTAssertEqual(1u, [dict[@"ringbuffers"] count]);
+  NSData* ringBufferNSData =
+      [dict[@"ringbuffers"][0] valueForKeyPath:@"#TEST# ring_buffer"];
+  crashpad::RingBufferData ringBufferData;
+  XCTAssertTrue(ringBufferData.DeserializeFromBuffer(ringBufferNSData.bytes,
+                                                     ringBufferNSData.length));
+  crashpad::LengthDelimitedRingBufferReader reader(ringBufferData);
+
+  std::vector<uint8_t> ringBufferEntry;
+  XCTAssertTrue(reader.Pop(ringBufferEntry));
+  NSString* firstEntry = [[NSString alloc] initWithBytes:ringBufferEntry.data()
+                                                  length:ringBufferEntry.size()
+                                                encoding:NSUTF8StringEncoding];
+  XCTAssertEqualObjects(firstEntry, @"hello");
+  ringBufferEntry.clear();
+
+  XCTAssertTrue(reader.Pop(ringBufferEntry));
+  NSString* secondEntry = [[NSString alloc] initWithBytes:ringBufferEntry.data()
+                                                   length:ringBufferEntry.size()
+                                                 encoding:NSUTF8StringEncoding];
+  XCTAssertEqualObjects(secondEntry, @"goodbye");
+  ringBufferEntry.clear();
+
+  XCTAssertFalse(reader.Pop(ringBufferEntry));
 }
 
 - (void)testDumpWithoutCrash {
@@ -344,6 +417,17 @@
   XCTAssertTrue(app_.state == XCUIApplicationStateRunningForeground);
   rootObject_ = [EDOClientService rootObjectWithPort:12345];
   XCTAssertEqual([rootObject_ pendingReportCount], 1);
+}
+
+- (void)testSimultaneousNSException {
+  [rootObject_ catchConcurrentNSException];
+
+  // The app should not crash
+  XCTAssertTrue(app_.state == XCUIApplicationStateRunningForeground);
+
+  // No report should be generated.
+  [rootObject_ processIntermediateDumps];
+  XCTAssertEqual([rootObject_ pendingReportCount], 0);
 }
 
 - (void)testCrashInHandlerReentrant {

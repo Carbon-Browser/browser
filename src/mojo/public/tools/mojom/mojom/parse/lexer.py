@@ -1,8 +1,7 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import imp
 import os.path
 import sys
 
@@ -10,7 +9,7 @@ from mojom import fileutil
 from mojom.error import Error
 
 fileutil.AddLocalRepoThirdPartyDirToModulePath()
-from ply.lex import TOKEN
+from ply.lex import LexToken, TOKEN
 
 
 class LexError(Error):
@@ -22,9 +21,11 @@ class LexError(Error):
 
 # We have methods which look like they could be functions:
 # pylint: disable=R0201
-class Lexer(object):
+class Lexer:
   def __init__(self, filename):
     self.filename = filename
+    self.line_comments = []
+    self.suffix_comments = []
 
   ######################--   PRIVATE   --######################
 
@@ -51,11 +52,11 @@ class Lexer(object):
       'DEFAULT',
       'ARRAY',
       'MAP',
-      'ASSOCIATED',
       'PENDING_REMOTE',
       'PENDING_RECEIVER',
       'PENDING_ASSOCIATED_REMOTE',
       'PENDING_ASSOCIATED_RECEIVER',
+      'FEATURE',
   )
 
   keyword_map = {}
@@ -100,6 +101,8 @@ class Lexer(object):
       'RANGLE',  # < >
       'SEMI',  # ;
       'COMMA',
+      'PIPE',  # |
+      'AMPERSAND',  # &
       'DOT'  # , .
   )
 
@@ -154,6 +157,8 @@ class Lexer(object):
   octal_or_hex_ordinal_disallowed = (
       r'@((0[0-9]+)|(' + hex_prefix + hex_digits + '))')
 
+  comment = r'(/\*(.|\n)*?\*/)|(//.*(\n[ \t]*//.*)*)'
+
   ##
   ## Rules for the normal state
   ##
@@ -187,6 +192,8 @@ class Lexer(object):
   t_COMMA = r','
   t_DOT = r'\.'
   t_SEMI = r';'
+  t_PIPE = r'\|'
+  t_AMPERSAND = r'&'
 
   t_STRING_LITERAL = string_literal
 
@@ -239,10 +246,32 @@ class Lexer(object):
     t.type = self.keyword_map.get(t.value, "NAME")
     return t
 
-  # Ignore C and C++ style comments
+  # Collect comments in the lexer, but don't promote them to the parser.
+  @TOKEN(comment)
   def t_COMMENT(self, t):
-    r'(/\*(.|\n)*?\*/)|(//.*(\n[ \t]*//.*)*)'
+    # Clone the LexToken object to only hold the needed data and not other
+    # references.
+    comment = LexToken()
+    for a in ('value', 'type', 'lineno', 'lexpos'):
+      setattr(comment, a, getattr(t, a))
+
     t.lexer.lineno += t.value.count("\n")
+
+    # Walk back to see if this is a comment on its own line.
+    pos = t.lexpos - 1
+    while pos >= 0:
+      c = t.lexer.lexdata[pos]
+      if c in t.lexer.lexignore:
+        pos -= 1
+      else:
+        if c == '\n':
+          self.line_comments.append(comment)
+        else:
+          self.suffix_comments.append(comment)
+        return
+
+    # Reached the beginning of the file, so this must be a line comment.
+    self.line_comments.append(comment)
 
   def t_error(self, t):
     msg = "Illegal character %s" % repr(t.value[0])

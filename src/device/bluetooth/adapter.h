@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,11 +10,12 @@
 #include <tuple>
 #include <vector>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/time/time.h"
 #include "device/bluetooth/bluetooth_adapter.h"
 #include "device/bluetooth/bluetooth_advertisement.h"
 #include "device/bluetooth/bluetooth_gatt_connection.h"
+#include "device/bluetooth/gatt_service.h"
 #include "device/bluetooth/public/cpp/bluetooth_uuid.h"
 #include "device/bluetooth/public/mojom/adapter.mojom.h"
 #include "device/bluetooth/public/mojom/device.mojom-forward.h"
@@ -47,6 +48,7 @@ class Adapter : public mojom::Adapter,
   void RegisterAdvertisement(const device::BluetoothUUID& service_uuid,
                              const std::vector<uint8_t>& service_data,
                              bool use_scan_response,
+                             bool connectable,
                              RegisterAdvertisementCallback callback) override;
   void SetDiscoverable(bool discoverable,
                        SetDiscoverableCallback callback) override;
@@ -56,11 +58,18 @@ class Adapter : public mojom::Adapter,
   void ConnectToServiceInsecurely(
       const std::string& address,
       const device::BluetoothUUID& service_uuid,
+      bool should_unbond_on_error,
       ConnectToServiceInsecurelyCallback callback) override;
   void CreateRfcommServiceInsecurely(
       const std::string& service_name,
       const device::BluetoothUUID& service_uuid,
       CreateRfcommServiceInsecurelyCallback callback) override;
+  void CreateLocalGattService(
+      const device::BluetoothUUID& service_id,
+      mojo::PendingRemote<mojom::GattServiceObserver> observer,
+      CreateLocalGattServiceCallback callback) override;
+  void IsLeScatternetDualRoleSupported(
+      IsLeScatternetDualRoleSupportedCallback callback) override;
 
   // device::BluetoothAdapter::Observer overrides:
   void AdapterPresentChanged(device::BluetoothAdapter* adapter,
@@ -89,26 +98,34 @@ class Adapter : public mojom::Adapter,
     ConnectToServiceRequestDetails(const std::string& address,
                                    const device::BluetoothUUID& service_uuid,
                                    const base::Time& time_requested,
+                                   bool should_unbond_on_error,
                                    ConnectToServiceInsecurelyCallback callback);
     ~ConnectToServiceRequestDetails();
 
     std::string address;
     device::BluetoothUUID service_uuid;
     base::Time time_requested;
+    bool should_unbond_on_error;
     ConnectToServiceInsecurelyCallback callback;
   };
+
+  void OnGattServiceInvalidated(device::BluetoothUUID service_id);
 
   void OnDeviceFetchedForInsecureServiceConnection(
       int request_id,
       device::BluetoothDevice* device);
+  void ProcessDeviceForInsecureServiceConnection(
+      int request_id,
+      device::BluetoothDevice* device,
+      bool disconnected);
   void ProcessPendingInsecureServiceConnectionRequest(
-      const std::string& address,
-      device::BluetoothDevice* device);
+      device::BluetoothDevice* device,
+      bool disconnected);
 
   void OnGattConnect(
       ConnectToDeviceCallback callback,
       std::unique_ptr<device::BluetoothGattConnection> connection,
-      absl::optional<device::BluetoothDevice::ConnectErrorCode> error_code);
+      std::optional<device::BluetoothDevice::ConnectErrorCode> error_code);
 
   void OnRegisterAdvertisement(
       RegisterAdvertisementCallback callback,
@@ -131,6 +148,8 @@ class Adapter : public mojom::Adapter,
   void OnConnectToService(int request_id,
                           scoped_refptr<device::BluetoothSocket> socket);
   void OnConnectToServiceError(int request_id, const std::string& message);
+  void OnConnectToServiceInsecurelyError(int request_id,
+                                         const std::string& error_message);
 
   void OnCreateRfcommServiceInsecurely(
       CreateRfcommServiceInsecurelyCallback callback,
@@ -160,6 +179,9 @@ class Adapter : public mojom::Adapter,
   // Ids of ConnectToServiceRequestDetails that are awaiting the completion of
   // service discovery for the given device.
   std::vector<int> connect_to_service_requests_pending_discovery_;
+
+  base::flat_map<device::BluetoothUUID, std::unique_ptr<GattService>>
+      uuid_to_local_gatt_service_map_;
 
   // Allowed UUIDs for untrusted clients to initiate outgoing connections, or
   // listen on incoming connections.

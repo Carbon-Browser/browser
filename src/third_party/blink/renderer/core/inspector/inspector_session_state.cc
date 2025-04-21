@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,7 @@ const mojom::blink::DevToolsSessionState* InspectorSessionState::ReattachState()
 
 void InspectorSessionState::EnqueueUpdate(const WTF::String& key,
                                           const WebVector<uint8_t>* value) {
-  absl::optional<WTF::Vector<uint8_t>> updated_value;
+  std::optional<WTF::Vector<uint8_t>> updated_value;
   if (value) {
     WTF::Vector<uint8_t> payload;
     payload.AppendRange(value->begin(), value->end());
@@ -128,15 +128,14 @@ void InspectorAgentState::Serialize(const WTF::String& v,
 bool InspectorAgentState::Deserialize(span<uint8_t> in, WTF::String* v) {
   CBORTokenizer tokenizer(in);
   if (tokenizer.TokenTag() == CBORTokenTag::STRING8) {
-    *v = WTF::String::FromUTF8(
-        reinterpret_cast<const char*>(tokenizer.GetString8().data()),
-        static_cast<size_t>(tokenizer.GetString8().size()));
+    *v = WTF::String::FromUTF8(tokenizer.GetString8());
     return true;
   }
   if (tokenizer.TokenTag() == CBORTokenTag::STRING16) {
-    *v = WTF::String(
-        reinterpret_cast<const UChar*>(tokenizer.GetString16WireRep().data()),
-        tokenizer.GetString16WireRep().size() / 2);
+    const crdtp::span<uint8_t> data = tokenizer.GetString16WireRep();
+    // SAFETY: GetString16WireRep guarantees `data` is safe.
+    *v = WTF::String(UNSAFE_BUFFERS(base::span(
+        reinterpret_cast<const UChar*>(data.data()), data.size() / 2)));
     return true;
   }
   return false;
@@ -148,7 +147,7 @@ void InspectorAgentState::Serialize(const std::vector<uint8_t>& v,
   // We could CBOR encode this, but since we never look at the contents
   // anyway (except for decoding just below), we just cheat and use the
   // blob directly.
-  out->Assign(v.data(), v.size());
+  out->Assign(v);
 }
 
 /*static*/

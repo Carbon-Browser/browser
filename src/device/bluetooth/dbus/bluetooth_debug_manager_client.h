@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "dbus/object_path.h"
 #include "device/bluetooth/bluetooth_export.h"
 #include "device/bluetooth/dbus/bluez_dbus_client.h"
@@ -37,6 +37,11 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothDebugManagerClient
   virtual void SetLLPrivacy(const bool enable,
                             base::OnceClosure callback,
                             ErrorCallback error_callback) = 0;
+
+  // Invoke D-Bus API to enable or disable the Bluetooth Quality Report.
+  virtual void SetBluetoothQualityReport(const bool enable,
+                                         base::OnceClosure callback,
+                                         ErrorCallback error_callback) = 0;
 
   // Invoke D-Bus API to set the levels of logging verbosity for each of
   // the bluetooth daemons and kernel.

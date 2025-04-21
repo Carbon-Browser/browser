@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,18 +6,18 @@
 #define COMPONENTS_OPTIMIZATION_GUIDE_CORE_HINTS_FETCHER_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "base/time/clock.h"
 #include "base/time/time.h"
 #include "components/optimization_guide/proto/hints.pb.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 class OptimizationGuideLogger;
@@ -30,36 +30,11 @@ class SimpleURLLoader;
 
 namespace optimization_guide {
 
-// Status of a request to fetch hints.
-// This enum must remain synchronized with the enum
-// |OptimizationGuideHintsFetcherRequestStatus| in
-// tools/metrics/histograms/enums.xml.
-enum class HintsFetcherRequestStatus {
-  // No fetch status known. Used in testing.
-  kUnknown,
-  // Fetch request was sent and a response received.
-  kSuccess,
-  // Fetch request was sent but no response received.
-  kResponseError,
-  // DEPRECATED: Fetch request not sent because of offline network status.
-  kDeprecatedNetworkOffline,
-  // Fetch request not sent because fetcher was busy with another request.
-  kFetcherBusy,
-  // Fetch request not sent because the host and URL lists were empty.
-  kNoHostsOrURLsToFetch,
-  // Fetch request not sent because no supported optimization types were
-  // provided.
-  kNoSupportedOptimizationTypes,
-
-  // Insert new values before this line.
-  kMaxValue = kNoSupportedOptimizationTypes
-};
-
 // Callback to inform the caller that the remote hints have been fetched and
 // to pass back the fetched hints response from the remote Optimization Guide
 // Service.
 using HintsFetchedCallback = base::OnceCallback<void(
-    absl::optional<std::unique_ptr<proto::GetHintsResponse>>)>;
+    std::optional<std::unique_ptr<proto::GetHintsResponse>>)>;
 
 // A class to handle requests for optimization hints from a remote Optimization
 // Guide Service.
@@ -83,12 +58,13 @@ class HintsFetcher {
   // |hints_fetched_callback| is run once when the outcome of this request is
   // determined (whether a request was actually sent or not). Virtualized for
   // testing. Hints fetcher may fetch hints for only a subset of the provided
-  // |hosts|. |hosts| should be an ordered list in descending order of
-  // probability that the hints are needed for that host. Only supported |urls|
-  // will be included in the fetch. |urls| is an ordered list in descending
-  // order of probability that a hint will be needed for the URL. The supplied
-  // optimization types will be included in the request, if empty no fetch will
-  // be made.
+  // |hosts|. A host may be skipped when too many are requested, or when it
+  // already has a result cached, unless |skip_cache| is specified. |hosts|
+  // should be an ordered list in descending order of probability that the hints
+  // are needed for that host. Only supported |urls| will be included in the
+  // fetch. |urls| is an ordered list in descending order of probability that a
+  // hint will be needed for the URL. The supplied optimization types will be
+  // included in the request, if empty no fetch will be made.
   virtual bool FetchOptimizationGuideServiceHints(
       const std::vector<std::string>& hosts,
       const std::vector<GURL>& urls,
@@ -96,7 +72,10 @@ class HintsFetcher {
           optimization_types,
       optimization_guide::proto::RequestContext request_context,
       const std::string& locale,
-      HintsFetchedCallback hints_fetched_callback);
+      const std::string& access_token,
+      bool skip_cache,
+      HintsFetchedCallback hints_fetched_callback,
+      std::optional<proto::RequestContextMetadata> request_context_metadata);
 
   // Set |time_clock_| for testing.
   void SetTimeClockForTesting(const base::Clock* time_clock);
@@ -125,7 +104,8 @@ class HintsFetcher {
 
  private:
   // URL loader completion callback.
-  void OnURLLoadComplete(std::unique_ptr<std::string> response_body);
+  void OnURLLoadComplete(bool skip_cache,
+                         std::unique_ptr<std::string> response_body);
 
   // Handles the response from the remote Optimization Guide Service.
   // |response| is the response body, |status| is the
@@ -133,7 +113,8 @@ class HintsFetcher {
   // response code (if available).
   void HandleResponse(const std::string& response,
                       int status,
-                      int response_code);
+                      int response_code,
+                      bool skip_cache);
 
   // Stores the hosts in |hosts_fetched_| in the
   // HintsFetcherHostsSuccessfullyFetched dictionary pref. The value stored for
@@ -151,7 +132,8 @@ class HintsFetcher {
   // refreshed. The count of returned hosts is limited to
   // features::MaxHostsForOptimizationGuideServiceHintsFetch().
   std::vector<std::string> GetSizeLimitedHostsDueForHintsRefresh(
-      const std::vector<std::string>& hosts) const;
+      const std::vector<std::string>& hosts,
+      bool skip_cache) const;
 
   // Used to hold the callback while the SimpleURLLoader performs the request
   // asynchronously.
@@ -159,6 +141,10 @@ class HintsFetcher {
 
   // The URL for the remote Optimization Guide Service.
   const GURL optimization_guide_service_url_;
+
+  // The API key used to call the remote Optimization Guide Service when no
+  // access token is present.
+  const std::string optimization_guide_service_api_key_;
 
   // Holds the |URLLoader| for an active hints request.
   std::unique_ptr<network::SimpleURLLoader> active_url_loader_;

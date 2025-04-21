@@ -1,10 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import {getTrustedHTML, getTrustedScript, getTrustedScriptURL} from 'chrome://resources/js/static_types.js';
 
-import {assertEquals, assertNotReached, assertThrows} from '../chai_assert.js';
+import {assertEquals, assertNotReached, assertThrows} from 'chrome://webui-test/chai_assert.js';
 
 suite('StaticTypesTest', function() {
   test('compatible with Trusted Types', () => {

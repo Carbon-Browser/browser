@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,22 +6,29 @@
 #define CONTENT_BROWSER_RENDERER_HOST_POLICY_CONTAINER_HOST_H_
 
 #include <iosfwd>
+#include <memory>
+#include <vector>
 
-#include "content/common/child_process_host_impl.h"
+#include "content/browser/child_process_host_impl.h"
 #include "content/common/content_export.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
 #include "mojo/public/cpp/bindings/unique_receiver_set.h"
 #include "services/network/public/cpp/cross_origin_embedder_policy.h"
 #include "services/network/public/cpp/cross_origin_opener_policy.h"
+#include "services/network/public/cpp/document_isolation_policy.h"
 #include "services/network/public/cpp/web_sandbox_flags.h"
 #include "services/network/public/mojom/content_security_policy.mojom-forward.h"
 #include "services/network/public/mojom/ip_address_space.mojom-shared.h"
 #include "services/network/public/mojom/referrer_policy.mojom-shared.h"
+#include "services/network/public/mojom/url_response_head.mojom-forward.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/public/mojom/frame/policy_container.mojom.h"
+#include "url/gurl.h"
 
 namespace content {
+
+class ContentBrowserClient;
 
 // The contents of a PolicyContainerHost.
 struct CONTENT_EXPORT PolicyContainerPolicies {
@@ -35,8 +42,20 @@ struct CONTENT_EXPORT PolicyContainerPolicies {
           content_security_policies,
       const network::CrossOriginOpenerPolicy& cross_origin_opener_policy,
       const network::CrossOriginEmbedderPolicy& cross_origin_embedder_policy,
+      const network::DocumentIsolationPolicy& document_isolation_policy,
       network::mojom::WebSandboxFlags sandbox_flags,
-      bool is_anonymous);
+      bool is_credentialless,
+      bool can_navigate_top_without_user_gesture,
+      bool allow_cross_origin_isolation);
+
+  explicit PolicyContainerPolicies(
+      const blink::mojom::PolicyContainerPolicies& policies);
+
+  // Used when loading workers from network schemes.
+  // WARNING: This does not populate referrer policy.
+  PolicyContainerPolicies(const GURL& url,
+                          network::mojom::URLResponseHead* response_head,
+                          ContentBrowserClient* client);
 
   // Instances of this type are move-only.
   PolicyContainerPolicies(const PolicyContainerPolicies&) = delete;
@@ -55,6 +74,9 @@ struct CONTENT_EXPORT PolicyContainerPolicies {
   // Helper function to append items to `content_security_policies`.
   void AddContentSecurityPolicies(
       std::vector<network::mojom::ContentSecurityPolicyPtr> policies);
+
+  blink::mojom::PolicyContainerPoliciesPtr ToMojoPolicyContainerPolicies()
+      const;
 
   // The referrer policy for the associated document. If not overwritten via a
   // call to SetReferrerPolicy (for example after parsing the Referrer-Policy
@@ -92,6 +114,11 @@ struct CONTENT_EXPORT PolicyContainerPolicies {
   // https://html.spec.whatwg.org/multipage/origin.html#coep
   network::CrossOriginEmbedderPolicy cross_origin_embedder_policy;
 
+  // The document isolation policy for the document.
+  // See:
+  // https://github.com/explainers-by-googlers/document-isolation-policy
+  network::DocumentIsolationPolicy document_isolation_policy;
+
   // Tracks the sandbox flags which are in effect on this document. This
   // includes any flags which have been set by a Content-Security-Policy header,
   // in addition to those which are set by the embedding frame.
@@ -99,9 +126,25 @@ struct CONTENT_EXPORT PolicyContainerPolicies {
       network::mojom::WebSandboxFlags::kNone;
 
   // https://wicg.github.io/anonymous-iframe/#spec-window-attribute
-  // True for window framed inside an anonymous iframe, directly or indirectly
+  // True for window framed inside credentialless iframe, directly or indirectly
   // by one of its ancestors
-  bool is_anonymous = false;
+  bool is_credentialless = false;
+
+  // Tracks if a document is allowed to navigate the top-level frame without
+  // sticky user activation. A document loses this ability when it is
+  // cross-origin with the top-level frame. An exception is made if the parent
+  // embeds the child with sandbox="allow-top-navigation", as opposed to not
+  // using sandboxing. A document that is same-origin to the top-level frame
+  // will always have this value set to true.
+  bool can_navigate_top_without_user_gesture = true;
+
+  // The top-level initial empty document opened as a popup by a cross-origin
+  // iframe might inherit the COOP policies of the top-level document but it
+  // shouldn't have crossOriginIsolated capabilities if COOP was initially set
+  // by another origin. Hence, we pass down this boolean to tell the renderer to
+  // restrict those capabilities. For more detail, see
+  // https://github.com/hemeryar/coi-with-popups/blob/main/docs/cross_origin_iframe_popup.MD
+  bool allow_cross_origin_isolation = false;
 };
 
 // PolicyContainerPolicies structs are comparable for equality.
@@ -126,17 +169,11 @@ CONTENT_EXPORT std::ostream& operator<<(
 // Although it is owned through a scoped_refptr, a PolicyContainerHost should
 // not be shared between different owners. A RenderFrameHost gets a
 // PolicyContainerHost at creation time, and it gets a new one from the
-// NavigationRequest every time a NavigationRequest commits. Initially, a
-// PolicyContainerHost has no associated frame token. As soon as the
-// PolicyContainerHost becomes owned by a RenderFrameHost, the method
-// AssociateWithFrameToken must be called. This makes it possible to retrieve
-// the PolicyContainerHost via
-// PolicyContainerHost::FromFrameToken. Additionally, this enables the
-// PolicyContainerHost to outlive its RenderFrameHost. In fact, as long as the
-// mojo receiver or a keep alive handle (as registered using
-// IssueKeepAliveHandle) is alive, the PolicyContainerHost will still be
-// retrievable by the corresponding frame token even if the RenderFrameHost has
-// been deleted (and the scoped_refptr with it).
+// NavigationRequest every time a NavigationRequest commits.
+// While a navigation is in flight, it is kept alive by
+// NavigationStateKeepAlive, which means it can outlive its RenderFrameHost.
+// At that point, it can be accessed through
+// RenderFrameHostImpl::GetPolicyContainerHost.
 class CONTENT_EXPORT PolicyContainerHost
     : public base::RefCounted<PolicyContainerHost>,
       public blink::mojom::PolicyContainerHost {
@@ -152,15 +189,8 @@ class CONTENT_EXPORT PolicyContainerHost
   PolicyContainerHost(const PolicyContainerHost&) = delete;
   PolicyContainerHost& operator=(const PolicyContainerHost&) = delete;
 
-  // Retrieve the PolicyContainerHost associated with the frame token |token|
-  // (cf. AsssociateWithFrameToken).
-  static PolicyContainerHost* FromFrameToken(
-      const blink::LocalFrameToken& token);
-
   // AssociateWithFrameToken must be called as soon as this PolicyContainerHost
-  // becomes owned by a RenderFrameHost. After this function is called, it
-  // becomes possible to retrieve this PolicyContainerHost via
-  // PolicyContainerHost::FromFrameToken. This function can be called only once.
+  // becomes owned by a RenderFrameHost.
   void AssociateWithFrameToken(
       const blink::LocalFrameToken& token,
       int process_id = ChildProcessHost::kInvalidUniqueID);
@@ -175,13 +205,17 @@ class CONTENT_EXPORT PolicyContainerHost
     return policies_.ip_address_space;
   }
 
-  network::CrossOriginOpenerPolicy cross_origin_opener_policy() const {
+  network::CrossOriginOpenerPolicy& cross_origin_opener_policy() {
     return policies_.cross_origin_opener_policy;
   }
 
   const network::CrossOriginEmbedderPolicy& cross_origin_embedder_policy()
       const {
     return policies_.cross_origin_embedder_policy;
+  }
+
+  const network::DocumentIsolationPolicy& document_isolation_policy() const {
+    return policies_.document_isolation_policy;
   }
 
   network::mojom::WebSandboxFlags sandbox_flags() const {
@@ -197,12 +231,30 @@ class CONTENT_EXPORT PolicyContainerHost
     policies_.cross_origin_opener_policy = policy;
   }
 
+  void set_cross_origin_embedder_policy(
+      const network::CrossOriginEmbedderPolicy& policy) {
+    policies_.cross_origin_embedder_policy = policy;
+  }
+
+  void set_document_isolation_policy(
+      const network::DocumentIsolationPolicy& policy) {
+    policies_.document_isolation_policy = policy;
+  }
+
   // Merges the provided sandbox flags with the existing flags.
   void set_sandbox_flags(network::mojom::WebSandboxFlags sandbox_flags) {
     policies_.sandbox_flags = sandbox_flags;
   }
 
-  void SetIsAnonymous() { policies_.is_anonymous = true; }
+  void SetIsCredentialless() { policies_.is_credentialless = true; }
+
+  void SetCanNavigateTopWithoutUserGesture(bool value) {
+    policies_.can_navigate_top_without_user_gesture = value;
+  }
+
+  void SetAllowCrossOriginIsolation(bool value) {
+    policies_.allow_cross_origin_isolation = value;
+  }
 
   // Return a PolicyContainer containing copies of the policies and a pending
   // mojo remote that can be used to update policies in this object. If called a
@@ -219,16 +271,6 @@ class CONTENT_EXPORT PolicyContainerHost
   void Bind(
       blink::mojom::PolicyContainerBindParamsPtr policy_container_bind_params);
 
-  // Register a keep alive handle by passing the mojo receiver. The
-  // PolicyContainerHost is kept alive as long as the corresponding remote
-  // exists.
-  // See also:
-  // - PolicyContainerHost::AssociateWithFrameToken(token)
-  // - PolicyContainerHost::FromFrameToken(token)
-  void IssueKeepAliveHandle(
-      mojo::PendingReceiver<blink::mojom::PolicyContainerHostKeepAliveHandle>
-          receiver) override;
-
  private:
   friend class base::RefCounted<PolicyContainerHost>;
   ~PolicyContainerHost() override;
@@ -241,10 +283,7 @@ class CONTENT_EXPORT PolicyContainerHost
   mojo::AssociatedReceiver<blink::mojom::PolicyContainerHost>
       policy_container_host_receiver_{this};
 
-  mojo::UniqueReceiverSet<blink::mojom::PolicyContainerHostKeepAliveHandle>
-      keep_alive_handles_receiver_set_;
-
-  absl::optional<blink::LocalFrameToken> frame_token_ = absl::nullopt;
+  std::optional<blink::LocalFrameToken> frame_token_ = std::nullopt;
   int process_id_ = ChildProcessHost::kInvalidUniqueID;
 };
 

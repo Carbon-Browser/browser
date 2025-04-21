@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,14 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/i18n/time_formatting.h"
 #include "components/constrained_window/constrained_window_views.h"
 #include "components/strings/grit/components_strings.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/models/dialog_model.h"
+#include "ui/base/mojom/ui_base_types.mojom-shared.h"
 #include "ui/views/bubble/bubble_dialog_model_host.h"
 
 ScheduledRebootDialog::ScheduledRebootDialog(const base::Time& reboot_time,
@@ -29,8 +30,9 @@ ScheduledRebootDialog::ScheduledRebootDialog(const base::Time& reboot_time,
 ScheduledRebootDialog::~ScheduledRebootDialog() {
   if (dialog_delegate_) {
     views::Widget* widget = dialog_delegate_->GetWidget();
-    if (widget->HasObserver(this))
+    if (widget->HasObserver(this)) {
       widget->RemoveObserver(this);
+    }
     widget->CloseNow();
     dialog_delegate_ = nullptr;
   }
@@ -42,10 +44,12 @@ void ScheduledRebootDialog::ShowBubble(const base::Time& reboot_time,
   auto dialog_model =
       ui::DialogModel::Builder(std::make_unique<ui::DialogModelDelegate>())
           .SetTitle(BuildTitle())
-          .AddOkButton(base::OnceClosure())
-          .AddCancelButton(std::move(reboot_callback),
-                           l10n_util::GetStringUTF16(IDS_POLICY_REBOOT_BUTTON))
-          .AddBodyText(
+          .AddOkButton(base::DoNothing())
+          .AddCancelButton(
+              std::move(reboot_callback),
+              ui::DialogModel::Button::Params().SetLabel(
+                  l10n_util::GetStringUTF16(IDS_POLICY_REBOOT_BUTTON)))
+          .AddParagraph(
               ui::DialogModelLabel(
                   l10n_util::GetStringFUTF16(
                       IDS_POLICY_DEVICE_SCHEDULED_REBOOT_DIALOG_MESSAGE,
@@ -55,7 +59,7 @@ void ScheduledRebootDialog::ShowBubble(const base::Time& reboot_time,
           .Build();
 
   auto bubble = views::BubbleDialogModelHost::CreateModal(
-      std::move(dialog_model), ui::MODAL_TYPE_SYSTEM);
+      std::move(dialog_model), ui::mojom::ModalType::kSystem);
   dialog_delegate_ = bubble.get();
   bubble->SetOwnedByWidget(true);
   constrained_window::CreateBrowserModalDialogViews(std::move(bubble),
@@ -74,8 +78,9 @@ views::DialogDelegate* ScheduledRebootDialog::GetDialogDelegate() const {
 }
 
 void ScheduledRebootDialog::UpdateWindowTitle() {
-  if (dialog_delegate_)
+  if (dialog_delegate_) {
     dialog_delegate_->SetTitle(BuildTitle());
+  }
 }
 
 const std::u16string ScheduledRebootDialog::BuildTitle() const {

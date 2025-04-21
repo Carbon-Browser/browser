@@ -1,14 +1,16 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/system/unified/quiet_mode_feature_pod_controller.h"
 
-#include "ash/system/unified/feature_pod_button.h"
+#include "ash/constants/quick_settings_catalogs.h"
+#include "ash/system/unified/feature_tile.h"
+#include "ash/system/unified/unified_system_tray.h"
+#include "ash/system/unified/unified_system_tray_bubble.h"
 #include "ash/system/unified/unified_system_tray_controller.h"
-#include "ash/system/unified/unified_system_tray_model.h"
 #include "ash/test/ash_test_base.h"
-#include "base/memory/scoped_refptr.h"
+#include "base/test/metrics/histogram_tester.h"
 
 namespace ash {
 
@@ -27,58 +29,130 @@ class QuietModeFeaturePodControllerTest : public NoSessionAshTestBase {
   void SetUp() override {
     NoSessionAshTestBase::SetUp();
 
-    tray_model_ = base::MakeRefCounted<UnifiedSystemTrayModel>(nullptr);
-    tray_controller_ =
-        std::make_unique<UnifiedSystemTrayController>(tray_model_.get());
+    GetPrimaryUnifiedSystemTray()->ShowBubble();
   }
 
   void TearDown() override {
-    button_.reset();
-    controller_.reset();
-    tray_controller_.reset();
-    tray_model_.reset();
+    TearDownButton();
     NoSessionAshTestBase::TearDown();
   }
 
- protected:
   void SetUpButton() {
-    controller_ =
-        std::make_unique<QuietModeFeaturePodController>(tray_controller());
-    button_.reset(controller_->CreateButton());
+    auto* system_tray = GetPrimaryUnifiedSystemTray();
+    if (!system_tray->IsBubbleShown()) {
+      system_tray->ShowBubble();
+    }
+    controller_ = std::make_unique<QuietModeFeaturePodController>();
+    tile_ = controller_->CreateTile();
+  }
+
+  void TearDownButton() {
+    tile_.reset();
+    controller_.reset();
   }
 
   UnifiedSystemTrayController* tray_controller() {
-    return tray_controller_.get();
+    DCHECK(GetPrimaryUnifiedSystemTray()->bubble());
+    return GetPrimaryUnifiedSystemTray()
+        ->bubble()
+        ->unified_system_tray_controller();
   }
 
-  FeaturePodButton* button() { return button_.get(); }
+  void PressIcon() { controller_->OnIconPressed(); }
+
+  void PressLabel() { controller_->OnLabelPressed(); }
+
+  bool IsButtonVisible() { return tile_->GetVisible(); }
+
+  bool IsButtonToggled() { return tile_->IsToggled(); }
 
  private:
-  scoped_refptr<UnifiedSystemTrayModel> tray_model_;
-  std::unique_ptr<UnifiedSystemTrayController> tray_controller_;
   std::unique_ptr<QuietModeFeaturePodController> controller_;
-  std::unique_ptr<FeaturePodButton> button_;
+  std::unique_ptr<FeatureTile> tile_;
 };
 
 TEST_F(QuietModeFeaturePodControllerTest, ButtonVisibilityNotLoggedIn) {
   SetUpButton();
   // If not logged in, it should not be visible.
-  EXPECT_FALSE(button()->GetVisible());
+  EXPECT_FALSE(IsButtonVisible());
 }
 
 TEST_F(QuietModeFeaturePodControllerTest, ButtonVisibilityLoggedIn) {
-  CreateUserSessions(1);
+  SimulateUserLogin(kDefaultUserEmail);
   SetUpButton();
   // If logged in, it should be visible.
-  EXPECT_TRUE(button()->GetVisible());
+  EXPECT_TRUE(IsButtonVisible());
 }
 
 TEST_F(QuietModeFeaturePodControllerTest, ButtonVisibilityLocked) {
-  CreateUserSessions(1);
+  SimulateUserLogin(kDefaultUserEmail);
   BlockUserSession(UserSessionBlockReason::BLOCKED_BY_LOCK_SCREEN);
   SetUpButton();
   // If locked, it should not be visible.
-  EXPECT_FALSE(button()->GetVisible());
+  EXPECT_FALSE(IsButtonVisible());
+}
+
+TEST_F(QuietModeFeaturePodControllerTest, IconUMATracking) {
+  SimulateUserLogin(kDefaultUserEmail);
+  SetUpButton();
+  message_center::MessageCenter::Get()->SetQuietMode(false);
+
+  std::string histogram_prefix;
+    histogram_prefix = "Ash.QuickSettings.FeaturePod.";
+
+  // No metrics logged before clicking on any views.
+  auto histogram_tester = std::make_unique<base::HistogramTester>();
+  histogram_tester->ExpectTotalCount(histogram_prefix + "ToggledOn",
+                                     /*expected_count=*/0);
+  histogram_tester->ExpectTotalCount(histogram_prefix + "ToggledOff",
+                                     /*expected_count=*/0);
+  histogram_tester->ExpectTotalCount(histogram_prefix + "DiveIn",
+                                     /*expected_count=*/0);
+
+  // Turn on quiet mode when pressing on the icon.
+  PressIcon();
+  histogram_tester->ExpectTotalCount(histogram_prefix + "ToggledOn",
+                                     /*expected_count=*/1);
+  histogram_tester->ExpectTotalCount(histogram_prefix + "ToggledOff",
+                                     /*expected_count=*/0);
+  histogram_tester->ExpectTotalCount(histogram_prefix + "DiveIn",
+                                     /*expected_count=*/0);
+  histogram_tester->ExpectBucketCount(histogram_prefix + "ToggledOn",
+                                      QsFeatureCatalogName::kQuietMode,
+                                      /*expected_count=*/1);
+
+  // Turn off quiet mode when pressing on the icon.
+  PressIcon();
+  histogram_tester->ExpectTotalCount(histogram_prefix + "ToggledOn",
+                                     /*expected_count=*/1);
+  histogram_tester->ExpectTotalCount(histogram_prefix + "ToggledOff",
+                                     /*expected_count=*/1);
+  histogram_tester->ExpectTotalCount(histogram_prefix + "DiveIn",
+                                     /*expected_count=*/0);
+  histogram_tester->ExpectBucketCount(histogram_prefix + "ToggledOff",
+                                      QsFeatureCatalogName::kQuietMode,
+                                      /*expected_count=*/1);
+}
+
+TEST_F(QuietModeFeaturePodControllerTest, ToggledState) {
+  SimulateUserLogin(kDefaultUserEmail);
+
+  // Do not disturb is initially off, button is not toggled.
+  SetUpButton();
+  EXPECT_FALSE(message_center::MessageCenter::Get()->IsQuietMode());
+  EXPECT_FALSE(IsButtonToggled());
+
+  // Button is toggled when QuietMode is on.
+  message_center::MessageCenter::Get()->SetQuietMode(true);
+  EXPECT_TRUE(message_center::MessageCenter::Get()->IsQuietMode());
+  EXPECT_TRUE(IsButtonToggled());
+
+  // Button persists state after being destroyed and recreated, such as when
+  // closing and opening the QS bubble.
+  TearDownButton();
+  SetUpButton();
+  EXPECT_TRUE(message_center::MessageCenter::Get()->IsQuietMode());
+  EXPECT_TRUE(IsButtonToggled());
 }
 
 }  // namespace ash

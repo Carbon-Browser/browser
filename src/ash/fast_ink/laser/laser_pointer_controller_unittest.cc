@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -195,7 +195,7 @@ TEST_F(LaserPointerControllerTest, LaserPointerRenderer) {
   ui::PointerDetails pointer_details;
   pointer_details.pointer_type = ui::EventPointerType::kPen;
 
-  ui::TouchEvent touch(ui::ET_TOUCH_MOVED, gfx::PointF(), gfx::PointF(),
+  ui::TouchEvent touch(ui::EventType::kTouchMoved, gfx::PointF(), gfx::PointF(),
                        base::TimeTicks(), pointer_details, 0);
   ui::Event::DispatcherApi api(&touch);
   api.set_target(Shell::GetPrimaryRootWindow());
@@ -213,7 +213,7 @@ TEST_F(LaserPointerControllerTest, LaserPointerRendererTouchEvent) {
   // the pointer event in an earlier event handler.
   ui::PointerDetails pointer_details;
 
-  ui::TouchEvent touch(ui::ET_TOUCH_MOVED, gfx::PointF(), gfx::PointF(),
+  ui::TouchEvent touch(ui::EventType::kTouchMoved, gfx::PointF(), gfx::PointF(),
                        base::TimeTicks(), pointer_details, 0);
   ui::Event::DispatcherApi api(&touch);
   api.set_target(Shell::GetPrimaryRootWindow());

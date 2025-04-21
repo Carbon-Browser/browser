@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@ class Layer;
 
 namespace ui_devtools {
 
-// TODO(https://crbug.com/757283): Remove this file when LayerElement exists
+// TODO(crbug.com/41340254): Remove this file when LayerElement exists
 
 // Appends Layer properties to ret (ex: layer-type, layer-mask, etc).
 // This is used to display information about the layer on devtools.

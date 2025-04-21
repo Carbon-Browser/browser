@@ -1,4 +1,4 @@
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -13,13 +13,10 @@ import typing
 CHROMIUM_SRC_DIR = os.path.realpath(
     os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', '..'))
 
+# //build/util imports.
 sys.path.append(os.path.join(CHROMIUM_SRC_DIR, 'build', 'util'))
-
-# pylint: disable=wrong-import-position
 from lib.results import result_sink
 from lib.results import result_types
-
-# pylint: disable=wrong-import-position
 
 
 # pylint: disable=too-many-arguments

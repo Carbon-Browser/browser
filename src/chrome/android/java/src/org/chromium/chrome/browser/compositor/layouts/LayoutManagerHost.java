@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,9 +22,7 @@ public interface LayoutManagerHost {
      */
     static final boolean LOG_CHROME_VIEW_SHOW_TIME = false;
 
-    /**
-     * Requests a refresh of the visuals.
-     */
+    /** Requests a refresh of the visuals. */
     void requestRender();
 
     /**
@@ -72,22 +70,6 @@ public interface LayoutManagerHost {
     void getViewportFullControls(RectF outRect);
 
     /**
-     * @return The height of the screen minus the height of the top and bottom browser controls
-     *         when not hidden.
-     */
-    float getHeightMinusBrowserControls();
-
-    /**
-     * @return The height of the top browser controls in pixels.
-     */
-    int getTopControlsHeightPixels();
-
-    /**
-     * @return The height of the bottom browsers controls in pixels.
-     */
-    int getBottomControlsHeightPixels();
-
-    /**
      * @return The associated {@link LayoutRenderHost} to be used from the GL Thread.
      */
     LayoutRenderHost getLayoutRenderHost();
@@ -109,9 +91,7 @@ public interface LayoutManagerHost {
      */
     FullscreenManager getFullscreenManager();
 
-    /**
-     * Called when the currently visible content has been changed.
-     */
+    /** Called when the currently visible content has been changed. */
     void onContentChanged();
 
     /**

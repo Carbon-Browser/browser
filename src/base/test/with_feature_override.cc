@@ -1,8 +1,9 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/test/with_feature_override.h"
+
 #include "base/task/thread_pool/thread_pool_instance.h"
 
 namespace base {
@@ -22,7 +23,7 @@ WithFeatureOverride::WithFeatureOverride(const base::Feature& feature) {
   }
 }
 
-bool WithFeatureOverride::IsParamFeatureEnabled() {
+bool WithFeatureOverride::IsParamFeatureEnabled() const {
   return GetParam();
 }
 

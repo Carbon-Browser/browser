@@ -1,8 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/public/browser/navigation_throttle.h"
+
+#include <utility>
 
 #include "content/browser/renderer_host/navigation_request.h"
 
@@ -25,7 +27,6 @@ net::Error DefaultNetErrorCode(NavigationThrottle::ThrottleAction action) {
       return net::ERR_BLOCKED_BY_RESPONSE;
     default:
       NOTREACHED();
-      return net::ERR_UNEXPECTED;
   }
 }
 
@@ -35,22 +36,22 @@ NavigationThrottle::ThrottleCheckResult::ThrottleCheckResult(
     NavigationThrottle::ThrottleAction action)
     : NavigationThrottle::ThrottleCheckResult(action,
                                               DefaultNetErrorCode(action),
-                                              absl::nullopt) {}
+                                              std::nullopt) {}
 
 NavigationThrottle::ThrottleCheckResult::ThrottleCheckResult(
     NavigationThrottle::ThrottleAction action,
     net::Error net_error_code)
     : NavigationThrottle::ThrottleCheckResult(action,
                                               net_error_code,
-                                              absl::nullopt) {}
+                                              std::nullopt) {}
 
 NavigationThrottle::ThrottleCheckResult::ThrottleCheckResult(
     NavigationThrottle::ThrottleAction action,
     net::Error net_error_code,
-    absl::optional<std::string> error_page_content)
+    std::optional<std::string> error_page_content)
     : action_(action),
       net_error_code_(net_error_code),
-      error_page_content_(error_page_content) {}
+      error_page_content_(std::move(error_page_content)) {}
 
 NavigationThrottle::ThrottleCheckResult::ThrottleCheckResult(
     const ThrottleCheckResult& other) = default;
@@ -77,6 +78,11 @@ NavigationThrottle::ThrottleCheckResult NavigationThrottle::WillFailRequest() {
 
 NavigationThrottle::ThrottleCheckResult
 NavigationThrottle::WillProcessResponse() {
+  return NavigationThrottle::PROCEED;
+}
+
+NavigationThrottle::ThrottleCheckResult
+NavigationThrottle::WillCommitWithoutUrlLoader() {
   return NavigationThrottle::PROCEED;
 }
 

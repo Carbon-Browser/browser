@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 #define CHROME_BROWSER_OFFLINE_PAGES_ANDROID_OFFLINE_PAGE_AUTO_FETCHER_H_
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/weak_ptr.h"
 #include "chrome/common/offline_page_auto_fetcher.mojom.h"
 #include "components/offline_pages/core/background/request_queue_results.h"
 #include "components/offline_pages/core/background/save_page_request.h"

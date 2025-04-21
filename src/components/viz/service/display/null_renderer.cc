@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,12 +45,13 @@ gfx::Size NullRenderer::GetRenderPassBackingPixelSize(
   return gfx::Size();
 }
 
-bool NullRenderer::FlippedFramebuffer() const {
-  return false;
-}
-
 void NullRenderer::CopyDrawnRenderPass(
     const copy_output::RenderPassGeometry& geometry,
     std::unique_ptr<CopyOutputRequest> request) {}
+
+gfx::Rect NullRenderer::GetRenderPassBackingDrawnRect(
+    const AggregatedRenderPassId& render_pass_id) const {
+  return gfx::Rect();
+}
 
 }  // namespace viz

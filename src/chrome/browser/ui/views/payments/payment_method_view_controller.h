@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,13 +36,13 @@ class PaymentMethodViewController : public PaymentRequestSheetController {
   bool ShouldShowPrimaryButton() override;
   bool ShouldShowSecondaryButton() override;
   std::u16string GetSecondaryButtonLabel() override;
-  ButtonCallback GetSecondaryButtonCallback() override;
   int GetSecondaryButtonId() override;
+  base::WeakPtr<PaymentRequestSheetController> GetWeakPtr() override;
 
   PaymentRequestItemList payment_method_list_;
 
-  // Whether or not adding a new card is allowed.
-  bool enable_add_card_;
+  // Must be the last member of a leaf class.
+  base::WeakPtrFactory<PaymentMethodViewController> weak_ptr_factory_{this};
 };
 
 }  // namespace payments

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,6 @@ class SafeBrowsingQuietErrorUI
  public:
   SafeBrowsingQuietErrorUI(
       const GURL& request_url,
-      const GURL& main_frame_url,
       BaseSafeBrowsingErrorUI::SBInterstitialReason reason,
       const BaseSafeBrowsingErrorUI::SBErrorDisplayOptions& display_options,
       const std::string& app_locale,

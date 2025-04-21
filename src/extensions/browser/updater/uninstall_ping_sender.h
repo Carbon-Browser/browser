@@ -1,11 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef EXTENSIONS_BROWSER_UPDATER_UNINSTALL_PING_SENDER_H_
 #define EXTENSIONS_BROWSER_UPDATER_UNINSTALL_PING_SENDER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/scoped_observation.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_registry_observer.h"

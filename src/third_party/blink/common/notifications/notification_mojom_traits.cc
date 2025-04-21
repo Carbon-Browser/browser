@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,9 +15,6 @@ constexpr int kMaximumVibrationPatternLength = 99;
 // Maximum duration of each vibration in a pattern.
 constexpr int kMaximumVibrationDurationMs = 10000;  // 10 seconds.
 
-// Maximum number of developer-provided actions on a notification.
-constexpr size_t kMaximumActions = 2;
-
 bool ValidateVibrationPattern(const std::vector<int>& vibration_pattern) {
   if (vibration_pattern.size() > kMaximumVibrationPatternLength)
     return false;
@@ -30,7 +27,7 @@ bool ValidateVibrationPattern(const std::vector<int>& vibration_pattern) {
 
 bool ValidateActions(
     const std::vector<blink::mojom::NotificationActionPtr>& actions) {
-  return actions.size() <= kMaximumActions;
+  return actions.size() <= blink::mojom::NotificationData::kMaximumActions;
 }
 
 bool ValidateData(const std::vector<char>& data) {
@@ -51,7 +48,7 @@ bool StructTraits<blink::mojom::NotificationDataDataView,
   // platform_notification_data.data once it stores a vector of ints not chars.
   std::vector<uint8_t> data;
 
-  absl::optional<std::string> lang;
+  std::optional<std::string> lang;
   if (!notification_data.ReadTitle(&platform_notification_data->title) ||
       !notification_data.ReadDirection(
           &platform_notification_data->direction) ||
@@ -66,7 +63,8 @@ bool StructTraits<blink::mojom::NotificationDataDataView,
       !notification_data.ReadActions(&platform_notification_data->actions) ||
       !notification_data.ReadData(&data) ||
       !notification_data.ReadShowTriggerTimestamp(
-          &platform_notification_data->show_trigger_timestamp)) {
+          &platform_notification_data->show_trigger_timestamp) ||
+      !notification_data.ReadScenario(&platform_notification_data->scenario)) {
     return false;
   }
 
@@ -75,7 +73,7 @@ bool StructTraits<blink::mojom::NotificationDataDataView,
   platform_notification_data->data.assign(data.begin(), data.end());
 
   platform_notification_data->timestamp =
-      base::Time::FromJsTime(notification_data.timestamp());
+      base::Time::FromMillisecondsSinceUnixEpoch(notification_data.timestamp());
 
   platform_notification_data->renotify = notification_data.renotify();
 

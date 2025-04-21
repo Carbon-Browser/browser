@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,7 +52,8 @@ class CORE_EXPORT ModuleTreeLinker final : public SingleModuleClient {
   void FetchRoot(const KURL&,
                  ModuleType,
                  const ScriptFetchOptions&,
-                 base::PassKey<ModuleTreeLinkerRegistry>);
+                 base::PassKey<ModuleTreeLinkerRegistry>,
+                 String referrer);
   void FetchRootInline(ModuleScript*, base::PassKey<ModuleTreeLinkerRegistry>);
 
  private:

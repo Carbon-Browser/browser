@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/file_system_provider/icon_set.h"
 #include "chrome/browser/ash/file_system_provider/operations/test_util.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_interface.h"
@@ -20,9 +20,7 @@
 #include "extensions/browser/event_router.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace ash {
-namespace file_system_provider {
-namespace operations {
+namespace ash::file_system_provider::operations {
 namespace {
 
 const char kExtensionId[] = "mbflcebpggnecokmikipoihdbecnjfoj";
@@ -33,13 +31,13 @@ const int kRequestId = 2;
 
 class FileSystemProviderOperationsConfigureTest : public testing::Test {
  protected:
-  FileSystemProviderOperationsConfigureTest() {}
-  ~FileSystemProviderOperationsConfigureTest() override {}
+  FileSystemProviderOperationsConfigureTest() = default;
+  ~FileSystemProviderOperationsConfigureTest() override = default;
 
   void SetUp() override {
     file_system_info_ = ProvidedFileSystemInfo(
-        kExtensionId, MountOptions(kFileSystemId, "" /* display_name */),
-        base::FilePath(), false /* configurable */, true /* watchable */,
+        kExtensionId, MountOptions(kFileSystemId, /*display_name=*/""),
+        base::FilePath(), /*configurable=*/false, /*watchable=*/true,
         extensions::SOURCE_FILE, IconSet());
   }
 
@@ -49,14 +47,11 @@ class FileSystemProviderOperationsConfigureTest : public testing::Test {
 TEST_F(FileSystemProviderOperationsConfigureTest, Execute) {
   using extensions::api::file_system_provider::ConfigureRequestedOptions;
 
-  util::LoggingDispatchEventImpl dispatcher(true /* dispatch_reply */);
+  util::LoggingDispatchEventImpl dispatcher(/*dispatch_reply=*/true);
   util::StatusCallbackLog callback_log;
 
-  Configure configure(NULL, file_system_info_,
+  Configure configure(&dispatcher, file_system_info_,
                       base::BindOnce(&util::LogStatusCallback, &callback_log));
-  configure.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(configure.Execute(kRequestId));
 
@@ -71,63 +66,52 @@ TEST_F(FileSystemProviderOperationsConfigureTest, Execute) {
   const base::Value* options_as_value = &event_args[0];
   ASSERT_TRUE(options_as_value->is_dict());
 
-  ConfigureRequestedOptions options;
-  ASSERT_TRUE(ConfigureRequestedOptions::Populate(*options_as_value, &options));
-  EXPECT_EQ(kFileSystemId, options.file_system_id);
-  EXPECT_EQ(kRequestId, options.request_id);
+  auto options =
+      ConfigureRequestedOptions::FromValue(options_as_value->GetDict());
+  ASSERT_TRUE(options);
+  EXPECT_EQ(kFileSystemId, options->file_system_id);
+  EXPECT_EQ(kRequestId, options->request_id);
 }
 
 TEST_F(FileSystemProviderOperationsConfigureTest, Execute_NoListener) {
-  util::LoggingDispatchEventImpl dispatcher(false /* dispatch_reply */);
+  util::LoggingDispatchEventImpl dispatcher(/*dispatch_reply=*/false);
   util::StatusCallbackLog callback_log;
 
-  Configure configure(NULL, file_system_info_,
+  Configure configure(&dispatcher, file_system_info_,
                       base::BindOnce(&util::LogStatusCallback, &callback_log));
-  configure.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_FALSE(configure.Execute(kRequestId));
 }
 
 TEST_F(FileSystemProviderOperationsConfigureTest, OnSuccess) {
-  util::LoggingDispatchEventImpl dispatcher(true /* dispatch_reply */);
+  util::LoggingDispatchEventImpl dispatcher(/*dispatch_reply=*/true);
   util::StatusCallbackLog callback_log;
 
-  Configure configure(NULL, file_system_info_,
+  Configure configure(&dispatcher, file_system_info_,
                       base::BindOnce(&util::LogStatusCallback, &callback_log));
-  configure.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(configure.Execute(kRequestId));
 
-  configure.OnSuccess(kRequestId, std::make_unique<RequestValue>(),
-                      false /* has_more */);
+  configure.OnSuccess(kRequestId, RequestValue(), /*has_more=*/false);
   ASSERT_EQ(1u, callback_log.size());
   base::File::Error event_result = callback_log[0];
   EXPECT_EQ(base::File::FILE_OK, event_result);
 }
 
 TEST_F(FileSystemProviderOperationsConfigureTest, OnError) {
-  util::LoggingDispatchEventImpl dispatcher(true /* dispatch_reply */);
+  util::LoggingDispatchEventImpl dispatcher(/*dispatch_reply=*/true);
   util::StatusCallbackLog callback_log;
 
-  Configure configure(NULL, file_system_info_,
+  Configure configure(&dispatcher, file_system_info_,
                       base::BindOnce(&util::LogStatusCallback, &callback_log));
-  configure.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(configure.Execute(kRequestId));
 
-  configure.OnError(kRequestId, std::make_unique<RequestValue>(),
+  configure.OnError(kRequestId, RequestValue(),
                     base::File::FILE_ERROR_NOT_FOUND);
   ASSERT_EQ(1u, callback_log.size());
   base::File::Error event_result = callback_log[0];
   EXPECT_EQ(base::File::FILE_ERROR_NOT_FOUND, event_result);
 }
 
-}  // namespace operations
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider::operations

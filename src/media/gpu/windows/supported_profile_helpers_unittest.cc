@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 #include <initguid.h>
 #include <map>
 #include <utility>
+#include <vector>
 
 #include "base/test/scoped_feature_list.h"
-#include "base/win/windows_version.h"
 #include "media/base/media_switches.h"
 #include "media/base/test_helpers.h"
 #include "media/base/win/d3d11_mocks.h"
@@ -25,12 +25,6 @@ using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::SetArgPointee;
 using ::testing::WithArgs;
-
-#define DONT_RUN_ON_WIN_7()                                  \
-  do {                                                       \
-    if (base::win::GetVersion() <= base::win::Version::WIN7) \
-      return;                                                \
-  } while (0)
 
 namespace {
 
@@ -171,8 +165,6 @@ class SupportedResolutionResolverTest : public ::testing::Test {
 };
 
 TEST_F(SupportedResolutionResolverTest, WorkaroundsDisableAv1) {
-  DONT_RUN_ON_WIN_7();
-
   // Enable the av1 decoder.
   EnableDecoders({DXVA_ModeAV1_VLD_Profile0});
   SetMaxResolution(DXVA_ModeAV1_VLD_Profile0, kSquare8k);
@@ -187,7 +179,6 @@ TEST_F(SupportedResolutionResolverTest, WorkaroundsDisableAv1) {
 }
 
 TEST_F(SupportedResolutionResolverTest, HasH264SupportByDefault) {
-  DONT_RUN_ON_WIN_7();
   AssertDefaultSupport(
       GetSupportedD3D11VideoDecoderResolutions(nullptr, gpu_workarounds_));
 
@@ -201,12 +192,8 @@ TEST_F(SupportedResolutionResolverTest, HasH264SupportByDefault) {
 }
 
 TEST_F(SupportedResolutionResolverTest, WorkaroundsDisableVpx) {
-  DONT_RUN_ON_WIN_7();
-
-  gpu_workarounds_.disable_accelerated_vp8_decode = true;
   gpu_workarounds_.disable_accelerated_vp9_decode = true;
-  EnableDecoders({D3D11_DECODER_PROFILE_VP8_VLD,
-                  D3D11_DECODER_PROFILE_VP9_VLD_PROFILE0,
+  EnableDecoders({D3D11_DECODER_PROFILE_VP9_VLD_PROFILE0,
                   D3D11_DECODER_PROFILE_VP9_VLD_10BIT_PROFILE2});
 
   AssertDefaultSupport(GetSupportedD3D11VideoDecoderResolutions(
@@ -214,11 +201,8 @@ TEST_F(SupportedResolutionResolverTest, WorkaroundsDisableVpx) {
 }
 
 TEST_F(SupportedResolutionResolverTest, WorkaroundsDisableVp92) {
-  DONT_RUN_ON_WIN_7();
-
   gpu_workarounds_.disable_accelerated_vp9_profile2_decode = true;
-  EnableDecoders({D3D11_DECODER_PROFILE_VP8_VLD,
-                  D3D11_DECODER_PROFILE_VP9_VLD_PROFILE0,
+  EnableDecoders({D3D11_DECODER_PROFILE_VP9_VLD_PROFILE0,
                   D3D11_DECODER_PROFILE_VP9_VLD_10BIT_PROFILE2});
   const auto supported_resolutions = GetSupportedD3D11VideoDecoderResolutions(
       mock_d3d11_device_, gpu_workarounds_);
@@ -233,8 +217,6 @@ TEST_F(SupportedResolutionResolverTest, WorkaroundsDisableVp92) {
 }
 
 TEST_F(SupportedResolutionResolverTest, H264Supports4k) {
-  DONT_RUN_ON_WIN_7();
-
   EnableDecoders({D3D11_DECODER_PROFILE_H264_VLD_NOFGT});
   const auto supported_resolutions = GetSupportedD3D11VideoDecoderResolutions(
       mock_d3d11_device_, gpu_workarounds_);
@@ -249,41 +231,17 @@ TEST_F(SupportedResolutionResolverTest, H264Supports4k) {
   }
 }
 
-TEST_F(SupportedResolutionResolverTest, VP8Supports4k) {
-  DONT_RUN_ON_WIN_7();
-
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(kMediaFoundationVP8Decoding);
-
-  EnableDecoders({D3D11_DECODER_PROFILE_VP8_VLD});
-  SetMaxResolution(D3D11_DECODER_PROFILE_VP8_VLD, kSquare4k);
-
-  const auto supported_resolutions = GetSupportedD3D11VideoDecoderResolutions(
-      mock_d3d11_device_, gpu_workarounds_);
-  auto it = supported_resolutions.find(VP8PROFILE_ANY);
-  ASSERT_NE(it, supported_resolutions.end());
-  EXPECT_EQ(kSquare4k, it->second.max_landscape_resolution);
-  EXPECT_EQ(kSquare4k, it->second.max_portrait_resolution);
-
-  constexpr gfx::Size kMinVp8Resolution = gfx::Size(640, 480);
-  EXPECT_EQ(kMinVp8Resolution, it->second.min_resolution);
-}
-
 TEST_F(SupportedResolutionResolverTest, VP9Profile0Supports8k) {
-  DONT_RUN_ON_WIN_7();
   TestDecoderSupport(D3D11_DECODER_PROFILE_VP9_VLD_PROFILE0,
                      VP9PROFILE_PROFILE0, kSquare8k, kSquare8k, kSquare8k);
 }
 
 TEST_F(SupportedResolutionResolverTest, VP9Profile2Supports8k) {
-  DONT_RUN_ON_WIN_7();
   TestDecoderSupport(D3D11_DECODER_PROFILE_VP9_VLD_10BIT_PROFILE2,
                      VP9PROFILE_PROFILE2, kSquare8k, kSquare8k, kSquare8k);
 }
 
 TEST_F(SupportedResolutionResolverTest, MultipleCodecs) {
-  DONT_RUN_ON_WIN_7();
-
   SetGpuProfile(kRecentAmdGpu);
 
   // H.264 and VP9.0 are the most common supported codecs.
@@ -312,42 +270,27 @@ TEST_F(SupportedResolutionResolverTest, MultipleCodecs) {
 }
 
 TEST_F(SupportedResolutionResolverTest, AV1ProfileMainSupports8k) {
-  DONT_RUN_ON_WIN_7();
   TestDecoderSupport(DXVA_ModeAV1_VLD_Profile0, AV1PROFILE_PROFILE_MAIN,
                      kSquare8k, kSquare8k, kSquare8k);
 }
 
 TEST_F(SupportedResolutionResolverTest, AV1ProfileHighSupports8k) {
-  DONT_RUN_ON_WIN_7();
   TestDecoderSupport(DXVA_ModeAV1_VLD_Profile1, AV1PROFILE_PROFILE_HIGH,
                      kSquare8k, kSquare8k, kSquare8k);
 }
 
 TEST_F(SupportedResolutionResolverTest, AV1ProfileProSupports8k) {
-  DONT_RUN_ON_WIN_7();
   TestDecoderSupport(DXVA_ModeAV1_VLD_Profile2, AV1PROFILE_PROFILE_PRO,
                      kSquare8k, kSquare8k, kSquare8k);
 }
 
 #if BUILDFLAG(ENABLE_HEVC_PARSER_AND_HW_DECODER)
 TEST_F(SupportedResolutionResolverTest, H265Supports8kIfEnabled) {
-  DONT_RUN_ON_WIN_7();
-
   EnableDecoders({D3D11_DECODER_PROFILE_HEVC_VLD_MAIN});
-  base::test::ScopedFeatureList scoped_feature_list;
-
-  // Test the supported resolutions before enabling the feature:
-  const auto no_feature_resolutions = GetSupportedD3D11VideoDecoderResolutions(
-      mock_d3d11_device_, gpu_workarounds_);
-  // Should only have the three h264 default resolutions.
-  ASSERT_EQ(3u, no_feature_resolutions.size());
-
-  // enable the feature and try again
   SetMaxResolution(D3D11_DECODER_PROFILE_HEVC_VLD_MAIN, kSquare8k);
-  scoped_feature_list.InitAndEnableFeature(kPlatformHEVCDecoderSupport);
   const auto resolutions_for_feature = GetSupportedD3D11VideoDecoderResolutions(
       mock_d3d11_device_, gpu_workarounds_);
-  ASSERT_EQ(4u, resolutions_for_feature.size());
+  ASSERT_EQ(5u, resolutions_for_feature.size());
   const auto it = resolutions_for_feature.find(HEVCPROFILE_MAIN);
   ASSERT_NE(it, resolutions_for_feature.end());
   ASSERT_EQ(it->second.max_landscape_resolution, kSquare8k);

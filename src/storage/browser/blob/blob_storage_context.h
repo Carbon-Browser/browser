@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,11 +13,11 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/trace_event/memory_dump_provider.h"
 #include "components/services/storage/public/mojom/blob_storage_context.mojom.h"
@@ -34,7 +34,6 @@
 namespace content {
 
 class ChromeBlobStorageContext;
-class ShareableBlobDataItem;
 
 namespace indexed_db_backing_store_unittest {
 class BlobStorageContextShim;
@@ -47,6 +46,7 @@ namespace storage {
 class BlobDataBuilder;
 class BlobDataHandle;
 class BlobDataSnapshot;
+class ShareableBlobDataItem;
 
 // This class handles the logistics of blob storage within the browser process.
 // This class is not threadsafe, access on IO thread. In Chromium there is one
@@ -254,8 +254,9 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) BlobStorageContext
   void WriteBlobToFile(mojo::PendingRemote<::blink::mojom::Blob> blob,
                        const base::FilePath& path,
                        bool flush_on_write,
-                       absl::optional<base::Time> last_modified,
+                       std::optional<base::Time> last_modified,
                        WriteBlobToFileCallback callback) override;
+  void Clone(mojo::PendingReceiver<mojom::BlobStorageContext> cloned) override;
 
   base::FilePath profile_directory_;
   BlobStorageRegistry registry_;

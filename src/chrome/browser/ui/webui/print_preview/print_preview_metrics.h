@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,12 @@
 #include <cstddef>
 
 #include "base/values.h"
+#include "build/chromeos_buildflags.h"
+#include "printing/mojom/print.mojom-forward.h"
+
+namespace base {
+class TimeTicks;
+}  // namespace base
 
 namespace printing {
 
@@ -48,7 +54,8 @@ enum class PrintSettingsBuckets {
   kNonDefaultDpi = 23,
   kPin = 24,
   kFitToPaper = 25,
-  kMaxValue = kFitToPaper
+  kNonSquarePixels = 26,
+  kMaxValue = kNonSquarePixels
 };
 
 // This enum is used to back an UMA histogram, and should therefore be treated
@@ -81,15 +88,10 @@ void ReportPrintSettingsStats(const base::Value::Dict& print_settings,
                               const base::Value::Dict& preview_settings,
                               bool is_pdf);
 
-// Record the number of times the user requests to regenerate preview data
-// before cancelling.
-void ReportRegeneratePreviewRequestCountBeforeCancel(size_t count);
-
-// Record the number of times the user requests to regenerate preview data
-// before printing.
-void ReportRegeneratePreviewRequestCountBeforePrint(size_t count);
-
 void ReportUserActionHistogram(UserActionBuckets event);
+
+void RecordGetPrintersTimeHistogram(mojom::PrinterType printer_type,
+                                    const base::TimeTicks& start_time);
 
 }  // namespace printing
 

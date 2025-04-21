@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include "chrome/browser/subresource_filter/subresource_filter_profile_context_factory.h"
 #include "components/safe_browsing/core/browser/db/database_manager.h"
 #include "components/subresource_filter/content/browser/content_subresource_filter_web_contents_helper.h"
-#include "components/subresource_filter/content/browser/ruleset_service.h"
+#include "components/subresource_filter/content/shared/browser/ruleset_service.h"
 
 namespace {
 

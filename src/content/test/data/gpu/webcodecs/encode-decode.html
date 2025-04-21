@@ -10,7 +10,12 @@ several frames and accelerated VideoDecoder needs to successfully decode them.
   <script src="webcodecs_common.js"></script>
   <script type="text/javascript">
     'use strict';
-    const acceleration = 'prefer-hardware';
+    function showFrameForDebug(frame) {
+      const cnv = document.getElementById('debug_cnv');
+      var ctx = cnv.getContext('2d');
+      ctx.drawImage(frame, 0, 0);
+    }
+
     async function main(arg) {
       const width = 640;
       const height = 480;
@@ -21,7 +26,7 @@ several frames and accelerated VideoDecoder needs to successfully decode them.
 
       const encoder_config = {
         codec: arg.codec,
-        hardwareAcceleration: acceleration,
+        hardwareAcceleration: arg.acceleration,
         width: width,
         height: height,
         bitrate: 5000000,
@@ -29,16 +34,34 @@ several frames and accelerated VideoDecoder needs to successfully decode them.
       };
       if (arg.codec.startsWith('avc1')) {
         encoder_config.avc = { format: 'annexb' };
+      } else if (arg.codec.startsWith('hvc1')) {
+        encoder_config.hevc = { format: 'annexb' };
       }
 
-      let support = await VideoEncoder.isConfigSupported(encoder_config);
-      if (!support.supported) {
+      TEST.log('Starting test with arguments: ' + JSON.stringify(arg));
+      let supported = false;
+      try {
+        supported = (await VideoEncoder.isConfigSupported(encoder_config)).supported;
+      } catch (e) {}
+      if (!supported) {
         TEST.skip('Unsupported codec: ' + arg.codec);
         return;
       }
 
       let decoder = new VideoDecoder({
         output(frame) {
+          let dots = frames_decoded;
+          // Check that we have intended number of dots and no more.
+          // Completely black frame shouldn't pass the test.
+          // Only count dots for sources that can actually pain them.
+          if (['offscreen', 'arraybuffer'].includes(arg.source_type)) {
+            if(!validateBlackDots(frame, dots) ||
+              validateBlackDots(frame, dots + 1)) {
+              showFrameForDebug(frame);
+              TEST.reportFailure(
+                  `Unexpected dot count ts:${frame.timestamp} dots:${dots}`);
+            }
+          }
           frames_decoded++;
           frame.close();
         },
@@ -54,9 +77,6 @@ several frames and accelerated VideoDecoder needs to successfully decode them.
         output(chunk, metadata) {
           let config = metadata.decoderConfig;
           if (config) {
-            // Here we assume that if accelerated encoding is supported,
-            // accelerated decoding should be supported too.
-            config.hardwareAcceleration = acceleration;
             decoder.configure(config);
           }
           decoder.decode(chunk);
@@ -76,7 +96,12 @@ several frames and accelerated VideoDecoder needs to successfully decode them.
 
       let encoder = new VideoEncoder(encoder_init);
       encoder.configure(encoder_config);
-      let source = new CanvasSource(width, height);
+
+      let source = await createFrameSource(arg.source_type, width, height);
+      if (!source) {
+        TEST.skip('Unsupported source: ' + arg.source_type);
+        return;
+      }
 
       for (let i = 0; i < frames_to_encode; i++) {
         let frame = await source.getNextFrame();
@@ -101,11 +126,38 @@ several frames and accelerated VideoDecoder needs to successfully decode them.
         'frames_decoded mismatch: ' + frames_decoded);
       TEST.assert(
         errors == 0, 'Decoding or encoding errors occurred during the test');
+      TEST.log('Test completed');
     }
+    addManualTestButton([{
+      'source_type': 'offscreen',
+      'codec': 'avc1.42001E',
+      'acceleration':'prefer-software'
+    },
+    {
+      'source_type': 'camera',
+      'codec': 'avc1.42001E',
+      'acceleration':'prefer-software'
+    },
+    {
+      'source_type': 'offscreen',
+      'codec': 'avc1.42001E',
+      'acceleration':'prefer-hardware'
+    },
+    {
+      'source_type': 'offscreen',
+      'codec': 'hvc1.1.6.L123.00',
+      'acceleration':'prefer-software'
+    },
+    {
+      'source_type': 'offscreen',
+      'codec': 'hvc1.1.6.L123.00',
+      'acceleration':'prefer-hardware'
+    }]);
   </script>
 </head>
 
 <body>
+  <canvas id="debug_cnv" width="640" height="480"></canvas>
 </body>
 
 </html>

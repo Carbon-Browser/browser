@@ -4,7 +4,8 @@
   <span slot="title" id="scaling-label">$i18n{scalingLabel}</span>
   <div slot="controls">
     <select class="md-select" aria-labelledby="scaling-label"
-        disabled$="[[dropdownDisabled_]]" value="{{selectedValue::change}}">
+        disabled$="[[dropdownDisabled_]]" value="[[selectedValue]]"
+        on-change="onSelectChange">
       <option value="[[ScalingValue.DEFAULT]]">
         $i18n{optionDefaultScaling}
       </option>
@@ -22,7 +23,7 @@
     </select>
   </div>
 </print-preview-settings-section>
-<iron-collapse opened="[[customSelected_]]"
+<cr-collapse opened="[[customSelected_]]"
     on-transitionend="onCollapseChanged_">
   <print-preview-number-settings-section
       max-value="200" min-value="10" default-value="100"
@@ -30,4 +31,4 @@
       current-value="{{currentValue_}}" input-valid="{{inputValid_}}"
       hint-message="$i18n{scalingInstruction}">
   </print-preview-number-settings-section>
-</iron-collapse>
+</cr-collapse>

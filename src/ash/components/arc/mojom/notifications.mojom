@@ -1,8 +1,8 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
-// Next MinVersion: 27
+// Next MinVersion: 37
 
 module arc.mojom;
 
@@ -51,10 +51,13 @@ enum ArcNotificationPriority {
   MAX = 2,
 };
 
-// DEPRECATED
-struct DeprecatedArcNotificationButton {
+// Action buttons when the ARC notification is rendered in Chrome
+struct ArcNotificationButton {
   // Title
   string label;
+  // Reply button placeholder, if exist.
+  [MinVersion=31]
+  string? buttonPlaceholder;
 };
 
 [Extensible]
@@ -104,6 +107,7 @@ enum ArcNotificationStyle {
   MEDIA_STYLE = 5,
   DECORATED_CUSTOM_VIEW_STYLE = 6,
   DECORATED_MEDIA_CUSTOM_VIEW_STYLE = 7,
+  [MinVersion=33] CALL_STYLE = 8,
 };
 
 struct ArcNotificationData {
@@ -115,36 +119,41 @@ struct ArcNotificationData {
   string message;
   // Title of notification
   string title;
-  // DEPRECATED: Mimetype of |icon_data|
-  string? deprecated_icon_mimetype;
+  // The app name of the notification. Displayed when the notification is
+  // rendered in ChromeOS and is expanded.
+  string? app_display_name;
   // DEPRECATED: Binary data of the icon
   array<uint8>? deprecated_icon_data;
   // Priority of notification
   ArcNotificationPriority priority;
   // Timestamp related to the notification
   int64 time;
-  // DEPRECATED: The current value of progress, must be [0, progress_max].
-  int32 deprecated_progress_current;
-  // DEPRECATED: The maximum value of progress.
-  int32 deprecated_progress_max;
-  // DEPRECATED: Action buttons
-  array<DeprecatedArcNotificationButton>? deprecated_buttons;
+  // The current value of progress. If in progress, the value must be in
+  // [0, progress_max]. Set to -1 for indeterminate progress.
+  int32 progress_current;
+  // The maximum value of progress. Set to -1 when the progress does not exist
+  // or ended.
+  int32 progress_max;
+  // Action buttons, provided when the notification is action enabled and
+  // rendered on Chrome.
+  array<ArcNotificationButton>? buttons;
   // Flag if the notification has FLAG_NO_CLEAR.
   [MinVersion=1]
   bool no_clear;
   // Flag if the notification has FLAG_ONGOING_EVENT.
   [MinVersion=1]
   bool ongoing_event;
-  // DEPRECATED: Subtexts for list notifications.
+  // Subtexts for list notifications. Provided when the notification style is
+  // inbox.
   [MinVersion=3]
-  array<string>? deprecated_texts;
-  // DEPRECATED: Image for image notifications.
+  array<string>? texts;
+  // Image for image notifications.
   [MinVersion=3]
-  ArcBitmap? deprecated_big_picture;
-  // DEPRECATED: Flag if a notification is a custom notification backed by a
+  ArcBitmap? big_picture;
+  // Flag if a notification is a custom notification backed by a
   // notification surface.
   [MinVersion=5]
-  bool deprecated_use_custom_notification;
+  bool is_custom_notification;
   [MinVersion=6]
   ArcBitmap? small_icon;
   // A snapshot image to show before the notification window is created.
@@ -173,8 +182,9 @@ struct ArcNotificationData {
   string? package_name;
   [MinVersion=17]
   ArcNotificationFlags? flags;
+  // Flag if a notification progress is indeterminate.
   [MinVersion=21]
-  bool hidden_on_lock_screen;
+  bool indeterminate_progress;
   [MinVersion=21]
   ArcBitmap? snapshot_image_public;
   [MinVersion=23]
@@ -184,6 +194,24 @@ struct ArcNotificationData {
   // True if there's at least one action button enabled for the notification.
   [MinVersion=26]
   bool is_action_enabled;
+  // True if there's at least one action button on the notification that's
+  // available for the user to trigger remote input.
+  [MinVersion=27]
+  bool is_inline_reply_enabled;
+  // True if rendering should be done on the Chrome side
+  [MinVersion=28]
+  bool render_on_chrome;
+  [MinVersion=29]
+  // Identifier of the group to which the notification is assigned
+  string? group_key;
+  // The index of reply button among all actions, if exist. Otherwise set to -1.
+  [MinVersion=30]
+  int32 reply_button_index;
+  [MinVersion=34]
+  array<ArcNotificationData>? children_data;
+  // Array of extra messages for messaging style notifications.
+  [MinVersion=35]
+  array<ArcNotificationMessage>? messages;
 };
 
 struct ArcDoNotDisturbStatus {
@@ -225,7 +253,17 @@ enum MessageCenterVisibility {
   VISIBILITY_MESSAGE_CENTER = 1,
 };
 
-// Next Method ID: 11
+struct ArcNotificationMessage {
+  // Message that was sent in the notification.
+  string? message;
+  // Name of the message sender that should be displayed above message.
+  string? sender_name;
+  // Profile icon of the message sender that needs to be displayed on the left
+  // of message.
+  ArcBitmap? sender_icon;
+};
+
+// Next Method ID: 12
 interface NotificationsHost {
   // Set the Do-Not-Disturb status on Chrome side from Android side.
   [MinVersion=18]
@@ -261,11 +299,14 @@ interface NotificationsHost {
   // Sets the lock screen setting on Chrome side from Android side. Usually
   // invoked when the setting on Android side is chagned.
   OnLockScreenSettingUpdated@10(ArcLockScreenNotificationSetting setting);
+
+  [MinVersion=27]
+  // Triggers Chrome to log that inline reply is sent for a notification.
+  LogInlineReplySent@11(string key);
 };
 
 // Deprecated method IDs: 0
-// Next Method ID: 14
-// TODO(lhchavez): Migrate all request/response messages to Mojo.
+// Next Method ID: 15
 interface NotificationsInstance {
   // Establishes full-duplex communication with the host.
   [MinVersion=14] Init@5(pending_remote<NotificationsHost> host_remote) => ();
@@ -328,4 +369,24 @@ interface NotificationsInstance {
   // Reports that Message Center visibility has changed.
   [MinVersion=25]
   OnMessageCenterVisibilityChanged@13(MessageCenterVisibility visibility);
+
+  // Sends notification button click event from Chrome notification UI to
+  // Android. |key| is the identifier of the notification which is generated
+  // by Android side. |action_button_index| is the index of the action button
+  // clicked among the buttons array originally passed in ArcNotificationData.
+  // |input| contains user-supplied text, if the notification allows inline
+  //  reply. Otherwise it is empty string.
+  [MinVersion=32]
+  SendNotificationButtonClickToAndroid@14(
+    string key,
+    uint32 action_button_index,
+    string input);
+
+  // Pops up the notification settings page for a specific application. This is
+  // called when the user clicks 'turn off notifications' button in inline
+  // settings view from the Chrome side in Chrome rendered ARC notifications.
+  // |key| is the identifier of the notification which is generated  by Android
+  // side.
+  [MinVersion=36]
+  PopUpAppNotificationSettings@15(string key);
 };

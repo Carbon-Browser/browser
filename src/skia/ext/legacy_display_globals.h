@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,9 @@ namespace skia {
 
 class SK_API LegacyDisplayGlobals {
  public:
-  static void SetCachedPixelGeometry(SkPixelGeometry pixel_geometry);
-  static SkPixelGeometry GetCachedPixelGeometry();
+  static void SetCachedParams(SkPixelGeometry pixel_geometry,
+                              float text_contrast,
+                              float text_gamma);
 
   // Returns a SkSurfaceProps with the cached geometry settings.
   static SkSurfaceProps GetSkSurfaceProps();

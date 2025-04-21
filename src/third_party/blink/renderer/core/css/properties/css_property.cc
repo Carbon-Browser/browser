@@ -1,6 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "third_party/blink/renderer/core/css/properties/css_property.h"
 
@@ -14,17 +19,11 @@
 namespace blink {
 
 const CSSProperty& GetCSSPropertyVariable() {
-  return To<CSSProperty>(GetCSSPropertyVariableInternal());
+  return To<CSSProperty>(*GetPropertyInternal(CSSPropertyID::kVariable));
 }
 
 bool CSSProperty::HasEqualCSSPropertyName(const CSSProperty& other) const {
   return property_id_ == other.property_id_;
-}
-
-const CSSProperty& CSSProperty::Get(CSSPropertyID id) {
-  DCHECK_NE(id, CSSPropertyID::kInvalid);
-  DCHECK_LE(id, kLastCSSProperty);  // last property id
-  return To<CSSProperty>(CSSUnresolvedProperty::GetNonAliasProperty(id));
 }
 
 // The correctness of static functions that operate on CSSPropertyName is
@@ -45,15 +44,18 @@ std::unique_ptr<CrossThreadStyleValue>
 CSSProperty::CrossThreadStyleValueFromComputedStyle(
     const ComputedStyle& computed_style,
     const LayoutObject* layout_object,
-    bool allow_visited_style) const {
+    bool allow_visited_style,
+    CSSValuePhase value_phase) const {
   const CSSValue* css_value = CSSValueFromComputedStyle(
-      computed_style, layout_object, allow_visited_style);
-  if (!css_value)
+      computed_style, layout_object, allow_visited_style, value_phase);
+  if (!css_value) {
     return std::make_unique<CrossThreadUnsupportedValue>("");
+  }
   CSSStyleValue* style_value =
       StyleValueFactory::CssValueToStyleValue(GetCSSPropertyName(), *css_value);
-  if (!style_value)
+  if (!style_value) {
     return std::make_unique<CrossThreadUnsupportedValue>("");
+  }
   return ComputedStyleUtils::CrossThreadStyleValueFromCSSStyleValue(
       style_value);
 }
@@ -61,22 +63,26 @@ CSSProperty::CrossThreadStyleValueFromComputedStyle(
 const CSSValue* CSSProperty::CSSValueFromComputedStyle(
     const ComputedStyle& style,
     const LayoutObject* layout_object,
-    bool allow_visited_style) const {
+    bool allow_visited_style,
+    CSSValuePhase value_phase) const {
   const CSSProperty& resolved_property =
-      ResolveDirectionAwareProperty(style.Direction(), style.GetWritingMode());
+      ResolveDirectionAwareProperty(style.GetWritingDirection());
   return resolved_property.CSSValueFromComputedStyleInternal(
-      style, layout_object, allow_visited_style);
+      style, layout_object, allow_visited_style, value_phase);
 }
 
 void CSSProperty::FilterWebExposedCSSPropertiesIntoVector(
     const ExecutionContext* execution_context,
     const CSSPropertyID* properties,
-    size_t propertyCount,
-    Vector<const CSSProperty*>& outVector) {
-  for (unsigned i = 0; i < propertyCount; i++) {
+    wtf_size_t property_count,
+    Vector<const CSSProperty*>& out_vector) {
+  DCHECK(out_vector.empty());
+  out_vector.reserve(property_count);
+  for (unsigned i = 0; i < property_count; i++) {
     const CSSProperty& property = Get(properties[i]);
-    if (property.IsWebExposed(execution_context))
-      outVector.push_back(&property);
+    if (property.IsWebExposed(execution_context)) {
+      out_vector.push_back(&property);
+    }
   }
 }
 

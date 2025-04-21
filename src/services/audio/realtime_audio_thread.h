@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,4 +26,4 @@ class RealtimeAudioThread : public base::Thread {
 
 }  // namespace audio
 
-#endif  // SERVICES_AUDIO_PROCESSING_AUDIO_FIFO_H_
+#endif  // SERVICES_AUDIO_REALTIME_AUDIO_THREAD_H_

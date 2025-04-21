@@ -1,17 +1,17 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #include "net/quic/quic_http3_logger.h"
 
 #include <algorithm>
 #include <memory>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "net/http/http_log_util.h"
 #include "net/log/net_log_capture_mode.h"
 #include "net/log/net_log_event_type.h"
@@ -22,7 +22,7 @@ namespace net {
 
 namespace {
 
-base::Value NetLogSettingsParams(const quic::SettingsFrame& frame) {
+base::Value::Dict NetLogSettingsParams(const quic::SettingsFrame& frame) {
   base::Value::Dict dict;
   for (auto setting : frame.values) {
     dict.Set(
@@ -30,42 +30,36 @@ base::Value NetLogSettingsParams(const quic::SettingsFrame& frame) {
             static_cast<quic::Http3AndQpackSettingsIdentifiers>(setting.first)),
         static_cast<int>(setting.second));
   }
-  return base::Value(std::move(dict));
+  return dict;
 }
 
-base::Value NetLogPriorityUpdateParams(const quic::PriorityUpdateFrame& frame) {
-  base::Value::Dict dict;
-  dict.Set("type", frame.prioritized_element_type ==
-                           quic::PrioritizedElementType::REQUEST_STREAM
-                       ? "request_stream"
-                       : "push_stream");
-  dict.Set("prioritized_element_id",
-           NetLogNumberValue(frame.prioritized_element_id));
-  dict.Set("priority_field_value", frame.priority_field_value);
-  return base::Value(std::move(dict));
+base::Value::Dict NetLogPriorityUpdateParams(
+    const quic::PriorityUpdateFrame& frame) {
+  return base::Value::Dict()
+      .Set("prioritized_element_id",
+           NetLogNumberValue(frame.prioritized_element_id))
+      .Set("priority_field_value", frame.priority_field_value);
 }
 
-base::Value NetLogTwoIntParams(base::StringPiece name1,
-                               uint64_t value1,
-                               base::StringPiece name2,
-                               uint64_t value2) {
-  base::Value::Dict dict;
-  dict.Set(name1, NetLogNumberValue(value1));
-  dict.Set(name2, NetLogNumberValue(value2));
-  return base::Value(std::move(dict));
+base::Value::Dict NetLogTwoIntParams(std::string_view name1,
+                                     uint64_t value1,
+                                     std::string_view name2,
+                                     uint64_t value2) {
+  return base::Value::Dict()
+      .Set(name1, NetLogNumberValue(value1))
+      .Set(name2, NetLogNumberValue(value2));
 }
 
-base::Value NetLogThreeIntParams(base::StringPiece name1,
-                                 uint64_t value1,
-                                 base::StringPiece name2,
-                                 uint64_t value2,
-                                 base::StringPiece name3,
-                                 uint64_t value3) {
-  base::Value::Dict dict;
-  dict.Set(name1, NetLogNumberValue(value1));
-  dict.Set(name2, NetLogNumberValue(value2));
-  dict.Set(name3, NetLogNumberValue(value3));
-  return base::Value(std::move(dict));
+base::Value::Dict NetLogThreeIntParams(std::string_view name1,
+                                       uint64_t value1,
+                                       std::string_view name2,
+                                       uint64_t value2,
+                                       std::string_view name3,
+                                       uint64_t value3) {
+  return base::Value::Dict()
+      .Set(name1, NetLogNumberValue(value1))
+      .Set(name2, NetLogNumberValue(value2))
+      .Set(name3, NetLogNumberValue(value3));
 }
 
 base::Value::List ElideQuicHeaderListForNetLog(
@@ -73,8 +67,8 @@ base::Value::List ElideQuicHeaderListForNetLog(
     NetLogCaptureMode capture_mode) {
   base::Value::List headers_list;
   for (const auto& header : headers) {
-    base::StringPiece key = header.first;
-    base::StringPiece value = header.second;
+    std::string_view key = header.first;
+    std::string_view value = header.second;
     headers_list.Append(NetLogStringValue(
         base::StrCat({key, ": ",
                       ElideHeaderValueForNetLog(capture_mode, std::string(key),
@@ -235,12 +229,11 @@ void QuicHttp3Logger::OnHeadersDecoded(quic::QuicStreamId stream_id,
   net_log_.AddEvent(
       NetLogEventType::HTTP3_HEADERS_DECODED,
       [stream_id, &headers](NetLogCaptureMode capture_mode) {
-        base::Value::Dict dict;
-        dict.Set("stream_id",
-                 NetLogNumberValue(static_cast<uint64_t>(stream_id)));
-        dict.Set("headers",
+        return base::Value::Dict()
+            .Set("stream_id",
+                 NetLogNumberValue(static_cast<uint64_t>(stream_id)))
+            .Set("headers",
                  ElideQuicHeaderListForNetLog(headers, capture_mode));
-        return base::Value(std::move(dict));
       });
 }
 
@@ -304,19 +297,18 @@ void QuicHttp3Logger::OnDataFrameSent(quic::QuicStreamId stream_id,
 
 void QuicHttp3Logger::OnHeadersFrameSent(
     quic::QuicStreamId stream_id,
-    const spdy::Http2HeaderBlock& header_block) {
+    const quiche::HttpHeaderBlock& header_block) {
   if (!net_log_.IsCapturing()) {
     return;
   }
   net_log_.AddEvent(
       NetLogEventType::HTTP3_HEADERS_SENT,
       [stream_id, &header_block](NetLogCaptureMode capture_mode) {
-        base::Value::Dict dict;
-        dict.Set("stream_id",
-                 NetLogNumberValue(static_cast<uint64_t>(stream_id)));
-        dict.Set("headers",
-                 ElideHttp2HeaderBlockForNetLog(header_block, capture_mode));
-        return base::Value(std::move(dict));
+        return base::Value::Dict()
+            .Set("stream_id",
+                 NetLogNumberValue(static_cast<uint64_t>(stream_id)))
+            .Set("headers",
+                 ElideHttpHeaderBlockForNetLog(header_block, capture_mode));
       });
 }
 

@@ -40,10 +40,10 @@ public Run\*() methods that merely forward to the private member).
 
 ### base::test::SingleThreadTaskEnvironment
 
-Your component uses `base::ThreadTaskRunnerHandle::Get()` or
-`base::SequencedTaskRunnerHandle::Get()` to post tasks to the thread it was
-created on? You'll need at least a `base::test::SingleThreadTaskEnvironment` in
-order for these APIs to be functional and `base::RunLoop` to run the posted
+Your component uses `base::SingleThreadTaskRunner::GetCurrentDefault()` or
+`base::SequencedTaskRunner::GetCurrentDefault()` to post tasks to the thread it
+was created on? You'll need at least a `base::test::SingleThreadTaskEnvironment`
+in order for these APIs to be functional and `base::RunLoop` to run the posted
 tasks.
 
 Typically this will look something like this:
@@ -52,7 +52,7 @@ foo.h
 ```c++
 class Foo {
  public:
-  Foo() : owning_sequence_(base::SequencedTaskRunnerHandle::Get()) {}
+  Foo() : owning_sequence_(base::SequencedTaskRunner::GetCurrentDefault()) {}
 
   DoSomethingAndReply(base::OnceClosure on_done) {
     DCHECK(owning_sequence_->RunsTasksInCurrentSequence());
@@ -114,7 +114,7 @@ class FooService {
   // Flushes state to disk async and replies.
   FlushAndReply(base::OnceClosure on_done) {
     DCHECK(owning_sequence_->RunsTasksInCurrentSequence());
-    backend_task_runner_->PostTaskAndReply(
+    backend_task_runner_->PostTaskAndReply(FROM_HERE,
         base::BindOnce(&FooBackend::Flush, Unretained(backend_.get()),
         std::move(on_done)));
   }
@@ -158,13 +158,12 @@ trait for rare instances that desire distinct physical BrowserThreads.
 This is the //ios equivalent of `content::BrowserTaskEnvironment` to simulate
 `web::WebThread`.
 
-### Blink ?
+### blink::test::TaskEnvironment
 
-We would like to have something like `blink::BlinkTaskEnvironment` to simulate
-Blink's task posting infrastructure. We don't have it yet because Blink can be
-initialized only once and some things have to be reused across multiple unit
-tests which makes creating per-test task environment quite tricky. Contributions
-welcome!
+This is the same thing as base::test::TaskEnvironment with the addition of
+blink::MainThreadScheduler and blink::MainThreadIsolate support. You need this
+if-and-only-if the code under test is using blink::Thread::Current() or needs
+v8::Isolate::GetCurrent() to be a blink Isolate.
 
 ## Task Environment Traits and Abilities
 

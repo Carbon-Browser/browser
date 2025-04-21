@@ -1,7 +1,8 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <array>
 #include <memory>
 
 #include "base/test/scoped_feature_list.h"
@@ -9,7 +10,7 @@
 #include "build/build_config.h"
 #include "content/browser/devtools/protocol/devtools_protocol_test_support.h"
 #include "content/browser/web_contents/web_contents_impl.h"
-#include "content/public/common/content_features.h"
+#include "content/common/features.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_browser_test_utils.h"
@@ -18,95 +19,73 @@
 
 #if BUILDFLAG(IS_WIN)
 #include "base/files/scoped_temp_dir.h"
-#include "content/browser/renderer_host/dwrite_font_lookup_table_builder_win.h"
 #endif
 
 namespace content {
 namespace {
 
 #if BUILDFLAG(IS_ANDROID)
-const char* const kExpectedFontFamilyNames[] = {"AndroidClock",
-                                                "Roboto",
-                                                "Droid Sans Mono",
-                                                "Roboto",
-                                                "Noto Color Emoji",
-                                                "Noto Sans Bengali",
-                                                "Noto Sans Bengali UI",
-                                                "Noto Sans Devanagari",
-                                                "Noto Sans Devanagari",
-                                                "Noto Sans Devanagari UI",
-                                                "Noto Sans Devanagari UI",
-                                                "Noto Sans Kannada",
-                                                "Noto Sans Kannada",
-                                                "Noto Sans Kannada UI",
-                                                "Noto Sans Kannada UI",
-                                                "Noto Sans Lao",
-                                                "Noto Sans Lao",
-                                                "Noto Sans Lao UI",
-                                                "Noto Sans Lao UI",
-                                                "Noto Sans Malayalam",
-                                                "Noto Sans Malayalam",
-                                                "Noto Sans Malayalam UI",
-                                                "Noto Sans Malayalam UI",
-                                                "Noto Sans Tamil",
-                                                "Noto Sans Tamil",
-                                                "Noto Sans Tamil UI",
-                                                "Noto Sans Tamil UI",
-                                                "Noto Sans Telugu",
-                                                "Noto Sans Telugu",
-                                                "Noto Sans Telugu UI",
-                                                "Noto Sans Telugu UI",
-                                                "Noto Sans Thai",
-                                                "Noto Sans Thai",
-                                                "Noto Sans Thai UI",
-                                                "Noto Sans Thai UI",
-                                                "Roboto",
-                                                "Roboto Condensed",
-                                                "Roboto Condensed",
-                                                "Roboto Condensed",
-                                                "Roboto Condensed",
-                                                "Roboto"};
+const auto kExpectedFontFamilyNames = std::to_array({
+    "AndroidClock",
+    "Droid Sans Mono",
+    "Roboto",
+    "Noto Color Emoji",
+    "Noto Sans Lao UI",
+    "Noto Sans Lao UI",
+    "Noto Sans Thai",
+    "Noto Sans Thai",
+    "Noto Sans Thai UI",
+    "Noto Sans Thai UI",
+});
 #elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-const char* const kExpectedFontFamilyNames[] = {"Ahem",
-                                                "Arimo",
-                                                "Arimo",
-                                                "Arimo",
-                                                "Arimo",
-                                                "Cousine",
-                                                "Cousine",
-                                                "Cousine",
-                                                "Cousine",
-                                                "DejaVu Sans",
-                                                "DejaVu Sans",
-                                                "Garuda",
-                                                "Gelasio",
-                                                "Gelasio",
-                                                "Gelasio",
-                                                "Gelasio",
-                                                "Lohit Devanagari",
-                                                "Lohit Gurmukhi",
-                                                "Lohit Tamil",
-                                                "Noto Sans Khmer",
-                                                "Tinos",
-                                                "Tinos",
-                                                "Tinos",
-                                                "Tinos",
-                                                "Mukti Narrow",
-                                                "Tinos"};
-#elif BUILDFLAG(IS_MAC)
-const char* const kExpectedFontFamilyNames[] = {"American Typewriter",
-                                                "Arial Narrow",
-                                                "Baskerville",
-                                                "Devanagari MT",
-                                                "DIN Alternate",
-                                                "Gill Sans",
-                                                "Iowan Old Style",
-                                                "Malayalam Sangam MN",
-                                                "Hiragino Maru Gothic Pro",
-                                                "Hiragino Kaku Gothic StdN"};
+const auto kExpectedFontFamilyNames = std::to_array({
+    "Ahem",
+    "Arimo",
+    "Arimo",
+    "Arimo",
+    "Arimo",
+    "Cousine",
+    "Cousine",
+    "Cousine",
+    "Cousine",
+    "DejaVu Sans",
+    "DejaVu Sans",
+    "Garuda",
+    "Gelasio",
+    "Gelasio",
+    "Gelasio",
+    "Gelasio",
+    "Lohit Devanagari",
+    "Lohit Gurmukhi",
+    "Lohit Tamil",
+    "Noto Sans Khmer",
+    "Tinos",
+    "Tinos",
+    "Tinos",
+    "Tinos",
+    "Mukti Narrow",
+    "Tinos",
+});
+#elif BUILDFLAG(IS_APPLE)
+const auto kExpectedFontFamilyNames = std::to_array({
+    "American Typewriter",
+    "Arial Narrow",
+    "Baskerville",
+    "Devanagari MT",
+    "DIN Alternate",
+    "Gill Sans",
+    "Iowan Old Style",
+    "Malayalam Sangam MN",
+    "Hiragino Maru Gothic Pro",
+    "Hiragino Kaku Gothic StdN",
+});
 #elif BUILDFLAG(IS_WIN)
-const char* const kExpectedFontFamilyNames[] = {
-    "Cambria Math", "MingLiU_HKSCS-ExtB", "NSimSun", "Calibri"};
+const auto kExpectedFontFamilyNames = std::to_array({
+    "Cambria Math",
+    "MingLiU_HKSCS-ExtB",
+    "NSimSun",
+    "Calibri",
+});
 #endif
 
 }  // namespace
@@ -135,21 +114,15 @@ class FontUniqueNameBrowserTest : public DevToolsProtocolTest {
 #endif
 };
 
-// TODO(crbug.com/949181): Make this work on Fuchsia.
+// TODO(crbug.com/42050634): Make this work on Fuchsia.
 #if !BUILDFLAG(IS_FUCHSIA)
-// TODO(crbug.com/1270151): Fix this on Android 11 and 12.
-#if BUILDFLAG(IS_ANDROID)
-#define MAYBE_ContentLocalFontsMatching DISABLED_ContentLocalFontsMatching
-#else
-#define MAYBE_ContentLocalFontsMatching ContentLocalFontsMatching
-#endif
 IN_PROC_BROWSER_TEST_F(FontUniqueNameBrowserTest,
-                       MAYBE_ContentLocalFontsMatching) {
+                       ContentLocalFontsMatching) {
   LoadAndWait("/font_src_local_matching.html");
   Attach();
 
-  ASSERT_TRUE(SendCommand("DOM.enable", nullptr));
-  ASSERT_TRUE(SendCommand("CSS.enable", nullptr));
+  ASSERT_TRUE(SendCommandSync("DOM.enable"));
+  ASSERT_TRUE(SendCommandSync("CSS.enable"));
 
   size_t num_added_nodes =
       static_cast<size_t>(EvalJs(shell(), "addTestNodes()").ExtractInt());

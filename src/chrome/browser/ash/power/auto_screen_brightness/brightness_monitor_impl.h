@@ -1,21 +1,21 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_POWER_AUTO_SCREEN_BRIGHTNESS_BRIGHTNESS_MONITOR_IMPL_H_
 #define CHROME_BROWSER_ASH_POWER_AUTO_SCREEN_BRIGHTNESS_BRIGHTNESS_MONITOR_IMPL_H_
 
+#include <optional>
+
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/power/auto_screen_brightness/brightness_monitor.h"
 #include "chromeos/dbus/power/power_manager_client.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 namespace power {
@@ -24,7 +24,7 @@ namespace auto_screen_brightness {
 // Real implementation of BrightnessMonitor.
 // It monitors user brightness changes and records the stabilized brightness.
 class BrightnessMonitorImpl : public BrightnessMonitor,
-                              public PowerManagerClient::Observer {
+                              public chromeos::PowerManagerClient::Observer {
  public:
   // Once a user brightness adjustment is received, we wait for
   // |brightness_sample_delay_| to record the final brightness. It can be
@@ -56,7 +56,7 @@ class BrightnessMonitorImpl : public BrightnessMonitor,
   // Sets initial brightness obtained from powerd. If nullopt is received from
   // powerd, the monitor status will be set to kDisabled.
   void OnReceiveInitialBrightnessPercent(
-      absl::optional<double> brightness_percent);
+      std::optional<double> brightness_percent);
 
   // Notifies its observers on the initialization status of the monitor.
   void OnInitializationComplete();
@@ -96,11 +96,11 @@ class BrightnessMonitorImpl : public BrightnessMonitor,
   // final/consolidated brightness (i.e. ignoring intermediate values selected
   // by the user). If the change is not user requested, it will simply be the
   // new brightness value.
-  absl::optional<double> stable_brightness_percent_;
+  std::optional<double> stable_brightness_percent_;
   // Current user selected brightness. It is reset after we've collected
   // final/stable user-requested brightness (i.e. after
   // |brightness_sample_timer_| times out).
-  absl::optional<double> user_brightness_percent_;
+  std::optional<double> user_brightness_percent_;
 
   base::ObserverList<BrightnessMonitor::Observer> observers_;
 

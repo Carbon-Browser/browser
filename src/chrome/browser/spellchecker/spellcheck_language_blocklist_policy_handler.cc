@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include <utility>
 #include <vector>
 
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/syslog_logging.h"
 #include "base/values.h"
@@ -109,14 +108,13 @@ void SpellcheckLanguageBlocklistPolicyHandler::SortBlocklistedLanguages(
       policy::key::kSpellcheckLanguage, base::Value::Type::LIST);
   std::unordered_set<std::string> forced_languages_lookup;
   if (forced_enabled_value) {
-    for (const auto& forced_language :
-         forced_enabled_value->GetListDeprecated())
+    for (const auto& forced_language : forced_enabled_value->GetList())
       forced_languages_lookup.insert(forced_language.GetString());
   }
 
   // Separate the valid languages from the unknown / unsupported languages and
   // the languages that also appear in the SpellcheckLanguage policy.
-  for (const base::Value& language : value->GetListDeprecated()) {
+  for (const base::Value& language : value->GetList()) {
     std::string candidate_language(
         base::TrimWhitespaceASCII(language.GetString(), base::TRIM_ALL));
     std::string current_language =

@@ -1,14 +1,16 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "chrome/common/extensions/api/side_panel/side_panel_info.h"
+#include <memory>
 
+#include "base/files/scoped_temp_dir.h"
 #include "base/strings/stringprintf.h"
-#include "base/test/values_test_util.h"
+#include "chrome/common/extensions/api/side_panel/side_panel_info.h"
 #include "chrome/common/extensions/manifest_tests/chrome_manifest_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "extensions/common/manifest.h"
+#include "extensions/common/switches.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace extensions {
@@ -24,10 +26,8 @@ class SidePanelManifestTest : public ChromeManifestTest {
         "manifest_version": %d,
         "side_panel": %s
       })";
-    base::Value manifest_value = base::test::ParseJson(base::StringPrintf(
+    return ManifestData::FromJSON(base::StringPrintf(
         kManifestStub, manifest_version, side_panel.c_str()));
-    EXPECT_EQ(base::Value::Type::DICTIONARY, manifest_value.type());
-    return ManifestData(std::move(manifest_value), "test");
   }
 };
 
@@ -69,29 +69,32 @@ class SidePanelExtensionsTest : public testing::Test {
     manifest_base.Set("version", "1.0");
     manifest_base.Set("manifest_version", 3);
     manifest_base.Merge(manifest.Clone());
-    auto value = base::Value(std::move(manifest_base));
-    auto& manifest_dict = std::move(base::Value::AsDictionaryValue(value));
     std::string error;
-    scoped_refptr<Extension> extension = Extension::Create(
-        temp_dir_.GetPath(), mojom::ManifestLocation::kUnpacked, manifest_dict,
-        Extension::NO_FLAGS, "", &error);
-    if (!extension.get())
-      return nullptr;
-    return extension;
+    return Extension::Create(temp_dir_.GetPath(),
+                             mojom::ManifestLocation::kUnpacked, manifest_base,
+                             Extension::NO_FLAGS, "", &error);
   }
 
  private:
   base::ScopedTempDir temp_dir_;
 };
 
-// Error loading extension when filepath doesn't exist or is empty.
-TEST_F(SidePanelExtensionsTest, FileDoesntExist) {
-  for (const auto* default_path : {"", "error"}) {
+// Error loading extension when filepath doesn't exist.
+TEST_F(SidePanelExtensionsTest, ValidateFileDoesntExist) {
+  static constexpr struct {
+    const char* relative_path;
+  } test_cases[] = {
+      {""},
+      {"error"},
+      {"?"},
+  };
+
+  for (const auto& test_case : test_cases) {
     std::string error;
     std::vector<InstallWarning> warnings;
     base::Value::Dict manifest;
     base::Value::Dict side_panel;
-    side_panel.Set("default_path", default_path);
+    side_panel.Set("default_path", test_case.relative_path);
     manifest.Set("side_panel", base::Value(std::move(side_panel)));
     auto extension = CreateExtension(manifest);
     ManifestHandler::ValidateExtension(extension.get(), &error, &warnings);

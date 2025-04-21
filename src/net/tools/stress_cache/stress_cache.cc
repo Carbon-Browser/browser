@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 // This is a simple application that stress-tests the crash recovery of the disk
 // cache. The main application starts a copy of itself on a loop, checking the
@@ -15,14 +20,15 @@
 // application level crashes, edit stress_support.h.
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/debug/debugger.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/message_loop/message_pump_type.h"
@@ -37,12 +43,12 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/platform_thread.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
 #include "net/base/test_completion_callback.h"
+#include "net/disk_cache/backend_cleanup_tracker.h"
 #include "net/disk_cache/blockfile/backend_impl.h"
 #include "net/disk_cache/blockfile/stress_support.h"
 #include "net/disk_cache/disk_cache.h"
@@ -97,7 +103,7 @@ int MasterCode() {
 std::string GenerateStressKey() {
   char key[20 * 1024];
   size_t size = 50 + rand() % 20000;
-  CacheTestFillBuffer(key, size, true);
+  CacheTestFillBuffer(base::as_writable_byte_span(key).first(size), true);
 
   key[size - 1] = '\0';
   return std::string(key);
@@ -125,7 +131,7 @@ enum Operation { NONE, OPEN, CREATE, READ, WRITE, DOOM };
 class EntryWrapper {
  public:
   EntryWrapper() {
-    buffer_ = base::MakeRefCounted<net::IOBuffer>(kBufferSize);
+    buffer_ = base::MakeRefCounted<net::IOBufferWithSize>(kBufferSize);
     memset(buffer_->data(), 'k', kBufferSize);
   }
 
@@ -272,8 +278,8 @@ void EntryWrapper::DoIdle() {
   state_ = NONE;
   g_data->pendig_operations--;
   DCHECK(g_data->pendig_operations);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                base::BindOnce(&LoopTask));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(&LoopTask));
 }
 
 // The task that keeps the main thread busy. Whenever an entry becomes idle this
@@ -293,8 +299,8 @@ void LoopTask() {
     g_data->entries[slot].DoOpen(key);
   }
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                base::BindOnce(&LoopTask));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(&LoopTask));
 }
 
 // This thread will loop forever, adding and removing entries from the cache.
@@ -316,7 +322,8 @@ void StressTheCache(int iteration) {
   g_data = new Data();
   g_data->iteration = iteration;
   g_data->cache = new disk_cache::BackendImpl(
-      path, mask, cache_thread.task_runner().get(), net::DISK_CACHE, nullptr);
+      path, mask, /*cleanup_tracker=*/nullptr, cache_thread.task_runner().get(),
+      net::DISK_CACHE, nullptr);
   g_data->cache->SetMaxSize(cache_size);
   g_data->cache->SetFlags(disk_cache::kNoLoadProtection);
 
@@ -336,8 +343,8 @@ void StressTheCache(int iteration) {
   for (auto& key : g_data->keys)
     key = GenerateStressKey();
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                base::BindOnce(&LoopTask));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, base::BindOnce(&LoopTask));
   base::RunLoop().Run();
 }
 
@@ -350,7 +357,7 @@ void RunSoon(scoped_refptr<base::SingleThreadTaskRunner> task_runner);
 
 void CrashCallback() {
   // Keep trying to run.
-  RunSoon(base::ThreadTaskRunnerHandle::Get());
+  RunSoon(base::SingleThreadTaskRunner::GetCurrentDefault());
 
   if (g_crashing)
     return;
@@ -381,8 +388,8 @@ bool StartCrashThread() {
 
 void CrashHandler(const char* file,
                   int line,
-                  const base::StringPiece str,
-                  const base::StringPiece stack_trace) {
+                  std::string_view str,
+                  std::string_view stack_trace) {
   g_crashing = true;
   base::debug::BreakDebugger();
 }

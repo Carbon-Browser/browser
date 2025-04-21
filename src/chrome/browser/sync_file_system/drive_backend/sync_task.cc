@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/sync_file_system/drive_backend/sync_task_manager.h"
 #include "chrome/browser/sync_file_system/drive_backend/sync_task_token.h"
 #include "chrome/browser/sync_file_system/drive_backend/task_dependency_manager.h"
@@ -24,8 +24,8 @@ void CallRunExclusive(const base::WeakPtr<ExclusiveTask>& task,
 
 }  // namespace
 
-ExclusiveTask::ExclusiveTask() {}
-ExclusiveTask::~ExclusiveTask() {}
+ExclusiveTask::ExclusiveTask() = default;
+ExclusiveTask::~ExclusiveTask() = default;
 
 void ExclusiveTask::RunPreflight(std::unique_ptr<SyncTaskToken> token) {
   std::unique_ptr<TaskBlocker> task_blocker(new TaskBlocker);

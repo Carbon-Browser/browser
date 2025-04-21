@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 #include "components/exo/buffer.h"
 #include "components/exo/display.h"
 #include "components/exo/shell_surface.h"
-#include "components/exo/shell_surface_util.h"
 #include "components/exo/test/exo_test_base.h"
 #include "components/exo/test/shell_surface_builder.h"
 #include "ui/events/base_event_utils.h"
@@ -36,7 +35,7 @@ TEST_F(ShellSurfaceUtilTest, TargetForLocatedEvent) {
   child_surface->Commit();
   root_surface->Commit();
 
-  ui::MouseEvent mouse_event(ui::ET_MOUSE_PRESSED, gfx::Point(0, 0),
+  ui::MouseEvent mouse_event(ui::EventType::kMousePressed, gfx::Point(0, 0),
                              gfx::Point(0, 0), ui::EventTimeForNow(), 0, 0);
   aura::Window* root_window = root_surface->window()->GetRootWindow();
   ui::Event::DispatcherApi(&mouse_event).set_target(root_window);

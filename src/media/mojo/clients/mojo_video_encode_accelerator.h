@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,11 +44,17 @@ class MojoVideoEncodeAccelerator : public VideoEncodeAccelerator {
                   Client* client,
                   std::unique_ptr<MediaLog> media_log = nullptr) override;
   void Encode(scoped_refptr<VideoFrame> frame, bool force_keyframe) override;
+  void Encode(scoped_refptr<VideoFrame> frame,
+              const VideoEncoder::EncodeOptions&) override;
   void UseOutputBitstreamBuffer(BitstreamBuffer buffer) override;
-  void RequestEncodingParametersChange(const Bitrate& bitrate,
-                                       uint32_t framerate_num) override;
-  void RequestEncodingParametersChange(const VideoBitrateAllocation& bitrate,
-                                       uint32_t framerate) override;
+  void RequestEncodingParametersChange(
+      const Bitrate& bitrate,
+      uint32_t framerate_num,
+      const std::optional<gfx::Size>& size) override;
+  void RequestEncodingParametersChange(
+      const VideoBitrateAllocation& bitrate,
+      uint32_t framerate,
+      const std::optional<gfx::Size>& size) override;
   bool IsFlushSupported() override;
   void Flush(FlushCallback flush_callback) override;
   void Destroy() override;
@@ -62,6 +68,8 @@ class MojoVideoEncodeAccelerator : public VideoEncodeAccelerator {
 
   // Constructed during Initialize().
   std::unique_ptr<mojom::VideoEncodeAcceleratorClient> vea_client_;
+
+  VideoPixelFormat init_format_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 };

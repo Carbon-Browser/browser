@@ -1,12 +1,18 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <GLES2/gl2.h>
 #include <stdint.h>
 
 #include <memory>
 
+#include "base/containers/heap_array.h"
 #include "gpu/command_buffer/tests/gl_manager.h"
 #include "gpu/command_buffer/tests/gl_test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -84,7 +90,8 @@ TEST_P(GLCubeMapTextureTest, TexImage2DAfterFBOBinding) {
   EXPECT_EQ(static_cast<GLenum>(GL_NO_ERROR), glGetError());
 }
 
-TEST_P(GLCubeMapTextureTest, ReadPixels) {
+// TODO(crbug.com/40246425): Re-enable this test
+TEST_P(GLCubeMapTextureTest, DISABLED_ReadPixels) {
   GLenum cube_map_target = GetParam();
 
   glBindTexture(GL_TEXTURE_CUBE_MAP, texture_);
@@ -110,8 +117,8 @@ TEST_P(GLCubeMapTextureTest, ReadPixels) {
   EXPECT_EQ(static_cast<GLenum>(GL_NO_ERROR), glGetError());
 }
 
-
-TEST_P(GLCubeMapTextureTest, ReadPixelsFromIncompleteCubeTexture) {
+// TODO(crbug.com/40246425): Re-enable this test
+TEST_P(GLCubeMapTextureTest, DISABLED_ReadPixelsFromIncompleteCubeTexture) {
   GLenum cube_map_target = GetParam();
 
   glBindTexture(GL_TEXTURE_CUBE_MAP, texture_);
@@ -133,8 +140,8 @@ TEST_P(GLCubeMapTextureTest, ReadPixelsFromIncompleteCubeTexture) {
   EXPECT_EQ(static_cast<GLenum>(GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT),
             glCheckFramebufferStatus(GL_FRAMEBUFFER));
   GLsizei size = width_ * width_ * 4;
-  std::unique_ptr<uint8_t[]> pixels(new uint8_t[size]);
-  glReadPixels(0, 0, width_, width_, GL_RGBA, GL_UNSIGNED_BYTE, pixels.get());
+  auto pixels = base::HeapArray<uint8_t>::Uninit(size);
+  glReadPixels(0, 0, width_, width_, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
   EXPECT_EQ(static_cast<GLenum>(GL_INVALID_FRAMEBUFFER_OPERATION),
             glGetError());
 }

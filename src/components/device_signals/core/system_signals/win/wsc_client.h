@@ -1,15 +1,15 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_DEVICE_SIGNALS_CORE_SYSTEM_SIGNALS_WIN_WSC_CLIENT_H_
 #define COMPONENTS_DEVICE_SIGNALS_CORE_SYSTEM_SIGNALS_WIN_WSC_CLIENT_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "components/device_signals/core/common/win/win_types.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 // WSC interfaces are available on Windows 8 and above. More information at:
 // https://docs.microsoft.com/en-us/windows/win32/api/iwscapi/
@@ -46,7 +46,7 @@ struct WscAvProductsResponse {
   WscAvProductsResponse(const WscAvProductsResponse& other);
 
   std::vector<AvProduct> av_products;
-  absl::optional<WscQueryError> query_error;
+  std::optional<WscQueryError> query_error;
   std::vector<WscParsingError> parsing_errors;
 };
 

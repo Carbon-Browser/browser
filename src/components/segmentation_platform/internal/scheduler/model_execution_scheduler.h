@@ -1,17 +1,18 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SEGMENTATION_PLATFORM_INTERNAL_SCHEDULER_MODEL_EXECUTION_SCHEDULER_H_
 #define COMPONENTS_SEGMENTATION_PLATFORM_INTERNAL_SCHEDULER_MODEL_EXECUTION_SCHEDULER_H_
 
-#include "components/segmentation_platform/internal/execution/model_execution_status.h"
 #include "components/segmentation_platform/public/proto/segmentation_platform.pb.h"
 
 namespace segmentation_platform {
 namespace proto {
 class SegmentInfo;
 }  // namespace proto
+
+struct ModelExecutionResult;
 
 using proto::SegmentId;
 
@@ -54,8 +55,8 @@ class ModelExecutionScheduler {
   // TODO(shaktisahu): Do we want to store that failure reason in the DB
   // instead? We might treat different failures differently next time.
   virtual void OnModelExecutionCompleted(
-      SegmentId segment_id,
-      const std::pair<float, ModelExecutionStatus>& result) = 0;
+      const proto::SegmentInfo& segment_info,
+      std::unique_ptr<ModelExecutionResult> result) = 0;
 };
 
 }  // namespace segmentation_platform

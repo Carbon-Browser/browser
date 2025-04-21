@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,12 +17,12 @@ using ::testing::_;
 
 class WindowElementTest : public views::ViewsTestBase {
  public:
-  WindowElementTest() {}
+  WindowElementTest() = default;
 
   WindowElementTest(const WindowElementTest&) = delete;
   WindowElementTest& operator=(const WindowElementTest&) = delete;
 
-  ~WindowElementTest() override {}
+  ~WindowElementTest() override = default;
 
   void SetUp() override {
     views::ViewsTestBase::SetUp();

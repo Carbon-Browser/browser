@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "content/public/renderer/render_frame.h"
 #include "content/public/renderer/render_thread.h"
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 
 PageAutoFetcherHelper::PageAutoFetcherHelper(content::RenderFrame* render_frame)
     : render_frame_(render_frame) {}
@@ -52,7 +52,7 @@ void PageAutoFetcherHelper::CancelSchedule() {
 bool PageAutoFetcherHelper::Bind() {
   if (fetcher_)
     return true;
-  render_frame_->GetBrowserInterfaceBroker()->GetInterface(
+  render_frame_->GetBrowserInterfaceBroker().GetInterface(
       fetcher_.BindNewPipeAndPassReceiver());
   return fetcher_.is_bound();
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,10 +17,7 @@
 
 namespace crypto {
 
-ECSignatureCreatorImpl::ECSignatureCreatorImpl(ECPrivateKey* key)
-    : key_(key) {
-  EnsureOpenSSLInit();
-}
+ECSignatureCreatorImpl::ECSignatureCreatorImpl(ECPrivateKey* key) : key_(key) {}
 
 ECSignatureCreatorImpl::~ECSignatureCreatorImpl() = default;
 

@@ -31,6 +31,8 @@
 #ifndef THIRD_PARTY_BLINK_PUBLIC_PLATFORM_WEB_THREAD_SAFE_DATA_H_
 #define THIRD_PARTY_BLINK_PUBLIC_PLATFORM_WEB_THREAD_SAFE_DATA_H_
 
+#include "base/containers/checked_iterators.h"
+#include "base/containers/span.h"
 #include "third_party/blink/public/platform/web_common.h"
 #include "third_party/blink/public/platform/web_private_ptr.h"
 
@@ -46,37 +48,49 @@ class RawData;
 
 // A container for raw bytes. It is inexpensive to copy a WebThreadSafeData
 // object.  It is safe to pass a WebThreadSafeData across threads.
-class WebThreadSafeData {
+class BLINK_PLATFORM_EXPORT WebThreadSafeData {
  public:
+  // Ideally, instead of defining this, `begin()`/`end()` below would return
+  // `auto` and just pass through the underlying storage types' iterators, so
+  // that they could decide what to do. However, since those types are defined
+  // outside /public/, that would be a layering violation. So be conservative
+  // and use `CheckedContiguousIterator` directyly, regardless of what the
+  // underlying type does.
+  using iterator = base::CheckedContiguousIterator<const char>;
+
   WebThreadSafeData() = default;
-  BLINK_PLATFORM_EXPORT WebThreadSafeData(const char* data, size_t length);
+  explicit WebThreadSafeData(base::span<const char> data);
 
   ~WebThreadSafeData() { Reset(); }
 
-  BLINK_PLATFORM_EXPORT void Assign(const WebThreadSafeData&);
-  BLINK_PLATFORM_EXPORT void Reset();
+  void Assign(const WebThreadSafeData&);
+  void Reset();
 
-  BLINK_PLATFORM_EXPORT size_t size() const;
-  BLINK_PLATFORM_EXPORT const char* Data() const;
+  size_t size() const;
+  const char* data() const;
+
+  // Iterators, required to satisfy the `std::ranges::contiguous_range` concept.
+  iterator begin() const;
+  iterator end() const;
 
   bool IsEmpty() const { return !size(); }
 
-  BLINK_PLATFORM_EXPORT WebThreadSafeData(const WebThreadSafeData&);
-  BLINK_PLATFORM_EXPORT WebThreadSafeData& operator=(const WebThreadSafeData&);
+  WebThreadSafeData(const WebThreadSafeData&);
+  WebThreadSafeData& operator=(const WebThreadSafeData&);
 
 #if INSIDE_BLINK
-  BLINK_PLATFORM_EXPORT WebThreadSafeData(scoped_refptr<RawData>);
-  BLINK_PLATFORM_EXPORT WebThreadSafeData(scoped_refptr<RawData>&&);
-  BLINK_PLATFORM_EXPORT WebThreadSafeData& operator=(scoped_refptr<RawData>);
+  WebThreadSafeData(scoped_refptr<RawData>);
+  WebThreadSafeData(scoped_refptr<RawData>&&);
+  WebThreadSafeData& operator=(scoped_refptr<RawData>);
 #else
   operator std::string() const {
     size_t len = size();
-    return len ? std::string(Data(), len) : std::string();
+    return len ? std::string(data(), len) : std::string();
   }
 #endif
 
  private:
-  WebPrivatePtr<RawData> private_;
+  WebPrivatePtrForRefCounted<RawData> private_;
 };
 
 }  // namespace blink

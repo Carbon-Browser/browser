@@ -11,19 +11,17 @@
       "transform": 1
     },
     {
-      "name": "LayoutNGBlockFlow (positioned) DIV id='scrollpanel'",
+      "name": "LayoutBlockFlow (positioned) DIV id='scrollpanel'",
       "bounds": [100, 100],
       "contentsOpaque": true,
       "backgroundColor": "#FF0000",
-      "invalidations": [
-        [0, 0, 100, 100]
-      ],
       "transform": 2
     },
     {
       "name": "VerticalScrollbar",
       "position": [785, 0],
-      "bounds": [15, 600]
+      "bounds": [15, 600],
+      "contentsOpaque": true
     }
   ],
   "transforms": [

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,7 @@ class DaemonControllerDelegateLinux : public DaemonController::Delegate {
 
   // DaemonController::Delegate interface.
   DaemonController::State GetState() override;
-  absl::optional<base::Value::Dict> GetConfig() override;
+  std::optional<base::Value::Dict> GetConfig() override;
   void CheckPermission(bool it2me, DaemonController::BoolCallback) override;
   void SetConfigAndStart(base::Value::Dict config,
                          bool consent,

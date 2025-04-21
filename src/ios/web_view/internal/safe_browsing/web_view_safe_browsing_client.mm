@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,19 +6,23 @@
 
 #import "base/check.h"
 #import "base/memory/weak_ptr.h"
+#import "ios/components/security_interstitials/safe_browsing/safe_browsing_service.h"
 #import "ios/web/public/web_state.h"
 #import "ios/web_view/internal/app/application_context.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-WebViewSafeBrowsingClient::WebViewSafeBrowsingClient() = default;
+WebViewSafeBrowsingClient::WebViewSafeBrowsingClient(PrefService* prefs)
+    : prefs_(prefs) {
+  DCHECK(prefs_);
+}
 
 WebViewSafeBrowsingClient::~WebViewSafeBrowsingClient() = default;
 
 base::WeakPtr<SafeBrowsingClient> WebViewSafeBrowsingClient::AsWeakPtr() {
   return weak_factory_.GetWeakPtr();
+}
+
+PrefService* WebViewSafeBrowsingClient::GetPrefs() {
+  return prefs_;
 }
 
 SafeBrowsingService* WebViewSafeBrowsingClient::GetSafeBrowsingService() {
@@ -32,19 +36,26 @@ WebViewSafeBrowsingClient::GetRealTimeUrlLookupService() {
   return nullptr;
 }
 
+safe_browsing::HashRealTimeService*
+WebViewSafeBrowsingClient::GetHashRealTimeService() {
+  // ios/web_view does not support hash-real-time lookups.
+  return nullptr;
+}
+
+variations::VariationsService*
+WebViewSafeBrowsingClient::GetVariationsService() {
+  // ios/web_view does not support variations.
+  return nullptr;
+}
+
 bool WebViewSafeBrowsingClient::ShouldBlockUnsafeResource(
     const security_interstitials::UnsafeResource& resource) const {
   return false;
 }
 
-void WebViewSafeBrowsingClient::OnMainFrameUrlQueryCancellationDecided(
+bool WebViewSafeBrowsingClient::OnMainFrameUrlQueryCancellationDecided(
     web::WebState* web_state,
     const GURL& url) {
-  // No op.
-}
-
-bool WebViewSafeBrowsingClient::OnSubFrameUrlQueryCancellationDecided(
-    web::WebState* web_state,
-    const GURL& url) {
+  // ios/web_view does not support OnMainFrameUrlQueryCancellationDecided.
   return true;
 }

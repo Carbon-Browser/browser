@@ -1,11 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/services/assistant/public/cpp/assistant_settings.h"
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 namespace {
 
@@ -16,7 +15,7 @@ AssistantSettings* g_instance = nullptr;
 SpeakerIdEnrollmentClient::SpeakerIdEnrollmentClient() = default;
 SpeakerIdEnrollmentClient::~SpeakerIdEnrollmentClient() = default;
 
-mojo::PendingRemote<chromeos::libassistant::mojom::SpeakerIdEnrollmentClient>
+mojo::PendingRemote<libassistant::mojom::SpeakerIdEnrollmentClient>
 SpeakerIdEnrollmentClient::BindNewPipeAndPassRemote() {
   return client_.BindNewPipeAndPassRemote();
 }
@@ -40,5 +39,4 @@ AssistantSettings::~AssistantSettings() {
   g_instance = nullptr;
 }
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant

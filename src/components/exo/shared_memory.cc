@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,12 +37,12 @@ bool IsSupportedFormat(gfx::BufferFormat format) {
 SharedMemory::SharedMemory(base::UnsafeSharedMemoryRegion shared_memory_region)
     : shared_memory_region_(std::move(shared_memory_region)) {}
 
-SharedMemory::~SharedMemory() {}
+SharedMemory::~SharedMemory() = default;
 
 std::unique_ptr<Buffer> SharedMemory::CreateBuffer(const gfx::Size& size,
                                                    gfx::BufferFormat format,
                                                    unsigned offset,
-                                                   int stride) {
+                                                   uint32_t stride) {
   TRACE_EVENT2("exo", "SharedMemory::CreateBuffer", "size", size.ToString(),
                "format", static_cast<int>(format));
 
@@ -52,10 +52,8 @@ std::unique_ptr<Buffer> SharedMemory::CreateBuffer(const gfx::Size& size,
     return nullptr;
   }
 
-  if (!base::IsValueInRangeForNumericType<size_t>(stride) ||
-      gfx::RowSizeForBufferFormat(size.width(), format, 0) >
-          static_cast<size_t>(stride) ||
-      static_cast<size_t>(stride) & 3) {
+  if (gfx::RowSizeForBufferFormat(size.width(), format, 0) > stride ||
+      stride & 3) {
     DLOG(WARNING) << "Failed to create shm buffer. Unsupported stride "
                   << stride;
     return nullptr;
@@ -67,28 +65,24 @@ std::unique_ptr<Buffer> SharedMemory::CreateBuffer(const gfx::Size& size,
   handle.offset = offset;
   handle.stride = stride;
 
-  std::unique_ptr<gfx::GpuMemoryBuffer> gpu_memory_buffer =
-      gpu::GpuMemoryBufferImplSharedMemory::CreateFromHandle(
-          std::move(handle), size, format, gfx::BufferUsage::GPU_READ,
-          gpu::GpuMemoryBufferImpl::DestructionCallback());
-  if (!gpu_memory_buffer) {
-    LOG(ERROR) << "Failed to create GpuMemoryBuffer from handle";
-    return nullptr;
-  }
+  const gfx::BufferUsage buffer_usage = gfx::BufferUsage::GPU_READ;
+
+  // COMMANDS_ISSUED queries are sufficient for shared memory
+  // buffers as binding to texture is implemented using a call to
+  // glTexImage2D and the buffer can be reused as soon as that
+  // command has been issued.
+  const unsigned query_type = GL_COMMANDS_ISSUED_CHROMIUM;
 
   // Zero-copy doesn't provide a benefit in the case of shared memory as an
   // implicit copy is required when trying to use these buffers as zero-copy
   // buffers. Making the copy explicit allows the buffer to be reused earlier.
-  bool use_zero_copy = false;
+  const bool use_zero_copy = false;
+  const bool is_overlay_candidate = false;
+  const bool y_invert = false;
 
-  return std::make_unique<Buffer>(
-      std::move(gpu_memory_buffer), GL_TEXTURE_2D,
-      // COMMANDS_ISSUED queries are sufficient for shared memory
-      // buffers as binding to texture is implemented using a call to
-      // glTexImage2D and the buffer can be reused as soon as that
-      // command has been issued.
-      GL_COMMANDS_ISSUED_CHROMIUM, use_zero_copy,
-      false /* is_overlay_candidate */, false /* y_invert */);
+    return Buffer::CreateBufferFromGMBHandle(
+        std::move(handle), size, format, buffer_usage, query_type,
+        use_zero_copy, is_overlay_candidate, y_invert);
 }
 
 size_t SharedMemory::GetSize() const {

@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Helpers related to multiprocessing.
@@ -26,6 +26,10 @@ _silence_exceptions = False
 _fork_params = None
 _fork_kwargs = None
 
+# Ensure fork is used on MacOS for multiprocessing compatibility.
+# Starting from Python 3.8, the "spawn" method is the default on MacOS.
+# On Linux hosts this line will be a no-op.
+multiprocessing.set_start_method('fork')
 
 class _ImmediateResult:
   def __init__(self, value):

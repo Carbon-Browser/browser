@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include "components/policy/core/common/cloud/signing_service.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "testing/gmock/include/gmock/gmock.h"
 

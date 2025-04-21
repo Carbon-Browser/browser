@@ -1,18 +1,18 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_GFX_SCOPED_CANVAS_H_
 #define UI_GFX_SCOPED_CANVAS_H_
 
+#include "base/component_export.h"
 #include "base/memory/raw_ptr.h"
 #include "ui/gfx/canvas.h"
-#include "ui/gfx/gfx_export.h"
 
 namespace gfx {
 
 // Saves the drawing state, and restores the state when going out of scope.
-class GFX_EXPORT ScopedCanvas {
+class COMPONENT_EXPORT(GFX) ScopedCanvas {
  public:
   explicit ScopedCanvas(gfx::Canvas* canvas);
   ScopedCanvas(const ScopedCanvas&) = delete;

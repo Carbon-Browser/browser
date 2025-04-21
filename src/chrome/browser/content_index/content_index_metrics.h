@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,9 +40,6 @@ class ContentIndexMetrics {
 
   // Records when a Content Index entry is deleted by a user.
   void RecordContentDeletedByUser(const url::Origin& origin);
-
-  // Records the number of Content Index entries available when requested.
-  static void RecordContentIndexEntries(size_t num_entries);
 
  private:
   raw_ptr<ukm::UkmBackgroundRecorderService> ukm_background_service_;

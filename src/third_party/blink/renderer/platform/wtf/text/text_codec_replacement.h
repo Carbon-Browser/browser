@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,8 +23,7 @@ class TextCodecReplacement final : public TextCodecUTF8 {
   static void RegisterCodecs(TextCodecRegistrar);
 
  private:
-  String Decode(const char*,
-                wtf_size_t length,
+  String Decode(base::span<const uint8_t> data,
                 FlushBehavior,
                 bool stop_on_error,
                 bool& saw_error) override;

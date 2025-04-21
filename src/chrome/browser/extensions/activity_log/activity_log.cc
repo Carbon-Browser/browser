@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,24 +11,23 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/json/json_string_value_serializer.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/one_shot_event.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/threading/thread_checker.h"
 #include "base/values.h"
-#include "chrome/browser/browser_process.h"
 #include "chrome/browser/extensions/activity_log/activity_action_constants.h"
 #include "chrome/browser/extensions/activity_log/counting_policy.h"
 #include "chrome/browser/extensions/activity_log/fullstream_ui_policy.h"
 #include "chrome/browser/extensions/extension_tab_util.h"
 #include "chrome/browser/preloading/prefetch/no_state_prefetch/no_state_prefetch_manager_factory.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/common/chrome_constants.h"
 #include "chrome/common/chrome_switches.h"
@@ -46,7 +45,6 @@
 #include "extensions/browser/extensions_browser_client.h"
 #include "extensions/browser/renderer_startup_helper.h"
 #include "extensions/common/extension.h"
-#include "extensions/common/extension_messages.h"
 #include "extensions/common/features/feature.h"
 #include "extensions/common/features/feature_provider.h"
 #include "extensions/common/hashed_extension_id.h"
@@ -105,23 +103,23 @@ struct ApiInfo {
 
 static const ApiInfo kApiInfoTable[] = {
     // Tabs APIs that require tab ID translation
-    {Action::ACTION_API_CALL, "tabs.connect", 0, LOOKUP_TAB_ID, NULL},
-    {Action::ACTION_API_CALL, "tabs.detectLanguage", 0, LOOKUP_TAB_ID, NULL},
-    {Action::ACTION_API_CALL, "tabs.duplicate", 0, LOOKUP_TAB_ID, NULL},
-    {Action::ACTION_API_CALL, "tabs.executeScript", 0, LOOKUP_TAB_ID, NULL},
-    {Action::ACTION_API_CALL, "tabs.get", 0, LOOKUP_TAB_ID, NULL},
-    {Action::ACTION_API_CALL, "tabs.insertCSS", 0, LOOKUP_TAB_ID, NULL},
-    {Action::ACTION_API_CALL, "tabs.move", 0, LOOKUP_TAB_ID, NULL},
-    {Action::ACTION_API_CALL, "tabs.reload", 0, LOOKUP_TAB_ID, NULL},
-    {Action::ACTION_API_CALL, "tabs.remove", 0, LOOKUP_TAB_ID, NULL},
-    {Action::ACTION_API_CALL, "tabs.sendMessage", 0, LOOKUP_TAB_ID, NULL},
-    {Action::ACTION_API_CALL, "tabs.update", 0, LOOKUP_TAB_ID, NULL},
-    {Action::ACTION_API_EVENT, "tabs.onUpdated", 0, LOOKUP_TAB_ID, NULL},
-    {Action::ACTION_API_EVENT, "tabs.onMoved", 0, LOOKUP_TAB_ID, NULL},
-    {Action::ACTION_API_EVENT, "tabs.onDetached", 0, LOOKUP_TAB_ID, NULL},
-    {Action::ACTION_API_EVENT, "tabs.onAttached", 0, LOOKUP_TAB_ID, NULL},
-    {Action::ACTION_API_EVENT, "tabs.onRemoved", 0, LOOKUP_TAB_ID, NULL},
-    {Action::ACTION_API_EVENT, "tabs.onReplaced", 0, LOOKUP_TAB_ID, NULL},
+    {Action::ACTION_API_CALL, "tabs.connect", 0, LOOKUP_TAB_ID, nullptr},
+    {Action::ACTION_API_CALL, "tabs.detectLanguage", 0, LOOKUP_TAB_ID, nullptr},
+    {Action::ACTION_API_CALL, "tabs.duplicate", 0, LOOKUP_TAB_ID, nullptr},
+    {Action::ACTION_API_CALL, "tabs.executeScript", 0, LOOKUP_TAB_ID, nullptr},
+    {Action::ACTION_API_CALL, "tabs.get", 0, LOOKUP_TAB_ID, nullptr},
+    {Action::ACTION_API_CALL, "tabs.insertCSS", 0, LOOKUP_TAB_ID, nullptr},
+    {Action::ACTION_API_CALL, "tabs.move", 0, LOOKUP_TAB_ID, nullptr},
+    {Action::ACTION_API_CALL, "tabs.reload", 0, LOOKUP_TAB_ID, nullptr},
+    {Action::ACTION_API_CALL, "tabs.remove", 0, LOOKUP_TAB_ID, nullptr},
+    {Action::ACTION_API_CALL, "tabs.sendMessage", 0, LOOKUP_TAB_ID, nullptr},
+    {Action::ACTION_API_CALL, "tabs.update", 0, LOOKUP_TAB_ID, nullptr},
+    {Action::ACTION_API_EVENT, "tabs.onUpdated", 0, LOOKUP_TAB_ID, nullptr},
+    {Action::ACTION_API_EVENT, "tabs.onMoved", 0, LOOKUP_TAB_ID, nullptr},
+    {Action::ACTION_API_EVENT, "tabs.onDetached", 0, LOOKUP_TAB_ID, nullptr},
+    {Action::ACTION_API_EVENT, "tabs.onAttached", 0, LOOKUP_TAB_ID, nullptr},
+    {Action::ACTION_API_EVENT, "tabs.onRemoved", 0, LOOKUP_TAB_ID, nullptr},
+    {Action::ACTION_API_EVENT, "tabs.onReplaced", 0, LOOKUP_TAB_ID, nullptr},
 
     // Other APIs that accept URLs as strings
     {Action::ACTION_API_CALL, "bookmarks.create", 0, DICT_LOOKUP, "url"},
@@ -134,35 +132,38 @@ static const ApiInfo kApiInfoTable[] = {
     {Action::ACTION_API_CALL, "history.addUrl", 0, DICT_LOOKUP, "url"},
     {Action::ACTION_API_CALL, "history.deleteUrl", 0, DICT_LOOKUP, "url"},
     {Action::ACTION_API_CALL, "history.getVisits", 0, DICT_LOOKUP, "url"},
-    {Action::ACTION_API_CALL, "webstore.install", 0, NONE, NULL},
+    {Action::ACTION_API_CALL, "webstore.install", 0, NONE, nullptr},
     {Action::ACTION_API_CALL, "windows.create", 0, DICT_LOOKUP, "url"},
-    {Action::ACTION_DOM_ACCESS, "Document.location", 0, NONE, NULL},
-    {Action::ACTION_DOM_ACCESS, "HTMLAnchorElement.href", 0, NONE, NULL},
-    {Action::ACTION_DOM_ACCESS, "HTMLButtonElement.formAction", 0, NONE, NULL},
-    {Action::ACTION_DOM_ACCESS, "HTMLEmbedElement.src", 0, NONE, NULL},
-    {Action::ACTION_DOM_ACCESS, "HTMLFormElement.action", 0, NONE, NULL},
-    {Action::ACTION_DOM_ACCESS, "HTMLFrameElement.src", 0, NONE, NULL},
-    {Action::ACTION_DOM_ACCESS, "HTMLHtmlElement.manifest", 0, NONE, NULL},
-    {Action::ACTION_DOM_ACCESS, "HTMLIFrameElement.src", 0, NONE, NULL},
-    {Action::ACTION_DOM_ACCESS, "HTMLImageElement.longDesc", 0, NONE, NULL},
-    {Action::ACTION_DOM_ACCESS, "HTMLImageElement.src", 0, NONE, NULL},
-    {Action::ACTION_DOM_ACCESS, "HTMLImageElement.lowsrc", 0, NONE, NULL},
-    {Action::ACTION_DOM_ACCESS, "HTMLInputElement.formAction", 0, NONE, NULL},
-    {Action::ACTION_DOM_ACCESS, "HTMLInputElement.src", 0, NONE, NULL},
-    {Action::ACTION_DOM_ACCESS, "HTMLLinkElement.href", 0, NONE, NULL},
-    {Action::ACTION_DOM_ACCESS, "HTMLMediaElement.src", 0, NONE, NULL},
-    {Action::ACTION_DOM_ACCESS, "HTMLMediaElement.currentSrc", 0, NONE, NULL},
-    {Action::ACTION_DOM_ACCESS, "HTMLModElement.cite", 0, NONE, NULL},
-    {Action::ACTION_DOM_ACCESS, "HTMLObjectElement.data", 0, NONE, NULL},
-    {Action::ACTION_DOM_ACCESS, "HTMLQuoteElement.cite", 0, NONE, NULL},
-    {Action::ACTION_DOM_ACCESS, "HTMLScriptElement.src", 0, NONE, NULL},
-    {Action::ACTION_DOM_ACCESS, "HTMLSourceElement.src", 0, NONE, NULL},
-    {Action::ACTION_DOM_ACCESS, "HTMLTrackElement.src", 0, NONE, NULL},
-    {Action::ACTION_DOM_ACCESS, "HTMLVideoElement.poster", 0, NONE, NULL},
-    {Action::ACTION_DOM_ACCESS, "Location.assign", 0, NONE, NULL},
-    {Action::ACTION_DOM_ACCESS, "Location.replace", 0, NONE, NULL},
-    {Action::ACTION_DOM_ACCESS, "Window.location", 0, NONE, NULL},
-    {Action::ACTION_DOM_ACCESS, "XMLHttpRequest.open", 1, NONE, NULL}};
+    {Action::ACTION_DOM_ACCESS, "Document.location", 0, NONE, nullptr},
+    {Action::ACTION_DOM_ACCESS, "HTMLAnchorElement.href", 0, NONE, nullptr},
+    {Action::ACTION_DOM_ACCESS, "HTMLButtonElement.formAction", 0, NONE,
+     nullptr},
+    {Action::ACTION_DOM_ACCESS, "HTMLEmbedElement.src", 0, NONE, nullptr},
+    {Action::ACTION_DOM_ACCESS, "HTMLFormElement.action", 0, NONE, nullptr},
+    {Action::ACTION_DOM_ACCESS, "HTMLFrameElement.src", 0, NONE, nullptr},
+    {Action::ACTION_DOM_ACCESS, "HTMLHtmlElement.manifest", 0, NONE, nullptr},
+    {Action::ACTION_DOM_ACCESS, "HTMLIFrameElement.src", 0, NONE, nullptr},
+    {Action::ACTION_DOM_ACCESS, "HTMLImageElement.longDesc", 0, NONE, nullptr},
+    {Action::ACTION_DOM_ACCESS, "HTMLImageElement.src", 0, NONE, nullptr},
+    {Action::ACTION_DOM_ACCESS, "HTMLImageElement.lowsrc", 0, NONE, nullptr},
+    {Action::ACTION_DOM_ACCESS, "HTMLInputElement.formAction", 0, NONE,
+     nullptr},
+    {Action::ACTION_DOM_ACCESS, "HTMLInputElement.src", 0, NONE, nullptr},
+    {Action::ACTION_DOM_ACCESS, "HTMLLinkElement.href", 0, NONE, nullptr},
+    {Action::ACTION_DOM_ACCESS, "HTMLMediaElement.src", 0, NONE, nullptr},
+    {Action::ACTION_DOM_ACCESS, "HTMLMediaElement.currentSrc", 0, NONE,
+     nullptr},
+    {Action::ACTION_DOM_ACCESS, "HTMLModElement.cite", 0, NONE, nullptr},
+    {Action::ACTION_DOM_ACCESS, "HTMLObjectElement.data", 0, NONE, nullptr},
+    {Action::ACTION_DOM_ACCESS, "HTMLQuoteElement.cite", 0, NONE, nullptr},
+    {Action::ACTION_DOM_ACCESS, "HTMLScriptElement.src", 0, NONE, nullptr},
+    {Action::ACTION_DOM_ACCESS, "HTMLSourceElement.src", 0, NONE, nullptr},
+    {Action::ACTION_DOM_ACCESS, "HTMLTrackElement.src", 0, NONE, nullptr},
+    {Action::ACTION_DOM_ACCESS, "HTMLVideoElement.poster", 0, NONE, nullptr},
+    {Action::ACTION_DOM_ACCESS, "Location.assign", 0, NONE, nullptr},
+    {Action::ACTION_DOM_ACCESS, "Location.replace", 0, NONE, nullptr},
+    {Action::ACTION_DOM_ACCESS, "Window.location", 0, NONE, nullptr},
+    {Action::ACTION_DOM_ACCESS, "XMLHttpRequest.open", 1, NONE, nullptr}};
 
 // A singleton class which provides lookups into the kApiInfoTable data
 // structure.  It inserts all data into a map on first lookup.
@@ -181,25 +182,24 @@ class ApiInfoDatabase {
                         const std::string& api_name) const {
     auto i = api_database_.find(api_name);
     if (i == api_database_.end())
-      return NULL;
+      return nullptr;
     if (i->second->action_type != action_type)
-      return NULL;
+      return nullptr;
     return i->second;
   }
 
  private:
   ApiInfoDatabase() {
-    for (size_t i = 0; i < std::size(kApiInfoTable); i++) {
-      const ApiInfo* info = &kApiInfoTable[i];
-      api_database_[info->api_name] = info;
+    for (const auto& info : kApiInfoTable) {
+      api_database_[info.api_name] = &info;
     }
   }
-  virtual ~ApiInfoDatabase() {}
+  virtual ~ApiInfoDatabase() = default;
 
   // The map is keyed by API name only, since API names aren't be repeated
   // across multiple action types in kApiInfoTable.  However, the action type
   // should still be checked before returning a positive match.
-  std::map<std::string, const ApiInfo*> api_database_;
+  std::map<std::string, raw_ptr<const ApiInfo, CtnExperimental>> api_database_;
 
   friend struct base::DefaultSingletonTraits<ApiInfoDatabase>;
 };
@@ -211,20 +211,16 @@ bool GetUrlForTabId(int tab_id,
                     Profile* profile,
                     GURL* url,
                     bool* is_incognito) {
-  content::WebContents* contents = NULL;
-  Browser* browser = NULL;
-  bool found = ExtensionTabUtil::GetTabById(
-      tab_id,
-      profile,
-      true,  // Search incognito tabs, too.
-      &browser,
-      NULL,
-      &contents,
-      NULL);
+  content::WebContents* contents = nullptr;
+  WindowController* window = nullptr;
+  bool found =
+      ExtensionTabUtil::GetTabById(tab_id, profile,
+                                   true,  // Search incognito tabs, too.
+                                   &window, &contents, nullptr);
 
-  if (found) {
+  if (found && window) {
     *url = contents->GetURL();
-    *is_incognito = browser->profile()->IsOffTheRecord();
+    *is_incognito = window->profile()->IsOffTheRecord();
     return true;
   } else {
     return false;
@@ -256,7 +252,7 @@ bool ResolveUrl(const GURL& base, const std::string& arg, GURL* arg_out) {
 void ExtractUrls(scoped_refptr<Action> action, Profile* profile) {
   const ApiInfo* api_info = ApiInfoDatabase::GetInstance()->Lookup(
       action->action_type(), action->api_name());
-  if (api_info == NULL)
+  if (api_info == nullptr)
     return;
 
   int url_index = api_info->arg_url_index;
@@ -357,8 +353,8 @@ ActivityLog* SafeGetActivityLog(content::BrowserContext* browser_context) {
   // the thread hops.
   // TODO(devlin): We should probably be doing this more extensively throughout
   // extensions code.
-  if (g_browser_process->IsShuttingDown() ||
-      !g_browser_process->profile_manager()->IsValidProfile(browser_context)) {
+  if (ExtensionsBrowserClient::Get()->IsShuttingDown() ||
+      !ExtensionsBrowserClient::Get()->IsValidContext(browser_context)) {
     return nullptr;
   }
   return ActivityLog::GetInstance(browser_context);
@@ -415,7 +411,7 @@ void LogWebRequestActivity(content::BrowserContext* browser_context,
                            const GURL& url,
                            bool is_incognito,
                            const std::string& api_call,
-                           std::unique_ptr<base::DictionaryValue> details) {
+                           base::Value::Dict details) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   if (IsExtensionAllowlisted(extension_id))
     return;
@@ -428,9 +424,8 @@ void LogWebRequestActivity(content::BrowserContext* browser_context,
       extension_id, base::Time::Now(), Action::ACTION_WEB_REQUEST, api_call);
   action->set_page_url(url);
   action->set_page_incognito(is_incognito);
-  action->mutable_other().Set(
-      activity_log_constants::kActionWebRequest,
-      base::Value::FromUniquePtrValue(std::move(details)));
+  action->mutable_other().Set(activity_log_constants::kActionWebRequest,
+                              std::move(details));
   activity_log->LogAction(action);
 }
 
@@ -651,7 +646,7 @@ void ActivityLog::LogAction(scoped_refptr<Action> action) {
                        base::CompareCase::SENSITIVE) &&
       action->other()) {
     base::Value::Dict& other = action->mutable_other();
-    absl::optional<int> dom_verb = other.FindInt(constants::kActionDomVerb);
+    std::optional<int> dom_verb = other.FindInt(constants::kActionDomVerb);
     if (dom_verb == DomActionType::METHOD)
       other.Set(constants::kActionDomVerb, DomActionType::XHR);
   }
@@ -676,16 +671,16 @@ void ActivityLog::OnScriptsExecuted(content::WebContents* web_contents,
   if (!is_active_)
     return;
   ExtensionRegistry* registry = ExtensionRegistry::Get(profile_);
-  for (auto it = extension_ids.begin(); it != extension_ids.end(); ++it) {
+  for (const auto& extension_id : extension_ids) {
     const Extension* extension =
-        registry->GetExtensionById(it->first, ExtensionRegistry::ENABLED);
+        registry->enabled_extensions().GetByID(extension_id.first);
     if (!extension || IsExtensionAllowlisted(extension->id()))
       continue;
 
     // If OnScriptsExecuted is fired because of tabs.executeScript, the list
     // of content scripts will be empty.  We don't want to log it because
     // the call to tabs.executeScript will have already been logged anyway.
-    if (!it->second.empty()) {
+    if (!extension_id.second.empty()) {
       auto action = base::MakeRefCounted<Action>(
           extension->id(), base::Time::Now(), Action::ACTION_CONTENT_SCRIPT,
           "");  // no API call here
@@ -700,8 +695,8 @@ void ActivityLog::OnScriptsExecuted(content::WebContents* web_contents,
       if (no_state_prefetch_manager &&
           no_state_prefetch_manager->IsWebContentsPrefetching(web_contents))
         action->mutable_other().Set(constants::kActionPrerender, true);
-      for (auto it2 = it->second.begin(); it2 != it->second.end(); ++it2) {
-        action->mutable_args().Append(*it2);
+      for (const auto& id : extension_id.second) {
+        action->mutable_args().Append(id);
       }
       LogAction(action);
     }
@@ -755,8 +750,8 @@ void ActivityLog::RemoveURLs(const std::set<GURL>& restrict_urls) {
     return;
 
   std::vector<GURL> urls;
-  for (auto it = restrict_urls.begin(); it != restrict_urls.end(); ++it) {
-    urls.push_back(*it);
+  for (const auto& url : restrict_urls) {
+    urls.push_back(url);
   }
   database_policy_->RemoveURLs(urls);
 }

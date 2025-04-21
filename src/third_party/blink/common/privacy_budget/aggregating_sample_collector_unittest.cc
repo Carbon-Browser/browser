@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,13 @@
 #include <type_traits>
 #include <vector>
 
+#include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
 #include "services/metrics/public/mojom/ukm_interface.mojom.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/common/privacy_budget/identifiability_sample_collector_test_utils.h"
 #include "third_party/blink/common/privacy_budget/test_ukm_recorder.h"
@@ -21,6 +23,11 @@
 #include "third_party/blink/public/common/privacy_budget/identifiability_study_settings_provider.h"
 #include "third_party/blink/public/common/privacy_budget/identifiable_sample.h"
 #include "third_party/blink/public/common/privacy_budget/identifiable_surface.h"
+
+namespace {
+using testing::Pointee;
+using testing::UnorderedElementsAre;
+}  // namespace
 
 namespace blink {
 
@@ -37,11 +44,11 @@ constexpr IdentifiableToken kTestValue1 = 1;
 // types.
 class TestSettingsProvider : public IdentifiabilityStudySettingsProvider {
  public:
+  bool IsMetaExperimentActive() const override { return false; }
   bool IsActive() const override { return true; }
   bool IsAnyTypeOrSurfaceBlocked() const override { return false; }
   bool IsSurfaceAllowed(IdentifiableSurface) const override { return true; }
   bool IsTypeAllowed(IdentifiableSurface::Type) const override { return true; }
-  bool ShouldActivelySample() const override { return false; }
 };
 
 }  // namespace
@@ -83,10 +90,12 @@ TEST_F(AggregatingSampleCollectorTest, NoImmediatePassthrough) {
 }
 
 TEST_F(AggregatingSampleCollectorTest, MergesDuplicates) {
+  base::HistogramTester histogram_tester;
+
   std::vector<IdentifiableSample> samples = {{kTestSurface1, kTestValue1}};
 
   // The same set of samples are recorded repeatedly against different sources.
-  // As far as the study is concerned, we only need to know one of them.
+  // The metrics should be deduplicated per source.
   for (auto i = 0; i < 1000; ++i)
     collector()->Record(recorder(), kTestSource1, samples);
   for (auto i = 0; i < 1000; ++i)
@@ -96,15 +105,25 @@ TEST_F(AggregatingSampleCollectorTest, MergesDuplicates) {
   collector()->Flush(recorder());
   const auto entries = recorder()->GetEntriesByHash(
       ukm::builders::Identifiability::kEntryNameHash);
-  ASSERT_EQ(1u, entries.size());
 
-  // We end up with a single entry: the first one. The source for the metrics
-  // will be `kTestSource1`.
-  const auto* entry = entries[0];
-  ASSERT_EQ(1u, entry->metrics.size());
-  EXPECT_EQ(kTestSource1, entry->source_id);
-  EXPECT_EQ(kTestSurface1.ToUkmMetricHash(), entry->metrics.begin()->first);
-  EXPECT_EQ(kTestValue1.ToUkmMetricValue(), entry->metrics.begin()->second);
+  // We end up with two entries, one per source.
+  EXPECT_THAT(
+      entries,
+      UnorderedElementsAre(
+          Pointee(*ukm::mojom::UkmEntry::New(
+              kTestSource1, ukm::builders::Identifiability::kEntryNameHash,
+              base::flat_map<uint64_t, int64_t>{
+                  {kTestSurface1.ToUkmMetricHash(),
+                   kTestValue1.ToUkmMetricValue()}})),
+          Pointee(*ukm::mojom::UkmEntry::New(
+              kTestSource2, ukm::builders::Identifiability::kEntryNameHash,
+              base::flat_map<uint64_t, int64_t>{
+                  {kTestSurface1.ToUkmMetricHash(),
+                   kTestValue1.ToUkmMetricValue()}}))));
+
+  histogram_tester.ExpectBucketCount(
+      "PrivacyBudget.Identifiability.RecordedSample",
+      PrivacyBudgetRecordedSample::kAccepted, 2);
 }
 
 TEST_F(AggregatingSampleCollectorTest, DoesNotCountDuplicates) {
@@ -149,6 +168,9 @@ TEST_F(AggregatingSampleCollectorTest, TooManySurfaces) {
   // Reporting kMaxTrackedSurfaces distinct surfaces should cause the tracker to
   // saturate. After this point, metrics aren't recorded. Only using one source
   // to not conflate source limits with surface limits.
+
+  base::HistogramTester histogram_tester;
+
   unsigned i = 0;
   for (; i < AggregatingSampleCollector::kMaxTrackedSurfaces; ++i) {
     collector()->Record(recorder(), kTestSource1,
@@ -168,25 +190,105 @@ TEST_F(AggregatingSampleCollectorTest, TooManySurfaces) {
   collector()->Flush(recorder());
   // Nothing get recorded.
   EXPECT_EQ(0u, recorder()->entries_count());
+
+  histogram_tester.ExpectBucketCount(
+      "PrivacyBudget.Identifiability.RecordedSample",
+      PrivacyBudgetRecordedSample::kAccepted,
+      AggregatingSampleCollector::kMaxTrackedSurfaces);
+  histogram_tester.ExpectBucketCount(
+      "PrivacyBudget.Identifiability.RecordedSample",
+      PrivacyBudgetRecordedSample::kDroppedMaxTrackedSurfaces, 1);
+}
+
+TEST_F(AggregatingSampleCollectorTest, TooManySources) {
+  // Reporting surfaces for kMaxTrackedSources distinct sources should cause the
+  // tracker to saturate. After this point, metrics aren't recorded. Only using
+  // one surface to not conflate source limits with surface limits.
+
+  base::HistogramTester histogram_tester;
+
+  // Start with 1 because 0 is an invalid source id for UKM.
+  unsigned i = 1;
+  for (; i < AggregatingSampleCollector::kMaxTrackedSources + 1; ++i) {
+    collector()->Record(recorder(), i, {{kTestSurface1, kTestValue1}});
+  }
+  collector()->Flush(recorder());
+  // There will be a bunch here. The exact number depends on other factors since
+  // each entry can include multiple samples.
+  EXPECT_NE(0u, recorder()->entries_count());
+  recorder()->Purge();
+  EXPECT_EQ(0u, recorder()->entries_count());
+
+  // Additional sources will be ignored.
+  collector()->Record(recorder(), i++, {{kTestSurface2, kTestValue1}});
+
+  collector()->Flush(recorder());
+  // Nothing gets recorded.
+  EXPECT_EQ(0u, recorder()->entries_count());
+
+  // Flushing one source will make room for one additional source.
+  collector()->FlushSource(recorder(), 1);
+  collector()->Record(recorder(), i++, {{kTestSurface2, kTestValue1}});
+  collector()->Flush(recorder());
+  EXPECT_EQ(1u, recorder()->entries_count());
+  EXPECT_EQ(1u, recorder()->entries()[0]->metrics.size());
+
+  histogram_tester.ExpectBucketCount(
+      "PrivacyBudget.Identifiability.RecordedSample",
+      PrivacyBudgetRecordedSample::kAccepted,
+      AggregatingSampleCollector::kMaxTrackedSources + 1);
+  histogram_tester.ExpectBucketCount(
+      "PrivacyBudget.Identifiability.RecordedSample",
+      PrivacyBudgetRecordedSample::kDroppedMaxTrackedSources, 1);
 }
 
 TEST_F(AggregatingSampleCollectorTest, TooManySamplesPerSurface) {
+  base::HistogramTester histogram_tester;
+
   unsigned i = 0;
   // These values are recorded against a single surface and a single source.
   // Once saturated it won't accept any more values.
-  for (; i < AggregatingSampleCollector::kMaxTrackedSamplesPerSurface; ++i) {
+  for (;
+       i < AggregatingSampleCollector::kMaxTrackedSamplesPerSurfacePerSourceId;
+       ++i) {
     collector()->Record(recorder(), kTestSource1, {{kTestSurface1, i}});
   }
   collector()->Flush(recorder());
-  EXPECT_EQ(AggregatingSampleCollector::kMaxTrackedSamplesPerSurface,
+  EXPECT_EQ(AggregatingSampleCollector::kMaxTrackedSamplesPerSurfacePerSourceId,
             recorder()->entries_count());
   EXPECT_EQ(1u, recorder()->entries()[0]->metrics.size());
   recorder()->Purge();
+  EXPECT_EQ(0u, recorder()->entries_count());
 
-  // Any more samples won't make a difference.
-  collector()->Record(recorder(), kTestSource1, {{kTestSurface1, i}});
+  // Any more samples for the same source id won't make a difference.
+  collector()->Record(recorder(), kTestSource1, {{kTestSurface1, i++}});
   collector()->Flush(recorder());
   EXPECT_EQ(0u, recorder()->entries_count());
+  recorder()->Purge();
+  EXPECT_EQ(0u, recorder()->entries_count());
+
+  // However, we can record more samples for another source id.
+  collector()->Record(recorder(), kTestSource2, {{kTestSurface1, i++}});
+  collector()->Flush(recorder());
+  EXPECT_EQ(1u, recorder()->entries_count());
+  EXPECT_EQ(1u, recorder()->entries()[0]->metrics.size());
+  recorder()->Purge();
+  EXPECT_EQ(0u, recorder()->entries_count());
+
+  // Moreover, flushing the source will allow to collect more samples for it.
+  collector()->FlushSource(recorder(), kTestSource1);
+  collector()->Record(recorder(), kTestSource1, {{kTestSurface1, i++}});
+  collector()->Flush(recorder());
+  EXPECT_EQ(1u, recorder()->entries_count());
+  EXPECT_EQ(1u, recorder()->entries()[0]->metrics.size());
+
+  histogram_tester.ExpectBucketCount(
+      "PrivacyBudget.Identifiability.RecordedSample",
+      PrivacyBudgetRecordedSample::kAccepted,
+      AggregatingSampleCollector::kMaxTrackedSamplesPerSurfacePerSourceId + 2);
+  histogram_tester.ExpectBucketCount(
+      "PrivacyBudget.Identifiability.RecordedSample",
+      PrivacyBudgetRecordedSample::kDroppedMaxTrackedPerSurfacePerSource, 1);
 }
 
 TEST_F(AggregatingSampleCollectorTest, TooManyUnsentMetrics) {

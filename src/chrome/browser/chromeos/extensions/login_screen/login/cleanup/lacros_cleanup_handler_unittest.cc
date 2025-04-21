@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,15 @@
 
 #include <utility>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/test_future.h"
 #include "chromeos/crosapi/mojom/login.mojom.h"
 #include "content/public/test/browser_task_environment.h"
+#include "mojo/public/cpp/bindings/receiver.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -27,7 +29,7 @@ namespace {
 class TestCleanupTriggeredObserver
     : public crosapi::mojom::LacrosCleanupTriggeredObserver {
  public:
-  explicit TestCleanupTriggeredObserver(absl::optional<std::string> error)
+  explicit TestCleanupTriggeredObserver(std::optional<std::string> error)
       : error_(error) {}
 
   explicit TestCleanupTriggeredObserver(bool should_reset)
@@ -50,9 +52,11 @@ class TestCleanupTriggeredObserver
     receiver_ = receiver;
   }
 
-  absl::optional<std::string> error_;
+  std::optional<std::string> error_;
   bool should_reset_ = false;
-  mojo::Receiver<crosapi::mojom::LacrosCleanupTriggeredObserver>* receiver_;
+  raw_ptr<mojo::Receiver<crosapi::mojom::LacrosCleanupTriggeredObserver>,
+          DanglingUntriaged>
+      receiver_;
 };
 
 }  // namespace
@@ -99,13 +103,13 @@ class LacrosCleanupHandlerUnittest : public testing::Test {
 
 TEST_F(LacrosCleanupHandlerUnittest, Cleanup) {
   SetUpLacrosCleanupTriggeredObserver(
-      std::make_unique<TestCleanupTriggeredObserver>(absl::nullopt));
+      std::make_unique<TestCleanupTriggeredObserver>(std::nullopt));
 
-  base::test::TestFuture<absl::optional<std::string>> future;
+  base::test::TestFuture<std::optional<std::string>> future;
   lacros_cleanup_handler_->Cleanup(
-      future.GetCallback<const absl::optional<std::string>&>());
+      future.GetCallback<const std::optional<std::string>&>());
 
-  EXPECT_EQ(absl::nullopt, future.Get());
+  EXPECT_EQ(std::nullopt, future.Get());
 }
 
 TEST_F(LacrosCleanupHandlerUnittest, CleanupError) {
@@ -113,30 +117,30 @@ TEST_F(LacrosCleanupHandlerUnittest, CleanupError) {
   SetUpLacrosCleanupTriggeredObserver(
       std::make_unique<TestCleanupTriggeredObserver>(error));
 
-  base::test::TestFuture<absl::optional<std::string>> future;
+  base::test::TestFuture<std::optional<std::string>> future;
   lacros_cleanup_handler_->Cleanup(
-      future.GetCallback<const absl::optional<std::string>&>());
+      future.GetCallback<const std::optional<std::string>&>());
 
   EXPECT_EQ(error, future.Get());
 }
 
 TEST_F(LacrosCleanupHandlerUnittest, NoObservers) {
-  base::test::TestFuture<absl::optional<std::string>> future;
+  base::test::TestFuture<std::optional<std::string>> future;
   lacros_cleanup_handler_->Cleanup(
-      future.GetCallback<const absl::optional<std::string>&>());
+      future.GetCallback<const std::optional<std::string>&>());
 
-  EXPECT_EQ(absl::nullopt, future.Get());
+  EXPECT_EQ(std::nullopt, future.Get());
 }
 
 TEST_F(LacrosCleanupHandlerUnittest, Disconnect) {
   SetUpLacrosCleanupTriggeredObserver(
       std::make_unique<TestCleanupTriggeredObserver>(/*should_reset=*/true));
 
-  base::test::TestFuture<absl::optional<std::string>> future;
+  base::test::TestFuture<std::optional<std::string>> future;
   lacros_cleanup_handler_->Cleanup(
-      future.GetCallback<const absl::optional<std::string>&>());
+      future.GetCallback<const std::optional<std::string>&>());
 
-  EXPECT_EQ(absl::nullopt, future.Get());
+  EXPECT_EQ(std::nullopt, future.Get());
 }
 
 }  // namespace chromeos

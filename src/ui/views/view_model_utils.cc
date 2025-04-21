@@ -1,11 +1,12 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/views/view_model_utils.h"
 
-#include <algorithm>
+#include <iterator>
 
+#include "base/ranges/algorithm.h"
 #include "ui/views/view.h"
 #include "ui/views/view_model.h"
 
@@ -22,16 +23,17 @@ int primary_axis_coordinate(bool is_horizontal, const gfx::Point& point) {
 
 // static
 void ViewModelUtils::SetViewBoundsToIdealBounds(const ViewModelBase& model) {
-  for (auto& entry : model.entries())
+  for (auto& entry : model.entries()) {
     entry.view->SetBoundsRect(entry.ideal_bounds);
+  }
 }
 
 // static
 bool ViewModelUtils::IsAtIdealBounds(const ViewModelBase& model) {
-  return std::all_of(model.entries().begin(), model.entries().end(),
-                     [](const ViewModelBase::Entry& entry) {
-                       return entry.view->bounds() == entry.ideal_bounds;
-                     });
+  return base::ranges::all_of(
+      model.entries(), [](const ViewModelBase::Entry& entry) {
+        return entry.view->bounds() == entry.ideal_bounds;
+      });
 }
 
 // static
@@ -48,12 +50,14 @@ size_t ViewModelUtils::DetermineMoveIndex(const ViewModelBase& model,
   for (; iter->view != view; ++iter) {
     const int mid_point = primary_axis_coordinate(
         is_horizontal, iter->ideal_bounds.CenterPoint());
-    if (value < mid_point)
+    if (value < mid_point) {
       return static_cast<size_t>(std::distance(entries.begin(), iter));
+    }
   }
 
-  if (std::next(iter) == entries.end())
+  if (std::next(iter) == entries.end()) {
     return static_cast<size_t>(std::distance(entries.begin(), iter));
+  }
 
   // For indices after the current index ignore the bounds of the view being
   // dragged. This keeps the view from bouncing around as moved.
@@ -65,8 +69,9 @@ size_t ViewModelUtils::DetermineMoveIndex(const ViewModelBase& model,
     const int mid_point = primary_axis_coordinate(
                               is_horizontal, iter->ideal_bounds.CenterPoint()) -
                           delta;
-    if (value < mid_point)
+    if (value < mid_point) {
       return static_cast<size_t>(std::distance(entries.begin(), iter)) - 1;
+    }
   }
   return entries.size() - 1;
 }

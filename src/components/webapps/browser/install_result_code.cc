@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 namespace webapps {
 
 bool IsSuccess(InstallResultCode code) {
-  // TODO(crbug.com/1296447): enumerate all the constants instead of the default
-  // clause to prevent accidentally implicitly returning false on any newly
-  // added value.
+  // TODO(crbug.com/40821686): enumerate all the constants instead of the
+  // default clause to prevent accidentally implicitly returning false on any
+  // newly added value.
   switch (code) {
     case InstallResultCode::kSuccessNewInstall:
     case InstallResultCode::kSuccessAlreadyInstalled:
@@ -79,6 +79,14 @@ std::ostream& operator<<(std::ostream& os, InstallResultCode code) {
       return os << "kAppNotInRegistrarAfterCommit";
     case InstallResultCode::kHaltedBySyncUninstall:
       return os << "kHaltedBySyncUninstall";
+    case InstallResultCode::kInstallURLInvalid:
+      return os << "kInstallURLInvalid";
+    case InstallResultCode::kIconDownloadingFailed:
+      return os << "kIconDownloadingFailed";
+    case InstallResultCode::kCancelledDueToMainFrameNavigation:
+      return os << "kCancelledDueToMainFrameNavigation";
+    case InstallResultCode::kNoValidIconsInManifest:
+      return os << "kNoValidIconsInManifest";
   }
 }
 

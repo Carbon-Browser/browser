@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/paint_preview/common/file_utils.h"
 #include "components/paint_preview/common/proto_validator.h"
 #include "third_party/zlib/google/zip.h"
@@ -52,10 +53,11 @@ size_t FileManager::GetSizeOfArtifacts(const DirectoryKey& key) const {
           root_directory_.AppendASCII(key.AsciiDirname()));
     }
     case kZip: {
-      int64_t file_size = 0;
-      if (!base::GetFileSize(path, &file_size) || file_size < 0)
+      std::optional<int64_t> file_size = base::GetFileSize(path);
+      if (!file_size.has_value() || file_size.value() < 0) {
         return 0;
-      return file_size;
+      }
+      return file_size.value();
     }
     case kNone:  // fallthrough
     default:
@@ -63,16 +65,16 @@ size_t FileManager::GetSizeOfArtifacts(const DirectoryKey& key) const {
   }
 }
 
-absl::optional<base::File::Info> FileManager::GetInfo(
+std::optional<base::File::Info> FileManager::GetInfo(
     const DirectoryKey& key) const {
   DCHECK(io_task_runner_->RunsTasksInCurrentSequence());
   base::FilePath path;
   StorageType storage_type = GetPathForKey(key, &path);
   if (storage_type == FileManager::StorageType::kNone)
-    return absl::nullopt;
+    return std::nullopt;
   base::File::Info info;
   if (!base::GetFileInfo(path, &info))
-    return absl::nullopt;
+    return std::nullopt;
   return info;
 }
 
@@ -101,7 +103,7 @@ bool FileManager::CaptureExists(const DirectoryKey& key) const {
   }
 }
 
-absl::optional<base::FilePath> FileManager::CreateOrGetDirectory(
+std::optional<base::FilePath> FileManager::CreateOrGetDirectory(
     const DirectoryKey& key,
     bool clear) const {
   DCHECK(io_task_runner_->RunsTasksInCurrentSequence());
@@ -119,7 +121,7 @@ absl::optional<base::FilePath> FileManager::CreateOrGetDirectory(
       }
       DVLOG(1) << "ERROR: failed to create directory: " << path
                << " with error code " << error;
-      return absl::nullopt;
+      return std::nullopt;
     }
     case kDirectory:
       return path;
@@ -129,17 +131,17 @@ absl::optional<base::FilePath> FileManager::CreateOrGetDirectory(
       if (!base::CreateDirectoryAndGetError(dst_path, &error)) {
         DVLOG(1) << "ERROR: failed to create directory: " << path
                  << " with error code " << error;
-        return absl::nullopt;
+        return std::nullopt;
       }
       if (!zip::Unzip(path, dst_path)) {
         DVLOG(1) << "ERROR: failed to unzip: " << path << " to " << dst_path;
-        return absl::nullopt;
+        return std::nullopt;
       }
       base::DeletePathRecursively(path);
       return dst_path;
     }
     default:
-      return absl::nullopt;
+      return std::nullopt;
   }
 }
 

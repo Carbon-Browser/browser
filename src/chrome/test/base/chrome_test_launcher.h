@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,9 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
+#include "chrome/app/startup_timestamps.h"
 #include "content/public/test/test_launcher.h"
 
 #if BUILDFLAG(IS_ANDROID)
@@ -46,16 +48,19 @@ class ChromeTestChromeMainDelegate
 #if BUILDFLAG(IS_ANDROID)
   ChromeTestChromeMainDelegate() : ChromeMainDelegateAndroid() {}
 #else
-  explicit ChromeTestChromeMainDelegate(base::TimeTicks time)
-      : ChromeMainDelegate(time) {}
+  ChromeTestChromeMainDelegate()
+      : ChromeMainDelegate({.exe_entry_point_ticks = base::TimeTicks::Now()}) {}
 #endif
 
   // ChromeMainDelegateOverrides.
-  content::ContentBrowserClient* CreateContentBrowserClient() override;
   content::ContentUtilityClient* CreateContentUtilityClient() override;
+#if !BUILDFLAG(IS_ANDROID)
+  std::optional<int> PostEarlyInitialization(InvokedIn invoked_in) override;
+#endif  // !BUILDFLAG(IS_ANDROID)
 #if BUILDFLAG(IS_WIN)
   bool ShouldHandleConsoleControlEvents() override;
 #endif
+  void CreateThreadPool(std::string_view name) override;
 };
 
 // Delegate used for setting up and running chrome browser tests.

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,7 @@ GbmPixmap::GbmPixmap(GbmSurfaceFactory* surface_manager,
       buffer_(std::move(buffer)),
       framebuffer_(std::move(framebuffer)) {}
 
-gfx::NativePixmapHandle GbmPixmap::ExportHandle() {
+gfx::NativePixmapHandle GbmPixmap::ExportHandle() const {
   return buffer_->ExportHandle();
 }
 
@@ -93,6 +93,6 @@ bool GbmPixmap::ScheduleOverlayPlane(
   return true;
 }
 
-GbmPixmap::~GbmPixmap() {}
+GbmPixmap::~GbmPixmap() = default;
 
 }  // namespace ui

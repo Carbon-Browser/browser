@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,13 +21,16 @@
 #include <sys/mman.h>
 #elif BUILDFLAG(IS_POSIX)
 #include <sys/mman.h>
+
 #include "base/debug/proc_maps_linux.h"
 #elif BUILDFLAG(IS_WIN)
 #include <windows.h>
+
 #include "base/logging.h"
 #elif BUILDFLAG(IS_FUCHSIA)
 #include <lib/zx/object.h>
 #include <lib/zx/process.h>
+
 #include "base/fuchsia/fuchsia_logging.h"
 #endif
 
@@ -307,11 +310,17 @@ TEST_F(PlatformSharedMemoryRegionTest, MappingProtectionSetCorrectly) {
   ASSERT_TRUE(region.ConvertToReadOnly());
   WritableSharedMemoryMapping ro_mapping = MapForTesting(&region);
   ASSERT_TRUE(ro_mapping.IsValid());
-  CheckReadOnlyMapProtection(ro_mapping.memory());
+  CheckReadOnlyMapProtection(ro_mapping.data());
 
-  EXPECT_FALSE(TryToRestoreWritablePermissions(ro_mapping.memory(),
-                                               ro_mapping.mapped_size()));
-  CheckReadOnlyMapProtection(ro_mapping.memory());
+  // SAFETY: There's no public way to get a span of the full mapped memory size.
+  // The `mapped_size()` is larger then `size()` but is the actual size of the
+  // shared memory backing.
+  auto full_map_mem =
+      UNSAFE_BUFFERS(span(ro_mapping.data(), ro_mapping.mapped_size()));
+  EXPECT_FALSE(TryToRestoreWritablePermissions(full_map_mem.data(),
+                                               full_map_mem.size()));
+
+  CheckReadOnlyMapProtection(ro_mapping.data());
 }
 
 // Tests that platform handle permissions are checked correctly.

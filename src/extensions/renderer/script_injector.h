@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,11 +50,14 @@ class ScriptInjector {
   // Returns the script type of this particular injection.
   virtual mojom::InjectionType script_type() const = 0;
 
-  // Returns true if the script is running inside a user gesture.
-  virtual bool IsUserGesture() const = 0;
+  // Returns the associated `UserActivationOption` for script evaluation.
+  virtual blink::mojom::UserActivationOption IsUserGesture() const = 0;
 
   // Returns the world in which to execute the javascript code.
   virtual mojom::ExecutionWorld GetExecutionWorld() const = 0;
+
+  // Returns the ID of the world into which to inject.
+  virtual const std::optional<std::string>& GetExecutionWorldId() const = 0;
 
   // Returns the CSS origin of this injection.
   virtual mojom::CSSOrigin GetCssOrigin() const = 0;
@@ -63,11 +66,11 @@ class ScriptInjector {
   // performed.
   virtual mojom::CSSInjection::Operation GetCSSInjectionOperation() const = 0;
 
-  // Returns true if the script expects results.
-  virtual bool ExpectsResults() const = 0;
+  // Returns the associated `WantResultOption` for script evaluation.
+  virtual blink::mojom::WantResultOption ExpectsResults() const = 0;
 
-  // Whether to wait for a promise result to resolve.
-  virtual bool ShouldWaitForPromise() const = 0;
+  // Returns the associated `PromiseResultOption` for script evaluation.
+  virtual blink::mojom::PromiseResultOption ShouldWaitForPromise() const = 0;
 
   // Returns true if the script should inject JS source at the given
   // |run_location|.
@@ -103,9 +106,8 @@ class ScriptInjector {
 
   // Notifies the script that injection has completed, with a possibly-populated
   // list of results (depending on whether or not ExpectsResults() was true).
-  virtual void OnInjectionComplete(
-      std::unique_ptr<base::Value> execution_result,
-      mojom::RunLocation run_location) = 0;
+  virtual void OnInjectionComplete(std::optional<base::Value> execution_result,
+                                   mojom::RunLocation run_location) = 0;
 
   // Notifies the script that injection will never occur.
   virtual void OnWillNotInject(InjectFailureReason reason) = 0;

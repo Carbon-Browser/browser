@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
 
+// Must come after all headers that specialize FromJniType() / ToJniType().
 #include "content/browser/reflection_jni_headers/AccessibleObject_jni.h"
 #include "content/browser/reflection_jni_headers/Class_jni.h"
 #include "content/browser/reflection_jni_headers/Method_jni.h"

@@ -1,9 +1,12 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.content.browser;
 
+import org.chromium.base.ResettersForTesting;
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 import org.chromium.content.browser.webcontents.WebContentsImpl;
 import org.chromium.content_public.browser.RenderCoordinates;
 import org.chromium.content_public.browser.WebContents;
@@ -16,7 +19,10 @@ import org.chromium.content_public.browser.WebContents;
  *
  * Unless stated otherwise, all coordinates are in CSS (document) coordinate space.
  */
+@NullMarked
 public class RenderCoordinatesImpl implements RenderCoordinates {
+    private static @Nullable RenderCoordinatesImpl sInstanceForTesting;
+
     // Scroll offset from the native in CSS.
     private float mScrollXCss;
     private float mScrollYCss;
@@ -40,7 +46,15 @@ public class RenderCoordinatesImpl implements RenderCoordinates {
     private float mTopContentOffsetYPix;
 
     public static RenderCoordinatesImpl fromWebContents(WebContents webContents) {
+        if (sInstanceForTesting != null) return sInstanceForTesting;
         return ((WebContentsImpl) webContents).getRenderCoordinates();
+    }
+
+    // TODO(crbug.com/40850475): Mocking |#fromWebContents()| may be a better option, when
+    // available.
+    public static void setInstanceForTesting(RenderCoordinatesImpl instance) {
+        sInstanceForTesting = instance;
+        ResettersForTesting.register(() -> sInstanceForTesting = null);
     }
 
     // Internally-visible set of update methods (used by WebContentsImpl).
@@ -103,9 +117,14 @@ public class RenderCoordinatesImpl implements RenderCoordinates {
         mDeviceScaleFactor = dipScale;
     }
 
-    public void updateFrameInfo(float contentWidthCss, float contentHeightCss,
-            float viewportWidthCss, float viewportHeightCss, float minPageScaleFactor,
-            float maxPageScaleFactor, float contentOffsetYPix) {
+    public void updateFrameInfo(
+            float contentWidthCss,
+            float contentHeightCss,
+            float viewportWidthCss,
+            float viewportHeightCss,
+            float minPageScaleFactor,
+            float maxPageScaleFactor,
+            float contentOffsetYPix) {
         mMinPageScaleFactor = minPageScaleFactor;
         mMaxPageScaleFactor = maxPageScaleFactor;
         mTopContentOffsetYPix = contentOffsetYPix;

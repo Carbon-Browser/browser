@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -34,7 +34,7 @@ def AppendJSFlags(options, js_flags):
     if extra_arg.startswith(_JS_FLAGS_SWITCH):
       # Find and remove the set of existing js_flags.
       existing_js_flags = extra_arg[len(_JS_FLAGS_SWITCH):]
-      options.extra_browser_args.remove(extra_arg)
+      options.RemoveExtraBrowserArg(extra_arg)
       break
 
   options.AppendExtraBrowserArgs([
@@ -60,7 +60,6 @@ def AugmentOptionsForV8Metrics(options, enable_runtime_call_stats=True):
       'webkit.console',
       # Blink categories.
       'blink.resource',
-      'blink_gc',
       'partition_alloc',
       # Needed for the metric reported by page.
       'blink.user_timing'
@@ -85,13 +84,11 @@ def AugmentOptionsForV8Metrics(options, enable_runtime_call_stats=True):
     options.config.chrome_trace_config.SetTraceBufferSizeInKb(400 * 1024)
 
   metrics = [
-      'blinkGcMetric',
       'blinkResourceMetric',
       'consoleErrorMetric',
       'expectedQueueingTimeMetric',
       'gcMetric',
       'memoryMetric',
-      'pcscanMetric',
       'reportedByPageMetric',
       'wasmMetric',
   ]

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,9 @@
 
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/containers/contains.h"
-#include "base/notreached.h"
+#include "base/functional/bind.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
 #include "ui/base/user_activity/user_activity_detector.h"
@@ -70,10 +69,7 @@ void PolicyRecommendationRestorer::Restore(bool allow_delay,
                                            const std::string& pref_name) {
   const PrefService::Preference* pref =
       pref_change_registrar_->prefs()->FindPreference(pref_name);
-  if (!pref) {
-    NOTREACHED();
-    return;
-  }
+  CHECK(pref);
 
   if (!pref->GetRecommendedValue() || !pref->HasUserSetting())
     return;
@@ -83,10 +79,7 @@ void PolicyRecommendationRestorer::Restore(bool allow_delay,
   } else if (allow_delay) {
     // Skip the delay if there has been no user input since |pref_name| is
     // started observing recommended value.
-    const ui::UserActivityDetector* user_activity_detector =
-        ui::UserActivityDetector::Get();
-    if (user_activity_detector &&
-        user_activity_detector->last_activity_time().is_null()) {
+    if (ui::UserActivityDetector::Get()->last_activity_time().is_null()) {
       allow_delay = false;
     }
   }
@@ -108,8 +101,9 @@ void PolicyRecommendationRestorer::StartTimer() {
   // |kRestoreDelayInMinutes|.
   ui::UserActivityDetector* user_activity_detector =
       ui::UserActivityDetector::Get();
-  if (user_activity_detector && !user_activity_detector->HasObserver(this))
+  if (!user_activity_detector->HasObserver(this)) {
     user_activity_detector->AddObserver(this);
+  }
 
   // There should be a separate timer for each pref. However, in the common
   // case of the user changing settings, a single timer is sufficient. This is
@@ -126,8 +120,7 @@ void PolicyRecommendationRestorer::StartTimer() {
 
 void PolicyRecommendationRestorer::StopTimer() {
   restore_timer_.Stop();
-  if (ui::UserActivityDetector::Get())
-    ui::UserActivityDetector::Get()->RemoveObserver(this);
+  ui::UserActivityDetector::Get()->RemoveObserver(this);
 }
 
 }  // namespace ash

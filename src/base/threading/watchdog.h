@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,15 +32,26 @@ namespace base {
 
 class BASE_EXPORT Watchdog {
  public:
-  // Constructor specifies how long the Watchdog will wait before alarming.
+  class Delegate {
+   public:
+    virtual ~Delegate() = default;
+
+    // Called on the watchdog thread.
+    virtual void Alarm() = 0;
+  };
+
+  // Constructor specifies how long the Watchdog will wait before alarming. If
+  // `delegate` is non-null, `Alarm` on the delegate will be called instead of
+  // the default behavior.
   Watchdog(const TimeDelta& duration,
            const std::string& thread_watched_name,
-           bool enabled);
+           bool enabled,
+           Delegate* delegate = nullptr);
 
   Watchdog(const Watchdog&) = delete;
   Watchdog& operator=(const Watchdog&) = delete;
 
-  virtual ~Watchdog();
+  ~Watchdog();
 
   // Notify watchdog thread to finish up. Sets the state_ to SHUTDOWN.
   void Cleanup();
@@ -58,18 +69,20 @@ class BASE_EXPORT Watchdog {
   void Disarm();
 
   // Alarm is called if the time expires after an Arm() without someone calling
-  // Disarm().  This method can be overridden to create testable classes.
-  virtual void Alarm();
+  // Disarm().
+  void Alarm();
 
   // Reset static data to initial state. Useful for tests, to ensure
   // they are independent.
   static void ResetStaticData();
 
+  // The default behavior of Alarm() if a delegate is not provided.
+  void DefaultAlarm();
+
  private:
   class ThreadDelegate : public PlatformThread::Delegate {
    public:
-    explicit ThreadDelegate(Watchdog* watchdog) : watchdog_(watchdog) {
-    }
+    explicit ThreadDelegate(Watchdog* watchdog) : watchdog_(watchdog) {}
     void ThreadMain() override;
 
    private:
@@ -88,8 +101,9 @@ class BASE_EXPORT Watchdog {
   const TimeDelta duration_;  // How long after start_time_ do we alarm?
   const std::string thread_watched_name_;
   PlatformThreadHandle handle_;
-  ThreadDelegate delegate_;  // Store it, because it must outlive the thread.
+  ThreadDelegate thread_delegate_;  // Must outlive the thread.
 
+  raw_ptr<Delegate> delegate_;
   TimeTicks start_time_;  // Start of epoch, and alarm after duration_.
 };
 

@@ -28,6 +28,11 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "base/synchronization/lock.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
@@ -40,6 +45,7 @@
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_linked_hash_set.h"
+#include "third_party/blink/renderer/platform/heap/cross_thread_persistent.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/heap_test_objects.h"
 #include "third_party/blink/renderer/platform/heap/heap_test_platform.h"
@@ -47,19 +53,22 @@
 #include "third_party/blink/renderer/platform/heap/prefinalizer.h"
 #include "third_party/blink/renderer/platform/heap/self_keep_alive.h"
 #include "third_party/blink/renderer/platform/heap/visitor.h"
+#include "third_party/blink/renderer/platform/scheduler/public/non_main_thread.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
-#include "third_party/blink/renderer/platform/scheduler/public/thread.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/hash_traits.h"
-#include "third_party/blink/renderer/platform/wtf/threading_primitives.h"
 #include "v8/include/cppgc/internal/api-constants.h"
 
 namespace blink {
 
 namespace {
 
-class HeapTest : public TestSupportingGC {};
+class HeapTest : public TestSupportingGC {
+#if DCHECK_IS_ON()
+  void TearDown() override { WTF::SetIsBeforeThreadCreatedForTest(); }
+#endif
+};
 
 class HeapDeathTest : public TestSupportingGC {};
 
@@ -78,7 +87,7 @@ class IntWrapper : public GarbageCollected<IntWrapper> {
     return other.Value() == Value();
   }
 
-  unsigned GetHash() { return IntHash<int>::GetHash(x_); }
+  unsigned GetHash() { return WTF::GetHash(x_); }
 
   IntWrapper(int x) : x_(x) {}
 
@@ -88,12 +97,10 @@ class IntWrapper : public GarbageCollected<IntWrapper> {
 };
 std::atomic_int IntWrapper::destructor_calls_{0};
 
-struct IntWrapperHash {
+struct IntWrapperHashTraits : GenericHashTraits<IntWrapper> {
   static unsigned GetHash(const IntWrapper& key) {
     return WTF::HashInt(static_cast<uint32_t>(key.Value()));
   }
-
-  static bool Equal(const IntWrapper& a, const IntWrapper& b) { return a == b; }
 };
 
 static_assert(WTF::IsTraceable<IntWrapper>::value,
@@ -102,9 +109,10 @@ static_assert(WTF::IsTraceable<HeapVector<IntWrapper>>::value,
               "HeapVector<IntWrapper> must be traceable.");
 static_assert(WTF::IsTraceable<HeapDeque<IntWrapper>>::value,
               "HeapDeque<IntWrapper> must be traceable.");
-static_assert(WTF::IsTraceable<HeapHashSet<IntWrapper, IntWrapperHash>>::value,
-              "HeapHashSet<IntWrapper> must be traceable.");
-static_assert(WTF::IsTraceable<HeapHashMap<int, IntWrapper>>::value,
+static_assert(
+    WTF::IsTraceable<HeapHashSet<IntWrapper, IntWrapperHashTraits>>::value,
+    "HeapHashSet<IntWrapper> must be traceable.");
+static_assert(WTF::IsTraceable<HeapHashMap<int, Member<IntWrapper>>>::value,
               "HeapHashMap<int, IntWrapper> must be traceable.");
 
 }  // namespace
@@ -179,7 +187,7 @@ class PreFinalizerVectorBackingExpandForbidden final
     vector_.push_back(MakeGarbageCollected<IntWrapper>(1));
   }
 
-  void Dispose() { EXPECT_DEATH(Test(), ""); }
+  void Dispose() { EXPECT_DEATH_IF_SUPPORTED(Test(), ""); }
 
   void Test() {
     // vector_'s backing will need to expand.
@@ -210,7 +218,7 @@ class PreFinalizerHashTableBackingExpandForbidden final
     map_.insert(123, MakeGarbageCollected<IntWrapper>(123));
   }
 
-  void Dispose() { EXPECT_DEATH(Test(), ""); }
+  void Dispose() { EXPECT_DEATH_IF_SUPPORTED(Test(), ""); }
 
   void Test() {
     // map_'s backing will need to expand.
@@ -248,7 +256,7 @@ class HeapTestResurrectingPreFinalizer
     GlobalStorage() {
       // Reserve storage upfront to avoid allocations during pre-finalizer
       // insertion.
-      vector_member.ReserveCapacity(32);
+      vector_member.reserve(32);
       hash_set_member.ReserveCapacityForSize(32);
       hash_set_weak_member.ReserveCapacityForSize(32);
     }
@@ -277,7 +285,7 @@ class HeapTestResurrectingPreFinalizer
   }
 
  private:
-  void Dispose() { EXPECT_DEATH(Test(), ""); }
+  void Dispose() { EXPECT_DEATH_IF_SUPPORTED(Test(), ""); }
 
   void Test() {
     switch (test_type_) {
@@ -332,9 +340,9 @@ class ThreadedTesterBase {
  protected:
   static void Test(ThreadedTesterBase* tester) {
     HeapTestingPlatformAdapter platform_for_threads(gin::V8Platform::Get());
-    std::unique_ptr<Thread> threads[kNumberOfThreads];
+    std::unique_ptr<NonMainThread> threads[kNumberOfThreads];
     for (auto& thread : threads) {
-      thread = Thread::CreateThread(
+      thread = NonMainThread::CreateThread(
           ThreadCreationParams(ThreadType::kTestThread)
               .SetThreadNameForTest("blink gc testing thread"));
       PostCrossThreadTask(
@@ -475,44 +483,21 @@ class ThreadMarker {
   ThreadState* creating_thread_;
   unsigned num_ = 0;
 };
-
-struct ThreadMarkerHash {
-  static unsigned GetHash(const ThreadMarker& key) {
-    return static_cast<unsigned>(
-        reinterpret_cast<uintptr_t>(key.creating_thread_) + key.num_);
-  }
-
-  static bool Equal(const ThreadMarker& a, const ThreadMarker& b) {
-    return a == b;
-  }
-
-  static const bool safe_to_compare_to_empty_or_deleted = false;
-};
 }  // namespace
 
 }  // namespace blink
 
 namespace WTF {
 
-template <typename T>
-struct DefaultHash;
-template <>
-struct DefaultHash<blink::ThreadMarker> {
-  typedef blink::ThreadMarkerHash Hash;
-};
-
 // ThreadMarkerHash is the default hash for ThreadMarker
 template <>
 struct HashTraits<blink::ThreadMarker>
-    : GenericHashTraits<blink::ThreadMarker> {
-  static const bool kEmptyValueIsZero = true;
-  static void ConstructDeletedValue(blink::ThreadMarker& slot, bool) {
-    new (NotNullTag::kNotNull, &slot)
-        blink::ThreadMarker(kHashTableDeletedValue);
+    : SimpleClassHashTraits<blink::ThreadMarker> {
+  static unsigned GetHash(const blink::ThreadMarker& key) {
+    return static_cast<unsigned>(
+        reinterpret_cast<uintptr_t>(key.creating_thread_) + key.num_);
   }
-  static bool IsDeletedValue(const blink::ThreadMarker& slot) {
-    return slot.IsHashTableDeletedValue();
-  }
+  static constexpr bool kSafeToCompareToEmptyOrDeleted = false;
 };
 
 }  // namespace WTF
@@ -546,7 +531,7 @@ class ThreadedWeaknessTester : public ThreadedTesterBase {
         }
 
         TestSupportingGC::PreciselyCollectGarbage();
-        EXPECT_TRUE(weak_map->IsEmpty());
+        EXPECT_TRUE(weak_map->empty());
       }
       test::YieldCurrentThread();
     }
@@ -633,10 +618,7 @@ TEST_F(HeapTest, HashMapOfMembers) {
   IntWrapper::destructor_calls_ = 0;
   size_t initial_object_payload_size = GetOverallObjectSize();
   {
-    typedef HeapHashMap<Member<IntWrapper>, Member<IntWrapper>,
-                        DefaultHash<Member<IntWrapper>>::Hash,
-                        HashTraits<Member<IntWrapper>>,
-                        HashTraits<Member<IntWrapper>>>
+    typedef HeapHashMap<Member<IntWrapper>, Member<IntWrapper>>
         HeapObjectIdentityMap;
 
     Persistent<HeapObjectIdentityMap> map =
@@ -833,20 +815,20 @@ TEST_F(HeapTest, HeapVectorShrinkCapacity) {
   ClearOutOldGarbage();
   HeapVector<Member<IntWrapper>> vector1;
   HeapVector<Member<IntWrapper>> vector2;
-  vector1.ReserveCapacity(96);
+  vector1.reserve(96);
   EXPECT_LE(96u, vector1.capacity());
   vector1.Grow(vector1.capacity());
 
   // Assumes none was allocated just after a vector backing of vector1.
   vector1.Shrink(56);
-  vector1.ShrinkToFit();
+  vector1.shrink_to_fit();
   EXPECT_GT(96u, vector1.capacity());
 
-  vector2.ReserveCapacity(20);
+  vector2.reserve(20);
   // Assumes another vector backing was allocated just after the vector
   // backing of vector1.
   vector1.Shrink(10);
-  vector1.ShrinkToFit();
+  vector1.shrink_to_fit();
   EXPECT_GT(56u, vector1.capacity());
 
   vector1.Grow(192);
@@ -857,13 +839,13 @@ TEST_F(HeapTest, HeapVectorShrinkInlineCapacity) {
   ClearOutOldGarbage();
   const size_t kInlineCapacity = 64;
   HeapVector<Member<IntWrapper>, kInlineCapacity> vector1;
-  vector1.ReserveCapacity(128);
+  vector1.reserve(128);
   EXPECT_LE(128u, vector1.capacity());
   vector1.Grow(vector1.capacity());
 
   // Shrink the external buffer.
   vector1.Shrink(90);
-  vector1.ShrinkToFit();
+  vector1.shrink_to_fit();
   EXPECT_GT(128u, vector1.capacity());
 
 // TODO(sof): if the ASan support for 'contiguous containers' is enabled,
@@ -873,12 +855,12 @@ TEST_F(HeapTest, HeapVectorShrinkInlineCapacity) {
 #if !defined(ANNOTATE_CONTIGUOUS_CONTAINER)
   // Shrinking switches the buffer from the external one to the inline one.
   vector1.Shrink(kInlineCapacity - 1);
-  vector1.ShrinkToFit();
+  vector1.shrink_to_fit();
   EXPECT_EQ(kInlineCapacity, vector1.capacity());
 
   // Try to shrink the inline buffer.
   vector1.Shrink(1);
-  vector1.ShrinkToFit();
+  vector1.shrink_to_fit();
   EXPECT_EQ(kInlineCapacity, vector1.capacity());
 #endif
 }
@@ -918,7 +900,7 @@ TEST_F(HeapTest, HeapVectorOnStackLargeObjectPageSized) {
   Container vector;
   wtf_size_t size = (kLargeObjectSizeThreshold + sizeof(Container::ValueType)) /
                     sizeof(Container::ValueType);
-  vector.ReserveCapacity(size);
+  vector.reserve(size);
   for (unsigned i = 0; i < size; ++i)
     vector.push_back(MakeGarbageCollected<IntWrapper>(i));
   ConservativelyCollectGarbage();
@@ -1679,7 +1661,7 @@ class ThingWithDestructor {
 
   static int live_things_with_destructor_;
 
-  unsigned GetHash() { return IntHash<int>::GetHash(x_); }
+  unsigned GetHash() { return WTF::GetHash(x_); }
 
  private:
   static const int kEmptyValue = 0;
@@ -1705,7 +1687,7 @@ class RefCountedAndGarbageCollected final
   ~RefCountedAndGarbageCollected() { ++destructor_calls_; }
 
   void AddRef() {
-    if (UNLIKELY(!ref_count_)) {
+    if (!ref_count_) [[unlikely]] {
       keep_alive_ = this;
     }
     ++ref_count_;
@@ -1734,10 +1716,7 @@ static void HeapMapDestructorHelper(bool clear_maps) {
                       Member<RefCountedAndGarbageCollected>>
       RefMap;
 
-  typedef HeapHashMap<WeakMember<IntWrapper>, ThingWithDestructor,
-                      DefaultHash<WeakMember<IntWrapper>>::Hash,
-                      HashTraits<WeakMember<IntWrapper>>>
-      Map;
+  typedef HeapHashMap<WeakMember<IntWrapper>, ThingWithDestructor> Map;
 
   Persistent<Map> map(MakeGarbageCollected<Map>());
   Persistent<RefMap> ref_map(MakeGarbageCollected<RefMap>());
@@ -1971,8 +1950,8 @@ TEST_F(HeapTest, HeapWeakCollectionTypes) {
         PreciselyCollectGarbage();
         unsigned count = 0;
         for (int i = 0; i < 128; i += 2) {
-          bool first_alive = keep_numbers_alive->at(i);
-          bool second_alive = keep_numbers_alive->at(i + 1);
+          bool first_alive = keep_numbers_alive->at(i) != nullptr;
+          bool second_alive = keep_numbers_alive->at(i + 1) != nullptr;
           if (first_alive && (collection_number == kWeakStrongIndex ||
                               collection_number == kStrongWeakIndex))
             second_alive = true;
@@ -2097,6 +2076,41 @@ TEST_F(HeapTest, WeakHeapHashCountedSetToVector) {
   EXPECT_LE(3u, vector.size());
   for (const auto& i : vector)
     EXPECT_TRUE(i->Value() == 1 || i->Value() == 2);
+}
+
+TEST_F(HeapTest, HeapHashSetToVector) {
+  HeapHashSet<Member<IntWrapper>> set;
+  HeapVector<Member<IntWrapper>> vector;
+  set.insert(MakeGarbageCollected<IntWrapper>(1));
+  set.insert(MakeGarbageCollected<IntWrapper>(1));
+  set.insert(MakeGarbageCollected<IntWrapper>(2));
+
+  CopyToVector(set, vector);
+  EXPECT_EQ(3u, vector.size());
+
+  Vector<int> int_vector;
+  for (const auto& i : vector) {
+    int_vector.push_back(i->Value());
+  }
+  std::sort(int_vector.begin(), int_vector.end());
+  ASSERT_EQ(3u, int_vector.size());
+  EXPECT_EQ(1, int_vector[0]);
+  EXPECT_EQ(1, int_vector[1]);
+  EXPECT_EQ(2, int_vector[2]);
+}
+
+TEST_F(HeapTest, WeakHeapHashSetToVector) {
+  HeapHashSet<WeakMember<IntWrapper>> set;
+  HeapVector<Member<IntWrapper>> vector;
+  set.insert(MakeGarbageCollected<IntWrapper>(1));
+  set.insert(MakeGarbageCollected<IntWrapper>(1));
+  set.insert(MakeGarbageCollected<IntWrapper>(2));
+
+  CopyToVector(set, vector);
+  EXPECT_EQ(3u, vector.size());
+  for (const auto& i : vector) {
+    EXPECT_TRUE(i->Value() == 1 || i->Value() == 2);
+  }
 }
 
 TEST_F(HeapTest, RefCountedGarbageCollected) {
@@ -2595,7 +2609,7 @@ class OffHeapInt : public RefCounted<OffHeapInt> {
     return other.Value() == Value();
   }
 
-  unsigned GetHash() { return IntHash<int>::GetHash(x_); }
+  unsigned GetHash() { return WTF::GetHash(x_); }
   void VoidFunction() {}
 
   OffHeapInt() = delete;
@@ -2611,11 +2625,11 @@ int OffHeapInt::destructor_calls_ = 0;
 
 TEST_F(HeapTest, Bind) {
   base::OnceClosure closure =
-      WTF::Bind(static_cast<void (Bar::*)(Visitor*) const>(&Bar::Trace),
-                WrapPersistent(MakeGarbageCollected<Bar>()), nullptr);
+      WTF::BindOnce(static_cast<void (Bar::*)(Visitor*) const>(&Bar::Trace),
+                    WrapPersistent(MakeGarbageCollected<Bar>()), nullptr);
   // OffHeapInt* should not make Persistent.
   base::OnceClosure closure2 =
-      WTF::Bind(&OffHeapInt::VoidFunction, OffHeapInt::Create(1));
+      WTF::BindOnce(&OffHeapInt::VoidFunction, OffHeapInt::Create(1));
   PreciselyCollectGarbage();
   // The closure should have a persistent handle to the Bar.
   EXPECT_EQ(1u, Bar::live_);
@@ -2623,8 +2637,8 @@ TEST_F(HeapTest, Bind) {
   UseMixin::trace_count_ = 0;
   auto* mixin = MakeGarbageCollected<UseMixin>();
   base::OnceClosure mixin_closure =
-      WTF::Bind(static_cast<void (Mixin::*)(Visitor*) const>(&Mixin::Trace),
-                WrapPersistent(mixin), nullptr);
+      WTF::BindOnce(static_cast<void (Mixin::*)(Visitor*) const>(&Mixin::Trace),
+                    WrapPersistent(mixin), nullptr);
   PreciselyCollectGarbage();
   // The closure should have a persistent handle to the mixin.
   EXPECT_LE(1, UseMixin::trace_count_);
@@ -2793,7 +2807,7 @@ class Link1 : public GarbageCollected<Link1> {
 
   void Trace(Visitor* visitor) const { visitor->Trace(link_); }
 
-  IntWrapper* Link() { return link_; }
+  IntWrapper* Link() { return link_.Get(); }
 
  private:
   Member<IntWrapper> link_;
@@ -2830,7 +2844,7 @@ class AllocatesOnAssignment : public GarbageCollected<AllocatesOnAssignment> {
   AllocatesOnAssignment(int x) : value_(MakeGarbageCollected<IntWrapper>(x)) {}
   AllocatesOnAssignment(IntWrapper* x) : value_(x) {}
 
-  AllocatesOnAssignment& operator=(const AllocatesOnAssignment x) {
+  AllocatesOnAssignment& operator=(const AllocatesOnAssignment& x) {
     value_ = x.value_;
     return *this;
   }
@@ -2983,11 +2997,11 @@ TEST_F(HeapTest, HeapVectorPartObjects) {
     vector2.push_back(PartObjectWithRef(i));
   }
 
-  vector1.ReserveCapacity(150);
+  vector1.reserve(150);
   EXPECT_LE(150u, vector1.capacity());
   EXPECT_EQ(10u, vector1.size());
 
-  vector2.ReserveCapacity(100);
+  vector2.reserve(100);
   EXPECT_LE(100u, vector2.capacity());
   EXPECT_EQ(10u, vector2.size());
 
@@ -3112,21 +3126,7 @@ class KeyWithCopyingMoveConstructor final {
   DISALLOW_NEW();
 
  public:
-  struct Hash final {
-    STATIC_ONLY(Hash);
-
-   public:
-    static unsigned GetHash(const KeyWithCopyingMoveConstructor& key) {
-      return key.hash_;
-    }
-
-    static bool Equal(const KeyWithCopyingMoveConstructor& x,
-                      const KeyWithCopyingMoveConstructor& y) {
-      return x.hash_ == y.hash_;
-    }
-
-    static constexpr bool safe_to_compare_to_empty_or_deleted = true;
-  };
+  unsigned GetHash() const { return hash_; }
 
   KeyWithCopyingMoveConstructor() = default;
   explicit KeyWithCopyingMoveConstructor(WTF::HashTableDeletedValueType)
@@ -3158,11 +3158,6 @@ class KeyWithCopyingMoveConstructor final {
 }  // namespace blink
 
 namespace WTF {
-
-template <>
-struct DefaultHash<blink::KeyWithCopyingMoveConstructor> {
-  using Hash = blink::KeyWithCopyingMoveConstructor::Hash;
-};
 
 template <>
 struct HashTraits<blink::KeyWithCopyingMoveConstructor>
@@ -3240,8 +3235,8 @@ TEST_F(HeapTest, CollectNodeAndCssStatistics) {
         node_bytes_before = node_bytes;
         css_bytes_before = css_bytes;
       }));
-  auto* node = MakeGarbageCollected<FakeNode>();
-  auto* css = MakeGarbageCollected<FakeCSSValue>();
+  Persistent<FakeNode> node = MakeGarbageCollected<FakeNode>();
+  Persistent<FakeCSSValue> css = MakeGarbageCollected<FakeCSSValue>();
   ConservativelyCollectGarbage();
   size_t node_bytes_after, css_bytes_after;
   ThreadState::Current()->CollectNodeAndCssStatistics(
@@ -3264,12 +3259,12 @@ TEST_F(HeapTest, ContainerAnnotationOnTinyBacking) {
   // =1, and capacity = 1.
   HeapVector<uint32_t> vector;
   DCHECK_EQ(0u, vector.capacity());
-  vector.ReserveCapacity(1);
-  DCHECK_EQ(1u, vector.capacity());
+  vector.reserve(1);
+  DCHECK_LE(1u, vector.capacity());
   // The following push_back() should not crash, even with container
   // annotations. The critical path expands the backing without allocating a new
   // one.
-  vector.ReserveCapacity(2);
+  vector.reserve(2);
 }
 
 }  // namespace blink

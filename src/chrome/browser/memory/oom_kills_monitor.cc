@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -84,7 +84,6 @@ void OOMKillsMonitor::Initialize(PrefService* pref_service) {
 
   if (monitoring_started_) {
     NOTREACHED() << "OOM kiils monitor should only be initialized once";
-    return;
   }
 
   monitoring_started_ = true;

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,11 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "build/build_config.h"
 #include "components/policy/policy_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_WIN)
 #include <windows.h>
@@ -28,7 +28,7 @@ class Schema;
 // Converts a value (as read from the registry) to meet |schema|, converting
 // types as necessary. Unconvertible types will show up as null values in the
 // result.
-absl::optional<base::Value> POLICY_EXPORT
+std::optional<base::Value> POLICY_EXPORT
 ConvertRegistryValue(const base::Value& value, const Schema& schema);
 
 // A case-insensitive string comparison functor.
@@ -37,7 +37,7 @@ struct POLICY_EXPORT CaseInsensitiveStringCompare {
 };
 
 // In-memory representation of a registry subtree. Using a
-// base::DictionaryValue directly seems tempting, but that doesn't handle the
+// base::Value::Dict directly seems tempting, but that doesn't handle the
 // registry's case-insensitive-but-case-preserving semantics properly.
 class POLICY_EXPORT RegistryDict {
  public:
@@ -68,7 +68,7 @@ class POLICY_EXPORT RegistryDict {
   // Sets a value.
   void SetValue(const std::string& name, base::Value&& value);
   // Removes a value. If the value doesn't exist, nullopt is returned.
-  absl::optional<base::Value> RemoveValue(const std::string& name);
+  std::optional<base::Value> RemoveValue(const std::string& name);
   // Clears all values.
   void ClearValues();
 
@@ -85,8 +85,9 @@ class POLICY_EXPORT RegistryDict {
   // Converts the dictionary to base::Value representation. For key/value name
   // collisions, the key wins. |schema| is used to determine the expected type
   // for each policy.
-  // The returned object is either a base::DictionaryValue or a base::ListValue.
-  std::unique_ptr<base::Value> ConvertToJSON(const class Schema& schema) const;
+  // The underlying data of the returned object is either a base::Value::Dict or
+  // a base::Value::List.
+  std::optional<base::Value> ConvertToJSON(const class Schema& schema) const;
 #endif
 
   const KeyMap& keys() const { return keys_; }

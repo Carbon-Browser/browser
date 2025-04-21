@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,8 @@
 #include <stddef.h>
 
 #include <map>
+#include <optional>
 #include <string>
-
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace arc {
 
@@ -20,6 +19,7 @@ class ArcTracingEvent;
 class ArcTracingEventMatcher {
  public:
   ArcTracingEventMatcher();
+  ~ArcTracingEventMatcher();
 
   ArcTracingEventMatcher(const ArcTracingEventMatcher&) = delete;
   ArcTracingEventMatcher& operator=(const ArcTracingEventMatcher&) = delete;
@@ -34,7 +34,7 @@ class ArcTracingEventMatcher {
   // Returns true in case |event| matches criteria set.
   bool Match(const ArcTracingEvent& event) const;
 
-  absl::optional<int64_t> ReadAndroidEventInt64(
+  std::optional<int64_t> ReadAndroidEventInt64(
       const ArcTracingEvent& event) const;
 
   // Sets the expected phase. Tested event does not match if its phase does not

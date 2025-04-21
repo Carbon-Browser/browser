@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -79,6 +79,11 @@ class COMPONENT_EXPORT(ASSISTANT_UI) MockAssistantViewDelegate
               (override));
 
   MOCK_METHOD(bool, ShouldShowOnboarding, (), (const, override));
+
+  MOCK_METHOD(void,
+              OnLauncherSearchChipPressed,
+              (const std::u16string&),
+              (override));
 };
 
 }  // namespace ash

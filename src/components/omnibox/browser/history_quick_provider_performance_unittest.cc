@@ -1,12 +1,20 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
+#include <algorithm>
 #include <memory>
 #include <random>
 #include <string>
+#include <string_view>
 
 #include "base/run_loop.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
@@ -20,7 +28,6 @@
 #include "components/omnibox/browser/fake_autocomplete_provider_client.h"
 #include "components/omnibox/browser/history_quick_provider.h"
 #include "components/omnibox/browser/history_test_util.h"
-#include "components/omnibox/browser/in_memory_url_index_test_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/perf/perf_result_reporter.h"
 
@@ -62,10 +69,10 @@ URLRow GeneratePopularURLRow() {
   return row;
 }
 
-using StringPieces = std::vector<base::StringPiece>;
+using StringPieces = std::vector<std::string_view>;
 
 StringPieces AllPrefixes(const std::string& str) {
-  std::vector<base::StringPiece> res;
+  std::vector<std::string_view> res;
   res.reserve(str.size());
   for (auto char_it = str.begin(); char_it != str.end(); ++char_it)
     res.push_back(base::MakeStringPiece(str.begin(), char_it));
@@ -117,13 +124,21 @@ void HQPPerfTestOnePopularURL::SetUp() {
   client_->set_history_service(
       history::CreateHistoryService(history_dir_.GetPath(), true));
   client_->set_bookmark_model(bookmarks::TestBookmarkClient::CreateModel());
+
+  ASSERT_NE(client_->GetHistoryService(), nullptr);
+  ASSERT_NO_FATAL_FAILURE(PrepareData());
+
   client_->set_in_memory_url_index(std::make_unique<InMemoryURLIndex>(
       client_->GetBookmarkModel(), client_->GetHistoryService(), nullptr,
       history_dir_.GetPath(), SchemeSet()));
   client_->GetInMemoryURLIndex()->Init();
 
-  ASSERT_TRUE(client_->GetHistoryService());
-  ASSERT_NO_FATAL_FAILURE(PrepareData());
+  // Block until History has processed InMemoryURLIndex initialization.
+  history::BlockUntilHistoryProcessesPendingRequests(
+      client_->GetHistoryService());
+  ASSERT_TRUE(client_->GetInMemoryURLIndex()->restored());
+
+  provider_ = new HistoryQuickProvider(client_.get());
 }
 
 void HQPPerfTestOnePopularURL::TearDown() {
@@ -138,9 +153,7 @@ void HQPPerfTestOnePopularURL::TearDown() {
 }
 
 void HQPPerfTestOnePopularURL::PrepareData() {
-// Adding fake urls to db must be done before RebuildFromHistory(). This will
-// ensure that the index is properly populated with data from the database.
-// Note: on debug builds these tests can be slow. Use a smaller data set in
+// Note: On debug builds these tests can be slow. Use a smaller data set in
 // that case. See crbug.com/822624.
 #if defined NDEBUG
   constexpr size_t kSimilarUrlCount = 10000;
@@ -151,18 +164,6 @@ void HQPPerfTestOnePopularURL::PrepareData() {
 #endif
   for (size_t i = 0; i < kSimilarUrlCount; ++i)
     AddFakeURLToHistoryDB(history_backend()->db(), GeneratePopularURLRow());
-
-  InMemoryURLIndex* url_index = client_->GetInMemoryURLIndex();
-  url_index->RebuildFromHistory(
-      client_->GetHistoryService()->history_backend_->db());
-  BlockUntilInMemoryURLIndexIsRefreshed(url_index);
-
-  // History index refresh creates rebuilt tasks to run on history thread.
-  // Block here to make sure that all of them are complete.
-  history::BlockUntilHistoryProcessesPendingRequests(
-      client_->GetHistoryService());
-
-  provider_ = new HistoryQuickProvider(client_.get());
 }
 
 void HQPPerfTestOnePopularURL::PrintMeasurements(
@@ -172,11 +173,12 @@ void HQPPerfTestOnePopularURL::PrintMeasurements(
 
   std::string durations;
   for (const auto& measurement : measurements)
-    durations += std::to_string(measurement.InMillisecondsRoundedUp()) + ',';
+    durations +=
+        base::NumberToString(measurement.InMillisecondsRoundedUp()) + ',';
   // Strip off trailing comma.
   durations.pop_back();
 
-  auto metric_prefix = std::string(test_info->test_case_name()) + "_" +
+  auto metric_prefix = std::string(test_info->test_suite_name()) + "_" +
                        std::string(test_info->name());
   perf_test::PerfResultReporter reporter(metric_prefix, story_name);
   reporter.RegisterImportantMetric(".duration", "ms");
@@ -209,12 +211,12 @@ void HQPPerfTestOnePopularURL::RunAllTests(PieceIt first, PieceIt last) {
     PieceIt group_end = std::min(group_start + kTestGroupSize, last);
 
     std::transform(group_start, group_end, std::back_inserter(measurements),
-                   [this](const base::StringPiece& prefix) {
+                   [this](std::string_view prefix) {
                      return RunTest(base::UTF8ToUTF16(prefix));
                    });
 
-    PrintMeasurements(std::to_string(group_start->size()) + '-' +
-                          std::to_string((group_end - 1)->size()),
+    PrintMeasurements(base::NumberToString(group_start->size()) + '-' +
+                          base::NumberToString((group_end - 1)->size()),
                       measurements);
 
     measurements.clear();

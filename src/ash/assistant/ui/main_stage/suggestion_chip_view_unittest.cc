@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,39 +8,35 @@
 #include "ash/assistant/ui/assistant_view_ids.h"
 #include "ash/assistant/ui/test_support/mock_assistant_view_delegate.h"
 #include "ash/assistant/util/test_support/macros.h"
-#include "ash/constants/ash_features.h"
-#include "ash/constants/ash_pref_names.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
+#include "ash/style/ash_color_id.h"
 #include "ash/style/ash_color_provider.h"
 #include "ash/style/dark_light_mode_controller_impl.h"
 #include "ash/test/ash_test_base.h"
-#include "base/test/scoped_feature_list.h"
 #include "cc/paint/paint_flags.h"
 #include "cc/test/pixel_comparator.h"
-#include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
-#include "chromeos/constants/chromeos_features.h"
 #include "chromeos/ui/vector_icons/vector_icons.h"
-#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/canvas.h"
-#include "ui/gfx/color_palette.h"
+#include "ui/gfx/color_utils.h"
 #include "ui/gfx/geometry/insets_f.h"
 #include "ui/gfx/image/image_unittest_util.h"
 #include "ui/gfx/paint_vector_icon.h"
+#include "ui/gfx/test/sk_color_eq.h"
 #include "ui/views/background.h"
-#include "ui/views/controls/focus_ring.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/focus/focus_manager.h"
+#include "ui/views/test/views_test_utils.h"
 #include "ui/views/widget/widget.h"
 
 namespace ash {
 
 namespace {
 
-using chromeos::assistant::AssistantSuggestion;
+using assistant::AssistantSuggestion;
 
 constexpr gfx::Size kSuggestionChipViewSize = gfx::Size(120, 32);
 
@@ -71,13 +67,6 @@ SkBitmap GetBitmapWithInnerRoundedRect(gfx::Size size,
 SkBitmap GetSuggestionChipViewBitmap(SuggestionChipView* view) {
   gfx::Canvas canvas(view->size(), /*image_scale=*/1.0f, /*is_opaque=*/false);
   view->OnPaint(&canvas);
-  return canvas.GetBitmap();
-}
-
-SkBitmap GetFocusRingBitmap(views::FocusRing* focus_ring) {
-  gfx::Canvas canvas(focus_ring->size(), /*image_scale=*/1.0f,
-                     /*is_opaque=*/false);
-  focus_ring->OnPaint(&canvas);
   return canvas.GetBitmap();
 }
 
@@ -125,10 +114,6 @@ TEST_F(SuggestionChipViewTest, ShouldHandleRemoteIcons) {
 }
 
 TEST_F(SuggestionChipViewTest, DarkAndLightTheme) {
-  base::test::ScopedFeatureList scoped_feature_list(
-      chromeos::features::kDarkLightMode);
-  ASSERT_TRUE(chromeos::features::IsDarkLightModeEnabled());
-
   auto* dark_light_mode_controller = DarkLightModeControllerImpl::Get();
   dark_light_mode_controller->OnActiveUserPrefServiceChanged(
       Shell::Get()->session_controller()->GetActivePrefService());
@@ -145,97 +130,44 @@ TEST_F(SuggestionChipViewTest, DarkAndLightTheme) {
   views::Label* label = static_cast<views::Label*>(
       suggestion_chip_view->GetViewByID(kSuggestionChipViewLabel));
 
-  suggestion_chip_view->SetSize(kSuggestionChipViewSize);
-  views::FocusRing::Get(suggestion_chip_view)->Layout();
+  widget->SetSize(kSuggestionChipViewSize);
 
   // No background if dark and light theme is on.
   EXPECT_EQ(suggestion_chip_view->GetBackground(), nullptr);
 
-  EXPECT_EQ(label->GetEnabledColor(),
-            ColorProvider::Get()->GetContentLayerColor(
-                ColorProvider::ContentLayerType::kTextColorSecondary));
-  EXPECT_TRUE(
-      cc::ExactPixelComparator(/*discard_alpha=*/false)
-          .Compare(GetSuggestionChipViewBitmap(suggestion_chip_view),
-                   GetBitmapWithInnerRoundedRect(
-                       kSuggestionChipViewSize, /*stroke_width=*/1,
-                       ColorProvider::Get()->GetContentLayerColor(
-                           ColorProvider::ContentLayerType::kSeparatorColor))));
-
-  // Focus the chip view and confirm that focus ring is rendered.
-  suggestion_chip_view->RequestFocus();
-  EXPECT_TRUE(
-      cc::ExactPixelComparator(/*discard_alpha=*/false)
-          .Compare(
-              GetFocusRingBitmap(views::FocusRing::Get(suggestion_chip_view)),
-              GetBitmapWithInnerRoundedRect(
-                  kSuggestionChipViewSize, /*stroke_width=*/2,
-                  ColorProvider::Get()->GetControlsLayerColor(
-                      ColorProvider::ControlsLayerType::kFocusRingColor))));
-
-  suggestion_chip_view->GetFocusManager()->ClearFocus();
+  const SkColor light_mode_enabled_color = label->GetEnabledColor();
+  EXPECT_SKCOLOR_EQ(
+      light_mode_enabled_color,
+      label->GetColorProvider()->GetColor(kColorAshSuggestionChipViewTextView));
+  EXPECT_TRUE(cc::ExactPixelComparator().Compare(
+      GetSuggestionChipViewBitmap(suggestion_chip_view),
+      GetBitmapWithInnerRoundedRect(
+          kSuggestionChipViewSize, /*stroke_width=*/1,
+          ColorProvider::Get()->GetContentLayerColor(
+              ColorProvider::ContentLayerType::kSeparatorColor))));
 
   // Switch the color mode.
   dark_light_mode_controller->ToggleColorMode();
   ASSERT_NE(initial_dark_mode_status,
             dark_light_mode_controller->IsDarkModeEnabled());
 
-  EXPECT_EQ(label->GetEnabledColor(),
-            ColorProvider::Get()->GetContentLayerColor(
-                ColorProvider::ContentLayerType::kTextColorSecondary));
-  EXPECT_TRUE(
-      cc::ExactPixelComparator(/*discard_alpha=*/false)
-          .Compare(GetSuggestionChipViewBitmap(suggestion_chip_view),
-                   GetBitmapWithInnerRoundedRect(
-                       kSuggestionChipViewSize, /*stroke_width=*/1,
-                       ColorProvider::Get()->GetContentLayerColor(
-                           ColorProvider::ContentLayerType::kSeparatorColor))));
+  const SkColor dark_mode_enabled_color = label->GetEnabledColor();
+  EXPECT_FALSE(
+      gfx::ColorsClose(light_mode_enabled_color, dark_mode_enabled_color, 20))
+      << " light_mode_enabled_color="
+      << color_utils::SkColorToRgbaString(light_mode_enabled_color)
+      << " dark_mode_enabled_color="
+      << color_utils::SkColorToRgbaString(dark_mode_enabled_color);
+  EXPECT_SKCOLOR_EQ(
+      dark_mode_enabled_color,
+      label->GetColorProvider()->GetColor(kColorAshSuggestionChipViewTextView));
 
-  // Focus the chip view and confirm that focus ring is rendered.
-  suggestion_chip_view->RequestFocus();
-  EXPECT_TRUE(
-      cc::ExactPixelComparator(/*discard_alpha=*/false)
-          .Compare(
-              GetFocusRingBitmap(views::FocusRing::Get(suggestion_chip_view)),
-              GetBitmapWithInnerRoundedRect(
-                  kSuggestionChipViewSize, /*stroke_width=*/2,
-                  ColorProvider::Get()->GetControlsLayerColor(
-                      ColorProvider::ControlsLayerType::kFocusRingColor))));
-}
-
-TEST_F(SuggestionChipViewTest, DarkAndLightModeFlagOff) {
-  // ProductivityLauncher uses DarkLightMode colors.
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitWithFeatures(
-      /*enabled_features=*/{}, /*disabled_features=*/{
-          chromeos::features::kDarkLightMode, features::kNotificationsRefresh,
-          features::kProductivityLauncher});
-
-  auto widget = CreateFramelessTestWidget();
-  auto* suggestion_chip_view =
-      widget->SetContentsView(std::make_unique<SuggestionChipView>(
-          /*delegate=*/nullptr,
-          CreateSuggestionWithIconUrl(
-              "googleassistant://resource?type=icon&name=assistant")));
-
-  views::Label* label = static_cast<views::Label*>(
-      suggestion_chip_view->GetViewByID(kSuggestionChipViewLabel));
-  EXPECT_EQ(label->GetEnabledColor(), kTextColorSecondary);
-
-  suggestion_chip_view->SetSize(kSuggestionChipViewSize);
-
-  EXPECT_EQ(suggestion_chip_view->GetBackground()->get_color(),
-            SK_ColorTRANSPARENT);
-  EXPECT_TRUE(cc::ExactPixelComparator(/*discard_alpha=*/false)
-                  .Compare(GetSuggestionChipViewBitmap(suggestion_chip_view),
-                           GetBitmapWithInnerRoundedRect(
-                               kSuggestionChipViewSize, /*stroke_width=*/1,
-                               SkColorSetA(gfx::kGoogleGrey900, 0x24))));
-
-  // Background color will change when it's get focused.
-  suggestion_chip_view->RequestFocus();
-  EXPECT_EQ(suggestion_chip_view->GetBackground()->get_color(),
-            SkColorSetA(gfx::kGoogleGrey900, 0x14));
+  EXPECT_TRUE(cc::ExactPixelComparator().Compare(
+      GetSuggestionChipViewBitmap(suggestion_chip_view),
+      GetBitmapWithInnerRoundedRect(
+          kSuggestionChipViewSize, /*stroke_width=*/1,
+          ColorProvider::Get()->GetContentLayerColor(
+              ColorProvider::ContentLayerType::kSeparatorColor))));
 }
 
 TEST_F(SuggestionChipViewTest, FontWeight) {

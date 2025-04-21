@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -187,7 +187,7 @@ class ThirdPartyFileTest : public testing::Test {
 
 // Test successful initialization and module lookup.
 TEST_F(ThirdPartyFileTest, Success) {
-  // Create blacklist data file.
+  // Create blocklist data file.
   ASSERT_NO_FATAL_FAILURE(CreateTestFile());
 
   // Init.
@@ -256,7 +256,7 @@ TEST_F(ThirdPartyFileTest, SuccessFromRegistry) {
   //    chrome.dll.
   ASSERT_TRUE(CreateRegistryKeyValue(GetBlTestFilePath()));
 
-  // 3. Drop a blacklist to the expected path.
+  // 3. Drop a blocklist to the expected path.
   ASSERT_NO_FATAL_FAILURE(CreateTestFile());
 
   // Clear override file path so that initialization goes to registry.

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -77,8 +77,6 @@ void MultizoneAudioDecoderProxyImpl::LogicalResume() {
 int64_t MultizoneAudioDecoderProxyImpl::GetCurrentPts() const {
   CheckCalledOnCorrectThread();
   NOTREACHED();
-
-  return 0;
 }
 
 CmaBackend::Decoder::BufferStatus MultizoneAudioDecoderProxyImpl::PushBuffer(

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 
 #include <memory>
 #include <type_traits>
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/task/sequenced_task_runner.h"
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -32,6 +33,7 @@ class Document;
 class DocumentLoader;
 class InspectorAgent;
 class LocalFrame;
+class InspectorAccessibilityAgent;
 class InspectorAuditsAgent;
 class InspectorCSSAgent;
 class InspectorCacheStorageAgent;
@@ -64,6 +66,7 @@ class CORE_EXPORT DevToolsSession : public GarbageCollected<DevToolsSession>,
       bool client_expects_binary_responses,
       bool client_is_trusted,
       const String& session_id,
+      bool session_waits_for_debugger,
       scoped_refptr<base::SequencedTaskRunner> mojo_task_runner);
   DevToolsSession(const DevToolsSession&) = delete;
   DevToolsSession& operator=(const DevToolsSession&) = delete;
@@ -82,6 +85,7 @@ class CORE_EXPORT DevToolsSession : public GarbageCollected<DevToolsSession>,
     return agent;
   }
   void Detach();
+  void DetachFromV8();
   void Trace(Visitor*) const;
 
   // protocol::FrontendChannel implementation.
@@ -128,13 +132,15 @@ class CORE_EXPORT DevToolsSession : public GarbageCollected<DevToolsSession>,
 
   // Converts to JSON if requested by the client.
   blink::mojom::blink::DevToolsMessagePtr FinalizeMessage(
-      std::vector<uint8_t> message) const;
+      std::vector<uint8_t> message,
+      std::optional<int> call_id) const;
 
   template <typename T>
   bool IsDomainAvailableToUntrustedClient() {
     return std::disjunction_v<std::is_same<T, InspectorAuditsAgent>,
                               std::is_same<T, InspectorCSSAgent>,
                               std::is_same<T, InspectorCacheStorageAgent>,
+                              std::is_same<T, InspectorAccessibilityAgent>,
                               std::is_same<T, InspectorDOMAgent>,
                               std::is_same<T, InspectorDOMDebuggerAgent>,
                               std::is_same<T, InspectorDOMSnapshotAgent>,
@@ -171,6 +177,9 @@ class CORE_EXPORT DevToolsSession : public GarbageCollected<DevToolsSession>,
   InspectorAgentState v8_session_state_;
   InspectorAgentState::Bytes v8_session_state_cbor_;
   const String session_id_;
+  // This is only relevant until the initial attach to v8 and is never reset
+  // once the session stops waiting.
+  const bool session_waits_for_debugger_;
 };
 
 }  // namespace blink

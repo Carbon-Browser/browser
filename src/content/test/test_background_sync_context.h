@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,8 +25,7 @@ class TestBackgroundSyncContext : public BackgroundSyncContextImpl {
   // BackgroundSyncContextImpl:
   void CreateBackgroundSyncManager(
       scoped_refptr<ServiceWorkerContextWrapper> service_worker_context,
-      scoped_refptr<DevToolsBackgroundServicesContextImpl> devtools_context)
-      override;
+      DevToolsBackgroundServicesContextImpl& devtools_context) override;
 };
 
 }  // namespace content

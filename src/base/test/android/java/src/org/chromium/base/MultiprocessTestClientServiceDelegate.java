@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 package org.chromium.base;
@@ -22,19 +22,21 @@ public class MultiprocessTestClientServiceDelegate implements ChildProcessServic
     private static final String TAG = "MPTestCSDelegate";
 
     private ITestCallback mTestCallback;
+    private IBinder mBinderBox;
 
-    private final ITestController.Stub mTestController = new ITestController.Stub() {
-        @Override
-        public boolean forceStopSynchronous(int exitCode) {
-            System.exit(exitCode);
-            return true;
-        }
+    private final ITestController.Stub mTestController =
+            new ITestController.Stub() {
+                @Override
+                public boolean forceStopSynchronous(int exitCode) {
+                    System.exit(exitCode);
+                    return true;
+                }
 
-        @Override
-        public void forceStop(int exitCode) {
-            System.exit(exitCode);
-        }
-    };
+                @Override
+                public void forceStop(int exitCode) {
+                    System.exit(exitCode);
+                }
+            };
 
     @Override
     public void onServiceCreated() {
@@ -46,8 +48,10 @@ public class MultiprocessTestClientServiceDelegate implements ChildProcessServic
     public void onServiceBound(Intent intent) {}
 
     @Override
-    public void onConnectionSetup(Bundle connectionBundle, List<IBinder> callbacks) {
+    public void onConnectionSetup(
+            Bundle connectionBundle, List<IBinder> callbacks, IBinder binderBox) {
         mTestCallback = ITestCallback.Stub.asInterface(callbacks.get(0));
+        mBinderBox = binderBox;
     }
 
     @Override
@@ -76,7 +80,7 @@ public class MultiprocessTestClientServiceDelegate implements ChildProcessServic
 
     @Override
     public void runMain() {
-        int result = MainRunner.runMain(CommandLine.getJavaSwitchesOrNull());
+        int result = MainRunner.runMain(CommandLine.getJavaSwitchesForTesting(), mBinderBox);
         try {
             mTestCallback.mainReturned(result);
         } catch (RemoteException re) {

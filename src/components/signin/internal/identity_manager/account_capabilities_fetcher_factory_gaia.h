@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,8 +32,10 @@ class AccountCapabilitiesFetcherFactoryGaia
   // AccountCapabilitiesFetcherFactory:
   std::unique_ptr<AccountCapabilitiesFetcher> CreateAccountCapabilitiesFetcher(
       const CoreAccountInfo& account_info,
+      AccountCapabilitiesFetcher::FetchPriority fetch_priority,
       AccountCapabilitiesFetcher::OnCompleteCallback on_complete_callback)
       override;
+  void PrepareForFetchingAccountCapabilities() override;
 
  private:
   const raw_ptr<ProfileOAuth2TokenService> token_service_;

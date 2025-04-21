@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 from telemetry.page import shared_page_state
@@ -570,7 +570,7 @@ class Masonry(KeySilkPage):
       action_runner.WaitForJavaScriptCondition('window.done')
 
 
-# TODO(crbug.com/760553):remove this class after smoothness.key_silk_cases
+# TODO(crbug.com/40537750):remove this class after smoothness.key_silk_cases
 # benchmark is completely replaced by rendering benchmarks
 class KeySilkCasesPageSet(story.StorySet):
 

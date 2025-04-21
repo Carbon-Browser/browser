@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -474,6 +474,14 @@
     "extensions": [".gsite"],
     "mime": "application/vnd.google-apps.site"
   },
+  {
+    "type": "hosted",
+    "icon": "gmaillayout",
+    "translationKey": "EMAIL_LAYOUTS_DOCUMENT_FILE_TYPE",
+    "subtype": "emaillayouts",
+    "extensions": [".gmaillayout"],
+    "mime": "application/vnd.google-apps.mail-layout"
+  },
 
   // Others
   {
@@ -538,6 +546,14 @@
     "subtype": "Excel",
     "extensions": [".xlsx"],
     "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  },
+  {
+    "type": "document",
+    "icon": "excel",
+    "translationKey": "EXCEL_FILE_TYPE",
+    "subtype": "Excel",
+    "extensions": [".xlsm"],
+    "mime": "application/vnd.ms-excel.sheet.macroEnabled.12"
   },
   {
     "type": "archive",

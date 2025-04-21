@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,16 +7,19 @@
 #include "ash/assistant/model/assistant_ui_model.h"
 #include "ash/assistant/ui/base/assistant_button_listener.h"
 #include "ash/assistant/util/histogram_util.h"
+#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/assistant/controller/assistant_ui_controller.h"
-#include "ash/public/cpp/style/color_provider.h"
-#include "ash/public/cpp/style/scoped_light_mode_as_default.h"
-#include "base/bind.h"
+#include "ash/style/ash_color_id.h"
+#include "ash/style/style_util.h"
+#include "base/functional/bind.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/color/color_provider.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/color_utils.h"
 #include "ui/gfx/paint_vector_icon.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/animation/ink_drop.h"
 #include "ui/views/controls/highlight_path_generator.h"
 #include "ui/views/view.h"
@@ -54,7 +57,6 @@ AssistantButton::AssistantButton(AssistantButtonListener* listener,
   SetHasInkDropActionOnClick(true);
   views::InkDrop::UseInkDropForFloodFillRipple(views::InkDrop::Get(this),
                                                /*highlight_on_hover=*/false);
-  UpdateInkDropColors();
   views::InstallCircleHighlightPathGenerator(this, gfx::Insets(kInkDropInset));
 
   // Image.
@@ -76,7 +78,7 @@ std::unique_ptr<AssistantButton> AssistantButton::Create(
   DCHECK(params.accessible_name_id.has_value());
 
   auto button = std::make_unique<AssistantButton>(listener, button_id);
-  button->SetAccessibleName(
+  button->GetViewAccessibility().SetName(
       l10n_util::GetStringUTF16(params.accessible_name_id.value()));
 
   if (params.tooltip_id) {
@@ -84,25 +86,27 @@ std::unique_ptr<AssistantButton> AssistantButton::Create(
         l10n_util::GetStringUTF16(params.tooltip_id.value()));
   }
 
-  ScopedAssistantLightModeAsDefault scoped_assistant_light_mode_as_default;
+  button->SetPreferredSize(gfx::Size(params.size_in_dip, params.size_in_dip));
+
   gfx::IconDescription icon_description(icon, params.icon_size_in_dip,
                                         gfx::kPlaceholderColor);
-  icon_description.color = params.icon_color_type.has_value()
-                               ? ColorProvider::Get()->GetContentLayerColor(
-                                     params.icon_color_type.value())
-                               : params.icon_color;
 
   if (params.icon_color_type.has_value()) {
+    // If we have an `icon_color_type`, that color needs to be resolved in
+    // OnThemeChanged(). Since we can't do anything else now, just set the data
+    // and return the button.
     button->icon_color_type_ = params.icon_color_type.value();
     // We cannot copy IconDescription as copy assignment operator of
     // IconDescription is deleted since it has a non-static reference member,
     // icon.
     button->icon_description_.emplace(icon_description);
+    return button;
   }
 
-  button->SetImage(views::Button::STATE_NORMAL,
-                   gfx::CreateVectorIcon(icon_description));
-  button->SetPreferredSize(gfx::Size(params.size_in_dip, params.size_in_dip));
+  button->SetImageModel(
+      views::Button::STATE_NORMAL,
+      ui::ImageModel::FromVectorIcon(*icon_description.icon, params.icon_color,
+                                     icon_description.dip_size));
   return button;
 }
 
@@ -133,8 +137,8 @@ void AssistantButton::OnPaintBackground(gfx::Canvas* canvas) {
   if (should_show_focus_ring) {
     cc::PaintFlags circle_flags;
     circle_flags.setAntiAlias(true);
-    circle_flags.setColor(ColorProvider::Get()->GetControlsLayerColor(
-        ColorProvider::ControlsLayerType::kFocusRingColor));
+    circle_flags.setColor(
+        GetColorProvider()->GetColor(cros_tokens::kFocusRingColor));
     circle_flags.setStyle(cc::PaintFlags::kStroke_Style);
     circle_flags.setStrokeWidth(kFocusRingStrokeWidth);
     canvas->DrawCircle(GetLocalBounds().CenterPoint(),
@@ -145,16 +149,22 @@ void AssistantButton::OnPaintBackground(gfx::Canvas* canvas) {
 void AssistantButton::OnThemeChanged() {
   views::View::OnThemeChanged();
 
-  UpdateInkDropColors();
+  // Updates inkdrop color and opacity.
+  auto* ink_drop = views::InkDrop::Get(this);
+  ink_drop->SetBaseColor(
+      GetColorProvider()->GetColor(kColorAshInkDropOpaqueColor));
+  ink_drop->SetVisibleOpacity(StyleUtil::GetInkDropOpacity());
 
   if (!icon_color_type_.has_value() || !icon_description_.has_value())
     return;
 
-  ScopedAssistantLightModeAsDefault scoped_assistant_light_mode_as_default;
-  icon_description_->color =
-      ColorProvider::Get()->GetContentLayerColor(icon_color_type_.value());
-  SetImage(views::Button::STATE_NORMAL,
-           gfx::CreateVectorIcon(icon_description_.value()));
+  // This might be the first time the image is rendered since `icon_color_type_`
+  // may not resolvable until now.
+  icon_description_->color = GetColorProvider()->GetColor(*icon_color_type_);
+  SetImageModel(views::Button::STATE_NORMAL,
+                ui::ImageModel::FromVectorIcon(*icon_description_->icon,
+                                               icon_description_->color,
+                                               icon_description_->dip_size));
 }
 
 void AssistantButton::OnButtonPressed() {
@@ -162,16 +172,7 @@ void AssistantButton::OnButtonPressed() {
   listener_->OnButtonPressed(id_);
 }
 
-void AssistantButton::UpdateInkDropColors() {
-  ScopedAssistantLightModeAsDefault scoped_assistant_light_mode_as_default;
-
-  std::pair<SkColor, float> base_color_and_opacity =
-      ColorProvider::Get()->GetInkDropBaseColorAndOpacity();
-  views::InkDrop::Get(this)->SetBaseColor(base_color_and_opacity.first);
-  views::InkDrop::Get(this)->SetVisibleOpacity(base_color_and_opacity.second);
-}
-
-BEGIN_METADATA(AssistantButton, views::ImageButton)
+BEGIN_METADATA(AssistantButton)
 END_METADATA
 
 }  // namespace ash

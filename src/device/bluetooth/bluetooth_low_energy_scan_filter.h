@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,13 @@
 
 #include <stddef.h>
 #include <stdint.h>
+
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/time/time.h"
 #include "device/bluetooth/bluetooth_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace device {
 
@@ -22,6 +23,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothLowEnergyScanFilter {
   // for Generic Access Profile (GAP).
   enum class AdvertisementDataType {
     kFlags = 0x01,
+    kServiceUUIDs = 0x03,
     kShortenedLocalName = 0x08,
     kCompleteLocalName = 0x09,
     kListOf16BitServiceSolicitationUUIDs = 0x14,
@@ -75,7 +77,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothLowEnergyScanFilter {
       base::TimeDelta device_found_timeout,
       base::TimeDelta device_lost_timeout,
       const std::vector<Pattern>& patterns,
-      absl::optional<base::TimeDelta> rssi_sampling_period);
+      std::optional<base::TimeDelta> rssi_sampling_period);
 
   static std::unique_ptr<BluetoothLowEnergyScanFilter> Create(
       int16_t device_found_rssi_threshold,
@@ -83,7 +85,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothLowEnergyScanFilter {
       base::TimeDelta device_found_timeout,
       base::TimeDelta device_lost_timeout,
       const std::vector<Pattern>& patterns,
-      absl::optional<base::TimeDelta> rssi_sampling_period);
+      std::optional<base::TimeDelta> rssi_sampling_period);
 
   BluetoothLowEnergyScanFilter(const BluetoothLowEnergyScanFilter&) = delete;
   BluetoothLowEnergyScanFilter& operator=(const BluetoothLowEnergyScanFilter&) =
@@ -99,7 +101,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothLowEnergyScanFilter {
   base::TimeDelta device_found_timeout() const { return device_found_timeout_; }
   base::TimeDelta device_lost_timeout() const { return device_lost_timeout_; }
   const std::vector<Pattern>& patterns() const { return patterns_; }
-  const absl::optional<base::TimeDelta>& rssi_sampling_period() const {
+  const std::optional<base::TimeDelta>& rssi_sampling_period() const {
     return rssi_sampling_period_;
   }
 
@@ -110,7 +112,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothLowEnergyScanFilter {
       base::TimeDelta device_found_timeout,
       base::TimeDelta device_lost_timeout,
       std::vector<Pattern> patterns,
-      absl::optional<base::TimeDelta> rssi_sampling_period);
+      std::optional<base::TimeDelta> rssi_sampling_period);
 
   bool IsValid() const;
 
@@ -142,7 +144,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothLowEnergyScanFilter {
   // propagated after the specified time period (rounded up to the nearest 100
   // ms). A lower sampling period will result in higher power consumption, with
   // the default setting being the most power-efficient.
-  absl::optional<base::TimeDelta> rssi_sampling_period_;
+  std::optional<base::TimeDelta> rssi_sampling_period_;
 };
 
 }  // namespace device

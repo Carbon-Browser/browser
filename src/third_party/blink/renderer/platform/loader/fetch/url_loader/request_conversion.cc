@@ -1,8 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/loader/fetch/url_loader/request_conversion.h"
+
+#include <string_view>
 
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -12,10 +14,11 @@
 #include "net/filter/source_stream.h"
 #include "net/http/http_request_headers.h"
 #include "net/http/http_util.h"
-#include "services/network/public/cpp/constants.h"
+#include "services/network/public/cpp/is_potentially_trustworthy.h"
 #include "services/network/public/cpp/optional_trust_token_params.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/resource_request_body.h"
+#include "services/network/public/mojom/chunked_data_pipe_getter.mojom-blink.h"
 #include "services/network/public/mojom/data_pipe_getter.mojom-blink.h"
 #include "services/network/public/mojom/data_pipe_getter.mojom.h"
 #include "services/network/public/mojom/trust_tokens.mojom-blink.h"
@@ -39,50 +42,22 @@
 namespace blink {
 namespace {
 
-constexpr char kStylesheetAcceptHeader[] = "text/css,*/*;q=0.1";
-constexpr char kWebBundleAcceptHeader[] = "application/webbundle;v=b2";
-
 // TODO(yhirano): Unify these with variables in
 // content/public/common/content_constants.h.
 constexpr char kCorsExemptPurposeHeaderName[] = "Purpose";
 constexpr char kCorsExemptRequestedWithHeaderName[] = "X-Requested-With";
 
-// This is complementary to ConvertNetPriorityToWebKitPriority, defined in
-// service_worker_context_client.cc.
-net::RequestPriority ConvertWebKitPriorityToNetPriority(
-    WebURLRequest::Priority priority) {
-  switch (priority) {
-    case WebURLRequest::Priority::kVeryHigh:
-      return net::HIGHEST;
-
-    case WebURLRequest::Priority::kHigh:
-      return net::MEDIUM;
-
-    case WebURLRequest::Priority::kMedium:
-      return net::LOW;
-
-    case WebURLRequest::Priority::kLow:
-      return net::LOWEST;
-
-    case WebURLRequest::Priority::kVeryLow:
-      return net::IDLE;
-
-    case WebURLRequest::Priority::kUnresolved:
-    default:
-      NOTREACHED();
-      return net::LOW;
-  }
-}
-
 // TODO(yhirano) Dedupe this and the same-name function in
 // web_url_request_util.cc.
-std::string TrimLWSAndCRLF(const base::StringPiece& input) {
-  base::StringPiece string = net::HttpUtil::TrimLWS(input);
-  const char* begin = string.data();
-  const char* end = string.data() + string.size();
-  while (begin < end && (end[-1] == '\r' || end[-1] == '\n'))
-    --end;
-  return std::string(base::StringPiece(begin, end - begin));
+std::string TrimLWSAndCRLF(const std::string_view& input) {
+  std::string_view string = net::HttpUtil::TrimLWS(input);
+  size_t last_crlf = string.size();
+  while (last_crlf > 0 &&
+         (string[last_crlf - 1] == '\r' || string[last_crlf - 1] == '\n')) {
+    --last_crlf;
+  }
+  string.remove_suffix(string.size() - last_crlf);
+  return std::string(string);
 }
 
 mojom::ResourceType RequestContextToResourceType(
@@ -104,6 +79,10 @@ mojom::ResourceType RequestContextToResourceType(
     case mojom::blink::RequestContextType::IMAGE:
     case mojom::blink::RequestContextType::IMAGE_SET:
       return mojom::ResourceType::kImage;
+
+    // Json
+    case mojom::blink::RequestContextType::JSON:
+      return mojom::ResourceType::kJson;
 
     // Media
     case mojom::blink::RequestContextType::AUDIO:
@@ -141,6 +120,7 @@ mojom::ResourceType RequestContextToResourceType(
     // Subresource
     case mojom::blink::RequestContextType::DOWNLOAD:
     case mojom::blink::RequestContextType::MANIFEST:
+    case mojom::blink::RequestContextType::SPECULATION_RULES:
     case mojom::blink::RequestContextType::SUBRESOURCE:
     case mojom::blink::RequestContextType::SUBRESOURCE_WEBBUNDLE:
       return mojom::ResourceType::kSubResource;
@@ -168,18 +148,16 @@ mojom::ResourceType RequestContextToResourceType(
     case mojom::blink::RequestContextType::XML_HTTP_REQUEST:
       return mojom::ResourceType::kXhr;
 
-    // Navigation requests should not go through WebURLLoader.
+    // Navigation requests should not go through URLLoader.
     case mojom::blink::RequestContextType::FORM:
     case mojom::blink::RequestContextType::HYPERLINK:
     case mojom::blink::RequestContextType::LOCATION:
     case mojom::blink::RequestContextType::FRAME:
     case mojom::blink::RequestContextType::IFRAME:
       NOTREACHED();
-      return mojom::ResourceType::kSubResource;
 
     default:
       NOTREACHED();
-      return mojom::ResourceType::kSubResource;
   }
 }
 
@@ -188,7 +166,7 @@ void PopulateResourceRequestBody(const EncodedFormData& src,
   for (const auto& element : src.Elements()) {
     switch (element.type_) {
       case FormDataElement::kData:
-        dest->AppendBytes(element.data_.data(), element.data_.size());
+        dest->AppendCopyOfBytes(base::as_byte_span(element.data_));
         break;
       case FormDataElement::kEncodedFile:
         if (element.file_length_ == -1) {
@@ -205,9 +183,9 @@ void PopulateResourceRequestBody(const EncodedFormData& src,
         }
         break;
       case FormDataElement::kEncodedBlob: {
-        DCHECK(element.optional_blob_data_handle_);
+        CHECK(element.blob_data_handle_);
         mojo::Remote<mojom::blink::Blob> blob_remote(
-            element.optional_blob_data_handle_->CloneBlobRemote());
+            element.blob_data_handle_->CloneBlobRemote());
         mojo::PendingRemote<network::mojom::blink::DataPipeGetter>
             data_pipe_getter_remote;
         blob_remote->AsDataPipeGetter(
@@ -229,6 +207,32 @@ void PopulateResourceRequestBody(const EncodedFormData& src,
   }
 }
 
+bool IsBannedCrossSiteAuth(network::ResourceRequest* resource_request,
+                           WebURLRequestExtraData* url_request_extra_data) {
+  auto& request_url = resource_request->url;
+  auto& first_party = resource_request->site_for_cookies;
+
+  bool allow_cross_origin_auth_prompt = false;
+  if (url_request_extra_data) {
+    allow_cross_origin_auth_prompt =
+        url_request_extra_data->allow_cross_origin_auth_prompt();
+  }
+
+  if (first_party.IsFirstPartyWithSchemefulMode(
+          request_url, /*compute_schemefully=*/false)) {
+    // If the first party is secure but the subresource is not, this is
+    // mixed-content. Do not allow the image.
+    if (!allow_cross_origin_auth_prompt &&
+        network::IsUrlPotentiallyTrustworthy(first_party.RepresentativeUrl()) &&
+        !network::IsUrlPotentiallyTrustworthy(request_url)) {
+      return true;
+    }
+    return false;
+  }
+
+  return !allow_cross_origin_auth_prompt;
+}
+
 }  // namespace
 
 scoped_refptr<network::ResourceRequestBody> NetworkResourceRequestBodyFor(
@@ -245,9 +249,6 @@ scoped_refptr<network::ResourceRequestBody> NetworkResourceRequestBodyFor(
     dest_body->SetToChunkedDataPipe(
         ToCrossVariantMojoType(std::move(stream_body)),
         network::ResourceRequestBody::ReadOnlyOnce(true));
-  }
-  if (dest_body) {
-    dest_body->SetAllowHTTP1ForStreamingUpload(false);
   }
   return dest_body;
 }
@@ -301,13 +302,13 @@ void PopulateResourceRequest(const ResourceRequestHead& src,
   }
   // Set X-Requested-With header to cors_exempt_headers rather than headers to
   // be exempted from CORS checks.
-  if (!src.GetRequestedWithHeader().IsEmpty()) {
+  if (!src.GetRequestedWithHeader().empty()) {
     dest->cors_exempt_headers.SetHeader(kCorsExemptRequestedWithHeaderName,
                                         src.GetRequestedWithHeader().Utf8());
   }
   // Set Purpose header to cors_exempt_headers rather than headers to be
   // exempted from CORS checks.
-  if (!src.GetPurposeHeader().IsEmpty()) {
+  if (!src.GetPurposeHeader().empty()) {
     dest->cors_exempt_headers.SetHeader(kCorsExemptPurposeHeaderName,
                                         src.GetPurposeHeader().Utf8());
   }
@@ -316,7 +317,8 @@ void PopulateResourceRequest(const ResourceRequestHead& src,
   dest->load_flags = WrappedResourceRequest(ResourceRequest(src))
                          .GetLoadFlagsForWebUrlRequest();
   dest->recursive_prefetch_token = src.RecursivePrefetchToken();
-  dest->priority = ConvertWebKitPriorityToNetPriority(src.Priority());
+  dest->priority = WebURLRequest::ConvertToNetPriority(src.Priority());
+  dest->priority_incremental = src.PriorityIncremental();
   dest->cors_preflight_policy = src.CorsPreflightPolicy();
   dest->skip_service_worker = src.GetSkipServiceWorker();
   dest->mode = src.GetMode();
@@ -324,9 +326,13 @@ void PopulateResourceRequest(const ResourceRequestHead& src,
   dest->credentials_mode = src.GetCredentialsMode();
   dest->redirect_mode = src.GetRedirectMode();
   dest->fetch_integrity = src.GetFetchIntegrity().Utf8();
+  dest->expected_signatures.reserve(src.GetExpectedSignatures().size());
+  for (const String& signature : src.GetExpectedSignatures()) {
+    dest->expected_signatures.push_back(signature.Utf8());
+  }
   if (src.GetWebBundleTokenParams().has_value()) {
     dest->web_bundle_token_params =
-        absl::make_optional(network::ResourceRequest::WebBundleTokenParams(
+        std::make_optional(network::ResourceRequest::WebBundleTokenParams(
             GURL(src.GetWebBundleTokenParams()->bundle_url),
             src.GetWebBundleTokenParams()->token,
             ToCrossVariantMojoType(
@@ -347,30 +353,31 @@ void PopulateResourceRequest(const ResourceRequestHead& src,
   }
 
   dest->keepalive = src.GetKeepalive();
+  dest->browsing_topics = src.GetBrowsingTopics();
+  dest->ad_auction_headers = src.GetAdAuctionHeaders();
+  dest->shared_storage_writable_eligible =
+      src.GetSharedStorageWritableEligible();
   dest->has_user_gesture = src.HasUserGesture();
   dest->enable_load_timing = true;
   dest->enable_upload_progress = src.ReportUploadProgress();
   dest->throttling_profile_id = src.GetDevToolsToken();
   dest->trust_token_params = ConvertTrustTokenParams(src.TrustTokenParams());
+  dest->required_ip_address_space = src.GetTargetAddressSpace();
 
   if (base::UnguessableToken window_id = src.GetFetchWindowId())
-    dest->fetch_window_id = absl::make_optional(window_id);
+    dest->fetch_window_id = std::make_optional(window_id);
 
-  if (src.GetDevToolsId().has_value()) {
-    dest->devtools_request_id = src.GetDevToolsId().value().Ascii();
+  if (!src.GetDevToolsId().IsNull()) {
+    dest->devtools_request_id = src.GetDevToolsId().Ascii();
   }
 
   if (src.GetDevToolsStackId().has_value()) {
     dest->devtools_stack_id = src.GetDevToolsStackId().value().Ascii();
   }
 
-  if (src.IsSignedExchangePrefetchCacheEnabled()) {
-    DCHECK_EQ(src.GetRequestContext(),
-              mojom::blink::RequestContextType::PREFETCH);
-    dest->is_signed_exchange_prefetch_cache_enabled = true;
-  }
-
   dest->is_fetch_like_api = src.IsFetchLikeAPI();
+
+  dest->is_fetch_later_api = src.IsFetchLaterAPI();
 
   dest->is_favicon = src.IsFavicon();
 
@@ -382,26 +389,43 @@ void PopulateResourceRequest(const ResourceRequestHead& src,
 
   network::mojom::RequestDestination request_destination =
       src.GetRequestDestination();
-  if (request_destination == network::mojom::RequestDestination::kStyle ||
-      request_destination == network::mojom::RequestDestination::kXslt) {
-    dest->headers.SetHeader(net::HttpRequestHeaders::kAccept,
-                            kStylesheetAcceptHeader);
-  } else if (request_destination ==
-             network::mojom::RequestDestination::kImage) {
-    dest->headers.SetHeaderIfMissing(net::HttpRequestHeaders::kAccept,
-                                     network_utils::ImageAcceptHeader());
-  } else if (request_destination ==
-             network::mojom::RequestDestination::kWebBundle) {
-    dest->headers.SetHeader(net::HttpRequestHeaders::kAccept,
-                            kWebBundleAcceptHeader);
-  } else {
-    // Calling SetHeaderIfMissing() instead of SetHeader() because JS can
-    // manually set an accept header on an XHR.
-    dest->headers.SetHeaderIfMissing(net::HttpRequestHeaders::kAccept,
-                                     network::kDefaultAcceptHeaderValue);
-  }
+  network_utils::SetAcceptHeader(dest->headers, request_destination);
 
   dest->original_destination = src.GetOriginalDestination();
+
+  if (src.GetURLRequestExtraData()) {
+    src.GetURLRequestExtraData()->CopyToResourceRequest(dest);
+  }
+
+  if (!dest->is_favicon &&
+      request_destination == network::mojom::RequestDestination::kImage &&
+      IsBannedCrossSiteAuth(dest, src.GetURLRequestExtraData().get())) {
+    // Prevent third-party image content from prompting for login, as this
+    // is often a scam to extract credentials for another domain from the
+    // user. Only block image loads, as the attack applies largely to the
+    // "src" property of the <img> tag. It is common for web properties to
+    // allow untrusted values for <img src>; this is considered a fair thing
+    // for an HTML sanitizer to do. Conversely, any HTML sanitizer that didn't
+    // filter sources for <script>, <link>, <embed>, <object>, <iframe> tags
+    // would be considered vulnerable in and of itself.
+    dest->do_not_prompt_for_login = true;
+    dest->load_flags |= net::LOAD_DO_NOT_USE_EMBEDDED_IDENTITY;
+  }
+
+  dest->storage_access_api_status = src.GetStorageAccessApiStatus();
+
+  dest->attribution_reporting_support = src.GetAttributionReportingSupport();
+
+  dest->attribution_reporting_eligibility =
+      src.GetAttributionReportingEligibility();
+
+  dest->attribution_reporting_src_token = src.GetAttributionSrcToken();
+
+  dest->keepalive_token = src.GetKeepaliveToken();
+
+  dest->shared_dictionary_writer_enabled = src.SharedDictionaryWriterEnabled();
+
+  dest->is_ad_tagged = src.IsAdResource();
 }
 
 }  // namespace blink

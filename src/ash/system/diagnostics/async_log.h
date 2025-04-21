@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,13 +31,10 @@ class ASH_EXPORT AsyncLog {
   // Returns the current contents as a string.
   std::string GetContents() const;
 
+  void SetTaskRunnerForTesting(
+      const scoped_refptr<base::SequencedTaskRunner>& task_runner);
+
  private:
-  // Appends to the file. Run on the the task runner.
-  void AppendImpl(const std::string& text);
-
-  // Create the log file. Called on the first write to the file.
-  void CreateFile();
-
   // Path of the log file.
   const base::FilePath file_path_;
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include <GLES2/gl2.h>
 #include <stdint.h>
 
+#include <string_view>
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
@@ -17,10 +18,6 @@
 #include "gpu/command_buffer/tests/gl_manager.h"
 #include "ui/gl/gl_display.h"
 #include "ui/gl/gl_implementation.h"
-
-namespace gl {
-class GLImageNativePixmap;
-}
 
 namespace gpu {
 
@@ -113,28 +110,14 @@ class GpuCommandBufferTestEGL {
   void RestoreGLDefault();
 
   // Returns whether the current context supports the named EGL extension.
-  bool HasEGLExtension(const base::StringPiece& extension) {
+  bool HasEGLExtension(std::string_view extension) {
     return gfx::HasExtension(egl_extensions_, extension);
   }
 
   // Returns whether the current context supports the named GL extension.
-  bool HasGLExtension(const base::StringPiece& extension) {
+  bool HasGLExtension(std::string_view extension) {
     return gfx::HasExtension(gl_extensions_, extension);
   }
-
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-  // Create GLImageNativePixmap filled in with the given pixels.
-  scoped_refptr<gl::GLImageNativePixmap> CreateGLImageNativePixmap(
-      gfx::BufferFormat format,
-      gfx::Size size,
-      uint8_t* pixels) const;
-
-  // Get some real dmabuf fds for testing by exporting an EGLImage created from
-  // a GL texture.
-  gfx::NativePixmapHandle CreateNativePixmapHandle(gfx::BufferFormat format,
-                                                   gfx::Size size,
-                                                   uint8_t* pixels);
-#endif
 
  protected:
   bool gl_reinitialized_;

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,6 @@
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/system/system_monitor.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "media/capture/video/fuchsia/video_capture_device_fuchsia.h"
 
@@ -100,8 +99,8 @@ class VideoCaptureDeviceFactoryFuchsia::DeviceConfigFetcher {
 
   uint64_t device_id_;
   fuchsia::camera3::DevicePtr device_;
-  absl::optional<std::string> description_;
-  absl::optional<VideoCaptureFormats> formats_;
+  std::optional<std::string> description_;
+  std::optional<VideoCaptureFormats> formats_;
   base::OnceClosure on_fetched_callback_;
 };
 
@@ -172,16 +171,16 @@ void VideoCaptureDeviceFactoryFuchsia::OnDeviceWatcherDisconnected(
     zx_status_t status) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
-  // CastRunner may close the channel with ZX_ERR_UNAVAILABLE error code when
-  // none of the running applications have access to camera. No need to log the
-  // error in that case.
+  // When running on a device with no camera there may be no device-watcher
+  // service, in which case the device watcher channel will close with a well-
+  // defined error. There is no need to log the error in that case.
   if (status != ZX_ERR_UNAVAILABLE)
     ZX_LOG(ERROR, status) << "fuchsia.camera3.DeviceWatcher disconnected.";
 
   // Clear the list of devices, so we don't report any camera devices while
   // DeviceWatcher is disconnected. We will try connecting DeviceWatcher again
   // when GetDevicesInfo() is called.
-  devices_ = absl::nullopt;
+  devices_ = std::nullopt;
   num_pending_device_info_requests_ = 0;
 
   MaybeResolvePendingDeviceInfoCallbacks();

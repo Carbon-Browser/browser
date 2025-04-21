@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,17 +12,21 @@ class WebClient;
 class WebFrame;
 }  // namespace web
 
+namespace autofill::test {
+// Test delay used for throttling form mutation messages.
+inline constexpr int kTrackFormMutationsDelayInMs = 10;
+}  // namespace autofill::test
+
 // A fixture to set up testing of Autofill methods.
 class AutofillTestWithWebState : public web::WebTestWithWebState {
  protected:
   AutofillTestWithWebState(std::unique_ptr<web::WebClient> web_client);
 
-  // Injects initial renderer is value into the |frame| and waits for
-  // completion.
-  void SetUpForUniqueIds(web::WebFrame* frame);
-
   // Toggles tracking form mutations in a |frame| and waits for completion.
   void TrackFormMutations(web::WebFrame* frame);
+
+  // web::WebTestWithWebState:
+  id ExecuteJavaScript(NSString* script) override;
 };
 
 #endif  // COMPONENTS_AUTOFILL_IOS_FORM_UTIL_AUTOFILL_TEST_WITH_WEB_STATE_H_

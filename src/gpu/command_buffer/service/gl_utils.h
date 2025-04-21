@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,13 +32,10 @@
 #define CHECK_GL_ERROR() void(0)
 #endif  // GL_ERROR_DEBUGGING
 
-namespace gl {
-struct GLVersionInfo;
-}
-
 namespace gpu {
 
 struct Capabilities;
+struct GLCapabilities;
 
 namespace gles2 {
 
@@ -67,8 +64,7 @@ struct CALayerSharedState {
 bool PrecisionMeetsSpecForHighpFloat(GLint rangeMin,
                                      GLint rangeMax,
                                      GLint precision);
-void QueryShaderPrecisionFormat(const gl::GLVersionInfo& gl_version_info,
-                                GLenum shader_type,
+void QueryShaderPrecisionFormat(GLenum shader_type,
                                 GLenum precision_type,
                                 GLint* range,
                                 GLint* precision);
@@ -78,6 +74,17 @@ void QueryShaderPrecisionFormat(const gl::GLVersionInfo& gl_version_info,
 // extension checks.
 void PopulateNumericCapabilities(Capabilities* caps,
                                  const FeatureInfo* feature_info);
+
+// Using the provided feature info, query the numeric limits of the underlying
+// GL and fill in the members of the GLCapabilities struct.  Does not perform
+// any extension checks.
+void PopulateGLCapabilities(GLCapabilities* caps,
+                            const FeatureInfo* feature_info);
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+void PopulateDRMCapabilities(Capabilities* caps,
+                             const FeatureInfo* feature_info);
+#endif
 
 bool CheckUniqueAndNonNullIds(GLsizei n, const GLuint* client_ids);
 
@@ -156,8 +163,6 @@ bool ValidateCopyTextureCHROMIUMInternalFormats(const FeatureInfo* feature_info,
 GLenum GetTextureBindingQuery(GLenum texture_type);
 
 gfx::OverlayTransform GetGFXOverlayTransform(GLenum plane_transform);
-
-bool GetGFXBufferFormat(GLenum internal_format, gfx::BufferFormat* out_format);
 
 bool IsASTCFormat(GLenum internal_format);
 bool IsCompressedTextureFormat(GLenum internal_format);

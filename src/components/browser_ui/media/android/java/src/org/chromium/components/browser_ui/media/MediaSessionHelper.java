@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,10 +21,10 @@ import org.chromium.base.SysUtils;
 import org.chromium.components.browser_ui.media.MediaSessionUma.MediaSessionActionSource;
 import org.chromium.components.favicon.LargeIconBridge;
 import org.chromium.components.url_formatter.UrlFormatter;
-import org.chromium.content_public.browser.BrowserContextHandle;
 import org.chromium.content_public.browser.MediaSession;
 import org.chromium.content_public.browser.MediaSessionObserver;
 import org.chromium.content_public.browser.NavigationHandle;
+import org.chromium.content_public.browser.Visibility;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.content_public.browser.WebContentsObserver;
 import org.chromium.media_session.mojom.MediaSessionAction;
@@ -43,27 +43,20 @@ import java.util.Set;
  * WebContents to a delegate (ultimately, to {@link MediaNotificationController}).
  */
 public class MediaSessionHelper implements MediaImageCallback {
-    private static final String TAG = "MediaSession";
-
     private static final String UNICODE_PLAY_CHARACTER = "\u25B6";
-    @VisibleForTesting
-    public static final int HIDE_NOTIFICATION_DELAY_MILLIS = 2500;
+    @VisibleForTesting public static final int HIDE_NOTIFICATION_DELAY_MILLIS = 2500;
 
     private Delegate mDelegate;
     private WebContents mWebContents;
-    @VisibleForTesting
-    public WebContentsObserver mWebContentsObserver;
-    @VisibleForTesting
-    public MediaSessionObserver mMediaSessionObserver;
+    @VisibleForTesting public WebContentsObserver mWebContentsObserver;
+    @VisibleForTesting public MediaSessionObserver mMediaSessionObserver;
     private MediaImageManager mMediaImageManager;
     private Bitmap mPageMediaImage;
-    @VisibleForTesting
-    public Bitmap mFavicon;
+    @VisibleForTesting public Bitmap mFavicon;
     private Bitmap mCurrentMediaImage;
     private String mOrigin;
     private int mPreviousVolumeControlStream = AudioManager.USE_DEFAULT_STREAM_TYPE;
-    @VisibleForTesting
-    public MediaNotificationInfo.Builder mNotificationInfoBuilder;
+    @VisibleForTesting public MediaNotificationInfo.Builder mNotificationInfoBuilder;
     // The fallback title if |mPageMetadata| is null or its title is empty.
     private String mFallbackTitle;
     // Set to true if favicon update callback was called at least once.
@@ -79,77 +72,71 @@ public class MediaSessionHelper implements MediaImageCallback {
     // Delayed hiding will schedule this delayed task to |mHandler|. The task will be canceled when
     // showing or immediate hiding.
     private Runnable mHideNotificationDelayedTask;
-    @VisibleForTesting
-    public LargeIconBridge mLargeIconBridge;
+    @VisibleForTesting public LargeIconBridge mLargeIconBridge;
 
     // Used to override the MediaSession object get from WebContents. This is to work around the
     // static getter {@link MediaSession#fromWebContents()}.
-    @VisibleForTesting
-    public static MediaSession sOverriddenMediaSession;
+    @VisibleForTesting public static MediaSession sOverriddenMediaSession;
 
-    private MediaNotificationListener mControlsListener = new MediaNotificationListener() {
-        @Override
-        public void onPlay(int actionSource) {
-            if (isNotificationHidingOrHidden()) return;
+    private MediaNotificationListener mControlsListener =
+            new MediaNotificationListener() {
+                @Override
+                public void onPlay(int actionSource) {
+                    if (isNotificationHidingOrHidden()) return;
 
-            MediaSessionUma.recordPlay(
-                    MediaSessionHelper.convertMediaActionSourceToUMA(actionSource));
+                    MediaSessionUma.recordPlay(
+                            MediaSessionHelper.convertMediaActionSourceToUMA(actionSource));
 
-            if (mMediaSessionObserver.getMediaSession() == null) return;
+                    if (mMediaSessionObserver.getMediaSession() == null) return;
 
-            mMediaSessionObserver.getMediaSession().resume();
-        }
+                    mMediaSessionObserver.getMediaSession().resume();
+                }
 
-        @Override
-        public void onPause(int actionSource) {
-            if (isNotificationHidingOrHidden()) return;
+                @Override
+                public void onPause(int actionSource) {
+                    if (isNotificationHidingOrHidden()) return;
 
-            MediaSessionUma.recordPause(
-                    MediaSessionHelper.convertMediaActionSourceToUMA(actionSource));
+                    if (mMediaSessionObserver.getMediaSession() == null) return;
 
-            if (mMediaSessionObserver.getMediaSession() == null) return;
+                    mMediaSessionObserver.getMediaSession().suspend();
+                }
 
-            mMediaSessionObserver.getMediaSession().suspend();
-        }
+                @Override
+                public void onStop(int actionSource) {
+                    if (isNotificationHidingOrHidden()) return;
 
-        @Override
-        public void onStop(int actionSource) {
-            if (isNotificationHidingOrHidden()) return;
+                    if (mMediaSessionObserver.getMediaSession() != null) {
+                        mMediaSessionObserver.getMediaSession().stop();
+                    }
+                }
 
-            MediaSessionUma.recordStop(
-                    MediaSessionHelper.convertMediaActionSourceToUMA(actionSource));
+                @Override
+                public void onMediaSessionAction(int action) {
+                    if (!MediaSessionAction.isKnownValue(action)) return;
+                    if (mMediaSessionObserver != null) {
+                        mMediaSessionObserver.getMediaSession().didReceiveAction(action);
+                    }
+                }
 
-            if (mMediaSessionObserver.getMediaSession() != null) {
-                mMediaSessionObserver.getMediaSession().stop();
-            }
-        }
-
-        @Override
-        public void onMediaSessionAction(int action) {
-            if (!MediaSessionAction.isKnownValue(action)) return;
-            if (mMediaSessionObserver != null) {
-                mMediaSessionObserver.getMediaSession().didReceiveAction(action);
-            }
-        }
-
-        @Override
-        public void onMediaSessionSeekTo(long pos) {
-            if (mMediaSessionObserver == null) return;
-            mMediaSessionObserver.getMediaSession().seekTo(pos);
-        }
-    };
+                @Override
+                public void onMediaSessionSeekTo(long pos) {
+                    if (mMediaSessionObserver == null) return;
+                    mMediaSessionObserver.getMediaSession().seekTo(pos);
+                }
+            };
 
     private void hideNotificationDelayed() {
         if (mWebContentsObserver == null) return;
         if (mHideNotificationDelayedTask != null) return;
 
-        mHideNotificationDelayedTask = new Runnable() {
-            @Override
-            public void run() {
-                mHideNotificationDelayedTask = null;
-                hideNotificationInternal();
-            }
-        };
+        mHideNotificationDelayedTask =
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        mHideNotificationDelayedTask = null;
+                        hideNotificationInternal();
+                    }
+                };
         mHandler.postDelayed(mHideNotificationDelayedTask, HIDE_NOTIFICATION_DELAY_MILLIS);
 
         mNotificationInfoBuilder = null;
@@ -204,10 +191,6 @@ public class MediaSessionHelper implements MediaImageCallback {
                 }
 
                 Intent contentIntent = mDelegate.createBringTabToFrontIntent();
-                if (contentIntent != null) {
-                    contentIntent.putExtra(MediaNotificationUma.INTENT_EXTRA_NAME,
-                            MediaNotificationUma.Source.MEDIA);
-                }
 
                 if (mFallbackTitle == null) mFallbackTitle = sanitizeMediaTitle(mOrigin);
 
@@ -215,7 +198,8 @@ public class MediaSessionHelper implements MediaImageCallback {
                 mCurrentMediaImage = getCachedNotificationImage();
                 rebaseMediaPosition(isPaused);
                 mNotificationInfoBuilder =
-                        mDelegate.createMediaNotificationInfoBuilder()
+                        mDelegate
+                                .createMediaNotificationInfoBuilder()
                                 .setMetadata(mCurrentMetadata)
                                 .setPaused(isPaused)
                                 .setOrigin(mOrigin)
@@ -223,9 +207,10 @@ public class MediaSessionHelper implements MediaImageCallback {
                                 .setNotificationSmallIcon(R.drawable.audio_playing)
                                 .setNotificationLargeIcon(mCurrentMediaImage)
                                 .setMediaSessionImage(mPageMediaImage)
-                                .setActions(MediaNotificationInfo.ACTION_PLAY_PAUSE
-                                        | MediaNotificationInfo.ACTION_SWIPEAWAY
-                                        | MediaNotificationInfo.ACTION_STOP)
+                                .setActions(
+                                        MediaNotificationInfo.ACTION_PLAY_PAUSE
+                                                | MediaNotificationInfo.ACTION_SWIPEAWAY
+                                                | MediaNotificationInfo.ACTION_STOP)
                                 .setContentIntent(contentIntent)
                                 .setListener(mControlsListener)
                                 .setMediaSessionActions(mMediaSessionActions)
@@ -284,76 +269,107 @@ public class MediaSessionHelper implements MediaImageCallback {
                 if (mMediaPosition == null) return;
 
                 long now = SystemClock.elapsedRealtime();
-                long rebased_position = mMediaPosition.getPosition()
-                        + (long) ((now - mMediaPosition.getLastUpdatedTime())
-                                * mMediaPosition.getPlaybackRate());
-                mMediaPosition = new MediaPosition(mMediaPosition.getDuration(), rebased_position,
-                        isPaused ? 0 : mMediaPosition.getPlaybackRate(), now);
+                long rebased_position =
+                        mMediaPosition.getPosition()
+                                + (long)
+                                        ((now - mMediaPosition.getLastUpdatedTime())
+                                                * mMediaPosition.getPlaybackRate());
+                mMediaPosition =
+                        new MediaPosition(
+                                mMediaPosition.getDuration(),
+                                rebased_position,
+                                isPaused ? 0 : mMediaPosition.getPlaybackRate(),
+                                now);
             }
         };
     }
 
-    public void setWebContents(@NonNull WebContents webContents) {
+    public void setWebContents(@Nullable WebContents webContents) {
         if (mWebContents == webContents) return;
 
         mWebContents = webContents;
 
         if (mWebContentsObserver != null) mWebContentsObserver.destroy();
-        mWebContentsObserver = new WebContentsObserver(webContents) {
-            @Override
-            public void didFinishNavigation(NavigationHandle navigation) {
-                if (!navigation.hasCommitted() || !navigation.isInPrimaryMainFrame()
-                        || navigation.isSameDocument()) {
-                    return;
-                }
 
-                mOrigin = UrlFormatter.formatUrlForDisplayOmitSchemeOmitTrivialSubdomains(
-                        webContents.getVisibleUrl().getOrigin().getSpec());
-                mFavicon = null;
-                mPageMediaImage = null;
-                mPageMetadata = null;
-                // |mCurrentMetadata| selects either |mPageMetadata| or |mFallbackTitle|. As
-                // there is no guarantee {@link #titleWasSet()} will be called before or
-                // after this method, |mFallbackTitle| is not reset in this callback, i.e.
-                // relying solely on
-                // {@link #titleWasSet()}. The following assignment is to keep
-                // |mCurrentMetadata| up to date as |mPageMetadata| may have changed.
-                mCurrentMetadata = getMetadata();
-                mMediaSessionActions = Collections.emptySet();
+        mMediaImageManager.setWebContents(mWebContents);
 
-                if (isNotificationHidingOrHidden()) return;
+        if (webContents == null) {
+            mWebContentsObserver = null;
+            cleanupMediaSessionObserver();
+            return;
+        }
 
-                mNotificationInfoBuilder.setOrigin(mOrigin);
-                mNotificationInfoBuilder.setNotificationLargeIcon(mFavicon);
-                mNotificationInfoBuilder.setMediaSessionImage(mPageMediaImage);
-                mNotificationInfoBuilder.setMetadata(mCurrentMetadata);
-                mNotificationInfoBuilder.setMediaSessionActions(mMediaSessionActions);
-                showNotification();
-            }
+        mWebContentsObserver =
+                new WebContentsObserver(webContents) {
+                    @Override
+                    public void didFinishNavigationInPrimaryMainFrame(NavigationHandle navigation) {
+                        if (!navigation.hasCommitted() || navigation.isSameDocument()) {
+                            return;
+                        }
 
-            @Override
-            public void titleWasSet(String title) {
-                String newFallbackTitle = sanitizeMediaTitle(title);
-                if (!TextUtils.equals(mFallbackTitle, newFallbackTitle)) {
-                    mFallbackTitle = newFallbackTitle;
-                    updateNotificationMetadata();
-                }
-            }
+                        mOrigin =
+                                UrlFormatter.formatUrlForDisplayOmitSchemeOmitTrivialSubdomains(
+                                        webContents.getVisibleUrl().getOrigin().getSpec());
+                        mFavicon = null;
+                        mPageMediaImage = null;
+                        mPageMetadata = null;
+                        // |mCurrentMetadata| selects either |mPageMetadata| or |mFallbackTitle|. As
+                        // there is no guarantee {@link #titleWasSet()} will be called before or
+                        // after this method, |mFallbackTitle| is not reset in this callback, i.e.
+                        // relying solely on {@link #titleWasSet()}. The following assignment is
+                        // to keep |mCurrentMetadata| up to date as |mPageMetadata| may have
+                        // changed.
+                        mCurrentMetadata = getMetadata();
+                        mMediaSessionActions = Collections.emptySet();
 
-            @Override
-            public void wasShown() {
-                mDelegate.activateAndroidMediaSession();
-            }
-        };
+                        if (isNotificationHidingOrHidden()) return;
+
+                        mNotificationInfoBuilder.setOrigin(mOrigin);
+                        mNotificationInfoBuilder.setNotificationLargeIcon(mFavicon);
+                        mNotificationInfoBuilder.setMediaSessionImage(mPageMediaImage);
+                        mNotificationInfoBuilder.setMetadata(mCurrentMetadata);
+                        mNotificationInfoBuilder.setMediaSessionActions(mMediaSessionActions);
+                        showNotification();
+                    }
+
+                    @Override
+                    public void titleWasSet(String title) {
+                        String newFallbackTitle = sanitizeMediaTitle(title);
+                        if (!TextUtils.equals(mFallbackTitle, newFallbackTitle)) {
+                            mFallbackTitle = newFallbackTitle;
+                            updateNotificationMetadata();
+                        }
+                    }
+
+                    @Override
+                    public void onVisibilityChanged(@Visibility int visibility) {
+                        // We should activate back the MediaSession eagerly when the WC is visible
+                        // again because some old versions of Android will only notify the latest
+                        // activated MediaSession. However, we shouldn't attempt to activate a
+                        // session that isn't actually active as it needlessly triggers the entire
+                        // internal MediaSession machinery.
+                        if (visibility == Visibility.VISIBLE && !isNotificationHidingOrHidden()) {
+                            mDelegate.activateAndroidMediaSession();
+                        }
+                    }
+
+                    @Override
+                    public void mediaSessionCreated(MediaSession mediaSession) {
+                        setUpMediaSessionObserver(mediaSession);
+                    }
+                };
 
         MediaSession mediaSession = getMediaSession(webContents);
+        setUpMediaSessionObserver(mediaSession);
+    }
+
+    private void setUpMediaSessionObserver(MediaSession mediaSession) {
         if (mMediaSessionObserver != null
                 && mediaSession == mMediaSessionObserver.getMediaSession()) {
             return;
         }
 
         cleanupMediaSessionObserver();
-        mMediaImageManager.setWebContents(webContents);
         if (mediaSession != null) {
             mMediaSessionObserver = createMediaSessionObserver(mediaSession);
         }
@@ -371,8 +387,8 @@ public class MediaSessionHelper implements MediaImageCallback {
         /** Returns an intent that brings the associated web contents to the front. */
         Intent createBringTabToFrontIntent();
 
-        /** Returns the {@link BrowserContextHandle} for mWebContents. */
-        BrowserContextHandle getBrowserContextHandle();
+        /** Returns the {@link LargeIconBridge} to be used while obtaining icons. */
+        LargeIconBridge getLargeIconBridge();
 
         /**
          * Creates a {@link MediaNotificationInfo.Builder} with basic embedder-specific
@@ -393,7 +409,8 @@ public class MediaSessionHelper implements MediaImageCallback {
     public MediaSessionHelper(@NonNull WebContents webContents, @NonNull Delegate delegate) {
         mDelegate = delegate;
         mMediaImageManager =
-                new MediaImageManager(MediaNotificationImageUtils.MINIMAL_MEDIA_IMAGE_SIZE_PX,
+                new MediaImageManager(
+                        MediaNotificationImageUtils.MINIMAL_MEDIA_IMAGE_SIZE_PX,
                         MediaNotificationImageUtils.getIdealMediaImageSize());
         mHandler = new Handler();
         setWebContents(webContents);
@@ -451,7 +468,8 @@ public class MediaSessionHelper implements MediaImageCallback {
     }
 
     private Activity getActivity() {
-        assert mWebContents != null;
+        if (mWebContents == null) return null;
+
         WindowAndroid windowAndroid = mWebContents.getTopLevelNativeWindow();
         if (windowAndroid == null) return null;
 
@@ -467,15 +485,19 @@ public class MediaSessionHelper implements MediaImageCallback {
         GURL pageUrl = mWebContents.getLastCommittedUrl();
         int size = MediaNotificationImageUtils.MINIMAL_MEDIA_IMAGE_SIZE_PX;
         if (mLargeIconBridge == null) {
-            mLargeIconBridge = new LargeIconBridge(mDelegate.getBrowserContextHandle());
+            mLargeIconBridge = mDelegate.getLargeIconBridge();
         }
-        LargeIconBridge.LargeIconCallback callback = new LargeIconBridge.LargeIconCallback() {
-            @Override
-            public void onLargeIconAvailable(
-                    Bitmap icon, int fallbackColor, boolean isFallbackColorDefault, int iconType) {
-                setLargeIcon(icon);
-            }
-        };
+        LargeIconBridge.LargeIconCallback callback =
+                new LargeIconBridge.LargeIconCallback() {
+                    @Override
+                    public void onLargeIconAvailable(
+                            Bitmap icon,
+                            int fallbackColor,
+                            boolean isFallbackColorDefault,
+                            int iconType) {
+                        setLargeIcon(icon);
+                    }
+                };
 
         return mLargeIconBridge.getLargeIconForUrl(pageUrl, size, callback);
     }
@@ -553,7 +575,8 @@ public class MediaSessionHelper implements MediaImageCallback {
             album = mPageMetadata.getAlbum();
         }
 
-        if (mCurrentMetadata != null && TextUtils.equals(title, mCurrentMetadata.getTitle())
+        if (mCurrentMetadata != null
+                && TextUtils.equals(title, mCurrentMetadata.getTitle())
                 && TextUtils.equals(artist, mCurrentMetadata.getArtist())
                 && TextUtils.equals(album, mCurrentMetadata.getAlbum())) {
             return mCurrentMetadata;
@@ -605,7 +628,8 @@ public class MediaSessionHelper implements MediaImageCallback {
     }
 
     private MediaSession getMediaSession(WebContents contents) {
-        return (sOverriddenMediaSession != null) ? sOverriddenMediaSession
-                                                 : MediaSession.fromWebContents(contents);
+        return (sOverriddenMediaSession != null)
+                ? sOverriddenMediaSession
+                : MediaSession.fromWebContents(contents);
     }
 }

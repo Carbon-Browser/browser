@@ -1,15 +1,16 @@
-// Copyright (c) 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_COCOA_APPLESCRIPT_CONSTANTS_APPLESCRIPT_H_
 #define CHROME_BROWSER_UI_COCOA_APPLESCRIPT_CONSTANTS_APPLESCRIPT_H_
 
-#import <Cocoa/Cocoa.h>
+#import <Foundation/Foundation.h>
 
-// This file contains the constant that are use to set the property of an
-// applescript scriptable item.
+// The constants that are used to designate the properties of AppleScript
+// scriptable items.
 namespace AppleScript {
+
 // Property to access windows.
 extern NSString* const kWindowsProperty;
 
@@ -27,5 +28,6 @@ extern NSString* const kNormalWindowMode;
 
 // To indicate a window in incognito mode.
 extern NSString* const kIncognitoWindowMode;
-}
+}  // namespace AppleScript
+
 #endif  // CHROME_BROWSER_UI_COCOA_APPLESCRIPT_CONSTANTS_APPLESCRIPT_H_

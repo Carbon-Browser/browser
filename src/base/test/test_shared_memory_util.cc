@@ -1,11 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/test/test_shared_memory_util.h"
 
 #include <gtest/gtest.h>
-
 #include <stddef.h>
 #include <stdint.h>
 
@@ -60,8 +59,8 @@ static bool CheckReadOnlySharedMemoryFdPosix(int fd) {
     return false;
   }
   if (errno != kExpectedErrno) {
-    LOG(ERROR) << "Expected mmap() to return " << kExpectedErrno
-               << " but returned " << errno << ": " << strerror(errno) << "\n";
+    PLOG(ERROR) << "Expected mmap() to return " << kExpectedErrno
+                << " but returned";  // PLOG will append the actual errno value.
     return false;
   }
   return true;
@@ -152,8 +151,9 @@ WritableSharedMemoryMapping MapAtForTesting(
     size_t size) {
   SharedMemoryMapper* mapper = SharedMemoryMapper::GetDefaultInstance();
   auto result = region->MapAt(offset, size, mapper);
-  if (!result.has_value())
+  if (!result.has_value()) {
     return {};
+  }
 
   return WritableSharedMemoryMapping(result.value(), size, region->GetGUID(),
                                      mapper);

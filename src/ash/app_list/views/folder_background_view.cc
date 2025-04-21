@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include "ash/app_list/views/app_list_folder_view.h"
 #include "ash/keyboard/ui/keyboard_ui_controller.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 
 namespace ash {
 
@@ -13,10 +14,6 @@ FolderBackgroundView::FolderBackgroundView(AppListFolderView* folder_view)
     : folder_view_(folder_view) {}
 
 FolderBackgroundView::~FolderBackgroundView() = default;
-
-const char* FolderBackgroundView::GetClassName() const {
-  return "FolderBackgroundView";
-}
 
 bool FolderBackgroundView::OnMousePressed(const ui::MouseEvent& event) {
   HandleClickOrTap();
@@ -43,5 +40,8 @@ void FolderBackgroundView::HandleClickOrTap() {
   // close the folder. Bug: https://crbug.com/879329
   folder_view_->CloseFolderPage();
 }
+
+BEGIN_METADATA(FolderBackgroundView)
+END_METADATA
 
 }  // namespace ash

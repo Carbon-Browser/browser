@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,11 @@
 
 #include "base/check.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
@@ -18,15 +21,16 @@
 #include "chrome/browser/sync/test/integration/sync_datatype_helper.h"
 #include "chrome/browser/sync/test/integration/sync_extension_helper.h"
 #include "chrome/browser/sync/test/integration/sync_service_impl_harness.h"
-#include "chrome/browser/web_applications/commands/install_from_info_command.h"
+#include "chrome/browser/web_applications/test/web_app_install_test_utils.h"
 #include "chrome/browser/web_applications/test/web_app_test_observers.h"
 #include "chrome/browser/web_applications/web_app_command_manager.h"
-#include "chrome/browser/web_applications/web_app_id.h"
+#include "chrome/browser/web_applications/web_app_command_scheduler.h"
 #include "chrome/browser/web_applications/web_app_install_manager.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_sync_bridge.h"
 #include "components/webapps/browser/install_result_code.h"
 #include "components/webapps/browser/installable/installable_metrics.h"
+#include "components/webapps/common/web_app_id.h"
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_system.h"
@@ -40,7 +44,8 @@ std::string CreateFakeAppName(int index) {
   return "fakeapp" + base::NumberToString(index);
 }
 
-void FlushPendingOperations(std::vector<Profile*> profiles) {
+void FlushPendingOperations(
+    std::vector<raw_ptr<Profile, VectorExperimental>> profiles) {
   for (Profile* profile : profiles) {
     web_app::WebAppProvider::GetForTest(profile)
         ->command_manager()
@@ -48,24 +53,17 @@ void FlushPendingOperations(std::vector<Profile*> profiles) {
 
     // First, wait for all installations to complete.
 
-    std::set<web_app::AppId> apps_to_be_installed =
+    base::flat_set<webapps::AppId> apps_to_be_installed =
         web_app::WebAppProvider::GetForTest(profile)
-            ->install_manager()
-            .GetEnqueuedInstallAppIdsForTesting();
-
-    std::vector<web_app::AppId> apps_to_be_sync_installed =
-        web_app::WebAppProvider::GetForTest(profile)
-            ->registrar()
+            ->registrar_unsafe()
             .GetAppsFromSyncAndPendingInstallation();
-    apps_to_be_installed.insert(apps_to_be_sync_installed.begin(),
-                                apps_to_be_sync_installed.end());
 
     if (!apps_to_be_installed.empty()) {
       // Because we don't know whether these have been installed yet or if we
       // are waiting for installation with hooks, wait on either.
       base::RunLoop loop;
       auto install_listener_callback =
-          base::BindLambdaForTesting([&](const web_app::AppId& app_id) {
+          base::BindLambdaForTesting([&](const webapps::AppId& app_id) {
             apps_to_be_installed.erase(app_id);
             if (apps_to_be_installed.empty())
               loop.Quit();
@@ -95,7 +93,8 @@ bool HasSameApps(Profile* profile1, Profile* profile2) {
 }
 
 bool AllProfilesHaveSameApps() {
-  const std::vector<Profile*>& profiles = test()->GetAllProfiles();
+  const std::vector<raw_ptr<Profile, VectorExperimental>>& profiles =
+      test()->GetAllProfiles();
   for (Profile* profile : profiles) {
     if (profile != profiles.front() &&
         !HasSameApps(profiles.front(), profile)) {
@@ -162,16 +161,6 @@ bool IsIncognitoEnabled(Profile* profile, int index) {
 
 void InstallAppsPendingForSync(Profile* profile) {
   SyncExtensionHelper::GetInstance()->InstallExtensionsPendingForSync(profile);
-  WaitForAppService(profile);
-}
-
-void WaitForAppService(Profile* profile) {
-  // The App Service is a Mojo service, and Mojo calls are asynchronous
-  // (because they are potentially IPC calls). When the tests install and
-  // uninstall apps, they may need to pump the run loop so that those async
-  // calls settle.
-  apps::AppServiceProxyFactory::GetForProfile(profile)
-      ->FlushMojoCallsForTesting();
 }
 
 syncer::StringOrdinal GetPageOrdinalForApp(Profile* profile, int app_index) {
@@ -210,7 +199,8 @@ void FixNTPOrdinalCollisions(Profile* profile) {
   SyncAppHelper::GetInstance()->FixNTPOrdinalCollisions(profile);
 }
 
-bool AwaitWebAppQuiescence(std::vector<Profile*> profiles) {
+bool AwaitWebAppQuiescence(
+    std::vector<raw_ptr<Profile, VectorExperimental>> profiles) {
   FlushPendingOperations(profiles);
 
   // If sync is off, then `AwaitQuiescence()` will crash. This code can be
@@ -236,16 +226,16 @@ bool AwaitWebAppQuiescence(std::vector<Profile*> profiles) {
     // some installs might not have OS hooks installed but they will be in the
     // registry.
     auto* provider = web_app::WebAppProvider::GetForTest(profile);
-    std::vector<web_app::AppId> sync_apps_pending_install =
-        provider->registrar().GetAppsFromSyncAndPendingInstallation();
+    std::vector<webapps::AppId> sync_apps_pending_install =
+        provider->registrar_unsafe().GetAppsFromSyncAndPendingInstallation();
     if (!sync_apps_pending_install.empty()) {
       LOG(ERROR) << "Apps from sync are still pending installation: "
                  << sync_apps_pending_install.size();
       return false;
     }
 
-    std::vector<web_app::AppId> apps_in_uninstall =
-        provider->registrar().GetAppsPendingUninstall();
+    std::vector<webapps::AppId> apps_in_uninstall =
+        provider->registrar_unsafe().GetAppsPendingUninstall();
     if (!apps_in_uninstall.empty()) {
       LOG(ERROR) << "App uninstalls are still pending: "
                  << apps_in_uninstall.size();
@@ -255,32 +245,11 @@ bool AwaitWebAppQuiescence(std::vector<Profile*> profiles) {
   return true;
 }
 
-web_app::AppId InstallWebApp(Profile* profile, const WebAppInstallInfo& info) {
-  DCHECK(info.start_url.is_valid());
-  base::RunLoop run_loop;
-  web_app::AppId app_id;
-  auto* provider = web_app::WebAppProvider::GetForTest(profile);
-  provider->command_manager().ScheduleCommand(
-      std::make_unique<web_app::InstallFromInfoCommand>(
-          std::make_unique<WebAppInstallInfo>(info),
-          &provider->install_finalizer(),
-          /*overwrite_existing_manifest_fields=*/true,
-          webapps::WebappInstallSource::OMNIBOX_INSTALL_ICON,
-          base::BindLambdaForTesting(
-              [&run_loop, &app_id](const web_app::AppId& new_app_id,
-                                   webapps::InstallResultCode code) {
-                DCHECK_EQ(code, webapps::InstallResultCode::kSuccessNewInstall);
-                app_id = new_app_id;
-                run_loop.Quit();
-              })));
-
-  run_loop.Run();
-
-  const web_app::WebAppRegistrar& registrar = provider->registrar();
-  DCHECK_EQ(base::UTF8ToUTF16(registrar.GetAppShortName(app_id)), info.title);
-  DCHECK_EQ(registrar.GetAppStartUrl(app_id), info.start_url);
-
-  return app_id;
+webapps::AppId InstallWebApp(Profile* profile,
+                             std::unique_ptr<web_app::WebAppInstallInfo> info) {
+  return web_app::test::InstallWebApp(
+      profile, std::move(info),
+      /*overwrite_existing_manifest_fields=*/true);
 }
 
 }  // namespace apps_helper
@@ -301,7 +270,7 @@ AppsStatusChangeChecker::AppsStatusChangeChecker()
         ->updater()
         ->SetUpdatingStartedCallbackForTesting(base::BindLambdaForTesting(
             [self = weak_ptr_factory_.GetWeakPtr(), profile]() {
-              base::ThreadTaskRunnerHandle::Get()->PostTask(
+              base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
                   FROM_HERE,
                   base::BindOnce(&AppsStatusChangeChecker::InstallSyncedApps,
                                  self, base::Unretained(profile)));
@@ -394,7 +363,8 @@ void AppsStatusChangeChecker::OnExtensionStateChanged(
 }
 
 void AppsStatusChangeChecker::OnAppsReordered(
-    const absl::optional<std::string>& extension_id) {
+    content::BrowserContext* context,
+    const std::optional<std::string>& extension_id) {
   CheckExitCondition();
 }
 

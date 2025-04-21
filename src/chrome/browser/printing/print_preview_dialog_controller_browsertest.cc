@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,16 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "chrome/browser/plugins/chrome_plugin_service_filter.h"
 #include "chrome/browser/plugins/plugin_prefs.h"
@@ -33,7 +32,6 @@
 #include "chrome/grit/generated_resources.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
-#include "content/public/browser/browser_accessibility_state.h"
 #include "content/public/browser/plugin_service.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
@@ -41,8 +39,10 @@
 #include "content/public/common/webplugininfo.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
+#include "content/public/test/scoped_accessibility_mode_override.h"
 #include "content/public/test/test_utils.h"
 #include "ipc/ipc_message_macros.h"
+#include "ui/accessibility/ax_mode.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/ui_base_switches.h"
 #include "url/gurl.h"
@@ -60,14 +60,14 @@ void PluginsLoadedCallback(
 
 void CheckPdfPluginForRenderFrame(content::RenderFrameHost* frame) {
   static const base::FilePath kPdfInternalPluginPath(
-      ChromeContentClient::kPDFPluginPath);
+      ChromeContentClient::kPDFInternalPluginPath);
 
   content::WebPluginInfo pdf_internal_plugin_info;
   ASSERT_TRUE(content::PluginService::GetInstance()->GetPluginInfoByPath(
       kPdfInternalPluginPath, &pdf_internal_plugin_info));
 
   ChromePluginServiceFilter* filter = ChromePluginServiceFilter::GetInstance();
-  EXPECT_TRUE(filter->IsPluginAvailable(frame->GetProcess()->GetID(),
+  EXPECT_TRUE(filter->IsPluginAvailable(frame->GetBrowserContext(),
                                         pdf_internal_plugin_info));
 }
 
@@ -139,15 +139,22 @@ class PrintPreviewDialogControllerBrowserTest : public InProcessBrowserTest {
 
   std::unique_ptr<printing::TestPrintPreviewDialogClonedObserver>
       cloned_tab_observer_;
-  raw_ptr<printing::TestPrintViewManagerForRequestPreview>
+  raw_ptr<printing::TestPrintViewManagerForRequestPreview,
+          AcrossTasksDanglingUntriaged>
       test_print_view_manager_;
-  raw_ptr<WebContents> initiator_ = nullptr;
+  raw_ptr<WebContents, AcrossTasksDanglingUntriaged> initiator_ = nullptr;
 };
 
 // Test to verify that when a initiator navigates, we can create a new preview
 // dialog for the new tab contents.
+// TODO(crbug.com/40251696): Test is flaky on Mac
+#if BUILDFLAG(IS_MAC)
+#define MAYBE_NavigateFromInitiatorTab DISABLED_NavigateFromInitiatorTab
+#else
+#define MAYBE_NavigateFromInitiatorTab NavigateFromInitiatorTab
+#endif
 IN_PROC_BROWSER_TEST_F(PrintPreviewDialogControllerBrowserTest,
-                       NavigateFromInitiatorTab) {
+                       MAYBE_NavigateFromInitiatorTab) {
   // Print for the first time.
   PrintPreview();
 
@@ -181,8 +188,14 @@ IN_PROC_BROWSER_TEST_F(PrintPreviewDialogControllerBrowserTest,
 
 // Test to verify that after reloading the initiator, it creates a new print
 // preview dialog.
+// TODO(crbug.com/40251696): Test is flaky on Mac
+#if BUILDFLAG(IS_MAC)
+#define MAYBE_ReloadInitiatorTab DISABLED_ReloadInitiatorTab
+#else
+#define MAYBE_ReloadInitiatorTab ReloadInitiatorTab
+#endif
 IN_PROC_BROWSER_TEST_F(PrintPreviewDialogControllerBrowserTest,
-                       ReloadInitiatorTab) {
+                       MAYBE_ReloadInitiatorTab) {
   // Print for the first time.
   PrintPreview();
 
@@ -219,8 +232,14 @@ IN_PROC_BROWSER_TEST_F(PrintPreviewDialogControllerBrowserTest,
 
 // Test to verify that after print preview works even when the PDF plugin is
 // disabled for webpages.
+// TODO(crbug.com/40884297): Flaky on Mac12 Test.
+#if BUILDFLAG(IS_MAC)
+#define MAYBE_PdfPluginDisabled DISABLED_PdfPluginDisabled
+#else
+#define MAYBE_PdfPluginDisabled PdfPluginDisabled
+#endif
 IN_PROC_BROWSER_TEST_F(PrintPreviewDialogControllerBrowserTest,
-                       PdfPluginDisabled) {
+                       MAYBE_PdfPluginDisabled) {
   // Make sure plugins are loaded.
   {
     base::RunLoop run_loop;
@@ -231,8 +250,7 @@ IN_PROC_BROWSER_TEST_F(PrintPreviewDialogControllerBrowserTest,
   // Get the PDF plugin info.
   content::WebPluginInfo pdf_external_plugin_info;
   ASSERT_TRUE(content::PluginService::GetInstance()->GetPluginInfoByPath(
-      base::FilePath(FILE_PATH_LITERAL(
-          "chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/")),
+      base::FilePath(ChromeContentClient::kPDFExtensionPluginPath),
       &pdf_external_plugin_info));
 
   // Disable the PDF plugin.
@@ -240,9 +258,8 @@ IN_PROC_BROWSER_TEST_F(PrintPreviewDialogControllerBrowserTest,
 
   // Make sure it is actually disabled for webpages.
   ChromePluginServiceFilter* filter = ChromePluginServiceFilter::GetInstance();
-  EXPECT_FALSE(filter->IsPluginAvailable(
-      initiator()->GetPrimaryMainFrame()->GetProcess()->GetID(),
-      pdf_external_plugin_info));
+  EXPECT_FALSE(filter->IsPluginAvailable(initiator()->GetBrowserContext(),
+                                         pdf_external_plugin_info));
 
   PrintPreview();
 
@@ -258,22 +275,19 @@ IN_PROC_BROWSER_TEST_F(PrintPreviewDialogControllerBrowserTest,
   int frame_count;
   do {
     base::RunLoop run_loop;
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, run_loop.QuitClosure(), base::Seconds(1));
     run_loop.Run();
 
     frame_count = 0;
     preview_dialog->GetPrimaryMainFrame()->ForEachRenderFrameHost(
-        base::BindLambdaForTesting(
-            [&frame_count](content::RenderFrameHost* /*frame*/) {
-              ++frame_count;
-            }));
+        [&frame_count](content::RenderFrameHost* /*frame*/) { ++frame_count; });
   } while (frame_count < kExpectedFrameCount);
   ASSERT_EQ(kExpectedFrameCount, frame_count);
 
   // Make sure all the frames in the dialog has access to the PDF plugin.
   preview_dialog->GetPrimaryMainFrame()->ForEachRenderFrameHost(
-      base::BindRepeating(&CheckPdfPluginForRenderFrame));
+      &CheckPdfPluginForRenderFrame);
 
   PrintPreviewDone();
 }
@@ -285,14 +299,21 @@ std::u16string GetExpectedPrefix() {
                                     std::u16string());
 }
 
-const std::vector<task_manager::WebContentsTag*>& GetTrackedTags() {
+const std::vector<raw_ptr<task_manager::WebContentsTag, VectorExperimental>>&
+GetTrackedTags() {
   return task_manager::WebContentsTagsManager::GetInstance()->tracked_tags();
 }
 
 }  // namespace
 
+// TODO(crbug.com/40879071): Flaky on macos12 builds.
+#if BUILDFLAG(IS_MAC)
+#define MAYBE_TaskManagementTest DISABLED_TaskManagementTest
+#else
+#define MAYBE_TaskManagementTest TaskManagementTest
+#endif
 IN_PROC_BROWSER_TEST_F(PrintPreviewDialogControllerBrowserTest,
-                       TaskManagementTest) {
+                       MAYBE_TaskManagementTest) {
   // This test starts with two tabs open.
   EXPECT_EQ(2U, GetTrackedTags().size());
 
@@ -338,12 +359,17 @@ IN_PROC_BROWSER_TEST_F(PrintPreviewDialogControllerBrowserTest,
 
 IN_PROC_BROWSER_TEST_F(PrintPreviewDialogControllerBrowserTest,
                        PrintPreviewPdfAccessibility) {
-  content::BrowserAccessibilityState::GetInstance()->EnableAccessibility();
-  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(),
-                                           GURL("data:text/html,HelloWorld")));
+  content::ScopedAccessibilityModeOverride mode_override(ui::kAXModeComplete);
+  // Put a DIV after the text we're going to search for. The last node in the
+  // tree will not have a newline appended, but all the others will. Avoid
+  // making assumptions about whether it's the last node or not. There may be
+  // nodes for headers and footers following the document contents.
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(
+      browser(), GURL("data:text/html,HelloWorld<div>next</div>")));
   PrintPreview();
   WebContents* preview_dialog = GetPrintPreviewDialog();
-  WaitForAccessibilityTreeToContainNodeWithName(preview_dialog, "HelloWorld");
+  WaitForAccessibilityTreeToContainNodeWithName(preview_dialog,
+                                                "HelloWorld\r\n");
 
   PrintPreviewDone();
 }

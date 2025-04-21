@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -105,6 +105,11 @@ void ArcPrintSpoolerBridge::OnPrintDocumentSaved(
   auto web_contents = CreateArcCustomTabWebContents(profile_, url);
   std::move(callback).Run(PrintSessionImpl::Create(
       std::move(web_contents), arc_window, std::move(instance)));
+}
+
+// static
+void ArcPrintSpoolerBridge::EnsureFactoryBuilt() {
+  ArcPrintSpoolerBridgeFactory::GetInstance();
 }
 
 }  // namespace arc

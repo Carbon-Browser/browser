@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,12 +17,13 @@
 #include "base/rand_util.h"
 #include "base/time/tick_clock.h"
 #include "net/base/backoff_entry.h"
-#include "net/base/network_isolation_key.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/base/rand_callback.h"
 #include "net/reporting/reporting_cache.h"
 #include "net/reporting/reporting_delegate.h"
 #include "net/reporting/reporting_endpoint.h"
 #include "net/reporting/reporting_policy.h"
+#include "net/reporting/reporting_target_type.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
@@ -69,9 +70,13 @@ class ReportingEndpointManagerImpl : public ReportingEndpointManager {
     int total_weight = 0;
 
     for (const ReportingEndpoint& endpoint : endpoints) {
-      if (!delegate_->CanUseClient(endpoint.group_key.origin,
-                                   endpoint.info.url)) {
-        continue;
+      // Enterprise endpoints don't have an origin.
+      if (endpoint.group_key.target_type == ReportingTargetType::kDeveloper) {
+        DCHECK(endpoint.group_key.origin.has_value());
+        if (!delegate_->CanUseClient(endpoint.group_key.origin.value(),
+                                     endpoint.info.url)) {
+          continue;
+        }
       }
 
       // If this client is lower priority than the ones we've found, skip it.
@@ -83,7 +88,7 @@ class ReportingEndpointManagerImpl : public ReportingEndpointManager {
       // This brings each match to the front of the MRU cache, so if an entry
       // frequently matches requests, it's more likely to stay in the cache.
       auto endpoint_backoff_it = endpoint_backoff_.Get(EndpointBackoffKey(
-          group_key.network_isolation_key, endpoint.info.url));
+          group_key.network_anonymization_key, endpoint.info.url));
       if (endpoint_backoff_it != endpoint_backoff_.end() &&
           endpoint_backoff_it->second->ShouldRejectRequest()) {
         continue;
@@ -121,13 +126,14 @@ class ReportingEndpointManagerImpl : public ReportingEndpointManager {
 
     // TODO(juliatuttle): Can we reach this in some weird overflow case?
     NOTREACHED();
-    return ReportingEndpoint();
   }
 
-  void InformOfEndpointRequest(const NetworkIsolationKey& network_isolation_key,
-                               const GURL& endpoint,
-                               bool succeeded) override {
-    EndpointBackoffKey endpoint_backoff_key(network_isolation_key, endpoint);
+  void InformOfEndpointRequest(
+      const NetworkAnonymizationKey& network_anonymization_key,
+      const GURL& endpoint,
+      bool succeeded) override {
+    EndpointBackoffKey endpoint_backoff_key(network_anonymization_key,
+                                            endpoint);
     // This will bring the entry to the front of the cache, if it exists.
     auto endpoint_backoff_it = endpoint_backoff_.Get(endpoint_backoff_key);
     if (endpoint_backoff_it == endpoint_backoff_.end()) {
@@ -140,7 +146,7 @@ class ReportingEndpointManagerImpl : public ReportingEndpointManager {
   }
 
  private:
-  using EndpointBackoffKey = std::pair<NetworkIsolationKey, GURL>;
+  using EndpointBackoffKey = std::pair<NetworkAnonymizationKey, GURL>;
 
   const raw_ptr<const ReportingPolicy> policy_;
   const raw_ptr<const base::TickClock> tick_clock_;

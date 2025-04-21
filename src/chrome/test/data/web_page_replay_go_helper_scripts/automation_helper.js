@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -134,4 +134,11 @@ const automation_helper = (function() {
   }
 
   return automation_helper;
+})();
+(function () {
+  // Some sites have beforeunload triggers to stop user navigation away.
+  // For testing purposes, we can suppress those here.
+  window.addEventListener('beforeunload', function (event) {
+    event.stopImmediatePropagation();
+  });
 })();

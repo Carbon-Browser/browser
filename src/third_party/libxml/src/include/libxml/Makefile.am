@@ -26,7 +26,6 @@ xmlinc_HEADERS = \
 		uri.h \
 		valid.h \
 		xlink.h \
-		xmlversion.h \
 		catalog.h \
 		threads.h \
 		globals.h \
@@ -50,4 +49,6 @@ xmlinc_HEADERS = \
 		xmlsave.h \
 		schematron.h
 
-EXTRA_DIST = xmlversion.h.in
+nodist_xmlinc_HEADERS = xmlversion.h
+
+EXTRA_DIST = xmlversion.h.in meson.build

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,10 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/web_contents.h"
-#include "content/public/browser/web_ui_data_source.h"
 #include "ui/base/template_expressions.h"
 
 class GURL;
@@ -69,12 +68,7 @@ class CONTENT_EXPORT URLDataSource {
 
   // Return the mimetype that should be sent with this response, or empty
   // string to specify no mime type.
-  virtual std::string GetMimeType(const GURL& url);
-
-  // Deprecated. Prefer method above.
-  // TODO(crbug.com/1344742): Remove after migrating to
-  // `GetMimeType(const GURL& url)`.
-  virtual std::string GetMimeType(const std::string& path);
+  virtual std::string GetMimeType(const GURL& url) = 0;
 
   // Returns true if the URLDataSource should replace an existing URLDataSource
   // with the same name that has already been registered. The default is true.
@@ -104,7 +98,7 @@ class CONTENT_EXPORT URLDataSource {
       network::mojom::CSPDirectiveName directive);
 
   // By default, neither of these headers are set. Override to change this.
-  // TODO(https://crbug.com/1189194): Consider setting COOP:same-origin and
+  // TODO(crbug.com/40755309): Consider setting COOP:same-origin and
   // COEP:require-corp as the default instead.
   virtual std::string GetCrossOriginOpenerPolicy();
   virtual std::string GetCrossOriginEmbedderPolicy();

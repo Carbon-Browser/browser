@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,8 +27,6 @@ class CORE_EXPORT V8MetricsRecorder : public v8::metrics::Recorder {
   void AddMainThreadEvent(const v8::metrics::WasmModuleCompiled& event,
                           ContextId context_id) override;
   void AddMainThreadEvent(const v8::metrics::WasmModuleInstantiated& event,
-                          ContextId context_id) override;
-  void AddMainThreadEvent(const v8::metrics::WasmModuleTieredUp& event,
                           ContextId context_id) override;
 
   void AddMainThreadEvent(const v8::metrics::GarbageCollectionFullCycle& event,
@@ -71,7 +69,7 @@ class CORE_EXPORT V8MetricsRecorder : public v8::metrics::Recorder {
         : recorder(ukm_recorder), source_id(ukm_source_id) {}
   };
 
-  absl::optional<UkmRecorderAndSourceId> GetUkmRecorderAndSourceId(
+  std::optional<UkmRecorderAndSourceId> GetUkmRecorderAndSourceId(
       ContextId context_id);
 
   v8::Isolate* isolate_;

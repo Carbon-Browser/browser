@@ -1,11 +1,11 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//extensions/buildflags/buildflags.gni")
 
-assert(enable_extensions,
-       "Cannot depend on extensions because enable_extensions=false.")
+assert(enable_extensions_core,
+       "Cannot depend on extensions because extensions are disabled.")
 
 source_set("i18n") {
   sources = [
@@ -13,12 +13,14 @@ source_set("i18n") {
     "i18n_api.h",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
+  public_deps = [ "//extensions/browser:browser_sources" ]
+
   deps = [
     "//base",
-    "//components/language/core/browser:browser",
+    "//components/language/core/browser",
     "//components/prefs",
     "//extensions/common/api",
   ]
-
-  public_deps = [ "//extensions/browser:browser_sources" ]
 }

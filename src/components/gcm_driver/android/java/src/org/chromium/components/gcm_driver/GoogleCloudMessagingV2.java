@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -67,7 +67,6 @@ public class GoogleCloudMessagingV2 implements GoogleCloudMessagingSubscriber {
         }
         data.putString(EXTRA_SUBTYPE, subtype);
         unsubscribe(source, data);
-        return;
     }
 
     /**
@@ -132,9 +131,7 @@ public class GoogleCloudMessagingV2 implements GoogleCloudMessagingSubscriber {
         if (Looper.getMainLooper() == Looper.myLooper()) {
             throw new IOException(ERROR_MAIN_THREAD);
         }
-        if (PackageUtils.getPackageVersion(
-                    ContextUtils.getApplicationContext(), GOOGLE_PLAY_SERVICES_PACKAGE)
-                < 0) {
+        if (!PackageUtils.isPackageInstalled(GOOGLE_PLAY_SERVICES_PACKAGE)) {
             throw new IOException("Google Play Services missing");
         }
         if (data == null) {
@@ -142,13 +139,14 @@ public class GoogleCloudMessagingV2 implements GoogleCloudMessagingSubscriber {
         }
 
         final BlockingQueue<Intent> responseResult = new LinkedBlockingQueue<Intent>();
-        Handler responseHandler = new Handler(Looper.getMainLooper()) {
-            @Override
-            public void handleMessage(Message msg) {
-                Intent res = (Intent) msg.obj;
-                responseResult.add(res);
-            }
-        };
+        Handler responseHandler =
+                new Handler(Looper.getMainLooper()) {
+                    @Override
+                    public void handleMessage(Message msg) {
+                        Intent res = (Intent) msg.obj;
+                        responseResult.add(res);
+                    }
+                };
         Messenger responseMessenger = new Messenger(responseHandler);
 
         Intent intent = new Intent(ACTION_C2DM_REGISTER);
@@ -188,8 +186,12 @@ public class GoogleCloudMessagingV2 implements GoogleCloudMessagingSubscriber {
                 Intent target = new Intent();
                 // Fill in the package, to prevent the intent from being used.
                 target.setPackage("com.google.example.invalidpackage");
-                mAppPendingIntent = PendingIntent.getBroadcast(ContextUtils.getApplicationContext(),
-                        0, target, IntentUtils.getPendingIntentMutabilityFlag(false));
+                mAppPendingIntent =
+                        PendingIntent.getBroadcast(
+                                ContextUtils.getApplicationContext(),
+                                0,
+                                target,
+                                IntentUtils.getPendingIntentMutabilityFlag(false));
             }
         }
         intent.putExtra(INTENT_PARAM_APP, mAppPendingIntent);

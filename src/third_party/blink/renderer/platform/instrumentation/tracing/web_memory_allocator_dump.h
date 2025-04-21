@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 
+#include "base/memory/raw_ptr.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
@@ -52,7 +53,8 @@ class PLATFORM_EXPORT WebMemoryAllocatorDump final {
   blink::WebMemoryAllocatorDumpGuid Guid() const;
 
  private:
-  base::trace_event::MemoryAllocatorDump* memory_allocator_dump_;  // Not owned.
+  raw_ptr<base::trace_event::MemoryAllocatorDump>
+      memory_allocator_dump_;  // Not owned.
   blink::WebMemoryAllocatorDumpGuid guid_;
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include "components/feedback/system_logs/system_logs_source.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ash/public/mojom/cros_display_config.mojom.h"
+#include "chromeos/crosapi/mojom/cros_display_config.mojom.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #endif
 
@@ -34,6 +34,9 @@ class ChromeInternalLogSource : public SystemLogsSource {
   void PopulateExtensionInfoLogs(SystemLogsResponse* response);
   void PopulatePowerApiLogs(SystemLogsResponse* response);
   void PopulateDataReductionProxyLogs(SystemLogsResponse* response);
+#if !BUILDFLAG(IS_CHROMEOS)
+  void PopulateVariations(SystemLogsResponse* response);
+#endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   void PopulateLocalStateSettings(SystemLogsResponse* response);
@@ -42,14 +45,14 @@ class ChromeInternalLogSource : public SystemLogsSource {
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if BUILDFLAG(IS_WIN)
-  void PopulateUsbKeyboardDetected(SystemLogsResponse* response);
   void PopulateEnrolledToDomain(SystemLogsResponse* response);
   void PopulateInstallerBrandCode(SystemLogsResponse* response);
   void PopulateLastUpdateState(SystemLogsResponse* response);
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  mojo::Remote<ash::mojom::CrosDisplayConfigController> cros_display_config_;
+  mojo::Remote<crosapi::mojom::CrosDisplayConfigController>
+      cros_display_config_;
 #endif
 };
 

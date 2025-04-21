@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,6 +38,10 @@ message CallStackProfile {
 
     // Index to the module identifier in |module_ids| of CallStackProfile.
     optional int32 module_id_index = 2;
+
+    // Currently only used for Java function names. In cases where this is
+    // available, this should be used instead of the address.
+    optional string function_name = 3;
   }
 
   // The sampled call stack.
@@ -152,11 +156,11 @@ message CallStackProfile {
   // The stack samples collected for this profile.
   repeated StackSample stack_sample = 9;
 
-  // Time of the first sample relative to Chrome start. This value may be
-  // imprecise or wrong for Windows clients without high-resolution
-  // TimeTicks. TODO(wittman): Clarify the actual properties of this value for
-  // clients without high-resolution TimeTicks once we understand what they are.
-  optional int64 profile_start_time_offset_ms = 10;
+  // Time of the profile relative to the start of the process being profiled.
+  // For CPU profiles, this is the time of the first sample. For Heap profiles
+  // whose samples don't have defined times, it is the time the profile is
+  // collected.
+  optional int64 profile_time_offset_ms = 10;
 
   // Duration of this profile.
   optional int32 profile_duration_ms = 3;

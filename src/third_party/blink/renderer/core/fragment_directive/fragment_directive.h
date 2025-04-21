@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@ namespace blink {
 
 class Document;
 class ScriptState;
+class SelectorDirective;
 class V8UnionRangeOrSelection;
 
 // This class implements the `window.fragmentDirective` web API and serves as a
@@ -54,8 +55,9 @@ class FragmentDirective : public ScriptWrappable {
 
   // Web-exposed FragmentDirective interface.
   const HeapVector<Member<Directive>>& items() const;
-  ScriptPromise createSelectorDirective(ScriptState*,
-                                        const V8UnionRangeOrSelection*);
+  ScriptPromise<SelectorDirective> createSelectorDirective(
+      ScriptState*,
+      const V8UnionRangeOrSelection*);
 
  private:
   void ParseDirectives(const String& fragment_directive);

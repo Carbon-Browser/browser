@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Copyright 2014 Blake Embrey (hello@blakeembrey.com)
 // Use of this source code is governed by an MIT-style license that can be
 // found in the LICENSE file or at https://opensource.org/licenses/MIT.
@@ -6,12 +6,13 @@
 #ifndef THIRD_PARTY_LIBURLPATTERN_PATTERN_H_
 #define THIRD_PARTY_LIBURLPATTERN_PATTERN_H_
 
+#include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
+
 #include "base/component_export.h"
-#include "third_party/abseil-cpp/absl/strings/string_view.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/liburlpattern/options.h"
 
 namespace liburlpattern {
@@ -135,6 +136,9 @@ class COMPONENT_EXPORT(LIBURLPATTERN) Pattern {
 
   const std::vector<Part>& PartList() const { return part_list_; }
 
+  // Returns true if the pattern has at least one kRegex part.
+  bool HasRegexGroups() const;
+
   // Returns true if the pattern can match input strings using `DirectMatch()`.
   bool CanDirectMatch() const;
 
@@ -148,9 +152,9 @@ class COMPONENT_EXPORT(LIBURLPATTERN) Pattern {
   // is populated with name:value pairs for matched pattern groups.  If a
   // group had an optional modifier and it did not match any input characters
   // then its `group_list_out` value will be std::nullopt.
-  bool DirectMatch(absl::string_view input,
-                   std::vector<std::pair<absl::string_view,
-                                         absl::optional<absl::string_view>>>*
+  bool DirectMatch(std::string_view input,
+                   std::vector<std::pair<std::string_view,
+                                         std::optional<std::string_view>>>*
                        group_list_out) const;
 
  private:

@@ -1,10 +1,17 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/prefs/chrome_command_line_pref_store.h"
 
 #include <stddef.h>
+
+#include <array>
 
 #include "base/command_line.h"
 #include "base/memory/ref_counted.h"
@@ -41,7 +48,7 @@ class TestCommandLinePrefStore : public ChromeCommandLinePrefStore {
     const base::Value* value = nullptr;
     ASSERT_TRUE(GetValue(proxy_config::prefs::kProxy, &value));
     ASSERT_TRUE(value->is_dict());
-    ProxyConfigDictionary dict(value->Clone());
+    ProxyConfigDictionary dict(value->GetDict().Clone());
     ProxyPrefs::ProxyMode actual_mode;
     ASSERT_TRUE(dict.GetMode(&actual_mode));
     EXPECT_EQ(expected_mode, actual_mode);
@@ -52,16 +59,16 @@ class TestCommandLinePrefStore : public ChromeCommandLinePrefStore {
     const base::Value* value = nullptr;
     ASSERT_TRUE(GetValue(prefs::kCipherSuiteBlacklist, &value));
     ASSERT_TRUE(value->is_list());
-    ASSERT_EQ(cipher_count, value->GetListDeprecated().size());
+    ASSERT_EQ(cipher_count, value->GetList().size());
 
-    for (const base::Value& cipher_string : value->GetListDeprecated()) {
+    for (const base::Value& cipher_string : value->GetList()) {
       ASSERT_TRUE(cipher_string.is_string());
       EXPECT_EQ(*ciphers++, cipher_string.GetString());
     }
   }
 
  private:
-  ~TestCommandLinePrefStore() override {}
+  ~TestCommandLinePrefStore() override = default;
 };
 
 // Tests a simple string pref on the command line.
@@ -119,7 +126,7 @@ TEST(ChromeCommandLinePrefStoreTest, MultipleSwitches) {
   const base::Value* value = nullptr;
   ASSERT_TRUE(store->GetValue(proxy_config::prefs::kProxy, &value));
   ASSERT_TRUE(value->is_dict());
-  ProxyConfigDictionary dict(value->Clone());
+  ProxyConfigDictionary dict(value->GetDict().Clone());
 
   std::string string_result;
 
@@ -226,20 +233,20 @@ TEST(ChromeCommandLinePrefStoreTest, ExplicitlyAllowedPorts) {
   cl.AppendSwitchASCII(switches::kExplicitlyAllowedPorts,
                        "79,554,  6000, foo,1000000");
   auto store = base::MakeRefCounted<TestCommandLinePrefStore>(&cl);
-  constexpr int kExpectedPorts[] = {
+  constexpr static const auto kExpectedPorts = std::to_array<int>({
       79,
       554,
       6000,
-  };
+  });
 
   const base::Value* value = nullptr;
   ASSERT_TRUE(store->GetValue(prefs::kExplicitlyAllowedNetworkPorts, &value));
   ASSERT_TRUE(value);
   ASSERT_TRUE(value->is_list());
-  ASSERT_EQ(std::size(kExpectedPorts), value->GetListDeprecated().size());
+  ASSERT_EQ(std::size(kExpectedPorts), value->GetList().size());
 
   int i = 0;
-  for (const base::Value& port : value->GetListDeprecated()) {
+  for (const base::Value& port : value->GetList()) {
     ASSERT_TRUE(port.is_int());
     EXPECT_EQ(kExpectedPorts[i], port.GetInt());
     ++i;

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "media/mojo/common/media_type_converters.h"
 
@@ -74,7 +74,7 @@ void MojoAudioEncoderService::OnDone(MojoDoneCallback callback,
 
 void MojoAudioEncoderService::OnOutput(
     EncodedAudioBuffer output,
-    absl::optional<media::AudioEncoder::CodecDescription> desc) {
+    std::optional<media::AudioEncoder::CodecDescription> desc) {
   client_->OnEncodedBufferReady(
       std::move(output),
       desc.value_or(media::AudioEncoder::CodecDescription()));

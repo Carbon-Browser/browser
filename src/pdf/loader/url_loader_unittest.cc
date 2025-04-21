@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/containers/heap_array.h"
 #include "base/containers/span.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_split.h"
@@ -55,7 +56,8 @@ using ::testing::UnorderedElementsAreArray;
 
 constexpr char kOriginUrl[] = "http://example.com/";
 constexpr char kDocumentUrl[] = "http://example.com/embedder/index.html";
-constexpr base::span<const char> kFakeData = "fake data";
+constexpr base::span<const char> kFakeData =
+    base::span_from_cstring("fake data");
 
 size_t GetRequestHeaderCount(const blink::WebURLRequest& request) {
   struct : public blink::WebHTTPHeaderVisitor {
@@ -168,8 +170,8 @@ class UrlLoaderTest : public testing::Test {
   std::unique_ptr<UrlLoader> loader_;
 
   // Becomes invalid if `loader_` is closed or destructed.
-  raw_ptr<MockWebAssociatedURLLoader> mock_url_loader_ =
-      fake_client_.mock_url_loader();
+  raw_ptr<MockWebAssociatedURLLoader, DisableDanglingPtrDetection>
+      mock_url_loader_ = fake_client_.mock_url_loader();
 
   blink::WebURLRequest saved_request_;
 };
@@ -240,8 +242,9 @@ TEST_F(UrlLoaderTest, OpenWithHeaders) {
 }
 
 TEST_F(UrlLoaderTest, OpenWithBody) {
+  static constexpr char kBodyData[] = "fake body";
   UrlRequest request;
-  request.body = "fake body";
+  request.body = kBodyData;
   loader_->Open(request, mock_callback_.Get());
 
   blink::WebHTTPBody request_body = saved_request_.HttpBody();
@@ -251,13 +254,13 @@ TEST_F(UrlLoaderTest, OpenWithBody) {
   EXPECT_TRUE(request_body.ElementAt(0, element));
   EXPECT_EQ(blink::HTTPBodyElementType::kTypeData, element.type);
 
-  std::string data;
+  auto data = base::HeapArray<uint8_t>::Uninit(element.data.size());
   element.data.ForEachSegment(
-      [&](const char* segment, size_t length, size_t pos) {
-        data.append(segment, length);
+      [&](base::span<const uint8_t> segment, size_t segment_offset) {
+        data.subspan(segment_offset).copy_prefix_from(segment);
         return true;
       });
-  EXPECT_EQ("fake body", data);
+  EXPECT_EQ(base::byte_span_from_cstring(kBodyData), data.as_span());
 }
 
 TEST_F(UrlLoaderTest, OpenWithCustomReferrerUrl) {
@@ -323,7 +326,7 @@ TEST_F(UrlLoaderTest, DidReceiveData) {
   loader_->ReadResponseBody(buffer, mock_callback_.Get());
   EXPECT_CALL(mock_callback_, Run(kFakeData.size()));
 
-  loader_->DidReceiveData(kFakeData.data(), kFakeData.size());
+  loader_->DidReceiveData(kFakeData);
 
   EXPECT_THAT(buffer, ElementsAreArray(kFakeData));
 }
@@ -335,7 +338,7 @@ TEST_F(UrlLoaderTest, DidReceiveDataWithZeroLength) {
   loader_->ReadResponseBody(buffer, mock_callback_.Get());
   EXPECT_CALL(mock_callback_, Run).Times(0);
 
-  loader_->DidReceiveData(kFakeData.data(), 0);
+  loader_->DidReceiveData(kFakeData.first(0u));
 
   EXPECT_THAT(buffer, Each(0));
 }
@@ -345,7 +348,7 @@ TEST_F(UrlLoaderTest, DidReceiveDataBelowUpperThreshold) {
   EXPECT_CALL(*mock_url_loader_, SetDefersLoading).Times(0);
 
   char buffer[3] = {};
-  loader_->DidReceiveData(buffer, sizeof(buffer));
+  loader_->DidReceiveData(buffer);
 }
 
 TEST_F(UrlLoaderTest, DidReceiveDataCrossUpperThreshold) {
@@ -360,23 +363,23 @@ TEST_F(UrlLoaderTest, DidReceiveDataCrossUpperThreshold) {
   }
 
   char buffer[4] = {};
-  loader_->DidReceiveData(buffer, sizeof(buffer));
+  loader_->DidReceiveData(buffer);
 }
 
 TEST_F(UrlLoaderTest, DidReceiveDataAboveUpperThreshold) {
   StartLoadWithThresholds(/*lower=*/2, /*upper=*/4);
 
   char buffer[4] = {};
-  loader_->DidReceiveData(buffer, sizeof(buffer));
+  loader_->DidReceiveData(buffer);
   EXPECT_CALL(*mock_url_loader_, SetDefersLoading).Times(0);
 
-  loader_->DidReceiveData(buffer, sizeof(buffer));
+  loader_->DidReceiveData(buffer);
 }
 
 TEST_F(UrlLoaderTest, ReadResponseBody) {
   loader_->Open(UrlRequest(), mock_callback_.Get());
   loader_->DidReceiveResponse(blink::WebURLResponse());
-  loader_->DidReceiveData(kFakeData.data(), kFakeData.size());
+  loader_->DidReceiveData(kFakeData);
   EXPECT_CALL(mock_callback_, Run(kFakeData.size()));
 
   char buffer[kFakeData.size()] = {};
@@ -414,7 +417,7 @@ TEST_F(UrlLoaderTest, ReadResponseBodyWithSmallerBuffer) {
 
   loader_->Open(UrlRequest(), mock_callback_.Get());
   loader_->DidReceiveResponse(blink::WebURLResponse());
-  loader_->DidReceiveData(kFakeData.data(), kFakeData.size());
+  loader_->DidReceiveData(kFakeData);
   EXPECT_CALL(mock_callback_, Run(kBufferSize));
 
   char buffer[kBufferSize] = {};
@@ -432,7 +435,7 @@ TEST_F(UrlLoaderTest, ReadResponseBodyWithSmallerBuffer) {
 TEST_F(UrlLoaderTest, ReadResponseBodyWithBiggerBuffer) {
   loader_->Open(UrlRequest(), mock_callback_.Get());
   loader_->DidReceiveResponse(blink::WebURLResponse());
-  loader_->DidReceiveData(kFakeData.data(), kFakeData.size());
+  loader_->DidReceiveData(kFakeData);
   EXPECT_CALL(mock_callback_, Run(kFakeData.size()));
 
   char buffer[kFakeData.size() + 1] = {};
@@ -450,7 +453,7 @@ TEST_F(UrlLoaderTest, ReadResponseBodyWithBiggerBuffer) {
 TEST_F(UrlLoaderTest, ReadResponseBodyWhileLoadComplete) {
   loader_->Open(UrlRequest(), mock_callback_.Get());
   loader_->DidReceiveResponse(blink::WebURLResponse());
-  loader_->DidReceiveData(kFakeData.data(), kFakeData.size());
+  loader_->DidReceiveData(kFakeData);
   loader_->DidFinishLoading();
   EXPECT_CALL(mock_callback_, Run(kFakeData.size()));
 
@@ -481,7 +484,7 @@ TEST_F(UrlLoaderTest, ReadResponseBodyWhileLoadCompleteWithoutData) {
 TEST_F(UrlLoaderTest, ReadResponseBodyWhileLoadCompleteWithError) {
   loader_->Open(UrlRequest(), mock_callback_.Get());
   loader_->DidReceiveResponse(blink::WebURLResponse());
-  loader_->DidReceiveData(kFakeData.data(), kFakeData.size());
+  loader_->DidReceiveData(kFakeData);
   loader_->DidFail(MakeWebURLError(net::ERR_FAILED));
   EXPECT_CALL(mock_callback_, Run(Result::kErrorFailed));
 
@@ -495,7 +498,7 @@ TEST_F(UrlLoaderTest, ReadResponseBodyAboveLowerThreshold) {
   StartLoadWithThresholds(/*lower=*/2, /*upper=*/4);
 
   char write_buffer[5] = {};
-  loader_->DidReceiveData(write_buffer, sizeof(write_buffer));
+  loader_->DidReceiveData(write_buffer);
   EXPECT_CALL(*mock_url_loader_, SetDefersLoading).Times(0);
 
   char buffer[2] = {};
@@ -506,7 +509,7 @@ TEST_F(UrlLoaderTest, ReadResponseBodyCrossLowerThreshold) {
   StartLoadWithThresholds(/*lower=*/2, /*upper=*/4);
 
   char write_buffer[5] = {};
-  loader_->DidReceiveData(write_buffer, sizeof(write_buffer));
+  loader_->DidReceiveData(write_buffer);
   {
     InSequence resume_before_read_callback;
     EXPECT_CALL(*mock_url_loader_, SetDefersLoading(false));
@@ -521,7 +524,7 @@ TEST_F(UrlLoaderTest, ReadResponseBodyBelowLowerThreshold) {
   StartLoadWithThresholds(/*lower=*/2, /*upper=*/4);
 
   char write_buffer[5] = {};
-  loader_->DidReceiveData(write_buffer, sizeof(write_buffer));
+  loader_->DidReceiveData(write_buffer);
 
   char buffer[3] = {};
   loader_->ReadResponseBody(buffer, mock_callback_.Get());
@@ -579,8 +582,9 @@ TEST_F(UrlLoaderTest, DidFailWithErrorNetworkAccessDenied) {
 }
 
 TEST_F(UrlLoaderTest, DidFailWithWebSecurityViolationError) {
-  blink::WebURLError error(network::CorsErrorStatus(),
-                           blink::WebURLError::HasCopyInCache::kFalse, GURL());
+  blink::WebURLError error(
+      network::CorsErrorStatus(network::mojom::CorsError::kDisallowedByMode),
+      blink::WebURLError::HasCopyInCache::kFalse, GURL());
   ASSERT_TRUE(error.is_web_security_violation());
 
   int32_t result = DidFailWithError(error);

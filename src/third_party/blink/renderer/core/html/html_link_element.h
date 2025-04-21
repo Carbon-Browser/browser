@@ -27,6 +27,7 @@
 #include <memory>
 
 #include "base/task/single_thread_task_runner.h"
+#include "services/network/public/mojom/referrer_policy.mojom-shared.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/css/css_style_sheet.h"
 #include "third_party/blink/renderer/core/dom/create_element_flags.h"
@@ -139,7 +140,6 @@ class CORE_EXPORT HTMLLinkElement final : public HTMLElement,
   void RemovedFrom(ContainerNode&) override;
   bool IsURLAttribute(const Attribute&) const override;
   bool HasLegalLinkAttribute(const QualifiedName&) const override;
-  const QualifiedName& SubResourceAttributeName() const override;
   bool SheetLoaded() override;
   void NotifyLoadedSheetAndAllCriticalSubresources(
       LoadedSheetErrorStatus) override;
@@ -151,6 +151,25 @@ class CORE_EXPORT HTMLLinkElement final : public HTMLElement,
   // From LinkLoaderClient
   void LinkLoaded() override;
   void LinkLoadingErrored() override;
+
+  bool MediaQueryMatches() const;
+
+  void HandleExpectBlockingChanges();
+  void HandleExpectHrefChanges(const String& old_value,
+                               const String& new_value);
+  void HandleExpectMediaChanges();
+
+  void RemoveExpectRenderBlockingLink(const String& href = String());
+  void AddExpectRenderBlockingLinkIfNeeded(const String& href = String(),
+                                           bool media_known_to_match = false);
+
+  AtomicString ParseSameDocumentIdFromHref(const String& href);
+
+  // Trigger payment link handling if below conditions are met:
+  // 1. `rel` is "payment".
+  // 2. `href` is not empty.
+  // 3. the link element is already attached to the document.
+  void MaybeHandlePaymentLink();
 
   Member<LinkResource> link_;
   Member<LinkLoader> link_loader_;

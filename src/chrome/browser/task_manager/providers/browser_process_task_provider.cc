@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,9 @@
 
 namespace task_manager {
 
-BrowserProcessTaskProvider::BrowserProcessTaskProvider() {
-}
+BrowserProcessTaskProvider::BrowserProcessTaskProvider() = default;
 
-BrowserProcessTaskProvider::~BrowserProcessTaskProvider() {
-}
+BrowserProcessTaskProvider::~BrowserProcessTaskProvider() = default;
 
 Task* BrowserProcessTaskProvider::GetTaskOfUrlRequest(int child_id,
                                                       int route_id) {

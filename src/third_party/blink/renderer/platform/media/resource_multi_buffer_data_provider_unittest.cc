@@ -1,16 +1,25 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "third_party/blink/renderer/platform/media/resource_multi_buffer_data_provider.h"
 
 #include <stdint.h>
+
 #include <algorithm>
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/containers/heap_array.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
@@ -22,7 +31,6 @@
 #include "net/http/http_request_headers.h"
 #include "net/http/http_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/blink/public/platform/media/url_index.h"
 #include "third_party/blink/public/platform/web_network_state_notifier.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/platform/web_url.h"
@@ -31,6 +39,7 @@
 #include "third_party/blink/public/platform/web_url_response.h"
 #include "third_party/blink/renderer/platform/media/testing/mock_resource_fetch_context.h"
 #include "third_party/blink/renderer/platform/media/testing/mock_web_associated_url_loader.h"
+#include "third_party/blink/renderer/platform/media/url_index.h"
 
 namespace blink {
 
@@ -55,8 +64,8 @@ static bool CorrectAcceptEncoding(const WebURLRequest& request) {
                           .HttpHeaderField(WebString::FromUTF8(
                               net::HttpRequestHeaders::kAcceptEncoding))
                           .Utf8();
-  return (value.find("identity;q=1") != std::string::npos) &&
-         (value.find("*;q=0") != std::string::npos);
+  return (base::Contains(value, "identity;q=1")) &&
+         (base::Contains(value, "*;q=0"));
 }
 
 class ResourceMultiBufferDataProviderTest : public testing::Test {
@@ -76,9 +85,9 @@ class ResourceMultiBufferDataProviderTest : public testing::Test {
       const ResourceMultiBufferDataProviderTest&) = delete;
 
   void Initialize(const char* url, int first_position) {
-    gurl_ = GURL(url);
-    url_data_ = url_index_.GetByUrl(gurl_, UrlData::CORS_UNSPECIFIED,
-                                    UrlIndex::kNormal);
+    url_ = KURL(url);
+    url_data_ =
+        url_index_.GetByUrl(url_, UrlData::CORS_UNSPECIFIED, UrlData::kNormal);
     url_data_->set_etag(kEtag);
     DCHECK(url_data_);
     url_data_->OnRedirect(
@@ -87,11 +96,9 @@ class ResourceMultiBufferDataProviderTest : public testing::Test {
 
     first_position_ = first_position;
 
-    std::unique_ptr<ResourceMultiBufferDataProvider> loader(
-        new ResourceMultiBufferDataProvider(
-            url_data_.get(), first_position_,
-            false /* is_client_audio_element */,
-            task_environment_.GetMainThreadTaskRunner()));
+    auto loader = std::make_unique<ResourceMultiBufferDataProvider>(
+        url_data_.get(), first_position_, false /* is_client_audio_element */,
+        task_environment_.GetMainThreadTaskRunner());
     loader_ = loader.get();
     url_data_->multibuffer()->AddProvider(std::move(loader));
   }
@@ -99,7 +106,7 @@ class ResourceMultiBufferDataProviderTest : public testing::Test {
   void Start() { loader_->Start(); }
 
   void FullResponse(int64_t instance_size, bool ok = true) {
-    WebURLResponse response(gurl_);
+    WebURLResponse response(url_);
     response.SetHttpHeaderField(
         WebString::FromUTF8("Content-Length"),
         WebString::FromUTF8(base::StringPrintf("%" PRId64, instance_size)));
@@ -125,7 +132,7 @@ class ResourceMultiBufferDataProviderTest : public testing::Test {
                        int64_t instance_size,
                        bool chunked,
                        bool accept_ranges) {
-    WebURLResponse response(gurl_);
+    WebURLResponse response(url_);
     response.SetHttpHeaderField(
         WebString::FromUTF8("Content-Range"),
         WebString::FromUTF8(
@@ -159,8 +166,8 @@ class ResourceMultiBufferDataProviderTest : public testing::Test {
   }
 
   void Redirect(const char* url) {
-    WebURL new_url{GURL(url)};
-    WebURLResponse redirect_response(gurl_);
+    WebURL new_url{KURL(url)};
+    WebURLResponse redirect_response(url_);
 
     EXPECT_CALL(*this, RedirectCallback(_))
         .WillOnce(
@@ -176,21 +183,6 @@ class ResourceMultiBufferDataProviderTest : public testing::Test {
     url_data_ = nullptr;
   }
 
-  // Helper method to write to |loader_| from |data_|.
-  void WriteLoader(int position, int size) {
-    loader_->DidReceiveData(reinterpret_cast<char*>(data_ + position), size);
-  }
-
-  void WriteData(int size) {
-    std::unique_ptr<char[]> data(new char[size]);
-    loader_->DidReceiveData(data.get(), size);
-  }
-
-  // Verifies that data in buffer[0...size] is equal to data_[pos...pos+size].
-  void VerifyBuffer(uint8_t* buffer, int pos, int size) {
-    EXPECT_EQ(0, memcmp(buffer, data_ + pos, size));
-  }
-
   MOCK_METHOD1(RedirectCallback, void(const scoped_refptr<UrlData>&));
 
   void SetUrlData(const scoped_refptr<UrlData>& new_url_data) {
@@ -201,13 +193,14 @@ class ResourceMultiBufferDataProviderTest : public testing::Test {
   std::unique_ptr<WebAssociatedURLLoader> CreateUrlLoader(
       const WebAssociatedURLLoaderOptions& options) {
     auto url_loader = std::make_unique<NiceMock<MockWebAssociatedURLLoader>>();
-    EXPECT_CALL(*url_loader.get(),
-                LoadAsynchronously(Truly(CorrectAcceptEncoding), loader_));
+    EXPECT_CALL(
+        *url_loader.get(),
+        LoadAsynchronously(Truly(CorrectAcceptEncoding), loader_.get()));
     return url_loader;
   }
 
   base::test::SingleThreadTaskEnvironment task_environment_;
-  GURL gurl_;
+  KURL url_;
   int32_t first_position_;
 
   NiceMock<MockResourceFetchContext> fetch_context_;
@@ -216,7 +209,7 @@ class ResourceMultiBufferDataProviderTest : public testing::Test {
   scoped_refptr<UrlData> url_data_;
   scoped_refptr<UrlData> redirected_to_;
   // The loader is owned by the UrlData above.
-  ResourceMultiBufferDataProvider* loader_;
+  raw_ptr<ResourceMultiBufferDataProvider> loader_;
 
   uint8_t data_[kDataSize];
 };
@@ -234,7 +227,7 @@ TEST_F(ResourceMultiBufferDataProviderTest, BadHttpResponse) {
 
   EXPECT_CALL(*this, RedirectCallback(scoped_refptr<UrlData>(nullptr)));
 
-  WebURLResponse response(gurl_);
+  WebURLResponse response(url_);
   response.SetHttpStatusCode(404);
   response.SetHttpStatusText("Not Found\n");
   loader_->DidReceiveResponse(response);
@@ -292,7 +285,7 @@ TEST_F(ResourceMultiBufferDataProviderTest, InvalidPartialResponse) {
 
   EXPECT_CALL(*this, RedirectCallback(scoped_refptr<UrlData>(nullptr)));
 
-  WebURLResponse response(gurl_);
+  WebURLResponse response(url_);
   response.SetHttpHeaderField(
       WebString::FromUTF8("Content-Range"),
       WebString::FromUTF8(base::StringPrintf("bytes "

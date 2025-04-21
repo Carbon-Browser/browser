@@ -1,15 +1,17 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import '../widgets/xf_breadcrumb.js';
 
-import {metrics} from '../common/js/metrics.js';
-import {CurrentDirectory, PropStatus, State} from '../externs/ts/state.js';
-import {changeDirectory} from '../state/actions.js';
-import {FileKey} from '../state/file_key.js';
-import {getStore, Store} from '../state/store.js';
-import {BREADCRUMB_CLICKED, BreadcrumbClickedEvent} from '../widgets/xf_breadcrumb.js';
+import {recordUserAction} from '../common/js/metrics.js';
+import {str} from '../common/js/translations.js';
+import {SEARCH_RESULTS_KEY} from '../common/js/url_constants.js';
+import {changeDirectory} from '../state/ducks/current_directory.js';
+import type {FileKey} from '../state/file_key.js';
+import {type PathComponent, PropStatus, type State} from '../state/state.js';
+import {getStore, getVolumeType, type Store} from '../state/store.js';
+import {type BreadcrumbClickedEvent, XfBreadcrumb} from '../widgets/xf_breadcrumb.js';
 
 /**
  * The controller of breadcrumb. The Breadcrumb element only renders a given
@@ -31,16 +33,48 @@ export class BreadcrumbContainer {
   }
 
   onStateChanged(state: State) {
-    const currentDir = state.currentDirectory;
-    const key = currentDir && currentDir.key;
-    if (!key || !currentDir) {
+    const {currentDirectory, search} = state;
+    let key = currentDirectory && currentDirectory.key;
+    if (!key || !currentDirectory) {
       this.hide_();
       return;
     }
 
-    if (currentDir.status == PropStatus.SUCCESS &&
+    if (search && search.status !== undefined) {
+      // Search results do not have the corresponding directory in the
+      // directory tree. When V2 version of search is active, we short-circuit
+      // the process to show the correct label and exit.
+      this.show_(SEARCH_RESULTS_KEY, [
+        {
+          name: 'search',
+          label: str('SEARCH_RESULTS_LABEL'),
+          key: SEARCH_RESULTS_KEY,
+        },
+      ]);
+      return;
+    }
+
+    // If the current location is somewhere in Drive, all files in Drive can
+    // be listed as search results regardless of current location.
+    // In this case, showing current location is confusing, so use the Drive
+    // root "My Drive" as the current location.
+    if (search && search.query && search.status === PropStatus.SUCCESS) {
+      const fileData = state.allEntries[currentDirectory.key];
+      if (getVolumeType(state, fileData)) {
+        const root = currentDirectory.pathComponents[0];
+        if (root) {
+          key = root.key;
+          this.show_(root.key!, [root]);
+          return;
+        }
+      }
+    }
+
+    if (currentDirectory.status === PropStatus.SUCCESS &&
         this.currentFileKey_ !== key) {
-      this.show_(state.currentDirectory);
+      this.show_(
+          state.currentDirectory?.key || '',
+          state.currentDirectory?.pathComponents || []);
     }
   }
 
@@ -51,22 +85,22 @@ export class BreadcrumbContainer {
     }
   }
 
-  private show_(currentDir?: CurrentDirectory) {
+  private show_(key: FileKey, pathComponents: PathComponent[]) {
     let breadcrumb = document.querySelector('xf-breadcrumb');
     if (!breadcrumb) {
       breadcrumb = document.createElement('xf-breadcrumb');
+      breadcrumb.id = 'breadcrumbs';
       breadcrumb.addEventListener(
-          BREADCRUMB_CLICKED, this.breadcrumbClick_.bind(this));
+          XfBreadcrumb.events.BREADCRUMB_CLICKED,
+          this.breadcrumbClick_.bind(this));
       this.container_.appendChild(breadcrumb);
     }
 
-    const path = !currentDir ?
-        '' :
-        currentDir.pathComponents.map(p => p.label).join('/');
+    const path =
+        pathComponents.map(p => p.label.replace(/\//g, '%2F')).join('/');
     breadcrumb!.path = path;
-    this.currentFileKey_ = currentDir ? currentDir.key : null;
-    this.pathKeys_ =
-        currentDir ? currentDir.pathComponents.map(p => p.key) : [];
+    this.currentFileKey_ = key;
+    this.pathKeys_ = pathComponents.map(p => p.key);
   }
 
   private breadcrumbClick_(event: BreadcrumbClickedEvent) {
@@ -81,6 +115,6 @@ export class BreadcrumbContainer {
 
     const fileKey = this.pathKeys_[index];
     this.store_.dispatch(changeDirectory({toKey: fileKey as FileKey}));
-    metrics.recordUserAction('ClickBreadcrumbs');
+    recordUserAction('ClickBreadcrumbs');
   }
 }

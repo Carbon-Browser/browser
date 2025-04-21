@@ -1,11 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/filters/fake_video_decoder.h"
 
 #include "base/location.h"
-#include "media/base/bind_to_current_loop.h"
+#include "base/task/bind_post_task.h"
 #include "media/base/test_helpers.h"
 
 namespace media {
@@ -42,6 +42,7 @@ FakeVideoDecoder::~FakeVideoDecoder() {
     SatisfyReset();
 
   decoded_frames_.clear();
+  total_decoded_frames_ = 0;
 }
 
 void FakeVideoDecoder::EnableEncryptedConfigSupport() {
@@ -82,10 +83,10 @@ void FakeVideoDecoder::Initialize(const VideoDecoderConfig& config,
   DCHECK(reset_cb_.IsNull()) << "No reinitialization during pending reset.";
 
   current_config_ = config;
-  init_cb_.SetCallback(BindToCurrentLoop(std::move(init_cb)));
+  init_cb_.SetCallback(base::BindPostTaskToCurrentDefault(std::move(init_cb)));
 
-  // Don't need BindToCurrentLoop() because |output_cb_| is only called from
-  // RunDecodeCallback() which is posted from Decode().
+  // Don't need base::BindPostTaskToCurrentDefault() because |output_cb_| is
+  // only called from RunDecodeCallback() which is posted from Decode().
   output_cb_ = output_cb;
 
   if (!decoded_frames_.empty()) {
@@ -121,10 +122,10 @@ void FakeVideoDecoder::Decode(scoped_refptr<DecoderBuffer> buffer,
             max_parallel_decoding_requests_);
   DCHECK_NE(state_, STATE_END_OF_STREAM);
 
-  int buffer_size = buffer->end_of_stream() ? 0 : buffer->data_size();
+  int buffer_size = buffer->end_of_stream() ? 0 : buffer->size();
   DecodeCB wrapped_decode_cb = base::BindOnce(
       &FakeVideoDecoder::OnFrameDecoded, weak_factory_.GetWeakPtr(),
-      buffer_size, BindToCurrentLoop(std::move(decode_cb)));
+      buffer_size, base::BindPostTaskToCurrentDefault(std::move(decode_cb)));
 
   if (state_ == STATE_ERROR) {
     std::move(wrapped_decode_cb).Run(DecoderStatus::Codes::kFailed);
@@ -132,6 +133,19 @@ void FakeVideoDecoder::Decode(scoped_refptr<DecoderBuffer> buffer,
   }
 
   if (buffer->end_of_stream()) {
+    if (buffer->next_config()) {
+      eos_next_configs_.emplace_back(
+          absl::get<VideoDecoderConfig>(*buffer->next_config()));
+
+      if (enable_eliding_eos_) {
+        DCHECK(held_decode_callbacks_.empty());
+        current_config_ = eos_next_configs_.back();
+        std::move(wrapped_decode_cb)
+            .Run(DecoderStatus::Codes::kElidedEndOfStreamForConfigChange);
+        return;
+      }
+    }
+
     state_ = STATE_END_OF_STREAM;
   } else {
     DCHECK(VerifyFakeVideoBufferForTest(*buffer, current_config_));
@@ -143,15 +157,18 @@ void FakeVideoDecoder::Decode(scoped_refptr<DecoderBuffer> buffer,
 
 scoped_refptr<VideoFrame> FakeVideoDecoder::MakeVideoFrame(
     const DecoderBuffer& buffer) {
-  return VideoFrame::CreateColorFrame(current_config_.coded_size(), 0, 0, 0,
-                                      buffer.timestamp());
+  auto frame = VideoFrame::CreateVideoHoleFrame(base::UnguessableToken(),
+                                                current_config_.coded_size(),
+                                                buffer.timestamp());
+  DCHECK(frame);
+  return frame;
 }
 
 void FakeVideoDecoder::Reset(base::OnceClosure closure) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(reset_cb_.IsNull());
 
-  reset_cb_.SetCallback(BindToCurrentLoop(std::move(closure)));
+  reset_cb_.SetCallback(base::BindPostTaskToCurrentDefault(std::move(closure)));
   decoded_frames_.clear();
 
   // Defer the reset if a decode is pending.
@@ -201,6 +218,7 @@ void FakeVideoDecoder::SatisfySingleDecode() {
 
   DecodeCB decode_cb = std::move(held_decode_callbacks_.front());
   held_decode_callbacks_.pop_front();
+  total_decoded_frames_++;
   RunDecodeCallback(std::move(decode_cb));
 
   if (!reset_cb_.IsNull() && held_decode_callbacks_.empty())

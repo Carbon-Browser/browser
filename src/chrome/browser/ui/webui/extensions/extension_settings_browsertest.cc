@@ -1,8 +1,6 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-
-#include "chrome/browser/ui/webui/extensions/extension_settings_browsertest.h"
 
 #include <string>
 
@@ -15,112 +13,42 @@
 #include "chrome/browser/extensions/activity_log/activity_log.h"
 #include "chrome/browser/extensions/api/developer_private/developer_private_api.h"
 #include "chrome/browser/extensions/chrome_test_extension_loader.h"
-#include "chrome/browser/extensions/unpacked_installer.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/safety_hub/extensions_result.h"
+#include "chrome/browser/ui/safety_hub/menu_notification_service_factory.h"
+#include "chrome/browser/ui/safety_hub/safety_hub_constants.h"
+#include "chrome/browser/ui/safety_hub/safety_hub_test_util.h"
+#include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/browser/ui/webui/extensions/extension_settings_test_base.h"
+#include "chrome/common/chrome_features.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/chrome_switches.h"
-#include "chrome/common/pref_names.h"
 #include "chrome/test/base/ui_test_utils.h"
-#include "components/prefs/pref_service.h"
+#include "components/guest_view/browser/guest_view_base.h"
+#include "components/guest_view/browser/guest_view_manager_delegate.h"
+#include "components/guest_view/browser/test_guest_view_manager.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/test_utils.h"
-#include "extensions/browser/extension_dialog_auto_confirm.h"
-#include "extensions/browser/extension_system.h"
+#include "extensions/browser/api/extensions_api_client.h"
+#include "extensions/browser/extension_prefs.h"
 #include "extensions/test/extension_test_message_listener.h"
 
-using extensions::Extension;
-using extensions::TestManagementPolicyProvider;
+class ExtensionSettingsUIBrowserTest : public ExtensionSettingsTestBase {
+ public:
+  guest_view::TestGuestViewManager* GetGuestViewManager() {
+    return factory_.GetOrCreateTestGuestViewManager(
+        browser()->profile(), extensions::ExtensionsAPIClient::Get()
+                                  ->CreateGuestViewManagerDelegate());
+  }
 
-ExtensionSettingsUIBrowserTest::ExtensionSettingsUIBrowserTest()
-    : policy_provider_(TestManagementPolicyProvider::PROHIBIT_MODIFY_STATUS |
-                       TestManagementPolicyProvider::MUST_REMAIN_ENABLED |
-                       TestManagementPolicyProvider::MUST_REMAIN_INSTALLED),
-      test_data_dir_(base::PathService::CheckedGet(chrome::DIR_TEST_DATA)
-                         .AppendASCII("extensions")) {}
-
-ExtensionSettingsUIBrowserTest::~ExtensionSettingsUIBrowserTest() {}
-
-void ExtensionSettingsUIBrowserTest::InstallGoodExtension() {
-  EXPECT_TRUE(InstallExtension(test_data_dir_.AppendASCII("good.crx")));
-}
-
-void ExtensionSettingsUIBrowserTest::InstallErrorsExtension() {
-  EXPECT_TRUE(
-      InstallExtension(test_data_dir_.AppendASCII("error_console")
-                           .AppendASCII("runtime_and_manifest_errors")));
-  EXPECT_TRUE(InstallExtension(test_data_dir_.AppendASCII("error_console")
-                                   .AppendASCII("deep_stack_trace")));
-}
-
-void ExtensionSettingsUIBrowserTest::InstallSharedModule() {
-  base::FilePath shared_module_path =
-      test_data_dir_.AppendASCII("api_test").AppendASCII("shared_module");
-  EXPECT_TRUE(InstallExtension(shared_module_path.AppendASCII("shared")));
-  EXPECT_TRUE(InstallExtension(shared_module_path.AppendASCII("import_pass")));
-}
-
-void ExtensionSettingsUIBrowserTest::InstallPackagedApp() {
-  EXPECT_TRUE(InstallExtension(test_data_dir_.AppendASCII("packaged_app")));
-}
-
-void ExtensionSettingsUIBrowserTest::InstallHostedApp() {
-  EXPECT_TRUE(InstallExtension(test_data_dir_.AppendASCII("hosted_app")));
-}
-
-void ExtensionSettingsUIBrowserTest::InstallPlatformApp() {
-  EXPECT_TRUE(InstallExtension(
-      test_data_dir_.AppendASCII("platform_apps").AppendASCII("minimal")));
-}
-
-const extensions::Extension*
-ExtensionSettingsUIBrowserTest::InstallExtensionWithInPageOptions() {
-  const extensions::Extension* extension =
-      InstallExtension(test_data_dir_.AppendASCII("options_page_in_view"));
-  EXPECT_TRUE(extension);
-  return extension;
-}
-
-void ExtensionSettingsUIBrowserTest::AddManagedPolicyProvider() {
-  extensions::ExtensionSystem* extension_system =
-      extensions::ExtensionSystem::Get(browser()->profile());
-  extension_system->management_policy()->RegisterProvider(&policy_provider_);
-}
-
-void ExtensionSettingsUIBrowserTest::SetAutoConfirmUninstall() {
-  uninstall_auto_confirm_ =
-      std::make_unique<extensions::ScopedTestDialogAutoConfirm>(
-          extensions::ScopedTestDialogAutoConfirm::ACCEPT);
-}
-
-void ExtensionSettingsUIBrowserTest::SetDevModeEnabled(bool enabled) {
-  browser()->profile()->GetPrefs()->SetBoolean(
-      prefs::kExtensionsUIDeveloperMode, enabled);
-}
-
-void ExtensionSettingsUIBrowserTest::ShrinkWebContentsView() {
-  content::WebContents* web_contents =
-      browser()->tab_strip_model()->GetActiveWebContents();
-  CHECK(web_contents);
-  web_contents->Resize(gfx::Rect(0, 0, 400, 400));
-}
-
-void ExtensionSettingsUIBrowserTest::
-    SetSilenceDeprecatedManifestVersionWarnings(bool silence) {
-  Extension::set_silence_deprecated_manifest_version_warnings_for_testing(
-      silence);
-}
-
-const Extension* ExtensionSettingsUIBrowserTest::InstallExtension(
-    const base::FilePath& path) {
-  extensions::ChromeTestExtensionLoader loader(browser()->profile());
-  loader.set_ignore_manifest_warnings(true);
-  return loader.LoadExtension(path).get();
-}
+ private:
+  guest_view::TestGuestViewManagerFactory factory_;
+};
 
 // Tests that viewing a source of the options page works fine.
 // This is a regression test for https://crbug.com/796080.
@@ -131,9 +59,10 @@ IN_PROC_BROWSER_TEST_F(ExtensionSettingsUIBrowserTest, ViewSource) {
   GURL options_url("chrome://extensions/?options=" + extension->id());
   content::WebContents* options_contents = nullptr;
   {
-    content::WebContentsAddedObserver options_contents_added_observer;
     ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), options_url));
-    options_contents = options_contents_added_observer.GetWebContents();
+    auto* guest = GetGuestViewManager()->WaitForSingleGuestViewCreated();
+    GetGuestViewManager()->WaitUntilAttached(guest);
+    options_contents = guest->web_contents();
   }
   ASSERT_TRUE(options_contents);
   EXPECT_TRUE(content::WaitForLoadStop(options_contents));
@@ -156,16 +85,15 @@ IN_PROC_BROWSER_TEST_F(ExtensionSettingsUIBrowserTest, ViewSource) {
             browser()->tab_strip_model()->GetActiveWebContents());
 
   // Verify the contents of the view-source tab.
-  std::string actual_source_text;
   std::string view_source_extraction_script = R"(
       output = "";
       document.querySelectorAll(".line-content").forEach(function(elem) {
           output += elem.innerText;
       });
-      domAutomationController.send(output); )";
-  EXPECT_TRUE(content::ExecuteScriptAndExtractString(
-      view_source_contents, view_source_extraction_script,
-      &actual_source_text));
+      output; )";
+  std::string actual_source_text =
+      content::EvalJs(view_source_contents, view_source_extraction_script)
+          .ExtractString();
   base::FilePath source_path =
       test_data_dir().AppendASCII("options_page_in_view/options.html");
   std::string expected_source_text;
@@ -213,7 +141,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionSettingsUIBrowserTest, ListenerRegistration) {
 
   TabStripModel* tab_strip = browser()->tab_strip_model();
   tab_strip->CloseWebContentsAt(tab_strip->active_index(),
-                                TabStripModel::CLOSE_NONE);
+                                TabCloseTypes::CLOSE_NONE);
   base::RunLoop().RunUntilIdle();
   content::RunAllTasksUntilIdle();
 
@@ -235,7 +163,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionSettingsUIBrowserTest,
 
   // Attempt to add an event listener for the
   // activityLogPrivate.onExtensionActivity event.
-  ASSERT_TRUE(content::ExecuteScript(page_contents, R"(
+  ASSERT_TRUE(content::ExecJs(page_contents, R"(
       let activityLogListener = () => {};
       chrome.activityLogPrivate.onExtensionActivity.addListener(
           activityLogListener);
@@ -282,10 +210,10 @@ IN_PROC_BROWSER_TEST_F(ExtensionsActivityLogTest, TestActivityLogVisible) {
   // See chrome/browser/resources/extensions for the Polymer code.
   // This test only serves as an end to end test, and most of the functionality
   // is covered in the JS unit tests.
-  bool has_api_call = false;
-  ASSERT_TRUE(content::ExecuteScriptAndExtractBool(
-      activity_log_contents,
-      R"(let manager = document.querySelector('extensions-manager');
+  EXPECT_EQ(true,
+            content::EvalJs(
+                activity_log_contents,
+                R"(let manager = document.querySelector('extensions-manager');
          let activityLog =
              manager.shadowRoot.querySelector('extensions-activity-log');
          let activityLogHistory =
@@ -301,10 +229,64 @@ IN_PROC_BROWSER_TEST_F(ExtensionsActivityLogTest, TestActivityLogVisible) {
              let item = activityLogHistory.shadowRoot.querySelector(
                  'activity-log-history-item');
              let activityKey = item.shadowRoot.getElementById('activity-key');
-             window.domAutomationController.send(
-                 activityKey.innerText === 'test.sendMessage');
+             return activityKey.innerText === 'test.sendMessage';
          });
-      )",
-      &has_api_call));
-  EXPECT_TRUE(has_api_call);
+      )"));
+}
+
+class SafetyHubExtensionSettingsUIBrowserTest
+    : public ExtensionSettingsTestBase {
+ public:
+  SafetyHubExtensionSettingsUIBrowserTest() {
+    feature_list_.InitAndEnableFeature(features::kSafetyHub);
+  }
+
+ private:
+  base::test::ScopedFeatureList feature_list_;
+};
+
+IN_PROC_BROWSER_TEST_F(SafetyHubExtensionSettingsUIBrowserTest,
+                       TestSafetyHubMenuNotificationDismissed) {
+  Profile* profile = browser()->profile();
+  extensions::ExtensionPrefs* extension_prefs =
+      extensions::ExtensionPrefs::Get(profile);
+  const extensions::Extension* extension = InstallExtensionWithInPageOptions();
+  SafetyHubMenuNotificationService* notification_service =
+      SafetyHubMenuNotificationServiceFactory::GetForProfile(profile);
+  // Safety Hub services will be initialized when
+  // SafetyHubMenuNotificationService is created. Let Safety Hub services to
+  // initialize properly.
+  safety_hub_test_util::RunUntilPasswordCheckCompleted(profile);
+  // No unpublished extensions yet, so there shouldn't be a menu notifications.
+  std::optional<MenuNotificationEntry> notification =
+      notification_service->GetNotificationToShow();
+  ASSERT_FALSE(notification.has_value());
+  // Update the extension pref to flag the extension as unpublished.
+  base::Value::Dict dict;
+  dict.Set("is-present", true);
+  dict.Set("is-live", true);
+  dict.Set("last-updated-time-millis", 100000000);
+  dict.Set("violation-type", 0);
+  dict.Set("no-privacy-practice", false);
+  dict.Set("unpublished-long-ago", true);
+  extension_prefs->SetDictionaryPref(
+      extension->id(),
+      {"cws-info", extensions::kDictionary,
+       extensions::PrefScope::kExtensionSpecific},
+      std::move(dict));
+  notification_service->UpdateResultGetterForTesting(
+      safety_hub::SafetyHubModuleType::EXTENSIONS,
+      base::BindRepeating(&SafetyHubExtensionsResult::GetResult, profile,
+                          /*only_unpublished_extensions=*/true));
+  // An extension was unpublished, so we now should get an associated menu
+  // notification.
+  notification = notification_service->GetNotificationToShow();
+  ASSERT_TRUE(notification.has_value());
+
+  // When the user visits the extensions page, notifications for the extension
+  // module of Safety Hub should be dismissed.
+  ASSERT_TRUE(
+      ui_test_utils::NavigateToURL(browser(), GURL("chrome://extensions/")));
+  notification = notification_service->GetNotificationToShow();
+  ASSERT_FALSE(notification.has_value());
 }

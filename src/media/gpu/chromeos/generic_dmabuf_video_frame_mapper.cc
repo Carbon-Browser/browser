@@ -1,16 +1,21 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/gpu/chromeos/generic_dmabuf_video_frame_mapper.h"
 
 #include <sys/mman.h>
 
-#include <algorithm>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "media/gpu/macros.h"
 
@@ -22,14 +27,14 @@ uint8_t* Mmap(const size_t length, const int fd, int permissions) {
   void* addr = mmap(nullptr, length, permissions, MAP_SHARED, fd, 0u);
 
   if (addr == MAP_FAILED) {
-    VLOGF(1) << "Failed to mmap.";
     return nullptr;
   }
+
   return static_cast<uint8_t*>(addr);
 }
 
 void MunmapBuffers(const std::vector<std::pair<uint8_t*, size_t>>& chunks,
-                   scoped_refptr<const VideoFrame> video_frame) {
+                   scoped_refptr<const FrameResource> video_frame) {
   for (const auto& chunk : chunks) {
     DLOG_IF(ERROR, !chunk.first) << "Pointer to be released is nullptr.";
     munmap(chunk.first, chunk.second);
@@ -41,7 +46,7 @@ void MunmapBuffers(const std::vector<std::pair<uint8_t*, size_t>>& chunks,
 // |chunks| is the vector of pair of (address, size) to be called in munmap().
 // |src_video_frame| is the video frame that owns dmabufs to the mapped planes.
 scoped_refptr<VideoFrame> CreateMappedVideoFrame(
-    scoped_refptr<const VideoFrame> src_video_frame,
+    scoped_refptr<const FrameResource> src_video_frame,
     uint8_t* plane_addrs[VideoFrame::kMaxPlanes],
     const std::vector<std::pair<uint8_t*, size_t>>& chunks) {
   scoped_refptr<VideoFrame> video_frame;
@@ -79,12 +84,12 @@ bool IsFormatSupported(VideoPixelFormat format) {
       PIXEL_FORMAT_I420,
       PIXEL_FORMAT_NV12,
       PIXEL_FORMAT_YV12,
+      PIXEL_FORMAT_P010LE,
 
       // Compressed format.
       PIXEL_FORMAT_MJPEG,
   };
-  return std::find(std::cbegin(supported_formats), std::cend(supported_formats),
-                   format) != std::cend(supported_formats);
+  return base::Contains(supported_formats, format);
 }
 
 }  // namespace
@@ -103,9 +108,9 @@ GenericDmaBufVideoFrameMapper::GenericDmaBufVideoFrameMapper(
     VideoPixelFormat format)
     : VideoFrameMapper(format) {}
 
-scoped_refptr<VideoFrame> GenericDmaBufVideoFrameMapper::Map(
-    scoped_refptr<const VideoFrame> video_frame,
-    int permissions) const {
+scoped_refptr<VideoFrame> GenericDmaBufVideoFrameMapper::MapFrame(
+    scoped_refptr<const FrameResource> video_frame,
+    int permissions) {
   if (!video_frame) {
     LOG(ERROR) << "Video frame is nullptr";
     return nullptr;
@@ -135,9 +140,8 @@ scoped_refptr<VideoFrame> GenericDmaBufVideoFrameMapper::Map(
   // format whose number of planes are less than VideoFrame::kMaxPlanes.
   uint8_t* plane_addrs[VideoFrame::kMaxPlanes] = {};
   const size_t num_planes = planes.size();
-  const auto& dmabuf_fds = video_frame->DmabufFds();
   std::vector<std::pair<uint8_t*, size_t>> chunks;
-  DCHECK_EQ(dmabuf_fds.size(), num_planes);
+  DCHECK_EQ(video_frame->NumDmabufFds(), num_planes);
   for (size_t i = 0; i < num_planes;) {
     size_t next_buf = i + 1;
     // Search the index of the plane from which the next buffer starts.
@@ -156,7 +160,14 @@ scoped_refptr<VideoFrame> GenericDmaBufVideoFrameMapper::Map(
       return nullptr;
     }
 
-    uint8_t* mapped_addr = Mmap(mapped_size, dmabuf_fds[i].get(), permissions);
+    uint8_t* mapped_addr =
+        Mmap(mapped_size, video_frame->GetDmabufFd(i), permissions);
+    if (!mapped_addr) {
+      VLOGF(1) << "nullptr returned by Mmap";
+      MunmapBuffers(chunks, /*video_frame=*/nullptr);
+      return nullptr;
+    }
+
     chunks.emplace_back(mapped_addr, mapped_size);
     for (size_t j = i; j < next_buf; ++j)
       plane_addrs[j] = mapped_addr + planes[j].offset;

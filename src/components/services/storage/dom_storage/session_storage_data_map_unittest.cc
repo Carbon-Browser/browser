@@ -1,15 +1,16 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/services/storage/dom_storage/session_storage_data_map.h"
 
 #include <map>
+#include <string_view>
 #include <tuple>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/span.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "base/task/thread_pool.h"
@@ -34,8 +35,8 @@ MATCHER(OKStatus, "Equality matcher for type OK leveldb::Status") {
   return arg.ok();
 }
 
-base::span<const uint8_t> MakeBytes(base::StringPiece str) {
-  return base::as_bytes(base::make_span(str));
+base::span<const uint8_t> MakeBytes(std::string_view str) {
+  return base::as_byte_span(str);
 }
 
 mojo::PendingRemote<blink::mojom::StorageAreaObserver> MakeStubObserver() {
@@ -73,7 +74,7 @@ class SessionStorageDataMapTest : public testing::Test {
   SessionStorageDataMapTest() {
     base::RunLoop loop;
     database_ = AsyncDomStorageDatabase::OpenInMemory(
-        absl::nullopt, "SessionStorageDataMapTest",
+        std::nullopt, "SessionStorageDataMapTest",
         base::ThreadPool::CreateSequencedTaskRunner({base::MayBlock()}),
         base::BindLambdaForTesting([&](leveldb::Status status) {
           ASSERT_TRUE(status.ok());

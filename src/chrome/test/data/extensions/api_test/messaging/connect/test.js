@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -329,49 +329,25 @@ chrome.test.getConfig(function(config) {
       chrome.tabs.reload(testTab.id);
     },
 
-    // Tests that the port is still available even if the page is salvaged
-    // from back/forward cache.
-    function keepConnectionOnNavigationWithBfcache() {
-      // Skip test if bfcache is disabled because this test expects
-      // the port will remain open when the page is salvaged from the
-      // back/forward cache.
-      if (config.customArg !== 'bfcache') {
-        chrome.test.succeed();
-        return;
-      }
-      listenOnce(chrome.runtime.onConnect, function(portFromTab) {
-        portFromTab.postMessage('navigateAwayAndHistoryBack');
-        listenOnce(portFromTab.onMessage, function(msg) {
-          chrome.test.assertTrue(msg.salvagedFromBackForwardCache2);
-        });
-      });
-      var port = chrome.tabs.connect(testTab.id);
-      listenOnce(port.onMessage, function(msg) {
-        // The port is still available even if the page is salvaged
-        // from back/forward cache.
-        chrome.test.assertTrue(msg.salvagedFromBackForwardCache1);
-      });
-      port.postMessage({testNavigateAwayAndHistoryBack: true});
-    },
-
     // Tests that we get the disconnect event when the tab context closes.
     function disconnectOnClose() {
-      // Skip test if bfcache is enabled because the port will not be
-      // closed immediately if the page is cached.
-      if (config.customArg === 'bfcache') {
-        chrome.test.succeed();
-        return;
-      }
       listenOnce(chrome.runtime.onConnect, function(portFromTab) {
-        listenOnce(portFromTab.onDisconnect, function() {
-          chrome.test.assertNoLastError();
+        listenOnce(portFromTab.onDisconnect, function () {
+          if (config.customArg === 'bfcache') {
+            chrome.test.assertLastError(
+              'The page keeping the extension port is moved into ' +
+              'back/forward cache, so the message channel is closed.'
+            );
+          } else {
+            chrome.test.assertNoLastError();
+          }
         });
         portFromTab.postMessage('unloadTabContent');
       });
 
       var port = chrome.tabs.connect(testTab.id);
-      port.postMessage({testDisconnectOnClose: true});
-      listenOnce(port.onDisconnect, function() {
+      port.postMessage({ testDisconnectOnClose: true });
+      listenOnce(port.onDisconnect, function () {
         testTab = null; // the tab is about:blank now.
       });
     },
@@ -384,7 +360,7 @@ chrome.test.getConfig(function(config) {
       } catch(e) {
         error = e;
       }
-      chrome.test.assertTrue(error != undefined);
+      chrome.test.assertNe(undefined, error);
 
       error = undefined;
       try {
@@ -392,7 +368,7 @@ chrome.test.getConfig(function(config) {
       } catch(e) {
         error = e;
       }
-      chrome.test.assertTrue(error != undefined);
+      chrome.test.assertNe(undefined, error);
 
       chrome.test.succeed();
     },

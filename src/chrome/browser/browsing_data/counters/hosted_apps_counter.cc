@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,12 +26,12 @@ const char* HostedAppsCounter::GetPrefName() const {
 void HostedAppsCounter::Count() {
   std::vector<std::string> names;
 
-  std::unique_ptr<extensions::ExtensionSet> extensions =
+  const extensions::ExtensionSet extensions =
       extensions::ExtensionRegistry::Get(profile_)
           ->GenerateInstalledExtensionsSet();
   auto* special_storage_policy = profile_->GetExtensionSpecialStoragePolicy();
 
-  for (const auto& extension : *extensions) {
+  for (const auto& extension : extensions) {
     // Exclude kChromeAppId because this is not a proper hosted app. It is just
     // a shortcut to launch Chrome on Chrome OS.
     if (special_storage_policy->NeedsProtection(extension.get()) &&
@@ -57,4 +57,4 @@ HostedAppsCounter::HostedAppsResult::HostedAppsResult(
     const std::vector<std::string>& examples)
     : FinishedResult(source, num_apps), examples_(examples) {}
 
-HostedAppsCounter::HostedAppsResult::~HostedAppsResult() {}
+HostedAppsCounter::HostedAppsResult::~HostedAppsResult() = default;

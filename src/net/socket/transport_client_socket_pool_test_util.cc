@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,13 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/weak_ptr.h"
 #include "base/notreached.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/base/ip_address.h"
 #include "net/base/ip_endpoint.h"
 #include "net/base/load_timing_info.h"
@@ -51,10 +50,7 @@ class MockConnectClientSocket : public TransportClientSocket {
   MockConnectClientSocket& operator=(const MockConnectClientSocket&) = delete;
 
   // TransportClientSocket implementation.
-  int Bind(const net::IPEndPoint& local_addr) override {
-    NOTREACHED();
-    return ERR_FAILED;
-  }
+  int Bind(const net::IPEndPoint& local_addr) override { NOTREACHED(); }
   // StreamSocket implementation.
   int Connect(CompletionOnceCallback callback) override {
     connected_ = true;
@@ -80,8 +76,9 @@ class MockConnectClientSocket : public TransportClientSocket {
   const NetLogWithSource& NetLog() const override { return net_log_; }
 
   bool WasEverUsed() const override { return false; }
-  bool WasAlpnNegotiated() const override { return false; }
-  NextProto GetNegotiatedProtocol() const override { return kProtoUnknown; }
+  NextProto GetNegotiatedProtocol() const override {
+    return NextProto::kProtoUnknown;
+  }
   bool GetSSLInfo(SSLInfo* ssl_info) override { return false; }
   int64_t GetTotalReceivedBytes() const override {
     NOTIMPLEMENTED();
@@ -123,10 +120,7 @@ class MockFailingClientSocket : public TransportClientSocket {
   MockFailingClientSocket& operator=(const MockFailingClientSocket&) = delete;
 
   // TransportClientSocket implementation.
-  int Bind(const net::IPEndPoint& local_addr) override {
-    NOTREACHED();
-    return ERR_FAILED;
-  }
+  int Bind(const net::IPEndPoint& local_addr) override { NOTREACHED(); }
 
   // StreamSocket implementation.
   int Connect(CompletionOnceCallback callback) override {
@@ -146,8 +140,9 @@ class MockFailingClientSocket : public TransportClientSocket {
   const NetLogWithSource& NetLog() const override { return net_log_; }
 
   bool WasEverUsed() const override { return false; }
-  bool WasAlpnNegotiated() const override { return false; }
-  NextProto GetNegotiatedProtocol() const override { return kProtoUnknown; }
+  NextProto GetNegotiatedProtocol() const override {
+    return NextProto::kProtoUnknown;
+  }
   bool GetSSLInfo(SSLInfo* ssl_info) override { return false; }
   int64_t GetTotalReceivedBytes() const override {
     NOTIMPLEMENTED();
@@ -206,8 +201,8 @@ class MockTriggerableClientSocket : public TransportClientSocket {
       net::NetLog* net_log) {
     auto socket = std::make_unique<MockTriggerableClientSocket>(
         addrlist, connect_error, net_log);
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  socket->GetConnectCallback());
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, socket->GetConnectCallback());
     return std::move(socket);
   }
 
@@ -218,7 +213,7 @@ class MockTriggerableClientSocket : public TransportClientSocket {
       net::NetLog* net_log) {
     auto socket = std::make_unique<MockTriggerableClientSocket>(
         addrlist, connect_error, net_log);
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, socket->GetConnectCallback(), delay);
     return std::move(socket);
   }
@@ -233,10 +228,7 @@ class MockTriggerableClientSocket : public TransportClientSocket {
   }
 
   // TransportClientSocket implementation.
-  int Bind(const net::IPEndPoint& local_addr) override {
-    NOTREACHED();
-    return ERR_FAILED;
-  }
+  int Bind(const net::IPEndPoint& local_addr) override { NOTREACHED(); }
 
   // StreamSocket implementation.
   int Connect(CompletionOnceCallback callback) override {
@@ -265,8 +257,9 @@ class MockTriggerableClientSocket : public TransportClientSocket {
   const NetLogWithSource& NetLog() const override { return net_log_; }
 
   bool WasEverUsed() const override { return false; }
-  bool WasAlpnNegotiated() const override { return false; }
-  NextProto GetNegotiatedProtocol() const override { return kProtoUnknown; }
+  NextProto GetNegotiatedProtocol() const override {
+    return NextProto::kProtoUnknown;
+  }
   bool GetSSLInfo(SSLInfo* ssl_info) override { return false; }
   int64_t GetTotalReceivedBytes() const override {
     NOTIMPLEMENTED();
@@ -346,7 +339,7 @@ void SetIPv6Address(IPEndPoint* address) {
 
 MockTransportClientSocketFactory::Rule::Rule(
     Type type,
-    absl::optional<std::vector<IPEndPoint>> expected_addresses,
+    std::optional<std::vector<IPEndPoint>> expected_addresses,
     Error connect_error)
     : type(type),
       expected_addresses(std::move(expected_addresses)),
@@ -373,7 +366,6 @@ MockTransportClientSocketFactory::CreateDatagramClientSocket(
     NetLog* net_log,
     const NetLogSource& source) {
   NOTREACHED();
-  return nullptr;
 }
 
 std::unique_ptr<TransportClientSocket>
@@ -388,7 +380,7 @@ MockTransportClientSocketFactory::CreateTransportClientSocket(
   Rule rule(client_socket_type_);
   if (!rules_.empty()) {
     rule = rules_.front();
-    rules_ = rules_.subspan(1);
+    rules_ = rules_.subspan<1>();
   }
 
   if (rule.expected_addresses) {
@@ -434,7 +426,6 @@ MockTransportClientSocketFactory::CreateTransportClientSocket(
     }
     default:
       NOTREACHED();
-      return std::make_unique<MockConnectClientSocket>(addresses, net_log_);
   }
 }
 

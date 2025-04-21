@@ -1,10 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/feature_engagement/internal/init_aware_event_model.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 
 namespace feature_engagement {
 
@@ -50,6 +50,25 @@ void InitAwareEventModel::IncrementEvent(const std::string& event_name,
     return;
 
   queued_events_.push_back(std::tie(event_name, current_day));
+}
+
+void InitAwareEventModel::ClearEvent(const std::string& event_name) {
+  // If the embedded model is ready, clear it out.
+  //
+  // TODO(dfried): consider storing the events to be deleted and removing them
+  // when the embedded model is loaded.
+  if (IsReady()) {
+    event_model_->ClearEvent(event_name);
+    return;
+  }
+
+  // Also clear any queued events of the same type that haven't yet been added
+  // to the embedded model.
+  const auto temp = std::move(queued_events_);
+  std::copy_if(temp.begin(), temp.end(), std::back_inserter(queued_events_),
+               [event_name](const auto& val) {
+                 return std::get<std::string>(val) != event_name;
+               });
 }
 
 void InitAwareEventModel::IncrementSnooze(const std::string& event_name,

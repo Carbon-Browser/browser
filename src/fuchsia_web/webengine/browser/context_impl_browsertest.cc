@@ -1,14 +1,15 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/command_line.h"
 #include "base/no_destructor.h"
+#include "base/run_loop.h"
 #include "content/public/test/browser_test.h"
+#include "fuchsia_web/common/test/frame_for_test.h"
 #include "fuchsia_web/common/test/frame_test_util.h"
 #include "fuchsia_web/common/test/test_navigation_listener.h"
 #include "fuchsia_web/webengine/switches.h"
-#include "fuchsia_web/webengine/test/frame_for_test.h"
 #include "fuchsia_web/webengine/test/web_engine_browser_test.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/url_constants.h"

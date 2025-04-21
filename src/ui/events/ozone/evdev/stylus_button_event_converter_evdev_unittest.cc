@@ -1,6 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ui/events/ozone/evdev/stylus_button_event_converter_evdev.h"
 
@@ -13,9 +18,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/run_loop.h"
@@ -34,6 +39,23 @@
 namespace {
 
 const char kTestDevicePath[] = "/dev/input/test-device";
+
+constexpr char kDellActivePenButtonLogDescription[] =
+    R"(class=ui::StylusButtonEventConverterEvdev id=1
+base class=ui::EventConverterEvdev id=1
+ path="/dev/input/test-device"
+member class=ui::InputDevice id=1
+ input_device_type=ui::InputDeviceType::INPUT_DEVICE_BLUETOOTH
+ name="Dell Active Pen PN579X"
+ phys=""
+ enabled=0
+ suspected_keyboard_imposter=0
+ suspected_mouse_imposter=0
+ sys_path=""
+ vendor_id=413C
+ product_id=81D5
+ version=0F08
+)";
 
 }  // namespace
 
@@ -99,9 +121,9 @@ void MockStylusButtonEventConverterEvdev::ConfigureReadMock(
     long queue_index) {
   int nwrite = HANDLE_EINTR(write(write_pipe_, queue + queue_index,
                                   sizeof(struct input_event) * read_this_many));
-  DCHECK(nwrite ==
-         static_cast<int>(sizeof(struct input_event) * read_this_many))
-      << "write() failed, errno: " << errno;
+  DPCHECK(nwrite ==
+          static_cast<int>(sizeof(struct input_event) * read_this_many))
+      << "write() failed";
 }
 
 }  // namespace ui
@@ -153,7 +175,7 @@ class StylusButtonEventConverterEvdevTest : public testing::Test {
   }
 
   void DispatchEventForTest(ui::Event* event) {
-    std::unique_ptr<ui::Event> cloned_event = ui::Event::Clone(*event);
+    std::unique_ptr<ui::Event> cloned_event = event->Clone();
     dispatched_events_.push_back(std::move(cloned_event));
   }
 
@@ -216,11 +238,11 @@ TEST_F(StylusButtonEventConverterEvdevTest, DellActivePenDoubleClick) {
   EXPECT_EQ(2u, size());
 
   ui::KeyEvent* event = dispatched_event(0);
-  EXPECT_EQ(ui::ET_KEY_PRESSED, event->type());
+  EXPECT_EQ(ui::EventType::kKeyPressed, event->type());
   EXPECT_TRUE(event->flags() & ui::EF_IS_STYLUS_BUTTON);
 
   event = dispatched_event(1);
-  EXPECT_EQ(ui::ET_KEY_RELEASED, event->type());
+  EXPECT_EQ(ui::EventType::kKeyReleased, event->type());
   EXPECT_TRUE(event->flags() & ui::EF_IS_STYLUS_BUTTON);
 }
 
@@ -246,4 +268,14 @@ TEST_F(StylusButtonEventConverterEvdevTest, DellActivePenLongPress) {
     dev->ProcessEvent(mock_kernel_queue[i]);
   }
   EXPECT_EQ(0u, size());
+}
+
+TEST_F(StylusButtonEventConverterEvdevTest, DescribeStateForLog) {
+  std::unique_ptr<ui::MockStylusButtonEventConverterEvdev> dev =
+      base::WrapUnique(CreateDevice(ui::kDellActivePenButton));
+
+  std::stringstream output;
+  dev->DescribeForLog(output);
+
+  EXPECT_EQ(output.str(), kDellActivePenButtonLogDescription);
 }

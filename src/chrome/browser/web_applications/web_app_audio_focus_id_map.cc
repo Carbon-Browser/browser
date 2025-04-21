@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@ WebAppAudioFocusIdMap::WebAppAudioFocusIdMap() = default;
 WebAppAudioFocusIdMap::~WebAppAudioFocusIdMap() = default;
 
 const base::UnguessableToken& WebAppAudioFocusIdMap::CreateOrGetIdForApp(
-    const AppId& app_id) {
+    const webapps::AppId& app_id) {
   auto it = ids_.find(app_id);
 
   if (it == ids_.end())

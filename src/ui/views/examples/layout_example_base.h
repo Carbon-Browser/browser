@@ -1,17 +1,20 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_VIEWS_EXAMPLES_LAYOUT_EXAMPLE_BASE_H_
 #define UI_VIEWS_EXAMPLES_LAYOUT_EXAMPLE_BASE_H_
 
+#include "base/containers/span.h"
 #include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/views/controls/button/checkbox.h"
 #include "ui/views/controls/button/label_button.h"
 #include "ui/views/controls/textfield/textfield_controller.h"
 #include "ui/views/examples/example_base.h"
+#include "ui/views/layout/delegating_layout_manager.h"
 #include "ui/views/view.h"
 
 namespace views {
@@ -27,17 +30,23 @@ class VIEWS_EXAMPLES_EXPORT LayoutExampleBase : public ExampleBase,
  public:
   // Grouping of multiple textfields that provide insets.
   struct InsetTextfields {
-    Textfield* left = nullptr;
-    Textfield* top = nullptr;
-    Textfield* right = nullptr;
-    Textfield* bottom = nullptr;
+    void ResetControllers();
+
+    raw_ptr<Textfield> left = nullptr;
+    raw_ptr<Textfield> top = nullptr;
+    raw_ptr<Textfield> right = nullptr;
+    raw_ptr<Textfield> bottom = nullptr;
   };
 
   // This view is created and added to the left-side view in the FullPanel each
   // time the "Add" button is pressed. It also will display Textfield controls
   // when the mouse is pressed over the view. These Textfields allow the user to
   // interactively set each margin and the "flex" for the given view.
-  class ChildPanel : public View, public TextfieldController {
+  class ChildPanel : public View,
+                     public TextfieldController,
+                     public LayoutDelegate {
+    METADATA_HEADER(ChildPanel, View)
+
    public:
     explicit ChildPanel(LayoutExampleBase* example);
     ChildPanel(const ChildPanel&) = delete;
@@ -45,8 +54,11 @@ class VIEWS_EXAMPLES_EXPORT LayoutExampleBase : public ExampleBase,
     ~ChildPanel() override;
 
     // View:
-    void Layout() override;
     bool OnMousePressed(const ui::MouseEvent& event) override;
+
+    // Overridden from LayoutDelegate:
+    ProposedLayout CalculateProposedLayout(
+        const SizeBounds& size_bounds) const override;
 
     void SetSelected(bool value);
     bool selected() const { return selected_; }
@@ -89,8 +101,7 @@ class VIEWS_EXAMPLES_EXPORT LayoutExampleBase : public ExampleBase,
   // Creates and adds a Combobox with a label with |label_text| to the left.
   // Sets |combobox_callback| as the callback for the created combobox.
   Combobox* CreateAndAddCombobox(const std::u16string& label_text,
-                                 const char* const* items,
-                                 int count,
+                                 base::span<const char* const> items,
                                  base::RepeatingClosure combobox_callback);
 
   // Creates and adds a Textfield with a label with |label_text| to the left.

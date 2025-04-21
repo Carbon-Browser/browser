@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,10 +39,10 @@ OptimizationGuideTabUrlProviderAndroid::GetUrlsOfActiveTabs(
 
       content::WebContents* web_contents = tab_model->GetWebContentsAt(tab_idx);
       if (web_contents) {
-        if ((base::TimeTicks::Now() - web_contents->GetLastActiveTime()) <
+        if ((base::TimeTicks::Now() - web_contents->GetLastActiveTimeTicks()) <
             duration_since_last_shown) {
           tab.url = web_contents->GetLastCommittedURL();
-          tab.last_active_time = web_contents->GetLastActiveTime();
+          tab.last_active_time = web_contents->GetLastActiveTimeTicks();
           tabs.push_back(tab);
         }
         continue;

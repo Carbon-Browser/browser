@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,11 +15,12 @@ SearchIPCRouterPolicyImpl::SearchIPCRouterPolicyImpl(
 
   Profile* profile =
       Profile::FromBrowserContext(web_contents_->GetBrowserContext());
-  if (profile)
+  if (profile) {
     is_incognito_ = profile->IsOffTheRecord();
+  }
 }
 
-SearchIPCRouterPolicyImpl::~SearchIPCRouterPolicyImpl() {}
+SearchIPCRouterPolicyImpl::~SearchIPCRouterPolicyImpl() = default;
 
 bool SearchIPCRouterPolicyImpl::ShouldProcessFocusOmnibox(bool is_active_tab) {
   return is_active_tab && !is_incognito_ && search::IsInstantNTP(web_contents_);

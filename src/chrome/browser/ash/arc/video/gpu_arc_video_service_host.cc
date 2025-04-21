@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,14 +16,16 @@
 #include "ash/components/arc/mojom/video_encode_accelerator.mojom.h"
 #include "ash/components/arc/mojom/video_protected_buffer_allocator.mojom.h"
 #include "ash/components/arc/session/arc_bridge_service.h"
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/no_destructor.h"
+#include "base/notreached.h"
 #include "base/rand_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/bind_post_task.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "chromeos/components/cdm_factory_daemon/cdm_factory_daemon_proxy_ash.h"
 #include "chromeos/components/cdm_factory_daemon/mojom/browser_cdm_factory.mojom.h"
@@ -33,6 +35,7 @@
 #include "content/public/browser/gpu_service_registry.h"
 #include "content/public/browser/service_process_host.h"
 #include "content/public/common/content_switches.h"
+#include "mojo/core/configuration.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/bindings/remote_set.h"
@@ -123,10 +126,10 @@ class VideoAcceleratorFactoryService : public mojom::VideoAcceleratorFactory {
     // VideoAcceleratorFactoryService. If this behavior ever changes,
     // VideoAcceleratorFactoryService will need to be adapted because methods
     // such as CreateDecodeAccelerator() assume that the
-    // VideoAcceleratorFactoryService never dies. Thus the CHECK(false) here:
+    // VideoAcceleratorFactoryService never dies. Thus the NOTREACHED() here:
     // violating this assumption without appropriate changes would be a security
     // problem.
-    CHECK(false);
+    NOTREACHED();
   }
 
   void CreateDecodeAccelerator(
@@ -153,7 +156,7 @@ class VideoAcceleratorFactoryService : public mojom::VideoAcceleratorFactory {
     // blocklist. Note: base::Unretained(this) is safe because *|this| should
     // never die. See the CHECK() in the destructor.
     const scoped_refptr<base::SingleThreadTaskRunner>& task_runner =
-        base::ThreadTaskRunnerHandle::Get();
+        base::SingleThreadTaskRunner::GetCurrentDefault();
     CHECK(task_runner);
     auto gpu_feature_checker = content::GpuFeatureChecker::Create(
         gpu::GpuFeatureType::GPU_FEATURE_TYPE_ACCELERATED_VIDEO_DECODE,
@@ -305,6 +308,9 @@ void GpuArcVideoServiceHost::OnBootstrapVideoAcceleratorFactory(
   std::string pipe_name = base::NumberToString(base::RandUint64());
   mojo::ScopedMessagePipeHandle server_pipe =
       invitation.AttachMessagePipe(pipe_name);
+  if (!mojo::core::GetConfiguration().is_broker_process) {
+    invitation.set_extra_flags(MOJO_SEND_INVITATION_FLAG_SHARE_BROKER);
+  }
   mojo::OutgoingInvitation::Send(std::move(invitation),
                                  kUnusedChildProcessHandle,
                                  channel.TakeLocalEndpoint());
@@ -318,6 +324,11 @@ void GpuArcVideoServiceHost::OnBootstrapVideoAcceleratorFactory(
       video_accelerator_factory_.get(),
       mojo::PendingReceiver<mojom::VideoAcceleratorFactory>(
           std::move(server_pipe)));
+}
+
+// static
+void GpuArcVideoKeyedService::EnsureFactoryBuilt() {
+  GpuArcVideoKeyedServiceFactory::GetInstance();
 }
 
 }  // namespace arc

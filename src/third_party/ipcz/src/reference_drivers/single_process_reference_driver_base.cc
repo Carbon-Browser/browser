@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,6 +55,12 @@ class InProcessMapping : public ObjectImpl<InProcessMapping, Object::kMapping> {
   const Ref<InProcessMemory> memory_;
 };
 
+BadTransportActivityCallback& GetBadTransportActivityCallback() {
+  static BadTransportActivityCallback* callback =
+      new BadTransportActivityCallback();
+  return *callback;
+}
+
 IpczResult IPCZ_API Close(IpczDriverHandle handle,
                           uint32_t flags,
                           const void* options) {
@@ -70,7 +76,7 @@ IpczResult IPCZ_API Serialize(IpczDriverHandle handle,
                               IpczDriverHandle transport,
                               uint32_t flags,
                               const void* options,
-                              void* data,
+                              volatile void* data,
                               size_t* num_bytes,
                               IpczDriverHandle* handles,
                               size_t* num_handles) {
@@ -96,7 +102,7 @@ IpczResult IPCZ_API Serialize(IpczDriverHandle handle,
   return IPCZ_RESULT_OK;
 }
 
-IpczResult IPCZ_API Deserialize(const void* data,
+IpczResult IPCZ_API Deserialize(const volatile void* data,
                                 size_t num_bytes,
                                 const IpczDriverHandle* handles,
                                 size_t num_handles,
@@ -107,6 +113,17 @@ IpczResult IPCZ_API Deserialize(const void* data,
   ABSL_ASSERT(num_bytes == 0);
   ABSL_ASSERT(num_handles == 1);
   *driver_handle = handles[0];
+  return IPCZ_RESULT_OK;
+}
+
+IpczResult IPCZ_API ReportBadTransportActivity(IpczDriverHandle transport,
+                                               uintptr_t context,
+                                               uint32_t flags,
+                                               const void* options) {
+  auto& callback = GetBadTransportActivityCallback();
+  if (callback) {
+    callback(transport, context);
+  }
   return IPCZ_RESULT_OK;
 }
 
@@ -149,7 +166,7 @@ IpczResult IPCZ_API DuplicateSharedMemory(IpczDriverHandle driver_memory,
 IpczResult IPCZ_API MapSharedMemory(IpczDriverHandle driver_memory,
                                     uint32_t flags,
                                     const void* options,
-                                    void** address,
+                                    volatile void** address,
                                     IpczDriverHandle* driver_mapping) {
   Ref<InProcessMemory> memory(InProcessMemory::FromHandle(driver_memory));
   auto mapping = MakeRefCounted<InProcessMapping>(std::move(memory));
@@ -177,11 +194,16 @@ const IpczDriver kSingleProcessReferenceDriverBase = {
     nullptr,
     nullptr,
     nullptr,
+    ReportBadTransportActivity,
     AllocateSharedMemory,
     GetSharedMemoryInfo,
     DuplicateSharedMemory,
     MapSharedMemory,
     GenerateRandomBytes,
 };
+
+void SetBadTransportActivityCallback(BadTransportActivityCallback callback) {
+  GetBadTransportActivityCallback() = std::move(callback);
+}
 
 }  // namespace ipcz::reference_drivers

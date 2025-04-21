@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 
 #include "base/component_export.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -56,14 +56,11 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) DhcpPacFileFetcherMojo
       std::unique_ptr<net::PacFileFetcher> pac_file_fetcher);
 
  private:
-  void ContinueFetch(std::u16string* utf16_text,
-                     const net::NetworkTrafficAnnotationTag traffic_annotation,
-                     std::string pac_url);
+  void OnPacUrlReceived(const std::string& pac_url);
   void OnFetchCompleted(int result);
-  void OnPacUrlReceived(const std::string& url);
 
   net::CompletionOnceCallback callback_;
-  std::u16string* utf16_text_;
+  raw_ptr<std::u16string> utf16_text_;
   GURL pac_url_;
   net::MutableNetworkTrafficAnnotationTag traffic_annotation_;
   std::unique_ptr<net::PacFileFetcher> pac_file_fetcher_;

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,19 +6,19 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
 #include "base/sequence_token.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/gtest_util.h"
 #include "base/test/test_simple_task_runner.h"
 #include "base/threading/simple_thread.h"
 #include "base/threading/thread_local.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace base {
+namespace base::internal {
 namespace {
 
 // A thread that runs a callback.
@@ -61,13 +61,10 @@ void ExpectNotCalledOnValidThread(ThreadCheckerImpl* thread_checker) {
   EXPECT_FALSE(thread_checker->CalledOnValidThread());
 }
 
-void ExpectNotCalledOnValidThreadWithSequenceTokenAndThreadTaskRunnerHandle(
+void ExpectNotCalledOnValidThreadWithSequenceTokenThreadBound(
     ThreadCheckerImpl* thread_checker,
     SequenceToken sequence_token) {
-  ThreadTaskRunnerHandle thread_task_runner_handle(
-      MakeRefCounted<TestSimpleTaskRunner>());
-  ScopedSetSequenceTokenForCurrentThread
-      scoped_set_sequence_token_for_current_thread(sequence_token);
+  TaskScope task_scope(sequence_token, /* is_thread_bound=*/true);
   ExpectNotCalledOnValidThread(thread_checker);
 }
 
@@ -78,48 +75,43 @@ TEST(ThreadCheckerTest, AllowedSameThreadNoSequenceToken) {
   EXPECT_TRUE(thread_checker.CalledOnValidThread());
 }
 
-TEST(ThreadCheckerTest,
-     AllowedSameThreadAndSequenceDifferentTasksWithThreadTaskRunnerHandle) {
-  ThreadTaskRunnerHandle thread_task_runner_handle(
-      MakeRefCounted<TestSimpleTaskRunner>());
-
+TEST(ThreadCheckerTest, AllowedSameThreadAndSequenceDifferentThreadBoundTasks) {
   std::unique_ptr<ThreadCheckerImpl> thread_checker;
   const SequenceToken sequence_token = SequenceToken::Create();
 
   {
-    ScopedSetSequenceTokenForCurrentThread
-        scoped_set_sequence_token_for_current_thread(sequence_token);
+    TaskScope task_scope(sequence_token,
+                         /* is_thread_bound=*/true);
     thread_checker = std::make_unique<ThreadCheckerImpl>();
   }
 
   {
-    ScopedSetSequenceTokenForCurrentThread
-        scoped_set_sequence_token_for_current_thread(sequence_token);
+    TaskScope task_scope(sequence_token,
+                         /* is_thread_bound=*/true);
     EXPECT_TRUE(thread_checker->CalledOnValidThread());
   }
 }
 
-TEST(ThreadCheckerTest,
-     AllowedSameThreadSequenceAndTaskNoThreadTaskRunnerHandle) {
-  ScopedSetSequenceTokenForCurrentThread
-      scoped_set_sequence_token_for_current_thread(SequenceToken::Create());
+TEST(ThreadCheckerTest, AllowedSameThreadSequenceAndTaskNotThreadBound) {
+  TaskScope task_scope(SequenceToken::Create(),
+                       /* is_thread_bound=*/false);
   ThreadCheckerImpl thread_checker;
   EXPECT_TRUE(thread_checker.CalledOnValidThread());
 }
 
 TEST(ThreadCheckerTest,
-     DisallowedSameThreadAndSequenceDifferentTasksNoThreadTaskRunnerHandle) {
+     DisallowedSameThreadAndSequenceDifferentTasksNotThreadBound) {
   std::unique_ptr<ThreadCheckerImpl> thread_checker;
 
   {
-    ScopedSetSequenceTokenForCurrentThread
-        scoped_set_sequence_token_for_current_thread(SequenceToken::Create());
+    TaskScope task_scope(SequenceToken::Create(),
+                         /* is_thread_bound=*/false);
     thread_checker = std::make_unique<ThreadCheckerImpl>();
   }
 
   {
-    ScopedSetSequenceTokenForCurrentThread
-        scoped_set_sequence_token_for_current_thread(SequenceToken::Create());
+    TaskScope task_scope(SequenceToken::Create(),
+                         /* is_thread_bound=*/false);
     EXPECT_FALSE(thread_checker->CalledOnValidThread());
   }
 }
@@ -131,36 +123,38 @@ TEST(ThreadCheckerTest, DisallowedDifferentThreadsNoSequenceToken) {
 }
 
 TEST(ThreadCheckerTest, DisallowedDifferentThreadsSameSequence) {
-  ThreadTaskRunnerHandle thread_task_runner_handle(
-      MakeRefCounted<TestSimpleTaskRunner>());
+  SingleThreadTaskRunner::CurrentDefaultHandle
+      single_thread_task_runner_current_default_handle(
+          MakeRefCounted<TestSimpleTaskRunner>());
   const SequenceToken sequence_token(SequenceToken::Create());
 
-  ScopedSetSequenceTokenForCurrentThread
-      scoped_set_sequence_token_for_current_thread(sequence_token);
+  TaskScope task_scope(sequence_token,
+                       /* is_thread_bound=*/false);
   ThreadCheckerImpl thread_checker;
   EXPECT_TRUE(thread_checker.CalledOnValidThread());
 
-  RunCallbackOnNewThreadSynchronously(BindOnce(
-      &ExpectNotCalledOnValidThreadWithSequenceTokenAndThreadTaskRunnerHandle,
-      Unretained(&thread_checker), sequence_token));
+  RunCallbackOnNewThreadSynchronously(
+      BindOnce(&ExpectNotCalledOnValidThreadWithSequenceTokenThreadBound,
+               Unretained(&thread_checker), sequence_token));
 }
 
 TEST(ThreadCheckerTest, DisallowedSameThreadDifferentSequence) {
   std::unique_ptr<ThreadCheckerImpl> thread_checker;
 
-  ThreadTaskRunnerHandle thread_task_runner_handle(
-      MakeRefCounted<TestSimpleTaskRunner>());
+  SingleThreadTaskRunner::CurrentDefaultHandle
+      single_thread_task_runner_current_default_handle(
+          MakeRefCounted<TestSimpleTaskRunner>());
 
   {
-    ScopedSetSequenceTokenForCurrentThread
-        scoped_set_sequence_token_for_current_thread(SequenceToken::Create());
+    TaskScope task_scope(SequenceToken::Create(),
+                         /* is_thread_bound=*/false);
     thread_checker = std::make_unique<ThreadCheckerImpl>();
   }
 
   {
     // Different SequenceToken.
-    ScopedSetSequenceTokenForCurrentThread
-        scoped_set_sequence_token_for_current_thread(SequenceToken::Create());
+    TaskScope task_scope(SequenceToken::Create(),
+                         /* is_thread_bound=*/false);
     EXPECT_FALSE(thread_checker->CalledOnValidThread());
   }
 
@@ -181,10 +175,11 @@ TEST(ThreadCheckerTest, DetachFromThread) {
 }
 
 TEST(ThreadCheckerTest, DetachFromThreadWithSequenceToken) {
-  ThreadTaskRunnerHandle thread_task_runner_handle(
-      MakeRefCounted<TestSimpleTaskRunner>());
-  ScopedSetSequenceTokenForCurrentThread
-      scoped_set_sequence_token_for_current_thread(SequenceToken::Create());
+  SingleThreadTaskRunner::CurrentDefaultHandle
+      single_thread_task_runner_current_default_handle(
+          MakeRefCounted<TestSimpleTaskRunner>());
+  TaskScope task_scope(SequenceToken::Create(),
+                       /* is_thread_bound=*/false);
   ThreadCheckerImpl thread_checker;
   thread_checker.DetachFromThread();
 
@@ -201,8 +196,9 @@ TEST(ThreadCheckerTest, DetachFromThreadWithSequenceToken) {
 class ThreadCheckerOwner {
  public:
   explicit ThreadCheckerOwner(bool detach_from_thread) {
-    if (detach_from_thread)
+    if (detach_from_thread) {
       checker_.DetachFromThread();
+    }
   }
 
   ThreadCheckerOwner(const ThreadCheckerOwner&) = delete;
@@ -218,7 +214,7 @@ class ThreadCheckerOwner {
 // during thread destruction.
 TEST(ThreadCheckerTest, CalledOnValidThreadFromThreadDestruction) {
   ThreadLocalOwnedPointer<ThreadCheckerOwner> thread_local_owner;
-  RunCallbackOnNewThreadSynchronously(BindLambdaForTesting([&]() {
+  RunCallbackOnNewThreadSynchronously(BindLambdaForTesting([&] {
     thread_local_owner.Set(std::make_unique<ThreadCheckerOwner>(false));
   }));
 }
@@ -227,7 +223,7 @@ TEST(ThreadCheckerTest, CalledOnValidThreadFromThreadDestruction) {
 // ThreadCheckerImpl::DetachFromThread().
 TEST(ThreadCheckerTest, CalledOnValidThreadFromThreadDestructionDetached) {
   ThreadLocalOwnedPointer<ThreadCheckerOwner> thread_local_owner;
-  RunCallbackOnNewThreadSynchronously(BindLambdaForTesting([&]() {
+  RunCallbackOnNewThreadSynchronously(BindLambdaForTesting([&] {
     thread_local_owner.Set(std::make_unique<ThreadCheckerOwner>(true));
   }));
 }
@@ -292,7 +288,7 @@ TEST(ThreadCheckerTest, MoveFromDetachedRebinds) {
 }
 
 TEST(ThreadCheckerTest, MoveOffThreadBanned) {
-  testing::GTEST_FLAG(death_test_style) = "threadsafe";
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
 
   ThreadCheckerImpl other_thread;
   other_thread.DetachFromThread();
@@ -336,7 +332,7 @@ class ThreadCheckerMacroTest : public testing::Test {
 }  // namespace
 
 TEST_F(ThreadCheckerMacroTest, Macros) {
-  testing::GTEST_FLAG(death_test_style) = "threadsafe";
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
 
   THREAD_CHECKER(my_thread_checker);
 
@@ -350,4 +346,4 @@ TEST_F(ThreadCheckerMacroTest, Macros) {
                Unretained(this)));
 }
 
-}  // namespace base
+}  // namespace base::internal

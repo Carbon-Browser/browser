@@ -28,7 +28,6 @@
 <translation id="2329392777730037872"><ph name="URL" /> ვერ გაიხსნა ამ კლიენტზე.</translation>
 <translation id="2359808026110333948">გაგრძელება</translation>
 <translation id="2366718077645204424">ვერ დაუკავშირდა ჰოსტს. ამის მიზეზი შეიძლება იყოს იმ ქსელის კონფიგურაცია, რომელსაც იყენებთ.</translation>
-<translation id="2370754117186920852"><ph name="OPTIONAL_OFFLINE_REASON" /> ბოლოს დაფიქსირდა ონლაინ: <ph name="RELATIVE_TIMESTAMP" />.</translation>
 <translation id="2504109125669302160"><ph name="PRODUCT_NAME" /> საჭიროებს „მარტივი წვდომის“ ნებართვას</translation>
 <translation id="2509394361235492552">დაკავშირებულია „<ph name="HOSTNAME" />“-თან</translation>
 <translation id="2540992418118313681">გსურთ ნახვისა და მართვისათვის, გაუზიაროს ეს კომპიუტერი სხვა მომხმარებელს?</translation>
@@ -36,7 +35,6 @@
 <translation id="2599300881200251572">ეს სერვისი რთავს შემოსულ კავშირებს Chrome-ის დისტანციური სამუშაო დაფის კლიენტებისგან.</translation>
 <translation id="2647232381348739934">Chromoting სერვისი</translation>
 <translation id="2676780859508944670">მუშაობს…</translation>
-<translation id="2692522824157224199">© 2022, Google LLC. ყველა უფლება დაცულია.</translation>
 <translation id="2699970397166997657">Chromoting კომუნიკაციის პროცესი</translation>
 <translation id="2758123043070977469">ავტორიზაციისას პრობლემა წარმოიქმნა. გთხოვთ, ხელახლა ცადოთ შესვლა.</translation>
 <translation id="2803375539583399270">შეიყვანეთ PIN-კოდი</translation>
@@ -54,7 +52,6 @@
 <translation id="3423542133075182604">უსაფრთხოების გასაღების დისტანციური დაკავშირების პროცესი</translation>
 <translation id="3581045510967524389">ვერ დაუკვშირდა ქსელს. შეამოწმეთ, რომ მოწყობილობა ონლაინშია.</translation>
 <translation id="3596628256176442606">ეს სერვისი იძლევა Chromoting-ის კლიენტების შემომავალი კავშირების გააქტიურების შესაძლებლობას.</translation>
-<translation id="369442766917958684">ხაზგარეშე.</translation>
 <translation id="3695446226812920698">შეიტყვეთ როგორ</translation>
 <translation id="3776024066357219166">თქვენი Chrome-ის დისტანციური სამუშაო დაფის სესია დასრულდა.</translation>
 <translation id="3858860766373142691">სახელი</translation>
@@ -73,7 +70,6 @@
 <translation id="4257751272692708833"><ph name="PRODUCT_NAME" /> URL-ების გადამამისამართებელი</translation>
 <translation id="4277736576214464567">წვდომის კოდი არასწორია. გთხოვთ სცადეთ ისევ.</translation>
 <translation id="4281844954008187215">მომსახურების პირობები</translation>
-<translation id="4372650392690220936">© 2022, The Chromium Authors. ყველა უფლება დაცულია.</translation>
 <translation id="4405930547258349619">ძირითადი ბიბლიოთეკა</translation>
 <translation id="443560535555262820">მარტივი წვდომის პარამეტრების გახსნა</translation>
 <translation id="4450893287417543264">აღარ გამოჩნდეს</translation>
@@ -107,7 +103,6 @@
 <translation id="5601503069213153581">PIN</translation>
 <translation id="5690427481109656848">Google LLC</translation>
 <translation id="5708869785009007625">თქვენი სამუშაო დაფა ამჟამად გაზიარებულია მომხმარებელთან <ph name="USER" />.</translation>
-<translation id="5750083143895808682">შესული ხართ, როგორც <ph name="EMAIL_ADDRESS" />.</translation>
 <translation id="579702532610384533">ხელახლა დაკავშირება</translation>
 <translation id="5810269635982033450">ეკრანი მუშაობს ტრეკპედის სახით</translation>
 <translation id="5823554426827907568"><ph name="CLIENT_USERNAME" /> ითხოვს ნებართვას, რომ ნახოს თქვენი ეკრანი, ასევე, თქვენი კლავიატურა და მაუსი გააკონტროლოს. თუ ეს მოთხოვნა მოულოდნელია, დააჭირეთ „<ph name="IDS_SHARE_CONFIRM_DIALOG_DECLINE" />“-ს. სხვა შემთხვევაში არჩიეთ „<ph name="IDS_SHARE_CONFIRM_DIALOG_CONFIRM" />“ და დაუშვით დაკავშირება, როცა მზად იქნებით.</translation>
@@ -154,6 +149,7 @@
 <translation id="7693372326588366043">განაახლე საკვანძო კომპიუტერების სია</translation>
 <translation id="7714222945760997814">ამის შესახებ მოხსენება</translation>
 <translation id="7868137160098754906">შეიყვანეთ თქვენი PIN დისტანციური კომპიუტერისთვის.</translation>
+<translation id="7881455334687220899">© 2024, The Chromium Authors. ყველა უფლება დაცულია.</translation>
 <translation id="7895403300744144251">დისტანციური კომპიუტერის უსაფრთხოების წესები კრძალავს თქვენი ანგარიშის მეშვეობით დაკავშირებას.</translation>
 <translation id="7936528439960309876">მარჯვნივ ჩამაგრება</translation>
 <translation id="7970576581263377361">ავტორიზაცია ვერ მოხერხდა. გთხოვთ, ხელახლა შეხვიდეთ Chromium-ში.</translation>
@@ -185,6 +181,7 @@
 <translation id="8747048596626351634">სესია ავარიულად გაითიშა ან მისი გაშვება ვერ მოხერხდა. თუ დისტანციურ კომპიუტერზე არსებობს სესია ~/.chrome-remote-desktop-session, დარწმუნდით, რომ მისი მეშვეობით წინა პლანზე გაშვებულია ხანგრძლივი პროცესი, როგორიცაა დესკტოპის გარემო ან ფანჯრების მენეჯერი.</translation>
 <translation id="8804164990146287819">კონფიდენციალურობის პოლიტიკა</translation>
 <translation id="8906511416443321782">აუდიოს აღსაბეჭდად და Chrome-ის დისტანციური სამუშაო დაფის კლიენტზე მისი სტრიმინგისთვის საჭიროა მიკროფონზე წვდომა.</translation>
+<translation id="9042277333359847053">© 2024, Google LLC. ყველა უფლება დაცულია.</translation>
 <translation id="9111855907838866522">თქვენ დაკავშირებული ხართ დისტანციურ მოწყობილობასთან. მენიუს გასახსნელად შეეხეთ ეკრანს ოთხი თითით.</translation>
 <translation id="9126115402994542723">აღარ მომთხოვო PIN-ის შეყვანა, ამ მოწყობილობიდან ჰოსტთან დაკავშირებისას.</translation>
 <translation id="916856682307586697">ნაგულისხმევი XSession-ის გაშვება</translation>

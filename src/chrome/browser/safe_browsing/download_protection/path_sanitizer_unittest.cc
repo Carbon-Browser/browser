@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,9 @@ namespace {
 // Returns the root directory with a trailing separator. Works on all platforms.
 base::FilePath GetRootDirectory() {
   base::FilePath dir_temp;
-  if (!base::PathService::Get(base::DIR_TEMP, &dir_temp))
+  if (!base::PathService::Get(base::DIR_TEMP, &dir_temp)) {
     NOTREACHED();
+  }
 
   std::vector<base::FilePath::StringType> components = dir_temp.GetComponents();
 

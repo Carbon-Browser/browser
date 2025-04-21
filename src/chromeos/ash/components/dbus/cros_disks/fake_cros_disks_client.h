@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,15 @@
 #include <set>
 #include <string>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "chromeos/ash/components/dbus/cros_disks/cros_disks_client.h"
 
-namespace chromeos {
+namespace ash {
 
 // A fake implementation of CrosDiskeClient. This class provides a fake behavior
 // and the user of this class can raise a fake mouse events.
@@ -46,7 +47,7 @@ class COMPONENT_EXPORT(ASH_DBUS_CROS_DISKS) FakeCrosDisksClient
              const std::vector<std::string>& mount_options,
              MountAccessMode access_mode,
              RemountOption remount,
-             VoidDBusMethodCallback callback) override;
+             chromeos::VoidDBusMethodCallback callback) override;
 
   // Deletes the directory created in Mount().
   void Unmount(const std::string& device_path,
@@ -58,12 +59,12 @@ class COMPONENT_EXPORT(ASH_DBUS_CROS_DISKS) FakeCrosDisksClient
   void Format(const std::string& device_path,
               const std::string& filesystem,
               const std::string& label,
-              VoidDBusMethodCallback callback) override;
+              chromeos::VoidDBusMethodCallback callback) override;
   void SinglePartitionFormat(const std::string& device_path,
                              PartitionCallback callback) override;
   void Rename(const std::string& device_path,
               const std::string& volume_name,
-              VoidDBusMethodCallback callback) override;
+              chromeos::VoidDBusMethodCallback callback) override;
   void GetDeviceProperties(const std::string& device_path,
                            GetDevicePropertiesCallback callback,
                            base::OnceClosure error_callback) override;
@@ -73,7 +74,8 @@ class COMPONENT_EXPORT(ASH_DBUS_CROS_DISKS) FakeCrosDisksClient
   void NotifyMountCompleted(MountError error_code,
                             const std::string& source_path,
                             MountType mount_type,
-                            const std::string& mount_path);
+                            const std::string& mount_path,
+                            bool read_only = false);
   void NotifyFormatCompleted(FormatError error_code,
                              const std::string& device_path);
   void NotifyRenameCompleted(RenameError error_code,
@@ -171,13 +173,13 @@ class COMPONENT_EXPORT(ASH_DBUS_CROS_DISKS) FakeCrosDisksClient
   void DidMount(const std::string& source_path,
                 MountType type,
                 const base::FilePath& mounted_path,
-                VoidDBusMethodCallback callback,
+                chromeos::VoidDBusMethodCallback callback,
                 MountError mount_error);
 
   base::ObserverList<Observer> observer_list_;
   int unmount_call_count_ = 0;
   std::string last_unmount_device_path_;
-  MountError unmount_error_ = MOUNT_ERROR_NONE;
+  MountError unmount_error_ = MountError::kSuccess;
   base::RepeatingClosure unmount_listener_;
   int format_call_count_ = 0;
   std::string last_format_device_path_;
@@ -186,25 +188,20 @@ class COMPONENT_EXPORT(ASH_DBUS_CROS_DISKS) FakeCrosDisksClient
   bool format_success_ = true;
   int partition_call_count_ = 0;
   std::string last_partition_device_path_;
-  PartitionError partition_error_ = PARTITION_ERROR_NONE;
+  PartitionError partition_error_ = PartitionError::kSuccess;
   int rename_call_count_ = 0;
   std::string last_rename_device_path_;
   std::string last_rename_volume_name_;
   bool rename_success_ = true;
   std::set<base::FilePath> mounted_paths_;
   std::vector<CustomMountPointCallback> custom_mount_point_callbacks_;
-  const DiskInfo* next_get_device_properties_disk_info_ = nullptr;
+  raw_ptr<const DiskInfo> next_get_device_properties_disk_info_ = nullptr;
   int get_device_properties_success_count_ = 0;
   bool block_mount_ = false;
 
   base::WeakPtrFactory<FakeCrosDisksClient> weak_ptr_factory_{this};
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove when //chromeos/dbus moved to ash.
-namespace ash {
-using ::chromeos::FakeCrosDisksClient;
 }  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_DBUS_CROS_DISKS_FAKE_CROS_DISKS_CLIENT_H_

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,7 @@
 
 #import "content/public/browser/native_event_processor_mac.h"
 
-namespace content {
-namespace responsiveness {
+namespace content::responsiveness {
 
 void NativeEventObserver::RegisterObserver() {
   DCHECK([NSApp conformsToProtocol:@protocol(NativeEventProcessor)]);
@@ -31,5 +30,4 @@ void NativeEventObserver::DidRunNativeEvent(const void* opaque_identifier) {
   did_run_event_callback_.Run(opaque_identifier);
 }
 
-}  // namespace responsiveness
-}  // namespace content
+}  // namespace content::responsiveness

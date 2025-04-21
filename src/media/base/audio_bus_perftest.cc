@@ -1,12 +1,15 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "media/base/audio_bus.h"
+
 #include <stdint.h>
+
 #include <memory>
 
+#include "base/containers/heap_array.h"
 #include "base/time/time.h"
-#include "media/base/audio_bus.h"
 #include "media/base/audio_sample_types.h"
 #include "media/base/fake_audio_render_callback.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -34,12 +37,12 @@ void RunInterleaveBench(AudioBus* bus,
                         const std::string& trace_name,
                         bool to_interleaved_only = false) {
   const int frame_size = bus->frames() * bus->channels();
-  std::unique_ptr<T[]> interleaved(new T[frame_size]);
+  auto interleaved = base::HeapArray<T>::Uninit(frame_size);
   perf_test::PerfResultReporter reporter = SetUpReporter(trace_name);
 
   base::TimeTicks start = base::TimeTicks::Now();
   for (int i = 0; i < kBenchmarkIterations; ++i)
-    bus->ToInterleaved<SampleTraits>(bus->frames(), interleaved.get());
+    bus->ToInterleaved<SampleTraits>(bus->frames(), interleaved.data());
   double total_time_milliseconds =
       (base::TimeTicks::Now() - start).InMillisecondsF();
   reporter.AddResult("_to_interleaved",
@@ -50,7 +53,7 @@ void RunInterleaveBench(AudioBus* bus,
 
   start = base::TimeTicks::Now();
   for (int i = 0; i < kBenchmarkIterations; ++i)
-    bus->FromInterleaved<SampleTraits>(interleaved.get(), bus->frames());
+    bus->FromInterleaved<SampleTraits>(interleaved.data(), bus->frames());
   total_time_milliseconds = (base::TimeTicks::Now() - start).InMillisecondsF();
   reporter.AddResult("_from_interleaved",
                      total_time_milliseconds / kBenchmarkIterations);
@@ -60,7 +63,7 @@ void RunInterleaveBench(AudioBus* bus,
 TEST(AudioBusPerfTest, Interleave) {
   std::unique_ptr<AudioBus> bus = AudioBus::Create(2, kSampleRate * 120);
   FakeAudioRenderCallback callback(0.2, kSampleRate);
-  callback.Render(base::TimeDelta(), base::TimeTicks::Now(), 0, bus.get());
+  callback.Render(base::TimeDelta(), base::TimeTicks::Now(), {}, bus.get());
 
   // Only benchmark these two types since they're the only commonly used ones.
   RunInterleaveBench<int16_t, SignedInt16SampleTypeTraits>(bus.get(),
@@ -71,7 +74,7 @@ TEST(AudioBusPerfTest, Interleave) {
 TEST(AudioBusPerfTest, DISABLED_ToInterleavedFloat) {
   std::unique_ptr<AudioBus> bus = AudioBus::Create(2, kSampleRate * 120);
   FakeAudioRenderCallback callback(0.2, kSampleRate);
-  callback.Render(base::TimeDelta(), base::TimeTicks::Now(), 0, bus.get());
+  callback.Render(base::TimeDelta(), base::TimeTicks::Now(), {}, bus.get());
 
   RunInterleaveBench<float, Float32SampleTypeTraits>(
       bus.get(), "to_interleave_float", true);
@@ -85,7 +88,7 @@ void RunCopyBench(void (AudioBus::*f)(AudioBus*) const,
   std::unique_ptr<AudioBus> bus = AudioBus::Create(2, kSampleRate * 120);
   std::unique_ptr<AudioBus> dest = AudioBus::Create(2, kSampleRate * 120);
   FakeAudioRenderCallback callback(0.2, kSampleRate);
-  callback.Render(base::TimeDelta(), base::TimeTicks::Now(), 0, bus.get());
+  callback.Render(base::TimeDelta(), base::TimeTicks::Now(), {}, bus.get());
 
   // Warmup.
   for (int i = 0; i < kBenchmarkIterations; ++i)

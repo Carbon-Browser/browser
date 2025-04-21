@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,9 @@
 #define CHROME_BROWSER_PERFORMANCE_MANAGER_TEST_SUPPORT_SITE_DATA_UTILS_H_
 
 #include <memory>
+
 #include "base/auto_reset.h"
+#include "base/functional/callback_helpers.h"
 #include "components/performance_manager/test_support/test_harness_helper.h"
 
 class Profile;
@@ -46,7 +48,7 @@ class SiteDataTestHarness : public PerformanceManagerTestHarnessHelper {
   void TearDown() override;
 
   // Use an in memory database to avoid creating some unnecessary files on disk.
-  std::unique_ptr<base::AutoReset<bool>> use_in_memory_db_for_testing_;
+  base::ScopedClosureRunner use_in_memory_db_for_testing_;
   std::unique_ptr<base::AutoReset<bool>> enable_cache_factory_for_testing_;
 };
 

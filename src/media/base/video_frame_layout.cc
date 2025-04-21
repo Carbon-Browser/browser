@@ -1,14 +1,17 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/base/video_frame_layout.h"
 
-#include <string.h>
 #include <numeric>
 #include <sstream>
 
+#include "base/check_op.h"
 #include "base/notreached.h"
+#include "base/numerics/checked_math.h"
+#include "base/numerics/safe_conversions.h"
+#include "media/base/video_frame.h"
 
 namespace media {
 
@@ -29,11 +32,15 @@ std::string VectorToString(const std::vector<T>& vec) {
   return result.str();
 }
 
-std::vector<ColorPlaneLayout> PlanesFromStrides(
-    const std::vector<int32_t> strides) {
+std::vector<ColorPlaneLayout> CreatePlanes(VideoPixelFormat format,
+                                           const std::vector<size_t>& strides,
+                                           const gfx::Size& coded_size) {
   std::vector<ColorPlaneLayout> planes(strides.size());
   for (size_t i = 0; i < strides.size(); i++) {
+    size_t rows =
+        VideoFrame::PlaneSizeInSamples(format, i, coded_size).height();
     planes[i].stride = strides[i];
+    planes[i].size = strides[i] * rows;
   }
   return planes;
 }
@@ -58,13 +65,18 @@ size_t VideoFrameLayout::NumPlanes(VideoPixelFormat format) {
     case PIXEL_FORMAT_RGBAF16:
       return 1;
     case PIXEL_FORMAT_NV12:
+    case PIXEL_FORMAT_NV16:
     case PIXEL_FORMAT_NV21:
-    case PIXEL_FORMAT_P016LE:
+    case PIXEL_FORMAT_NV24:
+    case PIXEL_FORMAT_P010LE:
+    case PIXEL_FORMAT_P210LE:
+    case PIXEL_FORMAT_P410LE:
       return 2;
     case PIXEL_FORMAT_I420:
     case PIXEL_FORMAT_YV12:
     case PIXEL_FORMAT_I422:
     case PIXEL_FORMAT_I444:
+    case PIXEL_FORMAT_NV12A:
     case PIXEL_FORMAT_YUV420P9:
     case PIXEL_FORMAT_YUV422P9:
     case PIXEL_FORMAT_YUV444P9:
@@ -88,55 +100,55 @@ size_t VideoFrameLayout::NumPlanes(VideoPixelFormat format) {
       return 0;
   }
   NOTREACHED() << "Unsupported video frame format: " << format;
-  return 0;
 }
 
 // static
-absl::optional<VideoFrameLayout> VideoFrameLayout::Create(
+std::optional<VideoFrameLayout> VideoFrameLayout::Create(
     VideoPixelFormat format,
     const gfx::Size& coded_size) {
   return CreateWithStrides(format, coded_size,
-                           std::vector<int32_t>(NumPlanes(format), 0));
+                           std::vector<size_t>(NumPlanes(format), 0));
 }
 
 // static
-absl::optional<VideoFrameLayout> VideoFrameLayout::CreateWithStrides(
+std::optional<VideoFrameLayout> VideoFrameLayout::CreateWithStrides(
     VideoPixelFormat format,
     const gfx::Size& coded_size,
-    std::vector<int32_t> strides,
+    std::vector<size_t> strides,
     size_t buffer_addr_align,
     uint64_t modifier) {
-  return CreateWithPlanes(format, coded_size, PlanesFromStrides(strides),
+  return CreateWithPlanes(format, coded_size,
+                          CreatePlanes(format, strides, coded_size),
                           buffer_addr_align, modifier);
 }
 
 // static
-absl::optional<VideoFrameLayout> VideoFrameLayout::CreateWithPlanes(
+std::optional<VideoFrameLayout> VideoFrameLayout::CreateWithPlanes(
     VideoPixelFormat format,
     const gfx::Size& coded_size,
     std::vector<ColorPlaneLayout> planes,
     size_t buffer_addr_align,
     uint64_t modifier) {
   // NOTE: Even if format is UNKNOWN, it is valid if coded_sizes is not Empty().
-  // TODO(crbug.com/896135): Return absl::nullopt,
+  // TODO(crbug.com/41421131): Return std::nullopt,
   // if (format != PIXEL_FORMAT_UNKNOWN || !coded_sizes.IsEmpty())
-  // TODO(crbug.com/896135): Return absl::nullopt,
+  // TODO(crbug.com/41421131): Return std::nullopt,
   // if (planes.size() != NumPlanes(format))
   return VideoFrameLayout(format, coded_size, std::move(planes),
                           false /*is_multi_planar */, buffer_addr_align,
                           modifier);
 }
 
-absl::optional<VideoFrameLayout> VideoFrameLayout::CreateMultiPlanar(
+std::optional<VideoFrameLayout> VideoFrameLayout::CreateMultiPlanar(
     VideoPixelFormat format,
     const gfx::Size& coded_size,
     std::vector<ColorPlaneLayout> planes,
     size_t buffer_addr_align,
     uint64_t modifier) {
   // NOTE: Even if format is UNKNOWN, it is valid if coded_sizes is not Empty().
-  // TODO(crbug.com/896135): Return absl::nullopt,
+  // TODO(crbug.com/41421131): Return std::nullopt,
   // if (format != PIXEL_FORMAT_UNKNOWN || !coded_sizes.IsEmpty())
-  // TODO(crbug.com/896135): Return absl::nullopt,
+  // TODO(crbug.com/41421131): Return std::nullopt,
   // if (planes.size() != NumPlanes(format))
   return VideoFrameLayout(format, coded_size, std::move(planes),
                           true /*is_multi_planar */, buffer_addr_align,
@@ -154,7 +166,10 @@ VideoFrameLayout::VideoFrameLayout(VideoPixelFormat format,
       planes_(std::move(planes)),
       is_multi_planar_(is_multi_planar),
       buffer_addr_align_(buffer_addr_align),
-      modifier_(modifier) {}
+      modifier_(modifier) {
+  // Trigger NOTREACHED() if `format` is not valid.
+  NumPlanes(format);
+}
 
 VideoFrameLayout::~VideoFrameLayout() = default;
 VideoFrameLayout::VideoFrameLayout(const VideoFrameLayout&) = default;
@@ -171,6 +186,27 @@ bool VideoFrameLayout::operator==(const VideoFrameLayout& rhs) const {
 
 bool VideoFrameLayout::operator!=(const VideoFrameLayout& rhs) const {
   return !(*this == rhs);
+}
+
+bool VideoFrameLayout::FitsInContiguousBufferOfSize(size_t data_size) const {
+  if (is_multi_planar_) {
+    return false;
+  }
+
+  for (const auto& plane : planes_) {
+    if (plane.offset > data_size || plane.size > data_size) {
+      return false;
+    }
+
+    // No individual plane should have a size + offset > data_size.
+    base::CheckedNumeric<size_t> plane_end = plane.size;
+    plane_end += plane.offset;
+    if (!plane_end.IsValid() || plane_end.ValueOrDie() > data_size) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 std::ostream& operator<<(std::ostream& ostream,

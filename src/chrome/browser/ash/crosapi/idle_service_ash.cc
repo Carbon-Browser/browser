@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,12 +35,7 @@ IdleServiceAsh::Dispatcher::Dispatcher() {
 IdleServiceAsh::Dispatcher::~Dispatcher() {
   if (!IdleServiceAsh::Dispatcher::is_disabled_for_testing_) {
     ash::SessionManagerClient::Get()->RemoveObserver(this);
-
-    // UserActivityDetector may not be exist on actual shutdown, because
-    // the ProfileManager destruct before CrosapiManager.
-    auto* user_activity_detector = ui::UserActivityDetector::Get();
-    if (user_activity_detector)
-      ui::UserActivityDetector::Get()->RemoveObserver(this);
+    ui::UserActivityDetector::Get()->RemoveObserver(this);
   }
 }
 

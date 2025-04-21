@@ -1,19 +1,19 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.components.paintpreview.player.frame;
 
-/**
- * Dispatches gesture events to the correct controllers.
- */
+/** Dispatches gesture events to the correct controllers. */
 public class PlayerFrameGestureDetectorDelegate {
     private final PlayerFrameScaleController mScaleController;
     private final PlayerFrameScrollController mScrollController;
     private final PlayerFrameViewDelegate mViewDelegate;
 
-    PlayerFrameGestureDetectorDelegate(PlayerFrameScaleController scaleController,
-            PlayerFrameScrollController scrollController, PlayerFrameViewDelegate viewDelegate) {
+    PlayerFrameGestureDetectorDelegate(
+            PlayerFrameScaleController scaleController,
+            PlayerFrameScrollController scrollController,
+            PlayerFrameViewDelegate viewDelegate) {
         mScaleController = scaleController;
         mScrollController = scrollController;
         mViewDelegate = viewDelegate;
@@ -39,9 +39,7 @@ public class PlayerFrameGestureDetectorDelegate {
         return mScrollController.onFling(velocityX, velocityY);
     }
 
-    /**
-     * Called when a gesture is released.
-     */
+    /** Called when a gesture is released. */
     void onRelease() {
         mScrollController.onRelease();
     }

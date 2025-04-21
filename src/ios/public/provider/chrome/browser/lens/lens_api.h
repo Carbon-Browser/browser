@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,17 @@
 
 #import <UIKit/UIKit.h>
 
+#import <optional>
+
+#import "base/functional/callback.h"
+#import "ios/public/provider/chrome/browser/lens/lens_query.h"
+#import "ios/web/public/navigation/navigation_manager.h"
+
 @class LensConfiguration;
 @class UIViewController;
+@class UIImage;
+class GURL;
+enum class LensEntrypoint;
 
 // A delegate that can receive Lens events forwarded by a ChromeLensController.
 @protocol ChromeLensControllerDelegate <NSObject>
@@ -16,8 +25,19 @@
 // Called when the Lens view controller's dimiss button has been tapped.
 - (void)lensControllerDidTapDismissButton;
 
-// Called when a URL in the Lens view controller has been selected.
+// Called when the user selects a URL in Lens.
 - (void)lensControllerDidSelectURL:(NSURL*)url;
+
+// Called when the user selects an image and the Lens controller has prepared
+// `params` for loading a Lens web page.
+- (void)lensControllerDidGenerateLoadParams:
+    (const web::NavigationManager::WebLoadParams&)params;
+
+// Called when the user picked or captured an image.
+- (void)lensControllerDidGenerateImage:(UIImage*)image;
+
+// Returns the frame of the web content area of the browser.
+- (CGRect)webContentFrame;
 
 @end
 
@@ -28,30 +48,80 @@
 // A delegate that can receive Lens events forwarded by the controller.
 @property(nonatomic, weak) id<ChromeLensControllerDelegate> delegate;
 
-// Returns a Lens post-capture view controller for the given query image.
-- (UIViewController*)postCaptureViewControllerForImage:(UIImage*)image;
+// Returns an input selection UIViewController.
+- (UIViewController*)inputSelectionViewController;
+
+// Triggers the secondary transition animation from native LVF to Lens Web.
+- (void)triggerSecondaryTransitionAnimation;
+
+@end
+
+#pragma mark - Lens View Finder
+
+@protocol ChromeLensViewFinderController;
+
+// A delegate that can receive Lens events forwarded by a
+// `ChromeLensViewFinderController`.
+@protocol ChromeLensViewFinderDelegate <NSObject>
+
+// Called when the Lens view controller's dimiss button has been tapped.
+- (void)lensControllerDidTapDismissButton:
+    (id<ChromeLensViewFinderController>)lensController;
+
+// Called when the user selects a URL in Lens.
+- (void)lensController:(id<ChromeLensViewFinderController>)lensController
+          didSelectURL:(GURL)url;
+
+// Called when the user picked or captured an image.
+- (void)lensController:(id<ChromeLensViewFinderController>)lensController
+             didSelectImage:(UIImage*)image
+    serializedViewportState:(NSString*)viewportState
+              isCameraImage:(BOOL)isCameraImage;
+
+@end
+
+// A controller that can facilitate communication with the downstream LVF
+// controller.
+@protocol ChromeLensViewFinderController <NSObject>
+
+// Sets the delegate for LVF.
+- (void)setLensViewFinderDelegate:(id<ChromeLensViewFinderDelegate>)delegate;
+
+// Tears down the live camera preview and destroys the UI.
+- (void)tearDownCaptureInfrastructure;
 
 @end
 
 namespace ios {
 namespace provider {
 
-// Block invoked when the URL for Lens has been generated. Either
-// `url` or `error` is guaranteed to be non-nil.
-using LensWebURLCompletion = void (^)(NSURL* url, NSError* error);
+// Callback invoked when the web load params for a Lens query have been
+// generated.
+using LensWebParamsCallback =
+    base::OnceCallback<void(web::NavigationManager::WebLoadParams)>;
 
 // Returns a controller for the given configuration that can facilitate
 // communication with the downstream Lens controller.
 id<ChromeLensController> NewChromeLensController(LensConfiguration* config);
 
+// Returns a controller for the given configuration that can facilitate
+// communication with the downstream Lens View Finder controller.
+UIViewController<ChromeLensViewFinderController>*
+NewChromeLensViewFinderController(LensConfiguration* config);
+
 // Returns whether Lens is supported for the current build.
 bool IsLensSupported();
 
-// Generates an URL for a Lens image search. The `completion` will
-// be invoked asynchronously in the calling sequence when the url
-// has been generated.
-void GenerateLensWebURLForImage(UIImage* image,
-                                LensWebURLCompletion completion);
+// Returns whether or not `url` represents a Lens Web results page.
+bool IsLensWebResultsURL(const GURL& url);
+
+// Returns the Lens entry point for `url` if it is a Lens Web results page.
+std::optional<LensEntrypoint> GetLensEntryPointFromURL(const GURL& url);
+
+// Generates web load params for a Lens image search for the given
+// `query`. `completion` will be run on the main thread.
+void GenerateLensLoadParamsAsync(LensQuery* query,
+                                 LensWebParamsCallback completion);
 
 }  // namespace provider
 }  // namespace ios

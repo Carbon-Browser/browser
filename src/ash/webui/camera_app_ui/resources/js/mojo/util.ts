@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,12 +29,12 @@ const NEVER_SETTLED_PROMISE = new Promise<never>(
  *     response or will never be resolved if the window unload is about to
  *     happen.
  */
-async function wrapMojoResponse<T>(call: Promise<T>|undefined): Promise<T> {
+async function wrapMojoResponse(call: unknown): Promise<unknown> {
   const result = await Promise.race([windowUnload.wait(), call]);
   if (windowUnload.isSignaled()) {
     return NEVER_SETTLED_PROMISE;
   }
-  return result as T;
+  return result;
 }
 
 const mojoResponseHandler: ProxyHandler<MojoEndpoint> = {
@@ -58,26 +58,46 @@ const mojoResponseHandler: ProxyHandler<MojoEndpoint> = {
 /**
  * Closes the given mojo endpoint once the page is unloaded.
  * Reference b/176139064.
- *
- * @param endpoint The mojo endpoint.
  */
 function closeWhenUnload(endpoint: MojoEndpoint) {
   addUnloadCallback(() => closeEndpoint(endpoint));
 }
 
 /**
- * Returns a mojo |endpoint| and returns a proxy of it.
+ * Returns a proxy of |endpoint|.
  *
- * @return The proxy of the given endpoint.
+ * The |endpoint| is automatically closed on window unload.
+ * Note that the methods on the returned proxy will not be resolved after unload
+ * event on window is triggered to avoid race condition during the window
+ * unloading.
  */
 export function wrapEndpoint<T extends MojoEndpoint>(endpoint: T): T {
   closeWhenUnload(endpoint);
+  // The mojoResponseHandler is designed to be able to handle all mojo
+  // connection proxies.
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   return new Proxy(endpoint, mojoResponseHandler as ProxyHandler<T>);
 }
 
 /**
- * Returns the target mojo endpoint.
+ * Closes the target mojo |endpoint|.
  */
 export function closeEndpoint(endpoint: MojoEndpoint): void {
   endpoint.$.close();
+}
+
+/**
+ * Returns a fake endpoint using proxy.
+ */
+export function fakeEndpoint<T>(): T {
+  // Disable type assertion since it is intended to make all function calls as
+  // no-ops.
+  const handler = {
+    apply: (): unknown =>
+        new Proxy(() => {/* Doing nothing for fake */}, handler),
+    get: (): unknown =>
+        new Proxy(() => {/* Doing nothing for fake */}, handler),
+  };
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  return new Proxy({}, handler) as T;
 }

@@ -1,10 +1,9 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <string>
 
-#include "ash/components/tpm/install_attributes.h"
 #include "base/at_exit.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
@@ -25,6 +24,8 @@
 #include "chrome/browser/ash/settings/device_settings_service.h"
 #include "chrome/browser/policy/configuration_policy_handler_list_factory.h"
 #include "chrome/common/chrome_paths.h"
+#include "chromeos/ash/components/attestation/attestation_features.h"
+#include "chromeos/ash/components/install_attributes/install_attributes.h"
 #include "components/policy/core/browser/configuration_policy_handler_list.h"
 #include "components/policy/core/browser/policy_conversions_client.h"
 #include "components/policy/core/browser/policy_error_map.h"
@@ -44,7 +45,7 @@ namespace policy {
 
 namespace {
 
-constexpr logging::LogSeverity kLogSeverity = logging::LOG_FATAL;
+constexpr logging::LogSeverity kLogSeverity = logging::LOGGING_FATAL;
 
 // A log handler that discards messages whose severity is lower than the
 // threshold. It's needed in order to suppress unneeded syslog logging (which by
@@ -100,6 +101,7 @@ struct PerInputEnvironment {
     ash::ShutdownDBus();
     ash::InstallAttributes::Shutdown();
     ash::DeviceSettingsService::Shutdown();
+    ash::attestation::AttestationFeatures::Shutdown();
   }
 
   base::test::TaskEnvironment task_environment;
@@ -120,8 +122,13 @@ void CheckPolicyMap(const PolicyMap& policy_map,
     const PolicyDetails* policy_details = GetChromePolicyDetails(policy_name);
     CHECK(policy_details) << "Policy " << policy_name
                           << " has no policy details";
-    CHECK_EQ(policy_details->is_device_policy, expected_is_device_policy)
-        << "Policy " << policy_name << " is of unexpected type";
+    if (expected_is_device_policy) {
+      CHECK_EQ(policy_details->scope, kDevice)
+        << "Policy " << policy_name << " should be device policy";
+    } else {
+      CHECK_NE(policy_details->scope, kDevice)
+        << "Policy " << policy_name << " should not be device policy";
+    }
   }
 }
 

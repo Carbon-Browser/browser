@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,19 +28,19 @@ TEST_F(DevToolsSettingsTest, BasicApiTest) {
   settings.Set("setting_a", "foo");
   settings.Set("setting_b", "bar");
 
-  base::Value prefs = settings.Get();
-  EXPECT_EQ(*prefs.FindStringKey("setting_a"), "foo");
-  EXPECT_EQ(*prefs.FindStringKey("setting_b"), "bar");
+  base::Value::Dict prefs = settings.Get();
+  EXPECT_EQ(*prefs.FindString("setting_a"), "foo");
+  EXPECT_EQ(*prefs.FindString("setting_b"), "bar");
 
   settings.Remove("setting_a");
   prefs = settings.Get();
-  EXPECT_EQ(prefs.FindStringKey("setting_a"), nullptr);
+  EXPECT_EQ(prefs.FindString("setting_a"), nullptr);
 
   settings.Clear();
   prefs = settings.Get();
   // kSyncDevToolsPreferenceFrontendName is always reported.
-  EXPECT_EQ(prefs.DictSize(), static_cast<size_t>(1));
-  EXPECT_EQ(prefs.FindStringKey("setting_b"), nullptr);
+  EXPECT_EQ(prefs.size(), static_cast<size_t>(1));
+  EXPECT_EQ(prefs.FindString("setting_b"), nullptr);
 }
 
 TEST_F(DevToolsSettingsTest, CanMoveUnsyncedSettingToBeingSynced) {
@@ -54,16 +54,16 @@ TEST_F(DevToolsSettingsTest, CanMoveUnsyncedSettingToBeingSynced) {
   DevToolsSettings settings(&profile_);
   settings.Register("setting", {RegisterOptions::SyncMode::kDontSync});
 
-  base::Value prefs = settings.Get();
-  EXPECT_EQ(*prefs.FindStringKey("setting"), "value");
+  base::Value::Dict prefs = settings.Get();
+  EXPECT_EQ(*prefs.FindString("setting"), "value");
 
   settings.Set("setting", "new_value");
   prefs = settings.Get();
-  EXPECT_EQ(*prefs.FindStringKey("setting"), "new_value");
+  EXPECT_EQ(*prefs.FindString("setting"), "new_value");
 
   settings.Remove("setting");
   prefs = settings.Get();
-  EXPECT_EQ(prefs.FindStringKey("setting"), nullptr);
+  EXPECT_EQ(prefs.FindString("setting"), nullptr);
 }
 
 TEST_F(DevToolsSettingsTest, CanMoveSyncedSettingToBeingUnsynced) {
@@ -77,16 +77,16 @@ TEST_F(DevToolsSettingsTest, CanMoveSyncedSettingToBeingUnsynced) {
   DevToolsSettings settings(&profile_);
   settings.Register("setting", {RegisterOptions::SyncMode::kSync});
 
-  base::Value prefs = settings.Get();
-  EXPECT_EQ(*prefs.FindStringKey("setting"), "value");
+  base::Value::Dict prefs = settings.Get();
+  EXPECT_EQ(*prefs.FindString("setting"), "value");
 
   settings.Set("setting", "new_value");
   prefs = settings.Get();
-  EXPECT_EQ(*prefs.FindStringKey("setting"), "new_value");
+  EXPECT_EQ(*prefs.FindString("setting"), "new_value");
 
   settings.Remove("setting");
   prefs = settings.Get();
-  EXPECT_EQ(prefs.FindStringKey("setting"), nullptr);
+  EXPECT_EQ(prefs.FindString("setting"), nullptr);
 }
 
 TEST_F(DevToolsSettingsTest, MovingUnsycnedToSyncedDoesNotOverwrite) {
@@ -102,9 +102,9 @@ TEST_F(DevToolsSettingsTest, MovingUnsycnedToSyncedDoesNotOverwrite) {
   // 2) Simulate the update to synced plus setting of a new value on a
   //    different device.
   {
-    DictionaryPrefUpdate update(profile_.GetPrefs(),
+    ScopedDictPrefUpdate update(profile_.GetPrefs(),
                                 prefs::kDevToolsSyncedPreferencesSyncEnabled);
-    update.Get()->SetStringKey("setting", "overwritten synced value");
+    update->Set("setting", "overwritten synced value");
   }
 
   // 3) Move the setting from unsynced to synced on this device but expect the
@@ -112,8 +112,8 @@ TEST_F(DevToolsSettingsTest, MovingUnsycnedToSyncedDoesNotOverwrite) {
   DevToolsSettings settings(&profile_);
   settings.Register("setting", {RegisterOptions::SyncMode::kSync});
 
-  base::Value prefs = settings.Get();
-  EXPECT_EQ(*prefs.FindStringKey("setting"), "overwritten synced value");
+  base::Value::Dict prefs = settings.Get();
+  EXPECT_EQ(*prefs.FindString("setting"), "overwritten synced value");
 }
 
 TEST_F(DevToolsSettingsTest, Set_SetsTheUnderlyingTogglePreference) {
@@ -136,15 +136,15 @@ TEST_F(DevToolsSettingsTest, Get_GetsTheUnderlyingTogglePreference) {
 
   profile_.GetPrefs()->SetBoolean(prefs::kDevToolsSyncPreferences, true);
   auto prefs = settings.Get();
-  EXPECT_EQ(*prefs.FindStringKey(
-                DevToolsSettings::kSyncDevToolsPreferencesFrontendName),
-            "true");
+  EXPECT_EQ(
+      *prefs.FindString(DevToolsSettings::kSyncDevToolsPreferencesFrontendName),
+      "true");
 
   profile_.GetPrefs()->SetBoolean(prefs::kDevToolsSyncPreferences, false);
   prefs = settings.Get();
-  EXPECT_EQ(*prefs.FindStringKey(
-                DevToolsSettings::kSyncDevToolsPreferencesFrontendName),
-            "false");
+  EXPECT_EQ(
+      *prefs.FindString(DevToolsSettings::kSyncDevToolsPreferencesFrontendName),
+      "false");
 }
 
 TEST_F(DevToolsSettingsTest, Remove_ResetsUnderlyingTogglePreference) {
@@ -157,6 +157,28 @@ TEST_F(DevToolsSettingsTest, Remove_ResetsUnderlyingTogglePreference) {
 
   EXPECT_EQ(profile_.GetPrefs()->GetBoolean(prefs::kDevToolsSyncPreferences),
             DevToolsSettings::kSyncDevToolsPreferencesDefault);
+}
+
+TEST_F(DevToolsSettingsTest, Remove_WorksOnBothStorages) {
+  {
+    ScopedDictPrefUpdate synced_update(
+        profile_.GetPrefs(), prefs::kDevToolsSyncedPreferencesSyncDisabled);
+    synced_update->Set("unknown setting", "value");
+
+    DevToolsSettings settings(&profile_);
+    settings.Register("synced setting", {RegisterOptions::SyncMode::kSync});
+    ScopedDictPrefUpdate unsynced_update(profile_.GetPrefs(),
+                                         prefs::kDevToolsPreferences);
+    unsynced_update->Set("synced setting", "value");
+  }
+
+  DevToolsSettings settings(&profile_);
+  base::Value::Dict prefs = settings.Get();
+  EXPECT_EQ(prefs.size(), static_cast<size_t>(3));
+  settings.Remove("unknown setting");
+  settings.Remove("synced setting");
+  prefs = settings.Get();
+  EXPECT_EQ(prefs.size(), static_cast<size_t>(1));
 }
 
 TEST_F(DevToolsSettingsTest, Clear_ResetsUnderlyingTogglePreference) {
@@ -185,9 +207,9 @@ TEST_F(DevToolsSettingsTest, EnableDisableSyncPreservesSettings) {
   // 3) Disable sync
   settings.Set(DevToolsSettings::kSyncDevToolsPreferencesFrontendName, "false");
 
-  base::Value prefs = settings.Get();
-  EXPECT_EQ(*prefs.FindStringKey("setting_unsynced"), "unsynced value");
-  EXPECT_EQ(*prefs.FindStringKey("setting_synced"), "synced value");
+  base::Value::Dict prefs = settings.Get();
+  EXPECT_EQ(*prefs.FindString("setting_unsynced"), "unsynced value");
+  EXPECT_EQ(*prefs.FindString("setting_synced"), "synced value");
 }
 
 TEST_F(DevToolsSettingsTest, DisableEnableSyncPreservesSettings) {
@@ -204,9 +226,9 @@ TEST_F(DevToolsSettingsTest, DisableEnableSyncPreservesSettings) {
   // 3) Enable sync
   settings.Set(DevToolsSettings::kSyncDevToolsPreferencesFrontendName, "true");
 
-  base::Value prefs = settings.Get();
-  EXPECT_EQ(*prefs.FindStringKey("setting_unsynced"), "unsynced value");
-  EXPECT_EQ(*prefs.FindStringKey("setting_synced"), "synced value");
+  base::Value::Dict prefs = settings.Get();
+  EXPECT_EQ(*prefs.FindString("setting_unsynced"), "unsynced value");
+  EXPECT_EQ(*prefs.FindString("setting_synced"), "synced value");
 }
 
 TEST_F(DevToolsSettingsTest, GetPreference) {
@@ -233,5 +255,5 @@ TEST_F(DevToolsSettingsTest, GetPreference) {
       "true");
   EXPECT_EQ(settings.Get("setting_unsynced")->GetString(), "unsynced value");
   EXPECT_EQ(settings.Get("setting_synced")->GetString(), "synced value");
-  EXPECT_EQ(settings.Get("nonexistent"), absl::nullopt);
+  EXPECT_EQ(settings.Get("nonexistent"), std::nullopt);
 }

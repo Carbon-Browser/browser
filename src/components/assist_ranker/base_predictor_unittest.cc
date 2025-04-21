@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
@@ -37,8 +37,9 @@ const char kTestNavigationUrl[] = "https://foo.com";
 
 const base::flat_set<std::string> kFeatureAllowlist;
 
-const base::Feature kTestRankerQuery{"TestRankerQuery",
-                                     base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kTestRankerQuery,
+             "TestRankerQuery",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 const base::FeatureParam<std::string> kTestRankerUrl{
     &kTestRankerQuery, kTestUrlParamName, kTestDefaultModelUrl};
@@ -67,7 +68,7 @@ class FakePredictor : public BasePredictor {
   ~FakePredictor() override {}
   // Validation will always succeed.
   static RankerModelStatus ValidateModel(const RankerModel& model) {
-    return RankerModelStatus::OK;
+    return RankerModelStatus::kOk;
   }
 
  protected:

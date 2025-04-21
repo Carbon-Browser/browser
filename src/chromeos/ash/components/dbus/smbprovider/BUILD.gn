@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -10,7 +10,7 @@ assert(is_chromeos_ash, "Non-Chrome-OS builds must not depend on //chromeos")
 component("smbprovider") {
   output_name = "ash_smbprovider"
   defines = [ "IS_ASH_DBUS_SMBPROVIDER_IMPL" ]
-  deps = [
+  public_deps = [
     ":proto",
     "//base",
     "//chromeos/dbus/common",
@@ -22,6 +22,7 @@ component("smbprovider") {
     "smb_provider_client.cc",
     "smb_provider_client.h",
   ]
+  deps = [ "//ash/constants" ]
 }
 
 proto_library("proto") {

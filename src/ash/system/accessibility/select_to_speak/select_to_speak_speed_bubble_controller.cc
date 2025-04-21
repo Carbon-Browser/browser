@@ -1,20 +1,22 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/system/accessibility/select_to_speak/select_to_speak_speed_bubble_controller.h"
 
-#include "ash/accessibility/accessibility_controller_impl.h"
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/bubble/bubble_constants.h"
 #include "ash/public/cpp/accessibility_controller_enums.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/shell.h"
+#include "ash/strings/grit/ash_strings.h"
 #include "ash/system/accessibility/floating_menu_utils.h"
 #include "ash/system/accessibility/select_to_speak/select_to_speak_constants.h"
 #include "ash/system/accessibility/select_to_speak/select_to_speak_speed_view.h"
 #include "ash/system/tray/tray_background_view.h"
 #include "ash/system/tray/tray_constants.h"
-#include "ash/system/unified/unified_system_tray_view.h"
+#include "base/metrics/histogram_functions.h"
+#include "ui/base/l10n/l10n_util.h"
 #include "ui/compositor/layer.h"
 #include "ui/wm/public/activation_client.h"
 
@@ -37,6 +39,7 @@ SelectToSpeakSpeedBubbleController::~SelectToSpeakSpeedBubbleController() {
   Shell::Get()->activation_client()->RemoveObserver(this);
   if (bubble_widget_ && !bubble_widget_->IsClosed())
     bubble_widget_->CloseNow();
+  MaybeRecordDurationHistogram();
 }
 
 void SelectToSpeakSpeedBubbleController::Show(views::View* anchor_view,
@@ -55,15 +58,15 @@ void SelectToSpeakSpeedBubbleController::Show(views::View* anchor_view,
     init_params.translucent = true;
     init_params.close_on_deactivate = false;
     init_params.preferred_width = kPreferredWidth;
+    init_params.type = TrayBubbleView::TrayBubbleType::kAccessibilityBubble;
+
     bubble_view_ = new TrayBubbleView(init_params);
     bubble_view_->SetArrow(views::BubbleBorder::BOTTOM_RIGHT);
     bubble_view_->SetCanActivate(true);
-    bubble_view_->SetFocusBehavior(ActionableView::FocusBehavior::ALWAYS);
+    bubble_view_->SetFocusBehavior(views::View::FocusBehavior::ALWAYS);
 
     speed_view_ = new SelectToSpeakSpeedView(this, speech_rate);
-    bubble_view_->AddChildView(speed_view_);
-    speed_view_->SetPaintToLayer();
-    speed_view_->layer()->SetFillsBoundsOpaquely(false);
+    bubble_view_->AddChildView(speed_view_.get());
 
     bubble_widget_ =
         views::BubbleDialogDelegateView::CreateBubble(bubble_view_);
@@ -77,22 +80,44 @@ void SelectToSpeakSpeedBubbleController::Show(views::View* anchor_view,
 
   bubble_view_->ChangeAnchorView(anchor_view);
   bubble_widget_->Show();
+  if (last_show_time_ == base::Time()) {
+    last_show_time_ = base::Time::Now();
+  }
 }
 
 void SelectToSpeakSpeedBubbleController::Hide() {
   if (!bubble_widget_)
     return;
   bubble_widget_->Hide();
+  MaybeRecordDurationHistogram();
+}
+
+void SelectToSpeakSpeedBubbleController::MaybeRecordDurationHistogram() {
+  if (last_show_time_ == base::Time()) {
+    return;
+  }
+  base::UmaHistogramTimes(
+      "Accessibility.CrosSelectToSpeak.SpeedBubbleVisibleDuration",
+      base::Time::Now() - last_show_time_);
+  last_show_time_ = base::Time();
 }
 
 bool SelectToSpeakSpeedBubbleController::IsVisible() const {
   return bubble_widget_ && bubble_widget_->IsVisible();
 }
 
+std::u16string
+SelectToSpeakSpeedBubbleController::GetAccessibleNameForBubble() {
+  return l10n_util::GetStringUTF16(IDS_ASH_SELECT_TO_SPEAK_SPEED_MENU);
+}
+
 void SelectToSpeakSpeedBubbleController::BubbleViewDestroyed() {
   bubble_view_ = nullptr;
   bubble_widget_ = nullptr;
 }
+
+void SelectToSpeakSpeedBubbleController::HideBubble(
+    const TrayBubbleView* bubble_view) {}
 
 void SelectToSpeakSpeedBubbleController::OnWindowActivated(
     ActivationReason reason,

@@ -1,9 +1,12 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_AURA_TEST_TEST_SCREEN_H_
 #define UI_AURA_TEST_TEST_SCREEN_H_
+
+#include <map>
+#include <unordered_map>
 
 #include "base/memory/raw_ptr.h"
 #include "ui/aura/window_observer.h"
@@ -43,8 +46,12 @@ class TestScreen : public display::ScreenBase, public WindowObserver {
   void SetDisplayRotation(display::Display::Rotation rotation);
   void SetUIScale(float ui_scale);
   void SetWorkAreaInsets(const gfx::Insets& insets);
+  void SetPreferredScaleFactorForWindow(gfx::NativeWindow window,
+                                        float scale_factor);
 
  protected:
+  static gfx::NativeWindow GetWindowForPoint(Window* window,
+                                             const gfx::Point& local_point);
   gfx::Transform GetRotationTransform() const;
   gfx::Transform GetUIScaleTransform() const;
 
@@ -65,11 +72,14 @@ class TestScreen : public display::ScreenBase, public WindowObserver {
   display::Display GetDisplayNearestWindow(
       gfx::NativeWindow window) const override;
   std::string GetCurrentWorkspace() override;
+  std::optional<float> GetPreferredScaleFactorForWindow(
+      gfx::NativeWindow window) const override;
 
  private:
   explicit TestScreen(const gfx::Rect& screen_bounds);
 
   raw_ptr<aura::WindowTreeHost> host_ = nullptr;
+  std::unordered_map<gfx::NativeWindow, float> preferred_scale_factors_;
 
   float ui_scale_ = 1.0f;
 };

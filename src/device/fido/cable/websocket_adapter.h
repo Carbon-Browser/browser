@@ -1,22 +1,23 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef DEVICE_FIDO_CABLE_WEBSOCKET_ADAPTER_H_
 #define DEVICE_FIDO_CABLE_WEBSOCKET_ADAPTER_H_
 
+#include <optional>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
 #include "base/containers/span.h"
+#include "base/functional/callback_forward.h"
 #include "base/sequence_checker.h"
 #include "device/fido/cable/v2_handshake.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
+#include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 #include "services/network/public/mojom/websocket.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace device {
 namespace cablev2 {
@@ -37,15 +38,25 @@ class COMPONENT_EXPORT(DEVICE_FIDO) WebSocketAdapter
     GONE,
   };
 
-  using TunnelReadyCallback = base::OnceCallback<
-      void(Result, absl::optional<std::array<uint8_t, kRoutingIdSize>>)>;
+  // ConnectSignalSupport indicates whether the connection will send a connect
+  // signal. This is a single zero byte, sent by the tunnel server when the peer
+  // connects. This only occurs for "contact" connections.
+  enum class ConnectSignalSupport {
+    NO,
+    YES,
+  };
+
+  using TunnelReadyCallback = base::OnceCallback<void(
+      Result,
+      std::optional<std::array<uint8_t, kRoutingIdSize>>,
+      ConnectSignalSupport)>;
   using TunnelDataCallback =
-      base::RepeatingCallback<void(absl::optional<base::span<const uint8_t>>)>;
+      base::RepeatingCallback<void(std::optional<base::span<const uint8_t>>)>;
   WebSocketAdapter(
       // on_tunnel_ready is called once with a boolean that indicates whether
       // the WebSocket successfully connected and an optional routing ID.
       TunnelReadyCallback on_tunnel_ready,
-      // on_tunnel_ready is called repeatedly, after successful connection, with
+      // on_tunnel_data is called repeatedly, after successful connection, with
       // the contents of WebSocket messages. Framing is preserved so a single
       // message written by the server will result in a single callback.
       TunnelDataCallback on_tunnel_data);

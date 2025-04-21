@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,7 +40,5 @@ class GpuRasterMsaaModeValidator {
   bool IsValid(const gpu::raster::MsaaMode value) const;
 };
 GpuRasterMsaaModeValidator gpu_raster_msaa_mode;
-
-ValueValidator<viz::ResourceFormat> viz_resource_format;
 
 #endif  // GPU_COMMAND_BUFFER_SERVICE_RASTER_CMD_VALIDATION_AUTOGEN_H_

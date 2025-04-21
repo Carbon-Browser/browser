@@ -1,12 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromecast/ui/display_settings_manager_impl.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/time/time.h"
 #include "chromecast/graphics/cast_window_manager.h"
@@ -28,6 +28,17 @@ constexpr base::TimeDelta kAnimationDuration = base::Seconds(2);
 const float kMinApiBrightness = 0.0f;
 const float kMaxApiBrightness = 1.0f;
 const float kDefaultApiBrightness = kMaxApiBrightness;
+
+#if defined(USE_AURA)
+// A wrapper function for converting a PowerToggleCallback to a
+// display::ConfigureCallback. Calls `callback` with the resulting status.
+void AsConfigureCallback(
+    ScreenPowerController::Delegate::PowerToggleCallback callback,
+    const std::vector<display::DisplayConfigurationParams>& request_results,
+    bool status) {
+  std::move(callback).Run(status);
+}
+#endif  // defined(USE_AURA)
 
 }  // namespace
 
@@ -95,13 +106,15 @@ void DisplaySettingsManagerImpl::AddReceiver(
 
 void DisplaySettingsManagerImpl::SetScreenPowerOn(PowerToggleCallback callback) {
 #if defined(USE_AURA)
-  display_configurator_->EnableDisplay(std::move(callback));
+  display_configurator_->EnableDisplay(
+      base::BindOnce(&AsConfigureCallback, std::move(callback)));
 #endif  // defined(USE_AURA)
 }
 
 void DisplaySettingsManagerImpl::SetScreenPowerOff(PowerToggleCallback callback) {
 #if defined(USE_AURA)
-  display_configurator_->DisableDisplay(std::move(callback));
+  display_configurator_->DisableDisplay(
+      base::BindOnce(&AsConfigureCallback, std::move(callback)));
 #endif  // defined(USE_AURA)
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -76,7 +76,7 @@ chrome.test.runTests([
     // `setAccessLevel` is not exposed to `sync` or `local`.
     chrome.test.assertFalse(!!chrome.storage.sync.setAccessLevel);
     chrome.test.assertFalse(!!chrome.storage.local.setAccessLevel);
-    // TODO(crbug.com/1227410): `setAccessLevel` is exposed to `session` but
+    // TODO(crbug.com/40189208): `setAccessLevel` is exposed to `session` but
     // cannot be accessed from a content script. This will change once we
     // expose only `setAccessLevel` in privileged contexts.
     chrome.test.assertTrue(!!chrome.storage.session.setAccessLevel);

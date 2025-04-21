@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -61,7 +61,7 @@ class TabLoaderTester {
   void WaitForTabLoadingEnabled();
 
  private:
-  raw_ptr<TabLoader> tab_loader_ = nullptr;
+  raw_ptr<TabLoader, DanglingUntriaged> tab_loader_ = nullptr;
 };
 
 #endif  // CHROME_BROWSER_SESSIONS_TAB_LOADER_TESTER_H_

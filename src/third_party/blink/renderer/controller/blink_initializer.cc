@@ -33,10 +33,12 @@
 #include <memory>
 #include <utility>
 
-#include "base/allocator/partition_allocator/page_allocator.h"
 #include "base/command_line.h"
+#include "base/ranges/algorithm.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/binder_map.h"
+#include "partition_alloc/page_allocator.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/switches.h"
 #include "third_party/blink/public/platform/interface_registry.h"
@@ -46,6 +48,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_initializer.h"
 #include "third_party/blink/renderer/controller/blink_leak_detector.h"
 #include "third_party/blink/renderer/controller/dev_tools_frontend_impl.h"
+#include "third_party/blink/renderer/controller/javascript_call_stack_generator.h"
 #include "third_party/blink/renderer/controller/performance_manager/renderer_resource_coordinator_impl.h"
 #include "third_party/blink/renderer/controller/performance_manager/v8_detailed_memory_reporter_impl.h"
 #include "third_party/blink/renderer/core/animation/animation_clock.h"
@@ -54,13 +57,12 @@
 #include "third_party/blink/renderer/core/execution_context/agent.h"
 #include "third_party/blink/renderer/core/frame/display_cutout_client_impl.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
-#include "third_party/blink/renderer/core/html/parser/atomic_html_token.h"
-#include "third_party/blink/renderer/core/html/parser/literal_buffer.h"
-#include "third_party/blink/renderer/platform/bindings/microtask.h"
+#include "third_party/blink/renderer/core/loader/loader_factory_for_frame.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
 #include "third_party/blink/renderer/platform/disk_data_allocator.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
-#include "third_party/blink/renderer/platform/scheduler/public/thread.h"
+#include "third_party/blink/renderer/platform/scheduler/public/main_thread.h"
+#include "third_party/blink/renderer/platform/wtf/allocator/partitions.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
 #include "v8/include/v8.h"
@@ -69,9 +71,14 @@
 #include "third_party/blink/renderer/extensions/chromeos/chromeos_extensions.h"
 #endif
 
+#if defined(USE_BLINK_EXTENSIONS_WEBVIEW)
+#include "third_party/blink/renderer/extensions/webview/webview_extensions.h"
+#endif
+
 #if BUILDFLAG(IS_ANDROID)
 #include "third_party/blink/renderer/controller/crash_memory_metrics_reporter_impl.h"
 #include "third_party/blink/renderer/controller/oom_intervention_impl.h"
+#include "third_party/blink/renderer/controller/private_memory_footprint_provider.h"
 #endif
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
@@ -79,7 +86,7 @@
 #endif
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID) || \
-    BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
+    BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_WIN)
 #include "third_party/blink/renderer/controller/highest_pmf_reporter.h"
 #include "third_party/blink/renderer/controller/user_level_memory_pressure_signal_generator.h"
 #endif
@@ -98,22 +105,8 @@ class EndOfTaskRunner : public Thread::TaskObserver {
   void WillProcessTask(const base::PendingTask&, bool) override {
     AnimationClock::NotifyTaskStart();
   }
-
-  void DidProcessTask(const base::PendingTask&) override {
-    // TODO(tzik): Move rejected promise handling to EventLoop.
-    V8Initializer::ReportRejectedPromisesOnMainThread();
-  }
+  void DidProcessTask(const base::PendingTask& pending_task) override {}
 };
-
-// See description of `g_literal_buffer_create_string_with_encoding` in
-// LiteralBuffer as to what this controls.
-const base::Feature kLiteralBufferCreateStringWithEncoding{
-    "LiteralBufferCreateStringWithEncoding", base::FEATURE_DISABLED_BY_DEFAULT};
-
-// See description of `g_use_html_attribute_name_lookup` in AtomicHTMLToken as
-// to what this controls.
-const base::Feature kUseHtmlAttributeNameLookup{
-    "UseHtmlAttributeNameLookup", base::FEATURE_DISABLED_BY_DEFAULT};
 
 Thread::TaskObserver* g_end_of_task_runner = nullptr;
 
@@ -129,8 +122,9 @@ void InitializeCommon(Platform* platform, mojo::BinderMap* binders) {
   // Reserve address space on 32 bit Windows, to make it likelier that large
   // array buffer allocations succeed.
   BOOL is_wow_64 = -1;
-  if (!IsWow64Process(GetCurrentProcess(), &is_wow_64))
+  if (!IsWow64Process(GetCurrentProcess(), &is_wow_64)) {
     is_wow_64 = FALSE;
+  }
   if (!is_wow_64) {
     // Try to reserve as much address space as we reasonably can.
     const size_t kMB = 1024 * 1024;
@@ -143,21 +137,23 @@ void InitializeCommon(Platform* platform, mojo::BinderMap* binders) {
 #endif  // !defined(ARCH_CPU_X86_64) && !defined(ARCH_CPU_ARM64) &&
         // BUILDFLAG(IS_WIN)
 
+  // These Initialize() methods for renderer extensions initialize strings which
+  // must be done before calling CoreInitializer::Initialize() which is called
+  // by GetBlinkInitializer().Initialize() below.
 #if defined(USE_BLINK_EXTENSIONS_CHROMEOS)
-  // ChromeOSExtensions::Initialize() initializes strings which must be done
-  // before calling CoreInitializer::Initialize() which is called by
-  // GetBlinkInitializer().Initialize() below.
   ChromeOSExtensions::Initialize();
+#endif
+#if defined(USE_BLINK_EXTENSIONS_WEBVIEW)
+  WebViewExtensions::Initialize();
 #endif
 
   // BlinkInitializer::Initialize() must be called before InitializeMainThread
   GetBlinkInitializer().Initialize();
 
-  std::string js_command_line_flag =
+  blink::V8Initializer::InitializeIsolateHolder(
+      blink::V8ContextSnapshot::GetReferenceTable(),
       base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
-          blink::switches::kJavaScriptFlags);
-  V8Initializer::InitializeMainThread(V8ContextSnapshot::GetReferenceTable(),
-                                      js_command_line_flag);
+          blink::switches::kJavaScriptFlags));
 
   GetBlinkInitializer().RegisterInterfaces(*binders);
 
@@ -165,31 +161,15 @@ void InitializeCommon(Platform* platform, mojo::BinderMap* binders) {
   g_end_of_task_runner = new EndOfTaskRunner;
   Thread::Current()->AddTaskObserver(g_end_of_task_runner);
 
-#if BUILDFLAG(IS_ANDROID)
-  // Initialize CrashMemoryMetricsReporterImpl in order to assure that memory
-  // allocation does not happen in OnOOMCallback.
-  CrashMemoryMetricsReporterImpl::Instance();
-#endif
-
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID) || \
-    BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
-  // Initialize UserLevelMemoryPressureSignalGenerator so it starts monitoring.
-  if (UserLevelMemoryPressureSignalGenerator::Enabled())
-    UserLevelMemoryPressureSignalGenerator::Instance();
-
-  // Start reporting the highest private memory footprint after the first
-  // navigation.
-  HighestPmfReporter::Instance();
-#endif
+  GetBlinkInitializer().RegisterMemoryWatchers(platform);
 
   // Initialize performance manager.
   RendererResourceCoordinatorImpl::MaybeInitialize();
 
-  g_literal_buffer_create_string_with_encoding =
-      base::FeatureList::IsEnabled(kLiteralBufferCreateStringWithEncoding);
-
-  g_use_html_attribute_name_lookup =
-      base::FeatureList::IsEnabled(kUseHtmlAttributeNameLookup);
+  // The ArrayBuffer partition is placed inside V8's virtual memory cage if it
+  // is enabled. For that reason, the partition can only be initialized after V8
+  // has been initialized.
+  WTF::Partitions::InitializeArrayBufferPartition();
 }
 
 }  // namespace
@@ -201,6 +181,7 @@ void Initialize(Platform* platform,
   DCHECK(binders);
   Platform::InitializeMainThread(platform, main_thread_scheduler);
   InitializeCommon(platform, binders);
+  V8Initializer::InitializeMainThread();
 }
 
 // Function defined in third_party/blink/public/web/blink.h.
@@ -211,67 +192,127 @@ void CreateMainThreadAndInitialize(Platform* platform,
   InitializeCommon(platform, binders);
 }
 
+void InitializeWithoutIsolateForTesting(
+    Platform* platform,
+    mojo::BinderMap* binders,
+    scheduler::WebThreadScheduler* main_thread_scheduler) {
+  Platform::InitializeMainThread(platform, main_thread_scheduler);
+  InitializeCommon(platform, binders);
+}
+
+v8::Isolate* CreateMainThreadIsolate() {
+  return V8Initializer::InitializeMainThread();
+}
+
 // Function defined in third_party/blink/public/web/blink.h.
 void SetIsCrossOriginIsolated(bool value) {
   Agent::SetIsCrossOriginIsolated(value);
 }
 
 // Function defined in third_party/blink/public/web/blink.h.
-bool IsCrossOriginIsolated() {
-  return Agent::IsCrossOriginIsolated();
+void SetIsWebSecurityDisabled(bool value) {
+  Agent::SetIsWebSecurityDisabled(value);
 }
 
 // Function defined in third_party/blink/public/web/blink.h.
-void SetIsIsolatedApplication(bool value) {
-  Agent::SetIsIsolatedApplication(value);
+void SetIsIsolatedContext(bool value) {
+  Agent::SetIsIsolatedContext(value);
 }
 
 // Function defined in third_party/blink/public/web/blink.h.
-bool IsIsolatedApplication() {
-  return Agent::IsIsolatedApplication();
+bool IsIsolatedContext() {
+  return Agent::IsIsolatedContext();
+}
+
+// Function defined in third_party/blink/public/web/blink.h.
+void SetCorsExemptHeaderList(
+    const WebVector<WebString>& web_cors_exempt_header_list) {
+  Vector<String> cors_exempt_header_list(
+      base::checked_cast<wtf_size_t>(web_cors_exempt_header_list.size()));
+  base::ranges::transform(web_cors_exempt_header_list,
+                          cors_exempt_header_list.begin(),
+                          &WebString::operator WTF::String);
+  LoaderFactoryForFrame::SetCorsExemptHeaderList(
+      std::move(cors_exempt_header_list));
 }
 
 void BlinkInitializer::RegisterInterfaces(mojo::BinderMap& binders) {
   ModulesInitializer::RegisterInterfaces(binders);
-  Thread* main_thread = Thread::MainThread();
-  // GetSingleThreadTaskRunner() uses GetTaskRunner() internally.
-  // crbug.com/781664
-  if (!main_thread->GetTaskRunner())
-    return;
+  scoped_refptr<base::SingleThreadTaskRunner> main_thread_task_runner =
+      Thread::MainThread()->GetTaskRunner(MainThreadTaskRunnerRestricted());
+  CHECK(main_thread_task_runner);
 
 #if BUILDFLAG(IS_ANDROID)
   binders.Add<mojom::blink::OomIntervention>(
       ConvertToBaseRepeatingCallback(
-          CrossThreadBindRepeating(&OomInterventionImpl::BindReceiver)),
-      main_thread->GetTaskRunner());
+          CrossThreadBindRepeating(&OomInterventionImpl::BindReceiver,
+                                   WTF::RetainedRef(main_thread_task_runner))),
+      main_thread_task_runner);
 
   binders.Add<mojom::blink::CrashMemoryMetricsReporter>(
       ConvertToBaseRepeatingCallback(
           CrossThreadBindRepeating(&CrashMemoryMetricsReporterImpl::Bind)),
-      main_thread->GetTaskRunner());
+      main_thread_task_runner);
 #endif
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   binders.Add<mojom::blink::MemoryUsageMonitorLinux>(
       ConvertToBaseRepeatingCallback(
           CrossThreadBindRepeating(&MemoryUsageMonitorPosix::Bind)),
-      main_thread->GetTaskRunner());
+      main_thread_task_runner);
 #endif
 
   binders.Add<mojom::blink::LeakDetector>(
-      ConvertToBaseRepeatingCallback(
-          CrossThreadBindRepeating(&BlinkLeakDetector::Bind)),
-      main_thread->GetTaskRunner());
+      ConvertToBaseRepeatingCallback(CrossThreadBindRepeating(
+          &BlinkLeakDetector::Bind, WTF::RetainedRef(main_thread_task_runner))),
+      main_thread_task_runner);
 
   binders.Add<mojom::blink::DiskAllocator>(
       ConvertToBaseRepeatingCallback(
           CrossThreadBindRepeating(&DiskDataAllocator::Bind)),
-      main_thread->GetTaskRunner());
+      main_thread_task_runner);
 
   binders.Add<mojom::blink::V8DetailedMemoryReporter>(
       ConvertToBaseRepeatingCallback(
           CrossThreadBindRepeating(&V8DetailedMemoryReporterImpl::Bind)),
-      main_thread->GetTaskRunner());
+      main_thread_task_runner);
+
+    DCHECK(Platform::Current());
+    // We need to use the IO task runner here because the call stack generator
+    // should work even when the main thread is blocked.
+    binders.Add<mojom::blink::CallStackGenerator>(
+        ConvertToBaseRepeatingCallback(
+            CrossThreadBindRepeating(&JavaScriptCallStackGenerator::Bind)),
+        Platform::Current()->GetIOTaskRunner());
+}
+
+void BlinkInitializer::RegisterMemoryWatchers(Platform* platform) {
+  scoped_refptr<base::SingleThreadTaskRunner> main_thread_task_runner =
+      Thread::MainThread()->GetTaskRunner(MainThreadTaskRunnerRestricted());
+#if BUILDFLAG(IS_ANDROID)
+  // Initialize CrashMemoryMetricsReporterImpl in order to assure that memory
+  // allocation does not happen in OnOOMCallback.
+  CrashMemoryMetricsReporterImpl::Instance();
+
+  // Initialize UserLevelMemoryPressureSignalGenerator so it starts monitoring.
+  if (platform->IsUserLevelMemoryPressureSignalEnabled()) {
+    UserLevelMemoryPressureSignalGenerator::Initialize(platform,
+                                                       main_thread_task_runner);
+  }
+#endif
+
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID) || \
+    BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_WIN)
+  // Start reporting the highest private memory footprint after the first
+  // navigation.
+  HighestPmfReporter::Initialize(main_thread_task_runner);
+#endif
+
+#if BUILDFLAG(IS_ANDROID)
+  // Initialize PrivateMemoryFootprintProvider to start providing the value
+  // for the browser process.
+  PrivateMemoryFootprintProvider::Initialize(main_thread_task_runner);
+#endif
 }
 
 void BlinkInitializer::InitLocalFrame(LocalFrame& frame) const {
@@ -306,6 +347,16 @@ void BlinkInitializer::OnClearWindowObjectInMainWorld(
     devtools_frontend->DidClearWindowObject();
   }
   ModulesInitializer::OnClearWindowObjectInMainWorld(document, settings);
+}
+
+// Function defined in third_party/blink/public/web/blink.h.
+void OnProcessForegrounded() {
+  WTF::Partitions::AdjustPartitionsForForeground();
+}
+
+// Function defined in third_party/blink/public/web/blink.h.
+void OnProcessBackgrounded() {
+  WTF::Partitions::AdjustPartitionsForBackground();
 }
 
 }  // namespace blink

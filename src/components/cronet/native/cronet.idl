@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -602,7 +602,6 @@ struct EngineParams {
   /**
    * Optional network thread priority. NAN indicates unset, use default.
    * On Android, corresponds to android.os.Process.setThreadPriority() values.
-   * On iOS, corresponds to NSThread::setThreadPriority values.
    * Do not specify for other platforms.
    */
   double network_thread_priority = double.NAN;

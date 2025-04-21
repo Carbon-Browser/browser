@@ -1,13 +1,18 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
 
-import {Cdd} from './data/cdd.js';
-import {PrinterType} from './data/destination.js';
-import {LocalDestinationInfo} from './data/local_parsers.js';
-import {MeasurementSystemUnitType} from './data/measurement_system.js';
+import type {Cdd} from './data/cdd.js';
+// <if expr="not is_chromeos">
+import type {PrinterType} from './data/destination.js';
+// </if>
+// <if expr="is_chromeos">
+import type {PrinterType} from './data/destination_cros.js';
+// </if>
+import type {LocalDestinationInfo} from './data/local_parsers.js';
+import type {MeasurementSystemUnitType} from './data/measurement_system.js';
 
 /**
  * Enumeration of background graphics printing mode restrictions used by
@@ -45,7 +50,7 @@ export enum DuplexModeRestriction {
   DUPLEX = 0x6,
 }
 
-// <if expr="chromeos_ash or chromeos_lacros">
+// <if expr="is_chromeos">
 /**
  * Enumeration of PIN printing mode restrictions used by Chromium.
  * This has to coincide with |printing::PinModeRestriction| as defined in
@@ -61,56 +66,57 @@ export enum PinModeRestriction {
 /**
  * Policies affecting print settings values and availability.
  */
-export type Policies = {
-  headerFooter?: {allowedMode?: boolean, defaultMode?: boolean},
+export interface Policies {
+  headerFooter?: {allowedMode?: boolean, defaultMode?: boolean};
   cssBackground?: {
     allowedMode?: BackgroundGraphicsModeRestriction,
     defaultMode?: BackgroundGraphicsModeRestriction,
-  },
-  mediaSize?: {defaultMode?: {width: number, height: number}},
-  sheets?: {value?: number},
+  };
+  mediaSize?: {defaultMode?: {width: number, height: number}};
+  sheets?: {value?: number};
   color?: {
     allowedMode?: ColorModeRestriction,
     defaultMode?: ColorModeRestriction,
-  },
+  };
   duplex?: {
     allowedMode?: DuplexModeRestriction,
     defaultMode?: DuplexModeRestriction,
-  },
-  // <if expr="chromeos_ash or chromeos_lacros">
-  pin?: {allowedMode?: PinModeRestriction, defaultMode?: PinModeRestriction},
+  };
+  // <if expr="is_chromeos">
+  pin?: {allowedMode?: PinModeRestriction, defaultMode?: PinModeRestriction};
   // </if>
-  printPdfAsImage?: {defaultMode?: boolean},
-  printPdfAsImageAvailability?: {allowedMode?: boolean},
-};
+  printPdfAsImage?: {defaultMode?: boolean};
+  printPdfAsImageAvailability?: {allowedMode?: boolean};
+}
 
 /**
  * @see corresponding field name definitions in print_preview_handler.cc
  */
-export type NativeInitialSettings = {
-  isInKioskAutoPrintMode: boolean,
-  isInAppKioskMode: boolean,
-  uiLocale: string,
-  thousandsDelimiter: string,
-  decimalDelimiter: string,
-  unitType: MeasurementSystemUnitType,
-  previewModifiable: boolean,
-  previewIsFromArc: boolean,
-  documentTitle: string,
-  documentHasSelection: boolean,
-  shouldPrintSelectionOnly: boolean,
-  printerName: string,
-  policies?: Policies,
-          serializedAppStateStr: string|null,
-          serializedDefaultDestinationSelectionRulesStr: string|null,
-          pdfPrinterDisabled: boolean,
-          destinationsManaged: boolean,
-  isDriveMounted?: boolean,
-};
+export interface NativeInitialSettings {
+  isInKioskAutoPrintMode: boolean;
+  isInAppKioskMode: boolean;
+  uiLocale: string;
+  thousandsDelimiter: string;
+  decimalDelimiter: string;
+  unitType: MeasurementSystemUnitType;
+  previewModifiable: boolean;
+  previewIsFromArc: boolean;
+  documentTitle: string;
+  documentHasSelection: boolean;
+  shouldPrintSelectionOnly: boolean;
+  printerName: string;
+  policies?: Policies;
+  serializedAppStateStr: string|null;
+  serializedDefaultDestinationSelectionRulesStr: string|null;
+  pdfPrinterDisabled: boolean;
+  destinationsManaged: boolean;
+  isDriveMounted?: boolean;
+}
 
-export type CapabilitiesResponse = {
-  printer?: LocalDestinationInfo, capabilities: Cdd|null,
-};
+export interface CapabilitiesResponse {
+  printer?: LocalDestinationInfo;
+  capabilities: Cdd|null;
+}
 
 /**
  * An interface to the native Chromium printing system layer.
@@ -161,7 +167,7 @@ export interface NativeLayer {
    * @return Promise that will resolve when the print request is
    *     finished or rejected.
    */
-  print(printTicket: string): Promise<string|undefined>;
+  doPrint(printTicket: string): Promise<string|undefined>;
 
   /** Requests that the current pending print request be cancelled. */
   cancelPendingPrintRequest(): void;
@@ -172,7 +178,7 @@ export interface NativeLayer {
    */
   saveAppState(appStateStr: string): void;
 
-  // <if expr="not chromeos_ash and not chromeos_lacros and not is_win">
+  // <if expr="not is_chromeos and not is_win">
   /** Shows the system's native printing dialog. */
   showSystemDialog(): void;
   // </if>
@@ -196,6 +202,13 @@ export interface NativeLayer {
    * @param maxBucket The maximum bucket value in the histogram.
    */
   recordInHistogram(histogram: string, bucket: number, maxBucket: number): void;
+
+  /**
+   * Notifies the metrics handler to record a boolean histogram value.
+   * @param histogram The name of the histogram to record.
+   * @param value The boolean value to record.
+   */
+  recordBooleanHistogram(histogram: string, value: boolean): void;
 }
 
 export class NativeLayerImpl implements NativeLayer {
@@ -219,8 +232,8 @@ export class NativeLayerImpl implements NativeLayer {
     chrome.send('managePrinters');
   }
 
-  print(printTicket: string) {
-    return sendWithPromise('print', printTicket);
+  doPrint(printTicket: string) {
+    return sendWithPromise('doPrint', printTicket);
   }
 
   cancelPendingPrintRequest() {
@@ -231,7 +244,7 @@ export class NativeLayerImpl implements NativeLayer {
     chrome.send('saveAppState', [appStateStr]);
   }
 
-  // <if expr="not chromeos_ash and not chromeos_lacros and not is_win">
+  // <if expr="not chromeos_ash and not is_win">
   showSystemDialog() {
     chrome.send('showSystemDialog');
   }
@@ -251,6 +264,10 @@ export class NativeLayerImpl implements NativeLayer {
   recordInHistogram(histogram: string, bucket: number, maxBucket: number) {
     chrome.send(
         'metricsHandler:recordInHistogram', [histogram, bucket, maxBucket]);
+  }
+
+  recordBooleanHistogram(histogram: string, value: boolean) {
+    chrome.send('metricsHandler:recordBooleanHistogram', [histogram, value]);
   }
 
   static getInstance(): NativeLayer {

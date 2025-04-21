@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "base/timer/timer.h"
@@ -28,8 +28,7 @@ class P2PTransportChannel;
 class PortAllocator;
 }  // namespace cricket
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 class P2PDatagramSocket;
 class TransportContext;
@@ -44,19 +43,19 @@ class IceTransportChannel : public sigslot::has_slots<> {
     // Called to pass ICE credentials to the session. Used only for STANDARD
     // version of ICE, see SetIceVersion().
     virtual void OnChannelIceCredentials(IceTransportChannel* transport,
-                                           const std::string& ufrag,
-                                           const std::string& password) = 0;
+                                         const std::string& ufrag,
+                                         const std::string& password) = 0;
 
     // Called when the transport generates a new candidate that needs
     // to be passed to the AddRemoteCandidate() method on the remote
     // end of the connection.
     virtual void OnChannelCandidate(IceTransportChannel* transport,
-                                      const cricket::Candidate& candidate) = 0;
+                                    const cricket::Candidate& candidate) = 0;
 
     // Called when transport route changes. Can be called even before
     // the transport is connected.
     virtual void OnChannelRouteChange(IceTransportChannel* transport,
-                                        const TransportRoute& route) = 0;
+                                      const TransportRoute& route) = 0;
 
     // Called when when the channel has failed to connect or reconnect.
     virtual void OnChannelFailed(IceTransportChannel* transport) = 0;
@@ -68,8 +67,8 @@ class IceTransportChannel : public sigslot::has_slots<> {
   typedef base::OnceCallback<void(std::unique_ptr<P2PDatagramSocket>)>
       ConnectedCallback;
 
-  explicit IceTransportChannel(
-      scoped_refptr<TransportContext> transport_context);
+  IceTransportChannel(scoped_refptr<TransportContext> transport_context,
+                      const NetworkSettings& network_settings);
 
   IceTransportChannel(const IceTransportChannel&) = delete;
   IceTransportChannel& operator=(const IceTransportChannel&) = delete;
@@ -132,13 +131,13 @@ class IceTransportChannel : public sigslot::has_slots<> {
   std::unique_ptr<cricket::P2PTransportChannel> channel_;
   int connect_attempts_left_;
   base::RepeatingTimer reconnect_timer_;
+  NetworkSettings network_settings_;
 
-  base::ThreadChecker thread_checker_;
+  THREAD_CHECKER(thread_checker_);
 
   base::WeakPtrFactory<IceTransportChannel> weak_factory_{this};
 };
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol
 
 #endif  // REMOTING_PROTOCOL_ICE_TRANSPORT_CHANNEL_H_

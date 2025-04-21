@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <map>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/supports_user_data.h"
 #include "ios/web/public/js_messaging/java_script_feature.h"
 
@@ -26,30 +26,29 @@ class ContextMenuJavaScriptFeature : public JavaScriptFeature,
   ContextMenuJavaScriptFeature();
   ~ContextMenuJavaScriptFeature() override;
 
-  // Returns the ContextMenuJavaScriptFeature associated with |browser_state|,
-  // creating one if necessary. |browser_state| must not be null.
+  // Returns the ContextMenuJavaScriptFeature associated with `browser_state`,
+  // creating one if necessary. `browser_state` must not be null.
   static ContextMenuJavaScriptFeature* FromBrowserState(
       BrowserState* browser_state);
 
   using ElementDetailsCallback =
       base::OnceCallback<void(const std::string& requestID,
                               const web::ContextMenuParams& params)>;
-  // Retrieves details of the DOM element at |point| in |web_state|'s currently
-  // loaded webpage. |requestID| must be unique and can be used to identify
-  // this request as it is returned with the element details in |callback|.
+  // Retrieves details of the DOM element at `point` in `web_state`'s currently
+  // loaded webpage. `requestID` must be unique and can be used to identify
+  // this request as it is returned with the element details in `callback`.
   void GetElementAtPoint(WebState* web_state,
                          std::string requestID,
                          CGPoint point,
-                         CGSize web_content_size,
                          ElementDetailsCallback callback);
 
   // JavaScriptFeature:
-  absl::optional<std::string> GetScriptMessageHandlerName() const override;
+  std::optional<std::string> GetScriptMessageHandlerName() const override;
   void ScriptMessageReceived(WebState* web_state,
                              const ScriptMessage& message) override;
 
  private:
-  // Outstanding |callbacks| keyed by requestIDs.
+  // Outstanding `callbacks` keyed by requestIDs.
   std::map<std::string, ElementDetailsCallback> callbacks_;
 };
 

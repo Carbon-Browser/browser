@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,14 +33,16 @@ void PaymentHandlerModalDialogManagerDelegate::SetWebContentsBlocked(
 
 web_modal::WebContentsModalDialogHost*
 PaymentHandlerModalDialogManagerDelegate::GetWebContentsModalDialogHost() {
-  if (!host_web_contents_)
+  if (!host_web_contents_) {
     return nullptr;
+  }
 
   auto* dialog_manager =
       static_cast<web_modal::WebContentsModalDialogManagerDelegate*>(
-          chrome::FindBrowserWithWebContents(host_web_contents_.get()));
-  if (!dialog_manager)
+          chrome::FindBrowserWithTab(host_web_contents_.get()));
+  if (!dialog_manager) {
     return nullptr;
+  }
 
   // Borrow the browser's WebContentModalDialogHost to display modal dialogs
   // triggered by the payment handler's web view (e.g. WebAuthn and Secure

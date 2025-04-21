@@ -1,9 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/download/data_url_blob_reader.h"
 
+#include "base/containers/span.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/string_util.h"
 
@@ -57,9 +58,9 @@ void DataURLBlobReader::Start(base::OnceClosure callback) {
       std::make_unique<mojo::DataPipeDrainer>(this, std::move(consumer_handle));
 }
 
-void DataURLBlobReader::OnDataAvailable(const void* data, size_t num_bytes) {
+void DataURLBlobReader::OnDataAvailable(base::span<const uint8_t> data) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  url_data_.append(static_cast<const char*>(data), num_bytes);
+  url_data_.append(base::as_string_view(data));
 }
 
 void DataURLBlobReader::OnDataComplete() {

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,15 +17,18 @@
 class GURL;
 class Profile;
 
+struct BookmarkParentFolder;
+
 namespace bookmarks {
 class BookmarkNode;
+class ManagedBookmarkService;
 struct BookmarkNodeData;
-}
+}  // namespace bookmarks
 
 namespace content {
 class BrowserContext;
 class WebContents;
-}
+}  // namespace content
 
 namespace ui {
 class DropTargetEvent;
@@ -64,6 +67,9 @@ bool IsAppsShortcutEnabled(Profile* profile);
 // Returns true if the Apps shortcut should be displayed in the bookmark bar.
 bool ShouldShowAppsShortcutInBookmarkBar(Profile* profile);
 
+// Returns true if the tab groups should be displayed in the bookmark bar.
+bool ShouldShowTabGroupsInBookmarkBar(Profile* profile);
+
 // Returns true if the reading list should be displayed in the bookmark bar.
 bool ShouldShowReadingListInBookmarkBar(Profile* profile);
 
@@ -79,24 +85,21 @@ ui::mojom::DragOperation GetPreferredBookmarkDropOperation(
     int operations);
 
 // Returns the preferred drop operation on a bookmark menu/bar.
-// |parent| is the parent node the drop is to occur on and |index| the index the
+// `parent` is the parent node the drop is to occur on and `index` the index the
 // drop is over.
 ui::mojom::DragOperation GetBookmarkDropOperation(
     Profile* profile,
     const ui::DropTargetEvent& event,
     const bookmarks::BookmarkNodeData& data,
-    const bookmarks::BookmarkNode* parent,
+    const BookmarkParentFolder& parent,
     size_t index);
 
-// Returns true if the bookmark data can be dropped on |drop_parent| at
-// |index|. A drop from a separate profile is always allowed, where as
-// a drop from the same profile is only allowed if none of the nodes in
-// |data| are an ancestor of |drop_parent| and one of the nodes isn't already
-// a child of |drop_parent| at |index|.
-bool IsValidBookmarkDropLocation(Profile* profile,
-                                 const bookmarks::BookmarkNodeData& data,
-                                 const bookmarks::BookmarkNode* drop_parent,
-                                 size_t index);
+// Returns true if all the |nodes| can be edited by the user, which means they
+// aren't enterprise-managed, as per `ManagedBookmarkService::IsNodeManaged()`.
+bool CanAllBeEditedByUser(
+    bookmarks::ManagedBookmarkService* managed_bookmark_service,
+    const std::vector<
+        raw_ptr<const bookmarks::BookmarkNode, VectorExperimental>>& nodes);
 
 #if defined(TOOLKIT_VIEWS)
 enum class BookmarkFolderIconType {
@@ -105,6 +108,12 @@ enum class BookmarkFolderIconType {
 };
 ui::ImageModel GetBookmarkFolderIcon(BookmarkFolderIconType icon_type,
                                      absl::variant<ui::ColorId, SkColor> color);
+
+// returns the vector image used for bookmarks folder.
+gfx::ImageSkia GetBookmarkFolderImageFromVectorIcon(
+    BookmarkFolderIconType icon_type,
+    absl::variant<ui::ColorId, SkColor> color,
+    ui::ColorProvider* color_provider);
 #endif
 
 }  // namespace chrome

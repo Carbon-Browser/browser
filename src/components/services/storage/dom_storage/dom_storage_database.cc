@@ -1,17 +1,23 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "components/services/storage/dom_storage/dom_storage_database.h"
 
+#include <algorithm>
 #include <utility>
 
 #include "base/debug/leak_annotations.h"
 #include "base/memory/ptr_util.h"
 #include "base/no_destructor.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/trace_event/memory_allocator_dump.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/process_memory_dump.h"
@@ -29,17 +35,11 @@ const char kInvalidDatabaseMessage[] = "DomStorageDatabase no longer valid.";
 
 class DomStorageDatabaseEnv : public leveldb_env::ChromiumEnv {
  public:
-  DomStorageDatabaseEnv()
-      : ChromiumEnv("ChromiumEnv.StorageService", CreateFilesystemProxy()) {}
+  DomStorageDatabaseEnv() : ChromiumEnv(CreateFilesystemProxy()) {}
 
   DomStorageDatabaseEnv(const DomStorageDatabaseEnv&) = delete;
   DomStorageDatabaseEnv& operator=(const DomStorageDatabaseEnv&) = delete;
 };
-
-DomStorageDatabaseEnv* GetDomStorageDatabaseEnv() {
-  static base::NoDestructor<DomStorageDatabaseEnv> env;
-  return env.get();
-}
 
 std::string MakeFullPersistentDBName(const base::FilePath& directory,
                                      const std::string& db_name) {
@@ -48,18 +48,25 @@ std::string MakeFullPersistentDBName(const base::FilePath& directory,
       .AsUTF8Unsafe();
 }
 
-leveldb_env::Options CreateDefaultInMemoryOptions() {
+// Used for disk DBs.
+leveldb_env::Options MakeOptions() {
   leveldb_env::Options options;
   options.create_if_missing = true;
-  options.max_open_files = 0;
-  return options;
-}
+  options.max_open_files = 0;  // use minimum
+  // Default write_buffer_size is 4 MB but that might leave a 3.999
+  // memory allocation in RAM from a log file recovery.
+  options.write_buffer_size = 64 * 1024;
 
-leveldb_env::Options AddEnvToOptions(const leveldb_env::Options& options,
-                                     leveldb::Env* env) {
-  leveldb_env::Options new_options = options;
-  new_options.env = env;
-  return new_options;
+  // We disable caching because all reads are one-offs such as in
+  // `LocalStorageImpl::OnDatabaseOpened()`, or they are bulk scans (as in
+  // `ForEachWithPrefix`). In the case of bulk scans, they're either for
+  // deletion (where caching doesn't make sense) or a mass-read, which we cache
+  // in memory.
+  options.block_cache = leveldb_chrome::GetSharedInMemoryBlockCache();
+
+  static base::NoDestructor<DomStorageDatabaseEnv> env;
+  options.env = env.get();
+  return options;
 }
 
 std::unique_ptr<leveldb::DB> TryOpenDB(
@@ -83,8 +90,8 @@ leveldb::Slice MakeSlice(base::span<const uint8_t> data) {
 
 DomStorageDatabase::KeyValuePair MakeKeyValuePair(const leveldb::Slice& key,
                                                   const leveldb::Slice& value) {
-  auto key_span = base::make_span(key);
-  auto value_span = base::make_span(value);
+  base::span key_span(key);
+  base::span value_span(value);
   return DomStorageDatabase::KeyValuePair(
       DomStorageDatabase::Key(key_span.begin(), key_span.end()),
       DomStorageDatabase::Value(value_span.begin(), value_span.end()));
@@ -94,12 +101,8 @@ template <typename Func>
 DomStorageDatabase::Status ForEachWithPrefix(leveldb::DB* db,
                                              DomStorageDatabase::KeyView prefix,
                                              Func function) {
-  // NOTE: We disable filling the cache for bulk scans. Either this is for
-  // deletion (where caching doesn't make sense) or a mass-read, which the user
-  // should be caching or only needing once.
-  leveldb::ReadOptions options;
-  options.fill_cache = false;
-  std::unique_ptr<leveldb::Iterator> iter(db->NewIterator(options));
+  std::unique_ptr<leveldb::Iterator> iter(
+      db->NewIterator(leveldb::ReadOptions()));
   const leveldb::Slice prefix_slice(MakeSlice(prefix));
   iter->Seek(prefix_slice);
   for (; iter->Valid(); iter->Next()) {
@@ -108,49 +111,6 @@ DomStorageDatabase::Status ForEachWithPrefix(leveldb::DB* db,
     function(iter->key(), iter->value());
   }
   return iter->status();
-}
-
-template <typename... Args>
-void CreateSequenceBoundDomStorageDatabase(
-    scoped_refptr<base::SequencedTaskRunner> blocking_task_runner,
-    DomStorageDatabase::OpenCallback callback,
-    Args&&... args) {
-  auto database = std::make_unique<base::SequenceBound<DomStorageDatabase>>();
-
-  // Subtle: We bind `database` as an unmanaged pointer during the async opening
-  // operation so that it leaks in case the bound callback below never gets a
-  // chance to run (because scheduler shutdown happens first).
-  //
-  // This is because the callback below is posted to
-  // SequencedTaskRunnerHandle::Get(), which may not itself be
-  // shutdown-blocking; so if shutdown completes before the task runs, the
-  // callback below is destroyed along with any of its owned arguments.
-  // Meanwhile, SequenceBound destruction posts a task to its bound TaskRunner,
-  // which in this case is one which runs shutdown-blocking tasks.
-  //
-  // The net result of all of this is that if the SequenceBound were an owned
-  // argument, it might attempt to post a shutdown-blocking task after shutdown
-  // has completed, which is not allowed and will DCHECK. Leaving the object
-  // temporarily unmanaged during this window of potential failure avoids such a
-  // DCHECK, and if shutdown does not happen during that window, the object's
-  // ownership will finally be left to the caller's discretion.
-  //
-  // See https://crbug.com/1174179.
-  auto* database_ptr = database.release();
-  ANNOTATE_LEAKING_OBJECT_PTR(database_ptr);
-  *database_ptr = base::SequenceBound<DomStorageDatabase>(
-      blocking_task_runner, args..., base::SequencedTaskRunnerHandle::Get(),
-      base::BindOnce(
-          [](base::SequenceBound<DomStorageDatabase>* database_ptr,
-             DomStorageDatabase::OpenCallback callback,
-             leveldb::Status status) {
-            auto database = base::WrapUnique(database_ptr);
-            if (status.ok())
-              std::move(callback).Run(std::move(*database), status);
-            else
-              std::move(callback).Run({}, status);
-          },
-          database_ptr, std::move(callback)));
 }
 
 }  // namespace
@@ -178,54 +138,85 @@ bool DomStorageDatabase::KeyValuePair::operator==(
 }
 
 DomStorageDatabase::DomStorageDatabase(
+    PassKey,
     const base::FilePath& directory,
     const std::string& name,
-    const leveldb_env::Options& options,
-    const absl::optional<base::trace_event::MemoryAllocatorDumpGuid>&
+    const std::optional<base::trace_event::MemoryAllocatorDumpGuid>&
         memory_dump_id,
     scoped_refptr<base::SequencedTaskRunner> callback_task_runner,
     StatusCallback callback)
-    : DomStorageDatabase(MakeFullPersistentDBName(directory, name),
-                         /*env=*/nullptr,
-                         options,
-                         memory_dump_id,
-                         std::move(callback_task_runner),
-                         std::move(callback)) {}
+    : name_(MakeFullPersistentDBName(directory, name)),
+      options_(MakeOptions()),
+      memory_dump_id_(memory_dump_id) {
+  Init(std::move(callback_task_runner), std::move(callback));
+}
 
 DomStorageDatabase::DomStorageDatabase(
+    PassKey,
     const std::string& tracking_name,
-    const absl::optional<base::trace_event::MemoryAllocatorDumpGuid>&
+    const std::optional<base::trace_event::MemoryAllocatorDumpGuid>&
         memory_dump_id,
     scoped_refptr<base::SequencedTaskRunner> callback_task_runner,
     StatusCallback callback)
-    : DomStorageDatabase("",
-                         leveldb_chrome::NewMemEnv(tracking_name),
-                         CreateDefaultInMemoryOptions(),
-                         memory_dump_id,
-                         std::move(callback_task_runner),
-                         std::move(callback)) {}
+    : env_(leveldb_chrome::NewMemEnv(tracking_name)),
+      memory_dump_id_(memory_dump_id) {
+  options_.env = env_.get();
+  Init(std::move(callback_task_runner), std::move(callback));
+}
 
-DomStorageDatabase::DomStorageDatabase(
-    const std::string& name,
-    std::unique_ptr<leveldb::Env> env,
-    const leveldb_env::Options& options,
-    const absl::optional<base::trace_event::MemoryAllocatorDumpGuid>
-        memory_dump_id,
+void DomStorageDatabase::Init(
     scoped_refptr<base::SequencedTaskRunner> callback_task_runner,
-    StatusCallback callback)
-    : name_(name),
-      env_(std::move(env)),
-      options_(AddEnvToOptions(options,
-                               env_ ? env_.get() : GetDomStorageDatabaseEnv())),
-      memory_dump_id_(memory_dump_id),
-      db_(TryOpenDB(options_,
-                    name,
-                    std::move(callback_task_runner),
-                    std::move(callback))) {
+    StatusCallback callback) {
+  db_ = TryOpenDB(options_, name_, std::move(callback_task_runner),
+                  std::move(callback));
   base::trace_event::MemoryDumpManager::GetInstance()
       ->RegisterDumpProviderWithSequencedTaskRunner(
-          this, "MojoLevelDB", base::SequencedTaskRunnerHandle::Get(),
+          this, "MojoLevelDB", base::SequencedTaskRunner::GetCurrentDefault(),
           MemoryDumpProvider::Options());
+}
+
+template <typename... Args>
+void DomStorageDatabase::CreateSequenceBoundDomStorageDatabase(
+    scoped_refptr<base::SequencedTaskRunner> blocking_task_runner,
+    DomStorageDatabase::OpenCallback callback,
+    Args&&... args) {
+  auto database = std::make_unique<base::SequenceBound<DomStorageDatabase>>();
+
+  // Subtle: We bind `database` as an unmanaged pointer during the async opening
+  // operation so that it leaks in case the bound callback below never gets a
+  // chance to run (because scheduler shutdown happens first).
+  //
+  // This is because the callback below is posted to
+  // SequencedTaskRunner::GetCurrentDefault(), which may not itself be
+  // shutdown-blocking; so if shutdown completes before the task runs, the
+  // callback below is destroyed along with any of its owned arguments.
+  // Meanwhile, SequenceBound destruction posts a task to its bound TaskRunner,
+  // which in this case is one which runs shutdown-blocking tasks.
+  //
+  // The net result of all of this is that if the SequenceBound were an owned
+  // argument, it might attempt to post a shutdown-blocking task after shutdown
+  // has completed, which is not allowed and will DCHECK. Leaving the object
+  // temporarily unmanaged during this window of potential failure avoids such a
+  // DCHECK, and if shutdown does not happen during that window, the object's
+  // ownership will finally be left to the caller's discretion.
+  //
+  // See https://crbug.com/1174179.
+  auto* database_ptr = database.release();
+  ANNOTATE_LEAKING_OBJECT_PTR(database_ptr);
+  *database_ptr = base::SequenceBound<DomStorageDatabase>(
+      blocking_task_runner, PassKey(), args...,
+      base::SequencedTaskRunner::GetCurrentDefault(),
+      base::BindOnce(
+          [](base::SequenceBound<DomStorageDatabase>* database_ptr,
+             DomStorageDatabase::OpenCallback callback,
+             leveldb::Status status) {
+            auto database = base::WrapUnique(database_ptr);
+            if (status.ok())
+              std::move(callback).Run(std::move(*database), status);
+            else
+              std::move(callback).Run({}, status);
+          },
+          database_ptr, std::move(callback)));
 }
 
 DomStorageDatabase::~DomStorageDatabase() {
@@ -239,21 +230,20 @@ DomStorageDatabase::~DomStorageDatabase() {
 void DomStorageDatabase::OpenDirectory(
     const base::FilePath& directory,
     const std::string& name,
-    const leveldb_env::Options& options,
-    const absl::optional<base::trace_event::MemoryAllocatorDumpGuid>&
+    const std::optional<base::trace_event::MemoryAllocatorDumpGuid>&
         memory_dump_id,
     scoped_refptr<base::SequencedTaskRunner> blocking_task_runner,
     OpenCallback callback) {
   DCHECK(directory.IsAbsolute());
   CreateSequenceBoundDomStorageDatabase(std::move(blocking_task_runner),
                                         std::move(callback), directory, name,
-                                        options, memory_dump_id);
+                                        memory_dump_id);
 }
 
 // static
 void DomStorageDatabase::OpenInMemory(
     const std::string& name,
-    const absl::optional<base::trace_event::MemoryAllocatorDumpGuid>&
+    const std::optional<base::trace_event::MemoryAllocatorDumpGuid>&
         memory_dump_id,
     scoped_refptr<base::SequencedTaskRunner> blocking_task_runner,
     OpenCallback callback) {
@@ -274,15 +264,13 @@ void DomStorageDatabase::Destroy(
           [](const std::string& db_name,
              scoped_refptr<base::SequencedTaskRunner> callback_task_runner,
              StatusCallback callback) {
-            leveldb_env::Options options;
-            options.env = GetDomStorageDatabaseEnv();
             callback_task_runner->PostTask(
                 FROM_HERE,
                 base::BindOnce(std::move(callback),
-                               leveldb::DestroyDB(db_name, options)));
+                               leveldb::DestroyDB(db_name, MakeOptions())));
           },
           MakeFullPersistentDBName(directory, name),
-          base::SequencedTaskRunnerHandle::Get(), std::move(callback)));
+          base::SequencedTaskRunner::GetCurrentDefault(), std::move(callback)));
 }
 
 DomStorageDatabase::Status DomStorageDatabase::Get(KeyView key,
@@ -302,13 +290,6 @@ DomStorageDatabase::Status DomStorageDatabase::Put(KeyView key,
   if (!db_)
     return Status::IOError(kInvalidDatabaseMessage);
   return db_->Put(leveldb::WriteOptions(), MakeSlice(key), MakeSlice(value));
-}
-
-DomStorageDatabase::Status DomStorageDatabase::Delete(KeyView key) const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (!db_)
-    return Status::IOError(kInvalidDatabaseMessage);
-  return db_->Delete(leveldb::WriteOptions(), MakeSlice(key));
 }
 
 DomStorageDatabase::Status DomStorageDatabase::GetPrefixed(

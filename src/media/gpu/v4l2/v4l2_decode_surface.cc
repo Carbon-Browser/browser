@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,13 +18,14 @@ namespace media {
 
 V4L2DecodeSurface::V4L2DecodeSurface(V4L2WritableBufferRef input_buffer,
                                      V4L2WritableBufferRef output_buffer,
-                                     scoped_refptr<VideoFrame> frame)
+                                     scoped_refptr<FrameResource> frame,
+                                     uint64_t secure_handle)
     : input_buffer_(std::move(input_buffer)),
       output_buffer_(std::move(output_buffer)),
-      video_frame_(std::move(frame)),
-      input_record_(input_buffer_.BufferId()),
+      frame_(std::move(frame)),
       output_record_(output_buffer_.BufferId()),
-      decoded_(false) {
+      decoded_(false),
+      secure_handle_(secure_handle) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 }
 
@@ -45,10 +46,6 @@ void V4L2DecodeSurface::SetDecoded() {
   // We can now drop references to all reference surfaces for this surface
   // as we are done with decoding.
   reference_surfaces_.clear();
-
-  // And finally execute and drop the decode done callback, if set.
-  if (done_cb_)
-    std::move(done_cb_).Run();
 }
 
 void V4L2DecodeSurface::SetVisibleRect(const gfx::Rect& visible_rect) {
@@ -76,13 +73,6 @@ void V4L2DecodeSurface::SetReferenceSurfaces(
   reference_surfaces_ = std::move(ref_surfaces);
 }
 
-void V4L2DecodeSurface::SetDecodeDoneCallback(base::OnceClosure done_cb) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(!done_cb_);
-
-  done_cb_ = std::move(done_cb);
-}
-
 void V4L2DecodeSurface::SetReleaseCallback(base::OnceClosure release_cb) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!release_cb_);
@@ -94,7 +84,8 @@ std::string V4L2DecodeSurface::ToString() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   std::string out;
-  base::StringAppendF(&out, "Buffer %d -> %d. ", input_record_, output_record_);
+  base::StringAppendF(&out, "Buffer %zu -> %d. ", input_buffer_.BufferId(),
+                      output_record_);
   base::StringAppendF(&out, "Reference surfaces:");
   for (const auto& ref : reference_surfaces_) {
     DCHECK_NE(ref->output_record(), output_record_);
@@ -102,47 +93,6 @@ std::string V4L2DecodeSurface::ToString() const {
   }
   return out;
 }
-
-// ConfigStore is ChromeOS-specific legacy stuff
-#if BUILDFLAG(IS_CHROMEOS)
-void V4L2ConfigStoreDecodeSurface::PrepareSetCtrls(
-    struct v4l2_ext_controls* ctrls) const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK_NE(ctrls, nullptr);
-  DCHECK_GT(config_store_, 0u);
-
-  ctrls->config_store = config_store_;
-}
-
-uint64_t V4L2ConfigStoreDecodeSurface::GetReferenceID() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  // Control store uses the output buffer ID as reference.
-  return output_record();
-}
-
-bool V4L2ConfigStoreDecodeSurface::Submit() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK_GT(config_store_, 0u);
-
-  input_buffer().SetConfigStore(config_store_);
-
-  if (!std::move(input_buffer()).QueueMMap()) {
-    return false;
-  }
-
-  switch (output_buffer().Memory()) {
-    case V4L2_MEMORY_MMAP:
-      return std::move(output_buffer()).QueueMMap();
-    case V4L2_MEMORY_DMABUF:
-      return std::move(output_buffer()).QueueDMABuf(video_frame());
-    default:
-      NOTREACHED() << "We should only use MMAP or DMABUF.";
-  }
-
-  return false;
-}
-#endif
 
 void V4L2RequestDecodeSurface::PrepareSetCtrls(
     struct v4l2_ext_controls* ctrls) const {
@@ -172,7 +122,12 @@ bool V4L2RequestDecodeSurface::Submit() {
   };
   input_buffer().SetTimeStamp(timestamp);
 
-  if (!std::move(input_buffer()).QueueMMap(&request_ref_)) {
+  if (input_buffer().Memory() == V4L2_MEMORY_DMABUF) {
+    if (!std::move(input_buffer())
+             .QueueDMABuf(secure_handle(), &request_ref_)) {
+      return false;
+    }
+  } else if (!std::move(input_buffer()).QueueMMap(&request_ref_)) {
     return false;
   }
 
@@ -182,7 +137,7 @@ bool V4L2RequestDecodeSurface::Submit() {
       result = std::move(output_buffer()).QueueMMap();
       break;
     case V4L2_MEMORY_DMABUF:
-      result = std::move(output_buffer()).QueueDMABuf(video_frame());
+      result = std::move(output_buffer()).QueueDMABuf(frame());
       break;
     default:
       NOTREACHED() << "We should only use MMAP or DMABUF.";

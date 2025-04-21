@@ -1,35 +1,32 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/android/compositor/compositor_view.h"
 
 #include <android/bitmap.h>
-#include <android/native_window_jni.h>
 
 #include <memory>
 #include <vector>
 
 #include "base/android/build_info.h"
 #include "base/android/jni_android.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/id_map.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/rand_util.h"
 #include "base/trace_event/trace_event.h"
-#include "cc/layers/layer.h"
-#include "cc/layers/layer_collections.h"
-#include "cc/layers/solid_color_layer.h"
-#include "cc/layers/texture_layer.h"
-#include "chrome/android/chrome_jni_headers/CompositorView_jni.h"
+#include "cc/slim/layer.h"
+#include "cc/slim/solid_color_layer.h"
 #include "chrome/browser/android/compositor/layer/toolbar_layer.h"
 #include "chrome/browser/android/compositor/layer_title_cache.h"
 #include "chrome/browser/android/compositor/tab_content_manager.h"
 #include "chrome/browser/ui/android/layouts/scene_layer.h"
 #include "content/public/browser/android/compositor.h"
 #include "content/public/browser/child_process_data.h"
-#include "content/public/browser/peak_gpu_memory_tracker.h"
+#include "content/public/browser/peak_gpu_memory_tracker_factory.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/process_type.h"
 #include "third_party/skia/include/core/SkBitmap.h"
@@ -39,9 +36,18 @@
 #include "ui/gfx/android/java_bitmap.h"
 #include "ui/gfx/geometry/rect.h"
 
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "chrome/android/chrome_jni_headers/CompositorView_jni.h"
+
 using base::android::JavaParamRef;
 
 namespace android {
+
+namespace {
+BASE_FEATURE(kIgnoreExcessiveSurfaceSizeKillSwitch,
+             "IgnoreExcessiveSurfaceSizeKillSwitch",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+}
 
 jlong JNI_CompositorView_Init(
     JNIEnv* env,
@@ -61,9 +67,9 @@ jlong JNI_CompositorView_Init(
   view = new CompositorView(env, obj, low_mem_device, window_android,
                             tab_content_manager);
 
-  ui::UIResourceProvider* ui_resource_provider = view->GetUIResourceProvider();
-  if (tab_content_manager)
-    tab_content_manager->SetUIResourceProvider(ui_resource_provider);
+  if (tab_content_manager) {
+    tab_content_manager->SetUIResourceProvider(view->GetUIResourceProvider());
+  }
 
   return reinterpret_cast<intptr_t>(view);
 }
@@ -74,7 +80,7 @@ CompositorView::CompositorView(JNIEnv* env,
                                ui::WindowAndroid* window_android,
                                TabContentManager* tab_content_manager)
     : tab_content_manager_(tab_content_manager),
-      root_layer_(cc::SolidColorLayer::Create()),
+      root_layer_(cc::slim::SolidColorLayer::Create()),
       scene_layer_(nullptr),
       current_surface_format_(0),
       content_width_(0),
@@ -124,7 +130,7 @@ base::android::ScopedJavaLocalRef<jobject> CompositorView::GetResourceManager(
 
 void CompositorView::RecreateSurface() {
   JNIEnv* env = base::android::AttachCurrentThread();
-  compositor_->SetSurface(nullptr, false);
+  compositor_->SetSurface(nullptr, false, nullptr);
   Java_CompositorView_recreateSurface(env, obj_);
 }
 
@@ -146,8 +152,8 @@ void CompositorView::DidSwapBuffers(const gfx::Size& swap_size) {
   Java_CompositorView_didSwapBuffers(env, obj_, swapped_current_size);
 }
 
-ui::UIResourceProvider* CompositorView::GetUIResourceProvider() {
-  return compositor_ ? &compositor_->GetUIResourceProvider() : nullptr;
+base::WeakPtr<ui::UIResourceProvider> CompositorView::GetUIResourceProvider() {
+  return compositor_ ? compositor_->GetUIResourceProvider() : nullptr;
 }
 
 void CompositorView::OnSurfaceControlFeatureStatusUpdate(bool available) {
@@ -165,28 +171,46 @@ void CompositorView::SurfaceCreated(JNIEnv* env,
 
 void CompositorView::SurfaceDestroyed(JNIEnv* env,
                                       const JavaParamRef<jobject>& object) {
-  compositor_->SetSurface(nullptr, false);
+  compositor_->SetSurface(nullptr, false, nullptr);
   current_surface_format_ = 0;
   tab_content_manager_->OnUIResourcesWereEvicted();
 }
 
-void CompositorView::SurfaceChanged(JNIEnv* env,
-                                    const JavaParamRef<jobject>& object,
-                                    jint format,
-                                    jint width,
-                                    jint height,
-                                    bool can_be_used_with_surface_control,
-                                    const JavaParamRef<jobject>& surface) {
+std::optional<int> CompositorView::SurfaceChanged(
+    JNIEnv* env,
+    const JavaParamRef<jobject>& object,
+    jint format,
+    jint width,
+    jint height,
+    bool can_be_used_with_surface_control,
+    const JavaParamRef<jobject>& surface,
+    const JavaParamRef<jobject>& browser_input_token) {
+  // Java View layout sometimes unexpectedly cause CompositorView to be sized so
+  // large that it exceeds the max texture size and memory on the device. This
+  // then subsequently causes the GPU process to crash loop. See
+  // crbug.com/369374760. Ignore these which is probably less bad than crashing
+  // the GPU process.
+  constexpr int kExcessiveSurfaceSize = 1000000;
+  if (base::FeatureList::IsEnabled(kIgnoreExcessiveSurfaceSizeKillSwitch) &&
+      (width >= kExcessiveSurfaceSize || height >= kExcessiveSurfaceSize)) {
+    LOG(WARNING) << "Ignoring excessive surface size " << width << "x"
+                 << height;
+    return std::nullopt;
+  }
+
+  std::optional<int> surface_handle = std::nullopt;
   DCHECK(surface);
   if (current_surface_format_ != format) {
     current_surface_format_ = format;
-    compositor_->SetSurface(surface, can_be_used_with_surface_control);
+    surface_handle = compositor_->SetSurface(
+        surface, can_be_used_with_surface_control, browser_input_token);
   }
   gfx::Size size = gfx::Size(width, height);
   compositor_->SetWindowBounds(size);
   content_width_ = size.width();
   content_height_ = size.height();
   root_layer_->SetBounds(gfx::Size(content_width_, content_height_));
+  return surface_handle;
 }
 
 void CompositorView::OnPhysicalBackingSizeChanged(
@@ -233,8 +257,8 @@ void CompositorView::SetLayoutBounds(JNIEnv* env,
 }
 
 void CompositorView::SetBackground(bool visible, SkColor color) {
-  // TODO(crbug.com/770911): Set the background color on the compositor.
-  // TODO(crbug/1308932): Remove FromColor and make all SkColor4f.
+  // TODO(crbug.com/41347744): Set the background color on the compositor.
+  // TODO(crbug.com/40219248): Remove FromColor and make all SkColor4f.
   root_layer_->SetBackgroundColor(SkColor4f::FromColor(color));
   root_layer_->SetIsDrawable(visible);
 }
@@ -242,8 +266,9 @@ void CompositorView::SetBackground(bool visible, SkColor color) {
 void CompositorView::SetOverlayVideoMode(JNIEnv* env,
                                          const JavaParamRef<jobject>& object,
                                          bool enabled) {
-  if (overlay_video_mode_ == enabled)
+  if (overlay_video_mode_ == enabled) {
     return;
+  }
   overlay_video_mode_ = enabled;
   compositor_->SetRequiresAlphaChannel(enabled);
   SetNeedsComposite(env, object);
@@ -287,17 +312,15 @@ void CompositorView::SetSceneLayer(JNIEnv* env,
     scene_layer_ = scene_layer;
 
     if (!scene_layer) {
-      scene_layer_layer_ = nullptr;
       return;
     }
 
-    scene_layer_layer_ = scene_layer->layer();
     root_layer_->InsertChild(scene_layer->layer(), 0);
   }
 
   if (overlay_immersive_ar_mode_) {
     // Suppress the scene background's default background which breaks
-    // transparency. TODO(https://crbug.com/1002270): Remove this workaround
+    // transparency. TODO(crbug.com/40098084): Remove this workaround
     // once the issue with StaticTabSceneLayer's unexpected background is
     // resolved.
     bool should_show_background = scene_layer->ShouldShowBackground();
@@ -324,8 +347,9 @@ void CompositorView::SetSceneLayer(JNIEnv* env,
 
 void CompositorView::FinalizeLayers(JNIEnv* env,
                                     const JavaParamRef<jobject>& jobj) {
-  if (GetResourceManager())
+  if (GetResourceManager()) {
     GetResourceManager()->OnFrameUpdatesFinished();
+  }
 #if !defined(OFFICIAL_BUILD)
   TRACE_EVENT0("compositor", "CompositorView::FinalizeLayers");
 #endif
@@ -348,7 +372,7 @@ void CompositorView::BrowserChildProcessKilled(
           base::android::SDK_VERSION_R &&
       data.process_type == content::PROCESS_TYPE_GPU) {
     JNIEnv* env = base::android::AttachCurrentThread();
-    compositor_->SetSurface(nullptr, false);
+    compositor_->SetSurface(nullptr, false, nullptr);
     Java_CompositorView_recreateSurface(env, obj_);
   }
 }
@@ -377,14 +401,15 @@ void CompositorView::EvictCachedBackBuffer(
 void CompositorView::OnTabChanged(
     JNIEnv* env,
     const base::android::JavaParamRef<jobject>& object) {
-  if (!compositor_)
+  if (!compositor_) {
     return;
-  std::unique_ptr<content::PeakGpuMemoryTracker> tracker =
-      content::PeakGpuMemoryTracker::Create(
-          content::PeakGpuMemoryTracker::Usage::CHANGE_TAB);
-  compositor_->RequestPresentationTimeForNextFrame(base::BindOnce(
-      [](std::unique_ptr<content::PeakGpuMemoryTracker> tracker,
-         const gfx::PresentationFeedback& feedback) {
+  }
+  std::unique_ptr<viz::PeakGpuMemoryTracker> tracker =
+      content::PeakGpuMemoryTrackerFactory::Create(
+          viz::PeakGpuMemoryTracker::Usage::CHANGE_TAB);
+  compositor_->RequestSuccessfulPresentationTimeForNextFrame(base::BindOnce(
+      [](std::unique_ptr<viz::PeakGpuMemoryTracker> tracker,
+         const viz::FrameTimingDetails& frame_timing_details) {
         // This callback will be ran once the content::Compositor presents the
         // next frame. The destruction of |tracker| will get the peak GPU memory
         // and record a histogram.

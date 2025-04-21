@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,7 +47,6 @@ void GenerateKeyResult::Complete(blink::WebCryptoResult* out) const {
   switch (type_) {
     case TYPE_NULL:
       NOTREACHED();
-      break;
     case TYPE_SECRET_KEY:
       out->CompleteWithKey(secret_key());
       break;

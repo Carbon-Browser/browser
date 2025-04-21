@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 #include "services/device/public/cpp/generic_sensor/sensor_reading.h"
 #include "services/device/public/mojom/sensor.mojom-blink.h"
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/platform_event_controller.h"
@@ -91,8 +91,8 @@ void DeviceOrientationEventPump::SendStartMessage(LocalFrame& frame) {
         sensor_provider_.BindNewPipeAndPassReceiver(
             frame.GetTaskRunner(TaskType::kSensor)));
     sensor_provider_.set_disconnect_handler(
-        WTF::Bind(&DeviceSensorEventPump::HandleSensorProviderError,
-                  WrapWeakPersistent(this)));
+        WTF::BindOnce(&DeviceSensorEventPump::HandleSensorProviderError,
+                      WrapWeakPersistent(this)));
   }
 
   if (absolute_) {
@@ -144,8 +144,7 @@ void DeviceOrientationEventPump::DidStartIfPossible() {
     // then fall back to using absolute_orientation_sensor_.
     attempted_to_fall_back_to_absolute_orientation_sensor_ = true;
     absolute_orientation_sensor_->Start(sensor_provider_.get());
-    if (relative_orientation_sensor_->state() ==
-        DeviceSensorEntry::State::kShouldSuspend) {
+    if (state() == PumpState::kStopped) {
       // If SendStopMessage() was called before the OnSensorCreated() callback
       // registered that relative_orientation_sensor_ was not able to connect
       // then absolute_orientation_sensor_ needs to be Stop()'d so that it
@@ -173,9 +172,9 @@ bool DeviceOrientationEventPump::SensorsReadyOrErrored() const {
 }
 
 DeviceOrientationData* DeviceOrientationEventPump::GetDataFromSharedMemory() {
-  absl::optional<double> alpha;
-  absl::optional<double> beta;
-  absl::optional<double> gamma;
+  std::optional<double> alpha;
+  std::optional<double> beta;
+  std::optional<double> gamma;
   bool absolute = false;
   bool got_reading = false;
   device::SensorReading reading;

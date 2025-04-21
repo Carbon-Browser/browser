@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,18 +6,20 @@
 
 #include <array>
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "base/containers/span.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/test/mock_callback.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "services/network/public/mojom/web_transport.mojom-blink.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/mojom/webtransport/web_transport_connector.mojom-blink.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
+#include "third_party/blink/renderer/bindings/core/v8/iterable.h"
 #include "third_party/blink/renderer/bindings/core/v8/native_value_traits_impl.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_tester.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
@@ -25,8 +27,8 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_testing.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_dom_exception.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_gc_controller.h"
-#include "third_party/blink/renderer/bindings/core/v8/v8_iterator_result_value.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_readable_stream.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_readable_stream_read_result.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_arraybuffer_arraybufferview.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_writable_stream.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_web_transport_bidirectional_stream.h"
@@ -36,6 +38,7 @@
 #include "third_party/blink/renderer/bindings/modules/v8/v8_web_transport_options.h"
 #include "third_party/blink/renderer/core/frame/csp/content_security_policy.h"
 #include "third_party/blink/renderer/core/streams/readable_stream.h"
+#include "third_party/blink/renderer/core/streams/readable_stream_byob_reader.h"
 #include "third_party/blink/renderer/core/streams/readable_stream_default_reader.h"
 #include "third_party/blink/renderer/core/streams/writable_stream.h"
 #include "third_party/blink/renderer/core/streams/writable_stream_default_writer.h"
@@ -49,7 +52,9 @@
 #include "third_party/blink/renderer/modules/webtransport/web_transport_error.h"
 #include "third_party/blink/renderer/platform/bindings/exception_code.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/persistent.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 #include "third_party/blink/renderer/platform/wtf/deque.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
@@ -136,6 +141,7 @@ class MockWebTransport : public network::mojom::blink::WebTransport {
                     void(uint32_t, mojo::ScopedDataPipeConsumerHandle)>));
 
   MOCK_METHOD1(SetOutgoingDatagramExpirationDuration, void(base::TimeDelta));
+  MOCK_METHOD1(GetStats, void(GetStatsCallback));
   MOCK_METHOD0(Close, void());
   MOCK_METHOD2(Close, void(uint32_t, String));
 
@@ -170,8 +176,8 @@ class WebTransportTest : public ::testing::Test {
         &scope.GetExecutionContext()->GetBrowserInterfaceBroker();
     interface_broker_->SetBinderForTesting(
         mojom::blink::WebTransportConnector::Name_,
-        base::BindRepeating(&WebTransportTest::BindConnector,
-                            weak_ptr_factory_.GetWeakPtr()));
+        WTF::BindRepeating(&WebTransportTest::BindConnector,
+                  weak_ptr_factory_.GetWeakPtr()));
   }
 
   static WebTransportOptions* EmptyOptions() {
@@ -244,7 +250,8 @@ class WebTransportTest : public ::testing::Test {
     handshake_client->OnConnectionEstablished(
         std::move(web_transport_to_pass),
         client_remote.InitWithNewPipeAndPassReceiver(),
-        network::mojom::blink::HttpResponseHeaders::New());
+        network::mojom::blink::HttpResponseHeaders::New(),
+        network::mojom::blink::WebTransportStats::New());
     client_remote_.Bind(std::move(client_remote));
   }
 
@@ -269,16 +276,15 @@ class WebTransportTest : public ::testing::Test {
         });
 
     auto* script_state = scope.GetScriptState();
-    ScriptPromise send_stream_promise =
-        web_transport->createUnidirectionalStream(script_state,
-                                                  ASSERT_NO_EXCEPTION);
+    auto send_stream_promise = web_transport->createUnidirectionalStream(
+        script_state, ASSERT_NO_EXCEPTION);
     ScriptPromiseTester tester(script_state, send_stream_promise);
 
     tester.WaitUntilSettled();
 
     EXPECT_TRUE(tester.IsFulfilled());
-    auto* writable = V8WritableStream::ToImplWithTypeCheck(
-        scope.GetIsolate(), tester.Value().V8Value());
+    auto* writable = V8WritableStream::ToWrappable(scope.GetIsolate(),
+                                                   tester.Value().V8Value());
     EXPECT_TRUE(writable);
     return static_cast<SendStream*>(writable);
   }
@@ -305,7 +311,7 @@ class WebTransportTest : public ::testing::Test {
     v8::Local<v8::Value> v8value = ReadValueFromStream(scope, streams);
 
     ReadableStream* readable =
-        V8ReadableStream::ToImplWithTypeCheck(scope.GetIsolate(), v8value);
+        V8ReadableStream::ToWrappable(scope.GetIsolate(), v8value);
     EXPECT_TRUE(readable);
 
     return static_cast<ReceiveStream*>(readable);
@@ -323,11 +329,13 @@ class WebTransportTest : public ::testing::Test {
         mojom::blink::WebTransportConnector::Name_, {});
   }
 
-  const BrowserInterfaceBrokerProxy* interface_broker_ = nullptr;
+  raw_ptr<const BrowserInterfaceBrokerProxy, DanglingUntriaged>
+      interface_broker_ = nullptr;
   WTF::Deque<AcceptUnidirectionalStreamCallback>
       pending_unidirectional_accept_callbacks_;
   WTF::Deque<AcceptBidirectionalStreamCallback>
       pending_bidirectional_accept_callbacks_;
+  test::TaskEnvironment task_environment_;
   WebTransportConnector connector_;
   std::unique_ptr<MockWebTransport> mock_web_transport_;
   mojo::Remote<network::mojom::blink::WebTransportClient> client_remote_;
@@ -419,10 +427,10 @@ TEST_F(WebTransportTest, FailByCSP) {
   auto* web_transport = WebTransport::Create(
       scope.GetScriptState(), String("https://example.com/"), EmptyOptions(),
       ASSERT_NO_EXCEPTION);
-  ScriptPromiseTester ready_tester(scope.GetScriptState(),
-                                   web_transport->ready());
-  ScriptPromiseTester closed_tester(scope.GetScriptState(),
-                                    web_transport->closed());
+  ScriptPromiseTester ready_tester(
+      scope.GetScriptState(), web_transport->ready(scope.GetScriptState()));
+  ScriptPromiseTester closed_tester(
+      scope.GetScriptState(), web_transport->closed(scope.GetScriptState()));
 
   test::RunPendingTasks();
 
@@ -445,8 +453,8 @@ TEST_F(WebTransportTest, PassCSP) {
           *(scope.GetExecutionContext()->GetSecurityOrigin())));
   auto* web_transport =
       CreateAndConnectSuccessfully(scope, "https://example.com/");
-  ScriptPromiseTester ready_tester(scope.GetScriptState(),
-                                   web_transport->ready());
+  ScriptPromiseTester ready_tester(
+      scope.GetScriptState(), web_transport->ready(scope.GetScriptState()));
 
   EXPECT_TRUE(web_transport->HasPendingActivity());
 
@@ -466,7 +474,7 @@ TEST_F(WebTransportTest, SendConnect) {
   auto args = connector_.TakeConnectArgs();
   ASSERT_EQ(1u, args.size());
   EXPECT_EQ(KURL("https://example.com/"), args[0].url);
-  EXPECT_TRUE(args[0].fingerprints.IsEmpty());
+  EXPECT_TRUE(args[0].fingerprints.empty());
   EXPECT_TRUE(web_transport->HasPendingActivity());
 }
 
@@ -474,8 +482,8 @@ TEST_F(WebTransportTest, SuccessfulConnect) {
   V8TestingScope scope;
   auto* web_transport =
       CreateAndConnectSuccessfully(scope, "https://example.com");
-  ScriptPromiseTester ready_tester(scope.GetScriptState(),
-                                   web_transport->ready());
+  ScriptPromiseTester ready_tester(
+      scope.GetScriptState(), web_transport->ready(scope.GetScriptState()));
 
   EXPECT_TRUE(web_transport->HasPendingActivity());
 
@@ -489,10 +497,10 @@ TEST_F(WebTransportTest, FailedConnect) {
   auto* web_transport = WebTransport::Create(
       scope.GetScriptState(), String("https://example.com/"), EmptyOptions(),
       ASSERT_NO_EXCEPTION);
-  ScriptPromiseTester ready_tester(scope.GetScriptState(),
-                                   web_transport->ready());
-  ScriptPromiseTester closed_tester(scope.GetScriptState(),
-                                    web_transport->closed());
+  ScriptPromiseTester ready_tester(
+      scope.GetScriptState(), web_transport->ready(scope.GetScriptState()));
+  ScriptPromiseTester closed_tester(
+      scope.GetScriptState(), web_transport->closed(scope.GetScriptState()));
 
   test::RunPendingTasks();
 
@@ -520,7 +528,7 @@ TEST_F(WebTransportTest, SendConnectWithFingerprint) {
       0x26, 0x5C, 0xB2, 0x74, 0xD7, 0x1C, 0xA2, 0x63, 0x3E, 0x94, 0x94,
       0xC0, 0x84, 0x39, 0xD6, 0x64, 0xFA, 0x08, 0xB9, 0x77, 0x37,
   };
-  DOMUint8Array* hashValue = DOMUint8Array::Create(kPattern, sizeof(kPattern));
+  DOMUint8Array* hashValue = DOMUint8Array::Create(kPattern);
   hash->setValue(MakeGarbageCollected<V8UnionArrayBufferOrArrayBufferView>(
       NotShared<DOMUint8Array>(hashValue)));
   auto* options = MakeGarbageCollected<WebTransportOptions>();
@@ -545,8 +553,7 @@ TEST_F(WebTransportTest, SendConnectWithArrayBufferHash) {
   auto* hash = MakeGarbageCollected<WebTransportHash>();
   hash->setAlgorithm("sha-256");
   constexpr uint8_t kPattern[] = {0x28, 0x24, 0xa8, 0xa2};
-  DOMArrayBuffer* hashValue =
-      DOMArrayBuffer::Create(kPattern, sizeof(kPattern));
+  DOMArrayBuffer* hashValue = DOMArrayBuffer::Create(kPattern);
   hash->setValue(
       MakeGarbageCollected<V8UnionArrayBufferOrArrayBufferView>(hashValue));
   auto* options = MakeGarbageCollected<WebTransportOptions>();
@@ -569,7 +576,7 @@ TEST_F(WebTransportTest, SendConnectWithOffsetArrayBufferViewHash) {
   auto* hash = MakeGarbageCollected<WebTransportHash>();
   hash->setAlgorithm("sha-256");
   constexpr uint8_t kPattern[6] = {0x28, 0x24, 0xa8, 0xa2, 0x44, 0xee};
-  DOMArrayBuffer* buffer = DOMArrayBuffer::Create(kPattern, sizeof(kPattern));
+  DOMArrayBuffer* buffer = DOMArrayBuffer::Create(kPattern);
   DOMUint8Array* view = DOMUint8Array::Create(buffer, 2, 3);
   hash->setValue(MakeGarbageCollected<V8UnionArrayBufferOrArrayBufferView>(
       NotShared<DOMUint8Array>(view)));
@@ -598,7 +605,7 @@ TEST_F(WebTransportTest, SendConnectWithInvalidFingerprint) {
       0x26, 0x5C, 0xB2, 0x74, 0xD7, 0x1C, 0xA2, 0x63, 0x3E, 0x94, 0x94,
       0xC0, 0x84, 0x39, 0xD6, 0x64, 0xFA, 0x08, 0xB9, 0x77, 0x37,
   };
-  DOMUint8Array* hashValue = DOMUint8Array::Create(kPattern, sizeof(kPattern));
+  DOMUint8Array* hashValue = DOMUint8Array::Create(kPattern);
   hash->setValue(MakeGarbageCollected<V8UnionArrayBufferOrArrayBufferView>(
       NotShared<DOMUint8Array>(hashValue)));
   auto* options = MakeGarbageCollected<WebTransportOptions>();
@@ -619,10 +626,10 @@ TEST_F(WebTransportTest, CloseDuringConnect) {
   auto* web_transport = WebTransport::Create(
       scope.GetScriptState(), String("https://example.com/"), EmptyOptions(),
       ASSERT_NO_EXCEPTION);
-  ScriptPromiseTester ready_tester(scope.GetScriptState(),
-                                   web_transport->ready());
-  ScriptPromiseTester closed_tester(scope.GetScriptState(),
-                                    web_transport->closed());
+  ScriptPromiseTester ready_tester(
+      scope.GetScriptState(), web_transport->ready(scope.GetScriptState()));
+  ScriptPromiseTester closed_tester(
+      scope.GetScriptState(), web_transport->closed(scope.GetScriptState()));
 
   test::RunPendingTasks();
 
@@ -644,15 +651,16 @@ TEST_F(WebTransportTest, CloseAfterConnection) {
       CreateAndConnectSuccessfully(scope, "https://example.com");
   EXPECT_CALL(*mock_web_transport_, Close(42, String("because")));
 
-  ScriptPromiseTester ready_tester(scope.GetScriptState(),
-                                   web_transport->ready());
-  ScriptPromiseTester closed_tester(scope.GetScriptState(),
-                                    web_transport->closed());
+  ScriptPromiseTester ready_tester(
+      scope.GetScriptState(), web_transport->ready(scope.GetScriptState()));
+  ScriptPromiseTester closed_tester(
+      scope.GetScriptState(), web_transport->closed(scope.GetScriptState()));
 
-  WebTransportCloseInfo close_info;
-  close_info.setCloseCode(42);
-  close_info.setReason("because");
-  web_transport->close(&close_info);
+  WebTransportCloseInfo* close_info =
+      MakeGarbageCollected<WebTransportCloseInfo>();
+  close_info->setCloseCode(42);
+  close_info->setReason("because");
+  web_transport->close(close_info);
 
   test::RunPendingTasks();
 
@@ -671,10 +679,10 @@ TEST_F(WebTransportTest, CloseWithNull) {
 
   EXPECT_CALL(*mock_web_transport_, Close());
 
-  ScriptPromiseTester ready_tester(scope.GetScriptState(),
-                                   web_transport->ready());
-  ScriptPromiseTester closed_tester(scope.GetScriptState(),
-                                    web_transport->closed());
+  ScriptPromiseTester ready_tester(
+      scope.GetScriptState(), web_transport->ready(scope.GetScriptState()));
+  ScriptPromiseTester closed_tester(
+      scope.GetScriptState(), web_transport->closed(scope.GetScriptState()));
 
   web_transport->close(nullptr);
 
@@ -692,16 +700,17 @@ TEST_F(WebTransportTest, CloseWithReasonOnly) {
   auto* web_transport =
       CreateAndConnectSuccessfully(scope, "https://example.com");
 
-  EXPECT_CALL(*mock_web_transport_, Close());
+  EXPECT_CALL(*mock_web_transport_, Close(0, String("because")));
 
-  ScriptPromiseTester ready_tester(scope.GetScriptState(),
-                                   web_transport->ready());
-  ScriptPromiseTester closed_tester(scope.GetScriptState(),
-                                    web_transport->closed());
+  ScriptPromiseTester ready_tester(
+      scope.GetScriptState(), web_transport->ready(scope.GetScriptState()));
+  ScriptPromiseTester closed_tester(
+      scope.GetScriptState(), web_transport->closed(scope.GetScriptState()));
 
-  WebTransportCloseInfo close_info;
-  close_info.setReason("because");
-  web_transport->close(&close_info);
+  WebTransportCloseInfo* close_info =
+      MakeGarbageCollected<WebTransportCloseInfo>();
+  close_info->setReason("because");
+  web_transport->close(close_info);
 
   test::RunPendingTasks();
 }
@@ -752,8 +761,8 @@ TEST_F(WebTransportTest, GarbageCollectMojoConnectionError) {
     web_transport = CreateAndConnectSuccessfully(scope, "https://example.com");
   }
 
-  ScriptPromiseTester closed_tester(scope.GetScriptState(),
-                                    web_transport->closed());
+  ScriptPromiseTester closed_tester(
+      scope.GetScriptState(), web_transport->closed(scope.GetScriptState()));
 
   // Closing the server-side of the pipe causes a mojo connection error.
   client_remote_.reset();
@@ -782,7 +791,7 @@ TEST_F(WebTransportTest, SendDatagram) {
   auto* writer = writable->getWriter(script_state, ASSERT_NO_EXCEPTION);
   auto* chunk = DOMUint8Array::Create(1);
   *chunk->Data() = 'A';
-  ScriptPromise result =
+  auto result =
       writer->write(script_state, ScriptValue::From(script_state, chunk),
                     ASSERT_NO_EXCEPTION);
   ScriptPromiseTester tester(script_state, result);
@@ -810,10 +819,10 @@ TEST_F(WebTransportTest, BackpressureForOutgoingDatagrams) {
   auto* script_state = scope.GetScriptState();
   auto* writer = writable->getWriter(script_state, ASSERT_NO_EXCEPTION);
 
-  ScriptPromise promise1;
-  ScriptPromise promise2;
-  ScriptPromise promise3;
-  ScriptPromise promise4;
+  ScriptPromise<IDLUndefined> promise1;
+  ScriptPromise<IDLUndefined> promise2;
+  ScriptPromise<IDLUndefined> promise3;
+  ScriptPromise<IDLUndefined> promise4;
 
   {
     auto* chunk = DOMUint8Array::Create(1);
@@ -845,7 +854,7 @@ TEST_F(WebTransportTest, BackpressureForOutgoingDatagrams) {
   }
 
   // The first two promises are resolved immediately.
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
   EXPECT_EQ(promise1.V8Promise()->State(), v8::Promise::kFulfilled);
   EXPECT_EQ(promise2.V8Promise()->State(), v8::Promise::kFulfilled);
   EXPECT_EQ(promise3.V8Promise()->State(), v8::Promise::kPending);
@@ -853,7 +862,7 @@ TEST_F(WebTransportTest, BackpressureForOutgoingDatagrams) {
 
   // The rest are resolved by the callback.
   test::RunPendingTasks();
-  v8::MicrotasksScope::PerformCheckpoint(scope.GetIsolate());
+  scope.PerformMicrotaskCheckpoint();
   EXPECT_EQ(promise3.V8Promise()->State(), v8::Promise::kFulfilled);
   EXPECT_EQ(promise4.V8Promise()->State(), v8::Promise::kFulfilled);
 }
@@ -867,7 +876,7 @@ TEST_F(WebTransportTest, SendDatagramBeforeConnect) {
   auto* writer = writable->getWriter(script_state, ASSERT_NO_EXCEPTION);
   auto* chunk = DOMUint8Array::Create(1);
   *chunk->Data() = 'A';
-  ScriptPromise result =
+  auto result =
       writer->write(script_state, ScriptValue::From(script_state, chunk),
                     ASSERT_NO_EXCEPTION);
 
@@ -911,7 +920,7 @@ TEST_F(WebTransportTest, SendDatagramAfterClose) {
 
   auto* chunk = DOMUint8Array::Create(1);
   *chunk->Data() = 'A';
-  ScriptPromise result =
+  auto result =
       writer->write(script_state, ScriptValue::From(script_state, chunk),
                     ASSERT_NO_EXCEPTION);
 
@@ -926,9 +935,9 @@ Vector<uint8_t> GetValueAsVector(ScriptState* script_state,
                                  ScriptValue iterator_result) {
   bool done = false;
   v8::Local<v8::Value> value;
-  if (!V8UnpackIteratorResult(script_state,
-                              iterator_result.V8Value().As<v8::Object>(), &done)
-           .ToLocal(&value)) {
+  if (!V8UnpackIterationResult(script_state,
+                               iterator_result.V8Value().As<v8::Object>(),
+                               &value, &done)) {
     ADD_FAILURE() << "unable to unpack iterator_result";
     return {};
   }
@@ -943,7 +952,7 @@ Vector<uint8_t> GetValueAsVector(ScriptState* script_state,
   }
 
   Vector<uint8_t> result;
-  result.Append(array->Data(), base::checked_cast<wtf_size_t>(array->length()));
+  result.AppendSpan(array->ByteSpan());
   return result;
 }
 
@@ -961,7 +970,7 @@ TEST_F(WebTransportTest, ReceiveDatagramBeforeRead) {
   auto* script_state = scope.GetScriptState();
   auto* reader =
       readable->GetDefaultReaderForTesting(script_state, ASSERT_NO_EXCEPTION);
-  ScriptPromise result = reader->read(script_state, ASSERT_NO_EXCEPTION);
+  auto result = reader->read(script_state, ASSERT_NO_EXCEPTION);
   ScriptPromiseTester tester(script_state, result);
   tester.WaitUntilSettled();
   EXPECT_TRUE(tester.IsFulfilled());
@@ -977,7 +986,7 @@ TEST_F(WebTransportTest, ReceiveDatagramDuringRead) {
   auto* script_state = scope.GetScriptState();
   auto* reader =
       readable->GetDefaultReaderForTesting(script_state, ASSERT_NO_EXCEPTION);
-  ScriptPromise result = reader->read(script_state, ASSERT_NO_EXCEPTION);
+  auto result = reader->read(script_state, ASSERT_NO_EXCEPTION);
 
   const std::array<uint8_t, 1> chunk = {'A'};
   client_remote_->OnDatagramReceived(chunk);
@@ -987,6 +996,81 @@ TEST_F(WebTransportTest, ReceiveDatagramDuringRead) {
   EXPECT_TRUE(tester.IsFulfilled());
 
   EXPECT_THAT(GetValueAsVector(script_state, tester.Value()), ElementsAre('A'));
+}
+
+TEST_F(WebTransportTest, ReceiveDatagramWithBYOBReader) {
+  V8TestingScope scope;
+  auto* web_transport =
+      CreateAndConnectSuccessfully(scope, "https://example.com");
+
+  auto* readable = web_transport->datagrams()->readable();
+  auto* script_state = scope.GetScriptState();
+  auto* reader =
+      readable->GetBYOBReaderForTesting(script_state, ASSERT_NO_EXCEPTION);
+
+  NotShared<DOMArrayBufferView> view =
+      NotShared<DOMUint8Array>(DOMUint8Array::Create(1));
+  auto result = reader->read(script_state, view, ASSERT_NO_EXCEPTION);
+  ScriptPromiseTester tester(script_state, result);
+
+  const std::array<uint8_t, 1> chunk = {'A'};
+  client_remote_->OnDatagramReceived(chunk);
+
+  test::RunPendingTasks();
+
+  tester.WaitUntilSettled();
+  EXPECT_TRUE(tester.IsFulfilled());
+  EXPECT_THAT(GetValueAsVector(script_state, tester.Value()), ElementsAre('A'));
+}
+
+bool IsRangeError(ScriptState* script_state,
+                  ScriptValue value,
+                  const String& message) {
+  v8::Local<v8::Object> object;
+  if (!value.V8Value()->ToObject(script_state->GetContext()).ToLocal(&object)) {
+    return false;
+  }
+  if (!object->IsNativeError())
+    return false;
+
+  const auto& Has = [script_state, object](const String& key,
+                                           const String& value) -> bool {
+    v8::Local<v8::Value> actual;
+    return object
+               ->Get(script_state->GetContext(),
+                     V8AtomicString(script_state->GetIsolate(), key))
+               .ToLocal(&actual) &&
+           ToCoreStringWithUndefinedOrNullCheck(script_state->GetIsolate(),
+                                                actual) == value;
+  };
+
+  return Has("name", "RangeError") && Has("message", message);
+}
+
+TEST_F(WebTransportTest, ReceiveDatagramWithoutEnoughBuffer) {
+  V8TestingScope scope;
+  auto* web_transport =
+      CreateAndConnectSuccessfully(scope, "https://example.com");
+
+  auto* readable = web_transport->datagrams()->readable();
+  auto* script_state = scope.GetScriptState();
+  auto* reader =
+      readable->GetBYOBReaderForTesting(script_state, ASSERT_NO_EXCEPTION);
+
+  NotShared<DOMArrayBufferView> view =
+      NotShared<DOMUint8Array>(DOMUint8Array::Create(1));
+  auto result = reader->read(script_state, view, ASSERT_NO_EXCEPTION);
+  ScriptPromiseTester tester(script_state, result);
+
+  const std::array<uint8_t, 3> chunk = {'A', 'B', 'C'};
+  client_remote_->OnDatagramReceived(chunk);
+
+  test::RunPendingTasks();
+
+  tester.WaitUntilSettled();
+  EXPECT_TRUE(tester.IsRejected());
+  EXPECT_TRUE(IsRangeError(script_state, tester.Value(),
+                           "supplied view is not large enough."));
 }
 
 TEST_F(WebTransportTest, CancelDatagramReadableWorks) {
@@ -1027,7 +1111,7 @@ TEST_F(WebTransportTest, DatagramsShouldBeErroredAfterClose) {
   auto* script_state = scope.GetScriptState();
   auto* reader =
       readable->GetDefaultReaderForTesting(script_state, ASSERT_NO_EXCEPTION);
-  ScriptPromise result1 = reader->read(script_state, ASSERT_NO_EXCEPTION);
+  auto result1 = reader->read(script_state, ASSERT_NO_EXCEPTION);
   ScriptPromiseTester tester1(script_state, result1);
   tester1.WaitUntilSettled();
   EXPECT_TRUE(tester1.IsRejected());
@@ -1052,7 +1136,7 @@ TEST_F(WebTransportTest, ResettingIncomingHighWaterMarkWorksAfterClose) {
       readable->GetDefaultReaderForTesting(script_state, ASSERT_NO_EXCEPTION);
 
   web_transport->datagrams()->setIncomingHighWaterMark(0);
-  ScriptPromise result = reader->read(script_state, ASSERT_NO_EXCEPTION);
+  auto result = reader->read(script_state, ASSERT_NO_EXCEPTION);
 
   ScriptPromiseTester tester(script_state, result);
   tester.WaitUntilSettled();
@@ -1079,7 +1163,7 @@ TEST_F(WebTransportTest, TransportErrorErrorsReadableStream) {
   auto* script_state = scope.GetScriptState();
   auto* reader =
       readable->GetDefaultReaderForTesting(script_state, ASSERT_NO_EXCEPTION);
-  ScriptPromise result = reader->read(script_state, ASSERT_NO_EXCEPTION);
+  auto result = reader->read(script_state, ASSERT_NO_EXCEPTION);
 
   ScriptPromiseTester tester(script_state, result);
   tester.WaitUntilSettled();
@@ -1107,8 +1191,8 @@ TEST_F(WebTransportTest, DatagramsAreDropped) {
   auto* script_state = scope.GetScriptState();
   auto* reader =
       readable->GetDefaultReaderForTesting(script_state, ASSERT_NO_EXCEPTION);
-  ScriptPromise result1 = reader->read(script_state, ASSERT_NO_EXCEPTION);
-  ScriptPromise result2 = reader->read(script_state, ASSERT_NO_EXCEPTION);
+  auto result1 = reader->read(script_state, ASSERT_NO_EXCEPTION);
+  auto result2 = reader->read(script_state, ASSERT_NO_EXCEPTION);
 
   ScriptPromiseTester tester1(script_state, result1);
   ScriptPromiseTester tester2(script_state, result2);
@@ -1152,7 +1236,7 @@ TEST_F(WebTransportTest, IncomingHighWaterMarkIsObeyed) {
       readable->GetDefaultReaderForTesting(script_state, ASSERT_NO_EXCEPTION);
 
   for (int i = 0; i < kHighWaterMark; ++i) {
-    ScriptPromise result = reader->read(script_state, ASSERT_NO_EXCEPTION);
+    auto result = reader->read(script_state, ASSERT_NO_EXCEPTION);
 
     ScriptPromiseTester tester(script_state, result);
     tester.WaitUntilSettled();
@@ -1186,7 +1270,7 @@ TEST_F(WebTransportTest, ResettingHighWaterMarkClearsQueue) {
   auto* reader =
       readable->GetDefaultReaderForTesting(script_state, ASSERT_NO_EXCEPTION);
 
-  ScriptPromise result = reader->read(script_state, ASSERT_NO_EXCEPTION);
+  auto result = reader->read(script_state, ASSERT_NO_EXCEPTION);
 
   ScriptPromiseTester tester(script_state, result);
 
@@ -1208,7 +1292,7 @@ TEST_F(WebTransportTest, ReadIncomingDatagramWorksWithHighWaterMarkZero) {
   auto* script_state = scope.GetScriptState();
   auto* reader =
       readable->GetDefaultReaderForTesting(script_state, ASSERT_NO_EXCEPTION);
-  ScriptPromise result = reader->read(script_state, ASSERT_NO_EXCEPTION);
+  auto result = reader->read(script_state, ASSERT_NO_EXCEPTION);
 
   const std::array<uint8_t, 1> chunk = {'A'};
   client_remote_->OnDatagramReceived(chunk);
@@ -1250,7 +1334,7 @@ TEST_F(WebTransportTest, IncomingMaxAgeIsObeyed) {
       readable->GetDefaultReaderForTesting(script_state, ASSERT_NO_EXCEPTION);
 
   // The queue should be empty so the read should not complete.
-  ScriptPromise result = reader->read(script_state, ASSERT_NO_EXCEPTION);
+  auto result = reader->read(script_state, ASSERT_NO_EXCEPTION);
 
   ScriptPromiseTester tester(script_state, result);
 
@@ -1270,8 +1354,8 @@ TEST_F(WebTransportTest, TwoSimultaneousReadsWork) {
   auto* reader =
       readable->GetDefaultReaderForTesting(script_state, ASSERT_NO_EXCEPTION);
 
-  ScriptPromise result1 = reader->read(script_state, ASSERT_NO_EXCEPTION);
-  ScriptPromise result2 = reader->read(script_state, ASSERT_NO_EXCEPTION);
+  auto result1 = reader->read(script_state, ASSERT_NO_EXCEPTION);
+  auto result2 = reader->read(script_state, ASSERT_NO_EXCEPTION);
 
   const std::array<uint8_t, 1> chunk1 = {'A'};
   client_remote_->OnDatagramReceived(chunk1);
@@ -1316,15 +1400,15 @@ TEST_F(WebTransportTest, CreateSendStream) {
       });
 
   auto* script_state = scope.GetScriptState();
-  ScriptPromise send_stream_promise = web_transport->createUnidirectionalStream(
+  auto send_stream_promise = web_transport->createUnidirectionalStream(
       script_state, ASSERT_NO_EXCEPTION);
   ScriptPromiseTester tester(script_state, send_stream_promise);
 
   tester.WaitUntilSettled();
 
   EXPECT_TRUE(tester.IsFulfilled());
-  auto* writable = V8WritableStream::ToImplWithTypeCheck(
-      scope.GetIsolate(), tester.Value().V8Value());
+  auto* writable = V8WritableStream::ToWrappable(scope.GetIsolate(),
+                                                 tester.Value().V8Value());
   EXPECT_TRUE(writable);
 }
 
@@ -1335,7 +1419,7 @@ TEST_F(WebTransportTest, CreateSendStreamBeforeConnect) {
   auto* web_transport = WebTransport::Create(
       script_state, "https://example.com", EmptyOptions(), ASSERT_NO_EXCEPTION);
   auto& exception_state = scope.GetExceptionState();
-  ScriptPromise send_stream_promise =
+  auto send_stream_promise =
       web_transport->createUnidirectionalStream(script_state, exception_state);
   EXPECT_TRUE(send_stream_promise.IsEmpty());
   EXPECT_TRUE(exception_state.HadException());
@@ -1355,15 +1439,15 @@ TEST_F(WebTransportTest, CreateSendStreamFailure) {
       });
 
   auto* script_state = scope.GetScriptState();
-  ScriptPromise send_stream_promise = web_transport->createUnidirectionalStream(
+  auto send_stream_promise = web_transport->createUnidirectionalStream(
       script_state, ASSERT_NO_EXCEPTION);
   ScriptPromiseTester tester(script_state, send_stream_promise);
 
   tester.WaitUntilSettled();
 
   EXPECT_TRUE(tester.IsRejected());
-  DOMException* exception = V8DOMException::ToImplWithTypeCheck(
-      scope.GetIsolate(), tester.Value().V8Value());
+  DOMException* exception =
+      V8DOMException::ToWrappable(scope.GetIsolate(), tester.Value().V8Value());
   EXPECT_EQ(exception->name(), "NetworkError");
   EXPECT_EQ(exception->message(), "Failed to create send stream.");
 }
@@ -1433,14 +1517,14 @@ TEST_F(WebTransportTest, SendStreamGarbageCollectionLocalClose) {
 
   auto* script_state = scope.GetScriptState();
   auto* isolate = scope.GetIsolate();
-  // We use v8::Persistent instead of ScriptPromise, because ScriptPromise
-  // will be broken when CollectAllGarbageForTesting is called.
+  // We use v8::Persistent instead of ScriptPromise, because
+  // ScriptPromise will be broken when CollectAllGarbageForTesting is
+  // called.
   v8::Persistent<v8::Promise> close_promise_persistent;
 
   {
     v8::HandleScope handle_scope(isolate);
-    ScriptPromise close_promise =
-        send_stream->close(script_state, ASSERT_NO_EXCEPTION);
+    auto close_promise = send_stream->close(script_state, ASSERT_NO_EXCEPTION);
     close_promise_persistent.Reset(isolate, close_promise.V8Promise());
   }
 
@@ -1459,8 +1543,8 @@ TEST_F(WebTransportTest, SendStreamGarbageCollectionLocalClose) {
   {
     v8::HandleScope handle_scope(isolate);
     ScriptPromiseTester tester(
-        script_state,
-        ScriptPromise(script_state, close_promise_persistent.Get(isolate)));
+        script_state, ScriptPromise<IDLUndefined>::FromV8Promise(
+                          isolate, close_promise_persistent.Get(isolate)));
     close_promise_persistent.Reset();
     tester.WaitUntilSettled();
     EXPECT_TRUE(tester.IsFulfilled());
@@ -1528,15 +1612,19 @@ TEST_F(WebTransportTest, ReceiveStreamGarbageCollectionCancel) {
 
   auto* script_state = scope.GetScriptState();
 
-  ScriptPromise cancel_promise;
+  // Eagerly destroy the promise as this test is using manual GC
+  // without stack which is incompatible with ScriptValue.
+  std::optional<ScriptPromise<IDLUndefined>> cancel_promise;
   {
     // Cancelling also creates v8 handles, so we need a new handle scope as
     // above.
     v8::HandleScope handle_scope(scope.GetIsolate());
-    cancel_promise = receive_stream->cancel(script_state, ASSERT_NO_EXCEPTION);
+    cancel_promise.emplace(
+        receive_stream->cancel(script_state, ASSERT_NO_EXCEPTION));
   }
 
-  ScriptPromiseTester tester(script_state, cancel_promise);
+  ScriptPromiseTester tester(script_state, cancel_promise.value());
+  cancel_promise.reset();
   tester.WaitUntilSettled();
   EXPECT_TRUE(tester.IsFulfilled());
 
@@ -1638,7 +1726,7 @@ TEST_F(WebTransportTest, CreateSendStreamAbortedByClose) {
       });
   EXPECT_CALL(*mock_web_transport_, Close());
 
-  ScriptPromise send_stream_promise = web_transport->createUnidirectionalStream(
+  auto send_stream_promise = web_transport->createUnidirectionalStream(
       script_state, ASSERT_NO_EXCEPTION);
   ScriptPromiseTester tester(script_state, send_stream_promise);
 
@@ -1665,20 +1753,15 @@ TEST_F(WebTransportTest, CreateReceiveStream) {
 
   ReceiveStream* receive_stream = ReadReceiveStream(scope, web_transport);
 
-  const char data[] = "what";
-  uint32_t num_bytes = 4u;
-
-  EXPECT_EQ(
-      producer->WriteData(data, &num_bytes, MOJO_WRITE_DATA_FLAG_ALL_OR_NONE),
-      MOJO_RESULT_OK);
-  EXPECT_EQ(num_bytes, 4u);
+  const std::string_view data = "what";
+  EXPECT_EQ(producer->WriteAllData(base::as_byte_span(data)), MOJO_RESULT_OK);
 
   producer.reset();
   web_transport->OnIncomingStreamClosed(/*stream_id=*/0, true);
 
   auto* reader = receive_stream->GetDefaultReaderForTesting(
       script_state, ASSERT_NO_EXCEPTION);
-  ScriptPromise read_promise = reader->read(script_state, ASSERT_NO_EXCEPTION);
+  auto read_promise = reader->read(script_state, ASSERT_NO_EXCEPTION);
   ScriptPromiseTester read_tester(script_state, read_promise);
   read_tester.WaitUntilSettled();
   EXPECT_TRUE(read_tester.IsFulfilled());
@@ -1686,16 +1769,13 @@ TEST_F(WebTransportTest, CreateReceiveStream) {
   ASSERT_TRUE(read_result->IsObject());
   v8::Local<v8::Value> value;
   bool done = false;
-  ASSERT_TRUE(
-      V8UnpackIteratorResult(script_state, read_result.As<v8::Object>(), &done)
-          .ToLocal(&value));
+  ASSERT_TRUE(V8UnpackIterationResult(
+      script_state, read_result.As<v8::Object>(), &value, &done));
   NotShared<DOMUint8Array> u8array =
       NativeValueTraits<NotShared<DOMUint8Array>>::NativeValue(
           scope.GetIsolate(), value, ASSERT_NO_EXCEPTION);
   ASSERT_TRUE(u8array);
-  EXPECT_THAT(base::make_span(static_cast<uint8_t*>(u8array->Data()),
-                              u8array->byteLength()),
-              ElementsAre('w', 'h', 'a', 't'));
+  EXPECT_THAT(u8array->ByteSpan(), ElementsAre('w', 'h', 'a', 't'));
 }
 
 TEST_F(WebTransportTest, CreateReceiveStreamThenClose) {
@@ -1713,19 +1793,19 @@ TEST_F(WebTransportTest, CreateReceiveStreamThenClose) {
 
   auto* reader = receive_stream->GetDefaultReaderForTesting(
       script_state, ASSERT_NO_EXCEPTION);
-  ScriptPromise read_promise = reader->read(script_state, ASSERT_NO_EXCEPTION);
+  auto read_promise = reader->read(script_state, ASSERT_NO_EXCEPTION);
   ScriptPromiseTester read_tester(script_state, read_promise);
 
   web_transport->close(nullptr);
 
   read_tester.WaitUntilSettled();
   EXPECT_TRUE(read_tester.IsRejected());
-  WebTransportError* exception = V8WebTransportError::ToImplWithTypeCheck(
+  WebTransportError* exception = V8WebTransportError::ToWrappable(
       scope.GetIsolate(), read_tester.Value().V8Value());
   ASSERT_TRUE(exception);
   EXPECT_EQ(exception->name(), "WebTransportError");
   EXPECT_EQ(exception->source(), "session");
-  EXPECT_EQ(exception->streamErrorCode(), absl::nullopt);
+  EXPECT_EQ(exception->streamErrorCode(), std::nullopt);
 }
 
 TEST_F(WebTransportTest, CreateReceiveStreamThenRemoteClose) {
@@ -1741,19 +1821,19 @@ TEST_F(WebTransportTest, CreateReceiveStreamThenRemoteClose) {
 
   auto* reader = receive_stream->GetDefaultReaderForTesting(
       script_state, ASSERT_NO_EXCEPTION);
-  ScriptPromise read_promise = reader->read(script_state, ASSERT_NO_EXCEPTION);
+  auto read_promise = reader->read(script_state, ASSERT_NO_EXCEPTION);
   ScriptPromiseTester read_tester(script_state, read_promise);
 
   client_remote_.reset();
 
   read_tester.WaitUntilSettled();
   EXPECT_TRUE(read_tester.IsRejected());
-  WebTransportError* exception = V8WebTransportError::ToImplWithTypeCheck(
+  WebTransportError* exception = V8WebTransportError::ToWrappable(
       scope.GetIsolate(), read_tester.Value().V8Value());
   ASSERT_TRUE(exception);
   EXPECT_EQ(exception->name(), "WebTransportError");
   EXPECT_EQ(exception->source(), "session");
-  EXPECT_EQ(exception->streamErrorCode(), absl::nullopt);
+  EXPECT_EQ(exception->streamErrorCode(), std::nullopt);
 }
 
 // BidirectionalStreams are thoroughly tested in bidirectional_stream_test.cc.
@@ -1772,17 +1852,15 @@ TEST_F(WebTransportTest, CreateBidirectionalStream) {
       });
 
   auto* script_state = scope.GetScriptState();
-  ScriptPromise bidirectional_stream_promise =
-      web_transport->createBidirectionalStream(script_state,
-                                               ASSERT_NO_EXCEPTION);
+  auto bidirectional_stream_promise = web_transport->createBidirectionalStream(
+      script_state, ASSERT_NO_EXCEPTION);
   ScriptPromiseTester tester(script_state, bidirectional_stream_promise);
 
   tester.WaitUntilSettled();
 
   EXPECT_TRUE(tester.IsFulfilled());
-  auto* bidirectional_stream =
-      V8WebTransportBidirectionalStream::ToImplWithTypeCheck(
-          scope.GetIsolate(), tester.Value().V8Value());
+  auto* bidirectional_stream = V8WebTransportBidirectionalStream::ToWrappable(
+      scope.GetIsolate(), tester.Value().V8Value());
   EXPECT_TRUE(bidirectional_stream);
 }
 
@@ -1811,8 +1889,8 @@ TEST_F(WebTransportTest, ReceiveBidirectionalStream) {
   v8::Local<v8::Value> v8value = ReadValueFromStream(scope, streams);
 
   BidirectionalStream* bidirectional_stream =
-      V8WebTransportBidirectionalStream::ToImplWithTypeCheck(scope.GetIsolate(),
-                                                             v8value);
+      V8WebTransportBidirectionalStream::ToWrappable(scope.GetIsolate(),
+                                                     v8value);
   EXPECT_TRUE(bidirectional_stream);
 }
 
@@ -1854,10 +1932,12 @@ TEST_F(WebTransportTest, OnClosed) {
       CreateAndConnectSuccessfully(scope, "https://example.com");
 
   auto* script_state = scope.GetScriptState();
-  ScriptPromiseTester tester(script_state, web_transport->closed());
+  ScriptPromiseTester tester(script_state,
+                             web_transport->closed(scope.GetScriptState()));
 
   web_transport->OnClosed(
-      network::mojom::blink::WebTransportCloseInfo::New(99, "reason"));
+      network::mojom::blink::WebTransportCloseInfo::New(99, "reason"),
+      network::mojom::blink::WebTransportStats::New());
 
   tester.WaitUntilSettled();
 
@@ -1873,6 +1953,21 @@ TEST_F(WebTransportTest, OnClosed) {
   EXPECT_EQ(close_info->reason(), "reason");
 }
 
+// Regression test for https://crbug.com/347710668.
+TEST_F(WebTransportTest, ClosedAccessorCalledAfterOnClosed) {
+  V8TestingScope scope;
+
+  auto* web_transport =
+      CreateAndConnectSuccessfully(scope, "https://example.com");
+
+  web_transport->OnClosed(
+      network::mojom::blink::WebTransportCloseInfo::New(99, "reason"),
+      network::mojom::blink::WebTransportStats::New());
+
+  // If this doesn't crash then the test passed.
+  EXPECT_FALSE(web_transport->closed(scope.GetScriptState()).IsEmpty());
+}
+
 TEST_F(WebTransportTest, OnClosedWithNull) {
   V8TestingScope scope;
   v8::Isolate* isolate = scope.GetIsolate();
@@ -1881,9 +1976,11 @@ TEST_F(WebTransportTest, OnClosedWithNull) {
       CreateAndConnectSuccessfully(scope, "https://example.com");
 
   auto* script_state = scope.GetScriptState();
-  ScriptPromiseTester tester(script_state, web_transport->closed());
+  ScriptPromiseTester tester(script_state,
+                             web_transport->closed(scope.GetScriptState()));
 
-  web_transport->OnClosed(nullptr);
+  web_transport->OnClosed(nullptr,
+                          network::mojom::blink::WebTransportStats::New());
 
   tester.WaitUntilSettled();
 
@@ -1893,15 +1990,15 @@ TEST_F(WebTransportTest, OnClosedWithNull) {
   ASSERT_TRUE(value.IsObject());
   WebTransportCloseInfo* close_info = WebTransportCloseInfo::Create(
       isolate, value.V8Value(), ASSERT_NO_EXCEPTION);
-  EXPECT_FALSE(close_info->hasCloseCode());
-  EXPECT_FALSE(close_info->hasReason());
+  EXPECT_TRUE(close_info->hasCloseCode());
+  EXPECT_TRUE(close_info->hasReason());
 }
 
 TEST_F(WebTransportTest, ReceivedResetStream) {
   V8TestingScope scope;
   v8::Isolate* isolate = scope.GetIsolate();
   constexpr uint32_t kStreamId = 99;
-  constexpr uint8_t kCode = 24;
+  constexpr uint32_t kCode = 0xffffffff;
 
   auto* web_transport =
       CreateAndConnectSuccessfully(scope, "https://example.com");
@@ -1919,17 +2016,15 @@ TEST_F(WebTransportTest, ReceivedResetStream) {
       });
 
   auto* script_state = scope.GetScriptState();
-  ScriptPromise bidirectional_stream_promise =
-      web_transport->createBidirectionalStream(script_state,
-                                               ASSERT_NO_EXCEPTION);
+  auto bidirectional_stream_promise = web_transport->createBidirectionalStream(
+      script_state, ASSERT_NO_EXCEPTION);
   ScriptPromiseTester tester(script_state, bidirectional_stream_promise);
 
   tester.WaitUntilSettled();
 
   EXPECT_TRUE(tester.IsFulfilled());
-  auto* bidirectional_stream =
-      V8WebTransportBidirectionalStream::ToImplWithTypeCheck(
-          scope.GetIsolate(), tester.Value().V8Value());
+  auto* bidirectional_stream = V8WebTransportBidirectionalStream::ToWrappable(
+      scope.GetIsolate(), tester.Value().V8Value());
   EXPECT_TRUE(bidirectional_stream);
 
   web_transport->OnReceivedResetStream(kStreamId, kCode);
@@ -1938,7 +2033,7 @@ TEST_F(WebTransportTest, ReceivedResetStream) {
   v8::Local<v8::Value> error_value =
       bidirectional_stream->readable()->GetStoredError(isolate);
   WebTransportError* error =
-      V8WebTransportError::ToImplWithTypeCheck(scope.GetIsolate(), error_value);
+      V8WebTransportError::ToWrappable(scope.GetIsolate(), error_value);
   ASSERT_TRUE(error);
 
   EXPECT_EQ(error->streamErrorCode(), kCode);
@@ -1951,7 +2046,7 @@ TEST_F(WebTransportTest, ReceivedStopSending) {
   V8TestingScope scope;
   v8::Isolate* isolate = scope.GetIsolate();
   constexpr uint32_t kStreamId = 51;
-  constexpr uint8_t kCode = 255;
+  constexpr uint32_t kCode = 255;
 
   auto* web_transport =
       CreateAndConnectSuccessfully(scope, "https://example.com");
@@ -1969,17 +2064,15 @@ TEST_F(WebTransportTest, ReceivedStopSending) {
       });
 
   auto* script_state = scope.GetScriptState();
-  ScriptPromise bidirectional_stream_promise =
-      web_transport->createBidirectionalStream(script_state,
-                                               ASSERT_NO_EXCEPTION);
+  auto bidirectional_stream_promise = web_transport->createBidirectionalStream(
+      script_state, ASSERT_NO_EXCEPTION);
   ScriptPromiseTester tester(script_state, bidirectional_stream_promise);
 
   tester.WaitUntilSettled();
 
   EXPECT_TRUE(tester.IsFulfilled());
-  auto* bidirectional_stream =
-      V8WebTransportBidirectionalStream::ToImplWithTypeCheck(
-          scope.GetIsolate(), tester.Value().V8Value());
+  auto* bidirectional_stream = V8WebTransportBidirectionalStream::ToWrappable(
+      scope.GetIsolate(), tester.Value().V8Value());
   EXPECT_TRUE(bidirectional_stream);
 
   web_transport->OnReceivedStopSending(kStreamId, kCode);
@@ -1988,7 +2081,7 @@ TEST_F(WebTransportTest, ReceivedStopSending) {
   v8::Local<v8::Value> error_value =
       bidirectional_stream->writable()->GetStoredError(isolate);
   WebTransportError* error =
-      V8WebTransportError::ToImplWithTypeCheck(scope.GetIsolate(), error_value);
+      V8WebTransportError::ToWrappable(scope.GetIsolate(), error_value);
   ASSERT_TRUE(error);
 
   EXPECT_EQ(error->streamErrorCode(), kCode);

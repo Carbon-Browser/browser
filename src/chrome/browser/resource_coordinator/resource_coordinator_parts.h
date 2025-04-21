@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -58,8 +58,8 @@ class ResourceCoordinatorParts {
   }
 
  private:
-  // This should be declared before |tab_memory_metrics_reporter_| and
-  // |tab_manager_| as they both depend on this at shutdown.
+  // This should be declared before |tab_memory_metrics_reporter_| because it
+  // depends on this at shutdown.
   TabLoadTracker tab_load_tracker_;
 
   // Created on demand the first time it's being accessed.

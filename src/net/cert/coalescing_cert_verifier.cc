@@ -1,29 +1,29 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/cert/coalescing_cert_verifier.h"
 
-#include <algorithm>
-
-#include "base/bind.h"
 #include "base/containers/linked_list.h"
 #include "base/containers/unique_ptr_adapters.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/not_fatal_until.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/time/time.h"
 #include "net/base/net_errors.h"
 #include "net/cert/cert_verify_result.h"
 #include "net/cert/crl_set.h"
-#include "net/cert/pem.h"
 #include "net/cert/x509_certificate_net_log_param.h"
 #include "net/log/net_log_event_type.h"
 #include "net/log/net_log_source.h"
 #include "net/log/net_log_source_type.h"
 #include "net/log/net_log_values.h"
 #include "net/log/net_log_with_source.h"
+#include "third_party/boringssl/src/pki/pem.h"
 
 namespace net {
 
@@ -71,21 +71,22 @@ namespace net {
 
 namespace {
 
-base::Value CertVerifierParams(const CertVerifier::RequestParams& params) {
+base::Value::Dict CertVerifierParams(
+    const CertVerifier::RequestParams& params) {
   base::Value::Dict dict;
   dict.Set("certificates",
            NetLogX509CertificateList(params.certificate().get()));
   if (!params.ocsp_response().empty()) {
     dict.Set("ocsp_response",
-             PEMEncode(params.ocsp_response(), "NETLOG OCSP RESPONSE"));
+             bssl::PEMEncode(params.ocsp_response(), "NETLOG OCSP RESPONSE"));
   }
   if (!params.sct_list().empty()) {
-    dict.Set("sct_list", PEMEncode(params.sct_list(), "NETLOG SCT LIST"));
+    dict.Set("sct_list", bssl::PEMEncode(params.sct_list(), "NETLOG SCT LIST"));
   }
   dict.Set("host", NetLogStringValue(params.hostname()));
   dict.Set("verifier_flags", params.flags());
 
-  return base::Value(std::move(dict));
+  return dict;
 }
 
 }  // namespace
@@ -342,10 +343,14 @@ CoalescingCertVerifier::Request::~Request() {
     net_log_.AddEvent(NetLogEventType::CANCELLED);
     net_log_.EndEvent(NetLogEventType::CERT_VERIFIER_REQUEST);
 
+    // Need to null out `job_` before aborting the request to avoid a dangling
+    // pointer warning, as aborting the request may delete `job_`.
+    auto* job = job_.get();
+    job_ = nullptr;
+
     // If the Request is deleted before the Job, then detach from the Job.
     // Note: This may cause |job_| to be deleted.
-    job_->AbortRequest(this);
-    job_ = nullptr;
+    job->AbortRequest(this);
   }
 }
 
@@ -358,6 +363,11 @@ void CoalescingCertVerifier::Request::Complete(int result) {
   // similarly, break the association here so that when the Request is
   // deleted, it does not try to abort the (now-completed) Job.
   job_ = nullptr;
+
+  // Also need to break the association with `verify_result_`, so that
+  // dangling pointer checks the result and the Request be destroyed
+  // in any order.
+  verify_result_ = nullptr;
 
   net_log_.EndEvent(NetLogEventType::CERT_VERIFIER_REQUEST);
 
@@ -380,9 +390,13 @@ void CoalescingCertVerifier::Request::OnJobAbort() {
 
 CoalescingCertVerifier::CoalescingCertVerifier(
     std::unique_ptr<CertVerifier> verifier)
-    : verifier_(std::move(verifier)) {}
+    : verifier_(std::move(verifier)) {
+  verifier_->AddObserver(this);
+}
 
-CoalescingCertVerifier::~CoalescingCertVerifier() = default;
+CoalescingCertVerifier::~CoalescingCertVerifier() {
+  verifier_->RemoveObserver(this);
+}
 
 int CoalescingCertVerifier::Verify(
     const RequestParams& params,
@@ -424,13 +438,17 @@ int CoalescingCertVerifier::Verify(
 }
 
 void CoalescingCertVerifier::SetConfig(const CertVerifier::Config& config) {
-  ++config_id_;
   verifier_->SetConfig(config);
 
-  for (auto& job : joinable_jobs_) {
-    inflight_jobs_.emplace_back(std::move(job.second));
-  }
-  joinable_jobs_.clear();
+  IncrementGenerationAndMakeCurrentJobsUnjoinable();
+}
+
+void CoalescingCertVerifier::AddObserver(CertVerifier::Observer* observer) {
+  verifier_->AddObserver(observer);
+}
+
+void CoalescingCertVerifier::RemoveObserver(CertVerifier::Observer* observer) {
+  verifier_->RemoveObserver(observer);
 }
 
 CoalescingCertVerifier::Job* CoalescingCertVerifier::FindJob(
@@ -452,11 +470,22 @@ void CoalescingCertVerifier::RemoveJob(Job* job) {
   }
 
   // Otherwise, it MUST have been a job from a previous generation.
-  auto inflight_it = std::find_if(inflight_jobs_.begin(), inflight_jobs_.end(),
-                                  base::MatchesUniquePtr(job));
-  DCHECK(inflight_it != inflight_jobs_.end());
+  auto inflight_it =
+      base::ranges::find_if(inflight_jobs_, base::MatchesUniquePtr(job));
+  CHECK(inflight_it != inflight_jobs_.end(), base::NotFatalUntil::M130);
   inflight_jobs_.erase(inflight_it);
   return;
+}
+
+void CoalescingCertVerifier::IncrementGenerationAndMakeCurrentJobsUnjoinable() {
+  for (auto& job : joinable_jobs_) {
+    inflight_jobs_.emplace_back(std::move(job.second));
+  }
+  joinable_jobs_.clear();
+}
+
+void CoalescingCertVerifier::OnCertVerifierChanged() {
+  IncrementGenerationAndMakeCurrentJobsUnjoinable();
 }
 
 }  // namespace net

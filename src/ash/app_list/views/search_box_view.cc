@@ -1,49 +1,78 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "ash/app_list/views/search_box_view.h"
 
-#include <algorithm>
+#include <map>
 #include <memory>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include "ash/app_list/app_list_metrics.h"
+#include "ash/app_list/app_list_model_provider.h"
 #include "ash/app_list/app_list_util.h"
 #include "ash/app_list/app_list_view_delegate.h"
 #include "ash/app_list/model/search/search_box_model.h"
 #include "ash/app_list/model/search/search_model.h"
-#include "ash/app_list/resources/grit/app_list_resources.h"
-#include "ash/app_list/views/app_list_view.h"
-#include "ash/app_list/views/contents_view.h"
 #include "ash/app_list/views/result_selection_controller.h"
+#include "ash/app_list/views/search_box_view_delegate.h"
 #include "ash/app_list/views/search_result_base_view.h"
+#include "ash/ash_element_identifiers.h"
+#include "ash/assistant/ui/main_stage/launcher_search_iph_view.h"
+#include "ash/capture_mode/capture_mode_constants.h"
+#include "ash/capture_mode/capture_mode_controller.h"
 #include "ash/constants/ash_features.h"
 #include "ash/keyboard/ui/keyboard_ui_controller.h"
-#include "ash/public/cpp/app_list/app_list_color_provider.h"
 #include "ash/public/cpp/app_list/app_list_config.h"
 #include "ash/public/cpp/app_list/app_list_features.h"
+#include "ash/public/cpp/app_list/app_list_types.h"
 #include "ash/public/cpp/app_list/vector_icons/vector_icons.h"
+#include "ash/public/cpp/app_menu_constants.h"
+#include "ash/public/cpp/capture_mode/capture_mode_api.h"
 #include "ash/public/cpp/wallpaper/wallpaper_types.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/search_box/search_box_constants.h"
-#include "ash/search_box/search_box_view_delegate.h"
 #include "ash/strings/grit/ash_strings.h"
+#include "ash/style/ash_color_id.h"
 #include "ash/style/ash_color_provider.h"
+#include "ash/style/typography.h"
+#include "ash/user_education/user_education_class_properties.h"
+#include "ash/user_education/user_education_util.h"
+#include "ash/user_education/welcome_tour/welcome_tour_metrics.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/i18n/case_conversion.h"
+#include "base/i18n/rtl.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
 #include "base/notreached.h"
 #include "base/rand_util.h"
+#include "base/ranges/algorithm.h"
+#include "base/strings/string_util.h"
+#include "base/types/cxx23_to_underlying.h"
+#include "chromeos/ash/services/assistant/public/cpp/assistant_browser_delegate.h"
+#include "chromeos/ash/services/assistant/public/cpp/assistant_enums.h"
 #include "chromeos/constants/chromeos_features.h"
 #include "chromeos/ui/vector_icons/vector_icons.h"
 #include "components/vector_icons/vector_icons.h"
+#include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/ime/composition_text.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/mojom/menu_source_type.mojom.h"
 #include "ui/base/resource/resource_bundle.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
+#include "ui/color/color_id.h"
+#include "ui/color/color_provider_manager.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/paint_recorder.h"
 #include "ui/events/event.h"
@@ -52,10 +81,20 @@
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/rounded_corners_f.h"
 #include "ui/gfx/paint_vector_icon.h"
+#include "ui/menus/simple_menu_model.h"
+#include "ui/views/accessibility/view_accessibility.h"
+#include "ui/views/animation/ink_drop.h"
+#include "ui/views/animation/ink_drop_host.h"
+#include "ui/views/animation/ink_drop_ripple.h"
+#include "ui/views/background.h"
 #include "ui/views/border.h"
 #include "ui/views/context_menu_controller.h"
 #include "ui/views/controls/button/image_button.h"
+#include "ui/views/controls/highlight_path_generator.h"
 #include "ui/views/controls/image_view.h"
+#include "ui/views/controls/menu/menu_item_view.h"
+#include "ui/views/controls/menu/menu_model_adapter.h"
+#include "ui/views/controls/menu/submenu_view.h"
 #include "ui/views/controls/textfield/textfield.h"
 #include "ui/views/highlight_border.h"
 #include "ui/views/layout/box_layout_view.h"
@@ -81,16 +120,13 @@ constexpr int kMinimumLengthToAutocomplete = 2;
 // Border insets for SearchBoxView in bubble launcher.
 constexpr auto kBorderInsetsForAppListBubble = gfx::Insets::TLBR(4, 4, 4, 0);
 
-// Margins for the search box text field in bubble launcher.
-constexpr auto kTextFieldMarginsForAppListBubble =
-    gfx::Insets::TLBR(8, 0, 0, 0);
-
 // The default PlaceholderTextTypes used for productivity launcher. Randomly
 // selected when placeholder text would be shown.
-constexpr SearchBoxView::PlaceholderTextType kDefaultPlaceholders[3] = {
+constexpr SearchBoxView::PlaceholderTextType kDefaultPlaceholders[] = {
     SearchBoxView::PlaceholderTextType::kShortcuts,
     SearchBoxView::PlaceholderTextType::kTabs,
     SearchBoxView::PlaceholderTextType::kSettings,
+    SearchBoxView::PlaceholderTextType::kImages,
 };
 
 // PlaceholderTextTypes used for productivity launcher for cloud gaming devices.
@@ -102,17 +138,45 @@ constexpr SearchBoxView::PlaceholderTextType kGamingPlaceholders[4] = {
     SearchBoxView::PlaceholderTextType::kGames,
 };
 
+constexpr gfx::RoundedCornersF kAssistantButtonBackgroundRadiiLTR = {
+    18,
+    18,
+    4,
+    18,
+};
+
+constexpr gfx::RoundedCornersF kAssistantButtonBackgroundRadiiRTL = {
+    18,
+    18,
+    18,
+    4,
+};
+
+// List of all categories with their corresponding string id that would be shown
+// in the menu.
+constexpr auto kCategories =
+    base::MakeFixedFlatMap<AppListSearchControlCategory, int>(
+        {{AppListSearchControlCategory::kApps,
+          IDS_ASH_SEARCH_RESULT_CATEGORY_LABEL_APPS},
+         {AppListSearchControlCategory::kAppShortcuts,
+          IDS_ASH_SEARCH_RESULT_CATEGORY_LABEL_APP_SHORTCUTS},
+         {AppListSearchControlCategory::kFiles,
+          IDS_ASH_SEARCH_RESULT_CATEGORY_LABEL_FILES},
+         {AppListSearchControlCategory::kGames,
+          IDS_ASH_SEARCH_RESULT_CATEGORY_LABEL_GAMES},
+         {AppListSearchControlCategory::kHelp,
+          IDS_ASH_SEARCH_RESULT_CATEGORY_LABEL_HELP},
+         {AppListSearchControlCategory::kImages,
+          IDS_ASH_SEARCH_RESULT_CATEGORY_LABEL_IMAGES},
+         {AppListSearchControlCategory::kPlayStore,
+          IDS_ASH_SEARCH_RESULT_CATEGORY_LABEL_PLAY_STORE},
+         {AppListSearchControlCategory::kWeb,
+          IDS_ASH_SEARCH_RESULT_CATEGORY_LABEL_WEB}});
+
 bool IsTrimmedQueryEmpty(const std::u16string& query) {
   std::u16string trimmed_query;
   base::TrimWhitespace(query, base::TrimPositions::TRIM_ALL, &trimmed_query);
   return trimmed_query.empty();
-}
-
-SearchBoxView::PlaceholderTextType SelectPlaceholderText() {
-  if (chromeos::features::IsCloudGamingDeviceEnabled()) {
-    return kGamingPlaceholders[rand() % std::size(kGamingPlaceholders)];
-  }
-  return kDefaultPlaceholders[rand() % std::size(kDefaultPlaceholders)];
 }
 
 std::u16string GetCategoryName(SearchResult* search_result) {
@@ -149,90 +213,411 @@ std::u16string GetCategoryName(SearchResult* search_result) {
   }
 }
 
+std::u16string GetCategoryMenuItemTooltip(
+    AppListSearchControlCategory category) {
+  int tooltip_id = -1;
+  switch (category) {
+    case AppListSearchControlCategory::kApps:
+      tooltip_id = IDS_ASH_SEARCH_CATEGORY_FILTER_MENU_APPS_TOOLTIP;
+      break;
+    case AppListSearchControlCategory::kAppShortcuts:
+      tooltip_id = IDS_ASH_SEARCH_CATEGORY_FILTER_MENU_APP_SHORTCUTS_TOOLTIP;
+      break;
+    case AppListSearchControlCategory::kFiles:
+      tooltip_id = IDS_ASH_SEARCH_CATEGORY_FILTER_MENU_FILES_TOOLTIP;
+      break;
+    case AppListSearchControlCategory::kGames:
+      tooltip_id = IDS_ASH_SEARCH_CATEGORY_FILTER_MENU_GAMES_TOOLTIP;
+      break;
+    case AppListSearchControlCategory::kHelp:
+      tooltip_id = IDS_ASH_SEARCH_CATEGORY_FILTER_MENU_HELP_TOOLTIP;
+      break;
+    case AppListSearchControlCategory::kImages:
+      tooltip_id = IDS_ASH_SEARCH_CATEGORY_FILTER_MENU_IMAGES_TOOLTIP;
+      break;
+    case AppListSearchControlCategory::kPlayStore:
+      tooltip_id = IDS_ASH_SEARCH_CATEGORY_FILTER_MENU_PLAYSTORE_TOOLTIP;
+      break;
+    case AppListSearchControlCategory::kWeb:
+      tooltip_id = IDS_ASH_SEARCH_CATEGORY_FILTER_MENU_WEBSITES_TOOLTIP;
+      break;
+    case AppListSearchControlCategory::kCannotToggle:
+      NOTREACHED();
+  }
+  return l10n_util::GetStringUTF16(tooltip_id);
+}
+
+// Returns the check box icon that is shown on the category filter menu item.
+ui::ImageModel GetCheckboxImage(bool checked) {
+  return ui::ImageModel::FromVectorIcon(
+      checked ? views::kCheckboxActiveIcon : views::kCheckboxNormalIcon,
+      checked ? cros_tokens::kCrosSysPrimary : cros_tokens::kCrosSysSecondary,
+      kAppContextMenuIconSize);
+}
+
 bool IsSubstringCaseInsensitive(std::u16string haystack_expr,
                                 std::u16string needle_expr) {
   // Convert complete given String to lower case
-  std::transform(haystack_expr.begin(), haystack_expr.end(),
-                 haystack_expr.begin(), ::tolower);
+  std::u16string haystack = base::i18n::ToLower(haystack_expr);
   // Convert complete given Sub String to lower case
-  std::transform(needle_expr.begin(), needle_expr.end(), needle_expr.begin(),
-                 ::tolower);
-  // Find sub string in given string
-  return haystack_expr.find(needle_expr) != std::string::npos;
+  std::u16string needle = base::i18n::ToLower(needle_expr);
+
+  // Find substring in the given string
+  return base::Contains(haystack, needle);
 }
 
 void RecordAutocompleteMatchMetric(SearchBoxTextMatch match_type) {
   base::UmaHistogramEnumeration("Apps.AppListSearchAutocomplete", match_type);
 }
 
+constexpr ui::ColorId GetFocusColorId() {
+  return cros_tokens::kCrosSysFocusRing;
+}
+
+class RoundRectPathGenerator : public views::HighlightPathGenerator {
+ public:
+  explicit RoundRectPathGenerator(const gfx::RoundedCornersF& radii)
+      : radii_(radii) {}
+  RoundRectPathGenerator(const RoundRectPathGenerator&) = delete;
+  RoundRectPathGenerator& operator=(const RoundRectPathGenerator&) = delete;
+  ~RoundRectPathGenerator() override = default;
+
+  // views::HighlightPathGenerator:
+  std::optional<gfx::RRectF> GetRoundRect(const gfx::RectF& rect) override {
+    return gfx::RRectF(rect, radii_);
+  }
+
+ private:
+  const gfx::RoundedCornersF radii_;
+};
+
 }  // namespace
 
-class SearchBoxView::FocusRingLayer : public ui::Layer, ui::LayerDelegate {
+class CheckBoxMenuItemView : public views::MenuItemView {
+  METADATA_HEADER(CheckBoxMenuItemView, views::MenuItemView)
+
  public:
-  FocusRingLayer() : Layer(ui::LAYER_TEXTURED) {
-    SetName("search_box/FocusRing");
-    SetFillsBoundsOpaquely(false);
-    set_delegate(this);
+  CheckBoxMenuItemView(views::MenuItemView* parent,
+                       int command,
+                       AppListViewDelegate* view_delegate)
+      : views::MenuItemView(parent,
+                            command,
+                            views::MenuItemView::Type::kNormal),
+        view_delegate_(view_delegate) {
+    // Set the role of the toggleable menu items to checkbox.
+    GetViewAccessibility().SetRole(ax::mojom::Role::kMenuItemCheckBox);
+    // The title of the menu is not focusable but included in the position
+    // counting. Explicitly set the hierarchical level of the toggleable menu
+    // items to exclude the title.
+    GetViewAccessibility().SetHierarchicalLevel(1);
+  }
+
+  CheckBoxMenuItemView(const CheckBoxMenuItemView&) = delete;
+  CheckBoxMenuItemView& operator=(const CheckBoxMenuItemView&) = delete;
+
+  ~CheckBoxMenuItemView() override = default;
+
+  void UpdateAccessibleCheckedState() override {
+    bool category_enabled = view_delegate_->IsCategoryEnabled(
+        static_cast<AppListSearchControlCategory>(GetCommand()));
+    GetViewAccessibility().SetCheckedState(
+        category_enabled ? ax::mojom::CheckedState::kTrue
+                         : ax::mojom::CheckedState::kFalse);
+  }
+
+ private:
+  raw_ptr<AppListViewDelegate> view_delegate_ = nullptr;
+};
+
+BEGIN_METADATA(CheckBoxMenuItemView)
+END_METADATA
+
+class FilterMenuAdapter : public views::MenuModelAdapter {
+ public:
+  FilterMenuAdapter(ui::SimpleMenuModel* menu_model,
+                    base::RepeatingClosure on_menu_closed,
+                    AppListViewDelegate* view_delegate)
+      : views::MenuModelAdapter(menu_model, std::move(on_menu_closed)),
+        view_delegate_(view_delegate),
+        model_(menu_model) {}
+
+  FilterMenuAdapter(const FilterMenuAdapter&) = delete;
+  FilterMenuAdapter& operator=(const FilterMenuAdapter&) = delete;
+
+  ~FilterMenuAdapter() override = default;
+
+  // Override AppendMenuItem to use customized MenuItemView.
+  views::MenuItemView* AppendMenuItem(views::MenuItemView* menu,
+                                      ui::MenuModel* model,
+                                      size_t model_index) override {
+    if (!menu->HasSubmenu()) {
+      menu->CreateSubmenu();
+    }
+
+    if (model->GetTypeAt(model_index) == ui::MenuModel::TYPE_TITLE) {
+      return menu->AppendTitle(model->GetLabelAt(model_index));
+    }
+
+    auto menu_item_view = std::make_unique<CheckBoxMenuItemView>(
+        menu, model->GetCommandIdAt(model_index), view_delegate_);
+    menu_item_view->SetTitle(model->GetLabelAt(model_index));
+    menu_item_view->SetIcon(model->GetIconAt(model_index));
+    menu_item_view->GetViewAccessibility().SetName(
+        model->GetAccessibleNameAt(model_index));
+    menu_item_view->UpdateAccessibleCheckedState();
+
+    const ui::ElementIdentifier element_id =
+        model->GetElementIdentifierAt(model_index);
+    if (element_id) {
+      menu_item_view->SetProperty(views::kElementIdentifierKey, element_id);
+    }
+
+    return menu->GetSubmenu()->AddChildView(std::move(menu_item_view));
+  }
+
+  // views::MenuDelegate
+  bool ShouldExecuteCommandWithoutClosingMenu(int id,
+                                              const ui::Event& e) override {
+    // Keep the menu open if the user toggles the checkboxes in the menu.
+    return true;
+  }
+  std::u16string GetTooltipText(int id,
+                                const gfx::Point& screen_loc) const override {
+    if (id == ui::MenuModel::kTitleId) {
+      return std::u16string();
+    }
+    return GetCategoryMenuItemTooltip(
+        static_cast<AppListSearchControlCategory>(id));
+  }
+  void ExecuteCommand(int id) override { ExecuteCommand(id, 0); }
+  void ExecuteCommand(int id, int mouse_event_flags) override {
+    CHECK(id >= static_cast<int>(AppListSearchControlCategory::kMinValue) &&
+          id <= static_cast<int>(AppListSearchControlCategory::kMaxValue));
+    const auto category = static_cast<AppListSearchControlCategory>(id);
+    switch (category) {
+      case AppListSearchControlCategory::kApps:
+      case AppListSearchControlCategory::kAppShortcuts:
+      case AppListSearchControlCategory::kFiles:
+      case AppListSearchControlCategory::kGames:
+      case AppListSearchControlCategory::kHelp:
+      case AppListSearchControlCategory::kImages:
+      case AppListSearchControlCategory::kPlayStore:
+      case AppListSearchControlCategory::kWeb:
+        view_delegate_->SetCategoryEnabled(
+            category, !view_delegate_->IsCategoryEnabled(category));
+        break;
+      case AppListSearchControlCategory::kCannotToggle:
+        // There shouldn't be a "Cannot toggle" option.
+        NOTREACHED();
+    }
+
+    // Toggle the checkbox icon.
+    GetFilterMenuItemByCategory(category)->SetIcon(
+        GetCheckboxImage(view_delegate_->IsCategoryEnabled(category)));
+    GetFilterMenuItemByCategory(category)->UpdateAccessibleCheckedState();
+  }
+
+  void ShowFilterMenu(SearchBoxView* search_box) {
+    int run_types = views::MenuRunner::USE_ASH_SYS_UI_LAYOUT |
+                    views::MenuRunner::FIXED_ANCHOR;
+    std::unique_ptr<views::MenuItemView> filter_menu_root = CreateMenu();
+    filter_menu_root_ = filter_menu_root.get();
+    filter_menu_runner_ = std::make_unique<views::MenuRunner>(
+        std::move(filter_menu_root), run_types);
+    filter_menu_runner_->RunMenuAt(
+        search_box->GetWidget(), nullptr /*button_controller*/,
+        search_box->filter_button()->GetBoundsInScreen(),
+        views::MenuAnchorPosition::kBubbleBottomRight,
+        ui::mojom::MenuSourceType::kNone);
+  }
+
+  // Returns true if the category filter menu is opened.
+  bool IsFilterMenuOpen() const {
+    return filter_menu_runner_ && filter_menu_runner_->IsRunning();
+  }
+
+  // Returns the menu item view in the category filter menu that indicates the
+  // `category` button. This should only be called when the menu is opened.
+  views::MenuItemView* GetFilterMenuItemByCategory(
+      AppListSearchControlCategory category) {
+    std::optional<size_t> index =
+        model_->GetIndexOfCommandId(base::to_underlying(category));
+    CHECK(index.has_value());
+    return GetFilterMenuItemByIdx(index.value());
+  }
+
+ private:
+  // Returns the menu item view at `index` in the category filter menu. This
+  // should only be called when the menu is opened.
+  views::MenuItemView* GetFilterMenuItemByIdx(int index) {
+    return filter_menu_root_->GetSubmenu()->GetMenuItemAt(index);
+  }
+
+  const raw_ptr<AppListViewDelegate> view_delegate_;
+
+  std::unique_ptr<views::MenuRunner> filter_menu_runner_;
+  raw_ptr<views::MenuItemView> filter_menu_root_;
+  raw_ptr<ui::SimpleMenuModel> model_;
+};
+
+class SearchBoxView::FocusRingLayer : public ui::LayerOwner, ui::LayerDelegate {
+ public:
+  FocusRingLayer()
+      : LayerOwner(std::make_unique<ui::Layer>(ui::LAYER_TEXTURED)) {
+    layer()->SetName("search_box/FocusRing");
+    layer()->SetFillsBoundsOpaquely(false);
+    layer()->set_delegate(this);
   }
   FocusRingLayer(const FocusRingLayer&) = delete;
   FocusRingLayer& operator=(const FocusRingLayer&) = delete;
-  ~FocusRingLayer() override {}
+  ~FocusRingLayer() override = default;
+
+  void SetColor(SkColor color) {
+    if (color == color_) {
+      return;
+    }
+    color_ = color;
+    layer()->SchedulePaint(gfx::Rect(layer()->size()));
+  }
 
  private:
   // views::LayerDelegate:
   void OnPaintLayer(const ui::PaintContext& context) override {
-    ui::PaintRecorder recorder(context, bounds().size());
+    ui::PaintRecorder recorder(context, layer()->size());
     gfx::Canvas* canvas = recorder.canvas();
 
     // When using strokes to draw a rect, the bounds set is the center of the
     // rect, which means that setting draw bounds to `bounds()` will leave half
     // of the border outside the layer that may not be painted. Shrink the draw
     // bounds by half of the width to solve this problem.
-    gfx::Rect draw_bounds(bounds().size());
+    gfx::Rect draw_bounds(layer()->size());
     draw_bounds.Inset(kSearchBoxFocusRingWidth / 2);
 
     cc::PaintFlags flags;
     flags.setAntiAlias(true);
-    flags.setColor(AppListColorProvider::Get()->GetFocusRingColor());
+    flags.setColor(color_);
     flags.setStyle(cc::PaintFlags::Style::kStroke_Style);
     flags.setStrokeWidth(kSearchBoxFocusRingWidth);
     canvas->DrawRoundRect(draw_bounds, kSearchBoxFocusRingCornerRadius, flags);
   }
   void OnDeviceScaleFactorChanged(float old_device_scale_factor,
                                   float new_device_scale_factor) override {
-    SchedulePaint(gfx::Rect(size()));
+    layer()->SchedulePaint(gfx::Rect(layer()->size()));
   }
+
+  SkColor color_ = gfx::kPlaceholderColor;
 };
 
 SearchBoxView::SearchBoxView(SearchBoxViewDelegate* delegate,
                              AppListViewDelegate* view_delegate,
-                             AppListView* app_list_view)
-    : SearchBoxViewBase(delegate),
+                             bool is_app_list_bubble)
+    : delegate_(delegate),
       view_delegate_(view_delegate),
-      app_list_view_(app_list_view),
-      is_app_list_bubble_(!app_list_view_),
-      is_tablet_mode_(view_delegate_->IsInTabletMode()) {
+      is_app_list_bubble_(is_app_list_bubble) {
   AppListModelProvider* const model_provider = AppListModelProvider::Get();
   model_provider->AddObserver(this);
-  search_box_model_observer_.Observe(
-      model_provider->search_model()->search_box());
+  SearchBoxModel* const search_box_model =
+      model_provider->search_model()->search_box();
+  search_box_model_observer_.Observe(search_box_model);
+
+  // The assistant view delegate could be nullptr in test.
+  if (view_delegate_->GetAssistantViewDelegate()) {
+    assistant_view_delegate_observer_.Observe(
+        view_delegate_->GetAssistantViewDelegate());
+  }
+
+  if (features::IsUserEducationEnabled()) {
+    // NOTE: Set `kHelpBubbleContextKey` before `views::kElementIdentifierKey`
+    // in case registration causes a help bubble to be created synchronously.
+    SetProperty(kHelpBubbleContextKey, HelpBubbleContext::kAsh);
+  }
+  SetProperty(views::kElementIdentifierKey, kSearchBoxViewElementId);
+
+  auto font_list = TypographyProvider::Get()->ResolveTypographyToken(
+      TypographyToken::kCrosBody1);
+  SetPreferredStyleForSearchboxText(font_list, cros_tokens::kCrosSysOnSurface);
+  SetPreferredStyleForAutocompleteText(font_list,
+                                       cros_tokens::kCrosSysOnSurfaceVariant);
+
+  if (features::IsLauncherSearchControlEnabled()) {
+    views::ImageButton* filter_button = CreateFilterButton(base::BindRepeating(
+        &SearchBoxView::ShowFilterMenu, weak_ptr_factory_.GetWeakPtr()));
+    filter_button->SetFlipCanvasOnPaintForRTLUI(false);
+    std::u16string filter_button_label(
+        l10n_util::GetStringUTF16(IDS_ASH_SEARCH_BOX_FILTER_BUTTON_TOOLTIP));
+    filter_button->GetViewAccessibility().SetName(
+        l10n_util::GetStringUTF16(IDS_ASH_SEARCH_CATEGORY_FILTER_MENU_TITLE));
+    filter_button->SetTooltipText(filter_button_label);
+  }
+
+  views::ImageButton* close_button = CreateCloseButton(base::BindRepeating(
+      &SearchBoxView::CloseButtonPressed, base::Unretained(this)));
+  std::u16string close_button_label(
+      l10n_util::GetStringUTF16(IDS_APP_LIST_CLEAR_SEARCHBOX));
+  close_button->GetViewAccessibility().SetName(close_button_label);
+  close_button->SetTooltipText(close_button_label);
+
+  CreateEndButtonContainer();
+
+  views::ImageButton* sunfish_button = CreateSunfishButton(base::BindRepeating(
+      &SearchBoxView::SunfishButtonPressed, base::Unretained(this)));
+  sunfish_button->SetFlipCanvasOnPaintForRTLUI(false);
+  // TODO(http://b/361850292): Upload label for translation.
+  std::u16string sunfish_button_label(u"Select to search");
+  sunfish_button->GetViewAccessibility().SetName(sunfish_button_label);
+  sunfish_button->SetTooltipText(sunfish_button_label);
+  SetShowSunfishButton(search_box_model->show_sunfish_button());
+
+  views::ImageButton* assistant_button =
+      CreateAssistantButton(base::BindRepeating(
+          &SearchBoxView::AssistantButtonPressed, base::Unretained(this)));
+  assistant_button->SetFlipCanvasOnPaintForRTLUI(false);
+  std::u16string assistant_button_label(
+      l10n_util::GetStringUTF16(IDS_APP_LIST_START_ASSISTANT));
+  assistant_button->GetViewAccessibility().SetName(assistant_button_label);
+  assistant_button->SetTooltipText(assistant_button_label);
+  SetShowAssistantButton(search_box_model->show_assistant_button());
+
+  views::ImageButton* assistant_new_entry_point_button =
+      CreateAssistantNewEntryPointButton(base::BindRepeating(
+          &SearchBoxView::AssistantNewEntryPointButtonPressed,
+          base::Unretained(this)));
+  assistant_new_entry_point_button->SetFlipCanvasOnPaintForRTLUI(false);
+  // TODO(crbug.com/380089265): update tooltip text and set a11y name.
+  assistant_new_entry_point_button->SetTooltipText(
+      u"Assistant New Entry Point");
+  SetShowAssistantNewEntryPointButton(
+      search_box_model->show_assistant_new_entry_point_button());
+
+  GetViewAccessibility().SetRole(ax::mojom::Role::kTextField);
+  UpdateAccessibleValue();
 }
 
 SearchBoxView::~SearchBoxView() {
   AppListModelProvider::Get()->RemoveObserver(this);
 }
 
-void SearchBoxView::Init(const InitParams& params) {
+void SearchBoxView::InitializeForBubbleLauncher() {
+  SearchBoxViewBase::InitParams params;
+  params.show_close_button_when_active = false;
+  params.create_background = false;
+  params.animate_changing_search_icon = false;
+  params.increase_child_view_padding = true;
+
   SearchBoxViewBase::Init(params);
+
   UpdatePlaceholderTextAndAccessibleName();
-  current_query_ = search_box()->GetText();
-  if (is_app_list_bubble_) {
-    // Add margins to the text field because the BoxLayout vertical centering
-    // does not properly align the text baseline with the icons.
-    search_box()->SetProperty(views::kMarginsKey,
-                              kTextFieldMarginsForAppListBubble);
-  }
-  ShowAssistantChanged();
+}
+
+void SearchBoxView::InitializeForFullscreenLauncher() {
+  SearchBoxViewBase::InitParams params;
+  params.show_close_button_when_active = true;
+  params.create_background = true;
+  params.animate_changing_search_icon = true;
+
+  SearchBoxViewBase::Init(params);
+
+  UpdatePlaceholderTextAndAccessibleName();
 }
 
 void SearchBoxView::SetResultSelectionController(
@@ -241,64 +626,24 @@ void SearchBoxView::SetResultSelectionController(
   result_selection_controller_ = controller;
 }
 
-void SearchBoxView::OnTabletModeChanged(bool started) {
-  // Reset timer metrics when tablet mode changes.
-  if (is_tablet_mode_ != started)
-    user_initiated_model_update_time_ = base::TimeTicks();
-
-  is_tablet_mode_ = started;
-
-  UpdateKeyboardVisibility();
-  // Search box accessible name may change depending on tablet mode state.
-  UpdatePlaceholderTextAndAccessibleName();
-  UpdateSearchBoxBorder();
-  UpdateBackgroundColor(GetBackgroundColorForState(current_app_list_state_));
-}
-
 void SearchBoxView::ResetForShow() {
-  // Avoid clearing an already inactive SearchBox in tablet mode because this
-  // causes suggested chips to flash (http://crbug.com/979594).
-  if (!is_search_box_active() && is_tablet_mode_)
+  UpdateIphViewVisibility(false);
+  if (!is_search_box_active())
     return;
-
   ClearSearchAndDeactivateSearchBox();
-  if (contents_view_) {
-    SetSearchBoxBackgroundCornerRadius(GetSearchBoxBorderCornerRadiusForState(
-        contents_view_->GetActiveState()));
-  }
 }
 
-void SearchBoxView::UpdateSearchTextfieldAccessibleNodeData(
-    ui::AXNodeData* node_data) {
+void SearchBoxView::UpdateSearchTextfieldAccessibleActiveDescendantId() {
+  auto* const textfield = search_box();
+  if (!textfield) {
+    return;
+  }
   if (a11y_active_descendant_) {
-    node_data->AddIntAttribute(ax::mojom::IntAttribute::kActivedescendantId,
-                               *a11y_active_descendant_);
+    textfield->GetViewAccessibility().SetActiveDescendant(
+        *a11y_active_descendant_);
+  } else {
+    textfield->GetViewAccessibility().ClearActiveDescendant();
   }
-}
-
-void SearchBoxView::ClearSearch() {
-  SearchBoxViewBase::ClearSearch();
-  current_query_.clear();
-  // Peeking/fullscreen launcher needs explicit state changes.
-  if (app_list_view_) {
-    app_list_view_->SetStateFromSearchBoxView(
-        /*search_box_is_empty=*/true, /*triggered_by_contents_change=*/false);
-  }
-  NotifyQueryChanged();
-  view_delegate_->StartSearch(u"");
-}
-
-void SearchBoxView::HandleSearchBoxEvent(ui::LocatedEvent* located_event) {
-  if (located_event->type() == ui::ET_MOUSEWHEEL) {
-    // TODO(crbug.com/1216082): Forward scroll events for bubble launcher.
-    if (app_list_view_ &&
-        !app_list_view_->HandleScroll(
-            located_event->location(),
-            located_event->AsMouseWheelEvent()->offset(), ui::ET_MOUSEWHEEL)) {
-      return;
-    }
-  }
-  SearchBoxViewBase::HandleSearchBoxEvent(located_event);
 }
 
 void SearchBoxView::OnActiveAppListModelsChanged(AppListModel* model,
@@ -308,7 +653,6 @@ void SearchBoxView::OnActiveAppListModelsChanged(AppListModel* model,
 
   ResetForShow();
   UpdateSearchIcon();
-  OnWallpaperColorsChanged();
   ShowAssistantChanged();
 }
 
@@ -331,72 +675,92 @@ void SearchBoxView::UpdateKeyboardVisibility() {
   keyboard_controller->HideKeyboardByUser();
 }
 
-void SearchBoxView::UpdateModel(bool initiated_by_user) {
-  auto new_query = search_box()->GetText();
-  SearchBoxModel* const search_box_model =
-      AppListModelProvider::Get()->search_model()->search_box();
-
+void SearchBoxView::HandleQueryChange(const std::u16string& query,
+                                      bool initiated_by_user) {
   // Randomly select a new placeholder text when we get an empty new query.
-  if (new_query.empty() && features::IsProductivityLauncherEnabled())
+  if (query.empty()) {
     UpdatePlaceholderTextAndAccessibleName();
+  }
+
+  MaybeSetAutocompleteGhostText(std::u16string(), std::u16string());
+
+  // Update autocomplete text highlight range to track user typed text.
+  if (ShouldProcessAutocomplete())
+    ResetHighlightRange();
 
   if (initiated_by_user) {
-    const std::u16string& previous_query = search_box_model->text();
     const base::TimeTicks current_time = base::TimeTicks::Now();
-    if (previous_query.empty() && !new_query.empty()) {
+    if (current_query_.empty() && !query.empty()) {
+      base::RecordAction(base::UserMetricsAction("AppList_SearchQueryStarted"));
       // Set 'user_initiated_model_update_time_' when initiating a new query.
       user_initiated_model_update_time_ = current_time;
-    } else if (!previous_query.empty() && new_query.empty()) {
+
+      if (features::IsWelcomeTourEnabled()) {
+        welcome_tour_metrics::RecordInteraction(
+            user_education_util::GetLastActiveUserPrefService(),
+            welcome_tour_metrics::Interaction::kSearch);
+      }
+    } else if (!current_query_.empty() && query.empty()) {
+      base::RecordAction(base::UserMetricsAction("AppList_LeaveSearch"));
       // Reset 'user_initiated_model_update_time_' when clearing the search_box.
       user_initiated_model_update_time_ = base::TimeTicks();
-    } else if (new_query != previous_query &&
+    } else if (query != current_query_ &&
                !user_initiated_model_update_time_.is_null()) {
-      if (is_tablet_mode_) {
-        UMA_HISTOGRAM_TIMES("Ash.SearchModelUpdateTime.TabletMode",
+      if (is_app_list_bubble_) {
+        UMA_HISTOGRAM_TIMES("Ash.SearchModelUpdateTime.ClamshellMode",
                             current_time - user_initiated_model_update_time_);
       } else {
-        UMA_HISTOGRAM_TIMES("Ash.SearchModelUpdateTime.ClamshellMode",
+        UMA_HISTOGRAM_TIMES("Ash.SearchModelUpdateTime.TabletMode",
                             current_time - user_initiated_model_update_time_);
       }
       user_initiated_model_update_time_ = current_time;
     }
   }
-  // Temporarily remove from observer to ignore notifications caused by us.
-  search_box_model_observer_.Reset();
 
-  search_box_model->Update(new_query, initiated_by_user);
-  search_box_model_observer_.Observe(search_box_model);
+  std::u16string trimmed_query;
+  base::TrimWhitespace(query, base::TrimPositions::TRIM_ALL, &trimmed_query);
+  const bool query_empty_changed =
+      trimmed_query.empty() != IsTrimmedQueryEmpty(current_query_);
 
-  // Ask the controller to start the search if the change was initiated by the
-  // user.
-  if (initiated_by_user)
-    view_delegate_->StartSearch(new_query);
+  current_query_ = query;
+
+  if (query_changed_callback_) {
+    query_changed_callback_.Run();
+  }
+
+  // Any query changes will dismiss the Launcher search IPH.
+  UpdateIphViewVisibility(false);
+
+  // The search box background depens on whether the query is empty, so schedule
+  // repaint when this changes.
+  if (query_empty_changed)
+    SchedulePaint();
+
+  delegate_->QueryChanged(trimmed_query, initiated_by_user);
+
+  // Don't reinitiate zero state search if the previous query was already empty
+  // (to avoid issuing zero state search twice in a row while clearing up search
+  // - see http://crbug.com/979594).
+  if (initiated_by_user || !trimmed_query.empty() || query_empty_changed)
+    view_delegate_->StartSearch(query);
 }
 
-void SearchBoxView::UpdateSearchIcon() {
-  const bool search_engine_is_google =
-      AppListModelProvider::Get()->search_model()->search_engine_is_google();
-  const gfx::VectorIcon& google_icon = is_search_box_active()
-                                           ? vector_icons::kGoogleColorIcon
-                                           : kGoogleBlackIcon;
-  const gfx::VectorIcon& icon =
-      search_engine_is_google ? google_icon : kSearchEngineNotGoogleIcon;
-  SetSearchIconImage(
-      gfx::CreateVectorIcon(icon, GetSearchBoxIconSize(),
-                            AppListColorProvider::Get()->GetSearchBoxIconColor(
-                                SkColorSetARGB(0xDE, 0x00, 0x00, 0x00))));
+void SearchBoxView::SetQueryChangedCallback(QueryChangedCallback callback) {
+  query_changed_callback_ = std::move(callback);
 }
 
 void SearchBoxView::UpdatePlaceholderTextStyle() {
+  SkColor primary_color =
+      GetColorProvider()->GetColor(cros_tokens::kCrosSysOnSurface);
+  SkColor secondary_color =
+      GetColorProvider()->GetColor(cros_tokens::kCrosSysOnSurfaceVariant);
   if (is_app_list_bubble_) {
     // The bubble launcher text is always side-aligned.
     search_box()->set_placeholder_text_draw_flags(
         base::i18n::IsRTL() ? gfx::Canvas::TEXT_ALIGN_RIGHT
                             : gfx::Canvas::TEXT_ALIGN_LEFT);
     // Bubble launcher uses standard text colors (light-on-dark by default).
-    search_box()->set_placeholder_text_color(
-        AshColorProvider::Get()->GetContentLayerColor(
-            AshColorProvider::ContentLayerType::kTextColorSecondary));
+    search_box()->set_placeholder_text_color(secondary_color);
     return;
   }
   // Fullscreen launcher centers the text when inactive.
@@ -407,11 +771,7 @@ void SearchBoxView::UpdatePlaceholderTextStyle() {
           : gfx::Canvas::TEXT_ALIGN_CENTER);
   // Fullscreen launcher uses custom colors (dark-on-light by default).
   search_box()->set_placeholder_text_color(
-      is_search_box_active()
-          ? AppListColorProvider::Get()->GetSearchBoxSecondaryTextColor(
-                kZeroQuerySearchboxColor)
-          : AppListColorProvider::Get()->GetSearchBoxTextColor(
-                kDefaultSearchboxPlaceholderTextColor));
+      is_search_box_active() ? secondary_color : primary_color);
 }
 
 void SearchBoxView::UpdateSearchBoxBorder() {
@@ -437,7 +797,8 @@ void SearchBoxView::OnPaintBackground(gfx::Canvas* canvas) {
       gfx::Point icon_origin;
       views::View::ConvertPointToTarget(search_icon(), this, &icon_origin);
       PaintFocusBar(canvas, gfx::Point(0, icon_origin.y()),
-                    /*height=*/GetSearchBoxIconSize());
+                    /*height=*/GetSearchBoxIconSize(),
+                    GetColorProvider()->GetColor(GetFocusColorId()));
     }
   }
 }
@@ -447,24 +808,121 @@ void SearchBoxView::OnPaintBorder(gfx::Canvas* canvas) {
     views::HighlightBorder::PaintBorderToCanvas(
         canvas, *this, GetContentsBounds(),
         gfx::RoundedCornersF(corner_radius_),
-        views::HighlightBorder::Type::kHighlightBorder1, false);
+        views::HighlightBorder::Type::kHighlightBorderNoShadow);
   }
-}
-
-const char* SearchBoxView::GetClassName() const {
-  return "SearchBoxView";
 }
 
 void SearchBoxView::OnThemeChanged() {
   SearchBoxViewBase::OnThemeChanged();
-  SetupAssistantButton();
-  SetupCloseButton();
-  OnWallpaperColorsChanged();
+
+  const SkColor button_icon_color =
+      GetColorProvider()->GetColor(kColorAshButtonIconColor);
+  close_button()->SetImageModel(
+      views::ImageButton::STATE_NORMAL,
+      ui::ImageModel::FromVectorIcon(views::kIcCloseIcon, button_icon_color,
+                                     GetSearchBoxIconSize()));
+  if (IsSunfishAllowedAndEnabled()) {
+    sunfish_button()->SetImageModel(
+        views::ImageButton::STATE_NORMAL,
+        ui::ImageModel::FromVectorIcon(
+            features::IsSunfishFeatureEnabled() ? kLensColorIcon : kScannerIcon,
+            button_icon_color, GetSearchBoxIconSize()));
+  }
+  assistant_button()->SetImageModel(
+      views::ImageButton::STATE_NORMAL,
+      ui::ImageModel::FromVectorIcon(
+          chromeos::kAssistantIcon, button_icon_color, GetSearchBoxIconSize()));
+
+  // Image model of `assistant_new_entry_point_button()` is set in
+  // `SearchBoxViewBase::SetShowAssistantNewEntryPointButton`.
+
+  if (filter_button()) {
+    filter_button()->SetImageModel(
+        views::ImageButton::STATE_NORMAL,
+        ui::ImageModel::FromVectorIcon(kFilterIcon, button_icon_color,
+                                       GetSearchBoxIconSize()));
+  }
+  auto* focus_ring = views::FocusRing::Get(assistant_button());
+  focus_ring->SetOutsetFocusRingDisabled(true);
+  focus_ring->SetColorId(GetFocusColorId());
+
+  if (focus_ring_layer_) {
+    focus_ring_layer_->SetColor(
+        GetColorProvider()->GetColor(GetFocusColorId()));
+  }
+
+  UpdateSearchIcon();
+  UpdatePlaceholderTextStyle();
+  UpdateTextColor();
+
+  UpdateBackgroundColor(GetBackgroundColorForState(current_app_list_state_));
+  SchedulePaint();
 }
 
 void SearchBoxView::OnBoundsChanged(const gfx::Rect& previous_bounds) {
   if (focus_ring_layer_)
-    focus_ring_layer_->SetBounds(bounds());
+    focus_ring_layer_->layer()->SetBounds(bounds());
+}
+
+void SearchBoxView::AddedToWidget() {
+  // Creating the search box focus ring relies on its parent layer which only
+  // exists after widget initialization.
+  if (!is_app_list_bubble_) {
+    focus_ring_layer_ = std::make_unique<FocusRingLayer>();
+    focus_ring_layer_->SetColor(
+        GetColorProvider()->GetColor(GetFocusColorId()));
+    layer()->parent()->Add(focus_ring_layer_->layer());
+    layer()->parent()->StackAtBottom(focus_ring_layer_->layer());
+    UpdateSearchBoxFocusPaint();
+  }
+}
+
+void SearchBoxView::RunLauncherSearchQuery(const std::u16string& query) {
+  UpdateQuery(query);
+}
+
+void SearchBoxView::OpenAssistantPage() {
+  UpdateIphViewVisibility(false);
+  view_delegate_->StartAssistant(
+      assistant::AssistantEntryPoint::kLauncherSearchIphChip);
+}
+
+void SearchBoxView::OnLauncherSearchChipPressed(const std::u16string& query) {
+  view_delegate_->EndAssistant(
+      assistant::AssistantExitPoint::kLauncherSearchIphChip);
+  UpdateQuery(query);
+}
+
+void SearchBoxView::ShowFilterMenu() {
+  filter_menu_adapter_ = nullptr;
+  ui::SimpleMenuModel* model = BuildFilterMenuModel();
+  filter_menu_adapter_ = std::make_unique<FilterMenuAdapter>(
+      model,
+      base::BindRepeating(&SearchBoxView::OnFilterMenuClosed,
+                          weak_ptr_factory_.GetWeakPtr()),
+      view_delegate_);
+
+  filter_menu_adapter_->ShowFilterMenu(this);
+  RecordSearchCategoryFilterMenuOpened();
+}
+
+void SearchBoxView::OnFilterMenuClosed() {
+  // Trigger the search while keeping the same query text.
+  if (HasSearch()) {
+    TriggerSearch();
+  }
+
+  RecordSearchCategoryEnableState(GetSearchCategoryEnableState());
+}
+
+views::MenuItemView* SearchBoxView::GetFilterMenuItemByCategory(
+    AppListSearchControlCategory category) {
+  return filter_menu_adapter_->GetFilterMenuItemByCategory(category);
+}
+
+bool SearchBoxView::IsFilterMenuOpen() {
+  CHECK(filter_button());
+  return filter_menu_adapter_->IsFilterMenuOpen();
 }
 
 // static
@@ -472,71 +930,12 @@ int SearchBoxView::GetFocusRingSpacing() {
   return kSearchBoxFocusRingWidth + kSearchBoxFocusRingPadding;
 }
 
-void SearchBoxView::MaybeCreateFocusRing() {
-  if (!is_app_list_bubble_) {
-    focus_ring_layer_ = std::make_unique<FocusRingLayer>();
-    layer()->parent()->Add(focus_ring_layer_.get());
-    layer()->parent()->StackAtBottom(focus_ring_layer_.get());
-  }
-}
-
-void SearchBoxView::SetupCloseButton() {
-  views::ImageButton* close = close_button();
-  close->SetImage(
-      views::ImageButton::STATE_NORMAL,
-      gfx::CreateVectorIcon(views::kIcCloseIcon, GetSearchBoxIconSize(),
-                            AppListColorProvider::Get()->GetSearchBoxIconColor(
-                                gfx::kGoogleGrey700)));
-  close->SetVisible(false);
-  std::u16string close_button_label(
-      l10n_util::GetStringUTF16(IDS_APP_LIST_CLEAR_SEARCHBOX));
-  close->SetAccessibleName(close_button_label);
-  close->SetTooltipText(close_button_label);
-}
-
-void SearchBoxView::SetupBackButton() {
-  views::ImageButton* back = back_button();
-  ui::ResourceBundle& rb = ui::ResourceBundle::GetSharedInstance();
-  back->SetImage(views::ImageButton::STATE_NORMAL,
-                 rb.GetImageSkiaNamed(IDR_APP_LIST_FOLDER_BACK_NORMAL));
-  back->SetImageHorizontalAlignment(views::ImageButton::ALIGN_CENTER);
-  back->SetImageVerticalAlignment(views::ImageButton::ALIGN_MIDDLE);
-  back->SetVisible(false);
-  std::u16string back_button_label(
-      l10n_util::GetStringUTF16(IDS_APP_LIST_BACK));
-  back->SetAccessibleName(back_button_label);
-  back->SetTooltipText(back_button_label);
-}
-
-void SearchBoxView::RecordSearchBoxActivationHistogram(
-    ui::EventType event_type) {
-  ActivationSource activation_type;
-  switch (event_type) {
-    case ui::ET_GESTURE_TAP:
-      activation_type = ActivationSource::kGestureTap;
-      break;
-    case ui::ET_MOUSE_PRESSED:
-      activation_type = ActivationSource::kMousePress;
-      break;
-    case ui::ET_KEY_PRESSED:
-      activation_type = ActivationSource::kKeyPress;
-      break;
-    default:
-      return;
-  }
-
-  base::UmaHistogramEnumeration("Apps.AppListSearchBoxActivated",
-                                activation_type);
-  if (is_tablet_mode_) {
-    base::UmaHistogramEnumeration("Apps.AppListSearchBoxActivated.TabletMode",
-                                  activation_type);
-  } else {
-    base::UmaHistogramEnumeration(
-        "Apps.AppListSearchBoxActivated.ClamshellMode", activation_type);
-  }
-}
-
 void SearchBoxView::OnSearchBoxActiveChanged(bool active) {
+  UpdateSearchIcon();
+
+  // Clear ghost text when toggling search box active state.
+  MaybeSetAutocompleteGhostText(std::u16string(), std::u16string());
+
   if (active) {
     result_selection_controller_->ResetSelection(nullptr,
                                                  true /* default_selection */);
@@ -544,15 +943,7 @@ void SearchBoxView::OnSearchBoxActiveChanged(bool active) {
     result_selection_controller_->ClearSelection();
   }
 
-  // Remove accessibility hint for classic launcher when search box is active
-  // because there are no apps to navigate to.
-  if (!features::IsProductivityLauncherEnabled()) {
-    if (active) {
-      search_box()->SetAccessibleName(std::u16string());
-    } else {
-      UpdatePlaceholderTextAndAccessibleName();
-    }
-  }
+  delegate_->ActiveChanged(this);
 }
 
 void SearchBoxView::UpdateSearchBoxFocusPaint() {
@@ -562,48 +953,66 @@ void SearchBoxView::UpdateSearchBoxFocusPaint() {
   // Paints the focus ring if the search box is focused.
   if (search_box()->HasFocus() && !is_search_box_active() &&
       view_delegate_->KeyboardTraversalEngaged()) {
-    focus_ring_layer_->SetVisible(true);
+    focus_ring_layer_->layer()->SetVisible(true);
   } else {
-    focus_ring_layer_->SetVisible(false);
+    focus_ring_layer_->layer()->SetVisible(false);
+  }
+}
+
+void SearchBoxView::OnAfterUserAction(views::Textfield* sender) {
+  if (highlight_range_.length() > 0 &&
+      !search_box()->GetSelectedRange().EqualsIgnoringDirection(
+          highlight_range_)) {
+    ResetHighlightRange();
+    if (search_box()->GetSelectedRange().length() == 0 &&
+        current_query_ != search_box()->GetText()) {
+      RunLauncherSearchQuery(search_box()->GetText());
+    }
   }
 }
 
 void SearchBoxView::OnKeyEvent(ui::KeyEvent* evt) {
-  // Handle keyboard navigation keys when close button is focused - move the
-  // focus to the search box text field, and ensure result selection gets
-  // updated according to the navigation key. The latter is the reason
-  // navigation is handled here instead of the focus manager - intended result
-  // selection depends on the key event that triggered the focus change.
-  if (close_button()->HasFocus() && evt->type() == ui::ET_KEY_PRESSED &&
-      (IsUnhandledArrowKeyEvent(*evt) || evt->key_code() == ui::VKEY_TAB)) {
-    search_box()->RequestFocus();
+  // Only handle the key event that triggers the focus or result selection
+  // traversal here. Propagate the event to `delegate_` otherwise.
+  if (evt->type() != ui::EventType::kKeyPressed ||
+      !(IsUnhandledArrowKeyEvent(*evt) || evt->key_code() == ui::VKEY_TAB)) {
+    delegate_->OnSearchBoxKeyEvent(evt);
+    return;
+  }
 
-    if (delegate()->CanSelectSearchResults() &&
-        result_selection_controller_->MoveSelection(*evt) ==
-            ResultSelectionController::MoveResult::kResultChanged) {
-      UpdateSearchBoxForSelectedResult(
-          result_selection_controller_->selected_result()->result());
-    }
+  const bool focus_on_close_button = close_button()->HasFocus();
+  const bool focus_on_filter_button =
+      filter_button() && filter_button()->HasFocus();
 
+  // Redirect the event handling if the focus is not on the buttons.
+  if (!focus_on_close_button && !focus_on_filter_button) {
+    delegate_->OnSearchBoxKeyEvent(evt);
+    return;
+  }
+
+  View* button_focused =
+      focus_on_close_button ? close_button() : filter_button();
+  bool moving_forward =
+      (evt->key_code() == ui::VKEY_TAB && !evt->IsShiftDown()) ||
+      evt->key_code() == ui::VKEY_DOWN || evt->key_code() == ui::VKEY_RIGHT;
+
+  View* next_view = GetFocusManager()->GetNextFocusableView(
+      button_focused, GetWidget(), /*reverse=*/!moving_forward,
+      /*dont_loop=*/true);
+
+  // Let FocusManager handles the focus change to its next focusable view if
+  // there is one, and let search result selection handle the focus if the
+  // next focusable view is the search box textfield.
+  if (next_view && next_view != search_box()) {
+    next_view->RequestFocus();
     evt->SetHandled();
     return;
   }
 
-  SearchBoxViewBase::OnKeyEvent(evt);
-}
-
-bool SearchBoxView::OnMouseWheel(const ui::MouseWheelEvent& event) {
-  if (contents_view_)
-    return contents_view_->OnMouseWheel(event);
-  return false;
-}
-
-void SearchBoxView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
-  if (HasAutocompleteText()) {
-    node_data->role = ax::mojom::Role::kTextField;
-    node_data->SetValue(l10n_util::GetStringFUTF16(
-        IDS_APP_LIST_SEARCH_BOX_AUTOCOMPLETE, search_box()->GetText()));
-  }
+  // Check if the `delegate_` can handle the event if the focus is moving to
+  // result selection. All events focusing on the buttons should be handled now.
+  EnterSearchResultSelection(*evt);
+  evt->SetHandled();
 }
 
 void SearchBoxView::UpdateBackground(AppListState target_state) {
@@ -616,8 +1025,8 @@ void SearchBoxView::UpdateBackground(AppListState target_state) {
 
   // The background layer is only painted for the search box in tablet mode.
   // Also the layer is not painted when the search result page is visible.
-  if (is_tablet_mode_ && (!search_result_page_visible_ ||
-                          target_state == AppListState::kStateApps)) {
+  if (!is_app_list_bubble_ && (!search_result_page_visible_ ||
+                               target_state == AppListState::kStateApps)) {
     layer()->SetClipRect(GetContentsBounds());
     layer()->SetBackgroundBlur(ColorProvider::kBackgroundBlurSigma);
     layer()->SetBackdropFilterQuality(ColorProvider::kBackgroundBlurQuality);
@@ -641,9 +1050,11 @@ void SearchBoxView::UpdateBackground(AppListState target_state) {
 void SearchBoxView::UpdateLayout(AppListState target_state,
                                  int target_state_height) {
   // Horizontal margins are selected to match search box icon's vertical
-  // margins.
+  // margins. Space used for iph should be ignored.
+  const int iph_height =
+      GetIphView() ? GetIphView()->GetPreferredSize().height() : 0;
   const int horizontal_spacing =
-      (target_state_height - GetSearchBoxIconSize()) / 2;
+      (target_state_height - iph_height - GetSearchBoxIconSize()) / 2;
   const int horizontal_right_padding =
       horizontal_spacing -
       (GetSearchBoxButtonSize() - GetSearchBoxIconSize()) / 2;
@@ -651,49 +1062,32 @@ void SearchBoxView::UpdateLayout(AppListState target_state,
       gfx::Insets::TLBR(0, horizontal_spacing, 0, horizontal_right_padding));
   box_layout_view()->SetBetweenChildSpacing(horizontal_spacing);
   InvalidateLayout();
-  UpdateBackground(target_state);
+  // Avoid setting background when animating to kStateApps, background will be
+  // set when the animation ends.
+  if (target_state != AppListState::kStateApps)
+    UpdateBackground(target_state);
 }
 
 int SearchBoxView::GetSearchBoxBorderCornerRadiusForState(
     AppListState state) const {
-  if (state == AppListState::kStateSearchResults && app_list_view_ &&
-      !app_list_view_->is_in_drag()) {
-    return features::IsProductivityLauncherEnabled()
-               ? kExpandedSearchBoxCornerRadiusForProductivityLauncher
-               : kSearchBoxBorderCornerRadiusSearchResult;
-  }
-  return kSearchBoxBorderCornerRadius;
+  return state == AppListState::kStateSearchResults
+             ? kExpandedSearchBoxCornerRadius
+             : kSearchBoxBorderCornerRadius;
 }
 
 SkColor SearchBoxView::GetBackgroundColorForState(AppListState state) const {
-  if (state == AppListState::kStateSearchResults) {
-    if ((features::IsDarkLightModeEnabled() ||
-         features::IsProductivityLauncherEnabled()) &&
-        search_result_page_visible_) {
-      return SK_ColorTRANSPARENT;
-    }
-    return AppListColorProvider::Get()->GetSearchBoxCardBackgroundColor();
+  const auto* app_list_widget = GetWidget();
+
+  if (is_app_list_bubble_) {
+    return app_list_widget->GetColorProvider()->GetColor(
+        cros_tokens::kCrosSysSystemBaseElevated);
   }
-  return AppListColorProvider::Get()->GetSearchBoxBackgroundColor();
-}
 
-void SearchBoxView::ShowZeroStateSuggestions() {
-  base::RecordAction(
-      base::UserMetricsAction("AppList_ShowZeroStateSuggestions"));
-  std::u16string empty_query;
-  ContentsChanged(search_box(), empty_query);
-}
+  if (search_result_page_visible_)
+    return SK_ColorTRANSPARENT;
 
-void SearchBoxView::OnWallpaperColorsChanged() {
-  UpdateSearchIcon();
-  UpdatePlaceholderTextStyle();
-  UpdateTextColor();
-
-  if (features::IsDarkLightModeEnabled()) {
-    UpdateBackgroundColor(
-        AppListColorProvider::Get()->GetSearchBoxBackgroundColor());
-  }
-  SchedulePaint();
+  return app_list_widget->GetColorProvider()->GetColor(
+      cros_tokens::kCrosSysSystemBaseElevated);
 }
 
 void SearchBoxView::ProcessAutocomplete(
@@ -706,13 +1100,19 @@ void SearchBoxView::ProcessAutocomplete(
 
   SearchResult* const first_visible_result = first_result_view->result();
 
+  // Do not autocomplete on answer cards.
+  if (!first_visible_result || first_visible_result->display_type() ==
+                                   SearchResultDisplayType::kAnswerCard) {
+    return;
+  }
+
   if (first_result_view->is_default_result() &&
       current_query_ != search_box()->GetText()) {
     // Search box text has been set to the previous selected result. Reset
     // it back to the current query. This could happen due to the racing
     // between results update and user press key to select a result.
     // See crbug.com/1065454.
-    search_box()->SetText(current_query_);
+    SetText(current_query_);
   }
 
   // Current non-autocompleted text.
@@ -734,48 +1134,18 @@ void SearchBoxView::ProcessAutocomplete(
   if (user_typed_text == details || user_typed_text == search_text)
     return;
 
-  auto is_valid_autocomplete_text =
-      [this](const std::u16string& autocomplete_text) {
-        // Don't set autocomplete text if it's the same as current search box
-        // text.
-        if (autocomplete_text == search_box()->GetText())
-          return false;
-        // Don't set autocomplete text if the highlighted text is the same as
-        // before.
-        if (autocomplete_text.length() > highlight_range_.start() &&
-            autocomplete_text.substr(highlight_range_.start()) ==
-                search_box()->GetSelectedText()) {
-          return false;
-        }
-        return true;
-      };
-
-  if (base::StartsWith(details, user_typed_text,
-                       base::CompareCase::INSENSITIVE_ASCII) &&
-      is_valid_autocomplete_text(details)) {
-    // Current text in the search_box matches the first result's url.
-    SetAutocompleteText(details);
+  if (ProcessPrefixMatchAutocomplete(first_visible_result, user_typed_text)) {
     RecordAutocompleteMatchMetric(SearchBoxTextMatch::kPrefixMatch);
     return;
   }
 
-  if (base::StartsWith(search_text, user_typed_text,
-                       base::CompareCase::INSENSITIVE_ASCII) &&
-      is_valid_autocomplete_text(search_text)) {
-    // Current text in the search_box matches the first result's search result
-    // text.
-    SetAutocompleteText(search_text);
-    RecordAutocompleteMatchMetric(SearchBoxTextMatch::kPrefixMatch);
-    return;
-  }
+  // Clear autocomplete since we don't have a prefix match.
+  ClearAutocompleteText();
 
-  if (is_valid_autocomplete_text(search_text)) {
+  if (IsValidAutocompleteText(search_text)) {
     // Setup autocomplete ghost text for eligible search_text.
-    if (features::IsAutocompleteExtendedSuggestionsEnabled()) {
-      MaybeSetAutocompleteGhostText(
-          first_result_view->result()->title(),
-          GetCategoryName(first_result_view->result()));
-    }
+    MaybeSetAutocompleteGhostText(first_result_view->result()->title(),
+                                  GetCategoryName(first_result_view->result()));
 
     if (IsSubstringCaseInsensitive(search_text, user_typed_text)) {
       // user_typed_text is a substring of search_text and is eligible for
@@ -791,13 +1161,43 @@ void SearchBoxView::ProcessAutocomplete(
     // search_text is not eligible for autocompletion.
     RecordAutocompleteMatchMetric(SearchBoxTextMatch::kNoMatch);
   }
+}
 
-  ClearAutocompleteText();
+bool SearchBoxView::ProcessPrefixMatchAutocomplete(
+    SearchResult* search_result,
+    const std::u16string& user_typed_text) {
+  const std::u16string& details = search_result->details();
+  const std::u16string& search_text = search_result->title();
+
+  if (base::StartsWith(details, user_typed_text,
+                       base::CompareCase::INSENSITIVE_ASCII) &&
+      IsValidAutocompleteText(details)) {
+    // Current text in the search_box matches the first result's url.
+    SetAutocompleteText(details);
+    MaybeSetAutocompleteGhostText(std::u16string(),
+                                  GetCategoryName(search_result));
+    return true;
+  }
+
+  if (base::StartsWith(search_text, user_typed_text,
+                       base::CompareCase::INSENSITIVE_ASCII) &&
+      IsValidAutocompleteText(search_text)) {
+    // Current text in the search_box matches the first result's search result
+    // text.
+    SetAutocompleteText(search_text);
+    MaybeSetAutocompleteGhostText(std::u16string(),
+                                  GetCategoryName(search_result));
+    return true;
+  }
+  return false;
 }
 
 void SearchBoxView::ClearAutocompleteText() {
   if (!ShouldProcessAutocomplete())
     return;
+
+  // Clear ghost text.
+  MaybeSetAutocompleteGhostText(std::u16string(), std::u16string());
 
   // Avoid triggering subsequent query by temporarily setting controller to
   // nullptr.
@@ -824,89 +1224,151 @@ bool SearchBoxView::HasValidQuery() {
 }
 
 int SearchBoxView::GetSearchBoxIconSize() {
-  if (features::IsProductivityLauncherEnabled())
-    return kBubbleLauncherSearchBoxIconSize;
-  return kClassicSearchBoxIconSize;
+  return kBubbleLauncherSearchBoxIconSize;
 }
 
 int SearchBoxView::GetSearchBoxButtonSize() {
-  if (features::IsProductivityLauncherEnabled())
-    return kBubbleLauncherSearchBoxButtonSizeDip;
-  return kClassicSearchBoxButtonSizeDip;
+  return kBubbleLauncherSearchBoxButtonSizeDip;
+}
+
+void SearchBoxView::CloseButtonPressed() {
+  UpdateIphViewVisibility(false);
+  delegate_->CloseButtonPressed();
+}
+
+void SearchBoxView::AssistantButtonPressed() {
+  if (GetIphView()) {
+    // Notify the Assistant button is pressed when the IPH is visible and close
+    // the IPH.
+    GetIphView()->NotifyAssistantButtonPressedEvent();
+    UpdateIphViewVisibility(false);
+    delegate_->AssistantButtonPressed();
+    return;
+  }
+
+  // Tries to show an IPH. This can be rejected by various reasons.
+  UpdateIphViewVisibility(true);
+
+  // If UpdateIphViewVisibility() rejected the request, let the delegate_ handle
+  // this.
+  if (!GetIphView()) {
+    delegate_->AssistantButtonPressed();
+    return;
+  }
+
+  // Activate the search box based on UX SPEC.
+  SetSearchBoxActive(true, /*event_type=*/ui::EventType::kUnknown);
+}
+
+void SearchBoxView::AssistantNewEntryPointButtonPressed() {
+  assistant::AssistantBrowserDelegate* delegate =
+      assistant::AssistantBrowserDelegate::Get();
+  CHECK(delegate);
+  delegate->OpenNewEntryPoint();
+}
+
+void SearchBoxView::SunfishButtonPressed() {
+  if (is_app_list_bubble_) {
+    // Only hide the launcher bubble in clamshell mode.
+    view_delegate_->DismissAppList();
+  }
+
+  // If the user presses the button, there is no need to show the nudge anymore,
+  // so set the pref to its limit.
+  SetSunfishLauncherNudgeShownCount(capture_mode::kSunfishNudgeMaxShownCount);
+
+  CaptureModeController::Get()->StartSunfishSession();
+}
+
+void SearchBoxView::UpdateSearchIcon() {
+  const bool search_engine_is_google =
+      AppListModelProvider::Get()->search_model()->search_engine_is_google();
+  const gfx::VectorIcon& google_icon = is_search_box_active()
+                                           ? vector_icons::kGoogleColorIcon
+                                           : kGoogleBlackIcon;
+  const gfx::VectorIcon& icon =
+      search_engine_is_google ? google_icon : kSearchEngineNotGoogleIcon;
+  SetSearchIconImage(gfx::CreateVectorIcon(
+      icon, GetSearchBoxIconSize(),
+      GetColorProvider()->GetColor(kColorAshButtonIconColor)));
+}
+
+bool SearchBoxView::IsValidAutocompleteText(
+    const std::u16string& autocomplete_text) {
+  // Don't set autocomplete text if it's the same as current search box
+  // text.
+  if (autocomplete_text == search_box()->GetText()) {
+    return false;
+  }
+
+  // Don't set autocomplete text if the highlighted text is the same as
+  // before.
+  if (autocomplete_text.length() > highlight_range_.start() &&
+      autocomplete_text.substr(highlight_range_.start()) ==
+          search_box()->GetSelectedText()) {
+    return false;
+  }
+
+  return true;
 }
 
 void SearchBoxView::UpdateTextColor() {
-  if (is_app_list_bubble_) {
-    // Bubble launcher uses standard text colors (light-on-dark by default).
-    search_box()->SetTextColor(AshColorProvider::Get()->GetContentLayerColor(
-        AshColorProvider::ContentLayerType::kTextColorPrimary));
-  } else {
-    // Fullscreen launcher uses dark-on-light text by default.
-    search_box()->SetTextColor(
-        AppListColorProvider::Get()->GetSearchBoxTextColor(
-            kDeprecatedSearchBoxTextDefaultColor));
-  }
+  search_box()->SetTextColor(
+      GetColorProvider()->GetColor(cros_tokens::kCrosSysOnSurface));
 }
 
 void SearchBoxView::UpdatePlaceholderTextAndAccessibleName() {
-  if (features::IsProductivityLauncherEnabled()) {
-    switch (SelectPlaceholderText()) {
-      case PlaceholderTextType::kShortcuts:
-        search_box()->SetPlaceholderText(l10n_util::GetStringFUTF16(
-            IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TEMPLATE,
-            l10n_util::GetStringUTF16(
-                IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_SHORTCUTS)));
-        search_box()->SetAccessibleName(l10n_util::GetStringFUTF16(
-            is_tablet_mode_
-                ? IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TEMPLATE_ACCESSIBILITY_NAME_TABLET
-                : IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TEMPLATE_ACCESSIBILITY_NAME_CLAMSHELL,
-            l10n_util::GetStringUTF16(
-                IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_SHORTCUTS)));
-        break;
-      case PlaceholderTextType::kTabs:
-        search_box()->SetPlaceholderText(l10n_util::GetStringFUTF16(
-            IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TEMPLATE,
-            l10n_util::GetStringUTF16(
-                IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TABS)));
-        search_box()->SetAccessibleName(l10n_util::GetStringFUTF16(
-            is_tablet_mode_
-                ? IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TEMPLATE_ACCESSIBILITY_NAME_TABLET
-                : IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TEMPLATE_ACCESSIBILITY_NAME_CLAMSHELL,
-            l10n_util::GetStringUTF16(
-                IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TABS)));
-        break;
-      case PlaceholderTextType::kSettings:
-        search_box()->SetPlaceholderText(l10n_util::GetStringFUTF16(
-            IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TEMPLATE,
-            l10n_util::GetStringUTF16(
-                IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_SETTINGS)));
-        search_box()->SetAccessibleName(l10n_util::GetStringFUTF16(
-            is_tablet_mode_
-                ? IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TEMPLATE_ACCESSIBILITY_NAME_TABLET
-                : IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TEMPLATE_ACCESSIBILITY_NAME_CLAMSHELL,
-            l10n_util::GetStringUTF16(
-                IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_SETTINGS)));
-        break;
-      case PlaceholderTextType::kGames:
-        search_box()->SetPlaceholderText(l10n_util::GetStringFUTF16(
-            IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TEMPLATE,
-            l10n_util::GetStringUTF16(
-                IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_GAMES)));
-        search_box()->SetAccessibleName(l10n_util::GetStringFUTF16(
-            is_tablet_mode_
-                ? IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TEMPLATE_ACCESSIBILITY_NAME_TABLET
-                : IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TEMPLATE_ACCESSIBILITY_NAME_CLAMSHELL,
-            l10n_util::GetStringUTF16(
-                IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_GAMES)));
-        break;
-    }
-  } else {
-    search_box()->SetPlaceholderText(
-        l10n_util::GetStringUTF16(IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER));
-    search_box()->SetAccessibleName(l10n_util::GetStringUTF16(
-        is_tablet_mode_
-            ? IDS_APP_LIST_SEARCH_BOX_ACCESSIBILITY_NAME_TABLET
-            : IDS_APP_LIST_SEARCH_BOX_ACCESSIBILITY_NAME_CLAMSHELL));
+  const int a11y_name_template =
+      is_app_list_bubble_
+          ? IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TEMPLATE_ACCESSIBILITY_NAME_CLAMSHELL
+          : IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TEMPLATE_ACCESSIBILITY_NAME_TABLET;
+  switch (SelectPlaceholderText()) {
+    case PlaceholderTextType::kShortcuts:
+      search_box()->SetPlaceholderText(l10n_util::GetStringFUTF16(
+          IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TEMPLATE,
+          l10n_util::GetStringUTF16(
+              IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_SHORTCUTS)));
+      search_box()->GetViewAccessibility().SetName(l10n_util::GetStringFUTF16(
+          a11y_name_template,
+          l10n_util::GetStringUTF16(
+              IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_SHORTCUTS)));
+      break;
+    case PlaceholderTextType::kTabs:
+      search_box()->SetPlaceholderText(l10n_util::GetStringFUTF16(
+          IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TEMPLATE,
+          l10n_util::GetStringUTF16(IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TABS)));
+      search_box()->GetViewAccessibility().SetName(l10n_util::GetStringFUTF16(
+          a11y_name_template,
+          l10n_util::GetStringUTF16(IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TABS)));
+      break;
+    case PlaceholderTextType::kSettings:
+      search_box()->SetPlaceholderText(l10n_util::GetStringFUTF16(
+          IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TEMPLATE,
+          l10n_util::GetStringUTF16(
+              IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_SETTINGS)));
+      search_box()->GetViewAccessibility().SetName(l10n_util::GetStringFUTF16(
+          a11y_name_template,
+          l10n_util::GetStringUTF16(
+              IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_SETTINGS)));
+      break;
+    case PlaceholderTextType::kGames:
+      search_box()->SetPlaceholderText(l10n_util::GetStringFUTF16(
+          IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TEMPLATE,
+          l10n_util::GetStringUTF16(
+              IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_GAMES)));
+      search_box()->GetViewAccessibility().SetName(l10n_util::GetStringFUTF16(
+          a11y_name_template, l10n_util::GetStringUTF16(
+                                  IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_GAMES)));
+      break;
+    case PlaceholderTextType::kImages:
+      search_box()->SetPlaceholderText(l10n_util::GetStringFUTF16(
+          IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_TEMPLATE,
+          l10n_util::GetStringUTF16(
+              IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_IMAGES)));
+      search_box()->GetViewAccessibility().SetName(l10n_util::GetStringFUTF16(
+          a11y_name_template, l10n_util::GetStringUTF16(
+                                  IDS_APP_LIST_SEARCH_BOX_PLACEHOLDER_IMAGES)));
+      break;
   }
 }
 
@@ -914,11 +1376,10 @@ void SearchBoxView::AcceptAutocompleteText() {
   if (!ShouldProcessAutocomplete())
     return;
 
-  // Do not trigger another search here in case the user is left clicking to
-  // select existing autocomplete text. (This also matches omnibox behavior.)
   DCHECK(HasAutocompleteText());
   search_box()->ClearSelection();
   ResetHighlightRange();
+  RunLauncherSearchQuery(search_box()->GetText());
 }
 
 bool SearchBoxView::HasAutocompleteText() {
@@ -933,39 +1394,16 @@ bool SearchBoxView::HasAutocompleteText() {
 
 void SearchBoxView::OnBeforeUserAction(views::Textfield* sender) {
   if (a11y_active_descendant_)
-    SetA11yActiveDescendant(absl::nullopt);
-}
-
-void SearchBoxView::ContentsChanged(views::Textfield* sender,
-                                    const std::u16string& new_contents) {
-  bool current_query_empty = IsTrimmedQueryEmpty(current_query_);
-  bool new_contents_empty = IsTrimmedQueryEmpty(new_contents);
-  if (current_query_empty && !new_contents_empty) {
-    // User enters a new search query. Record the action.
-    base::RecordAction(base::UserMetricsAction("AppList_SearchQueryStarted"));
-  }
-
-  // Schedule paint to update the focus bar, a part of the search box background
-  // that is dependent on whether the query is empty.
-  if (current_query_empty != new_contents_empty)
-    SchedulePaint();
-
-  current_query_ = new_contents;
-
-  // Update autocomplete text highlight range to track user typed text.
-  if (ShouldProcessAutocomplete())
-    ResetHighlightRange();
-  SearchBoxViewBase::ContentsChanged(sender, new_contents);
-  if (app_list_view_) {
-    app_list_view_->SetStateFromSearchBoxView(
-        IsSearchBoxTrimmedQueryEmpty(), true /*triggered_by_contents_change*/);
-  }
+    SetA11yActiveDescendant(std::nullopt);
 }
 
 void SearchBoxView::SetAutocompleteText(
     const std::u16string& autocomplete_text) {
   if (!ShouldProcessAutocomplete())
     return;
+
+  // Clear existing autocomplete text and reset the highlight range.
+  ClearAutocompleteText();
 
   const std::u16string& current_text = search_box()->GetText();
   // Currrent text is a prefix of autocomplete text.
@@ -974,6 +1412,14 @@ void SearchBoxView::SetAutocompleteText(
   // Autocomplete text should not be the same as current search box text.
   DCHECK(autocomplete_text != current_text);
   // Autocomplete text should not be the same as highlighted text.
+
+  // If the highlight range is beyond the suggested autocomplete text, clear
+  // the autocomplete ghost text and return.
+  if (highlight_range_.start() >= autocomplete_text.size()) {
+    MaybeSetAutocompleteGhostText(std::u16string(), std::u16string());
+    return;
+  }
+
   const std::u16string& highlighted_text =
       autocomplete_text.substr(highlight_range_.start());
   DCHECK(highlighted_text != current_text);
@@ -997,40 +1443,83 @@ void SearchBoxView::SetAutocompleteText(
   // Send an event to alert ChromeVox that an autocomplete has occurred.
   // The |kValueChanged| type lets ChromeVox know that it should scan
   // |node_data| for "Value".
-  NotifyAccessibilityEvent(ax::mojom::Event::kValueChanged, true);
+  UpdateAccessibleValue();
 
-  if (features::IsAutocompleteExtendedSuggestionsEnabled())
-    MaybeSetAutocompleteGhostText(std::u16string(), std::u16string());
+  MaybeSetAutocompleteGhostText(std::u16string(), std::u16string());
+}
+
+SearchBoxView::PlaceholderTextType SearchBoxView::SelectPlaceholderText()
+    const {
+  if (use_fixed_placeholder_text_for_test_)
+    return kDefaultPlaceholders[0];
+
+  if (chromeos::features::IsCloudGamingDeviceEnabled() ||
+      chromeos::features::IsAlmanacLauncherPayloadEnabled()) {
+    return kGamingPlaceholders[rand() % std::size(kGamingPlaceholders)];
+  }
+
+  return kDefaultPlaceholders[rand() % std::size(kDefaultPlaceholders)];
 }
 
 void SearchBoxView::UpdateQuery(const std::u16string& new_query) {
-  search_box()->SetText(new_query);
+  SetText(new_query);
   ContentsChanged(search_box(), new_query);
 }
 
+void SearchBoxView::SetText(const std::u16string& text) {
+  search_box()->SetText(text);
+  UpdateAccessibleValue();
+}
+
+void SearchBoxView::EnterSearchResultSelection(const ui::KeyEvent& event) {
+  // If the focus on the button is going to move to the search box text field,
+  // ensure result selection gets updated according to the navigation key. The
+  // result selection is the reason navigation is handled by the search box
+  // instead of the focus manager - intended result selection depends on the key
+  // event that triggered the focus change.
+  search_box()->RequestFocus();
+  if (delegate_->CanSelectSearchResults() &&
+      result_selection_controller_->MoveSelection(event) ==
+          ResultSelectionController::MoveResult::kResultChanged) {
+    UpdateSearchBoxForSelectedResult(
+        result_selection_controller_->selected_result()->result());
+  }
+}
+
 void SearchBoxView::ClearSearchAndDeactivateSearchBox() {
+  UpdateIphViewVisibility(false);
   if (!is_search_box_active())
     return;
 
-  SetA11yActiveDescendant(absl::nullopt);
+  SetA11yActiveDescendant(std::nullopt);
+  // Set search box as inactive first, because ClearSearch() eventually calls
+  // into AppListMainView::QueryChanged() which will hide search results based
+  // on `is_search_box_active_`.
+  SetSearchBoxActive(false, ui::EventType::kUnknown);
   ClearSearch();
-  SetSearchBoxActive(false, ui::ET_UNKNOWN);
-  if (features::IsAutocompleteExtendedSuggestionsEnabled())
-    MaybeSetAutocompleteGhostText(std::u16string(), std::u16string());
+  MaybeSetAutocompleteGhostText(std::u16string(), std::u16string());
 }
 
 void SearchBoxView::SetA11yActiveDescendant(
-    const absl::optional<int32_t>& active_descendant) {
+    const std::optional<ui::AXPlatformNodeId>& active_descendant) {
   a11y_active_descendant_ = active_descendant;
-  search_box()->NotifyAccessibilityEvent(
-      ax::mojom::Event::kActiveDescendantChanged, true);
+  UpdateSearchTextfieldAccessibleActiveDescendantId();
+}
+
+void SearchBoxView::UseFixedPlaceholderTextForTest() {
+  if (use_fixed_placeholder_text_for_test_)
+    return;
+
+  use_fixed_placeholder_text_for_test_ = true;
+  UpdatePlaceholderTextAndAccessibleName();
 }
 
 bool SearchBoxView::HandleKeyEvent(views::Textfield* sender,
                                    const ui::KeyEvent& key_event) {
   DCHECK(result_selection_controller_);
-  if (key_event.type() == ui::ET_KEY_RELEASED)
+  if (key_event.type() == ui::EventType::kKeyReleased) {
     return false;
+  }
 
   // Events occurring over an inactive search box are handled elsewhere, with
   // the exception of left/right arrow key events, and return.
@@ -1050,7 +1539,7 @@ bool SearchBoxView::HandleKeyEvent(views::Textfield* sender,
   // Nothing to do if no results are available (the rest of the method handles
   // result actions and result traversal). This might happen if zero state
   // suggestions are not enabled, and search box textfield is empty.
-  if (!delegate()->CanSelectSearchResults())
+  if (!delegate_->CanSelectSearchResults())
     return false;
 
   // When search box is active, the focus cycles between close button and the
@@ -1092,13 +1581,16 @@ bool SearchBoxView::HandleKeyEvent(views::Textfield* sender,
     ui::KeyEvent event(key_event);
     SearchResultBaseView* selected_result =
         result_selection_controller_->selected_result();
-    if (selected_result && selected_result->result())
+    if (selected_result) {
       selected_result->OnKeyEvent(&event);
-    // Reset the selected result to the default result.
-    result_selection_controller_->ResetSelection(nullptr,
-                                                 true /* default_selection */);
-    search_box()->SetText(std::u16string());
-    return true;
+      if (event.handled()) {
+        // Reset the selected result to the default result.
+        result_selection_controller_->ResetSelection(
+            nullptr, true /* default_selection */);
+        SetText(std::u16string());
+        return true;
+      }
+    }
   }
 
   // Do not handle keys intended for result selection traversal here - these
@@ -1136,18 +1628,37 @@ bool SearchBoxView::HandleKeyEvent(views::Textfield* sender,
       // return early, as what follows is actions for updating based on
       // change.
       break;
-    case ResultSelectionController::MoveResult::kSelectionCycleRejected:
-      // If move was about to cycle, clear the selection and move the focus to
-      // the next element in the SearchBoxView - close_button() (only
-      // close_button() and search_box() are expected to be in the focus cycle
-      // while the search box is active).
+    case ResultSelectionController::MoveResult::
+        kSelectionCycleBeforeFirstResult:
+      // If the result selection was about to cycle, clear the selection and
+      // move the focus to the next element in the SearchBoxView -
+      // close_button().
       if (HasAutocompleteText())
         ClearAutocompleteText();
       result_selection_controller_->ClearSelection();
 
+      // Check if the `delegate_` can handle the event if the focus is moving
+      // out from the result selection.
       DCHECK(close_button()->GetVisible());
       close_button()->RequestFocus();
-      SetA11yActiveDescendant(absl::nullopt);
+
+      SetA11yActiveDescendant(std::nullopt);
+      break;
+    case ResultSelectionController::MoveResult::kSelectionCycleAfterLastResult:
+      // If move was about to cycle, clear the selection and move the focus to
+      // the next element in the SearchBoxView - close_button() or
+      // filter_button().
+      if (HasAutocompleteText()) {
+        ClearAutocompleteText();
+      }
+      result_selection_controller_->ClearSelection();
+
+      if (filter_button()) {
+        filter_button()->RequestFocus();
+      } else {
+        close_button()->RequestFocus();
+      }
+      SetA11yActiveDescendant(std::nullopt);
       break;
     case ResultSelectionController::MoveResult::kResultChanged:
       UpdateSearchBoxForSelectedResult(
@@ -1160,21 +1671,13 @@ bool SearchBoxView::HandleKeyEvent(views::Textfield* sender,
 
 bool SearchBoxView::HandleMouseEvent(views::Textfield* sender,
                                      const ui::MouseEvent& mouse_event) {
-  if (mouse_event.type() == ui::ET_MOUSEWHEEL) {
-    // TODO(crbug.com/1216082): Forward scroll events for bubble launcher.
-    if (!app_list_view_) {
-      NOTIMPLEMENTED_LOG_ONCE();
-      return false;
-    }
-    return app_list_view_->HandleScroll(
-        mouse_event.location(), (&mouse_event)->AsMouseWheelEvent()->offset(),
-        ui::ET_MOUSEWHEEL);
-  }
-  if (mouse_event.type() == ui::ET_MOUSE_PRESSED && HasAutocompleteText())
+  if (mouse_event.type() == ui::EventType::kMousePressed &&
+      HasAutocompleteText()) {
     AcceptAutocompleteText();
+  }
 
   // Don't activate search box for context menu click.
-  if (mouse_event.type() == ui::ET_MOUSE_PRESSED &&
+  if (mouse_event.type() == ui::EventType::kMousePressed &&
       mouse_event.IsOnlyRightMouseButton()) {
     return false;
   }
@@ -1184,41 +1687,39 @@ bool SearchBoxView::HandleMouseEvent(views::Textfield* sender,
 
 bool SearchBoxView::HandleGestureEvent(views::Textfield* sender,
                                        const ui::GestureEvent& gesture_event) {
-  if (gesture_event.type() == ui::ET_GESTURE_TAP && HasAutocompleteText())
+  if (gesture_event.type() == ui::EventType::kGestureTap &&
+      HasAutocompleteText()) {
     AcceptAutocompleteText();
+  }
   return SearchBoxViewBase::HandleGestureEvent(sender, gesture_event);
 }
 
 void SearchBoxView::UpdateSearchBoxForSelectedResult(
     SearchResult* selected_result) {
+  if (!selected_result)
+    return;
+
   if (selected_result->result_type() ==
-      AppListSearchResultType::kInternalPrivacyInfo) {
-    // Privacy view should not change the search box text.
+          AppListSearchResultType::kInternalPrivacyInfo ||
+      selected_result->display_type() == SearchResultDisplayType::kAnswerCard) {
+    // Privacy and answer card views should not change the search box text.
     return;
   }
 
-  if (features::IsAutocompleteExtendedSuggestionsEnabled()) {
-    ClearAutocompleteText();
+  ClearAutocompleteText();
+
+  const std::u16string& details = selected_result->details();
+  const std::u16string& search_text = selected_result->title();
+
+  // Don't set autocomplete text if it's the same as user typed text.
+  if (current_query_ == details || current_query_ == search_text) {
+    return;
+  }
+
+  if (!ProcessPrefixMatchAutocomplete(selected_result, current_query_)) {
     MaybeSetAutocompleteGhostText(selected_result->title(),
                                   GetCategoryName(selected_result));
-  } else {
-    if (selected_result->result_type() == AppListSearchResultType::kOmnibox &&
-        !selected_result->is_omnibox_search() &&
-        !selected_result->details().empty()) {
-      // For url (non-search) results, use details to ensure that the url is
-      // displayed.
-      search_box()->SetText(selected_result->details());
-    } else {
-      search_box()->SetText(selected_result->title());
-    }
   }
-}
-
-void SearchBoxView::Update() {
-  search_box()->SetText(
-      AppListModelProvider::Get()->search_model()->search_box()->text());
-  UpdateButtonsVisibility();
-  NotifyQueryChanged();
 }
 
 void SearchBoxView::SearchEngineChanged() {
@@ -1232,30 +1733,155 @@ void SearchBoxView::ShowAssistantChanged() {
                              ->show_assistant_button());
 }
 
+void SearchBoxView::ShowAssistantNewEntryPointChanged() {
+  SetShowAssistantNewEntryPointButton(
+      AppListModelProvider::Get()
+          ->search_model()
+          ->search_box()
+          ->show_assistant_new_entry_point_button());
+}
+
+void SearchBoxView::ShowSunfishChanged() {
+  SetShowSunfishButton(AppListModelProvider::Get()
+                           ->search_model()
+                           ->search_box()
+                           ->show_sunfish_button());
+}
+
+void SearchBoxView::UpdateIphViewVisibility(bool can_show_iph) {
+  const bool would_trigger_iph =
+      AppListModelProvider::Get()->search_model()->would_trigger_iph();
+  const bool is_iph_showing = GetIphView() != nullptr;
+
+  const bool should_show_iph = can_show_iph && would_trigger_iph;
+
+  if (should_show_iph == is_iph_showing) {
+    return;
+  }
+
+  if (should_show_iph) {
+    std::unique_ptr<ScopedIphSession> scoped_iph_session =
+        view_delegate_->CreateLauncherSearchIphSession();
+    if (!scoped_iph_session) {
+      return;
+    }
+
+    SetIphView(std::make_unique<LauncherSearchIphView>(
+        /*delegate=*/this, /*is_in_tablet_mode=*/!is_app_list_bubble_,
+        std::move(scoped_iph_session),
+        LauncherSearchIphView::UiLocation::kSearchBox));
+
+    auto radii = base::i18n::IsRTL() ? kAssistantButtonBackgroundRadiiRTL
+                                     : kAssistantButtonBackgroundRadiiLTR;
+    assistant_button()->SetBackground(views::CreateThemedRoundedRectBackground(
+        kColorAshControlBackgroundColorInactive, radii));
+
+    auto highlight_path_generator =
+        std::make_unique<RoundRectPathGenerator>(radii);
+    views::HighlightPathGenerator::Install(assistant_button(),
+                                           std::move(highlight_path_generator));
+
+    // The ink drop doesn't automatically pick up on rounded corner changes, so
+    // we need to manually notify it here.
+    views::InkDrop::Get(assistant_button())
+        ->GetInkDrop()
+        ->HostSizeChanged(assistant_button()->size());
+
+    // Update the focus ring.
+    views::FocusRing::Get(assistant_button())->SchedulePaint();
+
+    // Announce the IPH title.
+    GetViewAccessibility().AnnounceAlert(GetIphView()->GetTitleText());
+  } else {
+    DeleteIphView();
+    assistant_button()->SetBackground(nullptr);
+    views::InstallCircleHighlightPathGenerator(assistant_button());
+  }
+
+  // Adding or removing IPH view can change `SearchBoxView` bounds largely.
+  // Re-layout can be necessary on parent views as well. Explicitly call
+  // `InvalidateLayout` to trigger re-layouts on all parent views. Without this,
+  // we can have unnecessary spaces in `SearchBoxView` for an IPH dismiss under
+  // some conditions.
+  InvalidateLayout();
+}
+
 bool SearchBoxView::ShouldProcessAutocomplete() {
-  // IME sets composition text while the user is typing, so avoid handle
+  // IME sets composition text while the user is typing, so avoid handling
   // autocomplete in this case to avoid conflicts.
-  return !(search_box()->IsIMEComposing() && highlight_range_.is_empty());
+  // The user's cursor may not be at the end of the the current query, so avoid
+  // handling autocomplete in this case to avoid moving the user's cursor.
+  return search_box()->GetCursorPosition() == search_box()->GetText().size() &&
+         (!(search_box()->IsIMEComposing() && highlight_range_.is_empty()));
 }
 
 void SearchBoxView::ResetHighlightRange() {
-  DCHECK(ShouldProcessAutocomplete());
   const uint32_t text_length = search_box()->GetText().length();
   highlight_range_.set_start(text_length);
   highlight_range_.set_end(text_length);
 }
 
-void SearchBoxView::SetupAssistantButton() {
-  views::ImageButton* assistant = assistant_button();
-  assistant->SetImage(
-      views::ImageButton::STATE_NORMAL,
-      gfx::CreateVectorIcon(chromeos::kAssistantIcon, GetSearchBoxIconSize(),
-                            AppListColorProvider::Get()->GetSearchBoxIconColor(
-                                gfx::kGoogleGrey700)));
-  std::u16string assistant_button_label(
-      l10n_util::GetStringUTF16(IDS_APP_LIST_START_ASSISTANT));
-  assistant->SetAccessibleName(assistant_button_label);
-  assistant->SetTooltipText(assistant_button_label);
+ui::SimpleMenuModel* SearchBoxView::BuildFilterMenuModel() {
+  filter_menu_model_ = std::make_unique<ui::SimpleMenuModel>(nullptr);
+  filter_menu_model_->AddTitle(
+      l10n_util::GetStringUTF16(IDS_ASH_SEARCH_CATEGORY_FILTER_MENU_TITLE));
+  std::vector<AppListSearchControlCategory> available_categories =
+      GetToggleableCategories();
+
+  for (auto category : available_categories) {
+    if (category == AppListSearchControlCategory::kCannotToggle) {
+      continue;
+    }
+
+    filter_menu_model_->AddItemWithIcon(
+        static_cast<int>(category),
+        l10n_util::GetStringUTF16(kCategories.at(category)),
+        GetCheckboxImage(view_delegate_->IsCategoryEnabled(category)));
+  }
+
+  return filter_menu_model_.get();
 }
+
+std::vector<AppListSearchControlCategory>
+SearchBoxView::GetToggleableCategories() {
+  return view_delegate_->GetToggleableCategories();
+}
+
+CategoryEnableStateMap SearchBoxView::GetSearchCategoryEnableState() {
+  auto toggleable_categories = GetToggleableCategories();
+  CategoryEnableStateMap category_to_state;
+
+  // Initialize the map.
+  for (int i = base::to_underlying(AppListSearchControlCategory::kMinValue);
+       i <= base::to_underlying(AppListSearchControlCategory::kMaxValue); ++i) {
+    auto category = static_cast<AppListSearchControlCategory>(i);
+    // Cannot toggle is not a category.
+    if (category == AppListSearchControlCategory::kCannotToggle) {
+      continue;
+    }
+
+    category_to_state[category] = SearchCategoryEnableState::kNotAvailable;
+  }
+
+  // Set the enable states for toggleable categories.
+  for (auto category : toggleable_categories) {
+    category_to_state[category] = view_delegate_->IsCategoryEnabled(category)
+                                      ? SearchCategoryEnableState::kEnabled
+                                      : SearchCategoryEnableState::kDisabled;
+  }
+  return category_to_state;
+}
+
+void SearchBoxView::UpdateAccessibleValue() {
+  if (!HasAutocompleteText()) {
+    GetViewAccessibility().RemoveValue();
+    return;
+  }
+  GetViewAccessibility().SetValue(l10n_util::GetStringFUTF16(
+      IDS_APP_LIST_SEARCH_BOX_AUTOCOMPLETE, search_box()->GetText()));
+}
+
+BEGIN_METADATA(SearchBoxView)
+END_METADATA
 
 }  // namespace ash

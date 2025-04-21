@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <utility>
 
 #include "base/memory/weak_ptr.h"
-#include "chrome/browser/ash/printing/print_servers_provider.h"
-#include "chrome/browser/ash/printing/print_servers_provider_factory.h"
+#include "chrome/browser/ash/printing/enterprise/print_servers_provider.h"
+#include "chrome/browser/ash/printing/enterprise/print_servers_provider_factory.h"
 #include "components/policy/policy_constants.h"
 
 namespace {

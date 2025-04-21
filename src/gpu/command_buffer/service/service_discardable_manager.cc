@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/system/sys_info.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "build/build_config.h"
 #include "gpu/command_buffer/service/gpu_switches.h"
@@ -67,7 +67,6 @@ size_t DiscardableCacheSizeLimitForPressure(
 
     default:
       NOTREACHED();
-      return 0;
   }
 }
 
@@ -88,12 +87,12 @@ ServiceDiscardableManager::ServiceDiscardableManager(
       cache_size_limit_(preferences.force_gpu_mem_discardable_limit_bytes
                             ? preferences.force_gpu_mem_discardable_limit_bytes
                             : DiscardableCacheSizeLimit()) {
-  // In certain cases, ThreadTaskRunnerHandle isn't set (Android Webview).
-  // Don't register a dump provider in these cases.
-  if (base::ThreadTaskRunnerHandle::IsSet()) {
+  // In certain cases, SingleThreadTaskRunner::CurrentDefaultHandle isn't set
+  // (Android Webview).  Don't register a dump provider in these cases.
+  if (base::SingleThreadTaskRunner::HasCurrentDefault()) {
     base::trace_event::MemoryDumpManager::GetInstance()->RegisterDumpProvider(
         this, "gpu::ServiceDiscardableManager",
-        base::ThreadTaskRunnerHandle::Get());
+        base::SingleThreadTaskRunner::GetCurrentDefault());
   }
 }
 
@@ -113,7 +112,7 @@ bool ServiceDiscardableManager::OnMemoryDump(
   using base::trace_event::MemoryAllocatorDump;
   using base::trace_event::MemoryDumpLevelOfDetail;
 
-  if (args.level_of_detail == MemoryDumpLevelOfDetail::BACKGROUND) {
+  if (args.level_of_detail == MemoryDumpLevelOfDetail::kBackground) {
     std::string dump_name =
         base::StringPrintf("gpu/discardable_cache/cache_0x%" PRIXPTR,
                            reinterpret_cast<uintptr_t>(this));
@@ -292,7 +291,7 @@ bool ServiceDiscardableManager::IsEntryLockedForTesting(
     uint32_t texture_id,
     gles2::TextureManager* texture_manager) const {
   auto found = entries_.Peek({texture_id, texture_manager});
-  DCHECK(found != entries_.end());
+  CHECK(found != entries_.end());
 
   return found->second.handle.IsLockedForTesting();
 }
@@ -301,7 +300,7 @@ gles2::TextureRef* ServiceDiscardableManager::UnlockedTextureRefForTesting(
     uint32_t texture_id,
     gles2::TextureManager* texture_manager) const {
   auto found = entries_.Peek({texture_id, texture_manager});
-  DCHECK(found != entries_.end());
+  CHECK(found != entries_.end());
 
   return found->second.unlocked_texture_ref.get();
 }

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,11 @@
 
 #include "third_party/blink/renderer/bindings/core/v8/v8_get_animations_options.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_keyframe_animation_options.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_timeline_range.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_timeline_range_offset.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_keyframeanimationoptions_unrestricteddouble.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_keyframeeffectoptions_unrestricteddouble.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_union_string_timelinerangeoffset.h"
 #include "third_party/blink/renderer/core/animation/animation.h"
 #include "third_party/blink/renderer/core/animation/document_animations.h"
 #include "third_party/blink/renderer/core/animation/document_timeline.h"
@@ -17,32 +20,19 @@
 #include "third_party/blink/renderer/core/animation/keyframe_effect_model.h"
 #include "third_party/blink/renderer/core/animation/timing.h"
 #include "third_party/blink/renderer/core/animation/timing_input.h"
+#include "third_party/blink/renderer/core/css/parser/css_parser.h"
+#include "third_party/blink/renderer/core/css/resolver/css_to_style_map.h"
+#include "third_party/blink/renderer/core/css/resolver/style_resolver_state.h"
+#include "third_party/blink/renderer/core/css/style_sheet_contents.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/element.h"
-#include "third_party/blink/renderer/core/permissions_policy/layout_animations_policy.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
+#include "third_party/blink/renderer/platform/geometry/calculation_value.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 
 namespace blink {
 namespace {
-
-// A helper method which is used to trigger a violation report for cases where
-// the |element.animate| API is used to animate a CSS property which is blocked
-// by the permissions policy 'layout-animations'.
-void ReportPermissionsPolicyViolationsIfNecessary(
-    ExecutionContext& context,
-    const KeyframeEffectModelBase& effect) {
-  for (const auto& property_handle : effect.Properties()) {
-    if (!property_handle.IsCSSProperty())
-      continue;
-    const auto& css_property = property_handle.GetCSSProperty();
-    if (LayoutAnimationsPolicy::AffectedCSSProperties().Contains(
-            &css_property)) {
-      LayoutAnimationsPolicy::ReportViolation(css_property, context);
-    }
-  }
-}
 
 V8UnionKeyframeEffectOptionsOrUnrestrictedDouble* CoerceEffectOptions(
     const V8UnionKeyframeAnimationOptionsOrUnrestrictedDouble* options) {
@@ -59,7 +49,6 @@ V8UnionKeyframeEffectOptionsOrUnrestrictedDouble* CoerceEffectOptions(
           options->GetAsUnrestrictedDouble());
   }
   NOTREACHED();
-  return nullptr;
 }
 
 }  // namespace
@@ -86,8 +75,6 @@ Animation* Animatable::animate(
   if (!element->GetExecutionContext())
     return nullptr;
 
-  ReportPermissionsPolicyViolationsIfNecessary(*element->GetExecutionContext(),
-                                               *effect->Model());
   if (!options->IsKeyframeAnimationOptions())
     return element->GetDocument().Timeline().Play(effect, exception_state);
 
@@ -107,6 +94,16 @@ Animation* Animatable::animate(
     return nullptr;
 
   animation->setId(options_dict->id());
+
+  // ViewTimeline options.
+  if (options_dict->hasRangeStart()) {
+    animation->SetRangeStartInternal(TimelineOffset::Create(
+        element, options_dict->rangeStart(), 0, exception_state));
+  }
+  if (options_dict->hasRangeEnd()) {
+    animation->SetRangeEndInternal(TimelineOffset::Create(
+        element, options_dict->rangeEnd(), 100, exception_state));
+  }
   return animation;
 }
 
@@ -129,8 +126,6 @@ Animation* Animatable::animate(ScriptState* script_state,
   if (!element->GetExecutionContext())
     return nullptr;
 
-  ReportPermissionsPolicyViolationsIfNecessary(*element->GetExecutionContext(),
-                                               *effect->Model());
   return element->GetDocument().Timeline().Play(effect, exception_state);
 }
 
@@ -145,10 +140,13 @@ HeapVector<Member<Animation>> Animatable::getAnimations(
 HeapVector<Member<Animation>> Animatable::GetAnimationsInternal(
     GetAnimationsOptionsResolved options) {
   Element* element = GetAnimationTarget();
-  if (options.use_subtree)
-    element->GetDocument().UpdateStyleAndLayoutTreeForSubtree(element);
-  else
-    element->GetDocument().UpdateStyleAndLayoutTreeForNode(element);
+  if (options.use_subtree) {
+    element->GetDocument().UpdateStyleAndLayoutTreeForSubtree(
+        element, DocumentUpdateReason::kWebAnimation);
+  } else {
+    element->GetDocument().UpdateStyleAndLayoutTreeForElement(
+        element, DocumentUpdateReason::kWebAnimation);
+  }
 
   HeapVector<Member<Animation>> animations;
   if (!options.use_subtree && !element->HasAnimations())

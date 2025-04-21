@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
+#include "ui/display/types/display_configuration_params.h"
 #include "ui/display/types/display_snapshot.h"
 #include "ui/display/types/native_display_delegate.h"
 #include "ui/ozone/demo/demo_window.h"
@@ -77,11 +78,12 @@ void WindowManager::OnConfigurationChanged() {
 void WindowManager::OnDisplaySnapshotsInvalidated() {}
 
 void WindowManager::OnDisplaysAcquired(
-    const std::vector<display::DisplaySnapshot*>& displays) {
+    const std::vector<raw_ptr<display::DisplaySnapshot, VectorExperimental>>&
+        displays) {
   windows_.clear();
 
   gfx::Point origin;
-  for (auto* display : displays) {
+  for (display::DisplaySnapshot* display : displays) {
     if (!display->native_mode()) {
       LOG(ERROR) << "Display " << display->display_id()
                  << " doesn't have a native mode";
@@ -92,27 +94,29 @@ void WindowManager::OnDisplaysAcquired(
         display->display_id(), origin, display->native_mode());
     std::vector<display::DisplayConfigurationParams> config_request;
     config_request.push_back(std::move(display_config_params));
-    delegate_->Configure(
-        config_request,
-        base::BindOnce(&WindowManager::OnDisplayConfigured,
-                       base::Unretained(this), display->display_id(),
-                       gfx::Rect(origin, display->native_mode()->size())),
-        display::kTestModeset | display::kCommitModeset);
+    delegate_->Configure(config_request,
+                         base::BindOnce(&WindowManager::OnDisplayConfigured,
+                                        base::Unretained(this)),
+                         {display::ModesetFlag::kTestModeset,
+                          display::ModesetFlag::kCommitModeset});
     origin.Offset(display->native_mode()->size().width(), 0);
   }
   is_configuring_ = false;
 
   if (should_configure_) {
     should_configure_ = false;
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&WindowManager::OnConfigurationChanged,
                                   base::Unretained(this)));
   }
 }
 
-void WindowManager::OnDisplayConfigured(const int64_t display_id,
-                                        const gfx::Rect& bounds,
-                                        bool config_success) {
+void WindowManager::OnDisplayConfigured(
+    const std::vector<display::DisplayConfigurationParams>& request_results,
+    bool config_success) {
+  CHECK_EQ(request_results.size(), 1u);
+  const auto& request = request_results[0];
+  const gfx::Rect bounds(request.origin, request.mode->size());
   if (config_success) {
     std::unique_ptr<DemoWindow> window(
         new DemoWindow(this, renderer_factory_.get(), bounds));

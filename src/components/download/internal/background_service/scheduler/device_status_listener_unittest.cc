@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -89,7 +89,7 @@ class TestDeviceStatusListener : public DeviceStatusListener {
 
 class DeviceStatusListenerTest : public testing::Test {
  public:
-  DeviceStatusListenerTest() {}
+  DeviceStatusListenerTest() = default;
 
   void SetUp() override {
     auto battery_listener = std::make_unique<TestBatteryStatusListener>();
@@ -139,7 +139,10 @@ class DeviceStatusListenerTest : public testing::Test {
 
   // Simulates a battery change call.
   void SimulateBatteryChange(bool on_battery_power) {
-    power_source_.GeneratePowerStateEvent(on_battery_power);
+    power_source_.GeneratePowerStateEvent(
+        on_battery_power
+            ? base::PowerStateObserver::BatteryPowerStatus::kBatteryPower
+            : base::PowerStateObserver::BatteryPowerStatus::kExternalPower);
   }
 
   void ChangeBatteryPercentage(int percentage) {
@@ -153,7 +156,7 @@ class DeviceStatusListenerTest : public testing::Test {
   // Needed for network change notifier and power monitor.
   base::test::SingleThreadTaskEnvironment task_environment_;
   base::test::ScopedPowerMonitorTestSource power_source_;
-  raw_ptr<TestBatteryStatusListener> test_battery_listener_;
+  raw_ptr<TestBatteryStatusListener, DanglingUntriaged> test_battery_listener_;
   raw_ptr<network::TestNetworkConnectionTracker>
       test_network_connection_tracker_;
 };

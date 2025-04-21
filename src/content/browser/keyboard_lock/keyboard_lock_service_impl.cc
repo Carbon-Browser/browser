@@ -1,16 +1,17 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/keyboard_lock/keyboard_lock_service_impl.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/metrics/histogram_macros.h"
 #include "content/browser/keyboard_lock/keyboard_lock_metrics.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
@@ -18,7 +19,6 @@
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_widget_host.h"
 #include "content/public/common/content_features.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/devtools/console_message.mojom.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy.mojom.h"
 #include "ui/events/keycodes/dom/dom_code.h"
@@ -57,16 +57,15 @@ void KeyboardLockServiceImpl::CreateMojoService(
 void KeyboardLockServiceImpl::RequestKeyboardLock(
     const std::vector<std::string>& key_codes,
     RequestKeyboardLockCallback callback) {
-  if (key_codes.empty())
+  if (key_codes.empty()) {
     LogKeyboardLockMethodCalled(KeyboardLockMethods::kRequestAllKeys);
-  else
+  } else {
     LogKeyboardLockMethodCalled(KeyboardLockMethods::kRequestSomeKeys);
-
+  }
   if (render_frame_host().GetParentOrOuterDocument()) {
     std::move(callback).Run(KeyboardLockRequestResult::kChildFrameError);
     return;
   }
-
   if (!render_frame_host().IsActive()) {
     std::move(callback).Run(KeyboardLockRequestResult::kFrameDetachedError);
     return;
@@ -100,20 +99,31 @@ void KeyboardLockServiceImpl::RequestKeyboardLock(
     return;
   }
 
-  absl::optional<base::flat_set<ui::DomCode>> dom_code_set;
-  if (!dom_codes.empty())
+  std::optional<base::flat_set<ui::DomCode>> dom_code_set;
+  if (!dom_codes.empty()) {
     dom_code_set = std::move(dom_codes);
-
-  if (frame_host_impl.GetRenderWidgetHost()->RequestKeyboardLock(
-          std::move(dom_code_set))) {
-    std::move(callback).Run(KeyboardLockRequestResult::kSuccess);
-    feature_handle_ =
-        static_cast<RenderFrameHostImpl&>(render_frame_host())
-            .RegisterBackForwardCacheDisablingNonStickyFeature(
-                blink::scheduler::WebSchedulerTrackedFeature::kKeyboardLock);
-  } else {
-    std::move(callback).Run(KeyboardLockRequestResult::kRequestFailedError);
   }
+  frame_host_impl.GetRenderWidgetHost()->RequestKeyboardLock(
+      std::move(dom_code_set),
+      // We use a lambda function here instead of binding to a method because
+      // we want the Mojo callback to be called even if `this` goes out of
+      // scope.
+      base::BindOnce(
+          [](base::WeakPtr<KeyboardLockServiceImpl> weak_this,
+             RequestKeyboardLockCallback callback,
+             blink::mojom::KeyboardLockRequestResult result) {
+            std::move(callback).Run(result);
+            if (weak_this &&
+                result == blink::mojom::KeyboardLockRequestResult::kSuccess) {
+              weak_this->feature_handle_ =
+                  static_cast<RenderFrameHostImpl&>(
+                      weak_this->render_frame_host())
+                      .RegisterBackForwardCacheDisablingNonStickyFeature(
+                          blink::scheduler::WebSchedulerTrackedFeature::
+                              kKeyboardLock);
+            }
+          },
+          weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }
 
 void KeyboardLockServiceImpl::CancelKeyboardLock() {
@@ -121,7 +131,7 @@ void KeyboardLockServiceImpl::CancelKeyboardLock() {
   auto& frame_host_impl =
       static_cast<RenderFrameHostImpl&>(render_frame_host());
   frame_host_impl.GetRenderWidgetHost()->CancelKeyboardLock();
-  feature_handle_.reset();
+  feature_handle_.Reset();
 }
 
 void KeyboardLockServiceImpl::GetKeyboardLayoutMap(

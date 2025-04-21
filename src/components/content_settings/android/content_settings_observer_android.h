@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,8 @@ class AndroidObserver : public Observer {
       const base::android::JavaParamRef<jobject>& obj,
       const base::android::JavaParamRef<jobject>& jbrowser_context_handle);
 
-  // Called by the Java counterpart when it is getting garbage collected.
+  // Destroys the AndroidObserver object. This needs to be called on the java
+  // side when the object is not in use anymore.
   void Destroy(JNIEnv* env, const base::android::JavaParamRef<jobject>& obj);
 
   // content_settings::Observer:

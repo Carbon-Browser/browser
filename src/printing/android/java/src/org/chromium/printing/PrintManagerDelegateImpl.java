@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,12 +14,13 @@ import android.print.PrintManager;
 import android.text.TextUtils;
 
 import org.chromium.base.Log;
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 
 import java.util.List;
 
-/**
- * An implementation of {@link PrintManagerDelegate} using the Android framework print manager.
- */
+/** An implementation of {@link PrintManagerDelegate} using the Android framework print manager. */
+@NullMarked
 public class PrintManagerDelegateImpl implements PrintManagerDelegate {
     private static final String TAG = "printing";
     private final PrintManager mPrintManager;
@@ -29,8 +30,10 @@ public class PrintManagerDelegateImpl implements PrintManagerDelegate {
     }
 
     @Override
-    public void print(String printJobName, PrintDocumentAdapter documentAdapter,
-            PrintAttributes attributes) {
+    public void print(
+            String printJobName,
+            PrintDocumentAdapter documentAdapter,
+            @Nullable PrintAttributes attributes) {
         dumpJobStatesForDebug();
         mPrintManager.print(printJobName, documentAdapter, attributes);
     }

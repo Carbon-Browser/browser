@@ -1,9 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "pdf/ui/document_properties.h"
 
+#include <optional>
 #include <string>
 
 #include "base/i18n/number_formatting.h"
@@ -11,7 +12,6 @@
 #include "pdf/document_metadata.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/size.h"
 
 namespace chrome_pdf {
@@ -44,7 +44,7 @@ class FormatPageSizeTest : public testing::Test {
 }  // namespace
 
 TEST_F(FormatPageSizeTest, NoUniformSize) {
-  EXPECT_EQ(FormatPageSize(absl::nullopt), u"Varies");
+  EXPECT_EQ(FormatPageSize(std::nullopt), u"Varies");
 }
 
 class FormatPageSizeMillimetersTest : public FormatPageSizeTest {

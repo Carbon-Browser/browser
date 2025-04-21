@@ -1,6 +1,13 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
+
+#include "base/profiler/stack_copier_suspend.h"
 
 #include <algorithm>
 #include <cstring>
@@ -9,8 +16,8 @@
 #include <utility>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/profiler/stack_buffer.h"
-#include "base/profiler/stack_copier_suspend.h"
 #include "base/profiler/suspendable_thread_delegate.h"
 #include "build/build_config.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -57,20 +64,22 @@ class TestSuspendableThreadDelegate : public SuspendableThreadDelegate {
   }
 
   bool GetThreadContext(RegisterContext* thread_context) override {
-    if (thread_context_)
+    if (thread_context_) {
       *thread_context = *thread_context_;
+    }
     // Set the stack pointer to be consistent with the provided fake stack.
     RegisterContextStackPointer(thread_context) =
-        reinterpret_cast<uintptr_t>(&fake_stack_[0]);
+        reinterpret_cast<uintptr_t>(&(*fake_stack_)[0]);
     RegisterContextInstructionPointer(thread_context) =
-        reinterpret_cast<uintptr_t>(fake_stack_[0]);
+        reinterpret_cast<uintptr_t>((*fake_stack_)[0]);
     return true;
   }
 
   PlatformThreadId GetThreadId() const override { return PlatformThreadId(); }
 
   uintptr_t GetStackBaseAddress() const override {
-    return reinterpret_cast<uintptr_t>(&fake_stack_[0] + fake_stack_.size());
+    return reinterpret_cast<uintptr_t>(&(*fake_stack_)[0] +
+                                       fake_stack_->size());
   }
 
   bool CanCopyStack(uintptr_t stack_pointer) override { return true; }
@@ -83,15 +92,13 @@ class TestSuspendableThreadDelegate : public SuspendableThreadDelegate {
  private:
   // Must be a reference to retain the underlying allocation from the vector
   // passed to the constructor.
-  const std::vector<uintptr_t>& fake_stack_;
+  const raw_ref<const std::vector<uintptr_t>> fake_stack_;
   raw_ptr<RegisterContext> thread_context_;
 };
 
 class TestStackCopierDelegate : public StackCopier::Delegate {
  public:
-  void OnStackCopy() override {
-    on_stack_copy_was_invoked_ = true;
-  }
+  void OnStackCopy() override { on_stack_copy_was_invoked_ = true; }
 
   bool on_stack_copy_was_invoked() const { return on_stack_copy_was_invoked_; }
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "ash/public/cpp/shelf_types.h"
 #include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/ash/shelf/crostini_app_display.h"
 
 class AppServiceAppWindowShelfController;
@@ -56,13 +57,14 @@ class AppServiceAppWindowCrostiniTracker {
                            aura::Window* window,
                            const std::string& app_id) const;
 
-  AppServiceAppWindowShelfController* const app_service_controller_;
+  const raw_ptr<AppServiceAppWindowShelfController> app_service_controller_;
 
   CrostiniAppDisplay crostini_app_display_;
 
   // Windows that have been granted the permission to activate via the
   // exo::Permission window property.
-  base::flat_set<aura::Window*> activation_permissions_;
+  base::flat_set<raw_ptr<aura::Window, CtnExperimental>>
+      activation_permissions_;
 };
 
 #endif  // CHROME_BROWSER_UI_ASH_SHELF_APP_SERVICE_APP_SERVICE_APP_WINDOW_CROSTINI_TRACKER_H_

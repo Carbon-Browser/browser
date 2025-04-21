@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 #include <utility>
 
 #include "ash/public/cpp/new_window_delegate.h"
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
@@ -50,8 +51,7 @@ void UrlHandlerServiceProvider::Start(
 }
 
 bool UrlHandlerServiceProvider::UrlAllowed(const GURL& gurl) const {
-  return gurl.is_valid() &&
-         allowed_url_schemes_.find(gurl.scheme()) != allowed_url_schemes_.end();
+  return gurl.is_valid() && base::Contains(allowed_url_schemes_, gurl.scheme());
 }
 
 void UrlHandlerServiceProvider::OpenUrl(
@@ -81,7 +81,8 @@ void UrlHandlerServiceProvider::OpenUrl(
   VLOG(1) << "Opening url now";
 
   NewWindowDelegate::GetPrimary()->OpenUrl(
-      gurl, NewWindowDelegate::OpenUrlFrom::kUnspecified);
+      gurl, NewWindowDelegate::OpenUrlFrom::kUnspecified,
+      NewWindowDelegate::Disposition::kNewForegroundTab);
   std::move(response_sender).Run(dbus::Response::FromMethodCall(method_call));
 }
 

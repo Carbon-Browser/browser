@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -64,11 +64,12 @@ int GetIDSForDMStatus(DeviceManagementStatus status) {
     case DM_STATUS_SERVICE_ENTERPRISE_TOS_HAS_NOT_BEEN_ACCEPTED:
       // This is shown only on registration failed.
       return IDS_POLICY_DM_STATUS_UNKNOWN_ERROR;
+    case DM_STATUS_SERVICE_INVALID_PACKAGED_DEVICE_FOR_KIOSK:
+      return IDS_POLICY_DM_STATUS_INVALID_PACKAGED_DEVICE_FOR_KIOSK;
     case DM_STATUS_SERVICE_ILLEGAL_ACCOUNT_FOR_PACKAGED_EDU_LICENSE:
       return IDS_POLICY_DM_STATUS_SERVICE_DOMAIN_MISMATCH;
   }
   NOTREACHED() << "Unhandled DM status " << status;
-  return IDS_POLICY_DM_STATUS_UNKNOWN_ERROR;
 }
 
 int GetIDSForValidationStatus(CloudPolicyValidatorBase::Status status) {
@@ -107,7 +108,6 @@ int GetIDSForValidationStatus(CloudPolicyValidatorBase::Status status) {
       NOTREACHED();
   }
   NOTREACHED() << "Unhandled validation status " << status;
-  return IDS_POLICY_VALIDATION_UNKNOWN_ERROR;
 }
 
 int GetIDSForStoreStatus(CloudPolicyStore::Status status) {
@@ -129,7 +129,6 @@ int GetIDSForStoreStatus(CloudPolicyStore::Status status) {
       return IDS_POLICY_STORE_STATUS_BAD_STATE;
   }
   NOTREACHED() << "Unhandled store status " << status;
-  return IDS_POLICY_STORE_STATUS_UNKNOWN_ERROR;
 }
 
 }  // namespace

@@ -1,13 +1,13 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_PERFORMANCE_MANAGER_PERSISTENCE_SITE_DATA_LEVELDB_SITE_DATA_STORE_H_
 #define COMPONENTS_PERFORMANCE_MANAGER_PERSISTENCE_SITE_DATA_LEVELDB_SITE_DATA_STORE_H_
 
-#include "base/auto_reset.h"
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
 #include "components/performance_manager/persistence/site_data/site_data_store.h"
@@ -53,8 +53,9 @@ class LevelDBSiteDataStore : public SiteDataStore {
                                   base::OnceClosure after_task_run_closure);
 
   // Make the new instances of this class use an in memory database rather than
-  // creating it on disk.
-  static std::unique_ptr<base::AutoReset<bool>> UseInMemoryDBForTesting();
+  // creating it on disk. When the ScopedClosureRunner goes out of scope, it
+  // will stop using an in-memory database.
+  static base::ScopedClosureRunner UseInMemoryDBForTesting();
 
   static const size_t kDbVersion;
   static const char kDbMetadataKey[];

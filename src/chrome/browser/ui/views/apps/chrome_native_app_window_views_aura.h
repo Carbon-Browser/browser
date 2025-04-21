@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "base/gtest_prod_util.h"
 #include "build/build_config.h"
 #include "chrome/browser/ui/views/apps/chrome_native_app_window_views.h"
+#include "ui/base/mojom/window_show_state.mojom-forward.h"
 
 // Aura-specific parts of ChromeNativeAppWindowViews. This is used directly on
 // Linux and Windows, and is the base class for the Ash specific class used on
@@ -26,8 +27,8 @@ class ChromeNativeAppWindowViewsAura : public ChromeNativeAppWindowViews {
   ~ChromeNativeAppWindowViewsAura() override = default;
 
  protected:
-  ui::WindowShowState GetRestorableState(
-      ui::WindowShowState restore_state) const;
+  ui::mojom::WindowShowState GetRestorableState(
+      ui::mojom::WindowShowState restore_state) const;
 
   // ChromeNativeAppWindowViews implementation.
   void OnBeforeWidgetInit(
@@ -38,7 +39,7 @@ class ChromeNativeAppWindowViewsAura : public ChromeNativeAppWindowViews {
       override;
 
   // ui::BaseWindow implementation.
-  ui::WindowShowState GetRestoredState() const override;
+  ui::mojom::WindowShowState GetRestoredState() const override;
   ui::ZOrderLevel GetZOrderLevel() const override;
 
   // NativeAppWindow implementation.

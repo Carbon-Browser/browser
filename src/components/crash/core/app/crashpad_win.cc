@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,7 @@
 #include "base/win/windows_version.h"
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
+#include "components/app_launch_prefetch/app_launch_prefetch.h"
 #include "components/crash/core/app/crash_export_thunks.h"
 #include "components/crash/core/app/crash_reporter_client.h"
 #include "components/crash/core/app/crash_switches.h"
@@ -118,10 +119,9 @@ bool PlatformCrashpadInitialization(
         start_arguments.push_back(std::string("--user-data-dir=") +
                                   user_data_dir);
       }
-      // The prefetch argument added here has to be documented in
-      // chrome_switches.cc, below the kPrefetchArgument* constants. A constant
-      // can't be used here because crashpad can't depend on Chrome.
-      start_arguments.push_back("/prefetch:7");
+      start_arguments.push_back(
+          base::WideToUTF8(app_launch_prefetch::GetPrefetchSwitch(
+              app_launch_prefetch::SubprocessType::kCrashpad)));
     } else {
       base::FilePath exe_dir = exe_file.DirName();
       exe_file = exe_dir.Append(FILE_PATH_LITERAL("crashpad_handler.exe"));
@@ -173,12 +173,16 @@ bool PlatformCrashpadInitialization(
       GetCrashpadClient().RegisterWerModule(path);
   }
 
-  if (crash_reporter_client->GetShouldDumpLargerDumps()) {
-    const uint32_t kIndirectMemoryLimit = 4 * 1024 * 1024;
-    crashpad::CrashpadInfo::GetCrashpadInfo()
-        ->set_gather_indirectly_referenced_memory(crashpad::TriState::kEnabled,
-                                                  kIndirectMemoryLimit);
-  }
+  // In the not-large-dumps case record enough extra memory to be able to save
+  // dereferenced memory from all registers on the crashing thread. crashpad may
+  // save 512-bytes per register, and the largest register set (not including
+  // stack pointers) is ARM64 with 32 registers. Hence, 16 KiB.
+  const uint32_t kIndirectMemoryLimit =
+      crash_reporter_client->GetShouldDumpLargerDumps() ? 4 * 1024 * 1024
+                                                        : 16 * 1024;
+  crashpad::CrashpadInfo::GetCrashpadInfo()
+      ->set_gather_indirectly_referenced_memory(crashpad::TriState::kEnabled,
+                                                kIndirectMemoryLimit);
 
   return true;
 }

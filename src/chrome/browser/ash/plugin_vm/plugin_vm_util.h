@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,15 @@
 #define CHROME_BROWSER_ASH_PLUGIN_VM_PLUGIN_VM_UTIL_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list_types.h"
-#include "chrome/browser/ash/settings/cros_settings.h"
+#include "chromeos/ash/components/settings/cros_settings.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace aura {
 class Window;
@@ -24,7 +25,7 @@ class GURL;
 
 namespace plugin_vm {
 
-class PluginVmPolicySubscription;
+class PluginVmAvailabilitySubscription;
 
 // Name of the pita DLC.
 extern const char kPitaDlc[];
@@ -80,7 +81,7 @@ std::string GetPluginVmUserIdForProfile(const Profile* profile);
 // will still be used by the PluginVmService. This function also makes the
 // installer skip its license check.
 // This sets global state, not per-profile state.
-// TODO(crbug.com/1025136): Set policy directly from tast instead of using a
+// TODO(crbug.com/40107731): Set policy directly from tast instead of using a
 // test helper function.
 void SetFakePluginVmPolicy(Profile* profile,
                            const std::string& image_path,
@@ -94,31 +95,39 @@ std::string GetFakeLicenseKey();
 void RemoveDriveDownloadDirectoryIfExists();
 
 // Returns nullopt if not a drive URL.
-absl::optional<std::string> GetIdFromDriveUrl(const GURL& url);
+std::optional<std::string> GetIdFromDriveUrl(const GURL& url);
 
-// A subscription for changes to PluginVm policy that may affect
-// PluginVmFeatures::Get()->IsAllowed.
-class PluginVmPolicySubscription {
+// Returns true if window is PluginVM.
+bool IsPluginvmWindowId(const std::string& window_id);
+
+// A subscription for changes to Plugin VM's availability. The callback is
+// called whenever there are changes that would affect either
+// PluginVmFeatures::Get()->IsAllowed() or IsConfigured().
+class PluginVmAvailabilitySubscription {
  public:
-  using PluginVmAllowedChanged = base::RepeatingCallback<void(bool is_allowed)>;
-  PluginVmPolicySubscription(Profile* profile, PluginVmAllowedChanged callback);
-  ~PluginVmPolicySubscription();
+  using AvailabilityChangeCallback =
+      base::RepeatingCallback<void(bool is_allowed, bool is_configured)>;
+  PluginVmAvailabilitySubscription(Profile* profile,
+                                   AvailabilityChangeCallback callback);
+  ~PluginVmAvailabilitySubscription();
 
-  PluginVmPolicySubscription(const PluginVmPolicySubscription&) = delete;
-  PluginVmPolicySubscription& operator=(const PluginVmPolicySubscription&) =
+  PluginVmAvailabilitySubscription(const PluginVmAvailabilitySubscription&) =
       delete;
+  PluginVmAvailabilitySubscription& operator=(
+      const PluginVmAvailabilitySubscription&) = delete;
 
  private:
-  // Internal callback for policy changes.
   void OnPolicyChanged();
+  void OnImageExistsChanged();
 
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
 
   // Whether Plugin VM was previously allowed for the profile.
   bool is_allowed_;
+  bool is_configured_;
 
   // The user-provided callback method.
-  PluginVmAllowedChanged callback_;
+  AvailabilityChangeCallback callback_;
 
   std::unique_ptr<PrefChangeRegistrar> pref_change_registrar_;
   base::CallbackListSubscription device_allowed_subscription_;

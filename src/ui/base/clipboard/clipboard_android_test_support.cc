@@ -1,8 +1,7 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ui/android/ui_javatest_jni_headers/ClipboardAndroidTestSupport_jni.h"
 
 #include <string>
 
@@ -13,11 +12,10 @@
 #include "ui/base/clipboard/clipboard_buffer.h"
 #include "ui/base/clipboard/scoped_clipboard_writer.h"
 
-namespace ui {
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "ui/android/ui_javatest_jni_headers/ClipboardAndroidTestSupport_jni.h"
 
-void JNI_ClipboardAndroidTestSupport_Cleanup(JNIEnv* env) {
-  Clipboard::DestroyClipboardForCurrentThread();
-}
+namespace ui {
 
 jboolean JNI_ClipboardAndroidTestSupport_NativeWriteHtml(
     JNIEnv* env,

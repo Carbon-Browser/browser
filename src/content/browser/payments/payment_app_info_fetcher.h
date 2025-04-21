@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -59,8 +59,10 @@ class PaymentAppInfoFetcher {
     void RunCallbackAndDestroy();
 
     // The WebContents::GetManifestCallback.
-    void FetchPaymentAppManifestCallback(const GURL& url,
-                                         blink::mojom::ManifestPtr manifest);
+    void FetchPaymentAppManifestCallback(
+        blink::mojom::ManifestRequestResult result,
+        const GURL& url,
+        blink::mojom::ManifestPtr manifest);
 
     // The ManifestIconDownloader::IconFetchCallback.
     void OnIconFetched(const SkBitmap& icon);

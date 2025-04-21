@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,9 @@
 #include <utility>
 
 #include "chrome/browser/android/tab_android.h"
-#include "chrome/browser/installable/installed_webapp_bridge.h"
-#include "chrome/browser/permissions/permission_update_infobar_delegate_android.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
+#include "chrome/browser/webapps/installable/installed_webapp_bridge.h"
 #include "components/permissions/android/android_permission_util.h"
 #include "components/permissions/permission_request_id.h"
 #include "components/permissions/permission_util.h"
@@ -20,6 +19,7 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_delegate.h"
 #include "url/gurl.h"
+#include "url/origin.h"
 
 GeolocationPermissionContextDelegateAndroid::
     GeolocationPermissionContextDelegateAndroid(Profile* profile)
@@ -34,8 +34,8 @@ bool GeolocationPermissionContextDelegateAndroid::DecidePermission(
     bool user_gesture,
     permissions::BrowserPermissionCallback* callback,
     permissions::GeolocationPermissionContext* context) {
-  content::RenderFrameHost* rfh = content::RenderFrameHost::FromID(
-      id.render_process_id(), id.render_frame_id());
+  content::RenderFrameHost* rfh =
+      content::RenderFrameHost::FromID(id.global_render_frame_host_id());
   DCHECK(rfh);
 
   content::WebContents* web_contents =
@@ -80,13 +80,10 @@ bool GeolocationPermissionContextDelegateAndroid::IsRequestingOriginDSE(
       TemplateURLServiceFactory::GetForProfile(
           Profile::FromBrowserContext(browser_context));
   if (template_url_service) {
-    const TemplateURL* template_url =
-        template_url_service->GetDefaultSearchProvider();
-    if (template_url) {
-      dse_url = template_url->GenerateSearchURL(
-          template_url_service->search_terms_data());
-    }
+    url::Origin dse_origin =
+        template_url_service->GetDefaultSearchProviderOrigin();
+    return dse_origin.IsSameOriginWith(requesting_origin);
   }
 
-  return url::IsSameOriginWith(requesting_origin, dse_url);
+  return false;
 }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -83,7 +83,7 @@ void ClipboardAura::CheckClipboardForChanges() {
   protocol::ClipboardEvent event;
   std::string data;
   ui::DataTransferEndpoint data_dst = ui::DataTransferEndpoint(
-      ui::EndpointType::kDefault, /*notify_if_restricted=*/false);
+      ui::EndpointType::kDefault, {.notify_if_restricted = false});
   clipboard->ReadAsciiText(ui::ClipboardBuffer::kCopyPaste, &data_dst, &data);
   event.set_mime_type(kMimeTypeTextUtf8);
   event.set_data(data);

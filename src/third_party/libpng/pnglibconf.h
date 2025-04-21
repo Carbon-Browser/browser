@@ -68,6 +68,7 @@
 #define PNG_READ_USER_CHUNKS_SUPPORTED
 #define PNG_READ_USER_TRANSFORM_SUPPORTED
 #define PNG_READ_cHRM_SUPPORTED
+#define PNG_READ_eXIf_SUPPORTED
 #define PNG_READ_gAMA_SUPPORTED
 #define PNG_READ_iCCP_SUPPORTED
 #define PNG_READ_sRGB_SUPPORTED
@@ -127,6 +128,7 @@
 #define PNG_WRITE_tRNS_SUPPORTED
 #define PNG_WRITE_zTXt_SUPPORTED
 #define PNG_cHRM_SUPPORTED
+#define PNG_eXIf_SUPPORTED
 #define PNG_gAMA_SUPPORTED
 #define PNG_iCCP_SUPPORTED
 #define PNG_sBIT_SUPPORTED
@@ -224,14 +226,5 @@
 #define PNG_USER_CHUNK_CACHE_MAX 128
 #define PNG_USER_CHUNK_MALLOC_MAX 4000000L
 /* end of chromium settings */
-
-/* chromium prefixing */
-/*
- * This is necessary to build multiple copies of libpng.  We need this while pdfium builds
- * its own copy of libpng.
- */
-#define PNG_PREFIX
-#include "pngprefix.h"
-/* end of chromium prefixing */
 
 #endif /* PNGLCONF_H */

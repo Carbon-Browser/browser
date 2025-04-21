@@ -1,11 +1,11 @@
-// Copyright 2018 the Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/css/cssom/prepopulated_computed_style_property_map.h"
 
 #include "third_party/blink/renderer/core/css/computed_style_css_value_mapping.h"
-#include "third_party/blink/renderer/core/css/css_custom_property_declaration.h"
+#include "third_party/blink/renderer/core/css/css_unparsed_declaration_value.h"
 #include "third_party/blink/renderer/core/css/css_variable_data.h"
 #include "third_party/blink/renderer/core/css/cssom/computed_style_property_map.h"
 #include "third_party/blink/renderer/core/css/cssom/css_unparsed_value.h"
@@ -28,8 +28,9 @@ PrepopulatedComputedStylePropertyMap::PrepopulatedComputedStylePropertyMap(
   for (const auto& property_id : native_properties) {
     // Silently drop shorthand properties.
     DCHECK_NE(property_id, CSSPropertyID::kInvalid);
-    if (CSSProperty::Get(property_id).IsShorthand())
+    if (CSSProperty::Get(property_id).IsShorthand()) {
       continue;
+    }
 
     UpdateNativeProperty(style, property_id);
   }
@@ -62,7 +63,8 @@ void PrepopulatedComputedStylePropertyMap::UpdateNativeProperty(
   native_values_.Set(property_id, CSSProperty::Get(property_id)
                                       .CSSValueFromComputedStyle(
                                           style, /*layout_object=*/nullptr,
-                                          /*allow_visited_style=*/false));
+                                          /*allow_visited_style=*/false,
+                                          CSSValuePhase::kComputedValue));
 }
 
 void PrepopulatedComputedStylePropertyMap::UpdateCustomProperty(
@@ -72,9 +74,10 @@ void PrepopulatedComputedStylePropertyMap::UpdateCustomProperty(
   CSSPropertyRef ref(property_name, document);
   const CSSValue* value = ref.GetProperty().CSSValueFromComputedStyle(
       style, /*layout_object=*/nullptr,
-      /*allow_visited_style=*/false);
-  if (!value)
+      /*allow_visited_style=*/false, CSSValuePhase::kComputedValue);
+  if (!value) {
     value = CSSUnparsedValue::Create()->ToCSSValue();
+  }
 
   custom_values_.Set(property_name, value);
 }
@@ -92,7 +95,7 @@ const CSSValue* PrepopulatedComputedStylePropertyMap::GetCustomProperty(
 }
 
 void PrepopulatedComputedStylePropertyMap::ForEachProperty(
-    const IterationCallback& callback) {
+    IterationFunction visitor) {
   // Have to sort by all properties by code point, so we have to store
   // them in a buffer first.
   HeapVector<std::pair<CSSPropertyName, Member<const CSSValue>>> values;
@@ -111,15 +114,15 @@ void PrepopulatedComputedStylePropertyMap::ForEachProperty(
     return ComputedStylePropertyMap::ComparePropertyNames(a.first, b.first);
   });
 
-  for (const auto& value : values)
-    callback(value.first, *value.second);
+  for (const auto& value : values) {
+    visitor(value.first, *value.second);
+  }
 }
 
 String PrepopulatedComputedStylePropertyMap::SerializationForShorthand(
     const CSSProperty&) const {
   // TODO(816722): Shorthands not yet supported for this style map.
   NOTREACHED();
-  return "";
 }
 
 void PrepopulatedComputedStylePropertyMap::Trace(Visitor* visitor) const {

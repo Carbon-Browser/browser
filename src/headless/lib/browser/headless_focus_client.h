@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,8 +37,7 @@ class HeadlessFocusClient : public aura::client::FocusClient,
   raw_ptr<aura::Window> focused_window_;
   base::ScopedObservation<aura::Window, aura::WindowObserver>
       observation_manager_{this};
-  base::ObserverList<aura::client::FocusChangeObserver>::Unchecked
-      focus_observers_;
+  base::ObserverList<aura::client::FocusChangeObserver> focus_observers_;
 };
 
 }  // namespace headless

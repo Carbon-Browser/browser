@@ -1,5 +1,5 @@
 #!/usr/bin/env vpython3
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -59,6 +59,14 @@ class SkiaGoldPropertiesInitializationTest(unittest.TestCase):
     args = createSkiaGoldArgs(no_luci_auth=True)
     sgp = skia_gold_properties.SkiaGoldProperties(args)
     self.verifySkiaGoldProperties(sgp, {'no_luci_auth': True})
+
+  def test_initializeSkiaGoldAttributes_explicitServiceAccount(self) -> None:
+    args = createSkiaGoldArgs(service_account='a')
+    sgp = skia_gold_properties.SkiaGoldProperties(args)
+    self.verifySkiaGoldProperties(sgp, {
+        'service_account': 'a',
+        'no_luci_auth': True
+    })
 
   def test_initializeSkiaGoldAttributes_explicitCrs(self) -> None:
     args = createSkiaGoldArgs(code_review_system='foo')
@@ -125,11 +133,15 @@ class SkiaGoldPropertiesCalculationTest(unittest.TestCase):
     sgp = skia_gold_properties.SkiaGoldProperties(args)
     with mock.patch.dict(os.environ, {}, clear=True):
       self.assertTrue(sgp.local_pixel_tests)
+    with mock.patch.dict(os.environ, {'RUNNING_IN_SKYLAB': '0'}, clear=True):
+      self.assertTrue(sgp.local_pixel_tests)
 
   def testLocalPixelTests_determineFalse(self) -> None:
     args = createSkiaGoldArgs()
     sgp = skia_gold_properties.SkiaGoldProperties(args)
     with mock.patch.dict(os.environ, {'SWARMING_SERVER': ''}, clear=True):
+      self.assertFalse(sgp.local_pixel_tests)
+    with mock.patch.dict(os.environ, {'RUNNING_IN_SKYLAB': '1'}, clear=True):
       self.assertFalse(sgp.local_pixel_tests)
 
   def testIsTryjobRun_noIssue(self) -> None:

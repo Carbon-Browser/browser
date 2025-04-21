@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,10 +29,11 @@ WebString TestWebFrameContentDumper::DumpWebViewAsText(WebView* web_view,
 
   WebViewImpl* web_view_impl = To<WebViewImpl>(web_view);
   DCHECK(web_view_impl->MainFrameViewWidget());
+  const viz::BeginFrameArgs args;
   // Updating the document lifecycle isn't enough, the BeginFrame() step
   // should come first which runs events such as notifying of media query
   // changes or raf-based events.
-  web_view_impl->MainFrameViewWidget()->BeginMainFrame(base::TimeTicks::Now());
+  web_view_impl->MainFrameViewWidget()->BeginMainFrame(args);
   web_view_impl->MainFrameViewWidget()->UpdateAllLifecyclePhases(
       DocumentUpdateReason::kTest);
 

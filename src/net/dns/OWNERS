@@ -1,2 +1,3 @@
 ericorth@chromium.org
-dmcardle@chromium.org
+
+per-file stale_host_resolver.*=file://components/cronet/OWNERS

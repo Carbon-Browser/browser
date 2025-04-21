@@ -1,6 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "mojo/core/handle_table.h"
 
@@ -290,7 +295,7 @@ TEST(HandleTableTest, OnMemoryDump) {
   }
 
   base::trace_event::MemoryDumpArgs args = {
-      base::trace_event::MemoryDumpLevelOfDetail::DETAILED};
+      base::trace_event::MemoryDumpLevelOfDetail::kDetailed};
   base::trace_event::ProcessMemoryDump pmd(args);
   ht.OnMemoryDump(args, &pmd);
 

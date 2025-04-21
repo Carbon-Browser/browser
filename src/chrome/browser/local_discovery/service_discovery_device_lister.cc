@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 
 namespace local_discovery {
 
@@ -54,6 +53,13 @@ class ServiceDiscoveryDeviceListerImpl : public ServiceDiscoveryDeviceLister {
                         const std::string& service_name) {
     VLOG(1) << "OnServiceUpdated: service_type: " << service_type_
             << ", service_name: " << service_name << ", update: " << update;
+
+    if (update == ServiceWatcher::UPDATE_PERMISSION_REJECTED) {
+      resolvers_.clear();
+      delegate_->OnPermissionRejected();
+      return;
+    }
+
     if (update == ServiceWatcher::UPDATE_INVALIDATED) {
       resolvers_.clear();
       CreateServiceWatcher();
@@ -106,6 +112,7 @@ class ServiceDiscoveryDeviceListerImpl : public ServiceDiscoveryDeviceLister {
         base::BindRepeating(&ServiceDiscoveryDeviceListerImpl::OnServiceUpdated,
                             weak_factory_.GetWeakPtr()));
     service_watcher_->Start();
+    service_watcher_->SetActivelyRefreshServices(true);
   }
 
   const raw_ptr<Delegate> delegate_;

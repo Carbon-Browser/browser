@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -498,7 +498,7 @@ PP_Bool FakeURLRequestInfoInterface::AppendDataToBody(PP_Resource request,
 
   request_resource->body.append(static_cast<const char*>(data), len);
 
-  char len_string[64] = {0};
+  char len_string[64] = {};
   snprintf(len_string, sizeof(len_string), "%u", len);
 
   SetHeader("Content-Length", len_string, &request_resource->headers);

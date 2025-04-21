@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,8 @@
 
 #include <vector>
 
-#include "ash/components/login/auth/challenge_response/known_user_pref_utils.h"
-#include "ash/components/login/auth/public/challenge_response_key.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/scoped_observation.h"
 #include "base/test/bind.h"
@@ -20,6 +19,8 @@
 #include "chrome/browser/certificate_provider/test_certificate_provider_extension_mixin.h"
 #include "chrome/browser/policy/extension_force_install_mixin.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chromeos/ash/components/login/auth/challenge_response/known_user_pref_utils.h"
+#include "chromeos/ash/components/login/auth/public/challenge_response_key.h"
 #include "components/account_id/account_id.h"
 #include "components/user_manager/known_user.h"
 #include "content/public/test/browser_test.h"
@@ -85,7 +86,7 @@ class ChallengeResponseAuthKeysLoaderBrowserTest : public OobeBaseTest {
       challenge_response_key.set_extension_id(extension_id());
 
     challenge_response_keys.push_back(challenge_response_key);
-    base::Value challenge_response_keys_value =
+    base::Value::List challenge_response_keys_value =
         SerializeChallengeResponseKeysForKnownUser(challenge_response_keys);
     user_manager::KnownUser(g_browser_process->local_state())
         .SetChallengeResponseKeys(account_id_,
@@ -375,8 +376,9 @@ class ChallengeResponseExtensionLoadObserverTest
   }
 
  private:
-  base::RunLoop* extension_host_created_loop_ = nullptr;
-  extensions::ExtensionHost* extension_host_ = nullptr;
+  raw_ptr<base::RunLoop> extension_host_created_loop_ = nullptr;
+  raw_ptr<extensions::ExtensionHost, DanglingUntriaged> extension_host_ =
+      nullptr;
   base::ScopedObservation<extensions::ProcessManager,
                           extensions::ProcessManagerObserver>
       process_manager_observation_{this};

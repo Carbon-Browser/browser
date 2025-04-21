@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,26 +33,27 @@ void AddExtensionsActivityToMessage(
 }
 
 void AddClientConfigParamsToMessage(
-    ModelTypeSet enabled_types,
-    bool proxy_tabs_datatype_enabled,
+    DataTypeSet enabled_types,
     bool cookie_jar_mismatch,
     bool single_client,
     bool single_client_with_standalone_invalidations,
+    bool single_client_with_old_invalidations,
     const std::vector<std::string>& all_fcm_registration_tokens,
     const std::vector<std::string>&
         fcm_registration_tokens_for_interested_clients,
     sync_pb::CommitMessage* message) {
   sync_pb::ClientConfigParams* config_params = message->mutable_config_params();
-  DCHECK(Difference(enabled_types, ProtocolTypes()).Empty());
-  for (ModelType type : enabled_types) {
-    int field_number = GetSpecificsFieldNumberFromModelType(type);
+  DCHECK(Difference(enabled_types, ProtocolTypes()).empty());
+  for (DataType type : enabled_types) {
+    int field_number = GetSpecificsFieldNumberFromDataType(type);
     config_params->mutable_enabled_type_ids()->Add(field_number);
   }
-  config_params->set_tabs_datatype_enabled(proxy_tabs_datatype_enabled);
   config_params->set_cookie_jar_mismatch(cookie_jar_mismatch);
   config_params->set_single_client(single_client);
   config_params->set_single_client_with_standalone_invalidations(
       single_client_with_standalone_invalidations);
+  config_params->set_single_client_with_old_invalidations(
+      single_client_with_old_invalidations);
   for (const std::string& token : all_fcm_registration_tokens) {
     *config_params->add_devices_fcm_registration_tokens() = token;
   }

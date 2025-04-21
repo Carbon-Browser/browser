@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,7 @@ Textarea::Textarea() {
   GetRenderText()->SetMultiline(true);
   GetRenderText()->SetVerticalAlignment(gfx::ALIGN_TOP);
   GetRenderText()->SetWordWrapBehavior(gfx::WRAP_LONG_WORDS);
+  SetTextInputType(ui::TextInputType::TEXT_INPUT_TYPE_TEXT_AREA);
 }
 
 size_t Textarea::GetNumLines() {
@@ -29,6 +30,7 @@ bool Textarea::OnMouseWheel(const ui::MouseWheelEvent& event) {
   GetRenderText()->SetDisplayOffset(GetRenderText()->GetUpdatedDisplayOffset() +
                                     gfx::Vector2d(0, event.y_offset()));
   UpdateCursorViewPosition();
+  UpdateCursorVisibility();
   SchedulePaint();
   return true;
 }
@@ -95,8 +97,9 @@ bool Textarea::PreHandleKeyPressed(const ui::KeyEvent& event) {
 }
 
 ui::TextEditCommand Textarea::GetCommandForKeyEvent(const ui::KeyEvent& event) {
-  if (event.type() != ui::ET_KEY_PRESSED || event.IsUnicodeKeyCode())
+  if (event.type() != ui::EventType::kKeyPressed || event.IsUnicodeKeyCode()) {
     return Textfield::GetCommandForKeyEvent(event);
+  }
 
   const bool shift = event.IsShiftDown();
   switch (event.key_code()) {
@@ -111,7 +114,7 @@ ui::TextEditCommand Textarea::GetCommandForKeyEvent(const ui::KeyEvent& event) {
   }
 }
 
-BEGIN_METADATA(Textarea, Textfield)
+BEGIN_METADATA(Textarea)
 END_METADATA
 
 }  // namespace views

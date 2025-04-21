@@ -1,4 +1,4 @@
-// Copyright 2017 The Crashpad Authors. All rights reserved.
+// Copyright 2017 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -487,6 +487,10 @@ TEST(Filesystem, GetFileSize) {
   EXPECT_EQ(filesize, sizeof(kTestFileContent));
 
 #if !BUILDFLAG(IS_FUCHSIA)
+  if (!CanCreateSymbolicLinks()) {
+    GTEST_SKIP();
+  }
+
   // Create a link to a file.
   base::FilePath link(temp_dir.path().Append(FILE_PATH_LITERAL("link")));
   ASSERT_TRUE(CreateSymbolicLink(filepath, link));
@@ -517,13 +521,15 @@ TEST(Filesystem, GetDirectorySize) {
   writer2.Close();
 
 #if !BUILDFLAG(IS_FUCHSIA)
-  // Create a link to a file.
-  base::FilePath link(dir.Append(FILE_PATH_LITERAL("link")));
-  ASSERT_TRUE(CreateSymbolicLink(filepath2, link));
+  if (CanCreateSymbolicLinks()) {
+    // Create a link to a file.
+    base::FilePath link(dir.Append(FILE_PATH_LITERAL("link")));
+    ASSERT_TRUE(CreateSymbolicLink(filepath2, link));
 
-  // Create a link to a dir.
-  base::FilePath linkdir(temp_dir.path().Append(FILE_PATH_LITERAL("link")));
-  ASSERT_TRUE(CreateSymbolicLink(dir, linkdir));
+    // Create a link to a dir.
+    base::FilePath linkdir(temp_dir.path().Append(FILE_PATH_LITERAL("link")));
+    ASSERT_TRUE(CreateSymbolicLink(dir, linkdir));
+  }
 #endif  // !BUILDFLAG(IS_FUCHSIA)
 
   uint64_t filesize = GetDirectorySize(temp_dir.path());

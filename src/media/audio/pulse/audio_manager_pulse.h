@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,11 @@
 
 #include "base/compiler_specific.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "media/audio/audio_manager_base.h"
 
 namespace media {
+
+class PulseLoopbackManager;
 
 class MEDIA_EXPORT AudioManagerPulse : public AudioManagerBase {
  public:
@@ -104,9 +105,10 @@ class MEDIA_EXPORT AudioManagerPulse : public AudioManagerBase {
   // Updates |native_input_sample_rate_| and |native_channel_count_|.
   void UpdateNativeAudioHardwareInfo();
 
-  raw_ptr<pa_threaded_mainloop, DanglingUntriaged> input_mainloop_;
-  raw_ptr<pa_context, DanglingUntriaged> input_context_;
+  raw_ptr<pa_threaded_mainloop> input_mainloop_;
+  raw_ptr<pa_context> input_context_;
   raw_ptr<AudioDeviceNames> devices_;
+  std::unique_ptr<PulseLoopbackManager> loopback_manager_;
   int native_input_sample_rate_;
   int native_channel_count_;
   std::string default_source_name_;

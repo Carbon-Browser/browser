@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/component_export.h"
@@ -14,7 +15,6 @@
 #include "media/learning/common/learning_task.h"
 #include "media/learning/common/value.h"
 #include "media/learning/impl/model.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace media {
 namespace learning {
@@ -56,7 +56,7 @@ class COMPONENT_EXPORT(LEARNING_IMPL) OneHotConverter {
 
   // [original task feature index] = optional converter for it.  If the feature
   // was kNumeric to begin with, then there will be no converter.
-  std::vector<absl::optional<ValueVectorIndexMap>> converters_;
+  std::vector<std::optional<ValueVectorIndexMap>> converters_;
 };
 
 // Model that uses |Converter| to convert instances before sending them to the

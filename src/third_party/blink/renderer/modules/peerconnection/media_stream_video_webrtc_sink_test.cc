@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_component.h"
 #include "third_party/blink/renderer/platform/testing/io_task_runner_testing_platform_support.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "ui/gfx/geometry/size.h"
 
 namespace blink {
@@ -64,7 +65,7 @@ class MediaStreamVideoWebRtcSinkTest : public ::testing::Test {
     return source;
   }
 
-  void SetVideoTrack(const absl::optional<bool>& noise_reduction) {
+  void SetVideoTrack(const std::optional<bool>& noise_reduction) {
     registry_.Init();
     registry_.AddVideoTrack("test video track",
                             blink::VideoTrackAdapterSettings(), noise_reduction,
@@ -78,12 +79,13 @@ class MediaStreamVideoWebRtcSinkTest : public ::testing::Test {
     MockMediaStreamVideoSource* source = registry_.AddVideoTrack(
         "test video track",
         blink::VideoTrackAdapterSettings(gfx::Size(100, 100), max_frame_rate),
-        absl::nullopt, false, 0.0);
+        std::nullopt, false, 0.0);
     CompleteSetVideoTrack();
     return source;
   }
 
  protected:
+  test::TaskEnvironment task_environment_;
   Persistent<MediaStreamComponent> component_;
   Persistent<MockPeerConnectionDependencyFactory> dependency_factory_ =
       MakeGarbageCollected<MockPeerConnectionDependencyFactory>();

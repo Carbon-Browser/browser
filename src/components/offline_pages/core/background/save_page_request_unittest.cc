@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,7 @@ class SavePageRequestTest : public testing::Test {
   ~SavePageRequestTest() override;
 };
 
-SavePageRequestTest::~SavePageRequestTest() {}
+SavePageRequestTest::~SavePageRequestTest() = default;
 
 TEST_F(SavePageRequestTest, CreatePendingReqeust) {
   const GURL kUrl1("http://example.com");

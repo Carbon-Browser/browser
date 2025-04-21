@@ -1,4 +1,4 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -6,7 +6,7 @@ from __future__ import print_function
 
 import os
 import sys
-import typing
+from typing import Any, List
 import unittest
 
 from gpu_tests import common_typing as ct
@@ -14,19 +14,7 @@ from gpu_tests import gpu_integration_test
 
 test_harness_script = r"""
   function VerifyHardwareAccelerated(feature) {
-    feature += ': '
-    var list = document.querySelector('info-view').shadowRoot.querySelector(
-        '.feature-status-list');
-    for (var i=0; i < list.childElementCount; i++) {
-      var span_list = list.children[i].getElementsByTagName('span');
-      var feature_str = span_list[0].textContent;
-      var value_str = span_list[1].textContent;
-      if ((feature_str == feature) &&
-          (value_str == 'Hardware accelerated')) {
-        return true;
-      }
-    }
-    return false;
+    return getGPUInfo('feature-status-list', feature) === 'enabled';
   };
 """
 
@@ -61,7 +49,7 @@ class HardwareAcceleratedFeatureIntegrationTest(
 
   @classmethod
   def GenerateGpuTests(cls, options: ct.ParsedCmdArgs) -> ct.TestGenerator:
-    tests = ('WebGL', 'Canvas')
+    tests = ('webgl', '2d_canvas')
     for feature in tests:
       yield ('HardwareAcceleratedFeature_%s_accelerated' %
              safe_feature_name(feature), 'chrome://gpu', [feature])
@@ -78,7 +66,7 @@ class HardwareAcceleratedFeatureIntegrationTest(
       self.fail('%s not hardware accelerated' % feature)
 
   @classmethod
-  def ExpectationsFiles(cls) -> typing.List[str]:
+  def ExpectationsFiles(cls) -> List[str]:
     return [
         os.path.join(
             os.path.dirname(os.path.abspath(__file__)), 'test_expectations',
@@ -86,7 +74,7 @@ class HardwareAcceleratedFeatureIntegrationTest(
     ]
 
 
-def load_tests(loader: unittest.TestLoader, tests: typing.Any,
-               pattern: typing.Any) -> unittest.TestSuite:
+def load_tests(loader: unittest.TestLoader, tests: Any,
+               pattern: Any) -> unittest.TestSuite:
   del loader, tests, pattern  # Unused.
   return gpu_integration_test.LoadAllTestsInModule(sys.modules[__name__])

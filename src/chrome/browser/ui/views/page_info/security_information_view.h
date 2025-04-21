@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,8 +20,9 @@ class NonAccessibleImageView;
 // View that represents the header of the page info bubble. The header shows the
 // status of the site's identity check and the name of the site's identity.
 class SecurityInformationView : public views::View {
+  METADATA_HEADER(SecurityInformationView, views::View)
+
  public:
-  METADATA_HEADER(SecurityInformationView);
   explicit SecurityInformationView(int side_margin);
   SecurityInformationView(const SecurityInformationView&) = delete;
   SecurityInformationView& operator=(const SecurityInformationView&) = delete;
@@ -52,7 +53,11 @@ class SecurityInformationView : public views::View {
       views::Button::PressedCallback password_reuse_callback);
 
  private:
-  // The icon that representes the security state for this site. Used for page
+  void AdjustContentWidth(int w);
+
+  int min_label_width_ = 0;
+
+  // The icon that represents the security state for this site. Used for page
   // info v2 only.
   raw_ptr<NonAccessibleImageView> icon_ = nullptr;
 

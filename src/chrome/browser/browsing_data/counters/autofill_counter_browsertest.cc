@@ -1,56 +1,74 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/browsing_data/core/counters/autofill_counter.h"
 
+#include <array>
 #include <memory>
 
-#include "base/bind.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/threading/platform_thread.h"
 #include "base/time/time.h"
+#include "base/uuid.h"
+#include "chrome/browser/autofill/personal_data_manager_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/browser/web_data_service_factory.h"
+#include "chrome/browser/user_annotations/user_annotations_service_factory.h"
+#include "chrome/browser/webdata_services/web_data_service_factory.h"
 #include "chrome/test/base/in_process_browser_test.h"
-#include "components/autofill/core/browser/autofill_test_utils.h"
 #include "components/autofill/core/browser/autofill_type.h"
+#include "components/autofill/core/browser/data_manager/addresses/address_data_manager.h"
+#include "components/autofill/core/browser/data_manager/payments/payments_data_manager.h"
+#include "components/autofill/core/browser/data_manager/personal_data_manager.h"
+#include "components/autofill/core/browser/data_manager/personal_data_manager_test_utils.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
-#include "components/autofill/core/browser/test_autofill_clock.h"
+#include "components/autofill/core/browser/test_utils/autofill_test_utils.h"
+#include "components/autofill/core/browser/test_utils/test_autofill_clock.h"
 #include "components/autofill/core/browser/webdata/autofill_webdata_service.h"
 #include "components/browsing_data/core/browsing_data_utils.h"
 #include "components/browsing_data/core/pref_names.h"
 #include "components/prefs/pref_service.h"
+#include "components/user_annotations/test_user_annotations_service.h"
+#include "components/user_annotations/user_annotations_service.h"
+#include "components/user_annotations/user_annotations_types.h"
 #include "content/public/test/browser_test.h"
 
 namespace {
 
 class AutofillCounterTest : public InProcessBrowserTest {
  public:
-  AutofillCounterTest() {}
+  AutofillCounterTest() = default;
 
   AutofillCounterTest(const AutofillCounterTest&) = delete;
   AutofillCounterTest& operator=(const AutofillCounterTest&) = delete;
 
-  ~AutofillCounterTest() override {}
+  ~AutofillCounterTest() override = default;
 
   void SetUpOnMainThread() override {
+    personal_data_manager_ =
+        autofill::PersonalDataManagerFactory::GetForBrowserContext(
+            browser()->profile());
     web_data_service_ = WebDataServiceFactory::GetAutofillWebDataForProfile(
         browser()->profile(), ServiceAccessType::IMPLICIT_ACCESS);
+    user_annotations_service_ =
+        std::make_unique<user_annotations::TestUserAnnotationsService>();
 
     SetAutofillDeletionPref(true);
     SetDeletionPeriodPref(browsing_data::TimePeriod::ALL_TIME);
   }
 
   void TearDownOnMainThread() override {
-    // Release our ref to let browser tear down of services complete in the same
-    // order as usual.
+    // Release our refs to let browser tear down of services complete in the
+    // same order as usual.
+    personal_data_manager_ = nullptr;
     web_data_service_ = nullptr;
   }
 
@@ -59,8 +77,8 @@ class AutofillCounterTest : public InProcessBrowserTest {
   void AddAutocompleteSuggestion(const std::string& name,
                                  const std::string& value) {
     autofill::FormFieldData field;
-    field.name = base::ASCIIToUTF16(name);
-    field.value = base::ASCIIToUTF16(value);
+    field.set_name(base::ASCIIToUTF16(name));
+    field.set_value(base::ASCIIToUTF16(value));
 
     std::vector<autofill::FormFieldData> form_fields;
     form_fields.push_back(field);
@@ -89,11 +107,14 @@ class AutofillCounterTest : public InProcessBrowserTest {
     autofill::test::SetCreditCardInfo(&card, nullptr, card_number, exp_month,
                                       exp_year, billing_address_id);
     credit_card_ids_.push_back(card.guid());
-    web_data_service_->AddCreditCard(card);
+    personal_data_manager_->payments_data_manager().AddCreditCard(card);
+    autofill::PersonalDataChangedWaiter(*personal_data_manager_).Wait();
   }
 
   void RemoveLastCreditCard() {
-    web_data_service_->RemoveCreditCard(credit_card_ids_.back());
+    personal_data_manager_->payments_data_manager().RemoveByGUID(
+        credit_card_ids_.back());
+    autofill::PersonalDataChangedWaiter(*personal_data_manager_).Wait();
     credit_card_ids_.pop_back();
   }
 
@@ -102,29 +123,41 @@ class AutofillCounterTest : public InProcessBrowserTest {
   void AddAddress(const std::string& name,
                   const std::string& surname,
                   const std::string& address) {
-    autofill::AutofillProfile profile;
-    std::string id = base::GenerateGUID();
+    autofill::AutofillProfile profile(
+        autofill::i18n_model_definition::kLegacyHierarchyCountryCode);
+    std::string id = base::Uuid::GenerateRandomV4().AsLowercaseString();
     address_ids_.push_back(id);
     profile.set_guid(id);
-    profile.SetInfo(autofill::AutofillType(autofill::NAME_FIRST),
-                    base::ASCIIToUTF16(name), "en-US");
-    profile.SetInfo(autofill::AutofillType(autofill::NAME_LAST),
-                    base::ASCIIToUTF16(surname), "en-US");
-    profile.SetInfo(autofill::AutofillType(autofill::ADDRESS_HOME_LINE1),
-                    base::ASCIIToUTF16(address), "en-US");
-    web_data_service_->AddAutofillProfile(profile);
+    profile.SetInfo(autofill::NAME_FIRST, base::ASCIIToUTF16(name), "en-US");
+    profile.SetInfo(autofill::NAME_LAST, base::ASCIIToUTF16(surname), "en-US");
+    profile.SetInfo(autofill::ADDRESS_HOME_LINE1, base::ASCIIToUTF16(address),
+                    "en-US");
+    personal_data_manager_->address_data_manager().AddProfile(profile);
+    autofill::PersonalDataChangedWaiter(*personal_data_manager_).Wait();
   }
 
   void RemoveLastAddress() {
-    web_data_service_->RemoveAutofillProfile(address_ids_.back());
+    personal_data_manager_->address_data_manager().RemoveProfile(
+        address_ids_.back());
+    autofill::PersonalDataChangedWaiter(*personal_data_manager_).Wait();
     address_ids_.pop_back();
+  }
+
+  // User annotations ----------------------------------------------------------
+
+  void SetUserAnnotations(user_annotations::UserAnnotationsEntries entries) {
+    user_annotations_service_->ReplaceAllEntries(std::move(entries));
   }
 
   // Other autofill utils ------------------------------------------------------
 
   void ClearCreditCardsAndAddresses() {
-    web_data_service_->RemoveAutofillDataModifiedBetween(
-        base::Time(), base::Time::Max());
+    while (!credit_card_ids_.empty()) {
+      RemoveLastCreditCard();
+    }
+    while (!address_ids_.empty()) {
+      RemoveLastAddress();
+    }
   }
 
   // Other utils ---------------------------------------------------------------
@@ -139,8 +172,17 @@ class AutofillCounterTest : public InProcessBrowserTest {
         browsing_data::prefs::kDeleteTimePeriod, static_cast<int>(period));
   }
 
+  autofill::PersonalDataManager* GetPersonalDataManager() {
+    return personal_data_manager_;
+  }
+
   scoped_refptr<autofill::AutofillWebDataService> GetWebDataService() {
     return web_data_service_;
+  }
+
+  raw_ptr<user_annotations::TestUserAnnotationsService>
+  GetUserAnnotationsService() {
+    return user_annotations_service_.get();
   }
 
   // Callback and result retrieval ---------------------------------------------
@@ -165,6 +207,11 @@ class AutofillCounterTest : public InProcessBrowserTest {
     return num_addresses_;
   }
 
+  browsing_data::BrowsingDataCounter::ResultInt GetNumUserAnnotations() {
+    DCHECK(finished_);
+    return num_user_annotations_;
+  }
+
   void Callback(
       std::unique_ptr<browsing_data::BrowsingDataCounter::Result> result) {
     finished_ = result->Finished();
@@ -177,6 +224,7 @@ class AutofillCounterTest : public InProcessBrowserTest {
       num_suggestions_ = autofill_result->Value();
       num_credit_cards_ = autofill_result->num_credit_cards();
       num_addresses_ = autofill_result->num_addresses();
+      num_user_annotations_ = autofill_result->num_user_annotation_entries();
 
       if (run_loop_)
         run_loop_->Quit();
@@ -184,23 +232,30 @@ class AutofillCounterTest : public InProcessBrowserTest {
   }
 
  private:
+  autofill::test::AutofillBrowserTestEnvironment autofill_test_environment_;
   std::unique_ptr<base::RunLoop> run_loop_;
 
   std::vector<std::string> credit_card_ids_;
   std::vector<std::string> address_ids_;
 
+  raw_ptr<autofill::PersonalDataManager> personal_data_manager_;
   scoped_refptr<autofill::AutofillWebDataService> web_data_service_;
+  std::unique_ptr<user_annotations::TestUserAnnotationsService>
+      user_annotations_service_;
 
   bool finished_;
   browsing_data::BrowsingDataCounter::ResultInt num_suggestions_;
   browsing_data::BrowsingDataCounter::ResultInt num_credit_cards_;
   browsing_data::BrowsingDataCounter::ResultInt num_addresses_;
+  browsing_data::BrowsingDataCounter::ResultInt num_user_annotations_;
 };
 
 // Tests that we count the correct number of autocomplete suggestions.
 IN_PROC_BROWSER_TEST_F(AutofillCounterTest, AutocompleteSuggestions) {
   Profile* profile = browser()->profile();
-  browsing_data::AutofillCounter counter(GetWebDataService(), nullptr);
+  browsing_data::AutofillCounter counter(
+      GetPersonalDataManager(), GetWebDataService(),
+      /*user_annotations_service=*/nullptr, /*sync_service=*/nullptr);
   counter.Init(profile->GetPrefs(),
                browsing_data::ClearBrowsingDataTab::ADVANCED,
                base::BindRepeating(&AutofillCounterTest::Callback,
@@ -238,7 +293,9 @@ IN_PROC_BROWSER_TEST_F(AutofillCounterTest, AutocompleteSuggestions) {
 // Tests that we count the correct number of credit cards.
 IN_PROC_BROWSER_TEST_F(AutofillCounterTest, CreditCards) {
   Profile* profile = browser()->profile();
-  browsing_data::AutofillCounter counter(GetWebDataService(), nullptr);
+  browsing_data::AutofillCounter counter(
+      GetPersonalDataManager(), GetWebDataService(),
+      /*user_annotations_service=*/nullptr, /*sync_service=*/nullptr);
   counter.Init(profile->GetPrefs(),
                browsing_data::ClearBrowsingDataTab::ADVANCED,
                base::BindRepeating(&AutofillCounterTest::Callback,
@@ -276,7 +333,9 @@ IN_PROC_BROWSER_TEST_F(AutofillCounterTest, CreditCards) {
 // Tests that we count the correct number of addresses.
 IN_PROC_BROWSER_TEST_F(AutofillCounterTest, Addresses) {
   Profile* profile = browser()->profile();
-  browsing_data::AutofillCounter counter(GetWebDataService(), nullptr);
+  browsing_data::AutofillCounter counter(
+      GetPersonalDataManager(), GetWebDataService(),
+      /*user_annotations_service=*/nullptr, /*sync_service=*/nullptr);
   counter.Init(profile->GetPrefs(),
                browsing_data::ClearBrowsingDataTab::ADVANCED,
                base::BindRepeating(&AutofillCounterTest::Callback,
@@ -311,6 +370,27 @@ IN_PROC_BROWSER_TEST_F(AutofillCounterTest, Addresses) {
   EXPECT_EQ(0, GetNumAddresses());
 }
 
+// Tests that we count the correct number of user annotations.
+IN_PROC_BROWSER_TEST_F(AutofillCounterTest, UserAnnotations) {
+  Profile* profile = browser()->profile();
+  browsing_data::AutofillCounter counter(
+      GetPersonalDataManager(), GetWebDataService(),
+      GetUserAnnotationsService(), /*sync_service=*/nullptr);
+  counter.Init(profile->GetPrefs(),
+               browsing_data::ClearBrowsingDataTab::ADVANCED,
+               base::BindRepeating(&AutofillCounterTest::Callback,
+                                   base::Unretained(this)));
+  counter.Restart();
+  WaitForCounting();
+  EXPECT_EQ(0, GetNumUserAnnotations());
+
+  SetUserAnnotations(
+      std::vector(10, optimization_guide::proto::UserAnnotationsEntry{}));
+  counter.Restart();
+  WaitForCounting();
+  EXPECT_EQ(10, GetNumUserAnnotations());
+}
+
 // Tests that we return the correct complex result when counting more than
 // one type of items.
 IN_PROC_BROWSER_TEST_F(AutofillCounterTest, ComplexResult) {
@@ -328,7 +408,9 @@ IN_PROC_BROWSER_TEST_F(AutofillCounterTest, ComplexResult) {
   AddAddress("John", "Smith", "Side Street 47");
 
   Profile* profile = browser()->profile();
-  browsing_data::AutofillCounter counter(GetWebDataService(), nullptr);
+  browsing_data::AutofillCounter counter(
+      GetPersonalDataManager(), GetWebDataService(),
+      /*user_annotations_service=*/nullptr, /*sync_service=*/nullptr);
   counter.Init(profile->GetPrefs(),
                browsing_data::ClearBrowsingDataTab::ADVANCED,
                base::BindRepeating(&AutofillCounterTest::Callback,
@@ -343,7 +425,7 @@ IN_PROC_BROWSER_TEST_F(AutofillCounterTest, ComplexResult) {
 // Tests that the counting respects time ranges.
 IN_PROC_BROWSER_TEST_F(AutofillCounterTest, TimeRanges) {
   autofill::TestAutofillClock test_clock;
-  const base::Time kTime1 = base::Time::FromDoubleT(25);
+  const base::Time kTime1 = base::Time::FromSecondsSinceUnixEpoch(25);
   test_clock.SetNow(kTime1);
   AddAutocompleteSuggestion("email", "example@example.com");
   AddCreditCard("0000-0000-0000-0000", "1", "2015", "1");
@@ -371,25 +453,35 @@ IN_PROC_BROWSER_TEST_F(AutofillCounterTest, TimeRanges) {
     const browsing_data::BrowsingDataCounter::ResultInt
         expected_num_credit_cards;
     const browsing_data::BrowsingDataCounter::ResultInt expected_num_addresses;
-  } test_cases[] = {{base::Time(), 2, 3, 3},
-                    {kTime1, 2, 3, 3},
-                    {kTime2, 1, 2, 2},
-                    {kTime3, 1, 1, 0}};
+    const browsing_data::BrowsingDataCounter::ResultInt
+        expected_num_user_annotations;
+  };
+  auto test_cases = std::to_array<TestCase>({
+      {base::Time(), 2, 3, 3, 0},
+      {kTime1, 2, 3, 3, 0},
+      {kTime2, 1, 2, 2, 0},
+      {kTime3, 1, 1, 0, 0},
+  });
 
   Profile* profile = browser()->profile();
-  browsing_data::AutofillCounter counter(GetWebDataService(), nullptr);
+  browsing_data::AutofillCounter counter(
+      GetPersonalDataManager(), GetWebDataService(),
+      /*user_annotations_service=*/nullptr, /*sync_service=*/nullptr);
   counter.Init(profile->GetPrefs(),
                browsing_data::ClearBrowsingDataTab::ADVANCED,
                base::BindRepeating(&AutofillCounterTest::Callback,
                                    base::Unretained(this)));
 
-  for (const TestCase& test_case : test_cases) {
+  for (size_t i = 0; i < std::size(test_cases); i++) {
+    SCOPED_TRACE(base::StringPrintf("Test case %zu", i));
+    const auto& test_case = test_cases[i];
     counter.SetPeriodStartForTesting(test_case.period_start);
     counter.Restart();
     WaitForCounting();
     EXPECT_EQ(test_case.expected_num_suggestions, GetNumSuggestions());
     EXPECT_EQ(test_case.expected_num_credit_cards, GetNumCreditCards());
     EXPECT_EQ(test_case.expected_num_addresses, GetNumAddresses());
+    EXPECT_EQ(test_case.expected_num_user_annotations, GetNumUserAnnotations());
   }
 
   // Test the results for different ending points and base::Time as start.
@@ -400,6 +492,7 @@ IN_PROC_BROWSER_TEST_F(AutofillCounterTest, TimeRanges) {
   EXPECT_EQ(1, GetNumSuggestions());
   EXPECT_EQ(1, GetNumCreditCards());
   EXPECT_EQ(1, GetNumAddresses());
+  EXPECT_EQ(0, GetNumUserAnnotations());
 
   counter.SetPeriodEndForTesting(kTime3);
   counter.Restart();
@@ -407,6 +500,7 @@ IN_PROC_BROWSER_TEST_F(AutofillCounterTest, TimeRanges) {
   EXPECT_EQ(1, GetNumSuggestions());
   EXPECT_EQ(2, GetNumCreditCards());
   EXPECT_EQ(3, GetNumAddresses());
+  EXPECT_EQ(0, GetNumUserAnnotations());
 }
 
 }  // namespace

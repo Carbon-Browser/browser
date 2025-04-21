@@ -1,12 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/idle/idle_manager.h"
 
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
-#include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
-#include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
+#include "base/task/single_thread_task_runner.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_permission_state.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/modules/permissions/permission_utils.h"
@@ -40,8 +40,9 @@ IdleManager::IdleManager(ExecutionContext* context)
 
 IdleManager::~IdleManager() = default;
 
-ScriptPromise IdleManager::RequestPermission(ScriptState* script_state,
-                                             ExceptionState& exception_state) {
+ScriptPromise<V8PermissionState> IdleManager::RequestPermission(
+    ScriptState* script_state,
+    ExceptionState& exception_state) {
   ExecutionContext* context = GetSupplementable();
   DCHECK_EQ(context, ExecutionContext::From(script_state));
 
@@ -53,7 +54,7 @@ ScriptPromise IdleManager::RequestPermission(ScriptState* script_state,
     exception_state.ThrowDOMException(
         DOMExceptionCode::kNotAllowedError,
         "Must be handling a user gesture to show a permission request.");
-    return ScriptPromise();
+    return EmptyPromise();
   }
 
   // This interface is annotated with [SecureContext].
@@ -68,14 +69,16 @@ ScriptPromise IdleManager::RequestPermission(ScriptState* script_state,
         permission_service_.BindNewPipeAndPassReceiver(std::move(task_runner)));
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
-  ScriptPromise promise = resolver->Promise();
+  auto* resolver =
+      MakeGarbageCollected<ScriptPromiseResolver<V8PermissionState>>(
+          script_state, exception_state.GetContext());
+  auto promise = resolver->Promise();
 
   permission_service_->RequestPermission(
       CreatePermissionDescriptor(mojom::blink::PermissionName::IDLE_DETECTION),
       LocalFrame::HasTransientUserActivation(window->GetFrame()),
-      WTF::Bind(&IdleManager::OnPermissionRequestComplete, WrapPersistent(this),
-                WrapPersistent(resolver)));
+      WTF::BindOnce(&IdleManager::OnPermissionRequestComplete,
+                    WrapPersistent(this), WrapPersistent(resolver)));
   return promise;
 }
 
@@ -110,9 +113,9 @@ void IdleManager::InitForTesting(
 }
 
 void IdleManager::OnPermissionRequestComplete(
-    ScriptPromiseResolver* resolver,
+    ScriptPromiseResolver<V8PermissionState>* resolver,
     mojom::blink::PermissionStatus status) {
-  resolver->Resolve(PermissionStatusToString(status));
+  resolver->Resolve(ToV8PermissionState(status));
 }
 
 }  // namespace blink

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,9 @@ class MediaAppUiBrowserTest : public SandboxedWebUiAppTestBase {
   // Returns the contents of the JavaScript library used to help test the
   // sandboxed frame.
   static std::string AppJsTestLibrary();
+
+  // Loads the test helpers in in the given WebUI in preparation for testing.
+  static void PrepareAppForTest(content::WebContents* web_ui);
 };
 
 #endif  // ASH_WEBUI_MEDIA_APP_UI_TEST_MEDIA_APP_UI_BROWSERTEST_H_

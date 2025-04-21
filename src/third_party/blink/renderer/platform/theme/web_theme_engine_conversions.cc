@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,18 +50,6 @@ ui::NativeTheme::Part NativeThemePart(WebThemeEngine::Part part) {
       return ui::NativeTheme::kProgressBar;
     default:
       return ui::NativeTheme::kScrollbarDownArrow;
-  }
-}
-
-ui::NativeTheme::ScrollbarOverlayColorTheme
-NativeThemeScrollbarOverlayColorTheme(WebScrollbarOverlayColorTheme theme) {
-  switch (theme) {
-    case WebScrollbarOverlayColorTheme::kWebScrollbarOverlayColorThemeLight:
-      return ui::NativeTheme::ScrollbarOverlayColorTheme::kLight;
-    case WebScrollbarOverlayColorTheme::kWebScrollbarOverlayColorThemeDark:
-      return ui::NativeTheme::ScrollbarOverlayColorTheme::kDark;
-    default:
-      return ui::NativeTheme::ScrollbarOverlayColorTheme::kDefault;
   }
 }
 

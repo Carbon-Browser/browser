@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,23 +7,28 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/location_bar/location_bar.h"
-#include "chrome/common/net/safe_search_util.h"
+#include "chrome/common/chrome_features.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/omnibox/browser/omnibox_edit_model.h"
 #include "components/policy/policy_constants.h"
+#include "components/safe_search_api/safe_search_util.h"
 #include "content/public/test/test_navigation_observer.h"
 
 namespace policy {
 
-SafeSearchPolicyTest::SafeSearchPolicyTest() = default;
+SafeSearchPolicyTest::SafeSearchPolicyTest() {
+  // TODO(crbug.com/40248833): Use HTTPS URLs in tests to avoid having to
+  // disable this feature.
+  feature_list_.InitAndDisableFeature(features::kHttpsUpgrades);
+}
 
 SafeSearchPolicyTest::~SafeSearchPolicyTest() = default;
 
 void SafeSearchPolicyTest::ApplySafeSearchPolicy(
-    absl::optional<base::Value> legacy_safe_search,
-    absl::optional<base::Value> google_safe_search,
-    absl::optional<base::Value> legacy_youtube,
-    absl::optional<base::Value> youtube_restrict) {
+    std::optional<base::Value> legacy_safe_search,
+    std::optional<base::Value> google_safe_search,
+    std::optional<base::Value> legacy_youtube,
+    std::optional<base::Value> youtube_restrict) {
   PolicyMap policies;
   SetPolicy(&policies, key::kForceSafeSearch, std::move(legacy_safe_search));
   SetPolicy(&policies, key::kForceGoogleSafeSearch,
@@ -38,8 +43,8 @@ GURL SafeSearchPolicyTest::GetExpectedSearchURL(bool expect_safe_search) {
   std::string expected_url("http://google.com/");
   if (expect_safe_search) {
     expected_url += "?" +
-                    std::string(safe_search_util::kSafeSearchSafeParameter) +
-                    "&" + safe_search_util::kSafeSearchSsuiParameter;
+                    std::string(safe_search_api::kSafeSearchSafeParameter) +
+                    "&" + safe_search_api::kSafeSearchSsuiParameter;
   }
   return GURL(expected_url);
 }

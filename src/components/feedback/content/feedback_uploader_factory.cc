@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,28 @@ CreateURLLoaderFactoryForBrowserContext(content::BrowserContext* context) {
   return context->GetDefaultStoragePartition()
       ->GetURLLoaderFactoryForBrowserProcess();
 }
+
+class FeedbackUploaderImpl final : public FeedbackUploader {
+ public:
+  FeedbackUploaderImpl(
+      bool is_off_the_record,
+      const base::FilePath& state_path,
+      SharedURLLoaderFactoryGetter shared_url_loader_factory_getter)
+      : FeedbackUploader(is_off_the_record,
+                         state_path,
+                         std::move(shared_url_loader_factory_getter)) {}
+  FeedbackUploaderImpl(const FeedbackUploaderImpl&) = delete;
+  FeedbackUploaderImpl& operator=(const FeedbackUploaderImpl&) = delete;
+
+  ~FeedbackUploaderImpl() override = default;
+
+  base::WeakPtr<FeedbackUploader> AsWeakPtr() override {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
+ private:
+  base::WeakPtrFactory<FeedbackUploaderImpl> weak_ptr_factory_{this};
+};
 
 }  // namespace
 
@@ -47,14 +69,16 @@ FeedbackUploaderFactory::FeedbackUploaderFactory()
           "feedback::FeedbackUploader",
           BrowserContextDependencyManager::GetInstance()) {}
 
-FeedbackUploaderFactory::~FeedbackUploaderFactory() {}
+FeedbackUploaderFactory::~FeedbackUploaderFactory() = default;
 
-KeyedService* FeedbackUploaderFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+FeedbackUploaderFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  // The returned FeedbackUploader lifetime is bound to that of BrowserContext
-  // by the KeyedServiceFactory infrastructure. The FeedbackUploader will be
-  // destroyed before the BrowserContext, thus base::Unretained() usage is safe.
-  return new FeedbackUploader(
+  // The returned FeedbackUploaderImpl lifetime is bound to that of
+  // BrowserContext by the KeyedServiceFactory infrastructure. The
+  // FeedbackUploader will be destroyed before the BrowserContext,
+  // thus base::Unretained() usage is safe.
+  return std::make_unique<FeedbackUploaderImpl>(
       context->IsOffTheRecord(), context->GetPath(),
       base::BindOnce(&CreateURLLoaderFactoryForBrowserContext,
                      base::Unretained(context)));

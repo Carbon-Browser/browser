@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -29,8 +29,7 @@ class TestExtractUnwindTables(unittest.TestCase):
 MODULE Linux arm CDE12FE1DF2B37A9C6560B4CBEE056420 lib_chrome.so
 INFO CODE_ID E12FE1CD2BDFA937C6560B4CBEE05642
 FILE 0 ../../base/allocator/allocator_check.cc
-FILE 1 ../../base/allocator/allocator_extension.cc
-FILE 2 ../../base/allocator/allocator_shim.cc
+FILE 1 ../../base/allocator/allocator_shim.cc
 FUNC 1adcb60 54 0 i2d_name_canon
 1adcb60 1a 509 17054
 3b94c70 2 69 40

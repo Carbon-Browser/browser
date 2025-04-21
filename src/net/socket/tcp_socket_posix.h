@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,11 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "net/base/address_family.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/net_export.h"
-#include "net/base/network_change_notifier.h"
+#include "net/base/network_handle.h"
 #include "net/log/net_log_with_source.h"
 #include "net/socket/socket_descriptor.h"
 #include "net/socket/socket_performance_watcher.h"
@@ -38,10 +38,13 @@ class NET_EXPORT TCPSocketPosix {
  public:
   // |socket_performance_watcher| is notified of the performance metrics related
   // to this socket. |socket_performance_watcher| may be null.
-  TCPSocketPosix(
+  static std::unique_ptr<TCPSocketPosix> Create(
       std::unique_ptr<SocketPerformanceWatcher> socket_performance_watcher,
       NetLog* net_log,
       const NetLogSource& source);
+  static std::unique_ptr<TCPSocketPosix> Create(
+      std::unique_ptr<SocketPerformanceWatcher> socket_performance_watcher,
+      NetLogWithSource net_log_source);
 
   TCPSocketPosix(const TCPSocketPosix&) = delete;
   TCPSocketPosix& operator=(const TCPSocketPosix&) = delete;
@@ -120,6 +123,7 @@ class NET_EXPORT TCPSocketPosix {
   int SetSendBufferSize(int32_t size);
   bool SetKeepAlive(bool enable, int delay);
   bool SetNoDelay(bool no_delay);
+  int SetIPv6Only(bool ipv6_only);
 
   // Gets the estimated RTT. Returns false if the RTT is
   // unavailable. May also return false when estimated RTT is 0.
@@ -150,11 +154,6 @@ class NET_EXPORT TCPSocketPosix {
 
   const NetLogWithSource& net_log() const { return net_log_; }
 
-  // Opens the socket and returns the underlying SocketDescriptor as well as the
-  // result of Open(). This method is used by the socket broker.
-  static int OpenAndReleaseSocketDescriptor(AddressFamily family,
-                                            SocketDescriptor* out);
-
   // Return the underlying SocketDescriptor and clean up this object, which may
   // no longer be used. This method should be used only for testing. No read,
   // write, or accept operations should be pending.
@@ -177,9 +176,17 @@ class NET_EXPORT TCPSocketPosix {
   // Connect() and/or Bind(). This call will fail if `network` has disconnected.
   // Communication using this socket will fail if `network` disconnects.
   // Returns a net error code.
-  int BindToNetwork(NetworkChangeNotifier::NetworkHandle network);
+  int BindToNetwork(handles::NetworkHandle network);
 
  private:
+  TCPSocketPosix(
+      std::unique_ptr<SocketPerformanceWatcher> socket_performance_watcher,
+      NetLog* net_log,
+      const NetLogSource& source);
+  TCPSocketPosix(
+      std::unique_ptr<SocketPerformanceWatcher> socket_performance_watcher,
+      NetLogWithSource net_log_source);
+
   void AcceptCompleted(std::unique_ptr<TCPSocketPosix>* tcp_socket,
                        IPEndPoint* address,
                        CompletionOnceCallback callback,

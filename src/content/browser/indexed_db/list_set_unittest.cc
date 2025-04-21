@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,8 @@
 #include "base/memory/scoped_refptr.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace content {
+namespace content::indexed_db {
+namespace {
 
 TEST(ListSetTest, ListSetIterator) {
   list_set<int> set;
@@ -264,4 +265,5 @@ TEST(ListSetTest, ListSetRefCounted) {
   }
 }
 
-}  // namespace content
+}  // namespace
+}  // namespace content::indexed_db

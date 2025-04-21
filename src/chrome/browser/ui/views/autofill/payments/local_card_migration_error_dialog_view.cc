@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,8 @@
 #include "components/web_modal/web_contents_modal_dialog_manager_delegate.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
+#include "ui/base/mojom/ui_base_types.mojom-shared.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/color/color_id.h"
 #include "ui/color/color_provider.h"
@@ -37,7 +39,7 @@ namespace autofill {
 LocalCardMigrationErrorDialogView::LocalCardMigrationErrorDialogView(
     LocalCardMigrationDialogController* controller)
     : controller_(controller) {
-  SetButtons(ui::DIALOG_BUTTON_CANCEL);
+  SetButtons(static_cast<int>(ui::mojom::DialogButton::kCancel));
   SetCancelCallback(
       base::BindOnce(&LocalCardMigrationDialogController::OnDoneButtonClicked,
                      base::Unretained(controller_)));
@@ -45,7 +47,7 @@ LocalCardMigrationErrorDialogView::LocalCardMigrationErrorDialogView(
   // The error dialog should be a modal dialog blocking the whole browser
   // which is consistent with other dialogs. It should make sure that the
   // user can see the error message.
-  SetModalType(ui::MODAL_TYPE_WINDOW);
+  SetModalType(ui::mojom::ModalType::kWindow);
   SetShowCloseButton(false);
   set_fixed_width(ChromeLayoutProvider::Get()->GetDistanceMetric(
       DISTANCE_LARGE_MODAL_DIALOG_PREFERRED_WIDTH));
@@ -78,8 +80,9 @@ void LocalCardMigrationErrorDialogView::CloseDialog() {
 }
 
 void LocalCardMigrationErrorDialogView::Init() {
-  if (!children().empty())
+  if (!children().empty()) {
     return;
+  }
 
   ChromeLayoutProvider* provider = ChromeLayoutProvider::Get();
   SetLayoutManager(std::make_unique<views::BoxLayout>(
@@ -108,9 +111,8 @@ void LocalCardMigrationErrorDialogView::Init() {
       views::BoxLayout::MainAxisAlignment::kCenter);
   error_view->SetBorder(views::CreateEmptyBorder(kMigrationDialogInsets));
   auto* error_image = new views::ImageView();
-  error_image->SetImage(gfx::CreateVectorIcon(
-      kBrowserToolsErrorIcon,
-      GetColorProvider()->GetColor(ui::kColorAlertHighSeverity)));
+  error_image->SetImage(ui::ImageModel::FromVectorIcon(
+      kBrowserToolsErrorIcon, ui::kColorAlertHighSeverity));
   error_view->AddChildView(error_image);
 
   auto* error_message = new views::Label(
@@ -128,8 +130,7 @@ LocalCardMigrationDialog* CreateLocalCardMigrationErrorDialogView(
   return new LocalCardMigrationErrorDialogView(controller);
 }
 
-BEGIN_METADATA(LocalCardMigrationErrorDialogView,
-               views::BubbleDialogDelegateView)
+BEGIN_METADATA(LocalCardMigrationErrorDialogView)
 END_METADATA
 
 }  // namespace autofill

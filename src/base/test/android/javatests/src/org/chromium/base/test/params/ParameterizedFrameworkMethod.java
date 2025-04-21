@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,8 +51,9 @@ public class ParameterizedFrameworkMethod extends FrameworkMethod {
             Collection<FrameworkMethod> frameworkMethods, String classParameterSetName) {
         List<FrameworkMethod> results = new ArrayList<>();
         for (FrameworkMethod frameworkMethod : frameworkMethods) {
-            results.add(new ParameterizedFrameworkMethod(
-                    frameworkMethod.getMethod(), null, classParameterSetName));
+            results.add(
+                    new ParameterizedFrameworkMethod(
+                            frameworkMethod.getMethod(), null, classParameterSetName));
         }
         return results;
     }
@@ -61,7 +62,8 @@ public class ParameterizedFrameworkMethod extends FrameworkMethod {
     public boolean equals(Object obj) {
         if (obj instanceof ParameterizedFrameworkMethod) {
             ParameterizedFrameworkMethod method = (ParameterizedFrameworkMethod) obj;
-            return super.equals(obj) && method.getParameterSet().equals(getParameterSet())
+            return super.equals(obj)
+                    && method.getParameterSet().equals(getParameterSet())
                     && method.getName().equals(getName());
         }
         return false;

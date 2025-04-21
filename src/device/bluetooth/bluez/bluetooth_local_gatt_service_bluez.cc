@@ -1,36 +1,31 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "device/bluetooth/bluez/bluetooth_local_gatt_service_bluez.h"
 
-#include "base/guid.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/string_util.h"
+#include "base/uuid.h"
 #include "dbus/object_path.h"
 #include "device/bluetooth/bluez/bluetooth_adapter_bluez.h"
 
-namespace device {
+namespace bluez {
 
 // static
-base::WeakPtr<BluetoothLocalGattService> BluetoothLocalGattService::Create(
-    BluetoothAdapter* adapter,
-    const BluetoothUUID& uuid,
+base::WeakPtr<BluetoothLocalGattServiceBlueZ>
+BluetoothLocalGattServiceBlueZ::Create(
+    BluetoothAdapterBlueZ* adapter,
+    const device::BluetoothUUID& uuid,
     bool is_primary,
-    BluetoothLocalGattService* included_service,
-    BluetoothLocalGattService::Delegate* delegate) {
-  bluez::BluetoothAdapterBlueZ* adapter_bluez =
-      static_cast<bluez::BluetoothAdapterBlueZ*>(adapter);
-  bluez::BluetoothLocalGattServiceBlueZ* service =
-      new bluez::BluetoothLocalGattServiceBlueZ(adapter_bluez, uuid, is_primary,
-                                                delegate);
-  return service->weak_ptr_factory_.GetWeakPtr();
+    device::BluetoothLocalGattService::Delegate* delegate) {
+  auto* service =
+      new BluetoothLocalGattServiceBlueZ(adapter, uuid, is_primary, delegate);
+  auto weak_ptr = service->weak_ptr_factory_.GetWeakPtr();
+  adapter->AddLocalGattService(base::WrapUnique(service));
+  return weak_ptr;
 }
-
-}  // namespace device
-
-namespace bluez {
 
 BluetoothLocalGattServiceBlueZ::BluetoothLocalGattServiceBlueZ(
     BluetoothAdapterBlueZ* adapter,
@@ -46,7 +41,6 @@ BluetoothLocalGattServiceBlueZ::BluetoothLocalGattServiceBlueZ(
       delegate_(delegate) {
   DVLOG(1) << "Creating local GATT service with identifier: "
            << GetIdentifier();
-  adapter->AddLocalGattService(base::WrapUnique(this));
 }
 
 BluetoothLocalGattServiceBlueZ::~BluetoothLocalGattServiceBlueZ() = default;
@@ -88,6 +82,15 @@ BluetoothLocalGattServiceBlueZ::GetCharacteristic(
   return service == characteristics_.end() ? nullptr : service->second.get();
 }
 
+base::WeakPtr<device::BluetoothLocalGattCharacteristic>
+BluetoothLocalGattServiceBlueZ::CreateCharacteristic(
+    const device::BluetoothUUID& uuid,
+    device::BluetoothGattCharacteristic::Properties properties,
+    device::BluetoothGattCharacteristic::Permissions permissions) {
+  return bluez::BluetoothLocalGattCharacteristicBlueZ::Create(
+      uuid, properties, permissions, /*service=*/this);
+}
+
 const std::map<dbus::ObjectPath,
                std::unique_ptr<BluetoothLocalGattCharacteristicBlueZ>>&
 BluetoothLocalGattServiceBlueZ::GetCharacteristics() const {
@@ -97,7 +100,7 @@ BluetoothLocalGattServiceBlueZ::GetCharacteristics() const {
 // static
 dbus::ObjectPath BluetoothLocalGattServiceBlueZ::AddGuidToObjectPath(
     const std::string& path) {
-  std::string GuidString = base::GenerateGUID();
+  std::string GuidString = base::Uuid::GenerateRandomV4().AsLowercaseString();
   base::RemoveChars(GuidString, "-", &GuidString);
 
   return dbus::ObjectPath(path + GuidString);

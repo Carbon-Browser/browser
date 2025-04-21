@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 namespace blink {
 
 double CSSStyleImageValue::intrinsicWidth(bool& is_null) const {
-  const absl::optional<gfx::Size> size = IntrinsicSize();
+  const std::optional<gfx::Size> size = IntrinsicSize();
   if (!size) {
     is_null = true;
     return 0;
@@ -16,7 +16,7 @@ double CSSStyleImageValue::intrinsicWidth(bool& is_null) const {
 }
 
 double CSSStyleImageValue::intrinsicHeight(bool& is_null) const {
-  const absl::optional<gfx::Size> size = IntrinsicSize();
+  const std::optional<gfx::Size> size = IntrinsicSize();
   if (!size) {
     is_null = true;
     return 0;
@@ -25,7 +25,7 @@ double CSSStyleImageValue::intrinsicHeight(bool& is_null) const {
 }
 
 double CSSStyleImageValue::intrinsicRatio(bool& is_null) const {
-  const absl::optional<gfx::Size> size = IntrinsicSize();
+  const std::optional<gfx::Size> size = IntrinsicSize();
   if (!size || size.value().height() == 0) {
     is_null = true;
     return 0;

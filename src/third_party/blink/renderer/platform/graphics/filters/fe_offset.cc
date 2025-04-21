@@ -24,10 +24,10 @@
 
 #include "third_party/blink/renderer/platform/graphics/filters/fe_offset.h"
 
-#include "base/stl_util.h"
+#include "base/types/optional_util.h"
 #include "third_party/blink/renderer/platform/graphics/filters/filter.h"
 #include "third_party/blink/renderer/platform/graphics/filters/paint_filter_builder.h"
-#include "third_party/blink/renderer/platform/wtf/text/text_stream.h"
+#include "third_party/blink/renderer/platform/wtf/text/string_builder_stream.h"
 
 namespace blink {
 
@@ -59,17 +59,17 @@ gfx::RectF FEOffset::MapEffect(const gfx::RectF& rect) const {
 
 sk_sp<PaintFilter> FEOffset::CreateImageFilter() {
   Filter* filter = GetFilter();
-  absl::optional<PaintFilter::CropRect> crop_rect = GetCropRect();
+  std::optional<PaintFilter::CropRect> crop_rect = GetCropRect();
   return sk_make_sp<OffsetPaintFilter>(
       SkFloatToScalar(filter->ApplyHorizontalScale(dx_)),
       SkFloatToScalar(filter->ApplyVerticalScale(dy_)),
       paint_filter_builder::Build(InputEffect(0),
                                   OperatingInterpolationSpace()),
-      base::OptionalOrNullptr(crop_rect));
+      base::OptionalToPtr(crop_rect));
 }
 
-WTF::TextStream& FEOffset::ExternalRepresentation(WTF::TextStream& ts,
-                                                  int indent) const {
+StringBuilder& FEOffset::ExternalRepresentation(StringBuilder& ts,
+                                                wtf_size_t indent) const {
   WriteIndent(ts, indent);
   ts << "[feOffset";
   FilterEffect::ExternalRepresentation(ts);

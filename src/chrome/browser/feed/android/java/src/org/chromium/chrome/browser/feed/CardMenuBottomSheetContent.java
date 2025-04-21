@@ -1,18 +1,18 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.feed;
 
+import android.content.Context;
 import android.view.View;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent;
 
-/**
- * Provide data that the bottom sheet manager needs to show a bottom sheet.
- */
+/** Provide data that the bottom sheet manager needs to show a bottom sheet. */
 public class CardMenuBottomSheetContent implements BottomSheetContent {
     private View mContentView;
 
@@ -60,8 +60,8 @@ public class CardMenuBottomSheetContent implements BottomSheetContent {
     }
 
     @Override
-    public int getSheetContentDescriptionStringId() {
-        return R.string.feed_card_menu_description;
+    public @NonNull String getSheetContentDescription(Context context) {
+        return context.getString(R.string.feed_card_menu_description);
     }
 
     @Override

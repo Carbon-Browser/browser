@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/auto_reset.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/threading/thread_checker.h"
 #include "ppapi/shared_impl/ppapi_shared_export.h"
 
@@ -67,7 +68,10 @@ class PPAPI_SHARED_EXPORT ProxyLock {
   class PPAPI_SHARED_EXPORT LockingDisablerForTest {
    public:
     LockingDisablerForTest();
-    ~LockingDisablerForTest();
+    ~LockingDisablerForTest() = default;
+
+   private:
+    const base::AutoReset<bool> resetter_;
   };
 
  private:

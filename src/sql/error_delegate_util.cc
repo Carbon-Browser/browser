@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,6 @@ bool IsErrorCatastrophic(int sqlite_error_code) {
     case SQLITE_WARNING:   // Only used as an argument to sqlite3_log().
       NOTREACHED() << "SQLite returned result code marked for internal use: "
                    << sqlite_error_code;
-      [[fallthrough]];
 
     // Group of error codes that may only be returned by SQLite (given Chrome's
     // usage patterns) if a database is corrupted. DCHECK would not be
@@ -42,21 +41,21 @@ bool IsErrorCatastrophic(int sqlite_error_code) {
     case SQLITE_ERROR:
       // Generic/fallback error code.
       //
-      // This error code is thrown when Chrome issues an invalid SQL statement.
-      // For instance, the SQL statement may reference a table or column which
-      // doesn't exist.
+      // In production, database corruption leads our SQL statements being
+      // flagged as invalid. For example, a SQL statement may reference a table
+      // or column whose name got corrupted.
       //
-      // This can happen in two scenarios:
-      //  1. There's a programmer error, and we have an outdated SQL statement
-      //     somewhere in the code.
-      //  2. The user's database got corrupted and the expected table or column
-      //     names are no longer there.
+      // In development, this error code shows up most often when passing
+      // invalid SQL statements to SQLite. We have DCHECKs in sql::Statement and
+      // sql::Database::Execute() that catch obvious SQL syntax errors. We can't
+      // DCHECK when a SQL statement uses incorrect table/index/row names,
+      // because that can legitimately happen in production, due to corruption.
       //
-      // TODO(https://crbug.com/1321483): In practice, we're logging a
-      // surprisingly lot of errors of this type, and the counts aren't going
-      // down, so there must be some instances of Case #1. Log and fix those
-      // cases, then turn this back to [[fallthrough]].
-      return false;
+      // In 2022 we considered these errors as non-catastrophic, and we didn't
+      // find ANY invalid SQL statements, and only found failed transactions
+      // and schemas that didn't match the reported schema version, which both
+      // suggest corruption. See https://crbug.com/1321483 for context.
+      [[fallthrough]];
     case SQLITE_PERM:
       // Failed to get the requested access mode for a newly created database.
       // The database was just created, so error recovery will not cause data
@@ -106,7 +105,6 @@ bool IsErrorCatastrophic(int sqlite_error_code) {
     case SQLITE_ROW:   // The statement produced a row of output.
     case SQLITE_DONE:  // A step has completed in a multi-step operation.
       NOTREACHED() << "Called with non-error result code " << sqlite_error_code;
-      [[fallthrough]];
 
     // Group of error codes that should not be returned by SQLite given Chrome's
     // usage patterns, even if the database gets corrupted. In development, we
@@ -120,38 +118,31 @@ bool IsErrorCatastrophic(int sqlite_error_code) {
       // connections (in the same process) sharing a page cache, but Chrome only
       // uses private page caches.
       NOTREACHED() << "Conflict between concurrently executing SQL statements";
-      [[fallthrough]];
     case SQLITE_NOMEM:
       // Out of memory. This is most likely a transient error.
       //
       // There's a small chance that the error is caused by trying to exchange
       // too much data with SQLite. Most such errors result in SQLITE_TOOBIG.
       NOTREACHED() << "SQLite reported out-of-memory: " << sqlite_error_code;
-      [[fallthrough]];
     case SQLITE_INTERRUPT:
       // Chrome features don't use sqlite3_interrupt().
       NOTREACHED() << "SQLite returned INTERRUPT code: " << sqlite_error_code;
-      [[fallthrough]];
     case SQLITE_NOTFOUND:
       // Unknown opcode in sqlite3_file_control(). Chrome's features only use a
       // few built-in opcodes.
       NOTREACHED() << "SQLite returned NOTFOUND code: " << sqlite_error_code;
-      [[fallthrough]];
     case SQLITE_MISUSE:
       // SQLite API misuse, such as trying to use a prepared statement after it
       // was finalized. In development, we DCHECK to flag this Chrome bug. In
       // production, we hope this is a race condition, and therefore transient.
       NOTREACHED() << "SQLite returned MISUSE code: " << sqlite_error_code;
-      [[fallthrough]];
     case SQLITE_AUTH:
       // Chrome features don't install an authorizer callback. Only WebSQL does.
       NOTREACHED() << "SQLite returned AUTH code: " << sqlite_error_code;
-      [[fallthrough]];
     case SQLITE_RANGE:
       // Chrome uses DCHECKs to ensure the validity of column indexes passed to
       // sqlite3_bind() and sqlite3_column().
       NOTREACHED() << "SQLite returned RANGE code: " << sqlite_error_code;
-      [[fallthrough]];
 
     // Group of error codes that should may be returned by SQLite given Chrome's
     // usage patterns, even without database corruption. In development, we
@@ -251,7 +242,6 @@ bool IsErrorCatastrophic(int sqlite_error_code) {
   }
 
   NOTREACHED() << "SQLite returned unknown result code: " << sqlite_error_code;
-  return false;
 }
 
 std::string GetCorruptFileDiagnosticsInfo(

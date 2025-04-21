@@ -34,26 +34,32 @@
 #include <memory>
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/document_lifecycle.h"
-#include "third_party/blink/renderer/core/inspector/thread_debugger.h"
-#include "third_party/blink/renderer/platform/bindings/script_state.h"
+#include "third_party/blink/renderer/core/inspector/thread_debugger_common_impl.h"
 #include "v8/include/v8-inspector.h"
 #include "v8/include/v8.h"
+
+namespace WTF {
+class String;
+}  // namespace WTF
 
 namespace blink {
 
 class ErrorEvent;
 class LocalFrame;
+class ScriptState;
 class SecurityOrigin;
 class SourceLocation;
 
-class CORE_EXPORT MainThreadDebugger final : public ThreadDebugger {
+class CORE_EXPORT MainThreadDebugger final : public ThreadDebuggerCommonImpl {
  public:
   class ClientMessageLoop {
     USING_FAST_MALLOC(ClientMessageLoop);
 
    public:
+    enum MessageLoopKind { kNormalPause, kInstrumentationPause };
+
     virtual ~ClientMessageLoop() = default;
-    virtual void Run(LocalFrame*) = 0;
+    virtual void Run(LocalFrame*, MessageLoopKind) = 0;
     virtual void QuitNow() = 0;
     virtual void RunIfWaitingForDebugger(LocalFrame*) = 0;
   };
@@ -63,7 +69,7 @@ class CORE_EXPORT MainThreadDebugger final : public ThreadDebugger {
   MainThreadDebugger& operator=(const MainThreadDebugger&) = delete;
   ~MainThreadDebugger() override;
 
-  static MainThreadDebugger* Instance();
+  static MainThreadDebugger* Instance(v8::Isolate*);
 
   bool IsWorker() override { return false; }
   bool IsPaused() const { return paused_; }
@@ -79,15 +85,18 @@ class CORE_EXPORT MainThreadDebugger final : public ThreadDebugger {
   void ExceptionThrown(ExecutionContext*, ErrorEvent*);
 
  private:
+  FRIEND_TEST_ALL_PREFIXES(MainThreadDebuggerMultipleMainFramesTest, Allow);
+
   void ReportConsoleMessage(ExecutionContext*,
                             mojom::ConsoleMessageSource,
                             mojom::ConsoleMessageLevel,
-                            const String& message,
+                            const WTF::String& message,
                             SourceLocation*) override;
   int ContextGroupId(ExecutionContext*) override;
 
   // V8InspectorClient implementation.
   void runMessageLoopOnPause(int context_group_id) override;
+  void runMessageLoopOnInstrumentationPause(int context_group_id) override;
   void quitMessageLoopOnPause() override;
   void muteMetrics(int context_group_id) override;
   void unmuteMetrics(int context_group_id) override;
@@ -117,7 +126,6 @@ class CORE_EXPORT MainThreadDebugger final : public ThreadDebugger {
 
   std::unique_ptr<ClientMessageLoop> client_message_loop_;
   bool paused_;
-  static MainThreadDebugger* instance_;
   std::unique_ptr<DocumentLifecycle::PostponeTransitionScope>
       postponed_transition_scope_;
 };

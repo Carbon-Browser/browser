@@ -1,62 +1,65 @@
-// Copyright (c) 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-
-#include "base/run_loop.h"
-#include "base/test/mock_callback.h"
-#include "base/test/task_environment.h"
-#include "content/renderer/media/win/dcomp_texture_factory.h"
-#include "content/renderer/media/win/dcomp_texture_wrapper_impl.h"
-#include "gpu/ipc/client/client_shared_image_interface.h"
-#include "gpu/ipc/client/gpu_channel_host.h"
-#include "media/base/mock_filters.h"
-#include "media/base/test_helpers.h"
-#include "media/base/win/test_utils.h"
-#include "testing/gtest/include/gtest/gtest.h"
 
 #include <d3d11.h>
 #include <dxgi1_2.h>
 #include <wrl/client.h>
 
+#include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/test/mock_callback.h"
+#include "base/test/task_environment.h"
+#include "content/renderer/media/win/dcomp_texture_factory.h"
+#include "content/renderer/media/win/dcomp_texture_wrapper_impl.h"
+#include "gpu/command_buffer/client/client_shared_image.h"
+#include "gpu/ipc/client/client_shared_image_interface.h"
+#include "gpu/ipc/client/gpu_channel_host.h"
+#include "gpu/ipc/common/gpu_memory_buffer_handle_info.h"
+#include "media/base/mock_filters.h"
+#include "media/base/test_helpers.h"
+#include "media/base/win/test_utils.h"
+#include "testing/gtest/include/gtest/gtest.h"
+
 using base::RunLoop;
 using Microsoft::WRL::ComPtr;
 
+// Stubs out methods of ClientSII that DCompTextureWrapperImpl invokes and for
+// which the production versions cannot run in the context of the unittest.
 class StubClientSharedImageInterface : public gpu::ClientSharedImageInterface {
  public:
-  StubClientSharedImageInterface() : gpu::ClientSharedImageInterface(nullptr) {}
+  StubClientSharedImageInterface()
+      : gpu::ClientSharedImageInterface(nullptr, nullptr) {}
   gpu::SyncToken GenVerifiedSyncToken() override { return gpu::SyncToken(); }
 
-  gpu::Mailbox CreateSharedImage(viz::ResourceFormat format,
-                                 const gfx::Size& size,
-                                 const gfx::ColorSpace& color_space,
-                                 GrSurfaceOrigin surface_origin,
-                                 SkAlphaType alpha_type,
-                                 uint32_t usage,
-                                 gpu::SurfaceHandle surface_handle) override {
-    return gpu::Mailbox();
+  // TODO(crbug.com/40263579): Remove this implementation when MappableSI is
+  // fully launched for DcomTextureWrapperImpl. Eventually look into refactoring
+  // code to use TestSharedImageInterface instead of
+  // StubClientSharedImageInterface.
+  scoped_refptr<gpu::ClientSharedImage> CreateSharedImage(
+      const gpu::SharedImageInfo& si_info,
+      gfx::GpuMemoryBufferHandle handle) override {
+    return base::MakeRefCounted<gpu::ClientSharedImage>(
+        gpu::Mailbox::Generate(), si_info.meta, gpu::SyncToken(), holder_,
+        handle.type);
   }
 
-  gpu::Mailbox CreateSharedImage(
-      viz::ResourceFormat format,
-      const gfx::Size& size,
-      const gfx::ColorSpace& color_space,
-      GrSurfaceOrigin surface_origin,
-      SkAlphaType alpha_type,
-      uint32_t usage,
-      base::span<const uint8_t> pixel_data) override {
-    return gpu::Mailbox();
+  // This implementation is used for test when MappableSI is enabled.
+  scoped_refptr<gpu::ClientSharedImage> CreateSharedImage(
+      const gpu::SharedImageInfo& si_info,
+      gpu::SurfaceHandle surface_handle,
+      gfx::BufferUsage buffer_usage,
+      gfx::GpuMemoryBufferHandle buffer_handle) override {
+    return base::MakeRefCounted<gpu::ClientSharedImage>(
+        gpu::Mailbox::Generate(), si_info.meta, gpu::SyncToken(),
+        gpu::GpuMemoryBufferHandleInfo(std::move(buffer_handle),
+                                       si_info.meta.format, si_info.meta.size,
+                                       buffer_usage),
+        holder_);
   }
 
-  gpu::Mailbox CreateSharedImage(
-      gfx::GpuMemoryBuffer* gpu_memory_buffer,
-      gpu::GpuMemoryBufferManager* gpu_memory_buffer_manager,
-      gfx::BufferPlane plane,
-      const gfx::ColorSpace& color_space,
-      GrSurfaceOrigin surface_origin,
-      SkAlphaType alpha_type,
-      uint32_t usage) override {
-    return gpu::Mailbox();
-  }
+ protected:
+  ~StubClientSharedImageInterface() override = default;
 };
 
 class TestGpuChannelHost : public gpu::GpuChannelHost {
@@ -66,12 +69,13 @@ class TestGpuChannelHost : public gpu::GpuChannelHost {
             0 /* channel_id */,
             gpu::GPUInfo(),
             gpu::GpuFeatureInfo(),
+            gpu::SharedImageCapabilities(),
             mojo::ScopedMessagePipeHandle(
                 mojo::MessagePipeHandle(mojo::kInvalidHandleValue))) {}
 
-  std::unique_ptr<gpu::ClientSharedImageInterface>
+  scoped_refptr<gpu::ClientSharedImageInterface>
   CreateClientSharedImageInterface() override {
-    return std::make_unique<StubClientSharedImageInterface>();
+    return base::MakeRefCounted<StubClientSharedImageInterface>();
   }
 
  protected:
@@ -118,9 +122,10 @@ void DCOMPTextureWrapperTest::CreateDXBackedVideoFrameTestTask(
 
   dcomp_texture_wrapper->CreateVideoFrame(
       frame_size, std::move(dx_handle),
-      base::BindRepeating(
+      base::BindOnce(
           [](gfx::Size orig_frame_size, base::WaitableEvent* wait_event,
-             scoped_refptr<media::VideoFrame> frame) {
+             scoped_refptr<media::VideoFrame> frame,
+             const gpu::Mailbox& mailbox) {
             EXPECT_EQ(frame->coded_size().width(), orig_frame_size.width());
             EXPECT_EQ(frame->coded_size().height(), orig_frame_size.height());
             wait_event->Signal();

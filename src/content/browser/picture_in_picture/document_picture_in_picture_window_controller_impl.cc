@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,12 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "content/browser/media/media_web_contents_observer.h"
 #include "content/browser/media/session/media_session_impl.h"
 #include "content/browser/picture_in_picture/picture_in_picture_session.h"
+#include "content/browser/renderer_host/navigation_request.h"
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/public/browser/content_browser_client.h"
 #include "content/public/browser/navigation_handle.h"
@@ -18,6 +20,7 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/common/content_client.h"
+#include "media/base/media_switches.h"
 
 namespace content {
 
@@ -38,10 +41,6 @@ DocumentPictureInPictureWindowControllerImpl::GetOrCreateForWebContents(
   // This is a no-op if the controller already exists.
   CreateForWebContents(web_contents);
   auto* controller = FromWebContents(web_contents);
-  // The controller must not have pre-existing web content. It's supposed
-  // to have been destroyed by NotifyClosedAndStopObserving() if it's being
-  // reused.
-  DCHECK(!controller->GetChildWebContents());
   return controller;
 }
 
@@ -80,7 +79,7 @@ void DocumentPictureInPictureWindowControllerImpl::Show() {
   // confident that somebody has set it already.
   DCHECK(child_contents_);
 
-  // Start observering our WebContents. Note that this is safe, since we're
+  // Start observing our WebContents. Note that this is safe, since we're
   // owned by the opener WebContents.
   Observe(opener_web_contents_);
 
@@ -106,8 +105,8 @@ void DocumentPictureInPictureWindowControllerImpl::Close(
 }
 
 void DocumentPictureInPictureWindowControllerImpl::CloseAndFocusInitiator() {
-  Close(false /* should_pause_video */);
   FocusInitiator();
+  Close(false /* should_pause_video */);
 }
 
 void DocumentPictureInPictureWindowControllerImpl::OnWindowDestroyed(
@@ -120,15 +119,26 @@ WebContents* DocumentPictureInPictureWindowControllerImpl::GetWebContents() {
   return web_contents();
 }
 
-void DocumentPictureInPictureWindowControllerImpl::WebContentsDestroyed() {
-  // The opener is being destroyed.
+std::optional<url::Origin>
+DocumentPictureInPictureWindowControllerImpl::GetOrigin() {
+  return std::nullopt;
+}
 
-  // Stop observing, and forget `opener_web_contents_`. This will also prevent
-  // `NotifyAndStopObserving` not to try to send messages to the opener, which
-  // is not safe during teardown.
+void DocumentPictureInPictureWindowControllerImpl::WebContentsDestroyed() {
+  // The opener web contents are being destroyed. Stop observing, and forget
+  // `opener_web_contents_`. This will also prevent `NotifyAndStopObserving`
+  // from trying to send messages to the opener, which is not safe during
+  // teardown.
   Observe(/*web_contents=*/nullptr);
   opener_web_contents_ = nullptr;
   Close(/*should_pause_video=*/true);
+}
+
+std::optional<gfx::Rect>
+DocumentPictureInPictureWindowControllerImpl::GetWindowBounds() {
+  if (!child_contents_)
+    return std::nullopt;
+  return child_contents_->GetContainerBounds();
 }
 
 void DocumentPictureInPictureWindowControllerImpl::PrimaryPageChanged(Page&) {
@@ -166,8 +176,8 @@ void DocumentPictureInPictureWindowControllerImpl::NotifyClosedAndStopObserving(
   // user explicitly closed the window and any active media should be paused.
   // If false, the user used a "return to tab" feature with the expectation
   // that any active media will continue playing in the parent tab.
-  // TODO(klausw): connect this to the requestPictureInPicture API and/or
-  // onleavepictureinpicture event once that's implemented.
+  // TODO(crbug.com/40877557): connect this to the requestPictureInPicture
+  // API and/or onleavepictureinpicture event once that's implemented.
   GetWebContentsImpl()->ExitPictureInPicture();
   Observe(/*web_contents=*/nullptr);
 }
@@ -199,25 +209,40 @@ DocumentPictureInPictureWindowControllerImpl::ChildContentsObserver::
 void DocumentPictureInPictureWindowControllerImpl::ChildContentsObserver::
     DidStartNavigation(NavigationHandle* navigation_handle) {
   // If we've already tried to close the window, then there's nothing to do.
-  if (!force_close_cb_)
+  if (!force_close_cb_) {
     return;
+  }
 
   // Only care if it's the root of the pip window.
-  if (!navigation_handle->IsInPrimaryMainFrame())
+  if (!navigation_handle->IsInPrimaryMainFrame()) {
     return;
+  }
 
   // History / etc. navigations are okay.
-  if (navigation_handle->IsSameDocument())
+  if (navigation_handle->IsSameDocument()) {
     return;
+  }
 
-  // about::blank is okay, since that's what it starts with.
-  if (navigation_handle->GetURL().IsAboutBlank())
+  // Allow a command-line flag to opt-out of navigation throttling.
+  if (base::FeatureList::IsEnabled(
+          media::kDocumentPictureInPictureNavigation)) {
     return;
+  }
+
+  // We allow the synchronous about:blank commit to succeed, since that is part
+  // of most initial navigations. Subsequent navigations to about:blank are
+  // treated like other navigations and close the window.
+  // `is_synchronous_renderer_commit()` will only be true for the initial
+  // about:blank navigation.
+  if (navigation_handle->GetURL().IsAboutBlank() &&
+      NavigationRequest::From(navigation_handle)
+          ->is_synchronous_renderer_commit()) {
+    return;
+  }
 
   // Don't run `force_close_cb` from within the observer, since closing
   // `web_contents` is not allowed during an observer callback.
-  content::GetUIThreadTaskRunner({})->PostTask(FROM_HERE,
-                                               std::move(force_close_cb_));
+  GetUIThreadTaskRunner({})->PostTask(FROM_HERE, std::move(force_close_cb_));
 }
 
 void DocumentPictureInPictureWindowControllerImpl::ChildContentsObserver::
@@ -226,6 +251,15 @@ void DocumentPictureInPictureWindowControllerImpl::ChildContentsObserver::
   // post, else something could reference the raw ptr.
   if (contents_destroyed_cb_)
     std::move(contents_destroyed_cb_).Run();
+}
+
+void DocumentPictureInPictureWindowControllerImpl::ChildContentsObserver::
+    DidCloneToNewWebContents(WebContents*, WebContents*) {
+  // DocumentPictureInPictureWindows should never be duplicated, since there
+  // should only ever be one PiP window and the duplicated window bypasses some
+  // of the controller logic here. This is a regression check for
+  // https://crbug.com/1413919.
+  NOTREACHED();
 }
 
 }  // namespace content

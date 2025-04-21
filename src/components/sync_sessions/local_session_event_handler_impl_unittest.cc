@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,13 @@
 #include <utility>
 #include <vector>
 
+#include "base/functional/callback_helpers.h"
 #include "base/strings/stringprintf.h"
+#include "base/test/scoped_feature_list.h"
 #include "components/sessions/core/serialized_navigation_entry.h"
 #include "components/sessions/core/serialized_navigation_entry_test_helper.h"
+#include "components/sync/base/features.h"
 #include "components/sync/base/time.h"
-#include "components/sync/model/sync_change.h"
 #include "components/sync/protocol/session_specifics.pb.h"
 #include "components/sync/protocol/sync_enums.pb.h"
 #include "components/sync_sessions/mock_sync_sessions_client.h"
@@ -118,19 +120,21 @@ class LocalSessionEventHandlerImplTest : public testing::Test {
             Return(ByMove(std::make_unique<NiceMock<MockWriteBatch>>())));
 
     session_tracker_.InitLocalSession(kSessionTag, kSessionName,
-                                      sync_pb::SyncEnums_DeviceType_TYPE_PHONE);
+                                      sync_pb::SyncEnums_DeviceType_TYPE_PHONE,
+                                      syncer::DeviceInfo::FormFactor::kPhone);
   }
 
   void InitHandler() {
     handler_ = std::make_unique<LocalSessionEventHandlerImpl>(
-        &mock_delegate_, &mock_sync_sessions_client_, &session_tracker_);
+        &mock_delegate_, &mock_sync_sessions_client_, &session_tracker_,
+        /*is_new_session=*/true);
     window_getter_.router()->StartRoutingTo(handler_.get());
   }
 
   TestSyncedWindowDelegate* AddWindow(
       int window_id,
-      sync_pb::SessionWindow_BrowserType type =
-          sync_pb::SessionWindow_BrowserType_TYPE_TABBED) {
+      sync_pb::SyncEnums_BrowserType type =
+          sync_pb::SyncEnums_BrowserType_TYPE_TABBED) {
     return window_getter_.AddWindow(type,
                                     SessionID::FromSerializedValue(window_id));
   }
@@ -157,8 +161,8 @@ class LocalSessionEventHandlerImplTest : public testing::Test {
   testing::NiceMock<MockDelegate> mock_delegate_;
   testing::NiceMock<MockSyncSessionsClient> mock_sync_sessions_client_;
   SyncedSessionTracker session_tracker_;
-  TestSyncedWindowDelegatesGetter window_getter_;
   std::unique_ptr<LocalSessionEventHandlerImpl> handler_;
+  TestSyncedWindowDelegatesGetter window_getter_;
 };
 
 // Populate the mock tab delegate with some data and navigation
@@ -170,9 +174,6 @@ TEST_F(LocalSessionEventHandlerImplTest, GetTabSpecificsFromDelegate) {
   TestSyncedTabDelegate* tab = AddTabWithTime(kWindowId1, kFoo1, kTime1);
   tab->Navigate(kBar1, kTime2);
   tab->Navigate(kBaz1, kTime3);
-  tab->SetPageLanguageAtIndex(0, "en");
-  tab->SetPageLanguageAtIndex(1, "fr");
-  tab->SetPageLanguageAtIndex(2, "in");
   InitHandler();
 
   const sync_pb::SessionTab session_tab =
@@ -198,21 +199,15 @@ TEST_F(LocalSessionEventHandlerImplTest, GetTabSpecificsFromDelegate) {
   EXPECT_EQ(200, session_tab.navigation(0).http_status_code());
   EXPECT_EQ(200, session_tab.navigation(1).http_status_code());
   EXPECT_EQ(200, session_tab.navigation(2).http_status_code());
-  EXPECT_FALSE(session_tab.navigation(0).has_blocked_state());
-  EXPECT_FALSE(session_tab.navigation(1).has_blocked_state());
-  EXPECT_FALSE(session_tab.navigation(2).has_blocked_state());
-  EXPECT_EQ("en", session_tab.navigation(0).page_language());
-  EXPECT_EQ("fr", session_tab.navigation(1).page_language());
-  EXPECT_EQ("in", session_tab.navigation(2).page_language());
 }
 
 // Verifies SessionTab.browser_type is set correctly.
 TEST_F(LocalSessionEventHandlerImplTest, BrowserTypeInTabSpecifics) {
   // Create two windows with different browser types.
-  AddWindow(kWindowId1, sync_pb::SessionWindow_BrowserType_TYPE_TABBED);
+  AddWindow(kWindowId1, sync_pb::SyncEnums_BrowserType_TYPE_TABBED);
   TestSyncedTabDelegate* tab1 = AddTabWithTime(kWindowId1, kFoo1, kTime1);
   tab1->Navigate(kBar1, kTime2);
-  AddWindow(kWindowId2, sync_pb::SessionWindow_BrowserType_TYPE_CUSTOM_TAB);
+  AddWindow(kWindowId2, sync_pb::SyncEnums_BrowserType_TYPE_CUSTOM_TAB);
   TestSyncedTabDelegate* tab2 = AddTabWithTime(kWindowId2, kFoo1, kTime1);
   tab2->Navigate(kBar1, kTime2);
   InitHandler();
@@ -220,11 +215,11 @@ TEST_F(LocalSessionEventHandlerImplTest, BrowserTypeInTabSpecifics) {
   // Verify the browser types are propagated to the SessionTab.
   const sync_pb::SessionTab session_tab1 =
       handler_->GetTabSpecificsFromDelegateForTest(*tab1);
-  EXPECT_EQ(sync_pb::SessionWindow_BrowserType_TYPE_TABBED,
+  EXPECT_EQ(sync_pb::SyncEnums_BrowserType_TYPE_TABBED,
             session_tab1.browser_type());
   const sync_pb::SessionTab session_tab2 =
       handler_->GetTabSpecificsFromDelegateForTest(*tab2);
-  EXPECT_EQ(sync_pb::SessionWindow_BrowserType_TYPE_CUSTOM_TAB,
+  EXPECT_EQ(sync_pb::SyncEnums_BrowserType_TYPE_CUSTOM_TAB,
             session_tab2.browser_type());
 }
 
@@ -272,8 +267,7 @@ TEST_F(LocalSessionEventHandlerImplTest,
   ASSERT_EQ(3, session_tab.navigation_size());
 }
 
-// Tests that for child account users blocked navigations are recorded and
-// marked as such, while regular navigations are marked as allowed.
+// Tests that for child account users blocked navigations are recorded.
 TEST_F(LocalSessionEventHandlerImplTest, BlockedNavigations) {
   AddWindow(kWindowId1);
   TestSyncedTabDelegate* tab = AddTabWithTime(kWindowId1, kFoo1, kTime1);
@@ -315,15 +309,6 @@ TEST_F(LocalSessionEventHandlerImplTest, BlockedNavigations) {
             session_tab.navigation(1).timestamp_msec());
   EXPECT_EQ(syncer::TimeToProtoTime(kTime3),
             session_tab.navigation(2).timestamp_msec());
-  EXPECT_TRUE(session_tab.navigation(0).has_blocked_state());
-  EXPECT_TRUE(session_tab.navigation(1).has_blocked_state());
-  EXPECT_TRUE(session_tab.navigation(2).has_blocked_state());
-  EXPECT_EQ(sync_pb::TabNavigation_BlockedState_STATE_ALLOWED,
-            session_tab.navigation(0).blocked_state());
-  EXPECT_EQ(sync_pb::TabNavigation_BlockedState_STATE_BLOCKED,
-            session_tab.navigation(1).blocked_state());
-  EXPECT_EQ(sync_pb::TabNavigation_BlockedState_STATE_BLOCKED,
-            session_tab.navigation(2).blocked_state());
 }
 
 // Tests that calling AssociateWindowsAndTabs() handles well the case with no
@@ -538,7 +523,7 @@ TEST_F(LocalSessionEventHandlerImplTest, AssociateCustomTab) {
               MatchesSyncedSession(kSessionTag, kInitialSession));
 
   // In the current session, all we have is a custom tab.
-  AddWindow(kWindowId3, sync_pb::SessionWindow_BrowserType_TYPE_CUSTOM_TAB);
+  AddWindow(kWindowId3, sync_pb::SyncEnums_BrowserType_TYPE_CUSTOM_TAB);
   AddTab(kWindowId3, kFoo1, kTabId2);
 
   auto mock_batch = std::make_unique<StrictMock<MockWriteBatch>>();
@@ -680,7 +665,7 @@ TEST_F(LocalSessionEventHandlerImplTest, PropagateNewCustomTab) {
       .WillOnce(Return(ByMove(std::move(tab_create_mock_batch))))
       .WillOnce(Return(ByMove(std::move(navigation_mock_batch))));
 
-  AddWindow(kWindowId1, sync_pb::SessionWindow_BrowserType_TYPE_CUSTOM_TAB);
+  AddWindow(kWindowId1, sync_pb::SyncEnums_BrowserType_TYPE_CUSTOM_TAB);
   AddTab(kWindowId1, kFoo1, kTabId1);
 }
 
@@ -746,10 +731,10 @@ TEST_F(LocalSessionEventHandlerImplTest,
   ASSERT_THAT(session_tracker_.LookupSession(kSessionTag),
               MatchesSyncedSession(kSessionTag, initial_session));
 
-  AddWindow(kWindowId1, sync_pb::SessionWindow_BrowserType_TYPE_CUSTOM_TAB);
+  AddWindow(kWindowId1, sync_pb::SyncEnums_BrowserType_TYPE_CUSTOM_TAB);
   TestSyncedTabDelegate* tab1 = AddTab(kWindowId1, kFoo1, kTabId1);
 
-  AddWindow(kWindowId2, sync_pb::SessionWindow_BrowserType_TYPE_CUSTOM_TAB);
+  AddWindow(kWindowId2, sync_pb::SyncEnums_BrowserType_TYPE_CUSTOM_TAB);
   AddTab(kWindowId2, kBar1, kTabId2);
 
   InitHandler();
@@ -804,7 +789,7 @@ TEST_F(LocalSessionEventHandlerImplTest, ShouldRemoveAllTabsOnEmptyWindow) {
   // been opened without restored tabs.
   // 2. This is the result of closing all tabs (normally on Android where the
   // window isn't closed when all tabs are closed).
-  AddWindow(kWindowId3, sync_pb::SessionWindow_BrowserType_TYPE_TABBED);
+  AddWindow(kWindowId3, sync_pb::SyncEnums_BrowserType_TYPE_TABBED);
 
   auto mock_batch = std::make_unique<StrictMock<MockWriteBatch>>();
   EXPECT_CALL(*mock_batch, Put(Pointee(MatchesHeader(kSessionTag, {}, {}))));
@@ -819,6 +804,39 @@ TEST_F(LocalSessionEventHandlerImplTest, ShouldRemoveAllTabsOnEmptyWindow) {
   EXPECT_THAT(session_tracker_.LookupSession(kSessionTag),
               MatchesSyncedSession(kSessionTag, {}));
 }
+
+#if BUILDFLAG(IS_ANDROID)
+TEST_F(LocalSessionEventHandlerImplTest, LoadPlaceholderTabFromDisk) {
+  // Mimic the user opening a tab that is initially a placeholder tab.
+  TestSyncedWindowDelegate* window = AddWindow(kWindowId1);
+  PlaceholderTabDelegate placeholder_tab(
+      SessionID::FromSerializedValue(kTabId1));
+  auto snapshot = std::make_unique<TestSyncedTabDelegate>(
+      SessionID::FromSerializedValue(kWindowId1),
+      SessionID::FromSerializedValue(kTabId1), base::DoNothing());
+  snapshot->Navigate(kFoo1);
+  placeholder_tab.SetPlaceholderTabSyncedTabDelegate(std::move(snapshot));
+  window->OverrideTabAt(0, &placeholder_tab);
+
+  // Add expectations for the invocations that are expected when the loading
+  // completes.
+  auto mock_batch = std::make_unique<StrictMock<MockWriteBatch>>();
+  EXPECT_CALL(
+      *mock_batch,
+      Put(Pointee(MatchesHeader(kSessionTag, {kWindowId1}, {kTabId1}))));
+  // Expect that the tab originating as a placeholder tab was included in
+  // the write batch for resync.
+  EXPECT_CALL(*mock_batch, Put(Pointee(MatchesTab(kSessionTag, kWindowId1,
+                                                  kTabId1, /*tab_node_id=*/0,
+                                                  /*urls=*/{kFoo1}))));
+  EXPECT_CALL(*mock_batch, Commit());
+
+  EXPECT_CALL(mock_delegate_, CreateLocalSessionWriteBatch())
+      .WillOnce(Return(ByMove(std::move(mock_batch))));
+
+  InitHandler();
+}
+#endif  // BUILDFLAG(IS_ANDROID)
 
 }  // namespace
 }  // namespace sync_sessions

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,38 +6,24 @@
 
 #include <algorithm>
 #include <memory>
-#include <set>
 #include <utility>
 #include <vector>
 
-#include "base/feature_list.h"
-#include "base/logging.h"
-#include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/strings/stringprintf.h"
 #include "base/time/time.h"
-#include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "components/viz/common/features.h"
-#include "components/viz/common/quads/solid_color_draw_quad.h"
-#include "components/viz/common/quads/texture_draw_quad.h"
 #include "components/viz/common/viz_utils.h"
 #include "components/viz/service/debugger/viz_debugger.h"
 #include "components/viz/service/display/display_resource_provider.h"
 #include "components/viz/service/display/output_surface.h"
 #include "components/viz/service/display/overlay_candidate.h"
 #include "components/viz/service/display/overlay_candidate_factory.h"
+#include "components/viz/service/display/overlay_processor_delegated_support.h"
 #include "components/viz/service/display/overlay_processor_interface.h"
-#include "components/viz/service/display/overlay_strategy_fullscreen.h"
-#include "components/viz/service/display/overlay_strategy_single_on_top.h"
-#include "components/viz/service/display/overlay_strategy_underlay.h"
 #include "gpu/command_buffer/client/shared_image_interface.h"
-#include "gpu/command_buffer/service/shared_image/shared_image_manager.h"
 #include "ui/gfx/geometry/rect.h"
-#include "ui/gfx/geometry/rect_conversions.h"
 #include "ui/gfx/geometry/transform.h"
-#include "ui/gfx/geometry/vector2d_f.h"
 #include "ui/ozone/public/overlay_manager_ozone.h"
 #include "ui/ozone/public/ozone_platform.h"
 
@@ -79,6 +65,10 @@ void RecordFDUsageUMA() {
   DBG_LOG("delegated.fd.usage", "FD usage: %d / %d - time us: %f",
           active_fd_count, fd_max, delta_time_taken.InMicrosecondsF());
 }
+
+// Block delegation if there has been a copy request in the last 3 frames.
+constexpr int kCopyRequestBlockFrames = 3;
+
 }  // namespace
 
 namespace viz {
@@ -92,10 +82,11 @@ OverlayProcessorDelegated::OverlayProcessorDelegated(
                             shared_image_interface) {
   // TODO(msisov, petermcneeley): remove this once Wayland uses only delegated
   // context. May be null in tests.
-  if (ui::OzonePlatform::GetInstance()->GetOverlayManager())
+  if (ui::OzonePlatform::GetInstance()->GetOverlayManager()) {
     ui::OzonePlatform::GetInstance()
         ->GetOverlayManager()
         ->SetContextDelegated();
+  }
 }
 
 OverlayProcessorDelegated::~OverlayProcessorDelegated() = default;
@@ -109,13 +100,12 @@ bool OverlayProcessorDelegated::DisableSplittingQuads() const {
 
 constexpr size_t kTooManyQuads = 64;
 
-DBG_FLAG_FBOOL("delegated.disable.delegation", disable_delegation)
-
 bool OverlayProcessorDelegated::AttemptWithStrategies(
     const SkM44& output_color_matrix,
+    const OverlayProcessorInterface::FilterOperationsMap& render_pass_filters,
     const OverlayProcessorInterface::FilterOperationsMap&
         render_pass_backdrop_filters,
-    DisplayResourceProvider* resource_provider,
+    const DisplayResourceProvider* resource_provider,
     AggregatedRenderPassList* render_pass_list,
     SurfaceDamageRectList* surface_damage_rect_list,
     OverlayProcessorInterface::OutputSurfaceOverlayPlane* primary_plane,
@@ -124,15 +114,22 @@ bool OverlayProcessorDelegated::AttemptWithStrategies(
   DCHECK(candidates->empty());
   auto* render_pass = render_pass_list->back().get();
   QuadList* quad_list = &render_pass->quad_list;
-  constexpr bool is_delegated_context = true;
   delegated_status_ = DelegationStatus::kCompositedOther;
 
-  if (disable_delegation())
+  if (!features::IsDelegatedCompositingEnabled()) {
+    delegated_status_ = DelegationStatus::kCompositedFeatureDisabled;
     return false;
+  }
 
-  // Do not delegated when we have copy requests otherwise we will end up with
-  // the delegated quads missing from the frame buffer.
-  if (!render_pass->copy_requests.empty()) {
+  if (ForceDisableDelegation()) {
+    delegated_status_ = DelegationStatus::kCompositedFeatureDisabled;
+    return false;
+  }
+
+  // Do not delegate when we have copy requests on the root render pass or we
+  // will end up with the delegated quads missing from the frame buffer.
+  // Delegating with copy requests also increases power usage.
+  if (BlockForCopyRequests(render_pass_list)) {
     delegated_status_ = DelegationStatus::kCompositedCopyRequest;
     return false;
   }
@@ -147,50 +144,37 @@ bool OverlayProcessorDelegated::AttemptWithStrategies(
     return false;
   }
 
+  OverlayCandidateFactory::OverlayContext context;
+  context.is_delegated_context = true;
+  context.supports_clip_rect = false;
+  context.supports_out_of_window_clip_rect = false;
+  context.supports_arbitrary_transform = false;
+  context.supports_mask_filter = true;
+  context.transform_and_clip_rpdq = false;
+  context.supports_flip_rotate_transform = SupportsFlipRotateTransform();
+
   OverlayCandidateFactory candidate_factory = OverlayCandidateFactory(
       render_pass, resource_provider, surface_damage_rect_list,
       &output_color_matrix, GetPrimaryPlaneDisplayRect(primary_plane),
-      is_delegated_context);
+      &render_pass_filters, context);
 
-  std::vector<QuadList::Iterator> candidate_quads;
+  unassigned_damage_ = gfx::RectF(candidate_factory.GetUnassignedDamage());
+
+  const auto kExtraCandiates = needs_background_image_ ? 1 : 0;
+  candidates->reserve(quad_list->size() + kExtraCandiates);
   int num_quads_skipped = 0;
+
   for (auto it = quad_list->begin(); it != quad_list->end(); ++it) {
-    OverlayCandidate candidate;
-    auto& transform = it->shared_quad_state->quad_to_target_transform;
-    auto display_rect = gfx::RectF(it->rect);
-    transform.TransformRect(&display_rect);
-    DBG_DRAW_TEXT(
-        "delegated.overlay.type",
-        gfx::Vector2dF(display_rect.origin().x(), display_rect.origin().y()),
-        base::StringPrintf("m=%d rid=%d", static_cast<int>(it->material),
-                           it->resources.begin()->value()));
-    auto candidate_status = candidate_factory.FromDrawQuad(*it, candidate);
-    if (candidate_status == OverlayCandidate::CandidateStatus::kSuccess) {
-      if (it->material == DrawQuad::Material::kSolidColor) {
-        DBG_DRAW_RECT("delegated.overlay.color", candidate.display_rect);
-      } else if (it->material == DrawQuad::Material::kAggregatedRenderPass) {
-        DBG_DRAW_RECT("delegated.overlay.aggregated", candidate.display_rect);
+    if (auto result = TryPromoteDrawQuadForDelegation(candidate_factory, *it);
+        result.has_value()) {
+      if (const auto& candidate = result.value(); candidate.has_value()) {
+        candidates->push_back(candidate.value());
       } else {
-        DBG_DRAW_RECT("delegated.overlay.candidate", candidate.display_rect);
-      }
-      candidates->push_back(candidate);
-      candidate_quads.push_back(it);
-    } else {
-      if (candidate_status == OverlayCandidate::CandidateStatus::kFailVisible) {
         // This quad can be intentionally skipped.
         num_quads_skipped++;
-      } else {
-        DBG_DRAW_RECT("delegated.overlay.failed", display_rect);
-        DBG_LOG("delegated.overlay.failed", "error code %d", candidate_status);
       }
-
-      if (candidate_status ==
-          OverlayCandidate::CandidateStatus::kFailNotAxisAligned) {
-        delegated_status_ = DelegationStatus::kCompositedNotAxisAligned;
-      } else if (candidate_status ==
-                 OverlayCandidate::CandidateStatus::kFailNotOverlay) {
-        delegated_status_ = DelegationStatus::kCompositedNotOverlay;
-      }
+    } else {
+      delegated_status_ = result.error();
     }
   }
 
@@ -251,15 +235,12 @@ void OverlayProcessorDelegated::ProcessForOverlays(
   RecordFDUsageUMA();
 #endif
 
-  DBG_DRAW_RECT("delegated.incoming.damage", (*damage_rect));
-  for (auto&& each : surface_damage_rect_list) {
-    DBG_DRAW_RECT("delegated.surface.damage", each);
-  }
+  DebugLogBeforeDelegation(*damage_rect, surface_damage_rect_list);
 
   success = AttemptWithStrategies(
-      output_color_matrix, render_pass_backdrop_filters, resource_provider,
-      render_passes, &surface_damage_rect_list, output_surface_plane,
-      candidates, content_bounds);
+      output_color_matrix, render_pass_filters, render_pass_backdrop_filters,
+      resource_provider, render_passes, &surface_damage_rect_list,
+      output_surface_plane, candidates, content_bounds);
 
   DCHECK(candidates->empty() || success);
 
@@ -274,31 +255,47 @@ void OverlayProcessorDelegated::ProcessForOverlays(
     // Add in all the damage from all fully delegated frames.
     damage_rect->Union(previous_frame_overlay_rect_);
     previous_frame_overlay_rect_ = gfx::Rect();
+    // This is only relevant when delegating.
+    unassigned_damage_ = gfx::RectF();
   }
 
-  UMA_HISTOGRAM_ENUMERATION("Viz.DelegatedCompositing.Status",
-                            delegated_status_);
-  DBG_DRAW_RECT("delegated.outgoing.damage", (*damage_rect));
-
-  TRACE_COUNTER1(TRACE_DISABLED_BY_DEFAULT("viz.debug.overlay_planes"),
-                 "Scheduled overlay planes", candidates->size());
-
-  TRACE_EVENT_INSTANT1(TRACE_DISABLED_BY_DEFAULT("viz.debug.overlay_planes"),
-                       "DelegatedCompositingStatus", TRACE_EVENT_SCOPE_THREAD,
-                       "delegated_status", delegated_status_);
+  DebugLogAfterDelegation(delegated_status_, *candidates, *damage_rect);
 }
 
 void OverlayProcessorDelegated::AdjustOutputSurfaceOverlay(
-    absl::optional<OutputSurfaceOverlayPlane>* output_surface_plane) {
+    std::optional<OutputSurfaceOverlayPlane>* output_surface_plane) {
   if (!output_surface_plane->has_value())
     return;
 
-  // TODO(https://crbug.com/1224991) : Damage propagation will allow us to
+  // TODO(crbug.com/40775556) : Damage propagation will allow us to
   // remove the primary plan entirely in the case of full delegation.
   // In that case we will do "output_surface_plane->reset()" like the existing
   // fullscreen overlay code.
   if (delegated_status_ == DelegationStatus::kFullDelegation)
     output_surface_plane->reset();
+}
+
+gfx::RectF OverlayProcessorDelegated::GetUnassignedDamage() const {
+  return unassigned_damage_;
+}
+
+bool OverlayProcessorDelegated::BlockForCopyRequests(
+    const AggregatedRenderPassList* render_pass_list) {
+  bool has_copy = false;
+  for (auto& pass : *render_pass_list) {
+    if (pass->HasCapture()) {
+      has_copy = true;
+      break;
+    }
+  }
+
+  if (has_copy) {
+    copy_request_counter_ = kCopyRequestBlockFrames;
+  } else {
+    copy_request_counter_ = std::max(0, copy_request_counter_ - 1);
+  }
+
+  return copy_request_counter_ > 0;
 }
 
 }  // namespace viz

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,11 @@
 
 #include <set>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "remoting/proto/ftl/v1/chromoting_message.pb.h"
 #include "remoting/proto/ftl/v1/ftl_messages.pb.h"
 #include "remoting/signaling/mock_signal_strategy.h"
@@ -80,7 +81,8 @@ class FtlHostChangeNotificationListenerTest : public testing::Test {
 
   MockListener mock_listener_;
   MockSignalStrategy signal_strategy_;
-  std::set<SignalStrategy::Listener*> signal_strategy_listeners_;
+  std::set<raw_ptr<SignalStrategy::Listener, SetExperimental>>
+      signal_strategy_listeners_;
   std::unique_ptr<FtlHostChangeNotificationListener>
       ftl_host_change_notification_listener_;
 };
@@ -110,8 +112,8 @@ TEST_F(FtlHostChangeNotificationListenerTest,
   ASSERT_TRUE(is_handled);
   ftl_host_change_notification_listener_.reset();
   base::RunLoop run_loop;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                   run_loop.QuitClosure());
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, run_loop.QuitClosure());
   run_loop.Run();
 }
 
@@ -125,8 +127,8 @@ TEST_F(FtlHostChangeNotificationListenerTest,
               ftl::HostStatusChangeMessage_DirectoryState_DELETED));
   ASSERT_FALSE(is_handled);
   base::RunLoop run_loop;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                   run_loop.QuitClosure());
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, run_loop.QuitClosure());
   run_loop.Run();
 }
 
@@ -139,8 +141,8 @@ TEST_F(FtlHostChangeNotificationListenerTest,
           /* chromoting_message */ {});
   ASSERT_FALSE(is_handled);
   base::RunLoop run_loop;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                   run_loop.QuitClosure());
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, run_loop.QuitClosure());
   run_loop.Run();
 }
 
@@ -154,8 +156,8 @@ TEST_F(FtlHostChangeNotificationListenerTest,
               ftl::HostStatusChangeMessage_DirectoryState_NOT_SET));
   ASSERT_FALSE(is_handled);
   base::RunLoop run_loop;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                   run_loop.QuitClosure());
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, run_loop.QuitClosure());
   run_loop.Run();
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Chromium Authors. All rights reserved.
+ * Copyright 2020 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -39,7 +39,7 @@ function getTotalFromPaymentResponse(response) {
  * @param {string} totalAmount - The total amount to be charged.
  * @return {Promise<string>} - Either the total amount or an error string.
  */
-async function getTotalAmountFromClientData(credentialId, totalAmount) { // eslint-disable-line no-unused-vars, max-len
+async function getTotalAmountFromClientData(credentialId, totalAmount) {
   try {
     const request = createPaymentRequest(credentialId, totalAmount, false, '');
     const response = await request.show();
@@ -59,7 +59,8 @@ async function getTotalAmountFromClientData(credentialId, totalAmount) { // esli
  * modifier.
  * @return {Promise<string>} - Either the total amount or an error string.
  */
-async function getTotalAmountFromClientDataWithModifier(credentialId, modifiedTotal) { // eslint-disable-line no-unused-vars, max-len
+async function getTotalAmountFromClientDataWithModifier(
+    credentialId, modifiedTotal) {
   try {
     const request = createPaymentRequest(
         credentialId, '0', true, modifiedTotal);
@@ -80,7 +81,8 @@ async function getTotalAmountFromClientDataWithModifier(credentialId, modifiedTo
  * @param {string} finalizedTotal - The finalized amount to be charged.
  * @return {Promise<string>} - Either the total amount or an error string.
  */
-async function getTotalAmountFromClientDataWithShowPromise(credentialId, finalizedTotal) { // eslint-disable-line no-unused-vars, max-len
+async function getTotalAmountFromClientDataWithShowPromise(
+    credentialId, finalizedTotal) {
   try {
     const request = createPaymentRequest(
         credentialId, '0', false, '');
@@ -105,7 +107,8 @@ async function getTotalAmountFromClientDataWithShowPromise(credentialId, finaliz
  * @param {string} finalizedModifierAmount - The finalized amount to be charged.
  * @return {Promise<string>} - Either the total amount or an error string.
  */
-async function getTotalAmountFromClientDataWithModifierAndShowPromise(credentialId, finalizedModifierAmount) { // eslint-disable-line no-unused-vars, max-len
+async function getTotalAmountFromClientDataWithModifierAndShowPromise(
+    credentialId, finalizedModifierAmount) {
   try {
     const request = createPaymentRequest(credentialId, '0', false, '');
     const response = await request.show(new Promise((resolve) => {
@@ -161,7 +164,7 @@ function createPaymentRequest(
  * @return {PaymentDetails} - The payment details with the given total amount.
  */
 function createDetails(totalAmount, withModifier, modifierAmount) {
-  let result = {
+  const result = {
     total: {label: 'TEST', amount: {currency: 'USD', value: totalAmount}},
   };
   if (withModifier) {

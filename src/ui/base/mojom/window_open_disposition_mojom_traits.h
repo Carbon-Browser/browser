@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,7 +41,6 @@ struct EnumTraits<ui::mojom::WindowOpenDisposition, WindowOpenDisposition> {
         return ui::mojom::WindowOpenDisposition::IGNORE_ACTION;
       default:
         NOTREACHED();
-        return ui::mojom::WindowOpenDisposition::UNKNOWN;
     }
   }
 
@@ -83,7 +82,6 @@ struct EnumTraits<ui::mojom::WindowOpenDisposition, WindowOpenDisposition> {
         return true;
       default:
         NOTREACHED();
-        return false;
     }
   }
 };

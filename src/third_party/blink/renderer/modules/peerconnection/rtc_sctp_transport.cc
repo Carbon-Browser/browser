@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,9 @@
 #include <limits>
 #include <memory>
 
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/web/web_local_frame.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_rtc_sctp_transport_state.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
@@ -23,23 +25,21 @@
 namespace blink {
 
 namespace {
-String TransportStateToString(webrtc::SctpTransportState state) {
+V8RTCSctpTransportState::Enum TransportStateToEnum(
+    webrtc::SctpTransportState state) {
   switch (state) {
-    case webrtc::SctpTransportState::kNew:
-      // Not supposed to happen. DtlsTransport should
-      // only be visible after reaching "connecting" state.
-      NOTREACHED();
-      return String("new");
     case webrtc::SctpTransportState::kConnecting:
-      return String("connecting");
+      return V8RTCSctpTransportState::Enum::kConnecting;
     case webrtc::SctpTransportState::kConnected:
-      return String("connected");
+      return V8RTCSctpTransportState::Enum::kConnected;
     case webrtc::SctpTransportState::kClosed:
-      return String("closed");
-    default:
-      NOTREACHED();
-      return String("failed");
+      return V8RTCSctpTransportState::Enum::kClosed;
+    case webrtc::SctpTransportState::kNew:
+    case webrtc::SctpTransportState::kNumValues:
+      // These shouldn't occur.
+      break;
   }
+  NOTREACHED();
 }
 
 std::unique_ptr<SctpTransportProxy> CreateProxy(
@@ -85,11 +85,11 @@ RTCSctpTransport::RTCSctpTransport(
 
 RTCSctpTransport::~RTCSctpTransport() {}
 
-String RTCSctpTransport::state() const {
+V8RTCSctpTransportState RTCSctpTransport::state() const {
   if (closed_from_owner_) {
-    return TransportStateToString(webrtc::SctpTransportState::kClosed);
+    return V8RTCSctpTransportState(V8RTCSctpTransportState::Enum::kClosed);
   }
-  return TransportStateToString(current_state_.state());
+  return V8RTCSctpTransportState(TransportStateToEnum(current_state_.state()));
 }
 
 double RTCSctpTransport::maxMessageSize() const {
@@ -102,14 +102,14 @@ double RTCSctpTransport::maxMessageSize() const {
   return std::numeric_limits<double>::infinity();
 }
 
-absl::optional<int16_t> RTCSctpTransport::maxChannels() const {
+std::optional<int16_t> RTCSctpTransport::maxChannels() const {
   if (!current_state_.MaxChannels())
-    return absl::nullopt;
+    return std::nullopt;
   return current_state_.MaxChannels().value();
 }
 
 RTCDtlsTransport* RTCSctpTransport::transport() const {
-  return dtls_transport_;
+  return dtls_transport_.Get();
 }
 
 rtc::scoped_refptr<webrtc::SctpTransportInterface>
@@ -161,7 +161,7 @@ ExecutionContext* RTCSctpTransport::GetExecutionContext() const {
 
 void RTCSctpTransport::Trace(Visitor* visitor) const {
   visitor->Trace(dtls_transport_);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   ExecutionContextClient::Trace(visitor);
   SctpTransportProxy::Delegate::Trace(visitor);
 }

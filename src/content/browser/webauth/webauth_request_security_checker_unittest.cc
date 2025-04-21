@@ -1,11 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/webauth/webauth_request_security_checker.h"
+
+#include <string_view>
+
+#include "base/json/json_reader.h"
 #include "base/memory/raw_ptr.h"
-#include "base/strings/string_piece.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/values.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_features.h"
@@ -14,12 +18,12 @@
 #include "content/public/test/test_browser_context.h"
 #include "content/public/test/test_renderer_host.h"
 #include "content/public/test/test_web_contents_factory.h"
-#include "device/fido/features.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/permissions_policy/permissions_policy.h"
 #include "third_party/blink/public/mojom/webauthn/authenticator.mojom.h"
 #include "url/gurl.h"
 #include "url/origin.h"
+#include "url/url_util.h"
 
 namespace content {
 namespace {
@@ -27,7 +31,8 @@ namespace {
 blink::ParsedPermissionsPolicy CreatePolicyToAllowWebAuthn() {
   return {blink::ParsedPermissionsPolicyDeclaration(
       blink::mojom::PermissionsPolicyFeature::kPublicKeyCredentialsGet,
-      /*values=*/{}, /*matches_all_origins=*/true,
+      /*allowed_origins=*/{}, /*self_if_matches=*/std::nullopt,
+      /*matches_all_origins=*/true,
       /*matches_opaque_src=*/false)};
 }
 
@@ -36,18 +41,20 @@ blink::ParsedPermissionsPolicy CreatePolicyToAllowWebAuthn() {
 blink::ParsedPermissionsPolicy CreatePolicyToDenyWebAuthn() {
   return {blink::ParsedPermissionsPolicyDeclaration(
       blink::mojom::PermissionsPolicyFeature::kPublicKeyCredentialsGet,
-      /*values=*/{}, /*matches_all_origins=*/false,
+      /*allowed_origins=*/{}, /*self_if_matches=*/std::nullopt,
+      /*matches_all_origins=*/false,
       /*matches_opaque_src=*/false)};
 }
 
 blink::ParsedPermissionsPolicy CreatePolicyToAllowWebPayments() {
   return {blink::ParsedPermissionsPolicyDeclaration(
-      blink::mojom::PermissionsPolicyFeature::kPayment, /*values=*/{},
+      blink::mojom::PermissionsPolicyFeature::kPayment, /*allowed_origins=*/{},
+      /*self_if_matches=*/std::nullopt,
       /*matches_all_origins=*/true, /*matches_opaque_src=*/false)};
 }
 
 struct TestCase {
-  TestCase(const base::StringPiece& url,
+  TestCase(const std::string_view& url,
            const blink::ParsedPermissionsPolicy& policy,
            WebAuthRequestSecurityChecker::RequestType request_type,
            bool expected_is_cross_origin,
@@ -60,7 +67,7 @@ struct TestCase {
 
   ~TestCase() = default;
 
-  const base::StringPiece url;
+  const std::string_view url;
   const blink::ParsedPermissionsPolicy policy;
   const WebAuthRequestSecurityChecker::RequestType request_type;
   const bool expected_is_cross_origin;
@@ -82,6 +89,9 @@ std::ostream& operator<<(std::ostream& out, const TestCase& test_case) {
       break;
     case WebAuthRequestSecurityChecker::RequestType::kMakeCredential:
       out << "Make Credential";
+      break;
+    case WebAuthRequestSecurityChecker::RequestType::kReport:
+      out << "Report";
       break;
   }
   return out;
@@ -324,6 +334,94 @@ INSTANTIATE_TEST_SUITE_P(
             CreatePolicyToDenyWebAuthn(),
             WebAuthRequestSecurityChecker::RequestType::kMakeCredential,
             blink::mojom::AuthenticatorStatus::SUCCESS)));
+
+class WebAuthRequestSecurityCheckerWellKnownJSONTest : public testing::Test {
+ protected:
+  blink::mojom::AuthenticatorStatus Test(std::string_view caller_origin_str,
+                                         std::string_view json) {
+    std::optional<base::Value> parsed =
+        base::JSONReader::Read(json, base::JSON_PARSE_RFC);
+    CHECK(parsed) << json;
+
+    GURL caller_origin_url(caller_origin_str);
+    CHECK(caller_origin_url.is_valid()) << caller_origin_str;
+
+    return WebAuthRequestSecurityChecker::RemoteValidation::
+        ValidateWellKnownJSON(url::Origin::Create(caller_origin_url), *parsed);
+  }
+};
+
+TEST_F(WebAuthRequestSecurityCheckerWellKnownJSONTest, Inputs) {
+  struct TestCase {
+    const char* json;
+    blink::mojom::AuthenticatorStatus expected;
+  };
+  constexpr blink::mojom::AuthenticatorStatus parse_error =
+      blink::mojom::AuthenticatorStatus::BAD_RELYING_PARTY_ID_JSON_PARSE_ERROR;
+  constexpr blink::mojom::AuthenticatorStatus ok =
+      blink::mojom::AuthenticatorStatus::SUCCESS;
+  constexpr blink::mojom::AuthenticatorStatus no_match =
+      blink::mojom::AuthenticatorStatus::BAD_RELYING_PARTY_ID_NO_JSON_MATCH;
+  constexpr blink::mojom::AuthenticatorStatus no_match_hit_limits = blink::
+      mojom::AuthenticatorStatus::BAD_RELYING_PARTY_ID_NO_JSON_MATCH_HIT_LIMITS;
+
+  static const TestCase kTestCases[] = {
+      {R"([])", parse_error},
+      {R"({})", parse_error},
+      {R"({"foo": "bar"})", parse_error},
+      {R"({"origins": "bar"})", parse_error},
+      {R"({"origins": []})", no_match},
+      {R"({"origins": [1]})", parse_error},
+      {R"({"origins": ["https://foo.com"]})", ok},
+      {R"({"origins": ["https://foo2.com"]})", no_match},
+      {R"({"origins": ["https://com"]})", no_match},
+      {R"({"origins": ["other://foo.com"]})", no_match},
+      {R"({"origins": [
+            "https://a.com",
+            "https://b.com",
+            "https://c.com",
+            "https://d.com",
+            "https://foo.com"
+          ]})",
+       ok},
+      // Too many eTLD+1 labels.
+      {R"({"origins": [
+            "https://a.com",
+            "https://b.com",
+            "https://c.com",
+            "https://d.com",
+            "https://e.com",
+            "https://foo.com"
+          ]})",
+       no_match_hit_limits},
+      // Too many eTLD+1 labels, but foo.com isn't at the end so will be
+      // processed.
+      {R"({"origins": [
+            "https://a.com",
+            "https://b.com",
+            "https://c.com",
+            "https://d.com",
+            "https://foo.com",
+            "https://e.com"
+          ]})",
+       ok},
+      {R"({"origins": [
+            "https://foo.co.uk",
+            "https://foo.de",
+            "https://foo.in",
+            "https://foo.net",
+            "https://foo.org",
+            "https://foo.com"
+          ]})",
+       ok},
+  };
+
+  for (const auto& test : kTestCases) {
+    SCOPED_TRACE(test.json);
+
+    EXPECT_EQ(test.expected, Test("https://foo.com", test.json));
+  }
+}
 
 }  // namespace
 }  // namespace content

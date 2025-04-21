@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,6 @@ import org.chromium.components.browser_ui.widget.chips.ChipView;
  * This view represents a section of user credit card details in the payment method tab of the
  * keyboard accessory (manual fallback) sheet.
  */
-
 class CreditCardAccessoryInfoView extends LinearLayout {
     private ImageView mIcon;
     private ChipView mCCNumber;
@@ -30,9 +29,7 @@ class CreditCardAccessoryInfoView extends LinearLayout {
     private ChipView mCardholder;
     private ChipView mCvc;
 
-    /**
-     * Constructor for inflating from XML.
-     */
+    /** Constructor for inflating from XML. */
     public CreditCardAccessoryInfoView(Context context, AttributeSet attrs) {
         super(context, attrs);
     }

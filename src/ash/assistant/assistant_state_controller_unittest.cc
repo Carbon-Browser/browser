@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_prefs.h"
 #include "components/prefs/pref_service.h"
 
@@ -18,18 +19,18 @@ namespace ash {
 
 namespace {
 
-using chromeos::assistant::prefs::AssistantOnboardingMode;
-using chromeos::assistant::prefs::ConsentStatus;
-using chromeos::assistant::prefs::kAssistantConsentStatus;
-using chromeos::assistant::prefs::kAssistantContextEnabled;
-using chromeos::assistant::prefs::kAssistantEnabled;
-using chromeos::assistant::prefs::kAssistantHotwordAlwaysOn;
-using chromeos::assistant::prefs::kAssistantHotwordEnabled;
-using chromeos::assistant::prefs::kAssistantLaunchWithMicOpen;
-using chromeos::assistant::prefs::kAssistantNotificationEnabled;
-using chromeos::assistant::prefs::kAssistantOnboardingMode;
-using chromeos::assistant::prefs::kAssistantOnboardingModeDefault;
-using chromeos::assistant::prefs::kAssistantOnboardingModeEducation;
+using assistant::prefs::AssistantOnboardingMode;
+using assistant::prefs::ConsentStatus;
+using assistant::prefs::kAssistantConsentStatus;
+using assistant::prefs::kAssistantContextEnabled;
+using assistant::prefs::kAssistantEnabled;
+using assistant::prefs::kAssistantHotwordAlwaysOn;
+using assistant::prefs::kAssistantHotwordEnabled;
+using assistant::prefs::kAssistantLaunchWithMicOpen;
+using assistant::prefs::kAssistantNotificationEnabled;
+using assistant::prefs::kAssistantOnboardingMode;
+using assistant::prefs::kAssistantOnboardingModeDefault;
+using assistant::prefs::kAssistantOnboardingModeEducation;
 
 class TestAssistantStateObserver : public AssistantStateObserver {
  public:
@@ -113,7 +114,7 @@ class AssistantStateControllerTest : public AshTestBase {
   TestAssistantStateObserver* observer() { return observer_.get(); }
 
  private:
-  PrefService* prefs_ = nullptr;
+  raw_ptr<PrefService, DanglingUntriaged> prefs_ = nullptr;
   std::unique_ptr<TestAssistantStateObserver> observer_;
 };
 

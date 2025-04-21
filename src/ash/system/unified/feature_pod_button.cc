@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_provider.h"
+#include "ash/style/color_util.h"
+#include "ash/style/style_util.h"
 #include "ash/system/tray/tray_constants.h"
-#include "ash/system/tray/tray_popup_utils.h"
 #include "ash/system/unified/feature_pod_controller_base.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_id.h"
@@ -51,17 +52,17 @@ void ConfigureFeaturePodLabel(views::Label* label,
 FeaturePodIconButton::FeaturePodIconButton(PressedCallback callback,
                                            bool is_togglable)
     : IconButton(std::move(callback),
-                 IconButton::Type::kMedium,
+                 IconButton::Type::kLarge,
                  /*icon=*/nullptr,
                  is_togglable,
                  /*has_border=*/true) {
   SetFlipCanvasOnPaintForRTLUI(false);
-  GetViewAccessibility().OverrideIsLeaf(true);
+  GetViewAccessibility().SetIsLeaf(true);
 }
 
 FeaturePodIconButton::~FeaturePodIconButton() = default;
 
-BEGIN_METADATA(FeaturePodIconButton, IconButton)
+BEGIN_METADATA(FeaturePodIconButton)
 END_METADATA
 
 FeaturePodLabelButton::FeaturePodLabelButton(PressedCallback callback)
@@ -70,7 +71,7 @@ FeaturePodLabelButton::FeaturePodLabelButton(PressedCallback callback)
       sub_label_(new views::Label),
       detailed_view_arrow_(new views::ImageView) {
   SetBorder(views::CreateEmptyBorder(kUnifiedFeaturePodHoverPadding));
-  GetViewAccessibility().OverrideIsLeaf(true);
+  GetViewAccessibility().SetIsLeaf(true);
 
   label_->SetLineHeight(kUnifiedFeaturePodLabelLineHeight);
   label_->SetMultiLine(true);
@@ -84,11 +85,11 @@ FeaturePodLabelButton::FeaturePodLabelButton(PressedCallback callback)
   detailed_view_arrow_->SetCanProcessEventsWithinSubtree(false);
   detailed_view_arrow_->SetVisible(false);
 
-  AddChildView(label_);
-  AddChildView(detailed_view_arrow_);
-  AddChildView(sub_label_);
+  AddChildView(label_.get());
+  AddChildView(detailed_view_arrow_.get());
+  AddChildView(sub_label_.get());
 
-  TrayPopupUtils::ConfigureTrayPopupButton(this);
+  StyleUtil::SetUpInkDropForButton(this);
 
   SetPaintToLayer();
   layer()->SetFillsBoundsOpaquely(false);
@@ -101,9 +102,9 @@ FeaturePodLabelButton::FeaturePodLabelButton(PressedCallback callback)
 
 FeaturePodLabelButton::~FeaturePodLabelButton() = default;
 
-void FeaturePodLabelButton::Layout() {
+void FeaturePodLabelButton::Layout(PassKey) {
   DCHECK(views::FocusRing::Get(this));
-  views::FocusRing::Get(this)->Layout();
+  views::FocusRing::Get(this)->DeprecatedLayoutImmediately();
   LayoutInCenter(label_, GetContentsBounds().y());
   LayoutInCenter(sub_label_, GetContentsBounds().CenterPoint().y() +
                                  kUnifiedFeaturePodInterLabelPadding);
@@ -111,7 +112,7 @@ void FeaturePodLabelButton::Layout() {
   if (!detailed_view_arrow_->GetVisible())
     return;
 
-  // We need custom Layout() because |label_| is first laid out in the center
+  // We need custom layout because |label_| is first laid out in the center
   // without considering |detailed_view_arrow_|, then |detailed_view_arrow_| is
   // placed on the right side of |label_|.
   gfx::Size arrow_size = detailed_view_arrow_->GetPreferredSize();
@@ -121,12 +122,15 @@ void FeaturePodLabelButton::Layout() {
       arrow_size));
 }
 
-gfx::Size FeaturePodLabelButton::CalculatePreferredSize() const {
+gfx::Size FeaturePodLabelButton::CalculatePreferredSize(
+    const views::SizeBounds& available_size) const {
   // Minimum width of the button
   int width = kUnifiedFeaturePodLabelWidth + GetInsets().width();
   if (detailed_view_arrow_->GetVisible()) {
-    const int label_width = std::min(kUnifiedFeaturePodLabelWidth,
-                                     label_->GetPreferredSize().width());
+    const int label_width = std::min(
+        kUnifiedFeaturePodLabelWidth,
+        label_->GetPreferredSize(views::SizeBounds(label_->width(), {}))
+            .width());
     // Symmetrically increase the width to accommodate the arrow
     const int extra_space_for_arrow =
         2 * (kUnifiedFeaturePodArrowSpacing +
@@ -136,14 +140,20 @@ gfx::Size FeaturePodLabelButton::CalculatePreferredSize() const {
   }
 
   // Make sure there is sufficient margin around the label.
-  int horizontal_margin = width - label_->GetPreferredSize().width();
+  int horizontal_margin =
+      width -
+      label_->GetPreferredSize(views::SizeBounds(label_->width(), {})).width();
   if (horizontal_margin < 2 * kUnifiedFeaturePodMinimumHorizontalMargin)
     width += 2 * kUnifiedFeaturePodMinimumHorizontalMargin - horizontal_margin;
 
-  int height = label_->GetPreferredSize().height() + GetInsets().height();
+  int height = label_->GetPreferredSize(views::SizeBounds(label_->width(), {}))
+                   .height() +
+               GetInsets().height();
   if (sub_label_->GetVisible()) {
-    height += kUnifiedFeaturePodInterLabelPadding +
-              sub_label_->GetPreferredSize().height();
+    height +=
+        kUnifiedFeaturePodInterLabelPadding +
+        sub_label_->GetPreferredSize(views::SizeBounds(sub_label_->width(), {}))
+            .height();
   }
 
   return gfx::Size(width, height);
@@ -180,6 +190,7 @@ void FeaturePodLabelButton::ShowDetailedViewArrow() {
 }
 
 void FeaturePodLabelButton::OnEnabledChanged() {
+  views::Button::OnEnabledChanged();
   const AshColorProvider* color_provider = AshColorProvider::Get();
   const SkColor primary_text_color =
       color_provider->GetContentLayerColor(ContentLayerType::kTextColorPrimary);
@@ -187,22 +198,22 @@ void FeaturePodLabelButton::OnEnabledChanged() {
       ContentLayerType::kTextColorSecondary);
   label_->SetEnabledColor(
       GetEnabled() ? primary_text_color
-                   : AshColorProvider::GetDisabledColor(primary_text_color));
+                   : ColorUtil::GetDisabledColor(primary_text_color));
   sub_label_->SetEnabledColor(
       GetEnabled() ? secondary_text_color
-                   : AshColorProvider::GetDisabledColor(secondary_text_color));
+                   : ColorUtil::GetDisabledColor(secondary_text_color));
 
   const SkColor icon_color =
       color_provider->GetContentLayerColor(ContentLayerType::kIconColorPrimary);
   detailed_view_arrow_->SetImage(gfx::CreateVectorIcon(
       kUnifiedMenuMoreIcon,
-      GetEnabled() ? icon_color
-                   : AshColorProvider::GetDisabledColor(icon_color)));
+      GetEnabled() ? icon_color : ColorUtil::GetDisabledColor(icon_color)));
 }
 
 void FeaturePodLabelButton::LayoutInCenter(views::View* child, int y) {
   gfx::Rect contents_bounds = GetContentsBounds();
-  gfx::Size preferred_size = child->GetPreferredSize();
+  gfx::Size preferred_size =
+      child->GetPreferredSize(views::SizeBounds(child->width(), {}));
   int child_width =
       std::min(kUnifiedFeaturePodLabelWidth, preferred_size.width());
   child->SetBounds(
@@ -210,7 +221,7 @@ void FeaturePodLabelButton::LayoutInCenter(views::View* child, int y) {
       child_width, preferred_size.height());
 }
 
-BEGIN_METADATA(FeaturePodLabelButton, views::Button)
+BEGIN_METADATA(FeaturePodLabelButton)
 END_METADATA
 
 FeaturePodButton::FeaturePodButton(FeaturePodControllerBase* controller,
@@ -228,8 +239,8 @@ FeaturePodButton::FeaturePodButton(FeaturePodControllerBase* controller,
   layout->set_cross_axis_alignment(
       views::BoxLayout::CrossAxisAlignment::kCenter);
 
-  AddChildView(icon_button_);
-  AddChildView(label_button_);
+  AddChildView(icon_button_.get());
+  AddChildView(label_button_.get());
 
   SetPaintToLayer();
   layer()->SetFillsBoundsOpaquely(false);
@@ -251,7 +262,7 @@ void FeaturePodButton::SetLabel(const std::u16string& label) {
     return;
 
   label_button_->SetLabel(label);
-  Layout();
+  DeprecatedLayoutImmediately();
   label_button_->SchedulePaint();
 }
 
@@ -260,7 +271,7 @@ void FeaturePodButton::SetSubLabel(const std::u16string& sub_label) {
     return;
 
   label_button_->SetSubLabel(sub_label);
-  Layout();
+  DeprecatedLayoutImmediately();
   label_button_->SchedulePaint();
 }
 
@@ -279,7 +290,7 @@ void FeaturePodButton::SetIconAndLabelTooltips(const std::u16string& text) {
 
 void FeaturePodButton::ShowDetailedViewArrow() {
   label_button_->ShowDetailedViewArrow();
-  Layout();
+  DeprecatedLayoutImmediately();
   label_button_->SchedulePaint();
 }
 
@@ -325,7 +336,7 @@ void FeaturePodButton::OnEnabledChanged() {
   label_button_->SetEnabled(GetEnabled());
 }
 
-BEGIN_METADATA(FeaturePodButton, views::View)
+BEGIN_METADATA(FeaturePodButton)
 END_METADATA
 
 }  // namespace ash

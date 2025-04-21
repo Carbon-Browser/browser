@@ -1,9 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/exported/web_frame_serializer_test_helper.h"
 
+#include "base/run_loop.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/web_string.h"
@@ -12,6 +13,7 @@
 #include "third_party/blink/renderer/core/frame/web_local_frame_impl.h"
 #include "third_party/blink/renderer/platform/mhtml/mhtml_archive.h"
 #include "third_party/blink/renderer/platform/mhtml/mhtml_parser.h"
+#include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/shared_buffer.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
@@ -33,7 +35,6 @@ class SimpleMHTMLPartsGenerationDelegate
 
   bool UseBinaryEncoding() final { return false; }
   bool RemovePopupOverlay() final { return remove_popup_overlay_; }
-  bool UsePageProblemDetectors() final { return false; }
 
   bool remove_popup_overlay_;
 };
@@ -52,28 +53,33 @@ String GenerateMHTMLHelper(WebLocalFrameImpl* frame,
   if (!only_body_parts) {
     WebThreadSafeData header_result = WebFrameSerializer::GenerateMHTMLHeader(
         boundary, frame, &mhtml_delegate);
-    mhtml.Append(header_result.Data(),
-                 static_cast<unsigned>(header_result.size()));
+    mhtml.Append(base::as_byte_span(header_result));
   }
 
-  WebThreadSafeData body_result =
-      WebFrameSerializer::GenerateMHTMLParts(boundary, frame, &mhtml_delegate);
-  mhtml.Append(body_result.Data(), static_cast<unsigned>(body_result.size()));
+  base::RunLoop run_loop;
+  WebFrameSerializer::GenerateMHTMLParts(
+      boundary, frame, &mhtml_delegate,
+      WTF::BindOnce(
+          [](StringBuilder* mhtml, base::OnceClosure quit,
+             WebThreadSafeData data) {
+            mhtml->Append(base::as_byte_span(data));
+            std::move(quit).Run();
+          },
+          WTF::Unretained(&mhtml), run_loop.QuitClosure()));
+  run_loop.Run();
 
   if (!only_body_parts) {
     scoped_refptr<RawData> footer_data = RawData::Create();
     MHTMLArchive::GenerateMHTMLFooterForTesting(boundary,
                                                 *footer_data->MutableData());
-    mhtml.Append(footer_data->data(),
-                 static_cast<unsigned>(footer_data->length()));
+    mhtml.Append(base::as_byte_span(*footer_data));
   }
 
   String mhtml_string = mhtml.ToString();
   if (!only_body_parts) {
     // Validate the generated MHTML.
-    MHTMLParser parser(SharedBuffer::Create(mhtml_string.Characters8(),
-                                            size_t(mhtml_string.length())));
-    EXPECT_FALSE(parser.ParseArchive().IsEmpty())
+    MHTMLParser parser(SharedBuffer::Create(mhtml_string.Span8()));
+    EXPECT_FALSE(parser.ParseArchive().empty())
         << "Generated MHTML is not well formed";
   }
   return mhtml_string;

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,8 +30,9 @@ CSSStyleVariableReferenceValue* CSSStyleVariableReferenceValue::Create(
 CSSStyleVariableReferenceValue* CSSStyleVariableReferenceValue::Create(
     const String& variable,
     CSSUnparsedValue* fallback) {
-  if (!variable.StartsWith("--"))
+  if (!variable.StartsWith("--")) {
     return nullptr;
+  }
   return MakeGarbageCollected<CSSStyleVariableReferenceValue>(variable,
                                                               fallback);
 }

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,10 +39,14 @@ class PLATFORM_EXPORT DocumentResourceCoordinator final {
   void SetIsAdFrame(bool is_ad_frame);
   void OnNonPersistentNotificationCreated();
   void SetHadFormInteraction();
+  void SetHadUserEdits();
+  void OnStartedUsingWebRTC();
+  void OnStoppedUsingWebRTC();
   void OnFirstContentfulPaint(base::TimeDelta time_since_navigation_start);
   void OnWebMemoryMeasurementRequested(
       WebMemoryMeasurementMode mode,
       OnWebMemoryMeasurementRequestedCallback callback);
+  void OnFreezingOriginTrialOptOut();
 
  private:
   explicit DocumentResourceCoordinator(const BrowserInterfaceBrokerProxy&);
@@ -51,6 +55,8 @@ class PLATFORM_EXPORT DocumentResourceCoordinator final {
       service_;
 
   bool had_form_interaction_ = false;
+  bool had_user_edits_ = false;
+  int num_web_rtc_usage_ = 0;
 };
 
 }  // namespace blink

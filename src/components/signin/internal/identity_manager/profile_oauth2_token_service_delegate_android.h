@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 
 #include "base/android/jni_weak_ref.h"
 #include "base/android/scoped_java_ref.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "components/signin/internal/identity_manager/account_tracker_service.h"
 #include "components/signin/internal/identity_manager/profile_oauth2_token_service.h"
@@ -47,30 +47,18 @@ class ProfileOAuth2TokenServiceDelegateAndroid
 
   std::vector<CoreAccountId> GetAccounts() const override;
 
-  // Overridden from ProfileOAuth2TokenService to complete signout of all
-  // POA2TService aware accounts.
-  void RevokeAllCredentials() override;
-
-  void LoadCredentials(const CoreAccountId& primary_account_id,
-                       bool is_syncing) override;
-
-  void ReloadAllAccountsFromSystemWithPrimaryAccount(
-      const absl::optional<CoreAccountId>& primary_account_id) override;
-
-  // Resumes the reload of accounts once the account seeding is complete.
-  // TODO(crbug.com/934688) Once ProfileOAuth2TokenServiceDelegate.java is
-  // internalized, use CoreAccountId instead of String.
-  void ReloadAllAccountsWithPrimaryAccountAfterSeeding(
-      JNIEnv* env,
-      const base::android::JavaParamRef<jstring>& j_primary_account_id,
-      const base::android::JavaParamRef<jobjectArray>& j_device_account_names);
+  // Seeds the accounts with |accounts| then resumes the reload of
+  // accounts once the account seeding is complete.
+  void SeedAccountsThenReloadAllAccountsWithPrimaryAccount(
+      const std::vector<AccountInfo>& accounts,
+      const std::optional<CoreAccountId>& primary_account_id) override;
 
   // Takes a the signed in sync account as well as all the other
   // android account ids and check the token status of each.
   // NOTE: TokenAvailable notifications will be sent for all accounts, even if
   // they were already known. See https://crbug.com/939470 for details.
   void UpdateAccountList(
-      const absl::optional<CoreAccountId>& signed_in_account_id,
+      const std::optional<CoreAccountId>& signed_in_account_id,
       const std::vector<CoreAccountId>& prev_ids,
       const std::vector<CoreAccountId>& curr_ids);
 
@@ -78,7 +66,8 @@ class ProfileOAuth2TokenServiceDelegateAndroid
   std::unique_ptr<OAuth2AccessTokenFetcher> CreateAccessTokenFetcher(
       const CoreAccountId& account_id,
       scoped_refptr<network::SharedURLLoaderFactory> url_factory,
-      OAuth2AccessTokenConsumer* consumer) override;
+      OAuth2AccessTokenConsumer* consumer,
+      const std::string& token_binding_challenge) override;
 
   // Overridden from ProfileOAuth2TokenServiceDelegate to intercept token fetch
   // requests and redirect them to the Account Manager.
@@ -92,6 +81,15 @@ class ProfileOAuth2TokenServiceDelegateAndroid
   void FireRefreshTokensLoaded() override;
 
  private:
+  // ProfileOAuth2TokenServiceDelegate implementation:
+  // Overridden from ProfileOAuth2TokenService to complete signout of all
+  // POA2TService aware accounts.
+  void RevokeAllCredentialsInternal(
+      signin_metrics::SourceForRefreshTokenOperation source) override;
+
+  void LoadCredentialsInternal(const CoreAccountId& primary_account_id,
+                               bool is_syncing) override;
+
   std::string MapAccountIdToAccountName(const CoreAccountId& account_id) const;
   CoreAccountId MapAccountNameToAccountId(
       const std::string& account_name) const;
@@ -105,7 +103,7 @@ class ProfileOAuth2TokenServiceDelegateAndroid
 
   // Return whether accounts are valid and we have access to all the tokens in
   // |curr_ids|.
-  bool UpdateAccountList(const absl::optional<CoreAccountId>& signed_in_id,
+  bool UpdateAccountList(const std::optional<CoreAccountId>& signed_in_id,
                          const std::vector<CoreAccountId>& prev_ids,
                          const std::vector<CoreAccountId>& curr_ids,
                          std::vector<CoreAccountId>* refreshed_ids,

@@ -1,4 +1,4 @@
-// Copyright 2014 The Crashpad Authors. All rights reserved.
+// Copyright 2014 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -362,6 +362,15 @@ struct CPUContextMIPS64 {
   uint64_t fir;
 };
 
+//! \brief A context structure carrying RISCV64 CPU state.
+struct CPUContextRISCV64 {
+  uint64_t pc;
+  uint64_t regs[31];
+
+  uint64_t fpregs[32];
+  uint32_t fcsr;
+};
+
 //! \brief A context structure capable of carrying the context of any supported
 //!     CPU architecture.
 struct CPUContext {
@@ -402,6 +411,7 @@ struct CPUContext {
     CPUContextARM64* arm64;
     CPUContextMIPS* mipsel;
     CPUContextMIPS64* mips64;
+    CPUContextRISCV64* riscv64;
   };
 };
 

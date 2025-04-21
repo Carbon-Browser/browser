@@ -1,12 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/media/router/discovery/dial/dial_device_data.h"
 
 #include "base/check.h"
-#include "base/feature_list.h"
-#include "chrome/browser/media/router/media_router_feature.h"
 
 namespace media_router {
 
@@ -23,7 +21,7 @@ DialDeviceData::DialDeviceData(const std::string& device_id,
 
 DialDeviceData::DialDeviceData(const DialDeviceData& other) = default;
 
-DialDeviceData::~DialDeviceData() {}
+DialDeviceData::~DialDeviceData() = default;
 
 const GURL& DialDeviceData::device_description_url() const {
   return device_description_url_;
@@ -38,21 +36,20 @@ void DialDeviceData::set_ip_address(const net::IPAddress& ip_address) {
 }
 
 bool DialDeviceData::IsValidUrl(const GURL& url) const {
-  if (!url.is_valid() || url.is_empty() || !url.SchemeIsHTTPOrHTTPS())
+  if (!url.is_valid() || url.is_empty() || !url.SchemeIsHTTPOrHTTPS()) {
     return false;
+  }
 
   net::IPAddress host_address;
-  if (!net::ParseURLHostnameToAddress(url.host(), &host_address))
+  if (!net::ParseURLHostnameToAddress(url.host(), &host_address)) {
     return false;
-
-  if (host_address.IsPubliclyRoutable())
-    return false;
-
-  if (base::FeatureList::IsEnabled(kDialEnforceUrlIPAddress)) {
-    return host_address == ip_address_;
-  } else {
-    return true;
   }
+
+  if (host_address.IsPubliclyRoutable()) {
+    return false;
+  }
+
+  return host_address == ip_address_;
 }
 
 bool DialDeviceData::UpdateFrom(const DialDeviceData& new_data) {

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,12 +17,12 @@ enum GpuFeatureStatus {
   Max
 };
 
-// gpu:GpuFeatureInfo
+// gpu::GpuFeatureInfo
 struct GpuFeatureInfo {
   // The array should have one entry for each GpuFeatureType. The size of the
   // array should be gpu::NUMBER_OF_GPU_FEATURE_TYPES. This is enforced during
   // deserialization.
-  array<GpuFeatureStatus> status_values;
+  array<GpuFeatureStatus, 13> status_values;
 
   // The array contains a set of workaround IDs that apply in the current
   // platform (OS, GPU, driver, etc). The IDs correspond to the enums defined

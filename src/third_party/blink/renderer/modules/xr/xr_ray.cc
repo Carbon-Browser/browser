@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,8 +36,8 @@ XRRay::XRRay() {
 }
 
 XRRay::XRRay(XRRigidTransform* transform, ExceptionState& exception_state) {
-  DOMFloat32Array* m = transform->matrix();
-  Set(DOMFloat32ArrayToTransformationMatrix(m), exception_state);
+  NotShared<DOMFloat32Array> m = transform->matrix();
+  Set(DOMFloat32ArrayToTransform(m), exception_state);
 }
 
 XRRay::XRRay(DOMPointInit* origin,
@@ -67,8 +67,7 @@ XRRay::XRRay(DOMPointInit* origin,
   Set(o, d, exception_state);
 }
 
-void XRRay::Set(const TransformationMatrix& matrix,
-                ExceptionState& exception_state) {
+void XRRay::Set(const gfx::Transform& matrix, ExceptionState& exception_state) {
   gfx::Point3F origin = matrix.MapPoint(gfx::Point3F(0, 0, 0));
   gfx::Point3F direction_point = matrix.MapPoint(gfx::Point3F(0, 0, -1));
   Set(origin, direction_point - origin, exception_state);
@@ -121,7 +120,7 @@ XRRay* XRRay::Create(DOMPointInit* origin,
 
 XRRay::~XRRay() {}
 
-DOMFloat32Array* XRRay::matrix() {
+NotShared<DOMFloat32Array> XRRay::matrix() {
   DVLOG(3) << __FUNCTION__;
 
   // A page may take the matrix value and detach it so matrix_ is a detached
@@ -135,7 +134,7 @@ DOMFloat32Array* XRRay::matrix() {
     // (0,0,0) with direction (0,0,-1) into ray originating at |origin_| with
     // direction |direction_|.
 
-    TransformationMatrix matrix;
+    gfx::Transform matrix;
 
     const gfx::Vector3dF desired_ray_direction(
         static_cast<float>(direction_->x()),
@@ -168,12 +167,11 @@ DOMFloat32Array* XRRay::matrix() {
     } else if (cos_angle < -0.9999) {
       // Vectors are co-linear or almost co-linear & face the opposite
       // direction, rotation by 180 degrees is needed & can be around any vector
-      // perpendicular to (0,0,-1) so let's rotate by (1, 0, 0).
-      matrix.Rotate3d(1, 0, 0, 180);
+      // perpendicular to (0,0,-1) so let's rotate about the x-axis.
+      matrix.RotateAboutXAxis(180);
     } else {
       // Rotation needed - create it from axis-angle.
-      matrix.Rotate3d(axis.x(), axis.y(), axis.z(),
-                      Rad2deg(std::acos(cos_angle)));
+      matrix.RotateAbout(axis, Rad2deg(std::acos(cos_angle)));
     }
 
     // Step 7: Let matrix be the result of premultiplying rotation from the left
@@ -181,7 +179,7 @@ DOMFloat32Array* XRRay::matrix() {
     // Step 8: Set ray’s internal matrix to matrix
     matrix_ = transformationMatrixToDOMFloat32Array(matrix);
     if (!raw_matrix_) {
-      raw_matrix_ = std::make_unique<TransformationMatrix>(matrix);
+      raw_matrix_ = std::make_unique<gfx::Transform>(matrix);
     } else {
       *raw_matrix_ = matrix;
     }
@@ -191,7 +189,7 @@ DOMFloat32Array* XRRay::matrix() {
   return matrix_;
 }
 
-TransformationMatrix XRRay::RawMatrix() {
+gfx::Transform XRRay::RawMatrix() {
   matrix();
 
   DCHECK(raw_matrix_);

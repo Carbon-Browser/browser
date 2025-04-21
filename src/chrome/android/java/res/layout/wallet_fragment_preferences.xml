@@ -26,6 +26,7 @@
         android:background="@drawable/rounded_background_wallet_black"
         android:orientation="horizontal"
         android:padding="20dp"
+        android:layout_marginTop="12dp"
         android:gravity="center_vertical"
         android:layout_height="wrap_content"
         android:layout_width="match_parent">
@@ -35,6 +36,36 @@
             android:layout_height="wrap_content"
             android:textColor="@android:color/white"
             android:text="Custom tokens"
+            tools:ignore="HardcodedText"/>
+
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@android:color/white"
+            android:text="〉"
+            tools:ignore="HardcodedText"/>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/view_seed_phrase"
+        android:background="@drawable/rounded_background_wallet_black"
+        android:orientation="horizontal"
+        android:padding="20dp"
+        android:layout_marginTop="12dp"
+        android:gravity="center_vertical"
+        android:layout_height="wrap_content"
+        android:layout_width="match_parent">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@android:color/white"
+            android:text="View seed phrase"
             tools:ignore="HardcodedText"/>
 
         <Space

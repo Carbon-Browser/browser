@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ class CombiningUploadList : public UploadList {
 
  protected:
   ~CombiningUploadList() override;
-  std::vector<UploadInfo> LoadUploadList() override;
+  std::vector<std::unique_ptr<UploadInfo>> LoadUploadList() override;
   void ClearUploadList(const base::Time& begin, const base::Time& end) override;
   void RequestSingleUpload(const std::string& local_id) override;
 

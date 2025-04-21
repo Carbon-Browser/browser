@@ -1,14 +1,17 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 function testExtensionApi() {
   try {
-    chrome.tabs.getAllInWindow(null, function() {
-      window.domAutomationController.send(
-          !chrome.runtime.lastError);
+    return new Promise(resolve => {
+      chrome.windows.getCurrent(null, window => {
+        chrome.tabs.query({windowId: window.id}, function() {
+          resolve(!chrome.runtime.lastError);
+        })
+      });
     });
   } catch (e) {
-    window.domAutomationController.send(false);
+    return false;
   }
 }

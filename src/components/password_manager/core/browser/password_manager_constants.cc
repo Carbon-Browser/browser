@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,14 @@
 
 namespace password_manager {
 
-const base::FilePath::CharType kAffiliationDatabaseFileName[] =
-    FILE_PATH_LITERAL("Affiliation Database");
 const base::FilePath::CharType kLoginDataForProfileFileName[] =
     FILE_PATH_LITERAL("Login Data");
 const base::FilePath::CharType kLoginDataForAccountFileName[] =
     FILE_PATH_LITERAL("Login Data For Account");
+const base::FilePath::CharType kLoginDataJournalForProfileFileName[] =
+    FILE_PATH_LITERAL("Login Data-journal");
+const base::FilePath::CharType kLoginDataJournalForAccountFileName[] =
+    FILE_PATH_LITERAL("Login Data For Account-journal");
 
 const char kPasswordManagerAccountDashboardURL[] =
     "https://passwords.google.com";
@@ -25,8 +27,5 @@ const char kPasswordManagerHelpCenterSmartLock[] =
 const char kManageMyPasswordsURL[] = "https://passwords.google.com/app";
 
 const char kReferrerURL[] = "https://passwords.google/";
-
-const char kTestingReferrerURL[] =
-    "https://xl-password-manager-staging.uc.r.appspot.com/";
 
 }  // namespace password_manager

@@ -1,16 +1,35 @@
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//build/config/clang/clang.gni")
 import("//build/config/rust.gni")
 import("//build/config/sysroot.gni")
+import("//build/rust/rust_bindgen_generator.gni")
 import("//build/rust/rust_static_library.gni")
+
+if (is_win) {
+  import("//build/toolchain/win/win_toolchain_data.gni")
+}
+
+_bindgen_path = "${rust_bindgen_root}/bin/bindgen"
+if (host_os == "win") {
+  _bindgen_path = "${_bindgen_path}.exe"
+}
+
+# On Windows, the libclang.dll is beside the bindgen.exe, otherwise it is in
+# ../lib.
+_libclang_path = rust_bindgen_root
+if (host_os == "win") {
+  _libclang_path += "/bin"
+} else {
+  _libclang_path += "/lib"
+}
 
 # Template to build Rust/C bindings with bindgen.
 #
-# This template expands to a static_library containing the Rust side of the
-# bindings. Simply treat it as a public dependency.
+# This template expands to a rust_static_library that exports the
+# bindings generated from bindgen at the root of the library.
 #
 # Parameters:
 #
@@ -25,97 +44,73 @@ import("//build/rust/rust_static_library.gni")
 #   on their dependencies and any configs applied. The same applies here. Set
 #   any configs here as if this were a C target.
 #
-# Rust targets depending on the output must include! the generated file.
+# cpp: (optional)
+#   Use C++ mode to consume the header instead of C mode (the default).
 #
+# bindgen_flags: (optional)
+#   The additional bindgen flags which are passed to the executable. A `--` will
+#   be prepended to each flag. So use `bindgen_flags = [ "foo" ]` to pass
+#   `--foo` to bindgen.
+#
+# wrap_static_fns: (optional)
+#   If set to true, enables binding `static` and `static inline` functions in
+#   the header. Setting this causes the template to emit a source_set target
+#   named "${target_name}_static_fns", which must be incorporated into the
+#   build. Additionally, `get_target_outputs` will return both the Rust file and
+#   a generated C file, but callers can rely on the Rust file being first.
+#
+#
+# For a small, self-contained example please see:
+# * C header: //build/rust/tests/bindgen_test
+# * C++ header: //build/rust/tests/bindgen_cpp_test
 template("rust_bindgen") {
-  assert(defined(invoker.header),
-         "Must specify the C header file to make bindings for.")
-  _target_name = target_name
-  _testonly = false
-  if (defined(invoker.testonly)) {
-    _testonly = invoker.testonly
+  # "_generator" will be added to the rust_bindgen_generator target.
+  _rust_bindgen_generator_name = target_name + "_generator"
+  _wrap_static_fns = false
+  if (defined(invoker.wrap_static_fns) && invoker.wrap_static_fns) {
+    _wrap_static_fns = true
   }
-  if (defined(invoker.visibility)) {
-    _visibility = invoker.visibility
+  rust_bindgen_generator(_rust_bindgen_generator_name) {
+    forward_variables_from(invoker,
+                           "*",
+                           [
+                                 "library_name",
+                                 "output_name",
+                               ] + TESTONLY_AND_VISIBILITY)
+
+    # This will allow the rust_static_library to depend on the
+    # `rust_bindgen_generator` through visibility.
+    library_name = target_name
+
+    # We know the library that is going to consume this rust_bindgen and we're
+    # sure that only a single bindgen is there. So rename the bindings to avoid
+    # passing envflags. envflags are usually problematic for Cronet as Soong
+    # does not support it (b/181221467).
+    output_name = "bindings"
   }
-  _deps = []
-  if (defined(invoker.deps)) {
-    _deps += invoker.deps
-  }
 
-  action(_target_name) {
-    testonly = _testonly
-    if (defined(_visibility)) {
-      visibility = _visibility
+  rust_static_library(target_name) {
+    forward_variables_from(invoker,
+                           TESTONLY_AND_VISIBILITY + [
+                                 "crate_name",
+                                 "cpp",
+                               ])
+
+    crate_root = "//build/rust/bindings.rs"
+    sources = [ crate_root ]
+    bindgen_deps = [ ":$_rust_bindgen_generator_name" ]
+    allow_unsafe = true
+    if (_wrap_static_fns) {
+      # Add a dependency on the static_fns library for simplicity if
+      # it's declared.
+      deps = [ ":${_rust_bindgen_generator_name}_static_fns" ]
     }
-
-    sources = [ invoker.header ]
-
-    # Several important compiler flags come from default_compiler_configs
-    configs = default_compiler_configs
-    if (defined(invoker.configs)) {
-      configs += invoker.configs
+    if (defined(cpp) && cpp) {
+      # This cfg is used to control the bindings public export.
+      rustflags = [
+        "--cfg",
+        "cpp",
+      ]
     }
-
-    bindgen_target = "//third_party/rust/bindgen/v0_59:bindgen($host_toolchain)"
-
-    bindgen_obj_dir = get_label_info(bindgen_target, "root_out_dir")
-    bindgen_executable = "${bindgen_obj_dir}/bindgen"
-    if (is_win) {
-      bindgen_executable = "${bindgen_executable}.exe"
-    }
-
-    output_dir = "$target_gen_dir"
-    out_gen_rs = "$output_dir/${target_name}.rs"
-
-    script = rebase_path("//build/rust/run_bindgen.py")
-    inputs = [ bindgen_executable ]
-
-    depfile = "$target_out_dir/${target_name}.d"
-    outputs = [ out_gen_rs ]
-
-    deps = [ bindgen_target ]
-
-    # bindgen relies on knowing the {{defines}} and {{include_dirs}} required
-    # to build the C++ headers which it's parsing. These are passed to the
-    # script's args and are populated using deps and configs.
-    deps += _deps
-
-    args = [
-      "--exe",
-      rebase_path(bindgen_executable),
-      "--header",
-      rebase_path(invoker.header, root_build_dir),
-      "--depfile",
-      rebase_path(depfile, root_build_dir),
-      "--output",
-      rebase_path(out_gen_rs, root_build_dir),
-      "--ld-library-path",
-      rebase_path(clang_base_path + "/lib", root_build_dir),
-    ]
-
-    args += [
-      "--",
-      "{{defines}}",
-      "{{include_dirs}}",
-      "{{cflags}}",
-      "{{cflags_c}}",
-
-      # This path contains important C headers (e.g. stddef.h) and {{cflags}}
-      # does not include it. Normally this path is implicitly added by clang but
-      # it does not happen for libclang.
-      #
-      # Add it last so includes from deps and configs take precedence.
-      "-isystem" + rebase_path(
-              clang_base_path + "/lib/clang/" + clang_version + "/include",
-              root_build_dir),
-
-      # Passes C comments through as rustdoc attributes.
-      "-fparse-all-comments",
-
-      # Default configs include "-fvisibility=hidden", and for some reason this
-      # causes bindgen not to emit function bindings. Override it.
-      "-fvisibility=default",
-    ]
   }
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <memory>
 #include <utility>
 
+#include "base/environment.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/task/single_thread_task_runner.h"
@@ -19,7 +20,6 @@
 #include "remoting/host/desktop_resizer.h"
 #include "remoting/host/host_window.h"
 #include "remoting/host/host_window_proxy.h"
-#include "remoting/host/input_injector.h"
 #include "remoting/host/input_monitor/local_input_monitor.h"
 #include "remoting/host/remote_open_url/remote_open_url_util.h"
 #include "remoting/host/resizing_host_observer.h"
@@ -36,7 +36,28 @@
 #include "base/win/windows_version.h"
 #endif  // BUILDFLAG(IS_WIN)
 
+#if defined(REMOTING_USE_X11)
+#include "remoting/host/linux/wayland_utils.h"
+#include "remoting/host/linux/x11_util.h"
+#include "ui/gfx/x/connection.h"
+#endif  // defined(REMOTING_USE_X11)
+
 namespace remoting {
+
+namespace {
+
+#if defined(REMOTING_USE_X11)
+
+// Helper function that caches the result of IsUsingVideoDummyDriver().
+bool UsingVideoDummyDriver() {
+  static bool is_using_dummy_driver =
+      IsUsingVideoDummyDriver(x11::Connection::Get());
+  return is_using_dummy_driver;
+}
+
+#endif  // defined(REMOTING_USE_X11)
+
+}  // namespace
 
 Me2MeDesktopEnvironment::~Me2MeDesktopEnvironment() {
   DCHECK(caller_task_runner()->BelongsToCurrentThread());
@@ -71,16 +92,6 @@ std::string Me2MeDesktopEnvironment::GetCapabilities() const {
   }
   capabilities += protocol::kRateLimitResizeRequests;
 
-  if (InputInjector::SupportsTouchEvents()) {
-    capabilities += " ";
-    capabilities += protocol::kTouchEventsCapability;
-  }
-
-  if (desktop_environment_options().enable_file_transfer()) {
-    capabilities += " ";
-    capabilities += protocol::kFileTransferCapability;
-  }
-
 #if BUILDFLAG(IS_WIN)
   capabilities += " ";
   capabilities += protocol::kSendAttentionSequenceAction;
@@ -92,16 +103,26 @@ std::string Me2MeDesktopEnvironment::GetCapabilities() const {
   }
 #endif  // BUILDFLAG(IS_WIN)
 
-  if (desktop_environment_options().enable_remote_open_url() &&
-      IsRemoteOpenUrlSupported()) {
-    capabilities += " ";
-    capabilities += protocol::kRemoteOpenUrlCapability;
-  }
-
   if (desktop_environment_options().enable_remote_webauthn()) {
     capabilities += " ";
     capabilities += protocol::kRemoteWebAuthnCapability;
   }
+
+#if BUILDFLAG(IS_LINUX) && defined(REMOTING_USE_X11)
+  if (!IsRunningWayland()) {
+    capabilities += " ";
+    capabilities += protocol::kMultiStreamCapability;
+
+    // Client-controlled layout is only supported with Xorg+video-dummy.
+    if (UsingVideoDummyDriver()) {
+      capabilities += " ";
+      capabilities += protocol::kClientControlledLayoutCapability;
+    }
+  }
+#elif BUILDFLAG(IS_MAC)
+  capabilities += " ";
+  capabilities += protocol::kMultiStreamCapability;
+#endif  // BUILDFLAG(IS_LINUX) && defined(REMOTING_USE_X11)
 
   return capabilities;
 }
@@ -128,6 +149,21 @@ Me2MeDesktopEnvironment::Me2MeDesktopEnvironment(
   // see http://crbug.com/73423. It's safe to enable it here because it works
   // properly under Xvfb.
   mutable_desktop_capture_options()->set_use_update_notifications(true);
+
+#if BUILDFLAG(IS_LINUX)
+  // Setting this option to false means that the capture differ wrapper will not
+  // be used when the X11 capturer is selected. This reduces the X11 capture
+  // time by a few milliseconds per frame and is safe because we can rely on
+  // XDAMAGE to identify the changed regions rather than checking each pixel
+  // ourselves.
+  mutable_desktop_capture_options()->set_detect_updated_region(false);
+#endif
+
+#if BUILDFLAG(IS_LINUX)
+  if (IsRunningWayland()) {
+    mutable_desktop_capture_options()->set_prefer_cursor_embedded(false);
+  }
+#endif
 }
 
 bool Me2MeDesktopEnvironment::InitializeSecurity(
@@ -136,8 +172,8 @@ bool Me2MeDesktopEnvironment::InitializeSecurity(
 
   // Detach the session from the local console if the caller requested.
   if (desktop_environment_options().enable_curtaining()) {
-    curtain_ = CurtainMode::Create(
-        caller_task_runner(), ui_task_runner(), client_session_control);
+    curtain_ = CurtainMode::Create(caller_task_runner(), ui_task_runner(),
+                                   client_session_control);
     if (!curtain_->Activate()) {
       LOG(ERROR) << "Failed to activate the curtain mode.";
       curtain_ = nullptr;
@@ -197,8 +233,7 @@ Me2MeDesktopEnvironmentFactory::Me2MeDesktopEnvironmentFactory(
                                      input_task_runner,
                                      ui_task_runner) {}
 
-Me2MeDesktopEnvironmentFactory::~Me2MeDesktopEnvironmentFactory() {
-}
+Me2MeDesktopEnvironmentFactory::~Me2MeDesktopEnvironmentFactory() = default;
 
 std::unique_ptr<DesktopEnvironment> Me2MeDesktopEnvironmentFactory::Create(
     base::WeakPtr<ClientSessionControl> client_session_control,
@@ -215,7 +250,7 @@ std::unique_ptr<DesktopEnvironment> Me2MeDesktopEnvironmentFactory::Create(
     return nullptr;
   }
 
-  return std::move(desktop_environment);
+  return desktop_environment;
 }
 
 }  // namespace remoting

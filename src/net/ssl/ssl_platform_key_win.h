@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,11 @@
 // Must be after windows.h.
 #include <NCrypt.h>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/win/wincrypt_shim.h"
 #include "crypto/scoped_capi_types.h"
+#include "crypto/scoped_cng_types.h"
+#include "crypto/unexportable_key.h"
 #include "net/base/net_export.h"
 
 namespace net {
@@ -34,11 +36,15 @@ NET_EXPORT_PRIVATE scoped_refptr<SSLPrivateKey> WrapCAPIPrivateKey(
     DWORD key_spec);
 
 // Returns an SSLPrivateKey backed by |key|, which must correspond to
-// |certificate|'s public key, or nullptr on error. Takes ownership of |key| in
-// both cases.
+// |certificate|'s public key, or nullptr on error.
 NET_EXPORT_PRIVATE scoped_refptr<SSLPrivateKey> WrapCNGPrivateKey(
     const X509Certificate* certificate,
-    NCRYPT_KEY_HANDLE key);
+    crypto::ScopedNCryptKey key);
+
+// Uses `key` to load a second NCrypt key handle and return an
+// SSLPrivateKey making use of that new handle.
+NET_EXPORT scoped_refptr<SSLPrivateKey> WrapUnexportableKeySlowly(
+    const crypto::UnexportableSigningKey& key);
 
 }  // namespace net
 

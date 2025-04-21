@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/weak_ptr.h"
+#include "chrome/browser/privacy_sandbox/privacy_sandbox_countries.h"
 #include "chrome/browser/ui/webui/settings/settings_page_ui_handler.h"
 
 class PrivacySandboxService;
@@ -31,13 +32,29 @@ class PrivacySandboxHandler : public SettingsPageUIHandler {
                            SetTopicAllowed);
   FRIEND_TEST_ALL_PREFIXES(PrivacySandboxHandlerTestMockService,
                            GetTopicsState);
+  FRIEND_TEST_ALL_PREFIXES(PrivacySandboxHandlerTestMockService,
+                           TopicsToggleChanged);
 
   void HandleSetFledgeJoiningAllowed(const base::Value::List& args);
   void HandleGetFledgeState(const base::Value::List& args);
   void HandleSetTopicAllowed(const base::Value::List& args);
   void HandleGetTopicsState(const base::Value::List& args);
+  void HandleTopicsToggleChanged(const base::Value::List& args);
+  void HandleGetFirstLevelTopics(const base::Value::List& args);
+  void HandleGetChildTopicsCurrentlyAssigned(const base::Value::List& args);
+  // Determines if the Ad Topics card in the Privacy Guide should be displayed.
+  // This requires the PrivacySandboxPrivacyGuideAdTopics feature to be enabled
+  // AND the user to be located in a Privacy Sandbox Consent Country.
+  void HandlePrivacySandboxPrivacyGuideShouldShowAdTopicsCard(
+      const base::Value::List& args);
+  // Determines if the V2 Ad Privacy sub-label should be shown on the completion
+  // card of the Privacy Guide. This decision is based on the status of the
+  // PrivacySandboxPrivacyGuideAdTopics feature.
+  void HandlePrivacySandboxPrivacyGuideShouldShowCompletionCardAdTopicsSubLabel(
+      const base::Value::List& args);
 
-  PrivacySandboxService* GetPrivacySandboxService();
+  virtual PrivacySandboxCountries* GetPrivacySandboxCountries();
+  virtual PrivacySandboxService* GetPrivacySandboxService();
 
   void OnFledgeJoiningSitesRecieved(const std::string& callback_id,
                                     std::vector<std::string> joining_sites);

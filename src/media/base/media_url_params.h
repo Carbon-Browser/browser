@@ -1,12 +1,14 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_BASE_MEDIA_URL_PARAMS_H_
 #define MEDIA_BASE_MEDIA_URL_PARAMS_H_
 
+#include "base/containers/flat_map.h"
 #include "media/base/media_export.h"
 #include "net/cookies/site_for_cookies.h"
+#include "net/storage_access_api/status.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
@@ -19,6 +21,7 @@ struct MEDIA_EXPORT MediaUrlParams {
   MediaUrlParams(const GURL& media_url,
                  const net::SiteForCookies& site_for_cookies,
                  const url::Origin& top_frame_origin,
+                 net::StorageAccessApiStatus storage_access_api_status,
                  bool allow_credentials,
                  bool is_hls);
   MediaUrlParams(const MediaUrlParams& other);
@@ -36,6 +39,9 @@ struct MEDIA_EXPORT MediaUrlParams {
   // Used to check for cookie content settings.
   url::Origin top_frame_origin;
 
+  // Used to check for cookie access.
+  net::StorageAccessApiStatus storage_access_api_status;
+
   // True when the crossorigin mode is unspecified or set to "use-credentials",
   // false when it's "anonymous".
   //
@@ -49,6 +55,9 @@ struct MEDIA_EXPORT MediaUrlParams {
   // True when MediaPlayerRenderer has been selected because the media has been
   // detected to be HLS. Used only for metrics.
   bool is_hls;
+
+  // HTTP Request Headers
+  base::flat_map<std::string, std::string> headers;
 };
 
 }  // namespace media

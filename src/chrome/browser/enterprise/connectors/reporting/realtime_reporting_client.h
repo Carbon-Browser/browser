@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,33 +8,26 @@
 #include <memory>
 #include <string>
 
-#include "base/feature_list.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/timer/timer.h"
 #include "base/values.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/enterprise/connectors/common.h"
+#include "components/enterprise/connectors/core/common.h"
+#include "components/enterprise/connectors/core/realtime_reporting_client_base.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/policy/core/common/cloud/cloud_policy_client.h"
+
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+#include "components/device_signals/core/browser/signals_types.h"
+#endif
 
 namespace content {
 class BrowserContext;
 }
 
-namespace extensions {
-class EventRouter;
-}
-
 namespace signin {
 class IdentityManager;
-}
-
-namespace policy {
-class DeviceManagementService;
-}
-
-namespace safe_browsing {
-enum class DeepScanAccessPoint;
 }
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -48,14 +41,11 @@ class User;
 namespace enterprise_connectors {
 
 // An event router that observes Safe Browsing events and notifies listeners.
-// The router also uploads events to the chrome reporting server side API if
-// the kRealtimeReportingFeature feature is enabled.
-class RealtimeReportingClient : public KeyedService,
-                                public policy::CloudPolicyClient::Observer {
+// The router also uploads events to the chrome reporting server side API. The
+// browser-based reporting logics are in RealtimeReportingClientBase whereas
+// profile-based reporting logics are implemented in this class.
+class RealtimeReportingClient : public RealtimeReportingClientBase {
  public:
-  // Feature that controls whether real-time reports are sent.
-  static const base::Feature kRealtimeReportingFeature;
-
   explicit RealtimeReportingClient(content::BrowserContext* context);
 
   RealtimeReportingClient(const RealtimeReportingClient&) = delete;
@@ -63,67 +53,83 @@ class RealtimeReportingClient : public KeyedService,
 
   ~RealtimeReportingClient() override;
 
-  // Returns true if enterprise real-time reporting should be initialized,
-  // checking both the feature flag. This function is public so that it can
-  // called in tests.
-  static bool ShouldInitRealtimeReportingClient();
+  // RealtimeReportingClientBase overrides:
+  bool ShouldInitRealtimeReportingClient() override;
+  std::string GetProfileUserName() override;
+  base::WeakPtr<RealtimeReportingClientBase> AsWeakPtr() override;
+
+  base::WeakPtr<RealtimeReportingClient> AsWeakPtrImpl() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
 
   void SetBrowserCloudPolicyClientForTesting(policy::CloudPolicyClient* client);
   void SetProfileCloudPolicyClientForTesting(policy::CloudPolicyClient* client);
 
+  void SetProfileUserNameForTesting(std::string username);
+
   void SetIdentityManagerForTesting(signin::IdentityManager* identity_manager);
 
-  // policy::CloudPolicyClient::Observer:
+  // policy::CloudPolicyClient::Observer overrides:
   void OnClientError(policy::CloudPolicyClient* client) override;
   void OnPolicyFetched(policy::CloudPolicyClient* client) override {}
   void OnRegistrationStateChanged(policy::CloudPolicyClient* client) override {}
 
+
   // Determines if the real-time reporting feature is enabled.
   // Obtain settings to apply to a reporting event from ConnectorsService.
-  // absl::nullopt represents that reporting should not be done.
-  absl::optional<enterprise_connectors::ReportingSettings>
-  GetReportingSettings();
-
-  // Returns the Gaia email address of the account signed in to the profile or
-  // an empty string if the profile is not signed in (declared virtual for
-  // tests).
-  virtual std::string GetProfileUserName() const;
+  // std::nullopt represents that reporting should not be done.
+  // Declared virtual for tests.
+  std::optional<ReportingSettings> virtual GetReportingSettings();
 
   // Report safe browsing event through real-time reporting channel, if enabled.
   // Declared as virtual for tests.
-  virtual void ReportRealtimeEvent(
-      const std::string&,
-      const enterprise_connectors::ReportingSettings& settings,
-      base::Value::Dict event);
+  virtual void ReportRealtimeEvent(const std::string& name,
+                                   const ReportingSettings& settings,
+                                   base::Value::Dict event);
+
+  // Report safe browsing events that have occurred in the past but has not yet
+  // been reported. This is currently used for browser crash events, which are
+  // polled at a fixed time interval. Declared as virtual for tests.
+  virtual void ReportPastEvent(const std::string& name,
+                               const ReportingSettings& settings,
+                               base::Value::Dict event,
+                               const base::Time& time);
 
  private:
-  // Initialize a real-time report client if needed.  This client is used only
-  // if real-time reporting is enabled, the machine is properly reigistered
-  // with CBCM and the appropriate policies are enabled.
-  void InitRealtimeReportingClient(
-      const enterprise_connectors::ReportingSettings& settings);
-
-  // Sub-methods called by InitRealtimeReportingClient to make appropriate
-  // verifications and initialize the corresponding client. Returns a policy
-  // client description and a client, which can be nullptr if it can't be
-  // initialized.
-  std::pair<std::string, policy::CloudPolicyClient*> InitBrowserReportingClient(
-      const std::string& dm_token);
+  // RealtimeReportingClientBase overrides (all overrides below):
+  std::string GetProfileIdentifier() override;
+  std::string GetBrowserClientId() override;
+  base::Value::Dict GetContext() override;
+  bool ShouldIncludeDeviceInfo(bool per_profile) override;
+  void UploadCallback(base::Value::Dict event_wrapper,
+                      bool per_profile,
+                      policy::CloudPolicyClient* client,
+                      EnterpriseReportingEventType eventType,
+                      policy::CloudPolicyClient::Result upload_result) override;
 
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
   std::pair<std::string, policy::CloudPolicyClient*> InitProfileReportingClient(
-      const std::string& dm_token);
+      const std::string& dm_token) override;
 #endif
 
-  // Called whenever the real-time reporting policy changes.
-  void RealtimeReportingPrefChanged(const std::string& pref);
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+  void MaybeCollectDeviceSignalsAndReportEvent(
+      base::Value::Dict event,
+      policy::CloudPolicyClient* client,
+      std::string name,
+      const ReportingSettings& settings,
+      base::Time time) override;
 
-  // Create a privately owned cloud policy client for events routing.
-  void CreatePrivateCloudPolicyClient(
-      const std::string& policy_client_desc,
-      policy::DeviceManagementService* device_management_service,
-      const std::string& client_id,
-      const std::string& dm_token);
+  // Add Crowdstrike signals to event report and upload it.
+  void PopulateSignalsAndReportEvent(
+      base::Value::Dict event,
+      policy::CloudPolicyClient* client,
+      std::string name,
+      ReportingSettings settings,
+      content::BrowserContext* context,
+      base::Time time,
+      device_signals::SignalsAggregationResponse response);
+#endif
 
   // Handle the availability of a cloud policy client.
   void OnCloudPolicyClientAvailable(const std::string& policy_client_desc,
@@ -137,36 +143,32 @@ class RealtimeReportingClient : public KeyedService,
 
 #endif
 
-  // Determines if real-time reporting is available based on platform and user.
-  static bool IsRealtimeReportingAvailable();
-
-  // Removes any path information and returns just the basename.
-  static std::string GetBaseName(const std::string& filename);
-
   void RemoveDmTokenFromRejectedSet(const std::string& dm_token);
 
   raw_ptr<content::BrowserContext> context_;
-  raw_ptr<signin::IdentityManager> identity_manager_ = nullptr;
-  raw_ptr<extensions::EventRouter> event_router_ = nullptr;
-
-  // The cloud policy clients used to upload browser events and profile events
-  // to the cloud. These clients are never used to fetch policies. These
-  // pointers are not owned by the class.
-  raw_ptr<policy::CloudPolicyClient> browser_client_ = nullptr;
-  raw_ptr<policy::CloudPolicyClient> profile_client_ = nullptr;
-
-  // The private clients are used on platforms where we cannot just get a
-  // client and we create our own (used through the above client pointers).
-  std::unique_ptr<policy::CloudPolicyClient> browser_private_client_;
-  std::unique_ptr<policy::CloudPolicyClient> profile_private_client_;
-
-  // When a request is rejected for a given DM token, wait 24 hours before
-  // trying again for this specific DM Token.
-  base::flat_map<std::string, std::unique_ptr<base::OneShotTimer>>
-      rejected_dm_token_timers_;
+  std::string username_;
 
   base::WeakPtrFactory<RealtimeReportingClient> weak_ptr_factory_{this};
 };
+
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+// Populate event dict with CrowdStrike signal values. If those signals are
+// available in `response`, this function returns a Dict with the following
+// fields added:
+// "securityAgents" : [
+//   {
+//     "crowdstrike": {
+//       "agent_id": "agent-123",
+//       "customer_id": "customer-123"
+//     }
+//   }
+// ]
+// These must match proto specified in
+// chrome/cros/reporting/api/proto/browser_events.proto
+void AddCrowdstrikeSignalsToEvent(
+    base::Value::Dict& event,
+    const device_signals::SignalsAggregationResponse& response);
+#endif
 
 }  // namespace enterprise_connectors
 

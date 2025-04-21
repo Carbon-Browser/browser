@@ -31,22 +31,30 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_ANIMATION_TIMING_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_ANIMATION_TIMING_H_
 
+#include <optional>
+
 #include "base/check_op.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/values_equivalent.h"
 #include "cc/animation/keyframe_model.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_fill_mode.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_timeline_range.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_typedefs.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_union_cssnumericvalue_double.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_union_string_timelinerangeoffset.h"
 #include "third_party/blink/renderer/core/animation/animation_time_delta.h"
 #include "third_party/blink/renderer/core/core_export.h"
+#include "third_party/blink/renderer/core/css/css_value.h"
 #include "third_party/blink/renderer/platform/animation/timing_function.h"
+#include "third_party/blink/renderer/platform/geometry/length.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/math_extras.h"
+#include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
 namespace blink {
 
-class EffectTiming;
 class ComputedEffectTiming;
+class EffectTiming;
 enum class TimelinePhase;
 
 struct CORE_EXPORT Timing {
@@ -79,7 +87,45 @@ struct CORE_EXPORT Timing {
     kOverrideIterationStart = 1 << 5,
     kOverrideStartDelay = 1 << 6,
     kOverrideTimingFunction = 1 << 7,
-    kOverrideAll = (1 << 8) - 1
+    kOverrideRangeStart = 1 << 8,
+    kOverrideRangeEnd = 1 << 9,
+    kOverrideAll = (1 << 10) - 1
+  };
+
+  using V8Delay = V8UnionCSSNumericValueOrDouble;
+
+  // Delay can be directly expressed as time delays or calculated based on a
+  // position on a view timeline. As part of the normalization process, a
+  // timeline offsets are converted to time-based delays.
+  struct Delay {
+    // TODO(crbug.com/7575): Support percent delays in addition to time-based
+    // delays.
+    AnimationTimeDelta time_delay;
+    std::optional<double> relative_delay;
+
+    Delay() = default;
+
+    explicit Delay(AnimationTimeDelta time) : time_delay(time) {}
+
+    bool IsInfinite() const { return time_delay.is_inf(); }
+
+    bool operator==(const Delay& other) const {
+      return time_delay == other.time_delay &&
+             relative_delay == other.relative_delay;
+    }
+
+    bool operator!=(const Delay& other) const { return !(*this == other); }
+
+    bool IsNonzeroTimeBasedDelay() const {
+      return !relative_delay && !time_delay.is_zero();
+    }
+
+    // Scaling only affects time based delays.
+    void Scale(double scale_factor) { time_delay *= scale_factor; }
+
+    AnimationTimeDelta AsTimeValue() const { return time_delay; }
+
+    V8Delay* ToV8Delay() const;
   };
 
   using FillMode = cc::KeyframeModel::FillMode;
@@ -87,15 +133,15 @@ struct CORE_EXPORT Timing {
 
   static double NullValue() { return std::numeric_limits<double>::quiet_NaN(); }
 
-  static String FillModeString(FillMode);
-  static FillMode StringToFillMode(const String&);
+  static V8FillMode::Enum FillModeEnum(FillMode);
+  static FillMode EnumToFillMode(V8FillMode::Enum);
   static String PlaybackDirectionString(PlaybackDirection);
 
   Timing() = default;
 
   void AssertValid() const {
-    DCHECK(!start_delay.is_inf());
-    DCHECK(!end_delay.is_inf());
+    DCHECK(!start_delay.IsInfinite());
+    DCHECK(!end_delay.IsInfinite());
     DCHECK(std::isfinite(iteration_start));
     DCHECK_GE(iteration_start, 0);
     DCHECK_GE(iteration_count, 0);
@@ -130,17 +176,16 @@ struct CORE_EXPORT Timing {
   }
   bool HasTimingOverrides() { return timing_overrides != kOverrideNode; }
 
-  V8CSSNumberish* ToComputedValue(absl::optional<AnimationTimeDelta>,
-                                  absl::optional<AnimationTimeDelta>) const;
+  V8CSSNumberish* ToComputedValue(std::optional<AnimationTimeDelta>,
+                                  std::optional<AnimationTimeDelta>) const;
 
-  // TODO(crbug.com/1216527): Support CSSNumberish delays
-  AnimationTimeDelta start_delay;
-  AnimationTimeDelta end_delay;
+  Delay start_delay;
+  Delay end_delay;
   FillMode fill_mode = FillMode::AUTO;
   double iteration_start = 0;
   double iteration_count = 1;
   // If empty, indicates the 'auto' value.
-  absl::optional<AnimationTimeDelta> iteration_duration = absl::nullopt;
+  std::optional<AnimationTimeDelta> iteration_duration = std::nullopt;
 
   PlaybackDirection direction = PlaybackDirection::NORMAL;
   scoped_refptr<TimingFunction> timing_function =
@@ -153,12 +198,12 @@ struct CORE_EXPORT Timing {
   struct CalculatedTiming {
     DISALLOW_NEW();
     Phase phase = Phase::kPhaseNone;
-    absl::optional<double> current_iteration = 0;
-    absl::optional<double> progress = 0;
+    std::optional<double> current_iteration = 0;
+    std::optional<double> progress = 0;
     bool is_current = false;
     bool is_in_effect = false;
     bool is_in_play = false;
-    absl::optional<AnimationTimeDelta> local_time;
+    std::optional<AnimationTimeDelta> local_time;
     AnimationTimeDelta time_to_forwards_effect_change =
         AnimationTimeDelta::Max();
     AnimationTimeDelta time_to_reverse_effect_change =
@@ -171,8 +216,11 @@ struct CORE_EXPORT Timing {
   struct NormalizedTiming {
     DISALLOW_NEW();
     // Value used in normalization math. Stored so that we can convert back if
-    // needed.
-    absl::optional<AnimationTimeDelta> timeline_duration;
+    // needed. At present, only scroll-linked animations have a timeline
+    // duration. If this changes, we need to update the is_current calculation.
+    std::optional<AnimationTimeDelta> timeline_duration;
+    // Though timing delays may be expressed as either times or (phase,offset)
+    // pairs, post normalization, delays is expressed in time.
     AnimationTimeDelta start_delay;
     AnimationTimeDelta end_delay;
     AnimationTimeDelta iteration_duration;
@@ -180,15 +228,23 @@ struct CORE_EXPORT Timing {
     AnimationTimeDelta active_duration;
     // Calculated as (start_delay + active_duration + end_delay)
     AnimationTimeDelta end_time;
+    // Indicates if the before-active phase boundary aligns with the minimum
+    // scroll position.
+    bool is_start_boundary_aligned = false;
+    // Indicates if the active-after phase boundary aligns with the maximum
+    // scroll position.
+    bool is_end_boundary_aligned = false;
   };
 
+  // TODO(crbug.com/1394434): Cleanup method signature by passing in
+  // AnimationEffectOwner.
   CalculatedTiming CalculateTimings(
-      absl::optional<AnimationTimeDelta> local_time,
-      bool at_progress_timeline_boundary,
+      std::optional<AnimationTimeDelta> local_time,
+      bool is_idle,
       const NormalizedTiming& normalized_timing,
       AnimationDirection animation_direction,
       bool is_keyframe_effect,
-      absl::optional<double> playback_rate) const;
+      std::optional<double> playback_rate) const;
   ComputedEffectTiming* getComputedTiming(const CalculatedTiming& calculated,
                                           const NormalizedTiming& normalized,
                                           bool is_keyframe_effect) const;

@@ -1,10 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/native_theme/scrollbar_animator_mac.h"
 
-#include "base/cxx17_backports.h"
+#include <algorithm>
+
+#include "base/task/single_thread_task_runner.h"
 
 namespace ui {
 
@@ -23,7 +25,7 @@ ScrollbarAnimationTimerMac::ScrollbarAnimationTimerMac(
 ScrollbarAnimationTimerMac::~ScrollbarAnimationTimerMac() {}
 
 void ScrollbarAnimationTimerMac::Start() {
-  start_time_ = base::Time::Now().ToDoubleT();
+  start_time_ = base::Time::Now().InSecondsFSinceUnixEpoch();
   // Set the framerate of the animation. NSAnimation uses a default
   // framerate of 60 Hz, so use that here.
   timer_.Start(FROM_HERE, base::Seconds(1.0 / 60.0), this,
@@ -39,14 +41,15 @@ void ScrollbarAnimationTimerMac::SetDuration(double duration) {
 }
 
 void ScrollbarAnimationTimerMac::TimerFired() {
-  double current_time = base::Time::Now().ToDoubleT();
+  double current_time = base::Time::Now().InSecondsFSinceUnixEpoch();
   double delta = current_time - start_time_;
 
-  if (delta >= duration_)
+  if (delta >= duration_) {
     timer_.Stop();
+  }
 
   double fraction = delta / duration_;
-  fraction = base::clamp(fraction, 0.0, 1.0);
+  fraction = std::clamp(fraction, 0.0, 1.0);
   double progress = timing_function_->GetValue(fraction);
   // Note that `this` may be destroyed from within `callback_`, so it is not
   // safe to call any other code after it.
@@ -73,28 +76,33 @@ OverlayScrollbarAnimatorMac::~OverlayScrollbarAnimatorMac() = default;
 void OverlayScrollbarAnimatorMac::MouseDidEnter() {
   // If the scrollbar is completely hidden, ignore this. We will initialize
   // the `mouse_in_track_` state if there's a scroll.
-  if (thumb_alpha_ == 0.f)
+  if (thumb_alpha_ == 0.f) {
     return;
+  }
 
-  if (mouse_in_track_)
+  if (mouse_in_track_) {
     return;
+  }
   mouse_in_track_ = true;
 
   // Cancel any in-progress fade-out, and ensure that the fade-out timer be
   // disabled.
-  if (fade_out_animation_)
+  if (fade_out_animation_) {
     FadeOutAnimationCancel();
+  }
   FadeOutTimerUpdate();
 
   // Start the fade-in animation (unless it is in progress or has already
   // completed).
-  if (!fade_in_track_animation_ && track_alpha_ != 1.f)
+  if (!fade_in_track_animation_ && track_alpha_ != 1.f) {
     FadeInTrackAnimationStart();
+  }
 
   // Start the expand-thumb animation (unless it is in progress or has already
   // completed).
-  if (!expand_thumb_animation_ && thumb_width_ != thumb_width_expanded_)
+  if (!expand_thumb_animation_ && thumb_width_ != thumb_width_expanded_) {
     ExpandThumbAnimationStart();
+  }
 }
 
 void OverlayScrollbarAnimatorMac::MouseDidExit() {
@@ -157,8 +165,9 @@ void OverlayScrollbarAnimatorMac::ExpandThumbAnimationTicked(double progress) {
   thumb_width_ = (1 - progress) * thumb_width_unexpanded_ +
                  progress * thumb_width_expanded_;
   client_->SetThumbNeedsDisplay();
-  if (progress == 1)
+  if (progress == 1) {
     expand_thumb_animation_.reset();
+  }
 }
 
 void OverlayScrollbarAnimatorMac::FadeInTrackAnimationStart() {

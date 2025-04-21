@@ -1,17 +1,20 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <fuzzer/FuzzedDataProvider.h>
 #include <stddef.h>
 #include <stdint.h>
+
 #include "base/test/bind.h"
 #include "base/time/default_tick_clock.h"
+#include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
 #include "third_party/blink/renderer/core/html/html_element.h"
 #include "third_party/blink/renderer/core/testing/dummy_page_holder.h"
 #include "third_party/blink/renderer/platform/testing/blink_fuzzer_test_support.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/testing/testing_platform_support_with_mock_scheduler.h"
 
 namespace blink {
@@ -88,6 +91,7 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     return 0;
 
   static BlinkFuzzerTestSupport test_support = BlinkFuzzerTestSupport();
+  test::TaskEnvironment task_environment;
 
   PageHelper page;
   page.SetUp();

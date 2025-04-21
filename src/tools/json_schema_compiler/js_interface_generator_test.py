@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2015 The Chromium Authors. All rights reserved.
+# Copyright 2015 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -13,7 +13,7 @@ import unittest
 
 # The contents of a fake idl file.
 fake_idl = """
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -59,6 +59,7 @@ namespace fakeApi {
     // |callback| : The callback which will most assuredly in all cases be
     // called; that is, of course, iff such a callback was provided and is
     // not at all null.
+    [doesNotSupportPromises="Multi-parameter callback"]
     static void bazGreek(optional BazGreekCallback callback);
 
     [deprecated="Use a new method."] static DOMString returnString();
@@ -72,7 +73,7 @@ namespace fakeApi {
 """
 
 # The output we expect from our fake idl file.
-fake_idl_output = ("""// Copyright %s The Chromium Authors. All rights reserved.
+fake_idl_output = ("""// Copyright %s The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -109,10 +110,12 @@ FakeApi.prototype = {
  * @type {!ChromeEvent}
  * @see https://developer.chrome.com/extensions/fakeApi#event-onTrapDetected
  */
-FakeApi.prototype.onTrapDetected;""" % (datetime.now().year,
-                                        sys.argv[0].replace('\\', '/')))
+FakeApi.prototype.onTrapDetected;""" %
+                   (datetime.now().year, sys.argv[0].replace('\\', '/')))
+
 
 class JsExternGeneratorTest(unittest.TestCase):
+
   def _GetNamespace(self, fake_content, filename):
     """Returns a namespace object for the given content"""
     api_def = idl_schema.Process(fake_content, filename)
@@ -120,7 +123,7 @@ class JsExternGeneratorTest(unittest.TestCase):
     return m.AddNamespace(api_def[0], filename)
 
   def setUp(self):
-    self.maxDiff = None # Lets us see the full diff when inequal.
+    self.maxDiff = None  # Lets us see the full diff when inequal.
 
   def testBasic(self):
     namespace = self._GetNamespace(fake_idl, 'fake_api.idl')

@@ -1,5 +1,5 @@
 #!/usr/bin/env vpython3
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -123,6 +123,7 @@ def _DumpJson(data, output_path):
             newline='') if sys.version_info.major == 3 else open(
                 output_path, 'wb') as output_file:
     json.dump(data, output_file, indent=4, separators=(',', ': '))
+    output_file.write('\n')
 
 
 def _LoadTimingData(args):
@@ -147,8 +148,8 @@ def GenerateShardMap(builder, num_of_shards, debug=False):
   if builder:
     with open(builder.timing_file_path) as f:
       timing_data = json.load(f)
-  benchmarks_to_shard = (
-      list(builder.benchmark_configs) + list(builder.executables))
+  benchmarks_to_shard = (list(builder.benchmark_configs) +
+                         list(builder.executables) + list(builder.crossbench))
   repeat_config = cross_device_test_config.TARGET_DEVICES.get(builder.name, {})
   sharding_map = sharding_map_generator.generate_sharding_map(
       benchmarks_to_shard,
@@ -198,7 +199,7 @@ def _FilterTimingData(builder, output_path=None):
     timing_dataset = json.load(f)
   story_full_names = set()
   for benchmark_config in builder.benchmark_configs:
-    for story in benchmark_config.stories:
+    for story in benchmark_config.exhaustive_stories:
       story_full_names.add('/'.join([benchmark_config.name, story]))
   # When benchmarks are abridged or stories are removed, we want that
   # to be reflected in the timing data right away.
@@ -229,10 +230,12 @@ def _GetBuilderPlatforms(builders, waterfall):
     return {b for b in bot_platforms.ALL_PLATFORMS if b.name in
                 builders}
   if waterfall == 'perf':
-    return bot_platforms.OFFICIAL_PLATFORMS
-  if waterfall == 'perf-fyi':
-    return bot_platforms.FYI_PLATFORMS
-  return bot_platforms.ALL_PLATFORMS
+    platforms = bot_platforms.OFFICIAL_PLATFORMS
+  elif waterfall == 'perf-fyi':
+    platforms = bot_platforms.FYI_PLATFORMS
+  else:
+    platforms = bot_platforms.ALL_PLATFORMS
+  return {p for p in platforms if not p.pinpoint_only}
 
 
 def _UpdateShardsForBuilders(args):
@@ -312,6 +315,8 @@ def _ValidateShardMaps(args):
 
   # Check that bot_platforms.py matches the actual shard maps
   for platform in bot_platforms.ALL_PLATFORMS:
+    if platform.pinpoint_only:
+      continue
     platform_benchmark_names = set(
         b.name for b in platform.benchmark_configs) | set(
             e.name for e in platform.executables)
@@ -337,11 +342,13 @@ def _ValidateShardMaps(args):
               benchmark=benchmark, path=platform.shards_map_file_path))
 
   # Check that every official benchmark is scheduled on some shard map.
-  # TODO(crbug.com/963614): Note that this check can be deleted if we
+  # TODO(crbug.com/40627632): Note that this check can be deleted if we
   # find some way other than naming the benchmark with prefix "UNSCHEDULED_"
   # to make it clear that a benchmark is not running.
   scheduled_benchmarks = set()
   for platform in bot_platforms.ALL_PLATFORMS:
+    if platform.pinpoint_only:
+      continue
     scheduled_benchmarks = scheduled_benchmarks | _ParseBenchmarks(
         platform.shards_map_file_path)
   for benchmark in (
@@ -352,7 +359,7 @@ def _ValidateShardMaps(args):
         'UNSCHEDULED_{benchmark}'.format(benchmark=benchmark))
 
   for error in errors:
-    print('*', textwrap.fill(error, 70), '\n', file=sys.stderr)
+    print('*', error, '\n', file=sys.stderr)
   if errors:
     return 1
   return 0

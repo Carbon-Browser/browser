@@ -1,11 +1,10 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.content.browser;
 
-import android.support.test.InstrumentationRegistry;
-
+import androidx.test.InstrumentationRegistry;
 import androidx.test.filters.MediumTest;
 
 import org.hamcrest.Matchers;
@@ -22,6 +21,7 @@ import org.chromium.base.test.util.CriteriaHelper;
 import org.chromium.base.test.util.CriteriaNotSatisfiedException;
 import org.chromium.base.test.util.Feature;
 import org.chromium.content_public.browser.LoadUrlParams;
+import org.chromium.content_public.browser.Visibility;
 import org.chromium.content_public.browser.test.util.TestCallbackHelperContainer;
 import org.chromium.content_public.browser.test.util.TestCallbackHelperContainer.OnEvaluateJavaScriptResultHelper;
 import org.chromium.content_shell_apk.ContentShellActivityTestRule;
@@ -43,21 +43,29 @@ public class ContentViewLocationTest {
     private MockLocationProvider mMockLocationProvider;
 
     private void hideContentViewOnUiThread() {
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(new Runnable() {
-            @Override
-            public void run() {
-                mActivityTestRule.getWebContents().onHide();
-            }
-        });
+        InstrumentationRegistry.getInstrumentation()
+                .runOnMainSync(
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                mActivityTestRule
+                                        .getWebContents()
+                                        .updateWebContentsVisibility(Visibility.HIDDEN);
+                            }
+                        });
     }
 
     private void showContentViewOnUiThread() {
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(new Runnable() {
-            @Override
-            public void run() {
-                mActivityTestRule.getWebContents().onShow();
-            }
-        });
+        InstrumentationRegistry.getInstrumentation()
+                .runOnMainSync(
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                mActivityTestRule
+                                        .getWebContents()
+                                        .updateWebContentsVisibility(Visibility.VISIBLE);
+                            }
+                        });
     }
 
     private void pollForPositionCallback() throws Throwable {
@@ -66,17 +74,18 @@ public class ContentViewLocationTest {
         mJavascriptHelper.waitUntilHasValue();
         Assert.assertEquals(0, Integer.parseInt(mJavascriptHelper.getJsonResultAndClear()));
 
-        CriteriaHelper.pollInstrumentationThread(() -> {
-            mJavascriptHelper.evaluateJavaScriptForTests(
-                    mActivityTestRule.getWebContents(), "positionCount");
-            try {
-                mJavascriptHelper.waitUntilHasValue();
-            } catch (Exception e) {
-                throw new CriteriaNotSatisfiedException(e);
-            }
-            int result = Integer.parseInt(mJavascriptHelper.getJsonResultAndClear());
-            Criteria.checkThat(result, Matchers.greaterThan(0));
-        });
+        CriteriaHelper.pollInstrumentationThread(
+                () -> {
+                    mJavascriptHelper.evaluateJavaScriptForTests(
+                            mActivityTestRule.getWebContents(), "positionCount");
+                    try {
+                        mJavascriptHelper.waitUntilHasValue();
+                    } catch (Exception e) {
+                        throw new CriteriaNotSatisfiedException(e);
+                    }
+                    int result = Integer.parseInt(mJavascriptHelper.getJsonResultAndClear());
+                    Criteria.checkThat(result, Matchers.greaterThan(0));
+                });
     }
 
     private void startGeolocationWatchPosition() throws Throwable {
@@ -86,9 +95,10 @@ public class ContentViewLocationTest {
     }
 
     private void ensureGeolocationRunning(final boolean running) {
-        CriteriaHelper.pollInstrumentationThread(() -> {
-            Criteria.checkThat(mMockLocationProvider.isRunning(), Matchers.is(running));
-        });
+        CriteriaHelper.pollInstrumentationThread(
+                () -> {
+                    Criteria.checkThat(mMockLocationProvider.isRunning(), Matchers.is(running));
+                });
     }
 
     @Before
@@ -100,7 +110,7 @@ public class ContentViewLocationTest {
             mActivityTestRule.launchContentShellWithUrlSync(
                     "content/test/data/android/geolocation.html");
         } catch (Throwable t) {
-            Assert.fail();
+            throw new RuntimeException(t);
         }
 
         mTestCallbackHelperContainer =
@@ -137,8 +147,10 @@ public class ContentViewLocationTest {
         ensureGeolocationRunning(true);
 
         // Navigate away and ensure that geolocation stops.
-        mActivityTestRule.loadUrl(mActivityTestRule.getWebContents().getNavigationController(),
-                mTestCallbackHelperContainer, new LoadUrlParams("about:blank"));
+        mActivityTestRule.loadUrl(
+                mActivityTestRule.getWebContents().getNavigationController(),
+                mTestCallbackHelperContainer,
+                new LoadUrlParams("about:blank"));
         ensureGeolocationRunning(false);
     }
 
@@ -183,8 +195,10 @@ public class ContentViewLocationTest {
         startGeolocationWatchPosition();
         ensureGeolocationRunning(false);
 
-        mActivityTestRule.loadUrl(mActivityTestRule.getWebContents().getNavigationController(),
-                mTestCallbackHelperContainer, new LoadUrlParams("about:blank"));
+        mActivityTestRule.loadUrl(
+                mActivityTestRule.getWebContents().getNavigationController(),
+                mTestCallbackHelperContainer,
+                new LoadUrlParams("about:blank"));
         showContentViewOnUiThread();
         ensureGeolocationRunning(false);
     }

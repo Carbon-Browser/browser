@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -18,12 +18,10 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/observer_list.h"
 #include "base/threading/thread.h"
 #include "base/unguessable_token.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "content/browser/renderer_host/media/media_stream_provider.h"
 #include "content/common/content_export.h"
 #include "third_party/blink/public/common/mediastream/media_stream_request.h"
@@ -60,8 +58,8 @@ class CONTENT_EXPORT AudioInputDeviceManager : public MediaStreamProvider {
   void OpenedOnIOThread(
       const base::UnguessableToken& session_id,
       const blink::MediaStreamDevice& device,
-      const absl::optional<media::AudioParameters>& input_params,
-      const absl::optional<std::string>& matched_output_device_id);
+      const std::optional<media::AudioParameters>& input_params,
+      const std::optional<std::string>& matched_output_device_id);
 
   // Callback called on IO thread with the session_id referencing the closed
   // device.

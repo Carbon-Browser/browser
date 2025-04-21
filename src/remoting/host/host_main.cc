@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -19,7 +19,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "mojo/core/embedder/embedder.h"
-#include "remoting/base/breakpad.h"
+#include "remoting/base/crash/breakpad.h"
 #include "remoting/base/logging.h"
 #include "remoting/host/base/host_exit_codes.h"
 #include "remoting/host/base/switches.h"
@@ -29,7 +29,7 @@
 #include "remoting/host/usage_stats_consent.h"
 
 #if BUILDFLAG(IS_APPLE)
-#include "base/mac/scoped_nsautorelease_pool.h"
+#include "base/apple/scoped_nsautorelease_pool.h"
 #endif  // BUILDFLAG(IS_APPLE)
 
 #if BUILDFLAG(IS_WIN)
@@ -102,8 +102,9 @@ int RunElevated() {
   base::CommandLine command_line(base::CommandLine::NO_PROGRAM);
   for (base::CommandLine::SwitchMap::const_iterator i = switches.begin();
        i != switches.end(); ++i) {
-    if (i->first != kElevateSwitchName)
+    if (i->first != kElevateSwitchName) {
       command_line.AppendSwitchNative(i->first, i->second);
+    }
   }
   for (base::CommandLine::StringVector::const_iterator i = args.begin();
        i != args.end(); ++i) {
@@ -169,7 +170,7 @@ MainRoutineFn SelectMainRoutine(const std::string& process_type) {
 int HostMain(int argc, char** argv) {
 #if BUILDFLAG(IS_APPLE)
   // Needed so we don't leak objects when threads are created.
-  base::mac::ScopedNSAutoreleasePool pool;
+  base::apple::ScopedNSAutoreleasePool pool;
 #endif
 
   base::CommandLine::Init(argc, argv);
@@ -220,8 +221,21 @@ int HostMain(int argc, char** argv) {
   // Initialize Breakpad as early as possible. On Mac the command-line needs to
   // be initialized first, so that the preference for crash-reporting can be
   // looked up in the config file.
+  // Note that we enable crash reporting only if the user has opted in to having
+  // the crash reports uploaded.
   if (IsUsageStatsAllowed()) {
+#if BUILDFLAG(IS_LINUX)
     InitializeCrashReporting();
+#elif BUILDFLAG(IS_WIN)
+    // TODO: joedow - Enable crash reporting for the RDP process.
+    if (process_type == kProcessTypeDesktop ||
+        process_type == kProcessTypeDaemon) {
+      InitializeCrashReporting();
+    } else if (command_line->HasSwitch(kCrashServerPipeHandle)) {
+      InitializeOopCrashClient(
+          command_line->GetSwitchValueASCII(kCrashServerPipeHandle));
+    }
+#endif
   }
 #endif  // defined(REMOTING_ENABLE_BREAKPAD)
 
@@ -246,7 +260,16 @@ int HostMain(int argc, char** argv) {
 
   remoting::LoadResources("");
 
-  mojo::core::Init();
+  mojo::core::Init({
+#if BUILDFLAG(IS_WIN)
+      .is_broker_process = main_routine == &DaemonProcessMain
+#elif BUILDFLAG(IS_MAC)
+      // The broker process on Mac is the agent process broker.
+      .is_broker_process = false
+#else
+      .is_broker_process = main_routine == &HostProcessMain
+#endif
+  });
 
   // Invoke the entry point.
   int exit_code = main_routine();

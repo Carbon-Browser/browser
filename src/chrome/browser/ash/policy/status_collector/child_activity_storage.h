@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,7 @@ class ChildActivityStorage : public ActivityStorage {
 
   // Adds an activity period.
   //
-  // TODO(crbug.com/827386): make a more appropriate signature once using
+  // TODO(crbug.com/40569404): make a more appropriate signature once using
   // SimpleClockTest (as the |now| parameter is mostly for testing).
   void AddActivityPeriod(base::Time start, base::Time end, base::Time now);
 

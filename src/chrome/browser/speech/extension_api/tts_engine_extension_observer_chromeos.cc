@@ -1,25 +1,20 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/speech/extension_api/tts_engine_extension_observer_chromeos.h"
 
 #include "base/check.h"
-#include "base/memory/singleton.h"
 #include "chrome/browser/extensions/extension_service.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/speech/extension_api/tts_engine_extension_api.h"
 #include "chrome/common/extensions/api/speech/tts_engine_manifest_handler.h"
 #include "chrome/common/extensions/extension_constants.h"
 #include "chromeos/services/tts/public/mojom/tts_service.mojom.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "content/public/browser/service_process_host.h"
 #include "content/public/browser/tts_controller.h"
 #include "extensions/browser/event_router.h"
-#include "extensions/browser/event_router_factory.h"
 #include "extensions/common/permissions/permissions_data.h"
 
 namespace {
@@ -79,52 +74,6 @@ void UpdateGoogleSpeechSynthesisKeepAliveCountOnReload(
 }
 
 }  // namespace
-
-// Factory to load one instance of TtsExtensionLoaderChromeOs per profile.
-class TtsEngineExtensionObserverChromeOSFactory
-    : public BrowserContextKeyedServiceFactory {
- public:
-  static TtsEngineExtensionObserverChromeOS* GetForProfile(Profile* profile) {
-    return static_cast<TtsEngineExtensionObserverChromeOS*>(
-        GetInstance()->GetServiceForBrowserContext(profile, true));
-  }
-
-  static TtsEngineExtensionObserverChromeOSFactory* GetInstance() {
-    return base::Singleton<TtsEngineExtensionObserverChromeOSFactory>::get();
-  }
-
- private:
-  friend struct base::DefaultSingletonTraits<
-      TtsEngineExtensionObserverChromeOSFactory>;
-
-  TtsEngineExtensionObserverChromeOSFactory()
-      : BrowserContextKeyedServiceFactory(
-            "TtsEngineExtensionObserverChromeOS",
-            BrowserContextDependencyManager::GetInstance()) {
-    DependsOn(extensions::EventRouterFactory::GetInstance());
-  }
-
-  ~TtsEngineExtensionObserverChromeOSFactory() override {}
-
-  content::BrowserContext* GetBrowserContextToUse(
-      content::BrowserContext* context) const override {
-    // If given an incognito profile (including the Chrome OS login
-    // profile), share the service with the original profile.
-    return chrome::GetBrowserContextRedirectedInIncognito(context);
-  }
-
-  KeyedService* BuildServiceInstanceFor(
-      content::BrowserContext* profile) const override {
-    return new TtsEngineExtensionObserverChromeOS(
-        static_cast<Profile*>(profile));
-  }
-};
-
-TtsEngineExtensionObserverChromeOS*
-TtsEngineExtensionObserverChromeOS::GetInstance(Profile* profile) {
-  return TtsEngineExtensionObserverChromeOSFactory::GetInstance()
-      ->GetForProfile(profile);
-}
 
 TtsEngineExtensionObserverChromeOS::TtsEngineExtensionObserverChromeOS(
     Profile* profile)
@@ -193,8 +142,10 @@ bool TtsEngineExtensionObserverChromeOS::IsLoadedTtsEngine(
   extensions::EventRouter* event_router =
       extensions::EventRouter::Get(profile_);
   DCHECK(event_router);
-  if (event_router->ExtensionHasEventListener(extension_id,
-                                              tts_engine_events::kOnSpeak) &&
+  if ((event_router->ExtensionHasEventListener(extension_id,
+                                               tts_engine_events::kOnSpeak) ||
+       event_router->ExtensionHasEventListener(
+           extension_id, tts_engine_events::kOnSpeakWithAudioStream)) &&
       event_router->ExtensionHasEventListener(extension_id,
                                               tts_engine_events::kOnStop)) {
     return true;
@@ -214,8 +165,6 @@ void TtsEngineExtensionObserverChromeOS::OnListenerAdded(
 void TtsEngineExtensionObserverChromeOS::OnExtensionLoaded(
     content::BrowserContext* browser_context,
     const extensions::Extension* extension) {
-  // TODO(jennyz): Do we need to monitor this in Lacros for loading 3rd party
-  // tts engine extensions?
   if (extension->permissions_data()->HasAPIPermission(
           extensions::mojom::APIPermissionID::kTtsEngine)) {
     engine_extension_ids_.insert(extension->id());

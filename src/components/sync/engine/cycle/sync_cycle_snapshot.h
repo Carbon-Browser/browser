@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,14 +12,14 @@
 #include <vector>
 
 #include "base/time/time.h"
-#include "components/sync/base/model_type.h"
+#include "base/values.h"
+#include "components/sync/base/data_type.h"
 #include "components/sync/base/progress_marker_map.h"
 #include "components/sync/engine/cycle/model_neutral_state.h"
-#include "components/sync/protocol/sync_enums.pb.h"
 
-namespace base {
-class DictionaryValue;
-}
+namespace sync_pb {
+enum SyncEnums_GetUpdatesOrigin : int;
+}  // namespace sync_pb
 
 namespace syncer {
 
@@ -40,13 +40,13 @@ class SyncCycleSnapshot {
                     bool notifications_enabled,
                     base::Time sync_start_time,
                     base::Time poll_finish_time,
-                    sync_pb::SyncEnums::GetUpdatesOrigin get_updates_origin,
+                    sync_pb::SyncEnums_GetUpdatesOrigin get_updates_origin,
                     base::TimeDelta poll_interval,
                     bool has_remaining_local_changes);
   SyncCycleSnapshot(const SyncCycleSnapshot& other);
   ~SyncCycleSnapshot();
 
-  std::unique_ptr<base::DictionaryValue> ToValue() const;
+  base::Value::Dict ToValue() const;
 
   std::string ToString() const;
 
@@ -59,7 +59,7 @@ class SyncCycleSnapshot {
   bool notifications_enabled() const;
   base::Time sync_start_time() const;
   base::Time poll_finish_time() const;
-  sync_pb::SyncEnums::GetUpdatesOrigin get_updates_origin() const;
+  sync_pb::SyncEnums_GetUpdatesOrigin get_updates_origin() const;
   base::TimeDelta poll_interval() const;
   // Whether usynced items existed at the time the sync cycle completed.
   bool has_remaining_local_changes() const;
@@ -78,7 +78,7 @@ class SyncCycleSnapshot {
   base::Time sync_start_time_;
   base::Time poll_finish_time_;
 
-  sync_pb::SyncEnums::GetUpdatesOrigin get_updates_origin_;
+  sync_pb::SyncEnums_GetUpdatesOrigin get_updates_origin_;
 
   base::TimeDelta poll_interval_;
 

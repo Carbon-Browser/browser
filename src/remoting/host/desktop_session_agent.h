@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,10 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
@@ -24,15 +25,14 @@
 #include "mojo/public/cpp/system/message_pipe.h"
 #include "remoting/host/base/desktop_environment_options.h"
 #include "remoting/host/client_session_control.h"
-#include "remoting/host/desktop_and_cursor_conditional_composer.h"
 #include "remoting/host/desktop_display_info.h"
 #include "remoting/host/file_transfer/session_file_operations_handler.h"
+#include "remoting/host/mojo_video_capturer_list.h"
 #include "remoting/host/mojom/desktop_session.mojom.h"
 #include "remoting/host/mojom/remoting_mojom_traits.h"
+#include "remoting/host/mouse_shape_pump.h"
 #include "remoting/proto/url_forwarder_control.pb.h"
 #include "remoting/protocol/clipboard_stub.h"
-#include "third_party/webrtc/modules/desktop_capture/desktop_capturer.h"
-#include "third_party/webrtc/modules/desktop_capture/desktop_geometry.h"
 #include "third_party/webrtc/modules/desktop_capture/mouse_cursor_monitor.h"
 #include "ui/events/event.h"
 
@@ -70,10 +70,8 @@ class InputEventTracker;
 class DesktopSessionAgent
     : public base::RefCountedThreadSafe<DesktopSessionAgent>,
       public IPC::Listener,
-      public webrtc::DesktopCapturer::Callback,
       public webrtc::MouseCursorMonitor::Callback,
       public ClientSessionControl,
-      public IpcFileOperations::ResultHandler,
       public mojom::DesktopSessionAgent,
       public mojom::DesktopSessionControl {
  public:
@@ -112,10 +110,6 @@ class DesktopSessionAgent
       const std::string& interface_name,
       mojo::ScopedInterfaceEndpointHandle handle) override;
 
-  // webrtc::DesktopCapturer::Callback implementation.
-  void OnCaptureResult(webrtc::DesktopCapturer::Result result,
-                       std::unique_ptr<webrtc::DesktopFrame> frame) override;
-
   // webrtc::MouseCursorMonitor::Callback implementation.
   void OnMouseCursor(webrtc::MouseCursor* cursor) override;
   void OnMouseCursorPosition(const webrtc::DesktopVector& position) override;
@@ -126,13 +120,6 @@ class DesktopSessionAgent
   // Forwards an audio packet though the IPC channel to the network process.
   void ProcessAudioPacket(std::unique_ptr<AudioPacket> packet);
 
-  // IpcFileOperations::ResultHandler implementation.
-  void OnResult(std::uint64_t file_id, ResultHandler::Result result) override;
-  void OnInfoResult(std::uint64_t file_id,
-                    ResultHandler::InfoResult result) override;
-  void OnDataResult(std::uint64_t file_id,
-                    ResultHandler::DataResult result) override;
-
   // mojom::DesktopSessionAgent implementation.
   void Start(const std::string& authenticated_jid,
              const ScreenResolution& resolution,
@@ -140,8 +127,8 @@ class DesktopSessionAgent
              StartCallback callback) override;
 
   // mojom::DesktopSessionControl implementation.
-  void CaptureFrame() override;
-  void SelectSource(int id) override;
+  void CreateVideoCapturer(int64_t desktop_display_id,
+                           CreateVideoCapturerCallback callback) override;
   void SetScreenResolution(const ScreenResolution& resolution) override;
   void LockWorkstation() override;
   void InjectSendAttentionSequence() override;
@@ -152,6 +139,9 @@ class DesktopSessionAgent
   void InjectTouchEvent(const protocol::TouchEvent& event) override;
   void SetUpUrlForwarder() override;
   void SignalWebAuthnExtension() override;
+  void BeginFileRead(BeginFileReadCallback callback) override;
+  void BeginFileWrite(const base::FilePath& file_path,
+                      BeginFileWriteCallback callback) override;
 
   // Creates desktop integration components and a connected IPC channel to be
   // used to access them. The client end of the channel is returned.
@@ -178,17 +168,6 @@ class DesktopSessionAgent
 
   // Handles keyboard layout changes.
   void OnKeyboardLayoutChange(const protocol::KeyboardLayout& layout);
-
-  // Notifies the network process when a new shared memory region is created.
-  void OnSharedMemoryRegionCreated(int id,
-                                   base::ReadOnlySharedMemoryRegion region,
-                                   uint32_t size);
-
-  // Notifies the network process when a shared memory region is released.
-  void OnSharedMemoryRegionReleased(int id);
-
-  // Sends a message to the network process.
-  void SendToNetwork(std::unique_ptr<IPC::Message> message);
 
   // Posted to |audio_capture_task_runner_| to start the audio capturer.
   void StartAudioCapturer();
@@ -244,22 +223,19 @@ class DesktopSessionAgent
   // True if the desktop session agent has been started.
   bool started_ = false;
 
-  // Captures the screen and composites with the mouse cursor if necessary.
-  std::unique_ptr<DesktopAndCursorConditionalComposer> video_capturer_;
+  // Per-display capturers which capture the screen and composite with the mouse
+  // cursor if necessary.
+  MojoVideoCapturerList video_capturers_;
 
   // Captures mouse shapes.
-  std::unique_ptr<webrtc::MouseCursorMonitor> mouse_cursor_monitor_;
+  std::unique_ptr<MouseShapePump> mouse_shape_pump_;
 
   // Watches for keyboard layout changes.
   std::unique_ptr<KeyboardLayoutMonitor> keyboard_layout_monitor_;
 
-  // Keep reference to the last frame sent to make sure shared buffer is alive
-  // before it's received.
-  std::unique_ptr<webrtc::DesktopFrame> last_frame_;
-
   // Routes file-transfer messages to the corresponding reader/writer to be
   // executed.
-  absl::optional<SessionFileOperationsHandler> session_file_operations_handler_;
+  std::optional<SessionFileOperationsHandler> session_file_operations_handler_;
 
   mojo::AssociatedRemote<mojom::DesktopSessionEventHandler>
       desktop_session_event_handler_;

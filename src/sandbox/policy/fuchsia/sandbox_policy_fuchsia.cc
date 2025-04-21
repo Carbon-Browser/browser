@@ -1,33 +1,36 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "sandbox/policy/fuchsia/sandbox_policy_fuchsia.h"
 
-#include <lib/fdio/spawn.h>
-#include <stdio.h>
-#include <zircon/processargs.h>
-#include <zircon/syscalls/policy.h>
-
+#include <fidl/fuchsia.scheduler/cpp/fidl.h>
 #include <fuchsia/buildinfo/cpp/fidl.h>
 #include <fuchsia/camera3/cpp/fidl.h>
 #include <fuchsia/fonts/cpp/fidl.h>
 #include <fuchsia/hwinfo/cpp/fidl.h>
 #include <fuchsia/intl/cpp/fidl.h>
+#include <fuchsia/kernel/cpp/fidl.h>
 #include <fuchsia/logger/cpp/fidl.h>
 #include <fuchsia/media/cpp/fidl.h>
+#include <fuchsia/mediacodec/cpp/fidl.h>
 #include <fuchsia/memorypressure/cpp/fidl.h>
 #include <fuchsia/net/interfaces/cpp/fidl.h>
 #include <fuchsia/sysmem/cpp/fidl.h>
-#include <fuchsia/ui/scenic/cpp/fidl.h>
+#include <fuchsia/tracing/perfetto/cpp/fidl.h>
+#include <fuchsia/tracing/provider/cpp/fidl.h>
+#include <fuchsia/ui/composition/cpp/fidl.h>
+#include <lib/fdio/spawn.h>
 #include <lib/sys/cpp/component_context.h>
 #include <lib/sys/cpp/service_directory.h>
+#include <stdio.h>
+#include <zircon/processargs.h>
+#include <zircon/syscalls/policy.h>
 
 #include <memory>
 #include <utility>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
 #include "base/clang_profiling_buildflags.h"
 #include "base/command_line.h"
 #include "base/containers/span.h"
@@ -37,12 +40,13 @@
 #include "base/fuchsia/filtered_service_directory.h"
 #include "base/fuchsia/fuchsia_logging.h"
 #include "base/fuchsia/process_context.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "base/path_service.h"
 #include "base/process/launch.h"
 #include "base/process/process.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread.h"
-#include "printing/buildflags/buildflags.h"
 #include "sandbox/policy/mojom/sandbox.mojom.h"
 #include "sandbox/policy/switches.h"
 
@@ -51,30 +55,23 @@ namespace policy {
 namespace {
 
 enum SandboxFeature {
-  // Clones the job. This is required to start new processes (to make it useful
-  // the process will also need access to the fuchsia.process.Launcher service).
-  kCloneJob = 1 << 0,
+  kNone = 0,
 
   // Provides access to resources required by Vulkan.
-  kProvideVulkanResources = 1 << 1,
+  kProvideVulkanResources = 1 << 0,
 
   // Read only access to /config/ssl, which contains root certs info.
-  kProvideSslConfig = 1 << 2,
-
-  // Allows the process to use the ambient mark-vmo-as-executable capability.
-  kAmbientMarkVmoAsExecutable = 1 << 3,
+  kProvideSslConfig = 1 << 1,
 };
 
 struct SandboxConfig {
-  base::span<const char* const> services;
+  base::span<const char* const> additional_services;
   uint32_t features;
 };
 
 // Services that are passed to all processes.
-// Prevent incorrect indentation due to the preprocessor lines within `({...})`:
-// clang-format off
-constexpr auto kMinimalServices = base::make_span((const char* const[]){
-    // TODO(crbug.com/1286960): Remove this and/or intl below if an alternative
+constexpr const char* kMinimalServices[] = {
+    // TODO(crbug.com/40815933): Remove this and/or intl below if an alternative
     // solution does not require access to the service in all processes. For now
     // these services are made available everywhere because they are required by
     // base::SysInfo.
@@ -88,60 +85,75 @@ constexpr auto kMinimalServices = base::make_span((const char* const[]){
 
     fuchsia::intl::PropertyProvider::Name_,
     fuchsia::logger::LogSink::Name_,
-});
-// clang-format on
+    fuchsia::tracing::perfetto::ProducerConnector::Name_,
+};
 
 // For processes that only get kMinimalServices and no other capabilities.
 constexpr SandboxConfig kMinimalConfig = {
-    base::span<const char* const>(),
-    0,
+    {},
+    kNone,
 };
 
+constexpr const char* kGpuServices[] = {
+    // TODO(crbug.com/42050308): Use the fuchsia.scheduler API instead.
+    fuchsia::media::ProfileProvider::Name_,
+    fuchsia::mediacodec::CodecFactory::Name_,
+    fidl::DiscoverableProtocolName<fuchsia_scheduler::RoleManager>,
+    fuchsia::sysmem::Allocator::Name_,
+    fuchsia::sysmem2::Allocator::Name_,
+    "fuchsia.vulkan.loader.Loader",
+    fuchsia::tracing::provider::Registry::Name_,
+    fuchsia::ui::composition::Allocator::Name_,
+    fuchsia::ui::composition::Flatland::Name_,
+};
 constexpr SandboxConfig kGpuConfig = {
-    base::make_span((const char* const[]){
-        // TODO(crbug.com/1224707): Use the fuchsia.scheduler API instead.
-        fuchsia::media::ProfileProvider::Name_,
-        fuchsia::sysmem::Allocator::Name_,
-        "fuchsia.vulkan.loader.Loader",
-        fuchsia::ui::composition::Allocator::Name_,
-        fuchsia::ui::composition::Flatland::Name_,
-        fuchsia::ui::scenic::Scenic::Name_,
-    }),
+    kGpuServices,
     kProvideVulkanResources,
 };
 
+constexpr const char* kNetworkServices[] = {
+    "fuchsia.device.NameProvider",
+    "fuchsia.net.name.Lookup",
+    fuchsia::net::interfaces::State::Name_,
+    "fuchsia.posix.socket.Provider",
+};
 constexpr SandboxConfig kNetworkConfig = {
-    base::make_span((const char* const[]){
-        "fuchsia.net.name.Lookup",
-        fuchsia::net::interfaces::State::Name_,
-        "fuchsia.posix.socket.Provider",
-    }),
+    kNetworkServices,
     kProvideSslConfig,
 };
 
+constexpr const char* kRendererServices[] = {
+    fuchsia::fonts::Provider::Name_,
+    fuchsia::kernel::VmexResource::Name_,
+    // TODO(crbug.com/42050308): Use the fuchsia.scheduler API instead.
+    fuchsia::media::ProfileProvider::Name_,
+    fuchsia::memorypressure::Provider::Name_,
+    fidl::DiscoverableProtocolName<fuchsia_scheduler::RoleManager>,
+    fuchsia::sysmem::Allocator::Name_,
+    fuchsia::sysmem2::Allocator::Name_,
+    fuchsia::ui::composition::Allocator::Name_,
+};
 constexpr SandboxConfig kRendererConfig = {
-    base::make_span((const char* const[]){
-        fuchsia::fonts::Provider::Name_,
-        // TODO(crbug.com/1224707): Use the fuchsia.scheduler API instead.
-        fuchsia::media::ProfileProvider::Name_,
-        fuchsia::memorypressure::Provider::Name_,
-        fuchsia::sysmem::Allocator::Name_,
-        fuchsia::ui::composition::Allocator::Name_,
-    }),
-    kAmbientMarkVmoAsExecutable,
+    kRendererServices,
+    kNone,
 };
 
+constexpr const char* kVideoCaptureServices[] = {
+    fuchsia::camera3::DeviceWatcher::Name_,
+    fuchsia::sysmem::Allocator::Name_,
+    fuchsia::sysmem2::Allocator::Name_,
+};
 constexpr SandboxConfig kVideoCaptureConfig = {
-    base::make_span((const char* const[]){
-        fuchsia::camera3::DeviceWatcher::Name_,
-        fuchsia::sysmem::Allocator::Name_,
-    }),
-    0,
+    kVideoCaptureServices,
+    kNone,
 };
 
+constexpr const char* kServiceWithJitServices[] = {
+    fuchsia::kernel::VmexResource::Name_,
+};
 constexpr SandboxConfig kServiceWithJitConfig = {
-    base::span<const char* const>(),
-    kAmbientMarkVmoAsExecutable,
+    kServiceWithJitServices,
+    kNone,
 };
 
 const SandboxConfig* GetConfigForSandboxType(sandbox::mojom::Sandbox type) {
@@ -161,9 +173,7 @@ const SandboxConfig* GetConfigForSandboxType(sandbox::mojom::Sandbox type) {
     // Remaining types receive no-access-to-anything.
     case sandbox::mojom::Sandbox::kAudio:
     case sandbox::mojom::Sandbox::kCdm:
-#if BUILDFLAG(ENABLE_PRINTING)
-    case sandbox::mojom::Sandbox::kPrintBackend:
-#endif
+    case sandbox::mojom::Sandbox::kOnDeviceModelExecution:
     case sandbox::mojom::Sandbox::kPrintCompositor:
     case sandbox::mojom::Sandbox::kService:
     case sandbox::mojom::Sandbox::kSpeechRecognition:
@@ -219,7 +229,7 @@ SandboxPolicyFuchsia::SandboxPolicyFuchsia(sandbox::mojom::Sandbox type) {
           .WithArgs(service_name)
           .Then(base::BindOnce(&AddServiceCallback, service_name));
     }
-    for (const char* service_name : config->services) {
+    for (const char* service_name : config->additional_services) {
       // |service_name_| comes from |config|, which points to a compile-time
       // constant. It will remain valid for the duration of the task.
       filtered_service_directory_
@@ -253,12 +263,15 @@ void SandboxPolicyFuchsia::UpdateLaunchOptionsForSandbox(
   options->paths_to_clone.push_back(
       base::FilePath(base::kPackageRootDirectoryPath));
 
-  // If /config/data/tzdata/icu/ exists then it contains up-to-date timezone
+  // If /config/tzdata/icu/ exists then it contains up-to-date timezone
   // data which should be provided to all sub-processes, for consistency.
-  const auto kIcuTimezoneDataPath = base::FilePath("/config/data/tzdata/icu");
+  // LINT.IfChange(icu_time_zone_data_path)
+  const auto kIcuTimezoneDataPath = base::FilePath("/config/tzdata/icu");
+  // LINT.ThenChange(//base/i18n/icu_util.cc:icu_time_zone_data_path)
   static bool icu_timezone_data_exists = base::PathExists(kIcuTimezoneDataPath);
-  if (icu_timezone_data_exists)
+  if (icu_timezone_data_exists) {
     options->paths_to_clone.push_back(kIcuTimezoneDataPath);
+  }
 
   // Clear environmental variables to better isolate the child from
   // this process.
@@ -271,11 +284,9 @@ void SandboxPolicyFuchsia::UpdateLaunchOptionsForSandbox(
   const SandboxConfig* config = GetConfigForSandboxType(type_);
   CHECK(config);
 
-  if (config->features & kCloneJob)
-    options->spawn_flags |= FDIO_SPAWN_CLONE_JOB;
-
-  if (config->features & kProvideSslConfig)
+  if (config->features & kProvideSslConfig) {
     options->paths_to_clone.push_back(base::FilePath("/config/ssl"));
+  }
 
   if (config->features & kProvideVulkanResources) {
     static const char* const kPathsToCloneForVulkan[] = {
@@ -306,25 +317,6 @@ void SandboxPolicyFuchsia::UpdateLaunchOptionsForSandbox(
   zx_status_t status = zx::job::create(*base::GetDefaultJob(), 0, &job_);
   ZX_CHECK(status == ZX_OK, status) << "zx_job_create";
   options->job_handle = job_.get();
-
-  // Only allow the ambient VMO mark-as-executable capability to be granted
-  // to processes that need to JIT (i.e. run V8/WASM).
-  zx_policy_basic_v2_t ambient_mark_vmo_exec{
-      ZX_POL_AMBIENT_MARK_VMO_EXEC,
-
-      // Kill processes which attempt to execute writable VMOs but lack the
-      // right to do so.
-      (config->features & kAmbientMarkVmoAsExecutable) ? ZX_POL_ACTION_ALLOW
-                                                       : ZX_POL_ACTION_KILL,
-
-      // Only grant spawn-capable processes, such as the browser process, the
-      // ability to override the execution policy.
-      (config->features & kCloneJob) ? ZX_POL_OVERRIDE_ALLOW
-                                     : ZX_POL_OVERRIDE_DENY};
-
-  status = job_.set_policy(ZX_JOB_POL_ABSOLUTE, ZX_JOB_POL_BASIC_V2,
-                           &ambient_mark_vmo_exec, 1);
-  ZX_CHECK(status == ZX_OK, status) << "zx_job_set_policy";
 }
 
 }  // namespace policy

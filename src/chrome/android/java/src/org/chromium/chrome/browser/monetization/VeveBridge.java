@@ -3,6 +3,8 @@ package org.chromium.chrome.browser.monetization;
 import android.content.SharedPreferences;
 import org.chromium.base.ContextUtils;
 
+// import com.amplitude.api.Amplitude;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -19,24 +21,24 @@ import java.util.ArrayList;
 import java.util.regex.Pattern;
 import java.util.regex.Matcher;
 import org.chromium.url.GURL;
-import org.chromium.chrome.browser.tabmodel.document.TabDelegate;
+// import org.chromium.chrome.browser.tabmodel.document.TabDelegate;
 import android.content.ComponentName;
 import android.content.Context;
 import org.chromium.chrome.browser.monetization.VeveUniversalObj;
 
 public class VeveBridge {
 
-    public interface VeveBookmarkCommunicator {
-        void onVeveBookmarkReceived(String url, TabDelegate tabDelegate);
-
-        void onReceiveVeveError(String url, TabDelegate tabDelegate);
-    }
-
-    public interface VeveBookmarkUtilCommunicator {
-        void onVeveBookmarkReceived(String url, Context context, ComponentName openBookmarkComponentName);
-
-        void onReceiveVeveError(String url, Context context, ComponentName openBookmarkComponentName);
-    }
+    // public interface VeveBookmarkCommunicator {
+    //     void onVeveBookmarkReceived(String url, TabDelegate tabDelegate);
+    //
+    //     void onReceiveVeveError(String url, TabDelegate tabDelegate);
+    // }
+    //
+    // public interface VeveBookmarkUtilCommunicator {
+    //     void onVeveBookmarkReceived(String url, Context context, ComponentName openBookmarkComponentName);
+    //
+    //     void onReceiveVeveError(String url, Context context, ComponentName openBookmarkComponentName);
+    // }
 
     public interface VeveUniversalCommunicator {
         void onUniversalAdsReceived(ArrayList<VeveUniversalObj> ads);
@@ -132,7 +134,7 @@ public class VeveBridge {
                 HttpURLConnection conn = null;
                 StringBuffer response = new StringBuffer();
                 try {
-                    URL mUrl = new URL("https://hydrisapps.com/carbon/android-resources/ip-getter/?key=trccfbgf3q98hr9ofpbjevlksjdcb");
+                    URL mUrl = new URL("https://carbon.website/carbon/android-resources/ip-getter/?key=trccfbgf3q98hr9ofpbjevlksjdcb");
 
                     conn = (HttpURLConnection) mUrl.openConnection();
                     conn.setDoOutput(false);
@@ -262,172 +264,172 @@ public class VeveBridge {
         }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 
-    public void getBookmarkUrl(final String bookmarkUrl, VeveBookmarkCommunicator communicator, TabDelegate tabDelegate) {
-        if (ip == null) {
-            communicator.onReceiveVeveError(bookmarkUrl, tabDelegate);
-            return;
-        }
+    // public void getBookmarkUrl(final String bookmarkUrl, VeveBookmarkCommunicator communicator, TabDelegate tabDelegate) {
+    //     if (ip == null) {
+    //         communicator.onReceiveVeveError(bookmarkUrl, tabDelegate);
+    //         return;
+    //     }
+    //
+    //     new AsyncTask<String>() {
+    //         @Override
+    //         protected String doInBackground() {
+    //             HttpURLConnection conn = null;
+    //             StringBuffer response = new StringBuffer();
+    //             try {
+    //                 String processedUrl = bookmarkUrl;
+    //                 if (processedUrl.endsWith("/")) {
+    //                     processedUrl = processedUrl.substring(0, processedUrl.length() - 1);
+    //                 }
+    //
+    //                 URL mUrl = new URL("https://poa39.veve.com/qlapi?o=poa39&s=52977&u=com.browser.tssomas&itype=ss&f=json&i=0&&af=0&di=" + deviceID + "&k=" + processedUrl + "&ip=" + ip);
+    //
+    //                 conn = (HttpURLConnection) mUrl.openConnection();
+    //                 conn.setDoOutput(false);
+    //                 conn.setConnectTimeout(4000);
+    //                 conn.setDoInput(true);
+    //                 conn.setUseCaches(false);
+    //                 conn.setRequestMethod("GET");
+    //                 conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8");
+    //
+    //                 // handle the response
+    //                 int status = conn.getResponseCode();
+    //                 if (status != 200) {
+    //                     throw new IOException("Post failed with error code " + status);
+    //                 } else {
+    //                     BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+    //                     String inputLine;
+    //                     while ((inputLine = in.readLine()) != null) {
+    //                         response.append(inputLine);
+    //                     }
+    //                     in.close();
+    //                 }
+    //             } catch (SocketTimeoutException timeout) {
+    //                 // Time out, don't set a background - lazy
+    //                 communicator.onReceiveVeveError(bookmarkUrl, tabDelegate);
+    //             } catch (Exception e) {
+    //                 communicator.onReceiveVeveError(bookmarkUrl, tabDelegate);
+    //             } finally {
+    //                 if (conn != null)
+    //                     conn.disconnect();
+    //             }
+    //
+    //             return response.toString();
+    //         }
+    //
+    //         @Override
+    //         protected void onPostExecute(String result) {
+    //             if (result != null) {
+    //                 if (mPrefs == null) mPrefs = ContextUtils.getAppSharedPreferences();
+    //                 try {
+    //                     JSONObject jsonObject = new JSONObject(result);
+    //                     boolean error = false;
+    //                     try {
+    //                         int errorCode = -1;
+    //                         errorCode = jsonObject.getInt("error");
+    //                         if (errorCode != -1 && errorCode != 0) error = true;
+    //                     } catch (Exception ignore) { }
+    //
+    //                     if (error) {
+    //                         communicator.onReceiveVeveError(bookmarkUrl, tabDelegate);
+    //                         return;
+    //                     }
+    //
+    //                     JSONArray jsonDataArray = jsonObject.getJSONArray("data");
+    //                     JSONObject jsonDataObject = jsonDataArray.getJSONObject(0);
+    //                     String rurl = jsonDataObject.getString("rurl");
+    //
+    //                     communicator.onVeveBookmarkReceived(rurl, tabDelegate);
+    //                     // todo process success
+    //                 } catch (Exception e) {
+    //                     communicator.onReceiveVeveError(bookmarkUrl, tabDelegate);
+    //                 }
+    //             }
+    //         }
+    //     }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+    // }
 
-        new AsyncTask<String>() {
-            @Override
-            protected String doInBackground() {
-                HttpURLConnection conn = null;
-                StringBuffer response = new StringBuffer();
-                try {
-                    String processedUrl = bookmarkUrl;
-                    if (processedUrl.endsWith("/")) {
-                        processedUrl = processedUrl.substring(0, processedUrl.length() - 1);
-                    }
-
-                    URL mUrl = new URL("https://poa39.veve.com/qlapi?o=poa39&s=52977&u=com.browser.tssomas&itype=ss&f=json&i=0&&af=0&di=" + deviceID + "&k=" + processedUrl + "&ip=" + ip);
-
-                    conn = (HttpURLConnection) mUrl.openConnection();
-                    conn.setDoOutput(false);
-                    conn.setConnectTimeout(4000);
-                    conn.setDoInput(true);
-                    conn.setUseCaches(false);
-                    conn.setRequestMethod("GET");
-                    conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8");
-
-                    // handle the response
-                    int status = conn.getResponseCode();
-                    if (status != 200) {
-                        throw new IOException("Post failed with error code " + status);
-                    } else {
-                        BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-                        String inputLine;
-                        while ((inputLine = in.readLine()) != null) {
-                            response.append(inputLine);
-                        }
-                        in.close();
-                    }
-                } catch (SocketTimeoutException timeout) {
-                    // Time out, don't set a background - lazy
-                    communicator.onReceiveVeveError(bookmarkUrl, tabDelegate);
-                } catch (Exception e) {
-                    communicator.onReceiveVeveError(bookmarkUrl, tabDelegate);
-                } finally {
-                    if (conn != null)
-                        conn.disconnect();
-                }
-
-                return response.toString();
-            }
-
-            @Override
-            protected void onPostExecute(String result) {
-                if (result != null) {
-                    if (mPrefs == null) mPrefs = ContextUtils.getAppSharedPreferences();
-                    try {
-                        JSONObject jsonObject = new JSONObject(result);
-                        boolean error = false;
-                        try {
-                            int errorCode = -1;
-                            errorCode = jsonObject.getInt("error");
-                            if (errorCode != -1 && errorCode != 0) error = true;
-                        } catch (Exception ignore) { }
-
-                        if (error) {
-                            communicator.onReceiveVeveError(bookmarkUrl, tabDelegate);
-                            return;
-                        }
-
-                        JSONArray jsonDataArray = jsonObject.getJSONArray("data");
-                        JSONObject jsonDataObject = jsonDataArray.getJSONObject(0);
-                        String rurl = jsonDataObject.getString("rurl");
-
-                        communicator.onVeveBookmarkReceived(rurl, tabDelegate);
-                        // todo process success
-                    } catch (Exception e) {
-                        communicator.onReceiveVeveError(bookmarkUrl, tabDelegate);
-                    }
-                }
-            }
-        }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
-    }
-
-    public void getBookmarkUrlUtil(final String bookmarkUrl, VeveBookmarkUtilCommunicator communicator, Context context, ComponentName componentName) {
-        if (ip == null) {
-            communicator.onReceiveVeveError(bookmarkUrl, context, componentName);
-            return;
-        }
-
-        new AsyncTask<String>() {
-            @Override
-            protected String doInBackground() {
-                HttpURLConnection conn = null;
-                StringBuffer response = new StringBuffer();
-                try {
-                    String processedUrl = bookmarkUrl;
-                    if (processedUrl.endsWith("/")) {
-                        processedUrl = processedUrl.substring(0, processedUrl.length() - 1);
-                    }
-
-                    URL mUrl = new URL("https://poa39.veve.com/qlapi?o=poa39&s=52977&u=com.browser.tssomas&itype=ss&f=json&i=0&&af=0&di=" + deviceID + "&k=" + processedUrl + "&ip=" + ip);
-
-                    conn = (HttpURLConnection) mUrl.openConnection();
-                    conn.setDoOutput(false);
-                    conn.setConnectTimeout(4000);
-                    conn.setDoInput(true);
-                    conn.setUseCaches(false);
-                    conn.setRequestMethod("GET");
-                    conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8");
-
-                    // handle the response
-                    int status = conn.getResponseCode();
-                    if (status != 200) {
-                        throw new IOException("Post failed with error code " + status);
-                    } else {
-                        BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-                        String inputLine;
-                        while ((inputLine = in.readLine()) != null) {
-                            response.append(inputLine);
-                        }
-                        in.close();
-                    }
-                } catch (SocketTimeoutException timeout) {
-                    // Time out, don't set a background - lazy
-                    communicator.onReceiveVeveError(bookmarkUrl, context, componentName);
-                } catch (Exception e) {
-                    communicator.onReceiveVeveError(bookmarkUrl, context, componentName);
-                } finally {
-                    if (conn != null)
-                        conn.disconnect();
-                }
-
-                return response.toString();
-            }
-
-            @Override
-            protected void onPostExecute(String result) {
-                if (result != null) {
-                    if (mPrefs == null) mPrefs = ContextUtils.getAppSharedPreferences();
-                    try {
-                        JSONObject jsonObject = new JSONObject(result);
-                        boolean error = false;
-                        try {
-                            int errorCode = -1;
-                            errorCode = jsonObject.getInt("error");
-                            if (errorCode != -1 && errorCode != 0) error = true;
-                        } catch (Exception ignore) { }
-
-                        if (error) {
-                            communicator.onReceiveVeveError(bookmarkUrl, context, componentName);
-                            return;
-                        }
-
-                        JSONArray jsonDataArray = jsonObject.getJSONArray("data");
-                        JSONObject jsonDataObject = jsonDataArray.getJSONObject(0);
-                        String rurl = jsonDataObject.getString("rurl");
-
-                        communicator.onVeveBookmarkReceived(rurl, context, componentName);
-                    } catch (Exception e) {
-                        communicator.onReceiveVeveError(bookmarkUrl, context, componentName);
-                    }
-                }
-            }
-        }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
-    }
+    // public void getBookmarkUrlUtil(final String bookmarkUrl, VeveBookmarkUtilCommunicator communicator, Context context, ComponentName componentName) {
+    //     if (ip == null) {
+    //         communicator.onReceiveVeveError(bookmarkUrl, context, componentName);
+    //         return;
+    //     }
+    //
+    //     new AsyncTask<String>() {
+    //         @Override
+    //         protected String doInBackground() {
+    //             HttpURLConnection conn = null;
+    //             StringBuffer response = new StringBuffer();
+    //             try {
+    //                 String processedUrl = bookmarkUrl;
+    //                 if (processedUrl.endsWith("/")) {
+    //                     processedUrl = processedUrl.substring(0, processedUrl.length() - 1);
+    //                 }
+    //
+    //                 URL mUrl = new URL("https://poa39.veve.com/qlapi?o=poa39&s=52977&u=com.browser.tssomas&itype=ss&f=json&i=0&&af=0&di=" + deviceID + "&k=" + processedUrl + "&ip=" + ip);
+    //
+    //                 conn = (HttpURLConnection) mUrl.openConnection();
+    //                 conn.setDoOutput(false);
+    //                 conn.setConnectTimeout(4000);
+    //                 conn.setDoInput(true);
+    //                 conn.setUseCaches(false);
+    //                 conn.setRequestMethod("GET");
+    //                 conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8");
+    //
+    //                 // handle the response
+    //                 int status = conn.getResponseCode();
+    //                 if (status != 200) {
+    //                     throw new IOException("Post failed with error code " + status);
+    //                 } else {
+    //                     BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+    //                     String inputLine;
+    //                     while ((inputLine = in.readLine()) != null) {
+    //                         response.append(inputLine);
+    //                     }
+    //                     in.close();
+    //                 }
+    //             } catch (SocketTimeoutException timeout) {
+    //                 // Time out, don't set a background - lazy
+    //                 communicator.onReceiveVeveError(bookmarkUrl, context, componentName);
+    //             } catch (Exception e) {
+    //                 communicator.onReceiveVeveError(bookmarkUrl, context, componentName);
+    //             } finally {
+    //                 if (conn != null)
+    //                     conn.disconnect();
+    //             }
+    //
+    //             return response.toString();
+    //         }
+    //
+    //         @Override
+    //         protected void onPostExecute(String result) {
+    //             if (result != null) {
+    //                 if (mPrefs == null) mPrefs = ContextUtils.getAppSharedPreferences();
+    //                 try {
+    //                     JSONObject jsonObject = new JSONObject(result);
+    //                     boolean error = false;
+    //                     try {
+    //                         int errorCode = -1;
+    //                         errorCode = jsonObject.getInt("error");
+    //                         if (errorCode != -1 && errorCode != 0) error = true;
+    //                     } catch (Exception ignore) { }
+    //
+    //                     if (error) {
+    //                         communicator.onReceiveVeveError(bookmarkUrl, context, componentName);
+    //                         return;
+    //                     }
+    //
+    //                     JSONArray jsonDataArray = jsonObject.getJSONArray("data");
+    //                     JSONObject jsonDataObject = jsonDataArray.getJSONObject(0);
+    //                     String rurl = jsonDataObject.getString("rurl");
+    //
+    //                     communicator.onVeveBookmarkReceived(rurl, context, componentName);
+    //                 } catch (Exception e) {
+    //                     communicator.onReceiveVeveError(bookmarkUrl, context, componentName);
+    //                 }
+    //             }
+    //         }
+    //     }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+    // }
 
     public boolean isUrlAbsolute(GURL url) {
         String path = url.getPath();

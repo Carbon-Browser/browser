@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -151,12 +151,6 @@ class MetadataDatabase {
 
   bool HasSyncRoot() const;
 
-  // Returns all file metadata for the given |app_id|.
-  std::unique_ptr<base::ListValue> DumpFiles(const std::string& app_id);
-
-  // Returns all database data.
-  std::unique_ptr<base::ListValue> DumpDatabase();
-
   // TODO(tzik): Move GetLargestKnownChangeID() to private section, and hide its
   // handling in the class, instead of letting user do.
   //
@@ -243,11 +237,6 @@ class MetadataDatabase {
   // |path| can be NULL.
   // The file path is relative to app-root and have a leading path separator.
   bool BuildPathForTracker(int64_t tracker_id, base::FilePath* path) const;
-
-  // Builds the file path for the given tracker for display purpose.
-  // This may return a path ending with '<unknown>' if the given tracker does
-  // not have title information (yet). This may return an empty path.
-  base::FilePath BuildDisplayPathForTracker(const FileTracker& tracker) const;
 
   // Returns false if no registered app exists associated to |app_id|.
   // If |full_path| is active, assigns the tracker of |full_path| to |tracker|.
@@ -382,9 +371,6 @@ class MetadataDatabase {
   SyncStatusCode WriteToDatabase();
 
   bool HasNewerFileMetadata(const std::string& file_id, int64_t change_id);
-
-  std::unique_ptr<base::ListValue> DumpTrackers();
-  std::unique_ptr<base::ListValue> DumpMetadata();
 
   void AttachSyncRoot(const google_apis::FileResource& sync_root_folder);
   void AttachInitialAppRoot(const google_apis::FileResource& app_root_folder);

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,9 +32,11 @@ bool OpenExtensionApplicationWindow(Profile* profile,
                                     const base::FilePath& current_directory);
 
 // If the user set a pref indicating that the app should open in a tab, open an
-// application tab. Returns true if |app_id| was successfully opened in a tab,
-// and false otherwise.
-bool OpenExtensionApplicationTab(Profile* profile, const std::string& app_id);
+// application tab.
+// Returns web contents if |app_id| was successfully opened in a tab, and
+// nullptr otherwise.
+content::WebContents* OpenExtensionApplicationTab(Profile* profile,
+                                                  const std::string& app_id);
 
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
 // Opens the deprecated Chrome Apps flow if |app_id| refers to a Chrome App and

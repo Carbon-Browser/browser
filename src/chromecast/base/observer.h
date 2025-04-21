@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -105,17 +105,17 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/ref_counted.h"
 #include "base/notreached.h"
 #include "base/sequence_checker.h"
 #include "base/synchronization/lock.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 
 namespace chromecast {
 
@@ -142,7 +142,7 @@ class Observer {
 
   const T& GetValue() const {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-    return value_;
+    return *value_;
   }
 
  private:
@@ -156,7 +156,7 @@ class Observer {
   const scoped_refptr<subtle::ObservableInternals<T>> internals_;
   // Note: value_ is a const ref to the value copy for this sequence, stored in
   // SequenceOwnedInfo.
-  const T& value_;
+  const raw_ref<const T> value_;
   base::RepeatingClosure on_update_callback_;
   SEQUENCE_CHECKER(sequence_checker_);
 };
@@ -216,8 +216,8 @@ class ObservableInternals
 
   const T& AddObserver(Observer<T>* observer) {
     DCHECK(observer);
-    DCHECK(base::SequencedTaskRunnerHandle::IsSet());
-    auto task_runner = base::SequencedTaskRunnerHandle::Get();
+    DCHECK(base::SequencedTaskRunner::HasCurrentDefault());
+    auto task_runner = base::SequencedTaskRunner::GetCurrentDefault();
 
     base::AutoLock lock(lock_);
     auto it = per_sequence_.begin();
@@ -234,8 +234,8 @@ class ObservableInternals
 
   void RemoveObserver(Observer<T>* observer) {
     DCHECK(observer);
-    DCHECK(base::SequencedTaskRunnerHandle::IsSet());
-    auto task_runner = base::SequencedTaskRunnerHandle::Get();
+    DCHECK(base::SequencedTaskRunner::HasCurrentDefault());
+    auto task_runner = base::SequencedTaskRunner::GetCurrentDefault();
 
     base::AutoLock lock(lock_);
     for (size_t i = 0; i < per_sequence_.size(); ++i) {

@@ -1,12 +1,17 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "components/services/storage/indexed_db/scopes/varint_coding.h"
 
 #include "base/check_op.h"
 
-namespace content {
+namespace content::indexed_db {
 
 void EncodeVarInt(int64_t from, std::string* into) {
   DCHECK_GE(from, 0);
@@ -27,8 +32,8 @@ void EncodeVarInt(int64_t from, std::string* into) {
   into->append(temp, temp_index);
 }
 
-bool DecodeVarInt(base::StringPiece* from, int64_t* into) {
-  base::StringPiece::const_iterator it = from->begin();
+bool DecodeVarInt(std::string_view* from, int64_t* into) {
+  std::string_view::const_iterator it = from->begin();
   int shift = 0;
   uint64_t ret = 0;
   do {
@@ -45,4 +50,4 @@ bool DecodeVarInt(base::StringPiece* from, int64_t* into) {
   return true;
 }
 
-}  // namespace content
+}  // namespace content::indexed_db

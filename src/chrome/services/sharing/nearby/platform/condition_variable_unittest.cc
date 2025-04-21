@@ -1,12 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/services/sharing/nearby/platform/condition_variable.h"
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/task/task_runner.h"
 #include "base/task/thread_pool.h"
@@ -19,9 +19,7 @@
 #include "chrome/services/sharing/nearby/platform/mutex.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace location {
-namespace nearby {
-namespace chrome {
+namespace nearby::chrome {
 
 class ConditionVariableTest : public testing::Test {
  protected:
@@ -123,6 +121,4 @@ TEST_F(ConditionVariableTest,
   EXPECT_TRUE(HasSuccessfullyRunWithAttemptId(attempt_id_3));
 }
 
-}  // namespace chrome
-}  // namespace nearby
-}  // namespace location
+}  // namespace nearby::chrome

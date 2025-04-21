@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -78,7 +78,7 @@ class EVENTS_EXPORT GestureProviderAura : public GestureProviderClient {
   bool handling_event_;
   std::vector<std::unique_ptr<GestureEvent>> pending_gestures_;
 
-  // |gesture_consumer_| must outlive this object.
+  // The |gesture_consumer_| owns this provider.
   raw_ptr<GestureConsumer> gesture_consumer_;
 };
 

@@ -1,9 +1,9 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/test/launcher/unit_test_launcher.h"
 #include "base/test/test_io_thread.h"
 #include "base/threading/platform_thread.h"
@@ -56,10 +56,6 @@ CreateContentClients() {
 
 int main(int argc, char** argv) {
   base::PlatformThread::SetName("MainThread");
-
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  chromeos::ScopedDisableCrosapiForTesting disable_crosapi;
-#endif
 
   content::UnitTestTestSuite test_suite(
       new ChromeUnitTestSuite(argc, argv),

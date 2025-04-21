@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -218,6 +218,16 @@ struct EnumTraits<ash::shimless_rma::mojom::ShutdownMethod,
 
   static bool FromMojom(ash::shimless_rma::mojom::ShutdownMethod input,
                         rmad::RepairCompleteState::ShutdownMethod* out);
+};
+
+template <>
+struct EnumTraits<ash::shimless_rma::mojom::FeatureLevel,
+                  rmad::UpdateDeviceInfoState::FeatureLevel> {
+  static ash::shimless_rma::mojom::FeatureLevel ToMojom(
+      rmad::UpdateDeviceInfoState::FeatureLevel feature_level);
+
+  static bool FromMojom(ash::shimless_rma::mojom::FeatureLevel input,
+                        rmad::UpdateDeviceInfoState::FeatureLevel* out);
 };
 
 }  // namespace mojo

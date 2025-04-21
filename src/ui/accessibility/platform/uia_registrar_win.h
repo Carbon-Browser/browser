@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 #define UI_ACCESSIBILITY_PLATFORM_UIA_REGISTRAR_WIN_H_
 
 #include <objbase.h>
-#include <uiautomation.h>
 
-#include "ui/accessibility/ax_export.h"
+#include "base/component_export.h"
+
+#include <uiautomation.h>
 
 namespace ui {
 
@@ -37,7 +38,7 @@ static const GUID kUiaPropertyVirtualContentGuid = {
     0x4FE4,
     {0xB7, 0xC6, 0x1E, 0x0F, 0x08, 0x9A, 0x72, 0xA5}};
 
-class AX_EXPORT UiaRegistrarWin {
+class COMPONENT_EXPORT(AX_PLATFORM) UiaRegistrarWin {
  public:
   UiaRegistrarWin();
   ~UiaRegistrarWin();

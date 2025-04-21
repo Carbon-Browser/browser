@@ -1,20 +1,16 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_PREFS_PREF_FILTER_H_
 #define COMPONENTS_PREFS_PREF_FILTER_H_
 
-#include <memory>
-#include <string>
+#include <string_view>
 #include <utility>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/values.h"
 #include "components/prefs/prefs_export.h"
-
-namespace base {
-class DictionaryValue;
-}  // namespace base
 
 // Filters preferences as they are loaded from disk or updated at runtime.
 // Currently supported only by JsonPrefStore.
@@ -29,10 +25,9 @@ class COMPONENTS_PREFS_EXPORT PrefFilter {
   // builder. |schedule_write| indicates whether a write should be immediately
   // scheduled (typically because the |prefs| were pre-modified).
   using PostFilterOnLoadCallback =
-      base::OnceCallback<void(std::unique_ptr<base::DictionaryValue> prefs,
-                              bool schedule_write)>;
+      base::OnceCallback<void(base::Value::Dict prefs, bool schedule_write)>;
 
-  virtual ~PrefFilter() {}
+  virtual ~PrefFilter() = default;
 
   // This method is given ownership of the |pref_store_contents| read from disk
   // before the underlying PersistentPrefStore gets to use them. It must hand
@@ -43,11 +38,11 @@ class COMPONENTS_PREFS_EXPORT PrefFilter {
   // to external users (see SegregatedPrefStore::ReadPrefs() for an example).
   virtual void FilterOnLoad(
       PostFilterOnLoadCallback post_filter_on_load_callback,
-      std::unique_ptr<base::DictionaryValue> pref_store_contents) = 0;
+      base::Value::Dict pref_store_contents) = 0;
 
   // Receives notification when a pref store value is changed, before Observers
   // are notified.
-  virtual void FilterUpdate(const std::string& path) = 0;
+  virtual void FilterUpdate(std::string_view path) = 0;
 
   // Receives notification when the pref store is about to serialize data
   // contained in |pref_store_contents| to a string. Modifications to
@@ -57,7 +52,7 @@ class COMPONENTS_PREFS_EXPORT PrefFilter {
   // invoked synchronously after the next write (from the I/O TaskRunner so they
   // must not be bound to thread-unsafe member state).
   virtual OnWriteCallbackPair FilterSerializeData(
-      base::DictionaryValue* pref_store_contents) = 0;
+      base::Value::Dict& pref_store_contents) = 0;
 
   // Cleans preference data that may have been saved outside of the store.
   virtual void OnStoreDeletionFromDisk() = 0;

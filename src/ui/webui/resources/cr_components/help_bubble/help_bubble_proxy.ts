@@ -1,8 +1,9 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {HelpBubbleClientCallbackRouter, HelpBubbleHandlerFactory, HelpBubbleHandlerInterface, HelpBubbleHandlerRemote} from './help_bubble.mojom-webui.js';
+import type {HelpBubbleHandlerInterface} from './help_bubble.mojom-webui.js';
+import {HelpBubbleClientCallbackRouter, HelpBubbleHandlerFactory, HelpBubbleHandlerRemote} from './help_bubble.mojom-webui.js';
 
 export interface HelpBubbleProxy {
   getHandler(): HelpBubbleHandlerInterface;

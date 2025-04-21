@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,15 +19,15 @@ DnsConfigServiceFuchsia::DnsConfigServiceFuchsia()
 DnsConfigServiceFuchsia::~DnsConfigServiceFuchsia() = default;
 
 void DnsConfigServiceFuchsia::ReadConfigNow() {
-  // TODO(crbug.com/950717): Implement this method.
+  // TODO(crbug.com/42050635): Implement this method.
 }
 
 void DnsConfigServiceFuchsia::ReadHostsNow() {
-  // TODO(crbug.com/950717): Implement this method.
+  // TODO(crbug.com/42050635): Implement this method.
 }
 
 bool DnsConfigServiceFuchsia::StartWatching() {
-  // TODO(crbug.com/950717): Implement this method.
+  // TODO(crbug.com/42050635): Implement this method.
   return false;
 }
 

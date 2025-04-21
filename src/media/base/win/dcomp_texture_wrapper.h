@@ -1,11 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_BASE_WIN_DCOMP_TEXTURE_WRAPPER_H_
 #define MEDIA_BASE_WIN_DCOMP_TEXTURE_WRAPPER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/unguessable_token.h"
 #include "ui/gfx/gpu_memory_buffer.h"
 
@@ -49,7 +49,7 @@ class DCOMPTextureWrapper {
                                 CreateVideoFrameCB create_video_frame_cb) = 0;
 
   using CreateDXVideoFrameCB =
-      base::OnceCallback<void(scoped_refptr<VideoFrame>)>;
+      base::OnceCallback<void(scoped_refptr<VideoFrame>, const gpu::Mailbox&)>;
   virtual void CreateVideoFrame(const gfx::Size& natural_size,
                                 gfx::GpuMemoryBufferHandle dx_handle,
                                 CreateDXVideoFrameCB create_video_frame_cb) = 0;

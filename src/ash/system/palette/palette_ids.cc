@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,14 +17,13 @@ PaletteTrayOptions PaletteToolIdToPaletteTrayOptions(PaletteToolId tool_id) {
       return PALETTE_LASER_POINTER;
     case PaletteToolId::MAGNIFY:
       return PALETTE_MAGNIFY;
-    case PaletteToolId::METALAYER:
-      return PALETTE_METALAYER;
     case PaletteToolId::ENTER_CAPTURE_MODE:
       return PALETTE_ENTER_CAPTURE_MODE;
+    case PaletteToolId::MARKER_MODE:
+      return PALETTE_MARKER_MODE;
   }
 
   NOTREACHED();
-  return PALETTE_OPTIONS_COUNT;
 }
 
 PaletteModeCancelType PaletteToolIdToPaletteModeCancelType(

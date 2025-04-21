@@ -1,16 +1,19 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/browsing_data/core/browsing_data_utils.h"
 
+#include <optional>
 #include <string>
 #include <vector>
 
+#include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
 #include "base/no_destructor.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/time/time.h"
 #include "components/browsing_data/core/counters/autofill_counter.h"
 #include "components/browsing_data/core/counters/history_counter.h"
 #include "components/browsing_data/core/counters/passwords_counter.h"
@@ -20,6 +23,9 @@
 #include "ui/base/l10n/l10n_util.h"
 
 namespace browsing_data {
+
+const char kDeleteBrowsingDataDialogHistogram[] =
+    "Privacy.DeleteBrowsingData.Dialog";
 
 // Creates a string like "for a.com, b.com, and 4 more".
 std::u16string CreateDomainExamples(
@@ -52,6 +58,9 @@ base::Time CalculateBeginDeleteTime(TimePeriod time_period) {
   base::TimeDelta diff;
   base::Time delete_begin_time = base::Time::Now();
   switch (time_period) {
+    case TimePeriod::LAST_15_MINUTES:
+      diff = base::Minutes(15);
+      break;
     case TimePeriod::LAST_HOUR:
       diff = base::Hours(1);
       break;
@@ -81,6 +90,10 @@ base::Time CalculateEndDeleteTime(TimePeriod time_period) {
 
 void RecordDeletionForPeriod(TimePeriod period) {
   switch (period) {
+    case TimePeriod::LAST_15_MINUTES:
+      base::RecordAction(
+          base::UserMetricsAction("ClearBrowsingData_Last15Minutes"));
+      break;
     case TimePeriod::LAST_HOUR:
       base::RecordAction(base::UserMetricsAction("ClearBrowsingData_LastHour"));
       break;
@@ -107,6 +120,10 @@ void RecordDeletionForPeriod(TimePeriod period) {
 
 void RecordTimePeriodChange(TimePeriod period) {
   switch (period) {
+    case TimePeriod::LAST_15_MINUTES:
+      base::RecordAction(base::UserMetricsAction(
+          "ClearBrowsingData_TimePeriodChanged_Last15Minutes"));
+      break;
     case TimePeriod::LAST_HOUR:
       base::RecordAction(base::UserMetricsAction(
           "ClearBrowsingData_TimePeriodChanged_LastHour"));
@@ -132,6 +149,10 @@ void RecordTimePeriodChange(TimePeriod period) {
           "ClearBrowsingData_TimePeriodChanged_OlderThan30Days"));
       break;
   }
+}
+
+void RecordDeleteBrowsingDataAction(DeleteBrowsingDataAction cbd_action) {
+  UMA_HISTOGRAM_ENUMERATION("Privacy.DeleteBrowsingData.Action", cbd_action);
 }
 
 std::u16string GetCounterTextFromResult(
@@ -225,15 +246,15 @@ std::u16string GetCounterTextFromResult(
     const AutofillCounter::AutofillResult* autofill_result =
         static_cast<const AutofillCounter::AutofillResult*>(result);
     AutofillCounter::ResultInt num_suggestions = autofill_result->Value();
-    AutofillCounter::ResultInt num_credit_cards =
+    AutofillCounter::ResultInt num_payment_methods =
         autofill_result->num_credit_cards();
     AutofillCounter::ResultInt num_addresses = autofill_result->num_addresses();
 
     std::vector<std::u16string> displayed_strings;
 
-    if (num_credit_cards) {
+    if (num_payment_methods) {
       displayed_strings.push_back(l10n_util::GetPluralStringFUTF16(
-          IDS_DEL_AUTOFILL_COUNTER_CREDIT_CARDS, num_credit_cards));
+          IDS_DEL_AUTOFILL_COUNTER_PAYMENT_METHODS, num_payment_methods));
     }
     if (num_addresses) {
       displayed_strings.push_back(l10n_util::GetPluralStringFUTF16(
@@ -262,32 +283,56 @@ std::u16string GetCounterTextFromResult(
 
     bool synced = autofill_result->is_sync_enabled();
 
-    // Construct the resulting string from the sections in |displayed_strings|.
+    // TODO(crbug.com/371539581): Exclude payment methods from this part,
+    // because it can be attributed as "synced", while payment methods are
+    // always local.
+    std::u16string payment_methods_addresses_autocomplete_entries_part;
     switch (displayed_strings.size()) {
       case 0:
-        return l10n_util::GetStringUTF16(IDS_DEL_AUTOFILL_COUNTER_EMPTY);
+        payment_methods_addresses_autocomplete_entries_part =
+            l10n_util::GetStringUTF16(IDS_DEL_AUTOFILL_COUNTER_EMPTY);
+        break;
       case 1:
-        return synced ? l10n_util::GetStringFUTF16(
-                            IDS_DEL_AUTOFILL_COUNTER_ONE_TYPE_SYNCED,
-                            displayed_strings[0])
-                      : displayed_strings[0];
+        payment_methods_addresses_autocomplete_entries_part =
+            synced ? l10n_util::GetStringFUTF16(
+                         IDS_DEL_AUTOFILL_COUNTER_ONE_TYPE_SYNCED,
+                         displayed_strings[0])
+                   : displayed_strings[0];
+        break;
       case 2:
-        return l10n_util::GetStringFUTF16(
-            synced ? IDS_DEL_AUTOFILL_COUNTER_TWO_TYPES_SYNCED
-                   : IDS_DEL_AUTOFILL_COUNTER_TWO_TYPES,
-            displayed_strings[0], displayed_strings[1]);
+        payment_methods_addresses_autocomplete_entries_part =
+            l10n_util::GetStringFUTF16(
+                synced ? IDS_DEL_AUTOFILL_COUNTER_TWO_TYPES_SYNCED
+                       : IDS_DEL_AUTOFILL_COUNTER_TWO_TYPES,
+                displayed_strings[0], displayed_strings[1]);
+        break;
       case 3:
-        return l10n_util::GetStringFUTF16(
-            synced ? IDS_DEL_AUTOFILL_COUNTER_THREE_TYPES_SYNCED
-                   : IDS_DEL_AUTOFILL_COUNTER_THREE_TYPES,
-            displayed_strings[0], displayed_strings[1], displayed_strings[2]);
+        payment_methods_addresses_autocomplete_entries_part =
+            l10n_util::GetStringFUTF16(
+                synced ? IDS_DEL_AUTOFILL_COUNTER_THREE_TYPES_SYNCED
+                       : IDS_DEL_AUTOFILL_COUNTER_THREE_TYPES,
+                displayed_strings[0], displayed_strings[1],
+                displayed_strings[2]);
+        break;
       default:
         NOTREACHED();
+    }
+
+    AutofillCounter::ResultInt num_user_annotations =
+        autofill_result->num_user_annotation_entries();
+    if (num_user_annotations) {
+      return l10n_util::GetStringFUTF16(
+          IDS_DEL_AUTOFILL_SYNCABLE_NON_SYNCABLE_COMBINATION,
+          payment_methods_addresses_autocomplete_entries_part,
+          l10n_util::GetPluralStringFUTF16(
+              IDS_DEL_AUTOFILL_COUNTER_USER_ANNOTATION_ENTRIES,
+              num_user_annotations));
+    } else {
+      return payment_methods_addresses_autocomplete_entries_part;
     }
   }
 
   NOTREACHED();
-  return std::u16string();
 }
 
 const char* GetTimePeriodPreferenceName(
@@ -309,20 +354,16 @@ bool GetDeletionPreferenceFromDataType(
       case BrowsingDataType::CACHE:
         *out_pref = prefs::kDeleteCacheBasic;
         return true;
-      case BrowsingDataType::COOKIES:
+      case BrowsingDataType::SITE_DATA:
         *out_pref = prefs::kDeleteCookiesBasic;
         return true;
       case BrowsingDataType::PASSWORDS:
       case BrowsingDataType::FORM_DATA:
-      case BrowsingDataType::BOOKMARKS:
       case BrowsingDataType::SITE_SETTINGS:
       case BrowsingDataType::DOWNLOADS:
       case BrowsingDataType::HOSTED_APPS_DATA:
+      case BrowsingDataType::TABS:
         return false;  // No corresponding preference on basic tab.
-      case BrowsingDataType::NUM_TYPES:
-        // This is not an actual type.
-        NOTREACHED();
-        return false;
     }
   }
   switch (data_type) {
@@ -332,7 +373,7 @@ bool GetDeletionPreferenceFromDataType(
     case BrowsingDataType::CACHE:
       *out_pref = prefs::kDeleteCache;
       return true;
-    case BrowsingDataType::COOKIES:
+    case BrowsingDataType::SITE_DATA:
       *out_pref = prefs::kDeleteCookies;
       return true;
     case BrowsingDataType::PASSWORDS:
@@ -341,10 +382,6 @@ bool GetDeletionPreferenceFromDataType(
     case BrowsingDataType::FORM_DATA:
       *out_pref = prefs::kDeleteFormData;
       return true;
-    case BrowsingDataType::BOOKMARKS:
-      // Bookmarks are deleted on the Android side. No corresponding deletion
-      // preference. Not implemented on Desktop.
-      return false;
     case BrowsingDataType::SITE_SETTINGS:
       *out_pref = prefs::kDeleteSiteSettings;
       return true;
@@ -354,15 +391,14 @@ bool GetDeletionPreferenceFromDataType(
     case BrowsingDataType::HOSTED_APPS_DATA:
       *out_pref = prefs::kDeleteHostedAppsData;
       return true;
-    case BrowsingDataType::NUM_TYPES:
-      NOTREACHED();  // This is not an actual type.
-      return false;
+    case BrowsingDataType::TABS:
+      *out_pref = prefs::kCloseTabs;
+      return true;
   }
   NOTREACHED();
-  return false;
 }
 
-BrowsingDataType GetDataTypeFromDeletionPreference(
+std::optional<BrowsingDataType> GetDataTypeFromDeletionPreference(
     const std::string& pref_name) {
   using DataTypeMap = base::flat_map<std::string, BrowsingDataType>;
   static base::NoDestructor<DataTypeMap> preference_to_datatype(
@@ -371,8 +407,8 @@ BrowsingDataType GetDataTypeFromDeletionPreference(
           {prefs::kDeleteBrowsingHistoryBasic, BrowsingDataType::HISTORY},
           {prefs::kDeleteCache, BrowsingDataType::CACHE},
           {prefs::kDeleteCacheBasic, BrowsingDataType::CACHE},
-          {prefs::kDeleteCookies, BrowsingDataType::COOKIES},
-          {prefs::kDeleteCookiesBasic, BrowsingDataType::COOKIES},
+          {prefs::kDeleteCookies, BrowsingDataType::SITE_DATA},
+          {prefs::kDeleteCookiesBasic, BrowsingDataType::SITE_DATA},
           {prefs::kDeletePasswords, BrowsingDataType::PASSWORDS},
           {prefs::kDeleteFormData, BrowsingDataType::FORM_DATA},
           {prefs::kDeleteSiteSettings, BrowsingDataType::SITE_SETTINGS},
@@ -381,8 +417,23 @@ BrowsingDataType GetDataTypeFromDeletionPreference(
       });
 
   auto iter = preference_to_datatype->find(pref_name);
-  DCHECK(iter != preference_to_datatype->end());
-  return iter->second;
+  if (iter != preference_to_datatype->end()) {
+    return iter->second;
+  }
+  return std::nullopt;
+}
+
+bool IsHttpsCookieSourceScheme(net::CookieSourceScheme cookie_source_scheme) {
+  switch (cookie_source_scheme) {
+    case net::CookieSourceScheme::kSecure:
+      return true;
+    case net::CookieSourceScheme::kNonSecure:
+      return false;
+    case net::CookieSourceScheme::kUnset:
+      // Older cookies don't have a source scheme. Associate them with https
+      // since the majority of pageloads are https.
+      return true;
+  }
 }
 
 }  // namespace browsing_data

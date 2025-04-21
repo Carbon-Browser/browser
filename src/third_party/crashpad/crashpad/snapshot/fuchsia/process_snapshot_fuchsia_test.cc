@@ -1,4 +1,4 @@
-// Copyright 2018 The Crashpad Authors. All rights reserved.
+// Copyright 2018 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -200,7 +200,7 @@ class InvalidStackPointerTest : public MultiprocessExec {
     constexpr uint64_t kOffsetIntoMapping = 1024;
 #if defined(ARCH_CPU_X86_64)
     regs.rsp = address_of_large_mapping + kOffsetIntoMapping;
-#elif defined(ARCH_CPU_ARM64)
+#elif defined(ARCH_CPU_ARM64) || defined(ARCH_CPU_RISCV64)
     regs.sp = address_of_large_mapping + kOffsetIntoMapping;
 #else
 #error

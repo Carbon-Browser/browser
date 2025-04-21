@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/filters/h264_to_annex_b_bitstream_converter.h"
 
@@ -8,7 +13,7 @@
 
 #include "base/logging.h"
 #include "media/formats/mp4/box_definitions.h"
-#include "media/video/h264_parser.h"
+#include "media/parsers/h264_parser.h"
 
 namespace media {
 

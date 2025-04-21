@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_STREAMS_READABLE_STREAM_DEFAULT_READER_H_
 
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
+#include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
 #include "third_party/blink/renderer/core/streams/readable_byte_stream_controller.h"
@@ -17,9 +18,9 @@ namespace blink {
 
 class ExceptionState;
 class ReadableStream;
-class ScriptPromise;
+class ReadableStreamReadResult;
+class ReadRequest;
 class ScriptState;
-class StreamPromiseResolver;
 
 class CORE_EXPORT ReadableStreamDefaultReader
     : public ReadableStreamGenericReader,
@@ -42,7 +43,7 @@ class CORE_EXPORT ReadableStreamDefaultReader
   bool IsBYOBReader() const override { return false; }
 
   // https://streams.spec.whatwg.org/#default-reader-read
-  ScriptPromise read(ScriptState*, ExceptionState&);
+  ScriptPromise<ReadableStreamReadResult> read(ScriptState*, ExceptionState&);
 
   // https://streams.spec.whatwg.org/#default-reader-release-lock
   void releaseLock(ScriptState*, ExceptionState&);
@@ -57,8 +58,10 @@ class CORE_EXPORT ReadableStreamDefaultReader
   //
 
   // https://streams.spec.whatwg.org/#readable-stream-default-reader-read
-  static StreamPromiseResolver* Read(ScriptState*,
-                                     ReadableStreamDefaultReader* reader);
+  static void Read(ScriptState*,
+                   ReadableStreamDefaultReader* reader,
+                   ReadRequest*,
+                   ExceptionState&);
 
   // https://streams.spec.whatwg.org/#abstract-opdef-readablestreamdefaultreadererrorreadrequests
   static void ErrorReadRequests(ScriptState*,
@@ -73,12 +76,15 @@ class CORE_EXPORT ReadableStreamDefaultReader
   bool HasPendingActivity() const final;
 
  private:
+  friend class ByteStreamTeeEngine;
   friend class ReadableByteStreamController;
+  friend class ReadableStreamController;
   friend class ReadableStreamDefaultController;
   friend class ReadableStream;
 
-  HeapDeque<Member<StreamPromiseResolver>> read_requests_;
-  bool for_author_code_ = true;
+  class DefaultReaderReadRequest;
+
+  HeapDeque<Member<ReadRequest>> read_requests_;
 };
 
 template <>

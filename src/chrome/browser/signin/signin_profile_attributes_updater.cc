@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "components/signin/public/base/consent_level.h"
 #include "components/signin/public/identity_manager/account_info.h"
 #include "google_apis/gaia/gaia_auth_util.h"
+#include "google_apis/gaia/gaia_id.h"
 
 SigninProfileAttributesUpdater::SigninProfileAttributesUpdater(
     signin::IdentityManager* identity_manager,
@@ -57,7 +58,7 @@ void SigninProfileAttributesUpdater::UpdateProfileAttributes() {
   }
 
   if (clear_profile) {
-    entry->SetAuthInfo(std::string(), std::u16string(),
+    entry->SetAuthInfo(GaiaId(), std::u16string(),
                        /*is_consented_primary_account=*/false);
   } else {
     entry->SetAuthInfo(

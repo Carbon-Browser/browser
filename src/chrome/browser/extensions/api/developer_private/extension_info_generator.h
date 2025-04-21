@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,15 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "chrome/common/buildflags.h"
 #include "chrome/common/extensions/api/developer_private.h"
-
-#if BUILDFLAG(ENABLE_SUPERVISED_USERS)
-class SupervisedUserService;
-#endif  // BUILDFLAG(ENABLE_SUPERVISED_USERS)
+#include "components/supervised_user/core/common/buildflags.h"
+#include "extensions/browser/blocklist_state.h"
+#include "extensions/common/extension_id.h"
+#include "extensions/common/url_pattern.h"
+#include "extensions/common/url_pattern_set.h"
 
 namespace content {
 class BrowserContext;
@@ -31,7 +31,6 @@ namespace extensions {
 class CommandService;
 class ErrorConsole;
 class Extension;
-class ExtensionActionAPI;
 class ExtensionPrefs;
 class ExtensionSystem;
 class ImageLoader;
@@ -55,7 +54,7 @@ class ExtensionInfoGenerator {
   // Creates and asynchronously returns an ExtensionInfo for the given
   // |extension_id|, if the extension can be found.
   // If the extension cannot be found, an empty vector is passed to |callback|.
-  void CreateExtensionInfo(const std::string& id,
+  void CreateExtensionInfo(const ExtensionId& id,
                            ExtensionInfosCallback callback);
 
   // Creates and asynchronously returns a collection of ExtensionInfos,
@@ -63,6 +62,11 @@ class ExtensionInfoGenerator {
   void CreateExtensionsInfo(bool include_disabled,
                             bool include_terminated,
                             ExtensionInfosCallback callback);
+
+  // Returns a list of URLPatterns where no pattern is completely contained by
+  // another pattern in the list.
+  static std::vector<URLPattern> GetDistinctHosts(
+      const URLPatternSet& patterns);
 
  private:
   // Creates an ExtensionInfo for the given |extension| and |state|, and
@@ -81,18 +85,23 @@ class ExtensionInfoGenerator {
   // Returns an icon url from the given image.
   std::string GetIconUrlFromImage(const gfx::Image& image);
 
+  // Construct the needed information for the Extension Safety Check and
+  // populate the relevant `extension_info` fields.
+  void PopulateSafetyCheckInfo(
+      const Extension& extension,
+      bool updates_from_webstore,
+      api::developer_private::ExtensionState state,
+      BitMapBlocklistState blocklist_state,
+      api::developer_private::ExtensionInfo& extension_info);
+
   // Various systems, cached for convenience.
   raw_ptr<content::BrowserContext> browser_context_;
   raw_ptr<CommandService> command_service_;
   raw_ptr<ExtensionSystem> extension_system_;
   raw_ptr<ExtensionPrefs> extension_prefs_;
-  raw_ptr<ExtensionActionAPI> extension_action_api_;
   raw_ptr<WarningService> warning_service_;
   raw_ptr<ErrorConsole> error_console_;
   raw_ptr<ImageLoader> image_loader_;
-#if BUILDFLAG(ENABLE_SUPERVISED_USERS)
-  raw_ptr<SupervisedUserService> supervised_user_service_;
-#endif  // BUILDFLAG(ENABLE_SUPERVISED_USERS)
 
   // The number of pending image loads.
   size_t pending_image_loads_;
@@ -104,6 +113,8 @@ class ExtensionInfoGenerator {
   ExtensionInfosCallback callback_;
 
   base::WeakPtrFactory<ExtensionInfoGenerator> weak_factory_{this};
+
+  friend class ExtensionInfoGeneratorUnitTest;
 };
 
 }  // namespace extensions

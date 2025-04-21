@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -65,7 +65,8 @@ test_util.getVolumeInfo = function(fileSystemId, callback) {
       // For extension backed providers, the provider id is equal to extension
       // id.
       if (volumeList[i].providerId === chrome.runtime.id &&
-          volumeList[i].fileSystemId === fileSystemId) {
+          volumeList[i].fileSystemId === fileSystemId &&
+          volumeList[i].diskFileSystemType !== 'fusebox') {
         callback(volumeList[i]);
         return;
       }

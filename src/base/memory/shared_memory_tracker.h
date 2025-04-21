@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ namespace trace_event {
 class MemoryAllocatorDump;
 class MemoryAllocatorDumpGuid;
 class ProcessMemoryDump;
-}
+}  // namespace trace_event
 
 // SharedMemoryTracker tracks shared memory usage.
 class BASE_EXPORT SharedMemoryTracker : public trace_event::MemoryDumpProvider {

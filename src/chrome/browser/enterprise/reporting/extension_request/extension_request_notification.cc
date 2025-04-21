@@ -1,6 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/enterprise/reporting/extension_request/extension_request_notification.h"
 
@@ -58,10 +63,7 @@ ExtensionRequestNotification::ExtensionRequestNotification(
 ExtensionRequestNotification::~ExtensionRequestNotification() = default;
 
 void ExtensionRequestNotification::Show(NotificationCloseCallback callback) {
-  if (extension_ids_.empty()) {
-    NOTREACHED();
-    return;
-  }
+  CHECK(!extension_ids_.empty());
 
   callback_ = std::move(callback);
 
@@ -84,19 +86,19 @@ void ExtensionRequestNotification::Show(NotificationCloseCallback callback) {
           weak_factory_.GetWeakPtr()));
   notification_->set_never_timeout(true);
 
-  NotificationDisplayService::GetForProfile(profile_)->Display(
+  NotificationDisplayServiceFactory::GetForProfile(profile_)->Display(
       NotificationHandler::Type::TRANSIENT, *notification_, nullptr);
 }
 
 void ExtensionRequestNotification::CloseNotification() {
-  NotificationDisplayService::GetForProfile(profile_)->Close(
+  NotificationDisplayServiceFactory::GetForProfile(profile_)->Close(
       NotificationHandler::Type::TRANSIENT, kNotificationIds[notify_type_]);
   notification_.reset();
 }
 
 void ExtensionRequestNotification::Click(
-    const absl::optional<int>& button_index,
-    const absl::optional<std::u16string>& reply) {
+    const std::optional<int>& button_index,
+    const std::optional<std::u16string>& reply) {
   for (const std::string& extension_id : extension_ids_) {
     NavigateParams params(profile_, GURL(kChromeWebstoreUrl + extension_id),
                           ui::PAGE_TRANSITION_LINK);

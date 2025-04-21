@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -8,6 +8,13 @@ template("preprocess_if_expr") {
   action(target_name) {
     script = "//tools/grit/preprocess_if_expr.py"
 
+    # Declare deps of preprocess_if_expr.py as inputs as well, to re-trigger
+    # preprocess_if_expr() targets whenever those change.
+    inputs = [
+      "//tools/grit/grit/node/base.py",
+      "//tools/grit/grit/format/html_inline.py",
+    ]
+
     forward_variables_from(invoker,
                            [
                              "deps",
@@ -15,7 +22,6 @@ template("preprocess_if_expr") {
                              "visibility",
                            ])
 
-    inputs = []
     outputs = []
 
     in_folder = "."
@@ -31,6 +37,14 @@ template("preprocess_if_expr") {
     foreach(in_file, invoker.in_files) {
       inputs += [ "$in_folder/" + in_file ]
       outputs += [ "$out_folder/" + in_file ]
+
+      if (defined(invoker.enable_removal_comments) &&
+          invoker.enable_removal_comments) {
+        extension = get_path_info(in_file, "extension")
+        assert(
+            extension == "js" || extension == "ts",
+            "enable_removal_comments requires .js or .ts input files. Found ${in_file}")
+      }
     }
 
     args = [

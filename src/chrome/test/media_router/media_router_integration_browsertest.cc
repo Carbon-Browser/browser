@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,17 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/json/json_file_value_serializer.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/path_service.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/types/cxx23_to_underlying.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/media/router/media_router_feature.h"
@@ -55,20 +56,11 @@ namespace media_router {
 namespace {
 
 std::string GetStartedConnectionId(WebContents* web_contents) {
-  std::string session_id;
-  CHECK(content::ExecuteScriptAndExtractString(
-      web_contents, "window.domAutomationController.send(startedConnection.id)",
-      &session_id));
-  return session_id;
+  return EvalJs(web_contents, "startedConnection.id").ExtractString();
 }
 
 std::string GetDefaultRequestSessionId(WebContents* web_contents) {
-  std::string session_id;
-  CHECK(content::ExecuteScriptAndExtractString(
-      web_contents,
-      "window.domAutomationController.send(defaultRequestSessionId)",
-      &session_id));
-  return session_id;
+  return EvalJs(web_contents, "defaultRequestSessionId").ExtractString();
 }
 
 // Routes observer that calls a callback once there are no routes.
@@ -90,27 +82,24 @@ class NoRoutesObserver : public MediaRoutesObserver {
 
 }  // namespace
 
-MediaRouterIntegrationBrowserTest::MediaRouterIntegrationBrowserTest() {
-  switch (GetParam()) {
-    case UiForBrowserTest::kCast:
-      feature_list_.InitAndDisableFeature(kGlobalMediaControlsCastStartStop);
-      break;
-    case UiForBrowserTest::kGmc:
-      feature_list_.InitWithFeatures(
-          {
-            media::kGlobalMediaControls, kGlobalMediaControlsCastStartStop,
+MediaRouterIntegrationBrowserTest::MediaRouterIntegrationBrowserTest(
+    UiForBrowserTest test_ui_type)
+    : test_ui_type_(test_ui_type) {
+  feature_list_.InitWithFeatures(
+      {
+          media::kGlobalMediaControls,
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-                // Without this flag, SodaInstaller::GetInstance() fails a
-                // DCHECK on Chrome OS.  The call to
-                // SodaInstaller::GetInstance() is in
-                // MediaDialogView::AddedToWidget(), which is called indirectly
-                // from MediaDialogView::ShowDialogForPresentationRequest().
-                ash::features::kOnDeviceSpeechRecognition,
+          // Without this flag, SodaInstaller::GetInstance() fails a DCHECK
+          // on Chrome OS. The call to SodaInstaller::GetInstance() is in
+          // MediaDialogView::AddedToWidget(), which is called indirectly
+          // from MediaDialogView::ShowDialogForPresentationRequest().
+          ash::features::kOnDeviceSpeechRecognition,
 #endif
-          },
-          {});
-      break;
-  }
+#if !BUILDFLAG(IS_CHROMEOS)
+          media::kGlobalMediaControlsUpdatedUI,
+#endif
+      },
+      {});
 }
 
 MediaRouterIntegrationBrowserTest::~MediaRouterIntegrationBrowserTest() =
@@ -126,8 +115,10 @@ void MediaRouterIntegrationBrowserTest::SetUpCommandLine(
       switches::kAutoplayPolicy,
       // Needed to allow a video to autoplay from a browser test.
       switches::autoplay::kNoUserGestureRequiredPolicy);
-  // Disable built-in media route providers.
-  command_line->AppendSwitch(kDisableMediaRouteProvidersForTestSwitch);
+  if (!RequiresMediaRouteProviders()) {
+    // Disable built-in media route providers.
+    command_line->AppendSwitch(kDisableMediaRouteProvidersForTestSwitch);
+  }
 }
 
 void MediaRouterIntegrationBrowserTest::SetUp() {
@@ -137,23 +128,24 @@ void MediaRouterIntegrationBrowserTest::SetUp() {
 
 void MediaRouterIntegrationBrowserTest::InitTestUi() {
   auto* const web_contents = GetActiveWebContents();
-  auto* const context = browser()->profile();
-  switch (GetParam()) {
+  if (test_ui_) {
+    test_ui_->TearDown();
+  }
+  switch (test_ui_type_) {
     case UiForBrowserTest::kCast:
-      CHECK(!GlobalMediaControlsCastStartStopEnabled(context));
-      test_ui_ =
-          MediaRouterCastUiForTest::GetOrCreateForWebContents(web_contents);
+      test_ui_ = std::make_unique<MediaRouterCastUiForTest>(web_contents);
       break;
     case UiForBrowserTest::kGmc:
-      CHECK(GlobalMediaControlsCastStartStopEnabled(context));
-      test_ui_ =
-          MediaRouterGmcUiForTest::GetOrCreateForWebContents(web_contents);
+      test_ui_ = std::make_unique<MediaRouterGmcUiForTest>(web_contents);
       break;
+    default:
+      NOTREACHED() << base::to_underlying(test_ui_type_);
   }
 }
 
 void MediaRouterIntegrationBrowserTest::TearDownOnMainThread() {
   test_ui_->TearDown();
+  test_ui_.reset();
   test_provider_->TearDown();
   InProcessBrowserTest::TearDownOnMainThread();
   test_navigation_observer_.reset();
@@ -169,7 +161,7 @@ void MediaRouterIntegrationBrowserTest::SetUpInProcessBrowserTestFixture() {
 }
 
 void MediaRouterIntegrationBrowserTest::SetUpOnMainThread() {
-  MediaRouterMojoImpl* router = static_cast<MediaRouterMojoImpl*>(
+  MediaRouterDesktop* router = static_cast<MediaRouterDesktop*>(
       MediaRouterFactory::GetApiForBrowserContext(browser()->profile()));
   mojo::PendingRemote<mojom::MediaRouter> media_router_remote;
   mojo::PendingRemote<mojom::MediaRouteProvider> provider_remote;
@@ -194,7 +186,7 @@ bool MediaRouterIntegrationBrowserTest::ConditionalWait(
       return true;
 
     base::RunLoop run_loop;
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, run_loop.QuitClosure(), interval);
     run_loop.Run();
   } while (timer.Elapsed() < timeout);
@@ -204,7 +196,7 @@ bool MediaRouterIntegrationBrowserTest::ConditionalWait(
 
 void MediaRouterIntegrationBrowserTest::Wait(base::TimeDelta timeout) {
   base::RunLoop run_loop;
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, run_loop.QuitClosure(), timeout);
   run_loop.Run();
 }
@@ -214,12 +206,13 @@ void MediaRouterIntegrationBrowserTest::WaitUntilNoRoutes(
   if (!test_provider_->HasRoutes())
     return;
 
-  // FIXME: There can't be a good reason to use the observer API to check for
-  // routes asynchronously, which is fragile.  However, some browser tests rely
-  // on this behavior.  Either add a callback parameter to TerminateRoute, or
-  // add pass callback to the TestProvider to run when all routes are gone.
+  // TODO(crbug.com/1374499): There can't be a good reason to use the observer
+  // API to check for routes asynchronously, which is fragile.  However, some
+  // browser tests rely on this behavior.  Either add a callback parameter to
+  // TerminateRoute, or add pass callback to the TestProvider to run when all
+  // routes are gone.
   base::RunLoop run_loop;
-  NoRoutesObserver no_routes_observer(
+  auto no_routes_observer = std::make_unique<NoRoutesObserver>(
       MediaRouterFactory::GetApiForBrowserContext(
           web_contents->GetBrowserContext()),
       run_loop.QuitClosure());
@@ -229,24 +222,23 @@ void MediaRouterIntegrationBrowserTest::WaitUntilNoRoutes(
 void MediaRouterIntegrationBrowserTest::ExecuteJavaScriptAPI(
     WebContents* web_contents,
     const std::string& script) {
-  std::string result(ExecuteScriptAndExtractString(web_contents, script));
+  std::string result(EvalJs(web_contents, script).ExtractString());
 
   // Read the test result, the test result set by javascript is a
   // JSON string with the following format:
   // {"passed": "<true/false>", "errorMessage": "<error_message>"}
-  std::unique_ptr<base::Value> value = base::JSONReader::ReadDeprecated(
-      result, base::JSON_ALLOW_TRAILING_COMMAS);
+  std::optional<base::Value> value =
+      base::JSONReader::Read(result, base::JSON_ALLOW_TRAILING_COMMAS);
 
   // Convert to dictionary.
-  base::DictionaryValue* dict_value = nullptr;
-  ASSERT_TRUE(value->GetAsDictionary(&dict_value));
+  base::Value::Dict* dict_value = value->GetIfDict();
+  ASSERT_TRUE(dict_value);
 
   // Extract the fields.
-  std::string error_message;
-  ASSERT_TRUE(dict_value->GetString("errorMessage", &error_message));
-
-  ASSERT_THAT(dict_value->FindBoolKey("passed"), Optional(true))
-      << error_message;
+  const std::string* error_message = dict_value->FindString("errorMessage");
+  ASSERT_TRUE(error_message);
+  ASSERT_THAT(dict_value->FindBool("passed"), Optional(true))
+      << error_message->c_str();
 }
 
 void MediaRouterIntegrationBrowserTest::StartSessionAndAssertNotFoundError() {
@@ -320,7 +312,7 @@ void MediaRouterIntegrationBrowserTest::CheckStartFailed(
 base::FilePath MediaRouterIntegrationBrowserTest::GetResourceFile(
     base::FilePath::StringPieceType relative_path) const {
   const base::FilePath full_path =
-      base::PathService::CheckedGet(base::DIR_GEN_TEST_DATA_ROOT)
+      base::PathService::CheckedGet(base::DIR_OUT_TEST_DATA_ROOT)
           .Append(FILE_PATH_LITERAL("media_router/browser_test_resources/"))
           .Append(relative_path);
   {
@@ -331,53 +323,14 @@ base::FilePath MediaRouterIntegrationBrowserTest::GetResourceFile(
   return full_path;
 }
 
-int MediaRouterIntegrationBrowserTest::ExecuteScriptAndExtractInt(
-    const content::ToRenderFrameHost& adapter,
-    const std::string& script) {
-  int result;
-  CHECK(content::ExecuteScriptAndExtractInt(adapter, script, &result));
-  return result;
-}
-
-std::string MediaRouterIntegrationBrowserTest::ExecuteScriptAndExtractString(
-    const content::ToRenderFrameHost& adapter,
-    const std::string& script) {
-  std::string result;
-  CHECK(content::ExecuteScriptAndExtractString(adapter, script, &result));
-  return result;
-}
-
-bool MediaRouterIntegrationBrowserTest::ExecuteScriptAndExtractBool(
-    const content::ToRenderFrameHost& adapter,
-    const std::string& script) {
-  bool result;
-  CHECK(content::ExecuteScriptAndExtractBool(adapter, script, &result));
-  return result;
-}
-
 void MediaRouterIntegrationBrowserTest::ExecuteScript(
     const content::ToRenderFrameHost& adapter,
     const std::string& script) {
-  ASSERT_TRUE(content::ExecuteScript(adapter, script));
+  ASSERT_TRUE(content::ExecJs(adapter, script));
 }
 
 bool MediaRouterIntegrationBrowserTest::IsRouteCreatedOnUI() {
   return !test_ui_->GetRouteIdForSink(receiver_).empty();
-}
-
-bool MediaRouterIntegrationBrowserTest::IsUIShowingIssue() {
-  std::string issue_text = test_ui_->GetIssueTextForSink(receiver_);
-  return !issue_text.empty();
-}
-
-bool MediaRouterIntegrationBrowserTest::IsRouteClosedOnUI() {
-  // After execute js script to close route on UI, the dialog will dispear
-  // after 3s. But sometimes it takes more than 3s to close the route, so
-  // we need to re-open the dialog if it is closed.
-  if (!test_ui_->IsDialogShown())
-    test_ui_->ShowDialog();
-  test_ui_->WaitForSink(receiver_);
-  return test_ui_->GetRouteIdForSink(receiver_).empty();
 }
 
 void MediaRouterIntegrationBrowserTest::ParseCommandLine() {
@@ -437,12 +390,8 @@ void MediaRouterIntegrationBrowserTest::RunReconnectSessionTest() {
   ExecuteJavaScriptAPI(
       new_web_contents,
       base::StringPrintf("reconnectSession('%s');", session_id.c_str()));
-  std::string reconnected_session_id;
-  ASSERT_TRUE(content::ExecuteScriptAndExtractString(
-      new_web_contents,
-      "window.domAutomationController.send(reconnectedSession.id)",
-      &reconnected_session_id));
-  ASSERT_EQ(session_id, reconnected_session_id);
+  ASSERT_EQ(session_id,
+            content::EvalJs(new_web_contents, "reconnectedSession.id"));
 
   ExecuteJavaScriptAPI(web_contents,
                        "terminateSessionAndWaitForStateChange();");
@@ -485,36 +434,47 @@ void MediaRouterIntegrationBrowserTest::RunReconnectSessionSameTabTest() {
   ExecuteJavaScriptAPI(
       web_contents,
       base::StringPrintf("reconnectSession('%s');", session_id.c_str()));
-  std::string reconnected_session_id;
-  ASSERT_TRUE(content::ExecuteScriptAndExtractString(
-      web_contents,
-      "window.domAutomationController.send(reconnectedSession.id)",
-      &reconnected_session_id));
-  ASSERT_EQ(session_id, reconnected_session_id);
+  ASSERT_EQ(session_id, content::EvalJs(web_contents, "reconnectedSession.id"));
+}
+
+bool MediaRouterIntegrationBrowserTest::RequiresMediaRouteProviders() const {
+  return false;
 }
 
 // TODO(crbug.com/1238758): Test is flaky on Windows and Linux.
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 #define MAYBE_Basic MANUAL_Basic
+#elif BUILDFLAG(IS_CHROMEOS)
+// TODO(crbug.com/380369297): Test fixture is not compatible with ChromeOS.
+#define MAYBE_Basic DISABLED_Basic
 #else
 #define MAYBE_Basic Basic
 #endif
-IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationBrowserTest, MAYBE_Basic) {
+IN_PROC_BROWSER_TEST_F(MediaRouterIntegrationBrowserTest, MAYBE_Basic) {
   RunBasicTest();
 }
 
-// TODO(crbug.com/1238728): Test is flaky on Windows and Linux.
+// TODO(crbug.com/40784325): Test is flaky on Windows and Linux.
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
 #define MAYBE_SendAndOnMessage MANUAL_SendAndOnMessage
+#elif BUILDFLAG(IS_CHROMEOS)
+// TODO(crbug.com/380369297): Test fixture is not compatible with ChromeOS.
+#define MAYBE_SendAndOnMessage DISABLED_SendAndOnMessage
 #else
 #define MAYBE_SendAndOnMessage SendAndOnMessage
 #endif
-IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationBrowserTest,
+IN_PROC_BROWSER_TEST_F(MediaRouterIntegrationBrowserTest,
                        MAYBE_SendAndOnMessage) {
   RunSendMessageTest("foo");
 }
 
-IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationBrowserTest, CloseOnError) {
+#if BUILDFLAG(IS_CHROMEOS)
+// TODO(crbug.com/380369297): Test fixture is not compatible with ChromeOS.
+#define MAYBE_CloseOnError DISABLED_CloseOnError
+#else
+#define MAYBE_CloseOnError CloseOnError
+#endif
+IN_PROC_BROWSER_TEST_F(MediaRouterIntegrationBrowserTest, MAYBE_CloseOnError) {
   test_provider_->set_close_route_error_on_send();
   WebContents* web_contents = StartSessionWithTestPageAndChooseSink();
   CheckSessionValidity(web_contents);
@@ -522,76 +482,89 @@ IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationBrowserTest, CloseOnError) {
                        "sendMessageAndExpectConnectionCloseOnError()");
 }
 
-// TODO(crbug.com/1238688): Test is flaky on Windows and Linux.
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
+// TODO(crbug.com/40784296): Test is flaky.
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_CHROMEOS)
 #define MAYBE_Fail_SendMessage MANUAL_Fail_SendMessage
 #else
 #define MAYBE_Fail_SendMessage Fail_SendMessage
 #endif
-IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationBrowserTest,
+IN_PROC_BROWSER_TEST_F(MediaRouterIntegrationBrowserTest,
                        MAYBE_Fail_SendMessage) {
   RunFailToSendMessageTest();
 }
 
-IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationBrowserTest, Fail_CreateRoute) {
+#if BUILDFLAG(IS_CHROMEOS)
+// TODO(crbug.com/380369297): Test fixture is not compatible with ChromeOS.
+#define MAYBE_Fail_CreateRoute DISABLED_Fail_CreateRoute
+#else
+#define MAYBE_Fail_CreateRoute Fail_CreateRoute
+#endif
+IN_PROC_BROWSER_TEST_F(MediaRouterIntegrationBrowserTest,
+                       MAYBE_Fail_CreateRoute) {
   test_provider_->set_route_error_message("Unknown sink");
   WebContents* web_contents = StartSessionWithTestPageAndChooseSink();
   CheckStartFailed(web_contents, "UnknownError", "Unknown sink");
 }
 
-IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationBrowserTest, ReconnectSession) {
+#if BUILDFLAG(IS_CHROMEOS)
+// TODO(crbug.com/380369297): Test fixture is not compatible with ChromeOS.
+#define MAYBE_ReconnectSession DISABLED_ReconnectSession
+#else
+#define MAYBE_ReconnectSession ReconnectSession
+#endif
+IN_PROC_BROWSER_TEST_F(MediaRouterIntegrationBrowserTest,
+                       MAYBE_ReconnectSession) {
   RunReconnectSessionTest();
 }
 
-IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationBrowserTest,
-                       Fail_ReconnectSession) {
+#if BUILDFLAG(IS_CHROMEOS)
+// TODO(crbug.com/380369297): Test fixture is not compatible with ChromeOS.
+#define MAYBE_Fail_ReconnectSession DISABLED_Fail_ReconnectSession
+#else
+#define MAYBE_Fail_ReconnectSession Fail_ReconnectSession
+#endif
+IN_PROC_BROWSER_TEST_F(MediaRouterIntegrationBrowserTest,
+                       MAYBE_Fail_ReconnectSession) {
   RunFailedReconnectSessionTest();
 }
 
-IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationBrowserTest, Fail_StartCancelled) {
+#if BUILDFLAG(IS_CHROMEOS)
+// TODO(crbug.com/380369297): Test fixture is not compatible with ChromeOS.
+#define MAYBE_Fail_StartCancelled DISABLED_Fail_StartCancelled
+#else
+#define MAYBE_Fail_StartCancelled Fail_StartCancelled
+#endif
+IN_PROC_BROWSER_TEST_F(MediaRouterIntegrationBrowserTest,
+                       MAYBE_Fail_StartCancelled) {
   WebContents* web_contents = StartSessionWithTestPageAndSink();
   test_ui_->HideDialog();
   CheckStartFailed(web_contents, "NotAllowedError", "Dialog closed.");
 }
 
-IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationBrowserTest,
-                       Fail_StartCancelledNoSinks) {
+#if BUILDFLAG(IS_CHROMEOS)
+// TODO(crbug.com/380369297): Test fixture is not compatible with ChromeOS.
+#define MAYBE_Fail_StartCancelledNoSinks DISABLED_Fail_StartCancelledNoSinks
+#else
+#define MAYBE_Fail_StartCancelledNoSinks Fail_StartCancelledNoSinks
+#endif
+IN_PROC_BROWSER_TEST_F(MediaRouterIntegrationBrowserTest,
+                       MAYBE_Fail_StartCancelledNoSinks) {
   test_provider_->set_empty_sink_list();
   StartSessionAndAssertNotFoundError();
 }
 
-IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationBrowserTest,
-                       Fail_StartCancelledNoSupportedSinks) {
+#if BUILDFLAG(IS_CHROMEOS)
+// TODO(crbug.com/380369297): Test fixture is not compatible with ChromeOS.
+#define MAYBE_Fail_StartCancelledNoSupportedSinks \
+  DISABLED_Fail_StartCancelledNoSupportedSinks
+#else
+#define MAYBE_Fail_StartCancelledNoSupportedSinks \
+  Fail_StartCancelledNoSupportedSinks
+#endif
+IN_PROC_BROWSER_TEST_F(MediaRouterIntegrationBrowserTest,
+                       MAYBE_Fail_StartCancelledNoSupportedSinks) {
   test_provider_->set_unsupported_media_sources_list();
   StartSessionAndAssertNotFoundError();
 }
-
-Browser* MediaRouterIntegrationIncognitoBrowserTest::browser() {
-  if (!incognito_browser_)
-    incognito_browser_ = CreateIncognitoBrowser();
-  return incognito_browser_;
-}
-
-IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationIncognitoBrowserTest, Basic) {
-  RunBasicTest();
-  // If we tear down before route observers are notified of route termination,
-  // MediaRouter will create another TerminateRoute() request which will have a
-  // dangling Mojo callback at shutdown. So we must wait for the update.
-  WaitUntilNoRoutes(GetActiveWebContents());
-}
-
-IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationIncognitoBrowserTest,
-                       ReconnectSession) {
-  RunReconnectSessionTest();
-  // If we tear down before route observers are notified of route termination,
-  // MediaRouter will create another TerminateRoute() request which will have a
-  // dangling Mojo callback at shutdown. So we must wait for the update.
-  WaitUntilNoRoutes(GetActiveWebContents());
-}
-
-INSTANTIATE_MEDIA_ROUTER_INTEGRATION_BROWER_TEST_SUITE(
-    MediaRouterIntegrationBrowserTest);
-INSTANTIATE_MEDIA_ROUTER_INTEGRATION_BROWER_TEST_SUITE(
-    MediaRouterIntegrationIncognitoBrowserTest);
 
 }  // namespace media_router

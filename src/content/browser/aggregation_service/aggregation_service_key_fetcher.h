@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,16 @@
 #define CONTENT_BROWSER_AGGREGATION_SERVICE_AGGREGATION_SERVICE_KEY_FETCHER_H_
 
 #include <memory>
+#include <optional>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/containers/circular_deque.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "content/browser/aggregation_service/public_key.h"
 #include "content/common/content_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class GURL;
 
@@ -34,23 +34,23 @@ class CONTENT_EXPORT AggregationServiceKeyFetcher {
     virtual ~NetworkFetcher() = default;
 
     using NetworkFetchCallback =
-        base::OnceCallback<void(absl::optional<PublicKeyset>)>;
+        base::OnceCallback<void(std::optional<PublicKeyset>)>;
 
     // Fetch public keys from the helper server endpoint `url`. Returns
-    // absl::nullopt in case of network or parsing error.
+    // std::nullopt in case of network or parsing error.
     virtual void FetchPublicKeys(const GURL& url,
                                  NetworkFetchCallback callback) = 0;
   };
 
   enum class PublicKeyFetchStatus {
-    // TODO(crbug.com/1217823): Propagate up more granular errors.
+    // TODO(crbug.com/40185368): Propagate up more granular errors.
     kOk,
     kPublicKeyFetchFailed,
     kMaxValue = kPublicKeyFetchFailed,
   };
 
   using FetchCallback =
-      base::OnceCallback<void(absl::optional<PublicKey>, PublicKeyFetchStatus)>;
+      base::OnceCallback<void(std::optional<PublicKey>, PublicKeyFetchStatus)>;
 
   AggregationServiceKeyFetcher(
       AggregationServiceStorageContext* storage_context,
@@ -87,7 +87,7 @@ class CONTENT_EXPORT AggregationServiceKeyFetcher {
 
   // Called when public keys are received from the network fetcher.
   void OnPublicKeysReceivedFromNetwork(const GURL& url,
-                                       absl::optional<PublicKeyset> keyset);
+                                       std::optional<PublicKeyset> keyset);
 
   // Runs callbacks for pending requests for `url` with the public keys
   // received from the network or storage. Any keys specified must be currently

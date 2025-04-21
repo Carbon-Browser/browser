@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/mojom/ui_base_types.mojom-shared.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/button/checkbox.h"
@@ -31,7 +32,7 @@ TeleportWarningDialog::TeleportWarningDialog(OnAcceptCallback callback)
       on_accept_(std::move(callback)) {
   never_show_again_checkbox_->SetChecked(true);
   SetShowCloseButton(false);
-  SetModalType(ui::MODAL_TYPE_SYSTEM);
+  SetModalType(ui::mojom::ModalType::kSystem);
   SetTitle(l10n_util::GetStringUTF16(IDS_ASH_TELEPORT_WARNING_TITLE));
   SetAcceptCallback(base::BindOnce(
       [](TeleportWarningDialog* dialog) {
@@ -60,7 +61,8 @@ void TeleportWarningDialog::Show(OnAcceptCallback callback) {
   widget->Show();
 }
 
-gfx::Size TeleportWarningDialog::CalculatePreferredSize() const {
+gfx::Size TeleportWarningDialog::CalculatePreferredSize(
+    const views::SizeBounds& available_size) const {
   return gfx::Size(
       kDefaultWidth,
       GetLayoutManager()->GetPreferredHeightForWidth(this, kDefaultWidth));
@@ -81,7 +83,7 @@ void TeleportWarningDialog::InitDialog() {
   label->SetMultiLine(true);
   label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
   AddChildView(label);
-  AddChildView(never_show_again_checkbox_);
+  AddChildView(never_show_again_checkbox_.get());
 }
 
 }  // namespace ash

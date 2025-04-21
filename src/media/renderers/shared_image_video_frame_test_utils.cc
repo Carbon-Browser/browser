@@ -1,16 +1,24 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/renderers/shared_image_video_frame_test_utils.h"
 
 #include "base/logging.h"
-#include "components/viz/common/gpu/context_provider.h"
-#include "gpu/GLES2/gl2extchromium.h"
-#include "gpu/command_buffer/client/gles2_interface_stub.h"
+#include "components/viz/common/resources/shared_image_format.h"
+#include "gpu/command_buffer/client/client_shared_image.h"
+#include "gpu/command_buffer/client/raster_interface.h"
 #include "gpu/command_buffer/client/shared_image_interface.h"
 #include "gpu/command_buffer/common/capabilities.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
+#include "third_party/skia/include/core/SkPixmap.h"
+#include "third_party/skia/include/core/SkYUVAInfo.h"
+#include "third_party/skia/include/core/SkYUVAPixmaps.h"
 
 namespace media {
 
@@ -29,39 +37,16 @@ static constexpr const uint8_t kYuvColors[8][3] = {
 
 // Destroys a list of shared images after a sync token is passed. Also runs
 // |callback|.
-void DestroySharedImages(scoped_refptr<viz::ContextProvider> context_provider,
-                         std::vector<gpu::Mailbox> mailboxes,
-                         base::OnceClosure callback,
-                         const gpu::SyncToken& sync_token) {
-  auto* sii = context_provider->SharedImageInterface();
-  for (const auto& mailbox : mailboxes)
-    sii->DestroySharedImage(sync_token, mailbox);
+void DestroySharedImage(scoped_refptr<gpu::ClientSharedImage> shared_image,
+                        base::OnceClosure callback,
+                        const gpu::SyncToken& sync_token) {
+  shared_image->UpdateDestructionSyncToken(sync_token);
   std::move(callback).Run();
 }
 
-// Upload pixels to a shared image using GL.
-void UploadPixels(gpu::gles2::GLES2Interface* gl,
-                  const gpu::Mailbox& mailbox,
-                  const gfx::Size& size,
-                  GLenum format,
-                  GLenum type,
-                  const uint8_t* data) {
-  GLuint texture = gl->CreateAndTexStorage2DSharedImageCHROMIUM(mailbox.name);
-  gl->BeginSharedImageAccessDirectCHROMIUM(
-      texture, GL_SHARED_IMAGE_ACCESS_MODE_READWRITE_CHROMIUM);
-  gl->BindTexture(GL_TEXTURE_2D, texture);
-  gl->TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, size.width(), size.height(), format,
-                    type, data);
-  gl->EndSharedImageAccessDirectCHROMIUM(texture);
-  gl->DeleteTextures(1, &texture);
-}
-
-}  // namespace
-
 scoped_refptr<VideoFrame> CreateSharedImageFrame(
-    scoped_refptr<viz::ContextProvider> context_provider,
     VideoPixelFormat format,
-    std::vector<gpu::Mailbox> mailboxes,
+    scoped_refptr<gpu::ClientSharedImage> shared_image,
     const gpu::SyncToken& sync_token,
     GLenum texture_target,
     const gfx::Size& coded_size,
@@ -69,29 +54,25 @@ scoped_refptr<VideoFrame> CreateSharedImageFrame(
     const gfx::Size& natural_size,
     base::TimeDelta timestamp,
     base::OnceClosure destroyed_callback) {
-  gpu::MailboxHolder mailboxes_for_frame[VideoFrame::kMaxPlanes] = {};
-  size_t i = 0;
-  for (const auto& mailbox : mailboxes) {
-    mailboxes_for_frame[i++] =
-        gpu::MailboxHolder(mailbox, sync_token, texture_target);
-  }
-  auto callback =
-      base::BindOnce(&DestroySharedImages, std::move(context_provider),
-                     std::move(mailboxes), std::move(destroyed_callback));
-  return VideoFrame::WrapNativeTextures(format, mailboxes_for_frame,
-                                        std::move(callback), coded_size,
-                                        visible_rect, natural_size, timestamp);
+  auto callback = base::BindOnce(&DestroySharedImage, shared_image,
+                                 std::move(destroyed_callback));
+  auto frame = VideoFrame::WrapSharedImage(
+      format, std::move(shared_image), sync_token, std::move(callback),
+      coded_size, visible_rect, natural_size, timestamp);
+  return frame;
 }
 
+}  // namespace
+
 scoped_refptr<VideoFrame> CreateSharedImageRGBAFrame(
-    scoped_refptr<viz::ContextProvider> context_provider,
+    scoped_refptr<viz::RasterContextProvider> context_provider,
     const gfx::Size& coded_size,
     const gfx::Rect& visible_rect,
     base::OnceClosure destroyed_callback) {
   DCHECK_EQ(coded_size.width() % 4, 0);
   DCHECK_EQ(coded_size.height() % 2, 0);
   size_t pixels_size = coded_size.GetArea() * 4;
-  auto pixels = std::make_unique<uint8_t[]>(pixels_size);
+  std::vector<uint8_t> pixels(pixels_size);
   size_t i = 0;
   for (size_t block_y = 0; block_y < 2u; ++block_y) {
     for (int y = 0; y < coded_size.height() / 2; ++y) {
@@ -107,26 +88,27 @@ scoped_refptr<VideoFrame> CreateSharedImageRGBAFrame(
   }
   DCHECK_EQ(i, pixels_size);
 
+  // This SharedImage will be read by the raster interface to create
+  // intermediate copies in copy to canvas and 2-copy upload to WebGL. It may
+  // also be read by the GLES2 interface if the code creating the intermediate
+  // SharedImage decides that the VideoFrame can be wrapped directly as a GL
+  // texture and/or if raster is going over GLES2 in the context of the test.
+  constexpr auto kUsages =
+      gpu::SHARED_IMAGE_USAGE_RASTER_READ | gpu::SHARED_IMAGE_USAGE_GLES2_READ;
   auto* sii = context_provider->SharedImageInterface();
-  gpu::Mailbox mailbox = sii->CreateSharedImage(
-      viz::ResourceFormat::RGBA_8888, coded_size, gfx::ColorSpace(),
-      kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType,
-      gpu::SHARED_IMAGE_USAGE_GLES2, gpu::kNullSurfaceHandle);
-  auto* gl = context_provider->ContextGL();
-  gl->WaitSyncTokenCHROMIUM(sii->GenUnverifiedSyncToken().GetConstData());
-  UploadPixels(gl, mailbox, coded_size, GL_RGBA, GL_UNSIGNED_BYTE,
-               pixels.get());
-  gpu::SyncToken sync_token;
-  gl->GenUnverifiedSyncTokenCHROMIUM(sync_token.GetData());
+  auto shared_image =
+      sii->CreateSharedImage({viz::SinglePlaneFormat::kRGBA_8888, coded_size,
+                              gfx::ColorSpace(), kUsages, "RGBAVideoFrame"},
+                             pixels);
 
   return CreateSharedImageFrame(
-      std::move(context_provider), VideoPixelFormat::PIXEL_FORMAT_ABGR,
-      {mailbox}, sync_token, GL_TEXTURE_2D, coded_size, visible_rect,
-      visible_rect.size(), base::Seconds(1), std::move(destroyed_callback));
+      VideoPixelFormat::PIXEL_FORMAT_ABGR, shared_image, {}, GL_TEXTURE_2D,
+      coded_size, visible_rect, visible_rect.size(), base::Seconds(1),
+      std::move(destroyed_callback));
 }
 
 scoped_refptr<VideoFrame> CreateSharedImageI420Frame(
-    scoped_refptr<viz::ContextProvider> context_provider,
+    scoped_refptr<viz::RasterContextProvider> context_provider,
     const gfx::Size& coded_size,
     const gfx::Rect& visible_rect,
     base::OnceClosure destroyed_callback) {
@@ -135,9 +117,9 @@ scoped_refptr<VideoFrame> CreateSharedImageI420Frame(
   gfx::Size uv_size(coded_size.width() / 2, coded_size.height() / 2);
   size_t y_pixels_size = coded_size.GetArea();
   size_t uv_pixels_size = uv_size.GetArea();
-  auto y_pixels = std::make_unique<uint8_t[]>(y_pixels_size);
-  auto u_pixels = std::make_unique<uint8_t[]>(uv_pixels_size);
-  auto v_pixels = std::make_unique<uint8_t[]>(uv_pixels_size);
+  std::vector<uint8_t> y_pixels(y_pixels_size);
+  std::vector<uint8_t> u_pixels(uv_pixels_size);
+  std::vector<uint8_t> v_pixels(uv_pixels_size);
   size_t y_i = 0;
   size_t uv_i = 0;
   for (size_t block_y = 0; block_y < 2u; ++block_y) {
@@ -159,38 +141,57 @@ scoped_refptr<VideoFrame> CreateSharedImageI420Frame(
   DCHECK_EQ(uv_i, uv_pixels_size);
 
   auto* sii = context_provider->SharedImageInterface();
-  gpu::Mailbox y_mailbox = sii->CreateSharedImage(
-      viz::ResourceFormat::LUMINANCE_8, coded_size, gfx::ColorSpace(),
-      kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType,
-      gpu::SHARED_IMAGE_USAGE_GLES2, gpu::kNullSurfaceHandle);
-  gpu::Mailbox u_mailbox = sii->CreateSharedImage(
-      viz::ResourceFormat::LUMINANCE_8, uv_size, gfx::ColorSpace(),
-      kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType,
-      gpu::SHARED_IMAGE_USAGE_GLES2, gpu::kNullSurfaceHandle);
-  gpu::Mailbox v_mailbox = sii->CreateSharedImage(
-      viz::ResourceFormat::LUMINANCE_8, uv_size, gfx::ColorSpace(),
-      kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType,
-      gpu::SHARED_IMAGE_USAGE_GLES2, gpu::kNullSurfaceHandle);
-  auto* gl = context_provider->ContextGL();
-  gl->WaitSyncTokenCHROMIUM(sii->GenUnverifiedSyncToken().GetConstData());
-  UploadPixels(gl, y_mailbox, coded_size, GL_LUMINANCE, GL_UNSIGNED_BYTE,
-               y_pixels.get());
-  UploadPixels(gl, u_mailbox, uv_size, GL_LUMINANCE, GL_UNSIGNED_BYTE,
-               u_pixels.get());
-  UploadPixels(gl, v_mailbox, uv_size, GL_LUMINANCE, GL_UNSIGNED_BYTE,
-               v_pixels.get());
+  auto* ri = context_provider->RasterInterface();
+  // These SharedImages will be read by the raster interface to create
+  // intermediate copies in copy to canvas and 2-copy upload to WebGL.
+  // In the context of the tests using these SharedImages, GPU rasterization is
+  // always used.
+  auto usages = gpu::SHARED_IMAGE_USAGE_RASTER_READ |
+                gpu::SHARED_IMAGE_USAGE_OOP_RASTERIZATION;
+#if !BUILDFLAG(IS_ANDROID)
+  // These SharedImages may be read by the GLES2 interface for 1-copy upload to
+  // WebGL (not supported on Android).
+  usages |= gpu::SHARED_IMAGE_USAGE_GLES2_READ;
+#endif
+
+  // Instead of creating shared image per plane, create a single multiplanar
+  // shared image and upload pixels to it.
+  auto shared_image =
+      sii->CreateSharedImage({viz::MultiPlaneFormat::kI420, coded_size,
+                              gfx::ColorSpace(), usages, "I420Frame"},
+                             gpu::kNullSurfaceHandle);
+  ri->WaitSyncTokenCHROMIUM(sii->GenUnverifiedSyncToken().GetConstData());
+
+  SkPixmap pixmaps[SkYUVAInfo::kMaxPlanes] = {};
+  // SkColorType is always Alpha8 for I420 8 bit video frames.
+  auto color_type = kAlpha_8_SkColorType;
+  SkImageInfo y_info = SkImageInfo::Make(
+      coded_size.width(), coded_size.height(), color_type, kPremul_SkAlphaType);
+  pixmaps[0] = SkPixmap(y_info, y_pixels.data(), y_info.minRowBytes());
+  SkImageInfo u_info = SkImageInfo::Make(uv_size.width(), uv_size.height(),
+                                         color_type, kPremul_SkAlphaType);
+  pixmaps[1] = SkPixmap(u_info, u_pixels.data(), u_info.minRowBytes());
+  SkImageInfo v_info = SkImageInfo::Make(uv_size.width(), uv_size.height(),
+                                         color_type, kPremul_SkAlphaType);
+  pixmaps[2] = SkPixmap(v_info, v_pixels.data(), v_info.minRowBytes());
+  SkYUVAInfo info =
+      SkYUVAInfo({coded_size.width(), coded_size.height()},
+                 SkYUVAInfo::PlaneConfig::kY_U_V, SkYUVAInfo::Subsampling::k420,
+                 kIdentity_SkYUVColorSpace);
+  SkYUVAPixmaps yuv_pixmap = SkYUVAPixmaps::FromExternalPixmaps(info, pixmaps);
+  ri->WritePixelsYUV(shared_image->mailbox(), yuv_pixmap);
+
   gpu::SyncToken sync_token;
-  gl->GenUnverifiedSyncTokenCHROMIUM(sync_token.GetData());
+  ri->GenUnverifiedSyncTokenCHROMIUM(sync_token.GetData());
 
   return CreateSharedImageFrame(
-      std::move(context_provider), VideoPixelFormat::PIXEL_FORMAT_I420,
-      {y_mailbox, u_mailbox, v_mailbox}, sync_token, GL_TEXTURE_2D, coded_size,
-      visible_rect, visible_rect.size(), base::Seconds(1),
-      std::move(destroyed_callback));
+      VideoPixelFormat::PIXEL_FORMAT_I420, shared_image, sync_token,
+      GL_TEXTURE_2D, coded_size, visible_rect, visible_rect.size(),
+      base::Seconds(1), std::move(destroyed_callback));
 }
 
 scoped_refptr<VideoFrame> CreateSharedImageNV12Frame(
-    scoped_refptr<viz::ContextProvider> context_provider,
+    scoped_refptr<viz::RasterContextProvider> context_provider,
     const gfx::Size& coded_size,
     const gfx::Rect& visible_rect,
     base::OnceClosure destroyed_callback) {
@@ -203,8 +204,8 @@ scoped_refptr<VideoFrame> CreateSharedImageNV12Frame(
   gfx::Size uv_size(coded_size.width() / 2, coded_size.height() / 2);
   size_t y_pixels_size = coded_size.GetArea();
   size_t uv_pixels_size = uv_size.GetArea() * 2;
-  auto y_pixels = std::make_unique<uint8_t[]>(y_pixels_size);
-  auto uv_pixels = std::make_unique<uint8_t[]>(uv_pixels_size);
+  std::vector<uint8_t> y_pixels(y_pixels_size);
+  std::vector<uint8_t> uv_pixels(uv_pixels_size);
   size_t y_i = 0;
   size_t uv_i = 0;
   for (size_t block_y = 0; block_y < 2u; ++block_y) {
@@ -226,28 +227,49 @@ scoped_refptr<VideoFrame> CreateSharedImageNV12Frame(
   DCHECK_EQ(uv_i, uv_pixels_size);
 
   auto* sii = context_provider->SharedImageInterface();
-  gpu::Mailbox y_mailbox = sii->CreateSharedImage(
-      viz::ResourceFormat::LUMINANCE_8, coded_size, gfx::ColorSpace(),
-      kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType,
-      gpu::SHARED_IMAGE_USAGE_GLES2, gpu::kNullSurfaceHandle);
-  gpu::Mailbox uv_mailbox = sii->CreateSharedImage(
-      viz::ResourceFormat::RG_88, uv_size, gfx::ColorSpace(),
-      kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType,
-      gpu::SHARED_IMAGE_USAGE_GLES2, gpu::kNullSurfaceHandle);
-  auto* gl = context_provider->ContextGL();
-  gl->WaitSyncTokenCHROMIUM(sii->GenUnverifiedSyncToken().GetConstData());
-  UploadPixels(gl, y_mailbox, coded_size, GL_LUMINANCE, GL_UNSIGNED_BYTE,
-               y_pixels.get());
-  UploadPixels(gl, uv_mailbox, uv_size, GL_RG, GL_UNSIGNED_BYTE,
-               uv_pixels.get());
+  auto* ri = context_provider->RasterInterface();
+  // These SharedImages will be read by the raster interface to create
+  // intermediate copies in copy to canvas and 2-copy upload to WebGL.
+  // In the context of the tests using these SharedImages, GPU rasterization is
+  // always used.
+  auto usages = gpu::SHARED_IMAGE_USAGE_RASTER_READ |
+                gpu::SHARED_IMAGE_USAGE_OOP_RASTERIZATION;
+#if !BUILDFLAG(IS_ANDROID)
+  // These SharedImages may be read by the GLES2 interface for 1-copy upload to
+  // WebGL (not supported on Android).
+  usages |= gpu::SHARED_IMAGE_USAGE_GLES2_READ;
+#endif
+  // Instead of creating shared image per plane, create a single multiplanar
+  // shared image and upload pixels to it.
+  auto shared_image =
+      sii->CreateSharedImage({viz::MultiPlaneFormat::kNV12, coded_size,
+                              gfx::ColorSpace(), usages, "NV12Frame"},
+                             gpu::kNullSurfaceHandle);
+  ri->WaitSyncTokenCHROMIUM(sii->GenUnverifiedSyncToken().GetConstData());
+
+  SkPixmap pixmaps[SkYUVAInfo::kMaxPlanes] = {};
+  SkImageInfo y_info =
+      SkImageInfo::Make(coded_size.width(), coded_size.height(),
+                        kAlpha_8_SkColorType, kPremul_SkAlphaType);
+  pixmaps[0] = SkPixmap(y_info, y_pixels.data(), y_info.minRowBytes());
+  SkImageInfo uv_info =
+      SkImageInfo::Make(uv_size.width(), uv_size.height(),
+                        kR8G8_unorm_SkColorType, kPremul_SkAlphaType);
+  pixmaps[1] = SkPixmap(uv_info, uv_pixels.data(), uv_info.minRowBytes());
+
+  SkYUVAInfo info = SkYUVAInfo(
+      {coded_size.width(), coded_size.height()}, SkYUVAInfo::PlaneConfig::kY_UV,
+      SkYUVAInfo::Subsampling::k420, kIdentity_SkYUVColorSpace);
+  SkYUVAPixmaps yuv_pixmap = SkYUVAPixmaps::FromExternalPixmaps(info, pixmaps);
+  ri->WritePixelsYUV(shared_image->mailbox(), yuv_pixmap);
+
   gpu::SyncToken sync_token;
-  gl->GenUnverifiedSyncTokenCHROMIUM(sync_token.GetData());
+  ri->GenUnverifiedSyncTokenCHROMIUM(sync_token.GetData());
 
   return CreateSharedImageFrame(
-      std::move(context_provider), VideoPixelFormat::PIXEL_FORMAT_NV12,
-      {y_mailbox, uv_mailbox}, sync_token, GL_TEXTURE_2D, coded_size,
-      visible_rect, visible_rect.size(), base::Seconds(1),
-      std::move(destroyed_callback));
+      VideoPixelFormat::PIXEL_FORMAT_NV12, shared_image, sync_token,
+      GL_TEXTURE_2D, coded_size, visible_rect, visible_rect.size(),
+      base::Seconds(1), std::move(destroyed_callback));
 }
 
 }  // namespace media

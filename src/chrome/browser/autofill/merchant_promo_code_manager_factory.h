@@ -1,16 +1,15 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_AUTOFILL_MERCHANT_PROMO_CODE_MANAGER_FACTORY_H_
 #define CHROME_BROWSER_AUTOFILL_MERCHANT_PROMO_CODE_MANAGER_FACTORY_H_
 
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
-#include "components/keyed_service/core/keyed_service.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 namespace base {
 template <typename T>
-struct DefaultSingletonTraits;
+class NoDestructor;
 }
 
 class Profile;
@@ -22,8 +21,7 @@ class MerchantPromoCodeManager;
 // Singleton that owns all MerchantPromoCodeManagers and associates
 // them with Profiles. Listens for the Profile's destruction notification and
 // cleans up the associated MerchantPromoCodeManager.
-class MerchantPromoCodeManagerFactory
-    : public BrowserContextKeyedServiceFactory {
+class MerchantPromoCodeManagerFactory : public ProfileKeyedServiceFactory {
  public:
   // Returns the MerchantPromoCodeManager for |profile|, creating it
   // if it is not yet created.
@@ -32,16 +30,14 @@ class MerchantPromoCodeManagerFactory
   static MerchantPromoCodeManagerFactory* GetInstance();
 
  private:
-  friend struct base::DefaultSingletonTraits<MerchantPromoCodeManagerFactory>;
+  friend base::NoDestructor<MerchantPromoCodeManagerFactory>;
 
   MerchantPromoCodeManagerFactory();
   ~MerchantPromoCodeManagerFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* profile) const override;
-  content::BrowserContext* GetBrowserContextToUse(
-      content::BrowserContext* context) const override;
 };
 
 }  // namespace autofill

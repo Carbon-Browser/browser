@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 
 #include "base/check_op.h"
 #include "ui/events/base_event_utils.h"
-#include "ui/events/gesture_detection/bitset_32.h"
-#include "ui/events/gesture_detection/motion_event.h"
+#include "ui/events/velocity_tracker/bitset_32.h"
+#include "ui/events/velocity_tracker/motion_event.h"
 
 using base::TimeTicks;
 
@@ -108,7 +108,7 @@ MockMotionEvent& MockMotionEvent::MovePoint(size_t index, float x, float y) {
   DCHECK_LT(index, GetPointerCount());
   PointerProperties& p = pointer(index);
   float dx = x - p.x;
-  float dy = x - p.y;
+  float dy = y - p.y;
   p.x = x;
   p.y = y;
   p.raw_x += dx;

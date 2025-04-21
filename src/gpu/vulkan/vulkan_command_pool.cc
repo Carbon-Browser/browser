@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,11 +19,12 @@ VulkanCommandPool::~VulkanCommandPool() {
   DCHECK_EQ(static_cast<VkCommandPool>(VK_NULL_HANDLE), handle_);
 }
 
-bool VulkanCommandPool::Initialize() {
+bool VulkanCommandPool::Initialize(bool allow_protected_memory) {
   VkCommandPoolCreateInfo command_pool_create_info = {};
   command_pool_create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
   command_pool_create_info.flags =
-      VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+      VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT |
+      (allow_protected_memory ? VK_COMMAND_POOL_CREATE_PROTECTED_BIT : 0);
   command_pool_create_info.queueFamilyIndex =
       device_queue_->GetVulkanQueueIndex();
 

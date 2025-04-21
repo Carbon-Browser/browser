@@ -1,10 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/mojo/mojom/media_foundation_cdm_data_mojom_traits.h"
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
 
 namespace mojo {
 
@@ -17,7 +17,7 @@ bool StructTraits<media::mojom::MediaFoundationCdmDataDataView,
   if (!input.ReadOriginId(&origin_id))
     return false;
 
-  absl::optional<std::vector<uint8_t>> client_token;
+  std::optional<std::vector<uint8_t>> client_token;
   if (!input.ReadClientToken(&client_token))
     return false;
 

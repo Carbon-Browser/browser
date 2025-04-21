@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,12 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_profiler_marker.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_profiler_sample.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_profiler_trace.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "v8/include/v8.h"
 namespace blink {
 
 TEST(ProfilerTraceBuilderTest, AddVMStateMarker) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   auto* script_state = scope.GetScriptState();
 
@@ -32,6 +34,7 @@ TEST(ProfilerTraceBuilderTest, AddVMStateMarker) {
 }
 
 TEST(ProfilerTraceBuilderTest, AddEmbedderStateMarker) {
+  test::TaskEnvironment task_environment;
   V8TestingScope scope;
   auto* script_state = scope.GetScriptState();
 

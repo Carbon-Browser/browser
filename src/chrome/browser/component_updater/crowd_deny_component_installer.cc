@@ -1,23 +1,28 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/component_updater/crowd_deny_component_installer.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/values.h"
 #include "chrome/browser/permissions/crowd_deny_preload_data.h"
 #include "components/permissions/permission_uma_util.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace {
 
@@ -49,7 +54,7 @@ bool CrowdDenyComponentInstallerPolicy::
 }
 
 bool CrowdDenyComponentInstallerPolicy::VerifyInstallation(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) const {
   // Just check that the file is there, detailed verification of the contents is
   // delegated to code in //chrome/browser/permissions.
@@ -62,7 +67,7 @@ bool CrowdDenyComponentInstallerPolicy::RequiresNetworkEncryption() const {
 
 update_client::CrxInstaller::Result
 CrowdDenyComponentInstallerPolicy::OnCustomInstall(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) {
   // Nothing custom here.
   return update_client::CrxInstaller::Result(0);
@@ -75,15 +80,15 @@ void CrowdDenyComponentInstallerPolicy::OnCustomUninstall() {
 void CrowdDenyComponentInstallerPolicy::ComponentReady(
     const base::Version& version,
     const base::FilePath& install_dir,
-    base::Value manifest) {
+    base::Value::Dict manifest) {
   DVLOG(1) << "Crowd Deny component ready, version " << version.GetString()
            << " in " << install_dir.value();
 
-  absl::optional<int> format =
-      manifest.FindIntKey(kCrowdDenyManifestPreloadDataFormatKey);
+  std::optional<int> format =
+      manifest.FindInt(kCrowdDenyManifestPreloadDataFormatKey);
   if (!format || *format != kCrowdDenyManifestPreloadDataCurrentFormat) {
-    DVLOG(1) << "Crowd Deny component bailing out. Future data version: "
-             << *format;
+    DVLOG(1) << "Crowd Deny component bailing out.";
+    DVLOG_IF(1, format) << "Future data version: " << *format;
     return;
   }
 

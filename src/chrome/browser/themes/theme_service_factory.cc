@@ -1,36 +1,38 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/themes/theme_service_factory.h"
 
+#include "base/feature_list.h"
 #include "base/no_destructor.h"
+#include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/extensions/extension_system_factory.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/themes/theme_service.h"
 #include "chrome/common/pref_names.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
+#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_service.h"
 #include "extensions/browser/extension_prefs_factory.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_registry_factory.h"
+#include "ui/base/mojom/themes.mojom.h"
 
 #if BUILDFLAG(IS_WIN)
 #include "chrome/browser/themes/theme_helper_win.h"
 #endif
 
-// TODO(crbug.com/1052397): Revisit the macro expression once build flag switch
+// TODO(crbug.com/40118868): Revisit the macro expression once build flag switch
 // of lacros-chrome is complete.
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
 #include "chrome/browser/themes/theme_service_aura_linux.h"
 #endif
 
 #if BUILDFLAG(IS_LINUX)
-#include "ui/linux/linux_ui.h"
+#include "ui/linux/linux_ui_factory.h"
 #endif
 
 namespace {
@@ -45,10 +47,23 @@ const ThemeHelper& GetThemeHelper() {
   return **theme_helper;
 }
 
+BASE_FEATURE(kProfileBasedThemeService,
+             "ProfileBasedThemeService",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
 }  // namespace
 
 // static
 ThemeService* ThemeServiceFactory::GetForProfile(Profile* profile) {
+  TRACE_EVENT(TRACE_DISABLED_BY_DEFAULT("loading"),
+              "ThemeServiceFactory::GetForProfile");
+  if (base::FeatureList::IsEnabled(kProfileBasedThemeService)) {
+    if (!profile->theme_service()) {
+      profile->set_theme_service(static_cast<ThemeService*>(
+          GetInstance()->GetServiceForBrowserContext(profile, true)));
+    }
+    return profile->theme_service().value();
+  }
   return static_cast<ThemeService*>(
       GetInstance()->GetServiceForBrowserContext(profile, true));
 }
@@ -57,8 +72,9 @@ ThemeService* ThemeServiceFactory::GetForProfile(Profile* profile) {
 const extensions::Extension* ThemeServiceFactory::GetThemeForProfile(
     Profile* profile) {
   ThemeService* theme_service = GetForProfile(profile);
-  if (!theme_service->UsingExtensionTheme())
+  if (!theme_service->UsingExtensionTheme()) {
     return nullptr;
+  }
 
   return extensions::ExtensionRegistry::Get(profile)
       ->enabled_extensions()
@@ -67,13 +83,22 @@ const extensions::Extension* ThemeServiceFactory::GetThemeForProfile(
 
 // static
 ThemeServiceFactory* ThemeServiceFactory::GetInstance() {
-  return base::Singleton<ThemeServiceFactory>::get();
+  static base::NoDestructor<ThemeServiceFactory> instance;
+  return instance.get();
 }
 
 ThemeServiceFactory::ThemeServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "ThemeService",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/40257657): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kRedirectedToOriginal)
+              // TODO(crbug.com/41488885): Check if this service is needed for
+              // Ash Internals.
+              .WithAshInternals(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {
   DependsOn(extensions::ExtensionRegistryFactory::GetInstance());
   DependsOn(extensions::ExtensionPrefsFactory::GetInstance());
   DependsOn(extensions::ExtensionSystemFactory::GetInstance());
@@ -81,33 +106,30 @@ ThemeServiceFactory::ThemeServiceFactory()
 
 ThemeServiceFactory::~ThemeServiceFactory() = default;
 
-KeyedService* ThemeServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ThemeServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* profile) const {
-// TODO(crbug.com/1052397): Revisit the macro expression once build flag switch
-// of lacros-chrome is complete.
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_LINUX)
   using ThemeService = ThemeServiceAuraLinux;
 #endif
 
   auto provider = std::make_unique<ThemeService>(static_cast<Profile*>(profile),
                                                  GetThemeHelper());
   provider->Init();
-  return provider.release();
+  return provider;
 }
 
 void ThemeServiceFactory::RegisterProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry) {
-// TODO(crbug.com/1052397): Revisit the macro expression once build flag switch
+// TODO(crbug.com/40118868): Revisit the macro expression once build flag switch
 // of lacros-chrome is complete.
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
-  bool default_uses_system_theme = false;
+  ui::SystemTheme default_system_theme = ui::SystemTheme::kDefault;
 #if BUILDFLAG(IS_LINUX)
-  const ui::LinuxUi* linux_ui = ui::LinuxUi::instance();
-  if (linux_ui)
-    default_uses_system_theme = linux_ui->GetDefaultUsesSystemTheme();
+  default_system_theme = ui::GetDefaultSystemTheme();
 #endif
-  registry->RegisterBooleanPref(prefs::kUsesSystemTheme,
-                                default_uses_system_theme);
+  registry->RegisterIntegerPref(prefs::kSystemTheme,
+                                static_cast<int>(default_system_theme));
 #endif
   registry->RegisterFilePathPref(prefs::kCurrentThemePackFilename,
                                  base::FilePath());
@@ -115,13 +137,45 @@ void ThemeServiceFactory::RegisterProfilePrefs(
                                ThemeHelper::kDefaultThemeID);
   registry->RegisterIntegerPref(prefs::kAutogeneratedThemeColor, 0);
   registry->RegisterIntegerPref(prefs::kPolicyThemeColor, SK_ColorTRANSPARENT);
-}
-
-content::BrowserContext* ThemeServiceFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextRedirectedInIncognito(context);
+  registry->RegisterIntegerPref(
+      prefs::kBrowserColorSchemeDoNotUse,
+      static_cast<int>(ThemeService::BrowserColorScheme::kSystem),
+      user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+  registry->RegisterIntegerPref(
+      prefs::kNonSyncingBrowserColorSchemeDoNotUse,
+      static_cast<int>(ThemeService::BrowserColorScheme::kSystem));
+  registry->RegisterIntegerPref(
+      prefs::kUserColorDoNotUse, SK_ColorTRANSPARENT,
+      user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+  registry->RegisterIntegerPref(prefs::kNonSyncingUserColorDoNotUse,
+                                SK_ColorTRANSPARENT);
+  registry->RegisterIntegerPref(
+      prefs::kBrowserColorVariantDoNotUse,
+      static_cast<int>(ui::mojom::BrowserColorVariant::kSystem),
+      user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+  registry->RegisterIntegerPref(
+      prefs::kNonSyncingBrowserColorVariantDoNotUse,
+      static_cast<int>(ui::mojom::BrowserColorVariant::kSystem));
+  registry->RegisterBooleanPref(
+      prefs::kGrayscaleThemeEnabledDoNotUse, false,
+      user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+  registry->RegisterBooleanPref(prefs::kNonSyncingGrayscaleThemeEnabledDoNotUse,
+                                false);
+  registry->RegisterBooleanPref(prefs::kBrowserFollowsSystemThemeColors,
+                                BUILDFLAG(IS_CHROMEOS));
+  registry->RegisterBooleanPref(prefs::kSyncingThemePrefsMigratedToNonSyncing,
+                                false);
+  registry->RegisterBooleanPref(prefs::kShouldReadIncomingSyncingThemePrefs,
+                                true);
+  registry->RegisterStringPref(prefs::kSavedLocalTheme, "");
 }
 
 bool ThemeServiceFactory::ServiceIsCreatedWithBrowserContext() const {
   return true;
+}
+
+void ThemeServiceFactory::BrowserContextDestroyed(
+    content::BrowserContext* browser_context) {
+  Profile::FromBrowserContext(browser_context)->set_theme_service(nullptr);
+  BrowserContextKeyedServiceFactory::BrowserContextDestroyed(browser_context);
 }

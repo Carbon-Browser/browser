@@ -1,4 +1,4 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -16,6 +16,7 @@ component("public") {
     "animation_host.h",
     "scoped_tooltip_disabler.h",
     "tooltip_client.h",
+    "tooltip_observer.h",
     "window_move_client.h",
   ]
 
@@ -32,8 +33,24 @@ component("public") {
 
   defines = [ "WM_PUBLIC_IMPLEMENTATION" ]
 
+  public_deps = [ "//base" ]
+
   deps = [
     "//ui/aura",
     "//ui/base",
+  ]
+}
+
+static_library("test_support") {
+  testonly = true
+
+  sources = [
+    "mock_activation_change_observer.cc",
+    "mock_activation_change_observer.h",
+  ]
+
+  deps = [
+    ":public",
+    "//testing/gmock",
   ]
 }

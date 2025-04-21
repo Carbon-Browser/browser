@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,14 @@
 #include <memory>
 #include <vector>
 
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/optimization_guide/core/model_executor.h"
 #include "components/optimization_guide/proto/common_types.pb.h"
 #include "components/segmentation_platform/internal/execution/optimization_guide/optimization_guide_segmentation_model_handler.h"
 #include "components/segmentation_platform/internal/execution/optimization_guide/segmentation_model_executor.h"
-#include "components/segmentation_platform/internal/proto/model_metadata.pb.h"
 #include "components/segmentation_platform/internal/segment_id_convertor.h"
 #include "components/segmentation_platform/internal/stats.h"
+#include "components/segmentation_platform/public/proto/model_metadata.pb.h"
 #include "components/segmentation_platform/public/proto/segmentation_platform.pb.h"
 
 namespace segmentation_platform {
@@ -25,7 +25,7 @@ const char kSegmentationModelMetadataTypeUrl[] =
     "type.googleapis.com/"
     "google.internal.chrome.optimizationguide.v1.SegmentationModelMetadata";
 
-absl::optional<optimization_guide::proto::Any> GetModelFetchConfig() {
+std::optional<optimization_guide::proto::Any> GetModelFetchConfig() {
   // Preparing the version data to be sent to server along with the request to
   // download the model.
   optimization_guide::proto::Any any_metadata;
@@ -55,7 +55,7 @@ OptimizationGuideSegmentationModelProvider::
 void OptimizationGuideSegmentationModelProvider::InitAndFetchModel(
     const ModelUpdatedCallback& model_updated_callback) {
   DCHECK(!model_handler_);
-  absl::optional<optimization_guide::proto::OptimizationTarget> target =
+  std::optional<optimization_guide::proto::OptimizationTarget> target =
       SegmentIdToOptimizationTarget(segment_id_);
   if (!target) {
     // If the segment ID is not an OptimizationTarget then do not request a
@@ -68,11 +68,11 @@ void OptimizationGuideSegmentationModelProvider::InitAndFetchModel(
 }
 
 void OptimizationGuideSegmentationModelProvider::ExecuteModelWithInput(
-    const std::vector<float>& inputs,
+    const ModelProvider::Request& inputs,
     ExecutionCallback callback) {
   if (!model_handler_) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
-        FROM_HERE, base::BindOnce(std::move(callback), absl::nullopt));
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(std::move(callback), std::nullopt));
     return;
   }
   model_handler_->ExecuteModelWithInput(std::move(callback), inputs);

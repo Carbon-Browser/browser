@@ -1,45 +1,50 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright 2015 The Chromium Authors. All rights reserved.
-     Use of this source code is governed by a BSD-style license that can be
-     found in the LICENSE file.
+<!--
+Copyright 2015 The Chromium Authors
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
 
-     This source code is a part of eyeo Chromium SDK.
-     Use of this source code is governed by the GPLv3 that can be found in the components/adblock/LICENSE file.-->
+This source code is a part of eyeo Chromium SDK.
+Use of this source code is governed by the GPLv3 that can be found in the components/adblock/LICENSE file.
+-->
 
-
+<!-- The main_preferences file will be reordered with the upcoming autofill
+options. Only the order changes. Each pref should exist here and in the layout
+for the previous order (main_preferences_legacy). -->
+<!-- LINT.IfChange -->
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:orderingFromXml="false">
+<!-- `order=0` is reserved and it will be added in code.  -->
+<!-- TODO(crbug.com/364906215): Move SettingsPromoCardPreference here once SyncPromoPreference is removed -->
+
 
     <PreferenceCategory
-        android:key="features_section"
-        android:order="0"
-        android:title="@string/prefs_section_features"/>
+          android:key="features_section"
+          android:order="0"
+          android:title="@string/prefs_section_features"/>
     <Preference
-        android:fragment="org.chromium.components.adblock.settings.AdblockSettingsFragment"
+        android:fragment="org.chromium.chrome.browser.adblock.settings.AdblockSettingsFragment"
         android:key="adblock"
         android:order="1"
-        android:title="@string/ad_block_settings_title" />
+        android:title="@string/adblock_settings_title" />
 
-    <org.chromium.chrome.browser.sync.settings.SyncPromoPreference
-        android:key="sync_promo"
-        android:order="2"/>
     <PreferenceCategory
         android:key="account_and_google_services_section"
-        android:order="3"
+        android:order="2"
         android:title="@string/prefs_section_account_and_google_services"/>
     <org.chromium.chrome.browser.sync.settings.SignInPreference
         android:key="sign_in"
-        android:order="4"
+        android:order="3"
         android:title="@string/sign_in_to_chrome"/>
     <org.chromium.components.browser_ui.settings.ChromeBasePreference
         android:key="manage_sync"
-        android:order="5"
+        android:order="4"
         android:layout="@layout/account_management_account_row"
         android:title="@string/sync_category_title"/>
     <org.chromium.components.browser_ui.settings.ChromeBasePreference
         android:key="google_services"
-        android:order="6"
+        android:order="5"
         android:layout="@layout/account_management_account_row"
         android:title="@string/prefs_google_services"
         android:icon="@drawable/ic_google_services_48dp"
@@ -47,21 +52,37 @@
 
     <PreferenceCategory
         android:key="basics_section"
-        android:order="7"
-        android:title="@string/prefs_section_general"/>
+        android:order="6"
+        android:title="@string/prefs_section_basics"/>
+
     <androidx.preference.CheckBoxPreference
+
         android:key="background_video_playback"
-        android:order="8"
+
+        android:order="7"
+
+        android:defaultValue="true"
+
         android:title="@string/enable_background_play"/>
+
     <org.chromium.components.browser_ui.settings.ChromeBasePreference
+
         android:key="make_default_browser"
-        android:order="9"
+
+        android:order="8"
+
         android:title="@string/make_browser_default"/>
+
     <org.chromium.components.browser_ui.settings.ChromeBasePreference
         android:fragment="org.chromium.chrome.browser.search_engines.settings.SearchEngineSettings"
         android:key="search_engine"
-        android:order="10"
+        android:order="9"
         android:title="@string/search_engine_settings"/>
+    <org.chromium.components.browser_ui.settings.ChromeBasePreference
+        android:fragment="org.chromium.chrome.browser.toolbar.settings.AddressBarSettingsFragment"
+        android:key="address_bar"
+        android:order="10"
+        android:title="@string/address_bar_settings"/>
     <Preference
         android:fragment="org.chromium.chrome.browser.privacy.settings.PrivacySettings"
         android:key="privacy"
@@ -73,83 +94,113 @@
         android:order="12"
         android:title="@string/prefs_safety_check"/>
     <Preference
-        android:key="notifications"
+        android:fragment="org.chromium.chrome.browser.safety_hub.SafetyHubFragment"
+        android:key="safety_hub"
         android:order="13"
-        android:title="@string/prefs_notifications"/>
-    <Preference
-        android:fragment="org.chromium.chrome.browser.toolbar.adaptive.settings.AdaptiveToolbarPreferenceFragment"
-        android:key="toolbar_shortcut"
-        android:order="14"
-        android:title="@string/toolbar_shortcut"/>
-    <Preference
-        android:fragment="org.chromium.components.browser_ui.site_settings.SiteSettings"
-        android:key="content_settings"
-        android:order="15"
-        android:title="@string/prefs_site_settings"/>
-    <org.chromium.components.browser_ui.settings.ChromeBasePreference
-        android:fragment="org.chromium.chrome.browser.download.settings.DownloadSettings"
-        android:key="downloads"
-        android:order="16"
-        android:title="@string/menu_downloads"/>
-    <Preference
-        android:fragment="org.chromium.chrome.browser.tracing.settings.DeveloperSettings"
-        android:key="developer"
-        android:order="17"
-        android:title="Developer options"/>
+        android:title="@string/prefs_safety_check"/>
 
     <PreferenceCategory
-        android:key="advanced_section"
-        android:order="18"
-        android:title="@string/prefs_section_display"/>
-    <Preference
-        android:fragment="org.chromium.chrome.browser.homepage.settings.HomepageSettings"
-        android:key="homepage"
-        android:order="19"
-        android:title="@string/options_homepage_title"/>
-    <androidx.preference.CheckBoxPreference
-        android:key="ntp_news_toggle"
-        android:order="20"
-        android:defaultValue="true"
-        android:title="@string/show_news_preference"/>
-    <androidx.preference.CheckBoxPreference
-        android:key="disable_carbon_button"
-        android:order="22"
-        android:defaultValue="true"
-        android:title="@string/use_legacy_toolbar"/>
-    <Preference
-        android:fragment="org.chromium.components.browser_ui.accessibility.AccessibilitySettings"
-        android:key="accessibility"
-        android:order="23"
-        android:title="@string/prefs_accessibility"/>
-    <Preference
-        android:fragment="org.chromium.chrome.browser.language.settings.LanguageSettings"
-        android:key="languages"
-        android:order="24"
-        android:title="@string/language_settings"/>
-    <Preference
-        android:fragment="org.chromium.chrome.browser.night_mode.settings.ThemeSettingsFragment"
-        android:key="ui_theme"
-        android:order="25"
-        android:title="@string/theme_settings" />
-    <PreferenceCategory
         android:key="autofill_section"
-        android:order="26"
+        android:order="11"
         android:title="@string/prefs_section_autofill"/>
-    <org.chromium.components.browser_ui.settings.ChromeBasePreference
+    <org.chromium.chrome.browser.password_manager.settings.PasswordsPreference
         android:fragment="org.chromium.chrome.browser.password_manager.settings.PasswordSettings"
         android:key="passwords"
-        android:order="27"
-        android:title="@string/password_settings_title"/>
+        android:order="12"
+        android:title="@string/password_manager_settings_title"/>
     <org.chromium.components.browser_ui.settings.ChromeBasePreference
         android:fragment="org.chromium.chrome.browser.autofill.settings.AutofillPaymentMethodsFragment"
         android:key="autofill_payment_methods"
-        android:order="28"
+        android:order="13"
         android:title="@string/autofill_payment_methods"/>
     <org.chromium.components.browser_ui.settings.ChromeBasePreference
         android:fragment="org.chromium.chrome.browser.autofill.settings.AutofillProfilesFragment"
         android:key="autofill_addresses"
-        android:order="29"
+        android:order="14"
         android:title="@string/autofill_addresses_settings_title"/>
+    <!-- TODO(crbug.com/40276862): UX design and review of the plus_addresses preference.
+    Do we want to change the order of preferences, combine this with other
+    autofill addresses, or move this preference to the Advanced section? -->
+    <org.chromium.components.browser_ui.settings.ChromeBasePreference
+        android:key="plus_addresses"
+        android:order="15"/>
+    <org.chromium.components.browser_ui.settings.ChromeBasePreference
+        android:fragment="org.chromium.chrome.browser.autofill.options.AutofillOptionsFragment"
+        android:key="autofill_options"
+        android:order="16"
+        android:title="@string/autofill_options_title" />
+
+    <PreferenceCategory
+        android:key="advanced_section"
+        android:order="17"
+        android:title="@string/prefs_section_advanced"/>
+
+    <androidx.preference.CheckBoxPreference
+        android:key="ntp_news_toggle"
+        android:order="18"
+        android:defaultValue="true"
+        android:title="@string/show_news_preference"/>
+    <!-- <androidx.preference.CheckBoxPreference
+        android:key="disable_carbon_button"
+        android:order="21"
+        android:defaultValue="true"
+        android:title="@string/use_legacy_toolbar"/> -->
+
+    <Preference
+        android:fragment="org.chromium.chrome.browser.tasks.tab_management.TabsSettings"
+        android:key="tabs"
+        android:order="19"
+        android:title="@string/tabs_settings_title"/>
+    <Preference
+        android:fragment="org.chromium.chrome.browser.homepage.settings.HomepageSettings"
+        android:key="homepage"
+        android:order="20"
+        android:title="@string/options_homepage_title"/>
+    <Preference
+        android:fragment="org.chromium.chrome.browser.magic_stack.HomeModulesConfigSettings"
+        android:key="home_modules_config"
+        android:order="21"
+        android:title="@string/home_modules_configuration"/>
+    <Preference
+        android:fragment="org.chromium.chrome.browser.toolbar.adaptive.settings.AdaptiveToolbarSettingsFragment"
+        android:key="toolbar_shortcut"
+        android:order="22"
+        android:title="@string/toolbar_shortcut"/>
+    <Preference
+        android:key="notifications"
+        android:order="23"
+        android:title="@string/prefs_notifications"/>
+    <Preference
+        android:fragment="org.chromium.chrome.browser.night_mode.settings.ThemeSettingsFragment"
+        android:key="ui_theme"
+        android:order="24"
+        android:title="@string/theme_settings" />
+    <Preference
+        android:fragment="org.chromium.components.browser_ui.accessibility.AccessibilitySettings"
+        android:key="accessibility"
+        android:order="25"
+        android:title="@string/prefs_accessibility"/>
+    <Preference
+        android:fragment="org.chromium.components.browser_ui.site_settings.SiteSettings"
+        android:key="content_settings"
+        android:order="26"
+        android:title="@string/prefs_site_settings"/>
+    <Preference
+        android:fragment="org.chromium.chrome.browser.language.settings.LanguageSettings"
+        android:key="languages"
+        android:order="27"
+        android:title="@string/language_settings"/>
+    <org.chromium.components.browser_ui.settings.ChromeBasePreference
+        android:fragment="org.chromium.chrome.browser.download.settings.DownloadSettings"
+        android:key="downloads"
+        android:order="28"
+        android:title="@string/menu_downloads"/>
+    <Preference
+        android:fragment="org.chromium.chrome.browser.tracing.settings.DeveloperSettings"
+        android:key="developer"
+        android:order="29"
+        android:title="Developer options"/>
+
     <PreferenceCategory
         android:key="support_section"
         android:order="30"
@@ -158,14 +209,12 @@
         android:key="support_pref"
         android:order="31"
         android:title="@string/support_pref" />
-    <PreferenceCategory
-        android:key="prefs_about"
-        android:order="32"
-        android:title="@string/prefs_section_about"/>
+
     <Preference
         android:fragment="org.chromium.chrome.browser.about_settings.AboutChromeSettings"
         android:key="about_chrome"
-        android:order="33"
+        android:order="32"
         android:title="@string/prefs_about_chrome"/>
 
 </PreferenceScreen>
+<!-- LINT.ThenChange(//chrome/android/java/res/xml/main_preferences_legacy.xml) -->

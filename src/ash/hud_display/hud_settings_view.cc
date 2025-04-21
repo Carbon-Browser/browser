@@ -1,9 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/hud_display/hud_settings_view.h"
 
+#include <set>
 #include <string>
 
 #include "ash/hud_display/ash_tracing_handler.h"
@@ -11,8 +12,10 @@
 #include "ash/hud_display/hud_properties.h"
 #include "ash/shell.h"
 #include "ash/shell_delegate.h"
-#include "base/bind.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
+#include "base/strings/strcat.h"
 #include "base/strings/stringprintf.h"
 #include "base/time/time.h"
 #include "cc/debug/layer_tree_debug_state.h"
@@ -25,9 +28,12 @@
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/compositor.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
+#include "ui/events/event.h"
+#include "ui/events/types/event_type.h"
 #include "ui/gfx/canvas.h"
+#include "ui/gfx/geometry/point.h"
 #include "ui/gfx/paint_throbber.h"
-#include "ui/views/accessibility/accessibility_paint_checks.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/background.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/button/checkbox.h"
@@ -61,10 +67,10 @@ class HUDCheckboxHandler {
   HUDCheckboxHandler(const HUDCheckboxHandler&) = delete;
   HUDCheckboxHandler& operator=(const HUDCheckboxHandler&) = delete;
 
-  void UpdateState() const { update_state_.Run(checkbox_); }
+  void UpdateState() const { update_state_.Run(checkbox_.get()); }
 
  private:
-  views::Checkbox* const checkbox_;  // not owned.
+  const raw_ptr<views::Checkbox> checkbox_;  // not owned.
   base::RepeatingCallback<void(views::Checkbox*)> update_state_;
 };
 
@@ -106,7 +112,7 @@ base::RepeatingCallback<void(views::Checkbox*)> GetCCDebugUpdateStateCallback(
          views::Checkbox* checkbox) {
         bool is_enabled = false;
         aura::Window::Windows root_windows = Shell::Get()->GetAllRootWindows();
-        for (auto* window : root_windows) {
+        for (aura::Window* window : root_windows) {
           ui::Compositor* compositor = window->GetHost()->compositor();
           is_enabled |= compositor->GetLayerTreeDebugState().*field;
         }
@@ -120,7 +126,7 @@ base::RepeatingCallback<void(views::Checkbox*)> GetCCDebugHandleClickCallback(
   return base::BindRepeating(
       [](bool cc::LayerTreeDebugState::*field, views::Checkbox* checkbox) {
         aura::Window::Windows root_windows = Shell::Get()->GetAllRootWindows();
-        for (auto* window : root_windows) {
+        for (aura::Window* window : root_windows) {
           ui::Compositor* compositor = window->GetHost()->compositor();
           cc::LayerTreeDebugState state = compositor->GetLayerTreeDebugState();
           state.*field = checkbox->GetChecked();
@@ -132,9 +138,9 @@ base::RepeatingCallback<void(views::Checkbox*)> GetCCDebugHandleClickCallback(
 
 // views::Checkbox that ignores theme colors.
 class SettingsCheckbox : public views::Checkbox {
- public:
-  METADATA_HEADER(SettingsCheckbox);
+  METADATA_HEADER(SettingsCheckbox, views::Checkbox)
 
+ public:
   SettingsCheckbox(const std::u16string& label, const std::u16string& tooltip)
       : views::Checkbox(label, views::Button::PressedCallback()) {
     SetTooltipText(tooltip);
@@ -150,20 +156,16 @@ class SettingsCheckbox : public views::Checkbox {
   }
 };
 
-BEGIN_METADATA(SettingsCheckbox, views::Checkbox);
+BEGIN_METADATA(SettingsCheckbox)
 END_METADATA
 
 class AnimationSpeedSlider : public views::Slider {
- public:
-  METADATA_HEADER(AnimationSpeedSlider);
+  METADATA_HEADER(AnimationSpeedSlider, views::Slider)
 
+ public:
   AnimationSpeedSlider(const base::flat_set<float>& values,
                        views::SliderListener* listener = nullptr)
       : views::Slider(listener) {
-    // TODO(crbug.com/1218186): Remove this, this is in place temporarily to be
-    // able to submit accessibility checks, but this focusable View needs to
-    // add a name so that the screen reader knows what to announce.
-    SetProperty(views::kSkipAccessibilityPaintChecks, true);
     SetAllowedValues(&values);
   }
 
@@ -179,7 +181,7 @@ class AnimationSpeedSlider : public views::Slider {
   void OnPaint(gfx::Canvas* canvas) override;
 };
 
-BEGIN_METADATA(AnimationSpeedSlider, views::Slider)
+BEGIN_METADATA(AnimationSpeedSlider)
 END_METADATA
 
 void AnimationSpeedSlider::OnPaint(gfx::Canvas* canvas) {
@@ -209,9 +211,9 @@ void AnimationSpeedSlider::OnPaint(gfx::Canvas* canvas) {
 
 // Checkbox group for setting UI animation speed.
 class AnimationSpeedControl : public views::SliderListener, public views::View {
- public:
-  METADATA_HEADER(AnimationSpeedControl);
+  METADATA_HEADER(AnimationSpeedControl, views::View)
 
+ public:
   AnimationSpeedControl();
   AnimationSpeedControl(const AnimationSpeedControl&) = delete;
   AnimationSpeedControl& operator=(const AnimationSpeedControl&) = delete;
@@ -225,19 +227,19 @@ class AnimationSpeedControl : public views::SliderListener, public views::View {
                           views::SliderChangeReason reason) override;
 
   // views::View:
-  void Layout() override;
+  void Layout(PassKey) override;
 
  private:
   // Map slider values to animation scale.
   using SliderValuesMap = base::flat_map<float, float>;
 
-  views::View* hints_container_ = nullptr;  // not owned.
-  AnimationSpeedSlider* slider_ = nullptr;  // not owned.
+  raw_ptr<views::View> hints_container_ = nullptr;  // not owned.
+  raw_ptr<AnimationSpeedSlider> slider_ = nullptr;  // not owned.
 
   SliderValuesMap slider_values_;
 };
 
-BEGIN_METADATA(AnimationSpeedControl, views::View)
+BEGIN_METADATA(AnimationSpeedControl)
 END_METADATA
 
 AnimationSpeedControl::AnimationSpeedControl() {
@@ -306,6 +308,11 @@ AnimationSpeedControl::AnimationSpeedControl() {
   slider_->SetProperty(kHUDClickHandler, HTCLIENT);
   if (slider_value != -1)
     slider_->SetValue(slider_value);
+
+  // Because the slider is focusable, it needs to have an accessible name so
+  // that the screen reader knows what to announce. Indicating the slider is
+  // labelled by the title will cause ViewAccessibility to set the name.
+  slider_->GetViewAccessibility().SetName(*title);
 }
 
 AnimationSpeedControl::~AnimationSpeedControl() = default;
@@ -329,14 +336,17 @@ void AnimationSpeedControl::SliderValueChanged(
   }
 }
 
-void AnimationSpeedControl::Layout() {
+void AnimationSpeedControl::Layout(PassKey) {
   gfx::Size max_size;
   // Make all labels equal size.
-  for (const auto* label : hints_container_->children())
-    max_size.SetToMax(label->GetPreferredSize());
+  for (const views::View* label : hints_container_->children()) {
+    max_size.SetToMax(
+        label->GetPreferredSize(views::SizeBounds(label->width(), {})));
+  }
 
-  for (auto* label : hints_container_->children())
+  for (views::View* label : hints_container_->children()) {
     label->SetPreferredSize(max_size);
+  }
 
   gfx::Size hints_total_size = hints_container_->GetPreferredSize();
   // Slider should begin in the middle of the first label, and end in the
@@ -347,10 +357,12 @@ void AnimationSpeedControl::Layout() {
   slider_->SetPreferredSize(slider_size);
   slider_->SetBorder(
       views::CreateEmptyBorder(gfx::Insets::VH(0, max_size.width() / 2)));
-  views::View::Layout();
+  LayoutSuperclass<views::View>(this);
 }
 
 class HUDActionButton : public views::LabelButton {
+  METADATA_HEADER(HUDActionButton, views::LabelButton)
+
  public:
   HUDActionButton(views::Button::PressedCallback::Callback callback,
                   const std::u16string& text)
@@ -417,9 +429,12 @@ class HUDActionButton : public views::LabelButton {
   base::RepeatingTimer spinner_refresh_timer_;
 };
 
+BEGIN_METADATA(HUDActionButton)
+END_METADATA
+
 }  // anonymous namespace
 
-BEGIN_METADATA(HUDSettingsView, views::View)
+BEGIN_METADATA(HUDSettingsView)
 END_METADATA
 
 HUDSettingsView::HUDSettingsView(HUDDisplayView* hud_display) {
@@ -515,6 +530,16 @@ HUDSettingsView::HUDSettingsView(HUDDisplayView* hud_display) {
       ->set_cross_axis_alignment(
           views::BoxLayout::CrossAxisAlignment::kStretch);
 
+  // Show cursor position.
+  constexpr int kCursorPositionDisplayButtonMargin = 6;
+  views::View* cursor_position_display =
+      AddChildView(std::make_unique<views::View>());
+  cursor_position_display
+      ->SetLayoutManager(std::make_unique<views::BoxLayout>(
+          views::BoxLayout::Orientation::kVertical))
+      ->set_cross_axis_alignment(
+          views::BoxLayout::CrossAxisAlignment::kStretch);
+
   // Tracing controls.
   constexpr int kTracingControlButtonMargin = 6;
   views::View* tracing_controls = AddChildView(std::make_unique<views::View>());
@@ -532,6 +557,15 @@ HUDSettingsView::HUDSettingsView(HUDDisplayView* hud_display) {
                               base::Unretained(this)),
           std::u16string()));
   UpdateDevToolsControlButtonLabel();
+
+  cursor_position_display->SetBorder(
+      views::CreateEmptyBorder(kCursorPositionDisplayButtonMargin));
+  cursor_position_display_button_ =
+      cursor_position_display->AddChildView(std::make_unique<HUDActionButton>(
+          base::BindRepeating(
+              &HUDSettingsView::OnEnableCursorPositionDisplayButtonPressed,
+              base::Unretained(this)),
+          u"Show cursor position"));
 
   tracing_controls->SetBorder(
       views::CreateEmptyBorder(kTracingControlButtonMargin));
@@ -566,10 +600,15 @@ HUDSettingsView::HUDSettingsView(HUDDisplayView* hud_display) {
   UpdateTracingControlButton();
 
   AshTracingManager::Get().AddObserver(this);
+  aura::Env* env = aura::Env::GetInstance();
+  env->AddEventObserver(this, env,
+                        std::set<ui::EventType>({ui::EventType::kMouseDragged,
+                                                 ui::EventType::kMouseMoved}));
 }
 
 HUDSettingsView::~HUDSettingsView() {
   AshTracingManager::Get().RemoveObserver(this);
+  aura::Env::GetInstance()->RemoveEventObserver(this);
 }
 
 void HUDSettingsView::OnTracingStatusChange() {
@@ -593,6 +632,31 @@ void HUDSettingsView::UpdateDevToolsControlButtonLabel() {
     ui_dev_tools_control_button_->SetText(base::ASCIIToUTF16(
         base::StringPrintf("Ui Dev Tools: ON, port %d", port).c_str()));
   }
+}
+
+void HUDSettingsView::OnEnableCursorPositionDisplayButtonPressed(
+    const ui::Event& event) {
+  showing_cursor_position_ = !showing_cursor_position_;
+  if (showing_cursor_position_) {
+    cursor_position_display_button_->SetText(base::ASCIIToUTF16(base::StrCat(
+        {"Cursor: ",
+         aura::Env::GetInstance()->last_mouse_location().ToString()})));
+  } else {
+    cursor_position_display_button_->SetText(u"Show cursor position");
+  }
+}
+
+void HUDSettingsView::OnEvent(ui::Event* event) {
+  views::View::OnEvent(event);
+}
+
+void HUDSettingsView::OnEvent(const ui::Event& event) {
+  if (!showing_cursor_position_ || !event.IsMouseEvent()) {
+    return;
+  }
+
+  cursor_position_display_button_->SetText(base::ASCIIToUTF16(
+      base::StrCat({"Cursor: ", event.AsMouseEvent()->location().ToString()})));
 }
 
 void HUDSettingsView::ToggleVisibility() {

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,6 +35,13 @@ VideoAspectRatio::VideoAspectRatio(const gfx::Rect& visible_rect,
 
   type_ = Type::kPixel;
   aspect_ratio_ = h != 0.0 ? w / h : 0.0;
+}
+
+bool VideoAspectRatio::operator==(const VideoAspectRatio& other) const {
+  if (!IsValid() || !other.IsValid()) {
+    return IsValid() == other.IsValid();
+  }
+  return type_ == other.type_ && aspect_ratio_ == other.aspect_ratio_;
 }
 
 bool VideoAspectRatio::IsValid() const {

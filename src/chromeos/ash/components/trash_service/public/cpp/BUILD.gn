@@ -1,4 +1,4 @@
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -8,6 +8,8 @@ assert(is_chromeos_ash, "Non-ChromeOS builds cannot depend on //chromeos/ash")
 
 source_set("cpp") {
   sources = [
+    "trash_info_parser.cc",
+    "trash_info_parser.h",
     "trash_service.cc",
     "trash_service.h",
   ]

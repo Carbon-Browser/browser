@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@
 
 #include <memory>
 
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/callback_helpers.h"
 #include "base/test/bind.h"
 #include "content/browser/service_worker/embedded_worker_test_helper.h"
-#include "content/browser/service_worker/service_worker_context_core.h"
+#include "content/browser/service_worker/service_worker_client.h"
 #include "content/browser/service_worker/service_worker_context_core_observer.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
 #include "content/browser/service_worker/service_worker_registration.h"
@@ -82,7 +82,8 @@ class ServiceWorkerContextCoreTest : public testing::Test,
               registration_id = result_registration_id;
               loop.Quit();
             }),
-        /*requesting_frame_id=*/GlobalRenderFrameHostId());
+        /*requesting_frame_id=*/GlobalRenderFrameHostId(),
+        PolicyContainerPolicies());
     loop.Run();
     EXPECT_EQ(blink::ServiceWorkerStatusCode::kOk, status);
     scoped_refptr<ServiceWorkerRegistration> registration =
@@ -142,15 +143,14 @@ class ServiceWorkerContextCoreTest : public testing::Test,
     return status;
   }
 
-  ServiceWorkerContainerHost* CreateControllee() {
-    remote_endpoints_.emplace_back();
-    base::WeakPtr<ServiceWorkerContainerHost> container_host =
-        CreateContainerHostForWindow(
-            GlobalRenderFrameHostId(/*mock process_id=*/33,
-                                    /*mock frame_routing_id=*/1),
-            /*is_parent_frame_secure=*/true, helper_->context()->AsWeakPtr(),
-            &remote_endpoints_.back());
-    return container_host.get();
+  ServiceWorkerClient* CreateControllee() {
+    ScopedServiceWorkerClient service_worker_client =
+        CreateServiceWorkerClient(helper_->context());
+    ServiceWorkerClient* service_worker_client_ptr =
+        service_worker_client.get();
+    service_worker_client_keep_alive_.push_back(
+        std::move(service_worker_client));
+    return service_worker_client_ptr;
   }
 
  protected:
@@ -169,7 +169,7 @@ class ServiceWorkerContextCoreTest : public testing::Test,
  private:
   BrowserTaskEnvironment task_environment_;
   std::unique_ptr<EmbeddedWorkerTestHelper> helper_;
-  std::vector<ServiceWorkerRemoteContainerEndpoint> remote_endpoints_;
+  std::vector<ScopedServiceWorkerClient> service_worker_client_keep_alive_;
   GURL scope_for_wait_for_activated_;
   base::OnceClosure quit_closure_for_wait_for_activated_;
   bool is_observing_context_ = false;
@@ -207,7 +207,7 @@ TEST_F(ServiceWorkerContextCoreTest, DeleteForStorageKey) {
   const GURL script("https://www.example.com/a/sw.js");
   const GURL scope("https://www.example.com/a");
   const url::Origin origin = url::Origin::Create(scope);
-  const blink::StorageKey key(origin);
+  const blink::StorageKey key = blink::StorageKey::CreateFirstParty(origin);
 
   // Register a service worker.
   blink::mojom::ServiceWorkerRegistrationOptions options;
@@ -227,7 +227,7 @@ TEST_F(ServiceWorkerContextCoreTest, DeleteForStorageKeyAbortsQueuedJobs) {
   const GURL script("https://www.example.com/a/sw.js");
   const GURL scope("https://www.example.com/a");
   const url::Origin origin = url::Origin::Create(scope);
-  const blink::StorageKey key(origin);
+  const blink::StorageKey key = blink::StorageKey::CreateFirstParty(origin);
 
   // Register a service worker.
   blink::mojom::ServiceWorkerRegistrationOptions options;
@@ -247,7 +247,8 @@ TEST_F(ServiceWorkerContextCoreTest, DeleteForStorageKeyAbortsQueuedJobs) {
             register_job_status = result_status;
             register_job_loop.Quit();
           }),
-      /*requesting_frame_id=*/GlobalRenderFrameHostId());
+      /*requesting_frame_id=*/GlobalRenderFrameHostId(),
+      PolicyContainerPolicies());
 
   EXPECT_EQ(blink::ServiceWorkerStatusCode::kOk, DeleteForStorageKey(key));
 
@@ -261,7 +262,7 @@ TEST_F(ServiceWorkerContextCoreTest,
   const GURL script("https://www.example.com/a/sw.js");
   const GURL scope("https://www.example.com/a");
   const url::Origin origin = url::Origin::Create(scope);
-  const blink::StorageKey key(origin);
+  const blink::StorageKey key = blink::StorageKey::CreateFirstParty(origin);
 
   // Register a service worker.
   blink::mojom::ServiceWorkerRegistrationOptions options;
@@ -270,17 +271,19 @@ TEST_F(ServiceWorkerContextCoreTest,
   RegisterServiceWorker(scope, key, options, &registration);
 
   // Add a controlled client.
-  ServiceWorkerContainerHost* container_host = CreateControllee();
-  container_host->UpdateUrls(scope, origin, key);
-  container_host->SetControllerRegistration(registration,
-                                            /*notify_controllerchange=*/false);
+  ServiceWorkerClient* service_worker_client = CreateControllee();
+  service_worker_client->UpdateUrls(scope, origin, key);
+  service_worker_client->SetControllerRegistration(
+      registration,
+      /*notify_controllerchange=*/false);
 
   // Unregister, which will wait to clear until the controlled client unloads.
   EXPECT_EQ(blink::ServiceWorkerStatusCode::kOk, Unregister(scope, key));
 
   // Queue an Update job.
-  context()->UpdateServiceWorker(registration.get(),
-                                 /*force_bypass_cache=*/false);
+  context()->UpdateServiceWorkerWithoutExecutionContext(
+      registration.get(),
+      /*force_bypass_cache=*/false);
 
   // Queue a register job.
   base::RunLoop register_job_loop;
@@ -294,7 +297,8 @@ TEST_F(ServiceWorkerContextCoreTest,
             register_job_status = result_status;
             register_job_loop.Quit();
           }),
-      /*requesting_frame_id=*/GlobalRenderFrameHostId());
+      /*requesting_frame_id=*/GlobalRenderFrameHostId(),
+      PolicyContainerPolicies());
 
   EXPECT_EQ(blink::ServiceWorkerStatusCode::kOk, DeleteForStorageKey(key));
 
@@ -309,7 +313,7 @@ TEST_F(ServiceWorkerContextCoreTest, DeleteForStorageKey_UnregisterFail) {
   const GURL script("https://www.example.com/a/sw.js");
   const GURL scope("https://www.example.com/a");
   const url::Origin origin = url::Origin::Create(scope);
-  const blink::StorageKey key(origin);
+  const blink::StorageKey key = blink::StorageKey::CreateFirstParty(origin);
 
   // Register a service worker.
   blink::mojom::ServiceWorkerRegistrationOptions options;

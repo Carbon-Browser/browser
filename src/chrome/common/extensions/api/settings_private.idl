@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,7 +42,7 @@ namespace settingsPrivate {
     PrefType type;
 
     // The current value of the pref.
-    any value;
+    any? value;
 
     // The policy source of the pref; an undefined value means there is no
     // policy.
@@ -91,26 +91,28 @@ namespace settingsPrivate {
     // |value|: The new value of the pref.
     // |pageId|: An optional user metrics identifier.
     // |callback|: The callback for whether the pref was set or not.
-    [supportsPromises] static void setPref(DOMString name,
-                                           any value,
-                                           optional DOMString pageId,
-                                           optional OnPrefSetCallback callback);
+    static void setPref(
+        DOMString name,
+        any value,
+        optional DOMString pageId,
+        optional OnPrefSetCallback callback);
 
     // Gets an array of all the prefs.
-    [supportsPromises] static void getAllPrefs(GetAllPrefsCallback callback);
+    static void getAllPrefs(GetAllPrefsCallback callback);
 
     // Gets the value of a specific pref.
-    [supportsPromises] static void getPref(DOMString name,
-                                           GetPrefCallback callback);
+    static void getPref(
+        DOMString name,
+        GetPrefCallback callback);
 
     // Gets the default page zoom factor. Possible values are currently between
-    // 0.25 and 5. For a full list, see zoom::kPresetZoomFactors.
-    [supportsPromises] static void getDefaultZoom(
+    // 0.25 and 5. For a full list, see zoom::kPresetBrowserZoomFactors.
+    static void getDefaultZoom(
         GetDefaultZoomCallback callback);
 
     // Sets the page zoom factor. Must be less than 0.001 different than a value
-    // in zoom::kPresetZoomFactors.
-    [supportsPromises] static void setDefaultZoom(
+    // in zoom::kPresetBrowserZoomFactors.
+    static void setDefaultZoom(
         double zoom,
         optional SetDefaultZoomCallback callback);
   };

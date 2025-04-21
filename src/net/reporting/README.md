@@ -73,7 +73,7 @@ by non-browser embedders as well as by Chromium.
 
 * The `ReportingService` is set up in a `URLRequestContext` by passing a
   `ReportingPolicy` to the `URLRequestContextBuilder`. This creates a
-  `ReportingService` which is owned by the `URLRequestContextStorage`.
+  `ReportingService` which is owned by the `URLRequestContext`.
 
 * `Report-To:` headers are processed by an `HttpNetworkTransaction` when they
   are received, and passed on to the `ReportingService` to be added to the
@@ -107,7 +107,7 @@ by non-browser embedders as well as by Chromium.
 
     * It queues reports via the `NetworkContext` using a
       `blink::mojom::ReportingServiceProxy` (implemented [in
-      `//content/browser/net/`][2]), which can queue Intervention, Deprecation,
+      `//content/browser/network/`][2]), which can queue Intervention, Deprecation,
       CSP Violation, and Permissions Policy Violation reports.
 
 * The `ChromeNetworkDelegate` [in `//chrome/browser/net/`][3] checks permissions
@@ -132,7 +132,7 @@ required for Network Error Logging, as those reports are not associated with
 any successful document load.
 
 All V0 reports destined for the same endpoint group may be bundled together for
-delivery, regardless of their source (subject to NIK isolation).
+delivery, regardless of their source (subject to NAK isolation).
 
 V1 reporting drops the `Report-To` header in favor of `Reporting-Endpoints`,
 which configures named endpoints (single URLs) which are only valid for the
@@ -169,6 +169,6 @@ To support both mechanisms simultaneously, we do the following:
   group.
 
 [1]: https://chromium.googlesource.com/chromium/src/+/HEAD/third_party/blink/renderer/core/frame/reporting_observer.h
-[2]: https://chromium.googlesource.com/chromium/src/+/HEAD/content/browser/net/reporting_service_proxy.cc
+[2]: https://chromium.googlesource.com/chromium/src/+/HEAD/content/browser/network/reporting_service_proxy.cc
 [3]: https://chromium.googlesource.com/chromium/src/+/HEAD/chrome/browser/net/chrome_network_delegate.h
 [4]: https://chromium.googlesource.com/chromium/src/+/HEAD/components/cronet/android/test/javatests/src/org/chromium/net/NetworkErrorLoggingTest.java

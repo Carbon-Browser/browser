@@ -1,4 +1,4 @@
-// Copyright 2014 The Crashpad Authors. All rights reserved.
+// Copyright 2014 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,9 +16,10 @@
 #define CRASHPAD_TOOLS_TOOL_SUPPORT_H_
 
 #include <string>
+#include <string_view>
 
 #include "base/files/file_path.h"
-#include "base/strings/string_piece.h"
+
 #include "build/build_config.h"
 
 namespace crashpad {
@@ -77,7 +78,7 @@ class ToolSupport {
   //! \sa Wmain()
   //! \sa FilePathToCommandLineArgument()
   static base::FilePath::StringType CommandLineArgumentToFilePathStringType(
-      const base::StringPiece& arg);
+      std::string_view arg);
 
   //! \brief Converts a base::FilePath to a command line argument.
   //!

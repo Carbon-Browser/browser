@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,16 +24,17 @@ TestResultPart& TestResultPart::operator=(TestResultPart&& other) = default;
 
 // static
 bool TestResultPart::TypeFromString(const std::string& str, Type* type) {
-  if (str == "success")
+  if (str == "success") {
     *type = kSuccess;
-  else if (str == "failure")
+  } else if (str == "failure") {
     *type = kNonFatalFailure;
-  else if (str == "fatal_failure")
+  } else if (str == "fatal_failure") {
     *type = kFatalFailure;
-  else if (str == "skip")
+  } else if (str == "skip") {
     *type = kSkip;
-  else
+  } else {
     return false;
+  }
   return true;
 }
 
@@ -47,14 +48,11 @@ std::string TestResultPart::TypeAsString() const {
       return "fatal_failure";
     case kSkip:
       return "skip";
-    default:
-      NOTREACHED();
   }
   return "unknown";
 }
 
-TestResult::TestResult() : status(TEST_UNKNOWN) {
-}
+TestResult::TestResult() : status(TEST_UNKNOWN) {}
 
 TestResult::~TestResult() = default;
 
@@ -87,7 +85,6 @@ std::string TestResult::StatusAsString() const {
   }
 
   NOTREACHED();
-  return std::string();
 }
 
 std::string TestResult::GetTestName() const {
@@ -103,9 +100,19 @@ std::string TestResult::GetTestCaseName() const {
 }
 
 void TestResult::AddLink(const std::string& name, const std::string& url) {
-  DCHECK(links.find(name) == links.end())
-      << name << " is already used as a link name. Ignoring...";
-  links[name] = url;
+  auto [it, inserted] = links.insert({name, url});
+  DCHECK(inserted) << name << " is already used as a link name. Ignoring...";
+}
+
+void TestResult::AddTag(const std::string& name, const std::string& value) {
+  tags[name].push_back(value);
+}
+
+void TestResult::AddProperty(const std::string& name,
+                             const std::string& value) {
+  auto [it, inserted] = properties.insert({name, value});
+  DCHECK(inserted) << name
+                   << " is already used as a property name. Ignoring...";
 }
 
 }  // namespace base

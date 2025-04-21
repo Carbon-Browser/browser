@@ -1,12 +1,15 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/lifetime/application_lifetime.h"
-#include "chrome/browser/lifetime/application_lifetime_chromeos.h"
 
+#include <optional>
+
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/lifetime/application_lifetime_chromeos.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_list_observer.h"
 #include "chrome/common/pref_names.h"
@@ -20,7 +23,6 @@
 #include "content/public/test/browser_test.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace chrome {
 
@@ -69,12 +71,14 @@ class ApplicationLifetimeTest : public InProcessBrowserTest,
 
  private:
   void OnBrowserClosing(Browser* browser) override {
-    if (quits_on_browser_closing_)
+    if (quits_on_browser_closing_) {
       quits_on_browser_closing_->Quit();
+    }
   }
 
-  absl::optional<base::RunLoop> quits_on_browser_closing_;
-  ash::FakeUpdateEngineClient* fake_update_engine_client_ = nullptr;
+  std::optional<base::RunLoop> quits_on_browser_closing_;
+  raw_ptr<ash::FakeUpdateEngineClient, DanglingUntriaged>
+      fake_update_engine_client_ = nullptr;
 };
 
 IN_PROC_BROWSER_TEST_F(ApplicationLifetimeTest,
@@ -82,7 +86,7 @@ IN_PROC_BROWSER_TEST_F(ApplicationLifetimeTest,
   AttemptRestart();
 
   // Session Manager is not going to stop session.
-  EXPECT_FALSE(IsAttemptingShutdown());
+  EXPECT_FALSE(IsSendingStopRequestToSessionManager());
   auto* fake_session_manager_client = ash::FakeSessionManagerClient::Get();
   EXPECT_FALSE(fake_session_manager_client->session_stopped());
 
@@ -105,7 +109,7 @@ IN_PROC_BROWSER_TEST_F(ApplicationLifetimeTest,
   AttemptRestart();
 
   // Session Manager is not going to stop session.
-  EXPECT_FALSE(IsAttemptingShutdown());
+  EXPECT_FALSE(IsSendingStopRequestToSessionManager());
   auto* fake_session_manager_client = ash::FakeSessionManagerClient::Get();
   EXPECT_FALSE(fake_session_manager_client->session_stopped());
 
@@ -128,7 +132,7 @@ IN_PROC_BROWSER_TEST_F(ApplicationLifetimeTest, AttemptRelaunchRelaunchesOs) {
   AttemptRelaunch();
 
   // Session Manager is not going to stop session.
-  EXPECT_FALSE(IsAttemptingShutdown());
+  EXPECT_FALSE(IsSendingStopRequestToSessionManager());
   auto* fake_session_manager_client = ash::FakeSessionManagerClient::Get();
   EXPECT_FALSE(fake_session_manager_client->session_stopped());
 
@@ -149,7 +153,7 @@ IN_PROC_BROWSER_TEST_F(ApplicationLifetimeTest,
   AttemptExit();
 
   // Session Manager has received stop session request.
-  EXPECT_TRUE(IsAttemptingShutdown());
+  EXPECT_TRUE(IsSendingStopRequestToSessionManager());
   auto* fake_session_manager_client = ash::FakeSessionManagerClient::Get();
   EXPECT_TRUE(fake_session_manager_client->session_stopped());
 

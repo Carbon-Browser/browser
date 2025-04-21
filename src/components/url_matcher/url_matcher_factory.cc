@@ -1,16 +1,15 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/url_matcher/url_matcher_factory.h"
 
-#include <algorithm>
-#include <cctype>
 #include <memory>
 #include <utility>
 
 #include "base/check.h"
 #include "base/lazy_instance.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/stringprintf.h"
 #include "base/values.h"
 #include "components/url_matcher/url_matcher_constants.h"
@@ -34,6 +33,7 @@ const char kAttributeExpectedString[] =
 const char kUnparseableRegexString[] =
     "Could not parse regular expression '%s': %s";
 const char kLowerCaseExpected[] = "%s values need to be in lower case.";
+const char kInvalidCidrBlocks[] = "Invalid CIDR blocks in UrlFilter.";
 
 // Registry for all factory methods of URLMatcherConditionFactory
 // that allows translating string literals from the extension API into
@@ -113,6 +113,7 @@ URLMatcherFactory::CreateFromURLFilterDictionary(
     std::string* error) {
   std::unique_ptr<URLMatcherSchemeFilter> url_matcher_schema_filter;
   std::unique_ptr<URLMatcherPortFilter> url_matcher_port_filter;
+  std::unique_ptr<URLMatcherCidrBlockFilter> url_matcher_cidr_block_filter;
   URLMatcherConditionSet::Conditions url_matcher_conditions;
 
   for (const auto iter : url_filter_dict) {
@@ -141,6 +142,13 @@ URLMatcherFactory::CreateFromURLFilterDictionary(
           &condition_attribute_value, error);
       if (!error->empty())
         return scoped_refptr<URLMatcherConditionSet>(nullptr);
+    } else if (condition_attribute_name == keys::kCidrBlocksKey) {
+      // Handle CIDR blocks.
+      url_matcher_cidr_block_filter =
+          CreateURLMatcherCidrBlocks(&condition_attribute_value, error);
+      if (!error->empty()) {
+        return scoped_refptr<URLMatcherConditionSet>(nullptr);
+      }
     } else {
       // Handle unknown attributes.
       *error = base::StringPrintf(kUnknownURLFilterAttribute,
@@ -162,7 +170,8 @@ URLMatcherFactory::CreateFromURLFilterDictionary(
   scoped_refptr<URLMatcherConditionSet> url_matcher_condition_set(
       new URLMatcherConditionSet(id, url_matcher_conditions,
                                  std::move(url_matcher_schema_filter),
-                                 std::move(url_matcher_port_filter)));
+                                 std::move(url_matcher_port_filter),
+                                 std::move(url_matcher_cidr_block_filter)));
   return url_matcher_condition_set;
 }
 
@@ -177,7 +186,7 @@ namespace {
 
 // Returns true if some alphabetic characters in this string are upper case.
 bool ContainsUpperCase(const std::string& str) {
-  return std::find_if(str.begin(), str.end(), ::isupper) != str.end();
+  return base::ranges::any_of(str, ::isupper);
 }
 
 }  // namespace
@@ -246,13 +255,13 @@ std::unique_ptr<URLMatcherPortFilter> URLMatcherFactory::CreateURLMatcherPorts(
     *error = kInvalidPortRanges;
     return nullptr;
   }
-  base::Value::ConstListView value_list = value->GetListDeprecated();
+  const base::Value::List& value_list = value->GetList();
 
   for (const auto& entry : value_list) {
     if (entry.is_int()) {
       ranges.push_back(URLMatcherPortFilter::CreateRange(entry.GetInt()));
     } else if (entry.is_list()) {
-      base::Value::ConstListView entry_list = entry.GetListDeprecated();
+      const base::Value::List& entry_list = entry.GetList();
       if (entry_list.size() != 2u || !entry_list[0].is_int() ||
           !entry_list[1].is_int()) {
         *error = kInvalidPortRanges;
@@ -268,6 +277,37 @@ std::unique_ptr<URLMatcherPortFilter> URLMatcherFactory::CreateURLMatcherPorts(
   }
 
   return std::make_unique<URLMatcherPortFilter>(ranges);
+}
+
+// static
+std::unique_ptr<URLMatcherCidrBlockFilter>
+URLMatcherFactory::CreateURLMatcherCidrBlocks(const base::Value* value,
+                                              std::string* error) {
+  std::vector<URLMatcherCidrBlockFilter::CidrBlock> cidr_blocks;
+  if (!value->is_list()) {
+    *error = kInvalidCidrBlocks;
+    return nullptr;
+  }
+
+  cidr_blocks.reserve(value->GetList().size());
+  for (const auto& entry : value->GetList()) {
+    if (!entry.is_string()) {
+      *error = kInvalidCidrBlocks;
+      return nullptr;
+    }
+
+    base::expected<URLMatcherCidrBlockFilter::CidrBlock, std::string>
+        cidr_block =
+            URLMatcherCidrBlockFilter::CreateCidrBlock(entry.GetString());
+    if (!cidr_block.has_value()) {
+      *error = cidr_block.error();
+      return nullptr;
+    }
+
+    cidr_blocks.push_back(std::move(*cidr_block));
+  }
+
+  return std::make_unique<URLMatcherCidrBlockFilter>(std::move(cidr_blocks));
 }
 
 }  // namespace url_matcher

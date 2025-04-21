@@ -34,7 +34,8 @@
 #include <memory>
 
 #include "services/network/public/mojom/ip_address_space.mojom-shared.h"
-#include "third_party/blink/public/mojom/loader/code_cache.mojom.h"
+#include "third_party/blink/public/mojom/loader/code_cache.mojom-shared.h"
+#include "third_party/blink/public/platform/cross_variant_mojo_util.h"
 #include "third_party/blink/public/platform/web_archive_info.h"
 #include "third_party/blink/public/platform/web_common.h"
 #include "third_party/blink/public/platform/web_source_location.h"
@@ -59,6 +60,7 @@ class BLINK_EXPORT WebDocumentLoader {
   class ExtraData {
    public:
     virtual ~ExtraData() = default;
+    virtual std::unique_ptr<ExtraData> Clone() = 0;
   };
 
   static bool WillLoadUrlAsEmpty(const WebURL&);
@@ -98,7 +100,7 @@ class BLINK_EXPORT WebDocumentLoader {
   // Extra data associated with this DocumentLoader.
   // Setting extra data will cause any existing extra data to be deleted.
   virtual ExtraData* GetExtraData() const = 0;
-  virtual std::unique_ptr<ExtraData> TakeExtraData() = 0;
+  virtual std::unique_ptr<ExtraData> CloneExtraData() = 0;
   virtual void SetExtraData(std::unique_ptr<ExtraData>) = 0;
 
   // Allows the embedder to inject a filter that will be consulted for each
@@ -133,11 +135,17 @@ class BLINK_EXPORT WebDocumentLoader {
   // committed in this WebDocumentLoader had transient activation.
   virtual bool LastNavigationHadTransientUserActivation() const = 0;
 
-  // Sets the CodeCacheHost for this loader.
+  // Sets the CodeCacheHosts for this loader.
   virtual void SetCodeCacheHost(
-      mojo::PendingRemote<mojom::CodeCacheHost> code_cache_host) = 0;
+      CrossVariantMojoRemote<mojom::CodeCacheHostInterfaceBase> code_cache_host,
+      CrossVariantMojoRemote<mojom::CodeCacheHostInterfaceBase>
+          code_cache_host_for_background) = 0;
 
   virtual WebString OriginCalculationDebugInfo() const = 0;
+
+  // Whether the frame holding this document has loaded a document that is not
+  // an initial empty document.
+  virtual bool HasLoadedNonInitialEmptyDocument() const = 0;
 
  protected:
   ~WebDocumentLoader() = default;

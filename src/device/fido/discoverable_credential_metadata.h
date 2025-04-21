@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "base/component_export.h"
+#include "device/fido/fido_types.h"
 #include "device/fido/public_key_credential_user_entity.h"
 
 namespace device {
@@ -17,7 +18,8 @@ namespace device {
 // information.
 class COMPONENT_EXPORT(DEVICE_FIDO) DiscoverableCredentialMetadata {
  public:
-  DiscoverableCredentialMetadata(std::string rp_id,
+  DiscoverableCredentialMetadata(AuthenticatorType source,
+                                 std::string rp_id,
                                  std::vector<uint8_t> cred_id,
                                  PublicKeyCredentialUserEntity user);
 
@@ -31,6 +33,7 @@ class COMPONENT_EXPORT(DEVICE_FIDO) DiscoverableCredentialMetadata {
   ~DiscoverableCredentialMetadata();
   bool operator==(const DiscoverableCredentialMetadata& other) const;
 
+  AuthenticatorType source = AuthenticatorType::kOther;
   std::string rp_id;
   std::vector<uint8_t> cred_id;
   PublicKeyCredentialUserEntity user;

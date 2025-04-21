@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,11 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "components/component_updater/installer_policies/trust_token_key_commitments_component_installer_policy.h"
 #include "content/public/browser/network_service_instance.h"
-#include "services/network/public/cpp/features.h"
 #include "services/network/public/mojom/network_service.mojom.h"
 
 using component_updater::ComponentUpdateService;
@@ -22,9 +20,6 @@ namespace component_updater {
 
 void RegisterTrustTokenKeyCommitmentsComponentIfTrustTokensEnabled(
     ComponentUpdateService* cus) {
-  if (!base::FeatureList::IsEnabled(network::features::kTrustTokens))
-    return;
-
   VLOG(1) << "Registering Trust Token Key Commitments component.";
   auto installer = base::MakeRefCounted<ComponentInstaller>(
       std::make_unique<TrustTokenKeyCommitmentsComponentInstallerPolicy>(

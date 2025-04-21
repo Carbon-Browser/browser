@@ -1,65 +1,114 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef BASE_ALLOCATOR_PARTITION_ALLOC_FEATURES_H_
 #define BASE_ALLOCATOR_PARTITION_ALLOC_FEATURES_H_
 
-#include "base/allocator/buildflags.h"
-#include "base/allocator/partition_allocator/partition_alloc_config.h"
 #include "base/base_export.h"
 #include "base/compiler_specific.h"
+#include "base/feature_list.h"
 #include "base/metrics/field_trial_params.h"
+#include "base/time/time.h"
+#include "build/build_config.h"
+#include "partition_alloc/buildflags.h"
+#include "partition_alloc/partition_alloc_base/time/time.h"
+#include "partition_alloc/partition_root.h"
 
 namespace base {
-
-struct Feature;
-
 namespace features {
 
+namespace internal {
+
+enum class PAFeatureEnabledProcesses {
+  // Enabled only in the browser process.
+  kBrowserOnly,
+  // Enabled only in the browser and renderer processes.
+  kBrowserAndRenderer,
+  // Enabled in all processes, except renderer.
+  kNonRenderer,
+  // Enabled only in renderer processes.
+  kRendererOnly,
+  // Enabled in all child processes, except zygote.
+  kAllChildProcesses,
+  // Enabled in all processes.
+  kAllProcesses,
+};
+
+}  // namespace internal
+
+extern const BASE_EXPORT Feature kPartitionAllocUnretainedDanglingPtr;
+enum class UnretainedDanglingPtrMode {
+  kCrash,
+  kDumpWithoutCrashing,
+};
+extern const BASE_EXPORT base::FeatureParam<UnretainedDanglingPtrMode>
+    kUnretainedDanglingPtrModeParam;
+
 // See /docs/dangling_ptr.md
-//
-// Usage:
-// --enable-features=PartitionAllocDanglingPtr:mode/crash
-// --enable-features=PartitionAllocDanglingPtr:mode/log_signature
-extern const BASE_EXPORT Feature kPartitionAllocDanglingPtr;
+BASE_EXPORT BASE_DECLARE_FEATURE(kPartitionAllocDanglingPtr);
 enum class DanglingPtrMode {
   // Crash immediately after detecting a dangling raw_ptr.
   kCrash,  // (default)
 
   // Log the signature of every occurrences without crashing. It is used by
   // bots.
-  // Format "[DanglingSignature]\t<1>\t<2>"
-  // 1. The function who freed the memory while it was still referenced.
-  // 2. The function who released the raw_ptr reference.
-  kLogSignature,
+  // Format "[DanglingSignature]\t<1>\t<2>\t<3>\t<4>"
+  // 1. The function which freed the memory while it was still referenced.
+  // 2. The task in which the memory was freed.
+  // 3. The function which released the raw_ptr reference.
+  // 4. The task in which the raw_ptr was released.
+  kLogOnly,
 
   // Note: This will be extended with a single shot DumpWithoutCrashing.
 };
 extern const BASE_EXPORT base::FeatureParam<DanglingPtrMode>
     kDanglingPtrModeParam;
+enum class DanglingPtrType {
+  // Act on any dangling raw_ptr released after being freed.
+  kAll,  // (default)
 
-#if defined(PA_ALLOW_PCSCAN)
-extern const BASE_EXPORT Feature kPartitionAllocPCScan;
-#endif  // defined(PA_ALLOW_PCSCAN)
-#if BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
-extern const BASE_EXPORT Feature kPartitionAllocPCScanBrowserOnly;
-extern const BASE_EXPORT Feature kPartitionAllocPCScanRendererOnly;
-extern const BASE_EXPORT Feature kPartitionAllocBackupRefPtrControl;
-extern const BASE_EXPORT Feature kPartitionAllocLargeThreadCacheSize;
-extern const BASE_EXPORT Feature kPartitionAllocLargeEmptySlotSpanRing;
-#endif  // BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
+  // Detect when freeing memory and releasing the dangling raw_ptr happens in
+  // a different task. Those are more likely to cause use after free.
+  kCrossTask,
 
-enum class BackupRefPtrEnabledProcesses {
-  // BRP enabled only in the browser process.
-  kBrowserOnly,
-  // BRP enabled only in the browser and renderer processes.
-  kBrowserAndRenderer,
-  // BRP enabled in all processes, except renderer.
-  kNonRenderer,
-  // BRP enabled in all processes.
-  kAllProcesses,
+  // Note: This will be extended with LongLived
 };
+extern const BASE_EXPORT base::FeatureParam<DanglingPtrType>
+    kDanglingPtrTypeParam;
+
+using PartitionAllocWithAdvancedChecksEnabledProcesses =
+    internal::PAFeatureEnabledProcesses;
+
+#if PA_BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
+BASE_EXPORT BASE_DECLARE_FEATURE(kPartitionAllocLargeThreadCacheSize);
+BASE_EXPORT int GetPartitionAllocLargeThreadCacheSizeValue();
+BASE_EXPORT int GetPartitionAllocLargeThreadCacheSizeValueForLowRAMAndroid();
+
+BASE_EXPORT BASE_DECLARE_FEATURE(kPartitionAllocLargeEmptySlotSpanRing);
+
+BASE_EXPORT BASE_DECLARE_FEATURE(kPartitionAllocWithAdvancedChecks);
+extern const BASE_EXPORT
+    base::FeatureParam<PartitionAllocWithAdvancedChecksEnabledProcesses>
+        kPartitionAllocWithAdvancedChecksEnabledProcessesParam;
+BASE_EXPORT BASE_DECLARE_FEATURE(kPartitionAllocSchedulerLoopQuarantine);
+// Scheduler Loop Quarantine's per-thread capacity in bytes.
+extern const BASE_EXPORT base::FeatureParam<int>
+    kPartitionAllocSchedulerLoopQuarantineBranchCapacity;
+// Scheduler Loop Quarantine's capacity for the UI thread in bytes.
+// TODO(https://crbug.com/387470567): Support more thread types.
+extern const BASE_EXPORT base::FeatureParam<int>
+    kPartitionAllocSchedulerLoopQuarantineBrowserUICapacity;
+
+BASE_EXPORT BASE_DECLARE_FEATURE(kPartitionAllocZappingByFreeFlags);
+
+// Eventually zero out most PartitionAlloc memory. This is not meant as a
+// security guarantee, but to increase the compression ratio of PartitionAlloc's
+// fragmented super pages.
+BASE_EXPORT BASE_DECLARE_FEATURE(kPartitionAllocEventuallyZeroFreedMemory);
+#endif  // PA_BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
+
+using BackupRefPtrEnabledProcesses = internal::PAFeatureEnabledProcesses;
 
 enum class BackupRefPtrMode {
   // BRP is disabled across all partitions. Equivalent to the Finch flag being
@@ -68,40 +117,121 @@ enum class BackupRefPtrMode {
 
   // BRP is enabled in the main partition, as well as certain Renderer-only
   // partitions (if enabled in Renderer at all).
-  // This entails splitting the main partition.
   kEnabled,
-
-  // Same as kEnabled but without zapping quarantined objects.
-  kEnabledWithoutZapping,
-
-  // BRP is disabled, but the main partition is split out, as if BRP was enabled
-  // in the "previous slot" mode.
-  kDisabledButSplitPartitions2Way,
-
-  // BRP is disabled, but the main partition *and* aligned partition are split
-  // out, as if BRP was enabled in the "before allocation" mode.
-  kDisabledButSplitPartitions3Way,
 };
 
-extern const BASE_EXPORT Feature kPartitionAllocBackupRefPtr;
+enum class MemtagMode {
+  // memtagMode will be SYNC.
+  kSync,
+  // memtagMode will be ASYNC.
+  kAsync,
+};
+
+enum class RetagMode {
+  // Allocations are retagged by incrementing the current tag.
+  kIncrement,
+
+  // Allocations are retagged with a random tag.
+  kRandom,
+};
+
+using MemoryTaggingEnabledProcesses = internal::PAFeatureEnabledProcesses;
+
+enum class BucketDistributionMode : uint8_t {
+  kDefault,
+  kDenser,
+};
+
+BASE_EXPORT BASE_DECLARE_FEATURE(kPartitionAllocBackupRefPtr);
 extern const BASE_EXPORT base::FeatureParam<BackupRefPtrEnabledProcesses>
     kBackupRefPtrEnabledProcessesParam;
 extern const BASE_EXPORT base::FeatureParam<BackupRefPtrMode>
     kBackupRefPtrModeParam;
+extern const BASE_EXPORT base::FeatureParam<int>
+    kBackupRefPtrExtraExtrasSizeParam;
+BASE_EXPORT BASE_DECLARE_FEATURE(kPartitionAllocMemoryTagging);
+extern const BASE_EXPORT base::FeatureParam<MemtagMode> kMemtagModeParam;
+extern const BASE_EXPORT base::FeatureParam<RetagMode> kRetagModeParam;
+extern const BASE_EXPORT base::FeatureParam<MemoryTaggingEnabledProcesses>
+    kMemoryTaggingEnabledProcessesParam;
+// Kill switch for memory tagging. Skips any code related to memory tagging when
+// enabled.
+BASE_EXPORT BASE_DECLARE_FEATURE(kKillPartitionAllocMemoryTagging);
+BASE_EXPORT BASE_DECLARE_FEATURE(kPartitionAllocPermissiveMte);
 extern const BASE_EXPORT base::FeatureParam<bool>
     kBackupRefPtrAsanEnableDereferenceCheckParam;
 extern const BASE_EXPORT base::FeatureParam<bool>
     kBackupRefPtrAsanEnableExtractionCheckParam;
 extern const BASE_EXPORT base::FeatureParam<bool>
     kBackupRefPtrAsanEnableInstantiationCheckParam;
+extern const BASE_EXPORT base::FeatureParam<BucketDistributionMode>
+    kPartitionAllocBucketDistributionParam;
 
-extern const BASE_EXPORT Feature kPartitionAllocPCScanMUAwareScheduler;
-extern const BASE_EXPORT Feature kPartitionAllocPCScanStackScanning;
-extern const BASE_EXPORT Feature kPartitionAllocDCScan;
-extern const BASE_EXPORT Feature kPartitionAllocPCScanImmediateFreeing;
-extern const BASE_EXPORT Feature kPartitionAllocPCScanEagerClearing;
-extern const BASE_EXPORT Feature kPartitionAllocUseAlternateDistribution;
-extern const BASE_EXPORT Feature kPartitionAllocSortActiveSlotSpans;
+BASE_EXPORT BASE_DECLARE_FEATURE(kLowerPAMemoryLimitForNonMainRenderers);
+BASE_EXPORT BASE_DECLARE_FEATURE(kPartitionAllocUseDenserDistribution);
+
+BASE_EXPORT BASE_DECLARE_FEATURE(kPartitionAllocMemoryReclaimer);
+extern const BASE_EXPORT base::FeatureParam<TimeDelta>
+    kPartitionAllocMemoryReclaimerInterval;
+BASE_EXPORT BASE_DECLARE_FEATURE(
+    kPartitionAllocStraightenLargerSlotSpanFreeLists);
+extern const BASE_EXPORT
+    base::FeatureParam<partition_alloc::StraightenLargerSlotSpanFreeListsMode>
+        kPartitionAllocStraightenLargerSlotSpanFreeListsMode;
+BASE_EXPORT BASE_DECLARE_FEATURE(kPartitionAllocSortSmallerSlotSpanFreeLists);
+BASE_EXPORT BASE_DECLARE_FEATURE(kPartitionAllocSortActiveSlotSpans);
+
+#if BUILDFLAG(IS_WIN)
+BASE_EXPORT BASE_DECLARE_FEATURE(kPageAllocatorRetryOnCommitFailure);
+#endif
+
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_CHROMEOS)
+extern const base::FeatureParam<bool>
+    kPartialLowEndModeExcludePartitionAllocSupport;
+#endif
+
+BASE_EXPORT BASE_DECLARE_FEATURE(kEnableConfigurableThreadCacheMultiplier);
+BASE_EXPORT double GetThreadCacheMultiplier();
+BASE_EXPORT double GetThreadCacheMultiplierForAndroid();
+
+BASE_EXPORT BASE_DECLARE_FEATURE(kEnableConfigurableThreadCachePurgeInterval);
+extern const partition_alloc::internal::base::TimeDelta
+GetThreadCacheMinPurgeInterval();
+extern const partition_alloc::internal::base::TimeDelta
+GetThreadCacheMaxPurgeInterval();
+extern const partition_alloc::internal::base::TimeDelta
+GetThreadCacheDefaultPurgeInterval();
+
+BASE_EXPORT BASE_DECLARE_FEATURE(
+    kEnableConfigurableThreadCacheMinCachedMemoryForPurging);
+BASE_EXPORT int GetThreadCacheMinCachedMemoryForPurgingBytes();
+
+BASE_EXPORT BASE_DECLARE_FEATURE(kPartitionAllocDisableBRPInBufferPartition);
+
+// This feature is additionally gated behind a buildflag because
+// pool offset freelists cannot be represented when PartitionAlloc uses
+// 32-bit pointers.
+#if PA_BUILDFLAG(USE_FREELIST_DISPATCHER)
+BASE_EXPORT BASE_DECLARE_FEATURE(kUsePoolOffsetFreelists);
+#endif
+
+// When set, partitions use a larger ring buffer and free memory less
+// aggressively when in the foreground.
+BASE_EXPORT BASE_DECLARE_FEATURE(kPartitionAllocAdjustSizeWhenInForeground);
+
+// When enabled, uses a more nuanced heuristic to determine if slot
+// spans can be treated as "single-slot."
+//
+// See also: https://crbug.com/333443437
+BASE_EXPORT BASE_DECLARE_FEATURE(kPartitionAllocUseSmallSingleSlotSpans);
+
+#if PA_CONFIG(ENABLE_SHADOW_METADATA)
+using ShadowMetadataEnabledProcesses = internal::PAFeatureEnabledProcesses;
+
+BASE_EXPORT BASE_DECLARE_FEATURE(kPartitionAllocShadowMetadata);
+extern const BASE_EXPORT base::FeatureParam<ShadowMetadataEnabledProcesses>
+    kShadowMetadataEnabledProcessesParam;
+#endif  // PA_CONFIG(ENABLE_SHADOW_METADATA)
 
 }  // namespace features
 }  // namespace base

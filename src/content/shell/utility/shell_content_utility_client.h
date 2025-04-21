@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,8 +24,6 @@ class ShellContentUtilityClient : public ContentUtilityClient {
   // ContentUtilityClient:
   void ExposeInterfacesToBrowser(mojo::BinderMap* binders) override;
   void RegisterIOThreadServices(mojo::ServiceFactory& services) override;
-  void RegisterNetworkBinders(
-      service_manager::BinderRegistry* registry) override;
 
  private:
   std::unique_ptr<NetworkServiceTestHelper> network_service_test_helper_;

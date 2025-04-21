@@ -1,6 +1,6 @@
 #!/usr/bin/env vpython3
 
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -24,21 +24,21 @@
 # That's it. We don't even support the other standard cargo:rustc-
 # output messages.
 
-import os
-import sys
-
-# Set up path to be able to import build_utils
-sys.path.append(
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir,
-                 os.pardir, 'build', 'android', 'gyp'))
-from util import build_utils
-
 import argparse
 import io
-import subprocess
-import re
+import os
 import platform
+import re
+import subprocess
+import sys
 import tempfile
+
+# Set up path to be able to import action_helpers
+sys.path.append(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir,
+                 os.pardir, 'build'))
+import action_helpers
+
 
 RUSTC_VERSION_LINE = re.compile(r"(\w+): (.*)")
 
@@ -62,7 +62,9 @@ def host_triple(rustc_path):
   return known_vars["host"]
 
 
-RUSTC_CFG_LINE = re.compile("cargo:rustc-cfg=(.*)")
+# Before 1.77, the format was `cargo:rustc-cfg=`. As of 1.77 the format is now
+# `cargo::rustc-cfg=`.
+RUSTC_CFG_LINE = re.compile("cargo::?rustc-cfg=(.*)")
 
 
 def main():
@@ -74,8 +76,13 @@ def main():
                       required=True,
                       help='where to write output rustc flags')
   parser.add_argument('--target', help='rust target triple')
+  parser.add_argument('--target-abi', help='rust target_abi')
+  parser.add_argument('--pointer-width', help='rust target pointer width')
   parser.add_argument('--features', help='features', nargs='+')
   parser.add_argument('--env', help='environment variable', nargs='+')
+  parser.add_argument('--rustflags',
+                      help=('path to a file of newline-separated command line '
+                            'flags for rustc'))
   parser.add_argument('--rust-prefix', required=True, help='rust path prefix')
   parser.add_argument('--generated-files', nargs='+', help='any generated file')
   parser.add_argument('--out-dir', required=True, help='target out dir')
@@ -101,16 +108,50 @@ def main():
     env["OUT_DIR"] = tempdir
     env["CARGO_MANIFEST_DIR"] = os.path.abspath(args.src_dir)
     env["HOST"] = host_triple(rustc_path)
+    env["CARGO_CFG_TARGET_POINTER_WIDTH"] = args.pointer_width
     if args.target is None:
       env["TARGET"] = env["HOST"]
     else:
       env["TARGET"] = args.target
     target_components = env["TARGET"].split("-")
-    env["CARGO_CFG_TARGET_ARCH"] = target_components[0]
+    if len(target_components) == 2:
+      env["CARGO_CFG_TARGET_ARCH"] = target_components[0]
+      env["CARGO_CFG_TARGET_VENDOR"] = ''
+      env["CARGO_CFG_TARGET_OS"] = target_components[1]
+      env["CARGO_CFG_TARGET_ENV"] = ''
+    elif len(target_components) == 3:
+      env["CARGO_CFG_TARGET_ARCH"] = target_components[0]
+      env["CARGO_CFG_TARGET_VENDOR"] = target_components[1]
+      env["CARGO_CFG_TARGET_OS"] = target_components[2]
+      env["CARGO_CFG_TARGET_ENV"] = ''
+    elif len(target_components) == 4:
+      env["CARGO_CFG_TARGET_ARCH"] = target_components[0]
+      env["CARGO_CFG_TARGET_VENDOR"] = target_components[1]
+      env["CARGO_CFG_TARGET_OS"] = target_components[2]
+      env["CARGO_CFG_TARGET_ENV"] = target_components[3]
+    else:
+      print(f'Invalid TARGET {env["TARGET"]}')
+      sys.exit(1)
+    # See https://crbug.com/325543500 for background.
+    # Cargo sets CARGO_CFG_TARGET_OS to "android" even when targeting
+    # *-androideabi.
+    if env["CARGO_CFG_TARGET_OS"].startswith("android"):
+      env["CARGO_CFG_TARGET_OS"] = "android"
+    elif env["CARGO_CFG_TARGET_OS"] == "darwin":
+      env["CARGO_CFG_TARGET_OS"] = "macos"
+    env["CARGO_CFG_TARGET_ENDIAN"] = "little"
+    if env["CARGO_CFG_TARGET_OS"] == "windows":
+      env["CARGO_CFG_TARGET_FAMILY"] = "windows"
+    else:
+      env["CARGO_CFG_TARGET_FAMILY"] = "unix"
+    env["CARGO_CFG_TARGET_ABI"] = args.target_abi if args.target_abi else ""
     if args.features:
       for f in args.features:
         feature_name = f.upper().replace("-", "_")
         env["CARGO_FEATURE_%s" % feature_name] = "1"
+    if args.rustflags:
+      with open(args.rustflags) as flags:
+        env["CARGO_ENCODED_RUSTFLAGS"] = '\x1f'.join(flags.readlines())
     if args.env:
       for e in args.env:
         (k, v) = e.split("=")
@@ -128,7 +169,8 @@ def main():
                           env=env,
                           cwd=args.src_dir,
                           encoding='utf8',
-                          capture_output=True)
+                          stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE)
 
     if proc.stderr.rstrip():
       print(proc.stderr.rstrip(), file=sys.stderr)
@@ -142,7 +184,7 @@ def main():
 
     # AtomicOutput will ensure we only write to the file on disk if what we
     # give to write() is different than what's currently on disk.
-    with build_utils.AtomicOutput(args.output) as output:
+    with action_helpers.atomic_output(args.output) as output:
       output.write(flags.encode("utf-8"))
 
     # Copy any generated code out of the temporary directory,
@@ -155,7 +197,7 @@ def main():
         if not os.path.exists(out_dir):
           os.makedirs(out_dir)
         with open(in_path, 'rb') as input:
-          with build_utils.AtomicOutput(out_path) as output:
+          with action_helpers.atomic_output(out_path) as output:
             content = input.read()
             output.write(content)
 

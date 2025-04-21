@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,20 +7,21 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/values.h"
 #include "chrome/browser/chromeos/app_mode/chrome_kiosk_external_loader_broker.h"
 
-namespace ash {
+namespace chromeos {
 
 KioskAppExternalLoader::KioskAppExternalLoader(AppClass app_class)
     : app_class_(app_class) {}
 
 KioskAppExternalLoader::~KioskAppExternalLoader() {
-  if (state_ != State::kInitial)
+  if (state_ != State::kInitial) {
     SetPrefsChangedHandler(
         ChromeKioskExternalLoaderBroker::InstallDataChangeCallback());
+  }
 }
 
 void KioskAppExternalLoader::StartLoading() {
@@ -44,15 +45,15 @@ void KioskAppExternalLoader::SetPrefsChangedHandler(
   }
 }
 
-void KioskAppExternalLoader::SendPrefs(base::DictionaryValue prefs) {
+void KioskAppExternalLoader::SendPrefs(base::Value::Dict prefs) {
   const bool initial_load = state_ == State::kLoading;
   state_ = State::kLoaded;
 
   if (initial_load) {
-    LoadFinished(std::make_unique<base::DictionaryValue>(std::move(prefs)));
+    LoadFinished(std::move(prefs));
   } else {
-    OnUpdated(std::make_unique<base::DictionaryValue>(std::move(prefs)));
+    OnUpdated(std::move(prefs));
   }
 }
 
-}  // namespace ash
+}  // namespace chromeos

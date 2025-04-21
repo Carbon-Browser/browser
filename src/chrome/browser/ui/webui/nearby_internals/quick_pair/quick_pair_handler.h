@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 #define CHROME_BROWSER_UI_WEBUI_NEARBY_INTERNALS_QUICK_PAIR_QUICK_PAIR_HANDLER_H_
 
 #include <memory>
+
 #include "ash/quick_pair/common/log_buffer.h"
 #include "ash/quick_pair/common/logging.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/values.h"

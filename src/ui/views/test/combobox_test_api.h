@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,9 +39,11 @@ class ComboboxTestApi {
   // Accessors for private data members of Combobox.
   gfx::Size content_size();
   ui::MenuModel* menu_model();
+  // Closes the menu of the combobox by calling private data members.
+  void CloseMenu();
 
  private:
-  raw_ptr<Combobox> combobox_;
+  const raw_ptr<Combobox> combobox_;
 };
 
 }  // namespace test

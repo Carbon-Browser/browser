@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,7 +39,8 @@ class BLINK_EXPORT WebServiceWorkerFetchContext : public WebWorkerFetchContext {
           preference_watcher_receiver,
       CrossVariantMojoReceiver<mojom::SubresourceLoaderUpdaterInterfaceBase>
           pending_subresource_loader_updater,
-      const WebVector<WebString>& cors_exempt_header_list);
+      const WebVector<WebString>& cors_exempt_header_list,
+      const bool is_third_party_context);
 };
 
 }  // namespace blink

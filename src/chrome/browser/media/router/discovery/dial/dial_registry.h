@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
@@ -111,7 +112,8 @@ class DialRegistry
 
  private:
   using DeviceByIdMap = std::map<std::string, std::unique_ptr<DialDeviceData>>;
-  using DeviceByLabelMap = std::map<std::string, DialDeviceData*>;
+  using DeviceByLabelMap =
+      std::map<std::string, raw_ptr<DialDeviceData, CtnExperimental>>;
 
   friend class MockDialRegistry;
   friend class TestDialRegistry;
@@ -158,7 +160,7 @@ class DialRegistry
   std::string NextLabel();
 
   // Unowned reference to the DialRegistry::Client.
-  Client& client_;
+  const raw_ref<Client> client_;
 
   // Task runner for the DialRegistry.
   scoped_refptr<base::SequencedTaskRunner> task_runner_;

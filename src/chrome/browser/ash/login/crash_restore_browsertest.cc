@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,6 @@
 #include <utility>
 #include <vector>
 
-#include "ash/components/cryptohome/cryptohome_parameters.h"
-#include "ash/components/login/auth/public/user_context.h"
 #include "ash/constants/ash_switches.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
@@ -30,11 +28,15 @@
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
+#include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
 #include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
 #include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 #include "chromeos/ash/components/dbus/userdataauth/userdataauth_client.h"
+#include "chromeos/ash/components/login/auth/public/user_context.h"
 #include "components/account_id/account_id.h"
 #include "components/session_manager/core/session_manager.h"
+#include "components/signin/public/identity_manager/account_managed_status_finder.h"
+#include "components/user_manager/fake_user_manager.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
 #include "content/public/test/browser_test.h"
@@ -45,7 +47,8 @@
 namespace ash {
 namespace {
 
-// Use consumer.example.com to keep policy code out of the tests.
+// Note that consumer.example.com is registered as a "known consumer domain"
+// below; this is to keep policy code out of these tests.
 constexpr char kUserId1[] = "user1@consumer.example.com";
 constexpr char kUserId2[] = "user2@consumer.example.com";
 constexpr char kUserId3[] = "user3@consumer.example.com";
@@ -54,9 +57,16 @@ constexpr char kUserId3[] = "user3@consumer.example.com";
 
 class CrashRestoreSimpleTest : public InProcessBrowserTest {
  protected:
-  CrashRestoreSimpleTest() {}
+  CrashRestoreSimpleTest() {
+    // Recognize consumer.example.com as a known non-enterprise domain.
+    signin::AccountManagedStatusFinder::SetNonEnterpriseDomainForTesting(
+        "consumer.example.com");
+  }
 
-  ~CrashRestoreSimpleTest() override {}
+  ~CrashRestoreSimpleTest() override {
+    signin::AccountManagedStatusFinder::SetNonEnterpriseDomainForTesting(
+        nullptr);
+  }
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
     command_line->AppendSwitchASCII(switches::kLoginUser,
@@ -113,7 +123,7 @@ class UserSessionRestoreObserver : public UserSessionStateObserver {
   UserSessionRestoreObserver& operator=(const UserSessionRestoreObserver&) =
       delete;
 
-  ~UserSessionRestoreObserver() override {}
+  ~UserSessionRestoreObserver() override = default;
 
   void PendingUserSessionsRestoreFinished() override {
     user_sessions_restored_ = true;
@@ -145,8 +155,8 @@ class UserSessionRestoreObserver : public UserSessionStateObserver {
 
 class CrashRestoreComplexTest : public CrashRestoreSimpleTest {
  protected:
-  CrashRestoreComplexTest() {}
-  ~CrashRestoreComplexTest() override {}
+  CrashRestoreComplexTest() = default;
+  ~CrashRestoreComplexTest() override = default;
 
   bool SetUpUserDataDirectory() override {
     RegisterUsers();
@@ -200,18 +210,17 @@ class CrashRestoreComplexTest : public CrashRestoreSimpleTest {
     // NOTE: This does not include IdentityManager prefs like
     // kGoogleServicesAccountId, so the IdentityManager will not initialize
     // itself with a primary account.
-    base::DictionaryValue prefs;
-    prefs.SetStringPath(prefs::kSessionExitType, "Crashed");
+    base::Value::Dict prefs;
+    prefs.Set(prefs::kSessionExitType, "Crashed");
     std::string prefs_json;
     ASSERT_TRUE(base::JSONWriter::Write(prefs, &prefs_json));
 
     base::FilePath user_data_dir;
     ASSERT_TRUE(base::PathService::Get(chrome::DIR_USER_DATA, &user_data_dir));
 
-    const char* kTestUserIds[] = {kUserId1, kUserId2, kUserId3};
-    for (auto* user_id : kTestUserIds) {
+    for (const auto& account_id : {account_id1_, account_id2_, account_id3_}) {
       const std::string user_id_hash =
-          ProfileHelper::GetUserIdHashByUserIdForTesting(user_id);
+          user_manager::FakeUserManager::GetFakeUsernameHash(account_id);
       const base::FilePath user_profile_path =
           user_data_dir.Append(ProfileHelper::GetUserProfileDir(user_id_hash));
       ASSERT_TRUE(base::CreateDirectory(user_profile_path));
@@ -283,14 +292,15 @@ class CrashRestoreChildUserTest : public MixinBasedInProcessBrowserTest {
     MixinBasedInProcessBrowserTest::SetUpInProcessBrowserTestFixture();
   }
 
-  LoggedInUserMixin logged_in_user_mixin_{
-      &mixin_host_, LoggedInUserMixin::LogInType::kChild,
-      embedded_test_server(), this, /*should_launch_browser=*/false};
+  LoggedInUserMixin logged_in_user_mixin_{&mixin_host_, /*test_base=*/this,
+                                          embedded_test_server(),
+                                          LoggedInUserMixin::LogInType::kChild};
 };
 
 IN_PROC_BROWSER_TEST_F(CrashRestoreChildUserTest, PRE_SessionRestore) {
   // Verify that child user can log in.
-  logged_in_user_mixin_.LogInUser();
+  logged_in_user_mixin_.LogInUser(
+      {ash::LoggedInUserMixin::LoginDetails::kNoBrowserLaunch});
 }
 
 IN_PROC_BROWSER_TEST_F(CrashRestoreChildUserTest, SessionRestore) {

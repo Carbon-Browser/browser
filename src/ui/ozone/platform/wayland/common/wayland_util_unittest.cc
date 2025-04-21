@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ TEST_F(WaylandUtilTest, TestCreateRectsFromSkPath) {
   constexpr int height = 100;
 
   // Test1 consists of 2 rectangles from SkPath.
-  std::vector<gfx::Rect> expectedFor2Rects = {gfx::Rect(1, 0, 98, 1),
+  std::vector<gfx::Rect> expectedFor2Rects = {gfx::Rect(1, 0, 99, 1),
                                               gfx::Rect(0, 1, 100, 99)};
   SkPath pathFor2Rects;
   const SkRect rect = SkRect::MakeIWH(width, height);

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,24 +16,28 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/callback_list.h"
+#include "base/containers/contains.h"
 #include "base/debug/stack_trace.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
+#include "base/not_fatal_until.h"
+#include "base/notreached.h"
 #include "base/path_service.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/threading/thread_checker.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "crypto/chaps_support.h"
 #include "crypto/nss_util_internal.h"
@@ -147,7 +151,7 @@ class ChromeOSTokenManager {
     explicit TPMModuleAndSlot(SECMODModule* init_chaps_module)
         : chaps_module(init_chaps_module) {}
 
-    SECMODModule* chaps_module;
+    raw_ptr<SECMODModule> chaps_module;
     ScopedPK11Slot tpm_slot;
   };
 
@@ -157,7 +161,7 @@ class ChromeOSTokenManager {
     // NSS is allowed to do IO on the current thread since dispatching
     // to a dedicated thread would still have the affect of blocking
     // the current thread, due to NSS's internal locking requirements
-    base::ThreadRestrictions::ScopedAllowIO allow_io;
+    ScopedAllowBlockingForNSS allow_blocking;
 
     base::FilePath nssdb_path = GetSoftwareNSSDBPath(path);
     if (!base::CreateDirectory(nssdb_path)) {
@@ -269,8 +273,8 @@ class ChromeOSTokenManager {
       return;
     }
 
-    DCHECK(base::SequencedTaskRunnerHandle::IsSet());
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    DCHECK(base::SequencedTaskRunner::HasCurrentDefault());
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback),
                        /*is_tpm_enabled=*/(state_ == State::kTpmTokenEnabled)));
@@ -279,7 +283,7 @@ class ChromeOSTokenManager {
   bool InitializeNSSForChromeOSUser(const std::string& username_hash,
                                     const base::FilePath& path) {
     DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-    if (chromeos_user_map_.find(username_hash) != chromeos_user_map_.end()) {
+    if (base::Contains(chromeos_user_map_, username_hash)) {
       // This user already exists in our mapping.
       DVLOG(2) << username_hash << " already initialized.";
       return false;
@@ -289,6 +293,20 @@ class ChromeOSTokenManager {
     std::string db_name = base::StringPrintf("%s %s", kUserNSSDatabaseName,
                                              username_hash.c_str());
     ScopedPK11Slot public_slot(OpenPersistentNSSDBForPath(db_name, path));
+
+    return InitializeNSSForChromeOSUserWithSlot(username_hash,
+                                                std::move(public_slot));
+  }
+
+  bool InitializeNSSForChromeOSUserWithSlot(const std::string& username_hash,
+                                            ScopedPK11Slot public_slot) {
+    DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+    if (base::Contains(chromeos_user_map_, username_hash)) {
+      // This user already exists in our mapping.
+      DVLOG(2) << username_hash << " already initialized.";
+      return false;
+    }
+
     chromeos_user_map_[username_hash] =
         std::make_unique<ChromeOSUserData>(std::move(public_slot));
     return true;
@@ -296,7 +314,7 @@ class ChromeOSTokenManager {
 
   bool ShouldInitializeTPMForChromeOSUser(const std::string& username_hash) {
     DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-    DCHECK(chromeos_user_map_.find(username_hash) != chromeos_user_map_.end());
+    DCHECK(base::Contains(chromeos_user_map_, username_hash));
 
     return !chromeos_user_map_[username_hash]
                 ->private_slot_initialization_started();
@@ -304,7 +322,7 @@ class ChromeOSTokenManager {
 
   void WillInitializeTPMForChromeOSUser(const std::string& username_hash) {
     DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-    DCHECK(chromeos_user_map_.find(username_hash) != chromeos_user_map_.end());
+    DCHECK(base::Contains(chromeos_user_map_, username_hash));
 
     chromeos_user_map_[username_hash]
         ->set_private_slot_initialization_started();
@@ -313,7 +331,7 @@ class ChromeOSTokenManager {
   void InitializeTPMForChromeOSUser(const std::string& username_hash,
                                     CK_SLOT_ID slot_id) {
     DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-    DCHECK(chromeos_user_map_.find(username_hash) != chromeos_user_map_.end());
+    DCHECK(base::Contains(chromeos_user_map_, username_hash));
     DCHECK(chromeos_user_map_[username_hash]
                ->private_slot_initialization_started());
 
@@ -350,7 +368,7 @@ class ChromeOSTokenManager {
       const std::string& username_hash) {
     DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
     VLOG(1) << "using software private slot for " << username_hash;
-    DCHECK(chromeos_user_map_.find(username_hash) != chromeos_user_map_.end());
+    DCHECK(base::Contains(chromeos_user_map_, username_hash));
     DCHECK(chromeos_user_map_[username_hash]
                ->private_slot_initialization_started());
 
@@ -373,7 +391,7 @@ class ChromeOSTokenManager {
       return ScopedPK11Slot();
     }
 
-    if (chromeos_user_map_.find(username_hash) == chromeos_user_map_.end()) {
+    if (!base::Contains(chromeos_user_map_, username_hash)) {
       LOG(ERROR) << username_hash << " not initialized.";
       return ScopedPK11Slot();
     }
@@ -388,13 +406,13 @@ class ChromeOSTokenManager {
     if (username_hash.empty()) {
       DVLOG(2) << "empty username_hash";
       if (!callback.is_null()) {
-        base::ThreadTaskRunnerHandle::Get()->PostTask(
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
             FROM_HERE, base::BindOnce(std::move(callback), ScopedPK11Slot()));
       }
       return ScopedPK11Slot();
     }
 
-    DCHECK(chromeos_user_map_.find(username_hash) != chromeos_user_map_.end());
+    DCHECK(base::Contains(chromeos_user_map_, username_hash));
 
     return chromeos_user_map_[username_hash]->GetPrivateSlot(
         std::move(callback));
@@ -403,7 +421,7 @@ class ChromeOSTokenManager {
   void CloseChromeOSUserForTesting(const std::string& username_hash) {
     DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
     auto i = chromeos_user_map_.find(username_hash);
-    DCHECK(i != chromeos_user_map_.end());
+    CHECK(i != chromeos_user_map_.end(), base::NotFatalUntil::M130);
     chromeos_user_map_.erase(i);
   }
 
@@ -419,7 +437,7 @@ class ChromeOSTokenManager {
       return;
     }
 
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(std::move(callback),
                        /*system_slot=*/ScopedPK11Slot(
@@ -486,7 +504,7 @@ class ChromeOSTokenManager {
   std::unique_ptr<base::OnceClosureList> tpm_ready_callback_list_ =
       std::make_unique<base::OnceClosureList>();
 
-  SECMODModule* chaps_module_ = nullptr;
+  raw_ptr<SECMODModule> chaps_module_ = nullptr;
   ScopedPK11Slot system_slot_;
   std::map<std::string, std::unique_ptr<ChromeOSUserData>> chromeos_user_map_;
   ScopedPK11Slot prepared_test_private_slot_;
@@ -551,6 +569,12 @@ bool InitializeNSSForChromeOSUser(const std::string& username_hash,
                                                             path);
 }
 
+bool InitializeNSSForChromeOSUserWithSlot(const std::string& username_hash,
+                                          ScopedPK11Slot public_slot) {
+  return g_token_manager.Get().InitializeNSSForChromeOSUserWithSlot(
+      username_hash, std::move(public_slot));
+}
+
 bool ShouldInitializeTPMForChromeOSUser(const std::string& username_hash) {
   return g_token_manager.Get().ShouldInitializeTPMForChromeOSUser(
       username_hash);
@@ -592,27 +616,26 @@ void SetPrivateSoftwareSlotForChromeOSUserForTesting(ScopedPK11Slot slot) {
 }
 
 namespace {
-void PrintDirectoryInfo(std::stringstream& ss, const base::FilePath& path) {
+void PrintDirectoryInfo(const base::FilePath& path) {
   base::stat_wrapper_t file_stat;
-  base::File::Error error_code = base::File::Error::FILE_OK;
-  if (base::File::Stat(path.value().c_str(), &file_stat) == -1) {
-    error_code = base::File::OSErrorToFileError(errno);
-  }
-  ss << path << ", ";
-  ss << std::oct << file_stat.st_mode << std::dec << ", ";
-  ss << "uid " << file_stat.st_uid << ", ";
-  ss << "gid " << file_stat.st_gid << std::endl;
 
-  ss << "Enumerate error code: " << error_code << std::endl;
+  if (base::File::Stat(path, &file_stat) == -1) {
+    base::File::Error error_code = base::File::OSErrorToFileError(errno);
+    LOG(ERROR) << "Failed to collect directory info, error: " << error_code;
+  }
+
+  LOG(ERROR) << path << ", " << std::oct << file_stat.st_mode << std::dec
+             << ", "
+             << "uid " << file_stat.st_uid << ", "
+             << "gid " << file_stat.st_gid << std::endl;
 }
 }  // namespace
 
 // TODO(crbug.com/1163303): Remove when the bug is fixed.
 void DiagnosePublicSlotAndCrash(const base::FilePath& nss_path) {
-  std::stringstream ss;
-  ss << "Public slot is invalid." << std::endl;
+  LOG(ERROR) << "Public slot is invalid. Start collecting stats.";
   // Should be something like /home/chronos/u-<hash>/.pki/nssdb .
-  ss << "NSS path: " << nss_path << std::endl;
+  LOG(ERROR) << "NSS path: " << nss_path;
 
   {
     // NSS files like pkcs11.txt, cert9.db, key4.db .
@@ -622,23 +645,22 @@ void DiagnosePublicSlotAndCrash(const base::FilePath& nss_path) {
         /*pattern=*/base::FilePath::StringType(),
         base::FileEnumerator::FolderSearchPolicy::MATCH_ONLY,
         base::FileEnumerator::ErrorPolicy::STOP_ENUMERATION);
-    ss << "Public slot database files:" << std::endl;
+    LOG(ERROR) << "Public slot database files:";
     for (base::FilePath path = files.Next(); !path.empty();
          path = files.Next()) {
       base::FileEnumerator::FileInfo file_info = files.GetInfo();
-      ss << file_info.GetName() << ", ";
-      ss << std::oct << file_info.stat().st_mode << std::dec << ", ";
-      ss << "uid " << file_info.stat().st_uid << ", ";
-      ss << "gid " << file_info.stat().st_gid << ", ";
-      ss << file_info.stat().st_size << " bytes, ";
 
       char buf[16];
       int read_result = base::ReadFile(path, buf, sizeof(buf) - 1);
-      ss << ((read_result > 0) ? "readable" : "not readable");
 
-      ss << std::endl;
+      LOG(ERROR) << file_info.GetName() << ", " << std::oct
+                 << file_info.stat().st_mode << std::dec << ", "
+                 << "uid " << file_info.stat().st_uid << ", "
+                 << "gid " << file_info.stat().st_gid << ", "
+                 << file_info.stat().st_size << " bytes, "
+                 << ((read_result > 0) ? "readable" : "not readable");
     }
-    ss << "Enumerate error code: " << files.GetError() << std::endl;
+    LOG(ERROR) << "Enumerate error code: " << files.GetError();
   }
 
   // NSS directory might not be created yet, also check parent directories.
@@ -646,32 +668,32 @@ void DiagnosePublicSlotAndCrash(const base::FilePath& nss_path) {
   // access permissions.
 
   base::FilePath nssdb_path = nss_path.Append(base::FilePath::kParentDirectory);
-  PrintDirectoryInfo(ss, nssdb_path);
+  PrintDirectoryInfo(nssdb_path);
 
   base::FilePath pki_path = nssdb_path.Append(base::FilePath::kParentDirectory);
-  PrintDirectoryInfo(ss, pki_path);
+  PrintDirectoryInfo(pki_path);
 
   base::FilePath u_hash_path =
       pki_path.Append(base::FilePath::kParentDirectory);
-  PrintDirectoryInfo(ss, u_hash_path);
+  PrintDirectoryInfo(u_hash_path);
 
   {
     // Check whether the NSS path exists, and if not, check whether it's
     // possible to create it.
     if (base::DirectoryExists(nss_path)) {
-      ss << "NSS path exists." << std::endl;
+      LOG(ERROR) << "NSS path exists (as expected).";
     } else {
       base::File::Error error = base::File::Error::FILE_OK;
       if (base::CreateDirectoryAndGetError(nss_path, &error)) {
-        ss << "NSS path didn't exist. Created successfully." << std::endl;
+        LOG(ERROR) << "NSS path didn't exist. Created successfully.";
       } else {
-        ss << "NSS path didn't exist. Failed to create, error: " << error
-           << std::endl;
+        LOG(ERROR) << "NSS path didn't exist. Failed to create, error: "
+                   << error;
       }
     }
   }
 
-  CHECK(false) << ss.str();
+  NOTREACHED() << "Public slot is invalid.";
 }
 
 }  // namespace crypto

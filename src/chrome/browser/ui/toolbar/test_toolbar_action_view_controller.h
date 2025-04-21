@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,16 +25,18 @@ class TestToolbarActionViewController : public ToolbarActionViewController {
   // ToolbarActionViewController:
   std::string GetId() const override;
   void SetDelegate(ToolbarActionViewDelegate* delegate) override;
-  gfx::Image GetIcon(content::WebContents* web_contents,
-                     const gfx::Size& size) override;
+  ui::ImageModel GetIcon(content::WebContents* web_contents,
+                         const gfx::Size& size) override;
   std::u16string GetActionName() const override;
+  std::u16string GetActionTitle(
+      content::WebContents* web_contents) const override;
   std::u16string GetAccessibleName(
       content::WebContents* web_contents) const override;
   std::u16string GetTooltip(content::WebContents* web_contents) const override;
+  ToolbarActionViewController::HoverCardState GetHoverCardState(
+      content::WebContents* web_contents) const override;
   bool IsEnabled(content::WebContents* web_contents) const override;
   bool IsShowingPopup() const override;
-  bool IsRequestingSiteAccess(
-      content::WebContents* web_contents) const override;
   void HidePopup() override;
   gfx::NativeView GetPopupNativeView() override;
   ui::MenuModel* GetContextMenu(
@@ -51,6 +53,7 @@ class TestToolbarActionViewController : public ToolbarActionViewController {
 
   // Configure the test controller. These also call UpdateDelegate().
   void SetActionName(const std::u16string& name);
+  void SetActionTitle(const std::u16string& title);
   void SetAccessibleName(const std::u16string& name);
   void SetTooltip(const std::u16string& tooltip);
   void SetEnabled(bool is_enabled);
@@ -69,6 +72,9 @@ class TestToolbarActionViewController : public ToolbarActionViewController {
 
   // Action name for the controller.
   std::u16string action_name_;
+
+  // Action title for the controller.
+  std::u16string action_title_;
 
   // The optional accessible name and tooltip; by default these are empty.
   std::u16string accessible_name_;

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,15 @@ TEST(ThreadPoolEnvironmentConfig, CanUseBackgroundPriorityForWorker) {
 #elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_FUCHSIA) || \
     BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_NACL)
   EXPECT_FALSE(CanUseBackgroundThreadTypeForWorkerThread());
+#else
+#error Platform doesn't match any block
+#endif
+
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_ANDROID)
+  EXPECT_TRUE(CanUseUtilityThreadTypeForWorkerThread());
+#elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_FUCHSIA) || \
+    BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_NACL)
+  EXPECT_FALSE(CanUseUtilityThreadTypeForWorkerThread());
 #else
 #error Platform doesn't match any block
 #endif

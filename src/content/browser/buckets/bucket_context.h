@@ -1,46 +1,57 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_BROWSER_BUCKETS_BUCKET_CONTEXT_H_
 #define CONTENT_BROWSER_BUCKETS_BUCKET_CONTEXT_H_
 
+#include "components/services/storage/privileged/cpp/bucket_client_info.h"
 #include "content/common/content_export.h"
-#include "content/public/browser/global_routing_id.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-#include "third_party/abseil-cpp/absl/types/variant.h"
-#include "third_party/blink/public/common/permissions/permission_utils.h"
+#include "mojo/public/cpp/bindings/pending_receiver.h"
+#include "third_party/blink/public/common/storage_key/storage_key.h"
+#include "third_party/blink/public/mojom/cache_storage/cache_storage.mojom-forward.h"
+#include "third_party/blink/public/mojom/file_system_access/file_system_access_manager.mojom.h"
+#include "third_party/blink/public/mojom/indexeddb/indexeddb.mojom-forward.h"
 #include "third_party/blink/public/mojom/permissions/permission_status.mojom-forward.h"
-#include "url/origin.h"
+
+namespace blink {
+enum class PermissionType;
+}
+
+namespace storage {
+struct BucketInfo;
+}
 
 namespace content {
 
-class StoragePartitionImpl;
-
-// This class encapsulates logic and data relevant to a particular bucket. There
-// is one created for each bucket that a renderer creates.
+// An interface that represents an execution context from which a bucket can be
+// created and used. This may correlate to a RenderFrame or a worker.
 class CONTENT_EXPORT BucketContext {
  public:
-  BucketContext(const GlobalRenderFrameHostId& render_frame_host_id,
-                const url::Origin& origin);
-  BucketContext(int render_process_id, const url::Origin& origin);
-  BucketContext(const BucketContext& other);
-  BucketContext operator=(const BucketContext& other) = delete;
-  ~BucketContext();
+  virtual ~BucketContext() = default;
 
-  const url::Origin& origin() const { return origin_; }
-  StoragePartitionImpl* GetStoragePartition() const;
-  blink::mojom::PermissionStatus GetPermissionStatus(
-      blink::PermissionType permission_type) const;
+  // Returns the StorageKey for the context.
+  virtual blink::StorageKey GetBucketStorageKey() = 0;
 
-  void set_permission_status_for_test(blink::mojom::PermissionStatus status) {
-    permission_status_for_test_ = status;
-  }
+  // Checks the permission status for the given type.
+  virtual blink::mojom::PermissionStatus GetPermissionStatus(
+      blink::PermissionType permission_type) = 0;
 
- private:
-  absl::variant<int, GlobalRenderFrameHostId> id_;
-  url::Origin origin_;
-  absl::optional<blink::mojom::PermissionStatus> permission_status_for_test_;
+  // Used to access CacheStorage for the bucket.
+  virtual void BindCacheStorageForBucket(
+      const storage::BucketInfo& bucket,
+      mojo::PendingReceiver<blink::mojom::CacheStorage> receiver) = 0;
+
+  // Returns an OPFS file system associated with `bucket`. An empty
+  // `directory_path_components` means that the root directory will be returned.
+  virtual void GetSandboxedFileSystemForBucket(
+      const storage::BucketInfo& bucket,
+      const std::vector<std::string>& directory_path_components,
+      blink::mojom::FileSystemAccessManager::GetSandboxedFileSystemCallback
+          callback) = 0;
+
+  // Returns the `BucketClientInfo` for this context.
+  virtual storage::BucketClientInfo GetBucketClientInfo() const = 0;
 };
 
 }  // namespace content

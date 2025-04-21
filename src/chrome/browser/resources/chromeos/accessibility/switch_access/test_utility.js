@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,14 +16,7 @@
  *         descendant of rootWebArea.
  */
 const TestUtility = {
-  async setup() {
-    await importModule('Commands', '/switch_access/commands.js');
-    await importModule(
-        'FocusRingManager', '/switch_access/focus_ring_manager.js');
-    await importModule('Navigator', '/switch_access/navigator.js');
-    await importModule(
-        'SwitchAccessPredicate', '/switch_access/switch_access_predicate.js');
-
+  setup() {
     FocusRingManager.instance.observer_ = TestUtility.whenFocusChanges_;
   },
 
@@ -41,17 +34,17 @@ const TestUtility = {
   },
 
   pressNextSwitch() {
-    Commands.instance.runCommand_(
+    SACommands.instance.runCommand_(
         chrome.accessibilityPrivate.SwitchAccessCommand.NEXT);
   },
 
   pressPreviousSwitch() {
-    Commands.instance.runCommand_(
+    SACommands.instance.runCommand_(
         chrome.accessibilityPrivate.SwitchAccessCommand.PREVIOUS);
   },
 
   pressSelectSwitch() {
-    Commands.instance.runCommand_(
+    SACommands.instance.runCommand_(
         chrome.accessibilityPrivate.SwitchAccessCommand.SELECT);
   },
 

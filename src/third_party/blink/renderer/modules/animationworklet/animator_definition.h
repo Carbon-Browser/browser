@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,10 +34,12 @@ class MODULES_EXPORT AnimatorDefinition final
     return "AnimatorDefinition";
   }
 
-  V8AnimatorConstructor* ConstructorFunction() const { return constructor_; }
-  V8AnimateCallback* AnimateFunction() const { return animate_; }
-  V8StateCallback* StateFunction() const { return state_; }
-  bool IsStateful() const { return state_; }
+  V8AnimatorConstructor* ConstructorFunction() const {
+    return constructor_.Get();
+  }
+  V8AnimateCallback* AnimateFunction() const { return animate_.Get(); }
+  V8StateCallback* StateFunction() const { return state_.Get(); }
+  bool IsStateful() const { return state_ != nullptr; }
 
  private:
   // This object keeps the constructor function, animate, and state function

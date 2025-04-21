@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,11 @@
 
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/numerics/safe_conversions.h"
+#include "base/task/single_thread_task_runner.h"
+#include "media/base/audio_glitch_info.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 
 namespace blink {
@@ -44,10 +47,8 @@ void WebAudioMediaStreamSource::SetFormat(int number_of_channels,
   // running on.
   fifo_.Reset(sample_rate / 100);
   media::AudioParameters params(media::AudioParameters::AUDIO_PCM_LOW_LATENCY,
-                                channel_layout, sample_rate,
-                                fifo_.frames_per_buffer());
-  // Take care of the discrete channel layout case.
-  params.set_channels_for_discrete(number_of_channels);
+                                {channel_layout, number_of_channels},
+                                sample_rate, fifo_.frames_per_buffer());
   MediaStreamAudioSource::SetFormat(params);
 
   if (!wrapper_bus_ || wrapper_bus_->channels() != params.channels())
@@ -91,8 +92,11 @@ void WebAudioMediaStreamSource::ConsumeAudio(
   wrapper_bus_->set_frames(number_of_frames);
   DCHECK_EQ(wrapper_bus_->channels(), static_cast<int>(audio_data.size()));
   for (wtf_size_t i = 0; i < audio_data.size(); ++i) {
-    wrapper_bus_->SetChannelData(static_cast<int>(i),
-                                 const_cast<float*>(audio_data[i]));
+    // TODO(crbug.com/375449662): Spanify `audio_data`.
+    wrapper_bus_->SetChannelData(
+        static_cast<int>(i),
+        UNSAFE_TODO(base::span(const_cast<float*>(audio_data[i]),
+                               base::checked_cast<size_t>(number_of_frames))));
   }
 
   // The following will result in zero, one, or multiple synchronous calls to
@@ -111,7 +115,7 @@ void WebAudioMediaStreamSource::DeliverRebufferedAudio(
       base::Microseconds(
           frame_delay * base::Time::kMicrosecondsPerSecond /
           MediaStreamAudioSource::GetAudioParameters().sample_rate());
-  MediaStreamAudioSource::DeliverDataToTracks(audio_bus, reference_time);
+  MediaStreamAudioSource::DeliverDataToTracks(audio_bus, reference_time, {});
 }
 
 }  // namespace blink

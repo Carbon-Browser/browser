@@ -1,16 +1,18 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_NEARBY_SHARING_NEARBY_RECEIVE_MANAGER_H_
 #define CHROME_BROWSER_NEARBY_SHARING_NEARBY_RECEIVE_MANAGER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/unguessable_token.h"
 #include "chrome/browser/nearby_sharing/attachment.h"
 #include "chrome/browser/nearby_sharing/nearby_sharing_service.h"
 #include "chrome/browser/nearby_sharing/transfer_update_callback.h"
 #include "chrome/browser/ui/webui/nearby_share/nearby_share.mojom.h"
 #include "mojo/public/cpp/bindings/remote.h"
+#include "mojo/public/cpp/bindings/remote_set.h"
 
 // |NearbyReceiveManager| is a mojo implementation that is bound in os-settings
 // to allow the user to enter high-visibility advertising and accept incoming
@@ -56,7 +58,7 @@ class NearbyReceiveManager : public nearby_share::mojom::ReceiveManager,
   void NotifyOnTransferUpdate(const ShareTarget& share_target,
                               const TransferMetadata& metadata);
 
-  NearbySharingService* nearby_sharing_service_;
+  raw_ptr<NearbySharingService> nearby_sharing_service_;
 
   base::flat_map<base::UnguessableToken, ShareTarget> share_targets_map_;
   mojo::RemoteSet<nearby_share::mojom::ReceiveObserver> observers_set_;

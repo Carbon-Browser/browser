@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,26 +37,20 @@ SearchResultPageAnchoredDialog::SearchResultPageAnchoredDialog(
   views::Widget* const parent = host_view_->GetWidget();
 
   widget_ = new views::Widget();
-  views::Widget::InitParams params;
-  // Pre-productivity launcher uses DialogDelegateView for the dialog, while the
-  // productivity launcher expects a frameless widget.
-  if (features::IsProductivityLauncherEnabled()) {
-    params.type = views::Widget::InitParams::TYPE_WINDOW_FRAMELESS;
-    params.layer_type = ui::LAYER_NOT_DRAWN;
-    params.parent = parent->GetNativeWindow();
-    params.delegate = dialog.release();
-  } else {
-    params = views::DialogDelegateView::GetDialogWidgetInitParams(
-        dialog.release(), parent->GetNativeWindow(), parent->GetNativeWindow(),
-        gfx::Rect());
-  }
+  views::Widget::InitParams params(
+      views::Widget::InitParams::NATIVE_WIDGET_OWNS_WIDGET,
+      views::Widget::InitParams::TYPE_WINDOW_FRAMELESS);
+  params.layer_type = ui::LAYER_NOT_DRAWN;
+  params.parent = parent->GetNativeWindow();
+  params.delegate = dialog.release();
+
   widget_->Init(std::move(params));
 
   // The |dialog| ownership is passed to the window hierarchy.
-  widget_observations_.AddObservation(widget_);
+  widget_observations_.AddObservation(widget_.get());
   widget_observations_.AddObservation(parent);
 
-  view_observations_.AddObservation(host_view_);
+  view_observations_.AddObservation(host_view_.get());
   view_observations_.AddObservation(widget_->GetContentsView());
 }
 

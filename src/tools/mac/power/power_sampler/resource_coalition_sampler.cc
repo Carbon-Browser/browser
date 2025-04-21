@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -215,7 +215,7 @@ std::unique_ptr<ResourceCoalitionSampler> ResourceCoalitionSampler::Create(
     GetProcessCoalitionIdFn get_process_coalition_id_fn,
     GetCoalitionResourceUsageFn get_coalition_resource_usage_fn,
     mach_timebase_info_data_t timebase) {
-  absl::optional<uint64_t> coalition_id = get_process_coalition_id_fn(pid);
+  std::optional<uint64_t> coalition_id = get_process_coalition_id_fn(pid);
   if (!coalition_id.has_value()) {
     return nullptr;
   }

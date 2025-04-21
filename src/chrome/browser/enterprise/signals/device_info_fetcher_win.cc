@@ -1,16 +1,28 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "chrome/browser/enterprise/signals/device_info_fetcher_win.h"
 
-#include <Windows.h>
+#include <windows.h>
+
 // SECURITY_WIN32 must be defined in order to get
 // EXTENDED_NAME_FORMAT enumeration.
 #define SECURITY_WIN32 1
 #include <security.h>
 #undef SECURITY_WIN32
-#include <wincred.h>
+
+#include <shobjidl.h>
+
+#include <DSRole.h>
+#include <iphlpapi.h>
+#include <powersetting.h>
+#include <propsys.h>
 
 #include "base/files/file_path.h"
 #include "base/path_service.h"
@@ -21,18 +33,11 @@
 #include "base/system/sys_info.h"
 #include "base/win/registry.h"
 #include "base/win/win_util.h"
-#include "base/win/windows_types.h"
+#include "base/win/wincred_shim.h"
 #include "base/win/windows_version.h"
 #include "base/win/wmi.h"
 #include "chrome/browser/enterprise/signals/signals_common.h"
 #include "net/base/network_interfaces.h"
-
-// Those headers need defines from windows_types.h, thus have to come after it.
-#include <DSRole.h>        // NOLINT(build/include_order)
-#include <iphlpapi.h>      // NOLINT(build/include_order)
-#include <powersetting.h>  // NOLINT(build/include_order)
-#include <propsys.h>       // NOLINT(build/include_order)
-#include <shobjidl.h>      // NOLINT(build/include_order)
 
 namespace enterprise_signals {
 
@@ -69,23 +74,27 @@ std::string GetSerialNumber() {
   return base::WideToUTF8(sys_info.serial_number());
 }
 
-// Retrieves the FQDN of the comeputer and if this fails reverts to the hostname
+// Retrieves the FQDN of the computer and if this fails reverts to the hostname
 // as known to the net subsystem.
 std::string GetComputerName() {
   DWORD size = 1024;
-  std::string result(size, '\0');
+  std::wstring result_wstr(size, L'\0');
 
-  if (!::GetComputerNameExA(ComputerNameDnsFullyQualified, &result[0], &size))
-    return net::GetHostName();
-  result.resize(size);
+  if (::GetComputerNameExW(ComputerNameDnsFullyQualified, &result_wstr[0],
+                           &size)) {
+    std::string result;
+    if (base::WideToUTF8(result_wstr.data(), size, &result)) {
+      return result;
+    }
+  }
 
-  return result;
+  return net::GetHostName();
 }
 
 // Retrieves the state of the screen locking feature from the screen saver
 // settings.
-absl::optional<bool> GetScreenLockStatus() {
-  absl::optional<bool> status;
+std::optional<bool> GetScreenLockStatus() {
+  std::optional<bool> status;
   BOOL value = FALSE;
   if (::SystemParametersInfo(SPI_GETSCREENSAVESECURE, 0, &value, 0))
     status = static_cast<bool>(value);
@@ -93,8 +102,8 @@ absl::optional<bool> GetScreenLockStatus() {
 }
 
 // Checks if locking is enabled at the currently active power scheme.
-absl::optional<bool> GetConsoleLockStatus() {
-  absl::optional<bool> status;
+std::optional<bool> GetConsoleLockStatus() {
+  std::optional<bool> status;
   SYSTEM_POWER_STATUS sps;
   // https://docs.microsoft.com/en-us/windows/desktop/api/winbase/nf-winbase-getsystempowerstatus
   // Retrieves the power status of the system. The status indicates whether the
@@ -139,11 +148,11 @@ absl::optional<bool> GetConsoleLockStatus() {
 // Gets cumulative screen locking policy based on the screen saver and console
 // lock status.
 SettingValue GetScreenlockSecured() {
-  const absl::optional<bool> screen_lock_status = GetScreenLockStatus();
+  const std::optional<bool> screen_lock_status = GetScreenLockStatus();
   if (screen_lock_status.value_or(false))
     return SettingValue::ENABLED;
 
-  const absl::optional<bool> console_lock_status = GetConsoleLockStatus();
+  const std::optional<bool> console_lock_status = GetConsoleLockStatus();
   if (console_lock_status.value_or(false))
     return SettingValue::ENABLED;
 
@@ -155,8 +164,8 @@ SettingValue GetScreenlockSecured() {
 }
 
 // Returns the volume where the Windows OS is installed.
-absl::optional<std::wstring> GetOsVolume() {
-  absl::optional<std::wstring> volume;
+std::optional<std::wstring> GetOsVolume() {
+  std::optional<std::wstring> volume;
   base::FilePath windows_dir;
   if (base::PathService::Get(base::DIR_WINDOWS, &windows_dir) &&
       windows_dir.IsAbsolute()) {
@@ -210,7 +219,7 @@ bool GetPropVariantAsInt64(PROPVARIANT variant, int64_t* out_value) {
 SettingValue GetDiskEncrypted() {
   // |volume| has to be a |wstring| because SHCreateItemFromParsingName() only
   // accepts |PCWSTR| which is |wchar_t*|.
-  absl::optional<std::wstring> volume = GetOsVolume();
+  std::optional<std::wstring> volume = GetOsVolume();
   if (!volume.has_value())
     return SettingValue::UNKNOWN;
 
@@ -277,9 +286,9 @@ std::vector<std::string> GetMacAddresses() {
   return mac_addresses;
 }
 
-absl::optional<std::string> GetWindowsMachineDomain() {
+std::optional<std::string> GetWindowsMachineDomain() {
   if (!base::win::IsEnrolledToDomain())
-    return absl::nullopt;
+    return std::nullopt;
   std::string domain;
   ::DSROLE_PRIMARY_DOMAIN_INFO_BASIC* info = nullptr;
   if (::DsRoleGetPrimaryDomainInformation(nullptr,
@@ -289,15 +298,15 @@ absl::optional<std::string> GetWindowsMachineDomain() {
       domain = base::WideToUTF8(info->DomainNameFlat);
     ::DsRoleFreeMemory(info);
   }
-  return domain.empty() ? absl::nullopt : absl::make_optional(domain);
+  return domain.empty() ? std::nullopt : std::make_optional(domain);
 }
 
-absl::optional<std::string> GetWindowsUserDomain() {
+std::optional<std::string> GetWindowsUserDomain() {
   WCHAR username[CREDUI_MAX_USERNAME_LENGTH + 1] = {};
   DWORD username_length = sizeof(username);
   if (!::GetUserNameExW(::NameSamCompatible, username, &username_length) ||
       username_length <= 0) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   // The string corresponds to DOMAIN\USERNAME. If there isn't a domain, the
   // domain name is replaced by the name of the machine, so the function
@@ -306,8 +315,8 @@ absl::optional<std::string> GetWindowsUserDomain() {
   std::string domain = username_str.substr(0, username_str.find("\\"));
 
   return domain == base::ToUpperASCII(GetComputerNameW())
-             ? absl::nullopt
-             : absl::make_optional(domain);
+             ? std::nullopt
+             : std::make_optional(domain);
 }
 
 std::string GetSecurityPatchLevel() {
@@ -336,6 +345,11 @@ SettingValue GetSecureBootEnabled() {
 }
 
 }  // namespace
+
+// static
+std::unique_ptr<DeviceInfoFetcher> DeviceInfoFetcher::CreateInstanceInternal() {
+  return std::make_unique<DeviceInfoFetcherWin>();
+}
 
 DeviceInfoFetcherWin::DeviceInfoFetcherWin() = default;
 

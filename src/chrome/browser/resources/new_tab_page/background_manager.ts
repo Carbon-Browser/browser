@@ -1,13 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import {skColorToRgba} from 'chrome://resources/js/color_utils.js';
-import {EventTracker} from 'chrome://resources/js/event_tracker.m.js';
-import {PromiseResolver} from 'chrome://resources/js/promise_resolver.m.js';
-import {SkColor} from 'chrome://resources/mojo/skia/public/mojom/skcolor.mojom-webui.js';
+import {EventTracker} from 'chrome://resources/js/event_tracker.js';
+import {PromiseResolver} from 'chrome://resources/js/promise_resolver.js';
+import type {SkColor} from 'chrome://resources/mojo/skia/public/mojom/skcolor.mojom-webui.js';
 
-import {BackgroundImage} from './new_tab_page.mojom-webui.js';
+import type {BackgroundImage} from './new_tab_page.mojom-webui.js';
 import {strictQuery} from './utils.js';
 import {WindowProxy} from './window_proxy.js';
 
@@ -109,9 +109,6 @@ export class BackgroundManager {
     }
     if (image.positionY) {
       url.searchParams.append('positionY', image.positionY);
-    }
-    if (image.scrimDisplay) {
-      url.searchParams.append('scrimDisplay', image.scrimDisplay);
     }
     if (url.href === this.url_) {
       return;

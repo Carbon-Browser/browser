@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,15 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/values.h"
 #include "chromeos/ash/components/network/network_device_handler.h"
 #include "chromeos/ash/components/network/network_handler_callbacks.h"
 #include "net/base/ip_endpoint.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
-namespace chromeos {
+namespace ash {
 
 class COMPONENT_EXPORT(CHROMEOS_NETWORK) MockNetworkDeviceHandler
     : public NetworkDeviceHandler {
@@ -26,7 +26,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) MockNetworkDeviceHandler
   MockNetworkDeviceHandler(const MockNetworkDeviceHandler&) = delete;
   MockNetworkDeviceHandler& operator=(const MockNetworkDeviceHandler&) = delete;
 
-  virtual ~MockNetworkDeviceHandler();
+  ~MockNetworkDeviceHandler() override;
 
   MOCK_CONST_METHOD2(GetDeviceProperties,
                      void(const std::string& device_path,
@@ -82,6 +82,6 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) MockNetworkDeviceHandler
                void(const std::string& enabled));
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_MOCK_NETWORK_DEVICE_HANDLER_H_

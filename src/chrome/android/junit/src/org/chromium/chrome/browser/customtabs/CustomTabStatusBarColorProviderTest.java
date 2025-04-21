@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,37 +21,34 @@ import org.mockito.MockitoAnnotations;
 import org.robolectric.annotation.Config;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.base.test.util.Batch;
 import org.chromium.chrome.browser.browserservices.intents.ColorProvider;
 import org.chromium.chrome.browser.tab.Tab;
-import org.chromium.chrome.browser.tab.TabImpl;
 import org.chromium.chrome.browser.ui.system.StatusBarColorController;
 
-/**
- * Tests for {@link CustomTabStatusBarColorProvider}.
- */
+/** Tests for {@link CustomTabStatusBarColorProvider}. */
 @RunWith(BaseRobolectricTestRunner.class)
+@Batch(Batch.UNIT_TESTS)
 @Config(manifest = Config.NONE)
 public class CustomTabStatusBarColorProviderTest {
-    private static final int DEFAULT_COLOR = 0x11223344;
-    private static final int FALLBACK_COLOR = 0x55667788;
     private static final int USER_PROVIDED_COLOR = 0x99aabbcc;
 
-    @Mock public CustomTabIntentDataProvider mCustomTabIntentDataProvider;
+    @Mock public CustomTabIntentDataProvider mIntentDataProvider;
     @Mock public StatusBarColorController mStatusBarColorController;
-    @Mock
-    public TabImpl mTab;
+    @Mock public Tab mTab;
     private CustomTabStatusBarColorProvider mStatusBarColorProvider;
-    @Mock
-    private ColorProvider mColorProvider;
+    @Mock private ColorProvider mColorProvider;
 
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
 
-        mStatusBarColorProvider = Mockito.spy(new CustomTabStatusBarColorProvider(
-                mCustomTabIntentDataProvider, mStatusBarColorController));
+        mStatusBarColorProvider =
+                Mockito.spy(
+                        new CustomTabStatusBarColorProvider(
+                                mIntentDataProvider, mStatusBarColorController));
 
-        when(mCustomTabIntentDataProvider.getColorProvider()).thenReturn(mColorProvider);
+        when(mIntentDataProvider.getColorProvider()).thenReturn(mColorProvider);
 
         when(mColorProvider.getToolbarColor()).thenReturn(USER_PROVIDED_COLOR);
         when(mColorProvider.hasCustomToolbarColor()).thenReturn(true);
@@ -59,14 +56,14 @@ public class CustomTabStatusBarColorProviderTest {
 
     @Test
     public void undefinedWhenOpenedByChromeNoCustom() {
-        when(mCustomTabIntentDataProvider.isOpenedByChrome()).thenReturn(true);
+        when(mIntentDataProvider.isOpenedByChrome()).thenReturn(true);
         when(mColorProvider.hasCustomToolbarColor()).thenReturn(false);
         Assert.assertEquals(UNDEFINED_STATUS_BAR_COLOR, getStatusBarColor(mTab));
     }
 
     @Test
     public void openedByChromeWithCustom() {
-        when(mCustomTabIntentDataProvider.isOpenedByChrome()).thenReturn(true);
+        when(mIntentDataProvider.isOpenedByChrome()).thenReturn(true);
         when(mColorProvider.hasCustomToolbarColor()).thenReturn(true);
         Assert.assertEquals(USER_PROVIDED_COLOR, getStatusBarColor(mTab));
     }

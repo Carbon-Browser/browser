@@ -40,18 +40,19 @@ bool InterpolatedTransformOperation::IsEqualAssumingSameType(
 }
 
 void InterpolatedTransformOperation::Apply(
-    TransformationMatrix& transform,
+    gfx::Transform& transform,
     const gfx::SizeF& border_box_size) const {
-  TransformationMatrix from_transform;
-  TransformationMatrix to_transform;
+  gfx::Transform from_transform;
+  gfx::Transform to_transform;
   from_.ApplyRemaining(border_box_size, starting_index_, from_transform);
   to_.ApplyRemaining(border_box_size, starting_index_, to_transform);
 
-  to_transform.Blend(from_transform, progress_);
-  transform.Multiply(to_transform);
+  if (!to_transform.Blend(from_transform, progress_) && progress_ < 0.5)
+    to_transform = from_transform;
+  transform.PreConcat(to_transform);
 }
 
-scoped_refptr<TransformOperation> InterpolatedTransformOperation::Blend(
+TransformOperation* InterpolatedTransformOperation::Blend(
     const TransformOperation* from,
     double progress,
     bool blend_to_identity) {
@@ -61,16 +62,16 @@ scoped_refptr<TransformOperation> InterpolatedTransformOperation::Blend(
   to_operations.Operations().push_back(this);
   TransformOperations from_operations;
   if (blend_to_identity) {
-    return InterpolatedTransformOperation::Create(to_operations,
-                                                  from_operations, 0, progress);
+    return MakeGarbageCollected<InterpolatedTransformOperation>(
+        to_operations, from_operations, 0, progress);
   }
 
   if (from) {
     from_operations.Operations().push_back(
         const_cast<TransformOperation*>(from));
   }
-  return InterpolatedTransformOperation::Create(from_operations, to_operations,
-                                                0, progress);
+  return MakeGarbageCollected<InterpolatedTransformOperation>(
+      from_operations, to_operations, 0, progress);
 }
 
 }  // namespace blink

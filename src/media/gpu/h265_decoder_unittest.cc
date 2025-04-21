@@ -1,18 +1,21 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "media/gpu/h265_decoder.h"
 
 #include <cstring>
 #include <memory>
 #include <string>
 
 #include "base/check.h"
+#include "base/containers/extend.h"
 #include "base/containers/queue.h"
 #include "base/containers/span.h"
 #include "base/files/file_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/types/optional_util.h"
 #include "media/base/test_data_util.h"
-#include "media/gpu/h265_decoder.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -93,11 +96,14 @@ class MockH265Accelerator : public H265Decoder::H265Accelerator {
   MockH265Accelerator() = default;
 
   MOCK_METHOD0(CreateH265Picture, scoped_refptr<H265Picture>());
-  MOCK_METHOD5(SubmitFrameMetadata,
+  MOCK_METHOD8(SubmitFrameMetadata,
                Status(const H265SPS* sps,
                       const H265PPS* pps,
                       const H265SliceHeader* slice_hdr,
                       const H265Picture::Vector& ref_pic_list,
+                      const H265Picture::Vector& ref_pic_set_lt_curr,
+                      const H265Picture::Vector& ref_pic_set_st_curr_after,
+                      const H265Picture::Vector& ref_pic_set_st_curr_before,
                       scoped_refptr<H265Picture> pic));
   MOCK_METHOD(Status,
               SubmitSlice,
@@ -118,7 +124,9 @@ class MockH265Accelerator : public H265Decoder::H265Accelerator {
   MOCK_METHOD2(SetStream,
                Status(base::span<const uint8_t> stream,
                       const DecryptConfig* decrypt_config));
-
+  bool IsChromaSamplingSupported(VideoChromaSampling format) override {
+    return format == VideoChromaSampling::k420;
+  }
   void Reset() override {}
 };
 
@@ -140,13 +148,31 @@ class H265DecoderTest : public ::testing::Test {
   // If |set_stream_expect| is true, it will setup EXPECT_CALL for SetStream.
   AcceleratedVideoDecoder::DecodeResult Decode(bool set_stream_expect = true);
 
+  void ResetExpectations() {
+    // Sets default behaviors for mock methods for convenience.
+    ON_CALL(*accelerator_, CreateH265Picture()).WillByDefault(Invoke([]() {
+      return new H265Picture();
+    }));
+    ON_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _, _, _, _))
+        .WillByDefault(Return(H265Decoder::H265Accelerator::Status::kOk));
+    ON_CALL(*accelerator_, SubmitDecode(_))
+        .WillByDefault(Return(H265Decoder::H265Accelerator::Status::kOk));
+    ON_CALL(*accelerator_, OutputPicture(_)).WillByDefault(Return(true));
+    ON_CALL(*accelerator_, SubmitSlice(_, _, _, _, _, _, _, _, _, _, _, _))
+        .With(Args<10, 11>(SubsampleSizeMatches()))
+        .WillByDefault(Return(H265Decoder::H265Accelerator::Status::kOk));
+    EXPECT_CALL(*accelerator_, SetStream(_, _))
+        .WillRepeatedly(
+            Return(H265Decoder::H265Accelerator::Status::kNotSupported));
+  }
+
  protected:
   std::unique_ptr<H265Decoder> decoder_;
   raw_ptr<MockH265Accelerator> accelerator_;
 
  private:
   base::queue<std::string> input_frame_files_;
-  std::string bitstream_;
+  std::vector<uint8_t> bitstream_;
   scoped_refptr<DecoderBuffer> decoder_buffer_;
 };
 
@@ -155,22 +181,7 @@ void H265DecoderTest::SetUp() {
   accelerator_ = mock_accelerator.get();
   decoder_.reset(new H265Decoder(std::move(mock_accelerator),
                                  VIDEO_CODEC_PROFILE_UNKNOWN));
-
-  // Sets default behaviors for mock methods for convenience.
-  ON_CALL(*accelerator_, CreateH265Picture()).WillByDefault(Invoke([]() {
-    return new H265Picture();
-  }));
-  ON_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _))
-      .WillByDefault(Return(H265Decoder::H265Accelerator::Status::kOk));
-  ON_CALL(*accelerator_, SubmitDecode(_))
-      .WillByDefault(Return(H265Decoder::H265Accelerator::Status::kOk));
-  ON_CALL(*accelerator_, OutputPicture(_)).WillByDefault(Return(true));
-  ON_CALL(*accelerator_, SubmitSlice(_, _, _, _, _, _, _, _, _, _, _, _))
-      .With(Args<10, 11>(SubsampleSizeMatches()))
-      .WillByDefault(Return(H265Decoder::H265Accelerator::Status::kOk));
-  ON_CALL(*accelerator_, SetStream(_, _))
-      .WillByDefault(
-          Return(H265Decoder::H265Accelerator::Status::kNotSupported));
+  ResetExpectations();
 }
 
 void H265DecoderTest::SetInputFrameFiles(
@@ -189,9 +200,9 @@ AcceleratedVideoDecoder::DecodeResult H265DecoderTest::Decode(
       return result;
     auto input_file = GetTestDataFilePath(input_frame_files_.front());
     input_frame_files_.pop();
-    CHECK(base::ReadFileToString(input_file, &bitstream_));
-    decoder_buffer_ = DecoderBuffer::CopyFrom(
-        reinterpret_cast<const uint8_t*>(bitstream_.data()), bitstream_.size());
+    CHECK(
+        base::OptionalUnwrapTo(base::ReadFileToBytes(input_file), bitstream_));
+    decoder_buffer_ = DecoderBuffer::CopyFrom(bitstream_);
     EXPECT_NE(decoder_buffer_.get(), nullptr);
     if (set_stream_expect)
       EXPECT_CALL(*accelerator_, SetStream(_, _));
@@ -211,11 +222,13 @@ TEST_F(H265DecoderTest, DecodeSingleFrame) {
   EXPECT_CALL(*accelerator_, CreateH265Picture()).WillOnce(Return(nullptr));
   EXPECT_EQ(AcceleratedVideoDecoder::kRanOutOfSurfaces, Decode());
   EXPECT_TRUE(Mock::VerifyAndClearExpectations(&*accelerator_));
+  ResetExpectations();
 
   {
     InSequence sequence;
     EXPECT_CALL(*accelerator_, CreateH265Picture()).Times(1);
-    EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _)).Times(1);
+    EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _, _, _, _))
+        .Times(1);
     EXPECT_CALL(*accelerator_, SubmitSlice(_, _, _, _, _, _, _, _, _, _, _, _))
         .Times(1);
     EXPECT_CALL(*accelerator_, SubmitDecode(HasPoc(0))).Times(1);
@@ -235,7 +248,8 @@ TEST_F(H265DecoderTest, SkipNonIDRFrames) {
   {
     InSequence sequence;
     EXPECT_CALL(*accelerator_, CreateH265Picture()).Times(1);
-    EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _)).Times(1);
+    EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _, _, _, _))
+        .Times(1);
     EXPECT_CALL(*accelerator_, SubmitSlice(_, _, _, _, _, _, _, _, _, _, _, _))
         .Times(1);
     EXPECT_CALL(*accelerator_, SubmitDecode(HasPoc(0))).Times(1);
@@ -255,7 +269,8 @@ TEST_F(H265DecoderTest, DecodeProfileMain) {
   EXPECT_EQ(17u, decoder_->GetRequiredNumOfPictures());
 
   EXPECT_CALL(*accelerator_, CreateH265Picture()).Times(6);
-  EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _)).Times(6);
+  EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _, _, _, _))
+      .Times(6);
   EXPECT_CALL(*accelerator_, SubmitSlice(_, _, _, _, _, _, _, _, _, _, _, _))
       .Times(6);
 
@@ -294,7 +309,8 @@ TEST_F(H265DecoderTest, Decode10BitStream) {
   EXPECT_EQ(17u, decoder_->GetRequiredNumOfPictures());
 
   EXPECT_CALL(*accelerator_, CreateH265Picture()).Times(4);
-  EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _)).Times(4);
+  EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _, _, _, _))
+      .Times(4);
   EXPECT_CALL(*accelerator_, SubmitSlice(_, _, _, _, _, _, _, _, _, _, _, _))
       .Times(4);
 
@@ -328,10 +344,11 @@ TEST_F(H265DecoderTest, DenyDecodeNonYUV420) {
 
 TEST_F(H265DecoderTest, OutputPictureFailureCausesDecodeToFail) {
   // Provide enough data that Decode() will try to output a frame.
-  SetInputFrameFiles({kSpsPps, kFrame0, kFrame1, kFrame2, kFrame3});
+  SetInputFrameFiles({kSpsPps, kFrame0, kFrame1, kFrame2});
   EXPECT_EQ(AcceleratedVideoDecoder::kConfigChange, Decode());
-  EXPECT_CALL(*accelerator_, CreateH265Picture()).Times(4);
-  EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _)).Times(3);
+  EXPECT_CALL(*accelerator_, CreateH265Picture()).Times(3);
+  EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _, _, _, _))
+      .Times(3);
   EXPECT_CALL(*accelerator_, SubmitSlice(_, _, _, _, _, _, _, _, _, _, _, _))
       .Times(3);
   EXPECT_CALL(*accelerator_, SubmitDecode(_)).Times(3);
@@ -341,12 +358,13 @@ TEST_F(H265DecoderTest, OutputPictureFailureCausesDecodeToFail) {
 
 // Verify that the decryption config is passed to the accelerator.
 TEST_F(H265DecoderTest, SetEncryptedStream) {
-  std::string bitstream, bitstream1, bitstream2;
+  std::vector<uint8_t> bitstream1, bitstream2;
   auto input_file1 = GetTestDataFilePath(kSpsPps);
-  CHECK(base::ReadFileToString(input_file1, &bitstream1));
+  CHECK(base::OptionalUnwrapTo(base::ReadFileToBytes(input_file1), bitstream1));
   auto input_file2 = GetTestDataFilePath(kFrame0);
-  CHECK(base::ReadFileToString(input_file2, &bitstream2));
-  bitstream = bitstream1 + bitstream2;
+  CHECK(base::OptionalUnwrapTo(base::ReadFileToBytes(input_file2), bitstream2));
+  std::vector<uint8_t> bitstream = bitstream1;
+  base::Extend(bitstream, bitstream2);
 
   const char kAnyKeyId[] = "any_16byte_keyid";
   const char kAnyIv[] = "any_16byte_iv___";
@@ -359,15 +377,14 @@ TEST_F(H265DecoderTest, SetEncryptedStream) {
   std::unique_ptr<DecryptConfig> decrypt_config =
       DecryptConfig::CreateCencConfig(kAnyKeyId, kAnyIv, subsamples);
   EXPECT_CALL(*accelerator_,
-              SubmitFrameMetadata(_, _, _, _,
+              SubmitFrameMetadata(_, _, _, _, _, _, _,
                                   DecryptConfigMatches(decrypt_config.get())))
       .WillOnce(Return(H265Decoder::H265Accelerator::Status::kOk));
   EXPECT_CALL(*accelerator_,
               SubmitDecode(DecryptConfigMatches(decrypt_config.get())))
       .WillOnce(Return(H265Decoder::H265Accelerator::Status::kOk));
 
-  auto buffer = DecoderBuffer::CopyFrom(
-      reinterpret_cast<const uint8_t*>(bitstream.data()), bitstream.size());
+  auto buffer = DecoderBuffer::CopyFrom(bitstream);
   ASSERT_NE(buffer.get(), nullptr);
   buffer->set_decrypt_config(std::move(decrypt_config));
   decoder_->SetStream(0, *buffer);
@@ -389,7 +406,7 @@ TEST_F(H265DecoderTest, SubmitFrameMetadataRetry) {
   {
     InSequence sequence;
     EXPECT_CALL(*accelerator_, CreateH265Picture());
-    EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _))
+    EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _, _, _, _))
         .WillOnce(Return(H265Decoder::H265Accelerator::Status::kTryAgain));
   }
   EXPECT_EQ(AcceleratedVideoDecoder::kTryAgain, Decode());
@@ -397,14 +414,14 @@ TEST_F(H265DecoderTest, SubmitFrameMetadataRetry) {
   // Try again, assuming key still not set. Only SubmitFrameMetadata()
   // should be called again.
   EXPECT_CALL(*accelerator_, CreateH265Picture()).Times(0);
-  EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _))
+  EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _, _, _, _))
       .WillOnce(Return(H265Decoder::H265Accelerator::Status::kTryAgain));
   EXPECT_EQ(AcceleratedVideoDecoder::kTryAgain, Decode());
 
   // Assume key has been provided now, next call to Decode() should proceed.
   {
     InSequence sequence;
-    EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _));
+    EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _, _, _, _));
     EXPECT_CALL(*accelerator_, SubmitSlice(_, _, _, _, _, _, _, _, _, _, _, _));
     EXPECT_CALL(*accelerator_, SubmitDecode(HasPoc(0)));
     EXPECT_CALL(*accelerator_, OutputPicture(HasPoc(0)));
@@ -425,7 +442,7 @@ TEST_F(H265DecoderTest, SubmitSliceRetry) {
   {
     InSequence sequence;
     EXPECT_CALL(*accelerator_, CreateH265Picture());
-    EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _));
+    EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _, _, _, _));
     EXPECT_CALL(*accelerator_, SubmitSlice(_, _, _, _, _, _, _, _, _, _, _, _))
         .WillOnce(Return(H265Decoder::H265Accelerator::Status::kTryAgain));
   }
@@ -434,7 +451,8 @@ TEST_F(H265DecoderTest, SubmitSliceRetry) {
   // Try again, assuming key still not set. Only SubmitSlice() should be
   // called again.
   EXPECT_CALL(*accelerator_, CreateH265Picture()).Times(0);
-  EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _)).Times(0);
+  EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _, _, _, _))
+      .Times(0);
   EXPECT_CALL(*accelerator_, SubmitSlice(_, _, _, _, _, _, _, _, _, _, _, _))
       .WillOnce(Return(H265Decoder::H265Accelerator::Status::kTryAgain));
   EXPECT_EQ(AcceleratedVideoDecoder::kTryAgain, Decode());
@@ -461,7 +479,7 @@ TEST_F(H265DecoderTest, SubmitDecodeRetry) {
   {
     InSequence sequence;
     EXPECT_CALL(*accelerator_, CreateH265Picture());
-    EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _));
+    EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _, _, _, _));
     EXPECT_CALL(*accelerator_, SubmitSlice(_, _, _, _, _, _, _, _, _, _, _, _));
     EXPECT_CALL(*accelerator_, SubmitDecode(HasPoc(0)))
         .WillOnce(Return(H265Decoder::H265Accelerator::Status::kTryAgain));
@@ -471,7 +489,8 @@ TEST_F(H265DecoderTest, SubmitDecodeRetry) {
   // Try again, assuming key still not set. Only SubmitDecode() should be
   // called again.
   EXPECT_CALL(*accelerator_, CreateH265Picture()).Times(0);
-  EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _)).Times(0);
+  EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _, _, _, _))
+      .Times(0);
   EXPECT_CALL(*accelerator_, SubmitSlice(_, _, _, _, _, _, _, _, _, _, _, _))
       .Times(0);
   EXPECT_CALL(*accelerator_, SubmitDecode(HasPoc(0)))
@@ -484,7 +503,7 @@ TEST_F(H265DecoderTest, SubmitDecodeRetry) {
     InSequence sequence;
     EXPECT_CALL(*accelerator_, SubmitDecode(HasPoc(0)));
     EXPECT_CALL(*accelerator_, CreateH265Picture());
-    EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _));
+    EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _, _, _, _));
     EXPECT_CALL(*accelerator_, SubmitSlice(_, _, _, _, _, _, _, _, _, _, _, _));
     EXPECT_CALL(*accelerator_, SubmitDecode(HasPoc(4)));
     EXPECT_CALL(*accelerator_, OutputPicture(HasPoc(0)));
@@ -512,13 +531,21 @@ TEST_F(H265DecoderTest, SetStreamRetry) {
   {
     InSequence sequence;
     EXPECT_CALL(*accelerator_, CreateH265Picture()).Times(1);
-    EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _)).Times(1);
+    EXPECT_CALL(*accelerator_, SubmitFrameMetadata(_, _, _, _, _, _, _, _))
+        .Times(1);
     EXPECT_CALL(*accelerator_, SubmitSlice(_, _, _, _, _, _, _, _, _, _, _, _))
         .Times(1);
     EXPECT_CALL(*accelerator_, SubmitDecode(HasPoc(0))).Times(1);
     EXPECT_CALL(*accelerator_, OutputPicture(HasPoc(0))).Times(1);
   }
   EXPECT_EQ(AcceleratedVideoDecoder::kRanOutOfStreamData, Decode(false));
+  EXPECT_TRUE(decoder_->Flush());
+}
+
+TEST_F(H265DecoderTest, DecodeMultiFrameInput) {
+  SetInputFrameFiles({"bear.hevc"});
+  EXPECT_EQ(AcceleratedVideoDecoder::kConfigChange, Decode());
+  EXPECT_EQ(AcceleratedVideoDecoder::kRanOutOfStreamData, Decode());
   EXPECT_TRUE(decoder_->Flush());
 }
 

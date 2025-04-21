@@ -1,17 +1,17 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_WEB_VIEW_INTERNAL_TRANSLATE_CWV_TRANSLATION_CONTROLLER_INTERNAL_H_
 #define IOS_WEB_VIEW_INTERNAL_TRANSLATE_CWV_TRANSLATION_CONTROLLER_INTERNAL_H_
 
-#import "ios/web_view/public/cwv_translation_controller.h"
-
 #include <memory>
 #include <string>
 
 #include "components/translate/core/browser/translate_step.h"
+#include "components/translate/core/common/language_detection_details.h"
 #include "components/translate/core/common/translate_errors.h"
+#import "ios/web_view/public/cwv_translation_controller.h"
 
 namespace ios_web_view {
 class WebViewTranslateClient;
@@ -40,8 +40,13 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)updateTranslateStep:(translate::TranslateStep)step
              sourceLanguage:(const std::string&)sourceLanguage
              targetLanguage:(const std::string&)targetLanguage
-                  errorType:(translate::TranslateErrors::Type)errorType
+                  errorType:(translate::TranslateErrors)errorType
           triggeredFromMenu:(bool)triggeredFromMenu;
+
+// Called when the current page's language detection details have been
+// determined.
+- (void)onLanguageDetermined:
+    (const translate::LanguageDetectionDetails&)details;
 
 @end
 

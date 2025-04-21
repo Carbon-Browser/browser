@@ -35,7 +35,7 @@ indexeddb_test(
         tx.objectStore('store').put(file, 'key');
 
         tx.oncomplete = t.step_func(function() {
-            var tx = db.transaction('store');
+            var tx = db.transaction('store', 'readonly');
             tx.objectStore('store').get('key').onsuccess = t.step_func(function(e) {
                 var result = e.target.result;
 

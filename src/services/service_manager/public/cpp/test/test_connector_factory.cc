@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,8 @@
 
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -56,7 +55,7 @@ class ProxiedServiceConnector : public mojom::Connector {
     auto* proxy = GetServiceProxy(service_filter.service_name());
     if (!proxy && factory_->ignore_unknown_service_requests()) {
       std::move(callback).Run(mojom::ConnectResult::ACCESS_DENIED,
-                              absl::nullopt);
+                              std::nullopt);
       return;
     }
 
@@ -68,7 +67,7 @@ class ProxiedServiceConnector : public mojom::Connector {
                                 base::Token{}, fake_guid_),
                        CapabilitySet()),
         interface_name, std::move(interface_pipe), base::DoNothing());
-    std::move(callback).Run(mojom::ConnectResult::SUCCEEDED, absl::nullopt);
+    std::move(callback).Run(mojom::ConnectResult::SUCCEEDED, std::nullopt);
   }
 
   void WarmService(const ServiceFilter& filter,

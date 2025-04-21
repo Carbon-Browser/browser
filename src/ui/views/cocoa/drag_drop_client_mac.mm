@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,10 +25,9 @@ DragDropClientMac::DragDropClientMac(
   DCHECK(bridge);
 }
 
-DragDropClientMac::~DragDropClientMac() {}
+DragDropClientMac::~DragDropClientMac() = default;
 
 void DragDropClientMac::StartDragAndDrop(
-    View* view,
     std::unique_ptr<ui::OSExchangeData> data,
     int operation,
     ui::mojom::DragEventSource source) {
@@ -48,38 +47,55 @@ void DragDropClientMac::StartDragAndDrop(
   // Synthesize an event for dragging, since we can't be sure that
   // [NSApp currentEvent] will return a valid dragging event.
   NSWindow* window = bridge_->ns_window();
-  NSPoint position = [window mouseLocationOutsideOfEventStream];
-  NSTimeInterval event_time = [[NSApp currentEvent] timestamp];
-  NSEvent* event = [NSEvent mouseEventWithType:NSEventTypeLeftMouseDragged
-                                      location:position
-                                 modifierFlags:0
-                                     timestamp:event_time
-                                  windowNumber:[window windowNumber]
-                                       context:nil
-                                   eventNumber:0
-                                    clickCount:1
-                                      pressure:1.0];
+  NSEvent* event =
+      [NSEvent mouseEventWithType:NSEventTypeLeftMouseDragged
+                         location:window.mouseLocationOutsideOfEventStream
+                    modifierFlags:0
+                        timestamp:NSApp.currentEvent.timestamp
+                     windowNumber:window.windowNumber
+                          context:nil
+                      eventNumber:0
+                       clickCount:1
+                         pressure:1.0];
 
-  NSImage* image = gfx::NSImageFromImageSkiaWithColorSpace(
-      provider_mac.GetDragImage(), base::mac::GetSRGBColorSpace());
+  NSImage* image = gfx::NSImageFromImageSkia(provider_mac.GetDragImage());
 
-  DCHECK(!NSEqualSizes([image size], NSZeroSize));
-  NSDraggingItem* drag_item = provider_mac.GetDraggingItem();
+  DCHECK(!NSEqualSizes(image.size, NSZeroSize));
+  NSArray<NSDraggingItem*>* drag_items = provider_mac.GetDraggingItems();
+  if (!drag_items) {
+    // The source of this data is ultimately the OS, and while this shouldn't be
+    // nil, it is documented as possibly being so if things are broken. If so,
+    // fail early rather than try to start a drag of a nil item list and making
+    // things worse.
+    return;
+  }
 
-  // Subtract the image's height from the y location so that the mouse will be
-  // at the upper left corner of the image.
+  // At this point the mismatch between the Views drag API, which assumes a
+  // single drag item, and the macOS drag API, which allows for multiple items,
+  // is encountered. For now, set the dragging frame and image on the first
+  // item, and set nil images for the remaining items. In the future, when Views
+  // becomes more capable in the area of the clipboard, revisit this.
+
+  // Create the frame to cause the mouse to be centered over the image, with the
+  // image slightly above the mouse pointer for visibility.
   NSRect dragging_frame =
-      NSMakeRect([event locationInWindow].x,
-                 [event locationInWindow].y - [image size].height,
-                 [image size].width, [image size].height);
-  [drag_item setDraggingFrame:dragging_frame contents:image];
+      NSMakeRect(event.locationInWindow.x - image.size.width / 2,
+                 event.locationInWindow.y - image.size.height / 4,
+                 image.size.width, image.size.height);
+  for (NSUInteger i = 0; i < drag_items.count; ++i) {
+    if (i == 0) {
+      [drag_items[i] setDraggingFrame:dragging_frame contents:image];
+    } else {
+      [drag_items[i] setDraggingFrame:NSMakeRect(0, 0, 1, 1) contents:nil];
+    }
+  }
 
-  [bridge_->ns_view() beginDraggingSessionWithItems:@[ drag_item ]
+  [bridge_->ns_view() beginDraggingSessionWithItems:drag_items
                                               event:event
                                              source:bridge_->ns_view()];
 
-  // Since Drag and drop is asynchronous on Mac, we need to spin a nested run
-  // loop for consistency with other platforms.
+  // Since Drag and drop is asynchronous on the Mac, spin a nested run loop for
+  // consistency with other platforms.
   base::RunLoop run_loop(base::RunLoop::Type::kNestableTasksAllowed);
   quit_closure_ = run_loop.QuitClosure();
   run_loop.Run();
@@ -89,13 +105,13 @@ NSDragOperation DragDropClientMac::DragUpdate(id<NSDraggingInfo> sender) {
   if (!exchange_data_) {
     exchange_data_ = std::make_unique<OSExchangeData>(
         ui::OSExchangeDataProviderMac::CreateProviderWrappingPasteboard(
-            [sender draggingPasteboard]));
+            sender.draggingPasteboard));
     source_operation_ = ui::DragDropTypes::NSDragOperationToDragOperation(
-        [sender draggingSourceOperationMask]);
+        sender.draggingSourceOperationMask);
   }
-
   last_operation_ = drop_helper_.OnDragOver(
-      *exchange_data_, LocationInView([sender draggingLocation]),
+      *exchange_data_,
+      LocationInView(sender.draggingLocation, sender.draggingDestinationWindow),
       source_operation_);
   return ui::DragDropTypes::DragOperationToNSDragOperation(last_operation_);
 }
@@ -116,20 +132,34 @@ void DragDropClientMac::EndDrag() {
   is_drag_source_ = false;
 
   // Allow a test to invoke EndDrag() without spinning the nested run loop.
-  if (!quit_closure_.is_null())
+  if (!quit_closure_.is_null()) {
     std::move(quit_closure_).Run();
+  }
 }
 
 void DragDropClientMac::DragExit() {
   drop_helper_.OnDragExit();
-  if (!is_drag_source_)
+  if (!is_drag_source_) {
     exchange_data_.reset();
+  }
 }
 
 gfx::Point DragDropClientMac::LocationInView(NSPoint point) const {
-  NSRect content_rect = [bridge_->ns_window()
-      contentRectForFrameRect:[bridge_->ns_window() frame]];
+  NSRect content_rect =
+      [bridge_->ns_window() contentRectForFrameRect:bridge_->ns_window().frame];
   return gfx::Point(point.x, NSHeight(content_rect) - point.y);
 }
 
+// In immersive fullscreen, the `NSToolbarFullScreenWindow` hosts both the tab
+// strip and toolbar. Convert the point to the corresponding hosted view's
+// coordinates.
+gfx::Point DragDropClientMac::LocationInView(
+    NSPoint point,
+    NSWindow* destination_window) const {
+  if (remote_cocoa::IsNSToolbarFullScreenWindow(destination_window)) {
+    NSView* overlay_view = [destination_window.contentView hitTest:point];
+    point = [overlay_view convertPoint:point fromView:nil];
+  }
+  return LocationInView(point);
+}
 }  // namespace views

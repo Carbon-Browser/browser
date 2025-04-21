@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,11 @@
 
 #include <memory>
 
+#include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "base/strings/utf_string_conversions.h"
+#include "components/account_id/account_id.h"
 #include "ui/message_center/message_center.h"
 #include "ui/message_center/public/cpp/notification.h"
 #include "ui/message_center/public/cpp/notification_delegate.h"
@@ -21,7 +23,7 @@ class NotificationDelegate : public message_center::NotificationDelegate {
  public:
   NotificationDelegate(
       const base::RepeatingCallback<void(bool)>& close_callback,
-      const base::RepeatingCallback<void(const absl::optional<int>&)>&
+      const base::RepeatingCallback<void(const std::optional<int>&)>&
           click_callback)
       : close_callback_(close_callback), click_callback_(click_callback) {}
 
@@ -35,8 +37,8 @@ class NotificationDelegate : public message_center::NotificationDelegate {
     close_callback_.Run(by_user);
   }
 
-  void Click(const absl::optional<int>& button_index,
-             const absl::optional<std::u16string>& reply) override {
+  void Click(const std::optional<int>& button_index,
+             const std::optional<std::u16string>& reply) override {
     if (!click_callback_)
       return;
     click_callback_.Run(button_index);
@@ -47,7 +49,7 @@ class NotificationDelegate : public message_center::NotificationDelegate {
   ~NotificationDelegate() override = default;
 
   const base::RepeatingCallback<void(bool)> close_callback_;
-  const base::RepeatingCallback<void(const absl::optional<int>&)>
+  const base::RepeatingCallback<void(const std::optional<int>&)>
       click_callback_;
 };
 
@@ -61,7 +63,7 @@ Notification::Notification(
     const std::string& notifier_id,
     const std::vector<std::string>& buttons,
     const base::RepeatingCallback<void(bool)>& close_callback,
-    const base::RepeatingCallback<void(const absl::optional<int>&)>&
+    const base::RepeatingCallback<void(const std::optional<int>&)>&
         click_callback)
     : notification_id_(notification_id) {
   // Currently, exo::Notification is used only for Crostini notifications.
@@ -75,6 +77,7 @@ Notification::Notification(
                             ->user_info.account_id.GetUserEmail();
 
   message_center::RichNotificationData data;
+  data.vector_small_image = &ash::kNotificationLinuxIcon;
   for (const auto& button : buttons)
     data.buttons.emplace_back(base::UTF8ToUTF16(button));
 

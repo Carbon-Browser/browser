@@ -1,13 +1,13 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/process/process_iterator.h"
 
 #include <errno.h>
-#include <sys/types.h>
 #include <stddef.h>
 #include <sys/sysctl.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include "base/logging.h"
@@ -17,10 +17,8 @@
 namespace base {
 
 ProcessIterator::ProcessIterator(const ProcessFilter* filter)
-    : index_of_kinfo_proc_(),
-      filter_(filter) {
-
-  int mib[] = { CTL_KERN, KERN_PROC, KERN_PROC_UID, getuid() };
+    : filter_(filter) {
+  int mib[] = {CTL_KERN, KERN_PROC, KERN_PROC_UID, getuid()};
 
   bool done = false;
   int try_num = 1;
@@ -62,8 +60,7 @@ ProcessIterator::ProcessIterator(const ProcessFilter* filter)
   }
 }
 
-ProcessIterator::~ProcessIterator() {
-}
+ProcessIterator::~ProcessIterator() = default;
 
 bool ProcessIterator::CheckForNextProcess() {
   std::string data;
@@ -71,10 +68,11 @@ bool ProcessIterator::CheckForNextProcess() {
   for (; index_of_kinfo_proc_ < kinfo_procs_.size(); ++index_of_kinfo_proc_) {
     size_t length;
     struct kinfo_proc kinfo = kinfo_procs_[index_of_kinfo_proc_];
-    int mib[] = { CTL_KERN, KERN_PROC_ARGS, kinfo.ki_pid };
+    int mib[] = {CTL_KERN, KERN_PROC_ARGS, kinfo.ki_pid};
 
-    if ((kinfo.ki_pid > 0) && (kinfo.ki_stat == SZOMB))
+    if ((kinfo.ki_pid > 0) && (kinfo.ki_stat == SZOMB)) {
       continue;
+    }
 
     length = 0;
     if (sysctl(mib, std::size(mib), NULL, &length, NULL, 0) < 0) {
@@ -91,8 +89,8 @@ bool ProcessIterator::CheckForNextProcess() {
 
     std::string delimiters;
     delimiters.push_back('\0');
-    entry_.cmd_line_args_ = SplitString(data, delimiters,
-                                        KEEP_WHITESPACE, SPLIT_WANT_NONEMPTY);
+    entry_.cmd_line_args_ =
+        SplitString(data, delimiters, KEEP_WHITESPACE, SPLIT_WANT_NONEMPTY);
 
     size_t exec_name_end = data.find('\0');
     if (exec_name_end == std::string::npos) {
@@ -121,8 +119,9 @@ bool ProcessIterator::CheckForNextProcess() {
 }
 
 bool NamedProcessIterator::IncludeEntry() {
-  if (executable_name_ != entry().exe_file())
+  if (executable_name_ != entry().exe_file()) {
     return false;
+  }
 
   return ProcessIterator::IncludeEntry();
 }

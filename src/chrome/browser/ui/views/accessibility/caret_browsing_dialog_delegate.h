@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,9 +18,9 @@ class Checkbox;
 
 // A dialog box that confirms that the user wants to enable caret browsing.
 class CaretBrowsingDialogDelegate : public views::DialogDelegateView {
- public:
-  METADATA_HEADER(CaretBrowsingDialogDelegate);
+  METADATA_HEADER(CaretBrowsingDialogDelegate, views::DialogDelegateView)
 
+ public:
   static void Show(gfx::NativeWindow parent_window, PrefService* pref_service);
 
  private:

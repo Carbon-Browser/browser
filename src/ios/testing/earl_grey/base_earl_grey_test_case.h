@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,10 @@
 // This class also sets up code coverage by default.
 @interface BaseEarlGreyTestCase : XCTestCase
 
+// When enabled, restart the test host between each test, and wipe the host
+// home directory to mimic a new install.
++ (BOOL)forceRestartAndWipe;
+
 // Invoked once per test case after launching test app from -setUp.
 // Subclasses can use this method to perform class level setup instead of
 // overriding +setUp, as due to EG2 limitations (crbug.com/961879) +setUp would
@@ -25,6 +29,9 @@
 
 // Invoked upon starting each test method in a test case.
 - (void)setUp NS_REQUIRES_SUPER;
+
+// Invoked upon end of each test case.
++ (void)tearDown NS_REQUIRES_SUPER;
 
 // Provides an |AppLaunchConfiguration| for host app used across a TestCase.
 // Subclasses must override this method to change app launching configuration

@@ -1,8 +1,8 @@
 {%- import "struct_macros.tmpl" as struct_macros %}
 
-{%- macro declare_params(prefix, parameters) %}
+{%- macro declare_params(prefix, parameters, allow_non_const_ref=False) %}
 {%-   for param in parameters -%}
-{{param.kind|cpp_wrapper_param_type}} {{prefix}}{{param.name}}
+{{param.kind|cpp_wrapper_param_type(allow_non_const_ref=allow_non_const_ref)}} {{prefix}}{{param.name}}
 {%- if not loop.last %}, {% endif %}
 {%-   endfor %}
 {%- endmacro %}
@@ -16,8 +16,8 @@ base::OnceCallback<void(
 )>
 {%- endmacro -%}
 
-{%- macro declare_request_params(prefix, method) -%}
-{{declare_params(prefix, method.parameters)}}
+{%- macro declare_request_params(prefix, method, allow_non_const_ref=False) -%}
+{{declare_params(prefix, method.parameters, allow_non_const_ref=allow_non_const_ref)}}
 {%-   if method.response_parameters != None -%}
 {%-     if method.parameters %}, {% endif -%}
 {{method.name}}Callback callback
@@ -66,29 +66,40 @@ base::OnceCallback<void(
 {%- endmacro -%}
 
 {%- macro build_message_flags(is_response, is_sync_text, allow_interrupt_text,
-                              expects_response_text, flags_name) %}
+                              is_urgent_text, expects_response_text, flags_name) %}
 {%-   if is_response %}
   const uint32_t kFlags = mojo::Message::kFlagIsResponse |
       (({{is_sync_text}}) ? mojo::Message::kFlagIsSync : 0) |
-      (({{allow_interrupt_text}}) ? 0 : mojo::Message::kFlagNoInterrupt);
+      (({{allow_interrupt_text}}) ? 0 : mojo::Message::kFlagNoInterrupt) |
+      (({{is_urgent_text}}) ? mojo::Message::kFlagIsUrgent : 0);
 {%-   else %}
   const uint32_t kFlags =
       (({{expects_response_text}}) ? mojo::Message::kFlagExpectsResponse : 0) |
       (({{is_sync_text}}) ? mojo::Message::kFlagIsSync : 0) |
-      (({{allow_interrupt_text}}) ? 0 : mojo::Message::kFlagNoInterrupt);
+      (({{allow_interrupt_text}}) ? 0 : mojo::Message::kFlagNoInterrupt) |
+      (({{is_urgent_text}}) ? mojo::Message::kFlagIsUrgent : 0);
 {%-   endif %}
 {%- endmacro %}
 
 {%- macro build_serialized_message(message_name, method, param_name_prefix,
                                    params_struct, params_description,
-                                   flags_text, message_object_name) %}
+                                   flags_text, message_object_name,
+                                   has_size_estimator = False) %}
+  const size_t estimated_payload_size =
+{%-   if has_size_estimator and method.estimate_message_size  %}
+    size_estimator_.EstimatePayloadSize({{message_name}});
+{%-   else %}
+    0;
+{%-   endif %}
+
 {%-   if method.unlimited_message_size %}
   mojo::Message {{message_object_name}}(
-      {{message_name}}, {{flags_text}}, 0, 0,
-      MOJO_CREATE_MESSAGE_FLAG_UNLIMITED_SIZE, nullptr);
+      {{message_name}}, {{flags_text}},
+      MOJO_CREATE_MESSAGE_FLAG_UNLIMITED_SIZE,
+      estimated_payload_size);
 {%-   else %}
   mojo::Message {{message_object_name}}(
-      {{message_name}}, {{flags_text}}, 0, 0, nullptr);
+      {{message_name}}, {{flags_text}}, estimated_payload_size);
 {%-   endif %}
   mojo::internal::MessageFragment<
       {{params_struct|get_qualified_name_for_kind(internal=True)}}> params(
@@ -134,14 +145,15 @@ class {{message_typename}}
       bool expects_response,
 {%-   endif %}
       bool is_sync,
-      bool allow_interrupt
+      bool allow_interrupt,
+      bool is_urgent
 {%-   if parameters -%}
       ,
       {{declare_params("param_", parameters)}}
 {%-   endif %}) {
 
     {{build_message_flags(is_response, "is_sync", "allow_interrupt",
-                          "expects_response", "kFlags")}}
+                          "is_urgent", "expects_response", "kFlags")}}
 
     if (!serialize) {
       return mojo::Message(std::make_unique<{{message_typename}}>(

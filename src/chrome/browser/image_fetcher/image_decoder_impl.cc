@@ -1,13 +1,15 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <algorithm>
+#include "chrome/browser/image_fetcher/image_decoder_impl.h"
+
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "chrome/browser/image_fetcher/image_decoder_impl.h"
+#include "base/not_fatal_until.h"
+#include "base/ranges/algorithm.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/image/image.h"
 
@@ -25,7 +27,7 @@ class ImageDecoderImpl::DecodeImageRequest
   DecodeImageRequest(const DecodeImageRequest&) = delete;
   DecodeImageRequest& operator=(const DecodeImageRequest&) = delete;
 
-  ~DecodeImageRequest() override {}
+  ~DecodeImageRequest() override = default;
 
  private:
   // Runs the callback and remove the request from the internal request queue.
@@ -64,9 +66,9 @@ void ImageDecoderImpl::DecodeImageRequest::RunCallbackAndRemoveRequest(
   decoder_->RemoveDecodeImageRequest(this);
 }
 
-ImageDecoderImpl::ImageDecoderImpl() {}
+ImageDecoderImpl::ImageDecoderImpl() = default;
 
-ImageDecoderImpl::~ImageDecoderImpl() {}
+ImageDecoderImpl::~ImageDecoderImpl() = default;
 
 void ImageDecoderImpl::DecodeImage(
     const std::string& image_data,
@@ -86,10 +88,8 @@ void ImageDecoderImpl::DecodeImage(
 void ImageDecoderImpl::RemoveDecodeImageRequest(DecodeImageRequest* request) {
   // Remove the finished request from the request queue.
   auto request_it =
-      std::find_if(decode_image_requests_.begin(), decode_image_requests_.end(),
-                   [request](const std::unique_ptr<DecodeImageRequest>& r) {
-                     return r.get() == request;
-                   });
-  DCHECK(request_it != decode_image_requests_.end());
+      base::ranges::find(decode_image_requests_, request,
+                         &std::unique_ptr<DecodeImageRequest>::get);
+  CHECK(request_it != decode_image_requests_.end(), base::NotFatalUntil::M130);
   decode_image_requests_.erase(request_it);
 }

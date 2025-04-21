@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,14 +28,14 @@ namespace payments {
 
 class SitePerProcessPaymentsBrowserTest : public InProcessBrowserTest {
  public:
-  SitePerProcessPaymentsBrowserTest() {}
+  SitePerProcessPaymentsBrowserTest() = default;
 
   SitePerProcessPaymentsBrowserTest(const SitePerProcessPaymentsBrowserTest&) =
       delete;
   SitePerProcessPaymentsBrowserTest& operator=(
       const SitePerProcessPaymentsBrowserTest&) = delete;
 
-  ~SitePerProcessPaymentsBrowserTest() override {}
+  ~SitePerProcessPaymentsBrowserTest() override = default;
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
     // HTTPS server only serves a valid cert for localhost, so this is needed

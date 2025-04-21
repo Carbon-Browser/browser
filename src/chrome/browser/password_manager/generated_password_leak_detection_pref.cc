@@ -1,9 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/password_manager/generated_password_leak_detection_pref.h"
 
+#include "base/feature_list.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/account_consistency_mode_manager.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
@@ -11,9 +12,9 @@
 #include "chrome/browser/sync/sync_service_factory.h"
 #include "chrome/browser/sync/sync_ui_util.h"
 #include "chrome/common/extensions/api/settings_private.h"
-#include "components/password_manager/core/common/password_manager_features.h"
 #include "components/password_manager/core/common/password_manager_pref_names.h"
 #include "components/prefs/pref_service.h"
+#include "components/safe_browsing/core/common/features.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 
@@ -21,17 +22,8 @@ namespace {
 
 // Returns whether the user can use the leak detection feature.
 bool IsUserAllowedToUseLeakDetection(Profile* profile) {
-  if (profile->IsGuestSession())
-    return false;
-
-  auto* identity_manager =
-      IdentityManagerFactory::GetForProfileIfExists(profile);
-  if (!identity_manager)
-    return false;
-
-  return identity_manager->HasPrimaryAccount(signin::ConsentLevel::kSignin) ||
-         base::FeatureList::IsEnabled(
-             password_manager::features::kLeakDetectionUnauthenticated);
+  return !profile->IsGuestSession() &&
+         IdentityManagerFactory::GetForProfileIfExists(profile);
 }
 
 // Returns whether the effective value of the Safe Browsing preferences for
@@ -68,11 +60,13 @@ GeneratedPasswordLeakDetectionPref::GeneratedPasswordLeakDetectionPref(
           &GeneratedPasswordLeakDetectionPref::OnSourcePreferencesChanged,
           base::Unretained(this)));
 
-  if (auto* identity_manager = IdentityManagerFactory::GetForProfile(profile))
+  if (auto* identity_manager = IdentityManagerFactory::GetForProfile(profile)) {
     identity_manager_observer_.Observe(identity_manager);
+  }
 
-  if (auto* sync_service = SyncServiceFactory::GetForProfile(profile))
+  if (auto* sync_service = SyncServiceFactory::GetForProfile(profile)) {
     sync_service_observer_.Observe(sync_service);
+  }
 }
 
 GeneratedPasswordLeakDetectionPref::~GeneratedPasswordLeakDetectionPref() =
@@ -80,49 +74,72 @@ GeneratedPasswordLeakDetectionPref::~GeneratedPasswordLeakDetectionPref() =
 
 extensions::settings_private::SetPrefResult
 GeneratedPasswordLeakDetectionPref::SetPref(const base::Value* value) {
-  if (!value->is_bool())
+  if (!value->is_bool()) {
     return extensions::settings_private::SetPrefResult::PREF_TYPE_MISMATCH;
-
-  if (!IsSafeBrowsingStandard(profile_) ||
-      !IsUserAllowedToUseLeakDetection(profile_))
-    return extensions::settings_private::SetPrefResult::PREF_NOT_MODIFIABLE;
-
-  if (!profile_->GetPrefs()
-           ->FindPreference(
-               password_manager::prefs::kPasswordLeakDetectionEnabled)
-           ->IsUserModifiable()) {
-    return extensions::settings_private::SetPrefResult::PREF_NOT_MODIFIABLE;
   }
 
-  profile_->GetPrefs()->SetBoolean(
-      password_manager::prefs::kPasswordLeakDetectionEnabled, value->GetBool());
+  // Decouples password leak pref from standard safe browsing. Users now have
+  // free choice regardless of their protection level.
+  if (base::FeatureList::IsEnabled(safe_browsing::kPasswordLeakToggleMove)) {
+    if (!profile_->GetPrefs()
+             ->FindPreference(
+                 password_manager::prefs::kPasswordLeakDetectionEnabled)
+             ->IsUserModifiable() ||
+        !IsUserAllowedToUseLeakDetection(profile_)) {
+      return extensions::settings_private::SetPrefResult::PREF_NOT_MODIFIABLE;
+    }
 
-  return extensions::settings_private::SetPrefResult::SUCCESS;
+    profile_->GetPrefs()->SetBoolean(
+        password_manager::prefs::kPasswordLeakDetectionEnabled,
+        value->GetBool());
+    return extensions::settings_private::SetPrefResult::SUCCESS;
+  } else {
+    if (!IsSafeBrowsingStandard(profile_) ||
+        !IsUserAllowedToUseLeakDetection(profile_)) {
+      return extensions::settings_private::SetPrefResult::PREF_NOT_MODIFIABLE;
+    }
+
+    if (!profile_->GetPrefs()
+             ->FindPreference(
+                 password_manager::prefs::kPasswordLeakDetectionEnabled)
+             ->IsUserModifiable()) {
+      return extensions::settings_private::SetPrefResult::PREF_NOT_MODIFIABLE;
+    }
+
+    profile_->GetPrefs()->SetBoolean(
+        password_manager::prefs::kPasswordLeakDetectionEnabled,
+        value->GetBool());
+
+    return extensions::settings_private::SetPrefResult::SUCCESS;
+  }
 }
 
-std::unique_ptr<settings_api::PrefObject>
-GeneratedPasswordLeakDetectionPref::GetPrefObject() const {
+settings_api::PrefObject GeneratedPasswordLeakDetectionPref::GetPrefObject()
+    const {
   auto* backing_preference = profile_->GetPrefs()->FindPreference(
       password_manager::prefs::kPasswordLeakDetectionEnabled);
 
-  auto pref_object = std::make_unique<settings_api::PrefObject>();
-  pref_object->key = kGeneratedPasswordLeakDetectionPref;
-  pref_object->type = settings_api::PREF_TYPE_BOOLEAN;
-  pref_object->value =
-      std::make_unique<base::Value>(backing_preference->GetValue()->GetBool() &&
-                                    IsUserAllowedToUseLeakDetection(profile_));
-  pref_object->user_control_disabled =
-      std::make_unique<bool>(!IsSafeBrowsingStandard(profile_) ||
-                             !IsUserAllowedToUseLeakDetection(profile_));
+  settings_api::PrefObject pref_object;
+  pref_object.key = kGeneratedPasswordLeakDetectionPref;
+  pref_object.type = settings_api::PrefType::kBoolean;
+  pref_object.value = base::Value(backing_preference->GetValue()->GetBool() &&
+                                  IsUserAllowedToUseLeakDetection(profile_));
+  if (base::FeatureList::IsEnabled(safe_browsing::kPasswordLeakToggleMove)) {
+    pref_object.user_control_disabled =
+        !IsUserAllowedToUseLeakDetection(profile_);
+  } else {
+    pref_object.user_control_disabled =
+        !IsSafeBrowsingStandard(profile_) ||
+        !IsUserAllowedToUseLeakDetection(profile_);
+  }
   if (!backing_preference->IsUserModifiable()) {
-    pref_object->enforcement = settings_api::Enforcement::ENFORCEMENT_ENFORCED;
+    pref_object.enforcement = settings_api::Enforcement::kEnforced;
     extensions::settings_private::GeneratedPref::ApplyControlledByFromPref(
-        pref_object.get(), backing_preference);
+        &pref_object, backing_preference);
   } else if (backing_preference->GetRecommendedValue()) {
-    pref_object->enforcement =
-        settings_api::Enforcement::ENFORCEMENT_RECOMMENDED;
-    pref_object->recommended_value = std::make_unique<base::Value>(
-        backing_preference->GetRecommendedValue()->GetBool());
+    pref_object.enforcement = settings_api::Enforcement::kRecommended;
+    pref_object.recommended_value =
+        base::Value(backing_preference->GetRecommendedValue()->GetBool());
   }
 
   return pref_object;
@@ -139,7 +156,7 @@ void GeneratedPasswordLeakDetectionPref::OnIdentityManagerShutdown(
 
 void GeneratedPasswordLeakDetectionPref::OnPrimaryAccountChanged(
     const signin::PrimaryAccountChangeEvent& event_details) {
-  switch (event_details.GetEventTypeFor(signin::ConsentLevel::kSync)) {
+  switch (event_details.GetEventTypeFor(signin::ConsentLevel::kSignin)) {
     case signin::PrimaryAccountChangeEvent::Type::kSet:
     case signin::PrimaryAccountChangeEvent::Type::kCleared:
       NotifyObservers(kGeneratedPasswordLeakDetectionPref);

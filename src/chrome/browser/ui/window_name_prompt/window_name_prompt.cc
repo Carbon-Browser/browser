@@ -1,8 +1,8 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/user_metrics.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ui/browser.h"
@@ -21,10 +21,11 @@ void SetBrowserTitleFromTextfield(Browser* browser,
                                   ui::DialogModel* dialog_model) {
   std::string text = base::UTF16ToUTF8(
       dialog_model->GetTextfieldByUniqueId(kWindowNameFieldId)->text());
-  if (text.empty())
+  if (text.empty()) {
     base::RecordAction(base::UserMetricsAction("WindowNaming_Cleared"));
-  else
+  } else {
     base::RecordAction(base::UserMetricsAction("WindowNaming_Set"));
+  }
   browser->SetWindowUserTitle(text);
 }
 

@@ -1,17 +1,22 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/exo/wayland/zwp_text_input_manager.h"
 
+#include <sys/mman.h>
 #include <text-input-extension-unstable-v1-server-protocol.h>
 #include <text-input-unstable-v1-server-protocol.h>
 #include <wayland-server-core.h>
 #include <wayland-server-protocol-core.h>
 #include <xkbcommon/xkbcommon.h>
 
+#include <string_view>
+
+#include "ash/constants/ash_features.h"
+#include "base/files/file_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/utf_offset_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/exo/display.h"
@@ -20,6 +25,7 @@
 #include "components/exo/wayland/server_util.h"
 #include "components/exo/wayland/wl_seat.h"
 #include "components/exo/xkb_tracker.h"
+#include "net/base/data_url.h"
 #include "ui/base/ime/utf_offset.h"
 #include "ui/base/wayland/wayland_server_input_types.h"
 #include "ui/events/event.h"
@@ -83,6 +89,53 @@ class WaylandTextInputDelegate : public TextInput::Delegate {
 
   wl_resource* resource() { return text_input_; }
 
+  ui::TextInputClient::FocusReason pending_focus_reason() const {
+    return pending_focus_reason_;
+  }
+
+  void set_pending_focus_reason(ui::TextInputClient::FocusReason reason) {
+    pending_focus_reason_ = reason;
+  }
+
+  bool pending_surrounding_text_supported() const {
+    return pending_surrounding_text_supported_;
+  }
+
+  void set_pending_surrounding_text_supported(bool is_supported) {
+    pending_surrounding_text_supported_ = is_supported;
+  }
+
+  void SetPendingGrammarFragment(
+      const std::optional<ui::GrammarFragment>& grammar_fragment) {
+    pending_grammar_fragment_ = grammar_fragment;
+  }
+
+  std::optional<ui::GrammarFragment> TakeGrammarFragment() {
+    auto result = pending_grammar_fragment_;
+    pending_grammar_fragment_.reset();
+    return result;
+  }
+
+  void SetPendingAutocorrectInfo(const ui::AutocorrectInfo& autocorrect_info) {
+    pending_autocorrect_info_ = autocorrect_info;
+  }
+
+  std::optional<ui::AutocorrectInfo> TakeAutocorrectInfo() {
+    auto result = pending_autocorrect_info_;
+    pending_autocorrect_info_.reset();
+    return result;
+  }
+
+  void SetSurroundingTextOffsetUtf16(uint32_t offset) {
+    pending_surrounding_text_offset_utf16_ = offset;
+  }
+
+  std::optional<uint32_t> TakeSurroundingTextOffsetUtf16() {
+    auto result = pending_surrounding_text_offset_utf16_;
+    pending_surrounding_text_offset_utf16_.reset();
+    return result;
+  }
+
  private:
   wl_client* client() { return wl_resource_get_client(text_input_); }
 
@@ -106,6 +159,26 @@ class WaylandTextInputDelegate : public TextInput::Delegate {
     wl_client_flush(client());
   }
 
+  void OnVirtualKeyboardOccludedBoundsChanged(
+      const gfx::Rect& screen_bounds) override {
+    if (!extended_text_input_)
+      return;
+
+    if (wl_resource_get_version(extended_text_input_) >=
+        ZCR_EXTENDED_TEXT_INPUT_V1_SET_VIRTUAL_KEYBOARD_OCCLUDED_BOUNDS_SINCE_VERSION) {
+      zcr_extended_text_input_v1_send_set_virtual_keyboard_occluded_bounds(
+          extended_text_input_, screen_bounds.x(), screen_bounds.y(),
+          screen_bounds.width(), screen_bounds.height());
+      wl_client_flush(client());
+    }
+  }
+
+  bool SupportsFinalizeVirtualKeyboardChanges() override {
+    return extended_text_input_ &&
+           wl_resource_get_version(extended_text_input_) >=
+               ZCR_EXTENDED_TEXT_INPUT_V1_FINALIZE_VIRTUAL_KEYBOARD_CHANGES_SINCE_VERSION;
+  }
+
   void SetCompositionText(const ui::CompositionText& composition) override {
     SendPreeditStyle(composition.text, composition.ime_text_spans);
 
@@ -124,7 +197,7 @@ class WaylandTextInputDelegate : public TextInput::Delegate {
     wl_client_flush(client());
   }
 
-  void Commit(const std::u16string& text) override {
+  void Commit(std::u16string_view text) override {
     zwp_text_input_v1_send_commit_string(
         text_input_,
         serial_tracker_->GetNextSerial(SerialTracker::EventType::OTHER_EVENT),
@@ -132,7 +205,7 @@ class WaylandTextInputDelegate : public TextInput::Delegate {
     wl_client_flush(client());
   }
 
-  void SetCursor(base::StringPiece16 surrounding_text,
+  void SetCursor(std::u16string_view surrounding_text,
                  const gfx::Range& selection) override {
     std::vector<size_t> offsets{selection.start(), selection.end()};
     base::UTF16ToUTF8AndAdjustOffsets(surrounding_text, &offsets);
@@ -141,17 +214,18 @@ class WaylandTextInputDelegate : public TextInput::Delegate {
                                            static_cast<uint32_t>(offsets[0]));
   }
 
-  void DeleteSurroundingText(base::StringPiece16 surrounding_text,
+  void DeleteSurroundingText(std::u16string_view surrounding_text,
                              const gfx::Range& range) override {
     std::vector<size_t> offsets{range.GetMin(), range.GetMax()};
     base::UTF16ToUTF8AndAdjustOffsets(surrounding_text, &offsets);
     // Currently, the arguments are conflicting with spec.
     // However, the only client, Lacros, also interprets wrongly in the same
     // way so just fixing here could cause visible regression.
-    // TODO(crbug.com/1227590): Fix the behavior with versioning.
+    // TODO(crbug.com/40189286): Fix the behavior with versioning.
     zwp_text_input_v1_send_delete_surrounding_text(
         text_input_, static_cast<uint32_t>(offsets[0]),
         static_cast<uint32_t>(offsets[1] - offsets[0]));
+    wl_client_flush(client());
   }
 
   void SendKey(const ui::KeyEvent& event) override {
@@ -172,7 +246,7 @@ class WaylandTextInputDelegate : public TextInput::Delegate {
       VLOG(0) << "Unable to find keysym for: " << event.ToString();
     }
 
-    bool pressed = (event.type() == ui::ET_KEY_PRESSED);
+    bool pressed = (event.type() == ui::EventType::kKeyPressed);
     zwp_text_input_v1_send_keysym(
         text_input_, TimeTicksToMilliseconds(event.time_stamp()),
         serial_tracker_->GetNextSerial(SerialTracker::EventType::OTHER_EVENT),
@@ -203,7 +277,7 @@ class WaylandTextInputDelegate : public TextInput::Delegate {
   }
 
   void SetCompositionFromExistingText(
-      base::StringPiece16 surrounding_text,
+      std::u16string_view surrounding_text,
       const gfx::Range& cursor,
       const gfx::Range& range,
       const std::vector<ui::ImeTextSpan>& ui_ime_text_spans) override {
@@ -225,7 +299,7 @@ class WaylandTextInputDelegate : public TextInput::Delegate {
     wl_client_flush(client());
   }
 
-  void ClearGrammarFragments(base::StringPiece16 surrounding_text,
+  void ClearGrammarFragments(std::u16string_view surrounding_text,
                              const gfx::Range& range) override {
     if (!extended_text_input_)
       return;
@@ -241,7 +315,7 @@ class WaylandTextInputDelegate : public TextInput::Delegate {
     }
   }
 
-  void AddGrammarFragment(base::StringPiece16 surrounding_text,
+  void AddGrammarFragment(std::u16string_view surrounding_text,
                           const ui::GrammarFragment& fragment) override {
     if (!extended_text_input_)
       return;
@@ -258,25 +332,85 @@ class WaylandTextInputDelegate : public TextInput::Delegate {
     }
   }
 
-  void SetAutocorrectRange(base::StringPiece16 surrounding_text,
+  void SetAutocorrectRange(std::u16string_view surrounding_text,
                            const gfx::Range& range) override {
-    if (!extended_text_input_)
+    if (!extended_text_input_) {
       return;
+    }
 
-    const uint32_t begin = range.GetMin();
-    const uint32_t end = range.GetMax();
+    if (wl_resource_get_version(extended_text_input_) <
+        ZCR_EXTENDED_TEXT_INPUT_V1_SET_AUTOCORRECT_RANGE_SINCE_VERSION) {
+      return;
+    }
+
+    std::vector<size_t> offsets{range.GetMin(), range.GetMax()};
+    base::UTF16ToUTF8AndAdjustOffsets(surrounding_text, &offsets);
+    zcr_extended_text_input_v1_send_set_autocorrect_range(
+        extended_text_input_, offsets[0], offsets[1]);
+    wl_client_flush(client());
+  }
+
+  bool HasImageInsertSupport() override {
+    if (!extended_text_input_) {
+      return false;
+    }
+
+    return wl_resource_get_version(extended_text_input_) >=
+           ZCR_EXTENDED_TEXT_INPUT_V1_INSERT_IMAGE_SINCE_VERSION;
+  }
+
+  void InsertImage(const GURL& src) override {
+    if (!extended_text_input_) {
+      return;
+    }
+
+    // Due to the limit of wayland protocol, we should check the size of
+    // payload here.
+    static constexpr size_t kSizeLimit = 4000;
+    const size_t src_size = src.spec().size();
+    if (src_size > kSizeLimit) {
+      if (wl_resource_get_version(extended_text_input_) <
+          ZCR_EXTENDED_TEXT_INPUT_V1_INSERT_IMAGE_WITH_LARGE_URL_SINCE_VERSION) {
+        LOG(ERROR) << "Inserting image with large URL is not supported";
+        return;
+      }
+
+      std::string mime_type, charset, raw_data;
+      if (!net::DataURL::Parse(src, &mime_type, &charset, &raw_data)) {
+        LOG(ERROR) << "Failed to parse data url";
+        return;
+      }
+
+      base::ScopedFD memfd(memfd_create("inserting_image", MFD_CLOEXEC));
+      if (!memfd.get()) {
+        PLOG(ERROR) << "Failed to create memfd";
+        return;
+      }
+
+      if (!base::WriteFileDescriptor(memfd.get(), raw_data)) {
+        LOG(ERROR) << "Failed to write into memfd";
+        return;
+      }
+      if (lseek(memfd.get(), 0, SEEK_SET) != 0) {
+        LOG(ERROR) << "Failed to reset file descriptor";
+        return;
+      }
+      zcr_extended_text_input_v1_send_insert_image_with_large_url(
+          extended_text_input_, mime_type.c_str(), charset.c_str(), memfd.get(),
+          raw_data.size());
+      wl_client_flush(client());
+      return;
+    }
 
     if (wl_resource_get_version(extended_text_input_) >=
-        ZCR_EXTENDED_TEXT_INPUT_V1_SET_AUTOCORRECT_RANGE_SINCE_VERSION) {
-      // TODO(https://crbug.com/952757): Convert to UTF-8 offsets once the
-      // surrounding text is no longer stale.
-      zcr_extended_text_input_v1_send_set_autocorrect_range(
-          extended_text_input_, begin, end);
+        ZCR_EXTENDED_TEXT_INPUT_V1_INSERT_IMAGE_SINCE_VERSION) {
+      zcr_extended_text_input_v1_send_insert_image(extended_text_input_,
+                                                   src.spec().c_str());
       wl_client_flush(client());
     }
   }
 
-  void SendPreeditStyle(base::StringPiece16 text,
+  void SendPreeditStyle(std::u16string_view text,
                         const std::vector<ui::ImeTextSpan>& spans) {
     if (spans.empty())
       return;
@@ -324,19 +458,57 @@ class WaylandTextInputDelegate : public TextInput::Delegate {
     }
   }
 
-  wl_resource* text_input_;
-  wl_resource* extended_text_input_ = nullptr;
-  wl_resource* surface_ = nullptr;
+  bool ConfirmComposition(bool keep_selection) override {
+    if (!extended_text_input_) {
+      return false;
+    }
+
+    if (wl_resource_get_version(extended_text_input_) <
+        ZCR_EXTENDED_TEXT_INPUT_V1_CONFIRM_PREEDIT_SINCE_VERSION) {
+      return false;
+    }
+
+    zcr_extended_text_input_v1_send_confirm_preedit(
+        extended_text_input_,
+        keep_selection
+            ? ZCR_EXTENDED_TEXT_INPUT_V1_CONFIRM_PREEDIT_SELECTION_BEHAVIOR_UNCHANGED
+            : ZCR_EXTENDED_TEXT_INPUT_V1_CONFIRM_PREEDIT_SELECTION_BEHAVIOR_AFTER_PREEDIT);
+    wl_client_flush(client());
+    return true;
+  }
+
+  bool SupportsConfirmPreedit() override {
+    // Note: until this is supported by crostini, crostini won't be able to add
+    // the new extension api.
+    return extended_text_input_ &&
+           wl_resource_get_version(extended_text_input_) >=
+               ZCR_EXTENDED_TEXT_INPUT_V1_CONFIRM_PREEDIT_SINCE_VERSION;
+  }
+
+  raw_ptr<wl_resource, DanglingUntriaged> text_input_;
+  raw_ptr<wl_resource, DanglingUntriaged> extended_text_input_ = nullptr;
+  raw_ptr<wl_resource, DanglingUntriaged> surface_ = nullptr;
 
   // Owned by Seat, which is updated before calling the callbacks of this
   // class.
-  const XkbTracker* const xkb_tracker_;
+  const raw_ptr<const XkbTracker> xkb_tracker_;
 
   // Owned by Server, which always outlives this delegate.
-  SerialTracker* const serial_tracker_;
+  const raw_ptr<SerialTracker> serial_tracker_;
   ui::XkbModifierConverter modifier_converter_{
       std::vector<std::string>(std::begin(kModifierNames),
                                std::end(kModifierNames))};
+
+  // Pending focus reason.
+  ui::TextInputClient::FocusReason pending_focus_reason_ =
+      ui::TextInputClient::FOCUS_REASON_OTHER;
+
+  // Pending surrounding text supported flag.
+  bool pending_surrounding_text_supported_ = true;
+  std::optional<ui::GrammarFragment> pending_grammar_fragment_;
+  std::optional<ui::AutocorrectInfo> pending_autocorrect_info_;
+  std::optional<std::uint32_t> pending_surrounding_text_offset_utf16_;
+
   base::WeakPtrFactory<WaylandTextInputDelegate> weak_factory_{this};
 };
 
@@ -362,6 +534,55 @@ class WaylandExtendedTextInput {
   base::WeakPtr<WaylandTextInputDelegate> delegate_;
 };
 
+void SetSurroundingTextImpl(TextInput* text_input,
+                            WaylandTextInputDelegate* delegate,
+                            std::string_view text,
+                            uint32_t cursor,
+                            uint32_t anchor) {
+  uint32_t offset_utf16 =
+      delegate->TakeSurroundingTextOffsetUtf16().value_or(0u);
+  auto grammar_fragment = delegate->TakeGrammarFragment();
+  auto autocorrect_info = delegate->TakeAutocorrectInfo();
+
+  // TODO(crbug.com/40189286): Selection range should keep cursor/anchor
+  // relationship.
+  auto minmax = std::minmax(cursor, anchor);
+  std::vector<size_t> offsets{minmax.first, minmax.second};
+  if (grammar_fragment.has_value()) {
+    offsets.push_back(grammar_fragment->range.start());
+    offsets.push_back(grammar_fragment->range.end());
+  }
+  if (autocorrect_info.has_value()) {
+    offsets.push_back(autocorrect_info->range.start());
+    offsets.push_back(autocorrect_info->range.end());
+  }
+
+  std::u16string u16_text = base::UTF8ToUTF16AndAdjustOffsets(text, &offsets);
+  if (offsets[0] == std::u16string::npos ||
+      offsets[1] == std::u16string::npos) {
+    return;
+  }
+
+  if (grammar_fragment.has_value()) {
+    grammar_fragment->range =
+        gfx::Range(offsets[2] + offset_utf16, offsets[3] + offset_utf16);
+  }
+
+  // Original implementation did not convert the range. Guard this by the
+  // feature flag to be reverted to old behavior just in case for transition
+  // period.
+  if (autocorrect_info.has_value()) {
+    size_t index = grammar_fragment.has_value() ? 4u : 2u;
+    autocorrect_info->range = gfx::Range(offsets[index] + offset_utf16,
+                                         offsets[index + 1] + offset_utf16);
+  }
+
+  text_input->SetSurroundingText(
+      u16_text, offset_utf16,
+      gfx::Range(offsets[0] + offset_utf16, offsets[1] + offset_utf16),
+      grammar_fragment, autocorrect_info);
+}
+
 void text_input_activate(wl_client* client,
                          wl_resource* resource,
                          wl_resource* seat_resource,
@@ -369,9 +590,12 @@ void text_input_activate(wl_client* client,
   TextInput* text_input = GetUserDataAs<TextInput>(resource);
   Surface* surface = GetUserDataAs<Surface>(surface_resource);
   Seat* seat = GetUserDataAs<WaylandSeat>(seat_resource)->seat;
-  static_cast<WaylandTextInputDelegate*>(text_input->delegate())
-      ->set_surface(surface_resource);
-  text_input->Activate(seat, surface);
+  auto* delegate =
+      static_cast<WaylandTextInputDelegate*>(text_input->delegate());
+  delegate->set_surface(surface_resource);
+  auto focus_reason = delegate->pending_focus_reason();
+  delegate->set_pending_focus_reason(ui::TextInputClient::FOCUS_REASON_OTHER);
+  text_input->Activate(seat, surface, focus_reason);
 
   // Sending modifiers.
   wl_array modifiers;
@@ -389,6 +613,9 @@ void text_input_deactivate(wl_client* client,
                            wl_resource* resource,
                            wl_resource* seat) {
   TextInput* text_input = GetUserDataAs<TextInput>(resource);
+  auto* delegate =
+      static_cast<WaylandTextInputDelegate*>(text_input->delegate());
+  delegate->set_pending_focus_reason(ui::TextInputClient::FOCUS_REASON_OTHER);
   text_input->Deactivate();
 }
 
@@ -410,14 +637,9 @@ void text_input_set_surrounding_text(wl_client* client,
                                      uint32_t cursor,
                                      uint32_t anchor) {
   TextInput* text_input = GetUserDataAs<TextInput>(resource);
-  // TODO(crbug.com/1227590): Selection range should keep cursor/anchor
-  // relationship.
-  auto minmax = std::minmax(cursor, anchor);
-  std::vector<size_t> offsets{minmax.first, minmax.second};
-  std::u16string u16_text = base::UTF8ToUTF16AndAdjustOffsets(text, &offsets);
-  if (offsets[0] == std::u16string::npos || offsets[1] == std::u16string::npos)
-    return;
-  text_input->SetSurroundingText(u16_text, gfx::Range(offsets[0], offsets[1]));
+  auto* delegate =
+      static_cast<WaylandTextInputDelegate*>(text_input->delegate());
+  SetSurroundingTextImpl(text_input, delegate, text, cursor, anchor);
 }
 
 void text_input_set_content_type(wl_client* client,
@@ -491,7 +713,15 @@ void text_input_set_content_type(wl_client* client,
       break;
   }
 
-  text_input->SetTypeModeFlags(type, mode, flags, should_do_learning);
+  auto* delegate =
+      static_cast<WaylandTextInputDelegate*>(text_input->delegate());
+  bool surrounding_text_supported =
+    delegate->pending_surrounding_text_supported();
+  delegate->set_pending_surrounding_text_supported(/*is_supported = */ true);
+
+  text_input->SetTypeModeFlags(type, mode, flags, should_do_learning,
+                               /* can_compose_inline = */ true,
+                               surrounding_text_supported);
 }
 
 void text_input_set_cursor_rectangle(wl_client* client,
@@ -571,7 +801,8 @@ void extended_text_input_set_input_type(wl_client* client,
                                         uint32_t input_type,
                                         uint32_t input_mode,
                                         uint32_t input_flags,
-                                        uint32_t learning_mode) {
+                                        uint32_t learning_mode,
+                                        uint32_t inline_composition_support) {
   auto* delegate =
       GetUserDataAs<WaylandExtendedTextInput>(resource)->delegate();
   if (!delegate)
@@ -590,9 +821,32 @@ void extended_text_input_set_input_type(wl_client* client,
   auto ui_flags = ui::wayland::ConvertToTextInputFlags(input_flags).first;
   bool should_do_learning =
       learning_mode == ZCR_EXTENDED_TEXT_INPUT_V1_LEARNING_MODE_ENABLED;
+  bool can_compose_inline =
+      inline_composition_support ==
+      ZCR_EXTENDED_TEXT_INPUT_V1_INLINE_COMPOSITION_SUPPORT_SUPPORTED;
+
+  bool surrounding_text_supported =
+    delegate->pending_surrounding_text_supported();
+  delegate->set_pending_surrounding_text_supported(/*is_supported = */ true);
 
   auto* text_input = GetUserDataAs<TextInput>(delegate->resource());
-  text_input->SetTypeModeFlags(ui_type, ui_mode, ui_flags, should_do_learning);
+  text_input->SetTypeModeFlags(ui_type, ui_mode, ui_flags, should_do_learning,
+                               can_compose_inline, surrounding_text_supported);
+}
+
+void extended_text_input_deprecated_set_input_type(wl_client* client,
+                                                   wl_resource* resource,
+                                                   uint32_t input_type,
+                                                   uint32_t input_mode,
+                                                   uint32_t input_flags,
+                                                   uint32_t learning_mode) {
+  // TODO(crbug.com/40258785) This deprecated method signature is preserved to
+  // maintain backwards compatibility with older client versions. Once both Exo
+  // and Lacros have stabilized on the new API, delete this implementation or
+  // otherwise make it impossible to call.
+  extended_text_input_set_input_type(client, resource, input_type, input_mode,
+                                     input_flags, learning_mode,
+                                     /*inline_composition_support=*/true);
 }
 
 void extended_text_input_set_grammar_fragment_at_cursor(
@@ -603,16 +857,14 @@ void extended_text_input_set_grammar_fragment_at_cursor(
     const char* suggestion) {
   auto* delegate =
       GetUserDataAs<WaylandExtendedTextInput>(resource)->delegate();
-  if (!delegate)
+  if (!delegate) {
     return;
-
-  auto* text_input = GetUserDataAs<TextInput>(delegate->resource());
-  if (start == end) {
-    text_input->SetGrammarFragmentAtCursor(absl::nullopt);
-  } else {
-    text_input->SetGrammarFragmentAtCursor(
-        ui::GrammarFragment(gfx::Range(start, end), suggestion));
   }
+
+  delegate->SetPendingGrammarFragment(
+      start == end ? std::nullopt
+                   : std::make_optional(ui::GrammarFragment(
+                         gfx::Range(start, end), suggestion)));
 }
 
 void extended_text_input_set_autocorrect_info(wl_client* client,
@@ -625,23 +877,138 @@ void extended_text_input_set_autocorrect_info(wl_client* client,
                                               uint32_t height) {
   auto* delegate =
       GetUserDataAs<WaylandExtendedTextInput>(resource)->delegate();
+  if (!delegate) {
+    return;
+  }
+
+  delegate->SetPendingAutocorrectInfo(ui::AutocorrectInfo{
+      gfx::Range(start, end),
+      gfx::Rect(x, y, width, height),
+  });
+}
+
+void extended_text_input_finalize_virtual_keyboard_changes(
+    wl_client* client,
+    wl_resource* resource) {
+  auto* delegate =
+      GetUserDataAs<WaylandExtendedTextInput>(resource)->delegate();
   if (!delegate)
     return;
 
   auto* text_input = GetUserDataAs<TextInput>(delegate->resource());
-  // TODO(https://crbug.com/952757): Convert to UTF-16 offsets once the
-  // surrounding text is no longer stale.
-  gfx::Range autocorrect_range(start, end);
-  gfx::Rect autocorrect_bounds(x, y, width, height);
-  text_input->SetAutocorrectInfo(autocorrect_range, autocorrect_bounds);
+  text_input->FinalizeVirtualKeyboardChanges();
+}
+
+void extended_text_input_set_focus_reason(wl_client* client,
+                                          wl_resource* resource,
+                                          uint32_t reason) {
+  ui::TextInputClient::FocusReason focus_reason;
+  switch (reason) {
+    case ZCR_EXTENDED_TEXT_INPUT_V1_FOCUS_REASON_TYPE_NONE:
+      focus_reason = ui::TextInputClient::FOCUS_REASON_NONE;
+      break;
+    case ZCR_EXTENDED_TEXT_INPUT_V1_FOCUS_REASON_TYPE_MOUSE:
+      focus_reason = ui::TextInputClient::FOCUS_REASON_MOUSE;
+      break;
+    case ZCR_EXTENDED_TEXT_INPUT_V1_FOCUS_REASON_TYPE_TOUCH:
+      focus_reason = ui::TextInputClient::FOCUS_REASON_TOUCH;
+      break;
+    case ZCR_EXTENDED_TEXT_INPUT_V1_FOCUS_REASON_TYPE_PEN:
+      focus_reason = ui::TextInputClient::FOCUS_REASON_PEN;
+      break;
+    case ZCR_EXTENDED_TEXT_INPUT_V1_FOCUS_REASON_TYPE_OTHER:
+      focus_reason = ui::TextInputClient::FOCUS_REASON_OTHER;
+      break;
+    default:
+      LOG(ERROR) << "Unknown focus reason: " << reason;
+      return;
+  }
+
+  // Keep tracking in WaylandExtendedTextInput. This will be passed to
+  // TextInput::Activate.
+  auto* delegate =
+      GetUserDataAs<WaylandExtendedTextInput>(resource)->delegate();
+  if (!delegate) {
+    return;
+  }
+  delegate->set_pending_focus_reason(focus_reason);
+}
+
+void extended_text_input_set_surrounding_text_support(wl_client* client,
+                                                      wl_resource* resource,
+                                                      uint32_t support) {
+  auto* delegate =
+      GetUserDataAs<WaylandExtendedTextInput>(resource)->delegate();
+  if (!delegate) {
+    return;
+  }
+
+  switch (support) {
+    case ZCR_EXTENDED_TEXT_INPUT_V1_SURROUNDING_TEXT_SUPPORT_SUPPORTED:
+      delegate->set_pending_surrounding_text_supported(/*is_supported=*/true);
+      return;
+    case ZCR_EXTENDED_TEXT_INPUT_V1_SURROUNDING_TEXT_SUPPORT_UNSUPPORTED:
+      delegate->set_pending_surrounding_text_supported(/*is_supported=*/false);
+      return;
+    default:
+      LOG(ERROR) << "Unknown surrounding_text_support: " << support;
+      return;
+  }
+}
+
+void extended_text_input_set_surrounding_text_offset_utf16(
+    wl_client* client,
+    wl_resource* resource,
+    uint32_t offset_utf16) {
+  auto* delegate =
+      GetUserDataAs<WaylandExtendedTextInput>(resource)->delegate();
+  if (!delegate) {
+    return;
+  }
+
+  delegate->SetSurroundingTextOffsetUtf16(offset_utf16);
+}
+
+void extended_text_input_set_large_surrounding_text(wl_client* client,
+                                                    wl_resource* resource,
+                                                    int32_t raw_fd,
+                                                    uint32_t size,
+                                                    uint32_t cursor,
+                                                    uint32_t anchor) {
+  std::string text;
+  {
+    text.resize(size);
+    base::ScopedFD fd(raw_fd);
+    if (!base::ReadFromFD(fd.get(), text)) {
+      PLOG(ERROR) << "Failed to read file descriptor for surrounding text";
+      return;
+    }
+  }
+
+  auto* delegate =
+      GetUserDataAs<WaylandExtendedTextInput>(resource)->delegate();
+  if (!delegate) {
+    return;
+  }
+  auto* text_input = GetUserDataAs<TextInput>(delegate->resource());
+  if (!text_input) {
+    return;
+  }
+  SetSurroundingTextImpl(text_input, delegate, text, cursor, anchor);
 }
 
 constexpr struct zcr_extended_text_input_v1_interface
     extended_text_input_implementation = {
         extended_text_input_destroy,
-        extended_text_input_set_input_type,
+        extended_text_input_deprecated_set_input_type,
         extended_text_input_set_grammar_fragment_at_cursor,
         extended_text_input_set_autocorrect_info,
+        extended_text_input_finalize_virtual_keyboard_changes,
+        extended_text_input_set_focus_reason,
+        extended_text_input_set_input_type,
+        extended_text_input_set_surrounding_text_support,
+        extended_text_input_set_surrounding_text_offset_utf16,
+        extended_text_input_set_large_surrounding_text,
 };
 
 ////////////////////////////////////////////////////////////////////////////////

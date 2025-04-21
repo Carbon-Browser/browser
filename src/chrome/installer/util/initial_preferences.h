@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -13,21 +13,15 @@
 #include <vector>
 
 #include "base/command_line.h"
+#include "base/memory/raw_ptr.h"
+#include "base/values.h"
 #include "build/build_config.h"
 
 namespace base {
-class DictionaryValue;
 class FilePath;
 }  // namespace base
 
 namespace installer {
-
-#if !BUILDFLAG(IS_MAC)
-// This is the default name for the initial preferences file used to pre-set
-// values in the user profile at first run.
-const char kInitialPrefs[] = "initial_preferences";
-const char kLegacyInitialPrefs[] = "master_preferences";
-#endif
 
 // The initial preferences is a JSON file with the same entries as the
 // 'Default\Preferences' file. This function parses the distribution
@@ -73,6 +67,16 @@ const char kLegacyInitialPrefs[] = "master_preferences";
 
 class InitialPreferences {
  public:
+#if !BUILDFLAG(IS_MAC)
+  // Find and return initial preferences's file path that is located in `dir`.
+  // It will fallback to the legacy file name if the new one is not available
+  // and `for_read` is set to true.
+  // Only available on Windows, Linux and CrOS. Mac has its own initial
+  // preferences file names which is implemented in
+  // `chrome/browser/mac/initial_prefs.h`.
+  static base::FilePath Path(const base::FilePath& dir, bool for_read = true);
+#endif  // !BUILDFLAG(IS_MAC)
+
   // Construct a initial preferences from the current process' current command
   // line. Equivalent to calling
   // InitialPreferences(*CommandLine::ForCurrentProcess()).
@@ -95,7 +99,7 @@ class InitialPreferences {
 
   // Parses a preferences directly from |prefs| and does not merge any command
   // line switches with the distribution dictionary.
-  explicit InitialPreferences(const base::DictionaryValue& prefs);
+  explicit InitialPreferences(base::Value::Dict prefs);
 
   InitialPreferences(const InitialPreferences&) = delete;
   InitialPreferences& operator=(const InitialPreferences&) = delete;
@@ -159,22 +163,21 @@ class InitialPreferences {
   //        }
   //     }
   //  }
-  //
-  bool GetExtensionsBlock(base::DictionaryValue** extensions) const;
+  bool GetExtensionsBlock(const base::Value::Dict*& extensions) const;
 
   // Returns the compressed variations seed entry from the initial prefs.
-  std::string GetCompressedVariationsSeed() const;
+  std::string GetCompressedVariationsSeed();
 
   // Returns the variations seed signature entry from the initial prefs.
-  std::string GetVariationsSeedSignature() const;
+  std::string GetVariationsSeedSignature();
 
   // Returns true iff the initial preferences were successfully read from a
   // file.
   bool read_from_file() const { return preferences_read_from_file_; }
 
   // Returns a reference to this InitialPreferences' root dictionary of values.
-  const base::DictionaryValue& initial_dictionary() const {
-    return *initial_dictionary_.get();
+  const base::Value::Dict& initial_dictionary() const {
+    return *initial_dictionary_;
   }
 
   // Returns a static preference object that has been initialized with the
@@ -198,10 +201,10 @@ class InitialPreferences {
   // Removes the specified string pref from the initial preferences and returns
   // its value. Should be used for initial prefs that shouldn't be automatically
   // copied over to profile preferences.
-  std::string ExtractPrefString(const std::string& name) const;
+  std::string ExtractPrefString(const std::string& name);
 
-  std::unique_ptr<base::DictionaryValue> initial_dictionary_;
-  base::DictionaryValue* distribution_ = nullptr;
+  std::optional<base::Value::Dict> initial_dictionary_;
+  raw_ptr<base::Value::Dict> distribution_ = nullptr;
   bool preferences_read_from_file_ = false;
 };
 

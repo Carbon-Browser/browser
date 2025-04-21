@@ -1,12 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/components/network/system_token_cert_db_storage.h"
 
-#include "base/callback.h"
 #include "base/callback_list.h"
 #include "base/check_op.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
@@ -14,7 +14,7 @@
 #include "base/timer/timer.h"
 #include "net/cert/nss_cert_database.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
@@ -74,7 +74,7 @@ void SystemTokenCertDbStorage::GetDatabase(GetDatabaseCallback callback) {
   DCHECK(callback);
 
   if (system_token_cert_database_) {
-    std::move(callback).Run(system_token_cert_database_);
+    std::move(callback).Run(system_token_cert_database_.get());
   } else if (system_token_cert_db_retrieval_failed_) {
     std::move(callback).Run(/*nss_cert_database=*/nullptr);
   } else {
@@ -114,4 +114,4 @@ void SystemTokenCertDbStorage::OnSystemTokenDbRetrievalTimeout() {
       /*nss_cert_database=*/nullptr);
 }
 
-}  // namespace chromeos
+}  // namespace ash

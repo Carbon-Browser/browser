@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@
 #include <tuple>
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/notreached.h"
 #include "base/tuple.h"
 #include "ipc/ipc_message_macros.h"
@@ -169,18 +169,16 @@ void DispatchResourceReplyOrDefaultParams(
 // 0-parameter messages you need to use the _0 version below (since there are
 // no params in the message).
 #define PPAPI_DISPATCH_PLUGIN_RESOURCE_CALL(msg_class, member_func) \
-    case msg_class::ID: { \
-      msg_class::Schema::Param p; \
-      if (msg_class::Read(&ipc_message__, &p)) { \
-        ppapi::proxy::DispatchResourceReply( \
-            this, \
-            &_IpcMessageHandlerClass::member_func, \
-            params, p); \
-      } else { \
-        NOTREACHED(); \
-      } \
-      break; \
-    }
+  case msg_class::ID: {                                             \
+    msg_class::Schema::Param p;                                     \
+    if (msg_class::Read(&ipc_message__, &p)) {                      \
+      ppapi::proxy::DispatchResourceReply(                          \
+          this, &_IpcMessageHandlerClass::member_func, params, p);  \
+    } else {                                                        \
+      NOTREACHED();                                                 \
+    }                                                               \
+    break;                                                          \
+  }
 
 #define PPAPI_DISPATCH_PLUGIN_RESOURCE_CALL_0(msg_class, member_func) \
   case msg_class::ID: { \

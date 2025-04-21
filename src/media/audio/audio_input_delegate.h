@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,11 @@
 #include <memory>
 #include <string>
 
-#include "base/memory/ref_counted.h"
 #include "media/base/media_export.h"
 
 namespace base {
 class CancelableSyncSocket;
-class ReadOnlySharedMemoryRegion;
+class UnsafeSharedMemoryRegion;
 }  // namespace base
 
 namespace media {
@@ -29,7 +28,7 @@ class MEDIA_EXPORT AudioInputDelegate {
     // Called when the underlying stream is ready for recording.
     virtual void OnStreamCreated(
         int stream_id,
-        base::ReadOnlySharedMemoryRegion shared_memory_region,
+        base::UnsafeSharedMemoryRegion shared_memory_region,
         std::unique_ptr<base::CancelableSyncSocket> socket,
         bool initially_muted) = 0;
 

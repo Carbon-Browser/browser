@@ -209,3 +209,32 @@ function barrier_func(count, func) {
       func();
   };
 }
+
+// Create an IndexedDB by executing script on the given remote context
+// with |dbName| and |version|.
+async function createIndexedDBForTesting(rc, dbName, version) {
+  await rc.executeScript((dbName, version) => {
+    let request = indexedDB.open(dbName, version);
+    request.onupgradeneeded = () => {
+      if (version == 1) {
+        // Only create the object store once.
+        request.result.createObjectStore('store');
+      }
+    }
+    request.onversionchange = () => {
+      fail(t, 'unexpectedly received versionchange event.');
+    }
+  }, [dbName, version]);
+}
+
+// Create an IndexedDB by executing script on the given remote context
+// with |dbName| and |version|, and wait for the reuslt.
+async function waitUntilIndexedDBOpenForTesting(rc, dbName, version) {
+  await rc.executeScript(async (dbName, version) => {
+    await new Promise((resolve, reject) => {
+        let request = indexedDB.open(dbName, version);
+        request.onsuccess = resolve;
+        request.onerror = reject;
+    });
+  }, [dbName, version]);
+}

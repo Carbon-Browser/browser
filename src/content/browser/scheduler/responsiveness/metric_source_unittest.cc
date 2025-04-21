@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <atomic>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/test/bind.h"
 #include "content/browser/scheduler/responsiveness/native_event_observer.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -155,7 +155,7 @@ TEST_F(ResponsivenessMetricSourceTest, RunTasks) {
   task_environment_.RunIOThreadUntilIdle();
   task_environment_.RunUntilIdle();
 
-  content::GetUIThreadTaskRunner({})->PostTask(FROM_HERE, base::DoNothing());
+  GetUIThreadTaskRunner({})->PostTask(FROM_HERE, base::DoNothing());
   task_environment_.RunUntilIdle();
   EXPECT_GT(delegate->will_run_task_on_ui_thread(), 0);
   EXPECT_GT(delegate->did_run_task_on_ui_thread(), 0);

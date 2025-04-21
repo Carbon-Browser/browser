@@ -1,9 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ANDROID_OOM_INTERVENTION_OOM_INTERVENTION_TAB_HELPER_H_
 #define CHROME_BROWSER_ANDROID_OOM_INTERVENTION_OOM_INTERVENTION_TAB_HELPER_H_
+
+#include <optional>
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/unsafe_shared_memory_region.h"
@@ -20,7 +22,6 @@
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/service_manager/public/cpp/interface_provider.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/oom_intervention/oom_intervention.mojom.h"
 
 namespace content {
@@ -90,7 +91,7 @@ class OomInterventionTabHelper
   void ResetInterfaces();
 
   bool navigation_started_ = false;
-  absl::optional<base::TimeTicks> near_oom_detected_time_;
+  std::optional<base::TimeTicks> near_oom_detected_time_;
   base::CallbackListSubscription subscription_;
   base::OneShotTimer renderer_detection_timer_;
 
@@ -119,9 +120,6 @@ class OomInterventionTabHelper
   // memory only after renderer process is dead.
   base::UnsafeSharedMemoryRegion shared_metrics_buffer_;
   base::WritableSharedMemoryMapping metrics_mapping_;
-
-  base::TimeTicks last_navigation_timestamp_;
-  base::TimeTicks start_monitor_timestamp_;
 
   base::ScopedObservation<crash_reporter::CrashMetricsReporter,
                           crash_reporter::CrashMetricsReporter::Observer>

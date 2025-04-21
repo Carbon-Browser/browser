@@ -1,19 +1,21 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/arc/keymaster/arc_keymaster_bridge.h"
 
+#include <cstdint>
 #include <utility>
 
 #include "ash/components/arc/arc_browser_context_keyed_service_factory_base.h"
 #include "ash/components/arc/session/arc_bridge_service.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/singleton.h"
 #include "base/process/process_handle.h"
-#include "chrome/services/keymaster/public/mojom/cert_store.mojom.h"
 #include "chromeos/ash/components/dbus/arc/arc_keymaster_client.h"
+#include "mojo/core/configuration.h"
+#include "mojo/core/embedder/embedder.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/platform/platform_channel.h"
 #include "mojo/public/cpp/system/invitation.h"
@@ -70,7 +72,7 @@ ArcKeymasterBridge::~ArcKeymasterBridge() {
 void ArcKeymasterBridge::UpdatePlaceholderKeys(
     std::vector<keymaster::mojom::ChromeOsKeyPtr> keys,
     UpdatePlaceholderKeysCallback callback) {
-  if (cert_store_bridge_->is_proxy_bound()) {
+  if (cert_store_bridge_->IsProxyBound()) {
     cert_store_bridge_->UpdatePlaceholderKeysInKeymaster(std::move(keys),
                                                          std::move(callback));
   } else {
@@ -113,7 +115,6 @@ void ArcKeymasterBridge::GetServerAfterBootstrap(GetServerCallback callback,
 void ArcKeymasterBridge::OnBootstrapMojoConnection(
     BootstrapMojoConnectionCallback callback,
     bool result) {
-  cert_store_bridge_->OnBootstrapMojoConnection(result);
   if (result) {
     DVLOG(1) << "Success bootstrapping Mojo in arc-keymasterd.";
   } else {
@@ -129,8 +130,21 @@ void ArcKeymasterBridge::BootstrapMojoConnection(
 
   mojo::OutgoingInvitation invitation;
   mojo::PlatformChannel channel;
-  mojo::ScopedMessagePipeHandle server_pipe =
-      invitation.AttachMessagePipe("arc-keymaster-pipe");
+  mojo::ScopedMessagePipeHandle server_pipe;
+  if (mojo::core::IsMojoIpczEnabled()) {
+    constexpr uint64_t kKeymasterPipeAttachment = 0;
+    server_pipe = invitation.AttachMessagePipe(kKeymasterPipeAttachment);
+  } else {
+    server_pipe = invitation.AttachMessagePipe("arc-keymaster-pipe");
+  }
+  if (!server_pipe.is_valid()) {
+    LOG(ERROR) << "ArcKeymasterBridge could not bind to invitation";
+    std::move(callback).Run(false);
+    return;
+  }
+  if (!mojo::core::GetConfiguration().is_broker_process) {
+    invitation.set_extra_flags(MOJO_SEND_INVITATION_FLAG_SHARE_BROKER);
+  }
 
   // Bootstrap cert_store channel attached to the same invitation.
   cert_store_bridge_->BindToInvitation(&invitation);
@@ -149,6 +163,11 @@ void ArcKeymasterBridge::BootstrapMojoConnection(
       channel.TakeRemoteEndpoint().TakePlatformHandle().TakeFD(),
       base::BindOnce(&ArcKeymasterBridge::OnBootstrapMojoConnection,
                      weak_factory_.GetWeakPtr(), std::move(callback)));
+}
+
+// static
+void ArcKeymasterBridge::EnsureFactoryBuilt() {
+  ArcKeymasterBridgeFactory::GetInstance();
 }
 
 }  // namespace arc

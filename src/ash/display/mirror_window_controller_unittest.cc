@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,7 @@
 #include "ui/display/display_switches.h"
 #include "ui/display/display_transform.h"
 #include "ui/display/manager/display_manager.h"
+#include "ui/display/manager/managed_display_info.h"
 #include "ui/display/test/display_manager_test_api.h"
 #include "ui/display/types/display_constants.h"
 #include "ui/events/test/event_generator.h"
@@ -34,9 +35,12 @@ namespace {
 display::ManagedDisplayInfo CreateDisplayInfo(int64_t id,
                                               const gfx::Rect& bounds,
                                               float scale = 1.f) {
-  display::ManagedDisplayInfo info(
-      id, base::StringPrintf("x-%d", static_cast<int>(id)), false);
-  info.SetBounds(bounds);
+  display::ManagedDisplayInfo info = display::CreateDisplayInfo(id, bounds);
+  // Each display should have at least one native mode.
+  display::ManagedDisplayMode mode(bounds.size(), /*refresh_rate=*/60.f,
+                                   /*is_interlaced=*/true,
+                                   /*native=*/true);
+  info.SetManagedDisplayModes({mode});
   info.set_device_scale_factor(scale);
   return info;
 }
@@ -84,7 +88,7 @@ TEST_F(MirrorWindowControllerTest, DockMode) {
           .SetFirstDisplayAsInternalDisplay();
   EXPECT_EQ(internal_id, internal_display_id);
 
-  display_manager()->SetMirrorMode(display::MirrorMode::kNormal, absl::nullopt);
+  display_manager()->SetMirrorMode(display::MirrorMode::kNormal, std::nullopt);
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(1U, display_manager()->GetNumDisplays());
   EXPECT_TRUE(display_manager()->IsInSoftwareMirrorMode());
@@ -147,7 +151,7 @@ TEST_P(MirrorWindowControllerRotationAndPanelOrientationTest, MirrorSize) {
     // Start software mirroring.
     display_manager()->OnNativeDisplaysChanged(display_info_list);
     display_manager()->SetMirrorMode(display::MirrorMode::kNormal,
-                                     absl::nullopt);
+                                     std::nullopt);
     base::RunLoop().RunUntilIdle();
     EXPECT_EQ(1U, display_manager()->GetNumDisplays());
     EXPECT_TRUE(display_manager()->IsInSoftwareMirrorMode());

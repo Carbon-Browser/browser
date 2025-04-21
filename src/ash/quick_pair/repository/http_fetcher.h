@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define ASH_QUICK_PAIR_REPOSITORY_HTTP_FETCHER_H_
 
 #include "ash/quick_pair/common/fast_pair/fast_pair_http_result.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "url/gurl.h"

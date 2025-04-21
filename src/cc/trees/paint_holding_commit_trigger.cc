@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,11 +12,10 @@ PaintHoldingCommitTrigger ReasonToTimeoutTrigger(PaintHoldingReason reason) {
   switch (reason) {
     case PaintHoldingReason::kFirstContentfulPaint:
       return PaintHoldingCommitTrigger::kTimeoutFCP;
-    case PaintHoldingReason::kDocumentTransition:
-      return PaintHoldingCommitTrigger::kTimeoutDocumentTransition;
+    case PaintHoldingReason::kViewTransition:
+      return PaintHoldingCommitTrigger::kTimeoutViewTransition;
   }
   NOTREACHED();
-  return PaintHoldingCommitTrigger::kTimeoutFCP;
 }
 
 }  // namespace cc

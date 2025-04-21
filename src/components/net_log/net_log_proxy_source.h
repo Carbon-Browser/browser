@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,11 @@
 #define COMPONENTS_NET_LOG_NET_LOG_PROXY_SOURCE_H_
 
 #include "base/memory/weak_ptr.h"
+#include "base/values.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/log/net_log.h"
-#include "services/network/public/mojom/network_service.mojom.h"
+#include "services/network/public/mojom/net_log.mojom.h"
 
 namespace base {
 class SequencedTaskRunner;
@@ -49,12 +50,10 @@ class NetLogProxySource : public net::NetLog::ThreadSafeObserver,
  private:
   // Proxy entry to the remote. Must only be called on |task_runner_|.
   void SendNetLogEntry(net::NetLogEventType type,
-                       net::NetLogSourceType source_type,
-                       uint32_t source_id,
-                       base::TimeTicks source_start_time,
+                       const net::NetLogSource& net_log_source,
                        net::NetLogEventPhase phase,
                        base::TimeTicks time,
-                       base::Value params);
+                       base::Value::Dict params);
 
   mojo::Receiver<network::mojom::NetLogProxySource> proxy_source_receiver_;
   mojo::Remote<network::mojom::NetLogProxySink> proxy_sink_remote_;

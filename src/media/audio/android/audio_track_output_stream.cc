@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,17 @@
 
 #include <cmath>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/default_tick_clock.h"
 #include "media/audio/audio_manager_base.h"
-#include "media/base/android/media_jni_headers/AudioTrackOutputStream_jni.h"
 #include "media/base/audio_sample_types.h"
 #include "media/base/audio_timestamp_helper.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "media/base/android/media_jni_headers/AudioTrackOutputStream_jni.h"
 
 using base::android::AttachCurrentThread;
 using base::android::ScopedJavaLocalRef;
@@ -64,6 +66,7 @@ bool AudioTrackOutputStream::Open() {
         format = kEncodingDts;
         break;
       case AudioParameters::AUDIO_BITSTREAM_DTS_HD:
+      case AudioParameters::AUDIO_BITSTREAM_DTS_HD_MA:
         format = kEncodingDtshd;
         break;
       case AudioParameters::AUDIO_BITSTREAM_IEC61937:
@@ -74,7 +77,6 @@ bool AudioTrackOutputStream::Open() {
       case AudioParameters::AUDIO_PCM_LINEAR:
       case AudioParameters::AUDIO_PCM_LOW_LATENCY:
         NOTREACHED();
-        break;
     }
   }
 
@@ -166,20 +168,21 @@ ScopedJavaLocalRef<jobject> AudioTrackOutputStream::OnMoreData(
         AudioBus::WrapMemory(params_, native_buffer));
     audio_bus->set_is_bitstream_format(true);
 
-    callback_->OnMoreData(delay, tick_clock_->NowTicks(), 0, audio_bus.get());
+    callback_->OnMoreData(delay, tick_clock_->NowTicks(), {}, audio_bus.get());
 
-    if (audio_bus->GetBitstreamDataSize() <= 0)
+    if (audio_bus->bitstream_data().empty()) {
       return nullptr;
+    }
 
     return Java_AudioTrackOutputStream_createAudioBufferInfo(
         env, j_audio_output_stream_, audio_bus->GetBitstreamFrames(),
-        audio_bus->GetBitstreamDataSize());
+        audio_bus->bitstream_data().size());
   }
 
   // For PCM format, we need extra memory to convert planar float32 into
   // interleaved int16.
 
-  callback_->OnMoreData(delay, tick_clock_->NowTicks(), 0, audio_bus_.get());
+  callback_->OnMoreData(delay, tick_clock_->NowTicks(), {}, audio_bus_.get());
 
   int16_t* native_bus = reinterpret_cast<int16_t*>(native_buffer);
   audio_bus_->ToInterleaved<SignedInt16SampleTypeTraits>(audio_bus_->frames(),

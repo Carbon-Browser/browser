@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/user_metrics_action.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
@@ -21,9 +22,8 @@
 #include "chrome/grit/renderer_resources.h"
 #include "chrome/renderer/chrome_content_renderer_client.h"
 #include "chrome/renderer/custom_menu_commands.h"
-#include "chrome/renderer/plugins/plugin_uma.h"
 #include "components/content_settings/renderer/content_settings_agent_impl.h"
-#include "components/no_state_prefetch/renderer/prerender_observer_list.h"
+#include "components/no_state_prefetch/renderer/no_state_prefetch_observer_list.h"
 #include "components/strings/grit/components_strings.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/renderer/render_frame.h"
@@ -78,12 +78,14 @@ class PlaceholderSet : public base::SupportsUserData::Data {
     return set;
   }
 
-  std::set<ChromePluginPlaceholder*>& placeholders() { return placeholders_; }
+  std::set<raw_ptr<ChromePluginPlaceholder, SetExperimental>>& placeholders() {
+    return placeholders_;
+  }
 
  private:
   PlaceholderSet() = default;
 
-  std::set<ChromePluginPlaceholder*> placeholders_;
+  std::set<raw_ptr<ChromePluginPlaceholder, SetExperimental>> placeholders_;
 };
 
 }  // namespace
@@ -94,13 +96,13 @@ gin::WrapperInfo ChromePluginPlaceholder::kWrapperInfo = {
 ChromePluginPlaceholder::ChromePluginPlaceholder(
     content::RenderFrame* render_frame,
     const blink::WebPluginParams& params,
-    const std::string& html_data,
     const std::u16string& title)
-    : plugins::LoadablePluginPlaceholder(render_frame, params, html_data),
+    : plugins::LoadablePluginPlaceholder(render_frame, params),
       status_(chrome::mojom::PluginStatus::kAllowed),
       title_(title) {
   RenderThread::Get()->AddObserver(this);
-  prerender::PrerenderObserverList::AddObserverForFrame(render_frame, this);
+  prerender::NoStatePrefetchObserverList::AddObserverForFrame(render_frame,
+                                                              this);
 
   // Keep track of all placeholders associated with |render_frame|.
   PlaceholderSet::GetOrCreate(render_frame)->placeholders().insert(this);
@@ -115,14 +117,9 @@ ChromePluginPlaceholder::~ChromePluginPlaceholder() {
     if (set)
       set->placeholders().erase(this);
 
-    prerender::PrerenderObserverList::RemoveObserverForFrame(render_frame(),
-                                                             this);
+    prerender::NoStatePrefetchObserverList::RemoveObserverForFrame(
+        render_frame(), this);
   }
-}
-
-mojo::PendingRemote<chrome::mojom::PluginRenderer>
-ChromePluginPlaceholder::BindPluginRenderer() {
-  return plugin_renderer_receiver_.BindNewPipeAndPassRemote();
 }
 
 // TODO(bauerb): Move this method to NonLoadablePluginPlaceholder?
@@ -141,8 +138,10 @@ ChromePluginPlaceholder* ChromePluginPlaceholder::CreateLoadableMissingPlugin(
   std::string html_data = webui::GetI18nTemplateHtml(template_html, values);
 
   // Will destroy itself when its WebViewPlugin is going away.
-  return new ChromePluginPlaceholder(render_frame, params, html_data,
-                                     params.mime_type.Utf16());
+  auto* placeholder = new ChromePluginPlaceholder(render_frame, params,
+                                                  params.mime_type.Utf16());
+  placeholder->Init(html_data);
+  return placeholder;
 }
 
 // static
@@ -175,8 +174,8 @@ ChromePluginPlaceholder* ChromePluginPlaceholder::CreateBlockedPlugin(
 
   // |blocked_plugin| will destroy itself when its WebViewPlugin is going away.
   ChromePluginPlaceholder* blocked_plugin =
-      new ChromePluginPlaceholder(render_frame, params, html_data, name);
-
+      new ChromePluginPlaceholder(render_frame, params, name);
+  blocked_plugin->Init(html_data);
   blocked_plugin->SetPluginInfo(info);
   blocked_plugin->SetIdentifier(identifier);
 
@@ -189,8 +188,9 @@ void ChromePluginPlaceholder::ForEach(
     const base::RepeatingCallback<void(ChromePluginPlaceholder*)>& callback) {
   PlaceholderSet* set = PlaceholderSet::Get(render_frame);
   if (set) {
-    for (auto* placeholder : set->placeholders())
+    for (ChromePluginPlaceholder* placeholder : set->placeholders()) {
       callback.Run(placeholder);
+    }
   }
 }
 
@@ -198,25 +198,9 @@ void ChromePluginPlaceholder::SetStatus(chrome::mojom::PluginStatus status) {
   status_ = status;
 }
 
-void ChromePluginPlaceholder::FinishedDownloading() {
-  SetMessage(l10n_util::GetStringFUTF16(IDS_PLUGIN_UPDATING, plugin_name_));
-}
-
-void ChromePluginPlaceholder::UpdateDownloading() {
-  SetMessage(l10n_util::GetStringFUTF16(IDS_PLUGIN_DOWNLOADING, plugin_name_));
-}
-
-void ChromePluginPlaceholder::UpdateSuccess() {
-  PluginListChanged();
-}
-
-void ChromePluginPlaceholder::UpdateFailure() {
-  SetMessage(l10n_util::GetStringFUTF16(IDS_PLUGIN_DOWNLOAD_ERROR_SHORT,
-                                        plugin_name_));
-}
-
-void ChromePluginPlaceholder::SetIsPrerendering(bool is_prerendering) {
-  OnSetIsPrerendering(is_prerendering);
+void ChromePluginPlaceholder::SetIsNoStatePrefetching(
+    bool is_no_state_prefetching) {
+  OnSetIsNoStatePrefetching(is_no_state_prefetching);
 }
 
 void ChromePluginPlaceholder::PluginListChanged() {
@@ -226,7 +210,10 @@ void ChromePluginPlaceholder::PluginListChanged() {
   chrome::mojom::PluginInfoPtr plugin_info = chrome::mojom::PluginInfo::New();
   std::string mime_type(GetPluginParams().mime_type.Utf8());
 
-  ChromeContentRendererClient::GetPluginInfoHost()->GetPluginInfo(
+  mojo::AssociatedRemote<chrome::mojom::PluginInfoHost> plugin_info_host;
+  render_frame()->GetRemoteAssociatedInterfaces()->GetInterface(
+      &plugin_info_host);
+  plugin_info_host->GetPluginInfo(
       GetPluginParams().url,
       render_frame()->GetWebFrame()->Top()->GetSecurityOrigin(), mime_type,
       &plugin_info);
@@ -235,10 +222,6 @@ void ChromePluginPlaceholder::PluginListChanged() {
   blink::WebPlugin* new_plugin = ChromeContentRendererClient::CreatePlugin(
       render_frame(), GetPluginParams(), *plugin_info);
   ReplacePlugin(new_plugin);
-  if (!new_plugin) {
-    PluginUMAReporter::GetInstance()->ReportPluginMissing(
-        GetPluginParams().mime_type.Utf8(), GetPluginParams().url);
-  }
 }
 
 v8::Local<v8::Value> ChromePluginPlaceholder::GetV8Handle(
@@ -289,7 +272,7 @@ void ChromePluginPlaceholder::ShowContextMenu(
   if (plugin() && plugin()->Container())
     point = plugin()->Container()->LocalToRootFramePoint(point);
 
-  // TODO(crbug.com/1093904): This essentially is a floor of the coordinates.
+  // TODO(crbug.com/40699157): This essentially is a floor of the coordinates.
   // Determine if rounding is more appropriate.
   gfx::Rect position_in_dips =
       render_frame()
@@ -326,30 +309,15 @@ void ChromePluginPlaceholder::CustomContextMenuAction(uint32_t action) {
   }
 }
 
-void ChromePluginPlaceholder::ContextMenuClosed(const GURL&) {
+void ChromePluginPlaceholder::ContextMenuClosed(
+    const GURL&,
+    const std::optional<blink::Impression>&) {
   context_menu_client_receiver_.reset();
   render_frame()->GetWebFrame()->View()->DidCloseContextMenu();
 }
 
 blink::WebPlugin* ChromePluginPlaceholder::CreatePlugin() {
   return render_frame()->CreatePlugin(GetPluginInfo(), GetPluginParams());
-}
-
-void ChromePluginPlaceholder::OnBlockedContent(
-    content::RenderFrame::PeripheralContentStatus status,
-    bool is_same_origin) {
-  DCHECK(render_frame());
-
-  std::string message = base::StringPrintf(
-      is_same_origin ? "Same-origin plugin content from %s must have a visible "
-                       "size larger than 6 x 6 pixels, or it will be blocked. "
-                       "Invisible content is always blocked."
-                     : "Cross-origin plugin content from %s must have a "
-                       "visible size larger than 400 x 300 pixels, or it will "
-                       "be blocked. Invisible content is always blocked.",
-      GetPluginParams().url.GetString().Utf8().c_str());
-  render_frame()->AddMessageToConsole(blink::mojom::ConsoleMessageLevel::kInfo,
-                                      message);
 }
 
 gin::ObjectTemplateBuilder ChromePluginPlaceholder::GetObjectTemplateBuilder(

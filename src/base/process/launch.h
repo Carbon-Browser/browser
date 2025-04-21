@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,11 @@
 #ifndef BASE_PROCESS_LAUNCH_H_
 #define BASE_PROCESS_LAUNCH_H_
 
+#include <limits.h>
 #include <stddef.h>
 
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -20,8 +22,8 @@
 #include "base/memory/raw_ptr.h"
 #include "base/process/process.h"
 #include "base/process/process_handle.h"
-#include "base/strings/string_piece.h"
 #include "base/threading/thread_restrictions.h"
+#include "build/blink_buildflags.h"
 #include "build/build_config.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -35,11 +37,45 @@
 #include "base/posix/file_descriptor_shuffle.h"
 #endif
 
+#if BUILDFLAG(IS_ANDROID)
+#include "base/android/binder.h"
+#endif
+
 #if BUILDFLAG(IS_MAC)
-#include "base/mac/mach_port_rendezvous.h"
+#include "base/mac/process_requirement.h"
 #endif
 
 namespace base {
+
+#if BUILDFLAG(IS_POSIX)
+// Some code (e.g. the sandbox) relies on PTHREAD_STACK_MIN
+// being async-signal-safe, which is no longer guaranteed by POSIX
+// (it may call sysconf, which is not safe).
+// To work around this, use a hardcoded value unless it's already
+// defined as a constant.
+
+// These constants are borrowed from glibc’s (arch)/bits/pthread_stack_min.h.
+#if defined(ARCH_CPU_ARM64)
+#define PTHREAD_STACK_MIN_CONST \
+  (__builtin_constant_p(PTHREAD_STACK_MIN) ? PTHREAD_STACK_MIN : 131072)
+#else
+#define PTHREAD_STACK_MIN_CONST \
+  (__builtin_constant_p(PTHREAD_STACK_MIN) ? PTHREAD_STACK_MIN : 16384)
+#endif  // defined(ARCH_CPU_ARM64)
+
+static_assert(__builtin_constant_p(PTHREAD_STACK_MIN_CONST),
+              "must be constant");
+
+// Make sure our hardcoded value is large enough to accommodate the
+// actual minimum stack size. This function will run a one-time CHECK
+// and so should be called at some point, preferably during startup.
+BASE_EXPORT void CheckPThreadStackMinIsSafe();
+#endif  // BUILDFLAG(IS_POSIX)
+
+#if BUILDFLAG(IS_APPLE)
+class MachRendezvousPort;
+using MachPortsForRendezvous = std::map<uint32_t, MachRendezvousPort>;
+#endif
 
 #if BUILDFLAG(IS_WIN)
 typedef std::vector<HANDLE> HandlesToInheritVector;
@@ -109,7 +145,7 @@ struct BASE_EXPORT LaunchOptions {
   // for a good overview of Windows handle inheritance.
   //
   // Implementation note: it might be nice to implement in terms of
-  // absl::optional<>, but then the natural default state (vector not present)
+  // std::optional<>, but then the natural default state (vector not present)
   // would be "all inheritable handles" while we want "no inheritance."
   enum class Inherit {
     // Only those handles in |handles_to_inherit| vector are inherited. If the
@@ -187,6 +223,13 @@ struct BASE_EXPORT LaunchOptions {
   FileHandleMappingVector fds_to_remap;
 #endif  // BUILDFLAG(IS_WIN)
 
+#if BUILDFLAG(IS_ANDROID)
+  // Set of strong IBinder references to be passed to the child process. These
+  // make their way to ChildProcessServiceDelegate.onConnectionSetup (Java)
+  // within the new child process.
+  std::vector<android::BinderRef> binders;
+#endif
+
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
   // Set/unset environment variables. These are applied on top of the parent
   // process environment.  Empty (the default) means to inherit the same
@@ -211,9 +254,13 @@ struct BASE_EXPORT LaunchOptions {
 
   // Sets parent process death signal to SIGKILL.
   bool kill_on_parent_death = false;
+
+  // File descriptors of the parent process with FD_CLOEXEC flag to be removed
+  // before calling exec*().
+  std::vector<int> fds_to_remove_cloexec;
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_MAC) || (BUILDFLAG(IS_IOS) && BUILDFLAG(USE_BLINK))
   // Mach ports that will be accessible to the child process. These are not
   // directly inherited across process creation, but they are stored by a Mach
   // IPC server that a child process can communicate with to retrieve them.
@@ -221,9 +268,15 @@ struct BASE_EXPORT LaunchOptions {
   // After calling LaunchProcess(), any rights that were transferred with MOVE
   // dispositions will be consumed, even on failure.
   //
-  // See base/mac/mach_port_rendezvous.h for details.
+  // See base/apple/mach_port_rendezvous.h for details.
   MachPortsForRendezvous mach_ports_for_rendezvous;
 
+  // Apply a process scheduler policy to enable mitigations against CPU side-
+  // channel attacks.
+  bool enable_cpu_security_mitigations = false;
+#endif  // BUILDFLAG(IS_MAC) || (BUILDFLAG(IS_IOS) && BUILDFLAG(USE_BLINK))
+
+#if BUILDFLAG(IS_MAC)
   // When a child process is launched, the system tracks the parent process
   // with a concept of "responsibility". The responsible process will be
   // associated with any requests for private data stored on the system via
@@ -232,9 +285,9 @@ struct BASE_EXPORT LaunchOptions {
   // that any TCC requests are not associated with the parent.
   bool disclaim_responsibility = false;
 
-  // Apply a process scheduler policy to enable mitigations against CPU side-
-  // channel attacks.
-  bool enable_cpu_security_mitigations = false;
+  // A `ProcessRequirement` that will be used to validate the launched process
+  // before it can retrieve `mach_ports_for_rendezvous`.
+  std::optional<mac::ProcessRequirement> process_requirement;
 #endif  // BUILDFLAG(IS_MAC)
 
 #if BUILDFLAG(IS_FUCHSIA)
@@ -269,11 +322,14 @@ struct BASE_EXPORT LaunchOptions {
   // the child process. If |paths_to_clone| is empty then the process will
   // receive either a full copy of the parent's namespace, or an empty one,
   // depending on whether FDIO_SPAWN_CLONE_NAMESPACE is set.
+  // Process launch will fail if `paths_to_clone` and `paths_to_transfer`
+  // together contain conflicting paths (e.g. overlaps or duplicates).
   std::vector<FilePath> paths_to_clone;
 
   // Specifies handles which will be installed as files or directories in the
-  // child process' namespace. Paths installed by |paths_to_clone| will be
-  // overridden by these entries.
+  // child process' namespace.
+  // Process launch will fail if `paths_to_clone` and `paths_to_transfer`
+  // together contain conflicting paths (e.g. overlaps or duplicates).
   std::vector<PathToTransfer> paths_to_transfer;
 
   // Suffix that will be added to the process name. When specified process name
@@ -388,13 +444,14 @@ BASE_EXPORT bool GetAppOutputAndError(const CommandLine& cl,
 // this is the case the exit code of the application is available in
 // |*exit_code|.
 BASE_EXPORT bool GetAppOutputWithExitCode(const CommandLine& cl,
-                                          std::string* output, int* exit_code);
+                                          std::string* output,
+                                          int* exit_code);
 
 #if BUILDFLAG(IS_WIN)
 // A Windows-specific version of GetAppOutput that takes a command line string
 // instead of a CommandLine object. Useful for situations where you need to
 // control the command line arguments directly.
-BASE_EXPORT bool GetAppOutput(CommandLine::StringPieceType cl,
+BASE_EXPORT bool GetAppOutput(CommandLine::StringViewType cl,
                               std::string* output);
 #elif BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
 // A POSIX-specific version of GetAppOutput that takes an argv array
@@ -443,7 +500,7 @@ namespace internal {
 // GetAppOutputInternal() to join a process. GetAppOutputInternal() can't itself
 // be a friend of ScopedAllowBaseSyncPrimitives because it is in the anonymous
 // namespace.
-class GetAppOutputScopedAllowBaseSyncPrimitives
+class [[maybe_unused, nodiscard]] GetAppOutputScopedAllowBaseSyncPrimitives
     : public base::ScopedAllowBaseSyncPrimitives {};
 
 }  // namespace internal

@@ -1,11 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/service_worker/service_worker_event_queue.h"
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/default_tick_clock.h"
 #include "base/time/time.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_event_status.mojom-blink.h"
@@ -66,20 +67,19 @@ ServiceWorkerEventQueue::~ServiceWorkerEventQueue() {
 
 void ServiceWorkerEventQueue::Start() {
   DCHECK(!timer_.IsRunning());
-  if (!HasInflightEvent() && !HasScheduledIdleCallback()) {
-    // If no event happens until Start(), the idle callback should be scheduled.
-    OnNoInflightEvent();
-  }
   timer_.Start(FROM_HERE, kUpdateInterval,
                WTF::BindRepeating(&ServiceWorkerEventQueue::UpdateStatus,
                                   WTF::Unretained(this)));
+  is_ready_for_processing_events_ = true;
+  ResetIdleTimeout();
+  ProcessEvents();
 }
 
 void ServiceWorkerEventQueue::EnqueueNormal(
     int event_id,
     StartCallback start_callback,
     AbortCallback abort_callback,
-    absl::optional<base::TimeDelta> custom_timeout) {
+    std::optional<base::TimeDelta> custom_timeout) {
   EnqueueEvent(std::make_unique<Event>(
       event_id, Event::Type::Normal, std::move(start_callback),
       std::move(abort_callback), std::move(custom_timeout)));
@@ -89,7 +89,7 @@ void ServiceWorkerEventQueue::EnqueuePending(
     int event_id,
     StartCallback start_callback,
     AbortCallback abort_callback,
-    absl::optional<base::TimeDelta> custom_timeout) {
+    std::optional<base::TimeDelta> custom_timeout) {
   EnqueueEvent(std::make_unique<Event>(
       event_id, Event::Type::Pending, std::move(start_callback),
       std::move(abort_callback), std::move(custom_timeout)));
@@ -99,7 +99,7 @@ void ServiceWorkerEventQueue::EnqueueOffline(
     int event_id,
     StartCallback start_callback,
     AbortCallback abort_callback,
-    absl::optional<base::TimeDelta> custom_timeout) {
+    std::optional<base::TimeDelta> custom_timeout) {
   EnqueueEvent(std::make_unique<ServiceWorkerEventQueue::Event>(
       event_id, ServiceWorkerEventQueue::Event::Type::Offline,
       std::move(start_callback), std::move(abort_callback),
@@ -135,8 +135,9 @@ void ServiceWorkerEventQueue::EnqueueEvent(std::unique_ptr<Event> event) {
   DCHECK(!HasEvent(event->event_id));
   DCHECK(!HasEventInQueue(event->event_id));
 
-  bool can_start_processing_events =
-      !processing_events_ && event->type != Event::Type::Pending;
+  bool can_start_processing_events = is_ready_for_processing_events_ &&
+                                     !processing_events_ &&
+                                     event->type != Event::Type::Pending;
 
   // Start counting the timer when an event is enqueued.
   all_events_.insert(
@@ -144,7 +145,7 @@ void ServiceWorkerEventQueue::EnqueueEvent(std::unique_ptr<Event> event) {
       std::make_unique<EventInfo>(
           tick_clock_->NowTicks() +
               event->custom_timeout.value_or(kEventTimeout),
-          WTF::Bind(std::move(event->abort_callback), event->event_id)));
+          WTF::BindOnce(std::move(event->abort_callback), event->event_id)));
 
   auto& queue = event->type == Event::Type::Offline ? queued_offline_events_
                                                     : queued_online_events_;
@@ -158,6 +159,8 @@ void ServiceWorkerEventQueue::EnqueueEvent(std::unique_ptr<Event> event) {
 }
 
 void ServiceWorkerEventQueue::ProcessEvents() {
+  // TODO(crbug.com/1462568): Switch to CHECK once we resolve the bug.
+  DCHECK(is_ready_for_processing_events_);
   DCHECK(!processing_events_);
   processing_events_ = true;
   auto& queue = GetActiveEventQueue();
@@ -199,7 +202,7 @@ void ServiceWorkerEventQueue::EndEvent(int event_id) {
 }
 
 bool ServiceWorkerEventQueue::HasEvent(int event_id) const {
-  return all_events_.find(event_id) != all_events_.end();
+  return base::Contains(all_events_, event_id);
 }
 
 bool ServiceWorkerEventQueue::HasEventInQueue(int event_id) const {
@@ -231,8 +234,8 @@ void ServiceWorkerEventQueue::SetIdleDelay(base::TimeDelta idle_delay) {
   idle_callback_handle_.Cancel();
 
   // Calculate the updated time of when the |idle_callback_| should be invoked.
-  DCHECK(!last_no_inflight_event_.is_null());
-  auto new_idle_callback_time = last_no_inflight_event_ + idle_delay;
+  DCHECK(!last_no_inflight_event_time_.is_null());
+  auto new_idle_callback_time = last_no_inflight_event_time_ + idle_delay;
   base::TimeDelta delta_until_idle =
       new_idle_callback_time - tick_clock_->NowTicks();
 
@@ -245,6 +248,12 @@ void ServiceWorkerEventQueue::SetIdleDelay(base::TimeDelta idle_delay) {
 
   // Let's schedule the idle callback in |delta_until_idle|.
   ScheduleIdleCallback(delta_until_idle);
+}
+
+void ServiceWorkerEventQueue::CheckEventQueue() {
+  if (!HasInflightEvent()) {
+    OnNoInflightEvent();
+  }
 }
 
 void ServiceWorkerEventQueue::UpdateStatus() {
@@ -300,8 +309,8 @@ void ServiceWorkerEventQueue::ScheduleIdleCallback(base::TimeDelta delay) {
   // before |this| is destroyed at ServiceWorkerGlobalScope::Dispose().
   idle_callback_handle_ = PostDelayedCancellableTask(
       *task_runner_, FROM_HERE,
-      WTF::Bind(&ServiceWorkerEventQueue::TriggerIdleCallback,
-                WTF::Unretained(this)),
+      WTF::BindOnce(&ServiceWorkerEventQueue::TriggerIdleCallback,
+                    WTF::Unretained(this)),
       delay);
 }
 
@@ -324,7 +333,7 @@ void ServiceWorkerEventQueue::OnNoInflightEvent() {
     ProcessEvents();
     return;
   }
-  last_no_inflight_event_ = tick_clock_->NowTicks();
+  last_no_inflight_event_time_ = tick_clock_->NowTicks();
   ScheduleIdleCallback(idle_delay_);
 }
 
@@ -337,7 +346,7 @@ bool ServiceWorkerEventQueue::HasInflightEvent() const {
 }
 
 void ServiceWorkerEventQueue::ResetIdleTimeout() {
-  last_no_inflight_event_ = base::TimeTicks();
+  last_no_inflight_event_time_ = base::TimeTicks();
   idle_callback_handle_.Cancel();
   did_idle_timeout_ = false;
 }
@@ -356,7 +365,7 @@ ServiceWorkerEventQueue::Event::Event(
     ServiceWorkerEventQueue::Event::Type type,
     StartCallback start_callback,
     AbortCallback abort_callback,
-    absl::optional<base::TimeDelta> custom_timeout)
+    std::optional<base::TimeDelta> custom_timeout)
     : event_id(event_id),
       type(type),
       start_callback(std::move(start_callback)),

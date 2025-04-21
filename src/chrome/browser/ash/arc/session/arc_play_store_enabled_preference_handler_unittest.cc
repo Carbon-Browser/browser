@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,34 +11,35 @@
 #include "ash/components/arc/session/arc_session_runner.h"
 #include "ash/components/arc/test/arc_util_test_support.h"
 #include "ash/components/arc/test/fake_arc_session.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_command_line.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
 #include "chrome/browser/ash/arc/test/arc_data_removed_waiter.h"
 #include "chrome/browser/ash/arc/test/test_arc_session_manager.h"
-#include "chrome/browser/ash/login/ui/fake_login_display_host.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/consent_auditor/consent_auditor_factory.h"
 #include "chrome/browser/consent_auditor/consent_auditor_test_utils.h"
 #include "chrome/browser/signin/identity_test_environment_profile_adaptor.h"
+#include "chrome/browser/ui/ash/login/fake_login_display_host.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
 #include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 #include "chromeos/ash/components/dbus/upstart/upstart_client.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
 #include "components/consent_auditor/fake_consent_auditor.h"
+#include "components/session_manager/core/session_manager.h"
 #include "components/signin/public/base/consent_level.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "components/user_manager/known_user.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "content/public/test/browser_task_environment.h"
+#include "google_apis/gaia/gaia_id.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -56,7 +57,7 @@ constexpr char kTestGaiaId[] = "1234567890";
 class ArcPlayStoreEnabledPreferenceHandlerTest : public testing::Test {
  public:
   ArcPlayStoreEnabledPreferenceHandlerTest()
-      : user_manager_enabler_(std::make_unique<ash::FakeChromeUserManager>()) {}
+      : fake_user_manager_(std::make_unique<ash::FakeChromeUserManager>()) {}
 
   ArcPlayStoreEnabledPreferenceHandlerTest(
       const ArcPlayStoreEnabledPreferenceHandlerTest&) = delete;
@@ -64,9 +65,6 @@ class ArcPlayStoreEnabledPreferenceHandlerTest : public testing::Test {
       const ArcPlayStoreEnabledPreferenceHandlerTest&) = delete;
 
   void SetUp() override {
-    // Need to initialize DBusThreadManager before ArcSessionManager's
-    // constructor calls DBusThreadManager::Get().
-    chromeos::DBusThreadManager::Initialize();
     ash::ConciergeClient::InitializeFake(/*fake_cicerone_client=*/nullptr);
     ash::SessionManagerClient::InitializeFakeInMemory();
     ash::UpstartClient::InitializeFake();
@@ -94,9 +92,9 @@ class ArcPlayStoreEnabledPreferenceHandlerTest : public testing::Test {
         std::make_unique<ArcPlayStoreEnabledPreferenceHandler>(
             profile_.get(), arc_session_manager_.get());
     const AccountId account_id(AccountId::FromUserEmailGaiaId(
-        profile()->GetProfileUserName(), kTestGaiaId));
-    GetFakeUserManager()->AddUser(account_id);
-    GetFakeUserManager()->LoginUser(account_id);
+        profile()->GetProfileUserName(), GaiaId(kTestGaiaId)));
+    fake_user_manager_->AddUser(account_id);
+    fake_user_manager_->LoginUser(account_id);
 
     identity_test_env_profile_adaptor_->identity_test_env()
         ->MakePrimaryAccountAvailable(kTestEmail,
@@ -115,7 +113,6 @@ class ArcPlayStoreEnabledPreferenceHandlerTest : public testing::Test {
     ash::UpstartClient::Shutdown();
     ash::SessionManagerClient::Shutdown();
     ash::ConciergeClient::Shutdown();
-    chromeos::DBusThreadManager::Shutdown();
   }
 
   TestingProfile* profile() const { return profile_.get(); }
@@ -124,10 +121,6 @@ class ArcPlayStoreEnabledPreferenceHandlerTest : public testing::Test {
   }
   ArcPlayStoreEnabledPreferenceHandler* preference_handler() const {
     return preference_handler_.get();
-  }
-  ash::FakeChromeUserManager* GetFakeUserManager() const {
-    return static_cast<ash::FakeChromeUserManager*>(
-        user_manager::UserManager::Get());
   }
 
   consent_auditor::FakeConsentAuditor* consent_auditor() const {
@@ -151,7 +144,9 @@ class ArcPlayStoreEnabledPreferenceHandlerTest : public testing::Test {
 
  private:
   content::BrowserTaskEnvironment task_environment_;
-  user_manager::ScopedUserManager user_manager_enabler_;
+  user_manager::TypedScopedUserManager<ash::FakeChromeUserManager>
+      fake_user_manager_;
+  session_manager::SessionManager session_manager_;
   base::ScopedTempDir temp_dir_;
   std::unique_ptr<IdentityTestEnvironmentProfileAdaptor>
       identity_test_env_profile_adaptor_;
@@ -174,7 +169,7 @@ TEST_F(ArcPlayStoreEnabledPreferenceHandlerTest, PrefChangeTriggersService) {
 
   SetArcPlayStoreEnabledForProfile(profile(), true);
   base::RunLoop().RunUntilIdle();
-  ASSERT_EQ(ArcSessionManager::State::NEGOTIATING_TERMS_OF_SERVICE,
+  ASSERT_EQ(ArcSessionManager::State::CHECKING_REQUIREMENTS,
             arc_session_manager()->state());
 
   SetArcPlayStoreEnabledForProfile(profile(), false);
@@ -193,7 +188,7 @@ TEST_F(ArcPlayStoreEnabledPreferenceHandlerTest,
   preference_handler()->Start();
 
   // Setting profile initiates a code fetching process.
-  ASSERT_EQ(ArcSessionManager::State::NEGOTIATING_TERMS_OF_SERVICE,
+  ASSERT_EQ(ArcSessionManager::State::CHECKING_REQUIREMENTS,
             arc_session_manager()->state());
 }
 
@@ -216,10 +211,9 @@ TEST_F(ArcPlayStoreEnabledPreferenceHandlerTest, PrefChangeRevokesConsent) {
 
   ArcPlayTermsOfServiceConsent play_consent;
   play_consent.set_status(UserConsentTypes::NOT_GIVEN);
-  play_consent.set_confirmation_grd_id(
-      IDS_SETTINGS_ANDROID_APPS_DISABLE_DIALOG_REMOVE);
+  play_consent.set_confirmation_grd_id(IDS_SETTINGS_ANDROID_APPS_REMOVE_BUTTON);
   play_consent.add_description_grd_ids(
-      IDS_SETTINGS_ANDROID_APPS_DISABLE_DIALOG_MESSAGE);
+      IDS_OS_SETTINGS_ANDROID_APPS_DISABLE_DIALOG_MESSAGE);
   play_consent.set_consent_flow(
       UserConsentTypes::ArcPlayTermsOfServiceConsent::SETTING_CHANGE);
   EXPECT_CALL(*auditor, RecordArcPlayConsent(
@@ -233,7 +227,7 @@ TEST_F(ArcPlayStoreEnabledPreferenceHandlerTest, PrefChangeRevokesConsent) {
 
   SetArcPlayStoreEnabledForProfile(profile(), true);
   base::RunLoop().RunUntilIdle();
-  EXPECT_EQ(ArcSessionManager::State::NEGOTIATING_TERMS_OF_SERVICE,
+  EXPECT_EQ(ArcSessionManager::State::CHECKING_REQUIREMENTS,
             arc_session_manager()->state());
 
   SetArcPlayStoreEnabledForProfile(profile(), false);
@@ -264,7 +258,7 @@ TEST_F(ArcPlayStoreEnabledPreferenceHandlerTest, ManualStart) {
   arc_session_manager()->RequestEnable();
 
   // Now ARC started by manual request.
-  EXPECT_EQ(ArcSessionManager::State::NEGOTIATING_TERMS_OF_SERVICE,
+  EXPECT_EQ(ArcSessionManager::State::CHECKING_REQUIREMENTS,
             arc_session_manager()->state());
 }
 
@@ -288,7 +282,7 @@ TEST_F(ArcPlayStoreEnabledPreferenceHandlerTest, ManualStartIgnorePreference) {
   // Now ARC started by manual request even if Play Store enabled preference
   // was not set.
   EXPECT_FALSE(IsArcPlayStoreEnabledForProfile(profile()));
-  EXPECT_EQ(ArcSessionManager::State::NEGOTIATING_TERMS_OF_SERVICE,
+  EXPECT_EQ(ArcSessionManager::State::CHECKING_REQUIREMENTS,
             arc_session_manager()->state());
 }
 
@@ -313,6 +307,8 @@ TEST_F(ArcPlayStoreEnabledPreferenceHandlerTest,
   // ARC is enable and already provisoned by manual mode blocks the start.
   ASSERT_EQ(ArcSessionManager::State::STOPPED, arc_session_manager()->state());
 
+  arc_session_manager()->AllowActivation(
+      ArcSessionManager::AllowActivationReason::kImmediateActivation);
   arc_session_manager()->RequestEnable();
 
   // Now ARC started by manual request.
@@ -398,7 +394,7 @@ TEST_F(ArcPlayStoreEnabledPreferenceHandlerTest, MiniStateManagedEnabled) {
   EXPECT_TRUE(arc_session_manager()
                   ->GetArcSessionRunnerForTesting()
                   ->GetArcSessionForTesting());
-  EXPECT_EQ(ArcSessionManager::State::NEGOTIATING_TERMS_OF_SERVICE,
+  EXPECT_EQ(ArcSessionManager::State::CHECKING_REQUIREMENTS,
             arc_session_manager()->state());
 }
 

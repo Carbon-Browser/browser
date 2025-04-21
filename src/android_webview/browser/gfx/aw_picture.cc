@@ -1,12 +1,16 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "android_webview/browser/gfx/aw_picture.h"
 
 #include "android_webview/browser/gfx/java_browser_view_renderer_helper.h"
-#include "android_webview/browser_jni_headers/AwPicture_jni.h"
+#include "base/check.h"
+#include "base/logging.h"
 #include "third_party/skia/include/core/SkPicture.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "android_webview/browser_jni_headers/AwPicture_jni.h"
 
 using base::android::JavaParamRef;
 

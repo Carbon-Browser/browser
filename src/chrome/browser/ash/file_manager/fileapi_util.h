@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -11,26 +11,21 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/files/file.h"
 #include "base/files/file_error_or.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
+#include "base/values.h"
 #include "storage/browser/file_system/file_system_operation_runner.h"
 #include "storage/browser/file_system/isolated_context.h"
 #include "third_party/blink/public/mojom/choosers/file_chooser.mojom-forward.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
-class Profile;
-
-namespace base {
-class DictionaryValue;
-class ListValue;
-}  // namespace base
-
 namespace content {
+class BrowserContext;
 class RenderFrameHost;
-}
+}  // namespace content
 
 namespace storage {
 class FileSystemContext;
@@ -48,7 +43,7 @@ namespace util {
 struct FileDefinition {
   base::FilePath virtual_path;
   base::FilePath absolute_path;
-  bool is_directory;
+  bool is_directory = false;
 };
 
 // Contains all information needed to create an Entry object in custom bindings.
@@ -59,11 +54,11 @@ struct EntryDefinition {
 
   std::string file_system_root_url;  // Used to create DOMFileSystem.
   std::string file_system_name;      // Value of DOMFileSystem.name.
-  base::FilePath full_path;    // Value of Entry.fullPath.
+  base::FilePath full_path;          // Value of Entry.fullPath.
   // Whether to create FileEntry or DirectoryEntry when the corresponding entry
   // is not found.
-  bool is_directory;
-  base::File::Error error;
+  bool is_directory = false;
+  base::File::Error error = base::File::FILE_ERROR_FAILED;
 };
 
 typedef std::vector<FileDefinition> FileDefinitionList;
@@ -93,7 +88,7 @@ typedef base::OnceCallback<void(FileChooserFileInfoList)>
 // Manager ID or URL, use this function instead. This function guarantees that
 // the correct and current URL is returned. If you need to access just the ID
 // of the system File Manager, call host() method on the returned URL.
-// TODO(crbug/1184927): Replace with dynamic listener URL.
+// TODO(crbug.com/40752851): Replace with dynamic listener URL.
 const GURL GetFileManagerURL();
 
 // Returns whether the given URL identifies the File Manager as a source. This
@@ -104,36 +99,38 @@ bool IsFileManagerURL(const GURL& source_url);
 // method that should be used only if you are ABSOLUTELY CERTAIN that you are
 // performing some functions on the behalf of the Files app yet your code does
 // not readily have access to the system File Manager ID or URL.
-storage::FileSystemContext* GetFileManagerFileSystemContext(Profile* profile);
+storage::FileSystemContext* GetFileManagerFileSystemContext(
+    content::BrowserContext* browser_context);
 
-// Returns a file system context associated with the given profile and the
-// source URL. The source URL is the URL that identifies the application, such
-// as chrome-extension://<extension-id>/ or chrome://<app-id>/. In private APIs
-// it is available as source_url(). You can also use GetFileManagerURL with this
-// call.
+// Returns a file system context associated with the given browser_context and
+// the source URL. The source URL is the URL that identifies the application,
+// such as chrome-extension://<extension-id>/ or chrome://<app-id>/. In private
+// APIs it is available as source_url(). You can also use GetFileManagerURL
+// with this call.
 storage::FileSystemContext* GetFileSystemContextForSourceURL(
-    Profile* profile,
+    content::BrowserContext* browser_context,
     const GURL& source_url);
 
-// Returns a file system context associated with the given profile and the
-// render view host.
+// Returns a file system context associated with the given browser_context and
+// the render view host.
 storage::FileSystemContext* GetFileSystemContextForRenderFrameHost(
-    Profile* profile,
+    content::BrowserContext* browser_context,
     content::RenderFrameHost* render_frame_host);
 
 // Converts AbsolutePath (e.g., "/media/removable/foo" or
 // "/home/chronos/u-xxx/Downloads") into filesystem URL. Returns false
 // if |absolute_path| is not managed by the external filesystem provider.
-bool ConvertAbsoluteFilePathToFileSystemUrl(Profile* profile,
-                                            const base::FilePath& absolute_path,
-                                            const GURL& source_url,
-                                            GURL* url);
+bool ConvertAbsoluteFilePathToFileSystemUrl(
+    content::BrowserContext* browser_context,
+    const base::FilePath& absolute_path,
+    const GURL& source_url,
+    GURL* url);
 
 // Converts AbsolutePath into RelativeFileSystemPath (e.g.,
 // "/media/removable/foo/bar" => "removable/foo/bar".) Returns false if
 // |absolute_path| is not managed by the external filesystem provider.
 bool ConvertAbsoluteFilePathToRelativeFileSystemPath(
-    Profile* profile,
+    content::BrowserContext* browser_context,
     const GURL& source_url,
     const base::FilePath& absolute_path,
     base::FilePath* relative_path);
@@ -159,15 +156,15 @@ void ConvertFileDefinitionListToEntryDefinitionList(
 // Converts SelectedFileInfoList into FileChooserFileInfoList.
 void ConvertSelectedFileInfoListToFileChooserFileInfoList(
     storage::FileSystemContext* context,
-    const GURL& origin,
+    const url::Origin& origin,
     const SelectedFileInfoList& selected_info_list,
     FileChooserFileInfoListCallback callback);
 
 // Converts EntryDefinition to something File API stack can understand.
-std::unique_ptr<base::DictionaryValue> ConvertEntryDefinitionToValue(
+base::Value::Dict ConvertEntryDefinitionToValue(
     const EntryDefinition& entry_definition);
 
-std::unique_ptr<base::ListValue> ConvertEntryDefinitionListToListValue(
+base::Value::List ConvertEntryDefinitionListToListValue(
     const EntryDefinitionList& entry_definition_list);
 
 // Checks if a directory exists at |directory_path| absolute path.
@@ -180,7 +177,7 @@ void CheckIfDirectoryExists(
 void GetMetadataForPath(
     scoped_refptr<storage::FileSystemContext> file_system_context,
     const base::FilePath& entry_path,
-    int fields,
+    storage::FileSystemOperationRunner::GetMetadataFieldSet fields,
     storage::FileSystemOperationRunner::GetMetadataCallback callback);
 
 // Groups a FileSystemURL and a related ScopedFSHandle.
@@ -195,7 +192,7 @@ struct FileSystemURLAndHandle {
 // external file system.
 FileSystemURLAndHandle CreateIsolatedURLFromVirtualPath(
     const storage::FileSystemContext& context,
-    const GURL& origin,
+    const url::Origin& origin,
     const base::FilePath& virtual_path);
 
 // Given a |destination_folder| and a |filename|, returns a suitable path inside

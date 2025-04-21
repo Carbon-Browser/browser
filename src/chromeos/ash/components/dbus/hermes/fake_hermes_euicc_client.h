@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,6 +52,7 @@ class COMPONENT_EXPORT(HERMES_CLIENT) FakeHermesEuiccClient
       const dbus::ObjectPath& euicc_path,
       const std::string& iccid,
       const std::string& name,
+      const std::string& nickname,
       const std::string& service_provider,
       const std::string& activation_code,
       const std::string& network_service_path,
@@ -61,9 +62,15 @@ class COMPONENT_EXPORT(HERMES_CLIENT) FakeHermesEuiccClient
   bool RemoveCarrierProfile(
       const dbus::ObjectPath& euicc_path,
       const dbus::ObjectPath& carrier_profile_path) override;
+  void UpdateShillDeviceSimSlotInfo() override;
   void QueueHermesErrorStatus(HermesResponseStatus status) override;
+  void SetNextInstallProfileFromActivationCodeResult(
+      HermesResponseStatus status) override;
+  void SetNextRefreshSmdxProfilesResult(
+      std::vector<dbus::ObjectPath> profiles) override;
   void SetInteractiveDelay(base::TimeDelta delay) override;
   std::string GenerateFakeActivationCode() override;
+  std::string GetDBusErrorActivationCode() override;
   bool GetLastRefreshProfilesRestoreSlotArg() override;
 
   // HermesEuiccClient:
@@ -79,6 +86,10 @@ class COMPONENT_EXPORT(HERMES_CLIENT) FakeHermesEuiccClient
   void RefreshInstalledProfiles(const dbus::ObjectPath& euicc_path,
                                 bool restore_slot,
                                 HermesResponseCallback callback) override;
+  void RefreshSmdxProfiles(const dbus::ObjectPath& euicc_path,
+                           const std::string& activation_code,
+                           bool restore_slot,
+                           RefreshSmdxProfilesCallback callback) override;
   void RequestPendingProfiles(const dbus::ObjectPath& euicc_path,
                               const std::string& root_smds,
                               HermesResponseCallback callback) override;
@@ -103,6 +114,9 @@ class COMPONENT_EXPORT(HERMES_CLIENT) FakeHermesEuiccClient
                                HermesResponseCallback callback);
   void DoRequestInstalledProfiles(const dbus::ObjectPath& euicc_path,
                                   HermesResponseCallback callback);
+  void DoRefreshSmdxProfiles(const dbus::ObjectPath& euicc_path,
+                             const std::string& activation_code,
+                             RefreshSmdxProfilesCallback callback);
   void DoRequestPendingProfiles(const dbus::ObjectPath& euicc_path,
                                 HermesResponseCallback callback);
   void DoUninstallProfile(const dbus::ObjectPath& euicc_path,
@@ -115,6 +129,9 @@ class COMPONENT_EXPORT(HERMES_CLIENT) FakeHermesEuiccClient
                                          std::string activation_code);
   void CreateCellularService(const dbus::ObjectPath& euicc_path,
                              const dbus::ObjectPath& carrier_profile_path);
+  // Add the default cellular APN. This is intended to simulate the
+  // auto-detecting APN in Shill.
+  void CreateDefaultModbApn(const std::string& service_path);
   void CallNotifyPropertyChanged(const dbus::ObjectPath& object_path,
                                  const std::string& property_name);
   void NotifyPropertyChanged(const dbus::ObjectPath& object_path,
@@ -127,6 +144,15 @@ class COMPONENT_EXPORT(HERMES_CLIENT) FakeHermesEuiccClient
 
   // Counter to generate fake ids and properties for profiles.
   int fake_profile_counter_ = 0;
+
+  // When set, this will be returned as the result of the next attempt to
+  // install a profile using an activation code.
+  std::optional<HermesResponseStatus> next_install_profile_result_;
+
+  // When set, this will be returned as the result the next time that we refresh
+  // the available SM-DX profiles.
+  std::optional<std::vector<dbus::ObjectPath>>
+      next_refresh_smdx_profiles_result_;
 
   // Queue of error code to be returned from method calls.
   std::queue<HermesResponseStatus> error_status_queue_;

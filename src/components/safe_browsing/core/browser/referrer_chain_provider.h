@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,6 +43,12 @@ class ReferrerChainProvider {
       const GURL& event_url,
       SessionID event_tab_id,
       const content::GlobalRenderFrameHostId& event_outermost_main_frame_id,
+      int user_gesture_count_limit,
+      ReferrerChain* out_referrer_chain) = 0;
+
+  virtual AttributionResult IdentifyReferrerChainByEventURL(
+      const GURL& event_url,
+      SessionID event_tab_id,
       int user_gesture_count_limit,
       ReferrerChain* out_referrer_chain) = 0;
 

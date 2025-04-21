@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ PresentationMediaSinksObserver::PresentationMediaSinksObserver(
   DCHECK(listener_);
 }
 
-PresentationMediaSinksObserver::~PresentationMediaSinksObserver() {}
+PresentationMediaSinksObserver::~PresentationMediaSinksObserver() = default;
 
 void PresentationMediaSinksObserver::OnSinksReceived(
     const std::vector<MediaSink>& result) {
@@ -30,8 +30,9 @@ void PresentationMediaSinksObserver::OnSinksReceived(
       result.empty() ? blink::mojom::ScreenAvailability::UNAVAILABLE
                      : blink::mojom::ScreenAvailability::AVAILABLE;
   // Don't send if new result is same as previous.
-  if (previous_availability_ == current_availability)
+  if (previous_availability_ == current_availability) {
     return;
+  }
 
   listener_->OnScreenAvailabilityChanged(current_availability);
   previous_availability_ = current_availability;

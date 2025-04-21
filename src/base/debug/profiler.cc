@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 
 #include "base/allocator/buildflags.h"
 #include "base/check.h"
-#include "base/debug/debugging_buildflags.h"
 #include "base/process/process_handle.h"
 #include "build/build_config.h"
 
@@ -18,21 +17,17 @@
 namespace base {
 namespace debug {
 
-void StartProfiling(const std::string& name) {
-}
+void StartProfiling(const std::string& name) {}
 
-void StopProfiling() {
-}
+void StopProfiling() {}
 
-void FlushProfiling() {
-}
+void FlushProfiling() {}
 
 bool BeingProfiled() {
   return false;
 }
 
-void RestartProfilingAfterFork() {
-}
+void RestartProfilingAfterFork() {}
 
 bool IsProfilingSupported() {
   return false;
@@ -62,10 +57,11 @@ struct FunctionSearchContext {
 };
 
 // Callback function to PEImage::EnumImportChunks.
-bool FindResolutionFunctionInImports(
-    const base::win::PEImage &image, const char* module_name,
-    PIMAGE_THUNK_DATA unused_name_table, PIMAGE_THUNK_DATA import_address_table,
-    PVOID cookie) {
+bool FindResolutionFunctionInImports(const base::win::PEImage& image,
+                                     const char* module_name,
+                                     PIMAGE_THUNK_DATA unused_name_table,
+                                     PIMAGE_THUNK_DATA import_address_table,
+                                     PVOID cookie) {
   FunctionSearchContext* context =
       reinterpret_cast<FunctionSearchContext*>(cookie);
 
@@ -103,7 +99,7 @@ template <typename FunctionType>
 FunctionType FindFunctionInImports(const char* function_name) {
   base::win::PEImage image(CURRENT_MODULE());
 
-  FunctionSearchContext ctx = { function_name, NULL };
+  FunctionSearchContext ctx = {function_name, NULL};
   image.EnumImportChunks(FindResolutionFunctionInImports, &ctx, nullptr);
 
   return reinterpret_cast<FunctionType>(ctx.function);
@@ -117,13 +113,11 @@ ReturnAddressLocationResolver GetProfilerReturnAddrResolutionFunc() {
 }
 
 AddDynamicSymbol GetProfilerAddDynamicSymbolFunc() {
-  return FindFunctionInImports<AddDynamicSymbol>(
-      "AddDynamicSymbol");
+  return FindFunctionInImports<AddDynamicSymbol>("AddDynamicSymbol");
 }
 
 MoveDynamicSymbol GetProfilerMoveDynamicSymbolFunc() {
-  return FindFunctionInImports<MoveDynamicSymbol>(
-      "MoveDynamicSymbol");
+  return FindFunctionInImports<MoveDynamicSymbol>("MoveDynamicSymbol");
 }
 
 #endif  // BUILDFLAG(IS_WIN)

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,16 +11,13 @@
 #include "base/memory/weak_ptr.h"
 #include "components/payments/content/payment_app_factory.h"
 #include "components/webdata/common/web_data_service_consumer.h"
-#include "content/public/browser/web_contents_observer.h"
 
 namespace payments {
 
 struct SecurePaymentConfirmationCredential;
 
-class SecurePaymentConfirmationAppFactory
-    : public PaymentAppFactory,
-      public WebDataServiceConsumer,
-      public content::WebContentsObserver {
+class SecurePaymentConfirmationAppFactory : public PaymentAppFactory,
+                                            public WebDataServiceConsumer {
  public:
   SecurePaymentConfirmationAppFactory();
   ~SecurePaymentConfirmationAppFactory() override;
@@ -41,28 +38,35 @@ class SecurePaymentConfirmationAppFactory
       WebDataServiceBase::Handle handle,
       std::unique_ptr<WDTypedResult> result) override;
 
-  // WebContentsObserver:
-  void RenderFrameDeleted(content::RenderFrameHost* render_frame_host) override;
-
   void OnIsUserVerifyingPlatformAuthenticatorAvailable(
       std::unique_ptr<Request> request,
       bool is_available);
 
-  void OnAppIcon(
-      std::unique_ptr<SecurePaymentConfirmationCredential> credential,
+  // On platforms where we have credential-store level support for retrieving
+  // credentials (i.e., rather than using the user profile database), this
+  // callback will be called with the retrieved and matching credential ids.
+  //
+  // |relying_party_id| and |matching_credentials| are always std::move'd in,
+  // and so are not const-ref.
+  void OnGetMatchingCredentialIdsFromStore(
       std::unique_ptr<Request> request,
-      const SkBitmap& icon);
+      std::string relying_party_id,
+      std::vector<std::vector<uint8_t>> matching_credentials);
 
-  // Called after downloading the icon whose URL was passed into PaymentRequest
-  // API.
-  void DidDownloadIcon(
-      std::unique_ptr<SecurePaymentConfirmationCredential> credential,
+  void OnRetrievedCredentials(
       std::unique_ptr<Request> request,
-      int request_id,
-      int unused_http_status_code,
-      const GURL& unused_image_url,
-      const std::vector<SkBitmap>& bitmaps,
-      const std::vector<gfx::Size>& unused_sizes);
+      std::vector<std::unique_ptr<SecurePaymentConfirmationCredential>>
+          credentials);
+
+  void OnRetrievedBrowserBoundKeyId(
+      std::unique_ptr<Request> request,
+      std::optional<std::vector<uint8_t>> maybe_browser_bound_key_id);
+
+  // Called once all icons are downloaded and their respective SkBitmaps have
+  // been set into the Request.
+  void DidDownloadAllIcons(
+      std::optional<std::vector<uint8_t>> browser_bound_key_id,
+      std::unique_ptr<Request> request);
 
   std::map<WebDataServiceBase::Handle, std::unique_ptr<Request>> requests_;
   base::WeakPtrFactory<SecurePaymentConfirmationAppFactory> weak_ptr_factory_{

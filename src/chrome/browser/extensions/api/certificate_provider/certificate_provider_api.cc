@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/values.h"
 #include "chrome/browser/certificate_provider/certificate_provider_service.h"
@@ -38,21 +38,19 @@ using StopPinRequestResult = ::chromeos::PinDialogManager::StopPinRequestResult;
 
 PinErrorLabel GetErrorLabelForDialog(api_cp::PinRequestErrorType error_type) {
   switch (error_type) {
-    case api_cp::PinRequestErrorType::PIN_REQUEST_ERROR_TYPE_INVALID_PIN:
+    case api_cp::PinRequestErrorType::kInvalidPin:
       return PinErrorLabel::kInvalidPin;
-    case api_cp::PinRequestErrorType::PIN_REQUEST_ERROR_TYPE_INVALID_PUK:
+    case api_cp::PinRequestErrorType::kInvalidPuk:
       return PinErrorLabel::kInvalidPuk;
-    case api_cp::PinRequestErrorType::
-        PIN_REQUEST_ERROR_TYPE_MAX_ATTEMPTS_EXCEEDED:
+    case api_cp::PinRequestErrorType::kMaxAttemptsExceeded:
       return PinErrorLabel::kMaxAttemptsExceeded;
-    case api_cp::PinRequestErrorType::PIN_REQUEST_ERROR_TYPE_UNKNOWN_ERROR:
+    case api_cp::PinRequestErrorType::kUnknownError:
       return PinErrorLabel::kUnknown;
-    case api_cp::PinRequestErrorType::PIN_REQUEST_ERROR_TYPE_NONE:
+    case api_cp::PinRequestErrorType::kNone:
       return PinErrorLabel::kNone;
   }
 
   NOTREACHED();
-  return PinErrorLabel::kNone;
 }
 
 }  // namespace
@@ -110,7 +108,7 @@ class RequestPinExceptFirstQuotaBucketMapper final
     const base::Value::Dict* details = args.front().GetIfDict();
     if (!details)
       return;
-    absl::optional<int> sign_request_id = details->FindInt("signRequestId");
+    std::optional<int> sign_request_id = details->FindInt("signRequestId");
     if (!sign_request_id.has_value())
       return;
     if (*sign_request_id > biggest_request_id_) {
@@ -168,9 +166,6 @@ scoped_refptr<net::X509Certificate> ParseCertificateDer(
       *out_error_message = kCertificateProviderErrorECDSANotSupported;
       return nullptr;
     case net::X509Certificate::kPublicKeyTypeUnknown:
-    case net::X509Certificate::kPublicKeyTypeDSA:
-    case net::X509Certificate::kPublicKeyTypeDH:
-    case net::X509Certificate::kPublicKeyTypeECDH:
       *out_error_message = kCertificateProviderErrorUnknownKeyType;
       return nullptr;
   }
@@ -189,24 +184,24 @@ bool ParseCertificateInfo(
   out_info->supported_algorithms.reserve(info.supported_hashes.size());
   for (const api_cp::Hash hash : info.supported_hashes) {
     switch (hash) {
-      case api_cp::HASH_MD5_SHA1:
-        out_info->supported_algorithms.push_back(SSL_SIGN_RSA_PKCS1_MD5_SHA1);
+      case api_cp::Hash::kMd5Sha1:
+        // Ignore `HASH_MD5_SHA1`. This is only used in TLS 1.0 and 1.1, which
+        // we no longer support.
         break;
-      case api_cp::HASH_SHA1:
+      case api_cp::Hash::kSha1:
         out_info->supported_algorithms.push_back(SSL_SIGN_RSA_PKCS1_SHA1);
         break;
-      case api_cp::HASH_SHA256:
+      case api_cp::Hash::kSha256:
         out_info->supported_algorithms.push_back(SSL_SIGN_RSA_PKCS1_SHA256);
         break;
-      case api_cp::HASH_SHA384:
+      case api_cp::Hash::kSha384:
         out_info->supported_algorithms.push_back(SSL_SIGN_RSA_PKCS1_SHA384);
         break;
-      case api_cp::HASH_SHA512:
+      case api_cp::Hash::kSha512:
         out_info->supported_algorithms.push_back(SSL_SIGN_RSA_PKCS1_SHA512);
         break;
-      case api_cp::HASH_NONE:
+      case api_cp::Hash::kNone:
         NOTREACHED();
-        return false;
     }
   }
   if (out_info->supported_algorithms.empty()) {
@@ -225,7 +220,7 @@ bool ParseClientCertificateInfo(
     return false;
   }
   if (info.certificate_chain.size() > 1) {
-    // TODO(crbug.com/1101854): Support passing certificate chains.
+    // TODO(crbug.com/40703788): Support passing certificate chains.
     *out_error_message = kCertificateProviderErrorChainTooLong;
     return false;
   }
@@ -237,33 +232,33 @@ bool ParseClientCertificateInfo(
   out_info->supported_algorithms.reserve(info.supported_algorithms.size());
   for (const api_cp::Algorithm algorithm : info.supported_algorithms) {
     switch (algorithm) {
-      case api_cp::ALGORITHM_RSASSA_PKCS1_V1_5_MD5_SHA1:
-        out_info->supported_algorithms.push_back(SSL_SIGN_RSA_PKCS1_MD5_SHA1);
+      case api_cp::Algorithm::kRsassaPkcs1V1_5Md5Sha1:
+        // Ignore `ALGORITHM_RSASSA_PKCS1_V1_5_MD5_SHA1`. This is only used in
+        // TLS 1.0 and 1.1, which we no longer support.
         break;
-      case api_cp::ALGORITHM_RSASSA_PKCS1_V1_5_SHA1:
+      case api_cp::Algorithm::kRsassaPkcs1V1_5Sha1:
         out_info->supported_algorithms.push_back(SSL_SIGN_RSA_PKCS1_SHA1);
         break;
-      case api_cp::ALGORITHM_RSASSA_PKCS1_V1_5_SHA256:
+      case api_cp::Algorithm::kRsassaPkcs1V1_5Sha256:
         out_info->supported_algorithms.push_back(SSL_SIGN_RSA_PKCS1_SHA256);
         break;
-      case api_cp::ALGORITHM_RSASSA_PKCS1_V1_5_SHA384:
+      case api_cp::Algorithm::kRsassaPkcs1V1_5Sha384:
         out_info->supported_algorithms.push_back(SSL_SIGN_RSA_PKCS1_SHA384);
         break;
-      case api_cp::ALGORITHM_RSASSA_PKCS1_V1_5_SHA512:
+      case api_cp::Algorithm::kRsassaPkcs1V1_5Sha512:
         out_info->supported_algorithms.push_back(SSL_SIGN_RSA_PKCS1_SHA512);
         break;
-      case api_cp::ALGORITHM_RSASSA_PSS_SHA256:
+      case api_cp::Algorithm::kRsassaPssSha256:
         out_info->supported_algorithms.push_back(SSL_SIGN_RSA_PSS_RSAE_SHA256);
         break;
-      case api_cp::ALGORITHM_RSASSA_PSS_SHA384:
+      case api_cp::Algorithm::kRsassaPssSha384:
         out_info->supported_algorithms.push_back(SSL_SIGN_RSA_PSS_RSAE_SHA384);
         break;
-      case api_cp::ALGORITHM_RSASSA_PSS_SHA512:
+      case api_cp::Algorithm::kRsassaPssSha512:
         out_info->supported_algorithms.push_back(SSL_SIGN_RSA_PSS_RSAE_SHA512);
         break;
-      case api_cp::ALGORITHM_NONE:
+      case api_cp::Algorithm::kNone:
         NOTREACHED();
-        return false;
     }
   }
   if (out_info->supported_algorithms.empty()) {
@@ -279,12 +274,12 @@ const int api::certificate_provider::kMaxClosedDialogsPerMinute = 10;
 const int api::certificate_provider::kMaxClosedDialogsPer10Minutes = 30;
 
 CertificateProviderInternalReportCertificatesFunction::
-    ~CertificateProviderInternalReportCertificatesFunction() {}
+    ~CertificateProviderInternalReportCertificatesFunction() = default;
 
 ExtensionFunction::ResponseAction
 CertificateProviderInternalReportCertificatesFunction::Run() {
-  std::unique_ptr<api_cpi::ReportCertificates::Params> params(
-      api_cpi::ReportCertificates::Params::Create(args()));
+  std::optional<api_cpi::ReportCertificates::Params> params =
+      api_cpi::ReportCertificates::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
   chromeos::CertificateProviderService* const service =
@@ -313,7 +308,7 @@ CertificateProviderInternalReportCertificatesFunction::Run() {
     }
   }
 
-  // TODO(crbug.com/1046860): Remove logging after stabilizing the feature.
+  // TODO(crbug.com/40671053): Remove logging after stabilizing the feature.
   LOG(WARNING) << "Certificates provided by extension " << extension()->id()
                << ": " << cert_infos.size() << ", rejected "
                << rejected_certificates.size();
@@ -336,32 +331,32 @@ CertificateProviderStopPinRequestFunction::
 
 ExtensionFunction::ResponseAction
 CertificateProviderStopPinRequestFunction::Run() {
-  std::unique_ptr<api_cp::StopPinRequest::Params> params(
-      api_cp::StopPinRequest::Params::Create(args()));
+  std::optional<api_cp::StopPinRequest::Params> params =
+      api_cp::StopPinRequest::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
-  // TODO(crbug.com/1046860): Remove logging after stabilizing the feature.
+  // TODO(crbug.com/40671053): Remove logging after stabilizing the feature.
   LOG(WARNING) << "Handling PIN stop request from extension "
-               << extension()->id() << " error " << params->details.error_type;
+               << extension()->id() << " error "
+               << api_cp::ToString(params->details.error_type);
 
   chromeos::CertificateProviderService* const service =
       chromeos::CertificateProviderServiceFactory::GetForBrowserContext(
           browser_context());
   DCHECK(service);
-  if (params->details.error_type ==
-      api_cp::PinRequestErrorType::PIN_REQUEST_ERROR_TYPE_NONE) {
+  if (params->details.error_type == api_cp::PinRequestErrorType::kNone) {
     bool dialog_closed =
         service->pin_dialog_manager()->CloseDialog(extension_id());
     if (!dialog_closed) {
       // This might happen if the user closed the dialog while extension was
       // processing the input.
-      // TODO(crbug.com/1046860): Remove logging after stabilizing the feature.
+      // TODO(crbug.com/40671053): Remove logging after stabilizing the feature.
       LOG(WARNING) << "PIN stop request failed: "
                    << kCertificateProviderNoActiveDialog;
       return RespondNow(Error(kCertificateProviderNoActiveDialog));
     }
 
-    // TODO(crbug.com/1046860): Remove logging after stabilizing the feature.
+    // TODO(crbug.com/40671053): Remove logging after stabilizing the feature.
     LOG(WARNING) << "PIN stop request succeeded";
     return RespondNow(NoArguments());
   }
@@ -387,19 +382,19 @@ CertificateProviderStopPinRequestFunction::Run() {
     case StopPinRequestResult::kSuccess:
       return RespondLater();
   }
-  // TODO(crbug.com/1046860): Remove logging after stabilizing the feature.
+  // TODO(crbug.com/40671053): Remove logging after stabilizing the feature.
   LOG(WARNING) << "PIN stop request failed: " << error_result;
   return RespondNow(Error(std::move(error_result)));
 }
 
 void CertificateProviderStopPinRequestFunction::OnPinRequestStopped() {
-  // TODO(crbug.com/1046860): Remove logging after stabilizing the feature.
+  // TODO(crbug.com/40671053): Remove logging after stabilizing the feature.
   LOG(WARNING) << "PIN stop request succeeded";
   Respond(NoArguments());
 }
 
 CertificateProviderRequestPinFunction::
-    ~CertificateProviderRequestPinFunction() {}
+    ~CertificateProviderRequestPinFunction() = default;
 
 bool CertificateProviderRequestPinFunction::ShouldSkipQuotaLimiting() const {
   chromeos::CertificateProviderService* const service =
@@ -436,23 +431,21 @@ void CertificateProviderRequestPinFunction::GetQuotaLimitHeuristics(
 }
 
 ExtensionFunction::ResponseAction CertificateProviderRequestPinFunction::Run() {
-  std::unique_ptr<api_cp::RequestPin::Params> params(
-      api_cp::RequestPin::Params::Create(args()));
+  std::optional<api_cp::RequestPin::Params> params =
+      api_cp::RequestPin::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
   const api_cp::PinRequestType pin_request_type =
-      params->details.request_type ==
-              api_cp::PinRequestType::PIN_REQUEST_TYPE_NONE
-          ? api_cp::PinRequestType::PIN_REQUEST_TYPE_PIN
+      params->details.request_type == api_cp::PinRequestType::kNone
+          ? api_cp::PinRequestType::kPin
           : params->details.request_type;
 
   const PinErrorLabel error_label =
       GetErrorLabelForDialog(params->details.error_type);
 
   const PinCodeType code_type =
-      (pin_request_type == api_cp::PinRequestType::PIN_REQUEST_TYPE_PIN)
-          ? PinCodeType::kPin
-          : PinCodeType::kPuk;
+      (pin_request_type == api_cp::PinRequestType::kPin) ? PinCodeType::kPin
+                                                         : PinCodeType::kPuk;
 
   chromeos::CertificateProviderService* const service =
       chromeos::CertificateProviderServiceFactory::GetForBrowserContext(
@@ -466,11 +459,12 @@ ExtensionFunction::ResponseAction CertificateProviderRequestPinFunction::Run() {
     attempts_left = *params->details.attempts_left;
   }
 
-  // TODO(crbug.com/1046860): Remove logging after stabilizing the feature.
+  // TODO(crbug.com/40671053): Remove logging after stabilizing the feature.
   LOG(WARNING) << "Starting PIN request from extension " << extension()->id()
                << " signRequestId " << params->details.sign_request_id
-               << " type " << params->details.request_type << " error "
-               << params->details.error_type << " attempts " << attempts_left;
+               << " type " << api_cp::ToString(params->details.request_type)
+               << " error " << api_cp::ToString(params->details.error_type)
+               << " attempts " << attempts_left;
 
   const RequestPinResult result = service->pin_dialog_manager()->RequestPin(
       extension()->id(), extension()->name(), params->details.sign_request_id,
@@ -491,7 +485,7 @@ ExtensionFunction::ResponseAction CertificateProviderRequestPinFunction::Run() {
       error_result = kCertificateProviderPreviousDialogActive;
       break;
   }
-  // TODO(crbug.com/1046860): Remove logging after stabilizing the feature.
+  // TODO(crbug.com/40671053): Remove logging after stabilizing the feature.
   LOG(WARNING) << "PIN request failed: " << error_result;
   return RespondNow(Error(std::move(error_result)));
 }
@@ -504,13 +498,13 @@ void CertificateProviderRequestPinFunction::OnInputReceived(
           browser_context());
   DCHECK(service);
   if (!value.empty()) {
-    // TODO(crbug.com/1046860): Remove logging after stabilizing the feature.
+    // TODO(crbug.com/40671053): Remove logging after stabilizing the feature.
     LOG(WARNING) << "PIN request succeeded";
     api::certificate_provider::PinResponseDetails details;
-    details.user_input = std::make_unique<std::string>(value);
-    create_results.Append(base::Value::FromUniquePtrValue(details.ToValue()));
+    details.user_input = value;
+    create_results.Append(details.ToValue());
   } else {
-    // TODO(crbug.com/1046860): Remove logging after stabilizing the feature.
+    // TODO(crbug.com/40671053): Remove logging after stabilizing the feature.
     LOG(WARNING) << "PIN request canceled";
   }
 
@@ -522,11 +516,12 @@ CertificateProviderSetCertificatesFunction::
 
 ExtensionFunction::ResponseAction
 CertificateProviderSetCertificatesFunction::Run() {
-  std::unique_ptr<api_cp::SetCertificates::Params> params(
-      api_cp::SetCertificates::Params::Create(args()));
+  std::optional<api_cp::SetCertificates::Params> params =
+      api_cp::SetCertificates::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
-  if (!params->details.client_certificates.empty() && params->details.error) {
+  if (!params->details.client_certificates.empty() &&
+      params->details.error != api_cp::Error::kNone) {
     return RespondNow(Error(kCertificateProviderErrorUnexpectedError));
   }
 
@@ -546,7 +541,7 @@ CertificateProviderSetCertificatesFunction::Run() {
     }
   }
 
-  // TODO(crbug.com/1046860): Remove logging after stabilizing the feature.
+  // TODO(crbug.com/40671053): Remove logging after stabilizing the feature.
   LOG(WARNING) << "Certificates provided by extension " << extension()->id()
                << ": " << accepted_certificates.size() << ", rejected "
                << rejected_certificates_count;
@@ -570,12 +565,12 @@ CertificateProviderSetCertificatesFunction::Run() {
 }
 
 CertificateProviderInternalReportSignatureFunction::
-    ~CertificateProviderInternalReportSignatureFunction() {}
+    ~CertificateProviderInternalReportSignatureFunction() = default;
 
 ExtensionFunction::ResponseAction
 CertificateProviderInternalReportSignatureFunction::Run() {
-  std::unique_ptr<api_cpi::ReportSignature::Params> params(
-      api_cpi::ReportSignature::Params::Create(args()));
+  std::optional<api_cpi::ReportSignature::Params> params =
+      api_cpi::ReportSignature::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
   chromeos::CertificateProviderService* const service =
@@ -603,16 +598,16 @@ CertificateProviderReportSignatureFunction::
 
 ExtensionFunction::ResponseAction
 CertificateProviderReportSignatureFunction::Run() {
-  std::unique_ptr<api_cp::ReportSignature::Params> params(
-      api_cp::ReportSignature::Params::Create(args()));
+  std::optional<api_cp::ReportSignature::Params> params =
+      api_cp::ReportSignature::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
 
   if (params->details.signature && !params->details.signature->empty() &&
-      params->details.error) {
+      params->details.error != api_cp::Error::kNone) {
     return RespondNow(Error(kCertificateProviderErrorUnexpectedError));
   }
   if ((!params->details.signature || params->details.signature->empty()) &&
-      !params->details.error) {
+      params->details.error == api_cp::Error::kNone) {
     // It's not allowed to supply empty result without an error code.
     return RespondNow(Error(kCertificateProviderErrorNeitherResultNorError));
   }

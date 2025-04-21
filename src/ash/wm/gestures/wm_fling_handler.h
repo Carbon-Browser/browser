@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,11 @@
 #define ASH_WM_GESTURES_WM_FLING_HANDLER_H_
 
 #include <memory>
+#include <optional>
 
-#include "base/callback.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "ui/compositor/compositor_animation_observer.h"
 #include "ui/gfx/geometry/vector2d_f.h"
 
@@ -56,13 +58,15 @@ class WmFlingHandler : public ui::CompositorAnimationObserver {
 
   // Cached value of an earlier offset that determines values to scroll through
   // by being compared to an updated offset.
-  absl::optional<gfx::Vector2dF> fling_last_offset_;
+  std::optional<gfx::Vector2dF> fling_last_offset_;
 
   // The compositor we are observing.
-  ui::Compositor* observed_compositor_ = nullptr;
+  raw_ptr<ui::Compositor> observed_compositor_ = nullptr;
 
   StepCallback on_step_callback_;
   base::RepeatingClosure on_end_callback_;
+
+  base::WeakPtrFactory<WmFlingHandler> weak_ptr_factory_{this};
 };
 
 }  // namespace ash

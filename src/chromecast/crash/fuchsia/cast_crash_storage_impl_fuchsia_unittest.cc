@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,9 +30,8 @@ class MockComponentDataRegister
       fidl::InterfaceRequest<fuchsia::io::Directory> channel) {
     outgoing_directory_ = std::make_unique<sys::OutgoingDirectory>();
     outgoing_directory_->GetOrCreateDirectory("svc")->Serve(
-        fuchsia::io::OpenFlags::RIGHT_READABLE |
-            fuchsia::io::OpenFlags::RIGHT_WRITABLE,
-        channel.TakeChannel());
+        fuchsia_io::wire::kPermReadable,
+        fidl::ServerEnd<fuchsia_io::Directory>(channel.TakeChannel()));
     binding_ = std::make_unique<
         base::ScopedServiceBinding<fuchsia::feedback::ComponentDataRegister>>(
         outgoing_directory_.get(), this);

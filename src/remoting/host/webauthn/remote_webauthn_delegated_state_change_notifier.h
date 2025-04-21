@@ -1,11 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef REMOTING_HOST_WEBAUTHN_REMOTE_WEBAUTHN_DELEGATED_STATE_CHANGE_NOTIFIER_H_
 #define REMOTING_HOST_WEBAUTHN_REMOTE_WEBAUTHN_DELEGATED_STATE_CHANGE_NOTIFIER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "remoting/host/webauthn/remote_webauthn_state_change_notifier.h"
 
 namespace remoting {

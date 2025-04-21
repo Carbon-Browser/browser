@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,9 +13,7 @@ import androidx.fragment.app.FragmentManager;
 import org.chromium.components.browser_ui.media.MediaNotificationInfo;
 import org.chromium.content_public.browser.WebContents;
 
-/**
- * An abstraction that allows embedders to implement behavior needed by shared Media Router code.
- */
+/** An abstraction that allows embedders to implement behavior needed by shared Media Router code. */
 public abstract class MediaRouterClient {
     @SuppressLint("StaticFieldLeak")
     private static MediaRouterClient sInstance;
@@ -53,7 +51,7 @@ public abstract class MediaRouterClient {
     public abstract Intent createBringTabToFrontIntent(int tabId);
 
     /**
-     * @param MediaNotificationInfo contains contents and metadata about a media notification
+     * @param notificationInfo contains contents and metadata about a media notification
      *         that should be shown.
      */
     public abstract void showNotification(MediaNotificationInfo notificationInfo);
@@ -70,4 +68,7 @@ public abstract class MediaRouterClient {
      *         DialogFragment} in.
      */
     public abstract FragmentManager getSupportFragmentManager(WebContents initiator);
+
+    /** Runs deferredTask on the main thread when the main thread is idle. */
+    public abstract void addDeferredTask(Runnable deferredTask);
 }

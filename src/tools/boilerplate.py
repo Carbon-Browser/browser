@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -17,8 +17,7 @@ import os.path
 import sys
 
 LINES = [
-    'Copyright %d The Chromium Authors. All rights reserved.' %
-        date.today().year,
+    f'Copyright {date.today().year} The Chromium Authors',
     'Use of this source code is governed by a BSD-style license that can be',
     'found in the LICENSE file.'
 ]
@@ -29,18 +28,19 @@ NO_COMPILE_LINES = [
 ]
 
 EXTENSIONS_TO_COMMENTS = {
-    'h': '//',
     'cc': '//',
-    'nc': '//',
-    'mm': '//',
-    'js': '//',
-    'py': '#',
     'gn': '#',
     'gni': '#',
+    'h': '//',
+    'js': '//',
+    'mm': '//',
     'mojom': '//',
+    'nc': '//',
+    'proto': '//',
+    'py': '#',
+    'swift': '//',
     'ts': '//',
     'typemap': '#',
-    "swift": "//",
 }
 
 
@@ -112,14 +112,8 @@ def _CppImplementation(filename):
 
 
 def _ObjCppImplementation(filename):
-  implementation = '\n#import "' + _RemoveTestSuffix(filename) + '.h"\n'
-  if not _IsIOSFile(filename):
-    return implementation
-  implementation += '\n'
-  implementation += '#if !defined(__has_feature) || !__has_feature(objc_arc)\n'
-  implementation += '#error "This file requires ARC support."\n'
-  implementation += '#endif\n'
-  return implementation
+  return '\n#import "' + _FilePathSlashesToCpp(_RemoveTestSuffix(filename)) \
+    + '.h"\n'
 
 
 def _CreateFile(filename):
@@ -141,6 +135,12 @@ def _CreateFile(filename):
     fd.write(contents)
 
 
+# A file is safe to overwrite if it's an empty file we can write to.
+def _IsSafeToOverwrite(path):
+  return os.path.isfile(path) and os.path.getsize(path) == 0 and os.access(
+      path, os.W_OK)
+
+
 def Main():
   files = sys.argv[1:]
   if len(files) < 1:
@@ -155,7 +155,7 @@ def Main():
       print('Unknown file type for %s' % f, file=sys.stderr)
       return 2
 
-    if os.path.exists(f):
+    if os.path.exists(f) and not _IsSafeToOverwrite(f):
       print('A file at path %s already exists' % f, file=sys.stderr)
       return 2
 

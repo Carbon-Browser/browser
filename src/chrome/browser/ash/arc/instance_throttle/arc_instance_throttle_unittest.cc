@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 
 #include "ash/components/arc/arc_features.h"
 #include "ash/components/arc/arc_prefs.h"
+#include "ash/components/arc/metrics/stability_metrics_manager.h"
 #include "ash/components/arc/mojom/power.mojom.h"
 #include "ash/components/arc/power/arc_power_bridge.h"
 #include "ash/components/arc/session/arc_bridge_service.h"
@@ -19,27 +20,31 @@
 #include "ash/components/arc/test/fake_app_host.h"
 #include "ash/components/arc/test/fake_app_instance.h"
 #include "ash/components/arc/test/fake_arc_session.h"
+#include "ash/components/arc/test/fake_intent_helper_host.h"
+#include "ash/components/arc/test/fake_intent_helper_instance.h"
 #include "ash/components/arc/test/fake_power_instance.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
+#include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "chrome/browser/ash/arc/boot_phase_monitor/arc_boot_phase_monitor_bridge.h"
+#include "chrome/browser/ash/arc/instance_throttle/arc_active_audio_throttle_observer.h"
 #include "chrome/browser/ash/arc/instance_throttle/arc_boot_phase_throttle_observer.h"
 #include "chrome/browser/ash/arc/instance_throttle/arc_power_throttle_observer.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
 #include "chrome/browser/ash/arc/test/test_arc_session_manager.h"
-#include "chrome/browser/ash/throttle_observer.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
 #include "chromeos/ash/components/dbus/concierge/fake_concierge_client.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
+#include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
+#include "chromeos/ash/components/throttle/throttle_observer.h"
 #include "chromeos/dbus/power/power_manager_client.h"
-#include "components/arc/test/fake_intent_helper_host.h"
-#include "components/arc/test/fake_intent_helper_instance.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "content/public/test/browser_task_environment.h"
 #include "services/device/public/cpp/test/test_wake_lock_provider.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/display/test/test_screen.h"
 
 namespace arc {
 
@@ -53,9 +58,6 @@ class ArcInstanceThrottleTest : public testing::Test {
 
   void SetUp() override {
     chromeos::PowerManagerClient::InitializeFake();
-    // Need to initialize DBusThreadManager before ArcSessionManager's
-    // constructor calls DBusThreadManager::Get().
-    chromeos::DBusThreadManager::Initialize();
     ash::ConciergeClient::InitializeFake(/*fake_cicerone_client=*/nullptr);
     arc_service_manager_ = std::make_unique<ArcServiceManager>();
     arc_session_manager_ =
@@ -68,6 +70,17 @@ class ArcInstanceThrottleTest : public testing::Test {
 
     ArcBootPhaseMonitorBridge::GetForBrowserContextForTesting(
         testing_profile_.get());
+
+    ash::SessionManagerClient::InitializeFakeInMemory();
+    ash::FakeSessionManagerClient::Get()->set_arc_available(true);
+    StabilityMetricsManager::Initialize(&local_state_);
+    prefs::RegisterLocalStatePrefs(local_state_.registry());
+    prefs::RegisterProfilePrefs(local_state_.registry());
+    arc_metrics_service_ = ArcMetricsService::GetForBrowserContextForTesting(
+        testing_profile_.get());
+    arc_metrics_service_->SetHistogramNamerCallback(base::BindLambdaForTesting(
+        [](const std::string&) -> std::string { return ""; }));
+
     arc_instance_throttle_ =
         ArcInstanceThrottle::GetForBrowserContextForTesting(
             testing_profile_.get());
@@ -96,11 +109,12 @@ class ArcInstanceThrottleTest : public testing::Test {
     intent_helper_host_.reset();
     intent_helper_instance_.reset();
 
+    arc::StabilityMetricsManager::Shutdown();
+    ash::SessionManagerClient::Shutdown();
     testing_profile_.reset();
     arc_session_manager_.reset();
     arc_service_manager_.reset();
     ash::ConciergeClient::Shutdown();
-    chromeos::DBusThreadManager::Shutdown();
     chromeos::PowerManagerClient::Shutdown();
   }
 
@@ -132,9 +146,7 @@ class ArcInstanceThrottleTest : public testing::Test {
         arc_service_manager_->arc_bridge_service()->intent_helper());
   }
 
-  sync_preferences::TestingPrefServiceSyncable* GetPrefs() {
-    return testing_profile_->GetTestingPrefService();
-  }
+  ArcMetricsService* GetArcMetricsService() { return arc_metrics_service_; }
 
   content::BrowserTaskEnvironment* task_environment() {
     return &task_environment_;
@@ -163,7 +175,6 @@ class ArcInstanceThrottleTest : public testing::Test {
         return observer.get();
     }
     NOTREACHED();
-    return nullptr;
   }
 
   ash::ThrottleObserver* GetArcBootPhaseThrottleObserver() {
@@ -174,7 +185,6 @@ class ArcInstanceThrottleTest : public testing::Test {
         return observer.get();
     }
     NOTREACHED();
-    return nullptr;
   }
 
   ash::ThrottleObserver* GetArcPowerThrottleObserver() {
@@ -185,7 +195,11 @@ class ArcInstanceThrottleTest : public testing::Test {
         return observer.get();
     }
     NOTREACHED();
-    return nullptr;
+  }
+
+  ArcInstanceThrottle* CreateArcInstanceThrottle() {
+    return ArcInstanceThrottle::GetForBrowserContextForTesting(
+        testing_profile_.get());
   }
 
   FakePowerInstance* power_instance() { return power_instance_.get(); }
@@ -226,13 +240,16 @@ class ArcInstanceThrottleTest : public testing::Test {
     void RecordCpuRestrictionDisabledUMA(const std::string& observer_name,
                                          base::TimeDelta delta) override {}
 
-    ArcInstanceThrottleTest* test_;
+    raw_ptr<ArcInstanceThrottleTest> test_;
   };
 
   content::BrowserTaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
+  display::test::TestScreen test_screen_{/*create_display=*/true,
+                                         /*register_screen=*/true};
   std::unique_ptr<ArcServiceManager> arc_service_manager_;
   std::unique_ptr<ArcSessionManager> arc_session_manager_;
+  TestingPrefServiceSimple local_state_;
   std::unique_ptr<TestingProfile> testing_profile_;
 
   std::unique_ptr<FakePowerInstance> power_instance_;
@@ -241,7 +258,8 @@ class ArcInstanceThrottleTest : public testing::Test {
   std::unique_ptr<FakeIntentHelperHost> intent_helper_host_;
   std::unique_ptr<FakeIntentHelperInstance> intent_helper_instance_;
 
-  ArcInstanceThrottle* arc_instance_throttle_;
+  raw_ptr<ArcInstanceThrottle, DanglingUntriaged> arc_instance_throttle_;
+  raw_ptr<ArcMetricsService, DanglingUntriaged> arc_metrics_service_ = nullptr;
   size_t disable_cpu_restriction_counter_ = 0;
   size_t enable_cpu_restriction_counter_ = 0;
   size_t use_quota_counter_ = 0;
@@ -337,6 +355,58 @@ TEST_F(ArcInstanceThrottleTest, TestThrottleInstanceQuotaEnforcement) {
   EXPECT_EQ(4U, disable_cpu_restriction_counter());
 }
 
+// Tests that ArcInstanceThrottle is not enforced when the boot type is
+// 'regular'.
+TEST_F(ArcInstanceThrottleTest,
+       TestThrottleInstanceNoQuotaEnforcementOnRegularBoot) {
+  GetArcBootPhaseThrottleObserver()->SetActive(true);
+  EXPECT_EQ(0U, enable_cpu_restriction_counter());
+  EXPECT_EQ(0U, use_quota_counter());
+  EXPECT_EQ(1U, disable_cpu_restriction_counter());
+
+  // Tell the throttle of the boot type.
+  GetArcMetricsService()->ReportBootProgress({}, mojom::BootType::REGULAR_BOOT);
+
+  // ARC booted, and mojom is connected.
+  ConnectMojo();
+
+  // 10 seconds passed.
+  task_environment()->FastForwardBy(
+      ArcBootPhaseThrottleObserver::GetThrottleDelayForTesting());
+
+  // Now CPU restriction is enforced BUT quota is still not enforced.
+  GetArcBootPhaseThrottleObserver()->SetActive(false);
+  EXPECT_EQ(1U, enable_cpu_restriction_counter());
+  EXPECT_EQ(0U, use_quota_counter());
+  EXPECT_EQ(1U, disable_cpu_restriction_counter());
+}
+
+// Tests the same with non-regular boot.
+TEST_F(ArcInstanceThrottleTest,
+       TestThrottleInstanceNoQuotaEnforcementOnNonRegularBoot) {
+  GetArcBootPhaseThrottleObserver()->SetActive(true);
+  EXPECT_EQ(0U, enable_cpu_restriction_counter());
+  EXPECT_EQ(0U, use_quota_counter());
+  EXPECT_EQ(1U, disable_cpu_restriction_counter());
+
+  // Tell the throttle of the boot type.
+  GetArcMetricsService()->ReportBootProgress(
+      {}, mojom::BootType::FIRST_BOOT_AFTER_UPDATE);
+
+  // ARC booted, and mojom is connected.
+  ConnectMojo();
+
+  // 10 seconds passed.
+  task_environment()->FastForwardBy(
+      ArcBootPhaseThrottleObserver::GetThrottleDelayForTesting());
+
+  // Now quota _is_ enforced.
+  GetArcBootPhaseThrottleObserver()->SetActive(false);
+  EXPECT_EQ(1U, enable_cpu_restriction_counter());
+  EXPECT_EQ(1U, use_quota_counter());
+  EXPECT_EQ(1U, disable_cpu_restriction_counter());
+}
+
 // Tests that power instance is correctly notified.
 TEST_F(ArcInstanceThrottleTest, TestPowerNotificationEnabledByDefault) {
   // Set power instance and it should be automatically notified once connection
@@ -369,6 +439,31 @@ TEST_F(ArcInstanceThrottleTest, TestPowerNotification) {
   EXPECT_EQ(3, power_instance()->cpu_restriction_state_count());
 }
 
+MATCHER_P(IsObserverNameEquals, name, "") {
+  return arg->name() == name;
+}
+
+TEST_F(ArcInstanceThrottleTest, UnthrottleOnActiveAudioV2FeatureOff) {
+  base::test::ScopedFeatureList feature;
+  feature.InitAndDisableFeature(arc::kUnthrottleOnActiveAudioV2);
+
+  auto* arc_instance_throttle = CreateArcInstanceThrottle();
+  EXPECT_THAT(arc_instance_throttle->observers_for_testing(),
+              testing::Not(testing::Contains(
+                  IsObserverNameEquals(kArcActiveAudioThrottleObserverName))));
+}
+
+TEST_F(ArcInstanceThrottleTest, UnthrottleOnActiveAudioV2FeatureOn) {
+  base::test::ScopedFeatureList feature;
+  feature.InitAndEnableFeature(arc::kUnthrottleOnActiveAudioV2);
+
+  auto* arc_instance_throttle = CreateArcInstanceThrottle();
+  EXPECT_THAT(arc_instance_throttle->observers_for_testing(),
+              testing::Contains(
+                  IsObserverNameEquals(kArcActiveAudioThrottleObserverName)));
+}
+
+// For testing ARCVM specific part of the class.
 class ArcInstanceThrottleVMTest : public testing::Test {
  public:
   ArcInstanceThrottleVMTest() = default;
@@ -385,10 +480,7 @@ class ArcInstanceThrottleVMTest : public testing::Test {
 
     run_loop_ = std::make_unique<base::RunLoop>();
 
-    // Need to initialize DBusThreadManager before ArcSessionManager's
-    // constructor calls DBusThreadManager::Get().
-    chromeos::DBusThreadManager::Initialize();
-    chromeos::ConciergeClient::InitializeFake();
+    ash::ConciergeClient::InitializeFake();
     DCHECK(GetConciergeClient());
 
     arc_service_manager_ = std::make_unique<ArcServiceManager>();
@@ -396,6 +488,16 @@ class ArcInstanceThrottleVMTest : public testing::Test {
         CreateTestArcSessionManager(std::make_unique<ArcSessionRunner>(
             base::BindRepeating(FakeArcSession::Create)));
     testing_profile_ = std::make_unique<TestingProfile>();
+
+    ash::SessionManagerClient::InitializeFakeInMemory();
+    ash::FakeSessionManagerClient::Get()->set_arc_available(true);
+    StabilityMetricsManager::Initialize(&local_state_);
+    prefs::RegisterLocalStatePrefs(local_state_.registry());
+    prefs::RegisterProfilePrefs(local_state_.registry());
+    arc_metrics_service_ = ArcMetricsService::GetForBrowserContextForTesting(
+        testing_profile_.get());
+    arc_metrics_service_->SetHistogramNamerCallback(base::BindLambdaForTesting(
+        [](const std::string&) -> std::string { return ""; }));
 
     arc_instance_throttle_ =
         ArcInstanceThrottle::GetForBrowserContextForTesting(
@@ -405,10 +507,11 @@ class ArcInstanceThrottleVMTest : public testing::Test {
   }
 
   void TearDown() override {
+    arc::StabilityMetricsManager::Shutdown();
+    ash::SessionManagerClient::Shutdown();
     testing_profile_.reset();
     arc_session_manager_.reset();
     arc_service_manager_.reset();
-    chromeos::DBusThreadManager::Shutdown();
   }
 
  protected:
@@ -423,7 +526,6 @@ class ArcInstanceThrottleVMTest : public testing::Test {
         return observer.get();
     }
     NOTREACHED();
-    return nullptr;
   }
 
   base::RunLoop* run_loop() { return run_loop_.get(); }
@@ -432,11 +534,15 @@ class ArcInstanceThrottleVMTest : public testing::Test {
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<base::RunLoop> run_loop_;
 
+  display::test::TestScreen test_screen_{/*create_display=*/true,
+                                         /*register_screen=*/true};
   std::unique_ptr<ArcServiceManager> arc_service_manager_;
   std::unique_ptr<ArcSessionManager> arc_session_manager_;
+  TestingPrefServiceSimple local_state_;
   std::unique_ptr<TestingProfile> testing_profile_;
 
-  ArcInstanceThrottle* arc_instance_throttle_;
+  raw_ptr<ArcInstanceThrottle, DanglingUntriaged> arc_instance_throttle_;
+  raw_ptr<ArcMetricsService, DanglingUntriaged> arc_metrics_service_ = nullptr;
 };
 
 TEST_F(ArcInstanceThrottleVMTest, Histograms) {
@@ -456,7 +562,7 @@ TEST_F(ArcInstanceThrottleVMTest, Histograms) {
 
   // No response
   client->set_wait_for_service_to_be_available_response(true);
-  absl::optional<vm_tools::concierge::SetVmCpuRestrictionResponse> response;
+  std::optional<vm_tools::concierge::SetVmCpuRestrictionResponse> response;
   client->set_set_vm_cpu_restriction_response(response);
   observer->SetActive(false);
   run_loop()->RunUntilIdle();

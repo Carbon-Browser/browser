@@ -1,23 +1,24 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/task/sequence_manager/work_queue.h"
 
 #include <stddef.h>
-#include <memory>
 
-#include "base/bind.h"
+#include <memory>
+#include <optional>
+
+#include "base/functional/bind.h"
+#include "base/task/common/lazy_now.h"
 #include "base/task/sequence_manager/enqueue_order.h"
 #include "base/task/sequence_manager/fence.h"
-#include "base/task/sequence_manager/lazy_now.h"
 #include "base/task/sequence_manager/sequence_manager.h"
 #include "base/task/sequence_manager/task_order.h"
 #include "base/task/sequence_manager/task_queue_impl.h"
 #include "base/task/sequence_manager/work_queue_sets.h"
 #include "base/time/time.h"
 #include "testing/gmock/include/gmock/gmock.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 namespace sequence_manager {
@@ -33,7 +34,7 @@ class MockObserver : public WorkQueueSets::Observer {
 void NopTask() {}
 
 struct Cancelable {
-  Cancelable() {}
+  Cancelable() = default;
 
   void NopTask() {}
 
@@ -52,7 +53,7 @@ class WorkQueueTest : public testing::Test {
   void SetUp() override {
     task_queue_ = std::make_unique<TaskQueueImpl>(
         /*sequence_manager=*/nullptr, /*wake_up_queue=*/nullptr,
-        TaskQueue::Spec("test"));
+        TaskQueue::Spec(QueueName::TEST_TQ));
 
     work_queue_ =
         std::make_unique<WorkQueue>(task_queue_.get(), "test", queue_type_);
@@ -97,7 +98,7 @@ class WorkQueueTest : public testing::Test {
                               task_order.delayed_run_time(),
                               subtle::DelayPolicy::kFlexibleNoSooner),
                    EnqueueOrder::FromIntForTesting(task_order.sequence_num()),
-                   task_order.enqueue_order());
+                   task_order.enqueue_order(), TimeTicks() + Milliseconds(1));
     return fake_task;
   }
 
@@ -150,7 +151,7 @@ TEST_F(WorkQueueTest, GetFrontTaskOrder) {
   work_queue_->Push(FakeTaskWithEnqueueOrder(3));
   work_queue_->Push(FakeTaskWithEnqueueOrder(4));
 
-  absl::optional<TaskOrder> task_order = work_queue_->GetFrontTaskOrder();
+  std::optional<TaskOrder> task_order = work_queue_->GetFrontTaskOrder();
   EXPECT_TRUE(task_order);
   EXPECT_EQ(2ull, task_order->enqueue_order());
 }
@@ -392,7 +393,7 @@ TEST_F(WorkQueueTest, InsertNewFence) {
   EXPECT_FALSE(work_queue_->BlockedByFence());
 
   // Note until TakeTaskFromWorkQueue() is called we don't hit the fence.
-  absl::optional<TaskOrder> task_order = work_queue_->GetFrontTaskOrder();
+  std::optional<TaskOrder> task_order = work_queue_->GetFrontTaskOrder();
   EXPECT_TRUE(task_order);
   EXPECT_EQ(2ull, task_order->enqueue_order());
 
@@ -527,7 +528,7 @@ TEST_F(WorkQueueTest, RemoveAllCanceledTasksFromFront) {
   }
   EXPECT_TRUE(work_queue_->RemoveAllCanceledTasksFromFront());
 
-  absl::optional<TaskOrder> task_order = work_queue_->GetFrontTaskOrder();
+  std::optional<TaskOrder> task_order = work_queue_->GetFrontTaskOrder();
   EXPECT_TRUE(task_order);
   EXPECT_EQ(5ull, task_order->enqueue_order());
 }
@@ -544,7 +545,7 @@ TEST_F(WorkQueueTest, RemoveAllCanceledTasksFromFrontTasksNotCanceled) {
     work_queue_->Push(FakeTaskWithEnqueueOrder(5));
     EXPECT_FALSE(work_queue_->RemoveAllCanceledTasksFromFront());
 
-    absl::optional<TaskOrder> task_order = work_queue_->GetFrontTaskOrder();
+    std::optional<TaskOrder> task_order = work_queue_->GetFrontTaskOrder();
     EXPECT_TRUE(task_order);
     EXPECT_EQ(2ull, task_order->enqueue_order());
   }

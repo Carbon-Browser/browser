@@ -1,12 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SYNC_INVALIDATIONS_INTERESTED_DATA_TYPES_HANDLER_H_
 #define COMPONENTS_SYNC_INVALIDATIONS_INTERESTED_DATA_TYPES_HANDLER_H_
 
-#include "base/callback_forward.h"
-#include "components/sync/base/model_type.h"
+#include "base/functional/callback_forward.h"
+#include "components/sync/base/data_type.h"
 
 namespace syncer {
 
@@ -23,7 +23,7 @@ class InterestedDataTypesHandler {
   // Called to provide an interface to invoke GetUpdates after any additional
   // interested data types get committed.
   virtual void SetCommittedAdditionalInterestedDataTypesCallback(
-      base::RepeatingCallback<void(const ModelTypeSet&)> callback) = 0;
+      base::RepeatingCallback<void(const DataTypeSet&)> callback) = 0;
 };
 
 }  // namespace syncer

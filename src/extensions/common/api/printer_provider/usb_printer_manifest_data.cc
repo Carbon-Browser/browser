@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,9 +31,10 @@ const UsbPrinterManifestData* UsbPrinterManifestData::Get(
 std::unique_ptr<UsbPrinterManifestData> UsbPrinterManifestData::FromValue(
     const base::Value& value,
     std::u16string* error) {
-  std::unique_ptr<api::extensions_manifest_types::UsbPrinters> usb_printers =
-      api::extensions_manifest_types::UsbPrinters::FromValue(value, error);
-  if (!usb_printers) {
+  auto usb_printers =
+      api::extensions_manifest_types::UsbPrinters::FromValue(value);
+  if (!usb_printers.has_value()) {
+    *error = std::move(usb_printers).error();
     return nullptr;
   }
 

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,37 +6,38 @@
 #define REMOTING_PROTOCOL_WEBRTC_TRANSPORT_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <tuple>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "base/timer/timer.h"
 #include "crypto/hmac.h"
 #include "remoting/base/constants.h"
 #include "remoting/base/session_options.h"
+#include "remoting/protocol/network_settings.h"
 #include "remoting/protocol/peer_connection_controls.h"
+#include "remoting/protocol/port_allocator.h"
+#include "remoting/protocol/port_allocator_factory.h"
 #include "remoting/protocol/session_options_provider.h"
 #include "remoting/protocol/transport.h"
 #include "remoting/protocol/webrtc_data_stream_adapter.h"
 #include "remoting/protocol/webrtc_event_log_data.h"
 #include "remoting/signaling/signal_strategy.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/webrtc/api/peer_connection_interface.h"
 #include "third_party/webrtc/api/video_codecs/video_encoder_factory.h"
 
 namespace base {
-
 class Watchdog;
-
 }  // namespace base
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 class TransportContext;
 class MessagePipe;
@@ -107,6 +108,10 @@ class WebrtcTransport : public Transport,
   // any messages.
   std::unique_ptr<MessagePipe> CreateOutgoingChannel(const std::string& name);
 
+  // Applies network settings. This can be called after Start(), but negotiation
+  // will not start until the network settings are applied.
+  void ApplyNetworkSettings(const NetworkSettings& network_settings);
+
   // Transport implementations.
   void Start(Authenticator* authenticator,
              SendTransportInfoCallback send_transport_info_callback) override;
@@ -116,8 +121,8 @@ class WebrtcTransport : public Transport,
   const SessionOptions& session_options() const override;
 
   // PeerConnectionControls implementations.
-  void SetPreferredBitrates(absl::optional<int> min_bitrate_bps,
-                            absl::optional<int> max_bitrate_bps) override;
+  void SetPreferredBitrates(std::optional<int> min_bitrate_bps,
+                            std::optional<int> max_bitrate_bps) override;
   void RequestIceRestart() override;
   void RequestSdpRestart() override;
 
@@ -170,14 +175,14 @@ class WebrtcTransport : public Transport,
   void OnRemoteDescriptionSet(bool send_answer,
                               bool success,
                               const std::string& error);
+  void SendAnswer();
+  void OnCloseAfterDisconnectTimeout();
 
   // PeerConnection event handlers, called by PeerConnectionWrapper.
   void OnSignalingChange(
       webrtc::PeerConnectionInterface::SignalingState new_state);
-  void OnAddStream(
-      rtc::scoped_refptr<webrtc::MediaStreamInterface> stream);
-  void OnRemoveStream(
-      rtc::scoped_refptr<webrtc::MediaStreamInterface> stream);
+  void OnAddStream(rtc::scoped_refptr<webrtc::MediaStreamInterface> stream);
+  void OnRemoveStream(rtc::scoped_refptr<webrtc::MediaStreamInterface> stream);
   void OnDataChannel(
       rtc::scoped_refptr<webrtc::DataChannelInterface> data_channel);
   void OnRenegotiationNeeded();
@@ -196,6 +201,10 @@ class WebrtcTransport : public Transport,
   // The default range is [0, default max bitrate]. Client overrides that go
   // beyond this bound or exceed the relay server's max bitrate will be ignored.
   std::tuple<int, int> BitratesForConnection();
+
+  // Sets the min/max bitrate (using the preferred bitrate members) on the peer
+  // connection and each video RtpSender.
+  void UpdateBitrates();
 
   // Sets bitrates on the PeerConnection.
   // Called after SetRemoteDescription(), but also called if the relay status
@@ -227,8 +236,6 @@ class WebrtcTransport : public Transport,
   void StartRtcEventLogging();
   void StopRtcEventLogging();
 
-  base::ThreadChecker thread_checker_;
-
   scoped_refptr<TransportContext> transport_context_;
   raw_ptr<EventHandler> event_handler_ = nullptr;
   SendTransportInfoCallback send_transport_info_callback_;
@@ -241,7 +248,7 @@ class WebrtcTransport : public Transport,
 
   bool connected_ = false;
 
-  absl::optional<bool> connection_relayed_;
+  std::optional<bool> connection_relayed_;
 
   std::string transport_protocol_;
 
@@ -249,12 +256,14 @@ class WebrtcTransport : public Transport,
 
   std::unique_ptr<jingle_xmpp::XmlElement> pending_transport_info_message_;
   base::OneShotTimer transport_info_timer_;
+  // Timer that closes the transport after the ICE connection has become
+  // disconnected for the specified timeout.
+  base::OneShotTimer close_after_disconnect_timer_;
 
   std::vector<std::unique_ptr<webrtc::IceCandidateInterface>>
       pending_incoming_candidates_;
 
   std::string preferred_video_codec_;
-  int desired_video_frame_rate_ = kTargetFrameRate;
 
   SessionOptions session_options_;
 
@@ -266,16 +275,21 @@ class WebrtcTransport : public Transport,
 
   // Preferred bitrates set by the client. nullopt if the client has not
   // provided any preferred bitrates.
-  absl::optional<int> preferred_min_bitrate_bps_;
-  absl::optional<int> preferred_max_bitrate_bps_;
+  std::optional<int> preferred_min_bitrate_bps_;
+  std::optional<int> preferred_max_bitrate_bps_;
 
   // Stores event log data generated by WebRTC for the PeerConnection.
   WebrtcEventLogData rtc_event_log_;
 
+  // Callback to apply network settings on the port allocator. Reset to null
+  // once network settings are applied.
+  PortAllocatorFactory::ApplyNetworkSettingsCallback apply_network_settings_;
+
+  THREAD_CHECKER(thread_checker_);
+
   base::WeakPtrFactory<WebrtcTransport> weak_factory_{this};
 };
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol
 
 #endif  // REMOTING_PROTOCOL_WEBRTC_TRANSPORT_H_

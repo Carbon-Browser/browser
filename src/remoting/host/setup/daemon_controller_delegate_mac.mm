@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,21 +8,24 @@
 #include <sys/types.h>
 #include <utility>
 
-#include "base/bind.h"
+#include <optional>
+#include "base/apple/bridging.h"
+#include "base/apple/foundation_util.h"
+#include "base/apple/osstatus_logging.h"
 #include "base/command_line.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/mac/authorization_util.h"
-#include "base/mac/foundation_util.h"
 #include "base/mac/launchd.h"
-#include "base/mac/mac_logging.h"
 #include "base/mac/scoped_authorizationref.h"
 #include "base/mac/scoped_launch_data.h"
 #include "base/memory/ptr_util.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/posix/eintr_wrapper.h"
-#include "base/threading/thread_task_runner_handle.h"
+#import "base/task/single_thread_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/values.h"
 #include "remoting/base/string_resources.h"
 #include "remoting/host/host_config.h"
@@ -30,7 +33,6 @@
 #include "remoting/host/mac/permission_checker.h"
 #include "remoting/host/mac/permission_wizard.h"
 #include "remoting/host/resources.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/l10n/l10n_util_mac.h"
 
@@ -50,7 +52,7 @@ class ScopedWaitpid {
   // case. Note that -1 is the value returned from
   // base::mac::ExecuteWithPrivilegesAndGetPID() when the child PID could not be
   // determined.
-  ScopedWaitpid(pid_t pid) : pid_(pid) {}
+  explicit ScopedWaitpid(pid_t pid) : pid_(pid) {}
   ~ScopedWaitpid() { MaybeWait(); }
 
   // Executes the waitpid() and resets the scoper. After this, the caller may
@@ -89,8 +91,9 @@ bool RunHelperAsRoot(const std::string& command,
   NSString* prompt = l10n_util::GetNSStringFWithFixup(
       IDS_HOST_AUTHENTICATION_PROMPT,
       l10n_util::GetStringUTF16(IDS_PRODUCT_NAME));
-  base::mac::ScopedAuthorizationRef authorization(
-      base::mac::AuthorizationCreateToRunAsRoot(base::mac::NSToCFCast(prompt)));
+  base::mac::ScopedAuthorizationRef authorization =
+      base::mac::AuthorizationCreateToRunAsRoot(
+          base::apple::NSToCFPtrCast(prompt));
   if (!authorization.get()) {
     LOG(ERROR) << "Failed to obtain authorizationRef";
     return false;
@@ -171,7 +174,7 @@ void ElevateAndSetConfig(base::Value::Dict config,
   bool service_running = (job_pid > 0);
 
   const char* command = service_running ? "--save-config" : "--enable";
-  std::string input_data = HostConfigToJson(base::Value(std::move(config)));
+  std::string input_data = HostConfigToJson(std::move(config));
   if (!RunHelperAsRoot(command, input_data)) {
     LOG(ERROR) << "Failed to run the helper tool.";
     std::move(done).Run(DaemonController::RESULT_FAILED);
@@ -233,21 +236,24 @@ DaemonController::State DaemonControllerDelegateMac::GetState() {
   }
 }
 
-absl::optional<base::Value::Dict> DaemonControllerDelegateMac::GetConfig() {
+std::optional<base::Value::Dict> DaemonControllerDelegateMac::GetConfig() {
   base::FilePath config_path(kHostConfigFilePath);
-  absl::optional<base::Value> host_config(HostConfigFromJsonFile(config_path));
-  if (!host_config.has_value())
-    return absl::nullopt;
+  auto host_config = HostConfigFromJsonFile(config_path);
+  if (!host_config.has_value()) {
+    return std::nullopt;
+  }
 
   base::Value::Dict config;
-  std::string* value = host_config->FindStringKey(kHostIdConfigPath);
+  std::string* value = host_config->FindString(kHostIdConfigPath);
   if (value) {
     config.Set(kHostIdConfigPath, *value);
   }
 
-  value = host_config->FindStringKey(kXmppLoginConfigPath);
+  value = host_config->FindString(kServiceAccountConfigPath);
   if (value) {
-    config.Set(kXmppLoginConfigPath, *value);
+    // Set both keys for compatibility purposes.
+    config.Set(kServiceAccountConfigPath, *value);
+    config.Set(kDeprecatedXmppLoginConfigPath, *value);
   }
 
   return config;
@@ -261,7 +267,7 @@ void DaemonControllerDelegateMac::CheckPermission(
   permission_wizard_ =
       std::make_unique<mac::PermissionWizard>(std::move(checker));
   permission_wizard_->SetCompletionCallback(std::move(callback));
-  permission_wizard_->Start(base::ThreadTaskRunnerHandle::Get());
+  permission_wizard_->Start(base::SingleThreadTaskRunner::GetCurrentDefault());
 }
 
 void DaemonControllerDelegateMac::SetConfigAndStart(
@@ -276,17 +282,15 @@ void DaemonControllerDelegateMac::UpdateConfig(
     base::Value::Dict config,
     DaemonController::CompletionCallback done) {
   base::FilePath config_file_path(kHostConfigFilePath);
-  absl::optional<base::Value> host_config(
+  std::optional<base::Value::Dict> host_config(
       HostConfigFromJsonFile(config_file_path));
-  if (!host_config.has_value() || !host_config->is_dict()) {
+  if (!host_config.has_value()) {
     std::move(done).Run(DaemonController::RESULT_FAILED);
     return;
   }
 
-  base::Value::Dict& host_config_dict = host_config->GetDict();
-
-  host_config_dict.Merge(std::move(config));
-  ElevateAndSetConfig(std::move(host_config_dict), std::move(done));
+  host_config->Merge(std::move(config));
+  ElevateAndSetConfig(std::move(*host_config), std::move(done));
 }
 
 void DaemonControllerDelegateMac::Stop(
@@ -303,13 +307,13 @@ DaemonControllerDelegateMac::GetUsageStatsConsent() {
   consent.set_by_policy = false;
 
   base::FilePath config_file_path(kHostConfigFilePath);
-  absl::optional<base::Value> host_config(
+  std::optional<base::Value::Dict> host_config(
       HostConfigFromJsonFile(config_file_path));
   if (host_config.has_value()) {
-    absl::optional<bool> host_config_value =
-        host_config->FindBoolKey(kUsageStatsConsentConfigPath);
+    std::optional<bool> host_config_value =
+        host_config->FindBool(kUsageStatsConsentConfigPath);
     if (host_config_value.has_value()) {
-      consent.allowed = host_config_value.value();
+      consent.allowed = *host_config_value;
     }
   }
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,14 +26,6 @@
 
 using extensions::ActionInfo;
 
-namespace {
-bool IsActionRelatedCommand(const std::string& name) {
-  return name == extensions::manifest_values::kActionCommandEvent ||
-         name == extensions::manifest_values::kBrowserActionCommandEvent ||
-         name == extensions::manifest_values::kPageActionCommandEvent;
-}
-}  //  namespace
-
 // static
 std::unique_ptr<ExtensionActionPlatformDelegate>
 ExtensionActionPlatformDelegate::Create(
@@ -55,8 +47,9 @@ ExtensionActionPlatformDelegateViews::~ExtensionActionPlatformDelegateViews() {
 
 void ExtensionActionPlatformDelegateViews::RegisterCommand() {
   // If we've already registered, do nothing.
-  if (action_keybinding_)
+  if (action_keybinding_) {
     return;
+  }
 
   extensions::Command extension_command;
   views::FocusManager* focus_manager =
@@ -71,8 +64,9 @@ void ExtensionActionPlatformDelegateViews::RegisterCommand() {
 
 void ExtensionActionPlatformDelegateViews::UnregisterCommand() {
   // If we've already unregistered, do nothing.
-  if (!action_keybinding_)
+  if (!action_keybinding_) {
     return;
+  }
 
   views::FocusManager* focus_manager =
       GetDelegateViews()->GetFocusManagerForAccelerator();
@@ -98,11 +92,13 @@ void ExtensionActionPlatformDelegateViews::ShowPopup(
 void ExtensionActionPlatformDelegateViews::OnExtensionCommandAdded(
     const std::string& extension_id,
     const extensions::Command& command) {
-  if (extension_id != controller_->extension()->id())
+  if (extension_id != controller_->extension()->id()) {
     return;  // Not this action's extension.
+  }
 
-  if (!IsActionRelatedCommand(command.command_name()))
+  if (!extensions::Command::IsActionRelatedCommand(command.command_name())) {
     return;
+  }
 
   RegisterCommand();
 }
@@ -110,15 +106,18 @@ void ExtensionActionPlatformDelegateViews::OnExtensionCommandAdded(
 void ExtensionActionPlatformDelegateViews::OnExtensionCommandRemoved(
     const std::string& extension_id,
     const extensions::Command& command) {
-  if (extension_id != controller_->extension()->id())
+  if (extension_id != controller_->extension()->id()) {
     return;
+  }
 
-  if (!IsActionRelatedCommand(command.command_name()))
+  if (!extensions::Command::IsActionRelatedCommand(command.command_name())) {
     return;
+  }
 
   extensions::Command extension_command;
-  if (controller_->GetExtensionCommand(&extension_command))
+  if (controller_->GetExtensionCommand(&extension_command)) {
     return;  // Command has not been removed.
+  }
 
   UnregisterCommand();
 }

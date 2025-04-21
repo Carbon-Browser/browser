@@ -1,17 +1,22 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 
+#include "base/check_deref.h"
 #include "base/command_line.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/apps/platform_apps/app_browsertest_util.h"
-#include "chrome/browser/ash/app_mode/kiosk_app_manager.h"
+#include "chrome/browser/ash/app_mode/consumer_kiosk_test_helper.h"
+#include "chrome/browser/ash/app_mode/kiosk_chrome_app_manager.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/ash/ownership/fake_owner_settings_service.h"
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
 #include "chrome/browser/extensions/extension_apitest.h"
+#include "chrome/browser/ui/browser.h"
+#include "chromeos/components/kiosk/kiosk_test_utils.h"
 #include "components/account_id/account_id.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "content/public/test/browser_test.h"
@@ -28,9 +33,7 @@ namespace {
 // This class contains chrome.bluetoothLowEnergy API tests.
 class BluetoothLowEnergyApiTestChromeOs : public PlatformAppBrowserTest {
  public:
-  BluetoothLowEnergyApiTestChromeOs()
-      : fake_user_manager_(nullptr), settings_helper_(false) {}
-  ~BluetoothLowEnergyApiTestChromeOs() override {}
+  ~BluetoothLowEnergyApiTestChromeOs() override = default;
 
   void SetUpOnMainThread() override {
     PlatformAppBrowserTest::SetUpOnMainThread();
@@ -43,35 +46,33 @@ class BluetoothLowEnergyApiTestChromeOs : public PlatformAppBrowserTest {
     owner_settings_service_.reset();
     settings_helper_.RestoreRealDeviceSettingsProvider();
     PlatformAppBrowserTest::TearDownOnMainThread();
-    user_manager_enabler_.reset();
-    fake_user_manager_ = nullptr;
+    user_manager_.Reset();
   }
 
  protected:
   void EnterKioskSession() {
-    fake_user_manager_ = new ash::FakeChromeUserManager();
-    user_manager_enabler_ = std::make_unique<user_manager::ScopedUserManager>(
-        base::WrapUnique(fake_user_manager_));
-
-    const AccountId kiosk_account_id(
-        AccountId::FromUserEmail("kiosk@foobar.com"));
-    fake_user_manager_->AddKioskAppUser(kiosk_account_id);
-    fake_user_manager_->LoginUser(kiosk_account_id);
+    user_manager_.Reset(std::make_unique<ash::FakeChromeUserManager>());
+    chromeos::SetUpFakeKioskSession();
   }
 
   void SetAutoLaunchApp() {
-    manager()->AddApp(kTestingAppId, owner_settings_service_.get());
-    manager()->SetAutoLaunchApp(kTestingAppId, owner_settings_service_.get());
+    AddConsumerKioskChromeAppForTesting(
+        CHECK_DEREF(owner_settings_service_.get()), kTestingAppId);
+    SetConsumerKioskAutoLaunchChromeAppForTesting(
+        CHECK_DEREF(manager()), CHECK_DEREF(owner_settings_service_.get()),
+        kTestingAppId);
     manager()->SetAppWasAutoLaunchedWithZeroDelay(kTestingAppId);
   }
 
-  ash::KioskAppManager* manager() const { return ash::KioskAppManager::Get(); }
+  ash::KioskChromeAppManager* manager() const {
+    return ash::KioskChromeAppManager::Get();
+  }
 
-  ash::FakeChromeUserManager* fake_user_manager_;
-  std::unique_ptr<user_manager::ScopedUserManager> user_manager_enabler_;
+  user_manager::TypedScopedUserManager<ash::FakeChromeUserManager>
+      user_manager_;
 
-  ash::ScopedCrosSettingsTestHelper settings_helper_;
-  std::unique_ptr<chromeos::FakeOwnerSettingsService> owner_settings_service_;
+  ash::ScopedCrosSettingsTestHelper settings_helper_{false};
+  std::unique_ptr<ash::FakeOwnerSettingsService> owner_settings_service_;
 };
 
 IN_PROC_BROWSER_TEST_F(BluetoothLowEnergyApiTestChromeOs,

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,13 +11,11 @@
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/prefs/session_startup_pref.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
 #include "chrome/browser/ui/tabs/pinned_tab_codec.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/common/url_constants.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/prefs/pref_service.h"
 #include "components/search_engines/search_engine_utils.h"
 #include "url/gurl.h"
@@ -27,16 +25,15 @@ PrefMetricsService::PrefMetricsService(Profile* profile)
   RecordLaunchPrefs();
 }
 
-PrefMetricsService::~PrefMetricsService() {
-}
+PrefMetricsService::~PrefMetricsService() = default;
 
 // static
 void PrefMetricsService::RecordHomePageLaunchMetrics(bool show_home_button,
                                                      bool homepage_is_ntp,
                                                      const GURL& homepage_url) {
-  UMA_HISTOGRAM_BOOLEAN("Settings.ShowHomeButton", show_home_button);
+  UMA_HISTOGRAM_BOOLEAN("Settings.ShowHomeButton2", show_home_button);
   if (show_home_button) {
-    UMA_HISTOGRAM_BOOLEAN("Settings.GivenShowHomeButton_HomePageIsNewTabPage",
+    UMA_HISTOGRAM_BOOLEAN("Settings.GivenShowHomeButton_HomePageIsNewTabPage2",
                           homepage_is_ntp);
   }
 
@@ -48,7 +45,7 @@ void PrefMetricsService::RecordHomePageLaunchMetrics(bool show_home_button,
   // pages, e.g. plus.google.com).
   if (!homepage_is_ntp) {
     if (homepage_url.is_valid()) {
-      UMA_HISTOGRAM_ENUMERATION("Settings.HomePageEngineType",
+      UMA_HISTOGRAM_ENUMERATION("Settings.HomePageEngineType2",
                                 SearchEngineUtils::GetEngineType(homepage_url),
                                 SEARCH_ENGINE_MAX);
     }
@@ -72,20 +69,20 @@ void PrefMetricsService::RecordLaunchPrefs() {
 #if !BUILDFLAG(IS_ANDROID)
   int restore_on_startup = prefs_->GetInteger(prefs::kRestoreOnStartup);
   UMA_HISTOGRAM_ENUMERATION(
-      "Settings.StartupPageLoadSettings", restore_on_startup,
+      "Settings.StartupPageLoadSettings2", restore_on_startup,
       static_cast<int>(SessionStartupPref::kPrefValueMax));
   if (SessionStartupPref(
           SessionStartupPref::PrefValueToType(restore_on_startup))
           .ShouldOpenUrls()) {
     const base::Value::List& url_list =
-        prefs_->GetValueList(prefs::kURLsToRestoreOnStartup);
+        prefs_->GetList(prefs::kURLsToRestoreOnStartup);
     // Similarly, check startup pages for known search engine TLD+1s.
     for (const base::Value& i : url_list) {
       const std::string* url_text = i.GetIfString();
       if (url_text) {
         GURL start_url(*url_text);
         if (start_url.is_valid()) {
-          UMA_HISTOGRAM_ENUMERATION("Settings.StartupPageEngineTypes",
+          UMA_HISTOGRAM_ENUMERATION("Settings.StartupPageEngineTypes2",
                                     SearchEngineUtils::GetEngineType(start_url),
                                     SEARCH_ENGINE_MAX);
         }
@@ -108,25 +105,29 @@ PrefMetricsService* PrefMetricsService::Factory::GetForProfile(
 }
 
 PrefMetricsService::Factory::Factory()
-    : BrowserContextKeyedServiceFactory(
-        "PrefMetricsService",
-        BrowserContextDependencyManager::GetInstance()) {
+    : ProfileKeyedServiceFactory(
+          "PrefMetricsService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // Not needed for any other profile types because these settings
+              // is only configurable by the profile owner for regular
+              // browser profiles.
+              .WithGuest(ProfileSelection::kNone)
+              .WithSystem(ProfileSelection::kNone)
+              .WithAshInternals(ProfileSelection::kNone)
+              .Build()) {
   DependsOn(TemplateURLServiceFactory::GetInstance());
 }
 
-PrefMetricsService::Factory::~Factory() {
-}
+PrefMetricsService::Factory::~Factory() = default;
 
-KeyedService* PrefMetricsService::Factory::BuildServiceInstanceFor(
-    content::BrowserContext* profile) const {
-  return new PrefMetricsService(static_cast<Profile*>(profile));
+std::unique_ptr<KeyedService>
+PrefMetricsService::Factory::BuildServiceInstanceForBrowserContext(
+    content::BrowserContext* context) const {
+  Profile* profile = Profile::FromBrowserContext(context);
+  return std::make_unique<PrefMetricsService>(profile);
 }
 
 bool PrefMetricsService::Factory::ServiceIsCreatedWithBrowserContext() const {
   return true;
-}
-
-content::BrowserContext* PrefMetricsService::Factory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextRedirectedInIncognito(context);
 }

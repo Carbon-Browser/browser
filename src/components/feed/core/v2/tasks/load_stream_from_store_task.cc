@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,7 +38,7 @@ LoadStreamFromStoreTask::LoadStreamFromStoreTask(
     bool is_web_feed_subscriber,
     base::OnceCallback<void(Result)> callback)
     : load_type_(load_type),
-      feed_stream_(*feed_stream),
+      feed_stream_(feed_stream),
       stream_type_(stream_type),
       store_(store),
       missed_last_refresh_(missed_last_refresh),
@@ -70,8 +70,8 @@ void LoadStreamFromStoreTask::LoadStreamDone(
   }
   if (!ignore_account_) {
     if (result.stream_data.signed_in()) {
-      const AccountInfo& account_info = feed_stream_.GetAccountInfo();
-      if (result.stream_data.gaia() != account_info.gaia ||
+      const AccountInfo& account_info = feed_stream_->GetAccountInfo();
+      if (result.stream_data.gaia() != account_info.gaia.ToString() ||
           result.stream_data.email() != account_info.email) {
         Complete(LoadStreamStatus::kDataInStoreIsForAnotherUser,
                  feedwire::DiscoverCardReadCacheResult::FAILED);
@@ -85,7 +85,7 @@ void LoadStreamFromStoreTask::LoadStreamDone(
     content_age_ =
         base::Time::Now() - feedstore::GetLastAddedTime(result.stream_data);
 
-    const feedstore::Metadata& metadata = feed_stream_.GetMetadata();
+    const feedstore::Metadata& metadata = feed_stream_->GetMetadata();
 
     if (ContentInvalidFromAge(metadata, result.stream_type, content_age_,
                               is_web_feed_subscriber_)) {

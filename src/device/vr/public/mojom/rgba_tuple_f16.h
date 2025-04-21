@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,8 @@
 
 #include <stddef.h>
 #include <stdint.h>
+
+#include <array>
 
 namespace device {
 
@@ -29,7 +31,7 @@ struct RgbaTupleF16 {
   uint16_t alpha() const { return components[3]; }
   void set_alpha(uint16_t alpha) { components[3] = alpha; }
 
-  uint16_t components[kNumComponents];
+  std::array<Component, kNumComponents> components;
 };
 
 static_assert(sizeof(RgbaTupleF16) == sizeof(RgbaTupleF16::Component) *

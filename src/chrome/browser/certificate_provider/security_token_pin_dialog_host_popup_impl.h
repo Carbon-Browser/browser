@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/certificate_provider/security_token_pin_dialog_host.h"
@@ -39,7 +39,7 @@ class SecurityTokenPinDialogHostPopupImpl final
       bool enable_user_input,
       security_token_pin::ErrorLabel error_label,
       int attempts_left,
-      const absl::optional<AccountId>& authenticating_user_account_id,
+      const std::optional<AccountId>& authenticating_user_account_id,
       SecurityTokenPinEnteredCallback pin_entered_callback,
       SecurityTokenPinDialogClosedCallback pin_dialog_closed_callback) override;
   void CloseSecurityTokenPinDialog() override;

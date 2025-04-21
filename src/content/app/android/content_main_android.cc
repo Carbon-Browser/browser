@@ -1,17 +1,23 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "content/app/android/content_main_android.h"
+
 #include <memory>
 
+#include "base/android/binder.h"
+#include "base/android/binder_box.h"
 #include "base/lazy_instance.h"
 #include "base/no_destructor.h"
 #include "base/trace_event/trace_event.h"
-#include "content/public/android/content_jni_headers/ContentMain_jni.h"
 #include "content/public/app/content_main.h"
 #include "content/public/app/content_main_delegate.h"
 #include "content/public/app/content_main_runner.h"
 #include "content/public/common/content_client.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "content/public/android/content_app_jni/ContentMain_jni.h"
 
 using base::LazyInstance;
 using base::android::JavaParamRef;
@@ -40,6 +46,14 @@ class ContentClientCreator {
   }
 };
 
+static void JNI_ContentMain_SetBindersFromParent(
+    JNIEnv* env,
+    const base::android::JavaParamRef<jobject>& binder_box) {
+  base::android::SetBindersFromParent(
+      base::android::UnpackBinderBox(env, binder_box)
+          .value_or(std::vector<base::android::BinderRef>()));
+}
+
 // TODO(qinmin/hanxi): split this function into 2 separate methods: One to
 // start the minimal browser and one to start the remainder of the browser
 // process. The first method should always be called upon browser start, and
@@ -60,7 +74,7 @@ void SetContentMainDelegate(ContentMainDelegate* delegate) {
     ContentClientCreator::Create(delegate);
 }
 
-ContentMainDelegate* GetContentMainDelegate() {
+ContentMainDelegate* GetContentMainDelegateForTesting() {
   DCHECK(g_content_main_delegate.Get().get());
   return g_content_main_delegate.Get().get();
 }

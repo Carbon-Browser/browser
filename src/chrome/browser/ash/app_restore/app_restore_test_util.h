@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,6 +30,14 @@ std::string GetTestApp2Id(const std::string& package_name);
 std::vector<arc::mojom::AppInfoPtr> GetTestAppsList(
     const std::string& package_name,
     bool multi_app);
+
+// We create a class so we can friend and access certain private members.
+class AppLaunchInfoSaveWaiter {
+ public:
+  // Instantly saves app restore data, bypassing the normal 2.5s timeout. If
+  // `allow_save` is true, allows writing to disk, if it wasn't already.
+  static void Wait(bool allow_save = true);
+};
 
 }  // namespace ash
 

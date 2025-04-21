@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,6 @@ content::WebContents* GetActiveWebContents(PlatformBrowserTest* browser_test) {
       return model->GetActiveWebContents();
   }
   NOTREACHED() << "No active TabModel??";
-  return nullptr;
 #else
   return browser_test->browser()->tab_strip_model()->GetActiveWebContents();
 #endif
@@ -36,10 +35,13 @@ Profile* GetProfile(PlatformBrowserTest* browser_test) {
       return model->GetProfile();
   }
   NOTREACHED() << "No active TabModel??";
-  return nullptr;
 #else
   return browser_test->browser()->profile();
 #endif
+}
+
+base::FilePath GetChromeTestDataDir() {
+  return base::FilePath(FILE_PATH_LITERAL("chrome/test/data"));
 }
 
 }  // namespace chrome_test_utils

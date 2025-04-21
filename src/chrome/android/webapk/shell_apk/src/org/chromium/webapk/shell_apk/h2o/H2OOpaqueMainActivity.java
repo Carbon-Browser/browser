@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,8 +31,8 @@ public class H2OOpaqueMainActivity extends Activity {
             // H2OOpaqueMainActivity is disabled by default for old-style WebAPKs.
             // R.bool.opaque_main_activity_enabled_default is inaccurate for old-style WebAPKs.
             return isNewStyleWebApk
-                    && context.getResources().getBoolean(
-                            R.bool.opaque_main_activity_enabled_default);
+                    && context.getResources()
+                            .getBoolean(R.bool.opaque_main_activity_enabled_default);
         }
         return enabledSetting == PackageManager.COMPONENT_ENABLED_STATE_ENABLED;
     }
@@ -43,7 +43,11 @@ public class H2OOpaqueMainActivity extends Activity {
         super.onCreate(savedInstanceState);
         Context appContext = getApplicationContext();
         overridePendingTransition(0, 0);
-        H2OLauncher.copyIntentExtrasAndLaunch(appContext, getIntent(), null, launchTimeMs,
+        H2OLauncher.copyIntentExtrasAndLaunch(
+                appContext,
+                getIntent(),
+                null,
+                launchTimeMs,
                 new ComponentName(appContext, SplashActivity.class));
         finish();
     }

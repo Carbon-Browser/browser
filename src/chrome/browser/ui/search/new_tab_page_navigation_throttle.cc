@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,12 +46,14 @@ content::NavigationThrottle::ThrottleCheckResult
 NewTabPageNavigationThrottle::WillProcessResponse() {
   const net::HttpResponseHeaders* headers =
       navigation_handle()->GetResponseHeaders();
-  if (!headers)
+  if (!headers) {
     return content::NavigationThrottle::PROCEED;
+  }
 
   int response_code = headers->response_code();
-  if (response_code < 400 && response_code != net::HTTP_NO_CONTENT)
+  if (response_code < 400 && response_code != net::HTTP_NO_CONTENT) {
     return content::NavigationThrottle::PROCEED;
+  }
 
   return OpenLocalNewTabPage();
 }
@@ -67,6 +69,7 @@ NewTabPageNavigationThrottle::OpenLocalNewTabPage() {
       content::OpenURLParams::FromNavigationHandle(navigation_handle());
   params.url = GURL(chrome::kChromeUINewTabPageThirdPartyURL);
   params.is_renderer_initiated = false;
-  navigation_handle()->GetWebContents()->OpenURL(std::move(params));
+  navigation_handle()->GetWebContents()->OpenURL(
+      std::move(params), /*navigation_handle_callback=*/{});
   return content::NavigationThrottle::CANCEL_AND_IGNORE;
 }

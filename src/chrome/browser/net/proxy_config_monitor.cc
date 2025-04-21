@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -85,9 +85,11 @@ void ProxyConfigMonitor::AddToNetworkContextParams(
       proxy_config_client.InitWithNewPipeAndPassReceiver();
   proxy_config_client_set_.Add(std::move(proxy_config_client));
 
-  poller_receiver_set_.Add(this,
-                           network_context_params->proxy_config_poller_client
-                               .InitWithNewPipeAndPassReceiver());
+  if (proxy_config_service_->UsesPolling()) {
+    poller_receiver_set_.Add(this,
+                             network_context_params->proxy_config_poller_client
+                                 .InitWithNewPipeAndPassReceiver());
+  }
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   error_receiver_set_.Add(this, network_context_params->proxy_error_client
@@ -121,7 +123,6 @@ void ProxyConfigMonitor::OnProxyConfigChanged(
         break;
       case net::ProxyConfigService::CONFIG_PENDING:
         NOTREACHED();
-        break;
     }
   }
 }
@@ -135,8 +136,7 @@ void ProxyConfigMonitor::OnPACScriptError(int32_t line_number,
                                           const std::string& details) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   extensions::ProxyEventRouter::GetInstance()->OnPACScriptError(
-      g_browser_process->extension_event_router_forwarder(), profile_,
-      line_number, base::UTF8ToUTF16(details));
+      profile_, line_number, base::UTF8ToUTF16(details));
 }
 
 void ProxyConfigMonitor::OnRequestMaybeFailedDueToProxySettings(
@@ -151,8 +151,7 @@ void ProxyConfigMonitor::OnRequestMaybeFailedDueToProxySettings(
     return;
   }
 
-  extensions::ProxyEventRouter::GetInstance()->OnProxyError(
-      g_browser_process->extension_event_router_forwarder(), profile_,
-      net_error);
+  extensions::ProxyEventRouter::GetInstance()->OnProxyError(profile_,
+                                                            net_error);
 }
 #endif

@@ -1,9 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/animation/length_property_functions.h"
 
+#include "third_party/blink/renderer/core/animation/interpolable_length.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
 
 namespace blink {
@@ -48,6 +49,42 @@ Length::ValueRange LengthPropertyFunctions::GetValueRange(
 
 bool LengthPropertyFunctions::IsZoomedLength(const CSSProperty& property) {
   return property.PropertyID() != CSSPropertyID::kStrokeWidth;
+}
+
+bool LengthPropertyFunctions::CanAnimateKeyword(const CSSProperty& property,
+                                                CSSValueID value_id) {
+  bool is_max_size = false;
+  switch (CSSPropertyID property_id = property.PropertyID()) {
+    case CSSPropertyID::kMaxWidth:
+    case CSSPropertyID::kMaxHeight:
+      is_max_size = true;
+      [[fallthrough]];
+    case CSSPropertyID::kFlexBasis:
+    case CSSPropertyID::kWidth:
+    case CSSPropertyID::kHeight:
+    case CSSPropertyID::kMinWidth:
+    case CSSPropertyID::kMinHeight:
+      switch (value_id) {
+        case CSSValueID::kContent:
+          return property_id == CSSPropertyID::kFlexBasis;
+        case CSSValueID::kAuto:
+          return !is_max_size;
+        case CSSValueID::kMinContent:
+        case CSSValueID::kMaxContent:
+        case CSSValueID::kFitContent:
+        case CSSValueID::kStretch:
+          return true;
+        case CSSValueID::kWebkitMinContent:
+        case CSSValueID::kWebkitMaxContent:
+        case CSSValueID::kWebkitFitContent:
+        case CSSValueID::kWebkitFillAvailable:
+          return property_id != CSSPropertyID::kFlexBasis;
+        default:
+          return false;
+      }
+    default:
+      return false;
+  }
 }
 
 bool LengthPropertyFunctions::GetPixelsForKeyword(const CSSProperty& property,
@@ -117,7 +154,8 @@ bool LengthPropertyFunctions::GetInitialLength(
       return true;
     case CSSPropertyID::kColumnRuleWidth:
       result =
-          Length::Fixed(ComputedStyleInitialValues::InitialColumnRuleWidth());
+          Length::Fixed(ComputedStyleInitialValues::InitialColumnRuleWidth()
+                            .GetLegacyValue());
       return true;
 
     default:
@@ -127,312 +165,392 @@ bool LengthPropertyFunctions::GetInitialLength(
 
 bool LengthPropertyFunctions::GetLength(const CSSProperty& property,
                                         const ComputedStyle& style,
-                                        Length& result) {
+                                        Length& result_param) {
+  bool success = false;
+  Length result;
   switch (property.PropertyID()) {
     case CSSPropertyID::kBottom:
       result = style.Bottom();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kCx:
       result = style.Cx();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kCy:
       result = style.Cy();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kFlexBasis:
       result = style.FlexBasis();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kHeight:
       result = style.Height();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kLeft:
       result = style.Left();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kMarginBottom:
       result = style.MarginBottom();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kMarginLeft:
       result = style.MarginLeft();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kMarginRight:
       result = style.MarginRight();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kMarginTop:
       result = style.MarginTop();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kMaxHeight:
       result = style.MaxHeight();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kMaxWidth:
       result = style.MaxWidth();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kMinHeight:
       result = style.MinHeight();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kMinWidth:
       result = style.MinWidth();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kOffsetDistance:
       result = style.OffsetDistance();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kPaddingBottom:
       result = style.PaddingBottom();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kPaddingLeft:
       result = style.PaddingLeft();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kPaddingRight:
       result = style.PaddingRight();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kPaddingTop:
       result = style.PaddingTop();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kR:
       result = style.R();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kRight:
       result = style.Right();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kRx:
       result = style.Rx();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kRy:
       result = style.Ry();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kShapeMargin:
       result = style.ShapeMargin();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kStrokeDashoffset:
       result = style.StrokeDashOffset();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kTextIndent:
       result = style.TextIndent();
-      return true;
+      success = true;
+      break;
+    case CSSPropertyID::kTextUnderlineOffset:
+      result = style.TextUnderlineOffset();
+      success = true;
+      break;
     case CSSPropertyID::kTop:
       result = style.Top();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kWebkitPerspectiveOriginX:
-      result = style.PerspectiveOriginX();
-      return true;
+      result = style.PerspectiveOrigin().X();
+      success = true;
+      break;
     case CSSPropertyID::kWebkitPerspectiveOriginY:
-      result = style.PerspectiveOriginY();
-      return true;
+      result = style.PerspectiveOrigin().Y();
+      success = true;
+      break;
     case CSSPropertyID::kWebkitTransformOriginX:
-      result = style.TransformOriginX();
-      return true;
+      result = style.GetTransformOrigin().X();
+      success = true;
+      break;
     case CSSPropertyID::kWebkitTransformOriginY:
-      result = style.TransformOriginY();
-      return true;
+      result = style.GetTransformOrigin().Y();
+      success = true;
+      break;
     case CSSPropertyID::kWidth:
       result = style.Width();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kX:
       result = style.X();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kY:
       result = style.Y();
-      return true;
+      success = true;
+      break;
 
     case CSSPropertyID::kBorderBottomWidth:
       result = Length::Fixed(style.BorderBottomWidth());
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kBorderLeftWidth:
       result = Length::Fixed(style.BorderLeftWidth());
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kBorderRightWidth:
       result = Length::Fixed(style.BorderRightWidth());
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kBorderTopWidth:
       result = Length::Fixed(style.BorderTopWidth());
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kLetterSpacing:
       result = Length::Fixed(style.LetterSpacing());
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kOutlineOffset:
       result = Length::Fixed(style.OutlineOffset());
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kOutlineWidth:
       result = Length::Fixed(style.OutlineWidth());
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kWebkitBorderHorizontalSpacing:
       result = Length::Fixed(style.HorizontalBorderSpacing());
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kWebkitBorderVerticalSpacing:
       result = Length::Fixed(style.VerticalBorderSpacing());
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kRowGap:
-      if (!style.RowGap())
-        return false;
-      result = *style.RowGap();
-      return true;
+      if (style.RowGap()) {
+        result = *style.RowGap();
+        success = true;
+      }
+      break;
     case CSSPropertyID::kColumnGap:
-      if (!style.ColumnGap())
-        return false;
-      result = *style.ColumnGap();
-      return true;
+      if (style.ColumnGap()) {
+        result = *style.ColumnGap();
+        success = true;
+      }
+      break;
     case CSSPropertyID::kColumnRuleWidth:
-      result = Length::Fixed(style.ColumnRuleWidth());
-      return true;
+      result = Length::Fixed(style.ColumnRuleWidth().GetLegacyValue());
+      success = true;
+      break;
     case CSSPropertyID::kWebkitTransformOriginZ:
-      result = Length::Fixed(style.TransformOriginZ());
-      return true;
+      result = Length::Fixed(style.GetTransformOrigin().Z());
+      success = true;
+      break;
     case CSSPropertyID::kWordSpacing:
       result = Length::Fixed(style.WordSpacing());
-      return true;
+      success = true;
+      break;
 
     case CSSPropertyID::kBaselineShift:
-      if (style.BaselineShiftType() != EBaselineShiftType::kLength)
-        return false;
-      result = style.BaselineShift();
-      return true;
-    case CSSPropertyID::kLineHeight:
+      if (style.BaselineShiftType() == EBaselineShiftType::kLength) {
+        result = style.BaselineShift();
+        success = true;
+      }
+      break;
+    case CSSPropertyID::kLineHeight: {
+      const Length& line_height = style.SpecifiedLineHeight();
       // Percent Lengths are used to represent numbers on line-height.
-      if (style.SpecifiedLineHeight().IsPercentOrCalc())
-        return false;
-      result = style.SpecifiedLineHeight();
-      return true;
+      if (!line_height.HasPercent()) {
+        result = line_height;
+        success = true;
+      }
+      break;
+    }
     case CSSPropertyID::kTabSize:
-      if (style.GetTabSize().IsSpaces())
-        return false;
-      result = Length::Fixed(style.GetTabSize().float_value_);
-      return true;
+      if (!style.GetTabSize().IsSpaces()) {
+        result = Length::Fixed(style.GetTabSize().float_value_);
+        success = true;
+      }
+      break;
     case CSSPropertyID::kPerspective:
-      if (!style.HasPerspective())
-        return false;
-      result = Length::Fixed(style.Perspective());
-      return true;
+      if (style.HasPerspective()) {
+        result = Length::Fixed(style.Perspective());
+        success = true;
+      }
+      break;
     case CSSPropertyID::kStrokeWidth:
       DCHECK(!IsZoomedLength(CSSProperty::Get(CSSPropertyID::kStrokeWidth)));
       result = style.StrokeWidth().length();
-      return true;
+      success = true;
+      break;
     case CSSPropertyID::kVerticalAlign:
-      if (style.VerticalAlign() != EVerticalAlign::kLength)
-        return false;
-      result = style.GetVerticalAlignLength();
-      return true;
+      if (style.VerticalAlign() == EVerticalAlign::kLength) {
+        result = style.GetVerticalAlignLength();
+        success = true;
+      }
+      break;
     case CSSPropertyID::kColumnWidth:
-      if (style.HasAutoColumnWidth())
-        return false;
-      result = Length::Fixed(style.ColumnWidth());
-      return true;
+      if (!style.HasAutoColumnWidth()) {
+        result = Length::Fixed(style.ColumnWidth());
+        success = true;
+      }
+      break;
     default:
-      return false;
+      break;
   }
+
+  // Don't report a length that will convert to a keyword if the property
+  // doesn't support animation of that keyword.
+  if (success) {
+    CSSValueID id =
+        InterpolableLength::LengthTypeToCSSValueID(result.GetType());
+    if (id != CSSValueID::kInvalid && !CanAnimateKeyword(property, id)) {
+      success = false;
+    }
+  }
+
+  if (success) {
+    result_param = std::move(result);
+  }
+
+  return success;
 }
 
 bool LengthPropertyFunctions::SetLength(const CSSProperty& property,
-                                        ComputedStyle& style,
+                                        ComputedStyleBuilder& builder,
                                         const Length& value) {
   switch (property.PropertyID()) {
     // Setters that take a Length value.
     case CSSPropertyID::kBaselineShift:
-      style.SetBaselineShiftType(EBaselineShiftType::kLength);
-      style.SetBaselineShift(value);
+      builder.SetBaselineShiftType(EBaselineShiftType::kLength);
+      builder.SetBaselineShift(value);
       return true;
     case CSSPropertyID::kBottom:
-      style.SetBottom(value);
+      builder.SetBottom(value);
       return true;
     case CSSPropertyID::kCx:
-      style.SetCx(value);
+      builder.SetCx(value);
       return true;
     case CSSPropertyID::kCy:
-      style.SetCy(value);
+      builder.SetCy(value);
       return true;
     case CSSPropertyID::kFlexBasis:
-      style.SetFlexBasis(value);
+      builder.SetFlexBasis(value);
       return true;
     case CSSPropertyID::kHeight:
-      style.SetHeight(value);
+      builder.SetHeight(value);
       return true;
     case CSSPropertyID::kLeft:
-      style.SetLeft(value);
+      builder.SetLeft(value);
       return true;
     case CSSPropertyID::kMarginBottom:
-      style.SetMarginBottom(value);
+      builder.SetMarginBottom(value);
       return true;
     case CSSPropertyID::kMarginLeft:
-      style.SetMarginLeft(value);
+      builder.SetMarginLeft(value);
       return true;
     case CSSPropertyID::kMarginRight:
-      style.SetMarginRight(value);
+      builder.SetMarginRight(value);
       return true;
     case CSSPropertyID::kMarginTop:
-      style.SetMarginTop(value);
+      builder.SetMarginTop(value);
       return true;
     case CSSPropertyID::kMaxHeight:
-      style.SetMaxHeight(value);
+      builder.SetMaxHeight(value);
       return true;
     case CSSPropertyID::kMaxWidth:
-      style.SetMaxWidth(value);
+      builder.SetMaxWidth(value);
       return true;
     case CSSPropertyID::kMinHeight:
-      style.SetMinHeight(value);
+      builder.SetMinHeight(value);
       return true;
     case CSSPropertyID::kMinWidth:
-      style.SetMinWidth(value);
+      builder.SetMinWidth(value);
       return true;
     case CSSPropertyID::kOffsetDistance:
-      style.SetOffsetDistance(value);
+      builder.SetOffsetDistance(value);
       return true;
     case CSSPropertyID::kPaddingBottom:
-      style.SetPaddingBottom(value);
+      builder.SetPaddingBottom(value);
       return true;
     case CSSPropertyID::kPaddingLeft:
-      style.SetPaddingLeft(value);
+      builder.SetPaddingLeft(value);
       return true;
     case CSSPropertyID::kPaddingRight:
-      style.SetPaddingRight(value);
+      builder.SetPaddingRight(value);
       return true;
     case CSSPropertyID::kPaddingTop:
-      style.SetPaddingTop(value);
+      builder.SetPaddingTop(value);
       return true;
     case CSSPropertyID::kR:
-      style.SetR(value);
+      builder.SetR(value);
       return true;
     case CSSPropertyID::kRx:
-      style.SetRx(value);
+      builder.SetRx(value);
       return true;
     case CSSPropertyID::kRy:
-      style.SetRy(value);
+      builder.SetRy(value);
       return true;
     case CSSPropertyID::kRight:
-      style.SetRight(value);
+      builder.SetRight(value);
       return true;
     case CSSPropertyID::kShapeMargin:
-      style.SetShapeMargin(value);
+      builder.SetShapeMargin(value);
       return true;
     case CSSPropertyID::kStrokeDashoffset:
-      style.SetStrokeDashOffset(value);
+      builder.SetStrokeDashOffset(value);
       return true;
     case CSSPropertyID::kTop:
-      style.SetTop(value);
+      builder.SetTop(value);
       return true;
     case CSSPropertyID::kWidth:
-      style.SetWidth(value);
+      builder.SetWidth(value);
       return true;
     case CSSPropertyID::kWebkitPerspectiveOriginX:
-      style.SetPerspectiveOriginX(value);
+      builder.SetPerspectiveOriginX(value);
       return true;
     case CSSPropertyID::kWebkitPerspectiveOriginY:
-      style.SetPerspectiveOriginY(value);
+      builder.SetPerspectiveOriginY(value);
       return true;
     case CSSPropertyID::kWebkitTransformOriginX:
-      style.SetTransformOriginX(value);
+      builder.SetTransformOriginX(value);
       return true;
     case CSSPropertyID::kWebkitTransformOriginY:
-      style.SetTransformOriginY(value);
+      builder.SetTransformOriginY(value);
       return true;
     case CSSPropertyID::kX:
-      style.SetX(value);
+      builder.SetX(value);
       return true;
     case CSSPropertyID::kY:
-      style.SetY(value);
+      builder.SetY(value);
       return true;
 
     case CSSPropertyID::kLineHeight:
       // Percent Lengths are used to represent numbers on line-height.
-      if (value.IsPercentOrCalc())
+      if (value.HasPercent()) {
         return false;
-      style.SetLineHeight(value);
+      }
+      builder.SetLineHeight(value);
       return true;
 
     // TODO(alancutter): Support setters that take a numeric value (need to

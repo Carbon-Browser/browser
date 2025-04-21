@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@ import {I18nString} from '../../i18n_string.js';
 import * as loadTimeData from '../../models/load_time_data.js';
 import {ChromeHelper} from '../../mojo/chrome_helper.js';
 import * as nav from '../../nav.js';
+import * as scannerChip from '../../scanner_chip.js';
 import * as state from '../../state.js';
 import {Mode, ViewName} from '../../type.js';
 import * as util from '../../util.js';
@@ -26,7 +27,7 @@ import {
   toAspectRatioAriaLabel,
   toAspectRatioLabel,
   toPhotoResolutionOptionLabel,
-  toVideoResoloutionOptionLabel,
+  toVideoResolutionOptionLabel,
 } from './util.js';
 import {VideoResolutionSettings} from './video_resolution.js';
 
@@ -107,7 +108,7 @@ export class PrimarySettings extends BaseSettings {
       this.videoResolutionSettings,
     ];
 
-    cameraManager.registerCameraUI({
+    cameraManager.registerCameraUi({
       onCameraUnavailable: () => {
         for (const setting of cameraSettings) {
           setting.disabled = true;
@@ -116,12 +117,6 @@ export class PrimarySettings extends BaseSettings {
       onCameraAvailable: () => {
         for (const setting of cameraSettings) {
           setting.disabled = false;
-        }
-      },
-      onUpdateCapability: (cameraInfo) => {
-        const devices = cameraInfo.camera3DevicesInfo;
-        if (devices === null) {
-          return;
         }
       },
     });
@@ -153,7 +148,13 @@ export class PrimarySettings extends BaseSettings {
       }
       const span =
           dom.getFrom(this.videoResolutionSettings, 'span', HTMLSpanElement);
-      span.textContent = toVideoResoloutionOptionLabel(option.resolutionLevel);
+      span.textContent = toVideoResolutionOptionLabel(option.resolutionLevel);
+    });
+
+    state.addObserver(state.State.ENABLE_PREVIEW_OCR, (enabled) => {
+      if (!enabled) {
+        scannerChip.dismiss();
+      }
     });
   }
 
@@ -210,11 +211,6 @@ export class PrimarySettings extends BaseSettings {
     util.setupI18nElements(assertInstanceof(this.header, HTMLElement));
   }
 
-  /**
-   * Opens sub-settings.
-   *
-   * @param name Name of settings view.
-   */
   private async openSubSettings(name: ViewName): Promise<void> {
     // Dismiss primary-settings if sub-settings was dismissed by background
     // click.

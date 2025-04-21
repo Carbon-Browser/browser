@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,12 +16,6 @@ enum class ShareEntryPoint {
   kShareSheet,
   kTabMenu,
 };
-
-// Records whether the user clicked to send a tab to a device.
-void RecordDeviceClicked(ShareEntryPoint entry_point);
-
-// Records when a tab is sent to a device.
-void RecordNotificationSent();
 
 // Records when a received STTS notification is shown.
 void RecordNotificationShown();

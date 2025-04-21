@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,11 @@
 #include <memory>
 #include <utility>
 
+#include "ui/base/metadata/metadata_impl_macros.h"
 
 AuthenticatorClientPinEntrySheetView::AuthenticatorClientPinEntrySheetView(
     std::unique_ptr<AuthenticatorClientPinEntrySheetModel> sheet_model)
-    : AuthenticatorRequestSheetView(std::move(sheet_model)) {
-}
+    : AuthenticatorRequestSheetView(std::move(sheet_model)) {}
 
 AuthenticatorClientPinEntrySheetView::~AuthenticatorClientPinEntrySheetView() =
     default;
@@ -41,3 +41,6 @@ void AuthenticatorClientPinEntrySheetView::OnConfirmationChanged(
     std::u16string pincode) {
   pin_entry_sheet_model()->SetPinConfirmation(std::move(pincode));
 }
+
+BEGIN_METADATA(AuthenticatorClientPinEntrySheetView)
+END_METADATA

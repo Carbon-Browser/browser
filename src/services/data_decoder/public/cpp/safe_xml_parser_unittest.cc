@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/bind.h"
 #include "base/values.h"
 #include "build/build_config.h"
@@ -24,8 +24,8 @@ std::unique_ptr<base::Value> ParseXml(const std::string& xml) {
 
   parser.Parse(xml, mojom::XmlParser::WhitespaceBehavior::kIgnore,
                base::BindLambdaForTesting(
-                   [&root_node](absl::optional<base::Value> parsed_root_node,
-                                const absl::optional<std::string>& error) {
+                   [&root_node](std::optional<base::Value> parsed_root_node,
+                                const std::optional<std::string>& error) {
                      root_node = parsed_root_node
                                      ? base::Value::ToUniquePtrValue(
                                            std::move(parsed_root_node.value()))

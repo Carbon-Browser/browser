@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,9 @@ namespace web {
 class NavigationItem;
 }
 
-@class CRWNavigationItemStorage;
+namespace web::proto {
+class NavigationItemStorage;
+}
 
 namespace sessions {
 class SerializedNavigationEntry;
@@ -27,10 +29,10 @@ class IOSSerializedNavigationBuilder {
       int index, const web::NavigationItem& item);
 
   // Construct a SerializedNavigationEntry for a particular index from the given
-  // CRWNavigationItemStorage.
+  // web::proto::NavigationItemStorage.
   static SerializedNavigationEntry FromNavigationStorageItem(
       int index,
-      CRWNavigationItemStorage* item);
+      const web::proto::NavigationItemStorage& item);
 
   // Convert the given SerializedNavigationEntry into a NavigationItem. The
   // NavigationItem will have a transition type of

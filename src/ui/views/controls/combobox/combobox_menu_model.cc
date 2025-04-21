@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,12 +15,8 @@ bool ComboboxMenuModel::UseCheckmarks() const {
 }
 
 // Overridden from MenuModel:
-bool ComboboxMenuModel::HasIcons() const {
-  for (size_t i = 0; i < GetItemCount(); ++i) {
-    if (!GetIconAt(i).IsEmpty())
-      return true;
-  }
-  return false;
+base::WeakPtr<ui::MenuModel> ComboboxMenuModel::AsWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
 }
 
 size_t ComboboxMenuModel::GetItemCount() const {
@@ -28,8 +24,12 @@ size_t ComboboxMenuModel::GetItemCount() const {
 }
 
 ui::MenuModel::ItemType ComboboxMenuModel::GetTypeAt(size_t index) const {
-  if (model_->IsItemSeparatorAt(index))
+  if (model_->IsItemSeparatorAt(index)) {
     return TYPE_SEPARATOR;
+  }
+  if (model_->IsItemTitleAt(index)) {
+    return TYPE_TITLE;
+  }
   return UseCheckmarks() ? TYPE_CHECK : TYPE_COMMAND;
 }
 
@@ -47,7 +47,7 @@ int ComboboxMenuModel::GetCommandIdAt(size_t index) const {
 std::u16string ComboboxMenuModel::GetLabelAt(size_t index) const {
   // Inserting the Unicode formatting characters if necessary so that the
   // text is displayed correctly in right-to-left UIs.
-  std::u16string text = model_->GetDropDownTextAt(index);
+  std::u16string text = model_->GetItemAt(index);
   base::i18n::AdjustStringForLocaleDirection(&text);
   return text;
 }
@@ -102,4 +102,19 @@ void ComboboxMenuModel::ActivatedAt(size_t index, int event_flags) {
 
 ui::MenuModel* ComboboxMenuModel::GetSubmenuModelAt(size_t index) const {
   return nullptr;
+}
+
+std::optional<ui::ColorId> ComboboxMenuModel::GetForegroundColorId(
+    size_t index) {
+  return model_->GetDropdownForegroundColorIdAt(index);
+}
+
+std::optional<ui::ColorId> ComboboxMenuModel::GetSubmenuBackgroundColorId(
+    size_t index) {
+  return model_->GetDropdownBackgroundColorIdAt(index);
+}
+
+std::optional<ui::ColorId> ComboboxMenuModel::GetSelectedBackgroundColorId(
+    size_t index) {
+  return model_->GetDropdownSelectedBackgroundColorIdAt(index);
 }

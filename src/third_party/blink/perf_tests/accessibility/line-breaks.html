@@ -12,7 +12,6 @@ var startTime;
 function randomString() {
     return '' + Math.floor(1000000 * Math.random());
 }
-
 function runTest() {
     if (startTime) {
         PerfTestRunner.measureValueAsync(PerfTestRunner.now() - startTime);
@@ -22,18 +21,20 @@ function runTest() {
         PerfTestRunner.addRunTestStartMarker();
         startTime = PerfTestRunner.now();
 
-        // Fill the paragraph with 1000 lines of text with <br> elements
+        // Fill the paragraph with 200 lines of text with <br> elements
         // in-between.
-        var testElement = document.getElementById('testElement');
-        var html = '';
-        for (var i = 0; i < 333; i++) {
-            html += randomString() + ' ' + randomString() + '<br>';
-        }
-        testElement.innerHTML = html;
+        setTimeout(() => {
+            var testElement = document.getElementById('testElement');
+            var html = '';
+            for (var i = 0; i < 200; i++) {
+                html += randomString() + ' ' + randomString() + '<br>';
+            }
+            testElement.innerHTML = html;
+        }, 0);
 
         // Wait to allow the asynchronous accessibility code that's
         // covered by traceEventsToMeasure to have a chance to run.
-        setTimeout(runTest, 1500);
+        setTimeout(runTest, 2500);
     }
 }
 
@@ -49,7 +50,14 @@ PerfTestRunner.startMeasureValuesAsync({
     iterationCount: 6,
     tracingCategories: 'accessibility',
     traceEventsToMeasure: [
+        'TotalAccessibilityCleanLayoutLifecycleStages',
+        'ProcessDeferredUpdatesLifecycleStage',
+        'FinalizingTreeLifecycleStage',
+        'SerializeLifecycleStage',
         'RenderAccessibilityImpl::SendPendingAccessibilityEvents',
+        'BrowserAccessibilityManager::OnAccessibilityEvents',
+        'SerializeLocationChanges',
+        "BrowserAccessibilityManager::OnLocationChanges"
     ]
 });
 </script>

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "build/build_config.h"
 #include "components/viz/host/host_frame_sink_manager.h"
 #include "content/browser/browser_thread_impl.h"
@@ -55,14 +55,14 @@ void XrFrameSinkClientImpl::SurfaceDestroyed() {
   // Since this code can be run during destruction, it's theoretically possible,
   // though unlikely, that the FrameSinkManager no longer exists.
   if (frame_sink_manager)
-    frame_sink_manager->InvalidateFrameSinkId(root_frame_sink_id_);
+    frame_sink_manager->InvalidateFrameSinkId(root_frame_sink_id_, this);
 
   // Reset the initialized state and the root FrameSinkId to an invalid value.
   initialized_ = false;
   root_frame_sink_id_ = viz::FrameSinkId();
 }
 
-absl::optional<viz::SurfaceId> XrFrameSinkClientImpl::GetDOMSurface() {
+std::optional<viz::SurfaceId> XrFrameSinkClientImpl::GetDOMSurface() {
   base::AutoLock lock(dom_surface_lock_);
   return dom_surface_id_;
 }

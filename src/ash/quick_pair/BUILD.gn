@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -7,7 +7,7 @@ import("//build/config/chromeos/ui_mode.gni")
 assert(is_chromeos_ash,
        "Quick Pair protocols (e.g. Fast Pair) are ash-chrome only")
 
-source_set("quick_pair") {
+group("quick_pair") {
   deps = [
     "//ash/quick_pair/common",
     "//ash/quick_pair/companion_app",
@@ -18,10 +18,11 @@ source_set("quick_pair") {
     "//ash/quick_pair/repository",
     "//ash/quick_pair/scanning",
     "//ash/quick_pair/ui",
+    "//components/cross_device/logging:logging",
   ]
 }
 
-source_set("unit_tests") {
+group("unit_tests") {
   testonly = true
 
   deps = [

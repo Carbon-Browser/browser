@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/capture/video/win/pin_base_win.h"
 
@@ -11,7 +16,7 @@ namespace media {
 
 // Implement IEnumPins.
 class TypeEnumerator final : public IEnumMediaTypes,
-                             public base::RefCounted<TypeEnumerator> {
+                             public base::RefCountedThreadSafe<TypeEnumerator> {
  public:
   explicit TypeEnumerator(PinBase* pin) : pin_(pin), index_(0) {}
 
@@ -26,12 +31,12 @@ class TypeEnumerator final : public IEnumMediaTypes,
   }
 
   IFACEMETHODIMP_(ULONG) AddRef() override {
-    base::RefCounted<TypeEnumerator>::AddRef();
+    base::RefCountedThreadSafe<TypeEnumerator>::AddRef();
     return 1;
   }
 
   IFACEMETHODIMP_(ULONG) Release() override {
-    base::RefCounted<TypeEnumerator>::Release();
+    base::RefCountedThreadSafe<TypeEnumerator>::Release();
     return 1;
   }
 
@@ -96,7 +101,7 @@ class TypeEnumerator final : public IEnumMediaTypes,
   }
 
  private:
-  friend class base::RefCounted<TypeEnumerator>;
+  friend class base::RefCountedThreadSafe<TypeEnumerator>;
   ~TypeEnumerator() {}
 
   void FreeAllocatedMediaTypes(ULONG allocated, AM_MEDIA_TYPE** types) {
@@ -186,7 +191,6 @@ HRESULT PinBase::QueryDirection(PIN_DIRECTION* pin_dir) {
 
 HRESULT PinBase::QueryId(LPWSTR* id) {
   NOTREACHED();
-  return E_OUTOFMEMORY;
 }
 
 HRESULT PinBase::QueryAccept(const AM_MEDIA_TYPE* media_type) {
@@ -219,7 +223,6 @@ HRESULT PinBase::NewSegment(REFERENCE_TIME start,
                             REFERENCE_TIME stop,
                             double rate) {
   NOTREACHED();
-  return E_NOTIMPL;
 }
 
 // Inherited from IMemInputPin.
@@ -270,12 +273,12 @@ HRESULT PinBase::QueryInterface(REFIID id, void** object_ptr) {
 }
 
 ULONG PinBase::AddRef() {
-  base::RefCounted<PinBase>::AddRef();
+  base::RefCountedThreadSafe<PinBase>::AddRef();
   return 1;
 }
 
 ULONG PinBase::Release() {
-  base::RefCounted<PinBase>::Release();
+  base::RefCountedThreadSafe<PinBase>::Release();
   return 1;
 }
 

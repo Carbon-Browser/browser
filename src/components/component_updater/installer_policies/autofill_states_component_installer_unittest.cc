@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
-#include "components/autofill/core/browser/autofill_test_utils.h"
 #include "components/autofill/core/browser/geo/state_names.h"
+#include "components/autofill/core/browser/test_utils/autofill_test_utils.h"
 #include "components/autofill/core/common/autofill_prefs.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -29,20 +29,22 @@ class AutofillStatesDataComponentInstallerPolicyTest : public ::testing::Test {
 
   const base::Version& version() const { return fake_version_; }
 
-  const base::Value& manifest() const { return manifest_; }
+  const base::Value::Dict& manifest() const { return manifest_; }
 
   const base::FilePath& GetPath() const {
     return component_install_dir_.GetPath();
   }
 
   void CreateEmptyFiles() {
-    for (const char* filename : filenames_)
+    for (const char* filename : filenames_) {
       base::WriteFile(GetPath().AppendASCII(filename), "");
+    }
   }
 
   void DeleteCreatedFiles() {
-    for (const char* filename : filenames_)
+    for (const char* filename : filenames_) {
       base::DeleteFile(GetPath().AppendASCII(filename));
+    }
   }
 
  protected:
@@ -50,7 +52,7 @@ class AutofillStatesDataComponentInstallerPolicyTest : public ::testing::Test {
   std::unique_ptr<PrefService> pref_service_;
 
  private:
-  base::Value manifest_ = base::Value(base::Value::Type::DICTIONARY);
+  base::Value::Dict manifest_ = base::Value::Dict();
   base::ScopedTempDir component_install_dir_;
   std::vector<const char*> filenames_;
   base::FilePath fake_install_dir_;
@@ -78,8 +80,7 @@ TEST_F(AutofillStatesDataComponentInstallerPolicyTest, VerifyInstallation) {
 TEST_F(AutofillStatesDataComponentInstallerPolicyTest,
        InstallDirSavedToPrefOnComponentReady) {
   AutofillStatesComponentInstallerPolicy policy(pref_service_.get());
-  policy.ComponentReadyForTesting(version(), GetPath(),
-                                  base::Value(base::Value::Type::DICTIONARY));
+  policy.ComponentReadyForTesting(version(), GetPath(), base::Value::Dict());
   ASSERT_EQ(GetPath(), pref_service_->GetFilePath(
                            autofill::prefs::kAutofillStatesDataDir));
 }

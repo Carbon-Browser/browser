@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,21 +7,18 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback_helpers.h"
 #include "base/containers/circular_deque.h"
-#include "chrome/browser/ash/net/network_diagnostics/fake_host_resolver.h"
+#include "base/functional/callback_helpers.h"
 #include "chrome/browser/ash/net/network_diagnostics/fake_network_context.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/test/browser_task_environment.h"
 #include "net/base/net_errors.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace ash {
-namespace network_diagnostics {
+namespace ash::network_diagnostics {
 
 namespace {
 
-// TODO(https://crbug.com/1164001): remove when migrated to namespace ash.
 namespace mojom = ::chromeos::network_diagnostics::mojom;
 
 // The number of hosts the the routine tries to open socket connections to (if
@@ -96,7 +93,8 @@ class HttpsFirewallRoutineTest : public ::testing::Test {
   void SetUpRoutine(
       base::circular_deque<TlsProberReturnValue> fake_probe_results) {
     fake_probe_results_ = std::move(fake_probe_results);
-    https_firewall_routine_ = std::make_unique<HttpsFirewallRoutine>();
+    https_firewall_routine_ = std::make_unique<HttpsFirewallRoutine>(
+        mojom::RoutineCallSource::kDiagnosticsUI);
     https_firewall_routine_->set_tls_prober_getter_callback_for_testing(
         base::BindRepeating(
             &HttpsFirewallRoutineTest::CreateAndExecuteTlsProber,
@@ -120,7 +118,7 @@ class HttpsFirewallRoutineTest : public ::testing::Test {
   }
 
   std::unique_ptr<TlsProber> CreateAndExecuteTlsProber(
-      TlsProber::NetworkContextGetter network_context_getter,
+      network::NetworkContextGetter network_context_getter,
       net::HostPortPair host_port_pair,
       bool negotiate_tls,
       TlsProber::TlsProbeCompleteCallback callback) {
@@ -154,6 +152,19 @@ TEST_F(HttpsFirewallRoutineTest, TestHighDnsResolutionFailuresRate) {
       fake_probe_results.push_back(
           TlsProberReturnValue{net::OK, TlsProber::ProbeExitEnum::kSuccess});
     }
+  }
+  SetUpAndRunRoutine(
+      std::move(fake_probe_results), mojom::RoutineVerdict::kProblem,
+      {mojom::HttpsFirewallProblem::kHighDnsResolutionFailureRate});
+}
+
+// Edge case for tls_probe_failure_rate calculation.
+TEST_F(HttpsFirewallRoutineTest, TestNoDnsResolutionSuccess) {
+  base::circular_deque<TlsProberReturnValue> fake_probe_results;
+  // kTotalHosts = 9
+  for (int i = 0; i < kTotalHosts; i++) {
+    fake_probe_results.push_back(TlsProberReturnValue{
+        net::ERR_NAME_NOT_RESOLVED, TlsProber::ProbeExitEnum::kDnsFailure});
   }
   SetUpAndRunRoutine(
       std::move(fake_probe_results), mojom::RoutineVerdict::kProblem,
@@ -231,5 +242,4 @@ TEST_F(HttpsFirewallRoutineTest, TestContinousRetries) {
                      mojom::RoutineVerdict::kNoProblem, {});
 }
 
-}  // namespace network_diagnostics
-}  // namespace ash
+}  // namespace ash::network_diagnostics

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,22 +10,19 @@
 #include "chrome/common/extensions/api/file_system_provider.h"
 #include "chrome/common/extensions/api/file_system_provider_internal.h"
 
-namespace ash {
-namespace file_system_provider {
-namespace operations {
+namespace ash::file_system_provider::operations {
 
-ExecuteAction::ExecuteAction(extensions::EventRouter* event_router,
+ExecuteAction::ExecuteAction(RequestDispatcher* dispatcher,
                              const ProvidedFileSystemInfo& file_system_info,
                              const std::vector<base::FilePath>& entry_paths,
                              const std::string& action_id,
                              storage::AsyncFileUtil::StatusCallback callback)
-    : Operation(event_router, file_system_info),
+    : Operation(dispatcher, file_system_info),
       entry_paths_(entry_paths),
       action_id_(action_id),
       callback_(std::move(callback)) {}
 
-ExecuteAction::~ExecuteAction() {
-}
+ExecuteAction::~ExecuteAction() = default;
 
 bool ExecuteAction::Execute(int request_id) {
   using extensions::api::file_system_provider::ExecuteActionRequestedOptions;
@@ -46,20 +43,18 @@ bool ExecuteAction::Execute(int request_id) {
           options));
 }
 
-void ExecuteAction::OnSuccess(int /* request_id */,
-                              std::unique_ptr<RequestValue> result,
+void ExecuteAction::OnSuccess(/*request_id=*/int,
+                              const RequestValue& result,
                               bool has_more) {
   DCHECK(callback_);
   std::move(callback_).Run(base::File::FILE_OK);
 }
 
-void ExecuteAction::OnError(int /* request_id */,
-                            std::unique_ptr<RequestValue> /* result */,
+void ExecuteAction::OnError(/*request_id=*/int,
+                            /*result=*/const RequestValue&,
                             base::File::Error error) {
   DCHECK(callback_);
   std::move(callback_).Run(error);
 }
 
-}  // namespace operations
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider::operations

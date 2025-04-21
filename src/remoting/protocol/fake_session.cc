@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,16 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
+#include "remoting/protocol/authenticator.h"
 #include "remoting/protocol/fake_authenticator.h"
 #include "remoting/protocol/session_plugin.h"
 #include "third_party/libjingle_xmpp/xmllite/xmlelement.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 const char kTestJid[] = "host1@gmail.com/chromoting123";
 const char kTestAuthKey[] = "test_auth_key";
@@ -59,7 +59,7 @@ void FakeSession::SetEventHandler(EventHandler* event_handler) {
   event_handler_ = event_handler;
 }
 
-ErrorCode FakeSession::error() {
+ErrorCode FakeSession::error() const {
   return error_;
 }
 
@@ -71,11 +71,17 @@ const SessionConfig& FakeSession::config() {
   return *config_;
 }
 
+const Authenticator& FakeSession::authenticator() const {
+  return *authenticator_;
+}
+
 void FakeSession::SetTransport(Transport* transport) {
   transport_ = transport;
 }
 
-void FakeSession::Close(ErrorCode error) {
+void FakeSession::Close(ErrorCode error,
+                        std::string_view error_details,
+                        const base::Location& error_location) {
   closed_ = true;
   error_ = error;
   event_handler_->OnSessionStateChange(CLOSED);
@@ -86,10 +92,18 @@ void FakeSession::Close(ErrorCode error) {
     peer_.reset();
 
     if (signaling_delay_.is_zero()) {
-      peer->Close(error);
+      peer->Close(error, error_details, error_location);
     } else {
-      base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-          FROM_HERE, base::BindOnce(&FakeSession::Close, peer, error),
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+          FROM_HERE,
+          // Cannot just bind `error_details` as a string view, since the
+          // underlying data could be invalidated before the callback is run.
+          base::BindOnce(
+              [](base::WeakPtr<FakeSession> peer, ErrorCode error,
+                 std::string error_details, base::Location error_location) {
+                peer->Close(error, error_details, error_location);
+              },
+              peer, error, std::string(error_details), error_location),
           signaling_delay_);
     }
   }
@@ -97,13 +111,14 @@ void FakeSession::Close(ErrorCode error) {
 
 void FakeSession::SendTransportInfo(
     std::unique_ptr<jingle_xmpp::XmlElement> transport_info) {
-  if (!peer_)
+  if (!peer_) {
     return;
+  }
 
   if (signaling_delay_.is_zero()) {
     peer_->ProcessTransportInfo(std::move(transport_info));
   } else {
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&FakeSession::ProcessTransportInfo, peer_,
                        std::move(transport_info)),
@@ -128,13 +143,13 @@ void FakeSession::AddPlugin(SessionPlugin* plugin) {
   }
 }
 
-void FakeSession::SetAttachment(size_t round,
-                                std::unique_ptr<jingle_xmpp::XmlElement> attachment) {
+void FakeSession::SetAttachment(
+    size_t round,
+    std::unique_ptr<jingle_xmpp::XmlElement> attachment) {
   while (attachments_.size() <= round) {
     attachments_.emplace_back();
   }
   attachments_[round] = std::move(attachment);
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

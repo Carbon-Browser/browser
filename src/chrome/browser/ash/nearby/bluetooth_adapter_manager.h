@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_NEARBY_BLUETOOTH_ADAPTER_MANAGER_H_
 #define CHROME_BROWSER_ASH_NEARBY_BLUETOOTH_ADAPTER_MANAGER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "device/bluetooth/bluetooth_adapter_factory.h"
@@ -43,7 +44,7 @@ class BluetoothAdapterManager {
   }
 
  private:
-  device::BluetoothAdapter* device_bluetooth_adapter_;
+  raw_ptr<device::BluetoothAdapter> device_bluetooth_adapter_;
   std::unique_ptr<bluetooth::Adapter> bluetooth_adapter_;
   std::unique_ptr<mojo::Receiver<bluetooth::mojom::Adapter>>
       bluetooth_receiver_;

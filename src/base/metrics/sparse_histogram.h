@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,7 @@ class BASE_EXPORT SparseHistogram : public HistogramBase {
  public:
   // If there's one with same name, return the existing one. If not, create a
   // new one.
-  static HistogramBase* FactoryGet(const std::string& name, int32_t flags);
+  static HistogramBase* FactoryGet(std::string_view name, int32_t flags);
 
   // Create a histogram using data in persistent storage. The allocator must
   // live longer than the created sparse histogram.
@@ -44,7 +44,7 @@ class BASE_EXPORT SparseHistogram : public HistogramBase {
 
   ~SparseHistogram() override;
 
-  // HistogramBase implementation:
+  // HistogramBase:
   uint64_t name_hash() const override;
   HistogramType GetHistogramType() const override;
   bool HasConstructionArguments(Sample expected_minimum,
@@ -52,15 +52,17 @@ class BASE_EXPORT SparseHistogram : public HistogramBase {
                                 size_t expected_bucket_count) const override;
   void Add(Sample value) override;
   void AddCount(Sample value, int count) override;
-  void AddSamples(const HistogramSamples& samples) override;
+  bool AddSamples(const HistogramSamples& samples) override;
   bool AddSamplesFromPickle(base::PickleIterator* iter) override;
   std::unique_ptr<HistogramSamples> SnapshotSamples() const override;
+  std::unique_ptr<HistogramSamples> SnapshotUnloggedSamples() const override;
+  void MarkSamplesAsLogged(const HistogramSamples& samples) override;
   std::unique_ptr<HistogramSamples> SnapshotDelta() override;
   std::unique_ptr<HistogramSamples> SnapshotFinalDelta() const override;
   base::Value::Dict ToGraphDict() const override;
 
  protected:
-  // HistogramBase implementation:
+  // HistogramBase:
   void SerializeInfoImpl(base::Pickle* pickle) const override;
 
  private:
@@ -81,6 +83,7 @@ class BASE_EXPORT SparseHistogram : public HistogramBase {
 
   // For constructor calling.
   friend class SparseHistogramTest;
+  friend class HistogramThreadsafeTest;
 
   // Protects access to |samples_|.
   mutable base::Lock lock_;

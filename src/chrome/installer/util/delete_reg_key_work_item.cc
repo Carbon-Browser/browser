@@ -1,4 +1,4 @@
-// Copyright (c) 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 
 using base::win::RegKey;
 
-DeleteRegKeyWorkItem::~DeleteRegKeyWorkItem() {}
+DeleteRegKeyWorkItem::~DeleteRegKeyWorkItem() = default;
 
 DeleteRegKeyWorkItem::DeleteRegKeyWorkItem(HKEY predefined_root,
                                            const std::wstring& path,

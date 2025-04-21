@@ -1,6 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/video/mock_gpu_video_accelerator_factories.h"
 
@@ -76,9 +81,6 @@ class GpuMemoryBufferImpl : public gfx::GpuMemoryBuffer {
   gfx::GpuMemoryBufferHandle CloneHandle() const override {
     return gfx::GpuMemoryBufferHandle();
   }
-  ClientBuffer AsClientBuffer() override {
-    return reinterpret_cast<ClientBuffer>(this);
-  }
   void OnMemoryDump(
       base::trace_event::ProcessMemoryDump* pmd,
       const base::trace_event::MemoryAllocatorDumpGuid& buffer_dump_guid,
@@ -140,11 +142,6 @@ MockGpuVideoAcceleratorFactories::CreateVideoEncodeAccelerator() {
 bool MockGpuVideoAcceleratorFactories::ShouldUseGpuMemoryBuffersForVideoFrames(
     bool for_media_stream) const {
   return false;
-}
-
-unsigned MockGpuVideoAcceleratorFactories::ImageTextureTarget(
-    gfx::BufferFormat format) {
-  return GL_TEXTURE_2D;
 }
 
 }  // namespace media

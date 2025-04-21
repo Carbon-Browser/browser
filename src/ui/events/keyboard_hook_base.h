@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,12 @@
 
 namespace ui {
 
-enum class DomCode;
+enum class DomCode : uint32_t;
 class KeyEvent;
 
 class KeyboardHookBase : public KeyboardHook {
  public:
-  KeyboardHookBase(absl::optional<base::flat_set<DomCode>> dom_codes,
+  KeyboardHookBase(std::optional<base::flat_set<DomCode>> dom_codes,
                    KeyEventCallback callback);
 
   KeyboardHookBase(const KeyboardHookBase&) = delete;
@@ -36,7 +36,7 @@ class KeyboardHookBase : public KeyboardHook {
   // returns.
   void ForwardCapturedKeyEvent(KeyEvent* event);
 
-  const absl::optional<base::flat_set<DomCode>>& dom_codes() {
+  const std::optional<base::flat_set<DomCode>>& dom_codes() {
     return dom_codes_;
   }
 
@@ -45,7 +45,7 @@ class KeyboardHookBase : public KeyboardHook {
   KeyEventCallback key_event_callback_;
 
   // The set of keys which should be intercepted by the keyboard hook.
-  absl::optional<base::flat_set<DomCode>> dom_codes_;
+  std::optional<base::flat_set<DomCode>> dom_codes_;
 };
 
 }  // namespace ui

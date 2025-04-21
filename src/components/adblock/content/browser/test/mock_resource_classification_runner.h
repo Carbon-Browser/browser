@@ -15,10 +15,11 @@
  * along with eyeo Chromium SDK.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef COMPONENTS_ADBLOCK_CONTENT_BROWSER_TEST_MOCK_RESOURCE_CLASSIFICATION_RUNNER_
-#define COMPONENTS_ADBLOCK_CONTENT_BROWSER_TEST_MOCK_RESOURCE_CLASSIFICATION_RUNNER_
+#ifndef COMPONENTS_ADBLOCK_CONTENT_BROWSER_TEST_MOCK_RESOURCE_CLASSIFICATION_RUNNER_H_
+#define COMPONENTS_ADBLOCK_CONTENT_BROWSER_TEST_MOCK_RESOURCE_CLASSIFICATION_RUNNER_H_
 
 #include "components/adblock/content/browser/resource_classification_runner.h"
+#include "content/public/browser/render_frame_host.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "url/gurl.h"
 
@@ -29,57 +30,61 @@ class MockResourceClassificationRunner : public ResourceClassificationRunner {
   MockResourceClassificationRunner();
   ~MockResourceClassificationRunner() override;
 
-  MOCK_METHOD(void,
-              AddObserver,
-              (ResourceClassificationRunner::Observer*),
-              (override));
-  MOCK_METHOD(void,
-              RemoveObserver,
-              (ResourceClassificationRunner::Observer*),
-              (override));
+  void AddObserver(ResourceClassificationRunner::Observer*) override;
+  void RemoveObserver(ResourceClassificationRunner::Observer*) override;
+  void NotifyResourceMatched(const GURL& url,
+                             FilterMatchResult result,
+                             const std::vector<GURL>& parent_frame_urls,
+                             ContentType content_type,
+                             content::RenderFrameHost* render_frame_host,
+                             const GURL& subscription);
 
-  MOCK_METHOD((mojom::FilterMatchResult),
+  MOCK_METHOD(FilterMatchResult,
               ShouldBlockPopup,
-              (std::unique_ptr<SubscriptionCollection>,
-               const GURL&,
+              (const SubscriptionService::Snapshot&,
                const GURL&,
                content::RenderFrameHost*),
               (override));
 
   MOCK_METHOD(void,
-              CheckRequestFilterMatch,
-              (std::unique_ptr<SubscriptionCollection>,
+              CheckPopupFilterMatch,
+              (SubscriptionService::Snapshot,
                const GURL&,
-               int32_t,
-               int32_t,
-               int32_t,
-               mojom::AdblockInterface::CheckFilterMatchCallback),
+               content::RenderFrameHost&,
+               CheckFilterMatchCallback),
               (override));
 
   MOCK_METHOD(void,
-              CheckRequestFilterMatchForWebSocket,
-              (std::unique_ptr<SubscriptionCollection>,
+              CheckRequestFilterMatch,
+              (const SubscriptionService::Snapshot,
                const GURL&,
-               content::RenderFrameHost*,
-               mojom::AdblockInterface::CheckFilterMatchCallback),
+               ContentType,
+               const RequestInitiator&,
+               CheckFilterMatchCallback),
+              (override));
+
+  MOCK_METHOD(void,
+              CheckDocumentAllowlisted,
+              (SubscriptionService::Snapshot,
+               const GURL& request_url,
+               const RequestInitiator& request_initiator),
               (override));
 
   MOCK_METHOD(void,
               CheckResponseFilterMatch,
-              (std::unique_ptr<SubscriptionCollection>,
+              (const SubscriptionService::Snapshot,
                const GURL&,
-               int32_t,
-               int32_t,
+               ContentType,
+               const RequestInitiator&,
                const scoped_refptr<net::HttpResponseHeaders>&,
-               mojom::AdblockInterface::CheckFilterMatchCallback),
+               CheckFilterMatchCallback),
               (override));
 
   MOCK_METHOD(void,
               CheckRewriteFilterMatch,
-              (std::unique_ptr<SubscriptionCollection>,
+              (const SubscriptionService::Snapshot,
                const GURL&,
-               int32_t,
-               int32_t,
+               const RequestInitiator&,
                base::OnceCallback<void(const absl::optional<GURL>&)>),
               (override));
 
@@ -88,4 +93,4 @@ class MockResourceClassificationRunner : public ResourceClassificationRunner {
 
 }  // namespace adblock
 
-#endif  // COMPONENTS_ADBLOCK_CONTENT_BROWSER_TEST_MOCK_RESOURCE_CLASSIFICATION_RUNNER_
+#endif  // COMPONENTS_ADBLOCK_CONTENT_BROWSER_TEST_MOCK_RESOURCE_CLASSIFICATION_RUNNER_H_

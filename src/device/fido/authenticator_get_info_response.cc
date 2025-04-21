@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -148,9 +148,9 @@ std::vector<uint8_t> AuthenticatorGetInfoResponse::EncodeToCBOR(
         cbor::Value(base::strict_cast<int64_t>(*response.min_pin_length)));
   }
 
-  if (response.max_cred_blob_length) {
-    device_info_map.emplace(
-        0x0f, base::strict_cast<int64_t>(*response.max_cred_blob_length));
+  if (response.options.max_cred_blob_length) {
+    device_info_map.emplace(0x0f, base::strict_cast<int64_t>(
+                                      *response.options.max_cred_blob_length));
   }
 
   auto encoded_bytes =

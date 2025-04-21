@@ -1,22 +1,27 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/cert_provisioning/cert_provisioning_platform_keys_helpers.h"
 
 #include <memory>
+#include <optional>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/containers/contains.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/cert_provisioning/cert_provisioning_common.h"
 #include "chrome/browser/ash/platform_keys/platform_keys_service.h"
-#include "chrome/browser/platform_keys/platform_keys.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chrome/browser/chromeos/platform_keys/platform_keys.h"
 
-namespace ash {
-namespace cert_provisioning {
+namespace ash::cert_provisioning {
+
+namespace {
+std::string BytesToStr(const std::vector<uint8_t>& val) {
+  return std::string(val.begin(), val.end());
+}
+}  // namespace
 
 // ========= CertIterator ======================================================
 
@@ -67,8 +72,8 @@ void CertIterator::OnGetCertificatesDone(
   wait_counter_ = existing_certs->size();
 
   for (const auto& cert : *existing_certs) {
-    std::string public_key =
-        chromeos::platform_keys::GetSubjectPublicKeyInfo(cert);
+    std::vector<uint8_t> public_key =
+        chromeos::platform_keys::GetSubjectPublicKeyInfoBlob(cert);
     platform_keys_service_->GetAttributeForKey(
         GetPlatformKeysTokenId(cert_scope_), public_key,
         chromeos::platform_keys::KeyAttributeType::kCertificateProvisioningId,
@@ -79,12 +84,12 @@ void CertIterator::OnGetCertificatesDone(
 
 void CertIterator::OnGetAttributeForKeyDone(
     scoped_refptr<net::X509Certificate> cert,
-    const absl::optional<std::string>& attr_value,
+    std::optional<std::vector<uint8_t>> attr_value,
     chromeos::platform_keys::Status status) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(wait_counter_ > 0);
 
-  // TODO(crbug.com/1073512): Currently if GetAttributeForKey fails to get the
+  // TODO(crbug.com/40127595): Currently if GetAttributeForKey fails to get the
   // attribute (because it was not set or any other reason), it will return
   // nullopt for cert_profile_id and empty error message. When
   // PlatformKeysService switches to error codes, a code for such situation
@@ -95,7 +100,7 @@ void CertIterator::OnGetAttributeForKeyDone(
   }
 
   if (attr_value) {
-    for_each_callback_.Run(cert, attr_value.value(),
+    for_each_callback_.Run(cert, BytesToStr(attr_value.value()),
                            chromeos::platform_keys::Status::kSuccess);
   }
 
@@ -307,5 +312,4 @@ void CertDeleter::ReturnStatus(chromeos::platform_keys::Status status) {
   std::move(callback_).Run(status);
 }
 
-}  // namespace cert_provisioning
-}  // namespace ash
+}  // namespace ash::cert_provisioning

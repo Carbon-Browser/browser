@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef GPU_COMMAND_BUFFER_SERVICE_SCHEDULER_TASK_RUNNER_H_
 #define GPU_COMMAND_BUFFER_SERVICE_SCHEDULER_TASK_RUNNER_H_
 
+#include "base/memory/raw_ref.h"
 #include "base/synchronization/lock.h"
 #include "base/task/sequenced_task_runner.h"
 #include "gpu/command_buffer/service/sequence_id.h"
@@ -43,7 +44,7 @@ class GPU_EXPORT SchedulerTaskRunner : public base::SequencedTaskRunner {
 
   void RunTask(base::OnceClosure task);
 
-  Scheduler& scheduler_;
+  const raw_ref<Scheduler> scheduler_;
   const SequenceId sequence_id_;
 
   base::Lock lock_;

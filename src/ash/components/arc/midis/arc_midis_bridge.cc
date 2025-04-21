@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,10 @@
 
 #include "ash/components/arc/arc_browser_context_keyed_service_factory_base.h"
 #include "ash/components/arc/session/arc_bridge_service.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/singleton.h"
 #include "chromeos/ash/components/dbus/arc/arc_midis_client.h"
+#include "mojo/core/configuration.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/platform/platform_channel.h"
 #include "mojo/public/cpp/system/invitation.h"
@@ -91,6 +92,9 @@ void ArcMidisBridge::Connect(
   mojo::PlatformChannel channel;
   mojo::ScopedMessagePipeHandle server_pipe =
       invitation.AttachMessagePipe("arc-midis-pipe");
+  if (!mojo::core::GetConfiguration().is_broker_process) {
+    invitation.set_extra_flags(MOJO_SEND_INVITATION_FLAG_SHARE_BROKER);
+  }
   mojo::OutgoingInvitation::Send(std::move(invitation),
                                  base::kNullProcessHandle,
                                  channel.TakeLocalEndpoint());
@@ -112,6 +116,11 @@ void ArcMidisBridge::Connect(
 void ArcMidisBridge::OnMojoConnectionError() {
   LOG(ERROR) << "ArcMidisBridge Mojo connection lost.";
   midis_host_remote_.reset();
+}
+
+// static
+void ArcMidisBridge::EnsureFactoryBuilt() {
+  ArcMidisBridgeFactory::GetInstance();
 }
 
 }  // namespace arc

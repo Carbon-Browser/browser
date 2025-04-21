@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "base/files/file_path.h"
 #include "components/services/font/public/mojom/font_service.mojom.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
+#include "pdf/buildflags.h"
 #include "third_party/skia/include/core/SkFontStyle.h"
 
 namespace font_service {
@@ -49,12 +50,15 @@ class FontServiceApp : public mojom::FontService {
   void MatchFontByPostscriptNameOrFullFontName(
       const std::string& family,
       MatchFontByPostscriptNameOrFullFontNameCallback callback) override;
+#if BUILDFLAG(ENABLE_PDF)
   void MatchFontWithFallback(const std::string& family,
                              bool is_bold,
                              bool is_italic,
                              uint32_t charset,
                              uint32_t fallbackFamilyType,
                              MatchFontWithFallbackCallback callback) override;
+#endif  // BUILDFLAG(ENABLE_PDF)
+
   size_t FindOrAddPath(const base::FilePath& path);
 
   mojo::ReceiverSet<mojom::FontService> receivers_;

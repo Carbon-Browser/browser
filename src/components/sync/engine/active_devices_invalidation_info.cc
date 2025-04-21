@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,13 +25,16 @@ ActiveDevicesInvalidationInfo::CreateUninitialized() {
 // static
 ActiveDevicesInvalidationInfo ActiveDevicesInvalidationInfo::Create(
     std::vector<std::string> all_fcm_registration_tokens,
-    ModelTypeSet all_interested_data_types,
-    std::map<std::string, ModelTypeSet> fcm_token_and_interested_data_types) {
+    DataTypeSet all_interested_data_types,
+    std::map<std::string, DataTypeSet> fcm_token_and_interested_data_types,
+    DataTypeSet old_invalidations_interested_data_types) {
   ActiveDevicesInvalidationInfo result(/*initialized=*/true);
   result.all_fcm_registration_tokens_ = std::move(all_fcm_registration_tokens);
   result.all_interested_data_types_ = all_interested_data_types;
   result.fcm_token_and_interested_data_types_ =
       std::move(fcm_token_and_interested_data_types);
+  result.old_invalidations_interested_data_types_ =
+      old_invalidations_interested_data_types;
   return result;
 }
 
@@ -50,33 +53,42 @@ ActiveDevicesInvalidationInfo& ActiveDevicesInvalidationInfo::operator=(
     ActiveDevicesInvalidationInfo&&) = default;
 
 bool ActiveDevicesInvalidationInfo::IsSingleClientForTypes(
-    const ModelTypeSet& types) const {
+    const DataTypeSet& types) const {
   if (!initialized_) {
     return false;
   }
 
-  return Intersection(types, all_interested_data_types_).Empty();
+  return Intersection(types, all_interested_data_types_).empty();
 }
 
 bool ActiveDevicesInvalidationInfo::
     IsSingleClientWithStandaloneInvalidationsForTypes(
-        const ModelTypeSet& types) const {
+        const DataTypeSet& types) const {
   if (!initialized_) {
     return false;
   }
 
   return Intersection(types,
                       GetAllInterestedDataTypesForStandaloneInvalidations())
-      .Empty();
+      .empty();
+}
+
+bool ActiveDevicesInvalidationInfo::IsSingleClientWithOldInvalidationsForTypes(
+    const DataTypeSet& types) const {
+  if (!initialized_) {
+    return false;
+  }
+
+  return Intersection(types, old_invalidations_interested_data_types_).empty();
 }
 
 std::vector<std::string>
 ActiveDevicesInvalidationInfo::GetFcmRegistrationTokensForInterestedClients(
-    ModelTypeSet types) const {
+    DataTypeSet types) const {
   std::vector<std::string> fcm_tokens;
   for (const auto& fcm_token_with_data_types :
        fcm_token_and_interested_data_types_) {
-    if (Intersection(types, fcm_token_with_data_types.second).Empty()) {
+    if (Intersection(types, fcm_token_with_data_types.second).empty()) {
       continue;
     }
     if (fcm_tokens.size() >= kMaxFcmRegistrationTokens) {
@@ -91,9 +103,9 @@ ActiveDevicesInvalidationInfo::GetFcmRegistrationTokensForInterestedClients(
   return fcm_tokens;
 }
 
-ModelTypeSet ActiveDevicesInvalidationInfo::
+DataTypeSet ActiveDevicesInvalidationInfo::
     GetAllInterestedDataTypesForStandaloneInvalidations() const {
-  ModelTypeSet result;
+  DataTypeSet result;
   for (const auto& fcm_token_with_data_types :
        fcm_token_and_interested_data_types_) {
     result.PutAll(fcm_token_with_data_types.second);

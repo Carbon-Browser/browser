@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,6 +24,7 @@ public class InstalledAppProviderFactory implements InterfaceFactory<InstalledAp
     public InstalledAppProvider createImpl() {
         return new InstalledAppProviderImpl(
                 Profile.fromWebContents(WebContentsStatics.fromRenderFrameHost(mRenderFrameHost)),
-                mRenderFrameHost, InstantAppsHandler.getInstance()::isInstantAppAvailable);
+                mRenderFrameHost,
+                InstantAppsHandler.getInstance()::isInstantAppAvailable);
     }
 }

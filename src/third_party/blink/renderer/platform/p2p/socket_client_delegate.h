@@ -1,10 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_P2P_SOCKET_CLIENT_DELEGATE_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_P2P_SOCKET_CLIENT_DELEGATE_H_
 
+#include "base/time/time.h"
 #include "net/base/ip_endpoint.h"
 #include "services/network/public/cpp/p2p_socket_type.h"
 
@@ -31,8 +32,9 @@ class P2PSocketClientDelegate {
 
   // Called when data is received on the socket.
   virtual void OnDataReceived(const net::IPEndPoint& address,
-                              const Vector<int8_t>& data,
-                              const base::TimeTicks& timestamp) = 0;
+                              base::span<const uint8_t> data,
+                              const base::TimeTicks& timestamp,
+                              rtc::EcnMarking ecn) = 0;
 };
 
 }  // namespace blink

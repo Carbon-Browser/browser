@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,8 +53,6 @@ TEST(MIMETypeRegistryTest, TextXMLType) {
   EXPECT_TRUE(MIMETypeRegistry::IsXMLMIMEType("application/xslt+xml"));
   EXPECT_TRUE(MIMETypeRegistry::IsXMLMIMEType("application/rdf+Xml"));
   EXPECT_TRUE(MIMETypeRegistry::IsXMLMIMEType("image/svg+xml"));
-  EXPECT_TRUE(MIMETypeRegistry::IsXMLMIMEType("text/xsl"));
-  EXPECT_TRUE(MIMETypeRegistry::IsXMLMIMEType("text/XSL"));
   EXPECT_TRUE(MIMETypeRegistry::IsXMLMIMEType("application/x+xml"));
 
   EXPECT_FALSE(MIMETypeRegistry::IsXMLMIMEType("application/x-custom;a=a+xml"));
@@ -70,6 +68,23 @@ TEST(MIMETypeRegistryTest, TextXMLType) {
   EXPECT_FALSE(MIMETypeRegistry::IsXMLMIMEType("application/x-tra+xML;a=2"));
   EXPECT_FALSE(MIMETypeRegistry::IsXMLMIMEType("application/+xML"));
   EXPECT_FALSE(MIMETypeRegistry::IsXMLMIMEType("application/+xml"));
+  EXPECT_FALSE(MIMETypeRegistry::IsXMLMIMEType("text/xsl"));
+  EXPECT_FALSE(MIMETypeRegistry::IsXMLMIMEType("text/XSL"));
+}
+
+TEST(MIMETypeRegistryTest, XMLExternalEntityMIMEType) {
+  EXPECT_TRUE(MIMETypeRegistry::IsXMLExternalEntityMIMEType(
+      "application/xml-external-parsed-entity"));
+  EXPECT_TRUE(MIMETypeRegistry::IsXMLExternalEntityMIMEType(
+      "text/xml-external-parsed-entity"));
+  EXPECT_TRUE(MIMETypeRegistry::IsXMLExternalEntityMIMEType(
+      "application/XML-external-parsed-entity"));
+  EXPECT_TRUE(MIMETypeRegistry::IsXMLExternalEntityMIMEType(
+      "text/XML-external-parsed-entity"));
+
+  EXPECT_FALSE(MIMETypeRegistry::IsXMLExternalEntityMIMEType("text/plain"));
+  EXPECT_FALSE(MIMETypeRegistry::IsXMLExternalEntityMIMEType("text/html"));
+  EXPECT_FALSE(MIMETypeRegistry::IsXMLExternalEntityMIMEType("text/xml"));
 }
 
 }  // namespace blink

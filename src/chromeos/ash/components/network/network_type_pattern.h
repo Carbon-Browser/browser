@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 #include "base/component_export.h"
 
-namespace chromeos {
+namespace ash {
 
 // Class to convert Shill network type names to explicit types and do pattern
 // matching for grouped types (e.g. Wireless). Grouped type matching is also
@@ -73,11 +73,6 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkTypePattern {
   int pattern_;
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove when moved to ash/components/.
-namespace ash {
-using ::chromeos::NetworkTypePattern;
-}
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_TYPE_PATTERN_H_

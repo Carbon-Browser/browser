@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@
 
 namespace blink {
 
-PLATFORM_EXPORT uint32_t AtomicStringToFourByteTag(AtomicString tag);
+PLATFORM_EXPORT uint32_t AtomicStringToFourByteTag(const AtomicString& tag);
 PLATFORM_EXPORT AtomicString FourByteTagToAtomicString(uint32_t tag);
 
 template <typename T>
@@ -94,10 +94,10 @@ class FontSettings {
     return false;
   }
 
-  const T* begin() const { return list_.begin(); }
-  const T* end() const { return list_.end(); }
-  T* begin() { return list_.begin(); }
-  T* end() { return list_.end(); }
+  Vector<T, 0>::const_iterator begin() const { return list_.begin(); }
+  Vector<T, 0>::const_iterator end() const { return list_.end(); }
+  Vector<T, 0>::iterator begin() { return list_.begin(); }
+  Vector<T, 0>::iterator end() { return list_.end(); }
 
  protected:
   FontSettings() = default;
@@ -111,8 +111,7 @@ using FontVariationAxis = FontTagValuePair<float>;
 
 class PLATFORM_EXPORT FontFeatureSettings
     : public FontSettings<FontFeature>,
-      public RefCountedWillBeThreadSafeForParallelTextShaping<
-          FontFeatureSettings> {
+      public RefCounted<FontFeatureSettings> {
  public:
   static scoped_refptr<FontFeatureSettings> Create() {
     return base::AdoptRef(new FontFeatureSettings());
@@ -127,8 +126,7 @@ class PLATFORM_EXPORT FontFeatureSettings
 
 class PLATFORM_EXPORT FontVariationSettings
     : public FontSettings<FontVariationAxis>,
-      public RefCountedWillBeThreadSafeForParallelTextShaping<
-          FontVariationSettings> {
+      public RefCounted<FontVariationSettings> {
  public:
   static scoped_refptr<FontVariationSettings> Create() {
     return base::AdoptRef(new FontVariationSettings());

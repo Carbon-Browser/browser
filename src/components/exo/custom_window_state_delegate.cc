@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include "ash/shell.h"
 #include "ash/shell_delegate.h"
 #include "ash/wm/window_state.h"
-#include "components/exo/shell_surface_presentation_time_recorder.h"
+#include "components/exo/shell_surface.h"
 #include "ui/base/hit_test.h"
 
 namespace exo {
@@ -31,19 +31,7 @@ void CustomWindowStateDelegate::ToggleLockedFullscreen(
   // Sets up the shell environment as appropriate for locked Lacros or Ash
   // chrome sessions including disabling ARC.
   ash::Shell::Get()->shell_delegate()->SetUpEnvironmentForLockedFullscreen(
-      window_state->IsPinned());
-}
-
-std::unique_ptr<ash::PresentationTimeRecorder>
-CustomWindowStateDelegate::OnDragStarted(int component) {
-  if (!shell_surface_ || !ui::IsResizingComponent(component))
-    return nullptr;
-
-  return std::make_unique<ShellSurfacePresentationTimeRecorder>(
-      shell_surface_,
-      ShellSurfacePresentationTimeRecorder::CreateHistogramReporter(
-          "Ash.InteractiveWindowResize.Lacros.TimeToPresent",
-          "Ash.InteractiveWindowResize.Lacros.TimeToPresent.MaxLatency"));
+      *window_state);
 }
 
 void CustomWindowStateDelegate::OnDragFinished(bool cancel,

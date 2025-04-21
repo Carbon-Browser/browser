@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,11 @@ namespace probe {
 
 {%- macro params_decl(probe) %}
 {%- for param in probe.params %}
+{%- if probe.is_scoped and param.is_reference %}
+std::reference_wrapper<std::remove_reference_t<{{param.type}}>>
+{%- else %}
 {{ param.type }}
+{%- endif %}
 {%- if param.default_value %} = {{ param.default_value }}
 {%- endif %}
 {%- if not loop.last %}, {% endif %}

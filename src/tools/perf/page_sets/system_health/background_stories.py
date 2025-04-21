@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -71,6 +71,7 @@ class BackgroundGmailMobileStory2019(loading_stories.LoadGmailStory2019):
   NAME = 'background:tools:gmail:2019'
   SUPPORTED_PLATFORMS = platforms.MOBILE_ONLY
   TAGS = [story_tags.HEALTH_CHECK, story_tags.YEAR_2019]
+  EXTRA_BROWSER_ARGUMENTS = []
 
   def _Measure(self, action_runner):
     action_runner.tab.browser.Background()

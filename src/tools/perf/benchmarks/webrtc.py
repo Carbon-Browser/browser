@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -9,8 +9,7 @@ from telemetry.web_perf import timeline_based_measurement
 from benchmarks import press
 
 
-@benchmark.Info(emails=['qiangchen@chromium.org', # For smoothness metrics
-                        'mbonadei@chromium.org'],
+@benchmark.Info(emails=['video-cmi-apis@google.com', 'herre@google.com'],
                 component='Blink>WebRTC',
                 documentation_url='http://bit.ly/webrtc-benchmark')
 class WebrtcPerfBenchmark(press._PressBenchmark):  # pylint: disable=protected-access

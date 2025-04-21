@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,16 @@
  * @fileoverview A dialog for showing SSL certificate related error messages.
  * The user can only close the dialog, there is no other possible interaction.
  */
-import '../../cr_elements/cr_button/cr_button.m.js';
-import '../../cr_elements/cr_dialog/cr_dialog.m.js';
+import '//resources/cr_elements/cr_button/cr_button.js';
+import '//resources/cr_elements/cr_dialog/cr_dialog.js';
 import './certificate_shared.css.js';
 
-import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import type {CrDialogElement} from '//resources/cr_elements/cr_dialog/cr_dialog.js';
+import {I18nMixin} from '//resources/cr_elements/i18n_mixin.js';
+import {loadTimeData} from '//resources/js/load_time_data.js';
+import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {CrDialogElement} from '../../cr_elements/cr_dialog/cr_dialog.m.js';
-import {I18nMixin} from '../../js/i18n_mixin.js';
-import {loadTimeData} from '../../js/load_time_data.m.js';
-
-import {CertificatesError, CertificatesImportError} from './certificates_browser_proxy.js';
+import type {CertificatesError, CertificatesImportError} from './certificates_browser_proxy.js';
 import {getTemplate} from './certificates_error_dialog.html.js';
 
 interface CertificatesErrorDialogElement {
@@ -45,12 +44,7 @@ class CertificatesErrorDialogElement extends
 
   model: CertificatesError|CertificatesImportError;
 
-  override connectedCallback() {
-    super.connectedCallback();
-    this.$.dialog.showModal();
-  }
-
-  private onOkTap_() {
+  private onOkClick_() {
     this.$.dialog.close();
   }
 

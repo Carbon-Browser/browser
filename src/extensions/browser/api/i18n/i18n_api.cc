@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include <string>
 #include <vector>
 
-#include "base/containers/cxx20_erase.h"
 #include "base/strings/string_split.h"
 #include "components/language/core/browser/pref_names.h"
 #include "components/prefs/pref_service.h"
@@ -47,7 +46,7 @@ ExtensionFunction::ResponseAction I18nGetAcceptLanguagesFunction::Run() {
 
   std::vector<std::string> languages = base::SplitString(
       accept_languages, ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
-  base::Erase(languages, "");
+  std::erase(languages, "");
 
   if (languages.empty())
     return RespondNow(Error(kEmptyAcceptLanguagesError));

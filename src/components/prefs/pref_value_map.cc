@@ -1,21 +1,24 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/prefs/pref_value_map.h"
 
 #include <limits.h>
+
 #include <map>
 #include <memory>
+#include <string>
+#include <string_view>
 #include <utility>
 
 #include "base/values.h"
 
-PrefValueMap::PrefValueMap() {}
+PrefValueMap::PrefValueMap() = default;
 
-PrefValueMap::~PrefValueMap() {}
+PrefValueMap::~PrefValueMap() = default;
 
-bool PrefValueMap::GetValue(const std::string& key,
+bool PrefValueMap::GetValue(std::string_view key,
                             const base::Value** value) const {
   auto it = prefs_.find(key);
   if (it == prefs_.end())
@@ -27,7 +30,7 @@ bool PrefValueMap::GetValue(const std::string& key,
   return true;
 }
 
-bool PrefValueMap::GetValue(const std::string& key, base::Value** value) {
+bool PrefValueMap::GetValue(std::string_view key, base::Value** value) {
   auto it = prefs_.find(key);
   if (it == prefs_.end())
     return false;
@@ -38,8 +41,14 @@ bool PrefValueMap::GetValue(const std::string& key, base::Value** value) {
   return true;
 }
 
-bool PrefValueMap::SetValue(const std::string& key, base::Value value) {
-  base::Value& existing_value = prefs_[key];
+bool PrefValueMap::SetValue(std::string_view key, base::Value value) {
+  // Once C++26 is supported, just do `base::Value& existing_value =
+  // prefs_[key]`.
+  auto it = prefs_.find(key);
+  if (it == prefs_.end()) {
+    it = prefs_.insert({std::string(key), base::Value()}).first;
+  }
+  base::Value& existing_value = it->second;
   if (value == existing_value)
     return false;
 
@@ -47,19 +56,25 @@ bool PrefValueMap::SetValue(const std::string& key, base::Value value) {
   return true;
 }
 
-bool PrefValueMap::RemoveValue(const std::string& key) {
-  return prefs_.erase(key) != 0;
+bool PrefValueMap::RemoveValue(std::string_view key) {
+  // Once C++23 is supported, just do `return prefs_.erase(key)`;
+  auto it = prefs_.find(key);
+  if (it == prefs_.end()) {
+    return false;
+  }
+  prefs_.erase(it);
+  return true;
 }
 
 void PrefValueMap::Clear() {
   prefs_.clear();
 }
 
-void PrefValueMap::ClearWithPrefix(const std::string& prefix) {
+void PrefValueMap::ClearWithPrefix(std::string_view prefix) {
   Map::iterator low = prefs_.lower_bound(prefix);
   // Appending maximum possible character so that there will be no string with
   // prefix |prefix| that we may miss.
-  Map::iterator high = prefs_.upper_bound(prefix + char(CHAR_MAX));
+  Map::iterator high = prefs_.upper_bound(std::string(prefix) + char(CHAR_MAX));
   prefs_.erase(low, high);
 }
 
@@ -87,7 +102,7 @@ bool PrefValueMap::empty() const {
   return prefs_.empty();
 }
 
-bool PrefValueMap::GetBoolean(const std::string& key, bool* value) const {
+bool PrefValueMap::GetBoolean(std::string_view key, bool* value) const {
   const base::Value* stored_value = nullptr;
   if (GetValue(key, &stored_value) && stored_value->is_bool()) {
     *value = stored_value->GetBool();
@@ -96,11 +111,11 @@ bool PrefValueMap::GetBoolean(const std::string& key, bool* value) const {
   return false;
 }
 
-void PrefValueMap::SetBoolean(const std::string& key, bool value) {
+void PrefValueMap::SetBoolean(std::string_view key, bool value) {
   SetValue(key, base::Value(value));
 }
 
-bool PrefValueMap::GetString(const std::string& key, std::string* value) const {
+bool PrefValueMap::GetString(std::string_view key, std::string* value) const {
   const base::Value* stored_value = nullptr;
   if (GetValue(key, &stored_value) && stored_value->is_string()) {
     *value = stored_value->GetString();
@@ -109,11 +124,11 @@ bool PrefValueMap::GetString(const std::string& key, std::string* value) const {
   return false;
 }
 
-void PrefValueMap::SetString(const std::string& key, const std::string& value) {
+void PrefValueMap::SetString(std::string_view key, std::string_view value) {
   SetValue(key, base::Value(value));
 }
 
-bool PrefValueMap::GetInteger(const std::string& key, int* value) const {
+bool PrefValueMap::GetInteger(std::string_view key, int* value) const {
   const base::Value* stored_value = nullptr;
   if (GetValue(key, &stored_value) && stored_value->is_int()) {
     *value = stored_value->GetInt();
@@ -122,11 +137,11 @@ bool PrefValueMap::GetInteger(const std::string& key, int* value) const {
   return false;
 }
 
-void PrefValueMap::SetInteger(const std::string& key, const int value) {
+void PrefValueMap::SetInteger(std::string_view key, const int value) {
   SetValue(key, base::Value(value));
 }
 
-void PrefValueMap::SetDouble(const std::string& key, const double value) {
+void PrefValueMap::SetDouble(std::string_view key, const double value) {
   SetValue(key, base::Value(value));
 }
 
@@ -169,10 +184,10 @@ void PrefValueMap::GetDifferingKeys(
     differing_keys->push_back(other_pref->first);
 }
 
-std::unique_ptr<base::DictionaryValue> PrefValueMap::AsDictionaryValue() const {
-  auto dictionary = std::make_unique<base::DictionaryValue>();
+base::Value::Dict PrefValueMap::AsDict() const {
+  base::Value::Dict dictionary;
   for (const auto& value : prefs_)
-    dictionary->SetPath(value.first, value.second.Clone());
+    dictionary.SetByDottedPath(value.first, value.second.Clone());
 
   return dictionary;
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,9 @@
 #include <map>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "dbus/object_path.h"
 #include "dbus/property.h"
 #include "device/bluetooth/bluetooth_export.h"
@@ -57,7 +58,9 @@ class DEVICE_BLUETOOTH_EXPORT FakeBluetoothProfileManagerClient
   // registered for it; maintained by RegisterProfileServiceProvider() and
   // UnregisterProfileServiceProvicer() called by the constructor and
   // destructor of FakeBluetoothProfileServiceProvider.
-  typedef std::map<dbus::ObjectPath, FakeBluetoothProfileServiceProvider*>
+  typedef std::map<
+      dbus::ObjectPath,
+      raw_ptr<FakeBluetoothProfileServiceProvider, CtnExperimental>>
       ServiceProviderMap;
   ServiceProviderMap service_provider_map_;
 

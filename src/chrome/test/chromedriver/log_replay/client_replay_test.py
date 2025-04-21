@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -51,7 +51,7 @@ def SubstituteVariableEntries(s):
                r'|element-6066-11e4-a52e-4f735466cecf|message|timestamp' \
                r'|expiry|chromedriverVersion|sessionId)": ' \
                r'("[0-9]\.[0-9]*(\.[0-9]*)? \([a-f0-9]*\)"|[^\s},]*))' \
-               r'|CDwindow-[A-F0-9]*|cd_frame_id_="[a-f0-9]*")'
+               r'|[A-F0-9]{32}|cd_frame_id_="[a-f0-9]*")'
 
   return re.sub(white_list, "<variable_item>", s)
 

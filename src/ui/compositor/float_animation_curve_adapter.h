@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,6 +26,8 @@ class FloatAnimationCurveAdapter : public gfx::FloatAnimationCurve {
   base::TimeDelta Duration() const override;
   std::unique_ptr<gfx::AnimationCurve> Clone() const override;
   float GetValue(base::TimeDelta t) const override;
+  float GetTransformedValue(base::TimeDelta t,
+                            gfx::TimingFunction::LimitDirection) const override;
 
  private:
   gfx::Tween::Type tween_type_;

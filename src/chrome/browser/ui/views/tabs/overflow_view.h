@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/views/layout/flex_layout_types.h"
 #include "ui/views/layout/layout_types.h"
@@ -34,10 +35,17 @@
 //
 // TODO(dfried): If this turns out to be usable in multiple places, move to
 // ui/views/layout.
+// If there are 2 indicator views defined, then the first goes on the left and
+// the the second goes on the right, else only the right gets filled.
 class OverflowView : public views::View {
+  METADATA_HEADER(OverflowView, views::View)
+
  public:
   OverflowView(std::unique_ptr<views::View> primary_view,
-               std::unique_ptr<views::View> indicator_view);
+               std::unique_ptr<views::View> prefix_indicator_view,
+               std::unique_ptr<views::View> postfix_indicator_view);
+  OverflowView(std::unique_ptr<views::View> primary_view,
+               std::unique_ptr<views::View> postfix_indicator_view);
   ~OverflowView() override;
 
   void SetOrientation(views::LayoutOrientation orientation);
@@ -49,11 +57,11 @@ class OverflowView : public views::View {
   }
 
   // View:
-  void Layout() override;
+  void Layout(PassKey) override;
   views::SizeBounds GetAvailableSize(const View* child) const override;
   gfx::Size GetMinimumSize() const override;
-  gfx::Size CalculatePreferredSize() const override;
-  int GetHeightForWidth(int width) const override;
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override;
 
  private:
   // Whether the primary and overflow views are arranged horizontally or
@@ -70,7 +78,11 @@ class OverflowView : public views::View {
 
   // The overflow indicator view to be displayed if the primary view will
   // receive less than its minimum size along the main axis.
-  raw_ptr<views::View> indicator_view_ = nullptr;
+  raw_ptr<views::View> prefix_indicator_view_ = nullptr;
+
+  // The overflow indicator view to be displayed if the primary view will
+  // receive less than its minimum size along the main axis.
+  raw_ptr<views::View> postfix_indicator_view_ = nullptr;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_TABS_OVERFLOW_VIEW_H_

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ class WDTypedResult;
 class WebDatabaseService;
 
 namespace base {
-class SingleThreadTaskRunner;
+class SequencedTaskRunner;
 }
 
 namespace payments {
@@ -34,7 +34,7 @@ class PaymentManifestWebDataService : public WebDataServiceBase,
  public:
   PaymentManifestWebDataService(
       scoped_refptr<WebDatabaseService> wdbs,
-      scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner);
+      scoped_refptr<base::SequencedTaskRunner> ui_task_runner);
 
   PaymentManifestWebDataService(const PaymentManifestWebDataService&) = delete;
   PaymentManifestWebDataService& operator=(
@@ -83,6 +83,23 @@ class PaymentManifestWebDataService : public WebDataServiceBase,
       base::Time end,
       base::OnceClosure callback);
 
+  // Set the `browser_bound_key_id` for the given `credential_id` and
+  // `relying_party_id`, and returns a boolean status to the `consumer`, which
+  // must outlive the DB operation, because DB tasks cannot be cancelled.
+  virtual WebDataServiceBase::Handle SetBrowserBoundKey(
+      std::vector<uint8_t> credential_id,
+      std::string relying_party_id,
+      std::vector<uint8_t> browser_bound_key_id,
+      WebDataServiceConsumer* consumer);
+
+  // Get the browser bound key id given the `credential_id` and
+  // `relying_party_id`. Returns the key id or nullopt to the `consumer`, which
+  // must outlive the DB operation, because DB tasks cannot be cancelled.
+  virtual WebDataServiceBase::Handle GetBrowserBoundKey(
+      const std::vector<uint8_t> credential_id,
+      std::string relying_party_id,
+      WebDataServiceConsumer* consumer);
+
   // Override WebDataServiceConsumer interface.
   void OnWebDataServiceRequestDone(
       WebDataServiceBase::Handle h,
@@ -119,6 +136,15 @@ class PaymentManifestWebDataService : public WebDataServiceBase,
   std::unique_ptr<WDTypedResult> GetSecurePaymentConfirmationCredentialsImpl(
       std::vector<std::vector<uint8_t>> credential_ids,
       const std::string& relying_party_id,
+      WebDatabase* db);
+  std::unique_ptr<WDTypedResult> SetBrowserBoundKeyImpl(
+      std::vector<uint8_t> credential_id,
+      std::string relying_party_id,
+      std::vector<uint8_t> browser_bound_key_id,
+      WebDatabase* db);
+  std::unique_ptr<WDTypedResult> GetBrowserBoundKeyImpl(
+      std::vector<uint8_t> credential_id,
+      std::string relying_party_id,
       WebDatabase* db);
 
   std::map<WebDataServiceBase::Handle, base::OnceClosure>

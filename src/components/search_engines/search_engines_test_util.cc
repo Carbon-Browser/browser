@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -58,8 +58,7 @@ void ExpectSimilar(const TemplateURLData* expected,
 void SetExtensionDefaultSearchInPrefs(
     sync_preferences::TestingPrefServiceSyncable* prefs,
     const TemplateURLData& data) {
-  std::unique_ptr<base::DictionaryValue> entry =
-      TemplateURLDataToDictionary(data);
+  base::Value::Dict entry = TemplateURLDataToDictionary(data);
   prefs->SetExtensionPref(
       DefaultSearchManager::kDefaultSearchProviderDataPrefName,
       std::move(entry));

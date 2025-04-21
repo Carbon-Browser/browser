@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,7 @@
 
 #include "base/command_line.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
-#include "ui/views/views_touch_selection_controller_factory.h"
+#include "ui/base/mojom/window_show_state.mojom.h"
 #include "ui/views/widget/native_widget_private.h"
 
 #if defined(USE_AURA)
@@ -24,15 +23,11 @@ ViewsDelegate* views_delegate = nullptr;
 
 }  // namespace
 
-ViewsDelegate::ViewsDelegate()
-    : editing_controller_factory_(new ViewsTouchEditingControllerFactory) {
+ViewsDelegate::ViewsDelegate() {
   DCHECK(!views_delegate);
   views_delegate = this;
 
-  ui::TouchEditingControllerFactory::SetInstance(
-      editing_controller_factory_.get());
-
-#if BUILDFLAG(ENABLE_DESKTOP_AURA) || BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(ENABLE_DESKTOP_AURA) || BUILDFLAG(IS_CHROMEOS)
   // TouchSelectionMenuRunnerViews is not supported on Mac or Cast.
   // It is also not used on Ash (the ChromeViewsDelegate() for Ash will
   // immediately replace this). But tests running without the Chrome layer
@@ -43,8 +38,6 @@ ViewsDelegate::ViewsDelegate()
 }
 
 ViewsDelegate::~ViewsDelegate() {
-  ui::TouchEditingControllerFactory::SetInstance(nullptr);
-
   DCHECK_EQ(this, views_delegate);
   views_delegate = nullptr;
 }
@@ -56,13 +49,14 @@ ViewsDelegate* ViewsDelegate::GetInstance() {
 void ViewsDelegate::SaveWindowPlacement(const Widget* widget,
                                         const std::string& window_name,
                                         const gfx::Rect& bounds,
-                                        ui::WindowShowState show_state) {}
+                                        ui::mojom::WindowShowState show_state) {
+}
 
 bool ViewsDelegate::GetSavedWindowPlacement(
     const Widget* widget,
     const std::string& window_name,
     gfx::Rect* bounds,
-    ui::WindowShowState* show_state) const {
+    ui::mojom::WindowShowState* show_state) const {
   return false;
 }
 

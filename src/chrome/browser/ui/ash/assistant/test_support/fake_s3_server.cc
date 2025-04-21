@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/notreached.h"
 #include "base/path_service.h"
 #include "base/process/launch.h"
 #include "base/strings/string_number_conversions.h"
@@ -20,10 +21,15 @@
 #include "chromeos/assistant/internal/internal_constants.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 namespace {
+
+// TODO(b/258750971): remove when internal assistant codes are migrated to
+// namespace ash.
+using ::chromeos::assistant::kFakeS3ServerBinary;
+using ::chromeos::assistant::kFakeS3ServerBinaryV2;
+using ::chromeos::assistant::kGenerateTokenInstructions;
 
 // Folder where the S3 communications are stored when running in replay mode.
 constexpr char kTestDataFolder[] = "chromeos/assistant/internal/test_data/";
@@ -42,7 +48,7 @@ base::FilePath GetExecutableDir() {
 
 base::FilePath GetSourceDir() {
   base::FilePath result;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &result);
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &result);
   return result;
 }
 
@@ -51,9 +57,10 @@ std::string GetSanitizedTestName() {
       "%s_%s",
       testing::UnitTest::GetInstance()->current_test_info()->test_suite_name(),
       testing::UnitTest::GetInstance()->current_test_info()->name()));
-  std::string new_test_name;
-  base::ReplaceChars(test_name, "/", "_", &new_test_name);
-  return new_test_name;
+  // The test name may has `disabled_`. Remove it to match the data_file
+  // name.
+  base::ReplaceSubstringsAfterOffset(&test_name, 0, "disabled_", "");
+  return test_name;
 }
 
 const std::string GetAccessTokenFromEnvironmentOrDie() {
@@ -112,13 +119,14 @@ class PortSelector {
   constexpr static int kMaxAttempts = 20000;
 
   void SelectPort() {
-    for (int offset = 0; offset < kMaxAttempts; offset++) {
+    for (int offset = 0; offset + 1 < kMaxAttempts; offset += 2) {
       port_ = kStartPort + offset;
       lock_file_ = base::File(GetLockFilePath(), GetFileFlags());
-      if (lock_file_.IsValid())
+      if (lock_file_.IsValid()) {
         return;
+      }
     }
-    CHECK(false) << "Failed to find an available port.";
+    NOTREACHED() << "Failed to find an available port.";
   }
 
   base::FilePath GetLockFilePath() const {
@@ -177,8 +185,8 @@ void FakeS3Server::SetAccessTokenForMode(FakeS3Mode mode) {
 
 void FakeS3Server::SetFakeS3ServerURI() {
   // Note this must be stored in a local variable, as
-  // |Service::OverrideS3ServerUriForTesting| does not take ownership of the
-  // |const char *|.
+  // `Service::OverrideS3ServerUriForTesting` does not take ownership of the
+  // `const char *`.
   fake_s3_server_uri_ = "localhost:" + base::NumberToString(port());
   Service::OverrideS3ServerUriForTesting(fake_s3_server_uri_.c_str());
 }
@@ -203,11 +211,14 @@ void FakeS3Server::StartS3ServerProcess(FakeS3Mode mode) {
     return;
   }
 
-  base::FilePath fake_s3_server_main =
-      GetExecutableDir().Append(FILE_PATH_LITERAL(kFakeS3ServerBinary));
+  base::FilePath fake_s3_server_main;
+  fake_s3_server_main =
+      GetExecutableDir().Append(FILE_PATH_LITERAL(kFakeS3ServerBinaryV2));
 
   base::CommandLine command_line(fake_s3_server_main);
   AppendArgument(&command_line, "--port", base::NumberToString(port()));
+  AppendArgument(&command_line, "--http_port",
+                 base::NumberToString(port() + 1));
   AppendArgument(&command_line, "--mode", FakeS3ModeToString(mode));
   AppendArgument(&command_line, "--auth_token", GetAccessToken());
   AppendArgument(&command_line, "--test_data_file", GetTestDataFileName());
@@ -249,5 +260,4 @@ int FakeS3Server::port() const {
   return port_selector_->port();
 }
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant

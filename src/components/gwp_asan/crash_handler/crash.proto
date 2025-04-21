@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,8 @@ option optimize_for = LITE_RUNTIME;
 
 message Crash {
   enum ErrorType {
+    reserved 6;
+
     // These should not be renumbered and should be kept in sync with
     // AllocatorState::ErrorType in allocator_state.h
     USE_AFTER_FREE = 0;
@@ -23,9 +25,19 @@ message Crash {
     FREE_INVALID_ADDRESS = 5;
   }
 
+  // Allocators with GWP-ASan support.
   enum Allocator {
     MALLOC = 0;
     PARTITIONALLOC = 1;
+  }
+
+  // GWP-ASan mode that produced the crash report.
+  enum Mode {
+    UNSPECIFIED = 0;
+    CLASSIC = 1;
+    LIGHTWEIGHT_DETECTOR_BRP = 2;
+    LIGHTWEIGHT_DETECTOR_RANDOM = 3;
+    EXTREME_LIGHTWEIGHT_DETECTOR = 4;
   }
 
   message AllocationInfo {
@@ -59,4 +71,6 @@ message Crash {
   optional string internal_error = 10;
 
   optional Allocator allocator = 11;
+
+  optional Mode mode = 12;
 }

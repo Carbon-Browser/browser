@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,9 +27,12 @@ GLSurfaceEglReadbackWayland::PixelBuffer::PixelBuffer(
 GLSurfaceEglReadbackWayland::PixelBuffer::~PixelBuffer() = default;
 
 GLSurfaceEglReadbackWayland::GLSurfaceEglReadbackWayland(
+    gl::GLDisplayEGL* display,
     gfx::AcceleratedWidget widget,
     WaylandBufferManagerGpu* buffer_manager)
-    : widget_(widget), buffer_manager_(buffer_manager) {
+    : GLSurfaceEglReadback(display),
+      widget_(widget),
+      buffer_manager_(buffer_manager) {
   buffer_manager_->RegisterSurface(widget_, this);
 }
 
@@ -83,23 +86,20 @@ bool GLSurfaceEglReadbackWayland::Resize(const gfx::Size& size,
   return true;
 }
 
-bool GLSurfaceEglReadbackWayland::IsOffscreen() {
-  return false;
-}
-
 bool GLSurfaceEglReadbackWayland::SupportsAsyncSwap() {
   return true;
 }
 
 gfx::SwapResult GLSurfaceEglReadbackWayland::SwapBuffers(
-    PresentationCallback callback) {
+    PresentationCallback callback,
+    gfx::FrameData data) {
   NOTREACHED();
-  return gfx::SwapResult::SWAP_FAILED;
 }
 
 void GLSurfaceEglReadbackWayland::SwapBuffersAsync(
     SwapCompletionCallback completion_callback,
-    PresentationCallback presentation_callback) {
+    PresentationCallback presentation_callback,
+    gfx::FrameData data) {
   DCHECK(pending_frames_ < kMaxBuffers);
 
   // Increase pending frames number.
@@ -113,13 +113,15 @@ void GLSurfaceEglReadbackWayland::SwapBuffersAsync(
   auto* next_buffer = in_flight_pixel_buffers_.back().get();
   available_buffers_.erase(available_buffers_.begin());
 
-  CHECK(next_buffer->shm_mapping_.memory());
-  ReadPixels(next_buffer->shm_mapping_.memory());
+  ReadPixels(next_buffer->shm_mapping_);
 
   const auto bounds = gfx::Rect(GetSize());
+  constexpr bool enable_blend_for_shadow = true;
   buffer_manager_->CommitBuffer(widget_, next_buffer->buffer_id_,
-                                /*frame_id*/ next_buffer->buffer_id_, bounds,
-                                surface_scale_factor_, bounds);
+                                /*frame_id*/ next_buffer->buffer_id_, data,
+                                bounds, enable_blend_for_shadow,
+                                gfx::RoundedCornersF(), surface_scale_factor_,
+                                bounds);
 }
 
 gfx::SurfaceOrigin GLSurfaceEglReadbackWayland::GetOrigin() const {

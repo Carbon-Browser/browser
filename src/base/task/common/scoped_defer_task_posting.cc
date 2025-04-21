@@ -1,11 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/task/common/scoped_defer_task_posting.h"
 
-#include "base/no_destructor.h"
-#include "base/threading/thread_local.h"
+#include "base/compiler_specific.h"
 
 namespace base {
 
@@ -13,10 +12,8 @@ namespace {
 
 // Holds a thread-local pointer to the current scope or null when no
 // scope is active.
-ThreadLocalPointer<ScopedDeferTaskPosting>& GetScopedDeferTaskPostingTLS() {
-  static NoDestructor<ThreadLocalPointer<ScopedDeferTaskPosting>> tls;
-  return *tls;
-}
+constinit thread_local ScopedDeferTaskPosting* scoped_defer_task_posting =
+    nullptr;
 
 }  // namespace
 
@@ -38,16 +35,22 @@ void ScopedDeferTaskPosting::PostOrDefer(
 
 // static
 ScopedDeferTaskPosting* ScopedDeferTaskPosting::Get() {
-  return GetScopedDeferTaskPostingTLS().Get();
+  // Workaround false-positive MSAN use-of-uninitialized-value on
+  // thread_local storage for loaded libraries:
+  // https://github.com/google/sanitizers/issues/1265
+  MSAN_UNPOISON(&scoped_defer_task_posting, sizeof(ScopedDeferTaskPosting*));
+
+  return scoped_defer_task_posting;
 }
 
 // static
 bool ScopedDeferTaskPosting::Set(ScopedDeferTaskPosting* scope) {
   // We can post a task from within a ScheduleWork in some tests, so we can
   // get nested scopes. In this case ignore all except the top one.
-  if (Get() && scope)
+  if (Get() && scope) {
     return false;
-  GetScopedDeferTaskPostingTLS().Set(scope);
+  }
+  scoped_defer_task_posting = scope;
   return true;
 }
 

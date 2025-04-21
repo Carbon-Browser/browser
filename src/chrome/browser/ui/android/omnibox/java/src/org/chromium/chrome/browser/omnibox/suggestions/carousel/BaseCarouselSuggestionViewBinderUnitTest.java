@@ -1,40 +1,36 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.omnibox.suggestions.carousel;
 
-import static org.mockito.Mockito.anyInt;
-import static org.mockito.Mockito.eq;
-import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.times;
+import static org.junit.Assert.assertEquals;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.notNull;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.when;
 
-import android.content.res.Configuration;
+import android.content.Context;
 import android.content.res.Resources;
-import android.util.DisplayMetrics;
-import android.view.View;
-import android.widget.TextView;
+import android.graphics.Color;
+import android.view.ViewGroup.MarginLayoutParams;
 
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.TestRule;
 import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.robolectric.annotation.Config;
 
+import org.chromium.base.ContextUtils;
 import org.chromium.base.test.BaseRobolectricTestRunner;
-import org.chromium.chrome.R;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
+import org.chromium.chrome.browser.omnibox.styles.OmniboxResourceProvider;
 import org.chromium.chrome.browser.omnibox.suggestions.SuggestionCommonProperties;
-import org.chromium.chrome.browser.omnibox.suggestions.SuggestionCommonProperties.FormFactor;
-import org.chromium.chrome.test.util.browser.Features;
-import org.chromium.chrome.test.util.browser.Features.EnableFeatures;
+import org.chromium.chrome.browser.omnibox.suggestions.base.SpacingRecyclerViewItemDecoration;
+import org.chromium.chrome.browser.omnibox.test.R;
+import org.chromium.chrome.browser.ui.theme.BrandedColorScheme;
 import org.chromium.ui.modelutil.MVCListAdapter.ListItem;
 import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
 import org.chromium.ui.modelutil.PropertyModel;
@@ -44,72 +40,27 @@ import org.chromium.ui.modelutil.SimpleRecyclerViewAdapter;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Tests for {@link BaseCarouselSuggestionViewBinder}.
- */
+/** Tests for {@link BaseCarouselSuggestionViewBinder}. */
 @RunWith(BaseRobolectricTestRunner.class)
-@Config(manifest = Config.NONE)
-@EnableFeatures({ChromeFeatureList.OMNIBOX_MOST_VISITED_TILES_DYNAMIC_SPACING})
 public class BaseCarouselSuggestionViewBinderUnitTest {
-    static final int SUGGESTION_VERTICAL_PADDING = 123;
-    public @Rule TestRule mFeatures = new Features.JUnitProcessor();
 
-    @Mock
-    BaseCarouselSuggestionView mView;
-
-    @Mock
-    TextView mHeaderTextView;
-
-    @Mock
-    View mHeaderView;
-
-    @Mock
-    View mItemView;
-
-    @Mock
-    SimpleRecyclerViewAdapter mAdapter;
-
-    @Mock
-    Resources mResources;
-
+    private BaseCarouselSuggestionView mView;
+    private Context mContext;
+    private Resources mResources;
     private ModelList mTiles;
+    private SimpleRecyclerViewAdapter mAdapter;
     private PropertyModel mModel;
-    private Configuration mConfiguration;
 
     @Before
     public void setUp() {
-        MockitoAnnotations.initMocks(this);
-        mModel = new PropertyModel(BaseCarouselSuggestionViewProperties.ALL_KEYS);
-        PropertyModelChangeProcessor.create(mModel, mView, BaseCarouselSuggestionViewBinder::bind);
+        mContext = ContextUtils.getApplicationContext();
+        mResources = mContext.getResources();
 
         mTiles = new ModelList();
-        mConfiguration = new Configuration();
-        mConfiguration.orientation = Configuration.ORIENTATION_PORTRAIT;
-
-        when(mView.getHeaderTextView()).thenReturn(mHeaderTextView);
-        when(mView.getHeaderView()).thenReturn(mHeaderView);
-        when(mView.getAdapter()).thenReturn(mAdapter);
-        when(mAdapter.getModelList()).thenReturn(mTiles);
-        when(mView.getResources()).thenReturn(mResources);
-
-        when(mResources.getDimensionPixelSize(eq(R.dimen.omnibox_carousel_suggestion_padding)))
-                .thenReturn(SUGGESTION_VERTICAL_PADDING);
-        when(mResources.getConfiguration()).thenReturn(mConfiguration);
-    }
-
-    @Test
-    public void headerTitle_set() {
-        mModel.set(BaseCarouselSuggestionViewProperties.TITLE, "title");
-        verify(mHeaderTextView, times(1)).setText(eq("title"));
-        verifyNoMoreInteractions(mHeaderTextView);
-    }
-
-    @Test
-    public void headerTitle_updateToSameIsNoOp() {
-        mModel.set(BaseCarouselSuggestionViewProperties.TITLE, "title");
-        reset(mHeaderTextView);
-        mModel.set(BaseCarouselSuggestionViewProperties.TITLE, "title");
-        verifyNoMoreInteractions(mHeaderTextView);
+        mAdapter = new SimpleRecyclerViewAdapter(mTiles);
+        mView = spy(new BaseCarouselSuggestionView(mContext, mAdapter));
+        mModel = new PropertyModel(BaseCarouselSuggestionViewProperties.ALL_KEYS);
+        PropertyModelChangeProcessor.create(mModel, mView, BaseCarouselSuggestionViewBinder::bind);
     }
 
     @Test
@@ -137,104 +88,150 @@ public class BaseCarouselSuggestionViewBinderUnitTest {
         Assert.assertEquals(0, mTiles.size());
         mModel.set(BaseCarouselSuggestionViewProperties.TILES, tiles);
         Assert.assertEquals(3, mTiles.size());
+        verify(mView).resetSelection();
+
+        clearInvocations(mView);
+
         mModel.set(BaseCarouselSuggestionViewProperties.TILES, null);
         Assert.assertEquals(0, mTiles.size());
+        verify(mView).resetSelection();
     }
 
     @Test
-    public void headerTitle_visibilityChangeAltersTopPadding() {
-        mModel.set(BaseCarouselSuggestionViewProperties.SHOW_TITLE, true);
-        verify(mHeaderView, times(1)).setVisibility(eq(View.VISIBLE));
-        verify(mHeaderView, times(1)).setVisibility(anyInt());
-        verify(mView, times(1))
-                .setPaddingRelative(eq(0), eq(0), eq(0), eq(SUGGESTION_VERTICAL_PADDING));
-        verify(mView, times(1)).setPaddingRelative(anyInt(), anyInt(), anyInt(), anyInt());
+    public void createModel_noPaddingValues() {
+        var view = mock(BaseCarouselSuggestionView.class);
+        var model =
+                new PropertyModel.Builder(BaseCarouselSuggestionViewProperties.ALL_KEYS).build();
+        PropertyModelChangeProcessor.create(model, view, BaseCarouselSuggestionViewBinder::bind);
 
-        mModel.set(BaseCarouselSuggestionViewProperties.SHOW_TITLE, false);
-        verify(mHeaderView, times(1)).setVisibility(eq(View.GONE));
-        verify(mHeaderView, times(2)).setVisibility(anyInt());
-        verify(mView, times(1))
-                .setPaddingRelative(eq(0), eq(SUGGESTION_VERTICAL_PADDING), eq(0),
-                        eq(SUGGESTION_VERTICAL_PADDING));
-        verify(mView, times(2)).setPaddingRelative(anyInt(), anyInt(), anyInt(), anyInt());
-    }
-
-    /**
-     * We expect value to be computed as the tile margin value computed is larger than
-     * tile_view_padding
-     */
-    @Test
-    public void formFactor_itemSpacingPhone_computedPortrait() {
-        int tileSpacingMaximum = 28;
-        int displayWidth = 1440;
-        int tileViewPaddingEdgePortrait = 12;
-        int tileViewwidth = 280;
-
-        when(mResources.getDimensionPixelOffset(
-                     eq(R.dimen.omnibox_suggestion_carousel_spacing_maximum)))
-                .thenReturn(tileSpacingMaximum);
-        when(mResources.getDimensionPixelSize(eq(R.dimen.tile_view_padding_edge_portrait)))
-                .thenReturn(tileViewPaddingEdgePortrait);
-        when(mResources.getDimensionPixelOffset(eq(R.dimen.tile_view_width)))
-                .thenReturn(tileViewwidth);
-
-        DisplayMetrics displayMetrics = new DisplayMetrics();
-        displayMetrics.widthPixels = displayWidth;
-        when(mResources.getDisplayMetrics()).thenReturn(displayMetrics);
-
-        final int expectedSpacingPx =
-                (int) ((displayWidth - tileViewPaddingEdgePortrait - tileViewwidth * 4.5) / 4);
-        Assert.assertEquals(expectedSpacingPx,
-                BaseCarouselSuggestionViewBinder.getItemSpacingPx(FormFactor.PHONE, mResources));
+        verify(view, never()).setPaddingRelative(anyInt(), anyInt(), anyInt(), anyInt());
     }
 
     @Test
-    public void formFactor_itemSpacingTabletPortrait() {
-        final int paddingPx = 100;
-        when(mResources.getDimensionPixelSize(eq(R.dimen.tile_view_padding_edge_portrait)))
-                .thenReturn(paddingPx);
-        Assert.assertEquals(paddingPx,
-                BaseCarouselSuggestionViewBinder.getItemSpacingPx(FormFactor.TABLET, mResources));
+    public void createModel_specificPaddingValues() {
+        var view = mock(BaseCarouselSuggestionView.class);
+        var model =
+                new PropertyModel.Builder(BaseCarouselSuggestionViewProperties.ALL_KEYS)
+                        .with(BaseCarouselSuggestionViewProperties.TOP_PADDING, 13)
+                        .with(BaseCarouselSuggestionViewProperties.BOTTOM_PADDING, 75)
+                        .build();
+        PropertyModelChangeProcessor.create(model, view, BaseCarouselSuggestionViewBinder::bind);
+
+        verify(view, atLeastOnce()).setPaddingRelative(0, 13, 0, 75);
     }
 
     @Test
-    public void formFactor_itemSpacingEndToEnd() {
-        final int spacingPx = 100;
-        when(mResources.getDimensionPixelSize(eq(R.dimen.tile_view_padding_edge_portrait)))
-                .thenReturn(spacingPx);
-        Assert.assertEquals(spacingPx,
-                BaseCarouselSuggestionViewBinder.getItemSpacingPx(FormFactor.TABLET, mResources));
-        mModel.set(SuggestionCommonProperties.DEVICE_FORM_FACTOR, FormFactor.TABLET);
-        verify(mView, times(1)).setItemSpacingPx(eq(spacingPx));
+    public void createModel_backgroundDisabled() {
+        var layoutParams = new MarginLayoutParams(/* width= */ 0, /* height= */ 0);
+        var view = spy(new BaseCarouselSuggestionView(mContext, mAdapter));
+        view.setLayoutParams(layoutParams);
+        clearInvocations(view);
+
+        var model =
+                new PropertyModel.Builder(BaseCarouselSuggestionViewProperties.ALL_KEYS)
+                        .with(BaseCarouselSuggestionViewProperties.APPLY_BACKGROUND, false)
+                        .build();
+
+        PropertyModelChangeProcessor.create(model, view, BaseCarouselSuggestionViewBinder::bind);
+
+        verify(view).setBackgroundColor(Color.TRANSPARENT);
+        verify(view).setOutlineProvider(null);
+        verify(view).setClipToOutline(false);
+        verify(view).setLayoutParams(layoutParams);
+        assertEquals(0, layoutParams.getMarginStart());
+        assertEquals(0, layoutParams.getMarginEnd());
     }
 
     @Test
-    public void formFactor_itemSpacingPhone_landscape() {
-        int landscapePadding = 123456789;
+    public void createModel_backgroundEnabled_nonIncognito() {
+        var layoutParams = new MarginLayoutParams(/* width= */ 0, /* height= */ 0);
+        var view = spy(new BaseCarouselSuggestionView(mContext, mAdapter));
+        view.setLayoutParams(layoutParams);
+        clearInvocations(view);
 
-        mConfiguration.orientation = Configuration.ORIENTATION_LANDSCAPE;
+        var model =
+                new PropertyModel.Builder(BaseCarouselSuggestionViewProperties.ALL_KEYS)
+                        .with(BaseCarouselSuggestionViewProperties.APPLY_BACKGROUND, true)
+                        .build();
 
-        // Ignore all other dimensions. Allow the logic to return garbage (or crash) if expectation
-        // is not met.
-        when(mResources.getDimensionPixelOffset(eq(R.dimen.tile_view_padding_landscape)))
-                .thenReturn(landscapePadding);
+        PropertyModelChangeProcessor.create(model, view, BaseCarouselSuggestionViewBinder::bind);
 
-        Assert.assertEquals(landscapePadding,
-                BaseCarouselSuggestionViewBinder.getItemSpacingPx(FormFactor.PHONE, mResources));
+        verify(view)
+                .setBackgroundColor(
+                        OmniboxResourceProvider.getStandardSuggestionBackgroundColor(mContext));
+        verify(view).setOutlineProvider(notNull());
+        verify(view).setClipToOutline(true);
+        verify(view).setLayoutParams(layoutParams);
+        assertEquals(
+                OmniboxResourceProvider.getSideSpacing(mContext), layoutParams.getMarginStart());
+        assertEquals(OmniboxResourceProvider.getSideSpacing(mContext), layoutParams.getMarginEnd());
     }
 
     @Test
-    public void formFactor_itemSpacingTablet_landscape() {
-        int landscapePadding = 123456789;
+    public void createModel_backgroundEnabled_incognito() {
+        var layoutParams = new MarginLayoutParams(/* width= */ 0, /* height= */ 0);
+        var view = spy(new BaseCarouselSuggestionView(mContext, mAdapter));
+        view.setLayoutParams(layoutParams);
+        clearInvocations(view);
 
-        mConfiguration.orientation = Configuration.ORIENTATION_LANDSCAPE;
+        var model =
+                new PropertyModel.Builder(BaseCarouselSuggestionViewProperties.ALL_KEYS)
+                        .with(SuggestionCommonProperties.COLOR_SCHEME, BrandedColorScheme.INCOGNITO)
+                        .with(BaseCarouselSuggestionViewProperties.APPLY_BACKGROUND, true)
+                        .build();
 
-        // Ignore all other dimensions. Allow the logic to return garbage (or crash) if expectation
-        // is not met.
-        when(mResources.getDimensionPixelOffset(eq(R.dimen.tile_view_padding_landscape)))
-                .thenReturn(landscapePadding);
+        PropertyModelChangeProcessor.create(model, view, BaseCarouselSuggestionViewBinder::bind);
 
-        Assert.assertEquals(landscapePadding,
-                BaseCarouselSuggestionViewBinder.getItemSpacingPx(FormFactor.TABLET, mResources));
+        verify(view).setBackgroundColor(mContext.getColor(R.color.omnibox_suggestion_bg_incognito));
+        // Same as in the non-incognito variant.
+        verify(view).setOutlineProvider(notNull());
+        verify(view).setClipToOutline(true);
+        verify(view).setLayoutParams(layoutParams);
+        assertEquals(
+                OmniboxResourceProvider.getSideSpacing(mContext), layoutParams.getMarginStart());
+        assertEquals(OmniboxResourceProvider.getSideSpacing(mContext), layoutParams.getMarginEnd());
+    }
+
+    @Test
+    public void itemDecoration_setItemWidth() {
+        // View was initially created with no decorations.
+        Assert.assertEquals(0, mView.getItemDecorationCount());
+
+        // Create a new model with a decoration attached.
+        var decoration = new SpacingRecyclerViewItemDecoration(10, 5);
+        mModel =
+                new PropertyModel.Builder(BaseCarouselSuggestionViewProperties.ALL_KEYS)
+                        .with(BaseCarouselSuggestionViewProperties.ITEM_DECORATION, decoration)
+                        .build();
+        PropertyModelChangeProcessor.create(mModel, mView, BaseCarouselSuggestionViewBinder::bind);
+
+        Assert.assertEquals(1, mView.getItemDecorationCount());
+        Assert.assertSame(decoration, mView.getItemDecorationAt(0));
+    }
+
+    @Test
+    public void bindContentDescription_nullDescription() {
+        mModel =
+                new PropertyModel.Builder(BaseCarouselSuggestionViewProperties.ALL_KEYS)
+                        .with(BaseCarouselSuggestionViewProperties.CONTENT_DESCRIPTION, null)
+                        .build();
+        mView = spy(new BaseCarouselSuggestionView(mContext, mAdapter));
+        PropertyModelChangeProcessor.create(mModel, mView, BaseCarouselSuggestionViewBinder::bind);
+
+        verify(mView).setContentDescription(null);
+    }
+
+    @Test
+    public void bindContentDescription_nonNullDescription() {
+        mModel =
+                new PropertyModel.Builder(BaseCarouselSuggestionViewProperties.ALL_KEYS)
+                        .with(
+                                BaseCarouselSuggestionViewProperties.CONTENT_DESCRIPTION,
+                                "description")
+                        .build();
+        mView = spy(new BaseCarouselSuggestionView(mContext, mAdapter));
+        PropertyModelChangeProcessor.create(mModel, mView, BaseCarouselSuggestionViewBinder::bind);
+
+        verify(mView).setContentDescription("description");
     }
 }

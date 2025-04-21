@@ -1,20 +1,20 @@
 <!DOCTYPE html>
-<html lang="en">
-<meta charset="utf-8" />
-<title>CSS Pseudo-Elements Test: Reference</title>
-<link rel="author" title="Manuel Rego Casasnovas" href="mailto:rego@igalia.com">
+<meta charset="utf-8">
+<link rel="author" title="Delan Azabani" href="mailto:dazabani@igalia.com">
 <link rel="stylesheet" href="support/highlights.css">
 <style>
-.highlight_reftest {
-  color: green;
-  margin: 10px;
-}
-.color-blue {
-  color: blue;
-}
+  .a {
+    color: yellow;
+    background-color: blue;
+  }
+  .b {
+    color: lime;
+    background-color: blue;
+  }
+  .selection {
+    color: currentColor;
+    background-color: black;
+    text-shadow: 0 2em red, 0 4em currentColor;
+  }
 </style>
-
-<div class="highlight_reftest">green</div>
-<div class="highlight_reftest">green</div>
-<div class="highlight_reftest color-blue">blue</div>
-<div class="highlight_reftest color-blue">blue</div>
+<div class="highlight_reftest" id="target"><span class="b"><span class="selection">test</span></span><span class="selection"> </span><span class="a"><span class="selection">test</span></span></div>

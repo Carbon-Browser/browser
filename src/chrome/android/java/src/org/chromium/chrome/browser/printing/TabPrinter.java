@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,12 @@ package org.chromium.chrome.browser.printing;
 
 import android.text.TextUtils;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.ContextUtils;
 import org.chromium.base.Log;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.content_public.browser.WebContents;
@@ -69,7 +70,7 @@ public class TabPrinter implements Printable {
     @Override
     public boolean canPrint() {
         Tab tab = mTab.get();
-        if (tab == null || !tab.isInitialized()) {
+        if (tab == null || !tab.isInitialized() || tab.isHidden()) {
             // Tab.isInitialized() will be false if tab is in destroy process.
             Log.d(TAG, "Tab is not avaliable for printing.");
             return false;

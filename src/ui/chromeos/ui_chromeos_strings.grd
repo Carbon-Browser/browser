@@ -636,6 +636,9 @@
       <message name="IDS_CHROMEOS_IME_INFOLIST_WINDOW_TITLE" desc="The title of the infolist window where the meanings and the usages of words are displayed.">
         Information
       </message>
+      <message name="IDS_CHROMEOS_DIACRITIC_NUDGE_TEXT">
+      Want keys to repeat? Turn off accent marks in Keyboard Settings
+      </message>
       <message name="IDS_CHROMEOS_IME_CHINESE_QUICK_SETTINGS_CHINESE" desc="It is the description of whether the current input method is Chinese.">
         Input language is Chinese
       </message>
@@ -1072,6 +1075,12 @@
       <message name="IDS_IME_NAME_KEYBOARD_ENGLISH_SOUTH_AFRICA" desc="Input method name, shown in system tray menu, settings page, etc. following this template: “|language| (|variant|) |IME| with |layout| keyboard” which means “an input method that supports typing in the |variant| of |language|, using |IME| and a keyboard with |layout|. When a part in this template is unambiguous, it’s dropped for brevity. Translations should strive for similar consistency in structure among input method names. Note: On ChromeOS, an “input method” is a suite of all input functionalities. |IME| in the template refers to an optional aspect of an “input method” on ChromeOS, i.e. sophisticated transforms into text in |language| when using a keyboard layout not designed for |language|." meaning="Input method name">
         English (South Africa)
       </message>
+      <message name="IDS_IME_NAME_KEYBOARD_ENGLISH_INDIA" desc="Input method name, shown in system tray menu, settings page, etc. following this template: “|language| (|variant|) |IME| with |layout| keyboard” which means “an input method that supports typing in the |variant| of |language|, using |IME| and a keyboard with |layout|. When a part in this template is unambiguous, it’s dropped for brevity. Translations should strive for similar consistency in structure among input method names. Note: On ChromeOS, an “input method” is a suite of all input functionalities. |IME| in the template refers to an optional aspect of an “input method” on ChromeOS, i.e. sophisticated transforms into text in |language| when using a keyboard layout not designed for |language|." meaning="Input method name">
+        English (India)
+      </message>
+      <message name="IDS_IME_NAME_KEYBOARD_ENGLISH_PAKISTAN" desc="Input method name, shown in system tray menu, settings page, etc. following this template: “|language| (|variant|) |IME| with |layout| keyboard” which means “an input method that supports typing in the |variant| of |language|, using |IME| and a keyboard with |layout|. When a part in this template is unambiguous, it’s dropped for brevity. Translations should strive for similar consistency in structure among input method names. Note: On ChromeOS, an “input method” is a suite of all input functionalities. |IME| in the template refers to an optional aspect of an “input method” on ChromeOS, i.e. sophisticated transforms into text in |language| when using a keyboard layout not designed for |language|." meaning="Input method name">
+        English (Pakistan)
+      </message>
       <message name="IDS_IME_NAME_KEYBOARD_UKRAINIAN" desc="Input method name, shown in system tray menu, settings page, etc. following this template: “|language| (|variant|) |IME| with |layout| keyboard” which means “an input method that supports typing in the |variant| of |language|, using |IME| and a keyboard with |layout|. When a part in this template is unambiguous, it’s dropped for brevity. Translations should strive for similar consistency in structure among input method names. Note: On ChromeOS, an “input method” is a suite of all input functionalities. |IME| in the template refers to an optional aspect of an “input method” on ChromeOS, i.e. sophisticated transforms into text in |language| when using a keyboard layout not designed for |language|." meaning="Input method name">
         Ukrainian
       </message>
@@ -1273,6 +1282,9 @@
       <message name="IDS_IME_NAME_TRANSLITERATION_HI" desc="Input method name, shown in system tray menu, settings page, etc. following this template: “|language| (|variant|) |IME| with |layout| keyboard” which means “an input method that supports typing in the |variant| of |language|, using |IME| and a keyboard with |layout|. When a part in this template is unambiguous, it’s dropped for brevity. Translations should strive for similar consistency in structure among input method names. Note: On ChromeOS, an “input method” is a suite of all input functionalities. |IME| in the template refers to an optional aspect of an “input method” on ChromeOS, i.e. sophisticated transforms into text in |language| when using a keyboard layout not designed for |language|." meaning="Input method name">
         Hindi
       </message>
+      <message name="IDS_IME_NAME_KEYBOARD_HINDI_INSCRIPT" desc="Input method name, shown in system tray menu, settings page, etc. following this template: “|language| (|variant|) |IME| with |layout| keyboard” which means “an input method that supports typing in the |variant| of |language|, using |IME| and a keyboard with |layout|. When a part in this template is unambiguous, it’s dropped for brevity. Translations should strive for similar consistency in structure among input method names. Note: On ChromeOS, an “input method” is a suite of all input functionalities. |IME| in the template refers to an optional aspect of an “input method” on ChromeOS, i.e. sophisticated transforms into text in |language| when using a keyboard layout not designed for |language|." meaning="Input method name">
+        Hindi with InScript keyboard
+      </message>
       <message name="IDS_IME_NAME_TRANSLITERATION_KN" desc="Input method name, shown in system tray menu, settings page, etc. following this template: “|language| (|variant|) |IME| with |layout| keyboard” which means “an input method that supports typing in the |variant| of |language|, using |IME| and a keyboard with |layout|. When a part in this template is unambiguous, it’s dropped for brevity. Translations should strive for similar consistency in structure among input method names. Note: On ChromeOS, an “input method” is a suite of all input functionalities. |IME| in the template refers to an optional aspect of an “input method” on ChromeOS, i.e. sophisticated transforms into text in |language| when using a keyboard layout not designed for |language|." meaning="Input method name">
         Kannada Transliteration
       </message>
@@ -1385,9 +1397,27 @@
       </message>
       <message name="IDS_CHROMEOS_NETWORK_ERROR_NOT_REGISTERED" desc="Network error details in notifications: NOT_REGISTERED. Error when a connect attempt fails because the modem is not registered.">
         Modem not registered
+        </message>
+      <message name="IDS_CHROMEOS_NETWORK_ERROR_SUSPECT_INACTIVE_SIM" desc="Network error details in notifications: NOT_REGISTERED. Error when a connect attempt fails due to inactive SIM.">
+        Your SIM card or eSIM profile may be deactivated. Try replacing your SIM card or switching eSIM profiles.
+      </message>
+      <message name="IDS_CHROMEOS_NETWORK_ERROR_SUSPECT_SUBSCRIPTION_ERROR" desc="Network error details in notifications: NOT_REGISTERED. Error when a connect attempt fails due to subscription error.">
+        Your mobile data plan may be expired. Contact your carrier for support.
+      </message>
+      <message name="IDS_CHROMEOS_NETWORK_ERROR_SUSPECT_MODEM_DISALLOWED" desc="Network error details in notifications: NOT_REGISTERED. Error when a connect attempt fails because the modem is not allowed by carrier.">
+        Your modem isn’t allowed to connect by your carrier. Contact your carrier for more details.
       </message>
       <message name="IDS_CHROMEOS_NETWORK_ERROR_WRONG_STATE" desc="Network error details in notifications: NOT_REGISTERED. Error when a connect attempt fails because the modem is in a busy state.">
         Device is busy
+      </message>
+      <message name="IDS_CHROMEOS_NETWORK_ERROR_INVALID_APN" desc="Network error details in notifications: NOT_REGISTERED. Error when a connect attempt fails because of invalid APN.">
+        Check your APN configuration
+      </message>
+      <message name="IDS_CHROMEOS_NETWORK_ERROR_WEP_NOT_SUPPORTED" desc="Network error details in notifications: WEP_NOT_SUPPORTED. Error when a connect attempt fails because WEP networks are not supported.">
+        WEP networks are not supported
+      </message>
+      <message name="IDS_NETWORK_NETWORK_TO_MANY_STAS_ERROR" desc="Network error details in notifications: TO_MANY_STAS. Error when a connect attempt fails.">
+        This network is busy. Try again later.
       </message>
       <message name="IDS_NETWORK_UNRECOGNIZED_ERROR" desc="Unrecognized Network error text">
         Unrecognized error: <ph name="desc">$1<ex>ShillErrorString</ex></ph>
@@ -1401,6 +1431,15 @@
       <message name="IDS_STATUSBAR_NETWORK_DEVICE_CONNECTED" desc="The network device status connected.">
         Connected
       </message>
+      <message name="IDS_STATUSBAR_NETWORK_DEVICE_SIGNIN" desc="Settings > Network, text in network page when in captive portal state or proxy auth state.">
+        Sign in to network
+      </message>
+      <message name="IDS_STATUSBAR_NETWORK_DEVICE_CELLULAR_SIGNIN" desc="Settings > Network, text in network page when in captive portal state or proxy auth state for cellular network.">
+        Sign in to your mobile network and confirm your mobile data plan is active
+      </message>
+      <message name="IDS_STATUSBAR_NETWORK_DEVICE_CONNECTED_NO_CONNECTIVITY" desc="The network device is connected but in a no-connectivity portal state, therefore, there is no connection to the internet.">
+        Connected, no internet
+      </message>
 
       <!-- Strings used in <network-list>, used in Settings and OOBE -->
       <message name="IDS_NETWORK_LIST_INITIALIZING" desc="Text in the network list element when a Cellular network is initiailizing.">
@@ -1409,8 +1448,14 @@
       <message name="IDS_NETWORK_LIST_UPDATED_CELLULAR_SIM_CARD_LOCKED" desc="Text in the network list element when a Cellular network's SIM card is locked. Used when updated cellular activation flag in on.">
         Locked
       </message>
+      <message name="IDS_NETWORK_LIST_UPDATED_CELLULAR_SIM_CARD_CARRIER_LOCKED" desc="Text in the network list element when a Cellular network's SIM card is locked to a specific carrier. Used when updated cellular activation flag in on.">
+        Locked by another mobile provider
+      </message>
       <message name="IDS_NETWORK_LIST_NOT_CONNECTED" desc="Text in the network list element when there is a network for the type, but it is not connected or connecting.">
         Not connected
+      </message>
+      <message name="IDS_NETWORK_LIST_ACTIVATE_AFTER_DEVICE_SETUP" desc="Text in the network list element in OOBE when a Cellular network's SIM card is locked. Used to inform the user they can activate this SIM after device setup.">
+        Activate after device setup
       </message>
       <message name="IDS_NETWORK_LIST_NO_NETWORK" desc="Text in the network list element when there is no network for the type.">
         No network
@@ -1505,6 +1550,18 @@
       <message name="IDS_NETWORK_LIST_ITEM_LABEL_ESIM_PENDING_PROFILE_WITH_PROVIDER_NAME_INSTALLING" desc="A11y label for an eSIM profile that is currently installing, shown in a list in settings and oobe. Includes the provider name.">
         Installing mobile profile, Network <ph name="NETWORK_INDEX">$1<ex>1</ex></ph> of <ph name="NETWORK_COUNT">$2<ex>10</ex></ph>, <ph name="NETWORK_NAME">$3<ex>Verizon Wireless</ex></ph>, <ph name="NETWORK_PROVIDER_NAME">$4<ex>Verizon LTE</ex></ph>
       </message>
+      <message name="IDS_NETWORK_LIST_ITEM_LABEL_CELLULAR_MANAGED_ACTIVATE_AFTER_SETUP_WITH_PROVIDER_NAME" desc="A11y label for an enterprise managed cellular network in a list in oobe. Includes provider name. Informs the user to activate the network after device setup.">
+        Network <ph name="NETWORK_INDEX">$1<ex>1</ex></ph> of <ph name="NETWORK_COUNT">$2<ex>10</ex></ph>, <ph name="NETWORK_NAME">$3<ex>Verizon Wireless</ex></ph>, <ph name="NETWORK_PROVIDER_NAME">$4<ex>Verizon LTE</ex></ph>, Activate after device setup, Managed by your Administrator
+      </message>
+      <message name="IDS_NETWORK_LIST_ITEM_LABEL_CELLULAR_MANAGED_ACTIVATE_AFTER_SETUP" desc="A11y label for an enterprise managed cellular network in a list in oobe. Informs the user to activate the network after device setup.">
+        Network <ph name="NETWORK_INDEX">$1<ex>1</ex></ph> of <ph name="NETWORK_COUNT">$2<ex>10</ex></ph>, <ph name="NETWORK_NAME">$3<ex>Verizon Wireless</ex></ph>, Activate after device setup, Managed by your Administrator
+      </message>
+      <message name="IDS_NETWORK_LIST_ITEM_LABEL_CELLULAR_ACTIVATE_AFTER_SETUP" desc="A11y label for a cellular network in a list in oobe. Informs the user to activate the network after device setup.">
+        Network <ph name="NETWORK_INDEX">$1<ex>1</ex></ph> of <ph name="NETWORK_COUNT">$2<ex>10</ex></ph>, <ph name="NETWORK_NAME">$3<ex>Verizon Wireless</ex></ph>, Activate after device setup
+      </message>
+       <message name="IDS_NETWORK_LIST_ITEM_LABEL_CELLULAR_ACTIVATE_AFTER_SETUP_WITH_PROVIDER_NAME" desc="A11y label for a cellular network in a list in oobe. Includes provider name. Informs the user to activate the network after device setup.">
+        Network <ph name="NETWORK_INDEX">$1<ex>1</ex></ph> of <ph name="NETWORK_COUNT">$2<ex>10</ex></ph>, <ph name="NETWORK_NAME">$3<ex>Verizon Wireless</ex></ph>, <ph name="NETWORK_PROVIDER_NAME">$4<ex>Verizon LTE</ex></ph>, Activate after device setup
+      </message>
       <message name="IDS_NETWORK_LIST_ITEM_ACTIVATE" desc="Text for the button displayed for SIM networks that haven't been setup that opens the SIM setup dialog when clicked.">
         Activate
       </message>
@@ -1545,7 +1602,10 @@
         Adding Profile...
       </message>
       <message name="IDS_NETWORK_LIST_SIM_CARD_LOCKED" desc="Text in the network list element when a Cellular network's SIM card is locked.">
-        SIM card is locked
+        Your SIM is locked
+      </message>
+      <message name="IDS_NETWORK_LIST_SIM_CARD_CARRIER_LOCKED" desc="Text in the network list element when a Cellular network's SIM card is carrier locked.">
+        Mobile network provider is locked. Contact your provider for support.
       </message>
       <message name="IDS_WIFI_NETWORK_STATUS_SECURED" desc="a11y label used when a Wi-Fi network is secured.">
         Secured
@@ -1728,6 +1788,12 @@
       <message name="IDS_SETTINGS_INTERNET_NETWORK_PROXY_PORT_INPUT_ACCESSIBILITY_LABEL" desc="Settings > Internet > Network details: Accessibility only label for proxy port number input field.">
         <ph name="INPUT_LABEL">$1<ex>HTTP Proxy</ex></ph> - Port
       </message>
+      <message name="IDS_SETTINGS_INTERNET_NETWORK_SETTING_MANAGED_BY_ADMIN_TOOLTIP" desc="Text displayed in the controlled settings bubble when a setting's value is managed by policy.">
+        This setting is managed by your administrator.
+      </message>
+      <message name="IDS_SUPPRESS_TEXT_MESSAGES" desc="Text displayed for a toggle button allowing user to show or hide text messages">
+        Show text messages
+      </message>
 
       <!-- Settings > Internet > SIM lock/unlock dialog -->
       <message name="IDS_SETTINGS_INTERNET_NETWORK_SIM_CHANGE_PIN" desc="Settings > Internet > Network details > Lock/unlock SIM card: Label for buton to change the PIN.">
@@ -1737,13 +1803,13 @@
         Missing SIM card
       </message>
       <message name="IDS_SETTINGS_INTERNET_NETWORK_SIM_CARD_LOCKED" desc="Settings > Internet > Network details > Lock/unlock SIM card: Message when SIM card is locked.">
-        SIM card is locked
+        Your SIM is locked
       </message>
       <message name="IDS_SETTINGS_INTERNET_NETWORK_SIM_LOCK_ENABLE" desc="Settings > Internet > Network details > Lock/unlock SIM card: Label for toggle to enable SIM card locking.">
-       Lock SIM card
+        Lock SIM
       </message>
       <message name="IDS_SETTINGS_INTERNET_NETWORK_SIM_LOCK_ENABLE_SUBLABEL" desc="Settings > Internet > Network details > Lock/unlock SIM card: Sublabel for toggle to enable SIM card locking.">
-        PIN is required to use mobile data
+        A PIN is required to use mobile data
       </message>
       <message name="IDS_SETTINGS_INTERNET_NETWORK_SIM_BUTTON_CHANGE" desc="Settings > Internet > Network details > Lock/unlock SIM card: Label for dialog button to change a PIN.">
         Change
@@ -1770,19 +1836,22 @@
         Connect to this network to change SIM lock setting
       </message>
       <message name="IDS_SETTINGS_INTERNET_NETWORK_SIM_LOCKED_TITLE" desc="Settings > Internet > Network details > Lock/unlock SIM card: Title for SIM locked dialog.">
-        SIM card is locked
+        Your SIM is locked
       </message>
       <message name="IDS_SETTINGS_INTERNET_NETWORK_SIM_LOCK_POLICY_ADMIN_SUBTITLE" desc="Settings > Internet > Network details > Unlock SIM card: Title for unlocking SIM locked dialog when restrict SIM PIN lock policy is on.">
-        Your administrator requires you to disable SIM Lock.
+        Your administrator has requested you to turn off the "Lock SIM" setting
+      </message>
+      <message name="IDS_SETTINGS_INTERNET_NETWORK_SIM_LOCKED_PIN_SUBTITLE" desc="Settings > Internet > Network details > Unlock SIM card: Subtitle for unlocking SIM locked SIM.">
+        Enter your SIM card PIN or the default PIN provided by your carrier. Contact your carrier for support.
       </message>
       <message name="IDS_SETTINGS_INTERNET_NETWORK_SIM_LOCKED_PUK_SUBTITLE" desc="Settings > Internet > Network details > Lock/unlock SIM card: Title informing the user to enter a PIN provided by the carrier in order unlock network.">
         An incorrect PIN was entered too many times. To set up a new PIN, enter the 8-digit Personal Unblocking Key (PUK) provided by your carrier.
       </message>
       <message name="IDS_SETTINGS_INTERNET_NETWORK_MANAGED_SIM_LOCKED_PUK_SUBTITLE" desc="Settings > Internet > Network details > Lock/unlock SIM card: Title informing the user to enter a PIN provided by the carrier in order unlock network if the admin prohibits SIM PIN locking.">
-        An incorrect PIN was entered too many times. Enter the 8-digit Personal Unblocking Key (PUK) provided by the carrier.
+        An incorrect PIN was entered too many times.
       </message>
       <message name="IDS_SETTINGS_INTERNET_NETWORK_MANAGED_SIM_LOCKED_PUK_WARNING_NO_FAILURES" desc="Settings > Internet > Network details > Lock/unlock SIM card: Warning shown to the user indicating that the network cannot be used until a new PIN is set up.">
-        You won't be able to use this network until you enter the PUK
+        To use this network, you need to enter the 8-digit Personal Unblocking Key (PUK) provided by the carrier. 
       </message>
       <message name="IDS_SETTINGS_INTERNET_NETWORK_SIM_LOCKED_PUK_WARNING_NO_FAILURES" desc="Settings > Internet > Network details > Lock/unlock SIM card: Warning shown to the user indicating that the network cannot be used until a new PIN is set up.">
         You won't be able to use this network until you set up a new PIN
@@ -1799,14 +1868,11 @@
       <message name="IDS_SETTINGS_INTERNET_NETWORK_MANAGED_SIM_LOCKED_PUK_WARNING_WITH_FAILURES" desc="Settings > Internet > Network details > Lock/unlock SIM card: Warning shown to the user indicating that the network cannot be used until a new PIN is set up and alerting the user about the number of attempts they have left to enter the correct code.">
         You have <ph name="RETRIES">$1<ex>3</ex></ph> remaining attempts.
       </message>
-      <message name="IDS_SETTINGS_INTERNET_NETWORK_SIM_LOCKED_SUBTITLE" desc="Subtitle for Network Summary item when the SIM is locked.">
-        SIM Locked
-      </message>
       <message name="IDS_SETTINGS_INTERNET_NETWORK_SIM_LOCKED_WARNING" desc="Settings > Internet > Network details > Lock/unlock SIM card: Warning for SIM locked dialog when PUK is required.">
         If you fail to verify, your network access will be disabled.
       </message>
       <message name="IDS_SETTINGS_INTERNET_NETWORK_SIM_ENTER_PIN" desc="Settings > Internet > Network details > Lock/unlock SIM card: Label for entering a PIN.">
-        Enter PIN
+        Your SIM is locked
       </message>
       <message name="IDS_SETTINGS_INTERNET_NETWORK_SIM_ENTER_OLD_PIN" desc="Settings > Internet > Network details > Lock/unlock SIM card: Label for entering an old (current) PIN.">
         Enter current PIN
@@ -1863,6 +1929,46 @@
       </message>
       <message name="IDS_NETWORK_INVALID_SAN_ENTRY" desc="Network error message shown when the Subject Alternative Name Match list configured for an EAP network contains a malformed entry">
         Invalid subject alternative name match entry
+      </message>
+      <message name="IDS_NETWORK_EAP_DEFAULT_SERVER_CA_WITHOUT_SUBJECT_VERIFICATION" desc="Network error message shown when the EAP configuration uses the default server CA cert without configuring subject alt name or domain matches to validate the servers identity">
+        Missing 'Subject alternative name match' or 'Domain suffix match' to validate the authentication server identity
+      </message>
+
+       <!-- Strings shown on the Incognito navigation blocked page when policy-configured mandatory extensions are not allowed by the user to run in Incognito -->
+      <message name="IDS_INCOGNITO_NAVIGATION_BLOCKED_PAGE_TITLE" desc="Title of the page shown when Incognito navigation is blocked">
+              {COUNT, plural,
+              =1 {To use Incognito, your organization requires an extension}
+              other {To use Incognito, your organization requires some extensions}}
+      </message>
+      <message name="IDS_INCOGNITO_NAVIGATION_MESSAGE" desc="Informational message shown when Incognito navigation is blocked">
+                    {COUNT, plural,
+              =1 {Turn on the following extension in Incognito:}
+              other {Turn on the following extensions in Incognito:}}
+      </message>
+      <message name="IDS_INCOGNITO_NAVIGATION_INSTRUCTIONS" desc="Instructions shown on the blocked navigation page on how to enable an extension">
+        Turn on an extension in Incognito:
+      </message>
+      <message name="IDS_INCOGNITO_NAVIGATION_INSTRUCTIONS_STEP_1" desc="First step from the instruction to enable an extension in Incognito mode">
+        Type <ph name="BEGIN_BOLD">&lt;b&gt;</ph>chrome://extensions<ph name="END_BOLD">&lt;/b&gt;</ph> into your browser
+      </message>
+      <message name="IDS_INCOGNITO_NAVIGATION_INSTRUCTIONS_STEP_2" desc="Second step from the instruction to enable an extension in Incognito mode">
+        Find the extension above
+      </message>
+      <message name="IDS_INCOGNITO_NAVIGATION_INSTRUCTIONS_STEP_3" desc="Third step from the instruction to enable an extension in Incognito mode">
+        Click <ph name="BEGIN_BOLD">&lt;b&gt;</ph>Details<ph name="END_BOLD">&lt;/b&gt;</ph>
+      </message>
+      <message name="IDS_INCOGNITO_NAVIGATION_INSTRUCTIONS_STEP_4" desc="Forth step from the instruction to enable an extension in Incognito mode">
+        Turn on <ph name="BEGIN_BOLD">&lt;b&gt;</ph>Allow in Incognito<ph name="END_BOLD">&lt;/b&gt;</ph>
+      </message>
+        <message name="IDS_INCOGNITO_NAVIGATION_MISSING_TITLE" desc="Message shown when the admin has configures one or more extensions as mandatory for Incognito mode navigation but the extensions are not installed in the browser">
+        {COUNT, plural,
+              =1 {Can’t find extension}
+              other {Can’t find extensions}}
+      </message>
+      <message name="IDS_INCOGNITO_NAVIGATION_MISSING_EXTENSIONS" desc="Message shown when the admin has configures one or more extensions as mandatory for Incognito mode navigation but the extensions are not installed in the browser">
+        {COUNT, plural,
+              =1 {An extension with the ID <ph name="BEGIN_LIST">&lt;ul id="mising-extensions" &gt;</ph><ph name="END_LIST">&lt;/ul&gt;</ph> can’t be located. Contact your administrator.}
+              other {Extensions with the IDs <ph name="BEGIN_LIST">&lt;ul id="mising-extensions" &gt;</ph><ph name="END_LIST">&lt;/ul&gt;</ph> can’t be located. Contact your administrator.}}
       </message>
 
       <!-- Settings strings -->

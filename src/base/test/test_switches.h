@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@ namespace switches {
 
 // All switches in alphabetical order. The switches should be documented
 // alongside the definition of their values in the .cc file.
+extern const char kEnforceExactPositiveFilter[];
 extern const char kHelpFlag[];
 extern const char kIsolatedScriptTestLauncherRetryLimit[];
 extern const char kRebaselinePixelTests[];
@@ -40,6 +41,10 @@ extern const char kTestLauncherTrace[];
 extern const char kTestTinyTimeout[];
 extern const char kUiTestActionMaxTimeout[];
 extern const char kUiTestActionTimeout[];
+extern const char kWithDeathTestStackTraces[];
+extern const char kFuzz[];
+extern const char kFuzzFor[];
+extern const char kListFuzzTests[];
 
 #if BUILDFLAG(IS_IOS)
 extern const char kEnableRunIOSUnittestsWithXCTest[];

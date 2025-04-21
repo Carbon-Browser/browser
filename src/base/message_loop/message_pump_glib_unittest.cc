@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "base/message_loop/message_pump_glib.h"
 
@@ -8,12 +13,13 @@
 #include <math.h>
 
 #include <algorithm>
+#include <string_view>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
@@ -27,8 +33,9 @@
 #include "base/task/single_thread_task_executor.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
+#include "base/test/trace_event_analyzer.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace base {
@@ -51,33 +58,37 @@ class EventInjector {
 
   ~EventInjector() {
     g_source_destroy(source_);
-    g_source_unref(source_);
+    g_source_unref(source_.ExtractAsDangling());
   }
 
   int HandlePrepare() {
     // If the queue is empty, block.
-    if (events_.empty())
+    if (events_.empty()) {
       return -1;
+    }
     TimeDelta delta = events_[0].time - Time::NowFromSystemTime();
     return std::max(0, static_cast<int>(ceil(delta.InMillisecondsF())));
   }
 
   bool HandleCheck() {
-    if (events_.empty())
+    if (events_.empty()) {
       return false;
+    }
     return events_[0].time <= Time::NowFromSystemTime();
   }
 
   void HandleDispatch() {
-    if (events_.empty())
+    if (events_.empty()) {
       return;
+    }
     Event event = std::move(events_[0]);
     events_.erase(events_.begin());
     ++processed_events_;
-    if (!event.callback.is_null())
+    if (!event.callback.is_null()) {
       std::move(event.callback).Run();
-    else if (!event.task.is_null())
+    } else if (!event.task.is_null()) {
       std::move(event.task).Run();
+    }
   }
 
   // Adds an event to the queue. When "handled", executes |callback|.
@@ -114,10 +125,11 @@ class EventInjector {
 
   void AddEventHelper(int delay_ms, OnceClosure callback, OnceClosure task) {
     Time last_time;
-    if (!events_.empty())
-      last_time = (events_.end()-1)->time;
-    else
+    if (!events_.empty()) {
+      last_time = (events_.end() - 1)->time;
+    } else {
       last_time = Time::NowFromSystemTime();
+    }
 
     Time future = last_time + Milliseconds(delay_ms);
     EventInjector::Event event = {future, std::move(callback), std::move(task)};
@@ -140,17 +152,28 @@ class EventInjector {
     return TRUE;
   }
 
+  static void Finalize(GSource* source) {
+    // Since the Source object memory is managed by glib, Source implicit
+    // destructor is never called, and thus Source's raw_ptr never release its
+    // internal reference on the pump pointer. This leads to adding pressure to
+    // the BackupRefPtr quarantine.
+    static_cast<Source*>(source)->injector = nullptr;
+  }
+
   raw_ptr<Source> source_;
   std::vector<Event> events_;
   int processed_events_;
   static GSourceFuncs SourceFuncs;
 };
 
-GSourceFuncs EventInjector::SourceFuncs = {EventInjector::Prepare,
-                                           EventInjector::Check,
-                                           EventInjector::Dispatch, nullptr};
+GSourceFuncs EventInjector::SourceFuncs = {
+    EventInjector::Prepare,
+    EventInjector::Check,
+    EventInjector::Dispatch,
+    EventInjector::Finalize,
+};
 
-void IncrementInt(int *value) {
+void IncrementInt(int* value) {
   ++*value;
 }
 
@@ -161,7 +184,8 @@ void ExpectProcessedEvents(EventInjector* injector, int count) {
 
 // Posts a task on the current message loop.
 void PostMessageLoopTask(const Location& from_here, OnceClosure task) {
-  ThreadTaskRunnerHandle::Get()->PostTask(from_here, std::move(task));
+  SingleThreadTaskRunner::GetCurrentDefault()->PostTask(from_here,
+                                                        std::move(task));
 }
 
 // Test fixture.
@@ -239,14 +263,14 @@ TEST_F(MessagePumpGLibTest, TestWorkWhileWaitingForEvents) {
   // Tests that we process tasks while waiting for new events.
   // The event queue is empty at first.
   for (int i = 0; i < 10; ++i) {
-    ThreadTaskRunnerHandle::Get()->PostTask(
+    SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, BindOnce(&IncrementInt, &task_count));
   }
   // After all the previous tasks have executed, enqueue an event that will
   // quit.
   {
     RunLoop run_loop;
-    ThreadTaskRunnerHandle::Get()->PostTask(
+    SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, BindOnce(&EventInjector::AddEvent, Unretained(injector()), 0,
                             run_loop.QuitClosure()));
     run_loop.Run();
@@ -258,7 +282,7 @@ TEST_F(MessagePumpGLibTest, TestWorkWhileWaitingForEvents) {
   injector()->Reset();
   task_count = 0;
   for (int i = 0; i < 10; ++i) {
-    ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, BindOnce(&IncrementInt, &task_count), Milliseconds(10 * i));
   }
   // After all the previous tasks have executed, enqueue an event that will
@@ -267,7 +291,7 @@ TEST_F(MessagePumpGLibTest, TestWorkWhileWaitingForEvents) {
   // That is verified in message_loop_unittest.cc.
   {
     RunLoop run_loop;
-    ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         BindOnce(&EventInjector::AddEvent, Unretained(injector()), 0,
                  run_loop.QuitClosure()),
@@ -306,7 +330,7 @@ namespace {
 // This class is a helper for the concurrent events / posted tasks test below.
 // It will quit the main loop once enough tasks and events have been processed,
 // while making sure there is always work to do and events in the queue.
-class ConcurrentHelper : public RefCounted<ConcurrentHelper>  {
+class ConcurrentHelper : public RefCounted<ConcurrentHelper> {
  public:
   ConcurrentHelper(EventInjector* injector, OnceClosure done_closure)
       : injector_(injector),
@@ -321,7 +345,7 @@ class ConcurrentHelper : public RefCounted<ConcurrentHelper>  {
     if (task_count_ == 0 && event_count_ == 0) {
       std::move(done_closure_).Run();
     } else {
-      ThreadTaskRunnerHandle::Get()->PostTask(
+      SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, BindOnce(&ConcurrentHelper::FromTask, this));
     }
   }
@@ -344,7 +368,7 @@ class ConcurrentHelper : public RefCounted<ConcurrentHelper>  {
  private:
   friend class RefCounted<ConcurrentHelper>;
 
-  ~ConcurrentHelper() {}
+  ~ConcurrentHelper() = default;
 
   static const int kStartingEventCount = 20;
   static const int kStartingTaskCount = 20;
@@ -373,9 +397,9 @@ TEST_F(MessagePumpGLibTest, TestConcurrentEventPostedTask) {
   injector()->AddEventAsTask(0, BindOnce(&ConcurrentHelper::FromEvent, helper));
 
   // Similarly post 2 tasks.
-  ThreadTaskRunnerHandle::Get()->PostTask(
+  SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, BindOnce(&ConcurrentHelper::FromTask, helper));
-  ThreadTaskRunnerHandle::Get()->PostTask(
+  SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, BindOnce(&ConcurrentHelper::FromTask, helper));
 
   run_loop.Run();
@@ -393,8 +417,8 @@ void AddEventsAndDrainGLib(EventInjector* injector, OnceClosure on_drained) {
   injector->AddEvent(0, std::move(on_drained));
 
   // Post a couple of dummy tasks
-  ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE, DoNothing());
-  ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE, DoNothing());
+  SingleThreadTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE, DoNothing());
+  SingleThreadTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE, DoNothing());
 
   // Drain the events
   while (g_main_context_pending(nullptr)) {
@@ -407,7 +431,7 @@ void AddEventsAndDrainGLib(EventInjector* injector, OnceClosure on_drained) {
 TEST_F(MessagePumpGLibTest, TestDrainingGLib) {
   // Tests that draining events using GLib works.
   RunLoop run_loop;
-  ThreadTaskRunnerHandle::Get()->PostTask(
+  SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, BindOnce(&AddEventsAndDrainGLib, Unretained(injector()),
                           run_loop.QuitClosure()));
   run_loop.Run();
@@ -420,7 +444,7 @@ namespace {
 // Helper class that lets us run the GLib message loop.
 class GLibLoopRunner : public RefCounted<GLibLoopRunner> {
  public:
-  GLibLoopRunner() : quit_(false) { }
+  GLibLoopRunner() : quit_(false) {}
 
   void RunGLib() {
     while (!quit_) {
@@ -434,18 +458,14 @@ class GLibLoopRunner : public RefCounted<GLibLoopRunner> {
     }
   }
 
-  void Quit() {
-    quit_ = true;
-  }
+  void Quit() { quit_ = true; }
 
-  void Reset() {
-    quit_ = false;
-  }
+  void Reset() { quit_ = false; }
 
  private:
   friend class RefCounted<GLibLoopRunner>;
 
-  ~GLibLoopRunner() {}
+  ~GLibLoopRunner() = default;
 
   bool quit_;
 };
@@ -458,22 +478,22 @@ void TestGLibLoopInternal(EventInjector* injector, OnceClosure done) {
   injector->AddDummyEvent(0);
   injector->AddDummyEvent(0);
   // Post a couple of dummy tasks
-  ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                          BindOnce(&IncrementInt, &task_count));
-  ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                          BindOnce(&IncrementInt, &task_count));
+  SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, BindOnce(&IncrementInt, &task_count));
+  SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, BindOnce(&IncrementInt, &task_count));
   // Delayed events
   injector->AddDummyEvent(10);
   injector->AddDummyEvent(10);
   // Delayed work
-  ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, BindOnce(&IncrementInt, &task_count), Milliseconds(30));
-  ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, BindOnce(&GLibLoopRunner::Quit, runner), Milliseconds(40));
 
   // Run a nested, straight GLib message loop.
   {
-    CurrentThread::ScopedNestableTaskAllower allow_nestable_tasks;
+    CurrentThread::ScopedAllowApplicationTasksInNativeNestedLoop allow;
     runner->RunGLib();
   }
 
@@ -490,22 +510,22 @@ void TestGtkLoopInternal(EventInjector* injector, OnceClosure done) {
   injector->AddDummyEvent(0);
   injector->AddDummyEvent(0);
   // Post a couple of dummy tasks
-  ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                          BindOnce(&IncrementInt, &task_count));
-  ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                          BindOnce(&IncrementInt, &task_count));
+  SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, BindOnce(&IncrementInt, &task_count));
+  SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, BindOnce(&IncrementInt, &task_count));
   // Delayed events
   injector->AddDummyEvent(10);
   injector->AddDummyEvent(10);
   // Delayed work
-  ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, BindOnce(&IncrementInt, &task_count), Milliseconds(30));
-  ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, BindOnce(&GLibLoopRunner::Quit, runner), Milliseconds(40));
 
   // Run a nested, straight Gtk message loop.
   {
-    CurrentThread::ScopedNestableTaskAllower allow_nestable_tasks;
+    CurrentThread::ScopedAllowApplicationTasksInNativeNestedLoop allow;
     runner->RunLoop();
   }
 
@@ -522,7 +542,7 @@ TEST_F(MessagePumpGLibTest, TestGLibLoop) {
   // Note that in this case we don't make strong guarantees about niceness
   // between events and posted tasks.
   RunLoop run_loop;
-  ThreadTaskRunnerHandle::Get()->PostTask(
+  SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, BindOnce(&TestGLibLoopInternal, Unretained(injector()),
                           run_loop.QuitClosure()));
   run_loop.Run();
@@ -534,10 +554,71 @@ TEST_F(MessagePumpGLibTest, TestGtkLoop) {
   // Note that in this case we don't make strong guarantees about niceness
   // between events and posted tasks.
   RunLoop run_loop;
-  ThreadTaskRunnerHandle::Get()->PostTask(
+  SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, BindOnce(&TestGtkLoopInternal, Unretained(injector()),
                           run_loop.QuitClosure()));
   run_loop.Run();
+}
+
+namespace {
+
+class NestedEventAnalyzer {
+ public:
+  NestedEventAnalyzer() {
+    trace_analyzer::Start(TRACE_DISABLED_BY_DEFAULT("base"));
+  }
+
+  size_t CountEvents() {
+    std::unique_ptr<trace_analyzer::TraceAnalyzer> analyzer =
+        trace_analyzer::Stop();
+    trace_analyzer::TraceEventVector events;
+    return analyzer->FindEvents(trace_analyzer::Query::EventName() ==
+                                    trace_analyzer::Query::String("Nested"),
+                                &events);
+  }
+};
+
+}  // namespace
+
+TEST_F(MessagePumpGLibTest, TestNativeNestedLoopWithoutDoWork) {
+  // Tests that nesting is triggered correctly if a message loop is run
+  // from a native event (gtk event) outside of a work item (not in a posted
+  // task).
+
+  RunLoop run_loop;
+  NestedEventAnalyzer analyzer;
+
+  base::CurrentThread::Get()->EnableMessagePumpTimeKeeperMetrics(
+      "GlibMainLoopTest");
+
+  scoped_refptr<GLibLoopRunner> runner = base::MakeRefCounted<GLibLoopRunner>();
+  injector()->AddEvent(
+      0,
+      BindOnce(
+          [](EventInjector* injector, scoped_refptr<GLibLoopRunner> runner,
+             OnceClosure done) {
+            CurrentThread::ScopedAllowApplicationTasksInNativeNestedLoop allow;
+            runner->RunLoop();
+          },
+          Unretained(injector()), runner, run_loop.QuitClosure()));
+
+  injector()->AddDummyEvent(0);
+  injector()->AddDummyEvent(0);
+  injector()->AddDummyEvent(0);
+
+  SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE, BindOnce(&GLibLoopRunner::Quit, runner), Milliseconds(40));
+
+  SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE, run_loop.QuitClosure(), Milliseconds(40));
+
+  run_loop.Run();
+
+  // It would be expected that there be one single event, but it seems like this
+  // is counting the Begin/End of the Nested trace event. Each of the two events
+  // found are of duration 0 with distinct timestamps. It has also been
+  // confirmed that nesting occurs only once.
+  CHECK_EQ(analyzer.CountEvents(), 2ul);
 }
 
 // Tests for WatchFileDescriptor API
@@ -558,10 +639,12 @@ class MessagePumpGLibFdWatchTest : public testing::Test {
     // Wait for the IO thread to exit before closing FDs which may have been
     // passed to it.
     io_thread_.Stop();
-    if (IGNORE_EINTR(close(pipefds_[0])) < 0)
+    if (IGNORE_EINTR(close(pipefds_[0])) < 0) {
       PLOG(ERROR) << "close";
-    if (IGNORE_EINTR(close(pipefds_[1])) < 0)
+    }
+    if (IGNORE_EINTR(close(pipefds_[1])) < 0) {
       PLOG(ERROR) << "close";
+    }
   }
 
   void WaitUntilIoThreadStarted() {
@@ -579,6 +662,7 @@ class MessagePumpGLibFdWatchTest : public testing::Test {
   }
 
   int pipefds_[2];
+  static constexpr char null_byte_ = 0;
 
  private:
   Thread io_thread_;
@@ -611,10 +695,17 @@ class DeleteWatcher : public BaseWatcher {
 
   ~DeleteWatcher() override { DCHECK(!controller_); }
 
+  bool HasController() const { return !!controller_; }
+
   void OnFileCanWriteWithoutBlocking(int /* fd */) override {
+    ClearController();
+  }
+
+ protected:
+  void ClearController() {
     DCHECK(owned_controller_);
-    owned_controller_.reset();
     controller_ = nullptr;
+    owned_controller_.reset();
   }
 
  private:
@@ -637,7 +728,8 @@ void QuitMessageLoopAndStart(OnceClosure quit_closure) {
   std::move(quit_closure).Run();
 
   RunLoop runloop(RunLoop::Type::kNestableTasksAllowed);
-  ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE, runloop.QuitClosure());
+  SingleThreadTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE,
+                                                        runloop.QuitClosure());
   runloop.Run();
 }
 
@@ -648,7 +740,7 @@ class NestedPumpWatcher : public MessagePumpGlib::FdWatcher {
 
   void OnFileCanReadWithoutBlocking(int /* fd */) override {
     RunLoop runloop;
-    ThreadTaskRunnerHandle::Get()->PostTask(
+    SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, BindOnce(&QuitMessageLoopAndStart, runloop.QuitClosure()));
     runloop.Run();
   }
@@ -656,15 +748,18 @@ class NestedPumpWatcher : public MessagePumpGlib::FdWatcher {
   void OnFileCanWriteWithoutBlocking(int /* fd */) override {}
 };
 
-class QuitWatcher : public BaseWatcher {
+class QuitWatcher : public DeleteWatcher {
  public:
-  QuitWatcher(MessagePumpGlib::FdWatchController* controller,
+  QuitWatcher(std::unique_ptr<MessagePumpGlib::FdWatchController> controller,
               base::OnceClosure quit_closure)
-      : BaseWatcher(controller), quit_closure_(std::move(quit_closure)) {}
+      : DeleteWatcher(std::move(controller)),
+        quit_closure_(std::move(quit_closure)) {}
 
-  void OnFileCanReadWithoutBlocking(int /* fd */) override {
-    if (quit_closure_)
+  void OnFileCanReadWithoutBlocking(int fd) override {
+    ClearController();
+    if (quit_closure_) {
       std::move(quit_closure_).Run();
+    }
   }
 
  private:
@@ -675,13 +770,13 @@ void WriteFDWrapper(const int fd,
                     const char* buf,
                     int size,
                     WaitableEvent* event) {
-  ASSERT_TRUE(WriteFileDescriptor(fd, StringPiece(buf, size)));
+  ASSERT_TRUE(WriteFileDescriptor(fd, std::string_view(buf, size)));
 }
 
 }  // namespace
 
 // Tests that MessagePumpGlib::FdWatcher::OnFileCanReadWithoutBlocking is not
-// called for a READ_WRITE event, when the controller is destroyed in
+// called for a READ_WRITE event, and that the controller is destroyed in
 // OnFileCanWriteWithoutBlocking callback.
 TEST_F(MessagePumpGLibFdWatchTest, DeleteWatcher) {
   auto pump = std::make_unique<MessagePumpGlib>();
@@ -695,6 +790,7 @@ TEST_F(MessagePumpGLibFdWatchTest, DeleteWatcher) {
                             &watcher);
 
   SimulateEvent(pump.get(), controller);
+  EXPECT_FALSE(watcher.HasController());
 }
 
 // Tests that MessagePumpGlib::FdWatcher::OnFileCanReadWithoutBlocking is not
@@ -716,8 +812,8 @@ TEST_F(MessagePumpGLibFdWatchTest, NestedPumpWatcher) {
   test::SingleThreadTaskEnvironment task_environment(
       test::SingleThreadTaskEnvironment::MainThreadType::UI);
   std::unique_ptr<MessagePumpGlib> pump(new MessagePumpGlib);
-  MessagePumpGlib::FdWatchController controller(FROM_HERE);
   NestedPumpWatcher watcher;
+  MessagePumpGlib::FdWatchController controller(FROM_HERE);
   pump->WatchFileDescriptor(pipefds_[1], false, MessagePumpGlib::WATCH_READ,
                             &controller, &watcher);
 
@@ -730,25 +826,27 @@ TEST_F(MessagePumpGLibFdWatchTest, QuitWatcher) {
   MessagePumpGlib* pump = new MessagePumpGlib();
   SingleThreadTaskExecutor executor(WrapUnique(pump));
   RunLoop run_loop;
-  MessagePumpGlib::FdWatchController controller(FROM_HERE);
-  QuitWatcher delegate(&controller, run_loop.QuitClosure());
-  WaitableEvent event;
-  auto watcher = std::make_unique<WaitableEventWatcher>();
+
+  auto owned_controller =
+      std::make_unique<MessagePumpGlib::FdWatchController>(FROM_HERE);
+  MessagePumpGlib::FdWatchController* controller = owned_controller.get();
+  QuitWatcher delegate(std::move(owned_controller), run_loop.QuitClosure());
 
   pump->WatchFileDescriptor(pipefds_[0], false, MessagePumpGlib::WATCH_READ,
-                            &controller, &delegate);
+                            controller, &delegate);
 
   // Make the IO thread wait for |event| before writing to pipefds[1].
-  const char buf = 0;
+  WaitableEvent event;
+  auto watcher = std::make_unique<WaitableEventWatcher>();
   WaitableEventWatcher::EventCallback write_fd_task =
-      BindOnce(&WriteFDWrapper, pipefds_[1], &buf, 1);
+      BindOnce(&WriteFDWrapper, pipefds_[1], &null_byte_, 1);
   io_runner()->PostTask(
       FROM_HERE, BindOnce(IgnoreResult(&WaitableEventWatcher::StartWatching),
                           Unretained(watcher.get()), &event,
                           std::move(write_fd_task), io_runner()));
 
   // Queue |event| to signal on |CurrentUIThread::Get()|.
-  ThreadTaskRunnerHandle::Get()->PostTask(
+  SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, BindOnce(&WaitableEvent::Signal, Unretained(&event)));
 
   // Now run the MessageLoop.

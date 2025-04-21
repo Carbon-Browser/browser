@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,9 @@
 #include "base/command_line.h"
 #include "content/shell/common/shell_switches.h"
 
-@interface ShellRenderWidgetHostViewMacDelegate () {
+@implementation ShellRenderWidgetHostViewMacDelegate {
   BOOL _drop_events;
 }
-@end
-
-@implementation ShellRenderWidgetHostViewMacDelegate
 
 - (id)init {
   if ((self = [super init])) {
@@ -22,6 +19,7 @@
   }
   return self;
 }
+
 - (BOOL)handleEvent:(NSEvent*)event {
   return _drop_events;
 }

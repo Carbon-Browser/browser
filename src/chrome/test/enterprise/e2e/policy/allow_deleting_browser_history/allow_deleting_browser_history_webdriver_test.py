@@ -1,4 +1,4 @@
-# Copyright (c) 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -32,7 +32,7 @@ def main(argv):
         expected_conditions.visibility_of_element_located((By.TAG_NAME,
                                                            'history-app')))
 
-    history_app = driver.find_element_by_css_selector("history-app")
+    history_app = driver.find_element(By.CSS_SELECTOR, "history-app")
     histroy_list = getElementFromShadowRoot(driver, history_app, "history-list")
     # get the checkbox of the first history item
     histroy_item = getElementFromShadowRoot(driver, histroy_list,

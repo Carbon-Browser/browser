@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_CROSAPI_TASK_MANAGER_ASH_H_
 #define CHROME_BROWSER_ASH_CROSAPI_TASK_MANAGER_ASH_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/unguessable_token.h"
 #include "chrome/browser/task_manager/task_manager_observer.h"
@@ -43,7 +44,8 @@ class TaskManagerAsh : public mojom::TaskManager {
 
   using GetTaskManagerTasksCallback =
       base::OnceCallback<void(std::vector<crosapi::mojom::TaskPtr>,
-                              std::vector<crosapi::mojom::TaskGroupPtr>)>;
+                              std::vector<crosapi::mojom::TaskGroupPtr>,
+                              const std::optional<std::string>&)>;
   // Gets lacros task data. Forward the call to the registered remote providers.
   void GetTaskManagerTasks(GetTaskManagerTasksCallback callback);
 
@@ -82,7 +84,7 @@ class TaskManagerAsh : public mojom::TaskManager {
   std::map<base::UnguessableToken, mojo::Remote<mojom::TaskManagerProvider>>
       task_manager_providers_;
 
-  Observer* observer_ = nullptr;
+  raw_ptr<Observer> observer_ = nullptr;
 
   int64_t refresh_flags_ = task_manager::REFRESH_TYPE_NONE;
 

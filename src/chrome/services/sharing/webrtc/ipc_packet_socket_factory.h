@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@ namespace sharing {
 // rtc::Thread) and also has associated base::MessageLoop. Each
 // socket created by the factory must be used on the thread it was
 // created on.
-// TODO(crbug.com/1044522): reuse code from blink instead.
+// TODO(crbug.com/40115622): reuse code from blink instead.
 class IpcPacketSocketFactory : public rtc::PacketSocketFactory {
  public:
   IpcPacketSocketFactory(
@@ -41,10 +41,9 @@ class IpcPacketSocketFactory : public rtc::PacketSocketFactory {
   rtc::AsyncPacketSocket* CreateClientTcpSocket(
       const rtc::SocketAddress& local_address,
       const rtc::SocketAddress& remote_address,
-      const rtc::ProxyInfo& proxy_info,
-      const std::string& user_agent,
       const rtc::PacketSocketTcpOptions& opts) override;
-  rtc::AsyncResolverInterface* CreateAsyncResolver() override;
+  std::unique_ptr<webrtc::AsyncDnsResolverInterface> CreateAsyncDnsResolver()
+      override;
 
  private:
   mojo::SharedRemote<network::mojom::P2PSocketManager> socket_manager_;

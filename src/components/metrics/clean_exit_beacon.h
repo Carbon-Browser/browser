@@ -1,10 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_METRICS_CLEAN_EXIT_BEACON_H_
 #define COMPONENTS_METRICS_CLEAN_EXIT_BEACON_H_
 
+#include <optional>
 #include <string>
 
 #include "base/files/file_path.h"
@@ -12,8 +13,6 @@
 #include "base/time/time.h"
 #include "base/values.h"
 #include "build/build_config.h"
-#include "components/version_info/channel.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class PrefRegistrySimple;
 class PrefService;
@@ -71,14 +70,9 @@ class CleanExitBeacon {
   //
   // |user_data_dir| is the path to the client's user data directory. If empty,
   // the beacon file is not used.
-  //
-  // TODO(crbug/1241702): Remove |channel| at the end of the Extended Variations
-  // Safe Mode experiment. |channel| is used to enable the experiment on only
-  // certain channels.
   CleanExitBeacon(const std::wstring& backup_registry_key,
                   const base::FilePath& user_data_dir,
-                  PrefService* local_state,
-                  version_info::Channel channel);
+                  PrefService* local_state);
 
   virtual ~CleanExitBeacon() = default;
 
@@ -101,7 +95,7 @@ class CleanExitBeacon {
   }
 
   // Returns true if Extended Variations Safe Mode is supported on this
-  // platform. Android WebLayer and WebView do not support this.
+  // platform. Android WebView does not support this.
   bool IsExtendedSafeModeSupported() const;
 
   // Sets the beacon value to |exited_cleanly| and writes the value to disk if
@@ -116,7 +110,7 @@ class CleanExitBeacon {
   // for browser crashes early on in startup as a part of Extended Variations
   // Safe Mode, which is supported by most, but not all, platforms.
   //
-  // TODO(crbug/1341125): Consider removing |is_extended_safe_mode|.
+  // TODO(crbug.com/40850854): Consider removing |is_extended_safe_mode|.
   void WriteBeaconValue(bool exited_cleanly,
                         bool is_extended_safe_mode = false);
 
@@ -174,7 +168,7 @@ class CleanExitBeacon {
   bool DidPreviousSessionExitCleanly(base::Value* beacon_file_contents);
 
   // Returns true if the beacon file is supported on this platform. Android
-  // WebLayer and WebView do not support this.
+  // WebView does not support this.
   bool IsBeaconFileSupported() const;
 
   // Writes |exited_cleanly| and the crash streak to the file located at
@@ -184,9 +178,9 @@ class CleanExitBeacon {
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_IOS)
   // Returns whether Chrome exited cleanly in the previous session according to
   // the platform-specific beacon (the registry for Windows or NSUserDefaults
-  // for iOS). Returns absl::nullopt if the platform-specific location does not
+  // for iOS). Returns std::nullopt if the platform-specific location does not
   // have beacon info.
-  absl::optional<bool> ExitedCleanly();
+  std::optional<bool> ExitedCleanly();
 #endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_IOS)
 
 #if BUILDFLAG(IS_IOS)
@@ -216,18 +210,13 @@ class CleanExitBeacon {
   // the browser was known to be alive.
   const base::Time initial_browser_last_live_timestamp_;
 
-  // The client's channel, e.g. Canary. Used to help determine whether the
-  // client should participate in the Extended Variations Safe Mode experiment.
-  // TODO(crbug/1241702): Remove at the end of the experiment.
-  [[maybe_unused]] const version_info::Channel channel_;
-
   bool did_previous_session_exit_cleanly_ = false;
 
   // Denotes the current beacon value for this session, which is updated via
   // CleanExitBeacon::WriteBeaconValue(). When `false`, Chrome is watching for
   // browser crashes. When `true`, Chrome has stopped watching for crashes. When
   // unset, Chrome has neither started nor stopped watching for crashes.
-  absl::optional<bool> has_exited_cleanly_ = absl::nullopt;
+  std::optional<bool> has_exited_cleanly_ = std::nullopt;
 
   // Where the clean exit beacon and the variations crash streak are stored on
   // platforms that support the beacon file.

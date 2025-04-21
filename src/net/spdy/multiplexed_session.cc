@@ -1,8 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/spdy/multiplexed_session.h"
+
+#include <string_view>
 
 namespace net {
 
@@ -33,10 +35,10 @@ void MultiplexedSessionHandle::SaveSSLInfo() {
   has_ssl_info_ = session_->GetSSLInfo(&ssl_info_);
 }
 
-base::StringPiece MultiplexedSessionHandle::GetAcceptChViaAlps(
+std::string_view MultiplexedSessionHandle::GetAcceptChViaAlps(
     const url::SchemeHostPort& scheme_host_port) const {
   return session_ ? session_->GetAcceptChViaAlps(scheme_host_port)
-                  : base::StringPiece();
+                  : std::string_view();
 }
 
 }  // namespace net

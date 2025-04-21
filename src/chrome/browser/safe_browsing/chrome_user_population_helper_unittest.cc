@@ -1,24 +1,28 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/safe_browsing/chrome_user_population_helper.h"
 
-#include "base/feature_list.h"
+#include "base/strings/strcat.h"
 #include "chrome/browser/safe_browsing/advanced_protection_status_manager.h"
 #include "chrome/browser/safe_browsing/advanced_protection_status_manager_factory.h"
+#include "chrome/browser/safe_browsing/verdict_cache_manager_factory.h"
+#include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/sync/sync_service_factory.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/prefs/pref_service.h"
 #include "components/safe_browsing/buildflags.h"
-#include "components/safe_browsing/core/common/features.h"
+#include "components/safe_browsing/core/browser/verdict_cache_manager.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
-#include "components/sync/base/model_type.h"
-#include "components/sync/driver/test_sync_service.h"
+#include "components/signin/public/identity_manager/identity_test_utils.h"
+#include "components/sync/base/data_type.h"
+#include "components/sync/test/test_sync_service.h"
 #include "components/unified_consent/pref_names.h"
 #include "components/version_info/version_info.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/protobuf/src/google/protobuf/repeated_ptr_field.h"
 
 namespace safe_browsing {
 
@@ -88,43 +92,57 @@ TEST(GetUserPopulationForProfileTest, PopulatesSync) {
           &profile, base::BindRepeating(&CreateTestSyncService)));
 
   {
-    sync_service->SetTransportState(
-        syncer::SyncService::TransportState::ACTIVE);
-    sync_service->SetLocalSyncEnabled(false);
-    sync_service->SetActiveDataTypes(syncer::ModelTypeSet::All());
-
+    ASSERT_TRUE(sync_service->GetActiveDataTypes().Has(
+        syncer::HISTORY_DELETE_DIRECTIVES));
     ChromeUserPopulation population = GetUserPopulationForProfile(&profile);
     EXPECT_TRUE(population.is_history_sync_enabled());
   }
 
   {
-    sync_service->SetTransportState(
-        syncer::SyncService::TransportState::DISABLED);
-    sync_service->SetLocalSyncEnabled(false);
-    sync_service->SetActiveDataTypes(syncer::ModelTypeSet::All());
+    sync_service->SetSignedOut();
 
     ChromeUserPopulation population = GetUserPopulationForProfile(&profile);
     EXPECT_FALSE(population.is_history_sync_enabled());
   }
 
   {
-    sync_service->SetTransportState(
-        syncer::SyncService::TransportState::ACTIVE);
+    // Enabling local sync reports the sync service as signed-out, so this is
+    // consistent with the SetSignedOut() call above.
+    // TODO(crbug.com/350494796): TestSyncService should honor that.
     sync_service->SetLocalSyncEnabled(true);
-    sync_service->SetActiveDataTypes(syncer::ModelTypeSet::All());
 
     ChromeUserPopulation population = GetUserPopulationForProfile(&profile);
     EXPECT_FALSE(population.is_history_sync_enabled());
   }
 
   {
-    sync_service->SetTransportState(
-        syncer::SyncService::TransportState::ACTIVE);
     sync_service->SetLocalSyncEnabled(false);
-    sync_service->SetActiveDataTypes(syncer::ModelTypeSet());
+    sync_service->SetSignedIn(signin::ConsentLevel::kSync);
+    sync_service->GetUserSettings()->SetSelectedTypes(
+        /*sync_everything=*/false,
+        /*types=*/syncer::UserSelectableTypeSet());
 
     ChromeUserPopulation population = GetUserPopulationForProfile(&profile);
     EXPECT_FALSE(population.is_history_sync_enabled());
+  }
+}
+
+TEST(GetUserPopulationForProfileTest, PopulatesSignedIn) {
+  content::BrowserTaskEnvironment task_environment;
+  TestingProfile profile;
+
+  {
+    ChromeUserPopulation population = GetUserPopulationForProfile(&profile);
+    EXPECT_FALSE(population.is_signed_in());
+  }
+
+  {
+    signin::IdentityManager* identity_manager =
+        IdentityManagerFactory::GetForProfile(&profile);
+    signin::SetPrimaryAccount(identity_manager, "test@example.com",
+                              signin::ConsentLevel::kSignin);
+    ChromeUserPopulation population = GetUserPopulationForProfile(&profile);
+    EXPECT_TRUE(population.is_signed_in());
   }
 }
 
@@ -148,26 +166,37 @@ TEST(GetUserPopulationForProfileTest, PopulatesAdvancedProtection) {
 TEST(GetUserPopulationForProfileTest, PopulatesUserAgent) {
   content::BrowserTaskEnvironment task_environment;
   TestingProfile profile;
+  std::string user_agent =
+      base::StrCat({version_info::GetProductNameAndVersionForUserAgent(), "/",
+                    version_info::GetOSType()});
+  ChromeUserPopulation population = GetUserPopulationForProfile(&profile);
+  EXPECT_EQ(population.user_agent(), user_agent);
+}
 
-  {
-    base::test::ScopedFeatureList feature_list;
-    feature_list.InitWithFeatures(
-        /* enabled_features = */ {},
-        /* disabled_features = */ {kBetterTelemetryAcrossReports});
-    ChromeUserPopulation population = GetUserPopulationForProfile(&profile);
-    EXPECT_EQ(population.user_agent(), "");
-  }
-  {
-    base::test::ScopedFeatureList feature_list;
-    feature_list.InitWithFeatures(
-        /* enabled_features = */ {kBetterTelemetryAcrossReports},
-        /* disabled_features = */ {});
-    std::string user_agent =
-        version_info::GetProductNameAndVersionForUserAgent() + "/" +
-        version_info::GetOSType();
-    ChromeUserPopulation population = GetUserPopulationForProfile(&profile);
-    EXPECT_EQ(population.user_agent(), user_agent);
-  }
+TEST(GetPageLoadTokenForURLTest, PopulatesEmptyTokenForEmptyProfile) {
+  content::BrowserTaskEnvironment task_environment;
+  ChromeUserPopulation::PageLoadToken token =
+      GetPageLoadTokenForURL(nullptr, GURL(""));
+  EXPECT_FALSE(token.has_token_value());
+}
+
+TEST(GetPageLoadTokenForURLTest, PopulatesNewTokenValueForURL) {
+  content::BrowserTaskEnvironment task_environment;
+  TestingProfile profile;
+  ChromeUserPopulation::PageLoadToken token =
+      GetPageLoadTokenForURL(&profile, GURL("https://www.example.com"));
+  EXPECT_TRUE(token.has_token_value());
+}
+
+TEST(GetPageLoadTokenForURLTest, PopulatesExistingTokenValueForURL) {
+  content::BrowserTaskEnvironment task_environment;
+  TestingProfile profile;
+  VerdictCacheManager* cache_manager =
+      VerdictCacheManagerFactory::GetForProfile(&profile);
+  cache_manager->CreatePageLoadToken(profile.GetHomePage());
+  ChromeUserPopulation::PageLoadToken token =
+      GetPageLoadTokenForURL(&profile, profile.GetHomePage());
+  EXPECT_TRUE(token.has_token_value());
 }
 
 }  // namespace safe_browsing

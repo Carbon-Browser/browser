@@ -1,10 +1,11 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/base/models/menu_model.h"
 
 #include "ui/base/models/image_model.h"
+#include "ui/base/resource/resource_bundle.h"
 
 namespace ui {
 
@@ -24,6 +25,10 @@ bool MenuModel::IsAlertedAt(size_t index) const {
 }
 
 bool MenuModel::IsNewFeatureAt(size_t index) const {
+  return false;
+}
+
+bool MenuModel::GetForceShowAcceleratorForItemAt(size_t index) const {
   return false;
 }
 
@@ -81,7 +86,10 @@ std::u16string MenuModel::GetAccessibleNameAt(size_t index) const {
 }
 
 const gfx::FontList* MenuModel::GetLabelFontListAt(size_t index) const {
-  return nullptr;
+  return (GetTypeAt(index) == ui::MenuModel::TYPE_TITLE)
+             ? &ui::ResourceBundle::GetSharedInstance().GetFontList(
+                   ui::ResourceBundle::BoldFont)
+             : nullptr;
 }
 
 // Default implementation ignores the event flags.
@@ -95,6 +103,20 @@ void MenuModel::SetMenuModelDelegate(MenuModelDelegate* delegate) {
   if (menu_model_delegate_)
     menu_model_delegate_->OnMenuClearingDelegate();
   menu_model_delegate_ = delegate;
+}
+
+std::optional<ui::ColorId> MenuModel::GetForegroundColorId(size_t index) {
+  return std::nullopt;
+}
+
+std::optional<ui::ColorId> MenuModel::GetSubmenuBackgroundColorId(
+    size_t index) {
+  return std::nullopt;
+}
+
+std::optional<ui::ColorId> MenuModel::GetSelectedBackgroundColorId(
+    size_t index) {
+  return std::nullopt;
 }
 
 }  // namespace ui

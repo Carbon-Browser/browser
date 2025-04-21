@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,9 +20,9 @@ namespace message_center {
 // will also allow for buttons whose touch areas extend beyond their clickable
 // area (<http://crbug.com/168856>).
 class MESSAGE_CENTER_EXPORT PaddedButton : public views::ImageButton {
- public:
-  METADATA_HEADER(PaddedButton);
+  METADATA_HEADER(PaddedButton, views::ImageButton)
 
+ public:
   explicit PaddedButton(PressedCallback callback);
   PaddedButton(const PaddedButton&) = delete;
   PaddedButton& operator=(const PaddedButton&) = delete;

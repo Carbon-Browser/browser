@@ -1,6 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #ifndef UI_ACCESSIBILITY_AX_POSITION_H_
 #define UI_ACCESSIBILITY_AX_POSITION_H_
@@ -10,6 +15,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <ostream>
 #include <string>
 #include <type_traits>
@@ -19,26 +25,29 @@
 #include "base/containers/contains.h"
 #include "base/containers/fixed_flat_map.h"
 #include "base/containers/stack.h"
+#include "base/export_template.h"
 #include "base/i18n/break_iterator.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/accessibility/ax_common.h"
 #include "ui/accessibility/ax_enum_util.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/accessibility/ax_role_properties.h"
+#include "ui/accessibility/ax_table_info.h"
 #include "ui/accessibility/ax_text_attributes.h"
 #include "ui/accessibility/ax_tree_id.h"
 #include "ui/accessibility/ax_tree_manager.h"
-#include "ui/accessibility/ax_tree_manager_map.h"
 #include "ui/gfx/utf16_indexing.h"
 
 namespace ui {
+
+class AXNodePosition;
+class AXNode;
 
 // Defines the type of position in the accessibility tree.
 // A tree position is used when referring to a specific child of a node in the
@@ -87,6 +96,12 @@ struct AXMovementOptions {
 
   AXBoundaryBehavior boundary_behavior;
   AXBoundaryDetection boundary_detection;
+
+  // If true, indicates that an upstream position should not be crossed when
+  // moving forward and should skip its initial check when moving backward. This
+  // primarily applies to getting a pair of positions around a line from an
+  // upstream caret.
+  bool upstream_bounded = false;
 };
 
 // Describes in further detail what type of boundary a current position is on.
@@ -144,9 +159,18 @@ enum class AXRangeExpandBehavior {
 // `AXPlatformNodeTextRangeProvider` methods. Since an "embedded object
 // character" is the only character in a node, we also treat this character as a
 // word.
+//
+// However, there is a special case for UIA. kExposeCharacterForHypertext is
+// used mainly to enable the hypertext logic and calculation for cases where the
+// embedded object character is not needed. This logic is IA2 and ATK specific,
+// and should not be used for UIA relevant calls and calculations. As a result,
+// we have the kUIAExposeCharacterForTextContent which avoids the IA2/ATK
+// specific logic for the text calculation but also keeps the same embedded
+// object character behavior for cases when it is needed.
 enum class AXEmbeddedObjectBehavior {
-  kExposeCharacter,
+  kExposeCharacterForHypertext,
   kSuppressCharacter,
+  kUIAExposeCharacterForTextContent,
 };
 
 // Controls whether embedded objects are represented by a replacement
@@ -162,7 +186,7 @@ enum class AXEmbeddedObjectBehavior {
 // through it, otherwise the text field would be missed by the user.
 //
 // Tests should use ScopedAXEmbeddedObjectBehaviorSetter to change this.
-// TODO(crbug.com/1204592) Don't export this so tests can't change it.
+// TODO(crbug.com/40764129) Don't export this so tests can't change it.
 extern AX_EXPORT AXEmbeddedObjectBehavior g_ax_embedded_object_behavior;
 
 class AX_EXPORT ScopedAXEmbeddedObjectBehaviorSetter {
@@ -243,23 +267,47 @@ class AXPosition {
     return new_position;
   }
 
-  static AXPositionInstance CreateTreePosition(AXTreeID tree_id,
-                                               AXNodeID anchor_id,
+  static AXPositionInstance CreateTreePosition(const AXNode& anchor,
                                                int child_index) {
+    DCHECK(anchor.tree());
+    DCHECK_NE(anchor.tree()->GetAXTreeID(), AXTreeIDUnknown());
+    DCHECK_NE(anchor.id(), kInvalidAXNodeID);
+
     AXPositionInstance new_position(new AXPositionType());
-    new_position->Initialize(AXPositionKind::TREE_POSITION, tree_id, anchor_id,
+    new_position->Initialize(AXPositionKind::TREE_POSITION,
+                             anchor.tree()->GetAXTreeID(), anchor.id(),
                              child_index, INVALID_OFFSET,
                              ax::mojom::TextAffinity::kDownstream);
     return new_position;
   }
 
+  static AXPositionInstance CreateTreePositionAtStartOfAnchor(
+      const AXNode& anchor) {
+    // Initialize the child index:
+    // - For a leaf, the child index will be BEFORE_TEXT.
+    // - Otherwise the child index will be 0.
+    int child_index = IsLeafNodeForTreePosition(anchor) ? BEFORE_TEXT : 0;
+    return CreateTreePosition(anchor, child_index);
+  }
+
+  static AXPositionInstance CreateTreePositionAtEndOfAnchor(
+      const AXNode& anchor) {
+    // Initialize the child index to the anchor's child count.
+    return CreateTreePosition(anchor,
+                              anchor.GetChildCountCrossingTreeBoundary());
+  }
+
   static AXPositionInstance CreateTextPosition(
-      AXTreeID tree_id,
-      AXNodeID anchor_id,
+      const AXNode& anchor,
       int text_offset,
       ax::mojom::TextAffinity affinity) {
+    DCHECK(anchor.tree());
+    DCHECK_NE(anchor.tree()->GetAXTreeID(), AXTreeIDUnknown());
+    DCHECK_NE(anchor.id(), kInvalidAXNodeID);
+
     AXPositionInstance new_position(new AXPositionType());
-    new_position->Initialize(AXPositionKind::TEXT_POSITION, tree_id, anchor_id,
+    new_position->Initialize(AXPositionKind::TEXT_POSITION,
+                             anchor.tree()->GetAXTreeID(), anchor.id(),
                              INVALID_INDEX, text_offset, affinity);
     return new_position;
   }
@@ -278,7 +326,6 @@ class AXPosition {
   AXPositionInstance CloneWithDownstreamAffinity() const {
     if (!IsTextPosition()) {
       NOTREACHED() << "Only text positions have affinity.";
-      return CreateNullPosition();
     }
 
     AXPositionInstance clone_with_downstream_affinity = Clone();
@@ -290,7 +337,6 @@ class AXPosition {
   AXPositionInstance CloneWithUpstreamAffinity() const {
     if (!IsTextPosition()) {
       NOTREACHED() << "Only text positions have affinity.";
-      return CreateNullPosition();
     }
 
     AXPositionInstance clone_with_upstream_affinity = Clone();
@@ -334,10 +380,12 @@ class AXPosition {
   static AXPositionInstance Unserialize(
       const SerializedPosition& serialization) {
     AXPositionInstance new_position(new AXPositionType());
-    new_position->Initialize(serialization.kind,
-                             ui::AXTreeID::FromString(serialization.tree_id),
-                             serialization.anchor_id, serialization.child_index,
-                             serialization.text_offset, serialization.affinity);
+    // Use initialize without validation because this is used by ATs that
+    // used outdated information to generated a selection request.
+    new_position->InitializeWithoutValidation(
+        serialization.kind, AXTreeID::FromString(serialization.tree_id),
+        serialization.anchor_id, serialization.child_index,
+        serialization.text_offset, serialization.affinity);
     return new_position;
   }
 
@@ -385,9 +433,13 @@ class AXPosition {
     if (text_offset_ == static_cast<int>(max_text_offset)) {
       annotated_text = text + u"<>";
     } else {
-      annotated_text = text.substr(0, text_offset_) + u"<" +
-                       text[text_offset_] + u">" +
-                       text.substr(text_offset_ + 1);
+      // TODO(aleventhal) This extra casting is only necessary to satisfy a
+      // compiler error that strangely occurs only when Initialize() contains
+      // SnapToMaxTextOffsetIfBeyond().
+      size_t unsigned_text_offset = static_cast<size_t>(text_offset_);
+      annotated_text = text.substr(0, unsigned_text_offset) + u"<" +
+                       text[unsigned_text_offset] + u">" +
+                       text.substr(unsigned_text_offset + 1);
     }
 
     return str + " annotated_text=" + base::UTF16ToUTF8(annotated_text);
@@ -395,15 +447,20 @@ class AXPosition {
 
   // Helper for logging the position, the AXTreeManager and the anchor node.
   std::string ToDebugString() const {
-    if (IsNullPosition()) {
-      return "* Position: null";
-    }
-    DCHECK(GetAnchor());
-    DCHECK(GetManager());
     std::ostringstream str;
-    str << "* Position: " << ToString()
-        << "\n* Manager: " << GetManager()->ToString()
-        << "\n* Anchor node: " << *GetAnchor();
+    str << "* Position: " << ToString();
+    if (GetAnchor()) {
+      str << "\n* Anchor node: " << *GetAnchor();
+      if (IsTreePosition()) {
+        str << "\n* AnchorChildCount(): " << AnchorChildCount()
+            << "\n* IsLeaf(): " << IsLeaf();
+      } else {
+        str << "\n* TextOffset: " << text_offset()
+            << "\n* MaxTextOffset: " << MaxTextOffset();
+      }
+    }
+    if (GetManager())
+      str << "\n* Tree: " << GetManager()->ax_tree()->data().ToString();
     return str.str();
   }
 
@@ -411,8 +468,87 @@ class AXPosition {
   AXTreeID tree_id() const { return tree_id_; }
   AXNodeID anchor_id() const { return anchor_id_; }
 
-  AXTreeManager* GetManager() const {
-    return AXTreeManagerMap::GetInstance().GetManager(tree_id());
+  AXTreeManager* GetManager() const { return AXTreeManager::FromID(tree_id()); }
+
+  // Returns true if this position is within an "empty object", i.e. within a
+  // node that should contribute no text to the accessibility tree's text
+  // representation. For example, returns true if this position is within an
+  // empty control, such as an empty text field or (on Windows) a collapsed
+  // popup menu. On some platforms, such nodes need to be represented by an
+  // "object replacement character". This character is inserted purely for
+  // navigational purposes. This is because empty controls still need to act as
+  // a word and character boundary on those platforms.
+  static bool IsEmptyObject(const AXNode& node) {
+    // A collapsed popup button that contains a menu list popup (i.e, the exact
+    // subtree representation we get from a collapsed <select> element on
+    // Windows) should not expose its descendants even though they are not
+    // ignored.
+    if (node.IsCollapsedMenuListSelect())
+      return true;
+
+    // All anchor nodes that are empty leaf nodes should be treated as empty
+    // objects. Empty leaf nodes are defined as nodes whose descendants are (A)
+    // not exposed to any platform accessibility APIs and (B) do not contribute
+    // any text to the tree's text representation. They may have unignored
+    // descendants however. They do not have any text content, hence they are
+    // empty from our perspective. For example, an empty text field may still
+    // have an unignored generic container inside it.
+    if (!node.IsEmptyLeaf())
+      return false;
+
+    // While atomic text fields from web content have a text node descendant,
+    // atomic text fields from Views don't. Their text value is set in the value
+    // attribute of the text field node directly.
+    if (node.IsView() && node.data().IsAtomicTextField() &&
+        !node.GetValueForControl().empty()) {
+      return false;
+    }
+
+    // One exception to the above rule that all empty leaf nodes are empty
+    // objects in AXPosition are <embed> and <object> elements that have
+    // children. They should not be treated as empty objects even when their
+    // descendants are all ignored so that text navigation won't stop on such
+    // nodes.
+    ax::mojom::Role role = node.GetRole();
+    if ((role == ax::mojom::Role::kEmbeddedObject ||
+         role == ax::mojom::Role::kPluginObject) &&
+        node.GetChildCountCrossingTreeBoundary()) {
+      return false;
+    }
+
+    // Nodes that are skipped during text navigation should also be "empty
+    // objects".
+    //
+    // Note that nodes that are skipped during text navigation could still have
+    // positions anchored to them, e.g. for determining if a paragraph boundary
+    // should be reported before or after such a node. Descending into the
+    // children of such objects could add unnecessary extra text boundaries.
+    if (node.IsIgnoredForTextNavigation())
+      return true;
+
+    // Another exception to the rule that all leaf nodes in the accessibility
+    // tree should be "empty objects" are kRootWebArea, kPdfRoot, kIframe,
+    // kIframePresentational, and text nodes. We don't want text navigation to
+    // stop on any of the above roles. On the other hand, nodes that only have
+    // ignored children (e.g., a button that contains only an empty ignored div)
+    // need to be treated as leaf nodes.
+    //
+    // Note that we have already determined that the anchor at this position
+    // doesn't have an unignored child, making this a leaf tree or text
+    // position, or a leaf's descendant.
+    return (!IsPlatformDocument(role) && !IsIframe(role) && !node.IsText());
+  }
+
+  // Return true if the node is a leaf, or has no selectable text content.
+  static bool IsLeafNodeForTreePosition(const AXNode& node) {
+    // Unignored text list markers expose text on their own, and all their
+    // descendants are ignored. Make sure they are treated as leaves, not empty
+    // containers.
+    if (node.GetRole() == ax::mojom::Role::kListMarker && !node.IsIgnored() &&
+        !node.GetUnignoredChildCountCrossingTreeBoundary()) {
+      return true;
+    }
+    return !node.GetChildCountCrossingTreeBoundary() || IsEmptyObject(node);
   }
 
   AXNode* GetAnchor() const {
@@ -421,7 +557,7 @@ class AXPosition {
 
     const AXTreeManager* manager = GetManager();
     if (manager)
-      return manager->GetNodeFromTree(anchor_id());
+      return manager->GetNode(anchor_id());
 
     return nullptr;
   }
@@ -455,14 +591,18 @@ class AXPosition {
     switch (kind_) {
       case AXPositionKind::NULL_POSITION:
         NOTREACHED();
-        return false;
       case AXPositionKind::TREE_POSITION: {
         // If this is a "before text" or an "after text" tree position, it's
         // pointing to the anchor itself, which we've determined to be
         // unignored.
-        DCHECK(!IsLeaf() || child_index_ == BEFORE_TEXT || child_index_ == 0)
-            << "\"Before text\" and \"after text\" tree positions are only "
-               "valid on leaf nodes.";
+        DCHECK(child_index_ == BEFORE_TEXT ||
+               child_index_ == AnchorChildCount() || !IsLeaf())
+            << "Leaf nodes can only have a position before or after, so they "
+               "must have a child index of BEFORE_TEXT or AnchorChildCount(): "
+            << ToString() << "  AnchorChildCount(): " << AnchorChildCount();
+        DCHECK(child_index_ != BEFORE_TEXT || IsLeaf())
+            << "Non-leaf nodes cannot have a position of BEFORE_TEXT: "
+            << *GetAnchor();
         if (child_index_ == BEFORE_TEXT || IsLeaf())
           return false;
 
@@ -491,7 +631,8 @@ class AXPosition {
         AXPositionInstance child_position =
             CreateChildPositionAt(adjusted_child_index);
         DCHECK(child_position && !child_position->IsNullPosition());
-        return child_position->GetAnchor()->IsIgnored();
+        return child_position->IsNullPosition() ||
+               child_position->GetAnchor()->IsIgnored();
       }
       case AXPositionKind::TEXT_POSITION:
         // If the corresponding leaf position is ignored, the current text
@@ -522,12 +663,11 @@ class AXPosition {
   bool IsLeaf() const {
     if (IsNullPosition())
       return false;
-    // Unignored text list markers expose text on their own, and all their
-    // descendants are ignored. Make sure they are treated as leaves, not empty
-    // containers.
-    if (IsInUnignoredTextListMarker())
-      return true;
-    return !AnchorChildCount() || IsInEmptyObject();
+
+    AXNode* anchor = GetAnchor();
+    DCHECK(anchor);
+
+    return IsLeafNodeForTreePosition(*anchor);
   }
 
   // Returns true if this is a valid position, e.g. the child_index_ or
@@ -554,8 +694,13 @@ class AXPosition {
         // `child_index_` of 0 would confusingly indicate both a "before text"
         // as well as an "after text" position. Note that some leaf positions,
         // e.g. positions in empty objects, do have children.
-        if (child_index_ == BEFORE_TEXT)
-          return IsLeaf();
+        if (IsLeaf()) {
+          // Leaf nodes can only have a position before or after, so they must
+          // have a child index of BEFORE_TEXT or AnchorChildCount().
+          return child_index_ == BEFORE_TEXT ||
+                 child_index_ == AnchorChildCount();
+        }
+
         return child_index_ >= 0 && child_index_ <= AnchorChildCount();
       case AXPositionKind::TEXT_POSITION:
         if (!GetAnchor())
@@ -595,8 +740,6 @@ class AXPosition {
         // A few positions are anchored to nodes that have children but we want
         // to treat them as leaf positions. An example is an empty text field;
         // it often has empty unignored divs coming from Blink inside it.
-        if (IsLeaf())
-          return child_index_ == 0;
         return child_index_ == AnchorChildCount();
       case AXPositionKind::TEXT_POSITION:
         return text_offset_ == MaxTextOffset();
@@ -621,7 +764,6 @@ class AXPosition {
         return false;
       case AXPositionKind::TREE_POSITION:
         NOTREACHED();
-        return false;
       case AXPositionKind::TEXT_POSITION: {
         const std::vector<int32_t>& word_starts =
             text_position->GetWordStartOffsets();
@@ -649,7 +791,6 @@ class AXPosition {
         return false;
       case AXPositionKind::TREE_POSITION:
         NOTREACHED();
-        return false;
       case AXPositionKind::TEXT_POSITION: {
         const std::vector<int32_t>& word_ends =
             text_position->GetWordEndOffsets();
@@ -665,7 +806,6 @@ class AXPosition {
         return false;
       case AXPositionKind::TREE_POSITION:
         NOTREACHED();
-        return false;
       case AXPositionKind::TEXT_POSITION:
         // We treat a position after some white space that is not connected to
         // any node after it via "next on line ID", to be equivalent to a
@@ -697,8 +837,14 @@ class AXPosition {
           return true;
         }
 
+        // If the anchor is ignored, then by default it will not have a
+        // PreviousOnLineID set since we only set this on unignored nodes.
+        // However, it could still have something previous to it on the same
+        // line, like for example if we have some text on the same line, and a
+        // text node in the middle is set to aria-hidden.
         return text_position->GetPreviousOnLineID() == kInvalidAXNodeID &&
-               text_position->AtStartOfAnchor();
+               text_position->AtStartOfAnchor() &&
+               !text_position->GetAnchor()->IsIgnored();
     }
   }
 
@@ -709,7 +855,6 @@ class AXPosition {
         return false;
       case AXPositionKind::TREE_POSITION:
         NOTREACHED();
-        return false;
       case AXPositionKind::TEXT_POSITION:
         // Text positions on objects with no text should not be considered at
         // end of line because the empty position may share a text offset with
@@ -857,7 +1002,6 @@ class AXPosition {
         return false;
       case AXPositionKind::TREE_POSITION:
         NOTREACHED();
-        return false;
       case AXPositionKind::TEXT_POSITION: {
         const std::vector<int32_t>& sentence_starts =
             text_position->GetAnchor()->GetIntListAttribute(
@@ -886,7 +1030,6 @@ class AXPosition {
         return false;
       case AXPositionKind::TREE_POSITION:
         NOTREACHED();
-        return false;
       case AXPositionKind::TEXT_POSITION: {
         const std::vector<int32_t>& sentence_ends =
             text_position->GetAnchor()->GetIntListAttribute(
@@ -925,7 +1068,6 @@ class AXPosition {
         return false;
       case AXPositionKind::TREE_POSITION:
         NOTREACHED();
-        return false;
       case AXPositionKind::TEXT_POSITION: {
         // 1. The current leaf text position must be at the start of an anchor,
         // or after a '\n' character if white space is preserved (e.g. when
@@ -933,15 +1075,22 @@ class AXPosition {
         // '\n' character in a <br> element unless multiple consecutive <br>
         // elements are present and so empty paragraphs have been created.
         //
-        // Note that `!AtStartOfAnchor()` implies that `MaxTextOffset()` > 0 and
-        // `text_offset()` > 0. Therefore,
-        // `text_position->GetText().at(text_position->text_offset_ - 1)` will
-        // always be valid.
+        // Note that, in theory, `!AtStartOfAnchor()` implies that
+        // `MaxTextOffset()` > 0 and `text_offset()` > 0. Therefore,
+        // `text_position->GetText().at(text_position->text_offset_ - 1)` should
+        // always be valid. However, as reported by https://crbug.com/1379716,
+        // this logic appears to have flaws.
+        //
+        // TODO(accessibility): Investigate what are these edge cases that lead
+        // to have a `text_offset_` greater than or equal to the `text` length.
         if (!text_position->AtStartOfAnchor()) {
-          if (!text_position->IsPointingToLineBreak() &&
-              text_position->GetText().at(text_position->text_offset_ - 1) ==
-                  '\n') {
-            return true;
+          if (!text_position->IsPointingToLineBreak()) {
+            const std::u16string text = text_position->GetText();
+            if (static_cast<size_t>(text_position->text_offset_) <
+                    text.length() &&
+                text.at(text_position->text_offset_) == '\n') {
+              return true;
+            }
           }
           return false;
         }
@@ -994,7 +1143,6 @@ class AXPosition {
         return false;
       case AXPositionKind::TREE_POSITION:
         NOTREACHED();
-        return false;
       case AXPositionKind::TEXT_POSITION: {
         // 1. The current leaf text position must be at the end of an anchor, or
         // before a '\n' character if white space is preserved (e.g. when using
@@ -1002,16 +1150,23 @@ class AXPosition {
         // character in a <br> element unless multiple consecutive <br> elements
         // are present and so empty paragraphs have been created.
         //
-        // Note that `!AtEndOfAnchor()` implies `AtStartOfAnchor()` !=
-        // `AtEndOfAnchor()` which in turn implies that `MaxTextOffset()` > 0
-        // and `text_offset()` < `MaxTextOffset()`. Therefore,
-        // `text_position->GetText().at(text_position->text_offset_)` will
-        // always be valid.
+        // Note that, in theory, `!AtEndOfAnchor()` implies
+        // `AtStartOfAnchor()` != `AtEndOfAnchor()` which in turn implies that
+        // `MaxTextOffset()` > 0 and `text_offset()` < `MaxTextOffset()`.
+        // Therefore, `text_position->GetText().at(text_position->text_offset_)`
+        // should always be valid. However, as reported by
+        // https://crbug.com/1379716, this logic appears to have flaws.
+        //
+        // TODO(accessibility): Investigate what are these edge cases that lead
+        // to have a `text_offset_` greater than or equal to the `text` length.
         if (!text_position->AtEndOfAnchor()) {
-          if (!text_position->IsPointingToLineBreak() &&
-              text_position->GetText().at(text_position->text_offset_) ==
-                  '\n') {
-            return true;
+          if (!text_position->IsPointingToLineBreak()) {
+            const std::u16string text = text_position->GetText();
+            if (static_cast<size_t>(text_position->text_offset_) <
+                    text.length() &&
+                text.at(text_position->text_offset_) == '\n') {
+              return true;
+            }
           }
           return false;
         }
@@ -1044,7 +1199,6 @@ class AXPosition {
         return false;
       case AXPositionKind::TREE_POSITION:
         NOTREACHED();
-        return false;
       case AXPositionKind::TEXT_POSITION: {
         if (text_position->AtStartOfAnchor()) {
           AXPositionInstance previous_position =
@@ -1090,7 +1244,6 @@ class AXPosition {
         return false;
       case AXPositionKind::TREE_POSITION:
         NOTREACHED();
-        return false;
       case AXPositionKind::TEXT_POSITION: {
         if (!text_position->AtStartOfAnchor())
           return false;
@@ -1118,7 +1271,6 @@ class AXPosition {
         return false;
       case AXPositionKind::TREE_POSITION:
         NOTREACHED();
-        return false;
       case AXPositionKind::TEXT_POSITION: {
         if (!text_position->AtEndOfAnchor())
           return false;
@@ -1258,7 +1410,14 @@ class AXPosition {
         if (!position->GetAnchor())
           return CreateNullPosition();
 
-        if (const AXNode* empty_object_node = GetEmptyObjectAncestorNode()) {
+        const AXNode* leaf_node = GetEmptyObjectAncestorNode();
+        if (!leaf_node && position->IsLeaf()) {
+          // If there is no empty object ancestor, but the current position's
+          // anchor is a leaf, then use the same anchor, as it will be valid
+          // as long as a valid offset is used.
+          leaf_node = position->GetAnchor();
+        }
+        if (leaf_node) {
           // In this class, we define the empty node as a leaf node (see
           // `AXNode::IsLeaf()`) that doesn't have any content. On certain
           // platforms, and so that such nodes will act as a character and a
@@ -1277,18 +1436,23 @@ class AXPosition {
           // valid we move the position from the descendant to the empty leaf
           // node itself. Otherwise, character and word navigation won't work
           // properly.
-          return CreateTreePosition(
-              position->tree_id(), empty_object_node->id(),
-              position->child_index() == BEFORE_TEXT ? BEFORE_TEXT
-                                                     : AnchorChildCount());
+          AXPositionInstance new_position =
+              position->child_index() == BEFORE_TEXT
+                  ? CreateTreePositionAtStartOfAnchor(*leaf_node)
+                  : CreateTreePositionAtEndOfAnchor(*leaf_node);
+          DCHECK(new_position->IsLeaf());
+          return new_position;
         }
 
-        if (position->child_index_ == BEFORE_TEXT)
-          return position;
-
-        if (position->child_index_ < 0)
+        DCHECK(!position->IsLeaf());
+        // Not a leaf: use a child index from 0 to AnchorChilkdCount().
+        if (position->child_index_ == BEFORE_TEXT) {
           position->child_index_ = 0;
-        else if (position->child_index_ > position->AnchorChildCount())
+          return position;
+        }
+
+        DCHECK_GE(position->child_index_, 0);
+        if (position->child_index_ > position->AnchorChildCount())
           position->child_index_ = position->AnchorChildCount();
         break;
       }
@@ -1307,8 +1471,8 @@ class AXPosition {
           // `AXNode::kEmbeddedObjectCharacterLengthUTF16`. If the invalid
           // position was already at the start of the node, we set it to 0.
           AXPositionInstance valid_position = CreateTextPosition(
-              position->tree_id(), empty_object_node->id(), /* text_offset */ 0,
-              ax::mojom::TextAffinity::kDownstream);
+              *empty_object_node,
+              /* text_offset */ 0, ax::mojom::TextAffinity::kDownstream);
           if (position->text_offset() > 0)
             return valid_position->CreatePositionAtEndOfAnchor();
           return std::move(valid_position);
@@ -1329,7 +1493,7 @@ class AXPosition {
         break;
       }
     }
-    DCHECK(position->IsValid());
+    DCHECK(position->IsValid()) << *position;
     return position;
   }
 
@@ -1351,11 +1515,13 @@ class AXPosition {
         copy->child_index_ = BEFORE_TEXT;
       } else {
         const int max_text_offset = copy->MaxTextOffset();
-        copy->child_index_ =
-            copy->text_offset_ != max_text_offset ? BEFORE_TEXT : 0;
+        copy->child_index_ = copy->text_offset_ != max_text_offset
+                                 ? BEFORE_TEXT
+                                 : AnchorChildCount();
       }
 
       copy->kind_ = AXPositionKind::TREE_POSITION;
+      DCHECK(copy->IsValid());
       return copy;
     }
 
@@ -1823,13 +1989,11 @@ class AXPosition {
     switch (boundary) {
       case ax::mojom::TextBoundary::kNone:
         NOTREACHED();
-        break;
 
       case ax::mojom::TextBoundary::kCharacter:
         switch (direction) {
           case ax::mojom::MoveDirection::kNone:
             NOTREACHED();
-            break;
           case ax::mojom::MoveDirection::kBackward:
             resulting_position = CreatePreviousCharacterPosition(options);
             break;
@@ -1843,7 +2007,6 @@ class AXPosition {
         switch (direction) {
           case ax::mojom::MoveDirection::kNone:
             NOTREACHED();
-            break;
           case ax::mojom::MoveDirection::kBackward:
             resulting_position = CreatePreviousFormatEndPosition(options);
             break;
@@ -1857,7 +2020,6 @@ class AXPosition {
         switch (direction) {
           case ax::mojom::MoveDirection::kNone:
             NOTREACHED();
-            break;
           case ax::mojom::MoveDirection::kBackward:
             resulting_position = CreatePreviousFormatStartPosition(options);
             break;
@@ -1871,7 +2033,6 @@ class AXPosition {
         switch (direction) {
           case ax::mojom::MoveDirection::kNone:
             NOTREACHED();
-            break;
           case ax::mojom::MoveDirection::kBackward:
             resulting_position = CreatePreviousFormatStartPosition(options);
             break;
@@ -1885,7 +2046,6 @@ class AXPosition {
         switch (direction) {
           case ax::mojom::MoveDirection::kNone:
             NOTREACHED();
-            break;
           case ax::mojom::MoveDirection::kBackward:
             resulting_position = CreatePreviousLineEndPosition(options);
             break;
@@ -1899,7 +2059,6 @@ class AXPosition {
         switch (direction) {
           case ax::mojom::MoveDirection::kNone:
             NOTREACHED();
-            break;
           case ax::mojom::MoveDirection::kBackward:
             resulting_position = CreatePreviousLineStartPosition(options);
             break;
@@ -1913,7 +2072,6 @@ class AXPosition {
         switch (direction) {
           case ax::mojom::MoveDirection::kNone:
             NOTREACHED();
-            break;
           case ax::mojom::MoveDirection::kBackward:
             resulting_position = CreatePreviousLineStartPosition(options);
             break;
@@ -1927,7 +2085,6 @@ class AXPosition {
         switch (direction) {
           case ax::mojom::MoveDirection::kNone:
             NOTREACHED();
-            break;
           case ax::mojom::MoveDirection::kBackward:
             resulting_position = CreatePositionAtStartOfAnchor();
             break;
@@ -1941,7 +2098,6 @@ class AXPosition {
         switch (direction) {
           case ax::mojom::MoveDirection::kNone:
             NOTREACHED();
-            break;
           case ax::mojom::MoveDirection::kBackward:
             resulting_position = CreatePreviousPageEndPosition(options);
             break;
@@ -1955,7 +2111,6 @@ class AXPosition {
         switch (direction) {
           case ax::mojom::MoveDirection::kNone:
             NOTREACHED();
-            break;
           case ax::mojom::MoveDirection::kBackward:
             resulting_position = CreatePreviousPageStartPosition(options);
             break;
@@ -1969,7 +2124,6 @@ class AXPosition {
         switch (direction) {
           case ax::mojom::MoveDirection::kNone:
             NOTREACHED();
-            break;
           case ax::mojom::MoveDirection::kBackward:
             resulting_position = CreatePreviousPageStartPosition(options);
             break;
@@ -1983,7 +2137,6 @@ class AXPosition {
         switch (direction) {
           case ax::mojom::MoveDirection::kNone:
             NOTREACHED();
-            break;
           case ax::mojom::MoveDirection::kBackward:
             resulting_position = CreatePreviousParagraphEndPosition(options);
             break;
@@ -1997,7 +2150,6 @@ class AXPosition {
         switch (direction) {
           case ax::mojom::MoveDirection::kNone:
             NOTREACHED();
-            break;
           case ax::mojom::MoveDirection::kBackward:
             resulting_position = CreatePreviousParagraphStartPosition(options);
             break;
@@ -2016,7 +2168,6 @@ class AXPosition {
         switch (direction) {
           case ax::mojom::MoveDirection::kNone:
             NOTREACHED();
-            break;
           case ax::mojom::MoveDirection::kBackward:
             resulting_position =
                 CreatePreviousParagraphStartPositionSkippingEmptyParagraphs(
@@ -2034,7 +2185,6 @@ class AXPosition {
         switch (direction) {
           case ax::mojom::MoveDirection::kNone:
             NOTREACHED();
-            break;
           case ax::mojom::MoveDirection::kBackward:
             resulting_position = CreatePreviousParagraphStartPosition(options);
             break;
@@ -2048,7 +2198,6 @@ class AXPosition {
         switch (direction) {
           case ax::mojom::MoveDirection::kNone:
             NOTREACHED();
-            break;
           case ax::mojom::MoveDirection::kBackward:
             resulting_position = CreatePreviousSentenceEndPosition(options);
             break;
@@ -2062,7 +2211,6 @@ class AXPosition {
         switch (direction) {
           case ax::mojom::MoveDirection::kNone:
             NOTREACHED();
-            break;
           case ax::mojom::MoveDirection::kBackward:
             resulting_position = CreatePreviousSentenceStartPosition(options);
             break;
@@ -2076,7 +2224,6 @@ class AXPosition {
         switch (direction) {
           case ax::mojom::MoveDirection::kNone:
             NOTREACHED();
-            break;
           case ax::mojom::MoveDirection::kBackward:
             resulting_position = CreatePreviousSentenceStartPosition(options);
             break;
@@ -2093,7 +2240,6 @@ class AXPosition {
         switch (direction) {
           case ax::mojom::MoveDirection::kNone:
             NOTREACHED();
-            break;
           case ax::mojom::MoveDirection::kBackward:
             resulting_position = CreatePositionAtStartOfContent();
             break;
@@ -2107,7 +2253,6 @@ class AXPosition {
         switch (direction) {
           case ax::mojom::MoveDirection::kNone:
             NOTREACHED();
-            break;
           case ax::mojom::MoveDirection::kBackward:
             resulting_position = CreatePreviousWordEndPosition(options);
             break;
@@ -2121,7 +2266,6 @@ class AXPosition {
         switch (direction) {
           case ax::mojom::MoveDirection::kNone:
             NOTREACHED();
-            break;
           case ax::mojom::MoveDirection::kBackward:
             resulting_position = CreatePreviousWordStartPosition(options);
             break;
@@ -2135,7 +2279,6 @@ class AXPosition {
         switch (direction) {
           case ax::mojom::MoveDirection::kNone:
             NOTREACHED();
-            break;
           case ax::mojom::MoveDirection::kBackward:
             resulting_position = CreatePreviousWordStartPosition(options);
             break;
@@ -2150,29 +2293,33 @@ class AXPosition {
   }
 
   AXPositionInstance CreatePositionAtStartOfAnchor() const {
+    const AXNode* anchor = GetAnchor();
+    if (!anchor)
+      return CreateNullPosition();
+
     switch (kind_) {
       case AXPositionKind::NULL_POSITION:
         return CreateNullPosition();
       case AXPositionKind::TREE_POSITION:
-        if (IsLeaf())
-          return CreateTreePosition(tree_id_, anchor_id_, BEFORE_TEXT);
-        return CreateTreePosition(tree_id_, anchor_id_, 0 /* child_index */);
+        return CreateTreePositionAtStartOfAnchor(*anchor);
       case AXPositionKind::TEXT_POSITION:
-        return CreateTextPosition(tree_id_, anchor_id_, 0 /* text_offset */,
+        return CreateTextPosition(*anchor, 0 /* text_offset */,
                                   ax::mojom::TextAffinity::kDownstream);
     }
   }
 
   AXPositionInstance CreatePositionAtEndOfAnchor() const {
+    const AXNode* anchor = GetAnchor();
+    if (!anchor)
+      return CreateNullPosition();
+
     switch (kind_) {
       case AXPositionKind::NULL_POSITION:
         return CreateNullPosition();
       case AXPositionKind::TREE_POSITION:
-        if (IsLeaf())
-          return CreateTreePosition(tree_id_, anchor_id_, /* child_index */ 0);
-        return CreateTreePosition(tree_id_, anchor_id_, AnchorChildCount());
+        return CreateTreePositionAtEndOfAnchor(*anchor);
       case AXPositionKind::TEXT_POSITION:
-        return CreateTextPosition(tree_id_, anchor_id_, MaxTextOffset(),
+        return CreateTextPosition(*anchor, MaxTextOffset(),
                                   ax::mojom::TextAffinity::kDownstream);
     }
   }
@@ -2260,32 +2407,18 @@ class AXPosition {
     if (child_index < 0 || child_index >= AnchorChildCount())
       return CreateNullPosition();
 
-    AXTreeID tree_id = AXTreeIDUnknown();
-    AXNodeID child_id = kInvalidAXNodeID;
     const AXNode* child_anchor =
         GetAnchor()->GetChildAtIndexCrossingTreeBoundary(child_index);
     if (!child_anchor)
       return CreateNullPosition();
-    tree_id = child_anchor->tree()->GetAXTreeID();
-    child_id = child_anchor->id();
-    DCHECK_NE(tree_id, AXTreeIDUnknown());
-    DCHECK_NE(child_id, kInvalidAXNodeID);
 
     switch (kind_) {
       case AXPositionKind::NULL_POSITION:
         NOTREACHED();
-        return CreateNullPosition();
-      case AXPositionKind::TREE_POSITION: {
-        AXPositionInstance child_position =
-            CreateTreePosition(tree_id, child_id, 0 /* child_index */);
-        // If the child's anchor is a leaf node, make this a "before text"
-        // position.
-        if (child_position->IsLeaf())
-          child_position->child_index_ = BEFORE_TEXT;
-        return child_position;
-      }
+      case AXPositionKind::TREE_POSITION:
+        return CreateTreePositionAtStartOfAnchor(*child_anchor);
       case AXPositionKind::TEXT_POSITION:
-        return CreateTextPosition(tree_id, child_id, 0 /* text_offset */,
+        return CreateTextPosition(*child_anchor, 0 /* text_offset */,
                                   ax::mojom::TextAffinity::kDownstream);
     }
 
@@ -2321,35 +2454,43 @@ class AXPosition {
     if (IsNullPosition())
       return CreateNullPosition();
 
-    AXTreeID parent_tree_id = AXTreeIDUnknown();
-    AXNodeID parent_anchor_id = kInvalidAXNodeID;
     const AXNode* parent_anchor = GetAnchor()->GetParentCrossingTreeBoundary();
     if (!parent_anchor)
       return CreateNullPosition();
-    parent_tree_id = parent_anchor->tree()->GetAXTreeID();
-    parent_anchor_id = parent_anchor->id();
-    DCHECK_NE(parent_tree_id, AXTreeIDUnknown());
-    DCHECK_NE(parent_anchor_id, kInvalidAXNodeID);
+
+    const AXTree* tree = parent_anchor->tree();
+    DCHECK(tree);
 
     switch (kind_) {
       case AXPositionKind::NULL_POSITION:
         NOTREACHED();
-        return CreateNullPosition();
 
       case AXPositionKind::TREE_POSITION: {
-        int child_index = AnchorIndexInParent();
+        if (IsLeafNodeForTreePosition(*parent_anchor)) {
+          if (AtEndOfAnchor() ||
+              move_direction == ax::mojom::MoveDirection::kForward) {
+            // If this position is an "after children" or an "after text"
+            // position inside of a leaf, or we are seeking a parent position
+            // for a forward movement operation with a parent leaf anchor,
+            // return a position at the end of the parent anchor.
+            return CreateTreePositionAtEndOfAnchor(*parent_anchor);
+          }
+          // If we are seeking a parent position for a backward movement
+          // operation, return a position at the start of the parent anchor.
+          return CreateTreePositionAtStartOfAnchor(*parent_anchor);
+        }
+
         // If this position is an "after children" or an "after text" position,
         // return either an "after children" position on the parent anchor, or a
         // position anchored at the next child, depending on whether this is the
         // last child in its parent anchor.
+        int child_index = AnchorIndexInParent();
         if (AtEndOfAnchor())
-          return CreateTreePosition(parent_tree_id, parent_anchor_id,
-                                    (child_index + 1));
+          return CreateTreePosition(*parent_anchor, (child_index + 1));
 
         switch (move_direction) {
           case ax::mojom::MoveDirection::kNone:
             NOTREACHED();
-            return CreateNullPosition();
           case ax::mojom::MoveDirection::kBackward:
             // "move_direction" is only important when this position is an
             // "embedded object in parent", i.e., when this position's anchor is
@@ -2361,8 +2502,7 @@ class AXPosition {
             // "AnchorIndexInParent" always returns a child index that is before
             // any "object replacement character" in our parent, we use that for
             // both situations.
-            return CreateTreePosition(parent_tree_id, parent_anchor_id,
-                                      child_index);
+            return CreateTreePosition(*parent_anchor, child_index);
           case ax::mojom::MoveDirection::kForward:
             // "move_direction" is only important when this position is an
             // "embedded object in parent", i.e., when this position's anchor is
@@ -2374,8 +2514,7 @@ class AXPosition {
             // "AnchorIndexInParent" for the child index.
             if (!AtStartOfAnchor() && IsEmbeddedObjectInParent())
               ++child_index;
-            return CreateTreePosition(parent_tree_id, parent_anchor_id,
-                                      child_index);
+            return CreateTreePosition(*parent_anchor, child_index);
         }
       }
 
@@ -2409,7 +2548,11 @@ class AXPosition {
         // position were at the start of the inline text box for "Line two".
 
         const int max_text_offset = MaxTextOffset();
-        DCHECK_LE(text_offset_, max_text_offset);
+
+        // TODO(crbug.com/40885940): temporary disabled until ax position
+        // autocorrection issue is fixed.
+        // DCHECK_LE(text_offset_, max_text_offset);
+
         const int max_text_offset_in_parent =
             IsEmbeddedObjectInParent()
                 ? AXNode::kEmbeddedObjectCharacterLengthUTF16
@@ -2454,7 +2597,6 @@ class AXPosition {
             switch (move_direction) {
               case ax::mojom::MoveDirection::kNone:
                 NOTREACHED();
-                return CreateNullPosition();
               case ax::mojom::MoveDirection::kBackward:
                 // Keep the offset to be right before the embedded object
                 // character.
@@ -2479,6 +2621,10 @@ class AXPosition {
           parent_affinity = ax::mojom::TextAffinity::kDownstream;
         }
 
+        // There are two cases for which we need to set an upstream affinity on
+        // the parent position:
+        //
+        // Case 1:
         // If the current position is pointing at the end of its anchor, we need
         // to check if the parent position has introduced ambiguity as to
         // whether it refers to the end of a line or the start of the next.
@@ -2494,12 +2640,38 @@ class AXPosition {
         // We could not have checked if the child was at the end of the line,
         // because our "AtEndOfLine" predicate takes into account trailing line
         // breaks, which would create false positives.
+        //
+        // Case 2:
+        // If the current position is followed by a generated newline character,
+        // which is a character that is actually not represented in the text
+        // content of the nodes but should still act as a stop when navigating
+        // to the previous/next character.
+        //
+        // When this is the case, we almost always want to set an upstream
+        // affinity on the `parent_position`. The only exception is when our
+        // current position is contained on a descendant of an empty object,
+        // because an empty object will hide the textual representation of its
+        // descendants, including the generated newline characters, by exposing
+        // a only the empty object character.
+        //
+        // Example:
+        // ++1 kLink "<embedded_object>"
+        // ++++2 kStaticText "hello" IsLineBreakingObject=true
+        // ++++++3 kInlineTextBox "hello"
+        // ++++4 kStaticText "world"
+        // ++++++5 kInlineTextBox "world"
+        //
+        // While there should be a generated newline character at the end of a
+        // position created on node 2, there won't be one represented to the
+        // user because node 1 simply exposes the empty object character and not
+        // its children's text.
 
-        AXPositionInstance parent_position = CreateTextPosition(
-            parent_tree_id, parent_anchor_id, parent_offset, parent_affinity);
-        if (AtEndOfAnchor() && !parent_position->AtStartOfAnchor() &&
-            !parent_position->AtEndOfAnchor() &&
-            parent_position->AtStartOfLine()) {
+        AXPositionInstance parent_position =
+            CreateTextPosition(*parent_anchor, parent_offset, parent_affinity);
+        if ((AtEndOfAnchor() && !parent_position->AtStartOfAnchor() &&
+             !parent_position->AtEndOfAnchor() &&
+             parent_position->AtStartOfLine()) ||
+            (!IsEmbeddedObjectInParent() && IsFollowedByGeneratedNewline())) {
           parent_position->affinity_ = ax::mojom::TextAffinity::kUpstream;
         }
         return parent_position;
@@ -2535,6 +2707,155 @@ class AXPosition {
         base::BindRepeating(&DefaultAbortMovePredicate));
   }
 
+  AXPositionInstance CreateNextPositionAtAnchorWithText() const {
+    AXPositionInstance text_position = AsLeafTextPosition();
+    do {
+      text_position = text_position->CreateNextLeafTextPosition(
+          base::BindRepeating(&AbortMoveAtRootBoundary));
+    } while (!text_position->IsNullPosition() &&
+             (text_position->IsIgnored() || !text_position->MaxTextOffset()));
+
+    return text_position;
+  }
+
+  AXPositionInstance CreatePreviousPositionAtAnchorWithText() const {
+    AXPositionInstance text_position = AsLeafTextPosition();
+    do {
+      text_position = text_position->CreatePreviousLeafTextPosition(
+          base::BindRepeating(&AbortMoveAtRootBoundary));
+    } while (!text_position->IsNullPosition() &&
+             (text_position->IsIgnored() || !text_position->MaxTextOffset()));
+
+    return text_position->CreatePositionAtEndOfAnchor();
+  }
+
+  // Generated newline characters are not part of any AXNode in the AXTree. They
+  // are appended to the accessible textual representation exposed to ATs in
+  // AXRange::GetText. They are necessary to expose the implicit newlines
+  // created from the layout breaks to screen reader users. For example, the
+  // following HTML will create an implicit line break after "hello":
+  //
+  // <div contenteditable>
+  //     <div>hello</div>
+  //     <div>world</div>
+  // </div>
+  //
+  // Even though there is not explicit line break in this template, the text
+  // returned for this contenteditable is "hello\nworld". In order to allow
+  // screen reader users to navigate (either using the caret or the controls
+  // built-in the AT), we need to create character stops around these
+  // generated characters.
+  //
+  // We can only create character stops around generated newline characters
+  // when empty objects are represented in the accessible text (ie. when the
+  // behavior is set to
+  // `AXEmbeddedObjectBehavior::kExposeCharacterForHypertext`). Otherwise,
+  // there's a risk that `CreateParentPosition` will create a position that
+  // doesn't point to the same character. This is because a position located
+  // right before a generated newline character will be represented in the
+  // parent ancestor with an upstream affinity.
+  //
+  // Let's consider this AXTree:
+  // 1 root
+  // ++2 button
+  // ++3 checkbox
+  // ++4 static text
+  // ++++5 inline text box "abc"
+  //
+  // The text representation for the entire document, including the generated
+  // newlines, will be "\n\nabc" if the empty objects do not expose the empty
+  // object character. If we were to allow character stops at generated
+  // newline characters, it would be possible to create a next and previous
+  // position located before/after a generated newline character. However,
+  // creating an equivalent position in an ancestor would potentially lead to
+  // an incorrect position.
+  //
+  // Example:
+  // leaf_position_1: anchor=2, text_offset=0, affinity=downstream
+  // leaf_position_2: anchor=3, text_offset=0, affinity=downstream
+  //
+  // `leaf_position_1` and `leaf_position_2` should both return true for
+  // `AtStartOfParagraph` and `AtEndOfParagraph`. Calling
+  // `CreateParentPosition` on each of those will respectively create:
+  // parent_position_1: anchor=1, text_offset=0, affinity=upstream
+  // parent_position_1: anchor=1, text_offset=0, affinity=upstream
+  //
+  // ...which are both the same. `CreateParentPosition` is relatively important
+  // when it comes to moving the position by character because
+  // `CreatePreviousCharacterPosition` uses it in many cases to create the
+  // previous position on the same anchor as the original position.
+  //
+  // This is a quirk of the current implementation which cannot easily be fixed,
+  // because when object replacement characters are missing from empty objects
+  // (sucha as a checkbox without a label, etc.) any leaf equivalent position
+  // from one of the objects' ancestors would skip the empty object and create
+  // the child position at the first non-empty object. Consequently,
+  // CreateParentPosition cannot easily determine the correct affinity when
+  // computing parent equivalent positions from positions on empty objects, i.e.
+  // like the example positions given here. Skipping empty objects when creating
+  // leaf equivalent positions had to be done, because on platforms where they
+  // are not represented by an object replacement character, the AT does not
+  // even know they are there.
+  bool AllowsCharacterStopsOnGeneratedNewline() const {
+    return g_ax_embedded_object_behavior ==
+               AXEmbeddedObjectBehavior::kExposeCharacterForHypertext ||
+           g_ax_embedded_object_behavior ==
+               AXEmbeddedObjectBehavior::kUIAExposeCharacterForTextContent ||
+           !IsInUnignoredEmptyObject();
+  }
+
+  bool IsFollowedByGeneratedNewline() const {
+    // Hard line breaks (such as <br> in HTML) are discounted because generated
+    // newlines are only inserted between neighboring block elements (such as
+    // <p>Hello</p><p>world</p>). Generated newlines are always a product of
+    // layout and have no corresponding AXNode to it. Hard line breaks have
+    // a matching AXNode and thus do not require to be treated differently.
+    AXPositionInstance leaf_text_position = AsLeafTextPosition();
+    if (!leaf_text_position->AllowsCharacterStopsOnGeneratedNewline() ||
+        leaf_text_position->affinity_ != ax::mojom::TextAffinity::kDownstream ||
+        leaf_text_position->GetAnchor()->IsLineBreak() ||
+        !leaf_text_position->AtEndOfParagraph()) {
+      return false;
+    }
+
+    AXPositionInstance next_position =
+        leaf_text_position->CreateNextPositionAtAnchorWithText();
+    return next_position->AllowsCharacterStopsOnGeneratedNewline() &&
+           !next_position->IsNullPosition() &&
+           !next_position->GetAnchor()->IsLineBreak() &&
+           next_position->AtStartOfParagraph();
+  }
+
+  bool IsPrecededByGeneratedNewline() const {
+    // Hard line breaks (such as <br> in HTML) are discounted because generated
+    // newlines are only inserted between neighboring block elements (such as
+    // <p>Hello</p><p>world</p>). Generated newlines are always a product of
+    // layout and have no corresponding AXNode to it. Hard line breaks have
+    // a matching AXNode and thus do not require to be treated differently.
+    AXPositionInstance leaf_text_position = AsLeafTextPosition();
+    if (!leaf_text_position->AllowsCharacterStopsOnGeneratedNewline() ||
+        leaf_text_position->GetAnchor()->IsLineBreak() ||
+        !leaf_text_position->AtStartOfParagraph()) {
+      return false;
+    }
+
+    AXPositionInstance previous_position =
+        leaf_text_position->CreatePreviousPositionAtAnchorWithText();
+    if (previous_position->IsNullPosition()) {
+      // When it's null, it's because we've reached the beginning of the tree.
+      // We need to make sure we didn't skip any generated newlines that could
+      // have been before the start of the page and our current position.
+      AXPositionInstance start_of_content =
+          CreatePositionAtStartOfContent()->AsLeafTextPosition();
+      return *start_of_content < *this &&
+             start_of_content->IsFollowedByGeneratedNewline();
+    }
+
+    return previous_position->AllowsCharacterStopsOnGeneratedNewline() &&
+           !previous_position->GetAnchor()->IsLineBreak() &&
+           previous_position->AtEndOfParagraph();
+  }
+
   // Returns a text position located right before the next character (from this
   // position) in the tree's text representation, following these conditions:
   //
@@ -2560,6 +2881,11 @@ class AXPosition {
   AXPositionInstance AsLeafTextPositionBeforeCharacter() const {
     if (IsNullPosition())
       return Clone();
+
+    AXPositionInstance leaf_text_position = AsLeafTextPosition();
+    if (leaf_text_position->IsFollowedByGeneratedNewline()) {
+      return leaf_text_position;
+    }
 
     AXPositionInstance text_position = AsTextPosition();
 
@@ -2603,12 +2929,7 @@ class AXPosition {
       return text_position;
     }
 
-    do {
-      text_position = text_position->CreateNextLeafTextPosition(
-          base::BindRepeating(&AbortMoveAtRootBoundary));
-    } while (!text_position->IsNullPosition() &&
-             (text_position->IsIgnored() || !text_position->MaxTextOffset()));
-    return text_position;
+    return text_position->CreateNextPositionAtAnchorWithText();
   }
 
   // Returns a text position located right after the previous character (from
@@ -2618,6 +2939,10 @@ class AXPosition {
   AXPositionInstance AsLeafTextPositionAfterCharacter() const {
     if (IsNullPosition())
       return Clone();
+
+    AXPositionInstance leaf_text_position = AsLeafTextPosition();
+    if (leaf_text_position->IsPrecededByGeneratedNewline())
+      return leaf_text_position;
 
     AXPositionInstance text_position = AsTextPosition();
     // Temporarily set the affinity to upstream.
@@ -2664,12 +2989,7 @@ class AXPosition {
       return text_position;
     }
 
-    do {
-      text_position = text_position->CreatePreviousLeafTextPosition(
-          base::BindRepeating(&AbortMoveAtRootBoundary));
-    } while (!text_position->IsNullPosition() &&
-             (text_position->IsIgnored() || !text_position->MaxTextOffset()));
-    return text_position->CreatePositionAtEndOfAnchor();
+    return text_position->CreatePreviousPositionAtAnchorWithText();
   }
 
   // Creates a position pointing to before the next character, which is defined
@@ -2695,6 +3015,10 @@ class AXPosition {
         text_position = Clone();
 
       return text_position;
+    }
+
+    if (text_position->IsFollowedByGeneratedNewline()) {
+      return CreateNextPositionAtAnchorWithText();
     }
 
     // Calling "AsLeafTextPositionBeforeCharacter" should have created a text
@@ -2778,35 +3102,45 @@ class AXPosition {
     }
 
     // Calling "AsLeafTextPositionAfterCharacter" should have created a text
-    // position that is either at a grapheme boundary, or a null position. If
-    // our text offset is pointing to a position that is in the middle of a
-    // grapheme cluster, we should not erroneously assume that we are at a
-    // character boundary and stop because we had been asked to "stop if already
-    // at boundary". However, we should not modify our position if
-    // `AsLeafTextPositionAfterCharacter` has simply moved us to the end of the
-    // previous leaf anchor because we originally happened to be at the start of
-    // our current anchor. We also need to ignore any differences that might be
-    // due to the affinity, because that should not be a determining factor as
-    // to whether we would stop if we are already at boundary or not.
-    if (options.boundary_behavior ==
-            AXBoundaryBehavior::kStopAtAnchorBoundary &&
-        options.boundary_detection ==
-            AXBoundaryDetection::kCheckInitialPosition &&
-        (AtStartOfAnchor() || *text_position == *CloneWithUpstreamAffinity() ||
-         *text_position == *CloneWithDownstreamAffinity())) {
-      return Clone();
-    }
+    // position that is either at the start of an anchor that is preceded by a
+    // generated newline, at a grapheme boundary or a null position.
+    if (text_position->IsPrecededByGeneratedNewline()) {
+      // When `text_position` is right after a generated newline character, we
+      // should create a position located at the end of the previous anchor.
+      text_position = CreatePreviousPositionAtAnchorWithText();
+      DCHECK(!text_position->IsNullPosition());
+    } else {
+      // If our text offset is pointing to a position that is in the middle of a
+      // grapheme cluster, we should not erroneously assume that we are at a
+      // character boundary and stop because we had been asked to "stop if
+      // already at boundary". However, we should not modify our position if
+      // `AsLeafTextPositionAfterCharacter` has simply moved us to the end of
+      // the previous leaf anchor because we originally happened to be at the
+      // start of our current anchor. We also need to ignore any differences
+      // that might be due to the affinity, because that should not be a
+      // determining factor as to whether we would stop if we are already at
+      // boundary or not.
+      if (options.boundary_behavior ==
+              AXBoundaryBehavior::kStopAtAnchorBoundary &&
+          options.boundary_detection ==
+              AXBoundaryDetection::kCheckInitialPosition &&
+          (AtStartOfAnchor() ||
+           *text_position == *CloneWithUpstreamAffinity() ||
+           *text_position == *CloneWithDownstreamAffinity())) {
+        return Clone();
+      }
 
-    DCHECK_GT(text_position->text_offset_, 0);
-    std::unique_ptr<base::i18n::BreakIterator> grapheme_iterator =
-        text_position->GetGraphemeIterator();
-    do {
-      --text_position->text_offset_;
-    } while (!text_position->AtStartOfAnchor() && grapheme_iterator &&
-             !grapheme_iterator->IsGraphemeBoundary(
-                 static_cast<size_t>(text_position->text_offset_)));
-    DCHECK_GE(text_position->text_offset_, 0);
-    DCHECK_LT(text_position->text_offset_, text_position->MaxTextOffset());
+      DCHECK_GT(text_position->text_offset_, 0);
+      std::unique_ptr<base::i18n::BreakIterator> grapheme_iterator =
+          text_position->GetGraphemeIterator();
+      do {
+        --text_position->text_offset_;
+      } while (!text_position->AtStartOfAnchor() && grapheme_iterator &&
+               !grapheme_iterator->IsGraphemeBoundary(
+                   static_cast<size_t>(text_position->text_offset_)));
+      DCHECK_GE(text_position->text_offset_, 0);
+      DCHECK_LT(text_position->text_offset_, text_position->MaxTextOffset());
+    }
 
     // The character boundary should be in the same subtree. Return a position
     // rooted at this position's anchor. This is necessary because we don't want
@@ -2873,6 +3207,7 @@ class AXPosition {
 
   AXPositionInstance CreateNextLineStartPosition(
       AXMovementOptions options) const {
+    options.upstream_bounded = true;
     return CreateBoundaryStartPosition(
         options, ax::mojom::MoveDirection::kForward,
         base::BindRepeating(&AtStartOfLinePredicate),
@@ -2881,6 +3216,7 @@ class AXPosition {
 
   AXPositionInstance CreatePreviousLineStartPosition(
       AXMovementOptions options) const {
+    options.upstream_bounded = true;
     return CreateBoundaryStartPosition(
         options, ax::mojom::MoveDirection::kBackward,
         base::BindRepeating(&AtStartOfLinePredicate),
@@ -3079,24 +3415,41 @@ class AXPosition {
       text_position = AsLeafTextPosition();
     }
 
-    if (text_position->IsNullPosition())
+    if (text_position->IsNullPosition()) {
       return text_position;
+    }
 
-    if (options.boundary_detection ==
-        AXBoundaryDetection::kDontCheckInitialPosition) {
+    // If true, we should not move the position any further.
+    bool forward_upstream =
+        options.upstream_bounded &&
+        move_direction == ax::mojom::MoveDirection::kForward &&
+        affinity() == ax::mojom::TextAffinity::kUpstream;
+
+    // If true, we should skip the initial position and move at least once.
+    bool backward_upstream =
+        options.upstream_bounded &&
+        move_direction == ax::mojom::MoveDirection::kBackward &&
+        affinity() == ax::mojom::TextAffinity::kUpstream;
+
+    if (backward_upstream ||
+        (options.boundary_detection ==
+             AXBoundaryDetection::kDontCheckInitialPosition &&
+         !forward_upstream)) {
       text_position =
           text_position->CreateAdjacentLeafTextPosition(move_direction);
       if (text_position->IsNullPosition()) {
         // There is no adjacent position to move to; in such case, CrossBoundary
         // behavior shall return a null position, while any other behavior shall
         // fallback to return the initial position.
-        if (options.boundary_behavior == AXBoundaryBehavior::kCrossBoundary)
+        if (options.boundary_behavior == AXBoundaryBehavior::kCrossBoundary) {
           return text_position;
+        }
+
         return Clone();
       }
     }
 
-    if (!at_start_condition.Run(text_position)) {
+    if (!forward_upstream && !at_start_condition.Run(text_position)) {
       text_position = text_position->CreatePositionAtNextOffsetBoundary(
           move_direction, get_start_offsets);
 
@@ -3105,7 +3458,6 @@ class AXPosition {
         switch (move_direction) {
           case ax::mojom::MoveDirection::kNone:
             NOTREACHED();
-            return CreateNullPosition();
           case ax::mojom::MoveDirection::kBackward:
             if (text_position->AtStartOfAnchor()) {
               next_position = text_position->CreatePreviousLeafTextPosition(
@@ -3128,7 +3480,6 @@ class AXPosition {
             switch (move_direction) {
               case ax::mojom::MoveDirection::kNone:
                 NOTREACHED();
-                return CreateNullPosition();
               case ax::mojom::MoveDirection::kBackward:
                 return CreatePositionAtStartOfAnchor()->AsUnignoredPosition(
                     AXPositionAdjustmentBehavior::kMoveBackward);
@@ -3145,7 +3496,6 @@ class AXPosition {
             switch (move_direction) {
               case ax::mojom::MoveDirection::kNone:
                 NOTREACHED();
-                return CreateNullPosition();
               case ax::mojom::MoveDirection::kBackward:
                 text_position = text_position->CreatePositionAtStartOfAnchor();
                 break;
@@ -3180,23 +3530,30 @@ class AXPosition {
       switch (move_direction) {
         case ax::mojom::MoveDirection::kNone:
           NOTREACHED();
-          return CreateNullPosition();
         case ax::mojom::MoveDirection::kBackward:
-          return CreatePositionAtStartOfAnchor()->AsUnignoredPosition(
+          text_position = CreatePositionAtStartOfAnchor()->AsUnignoredPosition(
               AXPositionAdjustmentBehavior::kMoveBackward);
+          break;
         case ax::mojom::MoveDirection::kForward:
-          return CreatePositionAtEndOfAnchor()->AsUnignoredPosition(
+          text_position = CreatePositionAtEndOfAnchor()->AsUnignoredPosition(
               AXPositionAdjustmentBehavior::kMoveForward);
       }
+
+      // Preserve affinity for forward upstream positions.
+      if (forward_upstream) {
+        text_position->affinity_ = ax::mojom::TextAffinity::kUpstream;
+      }
+
+      return text_position;
     }
 
-    // Affinity is only upstream at the end of a line, and so a start boundary
-    // will never have an upstream affinity.
-    text_position->affinity_ = ax::mojom::TextAffinity::kDownstream;
-    if (IsTreePosition())
+    if (IsTreePosition()) {
       text_position = text_position->AsTreePosition();
+    }
+
     AXPositionInstance unignored_position = text_position->AsUnignoredPosition(
         AXPositionAdjustmentBehavior::kMoveForward);
+
     // If there are no unignored positions then `text_position` is anchored in
     // ignored content at the end of the whole content. For
     // `kStopAtLastAnchorBoundary`, try to adjust in the opposite direction to
@@ -3208,6 +3565,11 @@ class AXPosition {
       unignored_position = text_position->AsUnignoredPosition(
           AXPositionAdjustmentBehavior::kMoveBackward);
     }
+
+    unignored_position->affinity_ = forward_upstream
+                                        ? ax::mojom::TextAffinity::kUpstream
+                                        : ax::mojom::TextAffinity::kDownstream;
+
     return unignored_position;
   }
 
@@ -3256,7 +3618,6 @@ class AXPosition {
         switch (move_direction) {
           case ax::mojom::MoveDirection::kNone:
             NOTREACHED();
-            return CreateNullPosition();
           case ax::mojom::MoveDirection::kBackward:
             next_position =
                 text_position
@@ -3282,7 +3643,6 @@ class AXPosition {
             switch (move_direction) {
               case ax::mojom::MoveDirection::kNone:
                 NOTREACHED();
-                return CreateNullPosition();
               case ax::mojom::MoveDirection::kBackward:
                 return CreatePositionAtStartOfAnchor()->AsUnignoredPosition(
                     AXPositionAdjustmentBehavior::kMoveBackward);
@@ -3299,7 +3659,6 @@ class AXPosition {
             switch (move_direction) {
               case ax::mojom::MoveDirection::kNone:
                 NOTREACHED();
-                return CreateNullPosition();
               case ax::mojom::MoveDirection::kBackward:
                 text_position = text_position->CreatePositionAtStartOfAnchor();
                 break;
@@ -3334,7 +3693,6 @@ class AXPosition {
       switch (move_direction) {
         case ax::mojom::MoveDirection::kNone:
           NOTREACHED();
-          return CreateNullPosition();
         case ax::mojom::MoveDirection::kBackward:
           return CreatePositionAtStartOfAnchor()->AsUnignoredPosition(
               AXPositionAdjustmentBehavior::kMoveBackward);
@@ -3403,11 +3761,17 @@ class AXPosition {
   //    0: if this position is logically equivalent to the other position
   //   <0: if this position is logically less than the other position
   //   >0: if this position is logically greater than the other position
-  absl::optional<int> CompareTo(const AXPosition& other) const {
-    if (IsNullPosition() && other.IsNullPosition())
-      return 0;
-    if (IsNullPosition() || other.IsNullPosition())
-      return absl::nullopt;
+  std::optional<int> CompareTo(const AXPosition& other) const {
+    if (IsNullPosition() || other.IsNullPosition()) {
+      if (IsNullPosition() && other.IsNullPosition())
+        return 0;
+      return std::nullopt;
+    }
+    // Valid positions are required for comparison. Use `AsValidPosition`
+    // or `SnapToMaxTextOffsetIfBeyond` before calling `CompareTo` or making
+    // comparisons.
+    DCHECK(IsValid());
+    DCHECK(other.IsValid());
 
     if (GetAnchor() == other.GetAnchor())
       return SlowCompareTo(other);  // No optimization is necessary.
@@ -3481,7 +3845,7 @@ class AXPosition {
     }
 
     if (!common_anchor)
-      return absl::nullopt;
+      return std::nullopt;
 
     // If each position has an uncommon ancestor node, we can compare those
     // instead of needing to compute ancestor positions. Otherwise we need to
@@ -3504,13 +3868,11 @@ class AXPosition {
       return SlowCompareTo(other);
 
     AXPositionInstance this_uncommon_tree_position =
-        CreateTreePosition(our_ancestors.top()->tree()->GetAXTreeID(),
-                           our_ancestors.top()->id(), 0 /*child_index*/);
+        CreateTreePositionAtStartOfAnchor(*our_ancestors.top());
     int this_uncommon_ancestor_index =
         this_uncommon_tree_position->AnchorIndexInParent();
     AXPositionInstance other_uncommon_tree_position =
-        CreateTreePosition(other_ancestors.top()->tree()->GetAXTreeID(),
-                           other_ancestors.top()->id(), 0 /*child_index*/);
+        CreateTreePositionAtStartOfAnchor(*other_ancestors.top());
     int other_uncommon_ancestor_index =
         other_uncommon_tree_position->AnchorIndexInParent();
     DCHECK_NE(this_uncommon_ancestor_index, other_uncommon_ancestor_index)
@@ -3584,17 +3946,17 @@ class AXPosition {
   // A less optimized, but much slower version of "CompareTo". Should only be
   // used when optimizations cannot be applied, e.g. when comparing ignored
   // positions. See "CompareTo" for an explanation of the return values.
-  absl::optional<int> SlowCompareTo(const AXPosition& other) const {
+  std::optional<int> SlowCompareTo(const AXPosition& other) const {
     if (IsNullPosition() && other.IsNullPosition())
       return 0;
     if (IsNullPosition() || other.IsNullPosition())
-      return absl::nullopt;
+      return std::nullopt;
 
     // If both positions share an anchor and either one is a text position, or
     // both are tree positions, we can do a straight comparison of text offsets
     // or child indices.
     if (GetAnchor() == other.GetAnchor()) {
-      absl::optional<int> optional_result;
+      std::optional<int> optional_result;
       ax::mojom::TextAffinity this_affinity;
       ax::mojom::TextAffinity other_affinity;
 
@@ -3655,14 +4017,14 @@ class AXPosition {
 
     const AXNode* common_anchor = this->LowestCommonAnchor(other);
     if (!common_anchor)
-      return absl::nullopt;
+      return std::nullopt;
 
     // If either of the two positions is a text position, and if one position is
     // an ancestor of the other, we need to compare using text positions,
     // because converting to tree positions will potentially lose information if
     // the text offset is anything other than 0 or `MaxTextOffset()`.
     if (IsTextPosition() || other.IsTextPosition()) {
-      absl::optional<int> optional_result;
+      std::optional<int> optional_result;
       ax::mojom::TextAffinity this_affinity;
       ax::mojom::TextAffinity other_affinity;
 
@@ -3880,72 +4242,27 @@ class AXPosition {
       text_offset_ = max_text_offset;
   }
 
-  // Returns true if this position is within an "empty object", i.e. within a
-  // node that should contribute no text to the accessibility tree's text
-  // representation. For example, returns true if this position is within an
-  // empty control, such as an empty text field or (on Windows) a collapsed
-  // popup menu. On some platforms, such nodes need to be represented by an
-  // "object replacement character". This character is inserted purely for
-  // navigational purposes. This is because empty controls still need to act as
-  // a word and character boundary on those platforms.
   bool IsInEmptyObject() const {
     if (IsNullPosition())
       return false;
 
-    // A collapsed popup button that contains a menu list popup (i.e, the exact
-    // subtree representation we get from a collapsed <select> element on
-    // Windows) should not expose its descendants even though they are not
-    // ignored.
-    if (GetAnchor()->IsCollapsedMenuListPopUpButton())
-      return true;
-
-    // All anchor nodes that are empty leaf nodes should be treated as empty
-    // objects. Empty leaf nodes are defined as nodes whose descendants are (A)
-    // not exposed to any platform accessibility APIs and (B) do not contribute
-    // any text to the tree's text representation. They may have unignored
-    // descendants however. They do not have any text content, hence they are
-    // empty from our perspective. For example, an empty text field may still
-    // have an unignored generic container inside it.
-    if (!GetAnchor()->IsEmptyLeaf())
-      return false;
-
-    // One exception to the above rule that all empty leaf nodes are empty
-    // objects in AXPosition are <embed> and <object> elements that have
-    // children. They should not be treated as empty objects even when their
-    // descendants are all ignored so that text navigation won't stop on such
-    // nodes.
-    if ((GetAnchorRole() == ax::mojom::Role::kEmbeddedObject ||
-         GetAnchorRole() == ax::mojom::Role::kPluginObject) &&
-        AnchorChildCount() > 0) {
-      return false;
-    }
-
-    // Nodes that are skipped during text navigation should also be "empty
-    // objects".
-    //
-    // Note that nodes that are skipped during text navigation could still have
-    // positions anchored to them, e.g. for determining if a paragraph boundary
-    // should be reported before or after such a node. Descending into the
-    // children of such objects could add unnecessary extra text boundaries.
-    if (GetAnchor()->IsIgnoredForTextNavigation())
-      return true;
-
-    // Another exception to the rule that all leaf nodes in the accessibility
-    // tree should be "empty objects" are kRootWebArea, kPdfRoot, kIframe,
-    // kIframePresentational, and text nodes. We don't want text navigation to
-    // stop on any of the above roles. On the other hand, nodes that only have
-    // ignored children (e.g., a button that contains only an empty ignored div)
-    // need to be treated as leaf nodes.
-    //
-    // Note that we have already determined that the anchor at this position
-    // doesn't have an unignored child, making this a leaf tree or text
-    // position, or a leaf's descendant.
-    return (!IsPlatformDocument(GetAnchorRole()) &&
-            !IsIframe(GetAnchorRole()) && !IsInTextObject());
+    return IsEmptyObject(*GetAnchor());
   }
 
   bool IsInUnignoredEmptyObject() const {
     return GetAnchor() && !GetAnchor()->IsIgnored() && IsInEmptyObject();
+  }
+
+  // Returns whether the position is anchored in an unignored and empty object,
+  // has an author specified name that is not empty, and it is not anchored in
+  // an image. This is because in UIA we want to expose embedded object
+  // characters for image elements, even if they have an author specified name.
+  // Only used for UIA.
+  bool EmptyObjectShouldProvideNameFromAttribute() const {
+    DCHECK(IsInUnignoredEmptyObject());
+    return GetAnchor()->GetNameFrom() == ax::mojom::NameFrom::kAttribute &&
+           !IsImage(GetAnchor()->GetRole()) &&
+           !GetAnchor()->GetNameUTF16().empty();
   }
 
   AXNode* GetEmptyObjectAncestorNode() const {
@@ -3958,7 +4275,7 @@ class AXPosition {
       // the parent of a menu list popup, or on all platforms inside a generic
       // container that is the child of an empty text field.
       if (AXNode* popup_button =
-              GetAnchor()->GetCollapsedMenuListPopUpButtonAncestor()) {
+              GetAnchor()->GetCollapsedMenuListSelectAncestor()) {
         return popup_button;
       }
 
@@ -3977,7 +4294,7 @@ class AXPosition {
       return nullptr;
 
     AXPositionInstance position =
-        CreateTextPosition(tree_id_, ancestor_node->id(), 0 /* text_offset */,
+        CreateTextPosition(*ancestor_node, 0 /* text_offset */,
                            ax::mojom::TextAffinity::kDownstream);
     if (position->IsInUnignoredEmptyObject())
       return ancestor_node;
@@ -4002,20 +4319,19 @@ class AXPosition {
   // text representation. Some platforms use an embedded object replacement
   // character that replaces the text coming from most child nodes and empty
   // objects.
-  const std::u16string& GetText(
+  std::u16string GetText(
       const AXEmbeddedObjectBehavior embedded_object_behavior =
           g_ax_embedded_object_behavior) const {
-    // Note that the use of `base::EmptyString16()` is a special case here. For
-    // performance reasons `base::EmptyString16()` should only be used when
-    // returning a const reference to a string and there is an error condition,
-    // not in any other case when an empty string16 is required.
-    if (IsNullPosition())
-      return base::EmptyString16();
+    if (IsNullPosition()) {
+      return std::u16string();
+    }
 
+    static const base::NoDestructor<std::u16string> embedded_character_str(
+        AXNode::kEmbeddedObjectCharacterUTF16);
     switch (embedded_object_behavior) {
       case AXEmbeddedObjectBehavior::kSuppressCharacter:
         return GetAnchor()->GetTextContentUTF16();
-      case AXEmbeddedObjectBehavior::kExposeCharacter:
+      case AXEmbeddedObjectBehavior::kExposeCharacterForHypertext:
         // Special case, if a position's anchor node has only ignored
         // descendants, i.e., it appears to be empty to assistive software, on
         // some platforms we need to still treat it as a character and a word
@@ -4023,11 +4339,45 @@ class AXPosition {
         // the text representation used by this class, but we don't expose that
         // character to assistive software that tries to retrieve the node's
         // text content.
-        static const base::NoDestructor<std::u16string> embedded_character_str(
-            AXNode::kEmbeddedObjectCharacterUTF16);
-        if (IsInUnignoredEmptyObject())
+        if (IsInUnignoredEmptyObject()) {
           return *embedded_character_str;
+        }
         return GetAnchor()->GetHypertext();
+      case AXEmbeddedObjectBehavior::kUIAExposeCharacterForTextContent:
+        // For UIA, we still have the notion of embedded object characters for
+        // text navigation purposes. I.e. when AT's need to navigate around
+        // nodes and elements which are empty and should then be exposed as
+        // embedded object characters.
+        //
+        // According to the spec, we should favor author supplied names over
+        // names from content. However, trying to fulfill this in every case
+        // leads to bugs in the UIA implementation in the TextRangeProvider
+        // since we create leaf text positions, which means that they will
+        // always have name from content. As such, for now we are
+        // implementing this special case where we will only return the author
+        // specified name if NameFrom is kAttribute and the name is not empty.
+        // Even though a case like:
+        // <button aria-label="label">hello</button>
+        // Should have its name exposed as "label" according to the spec
+        // but we will expose "hello" instead.
+        // Exposing the aria label here would make us expose text that isn't on
+        // a leaf position, and throughout our UIA implementation, we always
+        // assume and expect to be on leaf positions. Exposing the label
+        // when it has text from content would effectively hide the subtree
+        // from UIA ATs
+        // https://www.w3.org/TR/accname-1.1/#mapping_additional_nd_te
+
+        if (IsInUnignoredEmptyObject()) {
+          if (EmptyObjectShouldProvideNameFromAttribute()) {
+            return GetAnchor()->GetNameUTF16();
+          }
+          return *embedded_character_str;
+        }
+        // However, for UIA, we don't want to expose the Hypertext like the
+        // kExposeCharacterForHypertext case does, since that computation for
+        // Hypertext is IA2-specific. Instead, UIA needs the text contents of
+        // the node, which is what GetTextContentUTF16() returns.
+        return GetAnchor()->GetTextContentUTF16();
     }
   }
 
@@ -4070,6 +4420,14 @@ class AXPosition {
     return GetAnchor()->IsText();
   }
 
+  // Determines if the anchor containing this position is a text field object.
+  bool IsInTextField() const {
+    if (IsNullPosition()) {
+      return false;
+    }
+    return GetAnchor()->data().IsTextField();
+  }
+
   // Determines if the text representation of this position's anchor contains
   // only whitespace characters; <br> objects span a single '\n' character, so
   // positions inside line breaks are also considered "in whitespace". Note that
@@ -4107,7 +4465,7 @@ class AXPosition {
         // TODO(nektar): Switch to anchor->GetTextContentLengthUTF8() after
         // AXPosition switches to using UTF8.
         return GetAnchor()->GetTextContentLengthUTF16();
-      case AXEmbeddedObjectBehavior::kExposeCharacter:
+      case AXEmbeddedObjectBehavior::kExposeCharacterForHypertext:
         // Special case: If a node has only ignored descendants, i.e., it
         // appears to be empty to assistive software, on some platforms we need
         // to still treat it as a character and a word boundary. We achieve this
@@ -4118,6 +4476,33 @@ class AXPosition {
         if (IsInUnignoredEmptyObject())
           return AXNode::kEmbeddedObjectCharacterLengthUTF16;
         return static_cast<int>(GetAnchor()->GetHypertext().length());
+      case AXEmbeddedObjectBehavior::kUIAExposeCharacterForTextContent:
+        // For UIA, we still have the notion of embedded object characters for
+        // text navigation purposes. I.e. when AT's need to navigate around
+        // nodes and elements which are empty and should then be exposed as
+        // embedded object characters, and as such we need to return the length
+        // of the embedded object character when calculating the `MaxTextOffset`
+        // for these nodes.
+        //
+        // According to the spec, we should favor author supplied names over
+        // names from content. However, trying to fulfill this in every case
+        // leads to bugs in the UIA implementation in the TextRangeProvider
+        // since we create leaf text positions, which means that they will
+        // always have name from content. As such, for now we are
+        // implementing this special case where we will only return the author
+        // specified name if NameFrom is kAttribute and the name is not empty.
+        if (IsInUnignoredEmptyObject()) {
+          if (EmptyObjectShouldProvideNameFromAttribute()) {
+            return (int)GetAnchor()->GetNameUTF16().length();
+          }
+          return AXNode::kEmbeddedObjectCharacterLengthUTF16;
+        }
+        // However, for UIA, we don't want to expose the Hypertext like the
+        // kExposeCharacterForHypertext case does, since that computation for
+        // Hypertext is IA2-specific. Instead, UIA needs the text contents of
+        // the node, so for `MaxTextOffset()` we should return the length of the
+        // text content.
+        return GetAnchor()->GetTextContentLengthUTF16();
     }
   }
 
@@ -4129,14 +4514,28 @@ class AXPosition {
     return GetAnchor()->GetRole();
   }
 
+  AXTextAttributes GetTextAttributes() const {
+    // Check either the current anchor or its parent for text attributes.
+    AXTextAttributes current_anchor_text_attributes =
+        !IsNullPosition() ? GetAnchor()->GetTextAttributes()
+                          : AXTextAttributes();
+    if (current_anchor_text_attributes.IsUnset()) {
+      AXPositionInstance parent_position =
+          AsTreePosition()->CreateParentPosition(
+              ax::mojom::MoveDirection::kBackward);
+      if (!parent_position->IsNullPosition()) {
+        return parent_position->GetAnchor()->GetTextAttributes();
+      }
+    }
+    return current_anchor_text_attributes;
+  }
+
  protected:
   AXPosition()
-      : kind_(AXPositionKind::NULL_POSITION),
-        tree_id_(AXTreeIDUnknown()),
+      : tree_id_(AXTreeIDUnknown()),
         anchor_id_(kInvalidAXNodeID),
         child_index_(INVALID_INDEX),
-        text_offset_(INVALID_OFFSET),
-        affinity_(ax::mojom::TextAffinity::kDownstream) {}
+        text_offset_(INVALID_OFFSET) {}
 
   // We explicitly don't copy any cached members.
   AXPosition(const AXPosition& other)
@@ -4145,8 +4544,7 @@ class AXPosition {
         anchor_id_(other.anchor_id_),
         child_index_(other.child_index_),
         text_offset_(other.text_offset_),
-        affinity_(other.affinity_),
-        name_() {}
+        affinity_(other.affinity_) {}
 
   // Returns the character offset inside our anchor's parent at which our text
   // starts.
@@ -4205,12 +4603,12 @@ class AXPosition {
     return grapheme_iterator;
   }
 
-  void Initialize(AXPositionKind kind,
-                  AXTreeID tree_id,
-                  AXNodeID anchor_id,
-                  int child_index,
-                  int text_offset,
-                  ax::mojom::TextAffinity affinity) {
+  void InitializeWithoutValidation(AXPositionKind kind,
+                                   AXTreeID tree_id,
+                                   AXNodeID anchor_id,
+                                   int child_index,
+                                   int text_offset,
+                                   ax::mojom::TextAffinity affinity) {
     kind_ = kind;
     tree_id_ = tree_id;
     anchor_id_ = anchor_id;
@@ -4227,6 +4625,60 @@ class AXPosition {
       text_offset_ = INVALID_OFFSET;
       affinity_ = ax::mojom::TextAffinity::kDownstream;
     }
+  }
+
+  void Initialize(AXPositionKind kind,
+                  AXTreeID tree_id,
+                  AXNodeID anchor_id,
+                  int child_index,
+                  int text_offset,
+                  ax::mojom::TextAffinity affinity) {
+    kind_ = kind;
+    tree_id_ = tree_id;
+    anchor_id_ = anchor_id;
+    child_index_ = child_index;
+    text_offset_ = text_offset;
+    affinity_ = affinity;
+
+    // TODO(accessibility) Consider using WeakPtr<AXTree> instead of an
+    // AXTreeID, which would be both faster and easier to use in combination
+    // with AXTreeSnapshotter, which does not use AXTreeManager to cache
+    // AXTreeIDs in a map.
+    SANITIZER_CHECK(GetManager() || kind_ == AXPositionKind::NULL_POSITION)
+        << "Tree manager required, tree_id = " << tree_id.ToString()
+        << "  is unknown = " << (tree_id == AXTreeIDUnknown());
+    SANITIZER_CHECK(GetAnchor() || kind_ == AXPositionKind::NULL_POSITION)
+        << "Creating a position without an anchor is disallowed:\n"
+        << ToDebugString();
+
+    // TODO(crbug.com/40885940) Remove this line and let the below IsValid()
+    // assertion get triggered instead. We shouldn't be creating test positions
+    // with offsets that are too large. This seems to occur when the anchor node
+    // is ignored, and leads to a number of failing tests.
+    // Comment this line out as a known performance culprit (also see
+    // crbug.com/1401591).
+    // SnapToMaxTextOffsetIfBeyond();
+
+#if defined(AX_EXTRA_MAC_NODES)
+    // Temporary hack to constrain child index when extra mac nodes are present.
+    // TODO(accessibility) Remove this hack that works around the fact that Mac
+    // can set a selection on extra mac nodes, which looks invalid because the
+    // child index is larger than AnchorChildCount(), which does not account
+    // for them. We need to get a child count that includes extra mac nodes,
+    // similar to how BrowserAccessibility::PlatformChildCount() does.
+    if (!IsValid() && IsTreePosition() && IsTableLike(GetAnchor()->GetRole()) &&
+        child_index > AnchorChildCount()) {
+      child_index_ = AnchorChildCount();
+    }
+#endif
+
+    // TODO(crbug.com/40885940) see TODO above.
+    // Also look for the failures in
+    // AXPositionTest.AsLeafTextPositionBeforeCharacterIncludingGeneratedNewlines,
+    // AXPlatformNodeTextRangeProviderTest.TestNormalizeTextRangeForceSameAnchorOnDegenerateRange.
+    // SANITIZER_CHECK(IsValid()) << "Creating invalid positions is
+    // disallowed:\n"
+    //                            << ToDebugString();
   }
 
   int AnchorChildCount() const {
@@ -4259,7 +4711,7 @@ class AXPosition {
   base::stack<AXNode*> GetAncestorAnchors() const {
     if (!GetAnchor())
       return base::stack<AXNode*>();
-    return GetAnchor()->GetAncestorsCrossingTreeBoundary();
+    return GetAnchor()->GetAncestorsCrossingTreeBoundaryAsStack();
   }
 
   AXNode* GetLowestUnignoredAncestor() const {
@@ -4299,7 +4751,7 @@ class AXPosition {
     switch (g_ax_embedded_object_behavior) {
       case AXEmbeddedObjectBehavior::kSuppressCharacter:
         return false;
-      case AXEmbeddedObjectBehavior::kExposeCharacter:
+      case AXEmbeddedObjectBehavior::kExposeCharacterForHypertext:
         // We expose an "object replacement character" for all nodes except:
         // A) Textual nodes, such as static text, inline text boxes and line
         // breaks, and B) Nodes that are invisible to platform APIs.
@@ -4329,6 +4781,9 @@ class AXPosition {
         // `AXPosition::IsInUnignoredEmptyObject()`.
         return !IsNullPosition() && !GetAnchor()->IsIgnored() &&
                !GetAnchor()->IsText() && !GetAnchor()->IsChildOfLeaf();
+      case AXEmbeddedObjectBehavior::kUIAExposeCharacterForTextContent:
+        return !IsNullPosition() && !GetAnchor()->IsIgnored() &&
+               GetAnchor()->IsLeaf() && IsInUnignoredEmptyObject();
     }
   }
 
@@ -4350,21 +4805,6 @@ class AXPosition {
 
   ax::mojom::Role GetRole(AXNode* node) const { return node->GetRole(); }
 
-  AXTextAttributes GetTextAttributes() const {
-    // Check either the current anchor or its parent for text attributes.
-    AXTextAttributes current_anchor_text_attributes =
-        !IsNullPosition() ? GetAnchor()->GetTextAttributes()
-                          : AXTextAttributes();
-    if (current_anchor_text_attributes.IsUnset()) {
-      AXPositionInstance parent_position =
-          AsTreePosition()->CreateParentPosition(
-              ax::mojom::MoveDirection::kBackward);
-      if (!parent_position->IsNullPosition())
-        return parent_position->GetAnchor()->GetTextAttributes();
-    }
-    return current_anchor_text_attributes;
-  }
-
   const std::vector<int32_t>& GetWordStartOffsets() const {
     if (IsNullPosition()) {
       static const base::NoDestructor<std::vector<int32_t>> empty_word_starts;
@@ -4377,9 +4817,16 @@ class AXPosition {
     // control has no text, no word start offsets are present in the
     // `ax::mojom::IntListAttribute::kWordStarts` attribute, so we need to
     // special case them here.
-    if (g_ax_embedded_object_behavior ==
-            AXEmbeddedObjectBehavior::kExposeCharacter &&
-        IsInUnignoredEmptyObject()) {
+    //
+    // For the kUIAExposeCharacterForHypertext case, we only want to return a
+    // vector with {0} if the empty object does not have an author specified
+    // name that we are exposing.
+    if (IsInUnignoredEmptyObject() &&
+        (g_ax_embedded_object_behavior ==
+             AXEmbeddedObjectBehavior::kExposeCharacterForHypertext ||
+         (g_ax_embedded_object_behavior ==
+              AXEmbeddedObjectBehavior::kUIAExposeCharacterForTextContent &&
+          !EmptyObjectShouldProvideNameFromAttribute()))) {
       // Using braces ensures that the vector will contain the given value, and
       // not create a vector of size 0.
       static const base::NoDestructor<std::vector<int32_t>>
@@ -4409,9 +4856,12 @@ class AXPosition {
     // is positioned at 1. Because we want to treat embedded object replacement
     // characters as ordinary characters, it wouldn't be consistent to assume
     // they have no length and return 0 instead of 1.
-    if (g_ax_embedded_object_behavior ==
-            AXEmbeddedObjectBehavior::kExposeCharacter &&
-        IsInUnignoredEmptyObject()) {
+    if (IsInUnignoredEmptyObject() &&
+        (g_ax_embedded_object_behavior ==
+             AXEmbeddedObjectBehavior::kExposeCharacterForHypertext ||
+         (g_ax_embedded_object_behavior ==
+              AXEmbeddedObjectBehavior::kUIAExposeCharacterForTextContent &&
+          !EmptyObjectShouldProvideNameFromAttribute()))) {
       // Using braces ensures that the vector will contain the given value, and
       // not create a vector of size 1.
       static const base::NoDestructor<std::vector<int32_t>> embedded_word_ends{
@@ -4428,10 +4878,39 @@ class AXPosition {
       return kInvalidAXNodeID;
     DCHECK(GetAnchor());
 
-    int next_on_line_id;
-    if (GetAnchor()->GetIntAttribute(ax::mojom::IntAttribute::kNextOnLineId,
-                                     &next_on_line_id)) {
-      return static_cast<AXNodeID>(next_on_line_id);
+    if (GetAnchor()->HasIntAttribute(ax::mojom::IntAttribute::kNextOnLineId)) {
+      return static_cast<AXNodeID>(
+          GetAnchor()->GetIntAttribute(ax::mojom::IntAttribute::kNextOnLineId));
+    }
+    AXNode* parent = GetAnchor()->GetUnignoredParent();
+
+    if (!parent) {
+      return kInvalidAXNodeID;
+    }
+
+    // We should not need to bubble up to find the NextOnLine if we are not
+    // in an InlineTextBox, because the only cases where the relevant NextOnLine
+    // information is stored in the parent is in cases where we have text inside
+    // inline-block elements.
+    //
+    // We only want to bubble up to the parent to find the nextOnLine
+    // if we are in a leaf that is a last child.
+    // This is because if we have a structure where there are multiple
+    // InlineTextBox children that are in different lines, and the parent's
+    // NextOnLine only applies to the last child.
+    if (GetAnchor()->GetRole() != ax::mojom::Role::kInlineTextBox ||
+        parent->GetLastUnignoredChild() != GetAnchor()) {
+      return kInvalidAXNodeID;
+    }
+
+    while (parent &&
+           !parent->HasIntAttribute(ax::mojom::IntAttribute::kNextOnLineId)) {
+      parent = parent->GetUnignoredParent();
+    }
+
+    if (parent) {
+      return static_cast<AXNodeID>(
+          parent->GetIntAttribute(ax::mojom::IntAttribute::kNextOnLineId));
     }
     return kInvalidAXNodeID;
   }
@@ -4441,10 +4920,44 @@ class AXPosition {
       return kInvalidAXNodeID;
     DCHECK(GetAnchor());
 
-    int previous_on_line_id;
-    if (GetAnchor()->GetIntAttribute(ax::mojom::IntAttribute::kPreviousOnLineId,
-                                     &previous_on_line_id)) {
-      return static_cast<AXNodeID>(previous_on_line_id);
+    if (GetAnchor()->HasIntAttribute(
+            ax::mojom::IntAttribute::kPreviousOnLineId)) {
+      return static_cast<AXNodeID>(GetAnchor()->GetIntAttribute(
+          ax::mojom::IntAttribute::kPreviousOnLineId));
+    }
+    AXNode* parent = GetAnchor()->GetUnignoredParent();
+
+    if (!parent) {
+      return kInvalidAXNodeID;
+    }
+
+    // We should not need to bubble up to find the PreviousOnLine if we are not
+    // in an InlineTextBox, because the only cases where the relevant
+    // PreviousOnLine information is stored in the parent is in cases where we
+    // have text inside inline-block elements.
+    //
+    // We have some expectations that
+    // line break elements are not expected to have a previous on line element.
+    //
+    // We only want to bubble up to the parent to find the previousOnLine
+    // if we are in a leaf that is a first child.
+    // This is because if we have a structure where there are multiple
+    // InlineTextBox children that are in different lines, and the parent's
+    // PreviousOnLine only applies to the first child.
+    if (GetAnchor()->GetRole() != ax::mojom::Role::kInlineTextBox ||
+        parent->GetRole() == ax::mojom::Role::kLineBreak ||
+        parent->GetFirstUnignoredChild() != GetAnchor()) {
+      return kInvalidAXNodeID;
+    }
+
+    while (parent && !parent->HasIntAttribute(
+                         ax::mojom::IntAttribute::kPreviousOnLineId)) {
+      parent = parent->GetUnignoredParent();
+    }
+
+    if (parent) {
+      return static_cast<AXNodeID>(
+          parent->GetIntAttribute(ax::mojom::IntAttribute::kPreviousOnLineId));
     }
     return kInvalidAXNodeID;
   }
@@ -4472,11 +4985,6 @@ class AXPosition {
                                    const AXPosition& move_to,
                                    const AXMoveType type,
                                    const AXMoveDirection direction)>;
-
-  bool IsInUnignoredTextListMarker() const {
-    return GetAnchorRole() == ax::mojom::Role::kListMarker &&
-           !GetAnchor()->IsIgnored() && !AnchorUnignoredChildCount();
-  }
 
   // A text span is defined by a series of inline text boxes that make up a
   // single static text object.
@@ -4854,7 +5362,6 @@ class AXPosition {
       }
       default:
         NOTREACHED();
-        return false;
     }
   }
 
@@ -4914,7 +5421,9 @@ class AXPosition {
 
   // AbortMovePredicate function used to detect crossing through the boundaries
   // of a window-like container, such as a webpage, a PDF, a dialog, the
-  // browser's UI (AKA Views), or the whole desktop.
+  // browser's UI (AKA Views), or the whole desktop. Window-like containers
+  // that are ignored should not cause us to abort. For example, a hidden dialog
+  // should not cause a break.
   static bool AbortMoveAtRootBoundary(const AXPosition& move_from,
                                       const AXPosition& move_to,
                                       const AXMoveType move_type,
@@ -4928,28 +5437,31 @@ class AXPosition {
     const ax::mojom::Role move_to_role = move_to.GetAnchorRole();
     switch (move_type) {
       case AXMoveType::kAncestor:
-        // For Ancestor moves, only abort when exiting a window-like container.
-        // We don't care if the ancestor is the root of a window-like container
-        // or not, since the descendant is contained by it. However, we do care
-        // if the ancestor is an iframe because a webpage should be navigated as
-        // a single document together with all its iframes, (out-of-process or
-        // otherwise).
-        return IsRootLike(move_from_role) && !IsIframe(move_to_role);
-      case AXMoveType::kDescendant:
-        // For Descendant moves, only abort when entering a window-like
+        // For Ancestor moves, only abort when exiting an unignored window-like
         // container. We don't care if the ancestor is the root of a window-like
         // container or not, since the descendant is contained by it. However,
         // we do care if the ancestor is an iframe because a webpage should be
         // navigated as a single document together with all its iframes,
         // (out-of-process or otherwise).
-        return IsRootLike(move_to_role) && !IsIframe(move_from_role);
+        return IsRootLike(move_from_role) && !IsIframe(move_to_role) &&
+               !move_from.IsIgnored();
+      case AXMoveType::kDescendant:
+        // For Descendant moves, only abort when entering an unignored
+        // window-like container. We don't care if the ancestor is the root of a
+        // window-like container or not, since the descendant is contained by
+        // it. However, we do care if the ancestor is an iframe because a
+        // webpage should be navigated as a single document together with all
+        // its iframes, (out-of-process or otherwise).
+        return IsRootLike(move_to_role) && !IsIframe(move_from_role) &&
+               !move_to.IsIgnored();
       case AXMoveType::kSibling:
         // For Sibling moves, abort if both of the siblings are at the root of
-        // window-like containers because that would mean exiting and/or
-        // entering a new window-like container. Iframes should not be present
-        // in this case because an iframe should never contain more than one
-        // kRootWebArea as its immediate child.
-        return IsRootLike(move_from_role) && IsRootLike(move_to_role);
+        // unignored window-like containers because that would mean exiting
+        // and/or entering a new window-like container. Iframes should not be
+        // present in this case because an iframe should never contain more than
+        // one kRootWebArea as its immediate child.
+        return IsRootLike(move_from_role) && IsRootLike(move_to_role) &&
+               !move_from.IsIgnored() && !move_to.IsIgnored();
     }
   }
 
@@ -4981,7 +5493,6 @@ class AXPosition {
                 move_type == AXMoveType::kSibling);
     }
     NOTREACHED();
-    return false;
   }
 
   static const std::vector<int32_t>& GetSentenceStartOffsetsFunc(
@@ -5106,7 +5617,6 @@ class AXPosition {
     switch (move_direction) {
       case ax::mojom::MoveDirection::kNone:
         NOTREACHED();
-        return CreateNullPosition();
       case ax::mojom::MoveDirection::kBackward: {
         auto offsets_iterator =
             std::lower_bound(boundary_offsets.begin(), boundary_offsets.end(),
@@ -5118,7 +5628,8 @@ class AXPosition {
           // can safely move the iterator one position back, even if it's
           // currently at the vector's end.
           --offsets_iterator;
-          text_position->text_offset_ = int{*offsets_iterator};
+          auto offsets_iterator_ref = *offsets_iterator;
+          text_position->text_offset_ = static_cast<int>(offsets_iterator_ref);
           text_position->affinity_ = ax::mojom::TextAffinity::kDownstream;
         }
         break;
@@ -5129,7 +5640,8 @@ class AXPosition {
                              int32_t{text_position->text_offset_});
         // If there is no next offset, the current offset should be unchanged.
         if (offsets_iterator < boundary_offsets.end()) {
-          text_position->text_offset_ = int{*offsets_iterator};
+          auto offsets_iterator_ref = *offsets_iterator;
+          text_position->text_offset_ = static_cast<int>(offsets_iterator_ref);
           text_position->affinity_ = ax::mojom::TextAffinity::kDownstream;
         }
         break;
@@ -5158,7 +5670,6 @@ class AXPosition {
     switch (move_direction) {
       case ax::mojom::MoveDirection::kNone:
         NOTREACHED();
-        return CreateNullPosition();
       case ax::mojom::MoveDirection::kBackward:
         if (boundary_offsets.empty()) {
           return text_position->CreatePositionAtStartOfAnchor();
@@ -5217,7 +5728,6 @@ class AXPosition {
     switch (move_direction) {
       case ax::mojom::MoveDirection::kNone:
         NOTREACHED();
-        return CreateNullPosition();
       case ax::mojom::MoveDirection::kBackward:
         // If we are at a text offset greater than 0, we will simply decrease
         // the offset by one; otherwise, we will create a position at the end of
@@ -5259,7 +5769,10 @@ class AXPosition {
     return text_position;
   }
 
-  AXPositionKind kind_;
+  AXPositionKind kind_ = AXPositionKind::NULL_POSITION;
+  // TODO(crbug.com/40864560): use weak pointers for the AXTree, so that
+  // AXPosition can be used without AXTreeManager support (and also faster than
+  // the slow AXTreeID).
   AXTreeID tree_id_;
   AXNodeID anchor_id_;
 
@@ -5285,7 +5798,7 @@ class AXPosition {
   // leaf text position before the soft line break would be pointing to the
   // end of its anchor node, whilst a leaf text position after the soft line
   // break would be pointing to the start of the next node.
-  ax::mojom::TextAffinity affinity_;
+  ax::mojom::TextAffinity affinity_ = ax::mojom::TextAffinity::kDownstream;
 
   //
   // Cached members that should be lazily created on first use.
@@ -5306,14 +5819,14 @@ const int AXPosition<AXPositionType, AXNodeType>::INVALID_OFFSET;
 template <class AXPositionType, class AXNodeType>
 bool operator==(const AXPosition<AXPositionType, AXNodeType>& first,
                 const AXPosition<AXPositionType, AXNodeType>& second) {
-  const absl::optional<int> compare_to_optional = first.CompareTo(second);
+  const std::optional<int> compare_to_optional = first.CompareTo(second);
   return compare_to_optional.has_value() && compare_to_optional.value() == 0;
 }
 
 template <class AXPositionType, class AXNodeType>
 bool operator!=(const AXPosition<AXPositionType, AXNodeType>& first,
                 const AXPosition<AXPositionType, AXNodeType>& second) {
-  const absl::optional<int> compare_to_optional = first.CompareTo(second);
+  const std::optional<int> compare_to_optional = first.CompareTo(second);
   // It makes sense to also return false if the positions are not comparable,
   // because by definition non-comparable positions are uniqual. Positions are
   // not comparable when one position is null and the other is not or if the
@@ -5324,28 +5837,28 @@ bool operator!=(const AXPosition<AXPositionType, AXNodeType>& first,
 template <class AXPositionType, class AXNodeType>
 bool operator<(const AXPosition<AXPositionType, AXNodeType>& first,
                const AXPosition<AXPositionType, AXNodeType>& second) {
-  const absl::optional<int> compare_to_optional = first.CompareTo(second);
+  const std::optional<int> compare_to_optional = first.CompareTo(second);
   return compare_to_optional.has_value() && compare_to_optional.value() < 0;
 }
 
 template <class AXPositionType, class AXNodeType>
 bool operator<=(const AXPosition<AXPositionType, AXNodeType>& first,
                 const AXPosition<AXPositionType, AXNodeType>& second) {
-  const absl::optional<int> compare_to_optional = first.CompareTo(second);
+  const std::optional<int> compare_to_optional = first.CompareTo(second);
   return compare_to_optional.has_value() && compare_to_optional.value() <= 0;
 }
 
 template <class AXPositionType, class AXNodeType>
 bool operator>(const AXPosition<AXPositionType, AXNodeType>& first,
                const AXPosition<AXPositionType, AXNodeType>& second) {
-  const absl::optional<int> compare_to_optional = first.CompareTo(second);
+  const std::optional<int> compare_to_optional = first.CompareTo(second);
   return compare_to_optional.has_value() && compare_to_optional.value() > 0;
 }
 
 template <class AXPositionType, class AXNodeType>
 bool operator>=(const AXPosition<AXPositionType, AXNodeType>& first,
                 const AXPosition<AXPositionType, AXNodeType>& second) {
-  const absl::optional<int> compare_to_optional = first.CompareTo(second);
+  const std::optional<int> compare_to_optional = first.CompareTo(second);
   return compare_to_optional.has_value() && compare_to_optional.value() >= 0;
 }
 
@@ -5361,6 +5874,9 @@ std::ostream& operator<<(
     const AXPosition<AXPositionType, AXNodeType>& position) {
   return stream << position.ToString();
 }
+
+extern template class EXPORT_TEMPLATE_DECLARE(AX_EXPORT)
+    AXPosition<AXNodePosition, AXNode>;
 
 }  // namespace ui
 

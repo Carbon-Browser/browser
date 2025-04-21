@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -14,7 +14,7 @@ import page_sets
 
 @benchmark.Info(
     emails=[
-        'yuhengh@chromium.org', 'tluk@chromium.org', 'romanarora@chromium.org'
+        'yuhengh@chromium.org', 'tluk@chromium.org'
     ],
     component='UI>Browser',
     documentation_url=
@@ -27,7 +27,8 @@ class DesktopUI(perf_benchmark.PerfBenchmark):
   SUPPORTED_PLATFORMS = [story.expectations.ALL_DESKTOP]
 
   def CreateStorySet(self, options):
-    return page_sets.DesktopUIStorySet()
+    exhaustive = hasattr(options, 'story_set_should_be_exhaustive_for_test')
+    return page_sets.DesktopUIStorySet(exhaustive=exhaustive)
 
   def CreateCoreTimelineBasedMeasurementOptions(self):
     category_filter = chrome_trace_category_filter.ChromeTraceCategoryFilter(

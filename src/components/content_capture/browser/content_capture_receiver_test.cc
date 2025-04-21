@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,9 @@
 #include "base/test/test_mock_time_task_runner.h"
 #include "build/build_config.h"
 #include "components/content_capture/browser/content_capture_test_helper.h"
+#include "content/public/browser/back_forward_cache.h"
 #include "content/public/common/content_features.h"
+#include "content/public/test/back_forward_cache_util.h"
 #include "content/public/test/test_renderer_host.h"
 #include "content/public/test/test_utils.h"
 #include "third_party/blink/public/mojom/favicon/favicon_url.mojom.h"
@@ -30,13 +32,10 @@ class ContentCaptureReceiverTest : public content::RenderViewHostTestHarness,
                                    public ::testing::WithParamInterface<bool> {
  public:
   void SetUp() override {
-    // TODO (crbug.com/1115234): Remove the param when BFCache same site feature
-    // launched.
     if (GetParam()) {
       scoped_feature_list_.InitWithFeaturesAndParameters(
-          {{{features::kBackForwardCache}, {{"enable_same_site", "true"}}}},
-          // Allow BackForwardCache for all devices regardless of their memory.
-          {features::kBackForwardCacheMemoryControls});
+          content::GetBasicBackForwardCacheFeatureForTesting(),
+          content::GetDefaultDisabledBackForwardCacheFeaturesForTesting());
     }
     content::RenderViewHostTestHarness::SetUp();
     helper_.CreateProviderAndConsumer(web_contents(),
@@ -123,8 +122,8 @@ class ContentCaptureReceiverTest : public content::RenderViewHostTestHarness,
   // The sender for child frame.
   std::unique_ptr<FakeContentCaptureSender> child_frame_sender_;
 
-  raw_ptr<content::RenderFrameHost> main_frame_ = nullptr;
-  raw_ptr<content::RenderFrameHost> child_frame_ = nullptr;
+  raw_ptr<content::RenderFrameHost, DanglingUntriaged> main_frame_ = nullptr;
+  raw_ptr<content::RenderFrameHost, DanglingUntriaged> child_frame_ = nullptr;
 
   // Expected removed Ids.
   std::vector<int64_t> expected_removed_ids_{2};
@@ -176,14 +175,7 @@ TEST_P(ContentCaptureReceiverTest, MultipleConsumers) {
   EXPECT_EQ(consumer(), provider()->GetConsumersForTesting()[0]);
 }
 
-// TODO(https://crbug.com/1010179): Fix flakes on win10_chromium_x64_rel_ng and
-// re-enable this test.
-#if BUILDFLAG(IS_WIN)
-#define MAYBE_DidCaptureContentWithUpdate DISABLED_DidCaptureContentWithUpdate
-#else
-#define MAYBE_DidCaptureContentWithUpdate DidCaptureContentWithUpdate
-#endif
-TEST_P(ContentCaptureReceiverTest, MAYBE_DidCaptureContentWithUpdate) {
+TEST_P(ContentCaptureReceiverTest, DidCaptureContentWithUpdate) {
   main_frame_sender()->DidCaptureContent(helper()->test_data(),
                                          true /* first_data */);
   // Verifies to get test_data() with correct frame content id.
@@ -204,14 +196,7 @@ TEST_P(ContentCaptureReceiverTest, MAYBE_DidCaptureContentWithUpdate) {
             consumer()->captured_data());
 }
 
-// TODO(https://crbug.com/1011204): Fix flakes on win10_chromium_x64_rel_ng and
-// re-enable this test.
-#if BUILDFLAG(IS_WIN)
-#define MAYBE_DidUpdateContent DISABLED_DidUpdateContent
-#else
-#define MAYBE_DidUpdateContent DidUpdateContent
-#endif
-TEST_P(ContentCaptureReceiverTest, MAYBE_DidUpdateContent) {
+TEST_P(ContentCaptureReceiverTest, DidUpdateContent) {
   main_frame_sender()->DidCaptureContent(helper()->test_data(),
                                          true /* first_data */);
   EXPECT_TRUE(consumer()->parent_session().empty());
@@ -364,15 +349,10 @@ TEST_P(ContentCaptureReceiverTest, TitleUpdateTaskDelay) {
   EXPECT_EQ(title2, consumer()->updated_title());
 }
 
-// TODO(https://crbug.com/1010416): Fix flakes on win10_chromium_x64_rel_ng and
-// re-enable this test.
-#if BUILDFLAG(IS_WIN)
-#define MAYBE_ChildFrameCaptureContentFirst \
-  DISABLED_ChildFrameCaptureContentFirst
-#else
-#define MAYBE_ChildFrameCaptureContentFirst ChildFrameCaptureContentFirst
-#endif
-TEST_P(ContentCaptureReceiverTest, MAYBE_ChildFrameCaptureContentFirst) {
+TEST_P(ContentCaptureReceiverTest, ChildFrameCaptureContentFirst) {
+  // This test performs navigations, expecting the frames to be destroyed.
+  content::DisableBackForwardCacheForTesting(
+      web_contents(), content::BackForwardCache::TEST_REQUIRES_NO_CACHING);
   // Simulate add child frame.
   SetupChildFrame();
   // Simulate to capture the content from child frame.
@@ -404,10 +384,29 @@ TEST_P(ContentCaptureReceiverTest, MAYBE_ChildFrameCaptureContentFirst) {
                     &removed_child_session);
   ContentCaptureSession removed_main_session = expected;
   // When main frame navigates to same url, the parent session will not change.
+  bool rfh_should_change =
+      web_contents()
+          ->GetPrimaryMainFrame()
+          ->ShouldChangeRenderFrameHostOnSameSiteNavigation();
   NavigateMainFrame(GURL(kMainFrameUrl));
   SetupChildFrame();
   child_frame_sender()->DidCaptureContent(helper()->test_data2(),
                                           true /* first_data */);
+
+  // Intentionally reuse the data.id from previous result, so we know navigating
+  // to same domain didn't create new ContentCaptureReceiver when call
+  // VerifySession(), otherwise, we can't test the code to handle the navigation
+  // in ContentCaptureReceiver - except when RenderDocument is enabled, where we
+  // will get new RenderFrameHosts after the navigation to |kMainFrameUrl|.
+  if (rfh_should_change) {
+    data = GetExpectedTestData(helper()->test_data(),
+                               GetFrameId(true /* main_frame */));
+  }
+  data.url = kMainFrameUrl;
+  // Currently, there is no way to fake frame size, set it to 0.
+  data.bounds = gfx::Rect();
+  expected.clear();
+  expected.push_back(data);
   VerifySession(expected, consumer()->parent_session());
 
   EXPECT_EQ(2u, consumer()->removed_sessions().size());
@@ -506,16 +505,17 @@ TEST_P(ContentCaptureReceiverTest, ConvertFaviconURLToJSON) {
   EXPECT_TRUE(ContentCaptureReceiver::ToJSON(favicon_urls).empty());
   favicon_urls.push_back(blink::mojom::FaviconURL::New(
       GURL{"https://a.com"}, blink::mojom::FaviconIconType::kFavicon,
-      std::vector<gfx::Size>{gfx::Size(10, 10)}));
+      std::vector<gfx::Size>{gfx::Size(10, 10)}, /*is_default_icon=*/false));
   favicon_urls.push_back(blink::mojom::FaviconURL::New(
       GURL{"https://b.com"}, blink::mojom::FaviconIconType::kTouchIcon,
-      std::vector<gfx::Size>{gfx::Size(100, 100), gfx::Size(20, 20)}));
+      std::vector<gfx::Size>{gfx::Size(100, 100), gfx::Size(20, 20)},
+      /*is_default_icon=*/false));
   favicon_urls.push_back(blink::mojom::FaviconURL::New(
       GURL{"https://c.com"},
       blink::mojom::FaviconIconType::kTouchPrecomposedIcon,
-      std::vector<gfx::Size>{}));
+      std::vector<gfx::Size>{}, /*is_default_icon=*/false));
   std::string actual_json = ContentCaptureReceiver::ToJSON(favicon_urls);
-  absl::optional<base::Value> actual = base::JSONReader::Read(actual_json);
+  std::optional<base::Value> actual = base::JSONReader::Read(actual_json);
   std::string expected_json =
       R"JSON(
       [
@@ -536,7 +536,7 @@ TEST_P(ContentCaptureReceiverTest, ConvertFaviconURLToJSON) {
         }
       ]
       )JSON";
-  absl::optional<base::Value> expected = base::JSONReader::Read(expected_json);
+  std::optional<base::Value> expected = base::JSONReader::Read(expected_json);
   EXPECT_TRUE(actual);
   EXPECT_EQ(expected, actual);
 }
@@ -564,16 +564,8 @@ class ContentCaptureReceiverMultipleFrameTest
   ContentCaptureTestHelper helper_;
 };
 
-// TODO(https://crbug.com/1010417): Fix flakes on win10_chromium_x64_rel_ng and
-// re-enable this test.
-#if BUILDFLAG(IS_WIN)
-#define MAYBE_ReceiverCreatedForExistingFrame \
-  DISABLED_ReceiverCreatedForExistingFrame
-#else
-#define MAYBE_ReceiverCreatedForExistingFrame ReceiverCreatedForExistingFrame
-#endif
 TEST_F(ContentCaptureReceiverMultipleFrameTest,
-       MAYBE_ReceiverCreatedForExistingFrame) {
+       ReceiverCreatedForExistingFrame) {
   EXPECT_EQ(2u, provider()->GetFrameMapSizeForTesting());
 }
 

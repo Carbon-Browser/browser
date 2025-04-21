@@ -1,12 +1,18 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "remoting/test/fake_network_dispatcher.h"
 
 #include <stddef.h>
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/task/single_thread_task_runner.h"
@@ -14,9 +20,7 @@
 
 namespace remoting {
 
-FakeNetworkDispatcher::FakeNetworkDispatcher()
-    : allocated_address_(0) {
-}
+FakeNetworkDispatcher::FakeNetworkDispatcher() : allocated_address_(0) {}
 
 FakeNetworkDispatcher::~FakeNetworkDispatcher() {
   CHECK(nodes_.empty());
@@ -42,7 +46,7 @@ void FakeNetworkDispatcher::AddNode(Node* node) {
   DCHECK(node->GetThread()->BelongsToCurrentThread());
 
   base::AutoLock auto_lock(nodes_lock_);
-  DCHECK(nodes_.find(node->GetAddress()) == nodes_.end());
+  DCHECK(!base::Contains(nodes_, node->GetAddress()));
   nodes_[node->GetAddress()] = node;
 }
 

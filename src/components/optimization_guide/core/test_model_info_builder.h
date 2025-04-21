@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,9 @@
 #define COMPONENTS_OPTIMIZATION_GUIDE_CORE_TEST_MODEL_INFO_BUILDER_H_
 
 #include <memory>
+#include <optional>
 
+#include "base/containers/flat_set.h"
 #include "components/optimization_guide/core/model_info.h"
 #include "components/optimization_guide/proto/models.pb.h"
 
@@ -31,7 +33,7 @@ class TestModelInfoBuilder {
   TestModelInfoBuilder& SetVersion(int64_t version);
 
   TestModelInfoBuilder& SetModelMetadata(
-      absl::optional<proto::Any> model_metadata);
+      std::optional<proto::Any> model_metadata);
 
   std::unique_ptr<ModelInfo> Build();
 

@@ -29,7 +29,7 @@ import sys
 
 
 def get_gtest_selector(file):
-    if os.stat(file).st_size > 0:
+    if os.path.isfile(file) and os.stat(file).st_size > 0:
         with open(file) as f:
             return "-" + ':'.join(line.strip() for line in f)
     return "*"

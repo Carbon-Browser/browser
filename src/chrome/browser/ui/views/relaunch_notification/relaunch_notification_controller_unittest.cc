@@ -1,14 +1,15 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/relaunch_notification/relaunch_notification_controller.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "ash/public/cpp/update_types.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/numerics/safe_conversions.h"
@@ -19,20 +20,19 @@
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
 #include "base/values.h"
-#include "build/chromeos_buildflags.h"
-#include "chrome/browser/ui/ash/system_tray_client_impl.h"
+#include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/upgrade_detector/upgrade_detector.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 #include "ash/shell.h"
 #include "ash/test/ash_test_helper.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
+#include "chrome/browser/ui/ash/system/system_tray_client_impl.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "content/public/test/browser_task_environment.h"
 #include "ui/display/manager/display_configurator.h"
@@ -41,7 +41,7 @@
 #else
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/test_with_browser_view.h"
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 using ::testing::_;
 using ::testing::Eq;
@@ -57,7 +57,6 @@ class ControllerDelegate {
   virtual void NotifyRelaunchRecommended() = 0;
   virtual void NotifyRelaunchRequired() = 0;
   virtual void Close() = 0;
-  virtual void SetDeadline(base::Time deadline) = 0;
   virtual void OnRelaunchDeadlineExpired() = 0;
 
  protected:
@@ -99,10 +98,6 @@ class FakeRelaunchNotificationController
 
   void Close() override { delegate_->Close(); }
 
-  void SetDeadline(base::Time deadline) override {
-    delegate_->SetDeadline(deadline);
-  }
-
   void OnRelaunchDeadlineExpired() override {
     delegate_->OnRelaunchDeadlineExpired();
   }
@@ -113,11 +108,10 @@ class FakeRelaunchNotificationController
 // A mock delegate for testing.
 class MockControllerDelegate : public ControllerDelegate {
  public:
-  MOCK_METHOD0(NotifyRelaunchRecommended, void());
-  MOCK_METHOD0(NotifyRelaunchRequired, void());
-  MOCK_METHOD0(Close, void());
-  MOCK_METHOD1(SetDeadline, void(base::Time));
-  MOCK_METHOD0(OnRelaunchDeadlineExpired, void());
+  MOCK_METHOD(void, NotifyRelaunchRecommended, (), (override));
+  MOCK_METHOD(void, NotifyRelaunchRequired, (), (override));
+  MOCK_METHOD(void, Close, (), (override));
+  MOCK_METHOD(void, OnRelaunchDeadlineExpired, (), (override));
 };
 
 // A fake UpgradeDetector.
@@ -201,7 +195,7 @@ class RelaunchNotificationControllerTest : public ::testing::Test {
     // Unittests failed when the system is on battery. This class is using a
     // mock power monitor source `power_monitor_source_` to ensure no real
     // power state or power notifications are delivered to the unittests.
-    EXPECT_FALSE(base::PowerMonitor::IsOnBatteryPower());
+    EXPECT_FALSE(base::PowerMonitor::GetInstance()->IsOnBatteryPower());
   }
 
   UpgradeDetector* upgrade_detector() { return &upgrade_detector_; }
@@ -251,7 +245,7 @@ TEST_F(RelaunchNotificationControllerTest, CreateDestroy) {
 // should not be observing the UpgradeDetector, and should therefore never
 // attempt to show any notifications.
 
-// TODO(1004568) Disabled due to race condition.
+// TODO(crbug.com/40099078) Disabled due to race condition.
 #if defined(THREAD_SANATIZER)
 #define MAYBE_PolicyUnset DISABLED_PolicyUnset
 #else
@@ -910,7 +904,7 @@ TEST_F(RelaunchNotificationControllerTest, NotifyAllWithShortestPeriod) {
   ::testing::Mock::VerifyAndClearExpectations(&mock_controller_delegate);
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 
 class RelaunchNotificationControllerPlatformImplTest : public ::testing::Test {
  protected:
@@ -926,7 +920,7 @@ class RelaunchNotificationControllerPlatformImplTest : public ::testing::Test {
 
     user_manager_ = new ash::FakeChromeUserManager();
     scoped_user_manager_ = std::make_unique<user_manager::ScopedUserManager>(
-        base::WrapUnique(user_manager_));
+        base::WrapUnique(user_manager_.get()));
 
     const char test_user_email[] = "test_user@example.com";
     const AccountId test_account_id(AccountId::FromUserEmail(test_user_email));
@@ -977,10 +971,10 @@ class RelaunchNotificationControllerPlatformImplTest : public ::testing::Test {
   content::BrowserTaskEnvironment task_environment_;
   RelaunchNotificationControllerPlatformImpl impl_;
   ash::AshTestHelper ash_test_helper_;
-  ash::FakeChromeUserManager* user_manager_;
+  raw_ptr<ash::FakeChromeUserManager, DanglingUntriaged> user_manager_;
   std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
   std::unique_ptr<display::test::ActionLogger> logger_;
-  display::NativeDisplayDelegate* native_display_delegate_;
+  raw_ptr<display::NativeDisplayDelegate> native_display_delegate_;
 };
 
 // SynchronousNotification
@@ -1127,12 +1121,12 @@ TEST_F(RelaunchNotificationControllerPlatformImplTest,
             base::Seconds(1));
 }
 
-#else  // BUILDFLAG(IS_CHROMEOS_ASH)
+#else  // BUILDFLAG(IS_CHROMEOS)
 
 class RelaunchNotificationControllerPlatformImplTest
     : public TestWithBrowserView {
  protected:
-  RelaunchNotificationControllerPlatformImplTest() : TestWithBrowserView() {}
+  RelaunchNotificationControllerPlatformImplTest() = default;
 
   void SetUp() override {
     TestWithBrowserView::SetUp();
@@ -1140,10 +1134,11 @@ class RelaunchNotificationControllerPlatformImplTest
   }
 
   void SetVisibility(bool is_visible) {
-    if (is_visible)
+    if (is_visible) {
       browser_view()->Show();
-    else
+    } else {
       browser_view()->Hide();
+    }
 
     // Allow UI tasks to run so that the browser becomes fully active/inactive.
     task_environment()->RunUntilIdle();
@@ -1152,7 +1147,7 @@ class RelaunchNotificationControllerPlatformImplTest
   RelaunchNotificationControllerPlatformImpl& platform_impl() { return *impl_; }
 
  private:
-  absl::optional<RelaunchNotificationControllerPlatformImpl> impl_;
+  std::optional<RelaunchNotificationControllerPlatformImpl> impl_;
 };
 
 // Flaky on all platforms: https://crbug.com/1294032
@@ -1164,7 +1159,7 @@ TEST_F(RelaunchNotificationControllerPlatformImplTest,
   // Expect the platform_impl to show the notification synchronously.
   ::testing::StrictMock<base::MockOnceCallback<base::Time()>> callback;
 
-  base::Time deadline = base::Time::FromDeltaSinceWindowsEpoch(base::Hours(1));
+  base::Time deadline = base::Time::Now() + base::Hours(1);
 
   // There should be no query at the time of showing.
   platform_impl().NotifyRelaunchRequired(deadline, callback.Get());
@@ -1191,7 +1186,7 @@ TEST_F(RelaunchNotificationControllerPlatformImplTest,
 TEST_F(RelaunchNotificationControllerPlatformImplTest, MAYBE_DeferredDeadline) {
   ::testing::StrictMock<base::MockOnceCallback<base::Time()>> callback;
 
-  base::Time deadline = base::Time::FromDeltaSinceWindowsEpoch(base::Hours(1));
+  base::Time deadline = base::Time::Now() + base::Hours(1);
 
   // There should be no query because the browser isn't visible.
   platform_impl().NotifyRelaunchRequired(deadline, callback.Get());
@@ -1200,6 +1195,7 @@ TEST_F(RelaunchNotificationControllerPlatformImplTest, MAYBE_DeferredDeadline) {
   // The query should happen once the notification is potentially seen.
   EXPECT_CALL(callback, Run()).WillOnce(Return(deadline));
   ASSERT_NO_FATAL_FAILURE(SetVisibility(true));
+
   ::testing::Mock::VerifyAndClearExpectations(&callback);
 
   ASSERT_NO_FATAL_FAILURE(SetVisibility(false));
@@ -1214,4 +1210,4 @@ TEST_F(RelaunchNotificationControllerPlatformImplTest, MAYBE_DeferredDeadline) {
   ::testing::Mock::VerifyAndClearExpectations(&callback);
 }
 
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)

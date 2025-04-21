@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,15 @@ package org.chromium.chrome.browser.privacy.secure_dns;
 
 import androidx.annotation.NonNull;
 
-import org.chromium.base.annotations.NativeMethods;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.chrome.browser.net.SecureDnsManagementMode;
 import org.chromium.net.SecureDnsMode;
 
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Reads and writes preferences related to Secure DNS.
- */
+/** Reads and writes preferences related to Secure DNS. */
 class SecureDnsBridge {
     /**
      * An Entry represents the subset of a net::DohProviderEntry that is relevant
@@ -37,19 +35,6 @@ class SecureDnsBridge {
         public String toString() {
             return name;
         }
-    }
-
-    /**
-     * @return Whether the DoH UI field trial is active on this instance.
-     */
-    static boolean isUiEnabled() {
-        // Must match features::kDnsOverHttpsShowUiParam.
-        final String showUiParam = "ShowUi";
-        // Must match the default value for this param.
-        final boolean showUiParamDefault = true;
-
-        return ChromeFeatureList.getFieldTrialParamByFeatureAsBoolean(
-                ChromeFeatureList.DNS_OVER_HTTPS, showUiParam, showUiParamDefault);
     }
 
     /**
@@ -118,15 +103,6 @@ class SecureDnsBridge {
     }
 
     /**
-     * Record a DoH selection action for statistical purposes.
-     * @param oldEntry The previous selection.
-     * @param newEntry The current selection.
-     */
-    static void updateDropdownHistograms(Entry oldEntry, Entry newEntry) {
-        SecureDnsBridgeJni.get().updateDropdownHistograms(oldEntry.config, newEntry.config);
-    }
-
-    /**
      * Record whether a custom DoH config entered was valid for statistical purposes.
      * @param valid True if the config was valid.
      */
@@ -149,15 +125,22 @@ class SecureDnsBridge {
     interface Natives {
         @SecureDnsMode
         int getMode();
+
         void setMode(@SecureDnsMode int mode);
+
         boolean isModeManaged();
+
         String[][] getProviders();
+
         String getConfig();
+
         boolean setConfig(String config);
+
         @SecureDnsManagementMode
         int getManagementMode();
-        void updateDropdownHistograms(String oldConfig, String newConfig);
+
         void updateValidationHistogram(boolean valid);
+
         boolean probeConfig(String dohConfig);
     }
 }

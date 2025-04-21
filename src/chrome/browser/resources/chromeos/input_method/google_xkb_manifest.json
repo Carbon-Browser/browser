@@ -14,6 +14,7 @@
     "crashReportPrivate",
     "https://clients4.google.com/",
     "https://dl.google.com/",
+    "https://edgedl.me.gvt1.com/",
     "https://handwriting.googleapis.com/",
     "https://www.googleapis.com/",
     "input",
@@ -609,6 +610,32 @@
         "gb(extd)"
       ],
       "options_page": "hmm_options.html?code=xkb:gb:extd:eng"
+    },
+    {
+      "name": "__MSG_keyboard_english_india__",
+      "id": "xkb:in::eng",
+      "indicator": "IN",
+      "language": [
+        "en",
+        "en-IN"
+      ],
+      "layouts": [
+        "in(eng)"
+      ],
+      "options_page": "hmm_options.html?code=xkb:in::eng"
+    },
+    {
+      "name": "__MSG_keyboard_english_pakistan__",
+      "id": "xkb:pk::eng",
+      "indicator": "PK",
+      "language": [
+        "en",
+        "en-PK"
+      ],
+      "layouts": [
+        "us"
+      ],
+      "options_page": "hmm_options.html?code=xkb:pk::eng"
     },
     {
       "name": "__MSG_keyboard_english_south_africa__",
@@ -1247,6 +1274,17 @@
       ]
     },
     {
+      "name": "__MSG_keyboard_hindi_inscript__",
+      "id": "vkd_hi_inscript",
+      "indicator": "\u0939\u093f",
+      "language": [
+        "hi"
+      ],
+      "layouts": [
+        "us"
+      ]
+    },
+    {
       "name": "__MSG_keyboard_kannada_phonetic__",
       "id": "vkd_kn_phone",
       "language": [
@@ -1394,7 +1432,8 @@
       ],
       "layouts": [
         "us"
-      ]
+      ],
+      "options_page": "LEGACY-required-otherwise-options-does-not-load.html"
     },
     {
       "name": "__MSG_keyboard_vietnamese_viqr__",
@@ -1414,7 +1453,8 @@
       ],
       "layouts": [
         "us"
-      ]
+      ],
+      "options_page": "LEGACY-required-otherwise-options-does-not-load.html"
     },
     {
       "name": "__MSG_keyboard_arabic__",
@@ -1535,158 +1575,8 @@
       "layouts": [
         "us"
       ]
-    },
-    {
-      "name": "Dutch with US keyboard",
-      "id": "experimental_layout-us_lang-nl",
-      "language": [
-        "nl"
-      ],
-      "layouts": [
-        "us"
-      ]
-    },
-    {
-      "name": "Spanish (Spain) with US keyboard",
-      "id": "experimental_layout-us_lang-es-ES",
-      "language": [
-        "es-ES"
-      ],
-      "layouts": [
-        "us"
-      ]
-    },
-    {
-      "name": "Swedish with US keyboard",
-      "id": "experimental_layout-us_lang-sv",
-      "language": [
-        "sv"
-      ],
-      "layouts": [
-        "us"
-      ]
-    },
-    {
-      "name": "French (France) with US keyboard",
-      "id": "experimental_layout-us_lang-fr-FR",
-      "language": [
-        "fr-FR"
-      ],
-      "layouts": [
-        "us"
-      ]
-    },
-    {
-      "name": "French (Canada) with US keyboard",
-      "id": "experimental_layout-us_lang-fr-CA",
-      "language": [
-        "fr-CA"
-      ],
-      "layouts": [
-        "us"
-      ]
-    },
-    {
-      "name": "Dutch with UK keyboard",
-      "id": "experimental_layout-gb(extd)_lang-nl",
-      "language": [
-        "nl"
-      ],
-      "layouts": [
-        "gb(extd)"
-      ]
-    },
-    {
-      "name": "Spanish (Spain) with UK keyboard",
-      "id": "experimental_layout-gb(extd)_lang-es-ES",
-      "language": [
-        "es-ES"
-      ],
-      "layouts": [
-        "gb(extd)"
-      ]
-    },
-    {
-      "name": "Swedish with UK keyboard",
-      "id": "experimental_layout-gb(extd)_lang-sv",
-      "language": [
-        "sv"
-      ],
-      "layouts": [
-        "gb(extd)"
-      ]
-    },
-    {
-      "name": "French (France) with UK keyboard",
-      "id": "experimental_layout-gb(extd)_lang-fr-FR",
-      "language": [
-        "fr-FR"
-      ],
-      "layouts": [
-        "gb(extd)"
-      ]
-    },
-    {
-      "name": "Swedish with Norwegian keyboard",
-      "id": "experimental_layout-no_lang-sv",
-      "language": [
-        "sv"
-      ],
-      "layouts": [
-        "no"
-      ]
-    },
-    {
-      "name": "Danish with Norwegian keyboard",
-      "id": "experimental_layout-no_lang-da",
-      "language": [
-        "da"
-      ],
-      "layouts": [
-        "no"
-      ]
-    },
-    {
-      "name": "Norwegian with Swedish keyboard",
-      "id": "experimental_layout-se_lang-no",
-      "language": [
-        "no"
-      ],
-      "layouts": [
-        "se"
-      ]
-    },
-    {
-      "name": "Danish with Swedish keyboard",
-      "id": "experimental_layout-se_lang-da",
-      "language": [
-        "da"
-      ],
-      "layouts": [
-        "se"
-      ]
-    },
-    {
-      "name": "Norwegian with Danish keyboard",
-      "id": "experimental_layout-dk_lang-no",
-      "language": [
-        "no"
-      ],
-      "layouts": [
-        "dk"
-      ]
-    },
-    {
-      "name": "Swedish with Danish keyboard",
-      "id": "experimental_layout-dk_lang-sv",
-      "language": [
-        "sv"
-      ],
-      "layouts": [
-        "dk"
-      ]
     }
   ],
   "manifest_version": 2,
-  "content_security_policy": "script-src 'self' 'wasm-eval'; object-src 'self'"
+  "content_security_policy": "script-src 'self' 'wasm-eval'; object-src 'self'; style-src 'unsafe-inline' chrome://theme"
 }

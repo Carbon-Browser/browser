@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CONTENT_BROWSER_SERVICE_WORKER_SERVICE_WORKER_SINGLE_SCRIPT_UPDATE_CHECKER_H_
 
 #include "base/time/time.h"
+#include "content/browser/renderer_host/policy_container_host.h"
 #include "content/browser/service_worker/service_worker_updated_script_loader.h"
 #include "content/common/content_export.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -40,6 +41,22 @@ class CONTENT_EXPORT ServiceWorkerSingleScriptUpdateChecker
     kFailed,
     kIdentical,
     kDifferent,
+  };
+
+  // These values indicate if the update check returns the updated sha256
+  // checksum from |cache_writer_|.
+  //
+  // kDefault: By default, this class doesn't handle the script sha256
+  // checksum. The checksum is updated only when there is a cache mismatch but
+  // this class never checks it.
+  // kForceUpdate: If this value is passed to the ctor of this class,
+  // the checksum is updated even when there is no cache mismatch, and the
+  // updated checksum is passed to the |ResultCallback| param only if the check
+  // result is |kIdentical|. If the result is |kDifferent| or others, the
+  // checksum wouldn't be passed.
+  enum class ScriptChecksumUpdateOption {
+    kDefault,
+    kForceUpdate,
   };
 
   // This contains detailed error info of update check when it failed.
@@ -110,10 +127,12 @@ class CONTENT_EXPORT ServiceWorkerSingleScriptUpdateChecker
   // is transferred to the callback in the PausedState only when the result is
   // Result::kDifferent. Otherwise it's set to nullptr. FailureInfo is set to a
   // valid value if the result is Result::kFailed, otherwise it'll be nullptr.
-  using ResultCallback = base::OnceCallback<void(const GURL&,
-                                                 Result,
-                                                 std::unique_ptr<FailureInfo>,
-                                                 std::unique_ptr<PausedState>)>;
+  using ResultCallback = base::OnceCallback<void(
+      const GURL&,
+      Result,
+      std::unique_ptr<FailureInfo>,
+      std::unique_ptr<PausedState>,
+      const std::optional<std::string>& sha256_checksum)>;
 
   ServiceWorkerSingleScriptUpdateChecker() = delete;
 
@@ -139,6 +158,8 @@ class CONTENT_EXPORT ServiceWorkerSingleScriptUpdateChecker
       mojo::Remote<storage::mojom::ServiceWorkerResourceReader> copy_reader,
       mojo::Remote<storage::mojom::ServiceWorkerResourceWriter> writer,
       int64_t write_resource_id,
+      ScriptChecksumUpdateOption script_checksum_update_option,
+      const blink::StorageKey& storage_key,
       ResultCallback callback);
 
   ServiceWorkerSingleScriptUpdateChecker(
@@ -150,22 +171,22 @@ class CONTENT_EXPORT ServiceWorkerSingleScriptUpdateChecker
 
   // network::mojom::URLLoaderClient override:
   void OnReceiveEarlyHints(network::mojom::EarlyHintsPtr early_hints) override;
-  void OnReceiveResponse(network::mojom::URLResponseHeadPtr response_head,
-                         mojo::ScopedDataPipeConsumerHandle consumer) override;
+  void OnReceiveResponse(
+      network::mojom::URLResponseHeadPtr response_head,
+      mojo::ScopedDataPipeConsumerHandle consumer,
+      std::optional<mojo_base::BigBuffer> cached_metadata) override;
   void OnReceiveRedirect(
       const net::RedirectInfo& redirect_info,
       network::mojom::URLResponseHeadPtr response_head) override;
   void OnUploadProgress(int64_t current_position,
                         int64_t total_size,
                         OnUploadProgressCallback ack_callback) override;
-  void OnReceiveCachedMetadata(mojo_base::BigBuffer data) override;
   void OnTransferSizeUpdated(int32_t transfer_size_diff) override;
   void OnComplete(const network::URLLoaderCompletionStatus& status) override;
 
   bool network_accessed() const { return network_accessed_; }
-  const network::CrossOriginEmbedderPolicy& cross_origin_embedder_policy()
-      const {
-    return cross_origin_embedder_policy_;
+  const scoped_refptr<PolicyContainerHost> policy_container_host() const {
+    return policy_container_host_;
   }
 
   static const char* ResultToString(Result result);
@@ -197,7 +218,8 @@ class CONTENT_EXPORT ServiceWorkerSingleScriptUpdateChecker
   void Succeed(Result result, std::unique_ptr<PausedState> paused_state);
   void Finish(Result result,
               std::unique_ptr<PausedState> paused_state,
-              std::unique_ptr<FailureInfo> failure_info);
+              std::unique_ptr<FailureInfo> failure_info,
+              const std::optional<std::string>& sha256_checksum);
 
   const GURL script_url_;
   const bool is_main_script_;
@@ -206,9 +228,10 @@ class CONTENT_EXPORT ServiceWorkerSingleScriptUpdateChecker
   const blink::mojom::ServiceWorkerUpdateViaCache update_via_cache_;
   const base::TimeDelta time_since_last_check_;
   bool network_accessed_ = false;
-  network::CrossOriginEmbedderPolicy cross_origin_embedder_policy_;
+  const ScriptChecksumUpdateOption script_checksum_update_option_ =
+      ScriptChecksumUpdateOption::kDefault;
+  scoped_refptr<PolicyContainerHost> policy_container_host_;
 
-  std::unique_ptr<blink::ThrottlingURLLoader> network_loader_;
   // The endpoint called by `network_loader_`. That needs to be alive while
   // `network_loader_` is alive.
   mojo::Remote<network::mojom::URLLoaderClient> network_client_remote_;
@@ -216,6 +239,11 @@ class CONTENT_EXPORT ServiceWorkerSingleScriptUpdateChecker
       this};
   mojo::ScopedDataPipeConsumerHandle network_consumer_;
   mojo::SimpleWatcher network_watcher_;
+
+  // `network_loader_` needs to be declared after `network_client_remote_`
+  // because the former holds a `raw_ptr` on the latter, and thus it needs to
+  // be destroyed first to avoid holding a dangling pointer.
+  std::unique_ptr<blink::ThrottlingURLLoader> network_loader_;
 
   std::unique_ptr<ServiceWorkerCacheWriter> cache_writer_;
   ResultCallback callback_;

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,13 @@
 
 #include <list>
 #include <memory>
+#include <optional>
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/no_state_prefetch/browser/no_state_prefetch_handle.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/prerender/prerender.mojom.h"
 #include "url/gurl.h"
 #include "url/origin.h"
@@ -44,10 +44,11 @@ class NoStatePrefetchLinkManager : public KeyedService,
 
   // Called when a <link rel=prerender ...> element has been inserted into the
   // document. Returns the link trigger id that is used for canceling or
-  // abandoning prefetch. Returns absl::nullopt if the prefetch was not started.
-  virtual absl::optional<int> OnStartLinkTrigger(
+  // abandoning prefetch. Returns std::nullopt if the prefetch was not started.
+  virtual std::optional<int> OnStartLinkTrigger(
       int launcher_render_process_id,
       int launcher_render_view_id,
+      int launcher_render_frame_id,
       blink::mojom::PrerenderAttributesPtr attributes,
       const url::Origin& initiator_origin);
 
@@ -138,8 +139,6 @@ class NoStatePrefetchLinkManager : public KeyedService,
 
   // From NoStatePrefetchHandle::Observer:
   void OnPrefetchStop(NoStatePrefetchHandle* no_state_prefetch_handle) override;
-  void OnPrefetchNetworkBytesChanged(
-      NoStatePrefetchHandle* no_state_prefetch_handle) override;
 
   bool has_shutdown_;
 

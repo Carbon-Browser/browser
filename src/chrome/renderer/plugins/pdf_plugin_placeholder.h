@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,8 +24,7 @@ class PDFPluginPlaceholder final : public plugins::PluginPlaceholderBase,
 
  private:
   PDFPluginPlaceholder(content::RenderFrame* render_frame,
-                       const blink::WebPluginParams& params,
-                       const std::string& html_data);
+                       const blink::WebPluginParams& params);
   ~PDFPluginPlaceholder() final;
 
   // WebViewPlugin::Delegate methods:

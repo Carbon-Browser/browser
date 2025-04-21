@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,11 +27,6 @@ class NoStatePrefetchHandle : public NoStatePrefetchContents::Observer {
    public:
     // Signals that the prefetch has stopped running.
     virtual void OnPrefetchStop(NoStatePrefetchHandle* handle) = 0;
-
-    // Signals that a resource finished loading and altered the running byte
-    // count.
-    virtual void OnPrefetchNetworkBytesChanged(
-        NoStatePrefetchHandle* handle) = 0;
 
    protected:
     Observer();
@@ -64,12 +59,7 @@ class NoStatePrefetchHandle : public NoStatePrefetchContents::Observer {
   // True if we started prefetch, and it has finished loading.
   bool IsFinishedLoading() const;
 
-  // True if the prefetch is currently active, but is abandoned.
-  bool IsAbandoned() const;
-
   NoStatePrefetchContents* contents() const;
-
-  const GURL& prerender_url() const;
 
   // Returns whether this NoStatePrefetchHandle represents the same prefetch as
   // the other NoStatePrefetchHandle object specified.
@@ -84,13 +74,8 @@ class NoStatePrefetchHandle : public NoStatePrefetchContents::Observer {
   // From NoStatePrefetchContents::Observer:
   void OnPrefetchStop(
       NoStatePrefetchContents* no_state_prefetch_contents) override;
-  void OnPrefetchNetworkBytesChanged(
-      NoStatePrefetchContents* no_state_prefetch_contents) override;
 
   raw_ptr<Observer> observer_;
-
-  // The prerendered URL for this handle.
-  GURL prerender_url_;
 
   base::WeakPtr<NoStatePrefetchManager::NoStatePrefetchData> prefetch_data_;
   base::WeakPtrFactory<NoStatePrefetchHandle> weak_ptr_factory_{this};

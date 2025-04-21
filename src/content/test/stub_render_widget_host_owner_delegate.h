@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@ class StubRenderWidgetHostOwnerDelegate : public RenderWidgetHostOwnerDelegate {
   void RenderWidgetDidForwardMouseEvent(
       const blink::WebMouseEvent& mouse_event) override {}
   bool MayRenderWidgetForwardKeyboardEvent(
-      const NativeWebKeyboardEvent& key_event) override;
+      const input::NativeWebKeyboardEvent& key_event) override;
   bool ShouldContributePriorityToProcess() override;
   void SetBackgroundOpaque(bool opaque) override {}
   bool IsMainFrameActive() override;

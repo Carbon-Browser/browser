@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,21 +10,19 @@
 
 #include "base/check.h"
 #include "base/memory/ptr_util.h"
+#include "crypto/scoped_fake_apple_keychain_v2.h"
 #include "device/fido/mac/authenticator_config.h"
-#include "device/fido/mac/fake_keychain.h"
 #include "device/fido/mac/fake_touch_id_context.h"
 
-namespace device {
-namespace fido {
-namespace mac {
+namespace device::fido::mac {
 
 static ScopedTouchIdTestEnvironment* g_current_environment = nullptr;
 
 ScopedTouchIdTestEnvironment::ScopedTouchIdTestEnvironment(
     AuthenticatorConfig config)
     : config_(std::move(config)),
-      keychain_(
-          std::make_unique<ScopedFakeKeychain>(config_.keychain_access_group)) {
+      keychain_(std::make_unique<crypto::ScopedFakeAppleKeychainV2>(
+          config_.keychain_access_group)) {
   DCHECK(!g_current_environment);
   g_current_environment = this;
 
@@ -81,6 +79,11 @@ void ScopedTouchIdTestEnvironment::SimulateTouchIdPromptFailure() {
   next_touch_id_context_->set_callback_result(false);
 }
 
+void ScopedTouchIdTestEnvironment::DoNotResolveNextPrompt() {
+  next_touch_id_context_.reset(new FakeTouchIdContext);
+  next_touch_id_context_->DoNotResolveNextPrompt();
+}
+
 std::unique_ptr<TouchIdContext>
 ScopedTouchIdTestEnvironment::CreateTouchIdContext() {
   CHECK(next_touch_id_context_)
@@ -89,6 +92,4 @@ ScopedTouchIdTestEnvironment::CreateTouchIdContext() {
   return std::move(next_touch_id_context_);
 }
 
-}  // namespace mac
-}  // namespace fido
-}  // namespace device
+}  // namespace device::fido::mac

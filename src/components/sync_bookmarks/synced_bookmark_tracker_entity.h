@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -66,7 +66,7 @@ class SyncedBookmarkTrackerEntity {
   void clear_bookmark_node() { bookmark_node_ = nullptr; }
 
   // Used when replacing a node in order to update its otherwise immutable
-  // GUID.
+  // UUID.
   void set_bookmark_node(const bookmarks::BookmarkNode* bookmark_node) {
     bookmark_node_ = bookmark_node;
   }
@@ -87,7 +87,8 @@ class SyncedBookmarkTrackerEntity {
 
  private:
   // Null for tombstones.
-  raw_ptr<const bookmarks::BookmarkNode> bookmark_node_;
+  raw_ptr<const bookmarks::BookmarkNode, AcrossTasksDanglingUntriaged>
+      bookmark_node_;
 
   // Serializable Sync metadata.
   sync_pb::EntityMetadata metadata_;

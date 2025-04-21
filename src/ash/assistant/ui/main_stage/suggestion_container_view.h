@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,9 @@
 #include "ash/assistant/ui/main_stage/animated_container_view.h"
 #include "ash/assistant/ui/main_stage/suggestion_chip_view.h"
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
-#include "chromeos/services/libassistant/public/cpp/assistant_suggestion.h"
+#include "chromeos/ash/services/libassistant/public/cpp/assistant_suggestion.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/scroll_view.h"
 
@@ -33,10 +34,10 @@ class COMPONENT_EXPORT(ASSISTANT_UI) SuggestionContainerView
     : public AnimatedContainerView,
       public AssistantSuggestionsModelObserver,
       public AssistantUiModelObserver {
- public:
-  using AssistantSuggestion = chromeos::assistant::AssistantSuggestion;
+  METADATA_HEADER(SuggestionContainerView, AnimatedContainerView)
 
-  METADATA_HEADER(SuggestionContainerView);
+ public:
+  using AssistantSuggestion = assistant::AssistantSuggestion;
 
   explicit SuggestionContainerView(AssistantViewDelegate* delegate);
   SuggestionContainerView(const SuggestionContainerView&) = delete;
@@ -44,8 +45,8 @@ class COMPONENT_EXPORT(ASSISTANT_UI) SuggestionContainerView
   ~SuggestionContainerView() override;
 
   // AnimatedContainerView:
-  gfx::Size CalculatePreferredSize() const override;
-  int GetHeightForWidth(int width) const override;
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override;
   void OnContentsPreferredSizeChanged(views::View* content_view) override;
   void OnAssistantControllerDestroying() override;
   void OnCommittedQueryChanged(const AssistantQuery& query) override;
@@ -58,8 +59,10 @@ class COMPONENT_EXPORT(ASSISTANT_UI) SuggestionContainerView
   void OnUiVisibilityChanged(
       AssistantVisibility new_visibility,
       AssistantVisibility old_visibility,
-      absl::optional<AssistantEntryPoint> entry_point,
-      absl::optional<AssistantExitPoint> exit_point) override;
+      std::optional<AssistantEntryPoint> entry_point,
+      std::optional<AssistantExitPoint> exit_point) override;
+
+  void InitializeUIForBubbleView();
 
   // The suggestion chip that was pressed by the user. May be |nullptr|.
   const SuggestionChipView* selected_chip() const { return selected_chip_; }
@@ -77,13 +80,13 @@ class COMPONENT_EXPORT(ASSISTANT_UI) SuggestionContainerView
 
   void OnButtonPressed(SuggestionChipView* chip_view);
 
-  views::BoxLayout* layout_manager_;  // Owned by view hierarchy.
+  raw_ptr<views::BoxLayout> layout_manager_;  // Owned by view hierarchy.
 
   // Whether or not we have committed a query during this Assistant session.
   bool has_committed_query_ = false;
 
   // The suggestion chip that was pressed by the user. May be |nullptr|.
-  const SuggestionChipView* selected_chip_ = nullptr;
+  raw_ptr<const SuggestionChipView> selected_chip_ = nullptr;
 };
 
 }  // namespace ash

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,12 +26,13 @@ class StubLayerTreeViewDelegate : public LayerTreeViewDelegate {
   }
   void UpdateCompositorScrollState(
       const cc::CompositorCommitData& commit_data) override {}
-  void BeginMainFrame(base::TimeTicks frame_time) override {}
+  void BeginMainFrame(const viz::BeginFrameArgs& args) override {}
   void OnDeferMainFrameUpdatesChanged(bool) override {}
   void OnDeferCommitsChanged(
       bool defer_status,
       cc::PaintHoldingReason reason,
-      absl::optional<cc::PaintHoldingCommitTrigger> trigger) override {}
+      std::optional<cc::PaintHoldingCommitTrigger> trigger) override {}
+  void OnCommitRequested() override {}
   void DidBeginMainFrame() override {}
   void DidCommitAndDrawCompositorFrame() override {}
   void WillCommitCompositorFrame() override {}
@@ -49,9 +50,6 @@ class StubLayerTreeViewDelegate : public LayerTreeViewDelegate {
       override {
     return nullptr;
   }
-  std::unique_ptr<cc::WebVitalMetrics> GetWebVitalMetrics() override {
-    return nullptr;
-  }
   void BeginUpdateLayers() override {}
   void EndUpdateLayers() override {}
   void UpdateVisualState() override {}
@@ -59,6 +57,10 @@ class StubLayerTreeViewDelegate : public LayerTreeViewDelegate {
   void RunPaintBenchmark(int repeat_count,
                          cc::PaintBenchmarkResult& result) override {}
   void ScheduleAnimationForWebTests() override {}
+  std::unique_ptr<cc::RenderFrameMetadataObserver> CreateRenderFrameObserver()
+      override {
+    return nullptr;
+  }
 };
 
 }  // namespace blink

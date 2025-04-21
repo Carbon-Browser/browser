@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ class TestService : public BitmapFetcherService {
  public:
   explicit TestService(content::BrowserContext* context)
       : BitmapFetcherService(context) {}
-  ~TestService() override {}
+  ~TestService() override = default;
 
   // Create a fetcher, but don't start downloading. That allows side-stepping
   // the decode step, which requires a utility process.

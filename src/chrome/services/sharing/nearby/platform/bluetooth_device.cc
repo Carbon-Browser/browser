@@ -1,16 +1,14 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/services/sharing/nearby/platform/bluetooth_device.h"
 
-namespace location {
-namespace nearby {
-namespace chrome {
+namespace nearby::chrome {
 
 BluetoothDevice::BluetoothDevice(
     bluetooth::mojom::DeviceInfoPtr device_info,
-    absl::optional<base::TimeTicks> last_discovered_time)
+    std::optional<base::TimeTicks> last_discovered_time)
     : device_info_(std::move(device_info)),
       last_discovered_time_(last_discovered_time) {}
 
@@ -26,12 +24,10 @@ std::string BluetoothDevice::GetMacAddress() const {
 
 void BluetoothDevice::UpdateDevice(
     bluetooth::mojom::DeviceInfoPtr device_info,
-    absl::optional<base::TimeTicks> last_discovered_time) {
+    std::optional<base::TimeTicks> last_discovered_time) {
   DCHECK_EQ(device_info_->address, device_info->address);
   device_info_ = std::move(device_info);
   last_discovered_time_ = last_discovered_time;
 }
 
-}  // namespace chrome
-}  // namespace nearby
-}  // namespace location
+}  // namespace nearby::chrome

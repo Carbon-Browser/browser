@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -28,10 +28,11 @@ class MultipageSkpicturePrinter(perf_benchmark.PerfBenchmark):
 
   @classmethod
   def AddBenchmarkCommandLineArgs(cls, parser):
-    parser.add_option('--page-set-name',  action='store', type='string')
-    parser.add_option('--page-set-base-dir', action='store', type='string')
-    parser.add_option('-m', '--mskp-outdir',
-                      help='Output directory for the mSKP files')
+    parser.add_argument('--page-set-name')
+    parser.add_argument('--page-set-base-dir')
+    parser.add_argument('-m',
+                        '--mskp-outdir',
+                        help='Output directory for the mSKP files')
 
   @classmethod
   def ProcessCommandLineArgs(cls, parser, args):
@@ -66,9 +67,9 @@ class MultipageSkpicturePrinterCT(perf_benchmark.PerfBenchmark):
   @classmethod
   def AddBenchmarkCommandLineArgs(cls, parser):
     ct_benchmarks_util.AddBenchmarkCommandLineArgs(parser)
-    parser.add_option('-m', '--mskp-outdir',
-                      default=None,
-                      help='Output directory for the mSKP files')
+    parser.add_argument('-m',
+                        '--mskp-outdir',
+                        help='Output directory for the mSKP files')
 
   @classmethod
   def ProcessCommandLineArgs(cls, parser, args):

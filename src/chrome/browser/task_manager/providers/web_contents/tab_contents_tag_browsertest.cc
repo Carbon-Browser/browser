@@ -1,8 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <stddef.h>
+
+#include <array>
 
 #include "base/files/file_util.h"
 #include "base/memory/raw_ptr.h"
@@ -13,6 +15,7 @@
 #include "chrome/browser/task_manager/mock_web_contents_task_manager.h"
 #include "chrome/browser/task_manager/providers/web_contents/web_contents_tags_manager.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/grit/generated_resources.h"
@@ -29,6 +32,7 @@
 #include "content/public/test/fenced_frame_test_util.h"
 #include "content/public/test/test_utils.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
+#include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/page_transition_types.h"
 #include "ui/base/resource/resource_bundle.h"
@@ -53,26 +57,13 @@ struct TestPageData {
 // The below test files are available in src/chrome/test/data/
 // TODO(afakhry): Add more test pages here as needed (e.g. pages that are hosted
 // in the tabs as apps or extensions).
-const TestPageData kTestPages[] = {
-    {
-        "/title1.html",
-        "",
-        Task::RENDERER,
-        IDS_TASK_MANAGER_TAB_PREFIX
-    },
-    {
-        "/title2.html",
-        "Title Of Awesomeness",
-        Task::RENDERER,
-        IDS_TASK_MANAGER_TAB_PREFIX
-    },
-    {
-        "/title3.html",
-        "Title Of More Awesomeness",
-        Task::RENDERER,
-        IDS_TASK_MANAGER_TAB_PREFIX
-    },
-};
+const auto kTestPages = std::to_array<TestPageData>({
+    {"/title1.html", "", Task::RENDERER, IDS_TASK_MANAGER_TAB_PREFIX},
+    {"/title2.html", "Title Of Awesomeness", Task::RENDERER,
+     IDS_TASK_MANAGER_TAB_PREFIX},
+    {"/title3.html", "Title Of More Awesomeness", Task::RENDERER,
+     IDS_TASK_MANAGER_TAB_PREFIX},
+});
 
 const size_t kTestPagesLength = std::size(kTestPages);
 
@@ -151,7 +142,7 @@ class TabContentsTagTest : public InProcessBrowserTest {
 
   void CloseTabAt(int index) {
     browser()->tab_strip_model()->CloseWebContentsAt(index,
-                                                     TabStripModel::CLOSE_NONE);
+                                                     TabCloseTypes::CLOSE_NONE);
   }
 
   std::u16string GetTestPageExpectedTitle(const TestPageData& page_data) const {
@@ -179,7 +170,8 @@ class TabContentsTagTest : public InProcessBrowserTest {
 
   int tabs_count() const { return browser()->tab_strip_model()->count(); }
 
-  const std::vector<WebContentsTag*>& tracked_tags() const {
+  const std::vector<raw_ptr<WebContentsTag, VectorExperimental>>& tracked_tags()
+      const {
     return WebContentsTagsManager::GetInstance()->tracked_tags();
   }
 
@@ -272,8 +264,9 @@ IN_PROC_BROWSER_TEST_F(TabContentsTagTest, PostExistingTaskProviding) {
   EXPECT_EQ(kTestPagesLength, task_manager.tasks().size());
   const std::u16string closed_tab_title =
       GetTestPageExpectedTitle(kTestPages[kTestPagesLength - 1]);
-  for (const auto* task : task_manager.tasks())
+  for (const task_manager::Task* task : task_manager.tasks()) {
     EXPECT_NE(closed_tab_title, task->title());
+  }
 }
 
 // Test that the default favicon is shown in the task manager after navigating
@@ -307,17 +300,14 @@ IN_PROC_BROWSER_TEST_F(TabContentsTagTest, NavigateToPageNoFavicon) {
   // Check that the task manager uses the specified favicon for the page.
   base::FilePath test_dir;
   base::PathService::Get(chrome::DIR_TEST_DATA, &test_dir);
-  std::string favicon_string;
+  std::optional<std::vector<uint8_t>> favicon_data;
   {
     base::ScopedAllowBlockingForTesting allow_blocking;
-    base::ReadFileToString(
-        test_dir.AppendASCII("favicon").AppendASCII("icon.png"),
-        &favicon_string);
+    favicon_data = base::ReadFileToBytes(
+        test_dir.AppendASCII("favicon").AppendASCII("icon.png"));
   }
-  SkBitmap favicon_bitmap;
-  gfx::PNGCodec::Decode(
-      reinterpret_cast<const unsigned char*>(favicon_string.data()),
-      favicon_string.length(), &favicon_bitmap);
+  SkBitmap favicon_bitmap = gfx::PNGCodec::Decode(favicon_data.value());
+  ASSERT_FALSE(favicon_bitmap.isNull());
   ASSERT_TRUE(
       gfx::test::AreBitmapsEqual(favicon_bitmap, *task->icon().bitmap()));
 
@@ -329,8 +319,8 @@ IN_PROC_BROWSER_TEST_F(TabContentsTagTest, NavigateToPageNoFavicon) {
     // When ProactivelySwapBrowsingInstance or RenderDocument is enabled on
     // same-site main frame navigations, we'll get a new task because we are
     // changing RenderFrameHosts. Note that the previous page's task might still
-    // be around if the previous page is saved in the back-forward cache.
-    if (content::BackForwardCache::IsSameSiteBackForwardCacheFeatureEnabled()) {
+    // be around if the previous page is saved in the back/forward cache.
+    if (content::BackForwardCache::IsBackForwardCacheFeatureEnabled()) {
       ASSERT_EQ(2U, task_manager.tasks().size());
       ASSERT_EQ(
           l10n_util::GetStringFUTF16(IDS_TASK_MANAGER_BACK_FORWARD_CACHE_PREFIX,

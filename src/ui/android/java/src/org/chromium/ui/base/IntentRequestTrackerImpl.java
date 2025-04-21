@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,14 +14,15 @@ import android.util.SparseArray;
 
 import org.chromium.base.Callback;
 import org.chromium.base.ContextUtils;
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 import org.chromium.ui.base.WindowAndroid.IntentCallback;
 
 import java.lang.ref.WeakReference;
 import java.util.HashMap;
 
-/**
- * The implementation of IntentRequestTracker.
- */
+/** The implementation of IntentRequestTracker. */
+@NullMarked
 /* package */ final class IntentRequestTrackerImpl implements IntentRequestTracker {
     // Constants used for intent request code bounding.
     private static final int REQUEST_CODE_PREFIX = 1000;
@@ -34,7 +35,7 @@ import java.util.HashMap;
     // Ideally, this would be a SparseArray<String>, but there's no easy way to store a
     // SparseArray<String> in a bundle during saveInstanceState(). So we use a HashMap and suppress
     // the Android lint warning "UseSparseArrays".
-    private HashMap<Integer, String> mIntentErrors;
+    private HashMap<Integer, @Nullable String> mIntentErrors;
 
     /**
      * Creates an instance of the class.
@@ -47,7 +48,7 @@ import java.util.HashMap;
     }
 
     /* package */ int showCancelableIntent(
-            PendingIntent intent, IntentCallback callback, Integer errorId) {
+            PendingIntent intent, IntentCallback callback, @Nullable Integer errorId) {
         int requestCode = generateNextRequestCode();
 
         if (!mDelegate.startIntentSenderForResult(intent.getIntentSender(), requestCode)) {
@@ -58,8 +59,9 @@ import java.util.HashMap;
         return requestCode;
     }
 
-    /* package */ int showCancelableIntent(
-            Intent intent, IntentCallback callback, Integer errorId) {
+    @Override
+    public int showCancelableIntent(
+            @Nullable Intent intent, IntentCallback callback, @Nullable Integer errorId) {
         int requestCode = generateNextRequestCode();
 
         if (!mDelegate.startActivityForResult(intent, requestCode)) {
@@ -71,7 +73,7 @@ import java.util.HashMap;
     }
 
     /* package */ int showCancelableIntent(
-            Callback<Integer> intentTrigger, IntentCallback callback, Integer errorId) {
+            Callback<Integer> intentTrigger, IntentCallback callback, @Nullable Integer errorId) {
         int requestCode = generateNextRequestCode();
 
         intentTrigger.onResult(requestCode);
@@ -126,7 +128,7 @@ import java.util.HashMap;
         Object errors = bundle.getSerializable(WindowAndroid.WINDOW_CALLBACK_ERRORS);
         if (errors instanceof HashMap) {
             @SuppressWarnings("unchecked")
-            HashMap<Integer, String> intentErrors = (HashMap<Integer, String>) errors;
+            HashMap<Integer, String> intentErrors = (HashMap<Integer, @Nullable String>) errors;
             mIntentErrors = intentErrors;
         }
     }
@@ -137,9 +139,11 @@ import java.util.HashMap;
         return requestCode;
     }
 
-    private void storeCallbackData(int requestCode, IntentCallback callback, Integer errorId) {
+    private void storeCallbackData(
+            int requestCode, IntentCallback callback, @Nullable Integer errorId) {
         mOutstandingIntents.put(requestCode, callback);
-        mIntentErrors.put(requestCode,
+        mIntentErrors.put(
+                requestCode,
                 errorId == null ? null : ContextUtils.getApplicationContext().getString(errorId));
     }
 

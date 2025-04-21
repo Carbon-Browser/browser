@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,8 +31,9 @@ void RunBenchmark(int iterations, int addresses_count, int threads) {
     }
   };
   if (threads != 1) {
-    for (int i = 0; i < threads - 1; ++i)
+    for (int i = 0; i < threads - 1; ++i) {
       std::thread(iterate).detach();
+    }
   }
   auto tick = base::TimeTicks::Now();
   iterate();

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "base/files/file_enumerator.h"
+#include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/autofill/automated_tests/cache_replayer.h"
@@ -13,17 +14,18 @@
 #include "chrome/browser/password_manager/chrome_password_manager_client.h"
 #include "chrome/browser/password_manager/password_manager_test_base.h"
 #include "chrome/browser/password_manager/password_manager_uitest_util.h"
-#include "chrome/browser/password_manager/password_store_factory.h"
+#include "chrome/browser/password_manager/profile_password_store_factory.h"
 #include "chrome/browser/sync/sync_service_factory.h"
 #include "chrome/browser/ui/passwords/manage_passwords_ui_controller.h"
 #include "chrome/browser/ui/tab_dialogs.h"
 #include "components/autofill/core/common/autofill_features.h"
 #include "components/autofill/core/common/autofill_switches.h"
-#include "components/password_manager/core/browser/fake_password_store_backend.h"
 #include "components/password_manager/core/browser/password_form.h"
 #include "components/password_manager/core/browser/password_manager_test_utils.h"
+#include "components/password_manager/core/browser/password_store/fake_password_store_backend.h"
 #include "components/password_manager/core/common/password_manager_features.h"
-#include "components/sync/driver/test_sync_service.h"
+#include "components/safe_browsing/core/common/safe_browsing_prefs.h"
+#include "components/sync/test/test_sync_service.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_utils.h"
 
@@ -41,12 +43,13 @@ constexpr base::TimeDelta kWaitForSaveFallbackInterval = base::Seconds(5);
 // and test recipe replay files.
 base::FilePath GetReplayFilesRootDirectory() {
   base::FilePath src_dir;
-  if (base::PathService::Get(base::DIR_SOURCE_ROOT, &src_dir)) {
+  if (base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &src_dir)) {
     return src_dir.AppendASCII("chrome")
         .AppendASCII("test")
         .AppendASCII("data")
         .AppendASCII("password")
-        .AppendASCII("captured_sites");
+        .AppendASCII("captured_sites")
+        .AppendASCII("artifacts");
   }
 
   ADD_FAILURE() << "Unable to obtain the Chromium src directory!";
@@ -60,8 +63,6 @@ std::unique_ptr<KeyedService> BuildTestSyncService(
 }
 
 }  // namespace
-
-namespace password_manager {
 
 using autofill::test::ServerCacheReplayer;
 using autofill::test::ServerUrlLoader;
@@ -86,8 +87,8 @@ class CapturedSitesPasswordManagerBrowserTest
                      const std::string& username,
                      const std::string& password) override {
     scoped_refptr<password_manager::PasswordStoreInterface> password_store =
-        PasswordStoreFactory::GetForProfile(browser()->profile(),
-                                            ServiceAccessType::EXPLICIT_ACCESS);
+        ProfilePasswordStoreFactory::GetForProfile(
+            browser()->profile(), ServiceAccessType::EXPLICIT_ACCESS);
     password_manager::PasswordForm signin_form;
     signin_form.url = GURL(origin);
     signin_form.signon_realm = origin;
@@ -95,6 +96,11 @@ class CapturedSitesPasswordManagerBrowserTest
     signin_form.username_value = base::ASCIIToUTF16(username);
     password_store->AddLogin(signin_form);
     return true;
+  }
+
+  bool AddAutofillProfileInfo(const std::string& field_type,
+                              const std::string& field_value) override {
+    return profile_controller_->AddAutofillProfileInfo(field_type, field_value);
   }
 
   bool SavePassword() override {
@@ -127,8 +133,10 @@ class CapturedSitesPasswordManagerBrowserTest
 
   bool WaitForSaveFallback() override {
     BubbleObserver bubble_observer(WebContents());
-    if (bubble_observer.WaitForFallbackForSaving(kWaitForSaveFallbackInterval))
+    if (bubble_observer.WaitForFallbackForSaving(
+            kWaitForSaveFallbackInterval)) {
       return true;
+    }
     ADD_FAILURE() << "Chrome did not show the save fallback icon!";
     return false;
   }
@@ -148,10 +156,10 @@ class CapturedSitesPasswordManagerBrowserTest
                                  const std::string& username,
                                  const std::string& password) override {
     scoped_refptr<password_manager::PasswordStoreInterface> password_store =
-        PasswordStoreFactory::GetForProfile(browser()->profile(),
-                                            ServiceAccessType::EXPLICIT_ACCESS);
-    FakePasswordStoreBackend* fake_backend =
-        static_cast<FakePasswordStoreBackend*>(
+        ProfilePasswordStoreFactory::GetForProfile(
+            browser()->profile(), ServiceAccessType::EXPLICIT_ACCESS);
+    password_manager::FakePasswordStoreBackend* fake_backend =
+        static_cast<password_manager::FakePasswordStoreBackend*>(
             password_store->GetBackendForTesting());
 
     auto found = fake_backend->stored_passwords().find(origin);
@@ -188,20 +196,22 @@ class CapturedSitesPasswordManagerBrowserTest
                   SyncServiceFactory::GetInstance()->SetTestingFactory(
                       context, base::BindRepeating(&BuildTestSyncService));
 
-                  PasswordStoreFactory::GetInstance()->SetTestingFactory(
+                  ProfilePasswordStoreFactory::GetInstance()->SetTestingFactory(
                       context,
                       base::BindRepeating(
                           &password_manager::BuildPasswordStoreWithFakeBackend<
                               content::BrowserContext>));
                 }));
+
+    profile_controller_ =
+        std::make_unique<captured_sites_test_utils::ProfileDataController>();
   }
 
   void SetUpOnMainThread() override {
-    PasswordManagerBrowserTestBase::GetNewTab(browser(), &web_contents_);
+    web_contents_ = PasswordManagerBrowserTestBase::GetNewTab(browser());
     recipe_replayer_ =
         std::make_unique<captured_sites_test_utils::TestRecipeReplayer>(
             browser(), this);
-    recipe_replayer()->Setup();
     SetServerUrlLoader(
         std::make_unique<ServerUrlLoader>(std::make_unique<ServerCacheReplayer>(
             GetParam().capture_file_path,
@@ -211,13 +221,16 @@ class CapturedSitesPasswordManagerBrowserTest
     ChromePasswordManagerClient* client =
         ChromePasswordManagerClient::FromWebContents(WebContents());
     client->SetTestObserver(&observer_);
+
+    browser()->profile()->GetPrefs()->SetBoolean(::prefs::kSafeBrowsingEnabled,
+                                                 false);
   }
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
     feature_list_.InitWithFeaturesAndParameters(
-        /*enabled_features=*/{{autofill::features::kAutofillShowTypePredictions,
-                               {}},
-                              {features::kUsernameFirstFlow, {}}},
+        /*enabled_features=*/
+        {{autofill::features::test::kAutofillServerCommunication, {}},
+         {autofill::features::test::kAutofillShowTypePredictions, {}}},
         {});
     command_line->AppendSwitch(autofill::switches::kShowAutofillSignatures);
     captured_sites_test_utils::TestRecipeReplayer::SetUpHostResolverRules(
@@ -231,13 +244,14 @@ class CapturedSitesPasswordManagerBrowserTest
   }
 
   void TearDownOnMainThread() override {
-    recipe_replayer()->Cleanup();
+    web_contents_ = nullptr;
+    recipe_replayer_.reset();
     // Need to delete the URL loader and its underlying interceptor on the main
     // thread. Will result in a fatal crash otherwise. The pointer  has its
     // memory cleaned up twice: first time in that single thread, a second time
     // when the fixture's destructor is called, which will have no effect since
     // the raw pointer will be nullptr.
-    server_url_loader_.reset(nullptr);
+    server_url_loader_.reset();
   }
 
   captured_sites_test_utils::TestRecipeReplayer* recipe_replayer() {
@@ -245,7 +259,6 @@ class CapturedSitesPasswordManagerBrowserTest
   }
 
   content::WebContents* WebContents() {
-    // return web_contents_;
     return web_contents_;
   }
 
@@ -253,8 +266,10 @@ class CapturedSitesPasswordManagerBrowserTest
   TestGenerationPopupObserver observer_;
   std::unique_ptr<captured_sites_test_utils::TestRecipeReplayer>
       recipe_replayer_;
+  std::unique_ptr<captured_sites_test_utils::ProfileDataController>
+      profile_controller_;
   base::test::ScopedFeatureList feature_list_;
-  content::WebContents* web_contents_ = nullptr;
+  raw_ptr<content::WebContents> web_contents_ = nullptr;
   std::unique_ptr<ServerUrlLoader> server_url_loader_;
 
   base::CallbackListSubscription create_services_subscription_;
@@ -265,13 +280,14 @@ IN_PROC_BROWSER_TEST_P(CapturedSitesPasswordManagerBrowserTest, Recipe) {
       "password_manager_captured_sites_interactive_uitest");
 
   base::FilePath src_dir;
-  ASSERT_TRUE(base::PathService::Get(base::DIR_SOURCE_ROOT, &src_dir));
+  ASSERT_TRUE(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &src_dir));
 
   bool test_completed = recipe_replayer()->ReplayTest(
       GetParam().capture_file_path, GetParam().recipe_file_path,
       captured_sites_test_utils::GetCommandFilePath());
-  if (!test_completed)
+  if (!test_completed) {
     ADD_FAILURE() << "Full execution was unable to complete.";
+  }
 }
 
 // This test is called with a dynamic list and may be empty during the Autofill
@@ -284,4 +300,3 @@ INSTANTIATE_TEST_SUITE_P(
     CapturedSitesPasswordManagerBrowserTest,
     testing::ValuesIn(GetCapturedSites(GetReplayFilesRootDirectory())),
     GetParamAsString());
-}  // namespace password_manager

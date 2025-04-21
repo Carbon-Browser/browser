@@ -1,15 +1,15 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.device.nfc;
 
+import org.chromium.build.annotations.NullMarked;
 import org.chromium.device.mojom.NdefMessage;
 import org.chromium.device.mojom.NdefRecord;
 
-/**
- * Utility class that provides validation of NdefMessage.
- */
+/** Utility class that provides validation of NdefMessage. */
+@NullMarked
 public final class NdefMessageValidator {
     /**
      * Validates NdefMessage.

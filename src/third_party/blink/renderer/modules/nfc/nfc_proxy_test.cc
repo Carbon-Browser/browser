@@ -1,6 +1,8 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "third_party/blink/renderer/modules/nfc/nfc_proxy.h"
 
 #include <map>
 #include <memory>
@@ -11,14 +13,13 @@
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "testing/gmock/include/gmock/gmock.h"
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_testing.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_ndef_scan_options.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/testing/page_test_base.h"
 #include "third_party/blink/renderer/modules/nfc/ndef_reader.h"
-#include "third_party/blink/renderer/modules/nfc/nfc_proxy.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 
 namespace blink {
@@ -67,8 +68,8 @@ class FakeNfcService : public device::mojom::blink::NFC {
     DCHECK(!receiver_.is_bound());
     receiver_.Bind(
         mojo::PendingReceiver<device::mojom::blink::NFC>(std::move(handle)));
-    receiver_.set_disconnect_handler(
-        WTF::Bind(&FakeNfcService::OnConnectionError, WTF::Unretained(this)));
+    receiver_.set_disconnect_handler(WTF::BindOnce(
+        &FakeNfcService::OnConnectionError, WTF::Unretained(this)));
   }
 
   void OnConnectionError() {

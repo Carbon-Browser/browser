@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,12 @@
 // Used to simulate methods in NativeTaskBridge
 @interface FakeNativeTaskBridge : DownloadNativeTaskBridge
 
-// Called in |_startDownloadBlock| in DownloadNativeTaskBridge to check if the
+// Called in `_startDownloadBlock` in DownloadNativeTaskBridge to check if the
 // block was called.
 @property(nonatomic, readwrite) BOOL calledStartDownloadBlock;
 
 // Overriding properties in NativeTaskBridge to be used in unit tests
-@property(nonatomic, readwrite, strong)
-    WKDownload* download API_AVAILABLE(ios(15));
+@property(nonatomic, readwrite, strong) WKDownload* download;
 @property(nonatomic, readwrite, strong) NSProgress* progress;
 @property(nonatomic, readwrite, strong) NSURLResponse* response;
 @property(nonatomic, readwrite, strong) NSString* suggestedFilename;

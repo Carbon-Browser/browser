@@ -1,6 +1,8 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+mod more;
 
 fn main() {
     println!("Hello, world!");
@@ -12,4 +14,6 @@ fn main() {
     println!("Is android!");
     #[cfg(is_mac)]
     println!("Is darwin!");
+
+    more::hello();
 }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "content/public/browser/browser_thread.h"
 
@@ -20,14 +20,13 @@ namespace ash {
 // NSSProfileFilterChromeOS.
 //
 // TODO(davidben): Fold this class back into ClientCertStoreAsh.
-class ClientCertFilter {
+class ClientCertFilter : public base::RefCountedThreadSafe<ClientCertFilter> {
  public:
   // The internal NSSProfileFilterChromeOS will be initialized with the public
   // and private slot of the user with |username_hash| and with the system slot
   // if |use_system_slot| is true.
   // If |username_hash| is empty, no public and no private slot will be used.
   ClientCertFilter(bool use_system_slot, const std::string& username_hash);
-  ~ClientCertFilter();
 
   // Initializes this filter. Returns true if it finished initialization,
   // otherwise returns false and calls |callback| once the initialization is
@@ -42,6 +41,9 @@ class ClientCertFilter {
 
  private:
   class CertFilterIO;
+  friend class base::RefCountedThreadSafe<ClientCertFilter>;
+
+  ~ClientCertFilter();
 
   void OnInitComplete(base::OnceClosure callback);
 

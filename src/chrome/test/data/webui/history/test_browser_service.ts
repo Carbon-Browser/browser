@@ -1,9 +1,9 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {BrowserService, ForeignSession, QueryResult, RemoveVisitsRequest} from 'chrome://history/history.js';
-import {PromiseResolver} from 'chrome://resources/js/promise_resolver.m.js';
+import type {BrowserService, ForeignSession, QueryResult, RemoveVisitsRequest} from 'chrome://history/history.js';
+import {PromiseResolver} from 'chrome://resources/js/promise_resolver.js';
 import {assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 
@@ -32,6 +32,7 @@ export class TestBrowserService extends TestBrowserProxy implements
       'recordHistogram',
       'recordLongTime',
       'removeVisits',
+      'setLastSelectedTab',
       'startTurnOnSyncFlow',
     ]);
 
@@ -76,6 +77,10 @@ export class TestBrowserService extends TestBrowserProxy implements
     return Promise.resolve();
   }
 
+  setLastSelectedTab(lastSelectedTab: number) {
+    this.methodCalled('setLastSelectedTab', lastSelectedTab);
+  }
+
   // Resolves the removeVisits promise. delayRemove() must be called first.
   finishRemoveVisits() {
     this.delayedRemove_!.resolve();
@@ -101,11 +106,9 @@ export class TestBrowserService extends TestBrowserProxy implements
 
   openForeignSessionAllTabs() {}
 
-  openForeignSessionTab(
-      sessionTag: string, windowId: number, tabId: number, e: MouseEvent) {
+  openForeignSessionTab(sessionTag: string, tabId: number, e: MouseEvent) {
     this.methodCalled('openForeignSessionTab', {
       sessionTag: sessionTag,
-      windowId: windowId,
       tabId: tabId,
       e: e,
     });
@@ -119,9 +122,13 @@ export class TestBrowserService extends TestBrowserProxy implements
     this.queryResult_ = queryResult;
   }
 
-  queryHistory(searchTerm: string) {
+  queryHistory(searchTerm: string, afterDate?: number) {
     if (!this.ignoreNextQuery_) {
-      this.methodCalled('queryHistory', searchTerm);
+      if (afterDate) {
+        this.methodCalled('queryHistory', searchTerm, afterDate);
+      } else {
+        this.methodCalled('queryHistory', searchTerm);
+      }
     } else {
       this.ignoreNextQuery_ = false;
     }
@@ -141,7 +148,7 @@ export class TestBrowserService extends TestBrowserProxy implements
       this.actionMap[action] = 0;
     }
 
-    this.actionMap[action]++;
+    this.actionMap[action]!++;
   }
 
   recordHistogram(histogram: string, value: number, max: number) {
@@ -155,7 +162,7 @@ export class TestBrowserService extends TestBrowserProxy implements
       this.histogramMap[histogram]![value] = 0;
     }
 
-    this.histogramMap[histogram]![value]++;
+    this.histogramMap[histogram]![value]!++;
     this.methodCalled('recordHistogram');
   }
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -10,6 +10,7 @@ import subprocess
 import sys
 
 from util import build_utils
+import action_helpers  # build_utils adds //build to sys.path.
 
 
 # python -c "import zipfile; zipfile.ZipFile('test.jar', 'w')"
@@ -23,7 +24,7 @@ def main():
   if len(sys.argv) != 4:
     raise ValueError('unexpected arguments were given. %s' % sys.argv)
   ijar_bin, in_jar, out_jar = sys.argv[1], sys.argv[2], sys.argv[3]
-  with build_utils.AtomicOutput(out_jar) as f:
+  with action_helpers.atomic_output(out_jar) as f:
     # ijar fails on empty jars: https://github.com/bazelbuild/bazel/issues/10162
     if os.path.getsize(in_jar) <= _EMPTY_JAR_SIZE:
       with open(in_jar, 'rb') as in_f:

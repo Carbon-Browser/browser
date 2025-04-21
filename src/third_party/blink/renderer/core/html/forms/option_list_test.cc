@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,16 @@
 #include "third_party/blink/renderer/core/html/forms/html_option_element.h"
 #include "third_party/blink/renderer/core/html/forms/html_select_element.h"
 #include "third_party/blink/renderer/core/html/html_document.h"
+#include "third_party/blink/renderer/core/testing/null_execution_context.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 namespace blink {
 
 namespace {
 
-AtomicString Id(const HTMLOptionElement* option) {
-  return option->FastGetAttribute(html_names::kIdAttr);
+AtomicString Id(const HTMLOptionElement& option) {
+  return option.FastGetAttribute(html_names::kIdAttr);
 }
 
 }  // namespace
@@ -23,7 +25,8 @@ AtomicString Id(const HTMLOptionElement* option) {
 class OptionListTest : public testing::Test {
  protected:
   void SetUp() override {
-    auto* document = HTMLDocument::CreateForTest();
+    auto* document =
+        HTMLDocument::CreateForTest(execution_context_.GetExecutionContext());
     auto* select = MakeGarbageCollected<HTMLSelectElement>(*document);
     document->AppendChild(select);
     select_ = select;
@@ -31,6 +34,8 @@ class OptionListTest : public testing::Test {
   HTMLSelectElement& Select() const { return *select_; }
 
  private:
+  test::TaskEnvironment task_environment_;
+  ScopedNullExecutionContext execution_context_;
   Persistent<HTMLSelectElement> select_;
 };
 
@@ -54,7 +59,9 @@ TEST_F(OptionListTest, OptionOnly) {
   ++iter;
   EXPECT_EQ("o2", Id(*iter));
   ++iter;
-  // No "o3" because it's in DIV.
+  // Include "o3" even though it's in a DIV.
+  EXPECT_EQ("o3", Id(*iter));
+  ++iter;
   EXPECT_EQ(list.end(), iter);
 }
 
@@ -83,9 +90,9 @@ TEST_F(OptionListTest, Optgroup) {
       ->setInnerHTML(
           "<optgroup><option id=gg11></option></optgroup>"
           "<option id=g11></option>");
-  list = Select().GetOptionList();
-  iter = list.begin();
-  EXPECT_EQ("g11", Id(*iter)) << "Nested OPTGROUP should be ignored.";
+  OptionList list2 = Select().GetOptionList();
+  OptionList::Iterator iter2 = list2.begin();
+  EXPECT_EQ("gg11", Id(*iter2)) << "Nested OPTGROUP should be included.";
 }
 
 }  // naemespace blink

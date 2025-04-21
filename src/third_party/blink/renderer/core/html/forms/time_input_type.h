@@ -41,7 +41,6 @@ class TimeInputType final : public BaseTemporalInputType {
 
  private:
   void CountUsage() override;
-  const AtomicString& FormControlType() const override;
   Decimal DefaultValueForStepUp() const override;
   StepRange CreateStepRange(AnyStepHandling) const override;
   bool ParseToDateComponentsInternal(const String&,
@@ -65,6 +64,13 @@ class TimeInputType final : public BaseTemporalInputType {
   String AriaLabelForPickerIndicator() const override;
   String ReversedRangeOutOfRangeText(const Decimal& minimum,
                                      const Decimal& maximum) const override;
+};
+
+template <>
+struct DowncastTraits<TimeInputType> {
+  static bool AllowFrom(const InputType& type) {
+    return type.IsTimeInputType();
+  }
 };
 
 }  // namespace blink

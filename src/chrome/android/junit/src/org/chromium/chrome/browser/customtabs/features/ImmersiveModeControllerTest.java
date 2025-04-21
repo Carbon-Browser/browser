@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
-import android.app.Activity;
 import android.os.Build;
 import android.view.View;
 import android.view.Window;
@@ -23,20 +22,21 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
 import org.robolectric.shadows.ShadowLooper;
 
 import org.chromium.base.UnownedUserDataHost;
+import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.chrome.browser.customtabs.CustomTabActivity;
 import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
-import org.chromium.ui.base.WindowAndroid;
+import org.chromium.ui.base.ActivityWindowAndroid;
 
 /**
  * Tests for {@link ImmersiveModeController}.
  *
- * sdk = P for the cutout mode (setsLayoutParams) test.
+ * <p>sdk = P for the cutout mode (setsLayoutParams) test.
  */
-@RunWith(RobolectricTestRunner.class)
+@RunWith(BaseRobolectricTestRunner.class)
 @Config(sdk = Build.VERSION_CODES.P, manifest = Config.NONE)
 public class ImmersiveModeControllerTest {
     // Convenience constants to make the tests  more readable.
@@ -44,17 +44,12 @@ public class ImmersiveModeControllerTest {
     private static final boolean STICKY = true;
     private static final int LAYOUT = LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT;
 
-    @Mock
-    public ActivityLifecycleDispatcher mLifecycleDispatcher;
+    @Mock public ActivityLifecycleDispatcher mLifecycleDispatcher;
 
-    @Mock
-    public Activity mActivity;
-    @Mock
-    public WindowAndroid mWindowAndroid;
-    @Mock
-    public Window mWindow;
-    @Mock
-    public View mDecorView;
+    @Mock public CustomTabActivity mActivity;
+    @Mock public ActivityWindowAndroid mWindowAndroid;
+    @Mock public Window mWindow;
+    @Mock public View mDecorView;
     private WindowManager.LayoutParams mLayoutParams = new WindowManager.LayoutParams();
     public UnownedUserDataHost mWindowUserDataHost = new UnownedUserDataHost();
 
@@ -74,14 +69,16 @@ public class ImmersiveModeControllerTest {
 
         // Reflect mSystemUiVisibility in the DecorView.
         when(mDecorView.getSystemUiVisibility()).thenAnswer(invocation -> mSystemUiVisibility);
-        doAnswer(invocation -> {
-            mSystemUiVisibility = invocation.getArgument(0);
-            return null;
-        }).when(mDecorView).setSystemUiVisibility(anyInt());
+        doAnswer(
+                        invocation -> {
+                            mSystemUiVisibility = invocation.getArgument(0);
+                            return null;
+                        })
+                .when(mDecorView)
+                .setSystemUiVisibility(anyInt());
 
         when(mWindowAndroid.getUnownedUserDataHost()).thenReturn(mWindowUserDataHost);
-
-        mController = new ImmersiveModeController(mLifecycleDispatcher, mActivity, mWindowAndroid);
+        mController = new ImmersiveModeController(mActivity, mWindowAndroid, mLifecycleDispatcher);
     }
 
     @Test

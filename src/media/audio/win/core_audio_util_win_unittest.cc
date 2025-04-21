@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/audio/win/core_audio_util_win.h"
 
@@ -22,6 +27,9 @@ using Microsoft::WRL::ComPtr;
 using base::win::ScopedCOMInitializer;
 
 namespace media {
+namespace {
+constexpr bool kOffloadModeEnabled = true;
+}
 
 class CoreAudioUtilWinTest : public ::testing::Test {
  protected:
@@ -102,12 +110,6 @@ TEST_F(CoreAudioUtilWinTest, WaveFormatWrapperExtended) {
   EXPECT_FALSE(wave_format_ex.IsFloat());
   format_ex.SubFormat = KSDATAFORMAT_SUBTYPE_IEEE_FLOAT;
   EXPECT_TRUE(wave_format_ex.IsFloat());
-}
-
-TEST_F(CoreAudioUtilWinTest, GetIAudioClientVersion) {
-  uint32_t client_version = CoreAudioUtil::GetIAudioClientVersion();
-  EXPECT_GE(client_version, 1u);
-  EXPECT_LE(client_version, 3u);
 }
 
 TEST_F(CoreAudioUtilWinTest, NumberOfActiveDevices) {
@@ -286,8 +288,7 @@ TEST_F(CoreAudioUtilWinTest, CreateClient) {
 }
 
 TEST_F(CoreAudioUtilWinTest, CreateClient3) {
-  ABORT_AUDIO_TEST_IF_NOT(DevicesAvailable() &&
-                          CoreAudioUtil::GetIAudioClientVersion() >= 3);
+  ABORT_AUDIO_TEST_IF_NOT(DevicesAvailable());
 
   EDataFlow data[] = {eRender, eCapture};
 
@@ -432,7 +433,7 @@ TEST_F(CoreAudioUtilWinTest, GetChannelConfig) {
   }
 }
 
-TEST_F(CoreAudioUtilWinTest, SharedModeInitialize) {
+TEST_F(CoreAudioUtilWinTest, SharedModeInitializeWithoutOffload) {
   ABORT_AUDIO_TEST_IF_NOT(DevicesAvailable());
 
   ComPtr<IAudioClient> client;
@@ -499,6 +500,76 @@ TEST_F(CoreAudioUtilWinTest, SharedModeInitialize) {
   EXPECT_GT(endpoint_buffer_size, 0u);
 }
 
+TEST_F(CoreAudioUtilWinTest, SharedModeInitializeWithOffload) {
+  ABORT_AUDIO_TEST_IF_NOT(DevicesAvailable());
+
+  ComPtr<IAudioClient> client;
+  client = CoreAudioUtil::CreateClient(AudioDeviceDescription::kDefaultDeviceId,
+                                       eRender, eConsole);
+  EXPECT_TRUE(client.Get());
+
+  WAVEFORMATEXTENSIBLE format;
+  EXPECT_TRUE(
+      SUCCEEDED(CoreAudioUtil::GetSharedModeMixFormat(client.Get(), &format)));
+
+  // Perform a shared-mode initialization without event-driven buffer handling,
+  // with audio offload enabled.
+  uint32_t endpoint_buffer_size = 0;
+  HRESULT hr = CoreAudioUtil::SharedModeInitialize(client.Get(), &format, NULL,
+                                                   0, &endpoint_buffer_size,
+                                                   NULL, kOffloadModeEnabled);
+  EXPECT_TRUE(SUCCEEDED(hr));
+  EXPECT_GT(endpoint_buffer_size, 0u);
+
+  // It is only possible to create a client once.
+  hr = CoreAudioUtil::SharedModeInitialize(client.Get(), &format, NULL, 0,
+                                           &endpoint_buffer_size, NULL,
+                                           kOffloadModeEnabled);
+  EXPECT_FALSE(SUCCEEDED(hr));
+
+  // Verify that it is possible to reinitialize the client after releasing it.
+  client = CoreAudioUtil::CreateClient(AudioDeviceDescription::kDefaultDeviceId,
+                                       eRender, eConsole);
+  EXPECT_TRUE(client.Get());
+  hr = CoreAudioUtil::SharedModeInitialize(client.Get(), &format, NULL, 0,
+                                           &endpoint_buffer_size, NULL,
+                                           kOffloadModeEnabled);
+  EXPECT_TRUE(SUCCEEDED(hr));
+  EXPECT_GT(endpoint_buffer_size, 0u);
+
+  // Use a non-supported format and verify that initialization fails.
+  // A simple way to emulate an invalid format is to use the shared-mode
+  // mixing format and modify the preferred sample.
+  client = CoreAudioUtil::CreateClient(AudioDeviceDescription::kDefaultDeviceId,
+                                       eRender, eConsole);
+  EXPECT_TRUE(client.Get());
+  format.Format.nSamplesPerSec = format.Format.nSamplesPerSec + 1;
+  EXPECT_FALSE(CoreAudioUtil::IsFormatSupported(
+      client.Get(), AUDCLNT_SHAREMODE_SHARED, &format));
+  hr = CoreAudioUtil::SharedModeInitialize(client.Get(), &format, NULL, 0,
+                                           &endpoint_buffer_size, NULL,
+                                           kOffloadModeEnabled);
+  EXPECT_TRUE(FAILED(hr));
+
+  // Finally, perform a shared-mode initialization using event-driven buffer
+  // handling. The event handle will be signaled when an audio buffer is ready
+  // to be processed by the client (not verified here).
+  // The event handle should be in the nonsignaled state.
+  base::win::ScopedHandle event_handle(::CreateEvent(NULL, TRUE, FALSE, NULL));
+  client = CoreAudioUtil::CreateClient(AudioDeviceDescription::kDefaultDeviceId,
+                                       eRender, eConsole);
+  EXPECT_TRUE(client.Get());
+  EXPECT_TRUE(
+      SUCCEEDED(CoreAudioUtil::GetSharedModeMixFormat(client.Get(), &format)));
+  EXPECT_TRUE(CoreAudioUtil::IsFormatSupported(
+      client.Get(), AUDCLNT_SHAREMODE_SHARED, &format));
+  hr = CoreAudioUtil::SharedModeInitialize(
+      client.Get(), &format, event_handle.Get(), 0, &endpoint_buffer_size, NULL,
+      kOffloadModeEnabled);
+  EXPECT_TRUE(SUCCEEDED(hr));
+  EXPECT_GT(endpoint_buffer_size, 0u);
+}
+
 TEST_F(CoreAudioUtilWinTest, CreateRenderAndCaptureClients) {
   ABORT_AUDIO_TEST_IF_NOT(DevicesAvailable());
 
@@ -518,7 +589,7 @@ TEST_F(CoreAudioUtilWinTest, CreateRenderAndCaptureClients) {
     EXPECT_TRUE(SUCCEEDED(
         CoreAudioUtil::GetSharedModeMixFormat(client.Get(), &format)));
     if (data[i] == eRender) {
-      // It is not possible to create a render client using an unitialized
+      // It is not possible to create a render client using an uninitialized
       // client interface.
       render_client = CoreAudioUtil::CreateRenderClient(client.Get());
       EXPECT_FALSE(render_client.Get());
@@ -530,7 +601,7 @@ TEST_F(CoreAudioUtilWinTest, CreateRenderAndCaptureClients) {
       EXPECT_TRUE(render_client.Get());
       EXPECT_GT(endpoint_buffer_size, 0u);
     } else if (data[i] == eCapture) {
-      // It is not possible to create a capture client using an unitialized
+      // It is not possible to create a capture client using an uninitialized
       // client interface.
       capture_client = CoreAudioUtil::CreateCaptureClient(client.Get());
       EXPECT_FALSE(capture_client.Get());
@@ -610,76 +681,6 @@ TEST_F(CoreAudioUtilWinTest, GetMatchingOutputDeviceID) {
   }
 
   EXPECT_TRUE(found_a_pair);
-}
-
-TEST_F(CoreAudioUtilWinTest, CheckGetPreferredAudioParametersUMAStats) {
-  base::HistogramTester tester;
-  ABORT_AUDIO_TEST_IF_NOT(DevicesAvailable());
-
-  // Check that when input stream parameters are created, hr values are not
-  // erroneously tracked in output stream parameters UMA histograms
-  AudioParameters input_params;
-  HRESULT hr = CoreAudioUtil::GetPreferredAudioParameters(
-      AudioDeviceDescription::kDefaultDeviceId, false, &input_params);
-  EXPECT_TRUE(SUCCEEDED(hr));
-  EXPECT_TRUE(input_params.IsValid());
-  tester.ExpectTotalCount(
-      "Media.AudioOutputStreamProxy.GetPreferredOutputStreamParametersWin."
-      "CreateDeviceEnumeratorResult",
-      0);
-  tester.ExpectTotalCount(
-      "Media.AudioOutputStreamProxy.GetPreferredOutputStreamParametersWin."
-      "CreateDeviceResult",
-      0);
-  tester.ExpectTotalCount(
-      "Media.AudioOutputStreamProxy.GetPreferredOutputStreamParametersWin."
-      "CreateClientResult",
-      0);
-  tester.ExpectTotalCount(
-      "Media.AudioOutputStreamProxy.GetPreferredOutputStreamParametersWin."
-      "GetMixFormatResult",
-      0);
-  tester.ExpectTotalCount(
-      "Media.AudioOutputStreamProxy.GetPreferredOutputStreamParametersWin."
-      "GetDevicePeriodResult",
-      0);
-
-  // Check that when output stream parameters are created, hr values for all
-  // expected steps are tracked in UMA histograms
-  AudioParameters output_params;
-  hr = CoreAudioUtil::GetPreferredAudioParameters(
-      AudioDeviceDescription::kDefaultDeviceId, true, &output_params);
-  EXPECT_TRUE(SUCCEEDED(hr));
-  EXPECT_TRUE(output_params.IsValid());
-
-  AudioParameters::HardwareCapabilities output_hardware_capabilities =
-      output_params.hardware_capabilities().value_or(
-          AudioParameters::HardwareCapabilities());
-
-  tester.ExpectTotalCount(
-      "Media.AudioOutputStreamProxy.GetPreferredOutputStreamParametersWin."
-      "CreateDeviceEnumeratorResult",
-      1);
-  tester.ExpectTotalCount(
-      "Media.AudioOutputStreamProxy.GetPreferredOutputStreamParametersWin."
-      "CreateDeviceResult",
-      1);
-  tester.ExpectTotalCount(
-      "Media.AudioOutputStreamProxy.GetPreferredOutputStreamParametersWin."
-      "CreateClientResult",
-      1);
-  tester.ExpectTotalCount(
-      "Media.AudioOutputStreamProxy.GetPreferredOutputStreamParametersWin."
-      "GetMixFormatResult",
-      1);
-
-  // If we have a min_frames_per_buffer then it came from the new API.
-  if (!output_hardware_capabilities.min_frames_per_buffer) {
-    tester.ExpectTotalCount(
-        "Media.AudioOutputStreamProxy.GetPreferredOutputStreamParametersWin."
-        "GetDevicePeriodResult",
-        1);
-  }
 }
 
 TEST_F(CoreAudioUtilWinTest, SharedModeLowerBufferSize) {

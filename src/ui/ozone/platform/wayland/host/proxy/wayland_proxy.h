@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include "ui/platform_window/platform_window_init_properties.h"
 
 struct wl_buffer;
-struct wl_display;
+struct wl_registry;
 struct wl_surface;
 
 namespace gfx {
@@ -45,6 +45,9 @@ class COMPONENT_EXPORT(WAYLAND_PROXY) WaylandProxy {
     virtual void OnWindowConfigured(gfx::AcceleratedWidget widget,
                                     bool is_configured) = 0;
 
+    // Invoked when an existing surface is assigned a role.
+    virtual void OnWindowRoleAssigned(gfx::AcceleratedWidget widget) = 0;
+
    protected:
     virtual ~Delegate() = default;
   };
@@ -57,11 +60,7 @@ class COMPONENT_EXPORT(WAYLAND_PROXY) WaylandProxy {
   // for the Delegate class.
   virtual void SetDelegate(Delegate* delegate) = 0;
 
-  // Returns the wl_display the WaylandConnection has the connection with. See
-  // WaylandConnection::display() and WaylandConnection::display_wrapper() to
-  // know the difference between the GetDisplay() and GetDisplayWrapper().
-  virtual wl_display* GetDisplay() = 0;
-  virtual wl_display* GetDisplayWrapper() = 0;
+  virtual struct wl_registry* GetRegistry() = 0;
   virtual void RoundTripQueue() = 0;
 
   // Returns wl_surface that backs the |widget|.
@@ -78,8 +77,8 @@ class COMPONENT_EXPORT(WAYLAND_PROXY) WaylandProxy {
   // When this is called, |buffer| becomes invalid and mustn't be used any more.
   virtual void DestroyShmForWlBuffer(wl_buffer* buffer) = 0;
 
-  // Schedules display flush that dispatches pending events.
-  virtual void ScheduleDisplayFlush() = 0;
+  // Immediately flushes pending requests for testing.
+  virtual void FlushForTesting() = 0;
 
   // Returns platform window type of a window backed by the |widget|.
   virtual ui::PlatformWindowType GetWindowType(

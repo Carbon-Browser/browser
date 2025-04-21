@@ -1,17 +1,17 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
 
-type ResourcePrefetchPredictorDb = {
-  enabled: boolean,
-  origin_db: OriginData[],
-};
+interface ResourcePrefetchPredictorDb {
+  enabled: boolean;
+  origin_db: OriginData[];
+}
 
-type OriginData = {
-  main_frame_host: string,
+interface OriginData {
+  main_frame_host: string;
   origins: Array<{
     origin: string,
     number_of_hits: number,
@@ -21,8 +21,8 @@ type OriginData = {
     always_access_network: boolean,
     accessed_network: boolean,
     score: number,
-  }>,
-};
+  }>;
+}
 
 /**
  * Requests the database from the backend.

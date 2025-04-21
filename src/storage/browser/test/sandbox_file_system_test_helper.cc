@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <memory>
 #include <utility>
 
+#include "base/files/file_error_or.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/run_loop.h"
@@ -31,11 +32,13 @@ namespace storage {
 SandboxFileSystemTestHelper::SandboxFileSystemTestHelper(
     const blink::StorageKey& storage_key,
     FileSystemType type)
-    : storage_key_(storage_key), type_(type), file_util_(nullptr) {}
+    : bucket_locator_(BucketLocator::ForDefaultBucket(storage_key)),
+      type_(type),
+      file_util_(nullptr) {}
 
 SandboxFileSystemTestHelper::SandboxFileSystemTestHelper()
-    : storage_key_(
-          blink::StorageKey::CreateFromStringForTesting("http://foo.com")),
+    : bucket_locator_(BucketLocator::ForDefaultBucket(
+          blink::StorageKey::CreateFromStringForTesting("http://foo.com"))),
       type_(kFileSystemTypeTemporary),
       file_util_(nullptr) {}
 
@@ -54,18 +57,9 @@ void SandboxFileSystemTestHelper::SetUp(
 
 void SandboxFileSystemTestHelper::SetUp(
     scoped_refptr<FileSystemContext> file_system_context,
-    const blink::StorageKey& storage_key) {
-  file_system_context_ = std::move(file_system_context);
-  storage_key_ = storage_key;
-  SetUpFileSystem();
-}
-
-void SandboxFileSystemTestHelper::SetUp(
-    scoped_refptr<FileSystemContext> file_system_context,
     const BucketLocator& bucket_locator) {
   file_system_context_ = std::move(file_system_context);
   bucket_locator_ = bucket_locator;
-  storage_key_ = bucket_locator.storage_key;
   SetUpFileSystem();
 }
 
@@ -84,12 +78,8 @@ void SandboxFileSystemTestHelper::TearDown() {
 }
 
 base::FilePath SandboxFileSystemTestHelper::GetRootPath() {
-  if (bucket_locator_.has_value())
-    return file_system_context_->sandbox_delegate()
-        ->GetBaseDirectoryForBucketAndType(bucket_locator_.value(), type_,
-                                           false);
   return file_system_context_->sandbox_delegate()
-      ->GetBaseDirectoryForStorageKeyAndType(storage_key(), type_, false);
+      ->GetBaseDirectoryForBucketAndType(bucket_locator_, type_, false);
 }
 
 base::FilePath SandboxFileSystemTestHelper::GetLocalPath(
@@ -106,12 +96,10 @@ base::FilePath SandboxFileSystemTestHelper::GetLocalPathFromASCII(
   return GetLocalPath(base::FilePath().AppendASCII(path));
 }
 
-base::FilePath SandboxFileSystemTestHelper::GetUsageCachePath() const {
-  if (bucket_locator_.has_value())
-    return file_system_context_->sandbox_delegate()
-        ->GetUsageCachePathForBucketAndType(bucket_locator_.value(), type_);
+base::FileErrorOr<base::FilePath>
+SandboxFileSystemTestHelper::GetUsageCachePath() const {
   return file_system_context_->sandbox_delegate()
-      ->GetUsageCachePathForStorageKeyAndType(storage_key(), type_);
+      ->GetUsageCachePathForBucketAndType(bucket_locator_, type_);
 }
 
 FileSystemURL SandboxFileSystemTestHelper::CreateURL(
@@ -121,20 +109,17 @@ FileSystemURL SandboxFileSystemTestHelper::CreateURL(
 }
 
 int64_t SandboxFileSystemTestHelper::GetCachedUsage() const {
-  if (bucket_locator_.has_value())
-    return file_system_context_->sandbox_delegate()
-        ->GetBucketUsageOnFileTaskRunner(file_system_context_.get(),
-                                         bucket_locator_.value(), type_);
-  return file_system_context_->GetQuotaUtil(type_)
-      ->GetStorageKeyUsageOnFileTaskRunner(file_system_context_.get(),
-                                           storage_key(), type_);
+  return file_system_context_->sandbox_delegate()
+      ->GetBucketUsageOnFileTaskRunner(file_system_context_.get(),
+                                       bucket_locator_, type_);
 }
 
 int64_t SandboxFileSystemTestHelper::ComputeCurrentStorageKeyUsage() {
   usage_cache()->CloseCacheFiles();
 
   int64_t size = file_util_delegate()->ComputeDirectorySize(GetRootPath());
-  if (file_util_delegate()->PathExists(GetUsageCachePath()))
+  base::FileErrorOr<base::FilePath> path = GetUsageCachePath();
+  if (path.has_value() && file_util_delegate()->PathExists(path.value()))
     size -= FileSystemUsageCache::kUsageFileSize;
 
   return size;
@@ -189,17 +174,11 @@ void SandboxFileSystemTestHelper::SetUpFileSystem() {
   DCHECK(file_util_);
 
   // Prepare the root directory.
-  if (bucket_locator_.has_value()) {
-    file_system_context_->sandbox_delegate()->GetBaseDirectoryForBucketAndType(
-        bucket_locator_.value(), type_, /*create=*/true);
-  } else {
-    file_system_context_->sandbox_delegate()
-        ->GetBaseDirectoryForStorageKeyAndType(storage_key(), type_,
-                                               /*create=*/true);
-  }
-  base::FilePath usage_cache_path = GetUsageCachePath();
-  if (!usage_cache_path.empty())
-    usage_cache()->UpdateUsage(usage_cache_path, 0);
+  file_system_context_->sandbox_delegate()->GetBaseDirectoryForBucketAndType(
+      bucket_locator_, type_, /*create=*/true);
+  base::FileErrorOr<base::FilePath> usage_cache_path = GetUsageCachePath();
+  if (usage_cache_path.has_value() && !usage_cache_path->empty())
+    usage_cache()->UpdateUsage(usage_cache_path.value(), 0);
 }
 
 }  // namespace storage

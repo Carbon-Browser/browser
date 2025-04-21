@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@ package org.chromium.android_webview.gfx;
 import android.graphics.Canvas;
 import android.graphics.Picture;
 
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.android_webview.CleanupReference;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
 
 import java.io.OutputStream;
 
@@ -25,24 +26,25 @@ public class AwPicture extends Picture {
     // handled via the CleanupReference.
     private static final class DestroyRunnable implements Runnable {
         private long mNativeAwPicture;
+
         private DestroyRunnable(long nativeAwPicture) {
             mNativeAwPicture = nativeAwPicture;
         }
+
         @Override
         public void run() {
             AwPictureJni.get().destroy(mNativeAwPicture);
         }
     }
 
-    private CleanupReference mCleanupReference;
-
     /**
-     * @param nativeAwPicture is an instance of the AwPicture native class. Ownership is
-     *                        taken by this java instance.
+     * @param nativeAwPicture is an instance of the AwPicture native class. Ownership is taken by
+     *     this java instance.
      */
     public AwPicture(long nativeAwPicture) {
         mNativeAwPicture = nativeAwPicture;
-        mCleanupReference = new CleanupReference(this, new DestroyRunnable(nativeAwPicture));
+        // Constructor has side-effects, so no need to store this in a field.
+        new CleanupReference(this, new DestroyRunnable(nativeAwPicture));
     }
 
     @Override
@@ -83,8 +85,11 @@ public class AwPicture extends Picture {
     @NativeMethods
     interface Natives {
         void destroy(long nativeAwPicture);
+
         int getWidth(long nativeAwPicture, AwPicture caller);
+
         int getHeight(long nativeAwPicture, AwPicture caller);
+
         void draw(long nativeAwPicture, AwPicture caller, Canvas canvas);
     }
 }

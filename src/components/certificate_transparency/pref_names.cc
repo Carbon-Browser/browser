@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,20 +10,13 @@ namespace certificate_transparency {
 namespace prefs {
 
 void RegisterPrefs(PrefRegistrySimple* registry) {
-  registry->RegisterListPref(prefs::kCTRequiredHosts);
   registry->RegisterListPref(prefs::kCTExcludedHosts);
   registry->RegisterListPref(prefs::kCTExcludedSPKIs);
-  registry->RegisterListPref(prefs::kCTExcludedLegacySPKIs);
 }
-
-const char kCTRequiredHosts[] = "certificate_transparency.required_hosts";
 
 const char kCTExcludedHosts[] = "certificate_transparency.excluded_hosts";
 
 const char kCTExcludedSPKIs[] = "certificate_transparency.excluded_spkis";
-
-const char kCTExcludedLegacySPKIs[] =
-    "certificate_transparency.excluded_legacy_spkis";
 
 }  // namespace prefs
 }  // namespace certificate_transparency

@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,7 @@ class FakeTileManagerClient : public TileManagerClient {
   size_t GetFrameIndexForImage(const PaintImage& paint_image,
                                WhichTree tree) const override;
   int GetMSAASampleCountForRaster(
-      const scoped_refptr<DisplayItemList>& display_list) override;
+      const DisplayItemList& display_list) const override;
   bool HasPendingTree() override;
 
  private:

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,13 @@
 #include "base/check.h"
 #include "base/notreached.h"
 #include "base/time/time.h"
-#include "build/chromeos_buildflags.h"
+#include "build/build_config.h"
 #include "ui/events/devices/x11/touch_factory_x11.h"
 #include "ui/events/event.h"
 #include "ui/events/event_utils.h"
 #include "ui/events/keycodes/dom/dom_key.h"
 #include "ui/events/keycodes/keyboard_code_conversion_x.h"
+#include "ui/events/ozone/events_ozone.h"
 #include "ui/events/pointer_details.h"
 #include "ui/events/types/event_type.h"
 #include "ui/events/x/events_x_utils.h"
@@ -43,8 +44,15 @@ class TouchEventX11 : public ui::TouchEvent {
       : TouchEvent(type, location, timestamp, pointer_details) {}
 
   ~TouchEventX11() override {
-    if (type() == ET_TOUCH_RELEASED || type() == ET_TOUCH_CANCELLED)
+    if (type() == EventType::kTouchReleased ||
+        type() == EventType::kTouchCancelled) {
       TouchFactory::GetInstance()->ReleaseSlot(pointer_details().id);
+    }
+  }
+
+  // Event:
+  std::unique_ptr<Event> Clone() const override {
+    return std::make_unique<TouchEventX11>(*this);
   }
 };
 
@@ -52,7 +60,7 @@ Event::Properties GetEventPropertiesFromXEvent(EventType type,
                                                const x11::Event& x11_event) {
   using Values = std::vector<uint8_t>;
   Event::Properties properties;
-  if (type == ET_KEY_PRESSED || type == ET_KEY_RELEASED) {
+  if (type == EventType::kKeyPressed || type == EventType::kKeyReleased) {
     auto* key = x11_event.As<x11::KeyEvent>();
 
     // Keyboard group
@@ -75,10 +83,10 @@ Event::Properties GetEventPropertiesFromXEvent(EventType type,
     // IBus-/fctix-GTK specific flags
     uint8_t ime_flags = (state >> kPropertyKeyboardImeFlagOffset) &
                         kPropertyKeyboardImeFlagMask;
-    if (ime_flags)
-      properties.emplace(kPropertyKeyboardImeFlag, Values{ime_flags});
-
-  } else if (type == ET_MOUSE_EXITED) {
+    if (ime_flags) {
+      SetKeyboardImeFlagProperty(&properties, ime_flags);
+    }
+  } else if (type == EventType::kMouseExited) {
     // NotifyVirtual events are created for intermediate windows that the
     // pointer crosses through. These occur when middle clicking.
     // Change these into mouse move events.
@@ -102,7 +110,7 @@ std::unique_ptr<KeyEvent> CreateKeyEvent(EventType event_type,
   // in KeyEvent::ApplyLayout() which makes it possible for CrOS/Linux, for
   // example, to support host system keyboard layouts.
   std::unique_ptr<KeyEvent> event =
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
       std::make_unique<KeyEvent>(event_type, key_code, event_flags,
                                  EventTimeFromXEvent(x11_event));
 #else
@@ -125,12 +133,21 @@ void SetEventSourceDeviceId(MouseEvent* event, const x11::Event& xev) {
 
 std::unique_ptr<MouseEvent> CreateMouseEvent(EventType type,
                                              const x11::Event& x11_event) {
-  // Ignore EventNotify and LeaveNotify events from children of |xwindow_|.
-  // NativeViewGLSurfaceGLX adds a child to |xwindow_|.
-  // https://crbug.com/792322
-  auto* crossing = x11_event.As<x11::CrossingEvent>();
-  if (crossing && crossing->detail == x11::NotifyDetail::Inferior)
-    return nullptr;
+  if (auto* crossing = x11_event.As<x11::CrossingEvent>()) {
+    // Ignore EventNotify and LeaveNotify events from children of the window.
+    if (crossing->detail == x11::NotifyDetail::Inferior) {
+      return nullptr;
+    }
+    // Ignore LeaveNotify grab events with a detail of Ancestor.  Some WMs
+    // will grab the container window during a click.  Don't generate a
+    // kMouseExited event in this case.
+    // https://crbug.com/41314367
+    if (crossing->detail == x11::NotifyDetail::Ancestor &&
+        crossing->mode == x11::NotifyMode::Grab &&
+        crossing->opcode == x11::CrossingEvent::LeaveNotify) {
+      return nullptr;
+    }
+  }
 
   PointerDetails details = GetStylusPointerDetailsFromXEvent(x11_event);
   auto event = std::make_unique<MouseEvent>(
@@ -167,11 +184,11 @@ std::unique_ptr<TouchEvent> CreateTouchEvent(EventType type,
   auto event = std::make_unique<TouchEventX11>(
       type, EventLocationFromXEvent(xev), EventTimeFromXEvent(xev),
       GetTouchPointerDetailsFromXEvent(xev));
-#if defined(USE_OZONE)
-    // Touch events don't usually have |root_location| set differently than
-    // |location|, since there is a touch device to display association, but
-    // this doesn't happen in Ozone X11.
-    event->set_root_location(EventSystemLocationFromXEvent(xev));
+#if BUILDFLAG(IS_OZONE)
+  // Touch events don't usually have |root_location| set differently than
+  // |location|, since there is a touch device to display association, but
+  // this doesn't happen in Ozone X11.
+  event->set_root_location(EventSystemLocationFromXEvent(xev));
 #endif
   return event;
 }
@@ -181,13 +198,22 @@ std::unique_ptr<ScrollEvent> CreateScrollEvent(EventType type,
   float x_offset, y_offset, x_offset_ordinal, y_offset_ordinal;
   int finger_count = 0;
 
-  if (type == ET_SCROLL) {
+  if (type == EventType::kScroll) {
     GetScrollOffsetsFromXEvent(xev, &x_offset, &y_offset, &x_offset_ordinal,
                                &y_offset_ordinal, &finger_count);
   } else {
     GetFlingDataFromXEvent(xev, &x_offset, &y_offset, &x_offset_ordinal,
                            &y_offset_ordinal, nullptr);
   }
+  // When lifting up fingers x_offset and y_offset both have the value 0
+  // If this is the case EventType::kScrollFlingStart needs to be emitted, in
+  // order to trigger touchpad overscroll navigation gesture. x_offset and
+  // y_offset should not be manipulated, however, since some X11 drivers such as
+  // synaptics simulate the fling themselves
+  if (!x_offset && !y_offset) {
+    type = EventType::kScrollFlingStart;
+  }
+
   auto event = std::make_unique<ScrollEvent>(
       type, EventLocationFromXEvent(xev), EventTimeFromXEvent(xev),
       EventFlagsFromXEvent(xev), x_offset, y_offset, x_offset_ordinal,
@@ -197,7 +223,8 @@ std::unique_ptr<ScrollEvent> CreateScrollEvent(EventType type,
   // We need to filter zero scroll offset here. Because MouseWheelEventQueue
   // assumes we'll never get a zero scroll offset event and we need delta to
   // determine which element to scroll on phaseBegan.
-  return (event->x_offset() != 0.0 || event->y_offset() != 0.0)
+  return (event->x_offset() != 0.0 || event->y_offset() != 0.0 ||
+          event->type() == EventType::kScrollFlingStart)
              ? std::move(event)
              : nullptr;
 }
@@ -206,28 +233,28 @@ std::unique_ptr<ScrollEvent> CreateScrollEvent(EventType type,
 std::unique_ptr<ui::Event> TranslateFromXI2Event(const x11::Event& xev,
                                                  EventType event_type) {
   switch (event_type) {
-    case ET_KEY_PRESSED:
-    case ET_KEY_RELEASED:
+    case EventType::kKeyPressed:
+    case EventType::kKeyReleased:
       return CreateKeyEvent(event_type, xev);
-    case ET_MOUSE_PRESSED:
-    case ET_MOUSE_RELEASED:
-    case ET_MOUSE_MOVED:
-    case ET_MOUSE_DRAGGED:
-    case ET_MOUSE_ENTERED:
-    case ET_MOUSE_EXITED:
+    case EventType::kMousePressed:
+    case EventType::kMouseReleased:
+    case EventType::kMouseMoved:
+    case EventType::kMouseDragged:
+    case EventType::kMouseEntered:
+    case EventType::kMouseExited:
       return CreateMouseEvent(event_type, xev);
-    case ET_MOUSEWHEEL:
+    case EventType::kMousewheel:
       return CreateMouseWheelEvent(xev);
-    case ET_SCROLL_FLING_START:
-    case ET_SCROLL_FLING_CANCEL:
-    case ET_SCROLL:
+    case EventType::kScrollFlingStart:
+    case EventType::kScrollFlingCancel:
+    case EventType::kScroll:
       return CreateScrollEvent(event_type, xev);
-    case ET_TOUCH_MOVED:
-    case ET_TOUCH_PRESSED:
-    case ET_TOUCH_CANCELLED:
-    case ET_TOUCH_RELEASED:
+    case EventType::kTouchMoved:
+    case EventType::kTouchPressed:
+    case EventType::kTouchCancelled:
+    case EventType::kTouchReleased:
       return CreateTouchEvent(event_type, xev);
-    case ET_UNKNOWN:
+    case EventType::kUnknown:
       return nullptr;
     default:
       break;
@@ -243,12 +270,12 @@ std::unique_ptr<Event> TranslateFromXEvent(const x11::Event& xev) {
     return CreateKeyEvent(event_type, xev);
   if (xev.As<x11::ButtonEvent>()) {
     switch (event_type) {
-      case ET_MOUSEWHEEL:
+      case EventType::kMousewheel:
         return CreateMouseWheelEvent(xev);
-      case ET_MOUSE_PRESSED:
-      case ET_MOUSE_RELEASED:
+      case EventType::kMousePressed:
+      case EventType::kMouseReleased:
         return CreateMouseEvent(event_type, xev);
-      case ET_UNKNOWN:
+      case EventType::kUnknown:
         // No event is created for X11-release events for mouse-wheel
         // buttons.
         break;

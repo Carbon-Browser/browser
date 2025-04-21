@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,22 +6,23 @@
 
 #include <stdint.h>
 
-#include "ash/components/settings/cros_settings_names.h"
 #include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/notification_utils.h"
-#include "base/bind.h"
+#include "ash/webui/settings/public/constants/routes.mojom.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/app/vector_icons/vector_icons.h"
-#include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/browser/notifications/system_notification_helper.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
-#include "chrome/browser/ui/webui/settings/chromeos/constants/routes.mojom.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/generated_resources.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
+#include "chromeos/ash/components/dbus/dbus_thread_manager.h"
+#include "chromeos/ash/components/demo_mode/utils/demo_session_utils.h"
+#include "chromeos/ash/components/settings/cros_settings.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
 #include "components/user_manager/user_manager.h"
 #include "content/public/browser/browser_thread.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -72,6 +73,13 @@ void LowDiskNotification::LowDiskSpace(
                  << "suppressed on a managed device.";
     return;
   }
+
+  if (demo_mode::IsDeviceInDemoMode()) {
+    LOG(WARNING) << "Device is low on disk space, but the notification was "
+                 << "suppressed on a demo mode device.";
+    return;
+  }
+
   Severity severity = GetSeverity(status.disk_free_bytes());
   base::Time now = base::Time::Now();
   if (severity != last_notification_severity_ ||
@@ -111,7 +119,7 @@ LowDiskNotification::CreateNotification(Severity severity) {
       message_center::NotifierType::SYSTEM_COMPONENT, kNotifierLowDisk,
       NotificationCatalogName::kLowDisk);
 
-  auto on_click = base::BindRepeating([](absl::optional<int> button_index) {
+  auto on_click = base::BindRepeating([](std::optional<int> button_index) {
     if (button_index) {
       DCHECK_EQ(0, *button_index);
       chrome::SettingsWindowManager::GetInstance()->ShowOSSettings(
@@ -120,7 +128,7 @@ LowDiskNotification::CreateNotification(Severity severity) {
     }
   });
   std::unique_ptr<message_center::Notification> notification =
-      ash::CreateSystemNotification(
+      ash::CreateSystemNotificationPtr(
           message_center::NOTIFICATION_TYPE_SIMPLE, kLowDiskId, title, message,
           std::u16string(), GURL(), notifier_id, optional_fields,
           new message_center::HandleNotificationClickDelegate(on_click),

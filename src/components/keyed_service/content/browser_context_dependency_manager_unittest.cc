@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,7 +34,7 @@ class TestService : public BrowserContextKeyedServiceFactory {
         name_(name),
         fill_on_shutdown_(fill_on_shutdown) {}
 
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override {
     ADD_FAILURE() << "This isn't part of the tests!";
     return nullptr;

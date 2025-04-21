@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,59 +7,19 @@
 #include <array>
 #include <vector>
 
-#include "base/big_endian.h"
+#include "base/containers/span.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
+#include "base/numerics/byte_conversions.h"
+#include "media/base/video_codecs.h"
+#include "media/media_buildflags.h"
 
-namespace media {
-
-namespace video_toolbox {
+namespace media::video_toolbox {
 
 namespace {
 static const char kAnnexBHeaderBytes[4] = {0, 0, 0, 1};
 }  // anonymous namespace
-
-base::ScopedCFTypeRef<CFDictionaryRef>
-DictionaryWithKeysAndValues(CFTypeRef* keys, CFTypeRef* values, size_t size) {
-  return base::ScopedCFTypeRef<CFDictionaryRef>(CFDictionaryCreate(
-      kCFAllocatorDefault, keys, values, size, &kCFTypeDictionaryKeyCallBacks,
-      &kCFTypeDictionaryValueCallBacks));
-}
-
-base::ScopedCFTypeRef<CFDictionaryRef> DictionaryWithKeyValue(CFTypeRef key,
-                                                              CFTypeRef value) {
-  CFTypeRef keys[1] = {key};
-  CFTypeRef values[1] = {value};
-  return DictionaryWithKeysAndValues(keys, values, 1);
-}
-
-base::ScopedCFTypeRef<CFArrayRef> ArrayWithIntegers(const int* v, size_t size) {
-  std::vector<CFNumberRef> numbers;
-  numbers.reserve(size);
-  for (const int* end = v + size; v < end; ++v)
-    numbers.push_back(CFNumberCreate(nullptr, kCFNumberSInt32Type, v));
-  base::ScopedCFTypeRef<CFArrayRef> array(CFArrayCreate(
-      kCFAllocatorDefault, reinterpret_cast<const void**>(&numbers[0]),
-      numbers.size(), &kCFTypeArrayCallBacks));
-  for (auto* number : numbers) {
-    CFRelease(number);
-  }
-  return array;
-}
-
-base::ScopedCFTypeRef<CFArrayRef> ArrayWithIntegerAndFloat(int int_val,
-                                                           float float_val) {
-  std::array<CFNumberRef, 2> numbers = {
-      {CFNumberCreate(nullptr, kCFNumberSInt32Type, &int_val),
-       CFNumberCreate(nullptr, kCFNumberFloat32Type, &float_val)}};
-  base::ScopedCFTypeRef<CFArrayRef> array(CFArrayCreate(
-      kCFAllocatorDefault, reinterpret_cast<const void**>(numbers.data()),
-      numbers.size(), &kCFTypeArrayCallBacks));
-  for (auto* number : numbers)
-    CFRelease(number);
-  return array;
-}
 
 // Wrapper class for writing AnnexBBuffer output into.
 class AnnexBBuffer {
@@ -91,7 +51,7 @@ class RawAnnexBBuffer : public AnnexBBuffer {
   size_t GetReservedSize() const override { return reserved_size_; }
 
  private:
-  raw_ptr<char> annexb_buffer_;
+  raw_ptr<char, AllowPtrArithmetic> annexb_buffer_;
   size_t annexb_buffer_size_;
   size_t annexb_buffer_offset_;
   size_t reserved_size_;
@@ -119,31 +79,53 @@ class StringAnnexBBuffer : public AnnexBBuffer {
 };
 
 template <typename NalSizeType>
-void CopyNalsToAnnexB(char* avcc_buffer,
-                      const size_t avcc_size,
+  requires(std::is_integral_v<NalSizeType> && std::is_unsigned_v<NalSizeType> &&
+           sizeof(NalSizeType) <= 4)
+void CopyNalsToAnnexB(base::span<const char> buffer,
                       AnnexBBuffer* annexb_buffer) {
-  static_assert(sizeof(NalSizeType) == 1 || sizeof(NalSizeType) == 2 ||
-                    sizeof(NalSizeType) == 4,
-                "NAL size type has unsupported size");
-  DCHECK(avcc_buffer);
-  DCHECK(annexb_buffer);
-  size_t bytes_left = avcc_size;
-  while (bytes_left > 0) {
-    DCHECK_GT(bytes_left, sizeof(NalSizeType));
+  while (!buffer.empty()) {
+    const auto nal_size_be =
+        base::as_bytes(buffer.take_first<sizeof(NalSizeType)>());
     NalSizeType nal_size;
-    base::ReadBigEndian(reinterpret_cast<uint8_t*>(avcc_buffer), &nal_size);
-    bytes_left -= sizeof(NalSizeType);
-    avcc_buffer += sizeof(NalSizeType);
+    if constexpr (sizeof(NalSizeType) == 1u) {
+      nal_size = base::U8FromBigEndian(nal_size_be);
+    } else if constexpr (sizeof(NalSizeType) == 2u) {
+      nal_size = base::U16FromBigEndian(nal_size_be);
+    } else {
+      nal_size = base::U32FromBigEndian(nal_size_be);
+    }
+    auto nals_buf = buffer.take_first(nal_size);
 
-    DCHECK_GE(bytes_left, nal_size);
     annexb_buffer->Append(kAnnexBHeaderBytes, sizeof(kAnnexBHeaderBytes));
-    annexb_buffer->Append(avcc_buffer, nal_size);
-    bytes_left -= nal_size;
-    avcc_buffer += nal_size;
+    annexb_buffer->Append(nals_buf.data(), nals_buf.size());
   }
 }
 
-bool CopySampleBufferToAnnexBBuffer(CMSampleBufferRef sbuf,
+OSStatus GetParameterSetAtIndex(VideoCodec codec,
+                                CMFormatDescriptionRef videoDesc,
+                                size_t parameterSetIndex,
+                                const uint8_t** parameterSetPointerOut,
+                                size_t* parameterSetSizeOut,
+                                size_t* parameterSetCountOut,
+                                int* NALUnitHeaderLengthOut) {
+  switch (codec) {
+    case VideoCodec::kH264:
+      return CMVideoFormatDescriptionGetH264ParameterSetAtIndex(
+          videoDesc, parameterSetIndex, parameterSetPointerOut,
+          parameterSetSizeOut, parameterSetCountOut, NALUnitHeaderLengthOut);
+#if BUILDFLAG(ENABLE_HEVC_PARSER_AND_HW_DECODER)
+    case VideoCodec::kHEVC:
+      return CMVideoFormatDescriptionGetHEVCParameterSetAtIndex(
+          videoDesc, parameterSetIndex, parameterSetPointerOut,
+          parameterSetSizeOut, parameterSetCountOut, NALUnitHeaderLengthOut);
+#endif  // BUILDFLAG(ENABLE_HEVC_PARSER_AND_HW_DECODER)
+    default:
+      NOTREACHED();
+  }
+}
+
+bool CopySampleBufferToAnnexBBuffer(VideoCodec codec,
+                                    CMSampleBufferRef sbuf,
                                     AnnexBBuffer* annexb_buffer,
                                     bool keyframe) {
   // Perform two pass, one to figure out the total output size, and another to
@@ -153,26 +135,25 @@ bool CopySampleBufferToAnnexBBuffer(CMSampleBufferRef sbuf,
   OSStatus status;
 
   // Get the sample buffer's block buffer and format description.
-  auto* bb = CMSampleBufferGetDataBuffer(sbuf);
+  auto* const bb = CMSampleBufferGetDataBuffer(sbuf);
   DCHECK(bb);
   auto* fdesc = CMSampleBufferGetFormatDescription(sbuf);
   DCHECK(fdesc);
 
-  size_t bb_size = CMBlockBufferGetDataLength(bb);
+  const size_t bb_size = CMBlockBufferGetDataLength(bb);
   size_t total_bytes = bb_size;
 
   size_t pset_count;
   int nal_size_field_bytes;
-  status = CMVideoFormatDescriptionGetH264ParameterSetAtIndex(
-      fdesc, 0, nullptr, nullptr, &pset_count, &nal_size_field_bytes);
+  status = GetParameterSetAtIndex(codec, fdesc, 0, nullptr, nullptr,
+                                  &pset_count, &nal_size_field_bytes);
   if (status == kCMFormatDescriptionBridgeError_InvalidParameter) {
-    DLOG(WARNING) << " assuming 2 parameter sets and 4 bytes NAL length header";
-    pset_count = 2;
+    DLOG(WARNING) << " assuming " << int(codec == VideoCodec::kHEVC ? 3 : 2)
+                  << " parameter sets and 4 bytes NAL length header";
+    pset_count = codec == VideoCodec::kHEVC ? 3 : 2;
     nal_size_field_bytes = 4;
   } else if (status != noErr) {
-    DLOG(ERROR)
-        << " CMVideoFormatDescriptionGetH264ParameterSetAtIndex failed: "
-        << status;
+    DLOG(ERROR) << " GetParameterSetAtIndex failed: " << status;
     return false;
   }
 
@@ -180,12 +161,10 @@ bool CopySampleBufferToAnnexBBuffer(CMSampleBufferRef sbuf,
     const uint8_t* pset;
     size_t pset_size;
     for (size_t pset_i = 0; pset_i < pset_count; ++pset_i) {
-      status = CMVideoFormatDescriptionGetH264ParameterSetAtIndex(
-          fdesc, pset_i, &pset, &pset_size, nullptr, nullptr);
+      status = GetParameterSetAtIndex(codec, fdesc, pset_i, &pset, &pset_size,
+                                      nullptr, nullptr);
       if (status != noErr) {
-        DLOG(ERROR)
-            << " CMVideoFormatDescriptionGetH264ParameterSetAtIndex failed: "
-            << status;
+        DLOG(ERROR) << " GetParameterSetAtIndex failed: " << status;
         return false;
       }
       total_bytes += pset_size + nal_size_field_bytes;
@@ -203,12 +182,10 @@ bool CopySampleBufferToAnnexBBuffer(CMSampleBufferRef sbuf,
     const uint8_t* pset;
     size_t pset_size;
     for (size_t pset_i = 0; pset_i < pset_count; ++pset_i) {
-      status = CMVideoFormatDescriptionGetH264ParameterSetAtIndex(
-          fdesc, pset_i, &pset, &pset_size, nullptr, nullptr);
+      status = GetParameterSetAtIndex(codec, fdesc, pset_i, &pset, &pset_size,
+                                      nullptr, nullptr);
       if (status != noErr) {
-        DLOG(ERROR)
-            << " CMVideoFormatDescriptionGetH264ParameterSetAtIndex failed: "
-            << status;
+        DLOG(ERROR) << " GetParameterSetAtIndex failed: " << status;
         return false;
       }
       annexb_buffer->Append(kAnnexBHeaderBytes, sizeof(kAnnexBHeaderBytes));
@@ -218,7 +195,7 @@ bool CopySampleBufferToAnnexBBuffer(CMSampleBufferRef sbuf,
 
   // Block buffers can be composed of non-contiguous chunks. For the sake of
   // keeping this code simple, flatten non-contiguous block buffers.
-  base::ScopedCFTypeRef<CMBlockBufferRef> contiguous_bb(
+  base::apple::ScopedCFTypeRef<CMBlockBufferRef> contiguous_bb(
       bb, base::scoped_policy::RETAIN);
   if (!CMBlockBufferIsRangeContiguous(bb, 0, 0)) {
     contiguous_bb.reset();
@@ -231,48 +208,58 @@ bool CopySampleBufferToAnnexBBuffer(CMSampleBufferRef sbuf,
     }
   }
 
-  // Copy all the NAL units. In the process convert them from AVCC format
+  // Copy all the NAL units. In the process convert them from AVCC/HVCC format
   // (length header) to AnnexB format (start code).
-  char* bb_data;
-  status =
-      CMBlockBufferGetDataPointer(contiguous_bb, 0, nullptr, nullptr, &bb_data);
+  char* contiguous_bb_data;
+  status = CMBlockBufferGetDataPointer(contiguous_bb.get(), 0, nullptr, nullptr,
+                                       &contiguous_bb_data);
   if (status != noErr) {
     DLOG(ERROR) << " CMBlockBufferGetDataPointer failed: " << status;
     return false;
   }
+  auto contiguous_bb_span =
+      // SAFETY: `bb` is a block buffer of size `bb_size`, queried above through
+      // CMBlockBufferGetDataLength(). The `contiguous_bb` is a contiguous
+      // buffer created from `bb`, so it has the same size. Thus the
+      // `contiguous_bb_data` pointer, which points to the `contiguous_bb`
+      // buffer, will point to an array of size `bb_size`.
+      UNSAFE_BUFFERS(base::span<const char>(contiguous_bb_data, bb_size));
 
   if (nal_size_field_bytes == 1) {
-    CopyNalsToAnnexB<uint8_t>(bb_data, bb_size, annexb_buffer);
+    CopyNalsToAnnexB<uint8_t>(contiguous_bb_span, annexb_buffer);
   } else if (nal_size_field_bytes == 2) {
-    CopyNalsToAnnexB<uint16_t>(bb_data, bb_size, annexb_buffer);
+    CopyNalsToAnnexB<uint16_t>(contiguous_bb_span, annexb_buffer);
   } else if (nal_size_field_bytes == 4) {
-    CopyNalsToAnnexB<uint32_t>(bb_data, bb_size, annexb_buffer);
+    CopyNalsToAnnexB<uint32_t>(contiguous_bb_span, annexb_buffer);
   } else {
     NOTREACHED();
   }
   return true;
 }
 
-bool CopySampleBufferToAnnexBBuffer(CMSampleBufferRef sbuf,
+bool CopySampleBufferToAnnexBBuffer(VideoCodec codec,
+                                    CMSampleBufferRef sbuf,
                                     bool keyframe,
                                     std::string* annexb_buffer) {
   StringAnnexBBuffer buffer(annexb_buffer);
-  return CopySampleBufferToAnnexBBuffer(sbuf, &buffer, keyframe);
+  return CopySampleBufferToAnnexBBuffer(codec, sbuf, &buffer, keyframe);
 }
 
-bool CopySampleBufferToAnnexBBuffer(CMSampleBufferRef sbuf,
+bool CopySampleBufferToAnnexBBuffer(VideoCodec codec,
+                                    CMSampleBufferRef sbuf,
                                     bool keyframe,
                                     size_t annexb_buffer_size,
                                     char* annexb_buffer,
                                     size_t* used_buffer_size) {
   RawAnnexBBuffer buffer(annexb_buffer, annexb_buffer_size);
-  const bool copy_rv = CopySampleBufferToAnnexBBuffer(sbuf, &buffer, keyframe);
+  const bool copy_rv =
+      CopySampleBufferToAnnexBBuffer(codec, sbuf, &buffer, keyframe);
   *used_buffer_size = buffer.GetReservedSize();
   return copy_rv;
 }
 
 SessionPropertySetter::SessionPropertySetter(
-    base::ScopedCFTypeRef<VTCompressionSessionRef> session)
+    base::apple::ScopedCFTypeRef<VTCompressionSessionRef> session)
     : session_(session) {}
 
 SessionPropertySetter::~SessionPropertySetter() {}
@@ -281,42 +268,42 @@ bool SessionPropertySetter::IsSupported(CFStringRef key) {
   DCHECK(session_);
   if (!supported_keys_) {
     CFDictionaryRef dict_ref;
-    if (VTSessionCopySupportedPropertyDictionary(session_, &dict_ref) == noErr)
+    if (VTSessionCopySupportedPropertyDictionary(session_.get(), &dict_ref) ==
+        noErr) {
       supported_keys_.reset(dict_ref);
+    }
   }
-  return supported_keys_ && CFDictionaryContainsKey(supported_keys_, key);
+  return supported_keys_ && CFDictionaryContainsKey(supported_keys_.get(), key);
 }
 
 bool SessionPropertySetter::Set(CFStringRef key, int32_t value) {
   DCHECK(session_);
-  base::ScopedCFTypeRef<CFNumberRef> cfvalue(
+  base::apple::ScopedCFTypeRef<CFNumberRef> cfvalue(
       CFNumberCreate(nullptr, kCFNumberSInt32Type, &value));
-  return VTSessionSetProperty(session_, key, cfvalue) == noErr;
+  return VTSessionSetProperty(session_.get(), key, cfvalue.get()) == noErr;
 }
 
 bool SessionPropertySetter::Set(CFStringRef key, bool value) {
   DCHECK(session_);
   CFBooleanRef cfvalue = (value) ? kCFBooleanTrue : kCFBooleanFalse;
-  return VTSessionSetProperty(session_, key, cfvalue) == noErr;
+  return VTSessionSetProperty(session_.get(), key, cfvalue) == noErr;
 }
 
 bool SessionPropertySetter::Set(CFStringRef key, double value) {
   DCHECK(session_);
-  base::ScopedCFTypeRef<CFNumberRef> cfvalue(
+  base::apple::ScopedCFTypeRef<CFNumberRef> cfvalue(
       CFNumberCreate(nullptr, kCFNumberDoubleType, &value));
-  return VTSessionSetProperty(session_, key, cfvalue) == noErr;
+  return VTSessionSetProperty(session_.get(), key, cfvalue.get()) == noErr;
 }
 
 bool SessionPropertySetter::Set(CFStringRef key, CFStringRef value) {
   DCHECK(session_);
-  return VTSessionSetProperty(session_, key, value) == noErr;
+  return VTSessionSetProperty(session_.get(), key, value) == noErr;
 }
 
 bool SessionPropertySetter::Set(CFStringRef key, CFArrayRef value) {
   DCHECK(session_);
-  return VTSessionSetProperty(session_, key, value) == noErr;
+  return VTSessionSetProperty(session_.get(), key, value) == noErr;
 }
 
-}  // namespace video_toolbox
-
-}  // namespace media
+}  // namespace media::video_toolbox

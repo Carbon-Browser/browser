@@ -1,11 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/browser/api/bluetooth_socket/bluetooth_api_socket.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/lazy_instance.h"
 #include "device/bluetooth/bluetooth_socket.h"
 #include "net/base/io_buffer.h"
@@ -58,8 +58,9 @@ BluetoothApiSocket::BluetoothApiSocket(
 
 BluetoothApiSocket::~BluetoothApiSocket() {
   DCHECK_CURRENTLY_ON(kThreadId);
-  if (socket_.get())
+  if (socket_.get()) {
     socket_->Disconnect(base::DoNothing());
+  }
 }
 
 void BluetoothApiSocket::AdoptConnectedSocket(
@@ -68,8 +69,9 @@ void BluetoothApiSocket::AdoptConnectedSocket(
     const device::BluetoothUUID& uuid) {
   DCHECK_CURRENTLY_ON(kThreadId);
 
-  if (socket_.get())
+  if (socket_.get()) {
     socket_->Disconnect(base::DoNothing());
+  }
 
   socket_ = socket;
   device_address_ = device_address;
@@ -82,8 +84,9 @@ void BluetoothApiSocket::AdoptListeningSocket(
     const device::BluetoothUUID& uuid) {
   DCHECK_CURRENTLY_ON(kThreadId);
 
-  if (socket_.get())
+  if (socket_.get()) {
     socket_->Disconnect(base::DoNothing());
+  }
 
   socket_ = socket;
   device_address_ = "";

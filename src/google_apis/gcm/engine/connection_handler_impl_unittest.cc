@@ -1,6 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "google_apis/gcm/engine/connection_handler_impl.h"
 
@@ -10,13 +15,13 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_timeouts.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "google/protobuf/io/coded_stream.h"
 #include "google/protobuf/io/zero_copy_stream_impl_lite.h"
@@ -27,7 +32,7 @@
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "net/base/ip_address.h"
-#include "net/base/network_isolation_key.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/base/test_completion_callback.h"
 #include "net/log/net_log_source.h"
 #include "net/socket/socket_test_util.h"
@@ -256,15 +261,14 @@ void GCMConnectionHandlerImplTest::BuildSocket(const ReadList& read_list,
   const url::Origin kOrigin = url::Origin::Create(kDestination);
   mojo_socket_factory_remote_->CreateProxyResolvingSocket(
       kDestination,
-      net::NetworkIsolationKey(kOrigin /* top_frame_origin */,
-                               kOrigin /* frame_origin */),
+      net::NetworkAnonymizationKey::CreateSameSite(net::SchemefulSite(kOrigin)),
       std::move(options),
       net::MutableNetworkTrafficAnnotationTag(TRAFFIC_ANNOTATION_FOR_TESTS),
       mojo_socket_remote_.BindNewPipeAndPassReceiver(),
       mojo::NullRemote() /* observer */,
       base::BindLambdaForTesting(
-          [&](int result, const absl::optional<net::IPEndPoint>& local_addr,
-              const absl::optional<net::IPEndPoint>& peer_addr,
+          [&](int result, const std::optional<net::IPEndPoint>& local_addr,
+              const std::optional<net::IPEndPoint>& peer_addr,
               mojo::ScopedDataPipeConsumerHandle receive_pipe_handle,
               mojo::ScopedDataPipeProducerHandle send_pipe_handle) {
             net_error = result;
@@ -284,7 +288,8 @@ void GCMConnectionHandlerImplTest::PumpLoop() {
 void GCMConnectionHandlerImplTest::Connect(
     ScopedMessage* dst_proto) {
   connection_handler_ = std::make_unique<ConnectionHandlerImpl>(
-      base::ThreadTaskRunnerHandle::Get(), TestTimeouts::tiny_timeout(),
+      base::SingleThreadTaskRunner::GetCurrentDefault(),
+      TestTimeouts::tiny_timeout(),
       base::BindRepeating(&GCMConnectionHandlerImplTest::ReadContinuation,
                           base::Unretained(this), dst_proto),
       base::BindRepeating(&GCMConnectionHandlerImplTest::WriteContinuation,

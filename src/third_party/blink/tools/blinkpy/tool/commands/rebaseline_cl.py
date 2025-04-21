@@ -1,22 +1,46 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """A command to fetch new baselines from try jobs for the current CL."""
 
 import collections
+import contextlib
 import itertools
 import json
 import logging
 import optparse
 import re
+from concurrent.futures import Executor
+from typing import Collection, List, MutableMapping, Optional
 
-from blinkpy.common.net.git_cl import GitCL, TryJobStatus
+from blinkpy.common.memoized import memoized
+from blinkpy.common.net.git_cl import BuildStatus, BuildStatuses, GitCL
+from blinkpy.common.net.rpc import Build, RPCError
+from blinkpy.common.net.web_test_results import (
+    IncompleteResultsReason,
+    WebTestResults,
+)
 from blinkpy.common.path_finder import PathFinder
-from blinkpy.tool.commands.command import check_file_option
+from blinkpy.tool.commands.build_resolver import (
+    BuildResolver,
+    UnresolvedBuildException,
+)
+from blinkpy.tool.commands.command import resolve_test_patterns
 from blinkpy.tool.commands.rebaseline import AbstractParallelRebaselineCommand
 from blinkpy.tool.commands.rebaseline import TestBaselineSet
+from blinkpy.tool.grammar import pluralize
 
 _log = logging.getLogger(__name__)
+
+
+# Maps target builds to rebaseline to the test results to use. Note that
+# multiple builds may map to the same `WebTestResults` if the user chooses to
+# fill incomplete results with available ones. As a corollary, the target build
+# may differ from its `WebTestResults.build`, which represents the source of
+# the test results.
+ResultsByBuild = MutableMapping[Build, WebTestResults]
+
+ResultsBySuite = MutableMapping[str, ResultsByBuild]
 
 
 class RebaselineCL(AbstractParallelRebaselineCommand):
@@ -33,92 +57,78 @@ class RebaselineCL(AbstractParallelRebaselineCommand):
     show_in_main_help = True
     argument_names = '[testname,...]'
 
-    def __init__(self):
-        super(RebaselineCL, self).__init__(options=[
-            optparse.make_option(
-                '--dry-run',
-                action='store_true',
-                default=False,
-                help='Dry run mode; list actions that would be performed but '
-                'do not actually download any new baselines.'),
-            optparse.make_option(
-                '--only-changed-tests',
-                action='store_true',
-                default=False,
-                help='Only download new baselines for tests that are directly '
-                'modified in the CL.'),
-            optparse.make_option('--no-trigger-jobs',
-                                 dest='trigger_jobs',
-                                 action='store_false',
-                                 default=True,
-                                 help='Do not trigger any try jobs.'),
-            optparse.make_option(
-                '--fill-missing',
-                dest='fill_missing',
-                action='store_true',
-                default=None,
-                help='If some platforms have no try job results, use results '
-                'from try job results of other platforms.'),
-            optparse.make_option('--no-fill-missing',
-                                 dest='fill_missing',
-                                 action='store_false'),
-            optparse.make_option(
-                '--use-blink-try-bots-only',
-                dest='use_blink_try_bots_only',
-                action='store_true',
-                default=False,
-                help='Use only the try jobs results for rebaselining. '
-                'Default behavior is to use results from both CQ builders '
-                'and try bots.'),
-            optparse.make_option(
-                '--test-name-file',
-                dest='test_name_file',
-                action='callback',
-                callback=check_file_option,
-                type='string',
-                help='Read names of tests to rebaseline from this file, one '
-                'test per line.'),
+    only_changed_tests_option = optparse.make_option(
+        '--only-changed-tests',
+        action='store_true',
+        default=False,
+        help='Only update files for tests directly modified in the CL.')
+    no_trigger_jobs_option = optparse.make_option(
+        '--no-trigger-jobs',
+        dest='trigger_jobs',
+        action='store_false',
+        default=True,
+        help='Do not trigger any try jobs.')
+    patchset_option = optparse.make_option(
+        '--patchset',
+        default=None,
+        type='int',
+        help='Patchset number to fetch try results from (defaults to latest).')
+
+    def __init__(self, tool, io_pool: Optional[Executor] = None):
+        super().__init__(options=[
+            self.only_changed_tests_option,
+            self.no_trigger_jobs_option,
+            self.test_name_file_option,
             optparse.make_option(
                 '--builders',
-                default=None,
-                action='append',
+                default=set(),
+                type='string',
+                callback=self._check_builders,
+                action='callback',
                 help=('Comma-separated-list of builders to pull new baselines '
                       'from (can also be provided multiple times).')),
-            optparse.make_option(
-                '--flag-specific',
-                dest='flag_specific',
-                # TODO(crbug/1291020): try to get the list from builders.json
-                choices=[
-                    "disable-layout-ng", "highdpi",
-                    "disable-site-isolation-trials", "skia-vulkan-swiftshader"
-                ],
-                default=None,
-                action='store',
-                help=('Name of a flag-specific configuration defined in '
-                      'FlagSpecificConfig. This option will rebaseline '
-                      'results for the given FlagSpecificConfig while '
-                      'ignoring results from other builders.')),
-            optparse.make_option(
-                '--patchset',
-                default=None,
-                help='Patchset number to fetch new baselines from.'),
-            optparse.make_option('--resultDB',
-                                 dest='resultDB',
-                                 default=False,
-                                 action='store_true',
-                                 help=('Fetch results from resultDB(WIP). '
-                                       'Works with --test-name-file '
-                                       'and positional parameters')),
+            self.patchset_option,
             self.no_optimize_option,
+            self.dry_run_option,
             self.results_directory_option,
+            *self.wpt_options,
         ])
+        self._tool = tool
+        # Use a separate thread pool for parallel network I/O in the main
+        # process because `message_pool.get(...)` must know all tasks in
+        # advance; it has no API for submitting new tasks after the pool runs.
+        # Also, because communication is asynchronous (callback-based), a worker
+        # cannot return a value for a specific task without a custom tracking
+        # mechanism.
+        self._io_pool = io_pool
         self.git_cl = None
-        self._selected_try_bots = None
-        self._resultdb_fetcher = False
+        self._builders = []
+
+    def _check_builders(self, option, _opt_str, value, parser):
+        selected_builders = getattr(parser.values, option.dest, set())
+        # This set includes CQ builders, whereas `builder_for_rebaselining()`
+        # does not.
+        allowed_builders = self._tool.builders.all_try_builder_names()
+        for builder in value.split(','):
+            if builder in allowed_builders:
+                selected_builders.add(builder)
+            else:
+                lines = [
+                    "'%s' is not a try builder." % builder,
+                    '',
+                    "The try builders that 'rebaseline-cl' recognizes are:",
+                ]
+                lines.extend('  * %s' % builder
+                             for builder in sorted(allowed_builders))
+                raise optparse.OptionValueError('\n'.join(lines))
+        setattr(parser.values, option.dest, selected_builders)
 
     def execute(self, options, args, tool):
-        self._tool = tool
+        self._dry_run = options.dry_run
         self.git_cl = self.git_cl or GitCL(tool)
+
+        # '--dry-run' implies '--no-trigger-jobs'.
+        options.trigger_jobs = options.trigger_jobs and not self._dry_run
         if args and options.test_name_file:
             _log.error('Aborted: Cannot combine --test-name-file and '
                        'positional parameters.')
@@ -127,85 +137,83 @@ class RebaselineCL(AbstractParallelRebaselineCommand):
         if not self.check_ok_to_run():
             return 1
 
-        if options.builders:
-            try_builders = set()
-            for builder_names in options.builders:
-                try_builders.update(builder_names.split(','))
-            self._selected_try_bots = frozenset(try_builders)
+        self._builders = options.builders
 
-        if options.use_blink_try_bots_only:
-            self._selected_try_bots = self.selected_try_bots - self.cq_try_bots
-
-        if options.flag_specific:
-            self._selected_try_bots = self.flag_specific_builder(options.flag_specific)
-            if not self._selected_try_bots:
-                _log.error(
-                    'Aborted: builder %s not found in builder list.' % options.flag_specific)
-                return 1
-
-        if options.resultDB:
-            self._resultdb_fetcher = True
-        jobs = self.git_cl.latest_try_jobs(
-            builder_names=self.selected_try_bots, patchset=options.patchset)
-
-        self._log_jobs(jobs)
-        builders_with_no_jobs = self.selected_try_bots - {
-            b.builder_name
-            for b in jobs
-        }
-
-        if not options.trigger_jobs and not jobs:
-            _log.info('Aborted: no try jobs and --no-trigger-jobs passed.')
+        build_resolver = BuildResolver(
+            self._tool.web,
+            self.git_cl,
+            self._io_pool,
+            can_trigger_jobs=(options.trigger_jobs and not self._dry_run))
+        builds = [Build(builder) for builder in self.selected_try_bots]
+        try:
+            build_statuses = build_resolver.resolve_builds(
+                builds, options.patchset)
+        except RPCError as error:
+            _log.error('%s', error)
+            _log.error('Request payload: %s',
+                       json.dumps(error.request_body, indent=2))
+            return 1
+        except UnresolvedBuildException as error:
+            _log.error('%s', error)
             return 1
 
-        if options.use_blink_try_bots_only:
-            if not builders_with_no_jobs:
-                _log.info("All try bots have been run. ")
-                _log.info("Using only the try bots results")
-            elif options.trigger_jobs:
-                _log.info("Triggering try bots only.")
-
-        if options.trigger_jobs and builders_with_no_jobs:
-            self.trigger_try_jobs(builders_with_no_jobs)
-            return 1
-        jobs_to_results = self._fetch_results(jobs)
-        builders_with_results = {b.builder_name for b in jobs_to_results}
-        builders_without_results = (
-            set(self.selected_try_bots) - builders_with_results)
-        if builders_without_results:
-            _log.info('There are some builders with no results:')
-            self._log_builder_list(builders_without_results)
-
-        if options.fill_missing is None and builders_without_results:
-            should_continue = self._tool.user.confirm(
-                'Would you like to continue?',
-                default=self._tool.user.DEFAULT_NO)
-            if not should_continue:
-                _log.info('Aborting.')
+        results_by_suite = self._fetch_results(build_statuses)
+        incomplete_results = self._partition_incomplete_results(
+            results_by_suite)
+        if incomplete_results:
+            self._log_incomplete_results(incomplete_results)
+            if self._tool.user.confirm(
+                    'Would you like to fill in missing results '
+                    'with available results?\n'
+                    'This is generally not suggested unless the results are '
+                    'platform agnostic or the needed results happen to be not '
+                    'missing.'):
+                results_by_suite = self.fill_in_missing_results(
+                    incomplete_results, results_by_suite)
+            else:
+                _log.info('Aborting. Please retry builders with no results.')
                 return 1
-            options.fill_missing = self._tool.user.confirm(
-                'Would you like to try to fill in missing results with\n'
-                'available results?\n'
-                'Note: This will generally yield correct results\n'
-                'as long as the results are not platform-specific.',
-                default=self._tool.user.DEFAULT_NO)
 
         if options.test_name_file:
             test_baseline_set = self._make_test_baseline_set_from_file(
-                options.test_name_file, jobs_to_results)
+                options.test_name_file, results_by_suite)
         elif args:
             test_baseline_set = self._make_test_baseline_set_for_tests(
-                args, jobs_to_results)
+                args, results_by_suite)
         else:
             test_baseline_set = self._make_test_baseline_set(
-                jobs_to_results, options.only_changed_tests)
+                results_by_suite, options.only_changed_tests)
 
-        if options.fill_missing:
-            self.fill_in_missing_results(test_baseline_set)
+        with self._io_pool or contextlib.nullcontext():
+            return self.rebaseline(options, test_baseline_set)
 
-        if not options.dry_run:
-            self.rebaseline(options, test_baseline_set)
-        return 0
+    def _partition_incomplete_results(
+            self, results_by_suite: ResultsBySuite) -> ResultsBySuite:
+        """Remove and return incomplete results from the given results map.
+
+        Arguments:
+            results_by_suite: Test results keyed by suite name, then by build.
+                This map is mutated to leave only complete results when this
+                method returns.
+        """
+        incomplete_results_by_suite = collections.defaultdict(dict)
+        for suite, results_by_build in results_by_suite.items():
+            for target_build, results in list(results_by_build.items()):
+                if results.incomplete_reason:
+                    del results_by_build[target_build]
+                    incomplete_results_by_suite[suite][target_build] = results
+        return incomplete_results_by_suite
+
+    def _log_incomplete_results(self, results_by_suite: ResultsBySuite):
+        _log.warning('Some builds have incomplete results:')
+        for suite in sorted(results_by_suite):
+            for build in sorted(results_by_suite[suite],
+                                key=lambda build: build.builder_name):
+                _log.warning(
+                    f'  {build}, "{suite}": '
+                    f'{results_by_suite[suite][build].incomplete_reason}')
+        # TODO(crbug.com/352762538): Link to the document about handling bot
+        # timeouts if it's one of the reasons.
 
     def check_ok_to_run(self):
         unstaged_baselines = self.unstaged_baselines()
@@ -214,75 +222,15 @@ class RebaselineCL(AbstractParallelRebaselineCommand):
             for path in unstaged_baselines:
                 _log.error('  %s', path)
             return False
-        if self._get_issue_number() is None:
-            _log.error('No issue number for current branch.')
-            return False
         return True
 
     @property
     def selected_try_bots(self):
-        if self._selected_try_bots:
-            return self._selected_try_bots
-        return frozenset(self._tool.builders.filter_builders(
-            is_try=True, exclude_specifiers={'android'}))
+        if self._builders:
+            return set(self._builders)
+        return self._tool.builders.builders_for_rebaselining()
 
-    @property
-    def cq_try_bots(self):
-        return frozenset(self._tool.builders.all_cq_try_builder_names())
-
-    def flag_specific_builder(self, flag_specific):
-        return frozenset(
-            self._tool.builders.all_flag_specific_try_builder_names(
-                flag_specific=flag_specific))
-
-    def _get_issue_number(self):
-        """Returns the current CL issue number, or None."""
-        issue = self.git_cl.get_issue_number()
-        if not issue.isdigit():
-            return None
-        return int(issue)
-
-    def trigger_try_jobs(self, builders):
-        """Triggers try jobs for the given builders."""
-        _log.info('Triggering try jobs:')
-        for builder in sorted(builders):
-            _log.info('  %s', builder)
-        self.git_cl.trigger_try_jobs(builders)
-        _log.info('Once all pending try jobs have finished, please re-run\n'
-                  'blink_tool.py rebaseline-cl to fetch new baselines.')
-
-    def _log_jobs(self, jobs):
-        """Logs the current state of the try jobs.
-
-        This includes which jobs were started or finished or missing,
-        and their current state.
-
-        Args:
-            jobs: A dict mapping Build objects to TryJobStatus objects.
-        """
-        finished_jobs = {b for b, s in jobs.items() if s.status == 'COMPLETED'}
-        if self.selected_try_bots.issubset(
-            {b.builder_name
-             for b in finished_jobs}):
-            _log.info('Finished try jobs found for all try bots.')
-            return
-
-        if finished_jobs:
-            _log.info('Finished try jobs:')
-            self._log_builder_list({b.builder_name for b in finished_jobs})
-        else:
-            _log.info('No finished try jobs.')
-
-        unfinished_jobs = {b for b in jobs if b not in finished_jobs}
-        if unfinished_jobs:
-            _log.info('Scheduled or started try jobs:')
-            self._log_builder_list({b.builder_name for b in unfinished_jobs})
-
-    def _log_builder_list(self, builders):
-        for builder in sorted(builders):
-            _log.info('  %s', builder)
-
-    def _fetch_results(self, jobs):
+    def _fetch_results(self, build_statuses: BuildStatuses) -> ResultsBySuite:
         """Fetches results for all of the given builds.
 
         There should be a one-to-one correspondence between Builds, supported
@@ -290,115 +238,94 @@ class RebaselineCL(AbstractParallelRebaselineCommand):
         continuing with rebaselining may yield incorrect results, when the new
         baselines are deduped, an old baseline may be kept for the platform
         that's missing results.
-
-        Args:
-            jobs: A dict mapping Build objects to TryJobStatus objects.
-
-        Returns:
-            A dict mapping Builds to lists of WebTestResults for all completed
-            jobs.
         """
         results_fetcher = self._tool.results_fetcher
-        builds_to_results = collections.defaultdict(list)
+        results_by_suite = collections.defaultdict(dict)
+        build_steps_to_fetch = []
 
-        for build, status in jobs.items():
-            if status == TryJobStatus('COMPLETED', 'SUCCESS'):
-                _log.debug('No baselines to download for passing %r build %s.',
-                           build.builder_name, build.build_number
-                           or '(unknown)')
-                # This empty entry indicates the builder is not missing.
-                builds_to_results[build] = []
-                continue
-            if status != TryJobStatus('COMPLETED', 'FAILURE'):
-                # Only completed failed builds will contain actual failed
-                # web tests to download baselines for.
-                continue
+        for build, status in build_statuses.items():
+            for step in self._tool.builders.step_names_for_builder(
+                    build.builder_name):
+                if status is BuildStatus.TEST_FAILURE:
+                    # Only completed failed builds will contain actual failed
+                    # web tests to download baselines for.
+                    build_steps_to_fetch.append((build, step))
+                    continue
 
-            step_names = results_fetcher.get_layout_test_step_names(build)
-            unavailable_step_names = []
-            if self._resultdb_fetcher:
-                maybe_results = results_fetcher.fetch_results_from_resultdb_layout_tests(
-                    self._tool, build, True)
-                if maybe_results:
-                    builds_to_results[build].append(maybe_results)
+                incomplete_reason = None
+                if status is BuildStatus.SUCCESS:
+                    _log.debug(
+                        f'No baselines to download for passing {build}.')
                 else:
-                    # The results don't have step-level granularity, so just
-                    # log all of them.
-                    unavailable_step_names.extend(step_names)
-            else:
-                for step_name in step_names:
-                    maybe_result = results_fetcher.fetch_results(
-                        build, False, step_name)
-                    if maybe_result:
-                        builds_to_results[build].append(maybe_result)
-                    else:
-                        unavailable_step_names.append(step_name)
+                    incomplete_reason = IncompleteResultsReason(status)
+                # These empty results are a no-op when constructing the
+                # `TestBaselineSet` later.
+                results_by_suite[step][build] = WebTestResults(
+                    [],
+                    step_name=step,
+                    build=build,
+                    incomplete_reason=incomplete_reason)
 
-            if unavailable_step_names:
-                _log.warning('Failed to fetch some results for "%s".',
-                             build.builder_name)
-                for step_name in unavailable_step_names:
-                    results_url = results_fetcher.results_url(
-                        build.builder_name, build.build_number, step_name)
-                    _log.warning('Results URL: %s/results.html', results_url)
-        return builds_to_results
+        _log.info('Fetching test results for '
+                  f'{pluralize("suite", len(build_steps_to_fetch))}.')
+        map_fn = self._io_pool.map if self._io_pool else map
+        for results in map_fn(
+                lambda build_step: results_fetcher.gather_results(*build_step),
+                build_steps_to_fetch):
+            results_by_suite[results.step_name()][results.build] = results
+        return results_by_suite
 
-    def _make_test_baseline_set_from_file(self, filename, builds_to_results):
-        tests = []
+    def _make_test_baseline_set_from_file(
+        self,
+        filename: str,
+        results_by_suite: ResultsBySuite,
+    ) -> TestBaselineSet:
+        tests = set()
         try:
-            with self._tool.filesystem.open_text_file_for_reading(
-                    filename) as fh:
-                _log.info('Reading list of tests to rebaseline '
-                          'from %s', filename)
-                for test in fh.readlines():
-                    test = test.strip()
-                    if not test or test.startswith('#'):
-                        continue
-                    tests.append(test)
+            _log.info('Reading list of tests to rebaseline from %s', filename)
+            tests = self._host_port.tests_from_file(filename)
         except IOError:
             _log.info('Could not read test names from %s', filename)
-        return self._make_test_baseline_set_for_tests(tests, builds_to_results)
+        return self._make_test_baseline_set_for_tests(tests, results_by_suite)
 
-    def _test_exists(self, results, test):
-        if self._resultdb_fetcher:
-            return results.fail_result_exists_resultdb(test)
-        return results.result_for_test(test)
-
-    def _make_test_baseline_set_for_tests(self, tests, builds_to_results):
+    def _make_test_baseline_set_for_tests(
+        self,
+        test_patterns: Collection[str],
+        results_by_suite: ResultsBySuite,
+    ) -> TestBaselineSet:
         """Determines the set of test baselines to fetch from a list of tests.
 
         Args:
-            tests: A list of tests.
-            builds_to_results: A dict mapping Builds to lists of WebTestResults.
-
-        Returns:
-            A TestBaselineSet object.
+            tests_patterns: A list of test patterns (e.g., directories).
         """
-        test_baseline_set = TestBaselineSet(self._tool)
-        for test, (build, builder_results) in itertools.product(
-                tests, builds_to_results.items()):
-            for step_results in builder_results:
-                # Check for bad user-supplied test names early to create a
-                # smaller test baseline set and send fewer bad requests.
-                if self._test_exists(step_results, test):
-                    test_baseline_set.add(test, build,
-                                          step_results.step_name())
+        test_baseline_set = TestBaselineSet(self._tool.builders)
+        tests = resolve_test_patterns(self._host_port, test_patterns)
+        for test, (suite, results_by_build) in itertools.product(
+                tests, results_by_suite.items()):
+            for target_build, results in results_by_build.items():
+                if not results.result_for_test(test):
+                    # No need to rebaseline tests that ran expectedly. Expected
+                    # results aren't fetched from ResultDB.
+                    continue
+                target_port = self._tool.builders.port_name_for_builder_name(
+                    target_build.builder_name)
+                test_baseline_set.add(test, results.build, suite, target_port)
         return test_baseline_set
 
-    def _make_test_baseline_set(self, builds_to_results, only_changed_tests):
+    def _make_test_baseline_set(
+        self,
+        results_by_suite: ResultsBySuite,
+        only_changed_tests: bool,
+    ) -> TestBaselineSet:
         """Determines the set of test baselines to fetch.
 
         The list of tests are not explicitly provided, so all failing tests or
         modified tests will be rebaselined (depending on only_changed_tests).
 
         Args:
-            builds_to_results: A dict mapping Builds to lists of WebTestResults.
             only_changed_tests: Whether to only include baselines for tests that
                are changed in this CL. If False, all new baselines for failing
                tests will be downloaded, even for tests that were not modified.
-
-        Returns:
-            A TestBaselineSet object.
         """
         if only_changed_tests:
             files_in_cl = self._tool.git().changed_files(diff_filter='AM')
@@ -410,22 +337,38 @@ class RebaselineCL(AbstractParallelRebaselineCommand):
                 for f in files_in_cl if f.startswith(test_base)
             }
 
-        test_baseline_set = TestBaselineSet(self._tool, prefix_mode=False)
-        for build, builder_results in builds_to_results.items():
-            for step_results in builder_results:
-                if self._resultdb_fetcher:
-                    tests_to_rebaseline = self._tests_to_rebaseline_resultDB(
-                        build, step_results)
-                else:
-                    tests_to_rebaseline = self._tests_to_rebaseline(
-                        build, step_results)
+        builders = self._tool.builders
+        test_baseline_set = TestBaselineSet(self._tool.builders)
+        for suite, results_by_build in results_by_suite.items():
+            for target_build, results in results_by_build.items():
                 # Here we have a concrete list of tests so we don't need prefix lookup.
-                for test in tests_to_rebaseline:
+                for test in self._tests_to_rebaseline(results):
                     if only_changed_tests and test not in tests_in_cl:
                         continue
-                    test_baseline_set.add(test, build,
-                                          step_results.step_name())
-        return test_baseline_set
+                    target_port = builders.port_name_for_builder_name(
+                        target_build.builder_name)
+                    test_baseline_set.add(test, results.build, suite,
+                                          target_port)
+
+        # Validate test existence, since the builder may run tests not found
+        # locally. `Port.tests()` performs an expensive filesystem walk, so
+        # filter out all invalid tests here instead of filtering at each build
+        # step.
+        tests = set(self._host_port.tests(test_baseline_set.all_tests()))
+        missing_tests, valid_set = set(), TestBaselineSet(self._tool.builders)
+        for task in test_baseline_set:
+            if task.test in tests:
+                valid_set.add(*task)
+            else:
+                missing_tests.add(task.test)
+        if missing_tests:
+            _log.warning(
+                'Skipping rebaselining for %s missing from the local checkout:',
+                pluralize('test', len(missing_tests)))
+            for test in sorted(missing_tests):
+                _log.warning(f'  {test}')
+            _log.warning('You may want to rebase or trigger new builds.')
+        return valid_set
 
     def _test_base_path(self):
         """Returns the relative path from the repo root to the web tests."""
@@ -433,55 +376,26 @@ class RebaselineCL(AbstractParallelRebaselineCommand):
         return self._tool.filesystem.relpath(
             finder.web_tests_dir(), finder.path_from_chromium_base()) + '/'
 
-    def _tests_to_rebaseline_resultDB(self, build, web_test_results):
+    def _tests_to_rebaseline(self,
+                             web_test_results: WebTestResults) -> List[str]:
         """Fetches a list of tests that should be rebaselined for some build.
-
-        Args:
-            build: A Build instance.
-            web_test_results: A WebTestResults instance or None.
-
-        Returns:
-            A sorted list of tests to rebaseline for this build.
-        """
-        if web_test_results is None:
-            return []
-
-        failed_tests = web_test_results.failed_unexpected_resultdb()
-        failed_test_names = [
-            r['testId'][len('ninja://:blink_web_tests') + 1:]
-            for r in failed_tests
-        ]
-
-        # we do not create baselines for reftests.
-        port_name = self._tool.builders.port_name_for_builder_name(
-            build.builder_name)
-        port = self._tool.port_factory.get(port_name, None)
-        tests_to_rebaseline = []
-        for test_name in failed_test_names:
-            if not port.reference_files(test_name):
-                tests_to_rebaseline.append(test_name)
-        return tests_to_rebaseline
-
-    def _tests_to_rebaseline(self, build, web_test_results):
-        """Fetches a list of tests that should be rebaselined for some build.
-
-        Args:
-            build: A Build instance.
-            web_test_results: A WebTestResults instance.
 
         Returns:
             A sorted list of tests to rebaseline for this build.
         """
         unexpected_results = web_test_results.didnt_run_as_expected_results()
-        tests = sorted(
-            r.test_name() for r in unexpected_results
-            if r.is_missing_baseline() or r.has_non_reftest_mismatch())
+        tests = sorted(r.test_name() for r in unexpected_results
+                       if r.is_missing_baseline() or r.has_mismatch())
+        if not tests:
+            # no need to fetch retry summary in this case
+            return []
 
         test_suite = re.sub('\s*\(.*\)$', '', web_test_results.step_name())
-        new_failures = self._fetch_tests_with_new_failures(build, test_suite)
+        new_failures = self._fetch_tests_with_new_failures(
+            web_test_results.build, test_suite)
         if new_failures is None:
-            _log.warning('No retry summary available for "%s".',
-                         build.builder_name)
+            _log.warning('No retry summary available for (%s, "%s").',
+                         web_test_results.build, test_suite)
         else:
             tests = [t for t in tests if t in new_failures]
         return tests
@@ -507,56 +421,74 @@ class RebaselineCL(AbstractParallelRebaselineCommand):
             _log.warning('Unexpected retry summary content:\n%s', content)
             return None
 
-    def fill_in_missing_results(self, test_baseline_set):
-        """Adds entries, filling in results for missing jobs.
+    def fill_in_missing_results(
+        self,
+        incomplete_results: ResultsBySuite,
+        complete_results: ResultsBySuite,
+    ) -> ResultsBySuite:
+        """Create a map of complete results to rebaseline with.
 
-        For each test prefix, if there is an entry missing for some port,
-        then an entry should be added for that port using a build that is
-        available.
-
-        For example, if there's no entry for the port "win-win10", but there
-        is an entry for the "win-win11" port, then an entry might be added
-        for "win-win10" using the results from "win-win11".
+        Returns:
+            The union of `incomplete_results` and `complete_results`, where the
+            former's entries have been substituted with those selected from the
+            latter. The selection prioritizes same-OS substitutions.
         """
-        all_ports = {
-            self._tool.builders.port_name_for_builder_name(b)
-            for b in self.selected_try_bots
+        # Store complete and filled-in results separately to avoid mutating
+        # `complete_results` while it's being used to fill in results.
+        merged_results = {
+            suite: dict(results_by_build)
+            for suite, results_by_build in complete_results.items()
         }
-        for test_prefix in test_baseline_set.test_prefixes():
-            build_port_pairs = test_baseline_set.build_port_pairs(test_prefix)
-            missing_ports = all_ports - {p for _, p in build_port_pairs}
-            if not missing_ports:
-                continue
-            _log.info('For %s:', test_prefix)
-            for port in missing_ports:
-                build = self._choose_fill_in_build(port, build_port_pairs)
-                _log.info('Using "%s" build %d for %s.', build.builder_name,
-                          build.build_number, port)
-                test_baseline_set.add(test_prefix, build, port_name=port)
-        return test_baseline_set
+        for suite in incomplete_results:
+            for incomplete_build in list(incomplete_results[suite]):
+                fill_results = self._select_fill_results(
+                    incomplete_build, suite, complete_results)
+                if fill_results is None:
+                    continue
+                merged_results[suite][incomplete_build] = fill_results
+                _log.debug('Using %s, "%s" for %s, "%s".', fill_results.build,
+                           fill_results.step_name(), incomplete_build, suite)
+        return merged_results
 
-    def _choose_fill_in_build(self, target_port, build_port_pairs):
-        """Returns a Build to use to supply results for the given port.
+    def _select_fill_results(
+        self,
+        incomplete_build: Optional[Build],
+        suite: str,
+        complete_results: ResultsBySuite,
+    ) -> Optional[WebTestResults]:
+        # TODO(crbug.com/350775866): Consider allowing substitutions across
+        # related suites (e.g., ordinary `blink_wpt_tests` and
+        # `not_site_per_process_blink_wpt_tests`).
+        complete_results_by_build = complete_results.get(suite, {})
+        # Some platforms only run a small subset of tests. Don't allow them to
+        # provide results to other platforms that run all tests.
+        candidate_builds = {
+            build
+            for build in complete_results_by_build
+            if not self._default_smoke_test_only(build)
+        }
+        if not candidate_builds:
+            return None
+        target_os = self._os_name(incomplete_build)
+        # If no builds have the same OS, choose an arbitrary one, which is OK
+        # for platform-agnostic tests.
+        source_build = max(candidate_builds,
+                           key=lambda build: self._os_name(build) == target_os)
+        return complete_results_by_build[source_build]
 
-        Ideally, this should return a build for a similar port so that the
-        results from the selected build may also be correct for the target port.
-        """
+    @memoized
+    def _default_smoke_test_only(self, build: Build) -> bool:
+        port_name = self._tool.builders.port_name_for_builder_name(
+            build.builder_name)
+        port = self._tool.port_factory.get(port_name)
+        return port.default_smoke_test_only()
 
+    @memoized
+    def _os_name(self, build: Build) -> str:
         # A full port name should normally always be of the form <os>-<version>;
-        # for example "win-win11", or "linux-trusty". For the test port used in
-        # unit tests, though, the full port name may be "test-<os>-<version>".
-        def os_name(port):
-            if '-' not in port:
-                return port
-            return port[:port.rfind('-')]
-
-        # If any Build exists with the same OS, use the first one.
-        target_os = os_name(target_port)
-        same_os_builds = sorted(
-            b for b, p in build_port_pairs if os_name(p) == target_os)
-        if same_os_builds:
-            return same_os_builds[0]
-
-        # Otherwise, perhaps any build will do, for example if the results are
-        # the same on all platforms. In this case, just return the first build.
-        return sorted(build_port_pairs)[0][0]
+        # for example "win-win11", or "mac-mac13-arm64". For the test port used
+        # in unit tests, though, the full port name may be
+        # "test-<os>-<version>".
+        port_name = self._tool.builders.port_name_for_builder_name(
+            build.builder_name)
+        return self._tool.port_factory.get(port_name).operating_system()

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 namespace policy {
 
-ComponentCloudPolicyService::Delegate::~Delegate() {}
+ComponentCloudPolicyService::Delegate::~Delegate() = default;
 
 ComponentCloudPolicyService::ComponentCloudPolicyService(
     const std::string& policy_type,
@@ -19,7 +19,7 @@ ComponentCloudPolicyService::ComponentCloudPolicyService(
     scoped_refptr<base::SequencedTaskRunner> backend_task_runner)
     : policy_installed_(true), weak_ptr_factory_(this) {}
 
-ComponentCloudPolicyService::~ComponentCloudPolicyService() {}
+ComponentCloudPolicyService::~ComponentCloudPolicyService() = default;
 
 // static
 bool ComponentCloudPolicyService::SupportsDomain(PolicyDomain domain) {

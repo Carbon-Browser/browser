@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -173,12 +173,12 @@ SkBitmap GetResizedBitmap(const SkBitmap& source_bitmap,
 
 class FaviconImageSource : public gfx::ImageSkiaSource {
  public:
-  FaviconImageSource() {}
+  FaviconImageSource() = default;
 
   FaviconImageSource(const FaviconImageSource&) = delete;
   FaviconImageSource& operator=(const FaviconImageSource&) = delete;
 
-  ~FaviconImageSource() override {}
+  ~FaviconImageSource() override = default;
 
   // gfx::ImageSkiaSource:
   gfx::ImageSkiaRep GetImageForScale(float scale) override {

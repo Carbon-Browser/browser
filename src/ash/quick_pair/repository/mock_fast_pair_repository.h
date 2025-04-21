@@ -1,14 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_QUICK_PAIR_REPOSITORY_MOCK_FAST_PAIR_REPOSITORY_H_
 #define ASH_QUICK_PAIR_REPOSITORY_MOCK_FAST_PAIR_REPOSITORY_H_
 
+#include <optional>
+
 #include "ash/quick_pair/repository/fast_pair_repository.h"
 #include "base/memory/scoped_refptr.h"
 #include "testing/gmock/include/gmock/gmock.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 namespace quick_pair {
@@ -31,12 +32,12 @@ class MockFastPairRepository : public FastPairRepository {
                CheckAccountKeysCallback callback),
               (override));
   MOCK_METHOD(void,
-              AssociateAccountKey,
+              WriteAccountAssociationToFootprints,
               (scoped_refptr<Device> device,
                const std::vector<uint8_t>& account_key),
               (override));
   MOCK_METHOD(bool,
-              AssociateAccountKeyLocally,
+              WriteAccountAssociationToLocalRegistry,
               (scoped_refptr<Device> device),
               (override));
   MOCK_METHOD(void,
@@ -45,8 +46,18 @@ class MockFastPairRepository : public FastPairRepository {
                DeleteAssociatedDeviceCallback callback),
               (override));
   MOCK_METHOD(void,
+              UpdateAssociatedDeviceFootprintsName,
+              (const std::string& mac_address,
+               const std::string& display_name,
+               bool retry),
+              (override));
+  MOCK_METHOD(void,
               FetchDeviceImages,
               (scoped_refptr<Device> device),
+              (override));
+  MOCK_METHOD(std::optional<std::string>,
+              GetDeviceDisplayNameFromCache,
+              (std::vector<uint8_t> account_key),
               (override));
   MOCK_METHOD(bool,
               PersistDeviceImages,
@@ -54,11 +65,11 @@ class MockFastPairRepository : public FastPairRepository {
               (override));
   MOCK_METHOD(bool,
               EvictDeviceImages,
-              (const device::BluetoothDevice* device),
+              (const std::string& mac_address),
               (override));
-  MOCK_METHOD(absl::optional<chromeos::bluetooth_config::DeviceImageInfo>,
+  MOCK_METHOD(std::optional<bluetooth_config::DeviceImageInfo>,
               GetImagesForDevice,
-              (const std::string& device_id),
+              (const std::string& mac_address),
               (override));
   MOCK_METHOD(void,
               CheckOptInStatus,
@@ -81,6 +92,11 @@ class MockFastPairRepository : public FastPairRepository {
   MOCK_METHOD(bool,
               IsAccountKeyPairedLocally,
               (const std::vector<uint8_t>& account_key),
+              (override));
+  MOCK_METHOD(void,
+              IsDeviceSavedToAccount,
+              (const std::string& mac_address,
+               IsDeviceSavedToAccountCallback callback),
               (override));
 };
 

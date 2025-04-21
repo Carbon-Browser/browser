@@ -1,9 +1,9 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "tools/mac/power/power_sampler/user_active_simulator.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 
 namespace power_sampler {
 

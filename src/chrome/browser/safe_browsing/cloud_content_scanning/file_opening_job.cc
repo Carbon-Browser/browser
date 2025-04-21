@@ -1,38 +1,39 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/safe_browsing/cloud_content_scanning/file_opening_job.h"
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/task/task_traits.h"
+#include "components/safe_browsing/core/common/safebrowsing_switches.h"
 
 namespace safe_browsing {
 
 namespace {
 
-constexpr char kMaxFileOpeningThreads[] = "wp-max-file-opening-threads";
 constexpr size_t kDefaultMaxFileOpeningThreads = 5;
 
-size_t GetMaxFileOpeningThreads() {
+}  // namespace
+
+// static
+size_t FileOpeningJob::GetMaxFileOpeningThreads() {
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
-  if (command_line->HasSwitch(kMaxFileOpeningThreads)) {
+  if (command_line->HasSwitch(switches::kWpMaxFileOpeningThreads)) {
     int parsed_max;
-    if (base::StringToInt(
-            command_line->GetSwitchValueASCII(kMaxFileOpeningThreads),
-            &parsed_max) &&
+    if (base::StringToInt(command_line->GetSwitchValueASCII(
+                              switches::kWpMaxFileOpeningThreads),
+                          &parsed_max) &&
         parsed_max > 0) {
       return parsed_max;
     } else {
-      LOG(ERROR) << kMaxFileOpeningThreads << " had invalid value";
+      LOG(ERROR) << switches::kWpMaxFileOpeningThreads << " had invalid value";
     }
   }
 
   return kDefaultMaxFileOpeningThreads;
 }
-
-}  // namespace
 
 FileOpeningJob::FileOpeningTask::FileOpeningTask() = default;
 FileOpeningJob::FileOpeningTask::~FileOpeningTask() = default;

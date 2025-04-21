@@ -1,9 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.components.payments;
 
+import org.chromium.build.annotations.MockedInTests;
 import org.chromium.payments.mojom.PaymentDetailsModifier;
 import org.chromium.payments.mojom.PaymentItem;
 import org.chromium.payments.mojom.PaymentMethodData;
@@ -11,9 +12,8 @@ import org.chromium.payments.mojom.PaymentOptions;
 
 import java.util.Map;
 
-/**
- * The parameters of PaymentRequest specified by the merchant.
- */
+/** The parameters of PaymentRequest specified by the merchant. */
+@MockedInTests  // Tell R8 not to break the ability to mock the class.
 public interface PaymentRequestParams {
     /**
      * @return Whether or not the payment request is being aborted. Other methods should not get

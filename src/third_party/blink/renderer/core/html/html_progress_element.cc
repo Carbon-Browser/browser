@@ -25,7 +25,6 @@
 #include "third_party/blink/renderer/core/html/parser/html_parser_idioms.h"
 #include "third_party/blink/renderer/core/html/shadow/progress_shadow_element.h"
 #include "third_party/blink/renderer/core/html_names.h"
-#include "third_party/blink/renderer/core/layout/layout_object_factory.h"
 #include "third_party/blink/renderer/core/layout/layout_progress.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -39,26 +38,49 @@ const double HTMLProgressElement::kInvalidPosition = -2;
 HTMLProgressElement::HTMLProgressElement(Document& document)
     : HTMLElement(html_names::kProgressTag, document), value_(nullptr) {
   UseCounter::Count(document, WebFeature::kProgressElement);
+  SetHasCustomStyleCallbacks();
   EnsureUserAgentShadowRoot();
 }
 
 HTMLProgressElement::~HTMLProgressElement() = default;
 
 LayoutObject* HTMLProgressElement::CreateLayoutObject(
-    const ComputedStyle& style,
-    LegacyLayout legacy) {
+    const ComputedStyle& style) {
+  if (style.IsVerticalWritingMode()) {
+    UseCounter::Count(GetDocument(), WebFeature::kVerticalFormControls);
+  }
   if (!style.HasEffectiveAppearance()) {
     UseCounter::Count(GetDocument(),
                       WebFeature::kProgressElementWithNoneAppearance);
-    return LayoutObject::CreateObject(this, style, legacy);
+    return LayoutObject::CreateObject(this, style);
   }
   UseCounter::Count(GetDocument(),
                     WebFeature::kProgressElementWithProgressBarAppearance);
-  return LayoutObjectFactory::CreateProgress(this, style, legacy);
+  return MakeGarbageCollected<LayoutProgress>(*this);
 }
 
 LayoutProgress* HTMLProgressElement::GetLayoutProgress() const {
   return DynamicTo<LayoutProgress>(GetLayoutObject());
+}
+
+void HTMLProgressElement::DidRecalcStyle(const StyleRecalcChange change) {
+  HTMLElement::DidRecalcStyle(change);
+  const ComputedStyle* style = GetComputedStyle();
+  if (style) {
+    bool is_horizontal = style->IsHorizontalWritingMode();
+    bool is_ltr = style->IsLeftToRightDirection();
+    if (is_horizontal && is_ltr) {
+      UseCounter::Count(GetDocument(),
+                        WebFeature::kProgressElementHorizontalLtr);
+    } else if (is_horizontal && !is_ltr) {
+      UseCounter::Count(GetDocument(),
+                        WebFeature::kProgressElementHorizontalRtl);
+    } else if (is_ltr) {
+      UseCounter::Count(GetDocument(), WebFeature::kProgressElementVerticalLtr);
+    } else {
+      UseCounter::Count(GetDocument(), WebFeature::kProgressElementVerticalRtl);
+    }
+  }
 }
 
 void HTMLProgressElement::ParseAttribute(
@@ -119,7 +141,7 @@ bool HTMLProgressElement::IsDeterminate() const {
 }
 
 void HTMLProgressElement::DidElementStateChange() {
-  SetValueWidthPercentage(position() * 100);
+  SetInlineSizePercentage(position() * 100);
   if (LayoutProgress* layout_progress = GetLayoutProgress())
     layout_progress->UpdateFromElement();
 }
@@ -135,7 +157,7 @@ void HTMLProgressElement::DidAddUserAgentShadowRoot(ShadowRoot& root) {
   bar->SetShadowPseudoId(AtomicString("-webkit-progress-bar"));
   value_ = MakeGarbageCollected<ProgressShadowElement>(GetDocument());
   value_->SetShadowPseudoId(AtomicString("-webkit-progress-value"));
-  SetValueWidthPercentage(HTMLProgressElement::kIndeterminatePosition * 100);
+  SetInlineSizePercentage(HTMLProgressElement::kIndeterminatePosition * 100);
   bar->AppendChild(value_);
 
   inner->AppendChild(bar);
@@ -150,8 +172,10 @@ void HTMLProgressElement::Trace(Visitor* visitor) const {
   HTMLElement::Trace(visitor);
 }
 
-void HTMLProgressElement::SetValueWidthPercentage(double width) const {
-  value_->SetInlineStyleProperty(CSSPropertyID::kWidth, width,
+void HTMLProgressElement::SetInlineSizePercentage(double position) const {
+  value_->SetInlineStyleProperty(CSSPropertyID::kInlineSize, position,
+                                 CSSPrimitiveValue::UnitType::kPercentage);
+  value_->SetInlineStyleProperty(CSSPropertyID::kBlockSize, 100,
                                  CSSPrimitiveValue::UnitType::kPercentage);
 }
 

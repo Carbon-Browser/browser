@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,8 @@
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/run_loop.h"
-#include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/version.h"
 #include "components/component_updater/mock_component_updater_service.h"
 #include "components/optimization_guide/core/optimization_guide_constants.h"
@@ -35,8 +33,6 @@ class OptimizationHintsMockComponentUpdateService
       const OptimizationHintsMockComponentUpdateService&) = delete;
   OptimizationHintsMockComponentUpdateService& operator=(
       const OptimizationHintsMockComponentUpdateService&) = delete;
-
-  ~OptimizationHintsMockComponentUpdateService() override = default;
 };
 
 }  // namespace
@@ -44,16 +40,7 @@ class OptimizationHintsMockComponentUpdateService
 namespace component_updater {
 
 class OptimizationHintsComponentInstallerTest : public PlatformTest {
- public:
-  OptimizationHintsComponentInstallerTest() = default;
-
-  OptimizationHintsComponentInstallerTest(
-      const OptimizationHintsComponentInstallerTest&) = delete;
-  OptimizationHintsComponentInstallerTest& operator=(
-      const OptimizationHintsComponentInstallerTest&) = delete;
-
-  ~OptimizationHintsComponentInstallerTest() override = default;
-
+ protected:
   void SetUp() override {
     PlatformTest::SetUp();
 
@@ -66,23 +53,14 @@ class OptimizationHintsComponentInstallerTest : public PlatformTest {
     return component_install_dir_.GetPath();
   }
 
-  base::Version ruleset_format_version() {
-    return policy_->ruleset_format_version_;
-  }
-
   void CreateTestOptimizationHints(const std::string& hints_content) {
     base::FilePath hints_path = component_install_dir().Append(
         optimization_guide::kUnindexedHintsFileName);
     ASSERT_TRUE(base::WriteFile(hints_path, hints_content));
   }
 
-  void LoadOptimizationHints(const base::Version& ruleset_format) {
-    base::Value manifest(base::Value::Type::DICTIONARY);
-    if (ruleset_format.IsValid()) {
-      manifest.SetStringKey(
-          OptimizationHintsComponentInstallerPolicy::kManifestRulesetFormatKey,
-          ruleset_format.GetString());
-    }
+  void LoadOptimizationHints() {
+    base::Value::Dict manifest;
     ASSERT_TRUE(policy_->VerifyInstallation(manifest, component_install_dir()));
     const base::Version expected_version(kTestHintsVersion);
     policy_->ComponentReady(expected_version, component_install_dir(),
@@ -90,7 +68,6 @@ class OptimizationHintsComponentInstallerTest : public PlatformTest {
     base::RunLoop().RunUntilIdle();
   }
 
- protected:
   void RunUntilIdle() {
     task_environment_.RunUntilIdle();
     base::RunLoop().RunUntilIdle();
@@ -130,37 +107,12 @@ TEST_F(OptimizationHintsComponentInstallerTest,
   RunUntilIdle();
 }
 
-TEST_F(OptimizationHintsComponentInstallerTest, NoRulesetFormatIgnored) {
-  ASSERT_NO_FATAL_FAILURE(CreateTestOptimizationHints("some hints"));
-
-  ASSERT_NO_FATAL_FAILURE(LoadOptimizationHints(base::Version("")));
-  EXPECT_FALSE(optimization_guide::OptimizationHintsComponentUpdateListener::
-                   GetInstance()
-                       ->hints_component_info()
-                       .has_value());
-}
-
-TEST_F(OptimizationHintsComponentInstallerTest, FutureRulesetFormatIgnored) {
-  ASSERT_NO_FATAL_FAILURE(CreateTestOptimizationHints("some hints"));
-  base::Version version = ruleset_format_version();
-  const std::vector<uint32_t> future_ruleset_components = {
-      version.components()[0] + 1, version.components()[1],
-      version.components()[2]};
-
-  ASSERT_NO_FATAL_FAILURE(
-      LoadOptimizationHints(base::Version(future_ruleset_components)));
-  EXPECT_FALSE(optimization_guide::OptimizationHintsComponentUpdateListener::
-                   GetInstance()
-                       ->hints_component_info()
-                       .has_value());
-}
-
 TEST_F(OptimizationHintsComponentInstallerTest, LoadFileWithData) {
   const std::string expected_hints = "some hints";
   ASSERT_NO_FATAL_FAILURE(CreateTestOptimizationHints(expected_hints));
-  ASSERT_NO_FATAL_FAILURE(LoadOptimizationHints(ruleset_format_version()));
+  ASSERT_NO_FATAL_FAILURE(LoadOptimizationHints());
 
-  absl::optional<optimization_guide::HintsComponentInfo> component_info =
+  std::optional<optimization_guide::HintsComponentInfo> component_info =
       optimization_guide::OptimizationHintsComponentUpdateListener::
           GetInstance()
               ->hints_component_info();

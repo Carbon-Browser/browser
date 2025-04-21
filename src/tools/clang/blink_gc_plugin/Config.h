@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,8 +28,6 @@ extern const char kHeapAllocatorName[];
 extern const char kTraceIfNeededName[];
 extern const char kVisitorDispatcherName[];
 extern const char kVisitorVarName[];
-extern const char kAdjustAndMarkName[];
-extern const char kIsHeapObjectAliveName[];
 extern const char kConstIteratorName[];
 extern const char kIteratorName[];
 extern const char kConstReverseIteratorName[];
@@ -57,9 +55,6 @@ class Config {
                        llvm::StringRef ns_name,
                        RecordInfo* info,
                        RecordInfo::TemplateArgs* args) {
-    if (name == "Member") {
-      return VerifyNamespaceAndArgCount("blink", 1, ns_name, info, args);
-    }
     if (name == "BasicMember") {
       if (!VerifyNamespaceAndArgCount("cppgc", 2, ns_name, info, args))
         return false;
@@ -72,9 +67,6 @@ class Config {
                            llvm::StringRef ns_name,
                            RecordInfo* info,
                            RecordInfo::TemplateArgs* args) {
-    if (name == "WeakMember") {
-      return VerifyNamespaceAndArgCount("blink", 1, ns_name, info, args);
-    }
     if (name == "BasicMember") {
       if (!VerifyNamespaceAndArgCount("cppgc", 2, ns_name, info, args))
         return false;
@@ -87,9 +79,6 @@ class Config {
                            llvm::StringRef ns_name,
                            RecordInfo* info,
                            RecordInfo::TemplateArgs* args) {
-    if ((name == "Persistent") || (name == "WeakPersistent")) {
-      return VerifyNamespaceAndArgCount("blink", 1, ns_name, info, args);
-    }
     if (name == "BasicPersistent") {
       return VerifyNamespaceAndArgCount("cppgc", 1, ns_name, info, args);
     }
@@ -100,10 +89,6 @@ class Config {
                                       llvm::StringRef ns_name,
                                       RecordInfo* info,
                                       RecordInfo::TemplateArgs* args) {
-    if ((name == "CrossThreadPersistent") ||
-        (name == "CrossThreadWeakPersistent")) {
-      return VerifyNamespaceAndArgCount("blink", 1, ns_name, info, args);
-    }
     if (name == "BasicCrossThreadPersistent") {
       return VerifyNamespaceAndArgCount("cppgc", 1, ns_name, info, args);
     }
@@ -126,8 +111,8 @@ class Config {
                                         llvm::StringRef ns_name,
                                         RecordInfo* info,
                                         RecordInfo::TemplateArgs* args) {
-    return name == "TraceWrapperV8Reference" &&
-           VerifyNamespaceAndArgCount("blink", 1, ns_name, info, args);
+    return name == "TracedReference" &&
+           VerifyNamespaceAndArgCount("v8", 1, ns_name, info, args);
   }
 
   static bool IsWTFCollection(llvm::StringRef name) {
@@ -139,18 +124,31 @@ class Config {
            name == "HashMap";
   }
 
+  static bool IsSTDCollection(llvm::StringRef name) {
+    return name == "vector" || name == "map" || name == "unordered_map" ||
+           name == "set" || name == "unordered_set" || name == "array" ||
+           name == "optional" || name == "variant";
+  }
+
   static bool IsGCCollection(llvm::StringRef name) {
     return name == "HeapVector" || name == "HeapDeque" ||
            name == "HeapHashSet" || name == "HeapLinkedHashSet" ||
-           name == "HeapHashCountedSet" || name == "HeapHashMap";
+           name == "HeapHashCountedSet" || name == "HeapHashMap" ||
+           name == "HeapLinkedStack";
   }
 
   static bool IsHashMap(llvm::StringRef name) {
-    return name == "HashMap" || name == "HeapHashMap";
+    return name == "HashMap" || name == "HeapHashMap" || name == "map" ||
+           name == "unordered_map";
   }
 
   // Assumes name is a valid collection name.
   static size_t CollectionDimension(llvm::StringRef name) {
+    // In case we're dealing with a variant, we want to collect the whole
+    // parameter pack.
+    if (name == "variant") {
+      return 0;
+    }
     return (IsHashMap(name) || name == "pair") ? 2 : 1;
   }
 

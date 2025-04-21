@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,6 +57,7 @@ class CrostiniExportImportStatusTracker {
       const std::string& architecture_container,
       const std::string& architecture_device);
   void SetStatusFailedInsufficientSpace(uint64_t additional_required_space);
+  void SetStatusFailedInsufficientSpaceUnknownAmount();
   void SetStatusFailedConcurrentOperation(
       ExportImportType in_progress_operation_type);
 

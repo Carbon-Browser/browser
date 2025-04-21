@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 
 #include <deque>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -16,7 +17,6 @@
 #include "components/zucchini/arm_utils.h"
 #include "components/zucchini/image_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace zucchini {
 
@@ -40,7 +40,7 @@ void CheckReader(const std::vector<Reference>& expected_refs,
     EXPECT_TRUE(ref.has_value());
     EXPECT_EQ(expected_ref, ref.value());
   }
-  EXPECT_EQ(absl::nullopt, reader->GetNext());  // Nothing should be left.
+  EXPECT_EQ(std::nullopt, reader->GetNext());  // Nothing should be left.
 }
 
 using ArmCopyDispFun = bool (*)(ConstBufferView src_view,

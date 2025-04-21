@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,12 +20,18 @@ class CORE_EXPORT CSSLengthInterpolationType : public CSSInterpolationType {
 
   InterpolationValue MaybeConvertStandardPropertyUnderlyingValue(
       const ComputedStyle&) const final;
+  void Composite(UnderlyingValueOwner&,
+                 double underlying_fraction,
+                 const InterpolationValue&,
+                 double interpolation_fraction) const final;
   void ApplyStandardPropertyValue(const InterpolableValue&,
                                   const NonInterpolableValue*,
                                   StyleResolverState&) const final;
 
  private:
-  float EffectiveZoom(const ComputedStyle&) const;
+  float EffectiveZoom(float effective_zoom) const {
+    return is_zoomed_length_ ? effective_zoom : 1;
+  }
 
   InterpolationValue MaybeConvertNeutral(const InterpolationValue& underlying,
                                          ConversionCheckers&) const final;
@@ -37,6 +43,15 @@ class CORE_EXPORT CSSLengthInterpolationType : public CSSInterpolationType {
                                        const StyleResolverState*,
                                        ConversionCheckers&) const final;
 
+  InterpolationValue PreInterpolationCompositeIfNeeded(
+      InterpolationValue value,
+      const InterpolationValue& underlying,
+      EffectModel::CompositeOperation,
+      ConversionCheckers&) const override;
+
+  InterpolationValue MaybeConvertUnderlyingValue(
+      const InterpolationEnvironment&) const final;
+
   PairwiseInterpolationValue MaybeMergeSingles(
       InterpolationValue&& start,
       InterpolationValue&& end) const final;
@@ -46,6 +61,7 @@ class CORE_EXPORT CSSLengthInterpolationType : public CSSInterpolationType {
                                  const StyleResolverState&) const final;
 
   const Length::ValueRange value_range_;
+  bool is_zoomed_length_;
 };
 
 }  // namespace blink

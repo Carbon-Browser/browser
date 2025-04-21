@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 
 #include "ipcz/driver_object.h"
 #include "ipcz/driver_transport.h"
@@ -28,7 +29,7 @@ namespace internal {
 
 // Header which begins all messages. The header layout is versioned for
 // extensibility and long-term support.
-struct IPCZ_ALIGN(8) MessageHeader {
+struct MessageHeader {
   // The size of the header in bytes.
   uint8_t size;
 
@@ -60,18 +61,17 @@ using MessageHeaderV0 = MessageHeader;
 using LatestMessageHeaderVersion = MessageHeaderV0;
 
 // Header encoding metadata about a structure within a message.
-struct IPCZ_ALIGN(8) StructHeader {
-  // The size of the structure in bytes.
+struct StructHeader {
+  // The size of the structure in bytes. Used for versioning.
   uint32_t size;
 
-  // The version number of the structure, which may be used to differentiate
-  // between different versions of the same encoded size.
-  uint32_t version;
+  // Unused. Must be zero.
+  uint32_t padding;
 };
 static_assert(sizeof(StructHeader) == 8, "Unexpected size");
 
 // Header encoding metadata about any array within a message.
-struct IPCZ_ALIGN(8) ArrayHeader {
+struct ArrayHeader {
   // The total number of bytes occupied by the array, including this header and
   // any padding for 8-byte alignment.
   uint32_t num_bytes;
@@ -85,7 +85,7 @@ struct IPCZ_ALIGN(8) ArrayHeader {
 // array of driver handles. This structure describes both arrays for a single
 // driver object. For every object attached to a message, there one of these
 // structs.
-struct IPCZ_ALIGN(8) DriverObjectData {
+struct DriverObjectData {
   // Array index of the byte array which contains serialized data for this
   // driver object. This is specifically the byte index into the enclosing
   // message where the array's ArrayHeader can be found.
@@ -104,7 +104,7 @@ struct IPCZ_ALIGN(8) DriverObjectData {
 
 // Encodes information about a range of driver objects. Used to encode
 // DriverObject array parameters.
-struct IPCZ_ALIGN(8) DriverObjectArrayData {
+struct DriverObjectArrayData {
   // Index into the message's unified DriverObject array which corresponds to
   // the first DriverObject belonging to the array described by this structure.
   uint32_t first_object_index;
@@ -114,6 +114,10 @@ struct IPCZ_ALIGN(8) DriverObjectArrayData {
   // array, and continue for the next `num_objects` contiguous elements.
   uint32_t num_objects;
 };
+
+// Encodes an invalid driver object index. Any driver object field encoded as
+// this value will deserialize to an invalid DriverObject.
+constexpr uint32_t kInvalidDriverObjectIndex = 0xffffffff;
 
 // End of wire structure definitions. Anything below this line is not meant to
 // be encoded into messages.
@@ -142,10 +146,11 @@ enum class ParamType {
 };
 
 // Metadata about a single parameter declared within a message via one of the
-// IPCZ_MSG_PARAM* macros.
+// IPCZ_MSG_PARAM* macros. Constants of this type are genereated by such macros.
+// See documentation in message_versions_declaration_macros.h and
+// message_base_declaration_macros.h.
 struct ParamMetadata {
-  // The offset of this parameter from the start of the macro-generated
-  // parameters structure, including the StructHeader itself.
+  // The offset of this parameter from the start of its version's field block.
   size_t offset;
 
   // The size of the data expected at `offset` in order for the field to be
@@ -160,11 +165,63 @@ struct ParamMetadata {
   ParamType type;
 };
 
+// Metadata about a single message version. Note that versions are additive:
+// "version 0" refers only to the fields defined for version 0 of a message;
+// "version 1" refers only to the fields added for version 1. More generally, a
+// message with a "version N" block also has a block for all versions from 0 to
+// N-1, and all blocks are non-overlapping.
+//
+// Constants of this type are genereated by IPCZ_MSG_PARAM* macros. See
+// documentation in message_versions_declaration_macros.h and
+// message_base_declaration_macros.h.
+struct VersionMetadata {
+  // The version number for the described version.
+  int version_number;
+
+  // The offset of this version's parameter data from the start of the
+  // parameters structure, including the StructHeader.
+  size_t offset;
+
+  // The size of the parameter data which comprises this version.
+  size_t size;
+
+  // Metadata about all the parameters in the parameter data.
+  const absl::Span<const ParamMetadata> params;
+};
+
 }  // namespace internal
 
 // Message helps build, serialize, and deserialize ipcz-internal messages.
 class IPCZ_ALIGN(8) Message {
  public:
+  enum { kIncoming };
+
+  // ReceivedDataBuffer is a fixed-size, heap-allocated data buffer which is
+  // allocated uninitialized and which can be moved out of the Message which
+  // allocated it. This is used strictly as storage for received message data.
+  struct FreeDeleter {
+    void operator()(void* ptr) { free(ptr); }
+  };
+  using ReceivedDataPtr = std::unique_ptr<uint8_t, FreeDeleter>;
+  class ReceivedDataBuffer {
+   public:
+    ReceivedDataBuffer();
+    explicit ReceivedDataBuffer(size_t size);
+    ReceivedDataBuffer(ReceivedDataBuffer&&);
+    ReceivedDataBuffer& operator=(ReceivedDataBuffer&&);
+    ~ReceivedDataBuffer();
+
+    uint8_t* data() const { return data_.get(); }
+    size_t size() const { return size_; }
+    bool empty() const { return size_ == 0; }
+
+    absl::Span<uint8_t> bytes() const { return absl::MakeSpan(data(), size()); }
+
+   private:
+    ReceivedDataPtr data_;
+    size_t size_ = 0;
+  };
+
   Message();
   Message(uint8_t message_id, size_t params_size);
   ~Message();
@@ -177,7 +234,7 @@ class IPCZ_ALIGN(8) Message {
     return *reinterpret_cast<const internal::MessageHeader*>(data_.data());
   }
 
-  absl::Span<uint8_t> data_view() { return absl::MakeSpan(data_); }
+  absl::Span<uint8_t> data_view() { return data_; }
 
   absl::Span<uint8_t> params_data_view() {
     return absl::MakeSpan(&data_[header().size], data_.size() - header().size);
@@ -201,6 +258,16 @@ class IPCZ_ALIGN(8) Message {
   template <typename ElementType>
   uint32_t AllocateArray(size_t num_elements) {
     return AllocateGenericArray(sizeof(ElementType), num_elements);
+  }
+
+  // Allocates an array and populates its elements in-place, returning the array
+  // offset to use as a field value.
+  template <typename ElementType>
+  uint32_t AllocateAndSetArray(absl::Span<const ElementType> elements) {
+    const auto offset = AllocateArray<ElementType>(elements.size());
+    const auto view = GetArrayView<ElementType>(offset);
+    std::copy(elements.begin(), elements.end(), view.begin());
+    return offset;
   }
 
   // Appends a single driver object to this message, and returns its index into
@@ -318,7 +385,7 @@ class IPCZ_ALIGN(8) Message {
   // NOTE: It is invalid to call this on a message for which
   // `CanTransmitOn(transport)` does not return true, and doing so results in
   // unspecified behavior.
-  void Serialize(const DriverTransport& transport);
+  bool Serialize(const DriverTransport& transport);
 
   // Validates and deserializes a Message of an unrecognized type. DriverObjects
   // are deserialized and much of the message structure is validated, but the
@@ -326,6 +393,15 @@ class IPCZ_ALIGN(8) Message {
   // exposed.
   bool DeserializeUnknownType(const DriverTransport::RawMessage& message,
                               const DriverTransport& transport);
+
+  // For a Message whose contents were received from another node, this takes
+  // ownership of the heap-allocated copy of those contents. Invalidates this
+  // Message.
+  ReceivedDataBuffer TakeReceivedData() &&;
+
+  void SetEnvelope(DriverObject envelope);
+
+  DriverObject TakeEnvelope();
 
  protected:
   // Returns `x` aligned above to the nearest 8-byte boundary.
@@ -338,6 +414,17 @@ class IPCZ_ALIGN(8) Message {
                                  data_.data());
   }
 
+  // Common helper for vaidation of an incoming message header and basic data
+  // payload size.
+  bool CopyDataAndValidateHeader(absl::Span<const uint8_t> data);
+
+  // Common helper to validate an encoded parameter structure against a specific
+  // message definition. Must only be called on a Message with `data_` already
+  // populated, the header already validated, and DriverObjects already
+  // deserialized into `driver_objects_`.
+  bool ValidateParameters(size_t params_size,
+                          absl::Span<const internal::VersionMetadata> versions);
+
   // Attempts to deserialize a message from raw `data` and `handles` into `this`
   // message object, given the `params_size`, `params_current_version` and
   // `params_metadata`, which are all generated from message macros at build
@@ -347,19 +434,41 @@ class IPCZ_ALIGN(8) Message {
   // received.
   bool DeserializeFromTransport(
       size_t params_size,
-      uint32_t params_current_version,
-      absl::Span<const internal::ParamMetadata> params_metadata,
+      absl::Span<const internal::VersionMetadata> versions,
       const DriverTransport::RawMessage& message,
       const DriverTransport& transport);
 
-  // Raw serialized data for this message. This always begins with MessageHeader
-  // (or potentially some newer or older version thereof), whose actual size
-  // is determined by the header's `size` field. After that many bytes, a
-  // parameters structure immediately follows, as generated by an invocation of
-  // IPCZ_MSG_BEGIN()/IPCZ_MSG_END(). After fixed parameters, any number of
-  // dynamicaly inlined allocations may follow (e.g. for array contents,
-  // driver objects, etc.)
-  absl::InlinedVector<uint8_t, 128> data_;
+  // Attempts to deserialize a message from raw `data`, given a set of already
+  // deserialized DriverObjects in `objects`. The objects and data here have
+  // been extracted from a message relayed opaquely through the broker. While
+  // each DriverObject has already been validated and deserialized, the
+  // message-specific parameter data and object-field assignments must be
+  // validated here.
+  bool DeserializeFromRelay(
+      size_t params_size,
+      absl::Span<const internal::VersionMetadata> versions,
+      absl::Span<const uint8_t> data,
+      absl::Span<DriverObject> objects);
+
+  // Inlined storage for this message's data. Used when constructing outgoing
+  // messages, since most are small and can avoid additional heap allocation
+  // before hitting the wire.
+  std::optional<absl::InlinedVector<uint8_t, 128>> inlined_data_;
+
+  // Heap storage for this message's data, as received from a transport.
+  std::optional<ReceivedDataBuffer> received_data_;
+
+  // A view over *either* `received_data_` *or* `inlined_data_`, or empty if
+  // neither is present.
+  //
+  // This is the raw serialized data for this message. It always begins with a
+  // MessageHeader (or potentially some newer or older version thereof), whose
+  // actual size is determined by the header's `size` field. After that many
+  // bytes, a parameters structure immediately follows, as generated by an
+  // invocation of IPCZ_MSG_BEGIN()/IPCZ_MSG_END(). After fixed parameters, any
+  // number of dynamicaly inlined allocations may follow (e.g. for array
+  // contents, driver objects, etc.)
+  absl::Span<uint8_t> data_;
 
   // Collection of DriverObjects attached to this message. These are attached
   // while building a message (e.g. by calling AppendDriverObject), and they are
@@ -390,6 +499,8 @@ class IPCZ_ALIGN(8) Message {
   // transmissible handles, there is generally NOT a 1:1 correpsondence between
   // this list and `driver_objects_`.
   absl::InlinedVector<IpczDriverHandle, 2> transmissible_driver_handles_;
+
+  DriverObject envelope_;
 };
 
 // Template helper to wrap the Message type for a specific macro-generated
@@ -408,8 +519,12 @@ class MessageWithParams : public Message {
   MessageWithParams() : Message(ParamDataType::kId, sizeof(ParamDataType)) {
     ParamDataType& p = *(new (&params()) ParamDataType());
     p.header.size = sizeof(p);
-    p.header.version = ParamDataType::kVersion;
+    p.header.padding = 0;
   }
+
+  // Special constructor which avoids initializing storage that won't be used
+  // anyway.
+  explicit MessageWithParams(decltype(Message::kIncoming)) : Message() {}
 
   ~MessageWithParams() = default;
 
@@ -421,7 +536,8 @@ class MessageWithParams : public Message {
   //
   // If this object was deserialized from the wire, it must already have been
   // validated to have an enough space for `header().size` bytes plus the size
-  // if ParamDataType (TODO: or some older version thereof.)
+  // of ParamDataType or some older version thereof. Safe access to newer
+  // versions' fields is managed by the ParamDataType itself.
   ParamDataType& params() {
     return *reinterpret_cast<ParamDataType*>(&data_[header().size]);
   }

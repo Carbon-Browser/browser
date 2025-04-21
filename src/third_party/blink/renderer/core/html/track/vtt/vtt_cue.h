@@ -32,6 +32,7 @@
 
 #include "third_party/blink/renderer/bindings/core/v8/v8_align_setting.h"
 #include "third_party/blink/renderer/core/core_export.h"
+#include "third_party/blink/renderer/core/html/media/html_media_element.h"
 #include "third_party/blink/renderer/core/html/track/text_track_cue.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_map.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -46,6 +47,7 @@ class V8UnionAutoKeywordOrDouble;
 class VTTCueBox;
 class VTTRegion;
 class VTTScanner;
+class V8DirectionSetting;
 
 using AlignSetting = V8AlignSetting::Enum;
 using VTTRegionMap = HeapHashMap<String, Member<VTTRegion>>;
@@ -71,7 +73,7 @@ class VTTCueBackgroundBox final : public HTMLDivElement {
   void SetTrack(TextTrack*);
   void Trace(Visitor*) const override;
 
-  const TextTrack* GetTrack() const { return track_; }
+  const TextTrack* GetTrack() const { return track_.Get(); }
 
  private:
   void DidRecalcStyle(const StyleRecalcChange) override;
@@ -103,11 +105,11 @@ class CORE_EXPORT VTTCue final : public TextTrackCue {
   VTTCue(Document&, double start_time, double end_time, const String& text);
   ~VTTCue() override;
 
-  VTTRegion* region() const { return region_; }
+  VTTRegion* region() const { return region_.Get(); }
   void setRegion(VTTRegion*);
 
-  const String& vertical() const;
-  void setVertical(const String&);
+  V8DirectionSetting vertical() const;
+  void setVertical(const V8DirectionSetting&);
 
   bool snapToLines() const { return snap_to_lines_; }
   void setSnapToLines(bool);
@@ -135,21 +137,28 @@ class CORE_EXPORT VTTCue final : public TextTrackCue {
 
   DocumentFragment* getCueAsHTML();
 
+  // Handles the entrance and exit of cues for description-tagged tracks.
+  // OnEnter begins speaking the cue. OnExit pauses the video to let the
+  // description finish, if the cue is still being spoken at the specified end
+  // time.
+  void OnEnter(HTMLMediaElement& video) override;
+  void OnExit(HTMLMediaElement& video) override;
+
   void UpdateDisplay(HTMLDivElement& container) override;
 
   void UpdatePastAndFutureNodes(double movie_time) override;
 
-  absl::optional<double> GetNextIntraCueTime(double movie_time) const override;
+  std::optional<double> GetNextIntraCueTime(double movie_time) const override;
 
   void RemoveDisplayTree(RemovalNotification) override;
 
   double CalculateComputedLinePosition() const;
 
-  enum WritingDirection {
+  enum class WritingDirection {
     kHorizontal = 0,
     kVerticalGrowingLeft,
     kVerticalGrowingRight,
-    kNumberOfWritingDirections
+    kMaxValue = kVerticalGrowingRight
   };
   WritingDirection GetWritingDirection() const { return writing_direction_; }
 
@@ -179,7 +188,7 @@ class CORE_EXPORT VTTCue final : public TextTrackCue {
   double CalculateComputedTextPosition() const;
   AlignSetting CalculateComputedCueAlignment() const;
 
-  enum CueSetting {
+  enum class CueSetting {
     kNone,
     kVertical,
     kLine,

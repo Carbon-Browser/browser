@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,11 +37,13 @@ void TabStripScrubbingMetrics::IncrementPressCount(
     base::TimeDelta tab_switch_delta =
         base::TimeTicks::Now() - last_tab_switch_timestamp_;
     if (tab_switch_delta <= kMaxTimeConsideredScrubbing) {
-      if (user_gesture.type == TabStripUserGestureDetails::GestureType::kMouse)
+      if (user_gesture.type ==
+          TabStripUserGestureDetails::GestureType::kMouse) {
         ++tabs_scrubbed_by_mouse_press_count_;
-      else if (user_gesture.type ==
-               TabStripUserGestureDetails::GestureType::kKeyboard)
+      } else if (user_gesture.type ==
+                 TabStripUserGestureDetails::GestureType::kKeyboard) {
         ++tabs_scrubbed_by_key_press_count_;
+      }
     }
   }
   last_tab_switch_timestamp_ = base::TimeTicks::Now();

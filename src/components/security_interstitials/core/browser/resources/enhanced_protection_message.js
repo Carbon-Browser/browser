@@ -1,15 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-'use strict';
+import {SecurityInterstitialCommandId, sendCommand} from 'chrome://interstitials/common/resources/interstitial_common.js';
+import {mobileNav} from 'chrome://interstitials/common/resources/interstitial_mobile_nav.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 
 // Other constants defined in security_interstitial_page.h.
 const SB_DISPLAY_ENHANCED_PROTECTION_MESSAGE =
     'displayEnhancedProtectionMessage';
 
 // This sets up the enhanced protection message.
-function setupEnhancedProtectionMessage() {
+export function setupEnhancedProtectionMessage() {
   const interstitialType = loadTimeData.getString('type');
   if (interstitialType !== 'SAFEBROWSING' && interstitialType !== 'SSL' &&
       interstitialType !== 'CAPTIVE_PORTAL') {
@@ -20,24 +22,28 @@ function setupEnhancedProtectionMessage() {
     return;
   }
 
-  if ($('enhanced-protection-link')) {
+  const enhancedProtectionLink =
+      document.querySelector('#enhanced-protection-link');
+  const enhancedProtectionMessage =
+      document.querySelector('#enhanced-protection-message');
+  if (enhancedProtectionLink) {
     if (mobileNav) {
       // To make sure the touch area of the link is larger than the
       // minimum touch area for accessibility, make the whole block tappable.
-      $('enhanced-protection-message').addEventListener('click', function() {
+      enhancedProtectionMessage.addEventListener('click', function() {
         sendCommand(SecurityInterstitialCommandId
                         .CMD_OPEN_ENHANCED_PROTECTION_SETTINGS);
         return false;
       });
     } else {
-      $('enhanced-protection-link').addEventListener('click', function() {
+      enhancedProtectionLink.addEventListener('click', function() {
         sendCommand(SecurityInterstitialCommandId
                         .CMD_OPEN_ENHANCED_PROTECTION_SETTINGS);
         return false;
       });
     }
   }
-  $('enhanced-protection-message').classList.remove('hidden');
+  enhancedProtectionMessage.classList.remove('hidden');
 
   const billing =
       interstitialType === 'SAFEBROWSING' && loadTimeData.getBoolean('billing');
@@ -47,5 +53,5 @@ function setupEnhancedProtectionMessage() {
     className = 'safe-browsing-enhanced-protection-message';
   }
 
-  $('enhanced-protection-message').classList.add(className);
+  enhancedProtectionMessage.classList.add(className);
 }

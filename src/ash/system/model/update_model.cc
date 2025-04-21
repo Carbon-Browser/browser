@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,19 +19,17 @@ void UpdateModel::RemoveObserver(UpdateObserver* observer) {
 
 void UpdateModel::SetUpdateAvailable(UpdateSeverity severity,
                                      bool factory_reset_required,
-                                     bool rollback,
-                                     UpdateType update_type) {
+                                     bool rollback) {
   update_required_ = true;
+  update_deferred_ = DeferredUpdateState::kNone;
   severity_ = severity;
   factory_reset_required_ = factory_reset_required;
   rollback_ = rollback;
-  update_type_ = update_type;
   NotifyUpdateAvailable();
 }
 
 void UpdateModel::SetRelaunchNotificationState(
     const RelaunchNotificationState& relaunch_notification_state) {
-  DCHECK_EQ(update_type_, UpdateType::kSystem);
   relaunch_notification_state_ = relaunch_notification_state;
   NotifyUpdateAvailable();
 }
@@ -41,8 +39,21 @@ void UpdateModel::SetUpdateOverCellularAvailable(bool available) {
   NotifyUpdateAvailable();
 }
 
+void UpdateModel::SetUpdateDeferred(DeferredUpdateState state) {
+  update_deferred_ = state;
+  NotifyUpdateAvailable();
+}
+
+void UpdateModel::SetShowEolNotice(bool show) {
+  show_eol_notice_ = show;
+}
+
+void UpdateModel::SetShowExtendedUpdatesNotice(bool show) {
+  show_extended_updates_notice_ = show;
+}
+
 UpdateSeverity UpdateModel::GetSeverity() const {
-  // TODO(https://crbug.com/927010): adjust severity according the amount of
+  // TODO(crbug.com/41438408): adjust severity according the amount of
   // time passing after update is available over cellular connection. Use low
   // severity for update available over cellular connection.
   return update_over_cellular_available_ ? UpdateSeverity::kLow : severity_;
@@ -50,6 +61,7 @@ UpdateSeverity UpdateModel::GetSeverity() const {
 
 void UpdateModel::ResetUpdateAvailable() {
   update_required_ = false;
+  update_deferred_ = DeferredUpdateState::kNone;
   NotifyUpdateAvailable();
 }
 

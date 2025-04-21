@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 The Chromium Authors. All rights reserved.
+ * Copyright 2016 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -7,9 +7,9 @@
 /**
  * Launches the first PaymentRequest UI.
  */
-function showFirst() { // eslint-disable-line no-unused-vars
+function showFirst() {
   const request1 = new PaymentRequest(
-      [{supportedMethods: 'basic-card', data: {supportedNetworks: ['visa']}}],
+      [{supportedMethods: 'https://bobpay.test'}, {supportedMethods: 'https://alicepay.test'}],
       {total: {label: 'Total', amount: {currency: 'USD', value: '5.00'}}});
   request1.show();
 }
@@ -18,9 +18,9 @@ function showFirst() { // eslint-disable-line no-unused-vars
  * Launches the second PaymentRequest UI, which should fail because the first is
  * already showing. Must be called after showFirst().
  */
-async function showSecond() { // eslint-disable-line no-unused-vars
+async function showSecond() {
   const request2 = new PaymentRequest(
-      [{supportedMethods: 'basic-card', data: {supportedNetworks: ['visa']}}],
+      [{supportedMethods: 'https://bobpay.test'}],
       {total: {label: 'Total', amount: {currency: 'USD', value: '5.00'}}});
   // We already have a PaymentRequest showing, so this should fail.
   try {

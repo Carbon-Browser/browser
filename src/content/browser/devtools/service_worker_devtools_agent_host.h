@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -67,7 +67,7 @@ class ServiceWorkerDevToolsAgentHost : public DevToolsAgentHostImpl,
   NetworkLoaderFactoryParamsAndInfo CreateNetworkFactoryParamsForDevTools()
       override;
   RenderProcessHost* GetProcessHost() override;
-  absl::optional<network::CrossOriginEmbedderPolicy>
+  std::optional<network::CrossOriginEmbedderPolicy>
   cross_origin_embedder_policy(const std::string& id) override;
 
   void WorkerStarted(int worker_process_id, int worker_route_id);
@@ -120,7 +120,7 @@ class ServiceWorkerDevToolsAgentHost : public DevToolsAgentHostImpl,
   void UpdateProcessHost();
 
   // DevToolsAgentHostImpl overrides.
-  bool AttachSession(DevToolsSession* session, bool acquire_wake_lock) override;
+  bool AttachSession(DevToolsSession* session) override;
   void DetachSession(DevToolsSession* session) override;
   protocol::TargetAutoAttacher* auto_attacher() override;
 

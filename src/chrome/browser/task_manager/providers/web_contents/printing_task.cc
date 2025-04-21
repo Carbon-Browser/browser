@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,8 +23,7 @@ PrintingTask::PrintingTask(content::WebContents* web_contents)
           RendererTask::GetFaviconFromWebContents(web_contents),
           web_contents) {}
 
-PrintingTask::~PrintingTask() {
-}
+PrintingTask::~PrintingTask() = default;
 
 void PrintingTask::UpdateTitle() {
   set_title(PrefixPrintTitle(GetTitleFromWebContents(web_contents())));

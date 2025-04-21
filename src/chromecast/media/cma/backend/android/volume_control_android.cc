@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,10 +13,9 @@
 
 #include "base/android/build_info.h"
 #include "base/android/jni_android.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/cxx17_backports.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
@@ -24,6 +23,8 @@
 #include "base/no_destructor.h"
 #include "chromecast/base/init_command_line_shlib.h"
 #include "chromecast/chromecast_buildflags.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
 #include "chromecast/media/cma/backend/android/audio_track_jni_headers/VolumeControl_jni.h"
 #include "chromecast/media/cma/backend/android/audio_track_jni_headers/VolumeMap_jni.h"
 
@@ -90,10 +91,9 @@ void VolumeControlAndroid::SetVolume(VolumeChangeSource source,
                                      float level) {
   if (type == AudioContentType::kOther) {
     NOTREACHED() << "Can't set volume for content type kOther";
-    return;
   }
 
-  level = base::clamp(level, 0.0f, 1.0f);
+  level = std::clamp(level, 0.0f, 1.0f);
   // The input level value is in the kMedia (MUSIC) volume table domain.
   float mapped_level =
       MapIntoDifferentVolumeTableDomain(AudioContentType::kMedia, type, level);
@@ -113,7 +113,6 @@ void VolumeControlAndroid::SetMuted(VolumeChangeSource source,
                                     bool muted) {
   if (type == AudioContentType::kOther) {
     NOTREACHED() << "Can't set mute state for content type kOther";
-    return;
   }
 
   thread_.task_runner()->PostTask(
@@ -125,11 +124,10 @@ void VolumeControlAndroid::SetMuted(VolumeChangeSource source,
 void VolumeControlAndroid::SetOutputLimit(AudioContentType type, float limit) {
   if (type == AudioContentType::kOther) {
     NOTREACHED() << "Can't set output limit for content type kOther";
-    return;
   }
 
   // The input limit is in the kMedia (MUSIC) volume table domain.
-  limit = base::clamp(limit, 0.0f, 1.0f);
+  limit = std::clamp(limit, 0.0f, 1.0f);
   float limit_db = VolumeToDbFSCached(AudioContentType::kMedia, limit);
   AudioSinkManager::Get()->SetOutputLimitDb(type, limit_db);
 }

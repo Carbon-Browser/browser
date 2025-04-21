@@ -31,6 +31,7 @@
 #ifndef THIRD_PARTY_BLINK_PUBLIC_WEB_WEB_FRAME_SERIALIZER_H_
 #define THIRD_PARTY_BLINK_PUBLIC_WEB_WEB_FRAME_SERIALIZER_H_
 
+#include "base/functional/callback.h"
 #include "third_party/blink/public/platform/web_common.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/platform/web_thread_safe_data.h"
@@ -43,7 +44,7 @@ class WebFrame;
 class WebLocalFrame;
 
 // Serialization of frame contents into html or mhtml.
-class WebFrameSerializer {
+class BLINK_EXPORT WebFrameSerializer {
  public:
   // Delegate for controling the behavior of generateMHTMLParts method.
   class MHTMLPartsGenerationDelegate {
@@ -55,8 +56,6 @@ class WebFrameSerializer {
     virtual bool UseBinaryEncoding() = 0;
 
     virtual bool RemovePopupOverlay() = 0;
-
-    virtual bool UsePageProblemDetectors() = 0;
   };
 
   // Generates and returns an MHTML header.
@@ -68,21 +67,22 @@ class WebFrameSerializer {
   // Same |boundary| needs to used for all generateMHTMLHeader and
   // generateMHTMLParts and generateMHTMLFooter calls that belong to the same
   // MHTML document (see also rfc1341, section 7.2.1, "boundary" description).
-  BLINK_EXPORT static WebThreadSafeData GenerateMHTMLHeader(
-      const WebString& boundary,
-      WebLocalFrame*,
-      MHTMLPartsGenerationDelegate*);
+  static WebThreadSafeData GenerateMHTMLHeader(const WebString& boundary,
+                                               WebLocalFrame*,
+                                               MHTMLPartsGenerationDelegate*);
 
-  // Generates and returns MHTML parts for the given frame and the
-  // savable resources underneath.
+  // Generates and MHTML parts for the given frame and the savable resources
+  // underneath. Calls `callback` with the result which should be appended to
+  // the MHTML file.
   //
-  // Same |boundary| needs to used for all generateMHTMLHeader and
+  // The same `boundary` needs to be used for all generateMHTMLHeader and
   // generateMHTMLParts and generateMHTMLFooter calls that belong to the same
   // MHTML document (see also rfc1341, section 7.2.1, "boundary" description).
-  BLINK_EXPORT static WebThreadSafeData GenerateMHTMLParts(
+  static void GenerateMHTMLParts(
       const WebString& boundary,
       WebLocalFrame*,
-      MHTMLPartsGenerationDelegate*);
+      MHTMLPartsGenerationDelegate*,
+      base::OnceCallback<void(WebThreadSafeData)> callback);
 
   // IMPORTANT:
   // The API below is an older implementation of frame serialization that
@@ -119,19 +119,18 @@ class WebFrameSerializer {
   //
   // False is returned if no data has been serialized (i.e. because
   // the target frame didn't have a valid url).
-  BLINK_EXPORT static bool Serialize(WebLocalFrame*,
-                                     WebFrameSerializerClient*,
-                                     LinkRewritingDelegate*,
-                                     bool);
+  static bool Serialize(WebLocalFrame*,
+                        WebFrameSerializerClient*,
+                        LinkRewritingDelegate*,
+                        bool);
 
   // FIXME: The following are here for unit testing purposes. Consider
   // changing the unit tests instead.
 
   // Generate the META for charset declaration.
-  BLINK_EXPORT static WebString GenerateMetaCharsetDeclaration(
-      const WebString& charset);
+  static WebString GenerateMetaCharsetDeclaration(const WebString& charset);
   // Generate the MOTW declaration.
-  BLINK_EXPORT static WebString GenerateMarkOfTheWebDeclaration(const WebURL&);
+  static WebString GenerateMarkOfTheWebDeclaration(const WebURL&);
 };
 
 }  // namespace blink

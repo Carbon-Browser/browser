@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,16 @@
 #define CHROME_BROWSER_COMPONENT_UPDATER_PKI_METADATA_COMPONENT_INSTALLER_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
+#include "base/values.h"
 #include "components/component_updater/component_installer.h"
+#include "mojo/public/cpp/base/proto_wrapper.h"
 #include "net/net_buildflags.h"
 #include "third_party/protobuf/src/google/protobuf/repeated_field.h"
 
@@ -75,9 +78,10 @@ class PKIMetadataComponentInstallerService final {
 
 #if BUILDFLAG(CHROME_ROOT_STORE_SUPPORTED)
   // Updates cert verifiers with the component delivered Chrome Root Store
-  // data. |chrome_root_store_bytes| should be a serialized
+  // data. `chrome_root_store` should be a wrapped
   // chrome_root_store.RootStore proto message.
-  void UpdateChromeRootStoreOnUI(const std::string& chrome_root_store_bytes);
+  void UpdateChromeRootStoreOnUI(
+      std::optional<mojo_base::ProtoWrapper> chrome_root_store);
 
   // Notifies all observers that the Chrome Root Store data has been
   // configured.
@@ -118,14 +122,14 @@ class PKIMetadataComponentInstallerPolicy : public ComponentInstallerPolicy {
   bool SupportsGroupPolicyEnabledComponentUpdates() const override;
   bool RequiresNetworkEncryption() const override;
   update_client::CrxInstaller::Result OnCustomInstall(
-      const base::Value& manifest,
+      const base::Value::Dict& manifest,
       const base::FilePath& install_dir) override;
   void OnCustomUninstall() override;
-  bool VerifyInstallation(const base::Value& manifest,
+  bool VerifyInstallation(const base::Value::Dict& manifest,
                           const base::FilePath& install_dir) const override;
   void ComponentReady(const base::Version& version,
                       const base::FilePath& install_dir,
-                      base::Value manifest) override;
+                      base::Value::Dict manifest) override;
   base::FilePath GetRelativeInstallDir() const override;
   void GetHash(std::vector<uint8_t>* hash) const override;
   std::string GetName() const override;

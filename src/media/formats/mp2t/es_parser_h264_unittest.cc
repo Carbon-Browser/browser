@@ -1,6 +1,8 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "media/formats/mp2t/es_parser_h264.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -9,14 +11,13 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_util.h"
 #include "base/time/time.h"
 #include "media/base/stream_parser_buffer.h"
-#include "media/formats/mp2t/es_parser_h264.h"
 #include "media/formats/mp2t/es_parser_test_base.h"
-#include "media/video/h264_parser.h"
+#include "media/parsers/h264_parser.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace media {

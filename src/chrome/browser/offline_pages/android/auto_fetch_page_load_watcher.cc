@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,12 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/android/tab_android.h"
 #include "chrome/browser/offline_pages/android/offline_page_auto_fetcher.h"
 #include "chrome/browser/offline_pages/android/offline_page_auto_fetcher_service.h"
@@ -55,8 +57,7 @@ std::map<int, TabInfo> AndroidTabFinder::FindAndroidTabs(
 
     for (int index = 0; index < model->GetTabCount(); ++index) {
       TabAndroid* tab = model->GetTabAt(index);
-      if (std::find(android_tab_ids.begin(), android_tab_ids.end(),
-                    tab->GetAndroidId()) != android_tab_ids.end()) {
+      if (base::Contains(android_tab_ids, tab->GetAndroidId())) {
         result[tab->GetAndroidId()] = AnroidTabInfo(*tab);
       }
     }
@@ -64,11 +65,11 @@ std::map<int, TabInfo> AndroidTabFinder::FindAndroidTabs(
   return result;
 }
 
-absl::optional<TabInfo> AndroidTabFinder::FindNavigationTab(
+std::optional<TabInfo> AndroidTabFinder::FindNavigationTab(
     content::WebContents* web_contents) {
   TabAndroid* tab = TabAndroid::FromWebContents(web_contents);
   if (!tab)
-    return absl::nullopt;
+    return std::nullopt;
   return AnroidTabInfo(*tab);
 }
 
@@ -126,11 +127,11 @@ void AutoFetchPageLoadWatcher::CreateForWebContents(
 
 namespace auto_fetch_internal {
 
-absl::optional<RequestInfo> MakeRequestInfo(const SavePageRequest& request) {
-  absl::optional<auto_fetch::ClientIdMetadata> metadata =
+std::optional<RequestInfo> MakeRequestInfo(const SavePageRequest& request) {
+  std::optional<auto_fetch::ClientIdMetadata> metadata =
       auto_fetch::ExtractMetadata(request.client_id());
   if (!metadata)
-    return absl::nullopt;
+    return std::nullopt;
 
   RequestInfo info;
   info.request_id = request.request_id();
@@ -147,7 +148,7 @@ InternalImpl::InternalImpl(AutoFetchNotifier* notifier,
       delegate_(delegate),
       tab_finder_(std::move(tab_finder)) {}
 
-InternalImpl::~InternalImpl() {}
+InternalImpl::~InternalImpl() = default;
 
 void InternalImpl::RequestListInitialized(std::vector<RequestInfo> request) {
   DCHECK(!requests_initialized_);
@@ -289,8 +290,7 @@ void InternalImpl::NavigationFrom(const GURL& previous_url,
             SavePageRequest::AutoFetchNotificationState::kUnknown) {
       // Check that the navigation is happening on the tab from which the
       // request came.
-      absl::optional<TabInfo> tab =
-          tab_finder_->FindNavigationTab(web_contents);
+      std::optional<TabInfo> tab = tab_finder_->FindNavigationTab(web_contents);
       if (tab && tab->android_tab_id == request.metadata.android_tab_id)
         SetNotificationStateToShown(request.request_id);
     }
@@ -341,7 +341,7 @@ class AutoFetchPageLoadWatcher::TabWatcher : public TabModelListObserver,
   explicit TabWatcher(InternalImpl* impl) : impl_(impl) {
     // PostTask is used to avoid interfering with the tab model while a tab is
     // being created, as this has previously resulted in crashes.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&TabWatcher::RegisterTabObserver, GetWeakPtr()));
   }
@@ -453,7 +453,7 @@ void AutoFetchPageLoadWatcher::SetNotificationStateToShown(int64_t request_id) {
 }
 
 void AutoFetchPageLoadWatcher::OnAdded(const SavePageRequest& request) {
-  absl::optional<RequestInfo> info = MakeRequestInfo(request);
+  std::optional<RequestInfo> info = MakeRequestInfo(request);
   if (!info)
     return;
 
@@ -463,7 +463,7 @@ void AutoFetchPageLoadWatcher::OnAdded(const SavePageRequest& request) {
 void AutoFetchPageLoadWatcher::OnCompleted(
     const SavePageRequest& request,
     RequestNotifier::BackgroundSavePageResult status) {
-  absl::optional<RequestInfo> info = MakeRequestInfo(request);
+  std::optional<RequestInfo> info = MakeRequestInfo(request);
   if (!info)
     return;
 
@@ -474,7 +474,7 @@ void AutoFetchPageLoadWatcher::InitializeRequestList(
     std::vector<std::unique_ptr<SavePageRequest>> requests) {
   std::vector<RequestInfo> request_infos;
   for (const auto& request : requests) {
-    absl::optional<RequestInfo> info = MakeRequestInfo(*request);
+    std::optional<RequestInfo> info = MakeRequestInfo(*request);
     if (!info)
       continue;
     request_infos.push_back(info.value());

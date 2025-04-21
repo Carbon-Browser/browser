@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,19 +8,30 @@
 #include <utility>
 
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
+#include "remoting/host/basic_desktop_environment.h"
 #include "remoting/host/client_session_control.h"
 #include "remoting/host/host_window.h"
 #include "remoting/host/host_window_proxy.h"
 #include "remoting/host/input_monitor/local_input_monitor.h"
 #include "remoting/protocol/capability_names.h"
+#include "remoting/protocol/errors.h"
 
 #if BUILDFLAG(IS_POSIX)
 #include <sys/types.h>
 #include <unistd.h>
 #endif  // BUILDFLAG(IS_POSIX)
+
+#if BUILDFLAG(IS_CHROMEOS)
+#include "base/feature_list.h"
+#include "components/user_manager/user_manager.h"
+#include "remoting/host/chromeos/features.h"
+#include "remoting/host/curtain_mode_chromeos.h"
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 namespace remoting {
 
@@ -83,6 +94,17 @@ It2MeDesktopEnvironment::It2MeDesktopEnvironment(
         caller_task_runner, ui_task_runner, std::move(disconnect_window_));
     disconnect_window_->Start(client_session_control);
   }
+}
+
+std::string It2MeDesktopEnvironment::GetCapabilities() const {
+  std::string capabilities = BasicDesktopEnvironment::GetCapabilities();
+
+  // TODO: joedow - Move MultiStream capability to a shared base
+  // class once all platforms and connection modes support it.
+  capabilities += " ";
+  capabilities += protocol::kMultiStreamCapability;
+
+  return capabilities;
 }
 
 It2MeDesktopEnvironmentFactory::It2MeDesktopEnvironmentFactory(

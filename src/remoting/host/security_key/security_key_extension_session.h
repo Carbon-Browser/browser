@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,15 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/threading/thread_checker.h"
 #include "base/values.h"
+#include "build/build_config.h"
+#include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "remoting/host/host_extension_session.h"
+#include "remoting/host/mojom/remote_security_key.mojom.h"
 
 namespace base {
 class SingleThreadTaskRunner;
@@ -46,6 +49,11 @@ class SecurityKeyExtensionSession : public HostExtensionSession {
   bool OnExtensionMessage(ClientSessionDetails* client_session_details,
                           protocol::ClientStub* client_stub,
                           const protocol::ExtensionMessage& message) override;
+
+#if BUILDFLAG(IS_WIN)
+  void BindSecurityKeyForwarder(
+      mojo::PendingReceiver<mojom::SecurityKeyForwarder> receiver);
+#endif  // BUILDFLAG(IS_WIN)
 
   // Allows overriding SecurityKeyAuthHandler for unit testing.
   void SetSecurityKeyAuthHandlerForTesting(

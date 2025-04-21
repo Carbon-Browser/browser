@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,7 +44,7 @@ const AtomicString& BluetoothAdvertisingEvent::InterfaceName() const {
 }
 
 BluetoothDevice* BluetoothAdvertisingEvent::device() const {
-  return device_;
+  return device_.Get();
 }
 
 const String& BluetoothAdvertisingEvent::name() const {
@@ -57,11 +57,11 @@ const Vector<String>& BluetoothAdvertisingEvent::uuids() const {
 
 BluetoothManufacturerDataMap* BluetoothAdvertisingEvent::manufacturerData()
     const {
-  return manufacturer_data_map_;
+  return manufacturer_data_map_.Get();
 }
 
 BluetoothServiceDataMap* BluetoothAdvertisingEvent::serviceData() const {
-  return service_data_map_;
+  return service_data_map_.Get();
 }
 
 }  // namespace blink

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 #include "ash/components/arc/arc_prefs.h"
 #include "ash/constants/ash_pref_names.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/json/json_reader.h"
 #include "base/values.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_prefs.h"
@@ -17,6 +17,7 @@
 #include "chromeos/dbus/power/power_policy_controller.h"
 #include "components/policy/core/browser/configuration_policy_handler.h"
 #include "components/policy/core/browser/policy_error_map.h"
+#include "components/policy/core/common/cloud/mock_cloud_external_data_manager.h"
 #include "components/policy/core/common/external_data_fetcher.h"
 #include "components/policy/core/common/policy_map.h"
 #include "components/policy/core/common/policy_types.h"
@@ -59,16 +60,25 @@ class LoginScreenPowerManagementPolicyHandlerTest : public testing::Test {
 };
 
 LoginScreenPowerManagementPolicyHandlerTest::
-    LoginScreenPowerManagementPolicyHandlerTest() {}
+    LoginScreenPowerManagementPolicyHandlerTest() = default;
 
 void LoginScreenPowerManagementPolicyHandlerTest::SetUp() {
   chrome_schema_ = Schema::Wrap(GetChromeSchemaData());
 }
 
+// Test cases for the Help me write policy setting.
+class HelpMeWritePolicyHandlerTest : public testing::Test {
+ protected:
+  PolicyMap policy_;
+  PrefValueMap prefs_;
+  HelpMeWritePolicyHandler handler_;
+};
+
 base::Value GetPref(PrefValueMap* prefs, const std::string& name) {
   base::Value* pref_value = nullptr;
-  if (prefs->GetValue(name, &pref_value))
+  if (prefs->GetValue(name, &pref_value)) {
     return pref_value->Clone();
+  }
   return base::Value("Pref was not found");
 }
 
@@ -113,12 +123,12 @@ TEST(ExternalDataPolicyHandlerTest, WrongType) {
 }
 
 TEST(ExternalDataPolicyHandlerTest, MissingURL) {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetStringKey("hash", "1234567890123456789012345678901234567890");
+  auto dict = base::Value::Dict().Set(
+      "hash", "1234567890123456789012345678901234567890");
   PolicyMap policy_map;
   policy_map.Set(key::kUserAvatarImage, POLICY_LEVEL_MANDATORY,
-                 POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD, std::move(dict),
-                 nullptr);
+                 POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD,
+                 base::Value(std::move(dict)), nullptr);
   PolicyErrorMap errors;
   EXPECT_FALSE(ExternalDataPolicyHandler(key::kUserAvatarImage)
                    .CheckPolicySettings(policy_map, &errors));
@@ -126,13 +136,13 @@ TEST(ExternalDataPolicyHandlerTest, MissingURL) {
 }
 
 TEST(ExternalDataPolicyHandlerTest, InvalidURL) {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetStringKey("url", "http://");
-  dict.SetStringKey("hash", "1234567890123456789012345678901234567890");
+  auto dict = base::Value::Dict()
+                  .Set("url", "http://")
+                  .Set("hash", "1234567890123456789012345678901234567890");
   PolicyMap policy_map;
   policy_map.Set(key::kUserAvatarImage, POLICY_LEVEL_MANDATORY,
-                 POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD, std::move(dict),
-                 nullptr);
+                 POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD,
+                 base::Value(std::move(dict)), nullptr);
   PolicyErrorMap errors;
   EXPECT_FALSE(ExternalDataPolicyHandler(key::kUserAvatarImage)
                    .CheckPolicySettings(policy_map, &errors));
@@ -140,12 +150,11 @@ TEST(ExternalDataPolicyHandlerTest, InvalidURL) {
 }
 
 TEST(ExternalDataPolicyHandlerTest, MissingHash) {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetStringKey("url", "http://localhost/");
+  auto dict = base::Value::Dict().Set("url", "http://localhost/");
   PolicyMap policy_map;
   policy_map.Set(key::kUserAvatarImage, POLICY_LEVEL_MANDATORY,
-                 POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD, std::move(dict),
-                 nullptr);
+                 POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD,
+                 base::Value(std::move(dict)), nullptr);
   PolicyErrorMap errors;
   EXPECT_FALSE(ExternalDataPolicyHandler(key::kUserAvatarImage)
                    .CheckPolicySettings(policy_map, &errors));
@@ -153,13 +162,12 @@ TEST(ExternalDataPolicyHandlerTest, MissingHash) {
 }
 
 TEST(ExternalDataPolicyHandlerTest, InvalidHash) {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetStringKey("url", "http://localhost/");
-  dict.SetStringKey("hash", "1234");
+  auto dict =
+      base::Value::Dict().Set("url", "http://localhost/").Set("hash", "1234");
   PolicyMap policy_map;
   policy_map.Set(key::kUserAvatarImage, POLICY_LEVEL_MANDATORY,
-                 POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD, std::move(dict),
-                 nullptr);
+                 POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD,
+                 base::Value(std::move(dict)), nullptr);
   PolicyErrorMap errors;
   EXPECT_FALSE(ExternalDataPolicyHandler(key::kUserAvatarImage)
                    .CheckPolicySettings(policy_map, &errors));
@@ -167,15 +175,18 @@ TEST(ExternalDataPolicyHandlerTest, InvalidHash) {
 }
 
 TEST(ExternalDataPolicyHandlerTest, Valid) {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetStringKey("url", "http://localhost/");
-  dict.SetStringKey(
-      "hash",
-      "1234567890123456789012345678901234567890123456789012345678901234");
+  auto dict = base::Value::Dict()
+                  .Set("url", "http://localhost/")
+                  .Set("hash",
+                       "1234567890123456789012345678901234567890123456789012345"
+                       "678901234");
   PolicyMap policy_map;
-  policy_map.Set(key::kUserAvatarImage, POLICY_LEVEL_MANDATORY,
-                 POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD, std::move(dict),
-                 nullptr);
+  MockCloudExternalDataManager external_data_manager;
+
+  policy_map.Set(
+      key::kUserAvatarImage, POLICY_LEVEL_MANDATORY, POLICY_SCOPE_USER,
+      POLICY_SOURCE_CLOUD, base::Value(std::move(dict)),
+      external_data_manager.CreateExternalDataFetcher(key::kUserAvatarImage));
   PolicyErrorMap errors;
   EXPECT_TRUE(ExternalDataPolicyHandler(key::kUserAvatarImage)
                   .CheckPolicySettings(policy_map, &errors));
@@ -303,45 +314,6 @@ TEST(NetworkConfigurationPolicyHandlerTest, Sanitization) {
   const std::string& sanitized_onc = sanitized->GetString();
   EXPECT_FALSE(sanitized_onc.empty());
   EXPECT_EQ(std::string::npos, sanitized_onc.find("pass"));
-}
-
-TEST(PinnedLauncherAppsPolicyHandler, PrefTranslation) {
-  base::Value list(base::Value::Type::LIST);
-  PolicyMap policy_map;
-  PrefValueMap prefs;
-  base::Value expected_pinned_apps(base::Value::Type::LIST);
-  PinnedLauncherAppsPolicyHandler handler;
-
-  policy_map.Set(key::kPinnedLauncherApps, POLICY_LEVEL_MANDATORY,
-                 POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD, list.Clone(), nullptr);
-  handler.ApplyPolicySettings(policy_map, &prefs);
-  EXPECT_EQ(expected_pinned_apps,
-            GetPref(&prefs, prefs::kPolicyPinnedLauncherApps));
-
-  // Extension IDs are OK.
-  base::Value entry1("abcdefghijklmnopabcdefghijklmnop");
-  base::Value entry1_dict(base::Value::Type::DICTIONARY);
-  entry1_dict.SetKey(ChromeShelfPrefs::kPinnedAppsPrefAppIDKey, entry1.Clone());
-  expected_pinned_apps.Append(std::move(entry1_dict));
-  list.Append(entry1.Clone());
-
-  // Android appds are OK.
-  base::Value entry2("com.google.android.gm");
-  auto entry2_dict = base::Value(base::Value::Type::DICTIONARY);
-  entry2_dict.SetKey(ChromeShelfPrefs::kPinnedAppsPrefAppIDKey, entry2.Clone());
-  expected_pinned_apps.Append(std::move(entry2_dict));
-  list.Append(entry2.Clone());
-
-  // Anything else is not OK.
-  base::Value entry3("invalid");
-  list.Append(entry3.Clone());
-
-  policy_map.Set(key::kPinnedLauncherApps, POLICY_LEVEL_MANDATORY,
-                 POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD, list.Clone(), nullptr);
-  prefs.Clear();
-  handler.ApplyPolicySettings(policy_map, &prefs);
-  EXPECT_EQ(expected_pinned_apps,
-            GetPref(&prefs, prefs::kPolicyPinnedLauncherApps));
 }
 
 TEST_F(LoginScreenPowerManagementPolicyHandlerTest, Empty) {
@@ -624,6 +596,43 @@ TEST(ArcServicePolicyHandlerTest, UnderUserControlForConsumer) {
   handler.ApplyPolicySettings(policy_map, &prefs);
   const base::Value* enabled = nullptr;
   EXPECT_FALSE(prefs.GetValue(arc::prefs::kArcBackupRestoreEnabled, &enabled));
+}
+
+TEST_F(HelpMeWritePolicyHandlerTest, Default) {
+  handler_.ApplyPolicySettings(policy_, &prefs_);
+
+  EXPECT_FALSE(prefs_.GetValue(ash::prefs::kOrcaEnabled, nullptr));
+  EXPECT_FALSE(prefs_.GetValue(ash::prefs::kOrcaFeedbackEnabled, nullptr));
+}
+
+TEST_F(HelpMeWritePolicyHandlerTest, EnabledWithModelImprovement) {
+  policy_.Set(key::kHelpMeWriteSettings, POLICY_LEVEL_MANDATORY,
+              POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD, base::Value(0), nullptr);
+  handler_.ApplyPolicySettings(policy_, &prefs_);
+
+  EXPECT_EQ(base::Value(true), GetPref(&prefs_, ash::prefs::kOrcaEnabled));
+  EXPECT_EQ(base::Value(true),
+            GetPref(&prefs_, ash::prefs::kOrcaFeedbackEnabled));
+}
+
+TEST_F(HelpMeWritePolicyHandlerTest, EnabledWithoutModelImprovement) {
+  policy_.Set(key::kHelpMeWriteSettings, POLICY_LEVEL_MANDATORY,
+              POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD, base::Value(1), nullptr);
+  handler_.ApplyPolicySettings(policy_, &prefs_);
+
+  EXPECT_EQ(base::Value(true), GetPref(&prefs_, ash::prefs::kOrcaEnabled));
+  EXPECT_EQ(base::Value(false),
+            GetPref(&prefs_, ash::prefs::kOrcaFeedbackEnabled));
+}
+
+TEST_F(HelpMeWritePolicyHandlerTest, Disabled) {
+  policy_.Set(key::kHelpMeWriteSettings, POLICY_LEVEL_MANDATORY,
+              POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD, base::Value(2), nullptr);
+  handler_.ApplyPolicySettings(policy_, &prefs_);
+
+  EXPECT_EQ(base::Value(false), GetPref(&prefs_, ash::prefs::kOrcaEnabled));
+  EXPECT_EQ(base::Value(false),
+            GetPref(&prefs_, ash::prefs::kOrcaFeedbackEnabled));
 }
 
 }  // namespace policy

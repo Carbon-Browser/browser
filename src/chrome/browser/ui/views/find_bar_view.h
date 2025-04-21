@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/views/chrome_views_export.h"
-#include "chrome/browser/ui/views/dropdown_bar_host_delegate.h"
+#include "ui/base/interaction/element_identifier.h"
 #include "ui/views/controls/button/button.h"
 #include "ui/views/controls/button/image_button.h"
 #include "ui/views/controls/textfield/textfield.h"
@@ -32,7 +32,7 @@ namespace views {
 class Painter;
 class Separator;
 class Textfield;
-}
+}  // namespace views
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -42,10 +42,16 @@ class Textfield;
 //
 ////////////////////////////////////////////////////////////////////////////////
 class FindBarView : public views::BoxLayoutView,
-                    public DropdownBarHostDelegate,
                     public views::TextfieldController {
+  METADATA_HEADER(FindBarView, views::BoxLayoutView)
+
  public:
-  METADATA_HEADER(FindBarView);
+  // Element IDs for ui::ElementTracker
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kElementId);
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kTextField);
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kPreviousButtonElementId);
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kNextButtonElementId);
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(kCloseButtonElementId);
 
   explicit FindBarView(FindBarHost* host = nullptr);
 
@@ -76,13 +82,13 @@ class FindBarView : public views::BoxLayoutView,
   // Clears the current Match Count value in the Find text box.
   void ClearMatchCount();
 
+  // Claims focus for the text field and selects its contents.
+  void FocusAndSelectAll();
+
   // views::View:
   bool OnMousePressed(const ui::MouseEvent& event) override;
-  gfx::Size CalculatePreferredSize() const override;
-  void OnThemeChanged() override;
-
-  // DropdownBarHostDelegate:
-  void FocusAndSelectAll() override;
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override;
 
   // views::TextfieldController:
   bool HandleKeyEvent(views::Textfield* sender,
@@ -91,6 +97,10 @@ class FindBarView : public views::BoxLayoutView,
   void OnAfterPaste() override;
 
  private:
+  FRIEND_TEST_ALL_PREFIXES(LegacyFindInPageTest, AccessibleName);
+  const views::ViewAccessibility&
+  GetFindBarMatchCountLabelViewAccessibilityForTesting();
+
   // Starts finding |search_text|.  If the text is empty, stops finding.
   void Find(const std::u16string& search_text);
 
@@ -115,13 +125,13 @@ class FindBarView : public views::BoxLayoutView,
   std::u16string last_searched_text_;
 
   // The controls in the window.
-  views::Textfield* find_text_;
+  raw_ptr<views::Textfield> find_text_;
   std::unique_ptr<views::Painter> find_text_border_;
-  FindBarMatchCountLabel* match_count_text_;
-  views::Separator* separator_;
-  views::ImageButton* find_previous_button_;
-  views::ImageButton* find_next_button_;
-  views::ImageButton* close_button_;
+  raw_ptr<FindBarMatchCountLabel> match_count_text_;
+  raw_ptr<views::Separator> separator_;
+  raw_ptr<views::ImageButton> find_previous_button_;
+  raw_ptr<views::ImageButton> find_next_button_;
+  raw_ptr<views::ImageButton> close_button_;
 };
 
 BEGIN_VIEW_BUILDER(/* no export */, FindBarView, views::BoxLayoutView)

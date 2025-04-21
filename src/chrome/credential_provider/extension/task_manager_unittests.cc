@@ -1,21 +1,23 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <memory>
+#include "chrome/credential_provider/extension/task_manager.h"
 
-#include <atlcomcli.h>
 #include <windows.h>
 
-#include "base/bind.h"
-#include "base/guid.h"
+#include <atlcomcli.h>
+
+#include <memory>
+
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
+#include "base/uuid.h"
 #include "chrome/credential_provider/extension/extension_utils.h"
 #include "chrome/credential_provider/extension/task.h"
-#include "chrome/credential_provider/extension/task_manager.h"
 #include "chrome/credential_provider/gaiacp/gcp_utils.h"
 #include "chrome/credential_provider/gaiacp/reg_utils.h"
 #include "chrome/credential_provider/test/gcp_fakes.h"
@@ -27,7 +29,7 @@ namespace testing {
 
 class TaskManagerTest : public ::testing::Test {
  public:
-  TaskManagerTest() {}
+  TaskManagerTest() = default;
 
   void RunTasks() {
     fake_task_manager_.RunTasks(task_environment_.GetMainThreadTaskRunner());
@@ -81,7 +83,7 @@ int FakeTask::num_fails_ = 0;
 
 FakeTask::FakeTask(base::TimeDelta period) : period_(period) {}
 
-FakeTask::~FakeTask() {}
+FakeTask::~FakeTask() = default;
 
 extension::Config FakeTask::GetConfig() {
   extension::Config config;
@@ -184,7 +186,8 @@ TEST_F(TaskManagerTest, TaskExecuted) {
 
   FakeTokenGenerator fake_token_generator;
   fake_token_generator.SetTokensForTesting(
-      {base::GenerateGUID(), base::GenerateGUID()});
+      {base::Uuid::GenerateRandomV4().AsLowercaseString(),
+       base::Uuid::GenerateRandomV4().AsLowercaseString()});
 
   ASSERT_EQ(S_OK, GenerateGCPWDmToken((BSTR)sid1));
 
@@ -284,7 +287,8 @@ TEST_F(TaskManagerTest, BackOff) {
 
   FakeTokenGenerator fake_token_generator;
   fake_token_generator.SetTokensForTesting(
-      {base::GenerateGUID(), base::GenerateGUID()});
+      {base::Uuid::GenerateRandomV4().AsLowercaseString(),
+       base::Uuid::GenerateRandomV4().AsLowercaseString()});
 
   ASSERT_EQ(S_OK, GenerateGCPWDmToken((BSTR)sid1));
 

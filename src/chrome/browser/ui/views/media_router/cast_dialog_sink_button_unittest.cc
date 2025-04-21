@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -74,8 +74,8 @@ TEST_F(CastDialogSinkButtonTest, SetStatusLabelForActiveSink) {
 
 TEST_F(CastDialogSinkButtonTest, SetStatusLabelForSinkWithIssue) {
   UIMediaSink sink{mojom::MediaRouteProviderId::CAST};
-  sink.issue = Issue(IssueInfo("issue", IssueInfo::Action::DISMISS,
-                               IssueInfo::Severity::WARNING));
+  sink.issue = Issue::CreateIssueWithIssueInfo(
+      IssueInfo("issue", IssueInfo::Severity::WARNING, "sinkId1"));
   // Issue info should be the status text regardless of the sink state.
   sink.state = UIMediaSinkState::AVAILABLE;
   CastDialogSinkButton button1(views::Button::PressedCallback(), sink);

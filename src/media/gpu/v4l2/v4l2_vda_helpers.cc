@@ -1,22 +1,25 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/gpu/v4l2/v4l2_vda_helpers.h"
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/ranges/algorithm.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/base/color_plane_layout.h"
 #include "media/base/video_codecs.h"
 #include "media/gpu/chromeos/fourcc.h"
 #include "media/gpu/macros.h"
 #include "media/gpu/v4l2/v4l2_device.h"
 #include "media/gpu/v4l2/v4l2_image_processor_backend.h"
-#include "media/video/h264_parser.h"
+#include "media/parsers/h264_parser.h"
 
 namespace media {
 namespace v4l2_vda_helpers {
 
-absl::optional<Fourcc> FindImageProcessorInputFormat(V4L2Device* vda_device) {
+std::optional<Fourcc> FindImageProcessorInputFormat(V4L2Device* vda_device) {
   std::vector<uint32_t> processor_input_formats =
       V4L2ImageProcessorBackend::GetSupportedInputFormats();
 
@@ -24,27 +27,23 @@ absl::optional<Fourcc> FindImageProcessorInputFormat(V4L2Device* vda_device) {
   memset(&fmtdesc, 0, sizeof(fmtdesc));
   fmtdesc.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
   while (vda_device->Ioctl(VIDIOC_ENUM_FMT, &fmtdesc) == 0) {
-    if (std::find(processor_input_formats.begin(),
-                  processor_input_formats.end(),
-                  fmtdesc.pixelformat) != processor_input_formats.end()) {
+    if (base::Contains(processor_input_formats, fmtdesc.pixelformat)) {
       DVLOGF(3) << "Image processor input format=" << fmtdesc.description;
       return Fourcc::FromV4L2PixFmt(fmtdesc.pixelformat);
     }
     ++fmtdesc.index;
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
-absl::optional<Fourcc> FindImageProcessorOutputFormat(V4L2Device* ip_device) {
+std::optional<Fourcc> FindImageProcessorOutputFormat(V4L2Device* ip_device) {
   // Prefer YVU420 and NV12 because ArcGpuVideoDecodeAccelerator only supports
   // single physical plane.
   static constexpr uint32_t kPreferredFormats[] = {V4L2_PIX_FMT_NV12,
                                                    V4L2_PIX_FMT_YVU420};
   auto preferred_formats_first = [](uint32_t a, uint32_t b) -> bool {
-    auto* iter_a = std::find(std::begin(kPreferredFormats),
-                             std::end(kPreferredFormats), a);
-    auto* iter_b = std::find(std::begin(kPreferredFormats),
-                             std::end(kPreferredFormats), b);
+    auto* iter_a = base::ranges::find(kPreferredFormats, a);
+    auto* iter_b = base::ranges::find(kPreferredFormats, b);
     return iter_a < iter_b;
   };
 
@@ -63,7 +62,7 @@ absl::optional<Fourcc> FindImageProcessorOutputFormat(V4L2Device* ip_device) {
     }
   }
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 std::unique_ptr<ImageProcessor> CreateImageProcessor(
@@ -87,10 +86,10 @@ std::unique_ptr<ImageProcessor> CreateImageProcessor(
       base::BindRepeating(&V4L2ImageProcessorBackend::Create,
                           image_processor_device, nb_buffers),
       ImageProcessor::PortConfig(vda_output_format, vda_output_coded_size, {},
-                                 visible_rect, {VideoFrame::STORAGE_DMABUFS}),
+                                 visible_rect, VideoFrame::STORAGE_DMABUFS),
       ImageProcessor::PortConfig(ip_output_format, ip_output_coded_size, {},
-                                 visible_rect, {output_storage_type}),
-      image_processor_output_mode, VIDEO_ROTATION_0, std::move(error_cb),
+                                 visible_rect, output_storage_type),
+      image_processor_output_mode, std::move(error_cb),
       std::move(client_task_runner));
   if (!image_processor)
     return nullptr;
@@ -259,10 +258,9 @@ bool H264InputBufferFragmentSplitter::AdvanceFrameFragment(const uint8_t* data,
         return true;
       }
     }
-    *endpos = (nalu.data + nalu.size) - data;
+    *endpos = (nalu.data + base::checked_cast<size_t>(nalu.size)) - data;
   }
   NOTREACHED();
-  return false;
 }
 
 void H264InputBufferFragmentSplitter::Reset() {

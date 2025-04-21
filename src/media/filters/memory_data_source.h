@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include <atomic>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "media/base/data_source.h"
 
 namespace media {
@@ -41,10 +42,12 @@ class MEDIA_EXPORT MemoryDataSource final : public DataSource {
   [[nodiscard]] bool GetSize(int64_t* size_out) final;
   bool IsStreaming() final;
   void SetBitrate(int bitrate) final;
+  bool PassedTimingAllowOriginCheck() final;
+  bool WouldTaintOrigin() final;
 
  private:
   const std::string data_string_;
-  const uint8_t* data_ = nullptr;
+  raw_ptr<const uint8_t, AllowPtrArithmetic> data_ = nullptr;
   const size_t size_ = 0;
 
   // Stop may be called from the render thread while this class is being used by

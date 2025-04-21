@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,13 @@
 #include <memory>
 
 #include "base/command_line.h"
+#include "base/containers/span.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/scoped_command_line.h"
+#include "build/build_config.h"
 #include "chrome/browser/enterprise/connectors/common.h"
 #include "chrome/browser/safe_browsing/cloud_content_scanning/file_analysis_request.h"
 #include "content/public/test/browser_task_environment.h"
@@ -48,7 +50,7 @@ class FileOpeningJobTest : public testing::Test {
           base::StringPrintf("foo%d.txt", next_file_id_));
       ++next_file_id_;
       base::File file(path, base::File::FLAG_CREATE | base::File::FLAG_WRITE);
-      file.WriteAtCurrentPos(/*data*/ "foo", /*size*/ 3);
+      file.WriteAtCurrentPos(base::byte_span_from_cstring("foo"));
 
       auto request = std::make_unique<FileAnalysisRequest>(
           enterprise_connectors::AnalysisSettings(), path, path.BaseName(),
@@ -107,30 +109,22 @@ TEST_F(FileOpeningJobTest, MaxThreadsFlag) {
   quit_closure_ = run_loop.QuitClosure();
   quit_file_count_ = 500;
 
-  FileOpeningJob job_1(CreateFilesAndTasks(100));
-  EXPECT_EQ(5u, job_1.MaxConcurrentThreads(/*worker_count*/ 0));
+  EXPECT_EQ(5u, FileOpeningJob::GetMaxFileOpeningThreads());
 
   command_line->AppendSwitchASCII("wp-max-file-opening-threads", "10");
-  FileOpeningJob job_2(CreateFilesAndTasks(100));
-  EXPECT_EQ(10u, job_2.MaxConcurrentThreads(/*worker_count*/ 0));
+  EXPECT_EQ(10u, FileOpeningJob::GetMaxFileOpeningThreads());
 
   command_line->RemoveSwitch("wp-max-file-opening-threads");
   command_line->AppendSwitchASCII("wp-max-file-opening-threads", "0");
-  FileOpeningJob job_3(CreateFilesAndTasks(100));
-  EXPECT_EQ(5u, job_3.MaxConcurrentThreads(/*worker_count*/ 0));
+  EXPECT_EQ(5u, FileOpeningJob::GetMaxFileOpeningThreads());
 
   command_line->RemoveSwitch("wp-max-file-opening-threads");
   command_line->AppendSwitchASCII("wp-max-file-opening-threads", "foo");
-  FileOpeningJob job_4(CreateFilesAndTasks(100));
-  EXPECT_EQ(5u, job_4.MaxConcurrentThreads(/*worker_count*/ 0));
+  EXPECT_EQ(5u, FileOpeningJob::GetMaxFileOpeningThreads());
 
   command_line->RemoveSwitch("wp-max-file-opening-threads");
   command_line->AppendSwitchASCII("wp-max-file-opening-threads", "-1");
-  FileOpeningJob job_5(CreateFilesAndTasks(100));
-  EXPECT_EQ(5u, job_5.MaxConcurrentThreads(/*worker_count*/ 0));
-
-  run_loop.Run();
-  EXPECT_EQ(500, on_got_file_data_count_);
+  EXPECT_EQ(5u, FileOpeningJob::GetMaxFileOpeningThreads());
 }
 
 }  // namespace safe_browsing

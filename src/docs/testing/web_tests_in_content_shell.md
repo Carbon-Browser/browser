@@ -84,7 +84,7 @@ You need to start a web server first. By default it serves generated files from
 out/Release:
 
 ```bash
-vpython third_party/blink/tools/run_blink_httpd.py -t <build directory>
+vpython3 third_party/blink/tools/run_blink_httpd.py -t <build directory>
 ```
 Then run the test with a localhost URL:
 
@@ -101,7 +101,7 @@ Similar to HTTP tests, many WPT (a.k.a. web-platform-tests under
 tests require some setup before running in Content Shell:
 
 ```bash
-vpython third_party/blink/tools/run_blink_wptserve.py -t <build directory>
+vpython3 third_party/blink/tools/run_blink_wptserve.py -t <build directory>
 ```
 
 Then run the test:
@@ -144,13 +144,13 @@ If you want to debug WPT with devtools in Content Shell, you will first need to
 start the server:
 
 ```bash
-vpython third_party/blink/tools/run_blink_wptserve.py
+vpython3 third_party/blink/tools/run_blink_wptserve.py
 ```
 
 Then start Content Shell with some additional flags:
 
 ```bash
-out/Default/content_shell --enable-experimental-web-platform-features --ignore-certificate-errors --host-resolver-rules="MAP nonexistent.*.test ~NOTFOUND, MAP *.test. 127.0.0.1, MAP *.test 127.0.0.1"
+out/Default/content_shell --enable-experimental-web-platform-features --ignore-certificate-errors --host-resolver-rules="MAP nonexistent.*.test ^NOTFOUND, MAP *.test. 127.0.0.1, MAP *.test 127.0.0.1"
 ```
 
 You are also able to debug the inside of Chromium with a debugger for

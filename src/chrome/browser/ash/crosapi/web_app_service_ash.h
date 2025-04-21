@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,6 +26,7 @@ class WebAppServiceAsh : public crosapi::mojom::WebAppService {
    public:
     virtual void OnWebAppProviderBridgeConnected() {}
     virtual void OnWebAppProviderBridgeDisconnected() {}
+    virtual void OnWebAppServiceAshDestroyed() = 0;
   };
 
   WebAppServiceAsh();
@@ -40,10 +41,12 @@ class WebAppServiceAsh : public crosapi::mojom::WebAppService {
   void RegisterWebAppProviderBridge(
       mojo::PendingRemote<mojom::WebAppProviderBridge> web_app_provider_bridge)
       override;
-
   void GetAssociatedAndroidPackage(
       const std::string& app_id,
       GetAssociatedAndroidPackageCallback callback) override;
+  void MigrateLauncherState(const std::string& from_app_id,
+                            const std::string& to_app_id,
+                            MigrateLauncherStateCallback callback) override;
 
   // Returns the web app provider bridge of the currently connected
   // lacros-chrome, or nullptr if there is no connection.
@@ -58,7 +61,7 @@ class WebAppServiceAsh : public crosapi::mojom::WebAppService {
 
   // Remote lacros-chrome web app bridge to send commands to.
   // At the moment only a single connection is supported.
-  // TODO(crbug.com/1174246): Support SxS lacros.
+  // TODO(crbug.com/40167449): Support SxS lacros.
   mojo::Remote<mojom::WebAppProviderBridge> web_app_provider_bridge_;
 
   base::ObserverList<Observer> observers_;

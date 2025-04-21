@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include <wrl/client.h>
 #include <map>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/unguessable_token.h"
 #include "base/win/scoped_handle.h"
 #include "media/base/media_export.h"
@@ -76,4 +76,4 @@ class MEDIA_EXPORT MediaFoundationTexturePool {
   base::flat_map<base::UnguessableToken, TextureInfo> texture_pool_;
 };
 }  // namespace media
-#endif
+#endif  // MEDIA_RENDERERS_WIN_MEDIA_FOUNDATION_TEXTURE_POOL_H_

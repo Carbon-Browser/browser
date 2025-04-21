@@ -1,17 +1,15 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/services/sharing/nearby/platform/submittable_executor.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/threading/thread_restrictions.h"
 
-namespace location {
-namespace nearby {
-namespace chrome {
+namespace nearby::chrome {
 
 SubmittableExecutor::SubmittableExecutor(
     scoped_refptr<base::TaskRunner> task_runner)
@@ -92,6 +90,4 @@ void SubmittableExecutor::RunTask(Runnable&& runnable) {
     last_task_completed_.Signal();
 }
 
-}  // namespace chrome
-}  // namespace nearby
-}  // namespace location
+}  // namespace nearby::chrome

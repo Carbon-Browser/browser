@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,14 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
+#include <utility>
 
+#include "ash/ambient/ambient_ui_settings.h"
 #include "ash/ambient/resources/ambient_animation_static_resources.h"
 #include "ash/ash_export.h"
-#include "ash/constants/ambient_animation_theme.h"
 #include "base/containers/flat_map.h"
 #include "base/memory/scoped_refptr.h"
-#include "base/strings/string_piece.h"
 
 namespace cc {
 class SkottieWrapper;
@@ -42,23 +43,21 @@ class ASH_EXPORT FakeAmbientAnimationStaticResources
   // Sets the |image| that will be returned in future calls to
   // GetStaticImageAsset(asset_id). If the image is not set for an asset,
   // GetStaticImageAsset() will return a null image.
-  void SetStaticImageAsset(base::StringPiece asset_id, gfx::ImageSkia image);
+  void SetStaticImageAsset(std::string_view asset_id, gfx::ImageSkia image);
 
-  void set_ambient_animation_theme(
-      AmbientAnimationTheme ambient_animation_theme) {
-    ambient_animation_theme_ = ambient_animation_theme;
+  void set_ui_settings(AmbientUiSettings ui_settings) {
+    ui_settings_ = std::move(ui_settings);
   }
 
   // AmbientAnimationStaticResources implementation:
   const scoped_refptr<cc::SkottieWrapper>& GetSkottieWrapper() const override;
-  gfx::ImageSkia GetStaticImageAsset(base::StringPiece asset_id) const override;
-  AmbientAnimationTheme GetAmbientAnimationTheme() const override;
+  gfx::ImageSkia GetStaticImageAsset(std::string_view asset_id) const override;
+  const AmbientUiSettings& GetUiSettings() const override;
 
  private:
   scoped_refptr<cc::SkottieWrapper> animation_;
   base::flat_map</*asset_id*/ std::string, gfx::ImageSkia> images_;
-  AmbientAnimationTheme ambient_animation_theme_ =
-      AmbientAnimationTheme::kFeelTheBreeze;
+  AmbientUiSettings ui_settings_;
 };
 
 }  // namespace ash

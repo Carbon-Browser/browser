@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,9 @@ namespace ui {
 namespace {
 // Control use of cross-process CALayers to display content directly from the
 // GPU process on Mac.
-base::Feature kRemoteCoreAnimationAPI{"RemoteCoreAnimationAPI",
-                                      base::FEATURE_ENABLED_BY_DEFAULT};
+BASE_FEATURE(kRemoteCoreAnimationAPI,
+             "RemoteCoreAnimationAPI",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 }  // namespace
 
 bool RemoteLayerAPISupported() {
@@ -29,8 +30,13 @@ bool RemoteLayerAPISupported() {
   // Note that because the contextId and layer properties are dynamic,
   // instancesRespondToSelector will return NO for them.
   static bool caContextClassValid =
-      [caContextClass respondsToSelector:
-          @selector(contextWithCGSConnection:options:)] &&
+#if BUILDFLAG(IS_MAC)
+      [caContextClass
+          respondsToSelector:@selector(contextWithCGSConnection:options:)] &&
+#else
+      [caContextClass
+          respondsToSelector:@selector(remoteContextWithOptions:)] &&
+#endif
       class_getProperty(caContextClass, "contextId") &&
       class_getProperty(caContextClass, "layer");
   if (!caContextClassValid)

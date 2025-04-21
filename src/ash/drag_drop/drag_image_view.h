@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,6 @@
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/views/controls/image_view.h"
-#include "ui/views/widget/unique_widget_ptr.h"
 
 namespace aura {
 class Window;
@@ -38,8 +37,9 @@ class ASH_EXPORT DragImageView : public views::ImageView {
   // |source| is the event source that started this drag drop operation (touch
   // or mouse). It is used to determine attributes of the drag image such as
   // whether to show drag operation hint on top of the image.
-  static views::UniqueWidgetPtr Create(aura::Window* root_window,
-                                       ui::mojom::DragEventSource source);
+  static std::unique_ptr<views::Widget> Create(
+      aura::Window* root_window,
+      ui::mojom::DragEventSource source);
 
   // Sets the bounds of the native widget in screen
   // coordinates.
@@ -82,7 +82,7 @@ class ASH_EXPORT DragImageView : public views::ImageView {
   void OnPaint(gfx::Canvas* canvas) override;
 
   // Overridden from views::view
-  void Layout() override;
+  void Layout(PassKey) override;
 
   // Save the requested drag image size. We may need to display a drag hint
   // image, which potentially expands |widget_|'s size. That drag hint image

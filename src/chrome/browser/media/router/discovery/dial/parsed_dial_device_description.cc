@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,9 @@ ParsedDialDeviceDescription::~ParsedDialDeviceDescription() = default;
 
 ParsedDialDeviceDescription& ParsedDialDeviceDescription::operator=(
     const ParsedDialDeviceDescription& other) {
-  if (this == &other)
+  if (this == &other) {
     return *this;
+  }
 
   this->unique_id = other.unique_id;
   this->friendly_name = other.friendly_name;

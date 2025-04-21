@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@ std::u16string GetShippingAddressLabelFromAutofillProfile(
     const std::string& locale) {
   // Name, phone number, and country are not included in the shipping address
   // label.
-  static constexpr autofill::ServerFieldType kLabelFields[] = {
+  static constexpr autofill::FieldType kLabelFields[] = {
       autofill::COMPANY_NAME,
       autofill::ADDRESS_HOME_STREET_ADDRESS,
       autofill::ADDRESS_HOME_DEPENDENT_LOCALITY,
@@ -28,7 +28,7 @@ std::u16string GetShippingAddressLabelFromAutofillProfile(
   };
 
   return profile.ConstructInferredLabel(kLabelFields, std::size(kLabelFields),
-                                        std::size(kLabelFields), locale);
+                                        locale);
 }
 
 std::u16string GetShippingAddressSelectorInfoMessage(
@@ -45,7 +45,6 @@ std::u16string GetShippingAddressSelectorInfoMessage(
           IDS_PAYMENTS_SELECT_SHIPPING_ADDRESS_FOR_SHIPPING_METHODS);
     default:
       NOTREACHED();
-      return std::u16string();
   }
 }
 
@@ -60,7 +59,6 @@ std::u16string GetShippingAddressSectionString(
       return l10n_util::GetStringUTF16(IDS_PAYMENTS_SHIPPING_ADDRESS_LABEL);
     default:
       NOTREACHED();
-      return std::u16string();
   }
 }
 
@@ -75,7 +73,6 @@ std::u16string GetShippingOptionSectionString(
       return l10n_util::GetStringUTF16(IDS_PAYMENTS_SHIPPING_OPTION_LABEL);
     default:
       NOTREACHED();
-      return std::u16string();
   }
 }
 

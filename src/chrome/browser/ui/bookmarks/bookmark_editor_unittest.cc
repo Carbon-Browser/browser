@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,22 +29,22 @@ TEST(BookmarkEditorTest, ApplyEditsWithNoFolderChange) {
   {
     BookmarkEditor::EditDetails detail(
         BookmarkEditor::EditDetails::AddFolder(bookmarkbar, 1));
-    BookmarkEditor::ApplyEditsWithNoFolderChange(
-        model.get(), bookmarkbar, detail, u"folder0", GURL(std::string()));
+    BookmarkEditor::ApplyEdits(model.get(), bookmarkbar, detail, u"folder0",
+                               GURL(std::string()));
     EXPECT_EQ(u"folder0", bookmarkbar->children()[1]->GetTitle());
   }
   {
     BookmarkEditor::EditDetails detail(BookmarkEditor::EditDetails::AddFolder(
         bookmarkbar, static_cast<size_t>(-1)));
-    BookmarkEditor::ApplyEditsWithNoFolderChange(
-        model.get(), bookmarkbar, detail, u"folder1", GURL(std::string()));
+    BookmarkEditor::ApplyEdits(model.get(), bookmarkbar, detail, u"folder1",
+                               GURL(std::string()));
     EXPECT_EQ(u"folder1", bookmarkbar->children()[3]->GetTitle());
   }
   {
     BookmarkEditor::EditDetails detail(
         BookmarkEditor::EditDetails::AddFolder(bookmarkbar, 10));
-    BookmarkEditor::ApplyEditsWithNoFolderChange(
-        model.get(), bookmarkbar, detail, u"folder2", GURL(std::string()));
+    BookmarkEditor::ApplyEdits(model.get(), bookmarkbar, detail, u"folder2",
+                               GURL(std::string()));
     EXPECT_EQ(u"folder2", bookmarkbar->children()[4]->GetTitle());
   }
 }
@@ -58,15 +58,15 @@ TEST(BookmarkEditorTest, ApplyEditsWithMultipleURLs) {
   const std::u16string url_title_0 = u"url_0";
   const std::u16string url_title_1 = u"url_1";
   BookmarkEditor::EditDetails::BookmarkData url_data_0;
-  url_data_0.url = absl::make_optional(GURL("chrome://newtab"));
+  url_data_0.url = std::make_optional(GURL("chrome://newtab"));
   url_data_0.title = url_title_0;
   BookmarkEditor::EditDetails::BookmarkData url_data_1;
-  url_data_1.url = absl::make_optional(GURL("chrome://newtab"));
+  url_data_1.url = std::make_optional(GURL("chrome://newtab"));
   url_data_1.title = url_title_1;
   detail.bookmark_data.children.push_back(url_data_0);
   detail.bookmark_data.children.push_back(url_data_1);
-  BookmarkEditor::ApplyEditsWithNoFolderChange(model.get(), bookmarkbar, detail,
-                                               u"folder", GURL(std::string()));
+  BookmarkEditor::ApplyEdits(model.get(), bookmarkbar, detail, u"folder",
+                             GURL(std::string()));
   EXPECT_EQ(u"folder", bookmarkbar->children()[2]->GetTitle());
   EXPECT_EQ(url_title_0, bookmarkbar->children()[2]->children()[0]->GetTitle());
   EXPECT_EQ(url_title_1, bookmarkbar->children()[2]->children()[1]->GetTitle());
@@ -81,15 +81,15 @@ TEST(BookmarkEditorTest, ApplyEditsWithNestedFolder) {
   const std::u16string nested_folder_title = u"nested_folder";
   const std::u16string nested_url_title = u"nested_url";
   BookmarkEditor::EditDetails::BookmarkData url_data;
-  url_data.url = absl::make_optional(GURL("chrome://newtab"));
+  url_data.url = std::make_optional(GURL("chrome://newtab"));
   url_data.title = nested_url_title;
   BookmarkEditor::EditDetails::BookmarkData folder_data;
   folder_data.title = nested_folder_title;
   folder_data.children.push_back(url_data);
   detail.bookmark_data.children.push_back(folder_data);
 
-  BookmarkEditor::ApplyEditsWithNoFolderChange(model.get(), bookmarkbar, detail,
-                                               u"folder", GURL(std::string()));
+  BookmarkEditor::ApplyEdits(model.get(), bookmarkbar, detail, u"folder",
+                             GURL(std::string()));
   EXPECT_EQ(u"folder", bookmarkbar->children()[2]->GetTitle());
   EXPECT_EQ(nested_folder_title,
             bookmarkbar->children()[2]->children()[0]->GetTitle());
@@ -111,13 +111,13 @@ TEST(BookmarkEditorTest, ApplyEditsWithURLsAndNestedFolders) {
   const std::u16string url_title_1 = u"url_1";
   const std::u16string nested_url_title = u"nested_url";
   BookmarkEditor::EditDetails::BookmarkData url_data_0;
-  url_data_0.url = absl::make_optional(GURL("chrome://newtab"));
+  url_data_0.url = std::make_optional(GURL("chrome://newtab"));
   url_data_0.title = url_title_0;
   BookmarkEditor::EditDetails::BookmarkData url_data_1;
-  url_data_1.url = absl::make_optional(GURL("chrome://newtab"));
+  url_data_1.url = std::make_optional(GURL("chrome://newtab"));
   url_data_1.title = url_title_1;
   BookmarkEditor::EditDetails::BookmarkData nested_url_data;
-  nested_url_data.url = absl::make_optional(GURL("chrome://newtab"));
+  nested_url_data.url = std::make_optional(GURL("chrome://newtab"));
   nested_url_data.title = nested_url_title;
   BookmarkEditor::EditDetails::BookmarkData folder_data_0;
   folder_data_0.title = nested_folder_title_0;
@@ -135,8 +135,8 @@ TEST(BookmarkEditorTest, ApplyEditsWithURLsAndNestedFolders) {
   detail.bookmark_data.children.push_back(folder_data_2);
   detail.bookmark_data.children.push_back(url_data_1);
 
-  BookmarkEditor::ApplyEditsWithNoFolderChange(model.get(), bookmarkbar, detail,
-                                               u"folder", GURL(std::string()));
+  BookmarkEditor::ApplyEdits(model.get(), bookmarkbar, detail, u"folder",
+                             GURL(std::string()));
   EXPECT_EQ(u"folder", bookmarkbar->children()[2]->GetTitle());
   EXPECT_EQ(nested_folder_title_0,
             bookmarkbar->children()[2]->children()[0]->GetTitle());

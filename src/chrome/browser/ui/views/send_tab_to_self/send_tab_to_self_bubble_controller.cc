@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #include "chrome/browser/ui/views/send_tab_to_self/send_tab_to_self_bubble_controller.h"
@@ -12,12 +12,15 @@
 #include "chrome/browser/sharing_hub/sharing_hub_features.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/sync/send_tab_to_self_sync_service_factory.h"
+#include "chrome/browser/ui/actions/chrome_action_id.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_actions.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_navigator.h"
 #include "chrome/browser/ui/browser_navigator_params.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/sharing_hub/sharing_hub_bubble_controller.h"
+#include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/views/send_tab_to_self/send_tab_to_self_bubble_view.h"
 #include "chrome/common/url_constants.h"
 #include "chrome/grit/generated_resources.h"
@@ -32,6 +35,7 @@
 #include "content/public/browser/web_contents.h"
 #include "ui/base/page_transition_types.h"
 #include "ui/base/window_open_disposition.h"
+#include "ui/base/window_open_disposition_utils.h"
 #include "ui/events/event.h"
 
 namespace send_tab_to_self {
@@ -62,9 +66,9 @@ void SendTabToSelfBubbleController::HideBubble() {
 void SendTabToSelfBubbleController::ShowBubble(bool show_back_button) {
   show_back_button_ = show_back_button;
   bubble_shown_ = true;
-  Browser* browser = chrome::FindBrowserWithWebContents(&GetWebContents());
-  absl::optional<send_tab_to_self::EntryPointDisplayReason> reason =
-      send_tab_to_self::GetEntryPointDisplayReason(&GetWebContents());
+  Browser* browser = chrome::FindBrowserWithTab(&GetWebContents());
+  std::optional<send_tab_to_self::EntryPointDisplayReason> reason =
+      GetEntryPointDisplayReason();
   DCHECK(reason);
   switch (*reason) {
     case send_tab_to_self::EntryPointDisplayReason::kOfferFeature:
@@ -84,9 +88,10 @@ void SendTabToSelfBubbleController::ShowBubble(bool show_back_button) {
       break;
   }
 
-  if (sharing_hub::SharingHubOmniboxEnabled(
-          GetWebContents().GetBrowserContext())) {
-    UpdateIcon();
+  if (browser && base::FeatureList::IsEnabled(features::kToolbarPinning)) {
+    send_tab_to_self_action_item_ = actions::ActionManager::Get().FindAction(
+        kActionSendTabToSelf, browser->browser_actions()->root_action_item());
+    send_tab_to_self_action_item_->SetIsShowingBubble(true);
   }
 }
 
@@ -115,20 +120,21 @@ Profile* SendTabToSelfBubbleController::GetProfile() {
   return Profile::FromBrowserContext(GetWebContents().GetBrowserContext());
 }
 
+std::optional<send_tab_to_self::EntryPointDisplayReason>
+SendTabToSelfBubbleController::GetEntryPointDisplayReason() {
+  return send_tab_to_self::GetEntryPointDisplayReason(&GetWebContents());
+}
+
 void SendTabToSelfBubbleController::OnDeviceSelected(
     const std::string& target_device_guid) {
-  // TODO(crbug.com/1288843): This is being recorded for entry points other
-  // than the omnibox. Make the entry point a ShowBubble() argument.
-  send_tab_to_self::RecordDeviceClicked(ShareEntryPoint::kOmniboxIcon);
-
   SendTabToSelfModel* model =
       SendTabToSelfSyncServiceFactory::GetForProfile(GetProfile())
           ->GetSendTabToSelfModel();
-  // TODO(crbug.com/1288843): This duplicates the ShouldOfferFeature() check,
+  // TODO(crbug.com/40817150): This duplicates the ShouldOfferFeature() check,
   // instead the 2 codepaths should share code.
   const GURL& shared_url = GetWebContents().GetLastCommittedURL();
   if (!model->IsReady()) {
-    // TODO(https://crbug.com/1280681): Is this legit? In STTSv2, there may not
+    // TODO(crbug.com/40811626): Is this legit? In STTSv2, there may not
     // *be* a DesktopNotificationHandler for profile, and we're violating the
     // lifetime rules of DesktopNotificationHandler here I think.
     DesktopNotificationHandler(GetProfile()).DisplayFailureMessage(shared_url);
@@ -139,7 +145,6 @@ void SendTabToSelfBubbleController::OnDeviceSelected(
                   target_device_guid);
   // Show confirmation message.
   show_message_ = true;
-  UpdateIcon();
 }
 
 void SendTabToSelfBubbleController::OnManageDevicesClicked(
@@ -160,6 +165,9 @@ void SendTabToSelfBubbleController::OnManageDevicesClicked(
 void SendTabToSelfBubbleController::OnBubbleClosed() {
   bubble_shown_ = false;
   send_tab_to_self_bubble_view_ = nullptr;
+  if (send_tab_to_self_action_item_) {
+    send_tab_to_self_action_item_->SetIsShowingBubble(false);
+  }
 }
 
 void SendTabToSelfBubbleController::OnBackButtonPressed() {
@@ -177,20 +185,6 @@ bool SendTabToSelfBubbleController::InitialSendAnimationShown() {
 void SendTabToSelfBubbleController::SetInitialSendAnimationShown(bool shown) {
   GetProfile()->GetPrefs()->SetBoolean(prefs::kInitialSendAnimationShown,
                                        shown);
-}
-
-void SendTabToSelfBubbleController::UpdateIcon() {
-  Browser* browser = chrome::FindBrowserWithWebContents(&GetWebContents());
-  // UpdateIcon() can be called during browser teardown.
-  if (!browser)
-    return;
-
-  if (sharing_hub::SharingHubOmniboxEnabled(
-          GetWebContents().GetBrowserContext())) {
-    browser->window()->UpdatePageActionIcon(PageActionIconType::kSharingHub);
-  } else {
-    browser->window()->UpdatePageActionIcon(PageActionIconType::kSendTabToSelf);
-  }
 }
 
 // Static:

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,20 +7,23 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/i18n/message_formatter.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
 #include "chrome/app/vector_icons/vector_icons.h"
+#include "chrome/browser/headless/headless_mode_util.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/theme_resources.h"
 #include "components/constrained_window/constrained_window_views.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/image_model.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
+#include "ui/base/mojom/ui_base_types.mojom-shared.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/color/color_id.h"
 #include "ui/gfx/color_palette.h"
@@ -69,7 +72,7 @@ std::unique_ptr<views::Label> CreateText(const std::u16string& message) {
 
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
 class LogoView : public views::ImageView {
-  METADATA_HEADER(LogoView);
+  METADATA_HEADER(LogoView, views::ImageView)
 
  public:
   LogoView() {
@@ -91,9 +94,58 @@ class LogoView : public views::ImageView {
   }
 };
 
-BEGIN_METADATA(LogoView, views::ImageView)
+BEGIN_METADATA(LogoView)
 END_METADATA
 #endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
+
+// Alternate implementation of the EnterpriseStartupDialog which is used when
+// the headless mode is in effect. It does not display anything and when error
+// is set immediately calls back with not accepted condition.
+class HeadlessEnterpriseStartupDialogImpl : public EnterpriseStartupDialog {
+ public:
+  explicit HeadlessEnterpriseStartupDialogImpl(DialogResultCallback callback)
+      : callback_(std::move(callback)) {}
+
+  HeadlessEnterpriseStartupDialogImpl(
+      const HeadlessEnterpriseStartupDialogImpl&) = delete;
+  HeadlessEnterpriseStartupDialogImpl& operator=(
+      const HeadlessEnterpriseStartupDialogImpl&) = delete;
+
+  ~HeadlessEnterpriseStartupDialogImpl() override {
+    if (callback_) {
+      // ChromeBrowserCloudManagementRegisterWatcher dismisses the dialog
+      // without displaying an error messgae (in which case we would not
+      // have the outstanding callback) in case of successful enrollment,
+      // so allow it to show the browser window using the callback.
+      std::move(callback_).Run(/*was_accepted=*/false,
+                               /*can_show_browser_window_=*/true);
+    }
+  }
+
+  // Override EnterpriseStartupDialog
+  void DisplayLaunchingInformationWithThrobber(
+      const std::u16string& information) override {}
+
+  void DisplayErrorMessage(
+      const std::u16string& error_message,
+      const std::optional<std::u16string>& accept_button) override {
+    if (callback_) {
+      // In headless mode the dialog is invisible, therefore there is
+      // no one to accept or dismiss it. So just dismiss the dialog
+      // right away without accepting the prompt and not allowing
+      // browser to show its window.
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE,
+          base::BindOnce(std::move(callback_), /*was_accepted=*/false,
+                         /*can_show_browser_window_=*/false));
+    }
+  }
+
+  bool IsShowing() override { return true; }
+
+ private:
+  DialogResultCallback callback_;
+};
 
 }  // namespace
 
@@ -110,12 +162,12 @@ EnterpriseStartupDialogView::EnterpriseStartupDialogView(
           views::DISTANCE_TEXTFIELD_HORIZONTAL_TEXT_PADDING));
 
   set_draggable(true);
-  SetButtons(ui::DIALOG_BUTTON_OK);
+  SetButtons(static_cast<int>(ui::mojom::DialogButton::kOk));
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
   // Show Google Chrome Enterprise logo only for official build.
   SetExtraView(std::make_unique<LogoView>());
 #endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
-  SetModalType(ui::MODAL_TYPE_NONE);
+  SetModalType(ui::mojom::ModalType::kNone);
   SetAcceptCallback(
       base::BindOnce(&EnterpriseStartupDialogView::RunDialogCallback,
                      base::Unretained(this), true));
@@ -128,13 +180,13 @@ EnterpriseStartupDialogView::EnterpriseStartupDialogView(
   SetBorder(views::CreateEmptyBorder(GetDialogInsets()));
   CreateDialogWidget(this, nullptr, nullptr)->Show();
 #if BUILDFLAG(IS_MAC)
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&EnterpriseStartupDialogView::StartModalDialog,
                                 weak_factory_.GetWeakPtr()));
 #endif
 }
 
-EnterpriseStartupDialogView::~EnterpriseStartupDialogView() {}
+EnterpriseStartupDialogView::~EnterpriseStartupDialogView() = default;
 
 void EnterpriseStartupDialogView::DisplayLaunchingInformationWithThrobber(
     const std::u16string& information) {
@@ -151,7 +203,7 @@ void EnterpriseStartupDialogView::DisplayLaunchingInformationWithThrobber(
 
 void EnterpriseStartupDialogView::DisplayErrorMessage(
     const std::u16string& error_message,
-    const absl::optional<std::u16string>& accept_button) {
+    const std::optional<std::u16string>& accept_button) {
   ResetDialog(accept_button.has_value());
   std::unique_ptr<views::Label> text = CreateText(error_message);
   auto error_icon =
@@ -183,7 +235,7 @@ void EnterpriseStartupDialogView::RemoveWidgetObserver(
 
 void EnterpriseStartupDialogView::StartModalDialog() {
 #if BUILDFLAG(IS_MAC)
-  base::CurrentThread::ScopedNestableTaskAllower allow_nested;
+  base::CurrentThread::ScopedAllowApplicationTasksInNativeNestedLoop allow;
   StartModal(GetWidget()->GetNativeWindow());
 #endif
 }
@@ -196,7 +248,7 @@ void EnterpriseStartupDialogView::RunDialogCallback(bool was_accepted) {
   if (can_show_browser_window_) {
     std::move(callback_).Run(was_accepted, can_show_browser_window_);
   } else {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback_), was_accepted,
                                   can_show_browser_window_));
   }
@@ -209,7 +261,8 @@ bool EnterpriseStartupDialogView::ShouldShowWindowTitle() const {
   return false;
 }
 
-gfx::Size EnterpriseStartupDialogView::CalculatePreferredSize() const {
+gfx::Size EnterpriseStartupDialogView::CalculatePreferredSize(
+    const views::SizeBounds& available_size) const {
   return gfx::Size(kDialogContentWidth, kDialogContentHeight);
 }
 
@@ -229,11 +282,11 @@ void EnterpriseStartupDialogView::AddContent(
   // TODO(weili): The child views are added after the dialog shows. So it
   // requires relayout and repaint. Consider a refactoring to add content
   // before showing.
-  GetWidget()->GetRootView()->Layout();
+  GetWidget()->GetRootView()->DeprecatedLayoutImmediately();
   GetWidget()->GetRootView()->SchedulePaint();
 }
 
-BEGIN_METADATA(EnterpriseStartupDialogView, views::DialogDelegateView)
+BEGIN_METADATA(EnterpriseStartupDialogView)
 END_METADATA
 
 /*
@@ -256,15 +309,17 @@ EnterpriseStartupDialogImpl::~EnterpriseStartupDialogImpl() {
 
 void EnterpriseStartupDialogImpl::DisplayLaunchingInformationWithThrobber(
     const std::u16string& information) {
-  if (dialog_view_)
+  if (dialog_view_) {
     dialog_view_->DisplayLaunchingInformationWithThrobber(information);
+  }
 }
 
 void EnterpriseStartupDialogImpl::DisplayErrorMessage(
     const std::u16string& error_message,
-    const absl::optional<std::u16string>& accept_button) {
-  if (dialog_view_)
+    const std::optional<std::u16string>& accept_button) {
+  if (dialog_view_) {
     dialog_view_->DisplayErrorMessage(error_message, accept_button);
+  }
 }
 
 bool EnterpriseStartupDialogImpl::IsShowing() {
@@ -284,6 +339,13 @@ void EnterpriseStartupDialogImpl::OnWidgetDestroying(views::Widget* widget) {
 // static
 std::unique_ptr<EnterpriseStartupDialog>
 EnterpriseStartupDialog::CreateAndShowDialog(DialogResultCallback callback) {
+  // If running in headless mode use an alternate version of the enterprise
+  // startup dialog.
+  if (headless::IsHeadlessMode()) {
+    return std::make_unique<HeadlessEnterpriseStartupDialogImpl>(
+        std::move(callback));
+  }
+
   return std::make_unique<EnterpriseStartupDialogImpl>(std::move(callback));
 }
 

@@ -1,15 +1,15 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/common/font_list.h"
 
-#include "base/bind.h"
+#include <string_view>
+
+#include "base/functional/bind.h"
 #include "base/i18n/rtl.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "base/test/task_environment.h"
 #include "base/values.h"
 #include "build/build_config.h"
@@ -19,8 +19,8 @@ namespace {
 
 #if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_FUCHSIA)
 bool HasFontWithName(const base::Value::List& list,
-                     base::StringPiece expected_font_id,
-                     base::StringPiece expected_display_name) {
+                     std::string_view expected_font_id,
+                     std::string_view expected_display_name) {
   for (const auto& font : list) {
     const auto& font_names = font.GetList();
     std::string font_id = font_names[0].GetString();

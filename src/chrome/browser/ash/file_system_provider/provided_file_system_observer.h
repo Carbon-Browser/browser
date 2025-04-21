@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,13 @@
 
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
+#include "chrome/browser/ash/file_system_provider/cloud_file_info.h"
 #include "chrome/browser/ash/file_system_provider/watcher.h"
 #include "storage/browser/file_system/watcher_manager.h"
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 
 class ProvidedFileSystemInfo;
 
@@ -28,11 +28,22 @@ class ProvidedFileSystemObserver {
 
   // Describes a change related to a watched entry.
   struct Change {
-    Change();
+    Change(base::FilePath entry_path,
+           storage::WatcherManager::ChangeType change_type,
+           std::unique_ptr<CloudFileInfo> cloud_file_info);
+
+    // Not copyable.
+    Change(const Change&) = delete;
+    Change& operator=(const Change&) = delete;
+
+    // Movable
+    Change(Change&&);
+
     ~Change();
 
     base::FilePath entry_path;
     storage::WatcherManager::ChangeType change_type;
+    std::unique_ptr<CloudFileInfo> cloud_file_info;
   };
 
   // Called when a watched entry is changed, including removals. |callback|
@@ -56,14 +67,6 @@ class ProvidedFileSystemObserver {
       const Watchers& watchers) = 0;
 };
 
-}  // namespace file_system_provider
-}  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-namespace file_system_provider {
-using ::ash::file_system_provider::ProvidedFileSystemObserver;
-}  // namespace file_system_provider
-}  // namespace chromeos
+}  // namespace ash::file_system_provider
 
 #endif  // CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_PROVIDED_FILE_SYSTEM_OBSERVER_H_

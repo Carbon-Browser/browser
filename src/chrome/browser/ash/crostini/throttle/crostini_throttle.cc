@@ -1,14 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/crostini/throttle/crostini_throttle.h"
 
-#include "base/no_destructor.h"
-#include "chrome/browser/ash/concierge_helper_service.h"
+#include "base/memory/raw_ptr.h"
+#include "chrome/browser/ash/concierge_helper/concierge_helper_service.h"
 #include "chrome/browser/ash/crostini/throttle/crostini_active_window_throttle_observer.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 #include "content/public/browser/browser_context.h"
 
 namespace crostini {
@@ -30,51 +28,10 @@ class DefaultDelegateImpl : public CrostiniThrottle::Delegate {
   }
 
  private:
-  content::BrowserContext* context_;
-};
-
-class CrostiniThrottleFactory : public BrowserContextKeyedServiceFactory {
- public:
-  static CrostiniThrottleFactory* GetInstance() {
-    static base::NoDestructor<CrostiniThrottleFactory> instance;
-    return instance.get();
-  }
-
-  static CrostiniThrottle* GetForBrowserContext(
-      content::BrowserContext* context) {
-    return static_cast<CrostiniThrottle*>(
-        CrostiniThrottleFactory::GetInstance()->GetServiceForBrowserContext(
-            context, true /* create */));
-  }
-
-  CrostiniThrottleFactory(const CrostiniThrottleFactory&) = delete;
-  CrostiniThrottleFactory& operator=(const CrostiniThrottleFactory&) = delete;
-
- private:
-  friend class base::NoDestructor<CrostiniThrottleFactory>;
-
-  CrostiniThrottleFactory()
-      : BrowserContextKeyedServiceFactory(
-            "CrostiniThrottleFactory",
-            BrowserContextDependencyManager::GetInstance()) {}
-  ~CrostiniThrottleFactory() override = default;
-
-  // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
-      content::BrowserContext* context) const override {
-    if (context->IsOffTheRecord())
-      return nullptr;
-    return new CrostiniThrottle(context);
-  }
+  raw_ptr<content::BrowserContext> context_;
 };
 
 }  // namespace
-
-// static
-CrostiniThrottle* CrostiniThrottle::GetForBrowserContext(
-    content::BrowserContext* context) {
-  return CrostiniThrottleFactory::GetForBrowserContext(context);
-}
 
 CrostiniThrottle::CrostiniThrottle(content::BrowserContext* context)
     : ThrottleService(context),

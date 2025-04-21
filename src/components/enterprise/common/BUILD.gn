@@ -1,6 +1,8 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
+
+import("//build/config/features.gni")
 
 static_library("strings") {
   sources = [
@@ -9,10 +11,31 @@ static_library("strings") {
   ]
 }
 
-static_library("download_item_reroute_info") {
-  sources = [
-    "download_item_reroute_info.cc",
-    "download_item_reroute_info.h",
-  ]
-  deps = [ "proto:download_item_reroute_info_proto" ]
+if (use_blink) {
+  static_library("files_scan_data") {
+    sources = [
+      "files_scan_data.cc",
+      "files_scan_data.h",
+    ]
+    deps = [
+      "//base",
+      "//ui/base",
+    ]
+  }
+}
+
+source_set("unit_tests") {
+  testonly = true
+
+  if (!is_ios) {
+    sources = [ "files_scan_data_unittest.cc" ]
+
+    deps = [
+      ":files_scan_data",
+      "//base/test:test_support",
+      "//content/public/browser",
+      "//content/test:test_support",
+      "//testing/gtest",
+    ]
+  }
 }

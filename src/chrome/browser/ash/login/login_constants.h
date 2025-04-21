@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,9 +29,9 @@ constexpr int kDefaultGaiaOfflineSigninTimeLimitDays =
 constexpr int kDefaultSAMLOfflineSigninTimeLimit = base::Days(14).InSeconds();
 
 constexpr int kDefaultGaiaLockScreenOfflineSigninTimeLimitDays =
-    kLockScreenOfflineSigninTimeLimitDaysMatchLogin;
+    kOfflineSigninTimeLimitNotSet;
 constexpr int kDefaultSamlLockScreenOfflineSigninTimeLimitDays =
-    kLockScreenOfflineSigninTimeLimitDaysMatchLogin;
+    kOfflineSigninTimeLimitNotSet;
 
 // In-session password-change feature (includes password expiry notifications).
 const bool kDefaultSamlInSessionPasswordChangeEnabled = false;
@@ -39,6 +39,13 @@ const int kDefaultSamlPasswordExpirationAdvanceWarningDays = 14;
 
 // Online reauthentication on the lock screen.
 const bool kDefaultLockScreenReauthenticationEnabled = false;
+
+// Default value for authentication flow automatic reloading controlled by
+// `DeviceAuthenticationFlowAutoReloadInterval` policy
+// A value of zero indicates the policy being disabled (no auto reload is
+// triggered). While a value greater than zero indicates automatically reloading
+// the authentication flow by this interval specified in minutes.
+const int kDefaultAuthenticationFlowAutoReloadInterval = 0;
 
 }  // namespace constants
 }  // namespace ash

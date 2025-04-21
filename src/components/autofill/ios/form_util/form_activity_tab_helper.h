@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,22 +6,22 @@
 #define COMPONENTS_AUTOFILL_IOS_FORM_UTIL_FORM_ACTIVITY_TAB_HELPER_H_
 
 #include "base/observer_list.h"
+#include "base/values.h"
 #include "ios/web/public/web_state_observer.h"
 #import "ios/web/public/web_state_user_data.h"
-
-namespace base {
-class DictionaryValue;
-}
 
 namespace web {
 class ScriptMessage;
 class WebState;
+enum class ContentWorld;
 }  // namespace web
 
 namespace autofill {
 
-struct BaseFormActivityParams;
 class FormActivityObserver;
+
+inline constexpr char kProgrammaticFormSubmissionHistogram[] =
+    "Autofill.iOS.FormSubmission.IsProgrammatic";
 
 // Processes user activity messages for web page forms and forwards the form
 // activity event to FormActivityObserver.
@@ -65,12 +65,6 @@ class FormActivityTabHelper
   // Handler for the submission of a form.
   void FormSubmissionHandler(web::WebState* web_state,
                              const web::ScriptMessage& message);
-
-  bool GetBaseFormActivityParams(web::WebState* web_state,
-                                 const web::ScriptMessage& message,
-                                 base::DictionaryValue** message_body,
-                                 BaseFormActivityParams* form_activity,
-                                 web::WebFrame** sender_frame);
 
   // The observers.
   base::ObserverList<FormActivityObserver>::Unchecked observers_;

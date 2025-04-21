@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,7 @@ enum ClipboardBuffer {
   // Used on platforms like the X Window System that treat selection
   // as a type of clipboard.
   // TODO(crbug.com/676224): When preprocessing of mojom is available only
-  // define this value for USE_OZONE.
+  // define this value for EnableIf=use_ozone.
   kSelection,
 };
 
@@ -120,7 +120,7 @@ interface ClipboardHost {
   ReadFiles(ClipboardBuffer buffer) => (ClipboardFiles result);
 
   [Sync]
-  ReadCustomData(ClipboardBuffer buffer, mojo_base.mojom.String16 type) =>
+  ReadDataTransferCustomData(ClipboardBuffer buffer, mojo_base.mojom.String16 type) =>
       (mojo_base.mojom.BigString16 result);
 
   // Reads both unsanitized custom formats & standard
@@ -153,8 +153,8 @@ interface ClipboardHost {
 
   WriteSmartPasteMarker();
 
-  // Chrome-specific pickled data.
-  WriteCustomData(map<mojo_base.mojom.String16, mojo_base.mojom.BigString16> data);
+  // Chromium-specific DataTransfer custom data.
+  WriteDataTransferCustomData(map<mojo_base.mojom.String16, mojo_base.mojom.BigString16> data);
 
   // TODO(dcheng): The |url| parameter should really be a GURL, but <canvas>'s
   // copy as image tries to set very long data: URLs on the clipboard. Using

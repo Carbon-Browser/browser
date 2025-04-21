@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "media/base/encryption_pattern.h"
 #include "media/base/encryption_scheme.h"
 #include "media/base/limits.h"
+#include "media/base/media_switches.h"
 #include "ui/gfx/ipc/geometry/gfx_param_traits.h"
 #include "ui/gfx/ipc/gfx_param_traits.h"
 
@@ -40,8 +41,8 @@ bool ParamTraits<AudioParameters>::Read(const base::Pickle* m,
   ChannelLayout channel_layout;
   int sample_rate, frames_per_buffer, channels, effects;
   std::vector<media::Point> mic_positions;
-  AudioLatency::LatencyType latency_tag;
-  absl::optional<media::AudioParameters::HardwareCapabilities>
+  AudioLatency::Type latency_tag;
+  std::optional<media::AudioParameters::HardwareCapabilities>
       hardware_capabilities;
 
   if (!ReadParam(m, iter, &format) || !ReadParam(m, iter, &channel_layout) ||
@@ -55,14 +56,13 @@ bool ParamTraits<AudioParameters>::Read(const base::Pickle* m,
   }
 
   if (hardware_capabilities) {
-    *r = AudioParameters(format, channel_layout, sample_rate, frames_per_buffer,
-                         *hardware_capabilities);
+    *r = AudioParameters(format, {channel_layout, channels}, sample_rate,
+                         frames_per_buffer, *hardware_capabilities);
   } else {
-    *r =
-        AudioParameters(format, channel_layout, sample_rate, frames_per_buffer);
+    *r = AudioParameters(format, {channel_layout, channels}, sample_rate,
+                         frames_per_buffer);
   }
 
-  r->set_channels_for_discrete(channels);
   r->set_effects(effects);
   r->set_mic_positions(mic_positions);
   r->set_latency_tag(latency_tag);
@@ -81,6 +81,8 @@ void ParamTraits<AudioParameters::HardwareCapabilities>::Write(
   WriteParam(m, p.min_frames_per_buffer);
   WriteParam(m, p.max_frames_per_buffer);
   WriteParam(m, p.bitstream_formats);
+  WriteParam(m, p.require_encapsulation);
+  WriteParam(m, p.require_audio_offload);
 }
 
 bool ParamTraits<AudioParameters::HardwareCapabilities>::Read(
@@ -88,16 +90,28 @@ bool ParamTraits<AudioParameters::HardwareCapabilities>::Read(
     base::PickleIterator* iter,
     param_type* r) {
   int bitstream_formats;
+  bool require_encapsulation;
   int max_frames_per_buffer;
   int min_frames_per_buffer;
+  bool require_audio_offload;
   if (!ReadParam(m, iter, &min_frames_per_buffer) ||
       !ReadParam(m, iter, &max_frames_per_buffer) ||
-      !ReadParam(m, iter, &bitstream_formats)) {
+      !ReadParam(m, iter, &bitstream_formats) ||
+      !ReadParam(m, iter, &require_encapsulation) ||
+      !ReadParam(m, iter, &require_audio_offload)) {
     return false;
   }
+#if BUILDFLAG(IS_WIN)
+  if (require_audio_offload &&
+      !base::FeatureList::IsEnabled(media::kAudioOffload)) {
+    return false;
+  }
+#endif
   r->min_frames_per_buffer = min_frames_per_buffer;
   r->max_frames_per_buffer = max_frames_per_buffer;
   r->bitstream_formats = bitstream_formats;
+  r->require_encapsulation = require_encapsulation;
+  r->require_audio_offload = require_audio_offload;
   return true;
 }
 

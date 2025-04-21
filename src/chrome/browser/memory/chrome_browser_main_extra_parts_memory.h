@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,6 @@ class SystemMemoryPressureEvaluator;
 #endif
 
 namespace memory {
-class MemoryAblationStudy;
 class EnterpriseMemoryLimitPrefObserver;
 }  // namespace memory
 
@@ -37,6 +36,7 @@ class ChromeBrowserMainExtraPartsMemory : public ChromeBrowserMainExtraParts {
 
  private:
   // ChromeBrowserMainExtraParts overrides.
+  void PostCreateThreads() override;
   void PostBrowserStart() override;
   void PostMainMessageLoopRun() override;
 
@@ -52,8 +52,6 @@ class ChromeBrowserMainExtraPartsMemory : public ChromeBrowserMainExtraParts {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   std::unique_ptr<ash::memory::SystemMemoryPressureEvaluator> cros_evaluator_;
 #endif
-
-  std::unique_ptr<memory::MemoryAblationStudy> memory_ablation_study_;
 };
 
 #endif  // CHROME_BROWSER_MEMORY_CHROME_BROWSER_MAIN_EXTRA_PARTS_MEMORY_H_

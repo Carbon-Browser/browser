@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,7 +35,7 @@
           {
             "type": "string",
             "name": "messageName",
-            "description": "The name of the message, as specified in the <a href='i18n-messages'><code>messages.json</code></a> file."
+            "description": "The name of the message, as specified in the <a href='how-to/ui/localization-message-formats'><code>messages.json</code></a> file."
           },
           {
             "type": "any",

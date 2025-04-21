@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,10 @@
 // http://msdn.microsoft.com/library/default.asp?url=/library/en-us/shellcc/platform/commctls/userex/topics/partsandstates.asp
 #include <windows.h>
 
+#include <optional>
+
 #include "base/no_destructor.h"
 #include "base/win/registry.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/sys_color_change_listener.h"
@@ -67,12 +68,21 @@ class NATIVE_THEME_EXPORT NativeThemeWin : public NativeTheme,
              const gfx::Rect& rect,
              const ExtraParams& extra,
              ColorScheme color_scheme,
-             const absl::optional<SkColor>& accent_color) const override;
+             bool in_forced_colors,
+             const std::optional<SkColor>& accent_color) const override;
   bool SupportsNinePatch(Part part) const override;
   gfx::Size GetNinePatchCanvasSize(Part part) const override;
   gfx::Rect GetNinePatchAperture(Part part) const override;
   bool ShouldUseDarkColors() const override;
+
+  // On Windows, we look at the high contrast setting to calculate the color
+  // scheme. If high contrast is enabled, the preferred color scheme calculation
+  // will ignore the state of dark mode. Instead, preferred color scheme will be
+  // light or dark depending on the OS high contrast theme. If high contrast is
+  // off, the preferred color scheme calculation will be based of the state of
+  // dark mode.
   PreferredColorScheme CalculatePreferredColorScheme() const override;
+
   PreferredContrast CalculatePreferredContrast() const override;
   ColorScheme GetDefaultSystemColorScheme() const override;
 
@@ -82,6 +92,7 @@ class NATIVE_THEME_EXPORT NativeThemeWin : public NativeTheme,
 
   // NativeTheme:
   void ConfigureWebInstance() override;
+  std::optional<base::TimeDelta> GetPlatformCaretBlinkInterval() const override;
 
   NativeThemeWin(bool configure_web_instance, bool should_only_use_dark_colors);
   ~NativeThemeWin() override;
@@ -195,10 +206,21 @@ class NATIVE_THEME_EXPORT NativeThemeWin : public NativeTheme,
   HANDLE GetThemeHandle(ThemeName theme_name) const;
 
   void RegisterThemeRegkeyObserver();
+  void RegisterColorFilteringRegkeyObserver();
   void UpdateDarkModeStatus();
+  void UpdatePrefersReducedTransparency();
+  void UpdateInvertedColors();
 
-  // Dark Mode registry key.
+  // True if Windows supports dark mode. This does NOT indicate whether the
+  // system is in dark mode, only that it is supported by this version of
+  // Windows.
+  const bool supports_windows_dark_mode_;
+
+  // Dark Mode/Transparency registry key.
   base::win::RegKey hkcu_themes_regkey_;
+
+  // Inverted colors registry key
+  base::win::RegKey hkcu_color_filtering_regkey_;
 
   // A cache of open theme handles.
   mutable HANDLE theme_handles_[LAST];

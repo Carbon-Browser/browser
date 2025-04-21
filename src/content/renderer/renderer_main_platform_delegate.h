@@ -1,10 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_RENDERER_RENDERER_MAIN_PLATFORM_DELEGATE_H_
 #define CONTENT_RENDERER_RENDERER_MAIN_PLATFORM_DELEGATE_H_
 
+#include "base/memory/raw_ref.h"
 #include "build/build_config.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -37,7 +38,7 @@ class CONTENT_EXPORT RendererMainPlatformDelegate {
 
  private:
 #if BUILDFLAG(IS_WIN)
-  const MainFunctionParams& parameters_;
+  const raw_ref<const MainFunctionParams> parameters_;
 #endif
 };
 

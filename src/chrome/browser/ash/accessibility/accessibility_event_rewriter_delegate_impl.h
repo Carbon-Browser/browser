@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,9 +43,8 @@ class AccessibilityEventRewriterDelegateImpl
   void OnUnhandledSpokenFeedbackEvent(std::unique_ptr<ui::Event> event) const;
 
   // WebContentsDelegate:
-  bool HandleKeyboardEvent(
-      content::WebContents* source,
-      const content::NativeWebKeyboardEvent& event) override;
+  bool HandleKeyboardEvent(content::WebContents* source,
+                           const input::NativeWebKeyboardEvent& event) override;
 };
 
 }  // namespace ash

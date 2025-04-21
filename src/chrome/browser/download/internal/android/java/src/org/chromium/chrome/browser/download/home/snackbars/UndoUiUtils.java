@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,8 +19,9 @@ final class UndoUiUtils {
 
     /** @return A {@link String} representing the title text for an undo snackbar. */
     public static String getTitleFor(Collection<OfflineItem> items) {
-        return items.size() == 1 ? items.iterator().next().title
-                                 : String.format(Locale.getDefault(), "%d", items.size());
+        return items.size() == 1
+                ? items.iterator().next().title
+                : String.format(Locale.getDefault(), "%d", items.size());
     }
 
     /** @return A {@link String} representing the template text for an undo snackbar. */
@@ -29,16 +30,5 @@ final class UndoUiUtils {
         return items.size() == 1
                 ? context.getString(R.string.delete_message)
                 : context.getString(R.string.undo_bar_multiple_downloads_delete_message);
-    }
-
-    /** @return A {@link String} representing the text to announce when an undo occurs. */
-    public static String getAccessibilityActionAnnouncementTextFor(Collection<OfflineItem> items) {
-        String title = getTitleFor(items);
-        Context context = ContextUtils.getApplicationContext();
-        return items.size() == 1
-                ? context.getString(R.string.undo_bar_delete_restore_accessibility_message, title)
-                : context.getString(
-                        R.string.undo_bar_multiple_downloads_delete_restore_accessibility_message,
-                        title);
     }
 }

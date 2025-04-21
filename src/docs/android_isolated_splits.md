@@ -34,8 +34,7 @@ renderer processes require almost no DEX.
 Chrome's splits look like:
 
 ```
-base.apk <-- chrome.apk <-- autofill_assistant.apk
-                        <-- image_editor.apk
+base.apk <-- chrome.apk <-- image_editor.apk
                         <-- feedv2.apk
                         <-- ...
 ```
@@ -84,7 +83,7 @@ enforce that no Service subclasses exist outside of the base split.
 
 [b/169196314]: https://issuetracker.google.com/169196314
 [SplitCompatService]: https://source.chromium.org/search?q=symbol:SplitCompatService&ss=chromium
-[compile-time check]: https://source.chromium.org/search?q=symbol:_MaybeCheckServicesAndProvidersPresentInBase&ss=chromium
+[compile-time check]: https://source.chromium.org/chromium/chromium/src/+/main:build/android/gyp/create_app_bundle.py;l=446;drc=c4dd266492ad1e242161b415ac5a1d9fccd7a041
 
 ### Corrupted .odex (Android O MR1)
 
@@ -101,10 +100,10 @@ happens whenever Chrome is updated rather than when the user launches Chrome.
 [preemptively run]: https://source.chromium.org/search?q=symbol:DexFixer.needsDexCompile&ss=chromium
 [PackageReplacedBroadcastReceiver]: https://source.chromium.org/search?q=symbol:PackageReplacedBroadcastReceiver&ss=chromium
 
-### Conflicting ClassLoaders
+### Conflicting ClassLoaders #1
 
-Missing synchronization can cause the parent ClassLoader of split contexts to
-be different from the Application's ClassLoader. This manifests as odd-looking
+Tracked by [b/172602571], sometimes a split's parent ClassLoader is different
+from the Application's ClassLoader. This manifests as odd-looking
 `ClassCastExceptions` where `"TypeA cannot be cast to TypeA"` (since the two
 `TypeAs` are from different ClassLoaders).
 
@@ -126,6 +125,19 @@ corrected for `ContextImpl` instances, which we do via
 [detect and fix]: https://source.chromium.org/search?q=f:splitcompatappcomponentfactory&ss=chromium
 [ChromeBaseAppCompatActivity.attachBaseContext()]: https://source.chromium.org/search?q=BundleUtils\.checkContextClassLoader&ss=chromium
 
+### Conflicting ClassLoaders #2
+
+Tracked by [b/172602571], when a new split language split or feature split is
+installed, the ClassLoaders for non-base splits are recreated. Any reference to
+a class from the previous ClassLoader (e.g. due to native code holding
+references to them) will result in `ClassCastExceptions` where
+`"TypeA cannot be cast to TypeA"`.
+
+**Work-around:**
+
+There is no work-around. This is a source of crashes. We could potentially
+mitigate by restarting chrome when a split is installed.
+
 ### System.loadLibrary() Broken for Libraries in Splits
 
 Tracked by [b/171269960], Android is not adding the apk split to the associated
@@ -141,6 +153,18 @@ System.load(BundleUtils.getNativeLibraryPath("foo", "mysplitsname"));
 ```
 
 [b/171269960]: https://issuetracker.google.com/171269960
+
+### System.loadLibrary() Unusable from Split if Library depends on Another Loaded by Base Split
+
+Also tracked by [b/171269960], maybe related to linker namespaces. If a split
+tries to load `libfeature.so`, and `libfeature.so` has a `DT_NEEDED` entry for
+`libbase.so`, and `libbase.so` is loaded by the base split, then the load will
+fail.
+
+**Work-around:**
+
+Have base split load libraries from within splits. Proxy all JNI calls through
+a class that exists in the base split.
 
 ### System.loadLibrary() Broken for Libraries in Splits on System Image
 
@@ -168,6 +192,28 @@ Do not add too many splits, and monitor the size of our `ApplicationInfo` object
 
 [crbug/1298496]: https://bugs.chromium.org/p/chromium/issues/detail?id=1298496
 [Application Zygote]: https://developer.android.com/reference/android/app/ZygotePreload
+
+### AppComponentFactory does not Hook Split ClassLoaders
+
+`AppComponentFactory#instantiateClassLoader()` is meant to allow apps to hook
+`ClassLoader` creation. The hook is called for the base split, but not for other
+isolated splits. Tracked by [b/265583114]. There is no work-around.
+
+[b/265583114]: https://issuetracker.google.com/265583114
+
+### Incorrect Handling of Shared Libraries
+
+Tracked by [b/265589431]. If an APK split has `<uses-library>` in its manifest,
+the classloader for the split is meant to have that library added to it by the
+framework. However, Android does not add the library to the classpath when a
+split is dynamically installed, but instead adds it to the classpath of the base
+split's classloader upon subsequent app launches.
+
+**Work-around:**
+
+ * Always add `<uses-library>` to the base split.
+
+[b/265589431]: https://issuetracker.google.com/265589431
 
 ## Other Quirks & Subtleties
 
@@ -262,23 +308,31 @@ Use the `ContextWrapper` created via: [BundleUtils.createContextForInflation()]
 
 [BundleUtils.createContextForInflation()]: https://source.chromium.org/search?q=symbol:BundleUtils.createContextForInflation&ss=chromium
 
-### Using Fragments
+### onRestoreInstanceState with Classes From Splits
 
 When Android kills an app, it normally calls `onSaveInstanceState()` to allow
 the app to first save state. The saved state includes the class names of active
-Fragments. Upon re-launch, these class names are used to reflectively
-instantiate the fragments. `FragmentManager` uses the ClassLoader of the
-Activity to instantiate them, which doesn't work if the Activity and fragment
-classes live in different splits.
+Fragments, RecyclerViews, and potentially other classes from splits. Upon
+re-launch, these class names are used to reflectively instantiate instances.
+`FragmentManager` uses the ClassLoader of the Activity to instantiate them,
+and `RecyclerView` uses the ClassLoader associated with the `Bundle` object.
+The reflection fails if the active Activity resides in a different spilt from
+the reflectively instantiated classes.
 
 **Work-around:**
 
 Chrome stores the list of all splits that have been used for inflation during
-[onSaveInstanceState] and then uses [a custom ClassLoader] to look within them
-for classes that do not exist in the application's ClassLoader.
+[`onSaveInstanceState`] and then uses [a custom ClassLoader] to look within them
+for classes that do not exist in the application's ClassLoader. The custom
+ClassLoader is passed to `Bundle` instances in
+`ChromeBaseAppCompatActivity.onRestoreInstanceState()`.
 
-[onSaveInstanceState]: https://source.chromium.org/search?q=symbol:ChromeBaseAppCompatActivity.onSaveInstanceState&ss=chromium
+Having Android Framework call `Bundle.setClassLoader()` is tracked in
+[b/260574161].
+
+[`onSaveInstanceState`]: https://source.chromium.org/search?q=symbol:ChromeBaseAppCompatActivity.onSaveInstanceState&ss=chromium
 [a custom ClassLoader]: https://source.chromium.org/search?q=symbol:ChromeBaseAppCompatActivity.getClassLoader&ss=chromium
+[b/260574161]: https://issuetracker.google.com/260574161
 
 ### Calling Methods Across a Split Boundary
 
@@ -306,6 +360,17 @@ only).
 
 [proguard.py]: https://source.chromium.org/search?q=symbol:_DeDupeInputJars%20f:proguard.py&ss=chromium
 [b/225876019]: https://issuetracker.google.com/225876019
+
+### Metadata in Splits
+
+Metadata is queried on a per-app basis (not a per-split basis). E.g.:
+
+```java
+ApplicationInfo ai = context.getPackageManager().getApplicationInfo(context.getPackageName(), PackageManager.GET_META_DATA);
+Bundle b = ai.metaData;
+```
+
+This bundle contains merged values from all fully-installed apk splits.
 
 ## Other Resources
 

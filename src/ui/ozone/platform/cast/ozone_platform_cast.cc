@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -91,10 +91,7 @@ class OzonePlatformCast : public OzonePlatform {
   InputController* GetInputController() override {
     return event_factory_ozone_->input_controller();
   }
-  std::unique_ptr<PlatformScreen> CreateScreen() override {
-    NOTREACHED();
-    return nullptr;
-  }
+  std::unique_ptr<PlatformScreen> CreateScreen() override { NOTREACHED(); }
   void InitScreen(PlatformScreen* screen) override { NOTREACHED(); }
   GpuPlatformSupportHost* GetGpuPlatformSupportHost() override {
     return gpu_platform_support_host_.get();
@@ -113,9 +110,9 @@ class OzonePlatformCast : public OzonePlatform {
     return nullptr;
   }
   std::unique_ptr<InputMethod> CreateInputMethod(
-      internal::InputMethodDelegate* delegate,
+      ImeKeyEventDispatcher* ime_key_event_dispatcher,
       gfx::AcceleratedWidget) override {
-    return std::make_unique<InputMethodMinimal>(delegate);
+    return std::make_unique<InputMethodMinimal>(ime_key_event_dispatcher);
   }
 
   bool IsNativePixmapConfigSupported(gfx::BufferFormat format,
@@ -123,6 +120,8 @@ class OzonePlatformCast : public OzonePlatform {
     return format == gfx::BufferFormat::BGRA_8888 &&
            usage == gfx::BufferUsage::SCANOUT;
   }
+
+  bool IsWindowCompositingSupported() const override { return true; }
 
   bool InitializeUI(const InitParams& params) override {
     device_manager_ = CreateDeviceManager();
@@ -151,10 +150,18 @@ class OzonePlatformCast : public OzonePlatform {
 
     return true;
   }
+
   void InitializeGPU(const InitParams& params) override {
     overlay_manager_ = std::make_unique<OverlayManagerCast>();
     surface_factory_ =
         std::make_unique<SurfaceFactoryCast>(std::move(egl_platform_));
+  }
+
+  void PostCreateMainMessageLoop(base::OnceCallback<void()> shutdown_cb,
+                                 scoped_refptr<base::SingleThreadTaskRunner>
+                                     user_input_task_runner) override {
+    event_factory_ozone_->SetUserInputTaskRunner(
+        std::move(user_input_task_runner));
   }
 
  private:

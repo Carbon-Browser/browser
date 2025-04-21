@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,14 +32,13 @@ namespace base {
 template <class T>
 class RefCountedDeleteOnSequence : public subtle::RefCountedThreadSafeBase {
  public:
-  static constexpr subtle::StartRefCountFromZeroTag kRefCountPreference =
-      subtle::kStartRefCountFromZeroTag;
+  using RefCountPreferenceTag = subtle::StartRefCountFromZeroTag;
 
   // A SequencedTaskRunner for the current sequence can be acquired by calling
-  // SequencedTaskRunnerHandle::Get().
+  // SequencedTaskRunner::GetCurrentDefault().
   explicit RefCountedDeleteOnSequence(
       scoped_refptr<SequencedTaskRunner> owning_task_runner)
-      : subtle::RefCountedThreadSafeBase(T::kRefCountPreference),
+      : subtle::RefCountedThreadSafeBase(subtle::GetRefCountPreference<T>()),
         owning_task_runner_(std::move(owning_task_runner)) {
     DCHECK(owning_task_runner_);
   }
@@ -48,11 +47,12 @@ class RefCountedDeleteOnSequence : public subtle::RefCountedThreadSafeBase {
   RefCountedDeleteOnSequence& operator=(const RefCountedDeleteOnSequence&) =
       delete;
 
-  void AddRef() const { AddRefImpl(T::kRefCountPreference); }
+  void AddRef() const { AddRefImpl(subtle::GetRefCountPreference<T>()); }
 
   void Release() const {
-    if (subtle::RefCountedThreadSafeBase::Release())
+    if (subtle::RefCountedThreadSafeBase::Release()) {
       DestructOnSequence();
+    }
   }
 
  protected:
@@ -69,10 +69,11 @@ class RefCountedDeleteOnSequence : public subtle::RefCountedThreadSafeBase {
  private:
   void DestructOnSequence() const {
     const T* t = static_cast<const T*>(this);
-    if (owning_task_runner_->RunsTasksInCurrentSequence())
+    if (owning_task_runner_->RunsTasksInCurrentSequence()) {
       delete t;
-    else
+    } else {
       owning_task_runner_->DeleteSoon(FROM_HERE, t);
+    }
   }
 
   void AddRefImpl(subtle::StartRefCountFromZeroTag) const {

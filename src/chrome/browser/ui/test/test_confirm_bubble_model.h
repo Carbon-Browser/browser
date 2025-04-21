@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/confirm_bubble_model.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
 
 // A test version of the model for confirmation bubbles.
 class TestConfirmBubbleModel : public ConfirmBubbleModel {
@@ -25,7 +26,7 @@ class TestConfirmBubbleModel : public ConfirmBubbleModel {
   // ConfirmBubbleModel overrides:
   std::u16string GetTitle() const override;
   std::u16string GetMessageText() const override;
-  std::u16string GetButtonLabel(ui::DialogButton button) const override;
+  std::u16string GetButtonLabel(ui::mojom::DialogButton button) const override;
   void Accept() override;
   void Cancel() override;
   std::u16string GetLinkText() const override;

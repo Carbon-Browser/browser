@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 #include <stddef.h>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/callback.h"
 #include "content/public/common/drop_data.h"
+#include "ui/gfx/native_widget_types.h"
 
 namespace content {
 
@@ -17,7 +18,7 @@ WebContentsViewDelegate::~WebContentsViewDelegate() {
 }
 
 gfx::NativeWindow WebContentsViewDelegate::GetNativeWindow() {
-  return nullptr;
+  return gfx::NativeWindow();
 }
 
 WebDragDestDelegate* WebContentsViewDelegate::GetDragDestDelegate() {
@@ -52,15 +53,16 @@ bool WebContentsViewDelegate::TakeFocus(bool reverse) {
   return false;
 }
 
-void* WebContentsViewDelegate::CreateRenderWidgetHostViewDelegate(
+void* WebContentsViewDelegate::GetDelegateForHost(
     RenderWidgetHost* render_widget_host,
     bool is_popup) {
   return nullptr;
 }
 
-void WebContentsViewDelegate::OnPerformDrop(const DropData& drop_data,
-                                            DropCompletionCallback callback) {
-  return std::move(callback).Run(DropCompletionResult::kContinue);
+void WebContentsViewDelegate::OnPerformingDrop(
+    const DropData& drop_data,
+    DropCompletionCallback callback) {
+  return std::move(callback).Run(drop_data);
 }
 
 }  // namespace content

@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef BASE_WIN_SECURITY_UTIL_H_
 #define BASE_WIN_SECURITY_UTIL_H_
 
+#include <optional>
 #include <vector>
 
 #include "base/base_export.h"
@@ -43,6 +44,10 @@ BASE_EXPORT std::vector<Sid> CloneSidVector(const std::vector<Sid>& sids);
 // Append a vector of Sids to an existing vector.
 BASE_EXPORT void AppendSidVector(std::vector<Sid>& base_sids,
                                  const std::vector<Sid>& append_sids);
+
+// Gets the granted access for an open handle.
+// |handle| specifies any kernel object handle to query.
+BASE_EXPORT std::optional<ACCESS_MASK> GetGrantedAccess(HANDLE handle);
 
 }  // namespace win
 }  // namespace base

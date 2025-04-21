@@ -32,6 +32,14 @@ public class WalletPreferences extends Fragment {
             }
         });
 
+        View mViewSeedButton = view.findViewById(R.id.view_seed_phrase);
+        mViewSeedButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                ((WalletInterface) getActivity()).onNavigateViewSeed();
+            }
+        });
+
         View mLogoutButton = view.findViewById(R.id.logout_button);
         mLogoutButton.setOnClickListener(new View.OnClickListener() {
             @Override

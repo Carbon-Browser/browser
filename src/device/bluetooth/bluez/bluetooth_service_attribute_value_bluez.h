@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/values.h"
@@ -33,7 +34,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothServiceAttributeValueBlueZ {
   BluetoothServiceAttributeValueBlueZ();
   BluetoothServiceAttributeValueBlueZ(Type type,
                                       size_t size,
-                                      std::unique_ptr<base::Value> value);
+                                      std::optional<base::Value> value);
   explicit BluetoothServiceAttributeValueBlueZ(
       std::unique_ptr<Sequence> sequence);
   BluetoothServiceAttributeValueBlueZ(
@@ -44,13 +45,14 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothServiceAttributeValueBlueZ {
 
   Type type() const { return type_; }
   size_t size() const { return size_; }
+  bool is_sequence() const { return type_ == Type::SEQUENCE; }
   const Sequence& sequence() const { return *sequence_.get(); }
-  const base::Value& value() const { return *value_.get(); }
+  const base::Value& value() const { return *value_; }
 
  private:
   Type type_;
   size_t size_;
-  std::unique_ptr<base::Value> value_;
+  std::optional<base::Value> value_;
   std::unique_ptr<Sequence> sequence_;
 };
 

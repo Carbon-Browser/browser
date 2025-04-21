@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,20 +7,24 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "ash/webui/scanning/mojom/scanning.mojom-test-utils.h"
 #include "ash/webui/scanning/mojom/scanning.mojom.h"
 #include "ash/webui/scanning/scanning_uma.h"
 #include "base/containers/flat_set.h"
+#include "base/containers/span.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/i18n/time_formatting.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
+#include "base/test/test_future.h"
 #include "base/time/time.h"
 #include "base/unguessable_token.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
@@ -29,7 +33,7 @@
 #include "chrome/browser/ui/ash/holding_space/holding_space_keyed_service.h"
 #include "chrome/browser/ui/ash/holding_space/holding_space_keyed_service_factory.h"
 #include "chrome/browser/ui/ash/holding_space/scoped_test_mount_point.h"
-#include "chrome/browser/ui/ash/test_session_controller.h"
+#include "chrome/browser/ui/ash/session/test_session_controller.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/base/testing_profile_manager.h"
@@ -41,9 +45,8 @@
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkBitmap.h"
-#include "ui/gfx/codec/png_codec.h"
+#include "ui/gfx/codec/jpeg_codec.h"
 
 namespace ash {
 
@@ -52,6 +55,8 @@ using holding_space::ScopedTestMountPoint;
 namespace {
 
 namespace mojo_ipc = scanning::mojom;
+
+using ProtoScanFailureMode = lorgnette::ScanFailureMode;
 
 // Path to the user's "My files" folder.
 constexpr char kMyFilesPath[] = "/home/chronos/user/MyFiles";
@@ -118,19 +123,21 @@ lorgnette::ScannerCapabilities CreateEpsonScannerCapabilities() {
   return caps;
 }
 
+std::string GetTimestamp(const base::Time& scan_time) {
+  return base::UnlocalizedTimeFormatWithPattern(scan_time, "yyMMdd-HHmmss");
+}
+
 // Returns single FilePath to mimic saved PDF format scan.
 base::FilePath CreateSavedPdfScanPath(const base::FilePath& dir,
-                                      const base::Time::Exploded& scan_time) {
-  return dir.Append(base::StringPrintf("scan_%02d%02d%02d-%02d%02d%02d.pdf",
-                                       scan_time.year, scan_time.month,
-                                       scan_time.day_of_month, scan_time.hour,
-                                       scan_time.minute, scan_time.second));
+                                      const base::Time& scan_time) {
+  return dir.Append(
+      base::StringPrintf("scan_%s.pdf", GetTimestamp(scan_time).c_str()));
 }
 
 // Returns a vector of FilePaths to mimic saved scans.
 std::vector<base::FilePath> CreateSavedScanPaths(
     const base::FilePath& dir,
-    const base::Time::Exploded& scan_time,
+    const base::Time& scan_time,
     const mojo_ipc::FileType& file_type,
     int num_pages_to_scan) {
   const auto typeAndExtension = kFileTypes.find(file_type);
@@ -142,36 +149,40 @@ std::vector<base::FilePath> CreateSavedScanPaths(
   } else {
     file_paths.reserve(num_pages_to_scan);
     for (int i = 1; i <= num_pages_to_scan; i++) {
-      file_paths.push_back(dir.Append(base::StringPrintf(
-          "scan_%02d%02d%02d-%02d%02d%02d_%d.%s", scan_time.year,
-          scan_time.month, scan_time.day_of_month, scan_time.hour,
-          scan_time.minute, scan_time.second, i,
-          typeAndExtension->second.c_str())));
+      file_paths.push_back(dir.Append(
+          base::StringPrintf("scan_%s_%d.%s", GetTimestamp(scan_time).c_str(),
+                             i, typeAndExtension->second.c_str())));
     }
   }
   return file_paths;
 }
 
-// Returns a manually generated PNG image. |alpha| is used to make unique PNGs.
-std::string CreatePng(const int alpha = 255) {
-  DCHECK(alpha >= 0 && alpha <= 255);
-
+// Returns a manually generated JPEG image. |alpha| is used to make them unique.
+std::string CreateJpeg(const int alpha = 255) {
   SkBitmap bitmap;
   bitmap.allocN32Pixels(100, 100);
-  bitmap.eraseARGB(alpha, 0, 255, 0);
-  std::vector<unsigned char> bytes;
-  gfx::PNGCodec::EncodeBGRASkBitmap(bitmap, false, &bytes);
-  return std::string(bytes.begin(), bytes.end());
+  bitmap.eraseARGB(alpha, 0, 0, 255);
+  std::optional<std::vector<uint8_t>> bytes =
+      gfx::JPEGCodec::Encode(bitmap, 90);
+  CHECK(bytes);
+  return std::string(base::as_string_view(bytes.value()));
 }
 
 // Returns scan settings with the given path and file type.
-mojo_ipc::ScanSettings CreateScanSettings(const base::FilePath& scan_to_path,
-                                          const mojo_ipc::FileType& file_type,
-                                          const std::string source = "") {
+mojo_ipc::ScanSettings CreateScanSettings(
+    const base::FilePath& scan_to_path,
+    const mojo_ipc::FileType& file_type,
+    const std::string& source = "",
+    mojo_ipc::ColorMode color_mode = mojo_ipc::ColorMode::kColor,
+    mojo_ipc::PageSize page_size = mojo_ipc::PageSize::kIsoA3,
+    uint32_t resolution = kFirstResolution) {
   mojo_ipc::ScanSettings settings;
   settings.scan_to_path = scan_to_path;
   settings.file_type = file_type;
   settings.source_name = source;
+  settings.page_size = page_size;
+  settings.color_mode = color_mode;
+  settings.resolution_dpi = resolution;
   return settings;
 }
 
@@ -206,7 +217,7 @@ class FakeScanJobObserver : public mojo_ipc::ScanJobObserver {
   }
 
   void OnScanComplete(
-      mojo_ipc::ScanResult result,
+      ProtoScanFailureMode result,
       const std::vector<base::FilePath>& scanned_file_paths) override {
     scan_result_ = result;
     scanned_file_paths_ = scanned_file_paths;
@@ -216,7 +227,7 @@ class FakeScanJobObserver : public mojo_ipc::ScanJobObserver {
     cancel_scan_success_ = success;
   }
 
-  void OnMultiPageScanFail(mojo_ipc::ScanResult result) override {
+  void OnMultiPageScanFail(ProtoScanFailureMode result) override {
     multi_page_scan_result_ = result;
   }
 
@@ -234,7 +245,7 @@ class FakeScanJobObserver : public mojo_ipc::ScanJobObserver {
   // Returns true if the scan completed successfully.
   bool scan_success() const {
     return progress_ == 100 && page_complete_ &&
-           scan_result_ == mojo_ipc::ScanResult::kSuccess;
+           scan_result_ == ProtoScanFailureMode::SCAN_FAILURE_MODE_NO_FAILURE;
   }
 
   // Returns true if the cancel scan request completed successfully.
@@ -243,10 +254,10 @@ class FakeScanJobObserver : public mojo_ipc::ScanJobObserver {
   uint32_t new_page_index() const { return new_page_index_; }
 
   // Returns the result of the scan job.
-  mojo_ipc::ScanResult scan_result() const { return scan_result_; }
+  ProtoScanFailureMode scan_result() const { return scan_result_; }
 
   // Returns the result of the multi-page scan job.
-  mojo_ipc::ScanResult multi_page_scan_result() const {
+  ProtoScanFailureMode multi_page_scan_result() const {
     return multi_page_scan_result_;
   }
 
@@ -259,9 +270,10 @@ class FakeScanJobObserver : public mojo_ipc::ScanJobObserver {
   uint32_t progress_ = 0;
   bool page_complete_ = false;
   uint32_t new_page_index_ = UINT32_MAX;
-  mojo_ipc::ScanResult scan_result_ = mojo_ipc::ScanResult::kUnknownError;
-  mojo_ipc::ScanResult multi_page_scan_result_ =
-      mojo_ipc::ScanResult::kUnknownError;
+  ProtoScanFailureMode scan_result_ =
+      ProtoScanFailureMode::SCAN_FAILURE_MODE_UNKNOWN;
+  ProtoScanFailureMode multi_page_scan_result_ =
+      ProtoScanFailureMode::SCAN_FAILURE_MODE_UNKNOWN;
   bool cancel_scan_success_ = false;
   std::vector<base::FilePath> scanned_file_paths_;
   mojo::Receiver<mojo_ipc::ScanJobObserver> receiver_{this};
@@ -276,7 +288,7 @@ class ScanServiceTest : public testing::Test {
             ScopedTestMountPoint::CreateAndMountDownloads(profile_)),
         session_controller_(std::make_unique<TestSessionController>()),
         user_manager_(new ash::FakeChromeUserManager),
-        user_manager_owner_(base::WrapUnique(user_manager_)) {
+        user_manager_owner_(base::WrapUnique(user_manager_.get())) {
     DCHECK(scanned_files_mount_->IsValid());
     const AccountId account_id(AccountId::FromUserEmail(kUserEmail));
     user_manager_->AddUser(account_id);
@@ -299,31 +311,30 @@ class ScanServiceTest : public testing::Test {
 
   // Gets scanners by calling ScanService::GetScanners() via the mojo::Remote.
   std::vector<mojo_ipc::ScannerPtr> GetScanners() {
-    std::vector<mojo_ipc::ScannerPtr> scanners;
-    mojo_ipc::ScanServiceAsyncWaiter(scan_service_remote_.get())
-        .GetScanners(&scanners);
-    return scanners;
+    base::test::TestFuture<std::vector<mojo_ipc::ScannerPtr>> future;
+    scan_service_remote_->GetScanners(future.GetCallback());
+    return future.Take();
   }
 
   // Gets scanner capabilities for the scanner identified by |scanner_id| by
   // calling ScanService::GetScannerCapabilities() via the mojo::Remote.
   mojo_ipc::ScannerCapabilitiesPtr GetScannerCapabilities(
       const base::UnguessableToken& scanner_id) {
-    mojo_ipc::ScannerCapabilitiesPtr caps =
-        mojo_ipc::ScannerCapabilities::New();
-    mojo_ipc::ScanServiceAsyncWaiter(scan_service_remote_.get())
-        .GetScannerCapabilities(scanner_id, &caps);
-    return caps;
+    base::test::TestFuture<mojo_ipc::ScannerCapabilitiesPtr> future;
+    scan_service_remote_->GetScannerCapabilities(scanner_id,
+                                                 future.GetCallback());
+    return future.Take();
   }
 
   // Starts a scan with the scanner identified by |scanner_id| with the given
   // |settings| by calling ScanService::StartScan() via the mojo::Remote.
   bool StartScan(const base::UnguessableToken& scanner_id,
                  mojo_ipc::ScanSettingsPtr settings) {
-    bool success;
-    mojo_ipc::ScanServiceAsyncWaiter(scan_service_remote_.get())
-        .StartScan(scanner_id, std::move(settings),
-                   fake_scan_job_observer_.GenerateRemote(), &success);
+    base::test::TestFuture<bool> future;
+    scan_service_remote_->StartScan(scanner_id, std::move(settings),
+                                    fake_scan_job_observer_.GenerateRemote(),
+                                    future.GetCallback());
+    bool success = future.Take();
     task_environment_.RunUntilIdle();
     return success;
   }
@@ -334,11 +345,13 @@ class ScanServiceTest : public testing::Test {
   // mojo::PendingRemote.
   bool StartMultiPageScan(const base::UnguessableToken& scanner_id,
                           mojo_ipc::ScanSettingsPtr settings) {
-    mojo::PendingRemote<mojo_ipc::MultiPageScanController> pending_remote;
-    mojo_ipc::ScanServiceAsyncWaiter(scan_service_remote_.get())
-        .StartMultiPageScan(scanner_id, std::move(settings),
-                            fake_scan_job_observer_.GenerateRemote(),
-                            &pending_remote);
+    base::test::TestFuture<
+        mojo::PendingRemote<mojo_ipc::MultiPageScanController>>
+        future;
+    scan_service_remote_->StartMultiPageScan(
+        scanner_id, std::move(settings),
+        fake_scan_job_observer_.GenerateRemote(), future.GetCallback());
+    auto pending_remote = future.Take();
     if (!pending_remote.is_valid())
       return false;
 
@@ -353,10 +366,10 @@ class ScanServiceTest : public testing::Test {
 
   bool ScanNextPage(const base::UnguessableToken& scanner_id,
                     mojo_ipc::ScanSettingsPtr settings) {
-    bool success;
-    mojo_ipc::MultiPageScanControllerAsyncWaiter(
-        multi_page_scan_controller_remote_.get())
-        .ScanNextPage(scanner_id, std::move(settings), &success);
+    base::test::TestFuture<bool> future;
+    multi_page_scan_controller_remote_->ScanNextPage(
+        scanner_id, std::move(settings), future.GetCallback());
+    bool success = future.Take();
     task_environment_.RunUntilIdle();
     return success;
   }
@@ -380,10 +393,10 @@ class ScanServiceTest : public testing::Test {
   bool RescanPage(const base::UnguessableToken& scanner_id,
                   mojo_ipc::ScanSettingsPtr settings,
                   const uint32_t page_index) {
-    bool success;
-    mojo_ipc::MultiPageScanControllerAsyncWaiter(
-        multi_page_scan_controller_remote_.get())
-        .RescanPage(scanner_id, std::move(settings), page_index, &success);
+    base::test::TestFuture<bool> future;
+    multi_page_scan_controller_remote_->RescanPage(
+        scanner_id, std::move(settings), page_index, future.GetCallback());
+    bool success = future.Take();
     task_environment_.RunUntilIdle();
     return success;
   }
@@ -395,10 +408,10 @@ class ScanServiceTest : public testing::Test {
   FakeLorgnetteScannerManager fake_lorgnette_scanner_manager_;
   FakeScanJobObserver fake_scan_job_observer_;
   std::unique_ptr<TestingProfileManager> profile_manager_;
-  TestingProfile* const profile_;
+  const raw_ptr<TestingProfile> profile_;
   std::unique_ptr<ScopedTestMountPoint> scanned_files_mount_;
   std::unique_ptr<TestSessionController> session_controller_;
-  ash::FakeChromeUserManager* const user_manager_;
+  const raw_ptr<ash::FakeChromeUserManager, DanglingUntriaged> user_manager_;
   user_manager::ScopedUserManager user_manager_owner_;
   std::unique_ptr<ScanService> scan_service_;
 
@@ -459,7 +472,7 @@ TEST_F(ScanServiceTest, NoCapabilities) {
   fake_lorgnette_scanner_manager_.SetGetScannerNamesResponse(
       {kFirstTestScannerName});
   fake_lorgnette_scanner_manager_.SetGetScannerCapabilitiesResponse(
-      absl::nullopt);
+      std::nullopt);
   auto scanners = GetScanners();
   ASSERT_EQ(scanners.size(), 1u);
   auto caps = GetScannerCapabilities(scanners[0]->id);
@@ -515,16 +528,13 @@ TEST_F(ScanServiceTest, ScanWithUnsupportedFilePath) {
 TEST_F(ScanServiceTest, Scan) {
   fake_lorgnette_scanner_manager_.SetGetScannerNamesResponse(
       {kFirstTestScannerName});
-  const std::vector<std::string> scan_data = {CreatePng(), CreatePng(),
-                                              CreatePng()};
+  const std::vector<std::string> scan_data = {CreateJpeg(), CreateJpeg(),
+                                              CreateJpeg()};
   fake_lorgnette_scanner_manager_.SetScanResponse(scan_data);
   auto scanners = GetScanners();
   ASSERT_EQ(scanners.size(), 1u);
 
-  base::Time::Exploded scan_time;
-  // Since we're using mock time, this is deterministic.
-  base::Time::Now().LocalExplode(&scan_time);
-
+  const auto now = base::Time::Now();
   base::HistogramTester histogram_tester;
   int num_single_file_scans = 0u;
   int num_multi_file_scans = 0u;
@@ -534,7 +544,7 @@ TEST_F(ScanServiceTest, Scan) {
     auto type = static_cast<mojo_ipc::FileType>(type_num);
 
     const std::vector<base::FilePath> saved_scan_paths = CreateSavedScanPaths(
-        scanned_files_mount_->GetRootPath(), scan_time, type, scan_data.size());
+        scanned_files_mount_->GetRootPath(), now, type, scan_data.size());
     for (const auto& saved_scan_path : saved_scan_paths)
       EXPECT_FALSE(base::PathExists(saved_scan_path));
 
@@ -545,7 +555,7 @@ TEST_F(ScanServiceTest, Scan) {
       EXPECT_TRUE(base::PathExists(saved_scan_path));
 
     EXPECT_TRUE(fake_scan_job_observer_.scan_success());
-    EXPECT_EQ(mojo_ipc::ScanResult::kSuccess,
+    EXPECT_EQ(ProtoScanFailureMode::SCAN_FAILURE_MODE_NO_FAILURE,
               fake_scan_job_observer_.scan_result());
     EXPECT_EQ(scan_data.size() - 1, fake_scan_job_observer_.new_page_index());
     EXPECT_EQ(saved_scan_paths, fake_scan_job_observer_.scanned_file_paths());
@@ -567,21 +577,17 @@ TEST_F(ScanServiceTest, RotateEpsonADF) {
   fake_lorgnette_scanner_manager_.SetGetScannerNamesResponse({kEpsonTestName});
   fake_lorgnette_scanner_manager_.SetGetScannerCapabilitiesResponse(
       CreateEpsonScannerCapabilities());
-  const std::vector<std::string> scan_data = {CreatePng(), CreatePng(),
-                                              CreatePng()};
+  const std::vector<std::string> scan_data = {CreateJpeg(), CreateJpeg(),
+                                              CreateJpeg()};
   fake_lorgnette_scanner_manager_.SetScanResponse(scan_data);
   auto scanners = GetScanners();
   ASSERT_EQ(scanners.size(), 1u);
 
-  base::Time::Exploded scan_time;
-  // Since we're using mock time, this is deterministic.
-  base::Time::Now().LocalExplode(&scan_time);
-
   mojo_ipc::ScanSettings settings =
       CreateScanSettings(scanned_files_mount_->GetRootPath(),
                          mojo_ipc::FileType::kPdf, "ADF Duplex");
-  const base::FilePath saved_scan_path =
-      CreateSavedPdfScanPath(scanned_files_mount_->GetRootPath(), scan_time);
+  const base::FilePath saved_scan_path = CreateSavedPdfScanPath(
+      scanned_files_mount_->GetRootPath(), base::Time::Now());
   EXPECT_FALSE(base::PathExists(saved_scan_path));
   EXPECT_TRUE(StartScan(scanners[0]->id, settings.Clone()));
   EXPECT_TRUE(base::PathExists(saved_scan_path));
@@ -607,7 +613,7 @@ TEST_F(ScanServiceTest, ScanFails) {
 
   EXPECT_TRUE(StartScan(scanners[0]->id, settings.Clone()));
   EXPECT_FALSE(fake_scan_job_observer_.scan_success());
-  EXPECT_EQ(mojo_ipc::ScanResult::kDeviceBusy,
+  EXPECT_EQ(ProtoScanFailureMode::SCAN_FAILURE_MODE_DEVICE_BUSY,
             fake_scan_job_observer_.scan_result());
   EXPECT_TRUE(fake_scan_job_observer_.scanned_file_paths().empty());
 }
@@ -626,7 +632,7 @@ TEST_F(ScanServiceTest, ScanAfterFailedScan) {
 
   EXPECT_TRUE(StartScan(scanners[0]->id, settings.Clone()));
   EXPECT_FALSE(fake_scan_job_observer_.scan_success());
-  EXPECT_EQ(mojo_ipc::ScanResult::kDeviceBusy,
+  EXPECT_EQ(ProtoScanFailureMode::SCAN_FAILURE_MODE_DEVICE_BUSY,
             fake_scan_job_observer_.scan_result());
   EXPECT_TRUE(fake_scan_job_observer_.scanned_file_paths().empty());
 
@@ -634,13 +640,10 @@ TEST_F(ScanServiceTest, ScanAfterFailedScan) {
   const std::vector<std::string> scan_data = {"TestData1", "TestData2",
                                               "TestData3"};
   fake_lorgnette_scanner_manager_.SetScanResponse(scan_data);
-  base::Time::Exploded scan_time;
-  // Since we're using mock time, this is deterministic.
-  base::Time::Now().LocalExplode(&scan_time);
 
-  const std::vector<base::FilePath> saved_scan_paths =
-      CreateSavedScanPaths(scanned_files_mount_->GetRootPath(), scan_time,
-                           mojo_ipc::FileType::kPng, scan_data.size());
+  const std::vector<base::FilePath> saved_scan_paths = CreateSavedScanPaths(
+      scanned_files_mount_->GetRootPath(), base::Time::Now(),
+      mojo_ipc::FileType::kPng, scan_data.size());
   for (const auto& saved_scan_path : saved_scan_paths)
     EXPECT_FALSE(base::PathExists(saved_scan_path));
 
@@ -649,7 +652,7 @@ TEST_F(ScanServiceTest, ScanAfterFailedScan) {
     EXPECT_TRUE(base::PathExists(saved_scan_path));
 
   EXPECT_TRUE(fake_scan_job_observer_.scan_success());
-  EXPECT_EQ(mojo_ipc::ScanResult::kSuccess,
+  EXPECT_EQ(ProtoScanFailureMode::SCAN_FAILURE_MODE_NO_FAILURE,
             fake_scan_job_observer_.scan_result());
   EXPECT_EQ(saved_scan_paths, fake_scan_job_observer_.scanned_file_paths());
   EXPECT_EQ(scan_data.size() - 1, fake_scan_job_observer_.new_page_index());
@@ -666,15 +669,11 @@ TEST_F(ScanServiceTest, FailedScanAfterSuccessfulScan) {
   auto scanners = GetScanners();
   ASSERT_EQ(scanners.size(), 1u);
 
-  base::Time::Exploded scan_time;
-  // Since we're using mock time, this is deterministic.
-  base::Time::Now().LocalExplode(&scan_time);
-
   const mojo_ipc::ScanSettings settings = CreateScanSettings(
       scanned_files_mount_->GetRootPath(), mojo_ipc::FileType::kPng);
-  const std::vector<base::FilePath> saved_scan_paths =
-      CreateSavedScanPaths(scanned_files_mount_->GetRootPath(), scan_time,
-                           mojo_ipc::FileType::kPng, scan_data.size());
+  const std::vector<base::FilePath> saved_scan_paths = CreateSavedScanPaths(
+      scanned_files_mount_->GetRootPath(), base::Time::Now(),
+      mojo_ipc::FileType::kPng, scan_data.size());
   for (const auto& saved_scan_path : saved_scan_paths)
     EXPECT_FALSE(base::PathExists(saved_scan_path));
 
@@ -683,7 +682,7 @@ TEST_F(ScanServiceTest, FailedScanAfterSuccessfulScan) {
     EXPECT_TRUE(base::PathExists(saved_scan_path));
 
   EXPECT_TRUE(fake_scan_job_observer_.scan_success());
-  EXPECT_EQ(mojo_ipc::ScanResult::kSuccess,
+  EXPECT_EQ(ProtoScanFailureMode::SCAN_FAILURE_MODE_NO_FAILURE,
             fake_scan_job_observer_.scan_result());
   EXPECT_EQ(saved_scan_paths, fake_scan_job_observer_.scanned_file_paths());
   EXPECT_EQ(scan_data.size() - 1, fake_scan_job_observer_.new_page_index());
@@ -694,7 +693,7 @@ TEST_F(ScanServiceTest, FailedScanAfterSuccessfulScan) {
 
   EXPECT_TRUE(StartScan(scanners[0]->id, settings.Clone()));
   EXPECT_FALSE(fake_scan_job_observer_.scan_success());
-  EXPECT_EQ(mojo_ipc::ScanResult::kDeviceBusy,
+  EXPECT_EQ(ProtoScanFailureMode::SCAN_FAILURE_MODE_DEVICE_BUSY,
             fake_scan_job_observer_.scan_result());
   EXPECT_TRUE(fake_scan_job_observer_.scanned_file_paths().empty());
 }
@@ -720,14 +719,10 @@ TEST_F(ScanServiceTest, CancelScanBeforeScanCompletes) {
 TEST_F(ScanServiceTest, HoldingSpaceScan) {
   fake_lorgnette_scanner_manager_.SetGetScannerNamesResponse(
       {kFirstTestScannerName});
-  const std::vector<std::string> scan_data = {CreatePng(), CreatePng(),
-                                              CreatePng()};
+  const std::vector<std::string> scan_data = {CreateJpeg(), CreateJpeg(),
+                                              CreateJpeg()};
   auto scanners = GetScanners();
   ASSERT_EQ(scanners.size(), 1u);
-
-  base::Time::Exploded scan_time;
-  // Since we're using mock time, this is deterministic.
-  base::Time::Now().LocalExplode(&scan_time);
 
   // Verify that the holding space starts out empty.
   HoldingSpaceKeyedService* holding_space_keyed_service =
@@ -739,6 +734,7 @@ TEST_F(ScanServiceTest, HoldingSpaceScan) {
   size_t num_items_in_holding_space = 0u;
   ASSERT_EQ(num_items_in_holding_space, holding_space_model->items().size());
 
+  const auto now = base::Time::Now();
   for (int type_num = static_cast<int>(mojo_ipc::FileType::kMinValue);
        type_num <= static_cast<int>(mojo_ipc::FileType::kMaxValue);
        ++type_num) {
@@ -746,7 +742,7 @@ TEST_F(ScanServiceTest, HoldingSpaceScan) {
 
     fake_lorgnette_scanner_manager_.SetScanResponse(scan_data);
     const std::vector<base::FilePath> saved_scan_paths = CreateSavedScanPaths(
-        scanned_files_mount_->GetRootPath(), scan_time, type, scan_data.size());
+        scanned_files_mount_->GetRootPath(), now, type, scan_data.size());
     for (const auto& saved_scan_path : saved_scan_paths)
       EXPECT_FALSE(base::PathExists(saved_scan_path));
 
@@ -754,7 +750,7 @@ TEST_F(ScanServiceTest, HoldingSpaceScan) {
         CreateScanSettings(scanned_files_mount_->GetRootPath(), type);
     EXPECT_TRUE(StartScan(scanners[0]->id, settings.Clone()));
     EXPECT_TRUE(fake_scan_job_observer_.scan_success());
-    EXPECT_EQ(mojo_ipc::ScanResult::kSuccess,
+    EXPECT_EQ(ProtoScanFailureMode::SCAN_FAILURE_MODE_NO_FAILURE,
               fake_scan_job_observer_.scan_result());
     EXPECT_EQ(saved_scan_paths, fake_scan_job_observer_.scanned_file_paths());
 
@@ -766,7 +762,7 @@ TEST_F(ScanServiceTest, HoldingSpaceScan) {
       HoldingSpaceItem* scanned_item =
           holding_space_model->items()[num_items_in_holding_space++].get();
       EXPECT_EQ(scanned_item->type(), HoldingSpaceItem::Type::kScan);
-      EXPECT_EQ(scanned_item->file_path(), saved_scan_path);
+      EXPECT_EQ(scanned_item->file().file_path, saved_scan_path);
     }
 
     // Remove the scan data from FakeLorgnetteScannerManager so the scan will
@@ -775,7 +771,7 @@ TEST_F(ScanServiceTest, HoldingSpaceScan) {
 
     EXPECT_TRUE(StartScan(scanners[0]->id, settings.Clone()));
     EXPECT_FALSE(fake_scan_job_observer_.scan_success());
-    EXPECT_EQ(mojo_ipc::ScanResult::kDeviceBusy,
+    EXPECT_EQ(ProtoScanFailureMode::SCAN_FAILURE_MODE_DEVICE_BUSY,
               fake_scan_job_observer_.scan_result());
     EXPECT_TRUE(fake_scan_job_observer_.scanned_file_paths().empty());
 
@@ -790,17 +786,14 @@ TEST_F(ScanServiceTest, MultiPageScan) {
 
   fake_lorgnette_scanner_manager_.SetGetScannerNamesResponse(
       {kFirstTestScannerName});
-  const std::vector<std::string> scan_data = {CreatePng()};
+  const std::vector<std::string> scan_data = {CreateJpeg()};
   fake_lorgnette_scanner_manager_.SetScanResponse(scan_data);
   auto scanners = GetScanners();
   ASSERT_EQ(scanners.size(), 1u);
 
-  base::Time::Exploded scan_time;
-  // Since we're using mock time, this is deterministic.
-  base::Time::Now().LocalExplode(&scan_time);
-  const std::vector<base::FilePath> saved_scan_paths =
-      CreateSavedScanPaths(scanned_files_mount_->GetRootPath(), scan_time,
-                           mojo_ipc::FileType::kPdf, scan_data.size());
+  const std::vector<base::FilePath> saved_scan_paths = CreateSavedScanPaths(
+      scanned_files_mount_->GetRootPath(), base::Time::Now(),
+      mojo_ipc::FileType::kPdf, scan_data.size());
   for (const auto& saved_scan_path : saved_scan_paths)
     EXPECT_FALSE(base::PathExists(saved_scan_path));
 
@@ -845,7 +838,7 @@ TEST_F(ScanServiceTest, MultiPageScanFails) {
 
   fake_lorgnette_scanner_manager_.SetGetScannerNamesResponse(
       {kFirstTestScannerName});
-  const std::vector<std::string> scan_data = {CreatePng()};
+  const std::vector<std::string> scan_data = {CreateJpeg()};
   fake_lorgnette_scanner_manager_.SetScanResponse(scan_data);
   auto scanners = GetScanners();
   ASSERT_EQ(scanners.size(), 1u);
@@ -856,7 +849,7 @@ TEST_F(ScanServiceTest, MultiPageScanFails) {
   // The first scan should pass with no failure.
   EXPECT_TRUE(StartMultiPageScan(scanners[0]->id, settings.Clone()));
   EXPECT_FALSE(fake_scan_job_observer_.scan_success());
-  EXPECT_EQ(mojo_ipc::ScanResult::kUnknownError,
+  EXPECT_EQ(ProtoScanFailureMode::SCAN_FAILURE_MODE_UNKNOWN,
             fake_scan_job_observer_.multi_page_scan_result());
   EXPECT_TRUE(fake_scan_job_observer_.scanned_file_paths().empty());
   EXPECT_EQ(0u, fake_scan_job_observer_.new_page_index());
@@ -866,7 +859,7 @@ TEST_F(ScanServiceTest, MultiPageScanFails) {
   fake_lorgnette_scanner_manager_.SetScanResponse({});
   EXPECT_TRUE(ScanNextPage(scanners[0]->id, settings.Clone()));
   EXPECT_FALSE(fake_scan_job_observer_.scan_success());
-  EXPECT_EQ(mojo_ipc::ScanResult::kDeviceBusy,
+  EXPECT_EQ(ProtoScanFailureMode::SCAN_FAILURE_MODE_DEVICE_BUSY,
             fake_scan_job_observer_.multi_page_scan_result());
   EXPECT_TRUE(fake_scan_job_observer_.scanned_file_paths().empty());
 
@@ -883,7 +876,7 @@ TEST_F(ScanServiceTest, MultiPageScanFails) {
 TEST_F(ScanServiceTest, StartingAnotherMultiPageScan) {
   fake_lorgnette_scanner_manager_.SetGetScannerNamesResponse(
       {kFirstTestScannerName});
-  const std::vector<std::string> scan_data = {CreatePng()};
+  const std::vector<std::string> scan_data = {CreateJpeg()};
   fake_lorgnette_scanner_manager_.SetScanResponse(scan_data);
   auto scanners = GetScanners();
   ASSERT_EQ(scanners.size(), 1u);
@@ -894,7 +887,7 @@ TEST_F(ScanServiceTest, StartingAnotherMultiPageScan) {
   // The first scan should pass with no failure.
   EXPECT_TRUE(StartMultiPageScan(scanners[0]->id, settings.Clone()));
   EXPECT_FALSE(fake_scan_job_observer_.scan_success());
-  EXPECT_EQ(mojo_ipc::ScanResult::kUnknownError,
+  EXPECT_EQ(ProtoScanFailureMode::SCAN_FAILURE_MODE_UNKNOWN,
             fake_scan_job_observer_.multi_page_scan_result());
   EXPECT_TRUE(fake_scan_job_observer_.scanned_file_paths().empty());
   EXPECT_EQ(0u, fake_scan_job_observer_.new_page_index());
@@ -917,13 +910,13 @@ TEST_F(ScanServiceTest, MultiPageScanRemoveWithTwoPages) {
       scanned_files_mount_->GetRootPath(), mojo_ipc::FileType::kPdf);
   uint32_t new_page_index = 0;
 
-  const std::string first_scanned_image = CreatePng(/*alpha=*/1);
+  const std::string first_scanned_image = CreateJpeg(/*alpha=*/1);
   const std::vector<std::string> first_scan_data = {first_scanned_image};
   fake_lorgnette_scanner_manager_.SetScanResponse(first_scan_data);
   EXPECT_TRUE(StartMultiPageScan(scanners[0]->id, settings.Clone()));
   EXPECT_EQ(new_page_index++, fake_scan_job_observer_.new_page_index());
 
-  const std::string second_scanned_image = CreatePng(/*alpha=*/2);
+  const std::string second_scanned_image = CreateJpeg(/*alpha=*/2);
   const std::vector<std::string> second_scan_data = {second_scanned_image};
   fake_lorgnette_scanner_manager_.SetScanResponse(second_scan_data);
   EXPECT_TRUE(ScanNextPage(scanners[0]->id, settings.Clone()));
@@ -962,19 +955,19 @@ TEST_F(ScanServiceTest, MultiPageScanRemoveWithThreePages) {
       scanned_files_mount_->GetRootPath(), mojo_ipc::FileType::kPdf);
   uint32_t new_page_index = 0;
 
-  const std::string first_scanned_image = CreatePng(/*alpha=*/1);
+  const std::string first_scanned_image = CreateJpeg(/*alpha=*/1);
   const std::vector<std::string> first_scan_data = {first_scanned_image};
   fake_lorgnette_scanner_manager_.SetScanResponse(first_scan_data);
   EXPECT_TRUE(StartMultiPageScan(scanners[0]->id, settings.Clone()));
   EXPECT_EQ(new_page_index++, fake_scan_job_observer_.new_page_index());
 
-  const std::string second_scanned_image = CreatePng(/*alpha=*/2);
+  const std::string second_scanned_image = CreateJpeg(/*alpha=*/2);
   const std::vector<std::string> second_scan_data = {second_scanned_image};
   fake_lorgnette_scanner_manager_.SetScanResponse(second_scan_data);
   EXPECT_TRUE(ScanNextPage(scanners[0]->id, settings.Clone()));
   EXPECT_EQ(new_page_index++, fake_scan_job_observer_.new_page_index());
 
-  const std::string third_scanned_image = CreatePng(/*alpha=*/3);
+  const std::string third_scanned_image = CreateJpeg(/*alpha=*/3);
   const std::vector<std::string> third_scan_data = {third_scanned_image};
   fake_lorgnette_scanner_manager_.SetScanResponse(third_scan_data);
   EXPECT_TRUE(ScanNextPage(scanners[0]->id, settings.Clone()));
@@ -1007,7 +1000,7 @@ TEST_F(ScanServiceTest, MultiPageScanRemoveLastPage) {
 
   fake_lorgnette_scanner_manager_.SetGetScannerNamesResponse(
       {kFirstTestScannerName});
-  const std::vector<std::string> scan_data = {CreatePng()};
+  const std::vector<std::string> scan_data = {CreateJpeg()};
   fake_lorgnette_scanner_manager_.SetScanResponse(scan_data);
   auto scanners = GetScanners();
   ASSERT_EQ(scanners.size(), 1u);
@@ -1057,14 +1050,14 @@ TEST_F(ScanServiceTest, MultiPageScanRescanWithOnePage) {
       scanned_files_mount_->GetRootPath(), mojo_ipc::FileType::kPdf);
   uint32_t new_page_index = 0;
 
-  const std::string first_scanned_image = CreatePng(/*alpha=*/1);
+  const std::string first_scanned_image = CreateJpeg(/*alpha=*/1);
   const std::vector<std::string> first_scan_data = {first_scanned_image};
   fake_lorgnette_scanner_manager_.SetScanResponse(first_scan_data);
   EXPECT_TRUE(StartMultiPageScan(scanners[0]->id, settings.Clone()));
   EXPECT_EQ(new_page_index++, fake_scan_job_observer_.new_page_index());
 
   // Rescan the page.
-  const std::string rescanned_scanned_image = CreatePng(/*alpha=*/2);
+  const std::string rescanned_scanned_image = CreateJpeg(/*alpha=*/2);
   const std::vector<std::string> rescanned_scan_data = {
       rescanned_scanned_image};
   fake_lorgnette_scanner_manager_.SetScanResponse(rescanned_scan_data);
@@ -1101,26 +1094,26 @@ TEST_F(ScanServiceTest, MultiPageScanRescanWithThreePages) {
       scanned_files_mount_->GetRootPath(), mojo_ipc::FileType::kPdf);
   uint32_t new_page_index = 0;
 
-  const std::string first_scanned_image = CreatePng(/*alpha=*/1);
+  const std::string first_scanned_image = CreateJpeg(/*alpha=*/1);
   const std::vector<std::string> first_scan_data = {first_scanned_image};
   fake_lorgnette_scanner_manager_.SetScanResponse(first_scan_data);
   EXPECT_TRUE(StartMultiPageScan(scanners[0]->id, settings.Clone()));
   EXPECT_EQ(new_page_index++, fake_scan_job_observer_.new_page_index());
 
-  const std::string second_scanned_image = CreatePng(/*alpha=*/2);
+  const std::string second_scanned_image = CreateJpeg(/*alpha=*/2);
   const std::vector<std::string> second_scan_data = {second_scanned_image};
   fake_lorgnette_scanner_manager_.SetScanResponse(second_scan_data);
   EXPECT_TRUE(ScanNextPage(scanners[0]->id, settings.Clone()));
   EXPECT_EQ(new_page_index++, fake_scan_job_observer_.new_page_index());
 
-  const std::string third_scanned_image = CreatePng(/*alpha=*/3);
+  const std::string third_scanned_image = CreateJpeg(/*alpha=*/3);
   const std::vector<std::string> third_scan_data = {third_scanned_image};
   fake_lorgnette_scanner_manager_.SetScanResponse(third_scan_data);
   EXPECT_TRUE(ScanNextPage(scanners[0]->id, settings.Clone()));
   EXPECT_EQ(new_page_index++, fake_scan_job_observer_.new_page_index());
 
   // Rescan the second page.
-  const std::string rescanned_scanned_image = CreatePng(/*alpha=*/4);
+  const std::string rescanned_scanned_image = CreateJpeg(/*alpha=*/4);
   const std::vector<std::string> rescanned_scan_data = {
       rescanned_scanned_image};
   fake_lorgnette_scanner_manager_.SetScanResponse(rescanned_scan_data);
@@ -1158,4 +1151,27 @@ TEST_F(ScanServiceTest, ResetReceiverOnBindInterface) {
   scan_service_->BindInterface(remote.BindNewPipeAndPassReceiver());
   base::RunLoop().RunUntilIdle();
 }
+
+// TODO(b:307385730): Parameterize this test once more settings combinations
+// are added.
+TEST_F(ScanServiceTest, ScanDataSettings) {
+  fake_lorgnette_scanner_manager_.SetGetScannerNamesResponse(
+      {kFirstTestScannerName});
+  auto scanners = GetScanners();
+  ASSERT_EQ(scanners.size(), 1u);
+
+  // Settings correspond to "flatbed_jpeg_color_letter_300_dpi"
+  // which sets the `alpha` used in the generated JPEG images to
+  // 1.
+  mojo_ipc::ScanSettings settings = CreateScanSettings(
+      scanned_files_mount_->GetRootPath(), mojo_ipc::FileType::kPdf, "flatbed",
+      mojo_ipc::ColorMode::kColor, mojo_ipc::PageSize::kNaLetter,
+      kSecondResolution);
+
+  EXPECT_TRUE(StartScan(scanners[0]->id, settings.Clone()));
+  EXPECT_EQ(1u, scan_service_->GetScannedImagesForTesting().size());
+  EXPECT_EQ(CreateJpeg(/*alpha=*/1),
+            scan_service_->GetScannedImagesForTesting()[0]);
+}
+
 }  // namespace ash

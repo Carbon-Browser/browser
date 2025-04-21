@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,19 +8,18 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/containers/span.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/location.h"
 #include "base/notreached.h"
 #include "base/observer_list.h"
 #include "base/path_service.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "chrome/browser/spellchecker/spellcheck_service.h"
 #include "chrome/common/chrome_paths.h"
@@ -65,19 +64,16 @@ bool SaveDictionaryData(std::unique_ptr<std::string> data,
   base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
                                                 base::BlockingType::MAY_BLOCK);
 
-  size_t bytes_written =
-      base::WriteFile(path, data->data(), data->length());
-  if (bytes_written != data->length()) {
+  if (!base::WriteFile(path, *data)) {
     bool success = false;
 #if BUILDFLAG(IS_WIN)
     base::FilePath dict_dir;
     base::PathService::Get(chrome::DIR_USER_DATA, &dict_dir);
     base::FilePath fallback_file_path =
         dict_dir.Append(path.BaseName());
-    bytes_written =
-        base::WriteFile(fallback_file_path, data->data(), data->length());
-    if (bytes_written == data->length())
+    if (base::WriteFile(fallback_file_path, *data)) {
       success = true;
+    }
 #endif
 
     if (!success) {
@@ -167,7 +163,6 @@ void SpellcheckHunspellDictionary::RetryDownloadDictionary(
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   if (dictionary_file_.file.IsValid()) {
     NOTREACHED();
-    return;
   }
   browser_context_ = browser_context;
   DownloadDictionary(GetDictionaryURL());
@@ -250,8 +245,7 @@ void SpellcheckHunspellDictionary::OnSimpleLoaderComplete(
 #if !BUILDFLAG(IS_ANDROID)
   // To prevent corrupted dictionary data from causing a renderer crash, scan
   // the dictionary data and verify it is sane before save it to a file.
-  // TODO(rlp): Adding metrics to RecordDictionaryCorruptionStats
-  if (!hunspell::BDict::Verify(data->data(), data->size())) {
+  if (!hunspell::BDict::Verify(base::as_byte_span(*data))) {
     // Let PostTaskAndReply caller send to InformListenersOfInitialization
     // through SaveDictionaryDataComplete().
     SaveDictionaryDataComplete(false);
@@ -259,8 +253,8 @@ void SpellcheckHunspellDictionary::OnSimpleLoaderComplete(
   }
 #endif
 
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE,
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&SaveDictionaryData, std::move(data),
                      dictionary_file_.path),
       base::BindOnce(&SpellcheckHunspellDictionary::SaveDictionaryDataComplete,
@@ -365,23 +359,22 @@ SpellcheckHunspellDictionary::OpenDictionaryFile(base::TaskRunner* task_runner,
   dictionary.path = path;
 #endif  // BUILDFLAG(IS_WIN)
 
-  // Read the dictionary file and scan its data to check for corruption. The
-  // scoping closes the memory-mapped file before it is opened or deleted.
-  bool bdict_is_valid = false;
+  // Open the dictionary file and verify there is no corruption. If verification
+  // fails the file must be deleted.
 
-  {
-    base::MemoryMappedFile map;
-    bdict_is_valid =
-        base::PathExists(dictionary.path) &&
-        map.Initialize(dictionary.path) &&
-        hunspell::BDict::Verify(reinterpret_cast<const char*>(map.data()),
-                                map.length());
+  dictionary.file.Initialize(dictionary.path,
+                             base::File::FLAG_READ | base::File::FLAG_OPEN);
+  if (!dictionary.file.IsValid()) {
+    dictionary.file.Close();
+    base::DeleteFile(dictionary.path);
+    return dictionary;
   }
 
-  if (bdict_is_valid) {
-    dictionary.file.Initialize(dictionary.path,
-                               base::File::FLAG_READ | base::File::FLAG_OPEN);
-  } else {
+  std::vector<uint8_t> data;
+  data.resize(dictionary.file.GetLength());
+  if (!dictionary.file.ReadAndCheck(0, data) ||
+      !hunspell::BDict::Verify(data)) {
+    dictionary.file.Close();
     base::DeleteFile(dictionary.path);
   }
 
@@ -483,8 +476,8 @@ void SpellcheckHunspellDictionary::PlatformSupportsLanguageComplete(
     // support this language. In either case, we must use Hunspell for this
     // language, unless we are on Android, which doesn't support Hunspell.
 #if !BUILDFLAG(IS_ANDROID) && BUILDFLAG(USE_RENDERER_SPELLCHECKER)
-    base::PostTaskAndReplyWithResult(
-        task_runner_.get(), FROM_HERE,
+    task_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE,
         base::BindOnce(&InitializeDictionaryLocation,
                        base::RetainedRef(task_runner_.get()), language_),
         base::BindOnce(
@@ -503,7 +496,7 @@ void SpellcheckHunspellDictionary::SpellCheckPlatformSetLanguageComplete(
     return;
 
   use_browser_spellchecker_ = true;
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(
           &SpellcheckHunspellDictionary::InformListenersOfInitialization,

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define ASH_SYSTEM_NETWORK_NETWORK_LIST_NETWORK_ITEM_VIEW_H_
 
 #include "ash/ash_export.h"
-#include "ash/system/network/network_info.h"
+#include "ash/system/network/network_icon_animation_observer.h"
 #include "ash/system/network/network_list_item_view.h"
 #include "ash/system/tray/hover_highlight_view.h"
 #include "chromeos/services/network_config/public/mojom/cros_network_config.mojom.h"
@@ -20,10 +20,12 @@ class ViewClickListener;
 // This class encapsulates the logic of configuring the view shown for a single
 // network (Mobile, Wifi and Ethernet) in the detailed Network page within the
 // quick settings.
-class ASH_EXPORT NetworkListNetworkItemView : public NetworkListItemView {
- public:
-  METADATA_HEADER(NetworkListNetworkItemView);
+class ASH_EXPORT NetworkListNetworkItemView
+    : public NetworkListItemView,
+      public network_icon::AnimationObserver {
+  METADATA_HEADER(NetworkListNetworkItemView, NetworkListItemView)
 
+ public:
   explicit NetworkListNetworkItemView(ViewClickListener* listener);
   NetworkListNetworkItemView(const NetworkListNetworkItemView&) = delete;
   NetworkListNetworkItemView& operator=(const NetworkListNetworkItemView&) =
@@ -37,6 +39,12 @@ class ASH_EXPORT NetworkListNetworkItemView : public NetworkListItemView {
 
  private:
   friend class NetworkListNetworkItemViewTest;
+
+  // network_icon::AnimationObserver:
+  void NetworkIconChanged() override;
+
+  // ash::NetworkListItemView
+  void OnThemeChanged() override;
 
   void SetupCellularSubtext();
   void SetupNetworkSubtext();

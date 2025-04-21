@@ -1,12 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
-#include "chrome/android/chrome_jni_headers/MediaCaptureDevicesDispatcherAndroid_jni.h"
 #include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
 #include "chrome/browser/media/webrtc/media_stream_capture_indicator.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "chrome/android/chrome_jni_headers/MediaCaptureDevicesDispatcherAndroid_jni.h"
 
 using base::android::JavaParamRef;
 
@@ -52,5 +54,7 @@ void JNI_MediaCaptureDevicesDispatcherAndroid_NotifyStopped(
   scoped_refptr<MediaStreamCaptureIndicator> indicator =
       MediaCaptureDevicesDispatcher::GetInstance()
           ->GetMediaStreamCaptureIndicator();
-  indicator->NotifyStopped(web_contents);
+  indicator->StopMediaCapturing(
+      web_contents, MediaStreamCaptureIndicator::MediaType::kUserMedia |
+                        MediaStreamCaptureIndicator::MediaType::kDisplayMedia);
 }

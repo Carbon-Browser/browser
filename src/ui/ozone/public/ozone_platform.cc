@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,14 @@
 
 #include "base/check_op.h"
 #include "base/no_destructor.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "ui/events/devices/device_data_manager.h"
-#include "ui/ozone/common/base_keyboard_hook.h"
+#include "ui/gl/startup_trace.h"
 #include "ui/ozone/platform_object.h"
 #include "ui/ozone/platform_selection.h"
 #include "ui/ozone/public/platform_global_shortcut_listener.h"
+#include "ui/ozone/public/platform_keyboard_hook.h"
 #include "ui/ozone/public/platform_menu_utils.h"
 #include "ui/ozone/public/platform_screen.h"
 #include "ui/ozone/public/platform_user_input_monitor.h"
@@ -42,12 +44,18 @@ void EnsureInstance() {
 
 }  // namespace
 
-OzonePlatform::PlatformRuntimeProperties::SupportsSsdForTest
+OzonePlatform::PlatformRuntimeProperties::SupportsForTest
     OzonePlatform::PlatformRuntimeProperties::override_supports_ssd_for_test =
-        OzonePlatform::PlatformRuntimeProperties::SupportsSsdForTest::kNotSet;
+        OzonePlatform::PlatformRuntimeProperties::SupportsForTest::kNotSet;
+
+OzonePlatform::PlatformRuntimeProperties::SupportsForTest OzonePlatform::
+    PlatformRuntimeProperties::override_supports_per_window_scaling_for_test =
+        OzonePlatform::PlatformRuntimeProperties::SupportsForTest::kNotSet;
 
 OzonePlatform::PlatformProperties::PlatformProperties() = default;
 OzonePlatform::PlatformProperties::~PlatformProperties() = default;
+
+OzonePlatform::PlatformRuntimeProperties::PlatformRuntimeProperties() = default;
 
 OzonePlatform::OzonePlatform() {
   DCHECK(!g_instance) << "There should only be a single OzonePlatform.";
@@ -82,6 +90,7 @@ bool OzonePlatform::InitializeForUI(const InitParams& args) {
 
 // static
 void OzonePlatform::InitializeForGPU(const InitParams& args) {
+  GPU_STARTUP_TRACE_EVENT("ui::OzonePlatform::InitializeForGPU");
   EnsureInstance();
   if (g_instance->initialized_gpu_)
     return;
@@ -132,15 +141,9 @@ OzonePlatform::GetPlatformGlobalShortcutListener(
 std::unique_ptr<PlatformKeyboardHook> OzonePlatform::CreateKeyboardHook(
     PlatformKeyboardHookTypes type,
     base::RepeatingCallback<void(KeyEvent* event)> callback,
-    absl::optional<base::flat_set<DomCode>> dom_codes,
+    std::optional<base::flat_set<DomCode>> dom_codes,
     gfx::AcceleratedWidget accelerated_widget) {
-  switch (type) {
-    case PlatformKeyboardHookTypes::kModifier:
-      return std::make_unique<BaseKeyboardHook>(std::move(dom_codes),
-                                                std::move(callback));
-    case PlatformKeyboardHookTypes::kMedia:
-      return nullptr;
-  }
+  return nullptr;
 }
 
 bool OzonePlatform::IsNativePixmapConfigSupported(
@@ -182,7 +185,8 @@ OzonePlatform::GetPlatformUserInputMonitor(
 }
 
 void OzonePlatform::PostCreateMainMessageLoop(
-    base::OnceCallback<void()> shutdown_cb) {}
+    base::OnceCallback<void()> shutdown_cb,
+    scoped_refptr<base::SingleThreadTaskRunner> input_event_task_runner) {}
 
 void OzonePlatform::PostMainMessageLoopRun() {}
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,16 +10,18 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread.h"
 #include "base/threading/thread_checker.h"
 #include "base/values.h"
 #include "components/prefs/json_pref_store.h"
 #include "net/base/network_change_notifier.h"
+#include "net/base/network_handle.h"
 #include "net/nqe/effective_connection_type.h"
 #include "net/nqe/effective_connection_type_observer.h"
 #include "net/nqe/network_quality_estimator.h"
@@ -126,8 +128,8 @@ class CronetContext {
   // be present and used whenever a requests doesn't specify a target network
   // (currently the only possible behavior).
   net::URLRequestContext* GetURLRequestContext(
-      net::NetworkChangeNotifier::NetworkHandle network =
-          net::NetworkChangeNotifier::kInvalidNetworkHandle);
+      net::handles::NetworkHandle network =
+          net::handles::kInvalidNetworkHandle);
 
   // Returns a new instance of net::URLRequestContextGetter.
   // The net::URLRequestContext and base::SingleThreadTaskRunner that
@@ -151,12 +153,13 @@ class CronetContext {
   // flush any remaining writes to disk.
   void StopNetLog();
 
+  void FlushWritePropertiesForTesting();
+
   // Destroys the URLRequestContext associated to `network` if `network` has
   // disconnected and it has no pending URLRequests. This must be called on
   // the network thread while destroying a CronetURLRequest as that might
   // mark a URLRequestContext as eligible for destruction.
-  void MaybeDestroyURLRequestContext(
-      net::NetworkChangeNotifier::NetworkHandle network);
+  void MaybeDestroyURLRequestContext(net::handles::NetworkHandle network);
 
   // Default net::LOAD flags used to create requests.
   int default_load_flags() const;
@@ -170,8 +173,7 @@ class CronetContext {
                                                   bool use_smaller_responses,
                                                   bool disable_offline_check);
 
-  bool URLRequestContextExistsForTesting(
-      net::NetworkChangeNotifier::NetworkHandle network);
+  bool URLRequestContextExistsForTesting(net::handles::NetworkHandle network);
 
   // Request that RTT and/or throughput observations should or should not be
   // provided by the network quality estimator.
@@ -249,17 +251,14 @@ class CronetContext {
         net::NetworkQualityObservationSource source) override;
 
     // net::NetworkChangeNotifier::NetworkObserver implementation.
-    void OnNetworkDisconnected(
-        net::NetworkChangeNotifier::NetworkHandle network) override;
-    void OnNetworkConnected(
-        net::NetworkChangeNotifier::NetworkHandle network) override;
+    void OnNetworkDisconnected(net::handles::NetworkHandle network) override;
+    void OnNetworkConnected(net::handles::NetworkHandle network) override;
     void OnNetworkSoonToDisconnect(
-        net::NetworkChangeNotifier::NetworkHandle network) override;
-    void OnNetworkMadeDefault(
-        net::NetworkChangeNotifier::NetworkHandle network) override;
+        net::handles::NetworkHandle network) override;
+    void OnNetworkMadeDefault(net::handles::NetworkHandle network) override;
 
     net::URLRequestContext* GetURLRequestContext(
-        net::NetworkChangeNotifier::NetworkHandle network);
+        net::handles::NetworkHandle network);
 
     // Same as StartNetLogToDisk.
     void StartNetLogToBoundedFile(const std::string& dir_path,
@@ -273,8 +272,7 @@ class CronetContext {
     // Stops NetLog logging.
     void StopNetLog();
 
-    void MaybeDestroyURLRequestContext(
-        net::NetworkChangeNotifier::NetworkHandle network);
+    void MaybeDestroyURLRequestContext(net::handles::NetworkHandle network);
 
     // Callback for StopObserving() that unblocks the client thread and
     // signals that it is safe to access the NetLog files.
@@ -285,9 +283,8 @@ class CronetContext {
     void InitializeNQEPrefs() const;
 
     void SpawnNetworkBoundURLRequestContextForTesting(
-        net::NetworkChangeNotifier::NetworkHandle network);
-    bool URLRequestContextExistsForTesting(
-        net::NetworkChangeNotifier::NetworkHandle network);
+        net::handles::NetworkHandle network);
+    bool URLRequestContextExistsForTesting(net::handles::NetworkHandle network);
 
    private:
     friend class TestUtil;
@@ -304,7 +301,7 @@ class CronetContext {
 
     // Builds a URLRequestContext specifically bound to `network`.
     std::unique_ptr<net::URLRequestContext> BuildNetworkBoundURLRequestContext(
-        net::NetworkChangeNotifier::NetworkHandle network);
+        net::handles::NetworkHandle network);
 
     // Builds a URLRequestContext to be used a default context for `this`.
     // `proxy_config_service` is injected as it currently cannot be built on the
@@ -331,7 +328,7 @@ class CronetContext {
     // one, which is associated to kInvalidNetworkHandle.
     // For requests not requiring a specific network the default context must be
     // used.
-    base::flat_map<net::NetworkChangeNotifier::NetworkHandle,
+    base::flat_map<net::handles::NetworkHandle,
                    std::unique_ptr<net::URLRequestContext>>
         contexts_;
     // Shorthand for the default context (needed by
@@ -384,7 +381,7 @@ class CronetContext {
 
   // |network_tasks_| is owned by |this|. It is created off the network thread,
   // but invoked and destroyed on network thread.
-  raw_ptr<NetworkTasks> network_tasks_;
+  raw_ptr<NetworkTasks, AcrossTasksDanglingUntriaged> network_tasks_;
 
   // Network thread is destroyed from client thread.
   std::unique_ptr<base::Thread> network_thread_;

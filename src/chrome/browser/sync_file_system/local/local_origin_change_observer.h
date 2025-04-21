@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,13 +13,13 @@ namespace sync_file_system {
 
 class LocalOriginChangeObserver {
  public:
-  LocalOriginChangeObserver() {}
+  LocalOriginChangeObserver() = default;
 
   LocalOriginChangeObserver(const LocalOriginChangeObserver&) = delete;
   LocalOriginChangeObserver& operator=(const LocalOriginChangeObserver&) =
       delete;
 
-  ~LocalOriginChangeObserver() {}
+  ~LocalOriginChangeObserver() = default;
 
   virtual void OnChangesAvailableInOrigins(const std::set<GURL>& origins) = 0;
 };

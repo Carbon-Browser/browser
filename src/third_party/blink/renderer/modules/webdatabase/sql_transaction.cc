@@ -26,6 +26,11 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "third_party/blink/renderer/modules/webdatabase/sql_transaction.h"
 
 #include "third_party/blink/renderer/core/probe/core_probes.h"
@@ -117,15 +122,15 @@ void SQLTransaction::Trace(Visitor* visitor) const {
 }
 
 bool SQLTransaction::HasCallback() const {
-  return callback_;
+  return callback_ != nullptr;
 }
 
 bool SQLTransaction::HasSuccessCallback() const {
-  return success_callback_;
+  return success_callback_ != nullptr;
 }
 
 bool SQLTransaction::HasErrorCallback() const {
-  return error_callback_;
+  return error_callback_ != nullptr;
 }
 
 void SQLTransaction::SetBackend(SQLTransactionBackend* backend) {
@@ -291,7 +296,6 @@ SQLTransactionState SQLTransaction::DeliverSuccessCallback() {
 // never be reached in the course of correct execution.
 SQLTransactionState SQLTransaction::UnreachableState() {
   NOTREACHED();
-  return SQLTransactionState::kEnd;
 }
 
 SQLTransactionState SQLTransaction::SendToBackendState() {
@@ -345,7 +349,7 @@ void SQLTransaction::executeSql(ScriptState* script_state,
 void SQLTransaction::executeSql(
     ScriptState* script_state,
     const String& sql_statement,
-    const absl::optional<HeapVector<ScriptValue>>& arguments,
+    const std::optional<HeapVector<ScriptValue>>& arguments,
     V8SQLStatementCallback* callback,
     V8SQLStatementErrorCallback* callback_error,
     ExceptionState& exception_state) {

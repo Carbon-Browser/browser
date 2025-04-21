@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,7 @@ public class AndroidNetworkLibraryTest {
     @MediumTest
     @MinAndroidSdkLevel(Build.VERSION_CODES.M)
     public void testGetDnsStatus_searchDomains() {
-        DnsStatus dnsStatus = AndroidNetworkLibrary.getDnsStatus(/*network=*/null);
+        DnsStatus dnsStatus = AndroidNetworkLibrary.getDnsStatus(/* network= */ null);
         if (dnsStatus == null) {
             return;
         }

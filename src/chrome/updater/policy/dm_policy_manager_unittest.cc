@@ -1,14 +1,20 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/updater/policy/dm_policy_manager.h"
 
+#include <optional>
+
 #include "base/enterprise_util.h"
+#include "base/files/scoped_temp_dir.h"
+#include "base/memory/ref_counted.h"
 #include "build/build_config.h"
+#include "chrome/enterprise_companion/device_management_storage/dm_storage.h"
 #include "chrome/updater/constants.h"
-#include "chrome/updater/unittest_util.h"
+#include "chrome/updater/test/unit_test_util.h"
 #include "components/policy/proto/device_management_backend.pb.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace updater {
@@ -100,163 +106,245 @@ const uint8_t kOmahaPolicyResponseData[] = {
 
 #endif  // BUILDFLAG(IS_MAC)
 
+class TestTokenService
+    : public device_management_storage::TokenServiceInterface {
+ public:
+  // Overrides for TokenServiceInterface.
+  std::string GetDeviceID() const override { return "TestDeviceID"; }
+
+  bool IsEnrollmentMandatory() const override { return false; }
+
+  bool StoreEnrollmentToken(const std::string& enrollment_token) override {
+    enrollment_token_ = enrollment_token;
+    return true;
+  }
+
+  bool DeleteEnrollmentToken() override { return StoreEnrollmentToken(""); }
+
+  std::string GetEnrollmentToken() const override { return enrollment_token_; }
+
+  bool StoreDmToken(const std::string& dm_token) override {
+    dm_token_ = dm_token;
+    return true;
+  }
+
+  bool DeleteDmToken() override {
+    dm_token_.clear();
+    return true;
+  }
+
+  std::string GetDmToken() const override { return dm_token_; }
+
+ private:
+  std::string enrollment_token_ = "TestEnrollmentToken";
+  std::string dm_token_ = "TestDMToken";
+};
+
+std::string CannedOmahaPolicyFetchResponse() {
+  ::wireless_android_enterprise_devicemanagement::OmahaSettingsClientProto
+      omaha_settings;
+
+  omaha_settings.set_auto_update_check_period_minutes(111);
+  omaha_settings.set_download_preference("cacheable");
+  omaha_settings.mutable_updates_suppressed()->set_start_hour(8);
+  omaha_settings.mutable_updates_suppressed()->set_start_minute(8);
+  omaha_settings.mutable_updates_suppressed()->set_duration_min(47);
+  omaha_settings.set_proxy_mode("proxy_pac_script");
+  omaha_settings.set_proxy_pac_url("foo.c/proxy.pa");
+  omaha_settings.set_install_default(
+      ::wireless_android_enterprise_devicemanagement::INSTALL_DEFAULT_DISABLED);
+  omaha_settings.set_update_default(
+      ::wireless_android_enterprise_devicemanagement::MANUAL_UPDATES_ONLY);
+
+  ::wireless_android_enterprise_devicemanagement::ApplicationSettings app;
+  app.set_app_guid(test::kChromeAppId);
+
+  app.set_install(
+      ::wireless_android_enterprise_devicemanagement::INSTALL_DISABLED);
+  app.set_update(
+      ::wireless_android_enterprise_devicemanagement::AUTOMATIC_UPDATES_ONLY);
+  app.set_target_version_prefix("3.6.55");
+  app.set_rollback_to_target_version(
+      ::wireless_android_enterprise_devicemanagement::
+          ROLLBACK_TO_TARGET_VERSION_ENABLED);
+
+  omaha_settings.mutable_application_settings()->Add(std::move(app));
+
+  ::enterprise_management::PolicyData policy_data;
+  policy_data.set_policy_value(omaha_settings.SerializeAsString());
+
+  ::enterprise_management::PolicyFetchResponse response;
+  response.set_policy_data(policy_data.SerializeAsString());
+  return response.SerializeAsString();
+}
+
 }  // namespace
+
+TEST(DMPolicyManager, DeviceManagementOverride) {
+  ::wireless_android_enterprise_devicemanagement::OmahaSettingsClientProto
+      omaha_settings;
+
+  EXPECT_TRUE(base::MakeRefCounted<DMPolicyManager>(omaha_settings, true)
+                  ->HasActiveDevicePolicies());
+  EXPECT_FALSE(base::MakeRefCounted<DMPolicyManager>(omaha_settings, false)
+                   ->HasActiveDevicePolicies());
+}
 
 TEST(DMPolicyManager, PolicyManagerFromEmptyProto) {
   ::wireless_android_enterprise_devicemanagement::OmahaSettingsClientProto
       omaha_settings;
 
-  auto policy_manager(std::make_unique<DMPolicyManager>(omaha_settings));
+  auto policy_manager(base::MakeRefCounted<DMPolicyManager>(omaha_settings));
 
-#if !BUILDFLAG(IS_LINUX)
-  EXPECT_EQ(policy_manager->IsManaged(), base::IsManagedDevice());
-#endif  // BUILDFLAG(IS_LINUX)
-  EXPECT_EQ(policy_manager->source(), "DeviceManagement");
+  EXPECT_TRUE(policy_manager->HasActiveDevicePolicies());
+  EXPECT_EQ(policy_manager->source(), "Device Management");
 
-  int last_check_period_minutes = 0;
+  EXPECT_EQ(policy_manager->CloudPolicyOverridesPlatformPolicy(), std::nullopt);
+  EXPECT_EQ(policy_manager->GetLastCheckPeriod(), std::nullopt);
+  EXPECT_EQ(policy_manager->GetUpdatesSuppressedTimes(), std::nullopt);
+  EXPECT_EQ(policy_manager->GetDownloadPreference(), std::nullopt);
+  EXPECT_EQ(policy_manager->GetProxyMode(), std::nullopt);
+  EXPECT_EQ(policy_manager->GetProxyPacUrl(), std::nullopt);
+  EXPECT_EQ(policy_manager->GetProxyServer(), std::nullopt);
+  EXPECT_EQ(policy_manager->GetPackageCacheSizeLimitMBytes(), std::nullopt);
+  EXPECT_EQ(policy_manager->GetPackageCacheExpirationTimeDays(), std::nullopt);
   EXPECT_FALSE(
-      policy_manager->GetLastCheckPeriodMinutes(&last_check_period_minutes));
-
-  UpdatesSuppressedTimes suppressed_times;
-  EXPECT_FALSE(policy_manager->GetUpdatesSuppressedTimes(&suppressed_times));
-
-  std::string download_preference;
+      policy_manager->GetEffectivePolicyForAppInstalls(test::kChromeAppId));
   EXPECT_FALSE(
-      policy_manager->GetDownloadPreferenceGroupPolicy(&download_preference));
-
-  std::string proxy_mode;
-  EXPECT_FALSE(policy_manager->GetProxyMode(&proxy_mode));
-
-  std::string proxy_pac_url;
-  EXPECT_FALSE(policy_manager->GetProxyPacUrl(&proxy_pac_url));
-
-  std::string proxy_server;
-  EXPECT_FALSE(policy_manager->GetProxyServer(&proxy_server));
-
-  int size_limit = 0;
-  EXPECT_FALSE(policy_manager->GetPackageCacheSizeLimitMBytes(&size_limit));
-  int time_limit = 0;
-  EXPECT_FALSE(policy_manager->GetPackageCacheExpirationTimeDays(&time_limit));
-
-  // Verify app-specific polices.
-  int install_policy = -1;
-  EXPECT_FALSE(policy_manager->GetEffectivePolicyForAppInstalls(
-      kChromeAppId, &install_policy));
-  int update_policy = -1;
-  EXPECT_FALSE(policy_manager->GetEffectivePolicyForAppUpdates(kChromeAppId,
-                                                               &update_policy));
-  bool rollback_allowed = false;
-  EXPECT_FALSE(policy_manager->IsRollbackToTargetVersionAllowed(
-      kChromeAppId, &rollback_allowed));
-
-  std::string target_version_prefix;
-  EXPECT_FALSE(policy_manager->GetTargetVersionPrefix(kChromeAppId,
-                                                      &target_version_prefix));
+      policy_manager->GetEffectivePolicyForAppUpdates(test::kChromeAppId));
+  EXPECT_FALSE(
+      policy_manager->IsRollbackToTargetVersionAllowed(test::kChromeAppId));
+  EXPECT_EQ(policy_manager->GetTargetVersionPrefix(test::kChromeAppId),
+            std::nullopt);
 }
 
 TEST(DMPolicyManager, PolicyManagerFromProto) {
   ::wireless_android_enterprise_devicemanagement::OmahaSettingsClientProto
       omaha_settings;
 
+  // Global policies.
   omaha_settings.set_auto_update_check_period_minutes(111);
   omaha_settings.mutable_updates_suppressed()->set_start_hour(9);
   omaha_settings.mutable_updates_suppressed()->set_start_minute(30);
   omaha_settings.mutable_updates_suppressed()->set_duration_min(120);
   omaha_settings.set_download_preference("test_download_preference");
+  omaha_settings.set_proxy_server("test_proxy_server");
   omaha_settings.set_proxy_mode("test_proxy_mode");
   omaha_settings.set_proxy_pac_url("foo.c/proxy.pa");
   omaha_settings.set_install_default(
-      ::wireless_android_enterprise_devicemanagement::INSTALL_ENABLED);
+      ::wireless_android_enterprise_devicemanagement::
+          INSTALL_DEFAULT_ENABLED_MACHINE_ONLY);
   omaha_settings.set_update_default(
       ::wireless_android_enterprise_devicemanagement::MANUAL_UPDATES_ONLY);
+  omaha_settings.set_cloud_policy_overrides_platform_policy(true);
 
-  ::wireless_android_enterprise_devicemanagement::ApplicationSettings app;
-  app.set_app_guid(kChromeAppId);
-  app.set_install(
+  // Chrome specific policies.
+  ::wireless_android_enterprise_devicemanagement::ApplicationSettings chrome;
+  chrome.set_app_guid(test::kChromeAppId);
+  chrome.set_install(
       ::wireless_android_enterprise_devicemanagement::INSTALL_DISABLED);
-  app.set_update(
+  chrome.set_update(
       ::wireless_android_enterprise_devicemanagement::AUTOMATIC_UPDATES_ONLY);
-  app.set_target_version_prefix("81.");
-  app.set_rollback_to_target_version(
+  chrome.set_target_version_prefix("81.");
+  chrome.set_rollback_to_target_version(
       ::wireless_android_enterprise_devicemanagement::
           ROLLBACK_TO_TARGET_VERSION_ENABLED);
-  omaha_settings.mutable_application_settings()->Add(std::move(app));
+  omaha_settings.mutable_application_settings()->Add(std::move(chrome));
 
-  auto policy_manager(std::make_unique<DMPolicyManager>(omaha_settings));
+  // App1 policies.
+  constexpr char kApp1[] = "app1.chromium.org";
+  ::wireless_android_enterprise_devicemanagement::ApplicationSettings app1;
+  app1.set_app_guid(kApp1);
+  app1.set_bundle_identifier(kApp1);
+  app1.set_install(::wireless_android_enterprise_devicemanagement::
+                       INSTALL_ENABLED_MACHINE_ONLY);
+  app1.set_update(
+      ::wireless_android_enterprise_devicemanagement::UPDATES_DISABLED);
+  app1.set_target_channel("canary");
+  omaha_settings.mutable_application_settings()->Add(std::move(app1));
 
-#if !BUILDFLAG(IS_LINUX)
-  EXPECT_EQ(policy_manager->IsManaged(), base::IsManagedDevice());
-#endif  // BUILDFLAG(IS_LINUX)
-  EXPECT_EQ(policy_manager->source(), "DeviceManagement");
+  // App2 policies.
+  constexpr char kApp2[] = "app2.chromium.org";
+  ::wireless_android_enterprise_devicemanagement::ApplicationSettings app2;
+  app2.set_app_guid(kApp2);
+  app2.set_install(
+      ::wireless_android_enterprise_devicemanagement::INSTALL_FORCED);
+  app2.set_update(
+      ::wireless_android_enterprise_devicemanagement::UPDATES_ENABLED);
+  app2.set_target_channel("dev");
+  omaha_settings.mutable_application_settings()->Add(std::move(app2));
 
-  int last_check_period_minutes = 0;
+  auto policy_manager(base::MakeRefCounted<DMPolicyManager>(omaha_settings));
+
+  EXPECT_TRUE(policy_manager->HasActiveDevicePolicies());
+  EXPECT_EQ(policy_manager->source(), "Device Management");
+
+  // Verify global policies
+  EXPECT_EQ(policy_manager->GetLastCheckPeriod(), base::Minutes(111));
+
+  std::optional<UpdatesSuppressedTimes> suppressed_times =
+      policy_manager->GetUpdatesSuppressedTimes();
+  ASSERT_TRUE(suppressed_times);
+  EXPECT_EQ(suppressed_times->start_hour_, 9);
+  EXPECT_EQ(suppressed_times->start_minute_, 30);
+  EXPECT_EQ(suppressed_times->duration_minute_, 120);
+
+  EXPECT_EQ(policy_manager->GetDownloadPreference(),
+            "test_download_preference");
+
+  EXPECT_EQ(policy_manager->GetProxyServer(), "test_proxy_server");
+  EXPECT_EQ(policy_manager->GetProxyMode(), "test_proxy_mode");
+  EXPECT_EQ(policy_manager->GetProxyPacUrl(), "foo.c/proxy.pa");
+
+  EXPECT_EQ(policy_manager->GetPackageCacheSizeLimitMBytes(), std::nullopt);
+  EXPECT_EQ(policy_manager->GetPackageCacheExpirationTimeDays(), std::nullopt);
+  EXPECT_EQ(policy_manager->GetForceInstallApps(),
+            std::vector<std::string>({kApp2}));
+  EXPECT_EQ(policy_manager->GetAppsWithPolicy(),
+            std::vector<std::string>({test::kChromeAppId, kApp1, kApp2}));
+  EXPECT_TRUE(*policy_manager->CloudPolicyOverridesPlatformPolicy());
+
+  // Verify Chrome policies.
+  EXPECT_EQ(
+      policy_manager->GetEffectivePolicyForAppInstalls(test::kChromeAppId),
+      kPolicyDisabled);
+  EXPECT_EQ(policy_manager->GetEffectivePolicyForAppUpdates(test::kChromeAppId),
+            kPolicyAutomaticUpdatesOnly);
   EXPECT_TRUE(
-      policy_manager->GetLastCheckPeriodMinutes(&last_check_period_minutes));
-  EXPECT_EQ(last_check_period_minutes, 111);
+      policy_manager->IsRollbackToTargetVersionAllowed(test::kChromeAppId));
+  EXPECT_EQ(policy_manager->GetTargetVersionPrefix(test::kChromeAppId), "81.");
+  EXPECT_EQ(policy_manager->GetTargetChannel(test::kChromeAppId), std::nullopt);
 
-  UpdatesSuppressedTimes suppressed_times;
-  EXPECT_TRUE(policy_manager->GetUpdatesSuppressedTimes(&suppressed_times));
-  EXPECT_EQ(suppressed_times.start_hour_, 9);
-  EXPECT_EQ(suppressed_times.start_minute_, 30);
-  EXPECT_EQ(suppressed_times.duration_minute_, 120);
+  // Verify app1 policies.
+  EXPECT_EQ(policy_manager->GetEffectivePolicyForAppInstalls(kApp1),
+            kPolicyEnabledMachineOnly);
+  EXPECT_EQ(policy_manager->GetEffectivePolicyForAppUpdates(kApp1),
+            kPolicyDisabled);
+  EXPECT_EQ(policy_manager->IsRollbackToTargetVersionAllowed(kApp1),
+            std::nullopt);
+  EXPECT_EQ(policy_manager->GetTargetVersionPrefix(kApp1), std::nullopt);
+  EXPECT_EQ(policy_manager->GetTargetChannel(kApp1), "canary");
 
-  std::string download_preference;
-  EXPECT_TRUE(
-      policy_manager->GetDownloadPreferenceGroupPolicy(&download_preference));
-  EXPECT_EQ(download_preference, "test_download_preference");
-
-  std::string proxy_mode;
-  EXPECT_TRUE(policy_manager->GetProxyMode(&proxy_mode));
-  EXPECT_EQ(proxy_mode, "test_proxy_mode");
-
-  std::string proxy_pac_url;
-  EXPECT_TRUE(policy_manager->GetProxyPacUrl(&proxy_pac_url));
-  EXPECT_EQ(proxy_pac_url, "foo.c/proxy.pa");
-
-  std::string proxy_server;
-  EXPECT_FALSE(policy_manager->GetProxyServer(&proxy_server));
-
-  int size_limit = 0;
-  EXPECT_FALSE(policy_manager->GetPackageCacheSizeLimitMBytes(&size_limit));
-  int time_limit = 0;
-  EXPECT_FALSE(policy_manager->GetPackageCacheExpirationTimeDays(&time_limit));
-
-  // Verify app-specific polices.
-  int install_policy = -1;
-  EXPECT_TRUE(policy_manager->GetEffectivePolicyForAppInstalls(
-      kChromeAppId, &install_policy));
-  EXPECT_EQ(install_policy, kPolicyDisabled);
-  int update_policy = -1;
-  EXPECT_TRUE(policy_manager->GetEffectivePolicyForAppUpdates(kChromeAppId,
-                                                              &update_policy));
-  EXPECT_EQ(update_policy, kPolicyAutomaticUpdatesOnly);
-  bool rollback_allowed = false;
-  EXPECT_TRUE(policy_manager->IsRollbackToTargetVersionAllowed(
-      kChromeAppId, &rollback_allowed));
-  EXPECT_TRUE(rollback_allowed);
-
-  std::string target_version_prefix;
-  EXPECT_TRUE(policy_manager->GetTargetVersionPrefix(kChromeAppId,
-                                                     &target_version_prefix));
-  EXPECT_EQ(target_version_prefix, "81.");
+  // Verify app2 policies.
+  EXPECT_EQ(policy_manager->GetEffectivePolicyForAppInstalls(kApp2),
+            kPolicyForceInstallMachine);
+  EXPECT_EQ(policy_manager->GetEffectivePolicyForAppUpdates(kApp2),
+            kPolicyEnabled);
+  EXPECT_EQ(policy_manager->IsRollbackToTargetVersionAllowed(kApp2),
+            std::nullopt);
+  EXPECT_EQ(policy_manager->GetTargetVersionPrefix(kApp2), std::nullopt);
+  EXPECT_EQ(policy_manager->GetTargetChannel(kApp2), "dev");
 
   // Verify that if no app-specific polices, fallback to global-level policies
   // or return false if no fallback is available.
   const std::string app_guid = "ArbitraryAppGuid";
-  install_policy = -1;
-  EXPECT_TRUE(policy_manager->GetEffectivePolicyForAppInstalls(
-      app_guid, &install_policy));
-  EXPECT_EQ(install_policy, kPolicyEnabled);
-  update_policy = -1;
-  EXPECT_TRUE(policy_manager->GetEffectivePolicyForAppUpdates(app_guid,
-                                                              &update_policy));
-  EXPECT_EQ(update_policy, kPolicyManualUpdatesOnly);
-  rollback_allowed = false;
-  EXPECT_FALSE(policy_manager->IsRollbackToTargetVersionAllowed(
-      app_guid, &rollback_allowed));
-
-  EXPECT_FALSE(
-      policy_manager->GetTargetVersionPrefix(app_guid, &target_version_prefix));
+  EXPECT_EQ(policy_manager->GetEffectivePolicyForAppInstalls(app_guid),
+            kPolicyEnabledMachineOnly);
+  EXPECT_EQ(policy_manager->GetEffectivePolicyForAppUpdates(app_guid),
+            kPolicyManualUpdatesOnly);
+  EXPECT_EQ(policy_manager->IsRollbackToTargetVersionAllowed(app_guid),
+            std::nullopt);
+  EXPECT_EQ(policy_manager->GetTargetVersionPrefix(app_guid), std::nullopt);
 }
 
 #if BUILDFLAG(IS_MAC)
@@ -274,54 +362,78 @@ TEST(DMPolicyManager, PolicyManagerFromDMResponse) {
   EXPECT_TRUE(policy_data.has_policy_value());
   EXPECT_TRUE(omaha_settings.ParseFromString(policy_data.policy_value()));
 
-  auto policy_manager(std::make_unique<DMPolicyManager>(omaha_settings));
+  auto policy_manager(base::MakeRefCounted<DMPolicyManager>(omaha_settings));
 
-  EXPECT_EQ(policy_manager->IsManaged(), base::IsManagedDevice());
-  EXPECT_EQ(policy_manager->source(), "DeviceManagement");
+  EXPECT_TRUE(policy_manager->HasActiveDevicePolicies());
+  EXPECT_EQ(policy_manager->source(), "Device Management");
 
-  int last_check_period_minutes = 0;
-  EXPECT_FALSE(
-      policy_manager->GetLastCheckPeriodMinutes(&last_check_period_minutes));
-
-  UpdatesSuppressedTimes suppressed_times;
-  EXPECT_FALSE(policy_manager->GetUpdatesSuppressedTimes(&suppressed_times));
-
-  std::string download_preference;
-  EXPECT_FALSE(
-      policy_manager->GetDownloadPreferenceGroupPolicy(&download_preference));
-
-  std::string proxy_mode;
-  EXPECT_FALSE(policy_manager->GetProxyMode(&proxy_mode));
-
-  std::string proxy_pac_url;
-  EXPECT_FALSE(policy_manager->GetProxyPacUrl(&proxy_pac_url));
-
-  std::string proxy_server;
-  EXPECT_FALSE(policy_manager->GetProxyServer(&proxy_server));
-
-  int size_limit = 0;
-  EXPECT_FALSE(policy_manager->GetPackageCacheSizeLimitMBytes(&size_limit));
-  int time_limit = 0;
-  EXPECT_FALSE(policy_manager->GetPackageCacheExpirationTimeDays(&time_limit));
+  EXPECT_EQ(policy_manager->CloudPolicyOverridesPlatformPolicy(), std::nullopt);
+  EXPECT_EQ(policy_manager->GetLastCheckPeriod(), std::nullopt);
+  EXPECT_EQ(policy_manager->GetUpdatesSuppressedTimes(), std::nullopt);
+  EXPECT_EQ(policy_manager->GetDownloadPreference(), std::nullopt);
+  EXPECT_EQ(policy_manager->GetProxyMode(), std::nullopt);
+  EXPECT_EQ(policy_manager->GetProxyPacUrl(), std::nullopt);
+  EXPECT_EQ(policy_manager->GetProxyServer(), std::nullopt);
+  EXPECT_EQ(policy_manager->GetPackageCacheSizeLimitMBytes(), std::nullopt);
+  EXPECT_EQ(policy_manager->GetPackageCacheExpirationTimeDays(), std::nullopt);
 
   const std::string chrome_guid = "com.google.Chrome";
-  int install_policy = -1;
-  EXPECT_FALSE(policy_manager->GetEffectivePolicyForAppInstalls(
-      chrome_guid, &install_policy));
-  int update_policy = -1;
-  EXPECT_FALSE(policy_manager->GetEffectivePolicyForAppUpdates(chrome_guid,
-                                                               &update_policy));
-  bool rollback_allowed = false;
-  EXPECT_TRUE(policy_manager->IsRollbackToTargetVersionAllowed(
-      chrome_guid, &rollback_allowed));
-  EXPECT_TRUE(rollback_allowed);
+  EXPECT_EQ(policy_manager->GetEffectivePolicyForAppInstalls(chrome_guid),
+            std::nullopt);
+  EXPECT_EQ(policy_manager->GetEffectivePolicyForAppUpdates(chrome_guid),
+            std::nullopt);
+  EXPECT_EQ(policy_manager->IsRollbackToTargetVersionAllowed(chrome_guid),
+            true);
 
-  std::string target_version_prefix;
-  EXPECT_TRUE(policy_manager->GetTargetVersionPrefix(chrome_guid,
-                                                     &target_version_prefix));
-  EXPECT_EQ(target_version_prefix, "82.0.");
+  EXPECT_EQ(policy_manager->GetTargetVersionPrefix(chrome_guid), "82.0.");
 }
 
 #endif  // BUILDFLAG(IS_MAC)
+
+TEST(DMPolicyManager, GetOmahaPolicySettings) {
+  device_management_storage::DMPolicyMap policies({
+      {"google/machine-level-omaha", CannedOmahaPolicyFetchResponse()},
+  });
+  base::ScopedTempDir cache_root;
+  ASSERT_TRUE(cache_root.CreateUniqueTempDir());
+  auto storage = CreateDMStorage(cache_root.GetPath(),
+                                 std::make_unique<TestTokenService>());
+  EXPECT_TRUE(storage->CanPersistPolicies());
+  EXPECT_TRUE(storage->PersistPolicies(policies));
+
+  std::optional<
+      ::wireless_android_enterprise_devicemanagement::OmahaSettingsClientProto>
+      omaha_settings = GetOmahaPolicySettings(storage);
+  ASSERT_TRUE(omaha_settings);
+  EXPECT_EQ(omaha_settings->auto_update_check_period_minutes(), 111);
+
+  EXPECT_EQ(omaha_settings->updates_suppressed().start_hour(), 8);
+  EXPECT_EQ(omaha_settings->updates_suppressed().start_minute(), 8);
+  EXPECT_EQ(omaha_settings->updates_suppressed().duration_min(), 47);
+
+  EXPECT_EQ(omaha_settings->proxy_mode(), "proxy_pac_script");
+  EXPECT_EQ(omaha_settings->proxy_pac_url(), "foo.c/proxy.pa");
+  EXPECT_FALSE(omaha_settings->has_proxy_server());
+
+  EXPECT_EQ(omaha_settings->download_preference(), "cacheable");
+
+  // Chrome policies.
+  const auto& chrome_settings = omaha_settings->application_settings()[0];
+  EXPECT_EQ(chrome_settings.install(),
+            ::wireless_android_enterprise_devicemanagement::INSTALL_DISABLED);
+  EXPECT_EQ(
+      chrome_settings.update(),
+      ::wireless_android_enterprise_devicemanagement::AUTOMATIC_UPDATES_ONLY);
+  EXPECT_EQ(chrome_settings.target_version_prefix(), "3.6.55");
+  EXPECT_EQ(chrome_settings.rollback_to_target_version(),
+            ::wireless_android_enterprise_devicemanagement::
+                ROLLBACK_TO_TARGET_VERSION_ENABLED);
+
+  // Verify no policy settings once device is de-registered.
+  EXPECT_TRUE(storage->InvalidateDMToken());
+  EXPECT_TRUE(storage->IsDeviceDeregistered());
+  EXPECT_FALSE(storage->IsValidDMToken());
+  ASSERT_FALSE(GetOmahaPolicySettings(storage));
+}
 
 }  // namespace updater

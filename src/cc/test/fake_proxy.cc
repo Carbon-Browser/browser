@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,6 +31,8 @@ bool FakeProxy::IsDeferringCommits() const {
 }
 
 bool FakeProxy::CommitRequested() const { return false; }
+
+void FakeProxy::QueueImageDecode(int request_id, const DrawImage& image) {}
 
 void FakeProxy::SetMutator(std::unique_ptr<LayerTreeMutator> mutator) {}
 

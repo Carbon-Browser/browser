@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,18 +19,16 @@ DisplayErrorObserver::DisplayErrorObserver() = default;
 
 DisplayErrorObserver::~DisplayErrorObserver() = default;
 
-void DisplayErrorObserver::OnDisplayModeChangeFailed(
+void DisplayErrorObserver::OnDisplayConfigurationChangeFailed(
     const display::DisplayConfigurator::DisplayStateList& displays,
     display::MultipleDisplayState new_state) {
   bool internal_display_failed = false;
   LOG(ERROR) << "Failed to configure the following display(s):";
-  for (auto* display : displays) {
+  for (display::DisplaySnapshot* display : displays) {
     const int64_t display_id = display->display_id();
     internal_display_failed |= display::IsInternalDisplayId(display_id);
-    LOG(ERROR) << "- Display with ID = " << display_id << ", and EDID = "
-               << base::HexEncode(display->edid().data(),
-                                  display->edid().size())
-               << ".";
+    LOG(ERROR) << "- Display with ID = " << display_id
+               << ", and EDID = " << base::HexEncode(display->edid()) << ".";
   }
 
   if (internal_display_failed && displays.size() == 1u) {

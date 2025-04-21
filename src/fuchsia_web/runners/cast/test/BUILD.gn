@@ -1,74 +1,65 @@
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 assert(is_fuchsia)
 
-config("cfv1_config") {
-  defines = [ "USE_CFV1_LAUNCHER" ]
+source_set("test_support") {
+  testonly = true
+  sources = [
+    "fake_api_bindings.cc",
+    "fake_api_bindings.h",
+    "fake_application_config_manager.cc",
+    "fake_application_config_manager.h",
+  ]
+  public_deps = [
+    "//base",
+    "//fuchsia_web/runners/cast/fidl:fidl_hlcpp",
+    "//url",
+  ]
 }
 
 source_set("integration") {
   testonly = true
   public = [
     "cast_runner_features.h",
-    "cast_runner_launcher_v2.h",
+    "cast_runner_launcher.h",
+    "fake_cast_agent.h",
   ]
   sources = [
-    "cast_runner_launcher_v2.cc",
-    "fake_feedback_service.cc",
-    "fake_feedback_service.h",
+    "cast_runner_features.cc",
+    "cast_runner_launcher.cc",
+    "fake_cast_agent.cc",
   ]
   public_deps = [
-    "//media/fuchsia/audio:test_support_components",
+    ":test_support",
+    "//fuchsia_web/common/test:test_support",
     "//third_party/abseil-cpp:absl",
-    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.feedback",
-    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.sys",
-    "//third_party/fuchsia-sdk/sdk/pkg/fidl_cpp",
+    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.camera3:fuchsia.camera3_hlcpp",
+    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.legacymetrics:fuchsia.legacymetrics_hlcpp",
     "//third_party/fuchsia-sdk/sdk/pkg/sys_component_cpp_testing",
     "//third_party/fuchsia-sdk/sdk/pkg/sys_cpp",
   ]
   deps = [
     "//base",
+    "//fuchsia_web/common",
     "//fuchsia_web/runners:cast_runner_core",
-    "//fuchsia_web/runners/cast/fidl",
+    "//fuchsia_web/runners/cast/fidl:fidl_hlcpp",
     "//media/fuchsia/audio:test_support",
+    "//media/fuchsia/audio:test_support_components",
     "//testing/gtest",
-    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.buildinfo",
-    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.feedback",
-    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.fonts",
-    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.intl",
-    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.io",
-    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.media",
-    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.memorypressure",
-    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.net.interfaces",
-    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.sysmem",
-    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.ui.composition",
-    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.ui.scenic",
-    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.web",
-    "//third_party/fuchsia-sdk/sdk/pkg/fdio",
-  ]
-}
-
-source_set("cfv1_integration") {
-  testonly = true
-  public = [
-    "cast_runner_features.h",
-    "cast_runner_launcher_v1.h",
-  ]
-  sources = [ "cast_runner_launcher_v1.cc" ]
-  public_deps = [
-    "//base/test:test_support",
-    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.sys",
-    "//third_party/fuchsia-sdk/sdk/pkg/sys_cpp",
-  ]
-  public_configs = [ ":cfv1_config" ]
-  deps = [
-    "//base",
-    "//fuchsia_web/runners:cast_runner_core",
-    "//media/fuchsia/audio:test_support",
-    "//testing/gtest",
-    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.io",
+    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.buildinfo:fuchsia.buildinfo_hlcpp",
+    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.fonts:fuchsia.fonts_hlcpp",
+    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.intl:fuchsia.intl_hlcpp",
+    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.io:fuchsia.io_hlcpp",
+    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.kernel:fuchsia.kernel_hlcpp",
+    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.media:fuchsia.media_hlcpp",
+    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.memorypressure:fuchsia.memorypressure_hlcpp",
+    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.net.interfaces:fuchsia.net.interfaces_hlcpp",
+    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.sysmem:fuchsia.sysmem_hlcpp",
+    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.tracing.provider:fuchsia.tracing.provider_hlcpp",
+    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.ui.composition:fuchsia.ui.composition_hlcpp",
+    "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.web:fuchsia.web_hlcpp",
     "//third_party/fuchsia-sdk/sdk/pkg/fdio",
   ]
 }

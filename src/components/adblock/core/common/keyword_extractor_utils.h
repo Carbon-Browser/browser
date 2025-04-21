@@ -18,12 +18,12 @@
 #ifndef COMPONENTS_ADBLOCK_CORE_COMMON_KEYWORD_EXTRACTOR_UTILS_H_
 #define COMPONENTS_ADBLOCK_CORE_COMMON_KEYWORD_EXTRACTOR_UTILS_H_
 
-#include <string>
+#include <string_view>
 
 namespace adblock {
 namespace utils {
 
-bool IsBadKeyword(const std::string& value);
+bool IsBadKeyword(std::string_view value);
 
 }  // namespace utils
 }  // namespace adblock

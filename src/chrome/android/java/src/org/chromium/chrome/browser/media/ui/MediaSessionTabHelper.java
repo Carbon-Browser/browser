@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,15 +12,15 @@ import androidx.annotation.VisibleForTesting;
 
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.IntentHandler;
-import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.EmptyTabObserver;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabObserver;
 import org.chromium.components.browser_ui.media.MediaNotificationInfo;
 import org.chromium.components.browser_ui.media.MediaNotificationManager;
 import org.chromium.components.browser_ui.media.MediaSessionHelper;
-import org.chromium.content_public.browser.BrowserContextHandle;
+import org.chromium.components.favicon.LargeIconBridge;
 import org.chromium.ui.base.WindowAndroid;
+import org.chromium.url.GURL;
 
 /**
  * A tab helper that wraps {@link MediaSessionHelper} and is responsible for Chrome-specific
@@ -28,37 +28,40 @@ import org.chromium.ui.base.WindowAndroid;
  */
 public class MediaSessionTabHelper implements MediaSessionHelper.Delegate {
     private Tab mTab;
-    @VisibleForTesting
-    MediaSessionHelper mMediaSessionHelper;
+    @VisibleForTesting MediaSessionHelper mMediaSessionHelper;
 
     @VisibleForTesting
-    final TabObserver mTabObserver = new EmptyTabObserver() {
-        @Override
-        public void onContentChanged(Tab tab) {
-            assert tab == mTab;
-            maybeCreateOrUpdateMediaSessionHelper();
-        }
+    final TabObserver mTabObserver =
+            new EmptyTabObserver() {
+                @Override
+                public void onContentChanged(Tab tab) {
+                    assert tab == mTab;
+                    maybeCreateOrUpdateMediaSessionHelper();
+                }
 
-        @Override
-        public void onFaviconUpdated(Tab tab, Bitmap icon) {
-            assert tab == mTab;
-            mMediaSessionHelper.updateFavicon(icon);
-        }
+                @Override
+                public void onFaviconUpdated(Tab tab, Bitmap icon, GURL iconUrl) {
+                    assert tab == mTab;
 
-        @Override
-        public void onDestroyed(Tab tab) {
-            assert mTab == tab;
+                    if (mMediaSessionHelper == null) return;
 
-            if (mMediaSessionHelper != null) mMediaSessionHelper.destroy();
-            mTab.removeObserver(this);
-            mTab = null;
-        }
+                    mMediaSessionHelper.updateFavicon(icon);
+                }
 
-        @Override
-        public void onActivityAttachmentChanged(Tab tab, @Nullable WindowAndroid window) {
-            // Intentionally do nothing to prevent automatic observer removal on detachment.
-        }
-    };
+                @Override
+                public void onDestroyed(Tab tab) {
+                    assert mTab == tab;
+
+                    if (mMediaSessionHelper != null) mMediaSessionHelper.destroy();
+                    mTab.removeObserver(this);
+                    mTab = null;
+                }
+
+                @Override
+                public void onActivityAttachmentChanged(Tab tab, @Nullable WindowAndroid window) {
+                    // Intentionally do nothing to prevent automatic observer removal on detachment.
+                }
+            };
 
     @VisibleForTesting
     MediaSessionTabHelper(Tab tab) {
@@ -90,8 +93,8 @@ public class MediaSessionTabHelper implements MediaSessionHelper.Delegate {
     }
 
     @Override
-    public BrowserContextHandle getBrowserContextHandle() {
-        return Profile.fromWebContents(mTab.getWebContents());
+    public LargeIconBridge getLargeIconBridge() {
+        return new LargeIconBridge(mTab.getProfile());
     }
 
     @Override

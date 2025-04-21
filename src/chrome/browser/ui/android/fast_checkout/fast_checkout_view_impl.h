@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/scoped_java_ref.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/fast_checkout/fast_checkout_view.h"
 
@@ -27,16 +27,20 @@ class FastCheckoutViewImpl : public FastCheckoutView {
       const base::android::JavaParamRef<jobject>& autofill_profile_java,
       const base::android::JavaParamRef<jobject>& credit_card_java);
   void OnDismiss(JNIEnv* env);
+  void OpenAutofillProfileSettings(JNIEnv* env);
+  void OpenCreditCardSettings(JNIEnv* env);
 
   // FastCheckoutView:
-  void Show(base::span<const autofill::AutofillProfile> autofill_profiles,
-            base::span<const autofill::CreditCard> credit_cards) override;
+  void Show(
+      const std::vector<const autofill::AutofillProfile*>& autofill_profiles,
+      const std::vector<const autofill::CreditCard*>& credit_cards) override;
 
  private:
   // Returns either true if the java counterpart of this bridge is initialized
-  // successfully or false if the creation failed. This method  will recreate
-  // the java object whenever Show() is called.
-  bool RecreateJavaObject();
+  // successfully or false if the creation failed. This method  will create
+  // the java object whenever Show() is called and re-use the same component if
+  // already exist.
+  bool RecreateJavaObjectIfNecessary();
 
   const base::WeakPtr<FastCheckoutController> controller_;
 

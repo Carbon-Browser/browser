@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@
 #include <utility>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/numerics/checked_math.h"
+#include "base/task/sequenced_task_runner.h"
 #include "net/base/io_buffer.h"
 
 namespace network {
@@ -19,7 +20,7 @@ DataPipeToSourceStream::DataPipeToSourceStream(
       body_(std::move(body)),
       handle_watcher_(FROM_HERE,
                       mojo::SimpleWatcher::ArmingPolicy::MANUAL,
-                      base::SequencedTaskRunnerHandle::Get()) {
+                      base::SequencedTaskRunner::GetCurrentDefault()) {
   handle_watcher_.Watch(
       body_.get(), MOJO_HANDLE_SIGNAL_READABLE | MOJO_HANDLE_SIGNAL_PEER_CLOSED,
       base::BindRepeating(&DataPipeToSourceStream::OnReadable,
@@ -46,15 +47,13 @@ int DataPipeToSourceStream::Read(net::IOBuffer* buf,
     return 0;
   }
 
-  const void* buffer = nullptr;
-  uint32_t available = 0;
-  MojoResult result =
-      body_->BeginReadData(&buffer, &available, MOJO_READ_DATA_FLAG_NONE);
+  base::span<const uint8_t> buffer;
+  MojoResult result = body_->BeginReadData(MOJO_READ_DATA_FLAG_NONE, buffer);
   switch (result) {
     case MOJO_RESULT_OK: {
-      uint32_t consume =
-          std::min(base::checked_cast<uint32_t>(buf_size), available);
-      memcpy(buf->data(), buffer, consume);
+      size_t consume =
+          std::min(base::checked_cast<size_t>(buf_size), buffer.size());
+      buf->span().copy_prefix_from(buffer.first(consume));
       body_->EndReadData(consume);
       return base::checked_cast<int>(consume);
     }
@@ -71,7 +70,6 @@ int DataPipeToSourceStream::Read(net::IOBuffer* buf,
       return net::ERR_IO_PENDING;
   }
   NOTREACHED() << static_cast<int>(result);
-  return net::ERR_UNEXPECTED;
 }
 
 void DataPipeToSourceStream::OnReadable(MojoResult unused) {
@@ -79,15 +77,13 @@ void DataPipeToSourceStream::OnReadable(MojoResult unused) {
   DCHECK(!inside_read_);
   DCHECK(pending_callback_);
   DCHECK(output_buf_);
-  const void* buffer = nullptr;
-  uint32_t available = 0;
-  MojoResult result =
-      body_->BeginReadData(&buffer, &available, MOJO_READ_DATA_FLAG_NONE);
+  base::span<const uint8_t> buffer;
+  MojoResult result = body_->BeginReadData(MOJO_READ_DATA_FLAG_NONE, buffer);
   switch (result) {
     case MOJO_RESULT_OK: {
-      uint32_t consume =
-          std::min(base::checked_cast<uint32_t>(output_buf_size_), available);
-      memcpy(output_buf_->data(), buffer, consume);
+      size_t consume =
+          std::min(base::checked_cast<size_t>(output_buf_size_), buffer.size());
+      output_buf_->span().copy_prefix_from(buffer.first(consume));
       body_->EndReadData(consume);
       std::move(pending_callback_).Run(consume);
       return;

@@ -1,8 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 "use strict";
+
+// Use 16x16 aligned resolution since some platforms require that.
+// See https://crbug.com/1084702.
+// Also, some platforms require a resolution that isn't tiny (e.g. 160) to
+// use hardware acceleration.
+const FRAME_WIDTH = 640;
+const FRAME_HEIGHT = 480;
 
 class TestHarness {
   finished = false;
@@ -10,6 +17,7 @@ class TestHarness {
   skipped = false;
   message = 'ok';
   logs = [];
+  logWindow = null;
 
   constructor() {}
 
@@ -17,11 +25,13 @@ class TestHarness {
     this.skipped = true;
     this.finished = true;
     this.message = message;
+    this.log('Test skipped: ' + message);
   }
 
   reportSuccess() {
     this.finished = true;
     this.success = true;
+    this.log('Test completed');
   }
 
   reportFailure(error) {
@@ -36,6 +46,12 @@ class TestHarness {
       this.reportFailure("Assertion failed: " + msg);
   }
 
+  assert_eq(val1, val2, msg) {
+    if (val1 != val2) {
+      this.reportFailure(`Assertion failed: ${msg}. ${val1} != ${val2}.`);
+    }
+  }
+
   summary() {
     return this.message + "\n\n" + this.logs.join("\n");
   }
@@ -43,6 +59,10 @@ class TestHarness {
   log(msg) {
     this.logs.push(msg);
     console.log(msg);
+    if (this.logWindow === null)
+      this.logWindow = document.querySelector('textarea');
+    if (this.logWindow)
+      this.logWindow.value += msg + '\n';
   }
 
   run(arg) {
@@ -148,7 +168,7 @@ function validateBlackDots(frame, count) {
   const width = frame.displayWidth;
   const height = frame.displayHeight;
   let cnv = new OffscreenCanvas(width, height);
-  var ctx = cnv.getContext('2d');
+  var ctx = cnv.getContext('2d', { willReadFrequently : true });
   ctx.drawImage(frame, 0, 0);
   const dot_size = 10;
   const step = dot_size * 3;
@@ -186,7 +206,7 @@ class CanvasSource extends FrameSource {
     this.width = width;
     this.height = height;
     this.canvas = new OffscreenCanvas(width, height);
-    this.ctx = this.canvas.getContext('2d');
+    this.ctx = this.canvas.getContext('2d', {colorSpace: 'srgb'});
     this.timestamp = 0;
     this.duration = 16666;  // 1/60 s
     this.frame_index = 0;
@@ -226,25 +246,121 @@ class StreamSource extends FrameSource {
 class ArrayBufferSource extends FrameSource {
   constructor(width, height) {
     super();
-    this.inner_src = new CanvasSource(width, height);
     this.width = width;
     this.height = height;
+    this.canvas = new OffscreenCanvas(width, height);
+    this.ctx = this.canvas.getContext(
+        '2d', {willReadFrequently: true, colorSpace: 'srgb'});
+    this.timestamp = 0;
+    this.duration = 16666;  // 1/60 s
+    this.frame_index = 0;
   }
 
   async getNextFrame() {
-    let prototype_frame = await this.inner_src.getNextFrame();
-    let size = prototype_frame.allocationSize();
-    let buf = new ArrayBuffer(size);
-    let layout = await prototype_frame.copyTo(buf);
+    fourColorsFrame(
+        this.ctx, this.width, this.height, this.timestamp.toString());
+    putBlackDots(this.ctx, this.width, this.height, this.frame_index);
+    const imageData = this.ctx.getImageData(0, 0, this.width, this.height);
+    const buffer = imageData.data;
     let init = {
-        format: prototype_frame.format,
-        timestamp: prototype_frame.timestamp,
-        codedWidth: prototype_frame.codedWidth,
-        codedHeight: prototype_frame.codedHeight,
-        colorSpace: prototype_frame.colorSpace,
-        layout: layout
+      format: 'RGBA',
+      timestamp: this.timestamp,
+      codedWidth: this.width,
+      codedHeight: this.height,
+      // This describes sRGB color-space used by the canvas
+      colorSpace: {
+        fullRange: true,
+        matrix: 'rgb',
+        primaries: 'bt709',
+        transfer: 'iec61966-2-1'
+      },
+      transfer: [buffer.buffer]
     };
-    return new VideoFrame(buf, init);
+    this.timestamp += this.duration;
+    this.frame_index++;
+    return new VideoFrame(buffer, init);
+  }
+}
+
+class HBDArrayBufferSource extends FrameSource {
+  constructor(width, height) {
+    super();
+    this.width = width;
+    this.height = height;
+    this.timestamp = 0;
+    this.duration = 16666;  // 1/60 s
+    this.frame_index = 0;
+  }
+
+  async getNextFrame() {
+    const kDepth = 10;
+    const kShift = kDepth - 8;
+    // 8-bit YUV colors assuming BT.709 matrix and sRGB primaries.
+    const kYellow = [219, 16, 138];
+    const kRed = [63, 102, 240];
+    const kBlue = [32, 240, 118];
+    const kGreen = [173, 42, 26];
+
+    const width = this.width;
+    const height = this.height;
+    const halfW = Math.ceil(width / 2);
+    const halfH = Math.ceil(height / 2);
+    const qtrW = Math.ceil(width / 4);
+    const qtrH = Math.ceil(height / 4);
+    const data = new Uint8Array((width * height + 2 * halfW * halfH) * 2);
+    const view = new DataView(data.buffer)
+
+    let i = 0;
+
+    // Y plane.
+    for (let y = 0; y < height; ++y) {
+      const colors = y < halfH ? [kYellow, kRed] : [kBlue, kGreen];
+      for (let x = 0; x < width; ++x) {
+        const color = x < halfW ? colors[0] : colors[1];
+        // Note: Rounding is not quite accurate due to shifting rather than
+        // scaling, in addition to using already rounded YUV values.
+        view.setUint16(i, color[0] << kShift, true);
+        i += 2;
+      }
+    }
+
+    // U plane.
+    for (let y = 0; y < halfH; ++y) {
+      const colors = y < qtrH ? [kYellow, kRed] : [kBlue, kGreen];
+      for (let x = 0; x < halfW; ++x) {
+        const color = x < qtrW ? colors[0] : colors[1];
+        view.setUint16(i, color[1] << kShift, true);
+        i += 2;
+      }
+    }
+
+    // V plane.
+    for (let y = 0; y < halfH; ++y) {
+      const colors = y < qtrH ? [kYellow, kRed] : [kBlue, kGreen];
+      for (let x = 0; x < halfW; ++x) {
+        const color = x < qtrW ? colors[0] : colors[1];
+        view.setUint16(i, color[2] << kShift, true);
+        i += 2;
+      }
+    }
+
+    const init = {
+      format: `I420P${kDepth}`,
+      timestamp: this.timestamp,
+      codedWidth: width,
+      codedHeight: height,
+      // sRGB with BT.709 YUV matrix.
+      colorSpace: {
+        matrix: 'bt709',
+        primaries: 'bt709',
+        transfer: 'iec61966-2-1',
+        fullRange: false,
+      },
+      transfer: [data.buffer]
+    };
+    this.timestamp += this.duration;
+    this.frame_index++;
+    return new VideoFrame(data, init);
   }
 }
 
@@ -329,17 +445,20 @@ function createCanvasCaptureSource(width, height) {
 async function prepareDecoderSource(
     frames_to_encode, width, height, codec, acceleration) {
   if (!acceleration)
-    acceleration = 'allow';
+    acceleration = 'no-preference';
   const encoder_config = {
     codec: codec,
     width: width,
     height: height,
-    bitrate: 1000000,
+    bitrate: 10000000,
     framerate: 24
   };
 
-  if (codec.startsWith('avc1'))
+  if (codec.startsWith('avc1')) {
     encoder_config.avc = {format: 'annexb'};
+  } else if (codec.startsWith('hvc1')) {
+    encoder_config.hevc = {format: 'annexb'};
+  }
 
   let decoder_config = {
     codec: codec,
@@ -376,17 +495,17 @@ async function prepareDecoderSource(
 
   let encoder = new VideoEncoder(init);
   encoder.configure(encoder_config);
-  let canvasSource = new CanvasSource(width, height);
+  let innerSource = new ArrayBufferSource(width, height);
 
   for (let i = 0; i < frames_to_encode; i++) {
-    let frame = await canvasSource.getNextFrame();
+    let frame = await innerSource.getNextFrame();
     encoder.encode(frame, {keyFrame: false});
     frame.close();
   }
   try {
     await encoder.flush();
     encoder.close();
-    canvasSource.close();
+    innerSource.close();
   } catch (e) {
     errors++;
     TEST.log(e);
@@ -419,6 +538,9 @@ async function createFrameSource(type, width, height) {
           40, width, height, 'avc1.42001E', 'prefer-hardware');
       if (!src)
         src = await prepareDecoderSource(
+            40, width, height, 'hvc1.1.6.L123.00', 'prefer-hardware');
+      if (!src)
+        src = await prepareDecoderSource(
             40, width, height, 'vp8', 'prefer-hardware');
       if (!src) {
         src = await prepareDecoderSource(
@@ -436,5 +558,38 @@ async function createFrameSource(type, width, height) {
     case 'arraybuffer': {
       return new ArrayBufferSource(width, height);
     }
+    case 'hbd_arraybuffer': {
+      return new HBDArrayBufferSource(width, height);
+    }
   }
+}
+
+function addManualTestButton(configs) {
+  document.addEventListener('DOMContentLoaded', _ => {
+    configs.forEach(config => {
+      const btn = document.createElement('button');
+      const label = document.createTextNode(
+          'Run test with config: ' + JSON.stringify(config));
+      btn.onclick = function() {
+        main(config);
+      };
+      btn.appendChild(label);
+      btn.style.margin = '5px';
+      document.body.appendChild(btn);
+    });
+  }, true);
+}
+
+function readProfileFromAvcExtraData(view) {
+  if (view.byteLength < 6) {
+    // Too short to be a proper AVCDecoderConfigurationRecord
+    return null;
+  }
+  const version = view.getUint8(0);
+  if (version != 1) {
+    return null;
+  }
+
+  const profile = view.getUint8(1);
+  return profile;
 }

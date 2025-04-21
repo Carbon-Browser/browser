@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,6 @@ UploadList::UploadInfo::State ReportUploadStateToUploadInfoState(
   }
 
   NOTREACHED();
-  return UploadList::UploadInfo::State::Uploaded;
 }
 
 }  // namespace
@@ -35,16 +34,17 @@ CrashUploadListCrashpad::CrashUploadListCrashpad() = default;
 
 CrashUploadListCrashpad::~CrashUploadListCrashpad() = default;
 
-std::vector<UploadList::UploadInfo> CrashUploadListCrashpad::LoadUploadList() {
+std::vector<std::unique_ptr<UploadList::UploadInfo>>
+CrashUploadListCrashpad::LoadUploadList() {
   std::vector<crash_reporter::Report> reports;
   crash_reporter::GetReports(&reports);
 
-  std::vector<UploadInfo> uploads;
+  std::vector<std::unique_ptr<UploadInfo>> uploads;
   for (const crash_reporter::Report& report : reports) {
-    uploads.push_back(
-        UploadInfo(report.remote_id, base::Time::FromTimeT(report.upload_time),
-                   report.local_id, base::Time::FromTimeT(report.capture_time),
-                   ReportUploadStateToUploadInfoState(report.state)));
+    uploads.push_back(std::make_unique<UploadInfo>(
+        report.remote_id, base::Time::FromTimeT(report.upload_time),
+        report.local_id, base::Time::FromTimeT(report.capture_time),
+        ReportUploadStateToUploadInfoState(report.state)));
   }
   return uploads;
 }

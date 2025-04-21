@@ -1,8 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/events/event_handler.h"
+
+#include <string_view>
 
 #include "base/logging.h"
 #include "base/strings/string_util.h"
@@ -60,7 +62,7 @@ void EventHandler::OnGestureEvent(GestureEvent* event) {
 void EventHandler::OnCancelMode(CancelModeEvent* event) {
 }
 
-base::StringPiece EventHandler::GetLogContext() const {
+std::string_view EventHandler::GetLogContext() const {
   return "(Unknown EventHandler)"; // Please override
 }
 

@@ -1,4 +1,4 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -16,6 +16,8 @@ component("init") {
   ]
 
   defines = [ "IS_VULKAN_INIT_IMPL" ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
   public_deps = [
     "//base",
@@ -44,11 +46,13 @@ component("skia") {
   output_name = "vulkan_init_skia"
 
   sources = [
-    "gr_vk_memory_allocator_impl.cc",
-    "gr_vk_memory_allocator_impl.h",
+    "skia_vk_memory_allocator_impl.cc",
+    "skia_vk_memory_allocator_impl.h",
   ]
 
   defines = [ "IS_VULKAN_INIT_IMPL" ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
   public_deps = [
     "//base",

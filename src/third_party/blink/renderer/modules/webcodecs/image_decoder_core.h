@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,8 +24,7 @@ class MODULES_EXPORT ImageDecoderCore {
   ImageDecoderCore(String mime_type,
                    scoped_refptr<SegmentReader> data,
                    bool data_complete,
-                   ImageDecoder::AlphaOption alpha_option,
-                   const ColorBehavior& color_behavior,
+                   ColorBehavior color_behavior,
                    const SkISize& desired_size,
                    ImageDecoder::AnimationOption animation_option);
   ~ImageDecoderCore();
@@ -89,9 +88,7 @@ class MODULES_EXPORT ImageDecoderCore {
 
   // Calls ImageDecoder::SetData() after appending |data| to |stream_buffer_|.
   // May not be called after |data_complete| becomes true.
-  void AppendData(size_t data_size,
-                  std::unique_ptr<uint8_t[]> data,
-                  bool data_complete);
+  void AppendData(Vector<uint8_t> data, bool data_complete);
 
   // Releases |decoder_|. Decode() and DecodeMetadata() may not be called until
   // Reinitialize() has been called.
@@ -105,8 +102,11 @@ class MODULES_EXPORT ImageDecoderCore {
  private:
   void MaybeDecodeToYuv();
 
+  // Retrieves the timestamp for |index| from |decoder_| if supported, otherwise
+  // uses |timestamp_cache_| to generate a synthetic timestamp.
+  base::TimeDelta GetTimestampForFrame(uint32_t index) const;
+
   const String mime_type_;
-  const ImageDecoder::AlphaOption alpha_option_;
   const ColorBehavior color_behavior_;
   const SkISize desired_size_;
 
@@ -134,10 +134,7 @@ class MODULES_EXPORT ImageDecoderCore {
   // When decode() of incomplete frames has been requested, we need to track the
   // generation id for each SkBitmap that we've handed out. So that we can defer
   // resolution of promises until a new bitmap is generated.
-  HashMap<uint32_t,
-          uint32_t,
-          DefaultHash<uint32_t>::Hash,
-          WTF::UnsignedWithZeroKeyHashTraits<uint32_t>>
+  HashMap<uint32_t, uint32_t, IntWithZeroKeyHashTraits<uint32_t>>
       incomplete_frames_;
 
   // By default, assume in order decoding and purge all decoded frames except
@@ -145,6 +142,10 @@ class MODULES_EXPORT ImageDecoderCore {
   // only when platform memory limits are exceeded.
   bool is_decoding_in_order_ = true;
   uint32_t last_decoded_frame_ = 0u;
+
+  // Used to generate synthetic timestamps for decoders which don't provide
+  // native timestamps. The 0 position is initialized to zero at construction.
+  mutable Vector<base::TimeDelta> timestamp_cache_;
 };
 
 }  // namespace blink

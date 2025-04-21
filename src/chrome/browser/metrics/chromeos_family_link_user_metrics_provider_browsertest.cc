@@ -1,17 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/metrics/chromeos_family_link_user_metrics_provider.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/time/time.h"
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
 #include "chrome/browser/ash/login/test/guest_session_mixin.h"
 #include "chrome/browser/ash/login/test/logged_in_user_mixin.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/test/base/fake_gaia_mixin.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
 #include "components/metrics/delegating_provider.h"
 #include "components/metrics/metrics_service.h"
@@ -26,14 +26,14 @@ ash::LoggedInUserMixin::LogInType GetLogInType(
     ChromeOSFamilyLinkUserMetricsProvider::LogSegment log_segment) {
   switch (log_segment) {
     case ChromeOSFamilyLinkUserMetricsProvider::LogSegment::kOther:
-      return ash::LoggedInUserMixin::LogInType::kRegular;
+      return ash::LoggedInUserMixin::LogInType::kConsumer;
     case ChromeOSFamilyLinkUserMetricsProvider::LogSegment::kUnderConsentAge:
     case ChromeOSFamilyLinkUserMetricsProvider::LogSegment::kOverConsentAge:
       return ash::LoggedInUserMixin::LogInType::kChild;
   }
 }
 
-void ProvideCurrentSessionData() {
+void ProvideHistograms() {
   // The purpose of the below call is to avoid a DCHECK failure in an unrelated
   // metrics provider, in |FieldTrialsProvider::ProvideCurrentSessionData()|.
   metrics::SystemProfileProto system_profile_proto;
@@ -41,10 +41,9 @@ void ProvideCurrentSessionData() {
       ->GetDelegatingProviderForTesting()
       ->ProvideSystemProfileMetricsWithLogCreationTime(base::TimeTicks::Now(),
                                                        &system_profile_proto);
-  metrics::ChromeUserMetricsExtension uma_proto;
   g_browser_process->metrics_service()
       ->GetDelegatingProviderForTesting()
-      ->ProvideCurrentSessionData(&uma_proto);
+      ->OnDidCreateMetricsLog();
 }
 
 }  // namespace
@@ -77,9 +76,9 @@ class ChromeOSFamilyLinkUserMetricsProviderTest
       public testing::WithParamInterface<
           ChromeOSFamilyLinkUserMetricsProvider::LogSegment> {
  protected:
-  ash::LoggedInUserMixin logged_in_user_mixin_{
-      &mixin_host_, GetLogInType(GetParam()), embedded_test_server(),
-      /*test_base=*/this};
+  ash::LoggedInUserMixin logged_in_user_mixin_{&mixin_host_, /*test_base=*/this,
+                                               embedded_test_server(),
+                                               GetLogInType(GetParam())};
 };
 
 IN_PROC_BROWSER_TEST_P(ChromeOSFamilyLinkUserMetricsProviderTest,
@@ -88,9 +87,9 @@ IN_PROC_BROWSER_TEST_P(ChromeOSFamilyLinkUserMetricsProviderTest,
   ChromeOSFamilyLinkUserMetricsProviderForTesting provider;
   base::RunLoop run_loop;
 
-  // Simulate calling ProvideCurrentSessionData() prior to logging in. This call
-  // should return prematurely.
-  provider.ProvideCurrentSessionData(/*uma_proto_unused=*/nullptr);
+  // Simulate calling ProvideHistograms() prior to logging in. This call should
+  // return prematurely.
+  ProvideHistograms();
 
   // No metrics were recorded.
   histogram_tester.ExpectTotalCount(
@@ -104,12 +103,13 @@ IN_PROC_BROWSER_TEST_P(ChromeOSFamilyLinkUserMetricsProviderTest,
   logged_in_user_mixin_.GetFakeGaiaMixin()->set_initialize_child_id_token(
       log_segment ==
       ChromeOSFamilyLinkUserMetricsProvider::LogSegment::kUnderConsentAge);
-  logged_in_user_mixin_.LogInUser(/*issue_any_scope_token=*/true);
+  logged_in_user_mixin_.LogInUser(
+      {ash::LoggedInUserMixin::LoginDetails::kUseAnyScopeToken});
 
   run_loop.Run();
 
-  // Simulate calling ProvideCurrentSessionData() after logging in.
-  provider.ProvideCurrentSessionData(/*uma_proto_unused=*/nullptr);
+  // Simulate calling ProvideHistograms() after logging in.
+  ProvideHistograms();
 
   histogram_tester.ExpectUniqueSample(
       ChromeOSFamilyLinkUserMetricsProvider::GetHistogramNameForTesting(),
@@ -135,7 +135,7 @@ IN_PROC_BROWSER_TEST_F(ChromeOSFamilyLinkUserMetricsProviderGuestModeTest,
                        GuestMode) {
   base::HistogramTester histogram_tester;
 
-  ProvideCurrentSessionData();
+  ProvideHistograms();
 
   histogram_tester.ExpectUniqueSample(
       ChromeOSFamilyLinkUserMetricsProvider::GetHistogramNameForTesting(),

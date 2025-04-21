@@ -1,10 +1,16 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "remoting/host/win/wts_terminal_monitor.h"
 
 #include <windows.h>
+
 #include <wtsapi32.h>
 
 #include "base/logging.h"
@@ -17,8 +23,7 @@ const uint32_t kInvalidSessionId = 0xffffffffu;
 
 const char WtsTerminalMonitor::kConsole[] = "console";
 
-WtsTerminalMonitor::~WtsTerminalMonitor() {
-}
+WtsTerminalMonitor::~WtsTerminalMonitor() {}
 
 // static
 bool WtsTerminalMonitor::LookupTerminalId(uint32_t session_id,
@@ -33,17 +38,14 @@ bool WtsTerminalMonitor::LookupTerminalId(uint32_t session_id,
   // RdpClient sets the terminal ID as the initial program's working directory.
   DWORD bytes;
   wchar_t* working_directory;
-  if (!WTSQuerySessionInformation(WTS_CURRENT_SERVER_HANDLE,
-                                  session_id,
-                                  WTSWorkingDirectory,
-                                  &working_directory,
+  if (!WTSQuerySessionInformation(WTS_CURRENT_SERVER_HANDLE, session_id,
+                                  WTSWorkingDirectory, &working_directory,
                                   &bytes)) {
     return false;
   }
 
   bool result = base::WideToUTF8(working_directory,
-                                 (bytes / sizeof(wchar_t)) - 1,
-                                 terminal_id);
+                                 (bytes / sizeof(wchar_t)) - 1, terminal_id);
   WTSFreeMemory(working_directory);
   return result;
 }
@@ -52,8 +54,9 @@ bool WtsTerminalMonitor::LookupTerminalId(uint32_t session_id,
 uint32_t WtsTerminalMonitor::LookupSessionId(const std::string& terminal_id) {
   // Use the fast path if the caller wants to get id of the session attached to
   // the physical console.
-  if (terminal_id == kConsole)
+  if (terminal_id == kConsole) {
     return WTSGetActiveConsoleSessionId();
+  }
 
   // Enumerate all sessions and try to match the client endpoint.
   WTS_SESSION_INFO* session_info;
@@ -78,7 +81,6 @@ uint32_t WtsTerminalMonitor::LookupSessionId(const std::string& terminal_id) {
   return kInvalidSessionId;
 }
 
-WtsTerminalMonitor::WtsTerminalMonitor() {
-}
+WtsTerminalMonitor::WtsTerminalMonitor() {}
 
 }  // namespace remoting

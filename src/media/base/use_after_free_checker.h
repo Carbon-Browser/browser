@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "base/debug/crash_logging.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/notreached.h"
 #include "media/base/media_export.h"
 
 namespace {
@@ -35,12 +36,12 @@ class MEDIA_EXPORT UseAfterFreeChecker {
     state_ = State::kDestructed;
   }
 
-  void check() {
+  void check() const {
     if (state_ != State::kConstructed) {
       base::debug::ScopedCrashKeyString scoped(
           crash_key_string(),
           state_ == State::kDestructed ? "destructed" : "corrupt");
-      CHECK(false);
+      NOTREACHED();
     }
   }
 

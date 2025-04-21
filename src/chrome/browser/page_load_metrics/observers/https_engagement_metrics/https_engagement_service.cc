@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,9 @@ const char kHttpsEngagementSessionPercentage[] =
     "Navigation.EngagementTime.Ratio";
 }
 
-HttpsEngagementService::HttpsEngagementService() {}
+HttpsEngagementService::HttpsEngagementService() = default;
 
-HttpsEngagementService::~HttpsEngagementService() {}
+HttpsEngagementService::~HttpsEngagementService() = default;
 
 void HttpsEngagementService::RecordTimeOnPage(base::TimeDelta foreground_time,
                                               PageScheme scheme) {

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -113,10 +113,9 @@ TEST_F(OncCertificatePatternTest, PatternMatchingIssuer) {
   }
 
   {
-    base::Value* issuer =
-        parsed_json->FindKeyOfType("Issuer", base::Value::Type::DICTIONARY);
+    base::Value::Dict* issuer = parsed_json->GetDict().FindDict("Issuer");
     ASSERT_TRUE(issuer);
-    issuer->SetKey("CommonName", base::Value("SomeOtherCA"));
+    issuer->Set("CommonName", "SomeOtherCA");
 
     auto pattern =
         OncCertificatePattern::ReadFromONCDictionary(parsed_json->GetDict());
@@ -149,10 +148,9 @@ TEST_F(OncCertificatePatternTest, PatternMatchingSubject) {
   }
 
   {
-    base::Value* issuer =
-        parsed_json->FindKeyOfType("Subject", base::Value::Type::DICTIONARY);
+    base::Value::Dict* issuer = parsed_json->GetDict().FindDict("Subject");
     ASSERT_TRUE(issuer);
-    issuer->SetKey("CommonName", base::Value("B CA"));
+    issuer->Set("CommonName", "B CA");
 
     auto pattern =
         OncCertificatePattern::ReadFromONCDictionary(parsed_json->GetDict());

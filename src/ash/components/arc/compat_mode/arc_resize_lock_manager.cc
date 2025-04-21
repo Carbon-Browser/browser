@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,18 +10,23 @@
 #include "ash/components/arc/compat_mode/arc_window_property_util.h"
 #include "ash/components/arc/compat_mode/compat_mode_button_controller.h"
 #include "ash/components/arc/compat_mode/metrics.h"
+#include "ash/components/arc/compat_mode/overlay_dialog.h"
 #include "ash/components/arc/compat_mode/touch_mode_mouse_rewriter.h"
+#include "ash/game_dashboard/game_dashboard_controller.h"
 #include "ash/public/cpp/app_types_util.h"
 #include "ash/public/cpp/arc_resize_lock_type.h"
 #include "ash/public/cpp/resize_shadow_type.h"
 #include "ash/public/cpp/window_properties.h"
 #include "ash/shell.h"
 #include "ash/wm/resize_shadow_controller.h"
-#include "base/bind.h"
-#include "base/callback_forward.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/singleton.h"
 #include "base/memory/weak_ptr.h"
 #include "base/notreached.h"
+#include "base/task/sequenced_task_runner.h"
+#include "chromeos/ui/base/window_properties.h"
 #include "ui/aura/window_observer.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/wm/public/activation_client.h"
@@ -86,8 +91,8 @@ class WindowActivationObserver : public wm::ActivationChangeObserver,
       return;
     RemoveAllObservers();
     // To avoid nested-activation, here we post the task to the queue.
-    base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                     std::move(on_activated_));
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(on_activated_));
     delete this;
   }
 
@@ -96,7 +101,7 @@ class WindowActivationObserver : public wm::ActivationChangeObserver,
       : window_(window), on_activated_(std::move(on_activated)) {
     DCHECK(!on_activated_.is_null());
     ash::Shell::Get()->activation_client()->AddObserver(this);
-    observer_.Observe(window_);
+    observer_.Observe(window_.get());
   }
 
   ~WindowActivationObserver() override { RemoveAllObservers(); }
@@ -106,7 +111,7 @@ class WindowActivationObserver : public wm::ActivationChangeObserver,
     ash::Shell::Get()->activation_client()->RemoveObserver(this);
   }
 
-  aura::Window* const window_;
+  const raw_ptr<aura::Window> window_;
   base::OnceClosure on_activated_;
   base::ScopedObservation<aura::Window, aura::WindowObserver> observer_{this};
 };
@@ -153,12 +158,12 @@ class AppIdObserver : public aura::WindowObserver {
                 base::OnceCallback<void(aura::Window*)> on_ready)
       : window_(window), on_ready_(std::move(on_ready)) {
     DCHECK(!on_ready_.is_null());
-    observer_.Observe(window_);
+    observer_.Observe(window_.get());
   }
 
   ~AppIdObserver() override { observer_.Reset(); }
 
-  aura::Window* const window_;
+  const raw_ptr<aura::Window> window_;
   base::OnceCallback<void(aura::Window*)> on_ready_;
   base::ScopedObservation<aura::Window, aura::WindowObserver> observer_{this};
 };
@@ -217,6 +222,16 @@ void ArcResizeLockManager::OnWindowInitialized(aura::Window* new_window) {
 void ArcResizeLockManager::OnWindowPropertyChanged(aura::Window* window,
                                                    const void* key,
                                                    intptr_t old) {
+  // TODO(b/344640055): Replace below simple fix.
+  // The overlay layer might be added before `chromeos::kIsGameKey` is set for
+  // splash screen dialog. Once `chromeos::kIsGameKey` is set to true, remove
+  // the overlay layer.
+  if (key == chromeos::kIsGameKey &&
+      window->GetProperty(chromeos::kIsGameKey)) {
+    OverlayDialog::CloseIfAny(window);
+    return;
+  }
+
   if (key != ash::kArcResizeLockTypeKey)
     return;
 
@@ -252,8 +267,12 @@ void ArcResizeLockManager::OnWindowPropertyChanged(aura::Window* window,
   // kArcResizeLockTypeKey, and the new value is the same as |old| in that case.
   AppIdObserver::RunOnReady(
       window, base::BindOnce(&CompatModeButtonController::Update,
-                             compat_mode_button_controller_->GetWeakPtr(),
-                             pref_delegate_));
+                             compat_mode_button_controller_->GetWeakPtr()));
+}
+
+void ArcResizeLockManager::Shutdown() {
+  compat_mode_button_controller_->ClearPrefDelegate();
+  pref_delegate_ = nullptr;
 }
 
 void ArcResizeLockManager::OnWindowBoundsChanged(
@@ -261,13 +280,20 @@ void ArcResizeLockManager::OnWindowBoundsChanged(
     const gfx::Rect& old_bounds,
     const gfx::Rect& new_bounds,
     ui::PropertyChangeReason reason) {
-  compat_mode_button_controller_->Update(pref_delegate_, window);
+  compat_mode_button_controller_->Update(window);
 }
 
 void ArcResizeLockManager::OnWindowDestroying(aura::Window* window) {
   resize_lock_enabled_windows_.erase(window);
   if (window_observations_.IsObservingSource(window))
     window_observations_.RemoveObservation(window);
+}
+
+void ArcResizeLockManager::SetPrefDelegate(
+    ArcResizeLockPrefDelegate* delegate) {
+  CHECK(!pref_delegate_);
+  pref_delegate_ = delegate;
+  compat_mode_button_controller_->SetPrefDelegate(delegate);
 }
 
 void ArcResizeLockManager::EnableResizeLock(aura::Window* window) {
@@ -293,7 +319,9 @@ void ArcResizeLockManager::EnableResizeLock(aura::Window* window) {
                                mojom::ArcResizeLockState::READY;
   UpdateResizeLockState(window);
 
-  if (is_first_launch && ShouldShowSplashScreenDialog(pref_delegate_)) {
+  // No need to show splash screen dialog for game apps.
+  if (is_first_launch && ShouldShowSplashScreenDialog(pref_delegate_) &&
+      !ash::GameDashboardController::IsGameWindow(window)) {
     // UpdateResizeLockState() must be called beforehand as compat-mode button
     // must exist before showing the splash dialog because it's used as the
     // anchoring target.
@@ -302,7 +330,7 @@ void ArcResizeLockManager::EnableResizeLock(aura::Window* window) {
 
   if (!is_fully_locked) {
     window->SetProperty(ash::kUnresizableSnappedSizeKey,
-                        new gfx::Size(GetPortraitPhoneSizeWidth(), 0));
+                        new gfx::Size(GetUnresizableSnappedWidth(window), 0));
   } else {
     window->ClearProperty(ash::kUnresizableSnappedSizeKey);
   }
@@ -350,7 +378,7 @@ void ArcResizeLockManager::UpdateResizeLockState(aura::Window* window) {
 
   // As we updated the resize lock state above, we need to update compat mode
   // button.
-  compat_mode_button_controller_->Update(pref_delegate_, window);
+  compat_mode_button_controller_->Update(window);
 
   // Even if resize lock doesn't get enabled or disabled, we need to ensure to
   // update this as resize shadow can be updated in an intermediate state when
@@ -382,6 +410,11 @@ void ArcResizeLockManager::ShowSplashScreenDialog(aura::Window* window,
   WindowActivationObserver::RunOnActivated(
       window, base::BindOnce(&ArcSplashScreenDialogView::Show, window,
                              is_fully_locked));
+}
+
+// static
+void ArcResizeLockManager::EnsureFactoryBuilt() {
+  ArcResizeLockManagerFactory::GetInstance();
 }
 
 }  // namespace arc

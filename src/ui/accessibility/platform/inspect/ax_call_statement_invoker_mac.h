@@ -1,25 +1,22 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_ACCESSIBILITY_PLATFORM_INSPECT_AX_CALL_STATEMENT_INVOKER_MAC_H_
 #define UI_ACCESSIBILITY_PLATFORM_INSPECT_AX_CALL_STATEMENT_INVOKER_MAC_H_
 
+#include "base/component_export.h"
 #include "base/memory/raw_ptr.h"
-#include "ui/accessibility/ax_export.h"
-#include "ui/accessibility/platform/inspect/ax_optional.h"
 #include "ui/accessibility/platform/inspect/ax_tree_indexer_mac.h"
 
 namespace ui {
 
+class AXElementWrapper;
 class AXPropertyNode;
-
-// Optional tri-state id object.
-using AXOptionalNSObject = AXOptional<id>;
 
 // Invokes a script instruction describing a call unit which represents
 // a sequence of calls.
-class AX_EXPORT AXCallStatementInvoker final {
+class COMPONENT_EXPORT(AX_PLATFORM) AXCallStatementInvoker final {
  public:
   // Generic version, all calls are executed in the context of property nodes.
   // Note: both |indexer| and |storage| must outlive this object.
@@ -44,9 +41,14 @@ class AX_EXPORT AXCallStatementInvoker final {
   AXOptionalNSObject InvokeFor(const id target,
                                const AXPropertyNode& property_node) const;
 
+  // Invoke a property node for a given AXCustomContent.
+  AXOptionalNSObject InvokeForAXCustomContent(
+      const id target,
+      const AXPropertyNode& property_node) const;
+
   // Invokes a property node for a given AXElement.
   AXOptionalNSObject InvokeForAXElement(
-      const id target,
+      const AXElementWrapper& ax_element,
       const AXPropertyNode& property_node) const;
 
   // Invokes a property node for a given AXTextMarkerRange.
@@ -65,7 +67,7 @@ class AX_EXPORT AXCallStatementInvoker final {
 
   // Invokes setAccessibilityFocused method.
   AXOptionalNSObject InvokeSetAccessibilityFocused(
-      const id target,
+      const AXElementWrapper& ax_element,
       const AXPropertyNode& property_node) const;
 
   // Returns a parameterized attribute parameter by a property node representing
@@ -105,14 +107,14 @@ class AX_EXPORT AXCallStatementInvoker final {
   gfx::NativeViewAccessible LineIndexToNode(
       const std::u16string line_index) const;
 
-  const id node;
+  id __strong node;
 
   // Map between AXUIElement objects and their DOMIds/accessible tree
   // line numbers. Owned by the caller and outlives this object.
-  const base::raw_ptr<const AXTreeIndexerMac> indexer_;
+  const raw_ptr<const AXTreeIndexerMac> indexer_;
 
   // Variables storage. Owned by the caller and outlives this object.
-  const base::raw_ptr<std::map<std::string, id>> storage_;
+  const raw_ptr<std::map<std::string, id>> storage_;
 };
 
 }  // namespace ui

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 
 #include "base/allocator/buildflags.h"
 #include "base/logging.h"
+#include "build/blink_buildflags.h"
 #include "build/build_config.h"
 
 #if !BUILDFLAG(IS_FUCHSIA)
@@ -38,8 +39,6 @@ int64_t TimeValToMicroseconds(const struct timeval& tv) {
   ret += tv.tv_usec;
   return ret;
 }
-
-ProcessMetrics::~ProcessMetrics() = default;
 
 #if !BUILDFLAG(IS_FUCHSIA)
 
@@ -72,8 +71,9 @@ size_t GetMaxFds() {
     max_fds = nofile.rlim_cur;
   }
 
-  if (max_fds > INT_MAX)
+  if (max_fds > INT_MAX) {
     max_fds = INT_MAX;
+  }
 
   return static_cast<size_t>(max_fds);
 }
@@ -91,8 +91,9 @@ void IncreaseFdLimitTo(unsigned int max_descriptors) {
   struct rlimit limits;
   if (getrlimit(RLIMIT_NOFILE, &limits) == 0) {
     rlim_t new_limit = max_descriptors;
-    if (max_descriptors <= limits.rlim_cur)
+    if (max_descriptors <= limits.rlim_cur) {
       return;
+    }
     if (limits.rlim_max > 0 && limits.rlim_max < max_descriptors) {
       new_limit = limits.rlim_max;
     }

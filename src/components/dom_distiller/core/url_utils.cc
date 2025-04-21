@@ -1,15 +1,16 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/dom_distiller/core/url_utils.h"
 
 #include <string>
+#include <string_view>
 
-#include "base/guid.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
+#include "base/uuid.h"
 #include "components/dom_distiller/core/url_constants.h"
 #include "components/grit/components_resources.h"
 #include "crypto/sha2.h"
@@ -27,16 +28,16 @@ namespace {
 const char kDummyInternalUrlPrefix[] = "chrome-distiller-internal://dummy/";
 const char kSeparator[] = "_";
 
-std::string SHA256InHex(base::StringPiece str) {
+std::string SHA256InHex(std::string_view str) {
   std::string sha256 = crypto::SHA256HashString(str);
-  return base::ToLowerASCII(base::HexEncode(sha256.c_str(), sha256.size()));
+  return base::ToLowerASCII(base::HexEncode(sha256));
 }
 
 }  // namespace
 
 const GURL GetDistillerViewUrlFromEntryId(const std::string& scheme,
                                           const std::string& entry_id) {
-  GURL url(scheme + "://" + base::GenerateGUID());
+  GURL url(scheme + "://" + base::Uuid::GenerateRandomV4().AsLowercaseString());
   return net::AppendOrReplaceQueryParameter(url, kEntryIdKey, entry_id);
 }
 
@@ -44,8 +45,9 @@ const GURL GetDistillerViewUrlFromUrl(const std::string& scheme,
                                       const GURL& url,
                                       const std::string& title,
                                       int64_t start_time_ms) {
-  GURL view_url(scheme + "://" + base::GenerateGUID() + kSeparator +
-                SHA256InHex(url.spec()));
+  GURL view_url(scheme + "://" +
+                base::Uuid::GenerateRandomV4().AsLowercaseString() +
+                kSeparator + SHA256InHex(url.spec()));
   view_url = net::AppendOrReplaceQueryParameter(view_url, kTitleKey, title);
   if (start_time_ms > 0) {
     view_url = net::AppendOrReplaceQueryParameter(
@@ -54,7 +56,7 @@ const GURL GetDistillerViewUrlFromUrl(const std::string& scheme,
   return net::AppendOrReplaceQueryParameter(view_url, kUrlKey, url.spec());
 }
 
-const GURL GetOriginalUrlFromDistillerUrl(const GURL& url) {
+GURL GetOriginalUrlFromDistillerUrl(const GURL& url) {
   if (!IsUrlDistilledFormat(url))
     return url;
 
@@ -65,7 +67,7 @@ const GURL GetOriginalUrlFromDistillerUrl(const GURL& url) {
   // |GURL::host_piece()| to work correctly.
   DCHECK(url::IsStandard(kDomDistillerScheme,
                          url::Component(0, strlen(kDomDistillerScheme))));
-  std::vector<base::StringPiece> pieces =
+  std::vector<std::string_view> pieces =
       base::SplitStringPiece(url.host_piece(), kSeparator,
                              base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
   if (pieces.size() != 2)

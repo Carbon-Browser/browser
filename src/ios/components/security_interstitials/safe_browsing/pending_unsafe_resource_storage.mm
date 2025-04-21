@@ -1,22 +1,19 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/components/security_interstitials/safe_browsing/pending_unsafe_resource_storage.h"
 
-#include "base/callback_helpers.h"
-#include "base/memory/ptr_util.h"
-#import "ios/components/security_interstitials/safe_browsing/unsafe_resource_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/containers/contains.h"
+#import "base/functional/callback_helpers.h"
+#import "base/memory/ptr_util.h"
+#import "ios/components/security_interstitials/safe_browsing/ios_unsafe_resource_util.h"
 
 using safe_browsing::SBThreatType;
 using security_interstitials::UnsafeResource;
 
 namespace {
-// Returns whether a pending decision exists for |resource|.
+// Returns whether a pending decision exists for `resource`.
 bool IsUnsafeResourcePending(const UnsafeResource& resource) {
   SafeBrowsingUrlAllowList* allow_list = GetAllowListForResource(resource);
   GURL decision_url = SafeBrowsingUrlAllowList::GetDecisionUrl(resource);
@@ -24,8 +21,7 @@ bool IsUnsafeResourcePending(const UnsafeResource& resource) {
   return allow_list &&
          allow_list->IsUnsafeNavigationDecisionPending(decision_url,
                                                        &pending_threat_types) &&
-         pending_threat_types.find(resource.threat_type) !=
-             pending_threat_types.end();
+         base::Contains(pending_threat_types, resource.threat_type);
 }
 }  // namespace
 
@@ -54,7 +50,7 @@ PendingUnsafeResourceStorage::PendingUnsafeResourceStorage(
   DCHECK(IsUnsafeResourcePending(resource));
   // Reset the resource's callback to prevent misuse.
   resource_.value().callback = base::DoNothing();
-  // Create the policy observer for |resource|.
+  // Create the policy observer for `resource`.
   UpdatePolicyObserver();
 }
 
@@ -64,13 +60,13 @@ void PendingUnsafeResourceStorage::UpdatePolicyObserver() {
   if (resource_) {
     policy_observer_ = ResourcePolicyObserver(this);
   } else {
-    policy_observer_ = absl::nullopt;
+    policy_observer_ = std::nullopt;
   }
 }
 
 void PendingUnsafeResourceStorage::ResetResource() {
-  resource_ = absl::nullopt;
-  policy_observer_ = absl::nullopt;
+  resource_ = std::nullopt;
+  policy_observer_ = std::nullopt;
 }
 
 #pragma mark - PendingUnsafeResourceStorage::ResourcePolicyObserver
@@ -111,7 +107,7 @@ void PendingUnsafeResourceStorage::ResourcePolicyObserver::ThreatPolicyUpdated(
   }
 
   storage_->ResetResource();
-  // ResetResource() destroys |this|, so no additional code should be added.
+  // ResetResource() destroys `this`, so no additional code should be added.
 }
 
 void PendingUnsafeResourceStorage::ResourcePolicyObserver::
@@ -123,16 +119,16 @@ void PendingUnsafeResourceStorage::ResourcePolicyObserver::
   const UnsafeResource* resource = storage_->resource();
   if (policy == SafeBrowsingUrlAllowList::Policy::kPending ||
       url != resource->navigation_url ||
-      threat_types.find(resource->threat_type) == threat_types.end()) {
+      !base::Contains(threat_types, resource->threat_type)) {
     return;
   }
 
   storage_->ResetResource();
-  // ResetResource() destroys |this|, so no additional code should be added.
+  // ResetResource() destroys `this`, so no additional code should be added.
 }
 
 void PendingUnsafeResourceStorage::ResourcePolicyObserver::
     SafeBrowsingAllowListDestroyed(SafeBrowsingUrlAllowList* allow_list) {
   storage_->ResetResource();
-  // ResetResource() destroys |this|, so no additional code should be added.
+  // ResetResource() destroys `this`, so no additional code should be added.
 }

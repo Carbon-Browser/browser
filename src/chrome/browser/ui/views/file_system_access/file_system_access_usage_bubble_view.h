@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,14 @@
 
 #include "base/files/file_path.h"
 #include "chrome/browser/ui/views/location_bar/location_bar_bubble_delegate_view.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/models/table_model.h"
 #include "url/origin.h"
 
 class FileSystemAccessUsageBubbleView : public LocationBarBubbleDelegateView {
+  METADATA_HEADER(FileSystemAccessUsageBubbleView,
+                  LocationBarBubbleDelegateView)
+
  public:
   struct Usage {
     Usage();
@@ -73,7 +77,6 @@ class FileSystemAccessUsageBubbleView : public LocationBarBubbleDelegateView {
   void Init() override;
   void WindowClosing() override;
   void CloseBubble() override;
-  void ChildPreferredSizeChanged(views::View* child) override;
 
   void OnDialogCancelled();
 
@@ -82,6 +85,8 @@ class FileSystemAccessUsageBubbleView : public LocationBarBubbleDelegateView {
   // twice at the same time.
   static FileSystemAccessUsageBubbleView* bubble_;
 
+  raw_ptr<views::View> readable_collapsible_list_view_;
+  raw_ptr<views::View> writable_collapsible_list_view_;
   const url::Origin origin_;
   const Usage usage_;
   FilePathListModel readable_paths_model_;

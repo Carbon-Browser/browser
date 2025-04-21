@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,23 +7,24 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback.h"
+#include "base/debug/debugging_buildflags.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
 #include "base/values.h"
+#include "chromeos/ash/components/dbus/shill/shill_service_client.h"
 #include "chromeos/ash/components/network/network_configuration_handler.h"
 #include "chromeos/ash/components/network/network_handler_test_helper.h"
 #include "chromeos/ash/components/network/network_profile_handler.h"
 #include "chromeos/ash/components/network/network_ui_data.h"
 #include "chromeos/ash/components/network/shill_property_util.h"
-#include "chromeos/dbus/shill/shill_service_client.h"
 #include "components/prefs/testing_pref_service.h"
 #include "testing/gtest/include/gtest/gtest-spi.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
@@ -51,29 +52,26 @@ void ErrorCallback(const std::string& error_name) {
 // Helper function to create a VPN network using NetworkConfigurationHandler.
 void CreateTestShillConfiguration(const std::string& vpn_provider_type,
                                   bool is_managed) {
-  base::Value properties(base::Value::Type::DICTIONARY);
+  base::Value::Dict properties;
 
-  properties.SetKey(shill::kGuidProperty, base::Value("vpn_guid"));
-  properties.SetKey(shill::kTypeProperty, base::Value(shill::kTypeVPN));
-  properties.SetKey(shill::kStateProperty, base::Value(shill::kStateIdle));
-  properties.SetKey(shill::kProviderHostProperty, base::Value("vpn_host"));
-  properties.SetKey(shill::kProviderTypeProperty,
-                    base::Value(vpn_provider_type));
-  properties.SetKey(shill::kProfileProperty,
-                    base::Value(NetworkProfileHandler::GetSharedProfilePath()));
+  properties.Set(shill::kGuidProperty, "vpn_guid");
+  properties.Set(shill::kTypeProperty, shill::kTypeVPN);
+  properties.Set(shill::kStateProperty, shill::kStateIdle);
+  properties.Set(shill::kProviderHostProperty, "vpn_host");
+  properties.Set(shill::kProviderTypeProperty, vpn_provider_type);
+  properties.Set(shill::kProfileProperty,
+                 NetworkProfileHandler::GetSharedProfilePath());
 
   if (is_managed) {
-    properties.SetKey(shill::kONCSourceProperty,
-                      base::Value(shill::kONCSourceDevicePolicy));
+    properties.Set(shill::kONCSourceProperty, shill::kONCSourceDevicePolicy);
     std::unique_ptr<NetworkUIData> ui_data = NetworkUIData::CreateFromONC(
         ::onc::ONCSource::ONC_SOURCE_DEVICE_POLICY);
-    properties.SetKey(shill::kUIDataProperty,
-                      base::Value(ui_data->GetAsJson()));
+    properties.Set(shill::kUIDataProperty, ui_data->GetAsJson());
   }
 
   NetworkHandler::Get()
       ->network_configuration_handler()
-      ->CreateShillConfiguration(properties, base::DoNothing(),
+      ->CreateShillConfiguration(std::move(properties), base::DoNothing(),
                                  base::BindOnce(&ErrorCallback));
   base::RunLoop().RunUntilIdle();
 }
@@ -146,10 +144,10 @@ TEST_F(VpnNetworkMetricsHelperTest, LogVpnVPNConfigurationSource) {
     ExpectConfigurationSourceCounts(it.first.c_str(), /*manual_count=*/0,
                                     /*policy_count=*/0);
 
-// Emitting a metric for an unknown VPN provider will always cause a NOTREACHED
-// to be hit. This can cause a CHECK to fail, depending on the build flags. We
-// catch any failing CHECK below by asserting that we will crash when emitting.
-#if !BUILDFLAG(ENABLE_LOG_ERROR_NOT_REACHED)
+// Emitting a metric for an unknown VPN provider will always cause a
+// DUMP_WILL_BE_NOTREACHED() to be hit. This is fatal outside official builds,
+// so make sure that we die in those configurations.
+#if !defined(OFFICIAL_BUILD)
     if (it.first == kTestUnknownVpn) {
       ASSERT_DEATH(
           {
@@ -167,7 +165,7 @@ TEST_F(VpnNetworkMetricsHelperTest, LogVpnVPNConfigurationSource) {
                                       /*policy_count=*/0);
       continue;
     }
-#endif  // !BUILDFLAG(ENABLE_LOG_ERROR_NOT_REACHED)
+#endif  // !defined(OFFICIAL_BUILD)
 
     CreateTestShillConfiguration(it.first, /*is_managed=*/false);
     ExpectConfigurationSourceCounts(it.second, /*manual_count=*/1,
@@ -181,4 +179,4 @@ TEST_F(VpnNetworkMetricsHelperTest, LogVpnVPNConfigurationSource) {
   }
 }
 
-}  // namespace chromeos
+}  // namespace ash

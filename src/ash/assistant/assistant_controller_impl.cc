@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,30 +7,45 @@
 #include <algorithm>
 #include <utility>
 
-#include "ash/accessibility/accessibility_controller_impl.h"
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/assistant/util/deep_link_util.h"
 #include "ash/capture_mode/capture_mode_controller.h"
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/android_intent_helper.h"
+#include "ash/public/cpp/assistant/assistant_state.h"
 #include "ash/public/cpp/new_window_delegate.h"
-#include "ash/public/cpp/style/scoped_light_mode_as_default.h"
+#include "ash/public/cpp/session/session_types.h"
 #include "ash/public/mojom/assistant_volume_control.mojom.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_browser_delegate.h"
+#include "chromeos/ash/services/assistant/public/cpp/assistant_enums.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_prefs.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
 #include "chromeos/ash/services/assistant/public/cpp/features.h"
-#include "chromeos/services/libassistant/public/cpp/assistant_feedback.h"
+#include "chromeos/ash/services/libassistant/public/cpp/assistant_feedback.h"
+#include "components/account_id/account_id.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "url/gurl.h"
 
 namespace ash {
 
+namespace {
+
+const AccountId& GetActiveUserAccountId() {
+  const UserSession* active_user_session =
+      Shell::Get()->session_controller()->GetUserSession(0);
+  DCHECK(active_user_session);
+  return active_user_session->user_info.account_id;
+}
+
+}  // namespace
+
 AssistantControllerImpl::AssistantControllerImpl() {
+  Shell::Get()->AddShellObserver(this);
   assistant_state_controller_.AddObserver(this);
   CrasAudioHandler::Get()->AddAudioObserver(this);
   AddObserver(this);
@@ -45,14 +60,7 @@ AssistantControllerImpl::AssistantControllerImpl() {
   NotifyConstructed();
 }
 
-AssistantControllerImpl::~AssistantControllerImpl() {
-  NotifyDestroying();
-
-  CrasAudioHandler::Get()->RemoveAudioObserver(this);
-  Shell::Get()->accessibility_controller()->RemoveObserver(this);
-  assistant_state_controller_.RemoveObserver(this);
-  RemoveObserver(this);
-}
+AssistantControllerImpl::~AssistantControllerImpl() = default;
 
 // static
 void AssistantControllerImpl::RegisterProfilePrefs(
@@ -63,11 +71,13 @@ void AssistantControllerImpl::RegisterProfilePrefs(
 
 void AssistantControllerImpl::BindReceiver(
     mojo::PendingReceiver<mojom::AssistantVolumeControl> receiver) {
+  if (assistant_volume_control_receiver_.is_bound()) {
+    assistant_volume_control_receiver_.reset();
+  }
   assistant_volume_control_receiver_.Bind(std::move(receiver));
 }
 
-void AssistantControllerImpl::SetAssistant(
-    chromeos::assistant::Assistant* assistant) {
+void AssistantControllerImpl::SetAssistant(assistant::Assistant* assistant) {
   assistant_ = assistant;
 
   // Provide reference to sub-controllers.
@@ -75,11 +85,6 @@ void AssistantControllerImpl::SetAssistant(
   assistant_interaction_controller_.SetAssistant(assistant);
   assistant_notification_controller_.SetAssistant(assistant);
   assistant_ui_controller_.SetAssistant(assistant);
-
-  OnAccessibilityStatusChanged();
-
-  ScopedAssistantLightModeAsDefault scoped_light_mode_as_default;
-  OnColorModeChanged(DarkLightModeControllerImpl::Get()->IsDarkModeEnabled());
 
   if (assistant) {
     for (AssistantControllerObserver& observer : observers_)
@@ -91,7 +96,11 @@ void AssistantControllerImpl::SendAssistantFeedback(
     bool assistant_debug_info_allowed,
     const std::string& feedback_description,
     const std::string& screenshot_png) {
-  chromeos::assistant::AssistantFeedback assistant_feedback;
+  if (!IsAssistantReady()) {
+    return;
+  }
+
+  assistant::AssistantFeedback assistant_feedback;
   assistant_feedback.assistant_debug_info_allowed =
       assistant_debug_info_allowed;
   assistant_feedback.description = feedback_description;
@@ -134,6 +143,7 @@ void AssistantControllerImpl::DownloadImage(
             })");
 
   ImageDownloader::Get()->Download(url, kNetworkTrafficAnnotationTag,
+                                   GetActiveUserAccountId(),
                                    std::move(callback));
 }
 
@@ -152,7 +162,7 @@ void AssistantControllerImpl::OpenUrl(const GURL& url,
                                       bool from_server) {
   // app_list search result will be opened by `OpenUrl()`. However, the
   // `assistant_` may not be ready. Show a toast to indicate it.
-  if (!assistant_) {
+  if (!IsAssistantReady()) {
     assistant_ui_controller_.ShowUnboundErrorToast();
     return;
   }
@@ -165,7 +175,6 @@ void AssistantControllerImpl::OpenUrl(const GURL& url,
   auto* android_helper = AndroidIntentHelper::GetInstance();
   if (IsAndroidIntent(url) && !android_helper) {
     NOTREACHED();
-    return;
   }
 
   // Give observers an opportunity to perform any necessary handling before we
@@ -175,7 +184,7 @@ void AssistantControllerImpl::OpenUrl(const GURL& url,
   if (IsAndroidIntent(url)) {
     android_helper->LaunchAndroidIntent(url.spec());
   } else {
-    chromeos::assistant::AssistantBrowserDelegate::Get()->OpenUrl(url);
+    assistant::AssistantBrowserDelegate::Get()->OpenUrl(url);
   }
   NotifyUrlOpened(url, from_server);
 }
@@ -211,13 +220,13 @@ void AssistantControllerImpl::OnDeepLinkReceived(
 
       // Close the assistant UI so that the feedback page is visible.
       assistant_ui_controller_.CloseUi(
-          chromeos::assistant::AssistantExitPoint::kUnspecified);
+          assistant::AssistantExitPoint::kUnspecified);
       break;
     case DeepLinkType::kScreenshot:
       // We close the UI before taking the screenshot as it's probably not the
       // user's intention to include the Assistant in the picture.
       assistant_ui_controller_.CloseUi(
-          chromeos::assistant::AssistantExitPoint::kScreenshot);
+          assistant::AssistantExitPoint::kScreenshot);
       CaptureModeController::Get()->CaptureScreenshotsOfAllDisplays();
       break;
     case DeepLinkType::kTaskManager:
@@ -270,8 +279,9 @@ void AssistantControllerImpl::OnOutputNodeVolumeChanged(uint64_t node,
 }
 
 void AssistantControllerImpl::OnAccessibilityStatusChanged() {
-  if (!assistant_)
+  if (!IsAssistantReady()) {
     return;
+  }
 
   // The Assistant service needs to be informed of changes to accessibility
   // state so that it can turn on/off A11Y features appropriately.
@@ -280,14 +290,33 @@ void AssistantControllerImpl::OnAccessibilityStatusChanged() {
 }
 
 void AssistantControllerImpl::OnColorModeChanged(bool dark_mode_enabled) {
-  if (!assistant_)
+  if (!IsAssistantReady()) {
     return;
+  }
 
   assistant_->OnColorModeChanged(dark_mode_enabled);
 }
 
+void AssistantControllerImpl::OnShellDestroying() {
+  NotifyDestroying();
+  CrasAudioHandler::Get()->RemoveAudioObserver(this);
+  Shell::Get()->accessibility_controller()->RemoveObserver(this);
+  assistant_state_controller_.RemoveObserver(this);
+  Shell::Get()->RemoveShellObserver(this);
+  RemoveObserver(this);
+}
+
 bool AssistantControllerImpl::IsAssistantReady() const {
-  return !!assistant_;
+  if (!assistant_) {
+    return false;
+  }
+
+  if (AssistantState::Get()->assistant_status() ==
+      assistant::AssistantStatus::NOT_READY) {
+    return false;
+  }
+
+  return true;
 }
 
 void AssistantControllerImpl::NotifyConstructed() {
@@ -326,16 +355,25 @@ void AssistantControllerImpl::NotifyUrlOpened(const GURL& url,
 }
 
 void AssistantControllerImpl::OnAssistantStatusChanged(
-    chromeos::assistant::AssistantStatus status) {
-  if (status == chromeos::assistant::AssistantStatus::NOT_READY)
-    assistant_ui_controller_.CloseUi(
-        chromeos::assistant::AssistantExitPoint::kUnspecified);
+    assistant::AssistantStatus status) {
+  switch (status) {
+    case assistant::AssistantStatus::NOT_READY:
+      assistant_volume_control_receiver_.reset();
+      assistant_ui_controller_.CloseUi(
+          assistant::AssistantExitPoint::kUnspecified);
+      break;
+    case assistant::AssistantStatus::READY:
+      OnAccessibilityStatusChanged();
+      OnColorModeChanged(
+          DarkLightModeControllerImpl::Get()->IsDarkModeEnabled());
+      break;
+  }
 }
 
 void AssistantControllerImpl::OnLockedFullScreenStateChanged(bool enabled) {
   if (enabled)
     assistant_ui_controller_.CloseUi(
-        chromeos::assistant::AssistantExitPoint::kUnspecified);
+        assistant::AssistantExitPoint::kUnspecified);
 }
 
 void AssistantControllerImpl::BindVolumeControl(

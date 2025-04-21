@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,16 +7,17 @@
 
 #include "base/no_destructor.h"
 #include "base/observer_list.h"
+#include "chrome/browser/media/webrtc/desktop_media_picker.h"
 
 // A singleton that acts as a rendezvous for dialog observers to register and
 // the dialog managers/delegates to post their activities.
-// TODO(crbug/953495): Merge this into DesktopMediaPickerFactoryImpl.
+// TODO(crbug.com/41453310): Merge this into DesktopMediaPickerFactoryImpl.
 class DesktopMediaPickerManager {
  public:
   class DialogObserver : public base::CheckedObserver {
    public:
     // Called when a media dialog is opened/shown.
-    virtual void OnDialogOpened() = 0;
+    virtual void OnDialogOpened(const DesktopMediaPicker::Params&) = 0;
 
     // Called when a media dialog is closed/hidden.
     virtual void OnDialogClosed() = 0;
@@ -33,7 +34,7 @@ class DesktopMediaPickerManager {
   void RemoveObserver(DialogObserver* observer);
 
   // For the notifiers
-  void OnShowDialog();
+  void OnShowDialog(const DesktopMediaPicker::Params&);
   void OnHideDialog();
 
  private:

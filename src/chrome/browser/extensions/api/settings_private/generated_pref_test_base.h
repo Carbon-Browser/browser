@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,7 @@ enum class PrefSetting {
 };
 
 // Possible preference sources supported by TestingPrefService.
-// TODO(crbug.com/1063281): Extend TestingPrefService to support prefs set for
+// TODO(crbug.com/40123235): Extend TestingPrefService to support prefs set for
 //                          supervised users.
 enum class PrefSource {
   kExtension,

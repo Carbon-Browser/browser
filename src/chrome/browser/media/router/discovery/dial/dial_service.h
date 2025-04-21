@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -60,7 +60,7 @@ class DialService {
     virtual ~Client() = default;
   };
 
-  virtual ~DialService() {}
+  virtual ~DialService() = default;
 
   // Starts a new round of discovery.  Returns |true| if discovery was started
   // successfully or there is already one active. Returns |false| on error.

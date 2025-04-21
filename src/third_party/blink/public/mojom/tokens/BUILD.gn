@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -14,6 +14,12 @@ mojom_component("tokens") {
   shared_cpp_typemaps = [
     {
       types = [
+        # DOCUMENT TOKENS
+        {
+          mojom = "blink.mojom.DocumentToken"
+          cpp = "::blink::DocumentToken"
+        },
+
         # FRAME TOKENS
         {
           mojom = "blink.mojom.LocalFrameToken"
@@ -64,6 +70,12 @@ mojom_component("tokens") {
           cpp = "::blink::WorkletToken"
         },
 
+        # SHADOW REALM TOKENS
+        {
+          mojom = "blink.mojom.ShadowRealmToken"
+          cpp = "::blink::ShadowRealmToken"
+        },
+
         # OTHER TOKENS
         #
         # Keep this section last.
@@ -84,12 +96,32 @@ mojom_component("tokens") {
           cpp = "::blink::ExecutionContextToken"
         },
         {
-          mojom = "blink.mojom.PortalToken"
-          cpp = "::blink::PortalToken"
+          mojom = "blink.mojom.SameDocNavigationScreenshotDestinationToken"
+          cpp = "::blink::SameDocNavigationScreenshotDestinationToken"
         },
         {
           mojom = "blink.mojom.V8ContextToken"
           cpp = "::blink::V8ContextToken"
+        },
+        {
+          mojom = "blink.mojom.ViewTransitionToken"
+          cpp = "::blink::ViewTransitionToken"
+        },
+        {
+          mojom = "blink.mojom.WebGPUExecutionContextToken"
+          cpp = "::blink::WebGPUExecutionContextToken"
+        },
+        {
+          mojom = "blink.mojom.WebNNContextToken"
+          cpp = "::blink::WebNNContextToken"
+        },
+        {
+          mojom = "blink.mojom.WebNNPendingConstantToken"
+          cpp = "::blink::WebNNPendingConstantToken"
+        },
+        {
+          mojom = "blink.mojom.WebNNTensorToken"
+          cpp = "::blink::WebNNTensorToken"
         },
       ]
       traits_headers = [
@@ -114,6 +146,11 @@ mojom_component("tokens") {
   export_header_blink = "third_party/blink/renderer/platform/platform_export.h"
 
   generate_java = true
+
+  webui_module_path = "/"
+
+  # Used from locations that rely on legacy bindings.
+  generate_legacy_js_bindings = true
 }
 
 source_set("tokens_traits_headers") {

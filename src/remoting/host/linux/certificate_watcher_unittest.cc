@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,11 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -81,15 +82,13 @@ class CertificateWatcherTest : public testing::Test {
   }
 
   void TouchFileTask(const char* filename) {
-    std::string testWriteString = std::to_string(rand());
+    std::string testWriteString = base::NumberToString(rand());
     base::FilePath path = temp_dir_.GetPath().AppendASCII(filename);
 
     if (base::PathExists(path)) {
       EXPECT_TRUE(base::AppendToFile(path, testWriteString));
     } else {
-      EXPECT_EQ(static_cast<int>(testWriteString.length()),
-                base::WriteFile(path, testWriteString.c_str(),
-                                testWriteString.length()));
+      ASSERT_TRUE(base::WriteFile(path, testWriteString));
     }
   }
 

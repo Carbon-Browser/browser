@@ -1,8 +1,8 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//build/config/chromeos/ui_mode.gni")
+import("//build/config/features.gni")
 
 static_library("core") {
   sources = [
@@ -10,12 +10,7 @@ static_library("core") {
     "android_app_description.h",
     "android_app_description_tools.cc",
     "android_app_description_tools.h",
-    "autofill_card_validation.cc",
-    "autofill_card_validation.h",
-    "basic_card_response.cc",
-    "basic_card_response.h",
-    "can_make_payment_query.cc",
-    "can_make_payment_query.h",
+    "csp_checker.h",
     "currency_formatter.cc",
     "currency_formatter.h",
     "error_logger.cc",
@@ -24,6 +19,8 @@ static_library("core") {
     "error_message_util.h",
     "features.cc",
     "features.h",
+    "has_enrolled_instrument_query.cc",
+    "has_enrolled_instrument_query.h",
     "journey_logger.cc",
     "journey_logger.h",
     "payer_data.cc",
@@ -51,6 +48,8 @@ static_library("core") {
     "payment_request_data_util.h",
     "payment_request_delegate.cc",
     "payment_request_delegate.h",
+    "payment_request_metrics.cc",
+    "payment_request_metrics.h",
     "payment_shipping_option.cc",
     "payment_shipping_option.h",
     "payments_experimental_features.cc",
@@ -85,12 +84,13 @@ static_library("core") {
     ":error_strings",
     ":method_strings",
     "//base",
-    "//build:chromeos_buildflags",
+    "//build:blink_buildflags",
     "//components/autofill/core/browser",
     "//components/keyed_service/core",
     "//components/link_header_util",
     "//components/payments/mojom",
     "//components/pref_registry",
+    "//components/prefs",
     "//components/strings:components_strings_grit",
     "//net",
     "//services/metrics/public/cpp:metrics_cpp",
@@ -100,6 +100,10 @@ static_library("core") {
     "//ui/base",
     "//url",
   ]
+
+  if (use_blink) {
+    deps += [ "//third_party/blink/public:runtime_features_for_public" ]
+  }
 
   public_deps = [
     "//services/network/public/cpp",
@@ -116,7 +120,7 @@ static_library("error_strings") {
     "native_error_strings.h",
   ]
 
-  if (is_chromeos_ash) {
+  if (is_chromeos) {
     sources += [
       "chrome_os_error_strings.cc",
       "chrome_os_error_strings.h",
@@ -134,6 +138,8 @@ static_library("method_strings") {
 static_library("test_support") {
   testonly = true
   sources = [
+    "const_csp_checker.cc",
+    "const_csp_checker.h",
     "payments_test_util.cc",
     "payments_test_util.h",
     "test_payment_manifest_downloader.cc",
@@ -161,8 +167,10 @@ source_set("unit_tests") {
   testonly = true
   sources = [
     "android_app_description_tools_unittest.cc",
-    "can_make_payment_query_unittest.cc",
+    "const_csp_checker_unittest.cc",
     "currency_formatter_unittest.cc",
+    "error_message_util_unittest.cc",
+    "has_enrolled_instrument_query_unittest.cc",
     "journey_logger_unittest.cc",
     "payment_currency_amount_unittest.cc",
     "payment_details_modifier_unittest.cc",
@@ -171,6 +179,7 @@ source_set("unit_tests") {
     "payment_item_unittest.cc",
     "payment_manifest_downloader_unittest.cc",
     "payment_method_data_unittest.cc",
+    "payment_request_metrics_unittest.cc",
     "payment_shipping_option_unittest.cc",
     "payments_validators_unittest.cc",
     "secure_payment_confirmation_credential_unittest.cc",
@@ -179,7 +188,6 @@ source_set("unit_tests") {
 
   if (!is_android) {
     sources += [
-      "basic_card_response_unittest.cc",
       "payment_address_unittest.cc",
       "payment_options_unittest.cc",
       "payment_request_data_util_unittest.cc",
@@ -196,6 +204,8 @@ source_set("unit_tests") {
     "//components/autofill/core/browser",
     "//components/autofill/core/browser:test_support",
     "//components/leveldb_proto:leveldb_proto",
+    "//components/prefs",
+    "//components/prefs:test_support",
     "//components/strings:components_strings_grit",
     "//components/ukm",
     "//components/ukm:test_support",

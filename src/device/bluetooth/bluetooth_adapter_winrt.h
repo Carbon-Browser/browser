@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
-#include "base/callback_helpers.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/threading/thread_checker.h"
 #include "device/bluetooth/bluetooth_adapter.h"
 #include "device/bluetooth/bluetooth_export.h"
@@ -230,21 +230,21 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothAdapterWinrt : public BluetoothAdapter {
       adapter_;
 
   Microsoft::WRL::ComPtr<ABI::Windows::Devices::Radios::IRadio> radio_;
-  absl::optional<EventRegistrationToken> radio_state_changed_token_;
+  std::optional<EventRegistrationToken> radio_state_changed_token_;
 
   Microsoft::WRL::ComPtr<ABI::Windows::Devices::Enumeration::IDeviceWatcher>
       powered_radio_watcher_;
-  absl::optional<EventRegistrationToken> powered_radio_added_token_;
-  absl::optional<EventRegistrationToken> powered_radio_removed_token_;
-  absl::optional<EventRegistrationToken> powered_radios_enumerated_token_;
+  std::optional<EventRegistrationToken> powered_radio_added_token_;
+  std::optional<EventRegistrationToken> powered_radio_removed_token_;
+  std::optional<EventRegistrationToken> powered_radios_enumerated_token_;
   size_t num_powered_radios_ = 0;
 
   bool radio_was_powered_ = false;
 
   std::vector<scoped_refptr<BluetoothAdvertisement>> pending_advertisements_;
 
-  absl::optional<EventRegistrationToken> advertisement_received_token_;
-  absl::optional<EventRegistrationToken> advertisement_watcher_stopped_token_;
+  std::optional<EventRegistrationToken> advertisement_received_token_;
+  std::optional<EventRegistrationToken> advertisement_watcher_stopped_token_;
   Microsoft::WRL::ComPtr<ABI::Windows::Devices::Bluetooth::Advertisement::
                              IBluetoothLEAdvertisementWatcher>
       ble_advertisement_watcher_;

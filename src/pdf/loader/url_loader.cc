@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,11 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/containers/span.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/weak_ptr.h"
 #include "base/notreached.h"
 #include "net/base/net_errors.h"
@@ -44,16 +46,16 @@ class HeadersToString final : public blink::WebHTTPHeaderVisitor {
 
   void VisitHeader(const blink::WebString& name,
                    const blink::WebString& value) override {
-    if (!buffer_ref_.empty())
-      buffer_ref_.append("\n");
-    buffer_ref_.append(name.Utf8());
-    buffer_ref_.append(": ");
-    buffer_ref_.append(value.Utf8());
+    if (!buffer_ref_->empty())
+      buffer_ref_->append("\n");
+    buffer_ref_->append(name.Utf8());
+    buffer_ref_->append(": ");
+    buffer_ref_->append(value.Utf8());
   }
 
  private:
   // Reference allows writing directly into `UrlResponse::headers`.
-  std::string& buffer_ref_;
+  const raw_ref<std::string, DanglingUntriaged> buffer_ref_;
 };
 
 }  // namespace
@@ -91,7 +93,7 @@ void UrlLoader::Open(const UrlRequest& request,
   }
 
   // Modeled on `content::CreateWebURLRequest()`.
-  // TODO(crbug.com/1129291): The original code performs additional validations
+  // TODO(crbug.com/40149338): The original code performs additional validations
   // that we probably don't need in the new process model.
   blink::WebURLRequest blink_request;
   blink_request.SetUrl(
@@ -114,7 +116,7 @@ void UrlLoader::Open(const UrlRequest& request,
   if (!request.body.empty()) {
     blink::WebHTTPBody body;
     body.Initialize();
-    body.AppendData(request.body);
+    body.AppendData(blink::WebData(base::as_byte_span(request.body)));
     blink_request.SetHttpBody(body);
   }
 
@@ -132,7 +134,7 @@ void UrlLoader::Open(const UrlRequest& request,
   blink_request.SetRequestDestination(
       network::mojom::RequestDestination::kEmbed);
 
-  // TODO(crbug.com/822081): Revisit whether we need universal access.
+  // TODO(crbug.com/40567141): Revisit whether we need universal access.
   blink::WebAssociatedURLLoaderOptions options;
   options.grant_universal_access = true;
   ignore_redirects_ = request.ignore_redirects;
@@ -174,7 +176,7 @@ bool UrlLoader::WillFollowRedirect(
     const blink::WebURLResponse& redirect_response) {
   DCHECK_EQ(state_, LoadingState::kOpening);
 
-  // TODO(crbug.com/1129291): The original code performs additional validations
+  // TODO(crbug.com/40149338): The original code performs additional validations
   // that we probably don't need in the new process model.
 
   // Note that `pp::URLLoader::FollowRedirect()` is not supported, so the
@@ -208,14 +210,15 @@ void UrlLoader::DidDownloadData(uint64_t data_length) {
 }
 
 // Modeled on `content::PepperURLLoaderHost::DidReceiveData()`.
-void UrlLoader::DidReceiveData(const char* data, int data_length) {
+void UrlLoader::DidReceiveData(base::span<const char> data) {
   DCHECK_EQ(state_, LoadingState::kStreamingData);
 
   // It's surprisingly difficult to guarantee that this is always >0.
-  if (data_length < 1)
+  if (data.empty()) {
     return;
+  }
 
-  buffer_.insert(buffer_.end(), data, data + data_length);
+  buffer_.insert(buffer_.end(), data.begin(), data.end());
 
   // Defer loading if the buffer is too full.
   if (!deferring_loading_ && buffer_.size() >= buffer_upper_threshold_) {

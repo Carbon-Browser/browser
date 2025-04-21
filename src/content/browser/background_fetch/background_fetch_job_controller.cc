@@ -1,14 +1,16 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "content/browser/background_fetch/background_fetch_job_controller.h"
+
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/not_fatal_until.h"
 #include "content/browser/background_fetch/background_fetch_cross_origin_filter.h"
 #include "content/browser/background_fetch/background_fetch_data_manager.h"
-#include "content/browser/background_fetch/background_fetch_job_controller.h"
 #include "content/browser/background_fetch/background_fetch_request_match_params.h"
 #include "content/public/browser/browser_thread.h"
 #include "services/network/public/cpp/cors/cors.h"
@@ -35,7 +37,7 @@ bool IsMixedContent(const BackgroundFetchRequestInfo& request) {
 // Whether the |request| needs CORS preflight.
 // Requests that require CORS preflights are temporarily blocked, because the
 // browser side of Background Fetch doesn't yet support performing CORS
-// checks. TODO(crbug.com/711354): Remove this temporary block.
+// checks. TODO(crbug.com/40515511): Remove this temporary block.
 bool RequiresCorsPreflight(const BackgroundFetchRequestInfo& request,
                            const url::Origin& origin) {
   const blink::mojom::FetchAPIRequestPtr& fetch_request =
@@ -43,7 +45,8 @@ bool RequiresCorsPreflight(const BackgroundFetchRequestInfo& request,
 
   // Same origin requests don't require a CORS preflight.
   // https://fetch.spec.whatwg.org/#main-fetch
-  // TODO(crbug.com/711354): Make sure that cross-origin redirects are disabled.
+  // TODO(crbug.com/40515511): Make sure that cross-origin redirects are
+  // disabled.
   if (url::IsSameOriginWith(origin.GetURL(), fetch_request->url))
     return false;
 
@@ -97,7 +100,7 @@ void BackgroundFetchJobController::InitializeRequestStatus(
     std::vector<scoped_refptr<BackgroundFetchRequestInfo>>
         active_fetch_requests,
     bool start_paused,
-    absl::optional<net::IsolationInfo> isolation_info) {
+    std::optional<net::IsolationInfo> isolation_info) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
   // Don't allow double initialization.
@@ -113,8 +116,6 @@ void BackgroundFetchJobController::InitializeRequestStatus(
   for (const auto& request_info : active_fetch_requests)
     active_guids.push_back(request_info->download_guid());
 
-  // TODO(https://crbug.com/1199077): Should we update
-  // BackgroundFetchDescription to StorageKey?
   auto fetch_description = std::make_unique<BackgroundFetchDescription>(
       registration_id().unique_id(), registration_id().storage_key().origin(),
       options_->title, icon_, completed_downloads_, total_downloads_,
@@ -176,7 +177,7 @@ void BackgroundFetchJobController::DidStartRequest(
 
   request->PopulateWithResponse(std::move(response));
 
-  // TODO(crbug.com/884672): Stop the fetch if the cross origin filter fails.
+  // TODO(crbug.com/40593934): Stop the fetch if the cross origin filter fails.
   BackgroundFetchCrossOriginFilter filter(
       registration_id_.storage_key().origin(), *request);
   request->set_can_populate_body(filter.CanPopulateBody());
@@ -367,7 +368,8 @@ void BackgroundFetchJobController::NotifyDownloadComplete(
   --pending_downloads_;
   ++completed_downloads_;
   auto it = active_request_finished_callbacks_.find(request->download_guid());
-  DCHECK(it != active_request_finished_callbacks_.end());
+  CHECK(it != active_request_finished_callbacks_.end(),
+        base::NotFatalUntil::M130);
   std::move(it->second).Run(registration_id(), std::move(request));
   active_request_finished_callbacks_.erase(it);
 }

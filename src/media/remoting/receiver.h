@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,19 +7,20 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/timer/timer.h"
-#include "components/cast_streaming/public/rpc_call_message_handler.h"
 #include "media/base/buffering_state.h"
 #include "media/base/demuxer_stream.h"
 #include "media/base/renderer.h"
 #include "media/base/renderer_client.h"
+#include "media/cast/openscreen/rpc_call_message_handler.h"
+#include "third_party/openscreen/src/cast/streaming/public/rpc_messenger.h"
 #include "third_party/openscreen/src/cast/streaming/remoting.pb.h"
-#include "third_party/openscreen/src/cast/streaming/rpc_messenger.h"
 
 namespace openscreen {
 namespace cast {
@@ -46,15 +47,14 @@ class ReceiverController;
 // via RPC calls. When Receiver receives RPC calls, it will call the
 // corresponding functions of |renderer_| to control the media playback of
 // the remoting media.
-class Receiver final
-    : public Renderer,
-      public RendererClient,
-      public cast_streaming::remoting::RpcRendererCallMessageHandler {
+class Receiver final : public Renderer,
+                       public RendererClient,
+                       public media::cast::RpcRendererCallMessageHandler {
  public:
   Receiver(int rpc_handle,
            int remote_handle,
            ReceiverController* receiver_controller,
-           const scoped_refptr<base::SingleThreadTaskRunner>& media_task_runner,
+           const scoped_refptr<base::SequencedTaskRunner>& media_task_runner,
            std::unique_ptr<Renderer> renderer,
            base::OnceCallback<void(int)> acquire_renderer_done_cb);
   ~Receiver() override;
@@ -64,12 +64,13 @@ class Receiver final
                   RendererClient* client,
                   PipelineStatusCallback init_cb) override;
   void SetCdm(CdmContext* cdm_context, CdmAttachedCB cdm_attached_cb) override;
-  void SetLatencyHint(absl::optional<base::TimeDelta> latency_hint) override;
+  void SetLatencyHint(std::optional<base::TimeDelta> latency_hint) override;
   void Flush(base::OnceClosure flush_cb) override;
   void StartPlayingFrom(base::TimeDelta time) override;
   void SetPlaybackRate(double playback_rate) override;
   void SetVolume(float volume) override;
   base::TimeDelta GetMediaTime() override;
+  RendererType GetRendererType() override;
 
   // RendererClient implementation.
   void OnError(PipelineStatus status) override;
@@ -83,7 +84,7 @@ class Receiver final
   void OnVideoConfigChange(const VideoDecoderConfig& config) override;
   void OnVideoNaturalSizeChange(const gfx::Size& size) override;
   void OnVideoOpacityChange(bool opaque) override;
-  void OnVideoFrameRateChange(absl::optional<int>) override;
+  void OnVideoFrameRateChange(std::optional<int>) override;
 
   // Used to set |remote_handle_| after Receiver is created, because the remote
   // handle might be received after Receiver is created.
@@ -92,7 +93,7 @@ class Receiver final
   base::WeakPtr<Receiver> GetWeakPtr() { return weak_factory_.GetWeakPtr(); }
 
  private:
-  // cast_streaming::remoting::RpcCallMessageHandler overrides.
+  // media::cast::RpcCallMessageHandler overrides.
   void OnRpcInitialize() override;
   void OnRpcSetPlaybackRate(double playback_rate) override;
   void OnRpcFlush(uint32_t audio_count, uint32_t video_count) override;
@@ -140,7 +141,7 @@ class Receiver final
   const scoped_refptr<base::SingleThreadTaskRunner> main_task_runner_;
 
   // Media tasks should run on media thread.
-  const scoped_refptr<base::SingleThreadTaskRunner> media_task_runner_;
+  const scoped_refptr<base::SequencedTaskRunner> media_task_runner_;
 
   // |renderer_| is the real renderer to render media.
   std::unique_ptr<Renderer> renderer_;

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/scoped_observation.h"
 #include "base/task/sequenced_task_runner.h"
 #include "components/component_updater/component_updater_service.h"
@@ -42,7 +42,7 @@ class ModuleListComponentUpdater
   void InitializeOnUIThread();
 
   // ComponentUpdateService::Observer:
-  void OnEvent(Events event, const std::string& component_id) override;
+  void OnEvent(const update_client::CrxUpdateItem& item) override;
 
   // Holds the id of the Third Party Module List component.
   std::string module_list_component_id_;

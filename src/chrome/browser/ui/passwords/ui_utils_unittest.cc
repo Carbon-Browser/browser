@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -201,4 +201,9 @@ TEST(ManagePasswordsViewUtilTest, GetManagePasswordsDialogTitleText) {
         base::ASCIIToUTF16(kDomainsTestCases[i].expected_domain_placeholder);
     EXPECT_TRUE(title.find(domain) != std::u16string::npos);
   }
+}
+
+TEST(ManagePasswordsViewUtilTest,
+     GetConfirmationManagePasswordsDialogTitleText) {
+  EXPECT_NE(std::u16string(), GetConfirmationManagePasswordsDialogTitleText());
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -81,7 +81,8 @@ class COMPONENT_EXPORT(IPC) SyncMessageFilter : public MessageFilter,
   // The message loop where the Channel lives.
   scoped_refptr<base::SingleThreadTaskRunner> io_task_runner_;
 
-  typedef std::set<PendingSyncMsg*> PendingSyncMessages;
+  typedef std::set<raw_ptr<PendingSyncMsg, SetExperimental>>
+      PendingSyncMessages;
   PendingSyncMessages pending_sync_messages_;
 
   // Messages waiting to be delivered after IO initialization.

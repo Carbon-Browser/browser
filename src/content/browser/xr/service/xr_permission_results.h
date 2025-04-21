@@ -1,15 +1,16 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_BROWSER_XR_SERVICE_XR_PERMISSION_RESULTS_H_
 #define CONTENT_BROWSER_XR_SERVICE_XR_PERMISSION_RESULTS_H_
 
+#include <optional>
 #include <vector>
 
 #include "base/containers/flat_map.h"
 #include "device/vr/public/mojom/vr_service.mojom-shared.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "device/vr/public/mojom/xr_session.mojom-shared.h"
 #include "third_party/blink/public/common/permissions/permission_utils.h"
 
 namespace content {
@@ -33,9 +34,9 @@ class XrPermissionResults {
   // satisfied, `false` otherwise.
   bool HasPermissionsFor(device::mojom::XRSessionFeature feature) const;
 
-  static absl::optional<blink::PermissionType> GetPermissionFor(
+  static std::optional<blink::PermissionType> GetPermissionFor(
       device::mojom::XRSessionMode mode);
-  static absl::optional<blink::PermissionType> GetPermissionFor(
+  static std::optional<blink::PermissionType> GetPermissionFor(
       device::mojom::XRSessionFeature feature);
 
  private:

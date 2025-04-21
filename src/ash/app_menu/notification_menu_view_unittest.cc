@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include "ash/app_menu/notification_item_view.h"
 #include "ash/app_menu/notification_menu_view_test_api.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
@@ -18,6 +19,7 @@
 #include "ui/message_center/public/cpp/notification.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/test/views_test_base.h"
+#include "ui/views/test/views_test_utils.h"
 #include "ui/views/view.h"
 #include "ui/views/widget/widget_delegate.h"
 #include "ui/views/widget/widget_utils.h"
@@ -68,7 +70,8 @@ class MockNotificationMenuController : public views::SlideOutControllerDelegate,
   int overflow_added_or_removed_count_ = 0;
 
   // Owned by NotificationMenuViewTest.
-  NotificationMenuView* notification_menu_view_ = nullptr;
+  raw_ptr<NotificationMenuView, DanglingUntriaged> notification_menu_view_ =
+      nullptr;
 };
 
 }  // namespace
@@ -109,9 +112,8 @@ class NotificationMenuViewTest : public views::ViewsTestBase {
 
     widget_ = std::make_unique<views::Widget>();
     views::Widget::InitParams init_params(
-        CreateParams(views::Widget::InitParams::TYPE_POPUP));
-    init_params.ownership =
-        views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
+        CreateParams(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET,
+                     views::Widget::InitParams::TYPE_POPUP));
     init_params.activatable = views::Widget::InitParams::Activatable::kYes;
     widget_->Init(std::move(init_params));
     notification_menu_view_ =
@@ -137,7 +139,7 @@ class NotificationMenuViewTest : public views::ViewsTestBase {
         message, ui::ImageModel(), u"www.test.org", GURL(), notifier_id,
         message_center::RichNotificationData(), nullptr /* delegate */);
     notification_menu_view_->AddNotificationItemView(notification);
-    notification_menu_view_->Layout();
+    views::test::RunScheduledLayout(notification_menu_view_);
     return notification;
   }
 
@@ -167,16 +169,17 @@ class NotificationMenuViewTest : public views::ViewsTestBase {
   }
 
   void BeginScroll() {
-    DispatchGesture(ui::GestureEventDetails(ui::ET_GESTURE_SCROLL_BEGIN));
+    DispatchGesture(
+        ui::GestureEventDetails(ui::EventType::kGestureScrollBegin));
   }
 
   void EndScroll() {
-    DispatchGesture(ui::GestureEventDetails(ui::ET_GESTURE_SCROLL_END));
+    DispatchGesture(ui::GestureEventDetails(ui::EventType::kGestureScrollEnd));
   }
 
   void ScrollBy(int dx) {
     DispatchGesture(
-        ui::GestureEventDetails(ui::ET_GESTURE_SCROLL_UPDATE, dx, 0));
+        ui::GestureEventDetails(ui::EventType::kGestureScrollUpdate, dx, 0));
   }
 
   void DispatchGesture(const ui::GestureEventDetails& details) {
@@ -210,7 +213,7 @@ class NotificationMenuViewTest : public views::ViewsTestBase {
  private:
   std::unique_ptr<MockNotificationMenuController>
       mock_notification_menu_controller_;
-  NotificationMenuView* notification_menu_view_;
+  raw_ptr<NotificationMenuView, DanglingUntriaged> notification_menu_view_;
   std::unique_ptr<NotificationMenuViewTestAPI> test_api_;
   std::unique_ptr<views::Widget> widget_;
   std::unique_ptr<ui::ScopedAnimationDurationScaleMode> zero_duration_scope_;
@@ -352,7 +355,7 @@ TEST_F(NotificationMenuViewTest, SlideOut) {
 TEST_F(NotificationMenuViewTest, TapNotification) {
   AddNotification("notification_id", u"title", u"message");
   EXPECT_EQ(0, mock_notification_menu_controller()->activation_count_);
-  DispatchGesture(ui::GestureEventDetails(ui::ET_GESTURE_TAP));
+  DispatchGesture(ui::GestureEventDetails(ui::EventType::kGestureTap));
 
   EXPECT_EQ(1, mock_notification_menu_controller()->activation_count_);
 }
@@ -365,13 +368,13 @@ TEST_F(NotificationMenuViewTest, ClickNotification) {
   const auto* item =
       notification_menu_view()->GetDisplayedNotificationItemView();
   const gfx::Point cursor_location = item->GetBoundsInScreen().origin();
-  ui::MouseEvent press(ui::ET_MOUSE_PRESSED, cursor_location, cursor_location,
-                       ui::EventTimeForNow(), ui::EF_LEFT_MOUSE_BUTTON,
-                       ui::EF_NONE);
+  ui::MouseEvent press(ui::EventType::kMousePressed, cursor_location,
+                       cursor_location, ui::EventTimeForNow(),
+                       ui::EF_LEFT_MOUSE_BUTTON, ui::EF_NONE);
   notification_menu_view()->GetWidget()->OnMouseEvent(&press);
   EXPECT_EQ(0, mock_notification_menu_controller()->activation_count_);
 
-  ui::MouseEvent release(ui::ET_MOUSE_RELEASED, cursor_location,
+  ui::MouseEvent release(ui::EventType::kMouseReleased, cursor_location,
                          cursor_location, ui::EventTimeForNow(),
                          ui::EF_LEFT_MOUSE_BUTTON, ui::EF_NONE);
   notification_menu_view()->GetWidget()->OnMouseEvent(&release);
@@ -386,16 +389,16 @@ TEST_F(NotificationMenuViewTest, OutOfBoundsClick) {
   const auto* item =
       notification_menu_view()->GetDisplayedNotificationItemView();
   const gfx::Point cursor_location = item->GetBoundsInScreen().origin();
-  ui::MouseEvent press(ui::ET_MOUSE_PRESSED, cursor_location, cursor_location,
-                       ui::EventTimeForNow(), ui::EF_LEFT_MOUSE_BUTTON,
-                       ui::EF_NONE);
+  ui::MouseEvent press(ui::EventType::kMousePressed, cursor_location,
+                       cursor_location, ui::EventTimeForNow(),
+                       ui::EF_LEFT_MOUSE_BUTTON, ui::EF_NONE);
   notification_menu_view()->GetWidget()->OnMouseEvent(&press);
   EXPECT_EQ(0, mock_notification_menu_controller()->activation_count_);
 
   const gfx::Point out_of_bounds;
-  ui::MouseEvent out_of_bounds_release(ui::ET_MOUSE_RELEASED, out_of_bounds,
-                                       out_of_bounds, ui::EventTimeForNow(),
-                                       ui::EF_LEFT_MOUSE_BUTTON, ui::EF_NONE);
+  ui::MouseEvent out_of_bounds_release(
+      ui::EventType::kMouseReleased, out_of_bounds, out_of_bounds,
+      ui::EventTimeForNow(), ui::EF_LEFT_MOUSE_BUTTON, ui::EF_NONE);
   notification_menu_view()->GetWidget()->OnMouseEvent(&out_of_bounds_release);
 
   EXPECT_EQ(0, mock_notification_menu_controller()->activation_count_);

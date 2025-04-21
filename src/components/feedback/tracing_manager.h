@@ -1,12 +1,13 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_FEEDBACK_TRACING_MANAGER_H_
 #define COMPONENTS_FEEDBACK_TRACING_MANAGER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/memory/weak_ptr.h"
 
 namespace base {
 class RefCountedString;
@@ -42,9 +43,12 @@ class TracingManager {
   // Discard the data for trace |id|.
   virtual void DiscardTraceData(int id) = 0;
 
+  // Derived classes must implement this and return pointers from
+  // a `base::WeakPtrFactory` data member.
+  virtual base::WeakPtr<TracingManager> AsWeakPtr() = 0;
+
  protected:
   TracingManager();
 };
 
 #endif  // COMPONENTS_FEEDBACK_TRACING_MANAGER_H_
-

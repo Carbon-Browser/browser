@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,12 +45,12 @@ extern const char kDeviceAnnotatedLocation[];
 // not be processed.
 void RecursivelyReplaceManagedConfigurationVariables(
     const Profile* profile,
-    base::Value* managedConfiguration);
+    base::Value::Dict& managedConfiguration);
 
 void RecursivelyReplaceManagedConfigurationVariables(
     const Profile* profile,
     policy::DeviceAttributes* attributes,
-    base::Value* managedConfiguration);
+    base::Value::Dict& managedConfiguration);
 
 }  // namespace arc
 

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,8 +39,6 @@ class SecurityStatePageLoadMetricsObserver
   static std::unique_ptr<page_load_metrics::PageLoadMetricsObserver>
   MaybeCreateForProfile(content::BrowserContext* profile);
 
-  static std::string GetEngagementDeltaHistogramNameForTesting(
-      security_state::SecurityLevel level);
   static std::string GetEngagementFinalHistogramNameForTesting(
       security_state::SecurityLevel level);
   static std::string GetSecurityLevelPageEndReasonHistogramNameForTesting(
@@ -65,7 +63,11 @@ class SecurityStatePageLoadMetricsObserver
   ObservePolicy OnFencedFramesStart(
       content::NavigationHandle* navigation_handle,
       const GURL& currently_committed_url) override;
+  ObservePolicy OnPrerenderStart(content::NavigationHandle* navigation_handle,
+                                 const GURL& currently_committed_url) override;
   ObservePolicy OnCommit(content::NavigationHandle* navigation_handle) override;
+  void DidActivatePrerenderedPage(
+      content::NavigationHandle* navigation_handle) override;
   void OnComplete(
       const page_load_metrics::mojom::PageLoadTiming& timing) override;
 
@@ -73,6 +75,9 @@ class SecurityStatePageLoadMetricsObserver
   void DidChangeVisibleSecurityState() override;
 
  private:
+  void RecordSecurityLevelHistogram(
+      content::NavigationHandle* navigation_handle);
+
   // If the SiteEngagementService does not exist, this will be null.
   raw_ptr<site_engagement::SiteEngagementService> engagement_service_ = nullptr;
 

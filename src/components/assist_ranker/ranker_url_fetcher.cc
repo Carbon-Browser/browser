@@ -1,10 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/assist_ranker/ranker_url_fetcher.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "net/base/load_flags.h"
 #include "net/http/http_status_code.h"
@@ -25,7 +25,7 @@ const int kMaxRetry = 16;
 RankerURLFetcher::RankerURLFetcher()
     : state_(IDLE), retry_count_(0), max_retry_on_5xx_(0) {}
 
-RankerURLFetcher::~RankerURLFetcher() {}
+RankerURLFetcher::~RankerURLFetcher() = default;
 
 bool RankerURLFetcher::Request(
     const GURL& url,
@@ -35,7 +35,6 @@ bool RankerURLFetcher::Request(
   // finished.
   if (state_ == REQUESTING) {
     NOTREACHED();
-    return false;
   }
 
   if (retry_count_ >= kMaxRetry)

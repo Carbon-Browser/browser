@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
 #include "ui/views/controls/table/table_view_observer.h"
 #include "ui/views/window/dialog_delegate.h"
 
@@ -22,8 +23,9 @@ class ChooserController;
 // to the window/tab displaying the given web contents.
 class ChooserDialogView : public views::DialogDelegateView,
                           public views::TableViewObserver {
+  METADATA_HEADER(ChooserDialogView, views::DialogDelegateView)
+
  public:
-  METADATA_HEADER(ChooserDialogView);
   explicit ChooserDialogView(
       std::unique_ptr<permissions::ChooserController> chooser_controller);
   ChooserDialogView(const ChooserDialogView&) = delete;
@@ -31,13 +33,8 @@ class ChooserDialogView : public views::DialogDelegateView,
   ~ChooserDialogView() override;
 
   // views::DialogDelegate:
-  bool IsDialogButtonEnabled(ui::DialogButton button) const override;
+  bool IsDialogButtonEnabled(ui::mojom::DialogButton button) const override;
   views::View* GetInitiallyFocusedView() override;
-
-  // views::DialogDelegateView:
-  views::View* GetContentsView() override;
-  views::Widget* GetWidget() override;
-  const views::Widget* GetWidget() const override;
 
   // views::TableViewObserver:
   void OnSelectionChanged() override;

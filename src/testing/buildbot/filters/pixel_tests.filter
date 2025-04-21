@@ -5,26 +5,43 @@
 # Since these tests will all run in both browser_tests (or interactive_ui_tests)
 # and pixel_browser_tests (or pixel_interactive_ui_tests), avoid including
 # non-pixel tests here.
-#
-# Prefer browser_tests to interactive_ui_tests, as they are less expensive to
-# run; only use interactive_ui_tests if running your test in browser_tests
-# causes flakes (due to widget activation, occlusion, etc.)
 
-AccuracyTipBubbleViewDialogBrowserTest.*
+AccessCodeCastDialogBrowserTest.*
+AddNewAddressProfileTest.*
 AppInfoDialogBrowserTest.*
+AppMenuBrowserTest*.InvokeUi_*
 AskGoogleForSuggestionsDialogTest.*
-AssistantOnboardingViewBrowserTest.InvokeUi_*
+AutofillBubbleSignInPromoInteractiveUITest.*
+BatchUploadDialogViewPixelTest.*
 BookmarkBubbleViewBrowserTest.*
 BookmarkEditorViewBrowserTest.*
-ChromeLabsUiTest.*
+BubbleFrameViewBrowserTest.*
+ChromeLabs*UiTest.*
+ChromeSignoutConfirmationPromptPixelTest.*
 ConfirmBubbleTest.*
 ContentAnalysysDialogUiTest.*
 ContentSettingBubbleDialogTest.*
-CookieControlsBubbleViewTest.*
+CookieClearOnExitMigrationNoticePixelTest.*
+CookieControlsBubbleViewPixelTest.*
+CookieControlsBubbleViewTrackingProtectionUiPixelTest.*
+OldCookieControlsBubbleViewTest.*
+*CreatePopupRowViewTest.*
+*CreatePopupRowViewWithNoUserEducationRateLimitTest.*
 CryptoModulePasswordDialogTest.*
+*DataControlsDialogUiTest.*
 DeepScanningFailureModalDialogTest.*
 *DiceWebSigninInterceptionBubblePixelTest.InvokeUi_*
-*DiceWebSigninInterceptionBubbleSyncPromoPixelTest.InvokeUi_*
+*DiceWebSigninInterceptionBubbleV1SyncPromoPixelTest.InvokeUi_*
+*DiceWebSigninInterceptionBubbleV2PixelTest.InvokeUi_*
+DeleteAddressProfileDialogControllerImplTest.InvokeUi_*
+DesktopMediaPickerViewsBrowserTest.*
+DesktopPaymentsWindowManagerInteractiveUiTest*
+DocumentPictureInPicturePixelTest.*
+EditAddressProfileDialogControllerImplTest.InvokeUi_*
+*EmbeddedPermissionPromptUiTest.InvokeUi_*
+MahiMenuPixelBrowserTest.*
+ManagedUserNoticeUIDialogPixelTest.*
+ManagedUserNoticeUIWindowPixelTest.*
 ExtensionInstallDialogViewInteractiveBrowserTest.*
 ExtensionUninstallDialogViewInteractiveBrowserTest.*
 *EyeDropperBrowserTest.*
@@ -32,57 +49,100 @@ FeaturePromoDialogIntentChipTest.InvokeUi_*
 FeaturePromoDialogTest.InvokeUi_*
 FileSystemAccessUsageBubbleViewTest.*
 FirstRunDialogTest.*
+FirstRunIntroPixelTest.*
 GlobalErrorBubbleTest.*
 HatsBubbleTest.*
 HomeButtonUiTest.*
 HungRendererDialogViewBrowserTest.*
 ImportLockDialogViewBrowserTest.*
+InfoBarUiTest.*
 InlineLoginHelperBrowserTest.InvokeUi_*
+IntentChipButtonBrowserUiTest.*
 IntentPickerDialogTest.*
 IntentPickerDialogGridViewTest.*
-InteractionSequenceBrowserUtilInteractiveUiTest.CompareScreenshot_*
-InteractionSequenceBrowserUtilTest.CompareScreenshot_*
+InteractionTestUtilBrowserTest.CompareScreenshot_*
+InteractionTestUtilBrowserUiTest.CompareScreenshot_*
+IsolatedWebAppInstallerViewUiPixelTest.*
+LHSIndicatorsUiBrowserTest.*
 LocalCardMigrationBrowserUiTest.*
+*MemorySaverChipInteractiveTest.*
+*MemorySaverFaviconTreatmentTest.*
+*MemorySaverImprovedFaviconTreatmentTest.*
+Mv2DeprecationReEnableDialogBrowserTest.*
+BookmarkAccountStorageMoveDialogPixelTest*
 NewTabPageTest.*
-OneTimePermissionPromptBubbleViewBrowserTest.*
+OfferNotificationBubbleViewPixelBrowserTest.*
 OutdatedUpgradeBubbleTest.*
 PageInfoBubbleViewAboutThisSiteDialogBrowserTest.*
 PageInfoBubbleViewDialogBrowserTest.*
 PageInfoBubbleViewPrivacySandboxDialogBrowserTest.*
 PageInfoBubbleViewHistoryDialogBrowserTest.*
+PageInfoBubbleViewCookiesSubpageBrowserTest.*
+PageInfoBubbleViewIsolatedWebAppBrowserTest.*
+PageInfoBubbleViewMerchantTrustDialogBrowserTest.*
+ParentPermissionDialogViewTest.*
 *PasswordBubbleBrowserTest.*
+*PasswordAutomaticSaveBubbleBrowserTest.*
+*PasswordCrossDomainConfirmationPopupViewBrowsertest.*
+*PasswordGenerationPopupViewBrowsertest.*
+*PasswordGenerationPopupViewWithSoftNudgeBrowsertest.*
+*PasswordManagementRevampedBubbleInteractiveUiTest.*
+PasswordBubbleInteractiveUiTest.NavigateToManagementDetailsViewAndTakeScreenshot
+PasswordBubbleInteractiveUiTest.NavigateToManagementDetailsViewWithMoveFooterVisibleAndTakeScreenshot
+*PasswordBubbleWithManagePasswordButtonInteractiveUiTest.*
 PasswordReuseModalWarningTest.*
-PermissionRequestChipDialogBrowserTest.*
-*PermissionPromptBubbleViewBrowserTest.*
+PaymentsWindowUserConsentDialogBrowserTest*
+PerformanceInterventionInteractiveTest.InterventionToolbarButton
+PermissionRequestChipBrowserUiTest.*
+*PermissionPromptBubble*View*BrowserTest.InvokeUi_*
+PermissionPromptPreviewBrowserTest.InvokeUi_*
+*PlusAddressCreationDialogUiVariationsTest*
+*PlusAddressCreationDialogUiVariationsOnboardingTest*
+PlusAddressCreationDialogWithNoticeTest.ShowNoticeAndCancel
+*PopupViewViewsBrowsertest*
+*PopupViewViewsPlusAddressSuggestionBrowsertest*
 PrivacySandboxDialogViewBrowserTest.*
+PrivacySandboxDialogViewAdsApiUxEnhancementBrowserTest.*
+PrivacySandboxDialogViewPrivacyPolicyBrowserTest.*
+PrivacySandboxDialogViewAdsApiUxEnhancementPrivacyPolicyBrowserTest.*
 PrivacySandboxNoticeBubbleBrowserTest.*
+PrivacySandboxSettingsTopicsInteractiveTest.*
+ProfileMenuViewPixelTest.*
+ProfilePickerUIPixelTest.*
+ProfileTypeChoiceUIPixelTest.*
 PromptForScanningModalDialogTest.*
-QRCodeGeneratorBubbleBrowserTest.*
+QrCodeGeneratorServicePixelTest.*
+QuietPromptInteractiveUITest.*
 RelaunchRecommendedBubbleViewDialogTest.*
 RelaunchRequiredDialogViewDialogTest.*
 ReopenTabPromoControllerDialogBrowserTest.*
 SafetyTipPageInfoBubbleViewDialogTest.*
 ScreenCaptureNotificationUiBrowserTest.*
+SearchEngineChoiceUIPixelTest.*
 SecurePaymentConfirmationDialogViewTest.InvokeUi_*
 *SendTabToSelfBubbleTest.*
 SessionCrashedBubbleViewTest.*
+*SharedPasswordsNotificationBubbleInteractiveUiTest.*
+SharedTabGroupInteractiveUiTest.SharedTabGroupIn*
+SyncConfirmationUIDialogPixelTest.*
+SyncConfirmationUIWindowPixelTest.*
+SyncPassphraseDialogBrowserTest.*
 TabGroupEditorBubbleViewDialogBrowserTest.*
-TabHoverCardBubbleViewBrowserTest.*
-*TailoredSecurityDesktopModalTest.InvokeUi_*
+TabHoverCardBubbleViewDialogBrowserTest.*
+TabSearchBubbleUIBrowserTest.*
+*TailoredSecurityDesktopDialogManagerTest.InvokeUi_*
 TranslateBubbleVisualTest.InvokeUi_*
 UpdateRecommendedDialogTest.*
+*WatermarkBrowserTest.*
+*WatermarkDisabledBrowserTest.*
 WebAppConfirmViewBrowserTest.*
 ZoomBubbleDialogTest.*
 
-# This test uses random network port and shows it on ui.
--ContentSettingBubbleDialogTest.InvokeUi_popups
--OutdatedUpgradeBubbleTest.InvokeUi_Critical
-# TODO(crbug.com/1108988): Fix this flakiness test.
--BookmarkBubbleViewBrowserTest.InvokeUi_bookmark_details_signed_in
+# To temporarily disable a test, add it here with a leading '-', like this:
+#
+# # TODO(crbug.com/xxx): Fix xyz and re-enable.
+# -MyTestSuite.InvokeUi_MyTestCase
 
-# TODO(crbug.com/2666206): Flaky
--ContentSettingBubbleDialogTest.InvokeUi_mediastream_camera
--ContentSettingBubbleDialogTest.InvokeUi_mediastream_mic_and_camera
-
-# TODO(crbug.com/1164574): Flaky
--ContentSettingBubbleDialogTest.InvokeUi_mediastream_mic
+# TODO(crbug.com/359386795): Failing on Win10 Tests x64, linux-win-cross-rel
+-AppMenuBrowserTest.InvokeUi_main
+-AppMenuBrowserTestRefreshOnly.InvokeUi_main*

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,20 +6,21 @@ package org.chromium.android_webview.variations;
 
 import androidx.annotation.NonNull;
 
+import org.chromium.android_webview.common.Lifetime;
 import org.chromium.android_webview.common.SafeModeAction;
+import org.chromium.android_webview.common.SafeModeActionIds;
 import org.chromium.android_webview.common.variations.VariationsUtils;
 import org.chromium.base.Log;
 
 import java.io.File;
 
-/**
- * A {@link SafeModeAction} to delete the variations seed.
- */
+/** A {@link SafeModeAction} to delete the variations seed. */
+@Lifetime.Singleton
 public class VariationsSeedSafeModeAction implements SafeModeAction {
     private static final String TAG = "WebViewSafeMode";
 
     // This ID should not be changed or reused.
-    private static final String ID = "delete_variations_seed";
+    private static final String ID = SafeModeActionIds.DELETE_VARIATIONS_SEED;
 
     @Override
     @NonNull

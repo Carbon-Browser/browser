@@ -1,16 +1,18 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/task_manager/providers/fallback_task_provider.h"
 
-#include "base/bind.h"
+#include <vector>
+
 #include "base/containers/contains.h"
-#include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/process/process.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/task_manager/providers/render_process_host_task_provider.h"
 #include "chrome/browser/task_manager/providers/web_contents/web_contents_task_provider.h"
 #include "content/public/browser/browser_thread.h"
@@ -25,8 +27,9 @@ constexpr base::TimeDelta kTimeDelayForPendingTask = base::Milliseconds(750);
 
 // Returns a task that is in the vector if the task in the vector shares a Pid
 // with the other task.
-Task* GetTaskByPidFromVector(base::ProcessId process_id,
-                             std::vector<Task*>* which_vector) {
+Task* GetTaskByPidFromVector(
+    base::ProcessId process_id,
+    std::vector<raw_ptr<Task, VectorExperimental>>* which_vector) {
   for (Task* candidate : *which_vector) {
     if (candidate->process_id() == process_id)
       return candidate;
@@ -50,7 +53,7 @@ FallbackTaskProvider::FallbackTaskProvider(
   }
 }
 
-FallbackTaskProvider::~FallbackTaskProvider() {}
+FallbackTaskProvider::~FallbackTaskProvider() = default;
 
 Task* FallbackTaskProvider::GetTaskOfUrlRequest(int child_id, int route_id) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
@@ -101,10 +104,9 @@ void FallbackTaskProvider::ShowTaskLater(Task* task) {
                                            std::forward_as_tuple(this));
   } else {
     NOTREACHED();
-    it->second.InvalidateWeakPtrs();
   }
 
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&FallbackTaskProvider::ShowPendingTask,
                      it->second.GetWeakPtr(), task),
@@ -209,7 +211,7 @@ FallbackTaskProvider::SubproviderSource::SubproviderSource(
     : fallback_task_provider_(fallback_task_provider),
       subprovider_(std::move(subprovider)) {}
 
-FallbackTaskProvider::SubproviderSource::~SubproviderSource() {}
+FallbackTaskProvider::SubproviderSource::~SubproviderSource() = default;
 
 void FallbackTaskProvider::SubproviderSource::TaskAdded(Task* task) {
   DCHECK(task);
@@ -220,7 +222,7 @@ void FallbackTaskProvider::SubproviderSource::TaskAdded(Task* task) {
 void FallbackTaskProvider::SubproviderSource::TaskRemoved(Task* task) {
   DCHECK(task);
 
-  base::Erase(tasks_, task);
+  std::erase(tasks_, task);
   fallback_task_provider_->OnTaskRemovedBySource(task, this);
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,10 @@
 namespace remoting {
 
 ShutdownWatchdog::ShutdownWatchdog(const base::TimeDelta& duration)
-    : base::Watchdog(duration, "Shutdown watchdog", true) {
+    : watchdog_(duration, "Shutdown watchdog", true, this) {}
+
+void ShutdownWatchdog::Arm() {
+  watchdog_.Arm();
 }
 
 void ShutdownWatchdog::SetExitCode(int exit_code) {

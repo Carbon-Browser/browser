@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,10 @@
 #define CHROMEOS_ASH_COMPONENTS_NETWORK_ONC_ONC_MERGER_H_
 
 #include "base/component_export.h"
-// TODO(https://crbug.com/1164001): move to forward declaration
-#include "chromeos/components/onc/onc_signature.h"
+#include "base/values.h"
 
-namespace base {
-class Value;
+namespace chromeos::onc {
+struct OncValueSignature;
 }
 
 namespace ash::onc {
@@ -25,11 +24,11 @@ namespace ash::onc {
 // dispensable) that can be removed by the caller using the ONC normalizer. ONC
 // conformance of the arguments is not checked. Use ONC validator for that.
 COMPONENT_EXPORT(CHROMEOS_NETWORK)
-base::Value MergeSettingsAndPoliciesToEffective(
-    const base::Value* user_policy,
-    const base::Value* device_policy,
-    const base::Value* user_settings,
-    const base::Value* shared_settings);
+base::Value::Dict MergeSettingsAndPoliciesToEffective(
+    const base::Value::Dict* user_policy,
+    const base::Value::Dict* device_policy,
+    const base::Value::Dict* user_settings,
+    const base::Value::Dict* shared_settings);
 
 // Like MergeSettingsWithPoliciesToEffective but creates one dictionary in place
 // of each field that exists in any of the argument dictionaries. Each of these
@@ -39,20 +38,14 @@ base::Value MergeSettingsAndPoliciesToEffective(
 // overrides all other values. Credentials from policies are not written to the
 // result.
 COMPONENT_EXPORT(CHROMEOS_NETWORK)
-base::Value MergeSettingsAndPoliciesToAugmented(
-    const OncValueSignature& signature,
-    const base::Value* user_policy,
-    const base::Value* device_policy,
-    const base::Value* user_settings,
-    const base::Value* shared_settings,
-    const base::Value* active_settings);
+base::Value::Dict MergeSettingsAndPoliciesToAugmented(
+    const chromeos::onc::OncValueSignature& signature,
+    const base::Value::Dict* user_policy,
+    const base::Value::Dict* device_policy,
+    const base::Value::Dict* user_settings,
+    const base::Value::Dict* shared_settings,
+    const base::Value::Dict* active_settings);
 
 }  // namespace ash::onc
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos::onc {
-using ::ash::onc::MergeSettingsAndPoliciesToAugmented;
-using ::ash::onc::MergeSettingsAndPoliciesToEffective;
-}  // namespace chromeos::onc
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_ONC_ONC_MERGER_H_

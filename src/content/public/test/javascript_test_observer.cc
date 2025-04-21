@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,7 +44,7 @@ bool JavascriptTestObserver::Run() {
   if (!finished_) {
     CHECK(!running_);
     running_ = true;
-    RunMessageLoop();
+    loop_.Run();
     running_ = false;
   }
   return handler_->ok();
@@ -79,7 +79,7 @@ void JavascriptTestObserver::EndTest() {
   finished_ = true;
   if (running_) {
     running_ = false;
-    base::RunLoop::QuitCurrentWhenIdleDeprecated();
+    loop_.QuitWhenIdle();
   }
 }
 

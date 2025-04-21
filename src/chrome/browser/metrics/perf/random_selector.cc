@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@
 
 RandomSelector::RandomSelector() : sum_of_weights_(0) {}
 
-RandomSelector::~RandomSelector() {}
+RandomSelector::~RandomSelector() = default;
 
 // static
 double RandomSelector::SumWeights(const std::vector<WeightAndValue>& odds) {
@@ -57,7 +57,6 @@ const std::string& RandomSelector::GetValueFor(double random) {
       return odd.value;
   }
   NOTREACHED() << "Invalid value for key: " << random;
-  return base::EmptyString();
 }
 
 // Print the value. Used for friendly test failure messages.

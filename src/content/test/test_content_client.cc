@@ -1,8 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/test/test_content_client.h"
+
+#include <string_view>
 
 #include "ui/base/resource/resource_bundle.h"
 
@@ -12,7 +14,7 @@ TestContentClient::TestContentClient() = default;
 
 TestContentClient::~TestContentClient() = default;
 
-base::StringPiece TestContentClient::GetDataResource(
+std::string_view TestContentClient::GetDataResource(
     int resource_id,
     ui::ResourceScaleFactor scale_factor) {
   return ui::ResourceBundle::GetSharedInstance().GetRawDataResourceForScale(

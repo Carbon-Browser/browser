@@ -26,12 +26,16 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+from unittest import mock
+
 from blinkpy.common.net.network_transaction import NetworkTransaction, NetworkTimeout
 from blinkpy.common.system.log_testing import LoggingTestCase
 
-from six.moves.urllib.error import HTTPError
+from requests import Response
+from requests.exceptions import HTTPError, Timeout
 
 
+@mock.patch('time.sleep', new=mock.Mock())
 class NetworkTransactionTest(LoggingTestCase):
     exception = Exception('Test exception')
 
@@ -41,9 +45,9 @@ class NetworkTransactionTest(LoggingTestCase):
 
     def test_success(self):
         transaction = NetworkTransaction()
-        self.assertEqual(transaction.run(lambda: 42), 42)
+        self.assertEqual(transaction.run(lambda retry_index: 42), 42)
 
-    def _raise_exception(self):
+    def _raise_exception(self, retry_index):
         raise self.exception
 
     def test_exception(self):
@@ -59,25 +63,35 @@ class NetworkTransactionTest(LoggingTestCase):
         self.assertTrue(did_throw_exception)
         self.assertTrue(did_process_exception)
 
-    def _raise_500_error(self):
+    def _raise_500_error(self, retry_index):
         self._run_count += 1
-        if self._run_count < 3:
-            raise HTTPError('http://example.com/', 500,
-                            'internal server error', None, None)
+        if retry_index < 2:
+            response = Response()
+            response.status_code = 500
+            response.reason = 'internal server error'
+            response.url = 'http://example.com/'
+            raise HTTPError(response=response)
         return 42
 
-    def _raise_404_error(self):
-        raise HTTPError('http://foo.com/', 404, 'not found', None, None)
+    def _raise_404_error(self, retry_index):
+        response = Response()
+        response.status_code = 404
+        response.reason = 'not found'
+        response.url = 'http://foo.com/'
+        raise HTTPError(response=response)
+
+    def _raise_timeout(self, retry_index):
+        raise Timeout()
 
     def test_retry(self):
         transaction = NetworkTransaction(initial_backoff_seconds=0)
         self.assertEqual(transaction.run(self._raise_500_error), 42)
         self.assertEqual(self._run_count, 3)
         self.assertLog([
-            'WARNING: Received HTTP status 500 loading "http://example.com/".  '
-            'Retrying in 0 seconds...\n',
-            'WARNING: Received HTTP status 500 loading "http://example.com/".  '
-            'Retrying in 0.0 seconds...\n'
+            'WARNING: Received HTTP status 500 loading "http://example.com/": internal server error. \n',
+            'WARNING: Retrying in 0.000 seconds...\n',
+            'WARNING: Received HTTP status 500 loading "http://example.com/": internal server error. \n',
+            'WARNING: Retrying in 0.000 seconds...\n'
         ])
 
     def test_convert_404_to_none(self):
@@ -87,12 +101,5 @@ class NetworkTransactionTest(LoggingTestCase):
     def test_timeout(self):
         transaction = NetworkTransaction(
             initial_backoff_seconds=60 * 60, timeout_seconds=60)
-        did_process_exception = False
-        did_throw_exception = True
-        try:
-            transaction.run(self._raise_500_error)
-            did_throw_exception = False
-        except NetworkTimeout:
-            did_process_exception = True
-        self.assertTrue(did_throw_exception)
-        self.assertTrue(did_process_exception)
+        with self.assertRaises(NetworkTimeout):
+            transaction.run(self._raise_timeout)

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,7 @@ class GURL;
 namespace content {
 class RenderFrameHost;
 class WebContents;
-}
+}  // namespace content
 
 class SearchIPCRouterTest;
 
@@ -59,7 +59,7 @@ class SearchIPCRouter : public search::mojom::EmbeddedSearch {
   // versa (decide whether to send messages to the page).
   class Policy {
    public:
-    virtual ~Policy() {}
+    virtual ~Policy() = default;
 
     // SearchIPCRouter calls these functions before sending/receiving messages
     // to/from the page.

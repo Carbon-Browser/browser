@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,19 +6,21 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/user_metrics.h"
 #include "base/metrics/user_metrics_action.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/constrained_window/constrained_window_views.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/models/image_model.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
+#include "ui/base/mojom/ui_base_types.mojom-shared.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/point.h"
@@ -70,7 +72,7 @@ std::u16string RelaunchRequiredDialogView::GetWindowTitle() const {
   // "3..2..1.." countdown to change precisely on the per-second boundaries.
   const base::TimeDelta rounded_offset =
       relaunch_required_timer_.GetRoundedDeadlineDelta();
-
+  DCHECK_GE(rounded_offset, base::TimeDelta());
   int amount = rounded_offset.InSeconds();
   int message_id = IDS_RELAUNCH_REQUIRED_TITLE_SECONDS;
   if (rounded_offset.InDays() >= 2) {
@@ -103,11 +105,12 @@ RelaunchRequiredDialogView::RelaunchRequiredDialogView(
           deadline,
           base::BindRepeating(&RelaunchRequiredDialogView::UpdateWindowTitle,
                               base::Unretained(this))) {
-  SetDefaultButton(ui::DIALOG_BUTTON_NONE);
-  SetButtonLabel(ui::DIALOG_BUTTON_OK,
+  set_internal_name("RelaunchRequiredDialog");
+  SetDefaultButton(static_cast<int>(ui::mojom::DialogButton::kNone));
+  SetButtonLabel(ui::mojom::DialogButton::kOk,
                  l10n_util::GetStringUTF16(IDS_RELAUNCH_ACCEPT_BUTTON));
   SetButtonLabel(
-      ui::DIALOG_BUTTON_CANCEL,
+      ui::mojom::DialogButton::kCancel,
       l10n_util::GetStringUTF16(IDS_RELAUNCH_REQUIRED_CANCEL_BUTTON));
   SetShowIcon(true);
   SetAcceptCallback(base::BindOnce(
@@ -120,7 +123,7 @@ RelaunchRequiredDialogView::RelaunchRequiredDialogView(
       base::RecordAction, base::UserMetricsAction("RelaunchRequired_Close")));
   SetLayoutManager(std::make_unique<views::FillLayout>());
 
-  SetModalType(ui::MODAL_TYPE_WINDOW);
+  SetModalType(ui::mojom::ModalType::kWindow);
   SetShowCloseButton(false);
   set_fixed_width(views::LayoutProvider::Get()->GetDistanceMetric(
       views::DISTANCE_MODAL_DIALOG_PREFERRED_WIDTH));

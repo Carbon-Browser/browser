@@ -1,11 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.components.messages;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.base.WindowAndroid;
 
@@ -20,8 +21,11 @@ public class MessageDispatcherBridge {
      * activity is being recreated or destroyed; otherwise, return true.
      */
     @CalledByNative
-    private static boolean enqueueMessage(MessageWrapper message, WebContents webContents,
-            @MessageScopeType int scopeType, boolean highPriority) {
+    private static boolean enqueueMessage(
+            MessageWrapper message,
+            WebContents webContents,
+            @MessageScopeType int scopeType,
+            boolean highPriority) {
         MessageDispatcher messageDispatcher =
                 MessageDispatcherProvider.from(webContents.getTopLevelNativeWindow());
         if (messageDispatcher == null) return false;

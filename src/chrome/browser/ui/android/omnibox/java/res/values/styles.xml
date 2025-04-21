@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright 2021 The Chromium Authors. All rights reserved.
-     Use of this source code is governed by a BSD-style license that can be
-     found in the LICENSE file. -->
+<!--
+Copyright 2021 The Chromium Authors
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
+-->
 
 <resources xmlns:tools="http://schemas.android.com/tools">
 
@@ -14,13 +16,11 @@
     </style>
 
     <!-- Omnibox suggestions -->
-    <style name="TextAppearance.OmniboxAnswerDescriptionNegativeSmall">
-        <item name="android:textSize">@dimen/text_size_small</item>
+    <style name="TextAppearance.OmniboxAnswerDescriptionNegative">
         <item name="android:textColor">@color/answers_description_text_negative</item>
     </style>
 
-    <style name="TextAppearance.OmniboxAnswerDescriptionPositiveSmall">
-        <item name="android:textSize">@dimen/text_size_small</item>
+    <style name="TextAppearance.OmniboxAnswerDescriptionPositive">
         <item name="android:textColor">@color/answers_description_text_positive</item>
     </style>
 
@@ -29,11 +29,11 @@
         <item name="android:layout_height">match_parent</item>
     </style>
 
-    <style name="OmniboxPedalChipThemeOverlay">
-        <item name="chipStyle">@style/OmniboxPedalChip</item>
+    <style name="OmniboxActionChipThemeOverlay">
+        <item name="chipStyle">@style/OmniboxActionChip</item>
     </style>
 
-    <style name="OmniboxPedalChip" parent="SuggestionChip">
+    <style name="OmniboxActionChip" parent="SuggestionChip">
         <item name="iconWidth">@dimen/omnibox_pedal_suggestion_icon_size</item>
         <item name="iconHeight">@dimen/omnibox_pedal_suggestion_icon_size</item>
         <item name="allowMultipleLines">true</item>
@@ -41,4 +41,12 @@
         <item name="textAlignStart">true</item>
     </style>
 
+    <style name="OmniboxIncognitoActionChipThemeOverlay">
+        <item name="chipStyle">@style/OmniboxIncognitoActionChip</item>
+    </style>
+
+    <style name="OmniboxIncognitoActionChip" parent="OmniboxActionChip">
+        <item name="chipColor">@color/default_bg_color_dark</item>
+        <item name="primaryTextAppearance">@style/TextAppearance.TextSmall.Primary.Baseline.Light</item>
+    </style>
 </resources>

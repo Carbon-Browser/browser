@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,6 +32,7 @@
 #include "third_party/blink/renderer/platform/bindings/exception_code.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/testing/io_task_runner_testing_platform_support.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 using testing::_;
 
@@ -44,9 +45,8 @@ ScriptValue CreateVideoFrameChunk(ScriptState* script_state) {
       media::VideoFrame::CreateBlackFrame(gfx::Size(10, 5));
   VideoFrame* video_frame = MakeGarbageCollected<VideoFrame>(
       std::move(media_frame), ExecutionContext::From(script_state));
-  return ScriptValue(
-      script_state->GetIsolate(),
-      ToV8Traits<VideoFrame>::ToV8(script_state, video_frame).ToLocalChecked());
+  return ScriptValue(script_state->GetIsolate(),
+                     ToV8Traits<VideoFrame>::ToV8(script_state, video_frame));
 }
 
 ScriptValue CreateAudioDataChunk(ScriptState* script_state) {
@@ -56,9 +56,8 @@ ScriptValue CreateAudioDataChunk(ScriptState* script_state) {
           /*channel_count=*/2,
           /*sample_rate=*/44100,
           /*frame_count=*/500, base::TimeDelta()));
-  return ScriptValue(
-      script_state->GetIsolate(),
-      ToV8Traits<AudioData>::ToV8(script_state, audio_data).ToLocalChecked());
+  return ScriptValue(script_state->GetIsolate(),
+                     ToV8Traits<AudioData>::ToV8(script_state, audio_data));
 }
 
 }  // namespace
@@ -71,6 +70,7 @@ class MediaStreamTrackGeneratorTest : public testing::Test {
   }
 
  protected:
+  test::TaskEnvironment task_environment_;
   ScopedTestingPlatformSupport<IOTaskRunnerTestingPlatformSupport> platform_;
 };
 
@@ -199,7 +199,7 @@ TEST_F(MediaStreamTrackGeneratorTest, Clone) {
   ScriptState* script_state = v8_scope.GetScriptState();
   MediaStreamTrackGenerator* original = MediaStreamTrackGenerator::Create(
       script_state, "video", v8_scope.GetExceptionState());
-  MediaStreamTrack* clone = original->clone(script_state);
+  MediaStreamTrack* clone = original->clone(v8_scope.GetExecutionContext());
   EXPECT_FALSE(original->Ended());
   EXPECT_FALSE(clone->Ended());
 
@@ -276,7 +276,7 @@ TEST_F(MediaStreamTrackGeneratorTest, CloneStopSource) {
   ScriptState* script_state = v8_scope.GetScriptState();
   MediaStreamTrackGenerator* original = MediaStreamTrackGenerator::Create(
       script_state, "video", v8_scope.GetExceptionState());
-  MediaStreamTrack* clone = original->clone(script_state);
+  MediaStreamTrack* clone = original->clone(v8_scope.GetExecutionContext());
   EXPECT_FALSE(original->Ended());
   EXPECT_FALSE(clone->Ended());
 

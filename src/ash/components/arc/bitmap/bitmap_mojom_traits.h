@@ -1,6 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #ifndef ASH_COMPONENTS_ARC_BITMAP_BITMAP_MOJOM_TRAITS_H_
 #define ASH_COMPONENTS_ARC_BITMAP_BITMAP_MOJOM_TRAITS_H_
@@ -17,8 +22,8 @@ struct StructTraits<arc::mojom::ArcBitmapDataView, SkBitmap> {
     const SkImageInfo& info = r.info();
     DCHECK_EQ(info.colorType(), kRGBA_8888_SkColorType);
 
-    return base::make_span(static_cast<uint8_t*>(r.getPixels()),
-                           r.computeByteSize());
+    return base::span(static_cast<uint8_t*>(r.getPixels()),
+                      r.computeByteSize());
   }
   static uint32_t width(const SkBitmap& r) { return r.width(); }
   static uint32_t height(const SkBitmap& r) { return r.height(); }

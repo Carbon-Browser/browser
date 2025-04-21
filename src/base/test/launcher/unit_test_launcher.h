@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,18 +8,21 @@
 #include <stddef.h>
 
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/test/launcher/test_launcher.h"
+#include "build/blink_buildflags.h"
 #include "build/build_config.h"
 
-namespace base {
+#if BUILDFLAG(USE_BLINK)
+#include "base/test/launcher/test_launcher.h"
+#endif
 
-extern const char kDontUseJobObjectFlag[];
+namespace base {
 
 // Callback that runs a test suite and returns exit code.
 using RunTestSuiteCallback = OnceCallback<int(void)>;
@@ -35,16 +38,24 @@ int LaunchUnitTestsSerially(int argc,
                             char** argv,
                             RunTestSuiteCallback run_test_suite);
 
+// The following is not supported in unit_test_launcher_ios.cc, which is used on
+// iOS unless Blink is enabled.
+#if BUILDFLAG(USE_BLINK)
+
 // Launches unit tests in given test suite. Returns exit code.
 // |parallel_jobs| is the number of parallel test jobs.
 // |default_batch_limit| is the default size of test batch
 // (use 0 to disable batching).
 // |use_job_objects| determines whether to use job objects.
+// |timeout_callback| is called each time a test batch times out. It can be used
+// as a cue to print additional debugging information about the test system,
+// such as log files or the names of running processes.
 int LaunchUnitTestsWithOptions(int argc,
                                char** argv,
                                size_t parallel_jobs,
                                int default_batch_limit,
                                bool use_job_objects,
+                               RepeatingClosure timeout_callback,
                                RunTestSuiteCallback run_test_suite);
 
 #if BUILDFLAG(IS_WIN)
@@ -128,7 +139,8 @@ class UnitTestLauncherDelegate : public TestLauncherDelegate {
  public:
   UnitTestLauncherDelegate(UnitTestPlatformDelegate* delegate,
                            size_t batch_limit,
-                           bool use_job_objects);
+                           bool use_job_objects,
+                           RepeatingClosure timeout_callback);
 
   UnitTestLauncherDelegate(const UnitTestLauncherDelegate&) = delete;
   UnitTestLauncherDelegate& operator=(const UnitTestLauncherDelegate&) = delete;
@@ -151,6 +163,8 @@ class UnitTestLauncherDelegate : public TestLauncherDelegate {
 
   size_t GetBatchSize() override;
 
+  void OnTestTimedOut(const CommandLine& cmd_line) override;
+
   ThreadChecker thread_checker_;
 
   raw_ptr<UnitTestPlatformDelegate> platform_delegate_;
@@ -160,6 +174,9 @@ class UnitTestLauncherDelegate : public TestLauncherDelegate {
 
   // Determines whether we use job objects on Windows.
   bool use_job_objects_;
+
+  // Callback to invoke when a test process times out.
+  RepeatingClosure timeout_callback_;
 };
 
 // We want to stop throwing away duplicate test filter file flags, but we're
@@ -174,11 +191,13 @@ class MergeTestFilterSwitchHandler : public DuplicateSwitchHandler {
  public:
   ~MergeTestFilterSwitchHandler() override;
 
-  void ResolveDuplicate(base::StringPiece key,
-                        CommandLine::StringPieceType new_value,
+  void ResolveDuplicate(std::string_view key,
+                        CommandLine::StringViewType new_value,
                         CommandLine::StringType& out_value) override;
 };
 
-}   // namespace base
+#endif  // BUILDFLAG(USE_BLINK)
+
+}  // namespace base
 
 #endif  // BASE_TEST_LAUNCHER_UNIT_TEST_LAUNCHER_H_

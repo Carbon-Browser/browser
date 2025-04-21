@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "base/strings/string_number_conversions.h"
 #include "base/values.h"
+#include "components/policy/core/browser/configuration_policy_handler.h"
 #include "components/policy/core/browser/policy_error_map.h"
 #include "components/policy/core/common/policy_map.h"
 #include "components/policy/core/common/policy_pref_names.h"
@@ -87,35 +88,35 @@ TEST_F(URLAllowlistPolicyHandlerTest, ApplyPolicySettings_Empty) {
   base::Value* out;
   EXPECT_TRUE(prefs_.GetValue(policy_prefs::kUrlAllowlist, &out));
   ASSERT_TRUE(out->is_list());
-  EXPECT_EQ(0U, out->GetListDeprecated().size());
+  EXPECT_EQ(0U, out->GetList().size());
 }
 
 TEST_F(URLAllowlistPolicyHandlerTest, ApplyPolicySettings_WrongElementType) {
   // The policy expects string-valued elements. Give it booleans.
-  base::Value in(base::Value::Type::LIST);
+  base::Value::List in;
   in.Append(false);
-  SetPolicy(key::kURLAllowlist, std::move(in));
+  SetPolicy(key::kURLAllowlist, base::Value(std::move(in)));
   ApplyPolicies();
 
   // The element should be skipped.
   base::Value* out;
   EXPECT_TRUE(prefs_.GetValue(policy_prefs::kUrlAllowlist, &out));
   ASSERT_TRUE(out->is_list());
-  EXPECT_EQ(0U, out->GetListDeprecated().size());
+  EXPECT_EQ(0U, out->GetList().size());
 }
 
 TEST_F(URLAllowlistPolicyHandlerTest, ApplyPolicySettings_Successful) {
-  base::Value in_url_allowlist(base::Value::Type::LIST);
+  base::Value::List in_url_allowlist;
   in_url_allowlist.Append(kTestAllowlistValue);
-  SetPolicy(key::kURLAllowlist, std::move(in_url_allowlist));
+  SetPolicy(key::kURLAllowlist, base::Value(std::move(in_url_allowlist)));
   ApplyPolicies();
 
   base::Value* out;
   EXPECT_TRUE(prefs_.GetValue(policy_prefs::kUrlAllowlist, &out));
   ASSERT_TRUE(out->is_list());
-  ASSERT_EQ(1U, out->GetListDeprecated().size());
+  ASSERT_EQ(1U, out->GetList().size());
 
-  const std::string* out_string = out->GetListDeprecated()[0].GetIfString();
+  const std::string* out_string = out->GetList()[0].GetIfString();
   ASSERT_TRUE(out_string);
   EXPECT_EQ(kTestAllowlistValue, *out_string);
 }
@@ -134,7 +135,7 @@ TEST_F(URLAllowlistPolicyHandlerTest,
   base::Value* out;
   EXPECT_TRUE(prefs_.GetValue(policy_prefs::kUrlAllowlist, &out));
   ASSERT_TRUE(out->is_list());
-  EXPECT_EQ(max_filters_per_policy, out->GetListDeprecated().size());
+  EXPECT_EQ(max_filters_per_policy, out->GetList().size());
 }
 
 // Test that the warning message, mapped to
@@ -151,7 +152,7 @@ TEST_F(URLAllowlistPolicyHandlerTest,
 
   ApplyPolicies();
 
-  auto error_str = errors_.GetErrors(key::kURLAllowlist);
+  auto error_str = errors_.GetErrorMessages(key::kURLAllowlist);
   auto expected_str = l10n_util::GetStringFUTF16(
       IDS_POLICY_URL_ALLOW_BLOCK_LIST_MAX_FILTERS_LIMIT_WARNING,
       base::NumberToString16(max_filters_per_policy));
@@ -160,7 +161,7 @@ TEST_F(URLAllowlistPolicyHandlerTest,
   base::Value* out;
   EXPECT_TRUE(prefs_.GetValue(policy_prefs::kUrlAllowlist, &out));
   ASSERT_TRUE(out->is_list());
-  EXPECT_EQ(max_filters_per_policy + 1, out->GetListDeprecated().size());
+  EXPECT_EQ(max_filters_per_policy + 1, out->GetList().size());
 }
 
 TEST_F(URLAllowlistPolicyHandlerTest, ValidatePolicy) {
@@ -173,6 +174,20 @@ TEST_F(URLAllowlistPolicyHandlerTest, ValidatePolicy) {
   EXPECT_TRUE(ValidatePolicy("127.0.0.1:1"));
   EXPECT_TRUE(ValidatePolicy("127.0.0.1:65535"));
   EXPECT_FALSE(ValidatePolicy("127.0.0.1:65536"));
+
+  EXPECT_TRUE(ValidatePolicy("*"));
+  EXPECT_FALSE(ValidatePolicy("*.developers.com"));
+}
+
+// When the invalid sequence with '*' in the host is added to the allowlist, the
+// policy can still be applied, but an error is added to the error map to
+// indicate an invalid URL.
+TEST_F(URLAllowlistPolicyHandlerTest, CheckPolicyURLHostWithAsterik) {
+  base::Value::List allowed_urls;
+  allowed_urls.Append("*.developers.com");
+  EXPECT_TRUE(
+      CheckPolicy(key::kURLAllowlist, base::Value(std::move(allowed_urls))));
+  EXPECT_EQ(1U, errors_.size());
 }
 
 }  // namespace policy

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,10 @@ class Profile;
 class TemplateURL;
 class TemplateURLService;
 class TemplateURLTableModel;
+
+namespace search_engines {
+enum class ChoiceMadeLocation;
+}
 
 class KeywordEditorController {
  public:
@@ -62,6 +66,11 @@ class KeywordEditorController {
   // given `url`.
   bool ShouldConfirmDeletion(const TemplateURL* url) const;
 
+  // Return true if a search engine is managed by policy.
+  // Note: Only applies to SEs created by the `SiteSearchSettings` policy.
+  // TODO(b/317357143): Set this as true for SEs created by the DSP policies.
+  bool IsManaged(const TemplateURL* url) const;
+
   // Remove the TemplateURL at the specified index in the TableModel.
   void RemoveTemplateURL(int index);
 
@@ -70,7 +79,9 @@ class KeywordEditorController {
 
   // Make the TemplateURL at the specified index (into the TableModel) the
   // default search provider.
-  void MakeDefaultTemplateURL(int index);
+  void MakeDefaultTemplateURL(
+      int index,
+      search_engines::ChoiceMadeLocation choice_location);
 
   // Activates the TemplateURL at the specified index in the TableModel if
   // `is_active` is true or deactivates it if false.
@@ -82,9 +93,7 @@ class KeywordEditorController {
   // Return the TemplateURL corresponding to the |index| in the model.
   TemplateURL* GetTemplateURL(int index);
 
-  TemplateURLTableModel* table_model() {
-    return table_model_.get();
-  }
+  TemplateURLTableModel* table_model() { return table_model_.get(); }
 
  private:
   raw_ptr<TemplateURLService> url_model_;

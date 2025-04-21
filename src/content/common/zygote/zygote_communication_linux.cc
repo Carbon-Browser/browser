@@ -1,6 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/341324165): Fix and remove.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "content/common/zygote/zygote_communication_linux.h"
 
@@ -9,9 +14,11 @@
 
 #include "base/base_switches.h"
 #include "base/command_line.h"
+#include "base/files/platform_file.h"
 #include "base/i18n/unicodestring.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/path_service.h"
 #include "base/pickle.h"
 #include "base/posix/eintr_wrapper.h"
@@ -73,6 +80,21 @@ ssize_t ZygoteCommunication::ReadReply(void* buf, size_t buf_len) {
   }
 
   return HANDLE_EINTR(read(control_fd_.get(), buf, buf_len));
+}
+
+void ZygoteCommunication::ReinitializeLogging(
+    uint32_t logging_dest,
+    base::PlatformFile raw_log_file_fd) {
+  DCHECK(init_);
+
+  base::Pickle pickle;
+  pickle.WriteInt(kZygoteCommandReinitializeLogging);
+  pickle.WriteUInt32(logging_dest);
+  std::vector<int> fds = {raw_log_file_fd};
+
+  base::AutoLock lock(control_lock_);
+  if (!SendMessage(pickle, &fds))
+    DLOG(WARNING) << "Unable to reinitialize logging";
 }
 
 pid_t ZygoteCommunication::ForkRequest(
@@ -139,8 +161,7 @@ pid_t ZygoteCommunication::ForkRequest(
                       sizeof(kZygoteChildPingMessage))) {
         // Zygote children should still be trustworthy when they're supposed to
         // ping us, so something's broken if we don't receive a valid ping.
-        LOG(ERROR) << "Did not receive ping from zygote child";
-        NOTREACHED();
+        DUMP_WILL_BE_NOTREACHED() << "Did not receive ping from zygote child";
         real_pid = -1;
       }
       my_sock.reset();
@@ -158,7 +179,8 @@ pid_t ZygoteCommunication::ForkRequest(
     char buf[kMaxReplyLength];
     const ssize_t len = ReadReply(buf, sizeof(buf));
 
-    base::Pickle reply_pickle(buf, len);
+    base::Pickle reply_pickle = base::Pickle::WithUnownedBuffer(
+        base::as_bytes(base::span(buf, base::checked_cast<size_t>(len))));
     base::PickleIterator iter(reply_pickle);
     if (len <= 0 || !iter.ReadInt(&pid))
       return base::kNullProcessHandle;
@@ -243,8 +265,7 @@ void ZygoteCommunication::Init(
       sandbox::policy::switches::kDisableSeccompFilterSandbox,
       sandbox::policy::switches::kNoSandbox,
   };
-  cmd_line.CopySwitchesFrom(browser_command_line, kForwardSwitches,
-                            std::size(kForwardSwitches));
+  cmd_line.CopySwitchesFrom(browser_command_line, kForwardSwitches);
 
   pid_ = std::move(launcher).Run(&cmd_line, &control_fd_);
 
@@ -286,7 +307,8 @@ base::TerminationStatus ZygoteCommunication::GetTerminationStatus(
   } else if (len == 0) {
     LOG(WARNING) << "Socket closed prematurely.";
   } else {
-    base::Pickle read_pickle(buf, len);
+    base::Pickle read_pickle = base::Pickle::WithUnownedBuffer(
+        base::as_bytes(base::span(buf, base::checked_cast<size_t>(len))));
     int tmp_status, tmp_exit_code;
     base::PickleIterator iter(read_pickle);
     if (!iter.ReadInt(&tmp_status) || !iter.ReadInt(&tmp_exit_code)) {

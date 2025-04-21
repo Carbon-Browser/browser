@@ -1,96 +1,66 @@
-# Always on top is a feature of platform apps (aka packaged apps v2, aka chrome
-# apps). It allows a window to usually, but not always, stay on top of other
-# windows. It's implemented via window z-ordering, which vanilla Wayland does
-# not support. Platform apps are deprecated. It's unknown how often this feature
-# is used in the wild. It's unknown how much impact failing to implement this
-# for Lacros will cause. See https://crbug.com/1343973.
--AppWindowTest.InitAlwaysOnTopToFullscreen
--AppWindowTest.InitFullscreenAndAlwaysOnTop
--AppWindowTest.InitFullscreenToAlwaysOnTop
--AppWindowTest.RuntimeAlwaysOnTopToFullscreen
--AppWindowTest.RuntimeFullscreenToAlwaysOnTop
+# TODO(crbug.com/40267327) Fix BookmarkBarViewTests.
+# The following tests fail consistently.
+-BookmarkBarViewTest22.CloseSourceBrowserDuringDrag
+-BookmarkBarViewTest28.ClickWithModifierOnFolderOpensAllBookmarks
+-BookmarkBarViewTest29.DNDToEmptyMenu
+-BookmarkBarViewTest5.DND
+-BookmarkBarViewTest7.DNDToDifferentMenu
+-BookmarkBarViewTest8.DNDBackToOriginatingMenu
+# The following test is flaky.
+-BookmarkBarViewTest21.ContextMenusForEmptyFolder
 
-# TODO(crbug.com/1111979) Enable all tests on lacros.
--BookmarkBarViewTest*
--ChromeVisibilityObserverInteractiveTest.VisibilityTest
--CrossSiteSubframe/DragAndDropBrowserTest.CrossSiteDrag/*
--CrossSiteSubframe/DragAndDropBrowserTest.CrossTabDrag/*
--CrossSiteSubframe/DragAndDropBrowserTest.DragCorsSameOriginImageBetweenFrames/*
--CrossSiteSubframe/DragAndDropBrowserTest.DragCrossOriginImageBetweenFrames/*
--CrossSiteSubframe/DragAndDropBrowserTest.DragSameOriginImageBetweenFrames/*
+# TODO(crbug.com/40142821) Enable all tests on lacros.
+# The following tests fail consistently.
+-CrossSiteSubframe/DragAndDropBrowserTest.CrossTabDrag/0
+-CrossSiteSubframe/DragAndDropBrowserTest.DragCorsSameOriginImageBetweenFrames/0
+-CrossSiteSubframe/DragAndDropBrowserTest.DragCrossOriginImageBetweenFrames/0
+-CrossSiteSubframe/DragAndDropBrowserTest.DragSameOriginImageBetweenFrames/0
 -DesktopWidgetTestInteractive.DesktopNativeWidgetWithModalTransientChild
 -DesktopWindowTreeHostPlatformImplTest.CaptureEventForwarding
--DesktopWindowTreeHostPlatformImplTest.Deactivate
 -DesktopWindowTreeHostPlatformImplTest.InputMethodFocus
--ExtensionApiTest.WindowOpenFocus
--MenuViewDragAndDropTestNestedDrag.MenuViewDragAndDropNestedDrag
 -MenuViewDragAndDropTestTestInMenuDrag.TestInMenuDrag
 -OmniboxViewViewsTest.SelectionClipboard
--SameSiteSubframe/DragAndDropBrowserTest.CrossSiteDrag/*
--SameSiteSubframe/DragAndDropBrowserTest.CrossTabDrag/*
--SameSiteSubframe/DragAndDropBrowserTest.DragCorsSameOriginImageBetweenFrames/*
--SameSiteSubframe/DragAndDropBrowserTest.DragCrossOriginImageBetweenFrames/*
--SameSiteSubframe/DragAndDropBrowserTest.DragSameOriginImageBetweenFrames/*
+-SameSiteSubframe/DragAndDropBrowserTest.CrossTabDrag/0
+-SameSiteSubframe/DragAndDropBrowserTest.DragCorsSameOriginImageBetweenFrames/0
+-SameSiteSubframe/DragAndDropBrowserTest.DragCrossOriginImageBetweenFrames/0
+-SameSiteSubframe/DragAndDropBrowserTest.DragSameOriginImageBetweenFrames/0
 -SitePerProcessInteractiveBrowserTest.TabAndMouseFocusNavigation
--TabMetricsLoggerTest.CreateWindowFeaturesTestWindowActivation
--WidgetInputMethodInteractiveTest.Activation
--WidgetInputMethodInteractiveTest.OneWindow
--WidgetInputMethodInteractiveTest.TwoWindows
+# The following tests are flaky.
+-MenuItemViewTestInsertWithSubmenu1.InsertItemWithSubmenu1
+-MenuViewDragAndDropTestNestedDrag.MenuViewDragAndDropNestedDrag
+-TouchMode/InteractionTestUtilMouseUiTest.Drag/0
 
-# TODO(crbug.com/1195712): Implement the feature for Wayland.
+# TODO(crbug.com/40759171): Implement the feature for Wayland.
 -GlobalCommandsApiTest.GlobalCommand
-# TODO(crbug.com/1208111): Flaky test.
+
+# TODO(crbug.com/40765889): Was flaky with weston-test, fails consistently with
+# ui-controls.
 -MenuControllerUITest.TestMouseOverShownMenu
 
 # TODO(b/181803566): Fix modifier key interactions
--All/ActionCommandsApiTest.TriggeringCommandTriggersListener*
--All/ActionCommandsApiTest.TriggeringCommandTriggersPopup*
+# Note: ui/views/test/ui_controls_factory_desktop_aura_ozone.cc's implementation
+# of the SendKey*() functions currently DCHECK if the command key is pressed.
 -CommandsApiTest.ChromeOSConversions
--CommandsApiTest.DontOverwriteSystemShortcuts
--CommandsApiTest.PageActionKeyUpdated
--CommandsApiTest.UnpinnedPageActionTriggers
--PrivacySandboxDialogViewInteractiveUiTest.EscapeClosesNotice
 
-# TODO(crbug.com/1336691) Most tab dragging tests are failing, or flaky, but a
-# few consistently pass when run using touch interactions.
--TabDragging/DetachToBrowserTabDragControllerTest.CancelOnNewTabWhenDragging/*
--TabDragging/DetachToBrowserTabDragControllerTest.CaptureLostDuringDrag/*
--TabDragging/DetachToBrowserTabDragControllerTest.DeleteBeforeStartedDragging/*
--TabDragging/DetachToBrowserTabDragControllerTest.DeleteTabsWhileDetached/*
--TabDragging/DetachToBrowserTabDragControllerTest.DeleteTabWhileAttached/*
--TabDragging/DetachToBrowserTabDragControllerTest.DetachFromFullsizeWindow/*
--TabDragging/DetachToBrowserTabDragControllerTest.DetachToOwnWindow/*
--TabDragging/DetachToBrowserTabDragControllerTest.DetachToOwnWindowFromMaximizedWindow/*
--TabDragging/DetachToBrowserTabDragControllerTest.DragAll/*
+# TODO(crbug.com/40228994) Fix TabDragging tests.
+# The following tests fail consistently.
 -TabDragging/DetachToBrowserTabDragControllerTest.DragAllToSeparateWindow/*
--TabDragging/DetachToBrowserTabDragControllerTest.DragCollapsedGroupHeaderExpandsGroup/*
--TabDragging/DetachToBrowserTabDragControllerTest.DragDirectlyToSecondWindow/*
--TabDragging/DetachToBrowserTabDragControllerTest.DragDoesntStartFromClick/*
--TabDragging/DetachToBrowserTabDragControllerTest.DragGroupHeaderDragsGroup/*
--TabDragging/DetachToBrowserTabDragControllerTest.DragGroupHeaderLeftAvoidsOtherGroups/*
--TabDragging/DetachToBrowserTabDragControllerTest.DragGroupHeaderRightAvoidsOtherGroups/*
--TabDragging/DetachToBrowserTabDragControllerTest.DragGroupHeaderToSeparateWindow/*
--TabDragging/DetachToBrowserTabDragControllerTest.DragInSameWindow/*
--TabDragging/DetachToBrowserTabDragControllerTest.DragLeftToUngroupTab/*
--TabDragging/DetachToBrowserTabDragControllerTest.DragMultipleTabsLeftIntoGroup/0
--TabDragging/DetachToBrowserTabDragControllerTest.DragMultipleTabsRightIntoGroup/*
--TabDragging/DetachToBrowserTabDragControllerTest.DragOnlyTabInGroupRemovesGroup/0
--TabDragging/DetachToBrowserTabDragControllerTest.DragPinnedTabDoesNotGroup/0
--TabDragging/DetachToBrowserTabDragControllerTest.DragRightToUngroupTab/*
--TabDragging/DetachToBrowserTabDragControllerTest.DragSingleTabLeftIntoGroup/*
--TabDragging/DetachToBrowserTabDragControllerTest.DragSingleTabRightIntoGroup/*
--TabDragging/DetachToBrowserTabDragControllerTest.DragSingleTabRightOfRightmostGroup/0
+-TabDragging/DetachToBrowserTabDragControllerTest.DragDirectlyToSecondWindow/0
+-TabDragging/DetachToBrowserTabDragControllerTest.DragDirectlyToSecondWindow/2
+-TabDragging/DetachToBrowserTabDragControllerTest.DragGroupHeaderToSeparateWindow/1
+-TabDragging/DetachToBrowserTabDragControllerTest.DragGroupHeaderToSeparateWindow/3
 -TabDragging/DetachToBrowserTabDragControllerTest.DragSingleTabToSeparateWindow/*
--TabDragging/DetachToBrowserTabDragControllerTest.DragTabLeftPastCollapsedGroupHeader/*
--TabDragging/DetachToBrowserTabDragControllerTest.DragTabRightPastCollapsedGroupHeader/*
--TabDragging/DetachToBrowserTabDragControllerTest.DragTabWithinGroupDoesNotModifyGroup/*
--TabDragging/DetachToBrowserTabDragControllerTest.DragToSeparateWindow/*
--TabDragging/DetachToBrowserTabDragControllerTest.DragWindowIntoGroup/*
--TabDragging/DetachToBrowserTabDragControllerTest.DragWithMaskedWindows/*
--TabDragging/DetachToBrowserTabDragControllerTest.KeyPressShouldEndDragTest/*
+-TabDragging/DetachToBrowserTabDragControllerTest.DragToSeparateWindow/1
+-TabDragging/DetachToBrowserTabDragControllerTest.DragToSeparateWindow/3
+-TabDragging/DetachToBrowserTabDragControllerTest.DragWindowIntoGroup/1
+-TabDragging/DetachToBrowserTabDragControllerTest.DragWindowIntoGroup/3
+-TabDragging/DetachToBrowserTabDragControllerTest.FastResizeDuringDragging/*
+-TabDragging/DetachToBrowserTabDragControllerTest.NewBrowserWindowState/*
+-TabDragging/DetachToBrowserTabDragControllerTest.OffsetForDraggingInMaximizedWindow/*
 -TabDragging/DetachToBrowserTabDragControllerTest.OffsetForDraggingTab/*
--TabDragging/DetachToBrowserTabDragControllerTest.Revert*
--TabDragging/DetachToBrowserTabDragControllerTest.SelectTabDuringDrag/*
+-TabDragging/DetachToBrowserTabDragControllerTestTouch.FlingDownAtEndOfDrag/*
+-TabDragging/DetachToBrowserTabDragControllerTestTouch.FlingOnStartingDrag/*
 
-# TODO(crbug.com/1342797): Flaking on linux-lacros-rel
--TabDragging/DetachToBrowserTabDragControllerTest.DragPinnedTabDoesNotGroup/1
+# TODO(b/256212431): Re-enable when linux-lacros-rel support
+# signin::MakePrimaryAccountAvailable().
+-AccessCodeCastHandlerBrowserTest.ExpectProfileSynErrorWhenNoSync

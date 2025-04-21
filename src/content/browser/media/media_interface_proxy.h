@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,10 +11,8 @@
 
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
-#include "base/token.h"
 #include "base/unguessable_token.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "content/browser/media/media_interface_factory_holder.h"
 #include "content/public/browser/document_user_data.h"
 #include "content/public/common/cdm_info.h"
@@ -59,6 +57,11 @@ class MediaInterfaceProxy final : public DocumentUserData<MediaInterfaceProxy>,
       mojo::PendingReceiver<media::mojom::VideoDecoder> receiver,
       mojo::PendingRemote<media::stable::mojom::StableVideoDecoder>
           dst_video_decoder) final;
+#if BUILDFLAG(ALLOW_OOP_VIDEO_DECODER)
+  void CreateStableVideoDecoder(
+      mojo::PendingReceiver<media::stable::mojom::StableVideoDecoder>
+          video_decoder) final;
+#endif  // BUILDFLAG(ALLOW_OOP_VIDEO_DECODER)
   void CreateAudioEncoder(
       mojo::PendingReceiver<media::mojom::AudioEncoder> receiver) final;
   void CreateDefaultRenderer(
@@ -130,7 +133,7 @@ class MediaInterfaceProxy final : public DocumentUserData<MediaInterfaceProxy>,
       CreateCdmCallback callback,
       mojo::PendingRemote<media::mojom::ContentDecryptionModule> receiver,
       media::mojom::CdmContextPtr cdm_context,
-      const std::string& error_message);
+      media::CreateCdmStatus status);
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
 #if BUILDFLAG(IS_WIN)

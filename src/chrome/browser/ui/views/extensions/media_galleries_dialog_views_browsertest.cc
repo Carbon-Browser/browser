@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,14 +43,14 @@ MediaGalleryPrefInfo MakePrefInfo(
 
 class MediaGalleriesInteractiveDialogTest : public DialogBrowserTest {
  public:
-  MediaGalleriesInteractiveDialogTest() {}
+  MediaGalleriesInteractiveDialogTest() = default;
 
   MediaGalleriesInteractiveDialogTest(
       const MediaGalleriesInteractiveDialogTest&) = delete;
   MediaGalleriesInteractiveDialogTest& operator=(
       const MediaGalleriesInteractiveDialogTest&) = delete;
 
-  ~MediaGalleriesInteractiveDialogTest() override {}
+  ~MediaGalleriesInteractiveDialogTest() override = default;
 
   void PreRunTestOnMainThread() override {
     DialogBrowserTest::PreRunTestOnMainThread();

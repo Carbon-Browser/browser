@@ -1,16 +1,16 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_LOGIN_SAML_PASSWORD_SYNC_TOKEN_CHECKERS_COLLECTION_H_
 #define CHROME_BROWSER_ASH_LOGIN_SAML_PASSWORD_SYNC_TOKEN_CHECKERS_COLLECTION_H_
 
-#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
 
 #include "chrome/browser/ash/login/saml/password_sync_token_login_checker.h"
+#include "components/account_id/account_id.h"
 #include "components/user_manager/user.h"
 #include "net/base/backoff_entry.h"
 
@@ -51,11 +51,5 @@ class PasswordSyncTokenCheckersCollection
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::PasswordSyncTokenCheckersCollection;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SAML_PASSWORD_SYNC_TOKEN_CHECKERS_COLLECTION_H_

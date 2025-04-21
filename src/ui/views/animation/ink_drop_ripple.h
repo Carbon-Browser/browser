@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,8 @@ class LayerAnimationObserver;
 
 namespace views {
 
+class InkDropHost;
+
 namespace test {
 class InkDropRippleTestApi;
 }  // namespace test
@@ -36,7 +38,7 @@ class VIEWS_EXPORT InkDropRipple {
   // The opacity of the ink drop when it is not visible.
   static const float kHiddenOpacity;
 
-  InkDropRipple();
+  explicit InkDropRipple(InkDropHost* ink_drop_host);
   InkDropRipple(const InkDropRipple&) = delete;
   InkDropRipple& operator=(const InkDropRipple&) = delete;
   virtual ~InkDropRipple();
@@ -89,6 +91,9 @@ class VIEWS_EXPORT InkDropRipple {
   virtual void AnimateStateChange(InkDropState old_ink_drop_state,
                                   InkDropState new_ink_drop_state) = 0;
 
+  // Updates the transforms, opacity, and visibility to a ACTIVATED state.
+  virtual void SetStateToActivated() = 0;
+
   // Updates the transforms, opacity, and visibility to a HIDDEN state.
   virtual void SetStateToHidden() = 0;
 
@@ -97,6 +102,9 @@ class VIEWS_EXPORT InkDropRipple {
   // Get the current observer. CreateAnimationObserver must have already been
   // called.
   ui::LayerAnimationObserver* GetLayerAnimationObserver();
+
+  // Get the InkDropHost associated this ripple.
+  InkDropHost* GetInkDropHost() const;
 
  private:
   // The Callback invoked when all of the animation sequences for the specific
@@ -124,6 +132,9 @@ class VIEWS_EXPORT InkDropRipple {
   raw_ptr<InkDropRippleObserver> observer_ = nullptr;
 
   std::unique_ptr<ui::CallbackLayerAnimationObserver> animation_observer_;
+
+  // Reference to the host on which this ripple resides.
+  raw_ptr<InkDropHost> ink_drop_host_ = nullptr;
 };
 
 }  // namespace views

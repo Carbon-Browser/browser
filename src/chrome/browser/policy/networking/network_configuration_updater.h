@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,17 +13,12 @@
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
+#include "base/values.h"
 #include "chromeos/ash/components/network/policy_certificate_provider.h"
 #include "chromeos/components/onc/certificate_scope.h"
 #include "chromeos/components/onc/onc_parsed_certificates.h"
 #include "components/onc/onc_constants.h"
 #include "components/policy/core/common/policy_service.h"
-
-namespace base {
-class DictionaryValue;
-class ListValue;
-class Value;
-}  // namespace base
 
 namespace policy {
 
@@ -34,7 +29,7 @@ class PolicyMap;
 // (that will be propagated to the network service). Provides entry points for
 // handling client certificates and network configurations in subclasses.
 // Does not handle proxy settings.
-class NetworkConfigurationUpdater : public chromeos::PolicyCertificateProvider,
+class NetworkConfigurationUpdater : public ash::PolicyCertificateProvider,
                                     public PolicyService::Observer {
  public:
   NetworkConfigurationUpdater(const NetworkConfigurationUpdater&) = delete;
@@ -51,11 +46,11 @@ class NetworkConfigurationUpdater : public chromeos::PolicyCertificateProvider,
 
   // The observer interface sends notifications about changes in server and
   // authority certificates.
-  // chromeos::PolicyCertificateProvider:
+  // ash::PolicyCertificateProvider:
   void AddPolicyProvidedCertsObserver(
-      chromeos::PolicyCertificateProvider::Observer* observer) override;
+      ash::PolicyCertificateProvider::Observer* observer) override;
   void RemovePolicyProvidedCertsObserver(
-      chromeos::PolicyCertificateProvider::Observer* observer) override;
+      ash::PolicyCertificateProvider::Observer* observer) override;
   net::CertificateList GetAllServerAndAuthorityCertificates(
       const chromeos::onc::CertificateScope& scope) const override;
   net::CertificateList GetAllAuthorityCertificates(
@@ -84,8 +79,8 @@ class NetworkConfigurationUpdater : public chromeos::PolicyCertificateProvider,
   // Calls the specialized methods from subclasses to handle client certificates
   // and network configs.
   virtual void ApplyNetworkPolicy(
-      base::ListValue* network_configs_onc,
-      base::DictionaryValue* global_network_config) = 0;
+      const base::Value::List& network_configs_onc,
+      const base::Value::Dict& global_network_config) = 0;
 
   // Parses the current value of the ONC policy. Clears |network_configs|,
   // |global_network_config| and |certificates| and fills them with the
@@ -93,9 +88,9 @@ class NetworkConfigurationUpdater : public chromeos::PolicyCertificateProvider,
   // Certificates of the current policy. Callers can pass nullptr to any of
   // |network_configs|, |global_network_config|, |certificates| if they don't
   // need that specific part of the ONC policy.
-  void ParseCurrentPolicy(base::ListValue* network_configs,
-                          base::DictionaryValue* global_network_config,
-                          base::ListValue* certificates);
+  void ParseCurrentPolicy(base::Value::List* network_configs,
+                          base::Value::Dict* global_network_config,
+                          base::Value::List* certificates);
 
   const std::vector<chromeos::onc::OncParsedCertificates::ClientCertificate>&
   GetClientCertificates() const;
@@ -111,27 +106,10 @@ class NetworkConfigurationUpdater : public chromeos::PolicyCertificateProvider,
   // Apply the observed policy, i.e. both networks and certificates.
   void ApplyPolicy();
 
-  // Marks IP Address config fields as "Recommended" for Ethernet network
-  // configs without authentication. The reason is that Chrome OS used to treat
-  // Ethernet networks without authentication as unmanaged, so users were able
-  // to edit the IP address even if there was a policy for Ethernet. This
-  // behavior should be preserved for now to not break existing use cases.
-  // TODO(https://crbug.com/931412): Remove this when the server sets
-  // "Recommended".
-  void MarkFieldsAsRecommendedForBackwardsCompatibility(
-      base::Value* network_configs_onc);
-
-  // Sets the "Recommended" list of recommended field names in |onc_value|,
-  // which must be a dictionary, to |recommended_field_names|. If a
-  // "Recommended" list already existed in |onc_value|, it's replaced.
-  void SetRecommended(
-      base::Value* onc_value,
-      std::initializer_list<base::StringPiece> recommended_field_names);
-
   std::string LogHeader() const;
 
   // Imports the certificates part of the policy.
-  void ImportCertificates(const base::ListValue& certificates_onc);
+  void ImportCertificates(base::Value::List certificates_onc);
 
   void NotifyPolicyProvidedCertsChanged();
 
@@ -149,8 +127,8 @@ class NetworkConfigurationUpdater : public chromeos::PolicyCertificateProvider,
 
   // Observer list for notifying about ONC-provided server and CA certificate
   // changes.
-  base::ObserverList<chromeos::PolicyCertificateProvider::Observer,
-                     true>::Unchecked observer_list_;
+  base::ObserverList<ash::PolicyCertificateProvider::Observer, true>::Unchecked
+      observer_list_;
 };
 
 }  // namespace policy

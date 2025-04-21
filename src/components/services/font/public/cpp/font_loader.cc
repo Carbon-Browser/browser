@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/trace_event/trace_event.h"
 #include "components/services/font/public/cpp/font_service_thread.h"
+#include "pdf/buildflags.h"
+#include "third_party/skia/include/core/SkFontMgr.h"
 
 namespace font_service {
 
@@ -27,7 +29,7 @@ bool FontLoader::matchFamilyName(const char family_name[],
                                  SkString* out_family_name,
                                  SkFontStyle* out_style) {
   TRACE_EVENT1("fonts", "FontServiceThread::MatchFamilyName", "family_name",
-               TRACE_STR_COPY(family_name));
+               TRACE_STR_COPY(family_name ? family_name : "<unspecified>"));
   return thread_->MatchFamilyName(family_name, requested, out_font_identifier,
                                   out_family_name, out_style);
 }
@@ -61,9 +63,10 @@ SkStreamAsset* FontLoader::openStream(const FontIdentity& identity) {
   }
 }
 
-sk_sp<SkTypeface> FontLoader::makeTypeface(const FontIdentity& identity) {
+sk_sp<SkTypeface> FontLoader::makeTypeface(const FontIdentity& identity,
+                                           sk_sp<SkFontMgr> mgr) {
   TRACE_EVENT0("fonts", "FontServiceThread::makeTypeface");
-  return SkFontConfigInterface::makeTypeface(identity);
+  return SkFontConfigInterface::makeTypeface(identity, mgr);
 }
 
 // Additional cross-thread accessible methods.
@@ -98,6 +101,7 @@ bool FontLoader::MatchFontByPostscriptNameOrFullFontName(
       std::move(postscript_name_or_full_font_name), out_identity);
 }
 
+#if BUILDFLAG(ENABLE_PDF)
 void FontLoader::MatchFontWithFallback(std::string family,
                                        bool is_bold,
                                        bool is_italic,
@@ -107,6 +111,7 @@ void FontLoader::MatchFontWithFallback(std::string family,
   thread_->MatchFontWithFallback(std::move(family), is_bold, is_italic, charset,
                                  fallback_family_type, out_font_file_handle);
 }
+#endif  // BUILDFLAG(ENABLE_PDF)
 
 void FontLoader::OnMappedFontFileDestroyed(internal::MappedFontFile* f) {
   TRACE_EVENT1("fonts", "FontLoader::OnMappedFontFileDestroyed", "identity",

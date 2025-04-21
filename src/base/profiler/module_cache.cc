@@ -1,10 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/profiler/module_cache.h"
 
 #include <iterator>
+#include <string_view>
 #include <utility>
 
 #include "base/check_op.h"
@@ -32,9 +33,12 @@ struct ModuleAddressCompare {
 
 }  // namespace
 
-std::string TransformModuleIDToBreakpadFormat(StringPiece module_id) {
+std::string TransformModuleIDToSymbolServerFormat(std::string_view module_id) {
   std::string mangled_id(module_id);
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+  // Android and Linux Chrome builds use the "breakpad" format to index their
+  // build id, so we transform the build id for these platforms. All other
+  // platforms keep their symbols indexed by the original build ID.
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_LINUX)
   // Linux ELF module IDs are 160bit integers, which we need to mangle
   // down to 128bit integers to match the id that Breakpad outputs.
   // Example on version '66.0.3359.170' x64:
@@ -61,17 +65,21 @@ ModuleCache::~ModuleCache() {
 }
 
 const ModuleCache::Module* ModuleCache::GetModuleForAddress(uintptr_t address) {
-  if (const ModuleCache::Module* module = GetExistingModuleForAddress(address))
+  if (const ModuleCache::Module* module =
+          GetExistingModuleForAddress(address)) {
     return module;
+  }
 
   std::unique_ptr<const Module> new_module = CreateModuleForAddress(address);
-  if (!new_module && auxiliary_module_provider_)
+  if (!new_module && auxiliary_module_provider_) {
     new_module = auxiliary_module_provider_->TryCreateModuleForAddress(address);
-  if (!new_module)
+  }
+  if (!new_module) {
     return nullptr;
+  }
 
   const auto result = native_modules_.insert(std::move(new_module));
-  // TODO(https://crbug.com/1131769): Reintroduce DCHECK(result.second) after
+  // TODO(crbug.com/40150346): Reintroduce DCHECK(result.second) after
   // fixing the issue that is causing it to fail.
   return result.first->get();
 }
@@ -79,10 +87,12 @@ const ModuleCache::Module* ModuleCache::GetModuleForAddress(uintptr_t address) {
 std::vector<const ModuleCache::Module*> ModuleCache::GetModules() const {
   std::vector<const Module*> result;
   result.reserve(native_modules_.size());
-  for (const std::unique_ptr<const Module>& module : native_modules_)
+  for (const std::unique_ptr<const Module>& module : native_modules_) {
     result.push_back(module.get());
-  for (const std::unique_ptr<const Module>& module : non_native_modules_)
+  }
+  for (const std::unique_ptr<const Module>& module : non_native_modules_) {
     result.push_back(module.get());
+  }
   return result;
 }
 
@@ -146,12 +156,14 @@ void ModuleCache::AddCustomNativeModule(std::unique_ptr<const Module> module) {
 const ModuleCache::Module* ModuleCache::GetExistingModuleForAddress(
     uintptr_t address) const {
   const auto non_native_module_loc = non_native_modules_.find(address);
-  if (non_native_module_loc != non_native_modules_.end())
+  if (non_native_module_loc != non_native_modules_.end()) {
     return non_native_module_loc->get();
+  }
 
   const auto native_module_loc = native_modules_.find(address);
-  if (native_module_loc != native_modules_.end())
+  if (native_module_loc != native_modules_.end()) {
     return native_module_loc->get();
+  }
 
   return nullptr;
 }

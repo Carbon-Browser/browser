@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@ import "mojo/public/mojom/base/time.mojom";
 
 // Maps to the C++ enum CertProvisioningWorkerState from
 // cert_provisioning_common.h .
-[Stable, Extensible]
+[Extensible]
 enum CertProvisioningProcessState {
   [Default] kInitState = 0,
   kKeypairGenerated = 1,
@@ -19,14 +19,19 @@ enum CertProvisioningProcessState {
   kSignCsrFinished = 6,
   kFinishCsrResponseReceived = 7,
   kSucceeded = 8,
-  // The states below should never be sent, but it's good for diagnostic
+  // The 3 states below should never be sent, but it's good for diagnostic
   // purposes to be able to recognize them if it still happens.
   kInconsistentDataError = 9,
   kFailed = 10,
   kCanceled = 11,
+
+  // States only used in the "dynamic" flow.
+  [MinVersion=2] kReadyForNextOperation = 12,
+  [MinVersion=2] kAuthorizeInstructionReceived = 13,
+  [MinVersion=2] kProofOfPossessionInstructionReceived = 14,
+  [MinVersion=2] kImportCertificateInstructionReceived = 15,
 };
 
-[Stable]
 struct CertProvisioningBackendServerError {
   // The time of the error.
  mojo_base.mojom.Time time;
@@ -36,7 +41,6 @@ struct CertProvisioningBackendServerError {
  int32 status_code = 0;
 };
 
-[Stable]
 struct CertProvisioningProcessStatus {
   // ID of the certificate provisioning process from the policy.
   string cert_profile_id@0;
@@ -69,7 +73,7 @@ struct CertProvisioningProcessStatus {
 // This interface is implemented by classes that want to register themself as
 // certificate provisioning observers and receive notifications when
 // CertProvisioningProcessStatus of at least one process significantly changes.
-[Stable, Uuid="33dcc3c5-f9f6-4d28-be35-119b8f499d88"]
+[Uuid="33dcc3c5-f9f6-4d28-be35-119b8f499d88"]
 interface CertProvisioningObserver {
   // Ash calls this to notify the observer about a new change.
   OnStateChanged@0();
@@ -78,7 +82,7 @@ interface CertProvisioningObserver {
 // This interface provides methods to get information about the status of the
 // certificate provisioning feature and control it.
 // It is implemented by Ash-Chrome.
-[Stable, Uuid="ff60efaf-bb5c-4aff-903f-72abcb613df6"]
+[Uuid="ff60efaf-bb5c-4aff-903f-72abcb613df6"]
 interface CertProvisioning {
   // Adds an observer that will be notified about updates from the certificate
   // provisioning feature.
@@ -96,4 +100,9 @@ interface CertProvisioning {
   // out to the server-side and check for the current status. Otherwise it might
   // do nothing.
   UpdateOneProcess@2(string cert_profile_id);
+
+  // Instructs Ash to start over the provisioning of the certificate with
+  //`cert_profile_id`.
+  [MinVersion=2]
+  ResetOneProcess@3(string cert_profile_id);
 };

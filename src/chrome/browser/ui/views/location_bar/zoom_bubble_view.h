@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,6 @@
 #include "chrome/browser/ui/views/frame/immersive_mode_controller.h"
 #include "chrome/browser/ui/views/location_bar/location_bar_bubble_delegate_view.h"
 #include "components/sessions/core/session_id.h"
-#include "content/public/browser/notification_observer.h"
-#include "content/public/browser/notification_registrar.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "extensions/browser/extension_icon_image.h"
 #include "ui/views/controls/label.h"
@@ -25,7 +23,6 @@ class WebContents;
 }
 
 namespace views {
-class AXVirtualView;
 class Button;
 class ImageButton;
 }  // namespace views
@@ -34,6 +31,8 @@ class ImageButton;
 class ZoomBubbleView : public LocationBarBubbleDelegateView,
                        public ImmersiveModeController::Observer,
                        public extensions::IconImage::Observer {
+  METADATA_HEADER(ZoomBubbleView, LocationBarBubbleDelegateView)
+
  public:
   ZoomBubbleView(const ZoomBubbleView&) = delete;
   ZoomBubbleView& operator=(const ZoomBubbleView&) = delete;
@@ -62,7 +61,8 @@ class ZoomBubbleView : public LocationBarBubbleDelegateView,
   FRIEND_TEST_ALL_PREFIXES(ZoomBubbleBrowserTest,
                            BubbleSuppressingExtensionRefreshesExistingBubble);
   FRIEND_TEST_ALL_PREFIXES(ZoomBubbleBrowserTest, FocusPreventsClose);
-  FRIEND_TEST_ALL_PREFIXES(ZoomBubbleBrowserTest, AnchorPositionsInFullscreen);
+  FRIEND_TEST_ALL_PREFIXES(ZoomBubbleImmersiveDisabledBrowserTest,
+                           AnchorPositionsInFullscreen);
 
   // Returns true if we can reuse the existing bubble for the given
   // |web_contents|.
@@ -167,9 +167,6 @@ class ZoomBubbleView : public LocationBarBubbleDelegateView,
   raw_ptr<views::Button> zoom_out_button_ = nullptr;
   raw_ptr<views::Button> zoom_in_button_ = nullptr;
   raw_ptr<views::Button> reset_button_ = nullptr;
-
-  // Virtual view used to announce zoom level changes.
-  raw_ptr<views::AXVirtualView> zoom_level_alert_ = nullptr;
 
   // Whether the currently displayed bubble will automatically close.
   bool auto_close_;

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,12 @@
 #define BASE_ANDROID_APPLICATION_STATUS_LISTENER_H_
 
 #include <jni.h>
+
 #include <memory>
 
 #include "base/android/jni_android.h"
 #include "base/base_export.h"
-#include "base/callback_forward.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback_forward.h"
 
 namespace base {
 namespace android {

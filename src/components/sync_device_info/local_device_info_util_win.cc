@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 namespace syncer {
 
 std::string GetPersonalizableDeviceNameInternal() {
-  wchar_t computer_name[MAX_COMPUTERNAME_LENGTH + 1] = {0};
+  wchar_t computer_name[MAX_COMPUTERNAME_LENGTH + 1] = {};
   DWORD size = std::size(computer_name);
   if (::GetComputerNameW(computer_name, &size)) {
     std::string result;

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -74,11 +74,18 @@ bool EvictFileFromSystemCacheWithRetry(const FilePath& path) {
   const int kCycles = 10;
   const TimeDelta kDelay = TestTimeouts::action_timeout() / kCycles;
   for (int i = 0; i < kCycles; i++) {
-    if (EvictFileFromSystemCache(path))
+    if (EvictFileFromSystemCache(path)) {
       return true;
+    }
     PlatformThread::Sleep(kDelay);
   }
   return false;
+}
+
+FilePath GetTempDirForTesting() {
+  FilePath path;
+  CHECK(GetTempDir(&path));
+  return path;
 }
 
 FilePath CreateUniqueTempDirectoryScopedToTest() {

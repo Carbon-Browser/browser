@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,12 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/scoped_java_ref.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_executor.h"
 #include "base/task/single_thread_task_runner.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
 #include "mojo/public/java/system/system_impl_java_jni_headers/BaseRunLoop_jni.h"
 
 using base::android::JavaParamRef;
@@ -33,11 +35,6 @@ static void JNI_BaseRunLoop_Run(JNIEnv* env,
 static void JNI_BaseRunLoop_RunUntilIdle(JNIEnv* env,
                                          const JavaParamRef<jobject>& jcaller) {
   base::RunLoop().RunUntilIdle();
-}
-
-static void JNI_BaseRunLoop_Quit(JNIEnv* env,
-                                 const JavaParamRef<jobject>& jcaller) {
-  base::RunLoop::QuitCurrentWhenIdleDeprecated();
 }
 
 static void RunJavaRunnable(

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/files/file.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback.h"
 #include "base/hash/md5.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/memory/weak_ptr.h"
@@ -19,12 +19,11 @@
 #include "base/task/task_traits.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/extensions/api/image_writer_private/image_writer_utility_client.h"
 #include "chrome/common/extensions/api/image_writer_private.h"
 #include "extensions/common/extension_id.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ash/components/disks/disk_mount_manager.h"
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chromeos/ash/components/disks/disk_mount_manager.h"
 #endif
 
 namespace image_writer_api = extensions::api::image_writer_private;
@@ -39,6 +38,10 @@ namespace image_writer {
 const int kProgressComplete = 100;
 
 class OperationManager;
+
+#if !BUILDFLAG(IS_CHROMEOS)
+class ImageWriterUtilityClient;
+#endif
 
 // Encapsulates an operation being run on behalf of the
 // OperationManager.  Construction of the operation does not start
@@ -166,7 +169,7 @@ class Operation : public base::RefCountedThreadSafe<Operation> {
   friend class ImageWriterUtilityClientTest;
   friend class WriteFromUrlOperationForTest;
 
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
+#if !BUILDFLAG(IS_CHROMEOS)
   // Ensures the client is started.  This may be called many times but will only
   // instantiate one client which should exist for the lifetime of the
   // Operation.
@@ -182,12 +185,12 @@ class Operation : public base::RefCountedThreadSafe<Operation> {
   scoped_refptr<ImageWriterUtilityClient> image_writer_client_;
 #endif
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   // Unmounts all volumes on |device_path_|.
   void UnmountVolumes(base::OnceClosure continuation);
   // Starts the write after unmounting.
   void UnmountVolumesCallback(base::OnceClosure continuation,
-                              chromeos::MountError error_code);
+                              ash::MountError error_code);
   // Starts the ImageBurner write.  Note that target_path is the file path of
   // the device where device_path has been a system device path.
   void StartWriteOnUIThread(const std::string& target_path,

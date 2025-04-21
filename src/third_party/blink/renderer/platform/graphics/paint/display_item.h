@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,12 +14,17 @@
 #include "third_party/blink/renderer/platform/wtf/assertions.h"
 #include "third_party/blink/renderer/platform/wtf/hash_functions.h"
 #include "third_party/blink/renderer/platform/wtf/hash_traits.h"
+#include "third_party/blink/renderer/platform/wtf/wtf_size_t.h"
 #include "ui/gfx/geometry/rect.h"
 
 #if DCHECK_IS_ON()
 #include "third_party/blink/renderer/platform/json/json_values.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #endif
+
+namespace WTF {
+class String;
+}  // namespace WTF
 
 namespace blink {
 
@@ -62,24 +67,18 @@ class PLATFORM_EXPORT DisplayItem {
     kDrawingPaintPhaseFirst = kDrawingFirst,
     kDrawingPaintPhaseLast = kDrawingFirst + kPaintPhaseMax,
     kBoxDecorationBackground,
+    kFixedAttachmentBackground,
     kCapsLockIndicator,
     kCaret,
-    kClippingMask,
     kColumnRules,
-    kDebugDrawing,
     kDocumentRootBackdrop,
     kDocumentBackground,
-    kDragImage,
     kDragCaret,
     kForcedColorsModeBackplate,
     kSVGImage,
-    kLinkHighlight,
     kImageAreaFocusRing,
     kOverflowControls,
     kFrameOverlay,
-    kPopupContainerBorder,
-    kPopupListBoxBackground,
-    kPopupListBoxRow,
     kPrintedContentDestinationLocations,
     kPrintedContentPDFURLRect,
     kReflectionMask,
@@ -95,8 +94,6 @@ class PLATFORM_EXPORT DisplayItem {
     kScrollbarTickmarks,
     kSelectionTint,
     kTableCollapsedBorders,
-    kVideoBitmap,
-    kWebFont,
     kWebPlugin,
     kDrawingLast = kWebPlugin,
 
@@ -109,8 +106,8 @@ class PLATFORM_EXPORT DisplayItem {
     kForeignLayerLinkHighlight,
     kForeignLayerViewportScroll,
     kForeignLayerViewportScrollbar,
-    kForeignLayerDocumentTransitionContent,
-    kForeignLayerLast = kForeignLayerDocumentTransitionContent,
+    kForeignLayerViewTransitionContent,
+    kForeignLayerLast = kForeignLayerViewTransitionContent,
 
     kClipPaintPhaseFirst,
     kClipPaintPhaseLast = kClipPaintPhaseFirst + kPaintPhaseMax,
@@ -133,6 +130,9 @@ class PLATFORM_EXPORT DisplayItem {
     // include content that does not paint. Hit test data ensure a layer exists
     // and is sized properly even if no content would otherwise be painted.
     kHitTest,
+    // Web plugin needs a separate id to avoid conflict with the hit test data
+    // for LayoutReplaced.
+    kWebPluginHitTest,
 
     // Used for paint chunks that contain region capture data.
     kRegionCapture,
@@ -142,8 +142,6 @@ class PLATFORM_EXPORT DisplayItem {
     kScrollHitTest,
     // Used to prevent composited scrolling on the resize handle.
     kResizerScrollHitTest,
-    // Used to prevent composited scrolling on plugins with wheel handlers.
-    kPluginScrollHitTest,
     // Used to prevent composited scrolling and set touch action region, on
     // custom scrollbars and non-composited native scrollbars.
     kScrollbarHitTest,
@@ -179,15 +177,18 @@ class PLATFORM_EXPORT DisplayItem {
 
     // The no-argument version is for operator<< which is used in DCHECK and
     // unit tests.
-    String ToString() const;
+    WTF::String ToString() const;
     // This version will output the debug name of the client.
-    String ToString(const PaintArtifact&) const;
+    WTF::String ToString(const PaintArtifact&) const;
 
     const DisplayItemClientId client_id;
     const Type type;
     const wtf_size_t fragment;
 
     struct HashKey {
+      DISALLOW_NEW();
+
+     public:
       HashKey() = default;
       explicit HashKey(const DisplayItem::Id& id)
           : client_id(id.client_id), type(id.type), fragment(id.fragment) {}
@@ -282,12 +283,10 @@ class PLATFORM_EXPORT DisplayItem {
   bool IsSubsequenceTombstone() const {
     return !is_not_tombstone_ && client_id_ == kInvalidDisplayItemClientId;
   }
-  static String TypeAsDebugString(DisplayItem::Type);
-  String AsDebugString(const PaintArtifact&) const;
-  String IdAsString(const PaintArtifact&) const;
-  void PropertiesAsJSON(JSONObject&,
-                        const PaintArtifact&,
-                        bool client_known_to_be_alive = false) const;
+  static WTF::String TypeAsDebugString(DisplayItem::Type);
+  WTF::String AsDebugString(const PaintArtifact&) const;
+  WTF::String IdAsString(const PaintArtifact&) const;
+  void PropertiesAsJSON(JSONObject&, const PaintArtifact&) const;
 #endif
 
  protected:
@@ -372,27 +371,19 @@ template <>
 struct HashTraits<blink::DisplayItem::Id::HashKey>
     : GenericHashTraits<blink::DisplayItem::Id::HashKey> {
   using Key = blink::DisplayItem::Id::HashKey;
-  static void ConstructDeletedValue(Key& slot, bool) {
+  static constexpr bool kEmptyValueIsZero = true;
+  static void ConstructDeletedValue(Key& slot) {
     const_cast<wtf_size_t&>(slot.fragment) = kNotFound;
   }
   static bool IsDeletedValue(const Key& id) { return id.fragment == kNotFound; }
-};
 
-template <>
-struct DefaultHash<blink::DisplayItem::Id::HashKey> {
-  struct Hash {
-    STATIC_ONLY(Hash);
-    using Key = blink::DisplayItem::Id::HashKey;
-    static unsigned GetHash(const Key& id) {
-      unsigned hash =
-          IntHash<blink::DisplayItemClientId>::GetHash(id.client_id);
-      WTF::AddIntToHash(hash, id.type);
-      WTF::AddIntToHash(hash, id.fragment);
-      return hash;
-    }
-    static bool Equal(const Key& a, const Key& b) { return a == b; }
-    static const bool safe_to_compare_to_empty_or_deleted = false;
-  };
+  static unsigned GetHash(const Key& id) {
+    unsigned hash = WTF::GetHash(id.client_id);
+    WTF::AddIntToHash(hash, id.type);
+    WTF::AddIntToHash(hash, id.fragment);
+    return hash;
+  }
+  static constexpr bool kSafeToCompareToEmptyOrDeleted = false;
 };
 
 }  // namespace WTF

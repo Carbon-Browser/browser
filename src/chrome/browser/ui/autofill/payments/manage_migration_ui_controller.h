@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/scoped_observation.h"
 #include "chrome/browser/ui/autofill/payments/local_card_migration_bubble_controller_impl.h"
 #include "chrome/browser/ui/autofill/payments/local_card_migration_controller_observer.h"
 #include "chrome/browser/ui/autofill/payments/local_card_migration_dialog_controller_impl.h"
@@ -65,14 +66,15 @@ class ManageMigrationUiController
       const LegalMessageLines& legal_message_lines,
       const std::string& user_email,
       const std::vector<MigratableCreditCard>& migratable_credit_cards,
-      AutofillClient::LocalCardMigrationCallback
+      payments::PaymentsAutofillClient::LocalCardMigrationCallback
           start_migrating_cards_callback);
 
   void UpdateCreditCardIcon(
       const bool has_server_error,
       const std::u16string& tip_message,
       const std::vector<MigratableCreditCard>& migratable_credit_cards,
-      AutofillClient::MigrationDeleteCardCallback delete_local_card_callback);
+      payments::PaymentsAutofillClient::MigrationDeleteCardCallback
+          delete_local_card_callback);
 
   void OnUserClickedCreditCardIcon();
 
@@ -80,13 +82,14 @@ class ManageMigrationUiController
 
   bool IsIconVisible() const;
 
-  AutofillBubbleBase* GetBubbleView() const;
-
-  LocalCardMigrationDialog* GetDialogView() const;
+  // Returns the bubble or the dialog view, respectively.
+  AutofillBubbleBase* GetBubbleView();
+  LocalCardMigrationDialog* GetDialogView();
 
   // LocalCardMigrationControllerObserver:
   void OnMigrationNoLongerAvailable() override;
   void OnMigrationStarted() override;
+  void OnSourceDestruction(LocalCardMigrationControllerSource source) override;
 
  protected:
   explicit ManageMigrationUiController(content::WebContents* web_contents);
@@ -94,14 +97,16 @@ class ManageMigrationUiController
  private:
   friend class content::WebContentsUserData<ManageMigrationUiController>;
 
+  // Gets the card migration bubble controller for this `WebContents`.
+  LocalCardMigrationBubbleControllerImpl* GetBubbleController();
+  // Gets the card migration dialog controller for this `WebContents`.
+  LocalCardMigrationDialogControllerImpl* GetDialogController();
+
   void ReshowBubble();
 
   void ShowErrorDialog();
 
   void ShowFeedbackDialog();
-
-  raw_ptr<LocalCardMigrationBubbleControllerImpl> bubble_controller_ = nullptr;
-  raw_ptr<LocalCardMigrationDialogControllerImpl> dialog_controller_ = nullptr;
 
   // This indicates what step the migration flow is currently in and
   // what should be shown next.
@@ -110,6 +115,13 @@ class ManageMigrationUiController
   // This indicates if we should show error dialog or normal feedback dialog
   // after users click the credit card icon.
   bool show_error_dialog_ = false;
+
+  base::ScopedObservation<LocalCardMigrationBubbleControllerImpl,
+                          ManageMigrationUiController>
+      bubble_controller_observation_{this};
+  base::ScopedObservation<LocalCardMigrationDialogControllerImpl,
+                          ManageMigrationUiController>
+      dialog_controller_observation_{this};
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 };

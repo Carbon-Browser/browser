@@ -1,17 +1,18 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMEOS_ASH_COMPONENTS_DBUS_USERDATAAUTH_CRYPTOHOME_MISC_CLIENT_H_
 #define CHROMEOS_ASH_COMPONENTS_DBUS_USERDATAAUTH_CRYPTOHOME_MISC_CLIENT_H_
 
-#include "base/callback.h"
+#include <optional>
+
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/observer_list_types.h"
-#include "chromeos/dbus/common/dbus_method_call_status.h"
-#include "chromeos/dbus/cryptohome/UserDataAuth.pb.h"
-#include "chromeos/dbus/cryptohome/rpc.pb.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chromeos/ash/components/dbus/cryptohome/UserDataAuth.pb.h"
+#include "chromeos/ash/components/dbus/cryptohome/rpc.pb.h"
+#include "chromeos/dbus/common/dbus_callback.h"
 
 namespace dbus {
 class Bus;
@@ -26,17 +27,15 @@ namespace ash {
 class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) CryptohomeMiscClient {
  public:
   using GetSystemSaltCallback =
-      DBusMethodCallback<::user_data_auth::GetSystemSaltReply>;
+      chromeos::DBusMethodCallback<::user_data_auth::GetSystemSaltReply>;
   using GetSanitizedUsernameCallback =
-      DBusMethodCallback<::user_data_auth::GetSanitizedUsernameReply>;
+      chromeos::DBusMethodCallback<::user_data_auth::GetSanitizedUsernameReply>;
   using GetLoginStatusCallback =
-      DBusMethodCallback<::user_data_auth::GetLoginStatusReply>;
-  using LockToSingleUserMountUntilRebootCallback = DBusMethodCallback<
+      chromeos::DBusMethodCallback<::user_data_auth::GetLoginStatusReply>;
+  using LockToSingleUserMountUntilRebootCallback = chromeos::DBusMethodCallback<
       ::user_data_auth::LockToSingleUserMountUntilRebootReply>;
   using GetRsuDeviceIdCallback =
-      DBusMethodCallback<::user_data_auth::GetRsuDeviceIdReply>;
-  using CheckHealthCallback =
-      DBusMethodCallback<::user_data_auth::CheckHealthReply>;
+      chromeos::DBusMethodCallback<::user_data_auth::GetRsuDeviceIdReply>;
 
   // Not copyable or movable.
   CryptohomeMiscClient(const CryptohomeMiscClient&) = delete;
@@ -58,7 +57,7 @@ class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) CryptohomeMiscClient {
 
   // Runs the callback as soon as the service becomes available.
   virtual void WaitForServiceToBeAvailable(
-      WaitForServiceToBeAvailableCallback callback) = 0;
+      chromeos::WaitForServiceToBeAvailableCallback callback) = 0;
 
   // Retrieves the system salt.
   virtual void GetSystemSalt(
@@ -85,12 +84,8 @@ class COMPONENT_EXPORT(USERDATAAUTH_CLIENT) CryptohomeMiscClient {
       const ::user_data_auth::GetRsuDeviceIdRequest& request,
       GetRsuDeviceIdCallback callback) = 0;
 
-  // Returns the "health" state of the system. i.e. If powerwash is needed.
-  virtual void CheckHealth(const ::user_data_auth::CheckHealthRequest& request,
-                           CheckHealthCallback callback) = 0;
-
   // Blocking version of GetSanitizedUsername().
-  virtual absl::optional<::user_data_auth::GetSanitizedUsernameReply>
+  virtual std::optional<::user_data_auth::GetSanitizedUsernameReply>
   BlockingGetSanitizedUsername(
       const ::user_data_auth::GetSanitizedUsernameRequest& request) = 0;
 

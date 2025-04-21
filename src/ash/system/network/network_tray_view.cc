@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,33 +10,26 @@
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/model/system_tray_model.h"
+#include "ash/system/network/active_network_icon.h"
 #include "ash/system/network/network_icon.h"
 #include "ash/system/network/network_icon_animation.h"
 #include "ash/system/network/tray_network_state_model.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/controls/image_view.h"
 
 namespace ash {
-
-namespace {
-
-// OOBE has a white background that makes regular tray icons not visible.
-network_icon::IconType GetIconType() {
-  if (Shell::Get()->session_controller()->GetSessionState() ==
-      session_manager::SessionState::OOBE) {
-    return network_icon::ICON_TYPE_TRAY_OOBE;
-  }
-  return network_icon::ICON_TYPE_TRAY_REGULAR;
-}
-
-}  // namespace
 
 NetworkTrayView::NetworkTrayView(Shelf* shelf, ActiveNetworkIcon::Type type)
     : TrayItemView(shelf), type_(type) {
   Shell::Get()->system_tray_model()->network_state_model()->AddObserver(this);
   Shell::Get()->session_controller()->AddObserver(this);
   CreateImageView();
+
+  GetViewAccessibility().SetRole(ax::mojom::Role::kImage);
+
   UpdateConnectionStatus(true /* notify_a11y */);
 }
 
@@ -47,26 +40,13 @@ NetworkTrayView::~NetworkTrayView() {
   Shell::Get()->session_controller()->RemoveObserver(this);
 }
 
-const char* NetworkTrayView::GetClassName() const {
-  return "NetworkTrayView";
-}
-
-void NetworkTrayView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
-  node_data->SetName(accessible_name_);
-  node_data->SetDescription(accessible_description_);
-}
-
 std::u16string NetworkTrayView::GetAccessibleNameString() const {
-  return tooltip_;
+  return GetCachedTooltipText();
 }
 
 views::View* NetworkTrayView::GetTooltipHandlerForPoint(
     const gfx::Point& point) {
   return GetLocalBounds().Contains(point) ? this : nullptr;
-}
-
-std::u16string NetworkTrayView::GetTooltipText(const gfx::Point& p) const {
-  return tooltip_;
 }
 
 void NetworkTrayView::HandleLocaleChange() {
@@ -75,6 +55,12 @@ void NetworkTrayView::HandleLocaleChange() {
 
 void NetworkTrayView::OnThemeChanged() {
   TrayItemView::OnThemeChanged();
+  UpdateNetworkStateHandlerIcon();
+}
+
+void NetworkTrayView::UpdateLabelOrImageViewColor(bool active) {
+  TrayItemView::UpdateLabelOrImageViewColor(active);
+
   UpdateNetworkStateHandlerIcon();
 }
 
@@ -108,26 +94,54 @@ void NetworkTrayView::UpdateNetworkStateHandlerIcon() {
   bool animating = false;
   gfx::ImageSkia image =
       Shell::Get()->system_tray_model()->active_network_icon()->GetImage(
-          type_, GetIconType(), &animating);
+          GetColorProvider(), type_, GetIconType(), &animating);
   bool show_in_tray = !image.isNull();
   UpdateIcon(show_in_tray, image);
-  if (animating)
+  if (animating) {
     network_icon::NetworkIconAnimation::GetInstance()->AddObserver(this);
-  else
+  } else {
     network_icon::NetworkIconAnimation::GetInstance()->RemoveObserver(this);
+  }
 }
 
 void NetworkTrayView::UpdateConnectionStatus(bool notify_a11y) {
-  std::u16string prev_accessible_name = accessible_name_;
+  std::u16string prev_accessible_name = GetViewAccessibility().GetCachedName();
+  std::u16string accessible_name;
+  std::u16string tooltip;
   Shell::Get()
       ->system_tray_model()
       ->active_network_icon()
-      ->GetConnectionStatusStrings(type_, &accessible_name_,
-                                   &accessible_description_, &tooltip_);
-  if (notify_a11y && !accessible_name_.empty() &&
-      accessible_name_ != prev_accessible_name) {
+      ->GetConnectionStatusStrings(type_, &accessible_name,
+                                   &accessible_description_, &tooltip);
+  GetViewAccessibility().SetName(accessible_name);
+  if (notify_a11y && !accessible_name.empty() &&
+      accessible_name != prev_accessible_name) {
     NotifyAccessibilityEvent(ax::mojom::Event::kAlert, true);
   }
+
+  if (!accessible_description_.empty()) {
+    GetViewAccessibility().SetDescription(accessible_description_);
+  } else {
+    GetViewAccessibility().RemoveDescription();
+  }
+
+  SetCachedTooltipText(tooltip);
 }
+
+network_icon::IconType NetworkTrayView::GetIconType() {
+  // OOBE has a white background that makes regular tray icons not visible.
+  if (Shell::Get()->session_controller()->GetSessionState() ==
+      session_manager::SessionState::OOBE) {
+    return network_icon::ICON_TYPE_TRAY_OOBE;
+  }
+  // Active tray has a different icon color.
+  if (is_active()) {
+    return network_icon::ICON_TYPE_TRAY_ACTIVE;
+  }
+  return network_icon::ICON_TYPE_TRAY_REGULAR;
+}
+
+BEGIN_METADATA(NetworkTrayView)
+END_METADATA
 
 }  // namespace ash

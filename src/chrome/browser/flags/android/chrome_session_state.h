@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,9 +15,6 @@ class PrefService;
 namespace chrome {
 namespace android {
 
-// TODO(b/182286787): A/B experiment monitoring session/activity resume order.
-extern const base::Feature kFixedUmaSessionResumeOrder;
-
 enum CustomTabsVisibilityHistogram {
   VISIBLE_CUSTOM_TAB,
   VISIBLE_CHROME_TAB,
@@ -25,15 +22,51 @@ enum CustomTabsVisibilityHistogram {
   kMaxValue = NO_VISIBLE_TAB,
 };
 
+// Following enum should always be in sync with ChromeActivityType defined in
+// tools/metrics/histograms/metadata/android/enums.xml
+
 // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.chrome.browser.flags
 enum class ActivityType {
+  // Chrome is running as the Chrome Android Browser App (i.e., traditional
+  // Chrome).
   kTabbed,
+
+  // Chrome is running embedded in another application as a Custom Tab.
+  // See:
+  //   - https://developer.chrome.com/docs/android/custom-tabs/
   kCustomTab,
+
+  // Chrome is running as a Trusted Web Activity.
+  //
+  // See:
+  //   - https://developer.chrome.com/docs/android/trusted-web-activity/
   kTrustedWebActivity,
+
+  // Chrome is running as a Web App
+  //
+  // See
+  //   -
+  //   https://chromium.googlesource.com/chromium/src/+/HEAD/docs/webapps/README.md
   kWebapp,
+
+  // Chrome is running as a WebAPK.
+  //
+  // See:
+  //   - https://web.dev/webapks/
+  //   -
+  //   https://chromium.googlesource.com/chromium/src/+/refs/heads/main/chrome/android/webapk/README.md
   kWebApk,
-  kUndeclared,
-  kMaxValue = kUndeclared,
+
+  // Chrome has started running, but no tab has yet become visible (for example:
+  // warm-up,
+  // FRE, downloads manager shown in response to a notification click, etc).
+  kPreFirstTab,
+
+  // Chrome is running embedded in another application as auth-dedicated tab.
+  // TODO(b/353517557): Add a link to a developer guide
+  kAuthTab,
+
+  kMaxValue = kAuthTab,
 };
 
 // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.chrome.browser.flags
@@ -48,6 +81,17 @@ enum class DarkModeState {
   // Browser is in light mode, system is not/cannot be determined.
   kLightModeApp,
   kMaxValue = kLightModeApp,
+};
+
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused. See MultipleUserProfilesState in
+// enums.xml.
+// GENERATED_JAVA_ENUM_PACKAGE: org.chromium.chrome.browser.flags
+enum class MultipleUserProfilesState {
+  kUnknown = 0,
+  kSingleProfile = 1,
+  kMultipleProfiles = 2,
+  kMaxValue = kMultipleProfiles,
 };
 
 // Returns the CustomTabs.Visible histogram value that corresponde to |type|.
@@ -75,12 +119,15 @@ void EmitActivityTypeHistograms(ActivityType type);
 void RegisterActivityTypePrefs(PrefRegistrySimple* registry);
 
 // Retrieves the activity type from |local_state|.
-absl::optional<chrome::android::ActivityType> GetActivityTypeFromLocalState(
+std::optional<chrome::android::ActivityType> GetActivityTypeFromLocalState(
     PrefService* local_state);
 
 // Saves the activity type |value| to |local_state|.
 void SaveActivityTypeToLocalState(PrefService* local_state,
                                   chrome::android::ActivityType value);
+
+// Returns whether there are multiple user profiles.
+MultipleUserProfilesState GetMultipleUserProfilesState();
 
 }  // namespace android
 }  // namespace chrome

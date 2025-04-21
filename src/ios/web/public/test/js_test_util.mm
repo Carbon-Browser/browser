@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,17 @@
 
 #import <WebKit/WebKit.h>
 
-#include "base/mac/bundle_locations.h"
-#include "base/strings/sys_string_conversions.h"
+#import "base/apple/bundle_locations.h"
+#import "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
+#import "ios/web/js_messaging/java_script_feature_manager.h"
 #import "ios/web/js_messaging/page_script_util.h"
-#include "testing/gtest/include/gtest/gtest.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/web/public/js_messaging/java_script_feature.h"
+#import "ios/web/test/js_test_util_internal.h"
+#import "ios/web/web_state/ui/crw_web_controller.h"
+#import "ios/web/web_state/ui/wk_web_view_configuration_provider.h"
+#import "ios/web/web_state/web_state_impl.h"
+#import "testing/gtest/include/gtest/gtest.h"
 
 using base::test::ios::kWaitForJSCompletionTimeout;
 using base::test::ios::kWaitForPageLoadTimeout;
@@ -49,10 +51,29 @@ id ExecuteJavaScript(WKWebView* web_view,
       << "\nWKWebView failed to complete javascript execution.\n"
       << base::SysNSStringToUTF8(
              [[NSThread callStackSymbols] componentsJoinedByString:@"\n"]);
-  if (error) {
-    *error = block_error;
+  if (block_error) {
+    DLOG(WARNING) << "\nWKWebView javascript execution failed.\n"
+                  << base::SysNSStringToUTF8(block_error.description);
+    if (error) {
+      *error = block_error;
+    }
   }
   return result;
+}
+
+id ExecuteJavaScriptForFeature(web::WebState* web_state,
+                               NSString* script,
+                               JavaScriptFeature* feature) {
+  JavaScriptFeatureManager* feature_manager =
+      JavaScriptFeatureManager::FromBrowserState(web_state->GetBrowserState());
+  JavaScriptContentWorld* world =
+      feature_manager->GetContentWorldForFeature(feature);
+
+  WKWebView* web_view =
+      [web::WebStateImpl::FromWebState(web_state)->GetWebController()
+          ensureWebViewCreated];
+  return web::test::ExecuteJavaScript(web_view, world->GetWKContentWorld(),
+                                      script);
 }
 
 bool LoadHtml(WKWebView* web_view, NSString* html, NSURL* base_url) {
@@ -79,6 +100,21 @@ NSString* GetSharedScripts() {
   return [NSString stringWithFormat:@"%@; %@; %@", GetPageScript(@"gcrweb"),
                                     GetPageScript(@"common"),
                                     GetPageScript(@"message")];
+}
+
+void OverrideJavaScriptFeatures(web::BrowserState* browser_state,
+                                std::vector<JavaScriptFeature*> features) {
+  WKWebViewConfigurationProvider& configuration_provider =
+      WKWebViewConfigurationProvider::FromBrowserState(browser_state);
+  WKWebViewConfiguration* configuration =
+      configuration_provider.GetWebViewConfiguration();
+  // User scripts must be removed because
+  // `JavaScriptFeatureManager::ConfigureFeatures` will remove script message
+  // handlers.
+  [configuration.userContentController removeAllUserScripts];
+
+  JavaScriptFeatureManager::FromBrowserState(browser_state)
+      ->ConfigureFeatures(features);
 }
 
 }  // namespace test

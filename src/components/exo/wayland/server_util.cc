@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "base/containers/flat_map.h"
 #include "base/time/time.h"
 #include "components/exo/data_offer.h"
+#include "components/exo/wayland/server.h"
 #include "ui/display/display.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/rect.h"
@@ -35,6 +36,10 @@ DEFINE_UI_CLASS_PROPERTY_KEY(wl_resource*, kDataOfferResourceKey, nullptr)
 base::flat_map<wl_display*, SecurityDelegate*> g_display_security_map;
 
 }  // namespace
+
+void SetImplementation(wl_resource* resource, const void* implementation) {
+  wl_resource_set_implementation(resource, implementation, nullptr, nullptr);
+}
 
 uint32_t TimeTicksToMilliseconds(base::TimeTicks ticks) {
   return (ticks - base::TimeTicks()).InMilliseconds();
@@ -80,6 +85,18 @@ SecurityDelegate* GetSecurityDelegate(wl_display* display) {
 
 SecurityDelegate* GetSecurityDelegate(wl_client* client) {
   return GetSecurityDelegate(wl_client_get_display(client));
+}
+
+bool IsClientDestroyed(wl_client* client) {
+  CHECK(client);
+
+  // There should always be a display associated with a client and display will
+  // always outlive the wl_client object.
+  wl_display* display = wl_client_get_display(client);
+  CHECK(display);
+
+  Server* server = Server::GetServerForDisplay(display);
+  return server ? server->IsClientDestroyed(client) : true;
 }
 
 }  // namespace wayland

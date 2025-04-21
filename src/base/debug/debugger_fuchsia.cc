@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,8 +19,8 @@ bool BeingDebugged() {
   zx_info_process_t info = {};
   // Ignore failures. The 0-initialization above will result in "false" for
   // error cases.
-  zx::process::self()->get_info(ZX_INFO_PROCESS, &info, sizeof(info),
-                                nullptr, nullptr);
+  zx::process::self()->get_info(ZX_INFO_PROCESS, &info, sizeof(info), nullptr,
+                                nullptr);
   return (info.flags & ZX_INFO_PROCESS_FLAG_DEBUGGER_ATTACHED) != 0;
 }
 

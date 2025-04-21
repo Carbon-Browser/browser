@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,7 @@ MockCloudPolicyClient::MockCloudPolicyClient(
                         std::move(url_loader_factory),
                         CloudPolicyClient::DeviceDMTokenCallback()) {}
 
-MockCloudPolicyClient::~MockCloudPolicyClient() {}
+MockCloudPolicyClient::~MockCloudPolicyClient() = default;
 
 void MockCloudPolicyClient::SetDMToken(const std::string& token) {
   dm_token_ = token;
@@ -39,7 +39,8 @@ void MockCloudPolicyClient::SetDMToken(const std::string& token) {
 void MockCloudPolicyClient::SetPolicy(const std::string& policy_type,
                                       const std::string& settings_entity_id,
                                       const em::PolicyFetchResponse& policy) {
-  responses_[std::make_pair(policy_type, settings_entity_id)] = policy;
+  last_policy_fetch_responses_[std::make_pair(policy_type,
+                                              settings_entity_id)] = policy;
 }
 
 void MockCloudPolicyClient::SetFetchedInvalidationVersion(
@@ -48,7 +49,7 @@ void MockCloudPolicyClient::SetFetchedInvalidationVersion(
 }
 
 void MockCloudPolicyClient::SetStatus(DeviceManagementStatus status) {
-  status_ = status;
+  last_dm_status_ = status;
 }
 
 MockCloudPolicyClientObserver::MockCloudPolicyClientObserver() = default;

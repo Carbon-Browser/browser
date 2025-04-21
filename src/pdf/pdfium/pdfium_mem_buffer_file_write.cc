@@ -1,8 +1,12 @@
-// Copyright (c) 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "pdf/pdfium/pdfium_mem_buffer_file_write.h"
+
+#include <utility>
+
+#include "base/compiler_specific.h"
 
 namespace chrome_pdf {
 
@@ -27,7 +31,8 @@ int PDFiumMemBufferFileWrite::WriteBlockImpl(FPDF_FILEWRITE* this_file_write,
 
 int PDFiumMemBufferFileWrite::DoWriteBlock(const uint8_t* data,
                                            unsigned long size) {
-  buffer_.insert(buffer_.end(), data, data + size);
+  // SAFETY: required from caller across PDF public API.
+  buffer_.insert(buffer_.end(), data, UNSAFE_BUFFERS(data + size));
   return 1;
 }
 

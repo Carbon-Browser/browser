@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -99,8 +99,8 @@ class UsageStatsBridge : public history::HistoryServiceObserver {
                         const JavaRef<jobject>& j_callback);
 
   // Overridden from history::HistoryServiceObserver.
-  void OnURLsDeleted(history::HistoryService* history_service,
-                     const history::DeletionInfo& deletion_info) override;
+  void OnHistoryDeletions(history::HistoryService* history_service,
+                          const history::DeletionInfo& deletion_info) override;
   void HistoryServiceBeingDeleted(
       history::HistoryService* history_service) override;
 

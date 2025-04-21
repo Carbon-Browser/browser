@@ -1,11 +1,12 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/chrome_elf/crash/crash_helper.h"
 
-#include <assert.h>
 #include <windows.h>
+
+#include <assert.h>
 
 #include <algorithm>
 #include <string>

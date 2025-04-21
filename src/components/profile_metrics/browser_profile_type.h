@@ -1,11 +1,13 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_PROFILE_METRICS_BROWSER_PROFILE_TYPE_H_
 #define COMPONENTS_PROFILE_METRICS_BROWSER_PROFILE_TYPE_H_
 
-#include "base/supports_user_data.h"
+namespace base {
+class SupportsUserData;
+}
 
 namespace profile_metrics {
 
@@ -19,8 +21,8 @@ enum class BrowserProfileType {
   kGuest = 2,
   kSystem = 3,
   kOtherOffTheRecordProfile = 4,
-  kDeprecatedEphemeralGuest = 5,
-  kMaxValue = kDeprecatedEphemeralGuest,
+  // Deprecated(10/23): kDeprecatedEphemeralGuest = 5,
+  kMaxValue = kOtherOffTheRecordProfile,
 };
 
 // Returns the BrowserProfileType value associated with |browser_context|.

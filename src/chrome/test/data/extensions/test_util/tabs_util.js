@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,3 +40,33 @@ export function openTab(url) {
     });
   });
 }
+
+/**
+ *  Returns the single tab matching the given `query`.
+ * @param {Object} query
+ * @return {chrome.tabs.Tab}
+ */
+export async function getSingleTab(query) {
+  const tabs = await chrome.tabs.query(query);
+  chrome.test.assertEq(1, tabs.length);
+  return tabs[0];
+}
+
+/**
+ * Returns the injected element ids in `tabId`.
+ * @param {string} tabId
+ * @return {string[]}
+ */
+export async function getInjectedElementIds(tabId) {
+  let injectedElements = await chrome.scripting.executeScript({
+    target: { tabId: tabId },
+    func: () => {
+      let childIds = [];
+      for (const child of document.body.children)
+        childIds.push(child.id);
+      return childIds.sort();
+    }
+  });
+  chrome.test.assertEq(1, injectedElements.length);
+  return injectedElements[0].result;
+};

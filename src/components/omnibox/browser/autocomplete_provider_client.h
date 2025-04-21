@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,20 +15,26 @@
 #include "components/omnibox/browser/actions/omnibox_action.h"
 #include "third_party/metrics_proto/omnibox_event.pb.h"
 
-struct AutocompleteMatch;
 class AutocompleteClassifier;
 class AutocompleteSchemeClassifier;
-class RemoteSuggestionsService;
+class AutocompleteScoringModelService;
 class DocumentSuggestionsService;
+class UnscopedExtensionProvider;
+class UnscopedExtensionProviderDelegate;
 class GURL;
 class InMemoryURLIndex;
 class KeywordExtensionsDelegate;
 class KeywordProvider;
 class OmniboxPedalProvider;
 class OmniboxTriggeredFeatureService;
+class OnDeviceTailModelService;
 class PrefService;
+class RemoteSuggestionsService;
 class ShortcutsBackend;
 class TabMatcher;
+class ZeroSuggestCacheService;
+struct AutocompleteMatch;
+struct ProviderStateService;
 
 namespace bookmarks {
 class BookmarkModel;
@@ -36,12 +42,16 @@ class BookmarkModel;
 
 namespace history {
 class HistoryService;
-class URLDatabase;
 class TopSites;
-}
+class URLDatabase;
+}  // namespace history
 
 namespace history_clusters {
 class HistoryClustersService;
+}
+
+namespace history_embeddings {
+class HistoryEmbeddingsService;
 }
 
 namespace network {
@@ -56,15 +66,11 @@ namespace signin {
 class IdentityManager;
 }
 
-namespace query_tiles {
-class TileService;
-}
-
 class TemplateURLService;
 
 class AutocompleteProviderClient : public OmniboxAction::Client {
  public:
-  virtual ~AutocompleteProviderClient() {}
+  virtual ~AutocompleteProviderClient() = default;
 
   virtual scoped_refptr<network::SharedURLLoaderFactory>
   GetURLLoaderFactory() = 0;
@@ -75,24 +81,32 @@ class AutocompleteProviderClient : public OmniboxAction::Client {
   virtual AutocompleteClassifier* GetAutocompleteClassifier() = 0;
   virtual history::HistoryService* GetHistoryService() = 0;
   virtual history_clusters::HistoryClustersService* GetHistoryClustersService();
+  virtual history_embeddings::HistoryEmbeddingsService*
+  GetHistoryEmbeddingsService();
   virtual scoped_refptr<history::TopSites> GetTopSites() = 0;
   virtual bookmarks::BookmarkModel* GetBookmarkModel() = 0;
   virtual history::URLDatabase* GetInMemoryDatabase() = 0;
   virtual InMemoryURLIndex* GetInMemoryURLIndex() = 0;
   virtual TemplateURLService* GetTemplateURLService() = 0;
   virtual const TemplateURLService* GetTemplateURLService() const = 0;
+  virtual DocumentSuggestionsService* GetDocumentSuggestionsService() const;
   virtual RemoteSuggestionsService* GetRemoteSuggestionsService(
       bool create_if_necessary) const = 0;
-  virtual DocumentSuggestionsService* GetDocumentSuggestionsService(
-      bool create_if_necessary) const = 0;
+  virtual ZeroSuggestCacheService* GetZeroSuggestCacheService() = 0;
+  virtual const ZeroSuggestCacheService* GetZeroSuggestCacheService() const = 0;
   virtual OmniboxPedalProvider* GetPedalProvider() const = 0;
   virtual scoped_refptr<ShortcutsBackend> GetShortcutsBackend() = 0;
   virtual scoped_refptr<ShortcutsBackend> GetShortcutsBackendIfExists() = 0;
   virtual std::unique_ptr<KeywordExtensionsDelegate>
   GetKeywordExtensionsDelegate(KeywordProvider* keyword_provider) = 0;
-  virtual query_tiles::TileService* GetQueryTileService() const = 0;
+  virtual std::unique_ptr<UnscopedExtensionProviderDelegate>
+  GetUnscopedExtensionProviderDelegate(UnscopedExtensionProvider* provider) = 0;
   virtual OmniboxTriggeredFeatureService* GetOmniboxTriggeredFeatureService()
       const = 0;
+  virtual AutocompleteScoringModelService* GetAutocompleteScoringModelService()
+      const = 0;
+  virtual OnDeviceTailModelService* GetOnDeviceTailModelService() const = 0;
+  virtual ProviderStateService* GetProviderStateService() const = 0;
 
   // The value to use for Accept-Languages HTTP header when making an HTTP
   // request.
@@ -114,28 +128,33 @@ class AutocompleteProviderClient : public OmniboxAction::Client {
   // most commonly-used URLs from that set.
   virtual std::vector<std::u16string> GetBuiltinsToProvideAsUserTypes() = 0;
 
-  // TODO(crbug/925072): clean up component update service if it's confirmed
-  // it's not needed for on device head provider.
-  // The component update service instance which will be used by on device
-  // suggestion provider to observe the model update event.
+  // TODO(crbug.com/40610979): clean up component update service if it's
+  // confirmed it's not needed for on device head provider. The component update
+  // service instance which will be used by on device suggestion provider to
+  // observe the model update event.
   virtual component_updater::ComponentUpdateService*
   GetComponentUpdateService() = 0;
 
   // Returns the signin::IdentityManager associated with the current profile.
   virtual signin::IdentityManager* GetIdentityManager() const = 0;
-
+  // In desktop platforms, this returns true for both guest and Incognito mode.
+  // In mobile platforms, we don't have a guest mode and therefore, it returns
+  // true only for Incognito mode.
   virtual bool IsOffTheRecord() const = 0;
+  virtual bool IsIncognitoProfile() const = 0;
+  virtual bool IsGuestSession() const = 0;
+
   virtual bool SearchSuggestEnabled() const = 0;
 
   // True for almost all users except ones with a specific enterprise policy.
   virtual bool AllowDeletingBrowserHistory() const;
 
-  // Returns whether personalized URL data collection is enabled.  I.e.,
+  // Returns whether URL data collection is enabled.  I.e.,
   // the user has consented to have URLs recorded keyed by their Google account.
   // In this case, the user has agreed to share browsing data with Google and so
   // this state can be used to govern features such as sending the current page
   // URL with omnibox suggest requests.
-  virtual bool IsPersonalizedUrlDataCollectionActive() const = 0;
+  virtual bool IsUrlDataCollectionActive() const = 0;
 
   // This function returns true if the user is signed in.
   virtual bool IsAuthenticated() const = 0;
@@ -182,6 +201,17 @@ class AutocompleteProviderClient : public OmniboxAction::Client {
 
   // Returns true if the sharing hub command is enabled.
   virtual bool IsSharingHubAvailable() const;
+
+  // Returns true if history embeddings is enabled and user has opted in.
+  virtual bool IsHistoryEmbeddingsEnabled() const;
+
+  // Returns true if history embeddings is enabled and user can opt in/out.
+  virtual bool IsHistoryEmbeddingsSettingVisible() const;
+
+  // Returns whether the app is currently in the background state (Mobile only).
+  virtual bool in_background_state() const;
+
+  virtual void set_in_background_state(bool in_background_state) {}
 
   // Gets a weak pointer to the client. Used when providers need to use the
   // client when the client may no longer be around.

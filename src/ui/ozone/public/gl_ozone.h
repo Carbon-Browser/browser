@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,9 @@
 #include <string>
 
 #include "base/component_export.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "ui/gfx/geometry/size.h"
+#include "ui/gfx/native_pixmap.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/gl/gl_display.h"
 #include "ui/gl/gl_implementation.h"
@@ -20,9 +21,14 @@ namespace gl {
 class GLContext;
 class GLShareGroup;
 class GLSurface;
+class Presenter;
 
 struct GLContextAttribs;
 struct GLVersionInfo;
+}
+
+namespace gfx {
+class ColorSpace;
 }
 
 namespace ui {
@@ -40,7 +46,9 @@ class COMPONENT_EXPORT(OZONE_BASE) GLOzone {
 
   // Performs any one off initialization for GL implementation.
   virtual gl::GLDisplay* InitializeGLOneOffPlatform(
-      uint64_t system_device_id) = 0;
+      bool supports_angle,
+      std::vector<gl::DisplayType> init_displays,
+      gl::GpuPreference gpu_preference) = 0;
 
   // Disables the specified extensions in the window system bindings,
   // e.g., GLX, EGL, etc. This is part of the GPU driver bug workarounds
@@ -57,9 +65,9 @@ class COMPONENT_EXPORT(OZONE_BASE) GLOzone {
   // Clears static GL bindings.
   virtual void ShutdownGL(gl::GLDisplay* display) = 0;
 
-  // Returns true if the NativePixmap of the specified type can be imported
-  // into GL using ImportNativePixmap().
-  virtual bool CanImportNativePixmap() = 0;
+  // Returns true if the NativePixmap of the specified type and format can be
+  // imported into GL using ImportNativePixmap().
+  virtual bool CanImportNativePixmap(gfx::BufferFormat format) = 0;
 
   // Imports NativePixmap into GL and binds it to the provided texture_id. The
   // NativePixmapGLBinding does not take ownership of the provided texture_id
@@ -91,6 +99,7 @@ class COMPONENT_EXPORT(OZONE_BASE) GLOzone {
 
   // Creates a GL surface that renders directly to a view.
   virtual scoped_refptr<gl::GLSurface> CreateViewGLSurface(
+      gl::GLDisplay* display,
       gfx::AcceleratedWidget window) = 0;
 
   // Creates a GL surface that renders directly into a window with surfaceless
@@ -98,11 +107,13 @@ class COMPONENT_EXPORT(OZONE_BASE) GLOzone {
   // overlay-only displays. This will return null if surfaceless mode is
   // unsupported.
   // TODO(spang): Consider deprecating this and using OverlaySurface for GL.
-  virtual scoped_refptr<gl::GLSurface> CreateSurfacelessViewGLSurface(
+  virtual scoped_refptr<gl::Presenter> CreateSurfacelessViewGLSurface(
+      gl::GLDisplay* display,
       gfx::AcceleratedWidget window) = 0;
 
   // Creates a GL surface used for offscreen rendering.
   virtual scoped_refptr<gl::GLSurface> CreateOffscreenGLSurface(
+      gl::GLDisplay* display,
       const gfx::Size& size) = 0;
 };
 

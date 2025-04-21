@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@ namespace ui_devtools {
 ui::KeyEvent ConvertToUIKeyEvent(protocol::DOM::KeyEvent* event) {
   ui::EventType event_type =
       event->getType() == protocol::DOM::KeyEvent::TypeEnum::KeyPressed
-          ? ui::ET_KEY_PRESSED
-          : ui::ET_KEY_RELEASED;
+          ? ui::EventType::kKeyPressed
+          : ui::EventType::kKeyReleased;
   return ui::KeyEvent(
       event_type, static_cast<ui::KeyboardCode>(event->getKeyCode()),
       static_cast<ui::DomCode>(event->getCode()), event->getFlags(),

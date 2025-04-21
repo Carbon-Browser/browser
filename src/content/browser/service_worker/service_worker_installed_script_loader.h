@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "base/time/time.h"
 #include "content/browser/service_worker/service_worker_installed_script_reader.h"
+#include "content/browser/service_worker/url_loader_client_checker.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/system/data_pipe.h"
@@ -48,7 +49,7 @@ class ServiceWorkerInstalledScriptLoader
 
   // ServiceWorkerInstalledScriptReader::Client overrides:
   void OnStarted(network::mojom::URLResponseHeadPtr response_head,
-                 absl::optional<mojo_base::BigBuffer> metadata,
+                 std::optional<mojo_base::BigBuffer> metadata,
                  mojo::ScopedDataPipeConsumerHandle body_handle,
                  mojo::ScopedDataPipeConsumerHandle meta_data_handle) override;
   void OnFinished(
@@ -59,7 +60,7 @@ class ServiceWorkerInstalledScriptLoader
       const std::vector<std::string>& removed_headers,
       const net::HttpRequestHeaders& modified_headers,
       const net::HttpRequestHeaders& modified_cors_exempt_headers,
-      const absl::optional<GURL>& new_url) override;
+      const std::optional<GURL>& new_url) override;
   void SetPriority(net::RequestPriority priority,
                    int32_t intra_priority_value) override;
   void PauseReadingBodyFromNet() override;
@@ -68,13 +69,13 @@ class ServiceWorkerInstalledScriptLoader
  private:
   // mojo::DataPipeDrainer::Client overrides:
   // These just do nothing.
-  void OnDataAvailable(const void* data, size_t num_bytes) override {}
+  void OnDataAvailable(base::span<const uint8_t> data) override {}
   void OnDataComplete() override {}
 
-  mojo::Remote<network::mojom::URLLoaderClient> client_;
+  URLLoaderClientCheckedRemote client_;
   scoped_refptr<ServiceWorkerVersion>
       version_for_main_script_http_response_info_;
-  base::TimeTicks request_start_;
+  base::TimeTicks request_start_time_;
   std::unique_ptr<ServiceWorkerInstalledScriptReader> reader_;
 
   std::string encoding_;

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "dbus/object_path.h"
+#include "dbus/property.h"
 #include "device/bluetooth/bluetooth_export.h"
 #include "device/bluetooth/dbus/bluez_dbus_client.h"
 
@@ -90,6 +91,21 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothLEAdvertisingManagerClient
 
   // Constants used to indicate exceptional error conditions.
   static const char kNoResponseError[];
+
+  // Structure of properties associated with bluetooth adapters.
+  struct Properties : public dbus::PropertySet {
+    // The supported Advertising features. Read-only.
+    dbus::Property<std::vector<std::string>> supported_features;
+
+    Properties(dbus::ObjectProxy* object_proxy,
+               const std::string& interface_name,
+               const PropertyChangedCallback& callback);
+    ~Properties() override;
+  };
+
+  // Obtain the properties for the advertisingManager with object path
+  // |object_path|, any values should be copied if needed.
+  virtual Properties* GetProperties(const dbus::ObjectPath& object_path) = 0;
 
  protected:
   BluetoothLEAdvertisingManagerClient();

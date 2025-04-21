@@ -1,8 +1,9 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/extensions/forced_extensions/force_installed_test_base.h"
+#include "base/memory/raw_ptr.h"
 
 #include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
@@ -42,14 +43,15 @@ void ForceInstalledTestBase::SetUp() {
       /*is_first_policy_load_complete_return=*/false);
 
   auto policy_service = std::make_unique<policy::PolicyServiceImpl>(
-      std::vector<policy::ConfigurationPolicyProvider*>{&policy_provider_});
+      std::vector<
+          raw_ptr<policy::ConfigurationPolicyProvider, VectorExperimental>>{
+          &policy_provider_});
   profile_manager_ = std::make_unique<TestingProfileManager>(
       TestingBrowserProcess::GetGlobal());
   ASSERT_TRUE(profile_manager_->SetUp());
   profile_ = profile_manager_->CreateTestingProfile(
       "p1", nullptr, u"p1", 0, TestingProfile::TestingFactories(),
-      /*is_supervised_profile=*/false, absl::nullopt,
-      std::move(policy_service));
+      /*is_supervised_profile=*/false, std::nullopt, std::move(policy_service));
 
   prefs_ = profile_->GetTestingPrefService();
   registry_ = ExtensionRegistry::Get(profile_);
@@ -59,23 +61,20 @@ void ForceInstalledTestBase::SetUp() {
 }
 
 void ForceInstalledTestBase::SetupForceList(ExtensionOrigin origin) {
-  base::Value list(base::Value::Type::LIST);
+  base::Value::List list;
   const std::string update_url = origin == ExtensionOrigin::kWebStore
                                      ? kExtensionUpdateUrl
                                      : kOffStoreUpdateUrl;
   list.Append(base::StrCat({kExtensionId1, ";", update_url}));
   list.Append(base::StrCat({kExtensionId2, ";", update_url}));
-  std::unique_ptr<base::Value> dict =
-      DictionaryBuilder()
+  base::Value::Dict dict =
+      base::Value::Dict()
           .Set(kExtensionId1,
-               DictionaryBuilder()
-                   .Set(ExternalProviderImpl::kExternalUpdateUrl, update_url)
-                   .Build())
+               base::Value::Dict().Set(ExternalProviderImpl::kExternalUpdateUrl,
+                                       update_url))
           .Set(kExtensionId2,
-               DictionaryBuilder()
-                   .Set(ExternalProviderImpl::kExternalUpdateUrl, update_url)
-                   .Build())
-          .Build();
+               base::Value::Dict().Set(ExternalProviderImpl::kExternalUpdateUrl,
+                                       update_url));
   prefs_->SetManagedPref(pref_names::kInstallForceList, std::move(dict));
 
   EXPECT_CALL(policy_provider_, IsInitializationComplete(testing::_))
@@ -86,14 +85,13 @@ void ForceInstalledTestBase::SetupForceList(ExtensionOrigin origin) {
   policy::PolicyMap map;
   map.Set("ExtensionInstallForcelist", policy::POLICY_LEVEL_MANDATORY,
           policy::POLICY_SCOPE_MACHINE, policy::POLICY_SOURCE_PLATFORM,
-          std::move(list), nullptr);
+          base::Value(std::move(list)), nullptr);
   policy_provider_.UpdateChromePolicy(map);
   base::RunLoop().RunUntilIdle();
 }
 
 void ForceInstalledTestBase::SetupEmptyForceList() {
-  std::unique_ptr<base::Value> dict = DictionaryBuilder().Build();
-  prefs_->SetManagedPref(pref_names::kInstallForceList, std::move(dict));
+  prefs_->SetManagedPref(pref_names::kInstallForceList, base::Value::Dict());
 
   EXPECT_CALL(policy_provider_, IsInitializationComplete(testing::_))
       .WillRepeatedly(testing::Return(true));

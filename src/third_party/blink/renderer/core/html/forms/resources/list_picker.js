@@ -1,9 +1,11 @@
 'use strict';
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 var global = {argumentsReceived: false, params: null, picker: null};
+
+const DELAYED_LAYOUT_THRESHOLD = 1000;
 
 /**
  * @param {Event} event
@@ -28,6 +30,25 @@ function handleArgumentsTimeout() {
   if (global.argumentsReceived)
     return;
   initialize({});
+}
+
+/**
+ * @param {!Element} parent
+ * @param {!Array} optionBounds
+ */
+function buildOptionBoundsArray(parent, optionBounds) {
+  // The optionBounds.length check prevents us from doing so many
+  // getBoundingClientRect() calls that the picker hangs for 10+ seconds.
+  for (let i = 0; i < parent.children.length &&
+       optionBounds.length < DELAYED_LAYOUT_THRESHOLD;
+       i++) {
+    const child = parent.children[i];
+    if (child.tagName === 'OPTION') {
+      optionBounds[child.index] = child.getBoundingClientRect();
+    } else if (child.tagName === 'OPTGROUP') {
+      buildOptionBoundsArray(child, optionBounds)
+    }
+  }
 }
 
 class ListPicker extends Picker {
@@ -263,7 +284,7 @@ class ListPicker extends Picker {
         this.config_.anchorRectInScreen.width * scale, desiredWindowWidth);
     let windowRect = adjustWindowRect(
         desiredWindowWidth / scale, desiredWindowHeight / scale,
-        elementOffsetWidth / scale, 0);
+        elementOffsetWidth / scale, 0, /*allowOverlapWithAnchor=*/ false);
     // If the available screen space is smaller than maxHeight, we will get
     // an unexpected scrollbar.
     if (!expectingScrollbar && windowRect.height < noScrollHeight / scale) {
@@ -314,6 +335,7 @@ class ListPicker extends Picker {
     if (this.config_.baseStyle.textAlign)
       this.selectElement_.style.textAlign = this.config_.baseStyle.textAlign;
     this.updateChildren_(this.selectElement_, this.config_);
+    this.setMenuListOptionsBoundsInAXTree_();
   }
 
   update_() {
@@ -336,8 +358,6 @@ class ListPicker extends Picker {
     this.selectElement_.scrollTop = scrollPosition;
     this.dispatchEvent('didUpdate');
   }
-
-  static DELAYED_LAYOUT_THRESHOLD = 1000;
 
   /**
    * @param {!Element} parent Select element or optgroup element.
@@ -404,6 +424,7 @@ class ListPicker extends Picker {
     this.selectElement_.appendChild(fragment);
     this.selectElement_.classList.add('wrap');
     this.delayedChildrenConfig_ = null;
+    this.setMenuListOptionsBoundsInAXTree_(true);
   }
 
   findReusableItem_(parent, config, startIndex) {
@@ -471,6 +492,9 @@ class ListPicker extends Picker {
       else element.removeAttribute('aria-label');
       element.style.paddingInlineStart = this.config_.paddingStart + 'px';
       if (inGroup) {
+        const extraPaddingForOptionInsideOptgroup = 20;
+        element.style.paddingInlineStart = Number(this.config_.paddingStart) +
+            extraPaddingForOptionInsideOptgroup + 'px';
         element.style.marginInlineStart = (-this.config_.paddingStart) + 'px';
         // Should be synchronized with padding-end in list_picker.css.
         element.style.marginInlineEnd = '-2px';
@@ -493,6 +517,13 @@ class ListPicker extends Picker {
       }
     }
     this.applyItemStyle_(element, config.style);
+  }
+
+  setMenuListOptionsBoundsInAXTree_(childrenUpdated = false) {
+    var optionBounds = [];
+    buildOptionBoundsArray(this.selectElement_, optionBounds);
+    window.pagePopupController.setMenuListOptionsBoundsInAXTree(
+        optionBounds, childrenUpdated);
   }
 }
 

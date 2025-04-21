@@ -1,24 +1,24 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef EXTENSIONS_COMMON_API_MESSAGING_MESSAGE_H_
 #define EXTENSIONS_COMMON_API_MESSAGING_MESSAGE_H_
 
-#include "extensions/common/api/messaging/serialization_format.h"
+#include "extensions/common/mojom/message_port.mojom-shared.h"
 
 namespace extensions {
 
 // A message consists of both the data itself as well as a user gesture state.
 struct Message {
   std::string data;
-  SerializationFormat format = SerializationFormat::kJson;
+  mojom::SerializationFormat format = mojom::SerializationFormat::kJson;
   bool user_gesture = false;
   bool from_privileged_context = false;
 
   Message() = default;
   Message(const std::string& data,
-          SerializationFormat format,
+          mojom::SerializationFormat format,
           bool user_gesture,
           bool from_privileged_context = false)
       : data(data),

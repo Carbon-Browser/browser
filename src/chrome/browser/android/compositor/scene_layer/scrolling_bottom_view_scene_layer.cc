@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,14 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/jni_array.h"
-#include "cc/layers/ui_resource_layer.h"
-#include "chrome/browser/ui/android/toolbar/jni_headers/ScrollingBottomViewSceneLayer_jni.h"
+#include "cc/input/android/offset_tag_android.h"
+#include "cc/slim/layer.h"
+#include "cc/slim/ui_resource_layer.h"
+#include "components/viz/common/quads/offset_tag.h"
 #include "ui/android/resources/resource_manager_impl.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "chrome/browser/ui/android/toolbar/jni_headers/ScrollingBottomViewSceneLayer_jni.h"
 
 using base::android::JavaParamRef;
 using base::android::JavaRef;
@@ -21,8 +26,8 @@ ScrollingBottomViewSceneLayer::ScrollingBottomViewSceneLayer(
     : SceneLayer(env, jobj),
       should_show_background_(false),
       background_color_(SK_ColorWHITE),
-      view_container_(cc::Layer::Create()),
-      view_layer_(cc::UIResourceLayer::Create()) {
+      view_container_(cc::slim::Layer::Create()),
+      view_layer_(cc::slim::UIResourceLayer::Create()) {
   layer()->SetIsDrawable(true);
 
   view_container_->SetIsDrawable(true);
@@ -42,7 +47,8 @@ void ScrollingBottomViewSceneLayer::UpdateScrollingBottomViewLayer(
     jint shadow_height,
     jfloat x_offset,
     jfloat y_offset,
-    bool show_shadow) {
+    bool show_shadow,
+    const JavaParamRef<jobject>& joffset_tag) {
   ui::ResourceManager* resource_manager =
       ui::ResourceManagerImpl::FromJavaObject(jresource_manager);
   ui::Resource* bottom_view_resource = resource_manager->GetResource(
@@ -68,6 +74,9 @@ void ScrollingBottomViewSceneLayer::UpdateScrollingBottomViewLayer(
   view_container_->SetBounds(
       gfx::Size(bottom_view_resource->size().width(), container_height));
   view_container_->SetPosition(gfx::PointF(0, y_offset - container_height));
+
+  viz::OffsetTag offset_tag = cc::android::FromJavaOffsetTag(env, joffset_tag);
+  view_container_->SetOffsetTag(offset_tag);
 
   // The view's layer should be the same size as the texture.
   view_layer_->SetBounds(gfx::Size(bottom_view_resource->size().width(),

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,10 +37,10 @@ Value::Dict GenerateDict() {
   root.Set("String", "Foo");
 
   Value::List list;
-  list.Append(Value(2.718));
-  list.Append(Value(false));
-  list.Append(Value(123));
-  list.Append(Value("Bar"));
+  list.Append(2.718);
+  list.Append(false);
+  list.Append(123);
+  list.Append("Bar");
   root.Set("List", std::move(list));
 
   return root;
@@ -48,8 +48,9 @@ Value::Dict GenerateDict() {
 
 // Generates a tree-like dictionary value with a size of O(breadth ** depth).
 Value::Dict GenerateLayeredDict(int breadth, int depth) {
-  if (depth == 1)
+  if (depth == 1) {
     return GenerateDict();
+  }
 
   Value::Dict root = GenerateDict();
   Value::Dict next = GenerateLayeredDict(breadth, depth - 1);

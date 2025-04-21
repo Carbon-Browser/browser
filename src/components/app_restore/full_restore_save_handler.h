@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,14 +13,16 @@
 
 #include "base/component_export.h"
 #include "base/containers/flat_map.h"
+#include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_multi_source_observation.h"
 #include "base/scoped_observation.h"
 #include "base/timer/timer.h"
+#include "base/uuid.h"
 #include "components/app_restore/app_restore_arc_info.h"
 #include "components/app_restore/arc_save_handler.h"
-#include "components/app_restore/lacros_save_handler.h"
 #include "ui/aura/env.h"
 #include "ui/aura/env_observer.h"
 #include "ui/aura/window.h"
@@ -36,12 +38,10 @@ class RestoreData;
 struct WindowInfo;
 }  // namespace app_restore
 
-namespace ash {
-namespace full_restore {
+namespace ash::full_restore {
 class FullRestoreServiceTestHavingFullRestoreFile;
 class FullRestoreAppLaunchHandlerArcAppBrowserTest;
-}  // namespace full_restore
-}  // namespace ash
+}  // namespace ash::full_restore
 
 namespace base {
 class FilePath;
@@ -71,6 +71,8 @@ class COMPONENT_EXPORT(APP_RESTORE) FullRestoreSaveHandler
   FullRestoreSaveHandler(const FullRestoreSaveHandler&) = delete;
   FullRestoreSaveHandler& operator=(const FullRestoreSaveHandler&) = delete;
   ~FullRestoreSaveHandler() override;
+
+  void InsertIgnoreApplicationId(const std::string& app_id);
 
   void SetPrimaryProfilePath(const base::FilePath& profile_path);
 
@@ -110,17 +112,9 @@ class COMPONENT_EXPORT(APP_RESTORE) FullRestoreSaveHandler
   // Saves |window_info| to |profile_path_to_restore_data_|.
   void SaveWindowInfo(const app_restore::WindowInfo& window_info);
 
-  // Invoked when an Chrome app Lacros window is created. `app_id` is the
-  // AppService id, and `window_id` is the wayland app_id property for the
-  // window.
-  void OnLacrosChromeAppWindowAdded(const std::string& app_id,
-                                    const std::string& window_id);
-
-  // Invoked when an Chrome app Lacros window is removed. `app_id` is the
-  // AppService id, and `window_id` is the wayland app_id property for the
-  // window.
-  void OnLacrosChromeAppWindowRemoved(const std::string& app_id,
-                                      const std::string& window_id);
+  // Saves `removing_desk_guid` to the restore data for the currently active
+  // profile path.
+  void SaveRemovingDeskGuid(const base::Uuid& removing_desk_guid);
 
   // Flushes the full restore file in |profile_path| with the current restore
   // data.
@@ -234,6 +228,10 @@ class COMPONENT_EXPORT(APP_RESTORE) FullRestoreSaveHandler
   // Removes AppRestoreData for |window_id|.
   void RemoveAppRestoreData(int window_id);
 
+  // Applications with their app ids in this set will not have their app launch
+  // infos saved.
+  base::flat_set<std::string> ignore_applications_ids_;
+
   // FullRestoreSaveHandler might be called to save the help app before
   // FullRestoreAppLaunchHandler reads the full restore data from the full
   // restore file during the system startup phase, e.g. when a new user login.
@@ -256,7 +254,8 @@ class COMPONENT_EXPORT(APP_RESTORE) FullRestoreSaveHandler
       profile_path_to_file_handler_;
 
   // The AppRegistryCache for each user's profile. The key is the profile path.
-  base::flat_map<base::FilePath, apps::AppRegistryCache*>
+  base::flat_map<base::FilePath,
+                 raw_ptr<apps::AppRegistryCache, CtnExperimental>>
       profile_path_to_app_registry_cache_;
 
   // The map from the window id to the full restore file path and the app id.
@@ -286,8 +285,6 @@ class COMPONENT_EXPORT(APP_RESTORE) FullRestoreSaveHandler
   std::set<base::FilePath> save_running_;
 
   std::unique_ptr<ArcSaveHandler> arc_save_handler_;
-
-  std::unique_ptr<LacrosSaveHandler> lacros_save_handler_;
 
   bool is_shut_down_ = false;
 

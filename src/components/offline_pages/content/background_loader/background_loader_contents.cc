@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,11 +23,12 @@ BackgroundLoaderContents::BackgroundLoaderContents(
   // could kill the background offliner while it was running.
   web_contents_ = content::WebContents::Create(
       content::WebContents::CreateParams(browser_context_));
+  web_contents_->SetOwnerLocationForDebug(FROM_HERE);
   web_contents_->SetAudioMuted(true);
   web_contents_->SetDelegate(this);
 }
 
-BackgroundLoaderContents::~BackgroundLoaderContents() {}
+BackgroundLoaderContents::~BackgroundLoaderContents() = default;
 
 void BackgroundLoaderContents::LoadPage(const GURL& url) {
   web_contents_->GetController().LoadURL(
@@ -53,7 +54,11 @@ bool BackgroundLoaderContents::IsNeverComposited(
 
 void BackgroundLoaderContents::CloseContents(content::WebContents* source) {
   // Do nothing. Other pages should not be able to close a background page.
-  NOTREACHED();
+  //
+  // TODO(crbug.com/374382473): This used to be NOTREACHED() but is reachable as
+  // of 2024-11-20. It should either be made not reachable (and the NOTREACHED()
+  // added back) or document why this should be reachable (as opposed to the
+  // "should not be able to close" in the comment above).
 }
 
 bool BackgroundLoaderContents::ShouldSuppressDialogs(
@@ -62,7 +67,8 @@ bool BackgroundLoaderContents::ShouldSuppressDialogs(
   return true;
 }
 
-bool BackgroundLoaderContents::ShouldFocusPageAfterCrash() {
+bool BackgroundLoaderContents::ShouldFocusPageAfterCrash(
+    content::WebContents* source) {
   // Background page should never be focused.
   return false;
 }
@@ -89,18 +95,20 @@ bool BackgroundLoaderContents::IsWebContentsCreationOverridden(
   return true;
 }
 
-void BackgroundLoaderContents::AddNewContents(
+content::WebContents* BackgroundLoaderContents::AddNewContents(
     content::WebContents* source,
     std::unique_ptr<content::WebContents> new_contents,
     const GURL& target_url,
     WindowOpenDisposition disposition,
-    const gfx::Rect& initial_rect,
+    const blink::mojom::WindowFeatures& window_features,
     bool user_gesture,
     bool* was_blocked) {
   // Pop-ups should be blocked;
   // background pages should not create other contents
-  if (was_blocked != nullptr)
+  if (was_blocked != nullptr) {
     *was_blocked = true;
+  }
+  return nullptr;
 }
 
 #if BUILDFLAG(IS_ANDROID)
@@ -123,7 +131,7 @@ void BackgroundLoaderContents::RequestMediaAccessPermission(
 
 bool BackgroundLoaderContents::CheckMediaAccessPermission(
     content::RenderFrameHost* render_frame_host,
-    const GURL& security_origin,
+    const url::Origin& security_origin,
     blink::mojom::MediaStreamType type) {
   return false;  // No permissions granted.
 }

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -97,17 +97,12 @@ interface CastWebContents {
   SetGroupInfo(string session_id, bool is_multizone_launch);
 
   // Dictionary of renderer feature configurations.
-  AddRendererFeatures(mojo_base.mojom.Value features);
+  AddRendererFeatures(mojo_base.mojom.DictionaryValue features);
 
   // These interfaces will be exposed to RenderFrames. The interfaces are only
   // used as backends for built-in Cast V8 bindings. Sensitive APIs should
   // *never* be exposed through |remote_interfaces|.
   SetInterfacesForRenderer(pending_remote<RemoteInterfaces> remote_interfaces);
-
-  // Sets URL rewrite rules for modifying navigation requests.
-  // Note: this must be called before LoadUrl in order for the rules to take
-  // effect on the requests.
-  SetUrlRewriteRules(url_rewrite.mojom.UrlRequestRewriteRules rules);
 
   // ===========================================================================
   // Page Lifetime

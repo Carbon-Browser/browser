@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,10 @@
 
 #include <tuple>
 
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/strings/string_piece.h"
+#include "base/task/sequenced_task_runner.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -88,15 +88,16 @@ class BLINK_COMMON_EXPORT MimeSniffingURLLoader
   // network::mojom::URLLoaderClient implementation (called from the source of
   // the response):
   void OnReceiveEarlyHints(network::mojom::EarlyHintsPtr early_hints) override;
-  void OnReceiveResponse(network::mojom::URLResponseHeadPtr response_head,
-                         mojo::ScopedDataPipeConsumerHandle body) override;
+  void OnReceiveResponse(
+      network::mojom::URLResponseHeadPtr response_head,
+      mojo::ScopedDataPipeConsumerHandle body,
+      std::optional<mojo_base::BigBuffer> cached_metadata) override;
   void OnReceiveRedirect(
       const net::RedirectInfo& redirect_info,
       network::mojom::URLResponseHeadPtr response_head) override;
   void OnUploadProgress(int64_t current_position,
                         int64_t total_size,
                         OnUploadProgressCallback ack_callback) override;
-  void OnReceiveCachedMetadata(mojo_base::BigBuffer data) override;
   void OnTransferSizeUpdated(int32_t transfer_size_diff) override;
   void OnComplete(const network::URLLoaderCompletionStatus& status) override;
 
@@ -106,7 +107,7 @@ class BLINK_COMMON_EXPORT MimeSniffingURLLoader
       const std::vector<std::string>& removed_headers,
       const net::HttpRequestHeaders& modified_headers,
       const net::HttpRequestHeaders& modified_cors_exempt_headers,
-      const absl::optional<GURL>& new_url) override;
+      const std::optional<GURL>& new_url) override;
   void SetPriority(net::RequestPriority priority,
                    int32_t intra_priority_value) override;
   void PauseReadingBodyFromNet() override;
@@ -142,7 +143,7 @@ class BLINK_COMMON_EXPORT MimeSniffingURLLoader
   State state_ = State::kWaitForBody;
 
   // Set if OnComplete() is called during sniffing.
-  absl::optional<network::URLLoaderCompletionStatus> complete_status_;
+  std::optional<network::URLLoaderCompletionStatus> complete_status_;
 
   std::vector<char> buffered_body_;
   size_t bytes_remaining_in_buffer_;

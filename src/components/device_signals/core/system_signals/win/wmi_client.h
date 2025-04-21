@@ -1,16 +1,16 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_DEVICE_SIGNALS_CORE_SYSTEM_SIGNALS_WIN_WMI_CLIENT_H_
 #define COMPONENTS_DEVICE_SIGNALS_CORE_SYSTEM_SIGNALS_WIN_WMI_CLIENT_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/win/wmi.h"
 #include "components/device_signals/core/common/win/win_types.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 // WMI interfaces are available on Windows Vista and above, and are officially
 // undocumented.
@@ -28,19 +28,6 @@ enum class WmiParsingError {
   kMaxValue = kFailedToGetId
 };
 
-// Response object for calls to retrieve information about installed AntiVirus
-// software.
-struct WmiAvProductsResponse {
-  WmiAvProductsResponse();
-  ~WmiAvProductsResponse();
-
-  WmiAvProductsResponse(const WmiAvProductsResponse& other);
-
-  std::vector<AvProduct> av_products;
-  absl::optional<base::win::WmiError> query_error;
-  std::vector<WmiParsingError> parsing_errors;
-};
-
 // Response object for calls to retrieve information about installed hotfix
 // updates.
 struct WmiHotfixesResponse {
@@ -50,7 +37,7 @@ struct WmiHotfixesResponse {
   ~WmiHotfixesResponse();
 
   std::vector<InstalledHotfix> hotfixes;
-  absl::optional<base::win::WmiError> query_error;
+  std::optional<base::win::WmiError> query_error;
   std::vector<WmiParsingError> parsing_errors;
 };
 
@@ -58,9 +45,6 @@ struct WmiHotfixesResponse {
 class WmiClient {
  public:
   virtual ~WmiClient() = default;
-
-  // Will retrieve information about installed AntiVirus software.
-  virtual WmiAvProductsResponse GetAntiVirusProducts() = 0;
 
   // Will retrieve information about installed hotfix updates.
   virtual WmiHotfixesResponse GetInstalledHotfixes() = 0;

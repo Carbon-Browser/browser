@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/qrcode_generator/qrcode_generator_bubble_controller.h"
 
 #include "base/test/scoped_feature_list.h"
-#include "chrome/browser/sharing/features.h"
+#include "components/sharing_message/features.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"

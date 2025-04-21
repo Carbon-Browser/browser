@@ -1,15 +1,15 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef TOOLS_WIN_IDLEWAKEUPS_SYSTEM_INFORMATION_SAMPLER_H_
 #define TOOLS_WIN_IDLEWAKEUPS_SYSTEM_INFORMATION_SAMPLER_H_
 
+#include <windows.h>
+
 #include <map>
 #include <memory>
 #include <vector>
-
-#include <windows.h>
 
 // SYSTEM_PROCESS_INFORMATION and SYSTEM_THREAD_INFORMATION structures
 // use HANDLE for the thread / process IDs.

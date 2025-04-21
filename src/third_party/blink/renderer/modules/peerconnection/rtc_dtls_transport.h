@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,7 @@ namespace blink {
 class DtlsTransportProxy;
 class DOMArrayBuffer;
 class RTCIceTransport;
+class V8RTCDtlsTransportState;
 
 enum class RTCDtlsTransportState {
   kNew,
@@ -31,7 +32,7 @@ enum class RTCDtlsTransportState {
 // Blink bindings for the RTCDtlsTransport JavaScript object.
 //
 class MODULES_EXPORT RTCDtlsTransport final
-    : public EventTargetWithInlineData,
+    : public EventTarget,
       public ExecutionContextClient,
       public DtlsTransportProxy::Delegate {
   DEFINE_WRAPPERTYPEINFO();
@@ -45,7 +46,7 @@ class MODULES_EXPORT RTCDtlsTransport final
 
   // rtc_dtls_transport.idl
   RTCIceTransport* iceTransport() const;
-  String state() const;
+  V8RTCDtlsTransportState state() const;
   const HeapVector<Member<DOMArrayBuffer>>& getRemoteCertificates() const;
 
   DEFINE_ATTRIBUTE_EVENT_LISTENER(statechange, kStatechange)

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,6 @@ void InitLogging() {
   logging::LoggingSettings settings;
   settings.logging_dest =
       logging::LOG_TO_SYSTEM_DEBUG_LOG | logging::LOG_TO_STDERR;
-  settings.log_file_path = nullptr;
   settings.lock_log = logging::DONT_LOCK_LOG_FILE;
   settings.delete_old = logging::APPEND_TO_OLD_LOG_FILE;
   bool logging_res = logging::InitLogging(settings);
@@ -30,6 +29,7 @@ void InitLogging() {
 void InitErrorHandling(const base::CommandLine& command_line) {
   base::EnableTerminationOnHeapCorruption();
   base::EnableTerminationOnOutOfMemory();
+  logging::RegisterAbslAbortHook();
 #if BUILDFLAG(IS_WIN)
   base::win::RegisterInvalidParamHandler();
   base::win::SetupCRT(command_line);

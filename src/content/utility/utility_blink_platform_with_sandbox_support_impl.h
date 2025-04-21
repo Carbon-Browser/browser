@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,6 @@
 
 #include "build/build_config.h"
 #include "third_party/blink/public/platform/platform.h"
-
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-#include "components/services/font/public/cpp/font_loader.h"  // nogncheck
-#include "third_party/skia/include/core/SkRefCnt.h"           // nogncheck
-#endif
 
 namespace blink {
 class WebSandboxSupport;
@@ -40,9 +35,6 @@ class UtilityBlinkPlatformWithSandboxSupportImpl : public blink::Platform {
  private:
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_MAC)
   std::unique_ptr<blink::WebSandboxSupport> sandbox_support_;
-#endif
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-  sk_sp<font_service::FontLoader> font_loader_;
 #endif
 };
 

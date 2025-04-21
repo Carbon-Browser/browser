@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,10 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/types/expected.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/net_errors.h"
 #include "net/base/net_export.h"
@@ -41,7 +43,7 @@ class NET_EXPORT_PRIVATE FilterSourceStream : public SourceStream {
   std::string Description() const override;
   bool MayHaveMoreBytes() const override;
 
-  static SourceType ParseEncodingType(const std::string& encoding);
+  static SourceType ParseEncodingType(std::string_view encoding);
 
  private:
   enum State {
@@ -76,12 +78,13 @@ class NET_EXPORT_PRIVATE FilterSourceStream : public SourceStream {
   // with |upstream_eof_reached| = true.
   // TODO(xunjieli): consider allowing asynchronous response via callback
   // to support off-thread decompression.
-  virtual int FilterData(IOBuffer* output_buffer,
-                         int output_buffer_size,
-                         IOBuffer* input_buffer,
-                         int input_buffer_size,
-                         int* consumed_bytes,
-                         bool upstream_eof_reached) = 0;
+  virtual base::expected<size_t, Error> FilterData(
+      IOBuffer* output_buffer,
+      size_t output_buffer_size,
+      IOBuffer* input_buffer,
+      size_t input_buffer_size,
+      size_t* consumed_bytes,
+      bool upstream_eof_reached) = 0;
 
   // Returns a string representation of the type of this FilterSourceStream.
   // This is for UMA logging.
@@ -110,7 +113,7 @@ class NET_EXPORT_PRIVATE FilterSourceStream : public SourceStream {
 
   // Not null if there is a pending Read.
   scoped_refptr<IOBuffer> output_buffer_;
-  int output_buffer_size_ = 0;
+  size_t output_buffer_size_ = 0;
   CompletionOnceCallback callback_;
 
   // Reading from |upstream_| has returned 0 byte or an error code.

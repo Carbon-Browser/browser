@@ -26,7 +26,6 @@
 
 #include "third_party/blink/renderer/core/editing/commands/apply_block_element_command.h"
 
-#include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/dom/text.h"
 #include "third_party/blink/renderer/core/editing/commands/editing_commands_utilities.h"
 #include "third_party/blink/renderer/core/editing/editing_utilities.h"
@@ -41,6 +40,7 @@
 #include "third_party/blink/renderer/core/style/computed_style.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 
 namespace blink {
 
@@ -62,8 +62,9 @@ void ApplyBlockElementCommand::DoApply(EditingState* editing_state) {
   // execution, which updates layout before entering doApply().
   DCHECK(!GetDocument().NeedsLayoutTreeUpdate());
 
-  if (!RootEditableElementOf(EndingSelection().Base()))
+  if (!RootEditableElementOf(EndingSelection().Anchor())) {
     return;
+  }
 
   VisiblePosition visible_end = EndingVisibleSelection().VisibleEnd();
   VisiblePosition visible_start = EndingVisibleSelection().VisibleStart();
@@ -176,15 +177,16 @@ void ApplyBlockElementCommand::FormatSelection(
   VisiblePosition end_of_current_paragraph = EndOfParagraph(start_of_selection);
   const VisiblePosition& visible_end_of_last_paragraph =
       EndOfParagraph(end_of_selection);
-  RelocatablePosition end_of_next_last_paragraph(
-      EndOfParagraph(NextPositionOf(visible_end_of_last_paragraph))
-          .DeepEquivalent());
+  RelocatablePosition* end_of_next_last_paragraph =
+      MakeGarbageCollected<RelocatablePosition>(
+          EndOfParagraph(NextPositionOf(visible_end_of_last_paragraph))
+              .DeepEquivalent());
   Position end_of_last_paragraph =
       visible_end_of_last_paragraph.DeepEquivalent();
 
   bool at_end = false;
   while (end_of_current_paragraph.DeepEquivalent() !=
-             end_of_next_last_paragraph.GetPosition() &&
+             end_of_next_last_paragraph->GetPosition() &&
          !at_end) {
     if (end_of_current_paragraph.DeepEquivalent() == end_of_last_paragraph)
       at_end = true;
@@ -195,25 +197,40 @@ void ApplyBlockElementCommand::FormatSelection(
     end_of_current_paragraph = CreateVisiblePosition(end);
 
     Node* enclosing_cell = EnclosingNodeOfType(start, &IsTableCell);
-    RelocatablePosition relocatable_end_of_next_paragraph(
-        EndOfNextParagrahSplittingTextNodesIfNeeded(
-            end_of_current_paragraph, end_of_last_paragraph, start, end)
-            .DeepEquivalent());
-    RelocatablePosition relocatable_end(end);
+    RelocatablePosition* relocatable_end_of_next_paragraph =
+        MakeGarbageCollected<RelocatablePosition>(
+            EndOfNextParagrahSplittingTextNodesIfNeeded(
+                end_of_current_paragraph, end_of_last_paragraph, start, end)
+                .DeepEquivalent());
+    RelocatablePosition* relocatable_end =
+        MakeGarbageCollected<RelocatablePosition>(end);
 
+    VisiblePosition end_of_next_of_paragraph_to_move;
     FormatRange(start, end, end_of_last_paragraph, blockquote_for_next_indent,
-                editing_state);
+                end_of_next_of_paragraph_to_move, editing_state);
     if (editing_state->IsAborted())
       return;
 
+    // If `end_of_next_of_paragraph_to_move` is updated,
+    // `relocatable_end_of_next_paragraph` should be also updated along with
+    // it.
+    if (end_of_next_of_paragraph_to_move.IsNotNull() &&
+        end_of_next_of_paragraph_to_move.IsValidFor(GetDocument())) {
+      DCHECK(RuntimeEnabledFeatures::
+                 AdjustEndOfNextParagraphIfMovedParagraphIsUpdatedEnabled());
+      relocatable_end_of_next_paragraph->SetPosition(
+          end_of_next_of_paragraph_to_move.DeepEquivalent());
+    }
+
     const Position& end_of_next_paragraph =
-        relocatable_end_of_next_paragraph.GetPosition();
+        relocatable_end_of_next_paragraph->GetPosition();
 
     // Sometimes FormatRange can format beyond end. If the relocated end is now
     // the equivalent to end_of_next_paragraph, abort to avoid redoing the same
     // work in the next step.
-    if (relocatable_end.GetPosition().IsEquivalent(end_of_next_paragraph))
+    if (relocatable_end->GetPosition().IsEquivalent(end_of_next_paragraph)) {
       break;
+    }
 
     // Don't put the next paragraph in the blockquote we just created for this
     // paragraph unless the next paragraph is in the same cell.
@@ -222,8 +239,8 @@ void ApplyBlockElementCommand::FormatSelection(
             EnclosingNodeOfType(end_of_next_paragraph, &IsTableCell))
       blockquote_for_next_indent = nullptr;
 
-    DCHECK(end_of_next_last_paragraph.GetPosition().IsNull() ||
-           end_of_next_last_paragraph.GetPosition().IsConnected());
+    DCHECK(end_of_next_last_paragraph->GetPosition().IsNull() ||
+           end_of_next_last_paragraph->GetPosition().IsConnected());
     DCHECK(end_of_next_paragraph.IsNull() ||
            end_of_next_paragraph.IsConnected());
 
@@ -251,9 +268,11 @@ static bool IsNewLineAtPosition(const Position& position) {
 static const ComputedStyle* ComputedStyleOfEnclosingTextNode(
     const Position& position) {
   if (!position.IsOffsetInAnchor() || !position.ComputeContainerNode() ||
-      !position.ComputeContainerNode()->IsTextNode())
+      !position.ComputeContainerNode()->IsTextNode()) {
     return nullptr;
-  return position.ComputeContainerNode()->GetComputedStyle();
+  }
+  return GetComputedStyleForElementOrLayoutObject(
+      *position.ComputeContainerNode());
 }
 
 void ApplyBlockElementCommand::RangeForParagraphSplittingTextNodesIfNeeded(
@@ -278,16 +297,17 @@ void ApplyBlockElementCommand::RangeForParagraphSplittingTextNodesIfNeeded(
     // Avoid obtanining the start of next paragraph for start
     // TODO(yosin) We should use |PositionMoveType::CodePoint| for
     // |previousPositionOf()|.
-    if (start_style->PreserveNewline() && IsNewLineAtPosition(start) &&
+    if (start_style->ShouldPreserveBreaks() && IsNewLineAtPosition(start) &&
         !IsNewLineAtPosition(
             PreviousPositionOf(start, PositionMoveType::kCodeUnit)) &&
-        start.OffsetInContainerNode() > 0)
+        start.OffsetInContainerNode() > 0) {
       start = StartOfParagraph(CreateVisiblePosition(PreviousPositionOf(
                                    end, PositionMoveType::kCodeUnit)))
                   .DeepEquivalent();
+    }
 
     // If start is in the middle of a text node, split.
-    if (!start_style->CollapseWhiteSpace() &&
+    if (!start_style->ShouldCollapseWhiteSpaces() &&
         start.OffsetInContainerNode() > 0) {
       int start_offset = start.OffsetInContainerNode();
       auto* start_text = To<Text>(start.ComputeContainerNode());
@@ -313,16 +333,20 @@ void ApplyBlockElementCommand::RangeForParagraphSplittingTextNodesIfNeeded(
         ComputedStyleOfEnclosingTextNode(end_of_last_paragraph) &&
         end.AnchorNode() == end_of_last_paragraph.AnchorNode();
     // Include \n at the end of line if we're at an empty paragraph
-    if (end_style->PreserveNewline() && start == end &&
+    if (end_style->ShouldPreserveBreaks() && start == end &&
         end.OffsetInContainerNode() <
             static_cast<int>(To<Text>(end.ComputeContainerNode())->length())) {
-      int end_offset = end.OffsetInContainerNode();
-      // TODO(yosin) We should use |PositionMoveType::CodePoint| for
-      // |previousPositionOf()|.
-      if (!IsNewLineAtPosition(
-              PreviousPositionOf(end, PositionMoveType::kCodeUnit)) &&
-          IsNewLineAtPosition(end))
-        end = Position(end.ComputeContainerNode(), end_offset + 1);
+      if (!RuntimeEnabledFeatures::
+              NoIncreasingEndOffsetOnSplittingTextNodesEnabled()) {
+        int end_offset = end.OffsetInContainerNode();
+        // TODO(yosin) We should use |PositionMoveType::CodePoint| for
+        // |previousPositionOf()|.
+        if (!IsNewLineAtPosition(
+                PreviousPositionOf(end, PositionMoveType::kCodeUnit)) &&
+            IsNewLineAtPosition(end)) {
+          end = Position(end.ComputeContainerNode(), end_offset + 1);
+        }
+      }
       if (is_end_and_end_of_last_paragraph_on_same_node &&
           end.OffsetInContainerNode() >=
               end_of_last_paragraph.OffsetInContainerNode())
@@ -331,7 +355,7 @@ void ApplyBlockElementCommand::RangeForParagraphSplittingTextNodesIfNeeded(
 
     // If end is in the middle of a text node, split.
     if (end_style->UsedUserModify() != EUserModify::kReadOnly &&
-        !end_style->CollapseWhiteSpace() && end.OffsetInContainerNode() &&
+        end_style->ShouldPreserveWhiteSpaces() && end.OffsetInContainerNode() &&
         end.OffsetInContainerNode() <
             static_cast<int>(To<Text>(end.ComputeContainerNode())->length())) {
       auto* end_container = To<Text>(end.ComputeContainerNode());
@@ -377,17 +401,22 @@ ApplyBlockElementCommand::EndOfNextParagrahSplittingTextNodesIfNeeded(
 
   auto* const end_of_next_paragraph_text =
       To<Text>(end_of_next_paragraph_position.ComputeContainerNode());
-  if (!style->PreserveNewline() ||
+  if (style->ShouldCollapseBreaks() ||
       !end_of_next_paragraph_position.OffsetInContainerNode() ||
       !IsNewLineAtPosition(
-          Position::FirstPositionInNode(*end_of_next_paragraph_text)))
+          Position::FirstPositionInNode(*end_of_next_paragraph_text))) {
     return end_of_next_paragraph;
+  }
 
   // \n at the beginning of the text node immediately following the current
   // paragraph is trimmed by moveParagraphWithClones. If endOfNextParagraph was
   // pointing at this same text node, endOfNextParagraph will be shifted by one
   // paragraph. Avoid this by splitting "\n"
-  SplitTextNode(end_of_next_paragraph_text, 1);
+  if (end_of_next_paragraph_text->length() > 1) {
+    // To avoid empty `Text` node, `end_of_next_paragraph_text` should be
+    // longer than one. See http://crbug.com/1264470
+    SplitTextNode(end_of_next_paragraph_text, 1);
+  }
   GetDocument().UpdateStyleAndLayout(DocumentUpdateReason::kEditing);
   Text* const previous_text =
       DynamicTo<Text>(end_of_next_paragraph_text->previousSibling());

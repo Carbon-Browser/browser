@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 
 #include "apps/switches.h"
 #include "base/command_line.h"
+#include "base/containers/contains.h"
 #include "base/process/launch.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/test_switches.h"
@@ -22,6 +23,7 @@
 #include "chrome/browser/extensions/load_error_reporter.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/simple_message_box_internal.h"
+#include "chrome/common/chrome_result_codes.h"
 #include "chrome/common/chrome_switches.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/browser_test.h"
@@ -42,7 +44,7 @@ constexpr char kTestExtensionId[] = "behllobkkfkfnphdnhnkndlbkcpglgmj";
 // comment for InProcessBrowserTest::GetCommandLineForRelaunch().
 #if !BUILDFLAG(IS_CHROMEOS_LACROS)
 
-const char* kSwitchesToCopy[] = {
+const char* const kSwitchesToCopy[] = {
     sandbox::policy::switches::kNoSandbox,
     switches::kUserDataDir,
 };
@@ -63,8 +65,7 @@ IN_PROC_BROWSER_TEST_F(PlatformAppBrowserTest,
 
   const base::CommandLine& cmdline = *base::CommandLine::ForCurrentProcess();
   base::CommandLine new_cmdline(cmdline.GetProgram());
-  new_cmdline.CopySwitchesFrom(cmdline, kSwitchesToCopy,
-                               std::size(kSwitchesToCopy));
+  new_cmdline.CopySwitchesFrom(cmdline, kSwitchesToCopy);
 
   base::FilePath app_path = test_data_dir_
       .AppendASCII("platform_apps")
@@ -82,7 +83,7 @@ IN_PROC_BROWSER_TEST_F(PlatformAppBrowserTest,
   int exit_code;
   ASSERT_TRUE(process.WaitForExitWithTimeout(TestTimeouts::action_timeout(),
                                              &exit_code));
-  ASSERT_EQ(0, exit_code);
+  ASSERT_EQ(chrome::RESULT_CODE_NORMAL_EXIT_PROCESS_NOTIFIED, exit_code);
 }
 
 // TODO(jackhou): Enable this test once it works on OSX. It currently does not
@@ -99,8 +100,7 @@ IN_PROC_BROWSER_TEST_F(PlatformAppBrowserTest,
 
   const base::CommandLine& cmdline = *base::CommandLine::ForCurrentProcess();
   base::CommandLine new_cmdline(cmdline.GetProgram());
-  new_cmdline.CopySwitchesFrom(cmdline, kSwitchesToCopy,
-                               std::size(kSwitchesToCopy));
+  new_cmdline.CopySwitchesFrom(cmdline, kSwitchesToCopy);
 
   base::FilePath app_path = test_data_dir_
       .AppendASCII("platform_apps")
@@ -124,7 +124,7 @@ IN_PROC_BROWSER_TEST_F(PlatformAppBrowserTest,
   int exit_code;
   ASSERT_TRUE(process.WaitForExitWithTimeout(TestTimeouts::action_timeout(),
                                              &exit_code));
-  ASSERT_EQ(0, exit_code);
+  ASSERT_EQ(chrome::RESULT_CODE_NORMAL_EXIT_PROCESS_NOTIFIED, exit_code);
 }
 
 #endif  // !BUILDFLAG(IS_CHROMEOS_LACROS)
@@ -146,16 +146,24 @@ class LoadAndLaunchPlatformAppBrowserTest : public PlatformAppBrowserTest {
     base::FilePath app_path =
         test_data_dir_.AppendASCII("platform_apps").AppendASCII("minimal");
     command_line->AppendSwitchNative(apps::kLoadAndLaunchApp, app_path.value());
+
+    // |launched_listener_| needs to be instantiated before the app process is
+    // launched to ensure the test api observer is registered.
+    launched_listener_ =
+        std::make_unique<ExtensionTestMessageListener>("Launched");
   }
 
+  void TearDownOnMainThread() override { launched_listener_.reset(); }
+
   void LoadAndLaunchApp() {
-    ExtensionTestMessageListener launched_listener("Launched");
-    ASSERT_TRUE(launched_listener.WaitUntilSatisfied());
+    ASSERT_TRUE(launched_listener_->WaitUntilSatisfied());
 
     // Start an actual browser because we can't shut down with just an app
     // window.
     CreateBrowser(profile());
   }
+
+  std::unique_ptr<ExtensionTestMessageListener> launched_listener_;
 };
 
 // TestFixture that appends --load-and-launch-app with an extension before
@@ -193,14 +201,8 @@ IN_PROC_BROWSER_TEST_F(LoadAndLaunchPlatformAppBrowserTest,
   LoadAndLaunchApp();
 }
 
-// TODO(https://crbug.com/988160): Test is flaky on Windows.
-#if BUILDFLAG(IS_WIN)
-#define MAYBE_LoadAndLaunchExtension DISABLED_LoadAndLaunchExtension
-#else
-#define MAYBE_LoadAndLaunchExtension LoadAndLaunchExtension
-#endif
 IN_PROC_BROWSER_TEST_F(LoadAndLaunchExtensionBrowserTest,
-                       MAYBE_LoadAndLaunchExtension) {
+                       LoadAndLaunchExtension) {
   const std::vector<std::u16string>* errors =
       extensions::LoadErrorReporter::GetInstance()->GetErrors();
 
@@ -210,9 +212,8 @@ IN_PROC_BROWSER_TEST_F(LoadAndLaunchExtensionBrowserTest,
 #else
   // Expect |extension_instead_of_app_error|.
   EXPECT_EQ(1u, errors->size());
-  EXPECT_NE(std::u16string::npos,
-            errors->at(0).find(
-                u"App loading flags cannot be used to load extensions"));
+  EXPECT_TRUE(base::Contains(
+      *errors, u"App loading flags cannot be used to load extensions"));
 #endif
 
   extensions::ExtensionRegistry* registry =

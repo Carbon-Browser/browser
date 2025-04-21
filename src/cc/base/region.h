@@ -1,10 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CC_BASE_REGION_H_
 #define CC_BASE_REGION_H_
 
+#include <iosfwd>
 #include <memory>
 #include <string>
 
@@ -16,11 +17,10 @@
 class SkPath;
 
 namespace base {
-class Value;
 namespace trace_event {
 class TracedValue;
 }
-}
+}  // namespace base
 
 namespace gfx {
 class Vector2d;
@@ -76,7 +76,6 @@ class CC_BASE_EXPORT Region {
   }
 
   std::string ToString() const;
-  std::unique_ptr<base::Value> AsValue() const;
   void AsValueInto(base::trace_event::TracedValue* array) const;
 
   // Iterator for iterating through the gfx::Rects contained in this Region.
@@ -165,6 +164,11 @@ inline Region UnionRegions(const Region& a, const gfx::Rect& b) {
   result.Union(b);
   return result;
 }
+
+// This is declared here for use in gtest-based unit tests but is defined in
+// the //cc:test_support target. Depend on that to use this in your unit test.
+// This should not be used in production code - call ToString() instead.
+void PrintTo(const Region& region, std::ostream* os);
 
 }  // namespace cc
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/renderer/bindings/core/v8/callback_promise_adapter.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_visibility_state.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/messaging/message_port.h"
@@ -22,7 +23,7 @@ namespace blink {
 
 namespace {
 
-void DidFocus(ScriptPromiseResolver* resolver,
+void DidFocus(ScriptPromiseResolver<ServiceWorkerWindowClient>* resolver,
               mojom::blink::ServiceWorkerClientInfoPtr client) {
   if (!resolver->GetExecutionContext() ||
       resolver->GetExecutionContext()->IsContextDestroyed()) {
@@ -38,10 +39,11 @@ void DidFocus(ScriptPromiseResolver* resolver,
   resolver->Resolve(MakeGarbageCollected<ServiceWorkerWindowClient>(*client));
 }
 
-void DidNavigateOrOpenWindow(ScriptPromiseResolver* resolver,
-                             bool success,
-                             mojom::blink::ServiceWorkerClientInfoPtr info,
-                             const String& error_msg) {
+void DidNavigateOrOpenWindow(
+    ScriptPromiseResolver<IDLNullable<ServiceWorkerWindowClient>>* resolver,
+    bool success,
+    mojom::blink::ServiceWorkerClientInfoPtr info,
+    const String& error_msg) {
   if (!resolver->GetExecutionContext() ||
       resolver->GetExecutionContext()->IsContextDestroyed()) {
     return;
@@ -70,8 +72,8 @@ void DidNavigateOrOpenWindow(ScriptPromiseResolver* resolver,
 // static
 ServiceWorkerWindowClient::ResolveWindowClientCallback
 ServiceWorkerWindowClient::CreateResolveWindowClientCallback(
-    ScriptPromiseResolver* resolver) {
-  return WTF::Bind(&DidNavigateOrOpenWindow, WrapPersistent(resolver));
+    ScriptPromiseResolver<IDLNullable<ServiceWorkerWindowClient>>* resolver) {
+  return WTF::BindOnce(&DidNavigateOrOpenWindow, WrapPersistent(resolver));
 }
 
 ServiceWorkerWindowClient::ServiceWorkerWindowClient(
@@ -84,13 +86,20 @@ ServiceWorkerWindowClient::ServiceWorkerWindowClient(
 
 ServiceWorkerWindowClient::~ServiceWorkerWindowClient() = default;
 
-String ServiceWorkerWindowClient::visibilityState() const {
-  return PageHiddenStateString(page_hidden_);
+V8VisibilityState ServiceWorkerWindowClient::visibilityState() const {
+  if (page_hidden_) {
+    return V8VisibilityState(V8VisibilityState::Enum::kHidden);
+  } else {
+    return V8VisibilityState(V8VisibilityState::Enum::kVisible);
+  }
 }
 
-ScriptPromise ServiceWorkerWindowClient::focus(ScriptState* script_state) {
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
-  ScriptPromise promise = resolver->Promise();
+ScriptPromise<ServiceWorkerWindowClient> ServiceWorkerWindowClient::focus(
+    ScriptState* script_state) {
+  auto* resolver =
+      MakeGarbageCollected<ScriptPromiseResolver<ServiceWorkerWindowClient>>(
+          script_state);
+  auto promise = resolver->Promise();
   ServiceWorkerGlobalScope* global_scope =
       To<ServiceWorkerGlobalScope>(ExecutionContext::From(script_state));
 
@@ -103,14 +112,17 @@ ScriptPromise ServiceWorkerWindowClient::focus(ScriptState* script_state) {
   global_scope->ConsumeWindowInteraction();
 
   global_scope->GetServiceWorkerHost()->FocusClient(
-      Uuid(), WTF::Bind(&DidFocus, WrapPersistent(resolver)));
+      Uuid(), WTF::BindOnce(&DidFocus, WrapPersistent(resolver)));
   return promise;
 }
 
-ScriptPromise ServiceWorkerWindowClient::navigate(ScriptState* script_state,
-                                                  const String& url) {
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
-  ScriptPromise promise = resolver->Promise();
+ScriptPromise<IDLNullable<ServiceWorkerWindowClient>>
+ServiceWorkerWindowClient::navigate(ScriptState* script_state,
+                                    const String& url) {
+  auto* resolver = MakeGarbageCollected<
+      ScriptPromiseResolver<IDLNullable<ServiceWorkerWindowClient>>>(
+      script_state);
+  auto promise = resolver->Promise();
   ServiceWorkerGlobalScope* global_scope =
       To<ServiceWorkerGlobalScope>(ExecutionContext::From(script_state));
 

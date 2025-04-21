@@ -102,14 +102,14 @@
           tabindex="-1" is-open$="[[isOpen]]" noink aria-hidden="true">
       </cr-icon-button>
     </template>
-    <div class="folder-icon"
+    <div class="folder-icon icon-folder-open"
         open$="[[isSelectedFolder_]]"
         no-children$="[[!hasChildFolder_]]">
     </div>
     <div class="menu-label" title="[[item_.title]]">
       [[item_.title]]
     </div>
-    <paper-ripple></paper-ripple>
+    <cr-ripple></cr-ripple>
   </div>
 </div>
 <div id="descendants" role="group">

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include "components/policy/proto/device_management_backend.pb.h"
 #include "net/http/http_status_code.h"
 #include "net/test/embedded_test_server/http_response.h"
 #include "url/gurl.h"
@@ -63,6 +64,11 @@ bool GetGoogleLoginFromRequest(const net::test_server::HttpRequest& request,
 std::unique_ptr<net::test_server::HttpResponse> CreateHttpResponse(
     net::HttpStatusCode code,
     const std::string& content);
+
+// Returns an application/x-protobuffer HttpResponse.
+std::unique_ptr<net::test_server::HttpResponse> CreateHttpResponse(
+    net::HttpStatusCode code,
+    const enterprise_management::DeviceManagementResponse& content);
 
 }  // namespace policy
 

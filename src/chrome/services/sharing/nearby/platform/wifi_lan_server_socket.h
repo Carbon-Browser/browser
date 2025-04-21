@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,18 +6,19 @@
 #define CHROME_SERVICES_SHARING_NEARBY_PLATFORM_WIFI_LAN_SERVER_SOCKET_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "ash/services/nearby/public/mojom/firewall_hole.mojom.h"
 #include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "chrome/services/sharing/nearby/platform/wifi_lan_socket.h"
+#include "chromeos/ash/services/nearby/public/mojom/firewall_hole.mojom.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/shared_remote.h"
 #include "mojo/public/cpp/system/data_pipe.h"
 #include "net/base/ip_endpoint.h"
 #include "services/network/public/mojom/tcp_socket.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/nearby/src/internal/platform/implementation/wifi_lan.h"
 
 namespace base {
@@ -25,9 +26,7 @@ class SequencedTaskRunner;
 class WaitableEvent;
 }  // namespace base
 
-namespace location {
-namespace nearby {
-namespace chrome {
+namespace nearby::chrome {
 
 // An implementation of Nearby Connections's abstract class
 // api::WifiLanServerSocket. This implementation wraps a TCPServerSocket and
@@ -46,14 +45,14 @@ class WifiLanServerSocket : public api::WifiLanServerSocket {
     ServerSocketParameters(
         const net::IPEndPoint& local_end_point,
         mojo::PendingRemote<network::mojom::TCPServerSocket> tcp_server_socket,
-        mojo::PendingRemote<sharing::mojom::FirewallHole> firewall_hole);
+        mojo::PendingRemote<::sharing::mojom::FirewallHole> firewall_hole);
     ~ServerSocketParameters();
     ServerSocketParameters(ServerSocketParameters&&);
     ServerSocketParameters& operator=(ServerSocketParameters&&);
 
     net::IPEndPoint local_end_point;
     mojo::PendingRemote<network::mojom::TCPServerSocket> tcp_server_socket;
-    mojo::PendingRemote<sharing::mojom::FirewallHole> firewall_hole;
+    mojo::PendingRemote<::sharing::mojom::FirewallHole> firewall_hole;
   };
 
   explicit WifiLanServerSocket(ServerSocketParameters server_socket_parameters);
@@ -71,15 +70,15 @@ class WifiLanServerSocket : public api::WifiLanServerSocket {
   /*==========================================================================*/
   // Accept() helpers: Accept connection from remote TCP socket.
   /*==========================================================================*/
-  void DoAccept(absl::optional<WifiLanSocket::ConnectedSocketParameters>*
+  void DoAccept(std::optional<WifiLanSocket::ConnectedSocketParameters>*
                     connected_socket_parameters,
                 base::WaitableEvent* accept_waitable_event);
   void OnAccepted(
-      absl::optional<WifiLanSocket::ConnectedSocketParameters>*
+      std::optional<WifiLanSocket::ConnectedSocketParameters>*
           connected_socket_parameters,
       base::WaitableEvent* accept_waitable_event,
       int32_t net_result,
-      const absl::optional<net::IPEndPoint>& remote_addr,
+      const std::optional<net::IPEndPoint>& remote_addr,
       mojo::PendingRemote<network::mojom::TCPConnectedSocket> connected_socket,
       mojo::ScopedDataPipeConsumerHandle receive_stream,
       mojo::ScopedDataPipeProducerHandle send_stream);
@@ -110,14 +109,13 @@ class WifiLanServerSocket : public api::WifiLanServerSocket {
   // corresponding remote endpoint, |tcp_server_socket_|/|firewall_hole_|, is
   // destroyed.
   mojo::SharedRemote<network::mojom::TCPServerSocket> tcp_server_socket_;
-  mojo::SharedRemote<sharing::mojom::FirewallHole> firewall_hole_;
+  mojo::SharedRemote<::sharing::mojom::FirewallHole> firewall_hole_;
 
   // Track all pending accept tasks in case Close() is called while waiting.
-  base::flat_set<base::WaitableEvent*> pending_accept_waitable_events_;
+  base::flat_set<raw_ptr<base::WaitableEvent, CtnExperimental>>
+      pending_accept_waitable_events_;
 };
 
-}  // namespace chrome
-}  // namespace nearby
-}  // namespace location
+}  // namespace nearby::chrome
 
 #endif  // CHROME_SERVICES_SHARING_NEARBY_PLATFORM_WIFI_LAN_SERVER_SOCKET_H_

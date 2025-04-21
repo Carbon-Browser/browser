@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "chrome/browser/translate/chrome_translate_client.h"
@@ -59,7 +59,7 @@ class TranslateBubbleViewBrowserTest : public InProcessBrowserTest {
     command_line->AppendSwitchASCII(
         switches::kTranslateScriptURL,
         embedded_test_server()->GetURL("/mock_translate_script.js").spec());
-    // TODO(crbug.com/1258185): Migrate to better mechanism for testing around
+    // TODO(crbug.com/40200965): Migrate to better mechanism for testing around
     // language detection.
     command_line->AppendSwitch(::switches::kOverrideLanguageDetection);
   }
@@ -173,9 +173,8 @@ IN_PROC_BROWSER_TEST_F(TranslateBubbleViewBrowserTest,
       browser()->tab_strip_model()->GetActiveWebContents()));
 
   // Close the last tab.
-  chrome::CloseWebContents(browser(),
-                           browser()->tab_strip_model()->GetActiveWebContents(),
-                           false);
+  chrome::CloseWebContents(
+      browser(), browser()->tab_strip_model()->GetActiveWebContents(), false);
 }
 
 IN_PROC_BROWSER_TEST_F(TranslateBubbleViewBrowserTest, AlertAccessibleEvent) {
@@ -185,7 +184,7 @@ IN_PROC_BROWSER_TEST_F(TranslateBubbleViewBrowserTest, AlertAccessibleEvent) {
   GURL french_url = GURL(embedded_test_server()->GetURL("/french_page.html"));
   NavigateAndWaitForLanguageDetection(french_url, "fr");
 
-  // TODO(crbug.com/1082217): This should produce one event instead of two.
+  // TODO(crbug.com/40691800): This should produce one event instead of two.
   EXPECT_LT(0, counter.GetCount(ax::mojom::Event::kAlert));
 }
 

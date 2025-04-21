@@ -1,8 +1,10 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/shell/browser/shell_javascript_dialog.h"
+
+#include <windows.h>
 
 #include <utility>
 
@@ -11,8 +13,6 @@
 #include "content/shell/app/resource.h"
 #include "content/shell/browser/shell.h"
 #include "content/shell/browser/shell_javascript_dialog_manager.h"
-
-#include <windows.h>
 
 namespace content {
 

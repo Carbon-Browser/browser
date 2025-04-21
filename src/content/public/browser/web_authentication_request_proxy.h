@@ -1,12 +1,16 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_PUBLIC_BROWSER_WEB_AUTHENTICATION_REQUEST_PROXY_H_
 #define CONTENT_PUBLIC_BROWSER_WEB_AUTHENTICATION_REQUEST_PROXY_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "third_party/blink/public/mojom/webauthn/authenticator.mojom-forward.h"
+
+namespace url {
+class Origin;
+}
 
 namespace content {
 
@@ -41,8 +45,8 @@ class WebAuthenticationRequestProxy {
   virtual ~WebAuthenticationRequestProxy() = default;
 
   // IsActive indicates whether the proxy expects to handle Web Authentication
-  // API requests.
-  virtual bool IsActive() = 0;
+  // API requests for the given `caller_origin`.
+  virtual bool IsActive(const url::Origin& caller_origin) = 0;
 
   // SignalCreateRequest is invoked when a Web Authentication API
   // `navigator.credentials.create()` request occurs.

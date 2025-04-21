@@ -1,6 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/ash/phonehub/browser_tabs_metadata_fetcher_impl.h"
 
@@ -10,9 +15,10 @@
 #include "components/favicon_base/favicon_types.h"
 #include "components/sync_sessions/synced_session.h"
 #include "components/ukm/scheme_constants.h"
+#include "ui/gfx/image/image_skia.h"
 
-namespace ash {
-namespace phonehub {
+namespace ash::phonehub {
+
 namespace {
 
 std::vector<BrowserTabsModel::BrowserTabMetadata>
@@ -40,14 +46,16 @@ GetSortedMetadataWithoutFavicons(const sync_sessions::SyncedSession* session) {
       // URLs whose schemes are not http:// or https:// should be ignored
       // because they may be platform specific (e.g., chrome:// URLs) or may
       // refer to local media on the phone (e.g., content:// URLs).
-      if (!tab_url.SchemeIsHTTPOrHTTPS())
+      if (!tab_url.SchemeIsHTTPOrHTTPS()) {
         continue;
+      }
 
       // If the url is incorrectly formatted, is empty, or has a
       // scheme that should be omitted, do not proceed with storing its
       // metadata.
-      if (!tab_url.is_valid())
+      if (!tab_url.is_valid()) {
         continue;
+      }
 
       const std::u16string& title = current_navigation.title();
       const base::Time last_accessed_timestamp = tab->timestamp;
@@ -79,10 +87,10 @@ BrowserTabsMetadataFetcherImpl::~BrowserTabsMetadataFetcherImpl() = default;
 void BrowserTabsMetadataFetcherImpl::Fetch(
     const sync_sessions::SyncedSession* session,
     base::OnceCallback<void(BrowserTabsMetadataResponse)> callback) {
-  // A new fetch was made, return a absl::nullopt to the previous |callback_|.
+  // A new fetch was made, return a std::nullopt to the previous |callback_|.
   if (!callback_.is_null()) {
     weak_ptr_factory_.InvalidateWeakPtrs();
-    std::move(callback_).Run(absl::nullopt);
+    std::move(callback_).Run(std::nullopt);
   }
 
   results_ = GetSortedMetadataWithoutFavicons(session);
@@ -118,5 +126,4 @@ void BrowserTabsMetadataFetcherImpl::OnFaviconReady(
   std::move(done_closure).Run();
 }
 
-}  // namespace phonehub
-}  // namespace ash
+}  // namespace ash::phonehub

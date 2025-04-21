@@ -1,17 +1,22 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "media/gpu/vaapi/vaapi_jpeg_encoder.h"
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
-#include <array>
-#include <type_traits>
+#include "media/gpu/vaapi/vaapi_jpeg_encoder.h"
 
 #include <stddef.h>
 #include <string.h>
 
+#include <algorithm>
+#include <array>
+#include <type_traits>
+
 #include "base/check_op.h"
-#include "base/cxx17_backports.h"
 #include "base/numerics/safe_conversions.h"
 #include "media/gpu/macros.h"
 #include "media/gpu/vaapi/vaapi_wrapper.h"
@@ -214,7 +219,7 @@ size_t FillJpegHeader(const gfx::Size& input_size,
           VaapiWrapper::GetImplementationType() == VAImplementation::kIntelIHD ? 50 : 0;
       uint32_t scaled_quant_value =
           (quant_table.value[kZigZag8x8[j]] * quality_normalized + shift) / 100;
-      scaled_quant_value = base::clamp(scaled_quant_value, 1u, 255u);
+      scaled_quant_value = std::clamp(scaled_quant_value, 1u, 255u);
       header[idx++] = static_cast<uint8_t>(scaled_quant_value);
     }
   }

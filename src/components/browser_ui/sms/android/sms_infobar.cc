@@ -1,15 +1,17 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/browser_ui/sms/android/sms_infobar.h"
 
 #include "base/android/jni_string.h"
-#include "components/browser_ui/sms/android/jni_headers/WebOTPServiceInfoBar_jni.h"
 #include "components/browser_ui/sms/android/sms_infobar_delegate.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/android/window_android.h"
 #include "url/origin.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "components/browser_ui/sms/android/jni_headers/WebOTPServiceInfoBar_jni.h"
 
 using base::android::ConvertUTF16ToJavaString;
 using base::android::ScopedJavaLocalRef;

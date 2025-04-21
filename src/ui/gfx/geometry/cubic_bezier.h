@@ -1,17 +1,17 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_GFX_GEOMETRY_CUBIC_BEZIER_H_
 #define UI_GFX_GEOMETRY_CUBIC_BEZIER_H_
 
-#include "ui/gfx/geometry/geometry_export.h"
+#include "base/component_export.h"
 
 namespace gfx {
 
 #define CUBIC_BEZIER_SPLINE_SAMPLES 11
 
-class GEOMETRY_EXPORT CubicBezier {
+class COMPONENT_EXPORT(GEOMETRY) CubicBezier {
  public:
   CubicBezier(double p1x, double p1y, double p2x, double p2y);
   CubicBezier(const CubicBezier& other);

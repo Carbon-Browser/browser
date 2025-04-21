@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,11 +18,9 @@ using testing::Eq;
 using testing::NotNull;
 
 std::string ComputeKeystoreKeyName(const std::string& keystore_key) {
-  std::string key_name;
-  Nigori::CreateByDerivation(KeyDerivationParams::CreateForPbkdf2(),
-                             keystore_key)
-      ->Permute(Nigori::Password, kNigoriKeyName, &key_name);
-  return key_name;
+  return Nigori::CreateByDerivation(KeyDerivationParams::CreateForPbkdf2(),
+                                    keystore_key)
+      ->GetKeyName();
 }
 
 TEST(KeystoreKeysCryptographerTest, ShouldCreateEmpty) {

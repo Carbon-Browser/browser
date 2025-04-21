@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,15 @@
 
 #include "base/feature_list.h"
 #include "base/message_loop/message_pump_type.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "third_party/blink/public/common/input/web_input_event_attribution.h"
 #include "third_party/blink/renderer/platform/scheduler/common/features.h"
+#include "third_party/blink/renderer/platform/scheduler/common/task_priority.h"
 #include "third_party/blink/renderer/platform/scheduler/common/tracing_helper.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_scheduler_impl.h"
+#include "third_party/blink/renderer/platform/scheduler/public/main_thread.h"
 
 namespace blink {
 namespace scheduler {
@@ -24,12 +27,11 @@ WebThreadScheduler::~WebThreadScheduler() = default;
 std::unique_ptr<WebThreadScheduler>
 WebThreadScheduler::CreateMainThreadScheduler(
     std::unique_ptr<base::MessagePump> message_pump) {
-  auto settings =
-      base::sequence_manager::SequenceManager::Settings::Builder()
-          .SetMessagePumpType(base::MessagePumpType::DEFAULT)
-          .SetRandomisedSamplingEnabled(true)
-          .SetAddQueueTimeToTasks(true)
-          .Build();
+  auto settings = base::sequence_manager::SequenceManager::Settings::Builder()
+                      .SetMessagePumpType(base::MessagePumpType::DEFAULT)
+                      .SetAddQueueTimeToTasks(true)
+                      .SetPrioritySettings(CreatePrioritySettings())
+                      .Build();
   auto sequence_manager =
       message_pump
           ? base::sequence_manager::
@@ -42,20 +44,12 @@ WebThreadScheduler::CreateMainThreadScheduler(
 
 // Stubs for main thread only virtual functions.
 scoped_refptr<base::SingleThreadTaskRunner>
-WebThreadScheduler::CompositorTaskRunner() {
-  NOTREACHED();
-  return nullptr;
-}
-
-scoped_refptr<base::SingleThreadTaskRunner>
 WebThreadScheduler::DeprecatedDefaultTaskRunner() {
   NOTREACHED();
-  return nullptr;
 }
 
-std::unique_ptr<Thread> WebThreadScheduler::CreateMainThread() {
+std::unique_ptr<MainThread> WebThreadScheduler::CreateMainThread() {
   NOTREACHED();
-  return nullptr;
 }
 
 void WebThreadScheduler::SetRendererHidden(bool hidden) {
@@ -76,18 +70,15 @@ void WebThreadScheduler::ResumeTimersForAndroidWebView() {
 }
 #endif  // BUILDFLAG(IS_ANDROID)
 
-std::unique_ptr<WebThreadScheduler::RendererPauseHandle>
-WebThreadScheduler::PauseRenderer() {
-  NOTREACHED();
-  return nullptr;
-}
-
-void WebThreadScheduler::SetTopLevelBlameContext(
-    base::trace_event::BlameContext* blame_context) {
-  NOTREACHED();
-}
-
 void WebThreadScheduler::SetRendererProcessType(WebRendererProcessType type) {
+  NOTREACHED();
+}
+
+void WebThreadScheduler::OnUrgentMessageReceived() {
+  NOTREACHED();
+}
+
+void WebThreadScheduler::OnUrgentMessageProcessed() {
   NOTREACHED();
 }
 

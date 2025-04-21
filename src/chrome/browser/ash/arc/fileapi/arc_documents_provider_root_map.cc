@@ -1,12 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/arc/fileapi/arc_documents_provider_root_map.h"
 
 #include "ash/components/arc/session/arc_service_manager.h"
-#include "ash/constants/ash_features.h"
-#include "base/feature_list.h"
 #include "chrome/browser/ash/arc/fileapi/arc_documents_provider_root.h"
 #include "chrome/browser/ash/arc/fileapi/arc_documents_provider_root_map_factory.h"
 #include "chrome/browser/ash/arc/fileapi/arc_documents_provider_util.h"
@@ -28,18 +26,21 @@ struct DocumentsProviderSpec {
   const char* authority;
   const char* root_document_id;
   const char* root_id;
+  bool read_only;
 };
 
 // List of documents providers for media views.
 constexpr DocumentsProviderSpec kDocumentsProviderAllowlist[] = {
-    {kMediaDocumentsProviderAuthority, kImagesRootDocumentId,
-     kImagesRootDocumentId},
-    {kMediaDocumentsProviderAuthority, kVideosRootDocumentId,
-     kVideosRootDocumentId},
-    {kMediaDocumentsProviderAuthority, kAudioRootDocumentId,
-     kAudioRootDocumentId},
-    {kMediaDocumentsProviderAuthority, kDocumentsRootDocumentId,
-     kDocumentsRootDocumentId},
+    {kMediaDocumentsProviderAuthority, kImagesRootId, kImagesRootId,
+     // All roots are now writable after the introduction of this feature
+     // (b/255697751).
+     /*read_only=*/false},
+    {kMediaDocumentsProviderAuthority, kVideosRootId, kVideosRootId,
+     /*read_only=*/false},
+    {kMediaDocumentsProviderAuthority, kAudioRootId, kAudioRootId,
+     /*read_only=*/false},
+    {kMediaDocumentsProviderAuthority, kDocumentsRootId, kDocumentsRootId,
+     /*read_only=*/false},
 };
 
 }  // namespace
@@ -56,13 +57,6 @@ ArcDocumentsProviderRootMap::GetForArcBrowserContext() {
   return GetForBrowserContext(ArcServiceManager::Get()->browser_context());
 }
 
-// static
-// TODO(crbug.com/1327496): can be removed once this flag is on by default.
-bool ArcDocumentsProviderRootMap::IsDocumentProviderRootReadOnly() {
-  // All roots are read-only unless this flag is on.
-  return !base::FeatureList::IsEnabled(chromeos::features::kFiltersInRecentsV2);
-}
-
 ArcDocumentsProviderRootMap::ArcDocumentsProviderRootMap(Profile* profile)
     : runner_(ArcFileSystemOperationRunner::GetForBrowserContext(profile)) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
@@ -70,10 +64,9 @@ ArcDocumentsProviderRootMap::ArcDocumentsProviderRootMap(Profile* profile)
   // in ArcDocumentsProviderRootMapFactory.
   DCHECK(runner_);
 
-  const bool read_only = IsDocumentProviderRootReadOnly();
   for (const auto& spec : kDocumentsProviderAllowlist) {
-    RegisterRoot(spec.authority, spec.root_document_id, spec.root_id, read_only,
-                 {});
+    RegisterRoot(spec.authority, spec.root_document_id, spec.root_id,
+                 spec.read_only, {});
   }
 }
 
@@ -88,12 +81,13 @@ ArcDocumentsProviderRoot* ArcDocumentsProviderRootMap::ParseAndLookup(
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
   std::string authority;
-  std::string root_document_id;
+  std::string root_id;
   base::FilePath tmp_path;
-  if (!ParseDocumentsProviderUrl(url, &authority, &root_document_id, &tmp_path))
+  if (!ParseDocumentsProviderUrl(url, &authority, &root_id, &tmp_path)) {
     return nullptr;
+  }
 
-  ArcDocumentsProviderRoot* root = Lookup(authority, root_document_id);
+  ArcDocumentsProviderRoot* root = Lookup(authority, root_id);
   if (!root)
     return nullptr;
 
@@ -103,10 +97,10 @@ ArcDocumentsProviderRoot* ArcDocumentsProviderRootMap::ParseAndLookup(
 
 ArcDocumentsProviderRoot* ArcDocumentsProviderRootMap::Lookup(
     const std::string& authority,
-    const std::string& root_document_id) const {
+    const std::string& root_id) const {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
-  auto iter = map_.find(Key(authority, root_document_id));
+  auto iter = map_.find(Key(authority, root_id));
   if (iter == map_.end())
     return nullptr;
   return iter->second.get();
@@ -120,9 +114,9 @@ void ArcDocumentsProviderRootMap::RegisterRoot(
     const std::vector<std::string>& mime_types) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
-  Key key(authority, root_document_id);
+  Key key(authority, root_id);
   if (map_.find(key) != map_.end()) {
-    VLOG(1) << "Trying to register (" << authority << ", " << root_document_id
+    VLOG(1) << "Trying to register (" << authority << ", " << root_id
             << ") which is already registered.";
     return;
   }
@@ -131,13 +125,12 @@ void ArcDocumentsProviderRootMap::RegisterRoot(
                         read_only, mime_types));
 }
 
-void ArcDocumentsProviderRootMap::UnregisterRoot(
-    const std::string& authority,
-    const std::string& root_document_id) {
+void ArcDocumentsProviderRootMap::UnregisterRoot(const std::string& authority,
+                                                 const std::string& root_id) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
-  if (!map_.erase(Key(authority, root_document_id))) {
-    VLOG(1) << "Trying to unregister (" << authority << ", " << root_document_id
+  if (!map_.erase(Key(authority, root_id))) {
+    VLOG(1) << "Trying to unregister (" << authority << ", " << root_id
             << ") which is not registered.";
   }
 }

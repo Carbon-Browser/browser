@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,15 +10,21 @@
 #include "base/json/values_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/time/time.h"
+#include "base/values.h"
+#include "chrome/browser/extensions/extension_management_internal.h"
+#include "chrome/browser/supervised_user/supervised_user_test_util.h"
 #include "chrome/common/extensions/extension_constants.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/browser_with_test_window_test.h"
+#include "components/supervised_user/core/common/features.h"
+#include "components/supervised_user/core/common/pref_names.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "extensions/browser/disable_reason.h"
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/pref_names.h"
 #include "extensions/common/extension_builder.h"
+#include "extensions/common/extension_features.h"
 #include "extensions/common/manifest.h"
 #include "extensions/common/permissions/permission_set.h"
 
@@ -64,7 +70,7 @@ class ExtensionInstallStatusTest : public BrowserWithTestWindowTest {
   }
 
   void SetExtensionSettings(const std::string& settings_string) {
-    absl::optional<base::Value> settings =
+    std::optional<base::Value> settings =
         base::JSONReader::Read(settings_string);
     ASSERT_TRUE(settings);
     SetPolicy(pref_names::kExtensionManagement,
@@ -78,15 +84,14 @@ class ExtensionInstallStatusTest : public BrowserWithTestWindowTest {
   }
 
   void SetPendingList(const std::vector<ExtensionId>& ids) {
-    std::unique_ptr<base::Value> id_values =
-        std::make_unique<base::Value>(base::Value::Type::DICTIONARY);
+    base::Value::Dict id_values;
     for (const auto& id : ids) {
-      base::Value request_data(base::Value::Type::DICTIONARY);
-      request_data.SetKey(extension_misc::kExtensionRequestTimestamp,
-                          ::base::TimeToValue(base::Time::Now()));
-      id_values->SetKey(id, std::move(request_data));
+      base::Value::Dict request_data;
+      request_data.Set(extension_misc::kExtensionRequestTimestamp,
+                       ::base::TimeToValue(base::Time::Now()));
+      id_values.Set(id, std::move(request_data));
     }
-    profile()->GetTestingPrefService()->SetUserPref(
+    profile()->GetTestingPrefService()->SetDict(
         prefs::kCloudExtensionRequestIds, std::move(id_values));
   }
 };
@@ -233,13 +238,18 @@ TEST_F(ExtensionInstallStatusTest, PendingExtenisonIsRejected) {
             GetWebstoreExtensionInstallStatus(kExtensionId, profile()));
 }
 
-// If an extension is disabled due to reason
+// If an existing, installed extension is disabled due to reason
 // DISABLE_CUSTODIAN_APPROVAL_REQUIRED, then GetWebstoreExtensionInstallStatus()
 // should return kCustodianApprovalRequired.
-TEST_F(ExtensionInstallStatusTest, ExtensionCustodianApprovalRequired) {
+TEST_F(ExtensionInstallStatusTest,
+       ExistingExtensionWithCustodianApprovalRequired) {
+  ExtensionRegistry::Get(profile())->AddDisabled(CreateExtension(kExtensionId));
   ExtensionPrefs::Get(profile())->AddDisableReason(
       kExtensionId,
       extensions::disable_reason::DISABLE_CUSTODIAN_APPROVAL_REQUIRED);
+  ASSERT_TRUE(
+      ExtensionRegistry::Get(profile())->GetInstalledExtension(kExtensionId));
+
   EXPECT_EQ(ExtensionInstallStatus::kCustodianApprovalRequired,
             GetWebstoreExtensionInstallStatus(kExtensionId, profile()));
 }
@@ -541,6 +551,232 @@ TEST_F(ExtensionInstallStatusTest, NonWebstoreUpdateUrlPolicy) {
                 kExtensionId, profile(), Manifest::Type::TYPE_EXTENSION,
                 PermissionSet(api_permissions.Clone(), ManifestPermissionSet(),
                               URLPatternSet(), URLPatternSet())));
+}
+
+TEST_F(ExtensionInstallStatusTest, ManifestVersionIsBlocked) {
+  EXPECT_EQ(ExtensionInstallStatus::kInstallable,
+            GetWebstoreExtensionInstallStatus(
+                kExtensionId, profile(), Manifest::Type::TYPE_EXTENSION,
+                PermissionSet(), /*manifest_version=*/2));
+  EXPECT_EQ(ExtensionInstallStatus::kInstallable,
+            GetWebstoreExtensionInstallStatus(
+                kExtensionId, profile(), Manifest::Type::TYPE_EXTENSION,
+                PermissionSet(), /*manifest_version=*/3));
+  SetPolicy(pref_names::kManifestV2Availability,
+            std::make_unique<base::Value>(static_cast<int>(
+                internal::GlobalSettings::ManifestV2Setting::kDisabled)));
+  EXPECT_EQ(ExtensionInstallStatus::kBlockedByPolicy,
+            GetWebstoreExtensionInstallStatus(
+                kExtensionId, profile(), Manifest::Type::TYPE_EXTENSION,
+                PermissionSet(), /*manifest_version=*/2));
+  EXPECT_EQ(ExtensionInstallStatus::kInstallable,
+            GetWebstoreExtensionInstallStatus(
+                kExtensionId, profile(), Manifest::Type::TYPE_EXTENSION,
+                PermissionSet(), /*manifest_version=*/3));
+}
+
+TEST_F(ExtensionInstallStatusTest,
+       ManifestVersionIsBlockedWithExtensionRequest) {
+  SetPolicy(prefs::kCloudExtensionRequestEnabled,
+            std::make_unique<base::Value>(true));
+  EXPECT_EQ(ExtensionInstallStatus::kCanRequest,
+            GetWebstoreExtensionInstallStatus(
+                kExtensionId, profile(), Manifest::Type::TYPE_EXTENSION,
+                PermissionSet(), /*manifest_version=*/2));
+  EXPECT_EQ(ExtensionInstallStatus::kCanRequest,
+            GetWebstoreExtensionInstallStatus(
+                kExtensionId, profile(), Manifest::Type::TYPE_EXTENSION,
+                PermissionSet(), /*manifest_version=*/3));
+  SetPolicy(pref_names::kManifestV2Availability,
+            std::make_unique<base::Value>(static_cast<int>(
+                internal::GlobalSettings::ManifestV2Setting::kDisabled)));
+  EXPECT_EQ(ExtensionInstallStatus::kBlockedByPolicy,
+            GetWebstoreExtensionInstallStatus(
+                kExtensionId, profile(), Manifest::Type::TYPE_EXTENSION,
+                PermissionSet(), /*manifest_version=*/2));
+  EXPECT_EQ(ExtensionInstallStatus::kCanRequest,
+            GetWebstoreExtensionInstallStatus(
+                kExtensionId, profile(), Manifest::Type::TYPE_EXTENSION,
+                PermissionSet(), /*manifest_version=*/3));
+}
+
+// If an existing, installed extension is disabled due to corruption, then
+// GetWebstoreExtensionInstallStatus() should return kCorrupted.
+TEST_F(ExtensionInstallStatusTest, ExtensionCorrupted) {
+  ExtensionRegistry::Get(profile())->AddDisabled(CreateExtension(kExtensionId));
+  ExtensionPrefs::Get(profile())->AddDisableReason(
+      kExtensionId, extensions::disable_reason::DISABLE_CORRUPTED);
+  EXPECT_EQ(ExtensionInstallStatus::kCorrupted,
+            GetWebstoreExtensionInstallStatus(kExtensionId, profile()));
+}
+
+class SupervisedUserExtensionInstallStatusTest
+    : public ExtensionInstallStatusTest {
+ public:
+  SupervisedUserExtensionInstallStatusTest() {
+    std::vector<base::test::FeatureRef> enabled_features;
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
+    enabled_features.push_back(
+        supervised_user::
+            kEnableExtensionsPermissionsForSupervisedUsersOnDesktop);
+#endif  // BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
+    enabled_features.push_back(
+        supervised_user::
+            kEnableSupervisedUserSkipParentApprovalToInstallExtensions);
+    enabled_features.push_back(
+        supervised_user::kExposedParentalControlNeededForExtensionInstallation);
+    feature_list_.InitWithFeatures(enabled_features, /*disabled_features=*/{});
+  }
+
+ private:
+  base::test::ScopedFeatureList feature_list_;
+};
+
+// If a supervised user requires parent approval to install a new extension that
+// has not received parental approval before, then
+// GetWebstoreExtensionInstallStatus() should return
+// kCustodianApprovalRequiredForInstallation.
+TEST_F(SupervisedUserExtensionInstallStatusTest,
+       NewExtensionWithCustodianApprovalRequiredForInstallation) {
+  profile()->SetIsSupervisedProfile(true);
+  // The supervised user requires parent approval to install extensions.
+  supervised_user_test_util::SetSkipParentApprovalToInstallExtensionsPref(
+      profile(), false);
+
+  EXPECT_EQ(ExtensionInstallStatus::kCustodianApprovalRequiredForInstallation,
+            GetWebstoreExtensionInstallStatus(kExtensionId, profile()));
+}
+
+// If a supervised user can skip parent permission to install extensions,
+// then for a new (uninstalled) extension GetWebstoreExtensionInstallStatus()
+// should return kInstallable.
+TEST_F(
+    SupervisedUserExtensionInstallStatusTest,
+    NewExtensionOnSkipApprovalModeDoesNotRequireCustodianApprovalForInstallation) {
+  profile()->SetIsSupervisedProfile(true);
+  // The supervised user does not require parent approval to install extensions.
+  supervised_user_test_util::SetSkipParentApprovalToInstallExtensionsPref(
+      profile(), true);
+
+  EXPECT_EQ(ExtensionInstallStatus::kInstallable,
+            GetWebstoreExtensionInstallStatus(kExtensionId, profile()));
+}
+
+// If a supervised user wants to install an extension that has been already
+// granted parent approval (e.g. via synced settings from another client),
+// then GetWebstoreExtensionInstallStatus() should return kInstallable.
+TEST_F(
+    SupervisedUserExtensionInstallStatusTest,
+    NewExtensionWithParentApprovalDoesNotRequireCustodianApprovalForInstallation) {
+  profile()->SetIsSupervisedProfile(true);
+  // The supervised user requires parent approval to install extensions.
+  supervised_user_test_util::SetSkipParentApprovalToInstallExtensionsPref(
+      profile(), false);
+
+  // Grant approval to the extension.
+  base::Value::Dict approved_extensions;
+  approved_extensions.Set(kExtensionId, true);
+  profile()->GetPrefs()->SetDict(prefs::kSupervisedUserApprovedExtensions,
+                                 std::move(approved_extensions));
+
+  EXPECT_EQ(ExtensionInstallStatus::kInstallable,
+            GetWebstoreExtensionInstallStatus(kExtensionId, profile()));
+}
+
+// A test suite to toggle the behavior of the MV2 deprecation experiment.
+class ExtensionInstallStatusTestWithMV2Deprecation
+    : public ExtensionInstallStatusTest,
+      public testing::WithParamInterface<bool> {
+ public:
+  ExtensionInstallStatusTestWithMV2Deprecation() {
+    feature_list_.InitWithFeatureState(
+        extensions_features::kExtensionManifestV2Disabled, GetParam());
+  }
+  ~ExtensionInstallStatusTestWithMV2Deprecation() override = default;
+
+ private:
+  base::test::ScopedFeatureList feature_list_;
+};
+
+using ExtensionInstallStatusTestWithMV2DeprecationEnabled =
+    ExtensionInstallStatusTestWithMV2Deprecation;
+
+INSTANTIATE_TEST_SUITE_P(All,
+                         ExtensionInstallStatusTestWithMV2Deprecation,
+                         testing::Bool());
+INSTANTIATE_TEST_SUITE_P(All,
+                         ExtensionInstallStatusTestWithMV2DeprecationEnabled,
+                         testing::Values(true));
+
+// Tests the webstore properly checks whether an extension can be installed
+// inline with the MV2 Deprecation experiments.
+TEST_P(ExtensionInstallStatusTestWithMV2Deprecation,
+       MV2ExtensionsAreBlockedWithExperiment) {
+  const ExtensionId kTestId(32, 'a');
+
+  // MV3 extensions are always installable.
+  EXPECT_EQ(ExtensionInstallStatus::kInstallable,
+            GetWebstoreExtensionInstallStatus(
+                kTestId, profile(), Manifest::TYPE_EXTENSION, PermissionSet(),
+                /*manifest_version=*/3));
+
+  // MV2 extensions should be unavailable if and only if the experiment is
+  // enabled.
+  ExtensionInstallStatus expected_status =
+      GetParam() ? ExtensionInstallStatus::kDeprecatedManifestVersion
+                 : ExtensionInstallStatus::kInstallable;
+  EXPECT_EQ(expected_status,
+            GetWebstoreExtensionInstallStatus(
+                kTestId, profile(), Manifest::TYPE_EXTENSION, PermissionSet(),
+                /*manifest_version=*/2));
+}
+
+// An extension explicitly blocked by the admin should be considered blocked
+// by policy, rather than a deprecated manifest version.
+TEST_P(ExtensionInstallStatusTestWithMV2DeprecationEnabled,
+       IdBlockedByPolicyTakesPriorityOverDeprecatedManifestVersion) {
+  SetExtensionSettings(kExtensionSettingsWithIdBlocked);
+  EXPECT_EQ(ExtensionInstallStatus::kBlockedByPolicy,
+            GetWebstoreExtensionInstallStatus(
+                kExtensionId, profile(), Manifest::Type::TYPE_EXTENSION,
+                PermissionSet(), /*manifest_version=*/2));
+}
+
+// If an admin blocks all MV2 extensions, they should be considered blocked by
+// policy, rather than a deprecated manifest version.
+TEST_P(ExtensionInstallStatusTestWithMV2DeprecationEnabled,
+       ManifestV2PolicyTakesPriorityOverDeprecatedManifestVersion) {
+  SetPolicy(pref_names::kManifestV2Availability,
+            std::make_unique<base::Value>(static_cast<int>(
+                internal::GlobalSettings::ManifestV2Setting::kDisabled)));
+  EXPECT_EQ(ExtensionInstallStatus::kBlockedByPolicy,
+            GetWebstoreExtensionInstallStatus(
+                kExtensionId, profile(), Manifest::Type::TYPE_EXTENSION,
+                PermissionSet(), /*manifest_version=*/2));
+}
+
+// Extensions that are installed and enabled should indicate such, even if they
+// are using a deprecated manifest version (since they are either re-enabled by
+// the user or are allowed by the admin).
+TEST_P(ExtensionInstallStatusTestWithMV2DeprecationEnabled,
+       EnabledTakesPriorityOverDeprecatedManifestVersion) {
+  ExtensionRegistry::Get(profile())->AddEnabled(CreateExtension(kExtensionId));
+  EXPECT_EQ(ExtensionInstallStatus::kEnabled,
+            GetWebstoreExtensionInstallStatus(
+                kExtensionId, profile(), Manifest::Type::TYPE_EXTENSION,
+                PermissionSet(), /*manifest_version=*/2));
+}
+
+// Extensions that are installed and disabled and have a deprecated manifest
+// version should indicate they are unsupported due to the manifest version.
+// Note, this applies even if they are disabled due to other reasons.
+TEST_P(ExtensionInstallStatusTestWithMV2DeprecationEnabled,
+       DeprecatedManifestVersionTakesPriorityOverDisabled) {
+  ExtensionRegistry::Get(profile())->AddDisabled(CreateExtension(kExtensionId));
+  EXPECT_EQ(ExtensionInstallStatus::kDeprecatedManifestVersion,
+            GetWebstoreExtensionInstallStatus(
+                kExtensionId, profile(), Manifest::Type::TYPE_EXTENSION,
+                PermissionSet(), /*manifest_version=*/2));
 }
 
 }  // namespace extensions

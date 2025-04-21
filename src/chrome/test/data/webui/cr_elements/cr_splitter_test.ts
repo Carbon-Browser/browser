@@ -1,18 +1,18 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://resources/cr_elements/cr_splitter/cr_splitter.js';
 
-import {CrSplitterElement} from 'chrome://resources/cr_elements/cr_splitter/cr_splitter.js';
-
+import type {CrSplitterElement} from 'chrome://resources/cr_elements/cr_splitter/cr_splitter.js';
+import {getTrustedHTML} from 'chrome://resources/js/static_types.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 
 suite('cr-splitter', function() {
   let crSplitter: CrSplitterElement;
 
   setup(function() {
-    document.body.innerHTML = `
+    document.body.innerHTML = getTrustedHTML`
       <div id="previous"></div>
       <cr-splitter id="splitter"></cr-splitter>
       <div id="next"></div>`;

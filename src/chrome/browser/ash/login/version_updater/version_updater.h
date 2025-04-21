@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,14 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/login/screens/network_error.h"
 #include "chrome/browser/ash/login/version_updater/update_time_estimator.h"
 #include "chromeos/ash/components/dbus/update_engine/update_engine_client.h"
-#include "chromeos/ash/components/network/portal_detector/network_portal_detector.h"
-// TODO(https://crbug.com/1164001): move to forward declaration when migrated.
-#include "chromeos/ash/components/network/network_state.h"
+#include "chromeos/ash/components/network/network_state_handler_observer.h"
 
 namespace base {
 class DefaultTickClock;
@@ -24,22 +23,24 @@ class DefaultTickClock;
 
 namespace ash {
 
+class NetworkState;
+
 // Tries to update system, interacting with UpdateEnglineClient and
 // NetworkPortalDetector. Uses callbacks - methods of `delegate_`, which may
 // interact with user, change UI etc.
 class VersionUpdater : public UpdateEngineClient::Observer,
-                       public NetworkPortalDetector::Observer {
+                       public NetworkStateHandlerObserver {
  public:
   enum class Result {
     UPDATE_NOT_REQUIRED,
     UPDATE_ERROR,
     UPDATE_SKIPPED,
     UPDATE_OPT_OUT_INFO_SHOWN,
+    UPDATE_CHECK_TIMEOUT,
   };
 
   enum class State {
     STATE_IDLE = 0,
-    STATE_FIRST_PORTAL_CHECK,
     STATE_REQUESTING_USER_PERMISSION,
     STATE_UPDATE,
     STATE_ERROR
@@ -58,7 +59,7 @@ class VersionUpdater : public UpdateEngineClient::Observer,
     int better_update_progress = 0;
 
     // Estimated time left for only downloading stage, in seconds.
-    // TODO(crbug.com/1101317): Remove when better update is launched.
+    // TODO(crbug.com/40703499): Remove when better update is launched.
     int estimated_time_left_in_secs = 0;
     bool show_estimated_time_left = false;
 
@@ -98,10 +99,9 @@ class VersionUpdater : public UpdateEngineClient::Observer,
     virtual void OnWaitForRebootTimeElapsed() = 0;
     // Called before update check starts.
     virtual void PrepareForUpdateCheck() = 0;
-    virtual void UpdateErrorMessage(
-        const NetworkPortalDetector::CaptivePortalStatus status,
-        const NetworkError::ErrorState& error_state,
-        const std::string& network_name) = 0;
+    virtual void UpdateErrorMessage(NetworkState::PortalState state,
+                                    NetworkError::ErrorState error_state,
+                                    const std::string& network_name) = 0;
     virtual void ShowErrorMessage() = 0;
     virtual void DelayErrorMessage() = 0;
   };
@@ -123,6 +123,9 @@ class VersionUpdater : public UpdateEngineClient::Observer,
   // Starts network check. If success, starts update check.
   void StartNetworkCheck();
   void StartUpdateCheck();
+
+  // Cleans up observer registrations for this object.
+  void StopObserving();
 
   void RefreshTimeLeftEstimation();
 
@@ -146,27 +149,38 @@ class VersionUpdater : public UpdateEngineClient::Observer,
     wait_for_reboot_time_ = wait_for_reboot_time;
   }
 
-  base::OneShotTimer* GetRebootTimerForTesting();
+  base::OneShotTimer* get_retry_check_timer_for_testing() {
+    return &retry_check_timer_;
+  }
+
+  bool get_non_idle_status_received_for_testing() {
+    return non_idle_status_received_;
+  }
+
+  base::OneShotTimer* get_reboot_timer_for_testing() { return &reboot_timer_; }
+
   void UpdateStatusChangedForTesting(const update_engine::StatusResult& status);
 
  private:
   void RequestUpdateCheck();
+  void TriggerUpdateCheck();
+  void OnRetryCheckElapsed();
 
   void OnGetEolInfo(EolInfoCallback cb, UpdateEngineClient::EolInfo info);
 
   // UpdateEngineClient::Observer implementation:
   void UpdateStatusChanged(const update_engine::StatusResult& status) override;
 
-  // NetworkPortalDetector::Observer implementation:
-  void OnPortalDetectionCompleted(
-      const NetworkState* network,
-      const NetworkPortalDetector::CaptivePortalStatus status) override;
+  // NetworkStateHandlerObserver implementation:
+  void PortalStateChanged(
+      const NetworkState* default_network,
+      const NetworkState::PortalState portal_state) override;
+  void OnShuttingDown() override;
 
   void OnWaitForRebootTimeElapsed();
 
-  void UpdateErrorMessage(
-      const NetworkState* network,
-      const NetworkPortalDetector::CaptivePortalStatus status);
+  void UpdateErrorMessage(const NetworkState* network,
+                          NetworkState::PortalState state);
 
   // Callback to UpdateEngineClient::SetUpdateOverCellularOneTimePermission
   // called in response to user confirming that the OS update can proceed
@@ -179,7 +193,7 @@ class VersionUpdater : public UpdateEngineClient::Observer,
   void OnUpdateCheckStarted(UpdateEngineClient::UpdateCheckResult result);
 
   // Pointer to delegate that owns this VersionUpdater instance.
-  Delegate* delegate_;
+  raw_ptr<Delegate> delegate_;
 
   std::unique_ptr<base::RepeatingTimer> refresh_timer_;
 
@@ -191,12 +205,23 @@ class VersionUpdater : public UpdateEngineClient::Observer,
   // reboot device manually.
   base::TimeDelta wait_for_reboot_time_;
 
-  // True if there was no notification from NetworkPortalDetector
-  // about state for the default network.
-  bool is_first_detection_notification_ = true;
+  // True once we have received a non-IDLE status. If we first receive an IDLE
+  // status, then we are getting a signal from a previous request which may have
+  // been in-progress when our update was sent, and we should resend the update.
+  // Once we have received a non-IDLE, then IDLE means we can exit.
+  bool non_idle_status_received_ = false;
 
-  // Ignore fist IDLE status that is sent before VersionUpdater initiated check.
-  bool ignore_idle_status_ = true;
+  // Timer for the interval to wait trying reaching to the update screen before
+  // exiting the screen.
+  base::OneShotTimer retry_check_timer_;
+
+  // Time to retry reaching to update_engine before exit.
+  base::TimeDelta retry_check_timeout_ = base::Seconds(180);
+
+  // Current count of retiries to request `checking of update`.
+  int num_retries_ = 0;
+
+  base::TimeTicks checking_for_update_start_;
 
   // Stores information about current downloading process, update progress and
   // state. It is sent to Delegate on each UpdateInfoChanged call, and also can
@@ -205,16 +230,11 @@ class VersionUpdater : public UpdateEngineClient::Observer,
 
   UpdateTimeEstimator time_estimator_;
 
-  const base::TickClock* tick_clock_;
+  raw_ptr<const base::TickClock> tick_clock_;
 
   base::WeakPtrFactory<VersionUpdater> weak_ptr_factory_{this};
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when migration is finished.
-namespace chromeos {
-using ::ash::VersionUpdater;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_VERSION_UPDATER_VERSION_UPDATER_H_

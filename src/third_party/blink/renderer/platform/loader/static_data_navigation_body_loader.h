@@ -1,10 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_LOADER_STATIC_DATA_NAVIGATION_BODY_LOADER_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_LOADER_STATIC_DATA_NAVIGATION_BODY_LOADER_H_
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "third_party/blink/public/platform/web_navigation_body_loader.h"
 #include "third_party/blink/renderer/platform/loader/fetch/loader_freeze_mode.h"
@@ -19,23 +20,25 @@ namespace blink {
 class PLATFORM_EXPORT StaticDataNavigationBodyLoader
     : public WebNavigationBodyLoader {
  public:
+  static std::unique_ptr<StaticDataNavigationBodyLoader> CreateWithData(
+      scoped_refptr<SharedBuffer> data);
+
   StaticDataNavigationBodyLoader();
   ~StaticDataNavigationBodyLoader() override;
 
-  void Write(const char* data, size_t size);
-  void Write(const SharedBuffer&);
+  void Write(base::span<const char> data);
+
   void Finish();
 
   void SetDefersLoading(LoaderFreezeMode) override;
-  void StartLoadingBody(WebNavigationBodyLoader::Client*,
-                        CodeCacheHost* host) override;
-  void StartLoadingCodeCache(CodeCacheHost* code_cache_host) override;
+  void StartLoadingBody(WebNavigationBodyLoader::Client*) override;
+  BodyLoaderType GetType() const override { return BodyLoaderType::kStatic; }
 
  private:
   void Continue();
 
   scoped_refptr<SharedBuffer> data_;
-  WebNavigationBodyLoader::Client* client_ = nullptr;
+  raw_ptr<WebNavigationBodyLoader::Client> client_ = nullptr;
   LoaderFreezeMode freeze_mode_ = LoaderFreezeMode::kNone;
   bool sent_all_data_ = false;
   bool received_all_data_ = false;

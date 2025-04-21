@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,9 @@
 #include "components/dom_distiller/core/distilled_page_prefs.h"
 #include "components/dom_distiller/core/distilled_page_prefs_android.h"
 #include "components/dom_distiller/core/dom_distiller_service.h"
-#include "components/dom_distiller/core/jni_headers/DomDistillerService_jni.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "components/dom_distiller/core/android/jni_headers/DomDistillerService_jni.h"
 
 using base::android::ConvertUTF8ToJavaString;
 using base::android::JavaParamRef;
@@ -28,7 +30,7 @@ DomDistillerServiceAndroid::DomDistillerServiceAndroid(
   java_ref_.Reset(env, local_java_ref.obj());
 }
 
-DomDistillerServiceAndroid::~DomDistillerServiceAndroid() {}
+DomDistillerServiceAndroid::~DomDistillerServiceAndroid() = default;
 
 jlong DomDistillerServiceAndroid::GetDistilledPagePrefsPtr(JNIEnv* env) {
   return reinterpret_cast<intptr_t>(service_->GetDistilledPagePrefs());

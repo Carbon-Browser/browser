@@ -1,10 +1,12 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/gcm_driver/instance_id/scoped_use_fake_instance_id_android.h"
 
 #include "base/android/jni_android.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
 #include "components/gcm_driver/instance_id/android/test_support_jni_headers/FakeInstanceIDWithSubtype_jni.h"
 
 using base::android::AttachCurrentThread;

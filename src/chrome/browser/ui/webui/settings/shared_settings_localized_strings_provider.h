@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,33 +14,23 @@ class WebUIDataSource;
 
 namespace settings {
 
+// Adds strings used by the <settings-ax-annotations-section> element.
+void AddAxAnnotationsSectionStrings(content::WebUIDataSource* html_source);
+
 // Adds strings used by the <settings-captions> element.
 void AddCaptionSubpageStrings(content::WebUIDataSource* html_source);
 
 // Adds strings used by the <settings-live-caption> element.
 void AddLiveCaptionSectionStrings(content::WebUIDataSource* html_source);
 
-// Adds strings used by the <settings-personalization-options> element.
-void AddPersonalizationOptionsStrings(content::WebUIDataSource* html_source);
-
-// Adds strings used by the <settings-sync-controls> element.
-void AddSyncControlsStrings(content::WebUIDataSource* html_source);
-
-// Adds strings used by the <settings-sync-account-control> element.
-void AddSyncAccountControlStrings(content::WebUIDataSource* html_source);
-
 #if BUILDFLAG(IS_CHROMEOS)
 // Adds strings used by the <settings-password-prompt-dialog> element.
 void AddPasswordPromptDialogStrings(content::WebUIDataSource* html_source);
 #endif
 
-// Adds strings used by the <settings-sync-page> element.
-void AddSyncPageStrings(content::WebUIDataSource* html_source);
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-// Adds load time data used by the <settings-nearby-share-subpage>.
-void AddNearbyShareData(content::WebUIDataSource* html_source);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+// Adds strings used by both <settings-sync-page> and <os-settings-sync-subpage>
+// elements.
+void AddSharedSyncPageStrings(content::WebUIDataSource* html_source);
 
 // Adds strings used by the <settings-secure-dns> element.
 void AddSecureDnsStrings(content::WebUIDataSource* html_source);

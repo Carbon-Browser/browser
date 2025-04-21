@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -437,7 +437,7 @@ TEST_F(InputEventPredictionTest, TouchPointStates) {
 
   for (size_t state =
            static_cast<size_t>(blink::WebTouchPoint::State::kStateUndefined);
-       state <= static_cast<size_t>(blink::WebTouchPoint::State::kStateMax);
+       state <= static_cast<size_t>(blink::WebTouchPoint::State::kMaxValue);
        state++) {
     touch_event.touches[0].state =
         static_cast<blink::WebTouchPoint::State>(state);

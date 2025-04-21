@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,23 @@
 #define COMPONENTS_PERMISSIONS_PERMISSION_PROMPT_H_
 
 #include <memory>
+#include <optional>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
+#include "components/permissions/features.h"
 #include "components/permissions/permission_ui_selector.h"
+#include "ui/gfx/geometry/rect.h"
 #include "url/gurl.h"
 
 namespace content {
 class WebContents;
 }
+
+namespace ui {
+class Event;
+}  // namespace ui
 
 namespace permissions {
 enum class PermissionPromptDisposition;
@@ -45,11 +53,12 @@ class PermissionPrompt {
   // be persisted in the per-tab UI state.
   class Delegate {
    public:
-    virtual ~Delegate() {}
+    virtual ~Delegate() = default;
 
     // These pointers should not be stored as the actual request objects may be
     // deleted upon navigation and so on.
-    virtual const std::vector<PermissionRequest*>& Requests() = 0;
+    virtual const std::vector<raw_ptr<PermissionRequest, VectorExperimental>>&
+    Requests() = 0;
 
     // Get the single origin for the current set of requests.
     virtual GURL GetRequestingOrigin() const = 0;
@@ -64,10 +73,22 @@ class PermissionPrompt {
     virtual void Dismiss() = 0;
     virtual void Ignore() = 0;
 
+    // Called to explicitly finalize the request, if
+    // |ShouldFinalizeRequestAfterDecided| returns false.
+    virtual void FinalizeCurrentRequests() = 0;
+
+    virtual void OpenHelpCenterLink(const ui::Event& event) = 0;
+
+    // This method preemptively ignores a permission request but does not
+    // finalize a permission prompt. That is needed in case a permission prompt
+    // is a quiet chip. This should be called only if an origin is subscribed to
+    // the `PermissionStatus.onchange` listener.
+    virtual void PreIgnoreQuietPrompt() = 0;
+
     // If |ShouldCurrentRequestUseQuietUI| return true, this will provide a
-    // reason as to why the quiet UI needs to be used. Returns `absl::nullopt`
+    // reason as to why the quiet UI needs to be used. Returns `std::nullopt`
     // otherwise.
-    virtual absl::optional<PermissionUiSelector::QuietUiReason>
+    virtual std::optional<PermissionUiSelector::QuietUiReason>
     ReasonForUsingQuietUi() const = 0;
 
     // Notification permission requests might use a quiet UI when the
@@ -89,7 +110,7 @@ class PermissionPrompt {
 
     // Set whether the permission prompt bubble was shown for the current
     // request.
-    virtual void SetBubbleShown() = 0;
+    virtual void SetPromptShown() = 0;
 
     // Set when the user made any decision for the currentrequest.
     virtual void SetDecisionTime() = 0;
@@ -99,6 +120,14 @@ class PermissionPrompt {
 
     // Set when the user made any decision for clicking on learn more link.
     virtual void SetLearnMoreClicked() = 0;
+
+    // HaTS surveys may display at an inconvenient time, such as when a chip
+    // shown collapses after a certain timeout. To prevent affecting
+    // usability, this setter sets a callback that is be called when a HaTS
+    // survey is triggered to take appropriate actions.
+    virtual void SetHatsShownCallback(base::OnceCallback<void()> callback) = 0;
+
+    virtual content::WebContents* GetAssociatedWebContents() = 0;
 
     virtual base::WeakPtr<Delegate> GetWeakPtr() = 0;
 
@@ -115,10 +144,12 @@ class PermissionPrompt {
   static std::unique_ptr<PermissionPrompt> Create(
       content::WebContents* web_contents,
       Delegate* delegate);
-  virtual ~PermissionPrompt() {}
+  virtual ~PermissionPrompt() = default;
 
   // Updates where the prompt should be anchored. ex: fullscreen toggle.
-  virtual void UpdateAnchor() = 0;
+  // Returns true, if the update was successful, and false if the caller should
+  // recreate the view instead.
+  virtual bool UpdateAnchor() = 0;
 
   // Get the behavior of this prompt when the user switches away from the
   // associated tab.
@@ -126,8 +157,28 @@ class PermissionPrompt {
 
   // Get the type of prompt UI shown for metrics.
   virtual PermissionPromptDisposition GetPromptDisposition() const = 0;
-};
 
+  // Check if the view shown is an "Ask" prompt for metrics. Currently this only
+  // distinguishes different prompt views displayed through the Page Embedded
+  // Permission Element.
+  virtual bool IsAskPrompt() const = 0;
+
+  // Get the prompt view bounds in screen coordinates.
+  virtual std::optional<gfx::Rect> GetViewBoundsInScreen() const = 0;
+
+  // Get whether the permission request is allowed to be finalized as soon a
+  // decision is transmitted. If this returns `false` the delegate should wait
+  // for an explicit |Delegate::FinalizeCurrentRequests()| call to be made.
+  virtual bool ShouldFinalizeRequestAfterDecided() const = 0;
+
+  // Return what variant of the secondary UI is shown for Page Embedded
+  // Permission Element.
+  virtual std::vector<permissions::ElementAnchoredBubbleVariant>
+  GetPromptVariants() const = 0;
+
+  virtual std::optional<feature_params::PermissionElementPromptPosition>
+  GetPromptPosition() const = 0;
+};
 }  // namespace permissions
 
 #endif  // COMPONENTS_PERMISSIONS_PERMISSION_PROMPT_H_

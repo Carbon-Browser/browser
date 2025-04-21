@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,15 @@
 #define CHROMEOS_ASH_COMPONENTS_DBUS_UPDATE_ENGINE_FAKE_UPDATE_ENGINE_CLIENT_H_
 
 #include <map>
+#include <optional>
 #include <string>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback_forward.h"
 #include "base/observer_list.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/dbus/update_engine/update_engine_client.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -57,6 +57,8 @@ class COMPONENT_EXPORT(ASH_DBUS_UPDATE_ENGINE) FakeUpdateEngineClient
   void ToggleFeature(const std::string& feature, bool enable) override;
   void IsFeatureEnabled(const std::string& feature,
                         IsFeatureEnabledCallback callback) override;
+  void ApplyDeferredUpdate(bool shutdown_after_update,
+                           base::OnceClosure failure_callback) override;
   // Pushes update_engine::StatusResult in the queue to test changing status.
   // GetLastStatus() returns the status set by this method in FIFO order.
   // See set_default_status().
@@ -75,7 +77,13 @@ class COMPONENT_EXPORT(ASH_DBUS_UPDATE_ENGINE) FakeUpdateEngineClient
   // value set here if |status_queue_| is empty.
   void set_default_status(const update_engine::StatusResult& status);
 
-  void set_eol_date(const base::Time& eol_date) { eol_date_ = eol_date; }
+  // Sets the whole EolInfo to be used when checking eol info.
+  void set_eol_info(const EolInfo& eol_info) { eol_info_ = eol_info; }
+
+  // Sets the eol date to be used when checking eol info.
+  void set_eol_date(const base::Time& eol_date) {
+    eol_info_.eol_date = eol_date;
+  }
 
   // Sets a value returned by RequestUpdateCheck().
   void set_update_check_result(
@@ -127,8 +135,13 @@ class COMPONENT_EXPORT(ASH_DBUS_UPDATE_ENGINE) FakeUpdateEngineClient
   // Returns how many times |IsFeatureEnabled()| is called.
   int is_feature_enabled_count() const { return is_feature_enabled_count_; }
 
+  // Returns how many times |ApplyDeferredUpdate()| is called.
+  int apply_deferred_update_count() const {
+    return apply_deferred_update_count_;
+  }
+
   void SetToggleFeature(const std::string& feature,
-                        absl::optional<bool> opt_enabled);
+                        std::optional<bool> opt_enabled);
 
  private:
   base::ObserverList<Observer>::Unchecked observers_;
@@ -146,8 +159,9 @@ class COMPONENT_EXPORT(ASH_DBUS_UPDATE_ENGINE) FakeUpdateEngineClient
   int update_over_cellular_one_time_permission_count_ = 0;
   int toggle_feature_count_ = 0;
   int is_feature_enabled_count_ = 0;
-  std::map<std::string, absl::optional<bool>> features_;
-  base::Time eol_date_;
+  int apply_deferred_update_count_ = 0;
+  std::map<std::string, std::optional<bool>> features_;
+  EolInfo eol_info_;
 };
 
 }  // namespace ash

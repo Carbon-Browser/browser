@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,15 @@
 import 'chrome://settings/lazy_load.js';
 
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {SettingsPersonalizationOptionsElement} from 'chrome://settings/lazy_load.js';
-import {PrivacyPageVisibility} from 'chrome://settings/page_visibility.js';
-import {loadTimeData, PrivacyPageBrowserProxyImpl, StatusAction, SyncBrowserProxyImpl} from 'chrome://settings/settings.js';
-import {assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
-// <if expr="not chromeos_ash and not chromeos_lacros">
-import {eventToPromise, isVisible} from 'chrome://webui-test/test_util.js';
+import type {SettingsPersonalizationOptionsElement} from 'chrome://settings/lazy_load.js';
+import type {PrivacyPageVisibility, SettingsPrefsElement} from 'chrome://settings/settings.js';
+import {CrSettingsPrefs, loadTimeData, PrivacyPageBrowserProxyImpl, resetRouterForTesting, Router, routes, SignedInState, StatusAction, SyncBrowserProxyImpl} from 'chrome://settings/settings.js';
+import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import {isVisible} from 'chrome://webui-test/test_util.js';
+// <if expr="not is_chromeos">
+import {eventToPromise} from 'chrome://webui-test/test_util.js';
+import {ChromeSigninUserChoice} from 'chrome://settings/settings.js';
+import {webUIListenerCallback} from 'chrome://resources/js/cr.js';
 
 // </if>
 
@@ -20,34 +23,29 @@ import {TestSyncBrowserProxy} from './test_sync_browser_proxy.js';
 
 // clang-format on
 
-suite('PersonalizationOptionsTests_AllBuilds', function() {
+suite('AllBuilds', function() {
   let testBrowserProxy: TestPrivacyPageBrowserProxy;
   let syncBrowserProxy: TestSyncBrowserProxy;
-  let customPageVisibility: PrivacyPageVisibility;
   let testElement: SettingsPersonalizationOptionsElement;
+  let settingsPrefs: SettingsPrefsElement;
 
   suiteSetup(function() {
     loadTimeData.overrideValues({
-      driveSuggestAvailable: true,
-      enableAutofillAssistant: true,
       signinAvailable: true,
+      changePriceEmailNotificationsEnabled: true,
     });
+    settingsPrefs = document.createElement('settings-prefs');
+    return CrSettingsPrefs.initialized;
   });
 
-  function buildTestElement() {
-    document.body.innerHTML = '';
+  function buildTestElement(customPageVisibility?: PrivacyPageVisibility) {
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     testElement = document.createElement('settings-personalization-options');
-    testElement.prefs = {
-      autofill_assistant: {enabled: {value: false}},
-      signin: {
-        allowed_on_next_startup:
-            {type: chrome.settingsPrivate.PrefType.BOOLEAN, value: true},
-      },
-      profile: {password_manager_leak_detection: {value: true}},
-      safebrowsing:
-          {enabled: {value: true}, scout_reporting_enabled: {value: true}},
-    };
-    testElement.pageVisibility = customPageVisibility;
+    testElement.prefs = settingsPrefs.prefs!;
+    testElement.set('prefs.page_content_collection.enabled.value', false);
+    if (customPageVisibility) {
+      testElement.pageVisibility = customPageVisibility;
+    }
     document.body.appendChild(testElement);
     flush();
   }
@@ -64,33 +62,86 @@ suite('PersonalizationOptionsTests_AllBuilds', function() {
     testElement.remove();
   });
 
-  test('DriveSearchSuggestControl', function() {
-    assertFalse(
-        !!testElement.shadowRoot!.querySelector('#driveSuggestControl'));
+  // <if expr="not is_chromeos">
+  test('chromeSigninUserChoiceAvailableInitialization', async function() {
+    assertFalse(isVisible(testElement.$.chromeSigninUserChoiceSelection));
 
-    testElement.syncStatus = {
-      signedIn: true,
-      statusAction: StatusAction.NO_ACTION,
+    const infoResponse = {
+      shouldShowSettings: true,
+      choice: ChromeSigninUserChoice.NO_CHOICE,
+      signedInEmail: 'test@gmail.com',
     };
-    flush();
-    assertTrue(!!testElement.shadowRoot!.querySelector('#driveSuggestControl'));
+    syncBrowserProxy.setGetUserChromeSigninUserChoiceInfoResponse(infoResponse);
 
-    testElement.syncStatus = {
-      signedIn: true,
-      statusAction: StatusAction.REAUTHENTICATE,
-    };
-    flush();
-    assertFalse(
-        !!testElement.shadowRoot!.querySelector('#driveSuggestControl'));
+    buildTestElement();  // Rebuild the element simulating a fresh start.
+    await syncBrowserProxy.whenCalled('getChromeSigninUserChoiceInfo');
+    assertTrue(isVisible(testElement.$.chromeSigninUserChoiceSelection));
+    const descriptionText =
+        testElement.shadowRoot!.querySelector(
+                                   '#chromeSigninChoiceDescription')!.innerHTML;
+    assertTrue(descriptionText.includes(infoResponse.signedInEmail));
   });
 
-  // <if expr="not chromeos_ash and not chromeos_lacros">
+  test('chromeSigninUserChoiceAvailabilityUpdate', async function() {
+    const infoResponse = {
+      shouldShowSettings: true,
+      choice: ChromeSigninUserChoice.NO_CHOICE,
+      signedInEmail: 'test@gmail.com',
+    };
+    syncBrowserProxy.setGetUserChromeSigninUserChoiceInfoResponse(infoResponse);
+
+    buildTestElement();  // Rebuild the element simulating a fresh start.
+    await syncBrowserProxy.whenCalled('getChromeSigninUserChoiceInfo');
+    assertTrue(isVisible(testElement.$.chromeSigninUserChoiceSelection));
+
+    // New response to return should not show.
+    const infoResponse_hide = {
+      shouldShowSettings: false,
+      choice: ChromeSigninUserChoice.NO_CHOICE,
+      signedInEmail: '',
+    };
+
+    webUIListenerCallback(
+        'chrome-signin-user-choice-info-change', infoResponse_hide);
+    assertFalse(isVisible(testElement.$.chromeSigninUserChoiceSelection));
+
+    // Original response to return should show again.
+    webUIListenerCallback(
+        'chrome-signin-user-choice-info-change', infoResponse);
+    assertTrue(isVisible(testElement.$.chromeSigninUserChoiceSelection));
+  });
+
+  test('chromeSigninUserChoiceUpdatedExternally', async function() {
+    const infoResponse = {
+      shouldShowSettings: true,
+      choice: ChromeSigninUserChoice.NO_CHOICE,
+      signedInEmail: 'test@gmail.com',
+    };
+    syncBrowserProxy.setGetUserChromeSigninUserChoiceInfoResponse(infoResponse);
+
+    buildTestElement();  // Rebuild the element simulating a fresh start.
+    await syncBrowserProxy.whenCalled('getChromeSigninUserChoiceInfo');
+    assertTrue(isVisible(testElement.$.chromeSigninUserChoiceSelection));
+
+    // `ChromeSigninUserChoice.NO_CHOICE` leads to no value set.
+    assertEquals(
+        Number(testElement.$.chromeSigninUserChoiceSelection.value),
+        ChromeSigninUserChoice.NO_CHOICE);
+
+    infoResponse.choice = ChromeSigninUserChoice.SIGNIN;
+    webUIListenerCallback(
+        'chrome-signin-user-choice-info-change', infoResponse);
+    assertEquals(
+        Number(testElement.$.chromeSigninUserChoiceSelection.value),
+        ChromeSigninUserChoice.SIGNIN);
+  });
+
   test('signinAllowedToggle', function() {
     const toggle = testElement.$.signinAllowedToggle;
     assertTrue(isVisible(toggle));
 
     testElement.syncStatus = {
-      signedIn: false,
+      signedInState: SignedInState.SIGNED_OUT,
       statusAction: StatusAction.NO_ACTION,
     };
     // Check initial setup.
@@ -125,7 +176,7 @@ suite('PersonalizationOptionsTests_AllBuilds', function() {
     assertTrue(toggle.checked);
 
     testElement.syncStatus = {
-      signedIn: true,
+      signedInState: SignedInState.SYNCING,
       statusAction: StatusAction.NO_ACTION,
     };
     // When the user is signed in, clicking the toggle should open the
@@ -208,47 +259,74 @@ suite('PersonalizationOptionsTests_AllBuilds', function() {
   });
 
   test('searchSuggestToggleHiddenByPageVisibility', function() {
-    customPageVisibility = {
+    buildTestElement({
       searchPrediction: false,
       networkPrediction: false,
-    };
-    buildTestElement();
+    });
     assertFalse(isVisible(
         testElement.shadowRoot!.querySelector('#searchSuggestToggle')));
   });
 
   test('searchSuggestToggleShownByPageVisibility', function() {
-    customPageVisibility = {
+    buildTestElement({
       searchPrediction: true,
       networkPrediction: false,
-    };
-    buildTestElement();
+    });
     assertTrue(isVisible(
         testElement.shadowRoot!.querySelector('#searchSuggestToggle')));
   });
   // </if>
 
-  test('autofillAssistantAvailable', function() {
-    assertTrue(
-        !!testElement.shadowRoot!.querySelector('#enableAssistantFlows'));
+  test('priceEmailNotificationsToggleHidden', function() {
+    loadTimeData.overrideValues(
+        {'changePriceEmailNotificationsEnabled': false});
+    buildTestElement();  // Rebuild the element after modifying loadTimeData.
+
+    assertFalse(!!testElement.shadowRoot!.querySelector(
+        '#priceEmailNotificationsToggle'));
+
+    testElement.syncStatus = {
+      signedInState: SignedInState.SYNCING,
+      statusAction: StatusAction.NO_ACTION,
+    };
+    flush();
+    assertFalse(!!testElement.shadowRoot!.querySelector(
+        '#priceEmailNotificationsToggle'));
   });
 
-  test('autofillAssistantUnavailable', function() {
-    loadTimeData.overrideValues({'enableAutofillAssistant': false});
-    buildTestElement();  // Rebuild the element after modifying loadTimeData.
-    assertFalse(
-        !!testElement.shadowRoot!.querySelector('#enableAssistantFlows'));
+  test('historySearchRow', () => {
+    loadTimeData.overrideValues({
+      showHistorySearchControl: true,
+      enableAiSettingsPageRefresh: false,
+    });
+    resetRouterForTesting();
+    buildTestElement();
+
+    const historySearchRow =
+        testElement.shadowRoot!.querySelector<HTMLElement>('#historySearchRow');
+    assertTrue(!!historySearchRow);
+    assertTrue(isVisible(historySearchRow));
+    historySearchRow.click();
+    const currentRoute = Router.getInstance().getCurrentRoute();
+    assertEquals(routes.HISTORY_SEARCH, currentRoute);
+    assertEquals(routes.SYNC, currentRoute.parent);
+
+    loadTimeData.overrideValues({showHistorySearchControl: false});
+    buildTestElement();
+    assertFalse(!!testElement.shadowRoot!.querySelector<HTMLElement>(
+        '#historySearchRow'));
   });
 });
 
-suite('PersonalizationOptionsTests_OfficialBuild', function() {
+// <if expr="_google_chrome">
+suite('OfficialBuild', function() {
   let testBrowserProxy: TestPrivacyPageBrowserProxy;
   let testElement: SettingsPersonalizationOptionsElement;
 
   setup(function() {
     testBrowserProxy = new TestPrivacyPageBrowserProxy();
     PrivacyPageBrowserProxyImpl.setInstance(testBrowserProxy);
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     testElement = document.createElement('settings-personalization-options');
     document.body.appendChild(testElement);
   });
@@ -257,39 +335,40 @@ suite('PersonalizationOptionsTests_OfficialBuild', function() {
     testElement.remove();
   });
 
-  // <if expr="chromeos_ash">
-  test('Spellcheck controls without SyncSettingsCategorization', function() {
-    loadTimeData.overrideValues({syncSettingsCategorizationEnabled: false});
-
+  // On ChromeOS Ash, the spellcheck toggle is in OS Settings, not browser
+  // settings. TODO (https://www.crbug.com/1396704): Add this test in the OS
+  // settings test for the OS version of personalization options, once OS
+  // Settings supports TypeScript tests.
+  // <if expr="not chromeos_ash">
+  test('Spellcheck toggle', function() {
     testElement.prefs = {
       profile: {password_manager_leak_detection: {value: true}},
       safebrowsing:
           {enabled: {value: true}, scout_reporting_enabled: {value: true}},
+      page_content_collection: {enabled: {value: true}},
       spellcheck: {dictionaries: {value: ['en-US']}},
     };
     flush();
     const shadowRoot = testElement.shadowRoot!;
     assertFalse(
         shadowRoot.querySelector<HTMLElement>('#spellCheckControl')!.hidden);
-    assertTrue(
-        shadowRoot.querySelector<HTMLElement>('#spellCheckLink')!.hidden);
 
     testElement.prefs = {
       profile: {password_manager_leak_detection: {value: true}},
       safebrowsing:
           {enabled: {value: true}, scout_reporting_enabled: {value: true}},
+      page_content_collection: {enabled: {value: true}},
       spellcheck: {dictionaries: {value: []}},
     };
     flush();
     assertTrue(
         shadowRoot.querySelector<HTMLElement>('#spellCheckControl')!.hidden);
-    assertTrue(
-        shadowRoot.querySelector<HTMLElement>('#spellCheckLink')!.hidden);
 
     testElement.prefs = {
       profile: {password_manager_leak_detection: {value: true}},
       safebrowsing:
           {enabled: {value: true}, scout_reporting_enabled: {value: true}},
+      page_content_collection: {enabled: {value: true}},
       browser: {enable_spellchecking: {value: false}},
       spellcheck: {
         dictionaries: {value: ['en-US']},
@@ -299,87 +378,49 @@ suite('PersonalizationOptionsTests_OfficialBuild', function() {
     flush();
     shadowRoot.querySelector<HTMLElement>('#spellCheckControl')!.click();
     assertTrue(testElement.prefs.spellcheck.use_spelling_service.value);
+  });
+  // </if>
+
+  // Only the spellcheck link is shown on Chrome OS in Browser settings.
+  // <if expr="chromeos_ash">
+  test('Spellcheck link', function() {
+    testElement.prefs = {
+      profile: {password_manager_leak_detection: {value: true}},
+      safebrowsing:
+          {enabled: {value: true}, scout_reporting_enabled: {value: true}},
+      page_content_collection: {enabled: {value: true}},
+      spellcheck: {dictionaries: {value: ['en-US']}},
+    };
+    flush();
+    const shadowRoot = testElement.shadowRoot!;
+    assertFalse(
+        shadowRoot.querySelector<HTMLElement>('#spellCheckLink')!.hidden);
+
+    testElement.prefs = {
+      profile: {password_manager_leak_detection: {value: true}},
+      safebrowsing:
+          {enabled: {value: true}, scout_reporting_enabled: {value: true}},
+      page_content_collection: {enabled: {value: true}},
+      spellcheck: {dictionaries: {value: []}},
+    };
+    flush();
     assertTrue(
         shadowRoot.querySelector<HTMLElement>('#spellCheckLink')!.hidden);
   });
   // </if>
 
-  test('Spellcheck toggle', function() {
-    // <if expr="chromeos_ash">
-    // On ChromeOS spellcheck toggle is shown in OS settings only.
-    loadTimeData.overrideValues({
-      syncSettingsCategorizationEnabled: true,
-      isOSSettings: true,
-    });
-    // </if>
-
-    testElement.prefs = {
-      profile: {password_manager_leak_detection: {value: true}},
-      safebrowsing:
-          {enabled: {value: true}, scout_reporting_enabled: {value: true}},
-      spellcheck: {dictionaries: {value: ['en-US']}},
-    };
-    flush();
-    const shadowRoot = testElement.shadowRoot!;
-    assertFalse(
-        shadowRoot.querySelector<HTMLElement>('#spellCheckControl')!.hidden);
-    // <if expr="chromeos_ash">
-    assertTrue(
-        shadowRoot.querySelector<HTMLElement>('#spellCheckLink')!.hidden);
-    // </if>
-
-    testElement.prefs = {
-      profile: {password_manager_leak_detection: {value: true}},
-      safebrowsing:
-          {enabled: {value: true}, scout_reporting_enabled: {value: true}},
-      spellcheck: {dictionaries: {value: []}},
-    };
-    flush();
-    assertTrue(
-        shadowRoot.querySelector<HTMLElement>('#spellCheckControl')!.hidden);
-
-    testElement.prefs = {
-      profile: {password_manager_leak_detection: {value: true}},
-      safebrowsing:
-          {enabled: {value: true}, scout_reporting_enabled: {value: true}},
-      browser: {enable_spellchecking: {value: false}},
-      spellcheck: {
-        dictionaries: {value: ['en-US']},
-        use_spelling_service: {value: false},
-      },
-    };
-    flush();
-    shadowRoot.querySelector<HTMLElement>('#spellCheckControl')!.click();
-    assertTrue(testElement.prefs.spellcheck.use_spelling_service.value);
-  });
-
-  // Spellcheck link is shown on Chrome OS in Browser settings only.
   // <if expr="chromeos_ash">
-  test('Spellcheck link', function() {
-    loadTimeData.overrideValues({
-      syncSettingsCategorizationEnabled: true,
-      isOSSettings: false,
-    });
-    testElement.prefs = {
-      profile: {password_manager_leak_detection: {value: true}},
-      safebrowsing:
-          {enabled: {value: true}, scout_reporting_enabled: {value: true}},
-      spellcheck: {dictionaries: {value: ['en-US']}},
+  test('Metrics row links to OS Settings Privacy Hub subpage', function() {
+    let targetUrl: string = '';
+    testElement['navigateTo_'] = (url: string) => {
+      targetUrl = url;
     };
-    flush();
-    const shadowRoot = testElement.shadowRoot!;
-    assertFalse(
-        shadowRoot.querySelector<HTMLElement>('#spellCheckLink')!.hidden);
 
-    testElement.prefs = {
-      profile: {password_manager_leak_detection: {value: true}},
-      safebrowsing:
-          {enabled: {value: true}, scout_reporting_enabled: {value: true}},
-      spellcheck: {dictionaries: {value: []}},
-    };
-    flush();
-    assertTrue(
-        shadowRoot.querySelector<HTMLElement>('#spellCheckLink')!.hidden);
+    testElement.$.metricsReportingLink.click();
+    const expectedUrl =
+        loadTimeData.getString('osSettingsPrivacyHubSubpageUrl');
+    assertEquals(expectedUrl, targetUrl);
   });
   // </if>
 });
+// </if>

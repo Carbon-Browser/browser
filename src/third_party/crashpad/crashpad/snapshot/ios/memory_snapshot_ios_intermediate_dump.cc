@@ -1,4 +1,4 @@
-// Copyright 2020 The Crashpad Authors. All rights reserved.
+// Copyright 2020 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include "snapshot/ios/memory_snapshot_ios_intermediate_dump.h"
+
+#include "base/check_op.h"
 
 namespace crashpad {
 namespace internal {

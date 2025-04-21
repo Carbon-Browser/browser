@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "components/sessions/content/content_live_tab.h"
 #include "components/tab_groups/tab_group_id.h"
 #include "extensions/buildflags/buildflags.h"
+#include "ui/base/mojom/window_show_state.mojom.h"
 
 #if BUILDFLAG(ENABLE_SESSION_SERVICE)
 #include "chrome/browser/sessions/exit_type_service.h"
@@ -32,14 +33,14 @@
 ChromeTabRestoreServiceClient::ChromeTabRestoreServiceClient(Profile* profile)
     : profile_(profile) {}
 
-ChromeTabRestoreServiceClient::~ChromeTabRestoreServiceClient() {}
+ChromeTabRestoreServiceClient::~ChromeTabRestoreServiceClient() = default;
 
 sessions::LiveTabContext* ChromeTabRestoreServiceClient::CreateLiveTabContext(
     sessions::LiveTabContext* existing_context,
     sessions::SessionWindow::WindowType type,
     const std::string& app_name,
     const gfx::Rect& bounds,
-    ui::WindowShowState show_state,
+    ui::mojom::WindowShowState show_state,
     const std::string& workspace,
     const std::string& user_title,
     const std::map<std::string, std::string>& extra_data) {

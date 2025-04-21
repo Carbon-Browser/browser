@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <stddef.h>
 #include <stdint.h>
@@ -9,11 +14,12 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
+#include "base/containers/span.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
@@ -28,7 +34,6 @@
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "net/base/elements_upload_data_stream.h"
 #include "net/base/upload_bytes_element_reader.h"
@@ -170,10 +175,10 @@ std::unique_ptr<net::URLRequest> CreateSimpleRequest(
     request->SetExtraRequestHeaders(extra_headers);
   }
   if (!form_data.empty()) {
-    std::unique_ptr<net::UploadElementReader> reader(
-        new net::UploadBytesElementReader(form_data.data(), form_data.size()));
+    auto reader = std::make_unique<net::UploadBytesElementReader>(
+        base::as_byte_span(form_data));
     request->set_upload(
-        net::ElementsUploadDataStream::CreateWithReader(std::move(reader), 0));
+        net::ElementsUploadDataStream::CreateWithReader(std::move(reader)));
   }
   return request;
 }
@@ -197,7 +202,7 @@ int SimplePOSTRequest(
 
 class UsbGadgetFactory : public UsbService::Observer {
  public:
-  // TODO(crbug.com/1010491): Remove `io_task_runner` parameter.
+  // TODO(crbug.com/40101494): Remove `io_task_runner` parameter.
   UsbGadgetFactory(UsbService* usb_service,
                    scoped_refptr<base::SingleThreadTaskRunner> io_task_runner)
       : usb_service_(usb_service),
@@ -238,7 +243,7 @@ class UsbGadgetFactory : public UsbService::Observer {
     if (!device_) {
       // TODO(reillyg): This timer could be replaced by a way to use long-
       // polling to wait for claimed devices to become unclaimed.
-      base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
           FROM_HERE,
           base::BindOnce(&UsbGadgetFactory::EnumerateDevices,
                          weak_factory_.GetWeakPtr()),
@@ -395,7 +400,7 @@ class UsbGadgetFactory : public UsbService::Observer {
     version_.clear();
 
     // Wait a bit and then try again to find an available device.
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&UsbGadgetFactory::EnumerateDevices,
                        weak_factory_.GetWeakPtr()),

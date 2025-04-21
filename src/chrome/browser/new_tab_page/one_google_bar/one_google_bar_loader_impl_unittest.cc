@@ -1,8 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/new_tab_page/one_google_bar/one_google_bar_loader_impl.h"
+
+#include <optional>
 
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
@@ -27,7 +29,6 @@
 #include "services/network/test/test_url_loader_factory.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
 #include "chromeos/lacros/lacros_test_helper.h"
@@ -188,7 +189,7 @@ TEST_F(OneGoogleBarLoaderImplTest, RequestReturns) {
   base::MockCallback<OneGoogleBarLoader::OneGoogleCallback> callback;
   one_google_bar_loader()->Load(callback.Get());
 
-  absl::optional<OneGoogleBarData> data;
+  std::optional<OneGoogleBarData> data;
   base::RunLoop loop;
   EXPECT_CALL(callback, Run(OneGoogleBarLoader::Status::OK, _))
       .WillOnce(DoAll(SaveArg<1>(&data), Quit(&loop)));
@@ -205,7 +206,7 @@ TEST_F(OneGoogleBarLoaderImplTest, HandlesResponsePreamble) {
   base::MockCallback<OneGoogleBarLoader::OneGoogleCallback> callback;
   one_google_bar_loader()->Load(callback.Get());
 
-  absl::optional<OneGoogleBarData> data;
+  std::optional<OneGoogleBarData> data;
   base::RunLoop loop;
   EXPECT_CALL(callback, Run(OneGoogleBarLoader::Status::OK, _))
       .WillOnce(DoAll(SaveArg<1>(&data), Quit(&loop)));
@@ -246,7 +247,7 @@ TEST_F(OneGoogleBarLoaderImplTest, ParsesFullResponse) {
   base::MockCallback<OneGoogleBarLoader::OneGoogleCallback> callback;
   one_google_bar_loader()->Load(callback.Get());
 
-  absl::optional<OneGoogleBarData> data;
+  std::optional<OneGoogleBarData> data;
   base::RunLoop loop;
   EXPECT_CALL(callback, Run(OneGoogleBarLoader::Status::OK, _))
       .WillOnce(DoAll(SaveArg<1>(&data), Quit(&loop)));
@@ -271,8 +272,8 @@ TEST_F(OneGoogleBarLoaderImplTest, CoalescesMultipleRequests) {
   one_google_bar_loader()->Load(second_callback.Get());
 
   // Make sure that a single response causes both callbacks to be called.
-  absl::optional<OneGoogleBarData> first_data;
-  absl::optional<OneGoogleBarData> second_data;
+  std::optional<OneGoogleBarData> first_data;
+  std::optional<OneGoogleBarData> second_data;
 
   base::RunLoop loop;
   EXPECT_CALL(first_callback, Run(OneGoogleBarLoader::Status::OK, _))
@@ -294,7 +295,7 @@ TEST_F(OneGoogleBarLoaderImplTest, NetworkErrorIsTransient) {
 
   base::RunLoop loop;
   EXPECT_CALL(callback, Run(OneGoogleBarLoader::Status::TRANSIENT_ERROR,
-                            Eq(absl::nullopt)))
+                            Eq(std::nullopt)))
       .WillOnce(Quit(&loop));
   loop.Run();
 }
@@ -307,7 +308,7 @@ TEST_F(OneGoogleBarLoaderImplTest, InvalidJsonErrorIsFatal) {
 
   base::RunLoop loop;
   EXPECT_CALL(callback,
-              Run(OneGoogleBarLoader::Status::FATAL_ERROR, Eq(absl::nullopt)))
+              Run(OneGoogleBarLoader::Status::FATAL_ERROR, Eq(std::nullopt)))
       .WillOnce(Quit(&loop));
   loop.Run();
 }
@@ -323,7 +324,7 @@ TEST_F(OneGoogleBarLoaderImplTest, IncompleteJsonErrorIsFatal) {
 
   base::RunLoop loop;
   EXPECT_CALL(callback,
-              Run(OneGoogleBarLoader::Status::FATAL_ERROR, Eq(absl::nullopt)))
+              Run(OneGoogleBarLoader::Status::FATAL_ERROR, Eq(std::nullopt)))
       .WillOnce(Quit(&loop));
   loop.Run();
 }
@@ -348,11 +349,11 @@ TEST_F(OneGoogleBarLoaderImplTest, MirrorAccountConsistencyNotRequired) {
   if (check_x_chrome_connected_header) {
     // On Chrome OS, X-Chrome-Connected header is present, but
     // enable_account_consistency is set to false.
-    std::string header_value;
-    EXPECT_TRUE(last_request_headers().GetHeader(signin::kChromeConnectedHeader,
-                                                 &header_value));
+    EXPECT_THAT(
+        last_request_headers().GetHeader(signin::kChromeConnectedHeader),
+        testing::Optional(
+            testing::ResultOf(&GetEnableAccountConsistencyValue, "false")));
     // mode = PROFILE_MODE_DEFAULT
-    EXPECT_EQ(GetEnableAccountConsistencyValue(header_value), "false");
   } else {
     // On not Chrome OS, the X-Chrome-Connected header must not be present.
     EXPECT_FALSE(
@@ -389,12 +390,12 @@ TEST_F(OneGoogleBarLoaderImplWithMirrorAccountConsistencyTest,
   if (check_x_chrome_connected_header) {
     // On Chrome OS, X-Chrome-Connected header is present, and
     // enable_account_consistency is set to true.
-    std::string header_value;
-    EXPECT_TRUE(last_request_headers().GetHeader(signin::kChromeConnectedHeader,
-                                                 &header_value));
     // mode = PROFILE_MODE_INCOGNITO_DISABLED |
     // PROFILE_MODE_ADD_ACCOUNT_DISABLED
-    EXPECT_EQ(GetEnableAccountConsistencyValue(header_value), "true");
+    EXPECT_THAT(
+        last_request_headers().GetHeader(signin::kChromeConnectedHeader),
+        testing::Optional(
+            testing::ResultOf(&GetEnableAccountConsistencyValue, "true")));
   } else {
     // This is not a valid case (mirror account consistency can only be required
     // on Chrome OS). This ensures in this case nothing happens.
@@ -412,7 +413,7 @@ TEST_F(OneGoogleBarLoaderImplTest, ParsesLanguageCode) {
   base::MockCallback<OneGoogleBarLoader::OneGoogleCallback> callback;
   one_google_bar_loader()->Load(callback.Get());
 
-  absl::optional<OneGoogleBarData> data;
+  std::optional<OneGoogleBarData> data;
   base::RunLoop loop;
   EXPECT_CALL(callback, Run(OneGoogleBarLoader::Status::OK, _))
       .WillOnce(DoAll(SaveArg<1>(&data), Quit(&loop)));

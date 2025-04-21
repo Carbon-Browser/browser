@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "mojo/public/cpp/system/scope_to_message_pipe.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
@@ -57,12 +57,13 @@ TEST_F(ScopeToMessagePipeTest, PipeClosedOnPeerClosure) {
   base::RunLoop wait_for_pipe_closure;
   MessagePipe pipe;
   SimpleWatcher watcher(FROM_HERE, SimpleWatcher::ArmingPolicy::AUTOMATIC);
-  watcher.Watch(pipe.handle1.get(), MOJO_HANDLE_SIGNAL_READABLE,
+  watcher.Watch(pipe.handle0.get(), MOJO_HANDLE_SIGNAL_READABLE,
                 MOJO_TRIGGER_CONDITION_SIGNALS_SATISFIED,
                 base::BindLambdaForTesting(
                     [&](MojoResult result, const HandleSignalsState& state) {
-                      EXPECT_EQ(result, MOJO_RESULT_CANCELLED);
-                      wait_for_pipe_closure.Quit();
+                      if (result == MOJO_RESULT_CANCELLED) {
+                        wait_for_pipe_closure.Quit();
+                      }
                     }));
 
   ScopeToMessagePipe(42, std::move(pipe.handle0));

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,7 +54,7 @@ void DiscardMetricsLifecycleUnitObserver::OnDiscard(
     LifecycleUnitStateChangeReason reason) {
   discard_time_ = NowTicks();
   discard_reason_ = reason;
-  last_focused_time_before_discard_ = lifecycle_unit->GetLastFocusedTime();
+  last_focused_time_before_discard_ = lifecycle_unit->GetLastFocusedTimeTicks();
 
   static int discard_count = 0;
   UMA_HISTOGRAM_CUSTOM_COUNTS("TabManager.Discarding.DiscardCount",
@@ -77,6 +77,15 @@ void DiscardMetricsLifecycleUnitObserver::OnReload() {
   UMA_HISTOGRAM_CUSTOM_TIMES("TabManager.Discarding.InactiveToReloadTime",
                              inactive_to_reload_time, base::Seconds(1),
                              base::Days(1), 100);
+
+  if (discard_reason_ == LifecycleUnitStateChangeReason::BROWSER_INITIATED) {
+    UMA_HISTOGRAM_CUSTOM_TIMES(
+        "TabManager.Discarding.DiscardToReloadTime.Proactive",
+        discard_to_reload_time, base::Seconds(1), base::Days(1), 100);
+    UMA_HISTOGRAM_CUSTOM_TIMES(
+        "TabManager.Discarding.InactiveToReloadTime.Proactive",
+        inactive_to_reload_time, base::Seconds(1), base::Days(1), 100);
+  }
 }
 
 }  // namespace resource_coordinator

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,8 @@ namespace first_party_sets {
 class FirstPartySetsOverridesPolicyHandler
     : public policy::SchemaValidatingPolicyHandler {
  public:
-  explicit FirstPartySetsOverridesPolicyHandler(const policy::Schema& schema);
+  explicit FirstPartySetsOverridesPolicyHandler(const char* policy_name,
+                                                const policy::Schema& schema);
   FirstPartySetsOverridesPolicyHandler(
       const FirstPartySetsOverridesPolicyHandler&) = delete;
   FirstPartySetsOverridesPolicyHandler& operator=(

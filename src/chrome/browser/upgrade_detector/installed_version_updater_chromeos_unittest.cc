@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,13 @@
 #include <memory>
 #include <utility>
 
+#include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "chrome/browser/upgrade_detector/build_state.h"
 #include "chrome/browser/upgrade_detector/mock_build_state_observer.h"
 #include "chromeos/ash/components/dbus/update_engine/fake_update_engine_client.h"
 #include "chromeos/ash/components/dbus/update_engine/update_engine.pb.h"
 #include "chromeos/ash/components/dbus/update_engine/update_engine_client.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -26,7 +26,6 @@ using ::testing::Property;
 class InstalledVersionUpdaterTest : public ::testing::Test {
  protected:
   InstalledVersionUpdaterTest() {
-    chromeos::DBusThreadManager::Initialize();
     fake_update_engine_client_ =
         ash::UpdateEngineClient::InitializeFakeForTest();
 
@@ -38,7 +37,6 @@ class InstalledVersionUpdaterTest : public ::testing::Test {
 
     // Be kind; rewind.
     ash::UpdateEngineClient::Shutdown();
-    chromeos::DBusThreadManager::Shutdown();
   }
 
   void NotifyStatusChanged(update_engine::StatusResult status) {
@@ -50,7 +48,8 @@ class InstalledVersionUpdaterTest : public ::testing::Test {
   BuildState build_state_;
 
  private:
-  ash::FakeUpdateEngineClient* fake_update_engine_client_;  // Not owned.
+  raw_ptr<ash::FakeUpdateEngineClient, DanglingUntriaged>
+      fake_update_engine_client_;  // Not owned.
 };
 
 // Tests that an unrelated status change notification does not push data to the
@@ -78,7 +77,7 @@ TEST_F(InstalledVersionUpdaterTest, Update) {
                               Eq(BuildState::UpdateType::kNormalUpdate)),
                      Property(&BuildState::installed_version, IsTrue()),
                      Property(&BuildState::installed_version,
-                              Eq(absl::optional<base::Version>(
+                              Eq(std::optional<base::Version>(
                                   base::Version(new_version)))),
                      Property(&BuildState::critical_version, IsFalse()))));
   NotifyStatusChanged(std::move(status));
@@ -113,7 +112,7 @@ TEST_F(InstalledVersionUpdaterTest, Rollback) {
                               Eq(BuildState::UpdateType::kEnterpriseRollback)),
                      Property(&BuildState::installed_version, IsTrue()),
                      Property(&BuildState::installed_version,
-                              Eq(absl::optional<base::Version>(
+                              Eq(std::optional<base::Version>(
                                   base::Version(new_version)))),
                      Property(&BuildState::critical_version, IsFalse()))));
   NotifyStatusChanged(std::move(status));
@@ -138,7 +137,7 @@ TEST_F(InstalledVersionUpdaterTest, ChannelChange) {
           Property(&BuildState::installed_version, IsTrue()),
           Property(
               &BuildState::installed_version,
-              Eq(absl::optional<base::Version>(base::Version(new_version)))),
+              Eq(std::optional<base::Version>(base::Version(new_version)))),
           Property(&BuildState::critical_version, IsFalse()))));
   NotifyStatusChanged(std::move(status));
   task_environment_.RunUntilIdle();

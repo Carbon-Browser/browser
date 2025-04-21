@@ -1,10 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_HTML_CANVAS_IMAGE_ELEMENT_BASE_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_HTML_CANVAS_IMAGE_ELEMENT_BASE_H_
 
+#include "third_party/blink/public/mojom/css/preferred_color_scheme.mojom-blink.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/html/canvas/canvas_image_source.h"
 #include "third_party/blink/renderer/core/imagebitmap/image_bitmap_source.h"
@@ -27,15 +28,16 @@ class CORE_EXPORT ImageElementBase : public CanvasImageSource,
   static Image::ImageDecodingMode ParseImageDecodingMode(const AtomicString&);
 
   gfx::Size BitmapSourceSize() const override;
-  ScriptPromise CreateImageBitmap(ScriptState*,
-                                  absl::optional<gfx::Rect>,
-                                  const ImageBitmapOptions*,
-                                  ExceptionState&) override;
+  ScriptPromise<ImageBitmap> CreateImageBitmap(ScriptState*,
+                                               std::optional<gfx::Rect>,
+                                               const ImageBitmapOptions*,
+                                               ExceptionState&) override;
 
   scoped_refptr<Image> GetSourceImageForCanvas(
+      FlushReason,
       SourceImageStatus*,
       const gfx::SizeF&,
-      const AlphaDisposition alpha_disposition = kPremultiplyAlpha) override;
+      const AlphaDisposition alpha_disposition) override;
 
   bool WouldTaintOrigin() const override;
 
@@ -68,6 +70,8 @@ class CORE_EXPORT ImageElementBase : public CanvasImageSource,
 
  private:
   const Element& GetElement() const;
+
+  mojom::blink::PreferredColorScheme PreferredColorScheme() const;
 
   // The id for the PaintImage used the last time this element was painted.
   PaintImage::Id last_painted_image_id_ = PaintImage::kInvalidId;

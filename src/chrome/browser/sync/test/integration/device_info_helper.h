@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,8 +31,7 @@ class ServerDeviceInfoMatchChecker
       delete;
 
   // FakeServer::Observer overrides.
-  void OnCommit(const std::string& committer_invalidator_client_id,
-                syncer::ModelTypeSet committed_model_types) override;
+  void OnCommit(syncer::DataTypeSet committed_data_types) override;
 
   // StatusChangeChecker overrides.
   bool IsExitConditionSatisfied(std::ostream* os) override;

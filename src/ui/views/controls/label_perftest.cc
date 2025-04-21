@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,7 @@ TEST_F(LabelPerfTest, GetPreferredSize) {
   base::LapTimer timer(kWarmupLaps, base::TimeDelta(), kLaps);
   for (int i = 0; i < kLaps + kWarmupLaps; ++i) {
     label.SetText(i % 2 == 0 ? string1 : string2);
-    label.GetPreferredSize();
+    label.GetPreferredSize({});
     timer.NextLap();
   }
   perf_test::PerfResultReporter reporter("LabelPerfTest", "GetPreferredSize");

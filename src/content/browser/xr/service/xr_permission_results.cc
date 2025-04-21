@@ -1,11 +1,13 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/xr/service/xr_permission_results.h"
 
+#include <optional>
+
 #include "base/containers/contains.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "device/vr/public/mojom/xr_session.mojom-shared.h"
 #include "third_party/blink/public/common/permissions/permission_utils.h"
 
 namespace {
@@ -71,7 +73,7 @@ bool XrPermissionResults::HasPermissionsFor(
 }
 
 // static
-absl::optional<blink::PermissionType> XrPermissionResults::GetPermissionFor(
+std::optional<blink::PermissionType> XrPermissionResults::GetPermissionFor(
     device::mojom::XRSessionMode mode) {
   switch (mode) {
     case device::mojom::XRSessionMode::kInline:
@@ -84,13 +86,16 @@ absl::optional<blink::PermissionType> XrPermissionResults::GetPermissionFor(
 }
 
 // static
-absl::optional<blink::PermissionType> XrPermissionResults::GetPermissionFor(
+std::optional<blink::PermissionType> XrPermissionResults::GetPermissionFor(
     device::mojom::XRSessionFeature feature) {
   if (feature == device::mojom::XRSessionFeature::CAMERA_ACCESS) {
     return blink::PermissionType::VIDEO_CAPTURE;
   }
+  if (feature == device::mojom::XRSessionFeature::HAND_INPUT) {
+    return blink::PermissionType::HAND_TRACKING;
+  }
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 }  // namespace content

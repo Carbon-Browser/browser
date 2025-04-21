@@ -1,19 +1,18 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/challenge_response_auth_keys_loader.h"
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "ash/components/login/auth/challenge_response/cert_utils.h"
-#include "ash/components/login/auth/challenge_response/known_user_pref_utils.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/scoped_multi_source_observation.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
@@ -25,6 +24,9 @@
 #include "chrome/browser/certificate_provider/certificate_provider_service.h"
 #include "chrome/browser/certificate_provider/certificate_provider_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chromeos/ash/components/browser_context_helper/browser_context_helper.h"
+#include "chromeos/ash/components/login/auth/challenge_response/cert_utils.h"
+#include "chromeos/ash/components/login/auth/challenge_response/known_user_pref_utils.h"
 #include "components/account_id/account_id.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/known_user.h"
@@ -38,7 +40,6 @@
 #include "extensions/browser/process_manager.h"
 #include "extensions/browser/process_manager_observer.h"
 #include "extensions/common/manifest_handlers/background_info.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 namespace {
@@ -47,7 +48,7 @@ constexpr base::TimeDelta kDefaultMaximumExtensionLoadWaitingTime =
     base::Seconds(5);
 
 base::flat_set<std::string> GetLoginScreenPolicyExtensionIds() {
-  DCHECK(ProfileHelper::IsSigninProfileInitialized());
+  DCHECK(BrowserContextHelper::Get()->GetSigninBrowserContext());
 
   const PrefService* const prefs =
       ProfileHelper::GetSigninProfile()->GetPrefs();
@@ -57,12 +58,14 @@ base::flat_set<std::string> GetLoginScreenPolicyExtensionIds() {
   const PrefService::Preference* const pref =
       prefs->FindPreference(extensions::pref_names::kInstallForceList);
   if (!pref || !pref->IsManaged() ||
-      pref->GetType() != base::Value::Type::DICTIONARY)
+      pref->GetType() != base::Value::Type::DICT) {
     return {};
+  }
 
   base::flat_set<std::string> extension_ids;
-  for (const auto item : pref->GetValue()->DictItems())
+  for (const auto item : pref->GetValue()->GetDict()) {
     extension_ids.insert(item.first);
+  }
   return extension_ids;
 }
 
@@ -84,7 +87,7 @@ void LoadStoredChallengeResponseSpkiKeysForUser(
     const AccountId& account_id,
     std::vector<std::string>* spki_items,
     base::flat_set<std::string>* extension_ids) {
-  const base::Value known_user_value =
+  const base::Value::List known_user_value =
       user_manager::KnownUser(g_browser_process->local_state())
           .GetChallengeResponseKeys(account_id);
   std::vector<DeserializedChallengeResponseKey>
@@ -119,7 +122,7 @@ std::vector<ChallengeResponseKey::SignatureAlgorithm> MakeAlgorithmListFromSsl(
   std::vector<ChallengeResponseKey::SignatureAlgorithm>
       challenge_response_algorithms;
   for (auto ssl_algorithm : ssl_algorithms) {
-    absl::optional<ChallengeResponseKey::SignatureAlgorithm> algorithm =
+    std::optional<ChallengeResponseKey::SignatureAlgorithm> algorithm =
         GetChallengeResponseKeyAlgorithmFromSsl(ssl_algorithm);
     if (algorithm)
       challenge_response_algorithms.push_back(*algorithm);
@@ -193,8 +196,8 @@ class ExtensionLoadObserver final
     }
 
     // Ensure that the extension's background host is active.
-    const extensions::LazyContextId context_id(browser_context,
-                                               extension->id());
+    const auto context_id =
+        extensions::LazyContextId::ForExtension(browser_context, extension);
     extensions::LazyContextTaskQueue* queue = context_id.GetTaskQueue();
     if (!queue->ShouldEnqueueTask(browser_context, extension)) {
       // The background host already exists.
@@ -301,7 +304,6 @@ class ExtensionLoadObserver final
     if (!extension_host) {
       // Generally this should not happen, but better safe than sorry.
       NOTREACHED();
-      return;
     }
 
     if (extension_host->has_loaded_once()) {
@@ -318,7 +320,6 @@ class ExtensionLoadObserver final
   void StopWaitingOnExtension(const std::string& extension_id) {
     if (!extensions_waited_for_.contains(extension_id)) {
       NOTREACHED();
-      return;
     }
 
     extensions_waited_for_.erase(extension_id);

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/cookie_access_details.h"
@@ -31,7 +31,7 @@ CookieHelper::CookieHelper(content::StoragePartition* storage_partition,
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 }
 
-CookieHelper::~CookieHelper() {}
+CookieHelper::~CookieHelper() = default;
 
 void CookieHelper::StartFetching(FetchCallback callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
@@ -44,7 +44,7 @@ void CookieHelper::DeleteCookie(const net::CanonicalCookie& cookie) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   if (delete_disabled_callback_ &&
       delete_disabled_callback_.Run(net::cookie_util::CookieOriginToURL(
-          cookie.Domain(), cookie.IsSecure()))) {
+          cookie.Domain(), cookie.SecureAttribute()))) {
     return;
   }
   storage_partition_->GetCookieManagerForBrowserProcess()
@@ -62,7 +62,9 @@ CannedCookieHelper::~CannedCookieHelper() {
 
 void CannedCookieHelper::AddCookies(
     const content::CookieAccessDetails& details) {
-  for (const auto& cookie : details.cookie_list) {
+  for (const auto& cookie_with_access_result :
+       details.cookie_access_result_list) {
+    const auto& cookie = cookie_with_access_result.cookie;
     auto existing_slot = origin_cookie_set_.find(cookie);
     if (existing_slot != origin_cookie_set_.end()) {
       // |cookie| already exists in the set. We need to remove the old instance

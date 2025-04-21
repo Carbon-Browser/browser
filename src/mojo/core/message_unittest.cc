@@ -1,30 +1,47 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <algorithm>
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include <memory>
+#include <string_view>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/numerics/safe_math.h"
 #include "base/rand_util.h"
+#include "base/ranges/algorithm.h"
+#include "build/blink_buildflags.h"
 #include "build/build_config.h"
+#include "mojo/core/embedder/embedder.h"
+#include "mojo/core/ipcz_driver/mojo_message.h"
 #include "mojo/core/test/mojo_test_base.h"
-#include "mojo/core/user_message_impl.h"
 #include "mojo/public/cpp/platform/platform_channel.h"
 #include "mojo/public/cpp/system/buffer.h"
 #include "mojo/public/cpp/system/message_pipe.h"
 #include "mojo/public/cpp/system/platform_handle.h"
 
-namespace mojo {
-namespace core {
+#if BUILDFLAG(MOJO_SUPPORT_LEGACY_CORE)
+#include "mojo/core/user_message_impl.h"
+#endif
+
+namespace mojo::core {
 namespace {
 
 using MessageTest = test::MojoTestBase;
+
+#if BUILDFLAG(MOJO_SUPPORT_LEGACY_CORE)
+constexpr uint32_t kLegacyMinimumPayloadBufferSize = kMinimumPayloadBufferSize;
+#else
+constexpr uint32_t kLegacyMinimumPayloadBufferSize = 0;
+#endif
 
 // Helper class which provides a base implementation for an unserialized user
 // message context and helpers to go between these objects and opaque message
@@ -159,7 +176,7 @@ class SimpleMessage : public TestMessageBase {
   }
 
   void SerializePayload(void* buffer) override {
-    std::copy(contents_.begin(), contents_.end(), static_cast<char*>(buffer));
+    base::ranges::copy(contents_, static_cast<char*>(buffer));
   }
 
   const std::string contents_;
@@ -228,7 +245,7 @@ TEST_F(MessageTest, DestroyMessageWithContext) {
 
 const char kTestMessageWithContext1[] = "hello laziness";
 
-#if !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(USE_BLINK)
 
 const char kTestMessageWithContext2[] = "my old friend";
 const char kTestMessageWithContext3[] = "something something";
@@ -239,9 +256,18 @@ DEFINE_TEST_CLIENT_TEST_WITH_PIPE(ReceiveMessageNoHandles, MessageTest, h) {
   MojoTestBase::WaitForSignals(h, MOJO_HANDLE_SIGNAL_READABLE);
   auto m = MojoTestBase::ReadMessage(h);
   EXPECT_EQ(kTestMessageWithContext1, m);
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(h));
 }
 
-TEST_F(MessageTest, SerializeSimpleMessageNoHandlesWithContext) {
+#if BUILDFLAG(IS_IOS)
+// TODO(crbug.com/40257752): Test currently fails on iOS.
+#define MAYBE_SerializeSimpleMessageNoHandlesWithContext \
+  DISABLED_SerializeSimpleMessageNoHandlesWithContext
+#else
+#define MAYBE_SerializeSimpleMessageNoHandlesWithContext \
+  SerializeSimpleMessageNoHandlesWithContext
+#endif  // BUILDFLAG(IS_IOS)
+TEST_F(MessageTest, MAYBE_SerializeSimpleMessageNoHandlesWithContext) {
   RunTestClient("ReceiveMessageNoHandles", [&](MojoHandle h) {
     auto message = std::make_unique<SimpleMessage>(kTestMessageWithContext1);
     MojoWriteMessage(h, TestMessageBase::MakeMessageHandle(std::move(message)),
@@ -249,7 +275,14 @@ TEST_F(MessageTest, SerializeSimpleMessageNoHandlesWithContext) {
   });
 }
 
-TEST_F(MessageTest, SerializeDynamicallySizedMessage) {
+#if BUILDFLAG(IS_IOS)
+// TODO(crbug.com/40257752): Test currently fails on iOS.
+#define MAYBE_SerializeDynamicallySizedMessage \
+  DISABLED_SerializeDynamicallySizedMessage
+#else
+#define MAYBE_SerializeDynamicallySizedMessage SerializeDynamicallySizedMessage
+#endif  // BUILDFLAG(IS_IOS)
+TEST_F(MessageTest, MAYBE_SerializeDynamicallySizedMessage) {
   RunTestClient("ReceiveMessageNoHandles", [&](MojoHandle h) {
     MojoMessageHandle message;
     EXPECT_EQ(MOJO_RESULT_OK, MojoCreateMessage(nullptr, &message));
@@ -280,9 +313,19 @@ DEFINE_TEST_CLIENT_TEST_WITH_PIPE(ReceiveMessageOneHandle, MessageTest, h) {
   EXPECT_EQ(kTestMessageWithContext1, m);
   MojoTestBase::WriteMessage(h1, kTestMessageWithContext2);
   EXPECT_EQ(kTestQuitMessage, MojoTestBase::ReadMessage(h));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(h1));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(h));
 }
 
-TEST_F(MessageTest, SerializeSimpleMessageOneHandleWithContext) {
+#if BUILDFLAG(IS_IOS)
+// TODO(crbug.com/40257752): Test currently fails on iOS.
+#define MAYBE_SerializeSimpleMessageOneHandleWithContext \
+  DISABLED_SerializeSimpleMessageOneHandleWithContext
+#else
+#define MAYBE_SerializeSimpleMessageOneHandleWithContext \
+  SerializeSimpleMessageOneHandleWithContext
+#endif  // BUILDFLAG(IS_IOS)
+TEST_F(MessageTest, MAYBE_SerializeSimpleMessageOneHandleWithContext) {
   RunTestClient("ReceiveMessageOneHandle", [&](MojoHandle h) {
     auto message = std::make_unique<SimpleMessage>(kTestMessageWithContext1);
     mojo::MessagePipe pipe;
@@ -306,9 +349,22 @@ DEFINE_TEST_CLIENT_TEST_WITH_PIPE(ReceiveMessageWithHandles, MessageTest, h) {
   MojoTestBase::WriteMessage(handles[3], kTestMessageWithContext4);
 
   EXPECT_EQ(kTestQuitMessage, MojoTestBase::ReadMessage(h));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(h));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(handles[0]));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(handles[1]));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(handles[2]));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(handles[3]));
 }
 
-TEST_F(MessageTest, SerializeSimpleMessageWithHandlesWithContext) {
+#if BUILDFLAG(IS_IOS)
+// TODO(crbug.com/40257752): Test currently fails on iOS.
+#define MAYBE_SerializeSimpleMessageWithHandlesWithContext \
+  DISABLED_SerializeSimpleMessageWithHandlesWithContext
+#else
+#define MAYBE_SerializeSimpleMessageWithHandlesWithContext \
+  SerializeSimpleMessageWithHandlesWithContext
+#endif  // BUILDFLAG(IS_IOS)
+TEST_F(MessageTest, MAYBE_SerializeSimpleMessageWithHandlesWithContext) {
   RunTestClient("ReceiveMessageWithHandles", [&](MojoHandle h) {
     auto message = std::make_unique<SimpleMessage>(kTestMessageWithContext1);
     mojo::MessagePipe pipes[4];
@@ -331,7 +387,7 @@ TEST_F(MessageTest, SerializeSimpleMessageWithHandlesWithContext) {
   });
 }
 
-#endif  // !BUILDFLAG(IS_IOS)
+#endif  // BUILDFLAG(USE_BLINK)
 
 TEST_F(MessageTest, SendLocalSimpleMessageWithHandlesWithContext) {
   auto message = std::make_unique<SimpleMessage>(kTestMessageWithContext1);
@@ -440,6 +496,8 @@ TEST_F(MessageTest, GetMessageDataWithHandles) {
                                h, &num_handles));
 
   EXPECT_EQ(MOJO_RESULT_OK, MojoDestroyMessage(message_handle));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(h[0]));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(h[1]));
 }
 
 TEST_F(MessageTest, ReadMessageWithContextAsSerializedMessage) {
@@ -544,7 +602,7 @@ TEST_F(MessageTest, ForceSerializeMessageWithContext) {
                                &extracted_handle, &num_handles));
   EXPECT_EQ(std::string(kTestMessageWithContext1).size(), num_bytes);
   EXPECT_EQ(std::string(kTestMessageWithContext1),
-            base::StringPiece(static_cast<char*>(buffer), num_bytes));
+            std::string_view(static_cast<char*>(buffer), num_bytes));
 
   // Confirm that the handle we extracted from the serialized message is still
   // connected to the same peer, despite the fact that its handle value may have
@@ -556,6 +614,7 @@ TEST_F(MessageTest, ForceSerializeMessageWithContext) {
   EXPECT_EQ(kTestMessage, MojoTestBase::ReadMessage(extracted_handle));
 
   EXPECT_EQ(MOJO_RESULT_OK, MojoDestroyMessage(message_handle));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(extracted_handle));
 }
 
 TEST_F(MessageTest, DoubleSerialize) {
@@ -644,6 +703,142 @@ TEST_F(MessageTest, ExtendMessagePayload) {
   EXPECT_EQ(MOJO_RESULT_OK, MojoDestroyMessage(message));
 }
 
+TEST_F(MessageTest, PreallocateEnoughMemoryForMessage) {
+  MojoMessageHandle message;
+  EXPECT_EQ(MOJO_RESULT_OK, MojoCreateMessage(nullptr, &message));
+
+  // We need to calculate our payload sizes based on `kMinimumBufferSize` here,
+  // because if we use a total payload size smaller than that, the buffer may
+  // not be reallocated when we expect it to (since at least
+  // `kMinimumBufferSize` bytes of capacity will be allocated).
+  const size_t kMinimumBufferSize =
+      IsMojoIpczEnabled() ? ipcz_driver::MojoMessage::kMinBufferSize
+                          : kLegacyMinimumPayloadBufferSize;
+  const std::string kMsgPart1(kMinimumBufferSize / 2, 'x');
+  const std::string kMsgPart2(kMinimumBufferSize, 'y');
+  const std::string kCombined = kMsgPart1 + kMsgPart2;
+  // Overestimate the amount of memory required. 16 is picked as it should
+  // be larger than adjustments due to memory alignment.
+  const size_t estimated_size = kCombined.size() + 16;
+
+  // Preallocate `estimated_size`, enough for `kCombined`.
+  uint32_t buffer_size;
+  EXPECT_EQ(MOJO_RESULT_OK,
+            MojoReserveMessageCapacity(
+                message, static_cast<uint32_t>(estimated_size), &buffer_size));
+  EXPECT_GE(buffer_size, static_cast<uint32_t>(estimated_size));
+  uint32_t prev_buffer_size = buffer_size;
+
+  // Append `kMsgPart1`.
+  void* buffer;
+  EXPECT_EQ(
+      MOJO_RESULT_OK,
+      MojoAppendMessageData(message, static_cast<uint32_t>(kMsgPart1.size()),
+                            nullptr, 0, nullptr, &buffer, &buffer_size));
+  memcpy(buffer, kMsgPart1.data(), kMsgPart1.size());
+  // No reallocation expected since enough capacity should be reserved.
+  EXPECT_EQ(buffer_size, prev_buffer_size);
+  void* prev_buffer = buffer;
+
+  // Append `kMsgPart2`.
+  EXPECT_EQ(
+      MOJO_RESULT_OK,
+      MojoAppendMessageData(message, static_cast<uint32_t>(kMsgPart2.size()),
+                            nullptr, 0, nullptr, &buffer, &buffer_size));
+  memcpy(static_cast<uint8_t*>(buffer) + kMsgPart1.size(), kMsgPart2.data(),
+         kMsgPart2.size());
+  // No reallocation expected since enough capacity should be reserved.
+  EXPECT_EQ(buffer, prev_buffer);
+  EXPECT_EQ(buffer_size, prev_buffer_size);
+
+  // Finalize message by committing the final size.
+  MojoAppendMessageDataOptions options;
+  options.struct_size = sizeof(options);
+  options.flags = MOJO_APPEND_MESSAGE_DATA_FLAG_COMMIT_SIZE;
+  EXPECT_EQ(MOJO_RESULT_OK, MojoAppendMessageData(message, 0, nullptr, 0,
+                                                  &options, nullptr, nullptr));
+
+  // Check payload content and size.
+  void* payload;
+  uint32_t payload_size;
+  EXPECT_EQ(MOJO_RESULT_OK,
+            MojoGetMessageData(message, nullptr, &payload, &payload_size,
+                               nullptr, nullptr));
+  EXPECT_GE(estimated_size, payload_size);
+  EXPECT_EQ(kCombined.size(), payload_size);
+  EXPECT_EQ(0, memcmp(payload, kCombined.data(), kCombined.size()));
+
+  EXPECT_EQ(MOJO_RESULT_OK, MojoDestroyMessage(message));
+}
+
+TEST_F(MessageTest, PreallocateNotEnoughMemoryForMessage) {
+  MojoMessageHandle message;
+  EXPECT_EQ(MOJO_RESULT_OK, MojoCreateMessage(nullptr, &message));
+
+  // We need to calculate our payload sizes based on `kMinimumBufferSize` here,
+  // because if we use a total payload size smaller than that, the buffer may
+  // not be reallocated when we expect it to (since at least
+  // `kMinimumBufferSize` bytes of capacity will be allocated).
+  const size_t kMinimumBufferSize =
+      IsMojoIpczEnabled() ? ipcz_driver::MojoMessage::kMinBufferSize
+                          : kLegacyMinimumPayloadBufferSize;
+  const std::string kMsgPart1(kMinimumBufferSize / 2, 'x');
+  const std::string kMsgPart2(kMinimumBufferSize, 'y');
+  const std::string kCombined = kMsgPart1 + kMsgPart2;
+  // Underestimate the amount of memory required. 16 is picked as it should
+  // be larger than adjustments due to memory alignment.
+  const size_t estimated_size = kCombined.size() - 16;
+
+  // Preallocate `estimated_size`, not enough for `kCombined`.
+  uint32_t buffer_size;
+  EXPECT_EQ(MOJO_RESULT_OK,
+            MojoReserveMessageCapacity(
+                message, static_cast<uint32_t>(estimated_size), &buffer_size));
+  EXPECT_GE(buffer_size, static_cast<uint32_t>(estimated_size));
+  uint32_t prev_buffer_size = buffer_size;
+
+  // Append `kMsgPart1`.
+  void* buffer;
+  EXPECT_EQ(
+      MOJO_RESULT_OK,
+      MojoAppendMessageData(message, static_cast<uint32_t>(kMsgPart1.size()),
+                            nullptr, 0, nullptr, &buffer, &buffer_size));
+  memcpy(buffer, kMsgPart1.data(), kMsgPart1.size());
+  // No reallocation expected since enough capacity should be reserved.
+  EXPECT_EQ(buffer_size, prev_buffer_size);
+
+  // Append `kMsgPart2`.
+  EXPECT_EQ(
+      MOJO_RESULT_OK,
+      MojoAppendMessageData(message, static_cast<uint32_t>(kMsgPart2.size()),
+                            nullptr, 0, nullptr, &buffer, &buffer_size));
+  memcpy(static_cast<uint8_t*>(buffer) + kMsgPart1.size(), kMsgPart2.data(),
+         kMsgPart2.size());
+  // Since the preallocated size was intentionally underestimated, this
+  // should reallocate and grow the buffer.
+  EXPECT_GT(buffer_size, prev_buffer_size);
+  EXPECT_GT(buffer_size, static_cast<uint32_t>(estimated_size));
+
+  // Finalize message by committing the final size.
+  MojoAppendMessageDataOptions options;
+  options.struct_size = sizeof(options);
+  options.flags = MOJO_APPEND_MESSAGE_DATA_FLAG_COMMIT_SIZE;
+  EXPECT_EQ(MOJO_RESULT_OK, MojoAppendMessageData(message, 0, nullptr, 0,
+                                                  &options, nullptr, nullptr));
+
+  // Check payload content and size.
+  void* payload;
+  uint32_t payload_size;
+  EXPECT_EQ(MOJO_RESULT_OK,
+            MojoGetMessageData(message, nullptr, &payload, &payload_size,
+                               nullptr, nullptr));
+  EXPECT_LT(estimated_size, payload_size);
+  EXPECT_EQ(kCombined.size(), payload_size);
+  EXPECT_EQ(0, memcmp(payload, kCombined.data(), kCombined.size()));
+
+  EXPECT_EQ(MOJO_RESULT_OK, MojoDestroyMessage(message));
+}
+
 TEST_F(MessageTest, ExtendMessageWithHandlesPayload) {
   MojoMessageHandle message;
   EXPECT_EQ(MOJO_RESULT_OK, MojoCreateMessage(nullptr, &message));
@@ -717,7 +912,7 @@ TEST_F(MessageTest, ExtendMessagePayloadLarge) {
     // progressively extend the payload to this size.
     constexpr size_t kTestMessagePayloadSize = 512 * 1024;
     std::vector<uint8_t> test_payload(kTestMessagePayloadSize);
-    base::RandBytes(test_payload.data(), kTestMessagePayloadSize);
+    base::RandBytes(test_payload);
 
     size_t current_payload_size = 0;
     while (current_payload_size < kTestMessagePayloadSize) {
@@ -796,6 +991,7 @@ TEST_F(MessageTest, CorrectPayloadBufferBoundaries) {
   EXPECT_EQ(MOJO_RESULT_OK, MojoDestroyMessage(message));
 }
 
+#if BUILDFLAG(MOJO_SUPPORT_LEGACY_CORE)
 TEST_F(MessageTest, CommitInvalidMessageContents) {
   // Regression test for https://crbug.com/755127. Ensures that we don't crash
   // if we attempt to commit the contents of an unserialized message.
@@ -816,11 +1012,20 @@ TEST_F(MessageTest, CommitInvalidMessageContents) {
                                                   nullptr, nullptr, nullptr));
   UserMessageImpl::FailHandleSerializationForTesting(false);
   EXPECT_EQ(MOJO_RESULT_OK, MojoDestroyMessage(message));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(b));
 }
+#endif  // BUILDFLAG(MOJO_SUPPORT_LEGACY_CORE)
 
-#if !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(USE_BLINK)
 
-TEST_F(MessageTest, ExtendPayloadWithHandlesAttached) {
+#if BUILDFLAG(IS_IOS)
+// TODO(crbug.com/40257752): Test currently fails on iOS.
+#define MAYBE_ExtendPayloadWithHandlesAttached \
+  DISABLED_ExtendPayloadWithHandlesAttached
+#else
+#define MAYBE_ExtendPayloadWithHandlesAttached ExtendPayloadWithHandlesAttached
+#endif  // BUILDFLAG(IS_IOS)
+TEST_F(MessageTest, MAYBE_ExtendPayloadWithHandlesAttached) {
   // Regression test for https://crbug.com/748996. Verifies that internal
   // message objects do not retain invalid payload pointers across buffer
   // relocations.
@@ -875,9 +1080,18 @@ DEFINE_TEST_CLIENT_TEST_WITH_PIPE(ReadAndIgnoreMessage, MessageTest, h) {
   MojoTestBase::ReadMessageWithHandles(h, handles, 5);
   for (size_t i = 0; i < 5; ++i)
     EXPECT_EQ(MOJO_RESULT_OK, MojoClose(handles[i]));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(h));
 }
 
-TEST_F(MessageTest, ExtendPayloadWithHandlesAttachedViaExtension) {
+#if BUILDFLAG(IS_IOS)
+// TODO(crbug.com/40257752): Test currently fails on iOS.
+#define MAYBE_ExtendPayloadWithHandlesAttachedViaExtension \
+  DISABLED_ExtendPayloadWithHandlesAttachedViaExtension
+#else
+#define MAYBE_ExtendPayloadWithHandlesAttachedViaExtension \
+  ExtendPayloadWithHandlesAttachedViaExtension
+#endif  // BUILDFLAG(IS_IOS)
+TEST_F(MessageTest, MAYBE_ExtendPayloadWithHandlesAttachedViaExtension) {
   MojoHandle handles[5];
   CreateMessagePipe(&handles[0], &handles[4]);
   PlatformChannel channel;
@@ -932,9 +1146,10 @@ DEFINE_TEST_CLIENT_TEST_WITH_PIPE(ReadMessageAndCheckPipe, MessageTest, h) {
   EXPECT_EQ(kTestMessage, MojoTestBase::ReadMessage(handles[4]));
   for (size_t i = 0; i < 5; ++i)
     EXPECT_EQ(MOJO_RESULT_OK, MojoClose(handles[i]));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(h));
 }
 
-#endif  // !BUILDFLAG(IS_IOS)
+#endif  // BUILDFLAG(USE_BLINK)
 
 TEST_F(MessageTest, PartiallySerializedMessagesDontLeakHandles) {
   MojoMessageHandle message;
@@ -962,8 +1177,8 @@ TEST_F(MessageTest, PartiallySerializedMessagesDontLeakHandles) {
   EXPECT_EQ(MOJO_RESULT_OK, MojoDestroyMessage(message));
   EXPECT_EQ(MOJO_RESULT_OK,
             WaitForSignals(handles[1], MOJO_HANDLE_SIGNAL_PEER_CLOSED));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(handles[1]));
 }
 
 }  // namespace
-}  // namespace core
-}  // namespace mojo
+}  // namespace mojo::core

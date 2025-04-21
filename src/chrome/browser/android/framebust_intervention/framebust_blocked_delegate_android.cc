@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -117,9 +117,11 @@ void FramebustBlockedMessageDelegate::HandleClick() {
 }
 
 void FramebustBlockedMessageDelegate::HandleOpenLink() {
-  GetWebContents().OpenURL(content::OpenURLParams(
-      blocked_url_, content::Referrer(), WindowOpenDisposition::CURRENT_TAB,
-      ui::PAGE_TRANSITION_LINK, false));
+  GetWebContents().OpenURL(
+      content::OpenURLParams(blocked_url_, content::Referrer(),
+                             WindowOpenDisposition::CURRENT_TAB,
+                             ui::PAGE_TRANSITION_LINK, false),
+      /*navigation_handle_callback=*/{});
 
   if (intervention_callback_)
     std::move(intervention_callback_)

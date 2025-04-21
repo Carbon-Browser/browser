@@ -1,52 +1,65 @@
 #!/usr/bin/env python3
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import argparse
+import hashlib
 import json
-import os
+import pathlib
 
-_PATCH = 'cr2'
-_LATEST_VERSION = '12-robolectric-7732740.' + _PATCH
 # All instrumented jars + latest non-instrumented one.
 _ROBO_URL_FILES = {
-    'android-all-instrumented-12-robolectric-7732740-i3.jar':
-        'https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/12-robolectric-7732740-i3/android-all-instrumented-12-robolectric-7732740-i3.jar',
-    'android-all-instrumented-11-robolectric-6757853-i3.jar':
-        'https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/11-robolectric-6757853-i3/android-all-instrumented-11-robolectric-6757853-i3.jar',
-    'android-all-instrumented-10-robolectric-5803371-i3.jar':
-        'https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/10-robolectric-5803371-i3/android-all-instrumented-10-robolectric-5803371-i3.jar',
-    'android-all-instrumented-9-robolectric-4913185-2-i3.jar':
-        'https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/9-robolectric-4913185-2-i3/android-all-instrumented-9-robolectric-4913185-2-i3.jar',
-    'android-all-instrumented-8.1.0-robolectric-4611349-i3.jar':
-        'https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/8.1.0-robolectric-4611349-i3/android-all-instrumented-8.1.0-robolectric-4611349-i3.jar',
-    'android-all-instrumented-8.0.0_r4-robolectric-r1-i3.jar':
-        'https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/8.0.0_r4-robolectric-r1-i3/android-all-instrumented-8.0.0_r4-robolectric-r1-i3.jar',
-    'android-all-instrumented-7.1.0_r7-robolectric-r1-i3.jar':
-        'https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/7.1.0_r7-robolectric-r1-i3/android-all-instrumented-7.1.0_r7-robolectric-r1-i3.jar',
-    'android-all-instrumented-6.0.1_r3-robolectric-r1-i3.jar':
-        'https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/6.0.1_r3-robolectric-r1-i3/android-all-instrumented-6.0.1_r3-robolectric-r1-i3.jar',
-    'android-all-instrumented-5.0.2_r3-robolectric-r0-i3.jar':
-        'https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/5.0.2_r3-robolectric-r0-i3/android-all-instrumented-5.0.2_r3-robolectric-r0-i3.jar',
-    'android-all-instrumented-4.4_r1-robolectric-r2-i3.jar':
-        'https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/4.4_r1-robolectric-r2-i3/android-all-instrumented-4.4_r1-robolectric-r2-i3.jar',
-    'android-all-12-robolectric-7732740.jar':
-        'https://repo1.maven.org/maven2/org/robolectric/android-all/12-robolectric-7732740/android-all-12-robolectric-7732740.jar',
+    'android-all-15-robolectric-12650502.jar':
+        'https://repo1.maven.org/maven2/org/robolectric/android-all/15-robolectric-12650502/android-all-15-robolectric-12650502.jar',
+    'android-all-instrumented-15-robolectric-12650502-i7.jar':
+        'https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/15-robolectric-12650502-i7/android-all-instrumented-15-robolectric-12650502-i7.jar',
+    'android-all-instrumented-14-robolectric-10818077-i7.jar':
+        'https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/14-robolectric-10818077-i7/android-all-instrumented-14-robolectric-10818077-i7.jar',
+    'android-all-instrumented-13-robolectric-9030017-i7.jar':
+        'https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/13-robolectric-9030017-i7/android-all-instrumented-13-robolectric-9030017-i7.jar',
+    'android-all-instrumented-12.1-robolectric-8229987-i7.jar':
+        'https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/12.1-robolectric-8229987-i7/android-all-instrumented-12.1-robolectric-8229987-i7.jar',
+    'android-all-instrumented-12-robolectric-7732740-i7.jar':
+        'https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/12-robolectric-7732740-i7/android-all-instrumented-12-robolectric-7732740-i7.jar',
+    'android-all-instrumented-11-robolectric-6757853-i7.jar':
+        'https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/11-robolectric-6757853-i7/android-all-instrumented-11-robolectric-6757853-i7.jar',
+    'android-all-instrumented-10-robolectric-5803371-i7.jar':
+        'https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/10-robolectric-5803371-i7/android-all-instrumented-10-robolectric-5803371-i7.jar',
+    'android-all-instrumented-9-robolectric-4913185-2-i7.jar':
+        'https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/9-robolectric-4913185-2-i7/android-all-instrumented-9-robolectric-4913185-2-i7.jar',
+    'android-all-instrumented-8.1.0-robolectric-4611349-i7.jar':
+        'https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/8.1.0-robolectric-4611349-i7/android-all-instrumented-8.1.0-robolectric-4611349-i7.jar',
+    'android-all-instrumented-8.0.0_r4-robolectric-r1-i7.jar':
+        'https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/8.0.0_r4-robolectric-r1-i7/android-all-instrumented-8.0.0_r4-robolectric-r1-i7.jar',
+    'android-all-instrumented-7.1.0_r7-robolectric-r1-i7.jar':
+        'https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/7.1.0_r7-robolectric-r1-i7/android-all-instrumented-7.1.0_r7-robolectric-r1-i7.jar',
+    'android-all-instrumented-7.0.0_r1-robolectric-r1-i7.jar':
+        'https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/7.0.0_r1-robolectric-r1-i7/android-all-instrumented-7.0.0_r1-robolectric-r1-i7.jar',
+    'android-all-instrumented-6.0.1_r3-robolectric-r1-i7.jar':
+        'https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/6.0.1_r3-robolectric-r1-i7/android-all-instrumented-6.0.1_r3-robolectric-r1-i7.jar',
+    'android-all-instrumented-5.0.2_r3-robolectric-r0-i7.jar':
+        'https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/5.0.2_r3-robolectric-r0-i7/android-all-instrumented-5.0.2_r3-robolectric-r0-i7.jar',
 }
 
+
 def do_latest():
-  print(_LATEST_VERSION)
+  # Make the version change every time this file changes.
+  md5 = hashlib.md5()
+  md5.update(pathlib.Path(__file__).read_bytes())
+  file_hash = md5.hexdigest()[:10]
+  # Prefix with the first version from the dict, which should be the
+  # non-instrumented .jar, to make the version string not entirely random.
+  first_file = next(iter(_ROBO_URL_FILES))
+  assert '-instrumented' not in first_file and first_file.endswith('.jar')
+  first_file = first_file[:-len('.jar')]
+  print(f'{first_file}-{file_hash}')
 
 
-def _get_download_url(version):
-  download_urls, name = [], []
-  for robo_name, url in _ROBO_URL_FILES.items():
-    name.append(robo_name)
-    download_urls.append(url)
+def do_get_url():
   partial_manifest = {
-      'url': download_urls,
-      'name': name,
+      'url': list(_ROBO_URL_FILES.values()),
+      'name': list(_ROBO_URL_FILES),
       'ext': '.jar',
   }
   print(json.dumps(partial_manifest))
@@ -54,14 +67,13 @@ def _get_download_url(version):
 
 def main():
   ap = argparse.ArgumentParser()
-  sub = ap.add_subparsers()
+  sub = ap.add_subparsers(required=True)
 
-  latest = sub.add_parser("latest")
+  latest = sub.add_parser('latest')
   latest.set_defaults(func=lambda _opts: do_latest())
 
-  download = sub.add_parser("get_url")
-  download.set_defaults(
-      func=lambda _opts: _get_download_url(os.environ['_3PP_VERSION']))
+  download = sub.add_parser('get_url')
+  download.set_defaults(func=lambda _opts: do_get_url())
 
   opts = ap.parse_args()
   opts.func(opts)
@@ -69,4 +81,3 @@ def main():
 
 if __name__ == '__main__':
   main()
-

@@ -1,20 +1,21 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.components.browser_ui.bottomsheet;
 
-import org.chromium.ui.util.AccessibilityUtil;
+import org.chromium.components.browser_ui.desktop_windowing.DesktopWindowStateManager.AppHeaderObserver;
 
 /**
- * An interface for the owning object to manage interaction between the bottom sheet and the rest
- * of the system.
+ * An interface for the owning object to manage interaction between the bottom sheet and the rest of
+ * the system.
  */
 public interface ManagedBottomSheetController
-        extends BottomSheetController, BottomSheetControllerProvider.Unowned {
+        extends BottomSheetController, BottomSheetControllerProvider.Unowned, AppHeaderObserver {
     /**
      * Temporarily suppress the bottom sheet while other UI is showing. This will not itself change
      * the content displayed by the sheet.
+     *
      * @param reason The reason the sheet was suppressed.
      * @return A token to unsuppress the sheet with.
      */
@@ -43,12 +44,13 @@ public interface ManagedBottomSheetController
 
     /**
      * Set the hidden ratio of the browser controls.
+     *
      * @param ratio The hidden ratio of the browser controls in range [0, 1].
      */
     void setBrowserControlsHiddenRatio(float ratio);
 
-    /** @param accessibilityUtil A mechanism for testing whether accessibility is enabled. */
-    void setAccessibilityUtil(AccessibilityUtil accessibilityUtil);
+    /** Set the current height of the bottom controls. */
+    void setBottomControlsHeight(int bottomControlsHeight);
 
     /** Clean up any state maintained by the controller. */
     void destroy();

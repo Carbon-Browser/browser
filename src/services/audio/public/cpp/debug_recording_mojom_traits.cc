@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,6 @@ EnumTraits<audio::mojom::DebugRecordingStreamType,
       return audio::mojom::DebugRecordingStreamType::kOutput;
   }
   NOTREACHED();
-  return audio::mojom::DebugRecordingStreamType::kInput;
 }
 
 bool EnumTraits<audio::mojom::DebugRecordingStreamType,
@@ -33,7 +32,6 @@ bool EnumTraits<audio::mojom::DebugRecordingStreamType,
       return true;
   }
   NOTREACHED();
-  return false;
 }
 
 }  // namespace mojo

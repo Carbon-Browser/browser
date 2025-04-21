@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,7 +52,8 @@ WMTestHelper::~WMTestHelper() {
 }
 
 aura::Window* WMTestHelper::GetDefaultParent(aura::Window* window,
-                                             const gfx::Rect& bounds) {
+                                             const gfx::Rect& bounds,
+                                             const int64_t display_id) {
   return host_->window();
 }
 

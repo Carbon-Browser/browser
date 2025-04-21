@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,9 +32,7 @@ void KeyboardHookMonitorImpl::NotifyHookRegistered() {
   DCHECK(!is_hook_active_);
 
   is_hook_active_ = true;
-  for (auto& observer : observers_) {
-    observer.OnHookRegistered();
-  }
+  observers_.Notify(&KeyboardHookObserver::OnHookRegistered);
 }
 
 void KeyboardHookMonitorImpl::NotifyHookUnregistered() {
@@ -42,9 +40,7 @@ void KeyboardHookMonitorImpl::NotifyHookUnregistered() {
   DCHECK(is_hook_active_);
 
   is_hook_active_ = false;
-  for (auto& observer : observers_) {
-    observer.OnHookUnregistered();
-  }
+  observers_.Notify(&KeyboardHookObserver::OnHookUnregistered);
 }
 
 // static

@@ -1,12 +1,14 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SIGNIN_CORE_BROWSER_DICE_ACCOUNT_RECONCILOR_DELEGATE_H_
 #define COMPONENTS_SIGNIN_CORE_BROWSER_DICE_ACCOUNT_RECONCILOR_DELEGATE_H_
 
+#include "base/memory/raw_ptr.h"
 #include "components/signin/core/browser/account_reconcilor_delegate.h"
-#include "components/signin/public/base/account_consistency_method.h"
+#include "components/signin/public/base/consent_level.h"
+#include "components/signin/public/base/signin_client.h"
 
 namespace signin {
 
@@ -15,7 +17,8 @@ class IdentityManager;
 // AccountReconcilorDelegate specialized for Dice.
 class DiceAccountReconcilorDelegate : public AccountReconcilorDelegate {
  public:
-  explicit DiceAccountReconcilorDelegate(IdentityManager* identity_manager);
+  DiceAccountReconcilorDelegate(IdentityManager* identity_manager,
+                                SigninClient* signin_client);
 
   DiceAccountReconcilorDelegate(const DiceAccountReconcilorDelegate&) = delete;
   DiceAccountReconcilorDelegate& operator=(
@@ -26,7 +29,8 @@ class DiceAccountReconcilorDelegate : public AccountReconcilorDelegate {
   // AccountReconcilorDelegate:
   bool IsReconcileEnabled() const override;
   gaia::GaiaSource GetGaiaApiSource() const override;
-  void RevokeSecondaryTokensBeforeReconcileIfNeeded() override;
+  void RevokeSecondaryTokensForReconcileIfNeeded(
+      const std::vector<gaia::ListedAccount>& gaia_accounts) override;
   void OnReconcileFinished(const CoreAccountId& first_account) override;
   void OnAccountsCookieDeletedByUserAction(
       bool synced_data_deletion_in_progress) override;
@@ -34,6 +38,20 @@ class DiceAccountReconcilorDelegate : public AccountReconcilorDelegate {
       const std::vector<CoreAccountId>& chrome_accounts,
       const std::vector<gaia::ListedAccount>& gaia_accounts,
       bool first_execution) override;
+  ConsentLevel GetConsentLevelForPrimaryAccount() const override;
+
+  // Returns true if explicit browser sign in is enabled and Chrome isn't signed
+  // in.
+  // In this mode:
+  // - First, refresh tokens that do not have a valid counter account in the
+  //   cookie are revoked.
+  // - Then if needed, the cookie is updated to remove accounts that do not
+  //   have a refresh token. This is possible:
+  //   (1) If the user has signed out from chrome while being offline.
+  //   (2) If an account is moved from a profile to another as part of the
+  //       Sign in interception flows or as a result of merge sync data flow.
+  // Public for testing.
+  bool IsCookieBasedConsistencyMode() const;
 
  private:
   // Possible inconsistency reasons between tokens and gaia cookies.
@@ -52,6 +70,12 @@ class DiceAccountReconcilorDelegate : public AccountReconcilorDelegate {
     kSyncCookieNotFirst = 7,
     kMaxValue = kSyncCookieNotFirst
   };
+
+  // Used when update cookies to match refresh tokens is not allowed, see
+  // `IsUpdateCookieAllowed()`. In this mode, refresh tokens are updated to
+  // match accounts in the Gaia cookies to maintain consistency.
+  void MatchTokensWithAccountsInCookie(
+      const std::vector<gaia::ListedAccount>& gaia_accounts);
 
   // Computes inconsistency reason between tokens and gaia cookies.
   InconsistencyReason GetInconsistencyReason(
@@ -110,6 +134,7 @@ class DiceAccountReconcilorDelegate : public AccountReconcilorDelegate {
       bool first_execution) const;
 
   const raw_ptr<IdentityManager> identity_manager_;
+  const raw_ptr<SigninClient> signin_client_;
 
   // Last known "first account". Used when cookies are lost as a best guess.
   CoreAccountId last_known_first_account_;

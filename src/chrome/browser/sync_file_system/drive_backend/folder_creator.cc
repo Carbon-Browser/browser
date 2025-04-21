@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <stddef.h>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/sync_file_system/drive_backend/drive_backend_util.h"
 #include "chrome/browser/sync_file_system/drive_backend/metadata_database.h"
 #include "components/drive/drive_api_util.h"
@@ -74,8 +74,6 @@ void FolderCreator::DidListFolders(
 
   if (!file_list) {
     NOTREACHED();
-    std::move(callback).Run(std::string(), SYNC_STATUS_FAILED);
-    return;
   }
 
   candidates.reserve(candidates.size() + file_list->items().size());

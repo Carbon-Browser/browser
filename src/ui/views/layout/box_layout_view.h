@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,8 +18,9 @@ class Insets;
 namespace views {
 
 class VIEWS_EXPORT BoxLayoutView : public View {
+  METADATA_HEADER(BoxLayoutView, View)
+
  public:
-  METADATA_HEADER(BoxLayoutView);
   BoxLayoutView();
   BoxLayoutView(BoxLayoutView&) = delete;
   BoxLayoutView& operator=(BoxLayoutView&) = delete;

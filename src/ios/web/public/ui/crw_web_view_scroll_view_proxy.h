@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@
 // needed.
 // The class forwards some of the methods onto the UIScrollView. For more
 // information look at the UIScrollView documentation.
-// TODO(crbug.com/546152): rename class to CRWContentViewScrollViewProxy.
+// TODO(crbug.com/41211285): rename class to CRWContentViewScrollViewProxy.
 @interface CRWWebViewScrollViewProxy : NSObject
 
 @property(nonatomic, readonly, copy) NSArray<__kindof UIView*>* subviews;
@@ -28,10 +28,10 @@
 // Used by the CRWWebViewProxy to set the UIScrollView to be managed.
 - (void)setScrollView:(UIScrollView*)scrollView;
 
-// Adds |observer| to subscribe to change notifications.
+// Adds `observer` to subscribe to change notifications.
 - (void)addObserver:(id<CRWWebViewScrollViewProxyObserver>)observer;
 
-// Removes |observer| as a subscriber for change notifications.
+// Removes `observer` as a subscriber for change notifications.
 - (void)removeObserver:(id<CRWWebViewScrollViewProxyObserver>)observer;
 
 // Returns a scroll view proxy which can be accessed as UIScrollView.

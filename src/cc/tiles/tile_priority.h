@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,8 @@
 #include <string>
 
 #include "base/trace_event/traced_value.h"
+#include "base/tracing/protos/chrome_track_event.pbzero.h"
 #include "cc/cc_export.h"
-#include "third_party/perfetto/protos/perfetto/trace/track_event/chrome_compositor_scheduler_state.pbzero.h"
 
 namespace cc {
 
@@ -36,14 +36,14 @@ std::string TileResolutionToString(TileResolution resolution);
 struct CC_EXPORT TilePriority {
   enum PriorityBin { NOW, SOON, EVENTUALLY };
 
-  TilePriority()
+  constexpr TilePriority()
       : resolution(NON_IDEAL_RESOLUTION),
         priority_bin(EVENTUALLY),
         distance_to_visible(std::numeric_limits<float>::infinity()) {}
 
-  TilePriority(TileResolution resolution,
-               PriorityBin bin,
-               float distance_to_visible)
+  constexpr TilePriority(TileResolution resolution,
+                         PriorityBin bin,
+                         float distance_to_visible)
       : resolution(resolution),
         priority_bin(bin),
         distance_to_visible(distance_to_visible) {}
@@ -94,8 +94,9 @@ enum TreePriority {
 // TODO(nuskos): remove TreePriorityToString once we have a utility function to
 // take protozero to strings.
 std::string TreePriorityToString(TreePriority prio);
-perfetto::protos::pbzero::ChromeCompositorStateMachine::MinorState::TreePriority
-TreePriorityToProtozeroEnum(TreePriority priority);
+perfetto::protos::pbzero::ChromeCompositorStateMachineV2::MinorStateV2::
+    TreePriority
+    TreePriorityToProtozeroEnum(TreePriority priority);
 
 class GlobalStateThatImpactsTilePriority {
  public:

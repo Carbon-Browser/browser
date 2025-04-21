@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 #include <utility>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_descriptor_watcher_posix.h"
+#include "base/functional/bind.h"
 #include "base/message_loop/message_pump_for_io.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/run_loop.h"

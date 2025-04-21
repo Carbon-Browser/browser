@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -85,7 +85,6 @@ void TilingSetEvictionQueue::AdvancePhase() {
     switch (phase_) {
       case EVENTUALLY_RECT:
         NOTREACHED();
-        break;
       case SOON_BORDER_RECT:
         soon_iterator_ = SoonBorderTilingIterator(&tilings_, tree_);
         if (!soon_iterator_.done())

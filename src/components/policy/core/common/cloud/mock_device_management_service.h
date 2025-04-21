@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,10 +14,6 @@
 #include "components/policy/core/common/cloud/dmserver_job_configurations.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "testing/gmock/include/gmock/gmock.h"
-
-namespace network {
-class SharedURLLoaderFactory;
-}
 
 namespace policy {
 
@@ -38,8 +34,6 @@ class MockDeviceManagementServiceConfiguration
   std::string GetPlatformParameter() const override;
   std::string GetRealtimeReportingServerUrl() const override;
   std::string GetEncryptedReportingServerUrl() const override;
-  std::string GetReportingConnectorServerUrl(
-      content::BrowserContext* context) const override;
 
  private:
   const std::string server_url_;
@@ -148,18 +142,10 @@ class FakeJobConfiguration : public DMServerJobConfiguration {
                                        const std::string& response_body)>
       RetryCallback;
 
-  explicit FakeJobConfiguration(DeviceManagementService* service);
-  FakeJobConfiguration(
-      DeviceManagementService* service,
-      JobType type,
-      const std::string& client_id,
-      bool critical,
-      DMAuth auth_data,
-      absl::optional<std::string> oauth_token,
-      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-      FakeCallback callback,
-      RetryCallback retry_callback,
-      RetryCallback should_retry_callback);
+  FakeJobConfiguration(DMServerJobConfiguration::CreateParams params,
+                       FakeCallback callback,
+                       RetryCallback retry_callback,
+                       RetryCallback should_retry_callback);
   ~FakeJobConfiguration() override;
 
   void SetRequestPayload(const std::string& request_payload);

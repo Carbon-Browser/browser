@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/time/clock.h"
 #include "base/time/default_clock.h"
+#include "base/uuid.h"
 #include "components/gcm_driver/gcm_driver_desktop.h"
 #include "google_apis/gcm/engine/gcm_store.h"
 
@@ -37,7 +37,7 @@ const char kGCMSendToGaiaIdAppIdKey[] = "gcmb";
 
 
 std::string GenerateMessageID() {
-  return base::GenerateGUID();
+  return base::Uuid::GenerateRandomV4().AsLowercaseString();
 }
 
 }  // namespace
@@ -106,34 +106,6 @@ void GCMAccountMapper::SetAccountTokens(
       account_mapping->access_token = token_iter->access_token;
     }
   }
-
-  // Decide what to do with each account (either start mapping, or start
-  // removing).
-  for (auto mappings_iter = accounts_.begin(); mappings_iter != accounts_.end();
-       ++mappings_iter) {
-    if (mappings_iter->access_token.empty()) {
-      // Send a remove message if the account was not previously being removed,
-      // or it doesn't have a pending message, or the pending message is
-      // already expired, but OnSendError event was lost.
-      if (mappings_iter->status != AccountMapping::REMOVING ||
-          mappings_iter->last_message_id.empty() ||
-          IsLastStatusChangeOlderThanTTL(*mappings_iter)) {
-        SendRemoveMappingMessage(*mappings_iter);
-      }
-    } else {
-      // A message is sent for all of the mappings considered NEW, or mappings
-      // that are ADDING, but have expired message (OnSendError event lost), or
-      // for those mapped accounts that can be refreshed.
-      if (mappings_iter->status == AccountMapping::NEW ||
-          (mappings_iter->status == AccountMapping::ADDING &&
-           IsLastStatusChangeOlderThanTTL(*mappings_iter)) ||
-          (mappings_iter->status == AccountMapping::MAPPED &&
-           CanTriggerUpdate(mappings_iter->status_change_timestamp))) {
-        mappings_iter->last_message_id.clear();
-        SendAddMappingMessage(*mappings_iter);
-      }
-    }
-  }
 }
 
 void GCMAccountMapper::ShutdownHandler() {
@@ -144,7 +116,7 @@ void GCMAccountMapper::ShutdownHandler() {
 }
 
 void GCMAccountMapper::OnStoreReset() {
-  // TODO(crbug.com/661660): Tell server to remove the mapping. But can't use
+  // TODO(crbug.com/40491756): Tell server to remove the mapping. But can't use
   // upstream GCM send for that since the store got reset.
   ShutdownHandler();
 }

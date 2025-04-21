@@ -1,38 +1,39 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//build/config/rust.gni")
 import("//build/rust/rust_bindgen.gni")
 import("//build/rust/rust_static_library.gni")
-import("//build/rust/rust_unit_test.gni")
-import("//build/rust/rust_unit_tests_group.gni")
+import("//mojo/public/tools/bindings/mojom.gni")
+import("//testing/test.gni")
 
 # Meta target to build everything
-group("rust") {
-  deps = [ ":mojo_rust" ]
+group("mojo_rust") {
+  deps = [ ":mojo" ]
 }
 
-# Meta target to build test binaries, if supported.
-rust_unit_tests_group("mojo_rust_tests") {
-  deps = []
-  if (can_build_rust_unit_tests) {
-    deps += [ ":mojo_rust_unittests" ]
-  }
-  if (rustc_can_link) {
-    deps += [ ":mojo_rust_extra_tests" ]
-  }
-}
-
-static_library("c_test_support") {
-  testonly = true
-  sources = [ "test_support.cc" ]
+# These tests require real mojo and can't be mixed with test-only mojo. Mojo can
+# only be initialized once per process, and can't change modes.
+test("mojo_rust_integration_unittests") {
   deps = [
-    "//base",
-    "//mojo/core/embedder",
-    "//mojo/public/cpp/bindings/tests:mojo_public_bindings_test_utils",
+    "//base/test:run_all_unittests",
+    "//mojo/public/rust/tests:mojo_rust_system_tests",
+    "//testing/gtest",
   ]
-  visibility = [ ":*" ]
+}
+
+# These tests use stubbed out test-only mojo and can't be mixed with real mojo.
+# Mojo can only be initialized once per process, and can't change modes.
+test("mojo_rust_unittests") {
+  deps = [
+    "//base/test:run_all_unittests",
+    "//testing/gtest",
+  ]
+
+  if (enable_rust_mojom_bindings) {
+    deps += [ "//mojo/public/rust/tests:mojo_rust_bindings_tests" ]
+  }
 }
 
 source_set("mojo_c_system_wrapper") {
@@ -47,31 +48,23 @@ rust_bindgen("mojo_c_system_binding") {
   visibility = [ ":*" ]
 }
 
-rust_static_library("mojo_rust") {
-  crate_root = "lib.rs"
-  unit_test_target =
-      "mojo_rust_unittests"  # avoids conflict with C++ target elsewhere
-  crate_name = "mojo"
-  edition = "2018"
+rust_static_library("mojo_system") {
+  crate_root = "system/lib.rs"
+  allow_unsafe = true
 
-  # TODO(danakj): Move to a gtest target.
-  build_native_rust_unit_tests = true
+  # This should be removed; we should not rely on unstable features. But it's in
+  # experimental code and won't block compiler rolls. If it becomes a problem
+  # just disable the whole build target.
+  configs -= [ "//build/config/compiler:disallow_unstable_features" ]
+  rustflags = [ "-Zallow-features=maybe_uninit_slice" ]
+
   sources = [
-    "bindings/decoding.rs",
-    "bindings/encoding.rs",
-    "bindings/macros.rs",
-    "bindings/message.rs",
-    "bindings/mod.rs",
-    "bindings/mojom.rs",
-    "bindings/run_loop.rs",
-    "bindings/util.rs",
-    "lib.rs",
     "system/core.rs",
     "system/data_pipe.rs",
     "system/ffi.rs",
     "system/handle.rs",
+    "system/lib.rs",
     "system/message_pipe.rs",
-    "system/mod.rs",
     "system/mojo_types.rs",
     "system/shared_buffer.rs",
     "system/trap.rs",
@@ -82,28 +75,55 @@ rust_static_library("mojo_rust") {
   deps = [
     ":mojo_c_system_binding",
     ":mojo_c_system_wrapper",
-    "//third_party/rust/bitflags/v1:lib",
+    "//mojo/public/c/system",
+    "//third_party/rust/bitflags/v2:lib",
   ]
 
-  bindgen_output = get_target_outputs(":mojo_c_system_binding")
-  inputs = bindgen_output
-  rustenv = [ "BINDGEN_RS_FILE=" + rebase_path(bindgen_output[0]) ]
+  # TODO(crbug.com/369430130): reenable this warning.
+  rustflags += [ "-Aimproper-ctypes" ]
 }
 
-if (rustc_can_link) {
-  rust_unit_test("mojo_rust_extra_tests") {
-    testonly = true
-    crate_root = "tests/lib.rs"
-    edition = "2018"
-    sources = [
-      "tests/integration.rs",
-      "tests/lib.rs",
-    ]
-    deps = [
-      ":c_test_support",
-      ":mojo_rust",
-      "//mojo/public/c/system",
-      "//third_party/rust/lazy_static/v1:lib",
-    ]
-  }
+rust_static_library("mojo_system_test_support") {
+  testonly = true
+  crate_root = "system/test_support/lib.rs"
+
+  # Calls Mojo FFI functions.
+  allow_unsafe = true
+
+  sources = [ "system/test_support/lib.rs" ]
+
+  deps = [
+    ":mojo_system",
+    "//mojo/public/c/system",
+  ]
+}
+
+rust_static_library("mojo_bindings") {
+  crate_root = "bindings/lib.rs"
+  allow_unsafe = true
+
+  sources = [
+    "bindings/data.rs",
+    "bindings/lib.rs",
+    "bindings/mojom.rs",
+  ]
+
+  deps = [
+    ":mojo_system",
+    "//third_party/rust/bitflags/v2:lib",
+    "//third_party/rust/bytemuck/v1:lib",
+    "//third_party/rust/static_assertions/v1:lib",
+  ]
+}
+
+# Convenience target to link both Mojo Rust components and reexport them under a
+# single `mojo` name.
+rust_static_library("mojo") {
+  crate_root = "lib.rs"
+
+  sources = [ "lib.rs" ]
+  deps = [
+    ":mojo_bindings",
+    ":mojo_system",
+  ]
 }

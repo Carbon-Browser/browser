@@ -1,8 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.base;
+
+import static org.chromium.chrome.browser.base.SplitCompatApplication.CHROME_SPLIT_NAME;
 
 import android.app.job.JobParameters;
 import android.app.job.JobService;
@@ -20,7 +22,7 @@ public class SplitCompatJobService extends JobService {
     private Impl mImpl;
 
     public SplitCompatJobService(String serviceClassName) {
-        mServiceClassName = serviceClassName;
+        this(serviceClassName, CHROME_SPLIT_NAME);
     }
 
     public SplitCompatJobService(String serviceClassName, String splitName) {
@@ -29,16 +31,18 @@ public class SplitCompatJobService extends JobService {
     }
 
     @Override
-    protected void attachBaseContext(Context context) {
+    protected void attachBaseContext(Context baseContext) {
+        String splitToLoad = CHROME_SPLIT_NAME;
         // Make sure specified split is installed, otherwise fall back to chrome split.
-        if (mSplitName != null && BundleUtils.isIsolatedSplitInstalled(context, mSplitName)) {
-            context = BundleUtils.createIsolatedSplitContext(context, mSplitName);
-        } else {
-            context = SplitCompatApplication.createChromeContext(context);
+        if (BundleUtils.isIsolatedSplitInstalled(mSplitName)) {
+            splitToLoad = mSplitName;
         }
-        mImpl = (Impl) BundleUtils.newInstance(context, mServiceClassName);
+        mImpl =
+                (Impl)
+                        SplitCompatUtils.loadClassAndAdjustContext(
+                                baseContext, mServiceClassName, splitToLoad);
         mImpl.setService(this);
-        super.attachBaseContext(context);
+        super.attachBaseContext(baseContext);
     }
 
     @Override
@@ -66,6 +70,7 @@ public class SplitCompatJobService extends JobService {
         }
 
         public abstract boolean onStartJob(JobParameters params);
+
         public abstract boolean onStopJob(JobParameters params);
     }
 }

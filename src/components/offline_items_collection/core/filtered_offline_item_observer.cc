@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,7 +54,7 @@ void FilteredOfflineItemObserver::OnItemRemoved(const ContentId& id) {
 
 void FilteredOfflineItemObserver::OnItemUpdated(
     const OfflineItem& item,
-    const absl::optional<UpdateDelta>& update_delta) {
+    const std::optional<UpdateDelta>& update_delta) {
   auto it = observers_.find(item.id);
   if (it == observers_.end())
     return;

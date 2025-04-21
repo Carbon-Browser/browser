@@ -1,17 +1,19 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_GFX_GEOMETRY_TRANSFORM_OPERATION_H_
 #define UI_GFX_GEOMETRY_TRANSFORM_OPERATION_H_
 
-#include "ui/gfx/geometry/geometry_skia_export.h"
+// TODO(crbug.com/40237414): Remove dependency to Skia.
+#include "base/component_export.h"
+#include "third_party/skia/include/core/SkScalar.h"
 #include "ui/gfx/geometry/transform.h"
 
 namespace gfx {
 class BoxF;
 
-struct GEOMETRY_SKIA_EXPORT TransformOperation {
+struct COMPONENT_EXPORT(GEOMETRY_SKIA) TransformOperation {
   enum Type {
     TRANSFORM_OPERATION_TRANSLATE,
     TRANSFORM_OPERATION_ROTATE,

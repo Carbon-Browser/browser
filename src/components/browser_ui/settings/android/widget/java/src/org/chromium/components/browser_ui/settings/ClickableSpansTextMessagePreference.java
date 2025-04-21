@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,9 +25,7 @@ public class ClickableSpansTextMessagePreference extends ChromeBasePreference {
     private TextViewWithClickableSpans mTitleView;
     private TextViewWithClickableSpans mSummaryView;
 
-    /**
-     * Constructor for inflating from XML.
-     */
+    /** Constructor for inflating from XML. */
     public ClickableSpansTextMessagePreference(Context context, AttributeSet attrs) {
         super(context, attrs);
         setLayoutResource(R.layout.clickable_spans_text_message_preference_layout);

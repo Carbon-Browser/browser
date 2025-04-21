@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,15 @@
 #include <utility>
 #include <vector>
 
-#include "ash/services/nearby/public/mojom/nearby_share_target_types.mojom.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/time/time.h"
 #include "chrome/browser/nearby_sharing/attachment.h"
-#include "chrome/browser/nearby_sharing/logging/logging.h"
+#include "chrome/browser/nearby_sharing/nearby_notification_manager.h"
 #include "chrome/browser/nearby_sharing/nearby_sharing_service_factory.h"
+#include "chrome/browser/nearby_sharing/share_target.h"
 #include "chrome/browser/nearby_sharing/text_attachment.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_share_target_types.mojom.h"
+#include "components/cross_device/logging/logging.h"
 
 namespace {
 
@@ -38,6 +40,10 @@ const char kIsScanning[] = "isScanning";
 const char kIsSending[] = "isSending";
 const char kIsTransferring[] = "isTransferring";
 
+// KFields used in ShowReceiveNotification.
+const char kShareTargetFakeFullName[] = "Daniel's Rotom";
+const char kTextAttachmentFakeBodyText[] = "Long text that should be truncated";
+
 // TriggerEvents in alphabetical order.
 enum class TriggerEvent {
   kAccept,
@@ -54,7 +60,8 @@ enum class TriggerEvent {
 };
 
 base::Value GetJavascriptTimestamp() {
-  return base::Value(base::Time::Now().ToJsTimeIgnoringNull());
+  return base::Value(
+      base::Time::Now().InMillisecondsFSinceUnixEpochIgnoringNull());
 }
 
 std::string StatusCodeToString(
@@ -167,30 +174,30 @@ std::string TransferUpdateMetaDataToString(
 
 // Converts |status_code| to a raw dictionary value used as a JSON argument
 // to JavaScript functions.
-base::Value StatusCodeToDictionary(
+base::Value::Dict StatusCodeToDictionary(
     const NearbySharingService::StatusCodes status_code,
     TriggerEvent trigger_event) {
   base::Value::Dict dictionary;
   dictionary.Set(kStatusCodeKey, StatusCodeToString(status_code));
   dictionary.Set(kTriggerEventKey, TriggerEventToString(trigger_event));
   dictionary.Set(kTimeStampKey, GetJavascriptTimestamp());
-  return base::Value(std::move(dictionary));
+  return dictionary;
 }
 
 // Converts |share_target| to a raw dictionary value used as a JSON argument
 // to JavaScript functions.
-base::Value ShareTargetToDictionary(const ShareTarget share_target) {
+base::Value::Dict ShareTargetToDictionary(const ShareTarget share_target) {
   base::Value::Dict share_target_dictionary;
   share_target_dictionary.Set(kShareTargetDeviceNamesKey,
                               share_target.device_name);
   share_target_dictionary.Set(kShareTargetIdKey, share_target.id.ToString());
   share_target_dictionary.Set(kTimeStampKey, GetJavascriptTimestamp());
-  return base::Value(std::move(share_target_dictionary));
+  return share_target_dictionary;
 }
 
 // Converts |id_to_share_target_map| to a raw dictionary value used as a JSON
 // argument to JavaScript functions.
-base::Value ShareTargetMapToList(
+base::Value::List ShareTargetMapToList(
     const base::flat_map<std::string, ShareTarget>& id_to_share_target_map) {
   base::Value::List share_target_list;
   share_target_list.reserve(id_to_share_target_map.size());
@@ -199,12 +206,12 @@ base::Value ShareTargetMapToList(
     share_target_list.Append(ShareTargetToDictionary(it.second));
   }
 
-  return base::Value(std::move(share_target_list));
+  return share_target_list;
 }
 
 // Converts |transfer_metadata| to a raw dictionary value used as a JSON
 // argument to JavaScript functions.
-base::Value TransferUpdateToDictionary(
+base::Value::Dict TransferUpdateToDictionary(
     const ShareTarget& share_target,
     const TransferMetadata& transfer_metadata) {
   base::Value::Dict dictionary;
@@ -213,15 +220,15 @@ base::Value TransferUpdateToDictionary(
   dictionary.Set(kTimeStampKey, GetJavascriptTimestamp());
   dictionary.Set(kShareTargetDeviceNamesKey, share_target.device_name);
   dictionary.Set(kShareTargetIdKey, share_target.id.ToString());
-  return base::Value(std::move(dictionary));
+  return dictionary;
 }
 
-base::Value StatusBooleansToDictionary(const bool is_scanning,
-                                       const bool is_transferring,
-                                       const bool is_receiving_files,
-                                       const bool is_sending_files,
-                                       const bool is_conecting,
-                                       const bool is_in_high_visibility) {
+base::Value::Dict StatusBooleansToDictionary(const bool is_scanning,
+                                             const bool is_transferring,
+                                             const bool is_receiving_files,
+                                             const bool is_sending_files,
+                                             const bool is_conecting,
+                                             const bool is_in_high_visibility) {
   base::Value::Dict dictionary;
   dictionary.Set(kIsScanning, is_scanning);
   dictionary.Set(kIsTransferring, is_transferring);
@@ -230,7 +237,7 @@ base::Value StatusBooleansToDictionary(const bool is_scanning,
   dictionary.Set(kIsConnecting, is_conecting);
   dictionary.Set(kIsInHighVisibility, is_in_high_visibility);
   dictionary.Set(kTimeStampKey, GetJavascriptTimestamp());
-  return base::Value(std::move(dictionary));
+  return dictionary;
 }
 
 }  // namespace
@@ -296,6 +303,11 @@ void NearbyInternalsUiTriggerHandler::RegisterMessages() {
       "getStates",
       base::BindRepeating(&NearbyInternalsUiTriggerHandler::GetState,
                           base::Unretained(this)));
+  web_ui()->RegisterMessageCallback(
+      "showNearbyShareReceivedNotification",
+      base::BindRepeating(
+          &NearbyInternalsUiTriggerHandler::ShowReceivedNotification,
+          base::Unretained(this)));
 }
 
 void NearbyInternalsUiTriggerHandler::InitializeContents(
@@ -308,7 +320,7 @@ void NearbyInternalsUiTriggerHandler::RegisterSendSurfaceForeground(
   NearbySharingService* service_ =
       NearbySharingServiceFactory::GetForBrowserContext(context_);
   if (!service_) {
-    NS_LOG(ERROR) << "No NearbyShareService instance to call.";
+    CD_LOG(ERROR, Feature::NS) << "No NearbyShareService instance to call.";
     return;
   }
 
@@ -326,7 +338,7 @@ void NearbyInternalsUiTriggerHandler::RegisterSendSurfaceBackground(
   NearbySharingService* service_ =
       NearbySharingServiceFactory::GetForBrowserContext(context_);
   if (!service_) {
-    NS_LOG(ERROR) << "No NearbyShareService instance to call.";
+    CD_LOG(ERROR, Feature::NS) << "No NearbyShareService instance to call.";
     return;
   }
 
@@ -344,7 +356,7 @@ void NearbyInternalsUiTriggerHandler::UnregisterSendSurface(
   NearbySharingService* service_ =
       NearbySharingServiceFactory::GetForBrowserContext(context_);
   if (!service_) {
-    NS_LOG(ERROR) << "No NearbyShareService instance to call.";
+    CD_LOG(ERROR, Feature::NS) << "No NearbyShareService instance to call.";
     return;
   }
 
@@ -360,7 +372,7 @@ void NearbyInternalsUiTriggerHandler::RegisterReceiveSurfaceForeground(
   NearbySharingService* service_ =
       NearbySharingServiceFactory::GetForBrowserContext(context_);
   if (!service_) {
-    NS_LOG(ERROR) << "No NearbyShareService instance to call.";
+    CD_LOG(ERROR, Feature::NS) << "No NearbyShareService instance to call.";
     return;
   }
 
@@ -378,7 +390,7 @@ void NearbyInternalsUiTriggerHandler::RegisterReceiveSurfaceBackground(
   NearbySharingService* service_ =
       NearbySharingServiceFactory::GetForBrowserContext(context_);
   if (!service_) {
-    NS_LOG(ERROR) << "No NearbyShareService instance to call.";
+    CD_LOG(ERROR, Feature::NS) << "No NearbyShareService instance to call.";
     return;
   }
 
@@ -396,7 +408,7 @@ void NearbyInternalsUiTriggerHandler::UnregisterReceiveSurface(
   NearbySharingService* service_ =
       NearbySharingServiceFactory::GetForBrowserContext(context_);
   if (!service_) {
-    NS_LOG(ERROR) << "No NearbyShareService instance to call.";
+    CD_LOG(ERROR, Feature::NS) << "No NearbyShareService instance to call.";
     return;
   }
 
@@ -462,22 +474,22 @@ void NearbyInternalsUiTriggerHandler::SendText(const base::Value::List& args) {
   NearbySharingService* service_ =
       NearbySharingServiceFactory::GetForBrowserContext(context_);
   if (!service_) {
-    NS_LOG(ERROR) << "No NearbyShareService instance to call.";
+    CD_LOG(ERROR, Feature::NS) << "No NearbyShareService instance to call.";
     return;
   }
 
   std::string share_target_id = args[1].GetString();
   auto it = id_to_share_target_map_.find(share_target_id);
   if (it == id_to_share_target_map_.end()) {
-    NS_LOG(ERROR) << "Invalid ShareTarget ID " << share_target_id
-                  << " for SendText.";
+    CD_LOG(ERROR, Feature::NS)
+        << "Invalid ShareTarget ID " << share_target_id << " for SendText.";
     return;
   }
 
   std::vector<std::unique_ptr<Attachment>> attachments;
   attachments.push_back(std::make_unique<TextAttachment>(
-      TextAttachment::Type::kText, kPayloadExample, /*title=*/absl::nullopt,
-      /*mime_type=*/absl::nullopt));
+      TextAttachment::Type::kText, kPayloadExample, /*title=*/std::nullopt,
+      /*mime_type=*/std::nullopt));
 
   const base::Value& callback_id = args[0];
   ResolveJavascriptCallback(
@@ -491,15 +503,15 @@ void NearbyInternalsUiTriggerHandler::Accept(const base::Value::List& args) {
   NearbySharingService* service_ =
       NearbySharingServiceFactory::GetForBrowserContext(context_);
   if (!service_) {
-    NS_LOG(ERROR) << "No NearbyShareService instance to call.";
+    CD_LOG(ERROR, Feature::NS) << "No NearbyShareService instance to call.";
     return;
   }
 
   std::string share_target_id = args[0].GetString();
   auto it = id_to_share_target_map_.find(share_target_id);
   if (it == id_to_share_target_map_.end()) {
-    NS_LOG(ERROR) << "Invalid ShareTarget ID " << share_target_id
-                  << " for Accept.";
+    CD_LOG(ERROR, Feature::NS)
+        << "Invalid ShareTarget ID " << share_target_id << " for Accept.";
     return;
   }
 
@@ -513,15 +525,15 @@ void NearbyInternalsUiTriggerHandler::Open(const base::Value::List& args) {
   NearbySharingService* service_ =
       NearbySharingServiceFactory::GetForBrowserContext(context_);
   if (!service_) {
-    NS_LOG(ERROR) << "No NearbyShareService instance to call.";
+    CD_LOG(ERROR, Feature::NS) << "No NearbyShareService instance to call.";
     return;
   }
 
   std::string share_target_id = args[0].GetString();
   auto it = id_to_share_target_map_.find(share_target_id);
   if (it == id_to_share_target_map_.end()) {
-    NS_LOG(ERROR) << "Invalid ShareTarget ID " << share_target_id
-                  << " for Open.";
+    CD_LOG(ERROR, Feature::NS)
+        << "Invalid ShareTarget ID " << share_target_id << " for Open.";
     return;
   }
 
@@ -534,15 +546,15 @@ void NearbyInternalsUiTriggerHandler::Reject(const base::Value::List& args) {
   NearbySharingService* service_ =
       NearbySharingServiceFactory::GetForBrowserContext(context_);
   if (!service_) {
-    NS_LOG(ERROR) << "No NearbyShareService instance to call.";
+    CD_LOG(ERROR, Feature::NS) << "No NearbyShareService instance to call.";
     return;
   }
 
   std::string share_target_id = args[0].GetString();
   auto it = id_to_share_target_map_.find(share_target_id);
   if (it == id_to_share_target_map_.end()) {
-    NS_LOG(ERROR) << "Invalid ShareTarget ID " << share_target_id
-                  << " for Reject.";
+    CD_LOG(ERROR, Feature::NS)
+        << "Invalid ShareTarget ID " << share_target_id << " for Reject.";
     return;
   }
 
@@ -556,15 +568,15 @@ void NearbyInternalsUiTriggerHandler::Cancel(const base::Value::List& args) {
   NearbySharingService* service_ =
       NearbySharingServiceFactory::GetForBrowserContext(context_);
   if (!service_) {
-    NS_LOG(ERROR) << "No NearbyShareService instance to call.";
+    CD_LOG(ERROR, Feature::NS) << "No NearbyShareService instance to call.";
     return;
   }
 
   std::string share_target_id = args[0].GetString();
   auto it = id_to_share_target_map_.find(share_target_id);
   if (it == id_to_share_target_map_.end()) {
-    NS_LOG(ERROR) << "Invalid ShareTarget ID " << share_target_id
-                  << " for Cancel.";
+    CD_LOG(ERROR, Feature::NS)
+        << "Invalid ShareTarget ID " << share_target_id << " for Cancel.";
     return;
   }
 
@@ -578,7 +590,7 @@ void NearbyInternalsUiTriggerHandler::GetState(const base::Value::List& args) {
   NearbySharingService* service_ =
       NearbySharingServiceFactory::GetForBrowserContext(context_);
   if (!service_) {
-    NS_LOG(ERROR) << "No NearbyShareService instance to call.";
+    CD_LOG(ERROR, Feature::NS) << "No NearbyShareService instance to call.";
     return;
   }
 
@@ -589,4 +601,34 @@ void NearbyInternalsUiTriggerHandler::GetState(const base::Value::List& args) {
           service_->IsScanning(), service_->IsTransferring(),
           service_->IsReceivingFile(), service_->IsSendingFile(),
           service_->IsConnecting(), service_->IsInHighVisibility()));
+}
+
+void NearbyInternalsUiTriggerHandler::ShowReceivedNotification(
+    const base::Value::List& args) {
+  NearbySharingService* service =
+      NearbySharingServiceFactory::GetForBrowserContext(context_);
+  if (!service) {
+    CD_LOG(ERROR, Feature::NS) << "No NearbyShareService instance to call.";
+    return;
+  }
+
+  NearbyNotificationManager* manager = service->GetNotificationManager();
+
+  if (!manager) {
+    CD_LOG(ERROR, Feature::NS)
+        << "No NearbyNotificationManager instance to call.";
+    return;
+  }
+
+  // Create a share target with a fake text attachment.
+  TextAttachment attachment(TextAttachment::Type::kText,
+                            kTextAttachmentFakeBodyText,
+                            /*title=*/std::nullopt,
+                            /*mime_type=*/std::nullopt);
+  ShareTarget target;
+  target.is_incoming = true;
+  target.device_name = kShareTargetFakeFullName;
+  attachment.MoveToShareTarget(target);
+
+  manager->ShowSuccess(target);
 }

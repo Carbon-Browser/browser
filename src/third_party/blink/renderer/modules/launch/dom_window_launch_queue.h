@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,10 +25,10 @@ class DOMWindowLaunchQueue final
  public:
   static const char kSupplementName[];
 
-  explicit DOMWindowLaunchQueue();
+  explicit DOMWindowLaunchQueue(LocalDOMWindow& window);
 
   // IDL Interface.
-  static Member<LaunchQueue> launchQueue(LocalDOMWindow&);
+  static LaunchQueue* launchQueue(LocalDOMWindow&);
 
   static void UpdateLaunchFiles(LocalDOMWindow*,
                                 HeapVector<Member<FileSystemHandle>>);

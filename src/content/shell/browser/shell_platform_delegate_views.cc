@@ -1,19 +1,23 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/342213636): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <stddef.h>
 
 #include <algorithm>
 #include <memory>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "content/public/browser/context_factory.h"
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/web_contents.h"
@@ -43,9 +47,9 @@
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_delegate.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 #include "ui/wm/test/wm_test_helper.h"
-#else  // !BUILDFLAG(IS_CHROMEOS_ASH)
+#else  // !BUILDFLAG(IS_CHROMEOS)
 #include "ui/display/screen.h"
 #include "ui/views/widget/desktop_aura/desktop_screen.h"
 #include "ui/wm/core/wm_state.h"
@@ -61,11 +65,11 @@ namespace content {
 struct ShellPlatformDelegate::ShellData {
   gfx::Size content_size;
   // Self-owned Widget, destroyed through CloseNow().
-  views::Widget* window_widget = nullptr;
+  raw_ptr<views::Widget> window_widget = nullptr;
 };
 
 struct ShellPlatformDelegate::PlatformData {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   std::unique_ptr<wm::WMTestHelper> wm_test_helper;
 #else
   std::unique_ptr<wm::WMState> wm_state;
@@ -81,9 +85,9 @@ namespace {
 // Maintain the UI controls and web view for content shell
 class ShellView : public views::BoxLayoutView,
                   public views::TextfieldController {
- public:
-  METADATA_HEADER(ShellView);
+  METADATA_HEADER(ShellView, views::BoxLayoutView)
 
+ public:
   enum UIControl { BACK_BUTTON, FORWARD_BUTTON, STOP_BUTTON };
 
   explicit ShellView(Shell* shell) : shell_(shell) { InitShellWindow(); }
@@ -99,9 +103,11 @@ class ShellView : public views::BoxLayoutView,
   void SetWebContents(WebContents* web_contents, const gfx::Size& size) {
     // If there was a previous WebView in this Shell it should be removed and
     // deleted.
-    if (web_view_)
-      contents_view_->RemoveChildViewT(web_view_.get());
-
+    if (web_view_) {
+      // ExtractAsDangling clears the underlying pointer and returns another
+      // raw_ptr instance that is allowed to dangle.
+      contents_view_->RemoveChildViewT(web_view_.ExtractAsDangling().get());
+    }
     views::Builder<views::View>(contents_view_)
         .AddChild(views::Builder<views::WebView>()
                       .CopyAddressTo(&web_view_)
@@ -114,12 +120,12 @@ class ShellView : public views::BoxLayoutView,
 
     // Resize the widget, keeping the same origin.
     gfx::Rect bounds = GetWidget()->GetWindowBoundsInScreen();
-    bounds.set_size(GetWidget()->GetRootView()->GetPreferredSize());
+    bounds.set_size(GetWidget()->GetRootView()->GetPreferredSize({}));
     GetWidget()->SetBounds(bounds);
 
     // Resizing a widget on chromeos doesn't automatically resize the root, need
     // to explicitly do that.
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
     GetWidget()->GetNativeWindow()->GetHost()->SetBoundsInPixels(bounds);
 #endif
   }
@@ -142,7 +148,7 @@ class ShellView : public views::BoxLayoutView,
   void InitShellWindow() {
     auto toolbar_button_rule = [](const views::View* view,
                                   const views::SizeBounds& size_bounds) {
-      gfx::Size preferred_size = view->GetPreferredSize();
+      gfx::Size preferred_size = view->GetPreferredSize({});
       if (size_bounds != views::SizeBounds() &&
           size_bounds.width().is_bounded()) {
         preferred_size.set_width(std::max(
@@ -208,6 +214,7 @@ class ShellView : public views::BoxLayoutView,
                       .SetProperty(
                           views::kFlexBehaviorKey,
                           views::FlexSpecification(
+                              views::LayoutOrientation::kHorizontal,
                               views::MinimumFlexSizeRule::kScaleToMinimum,
                               views::MaximumFlexSizeRule::kUnbounded))
                       // Left padding  = 2, Right padding = 2
@@ -249,8 +256,8 @@ class ShellView : public views::BoxLayoutView,
                        const std::u16string& new_contents) override {}
   bool HandleKeyEvent(views::Textfield* sender,
                       const ui::KeyEvent& key_event) override {
-    if (key_event.type() == ui::ET_KEY_PRESSED && sender == url_entry_ &&
-        key_event.key_code() == ui::VKEY_RETURN) {
+    if (key_event.type() == ui::EventType::kKeyPressed &&
+        sender == url_entry_ && key_event.key_code() == ui::VKEY_RETURN) {
       std::string text = base::UTF16ToUTF8(url_entry_->GetText());
       GURL url(text);
       if (!url.has_scheme()) {
@@ -304,10 +311,10 @@ class ShellView : public views::BoxLayoutView,
 
   // Contents view contains the web contents view
   raw_ptr<views::View> contents_view_ = nullptr;
-  raw_ptr<views::WebView, DanglingUntriaged> web_view_ = nullptr;
+  raw_ptr<views::WebView> web_view_ = nullptr;
 };
 
-BEGIN_METADATA(ShellView, views::View)
+BEGIN_METADATA(ShellView)
 END_METADATA
 
 ShellView* ShellViewForWidget(views::Widget* widget) {
@@ -326,7 +333,7 @@ void ShellPlatformDelegate::Initialize(const gfx::Size& default_window_size) {
 
   platform_ = std::make_unique<PlatformData>();
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   platform_->wm_test_helper =
       std::make_unique<wm::WMTestHelper>(default_window_size);
 #else
@@ -355,14 +362,16 @@ void ShellPlatformDelegate::CreatePlatformWindow(
   delegate->SetHasWindowSizeControls(true);
   delegate->SetOwnedByWidget(true);
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   shell_data.window_widget = views::Widget::CreateWindowWithContext(
       std::move(delegate),
-      platform_->wm_test_helper->GetDefaultParent(nullptr, gfx::Rect()),
+      platform_->wm_test_helper->GetDefaultParent(nullptr, gfx::Rect(),
+                                                  display::kInvalidDisplayId),
       gfx::Rect(initial_size));
 #else
   shell_data.window_widget = new views::Widget();
-  views::Widget::InitParams params;
+  views::Widget::InitParams params(
+      views::Widget::InitParams::NATIVE_WIDGET_OWNS_WIDGET);
   params.bounds = gfx::Rect(initial_size);
   params.delegate = delegate.release();
   params.wm_class_class = "chromium-content_shell";

@@ -46,7 +46,9 @@ namespace blink {
 MediaElementAudioSourceNode::MediaElementAudioSourceNode(
     AudioContext& context,
     HTMLMediaElement& media_element)
-    : AudioNode(context), media_element_(&media_element) {
+    : AudioNode(context),
+      ActiveScriptWrappable<MediaElementAudioSourceNode>({}),
+      media_element_(&media_element) {
   SetHandler(MediaElementAudioSourceHandler::Create(*this, media_element));
 }
 
@@ -95,7 +97,7 @@ MediaElementAudioSourceNode::GetMediaElementAudioSourceHandler() const {
 }
 
 HTMLMediaElement* MediaElementAudioSourceNode::mediaElement() const {
-  return media_element_;
+  return media_element_.Get();
 }
 
 void MediaElementAudioSourceNode::SetFormat(uint32_t number_of_channels,
@@ -122,7 +124,7 @@ void MediaElementAudioSourceNode::ReportWillBeDestroyed() {
 
 bool MediaElementAudioSourceNode::HasPendingActivity() const {
   // The node stays alive as long as the context is running.
-  return context()->ContextState() == BaseAudioContext::kRunning;
+  return context()->ContextState() == V8AudioContextState::Enum::kRunning;
 }
 
 void MediaElementAudioSourceNode::Trace(Visitor* visitor) const {

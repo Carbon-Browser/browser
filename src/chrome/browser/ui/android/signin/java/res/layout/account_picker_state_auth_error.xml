@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright 2020 The Chromium Authors. All rights reserved.
-     Use of this source code is governed by a BSD-style license that can be
-     found in the LICENSE file. -->
+<!--
+Copyright 2020 The Chromium Authors
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
+-->
 
 <LinearLayout
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -15,7 +17,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center_horizontal"
         android:importantForAccessibility="no"
-        app:srcCompat="@drawable/ic_warning_red_24dp" />
+        app:srcCompat="@drawable/ic_warning_red_outline_32dp" />
 
     <TextView
         android:id="@+id/account_picker_auth_error_title"
@@ -24,7 +26,7 @@
         android:layout_marginTop="12dp"
         android:layout_marginBottom="8dp"
         android:gravity="center_horizontal"
-        android:textAppearance="@style/TextAppearance.TextLarge.Primary"
+        android:textAppearance="@style/TextAppearance.Headline.Primary"
         android:text="@string/signin_account_picker_bottom_sheet_error_title" />
 
     <org.chromium.ui.widget.TextViewWithLeading

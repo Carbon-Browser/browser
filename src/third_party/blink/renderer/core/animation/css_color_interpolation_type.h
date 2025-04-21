@@ -1,25 +1,27 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_ANIMATION_CSS_COLOR_INTERPOLATION_TYPE_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_ANIMATION_CSS_COLOR_INTERPOLATION_TYPE_H_
 
-#include <memory>
 #include "third_party/blink/renderer/core/animation/css_interpolation_type.h"
+#include "third_party/blink/renderer/core/animation/interpolable_color.h"
+#include "third_party/blink/renderer/core/animation/interpolable_style_color.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/css_value_keywords.h"
 #include "third_party/blink/renderer/platform/graphics/color.h"
 
 namespace blink {
 
+class OptionalStyleColor;
 class StyleColor;
-struct OptionalStyleColor;
 
 class CORE_EXPORT CSSColorInterpolationType : public CSSInterpolationType {
  public:
-  CSSColorInterpolationType(PropertyHandle property,
-                            const PropertyRegistration* registration = nullptr)
+  explicit CSSColorInterpolationType(
+      PropertyHandle property,
+      const PropertyRegistration* registration = nullptr)
       : CSSInterpolationType(property, registration) {}
 
   InterpolationValue MaybeConvertStandardPropertyUnderlyingValue(
@@ -32,25 +34,45 @@ class CORE_EXPORT CSSColorInterpolationType : public CSSInterpolationType {
                  const InterpolationValue& value,
                  double interpolation_fraction) const final;
 
-  static std::unique_ptr<InterpolableValue> CreateInterpolableColor(
-      const Color&);
-  static std::unique_ptr<InterpolableValue> CreateInterpolableColor(CSSValueID);
-  static std::unique_ptr<InterpolableValue> CreateInterpolableColor(
-      const StyleColor&);
-  static std::unique_ptr<InterpolableValue> MaybeCreateInterpolableColor(
-      const CSSValue&);
+  static void EnsureInterpolableStyleColor(InterpolableList& list,
+                                           wtf_size_t index);
+  static void EnsureCompatibleInterpolableColorTypes(InterpolableList& list_a,
+                                                     InterpolableList& list_b);
+
+  static InterpolableColor* CreateInterpolableColor(const Color&);
+  static InterpolableColor* CreateInterpolableColor(
+      CSSValueID,
+      mojom::blink::ColorScheme color_scheme,
+      const ui::ColorProvider* color_provider);
+  static InterpolableColor* CreateInterpolableColor(
+      const StyleColor&,
+      mojom::blink::ColorScheme color_scheme,
+      const ui::ColorProvider* color_provider);
+  static InterpolableColor* MaybeCreateInterpolableColor(
+      const CSSValue&,
+      mojom::blink::ColorScheme color_scheme,
+      const ui::ColorProvider* color_provider);
+
+  static BaseInterpolableColor* CreateBaseInterpolableColor(
+      const StyleColor&,
+      mojom::blink::ColorScheme color_scheme,
+      const ui::ColorProvider* color_provider);
+
   static Color ResolveInterpolableColor(
       const InterpolableValue& interpolable_color,
       const StyleResolverState&,
       bool is_visited = false,
       bool is_text_decoration = false);
 
-  // Extract color info from a InterpolableValue-result, the input value must be
-  // a InterpolableList.
-  static Color GetRGBA(const InterpolableValue&);
+  static Color GetColor(const InterpolableValue&);
 
-  // Determines if an interpolation values represents an RGBA color value.
-  static bool IsRGBA(const InterpolableValue&);
+  // This method confirms that the two colors are in the same colorspace for
+  // interpolation and converts them if necessary.
+  PairwiseInterpolationValue MaybeMergeSingles(
+      InterpolationValue&& start,
+      InterpolationValue&& end) const final;
+
+  static bool IsNonKeywordColor(const InterpolableValue&);
 
  private:
   InterpolationValue MaybeConvertNeutral(const InterpolationValue& underlying,
@@ -62,8 +84,16 @@ class CORE_EXPORT CSSColorInterpolationType : public CSSInterpolationType {
   InterpolationValue MaybeConvertValue(const CSSValue&,
                                        const StyleResolverState*,
                                        ConversionCheckers&) const final;
-  InterpolationValue ConvertStyleColorPair(const OptionalStyleColor&,
-                                           const OptionalStyleColor&) const;
+  static InterpolationValue ConvertStyleColorPair(
+      const OptionalStyleColor&,
+      const OptionalStyleColor&,
+      mojom::blink::ColorScheme color_scheme,
+      const ui::ColorProvider* color_provider);
+  static InterpolationValue ConvertStyleColorPair(
+      const StyleColor& unvisited_color,
+      const StyleColor& visited_color,
+      mojom::blink::ColorScheme color_scheme,
+      const ui::ColorProvider* color_provider);
 
   const CSSValue* CreateCSSValue(const InterpolableValue&,
                                  const NonInterpolableValue*,

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,12 @@
 #include <sstream>
 #include <string>
 
+#include "base/ranges/algorithm.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/test_mock_time_task_runner.h"
-#include "chrome/browser/chromeos/policy/dlp/dlp_histogram_helper.h"
 #include "chrome/browser/chromeos/policy/dlp/dlp_rules_manager.h"
 #include "chrome/test/base/testing_profile.h"
+#include "components/enterprise/data_controls/core/browser/dlp_histogram_helper.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_renderer_host.h"
@@ -62,13 +63,11 @@ class DlpConfidentialContentsTest : public testing::Test {
   // |web_contents|.
   bool Contains(const DlpConfidentialContents& contents,
                 content::WebContents* web_contents) {
-    auto iter = std::find_if(contents.GetContents().begin(),
-                             contents.GetContents().end(),
-                             [&](const DlpConfidentialContent& content) {
-                               return content.url.EqualsIgnoringRef(
-                                   web_contents->GetLastCommittedURL());
-                             });
-    return iter != contents.GetContents().end();
+    return base::ranges::any_of(contents.GetContents(),
+                                [&](const DlpConfidentialContent& content) {
+                                  return content.url.EqualsIgnoringRef(
+                                      web_contents->GetLastCommittedURL());
+                                });
   }
 
  protected:
@@ -255,7 +254,9 @@ TEST_F(DlpConfidentialContentsTest, CacheEvictsAfterTimeout) {
   cache.Cache(content, kRestriction);
   EXPECT_TRUE(cache.Contains(content, kRestriction));
   histogram_tester_.ExpectBucketCount(
-      GetDlpHistogramPrefix() + dlp::kConfidentialContentsCount, 1, 1);
+      data_controls::GetDlpHistogramPrefix() +
+          data_controls::dlp::kConfidentialContentsCount,
+      1, 1);
   task_runner->FastForwardBy(DlpConfidentialContentsCache::GetCacheTimeout());
   EXPECT_FALSE(cache.Contains(content, kRestriction));
 }
@@ -265,7 +266,9 @@ TEST_F(DlpConfidentialContentsTest, CacheEvictsWhenFull) {
   DlpConfidentialContent content1 = CreateConfidentialContent(title1, url1);
   cache.Cache(content1, kRestriction);
   histogram_tester_.ExpectBucketCount(
-      GetDlpHistogramPrefix() + dlp::kConfidentialContentsCount, 1, 1);
+      data_controls::GetDlpHistogramPrefix() +
+          data_controls::dlp::kConfidentialContentsCount,
+      1, 1);
   for (int i = 2; i <= 100; i++) {
     std::stringstream url;
     url << "https://example";
@@ -276,10 +279,13 @@ TEST_F(DlpConfidentialContentsTest, CacheEvictsWhenFull) {
   }
   EXPECT_EQ(cache.GetSizeForTesting(), 100u);
   histogram_tester_.ExpectBucketCount(
-      GetDlpHistogramPrefix() + dlp::kConfidentialContentsCount, 100, 1);
+      data_controls::GetDlpHistogramPrefix() +
+          data_controls::dlp::kConfidentialContentsCount,
+      100, 1);
   EXPECT_EQ(histogram_tester_
                 .GetHistogramSamplesSinceCreation(
-                    GetDlpHistogramPrefix() + dlp::kConfidentialContentsCount)
+                    data_controls::GetDlpHistogramPrefix() +
+                    data_controls::dlp::kConfidentialContentsCount)
                 ->TotalCount(),
             100);
 
@@ -292,11 +298,14 @@ TEST_F(DlpConfidentialContentsTest, CacheEvictsWhenFull) {
   EXPECT_TRUE(cache.Contains(content101, kRestriction));
   EXPECT_EQ(histogram_tester_
                 .GetHistogramSamplesSinceCreation(
-                    GetDlpHistogramPrefix() + dlp::kConfidentialContentsCount)
+                    data_controls::GetDlpHistogramPrefix() +
+                    data_controls::dlp::kConfidentialContentsCount)
                 ->TotalCount(),
             101);
   histogram_tester_.ExpectBucketCount(
-      GetDlpHistogramPrefix() + dlp::kConfidentialContentsCount, 100, 2);
+      data_controls::GetDlpHistogramPrefix() +
+          data_controls::dlp::kConfidentialContentsCount,
+      100, 2);
 }
 
 TEST_F(DlpConfidentialContentsTest, CacheRemovesDuplicates) {
@@ -308,7 +317,9 @@ TEST_F(DlpConfidentialContentsTest, CacheRemovesDuplicates) {
   cache.Cache(content, kRestriction);
   EXPECT_EQ(cache.GetSizeForTesting(), 1u);
   histogram_tester_.ExpectBucketCount(
-      GetDlpHistogramPrefix() + dlp::kConfidentialContentsCount, 1, 1);
+      data_controls::GetDlpHistogramPrefix() +
+          data_controls::dlp::kConfidentialContentsCount,
+      1, 1);
 }
 
 }  // namespace policy

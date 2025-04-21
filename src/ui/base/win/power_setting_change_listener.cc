@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/base/win/power_setting_change_listener.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/singleton.h"
 #include "base/observer_list.h"
@@ -96,18 +96,16 @@ void PowerSettingChangeObserver::OnWndProc(HWND hwnd,
 }
 
 void PowerSettingChangeObserver::OnResume() {
-  for (PowerSettingChangeListener& observer : listeners_)
-    observer.OnResume();
+  listeners_.Notify(&PowerSettingChangeListener::OnResume);
 }
 
 void PowerSettingChangeObserver::OnSuspend() {
-  for (PowerSettingChangeListener& observer : listeners_)
-    observer.OnSuspend();
+  listeners_.Notify(&PowerSettingChangeListener::OnSuspend);
 }
 
 void PowerSettingChangeObserver::OnDisplayStateChanged(bool display_on) {
-  for (PowerSettingChangeListener& observer : listeners_)
-    observer.OnDisplayStateChanged(display_on);
+  listeners_.Notify(&PowerSettingChangeListener::OnDisplayStateChanged,
+                    display_on);
 }
 
 HPOWERNOTIFY PowerSettingChangeObserver::RegisterNotification(

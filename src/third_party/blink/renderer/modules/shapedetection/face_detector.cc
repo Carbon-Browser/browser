@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <utility>
 
 #include "services/shape_detection/public/mojom/facedetection_provider.mojom-blink.h"
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_throw_dom_exception.h"
@@ -49,30 +49,44 @@ FaceDetector::FaceDetector(ExecutionContext* context,
       face_service_.BindNewPipeAndPassReceiver(task_runner),
       std::move(face_detector_options));
 
-  face_service_.set_disconnect_handler(WTF::Bind(
+  face_service_.set_disconnect_handler(WTF::BindOnce(
       &FaceDetector::OnFaceServiceConnectionError, WrapWeakPersistent(this)));
 }
 
-ScriptPromise FaceDetector::DoDetect(ScriptState* script_state,
-                                     SkBitmap bitmap,
-                                     ExceptionState& exception_state) {
-  if (!face_service_.is_bound()) {
-    exception_state.ThrowDOMException(DOMExceptionCode::kNotSupportedError,
-                                      "Face detection service unavailable.");
-    return ScriptPromise();
+ScriptPromise<IDLSequence<DetectedFace>> FaceDetector::detect(
+    ScriptState* script_state,
+    const V8ImageBitmapSource* image_source,
+    ExceptionState& exception_state) {
+  std::optional<SkBitmap> bitmap =
+      GetBitmapFromSource(script_state, image_source, exception_state);
+  if (!bitmap) {
+    return ScriptPromise<IDLSequence<DetectedFace>>();
   }
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+
+  auto* resolver =
+      MakeGarbageCollected<ScriptPromiseResolver<IDLSequence<DetectedFace>>>(
+          script_state, exception_state.GetContext());
   auto promise = resolver->Promise();
+  if (bitmap->isNull()) {
+    resolver->Resolve(HeapVector<Member<DetectedFace>>());
+    return promise;
+  }
+
+  if (!face_service_.is_bound()) {
+    resolver->RejectWithDOMException(DOMExceptionCode::kNotSupportedError,
+                                     "Face detection service unavailable.");
+    return promise;
+  }
   face_service_requests_.insert(resolver);
   face_service_->Detect(
-      std::move(bitmap),
-      WTF::Bind(&FaceDetector::OnDetectFaces, WrapPersistent(this),
-                WrapPersistent(resolver)));
+      std::move(*bitmap),
+      WTF::BindOnce(&FaceDetector::OnDetectFaces, WrapPersistent(this),
+                    WrapPersistent(resolver)));
   return promise;
 }
 
 void FaceDetector::OnDetectFaces(
-    ScriptPromiseResolver* resolver,
+    ScriptPromiseResolver<IDLSequence<DetectedFace>>* resolver,
     Vector<shape_detection::mojom::blink::FaceDetectionResultPtr>
         face_detection_results) {
   DCHECK(face_service_requests_.Contains(resolver));

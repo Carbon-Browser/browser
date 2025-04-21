@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,12 +18,12 @@ class MODULES_EXPORT PaymentStateResolver : public GarbageCollectedMixin {
  public:
   enum PaymentComplete { kFail, kSuccess, kUnknown };
 
-  virtual ScriptPromise Complete(ScriptState*,
-                                 PaymentComplete result,
-                                 ExceptionState&) = 0;
-  virtual ScriptPromise Retry(ScriptState*,
-                              const PaymentValidationErrors*,
-                              ExceptionState&) = 0;
+  virtual ScriptPromise<IDLUndefined> Complete(ScriptState*,
+                                               PaymentComplete result,
+                                               ExceptionState&) = 0;
+  virtual ScriptPromise<IDLUndefined> Retry(ScriptState*,
+                                            const PaymentValidationErrors*,
+                                            ExceptionState&) = 0;
 
  protected:
   virtual ~PaymentStateResolver() = default;

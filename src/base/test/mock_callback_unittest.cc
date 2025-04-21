@@ -1,10 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/test/mock_callback.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
 using testing::InSequence;
@@ -57,23 +57,23 @@ TEST(MockCallbackTest, WithArgsOnce) {
 }
 
 TEST(MockCallbackTest, Typedefs) {
-  static_assert(std::is_same<MockCallback<RepeatingCallback<int()>>,
-                             MockRepeatingCallback<int()>>::value,
+  static_assert(std::is_same_v<MockCallback<RepeatingCallback<int()>>,
+                               MockRepeatingCallback<int()>>,
                 "Repeating typedef differs for zero args");
-  static_assert(std::is_same<MockCallback<RepeatingCallback<int(int, int)>>,
-                             MockRepeatingCallback<int(int, int)>>::value,
+  static_assert(std::is_same_v<MockCallback<RepeatingCallback<int(int, int)>>,
+                               MockRepeatingCallback<int(int, int)>>,
                 "Repeating typedef differs for multiple args");
-  static_assert(std::is_same<MockCallback<RepeatingCallback<void()>>,
-                             MockRepeatingClosure>::value,
+  static_assert(std::is_same_v<MockCallback<RepeatingCallback<void()>>,
+                               MockRepeatingClosure>,
                 "Repeating typedef differs for closure");
-  static_assert(std::is_same<MockCallback<OnceCallback<int()>>,
-                             MockOnceCallback<int()>>::value,
+  static_assert(std::is_same_v<MockCallback<OnceCallback<int()>>,
+                               MockOnceCallback<int()>>,
                 "Once typedef differs for zero args");
-  static_assert(std::is_same<MockCallback<OnceCallback<int(int, int)>>,
-                             MockOnceCallback<int(int, int)>>::value,
+  static_assert(std::is_same_v<MockCallback<OnceCallback<int(int, int)>>,
+                               MockOnceCallback<int(int, int)>>,
                 "Once typedef differs for multiple args");
-  static_assert(std::is_same<MockCallback<RepeatingCallback<void()>>,
-                             MockRepeatingClosure>::value,
+  static_assert(std::is_same_v<MockCallback<RepeatingCallback<void()>>,
+                               MockRepeatingClosure>,
                 "Once typedef differs for closure");
 }
 

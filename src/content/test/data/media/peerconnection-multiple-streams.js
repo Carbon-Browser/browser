@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 The Chromium Authors. All rights reserved.
+ * Copyright 2017 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -82,7 +82,7 @@ class PeerConnection {
       this.badResolutionsSeen = 0;
     }
     if (this.badResolutionsSeen >= numSequentialBadResolutionsForFailure) {
-      failTest(
+      throw new Error(
           'Expected video resolution ' +
           resStr(expectedResolution.w, expectedResolution.h) +
           ' but got another resolution ' + this.badResolutionsSeen +
@@ -93,7 +93,7 @@ class PeerConnection {
 
   verifyAllStreamsActive_() {
     if (this.streams.some((x) => !x.active)) {
-      failTest('At least one media stream is not active')
+      throw new Error('At least one media stream is not active')
     }
   }
 

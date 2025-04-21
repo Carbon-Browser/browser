@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@ BackgroundLoaderContentsStub::BackgroundLoaderContentsStub(
   web_contents_->SetDelegate(this);
 }
 
-BackgroundLoaderContentsStub::~BackgroundLoaderContentsStub() {}
+BackgroundLoaderContentsStub::~BackgroundLoaderContentsStub() = default;
 
 void BackgroundLoaderContentsStub::LoadPage(const GURL& url) {
   is_loading_ = true;

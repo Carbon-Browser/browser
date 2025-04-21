@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "third_party/blink/renderer/core/css/css_primitive_value.h"
 #include "third_party/blink/renderer/core/css/parser/css_property_parser.h"
 #include "third_party/blink/renderer/core/css_value_keywords.h"
+#include "third_party/blink/renderer/platform/wtf/dtoa.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
@@ -16,7 +17,10 @@ namespace blink {
 
 // Just a helper used for Delimiter tokens.
 CSSParserToken::CSSParserToken(CSSParserTokenType type, UChar c)
-    : type_(type), block_type_(kNotBlock), delimiter_(c) {
+    : type_(type),
+      block_type_(kNotBlock),
+      value_is_inline_(false),
+      delimiter_(c) {
   DCHECK_EQ(type_, static_cast<unsigned>(kDelimiterToken));
 }
 
@@ -28,7 +32,8 @@ CSSParserToken::CSSParserToken(CSSParserTokenType type,
       block_type_(kNotBlock),
       numeric_value_type_(numeric_value_type),
       numeric_sign_(sign),
-      unit_(static_cast<unsigned>(CSSPrimitiveValue::UnitType::kNumber)) {
+      unit_(static_cast<unsigned>(CSSPrimitiveValue::UnitType::kNumber)),
+      value_is_inline_(false) {
   DCHECK_EQ(type, kNumberToken);
   numeric_value_ =
       ClampTo<double>(numeric_value, -std::numeric_limits<float>::max(),
@@ -38,14 +43,19 @@ CSSParserToken::CSSParserToken(CSSParserTokenType type,
 CSSParserToken::CSSParserToken(CSSParserTokenType type,
                                UChar32 start,
                                UChar32 end)
-    : type_(kUnicodeRangeToken), block_type_(kNotBlock) {
+    : type_(kUnicodeRangeToken),
+      block_type_(kNotBlock),
+      value_is_inline_(false) {
   DCHECK_EQ(type, kUnicodeRangeToken);
   unicode_range_.start = start;
   unicode_range_.end = end;
 }
 
 CSSParserToken::CSSParserToken(HashTokenType type, StringView value)
-    : type_(kHashToken), block_type_(kNotBlock), hash_token_type_(type) {
+    : type_(kHashToken),
+      block_type_(kNotBlock),
+      value_is_inline_(false),
+      hash_token_type_(type) {
   InitValueFromStringView(value);
 }
 
@@ -99,23 +109,20 @@ AtRuleDescriptorID CSSParserToken::ParseAsAtRuleDescriptorID() const {
 }
 
 CSSValueID CSSParserToken::Id() const {
-  if (type_ != kIdentToken)
+  if (type_ != kIdentToken) {
     return CSSValueID::kInvalid;
-  if (id_ < 0)
+  }
+  if (id_ < 0) {
     id_ = static_cast<int>(CssValueKeywordID(Value()));
-  return static_cast<CSSValueID>(id_);
-}
-
-CSSValueID CSSParserToken::FunctionId() const {
-  if (type_ != kFunctionToken)
-    return CSSValueID::kInvalid;
-  if (id_ < 0)
-    id_ = static_cast<int>(CssValueKeywordID(Value()));
+  }
   return static_cast<CSSValueID>(id_);
 }
 
 bool CSSParserToken::HasStringBacking() const {
   CSSParserTokenType token_type = GetType();
+  if (value_is_inline_) {
+    return false;
+  }
   return token_type == kIdentToken || token_type == kFunctionToken ||
          token_type == kAtKeywordToken || token_type == kHashToken ||
          token_type == kUrlToken || token_type == kDimensionToken ||
@@ -130,41 +137,33 @@ CSSParserToken CSSParserToken::CopyWithUpdatedString(
 }
 
 bool CSSParserToken::ValueDataCharRawEqual(const CSSParserToken& other) const {
-  if (value_length_ != other.value_length_)
-    return false;
-
-  if (value_data_char_raw_ == other.value_data_char_raw_ &&
-      value_is_8bit_ == other.value_is_8bit_)
-    return true;
+  if (ValueDataCharRaw() == other.ValueDataCharRaw() &&
+      value_is_8bit_ == other.value_is_8bit_) {
+    return value_length_ == other.value_length_;
+  }
 
   if (value_is_8bit_) {
-    return other.value_is_8bit_
-               ? Equal(static_cast<const LChar*>(value_data_char_raw_),
-                       static_cast<const LChar*>(other.value_data_char_raw_),
-                       value_length_)
-               : Equal(static_cast<const LChar*>(value_data_char_raw_),
-                       static_cast<const UChar*>(other.value_data_char_raw_),
-                       value_length_);
+    const auto span = Span8();
+    return other.value_is_8bit_ ? span == other.Span8()
+                                : span == other.Span16();
   } else {
-    return other.value_is_8bit_
-               ? Equal(static_cast<const UChar*>(value_data_char_raw_),
-                       static_cast<const LChar*>(other.value_data_char_raw_),
-                       value_length_)
-               : Equal(static_cast<const UChar*>(value_data_char_raw_),
-                       static_cast<const UChar*>(other.value_data_char_raw_),
-                       value_length_);
+    const auto span = Span16();
+    return other.value_is_8bit_ ? span == other.Span8()
+                                : span == other.Span16();
   }
 }
 
 bool CSSParserToken::operator==(const CSSParserToken& other) const {
-  if (type_ != other.type_)
+  if (type_ != other.type_) {
     return false;
+  }
   switch (type_) {
     case kDelimiterToken:
       return Delimiter() == other.Delimiter();
     case kHashToken:
-      if (hash_token_type_ != other.hash_token_type_)
+      if (hash_token_type_ != other.hash_token_type_) {
         return false;
+      }
       [[fallthrough]];
     case kIdentToken:
     case kFunctionToken:
@@ -172,8 +171,9 @@ bool CSSParserToken::operator==(const CSSParserToken& other) const {
     case kUrlToken:
       return ValueDataCharRawEqual(other);
     case kDimensionToken:
-      if (!ValueDataCharRawEqual(other))
+      if (!ValueDataCharRawEqual(other)) {
         return false;
+      }
       [[fallthrough]];
     case kNumberToken:
     case kPercentageToken:
@@ -212,20 +212,39 @@ void CSSParserToken::Serialize(StringBuilder& builder) const {
       SerializeIdentifier(Value().ToString(), builder);
       return builder.Append(')');
     case kDelimiterToken:
-      if (Delimiter() == '\\')
+      if (Delimiter() == '\\') {
         return builder.Append("\\\n");
+      }
       return builder.Append(Delimiter());
     case kNumberToken:
-      // These won't properly preserve the NumericValueType flag
-      return builder.AppendNumber(NumericValue());
+      if (numeric_value_type_ == kIntegerValueType) {
+        return builder.AppendNumber(ClampTo<int64_t>(NumericValue()));
+      } else {
+        NumberToStringBuffer buffer;
+        const char* str = NumberToString(NumericValue(), buffer);
+        builder.Append(str);
+        // This wasn't parsed as an integer, so when we serialize it back,
+        // it cannot be an integer. Otherwise, we would round-trip e.g.
+        // “2.0” to “2”, which could make an invalid value suddenly valid.
+        if (strchr(str, '.') == nullptr && strchr(str, 'e') == nullptr) {
+          builder.Append(".0");
+        }
+        return;
+      }
     case kPercentageToken:
       builder.AppendNumber(NumericValue());
       return builder.Append('%');
-    case kDimensionToken:
+    case kDimensionToken: {
       // This will incorrectly serialize e.g. 4e3e2 as 4000e2
-      builder.AppendNumber(NumericValue());
+      NumberToStringBuffer buffer;
+      const char* str = NumberToString(NumericValue(), buffer);
+      builder.Append(str);
+      // NOTE: We don't need the same “.0” treatment as we did for
+      // kNumberToken, as there are no situations where e.g. 2deg
+      // would be valid but 2.0deg not.
       SerializeIdentifier(Value().ToString(), builder);
       break;
+    }
     case kUnicodeRangeToken:
       return builder.Append(
           String::Format("U+%X-%X", UnicodeRangeStart(), UnicodeRangeEnd()));
@@ -276,8 +295,52 @@ void CSSParserToken::Serialize(StringBuilder& builder) const {
     case kEOFToken:
     case kCommentToken:
       NOTREACHED();
-      return;
   }
+}
+
+// https://www.w3.org/TR/css-syntax-3/#serialization
+bool NeedsInsertedComment(const CSSParserToken& a, const CSSParserToken& b) {
+  CSSParserTokenType at = a.GetType();
+  CSSParserTokenType bt = b.GetType();
+
+  // Row 1–7 of the table.
+  if (at == kIdentToken || at == kAtKeywordToken || at == kHashToken ||
+      at == kDimensionToken || at == kNumberToken ||
+      (at == kDelimiterToken &&
+       (a.Delimiter() == '#' || a.Delimiter() == '-'))) {
+    if (at == kIdentToken && bt == kLeftParenthesisToken) {
+      return true;
+    }
+    if (at == kNumberToken && bt == kDelimiterToken) {
+      if (b.Delimiter() == '-') {
+        return false;
+      }
+      if (b.Delimiter() == '%') {
+        return true;
+      }
+    }
+    return bt == kIdentToken || bt == kFunctionToken || bt == kUrlToken ||
+           bt == kBadUrlToken || bt == kNumberToken || bt == kPercentageToken ||
+           bt == kDimensionToken || bt == kCDCToken ||
+           (bt == kDelimiterToken && b.Delimiter() == '-');
+  }
+
+  // Row 8.
+  if (at == kDelimiterToken && a.Delimiter() == '@') {
+    return bt == kIdentToken || bt == kFunctionToken || bt == kUrlToken ||
+           bt == kBadUrlToken || bt == kCDCToken ||
+           (bt == kDelimiterToken && b.Delimiter() == '-');
+  }
+
+  // Rows 9 and 10.
+  if (at == kDelimiterToken && (a.Delimiter() == '.' || a.Delimiter() == '+')) {
+    return bt == kNumberToken || bt == kPercentageToken ||
+           bt == kDimensionToken;
+  }
+
+  // Final row (all other cases are false).
+  return at == kDelimiterToken && bt == kDelimiterToken &&
+         a.Delimiter() == '/' && b.Delimiter() == '*';
 }
 
 }  // namespace blink

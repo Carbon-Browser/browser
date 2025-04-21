@@ -1,19 +1,18 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 /** @fileoverview Runs UI tests for account manager dialogs. */
 
 // Polymer BrowserTest fixture.
-GEN_INCLUDE(['//chrome/test/data/webui/polymer_browser_test_base.js']);
+GEN_INCLUDE(['//chrome/test/data/webui/chromeos/polymer_browser_test_base.js']);
 
 GEN('#include "content/public/test/browser_test.h"');
 
-// eslint-disable-next-line no-var
 var AccountMigrationWelcomeTest = class extends PolymerTest {
   /** @override */
   get browsePreload() {
-    return 'chrome://account-migration-welcome/test_loader.html?module=chromeos/account_manager/account_migration_welcome_test.js&host=test';
+    return 'chrome://account-migration-welcome/test_loader.html?module=chromeos/account_manager/account_migration_welcome_test.js';
   }
 };
 

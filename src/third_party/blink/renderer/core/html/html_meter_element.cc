@@ -21,7 +21,6 @@
 #include "third_party/blink/renderer/core/html/html_meter_element.h"
 
 #include "third_party/blink/renderer/core/display_lock/display_lock_utilities.h"
-#include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/dom/shadow_root.h"
 #include "third_party/blink/renderer/core/frame/web_feature.h"
 #include "third_party/blink/renderer/core/html/html_div_element.h"
@@ -40,26 +39,46 @@ namespace blink {
 HTMLMeterElement::HTMLMeterElement(Document& document)
     : HTMLElement(html_names::kMeterTag, document) {
   UseCounter::Count(document, WebFeature::kMeterElement);
+  SetHasCustomStyleCallbacks();
   EnsureUserAgentShadowRoot();
 }
 
 HTMLMeterElement::~HTMLMeterElement() = default;
 
-LayoutObject* HTMLMeterElement::CreateLayoutObject(const ComputedStyle& style,
-                                                   LegacyLayout legacy) {
+LayoutObject* HTMLMeterElement::CreateLayoutObject(const ComputedStyle& style) {
   switch (style.EffectiveAppearance()) {
-    case kMeterPart:
+    case AppearanceValue::kMeter:
       UseCounter::Count(GetDocument(),
                         WebFeature::kMeterElementWithMeterAppearance);
       break;
-    case kNoControlPart:
+    case AppearanceValue::kNone:
       UseCounter::Count(GetDocument(),
                         WebFeature::kMeterElementWithNoneAppearance);
       break;
     default:
       break;
   }
-  return HTMLElement::CreateLayoutObject(style, legacy);
+  if (style.IsVerticalWritingMode()) {
+    UseCounter::Count(GetDocument(), WebFeature::kVerticalFormControls);
+  }
+  return HTMLElement::CreateLayoutObject(style);
+}
+
+void HTMLMeterElement::DidRecalcStyle(const StyleRecalcChange change) {
+  HTMLElement::DidRecalcStyle(change);
+  if (const ComputedStyle* style = GetComputedStyle()) {
+    bool is_horizontal = style->IsHorizontalWritingMode();
+    bool is_ltr = style->IsLeftToRightDirection();
+    if (is_horizontal && is_ltr) {
+      UseCounter::Count(GetDocument(), WebFeature::kMeterElementHorizontalLtr);
+    } else if (is_horizontal && !is_ltr) {
+      UseCounter::Count(GetDocument(), WebFeature::kMeterElementHorizontalRtl);
+    } else if (is_ltr) {
+      UseCounter::Count(GetDocument(), WebFeature::kMeterElementVerticalLtr);
+    } else {
+      UseCounter::Count(GetDocument(), WebFeature::kMeterElementVerticalRtl);
+    }
+  }
 }
 
 void HTMLMeterElement::ParseAttribute(
@@ -190,10 +209,12 @@ void HTMLMeterElement::DidAddUserAgentShadowRoot(ShadowRoot& root) {
 
   inner->AppendChild(bar);
 
-  auto* fallback = MakeGarbageCollected<HTMLDivElement>(GetDocument());
-  fallback->AppendChild(MakeGarbageCollected<HTMLSlotElement>(GetDocument()));
-  fallback->SetShadowPseudoId(AtomicString("-internal-fallback"));
-  root.AppendChild(fallback);
+  if (!RuntimeEnabledFeatures::MeterAppearanceNoneFallbackStyleEnabled()) {
+    auto* fallback = MakeGarbageCollected<HTMLDivElement>(GetDocument());
+    fallback->AppendChild(MakeGarbageCollected<HTMLSlotElement>(GetDocument()));
+    fallback->SetShadowPseudoId(AtomicString("-internal-fallback"));
+    root.AppendChild(fallback);
+  }
 }
 
 void HTMLMeterElement::UpdateValueAppearance(double percentage) {
@@ -204,7 +225,9 @@ void HTMLMeterElement::UpdateValueAppearance(double percentage) {
   DEFINE_STATIC_LOCAL(AtomicString, even_less_good_pseudo_id,
                       ("-webkit-meter-even-less-good-value"));
 
-  value_->SetInlineStyleProperty(CSSPropertyID::kWidth, percentage,
+  value_->SetInlineStyleProperty(CSSPropertyID::kInlineSize, percentage,
+                                 CSSPrimitiveValue::UnitType::kPercentage);
+  value_->SetInlineStyleProperty(CSSPropertyID::kBlockSize, 100,
                                  CSSPrimitiveValue::UnitType::kPercentage);
   switch (GetGaugeRegion()) {
     case kGaugeRegionOptimum:
@@ -228,6 +251,22 @@ bool HTMLMeterElement::CanContainRangeEndPoint() const {
     return false;
   }
   return GetComputedStyle() && !GetComputedStyle()->HasEffectiveAppearance();
+}
+
+void HTMLMeterElement::AdjustStyle(ComputedStyleBuilder& builder) {
+  // Descendants of the <meter> UA shadow host use
+  // a -internal-shadow-host-has-non-auto-appearance selector which depends on
+  // the computed value of the host's 'appearance'.
+  // This information is propagated via StyleUAShadowHostData to ensure
+  // invalidation of those descendants when the appearance changes.
+
+  builder.SetUAShadowHostData(std::make_unique<StyleUAShadowHostData>(
+      /* width */ Length(),
+      /* height */ Length(),
+      StyleAspectRatio(EAspectRatioType::kAuto, gfx::SizeF()),
+      /* alt_text */ g_null_atom,
+      /* alt_attr */ g_null_atom,
+      /* src_attr */ g_null_atom, builder.HasEffectiveAppearance()));
 }
 
 void HTMLMeterElement::Trace(Visitor* visitor) const {

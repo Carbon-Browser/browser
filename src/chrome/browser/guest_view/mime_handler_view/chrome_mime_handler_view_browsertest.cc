@@ -1,19 +1,19 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
-#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
+#include "base/test/bind.h"
 #include "base/test/test_timeouts.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/buildflag.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/extensions/extension_apitest.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/test/base/ui_test_utils.h"
@@ -25,17 +25,21 @@
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/navigation_handle.h"
+#include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
+#include "content/public/test/hit_test_region_observer.h"
 #include "content/public/test/test_navigation_observer.h"
 #include "content/public/test/test_renderer_host.h"
 #include "content/public/test/test_utils.h"
+#include "content/public/test/update_user_activation_state_interceptor.h"
 #include "extensions/browser/api/extensions_api_client.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/guest_view/extensions_guest_view_manager_delegate.h"
 #include "extensions/browser/guest_view/mime_handler_view/mime_handler_stream_manager.h"
+#include "extensions/browser/guest_view/mime_handler_view/mime_handler_view_attach_helper.h"
 #include "extensions/browser/guest_view/mime_handler_view/mime_handler_view_constants.h"
 #include "extensions/browser/guest_view/mime_handler_view/mime_handler_view_guest.h"
 #include "extensions/browser/guest_view/mime_handler_view/test_mime_handler_view_guest.h"
@@ -56,6 +60,7 @@
 #include "url/url_constants.h"
 
 #if BUILDFLAG(ENABLE_PRINT_PREVIEW)
+#include "chrome/browser/printing/test_print_preview_observer.h"
 #include "chrome/browser/ui/webui/print_preview/print_preview_ui.h"
 #endif
 
@@ -66,13 +71,16 @@ using guest_view::GuestViewManager;
 using guest_view::TestGuestViewManager;
 using guest_view::TestGuestViewManagerFactory;
 
+namespace {
+// The value of the data is "content to read\n".
+const char kDataUrlCsv[] = "data:text/csv;base64,Y29udGVudCB0byByZWFkCg==";
+}  // namespace
+
 class ChromeMimeHandlerViewTest : public extensions::ExtensionApiTest {
  public:
-  ChromeMimeHandlerViewTest() {
-    GuestViewManager::set_factory_for_testing(&factory_);
-  }
+  ChromeMimeHandlerViewTest() = default;
 
-  ~ChromeMimeHandlerViewTest() override {}
+  ~ChromeMimeHandlerViewTest() override = default;
 
   void SetUpOnMainThread() override {
     extensions::ExtensionApiTest::SetUpOnMainThread();
@@ -87,21 +95,9 @@ class ChromeMimeHandlerViewTest : public extensions::ExtensionApiTest {
 
  protected:
   TestGuestViewManager* GetGuestViewManager() {
-    TestGuestViewManager* manager = static_cast<TestGuestViewManager*>(
-        TestGuestViewManager::FromBrowserContext(browser()->profile()));
-    // TestGuestViewManager::WaitForSingleGuestCreated can and will get called
-    // before a guest is created. Since GuestViewManager is usually not created
-    // until the first guest is created, this means that |manager| will be
-    // nullptr if trying to use the manager to wait for the first guest. Because
-    // of this, the manager must be created here if it does not already exist.
-    if (!manager) {
-      manager = static_cast<TestGuestViewManager*>(
-          GuestViewManager::CreateWithDelegate(
-              browser()->profile(),
-              ExtensionsAPIClient::Get()->CreateGuestViewManagerDelegate(
-                  browser()->profile())));
-    }
-    return manager;
+    return factory_.GetOrCreateTestGuestViewManager(
+        browser()->profile(),
+        ExtensionsAPIClient::Get()->CreateGuestViewManagerDelegate());
   }
 
   const extensions::Extension* LoadTestExtension() {
@@ -115,8 +111,7 @@ class ChromeMimeHandlerViewTest : public extensions::ExtensionApiTest {
 
   void RunTestWithUrl(const GURL& url) {
     // Use the testing subclass of MimeHandlerViewGuest.
-    GetGuestViewManager()->RegisterTestGuestViewType<MimeHandlerViewGuest>(
-        base::BindRepeating(&TestMimeHandlerViewGuest::Create));
+    TestMimeHandlerViewGuest::RegisterTestGuestViewType(GetGuestViewManager());
 
     const extensions::Extension* extension = LoadTestExtension();
     ASSERT_TRUE(extension);
@@ -128,7 +123,7 @@ class ChromeMimeHandlerViewTest : public extensions::ExtensionApiTest {
     if (!catcher.GetNextResult())
       FAIL() << catcher.message();
 
-    ASSERT_TRUE(GetGuestViewManager()->WaitForSingleGuestCreated());
+    ASSERT_TRUE(GetGuestViewManager()->WaitForSingleGuestViewCreated());
     ASSERT_TRUE(GetEmbedderWebContents());
   }
 
@@ -138,6 +133,18 @@ class ChromeMimeHandlerViewTest : public extensions::ExtensionApiTest {
 
   content::WebContents* GetEmbedderWebContents() {
     return browser()->tab_strip_model()->GetWebContentsAt(0);
+  }
+
+  // In preparation for the migration of guest view from inner WebContents to
+  // MPArch (crbug/1261928), individual tests should avoid accessing the guest's
+  // inner WebContents. The direct access is centralized in this helper function
+  // for easier migration.
+  //
+  // TODO(crbug.com/40202416): Update this implementation for MPArch, and
+  // consider relocate it to `content/public/test/browser_test_utils.h`.
+  void WaitForGuestViewLoadStop(GuestViewBase* guest_view) {
+    auto* guest_contents = guest_view->web_contents();
+    ASSERT_TRUE(content::WaitForLoadStop(guest_contents));
   }
 
   int basic_count() const { return basic_count_; }
@@ -160,8 +167,8 @@ namespace {
 
 class UserActivationUpdateWaiter {
  public:
-  explicit UserActivationUpdateWaiter(content::WebContents* web_contents)
-      : user_activation_interceptor_(web_contents->GetPrimaryMainFrame()) {}
+  explicit UserActivationUpdateWaiter(content::RenderFrameHost* rfh)
+      : user_activation_interceptor_(rfh) {}
   ~UserActivationUpdateWaiter() = default;
 
   void Wait() {
@@ -176,73 +183,15 @@ class UserActivationUpdateWaiter {
   content::UpdateUserActivationStateInterceptor user_activation_interceptor_;
 };
 
-// Helper class to wait for document load event in the main frame.
-class DocumentLoadCompletionWaiter : public content::WebContentsObserver {
- public:
-  explicit DocumentLoadCompletionWaiter(content::WebContents* web_contents)
-      : content::WebContentsObserver(web_contents) {}
-  ~DocumentLoadCompletionWaiter() override = default;
-
-  void DocumentOnLoadCompletedInPrimaryMainFrame() override {
-    did_load_ = true;
-    run_loop_.Quit();
-  }
-
-  void Wait() {
-    if (!did_load_)
-      run_loop_.Run();
-  }
-
- private:
-  bool did_load_ = false;
-  base::RunLoop run_loop_;
-};
-
 // A DevToolsAgentHostClient implementation doing nothing.
 class StubDevToolsAgentHostClient : public content::DevToolsAgentHostClient {
  public:
-  StubDevToolsAgentHostClient() {}
-  ~StubDevToolsAgentHostClient() override {}
+  StubDevToolsAgentHostClient() = default;
+  ~StubDevToolsAgentHostClient() override = default;
   void AgentHostClosed(content::DevToolsAgentHost* agent_host) override {}
   void DispatchProtocolMessage(content::DevToolsAgentHost* agent_host,
                                base::span<const uint8_t> message) override {}
 };
-
-#if BUILDFLAG(ENABLE_PRINT_PREVIEW)
-class PrintPreviewDelegate : printing::PrintPreviewUI::TestDelegate {
- public:
-  PrintPreviewDelegate() {
-    printing::PrintPreviewUI::SetDelegateForTesting(this);
-  }
-  PrintPreviewDelegate(const PrintPreviewDelegate&) = delete;
-  PrintPreviewDelegate& operator=(const PrintPreviewDelegate&) = delete;
-  ~PrintPreviewDelegate() override {
-    printing::PrintPreviewUI::SetDelegateForTesting(nullptr);
-  }
-
-  void WaitUntilPreviewIsReady() {
-    if (total_page_count_ > 0)
-      return;
-
-    base::RunLoop run_loop;
-    quit_callback_ = run_loop.QuitClosure();
-    run_loop.Run();
-  }
-
- private:
-  // PrintPreviewUI::TestDelegate:
-  void DidGetPreviewPageCount(uint32_t page_count) override {
-    EXPECT_GE(page_count, 1u);
-    total_page_count_ = page_count;
-    if (quit_callback_)
-      std::move(quit_callback_).Run();
-  }
-  void DidRenderPreviewPage(content::WebContents* preview_dialog) override {}
-
-  uint32_t total_page_count_ = 0;
-  base::OnceClosure quit_callback_;
-};
-#endif
 
 }  // namespace
 
@@ -306,7 +255,7 @@ IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest,
 // other cross-origin content. On the embedder side, when the first page loads,
 // the <object> loads some text/csv content to create a MimeHandlerViewGuest.
 // The test passes if MHV loads.
-// TODO(crbug.com/1182355): Disabled due to flakes.
+// TODO(crbug.com/40751404): Disabled due to flakes.
 IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest,
                        DISABLED_NavigationRaceFromCrossProcessRenderer) {
   const std::string kTestName = "test_navigation_race_cross_origin";
@@ -326,8 +275,7 @@ IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest,
 // renderer (for context see https://crbug.com/930803).
 IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest, EmbedderFrameRemovedNoCrash) {
   RunTest("test_iframe_basic.html");
-  auto* guest_view = GuestViewBase::FromWebContents(
-      GetGuestViewManager()->WaitForSingleGuestCreated());
+  auto* guest_view = GetGuestViewManager()->WaitForSingleGuestViewCreated();
   ASSERT_TRUE(guest_view);
   int32_t element_instance_id = guest_view->element_instance_id();
   auto* embedder_web_contents = GetEmbedderWebContents();
@@ -363,8 +311,7 @@ IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest, EmbedderFrameRemovedNoCrash) {
 IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest,
                        EmbedWithInitialFrameAcceptBeforeUnloadDialog) {
   // Use the testing subclass of MimeHandlerViewGuest.
-  GetGuestViewManager()->RegisterTestGuestViewType<MimeHandlerViewGuest>(
-      base::BindRepeating(&TestMimeHandlerViewGuest::Create));
+  TestMimeHandlerViewGuest::RegisterTestGuestViewType(GetGuestViewManager());
   const extensions::Extension* extension = LoadTestExtension();
   ASSERT_TRUE(extension);
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
@@ -374,28 +321,26 @@ IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest,
       browser()->tab_strip_model()->GetWebContentsAt(0)->GetPrimaryMainFrame();
   auto url_with_beforeunload =
       embedded_test_server()->GetURL("b.com", "/test_page.html?beforeunload");
-  bool result = false;
-  ASSERT_TRUE(content::ExecuteScriptAndExtractBool(
-      main_frame,
-      base::StringPrintf(
-          "object.data = '%s';"
-          " object.onload = () => window.domAutomationController.send(true);",
-          url_with_beforeunload.spec().c_str()),
-      &result));
-  ASSERT_TRUE(result);
+  ASSERT_EQ(true, content::EvalJs(main_frame,
+                                  base::StringPrintf(
+                                      "object.data = '%s';"
+                                      "new Promise(resolve => {"
+                                      "  object.onload = () => resolve(true);"
+                                      "});",
+                                      url_with_beforeunload.spec().c_str())));
   // Give user gesture to the frame, set the <object> to text/csv resource and
   // handle the "beforeunload" dialog.
   content::PrepContentsForBeforeUnloadTest(
       browser()->tab_strip_model()->GetWebContentsAt(0));
-  ASSERT_TRUE(content::ExecuteScript(main_frame,
-                                     "object.data = './testEmbedded.csv';"
-                                     "object.type = 'text/csv';"));
+  ASSERT_TRUE(content::ExecJs(main_frame,
+                              "object.data = './testEmbedded.csv';"
+                              "object.type = 'text/csv';"));
   javascript_dialogs::AppModalDialogController* alert =
       ui_test_utils::WaitForAppModalDialog();
   ASSERT_TRUE(alert->is_before_unload_dialog());
   alert->view()->AcceptAppModalDialog();
 
-  EXPECT_TRUE(GetGuestViewManager()->WaitForSingleGuestCreated());
+  EXPECT_TRUE(GetGuestViewManager()->WaitForSingleGuestViewCreated());
 }
 
 IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest, PostMessage) {
@@ -426,7 +371,6 @@ IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest, NonAsciiHeaders) {
 }
 
 IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest, DataUrl) {
-  const char* kDataUrlCsv = "data:text/csv;base64,Y29udGVudCB0byByZWFkCg==";
   RunTestWithUrl(GURL(kDataUrlCsv));
 }
 
@@ -473,7 +417,7 @@ IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest, BeforeUnload_NoDialog) {
 
   // Wait for a round trip to the outer renderer to ensure any beforeunload
   // toggle IPC has had time to reach the browser.
-  ExecuteScriptAndGetValue(web_contents->GetPrimaryMainFrame(), "");
+  ASSERT_TRUE(content::ExecJs(web_contents->GetPrimaryMainFrame(), ""));
 
   // Try to navigate away from the page. If the beforeunload listener is
   // triggered and a dialog is shown, this navigation will never complete,
@@ -489,7 +433,7 @@ IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest, BeforeUnload_ShowDialog) {
 
   // Wait for a round trip to the outer renderer to ensure the beforeunload
   // toggle IPC has had time to reach the browser.
-  ExecuteScriptAndGetValue(web_contents->GetPrimaryMainFrame(), "");
+  ASSERT_TRUE(content::ExecJs(web_contents->GetPrimaryMainFrame(), ""));
 
   web_contents->GetController().LoadURL(GURL(url::kAboutBlankURL), {},
                                         ui::PAGE_TRANSITION_TYPED, "");
@@ -524,17 +468,23 @@ IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest,
   content::PrepContentsForBeforeUnloadTest(web_contents, false);
 
   // Make sure we have a guestviewmanager.
-  auto* guest_contents = GetGuestViewManager()->WaitForSingleGuestCreated();
-  UserActivationUpdateWaiter activation_waiter(guest_contents);
+  auto* guest_view = GetGuestViewManager()->WaitForSingleGuestViewCreated();
+  ASSERT_TRUE(guest_view);
 
-  // Activate |guest_contents| through a click, then wait until the activation
-  // IPC reaches the browser process.
-  SimulateMouseClick(guest_contents, 0, blink::WebMouseEvent::Button::kLeft);
+  UserActivationUpdateWaiter activation_waiter(guest_view->GetGuestMainFrame());
+
+  // Activate |guest_view| through a click, then wait until the activation IPC
+  // reaches the browser process.
+  content::WaitForHitTestData(guest_view->GetGuestMainFrame());
+  SimulateMouseClickAt(web_contents, 0, blink::WebMouseEvent::Button::kLeft,
+                       guest_view->GetGuestMainFrame()
+                           ->GetView()
+                           ->TransformPointToRootCoordSpace(gfx::Point(5, 5)));
   activation_waiter.Wait();
 
   // Wait for a round trip to the outer renderer to ensure any beforeunload
   // toggle IPC has had time to reach the browser.
-  ExecuteScriptAndGetValue(web_contents->GetPrimaryMainFrame(), "");
+  ASSERT_TRUE(content::ExecJs(web_contents->GetPrimaryMainFrame(), ""));
 
   // Try to navigate away, this should invoke a beforeunload dialog.
   web_contents->GetController().LoadURL(GURL(url::kAboutBlankURL), {},
@@ -555,8 +505,11 @@ IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest,
                               "const e = document.createElement('embed');"
                               "e.src = './testEmbedded.csv'; e.type='text/csv';"
                               "document.body.appendChild(e);"));
-  DocumentLoadCompletionWaiter(GetGuestViewManager()->WaitForNextGuestCreated())
-      .Wait();
+
+  auto* guest_view = GetGuestViewManager()->WaitForNextGuestViewCreated();
+  ASSERT_TRUE(guest_view);
+  WaitForGuestViewLoadStop(guest_view);
+
   // After load, an IPC has been sent to the renderer to update routing IDs for
   // the guest frame and the content frame (and activate the
   // PostMessageSupport). Run some JS to Ensure no DCHECKs have fired in the
@@ -581,8 +534,7 @@ IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest,
 // blocked in sandboxed frames).
 IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest, DoNotLoadInSandboxedFrame) {
   // Use the testing subclass of MimeHandlerViewGuest.
-  GetGuestViewManager()->RegisterTestGuestViewType<MimeHandlerViewGuest>(
-      base::BindRepeating(&TestMimeHandlerViewGuest::Create));
+  TestMimeHandlerViewGuest::RegisterTestGuestViewType(GetGuestViewManager());
 
   const extensions::Extension* extension = LoadTestExtension();
   ASSERT_TRUE(extension);
@@ -596,7 +548,7 @@ IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest, DoNotLoadInSandboxedFrame) {
   // Therefore, it suffices to wait for one GuestView to be created, then remove
   // the non-sandboxed frame, and ensue there are no GuestViews left.
   if (guest_view_manager->num_guests_created() == 0)
-    ASSERT_TRUE(guest_view_manager->WaitForNextGuestCreated());
+    ASSERT_TRUE(GetGuestViewManager()->WaitForNextGuestViewCreated());
   ASSERT_EQ(1U, guest_view_manager->num_guests_created());
 
   // Remove the non-sandboxed frame.
@@ -630,8 +582,7 @@ IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest, DoNotLoadInSandboxedFrame) {
 
 // Tests that a MimeHandlerViewGuest auto-rejects pointer lock requests.
 IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest, RejectPointLock) {
-  GetGuestViewManager()->RegisterTestGuestViewType<MimeHandlerViewGuest>(
-      base::BindRepeating(&TestMimeHandlerViewGuest::Create));
+  TestMimeHandlerViewGuest::RegisterTestGuestViewType(GetGuestViewManager());
 
   auto* extension = LoadTestExtension();
   ASSERT_TRUE(extension);
@@ -639,18 +590,11 @@ IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest, RejectPointLock) {
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
       browser(), embedded_test_server()->GetURL("/test_embedded.html")));
 
-  auto* guest_contents = GetGuestViewManager()->WaitForSingleGuestCreated();
-  // Make sure the load has started, before waiting for it to stop.
-  // This is a little hacky, but will unjank the test for now.
-  while (!guest_contents->IsLoading() &&
-         !guest_contents->GetController().GetLastCommittedEntry()) {
-    base::RunLoop run_loop;
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-        FROM_HERE, run_loop.QuitClosure(), TestTimeouts::tiny_timeout());
-    run_loop.Run();
-  }
-  EXPECT_TRUE(WaitForLoadStop(guest_contents));
-  content::RenderFrameHost* guest_rfh = guest_contents->GetPrimaryMainFrame();
+  auto* guest_view = GetGuestViewManager()->WaitForSingleGuestViewCreated();
+  ASSERT_TRUE(guest_view);
+  TestMimeHandlerViewGuest::WaitForGuestLoadStartThenStop(guest_view);
+
+  auto* guest_rfh = guest_view->GetGuestMainFrame();
   EXPECT_EQ(false, content::EvalJs(guest_rfh, R"code(
     var promise = new Promise((resolve, reject) => {
       document.addEventListener('pointerlockchange', () => resolve(true));
@@ -663,25 +607,20 @@ IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest, RejectPointLock) {
                                    1 /* world_id */));
 }
 
-// Flaky (https://crbug.com/1033009)
 IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest,
-                       DISABLED_GuestDevToolsReloadsEmbedder) {
-  GURL data_url("data:application/pdf,foo");
-  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), data_url));
+                       GuestDevToolsReloadsEmbedder) {
+  GURL data_url(kDataUrlCsv);
+  RunTestWithUrl(data_url);
   auto* embedder_web_contents =
       browser()->tab_strip_model()->GetWebContentsAt(0);
-  auto* guest_web_contents = GetGuestViewManager()->WaitForSingleGuestCreated();
-  EXPECT_NE(embedder_web_contents, guest_web_contents);
-  while (guest_web_contents->IsLoading()) {
-    base::RunLoop run_loop;
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-        FROM_HERE, run_loop.QuitClosure(), TestTimeouts::tiny_timeout());
-    run_loop.Run();
-  }
+  auto* guest_view = GetGuestViewManager()->WaitForSingleGuestViewCreated();
+  EXPECT_NE(embedder_web_contents->GetPrimaryMainFrame(),
+            guest_view->GetGuestMainFrame());
+  TestMimeHandlerViewGuest::WaitForGuestLoadStartThenStop(guest_view);
 
   // Load DevTools.
   scoped_refptr<content::DevToolsAgentHost> devtools_agent_host =
-      content::DevToolsAgentHost::GetOrCreateFor(guest_web_contents);
+      content::DevToolsAgentHost::GetOrCreateFor(guest_view->web_contents());
   StubDevToolsAgentHostClient devtools_agent_host_client;
   devtools_agent_host->AttachClient(&devtools_agent_host_client);
 
@@ -689,8 +628,7 @@ IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest,
   content::TestNavigationObserver reload_observer(embedder_web_contents);
   constexpr char kMsg[] = R"({"id":1,"method":"Page.reload"})";
   devtools_agent_host->DispatchProtocolMessage(
-      &devtools_agent_host_client,
-      base::as_bytes(base::make_span(kMsg, strlen(kMsg))));
+      &devtools_agent_host_client, base::byte_span_from_cstring(kMsg));
   reload_observer.Wait();
   devtools_agent_host->DetachClient(&devtools_agent_host_client);
 }
@@ -701,15 +639,15 @@ IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest,
 IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest,
                        MimeHandlerViewInDisplayNoneFrameForGoogleApps) {
   GURL data_url(
-      "data:text/html, <iframe src='data:application/pdf,foo' "
-      "style='display:none'></iframe>,foo2");
-  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), data_url));
-  ASSERT_TRUE(GetGuestViewManager()->WaitForSingleGuestCreated());
+      base::StringPrintf("data:text/html, <iframe src='%s' "
+                         "style='display:none'></iframe>,foo2",
+                         kDataUrlCsv));
+  RunTestWithUrl(data_url);
 }
 
 #if BUILDFLAG(ENABLE_PRINT_PREVIEW)
 IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest, EmbeddedThenPrint) {
-  PrintPreviewDelegate print_preview_delegate;
+  printing::TestPrintPreviewObserver print_observer(/*wait_for_loaded=*/false);
   RunTestWithUrl(embedded_test_server()->GetURL("/test_embedded.html"));
   ASSERT_TRUE(
       ui_test_utils::NavigateToURL(browser(), GURL(url::kAboutBlankURL)));
@@ -720,10 +658,69 @@ IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest, EmbeddedThenPrint) {
   // Verify that print dialog comes up.
   auto* web_contents = browser()->tab_strip_model()->GetActiveWebContents();
   auto* main_frame = web_contents->GetPrimaryMainFrame();
-  // Use setTimeout() to prevent ExecuteScript() from blocking on the print
+  // Use setTimeout() to prevent ExecJs() from blocking on the print
   // dialog.
-  ASSERT_TRUE(content::ExecuteScript(
-      main_frame, "setTimeout(function() { window.print(); }, 0)"));
-  print_preview_delegate.WaitUntilPreviewIsReady();
+  ASSERT_TRUE(content::ExecJs(main_frame,
+                              "setTimeout(function() { window.print(); }, 0)"));
+  print_observer.WaitUntilPreviewIsReady();
 }
 #endif
+
+IN_PROC_BROWSER_TEST_F(ChromeMimeHandlerViewTest, FrameIterationBeforeAttach) {
+  TestGuestViewManager* manager = GetGuestViewManager();
+  TestMimeHandlerViewGuest::RegisterTestGuestViewType(manager);
+  ASSERT_TRUE(LoadTestExtension());
+  const GURL initial_url(embedded_test_server()->GetURL("/title1.html"));
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), initial_url));
+
+  // Navigate to a page with a MimeHandlerView inside an iframe and pause
+  // between the creation of the MimeHandlerView and when it is attached to the
+  // placeholder frame inside the iframe.
+  base::RunLoop pre_attach_run_loop;
+  base::OnceClosure resume_attach;
+  auto* web_contents = browser()->tab_strip_model()->GetActiveWebContents();
+  auto* mime_handler_view_helper = extensions::MimeHandlerViewAttachHelper::Get(
+      web_contents->GetPrimaryMainFrame()->GetProcess()->GetDeprecatedID());
+  mime_handler_view_helper->set_resume_attach_callback_for_testing(
+      base::BindLambdaForTesting([&](base::OnceClosure resume_closure) {
+        resume_attach = std::move(resume_closure);
+        pre_attach_run_loop.Quit();
+      }));
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(
+      browser(), embedded_test_server()->GetURL("/test_iframe.html")));
+  pre_attach_run_loop.Run();
+
+  auto* guest = manager->GetLastGuestViewCreated();
+  auto* guest_main_frame = guest->GetGuestMainFrame();
+  content::RenderFrameHost* expected_outermost_rfh =
+      web_contents->GetPrimaryMainFrame();
+  content::RenderFrameHost* expected_embedder_rfh =
+      content::ChildFrameAt(expected_outermost_rfh, 0);
+
+  // Ensure that iterating through ancestors is correct even when pending
+  // attachment.
+  EXPECT_EQ(nullptr, guest_main_frame->GetParent());
+  EXPECT_EQ(guest_main_frame, guest_main_frame->GetMainFrame());
+  EXPECT_EQ(nullptr, guest_main_frame->GetParentOrOuterDocument());
+  EXPECT_EQ(guest_main_frame, guest_main_frame->GetOutermostMainFrame());
+  // In particular, MimeHandlerView should still be considered to have an
+  // embedder in this state.
+  EXPECT_EQ(expected_embedder_rfh,
+            guest_main_frame->GetParentOrOuterDocumentOrEmbedder());
+  EXPECT_EQ(expected_outermost_rfh,
+            guest_main_frame->GetOutermostMainFrameOrEmbedder());
+
+  // Complete attachment and ensure the results afterwords are consistent with
+  // the above.
+  std::move(resume_attach).Run();
+  manager->WaitUntilAttached(guest);
+
+  EXPECT_EQ(nullptr, guest_main_frame->GetParent());
+  EXPECT_EQ(guest_main_frame, guest_main_frame->GetMainFrame());
+  EXPECT_EQ(nullptr, guest_main_frame->GetParentOrOuterDocument());
+  EXPECT_EQ(guest_main_frame, guest_main_frame->GetOutermostMainFrame());
+  EXPECT_EQ(expected_embedder_rfh,
+            guest_main_frame->GetParentOrOuterDocumentOrEmbedder());
+  EXPECT_EQ(expected_outermost_rfh,
+            guest_main_frame->GetOutermostMainFrameOrEmbedder());
+}

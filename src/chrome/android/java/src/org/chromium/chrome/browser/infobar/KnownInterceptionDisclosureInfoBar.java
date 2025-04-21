@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,8 @@ import android.graphics.Bitmap;
 
 import androidx.annotation.ColorRes;
 
-import org.chromium.base.annotations.CalledByNative;
+import org.jni_zero.CalledByNative;
+
 import org.chromium.components.infobars.ConfirmInfoBar;
 import org.chromium.components.infobars.InfoBarLayout;
 
@@ -17,7 +18,6 @@ import org.chromium.components.infobars.InfoBarLayout;
  * standard ConfirmInfoBar to provide a description as well as a title.
  */
 public class KnownInterceptionDisclosureInfoBar extends ConfirmInfoBar {
-    private static final String TAG = "KnownInterceptionDisclosureInfoBar";
     private String mDescription;
 
     /**
@@ -33,14 +33,24 @@ public class KnownInterceptionDisclosureInfoBar extends ConfirmInfoBar {
      * @param description String to display below the "message" title.
      */
     @CalledByNative
-    private static ConfirmInfoBar create(int iconId, Bitmap iconBitmap, String message,
-            String linkText, String buttonOk, String description) {
+    private static ConfirmInfoBar create(
+            int iconId,
+            Bitmap iconBitmap,
+            String message,
+            String linkText,
+            String buttonOk,
+            String description) {
         return new KnownInterceptionDisclosureInfoBar(
                 iconId, 0, iconBitmap, message, linkText, buttonOk, description);
     }
 
-    private KnownInterceptionDisclosureInfoBar(int iconDrawableId, @ColorRes int iconTintId,
-            Bitmap iconBitmap, String message, String linkText, String primaryButtonText,
+    private KnownInterceptionDisclosureInfoBar(
+            int iconDrawableId,
+            @ColorRes int iconTintId,
+            Bitmap iconBitmap,
+            String message,
+            String linkText,
+            String primaryButtonText,
             String description) {
         super(iconDrawableId, iconTintId, iconBitmap, message, linkText, primaryButtonText, "");
         mDescription = description;

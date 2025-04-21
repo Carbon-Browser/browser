@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,15 +36,41 @@ void ArcNotificationDelegate::Close(bool by_user) {
 }
 
 void ArcNotificationDelegate::Click(
-    const absl::optional<int>& button_index,
-    const absl::optional<std::u16string>& reply) {
+    const std::optional<int>& button_index,
+    const std::optional<std::u16string>& reply) {
   DCHECK(item_);
-  item_->Click();
+
+  if (button_index) {
+    item_->ClickButton(button_index.value(),
+                       base::UTF16ToUTF8(reply.value_or(std::u16string())));
+  } else {
+    item_->Click();
+  }
 }
 
 void ArcNotificationDelegate::SettingsClick() {
   DCHECK(item_);
   item_->OpenSettings();
+}
+
+void ArcNotificationDelegate::DisableNotification() {
+  DCHECK(item_);
+  item_->DisableNotification();
+}
+
+void ArcNotificationDelegate::ExpandStateChanged(bool expanded) {
+  DCHECK(item_);
+  item_->SetExpandState(expanded);
+}
+
+void ArcNotificationDelegate::SnoozeButtonClicked() {
+  DCHECK(item_);
+  item_->OpenSnooze();
+}
+
+message_center::NotificationDelegate*
+ArcNotificationDelegate::GetDelegateForParentCopy() {
+  return nullptr;
 }
 
 }  // namespace ash

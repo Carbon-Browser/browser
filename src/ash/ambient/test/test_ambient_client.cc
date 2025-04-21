@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "base/time/time.h"
+#include "google_apis/gaia/gaia_id.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/test/test_url_loader_factory.h"
 #include "ui/gfx/image/image_unittest_util.h"
@@ -49,7 +50,6 @@ class FakeSharedURLLoaderFactory : public network::SharedURLLoaderFactory {
   // network::SharedURLLoaderFactory implementation:
   std::unique_ptr<network::PendingSharedURLLoaderFactory> Clone() override {
     NOTREACHED();
-    return nullptr;
   }
 
   network::TestURLLoaderFactory& test_url_loader_factory() {
@@ -99,6 +99,11 @@ TestAmbientClient::GetURLLoaderFactory() {
   return url_loader_factory_;
 }
 
+scoped_refptr<network::SharedURLLoaderFactory>
+TestAmbientClient::GetSigninURLLoaderFactory() {
+  return url_loader_factory_;
+}
+
 void TestAmbientClient::RequestWakeLockProvider(
     mojo::PendingReceiver<device::mojom::WakeLockProvider> receiver) {
   wake_lock_provider_->BindReceiver(std::move(receiver));
@@ -110,12 +115,12 @@ void TestAmbientClient::IssueAccessToken(bool is_empty) {
 
   if (is_empty) {
     std::move(pending_callback_)
-        .Run(/*gaia_id=*/std::string(),
+        .Run(GaiaId(),
              /*access_token=*/std::string(),
              /*expiration_time=*/base::Time::Now());
   } else {
     std::move(pending_callback_)
-        .Run(kTestGaiaId, kTestAccessToken,
+        .Run(GaiaId(kTestGaiaId), kTestAccessToken,
              base::Time::Now() + kDefaultTokenExpirationDelay);
   }
 }

@@ -1,4 +1,4 @@
-// Copyright 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,26 +10,29 @@
 
 #include <limits>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/cancelable_callback.h"
 #include "base/containers/flat_map.h"
-#include "base/containers/flat_set.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
+#include "base/types/optional_ref.h"
 #include "cc/base/completion_event.h"
 #include "cc/benchmarks/micro_benchmark.h"
 #include "cc/benchmarks/micro_benchmark_controller.h"
 #include "cc/cc_export.h"
+#include "cc/input/browser_controls_offset_tags_info.h"
 #include "cc/input/browser_controls_state.h"
 #include "cc/input/compositor_input_interfaces.h"
 #include "cc/input/event_listener_properties.h"
@@ -42,7 +45,6 @@
 #include "cc/metrics/begin_main_frame_metrics.h"
 #include "cc/metrics/events_metrics_manager.h"
 #include "cc/metrics/frame_sequence_tracker.h"
-#include "cc/metrics/web_vital_metrics.h"
 #include "cc/paint/node_id.h"
 #include "cc/resources/ui_resource_request.h"
 #include "cc/trees/browser_controls_params.h"
@@ -60,21 +62,15 @@
 #include "cc/trees/target_property.h"
 #include "cc/trees/viewport_layers.h"
 #include "cc/trees/viewport_property_ids.h"
-#include "components/viz/common/resources/resource_format.h"
 #include "components/viz/common/surfaces/local_surface_id.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/delegated_ink_metadata.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/overlay_transform.h"
 
-namespace gfx {
-struct PresentationFeedback;
-}
-
 namespace cc {
 
-class DocumentTransitionRequest;
+class ViewTransitionRequest;
 class HeadsUpDisplayLayer;
 class LayerTreeHostImpl;
 class LayerTreeHostImplClient;
@@ -101,6 +97,17 @@ class CC_EXPORT ScopedDeferMainFrameUpdate {
  public:
   explicit ScopedDeferMainFrameUpdate(LayerTreeHost* host);
   ~ScopedDeferMainFrameUpdate();
+
+ private:
+  base::WeakPtr<LayerTreeHost> host_;
+};
+
+// Returned from LayerTreeHost::PauseRendering. Automatically un-pauses on
+// destruction.
+class CC_EXPORT ScopedPauseRendering {
+ public:
+  explicit ScopedPauseRendering(LayerTreeHost* host);
+  ~ScopedPauseRendering();
 
  private:
   base::WeakPtr<LayerTreeHost> host_;
@@ -204,7 +211,7 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
   void SetPaintWorkletLayerPainter(
       std::unique_ptr<PaintWorkletLayerPainter> painter);
 
-  // Attachs a SwapPromise to the Layer tree, that passes through the
+  // Attaches a SwapPromise to the Layer tree, that passes through the
   // LayerTreeHost and LayerTreeHostImpl with the next commit and frame
   // submission, which can be used to observe that progress. This also
   // causes a main frame to be requested.
@@ -232,7 +239,8 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
   // Visibility and LayerTreeFrameSink -------------------------------
 
   // Sets or gets if the LayerTreeHost is visible. When not visible it will:
-  // - Not request a new LayerTreeFrameSink from the client.
+  // - Not request a new LayerTreeFrameSink from the client (except
+  //   `kWarmUpCompositor` is enabled and warm-up is explicitly requested).
   // - Stop submitting frames to the display compositor.
   // - Stop producing main frames and committing them.
   // The LayerTreeHost is not visible when first created, so this must be called
@@ -240,10 +248,18 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
   void SetVisible(bool visible);
   bool IsVisible() const;
 
+  // Indicates that warm-up is requested to create a new LayerTreeFrameSink
+  // even if the LayerTreeHost is invisible. This is an experimental function
+  // and only used if `kWarmUpCompositor` is enabled. Currently, this will be
+  // requested only from prerendered pages. Please see crbug.com/41496019 for
+  // more details.
+  void SetShouldWarmUp();
+  bool ShouldWarmUp() const;
+
   // Called in response to a LayerTreeFrameSink request made to the client
   // using LayerTreeHostClient::RequestNewLayerTreeFrameSink. The client will
   // be informed of the LayerTreeFrameSink initialization status using
-  // DidInitializaLayerTreeFrameSink or DidFailToInitializeLayerTreeFrameSink.
+  // DidInitializeLayerTreeFrameSink or DidFailToInitializeLayerTreeFrameSink.
   // The request is completed when the host successfully initializes an
   // LayerTreeFrameSink.
   void SetLayerTreeFrameSink(
@@ -274,6 +290,9 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
   // synchronization.
   virtual void SetNeedsCommit();
 
+  // Invoked when a compositing update is first requested and scheduled.
+  void OnCommitRequested();
+
   // Notifies that a new viz::LocalSurfaceId has been set, ahead of it becoming
   // activated. Requests that the compositor thread does not produce new frames
   // until it has activated.
@@ -296,6 +315,14 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
   // StopDeferringCommits is called.
   std::unique_ptr<ScopedDeferMainFrameUpdate> DeferMainFrameUpdate();
 
+  // Prevents the compositor from rendering updates. As opposed to
+  // DeferMainFrameUpdate() which only pauses main frames, this pauses both main
+  // and impl frames to ensure no visual updates are presented.
+  //
+  // Note that this ensures any previously committed or in progress (if called
+  // during the main frame) updates are presented before rendering is paused.
+  [[nodiscard]] std::unique_ptr<ScopedPauseRendering> PauseRendering();
+
   // Returns whether main frame updates are deferred. See conditions above.
   bool MainFrameUpdatesAreDeferred() const;
 
@@ -306,7 +333,7 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
   // while still allowing main frame lifecycle updates. |timeout|
   // is the interval after which commits will restart if nothing stops
   // deferring sooner. If multiple calls are made to StartDeferringCommits
-  // while deferal is active, the first timeout continues to apply.
+  // while deferral is active, the first timeout continues to apply.
   bool StartDeferringCommits(base::TimeDelta timeout,
                              PaintHoldingReason reason);
 
@@ -316,10 +343,13 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
   // Returns true if commits are currently deferred.
   bool IsDeferringCommits() const;
 
+  // Returns true if rendering is currently paused.
+  bool IsRenderingPaused() const;
+
   // Notification that the proxy started or stopped deferring commits.
   void OnDeferCommitsChanged(bool defer_status,
                              PaintHoldingReason reason,
-                             absl::optional<PaintHoldingCommitTrigger> trigger);
+                             std::optional<PaintHoldingCommitTrigger> trigger);
 
   // Returns whether there are any outstanding ScopedDeferMainFrameUpdate,
   // though commits may be deferred also when the local_surface_id_from_parent()
@@ -336,7 +366,9 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
   // Synchronously performs a complete main frame update, commit and compositor
   // frame. Used only in single threaded mode when the compositor's internal
   // scheduling is disabled.
-  void CompositeForTest(base::TimeTicks frame_begin_time, bool raster);
+  void CompositeForTest(base::TimeTicks frame_begin_time,
+                        bool raster,
+                        base::OnceClosure callback);
 
   // Requests a redraw (compositor frame) for the given rect.
   void SetNeedsRedrawRect(const gfx::Rect& damage_rect);
@@ -349,14 +381,20 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
   // Input Handling ---------------------------------------------
 
   // Sets the state of the browser controls. (Used for URL bar animations).
-  void UpdateBrowserControlsState(BrowserControlsState constraints,
-                                  BrowserControlsState current,
-                                  bool animate);
+  void UpdateBrowserControlsState(
+      BrowserControlsState constraints,
+      BrowserControlsState current,
+      bool animate,
+      base::optional_ref<const BrowserControlsOffsetTagsInfo> offset_tags_info);
 
   // Returns the delegate that the input handler uses to communicate with the
   // LayerTreeHostImpl on the compositor thread. Must be dereferenced only on
   // the input handling thread.
   const base::WeakPtr<CompositorDelegateForInput>& GetDelegateForInput() const;
+
+  // Detaches the InputDelegateForCompositor (InputHandler) and
+  // RenderFrameMetadataObserver bound on the compositor thread synchronously.p
+  void DetachInputDelegateAndRenderFrameObserver();
 
   // Debugging and benchmarks ---------------------------------
   void SetDebugState(const LayerTreeDebugState& debug_state);
@@ -364,11 +402,11 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
 
   // Returns the id of the benchmark on success, 0 otherwise.
   int ScheduleMicroBenchmark(const std::string& benchmark_name,
-                             base::Value settings,
+                             base::Value::Dict settings,
                              MicroBenchmark::DoneCallback callback);
 
   // Returns true if the message was successfully delivered and handled.
-  bool SendMessageToMicroBenchmark(int id, base::Value message);
+  bool SendMessageToMicroBenchmark(int id, base::Value::Dict message);
 
   // When the main thread informs the compositor thread that it is ready to
   // commit, generally it would remain blocked until the main thread state is
@@ -376,11 +414,20 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
   // remains blocked until the pending tree is activated.
   void SetNextCommitWaitsForActivation();
 
+  // Registers a callback that is run when the presentation feedback for the
+  // next submitted frame is received (it's entirely possible some frames may be
+  // dropped between the time this is called and the callback is run).
+  // Note that since this might be called on failed presentations, it is
+  // deprecated in favor of `RequestSuccessfulPresentationTimeForNextFrame()`
+  // which will be called only after a successful presentation.
+  void RequestPresentationTimeForNextFrame(
+      PresentationTimeCallbackBuffer::Callback callback);
+
   // Registers a callback that is run when the next frame successfully makes it
   // to the screen (it's entirely possible some frames may be dropped between
   // the time this is called and the callback is run).
-  void RequestPresentationTimeForNextFrame(
-      PresentationTimeCallbackBuffer::MainCallback callback);
+  void RequestSuccessfulPresentationTimeForNextFrame(
+      PresentationTimeCallbackBuffer::SuccessfulCallbackWithDetails callback);
 
   // Registers a callback that is run when any ongoing scroll-animation ends. If
   // there are no ongoing animations, then the callback is run immediately.
@@ -396,6 +443,7 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
   const Layer* root_layer() const {
     return thread_unsafe_commit_state().root_layer.get();
   }
+  bool has_root_layer() const { return root_layer(); }
 
   // Sets the collection of viewport property ids, defined to allow viewport
   // pinch-zoom etc. on the compositor thread. This is set only on the
@@ -465,6 +513,7 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
   // compositors. This is specified in device viewport coordinate space.
   void SetVisualDeviceViewportSize(const gfx::Size&);
 
+  void SetMaxSafeAreaInsets(const gfx::InsetsF& max_safe_area_insets);
   gfx::Rect device_viewport_rect() const {
     return pending_commit_state()->device_viewport_rect;
   }
@@ -540,6 +589,21 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
 
   // Requests the allocation of a new LocalSurfaceId on the compositor thread.
   void RequestNewLocalSurfaceId();
+
+  // Request to screenshot the current viewport. The screenshot will be tagged
+  // with `destination_token`. The screenshot is tagged with `token`. The caller
+  // must have requested a new `viz::LocalSurfaceID` before making this request.
+  void RequestViewportScreenshot(
+      const base::UnguessableToken& destination_token);
+
+  // Request to set `primary_main_frame_item_sequence_number` on the next
+  // frame's metadata.
+  void SetPrimaryMainFrameItemSequenceNumber(
+      int64_t primary_main_frame_item_sequence_number);
+
+  int64_t primary_main_frame_item_sequence_number_for_testing() const {
+    return pending_commit_state()->primary_main_frame_item_sequence_number;
+  }
 
   // Returns the current state of the new LocalSurfaceId request and resets
   // the state.
@@ -652,8 +716,7 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
 
   void SetPropertyTreesNeedRebuild();
 
-  // Returns the layer with the given |element_id|. In layer-list mode, only
-  // scrollable layers are registered in this map.
+  // Returns the layer with the given |element_id|.
   Layer* LayerByElementId(ElementId element_id);
   const Layer* LayerByElementId(ElementId element_id) const;
 
@@ -688,38 +751,42 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
       std::unique_ptr<CompletionEvent> completion,
       bool has_updates);
   std::unique_ptr<CommitState> ActivateCommitState();
-  void CommitComplete(const CommitTimestamps&);
+  void CommitComplete(int source_frame_number, const CommitTimestamps&);
   void RequestNewLayerTreeFrameSink();
   void DidInitializeLayerTreeFrameSink();
   void DidFailToInitializeLayerTreeFrameSink();
   std::unique_ptr<LayerTreeHostImpl> CreateLayerTreeHostImpl(
       LayerTreeHostImplClient* client);
   void DidLoseLayerTreeFrameSink();
-  void DidCommitAndDrawFrame() {
+  void DidCommitAndDrawFrame(int source_frame_number) {
     DCHECK(IsMainThread());
-    client_->DidCommitAndDrawFrame();
+    client_->DidCommitAndDrawFrame(source_frame_number);
   }
-  void DidReceiveCompositorFrameAck() {
+  void DidReceiveCompositorFrameAckDeprecatedForCompositor() {
     DCHECK(IsMainThread());
-    client_->DidReceiveCompositorFrameAck();
+    client_->DidReceiveCompositorFrameAckDeprecatedForCompositor();
   }
   bool UpdateLayers();
   void DidPresentCompositorFrame(
       uint32_t frame_token,
-      std::vector<PresentationTimeCallbackBuffer::MainCallback> callbacks,
-      const gfx::PresentationFeedback& feedback);
+      std::vector<PresentationTimeCallbackBuffer::Callback>
+          presentation_callbacks,
+      std::vector<PresentationTimeCallbackBuffer::SuccessfulCallbackWithDetails>
+          successful_presentation_callbacks,
+      const viz::FrameTimingDetails& frame_timing_details);
   // Called when the compositor completed page scale animation.
   void DidCompletePageScaleAnimation();
-  void ApplyCompositorChanges(CompositorCommitData* commit_data);
+  // Virtual for testing
+  virtual void ApplyCompositorChanges(CompositorCommitData* commit_data);
   void ApplyMutatorEvents(std::unique_ptr<MutatorEvents> events);
   void RecordStartOfFrameMetrics();
   void RecordEndOfFrameMetrics(base::TimeTicks frame_begin_time,
                                ActiveFrameSequenceTrackers trackers);
-  void NotifyThroughputTrackerResults(CustomTrackerResults results);
+  void NotifyCompositorMetricsTrackerResults(CustomTrackerResults results);
+  void NotifyImageDecodeFinished(int request_id, bool decode_succeeded);
   void NotifyTransitionRequestsFinished(
-      const std::vector<uint32_t>& sequence_ids);
-  void ReportEventLatency(
-      std::vector<EventLatencyTracker::LatencyData> latencies);
+      const uint32_t sequence_id,
+      const viz::ViewTransitionElementResourceRects& rects);
 
   LayerTreeHostClient* client() {
     DCHECK(IsMainThread());
@@ -757,6 +824,10 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
   // commit is finished.
   void WaitForProtectedSequenceCompletion() const override;
 
+  bool MustWaitForCommitForTesting() const {
+    return !!commit_completion_event_;
+  }
+
   // MutatorHostClient implementation.
   bool IsElementInPropertyTrees(ElementId element_id,
                                 ElementListType list_type) const override;
@@ -793,12 +864,12 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
 
   bool RunsOnCurrentThread() const override;
 
-  void ScrollOffsetAnimationFinished() override {}
+  void ScrollOffsetAnimationFinished(ElementId element_id) override {}
 
   void NotifyAnimationWorkletStateChange(AnimationWorkletMutationState state,
                                          ElementListType tree_type) override {}
 
-  void QueueImageDecode(const PaintImage& image,
+  void QueueImageDecode(const DrawImage& image,
                         base::OnceCallback<void(bool)> callback);
   void ImageDecodesFinished(const std::vector<std::pair<int, bool>>& results);
 
@@ -831,13 +902,14 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
     return pending_commit_state()->delegated_ink_metadata.get();
   }
 
-  void DidObserveFirstScrollDelay(base::TimeDelta first_scroll_delay,
+  void DidObserveFirstScrollDelay(int source_frame_number,
+                                  base::TimeDelta first_scroll_delay,
                                   base::TimeTicks first_scroll_timestamp);
 
-  void AddDocumentTransitionRequest(
-      std::unique_ptr<DocumentTransitionRequest> request);
+  void AddViewTransitionRequest(std::unique_ptr<ViewTransitionRequest> request);
 
-  std::vector<base::OnceClosure> TakeDocumentTransitionCallbacksForTesting();
+  std::vector<ViewTransitionRequest::ViewTransitionCaptureCallback>
+  TakeViewTransitionCallbacksForTesting();
 
   // Returns a percentage of dropped frames of the last second.
   double GetPercentDroppedFrames() const;
@@ -857,7 +929,11 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
     return base::AutoReset<bool>(&syncing_deltas_for_test_, true);
   }
 
-  void IncrementVisualUpdateDuration(base::TimeDelta visual_update_duration);
+  // See CommitState::scrollers_clobbering_active_value_.
+  void DropActiveScrollDeltaNextCommit(ElementId scroll_element);
+
+  // Causes gpu crash for testing.
+  void CrashGpuProcessForTesting();
 
  protected:
   LayerTreeHost(InitParams params, CompositorMode mode);
@@ -897,7 +973,9 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
   MicroBenchmarkController micro_benchmark_controller_;
 
   // The pointer that input uses to communicate with the layer tree host impl.
-  // Must be dereferenced only from the input-handling thread.
+  // Must be dereferenced only from the input-handling thread. This is the same
+  // as the valid-compositor thread, which may be a separate thread for the
+  // compositor, or the main thread.
   base::WeakPtr<CompositorDelegateForInput> compositor_delegate_weak_ptr_;
 
   scoped_refptr<base::SequencedTaskRunner> image_worker_task_runner_;
@@ -907,6 +985,7 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
   friend class LayerTreeHostSerializationTest;
   friend class LayerTreeTest;
   friend class ScopedDeferMainFrameUpdate;
+  friend class ScopedPauseRendering;
 
   // This is the number of consecutive frames in which we want the content to be
   // free of slow-paths before toggling the flag.
@@ -935,13 +1014,14 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
   void WaitForCommitCompletion(bool for_protected_sequence) const;
 
   void UpdateDeferMainFrameUpdateInternal();
+  void UpdatePauseRenderingInternal();
 
   // Preemptively applies the scroll offset and delta before sending it to the
   // client. This lets the client skip a commit if the value does not change.
   void UpdateScrollOffsetFromImpl(
       const ElementId&,
       const gfx::Vector2dF& delta,
-      const absl::optional<TargetSnapAreaElementIds>&);
+      const std::optional<TargetSnapAreaElementIds>&);
 
   const CompositorMode compositor_mode_;
 
@@ -971,6 +1051,7 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
   const LayerTreeSettings settings_;
 
   bool visible_ = false;
+  bool should_warm_up_ = false;
 
   // If set, then page scale animation has completed, but the client hasn't been
   // notified about it yet.
@@ -989,16 +1070,18 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
   bool is_pinch_gesture_active_from_impl_ = false;
 
   uint32_t defer_main_frame_update_count_ = 0;
+  uint32_t pause_rendering_count_ = 0;
 
   gfx::Rect visual_device_viewport_intersection_rect_;
 
   scoped_refptr<HeadsUpDisplayLayer> hud_layer_;
 
   // Layer id to Layer map.
-  std::unordered_map<int, Layer*> layer_id_map_;
+  std::unordered_map<int, raw_ptr<Layer, CtnExperimental>> layer_id_map_;
 
   // This is for layer tree mode only.
-  std::unordered_map<ElementId, Layer*, ElementIdHash> element_layers_map_;
+  std::unordered_map<ElementId, raw_ptr<Layer, CtnExperimental>, ElementIdHash>
+      element_layers_map_;
 
   bool in_paint_layer_contents_ = false;
 
@@ -1030,20 +1113,14 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
   EventsMetricsManager events_metrics_manager_;
 
   // A list of callbacks that need to be invoked when they are processed.
-  base::flat_map<uint32_t, base::OnceClosure> document_transition_callbacks_;
-
-  // Set if WaitForCommitCompletion() was called before commit completes. Used
-  // for histograms.
-  mutable bool waited_for_protected_sequence_ = false;
+  base::flat_map<uint32_t, ViewTransitionRequest::ViewTransitionCaptureCallback>
+      view_transition_callbacks_;
 
   bool in_composite_for_test_ = false;
 
   bool syncing_deltas_for_test_ = false;
 
-  // Used to vend weak pointers to LayerTreeHost to ScopedDeferMainFrameUpdate
-  // objects.
-  base::WeakPtrFactory<LayerTreeHost> defer_main_frame_update_weak_ptr_factory_{
-      this};
+  base::WeakPtrFactory<LayerTreeHost> weak_ptr_factory_{this};
 };
 
 }  // namespace cc

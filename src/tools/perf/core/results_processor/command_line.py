@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -11,7 +11,6 @@ import argparse
 import datetime
 import logging
 import os
-import re
 import sys
 
 from py_utils import cloud_storage
@@ -29,16 +28,26 @@ def ArgumentParser(standalone=False):
   parser.add_argument(
       '-v', '--verbose', action='count', dest='verbosity', default=0,
       help='Increase verbosity level (repeat as needed)')
+  parser.add_argument('-q',
+                      '--quiet',
+                      action='count',
+                      default=0,
+                      help='Decrease verbosity level (repeat as needed)')
   group.add_argument(
-      '--output-format', action='append', dest='output_formats',
-      metavar='FORMAT', choices=all_output_formats, required=standalone,
-      help=Sentences(
-          'Output format to produce.',
-          'May be used multiple times to produce multiple outputs.',
-          'Avaliable formats: %(choices)s.',
-          '' if standalone else 'Defaults to: html.'))
+      '--output-format',
+      action='append',
+      dest='output_formats',
+      metavar='FORMAT',
+      choices=all_output_formats,
+      required=standalone,
+      help=Sentences('Output format to produce.',
+                     'May be used multiple times to produce multiple outputs.',
+                     'Avaliable formats: %(choices)s.',
+                     '' if standalone else 'Defaults to: html.'))
   group.add_argument(
-      '--intermediate-dir', metavar='DIR_PATH', required=standalone,
+      '--intermediate-dir',
+      metavar='DIR_PATH',
+      required=standalone,
       help=Sentences(
           'Path to a directory where intermediate results are stored.',
           '' if standalone else 'If not provided, the default is to create a '
@@ -99,22 +108,36 @@ def ArgumentParser(standalone=False):
       '--is-unittest',
       action='store_true',
       help='Is running inside a unittest.')
-  group.add_argument(
+
+  # Separate group for fetching device data
+  device_group = parser.add_argument_group(title='Device fetching options')
+  device_group.add_argument(
       '--fetch-device-data',
       action='store_true',
-      help='Android-specific argument to enable fetching data from a device.')
-  group.add_argument(
+      help=('Argument to enable fetching data from a device.'))
+  device_group.add_argument(
+      '--fetch-device-data-on-success',
+      action='store_true',
+      help=('When --fetch-device-data is enabled, this switch ensures that '
+            'data is only pulled after a successful run (exited with 0)'))
+  device_group.add_argument(
+      '--fetch-device-data-platform',
+      dest='fetch_data_platform',
+      choices=['android', 'chromeos'],
+      help='Platform associated with device type to pull data from. Only '
+      'supports --fetch-device-data.')
+  device_group.add_argument(
       '--fetch-data-path-device',
       dest='device_data_path',
-      help=('Android-specific argument for --fetch-data-device. Use this to '
-            'specify the path on device to pull data from using adb.'))
-  group.add_argument(
+      help=('Use this to specify the path on device to pull data from. Should '
+            'be used with --fetch-device-data.'))
+  device_group.add_argument(
       '--fetch-data-path-local',
       dest='local_data_path',
-      default=os.environ.get('ISOLATED_OUTDIR'),
-      help=('Android-specific argument for --fetch-data-device. Use this to '
-            'override the local copy path. Defaults to ISOLATED_OUTDIR '
-            'environment variable.'))
+      default=os.environ.get('ISOLATED_OUTDIR', os.getcwd()),
+      help=('Use this to override the local copy path. Defaults to '
+            'ISOLATED_OUTDIR environment variable or cwd if ISOLATED_OUTDIR is '
+            'not set. To be used in conjuction with --fetch-device-data.'))
   return parser
 
 
@@ -132,10 +155,15 @@ def ProcessOptions(options):
   Args:
     options: An options object with values parsed from the command line.
   """
-  if options.verbosity >= 2:
+  log_verbosity = options.verbosity - options.quiet
+  if log_verbosity >= 2:
     logging.getLogger().setLevel(logging.DEBUG)
-  elif options.verbosity == 1:
+  elif log_verbosity == 1:
     logging.getLogger().setLevel(logging.INFO)
+  elif log_verbosity <= -2:
+    logging.getLogger().setLevel(logging.CRITICAL)
+  elif log_verbosity == -1:
+    logging.getLogger().setLevel(logging.ERROR)
   else:
     logging.getLogger().setLevel(logging.WARNING)
 
@@ -153,13 +181,9 @@ def ProcessOptions(options):
   if options.intermediate_dir:
     options.intermediate_dir = resolve_dir(options.intermediate_dir)
   else:
-    if options.results_label:
-      filesafe_label = re.sub(r'\W+', '_', options.results_label)
-    else:
-      filesafe_label = 'run'
     start_time = datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
-    options.intermediate_dir = os.path.join(
-        options.output_dir, 'artifacts', '%s_%s' % (filesafe_label, start_time))
+    options.intermediate_dir = os.path.join(options.output_dir, 'artifacts',
+                                            'run_%s' % start_time)
 
   if options.upload_results:
     options.upload_bucket = cloud_storage.BUCKET_ALIASES.get(
@@ -173,6 +197,21 @@ def ProcessOptions(options):
     options.output_formats = sorted(set(options.output_formats))
   if 'none' in options.output_formats:
     options.output_formats.remove('none')
+
+  if options.fetch_device_data:
+    if not options.fetch_data_platform:
+      raise argparse.ArgumentError(options.fetch_data_platform,
+                                   ('--fetch-device-data-platform must be set '
+                                    'with --fetch-device-data'))
+    if not options.device_data_path:
+      raise argparse.ArgumentError(options.device_data_path,
+                                   ('--fetch-data-path-device must be set '
+                                    'with --fetch-device-data'))
+  if options.fetch_device_data_on_success:
+    if not options.fetch_device_data:
+      raise argparse.ArgumentError(options.fetch_device_data_on_success,
+                                   ('--fetch-device-data must be set '
+                                    'with --fetch-device-data-on-success'))
 
 
 def _CreateTopLevelParser(standalone):

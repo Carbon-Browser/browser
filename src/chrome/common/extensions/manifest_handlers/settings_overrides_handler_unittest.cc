@@ -1,21 +1,22 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/common/extensions/manifest_handlers/settings_overrides_handler.h"
 
 #include <memory>
+#include <string_view>
 
 #include "base/json/json_string_value_serializer.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/values.h"
 #include "build/build_config.h"
 #include "components/version_info/version_info.h"
 #include "extensions/common/error_utils.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/manifest_constants.h"
 #include "extensions/common/manifest_url_handlers.h"
-#include "extensions/common/value_builder.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace {
@@ -104,14 +105,13 @@ const char kManifestBrokenStartupPagesButCorrectHomepage[] = R"(
   }
 })";
 
-using extensions::DictionaryBuilder;
 using extensions::Extension;
 using extensions::Manifest;
 using extensions::SettingsOverrides;
 using extensions::api::manifest_types::ChromeSettingsOverrides;
 namespace manifest_keys = extensions::manifest_keys;
 
-scoped_refptr<Extension> CreateExtension(const base::DictionaryValue& manifest,
+scoped_refptr<Extension> CreateExtension(const base::Value::Dict& manifest,
                                          std::string* error) {
   scoped_refptr<Extension> extension =
       Extension::Create(base::FilePath(FILE_PATH_LITERAL("//nonexistent")),
@@ -120,7 +120,7 @@ scoped_refptr<Extension> CreateExtension(const base::DictionaryValue& manifest,
   return extension;
 }
 
-scoped_refptr<Extension> CreateExtension(base::StringPiece manifest,
+scoped_refptr<Extension> CreateExtension(std::string_view manifest,
                                          std::string* error) {
   JSONStringValueDeserializer json(manifest);
   std::unique_ptr<base::Value> root(json.Deserialize(nullptr, error));
@@ -132,23 +132,21 @@ scoped_refptr<Extension> CreateExtension(base::StringPiece manifest,
     ADD_FAILURE() << "Manifest isn't a Dictionary";
     return nullptr;
   }
-  return CreateExtension(*static_cast<base::DictionaryValue*>(root.get()),
-                         error);
+  return CreateExtension(root->GetDict(), error);
 }
 
 scoped_refptr<Extension> CreateExtensionWithSearchProvider(
-    std::unique_ptr<base::DictionaryValue> search_provider,
+    base::Value::Dict search_provider,
     std::string* error) {
-  DictionaryBuilder manifest;
-  manifest.Set("name", "name")
-      .Set("manifest_version", 2)
-      .Set("version", "0.1")
-      .Set("description", "desc")
-      .Set("chrome_settings_overrides",
-           DictionaryBuilder()
-               .Set("search_provider", std::move(search_provider))
-               .Build());
-  return CreateExtension(*manifest.Build(), error);
+  auto manifest = base::Value::Dict()
+                      .Set("name", "name")
+                      .Set("manifest_version", 2)
+                      .Set("version", "0.1")
+                      .Set("description", "desc")
+                      .Set("chrome_settings_overrides",
+                           base::Value::Dict().Set("search_provider",
+                                                   std::move(search_provider)));
+  return CreateExtension(std::move(manifest), error);
 }
 
 TEST(OverrideSettingsTest, ParseManifest) {
@@ -164,8 +162,7 @@ TEST(OverrideSettingsTest, ParseManifest) {
   ASSERT_TRUE(settings_override);
   ASSERT_TRUE(settings_override->search_engine);
   EXPECT_TRUE(settings_override->search_engine->is_default);
-  const ChromeSettingsOverrides::SearchProvider* search_engine =
-      settings_override->search_engine.get();
+  const auto& search_engine = settings_override->search_engine;
   EXPECT_EQ("first", *search_engine->name);
   EXPECT_EQ("firstkey", *search_engine->keyword);
   EXPECT_EQ("http://www.foo.com/s?q={searchTerms}", search_engine->search_url);
@@ -199,8 +196,7 @@ TEST(OverrideSettingsTest, ParsePrepopulatedId) {
   ASSERT_TRUE(settings_override);
   ASSERT_TRUE(settings_override->search_engine);
   EXPECT_TRUE(settings_override->search_engine->is_default);
-  const ChromeSettingsOverrides::SearchProvider* search_engine =
-      settings_override->search_engine.get();
+  const auto& search_engine = settings_override->search_engine;
   ASSERT_TRUE(search_engine->prepopulated_id);
   EXPECT_EQ("http://www.foo.com/s?q={searchTerms}", search_engine->search_url);
   EXPECT_EQ(3, *search_engine->prepopulated_id);
@@ -312,23 +308,23 @@ TEST(OverrideSettingsTest, SearchProviderMissingKeys) {
       {"favicon_url", "http://www.foo.com/favicon.ico"},
   };
 
-  DictionaryBuilder search_provider;
-  search_provider.Set("search_url", "http://www.foo.com/s?q={searchTerms}")
-      .Set("is_default", true);
+  auto search_provider =
+      base::Value::Dict()
+          .Set("search_url", "http://www.foo.com/s?q={searchTerms}")
+          .Set("is_default", true);
   for (const KeyValue& kv : kMandatorySearchProviderKeyValues)
     search_provider.Set(kv.key, kv.value);
-  std::unique_ptr<base::DictionaryValue> search_provider_with_all_keys_dict =
-      search_provider.Build();
+  base::Value::Dict search_provider_with_all_keys_dict =
+      std::move(search_provider);
 
   // Missing all keys from |kMandatorySearchProviderValues|.
   for (const KeyValue& kv : kMandatorySearchProviderKeyValues) {
     SCOPED_TRACE(testing::Message()
                  << "key = " << kv.key << " value = " << kv.value);
     // Build a search provider entry with |kv.key| missing:
-    std::unique_ptr<base::DictionaryValue> provider_with_missing_key =
-        base::DictionaryValue::From(base::Value::ToUniquePtrValue(
-            search_provider_with_all_keys_dict->Clone()));
-    ASSERT_TRUE(provider_with_missing_key->RemovePath(kv.key));
+    base::Value::Dict provider_with_missing_key =
+        search_provider_with_all_keys_dict.Clone();
+    ASSERT_TRUE(provider_with_missing_key.Remove(kv.key));
 
     std::string error;
     scoped_refptr<Extension> extension = CreateExtensionWithSearchProvider(

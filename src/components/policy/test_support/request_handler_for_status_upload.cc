@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,7 +35,7 @@ std::unique_ptr<HttpResponse> RequestHandlerForStatusUpload::HandleRequest(
   em::DeviceManagementResponse response;
   response.mutable_device_status_report_response();
   response.mutable_session_status_report_response();
-  return CreateHttpResponse(net::HTTP_OK, response.SerializeAsString());
+  return CreateHttpResponse(net::HTTP_OK, response);
 }
 
 }  // namespace policy

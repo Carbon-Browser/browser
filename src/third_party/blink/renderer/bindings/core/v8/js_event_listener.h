@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,6 @@ class CORE_EXPORT JSEventListener final : public JSBasedEventListener {
   explicit JSEventListener(V8EventListener* listener)
       : event_listener_(listener) {}
 
-  // blink::CustomWrappable overrides:
   void Trace(Visitor*) const override;
 
   // blink::EventListener overrides:

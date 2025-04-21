@@ -1,4 +1,4 @@
-// Copyright (c) 2009 The Chromium Authors. All rights reserved.
+// Copyright 2009 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,12 @@
 #define TRACELINE_SYM_RESOLVER_H_
 
 #include <windows.h>
+
 #include <dbghelp.h>
 
-#include <vector>
-#include <string>
 #include <map>
+#include <string>
+#include <vector>
 
 static BOOL CALLBACK SymEnumer(PCSTR name, DWORD64 base, PVOID context) {
   reinterpret_cast<std::vector<DWORD64>*>(context)->push_back(base);

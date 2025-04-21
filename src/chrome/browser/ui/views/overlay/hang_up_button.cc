@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,8 +21,9 @@ HangUpButton::HangUpButton(PressedCallback callback)
 }
 
 void HangUpButton::OnBoundsChanged(const gfx::Rect& previous_bounds) {
-  if (size() == previous_bounds.size())
+  if (size() == previous_bounds.size()) {
     return;
+  }
 
   UpdateImage();
 }
@@ -35,5 +36,5 @@ void HangUpButton::UpdateImage() {
                     kColorPipWindowHangUpButtonForeground, icon_size));
 }
 
-BEGIN_METADATA(HangUpButton, OverlayWindowImageButton)
+BEGIN_METADATA(HangUpButton)
 END_METADATA

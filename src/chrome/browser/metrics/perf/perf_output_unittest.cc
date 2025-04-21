@@ -1,6 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/metrics/perf/perf_output.h"
 
@@ -9,11 +14,12 @@
 
 #include <utility>
 
+#include "base/containers/span.h"
 #include "base/files/file.h"
 #include "base/posix/eintr_wrapper.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread_restrictions.h"
-#include "chromeos/dbus/debug_daemon/fake_debug_daemon_client.h"
+#include "chromeos/ash/components/dbus/debug_daemon/fake_debug_daemon_client.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/metrics_proto/sampled_profile.pb.h"
@@ -59,10 +65,10 @@ const std::vector<std::string> kQuipperArgs{
 
 // This fakes DebugDaemonClient by serving example perf data when the profiling
 // duration elapses.
-class FakeDebugDaemonClient : public chromeos::FakeDebugDaemonClient {
+class FakeDebugDaemonClient : public ash::FakeDebugDaemonClient {
  public:
   FakeDebugDaemonClient()
-      : task_runner_(base::SequencedTaskRunnerHandle::Get()) {}
+      : task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {}
 
   FakeDebugDaemonClient(const FakeDebugDaemonClient&) = delete;
   FakeDebugDaemonClient& operator=(const FakeDebugDaemonClient&) = delete;
@@ -109,9 +115,9 @@ class FakeDebugDaemonClient : public chromeos::FakeDebugDaemonClient {
     base::ScopedAllowBlockingForTesting allow_block;
 
     auto perf_data = GetExamplePerfDataProto().SerializeAsString();
-    auto bytes_written = perf_output_file_.WriteAtCurrentPos(perf_data.c_str(),
-                                                             perf_data.size());
-    EXPECT_EQ(bytes_written, static_cast<ssize_t>(perf_data.size()));
+    EXPECT_TRUE(perf_output_file_.WriteAtCurrentPosAndCheck(
+        base::as_byte_span(perf_data)));
+
     // Need to close the pipe to unblock the pipe reader.
     perf_output_file_.Close();
   }

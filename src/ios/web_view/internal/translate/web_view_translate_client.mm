@@ -1,28 +1,26 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/web_view/internal/translate/web_view_translate_client.h"
 
-#include <vector>
+#import <vector>
 
-#include "base/check.h"
-#include "base/notreached.h"
-#include "components/infobars/core/infobar.h"
-#include "components/language/core/browser/language_model_manager.h"
-#include "components/language/core/browser/pref_names.h"
-#include "components/translate/core/browser/page_translated_details.h"
-#include "components/translate/core/browser/translate_infobar_delegate.h"
-#include "components/translate/core/browser/translate_step.h"
-#include "ios/web/public/browser_state.h"
-#include "ios/web_view/internal/language/web_view_accept_languages_service_factory.h"
-#include "ios/web_view/internal/language/web_view_language_model_manager_factory.h"
-#include "ios/web_view/internal/translate/web_view_translate_ranker_factory.h"
-#include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/check.h"
+#import "base/notreached.h"
+#import "components/infobars/core/infobar.h"
+#import "components/language/core/browser/language_model_manager.h"
+#import "components/language/core/browser/pref_names.h"
+#import "components/translate/core/browser/page_translated_details.h"
+#import "components/translate/core/browser/translate_infobar_delegate.h"
+#import "components/translate/core/browser/translate_step.h"
+#import "components/translate/core/common/language_detection_details.h"
+#import "ios/web/public/browser_state.h"
+#import "ios/web_view/internal/language/web_view_accept_languages_service_factory.h"
+#import "ios/web_view/internal/language/web_view_language_model_manager_factory.h"
+#import "ios/web_view/internal/language/web_view_url_language_histogram_factory.h"
+#import "ios/web_view/internal/translate/web_view_translate_ranker_factory.h"
+#import "url/gurl.h"
 
 namespace ios_web_view {
 
@@ -36,6 +34,7 @@ std::unique_ptr<WebViewTranslateClient> WebViewTranslateClient::Create(
       WebViewTranslateRankerFactory::GetForBrowserState(browser_state),
       WebViewLanguageModelManagerFactory::GetForBrowserState(browser_state)
           ->GetPrimaryModel(),
+      WebViewUrlLanguageHistogramFactory::GetForBrowserState(browser_state),
       web_state,
       WebViewAcceptLanguagesServiceFactory::GetForBrowserState(browser_state));
 }
@@ -44,16 +43,18 @@ WebViewTranslateClient::WebViewTranslateClient(
     PrefService* pref_service,
     translate::TranslateRanker* translate_ranker,
     language::LanguageModel* language_model,
+    language::UrlLanguageHistogram* url_language_histogram,
     web::WebState* web_state,
     language::AcceptLanguagesService* accept_languages)
     : pref_service_(pref_service),
-      translate_manager_(this, translate_ranker, language_model),
       translate_driver_(web_state,
-                        &translate_manager_,
-                        /*translate_model_service*/ nullptr),
+                        /*language_detection_model_service=*/nullptr),
+      translate_manager_(this, translate_ranker, language_model),
       accept_languages_(accept_languages) {
   DCHECK(pref_service_);
   DCHECK(accept_languages_);
+  translate_driver_.Initialize(url_language_histogram, &translate_manager_);
+  translate_observation_.Observe(&translate_driver_);
 }
 
 WebViewTranslateClient::~WebViewTranslateClient() = default;
@@ -78,19 +79,30 @@ bool WebViewTranslateClient::RequestTranslationOffer() {
   }
 }
 
+// LanguageDetectionObserver implementation:
+
+void WebViewTranslateClient::OnTranslateDriverDestroyed(
+    translate::TranslateDriver* driver) {
+  translate_observation_.Reset();
+}
+
+void WebViewTranslateClient::OnLanguageDetermined(
+    const translate::LanguageDetectionDetails& details) {
+  [translation_controller_ onLanguageDetermined:details];
+}
+
 // TranslateClient implementation:
 
 std::unique_ptr<infobars::InfoBar> WebViewTranslateClient::CreateInfoBar(
     std::unique_ptr<translate::TranslateInfoBarDelegate> delegate) const {
   NOTREACHED();
-  return nullptr;
 }
 
 bool WebViewTranslateClient::ShowTranslateUI(
     translate::TranslateStep step,
     const std::string& source_language,
     const std::string& target_language,
-    translate::TranslateErrors::Type error_type,
+    translate::TranslateErrors error_type,
     bool triggered_from_menu) {
   [translation_controller_ updateTranslateStep:step
                                 sourceLanguage:source_language
@@ -118,17 +130,8 @@ WebViewTranslateClient::GetAcceptLanguagesService() {
   return accept_languages_;
 }
 
-int WebViewTranslateClient::GetInfobarIconID() const {
-  NOTREACHED();
-  return 0;
-}
-
 bool WebViewTranslateClient::IsTranslatableURL(const GURL& url) {
   return !url.is_empty() && !url.SchemeIs(url::kFtpScheme);
-}
-
-bool WebViewTranslateClient::IsAutofillAssistantRunning() const {
-  return false;
 }
 
 }  // namespace ios_web_view

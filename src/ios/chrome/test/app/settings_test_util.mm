@@ -1,23 +1,19 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ios/chrome/test/app/settings_test_util.h"
+#import "ios/chrome/test/app/settings_test_util.h"
 
-#include "components/content_settings/core/browser/host_content_settings_map.h"
-#include "ios/chrome/browser/content_settings/host_content_settings_map_factory.h"
+#import "components/content_settings/core/browser/host_content_settings_map.h"
+#import "ios/chrome/browser/content_settings/model/host_content_settings_map_factory.h"
 #import "ios/chrome/test/app/chrome_test_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace chrome_test_util {
 
 void SetContentSettingsBlockPopups(ContentSetting setting) {
-  ChromeBrowserState* browser_state = GetOriginalBrowserState();
+  ProfileIOS* profile = GetOriginalProfile();
   HostContentSettingsMap* settings_map =
-      ios::HostContentSettingsMapFactory::GetForBrowserState(browser_state);
+      ios::HostContentSettingsMapFactory::GetForProfile(profile);
   settings_map->SetDefaultContentSetting(ContentSettingsType::POPUPS, setting);
 }
 

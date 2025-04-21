@@ -1,21 +1,22 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/chromebox_for_meetings/logger/cfm_logger_service.h"
 
-#include "ash/services/chromebox_for_meetings/public/mojom/meet_devices_logger.mojom-shared.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/chromebox_for_meetings/logger/reporting_pipeline.h"
 #include "chromeos/ash/components/chromebox_for_meetings/features.h"
 #include "chromeos/ash/components/dbus/chromebox_for_meetings/cfm_hotline_client.h"
+#include "chromeos/services/chromebox_for_meetings/public/mojom/meet_devices_logger.mojom-shared.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 
 namespace ash::cfm {
 
 namespace {
 
-// TODO(https://crbug.com/1164001): remove after the migration to namespace ash.
+// TODO(https://crbug.com/1403174): Remove when namespace of mojoms for CfM are
+// migarted to ash.
 namespace mojom = ::chromeos::cfm::mojom;
 
 // Implementation of the CfmLoggerService which uses the Chrome Encrypted
@@ -137,8 +138,9 @@ void CfmLoggerService::AddStateObserver(
 
 void CfmLoggerService::NotifyStateObserver(mojom::LoggerState state) {
   current_logger_state_ = state;
-  for (auto& observer : observer_list_)
+  for (auto& observer : observer_list_) {
     observer->OnNotifyState(current_logger_state_);
+  }
 }
 
 void CfmLoggerService::SetDelegate(Delegate* delegate) {

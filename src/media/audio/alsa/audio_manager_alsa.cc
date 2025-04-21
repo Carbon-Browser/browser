@@ -1,12 +1,18 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/audio/alsa/audio_manager_alsa.h"
 
 #include <stddef.h>
 
 #include "base/command_line.h"
+#include "base/containers/contains.h"
 #include "base/logging.h"
 #include "base/memory/free_deleter.h"
 #include "base/metrics/histogram.h"
@@ -49,23 +55,29 @@ AudioManagerAlsa::AudioManagerAlsa(std::unique_ptr<AudioThread> audio_thread,
 AudioManagerAlsa::~AudioManagerAlsa() = default;
 
 bool AudioManagerAlsa::HasAudioOutputDevices() {
-  return HasAnyAlsaAudioDevice(kStreamPlayback);
+  return base::CommandLine::ForCurrentProcess()->HasSwitch(
+             switches::kAlsaOutputDevice) ||
+         HasAnyAlsaAudioDevice(kStreamPlayback);
 }
 
 bool AudioManagerAlsa::HasAudioInputDevices() {
-  return HasAnyAlsaAudioDevice(kStreamCapture);
+  return base::CommandLine::ForCurrentProcess()->HasSwitch(
+             switches::kAlsaInputDevice) ||
+         HasAnyAlsaAudioDevice(kStreamCapture);
 }
 
 void AudioManagerAlsa::GetAudioInputDeviceNames(
     AudioDeviceNames* device_names) {
   DCHECK(device_names->empty());
   GetAlsaAudioDevices(kStreamCapture, device_names);
+  AddAlsaDeviceFromSwitch(switches::kAlsaInputDevice, device_names);
 }
 
 void AudioManagerAlsa::GetAudioOutputDeviceNames(
     AudioDeviceNames* device_names) {
   DCHECK(device_names->empty());
   GetAlsaAudioDevices(kStreamPlayback, device_names);
+  AddAlsaDeviceFromSwitch(switches::kAlsaOutputDevice, device_names);
 }
 
 AudioParameters AudioManagerAlsa::GetInputStreamParameters(
@@ -73,7 +85,7 @@ AudioParameters AudioManagerAlsa::GetInputStreamParameters(
   static const int kDefaultInputBufferSize = 1024;
 
   return AudioParameters(AudioParameters::AUDIO_PCM_LOW_LATENCY,
-                         CHANNEL_LAYOUT_STEREO, kDefaultSampleRate,
+                         ChannelLayoutConfig::Stereo(), kDefaultSampleRate,
                          kDefaultInputBufferSize);
 }
 
@@ -87,7 +99,7 @@ void AudioManagerAlsa::GetAlsaAudioDevices(StreamType type,
   static const char kPcmInterfaceName[] = "pcm";
   int card = -1;
 
-  // Loop through the sound cards to get ALSA device hints.
+  // Loop through the physical sound cards to get ALSA device hints.
   while (!wrapper_->CardNext(&card) && card >= 0) {
     void** hints = NULL;
     int error = wrapper_->DeviceNameHint(card, kPcmInterfaceName, &hints);
@@ -189,6 +201,36 @@ bool AudioManagerAlsa::IsAlsaDeviceAvailable(
 }
 
 // static
+void AudioManagerAlsa::AddAlsaDeviceFromSwitch(const char* switch_name,
+                                               AudioDeviceNames* device_names) {
+  // If an ALSA device is specified via the given switch, but the device list
+  // does not contain the specified device, append it to the list.
+  // GetAlsaAudioDevices only returns hardware ALSA devices, so this logic
+  // ensures that if a virtual ALSA device is specified via switch, it is
+  // included in the list of audio devices.
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch(switch_name)) {
+    // If the device list is empty, prepend the default device since we always
+    // want it to be on the top of the list for all platforms.
+    if (device_names->empty()) {
+      device_names->push_front(AudioDeviceName::CreateDefault());
+    }
+    std::string switch_device_name =
+        base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
+            switch_name);
+    // Only append the specified device if it is not already present on the
+    // list.
+    if (!base::Contains(
+            *device_names, switch_device_name,
+            [](const auto& device_name) { return device_name.unique_id; })) {
+      AudioDeviceName name;
+      name.unique_id = switch_device_name;
+      name.device_name = switch_device_name;
+      device_names->push_back(name);
+    }
+  }
+}
+
+// static
 const char* AudioManagerAlsa::UnwantedDeviceTypeWhenEnumerating(
     AudioManagerAlsa::StreamType wanted_type) {
   return wanted_type == kStreamPlayback ? "Input" : "Output";
@@ -272,7 +314,7 @@ AudioParameters AudioManagerAlsa::GetPreferredOutputStreamParameters(
   // TODO(tommi): Support |output_device_id|.
   DLOG_IF(ERROR, !output_device_id.empty()) << "Not implemented!";
   static const int kDefaultOutputBufferSize = 2048;
-  ChannelLayout channel_layout = CHANNEL_LAYOUT_STEREO;
+  ChannelLayoutConfig channel_layout_config = ChannelLayoutConfig::Stereo();
   int sample_rate = kDefaultSampleRate;
   int buffer_size = kDefaultOutputBufferSize;
   if (input_params.IsValid()) {
@@ -282,7 +324,7 @@ AudioParameters AudioManagerAlsa::GetPreferredOutputStreamParameters(
     // TODO(dalecurtis): This should include bits per channel and channel layout
     // eventually.
     sample_rate = input_params.sample_rate();
-    channel_layout = input_params.channel_layout();
+    channel_layout_config = input_params.channel_layout_config();
     buffer_size = std::min(input_params.frames_per_buffer(), buffer_size);
   }
 
@@ -290,8 +332,8 @@ AudioParameters AudioManagerAlsa::GetPreferredOutputStreamParameters(
   if (user_buffer_size)
     buffer_size = user_buffer_size;
 
-  return AudioParameters(AudioParameters::AUDIO_PCM_LOW_LATENCY, channel_layout,
-                         sample_rate, buffer_size);
+  return AudioParameters(AudioParameters::AUDIO_PCM_LOW_LATENCY,
+                         channel_layout_config, sample_rate, buffer_size);
 }
 
 AudioOutputStream* AudioManagerAlsa::MakeOutputStream(

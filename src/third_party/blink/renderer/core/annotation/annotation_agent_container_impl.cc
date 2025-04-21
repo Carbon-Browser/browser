@@ -1,10 +1,14 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/annotation/annotation_agent_container_impl.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/trace_event/typed_macros.h"
+#include "components/shared_highlighting/core/common/disabled_sites.h"
+#include "components/shared_highlighting/core/common/shared_highlighting_features.h"
+#include "third_party/blink/renderer/core/annotation/annotation_agent_generator.h"
 #include "third_party/blink/renderer/core/annotation/annotation_agent_impl.h"
 #include "third_party/blink/renderer/core/annotation/annotation_selector.h"
 #include "third_party/blink/renderer/core/annotation/text_annotation_selector.h"
@@ -14,21 +18,44 @@
 #include "third_party/blink/renderer/core/fragment_directive/text_fragment_handler.h"
 #include "third_party/blink/renderer/core/fragment_directive/text_fragment_selector.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
+#include "third_party/blink/renderer/core/page/chrome_client.h"
+#include "third_party/blink/renderer/core/page/page.h"
 
 namespace blink {
+
+namespace {
+const char* ToString(mojom::blink::AnnotationType type) {
+  switch (type) {
+    case mojom::blink::AnnotationType::kSharedHighlight:
+      return "SharedHighlight";
+    case mojom::blink::AnnotationType::kUserNote:
+      return "UserNote";
+    case mojom::blink::AnnotationType::kTextFinder:
+      return "TextFinder";
+  }
+}
+}  // namespace
 
 // static
 const char AnnotationAgentContainerImpl::kSupplementName[] =
     "AnnotationAgentContainerImpl";
 
-// static
-AnnotationAgentContainerImpl* AnnotationAgentContainerImpl::From(
-    Document& document) {
-  if (!document.IsActive())
-    return nullptr;
+void AnnotationAgentContainerImpl::AddObserver(Observer* observer) {
+  observers_.insert(observer);
+}
 
-  AnnotationAgentContainerImpl* container =
-      Supplement<Document>::From<AnnotationAgentContainerImpl>(document);
+void AnnotationAgentContainerImpl::RemoveObserver(Observer* observer) {
+  observers_.erase(observer);
+}
+
+// static
+AnnotationAgentContainerImpl* AnnotationAgentContainerImpl::CreateIfNeeded(
+    Document& document) {
+  if (!document.IsActive()) {
+    return nullptr;
+  }
+
+  AnnotationAgentContainerImpl* container = FromIfExists(document);
   if (!container) {
     container =
         MakeGarbageCollected<AnnotationAgentContainerImpl>(document, PassKey());
@@ -39,6 +66,12 @@ AnnotationAgentContainerImpl* AnnotationAgentContainerImpl::From(
 }
 
 // static
+AnnotationAgentContainerImpl* AnnotationAgentContainerImpl::FromIfExists(
+    Document& document) {
+  return Supplement<Document>::From<AnnotationAgentContainerImpl>(document);
+}
+
+// static
 void AnnotationAgentContainerImpl::BindReceiver(
     LocalFrame* frame,
     mojo::PendingReceiver<mojom::blink::AnnotationAgentContainer> receiver) {
@@ -46,7 +79,7 @@ void AnnotationAgentContainerImpl::BindReceiver(
   DCHECK(frame->GetDocument());
   Document& document = *frame->GetDocument();
 
-  auto* container = AnnotationAgentContainerImpl::From(document);
+  auto* container = AnnotationAgentContainerImpl::CreateIfNeeded(document);
   if (!container)
     return;
 
@@ -56,18 +89,55 @@ void AnnotationAgentContainerImpl::BindReceiver(
 AnnotationAgentContainerImpl::AnnotationAgentContainerImpl(Document& document,
                                                            PassKey)
     : Supplement<Document>(document),
-      receivers_(this, document.GetExecutionContext()) {}
+      receivers_(this, document.GetExecutionContext()) {
+  LocalFrame* frame = document.GetFrame();
+  DCHECK(frame);
+
+  annotation_agent_generator_ =
+      MakeGarbageCollected<AnnotationAgentGenerator>(frame);
+}
 
 void AnnotationAgentContainerImpl::Bind(
     mojo::PendingReceiver<mojom::blink::AnnotationAgentContainer> receiver) {
-  receivers_.Add(std::move(receiver), GetSupplementable()->GetTaskRunner(
-                                          TaskType::kInternalDefault));
+  receivers_.Add(std::move(receiver),
+                 GetDocument().GetTaskRunner(TaskType::kInternalDefault));
 }
 
 void AnnotationAgentContainerImpl::Trace(Visitor* visitor) const {
   visitor->Trace(receivers_);
   visitor->Trace(agents_);
+  visitor->Trace(annotation_agent_generator_);
+  visitor->Trace(observers_);
   Supplement<Document>::Trace(visitor);
+}
+
+void AnnotationAgentContainerImpl::PerformInitialAttachments() {
+  TRACE_EVENT("blink",
+              "AnnotationAgentContainerImpl::PerformInitialAttachments",
+              "num_agents", agents_.size());
+  CHECK(IsLifecycleCleanForAttachment());
+
+  if (GetFrame().GetPage()->IsPageVisible()) {
+    page_has_been_visible_ = true;
+  }
+
+  for (Observer* observer : observers_) {
+    observer->WillPerformAttach();
+  }
+
+  for (auto& agent : agents_) {
+    if (agent->NeedsAttachment()) {
+      // SharedHighlights must wait until the page has been made visible at
+      // least once before searching. See:
+      // https://wicg.github.io/scroll-to-text-fragment/#search-timing:~:text=If%20a%20UA,in%20background%20documents.
+      if (agent->GetType() == mojom::blink::AnnotationType::kSharedHighlight &&
+          !page_has_been_visible_) {
+        continue;
+      }
+
+      agent->Attach(PassKey());
+    }
+  }
 }
 
 AnnotationAgentImpl* AnnotationAgentContainerImpl::CreateUnboundAgent(
@@ -75,17 +145,10 @@ AnnotationAgentImpl* AnnotationAgentContainerImpl::CreateUnboundAgent(
     AnnotationSelector& selector) {
   auto* agent_impl = MakeGarbageCollected<AnnotationAgentImpl>(
       *this, type, selector, PassKey());
-  agents_.insert(agent_impl);
+  agents_.push_back(agent_impl);
 
-  // TODO(bokan): This is a stepping stone in refactoring the
-  // TextFragmentHandler. When we replace it with a browser-side manager it may
-  // make for a better API to have components register a handler for an
-  // annotation type with AnnotationAgentContainer.
-  // https://crbug.com/1303887.
-  if (type == mojom::blink::AnnotationType::kSharedHighlight) {
-    TextFragmentHandler::DidCreateTextFragment(*agent_impl,
-                                               *GetSupplementable());
-  }
+  // Attachment will happen as part of the document lifecycle in a new frame.
+  ScheduleBeginMainFrame();
 
   return agent_impl;
 }
@@ -93,9 +156,9 @@ AnnotationAgentImpl* AnnotationAgentContainerImpl::CreateUnboundAgent(
 void AnnotationAgentContainerImpl::RemoveAgent(AnnotationAgentImpl& agent,
                                                AnnotationAgentImpl::PassKey) {
   DCHECK(!agent.IsAttached());
-  auto itr = agents_.find(&agent);
-  DCHECK_NE(itr, agents_.end());
-  agents_.erase(itr);
+  wtf_size_t index = agents_.Find(&agent);
+  DCHECK_NE(index, kNotFound);
+  agents_.EraseAt(index);
 }
 
 HeapHashSet<Member<AnnotationAgentImpl>>
@@ -115,6 +178,8 @@ void AnnotationAgentContainerImpl::CreateAgent(
     mojo::PendingReceiver<mojom::blink::AnnotationAgent> agent_receiver,
     mojom::blink::AnnotationType type,
     const String& serialized_selector) {
+  TRACE_EVENT("blink", "AnnotationAgentContainerImpl::CreateAgent", "type",
+              ToString(type), "selector", serialized_selector);
   DCHECK(GetSupplementable());
 
   AnnotationSelector* selector =
@@ -124,87 +189,52 @@ void AnnotationAgentContainerImpl::CreateAgent(
   // will see as a disconnect.
   // TODO(bokan): We could support more graceful fallback/error reporting by
   // calling an error method on the host.
-  if (!selector)
+  if (!selector) {
+    TRACE_EVENT_INSTANT("blink", "Failed to deserialize selector");
     return;
+  }
 
-  auto* agent_impl = MakeGarbageCollected<AnnotationAgentImpl>(
-      *this, type, *selector, PassKey());
-  agents_.insert(agent_impl);
+  auto* agent_impl = CreateUnboundAgent(type, *selector);
   agent_impl->Bind(std::move(host_remote), std::move(agent_receiver));
-  agent_impl->Attach();
 }
 
 void AnnotationAgentContainerImpl::CreateAgentFromSelection(
     mojom::blink::AnnotationType type,
     CreateAgentFromSelectionCallback callback) {
-  // Both Document and LocalFrame must be non-null since the mojo connections
-  // are closed when the Document shuts down its execution context.
-  Document* document = GetSupplementable();
-  DCHECK(document);
-
-  LocalFrame* frame = document->GetFrame();
-  DCHECK(frame);
-
-  VisibleSelectionInFlatTree selection =
-      frame->Selection().ComputeVisibleSelectionInFlatTree();
-  if (selection.IsNone() || !selection.IsRange()) {
-    std::move(callback).Run(mojo::NullReceiver(), mojo::NullRemote(),
-                            /*serialized_selector=*/"", /*selected_text=*/"");
-    return;
-  }
-
-  EphemeralRangeInFlatTree selection_range(selection.Start(), selection.End());
-
-  if (selection_range.IsNull() || selection_range.IsCollapsed()) {
-    std::move(callback).Run(mojo::NullReceiver(), mojo::NullRemote(),
-                            /*serialized_selector=*/"", /*selected_text=*/"");
-    return;
-  }
-
-  RangeInFlatTree* current_selection_range =
-      MakeGarbageCollected<RangeInFlatTree>(selection_range.StartPosition(),
-                                            selection_range.EndPosition());
-
-  // TODO(crbug.com/1313967): We may be able to reduce the latency of adding a
-  // new note by starting the generator when the context menu is opened so that
-  // by the time the user selects "add a note" the selector is already
-  // generated. We already do this for shared-highlighting so we could just
-  // generalize that code, see
-  // TextFragmentHandler::OpenedContextMenuOverSelection.
-  auto* generator = MakeGarbageCollected<TextFragmentSelectorGenerator>(frame);
-
-  // The generator is kept alive by the callback.
-  generator->Generate(
-      *current_selection_range,
-      WTF::Bind(&AnnotationAgentContainerImpl::DidFinishSelectorGeneration,
-                WrapWeakPersistent(this), WrapPersistent(generator), type,
-                std::move(callback)));
+  TRACE_EVENT("blink", "AnnotationAgentContainerImpl::CreateAgentFromSelection",
+              "type", ToString(type));
+  DCHECK(annotation_agent_generator_);
+  annotation_agent_generator_->GetForCurrentSelection(
+      type,
+      WTF::BindOnce(&AnnotationAgentContainerImpl::DidFinishSelectorGeneration,
+                    WrapWeakPersistent(this), std::move(callback)));
 }
 
+// TODO(cheickcisse@): Move shared highlighting enums, also used in user note to
+// annotation.mojom.
 void AnnotationAgentContainerImpl::DidFinishSelectorGeneration(
-    TextFragmentSelectorGenerator* generator,
-    mojom::blink::AnnotationType type,
     CreateAgentFromSelectionCallback callback,
+    mojom::blink::AnnotationType type,
+    shared_highlighting::LinkGenerationReadyStatus ready_status,
+    const String& selected_text,
     const TextFragmentSelector& selector,
     shared_highlighting::LinkGenerationError error) {
+  TRACE_EVENT("blink",
+              "AnnotationAgentContainerImpl::DidFinishSelectorGeneration",
+              "type", ToString(type));
+
   if (error != shared_highlighting::LinkGenerationError::kNone) {
-    std::move(callback).Run(mojo::NullReceiver(), mojo::NullRemote(),
-                            /*serialized_selector=*/"", /*selected_text=*/"");
+    std::move(callback).Run(/*SelectorCreationResult=*/nullptr, error,
+                            ready_status);
     return;
   }
 
-  // TODO(bokan): Should we clear the frame selection?
-  {
-    // If the document were detached selector generation will return above with
-    // an error.
-    Document* document = GetSupplementable();
-    DCHECK(document);
+  // If the document was detached then selector generation must have returned
+  // an error.
+  CHECK(GetSupplementable());
 
-    LocalFrame* frame = document->GetFrame();
-    DCHECK(frame);
-
-    frame->Selection().Clear();
-  }
+  // TODO(bokan): Why doesn't this clear selection?
+  GetFrame().Selection().Clear();
 
   mojo::PendingRemote<mojom::blink::AnnotationAgentHost> pending_host_remote;
   mojo::PendingReceiver<mojom::blink::AnnotationAgent> pending_agent_receiver;
@@ -214,17 +244,77 @@ void AnnotationAgentContainerImpl::DidFinishSelectorGeneration(
   // highlight is showing before the creation flow begins we can swap these.
   auto* annotation_selector =
       MakeGarbageCollected<TextAnnotationSelector>(selector);
-  std::move(callback).Run(pending_host_remote.InitWithNewPipeAndPassReceiver(),
-                          pending_agent_receiver.InitWithNewPipeAndPassRemote(),
-                          annotation_selector->Serialize(),
-                          generator->GetSelectorTargetText());
+
+  mojom::blink::SelectorCreationResultPtr selector_creation_result =
+      mojom::blink::SelectorCreationResult::New();
+  selector_creation_result->host_receiver =
+      pending_host_remote.InitWithNewPipeAndPassReceiver();
+  selector_creation_result->agent_remote =
+      pending_agent_receiver.InitWithNewPipeAndPassRemote();
+  selector_creation_result->serialized_selector =
+      annotation_selector->Serialize();
+  DCHECK(!selector_creation_result->serialized_selector.empty())
+      << "User note creation received an empty selector for mojo binding "
+         "result";
+  selector_creation_result->selected_text = selected_text;
+  DCHECK(!selector_creation_result->selected_text.empty())
+      << "User note creation received an empty text for mojo binding result";
+
+  std::move(callback).Run(std::move(selector_creation_result), error,
+                          ready_status);
 
   AnnotationAgentImpl* agent_impl =
       CreateUnboundAgent(type, *annotation_selector);
   agent_impl->Bind(std::move(pending_host_remote),
                    std::move(pending_agent_receiver));
+}
 
-  agent_impl->Attach();
+void AnnotationAgentContainerImpl::OpenedContextMenuOverSelection() {
+  DCHECK(annotation_agent_generator_);
+  if (!ShouldPreemptivelyGenerate())
+    return;
+
+  annotation_agent_generator_->PreemptivelyGenerateForCurrentSelection();
+}
+
+bool AnnotationAgentContainerImpl::IsLifecycleCleanForAttachment() const {
+  return GetDocument().HasFinishedParsing() &&
+         !GetDocument().NeedsLayoutTreeUpdate() &&
+         !GetFrame().View()->NeedsLayout();
+}
+
+bool AnnotationAgentContainerImpl::ShouldPreemptivelyGenerate() {
+  if (!shared_highlighting::ShouldOfferLinkToText(GURL(GetDocument().Url()))) {
+    return false;
+  }
+
+  if (GetFrame().Selection().SelectedText().empty()) {
+    return false;
+  }
+
+  if (GetFrame().IsOutermostMainFrame()) {
+    return true;
+  }
+
+  // Only generate for iframe urls if they are supported
+  return shared_highlighting::SupportsLinkGenerationInIframe(
+      GURL(GetFrame().GetDocument()->Url()));
+}
+
+void AnnotationAgentContainerImpl::ScheduleBeginMainFrame() {
+  GetFrame().GetPage()->GetChromeClient().ScheduleAnimation(GetFrame().View());
+}
+
+Document& AnnotationAgentContainerImpl::GetDocument() const {
+  Document* document = GetSupplementable();
+  CHECK(document);
+  return *document;
+}
+
+LocalFrame& AnnotationAgentContainerImpl::GetFrame() const {
+  LocalFrame* frame = GetDocument().GetFrame();
+  CHECK(frame);
+  return *frame;
 }
 
 }  // namespace blink

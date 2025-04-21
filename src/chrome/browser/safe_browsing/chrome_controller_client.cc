@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,14 +33,14 @@ ChromeControllerClient::ChromeControllerClient(
           default_safe_page,
           std::move(settings_page_helper)) {}
 
-ChromeControllerClient::~ChromeControllerClient() {}
+ChromeControllerClient::~ChromeControllerClient() = default;
 
 void ChromeControllerClient::Proceed() {
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   // Hosted Apps should not be allowed to run if Safe Browsing considers them
   // dangerous. So, when users click proceed on an interstitial, move the tab
   // to a regular Chrome window and proceed as usual there.
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents_);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents_);
   if (web_app::AppBrowserController::IsWebApp(browser))
     chrome::OpenInChrome(browser);
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)

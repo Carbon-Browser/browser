@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,8 @@ class SessionAbortedDialog : public views::DialogDelegateView {
   SessionAbortedDialog& operator=(const SessionAbortedDialog&) = delete;
 
   // views::View overrides.
-  gfx::Size CalculatePreferredSize() const override;
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override;
 
  private:
   SessionAbortedDialog();

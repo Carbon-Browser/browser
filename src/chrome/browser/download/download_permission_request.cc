@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,18 +24,20 @@ DownloadPermissionRequest::DownloadPermissionRequest(
           requesting_origin.GetURL(),
           permissions::RequestType::kMultipleDownloads,
           /*has_gesture=*/false,
-          base::BindOnce(&DownloadPermissionRequest::PermissionDecided,
-                         base::Unretained(this)),
+          base::BindRepeating(&DownloadPermissionRequest::PermissionDecided,
+                              base::Unretained(this)),
           base::BindOnce(&DownloadPermissionRequest::DeleteRequest,
                          base::Unretained(this))),
       host_(host),
       requesting_origin_(requesting_origin) {}
 
-DownloadPermissionRequest::~DownloadPermissionRequest() {}
+DownloadPermissionRequest::~DownloadPermissionRequest() = default;
 
 void DownloadPermissionRequest::PermissionDecided(ContentSetting result,
-                                                  bool is_one_time) {
+                                                  bool is_one_time,
+                                                  bool is_final_decision) {
   DCHECK(!is_one_time);
+  DCHECK(is_final_decision);
   if (!host_)
     return;
 

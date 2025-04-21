@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
-#include "chrome/browser/sharing/sharing_dialog.h"
-#include "chrome/browser/sharing/sharing_dialog_data.h"
 #include "chrome/browser/ui/views/location_bar/location_bar_bubble_delegate_view.h"
+#include "components/sharing_message/sharing_dialog.h"
+#include "components/sharing_message/sharing_dialog_data.h"
 
 namespace views {
 class StyledLabel;

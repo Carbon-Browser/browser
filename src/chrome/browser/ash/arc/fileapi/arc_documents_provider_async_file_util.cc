@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,11 @@
 #include <vector>
 
 #include "ash/components/arc/arc_util.h"
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/files/safe_base_name.h"
+#include "base/functional/bind.h"
 #include "base/notreached.h"
 #include "chrome/browser/ash/arc/fileapi/arc_content_file_system_size_util.h"
 #include "chrome/browser/ash/arc/fileapi/arc_documents_provider_file_system_url_util.h"
@@ -50,7 +51,9 @@ void OnReadDirectoryOnUIThread(
   storage::AsyncFileUtil::EntryList entries;
   entries.reserve(files.size());
   for (const auto& file : files) {
-    entries.emplace_back(base::FilePath(file.name),
+    auto name = base::SafeBaseName::Create(file.name);
+    CHECK(name) << file.name;
+    entries.emplace_back(*name, std::string(),
                          file.is_directory
                              ? filesystem::mojom::FsFileType::DIRECTORY
                              : filesystem::mojom::FsFileType::REGULAR_FILE);
@@ -86,7 +89,7 @@ void OnStatusCallbackOnUIThread(storage::AsyncFileUtil::StatusCallback callback,
 
 void GetFileInfoOnUIThread(
     const storage::FileSystemURL& url,
-    int fields,
+    storage::FileSystemOperation::GetMetadataFieldSet fields,
     ArcDocumentsProviderRoot::GetFileInfoCallback callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
@@ -338,7 +341,7 @@ void ArcDocumentsProviderAsyncFileUtil::CreateDirectory(
 void ArcDocumentsProviderAsyncFileUtil::GetFileInfo(
     std::unique_ptr<storage::FileSystemOperationContext> context,
     const storage::FileSystemURL& url,
-    int fields,
+    GetMetadataFieldSet fields,
     GetFileInfoCallback callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
   DCHECK_EQ(storage::kFileSystemTypeArcDocumentsProvider, url.type());
@@ -379,7 +382,8 @@ void ArcDocumentsProviderAsyncFileUtil::Truncate(
     int64_t length,
     StatusCallback callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
-  // Truncate() doesn't work well on ARC++ P.
+  // Truncate() doesn't work well on ARC P/R container. It works on ARCVM R+
+  // because the mojo proxy for ARCVM implements the feature.
   // TODO(b/223247850) Fix this.
   if (!IsArcVmEnabled()) {
     // HACK: Return FILE_OK even though we do nothing here.
@@ -435,7 +439,6 @@ void ArcDocumentsProviderAsyncFileUtil::CopyInForeignFile(
     StatusCallback callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
   NOTREACHED();  // Read-only file system.
-  std::move(callback).Run(base::File::FILE_ERROR_ACCESS_DENIED);
 }
 
 void ArcDocumentsProviderAsyncFileUtil::DeleteFile(
@@ -483,7 +486,7 @@ void ArcDocumentsProviderAsyncFileUtil::CreateSnapshotFile(
     const storage::FileSystemURL& url,
     CreateSnapshotFileCallback callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
-  NOTIMPLEMENTED();  // TODO(crbug.com/671511): Implement this function.
+  NOTIMPLEMENTED();  // TODO(crbug.com/40496703): Implement this function.
   std::move(callback).Run(base::File::FILE_ERROR_FAILED, base::File::Info(),
                           base::FilePath(),
                           scoped_refptr<storage::ShareableFileReference>());

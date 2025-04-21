@@ -1,16 +1,20 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/disk_cache/blockfile/file.h"
 
+#include <windows.h>
+
 #include <limits.h>
+
 #include <utility>
 
+#include "base/compiler_specific.h"
 #include "base/files/file_path.h"
-#include "base/lazy_instance.h"
 #include "base/memory/raw_ptr.h"
 #include "base/message_loop/message_pump_for_io.h"
+#include "base/no_destructor.h"
 #include "base/run_loop.h"
 #include "base/strings/string_util.h"
 #include "base/task/current_thread.h"
@@ -27,10 +31,8 @@ class CompletionHandler;
 struct MyOverlapped {
   MyOverlapped(disk_cache::File* file, size_t offset,
                disk_cache::FileIOCallback* callback);
-  ~MyOverlapped() {}
-  OVERLAPPED* overlapped() {
-    return &context_.overlapped;
-  }
+  ~MyOverlapped() = default;
+  OVERLAPPED* overlapped() { return context_.GetOverlapped(); }
 
   base::MessagePumpForIO::IOContext context_;
   scoped_refptr<disk_cache::File> file_;
@@ -42,8 +44,8 @@ static_assert(offsetof(MyOverlapped, context_) == 0,
               "should start with overlapped");
 
 // Helper class to handle the IO completion notifications from the message loop.
-class CompletionHandler : public base::MessagePumpForIO::IOHandler,
-                          public base::RefCounted<CompletionHandler> {
+class CompletionHandler final : public base::MessagePumpForIO::IOHandler,
+                                public base::RefCounted<CompletionHandler> {
  public:
   CompletionHandler() : base::MessagePumpForIO::IOHandler(FROM_HERE) {}
   static CompletionHandler* Get();
@@ -61,25 +63,10 @@ class CompletionHandler : public base::MessagePumpForIO::IOHandler,
                      DWORD error) override;
 };
 
-class CompletionHandlerHolder {
- public:
-  CompletionHandlerHolder()
-      : completion_handler_(base::MakeRefCounted<CompletionHandler>()) {}
-
-  CompletionHandler* completion_handler() { return completion_handler_.get(); }
-
- private:
-  scoped_refptr<CompletionHandler> completion_handler_;
-};
-
-static base::LazyInstance<CompletionHandlerHolder>::DestructorAtExit
-    g_completion_handler_holder = LAZY_INSTANCE_INITIALIZER;
-
 CompletionHandler* CompletionHandler::Get() {
-  if (auto* holder = g_completion_handler_holder.Pointer()) {
-    return holder->completion_handler();
-  }
-  return nullptr;
+  static base::NoDestructor<scoped_refptr<CompletionHandler>> handler(
+      base::MakeRefCounted<CompletionHandler>());
+  return handler->get();
 }
 
 void CompletionHandler::OnIOCompleted(
@@ -91,18 +78,19 @@ void CompletionHandler::OnIOCompleted(
   if (error) {
     DCHECK(!actual_bytes);
     actual_bytes = static_cast<DWORD>(net::ERR_CACHE_READ_FAILURE);
-    NOTREACHED();
   }
 
+  // `callback_` may self delete while in `OnFileIOComplete`.
   if (data->callback_)
-    data->callback_->OnFileIOComplete(static_cast<int>(actual_bytes));
+    data->callback_.ExtractAsDangling()->OnFileIOComplete(
+        static_cast<int>(actual_bytes));
 
   delete data;
 }
 
 MyOverlapped::MyOverlapped(disk_cache::File* file, size_t offset,
                            disk_cache::FileIOCallback* callback) {
-  context_.overlapped.Offset = static_cast<DWORD>(offset);
+  context_.GetOverlapped()->Offset = static_cast<DWORD>(offset);
   file_ = file;
   callback_ = callback;
   completion_handler_ = CompletionHandler::Get();
@@ -129,8 +117,10 @@ bool File::Init(const base::FilePath& name) {
   if (!base_file_.IsValid())
     return false;
 
-  base::CurrentIOThread::Get()->RegisterIOHandler(base_file_.GetPlatformFile(),
-                                                  CompletionHandler::Get());
+  if (!base::CurrentIOThread::Get()->RegisterIOHandler(
+          base_file_.GetPlatformFile(), CompletionHandler::Get())) {
+    return false;
+  }
 
   init_ = true;
   sync_base_file_ = base::File(CreateFile(name.value().c_str(), access, sharing,
@@ -153,8 +143,8 @@ bool File::Read(void* buffer, size_t buffer_len, size_t offset) {
   if (buffer_len > ULONG_MAX || offset > LONG_MAX)
     return false;
 
-  int ret = sync_base_file_.Read(offset, static_cast<char*>(buffer),
-                                 buffer_len);
+  int ret = UNSAFE_TODO(
+      sync_base_file_.Read(offset, static_cast<char*>(buffer), buffer_len));
   return static_cast<int>(buffer_len) == ret;
 }
 
@@ -163,8 +153,8 @@ bool File::Write(const void* buffer, size_t buffer_len, size_t offset) {
   if (buffer_len > ULONG_MAX || offset > ULONG_MAX)
     return false;
 
-  int ret = sync_base_file_.Write(offset, static_cast<const char*>(buffer),
-                                 buffer_len);
+  int ret = UNSAFE_TODO(sync_base_file_.Write(
+      offset, static_cast<const char*>(buffer), buffer_len));
   return static_cast<int>(buffer_len) == ret;
 }
 

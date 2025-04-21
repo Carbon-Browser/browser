@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2024 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,10 @@
 // Please run the closure compiler before committing changes.
 // See https://chromium.googlesource.com/chromium/src/+/main/docs/closure_compilation.md
 
-/** @fileoverview Externs generated from namespace: terminalPrivate */
+/**
+ * @fileoverview Externs generated from namespace: terminalPrivate
+ * @externs
+ */
 
 /** @const */
 chrome.terminalPrivate = {};
@@ -111,9 +114,7 @@ chrome.terminalPrivate.openSettingsSubpage = function(subpage, callback) {};
  * Returns an object containing info about ChromeOS settings that affect the
  * Terminal, e.g. which feature flags are enabled.
  * @param {function({
- *   alternative_renderer: boolean,
- *   multi_profile: boolean,
- *   tmux_integration: boolean
+ *   tast: boolean
  * }): void} callback Callback that will be called with the info object.
  */
 chrome.terminalPrivate.getOSInfo = function(callback) {};

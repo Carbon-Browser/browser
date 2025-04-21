@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -106,7 +106,6 @@ int32_t TCPSocketPrivateResource::SetOption(
                            callback);
     default:
       NOTREACHED();
-      return PP_ERROR_BADARGUMENT;
   }
 }
 
@@ -115,7 +114,6 @@ PP_Resource TCPSocketPrivateResource::CreateAcceptedSocket(
     const PP_NetAddress_Private& /* local_addr */,
     const PP_NetAddress_Private& /* remote_addr */) {
   NOTREACHED();
-  return 0;
 }
 
 }  // namespace proxy

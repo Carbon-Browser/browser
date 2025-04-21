@@ -1,16 +1,23 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/342213636): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
-#include "base/test/scoped_feature_list.h"
+#include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "cc/base/math_util.h"
-#include "components/viz/common/gpu/context_provider.h"
+#include "components/viz/common/gpu/raster_context_provider.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/video_capture_service.h"
 #include "content/public/common/content_features.h"
@@ -21,10 +28,10 @@
 #include "content/public/test/content_browser_test_utils.h"
 #include "content/shell/browser/shell.h"
 #include "gpu/GLES2/gl2extchromium.h"
-#include "gpu/command_buffer/client/gles2_interface.h"
+#include "gpu/command_buffer/client/client_shared_image.h"
+#include "gpu/command_buffer/client/raster_interface.h"
 #include "gpu/command_buffer/client/shared_image_interface.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/media_switches.h"
 #include "media/base/video_frame.h"
 #include "media/base/video_frame_metadata.h"
@@ -37,12 +44,13 @@
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "services/video_capture/public/cpp/mock_video_frame_handler.h"
 #include "services/video_capture/public/mojom/constants.mojom.h"
-#include "services/video_capture/public/mojom/device_factory.mojom.h"
 #include "services/video_capture/public/mojom/producer.mojom.h"
 #include "services/video_capture/public/mojom/video_capture_service.mojom.h"
+#include "services/video_capture/public/mojom/video_source_provider.mojom.h"
 #include "services/video_capture/public/mojom/virtual_device.mojom.h"
 #include "testing/gmock/include/gmock/gmock.h"
-#include "third_party/khronos/GLES2/gl2ext.h"
+#include "third_party/skia/include/core/SkBitmap.h"
+#include "third_party/skia/include/core/SkColor.h"
 #include "ui/compositor/compositor.h"
 
 // ImageTransportFactory::GetInstance is not available on all build configs.
@@ -78,8 +86,8 @@ class VirtualDeviceExerciser {
  public:
   virtual ~VirtualDeviceExerciser() {}
   virtual void Initialize() = 0;
-  virtual void RegisterVirtualDeviceAtFactory(
-      mojo::Remote<video_capture::mojom::DeviceFactory>* factory,
+  virtual void RegisterVirtualDeviceAtVideoSourceProvider(
+      mojo::Remote<video_capture::mojom::VideoSourceProvider>* video_source,
       const media::VideoCaptureDeviceInfo& info) = 0;
   virtual gfx::Size GetVideoSize() = 0;
   virtual void PushNextFrame(base::TimeDelta timestamp) = 0;
@@ -97,35 +105,43 @@ class TextureDeviceExerciser : public VirtualDeviceExerciser {
     ImageTransportFactory* factory = ImageTransportFactory::GetInstance();
     CHECK(factory);
     context_provider_ =
-        factory->GetContextFactory()->SharedMainThreadContextProvider();
+        factory->GetContextFactory()->SharedMainThreadRasterContextProvider();
     CHECK(context_provider_);
-    gpu::gles2::GLES2Interface* gl = context_provider_->ContextGL();
-    CHECK(gl);
+    gpu::raster::RasterInterface* ri = context_provider_->RasterInterface();
+    CHECK(ri);
 
     gpu::SharedImageInterface* sii = context_provider_->SharedImageInterface();
     CHECK(sii);
 
-    const uint8_t kDarkFrameByteValue = 0;
-    const uint8_t kLightFrameByteValue = 200;
-    CreateDummyRgbFrame(gl, sii, kDarkFrameByteValue,
-                        &dummy_frame_0_mailbox_holder_);
-    CreateDummyRgbFrame(gl, sii, kLightFrameByteValue,
-                        &dummy_frame_1_mailbox_holder_);
+    const SkColor4f kDarkFrameColor = SkColors::kBlack;
+    const SkColor4f kLightFrameColor = SkColors::kGray;
+    dummy_frame_0_shared_image_ = CreateDummyRgbFrame(
+        ri, sii, kDarkFrameColor, dummy_frame_0_sync_token_);
+    dummy_frame_1_shared_image_ = CreateDummyRgbFrame(
+        ri, sii, kLightFrameColor, dummy_frame_1_sync_token_);
   }
 
-  void RegisterVirtualDeviceAtFactory(
-      mojo::Remote<video_capture::mojom::DeviceFactory>* factory,
+  void RegisterVirtualDeviceAtVideoSourceProvider(
+      mojo::Remote<video_capture::mojom::VideoSourceProvider>* video_source,
       const media::VideoCaptureDeviceInfo& info) override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-    (*factory)->AddTextureVirtualDevice(
-        info, virtual_device_.BindNewPipeAndPassReceiver());
+    (*video_source)
+        ->AddTextureVirtualDevice(info,
+                                  virtual_device_.BindNewPipeAndPassReceiver());
 
-    virtual_device_->OnNewMailboxHolderBufferHandle(
-        0, media::mojom::MailboxBufferHandleSet::New(
-               std::move(dummy_frame_0_mailbox_holder_)));
-    virtual_device_->OnNewMailboxHolderBufferHandle(
-        1, media::mojom::MailboxBufferHandleSet::New(
-               std::move(dummy_frame_1_mailbox_holder_)));
+    gpu::ExportedSharedImage dummy_frame_0_exported_shared_image =
+        dummy_frame_0_shared_image_->Export();
+    gpu::ExportedSharedImage dummy_frame_1_exported_shared_image =
+        dummy_frame_1_shared_image_->Export();
+
+    virtual_device_->OnNewSharedImageBufferHandle(
+        0, media::mojom::SharedImageBufferHandleSet::New(
+               std::move(dummy_frame_0_exported_shared_image),
+               dummy_frame_0_sync_token_));
+    virtual_device_->OnNewSharedImageBufferHandle(
+        1, media::mojom::SharedImageBufferHandleSet::New(
+               std::move(dummy_frame_1_exported_shared_image),
+               dummy_frame_1_sync_token_));
     frame_being_consumed_[0] = false;
     frame_being_consumed_[1] = false;
   }
@@ -178,58 +194,40 @@ class TextureDeviceExerciser : public VirtualDeviceExerciser {
   }
 
  private:
-  void CreateDummyRgbFrame(gpu::gles2::GLES2Interface* gl,
-                           gpu::SharedImageInterface* sii,
-                           uint8_t value_for_all_rgb_bytes,
-                           std::vector<gpu::MailboxHolder>* target) {
-    const int32_t kBytesPerRGBAPixel = 4;
-    int32_t frame_size_in_bytes = kDummyFrameCodedSize.width() *
-                                  kDummyFrameCodedSize.height() *
-                                  kBytesPerRGBAPixel;
-    std::unique_ptr<uint8_t[]> dummy_frame_data(
-        new uint8_t[frame_size_in_bytes]);
-    memset(dummy_frame_data.get(), value_for_all_rgb_bytes,
-           frame_size_in_bytes);
-    for (int i = 0; i < media::VideoFrame::kMaxPlanes; i++) {
-      // For RGB formats, only the first plane needs to be filled with an
-      // actual texture.
-      if (i != 0) {
-        target->push_back(gpu::MailboxHolder());
-        continue;
-      }
+  scoped_refptr<gpu::ClientSharedImage> CreateDummyRgbFrame(
+      gpu::raster::RasterInterface* ri,
+      gpu::SharedImageInterface* sii,
+      SkColor4f frame_color,
+      gpu::SyncToken& ri_token) {
+    SkBitmap frame_bitmap;
+    frame_bitmap.allocPixels(SkImageInfo::Make(
+        kDummyFrameCodedSize.width(), kDummyFrameCodedSize.height(),
+        kRGBA_8888_SkColorType, kOpaque_SkAlphaType));
+    frame_bitmap.eraseColor(frame_color);
 
-      gpu::Mailbox mailbox = sii->CreateSharedImage(
-          viz::ResourceFormat::RGBA_8888,
-          gfx::Size(kDummyFrameCodedSize.width(),
-                    kDummyFrameCodedSize.height()),
-          gfx::ColorSpace::CreateSRGB(), kTopLeft_GrSurfaceOrigin,
-          kOpaque_SkAlphaType,
-          gpu::SHARED_IMAGE_USAGE_RASTER |
-              gpu::SHARED_IMAGE_USAGE_OOP_RASTERIZATION |
-              gpu::SHARED_IMAGE_USAGE_GLES2 |
-              gpu::SHARED_IMAGE_USAGE_GLES2_FRAMEBUFFER_HINT,
-          gpu::kNullSurfaceHandle);
+    // This SharedImage is populated via the raster interface below and may
+    // be read via the raster interface in normal VideoFrame usage exercised
+    // by the tests.
+    auto shared_image = sii->CreateSharedImage(
+        {viz::SinglePlaneFormat::kRGBA_8888, kDummyFrameCodedSize,
+         gfx::ColorSpace::CreateSRGB(), kTopLeft_GrSurfaceOrigin,
+         kOpaque_SkAlphaType,
+         gpu::SHARED_IMAGE_USAGE_RASTER_READ |
+             gpu::SHARED_IMAGE_USAGE_RASTER_WRITE |
+             gpu::SHARED_IMAGE_USAGE_OOP_RASTERIZATION,
+         "TestLabel"},
+        gpu::kNullSurfaceHandle);
 
-      gpu::SyncToken sii_token = sii->GenVerifiedSyncToken();
-      gl->WaitSyncTokenCHROMIUM(sii_token.GetConstData());
-      GLuint texture =
-          gl->CreateAndTexStorage2DSharedImageCHROMIUM(mailbox.name);
-      gl->BeginSharedImageAccessDirectCHROMIUM(
-          texture, GL_SHARED_IMAGE_ACCESS_MODE_READ_CHROMIUM);
-      gl->BindTexture(GL_TEXTURE_2D, texture);
-      gl->TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, kDummyFrameCodedSize.width(),
-                        kDummyFrameCodedSize.height(), GL_RGBA,
-                        GL_UNSIGNED_BYTE, dummy_frame_data.get());
-      gl->BindTexture(GL_TEXTURE_2D, 0);
-      gl->EndSharedImageAccessDirectCHROMIUM(texture);
-      gl->DeleteTextures(1, &texture);
-      gpu::SyncToken gl_token;
-      gl->GenSyncTokenCHROMIUM(gl_token.GetData());
+    gpu::SyncToken sii_token = sii->GenVerifiedSyncToken();
+    ri->WaitSyncTokenCHROMIUM(sii_token.GetConstData());
+    ri->WritePixels(shared_image->mailbox(), 0, 0, GL_TEXTURE_2D,
+                    frame_bitmap.pixmap());
 
-      target->push_back(gpu::MailboxHolder(mailbox, gl_token, GL_TEXTURE_2D));
-    }
-    gl->ShallowFlushCHROMIUM();
-    CHECK_EQ(gl->GetError(), static_cast<GLenum>(GL_NO_ERROR));
+    ri->GenSyncTokenCHROMIUM(ri_token.GetData());
+    ri->ShallowFlushCHROMIUM();
+    CHECK_EQ(ri->GetError(), static_cast<GLenum>(GL_NO_ERROR));
+
+    return shared_image;
   }
 
   void OnFrameConsumptionFinished(int32_t frame_index) {
@@ -238,12 +236,14 @@ class TextureDeviceExerciser : public VirtualDeviceExerciser {
   }
 
   SEQUENCE_CHECKER(sequence_checker_);
-  scoped_refptr<viz::ContextProvider> context_provider_;
+  scoped_refptr<viz::RasterContextProvider> context_provider_;
   mojo::Remote<video_capture::mojom::TextureVirtualDevice> virtual_device_;
   bool virtual_device_has_frame_access_handler_ = false;
   int dummy_frame_index_ = 0;
-  std::vector<gpu::MailboxHolder> dummy_frame_0_mailbox_holder_;
-  std::vector<gpu::MailboxHolder> dummy_frame_1_mailbox_holder_;
+  scoped_refptr<gpu::ClientSharedImage> dummy_frame_0_shared_image_;
+  scoped_refptr<gpu::ClientSharedImage> dummy_frame_1_shared_image_;
+  gpu::SyncToken dummy_frame_0_sync_token_;
+  gpu::SyncToken dummy_frame_1_sync_token_;
   std::array<bool, 2> frame_being_consumed_;
   base::WeakPtrFactory<TextureDeviceExerciser> weak_factory_{this};
 };
@@ -261,16 +261,15 @@ class SharedMemoryDeviceExerciser : public VirtualDeviceExerciser,
 
   // VirtualDeviceExerciser implementation.
   void Initialize() override {}
-  void RegisterVirtualDeviceAtFactory(
-      mojo::Remote<video_capture::mojom::DeviceFactory>* factory,
+  void RegisterVirtualDeviceAtVideoSourceProvider(
+      mojo::Remote<video_capture::mojom::VideoSourceProvider>* video_source,
       const media::VideoCaptureDeviceInfo& info) override {
     mojo::PendingRemote<video_capture::mojom::Producer> producer;
-    static const bool kSendBufferHandlesToProducerAsRawFileDescriptors = false;
     producer_receiver_.Bind(producer.InitWithNewPipeAndPassReceiver());
-    (*factory)->AddSharedMemoryVirtualDevice(
-        info, std::move(producer),
-        kSendBufferHandlesToProducerAsRawFileDescriptors,
-        virtual_device_.BindNewPipeAndPassReceiver());
+    (*video_source)
+        ->AddSharedMemoryVirtualDevice(
+            info, std::move(producer),
+            virtual_device_.BindNewPipeAndPassReceiver());
   }
   gfx::Size GetVideoSize() override {
     return gfx::Size(kDummyFrameVisibleRect.width(),
@@ -324,7 +323,7 @@ class SharedMemoryDeviceExerciser : public VirtualDeviceExerciser,
     info->metadata = metadata;
     info->strides = strides_.Clone();
 
-    const base::WritableSharedMemoryMapping& outgoing_buffer =
+    base::WritableSharedMemoryMapping& outgoing_buffer =
         outgoing_buffer_id_to_buffer_map_.at(buffer_id);
 
     static int frame_count = 0;
@@ -420,7 +419,6 @@ class WebRtcVideoCaptureServiceBrowserTest : public ContentBrowserTest {
  public:
   WebRtcVideoCaptureServiceBrowserTest()
       : virtual_device_thread_("Virtual Device Thread") {
-    scoped_feature_list_.InitAndEnableFeature(features::kMojoVideoCapture);
     virtual_device_thread_.Start();
   }
 
@@ -438,12 +436,12 @@ class WebRtcVideoCaptureServiceBrowserTest : public ContentBrowserTest {
     main_task_runner_->PostTask(
         FROM_HERE,
         base::BindOnce(
-            [](mojo::PendingReceiver<video_capture::mojom::DeviceFactory>
+            [](mojo::PendingReceiver<video_capture::mojom::VideoSourceProvider>
                    receiver) {
-              GetVideoCaptureService().ConnectToDeviceFactory(
+              GetVideoCaptureService().ConnectToVideoSourceProvider(
                   std::move(receiver));
             },
-            factory_.BindNewPipeAndPassReceiver()));
+            video_source_provider_.BindNewPipeAndPassReceiver()));
 
     media::VideoCaptureDeviceInfo info;
     info.descriptor.device_id = kVirtualDeviceId;
@@ -451,14 +449,15 @@ class WebRtcVideoCaptureServiceBrowserTest : public ContentBrowserTest {
     info.descriptor.capture_api = media::VideoCaptureApi::VIRTUAL_DEVICE;
 
     video_size_ = device_exerciser->GetVideoSize();
-    device_exerciser->RegisterVirtualDeviceAtFactory(&factory_, info);
+    device_exerciser->RegisterVirtualDeviceAtVideoSourceProvider(
+        &video_source_provider_, info);
 
     main_task_runner_->PostTask(
         FROM_HERE,
         base::BindOnce(&WebRtcVideoCaptureServiceBrowserTest::
                            OpenVirtualDeviceInRendererAndWaitForPlaying,
                        base::Unretained(this),
-                       media::BindToCurrentLoop(base::BindOnce(
+                       base::BindPostTaskToCurrentDefault(base::BindOnce(
                            &WebRtcVideoCaptureServiceBrowserTest::
                                ShutDownVirtualDeviceAndContinue,
                            base::Unretained(this), device_exerciser,
@@ -471,7 +470,7 @@ class WebRtcVideoCaptureServiceBrowserTest : public ContentBrowserTest {
       VirtualDeviceExerciser* device_exerciser) {
     DCHECK(virtual_device_thread_.task_runner()->RunsTasksInCurrentSequence());
     device_exerciser->PushNextFrame(CalculateTimeSinceFirstInvocation());
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&WebRtcVideoCaptureServiceBrowserTest::
                            PushDummyFrameAndScheduleNextPush,
@@ -485,7 +484,7 @@ class WebRtcVideoCaptureServiceBrowserTest : public ContentBrowserTest {
     DCHECK(virtual_device_thread_.task_runner()->RunsTasksInCurrentSequence());
     LOG(INFO) << "Shutting down virtual device";
     device_exerciser->ShutDown();
-    factory_.reset();
+    video_source_provider_.reset();
     weak_factory_.InvalidateWeakPtrs();
     std::move(continuation).Run();
   }
@@ -500,8 +499,7 @@ class WebRtcVideoCaptureServiceBrowserTest : public ContentBrowserTest {
     std::string javascript_to_execute = base::StringPrintf(
         kStartVideoCaptureAndVerify, video_size_.width(), video_size_.height());
     // Start video capture and wait until it started rendering
-    ASSERT_EQ("OK", EvalJs(shell(), javascript_to_execute,
-                           EXECUTE_SCRIPT_USE_MANUAL_REPLY));
+    ASSERT_TRUE(ExecJs(shell(), javascript_to_execute));
 
     std::move(finish_test_cb).Run();
   }
@@ -521,7 +519,7 @@ class WebRtcVideoCaptureServiceBrowserTest : public ContentBrowserTest {
 
   void Initialize() {
     DCHECK(content::BrowserThread::CurrentlyOn(content::BrowserThread::UI));
-    main_task_runner_ = base::ThreadTaskRunnerHandle::Get();
+    main_task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
   }
 
   base::Thread virtual_device_thread_;
@@ -534,17 +532,18 @@ class WebRtcVideoCaptureServiceBrowserTest : public ContentBrowserTest {
     return base::TimeTicks::Now() - first_frame_time_;
   }
 
-  base::test::ScopedFeatureList scoped_feature_list_;
-  mojo::Remote<video_capture::mojom::DeviceFactory> factory_;
+  mojo::Remote<video_capture::mojom::VideoSourceProvider>
+      video_source_provider_;
   gfx::Size video_size_;
   base::TimeTicks first_frame_time_;
   base::WeakPtrFactory<WebRtcVideoCaptureServiceBrowserTest> weak_factory_{
       this};
 };
 
-// TODO(https://crbug.com/1318247): Fix and enable on Fuchsia.
-// TODO(https://crbug.com/1235254): This test is flakey on macOS.
-#if BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(IS_MAC)
+// TODO(crbug.com/40835247): Fix and enable on Fuchsia.
+// TODO(crbug.com/40781953): This test is flakey on macOS.
+// TODO(crbug.com/41484083): This test is flakey on ChromeOS.
+#if BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_CHROMEOS)
 #define MAYBE_FramesSentThroughTextureVirtualDeviceGetDisplayedOnPage \
   DISABLED_FramesSentThroughTextureVirtualDeviceGetDisplayedOnPage
 #else
@@ -560,16 +559,16 @@ IN_PROC_BROWSER_TEST_F(
 
   base::RunLoop run_loop;
   virtual_device_thread_.task_runner()->PostTask(
-      FROM_HERE,
-      base::BindOnce(&WebRtcVideoCaptureServiceBrowserTest::
-                         AddVirtualDeviceAndStartCapture,
-                     base::Unretained(this), device_exerciser.get(),
-                     media::BindToCurrentLoop(run_loop.QuitClosure())));
+      FROM_HERE, base::BindOnce(&WebRtcVideoCaptureServiceBrowserTest::
+                                    AddVirtualDeviceAndStartCapture,
+                                base::Unretained(this), device_exerciser.get(),
+                                base::BindPostTaskToCurrentDefault(
+                                    run_loop.QuitClosure())));
   run_loop.Run();
 }
 
 #if BUILDFLAG(IS_MAC)
-// TODO(https://crbug.com/1235254): This test is flakey on macOS.
+// TODO(crbug.com/40781953): This test is flakey on macOS.
 #define MAYBE_FramesSentThroughSharedMemoryVirtualDeviceGetDisplayedOnPage \
   DISABLED_FramesSentThroughSharedMemoryVirtualDeviceGetDisplayedOnPage
 #else
@@ -585,16 +584,16 @@ IN_PROC_BROWSER_TEST_F(
 
   base::RunLoop run_loop;
   virtual_device_thread_.task_runner()->PostTask(
-      FROM_HERE,
-      base::BindOnce(&WebRtcVideoCaptureServiceBrowserTest::
-                         AddVirtualDeviceAndStartCapture,
-                     base::Unretained(this), device_exerciser.get(),
-                     media::BindToCurrentLoop(run_loop.QuitClosure())));
+      FROM_HERE, base::BindOnce(&WebRtcVideoCaptureServiceBrowserTest::
+                                    AddVirtualDeviceAndStartCapture,
+                                base::Unretained(this), device_exerciser.get(),
+                                base::BindPostTaskToCurrentDefault(
+                                    run_loop.QuitClosure())));
   run_loop.Run();
 }
 
 #if BUILDFLAG(IS_MAC)
-// TODO(https://crbug.com/1235254): This test is flakey on macOS.
+// TODO(crbug.com/40781953): This test is flakey on macOS.
 #define MAYBE_PaddedI420FramesSentThroughSharedMemoryVirtualDeviceGetDisplayedOnPage \
   DISABLED_PaddedI420FramesSentThroughSharedMemoryVirtualDeviceGetDisplayedOnPage
 #else
@@ -612,11 +611,11 @@ IN_PROC_BROWSER_TEST_F(
 
   base::RunLoop run_loop;
   virtual_device_thread_.task_runner()->PostTask(
-      FROM_HERE,
-      base::BindOnce(&WebRtcVideoCaptureServiceBrowserTest::
-                         AddVirtualDeviceAndStartCapture,
-                     base::Unretained(this), device_exerciser.get(),
-                     media::BindToCurrentLoop(run_loop.QuitClosure())));
+      FROM_HERE, base::BindOnce(&WebRtcVideoCaptureServiceBrowserTest::
+                                    AddVirtualDeviceAndStartCapture,
+                                base::Unretained(this), device_exerciser.get(),
+                                base::BindPostTaskToCurrentDefault(
+                                    run_loop.QuitClosure())));
   run_loop.Run();
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,12 +37,13 @@ class SodaInstallerImpl : public SodaInstaller,
   // Currently only implemented in the chromeos-specific subclass.
   base::FilePath GetSodaBinaryPath() const override;
 
-  // Currently only implemented in the chromeos-specific subclass.
   base::FilePath GetLanguagePath(const std::string& language) const override;
 
   // SodaInstaller:
   void InstallLanguage(const std::string& language,
                        PrefService* global_prefs) override;
+  void UninstallLanguage(const std::string& language,
+                         PrefService* global_prefs) override;
   std::vector<std::string> GetAvailableLanguages() const override;
 
  protected:
@@ -51,12 +52,14 @@ class SodaInstallerImpl : public SodaInstaller,
   void UninstallSoda(PrefService* global_prefs) override;
 
   // component_updater::ServiceObserver:
-  void OnEvent(Events event, const std::string& id) override;
+  void OnEvent(const update_client::CrxUpdateItem& item) override;
 
   void OnSodaBinaryInstalled();
   void OnSodaLanguagePackInstalled(speech::LanguageCode language_code);
 
  private:
+  void DeleteSodaFiles();
+
   void UpdateAndNotifyOnSodaProgress(speech::LanguageCode language_code);
 
   std::map<speech::LanguageCode, update_client::CrxUpdateItem>

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,8 +21,7 @@ namespace storage {
 class FileSystemContext;
 }  // namespace storage
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 
 struct EntryMetadata;
 
@@ -114,7 +113,6 @@ class FileStreamReader : public storage::FileStreamReader {
   base::WeakPtrFactory<FileStreamReader> weak_ptr_factory_{this};
 };
 
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider
 
 #endif  // CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_FILEAPI_FILE_STREAM_READER_H_

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,10 @@
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/task_environment.h"
+#include "chromeos/ash/components/dbus/shill/shill_clients.h"
+#include "chromeos/ash/components/dbus/shill/shill_manager_client.h"
 #include "chromeos/ash/components/network/geolocation_handler.h"
 #include "chromeos/ash/components/network/network_handler_test_helper.h"
-#include "chromeos/dbus/shill/shill_clients.h"
-#include "chromeos/dbus/shill/shill_manager_client.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
@@ -22,23 +22,22 @@ class GeolocationServiceAshTest : public testing::Test {
  public:
   GeolocationServiceAshTest()
       : network_handler_test_helper_(
-            std::make_unique<chromeos::NetworkHandlerTestHelper>()) {}
+            std::make_unique<ash::NetworkHandlerTestHelper>()) {}
 
   void AddAccessPoints(int ssids, int aps_per_ssid) {
     for (int i = 0; i < ssids; ++i) {
       for (int j = 0; j < aps_per_ssid; ++j) {
-        base::DictionaryValue properties;
+        base::Value::Dict properties;
         std::string mac_address = base::StringPrintf(
             "%02X:%02X:%02X:%02X:%02X:%02X", i, j, 3, 4, 5, 6);
         std::string channel = base::NumberToString(i * 10 + j);
         std::string strength = base::NumberToString(i * 100 + j);
-        properties.SetKey(shill::kGeoMacAddressProperty,
-                          base::Value(mac_address));
-        properties.SetKey(shill::kGeoChannelProperty, base::Value(channel));
-        properties.SetKey(shill::kGeoSignalStrengthProperty,
-                          base::Value(strength));
+        properties.Set(shill::kGeoMacAddressProperty, base::Value(mac_address));
+        properties.Set(shill::kGeoChannelProperty, base::Value(channel));
+        properties.Set(shill::kGeoSignalStrengthProperty,
+                       base::Value(strength));
         network_handler_test_helper_->manager_test()->AddGeoNetwork(
-            shill::kGeoWifiAccessPointsProperty, properties);
+            shill::kGeoWifiAccessPointsProperty, std::move(properties));
       }
     }
     base::RunLoop().RunUntilIdle();
@@ -55,8 +54,7 @@ class GeolocationServiceAshTest : public testing::Test {
 
  private:
   base::test::SingleThreadTaskEnvironment task_environment_;
-  std::unique_ptr<chromeos::NetworkHandlerTestHelper>
-      network_handler_test_helper_;
+  std::unique_ptr<ash::NetworkHandlerTestHelper> network_handler_test_helper_;
   GeolocationServiceAsh download_controller_ash_;
 };
 

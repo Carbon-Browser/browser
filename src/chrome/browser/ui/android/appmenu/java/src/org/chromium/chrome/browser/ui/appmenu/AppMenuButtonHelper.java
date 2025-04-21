@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,8 @@ public interface AppMenuButtonHelper extends View.OnTouchListener {
     View.AccessibilityDelegate getAccessibilityDelegate();
 
     /**
-     * TODO(https://crbug.com/956260): Try to unify with AppMenuObserver#onMenuVisibilityChanged()?
+     * TODO(crbug.com/40624538): Try to unify with AppMenuObserver#onMenuVisibilityChanged()?
+     *
      * @param onAppMenuShownListener This is called when the app menu is shown by this class.
      */
     void setOnAppMenuShownListener(Runnable onAppMenuShownListener);

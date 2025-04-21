@@ -1,10 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/browser/api/bluetooth/bluetooth_extension_function.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/render_frame_host.h"
@@ -13,7 +13,6 @@
 #include "device/bluetooth/bluetooth_adapter_factory.h"
 #include "extensions/browser/api/bluetooth/bluetooth_api.h"
 #include "extensions/browser/api/bluetooth/bluetooth_event_router.h"
-#include "url/gurl.h"
 
 using content::BrowserThread;
 
@@ -55,8 +54,9 @@ ExtensionFunction::ResponseAction BluetoothExtensionFunction::Run() {
 
   EXTENSION_FUNCTION_VALIDATE(CreateParams());
 
-  if (!IsBluetoothSupported(browser_context()))
+  if (!IsBluetoothSupported(browser_context())) {
     return RespondNow(Error(kPlatformNotSupported));
+  }
 
   GetAdapter(
       base::BindOnce(&BluetoothExtensionFunction::RunOnAdapterReady, this),
@@ -69,8 +69,9 @@ bool BluetoothExtensionFunction::CreateParams() {
 }
 
 std::string BluetoothExtensionFunction::GetExtensionId() {
-  if (extension())
+  if (extension()) {
     return extension()->id();
+  }
   return render_frame_host()->GetLastCommittedURL().host();
 }
 

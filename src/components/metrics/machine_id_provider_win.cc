@@ -1,15 +1,17 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/metrics/machine_id_provider.h"
 
 #include <windows.h>
+
 #include <stdint.h>
 #include <winioctl.h>
 
 #include "base/base_paths.h"
 #include "base/files/file_path.h"
+#include "base/notreached.h"
 #include "base/path_service.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/win/scoped_handle.h"
@@ -33,17 +35,11 @@ std::string MachineIdProvider::GetMachineId() {
   // This is fine as we do not support migrating Chrome installs to new drives.
   base::FilePath executable_path;
 
-  if (!base::PathService::Get(base::FILE_EXE, &executable_path)) {
-    NOTREACHED();
-    return std::string();
-  }
+  CHECK(base::PathService::Get(base::FILE_EXE, &executable_path));
 
   std::vector<base::FilePath::StringType> path_components =
       executable_path.GetComponents();
-  if (path_components.empty()) {
-    NOTREACHED();
-    return std::string();
-  }
+  CHECK(!path_components.empty());
   base::FilePath::StringType drive_name = L"\\\\.\\" + path_components[0];
 
   base::win::ScopedHandle drive_handle(

@@ -1,32 +1,30 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#import "ios/web_view/internal/autofill/cwv_autofill_data_manager_internal.h"
-
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#import "base/location.h"
 #include "base/notreached.h"
 #include "base/strings/sys_string_conversions.h"
-#include "components/autofill/core/browser/personal_data_manager.h"
-#include "components/autofill/core/browser/personal_data_manager_observer.h"
+#import "components/autofill/core/browser/data_manager/addresses/address_data_manager.h"
+#import "components/autofill/core/browser/data_manager/payments/payments_data_manager.h"
+#include "components/autofill/core/browser/data_manager/personal_data_manager.h"
+#include "components/autofill/core/browser/data_manager/personal_data_manager_observer.h"
 #include "components/password_manager/core/browser/password_manager_util.h"
-#include "components/password_manager/core/browser/password_store_change.h"
-#include "components/password_manager/core/browser/password_store_consumer.h"
-#include "components/password_manager/core/browser/password_store_interface.h"
+#import "components/password_manager/core/browser/password_store/password_store_change.h"
+#import "components/password_manager/core/browser/password_store/password_store_consumer.h"
+#import "components/password_manager/core/browser/password_store/password_store_interface.h"
 #include "ios/web/public/thread/web_task_traits.h"
 #include "ios/web/public/thread/web_thread.h"
+#import "ios/web_view/internal/autofill/cwv_autofill_data_manager_internal.h"
 #import "ios/web_view/internal/autofill/cwv_autofill_profile_internal.h"
 #import "ios/web_view/internal/autofill/cwv_credit_card_internal.h"
 #import "ios/web_view/internal/passwords/cwv_password_internal.h"
 #import "ios/web_view/public/cwv_autofill_data_manager_observer.h"
 #import "ios/web_view/public/cwv_credential_provider_extension_utils.h"
 #include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 // Typedefs of |completionHandler| in |fetchProfilesWithCompletionHandler:|,
 // |fetchCreditCardsWithCompletionHandler:|, and
@@ -72,10 +70,6 @@ class WebViewPersonalDataManagerObserverBridge
   // autofill::PersonalDataManagerObserver implementation.
   void OnPersonalDataChanged() override {
     [data_manager_ personalDataDidChange];
-  }
-
-  void OnInsufficientFormData() override {
-    // Nop.
   }
 
  private:
@@ -139,7 +133,6 @@ class WebViewPasswordStoreObserver
           break;
         default:
           NOTREACHED();
-          break;
       }
     }
     [data_manager_ handlePasswordStoreLoginsAdded:added
@@ -235,7 +228,8 @@ class WebViewPasswordStoreObserver
 }
 
 - (void)updateProfile:(CWVAutofillProfile*)profile {
-  _personalDataManager->UpdateProfile(*profile.internalProfile);
+  _personalDataManager->address_data_manager().UpdateProfile(
+      *profile.internalProfile);
 }
 
 - (void)deleteProfile:(CWVAutofillProfile*)profile {
@@ -298,7 +292,7 @@ class WebViewPasswordStoreObserver
 }
 
 - (void)deletePassword:(CWVPassword*)password {
-  _passwordStore->RemoveLogin(*[password internalPasswordForm]);
+  _passwordStore->RemoveLogin(FROM_HERE, *[password internalPasswordForm]);
 }
 
 - (void)addNewPasswordForUsername:(NSString*)username
@@ -330,7 +324,7 @@ class WebViewPasswordStoreObserver
   form.url = password_manager_util::StripAuthAndParams(url);
   form.signon_realm = form.url.DeprecatedGetOriginAsURL().spec();
   form.username_value = base::SysNSStringToUTF16(username);
-  form.encrypted_password = base::SysNSStringToUTF8(keychainIdentifier);
+  form.keychain_identifier = base::SysNSStringToUTF8(keychainIdentifier);
 
   _passwordStore->AddLogin(form);
 }
@@ -384,8 +378,8 @@ class WebViewPasswordStoreObserver
 
 - (NSArray<CWVAutofillProfile*>*)profiles {
   NSMutableArray* profiles = [NSMutableArray array];
-  for (autofill::AutofillProfile* internalProfile :
-       _personalDataManager->GetProfiles()) {
+  for (const autofill::AutofillProfile* internalProfile :
+       _personalDataManager->address_data_manager().GetProfiles()) {
     CWVAutofillProfile* profile =
         [[CWVAutofillProfile alloc] initWithProfile:*internalProfile];
     [profiles addObject:profile];
@@ -395,13 +389,19 @@ class WebViewPasswordStoreObserver
 
 - (NSArray<CWVCreditCard*>*)creditCards {
   NSMutableArray* creditCards = [NSMutableArray array];
-  for (autofill::CreditCard* internalCard :
-       _personalDataManager->GetCreditCards()) {
+  for (const autofill::CreditCard* internalCard :
+       _personalDataManager->payments_data_manager().GetCreditCards()) {
     CWVCreditCard* creditCard =
         [[CWVCreditCard alloc] initWithCreditCard:*internalCard];
     [creditCards addObject:creditCard];
   }
   return [creditCards copy];
+}
+
+- (void)shutDown {
+  _personalDataManager->RemoveObserver(
+      _personalDataManagerObserverBridge.get());
+  _passwordStore->RemoveObserver(_passwordStoreObserver.get());
 }
 
 @end

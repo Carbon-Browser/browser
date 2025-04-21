@@ -1,6 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/component_updater/file_type_policies_component_installer.h"
 
@@ -9,10 +14,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/path_service.h"
@@ -20,7 +25,6 @@
 #include "base/version.h"
 #include "components/component_updater/component_updater_paths.h"
 #include "components/safe_browsing/content/common/file_type_policies.h"
-#include "components/safe_browsing/core/common/features.h"
 
 using component_updater::ComponentUpdateService;
 
@@ -39,8 +43,9 @@ const uint8_t kFileTypePoliciesPublicKeySHA256[32] = {
 const char kFileTypePoliciesManifestName[] = "File Type Policies";
 
 void LoadFileTypesFromDisk(const base::FilePath& pb_path) {
-  if (pb_path.empty())
+  if (pb_path.empty()) {
     return;
+  }
 
   VLOG(1) << "Reading Download File Types from file: " << pb_path.value();
   std::string binary_pb;
@@ -71,7 +76,7 @@ bool FileTypePoliciesComponentInstallerPolicy::RequiresNetworkEncryption()
 
 update_client::CrxInstaller::Result
 FileTypePoliciesComponentInstallerPolicy::OnCustomInstall(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) {
   return update_client::CrxInstaller::Result(0);  // Nothing custom here.
 }
@@ -86,7 +91,7 @@ base::FilePath FileTypePoliciesComponentInstallerPolicy::GetInstalledPath(
 void FileTypePoliciesComponentInstallerPolicy::ComponentReady(
     const base::Version& version,
     const base::FilePath& install_dir,
-    base::Value manifest) {
+    base::Value::Dict manifest) {
   VLOG(1) << "Component ready, version " << version.GetString() << " in "
           << install_dir.value();
 
@@ -97,7 +102,7 @@ void FileTypePoliciesComponentInstallerPolicy::ComponentReady(
 
 // Called during startup and installation before ComponentReady().
 bool FileTypePoliciesComponentInstallerPolicy::VerifyInstallation(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) const {
   // No need to actually validate the proto here, since we'll do the checking
   // in PopulateFromDynamicUpdate().
@@ -122,9 +127,7 @@ std::string FileTypePoliciesComponentInstallerPolicy::GetName() const {
 
 update_client::InstallerAttributes
 FileTypePoliciesComponentInstallerPolicy::GetInstallerAttributes() const {
-  update_client::InstallerAttributes attributes;
-  attributes["tag"] = safe_browsing::GetFileTypePoliciesTag();
-  return attributes;
+  return update_client::InstallerAttributes();
 }
 
 void RegisterFileTypePoliciesComponent(ComponentUpdateService* cus) {

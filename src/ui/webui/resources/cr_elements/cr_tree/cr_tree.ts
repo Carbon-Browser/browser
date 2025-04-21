@@ -1,13 +1,14 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert, assertNotReached} from '../../js/assert_ts.js';
-import {isMac} from '../../js/cr.m.js';
+import {assert, assertNotReached} from '//resources/js/assert.js';
+import {isMac} from '//resources/js/platform.js';
 
 import {getTemplate} from './cr_tree.html.js';
 import {CrTreeBaseElement} from './cr_tree_base.js';
-import {CrTreeItemElement, SELECTED_ATTR} from './cr_tree_item.js';
+import type {CrTreeItemElement} from './cr_tree_item.js';
+import {SELECTED_ATTR} from './cr_tree_item.js';
 
 /**
  * @fileoverview cr-tree is a container for a tree structure. Items can be added

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkPaint.h"
 #include "third_party/skia/include/core/SkPath.h"
+#include "third_party/skia/include/core/SkPathUtils.h"
 #include "third_party/skia/include/core/SkSurface.h"
 
 
@@ -49,10 +50,11 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   paint_stroke.setAntiAlias(anti_alias & 1);
 
   SkPath dst_path;
-  paint_stroke.getFillPath(path, &dst_path, nullptr);
+  skpathutils::FillPathWithPaint(path, paint_stroke, &dst_path, nullptr);
 
   // Width and height should never be 0.
-  auto surface(SkSurface::MakeRasterN32Premul(w ? w : 1, h ? h : 1));
+  auto surface(
+      SkSurfaces::Raster(SkImageInfo::MakeN32Premul(w ? w : 1, h ? h : 1)));
 
   surface->getCanvas()->drawPath(path, paint_fill);
   surface->getCanvas()->drawPath(path, paint_stroke);

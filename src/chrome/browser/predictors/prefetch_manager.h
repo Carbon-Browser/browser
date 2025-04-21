@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,17 @@
 #include <list>
 #include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/predictors/resource_prefetch_predictor.h"
-#include "net/base/network_isolation_key.h"
+#include "net/base/network_anonymization_key.h"
+#include "services/network/public/mojom/fetch_api.mojom-forward.h"
 #include "services/network/public/mojom/url_loader.mojom-forward.h"
+#include "third_party/blink/public/mojom/loader/resource_load_info.mojom-forward.h"
 #include "url/gurl.h"
 
 class Profile;
@@ -37,6 +40,8 @@ namespace predictors {
 struct PrefetchRequest;
 struct PrefetchInfo;
 struct PrefetchJob;
+
+static constexpr size_t kMaxInflightPrefetches = 3;
 
 struct PrefetchStats {
   explicit PrefetchStats(const GURL& url);
@@ -62,6 +67,9 @@ struct PrefetchStats {
 //  usable when LoadingPredictorPrefetch is enabled.
 class PrefetchManager {
  public:
+  // Delegate methods are not called when the
+  // kPrefetchManagerUseNetworkContextPrefetch feature is enabled, as this class
+  // does not track progress in that case.
   class Delegate {
    public:
     virtual ~Delegate() = default;
@@ -76,7 +84,8 @@ class PrefetchManager {
     virtual void PrefetchFinished(std::unique_ptr<PrefetchStats> stats) = 0;
   };
 
-  // For testing.
+  // For testing. Observer methods will not be called when the
+  // kPrefetchManagerUseNetworkContextPrefetch feature is enabled.
   class Observer {
    public:
     virtual ~Observer() = default;
@@ -93,6 +102,9 @@ class PrefetchManager {
 
   PrefetchManager(const PrefetchManager&) = delete;
   PrefetchManager& operator=(const PrefetchManager&) = delete;
+
+  static bool IsAvailableForPrefetch(
+      network::mojom::RequestDestination destination);
 
   // Starts prefetch jobs keyed by |url|.
   void Start(const GURL& url, std::vector<PrefetchRequest> requests);
@@ -125,7 +137,7 @@ class PrefetchManager {
   void TryToLaunchPrefetchJobs();
 
   base::WeakPtr<Delegate> delegate_;
-  const raw_ptr<Profile> profile_;
+  const raw_ptr<Profile, DanglingUntriaged> profile_;
 
   // All the jobs that haven't yet started. A job is removed once it starts.
   // Inflight jobs destruct once finished.
@@ -137,10 +149,20 @@ class PrefetchManager {
   // across all main frame URLs.
   size_t inflight_jobs_count_ = 0;
 
-  raw_ptr<Observer> observer_for_testing_ = nullptr;
+  raw_ptr<Observer, DanglingUntriaged> observer_for_testing_ = nullptr;
+
+  // True if the feature "PrefetchManagerUseNetworkContextPrefetch" is in use,
+  // in which case this class just fires off prefetches but does not track their
+  // completion.
+  const bool use_network_context_prefetch_;
 
   base::WeakPtrFactory<PrefetchManager> weak_factory_{this};
 };
+
+// Returns a relevant ResourceType for the given RequestDestination if it's
+// supported by prefetch. Otherwise, returns nullopt.
+std::optional<blink::mojom::ResourceType> GetResourceTypeForPrefetch(
+    network::mojom::RequestDestination destination);
 
 }  // namespace predictors
 

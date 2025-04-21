@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/feature_list.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/notreached.h"
 #include "chrome/browser/browser_features.h"
 #include "chrome/browser/notifications/notification_display_service.h"
@@ -26,8 +26,8 @@ void MutedNotificationHandler::OnClick(
     Profile* profile,
     const GURL& origin,
     const std::string& notification_id,
-    const absl::optional<int>& action_index,
-    const absl::optional<std::u16string>& reply,
+    const std::optional<int>& action_index,
+    const std::optional<std::u16string>& reply,
     base::OnceClosure completed_closure) {
   base::ScopedClosureRunner runner(std::move(completed_closure));
 

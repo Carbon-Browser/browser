@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -35,7 +35,7 @@ class _BaseSampleIntegrationTest(gpu_integration_test.GpuIntegrationTest):
   @classmethod
   def AddCommandlineArgs(cls, parser):
     super(_BaseSampleIntegrationTest, cls).AddCommandlineArgs(parser)
-    parser.add_option(
+    parser.add_argument(
         '--test-state-json-path',
         help=('Where to dump the test state json (this is used by '
               'gpu_integration_test_unittest)'))

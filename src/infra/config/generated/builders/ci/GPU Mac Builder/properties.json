@@ -1,13 +1,16 @@
 {
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/ci/GPU Mac Builder/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
             "builder_id": {
               "bucket": "ci",
               "builder": "GPU Mac Builder",
-              "project": "chromium"
+              "project": "chromium-m133"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-gpu-archive",
@@ -15,16 +18,17 @@
               "execution_mode": "COMPILE_AND_TEST",
               "legacy_chromium_config": {
                 "apply_configs": [
-                  "mb",
-                  "goma_use_local"
+                  "mb"
                 ],
                 "build_config": "Release",
                 "config": "chromium",
+                "target_arch": "intel",
                 "target_bits": 64,
                 "target_platform": "mac"
               },
               "legacy_gclient_config": {
                 "apply_configs": [
+                  "chromium_with_telemetry_dependencies",
                   "use_clang_coverage"
                 ],
                 "config": "chromium"
@@ -35,7 +39,7 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "Mac Release (Intel)",
-              "project": "chromium"
+              "project": "chromium-m133"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-gpu-archive",
@@ -43,8 +47,7 @@
               "execution_mode": "TEST",
               "legacy_chromium_config": {
                 "apply_configs": [
-                  "mb",
-                  "goma_use_local"
+                  "mb"
                 ],
                 "build_config": "Release",
                 "config": "chromium",
@@ -57,7 +60,7 @@
               "parent": {
                 "bucket": "ci",
                 "builder": "GPU Mac Builder",
-                "project": "chromium"
+                "project": "chromium-m133"
               }
             }
           },
@@ -65,7 +68,7 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "Mac Retina Release (AMD)",
-              "project": "chromium"
+              "project": "chromium-m133"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-gpu-archive",
@@ -73,8 +76,7 @@
               "execution_mode": "TEST",
               "legacy_chromium_config": {
                 "apply_configs": [
-                  "mb",
-                  "goma_use_local"
+                  "mb"
                 ],
                 "build_config": "Release",
                 "config": "chromium",
@@ -87,7 +89,7 @@
               "parent": {
                 "bucket": "ci",
                 "builder": "GPU Mac Builder",
-                "project": "chromium"
+                "project": "chromium-m133"
               }
             }
           }
@@ -97,19 +99,19 @@
         {
           "bucket": "ci",
           "builder": "GPU Mac Builder",
-          "project": "chromium"
+          "project": "chromium-m133"
         }
       ],
       "builder_ids_in_scope_for_testing": [
         {
           "bucket": "ci",
           "builder": "Mac Release (Intel)",
-          "project": "chromium"
+          "project": "chromium-m133"
         },
         {
           "bucket": "ci",
           "builder": "Mac Retina Release (AMD)",
-          "project": "chromium"
+          "project": "chromium-m133"
         }
       ],
       "mirroring_builder_group_and_names": [
@@ -117,13 +119,24 @@
           "builder": "mac-rel",
           "group": "tryserver.chromium.mac"
         }
-      ]
+      ],
+      "targets_spec_directory": "src/infra/config/generated/builders/ci/GPU Mac Builder/targets"
     }
   },
-  "$build/goma": {
-    "rpc_extra_params": "?prod",
-    "server_host": "goma.chromium.org",
-    "use_luci_auth": true
+  "$build/reclient": {
+    "instance": "rbe-chromium-trusted",
+    "metrics_project": "chromium-reclient-metrics",
+    "scandeps_server": true
+  },
+  "$build/siso": {
+    "configs": [
+      "builder"
+    ],
+    "enable_cloud_profiler": true,
+    "enable_cloud_trace": true,
+    "experiments": [],
+    "project": "rbe-chromium-trusted",
+    "remote_jobs": 250
   },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],
@@ -133,6 +146,9 @@
     ]
   },
   "builder_group": "chromium.gpu",
+  "gardener_rotations": [
+    "chrome_browser_release"
+  ],
   "recipe": "chromium",
   "sheriff_rotations": [
     "chrome_browser_release"

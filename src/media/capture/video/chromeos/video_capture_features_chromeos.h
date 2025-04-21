@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,19 +14,22 @@ namespace switches {
 
 CAPTURE_EXPORT extern const char kForceControlFaceAe[];
 
-CAPTURE_EXPORT extern const char kHdrNetOverride[];
-constexpr char kHdrNetForceEnabled[] = "force-enabled";
-constexpr char kHdrNetForceDisabled[] = "force-disabled";
-
 CAPTURE_EXPORT extern const char kAutoFramingOverride[];
-constexpr char kAutoFramingForceEnabled[] = "force-enabled";
-constexpr char kAutoFramingForceDisabled[] = "force-disabled";
+inline constexpr char kAutoFramingForceEnabled[] = "force-enabled";
+inline constexpr char kAutoFramingForceDisabled[] = "force-disabled";
+
+CAPTURE_EXPORT extern const char kFaceRetouchOverride[];
+inline constexpr char kFaceRetouchForceEnabledWithRelighting[] =
+    "force-enabled-with-relighting";
+inline constexpr char kFaceRetouchForceEnabledWithoutRelighting[] =
+    "force-enabled-without-relighting";
+inline constexpr char kFaceRetouchForceDisabled[] = "force-disabled";
 
 }  // namespace switches
 
 namespace features {
 
-CAPTURE_EXPORT extern const base::Feature kDisableCameraFrameRotationAtSource;
+CAPTURE_EXPORT BASE_DECLARE_FEATURE(kDisableCameraFrameRotationAtSource);
 
 }  // namespace features
 

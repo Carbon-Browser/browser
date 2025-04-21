@@ -1,30 +1,36 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chromeos/ash/components/memory/userspace_swap/userspace_swap.h"
 
 #include <string>
 #include <vector>
 
-#include "base/allocator/buildflags.h"
-#include "base/allocator/partition_allocator/page_allocator_constants.h"
 #include "base/rand_util.h"
 #include "build/build_config.h"
 #include "chromeos/ash/components/memory/userspace_swap/region.h"
+#include "partition_alloc/buildflags.h"
+#include "partition_alloc/page_allocator_constants.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-#if BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
-#include "base/allocator/partition_allocator/page_allocator.h"
-#include "base/allocator/partition_allocator/partition_alloc_constants.h"
+#if PA_BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
+#include "partition_alloc/page_allocator.h"
+#include "partition_alloc/partition_alloc_constants.h"
 #endif
 
 namespace ash {
 namespace memory {
 namespace userspace_swap {
 
-#if BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) && defined(PA_HAS_64_BITS_POINTERS)
+#if PA_BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) && \
+    PA_BUILDFLAG(HAS_64_BIT_POINTERS)
 // InRange matches if the range specified by [start,end] is in [address,
 // address+length] of a region.
 MATCHER_P2(InRange, start, end, "") {
@@ -91,8 +97,8 @@ TEST(UserspaceSwap, LimitSuperpagesReturned) {
     free(reinterpret_cast<void*>(mem_area[i]));
   }
 }
-#endif  // BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) &&
-        // defined(PA_HAS_64_BITS_POINTERS)
+#endif  // PA_BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) &&
+        // PA_BUILDFLAG(HAS_64_BIT_POINTERS)
 
 }  // namespace userspace_swap
 }  // namespace memory

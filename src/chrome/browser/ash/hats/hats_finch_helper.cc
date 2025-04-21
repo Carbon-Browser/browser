@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include "base/metrics/field_trial_params.h"
 #include "base/rand_util.h"
+#include "base/strings/string_util.h"
 #include "chrome/browser/ash/hats/hats_config.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/chrome_features.h"
@@ -15,6 +16,8 @@
 namespace ash {
 
 // These values should match the param key values in the finch config file.
+// static
+const char HatsFinchHelper::kEnabledForGooglersParam[] = "enabled_for_googlers";
 // static
 const char HatsFinchHelper::kCustomClientDataParam[] = "custom_client_data";
 // static
@@ -30,10 +33,37 @@ const char HatsFinchHelper::kSurveyStartDateMsParam[] = "survey_start_date_ms";
 // static
 const char HatsFinchHelper::kTriggerIdParam[] = "trigger_id";
 
+const char HatsFinchHelper::kHistogramNameParam[] = "histogram_name";
+
 std::string HatsFinchHelper::GetTriggerID(const HatsConfig& hats_config) {
   DCHECK(base::FeatureList::IsEnabled(hats_config.feature));
   return base::GetFieldTrialParamValueByFeature(hats_config.feature,
                                                 kTriggerIdParam);
+}
+
+// To enable UMA collection for a specific survey, the Finch configuration
+// file for this survey should be updated to include a `histogram_name`
+// parameter along side the `trigger_id` parameter. Without this
+// `histogram_name` parameter specified, no survey-specific UMA data will be
+// collected.
+std::string HatsFinchHelper::GetHistogramName(const HatsConfig& hats_config) {
+  DCHECK(base::FeatureList::IsEnabled(hats_config.feature));
+  // Fetch the histogram name from the feature parameters, if it is assigned.
+  // An empty string will be returned if the parameter is not set in Finch.
+  // This value should be a valid histogram that has been registered in the
+  // histograms.xml file, otherwise it will not be ingested by UMA.
+  std::string histogram_name = base::GetFieldTrialParamValueByFeature(
+      hats_config.feature, kHistogramNameParam);
+
+  // Valid histogram names for HaTS/UMA integration must start with the
+  // prefix "ChromeOS.HaTS.". This corresponds to the histogram definition
+  // in the histograms.xml file.
+  if (!base::StartsWith(histogram_name, "ChromeOS.HaTS.")) {
+    LOG(ERROR) << "Invalid HaTS histogram name: " << histogram_name;
+    return std::string();
+  }
+
+  return histogram_name;
 }
 
 std::string HatsFinchHelper::GetCustomClientDataAsString(
@@ -41,6 +71,12 @@ std::string HatsFinchHelper::GetCustomClientDataAsString(
   DCHECK(base::FeatureList::IsEnabled(hats_config.feature));
   return base::GetFieldTrialParamValueByFeature(hats_config.feature,
                                                 kCustomClientDataParam);
+}
+
+bool HatsFinchHelper::IsEnabledForGooglers(const HatsConfig& hats_config) {
+  DCHECK(base::FeatureList::IsEnabled(hats_config.feature));
+  return base::GetFieldTrialParamByFeatureAsBool(
+      hats_config.feature, kEnabledForGooglersParam, false);
 }
 
 HatsFinchHelper::HatsFinchHelper(Profile* profile,
@@ -63,7 +99,7 @@ HatsFinchHelper::HatsFinchHelper(Profile* profile,
   CheckForDeviceSelection();
 }
 
-HatsFinchHelper::~HatsFinchHelper() {}
+HatsFinchHelper::~HatsFinchHelper() = default;
 
 void HatsFinchHelper::LoadFinchParamValues(const HatsConfig& hats_config) {
   if (!base::FeatureList::IsEnabled(hats_config.feature))
@@ -93,10 +129,11 @@ void HatsFinchHelper::LoadFinchParamValues(const HatsConfig& hats_config) {
                << first_survey_start_date_ms;
     // Set a random date in the distant future so that the survey never starts
     // until a new finch seed is received with the correct start date.
-    first_survey_start_date_ms = 2 * base::Time::Now().ToJsTime();
+    first_survey_start_date_ms =
+        2 * base::Time::Now().InMillisecondsFSinceUnixEpoch();
   }
   first_survey_start_date_ =
-      base::Time().FromJsTime(first_survey_start_date_ms);
+      base::Time().FromMillisecondsSinceUnixEpoch(first_survey_start_date_ms);
 
   trigger_id_ = GetTriggerID(hats_config);
 
@@ -110,14 +147,14 @@ void HatsFinchHelper::LoadFinchParamValues(const HatsConfig& hats_config) {
   if (reset_survey_cycle_ || reset_hats_) {
     probability_of_pick_ = 0;
     survey_cycle_length_ = INT_MAX;
-    first_survey_start_date_ =
-        base::Time().FromJsTime(2 * base::Time::Now().ToJsTime());
+    first_survey_start_date_ = base::Time().FromMillisecondsSinceUnixEpoch(
+        2 * base::Time::Now().InMillisecondsFSinceUnixEpoch());
   }
 }
 
 bool HatsFinchHelper::HasPreviousCycleEnded() {
   int64_t serialized_timestamp = profile_->GetPrefs()->GetInt64(
-      hats_config_.cycle_end_timestamp_pref_name);
+      hats_config_->cycle_end_timestamp_pref_name);
   base::Time recent_survey_cycle_end_time =
       base::Time::FromInternalValue(serialized_timestamp);
   return recent_survey_cycle_end_time < base::Time::Now();
@@ -139,7 +176,7 @@ void HatsFinchHelper::CheckForDeviceSelection() {
   // for the current cycle, then return the stored value of the result.
   if (!HasPreviousCycleEnded()) {
     device_is_selected_for_cycle_ =
-        profile_->GetPrefs()->GetBoolean(hats_config_.is_selected_pref_name);
+        profile_->GetPrefs()->GetBoolean(hats_config_->is_selected_pref_name);
     return;
   }
 
@@ -151,7 +188,7 @@ void HatsFinchHelper::CheckForDeviceSelection() {
   base::Time survey_cycle_end_date = ComputeNextEndDate();
 
   PrefService* pref_service = profile_->GetPrefs();
-  pref_service->SetInt64(hats_config_.cycle_end_timestamp_pref_name,
+  pref_service->SetInt64(hats_config_->cycle_end_timestamp_pref_name,
                          survey_cycle_end_date.ToInternalValue());
 
   double rand_double = base::RandDouble();
@@ -163,7 +200,7 @@ void HatsFinchHelper::CheckForDeviceSelection() {
   // of around 26 characters.
   is_selected = is_selected && (trigger_id_.length() > 15);
 
-  pref_service->SetBoolean(hats_config_.is_selected_pref_name, is_selected);
+  pref_service->SetBoolean(hats_config_->is_selected_pref_name, is_selected);
   device_is_selected_for_cycle_ = is_selected;
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,12 @@
 #define EXTENSIONS_BROWSER_API_WEB_REQUEST_WEB_REQUEST_EVENT_DETAILS_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "base/gtest_prod_util.h"
 #include "base/values.h"
 #include "extensions/browser/extension_api_frame_id_map.h"
 #include "extensions/common/extension_id.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/origin.h"
 
 namespace net {
@@ -82,16 +81,12 @@ class WebRequestEventDetails {
   // - ip
   void SetResponseSource(const WebRequestInfo& request);
 
-  void SetBoolean(const std::string& key, bool value) {
-    dict_.SetBoolPath(key, value);
-  }
+  void SetBoolean(const std::string& key, bool value) { dict_.Set(key, value); }
 
-  void SetInteger(const std::string& key, int value) {
-    dict_.SetIntPath(key, value);
-  }
+  void SetInteger(const std::string& key, int value) { dict_.Set(key, value); }
 
   void SetString(const std::string& key, const std::string& value) {
-    dict_.SetStringPath(key, value);
+    dict_.Set(key, value);
   }
 
   // Create an event dictionary that contains all required keys, and also the
@@ -99,34 +94,24 @@ class WebRequestEventDetails {
   // this event will be dispatched to doesn't have permission for the initiator
   // then the initiator will not be populated.
   // This can be called from any thread.
-  std::unique_ptr<base::DictionaryValue> GetFilteredDict(
-      int extra_info_spec,
-      PermissionHelper* permission_helper,
-      const ExtensionId& extension_id,
-      bool crosses_incognito) const;
+  base::Value::Dict GetFilteredDict(int extra_info_spec,
+                                    PermissionHelper* permission_helper,
+                                    const ExtensionId& extension_id,
+                                    bool crosses_incognito) const;
 
   // Get the internal dictionary, unfiltered. After this call, the internal
   // dictionary is empty.
-  std::unique_ptr<base::DictionaryValue> GetAndClearDict();
-
-  // Returns a filtered copy with only allowlisted data for public session.
-  std::unique_ptr<WebRequestEventDetails> CreatePublicSessionCopy();
+  base::Value::Dict GetAndClearDict();
 
  private:
-  FRIEND_TEST_ALL_PREFIXES(WebRequestEventDetailsTest,
-                           AllowlistedCopyForPublicSession);
-
-  // Empty constructor used in unittests.
-  WebRequestEventDetails();
-
   // The details that are always included in a webRequest event object.
-  base::DictionaryValue dict_;
+  base::Value::Dict dict_;
 
   // Extra event details: Only included when |extra_info_spec_| matches.
-  std::unique_ptr<base::DictionaryValue> request_body_;
-  std::unique_ptr<base::ListValue> request_headers_;
-  std::unique_ptr<base::ListValue> response_headers_;
-  absl::optional<url::Origin> initiator_;
+  std::optional<base::Value::Dict> request_body_;
+  std::optional<base::Value::List> request_headers_;
+  std::optional<base::Value::List> response_headers_;
+  std::optional<url::Origin> initiator_;
 
   int extra_info_spec_;
 

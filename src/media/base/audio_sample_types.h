@@ -1,10 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_BASE_AUDIO_SAMPLE_TYPES_H_
 #define MEDIA_BASE_AUDIO_SAMPLE_TYPES_H_
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -45,33 +46,33 @@ class FloatSampleTypeTraits {
   static constexpr SampleType kMaxValue = +1.0f;
   static constexpr SampleType kZeroPointValue = 0.0f;
 
-  static SampleType FromFloat(float source_value) {
+  static constexpr SampleType FromFloat(float source_value) {
     return From<float>(source_value);
   }
-  static float ToFloat(SampleType source_value) {
+  static constexpr float ToFloat(SampleType source_value) {
     return To<float>(source_value);
   }
-  static SampleType FromDouble(double source_value) {
+  static constexpr SampleType FromDouble(double source_value) {
     return From<double>(source_value);
   }
-  static double ToDouble(SampleType source_value) {
+  static constexpr double ToDouble(SampleType source_value) {
     return To<double>(source_value);
   }
 
  private:
   template <typename FloatType>
-  static SampleType From(FloatType source_value) {
+  static constexpr SampleType From(FloatType source_value) {
     // Apply clipping (aka. clamping). These values are frequently sent to OS
     // level drivers that may not properly handle these values.
-    if (UNLIKELY(!(source_value >= kMinValue)))
-      return kMinValue;
-    if (UNLIKELY(source_value >= kMaxValue))
-      return kMaxValue;
-    return static_cast<SampleType>(source_value);
+    // Note: Passing NaN to `std::clamp()` is UB.
+    return std::isnan(source_value)
+               ? kMinValue
+               : std::clamp(static_cast<SampleType>(source_value), kMinValue,
+                            kMaxValue);
   }
 
   template <typename FloatType>
-  static FloatType To(SampleType source_value) {
+  static constexpr FloatType To(SampleType source_value) {
     return static_cast<FloatType>(source_value);
   }
 };
@@ -89,27 +90,27 @@ class FloatSampleTypeTraitsNoClip {
   static constexpr SampleType kMaxValue = +1.0f;
   static constexpr SampleType kZeroPointValue = 0.0f;
 
-  static SampleType FromFloat(float source_value) {
+  static constexpr SampleType FromFloat(float source_value) {
     return From<float>(source_value);
   }
-  static float ToFloat(SampleType source_value) {
+  static constexpr float ToFloat(SampleType source_value) {
     return To<float>(source_value);
   }
-  static SampleType FromDouble(double source_value) {
+  static constexpr SampleType FromDouble(double source_value) {
     return From<double>(source_value);
   }
-  static double ToDouble(SampleType source_value) {
+  static constexpr double ToDouble(SampleType source_value) {
     return To<double>(source_value);
   }
 
  private:
   template <typename FloatType>
-  static SampleType From(FloatType source_value) {
+  static constexpr SampleType From(FloatType source_value) {
     return static_cast<SampleType>(source_value);
   }
 
   template <typename FloatType>
-  static FloatType To(SampleType source_value) {
+  static constexpr FloatType To(SampleType source_value) {
     return static_cast<FloatType>(source_value);
   }
 };
@@ -131,16 +132,16 @@ class FixedSampleTypeTraits {
   static constexpr SampleType kZeroPointValue =
       (kMinValue == 0) ? (kMaxValue / 2 + 1) : 0;
 
-  static SampleType FromFloat(float source_value) {
+  static constexpr SampleType FromFloat(float source_value) {
     return From<float>(source_value);
   }
-  static float ToFloat(SampleType source_value) {
+  static constexpr float ToFloat(SampleType source_value) {
     return To<float>(source_value);
   }
-  static SampleType FromDouble(double source_value) {
+  static constexpr SampleType FromDouble(double source_value) {
     return From<double>(source_value);
   }
-  static double ToDouble(SampleType source_value) {
+  static constexpr double ToDouble(SampleType source_value) {
     return To<double>(source_value);
   }
 
@@ -185,7 +186,7 @@ class FixedSampleTypeTraits {
   };
 
   template <typename FloatType>
-  static SampleType From(FloatType source_value) {
+  static constexpr SampleType From(FloatType source_value) {
     // Note, that the for the case of |source_value| == 1.0, the imprecision of
     // |kScalingFactorForPositive| can lead to a product that is larger than the
     // maximum possible value of SampleType. To ensure this does not happen, we
@@ -209,8 +210,9 @@ class FixedSampleTypeTraits {
     // negative float to an unsigned integer is undefined.
     if (source_value < 0) {
       // Apply clipping (aka. clamping).
-      if (source_value <= FloatSampleTypeTraits<float>::kMinValue)
+      if (source_value <= FloatSampleTypeTraits<float>::kMinValue) {
         return kMinValue;
+      }
 
       return static_cast<SampleType>(
           (source_value * ScalingFactors<FloatType>::kForNegativeInput) +
@@ -218,8 +220,9 @@ class FixedSampleTypeTraits {
     } else {
       // Apply clipping (aka. clamping).
       // As mentioned above, here we must include the case |source_value| == 1.
-      if (source_value >= FloatSampleTypeTraits<float>::kMaxValue)
+      if (source_value >= FloatSampleTypeTraits<float>::kMaxValue) {
         return kMaxValue;
+      }
       return static_cast<SampleType>(
           (source_value * ScalingFactors<FloatType>::kForPositiveInput) +
           static_cast<FloatType>(kZeroPointValue));
@@ -227,7 +230,7 @@ class FixedSampleTypeTraits {
   }
 
   template <typename FloatType>
-  static FloatType To(SampleType source_value) {
+  static constexpr FloatType To(SampleType source_value) {
     FloatType offset_value =
         static_cast<FloatType>(source_value - kZeroPointValue);
 

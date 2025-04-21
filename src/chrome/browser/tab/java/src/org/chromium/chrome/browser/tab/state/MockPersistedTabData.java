@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.tab.state;
 
 import org.chromium.base.Callback;
-import org.chromium.base.annotations.DoNotClassMerge;
+import org.chromium.build.annotations.DoNotClassMerge;
 import org.chromium.chrome.browser.tab.Tab;
 
 import java.nio.ByteBuffer;
@@ -25,7 +25,8 @@ public class MockPersistedTabData extends PersistedTabData {
      * @param field field stored in {@link MockPersistedTabData}
      */
     public MockPersistedTabData(Tab tab, int field) {
-        super(tab,
+        super(
+                tab,
                 PersistedTabDataConfiguration.get(MockPersistedTabData.class, tab.isIncognito())
                         .getStorage(),
                 PersistedTabDataConfiguration.get(MockPersistedTabData.class, tab.isIncognito())
@@ -46,9 +47,14 @@ public class MockPersistedTabData extends PersistedTabData {
      * @param callback callback {@link MockPersistedTabData} will be passed back in
      */
     public static void from(Tab tab, Callback<MockPersistedTabData> callback) {
-        PersistedTabData.from(tab, (data, storage, id, factoryCallback) -> {
-            factoryCallback.onResult(new MockPersistedTabData(tab, data, storage, id));
-        }, null, MockPersistedTabData.class, callback);
+        PersistedTabData.from(
+                tab,
+                (data, storage, id, factoryCallback) -> {
+                    factoryCallback.onResult(new MockPersistedTabData(tab, data, storage, id));
+                },
+                null,
+                MockPersistedTabData.class,
+                callback);
     }
 
     /**

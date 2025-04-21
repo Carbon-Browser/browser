@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,8 @@
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/root_window_controller.h"
 #include "ash/shell.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/aura/window.h"
@@ -72,9 +73,9 @@ bool g_hud_overlay_mode = true;
 // ClientView that return HTNOWHERE by default. A child view can receive event
 // by setting kHitTestComponentKey property to HTCLIENT.
 class HTClientView : public views::ClientView {
- public:
-  METADATA_HEADER(HTClientView);
+  METADATA_HEADER(HTClientView, views::ClientView)
 
+ public:
   HTClientView(HUDDisplayView* hud_display,
                views::Widget* widget,
                views::View* contents_view)
@@ -92,10 +93,10 @@ class HTClientView : public views::ClientView {
   HUDDisplayView* GetHUDDisplayViewForTesting() { return hud_display_; }
 
  private:
-  HUDDisplayView* hud_display_;
+  raw_ptr<HUDDisplayView> hud_display_;
 };
 
-BEGIN_METADATA(HTClientView, views::ClientView)
+BEGIN_METADATA(HTClientView)
 END_METADATA
 
 std::unique_ptr<views::ClientView> MakeClientView(views::Widget* widget) {
@@ -117,7 +118,7 @@ void InitializeFrameView(views::WidgetDelegate* delegate) {
 ////////////////////////////////////////////////////////////////////////////////
 // HUDDisplayView, public:
 
-BEGIN_METADATA(HUDDisplayView, views::View)
+BEGIN_METADATA(HUDDisplayView)
 END_METADATA
 
 // static
@@ -139,16 +140,21 @@ void HUDDisplayView::Toggle() {
       base::BindOnce(&InitializeFrameView, base::Unretained(delegate.get())));
   delegate->SetOwnedByWidget(true);
 
-  views::Widget::InitParams params(views::Widget::InitParams::TYPE_WINDOW);
+  views::Widget::InitParams params(
+      views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET,
+      views::Widget::InitParams::TYPE_WINDOW);
   params.delegate = delegate.release();
+  params.name = "HUDDisplay";
   params.parent = Shell::GetContainer(Shell::GetPrimaryRootWindow(),
                                       kShellWindowId_OverlayContainer);
-  params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
   params.bounds = gfx::Rect(kHUDWidth, kHUDHeightWithGraph);
   auto* widget = CreateViewTreeHostWidget(std::move(params));
   widget->GetLayer()->SetName("HUDDisplayView");
-  static_cast<ViewTreeHostRootView*>(widget->GetRootView())
-      ->SetIsOverlayCandidate(g_hud_overlay_mode);
+
+  ViewTreeHostRootView* root_view =
+      static_cast<ViewTreeHostRootView*>(widget->GetRootView());
+  root_view->SetIsOverlayCandidate(g_hud_overlay_mode);
+  root_view->Init(widget->GetNativeView());
   widget->Show();
 
   g_hud_widget = widget;

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,9 @@ namespace tracing {
 class COMPONENT_EXPORT(TRACING_CPP) CustomEventRecorder
     : public perfetto::TrackEventSessionObserver {
  public:
+  using ActiveProcessesCallback =
+      base::RepeatingCallback<std::set<base::ProcessId>()>;
+
   static CustomEventRecorder* GetInstance();
   static void EmitRecurringUpdates();
 
@@ -29,15 +32,14 @@ class COMPONENT_EXPORT(TRACING_CPP) CustomEventRecorder
 
   // perfetto::TrackEventSessionObserver implementation
   void OnSetup(const perfetto::DataSourceBase::SetupArgs&) override;
+  void OnStart(const perfetto::DataSourceBase::StartArgs&) override;
   void OnStop(const perfetto::DataSourceBase::StopArgs&) override;
   void WillClearIncrementalState(
       const perfetto::DataSourceBase::ClearIncrementalStateArgs&) override;
 
-  void OnStartupTracingStarted(
-      const base::trace_event::TraceConfig& trace_config,
-      bool privacy_filtering_enabled);
-  void OnTracingStarted(const perfetto::DataSourceConfig& data_source_config);
-  void OnTracingStopped(base::OnceClosure stop_complete_callback);
+  void SetActiveProcessesCallback(ActiveProcessesCallback callback) {
+    active_processes_callback_ = callback;
+  }
 
   // Registered as a callback to receive every action recorded using
   // base::RecordAction(), when tracing is enabled with a histogram category.
@@ -61,7 +63,7 @@ class COMPONENT_EXPORT(TRACING_CPP) CustomEventRecorder
   SEQUENCE_CHECKER(perfetto_sequence_checker_);
   // Extracts UMA histogram names that should be logged in traces and logs their
   // starting values.
-  void ResetHistograms(const base::trace_event::TraceConfig& trace_config);
+  void ResetHistograms(const std::unordered_set<std::string>& histogram_names);
   // Logs selected UMA histogram.
   void LogHistograms();
   // Logs a given histogram in traces.
@@ -75,11 +77,13 @@ class COMPONENT_EXPORT(TRACING_CPP) CustomEventRecorder
   std::vector<std::string> histograms_;
   // Stores the registered histogram callbacks for which OnMetricsSampleCallback
   // was set individually.
-  std::vector<
+  std::unordered_map<
+      std::string,
       std::unique_ptr<base::StatisticsRecorder::ScopedHistogramSampleObserver>>
       monitored_histograms_;
   base::ActionCallback user_action_callback_ =
       base::BindRepeating(&CustomEventRecorder::OnUserActionSampleCallback);
+  ActiveProcessesCallback active_processes_callback_;
 
   base::Lock lock_;
   bool privacy_filtering_enabled_ GUARDED_BY(lock_) = false;

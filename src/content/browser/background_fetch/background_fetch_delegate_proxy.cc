@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "components/download/public/common/download_item.h"
 #include "components/download/public/common/download_url_parameters.h"
 #include "content/browser/background_fetch/background_fetch_job_controller.h"
@@ -15,7 +15,7 @@
 #include "content/public/browser/background_fetch_description.h"
 #include "content/public/browser/background_fetch_response.h"
 #include "content/public/browser/browser_context.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/download_manager.h"
 #include "content/public/browser/download_manager_delegate.h"
 #include "content/public/browser/permission_controller.h"
@@ -77,8 +77,9 @@ void BackgroundFetchDelegateProxy::GetPermissionForOrigin(
         ->GetDelegate()
         ->CheckDownloadAllowed(
             std::move(web_contents_getter), origin.GetURL(), "GET",
-            absl::nullopt, false /* from_download_cross_origin_redirect */,
-            true /* content_initiated */,
+            std::nullopt, /* from_download_cross_origin_redirect= */ false,
+            /* content_initiated= */ true, /* mime_type= */ std::string(),
+            /* page_transition= */ std::nullopt,
             base::BindOnce(&BackgroundFetchDelegateProxy::
                                DidGetPermissionFromDownloadRequestLimiter,
                            weak_ptr_factory_.GetWeakPtr(),
@@ -201,8 +202,8 @@ void BackgroundFetchDelegateProxy::StartRequest(
 
 void BackgroundFetchDelegateProxy::UpdateUI(
     const std::string& job_unique_id,
-    const absl::optional<std::string>& title,
-    const absl::optional<SkBitmap>& icon,
+    const std::optional<std::string>& title,
+    const std::optional<SkBitmap>& icon,
     blink::mojom::BackgroundFetchRegistrationService::UpdateUICallback
         update_ui_callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);

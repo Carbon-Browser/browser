@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,6 @@ class DEVICE_GAMEPAD_EXPORT GamepadMonitor : public GamepadConsumer,
   // GamepadConsumer implementation.
   void OnGamepadConnected(uint32_t index, const Gamepad& gamepad) override;
   void OnGamepadDisconnected(uint32_t index, const Gamepad& gamepad) override;
-  void OnGamepadChanged(const mojom::GamepadChanges& change) override;
 
   // mojom::GamepadMonitor implementation.
   void GamepadStartPolling(GamepadStartPollingCallback callback) override;

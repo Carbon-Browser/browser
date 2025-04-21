@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ipc/ipc_message.h"
 
@@ -84,16 +89,16 @@ TEST(IPCMessageTest, Value) {
   expect_value_equals(base::Value(base::Value::BlobStorage({'a', 'b', 'c'})));
 
   {
-    base::Value dict(base::Value::Type::DICTIONARY);
-    dict.SetIntKey("key1", 42);
-    dict.SetStringKey("key2", "hi");
-    expect_value_equals(dict);
+    base::Value::Dict dict;
+    dict.Set("key1", 42);
+    dict.Set("key2", "hi");
+    expect_value_equals(base::Value(std::move(dict)));
   }
   {
-    base::Value list(base::Value::Type::LIST);
-    list.GetList().Append(42);
-    list.GetList().Append("hello");
-    expect_value_equals(list);
+    base::Value::List list;
+    list.Append(42);
+    list.Append("hello");
+    expect_value_equals(base::Value(std::move(list)));
   }
 
   // Also test the corrupt case.
@@ -104,51 +109,29 @@ TEST(IPCMessageTest, Value) {
   EXPECT_FALSE(IPC::ReadParam(&bad_msg, &iter, &output));
 }
 
-TEST(IPCMessageTest, ListValue) {
-  base::ListValue input;
-  input.GetList().Append(42.42);
-  input.GetList().Append("forty");
-  input.GetList().Append(base::Value());
+TEST(IPCMessageTest, ValueDict) {
+  base::Value::Dict input;
+  input.Set("null", base::Value());
+  input.Set("bool", true);
+  input.Set("int", 42);
+  input.Set("int.with.dot", 43);
+
+  base::Value::Dict subdict;
+  subdict.Set("str", "forty two");
+  subdict.Set("bool", false);
+
+  base::Value::List sublist;
+  sublist.Append(42.42);
+  sublist.Append("forty");
+  sublist.Append("two");
+  subdict.Set("list", std::move(sublist));
+
+  input.Set("dict", std::move(subdict));
 
   IPC::Message msg(1, 2, IPC::Message::PRIORITY_NORMAL);
   IPC::WriteParam(&msg, input);
 
-  base::ListValue output;
-  base::PickleIterator iter(msg);
-  EXPECT_TRUE(IPC::ReadParam(&msg, &iter, &output));
-
-  EXPECT_EQ(input, output);
-
-  // Also test the corrupt case.
-  IPC::Message bad_msg(1, 2, IPC::Message::PRIORITY_NORMAL);
-  bad_msg.WriteInt(99);
-  iter = base::PickleIterator(bad_msg);
-  EXPECT_FALSE(IPC::ReadParam(&bad_msg, &iter, &output));
-}
-
-TEST(IPCMessageTest, DictionaryValue) {
-  base::DictionaryValue input;
-  input.SetKey("null", base::Value());
-  input.SetBoolean("bool", true);
-  input.SetInteger("int", 42);
-  input.SetKey("int.with.dot", base::Value(43));
-
-  base::DictionaryValue subdict;
-  subdict.SetString("str", "forty two");
-  subdict.SetBoolean("bool", false);
-
-  base::ListValue sublist;
-  sublist.GetList().Append(42.42);
-  sublist.GetList().Append("forty");
-  sublist.GetList().Append("two");
-  subdict.SetKey("list", std::move(sublist));
-
-  input.SetKey("dict", std::move(subdict));
-
-  IPC::Message msg(1, 2, IPC::Message::PRIORITY_NORMAL);
-  IPC::WriteParam(&msg, input);
-
-  base::DictionaryValue output;
+  base::Value::Dict output;
   base::PickleIterator iter(msg);
   EXPECT_TRUE(IPC::ReadParam(&msg, &iter, &output));
 

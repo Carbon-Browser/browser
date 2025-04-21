@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include <memory>
 #include <string>
 
-#include "base/memory/ref_counted.h"
 #include "base/synchronization/lock.h"
 #include "extensions/renderer/extension_throttle_entry.h"
 #include "services/network/public/mojom/url_response_head.mojom-forward.h"
@@ -17,12 +16,15 @@
 
 namespace blink {
 class URLLoaderThrottle;
-class WebURLRequest;
 }  // namespace blink
 
 namespace net {
 struct RedirectInfo;
 }  // namespace net
+
+namespace network {
+struct ResourceRequest;
+}  // namespace network
 
 namespace extensions {
 
@@ -47,7 +49,7 @@ class ExtensionThrottleManager {
   // Creates a throttle which uses this class to prevent extensions from
   // requesting a URL too often, if such a throttle is needed.
   std::unique_ptr<blink::URLLoaderThrottle> MaybeCreateURLLoaderThrottle(
-      const blink::WebURLRequest& request);
+      const network::ResourceRequest& request);
 
   // Determine if a request to |request_url| should be rejected.
   bool ShouldRejectRequest(const GURL& request_url);

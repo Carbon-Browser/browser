@@ -1,20 +1,30 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/in_session_auth/webauthn_dialog_controller_impl.h"
 
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <utility>
+
 #include "ash/in_session_auth/auth_dialog_contents_view.h"
+#include "ash/in_session_auth/in_session_auth_dialog.h"
 #include "ash/in_session_auth/webauthn_request_registrar_impl.h"
 #include "ash/public/cpp/in_session_auth_dialog_client.h"
+#include "ash/public/cpp/login_types.h"
+#include "ash/public/cpp/session/session_types.h"
+#include "ash/public/cpp/session/user_info.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/logging.h"
 #include "base/strings/string_util.h"
 #include "components/user_manager/known_user.h"
 #include "ui/aura/window.h"
-#include "ui/views/widget/widget.h"
 
 namespace ash {
 
@@ -45,6 +55,31 @@ void WebAuthNDialogControllerImpl::ShowAuthenticationDialog(
   // GAIA password option is not offered.
   uint32_t auth_methods = AuthDialogContentsView::kAuthPassword;
 
+  base::OnceClosure continuation =
+      base::BindOnce(&WebAuthNDialogControllerImpl::CheckAuthFactorAvailability,
+                     weak_factory_.GetWeakPtr(), account_id, origin_name,
+                     auth_methods, source_window);
+
+  auto on_auth_session_started = [](base::OnceClosure continuation,
+                                    bool is_auth_session_started) {
+    if (!is_auth_session_started) {
+      LOG(ERROR)
+          << "Failed to start cryptohome auth session, exiting dialog early";
+      return;
+    }
+    std::move(continuation).Run();
+  };
+
+  client_->StartAuthSession(
+      base::BindOnce(on_auth_session_started, std::move(continuation)));
+  return;
+}
+
+void WebAuthNDialogControllerImpl::CheckAuthFactorAvailability(
+    const AccountId& account_id,
+    const std::string& origin_name,
+    uint32_t auth_methods,
+    aura::Window* source_window) {
   if (client_->IsFingerprintAuthAvailable(account_id)) {
     client_->StartFingerprintAuthSession(
         account_id,
@@ -125,9 +160,18 @@ void WebAuthNDialogControllerImpl::DestroyAuthenticationDialog() {
   if (!dialog_)
     return;
 
-  if (dialog_->GetAuthMethods() & AuthDialogContentsView::kAuthFingerprint)
-    client_->EndFingerprintAuthSession();
+  if (dialog_->GetAuthMethods() & AuthDialogContentsView::kAuthFingerprint) {
+    client_->EndFingerprintAuthSession(
+        base::BindOnce(&WebAuthNDialogControllerImpl::ProcessFinalCleanups,
+                       weak_factory_.GetWeakPtr()));
+    return;
+  }
 
+  ProcessFinalCleanups();
+}
+
+void WebAuthNDialogControllerImpl::ProcessFinalCleanups() {
+  client_->InvalidateAuthSession();
   dialog_.reset();
   source_window_tracker_.RemoveAll();
 }

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,34 +6,28 @@
 
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/style/ash_color_provider.h"
-#include "ash/wm/desks/desk_mini_view.h"
 #include "ash/wm/desks/desk_preview_view.h"
-#include "ash/wm/desks/desks_bar_view.h"
-#include "base/bind.h"
-#include "ui/compositor/layer.h"
+#include "ash/wm/desks/overview_desk_bar_view.h"
+#include "base/functional/bind.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/paint_vector_icon.h"
-#include "ui/views/widget/widget.h"
-
-namespace {
-base::TimeDelta kScrollTimeInterval = base::Seconds(1);
-}
+#include "ui/views/accessibility/view_accessibility.h"
 
 namespace ash {
+namespace {
+base::TimeDelta g_scroll_time_interval = base::Seconds(1);
+}
 
 ScrollArrowButton::ScrollArrowButton(base::RepeatingClosure on_scroll,
                                      bool is_left_arrow,
-                                     DesksBarView* bar_view)
+                                     DeskBarViewBase* bar_view)
     : on_scroll_(std::move(on_scroll)),
       state_change_subscription_(AddStateChangedCallback(
           base::BindRepeating(&ScrollArrowButton::OnStateChanged,
                               base::Unretained(this)))),
       is_left_arrow_(is_left_arrow),
       bar_view_(bar_view) {
-  SetPaintToLayer();
-  layer()->SetFillsBoundsOpaquely(false);
-
-  SetAccessibleName(base::UTF8ToUTF16(GetClassName()));
+  GetViewAccessibility().SetName(base::UTF8ToUTF16(GetClassName()));
 }
 
 ScrollArrowButton::~ScrollArrowButton() = default;
@@ -46,7 +40,7 @@ void ScrollArrowButton::PaintButtonContents(gfx::Canvas* canvas) {
           AshColorProvider::ContentLayerType::kIconColorPrimary));
 
   DCHECK(!bar_view_->mini_views().empty());
-  const auto* mini_view = bar_view_->mini_views()[0];
+  const auto* mini_view = bar_view_->mini_views()[0].get();
   canvas->DrawImageInt(
       img, (width() - img.width()) / 2,
       mini_view->bounds().y() +
@@ -58,16 +52,12 @@ void ScrollArrowButton::OnThemeChanged() {
   SchedulePaint();
 }
 
-const char* ScrollArrowButton::GetClassName() const {
-  return "ScrollArrowButton";
-}
-
 void ScrollArrowButton::OnDeskHoverStart() {
   // Don't start the timer again, if it's already running.
   if (timer_.IsRunning())
     return;
 
-  timer_.Start(FROM_HERE, kScrollTimeInterval, on_scroll_);
+  timer_.Start(FROM_HERE, g_scroll_time_interval, on_scroll_);
   on_scroll_.Run();
 }
 
@@ -82,11 +72,20 @@ void ScrollArrowButton::OnStateChanged() {
     // of the scroll arrow button will be set to |FALSE|, at the same time, the
     // state of the button will be set to |STATE_NORMAL|. In this case, stopping
     // timer will be called before starting timer.
-    timer_.Start(FROM_HERE, kScrollTimeInterval, on_scroll_);
+    timer_.Start(FROM_HERE, g_scroll_time_interval, on_scroll_);
     on_scroll_.Run();
   } else {
     timer_.Stop();
   }
 }
+
+// static
+base::AutoReset<base::TimeDelta>
+ScrollArrowButton::SetScrollTimeIntervalForTest(base::TimeDelta interval) {
+  return {&g_scroll_time_interval, interval};
+}
+
+BEGIN_METADATA(ScrollArrowButton)
+END_METADATA
 
 }  // namespace ash

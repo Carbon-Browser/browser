@@ -1,13 +1,13 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/frame/dbus_appmenu_registrar.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "chrome/browser/ui/views/frame/dbus_appmenu.h"
@@ -32,13 +32,11 @@ DbusAppmenuRegistrar* DbusAppmenuRegistrar::GetInstance() {
 }
 
 void DbusAppmenuRegistrar::OnMenuBarCreated(DbusAppmenu* menu) {
-  if (base::Contains(menus_, menu)) {
-    NOTREACHED();
-    return;
-  }
-  menus_[menu] = kUninitialized;
-  if (service_has_owner_)
+  // Make sure insertion succeeds, we should not already be tracking `menu`.
+  CHECK(menus_.insert({menu, kUninitialized}).second);
+  if (service_has_owner_) {
     InitializeMenu(menu);
+  }
 }
 
 void DbusAppmenuRegistrar::OnMenuBarDestroyed(DbusAppmenu* menu) {
@@ -96,8 +94,9 @@ void DbusAppmenuRegistrar::OnMenuInitialized(DbusAppmenu* menu, bool success) {
   DCHECK(base::Contains(menus_, menu));
   DCHECK(menus_[menu] == kInitializing);
   menus_[menu] = success ? kInitializeSucceeded : kInitializeFailed;
-  if (success && service_has_owner_)
+  if (success && service_has_owner_) {
     RegisterMenu(menu);
+  }
 }
 
 void DbusAppmenuRegistrar::OnNameOwnerChanged(
@@ -110,8 +109,9 @@ void DbusAppmenuRegistrar::OnNameOwnerChanged(
     DbusAppmenu* menu = pair.first;
     switch (pair.second) {
       case kUninitialized:
-        if (service_has_owner_)
+        if (service_has_owner_) {
           InitializeMenu(menu);
+        }
         break;
       case kInitializing:
         // Wait for Initialize() to finish.
@@ -120,14 +120,16 @@ void DbusAppmenuRegistrar::OnNameOwnerChanged(
         // Don't try to recover.
         break;
       case kInitializeSucceeded:
-        if (service_has_owner_)
+        if (service_has_owner_) {
           RegisterMenu(menu);
+        }
         break;
       case kRegistered:
-        if (service_has_owner_)
+        if (service_has_owner_) {
           RegisterMenu(menu);
-        else
+        } else {
           menus_[menu] = kInitializeSucceeded;
+        }
         break;
     }
   }

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "base/path_service.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 
 namespace variations {
@@ -17,7 +18,9 @@ namespace variations {
 namespace {
 
 // Path where we put variations in cryptohome.
+#if BUILDFLAG(IS_CHROMEOS)
 constexpr char kCrashVariationsFileName[] = ".variations-list.txt";
+#endif  // IS_CHROMEOS
 
 void WriteVariationsToFile(ExperimentListInfo info) {
   std::string combined_string = base::StrCat(

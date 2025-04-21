@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,8 +16,10 @@ WebContentsObserver::WebContentsObserver(WebContents* web_contents) {
 WebContentsObserver::WebContentsObserver() = default;
 
 WebContentsObserver::~WebContentsObserver() {
-  if (web_contents_)
+  if (web_contents_) {
     static_cast<WebContentsImpl*>(web_contents_)->RemoveObserver(this);
+  }
+  CHECK(!IsInObserverList());
 }
 
 WebContents* WebContentsObserver::web_contents() const {

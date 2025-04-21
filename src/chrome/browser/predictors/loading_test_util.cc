@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -84,12 +84,14 @@ PageRequestSummary CreatePageRequestSummary(
     const std::string& main_frame_url,
     const std::string& initial_url,
     const std::vector<blink::mojom::ResourceLoadInfoPtr>& resource_load_infos,
-    base::TimeTicks navigation_started) {
-  PageRequestSummary summary(ukm::SourceId(), GURL(main_frame_url),
+    base::TimeTicks navigation_started,
+    bool main_frame_load_complete) {
+  PageRequestSummary summary(ukm::SourceId(), GURL(initial_url),
                              navigation_started);
-  summary.initial_url = GURL(initial_url);
+  summary.main_frame_url = GURL(main_frame_url);
   for (const auto& resource_load_info : resource_load_infos)
     summary.UpdateOrAddResource(*resource_load_info);
+  summary.main_frame_load_complete = main_frame_load_complete;
   return summary;
 }
 
@@ -103,7 +105,7 @@ blink::mojom::ResourceLoadInfoPtr CreateResourceLoadInfo(
   resource_load_info->method = "GET";
   resource_load_info->request_destination = request_destination;
   resource_load_info->network_info = blink::mojom::CommonNetworkInfo::New(
-      true, always_access_network, absl::nullopt);
+      true, always_access_network, std::nullopt);
   resource_load_info->request_priority = net::HIGHEST;
   return resource_load_info;
 }
@@ -127,7 +129,7 @@ blink::mojom::ResourceLoadInfoPtr CreateResourceLoadInfoWithRedirects(
   resource_load_info->request_destination = request_destination;
   resource_load_info->request_priority = net::HIGHEST;
   auto common_network_info =
-      blink::mojom::CommonNetworkInfo::New(true, false, absl::nullopt);
+      blink::mojom::CommonNetworkInfo::New(true, false, std::nullopt);
   resource_load_info->network_info = common_network_info.Clone();
   for (size_t i = 0; i + 1 < redirect_chain.size(); ++i) {
     resource_load_info->redirect_info_chain.push_back(
@@ -152,9 +154,12 @@ PreconnectPrediction CreatePreconnectPrediction(
 void PopulateTestConfig(LoadingPredictorConfig* config, bool small_db) {
   if (small_db) {
     config->max_hosts_to_track = 2;
+    config->max_hosts_to_track_for_lcpp = 2;
     config->max_origins_per_entry = 5;
     config->max_consecutive_misses = 2;
     config->max_redirect_consecutive_misses = 2;
+    config->lcpp_histogram_sliding_window_size = 5;
+    config->max_lcpp_histogram_buckets = 2;
   }
   config->flush_data_to_disk_delay_seconds = 0;
 }
@@ -207,7 +212,7 @@ std::ostream& operator<<(std::ostream& os, const PageRequestSummary& summary) {
 std::ostream& operator<<(std::ostream& os, const PreconnectRequest& request) {
   return os << "[" << request.origin << "," << request.num_sockets << ","
             << request.allow_credentials << ","
-            << request.network_isolation_key.ToDebugString() << "]";
+            << request.network_anonymization_key.ToDebugString() << "]";
 }
 
 std::ostream& operator<<(std::ostream& os,
@@ -244,8 +249,12 @@ bool operator==(const RedirectStat& lhs, const RedirectStat& rhs) {
 
 bool operator==(const PageRequestSummary& lhs, const PageRequestSummary& rhs) {
   return lhs.main_frame_url == rhs.main_frame_url &&
-         lhs.initial_url == rhs.initial_url && lhs.origins == rhs.origins &&
-         lhs.subresource_urls == rhs.subresource_urls;
+         lhs.initial_url == rhs.initial_url &&
+         lhs.main_frame_load_complete == rhs.main_frame_load_complete &&
+         lhs.origins == rhs.origins &&
+         lhs.subresource_urls == rhs.subresource_urls &&
+         lhs.low_priority_origins == rhs.low_priority_origins &&
+         lhs.low_priority_subresource_urls == rhs.low_priority_subresource_urls;
 }
 
 bool operator==(const OriginRequestSummary& lhs,
@@ -281,7 +290,7 @@ bool operator==(const OriginStat& lhs, const OriginStat& rhs) {
 bool operator==(const PreconnectRequest& lhs, const PreconnectRequest& rhs) {
   return lhs.origin == rhs.origin && lhs.num_sockets == rhs.num_sockets &&
          lhs.allow_credentials == rhs.allow_credentials &&
-         lhs.network_isolation_key == rhs.network_isolation_key;
+         lhs.network_anonymization_key == rhs.network_anonymization_key;
 }
 
 bool operator==(const PreconnectPrediction& lhs,

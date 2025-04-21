@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -129,8 +129,6 @@ source_set("win") {
     "host_service.h",
     "launch_process_with_token.cc",
     "launch_process_with_token.h",
-    "omaha.cc",
-    "omaha.h",
     "rdp_client.cc",
     "rdp_client.h",
     "rdp_client_window.cc",
@@ -179,7 +177,9 @@ source_set("win") {
     "//ipc",
     "//remoting/base",
     "//remoting/host:ipc_constants",
+    "//remoting/host:platform_interfaces",
     "//remoting/host/base",
+    "//remoting/host/mojom",
     "//remoting/host/security_key",
     "//remoting/host/win:messages",
     "//remoting/host/win:remoting_lib_idl",
@@ -422,7 +422,6 @@ shared_library("remoting_core") {
     "//base",
     "//base:base_static",
     "//base:i18n",
-    "//base/third_party/dynamic_annotations",
     "//build:chromeos_buildflags",
     "//build/win:default_exe_manifest",
     "//ipc",
@@ -432,7 +431,7 @@ shared_library("remoting_core") {
     "//net",
     "//remoting/base",
     "//remoting/base:authorization",
-    "//remoting/base:breakpad",
+    "//remoting/base/crash",
     "//remoting/host:host",
     "//remoting/host:host_main_headers",
     "//remoting/host:implementation",
@@ -441,11 +440,9 @@ shared_library("remoting_core") {
     "//remoting/host:settings",
     "//remoting/host/base",
     "//remoting/host/it2me:common",
+    "//remoting/host/mojom",
     "//remoting/host/native_messaging",
-    "//remoting/host/remote_open_url:main",
-    "//remoting/host/security_key:main",
     "//remoting/host/setup",
-    "//remoting/host/webauthn:main",
     "//remoting/protocol",
     "//sandbox/win:sandbox",  # Should always use Windows version
     "//services/network:network_service",

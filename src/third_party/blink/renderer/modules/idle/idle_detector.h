@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,13 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_IDLE_IDLE_DETECTOR_H_
 
 #include "base/memory/scoped_refptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/mojom/idle/idle_manager.mojom-blink.h"
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_idle_options.h"
+#include "third_party/blink/renderer/core/dom/abort_signal.h"
 #include "third_party/blink/renderer/core/dom/events/event_target.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
 #include "third_party/blink/renderer/modules/event_modules.h"
@@ -22,13 +24,15 @@
 
 namespace blink {
 
-class AbortSignal;
 class ExceptionState;
+class V8PermissionState;
+class V8ScreenIdleState;
+class V8UserIdleState;
 
 class MODULES_EXPORT IdleDetector final
-    : public EventTargetWithInlineData,
+    : public EventTarget,
       public ActiveScriptWrappable<IdleDetector>,
-      public ExecutionContextClient,
+      public ExecutionContextLifecycleObserver,
       public mojom::blink::IdleMonitor {
   DEFINE_WRAPPERTYPEINFO();
 
@@ -45,14 +49,20 @@ class MODULES_EXPORT IdleDetector final
   const AtomicString& InterfaceName() const override;
   ExecutionContext* GetExecutionContext() const override;
 
+  // ExecutionContextLifecycleObserver implementation.
+  void ContextDestroyed() override;
+
   // ActiveScriptWrappable implementation.
   bool HasPendingActivity() const final;
 
   // IdleDetector IDL interface.
-  String userState() const;
-  String screenState() const;
-  static ScriptPromise requestPermission(ScriptState*, ExceptionState&);
-  ScriptPromise start(ScriptState*, const IdleOptions*, ExceptionState&);
+  std::optional<V8UserIdleState> userState() const;
+  std::optional<V8ScreenIdleState> screenState() const;
+  static ScriptPromise<V8PermissionState> requestPermission(ScriptState*,
+                                                            ExceptionState&);
+  ScriptPromise<IDLUndefined> start(ScriptState*,
+                                    const IdleOptions*,
+                                    ExceptionState&);
   DEFINE_ATTRIBUTE_EVENT_LISTENER(change, kChange)
 
   void Trace(Visitor*) const override;
@@ -70,11 +80,12 @@ class MODULES_EXPORT IdleDetector final
               bool is_overridden_by_devtools) override;
 
   void DispatchUserIdleEvent(TimerBase*);
-  void Abort(AbortSignal*);
+  void Abort();
   void OnMonitorDisconnected();
-  void OnAddMonitor(ScriptPromiseResolver*,
+  void OnAddMonitor(ScriptPromiseResolver<IDLUndefined>*,
                     mojom::blink::IdleManagerError,
                     mojom::blink::IdleStatePtr);
+  void Clear();
 
   // State currently visible to script.
   bool has_state_ = false;
@@ -91,7 +102,10 @@ class MODULES_EXPORT IdleDetector final
 
   base::TimeDelta threshold_ = base::Seconds(60);
   Member<AbortSignal> signal_;
-  Member<ScriptPromiseResolver> resolver_;
+  // The handle is valid from the time start() is called until the detector is
+  // stopped, if an AbortSignal is passed to start().
+  Member<AbortSignal::AlgorithmHandle> abort_handle_;
+  Member<ScriptPromiseResolver<IDLUndefined>> resolver_;
 
   // Holds a pipe which the service uses to notify this object
   // when the idle state has changed.

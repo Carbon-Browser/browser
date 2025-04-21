@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_writer.h"
 #include "base/location.h"
 #include "base/logging.h"
@@ -55,8 +56,10 @@ bool CastMetricsHelper::DecodeAppInfoFromMetricsName(
   DCHECK(app_id);
   DCHECK(session_id);
   DCHECK(sdk_version);
-  if (metrics_name.find(kMetricsNameAppInfoDelimiter) == std::string::npos)
+
+  if (!base::Contains(metrics_name, kMetricsNameAppInfoDelimiter)) {
     return false;
+  }
 
   std::vector<std::string> tokens = base::SplitString(
       metrics_name, std::string(1, kMetricsNameAppInfoDelimiter),
@@ -286,18 +289,18 @@ void CastMetricsHelper::LogMediumTimeHistogramEvent(const std::string& name,
                         50);
 }
 
-base::Value CastMetricsHelper::CreateEventBase(const std::string& name) {
-  base::Value cast_event(base::Value::Type::DICTIONARY);
-  cast_event.SetKey("name", base::Value(name));
+base::Value::Dict CastMetricsHelper::CreateEventBase(const std::string& name) {
+  base::Value::Dict cast_event;
+  cast_event.Set("name", name);
   const double time = (Now() - base::TimeTicks()).InMicrosecondsF();
-  cast_event.SetKey("time", base::Value(time));
+  cast_event.Set("time", time);
   return cast_event;
 }
 
 void CastMetricsHelper::RecordEventWithValue(const std::string& event,
                                              int value) {
-  base::Value cast_event = CreateEventBase(event);
-  cast_event.SetKey("value", base::Value(value));
+  base::Value::Dict cast_event = CreateEventBase(event);
+  cast_event.Set("value", value);
   std::string message;
   base::JSONWriter::Write(cast_event, &message);
   RecordSimpleAction(message);
@@ -311,10 +314,10 @@ void CastMetricsHelper::RecordApplicationEvent(const std::string& app_id,
                                                const std::string& session_id,
                                                const std::string& sdk_version,
                                                const std::string& event) {
-  base::Value cast_event = CreateEventBase(event);
-  cast_event.SetKey("app_id", base::Value(app_id));
-  cast_event.SetKey("session_id", base::Value(session_id));
-  cast_event.SetKey("sdk_version", base::Value(sdk_version));
+  base::Value::Dict cast_event = CreateEventBase(event);
+  cast_event.Set("app_id", app_id);
+  cast_event.Set("session_id", session_id);
+  cast_event.Set("sdk_version", sdk_version);
   std::string message;
   base::JSONWriter::Write(cast_event, &message);
   RecordSimpleAction(message);
@@ -323,11 +326,11 @@ void CastMetricsHelper::RecordApplicationEvent(const std::string& app_id,
 void CastMetricsHelper::RecordApplicationEventWithValue(
     const std::string& event,
     int value) {
-  base::Value cast_event = CreateEventBase(event);
-  cast_event.SetKey("app_id", base::Value(app_id_));
-  cast_event.SetKey("session_id", base::Value(session_id_));
-  cast_event.SetKey("sdk_version", base::Value(sdk_version_));
-  cast_event.SetKey("value", base::Value(value));
+  base::Value::Dict cast_event = CreateEventBase(event);
+  cast_event.Set("app_id", app_id_);
+  cast_event.Set("session_id", session_id_);
+  cast_event.Set("sdk_version", sdk_version_);
+  cast_event.Set("value", value);
   std::string message;
   base::JSONWriter::Write(cast_event, &message);
   RecordSimpleAction(message);
@@ -339,11 +342,11 @@ void CastMetricsHelper::RecordApplicationEventWithValue(
     const std::string& sdk_version,
     const std::string& event,
     int value) {
-  base::Value cast_event = CreateEventBase(event);
-  cast_event.SetKey("app_id", base::Value(app_id));
-  cast_event.SetKey("session_id", base::Value(session_id));
-  cast_event.SetKey("sdk_version", base::Value(sdk_version));
-  cast_event.SetKey("value", base::Value(value));
+  base::Value::Dict cast_event = CreateEventBase(event);
+  cast_event.Set("app_id", app_id);
+  cast_event.Set("session_id", session_id);
+  cast_event.Set("sdk_version", sdk_version);
+  cast_event.Set("value", value);
   std::string message;
   base::JSONWriter::Write(cast_event, &message);
   RecordSimpleAction(message);

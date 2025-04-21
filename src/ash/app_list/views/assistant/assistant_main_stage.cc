@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,6 @@
 #include "ash/assistant/ui/assistant_view_delegate.h"
 #include "ash/assistant/ui/assistant_view_ids.h"
 #include "ash/assistant/ui/base/stack_layout.h"
-#include "ash/assistant/ui/colors/assistant_colors_util.h"
 #include "ash/assistant/ui/main_stage/assistant_footer_view.h"
 #include "ash/assistant/ui/main_stage/assistant_progress_indicator.h"
 #include "ash/assistant/ui/main_stage/assistant_query_view.h"
@@ -19,13 +18,15 @@
 #include "ash/assistant/ui/main_stage/ui_element_container_view.h"
 #include "ash/assistant/util/animation_util.h"
 #include "ash/assistant/util/assistant_util.h"
-#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/assistant/controller/assistant_interaction_controller.h"
 #include "ash/public/cpp/assistant/controller/assistant_ui_controller.h"
 #include "ash/public/cpp/style/color_provider.h"
-#include "base/bind.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/time/time.h"
+#include "components/feature_engagement/public/feature_constants.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_id.h"
 #include "ui/compositor/layer.h"
@@ -83,24 +84,32 @@ constexpr base::TimeDelta kZeroStateAnimationTranslateUpDuration =
 // These classes exist to solely to provide a class name to UI devtools. They
 // don't follow the style guide so they can be shorter.
 class ContentContainer : public views::View {
- public:
-  const char* GetClassName() const override { return "ContentContainer"; }
+  METADATA_HEADER(ContentContainer, views::View)
 };
+
+BEGIN_METADATA(ContentContainer)
+END_METADATA
 
 class MainContentContainer : public views::View {
- public:
-  const char* GetClassName() const override { return "MainContentContainer"; }
+  METADATA_HEADER(MainContentContainer, views::View)
 };
+
+BEGIN_METADATA(MainContentContainer)
+END_METADATA
 
 class DividerContainer : public views::View {
- public:
-  const char* GetClassName() const override { return "DividerContainer"; }
+  METADATA_HEADER(DividerContainer, views::View)
 };
 
+BEGIN_METADATA(DividerContainer)
+END_METADATA
+
 class FooterContainer : public views::View {
- public:
-  const char* GetClassName() const override { return "FooterContainer"; }
+  METADATA_HEADER(FooterContainer, views::View)
 };
+
+BEGIN_METADATA(FooterContainer)
+END_METADATA
 
 // A view is considered shown when it is visible and not in the process of
 // fading out.
@@ -118,10 +127,14 @@ bool IsShown(const views::View* view) {
 
 AppListAssistantMainStage::AppListAssistantMainStage(
     AssistantViewDelegate* delegate)
-    : delegate_(delegate),
-      use_dark_light_mode_colors_(assistant::UseDarkLightModeColors()) {
+    : delegate_(delegate) {
   SetID(AssistantViewID::kMainStage);
-  InitLayout();
+  if (base::FeatureList::IsEnabled(
+          feature_engagement::kIPHLauncherSearchHelpUiFeature)) {
+    InitLayoutWithIph();
+  } else {
+    InitLayout();
+  }
 
   assistant_controller_observation_.Observe(AssistantController::Get());
   AssistantInteractionController::Get()->GetModel()->AddObserver(this);
@@ -142,16 +155,12 @@ void AppListAssistantMainStage::ChildPreferredSizeChanged(views::View* child) {
 
 void AppListAssistantMainStage::OnThemeChanged() {
   views::View::OnThemeChanged();
-
-  if (!use_dark_light_mode_colors_)
-    return;
-
   horizontal_separator_->SetColorId(ui::kColorAshSystemUIMenuSeparator);
 }
 
 void AppListAssistantMainStage::OnViewPreferredSizeChanged(views::View* view) {
   PreferredSizeChanged();
-  Layout();
+  DeprecatedLayoutImmediately();
   SchedulePaint();
 }
 
@@ -174,11 +183,47 @@ void AppListAssistantMainStage::InitLayout() {
   AddChildView(CreateFooterLayoutContainer());
 }
 
+void AppListAssistantMainStage::InitLayoutWithIph() {
+  // The children of AppListAssistantMainStage will be animated on their own
+  // layers and we want them to be clipped by their parent layer.
+  SetPaintToLayer();
+  layer()->SetFillsBoundsOpaquely(false);
+  layer()->SetMasksToBounds(true);
+
+  // The layout container stacks two views.
+  // On top is a main content container including the line separator, progress
+  // indicator query view, `ui_element_container()` and `footer()`.
+  // The `zero_state_view_` is laid out above of the main content container. As
+  // such, it floats above and does not cause repositioning to any of content
+  // layout's underlying views.
+  auto* stack_layout = SetLayoutManager(std::make_unique<StackLayout>());
+
+  auto* main_content_layout_container =
+      AddChildView(CreateMainContentLayoutContainer());
+  // Currently `CreateMainContentLayoutContainer()` is reused for both layouts
+  // with/without IPH. So add the footer here separately.
+  main_content_layout_container->AddChildView(CreateFooterLayoutContainer());
+
+  // Do not respect height, otherwise bounds will not be set correctly for
+  // scrolling.
+  stack_layout->SetRespectDimensionForView(
+      main_content_layout_container, StackLayout::RespectDimension::kWidth);
+
+  // Zero state, which will be animated on its own layer.
+  zero_state_view_ =
+      AddChildView(std::make_unique<AssistantZeroStateView>(delegate_));
+  zero_state_view_->SetPaintToLayer();
+  zero_state_view_->layer()->SetFillsBoundsOpaquely(false);
+  // Expand the height of the `zero_state_view_` to the host height.
+  stack_layout->SetRespectDimensionForView(
+      zero_state_view_, StackLayout::RespectDimension::kWidth);
+}
+
 std::unique_ptr<views::View>
 AppListAssistantMainStage::CreateContentLayoutContainer() {
   // The content layout container stacks two views.
   // On top is a main content container including the line separator, progress
-  // indicator query view and |ui_element_container_|.
+  // indicator query view and |ui_element_container()|.
   // The |zero_state_view_| is laid out above of the main content container. As
   // such, it floats above and does not cause repositioning to any of content
   // layout's underlying views.
@@ -200,6 +245,9 @@ AppListAssistantMainStage::CreateContentLayoutContainer() {
       std::make_unique<AssistantZeroStateView>(delegate_));
   zero_state_view_->SetPaintToLayer();
   zero_state_view_->layer()->SetFillsBoundsOpaquely(false);
+  // Expand the height of the `zero_state_view_` to the host height.
+  stack_layout->SetRespectDimensionForView(
+      zero_state_view_, StackLayout::RespectDimension::kWidth);
 
   return content_layout_container;
 }
@@ -218,17 +266,17 @@ AppListAssistantMainStage::CreateMainContentLayoutContainer() {
   content_layout_container->AddChildView(CreateDividerLayoutContainer());
 
   // Query view. Will be animated on its own layer.
-  query_view_ = content_layout_container->AddChildView(
+  auto* query_view = content_layout_container->AddChildView(
       std::make_unique<AssistantQueryView>());
-  query_view_->SetPaintToLayer();
-  query_view_->layer()->SetFillsBoundsOpaquely(false);
-  query_view_->AddObserver(this);
+  query_view->SetPaintToLayer();
+  query_view->layer()->SetFillsBoundsOpaquely(false);
+  query_view_observation_.Observe(query_view);
 
   // UI element container.
-  ui_element_container_ = content_layout_container->AddChildView(
-      std::make_unique<UiElementContainerView>(delegate_));
-  ui_element_container_->AddObserver(this);
-  content_layout->SetFlexForView(ui_element_container_, 1,
+  ui_element_container_observation_.Observe(
+      content_layout_container->AddChildView(
+          std::make_unique<UiElementContainerView>(delegate_)));
+  content_layout->SetFlexForView(ui_element_container(), 1,
                                  /*use_min_size=*/true);
 
   return content_layout_container;
@@ -258,9 +306,7 @@ AppListAssistantMainStage::CreateDividerLayoutContainer() {
                        2;
   horizontal_separator_->SetBorder(
       views::CreateEmptyBorder(gfx::Insets::VH(vertical_inset, 0)));
-  // We use default color of views::Separator if dark light mode flag is off.
-  if (use_dark_light_mode_colors_)
-    horizontal_separator_->SetColorId(ui::kColorAshSystemUIMenuSeparator);
+  horizontal_separator_->SetColorId(ui::kColorAshSystemUIMenuSeparator);
   horizontal_separator_->SetPreferredSize(gfx::Size(
       kSeparatorWidthDip, progress_indicator_->GetPreferredSize().height()));
   horizontal_separator_->SetPaintToLayer();
@@ -272,20 +318,19 @@ AppListAssistantMainStage::CreateDividerLayoutContainer() {
 std::unique_ptr<views::View>
 AppListAssistantMainStage::CreateFooterLayoutContainer() {
   // Footer.
-  // Note that the |footer_| is placed within its own view container so that as
-  // its visibility changes, its parent container will still reserve the same
-  // layout space. This prevents jank that would otherwise occur due to
-  // |ui_element_container_| claiming that empty space.
+  // Note that the |footer()| is placed within its own view container so that
+  // as its visibility changes, its parent container will still reserve the
+  // same layout space. This prevents jank that would otherwise occur due to
+  // |ui_element_container()| claiming that empty space.
   auto footer_container = std::make_unique<FooterContainer>();
   footer_container->SetLayoutManager(std::make_unique<views::FillLayout>());
 
-  footer_ = footer_container->AddChildView(
-      std::make_unique<AssistantFooterView>(delegate_));
-  footer_->AddObserver(this);
+  footer_observation_.Observe(footer_container->AddChildView(
+      std::make_unique<AssistantFooterView>(delegate_)));
 
   // The footer will be animated on its own layer.
-  footer_->SetPaintToLayer();
-  footer_->layer()->SetFillsBoundsOpaquely(false);
+  footer()->SetPaintToLayer();
+  footer()->layer()->SetFillsBoundsOpaquely(false);
 
   return footer_container;
 }
@@ -319,10 +364,11 @@ void AppListAssistantMainStage::AnimateInZeroState() {
 
 void AppListAssistantMainStage::AnimateInFooter() {
   // Set up our pre-animation values.
-  footer_->layer()->SetOpacity(0.f);
+  footer()->layer()->SetOpacity(0.f);
+  footer()->SetVisible(true);
 
   // Animate the footer to 100% opacity with delay.
-  footer_->layer()->GetAnimator()->StartAnimation(CreateLayerAnimationSequence(
+  footer()->layer()->GetAnimator()->StartAnimation(CreateLayerAnimationSequence(
       ui::LayerAnimationElement::CreatePauseElement(
           ui::LayerAnimationElement::AnimatableProperty::OPACITY,
           kFooterEntryAnimationFadeInDelay),
@@ -340,7 +386,7 @@ void AppListAssistantMainStage::OnAssistantControllerDestroying() {
 void AppListAssistantMainStage::OnCommittedQueryChanged(
     const AssistantQuery& query) {
   // Update the view.
-  query_view_->SetQuery(query);
+  query_view()->SetQuery(query);
 
   // If query is empty and we are showing zero state, do not update the Ui.
   if (query.Empty() && IsShown(zero_state_view_))
@@ -361,13 +407,13 @@ void AppListAssistantMainStage::OnCommittedQueryChanged(
           // ...then fade in.
           CreateOpacityElement(1.f, kDividerAnimationFadeInDuration)));
 
-  MaybeHideZeroState();
+  MaybeHideZeroStateAndShowFooter();
 }
 
 void AppListAssistantMainStage::OnPendingQueryChanged(
     const AssistantQuery& query) {
   // Update the view.
-  query_view_->SetQuery(query);
+  query_view()->SetQuery(query);
 
   if (!IsShown(zero_state_view_))
     return;
@@ -376,8 +422,8 @@ void AppListAssistantMainStage::OnPendingQueryChanged(
   // animation duration to avoid the two views displaying at the same time.
   constexpr base::TimeDelta kQueryAnimationFadeInDuration =
       base::Milliseconds(433);
-  query_view_->layer()->SetOpacity(0.f);
-  query_view_->layer()->GetAnimator()->StartAnimation(
+  query_view()->layer()->SetOpacity(0.f);
+  query_view()->layer()->GetAnimator()->StartAnimation(
       CreateLayerAnimationSequence(
           ui::LayerAnimationElement::CreatePauseElement(
               ui::LayerAnimationElement::AnimatableProperty::OPACITY,
@@ -385,7 +431,7 @@ void AppListAssistantMainStage::OnPendingQueryChanged(
           CreateOpacityElement(1.f, kQueryAnimationFadeInDuration)));
 
   if (!query.Empty())
-    MaybeHideZeroState();
+    MaybeHideZeroStateAndShowFooter();
 }
 
 void AppListAssistantMainStage::OnPendingQueryCleared(bool due_to_commit) {
@@ -393,13 +439,13 @@ void AppListAssistantMainStage::OnPendingQueryCleared(bool due_to_commit) {
   // cancelled, or because the query was committed. If the query was committed,
   // reseting the query here will have no visible effect. If the interaction was
   // cancelled, we set the query here to restore the previously committed query.
-  query_view_->SetQuery(
+  query_view()->SetQuery(
       AssistantInteractionController::Get()->GetModel()->committed_query());
 }
 
 void AppListAssistantMainStage::OnResponseChanged(
     const scoped_refptr<AssistantResponse>& response) {
-  MaybeHideZeroState();
+  MaybeHideZeroStateAndShowFooter();
 
   // Show the horizontal separator.
   horizontal_separator_->layer()->GetAnimator()->StartAnimation(
@@ -420,41 +466,59 @@ void AppListAssistantMainStage::OnResponseChanged(
 void AppListAssistantMainStage::OnUiVisibilityChanged(
     AssistantVisibility new_visibility,
     AssistantVisibility old_visibility,
-    absl::optional<AssistantEntryPoint> entry_point,
-    absl::optional<AssistantExitPoint> exit_point) {
+    std::optional<AssistantEntryPoint> entry_point,
+    std::optional<AssistantExitPoint> exit_point) {
   if (assistant::util::IsStartingSession(new_visibility, old_visibility)) {
-    // When Assistant is starting a new session, we animate in the appearance of
-    // the zero state view and footer.
     const bool from_search =
         entry_point == AssistantEntryPoint::kLauncherSearchResult;
-    progress_indicator_->layer()->SetOpacity(0.f);
-    horizontal_separator_->layer()->SetOpacity(from_search ? 1.f : 0.f);
-
-    if (!from_search)
-      AnimateInZeroState();
-    else
-      zero_state_view_->SetVisible(false);
-
-    AnimateInFooter();
+    InitializeUIForStartingSession(from_search);
     return;
   }
 
-  query_view_->SetQuery(AssistantNullQuery());
-
-  footer_->SetVisible(true);
-  footer_->layer()->SetOpacity(1.f);
-  footer_->SetCanProcessEventsWithinSubtree(true);
+  query_view()->SetQuery(AssistantNullQuery());
 }
 
-void AppListAssistantMainStage::MaybeHideZeroState() {
+void AppListAssistantMainStage::InitializeUIForBubbleView() {
+  InitializeUIForStartingSession(/*from_search=*/false);
+}
+
+void AppListAssistantMainStage::MaybeHideZeroStateAndShowFooter() {
   if (!IsShown(zero_state_view_))
     return;
 
   assistant::util::FadeOutAndHide(zero_state_view_,
                                   kZeroStateAnimationFadeOutDuration);
+
+  if (base::FeatureList::IsEnabled(
+          feature_engagement::kIPHLauncherSearchHelpUiFeature)) {
+    AnimateInFooter();
+  }
 }
 
-BEGIN_METADATA(AppListAssistantMainStage, views::View)
+void AppListAssistantMainStage::InitializeUIForStartingSession(
+    bool from_search) {
+  // When Assistant is starting a new session, we animate in the appearance of
+  // the zero state view and footer.
+  progress_indicator_->layer()->SetOpacity(0.f);
+  horizontal_separator_->layer()->SetOpacity(from_search ? 1.f : 0.f);
+
+  footer()->InitializeUIForBubbleView();
+  if (from_search) {
+    zero_state_view_->SetVisible(false);
+    AnimateInFooter();
+  } else {
+    AnimateInZeroState();
+
+    if (base::FeatureList::IsEnabled(
+            feature_engagement::kIPHLauncherSearchHelpUiFeature)) {
+      footer()->SetVisible(false);
+    } else {
+      AnimateInFooter();
+    }
+  }
+}
+
+BEGIN_METADATA(AppListAssistantMainStage)
 END_METADATA
 
 }  // namespace ash

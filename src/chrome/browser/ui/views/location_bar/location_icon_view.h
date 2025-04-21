@@ -1,9 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_VIEWS_LOCATION_BAR_LOCATION_ICON_VIEW_H_
 #define CHROME_BROWSER_UI_VIEWS_LOCATION_BAR_LOCATION_ICON_VIEW_H_
+
+#include <optional>
 
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/views/location_bar/icon_label_bubble_view.h"
@@ -19,13 +21,12 @@ enum SecurityLevel;
 }
 
 // Use a LocationIconView to display an icon on the leading side of the edit
-// field. It shows the user's current action (while the user is editing), or the
 // page security status (after navigation has completed), or extension name (if
 // the URL is a chrome-extension:// URL).
 class LocationIconView : public IconLabelBubbleView {
- public:
-  METADATA_HEADER(LocationIconView);
+  METADATA_HEADER(LocationIconView, IconLabelBubbleView)
 
+ public:
   class Delegate {
    public:
     using IconFetchedCallback =
@@ -59,6 +60,11 @@ class LocationIconView : public IconLabelBubbleView {
     // Gets an icon for the location bar icon chip.
     virtual ui::ImageModel GetLocationIcon(
         IconFetchedCallback on_icon_fetched) const = 0;
+
+    // Gets an optional background color override for the location bar icon
+    // chip.
+    virtual std::optional<ui::ColorId> GetLocationIconBackgroundColorOverride()
+        const;
   };
 
   LocationIconView(const gfx::FontList& font_list,
@@ -73,20 +79,26 @@ class LocationIconView : public IconLabelBubbleView {
   bool OnMouseDragged(const ui::MouseEvent& event) override;
   SkColor GetForegroundColor() const override;
   bool ShouldShowSeparator() const override;
+  bool ShouldShowLabelAfterAnimation() const override;
   bool ShowBubble(const ui::Event& event) override;
   bool IsBubbleShowing() const override;
   bool OnMousePressed(const ui::MouseEvent& event) override;
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
   void AddedToWidget() override;
   void OnThemeChanged() override;
+
+  // Returns true if the icon's security state has changed since the last call
+  // to Update().
+  bool HasSecurityStateChanged() const;
 
   // Returns what the minimum width for the label text.
   int GetMinimumLabelTextWidth() const;
 
   // Updates the icon's ink drop mode, focusable behavior, text and security
-  // status. |suppress_animations| indicates whether this update should suppress
+  // status. `suppress_animations` indicates whether this update should suppress
   // the text change animation (e.g. when swapping tabs).
-  void Update(bool suppress_animations);
+  // `force_hide_background` hides the background color. This is useful in
+  // situations like where the popup is shown.
+  void Update(bool suppress_animations, bool force_hide_background = false);
 
   // Returns text to be placed in the view.
   // - For secure/insecure pages, returns text describing the URL's security
@@ -108,8 +120,11 @@ class LocationIconView : public IconLabelBubbleView {
  protected:
   // IconLabelBubbleView:
   bool IsTriggerableEvent(const ui::Event& event) override;
+  void UpdateBorder() override;
 
  private:
+  friend class ToolbarViewTest;
+
   // Returns what the minimum size would be if the preferred size were |size|.
   gfx::Size GetMinimumSizeForPreferredSize(gfx::Size size) const;
 
@@ -121,22 +136,40 @@ class LocationIconView : public IconLabelBubbleView {
   // If |suppress_animations| is true, the text change will not be animated.
   void UpdateTextVisibility(bool suppress_animations);
 
+  // Updates the accessible properties based on if we are editing or empty.
+  void SetAccessibleProperties(bool is_initialization);
+
   // Updates Icon based on the current state and theme.
   void UpdateIcon();
 
+  // Updates background based on the current state and theme.
+  void UpdateBackground() override;
+
   // Handles the arrival of an asynchronously fetched icon.
   void OnIconFetched(const gfx::Image& image);
+
+  // Returns the current security level from the LocationBarModel.
+  security_state::SecurityLevel GetSecurityLevel() const;
+
+  // Sets the security level to use for testing.
+  void SetSecurityLevelForTesting(security_state::SecurityLevel security_level);
+
+  // Set the rounded rect background with the given color.
+  void SetBackgroundColor(SkColor color);
 
   // The security level when the location icon was last updated. Used to decide
   // whether to animate security level transitions.
   security_state::SecurityLevel last_update_security_level_ =
       security_state::NONE;
 
+  // The security level to use during testing (if set).
+  std::optional<security_state::SecurityLevel> security_level_for_testing_;
+
   // Whether the delegate's editing or empty flag was set the last time the
   // location icon was updated.
   bool was_editing_or_empty_ = false;
 
-  raw_ptr<Delegate> delegate_;
+  raw_ptr<Delegate, DanglingUntriaged> delegate_;
 
   // Used to scope the lifetime of asynchronous icon fetch callbacks to the
   // lifetime of the object. Weak pointers issued by this factory are

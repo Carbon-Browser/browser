@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <set>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "media/learning/impl/voting_ensemble.h"
 
 namespace media {
@@ -70,8 +70,8 @@ void ExtraTreesTrainer::OnRandomTreeModel(TrainedModelCB model_cb,
   }
 
   // Train the next tree.
-  auto cb = base::BindOnce(&ExtraTreesTrainer::OnRandomTreeModel, AsWeakPtr(),
-                           std::move(model_cb));
+  auto cb = base::BindOnce(&ExtraTreesTrainer::OnRandomTreeModel,
+                           weak_ptr_factory_.GetWeakPtr(), std::move(model_cb));
   tree_trainer_->Train(task_, converted_training_data_, std::move(cb));
 }
 

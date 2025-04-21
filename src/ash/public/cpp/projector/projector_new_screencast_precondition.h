@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,6 @@
 #include <vector>
 
 #include "ash/public/cpp/ash_public_export.h"
-
-namespace base {
-class Value;
-}  // namespace base
 
 namespace ash {
 
@@ -23,7 +19,9 @@ enum class ASH_PUBLIC_EXPORT NewScreencastPreconditionState {
   // The new screencast button is visible but is disabled.
   kDisabled = 1,
   // The new screencast button is enabled and the user can create new ones now.
-  kEnabled = 2
+  kEnabled = 2,
+  // The new screencast button is hidden.
+  kHidden = 3,
 };
 
 // The reason for the new screencast button state.
@@ -31,7 +29,6 @@ enum class ASH_PUBLIC_EXPORT NewScreencastPreconditionState {
 // NewScreencastPreconditionReason enum in
 // //ash/webui/projector_app/resources/communication/message_types.js.
 enum class ASH_PUBLIC_EXPORT NewScreencastPreconditionReason {
-  kSodaInstallationError = 0,
   kOnDeviceSpeechRecognitionNotSupported = 1,
   kUserLocaleNotSupported = 2,
   kInProjectorSession = 3,
@@ -42,6 +39,16 @@ enum class ASH_PUBLIC_EXPORT NewScreencastPreconditionReason {
   kDriveFsUnmounted = 8,    // Drive could be re-enabled from the Setting.
   kDriveFsMountFailed = 9,  // Drive will not be automatically retried to mount.
   kOthers = 10,
+
+  // Soda installation errors.
+  kSodaInstallationErrorUnspecified = 0,
+  kSodaInstallationErrorNeedsReboot = 11,
+
+  kAudioCaptureDisabledByPolicy = 12,
+
+  // Enabled reason:
+  kEnabledBySoda = 13,
+  kEnabledByServerSideSpeechRecognition = 14,
 };
 
 // Struct used to provide the new screen cast precondition state and the reasons
@@ -55,7 +62,6 @@ struct ASH_PUBLIC_EXPORT NewScreencastPrecondition {
   NewScreencastPrecondition& operator=(const NewScreencastPrecondition&);
   ~NewScreencastPrecondition();
 
-  base::Value ToValue() const;
   bool operator==(const NewScreencastPrecondition& rhs) const;
 
   NewScreencastPreconditionState state;

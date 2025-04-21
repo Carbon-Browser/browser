@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,8 +23,8 @@
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
 #include "chromeos/ash/services/assistant/public/cpp/features.h"
-#include "chromeos/services/libassistant/public/cpp/assistant_notification.h"
-#include "chromeos/services/libassistant/public/cpp/assistant_timer.h"
+#include "chromeos/ash/services/libassistant/public/cpp/assistant_notification.h"
+#include "chromeos/ash/services/libassistant/public/cpp/assistant_timer.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -33,11 +33,11 @@ namespace ash {
 
 namespace {
 
-using chromeos::assistant::AssistantNotification;
-using chromeos::assistant::AssistantNotificationButton;
-using chromeos::assistant::AssistantNotificationPriority;
-using chromeos::assistant::AssistantTimer;
-using chromeos::assistant::AssistantTimerState;
+using assistant::AssistantNotification;
+using assistant::AssistantNotificationButton;
+using assistant::AssistantNotificationPriority;
+using assistant::AssistantTimer;
+using assistant::AssistantTimerState;
 
 // Constants.
 constexpr char kClientId[] = "assistant/timer<timer-id>";
@@ -78,7 +78,7 @@ class TimerEvent {
     return *this;
   }
 
-  TimerEvent& WithCreationTime(absl::optional<base::Time> creation_time) {
+  TimerEvent& WithCreationTime(std::optional<base::Time> creation_time) {
     timer_.creation_time = creation_time;
     return *this;
   }
@@ -220,14 +220,14 @@ class ExpectedNotification {
   }
 
  private:
-  absl::optional<GURL> action_url_;
-  absl::optional<std::string> client_id_;
-  absl::optional<bool> is_pinned_;
-  absl::optional<std::string> message_;
-  absl::optional<AssistantNotificationPriority> priority_;
-  absl::optional<bool> remove_on_click_;
-  absl::optional<bool> renotify_;
-  absl::optional<std::string> title_;
+  std::optional<GURL> action_url_;
+  std::optional<std::string> client_id_;
+  std::optional<bool> is_pinned_;
+  std::optional<std::string> message_;
+  std::optional<AssistantNotificationPriority> priority_;
+  std::optional<bool> remove_on_click_;
+  std::optional<bool> renotify_;
+  std::optional<std::string> title_;
 };
 
 class ExpectedButton {
@@ -274,9 +274,9 @@ class ExpectedButton {
   }
 
  private:
-  absl::optional<GURL> action_url_;
-  absl::optional<std::string> label_;
-  absl::optional<bool> remove_notification_on_click_;
+  std::optional<GURL> action_url_;
+  std::optional<std::string> label_;
+  std::optional<bool> remove_notification_on_click_;
 };
 
 // ScopedNotificationModelObserver ---------------------------------------------
@@ -490,9 +490,9 @@ TEST_F(AssistantAlarmTimerControllerTest, TimerNotificationHasExpectedMessage) {
   typedef struct {
     std::string locale;
     std::vector<TestTimer> timers;
-  } I18nTestCase;
+  } I18nTimerTestCase;
 
-  std::vector<I18nTestCase> i18n_test_cases;
+  std::vector<I18nTimerTestCase> i18n_test_cases;
 
   // We'll test in English (United States).
   i18n_test_cases.push_back({
@@ -718,19 +718,6 @@ TEST_F(AssistantAlarmTimerControllerTest,
   EXPECT_EQ(ExpectedNotification().WithClientId(kClientId).WithPriority(
                 AssistantNotificationPriority::kHigh),
             notification_model_observer.last_notification());
-}
-
-// Tests that a notification is added for a timer and is pinned.
-TEST_F(AssistantAlarmTimerControllerTest, TimerNotificationIsPinned) {
-  // Observe notifications.
-  ScopedNotificationModelObserver observer;
-
-  // Schedule a timer.
-  ScheduleTimer{kTimerId};
-
-  // Make assertions about the notification.
-  EXPECT_EQ(ExpectedNotification().WithClientId(kClientId).WithIsPinned(true),
-            observer.last_notification());
 }
 
 }  // namespace ash

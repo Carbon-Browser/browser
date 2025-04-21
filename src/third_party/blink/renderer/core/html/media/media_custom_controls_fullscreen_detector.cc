@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,8 @@
 #include "third_party/blink/renderer/core/html/media/html_video_element.h"
 #include "third_party/blink/renderer/core/intersection_observer/intersection_observer_entry.h"
 #include "third_party/blink/renderer/core/layout/layout_object.h"
-#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
+#include "ui/gfx/geometry/size_conversions.h"
 
 namespace blink {
 
@@ -90,30 +90,25 @@ void MediaCustomControlsFullscreenDetector::Attach() {
   VideoElement().GetDocument().addEventListener(
       event_type_names::kFullscreenchange, this, true);
 
-  // Ideally we'd like to monitor all minute intersection changes here,
-  // because any change can potentially affect the fullscreen heuristics,
-  // but it's not practical from perf point of view. Given that the heuristics
-  // are more of a guess that exact science, it wouldn't be well spent CPU
-  // cycles anyway. That's why the observer only triggers on 10% steps in
-  // viewport area occupation.
-  const WTF::Vector<float> thresholds{
-      kMinPossibleFullscreenIntersectionThreshold,
-      0.2,
-      0.3,
-      0.4,
-      0.5,
-      0.6,
-      0.7,
-      0.8,
-      kMostlyFillViewportIntersectionThreshold};
   viewport_intersection_observer_ = IntersectionObserver::Create(
-      {}, thresholds, &(video_element_->GetDocument()),
+      video_element_->GetDocument(),
       WTF::BindRepeating(
           &MediaCustomControlsFullscreenDetector::OnIntersectionChanged,
           WrapWeakPersistent(this)),
       LocalFrameUkmAggregator::kMediaIntersectionObserver,
-      IntersectionObserver::kDeliverDuringPostLifecycleSteps,
-      IntersectionObserver::kFractionOfRoot, 0, false, true);
+      IntersectionObserver::Params{
+          // Ideally we'd like to monitor all minute intersection changes
+          // here, because any change can potentially affect the fullscreen
+          // heuristics, but it's not practical from perf point of view.
+          // Given that the heuristics are more of a guess that exact science,
+          // it wouldn't be well spent CPU cycles anyway. That's why the
+          // observer only triggers on 10% steps in viewport area occupation.
+          .thresholds = {kMinPossibleFullscreenIntersectionThreshold, 0.2, 0.3,
+                         0.4, 0.5, 0.6, 0.7, 0.8,
+                         kMostlyFillViewportIntersectionThreshold},
+          .semantics = IntersectionObserver::kFractionOfRoot,
+          .always_report_root_bounds = true,
+      });
   viewport_intersection_observer_->observe(&VideoElement());
 }
 
@@ -157,11 +152,8 @@ void MediaCustomControlsFullscreenDetector::ReportEffectivelyFullscreen(
     return;
   }
 
-  // Picture-in-Picture can be disabled by the website when the API is enabled.
-  bool picture_in_picture_allowed =
-      !RuntimeEnabledFeatures::PictureInPictureEnabled() ||
-      !VideoElement().FastHasAttribute(
-          html_names::kDisablepictureinpictureAttr);
+  bool picture_in_picture_allowed = !VideoElement().FastHasAttribute(
+      html_names::kDisablepictureinpictureAttr);
 
   if (picture_in_picture_allowed) {
     VideoElement().SetIsEffectivelyFullscreen(
@@ -193,15 +185,15 @@ void MediaCustomControlsFullscreenDetector::UpdateDominantAndFullscreenStatus(
   VideoElement()
       .GetDocument()
       .GetTaskRunner(TaskType::kInternalMedia)
-      ->PostTask(
-          FROM_HERE,
-          WTF::Bind(update_dominant_and_fullscreen, WrapWeakPersistent(this),
-                    is_dominant_visible_content, is_effectively_fullscreen));
+      ->PostTask(FROM_HERE, WTF::BindOnce(update_dominant_and_fullscreen,
+                                          WrapWeakPersistent(this),
+                                          is_dominant_visible_content,
+                                          is_effectively_fullscreen));
 }
 
 void MediaCustomControlsFullscreenDetector::OnIntersectionChanged(
     const HeapVector<Member<IntersectionObserverEntry>>& entries) {
-  if (!viewport_intersection_observer_ || entries.IsEmpty())
+  if (!viewport_intersection_observer_ || entries.empty())
     return;
 
   auto* layout = VideoElement().GetLayoutObject();
@@ -230,9 +222,10 @@ void MediaCustomControlsFullscreenDetector::OnIntersectionChanged(
   }
 
   const IntersectionGeometry& geometry = entries.back()->GetGeometry();
-  gfx::Size target_size = ToRoundedSize(geometry.TargetRect().size);
-  gfx::Size intersection_size = ToRoundedSize(geometry.IntersectionRect().size);
-  gfx::Size root_size = ToRoundedSize(geometry.RootRect().size);
+  gfx::Size target_size = gfx::ToRoundedSize(geometry.TargetRect().size());
+  gfx::Size intersection_size =
+      gfx::ToRoundedSize(geometry.IntersectionRect().size());
+  gfx::Size root_size = gfx::ToRoundedSize(geometry.RootRect().size());
 
   UpdateDominantAndFullscreenStatus(
       false, IsFullscreenVideoOfDifferentRatio(target_size, root_size,

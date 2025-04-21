@@ -1,12 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_DEVICE_SYNC_DEVICE_SYNC_CLIENT_FACTORY_H_
 #define CHROME_BROWSER_ASH_DEVICE_SYNC_DEVICE_SYNC_CLIENT_FACTORY_H_
 
-#include "base/memory/singleton.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "base/no_destructor.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 class Profile;
 
@@ -17,7 +17,7 @@ class DeviceSyncClient;
 
 // Singleton that owns all DeviceSyncClient instances and associates them with
 // Profiles.
-class DeviceSyncClientFactory : public BrowserContextKeyedServiceFactory {
+class DeviceSyncClientFactory : public ProfileKeyedServiceFactory {
  public:
   static DeviceSyncClient* GetForProfile(Profile* profile);
 
@@ -27,25 +27,18 @@ class DeviceSyncClientFactory : public BrowserContextKeyedServiceFactory {
   DeviceSyncClientFactory& operator=(const DeviceSyncClientFactory&) = delete;
 
  private:
-  friend struct base::DefaultSingletonTraits<DeviceSyncClientFactory>;
+  friend base::NoDestructor<DeviceSyncClientFactory>;
 
   DeviceSyncClientFactory();
   ~DeviceSyncClientFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   bool ServiceIsNULLWhileTesting() const override;
 };
 
 }  // namespace device_sync
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the migration is finished.
-namespace chromeos {
-namespace device_sync {
-using ::ash::device_sync::DeviceSyncClientFactory;
-}
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_DEVICE_SYNC_DEVICE_SYNC_CLIENT_FACTORY_H_

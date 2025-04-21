@@ -1,18 +1,19 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/in_session_auth/webauthn_request_registrar_impl.h"
 
+#include <cstdint>
 #include <string>
 
 #include "ash/shell.h"
 #include "ash/wm/mru_window_tracker.h"
 #include "ash/wm/window_properties.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/sequence_checker.h"
 #include "base/strings/string_number_conversions.h"
 #include "ui/aura/window.h"
-#include "ui/base/class_property.h"
 
 namespace ash {
 

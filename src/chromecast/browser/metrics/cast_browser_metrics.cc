@@ -1,13 +1,13 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromecast/browser/metrics/cast_browser_metrics.h"
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/command_line.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "chromecast/base/chromecast_switches.h"
 #include "chromecast/base/path_utils.h"
@@ -122,8 +122,8 @@ void CastBrowserMetrics::CollectFinalMetricsForLog(
   // is called on log upload, metrics that occur between log upload and child
   // process termination will not be uploaded.
   content::FetchHistogramsAsynchronously(
-      base::ThreadTaskRunnerHandle::Get(), std::move(done_callback),
-      base::Seconds(kMetricsFetchTimeoutSeconds));
+      base::SingleThreadTaskRunner::GetCurrentDefault(),
+      std::move(done_callback), base::Seconds(kMetricsFetchTimeoutSeconds));
 }
 
 void CastBrowserMetrics::ProcessExternalEvents(base::OnceClosure cb) {

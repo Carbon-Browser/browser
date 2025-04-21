@@ -1,8 +1,9 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/host/ash_window_tree_host_platform.h"
+#include "base/memory/raw_ptr.h"
 
 #include <utility>
 
@@ -41,7 +42,7 @@ class ScopedEnableUnadjustedMouseEventsOzone
   }
 
  private:
-  ui::InputController* input_controller_;
+  raw_ptr<ui::InputController> input_controller_;
 };
 
 AshWindowTreeHostPlatform::AshWindowTreeHostPlatform(
@@ -90,9 +91,8 @@ void AshWindowTreeHostPlatform::ConfineCursorToBoundsInRoot(
   if (!allow_confine_cursor())
     return;
 
-  gfx::RectF bounds_f(bounds_in_root);
-  GetRootTransform().TransformRect(&bounds_f);
-  last_cursor_confine_bounds_in_pixels_ = gfx::ToEnclosingRect(bounds_f);
+  last_cursor_confine_bounds_in_pixels_ =
+      GetRootTransform().MapRect(bounds_in_root);
   platform_window()->ConfineCursorToBounds(
       last_cursor_confine_bounds_in_pixels_);
 }
@@ -198,6 +198,13 @@ std::unique_ptr<aura::ScopedEnableUnadjustedMouseEvents>
 AshWindowTreeHostPlatform::RequestUnadjustedMovement() {
   return std::make_unique<ScopedEnableUnadjustedMouseEventsOzone>(
       input_controller_);
+}
+
+void AshWindowTreeHostPlatform::OnDamageRect(const gfx::Rect& damage_rect) {
+  if (ignore_platform_damage_rect_for_test_) {
+    return;
+  }
+  return aura::WindowTreeHostPlatform::OnDamageRect(damage_rect);
 }
 
 void AshWindowTreeHostPlatform::DispatchEvent(ui::Event* event) {

@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 
 #include "base/memory/ref_counted.h"
 #include "media/gpu/vaapi/test/shared_va_surface.h"
-#include "media/video/h264_parser.h"
+#include "media/parsers/h264_parser.h"
 #include "ui/gfx/geometry/rect.h"
 
 namespace media::vaapi_test {
@@ -135,6 +135,9 @@ class H264DPB {
 
   // Return a long-term reference picture by its long_term_pic_num.
   scoped_refptr<H264Picture> GetLongRefPicByLongTermPicNum(int pic_num);
+
+  // Return a long-term reference picture by its long term reference index.
+  scoped_refptr<H264Picture> GetLongRefPicByLongTermIdx(int idx);
 
   // Return the short reference picture with lowest frame_num. Used for sliding
   // window memory management.

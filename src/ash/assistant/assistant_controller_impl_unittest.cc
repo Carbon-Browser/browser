@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,6 @@
 #include "base/scoped_observation.h"
 #include "base/test/scoped_feature_list.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
-#include "chromeos/constants/chromeos_features.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
 namespace ash {
@@ -68,8 +67,8 @@ class MockAssistantUiModelObserver : public AssistantUiModelObserver {
               OnUiVisibilityChanged,
               (AssistantVisibility new_visibility,
                AssistantVisibility old_visibility,
-               absl::optional<AssistantEntryPoint> entry_point,
-               absl::optional<AssistantExitPoint> exit_point),
+               std::optional<AssistantEntryPoint> entry_point,
+               std::optional<AssistantExitPoint> exit_point),
               (override));
 };
 
@@ -78,7 +77,10 @@ class MockAssistantUiModelObserver : public AssistantUiModelObserver {
 class MockNewWindowDelegate : public testing::NiceMock<TestNewWindowDelegate> {
  public:
   // TestNewWindowDelegate:
-  MOCK_METHOD(void, OpenUrl, (const GURL& url, OpenUrlFrom from), (override));
+  MOCK_METHOD(void,
+              OpenUrl,
+              (const GURL& url, OpenUrlFrom from, Disposition disposition),
+              (override));
 
   MOCK_METHOD(void,
               OpenFeedbackPage,
@@ -91,29 +93,26 @@ class MockNewWindowDelegate : public testing::NiceMock<TestNewWindowDelegate> {
 
 class AssistantControllerImplTest : public AssistantAshTestBase {
  public:
-  AssistantControllerImplTest() {
-    auto delegate = std::make_unique<MockNewWindowDelegate>();
-    new_window_delegate_ = delegate.get();
-    delegate_provider_ =
-        std::make_unique<TestNewWindowDelegateProvider>(std::move(delegate));
-  }
+  AssistantControllerImplTest() = default;
 
   AssistantController* controller() { return AssistantController::Get(); }
-  MockNewWindowDelegate& new_window_delegate() { return *new_window_delegate_; }
+  MockNewWindowDelegate& new_window_delegate() { return new_window_delegate_; }
   const AssistantUiModel* ui_model() {
     return AssistantUiController::Get()->GetModel();
   }
-  TestAssistantService* test_assistant_service() {
-    return &test_assistant_service_;
-  }
 
  private:
-  MockNewWindowDelegate* new_window_delegate_;
-  std::unique_ptr<TestNewWindowDelegateProvider> delegate_provider_;
+  MockNewWindowDelegate new_window_delegate_;
+};
 
-  // AssistantService must outlive AssistantController as destructor can
-  // reference AssistantService.
-  TestAssistantService test_assistant_service_;
+// Same with `AssistantControllerImplTest` except that this class does not set
+// up an active user in `SetUp`.
+class AssistantControllerImplTestForStartUp
+    : public AssistantControllerImplTest {
+ public:
+  AssistantControllerImplTestForStartUp() {
+    set_up_active_user_in_test_set_up_ = false;
+  }
 };
 
 }  // namespace
@@ -164,7 +163,8 @@ TEST_F(AssistantControllerImplTest, NotifiesOpeningUrlAndUrlOpened) {
 
   EXPECT_CALL(new_window_delegate(),
               OpenUrl(GURL("https://g.co/"),
-                      NewWindowDelegate::OpenUrlFrom::kUserInteraction));
+                      NewWindowDelegate::OpenUrlFrom::kUserInteraction,
+                      NewWindowDelegate::Disposition::kNewForegroundTab));
 
   EXPECT_CALL(controller_observer_mock, OnUrlOpened)
       .WillOnce(testing::Invoke([](const GURL& url, bool from_server) {
@@ -226,8 +226,8 @@ TEST_F(AssistantControllerImplTest, ClosesAssistantUiForFeedbackDeeplink) {
   EXPECT_CALL(ui_model_observer_mock, OnUiVisibilityChanged)
       .WillOnce([](AssistantVisibility new_visibility,
                    AssistantVisibility old_visibility,
-                   absl::optional<AssistantEntryPoint> entry_point,
-                   absl::optional<AssistantExitPoint> exit_point) {
+                   std::optional<AssistantEntryPoint> entry_point,
+                   std::optional<AssistantExitPoint> exit_point) {
         EXPECT_EQ(old_visibility, AssistantVisibility::kVisible);
         EXPECT_EQ(new_visibility, AssistantVisibility::kClosing);
         EXPECT_FALSE(entry_point.has_value());
@@ -236,8 +236,8 @@ TEST_F(AssistantControllerImplTest, ClosesAssistantUiForFeedbackDeeplink) {
   EXPECT_CALL(ui_model_observer_mock, OnUiVisibilityChanged)
       .WillOnce([](AssistantVisibility new_visibility,
                    AssistantVisibility old_visibility,
-                   absl::optional<AssistantEntryPoint> entry_point,
-                   absl::optional<AssistantExitPoint> exit_point) {
+                   std::optional<AssistantEntryPoint> entry_point,
+                   std::optional<AssistantExitPoint> exit_point) {
         EXPECT_EQ(old_visibility, AssistantVisibility::kClosing);
         EXPECT_EQ(new_visibility, AssistantVisibility::kClosed);
         EXPECT_FALSE(entry_point.has_value());
@@ -250,29 +250,7 @@ TEST_F(AssistantControllerImplTest, ClosesAssistantUiForFeedbackDeeplink) {
   ui_model()->RemoveObserver(&ui_model_observer_mock);
 }
 
-// Make sure that AssistantControllerImpl sets dark mode = false even if the
-// flag is off. SettingsController won't set options if dark mode bit is not
-// set.
-TEST_F(AssistantControllerImplTest, ColorModeIsSetWhenAssistantIsReadyFlagOff) {
-  // ProductivityLauncher uses DarkLightMode colors.
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitWithFeatures(
-      /*enabled_features=*/{}, /*disabled_features=*/{
-          chromeos::features::kDarkLightMode, features::kNotificationsRefresh,
-          features::kProductivityLauncher});
-
-  controller()->SetAssistant(test_assistant_service());
-
-  ASSERT_TRUE(test_assistant_service()->dark_mode_enabled().has_value());
-  EXPECT_FALSE(test_assistant_service()->dark_mode_enabled().value());
-}
-
-TEST_F(AssistantControllerImplTest, ColorModeIsUpdated) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeature(chromeos::features::kDarkLightMode);
-
-  ASSERT_TRUE(chromeos::features::IsDarkLightModeEnabled());
-
+TEST_F(AssistantControllerImplTestForStartUp, ColorModeIsUpdated) {
   auto* active_user_pref_service =
       Shell::Get()->session_controller()->GetPrimaryUserPrefService();
   ASSERT_TRUE(active_user_pref_service);
@@ -280,18 +258,18 @@ TEST_F(AssistantControllerImplTest, ColorModeIsUpdated) {
   auto* dark_light_mode_controller = DarkLightModeControllerImpl::Get();
   dark_light_mode_controller->OnActiveUserPrefServiceChanged(
       active_user_pref_service);
-  controller()->SetAssistant(test_assistant_service());
+  SetUpActiveUser();
   const bool initial_dark_mode_status =
       dark_light_mode_controller->IsDarkModeEnabled();
-  ASSERT_TRUE(test_assistant_service()->dark_mode_enabled().has_value());
+  ASSERT_TRUE(assistant_service()->dark_mode_enabled().has_value());
   EXPECT_EQ(initial_dark_mode_status,
-            test_assistant_service()->dark_mode_enabled().value());
+            assistant_service()->dark_mode_enabled().value());
 
   // Switch the color mode.
   dark_light_mode_controller->ToggleColorMode();
-  ASSERT_TRUE(test_assistant_service()->dark_mode_enabled().has_value());
+  ASSERT_TRUE(assistant_service()->dark_mode_enabled().has_value());
   EXPECT_NE(initial_dark_mode_status,
-            test_assistant_service()->dark_mode_enabled().value());
+            assistant_service()->dark_mode_enabled().value());
 }
 
 }  // namespace ash

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ enum DisplayEvent {
   DISPLAY_EVENT_INSTALLED_PREVIOUSLY = 5,
   DISPLAY_EVENT_IGNORED_PREVIOUSLY = 6,
   DISPLAY_EVENT_LACKS_SERVICE_WORKER = 7,
-  DISPLAY_EVENT_NOT_VISITED_ENOUGH = 8,
+  // Deprecated: DISPLAY_EVENT_NOT_VISITED_ENOUGH = 8,
   DISPLAY_EVENT_NATIVE_APP_BANNER_REQUESTED = 9,
   DISPLAY_EVENT_WEB_APP_BANNER_REQUESTED = 10,
   DISPLAY_EVENT_NATIVE_APP_BANNER_CREATED = 11,
@@ -48,7 +48,7 @@ enum DismissEvent {
   DISMISS_EVENT_CLOSE_BUTTON = 45,
   // Deprecated: DISMISS_EVENT_INSTALL_TIMEOUT = 46,
   DISMISS_EVENT_DISMISSED = 47,
-  DISMISS_EVENT_AMBIENT_INFOBAR_DISMISSED = 48,
+  // Deprecated: DISMISS_EVENT_AMBIENT_INFOBAR_DISMISSED = 48,
   DISMISS_EVENT_MAX = 49,
 };
 
@@ -71,15 +71,20 @@ enum BeforeInstallEvent {
   BEFORE_INSTALL_EVENT_COMPLETE = 2,
   BEFORE_INSTALL_EVENT_NO_ACTION = 3,
   BEFORE_INSTALL_EVENT_PREVENT_DEFAULT_CALLED = 4,
-  BEFORE_INSTALL_EVENT_PROMPT_CALLED_AFTER_PREVENT_DEFAULT = 5,
-  BEFORE_INSTALL_EVENT_PROMPT_NOT_CALLED_AFTER_PREVENT_DEFAULT = 6,
-  BEFORE_INSTALL_EVENT_MAX = 7,
+  // Deprecated: BEFORE_INSTALL_EVENT_PROMPT_CALLED_AFTER_PREVENT_DEFAULT = 5,
+  // Deprecated: BEFORE_INSTALL_EVENT_PROMPT_NOT_CALLED_AFTER_PREVENT_DEFAULT =
+  // 6,
+  BEFORE_INSTALL_EVENT_EARLY_PROMPT = 7,
+  BEFORE_INSTALL_EVENT_PROMPT_CALLED_AFTER_PREVENT_DEFAULT = 8,
+  BEFORE_INSTALL_EVENT_PROMPT_CALLED_NOT_CANCELED = 9,
+  BEFORE_INSTALL_EVENT_PROMPT_NOT_CALLED_AFTER_PREVENT_DEFAULT = 10,
+  BEFORE_INSTALL_EVENT_PROMPT_NOT_CALLED_NOT_CANCELLED = 11,
+  BEFORE_INSTALL_EVENT_MAX = 12,
 };
 
 extern const char kDismissEventHistogram[];
 extern const char kDisplayEventHistogram[];
 extern const char kInstallEventHistogram[];
-extern const char kMinutesHistogram[];
 extern const char kUserResponseHistogram[];
 extern const char kBeforeInstallEventHistogram[];
 extern const char kInstallableStatusCodeHistogram[];
@@ -88,7 +93,6 @@ extern const char kInstallDisplayModeHistogram[];
 void TrackDismissEvent(int event);
 void TrackDisplayEvent(int event);
 void TrackInstallEvent(int event);
-void TrackMinutesFromFirstVisitToBannerShown(int minutes);
 void TrackUserResponse(int event);
 void TrackBeforeInstallEvent(int event);
 void TrackInstallableStatusCode(InstallableStatusCode code);

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,12 @@
 #include <stdint.h>
 
 #include <memory>
+#include <queue>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -54,6 +55,9 @@ class BrowsingHistoryHandler : public content::WebUIMessageHandler,
   // Handler for "removeBookmark" message.
   void HandleRemoveBookmark(const base::Value::List& args);
 
+  // Handler for "setLastSelectedTab" message.
+  void HandleSetLastSelectedTab(const base::Value::List& args);
+
   // BrowsingHistoryDriver implementation.
   void OnQueryComplete(
       const std::vector<history::BrowsingHistoryService::HistoryEntry>& results,
@@ -79,7 +83,9 @@ class BrowsingHistoryHandler : public content::WebUIMessageHandler,
   }
 
  protected:
-  virtual void SendHistoryQuery(int count, const std::u16string& query);
+  virtual void SendHistoryQuery(int count,
+                                const std::u16string& query,
+                                std::optional<double> begin_timestamp);
 
  private:
   FRIEND_TEST_ALL_PREFIXES(BrowsingHistoryHandlerTest,
@@ -93,13 +99,13 @@ class BrowsingHistoryHandler : public content::WebUIMessageHandler,
 
   std::vector<base::OnceClosure> deferred_callbacks_;
 
-  base::Value initial_results_;
+  std::optional<base::Value::Dict> initial_results_;
 
   std::string query_history_callback_id_;
 
   base::OnceClosure query_history_continuation_;
 
-  std::string remove_visits_callback_;
+  std::queue<std::string> remove_visits_callbacks_;
 
   base::WeakPtrFactory<BrowsingHistoryHandler> weak_factory_{this};
 };

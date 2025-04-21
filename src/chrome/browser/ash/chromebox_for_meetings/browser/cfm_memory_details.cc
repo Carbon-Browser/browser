@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/chromebox_for_meetings/browser/cfm_memory_details.h"
 
-#include "base/bind.h"
+#include "base/containers/map_util.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/thread_pool.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -17,7 +18,8 @@
 
 namespace ash::cfm {
 
-// TODO(https://crbug.com/1164001): remove after the migration to namespace ash.
+// TODO(https://crbug.com/1403174): Remove when namespace of mojoms for CfM are
+// migarted to ash.
 namespace mojom = ::chromeos::cfm::mojom;
 
 // static
@@ -102,7 +104,7 @@ void CfmMemoryDetails::CollectProcessInformation() {
       proc_mem_info_list.push_back(std::move(proc_mem_info_mojom));
       // We push back to a map that we can use to complete filling out
       // various information such as extensions
-      proc_mem_info_map_[proc_mem_info.pid] = &proc_mem_info_list.back();
+      proc_mem_info_map_[proc_mem_info.pid] = proc_mem_info_list.back().get();
     }
     proc_data_list_.push_back(
         mojom::ProcessData::New(base::UTF16ToUTF8(proc_data.name),
@@ -120,40 +122,23 @@ void CfmMemoryDetails::CollectExtensionsInformation() {
        !it.IsAtEnd(); it.Advance()) {
     content::RenderProcessHost* host = it.GetCurrentValue();
     // Only add valid processes
-    if (!host->GetProcess().IsValid())
-      continue;
-
-    // Check if process was added in current list
-    auto entry = proc_mem_info_map_.find(host->GetProcess().Pid());
-
-    if (entry == proc_mem_info_map_.end()) {
+    if (!host->GetProcess().IsValid()) {
       continue;
     }
-    auto& proc_mem_info = *entry->second;
 
-    content::BrowserContext* browser_context = host->GetBrowserContext();
-    extensions::ProcessMap* extension_process_map =
-        extensions::ProcessMap::Get(browser_context);
-
-    std::set<std::string> extension_ids =
-        extension_process_map->GetExtensionsInProcess(host->GetID());
+    // Check if process was added in current list
+    auto* proc_mem_info =
+        base::FindPtrOrNull(proc_mem_info_map_, host->GetProcess().Pid());
+    if (!proc_mem_info) {
+      continue;
+    }
 
     // If no extension can be found in this process then no more work is
     // needed
-    if (extension_ids.empty()) {
-      continue;
-    }
-
-    extensions::ExtensionRegistry* extension_registry =
-        extensions::ExtensionRegistry::Get(browser_context);
-
-    auto& ext_data = proc_mem_info->extension_info;
-    ext_data.reserve(extension_ids.size());
-
-    for (const extensions::ExtensionId& id : extension_ids) {
-      const extensions::Extension* extension =
-          extension_registry->enabled_extensions().GetByID(id);
-      ext_data.push_back(mojom::ExtensionData::New(
+    if (const extensions::Extension* extension =
+            extensions::ProcessMap::Get(host->GetBrowserContext())
+                ->GetEnabledExtensionByProcessID(host->GetDeprecatedID())) {
+      proc_mem_info->extension_info.push_back(mojom::ExtensionData::New(
           extension->name(), extension->GetVersionForDisplay(), extension->id(),
           extension->hashed_id().value(), extension->description()));
     }

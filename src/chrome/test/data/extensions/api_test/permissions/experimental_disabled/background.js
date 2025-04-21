@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 chrome.test.runTests([
   function experimental() {
-    chrome.tabs.getSelected(null, function(tab) {
+    chrome.tabs.query({active: true}, function(tabs) {
       try {
         // If/when chrome.experimental.history is moved out of
         // experimental, this test needs to be updated.

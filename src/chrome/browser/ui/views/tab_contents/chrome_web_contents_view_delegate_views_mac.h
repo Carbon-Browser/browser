@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,7 @@ class ChromeWebContentsViewDelegateViewsMac
 
   // WebContentsViewDelegate:
   gfx::NativeWindow GetNativeWindow() override;
-  NSObject<RenderWidgetHostViewMacDelegate>* CreateRenderWidgetHostViewDelegate(
+  NSObject<RenderWidgetHostViewMacDelegate>* GetDelegateForHost(
       content::RenderWidgetHost* render_widget_host,
       bool is_popup) override;
   content::WebDragDestDelegate* GetDragDestDelegate() override;
@@ -47,8 +47,8 @@ class ChromeWebContentsViewDelegateViewsMac
   void ResetStoredFocus() override;
   bool Focus() override;
   bool TakeFocus(bool reverse) override;
-  void OnPerformDrop(const content::DropData& drop_data,
-                     DropCompletionCallback callback) override;
+  void OnPerformingDrop(const content::DropData& drop_data,
+                        DropCompletionCallback callback) override;
 
   // ContextMenuDelegate:
   std::unique_ptr<RenderViewContextMenuBase> BuildMenu(

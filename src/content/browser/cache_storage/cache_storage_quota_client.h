@@ -1,11 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_BROWSER_CACHE_STORAGE_CACHE_STORAGE_QUOTA_CLIENT_H_
 #define CONTENT_BROWSER_CACHE_STORAGE_CACHE_STORAGE_QUOTA_CLIENT_H_
 
-#include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "components/services/storage/public/mojom/cache_storage_control.mojom.h"
 #include "components/services/storage/public/mojom/quota_client.mojom.h"

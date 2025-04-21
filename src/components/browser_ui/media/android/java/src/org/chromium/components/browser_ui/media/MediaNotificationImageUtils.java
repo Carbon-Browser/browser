@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,9 +56,7 @@ public class MediaNotificationImageUtils {
         return paddedBitmap;
     }
 
-    /**
-     * @return The ideal size of the media image.
-     */
+    /** @return The ideal size of the media image. */
     public static int getIdealMediaImageSize() {
         return SysUtils.isLowEndDevice() ? LOW_IMAGE_SIZE_PX : HIGH_IMAGE_SIZE_PX;
     }
@@ -68,7 +66,8 @@ public class MediaNotificationImageUtils {
      * @return Whether |icon| is suitable as the media image, i.e. bigger than the minimal size.
      */
     public static boolean isBitmapSuitableAsMediaImage(Bitmap icon) {
-        return icon != null && icon.getWidth() >= MINIMAL_MEDIA_IMAGE_SIZE_PX
+        return icon != null
+                && icon.getWidth() >= MINIMAL_MEDIA_IMAGE_SIZE_PX
                 && icon.getHeight() >= MINIMAL_MEDIA_IMAGE_SIZE_PX;
     }
 }

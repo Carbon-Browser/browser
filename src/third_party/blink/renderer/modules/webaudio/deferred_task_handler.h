@@ -27,6 +27,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_WEBAUDIO_DEFERRED_TASK_HANDLER_H_
 
 #include <atomic>
+
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/lock.h"
@@ -63,8 +64,7 @@ class AudioSummingJunction;
 // - GC happens and it collects the BaseAudioContext before the task execution.
 //
 class MODULES_EXPORT DeferredTaskHandler final
-    : public ThreadSafeRefCounted<DeferredTaskHandler>,
-      public base::SupportsWeakPtr<DeferredTaskHandler> {
+    : public ThreadSafeRefCounted<DeferredTaskHandler> {
  public:
   static scoped_refptr<DeferredTaskHandler> Create(
       scoped_refptr<base::SingleThreadTaskRunner> task_runner);
@@ -289,6 +289,8 @@ class MODULES_EXPORT DeferredTaskHandler final
   mutable base::Lock automatic_pull_handlers_lock_;
 
   std::atomic<base::PlatformThreadId> audio_thread_;
+
+  base::WeakPtrFactory<DeferredTaskHandler> weak_ptr_factory_{this};
 };
 
 }  // namespace blink

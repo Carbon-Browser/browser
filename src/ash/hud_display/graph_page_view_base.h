@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "ash/hud_display/data_source.h"
 #include "ash/hud_display/legend.h"
+#include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
 #include "ui/views/view.h"
 
@@ -22,9 +23,9 @@ class ReferenceLines;
 
 // Interface for a single graph page.
 class GraphPageViewBase : public views::View {
- public:
-  METADATA_HEADER(GraphPageViewBase);
+  METADATA_HEADER(GraphPageViewBase, views::View)
 
+ public:
   GraphPageViewBase();
   GraphPageViewBase(const GraphPageViewBase&) = delete;
   GraphPageViewBase& operator=(const GraphPageViewBase&) = delete;
@@ -55,12 +56,12 @@ class GraphPageViewBase : public views::View {
   void OnButtonPressed();
 
   // Container for the |ReferenceLines| object.
-  views::View* reference_lines_container_ = nullptr;  // not owned
+  raw_ptr<views::View> reference_lines_container_ = nullptr;  // not owned
 
   // Container for the legend object.
-  views::View* legend_container_ = nullptr;              // not owned
-  views::ImageButton* legend_min_max_button_ = nullptr;  // not owned
-  Legend* legend_ = nullptr;                             // not owned
+  raw_ptr<views::View> legend_container_ = nullptr;              // not owned
+  raw_ptr<views::ImageButton> legend_min_max_button_ = nullptr;  // not owned
+  raw_ptr<Legend> legend_ = nullptr;                             // not owned
 
   SEQUENCE_CHECKER(ui_sequence_checker_);
 };

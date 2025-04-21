@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include "base/check.h"
+#include "base/containers/span.h"
 #include "base/strings/stringprintf.h"
 #include "third_party/hunspell/google/bdict.h"
 
@@ -454,7 +455,7 @@ std::string BDictWriter::GetBDict() const {
   // Write the MD5 digest of the affix information and the dictionary words at
   // the end of the BDic header.
   if (header->major_version >= 2)
-    base::MD5Sum(&ret[aff_offset], ret.size() - aff_offset, &header->digest);
+    base::MD5Sum(base::as_byte_span(ret).subspan(aff_offset), &header->digest);
 
   return ret;
 }

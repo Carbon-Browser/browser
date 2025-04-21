@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,14 @@
 
 #include <memory>
 
-#include "ash/services/nearby/public/mojom/nearby_connections.mojom.h"
-#include "ash/services/nearby/public/mojom/webrtc.mojom.h"
-#include "ash/services/nearby/public/mojom/webrtc_signaling_messenger.mojom.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_connections.mojom.h"
+#include "chromeos/ash/services/nearby/public/mojom/sharing.mojom.h"
+#include "chromeos/ash/services/nearby/public/mojom/webrtc.mojom.h"
+#include "chromeos/ash/services/nearby/public/mojom/webrtc_signaling_messenger.mojom.h"
 #include "mojo/public/cpp/bindings/shared_remote.h"
 #include "services/network/public/mojom/mdns_responder.mojom.h"
 #include "services/network/public/mojom/p2p.mojom.h"
@@ -25,9 +27,7 @@ namespace sharing {
 class IpcPacketSocketFactory;
 }  // namespace sharing
 
-namespace location {
-namespace nearby {
-namespace chrome {
+namespace nearby::chrome {
 
 class WebRtcMedium : public api::WebRtcMedium {
  public:
@@ -36,12 +36,11 @@ class WebRtcMedium : public api::WebRtcMedium {
   WebRtcMedium(
       const mojo::SharedRemote<network::mojom::P2PSocketManager>&
           socket_manager,
-      const mojo::SharedRemote<
-          location::nearby::connections::mojom::MdnsResponderFactory>&
+      const mojo::SharedRemote<::sharing::mojom::MdnsResponderFactory>&
           mdns_responder_factory,
-      const mojo::SharedRemote<sharing::mojom::IceConfigFetcher>&
+      const mojo::SharedRemote<::sharing::mojom::IceConfigFetcher>&
           ice_config_fetcher,
-      const mojo::SharedRemote<sharing::mojom::WebRtcSignalingMessenger>&
+      const mojo::SharedRemote<::sharing::mojom::WebRtcSignalingMessenger>&
           webrtc_signaling_messenger,
       scoped_refptr<base::SingleThreadTaskRunner> task_runner);
   ~WebRtcMedium() override;
@@ -50,9 +49,13 @@ class WebRtcMedium : public api::WebRtcMedium {
   const std::string GetDefaultCountryCode() override;
   void CreatePeerConnection(webrtc::PeerConnectionObserver* observer,
                             PeerConnectionCallback callback) override;
+  void CreatePeerConnection(
+      std::optional<webrtc::PeerConnectionFactoryInterface::Options> options,
+      webrtc::PeerConnectionObserver* observer,
+      PeerConnectionCallback callback) override;
   std::unique_ptr<api::WebRtcSignalingMessenger> GetSignalingMessenger(
-      absl::string_view self_id,
-      const connections::LocationHint& location_hint) override;
+      std::string_view self_id,
+      const location::nearby::connections::LocationHint& location_hint) override;
 
  private:
   void FetchIceServers(webrtc::PeerConnectionObserver* observer,
@@ -60,7 +63,7 @@ class WebRtcMedium : public api::WebRtcMedium {
   void OnIceServersFetched(
       webrtc::PeerConnectionObserver* observer,
       PeerConnectionCallback callback,
-      std::vector<sharing::mojom::IceServerPtr> ice_servers)
+      std::vector<::sharing::mojom::IceServerPtr> ice_servers)
       LOCKS_EXCLUDED(peer_connection_factory_lock_);
 
   void InitWebRTCThread(rtc::Thread** thread_to_set);
@@ -80,9 +83,10 @@ class WebRtcMedium : public api::WebRtcMedium {
   // These rtc::Thread* are jingle thread wrappers around the corresponding
   // base::Thread. They get cleaned up on thread shutdown so we don't need to
   // manage lifetime.
-  rtc::Thread* rtc_network_thread_ = nullptr;
-  rtc::Thread* rtc_signaling_thread_ = nullptr;
-  rtc::Thread* rtc_worker_thread_ = nullptr;
+  // RAW_PTR_EXCLUSION: Performance.
+  RAW_PTR_EXCLUSION rtc::Thread* rtc_network_thread_ = nullptr;
+  RAW_PTR_EXCLUSION rtc::Thread* rtc_signaling_thread_ = nullptr;
+  RAW_PTR_EXCLUSION rtc::Thread* rtc_worker_thread_ = nullptr;
 
   // Used to guard access to peer_connection_factory_.
   base::Lock peer_connection_factory_lock_;
@@ -92,13 +96,13 @@ class WebRtcMedium : public api::WebRtcMedium {
       peer_connection_factory_ GUARDED_BY(peer_connection_factory_lock_);
 
   mojo::SharedRemote<network::mojom::P2PSocketManager> p2p_socket_manager_;
-  mojo::SharedRemote<location::nearby::connections::mojom::MdnsResponderFactory>
+  mojo::SharedRemote<::sharing::mojom::MdnsResponderFactory>
       mdns_responder_factory_;
-  mojo::SharedRemote<sharing::mojom::IceConfigFetcher> ice_config_fetcher_;
-  mojo::SharedRemote<sharing::mojom::WebRtcSignalingMessenger>
+  mojo::SharedRemote<::sharing::mojom::IceConfigFetcher> ice_config_fetcher_;
+  mojo::SharedRemote<::sharing::mojom::WebRtcSignalingMessenger>
       webrtc_signaling_messenger_;
 
-  std::unique_ptr<sharing::IpcPacketSocketFactory> socket_factory_;
+  std::unique_ptr<::sharing::IpcPacketSocketFactory> socket_factory_;
   std::unique_ptr<rtc::NetworkManager> network_manager_;
 
   // This task runner is used to fetch ice servers and initialize the peer
@@ -108,8 +112,6 @@ class WebRtcMedium : public api::WebRtcMedium {
   base::WeakPtrFactory<WebRtcMedium> weak_ptr_factory_{this};
 };
 
-}  // namespace chrome
-}  // namespace nearby
-}  // namespace location
+}  // namespace nearby::chrome
 
 #endif  // CHROME_SERVICES_SHARING_NEARBY_PLATFORM_WEBRTC_H_

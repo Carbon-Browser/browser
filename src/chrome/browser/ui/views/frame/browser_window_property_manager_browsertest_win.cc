@@ -1,8 +1,9 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <objbase.h>
+
 #include <propkey.h>
 #include <shellapi.h>
 #include <shlobj.h>
@@ -11,8 +12,10 @@
 #include <string>
 
 #include "base/command_line.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/bind.h"
 #include "base/win/scoped_propvariant.h"
 #include "chrome/browser/apps/app_service/app_launch_params.h"
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
@@ -25,6 +28,7 @@
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_shortcut_manager_win.h"
+#include "chrome/browser/profiles/profile_test_util.h"
 #include "chrome/browser/profiles/profiles_state.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
@@ -110,17 +114,15 @@ void ValidateHostedAppWindowProperties(const Browser* browser,
 
   base::win::ScopedPropVariant prop_var;
   // The relaunch name should be the extension name.
-  EXPECT_EQ(S_OK,
-            pps->GetValue(PKEY_AppUserModel_RelaunchDisplayNameResource,
-                          prop_var.Receive()));
+  EXPECT_EQ(S_OK, pps->GetValue(PKEY_AppUserModel_RelaunchDisplayNameResource,
+                                prop_var.Receive()));
   EXPECT_EQ(VT_LPWSTR, prop_var.get().vt);
   EXPECT_EQ(base::UTF8ToWide(extension->name()), prop_var.get().pwszVal);
   prop_var.Reset();
 
   // The relaunch command should specify the profile and the app id.
-  EXPECT_EQ(
-      S_OK,
-      pps->GetValue(PKEY_AppUserModel_RelaunchCommand, prop_var.Receive()));
+  EXPECT_EQ(S_OK, pps->GetValue(PKEY_AppUserModel_RelaunchCommand,
+                                prop_var.Receive()));
   EXPECT_EQ(VT_LPWSTR, prop_var.get().vt);
   base::CommandLine cmd_line(
       base::CommandLine::FromString(prop_var.get().pwszVal));
@@ -134,9 +136,8 @@ void ValidateHostedAppWindowProperties(const Browser* browser,
   base::FilePath web_app_dir =
       web_app::GetOsIntegrationResourcesDirectoryForApp(
           browser->profile()->GetPath(), extension->id(), GURL());
-  EXPECT_EQ(S_OK,
-            pps->GetValue(PKEY_AppUserModel_RelaunchIconResource,
-                          prop_var.Receive()));
+  EXPECT_EQ(S_OK, pps->GetValue(PKEY_AppUserModel_RelaunchIconResource,
+                                prop_var.Receive()));
   EXPECT_EQ(VT_LPWSTR, prop_var.get().vt);
   EXPECT_EQ(
       AddIdToIconPath(web_app::internals::GetIconFilePath(
@@ -152,7 +153,7 @@ void ValidateHostedAppWindowProperties(const Browser* browser,
 // having --user-data-dir specified.
 class BrowserTestWithProfileShortcutManager : public InProcessBrowserTest {
  public:
-  BrowserTestWithProfileShortcutManager() {}
+  BrowserTestWithProfileShortcutManager() = default;
 
   BrowserTestWithProfileShortcutManager(
       const BrowserTestWithProfileShortcutManager&) = delete;
@@ -172,16 +173,17 @@ IN_PROC_BROWSER_TEST_F(BrowserTestWithProfileShortcutManager,
 
   // If multiprofile mode is not enabled, we can't test the behavior when there
   // are multiple profiles.
-  if (!profiles::IsMultipleProfilesEnabled())
+  if (!profiles::IsMultipleProfilesEnabled()) {
     return;
+  }
 
   // Two profile case. Both profile names should be shown.
   ProfileManager* profile_manager = g_browser_process->profile_manager();
 
   base::FilePath path_profile2 =
       profile_manager->GenerateNextProfileDirectoryPath();
-  profile_manager->CreateProfileAsync(path_profile2,
-                                      ProfileManager::CreateCallback());
+  profiles::testing::CreateProfileSync(profile_manager, path_profile2);
+
   // The default profile's name should be part of the relaunch name.
   ValidateBrowserWindowProperties(
       browser(), base::UTF8ToUTF16(browser()->profile()->GetProfileUserName()));
@@ -202,12 +204,16 @@ IN_PROC_BROWSER_TEST_F(BrowserWindowPropertyManagerTest, DISABLED_HostedApp) {
       LoadExtension(test_data_dir_.AppendASCII("app/"));
   EXPECT_TRUE(extension);
 
+  base::RunLoop done;
   apps::AppServiceProxyFactory::GetForProfile(browser()->profile())
       ->BrowserAppLauncher()
-      ->LaunchAppWithParams(apps::AppLaunchParams(
-          extension->id(), apps::LaunchContainer::kLaunchContainerWindow,
-          WindowOpenDisposition::NEW_FOREGROUND_TAB,
-          apps::LaunchSource::kFromTest));
+      ->LaunchAppWithParams(
+          apps::AppLaunchParams(extension->id(),
+                                apps::LaunchContainer::kLaunchContainerWindow,
+                                WindowOpenDisposition::NEW_FOREGROUND_TAB,
+                                apps::LaunchSource::kFromTest),
+          base::IgnoreArgs<content::WebContents*>(done.QuitClosure()));
+  done.Run();
 
   // Check that the new browser has an app name.
   // The launch should have created a new browser.
@@ -215,9 +221,10 @@ IN_PROC_BROWSER_TEST_F(BrowserWindowPropertyManagerTest, DISABLED_HostedApp) {
 
   // Find the new browser.
   Browser* app_browser = nullptr;
-  for (auto* b : *BrowserList::GetInstance()) {
-    if (b != browser())
+  for (Browser* b : *BrowserList::GetInstance()) {
+    if (b != browser()) {
       app_browser = b;
+    }
   }
   ASSERT_TRUE(app_browser);
   ASSERT_TRUE(app_browser != browser());

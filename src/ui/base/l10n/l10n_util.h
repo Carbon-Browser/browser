@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,11 @@
 #include <stdint.h>
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/component_export.h"
+#include "base/containers/span.h"
 #include "build/build_config.h"
 
 #if BUILDFLAG(IS_APPLE)
@@ -24,10 +26,10 @@
 namespace l10n_util {
 
 // Takes normalized locale as |locale|. Returns language part (before '-').
-COMPONENT_EXPORT(UI_BASE) std::string GetLanguage(const std::string& locale);
+COMPONENT_EXPORT(UI_BASE) std::string GetLanguage(std::string_view locale);
 
 // Takes normalized locale as |locale|. Returns country part (after '-').
-COMPONENT_EXPORT(UI_BASE) std::string GetCountry(const std::string& locale);
+COMPONENT_EXPORT(UI_BASE) std::string GetCountry(std::string_view locale);
 
 // This method translates a generic locale name to one of the locally defined
 // ones. This method returns true if it succeeds.
@@ -66,21 +68,35 @@ std::string GetApplicationLocale(const std::string& pref_locale);
 // Returns true if a display name for |locale| is available in the locale
 // |display_locale|.
 COMPONENT_EXPORT(UI_BASE)
-bool IsLocaleNameTranslated(const char* locale,
-                            const std::string& display_locale);
+bool IsLocaleNameTranslated(std::string_view locale,
+                            std::string_view display_locale);
+
+// This method returns the display name of the `locale` code in `display_locale`
+// without the country. For example, for `locale` = "en-US" and `display_locale`
+// = "en", it returns "English" in English, per "en". Chrome has different
+// strings for some languages depending on the locale. To get the display name
+// of `locale` in the UI language of Chrome, `display_locale` can be set to the
+// return value of g_browser_process->GetApplicationLocale() in the UI thread.
+// If `is_for_ui` is true, U+200F is appended so that it can be rendered
+// properly in a RTL Chrome.
+COMPONENT_EXPORT(UI_BASE)
+std::u16string GetDisplayNameForLocaleWithoutCountry(
+    std::string_view locale,
+    std::string_view display_locale,
+    bool is_for_ui,
+    bool disallow_default = false);
 
 // This method returns the display name of the locale code in |display_locale|.
-
-// For example, for |locale| = "fr" and |display_locale| = "en",
-// it returns "French". To get the display name of
+// For example, for |locale| = "en-US" and |display_locale| = "en",
+// it returns "English (United States)". To get the display name of
 // |locale| in the UI language of Chrome, |display_locale| can be
 // set to the return value of g_browser_process->GetApplicationLocale()
 // in the UI thread.
 // If |is_for_ui| is true, U+200F is appended so that it can be
 // rendered properly in a RTL Chrome.
 COMPONENT_EXPORT(UI_BASE)
-std::u16string GetDisplayNameForLocale(const std::string& locale,
-                                       const std::string& display_locale,
+std::u16string GetDisplayNameForLocale(std::string_view locale,
+                                       std::string_view display_locale,
                                        bool is_for_ui,
                                        bool disallow_default = false);
 
@@ -264,20 +280,29 @@ void GetAcceptLanguagesForLocale(const std::string& display_locale,
 COMPONENT_EXPORT(UI_BASE)
 void GetAcceptLanguages(std::vector<std::string>* locale_codes);
 
-// Returns true if |locale| is in a predefined AcceptLanguageList and
+// Returns true if |locale| is in a predefined |AcceptLanguageList|.
+COMPONENT_EXPORT(UI_BASE)
+bool IsPossibleAcceptLanguage(std::string_view locale);
+
+// Returns true if |locale| is in a predefined |AcceptLanguageList| and
 // a display name for the |locale| is available in the locale |display_locale|.
 COMPONENT_EXPORT(UI_BASE)
-bool IsLanguageAccepted(const std::string& display_locale,
-                        const std::string& locale);
+bool IsAcceptLanguageDisplayable(const std::string& display_locale,
+                                 const std::string& locale);
+
+// Filters the input vector of languages. Returns only those in the
+// |AcceptLanguageList|.
+COMPONENT_EXPORT(UI_BASE)
+std::vector<std::string> KeepAcceptedLanguages(
+    base::span<const std::string> languages);
 
 // Returns the preferred size of the contents view of a window based on
 // designer given constraints which might dependent on the language used.
 COMPONENT_EXPORT(UI_BASE)
 int GetLocalizedContentsWidthInPixels(int pixel_resource_id);
 
-COMPONENT_EXPORT(UI_BASE) const char* const* GetAcceptLanguageListForTesting();
-
-COMPONENT_EXPORT(UI_BASE) size_t GetAcceptLanguageListSizeForTesting();
+COMPONENT_EXPORT(UI_BASE)
+std::vector<std::string_view> GetAcceptLanguageListForTesting();
 
 COMPONENT_EXPORT(UI_BASE) const char* const* GetPlatformLocalesForTesting();
 

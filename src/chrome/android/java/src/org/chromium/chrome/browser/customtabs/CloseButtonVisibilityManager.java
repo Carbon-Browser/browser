@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,22 +9,15 @@ import android.graphics.drawable.Drawable;
 import androidx.annotation.Nullable;
 
 import org.chromium.chrome.browser.browserservices.intents.BrowserServicesIntentDataProvider;
-import org.chromium.chrome.browser.dependency_injection.ActivityScope;
 import org.chromium.chrome.browser.toolbar.ToolbarManager;
 
-import javax.inject.Inject;
-
-/**
- * Manages the visibility of the close button.
- */
-@ActivityScope
+/** Manages the visibility of the close button. */
 public class CloseButtonVisibilityManager {
     private final Drawable mCloseButtonDrawable;
 
     private @Nullable ToolbarManager mToolbarManager;
     private boolean mIsVisible = true;
 
-    @Inject
     public CloseButtonVisibilityManager(BrowserServicesIntentDataProvider intentDataProvider) {
         mCloseButtonDrawable = intentDataProvider.getCloseButtonDrawable();
     }

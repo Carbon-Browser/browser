@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -225,7 +225,7 @@
       {
         "name": "openSettings",
         "type": "function",
-        "description": "Opens chrome://os-settings/osLanguages page.",
+        "description": "Opens chrome://os-settings/osLanguages/input page.",
         "parameters": []
       },
       {
@@ -456,6 +456,11 @@
             "$ref": "ClipboardItem"
           }
         ]
+      },
+      {
+        "name": "onColorProviderChanged",
+        "type": "function",
+        "description": "Fired when the color provider of virtual keyboard window has changed."
       }
     ]
   }

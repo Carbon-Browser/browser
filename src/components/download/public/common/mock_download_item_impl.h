@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,14 @@
 #define COMPONENTS_DOWNLOAD_PUBLIC_COMMON_MOCK_DOWNLOAD_ITEM_IMPL_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "components/download/public/common/download_create_info.h"
 #include "components/download/public/common/download_file.h"
 #include "components/download/public/common/download_item_impl.h"
-#include "components/download/public/common/download_schedule.h"
 #include "testing/gmock/include/gmock/gmock.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/origin.h"
 
 namespace download {
@@ -27,15 +26,7 @@ class MockDownloadItemImpl : public DownloadItemImpl {
   explicit MockDownloadItemImpl(DownloadItemImplDelegate* delegate);
   ~MockDownloadItemImpl() override;
 
-  MOCK_METHOD8(OnDownloadTargetDetermined,
-               void(const base::FilePath&,
-                    TargetDisposition,
-                    DownloadDangerType,
-                    MixedContentStatus,
-                    const base::FilePath&,
-                    const base::FilePath&,
-                    const std::string&,
-                    DownloadInterruptReason));
+  MOCK_METHOD1(OnDownloadTargetDetermined, void(DownloadTargetInfo));
   MOCK_METHOD1(AddObserver, void(DownloadItem::Observer*));
   MOCK_METHOD1(RemoveObserver, void(DownloadItem::Observer*));
   MOCK_METHOD0(UpdateObservers, void());
@@ -84,7 +75,7 @@ class MockDownloadItemImpl : public DownloadItemImpl {
   MOCK_CONST_METHOD0(GetReferrerUrl, const GURL&());
   MOCK_CONST_METHOD0(GetTabUrl, const GURL&());
   MOCK_CONST_METHOD0(GetTabReferrerUrl, const GURL&());
-  MOCK_CONST_METHOD0(GetRequestInitiator, const absl::optional<url::Origin>&());
+  MOCK_CONST_METHOD0(GetRequestInitiator, const std::optional<url::Origin>&());
   MOCK_CONST_METHOD0(GetSuggestedFilename, std::string());
   MOCK_CONST_METHOD0(GetContentDisposition, std::string());
   MOCK_CONST_METHOD0(GetMimeType, std::string());
@@ -106,9 +97,9 @@ class MockDownloadItemImpl : public DownloadItemImpl {
   MOCK_METHOD1(SetOpenWhenComplete, void(bool));
   MOCK_CONST_METHOD0(GetFileExternallyRemoved, bool());
   MOCK_CONST_METHOD0(GetDangerType, DownloadDangerType());
-  MOCK_CONST_METHOD0(GetMixedContentStatus, MixedContentStatus());
+  MOCK_CONST_METHOD0(GetInsecureDownloadStatus, InsecureDownloadStatus());
   MOCK_CONST_METHOD0(IsDangerous, bool());
-  MOCK_CONST_METHOD0(IsMixedContent, bool());
+  MOCK_CONST_METHOD0(IsInsecure, bool());
   MOCK_METHOD0(GetAutoOpened, bool());
   MOCK_CONST_METHOD0(GetForcedFilePath, const base::FilePath&());
   MOCK_CONST_METHOD0(HasUserGesture, bool());
@@ -122,6 +113,7 @@ class MockDownloadItemImpl : public DownloadItemImpl {
   MOCK_CONST_METHOD0(GetLastReason, DownloadInterruptReason());
   MOCK_CONST_METHOD0(GetFileNameToReportUser, base::FilePath());
   MOCK_METHOD1(SetDisplayName, void(const base::FilePath&));
+  MOCK_CONST_METHOD0(IsTransient, bool());
   // May be called when vlog is on.
   std::string DebugString(bool verbose) const override { return std::string(); }
 };

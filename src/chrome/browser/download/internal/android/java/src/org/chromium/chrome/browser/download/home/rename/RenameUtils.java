@@ -1,16 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 package org.chromium.chrome.browser.download.home.rename;
 
-import androidx.annotation.VisibleForTesting;
+import org.jni_zero.JniType;
+import org.jni_zero.NativeMethods;
 
 import org.chromium.base.FileUtils;
-import org.chromium.base.annotations.NativeMethods;
 
-/**
- * A class containing some utility static methods for rename.
- */
+/** A class containing some utility static methods for rename. */
 public class RenameUtils {
     private static boolean sIsDisabledNativeForTesting;
 
@@ -24,20 +22,19 @@ public class RenameUtils {
      * the path "foo/bar.tar.gz".
      */
     public static String getFileExtension(String fileName) {
-        return sIsDisabledNativeForTesting ? FileUtils.getExtension(fileName)
-                                           : RenameUtilsJni.get().getFileExtension(fileName);
+        return sIsDisabledNativeForTesting
+                ? FileUtils.getExtension(fileName)
+                : RenameUtilsJni.get().getFileExtension(fileName);
     }
 
-    /**
-     * Disables the native APIs. This is only intended for testing purposes.
-     */
-    @VisibleForTesting
+    /** Disables the native APIs. This is only intended for testing purposes. */
     public static void disableNativeForTesting() {
         sIsDisabledNativeForTesting = true;
     }
 
     @NativeMethods
     interface Natives {
-        String getFileExtension(String fileName);
+        @JniType("std::string")
+        String getFileExtension(@JniType("std::string") String fileName);
     }
 }

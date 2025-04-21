@@ -19,7 +19,7 @@ There are two ways to enable UI DevTools:
     * If you want to use a different port, add the port number in the flag
     `--enable-ui-devtools=<port>`.
 
-2. Enable `ui-debug-tools` feature flag from `chrome://flags`
+2. Enable `enable-ui-devtools` feature flag from `chrome://flags`
 
 Once enabled, go to `chrome://inspect#native-ui` and click the `Inspect Native UI`
 button to launch the DevTools front-end in a separate tab.
@@ -91,18 +91,14 @@ is read in from local files.
 
 ![sources panel]
 
-### View Bounds Highlighting
-
-Red border rectangles around each View element can be drawn using the command Ctrl+R (Meta+R for mac).
-The rectangles can be toggled off and on using the same command.
-
-![debug bounds rectangles]
-
 ### Bubble Locking
 
 In order to inspect a bubble, the command Ctrl+Shift+R (Meta+Shift+R for mac) locks bubbles to prevent
 them from dismissing upon losing focus. This allows a bubble's inner elements to be inspected. Bubble
 locking can be toggled off and on using the same command.
+
+Note: Before hitting Ctrl+Shift+R (Meta+Shift+R for mac), the UI devtools window
+has to be the active window, otherwise it will cause a page refresh.
 
 ![lock and inspect bubble]
 

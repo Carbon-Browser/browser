@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,13 @@
 
 #include <algorithm>
 
+#include "base/containers/contains.h"
 #include "base/feature_list.h"
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
+#include "base/numerics/safe_conversions.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/font_access/font_enumeration_table.pb.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy.mojom-blink.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_throw_dom_exception.h"
@@ -21,7 +23,6 @@
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/modules/font_access/font_metadata.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
-#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 
 namespace blink {
 
@@ -37,23 +38,19 @@ const char kFeaturePolicyBlocked[] =
 const char FontAccess::kSupplementName[] = "FontAccess";
 
 FontAccess::FontAccess(LocalDOMWindow* window)
-    : ExecutionContextLifecycleObserver(window),
-      Supplement<LocalDOMWindow>(*window) {}
+    : Supplement<LocalDOMWindow>(*window), remote_(window) {}
 
 void FontAccess::Trace(blink::Visitor* visitor) const {
-  ExecutionContextLifecycleObserver::Trace(visitor);
+  visitor->Trace(remote_);
   Supplement<LocalDOMWindow>::Trace(visitor);
 }
 
-void FontAccess::ContextDestroyed() {
-  remote_.reset();
-}
-
 // static
-ScriptPromise FontAccess::queryLocalFonts(ScriptState* script_state,
-                                          LocalDOMWindow& window,
-                                          const QueryOptions* options,
-                                          ExceptionState& exception_state) {
+ScriptPromise<IDLSequence<FontMetadata>> FontAccess::queryLocalFonts(
+    ScriptState* script_state,
+    LocalDOMWindow& window,
+    const QueryOptions* options,
+    ExceptionState& exception_state) {
   DCHECK(ExecutionContext::From(script_state)->IsContextThread());
   return From(&window)->QueryLocalFontsImpl(script_state, options,
                                             exception_state);
@@ -69,48 +66,52 @@ FontAccess* FontAccess::From(LocalDOMWindow* window) {
   return supplement;
 }
 
-ScriptPromise FontAccess::QueryLocalFontsImpl(ScriptState* script_state,
-                                              const QueryOptions* options,
-                                              ExceptionState& exception_state) {
+ScriptPromise<IDLSequence<FontMetadata>> FontAccess::QueryLocalFontsImpl(
+    ScriptState* script_state,
+    const QueryOptions* options,
+    ExceptionState& exception_state) {
   if (!base::FeatureList::IsEnabled(blink::features::kFontAccess)) {
     exception_state.ThrowDOMException(DOMExceptionCode::kNotSupportedError,
                                       "Font Access feature is not supported.");
-    return ScriptPromise();
+    return ScriptPromise<IDLSequence<FontMetadata>>();
   }
   if (!script_state->ContextIsValid()) {
     exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
                                       "The execution context is not valid.");
-    return ScriptPromise();
+    return ScriptPromise<IDLSequence<FontMetadata>>();
   }
   ExecutionContext* context = ExecutionContext::From(script_state);
   if (!context->IsFeatureEnabled(
           mojom::blink::PermissionsPolicyFeature::kLocalFonts,
           ReportOptions::kReportOnFailure)) {
     exception_state.ThrowSecurityError(kFeaturePolicyBlocked);
-    return ScriptPromise();
+    return ScriptPromise<IDLSequence<FontMetadata>>();
   }
 
   // Connect to font access manager remote if not bound already.
   if (!remote_.is_bound()) {
     context->GetBrowserInterfaceBroker().GetInterface(
-        remote_.BindNewPipeAndPassReceiver());
+        remote_.BindNewPipeAndPassReceiver(
+            context->GetTaskRunner(TaskType::kFontLoading)));
     remote_.set_disconnect_handler(
-        WTF::Bind(&FontAccess::OnDisconnect, WrapWeakPersistent(this)));
+        WTF::BindOnce(&FontAccess::OnDisconnect, WrapWeakPersistent(this)));
   }
   DCHECK(remote_.is_bound());
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
-  ScriptPromise promise = resolver->Promise();
+  auto* resolver =
+      MakeGarbageCollected<ScriptPromiseResolver<IDLSequence<FontMetadata>>>(
+          script_state, exception_state.GetContext());
+  auto promise = resolver->Promise();
   remote_->EnumerateLocalFonts(resolver->WrapCallbackInScriptScope(
-      WTF::Bind(&FontAccess::DidGetEnumerationResponse,
-                WrapWeakPersistent(this), WrapPersistent(options))));
+      WTF::BindOnce(&FontAccess::DidGetEnumerationResponse,
+                    WrapWeakPersistent(this), WrapPersistent(options))));
 
   return promise;
 }
 
 void FontAccess::DidGetEnumerationResponse(
     const QueryOptions* options,
-    ScriptPromiseResolver* resolver,
+    ScriptPromiseResolver<IDLSequence<FontMetadata>>* resolver,
     FontEnumerationStatus status,
     base::ReadOnlySharedMemoryRegion region) {
   if (!resolver->GetScriptState()->ContextIsValid())
@@ -150,20 +151,22 @@ void FontAccess::DidGetEnumerationResponse(
   }
 
   HeapVector<Member<FontMetadata>> entries;
-  table.ParseFromArray(mapping.memory(), static_cast<int>(mapping.size()));
+  base::span<const uint8_t> mapped_mem(mapping);
+  table.ParseFromArray(mapped_mem.data(),
+                       base::checked_cast<int>(mapped_mem.size()));
   for (const auto& element : table.fonts()) {
     // If the optional postscript name filter is set in QueryOptions,
     // only allow items that match.
     if (hasPostscriptNameFilter &&
-        selection_utf8.find(element.postscript_name().c_str()) ==
-            selection_utf8.end())
+        !base::Contains(selection_utf8, element.postscript_name().c_str())) {
       continue;
+    }
 
     auto entry = FontEnumerationEntry{
-        .postscript_name = String::FromUTF8(element.postscript_name().c_str()),
-        .full_name = String::FromUTF8(element.full_name().c_str()),
-        .family = String::FromUTF8(element.family().c_str()),
-        .style = String::FromUTF8(element.style().c_str()),
+        .postscript_name = String::FromUTF8(element.postscript_name()),
+        .full_name = String::FromUTF8(element.full_name()),
+        .family = String::FromUTF8(element.family()),
+        .style = String::FromUTF8(element.style()),
     };
     entries.push_back(FontMetadata::Create(std::move(entry)));
   }
@@ -172,7 +175,7 @@ void FontAccess::DidGetEnumerationResponse(
 }
 
 bool FontAccess::RejectPromiseIfNecessary(const FontEnumerationStatus& status,
-                                          ScriptPromiseResolver* resolver) {
+                                          ScriptPromiseResolverBase* resolver) {
   switch (status) {
     case FontEnumerationStatus::kOk:
     case FontEnumerationStatus::kPermissionDenied:

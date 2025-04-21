@@ -1,30 +1,35 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/loader/static_data_navigation_body_loader.h"
-#include "third_party/blink/public/mojom/loader/code_cache.mojom.h"
 
 namespace blink {
 
-StaticDataNavigationBodyLoader::StaticDataNavigationBodyLoader() {}
+// static
+std::unique_ptr<StaticDataNavigationBodyLoader>
+StaticDataNavigationBodyLoader::CreateWithData(
+    scoped_refptr<SharedBuffer> data) {
+  auto body_loader = std::make_unique<StaticDataNavigationBodyLoader>();
+  body_loader->data_ = std::move(data);
+  if (!body_loader->data_) {
+    body_loader->data_ = SharedBuffer::Create();
+  }
+  body_loader->Finish();
+  return body_loader;
+}
+
+StaticDataNavigationBodyLoader::StaticDataNavigationBodyLoader() = default;
 
 StaticDataNavigationBodyLoader::~StaticDataNavigationBodyLoader() = default;
 
-void StaticDataNavigationBodyLoader::Write(const char* data, size_t size) {
+void StaticDataNavigationBodyLoader::Write(base::span<const char> data) {
   DCHECK(!received_all_data_);
-  if (!data_)
-    data_ = SharedBuffer::Create(data, size);
-  else
-    data_->Append(data, size);
-  Continue();
-}
-
-void StaticDataNavigationBodyLoader::Write(const SharedBuffer& data) {
-  DCHECK(!received_all_data_);
-  if (!data_)
-    data_ = SharedBuffer::Create();
-  data_->Append(data);
+  if (!data_) {
+    data_ = SharedBuffer::Create(data);
+  } else {
+    data_->Append(data);
+  }
   Continue();
 }
 
@@ -40,23 +45,11 @@ void StaticDataNavigationBodyLoader::SetDefersLoading(LoaderFreezeMode mode) {
 }
 
 void StaticDataNavigationBodyLoader::StartLoadingBody(
-    WebNavigationBodyLoader::Client* client,
-    CodeCacheHost* code_cache_host) {
+    WebNavigationBodyLoader::Client* client) {
   DCHECK(!is_in_continue_);
   client_ = client;
-
-  if (client_) {
-    auto weak_self = weak_factory_.GetWeakPtr();
-    client_->BodyCodeCacheReceived(mojo_base::BigBuffer());
-    if (!weak_self)
-      return;
-  }
-
   Continue();
 }
-
-void StaticDataNavigationBodyLoader::StartLoadingCodeCache(
-    CodeCacheHost* code_cache_host) {}
 
 void StaticDataNavigationBodyLoader::Continue() {
   if (freeze_mode_ != LoaderFreezeMode::kNone || !client_ || is_in_continue_)
@@ -99,8 +92,7 @@ void StaticDataNavigationBodyLoader::Continue() {
     client_ = nullptr;
     client->BodyLoadingFinished(
         base::TimeTicks::Now(), total_encoded_data_length_,
-        total_encoded_data_length_, total_encoded_data_length_, false,
-        absl::nullopt);
+        total_encoded_data_length_, total_encoded_data_length_, std::nullopt);
     // |this| can be destroyed from BodyLoadingFinished.
     if (!weak_self)
       return;

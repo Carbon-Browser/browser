@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <memory>
 
 #include "base/containers/flat_map.h"
+#include "base/not_fatal_until.h"
 #include "ui/gfx/win/window_impl.h"
 
 namespace gpu {
@@ -44,7 +45,7 @@ gfx::AcceleratedWidget CreateNativeWindow(const gfx::Rect& bounds) {
 
 void DestroyNativeWindow(gfx::AcceleratedWidget window) {
   auto it = g_windows_.find(window);
-  DCHECK(it != g_windows_.end());
+  CHECK(it != g_windows_.end(), base::NotFatalUntil::M130);
 
   it->second.reset();
   g_windows_.erase(it);

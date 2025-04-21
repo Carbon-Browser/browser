@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <stdint.h>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "chrome/browser/sync_file_system/drive_backend/drive_backend_constants.h"
 #include "chrome/browser/sync_file_system/drive_backend/folder_creator.h"
@@ -39,8 +39,7 @@ RegisterAppTask::RegisterAppTask(SyncEngineContext* sync_context,
       create_folder_retry_count_(0),
       app_id_(app_id) {}
 
-RegisterAppTask::~RegisterAppTask() {
-}
+RegisterAppTask::~RegisterAppTask() = default;
 
 bool RegisterAppTask::CanFinishImmediately() {
   return metadata_database() &&
@@ -128,7 +127,6 @@ bool RegisterAppTask::FilterCandidates(const TrackerIDSet& trackers,
     if (!metadata_database()->FindTrackerByTrackerID(
             *itr, tracker.get())) {
       NOTREACHED();
-      continue;
     }
 
     FileMetadata file;
@@ -136,12 +134,11 @@ bool RegisterAppTask::FilterCandidates(const TrackerIDSet& trackers,
     DCHECK(tracker->has_synced_details());
 
     if (!metadata_database()->FindFileByFileID(tracker->file_id(), &file)) {
-      NOTREACHED();
       // The parent folder is sync-root, whose contents are fetched in
       // initialization sequence.
       // So at this point, direct children of sync-root should have
       // FileMetadata.
-      continue;
+      NOTREACHED();
     }
 
     if (file.details().file_kind() != FILE_KIND_FOLDER)

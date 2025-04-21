@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,7 @@ class IndexedBufferBindingHostTest : public GpuServiceTest {
 
  protected:
   void SetUp() override {
-    GpuServiceTest::SetUpWithGLVersion("4.1", "");
+    GpuServiceTest::SetUpWithGLVersion("OpenGL ES 3.0", "");
   }
 
   void TearDown() override {

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,13 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/offline_pages/core/model/add_page_task.h"
 #include "components/offline_pages/core/model/get_pages_task.h"
 #include "components/offline_pages/core/offline_page_types.h"
@@ -39,7 +39,7 @@ int64_t GetPageCountSync(sql::Database* db) {
 OfflinePageMetadataStoreTestUtil::OfflinePageMetadataStoreTestUtil()
     : store_ptr_(nullptr) {}
 
-OfflinePageMetadataStoreTestUtil::~OfflinePageMetadataStoreTestUtil() {}
+OfflinePageMetadataStoreTestUtil::~OfflinePageMetadataStoreTestUtil() = default;
 
 void OfflinePageMetadataStoreTestUtil::BuildStore() {
   if (!temp_directory_.IsValid() && !temp_directory_.CreateUniqueTempDir()) {
@@ -48,19 +48,20 @@ void OfflinePageMetadataStoreTestUtil::BuildStore() {
   }
 
   store_ = std::make_unique<OfflinePageMetadataStore>(
-      base::ThreadTaskRunnerHandle::Get(), temp_directory_.GetPath());
+      base::SingleThreadTaskRunner::GetCurrentDefault(),
+      temp_directory_.GetPath());
   store_ptr_ = store_.get();
 }
 
 void OfflinePageMetadataStoreTestUtil::BuildStoreInMemory() {
   store_ = std::make_unique<OfflinePageMetadataStore>(
-      base::ThreadTaskRunnerHandle::Get());
+      base::SingleThreadTaskRunner::GetCurrentDefault());
   store_ptr_ = store_.get();
 }
 
 void OfflinePageMetadataStoreTestUtil::DeleteStore() {
-  store_.reset();
   store_ptr_ = nullptr;
+  store_.reset();
 }
 
 std::unique_ptr<OfflinePageMetadataStore>
@@ -103,12 +104,13 @@ OfflinePageMetadataStoreTestUtil::GetPageByOfflineId(int64_t offline_id) {
   OfflinePageItem* page = nullptr;
   auto task = std::make_unique<GetPagesTask>(
       store(), criteria,
-      base::BindOnce(base::BindLambdaForTesting(
+      base::BindLambdaForTesting(
           [&](const std::vector<OfflinePageItem>& cb_pages) {
-            if (!cb_pages.empty())
+            if (!cb_pages.empty()) {
               page = new OfflinePageItem(cb_pages[0]);
+            }
             run_loop.Quit();
-          })));
+          }));
   task->Execute(base::DoNothing());
   run_loop.Run();
   return base::WrapUnique<OfflinePageItem>(page);

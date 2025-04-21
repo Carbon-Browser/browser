@@ -1,8 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/global_media_controls/media_notification_device_provider_impl.h"
+
+#include <algorithm>
 
 #include "base/ranges/algorithm.h"
 #include "chrome/browser/ui/global_media_controls/media_notification_device_monitor.h"
@@ -16,15 +18,14 @@ namespace {
 // overwritten with |media::AudioDeviceDescription::kDefaultDeviceId|.
 void MaybeRemoveDefaultDevice(media::AudioDeviceDescriptions& descriptions) {
   // Determine which of the audio devices is the fallback "default" device.
-  auto default_device_it =
-      base::ranges::find_if(descriptions, [](const auto& description) {
-        return description.unique_id ==
-               media::AudioDeviceDescription::kDefaultDeviceId;
-      });
+  auto default_device_it = base::ranges::find(
+      descriptions, media::AudioDeviceDescription::kDefaultDeviceId,
+      &media::AudioDeviceDescription::unique_id);
 
   // If there is no default device, there is nothing to remove.
-  if (default_device_it == descriptions.end())
+  if (default_device_it == descriptions.end()) {
     return;
+  }
 
   // If name of the device associated with the default id is known, the default
   // device description will contain that name prefixed by a localized string.
@@ -36,9 +37,9 @@ void MaybeRemoveDefaultDevice(media::AudioDeviceDescriptions& descriptions) {
   // the following prefix.
   const std::string default_device_name_prefix =
       media::AudioDeviceDescription::GetDefaultDeviceName() + " - ";
-  if (std::equal(default_device_name_prefix.cbegin(),
-                 default_device_name_prefix.cend(),
-                 default_device_it->device_name.cbegin())) {
+
+  if (base::StartsWith(default_device_it->device_name,
+                       default_device_name_prefix)) {
     std::string real_default_device_name =
         default_device_it->device_name.substr(
             default_device_name_prefix.size());
@@ -75,8 +76,9 @@ MediaNotificationDeviceProviderImpl::MediaNotificationDeviceProviderImpl(
 }
 
 MediaNotificationDeviceProviderImpl::~MediaNotificationDeviceProviderImpl() {
-  if (monitor_)
+  if (monitor_) {
     monitor_->RemoveDevicesChangedObserver(this);
+  }
 }
 
 base::CallbackListSubscription
@@ -87,18 +89,21 @@ MediaNotificationDeviceProviderImpl::RegisterOutputDeviceDescriptionsCallback(
     monitor_->AddDevicesChangedObserver(this);
   }
   monitor_->StartMonitoring();
-  if (has_device_list_)
+  if (has_device_list_) {
     cb.Run(audio_device_descriptions_);
+  }
   auto subscription = output_device_callback_list_.Add(std::move(cb));
-  if (!has_device_list_)
+  if (!has_device_list_) {
     GetDevices();
+  }
   return subscription;
 }
 
 void MediaNotificationDeviceProviderImpl::GetOutputDeviceDescriptions(
     media::AudioSystem::OnDeviceDescriptionsCallback cb) {
-  if (!audio_system_)
+  if (!audio_system_) {
     audio_system_ = content::CreateAudioSystemForAudioService();
+  }
   audio_system_->GetDeviceDescriptions(
       /*for_input=*/false,
       base::BindOnce(
@@ -115,8 +120,9 @@ void MediaNotificationDeviceProviderImpl::OnDevicesChanged() {
 }
 
 void MediaNotificationDeviceProviderImpl::GetDevices() {
-  if (is_querying_for_output_devices_)
+  if (is_querying_for_output_devices_) {
     return;
+  }
   is_querying_for_output_devices_ = true;
   GetOutputDeviceDescriptions(
       base::BindOnce(&MediaNotificationDeviceProviderImpl::NotifySubscribers,
@@ -132,6 +138,7 @@ void MediaNotificationDeviceProviderImpl::NotifySubscribers(
 }
 
 void MediaNotificationDeviceProviderImpl::OnSubscriberRemoved() {
-  if (output_device_callback_list_.empty())
+  if (output_device_callback_list_.empty()) {
     monitor_->StopMonitoring();
+  }
 }

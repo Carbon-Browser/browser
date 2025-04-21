@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,17 +7,20 @@
  * with the secure DNS setting to configure custom servers. It is based on
  * `home-url-input`.
  */
+import 'chrome://resources/cr_elements/cr_textarea/cr_textarea.js';
+
+import type {PrivacyPageBrowserProxy} from '/shared/settings/privacy_page/privacy_page_browser_proxy.js';
+import {PrivacyPageBrowserProxyImpl} from '/shared/settings/privacy_page/privacy_page_browser_proxy.js';
+import type {CrTextareaElement} from 'chrome://resources/cr_elements/cr_textarea/cr_textarea.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {SettingsTextareaElement} from '../controls/settings_textarea';
 import {loadTimeData} from '../i18n_setup.js';
 
-import {PrivacyPageBrowserProxy, PrivacyPageBrowserProxyImpl} from './privacy_page_browser_proxy.js';
 import {getTemplate} from './secure_dns_input.html.js';
 
 export interface SecureDnsInputElement {
   $: {
-    input: SettingsTextareaElement,
+    input: CrTextareaElement,
   };
 }
 

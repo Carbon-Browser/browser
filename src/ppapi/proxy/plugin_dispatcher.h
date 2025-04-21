@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -89,10 +89,8 @@ class PPAPI_PROXY_EXPORT LockedSender {
   virtual ~LockedSender() {}
 };
 
-class PPAPI_PROXY_EXPORT PluginDispatcher
-    : public Dispatcher,
-      public LockedSender,
-      public base::SupportsWeakPtr<PluginDispatcher> {
+class PPAPI_PROXY_EXPORT PluginDispatcher : public Dispatcher,
+                                            public LockedSender {
  public:
   class PPAPI_PROXY_EXPORT PluginDelegate : public ProxyChannel::Delegate {
    public:
@@ -258,6 +256,8 @@ class PPAPI_PROXY_EXPORT PluginDispatcher
   bool incognito_;
 
   scoped_refptr<Sender> sender_;
+
+  base::WeakPtrFactory<PluginDispatcher> weak_ptr_factory_{this};
 };
 
 }  // namespace proxy

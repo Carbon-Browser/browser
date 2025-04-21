@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,3 +34,41 @@ namespace IPC {
 namespace IPC {
 #include "p2p_param_traits.h"
 }  // namespace IPC
+
+namespace mojo {
+network::mojom::EcnMarking
+EnumTraits<network::mojom::EcnMarking, rtc::EcnMarking>::ToMojom(
+    rtc::EcnMarking input) {
+  switch (input) {
+    case rtc::EcnMarking::kNotEct:
+      return network::mojom::EcnMarking::kNotEct;
+    case rtc::EcnMarking::kEct1:
+      return network::mojom::EcnMarking::kEct1;
+    case rtc::EcnMarking::kEct0:
+      return network::mojom::EcnMarking::kEct0;
+    case rtc::EcnMarking::kCe:
+      return network::mojom::EcnMarking::kCe;
+  }
+  NOTREACHED();
+}
+
+bool EnumTraits<network::mojom::EcnMarking, rtc::EcnMarking>::FromMojom(
+    network::mojom::EcnMarking input,
+    rtc::EcnMarking* output) {
+  switch (input) {
+    case network::mojom::EcnMarking::kNotEct:
+      *output = rtc::EcnMarking::kNotEct;
+      return true;
+    case network::mojom::EcnMarking::kEct1:
+      *output = rtc::EcnMarking::kEct1;
+      return true;
+    case network::mojom::EcnMarking::kEct0:
+      *output = rtc::EcnMarking::kEct0;
+      return true;
+    case network::mojom::EcnMarking::kCe:
+      *output = rtc::EcnMarking::kCe;
+      return true;
+  }
+  return false;
+}
+}  // namespace mojo

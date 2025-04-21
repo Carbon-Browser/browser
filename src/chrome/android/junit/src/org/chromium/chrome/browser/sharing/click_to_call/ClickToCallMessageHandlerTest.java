@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.sharing.click_to_call;
 
 import static org.junit.Assert.assertEquals;
-import static org.mockito.Mockito.any;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.robolectric.Shadows.shadowOf;
@@ -29,9 +29,11 @@ import org.robolectric.shadows.ShadowNotificationManager;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Feature;
+import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.chrome.browser.device.DeviceConditions;
 import org.chromium.chrome.browser.device.ShadowDeviceConditions;
 import org.chromium.chrome.browser.notifications.NotificationConstants;
+import org.chromium.components.browser_ui.notifications.NotificationFeatureMap;
 import org.chromium.net.ConnectionType;
 
 /**
@@ -39,10 +41,12 @@ import org.chromium.net.ConnectionType;
  * display a notification or directly open the dialer.
  */
 @RunWith(BaseRobolectricTestRunner.class)
-@Config(manifest = Config.NONE, shadows = {ShadowDeviceConditions.class})
+@EnableFeatures({NotificationFeatureMap.CACHE_NOTIIFICATIONS_ENABLED})
+@Config(
+        manifest = Config.NONE,
+        shadows = {ShadowDeviceConditions.class})
 public class ClickToCallMessageHandlerTest {
-    @Spy
-    private Context mContext = RuntimeEnvironment.application.getApplicationContext();
+    @Spy private Context mContext = RuntimeEnvironment.application.getApplicationContext();
 
     @Before
     public void setUp() {
@@ -50,9 +54,7 @@ public class ClickToCallMessageHandlerTest {
         ContextUtils.initApplicationContextForTests(mContext);
     }
 
-    /**
-     * Android Q+ should always display a notification to open the dialer.
-     */
+    /** Android Q+ should always display a notification to open the dialer. */
     @Test
     @Feature({"Browser", "Sharing", "ClickToCall"})
     @Config(sdk = Build.VERSION_CODES.Q)
@@ -64,9 +66,7 @@ public class ClickToCallMessageHandlerTest {
         assertEquals(1, getShadowNotificationManager().size());
     }
 
-    /**
-     * Locked or turned off screens should force us to display a notification.
-     */
+    /** Locked or turned off screens should force us to display a notification. */
     @Test
     @Feature({"Browser", "Sharing", "ClickToCall"})
     @Config(sdk = Build.VERSION_CODES.P)
@@ -106,21 +106,29 @@ public class ClickToCallMessageHandlerTest {
         assertEquals(1, manager.size());
 
         Notification notification =
-                manager.getNotification(NotificationConstants.GROUP_CLICK_TO_CALL,
+                manager.getNotification(
+                        NotificationConstants.GROUP_CLICK_TO_CALL,
                         NotificationConstants.NOTIFICATION_ID_CLICK_TO_CALL);
         ShadowNotification shadowNotification = shadowOf(notification);
         assertEquals("+44 1234", shadowNotification.getContentTitle());
     }
 
     private void setIsScreenOnAndUnlocked(boolean isScreenOnAndUnlocked) {
-        DeviceConditions deviceConditions = new DeviceConditions(false /* POWER_CONNECTED */,
-                75 /* BATTERY_LEVEL */, ConnectionType.CONNECTION_WIFI, false /* POWER_SAVE */,
-                false /* metered */, isScreenOnAndUnlocked);
+        DeviceConditions deviceConditions =
+                new DeviceConditions(
+                        /* powerConnected= */ false,
+                        /* batteryPercentage= */ 75,
+                        ConnectionType.CONNECTION_WIFI,
+                        /* powerSaveOn= */ false,
+                        /* activeNetworkMetered= */ false,
+                        isScreenOnAndUnlocked);
         ShadowDeviceConditions.setCurrentConditions(deviceConditions);
     }
 
     private ShadowNotificationManager getShadowNotificationManager() {
-        return shadowOf((NotificationManager) RuntimeEnvironment.application.getSystemService(
-                Context.NOTIFICATION_SERVICE));
+        return shadowOf(
+                (NotificationManager)
+                        RuntimeEnvironment.application.getSystemService(
+                                Context.NOTIFICATION_SERVICE));
     }
 }

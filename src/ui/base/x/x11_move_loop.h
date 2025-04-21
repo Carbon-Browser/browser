@@ -1,10 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_BASE_X_X11_MOVE_LOOP_H_
 #define UI_BASE_X_X11_MOVE_LOOP_H_
 
+#include "base/functional/callback_forward.h"
 #include "ui/gfx/native_widget_types.h"
 
 namespace ui {
@@ -23,7 +24,8 @@ class X11MoveLoop {
   // by pressing escape), then returns false.
   virtual bool RunMoveLoop(bool can_grab_pointer,
                            scoped_refptr<ui::X11Cursor> old_cursor,
-                           scoped_refptr<ui::X11Cursor> new_cursor) = 0;
+                           scoped_refptr<ui::X11Cursor> new_cursor,
+                           base::OnceClosure started_callback) = 0;
 
   // Updates the cursor while the move loop is running.
   virtual void UpdateCursor(scoped_refptr<ui::X11Cursor> cursor) = 0;

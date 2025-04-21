@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,9 @@
 #include "ash/ash_export.h"
 #include "ash/login/ui/non_accessible_view.h"
 #include "ash/login/ui/public_account_menu_view.h"
+#include "ash/style/system_shadow.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/events/event_handler.h"
 #include "ui/views/controls/image_view.h"
 #include "ui/views/controls/label.h"
@@ -19,11 +22,16 @@
 
 class PrefRegistrySimple;
 
+namespace views {
+class BoxLayoutView;
+}  // namespace views
+
 namespace ash {
 
 class MonitoringWarningView;
 class ArrowButtonView;
 struct LocaleItem;
+class LeftPaneView;
 class LoginUserView;
 class RightPaneView;
 class PublicAccountMonitoringInfoDialog;
@@ -32,6 +40,8 @@ struct LoginUserInfo;
 // Implements an expanded view for the public account user to select language
 // and keyboard options.
 class ASH_EXPORT LoginExpandedPublicAccountView : public NonAccessibleView {
+  METADATA_HEADER(LoginExpandedPublicAccountView, NonAccessibleView)
+
  public:
   // TestApi is used for tests to get internal implementation details.
   class ASH_EXPORT TestApi {
@@ -57,7 +67,7 @@ class ASH_EXPORT LoginExpandedPublicAccountView : public NonAccessibleView {
     std::vector<LocaleItem> GetLocales();
 
    private:
-    LoginExpandedPublicAccountView* const view_;
+    const raw_ptr<LoginExpandedPublicAccountView> view_;
   };
 
   using OnPublicSessionViewDismissed = base::RepeatingClosure;
@@ -85,10 +95,7 @@ class ASH_EXPORT LoginExpandedPublicAccountView : public NonAccessibleView {
   static gfx::Size GetPreferredSizePortrait();
 
   // views::View:
-  int GetHeightForWidth(int width) const override;
-  void Layout() override;
   void OnBoundsChanged(const gfx::Rect& previous_bounds) override;
-  void OnPaint(gfx::Canvas* canvas) override;
 
   // ui::EventHandler:
   void OnKeyEvent(ui::KeyEvent* event) override;
@@ -97,17 +104,18 @@ class ASH_EXPORT LoginExpandedPublicAccountView : public NonAccessibleView {
   void UseLandscapeLayout();
   void UsePortraitLayout();
 
-  views::BoxLayout* layout_ = nullptr;
-  LoginUserView* user_view_ = nullptr;
-  MonitoringWarningView* monitoring_warning_view_ = nullptr;
-  views::View* left_pane_ = nullptr;
-  views::View* separator_ = nullptr;
-  RightPaneView* right_pane_ = nullptr;
-  ArrowButtonView* submit_button_ = nullptr;
+  raw_ptr<views::BoxLayoutView> box_layout_view_ = nullptr;
+  raw_ptr<LoginUserView> user_view_ = nullptr;
+  raw_ptr<MonitoringWarningView> monitoring_warning_view_ = nullptr;
+  raw_ptr<LeftPaneView> left_pane_ = nullptr;
+  raw_ptr<views::View> separator_ = nullptr;
+  raw_ptr<RightPaneView> right_pane_ = nullptr;
+  raw_ptr<ArrowButtonView> submit_button_ = nullptr;
 
   OnPublicSessionViewDismissed on_dismissed_;
-  PublicAccountMonitoringInfoDialog* learn_more_dialog_ = nullptr;
+  raw_ptr<PublicAccountMonitoringInfoDialog> learn_more_dialog_ = nullptr;
   std::unique_ptr<ui::EventHandler> event_handler_;
+  std::unique_ptr<SystemShadow> shadow_;
 
   base::WeakPtrFactory<LoginExpandedPublicAccountView> weak_factory_{this};
 };

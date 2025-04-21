@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,10 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/singleton.h"
-#include "base/memory/weak_ptr.h"
 #include "base/observer_list_types.h"
-#include "build/chromeos_buildflags.h"
+#include "base/scoped_observation_traits.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/tts_utterance.h"
 #include "url/gurl.h"
@@ -43,11 +42,14 @@ struct CONTENT_EXPORT VoiceData {
   // TtsPlatformImpl. If false, this is implemented in a content embedder.
   bool native;
   std::string native_voice_identifier;
+};
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  // If true, the voice is from a remote tts engine.
-  bool from_crosapi = false;
-#endif
+enum class LanguageInstallStatus {
+  NOT_INSTALLED,
+  INSTALLING,
+  INSTALLED,
+  FAILED,
+  UNKNOWN
 };
 
 // Interface that delegates TTS requests to engines in content embedders.
@@ -67,13 +69,26 @@ class CONTENT_EXPORT TtsEngineDelegate {
   // Stop speaking the given utterance by sending an event to the target
   // associated with this utterance.
   virtual void Stop(TtsUtterance* utterance) = 0;
-
   // Pause in the middle of speaking this utterance.
   virtual void Pause(TtsUtterance* utterance) = 0;
-
   // Resume speaking this utterance.
   virtual void Resume(TtsUtterance* utterance) = 0;
-
+  // Sends an UninstallLanguageRequest event to extensions.
+  virtual void UninstallLanguageRequest(BrowserContext* browser_context,
+                                        const std::string& lang,
+                                        const std::string& client_id,
+                                        int source,
+                                        bool uninstall_immediately) = 0;
+  // Sends an InstallLanguageRequest event to extensions.
+  virtual void InstallLanguageRequest(BrowserContext* browser_context,
+                                      const std::string& lang,
+                                      const std::string& client_id,
+                                      int source) = 0;
+  // Requests the installation status of a voice for a specific language.
+  virtual void LanguageStatusRequest(BrowserContext* browser_context,
+                                     const std::string& lang,
+                                     const std::string& client_id,
+                                     int source) = 0;
   // Load the built-in TTS engine.
   virtual void LoadBuiltInTtsEngine(BrowserContext* browser_context) = 0;
 
@@ -82,22 +97,20 @@ class CONTENT_EXPORT TtsEngineDelegate {
       BrowserContext* browser_context) = 0;
 };
 
-// Interface that delegates TTS requests to a remote engine from another browser
-// process.
-class CONTENT_EXPORT RemoteTtsEngineDelegate {
- public:
-  virtual ~RemoteTtsEngineDelegate() = default;
-
-  // Returns a list of voices from remote tts engine for |browser_context|.
-  virtual void GetVoices(BrowserContext* browser_context,
-                         std::vector<VoiceData>* out_voices) = 0;
-};
-
 // Class that wants to be notified when the set of
 // voices has changed.
 class CONTENT_EXPORT VoicesChangedDelegate : public base::CheckedObserver {
  public:
   virtual void OnVoicesChanged() = 0;
+};
+
+// Class that wants to be notified when a language status changes.
+class CONTENT_EXPORT UpdateLanguageStatusDelegate
+    : public base::CheckedObserver {
+ public:
+  virtual void OnUpdateLanguageStatus(const std::string& lang,
+                                      LanguageInstallStatus install_status,
+                                      const std::string& error) = 0;
 };
 
 // Singleton class that manages text-to-speech for all TTS engines and
@@ -134,6 +147,53 @@ class CONTENT_EXPORT TtsController {
   // Resume speaking.
   virtual void Resume() = 0;
 
+  // Called by the content embedder when the status of a voice for a language
+  // has changed.
+  virtual void UpdateLanguageStatus(const std::string& lang,
+                                    LanguageInstallStatus install_status,
+                                    const std::string& error) = 0;
+
+  // Add a delegate that wants to be notified when the set of voices changes.
+  virtual void AddUpdateLanguageStatusDelegate(
+      UpdateLanguageStatusDelegate* delegate) = 0;
+
+  // Remove delegate that wants to be notified when the set of voices changes.
+  virtual void RemoveUpdateLanguageStatusDelegate(
+      UpdateLanguageStatusDelegate* delegate) = 0;
+
+  // Requests to remove an installed voice for the language.
+  // The `source` param can be defined by delegates and embedders. For example,
+  // Reading Mode uses the tts_engine_events::TtsClientSource.
+  // The `uninstall_immediately` param indicates whether the client wants the
+  // voice uninstalled immediately. If false, other criteria, such as recent
+  // usage, may be considered to determine when to uninstall.
+  virtual void UninstallLanguageRequest(
+      content::BrowserContext* browser_context,
+      const std::string& lang,
+      const std::string& client_id,
+      int source,
+      bool uninstall_immediately) = 0;
+
+  // Requests to install a new voice for the language. For example, Reading Mode
+  // manages voice installation by sending an InstallLanguageRequest event to
+  // extensions, who can subscribe to this event and attempt to download a voice
+  // for this language.
+  // The "source" param can be defined by delegates and embedders. For example,
+  // Reading Mode uses the tts_engine_events::TtsClientSource
+  virtual void InstallLanguageRequest(BrowserContext* browser_context,
+                                      const std::string& lang,
+                                      const std::string& client_id,
+                                      int source) = 0;
+
+  // Request the installation status of a voice for a specific language. For
+  // example, Reading Mode uses this to broadcast a LanguageStatusRequest to tts
+  // extensions, which respond with this status via the
+  // chrome.ttsEngine.updateLanguage API.
+  virtual void LanguageStatusRequest(BrowserContext* browser_context,
+                                     const std::string& lang,
+                                     const std::string& client_id,
+                                     int source) = 0;
+
   // Handle events received from the speech engine. Events are forwarded to
   // the callback function, and in addition, completion and error events
   // trigger finishing the current utterance and starting the next one, if
@@ -144,6 +204,12 @@ class CONTENT_EXPORT TtsController {
                           int char_index,
                           int length,
                           const std::string& error_message) = 0;
+
+  // Called when the utterance with |utterance_id| becomes invalid.
+  // For example, when the WebContents associated with the utterance
+  // living in a standalone browser is destroyed, the utterance becomes
+  // invalid and should not be spoken.
+  virtual void OnTtsUtteranceBecameInvalid(int utterance_id) = 0;
 
   // Return a list of all available voices, including the native voice,
   // if supported, and all voices registered by engines. |source_url|
@@ -173,10 +239,6 @@ class CONTENT_EXPORT TtsController {
   // embedder.
   virtual void SetTtsEngineDelegate(TtsEngineDelegate* delegate) = 0;
 
-  // Sets the delegate that processes TTS requests with the remote enigne.
-  virtual void SetRemoteTtsEngineDelegate(
-      RemoteTtsEngineDelegate* delegate) = 0;
-
   // Get the delegate that processes TTS requests with engines in a content
   // embedder.
   virtual TtsEngineDelegate* GetTtsEngineDelegate() = 0;
@@ -198,5 +260,22 @@ class CONTENT_EXPORT TtsController {
 };
 
 }  // namespace content
+
+namespace base {
+
+template <>
+struct ScopedObservationTraits<content::TtsController,
+                               content::VoicesChangedDelegate> {
+  static void AddObserver(content::TtsController* source,
+                          content::VoicesChangedDelegate* observer) {
+    source->AddVoicesChangedDelegate(observer);
+  }
+  static void RemoveObserver(content::TtsController* source,
+                             content::VoicesChangedDelegate* observer) {
+    source->RemoveVoicesChangedDelegate(observer);
+  }
+};
+
+}  // namespace base
 
 #endif  // CONTENT_PUBLIC_BROWSER_TTS_CONTROLLER_H_

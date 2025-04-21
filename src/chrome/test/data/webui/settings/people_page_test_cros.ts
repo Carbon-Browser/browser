@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@ import 'chrome://settings/lazy_load.js';
 import 'chrome://settings/settings.js';
 
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {AccountManagerBrowserProxy, AccountManagerBrowserProxyImpl, loadTimeData, pageVisibility, ProfileInfoBrowserProxyImpl, Router, SettingsPeoplePageElement, StatusAction, SyncBrowserProxyImpl} from 'chrome://settings/settings.js';
+import type {AccountManagerBrowserProxy, SettingsPeoplePageElement} from 'chrome://settings/settings.js';
+import {AccountManagerBrowserProxyImpl, loadTimeData, pageVisibility, ProfileInfoBrowserProxyImpl, Router, SignedInState, StatusAction, SyncBrowserProxyImpl} from 'chrome://settings/settings.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 
@@ -76,10 +77,10 @@ suite('Chrome OS', function() {
     accountManagerBrowserProxy = new TestAccountManagerBrowserProxy();
     AccountManagerBrowserProxyImpl.setInstance(accountManagerBrowserProxy);
 
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     peoplePage = document.createElement('settings-people-page');
     peoplePage.prefs = DEFAULT_PREFS;
-    peoplePage.pageVisibility = pageVisibility;
+    peoplePage.pageVisibility = pageVisibility || {};
     document.body.appendChild(peoplePage);
 
     await accountManagerBrowserProxy.whenCalled('getAccounts');
@@ -92,10 +93,10 @@ suite('Chrome OS', function() {
   });
 
   test('GAIA name and picture', async () => {
-    chai.assert.include(
-        peoplePage.shadowRoot!.querySelector<HTMLElement>(
-                                  '#profile-icon')!.style.backgroundImage,
-        'data:image/png;base64,primaryAccountPicData');
+    assertTrue(
+        peoplePage.shadowRoot!.querySelector<HTMLElement>('#profile-icon')!
+            .style.backgroundImage.includes(
+                'data:image/png;base64,primaryAccountPicData'));
     assertEquals(
         'Primary Account',
         peoplePage.shadowRoot!.querySelector(
@@ -105,7 +106,7 @@ suite('Chrome OS', function() {
   test('profile row is actionable', () => {
     // Simulate a signed-in user.
     simulateSyncStatus({
-      signedIn: true,
+      signedInState: SignedInState.SYNCING,
       statusAction: StatusAction.NO_ACTION,
     });
 
@@ -135,10 +136,10 @@ suite('Chrome OS with account manager disabled', function() {
     profileInfoBrowserProxy = new TestProfileInfoBrowserProxy();
     ProfileInfoBrowserProxyImpl.setInstance(profileInfoBrowserProxy);
 
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     peoplePage = document.createElement('settings-people-page');
     peoplePage.prefs = DEFAULT_PREFS;
-    peoplePage.pageVisibility = pageVisibility;
+    peoplePage.pageVisibility = pageVisibility || {};
     document.body.appendChild(peoplePage);
 
     await syncBrowserProxy.whenCalled('getSyncStatus');
@@ -152,7 +153,7 @@ suite('Chrome OS with account manager disabled', function() {
   test('profile row is not actionable', () => {
     // Simulate a signed-in user.
     simulateSyncStatus({
-      signedIn: true,
+      signedInState: SignedInState.SYNCING,
       statusAction: StatusAction.NO_ACTION,
     });
 

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <string>
 
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/component_updater/cros_component_installer_chromeos.h"
@@ -42,7 +43,7 @@ namespace ash {
 // % (returns empty response on success and error response on failure)
 class ComponentUpdaterServiceProvider
     : public CrosDBusService::ServiceProviderInterface,
-      public component_updater::CrOSComponentManager::Delegate {
+      public component_updater::ComponentManagerAsh::Delegate {
  public:
   // Delegate interface providing additional resources to
   // ComponentUpdaterServiceProvider.
@@ -50,12 +51,12 @@ class ComponentUpdaterServiceProvider
    public:
     using LoadCallback = base::OnceCallback<void(const base::FilePath&)>;
 
-    Delegate() {}
+    Delegate() = default;
 
     Delegate(const Delegate&) = delete;
     Delegate& operator=(const Delegate&) = delete;
 
-    virtual ~Delegate() {}
+    virtual ~Delegate() = default;
 
     virtual void LoadComponent(const std::string& name,
                                bool mount,
@@ -65,7 +66,7 @@ class ComponentUpdaterServiceProvider
   };
 
   explicit ComponentUpdaterServiceProvider(
-      component_updater::CrOSComponentManager* cros_component_manager);
+      component_updater::ComponentManagerAsh* cros_component_manager);
 
   ComponentUpdaterServiceProvider(const ComponentUpdaterServiceProvider&) =
       delete;
@@ -77,7 +78,7 @@ class ComponentUpdaterServiceProvider
   // CrosDBusService::ServiceProviderInterface overrides:
   void Start(scoped_refptr<dbus::ExportedObject> exported_object) override;
 
-  // component_updater::CrOSComponentManager::Delegate overrides:
+  // component_updater::ComponentManagerAsh::Delegate overrides:
   void EmitInstalledSignal(const std::string& component) override;
 
  private:
@@ -94,7 +95,7 @@ class ComponentUpdaterServiceProvider
   // Callback executed after component loading operation is done.
   void OnLoadComponent(dbus::MethodCall* method_call,
                        dbus::ExportedObject::ResponseSender response_sender,
-                       component_updater::CrOSComponentManager::Error error,
+                       component_updater::ComponentManagerAsh::Error error,
                        const base::FilePath& result);
 
   // Called on UI thread in response to a D-Bus request.
@@ -107,8 +108,8 @@ class ComponentUpdaterServiceProvider
   // A reference on ExportedObject for sending signals.
   scoped_refptr<dbus::ExportedObject> exported_object_;
 
-  // Weak pointer to CrOSComponentManager to avoid calling BrowserProcess.
-  component_updater::CrOSComponentManager* cros_component_manager_;
+  // Weak pointer to ComponentManagerAsh to avoid calling BrowserProcess.
+  raw_ptr<component_updater::ComponentManagerAsh> cros_component_manager_;
 
   // Keep this last so that all weak pointers will be invalidated at the
   // beginning of destruction.
@@ -116,10 +117,5 @@ class ComponentUpdaterServiceProvider
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-using ::ash::ComponentUpdaterServiceProvider;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_DBUS_COMPONENT_UPDATER_SERVICE_PROVIDER_H_

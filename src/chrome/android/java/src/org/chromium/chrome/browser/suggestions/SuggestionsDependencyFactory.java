@@ -1,10 +1,8 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.suggestions;
-
-import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.ThreadUtils;
 import org.chromium.chrome.browser.offlinepages.OfflinePageBridge;
@@ -28,7 +26,6 @@ public class SuggestionsDependencyFactory {
         return sInstance;
     }
 
-    @VisibleForTesting
     public static void setInstanceForTesting(SuggestionsDependencyFactory testInstance) {
         if (sInstance != null && testInstance != null) {
             throw new IllegalStateException("A real instance already exists.");

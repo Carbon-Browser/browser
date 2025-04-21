@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,12 @@
 
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/singleton.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 #include "components/content_settings/core/common/content_settings.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "url/origin.h"
 
@@ -38,11 +38,17 @@ class Profile;
 //     CCTLD: Country Code Top Level Domain (e.g. google.com.au)
 class SearchPermissionsService : public KeyedService {
  public:
+  // Use
+  // `SearchPermissionService::Factory::BuildServiceInstanceForBrowserContext`
+  // instead.
+  explicit SearchPermissionsService(Profile* profile);
+  ~SearchPermissionsService() override;
+
   // Delegate for search engine related functionality. Can be overridden for
   // testing.
   class SearchEngineDelegate {
    public:
-    virtual ~SearchEngineDelegate() {}
+    virtual ~SearchEngineDelegate() = default;
 
     // Returns the name of the current DSE.
     virtual std::u16string GetDSEName() = 0;
@@ -53,7 +59,7 @@ class SearchPermissionsService : public KeyedService {
   };
 
   // Factory implementation will not create a service in incognito.
-  class Factory : public BrowserContextKeyedServiceFactory {
+  class Factory : public ProfileKeyedServiceFactory {
    public:
     static SearchPermissionsService* GetForBrowserContext(
         content::BrowserContext* context);
@@ -68,13 +74,11 @@ class SearchPermissionsService : public KeyedService {
 
     // BrowserContextKeyedServiceFactory
     bool ServiceIsCreatedWithBrowserContext() const override;
-    KeyedService* BuildServiceInstanceFor(
+    std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
         content::BrowserContext* profile) const override;
     void RegisterProfilePrefs(
         user_prefs::PrefRegistrySyncable* registry) override;
   };
-
-  explicit SearchPermissionsService(Profile* profile);
 
   // Returns whether the given origin matches the DSE origin.
   bool IsDseOrigin(const url::Origin& origin);
@@ -88,8 +92,6 @@ class SearchPermissionsService : public KeyedService {
   FRIEND_TEST_ALL_PREFIXES(GeolocationPermissionContextDelegateTests,
                            SearchGeolocationInIncognito);
   struct PrefValue;
-
-  ~SearchPermissionsService() override;
 
   // Restore the setting for an origin before it became the DSE. Returns the
   // setting that the origin was set to before restoring the old value.

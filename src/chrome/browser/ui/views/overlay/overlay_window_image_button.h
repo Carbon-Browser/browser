@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,9 @@
 
 // Base class for image buttons on the PiP window.
 class OverlayWindowImageButton : public views::ImageButton {
- public:
-  METADATA_HEADER(OverlayWindowImageButton);
+  METADATA_HEADER(OverlayWindowImageButton, views::ImageButton)
 
+ public:
   OverlayWindowImageButton(const OverlayWindowImageButton&) = delete;
   OverlayWindowImageButton& operator=(const OverlayWindowImageButton&) = delete;
 

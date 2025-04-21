@@ -64,13 +64,8 @@ class CORE_EXPORT HTMLTableCellElement final : public HTMLTablePartElement {
 
   bool IsURLAttribute(const Attribute&) const override;
   bool HasLegalLinkAttribute(const QualifiedName&) const override;
-  const QualifiedName& SubResourceAttributeName() const override;
 };
 
-template <>
-inline bool IsElementOfType<const HTMLTableCellElement>(const Node& node) {
-  return IsA<HTMLTableCellElement>(node);
-}
 template <>
 struct DowncastTraits<HTMLTableCellElement> {
   static bool AllowFrom(const Node& node) {

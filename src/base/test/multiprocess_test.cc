@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,8 +21,9 @@ Process SpawnMultiProcessTestChild(const std::string& procname,
   // TODO(viettrungluu): See comment above |MakeCmdLine()| in the header file.
   // This is a temporary hack, since |MakeCmdLine()| has to provide a full
   // command line.
-  if (!command_line.HasSwitch(switches::kTestChildProcess))
+  if (!command_line.HasSwitch(switches::kTestChildProcess)) {
     command_line.AppendSwitchASCII(switches::kTestChildProcess, procname);
+  }
 
   return LaunchProcess(command_line, options);
 }

@@ -1,12 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {DuplexMode, PrintPreviewDuplexSettingsElement, PrintPreviewModelElement} from 'chrome://print/print_preview.js';
+import type {PrintPreviewDuplexSettingsElement, PrintPreviewModelElement} from 'chrome://print/print_preview.js';
+import {DuplexMode} from 'chrome://print/print_preview.js';
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {eventToPromise, fakeDataBind} from 'chrome://webui-test/test_util.js';
+import {fakeDataBind} from 'chrome://webui-test/polymer_test_util.js';
 
 import {selectOption} from './print_preview_test_utils.js';
 
@@ -16,7 +16,7 @@ suite('DuplexSettingsTest', function() {
   let model: PrintPreviewModelElement;
 
   setup(function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     model = document.createElement('print-preview-model');
     document.body.appendChild(model);
     model.set('settings.duplex.available', true);
@@ -34,7 +34,7 @@ suite('DuplexSettingsTest', function() {
   // Tests that making short edge unavailable prevents the collapse from
   // showing.
   test('short edge unavailable', function() {
-    const collapse = duplexSection.shadowRoot!.querySelector('iron-collapse')!;
+    const collapse = duplexSection.shadowRoot!.querySelector('cr-collapse')!;
     duplexSection.setSetting('duplex', true);
     assertTrue(collapse.opened);
 
@@ -45,9 +45,9 @@ suite('DuplexSettingsTest', function() {
   });
 
   // Tests that setting the setting updates the UI.
-  test('set setting', async () => {
+  test('set setting', () => {
     const checkbox = duplexSection.shadowRoot!.querySelector('cr-checkbox')!;
-    const collapse = duplexSection.shadowRoot!.querySelector('iron-collapse')!;
+    const collapse = duplexSection.shadowRoot!.querySelector('cr-collapse')!;
     assertFalse(checkbox.checked);
     assertFalse(collapse.opened);
 
@@ -59,7 +59,6 @@ suite('DuplexSettingsTest', function() {
     assertEquals(DuplexMode.LONG_EDGE.toString(), select.value);
 
     duplexSection.setSetting('duplexShortEdge', true);
-    await eventToPromise('process-select-change', duplexSection);
     assertEquals(DuplexMode.SHORT_EDGE.toString(), select.value);
   });
 
@@ -67,7 +66,7 @@ suite('DuplexSettingsTest', function() {
   // updates the setting.
   test('select option', async () => {
     const checkbox = duplexSection.shadowRoot!.querySelector('cr-checkbox')!;
-    const collapse = duplexSection.shadowRoot!.querySelector('iron-collapse')!;
+    const collapse = duplexSection.shadowRoot!.querySelector('cr-collapse')!;
     assertFalse(checkbox.checked);
     assertFalse(collapse.opened);
     assertFalse(duplexSection.getSettingValue('duplex') as boolean);
@@ -96,7 +95,7 @@ suite('DuplexSettingsTest', function() {
     assertTrue(duplexSection.getSetting('duplexShortEdge').setFromUi);
   });
 
-  // <if expr="chromeos_ash or chromeos_lacros">
+  // <if expr="is_chromeos">
   // Tests that if settings are enforced by enterprise policy the
   // appropriate UI is disabled.
   test('disabled by policy', function() {

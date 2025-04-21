@@ -21,7 +21,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "components/adblock/core/common/flatbuffer_data.h"
 #include "components/adblock/core/subscription/installed_subscription.h"

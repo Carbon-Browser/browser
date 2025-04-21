@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include "third_party/blink/public/mojom/devtools/inspector_issue.mojom-blink.h"
 #include "third_party/blink/public/mojom/frame/frame.mojom-blink.h"
 #include "third_party/blink/public/mojom/security_context/insecure_request_policy.mojom-blink.h"
-#include "third_party/blink/renderer/bindings/core/v8/source_location.h"
+#include "third_party/blink/renderer/bindings/core/v8/capture_source_location.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/events/security_policy_violation_event.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
@@ -27,6 +27,7 @@
 #include "third_party/blink/renderer/core/probe/core_probes.h"
 #include "third_party/blink/renderer/core/workers/worker_global_scope.h"
 #include "third_party/blink/renderer/core/workers/worklet_global_scope.h"
+#include "third_party/blink/renderer/platform/bindings/source_location.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/network/encoded_form_data.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
@@ -108,8 +109,8 @@ void ExecutionContextCSPDelegate::AddInsecureRequestPolicy(
     // WorkerGlobalScope::Url() before it's ready. https://crbug.com/861564
     // This should be safe, because the insecure navigations set is not used
     // in non-Document contexts.
-    if (window && !Url().Host().IsEmpty()) {
-      uint32_t hash = Url().Host().Impl()->GetHash();
+    if (window && !Url().Host().empty()) {
+      uint32_t hash = Url().Host().ToString().Impl()->GetHash();
       security_context.AddInsecureNavigationUpgrade(hash);
       if (auto* frame = window->GetFrame()) {
         frame->GetLocalFrameHostRemote().EnforceInsecureNavigationsSet(
@@ -122,11 +123,11 @@ void ExecutionContextCSPDelegate::AddInsecureRequestPolicy(
 
 std::unique_ptr<SourceLocation>
 ExecutionContextCSPDelegate::GetSourceLocation() {
-  return SourceLocation::Capture(execution_context_);
+  return CaptureSourceLocation(execution_context_);
 }
 
-absl::optional<uint16_t> ExecutionContextCSPDelegate::GetStatusCode() {
-  absl::optional<uint16_t> status_code;
+std::optional<uint16_t> ExecutionContextCSPDelegate::GetStatusCode() {
+  std::optional<uint16_t> status_code;
 
   // TODO(mkwst): We only have status code information for Documents. It would
   // be nice to get them for Workers as well.
@@ -153,7 +154,7 @@ void ExecutionContextCSPDelegate::DispatchViolationEvent(
   execution_context_->GetTaskRunner(TaskType::kNetworking)
       ->PostTask(
           FROM_HERE,
-          WTF::Bind(
+          WTF::BindOnce(
               &ExecutionContextCSPDelegate::DispatchViolationEventInternal,
               WrapPersistent(this), WrapPersistent(&violation_data),
               WrapPersistent(element)));
@@ -198,7 +199,8 @@ void ExecutionContextCSPDelegate::PostViolationReport(
 
   for (const auto& report_endpoint : report_endpoints) {
     PingLoader::SendViolationReport(execution_context_.Get(),
-                                    KURL(report_endpoint), report);
+                                    KURL(report_endpoint), report,
+                                    is_frame_ancestors_violation);
   }
 }
 
@@ -241,8 +243,9 @@ void ExecutionContextCSPDelegate::DidAddContentSecurityPolicies(
 
   // Record what source was used to find main frame CSP. Do not record
   // this for fence frame roots since they will never become an
-  // outermost main frame, but we do wish to record this for portals.
-  if (frame->IsMainFrame() && !frame->IsInFencedFrameTree()) {
+  // outermost main frame.
+  bool is_main_frame = frame->IsMainFrame() && !frame->IsInFencedFrameTree();
+  if (is_main_frame) {
     for (const auto& policy : policies) {
       switch (policy->header->source) {
         case network::mojom::ContentSecurityPolicySource::kHTTP:
@@ -253,6 +256,12 @@ void ExecutionContextCSPDelegate::DidAddContentSecurityPolicies(
           break;
       }
     }
+  }
+  // As the injection-mitigatedness of a context changes only when CSPs are
+  // added, we can measure the prevalance here:
+  if (execution_context_->IsInjectionMitigatedContext()) {
+    Count(is_main_frame ? WebFeature::kInjectionMitigatedContextMainFrame
+                        : WebFeature::kInjectionMitigatedContextSubFrame);
   }
 }
 

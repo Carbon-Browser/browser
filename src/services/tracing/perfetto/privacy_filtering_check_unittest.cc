@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -77,7 +77,7 @@ TEST(PrivacyFilteringTest, UnsafeToplevelField) {
   FillDisallowedTestField(trace.add_packet());
 
   perfetto::protos::Trace filtered = GetFilteredTrace(trace);
-  ASSERT_EQ(0, filtered.packet_size());
+  ASSERT_EQ(1, filtered.packet_size());
 }
 
 TEST(PrivacyFilteringTest, SafeMessageWithOnlyUnsafeFields) {
@@ -91,7 +91,7 @@ TEST(PrivacyFilteringTest, SafeMessageWithOnlyUnsafeFields) {
   packet->mutable_track_event()->mutable_log_message()->set_body_iid(1);
 
   perfetto::protos::Trace filtered = GetFilteredTrace(trace);
-  ASSERT_EQ(0, filtered.packet_size());
+  ASSERT_EQ(1, filtered.packet_size());
 }
 
 TEST(PrivacyFilteringTest, SafeAndUnsafeFields) {
@@ -114,10 +114,10 @@ TEST(PrivacyFilteringTest, SafeAndUnsafePackets) {
       11);
 
   perfetto::protos::Trace filtered = GetFilteredTrace(trace);
-  ASSERT_EQ(1, filtered.packet_size());
-  EXPECT_FALSE(filtered.packet(0).has_for_testing());
+  ASSERT_EQ(2, filtered.packet_size());
+  EXPECT_FALSE(filtered.packet(1).has_for_testing());
   EXPECT_EQ(11u,
-            filtered.packet(0).trace_packet_defaults().timestamp_clock_id());
+            filtered.packet(1).trace_packet_defaults().timestamp_clock_id());
 }
 
 TEST(PrivacyFilteringTest, NestedSafeAndUnsafeFields) {

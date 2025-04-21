@@ -103,7 +103,8 @@ bool SQLiteDatabase::Open(const String& filename) {
   // Defensive mode is a layer of defense in depth for applications that must
   // run SQL queries from an untrusted source, such as WebDatabase. Refuse to
   // proceed if this layer cannot be enabled.
-  open_error_ = sqlite3_db_config(db_, SQLITE_DBCONFIG_DEFENSIVE, 1, nullptr);
+  open_error_ =
+      sqlite3_db_config(db_.get(), SQLITE_DBCONFIG_DEFENSIVE, 1, nullptr);
   if (open_error_ != SQLITE_OK) {
     open_error_message_ = sqlite3_errmsg(db_);
     DLOG(ERROR) << "SQLite database error when enabling defensive mode - "
@@ -364,13 +365,11 @@ int SQLiteDatabase::AuthorizerFunction(void* user_data,
       return kSQLAuthDeny;
   }
   NOTREACHED();
-  return kSQLAuthDeny;
 }
 
 void SQLiteDatabase::SetAuthorizer(DatabaseAuthorizer* authorizer) {
   if (!db_) {
     NOTREACHED() << "Attempt to set an authorizer on a non-open SQL database";
-    return;
   }
 
   base::AutoLock locker(authorizer_lock_);

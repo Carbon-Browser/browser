@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/types/id_type.h"
 
 namespace captions {
 
@@ -17,15 +18,19 @@ class CaptionBubbleContext;
 
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused.
+// LINT.IfChange(CaptionBubbleErrorType)
 enum CaptionBubbleErrorType {
   kGeneric = 0,
   kMediaFoundationRendererUnsupported = 1,
   kMaxValue = kMediaFoundationRendererUnsupported
 };
+// LINT.ThenChange(/tools/metrics/histograms/metadata/accessibility/enums.xml:CaptionBubbleErrorType)
 
 using OnErrorClickedCallback = base::RepeatingCallback<void()>;
 using OnDoNotShowAgainClickedCallback =
     base::RepeatingCallback<void(CaptionBubbleErrorType, bool)>;
+using OnCaptionBubbleClosedCallback =
+    base::RepeatingCallback<void(const std::string&)>;
 
 ///////////////////////////////////////////////////////////////////////////////
 // Caption Bubble Model
@@ -51,7 +56,14 @@ using OnDoNotShowAgainClickedCallback =
 //
 class CaptionBubbleModel {
  public:
-  explicit CaptionBubbleModel(CaptionBubbleContext* context);
+  // TODO(crbug.com/378469298): Gate Boca strings and functions behind ChromeOS
+  // build flag.
+  static constexpr char kBocaWithTranslationSessionId[] = "BocaWithTranslation";
+
+  using Id = base::IdTypeU64<CaptionBubbleModel>;
+
+  CaptionBubbleModel(CaptionBubbleContext* context,
+                     OnCaptionBubbleClosedCallback callback);
   ~CaptionBubbleModel();
   CaptionBubbleModel(const CaptionBubbleModel&) = delete;
   CaptionBubbleModel& operator=(const CaptionBubbleModel&) = delete;
@@ -62,6 +74,12 @@ class CaptionBubbleModel {
   // Set the partial text and alert the observer.
   void SetPartialText(const std::string& partial_text);
 
+  // Set the download progress label and alert the observer.
+  void SetDownloadProgressText(const std::u16string& download_progress_text);
+
+  // Notify the observer that a language pack was installed.
+  void OnLanguagePackInstalled();
+
   // Commits the partial text as final text.
   void CommitPartialText();
 
@@ -70,12 +88,12 @@ class CaptionBubbleModel {
                OnErrorClickedCallback error_clicked_callback,
                OnDoNotShowAgainClickedCallback error_silenced_callback);
 
-  // Mark the bubble as closed, clear the partial and final text, and alert the
+  // Mark the bubble as closed.
+  void CloseButtonPressed();
+
+  // Clear the partial and final text, and alert the
   // observer.
   void Close();
-
-  // Marks the bubble as open.
-  void Open();
 
   // Clears the partial and final text and alerts the observer.
   void ClearText();
@@ -85,13 +103,42 @@ class CaptionBubbleModel {
   CaptionBubbleErrorType ErrorType() const { return error_type_; }
   std::string GetFullText() const { return final_text_ + partial_text_; }
   CaptionBubbleContext* GetContext() { return context_; }
+  std::u16string GetDownloadProgressText() const {
+    return download_progress_text_;
+  }
+
+  // Returns the auto-detected language code or an empty string if the language
+  // was not automatically switched.
+  std::string GetAutoDetectedLanguageCode() const {
+    return auto_detected_language_code_;
+  }
+
+  Id unique_id() const { return unique_id_; }
+
+  void SetLanguage(const std::string& language_code);
+
+  bool CanUseLiveTranslate();
+
+  bool SkipPrefChangeOnClose();
 
  private:
+  // Generates the next unique id.
+  static Id GetNextId();
+
   // Alert the observer that a change has occurred to the model text.
   void OnTextChanged();
 
+  // Alert the observer that the auto-detected language of the model has
+  // changed.
+  void OnAutoDetectedLanguageChanged();
+
+  const Id unique_id_;
+
   std::string final_text_;
   std::string partial_text_;
+  std::u16string download_progress_text_;
+
+  std::string auto_detected_language_code_ = std::string();
 
   // Whether the bubble has been closed by the user.
   bool is_closed_ = false;
@@ -103,9 +150,15 @@ class CaptionBubbleModel {
   CaptionBubbleErrorType error_type_ = CaptionBubbleErrorType::kGeneric;
 
   // The CaptionBubble observing changes to this model.
-  raw_ptr<CaptionBubble> observer_ = nullptr;
+  raw_ptr<CaptionBubble, DanglingUntriaged> observer_ = nullptr;
 
-  const raw_ptr<CaptionBubbleContext> context_;
+  OnCaptionBubbleClosedCallback caption_bubble_closed_callback_;
+
+  // Used to calculate and log the amount of flickering between partial results.
+  int erasure_count_ = 0;
+  int partial_result_count_ = 0;
+
+  const raw_ptr<CaptionBubbleContext, DanglingUntriaged> context_;
 };
 
 }  // namespace captions

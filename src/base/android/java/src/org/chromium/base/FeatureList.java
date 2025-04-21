@@ -1,88 +1,184 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.base;
 
-import androidx.annotation.Nullable;
+import android.util.ArrayMap;
+
 import androidx.annotation.VisibleForTesting;
 
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.MainDex;
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.library_loader.LibraryLoader;
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.Map;
 
 /**
  * Provides shared capabilities for feature flag support.
+ *
+ * <p>TODO(crbug.com/345483590): Move all override logic and TestValues to FeatureOverrides.
  */
+@NullMarked
 @JNINamespace("base::android")
-@MainDex
 public class FeatureList {
-    /**
-     * Test value overrides for tests without native.
-     */
+    /** Test value overrides for tests without native. */
     public static class TestValues {
         private Map<String, Boolean> mFeatureFlags = new HashMap<>();
-        private Map<String, String> mFieldTrialParams = new HashMap<>();
+        private Map<String, Map<String, String>> mFieldTrialParams = new HashMap<>();
 
-        /**
-         * Constructor.
-         */
+        /** Constructor. */
         public TestValues() {}
 
-        /**
-         * Set overrides for feature flags.
-         */
+        /** Set overrides for feature flags. */
         public void setFeatureFlagsOverride(Map<String, Boolean> featureFlags) {
             mFeatureFlags = featureFlags;
         }
 
-        /**
-         * Add an override for a feature flag.
-         */
+        /** Add an override for a feature flag. */
         public void addFeatureFlagOverride(String featureName, boolean testValue) {
             mFeatureFlags.put(featureName, testValue);
         }
 
-        /**
-         * Add an override for a field trial parameter.
-         */
+        /** Add an override for a field trial parameter. */
         public void addFieldTrialParamOverride(
                 String featureName, String paramName, String testValue) {
-            mFieldTrialParams.put(makeKey(featureName, paramName), testValue);
+            Map<String, String> featureParams = mFieldTrialParams.get(featureName);
+            if (featureParams == null) {
+                featureParams = new ArrayMap<>();
+                mFieldTrialParams.put(featureName, featureParams);
+            }
+            featureParams.put(paramName, testValue);
         }
 
-        Boolean getFeatureFlagOverride(String featureName) {
+        /**
+         * Add an override for a field trial parameter.
+         *
+         * @param param The param object that holds feature and param names.
+         * @param testValue The string value to override, which will later be parsed/converted into
+         *     the actual value.
+         */
+        public void addFieldTrialParamOverride(FeatureParam param, String testValue) {
+            addFieldTrialParamOverride(param.getFeatureName(), param.getName(), testValue);
+        }
+
+        @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
+        @Nullable
+        public Boolean getFeatureFlagOverride(String featureName) {
             return mFeatureFlags.get(featureName);
         }
 
+        @Nullable
         String getFieldTrialParamOverride(String featureName, String paramName) {
-            return mFieldTrialParams.get(makeKey(featureName, paramName));
+            Map<String, String> featureParams = mFieldTrialParams.get(featureName);
+            if (featureParams == null) return null;
+            return featureParams.get(paramName);
         }
 
-        private static String makeKey(String featureName, String paramName) {
-            return featureName + ":" + paramName;
+        @Nullable
+        Map<String, String> getAllFieldTrialParamOverridesForFeature(String featureName) {
+            return mFieldTrialParams.get(featureName);
+        }
+
+        public void merge(TestValues testValuesToMerge, boolean replace) {
+            if (replace) {
+                mFeatureFlags.putAll(testValuesToMerge.mFeatureFlags);
+            } else {
+                for (Map.Entry<String, Boolean> toMerge :
+                        testValuesToMerge.mFeatureFlags.entrySet()) {
+                    mFeatureFlags.putIfAbsent(toMerge.getKey(), toMerge.getValue());
+                }
+            }
+
+            for (Map.Entry<String, Map<String, String>> e :
+                    testValuesToMerge.mFieldTrialParams.entrySet()) {
+                String featureName = e.getKey();
+                var fieldTrialParamsForFeature = mFieldTrialParams.get(featureName);
+                if (fieldTrialParamsForFeature == null) {
+                    fieldTrialParamsForFeature = new ArrayMap<>();
+                    mFieldTrialParams.put(featureName, fieldTrialParamsForFeature);
+                }
+
+                if (replace) {
+                    fieldTrialParamsForFeature.putAll(e.getValue());
+                } else {
+                    for (Map.Entry<String, String> toMerge : e.getValue().entrySet()) {
+                        fieldTrialParamsForFeature.putIfAbsent(
+                                toMerge.getKey(), toMerge.getValue());
+                    }
+                }
+            }
+        }
+
+        /**
+         * Returns a representation of the TestValues.
+         *
+         * <p>The format returned is:
+         *
+         * <pre>{FeatureA=true} + {FeatureA.Param1=Value1, FeatureA.ParamB=ValueB}</pre>
+         */
+        public String toDebugString() {
+            StringBuilder stringBuilder = new StringBuilder();
+            String separator = "";
+            stringBuilder.append("{");
+            for (var e : mFeatureFlags.entrySet()) {
+                String featureName = e.getKey();
+                boolean featureValue = e.getValue();
+                stringBuilder
+                        .append(separator)
+                        .append(featureName)
+                        .append("=")
+                        .append(featureValue);
+                separator = ", ";
+            }
+            stringBuilder.append("}");
+            if (!mFieldTrialParams.isEmpty()) {
+                stringBuilder.append(" + {");
+                for (var e : mFieldTrialParams.entrySet()) {
+                    String paramsAndValuesSeparator = "";
+                    String featureName = e.getKey();
+                    Map<String, String> paramsAndValues = e.getValue();
+                    for (var paramAndValue : paramsAndValues.entrySet()) {
+                        String paramName = paramAndValue.getKey();
+                        String paramValue = paramAndValue.getValue();
+                        stringBuilder
+                                .append(paramsAndValuesSeparator)
+                                .append(featureName)
+                                .append(".")
+                                .append(paramName)
+                                .append("=")
+                                .append(paramValue);
+                        paramsAndValuesSeparator = ", ";
+                    }
+                }
+                stringBuilder.append("}");
+            }
+            return stringBuilder.toString();
+        }
+
+        public boolean isEmpty() {
+            return mFeatureFlags.isEmpty() && mFieldTrialParams.isEmpty();
         }
     }
 
     /** Map that stores substitution feature flags for tests. */
     private static @Nullable TestValues sTestFeatures;
 
-    /** Access to default values of the native feature flag. */
-    private static boolean sTestCanUseDefaults;
+    /** Prevent access to default values of the native feature flag. */
+    private static boolean sDisableNativeForTesting;
 
     private FeatureList() {}
 
     /**
-     * @return Whether the native FeatureList has been initialized. If this method returns false,
-     *         none of the methods in this class that require native access should be called (except
-     *         in tests if test features have been set).
+     * @deprecated Check specific flags (via Flag.isEnabled()) instead.
      */
+    @Deprecated
     public static boolean isInitialized() {
-        return hasTestFeatures() || isNativeInitialized();
+        return (sDisableNativeForTesting && sTestFeatures != null) || isNativeInitialized();
     }
 
     /**
@@ -101,53 +197,78 @@ public class FeatureList {
         return FeatureListJni.get().isInitialized();
     }
 
-    /**
-     * This is called explicitly for instrumentation tests via Features#applyForInstrumentation().
-     * Unit tests and Robolectric tests must not invoke this and should rely on the {@link Features}
-     * annotations to enable or disable any feature flags.
-     */
-    @VisibleForTesting
-    public static void setTestCanUseDefaultsForTesting() {
-        sTestCanUseDefaults = true;
+    /** Whether to block querying feature values from native. */
+    public static void setDisableNativeForTesting(boolean value) {
+        boolean prev = sDisableNativeForTesting;
+        sDisableNativeForTesting = value;
+        ResettersForTesting.register(() -> sDisableNativeForTesting = prev);
+    }
+
+    /** Whether to pretend native isn't loaded. */
+    public static boolean getDisableNativeForTesting() {
+        return sDisableNativeForTesting;
     }
 
     /**
-     * We reset the value to false after the instrumentation test to avoid any unwanted
-     * persistence of the state. This is invoked by Features#reset().
+     * Adds overrides to feature flags and field trial parameters in addition to existing ones.
+     *
+     * @deprecated use {@link FeatureOverrides#apply()}
      */
     @VisibleForTesting
-    public static void resetTestCanUseDefaultsForTesting() {
-        sTestCanUseDefaults = false;
+    @Deprecated
+    public static void setTestValues(TestValues testValues) {
+        assert testValues != null;
+        mergeTestValues(testValues, /* replace= */ true);
     }
 
     /**
-     * Sets the feature flags to use in JUnit tests, since native calls are not available there.
+     * Rarely necessary. Remove all Java overrides to feature flags and field trial parameters.
+     *
+     * <p>You don't need to call this on tearDown() or at the end of a test. ResettersForTesting
+     * already resets test values.
+     *
+     * <p>@Features annotations and @CommandLineFlags --enable/disable-features are affected by
+     * this.
+     *
+     * @deprecated use {@link FeatureOverrides#removeAllIncludingAnnotations()}
      */
     @VisibleForTesting
-    public static void setTestFeatures(Map<String, Boolean> testFeatures) {
-        if (testFeatures == null) {
-            setTestValues(null);
-        } else {
-            TestValues testValues = new TestValues();
-            testValues.setFeatureFlagsOverride(testFeatures);
-            setTestValues(testValues);
+    @Deprecated
+    static void removeAllTestOverrides() {
+        overwriteTestValues(null);
+    }
+
+    private static void overwriteTestValues(@Nullable TestValues testValues) {
+        TestValues prevValues = sTestFeatures;
+        sTestFeatures = testValues;
+        ResettersForTesting.register(() -> sTestFeatures = prevValues);
+    }
+
+    /** For use by test runners. */
+    public static void setTestValuesNoResetForTesting(TestValues testValues) {
+        sTestFeatures = testValues;
+    }
+
+    /**
+     * Adds overrides to feature flags and field trial parameters in addition to existing ones.
+     *
+     * <p>TODO(crbug.com/386813115): Migrate test class usages to {@link
+     * FeatureOverrides.Builder#apply()} or {@link FeatureOverrides.Builder#applyWithoutOverwrite()}
+     * and make this private.
+     *
+     * @deprecated use {@link FeatureOverrides.Builder#apply()} or {@link
+     *     FeatureOverrides.Builder#applyWithoutOverwrite()}
+     * @param testValuesToMerge the TestValues to merge into existing ones
+     * @param replace if true, replaces existing overrides; otherwise preserve them
+     */
+    @Deprecated
+    static void mergeTestValues(TestValues testValuesToMerge, boolean replace) {
+        TestValues newTestValues = new TestValues();
+        if (sTestFeatures != null) {
+            newTestValues.merge(sTestFeatures, /* replace= */ true);
         }
-    }
-
-    /**
-     * Sets the feature flags and field trial parameters to use in JUnit tests, since native calls
-     * are not available there.
-     */
-    @VisibleForTesting
-    public static void setTestValues(TestValues testFeatures) {
-        sTestFeatures = testFeatures;
-    }
-
-    /**
-     * @return Whether test feature values have been configured.
-     */
-    public static boolean hasTestFeatures() {
-        return sTestFeatures != null;
+        newTestValues.merge(testValuesToMerge, replace);
+        overwriteTestValues(newTestValues);
     }
 
     /**
@@ -155,7 +276,23 @@ public class FeatureList {
      * @return Whether the feature has a test value configured.
      */
     public static boolean hasTestFeature(String featureName) {
-        return hasTestFeatures() && sTestFeatures.mFeatureFlags.containsKey(featureName);
+        // TODO(crbug.com/40264751)): Copy into a local reference to avoid race conditions
+        // like crbug.com/1494095 unsetting the test features. Locking down flag state will allow
+        // this mitigation to be removed.
+        TestValues testValues = sTestFeatures;
+        return testValues != null && testValues.mFeatureFlags.containsKey(featureName);
+    }
+
+    /**
+     * @param featureName The name of the feature the param is part of.
+     * @param paramName The name of the param to query.
+     * @return Whether the param has a test value configured.
+     */
+    public static boolean hasTestParam(String featureName, String paramName) {
+        TestValues testValues = sTestFeatures;
+        return testValues != null
+                && testValues.mFieldTrialParams.containsKey(featureName)
+                && testValues.mFieldTrialParams.get(featureName).containsKey(paramName);
     }
 
     /**
@@ -165,17 +302,34 @@ public class FeatureList {
      * @return The test value set for the feature, or null if no test value has been set.
      * @throws IllegalArgumentException if no test value was set and default values aren't allowed.
      */
-    public static Boolean getTestValueForFeature(String featureName) {
-        if (hasTestFeatures()) {
-            Boolean override = sTestFeatures.getFeatureFlagOverride(featureName);
+    public static @Nullable Boolean getTestValueForFeatureStrict(String featureName) {
+        Boolean testValue = getTestValueForFeature(featureName);
+        if (testValue == null && sDisableNativeForTesting) {
+            throw new IllegalArgumentException(
+                    "No test value configured for "
+                            + featureName
+                            + " and native is not available to provide a default value. Use"
+                            + " @EnableFeatures or @DisableFeatures to provide test values for"
+                            + " the flag.");
+        }
+        return testValue;
+    }
+
+    /**
+     * Returns the test value of the feature with the given name.
+     *
+     * @param featureName The name of the feature to query.
+     * @return The test value set for the feature, or null if no test value has been set.
+     */
+    public static @Nullable Boolean getTestValueForFeature(String featureName) {
+        // TODO(crbug.com/40264751)): Copy into a local reference to avoid race conditions
+        // like crbug.com/1494095 unsetting the test features. Locking down flag state will allow
+        // this mitigation to be removed.
+        TestValues testValues = sTestFeatures;
+        if (testValues != null) {
+            Boolean override = testValues.getFeatureFlagOverride(featureName);
             if (override != null) {
                 return override;
-            }
-            if (!sTestCanUseDefaults) {
-                throw new IllegalArgumentException("No test value configured for " + featureName
-                        + " and native is not available to provide a default value. Use"
-                        + " @EnableFeatures or @DisableFeatures to provide test values for the"
-                        + " flag.");
             }
         }
         return null;
@@ -187,14 +341,34 @@ public class FeatureList {
      * @param featureName The name of the feature to query.
      * @param paramName The name of the field trial parameter to query.
      * @return The test value set for the parameter, or null if no test value has been set.
-     * @throws IllegalArgumentException if no test value was set and default values aren't allowed.
      */
-    public static String getTestValueForFieldTrialParam(String featureName, String paramName) {
-        if (hasTestFeatures()) {
-            String override = sTestFeatures.getFieldTrialParamOverride(featureName, paramName);
-            if (override != null) {
-                return override;
-            }
+    public static @Nullable String getTestValueForFieldTrialParam(
+            String featureName, String paramName) {
+        // TODO(crbug.com/40264751)): Copy into a local reference to avoid race conditions
+        // like crbug.com/1494095 unsetting the test features. Locking down flag state will allow
+        // this mitigation to be removed.
+        TestValues testValues = sTestFeatures;
+        if (testValues != null) {
+            return testValues.getFieldTrialParamOverride(featureName, paramName);
+        }
+        return null;
+    }
+
+    /**
+     * Returns the test value of the all field trial parameters of a given feature.
+     *
+     * @param featureName The name of the feature to query all parameters.
+     * @return The test values set for the parameter, or null if no test values have been set (if
+     *     test values were set for other features, an empty Map will be returned, not null).
+     */
+    public static @Nullable Map<String, String> getTestValuesForAllFieldTrialParamsForFeature(
+            String featureName) {
+        // TODO(crbug.com/40264751)): Copy into a local reference to avoid race conditions
+        // like crbug.com/1494095 unsetting the test features. Locking down flag state will allow
+        // this mitigation to be removed.
+        TestValues testValues = sTestFeatures;
+        if (testValues != null) {
+            return testValues.getAllFieldTrialParamOverridesForFeature(featureName);
         }
         return null;
     }

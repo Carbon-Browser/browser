@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include <string>
 
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/pickle.h"
 #include "build/build_config.h"
@@ -66,7 +67,7 @@ class IPC_MESSAGE_SUPPORT_EXPORT Message : public base::Pickle {
   // Initializes a message from a const block of data.  The data is not copied;
   // instead the data is merely referenced by this message.  Only const methods
   // should be used on the message when initialized this way.
-  Message(const char* data, int data_len);
+  Message(const char* data, size_t data_len);
 
   Message(const Message& other);
   Message& operator=(const Message& other);
@@ -111,7 +112,7 @@ class IPC_MESSAGE_SUPPORT_EXPORT Message : public base::Pickle {
     if (unblock) {
       header()->flags |= UNBLOCK_BIT;
     } else {
-      header()->flags &= ~UNBLOCK_BIT;
+      header()->flags &= static_cast<uint32_t>(~UNBLOCK_BIT);
     }
   }
 
@@ -279,7 +280,7 @@ class IPC_MESSAGE_SUPPORT_EXPORT Message : public base::Pickle {
   // Used for logging.
   mutable int64_t received_time_;
   mutable std::string output_params_;
-  mutable LogData* log_data_;
+  mutable raw_ptr<LogData> log_data_;
   mutable bool dont_log_;
 #endif
 

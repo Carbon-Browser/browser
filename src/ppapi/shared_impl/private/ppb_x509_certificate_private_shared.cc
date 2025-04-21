@@ -1,20 +1,24 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ppapi/shared_impl/private/ppb_x509_certificate_private_shared.h"
 
 #include <utility>
 
-#include "base/check.h"
+#include "base/notreached.h"
 #include "ppapi/shared_impl/ppapi_globals.h"
 #include "ppapi/shared_impl/var.h"
 #include "ppapi/shared_impl/var_tracker.h"
 
 namespace ppapi {
 
-PPB_X509Certificate_Fields::PPB_X509Certificate_Fields()
-    : values_(base::Value::Type::LIST) {}
+PPB_X509Certificate_Fields::PPB_X509Certificate_Fields() = default;
 
 PPB_X509Certificate_Fields::PPB_X509Certificate_Fields(
     const PPB_X509Certificate_Fields& fields)
@@ -22,26 +26,24 @@ PPB_X509Certificate_Fields::PPB_X509Certificate_Fields(
 
 void PPB_X509Certificate_Fields::SetField(
     PP_X509Certificate_Private_Field field,
-    std::unique_ptr<base::Value> value) {
-  DCHECK(value);
+    base::Value value) {
   uint32_t index = static_cast<uint32_t>(field);
   // Pad the list with null values if necessary.
-  while (index >= values_.GetListDeprecated().size())
+  while (index >= values_.size())
     values_.Append(base::Value());
-  values_.GetListDeprecated()[index] =
-      base::Value::FromUniquePtrValue(std::move(value));
+  values_[index] = std::move(value);
 }
 
 PP_Var PPB_X509Certificate_Fields::GetFieldAsPPVar(
     PP_X509Certificate_Private_Field field) const {
   uint32_t index = static_cast<uint32_t>(field);
-  if (index >= values_.GetListDeprecated().size()) {
+  if (index >= values_.size()) {
     // Our list received might be smaller than the number of fields, so just
     // return null if the index is OOB.
     return PP_MakeNull();
   }
 
-  const base::Value& value = values_.GetListDeprecated()[index];
+  const base::Value& value = values_[index];
   switch (value.type()) {
     case base::Value::Type::NONE:
       return PP_MakeNull();
@@ -65,15 +67,14 @@ PP_Var PPB_X509Certificate_Fields::GetFieldAsPPVar(
                                                                      buffer);
       return array_buffer;
     }
-    case base::Value::Type::DICTIONARY:
+    case base::Value::Type::DICT:
     case base::Value::Type::LIST:
       // Not handled.
       break;
   }
 
   // Should not reach here.
-  CHECK(false);
-  return PP_MakeUndefined();
+  NOTREACHED();
 }
 
 //------------------------------------------------------------------------------
@@ -133,8 +134,7 @@ bool PPB_X509Certificate_Private_Shared::ParseDER(
   // A concrete PPB_X509Certificate_Private_Shared should only ever be
   // constructed by passing in PPB_X509Certificate_Fields, in which case it is
   // already initialized.
-  CHECK(false);
-  return false;
+  NOTREACHED();
 }
 
 }  // namespace ppapi

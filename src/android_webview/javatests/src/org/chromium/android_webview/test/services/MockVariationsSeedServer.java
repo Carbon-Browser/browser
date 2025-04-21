@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,20 +32,23 @@ public class MockVariationsSeedServer extends VariationsSeedServer {
         sMetricsBundle = metricsBundle;
     }
 
-    private final IVariationsSeedServer.Stub mMockBinder = new IVariationsSeedServer.Stub() {
-        @Override
-        public void getSeed(ParcelFileDescriptor newSeedFile, long oldSeedDate,
-                IVariationsSeedServerCallback callback) {
-            if (sMetricsBundle != null) {
-                try {
-                    callback.reportVariationsServiceMetrics(sMetricsBundle);
-                } catch (RemoteException e) {
-                    throw new RuntimeException("Error reporting mock metrics", e);
+    private final IVariationsSeedServer.Stub mMockBinder =
+            new IVariationsSeedServer.Stub() {
+                @Override
+                public void getSeed(
+                        ParcelFileDescriptor newSeedFile,
+                        long oldSeedDate,
+                        IVariationsSeedServerCallback callback) {
+                    if (sMetricsBundle != null) {
+                        try {
+                            callback.reportVariationsServiceMetrics(sMetricsBundle);
+                        } catch (RemoteException e) {
+                            throw new RuntimeException("Error reporting mock metrics", e);
+                        }
+                    }
+                    sOnSeedRequested.notifyCalled();
                 }
-            }
-            sOnSeedRequested.notifyCalled();
-        }
-    };
+            };
 
     @Override
     public IBinder onBind(Intent intent) {

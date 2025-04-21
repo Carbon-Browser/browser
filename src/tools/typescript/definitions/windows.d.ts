@@ -1,9 +1,9 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 /** @fileoverview Definitions for chrome.windows API. */
-// TODO(crbug.com/1203307): Auto-generate this file.
+// TODO(crbug.com/40179454): Auto-generate this file.
 
 declare namespace chrome {
   export namespace windows {
@@ -44,23 +44,7 @@ declare namespace chrome {
       PANEL = 'panel',
     }
 
-    export interface GetInfo {
-      populate?: boolean;
-      windowTypes?: WindowType[];
-    }
-
-    export const WINDOW_ID_NONE: number;
-    export const WINDOW_ID_CURRENT: number;
-
-    export function get(windowId: number, getInfo: (GetInfo|null),
-                        callback: (p1: Window) => void): void;
-    export function getCurrent(getInfo: (GetInfo|null),
-                               callback: (p1: Window) => void): void;
-    export function getLastFocused(getInfo: (GetInfo|null),
-                                   callback: (p1: Window) => void): void;
-    export function getAll(getInfo: (GetInfo|null),
-                           callback: (p1: Window[]) => void): void;
-    type CreateData = {
+    interface CreateData {
       url?: (string|string[]);
       tabId?: number;
       left?: number;
@@ -74,21 +58,13 @@ declare namespace chrome {
       setSelfAsOpener?: boolean;
     }
 
-    export function create(createData?: CreateData,
-                           callback?: (p1: Window) => void): void;
-
-    type UpdateInfo = {
-      left?: number;
-      top?: number;
-      width?: number;
-      height?: number;
-      focused?: boolean;
-      drawAttention?: boolean;
-      state?: WindowState;
+    interface QueryOptions {
+      populate?: boolean;
+      windowTypes?: WindowType[];
     }
 
-    export function update(windowId: number, updateInfo: UpdateInfo,
-                           callback?: (p1: Window) => void): void;
-    export function remove(windowId: number, callback?: () => void): void;
+    export function create(createData?: CreateData): Promise<Window>;
+
+    export function getAll(queryOptions?: QueryOptions): Promise<Window[]>;
   }
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <cmath>
 
+#include "base/numerics/angle_conversions.h"
 #include "base/strings/stringprintf.h"
-#include "ui/gfx/geometry/angle_conversions.h"
 
 namespace {
 const double kEpsilon = 1.0e-6;
@@ -50,6 +50,14 @@ void Vector3dF::Scale(float x_scale, float y_scale, float z_scale) {
   z_ *= z_scale;
 }
 
+void Vector3dF::InvScale(float inv_x_scale,
+                         float inv_y_scale,
+                         float inv_z_scale) {
+  x_ /= inv_x_scale;
+  y_ /= inv_y_scale;
+  z_ /= inv_z_scale;
+}
+
 void Vector3dF::Cross(const Vector3dF& other) {
   double dx = x_;
   double dy = y_;
@@ -67,7 +75,7 @@ bool Vector3dF::GetNormalized(Vector3dF* out) const {
   *out = *this;
   if (length_squared < kEpsilon * kEpsilon)
     return false;
-  out->Scale(1 / sqrt(length_squared));
+  out->InvScale(sqrt(length_squared));
   return true;
 }
 
@@ -88,7 +96,7 @@ float AngleBetweenVectorsInDegrees(const gfx::Vector3dF& base,
                                    const gfx::Vector3dF& other) {
   // Clamp the resulting value to prevent potential NANs from floating point
   // precision issues.
-  return gfx::RadToDeg(std::acos(fmax(
+  return base::RadToDeg(std::acos(fmax(
       fmin(gfx::DotProduct(base, other) / base.Length() / other.Length(), 1.f),
       -1.f)));
 }

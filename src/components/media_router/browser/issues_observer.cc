@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,13 +15,15 @@ IssuesObserver::IssuesObserver(IssueManager* issue_manager)
 }
 
 IssuesObserver::~IssuesObserver() {
-  if (initialized_)
+  if (initialized_) {
     issue_manager_->UnregisterObserver(this);
+  }
 }
 
 void IssuesObserver::Init() {
-  if (initialized_)
+  if (initialized_) {
     return;
+  }
 
   issue_manager_->RegisterObserver(this);
   initialized_ = true;

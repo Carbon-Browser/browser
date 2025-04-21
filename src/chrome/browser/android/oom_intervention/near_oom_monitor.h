@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 #define CHROME_BROWSER_ANDROID_OOM_INTERVENTION_NEAR_OOM_MONITOR_H_
 
 #include "base/android/jni_android.h"
-#include "base/callback.h"
 #include "base/callback_list.h"
+#include "base/functional/callback.h"
 #include "base/process/process_metrics.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"

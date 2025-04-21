@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -59,5 +59,12 @@ TEST_F(TrustSafetySentimentServiceFactoryTest, NoServiceWithoutHats) {
 TEST_F(TrustSafetySentimentServiceFactoryTest, NoServiceFeatureDisabled) {
   feature_list()->Reset();
   feature_list()->InitAndDisableFeature(features::kTrustSafetySentimentSurvey);
+  EXPECT_FALSE(TrustSafetySentimentServiceFactory::GetForProfile(profile()));
+}
+
+TEST_F(TrustSafetySentimentServiceFactoryTest, VersionTwoEnabled) {
+  feature_list()->Reset();
+  feature_list()->InitWithFeatures({features::kTrustSafetySentimentSurveyV2},
+                                   {features::kTrustSafetySentimentSurvey});
   EXPECT_FALSE(TrustSafetySentimentServiceFactory::GetForProfile(profile()));
 }

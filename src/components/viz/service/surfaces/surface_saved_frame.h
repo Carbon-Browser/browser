@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,24 @@
 #define COMPONENTS_VIZ_SERVICE_SURFACES_SURFACE_SAVED_FRAME_H_
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/containers/flat_map.h"
 #include "base/memory/weak_ptr.h"
+#include "base/types/pass_key.h"
 #include "components/viz/common/frame_sinks/copy_output_result.h"
 #include "components/viz/common/quads/compositor_frame.h"
 #include "components/viz/common/quads/compositor_frame_transition_directive.h"
 #include "components/viz/common/quads/compositor_render_pass.h"
 #include "components/viz/common/resources/release_callback.h"
 #include "components/viz/service/viz_service_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "gpu/command_buffer/client/client_shared_image.h"
+#include "ui/gfx/display_color_spaces.h"
+
+namespace gpu {
+class SharedImageInterface;
+}
 
 namespace viz {
 
@@ -24,21 +31,15 @@ class Surface;
 
 class VIZ_SERVICE_EXPORT SurfaceSavedFrame {
  public:
-  using TransitionDirectiveCompleteCallback =
-      base::OnceCallback<void(uint32_t)>;
+  using CopyFinishedCallback =
+      base::OnceCallback<void(const CompositorFrameTransitionDirective&)>;
 
   struct RenderPassDrawData {
     RenderPassDrawData();
-    RenderPassDrawData(const CompositorRenderPass& render_pass, float opacity);
+    explicit RenderPassDrawData(const CompositorRenderPass& render_pass);
 
     // This represents the size of the copied texture.
     gfx::Size size;
-    // This is a transform that takes `rect` into a root render pass space. Note
-    // that this makes this result dependent on the structure of the compositor
-    // frame render pass list used to request the copy output.
-    gfx::Transform target_transform;
-    // Opacity accumulated from the original frame.
-    float opacity = 1.f;
   };
 
   struct OutputCopyResult {
@@ -48,13 +49,17 @@ class VIZ_SERVICE_EXPORT SurfaceSavedFrame {
 
     OutputCopyResult& operator=(OutputCopyResult&& other);
 
-    // Texture representation.
-    gpu::Mailbox mailbox;
     gpu::SyncToken sync_token;
     gfx::ColorSpace color_space;
 
+    // Texture representation.
+    gpu::Mailbox mailbox;
+
     // Software bitmap representation.
     SkBitmap bitmap;
+
+    // Software image representation.
+    scoped_refptr<gpu::ClientSharedImage> shared_image;
 
     // This is information needed to draw the texture as if it was a part of the
     // original frame.
@@ -74,12 +79,15 @@ class VIZ_SERVICE_EXPORT SurfaceSavedFrame {
 
     FrameResult& operator=(FrameResult&& other);
 
-    OutputCopyResult root_result;
-    std::vector<absl::optional<OutputCopyResult>> shared_results;
+    std::vector<std::optional<OutputCopyResult>> shared_results;
+    base::flat_set<ViewTransitionElementResourceId> empty_resource_ids;
   };
 
+  static std::unique_ptr<SurfaceSavedFrame> CreateForTesting(
+      CompositorFrameTransitionDirective directive);
+
   SurfaceSavedFrame(CompositorFrameTransitionDirective directive,
-                    TransitionDirectiveCompleteCallback finished_callback);
+                    gpu::SharedImageInterface* shared_image_interface);
   ~SurfaceSavedFrame();
 
   // Returns true iff the frame is valid and complete.
@@ -89,48 +97,31 @@ class VIZ_SERVICE_EXPORT SurfaceSavedFrame {
 
   // Appends copy output requests to the needed render passes in the active
   // frame.
-  void RequestCopyOfOutput(Surface* surface);
-  void ReleaseSurface();
+  void RequestCopyOfOutput(Surface* surface,
+                           CopyFinishedCallback finished_callback);
 
-  [[nodiscard]] absl::optional<FrameResult> TakeResult();
+  [[nodiscard]] FrameResult TakeResult();
 
   // For testing functionality that ensures that we have a valid frame.
   void CompleteSavedFrameForTesting();
 
-  base::flat_set<SharedElementResourceId> GetEmptyResourceIds() const;
+  base::flat_set<ViewTransitionElementResourceId> GetEmptyResourceIds() const;
 
  private:
-  enum class ResultType { kRoot, kShared };
-
-  // Replaced the CompositorFrame on the |surface| with a copy that places
-  // shared elements in individual render passes. This effectively allows them
-  // to be in independent layers that can be cached as textures.
-  class ScopedCleanSurface {
-   public:
-    ScopedCleanSurface(Surface* surface, CompositorFrame clean_frame);
-    ~ScopedCleanSurface();
-
-   private:
-    Surface* surface_;
-  };
-
-  // Queues copy requests by creating a copy of the CompositorFrame as specified
-  // in ScopedCleanSurface.
-  void CopyUsingCleanFrame(Surface* surface);
-
-  // Queues copy requests from the original CompositorFrame. This mode is used
-  // when the frame produced by the renderer already has independent render
-  // passes for each shared element.
-  void CopyUsingOriginalFrame(Surface* surface);
+  explicit SurfaceSavedFrame(base::PassKey<SurfaceSavedFrame>,
+                             CompositorFrameTransitionDirective directive);
 
   std::unique_ptr<CopyOutputRequest> CreateCopyRequestIfNeeded(
       const CompositorRenderPass& render_pass,
-      const CompositorRenderPassList& render_pass_list) const;
+      bool is_software,
+      gfx::ContentColorUsage content_color_usage);
 
-  void NotifyCopyOfOutputComplete(ResultType type,
-                                  size_t shared_index,
-                                  const RenderPassDrawData& info,
+  void NotifyCopyOfOutputComplete(size_t shared_index,
                                   std::unique_ptr<CopyOutputResult> result);
+
+  // The `directive_finished_callback_` is dispatched asynchronously since the
+  // callback can access *and* delete this object.
+  void DispatchCopyDoneCallback();
 
   size_t ExpectedResultCount() const;
 
@@ -162,9 +153,17 @@ class VIZ_SERVICE_EXPORT SurfaceSavedFrame {
   bool IsSharedElementRenderPass(CompositorRenderPassId pass_id) const;
 
   CompositorFrameTransitionDirective directive_;
-  TransitionDirectiveCompleteCallback directive_finished_callback_;
+  raw_ptr<gpu::SharedImageInterface> shared_image_interface_;
+  CopyFinishedCallback directive_finished_callback_;
 
-  absl::optional<FrameResult> frame_result_;
+  // Store the blit images while the copy output request is ongoing.
+  base::flat_map<size_t, scoped_refptr<gpu::ClientSharedImage>>
+      blit_shared_images_;
+
+  // Stored draw data for the shared index.
+  base::flat_map<size_t, RenderPassDrawData> draw_data_;
+
+  std::optional<FrameResult> frame_result_;
 
   // This is the number of copy requests we requested. We decrement this value
   // anytime we get a result back. When it reaches 0, we notify that this frame
@@ -177,10 +176,8 @@ class VIZ_SERVICE_EXPORT SurfaceSavedFrame {
   // whether the SurfaceSavedFrame is "valid".
   size_t valid_result_count_ = 0;
 
-  // Tracks whether the root render pass should be copied.
-  bool copy_root_render_pass_ = true;
-
-  absl::optional<ScopedCleanSurface> clean_surface_;
+  // This indicates whether or not to use blit requests.
+  const bool use_blit_requests_;
 
   base::WeakPtrFactory<SurfaceSavedFrame> weak_factory_{this};
 };

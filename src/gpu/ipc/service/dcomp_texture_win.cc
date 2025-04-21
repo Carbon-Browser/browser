@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,22 +6,24 @@
 
 #include <string.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/notreached.h"
+#include "base/power_monitor/power_monitor.h"
 #include "base/win/windows_types.h"
-#include "components/viz/common/resources/resource_sizes.h"
 #include "gpu/command_buffer/common/shared_image_usage.h"
-#include "gpu/command_buffer/service/mailbox_manager.h"
 #include "gpu/command_buffer/service/scheduler.h"
 #include "gpu/command_buffer/service/scheduler_task_runner.h"
-#include "gpu/command_buffer/service/shared_image/gl_image_backing.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_backing.h"
 #include "gpu/command_buffer/service/shared_image/shared_image_factory.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_representation.h"
 #include "gpu/ipc/common/gpu_channel.mojom.h"
 #include "gpu/ipc/service/gpu_channel.h"
 #include "gpu/ipc/service/gpu_channel_manager.h"
 #include "ipc/ipc_mojo_bootstrap.h"
 #include "ui/gfx/color_space.h"
 #include "ui/gfx/geometry/size.h"
+#include "ui/gfx/video_types.h"
 #include "ui/gl/dcomp_surface_registry.h"
 #include "ui/gl/scoped_make_current.h"
 
@@ -29,23 +31,67 @@ namespace gpu {
 
 namespace {
 
-constexpr base::TimeDelta kParentWindowPosPollingPeriod =
-    base::Milliseconds(1000);
+constexpr base::TimeDelta kParentWindowPosPollingPeriod = base::Seconds(1);
+constexpr base::TimeDelta kPowerChangeDetectionGracePeriod = base::Seconds(2);
 
-std::unique_ptr<ui::ScopedMakeCurrent> MakeCurrent(
-    SharedContextState* context_state) {
-  std::unique_ptr<ui::ScopedMakeCurrent> scoped_make_current;
-  bool needs_make_current = !context_state->IsCurrent(nullptr);
-  if (needs_make_current) {
-    scoped_make_current = std::make_unique<ui::ScopedMakeCurrent>(
-        context_state->context(), context_state->surface());
+class DCOMPTextureRepresentation : public OverlayImageRepresentation {
+ public:
+  DCOMPTextureRepresentation(
+      SharedImageManager* manager,
+      SharedImageBacking* backing,
+      MemoryTypeTracker* tracker,
+      scoped_refptr<gl::DCOMPSurfaceProxy> dcomp_surface_proxy)
+      : OverlayImageRepresentation(manager, backing, tracker),
+        dcomp_surface_proxy_(std::move(dcomp_surface_proxy)) {}
+
+  std::optional<gl::DCLayerOverlayImage> GetDCLayerOverlayImage() override {
+    return std::make_optional<gl::DCLayerOverlayImage>(size(),
+                                                       dcomp_surface_proxy_);
   }
-  return scoped_make_current;
-}
 
-using InitializeGLTextureParams =
-    GLTextureImageBackingHelper::InitializeGLTextureParams;
-using UnpackStateAttribs = GLTextureImageBackingHelper::UnpackStateAttribs;
+  bool BeginReadAccess(gfx::GpuFenceHandle& acquire_fence) override {
+    return true;
+  }
+
+  void EndReadAccess(gfx::GpuFenceHandle release_fence) override {}
+
+ private:
+  scoped_refptr<gl::DCOMPSurfaceProxy> dcomp_surface_proxy_;
+};
+
+class DCOMPTextureBacking : public ClearTrackingSharedImageBacking {
+ public:
+  DCOMPTextureBacking(scoped_refptr<gl::DCOMPSurfaceProxy> dcomp_surface_proxy,
+                      const Mailbox& mailbox,
+                      const gfx::Size& size)
+      : ClearTrackingSharedImageBacking(mailbox,
+                                        viz::SinglePlaneFormat::kBGRA_8888,
+                                        size,
+                                        gfx::ColorSpace::CreateSRGB(),
+                                        kTopLeft_GrSurfaceOrigin,
+                                        kPremul_SkAlphaType,
+                                        gpu::SHARED_IMAGE_USAGE_SCANOUT,
+                                        {},
+                                        /*estimated_size=*/0,
+                                        /*is_thread_safe=*/false),
+        dcomp_surface_proxy_(std::move(dcomp_surface_proxy)) {
+    SetCleared();
+  }
+
+  SharedImageBackingType GetType() const override {
+    return SharedImageBackingType::kDCOMPSurfaceProxy;
+  }
+
+  std::unique_ptr<OverlayImageRepresentation> ProduceOverlay(
+      SharedImageManager* manager,
+      MemoryTypeTracker* tracker) override {
+    return std::make_unique<DCOMPTextureRepresentation>(manager, this, tracker,
+                                                        dcomp_surface_proxy_);
+  }
+
+ private:
+  scoped_refptr<gl::DCOMPSurfaceProxy> dcomp_surface_proxy_;
+};
 
 }  // namespace
 
@@ -61,8 +107,6 @@ scoped_refptr<DCOMPTexture> DCOMPTexture::Create(
     DLOG(ERROR) << "GetSharedContextState() failed.";
     return nullptr;
   }
-
-  auto scoped_make_current = MakeCurrent(context_state.get());
   return base::WrapRefCounted(new DCOMPTexture(
       channel, route_id, std::move(receiver), std::move(context_state)));
 }
@@ -72,10 +116,7 @@ DCOMPTexture::DCOMPTexture(
     int32_t route_id,
     mojo::PendingAssociatedReceiver<mojom::DCOMPTexture> receiver,
     scoped_refptr<SharedContextState> context_state)
-    // Size of {1, 1} to signify the Media Foundation rendering pipeline is not
-    // ready to setup DCOMP video yet.
-    : GLImageDCOMPSurface({1, 1}, INVALID_HANDLE_VALUE),
-      channel_(channel),
+    : channel_(channel),
       route_id_(route_id),
       context_state_(std::move(context_state)),
       sequence_(channel_->scheduler()->CreateSequence(SchedulingPriority::kLow,
@@ -86,21 +127,26 @@ DCOMPTexture::DCOMPTexture(
   IPC::ScopedAllowOffSequenceChannelAssociatedBindings allow_binding;
   receiver_.Bind(std::move(receiver), runner);
   context_state_->AddContextLostObserver(this);
+  base::PowerMonitor::GetInstance()->AddPowerSuspendObserver(this);
   channel_->AddRoute(route_id, sequence_);
 }
 
 DCOMPTexture::~DCOMPTexture() {
+  DVLOG(1) << __func__;
   // |channel_| is always released before GpuChannel releases its reference to
   // this class.
   DCHECK(!channel_);
 
   context_state_->RemoveContextLostObserver(this);
+  base::PowerMonitor::GetInstance()->RemovePowerSuspendObserver(this);
+
   if (window_pos_timer_.IsRunning()) {
     window_pos_timer_.Stop();
   }
 }
 
 void DCOMPTexture::ReleaseChannel() {
+  DVLOG(1) << __func__;
   DCHECK(channel_);
 
   receiver_.ResetFromAnotherSequenceUnsafe();
@@ -108,14 +154,43 @@ void DCOMPTexture::ReleaseChannel() {
   channel_->scheduler()->DestroySequence(sequence_);
   sequence_ = SequenceId();
   channel_ = nullptr;
+
+  ResetSizeIfNeeded();
 }
 
 void DCOMPTexture::OnContextLost() {
-  context_lost_ = true;
+  DVLOG(1) << __func__;
 }
 
-bool DCOMPTexture::IsContextValid() const {
-  return !context_lost_;
+// TODO(xhwang): Also observe GPU LUID change.
+void DCOMPTexture::OnResume() {
+  DVLOG(1) << __func__;
+  last_power_change_time_ = base::TimeTicks::Now();
+  ResetSizeIfNeeded();
+}
+
+void DCOMPTexture::ResetSizeIfNeeded() {
+  DVLOG(2) << __func__;
+  // For `kHardwareProtected` video frame, when hardware content reset happens,
+  // e.g. OS suspend/resume or GPU hot swap, existing video frames become stale
+  // and presenting them could cause issues like black screen flash (see
+  // crbug.com/1384544). So we set `size_` to (1, 1) so that DComp surface
+  // resources will be released (see SwapChainPresenter::PresentDCOMPSurface()).
+  // We don't know for sure whether hardware content reset happened. So we check
+  // whether power suspend/resume or GPU change happened recently as a hint.
+  // Since it's a hint, to prevent breaking normal playback, we only do this
+  // when the video frame is orphaned (the media Renderer has been suspended or
+  // destroyed, but we are still showing the last frame), which will trigger
+  // `ReleaseChannel()` and set `channel_` to null.
+  if (!channel_ &&
+      protected_video_type_ == gfx::ProtectedVideoType::kHardwareProtected &&
+      base::TimeTicks::Now() - last_power_change_time_ <
+          kPowerChangeDetectionGracePeriod) {
+    DVLOG(1) << __func__
+             << ": Resetting size to {1,1} to release dcomp surface resources "
+                "and prevent stale content from being displayed";
+    size_ = gfx::Size(1, 1);
+  }
 }
 
 void DCOMPTexture::StartListening(
@@ -124,7 +199,7 @@ void DCOMPTexture::StartListening(
 }
 
 void DCOMPTexture::SetTextureSize(const gfx::Size& size) {
-  SetSize(size);
+  size_ = size;
   if (!shared_image_mailbox_created_) {
     if (client_) {
       shared_image_mailbox_created_ = true;
@@ -133,6 +208,14 @@ void DCOMPTexture::SetTextureSize(const gfx::Size& size) {
     } else
       DLOG(ERROR) << "Unable to call client_->OnSharedImageMailboxBound";
   }
+}
+
+const gfx::Size& DCOMPTexture::GetSize() const {
+  return size_;
+}
+
+HANDLE DCOMPTexture::GetSurfaceHandle() {
+  return surface_handle_.get();
 }
 
 void DCOMPTexture::SetDCOMPSurfaceHandle(
@@ -155,30 +238,16 @@ void DCOMPTexture::SetDCOMPSurfaceHandle(
 gpu::Mailbox DCOMPTexture::CreateSharedImage() {
   DCHECK(channel_);
 
-  auto scoped_make_current = MakeCurrent(context_state_.get());
-  auto mailbox = gpu::Mailbox::GenerateForSharedImage();
+  auto mailbox = gpu::Mailbox::Generate();
 
-  // Use GLImageBacking as the backing to hold GLImageDCOMPSurface
+  // Use DCOMPTextureBacking as the backing to hold DCOMPSurfaceProxy i.e. this,
   // and be able to retrieve it later via ProduceOverlay.
-  // Use some reasonable defaults for params to create GLImageBacking
-  // since params are only used when the backing is accessed for GL.
-  // Note: this backing shouldn't be accessed via GL at all.
-  InitializeGLTextureParams params;
-  params.target = GL_TEXTURE_2D;
-  params.internal_format = GL_RGBA;
-  params.format = GL_RGBA;
-  params.is_cleared = true;
-  params.is_rgb_emulation = false;
-  params.framebuffer_attachment_angle = false;
-  UnpackStateAttribs attribs;
-  auto shared_image = std::make_unique<GLImageBacking>(
-      this, mailbox, viz::BGRA_8888, GetSize(), gfx::ColorSpace::CreateSRGB(),
-      kTopLeft_GrSurfaceOrigin, kPremul_SkAlphaType,
-      /*usage=*/SHARED_IMAGE_USAGE_DISPLAY, params, attribs,
-      /*use_passthrough=*/true);
+  // Note: DCOMPTextureBacking shouldn't be accessed via GL at all.
+  auto shared_image =
+      std::make_unique<DCOMPTextureBacking>(this, mailbox, size_);
 
   channel_->shared_image_stub()->factory()->RegisterBacking(
-      std::move(shared_image), /*allow_legacy_mailbox=*/false);
+      std::move(shared_image));
 
   return mailbox;
 }
@@ -198,11 +267,13 @@ void DCOMPTexture::OnUpdateParentWindowRect() {
 }
 
 void DCOMPTexture::SetParentWindow(HWND parent) {
-  GLImageDCOMPSurface::SetParentWindow(parent);
-  OnUpdateParentWindowRect();
-  if (!window_pos_timer_.IsRunning()) {
-    window_pos_timer_.Start(FROM_HERE, kParentWindowPosPollingPeriod, this,
-                            &DCOMPTexture::OnUpdateParentWindowRect);
+  if (last_parent_ != parent) {
+    last_parent_ = parent;
+    OnUpdateParentWindowRect();
+    if (!window_pos_timer_.IsRunning()) {
+      window_pos_timer_.Start(FROM_HERE, kParentWindowPosPollingPeriod, this,
+                              &DCOMPTexture::OnUpdateParentWindowRect);
+    }
   }
 }
 
@@ -221,6 +292,16 @@ void DCOMPTexture::SetRect(const gfx::Rect& window_relative_rect) {
 
   if (should_send_output_rect)
     SendOutputRect();
+}
+
+void DCOMPTexture::SetProtectedVideoType(
+    gfx::ProtectedVideoType protected_video_type) {
+  if (protected_video_type == protected_video_type_)
+    return;
+
+  DVLOG(2) << __func__ << ": protected_video_type="
+           << static_cast<int>(protected_video_type);
+  protected_video_type_ = protected_video_type;
 }
 
 void DCOMPTexture::SendOutputRect() {

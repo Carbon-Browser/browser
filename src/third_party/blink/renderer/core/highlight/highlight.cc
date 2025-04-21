@@ -1,9 +1,10 @@
-﻿// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/highlight/highlight.h"
 
+#include "base/not_fatal_until.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
@@ -25,7 +26,7 @@ Highlight::~Highlight() = default;
 void Highlight::Trace(blink::Visitor* visitor) const {
   visitor->Trace(highlight_ranges_);
   visitor->Trace(containing_highlight_registries_);
-  ScriptWrappable::Trace(visitor);
+  EventTarget::Trace(visitor);
 }
 
 void Highlight::ScheduleRepaintsInContainingHighlightRegistries() const {
@@ -39,8 +40,9 @@ void Highlight::ScheduleRepaintsInContainingHighlightRegistries() const {
 Highlight* Highlight::addForBinding(ScriptState*,
                                     AbstractRange* range,
                                     ExceptionState&) {
-  if (highlight_ranges_.insert(range).is_new_entry)
+  if (highlight_ranges_.insert(range).is_new_entry) {
     ScheduleRepaintsInContainingHighlightRegistries();
+  }
   return this;
 }
 
@@ -80,6 +82,18 @@ bool Highlight::Contains(AbstractRange* range) const {
   return highlight_ranges_.Contains(range);
 }
 
+const AtomicString& Highlight::InterfaceName() const {
+  // TODO(crbug.com/1346693)
+  NOTIMPLEMENTED();
+  return g_null_atom;
+}
+
+ExecutionContext* Highlight::GetExecutionContext() const {
+  // TODO(crbug.com/1346693)
+  NOTIMPLEMENTED();
+  return nullptr;
+}
+
 void Highlight::RegisterIn(HighlightRegistry* highlight_registry) {
   auto map_iterator = containing_highlight_registries_.find(highlight_registry);
   if (map_iterator == containing_highlight_registries_.end()) {
@@ -92,7 +106,8 @@ void Highlight::RegisterIn(HighlightRegistry* highlight_registry) {
 
 void Highlight::DeregisterFrom(HighlightRegistry* highlight_registry) {
   auto map_iterator = containing_highlight_registries_.find(highlight_registry);
-  DCHECK_NE(map_iterator, containing_highlight_registries_.end());
+  CHECK_NE(map_iterator, containing_highlight_registries_.end(),
+           base::NotFatalUntil::M130);
   DCHECK_GT(map_iterator->value, 0u);
   if (--map_iterator->value == 0)
     containing_highlight_registries_.erase(map_iterator);
@@ -107,13 +122,12 @@ Highlight::IterationSource::IterationSource(const Highlight& highlight)
   }
 }
 
-bool Highlight::IterationSource::Next(ScriptState*,
-                                      Member<AbstractRange>& key,
-                                      Member<AbstractRange>& value,
-                                      ExceptionState&) {
+bool Highlight::IterationSource::FetchNextItem(ScriptState*,
+                                               AbstractRange*& value,
+                                               ExceptionState&) {
   if (index_ >= highlight_ranges_snapshot_.size())
     return false;
-  key = value = highlight_ranges_snapshot_[index_++];
+  value = highlight_ranges_snapshot_[index_++];
   return true;
 }
 
@@ -122,7 +136,7 @@ void Highlight::IterationSource::Trace(blink::Visitor* visitor) const {
   HighlightSetIterable::IterationSource::Trace(visitor);
 }
 
-HighlightSetIterable::IterationSource* Highlight::StartIteration(
+HighlightSetIterable::IterationSource* Highlight::CreateIterationSource(
     ScriptState*,
     ExceptionState&) {
   return MakeGarbageCollected<IterationSource>(*this);

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,17 +44,9 @@ class PpdResolutionState {
   // Returns true if a PpdReference was retrieved.
   bool WasResolutionSuccessful() const;
 
-  // Marks the printer as not autoconfigurable. This flag is set after
-  // unsuccessful attempt to configure the printer automatically.
-  void MarkPrinterAsNotAutoconfigurable();
-
-  // Returns true <=> the method above was called for the printer.
-  bool IsMarkedAsNotAutoconfigurable() const;
-
  private:
   bool is_inflight_;
   bool is_ppd_resolution_successful_;
-  bool is_not_autoconfigurable_;
   chromeos::Printer::PpdReference ppd_reference_;
   std::string usb_manufacturer_;
 };

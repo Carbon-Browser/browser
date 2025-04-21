@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,20 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_WORKERS_GLOBAL_SCOPE_CREATION_PARAMS_H_
 
 #include <memory>
+#include <optional>
 
+#include "base/task/single_thread_task_runner.h"
 #include "base/unguessable_token.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
+#include "net/storage_access_api/status.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
 #include "services/network/public/mojom/referrer_policy.mojom-blink-forward.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/permissions_policy/permissions_policy.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/public/common/user_agent/user_agent_metadata.h"
+#include "third_party/blink/public/mojom/blob/blob_url_store.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/browser_interface_broker.mojom-blink-forward.h"
-#include "third_party/blink/public/mojom/loader/code_cache.mojom.h"
+#include "third_party/blink/public/mojom/loader/code_cache.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/script/script_type.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/v8_cache_options.mojom-blink.h"
 #include "third_party/blink/public/platform/web_content_settings_client.h"
@@ -47,7 +50,7 @@ struct CORE_EXPORT GlobalScopeCreationParams final {
       mojom::blink::ScriptType script_type,
       const String& global_scope_name,
       const String& user_agent,
-      const absl::optional<UserAgentMetadata>& ua_metadata,
+      const std::optional<UserAgentMetadata>& ua_metadata,
       scoped_refptr<WebWorkerFetchContext>,
       Vector<network::mojom::blink::ContentSecurityPolicyPtr>
           outside_content_security_policies,
@@ -59,24 +62,33 @@ struct CORE_EXPORT GlobalScopeCreationParams final {
       HttpsState starter_https_state,
       WorkerClients*,
       std::unique_ptr<WebContentSettingsClient>,
-      const Vector<OriginTrialFeature>* inherited_trial_features,
+      const Vector<mojom::blink::OriginTrialFeature>* inherited_trial_features,
       const base::UnguessableToken& parent_devtools_token,
       std::unique_ptr<WorkerSettings>,
       mojom::blink::V8CacheOptions,
       WorkletModuleResponsesMap*,
       mojo::PendingRemote<mojom::blink::BrowserInterfaceBroker>
           browser_interface_broker = mojo::NullRemote(),
-      mojo::PendingRemote<blink::mojom::CodeCacheHost> code_cahe_host =
+      mojo::PendingRemote<mojom::blink::CodeCacheHost> code_cahe_host =
+          mojo::NullRemote(),
+      mojo::PendingRemote<mojom::blink::BlobURLStore> blob_url_store =
           mojo::NullRemote(),
       BeginFrameProviderParams begin_frame_provider_params = {},
       const PermissionsPolicy* parent_permissions_policy = nullptr,
       base::UnguessableToken agent_cluster_id = {},
       ukm::SourceId ukm_source_id = ukm::kInvalidSourceId,
-      const absl::optional<ExecutionContextToken>& parent_context_token =
-          absl::nullopt,
+      const std::optional<ExecutionContextToken>& parent_context_token =
+          std::nullopt,
       bool parent_cross_origin_isolated_capability = false,
-      bool parent_direct_socket_capability = false,
-      InterfaceRegistry* interface_registry = nullptr);
+      bool parent_is_isolated_context = false,
+      InterfaceRegistry* interface_registry = nullptr,
+      scoped_refptr<base::SingleThreadTaskRunner>
+          agent_group_scheduler_compositor_task_runner = nullptr,
+      const SecurityOrigin* top_level_frame_security_origin = nullptr,
+      net::StorageAccessApiStatus parent_storage_access_api_status =
+          net::StorageAccessApiStatus::kNone,
+      bool require_cross_site_request_for_cookies = false,
+      scoped_refptr<SecurityOrigin> origin_to_use = nullptr);
   GlobalScopeCreationParams(const GlobalScopeCreationParams&) = delete;
   GlobalScopeCreationParams& operator=(const GlobalScopeCreationParams&) =
       delete;
@@ -120,7 +132,8 @@ struct CORE_EXPORT GlobalScopeCreationParams final {
 
   // Origin trial features to be inherited by worker/worklet from the document
   // loading it.
-  std::unique_ptr<Vector<OriginTrialFeature>> inherited_trial_features;
+  std::unique_ptr<Vector<mojom::blink::OriginTrialFeature>>
+      inherited_trial_features;
 
   // The SecurityOrigin of the Document creating a Worker/Worklet.
   //
@@ -135,6 +148,15 @@ struct CORE_EXPORT GlobalScopeCreationParams final {
   // scripts need to be fetched as sub-resources of the Document, and a module
   // script loader uses Document's SecurityOrigin for security checks.
   scoped_refptr<const SecurityOrigin> starter_origin;
+
+  // The SecurityOrigin to be used by the worker, if it's pre-calculated
+  // already (e.g. passed down from the browser to the renderer). Only set
+  // for dedicated and shared workers. When PlzDedicatedWorker is enabled, the
+  // origin is calculated in the browser process and sent to the renderer. When
+  // PlzDedicatedWorker is disabled, the origin is calculated in the renderer
+  // and then passed to the browser process. This guarantees both the renderer
+  // and browser knows the exact origin used by the worker.
+  scoped_refptr<SecurityOrigin> origin_to_use;
 
   // Indicates if the Document creating a Worker/Worklet is a secure context.
   //
@@ -171,7 +193,9 @@ struct CORE_EXPORT GlobalScopeCreationParams final {
   mojo::PendingRemote<mojom::blink::BrowserInterfaceBroker>
       browser_interface_broker;
 
-  mojo::PendingRemote<blink::mojom::CodeCacheHost> code_cache_host_interface;
+  mojo::PendingRemote<mojom::blink::CodeCacheHost> code_cache_host_interface;
+
+  mojo::PendingRemote<mojom::blink::BlobURLStore> blob_url_store;
 
   BeginFrameProviderParams begin_frame_provider_params;
 
@@ -188,7 +212,7 @@ struct CORE_EXPORT GlobalScopeCreationParams final {
   // The identity of the parent ExecutionContext that is the sole owner of this
   // worker or worklet, which caused it to be created, and to whose lifetime
   // this worker/worklet is bound. This is used for resource usage attribution.
-  absl::optional<ExecutionContextToken> parent_context_token;
+  std::optional<ExecutionContextToken> parent_context_token;
 
   // https://html.spec.whatwg.org/C/#concept-settings-object-cross-origin-isolated-capability
   // Used by dedicated workers, and set to false when there is no parent.
@@ -197,10 +221,38 @@ struct CORE_EXPORT GlobalScopeCreationParams final {
   // Governs whether Direct Sockets are available in a worker context, false
   // when no parent exists.
   //
-  // TODO(mkwst): We need a specification for this capability.
-  const bool parent_direct_socket_capability;
+  // TODO(crbug.com/1206150): We need a specification for this capability.
+  const bool parent_is_isolated_context;
 
   InterfaceRegistry* const interface_registry;
+
+  // The compositor task runner associated with the |AgentGroupScheduler| this
+  // worker belongs to.
+  scoped_refptr<base::SingleThreadTaskRunner>
+      agent_group_scheduler_compositor_task_runner;
+
+  // The security origin of the top level frame associated with the worker. This
+  // can be used, for instance, to check if the top level frame has an opaque
+  // origin.
+  scoped_refptr<const SecurityOrigin> top_level_frame_security_origin;
+
+  // Timestamp of the dedicated worker start.
+  // i.e. when DedicatedWorkerStart() was called.
+  std::optional<base::TimeTicks> dedicated_worker_start_time;
+
+  // The parent ExecutionContext's Storage Access API status.
+  const net::StorageAccessApiStatus parent_storage_access_api_status;
+
+  // Late initialized on thread creation. This signals whether the world created
+  // is the default world for an isolate.
+  bool is_default_world_of_isolate = false;
+
+  // If `require_cross_site_request_for_cookies` is specified, then all requests
+  // made must have an empty site_for_cookies to ensure only SameSite=None
+  // cookies can be attached to the request.
+  // For context on usage see:
+  // https://privacycg.github.io/saa-non-cookie-storage/shared-workers.html
+  const bool require_cross_site_request_for_cookies;
 };
 
 }  // namespace blink

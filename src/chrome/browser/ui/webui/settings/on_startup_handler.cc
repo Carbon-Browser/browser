@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "chrome/browser/extensions/settings_api_helpers.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/webui/settings/settings_utils.h"
@@ -27,7 +27,7 @@ const char OnStartupHandler::kOnStartupNtpExtensionEventName[] =
 OnStartupHandler::OnStartupHandler(Profile* profile) : profile_(profile) {
   DCHECK(profile);
 }
-OnStartupHandler::~OnStartupHandler() {}
+OnStartupHandler::~OnStartupHandler() = default;
 
 void OnStartupHandler::OnJavascriptAllowed() {
   extension_registry_observation_.Observe(
@@ -69,14 +69,13 @@ base::Value OnStartupHandler::GetNtpExtension() {
     return base::Value();
   }
 
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetStringKey("id", ntp_extension->id());
-  dict.SetStringKey("name", ntp_extension->name());
-  dict.SetBoolKey("canBeDisabled",
-                  !extensions::ExtensionSystem::Get(profile_)
-                       ->management_policy()
-                       ->MustRemainEnabled(ntp_extension, nullptr));
-  return dict;
+  base::Value::Dict dict;
+  dict.Set("id", ntp_extension->id());
+  dict.Set("name", ntp_extension->name());
+  dict.Set("canBeDisabled", !extensions::ExtensionSystem::Get(profile_)
+                                 ->management_policy()
+                                 ->MustRemainEnabled(ntp_extension, nullptr));
+  return base::Value(std::move(dict));
 }
 
 void OnStartupHandler::HandleGetNtpExtension(const base::Value::List& args) {

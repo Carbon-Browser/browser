@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -102,8 +102,8 @@ class PPAPIDownloadRequest : public content::WebContentsObserver {
 
   friend class DownloadProtectionService;
 
-  // Allowlist checking needs to the done on the IO thread.
-  static void CheckAllowlistsOnIOThread(
+  // Allowlist checking needs to the done on the UI thread.
+  static void CheckAllowlistsOnUIThread(
       const GURL& requestor_url,
       scoped_refptr<SafeBrowsingDatabaseManager> database_manager,
       base::WeakPtr<PPAPIDownloadRequest> download_request);
@@ -149,7 +149,7 @@ class PPAPIDownloadRequest : public content::WebContentsObserver {
   SessionID tab_id_;
 
   // If the user interacted with this PPAPI plugin to trigger the download.
-  bool has_user_gesture_;
+  bool has_user_gesture_ = false;
 
   // Default download path requested by the PPAPI plugin.
   const base::FilePath default_file_path_;

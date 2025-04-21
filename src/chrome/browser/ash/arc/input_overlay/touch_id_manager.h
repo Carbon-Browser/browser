@@ -1,14 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_ARC_INPUT_OVERLAY_TOUCH_ID_MANAGER_H_
 #define CHROME_BROWSER_ASH_ARC_INPUT_OVERLAY_TOUCH_ID_MANAGER_H_
 
-#include "base/no_destructor.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
 
-namespace arc {
+#include "base/no_destructor.h"
+
+namespace arc::input_overlay {
 
 // TouchIdManager manages the touch id for input overlay feature.
 class TouchIdManager {
@@ -40,6 +41,6 @@ class TouchIdManager {
   int touch_ids_ = 0;
 };
 
-}  // namespace arc
+}  // namespace arc::input_overlay
 
 #endif  // CHROME_BROWSER_ASH_ARC_INPUT_OVERLAY_TOUCH_ID_MANAGER_H_

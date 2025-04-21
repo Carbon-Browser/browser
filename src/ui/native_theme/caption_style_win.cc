@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,6 @@
 #include "base/numerics/safe_conversions.h"
 #include "base/trace_event/trace_event.h"
 #include "base/win/core_winrt_util.h"
-#include "base/win/windows_version.h"
 #include "skia/ext/skia_utils_win.h"
 #include "ui/base/ui_base_features.h"
 #include "ui/gfx/color_utils.h"
@@ -67,8 +66,6 @@ void GetFontFamilyString(CC::ClosedCaptionStyle closed_caption_style,
     case CC::ClosedCaptionStyle_Default:
       // We shouldn't override with OS Styling for Default case.
       NOTREACHED();
-      *css_font_family = std::string();
-      break;
   }
 }
 
@@ -93,7 +90,6 @@ std::string GetEdgeEffectString(CC::ClosedCaptionEdgeEffect edge_effect) {
     case CC::ClosedCaptionEdgeEffect_Default:
       // We shouldn't override with OS Styling for Default case.
       NOTREACHED();
-      return std::string();
   }
 }
 
@@ -112,7 +108,6 @@ std::string GetCaptionSizeString(CC::ClosedCaptionSize caption_size) {
     case CC::ClosedCaptionSize_Default:
       // We shouldn't override with OS Styling for Default case.
       NOTREACHED();
-      return std::string();
   }
 }
 
@@ -157,7 +152,6 @@ SkColor GetCaptionColor(CC::ClosedCaptionColor caption_color) {
     default:
       // We shouldn't override with OS Styling for Default case.
       NOTREACHED();
-      return SK_ColorWHITE;
   }
 }
 
@@ -171,18 +165,8 @@ std::string GetCssColorWithAlpha(CC::ClosedCaptionColor caption_color,
   return color_utils::SkColorToRgbaString(SkColorSetA(color, opacity));
 }
 
-absl::optional<CaptionStyle> InitializeFromSystemSettings() {
+std::optional<CaptionStyle> InitializeFromSystemSettings() {
   TRACE_EVENT0("ui", "InitializeFromSystemSettings");
-  DCHECK_GE(base::win::GetVersion(), base::win::Version::WIN10);
-  DCHECK(base::FeatureList::IsEnabled(features::kSystemCaptionStyle));
-
-  // Need to do this check before using ScopedHString.
-  bool can_use_scoped_hstring =
-      base::win::ResolveCoreWinRTDelayload() &&
-      base::win::ScopedHString::ResolveCoreWinRTStringDelayload();
-
-  if (!can_use_scoped_hstring)
-    return absl::nullopt;
 
   base::win::ScopedHString closed_caption_properties_string =
       base::win::ScopedHString::Create(
@@ -192,56 +176,66 @@ absl::optional<CaptionStyle> InitializeFromSystemSettings() {
   HRESULT hr = base::win::RoGetActivationFactory(
       closed_caption_properties_string.get(),
       IID_PPV_ARGS(&closed_caption_properties_statics));
-  if (FAILED(hr))
-    return absl::nullopt;
+  if (FAILED(hr)) {
+    return std::nullopt;
+  }
 
   CC::ClosedCaptionSize font_size = CC::ClosedCaptionSize_Default;
   hr = closed_caption_properties_statics->get_FontSize(&font_size);
-  if (FAILED(hr))
-    return absl::nullopt;
+  if (FAILED(hr)) {
+    return std::nullopt;
+  }
 
   CC::ClosedCaptionEdgeEffect edge_effect = CC::ClosedCaptionEdgeEffect_Default;
   hr = closed_caption_properties_statics->get_FontEffect(&edge_effect);
-  if (FAILED(hr))
-    return absl::nullopt;
+  if (FAILED(hr)) {
+    return std::nullopt;
+  }
 
   CC::ClosedCaptionStyle font_family = CC::ClosedCaptionStyle_Default;
   hr = closed_caption_properties_statics->get_FontStyle(&font_family);
-  if (FAILED(hr))
-    return absl::nullopt;
+  if (FAILED(hr)) {
+    return std::nullopt;
+  }
 
   CC::ClosedCaptionColor font_color = CC::ClosedCaptionColor_Default;
   hr = closed_caption_properties_statics->get_FontColor(&font_color);
-  if (FAILED(hr))
-    return absl::nullopt;
+  if (FAILED(hr)) {
+    return std::nullopt;
+  }
 
   CC::ClosedCaptionOpacity font_opacity = CC::ClosedCaptionOpacity_Default;
   hr = closed_caption_properties_statics->get_FontOpacity(&font_opacity);
-  if (FAILED(hr))
-    return absl::nullopt;
+  if (FAILED(hr)) {
+    return std::nullopt;
+  }
 
   CC::ClosedCaptionColor background_color = CC::ClosedCaptionColor_Default;
   hr =
       closed_caption_properties_statics->get_BackgroundColor(&background_color);
-  if (FAILED(hr))
-    return absl::nullopt;
+  if (FAILED(hr)) {
+    return std::nullopt;
+  }
 
   CC::ClosedCaptionOpacity background_opacity =
       CC::ClosedCaptionOpacity_Default;
   hr = closed_caption_properties_statics->get_BackgroundOpacity(
       &background_opacity);
-  if (FAILED(hr))
-    return absl::nullopt;
+  if (FAILED(hr)) {
+    return std::nullopt;
+  }
 
   CC::ClosedCaptionColor region_color = CC::ClosedCaptionColor_Default;
   hr = closed_caption_properties_statics->get_RegionColor(&region_color);
-  if (FAILED(hr))
-    return absl::nullopt;
+  if (FAILED(hr)) {
+    return std::nullopt;
+  }
 
   CC::ClosedCaptionOpacity region_opacity = CC::ClosedCaptionOpacity_Default;
   hr = closed_caption_properties_statics->get_RegionOpacity(&region_opacity);
-  if (FAILED(hr))
-    return absl::nullopt;
+  if (FAILED(hr)) {
+    return std::nullopt;
+  }
 
   CaptionStyle caption_style;
   if (font_family != CC::ClosedCaptionStyle_Default) {
@@ -251,8 +245,9 @@ absl::optional<CaptionStyle> InitializeFromSystemSettings() {
     caption_style.font_variant = AddCSSImportant(caption_style.font_variant);
   }
 
-  if (font_size != CC::ClosedCaptionSize_Default)
+  if (font_size != CC::ClosedCaptionSize_Default) {
     caption_style.text_size = AddCSSImportant(GetCaptionSizeString(font_size));
+  }
 
   if (edge_effect != CC::ClosedCaptionEdgeEffect_Default) {
     caption_style.text_shadow =
@@ -279,14 +274,8 @@ absl::optional<CaptionStyle> InitializeFromSystemSettings() {
 
 }  // namespace
 
-absl::optional<CaptionStyle> CaptionStyle::FromSystemSettings() {
-  if (base::win::GetVersion() >= base::win::Version::WIN10 &&
-      base::FeatureList::IsEnabled(features::kSystemCaptionStyle)) {
-    return InitializeFromSystemSettings();
-  }
-  // Return default CaptionStyle for pre Win10 versions since system settings
-  // don't allow caption styling.
-  return absl::nullopt;
+std::optional<CaptionStyle> CaptionStyle::FromSystemSettings() {
+  return InitializeFromSystemSettings();
 }
 
 }  // namespace ui

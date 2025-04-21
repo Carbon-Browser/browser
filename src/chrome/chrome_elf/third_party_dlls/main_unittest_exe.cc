@@ -1,9 +1,9 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-#include <windows.h>
-
 #include "chrome/chrome_elf/third_party_dlls/main_unittest_exe.h"
+
+#include <windows.h>
 
 #include <shellapi.h>
 #include <stdlib.h>
@@ -70,7 +70,7 @@ bool MatchPath(const wchar_t* arg_path, const third_party_dlls::LogEntry& log) {
 // - Attempt to load a specific DLL.
 //
 // Arguments:
-// #1: path to test blacklist file (mandatory).
+// #1: path to test blocklist file (mandatory).
 // #2: test identifier (mandatory).
 // #3: path to dll (test-identifier dependent).
 //
@@ -92,21 +92,21 @@ int main() {
   install_static::InitializeProductDetailsForPrimaryModule();
   install_static::InitializeProcessType();
 
-  // Get the required arguments, path to blacklist file and test id to run.
+  // Get the required arguments, path to blocklist file and test id to run.
   if (argument_count < 3)
     return third_party_dlls::kMissingArgument;
 
-  const wchar_t* blacklist_path = argv[1];
-  if (!blacklist_path || ::wcslen(blacklist_path) == 0)
-    return third_party_dlls::kBadBlacklistPath;
+  const wchar_t* blocklist_path = argv[1];
+  if (!blocklist_path || ::wcslen(blocklist_path) == 0)
+    return third_party_dlls::kBadBlocklistPath;
 
   const wchar_t* arg2 = argv[2];
   int test_id = ::_wtoi(arg2);
   if (!test_id)
     return third_party_dlls::kUnsupportedTestId;
 
-  // Override blacklist path before initializing.
-  third_party_dlls::OverrideFilePathForTesting(blacklist_path);
+  // Override blocklist path before initializing.
+  third_party_dlls::OverrideFilePathForTesting(blocklist_path);
 
   // Enable a registry test net before initializing.
   registry_util::RegistryOverrideManager rom;

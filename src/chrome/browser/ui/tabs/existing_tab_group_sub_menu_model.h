@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_UI_TABS_EXISTING_TAB_GROUP_SUB_MENU_MODEL_H_
 
 #include <stddef.h>
+
 #include <vector>
 
 #include "chrome/browser/ui/tabs/existing_base_sub_menu_model.h"
@@ -31,10 +32,9 @@ class ExistingTabGroupSubMenuModel : public ExistingBaseSubMenuModel {
   // Whether the submenu should be shown in the provided context. True iff
   // the submenu would show at least one group. Does not assume ownership of
   // |model|; |model| must outlive this instance.
-  static bool ShouldShowSubmenu(TabStripModel* model, int context_index);
-
-  // ExistingBaseSubMenuModel:
-  std::u16string GetLabelAt(size_t index) const override;
+  static bool ShouldShowSubmenu(TabStripModel* model,
+                                int context_index,
+                                TabMenuModelDelegate* tab_menu_model_delegate);
 
   // Used for testing.
   void ExecuteExistingCommandForTesting(size_t target_index);

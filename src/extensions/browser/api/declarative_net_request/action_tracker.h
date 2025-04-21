@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,16 @@
 
 #include <list>
 #include <map>
+#include <optional>
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
+#include "extensions/browser/api/declarative_net_request/prefs_helper.h"
 #include "extensions/common/api/declarative_net_request.h"
 #include "extensions/common/api/declarative_net_request/constants.h"
 #include "extensions/common/extension_id.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class Clock;
@@ -29,7 +30,6 @@ class BrowserContext;
 namespace extensions {
 
 class Extension;
-class ExtensionPrefs;
 struct WebRequestInfo;
 
 namespace declarative_net_request {
@@ -46,7 +46,7 @@ class ActionTracker {
   ActionTracker(const ActionTracker& other) = delete;
   ActionTracker& operator=(const ActionTracker& other) = delete;
 
-  // TODO(crbug.com/1043367): Use a task environment to avoid having to set
+  // TODO(crbug.com/40115239): Use a task environment to avoid having to set
   // clocks just for tests.
 
   // Sets a custom Clock to use in tests. |clock| should be owned by the caller
@@ -93,7 +93,7 @@ class ActionTracker {
   // rules matched for |tab_id| will be returned.
   std::vector<api::declarative_net_request::MatchedRuleInfo> GetMatchedRules(
       const Extension& extension,
-      const absl::optional<int>& tab_id,
+      const std::optional<int>& tab_id,
       const base::Time& min_time_stamp);
 
   // Returns the number of matched rules in |rules_tracked_| for the given
@@ -211,7 +211,7 @@ class ActionTracker {
 
   raw_ptr<content::BrowserContext> browser_context_;
 
-  raw_ptr<ExtensionPrefs> extension_prefs_;
+  PrefsHelper prefs_helper_;
 };
 
 }  // namespace declarative_net_request

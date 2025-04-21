@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 
 #include "ash/public/cpp/ash_public_export.h"
 #include "ash/public/cpp/session/session_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "components/account_id/account_id.h"
 
@@ -27,9 +28,8 @@ class HoldingSpaceModel;
 class ASH_PUBLIC_EXPORT HoldingSpaceController : public SessionObserver {
  public:
   HoldingSpaceController();
-  HoldingSpaceController(const HoldingSpaceController& other) = delete;
-  HoldingSpaceController& operator=(const HoldingSpaceController& other) =
-      delete;
+  HoldingSpaceController(const HoldingSpaceController&) = delete;
+  HoldingSpaceController& operator=(const HoldingSpaceController&) = delete;
   ~HoldingSpaceController() override;
 
   // Returns the global HoldingSpaceController instance. It's set in the
@@ -46,7 +46,6 @@ class ASH_PUBLIC_EXPORT HoldingSpaceController : public SessionObserver {
                                      HoldingSpaceModel* model);
 
   HoldingSpaceClient* client() { return client_; }
-
   HoldingSpaceModel* model() { return model_; }
 
  private:
@@ -57,10 +56,10 @@ class ASH_PUBLIC_EXPORT HoldingSpaceController : public SessionObserver {
   void SetModel(HoldingSpaceModel* model);
 
   // The currently active holding space client, set by `SetClient()`.
-  HoldingSpaceClient* client_ = nullptr;
+  raw_ptr<HoldingSpaceClient> client_ = nullptr;
 
   // The currently active holding space model, set by `SetModel()`.
-  HoldingSpaceModel* model_ = nullptr;
+  raw_ptr<HoldingSpaceModel> model_ = nullptr;
 
   // The currently active user account id.
   AccountId active_user_account_id_;

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,9 +22,7 @@ using extensions::SharedModuleInfo;
 namespace {
 
 std::string HashHost(const std::string& host) {
-  const std::string id_hash = base::SHA1HashString(host);
-  DCHECK_EQ(id_hash.length(), base::kSHA1Length);
-  return base::HexEncode(id_hash.c_str(), id_hash.length());
+  return base::HexEncode(base::SHA1Hash(base::as_byte_span(host)));
 }
 
 bool HostIsInSet(const std::string& host, const std::set<std::string>& set) {
@@ -46,8 +44,8 @@ bool IsExtensionOrSharedModuleAllowed(
 
   // Check the modules that are imported by this extension to see if any of them
   // is allowed.
-  const Extension* extension = extension_set ? extension_set->GetByID(host)
-                                             : NULL;
+  const Extension* extension =
+      extension_set ? extension_set->GetByID(host) : nullptr;
   if (!extension)
     return false;
 

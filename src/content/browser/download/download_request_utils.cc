@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,7 @@ DownloadRequestUtils::CreateDownloadForWebContentsMainFrame(
     const net::NetworkTrafficAnnotationTag& traffic_annotation) {
   RenderFrameHost* render_frame_host = web_contents->GetPrimaryMainFrame();
   return std::make_unique<download::DownloadUrlParameters>(
-      url, render_frame_host->GetProcess()->GetID(),
+      url, render_frame_host->GetProcess()->GetDeprecatedID(),
       render_frame_host->GetRoutingID(), traffic_annotation);
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,14 @@
 #include "ash/app_list/app_list_controller_impl.h"
 #include "ash/root_window_controller.h"
 #include "ash/shell.h"
-#include "ash/wallpaper/wallpaper_view.h"
-#include "ash/wallpaper/wallpaper_widget_controller.h"
+#include "ash/wallpaper/views/wallpaper_view.h"
+#include "ash/wallpaper/views/wallpaper_widget_controller.h"
 #include "ash/wm/gestures/wm_fling_handler.h"
 #include "ash/wm/overview/overview_controller.h"
 #include "ash/wm/overview/overview_grid.h"
 #include "ash/wm/overview/overview_utils.h"
 #include "ash/wm/splitview/split_view_controller.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "ui/display/screen.h"
 #include "ui/events/event.h"
 #include "ui/gfx/geometry/vector2d_f.h"
@@ -62,17 +62,18 @@ void OverviewGridEventHandler::OnMouseEvent(ui::MouseEvent* event) {
   // case, so just exit overview. Note that this is done here instead of on
   // release like usual, because pressing the mouse while dragging sends out a
   // ui::GESTURE_END_EVENT which may cause a bad state.
-  if (event->type() == ui::ET_MOUSE_PRESSED &&
+  if (event->type() == ui::EventType::kMousePressed &&
       !overview_session_->CanProcessEvent()) {
-    Shell::Get()->overview_controller()->EndOverview(
+    OverviewController::Get()->EndOverview(
         OverviewEndAction::kClickingOutsideWindowsInOverview);
     event->StopPropagation();
     event->SetHandled();
     return;
   }
 
-  if (event->type() == ui::ET_MOUSE_RELEASED)
+  if (event->type() == ui::EventType::kMouseReleased) {
     HandleClickOrTap(event);
+  }
 }
 
 void OverviewGridEventHandler::OnGestureEvent(ui::GestureEvent* event) {
@@ -84,39 +85,38 @@ void OverviewGridEventHandler::OnGestureEvent(ui::GestureEvent* event) {
 
   // TODO(crbug.com/1341128): Enable context menu via long-press in library page
   // `SavedDeskLibraryView` will take over gesture event if it's active. When
-  // it's `ET_GESTURE_TAP`, here it does not set event to handled, and thus
-  // `HandleClickOrTap()` would be executed from
+  // it's `EventType::kGestureTap`, here it does not set event to handled, and
+  // thus `HandleClickOrTap()` would be executed from
   // `SavedDeskLibraryView::OnLocatedEvent()`.
-  if (grid_->IsShowingDesksTemplatesGrid())
+  if (grid_->IsShowingSavedDeskLibrary()) {
     return;
+  }
+
+  if (event->type() == ui::EventType::kGestureTap) {
+    HandleClickOrTap(event);
+    return;
+  }
+
+  // The following events are for scrolling the overview scroll layout, which is
+  // tablet only.
+  if (!display::Screen::GetScreen()->InTabletMode()) {
+    return;
+  }
 
   switch (event->type()) {
-    case ui::ET_GESTURE_TAP: {
-      HandleClickOrTap(event);
-      break;
-    }
-    case ui::ET_SCROLL_FLING_START: {
-      if (!ShouldUseTabletModeGridLayout())
-        return;
-
+    case ui::EventType::kScrollFlingStart: {
       HandleFlingScroll(event);
       event->SetHandled();
       break;
     }
-    case ui::ET_GESTURE_SCROLL_BEGIN: {
-      if (!ShouldUseTabletModeGridLayout())
-        return;
-
+    case ui::EventType::kGestureScrollBegin: {
       scroll_offset_x_cumulative_ = 0.f;
       OnFlingEnd();
       grid_->StartScroll();
       event->SetHandled();
       break;
     }
-    case ui::ET_GESTURE_SCROLL_UPDATE: {
-      if (!ShouldUseTabletModeGridLayout())
-        return;
-
+    case ui::EventType::kGestureScrollUpdate: {
       // Only forward the scrolls to grid once they have exceeded the threshold.
       const float scroll_offset_x = event->details().scroll_x();
       scroll_offset_x_cumulative_ += scroll_offset_x;
@@ -127,10 +127,7 @@ void OverviewGridEventHandler::OnGestureEvent(ui::GestureEvent* event) {
       event->SetHandled();
       break;
     }
-    case ui::ET_GESTURE_SCROLL_END: {
-      if (!ShouldUseTabletModeGridLayout())
-        return;
-
+    case ui::EventType::kGestureScrollEnd: {
       grid_->EndScroll();
       event->SetHandled();
       break;
@@ -143,16 +140,16 @@ void OverviewGridEventHandler::OnGestureEvent(ui::GestureEvent* event) {
 void OverviewGridEventHandler::HandleClickOrTap(ui::Event* event) {
   CHECK_EQ(ui::EP_PRETARGET, event->phase());
 
-  // If the user is renaming a desk or template, rather than closing overview
+  // If the user is renaming a desk or saved desk, rather than closing overview
   // the focused name view should lose focus.
   if (grid_->IsDeskNameBeingModified() ||
-      grid_->IsTemplateNameBeingModified()) {
+      grid_->IsSavedDeskNameBeingModified()) {
     grid_->CommitNameChanges();
     event->StopPropagation();
     return;
   }
 
-  if (Shell::Get()->tablet_mode_controller()->InTabletMode()) {
+  if (display::Screen::GetScreen()->InTabletMode()) {
     aura::Window* window = static_cast<views::View*>(event->target())
                                ->GetWidget()
                                ->GetNativeWindow();
@@ -166,7 +163,7 @@ void OverviewGridEventHandler::HandleClickOrTap(ui::Event* event) {
       Shell::Get()->app_list_controller()->GoHome(display_id);
     }
   } else {
-    Shell::Get()->overview_controller()->EndOverview(
+    OverviewController::Get()->EndOverview(
         OverviewEndAction::kClickingOutsideWindowsInOverview);
   }
   event->StopPropagation();

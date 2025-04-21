@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -88,9 +88,6 @@ class GLES2ImplementationWithGrContextSupport
                          GLenum dstRGB,
                          GLenum srcAlpha,
                          GLenum dstAlpha) override;
-
-  // Calls that invalidate kMSAAEnable_GrGLBackendState
-  void CoverageModulationCHROMIUM(GLenum components) override;
 
   // Calls that invalidate kVertex_GrGLBackendState
   void BindVertexArrayOES(GLuint array) override;

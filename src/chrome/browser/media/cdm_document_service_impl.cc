@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/web_contents.h"
-#include "media/cdm/media_foundation_cdm_data.h"
 #include "media/media_buildflags.h"
 
 #if BUILDFLAG(ENABLE_CDM_STORAGE_ID)
@@ -27,8 +26,8 @@
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ash/components/settings/cros_settings_names.h"
-#include "chrome/browser/ash/settings/cros_settings.h"
+#include "chromeos/ash/components/settings/cros_settings.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
@@ -45,6 +44,7 @@
 
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/system/sys_info.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
@@ -52,6 +52,7 @@
 #include "base/win/sid.h"
 #include "chrome/browser/media/cdm_pref_service_helper.h"
 #include "chrome/browser/media/media_foundation_service_monitor.h"
+#include "media/cdm/media_foundation_cdm_data.h"
 #include "media/cdm/win/media_foundation_cdm.h"
 #include "sandbox/policy/win/lpac_capability.h"
 #endif  // BUILDFLAG(IS_WIN)
@@ -108,7 +109,7 @@ bool CreateCdmStorePathRootAndGrantAccessIfNeeded(
   auto sids = base::win::Sid::FromNamedCapabilityVector(
       {sandbox::policy::kMediaFoundationCdmData});
   return base::win::GrantAccessToPath(
-      cdm_store_path_root, *sids,
+      cdm_store_path_root, sids,
       FILE_GENERIC_READ | FILE_GENERIC_WRITE | GENERIC_EXECUTE | DELETE,
       CONTAINER_INHERIT_ACE | OBJECT_INHERIT_ACE);
 }
@@ -161,7 +162,7 @@ void CdmDocumentServiceImpl::ChallengePlatform(
   DVLOG(2) << __func__;
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  // TODO(crbug.com/676224). This should be commented out at the mojom
+  // TODO(crbug.com/40499115). This should be commented out at the mojom
   // level so that it's only available for ChromeOS.
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -177,8 +178,8 @@ void CdmDocumentServiceImpl::ChallengePlatform(
   auto* lacros_service = chromeos::LacrosService::Get();
   if (lacros_service &&
       lacros_service->IsAvailable<crosapi::mojom::ContentProtection>() &&
-      lacros_service->GetInterfaceVersion(
-          crosapi::mojom::ContentProtection::Uuid_) >=
+      lacros_service
+              ->GetInterfaceVersion<crosapi::mojom::ContentProtection>() >=
           static_cast<int>(crosapi::mojom::ContentProtection::
                                kChallengePlatformMinVersion)) {
     lacros_service->GetRemote<crosapi::mojom::ContentProtection>()
@@ -253,7 +254,7 @@ void CdmDocumentServiceImpl::GetStorageId(uint32_t version,
   DVLOG(2) << __func__ << " version: " << version;
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  // TODO(crbug.com/676224). This should be commented out at the mojom
+  // TODO(crbug.com/40499115). This should be commented out at the mojom
   // level so that it's only available if Storage Id is available.
 
 #if BUILDFLAG(ENABLE_CDM_STORAGE_ID)
@@ -300,8 +301,8 @@ void CdmDocumentServiceImpl::IsVerifiedAccessEnabled(
   auto* lacros_service = chromeos::LacrosService::Get();
   if (lacros_service &&
       lacros_service->IsAvailable<crosapi::mojom::ContentProtection>() &&
-      lacros_service->GetInterfaceVersion(
-          crosapi::mojom::ContentProtection::Uuid_) >=
+      lacros_service
+              ->GetInterfaceVersion<crosapi::mojom::ContentProtection>() >=
           static_cast<int>(crosapi::mojom::ContentProtection::
                                kIsVerifiedAccessEnabledMinVersion)) {
     lacros_service->GetRemote<crosapi::mojom::ContentProtection>()
@@ -361,36 +362,54 @@ void CdmDocumentServiceImpl::SetCdmClientToken(
   CdmPrefServiceHelper::SetCdmClientToken(user_prefs, cdm_origin, client_token);
 }
 
-void CdmDocumentServiceImpl::OnCdmEvent(media::CdmEvent event) {
+void CdmDocumentServiceImpl::OnCdmEvent(media::CdmEvent event,
+                                        uint32_t hresult) {
   DVLOG(1) << __func__ << ": event=" << static_cast<int>(event);
+
+  auto* monitor = MediaFoundationServiceMonitor::GetInstance();
+
+  // Hardware context reset after power or display change is expected.
+  if (event == media::CdmEvent::kHardwareContextReset) {
+    bool has_change = monitor->HasRecentPowerOrDisplayChange();
+    base::UmaHistogramBoolean(
+        "Media.EME.MediaFoundationService.HardwareContextReset", has_change);
+    if (has_change) {
+      DVLOG(2) << __func__
+               << ": HardwareContextReset ignored after power/display change";
+      return;
+    }
+  }
 
   // CdmDocumentServiceImpl is shared by all CDMs in the same RenderFrame.
   //
-  // We choose to only report a significant playback at most once and an error
-  // at most once because:
+  // We choose to only handle each event type at most once because:
   // 1. A site could create many CDM instances, e.g. to prefetch licenses. This
   //    could cause multiple errors to be reported.
   // 2. The media::Renderer could be destroyed and then recreated as part of the
-  //    suspend/resume process (e.g. paused for long time).This could cause
-  //    multiple significant playback to be reported.
-  // In both cases, our data could be skewed if we don't throttle them.
+  //    suspend/resume process (e.g. paused for long time). This could cause
+  //    multiple significant playback or hardware context reset without playback
+  //    to be reported.
+  // In all cases, our data could be skewed if we don't throttle them.
   //
-  // If an error happens after a significant playback both will be reported.
-  // This is fine since MediaFoundationServiceMonitor calculates a score.
+  // A different event will still be reported. For example, if an error happens
+  // after a significant playback both will be reported. This is fine since
+  // MediaFoundationServiceMonitor calculates a score.
+  if (auto [ignored, inserted] = reported_cdm_event_.insert(event); !inserted) {
+    DVLOG(2) << __func__ << ": Repeated CdmEvent ignored";
+    return;
+  }
+
+  auto site = render_frame_host().GetSiteInstance()->GetSiteURL();
   switch (event) {
     case media::CdmEvent::kSignificantPlayback:
-      if (!has_reported_significant_playback_) {
-        has_reported_significant_playback_ = true;
-        MediaFoundationServiceMonitor::GetInstance()->OnSignificantPlayback();
-      }
+      monitor->OnSignificantPlayback(site);
       break;
     case media::CdmEvent::kPlaybackError:
-      [[fallthrough]];
     case media::CdmEvent::kCdmError:
-      if (!has_reported_cdm_error_) {
-        has_reported_cdm_error_ = true;
-        MediaFoundationServiceMonitor::GetInstance()->OnPlaybackOrCdmError();
-      }
+      monitor->OnPlaybackOrCdmError(site, static_cast<HRESULT>(hresult));
+      break;
+    case media::CdmEvent::kHardwareContextReset:
+      monitor->OnUnexpectedHardwareContextReset(site);
       break;
   }
 }
@@ -427,7 +446,7 @@ void DeleteMediaFoundationCdmData(
       continue;
 
     DVLOG(2) << __func__ << ": Processing: " << file_path;
-    absl::optional<url::Origin> origin = absl::nullopt;
+    std::optional<url::Origin> origin = std::nullopt;
     if (origin_id_mapping.count(origin_id_string) != 0)
       origin = origin_id_mapping.at(origin_id_string);
 

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,14 +42,15 @@ class CC_BASE_EXPORT SpiralIterator {
 
  private:
   int current_step_count() const {
-    return (direction_ == UP || direction_ == DOWN) ? vertical_step_count_
-                                                    : horizontal_step_count_;
+    return (direction_ == Direction::kUp || direction_ == Direction::kDown)
+               ? vertical_step_count_
+               : horizontal_step_count_;
   }
 
   bool needs_direction_switch() const;
   void switch_direction();
 
-  enum Direction { UP, LEFT, DOWN, RIGHT };
+  enum class Direction { kUp, kLeft, kDown, kRight };
 
   IndexRect around_index_rect_;
   IndexRect consider_index_rect_;

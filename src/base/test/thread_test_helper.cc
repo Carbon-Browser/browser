@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/threading/thread_restrictions.h"
 
@@ -29,7 +29,9 @@ bool ThreadTestHelper::Run() {
   return test_result_;
 }
 
-void ThreadTestHelper::RunTest() { set_test_result(true); }
+void ThreadTestHelper::RunTest() {
+  set_test_result(true);
+}
 
 ThreadTestHelper::~ThreadTestHelper() = default;
 

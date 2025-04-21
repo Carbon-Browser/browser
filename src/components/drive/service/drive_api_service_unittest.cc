@@ -1,9 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/drive/service/drive_api_service.h"
 
+#include <optional>
 #include <utility>
 
 #include "base/test/test_simple_task_runner.h"
@@ -64,7 +65,7 @@ TEST(DriveAPIServiceTest, BatchRequestConfiguratorWithAuthFailure) {
     google_apis::ApiErrorCode error = google_apis::HTTP_SUCCESS;
     std::unique_ptr<google_apis::FileResource> file_resource;
     configurator.MultipartUploadNewFile(
-        "text/plain", 10, "", "title",
+        "text/plain", /*converted_mime_type=*/std::nullopt, 10, "", "title",
         base::FilePath(FILE_PATH_LITERAL("/file")), UploadNewFileOptions(),
         google_apis::test_util::CreateCopyResultCallback(&error,
                                                          &file_resource),

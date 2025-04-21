@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -100,7 +100,6 @@ bool operator==(const PolicyValue& lhs, const PolicyValue& rhs) {
       return true;
   }
   NOTREACHED();
-  return false;
 }
 
 bool operator!=(const PolicyValue& lhs, const PolicyValue& rhs) {
@@ -118,7 +117,6 @@ bool PolicyValue::IsCompatibleWith(const PolicyValue& required) const {
       return int_value_ == required.int_value_;
     case mojom::PolicyValueType::kNull:
       NOTREACHED();
-      break;
   }
   return false;
 }

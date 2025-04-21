@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,25 +7,23 @@
  * the "dictionary" of custom words used for spell check.
  */
 
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
-import 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
-import 'chrome://resources/cr_elements/icons.m.js';
-import 'chrome://resources/polymer/v3_0/iron-a11y-keys/iron-a11y-keys.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
+import 'chrome://resources/cr_elements/cr_input/cr_input.js';
+import 'chrome://resources/cr_elements/icons.html.js';
 import 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
-import '../prefs/prefs.js';
+import '/shared/settings/prefs/prefs.js';
 import '../settings_shared.css.js';
 import '../settings_vars.css.js';
 
-import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
-import {IronA11yKeysElement} from 'chrome://resources/polymer/v3_0/iron-a11y-keys/iron-a11y-keys.js';
+import type {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import type {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.js';
 import {flush, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {GlobalScrollTargetMixin} from '../global_scroll_target_mixin.js';
 import {loadTimeData} from '../i18n_setup.js';
 import {routes} from '../route.js';
-import {Route} from '../router.js';
+import type {Route} from '../router.js';
 
 import {getTemplate} from './edit_dictionary_page.html.js';
 import {LanguagesBrowserProxyImpl} from './languages_browser_proxy.js';
@@ -37,7 +35,6 @@ const MAX_CUSTOM_DICTIONARY_WORD_BYTES = 99;
 export interface SettingsEditDictionaryPageElement {
   $: {
     addWord: CrButtonElement,
-    keys: IronA11yKeysElement,
     newWord: CrInputElement,
     noWordsLabel: HTMLElement,
   };
@@ -99,16 +96,13 @@ export class SettingsEditDictionaryPageElement extends
     this.languageSettingsPrivate_ =
         LanguagesBrowserProxyImpl.getInstance().getLanguageSettingsPrivate();
 
-    this.languageSettingsPrivate_!.getSpellcheckWords(words => {
+    this.languageSettingsPrivate_!.getSpellcheckWords().then(words => {
       this.hasWords_ = words.length > 0;
       this.words_ = words;
     });
 
     this.languageSettingsPrivate_!.onCustomDictionaryChanged.addListener(
         this.onCustomDictionaryChanged_.bind(this));
-
-    // Add a key handler for the new-word input.
-    this.$.keys.target = this.$.newWord;
   }
 
   /**
@@ -163,7 +157,7 @@ export class SettingsEditDictionaryPageElement extends
   /**
    * Handles tapping on the Add Word button.
    */
-  private onAddWordTap_() {
+  private onAddWordClick_() {
     this.addWordFromInput_();
     this.$.newWord.focus();
   }
@@ -213,19 +207,18 @@ export class SettingsEditDictionaryPageElement extends
   /**
    * Handles Enter and Escape key presses for the new-word input.
    */
-  private onKeysPress_(
-      e: CustomEvent<{key: string, keyboardEvent: KeyboardEvent}>) {
-    if (e.detail.key === 'enter' && !this.disableAddButton_()) {
+  private onKeysPress_(e: KeyboardEvent) {
+    if (e.key === 'Enter' && !this.disableAddButton_()) {
       this.addWordFromInput_();
-    } else if (e.detail.key === 'esc') {
-      (e.detail.keyboardEvent.target as CrInputElement).value = '';
+    } else if (e.key === 'Escape') {
+      (e.target as CrInputElement).value = '';
     }
   }
 
   /**
    * Handles tapping on a "Remove word" icon button.
    */
-  private onRemoveWordTap_(e: {model: {item: string}}) {
+  private onRemoveWordClick_(e: {model: {item: string}}) {
     this.languageSettingsPrivate_!.removeSpellcheckWord(e.model.item);
   }
 }

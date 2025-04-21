@@ -1,18 +1,25 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/search_engines/template_url_data.h"
 
+#include <string_view>
+
 #include "base/check.h"
-#include "base/guid.h"
+#include "base/containers/fixed_flat_set.h"
+#include "base/containers/flat_map.h"
 #include "base/i18n/case_conversion.h"
-#include "base/strings/string_piece.h"
+#include "base/pickle.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/trace_event/memory_usage_estimator.h"
+#include "base/uuid.h"
 #include "base/values.h"
+#include "components/search_engines/prepopulated_engines.h"
+#include "components/search_engines/regulatory_extension_type.h"
+#include "crypto/hash.h"
 
 namespace {
 
@@ -31,10 +38,10 @@ std::string GenerateGUID(int prepopulate_id, int starter_pack_id) {
     guid = base::StringPrintf("ec205736-edd7-4022-a9a3-b431fc%06d",
                               starter_pack_id);
   } else {
-    guid = base::GenerateGUID();
+    guid = base::Uuid::GenerateRandomV4().AsLowercaseString();
   }
 
-  DCHECK(base::IsValidGUID(guid));
+  DCHECK(base::Uuid::ParseCaseInsensitive(guid).is_valid());
   return guid;
 }
 
@@ -45,12 +52,12 @@ TemplateURLData::TemplateURLData()
       id(0),
       date_created(base::Time::Now()),
       last_modified(base::Time::Now()),
-      last_visited(base::Time()),
-      created_by_policy(false),
+      policy_origin(PolicyOrigin::kNoPolicy),
+      enforced_by_policy(false),
       created_from_play_api(false),
       usage_count(0),
       prepopulate_id(0),
-      sync_guid(base::GenerateGUID()),
+      sync_guid(base::Uuid::GenerateRandomV4().AsLowercaseString()),
       keyword_(u"dummy"),
       url_("x") {}
 
@@ -59,27 +66,37 @@ TemplateURLData::TemplateURLData(const TemplateURLData& other) = default;
 TemplateURLData& TemplateURLData::operator=(const TemplateURLData& other) =
     default;
 
-TemplateURLData::TemplateURLData(const std::u16string& name,
-                                 const std::u16string& keyword,
-                                 base::StringPiece search_url,
-                                 base::StringPiece suggest_url,
-                                 base::StringPiece image_url,
-                                 base::StringPiece new_tab_url,
-                                 base::StringPiece contextual_search_url,
-                                 base::StringPiece logo_url,
-                                 base::StringPiece doodle_url,
-                                 base::StringPiece search_url_post_params,
-                                 base::StringPiece suggest_url_post_params,
-                                 base::StringPiece image_url_post_params,
-                                 base::StringPiece side_search_param,
-                                 base::StringPiece favicon_url,
-                                 base::StringPiece encoding,
-                                 const base::Value& alternate_urls_list,
-                                 bool preconnect_to_search_url,
-                                 bool prefetch_likely_navigations,
-                                 int prepopulate_id)
+TemplateURLData::TemplateURLData(
+    std::u16string_view name,
+    std::u16string_view keyword,
+    std::string_view search_url,
+    std::string_view suggest_url,
+    std::string_view image_url,
+    std::string_view image_translate_url,
+    std::string_view new_tab_url,
+    std::string_view contextual_search_url,
+    std::string_view logo_url,
+    std::string_view doodle_url,
+    std::string_view search_url_post_params,
+    std::string_view suggest_url_post_params,
+    std::string_view image_url_post_params,
+    std::string_view side_search_param,
+    std::string_view side_image_search_param,
+    std::string_view image_translate_source_language_param_key,
+    std::string_view image_translate_target_language_param_key,
+    std::vector<std::string> search_intent_params,
+    std::string_view favicon_url,
+    std::string_view encoding,
+    std::u16string_view image_search_branding_label,
+    const base::Value::List& alternate_urls_list,
+    bool preconnect_to_search_url,
+    bool prefetch_likely_navigations,
+    int prepopulate_id,
+    const base::span<const TemplateURLData::RegulatoryExtension>&
+        reg_extensions)
     : suggestions_url(suggest_url),
       image_url(image_url),
+      image_translate_url(image_translate_url),
       new_tab_url(new_tab_url),
       contextual_search_url(contextual_search_url),
       logo_url(logo_url),
@@ -88,12 +105,18 @@ TemplateURLData::TemplateURLData(const std::u16string& name,
       suggestions_url_post_params(suggest_url_post_params),
       image_url_post_params(image_url_post_params),
       side_search_param(side_search_param),
+      side_image_search_param(side_image_search_param),
+      image_translate_source_language_param_key(
+          image_translate_source_language_param_key),
+      image_translate_target_language_param_key(
+          image_translate_target_language_param_key),
+      image_search_branding_label(image_search_branding_label),
+      search_intent_params(search_intent_params),
       favicon_url(favicon_url),
       safe_for_autoreplace(true),
       id(0),
-      date_created(base::Time()),
-      last_modified(base::Time()),
-      created_by_policy(false),
+      policy_origin(PolicyOrigin::kNoPolicy),
+      enforced_by_policy(false),
       created_from_play_api(false),
       usage_count(0),
       prepopulate_id(prepopulate_id),
@@ -104,40 +127,63 @@ TemplateURLData::TemplateURLData(const std::u16string& name,
   SetKeyword(keyword);
   SetURL(std::string(search_url));
   input_encodings.push_back(std::string(encoding));
-  if (alternate_urls_list.is_list()) {
-    auto alternate_urls_list_view = alternate_urls_list.GetListDeprecated();
-    for (size_t i = 0; i < alternate_urls_list_view.size(); ++i) {
-      const std::string* alternate_url =
-          alternate_urls_list_view[i].GetIfString();
-      DCHECK(alternate_url && !alternate_url->empty());
-      if (alternate_url) {
-        alternate_urls.push_back(*alternate_url);
-      }
+  for (const auto& entry : alternate_urls_list) {
+    const std::string* alternate_url = entry.GetIfString();
+    DCHECK(alternate_url && !alternate_url->empty());
+    if (alternate_url) {
+      alternate_urls.push_back(*alternate_url);
     }
   }
+
+  regulatory_extensions = base::MakeFlatMap<
+      RegulatoryExtensionType,
+      raw_ptr<const TemplateURLData::RegulatoryExtension, CtnExperimental>>(
+      reg_extensions, {}, [](const TemplateURLData::RegulatoryExtension& a) {
+        return std::pair<RegulatoryExtensionType,
+                         raw_ptr<const TemplateURLData::RegulatoryExtension,
+                                 CtnExperimental>>(a.variant, &a);
+      });
+  DCHECK_EQ(regulatory_extensions.size(), reg_extensions.size());
 }
 
 TemplateURLData::~TemplateURLData() = default;
 
-void TemplateURLData::SetShortName(const std::u16string& short_name) {
+void TemplateURLData::SetShortName(std::u16string_view short_name) {
   // Remove tabs, carriage returns, and the like, as they can corrupt
   // how the short name is displayed.
   short_name_ = base::CollapseWhitespace(short_name, true);
 }
 
-void TemplateURLData::SetKeyword(const std::u16string& keyword) {
+void TemplateURLData::SetKeyword(std::u16string_view keyword) {
   DCHECK(!keyword.empty());
 
   // Case sensitive keyword matching is confusing. As such, we force all
   // keywords to be lower case.
   keyword_ = base::i18n::ToLower(keyword);
 
-  base::TrimWhitespace(keyword_, base::TRIM_ALL, &keyword_);
+  // The omnibox doesn't properly handle search keywords with whitespace.
+  base::RemoveChars(keyword_, base::kWhitespaceUTF16, &keyword_);
 }
 
 void TemplateURLData::SetURL(const std::string& url) {
   DCHECK(!url.empty());
   url_ = url;
+}
+
+std::vector<uint8_t> TemplateURLData::GenerateHash() const {
+  DCHECK(!url_.empty());
+  DCHECK_NE(id, 0);
+  base::Pickle pickle;
+  pickle.WriteInt64(id);
+  pickle.WriteString(url_);
+  // Prepend a hash version. This would allow expanding the data contained
+  // within the hash in the future, while keeping backwards compatibility.
+  const uint8_t kHashVersion = 1u;
+  std::vector<uint8_t> result(1, kHashVersion);
+
+  const auto hash = crypto::hash::Sha256(pickle);
+  result.insert(result.end(), hash.begin(), hash.end());
+  return result;
 }
 
 void TemplateURLData::GenerateSyncGUID() {
@@ -156,7 +202,10 @@ size_t TemplateURLData::EstimateMemoryUsage() const {
   res += base::trace_event::EstimateMemoryUsage(search_url_post_params);
   res += base::trace_event::EstimateMemoryUsage(suggestions_url_post_params);
   res += base::trace_event::EstimateMemoryUsage(image_url_post_params);
+  res += base::trace_event::EstimateMemoryUsage(side_search_param);
+  res += base::trace_event::EstimateMemoryUsage(side_image_search_param);
   res += base::trace_event::EstimateMemoryUsage(favicon_url);
+  res += base::trace_event::EstimateMemoryUsage(image_search_branding_label);
   res += base::trace_event::EstimateMemoryUsage(originating_url);
   res += base::trace_event::EstimateMemoryUsage(input_encodings);
   res += base::trace_event::EstimateMemoryUsage(sync_guid);
@@ -166,4 +215,16 @@ size_t TemplateURLData::EstimateMemoryUsage() const {
   res += base::trace_event::EstimateMemoryUsage(url_);
 
   return res;
+}
+
+bool TemplateURLData::CreatedByPolicy() const {
+  return policy_origin != PolicyOrigin::kNoPolicy;
+}
+
+bool TemplateURLData::CreatedByDefaultSearchProviderPolicy() const {
+  return policy_origin == PolicyOrigin::kDefaultSearchProvider;
+}
+
+bool TemplateURLData::CreatedByNonDefaultSearchProviderPolicy() const {
+  return CreatedByPolicy() && !CreatedByDefaultSearchProviderPolicy();
 }

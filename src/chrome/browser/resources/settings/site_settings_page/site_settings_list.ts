@@ -1,38 +1,41 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://resources/cr_elements/cr_link_row/cr_link_row.js';
-import 'chrome://resources/cr_elements/icons.m.js';
+import 'chrome://resources/cr_elements/icons.html.js';
 import '../icons.html.js';
 import '../settings_shared.css.js';
-import '../i18n_setup.js';
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {focusWithoutInk} from 'chrome://resources/js/cr/ui/focus_without_ink.m.js';
-import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
-import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
-import {DomRepeatEvent, microTask, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {PrefsMixin} from '/shared/settings/prefs/prefs_mixin.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {focusWithoutInk} from 'chrome://resources/js/focus_without_ink.js';
+import type {DomRepeatEvent} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {microTask, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {BaseMixin} from '../base_mixin.js';
-import {FocusConfig} from '../focus_config.js';
-import {PrefsMixin} from '../prefs/prefs_mixin.js';
-import {Route, Router} from '../router.js';
-import {ContentSetting, ContentSettingsTypes, NotificationSetting} from '../site_settings/constants.js';
-import {SiteSettingsPrefsBrowserProxy, SiteSettingsPrefsBrowserProxyImpl} from '../site_settings/site_settings_prefs_browser_proxy.js';
+import type {FocusConfig} from '../focus_config.js';
+import {loadTimeData} from '../i18n_setup.js';
+import type {Route} from '../router.js';
+import {Router} from '../router.js';
+import {ContentSetting, ContentSettingsTypes, CookieControlsMode, SettingsState} from '../site_settings/constants.js';
+import type {SiteSettingsPrefsBrowserProxy} from '../site_settings/site_settings_prefs_browser_proxy.js';
+import {SiteSettingsPrefsBrowserProxyImpl} from '../site_settings/site_settings_prefs_browser_proxy.js';
 
 import {getTemplate} from './site_settings_list.html.js';
 
-export type CategoryListItem = {
-  route: Route,
-  id: ContentSettingsTypes,
-  label: string,
-  icon?: string,
-  enabledLabel?: string,
-  disabledLabel?: string,
-  otherLabel?: string,
-  shouldShow?: () => boolean,
-};
+export interface CategoryListItem {
+  route: Route;
+  id: ContentSettingsTypes;
+  label: string;
+  icon?: string;
+  enabledLabel?: string;
+  disabledLabel?: string;
+  otherLabel?: string;
+  shouldShow?: () => boolean;
+}
 
 export function defaultSettingLabel(
     setting: string, enabled: string, disabled: string,
@@ -49,7 +52,7 @@ export function defaultSettingLabel(
 
 
 const SettingsSiteSettingsListElementBase =
-    PrefsMixin(BaseMixin(WebUIListenerMixin(I18nMixin(PolymerElement))));
+    PrefsMixin(BaseMixin(WebUiListenerMixin(I18nMixin(PolymerElement))));
 
 class SettingsSiteSettingsListElement extends
     SettingsSiteSettingsListElementBase {
@@ -74,10 +77,13 @@ class SettingsSiteSettingsListElement extends
 
   static get observers() {
     return [
-      // The prefs object is only populated for the instance of this element
-      // which contains the notifications link row, avoiding non-actionable
-      // firing of the observer.
       'updateNotificationsLabel_(prefs.generated.notification.*)',
+      'updateLocationLabel_(prefs.generated.geolocation.*)',
+      'updateSiteDataLabel_(prefs.generated.cookie_default_content_setting.*)',
+      'updateThirdPartyCookiesLabel_(prefs.profile.cookie_controls_mode.*,' +
+          'prefs.tracking_protection.block_all_3pc_toggle_enabled.*,' +
+          'prefs.generated.third_party_cookie_blocking_setting.*)',
+      'updateOfferWritingHelpLabel_(prefs.compose.proactive_nudge_enabled.*)',
     ];
   }
 
@@ -96,7 +102,8 @@ class SettingsSiteSettingsListElement extends
     // elements residing in this element's Shadow DOM.
     for (const item of this.categoryList) {
       this.focusConfig.set(item.route.path, () => microTask.run(() => {
-        const toFocus = this.shadowRoot!.querySelector(`#${item.id}`);
+        const toFocus =
+            this.shadowRoot!.querySelector<HTMLElement>(`#${item.id}`);
         assert(!!toFocus);
         focusWithoutInk(toFocus);
       }));
@@ -113,7 +120,7 @@ class SettingsSiteSettingsListElement extends
           this.fire('site-settings-list-labels-updated-for-testing');
         });
 
-    this.addWebUIListener(
+    this.addWebUiListener(
         'contentSettingCategoryChanged',
         (category: ContentSettingsTypes) =>
             this.refreshDefaultValueLabel_(category));
@@ -124,24 +131,12 @@ class SettingsSiteSettingsListElement extends
 
     if (hasProtocolHandlers) {
       // The protocol handlers have a separate enabled/disabled notifier.
-      this.addWebUIListener('setHandlersEnabled', (enabled: boolean) => {
+      this.addWebUiListener('setHandlersEnabled', (enabled: boolean) => {
         this.updateDefaultValueLabel_(
             ContentSettingsTypes.PROTOCOL_HANDLERS,
             enabled ? ContentSetting.ALLOW : ContentSetting.BLOCK);
       });
       this.browserProxy_.observeProtocolHandlersEnabledState();
-    }
-
-    const hasCookies = this.categoryList.some(item => {
-      return item.id === ContentSettingsTypes.COOKIES;
-    });
-    if (hasCookies) {
-      // The cookies sub-label is provided by an update from C++.
-      this.browserProxy_.getCookieSettingDescription().then(
-          (label: string) => this.updateCookiesLabel_(label));
-      this.addWebUIListener(
-          'cookieSettingDescriptionChanged',
-          (label: string) => this.updateCookiesLabel_(label));
     }
   }
 
@@ -151,23 +146,31 @@ class SettingsSiteSettingsListElement extends
    */
   private refreshDefaultValueLabel_(category: ContentSettingsTypes):
       Promise<void> {
-    // Default labels are not applicable to ZOOM_LEVELS, PDF or
-    // PROTECTED_CONTENT
+    // Default labels are not applicable to ZOOM_LEVELS, PDF, PROTECTED_CONTENT,
+    // SITE_DATA, or OFFER_WRITING_HELP.
     if (category === ContentSettingsTypes.ZOOM_LEVELS ||
         category === ContentSettingsTypes.PROTECTED_CONTENT ||
-        category === ContentSettingsTypes.PDF_DOCUMENTS) {
-      return Promise.resolve();
-    }
-
-    if (category === ContentSettingsTypes.COOKIES) {
-      // Updates to the cookies label are handled by the
-      // cookieSettingDescriptionChanged event listener.
+        category === ContentSettingsTypes.PDF_DOCUMENTS ||
+        category === ContentSettingsTypes.SITE_DATA ||
+        category === ContentSettingsTypes.OFFER_WRITING_HELP ||
+        // Updates to the cookies label are handled by the
+        // cookieSettingDescriptionChanged event listener.
+        category === ContentSettingsTypes.COOKIES) {
       return Promise.resolve();
     }
 
     if (category === ContentSettingsTypes.NOTIFICATIONS) {
       // Updates to the notifications label are handled by a preference
       // observer.
+      return Promise.resolve();
+    }
+
+    if (category === ContentSettingsTypes.PERFORMANCE) {
+      const index = this.categoryList.map(e => e.id).indexOf(
+          ContentSettingsTypes.PERFORMANCE);
+      this.set(
+          `categoryList.${index}.subLabel`,
+          this.i18n('siteSettingsPerformanceSublabel'));
       return Promise.resolve();
     }
 
@@ -212,6 +215,33 @@ class SettingsSiteSettingsListElement extends
   }
 
   /**
+   * Update the geolocation link row label when the geolocation setting
+   * description changes.
+   */
+  private updateLocationLabel_() {
+    const state = this.getPref('generated.geolocation').value;
+    const index = this.categoryList.map(e => e.id).indexOf(
+        ContentSettingsTypes.GEOLOCATION);
+
+    // The location row might not be part of the current site-settings-list
+    // but the class always observes the preference.
+    if (index === -1) {
+      return;
+    }
+
+    let label = 'siteSettingsLocationBlocked';
+    if (state === SettingsState.LOUD) {
+      label = 'siteSettingsLocationAskLoud';
+    } else if (state === SettingsState.QUIET) {
+      label = 'siteSettingsLocationAskQuiet';
+    } else if (state === SettingsState.CPSS) {
+      label = 'siteSettingsLocationAskCPSS';
+    }
+    this.set(`categoryList.${index}.subLabel`, this.i18n(label));
+  }
+
+
+  /**
    * Update the notifications link row label when the notifications setting
    * description changes.
    */
@@ -220,16 +250,105 @@ class SettingsSiteSettingsListElement extends
     const index = this.categoryList.map(e => e.id).indexOf(
         ContentSettingsTypes.NOTIFICATIONS);
 
-    // updateNotificationsLabel_ should only be called for the
-    // site-settings-list instance which contains notifications.
-    assert(index !== -1);
+    // The notification row might not be part of the current site-settings-list
+    // but the class always observes the preference.
+    if (index === -1) {
+      return;
+    }
 
     let label = 'siteSettingsNotificationsBlocked';
-    if (state === NotificationSetting.ASK) {
-      label = 'siteSettingsNotificationsAllowed';
-    } else if (state === NotificationSetting.QUIETER_MESSAGING) {
-      label = 'siteSettingsNotificationsPartial';
+    if (state === SettingsState.LOUD) {
+      label = 'siteSettingsNotificationsAskLoud';
+    } else if (state === SettingsState.QUIET) {
+      label = 'siteSettingsNotificationsAskQuiet';
+    } else if (state === SettingsState.CPSS) {
+      label = 'siteSettingsNotificationsAskCPSS';
     }
+    this.set(`categoryList.${index}.subLabel`, this.i18n(label));
+  }
+
+  /**
+   * Update the site data link row label when the default cookies content
+   * setting changes.
+   */
+  private updateSiteDataLabel_() {
+    const state =
+        this.getPref('generated.cookie_default_content_setting').value;
+    const index = this.categoryList.map(e => e.id).indexOf(
+        ContentSettingsTypes.SITE_DATA);
+
+    // The site data row might not be part of the current site-settings-list
+    // but the class always observes the preference.
+    if (index === -1) {
+      return;
+    }
+
+    let label;
+    if (state === ContentSetting.ALLOW) {
+      label = 'siteSettingsSiteDataAllowedSubLabel';
+    } else if (state === ContentSetting.SESSION_ONLY) {
+      label = 'siteSettingsSiteDataDeleteOnExitSubLabel';
+    } else if (state === ContentSetting.BLOCK) {
+      label = 'siteSettingsSiteDataBlockedSubLabel';
+    }
+    assert(!!label);
+    this.set(`categoryList.${index}.subLabel`, this.i18n(label));
+  }
+
+  /**
+   * Update the third-party cookies link row label when the pref changes.
+   */
+  private updateThirdPartyCookiesLabel_() {
+    const index =
+        this.categoryList.map(e => e.id).indexOf(ContentSettingsTypes.COOKIES);
+    // The third-party cookies might not be part of the current
+    // site-settings-list but the class always observes the preference.
+    if (index === -1) {
+      return;
+    }
+
+    let label;
+    if (loadTimeData.getBoolean('is3pcdCookieSettingsRedesignEnabled')) {
+      if (this.getPref('tracking_protection.block_all_3pc_toggle_enabled')
+              .value) {
+        label = 'thirdPartyCookiesLinkRowSublabelDisabled';
+      } else {
+        label = 'thirdPartyCookiesLinkRowSublabelLimited';
+      }
+    } else {
+      const state = this.getPref('profile.cookie_controls_mode').value;
+      if (state === CookieControlsMode.OFF) {
+        label = 'thirdPartyCookiesLinkRowSublabelEnabled';
+      } else if (state === CookieControlsMode.INCOGNITO_ONLY) {
+        label = loadTimeData.getBoolean('isAlwaysBlock3pcsIncognitoEnabled') ?
+            'thirdPartyCookiesLinkRowSublabelEnabled' :
+            'thirdPartyCookiesLinkRowSublabelDisabledIncognito';
+      } else if (state === CookieControlsMode.BLOCK_THIRD_PARTY) {
+        label = 'thirdPartyCookiesLinkRowSublabelDisabled';
+      }
+    }
+
+    assert(!!label);
+    this.set(`categoryList.${index}.subLabel`, this.i18n(label));
+  }
+
+  private updateOfferWritingHelpLabel_() {
+    if (!loadTimeData.getBoolean('enableComposeProactiveNudge')) {
+      return;
+    }
+
+    const enabled = this.getPref('compose.proactive_nudge_enabled').value;
+    const index = this.categoryList.map(e => e.id).indexOf(
+        ContentSettingsTypes.OFFER_WRITING_HELP);
+
+    // The writing help data row might not be part of the current
+    // site-settings-list but the class always observes the preference.
+    if (index === -1) {
+      return;
+    }
+
+    const label = enabled ? 'siteSettingsOfferWritingHelpEnabledSublabel' :
+                            'siteSettingsOfferWritingHelpDisabledSublabel';
     this.set(`categoryList.${index}.subLabel`, this.i18n(label));
   }
 

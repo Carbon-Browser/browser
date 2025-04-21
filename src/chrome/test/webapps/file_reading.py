@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Parsing logic to read files for the Web App testing framework.
@@ -14,14 +14,17 @@ from typing import Dict, List, Set, Tuple, Optional
 
 from numpy import append
 
-from models import Action
+from models import Action, TestId
 from models import ArgEnum
 from models import ActionType
 from models import ActionsByName
 from models import CoverageTest
+from models import CoverageTestsByPlatformSet
+from models import EnumsByType
 from models import PartialAndFullCoverageByBaseName
-from models import TestIdsByPlatform
-from models import TestIdsByPlatformSet
+from models import TestIdsTestNamesByPlatform
+from models import TestIdsTestNamesByPlatformSet
+from models import TestIdTestNameTuple
 from models import TestPartitionDescription
 from models import TestPlatform
 
@@ -67,6 +70,61 @@ def enumerate_all_argument_combinations(argument_types: List[ArgEnum]
     return output
 
 
+def expand_wildcards_in_action(action: str, enums: EnumsByType) -> List[str]:
+    """
+    Takes an action string that could contain enum wildcards, and returns the
+    list of all combinations of actions with all wildcards fully expanded.
+
+    Example input:
+    - action: 'Action(EnumType::All, EnumType::All)'
+    - enums: {'EnumType': EnumType('EnumType', ['Value1', 'Value2'])}
+    Example output:
+    - ['Action(Value1, Value1)', 'Action(Value1, Value2)',
+       'Action(Value2, Value1)', 'Action(Value2, Value2)']
+    """
+    if "::All" not in action:
+        return [action]
+    output: List[str] = []
+    for type, enum in enums.items():
+        wildcard_str = type + "::All"
+        if wildcard_str in action:
+            prefix = action[:action.index(wildcard_str)]
+            postfix = action[action.index(wildcard_str) + len(wildcard_str):]
+            for value in enum.values:
+                output.extend(
+                    expand_wildcards_in_action(prefix + value + postfix,
+                                               enums))
+    return output
+
+
+def expand_tests_from_action_parameter_wildcards(enums: EnumsByType,
+                                                 actions: List[str]
+                                                 ) -> List[List[str]]:
+    """
+    Takes a list of actions for a test that could contain argument wildcards.
+    Returns a list of tests the expand out all combination of argument
+    wildcards.
+    Example input:
+    - actions: ['Action1(EnumType::All), Action2(EnumType::All)']
+    - enums: {'EnumType': EnumType('EnumType', ['Value1', 'Value2'])}
+    Example output:
+    - [['Action1(Value1)', 'Action2(Value1)'],
+       ['Action1(Value1)', 'Action2(Value2)'],
+       ['Action1(Value2)', 'Action2(Value1)'],
+       ['Action1(Value2)', 'Action2(Value2)']]
+    """
+    if not actions:
+        return [[]]
+    current_elements: List[str] = expand_wildcards_in_action(actions[0], enums)
+    output: List[List[str]] = []
+    following_output = expand_tests_from_action_parameter_wildcards(
+        enums, actions[1:])
+    for following_list in following_output:
+        for element in current_elements:
+            output.append([element] + following_list)
+    return output
+
+
 def resolve_bash_style_replacement(output_action_str: str,
                                    argument_values: List[str]):
     for i, arg in enumerate(argument_values):
@@ -99,9 +157,10 @@ def human_friendly_name_to_canonical_action_name(
         human_friendly_action_name += "_" + action_base_name_to_default_args[
             human_friendly_action_name]
     elif '(' in human_friendly_action_name:
-        # Handle arguments being specified.
+        # Handle arguments being specified. Also strip trailing _, which appears
+        # if the action is "action_name()" without arguments.
         human_friendly_action_name = human_friendly_action_name.replace(
-            "(", "_").replace(", ", "_").rstrip(")")
+            "(", "_").replace(", ", "_").rstrip(")_")
     return human_friendly_action_name
 
 
@@ -159,10 +218,10 @@ def read_platform_supported_actions(csv_file
     return actions_base_name_to_coverage
 
 
-def read_enums_file(enums_file_lines: List[str]) -> Dict[str, ArgEnum]:
+def read_enums_file(enums_file_lines: List[str]) -> EnumsByType:
     """Reads the enums markdown file.
     """
-    enums_by_type: Dict[str, ArgEnum] = {}
+    enums_by_type: EnumsByType = {}
     for i, row in enumerate_markdown_file_lines_to_table_rows(
             enums_file_lines):
         if len(row) < MIN_COLUMNS_ENUMS_FILE:
@@ -233,22 +292,18 @@ def read_actions_file(
     actions_by_name: Dict[str, Action] = {}
     action_base_name_to_default_args: Dict[str, str] = {}
     action_base_names: Set[str] = set()
-    all_ids: Set[str] = set()
     for i, row in enumerate_markdown_file_lines_to_table_rows(
             actions_file_lines):
         if len(row) < MIN_COLUMNS_ACTIONS_FILE:
             raise ValueError(f"Row {i!r} does not contain enough entries. "
                              f"Got {row}.")
 
+        shortened_base_name = row[7].strip() if len(row) > 7 else None
         action_base_name = row[0].strip()
         action_base_names.add(action_base_name)
         if not re.fullmatch(r'[a-z_]+', action_base_name):
             raise ValueError(f"Invald action base name {action_base_name} on "
                              f"row {i!r}. Please use snake_case.")
-        id_base = row[3].strip()
-        if not id_base or id_base in all_ids:
-            raise ValueError(f"Action id '{id_base}' on line {i!r} is "
-                             f"not populated or already used.")
 
         type = ActionType.STATE_CHANGE
         if action_base_name.startswith("check_"):
@@ -300,7 +355,6 @@ def read_actions_file(
 
         for arg_combination in all_arg_value_combinations:
             name = "_".join([action_base_name] + arg_combination)
-            identifier = "".join([id_base] + arg_combination)
 
             # If the action has arguments, then modify the output actions,
             # and cpp method.
@@ -321,22 +375,27 @@ def read_actions_file(
             for human_friendly_action_name in output_unresolved_action_names:
                 bash_replaced_name = resolve_bash_style_replacement(
                     human_friendly_action_name, arg_combination)
+
+                # Handle any wildcards in the actions
+                wildcart_expanded_actions = expand_wildcards_in_action(
+                    bash_replaced_name, enums_by_type)
+
                 # Output actions for parameterized actions are not allowed to
                 # use 'defaults', and the action author must explicitly
                 # populate all arguments with bash-style replacements or static
                 # values.
-                output_canonical_action_names.append(
-                    human_friendly_name_to_canonical_action_name(
-                        bash_replaced_name, {}))
+                for action_name in wildcart_expanded_actions:
+                    output_canonical_action_names.append(
+                        human_friendly_name_to_canonical_action_name(
+                            action_name, {}))
 
             if name in actions_by_name:
                 raise ValueError(f"Cannot add duplicate action {name} on row "
                                  f"{i!r}")
 
-            action = Action(name, action_base_name, identifier, cpp_method,
-                            type, fully_supported_platforms,
+            action = Action(name, action_base_name, shortened_base_name,
+                            cpp_method, type, fully_supported_platforms,
                             partially_supported_platforms)
-            all_ids.add(identifier)
             action._output_canonical_action_names = (
                 output_canonical_action_names)
             actions_by_name[action.name] = action
@@ -344,7 +403,7 @@ def read_actions_file(
     unused_supported_actions = set(
         supported_platform_actions.keys()).difference(action_base_names)
     if unused_supported_actions:
-        raise ValueError(f"Actions specified as suppored that are not in "
+        raise ValueError(f"Actions specified as supported that are not in "
                          f"the actions list: {unused_supported_actions}.")
 
     # Resolve the output actions
@@ -374,6 +433,7 @@ def read_actions_file(
 
 def read_unprocessed_coverage_tests_file(
         coverage_file_lines: List[str], actions_by_name: ActionsByName,
+        enums_by_type: EnumsByType,
         action_base_name_to_default_arg: Dict[str, str]) -> List[CoverageTest]:
     """Reads the coverage tests markdown file.
 
@@ -402,36 +462,52 @@ def read_unprocessed_coverage_tests_file(
         platforms = TestPlatform.get_platforms_from_chars(row[0])
         if len(platforms) == 0:
             raise ValueError(f"Row {i} has invalid platforms: {row[0]}")
-        actions = []
-        for action_name in row[1:]:
-            action_name = action_name.strip()
-            if action_name == "":
-                continue
-            action_name = human_friendly_name_to_canonical_action_name(
-                action_name, action_base_name_to_default_arg)
-            if action_name not in actions_by_name:
-                missing_actions.append(action_name)
-                logging.error(f"Could not find action on row {i!r}: "
-                              f"{action_name}")
-                continue
-            actions.append(actions_by_name[action_name])
-        coverage_test = CoverageTest(actions, platforms)
-        required_coverage_tests.append(coverage_test)
+        # Filter out all blank actions.
+        original_action_strs = [
+            action_str for action_str in row[1:] if action_str.strip()
+        ]
+        # If any of the actions had parameter wildcards (like
+        # "WindowOption::All"), then this expands those into multiple tests.
+        expanded_tests = expand_tests_from_action_parameter_wildcards(
+            enums_by_type, original_action_strs)
+        for test_actions in expanded_tests:
+            actions: List[Action] = []
+            for action_name in test_actions:
+                action_name = action_name.strip()
+                if action_name == "":
+                    continue
+                action_name = human_friendly_name_to_canonical_action_name(
+                    action_name, action_base_name_to_default_arg)
+                if action_name not in actions_by_name:
+                    missing_actions.append(action_name)
+                    logging.error(f"Could not find action on row {i!r}: "
+                                  f"{action_name}")
+                    continue
+                actions.append(actions_by_name[action_name])
+            coverage_test = CoverageTest(actions, platforms)
+            required_coverage_tests.append(coverage_test)
     if missing_actions:
         raise ValueError(f"Actions missing from actions dictionary: "
                          f"{', '.join(missing_actions)}")
     return required_coverage_tests
 
 
-def get_tests_in_browsertest(file: str) -> Dict[str, Set[TestPlatform]]:
+def get_and_maybe_delete_tests_in_browsertest(
+    filename: str,
+    required_tests: Set[TestIdTestNameTuple] = {},
+    delete_in_place: bool = False
+) -> Dict[TestIdTestNameTuple, Set[TestPlatform]]:
     """
-    Returns a dictionary of all test ids found to the set of detected platforms
-    the test is enabled on.
+    Returns a dictionary of all test ids and test names found to
+    the set of detected platforms the test is enabled on.
+
+    When delete_in_place is set to True, overwrite the file to remove tests not
+    in required_tests.
 
     For reference, this is what a disabled test by a sheriff typically looks
     like:
 
-    TEST_F(WebAppIntegrationTestBase, DISABLED_NavSiteA_InstallIconShown) {
+    TEST_F(WebAppIntegrationTestBase, DISABLED_NavStandalone_InstallIconShown) {
         ...
     }
 
@@ -439,11 +515,12 @@ def get_tests_in_browsertest(file: str) -> Dict[str, Set[TestPlatform]]:
     This is what a test disabled by a sheriff on a specific platform looks like:
 
     #if BUILDFLAG(IS_WIN)
-    #define MAYBE_NavSiteA_InstallIconShown DISABLED_NavSiteA_InstallIconShown
+    #define MAYBE_NavStandalone_InstallIconShown \
+            DISABLED_NavStandalone_InstallIconShown
     #else
-    #define MAYBE_NavSiteA_InstallIconShown NavSiteA_InstallIconShown
+    #define MAYBE_NavStandalone_InstallIconShown NavStandalone_InstallIconShown
     #endif
-    TEST_F(WebAppIntegrationTestBase, MAYBE_NavSiteA_InstallIconShown) {
+    TEST_F(WebAppIntegrationTestBase, MAYBE_NavStandalone_InstallIconShown) {
         ...
     }
 
@@ -451,41 +528,72 @@ def get_tests_in_browsertest(file: str) -> Dict[str, Set[TestPlatform]]:
     `TestPlatform.WINDOWS` and thus enabled on {`TestPlatform.MAC`,
     `TestPlatform.CHROME_OS`, and `TestPlatform.LINUX`}.
     """
-    tests: Dict[str, Set[TestPlatform]] = {}
-    # Attempts to only match test test name in a test declaration, where the
-    # name contains the test id prefix. Purposefully allows any prefixes on
-    # the test name (like MAYBE_ or DISABLED_).
-    for match in re.finditer(fr'{CoverageTest.TEST_ID_PREFIX}(\w+)\)', file):
-        test_id = match.group(1)
-        tests[test_id] = set(TestPlatform)
-        test_name = f"{CoverageTest.TEST_ID_PREFIX}{test_id}"
-        if f"DISABLED_{test_name}" not in file:
-            continue
-        enabled_platforms: Set[TestPlatform] = tests[test_id]
-        for platform in TestPlatform:
-            # Search for macro that specifies the given platform before
-            # the string "DISABLED_<test_name>".
-            macro_for_regex = re.escape(platform.macro)
-            # This pattern ensures that there aren't any '{' or '}' characters
-            # between the macro and the disabled test name, which ensures that
-            # the macro is applying to the correct test.
-            if re.search(fr"{macro_for_regex}[^{{}}]+DISABLED_{test_name}",
-                         file):
-                enabled_platforms.remove(platform)
-        if len(enabled_platforms) == len(TestPlatform):
-            enabled_platforms.clear()
+    tests: Dict[TestIdTestNameTuple, Set[TestPlatform]] = {}
+
+    with open(filename, 'r') as fp:
+        file = fp.read()
+        result_file = file
+        # Attempts to match a full test case, where the name contains the test
+        # id prefix. Purposefully allows any prefixes on the test name (like
+        # MAYBE_ or DISABLED_). Examples can be found here.
+        # https://regex101.com/r/l1xnAJ/2
+        for match in re.finditer(
+                'IN_PROC_BROWSER_TEST_F[\\(\\w\\s,]+'
+                fr'{CoverageTest.TEST_ID_PREFIX}([a-zA-Z0-9._-]+)\)'
+                '\\s*{\n(?:\\s*\\/\\/.*\n)+((?:[^;^}}]+;\n)+)}', file):
+            test_steps: List[str] = []
+            if match.group(2):
+                test_body = match.group(2).split(";")
+                for line in test_body:
+                    assert not line.strip().startswith("//")
+                    test_steps.append(line.strip())
+            test_id = generate_test_id_from_test_steps(test_steps)
+            test_name = match.group(1)
+            tests[TestIdTestNameTuple(test_id, test_name)] = set(TestPlatform)
+            browser_test_name = f"{CoverageTest.TEST_ID_PREFIX}{test_name}"
+            required_tests_ids = []
+            for t in required_tests:
+                required_tests_ids.append(t[0])
+            if f"DISABLED_{browser_test_name}" not in file:
+                if delete_in_place and test_id not in required_tests_ids:
+                    del tests[TestIdTestNameTuple(test_id, test_name)]
+                    # Remove the matching test code block when the test is not
+                    # in required_tests
+                    regex_to_remove = re.escape(match.group(0))
+                    result_file = re.sub(regex_to_remove, '', result_file)
+                continue
+            enabled_platforms: Set[TestPlatform] = tests[TestIdTestNameTuple(
+                test_id, test_name)]
+            for platform in TestPlatform:
+                # Search for macro that specifies the given platform before
+                # the string "DISABLED_<test_name>".
+                macro_for_regex = re.escape(platform.macro)
+                # This pattern ensures that there aren't any '{' or '}'
+                # characters between the macro and the disabled test name, which
+                #  ensures that the macro is applying to the correct test.
+                if re.search(
+                        fr"{macro_for_regex}[^{{}}]+DISABLED_{browser_test_name}",
+                        file):
+                    enabled_platforms.remove(platform)
+            if len(enabled_platforms) == len(TestPlatform):
+                enabled_platforms.clear()
+    if delete_in_place:
+        with open(filename, 'w') as fp:
+            fp.write(result_file)
     return tests
 
 
 def find_existing_and_disabled_tests(
-        test_partitions: List[TestPartitionDescription]
-) -> Tuple[TestIdsByPlatformSet, TestIdsByPlatform]:
+    test_partitions: List[TestPartitionDescription],
+    required_coverage_by_platform_set: CoverageTestsByPlatformSet,
+    delete_in_place: bool = False
+) -> Tuple[TestIdsTestNamesByPlatformSet, TestIdsTestNamesByPlatform]:
     """
     Returns a dictionary of platform set to test id, and a dictionary of
     platform to disabled test ids.
     """
-    existing_tests: TestIdsByPlatformSet = defaultdict(lambda: set())
-    disabled_tests: TestIdsByPlatform = defaultdict(lambda: set())
+    existing_tests: TestIdsNamesByPlatformSet = defaultdict(lambda: set())
+    disabled_tests: TestIdsNamesByPlatform = defaultdict(lambda: set())
     for partition in test_partitions:
         for file in os.listdir(partition.browsertest_dir):
             if not file.startswith(partition.test_file_prefix):
@@ -493,17 +601,42 @@ def find_existing_and_disabled_tests(
             platforms = frozenset(
                 TestPlatform.get_platforms_from_browsertest_filename(file))
             filename = os.path.join(partition.browsertest_dir, file)
-            with open(filename) as f:
-                file = f.read()
-                tests = get_tests_in_browsertest(file)
-                for test_id in tests.keys():
-                    if test_id in existing_tests[platforms]:
-                        raise ValueError(f"Already found test {test_id}. "
-                                         f"Duplicate test in {filename}")
-                    existing_tests[platforms].add(test_id)
-                for platform in platforms:
-                    for test_id, enabled_platforms in tests.items():
-                        if platform not in enabled_platforms:
-                            disabled_tests[platform].add(test_id)
-                logging.info(f"Found tests in {filename}:\n{tests.keys()}")
+            required_tests = set(
+                TestIdTestNameTuple(i.id, i.generate_test_name())
+                for i in required_coverage_by_platform_set.get(platforms, []))
+            tests = get_and_maybe_delete_tests_in_browsertest(
+                filename, required_tests, delete_in_place)
+            for test_id, test_name in tests.keys():
+                if test_id in existing_tests[platforms]:
+                    raise ValueError(f"Already found test {test_name}. "
+                                     f"Duplicate test in {filename}")
+                existing_tests[platforms].add(
+                    TestIdTestNameTuple(test_id, test_name))
+            for platform in platforms:
+                for (test_id, test_name), enabled_platforms in tests.items():
+                    if platform not in enabled_platforms:
+                        disabled_tests[platform].add(
+                            TestIdTestNameTuple(test_id, test_name))
+            test_names = [test_name for (test_id, test_name) in tests.keys()]
+            logging.info(f"Found tests in {filename}:\n{test_names}")
     return (existing_tests, disabled_tests)
+
+
+def generate_test_id_from_test_steps(test_steps: List[str]) -> str:
+    test_id = []
+    for test_step in test_steps:
+        # Examples of the matching regex.
+        # https://regex101.com/r/UYlzkK/1
+        match_test_step = re.search(r"helper_.(\w+)\(([\w,\s:]*)\)", test_step)
+        if match_test_step:
+            actions = re.findall('[A-Z][^A-Z]*', match_test_step.group(1))
+            test_id += [a.lower() for a in actions]
+            if match_test_step.group(2):
+                parameters = [
+                    m.strip() for m in match_test_step.group(2).split(',')
+                ]
+                for p in parameters:
+                    match_param_value = re.match(r".*::k(.*)", p)
+                    if match_param_value.group(1):
+                        test_id.append(match_param_value.group(1))
+    return "_".join(test_id)

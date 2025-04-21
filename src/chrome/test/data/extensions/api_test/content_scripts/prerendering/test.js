@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,7 +55,7 @@ async function testWithIframe() {
     }
     if (numAllFramesMessages == 3 && numTopFrameOnlyMessages == 2) {
       // Navigate to the pre-rendered page.
-      // TODO(https://crbug.com/1278141): `chrome.tabs.update` can not activate
+      // TODO(crbug.com/40208062): `chrome.tabs.update` can not activate
       // the pre-rendered page, but takes a new navigation instead.
       const url = getUrl('test_file_with_iframe.html');
       chrome.tabs.executeScript({code: `location.href = '${url}';`});
@@ -117,7 +117,7 @@ async function testWithAboutBlankIframe(details) {
     if (numAllFramesMessages == expectedNumAllFramesMessages &&
         numTopFrameOnlyMessages == expectedNumTopFrameOnlyMessages) {
       // Navigate to the pre-rendered page.
-      // TODO(https://crbug.com/1278141): `chrome.tabs.update` can not activate
+      // TODO(crbug.com/40208062): `chrome.tabs.update` can not activate
       // the pre-rendered page, but takes a new navigation instead.
       const url = getUrl('test_file_with_about_blank_iframe.html', details);
       chrome.tabs.executeScript({code: `location.href = '${url}';`});
@@ -136,7 +136,8 @@ chrome.test.getConfig(async config => {
   // `match_origin_as_fallback` and manifest v3.
   chrome.test.runTests([
     testWithIframe,
-    testWithAboutBlankIframe,
-    testWithAboutBlankIframe.bind(this, {matchAboutBlank: true}),
+    // TODO(crbug.com/40853029): These two tests are flaky and time out.
+    // testWithAboutBlankIframe,
+    // testWithAboutBlankIframe.bind(this, {matchAboutBlank: true}),
   ]);
 });

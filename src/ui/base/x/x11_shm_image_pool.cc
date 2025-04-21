@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,15 +10,13 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/environment.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/strings/string_util.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "net/base/url_util.h"
 #include "ui/events/platform/platform_event_dispatcher.h"
 #include "ui/events/platform/platform_event_source.h"
@@ -57,7 +55,7 @@ std::size_t MaxShmSegmentSize() {
   return max_size;
 }
 
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
+#if !BUILDFLAG(IS_CHROMEOS)
 bool IsRemoteHost(const std::string& name) {
   if (name.empty())
     return false;
@@ -95,7 +93,7 @@ bool ShouldUseMitShm(x11::Connection* connection) {
 
   return true;
 }
-#endif
+#endif  // !BUILDFLAG(IS_CHROMEOS)
 
 }  // namespace
 
@@ -139,10 +137,10 @@ bool XShmImagePool::Resize(const gfx::Size& pixel_size) {
   std::unique_ptr<XShmImagePool, decltype(cleanup_fn)> cleanup{this,
                                                                cleanup_fn};
 
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
+#if !BUILDFLAG(IS_CHROMEOS)
   if (!ShouldUseMitShm(connection_))
     return false;
-#endif
+#endif  // !BUILDFLAG(IS_CHROMEOS)
 
   if (!ui::QueryShmSupport())
     return false;
@@ -292,7 +290,7 @@ void XShmImagePool::OnEvent(const x11::Event& xev) {
 void XShmImagePool::Cleanup() {
   for (FrameState& state : frame_states_) {
     if (state.shmaddr)
-      shmdt(state.shmaddr);
+      shmdt(state.shmaddr.ExtractAsDangling());
     if (state.shmem_attached_to_server)
       connection_->shm().Detach({state.shmseg});
     state.shmem_attached_to_server = false;

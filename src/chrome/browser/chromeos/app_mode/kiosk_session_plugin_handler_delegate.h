@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,7 @@ class KioskSessionPluginHandlerDelegate {
   virtual void OnPluginHung(const std::set<int>& hung_plugins) = 0;
 
  protected:
-  virtual ~KioskSessionPluginHandlerDelegate() {}
+  virtual ~KioskSessionPluginHandlerDelegate() = default;
 };
 
 }  // namespace chromeos

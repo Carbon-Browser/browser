@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,9 +25,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 
-/**
- * Class encapsulating the application origin of a particular offline page request.
- */
+/** Class encapsulating the application origin of a particular offline page request. */
 public class OfflinePageOrigin {
     private final String mAppName;
     private final String[] mSignatures;

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,14 +51,15 @@ V8CSSNumberish* CSSMathClamp::upper() {
   return MakeGarbageCollected<V8CSSNumberish>(upper_);
 }
 
-absl::optional<CSSNumericSumValue> CSSMathClamp::SumValue() const {
+std::optional<CSSNumericSumValue> CSSMathClamp::SumValue() const {
   auto lower = lower_->SumValue();
 
   for (const auto& value : {lower_, value_, upper_}) {
     const auto child_sum = value->SumValue();
     if (!child_sum.has_value() || child_sum->terms.size() != 1 ||
-        child_sum->terms[0].units != lower->terms[0].units)
-      return absl::nullopt;
+        child_sum->terms[0].units != lower->terms[0].units) {
+      return std::nullopt;
+    }
   }
 
   auto value = value_->SumValue();
@@ -88,14 +89,13 @@ void CSSMathClamp::BuildCSSText(Nested,
 
 CSSMathExpressionNode* CSSMathClamp::ToCalcExpressionNode() const {
   CSSMathExpressionOperation::Operands operands;
-  operands.ReserveCapacity(3u);
+  operands.reserve(3u);
   for (const auto& value : {lower_, value_, upper_}) {
     CSSMathExpressionNode* operand = value->ToCalcExpressionNode();
     if (!operand) {
       // TODO(crbug.com/983784): Remove this when all ToCalcExpressionNode()
       // overrides are implemented.
       NOTREACHED();
-      return nullptr;
     }
     operands.push_back(value->ToCalcExpressionNode());
   }

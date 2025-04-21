@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,17 @@
 
 #include <map>
 #include <memory>
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/adapters.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/task/task_runner_util.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
+#include "components/safe_browsing/core/common/features.h"
 #include "net/base/url_util.h"
 #include "url/url_util.h"
 
@@ -62,14 +62,13 @@ struct TrieNode {
 
 namespace {
 
-void InsertRuleToTrie(const std::vector<base::StringPiece>& components,
+void InsertRuleToTrie(const std::vector<std::string_view>& components,
                       TrieNode* root,
                       bool match_prefix) {
   TrieNode* node = root;
-  for (auto hostcomp = components.rbegin(); hostcomp != components.rend();
-       ++hostcomp) {
+  for (const auto& hostcomp : base::Reversed(components)) {
     DCHECK(!node->match_prefix);
-    std::string component(*hostcomp);
+    std::string component(hostcomp);
     auto child_node = node->children.find(component);
     if (child_node == node->children.end()) {
       std::unique_ptr<TrieNode> temp = std::make_unique<TrieNode>();
@@ -94,8 +93,8 @@ void InsertRuleToTrie(const std::vector<base::StringPiece>& components,
   node->is_terminal = true;
 }
 
-std::vector<base::StringPiece> SplitHost(const GURL& url) {
-  std::vector<base::StringPiece> components;
+std::vector<std::string_view> SplitHost(const GURL& url) {
+  std::vector<std::string_view> components;
   if (url.HostIsIPAddress()) {
     components.push_back(url.host_piece());
   } else {
@@ -108,7 +107,7 @@ std::vector<base::StringPiece> SplitHost(const GURL& url) {
 }
 
 // Rule is a UTF-8 wide string.
-bool AddRuleToAllowlist(base::StringPiece rule, TrieNode* root) {
+bool AddRuleToAllowlist(std::string_view rule, TrieNode* root) {
   if (rule.empty()) {
     return false;
   }
@@ -158,8 +157,8 @@ bool AddRules(const std::vector<std::string>& rules, TrieNode* root) {
 }
 
 bool IsAllowed(const GURL& url, const TrieNode* node) {
-  std::vector<base::StringPiece> components = SplitHost(url);
-  for (const base::StringPiece& component : base::Reversed(components)) {
+  std::vector<std::string_view> components = SplitHost(url);
+  for (std::string_view component : base::Reversed(components)) {
     if (node->match_prefix) {
       return true;
     }
@@ -180,19 +179,32 @@ bool IsAllowed(const GURL& url, const TrieNode* node) {
 
 }  // namespace
 
+AwSafeBrowsingAllowlistSetObserver::AwSafeBrowsingAllowlistSetObserver(
+    AwSafeBrowsingAllowlistManager* manager)
+    : manager_(manager) {
+  manager_->RegisterAllowlistSetObserver(this);
+}
+
+AwSafeBrowsingAllowlistSetObserver::~AwSafeBrowsingAllowlistSetObserver() {
+  manager_->RemoveAllowlistSetObserver(this);
+}
+
 AwSafeBrowsingAllowlistManager::AwSafeBrowsingAllowlistManager(
     const scoped_refptr<base::SequencedTaskRunner>& background_task_runner,
     const scoped_refptr<base::SequencedTaskRunner>& io_task_runner)
     : background_task_runner_(background_task_runner),
       io_task_runner_(io_task_runner),
-      ui_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      ui_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       allowlist_(std::make_unique<TrieNode>()) {}
 
 AwSafeBrowsingAllowlistManager::~AwSafeBrowsingAllowlistManager() {}
 
 void AwSafeBrowsingAllowlistManager::SetAllowlist(
     std::unique_ptr<TrieNode> allowlist) {
-  DCHECK(io_task_runner_->RunsTasksInCurrentSequence());
+  DCHECK(ui_task_runner_->RunsTasksInCurrentSequence());
+  for (auto&& observer : allowlist_set_observers_) {
+    observer.OnSafeBrowsingAllowListSet();
+  }
   allowlist_ = std::move(allowlist);
 }
 
@@ -207,17 +219,17 @@ void AwSafeBrowsingAllowlistManager::BuildAllowlist(
   DCHECK(!allowlist->is_terminal);
   DCHECK(!allowlist->match_prefix);
 
-  ui_task_runner_->PostTask(FROM_HERE,
-                            base::BindOnce(std::move(callback), success));
-
   if (success) {
     // use base::Unretained as AwSafeBrowsingAllowlistManager is a singleton and
     // not cleaned.
-    io_task_runner_->PostTask(
+    ui_task_runner_->PostTask(
         FROM_HERE,
         base::BindOnce(&AwSafeBrowsingAllowlistManager::SetAllowlist,
                        base::Unretained(this), std::move(allowlist)));
   }
+
+  ui_task_runner_->PostTask(FROM_HERE,
+                            base::BindOnce(std::move(callback), success));
 }
 
 void AwSafeBrowsingAllowlistManager::SetAllowlistOnUIThread(
@@ -233,11 +245,21 @@ void AwSafeBrowsingAllowlistManager::SetAllowlistOnUIThread(
 }
 
 bool AwSafeBrowsingAllowlistManager::IsUrlAllowed(const GURL& url) const {
-  DCHECK(io_task_runner_->RunsTasksInCurrentSequence());
+  DCHECK(ui_task_runner_->RunsTasksInCurrentSequence());
   if (!url.has_host()) {
     return false;
   }
   return IsAllowed(url, allowlist_.get());
+}
+
+void AwSafeBrowsingAllowlistManager::RegisterAllowlistSetObserver(
+    AwSafeBrowsingAllowlistSetObserver* listener) {
+  allowlist_set_observers_.AddObserver(listener);
+}
+
+void AwSafeBrowsingAllowlistManager::RemoveAllowlistSetObserver(
+    AwSafeBrowsingAllowlistSetObserver* listener) {
+  allowlist_set_observers_.RemoveObserver(listener);
 }
 
 }  // namespace android_webview

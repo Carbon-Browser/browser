@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 
 #include "base/strings/utf_string_conversions.h"
 #include "components/bookmarks/browser/bookmark_model.h"
+#include "components/bookmarks/common/bookmark_metrics.h"
 #include "components/bookmarks/test/bookmark_test_helpers.h"
 #include "components/bookmarks/test/test_bookmark_client.h"
 #include "content/public/test/browser_task_environment.h"
@@ -21,13 +22,13 @@ using bookmarks::TestBookmarkClient;
 // OnComboboxModelChanged() is invoked.
 class TestComboboxModelObserver : public ui::ComboboxModelObserver {
  public:
-  TestComboboxModelObserver() : changed_(false) {}
+  TestComboboxModelObserver() = default;
 
   TestComboboxModelObserver(const TestComboboxModelObserver&) = delete;
   TestComboboxModelObserver& operator=(const TestComboboxModelObserver&) =
       delete;
 
-  ~TestComboboxModelObserver() override {}
+  ~TestComboboxModelObserver() override = default;
 
   // Returns whether the model changed and clears changed state.
   bool GetAndClearChanged() {
@@ -44,7 +45,7 @@ class TestComboboxModelObserver : public ui::ComboboxModelObserver {
   void OnComboboxModelDestroying(ui::ComboboxModel* model) override {}
 
  private:
-  bool changed_;
+  bool changed_ = false;
 };
 
 class RecentlyUsedFoldersComboModelTest : public testing::Test {
@@ -69,8 +70,9 @@ TEST_F(RecentlyUsedFoldersComboModelTest, NoDups) {
   RecentlyUsedFoldersComboModel model(bookmark_model.get(), new_node);
   std::set<std::u16string> items;
   for (size_t i = 0; i < model.GetItemCount(); ++i) {
-    if (!model.IsItemSeparatorAt(i))
+    if (!model.IsItemSeparatorAt(i)) {
       EXPECT_EQ(0u, items.count(model.GetItemAt(i)));
+    }
   }
 }
 
@@ -89,13 +91,14 @@ TEST_F(RecentlyUsedFoldersComboModelTest, NotifyObserver) {
 
   const size_t initial_count = model.GetItemCount();
   // Remove a folder, it should remove an item from the model too.
-  bookmark_model->Remove(sub_folder);
+  bookmark_model->Remove(
+      sub_folder, bookmarks::metrics::BookmarkEditSource::kOther, FROM_HERE);
   EXPECT_TRUE(observer.GetAndClearChanged());
   const size_t updated_count = model.GetItemCount();
   EXPECT_LT(updated_count, initial_count);
 
   // Remove all, which should remove a folder too.
-  bookmark_model->RemoveAllUserBookmarks();
+  bookmark_model->RemoveAllUserBookmarks(FROM_HERE);
   EXPECT_TRUE(observer.GetAndClearChanged());
   EXPECT_LT(model.GetItemCount(), updated_count);
 

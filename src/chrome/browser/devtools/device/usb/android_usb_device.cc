@@ -1,23 +1,28 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/devtools/device/usb/android_usb_device.h"
 
 #include <set>
 #include <utility>
+#include <vector>
 
 #include "base/barrier_closure.h"
 #include "base/base64.h"
-#include "base/bind.h"
 #include "base/containers/contains.h"
-#include "base/containers/cxx20_erase.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/memory/ref_counted_memory.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/devtools/device/usb/android_rsa.h"
 #include "chrome/browser/devtools/device/usb/android_usb_socket.h"
 #include "crypto/rsa_private_key.h"
@@ -100,13 +105,13 @@ void OnProbeFinished(AndroidUsbDevicesCallback callback,
 
 void OnDeviceClosed(const std::string& guid,
                     mojo::Remote<device::mojom::UsbDevice> device) {
-  base::Erase(g_open_devices.Get(), guid);
+  std::erase(g_open_devices.Get(), guid);
 }
 
 void OnDeviceClosedWithBarrier(const std::string& guid,
                                mojo::Remote<device::mojom::UsbDevice> device,
                                const base::RepeatingClosure& barrier) {
-  base::Erase(g_open_devices.Get(), guid);
+  std::erase(g_open_devices.Get(), guid);
   barrier.Run();
 }
 
@@ -141,11 +146,12 @@ void OnDeviceOpened(AndroidUsbDevices* devices,
                     AndroidDeviceInfo android_device_info,
                     mojo::Remote<device::mojom::UsbDevice> device,
                     const base::RepeatingClosure& barrier,
-                    device::mojom::UsbOpenDeviceError error) {
-  // For UsbOpenDeviceError::OK and UsbOpenDeviceError::ALREADY_OPEN we all try
-  // to claim the interface because the device may be opened by other modules or
-  // extensions for different interface.
-  if (error != device::mojom::UsbOpenDeviceError::ACCESS_DENIED) {
+                    device::mojom::UsbOpenDeviceResultPtr result) {
+  // If the error is UsbOpenDeviceError::ALREADY_OPEN we all try to claim the
+  // interface because the device may be opened by other modules or extensions
+  // for different interface.
+  if (result->is_success() ||
+      result->get_error() == device::mojom::UsbOpenDeviceError::ALREADY_OPEN) {
     DCHECK(device);
     auto* device_raw = device.get();
     device_raw->ClaimInterface(
@@ -153,7 +159,7 @@ void OnDeviceOpened(AndroidUsbDevices* devices,
         base::BindOnce(&CreateDeviceOnInterfaceClaimed, devices, rsa_key,
                        android_device_info, std::move(device), barrier));
   } else {
-    base::Erase(g_open_devices.Get(), android_device_info.guid);
+    std::erase(g_open_devices.Get(), android_device_info.guid);
     barrier.Run();
   }
 }
@@ -193,7 +199,7 @@ AdbMessage::AdbMessage(uint32_t command,
                        const std::string& body)
     : command(command), arg0(arg0), arg1(arg1), body(body) {}
 
-AdbMessage::~AdbMessage() {}
+AdbMessage::~AdbMessage() = default;
 
 // static
 void AndroidUsbDevice::Enumerate(crypto::RSAPrivateKey* rsa_key,
@@ -220,7 +226,7 @@ AndroidUsbDevice::AndroidUsbDevice(
 void AndroidUsbDevice::InitOnCallerThread() {
   if (task_runner_)
     return;
-  task_runner_ = base::ThreadTaskRunnerHandle::Get();
+  task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
   Queue(std::make_unique<AdbMessage>(AdbMessage::kCommandCNXN, kVersion,
                                      kMaxPayload, kHostConnectMessage));
   ReadHeader();
@@ -276,18 +282,24 @@ void AndroidUsbDevice::Queue(std::unique_ptr<AdbMessage> message) {
   header.push_back(body_length);
   header.push_back(Checksum(message->body));
   header.push_back(message->command ^ 0xffffffff);
+  DCHECK_EQ(kHeaderSize, base::as_byte_span(header).size());
+
   // TODO(donna.wu@intel.com): eliminate the buffer copy here, needs to change
   // type BulkMessage.
-  auto header_buffer = base::MakeRefCounted<base::RefCountedBytes>(
-      reinterpret_cast<uint8_t*>(header.data()), kHeaderSize);
+  auto header_buffer =
+      base::MakeRefCounted<base::RefCountedBytes>(base::as_byte_span(header));
   outgoing_queue_.push(header_buffer);
 
   // Queue body.
   if (!message->body.empty()) {
     auto body_buffer = base::MakeRefCounted<base::RefCountedBytes>(body_length);
-    memcpy(body_buffer->front(), message->body.data(), message->body.length());
-    if (append_zero)
-      body_buffer->data()[body_length - 1] = 0;
+    {
+      auto& v = body_buffer->as_vector();
+      memcpy(v.data(), message->body.data(), message->body.length());
+      if (append_zero) {
+        v[body_length - 1] = 0;
+      }
+    }
     outgoing_queue_.push(body_buffer);
     if (android_device_info_.zero_mask &&
         (body_length & android_device_info_.zero_mask) == 0) {
@@ -306,10 +318,10 @@ void AndroidUsbDevice::ProcessOutgoing() {
 
   BulkMessage message = outgoing_queue_.front();
   outgoing_queue_.pop();
-  DumpMessage(true, message->front(), message->size());
+  DumpMessage(true, message->data(), message->size());
 
   device_->GenericTransferOut(
-      android_device_info_.outbound_address, message->data(), kUsbTimeout,
+      android_device_info_.outbound_address, message->as_vector(), kUsbTimeout,
       base::BindOnce(&AndroidUsbDevice::OutgoingMessageSent,
                      weak_factory_.GetWeakPtr()));
 }
@@ -477,14 +489,14 @@ void AndroidUsbDevice::Terminate() {
   DCHECK(task_runner_->BelongsToCurrentThread());
 
   // Remove this AndroidUsbDevice from |g_devices|.
-  auto it = std::find(g_devices.Get().begin(), g_devices.Get().end(), this);
+  auto it = base::ranges::find(g_devices.Get(), this);
   if (it != g_devices.Get().end())
     g_devices.Get().erase(it);
 
   // For connection error, remove the guid from recored opening/opened list.
   // For transfer errors, we'll do this after releasing the interface.
   if (!device_) {
-    base::Erase(g_open_devices.Get(), android_device_info_.guid);
+    std::erase(g_open_devices.Get(), android_device_info_.guid);
     return;
   }
 

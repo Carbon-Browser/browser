@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SESSIONS_CORE_SESSION_ID_GENERATOR_H_
 #define COMPONENTS_SESSIONS_CORE_SESSION_ID_GENERATOR_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/singleton.h"
 #include "base/sequence_checker.h"
@@ -36,6 +36,11 @@ class SESSIONS_EXPORT SessionIdGenerator {
   // Creates a new instance representing an ID that has never been used before
   // locally (even across browser restarts). Must be preceded by Init().
   SessionID NewUnique();
+
+  // Calls this method after restoring a session passing the
+  // `highest_restored_id` to ensure that the next ID will not conflict with the
+  // existing ones.
+  void SetHighestRestoredID(SessionID highest_restored_id);
 
   // Preference name used to persist the last ID.
   static std::string GetLastValuePrefNameForTest();

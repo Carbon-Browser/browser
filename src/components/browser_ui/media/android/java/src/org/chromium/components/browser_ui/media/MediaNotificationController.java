@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,12 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ServiceInfo;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.media.AudioManager;
 import android.os.Build;
 import android.os.Handler;
+import android.os.Looper;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
@@ -28,9 +29,9 @@ import org.chromium.base.CollectionUtil;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.IntentUtils;
 import org.chromium.base.Log;
+import org.chromium.components.browser_ui.notifications.BaseNotificationManagerProxy;
+import org.chromium.components.browser_ui.notifications.BaseNotificationManagerProxyFactory;
 import org.chromium.components.browser_ui.notifications.ForegroundServiceUtils;
-import org.chromium.components.browser_ui.notifications.NotificationManagerProxy;
-import org.chromium.components.browser_ui.notifications.NotificationManagerProxyImpl;
 import org.chromium.components.browser_ui.notifications.NotificationWrapper;
 import org.chromium.components.browser_ui.notifications.NotificationWrapperBuilder;
 import org.chromium.components.browser_ui.notifications.PendingIntentProvider;
@@ -54,6 +55,14 @@ public class MediaNotificationController {
 
     // The maximum number of actions in BigView media notification.
     private static final int BIG_VIEW_ACTIONS_COUNT = 5;
+
+    // Pending intent for `ACTION_SWIPE`. This intent is scheduled to be created when the UI thread
+    // message queue is idle, the first time it is needed, with the goal of reducing input handling
+    // delay.
+    @VisibleForTesting public PendingIntentProvider mPendingIntentActionSwipe;
+
+    // Used to help initialize `mPendingIntentActionSwipe`.
+    @VisibleForTesting public PendingIntentInitializer mPendingIntentInitializer;
 
     public static final String ACTION_PLAY = "org.chromium.components.browser_ui.media.ACTION_PLAY";
     public static final String ACTION_PAUSE =
@@ -82,46 +91,30 @@ public class MediaNotificationController {
     public static final int MEDIA_ACTION_SEEK_FORWARD = 22;
     public static final int MEDIA_ACTION_SEEK_BACKWARD = 23;
 
-    // Overrides N detection. The production code will use |null|, which uses the Android version
-    // code. Otherwise, |isRunningAtLeastN()| will return whatever value is set.
-    @VisibleForTesting
-    public static Boolean sOverrideIsRunningNForTesting;
-
     // ListenerService running for the notification. Only non-null when showing.
-    @VisibleForTesting
-    public Service mService;
+    @VisibleForTesting public Service mService;
 
-    @VisibleForTesting
-    public Delegate mDelegate;
+    @VisibleForTesting public Delegate mDelegate;
 
     private SparseArray<MediaButtonInfo> mActionToButtonInfo;
 
-    @VisibleForTesting
-    public NotificationWrapperBuilder mNotificationBuilder;
+    @VisibleForTesting public NotificationWrapperBuilder mNotificationBuilder;
 
-    @VisibleForTesting
-    public Bitmap mDefaultNotificationLargeIcon;
+    @VisibleForTesting public Bitmap mDefaultNotificationLargeIcon;
 
     // |mMediaNotificationInfo| should be not null if and only if the notification is showing.
-    @VisibleForTesting
-    public MediaNotificationInfo mMediaNotificationInfo;
+    @VisibleForTesting public MediaNotificationInfo mMediaNotificationInfo;
 
-    @VisibleForTesting
-    public MediaSessionCompat mMediaSession;
+    @VisibleForTesting public MediaSessionCompat mMediaSession;
 
-    @VisibleForTesting
-    public Throttler mThrottler;
+    @VisibleForTesting public Throttler mThrottler;
 
-    /**
-     * Helper class to prevent spamming notification updates.
-     */
+    /** Helper class to prevent spamming notification updates. */
     @VisibleForTesting
     public static class Throttler {
-        @VisibleForTesting
-        public static final int THROTTLE_MILLIS = 500;
+        @VisibleForTesting public static final int THROTTLE_MILLIS = 500;
 
-        @VisibleForTesting
-        public MediaNotificationController mController;
+        @VisibleForTesting public MediaNotificationController mController;
 
         private final Handler mHandler;
 
@@ -131,120 +124,243 @@ public class MediaNotificationController {
             mHandler = new Handler();
         }
 
-        // When |mTask| is non-null, it will always be queued in mHandler. When |mTask| is non-null,
-        // all notification updates will be throttled and their info will be stored as
-        // mLastPendingInfo. When |mTask| fires, it will call {@link showNotification()} with
-        // the latest queued notification info.
-        @VisibleForTesting
-        public Runnable mTask;
+        // When |mThrottleTask| is non-null, it will always be queued in mHandler. When
+        // |mThrottleTask| is non-null, all notification updates will be throttled and their info
+        // will be stored as mLastPendingInfo. When |mThrottleTask| fires, it will call {@link
+        // showNotification()} with the latest queued notification info.
+        @VisibleForTesting public Runnable mThrottleTask;
 
         // The last pending info. If non-null, it will be the latest notification info.
         // Otherwise, the latest notification info will be |mController.mMediaNotificationInfo|.
-        @VisibleForTesting
-        public MediaNotificationInfo mLastPendingInfo;
+        //
+        // If `mLastPendingInfo` or `mPendingIntentActionSwipe` are null, no notification will be
+        // shown. When `mThrottleTask` fires and `mLastPendingInfo` is null, the throttled state
+        // will end.
+        @VisibleForTesting public MediaNotificationInfo mLastPendingInfo;
 
         /**
-         * Queue |mediaNotificationInfo| for update. In unthrottled state (i.e. |mTask| != null),
-         * the notification will be updated immediately and enter the throttled state. In
-         * unthrottled state, the method will only update the pending notification info, which will
-         * be used for updating the notification when |mTask| is fired.
+         * Queue `mediaNotificationInfo` for update.
          *
          * @param mediaNotificationInfo The notification info to be queued.
          */
         public void queueNotification(MediaNotificationInfo mediaNotificationInfo) {
             assert mediaNotificationInfo != null;
-
-            MediaNotificationInfo latestMediaNotificationInfo = mLastPendingInfo != null
-                    ? mLastPendingInfo
-                    : mController.mMediaNotificationInfo;
+            mController.schedulePendingIntentConstructionIfNeeded();
+            MediaNotificationInfo latestMediaNotificationInfo =
+                    mLastPendingInfo != null
+                            ? mLastPendingInfo
+                            : mController.mMediaNotificationInfo;
 
             if (shouldIgnoreMediaNotificationInfo(
-                        latestMediaNotificationInfo, mediaNotificationInfo)) {
+                    latestMediaNotificationInfo, mediaNotificationInfo)) {
                 return;
             }
 
-            if (mTask == null) {
-                showNotificationImmediately(mediaNotificationInfo);
-            } else {
-                mLastPendingInfo = mediaNotificationInfo;
+            showNotificationImmediately(mediaNotificationInfo);
+        }
+
+        /**
+         * Clears the pending notification and `PendingIntentInitializer` task, and enter
+         * unthrottled state.
+         */
+        public void clearPendingNotifications() {
+            mHandler.removeCallbacks(mThrottleTask);
+            mLastPendingInfo = null;
+            mThrottleTask = null;
+
+            if (mController.mPendingIntentInitializer != null) {
+                mController.mPendingIntentInitializer.clearDelayedTask();
             }
         }
 
         /**
-         * Clears the pending notification and enter unthrottled state.
+         * Shows notification immediately if no notification has been updated in the last
+         * THROTTLE_MILLIS, and queue a task for blocking further updates.
+         *
+         * <p>In unthrottled state (i.e. `mThrottleTask` == null), the notification will be updated
+         * immediately and enter the throttled state. In throttled state, the method will only
+         * update the pending notification info, which will be used for updating the notification
+         * when `mThrottleTask` is fired.
          */
-        public void clearPendingNotifications() {
-            mHandler.removeCallbacks(mTask);
-            mLastPendingInfo = null;
-            mTask = null;
-        }
-
         @VisibleForTesting
         public void showNotificationImmediately(MediaNotificationInfo mediaNotificationInfo) {
-            // If no notification hasn't been updated in the last THROTTLE_MILLIS, update
-            // immediately and queue a task for blocking further updates.
-            mController.showNotification(mediaNotificationInfo);
-            mTask = new Runnable() {
-                @Override
-                public void run() {
-                    if (mLastPendingInfo != null) {
-                        // If any notification info is pended during the throttling time window,
-                        // update the notification.
-                        showNotificationImmediately(mLastPendingInfo);
-                        mLastPendingInfo = null;
-                    } else {
-                        // Otherwise, clear the task so further update is unthrottled.
-                        mTask = null;
-                    }
-                }
-            };
-            if (!mHandler.postDelayed(mTask, THROTTLE_MILLIS)) {
+            // Keep `mLastPendingInfo` up to date with the latest notification info.
+            mLastPendingInfo = mediaNotificationInfo;
+
+            // Return if we are in a throttled state.
+            if (mThrottleTask != null) {
+                return;
+            }
+
+            // Show the notification and clear `mLastPendingInfo` to prevent the next scheduled task
+            // from showing a notification, if no new notifications are received.
+            if (mController.mPendingIntentActionSwipe != null) {
+                mController.showNotification(mediaNotificationInfo);
+                mLastPendingInfo = null;
+            }
+
+            // Create a task to show a notification for the latest `mLastPendingInfo` that is queued
+            // while the task is waiting to run. The task will fire after `THROTTLE_MILLIS` has
+            // elapsed.
+            //
+            // `mThrottleTask` takes care of clearing itself and `mLastPendingInfo` controls when to
+            // exit the throttled state.
+            mThrottleTask =
+                    new Runnable() {
+                        @Override
+                        public void run() {
+                            mThrottleTask = null;
+                            if (mLastPendingInfo != null) {
+                                showNotificationImmediately(mLastPendingInfo);
+                            }
+                        }
+                    };
+
+            // Enter throttled state.
+            if (!mHandler.postDelayed(mThrottleTask, THROTTLE_MILLIS)) {
                 Log.w(TAG, "Failed to post the throttler task.");
-                mTask = null;
+                mThrottleTask = null;
             }
         }
     }
 
-    private final MediaSessionCompat
-            .Callback mMediaSessionCallback = new MediaSessionCompat.Callback() {
-        @Override
-        public void onPlay() {
-            MediaNotificationController.this.onPlay(
-                    MediaNotificationListener.ACTION_SOURCE_MEDIA_SESSION);
+    /**
+     * Helper class to initialize the `mPendingIntentActionSwipe` pending intent when the UI thread
+     * message queue is idle.
+     *
+     * <p>This class will add an `IdleHandler` to the UI thread message queue and schedule a delayed
+     * task. If the UI thread is not idle before `MAX_INIT_WAIT_TIME_MILLIS`, then
+     * `mPendingIntentActionSwipe` will be initialized by the delayed task.
+     *
+     * <p>If the idle task runs before `MAX_INIT_WAIT_TIME_MILLIS`, it will cancel the delayed task.
+     */
+    public static class PendingIntentInitializer {
+        @VisibleForTesting public static final int MAX_INIT_WAIT_TIME_MILLIS = 2000;
+
+        @VisibleForTesting public MediaNotificationController mController;
+
+        private final Handler mHandler;
+
+        // Task to perform initialization if the pending intent has not been initialized after
+        // `MAX_INIT_WAIT_TIME_MILLIS`.
+        @VisibleForTesting public Runnable mSwipeInitTask;
+
+        // Indicates whether the tasks to initialize the pending intent have been scheduled or not.
+        private boolean mTasksScheduled;
+
+        @VisibleForTesting
+        public PendingIntentInitializer(@NonNull MediaNotificationController controller) {
+            mController = controller;
+            mHandler = new Handler();
         }
 
-        @Override
-        public void onPause() {
-            MediaNotificationController.this.onPause(
-                    MediaNotificationListener.ACTION_SOURCE_MEDIA_SESSION);
+        /** Schedules the `mPendingIntentActionSwipe` construction if needed. */
+        @VisibleForTesting
+        public void schedulePendingIntentConstructionIfNeeded() {
+            if (mController.mPendingIntentActionSwipe != null || mTasksScheduled) {
+                return;
+            }
+
+            postDelayedTask();
+            scheduleIdleTask();
+
+            mTasksScheduled = true;
         }
 
-        @Override
-        public void onSkipToPrevious() {
-            MediaNotificationController.this.onMediaSessionAction(
-                    MediaSessionAction.PREVIOUS_TRACK);
+        @VisibleForTesting
+        public void createPendingIntentActionSwipeIfNeeded() {
+            if (mController.mPendingIntentActionSwipe != null) {
+                return;
+            }
+
+            clearDelayedTask();
+            mController.mPendingIntentActionSwipe = mController.createPendingIntent(ACTION_SWIPE);
+            mController.mPendingIntentInitializer = null;
         }
 
-        @Override
-        public void onSkipToNext() {
-            MediaNotificationController.this.onMediaSessionAction(MediaSessionAction.NEXT_TRACK);
+        /**
+         * Schedules a delayed task to initialize `mPendingIntentActionSwipe`, if the pending intent
+         * has not been initialized after `MAX_INIT_WAIT_TIME_MILLIS`.
+         */
+        @VisibleForTesting
+        public void postDelayedTask() {
+            mSwipeInitTask =
+                    new Runnable() {
+                        @Override
+                        public void run() {
+                            createPendingIntentActionSwipeIfNeeded();
+                        }
+                    };
+            mHandler.postDelayed(mSwipeInitTask, MAX_INIT_WAIT_TIME_MILLIS);
         }
 
-        @Override
-        public void onFastForward() {
-            MediaNotificationController.this.onMediaSessionAction(MediaSessionAction.SEEK_FORWARD);
+        /**
+         * Adds a new `IdleHandler` to initialize `mPendingIntentActionSwipe` whenever the UI thread
+         * message queue is idle.
+         */
+        @VisibleForTesting
+        public void scheduleIdleTask() {
+            Looper.myQueue()
+                    .addIdleHandler(
+                            () -> {
+                                createPendingIntentActionSwipeIfNeeded();
+                                return false;
+                            });
         }
 
-        @Override
-        public void onRewind() {
-            MediaNotificationController.this.onMediaSessionAction(MediaSessionAction.SEEK_BACKWARD);
+        /** Clears the `mIdleSwipeInitTask` delayed task */
+        @VisibleForTesting
+        public void clearDelayedTask() {
+            if (mSwipeInitTask != null) {
+                mHandler.removeCallbacks(mSwipeInitTask);
+                mSwipeInitTask = null;
+            }
         }
+    }
 
-        @Override
-        public void onSeekTo(long pos) {
-            MediaNotificationController.this.onMediaSessionSeekTo(pos);
-        }
-    };
+    private final MediaSessionCompat.Callback mMediaSessionCallback =
+            new MediaSessionCompat.Callback() {
+                @Override
+                public void onPlay() {
+                    MediaNotificationController.this.onPlay(
+                            MediaNotificationListener.ACTION_SOURCE_MEDIA_SESSION);
+                }
+
+                @Override
+                public void onPause() {
+                    MediaNotificationController.this.onPause(
+                            MediaNotificationListener.ACTION_SOURCE_MEDIA_SESSION);
+                }
+
+                @Override
+                public void onSkipToPrevious() {
+                    MediaNotificationController.this.onMediaSessionAction(
+                            MediaSessionAction.PREVIOUS_TRACK);
+                }
+
+                @Override
+                public void onSkipToNext() {
+                    MediaNotificationController.this.onMediaSessionAction(
+                            MediaSessionAction.NEXT_TRACK);
+                }
+
+                @Override
+                public void onFastForward() {
+                    MediaNotificationController.this.onMediaSessionAction(
+                            MediaSessionAction.SEEK_FORWARD);
+                }
+
+                @Override
+                public void onRewind() {
+                    MediaNotificationController.this.onMediaSessionAction(
+                            MediaSessionAction.SEEK_BACKWARD);
+                }
+
+                @Override
+                public void onSeekTo(long pos) {
+                    MediaNotificationController.this.onMediaSessionSeekTo(pos);
+                }
+            };
 
     /**
      * Finishes starting the service on O+.
@@ -260,22 +376,28 @@ public class MediaNotificationController {
     public static boolean finishStartingForegroundServiceOnO(
             Service service, NotificationWrapper notification) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false;
-        ForegroundServiceUtils.getInstance().startForeground(service, notification.getMetadata().id,
-                notification.getNotification(), 0 /* foregroundServiceType */);
+        try {
+            ForegroundServiceUtils.getInstance()
+                    .startForeground(
+                            service,
+                            notification.getMetadata().id,
+                            notification.getNotification(),
+                            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+        } catch (RuntimeException e) {
+            Log.e(TAG, "Unable to start media foreground service", e);
+        }
         return true;
     }
 
-    private PendingIntentProvider createPendingIntent(String action) {
+    @VisibleForTesting
+    public PendingIntentProvider createPendingIntent(String action) {
         Intent intent = mDelegate.createServiceIntent().setAction(action);
-        return PendingIntentProvider.getService(getContext(), 0, intent,
+        return PendingIntentProvider.getService(
+                getContext(),
+                0,
+                intent,
                 PendingIntent.FLAG_CANCEL_CURRENT
                         | IntentUtils.getPendingIntentMutabilityFlag(false));
-    }
-
-    private static boolean isRunningAtLeastN() {
-        return (sOverrideIsRunningNForTesting != null)
-                ? sOverrideIsRunningNForTesting
-                : Build.VERSION.SDK_INT >= Build.VERSION_CODES.N;
     }
 
     /**
@@ -330,33 +452,61 @@ public class MediaNotificationController {
 
         mActionToButtonInfo = new SparseArray<>();
 
-        mActionToButtonInfo.put(MediaSessionAction.PLAY,
-                new MediaButtonInfo(R.drawable.ic_play_arrow_white_36dp,
-                        R.string.accessibility_play, ACTION_PLAY, MEDIA_ACTION_PLAY));
-        mActionToButtonInfo.put(MediaSessionAction.PAUSE,
-                new MediaButtonInfo(R.drawable.ic_pause_white_36dp, R.string.accessibility_pause,
-                        ACTION_PAUSE, MEDIA_ACTION_PAUSE));
-        mActionToButtonInfo.put(MediaSessionAction.STOP,
-                new MediaButtonInfo(R.drawable.ic_stop_white_36dp, R.string.accessibility_stop,
-                        ACTION_STOP, MEDIA_ACTION_STOP));
-        mActionToButtonInfo.put(MediaSessionAction.PREVIOUS_TRACK,
-                new MediaButtonInfo(R.drawable.ic_skip_previous_white_36dp,
-                        R.string.accessibility_previous_track, ACTION_PREVIOUS_TRACK,
+        mActionToButtonInfo.put(
+                MediaSessionAction.PLAY,
+                new MediaButtonInfo(
+                        R.drawable.ic_play_arrow_white_24dp,
+                        R.string.accessibility_play,
+                        ACTION_PLAY,
+                        MEDIA_ACTION_PLAY));
+        mActionToButtonInfo.put(
+                MediaSessionAction.PAUSE,
+                new MediaButtonInfo(
+                        R.drawable.ic_pause_white_24dp,
+                        R.string.accessibility_pause,
+                        ACTION_PAUSE,
+                        MEDIA_ACTION_PAUSE));
+        mActionToButtonInfo.put(
+                MediaSessionAction.STOP,
+                new MediaButtonInfo(
+                        R.drawable.ic_stop_white_24dp,
+                        R.string.accessibility_stop,
+                        ACTION_STOP,
+                        MEDIA_ACTION_STOP));
+        mActionToButtonInfo.put(
+                MediaSessionAction.PREVIOUS_TRACK,
+                new MediaButtonInfo(
+                        R.drawable.ic_skip_previous_white_24dp,
+                        R.string.accessibility_previous_track,
+                        ACTION_PREVIOUS_TRACK,
                         MEDIA_ACTION_PREVIOUS_TRACK));
-        mActionToButtonInfo.put(MediaSessionAction.NEXT_TRACK,
-                new MediaButtonInfo(R.drawable.ic_skip_next_white_36dp,
-                        R.string.accessibility_next_track, ACTION_NEXT_TRACK,
+        mActionToButtonInfo.put(
+                MediaSessionAction.NEXT_TRACK,
+                new MediaButtonInfo(
+                        R.drawable.ic_skip_next_white_24dp,
+                        R.string.accessibility_next_track,
+                        ACTION_NEXT_TRACK,
                         MEDIA_ACTION_NEXT_TRACK));
-        mActionToButtonInfo.put(MediaSessionAction.SEEK_FORWARD,
-                new MediaButtonInfo(R.drawable.ic_fast_forward_white_36dp,
-                        R.string.accessibility_seek_forward, ACTION_SEEK_FORWARD,
+        mActionToButtonInfo.put(
+                MediaSessionAction.SEEK_FORWARD,
+                new MediaButtonInfo(
+                        R.drawable.ic_fast_forward_white_24dp,
+                        R.string.accessibility_seek_forward,
+                        ACTION_SEEK_FORWARD,
                         MEDIA_ACTION_SEEK_FORWARD));
-        mActionToButtonInfo.put(MediaSessionAction.SEEK_BACKWARD,
-                new MediaButtonInfo(R.drawable.ic_fast_rewind_white_36dp,
-                        R.string.accessibility_seek_backward, ACTION_SEEK_BACKWARD,
+        mActionToButtonInfo.put(
+                MediaSessionAction.SEEK_BACKWARD,
+                new MediaButtonInfo(
+                        R.drawable.ic_fast_rewind_white_24dp,
+                        R.string.accessibility_seek_backward,
+                        ACTION_SEEK_BACKWARD,
                         MEDIA_ACTION_SEEK_BACKWARD));
 
         mThrottler = new Throttler(this);
+
+        // Create `mPendingIntentInitializer`, which will be used to help initialize
+        // `mPendingIntentActionSwipe`.
+        mPendingIntentInitializer = new PendingIntentInitializer(this);
     }
 
     /**
@@ -368,7 +518,7 @@ public class MediaNotificationController {
         if (mService == service) return;
 
         mService = service;
-        updateNotification(true /*serviceStarting*/, true /*shouldLogNotification*/);
+        updateNotification(/* serviceStarting= */ true, /* shouldLogNotification= */ true);
     }
 
     /** Handles the service destruction. */
@@ -391,7 +541,8 @@ public class MediaNotificationController {
     }
 
     public void processAction(String action) {
-        if (ACTION_STOP.equals(action) || ACTION_SWIPE.equals(action)
+        if (ACTION_STOP.equals(action)
+                || ACTION_SWIPE.equals(action)
                 || ACTION_CANCEL.equals(action)) {
             onStop(MediaNotificationListener.ACTION_SOURCE_MEDIA_NOTIFICATION);
             stopListenerService();
@@ -482,8 +633,8 @@ public class MediaNotificationController {
             // This is not allowed from the background, and there is no workaround on S+.  Just
             // catch the exception, and `mService` will remain null for us to try again later.
             try {
-                ForegroundServiceUtils.getInstance().startForegroundService(
-                        mDelegate.createServiceIntent());
+                ForegroundServiceUtils.getInstance()
+                        .startForegroundService(mDelegate.createServiceIntent());
             } catch (RuntimeException e) {
             }
         } else {
@@ -500,8 +651,9 @@ public class MediaNotificationController {
         }
 
         return newInfo.equals(oldInfo)
-                || ((newInfo.isPaused && oldInfo != null
-                        && newInfo.instanceId != oldInfo.instanceId));
+                || (newInfo.isPaused
+                        && oldInfo != null
+                        && newInfo.instanceId != oldInfo.instanceId);
     }
 
     public void clearNotification() {
@@ -532,12 +684,21 @@ public class MediaNotificationController {
         clearNotification();
     }
 
+    /** Schedules the `mPendingIntentActionSwipe` construction if needed. */
+    @VisibleForTesting
+    public void schedulePendingIntentConstructionIfNeeded() {
+        if (mPendingIntentInitializer == null) {
+            return;
+        }
+        mPendingIntentInitializer.schedulePendingIntentConstructionIfNeeded();
+    }
+
     @VisibleForTesting
     public void stopListenerService() {
         if (mService == null) return;
 
-        ForegroundServiceUtils.getInstance().stopForeground(
-                mService, Service.STOP_FOREGROUND_REMOVE);
+        ForegroundServiceUtils.getInstance()
+                .stopForeground(mService, Service.STOP_FOREGROUND_REMOVE);
         mService.stopSelf();
     }
 
@@ -550,24 +711,28 @@ public class MediaNotificationController {
         if (mMediaNotificationInfo.isPrivate) return metadataBuilder.build();
 
         metadataBuilder.putString(
-                MediaMetadataCompat.METADATA_KEY_TITLE, mMediaNotificationInfo.metadata.getTitle());
+                MediaMetadataCompat.METADATA_KEY_TITLE, getSafeNotificationTitle());
         metadataBuilder.putString(
                 MediaMetadataCompat.METADATA_KEY_ARTIST, mMediaNotificationInfo.origin);
 
         if (!TextUtils.isEmpty(mMediaNotificationInfo.metadata.getArtist())) {
-            metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_ARTIST,
+            metadataBuilder.putString(
+                    MediaMetadataCompat.METADATA_KEY_ARTIST,
                     mMediaNotificationInfo.metadata.getArtist());
         }
         if (!TextUtils.isEmpty(mMediaNotificationInfo.metadata.getAlbum())) {
-            metadataBuilder.putString(MediaMetadataCompat.METADATA_KEY_ALBUM,
+            metadataBuilder.putString(
+                    MediaMetadataCompat.METADATA_KEY_ALBUM,
                     mMediaNotificationInfo.metadata.getAlbum());
         }
         if (mMediaNotificationInfo.mediaSessionImage != null) {
-            metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART,
+            metadataBuilder.putBitmap(
+                    MediaMetadataCompat.METADATA_KEY_ALBUM_ART,
                     mMediaNotificationInfo.mediaSessionImage);
         }
         if (mMediaNotificationInfo.mediaPosition != null) {
-            metadataBuilder.putLong(MediaMetadataCompat.METADATA_KEY_DURATION,
+            metadataBuilder.putLong(
+                    MediaMetadataCompat.METADATA_KEY_DURATION,
                     mMediaNotificationInfo.mediaPosition.getDuration());
         }
 
@@ -580,10 +745,11 @@ public class MediaNotificationController {
 
         if (mMediaNotificationInfo == null) {
             if (serviceStarting) {
-                finishStartingForegroundServiceOnO(mService,
+                finishStartingForegroundServiceOnO(
+                        mService,
                         mDelegate.createNotificationWrapperBuilder().buildNotificationWrapper());
-                ForegroundServiceUtils.getInstance().stopForeground(
-                        mService, Service.STOP_FOREGROUND_REMOVE);
+                ForegroundServiceUtils.getInstance()
+                        .stopForeground(mService, Service.STOP_FOREGROUND_REMOVE);
             }
             return;
         }
@@ -602,9 +768,9 @@ public class MediaNotificationController {
         // While the service is in foreground, the associated notification can't be swipped away.
         // Moving it back to background allows the user to remove the notification.
         if (mMediaNotificationInfo.supportsSwipeAway() && mMediaNotificationInfo.isPaused) {
-            ForegroundServiceUtils.getInstance().stopForeground(
-                    mService, Service.STOP_FOREGROUND_DETACH);
-            NotificationManagerProxy manager = new NotificationManagerProxyImpl(getContext());
+            ForegroundServiceUtils.getInstance()
+                    .stopForeground(mService, Service.STOP_FOREGROUND_DETACH);
+            BaseNotificationManagerProxy manager = BaseNotificationManagerProxyFactory.create();
             manager.notify(notification);
         } else if (!finishedForegroundingService) {
             // We did not foreground the service and update the notification above, so we should do
@@ -613,11 +779,14 @@ public class MediaNotificationController {
             // prevent us from launching a trampoline to fix it.  Try it, and see if it works.  If
             // not, then update the notification and leave the service in the background.
             try {
-                ForegroundServiceUtils.getInstance().startForeground(mService,
-                        mMediaNotificationInfo.id, notification.getNotification(),
-                        0 /*foregroundServiceType*/);
+                ForegroundServiceUtils.getInstance()
+                        .startForeground(
+                                mService,
+                                mMediaNotificationInfo.id,
+                                notification.getNotification(),
+                                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
             } catch (RuntimeException e) {
-                NotificationManagerProxy manager = new NotificationManagerProxyImpl(getContext());
+                BaseNotificationManagerProxy manager = BaseNotificationManagerProxyFactory.create();
                 manager.notify(notification);
             }
         }
@@ -633,9 +802,7 @@ public class MediaNotificationController {
         mNotificationBuilder = mDelegate.createNotificationWrapperBuilder();
         setMediaStyleLayoutForNotificationBuilder(mNotificationBuilder);
 
-        // TODO(zqzhang): It's weird that setShowWhen() doesn't work on K. Calling setWhen() to
-        // force removing the time.
-        mNotificationBuilder.setShowWhen(false).setWhen(0);
+        mNotificationBuilder.setShowWhen(false);
         mNotificationBuilder.setSmallIcon(mMediaNotificationInfo.notificationSmallIcon);
         mNotificationBuilder.setAutoCancel(false);
         mNotificationBuilder.setLocalOnly(true);
@@ -644,21 +811,26 @@ public class MediaNotificationController {
 
         if (mMediaNotificationInfo.supportsSwipeAway()) {
             mNotificationBuilder.setOngoing(!mMediaNotificationInfo.isPaused);
-            mNotificationBuilder.setDeleteIntent(createPendingIntent(ACTION_SWIPE));
+            assert (mPendingIntentActionSwipe != null);
+            mNotificationBuilder.setDeleteIntent(mPendingIntentActionSwipe);
         }
 
         // The intent will currently only be null when using a custom tab.
         // TODO(avayvod) work out what we should do in this case. See https://crbug.com/585395.
         if (mMediaNotificationInfo.contentIntent != null) {
-            mNotificationBuilder.setContentIntent(PendingIntentProvider.getActivity(getContext(),
-                    mMediaNotificationInfo.instanceId, mMediaNotificationInfo.contentIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT
-                            | IntentUtils.getPendingIntentMutabilityFlag(false)));
+            mNotificationBuilder.setContentIntent(
+                    PendingIntentProvider.getActivity(
+                            getContext(),
+                            mMediaNotificationInfo.instanceId,
+                            mMediaNotificationInfo.contentIntent,
+                            PendingIntent.FLAG_UPDATE_CURRENT
+                                    | IntentUtils.getPendingIntentMutabilityFlag(false)));
             // Set FLAG_UPDATE_CURRENT so that the intent extras is updated, otherwise the
             // intent extras will stay the same for the same tab.
         }
 
-        mNotificationBuilder.setVisibility(mMediaNotificationInfo.isPrivate
+        mNotificationBuilder.setVisibility(
+                mMediaNotificationInfo.isPrivate
                         ? NotificationCompat.VISIBILITY_PRIVATE
                         : NotificationCompat.VISIBILITY_PUBLIC);
     }
@@ -683,11 +855,15 @@ public class MediaNotificationController {
         PlaybackStateCompat.Builder playbackStateBuilder =
                 new PlaybackStateCompat.Builder().setActions(computeMediaSessionActions());
 
-        int state = mMediaNotificationInfo.isPaused ? PlaybackStateCompat.STATE_PAUSED
-                                                    : PlaybackStateCompat.STATE_PLAYING;
+        int state =
+                mMediaNotificationInfo.isPaused
+                        ? PlaybackStateCompat.STATE_PAUSED
+                        : PlaybackStateCompat.STATE_PLAYING;
 
         if (mMediaNotificationInfo.mediaPosition != null) {
-            playbackStateBuilder.setState(state, mMediaNotificationInfo.mediaPosition.getPosition(),
+            playbackStateBuilder.setState(
+                    state,
+                    mMediaNotificationInfo.mediaPosition.getPosition(),
                     mMediaNotificationInfo.mediaPosition.getPlaybackRate(),
                     mMediaNotificationInfo.mediaPosition.getLastUpdatedTime());
         } else {
@@ -755,17 +931,7 @@ public class MediaNotificationController {
         } else if (mMediaNotificationInfo.notificationLargeIcon != null
                 && !mMediaNotificationInfo.isPrivate) {
             builder.setLargeIcon(mMediaNotificationInfo.notificationLargeIcon);
-        } else if (!isRunningAtLeastN()) {
-            if (mDefaultNotificationLargeIcon == null
-                    && mMediaNotificationInfo.defaultNotificationLargeIcon != 0) {
-                mDefaultNotificationLargeIcon =
-                        MediaNotificationImageUtils.downscaleIconToIdealSize(
-                                BitmapFactory.decodeResource(getContext().getResources(),
-                                        mMediaNotificationInfo.defaultNotificationLargeIcon));
-            }
-            builder.setLargeIcon(mDefaultNotificationLargeIcon);
         }
-
         addNotificationButtons(builder);
     }
 
@@ -797,9 +963,11 @@ public class MediaNotificationController {
 
         for (int action : bigViewActions) {
             MediaButtonInfo buttonInfo = mActionToButtonInfo.get(action);
-            builder.addAction(buttonInfo.iconResId,
-                    getContext().getResources().getString(buttonInfo.descriptionResId),
-                    createPendingIntent(buttonInfo.intentString), buttonInfo.buttonId);
+            builder.addAction(
+                    buttonInfo.iconResId,
+                    getContext().getString(buttonInfo.descriptionResId),
+                    createPendingIntent(buttonInfo.intentString),
+                    buttonInfo.buttonId);
         }
 
         // Only apply MediaStyle when NotificationInfo supports play/pause.
@@ -812,30 +980,15 @@ public class MediaNotificationController {
         if (mMediaNotificationInfo.isPrivate) {
             // Notifications in incognito shouldn't show what is playing to avoid leaking
             // information.
-            if (isRunningAtLeastN()) {
-                builder.setContentTitle(getContext().getResources().getString(
-                        R.string.media_notification_incognito));
-                builder.setSubText(
-                        getContext().getResources().getString(R.string.notification_incognito_tab));
-            } else {
-                // App name is automatically added to the title from Android N,
-                // but needs to be added explicitly for prior versions.
-                builder.setContentTitle(mDelegate.getAppName())
-                        .setContentText(getContext().getResources().getString(
-                                R.string.media_notification_incognito));
-            }
+            builder.setContentTitle(getContext().getString(R.string.media_notification_incognito));
+            builder.setSubText(getContext().getString(R.string.notification_incognito_tab));
             return;
         }
 
-        builder.setContentTitle(mMediaNotificationInfo.metadata.getTitle());
+        builder.setContentTitle(getSafeNotificationTitle());
         String artistAndAlbumText = getArtistAndAlbumText(mMediaNotificationInfo.metadata);
-        if (isRunningAtLeastN() || !artistAndAlbumText.isEmpty()) {
-            builder.setContentText(artistAndAlbumText);
-            builder.setSubText(mMediaNotificationInfo.origin);
-        } else {
-            // Leaving ContentText empty looks bad, so move origin up to the ContentText.
-            builder.setContentText(mMediaNotificationInfo.origin);
-        }
+        builder.setContentText(artistAndAlbumText);
+        builder.setSubText(mMediaNotificationInfo.origin);
     }
 
     private static String getArtistAndAlbumText(MediaMetadata metadata) {
@@ -858,13 +1011,13 @@ public class MediaNotificationController {
                 || !actions.contains(MediaSessionAction.PAUSE);
 
         int[] actionByOrder = {
-                MediaSessionAction.PREVIOUS_TRACK,
-                MediaSessionAction.SEEK_BACKWARD,
-                MediaSessionAction.PLAY,
-                MediaSessionAction.PAUSE,
-                MediaSessionAction.SEEK_FORWARD,
-                MediaSessionAction.NEXT_TRACK,
-                MediaSessionAction.STOP,
+            MediaSessionAction.PREVIOUS_TRACK,
+            MediaSessionAction.SEEK_BACKWARD,
+            MediaSessionAction.PLAY,
+            MediaSessionAction.PAUSE,
+            MediaSessionAction.SEEK_FORWARD,
+            MediaSessionAction.NEXT_TRACK,
+            MediaSessionAction.STOP,
         };
 
         // Sort the actions based on the expected ordering in the UI.
@@ -945,10 +1098,20 @@ public class MediaNotificationController {
             }
         }
 
-        return CollectionUtil.integerListToIntArray(compactActions);
+        return CollectionUtil.integerCollectionToIntArray(compactActions);
     }
 
     private static Context getContext() {
         return ContextUtils.getApplicationContext();
+    }
+
+    // Return a non-blank string for use as the notification title, to avoid issues on some
+    // versions of Android.
+    private String getSafeNotificationTitle() {
+        String title = mMediaNotificationInfo.metadata.getTitle();
+        if (title != null && title.trim().length() > 0) {
+            return title;
+        }
+        return getContext().getPackageName();
     }
 }

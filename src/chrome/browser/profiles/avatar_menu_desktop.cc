@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,6 +38,7 @@ AvatarMenu::ImageLoadStatus AvatarMenu::GetImageForMenuButton(
       status = ImageLoadStatus::LOADING;
   }
 
-  *image = entry->GetAvatarIcon(preferred_size, /*use_high_res_file=*/false);
+  *image = entry->GetAvatarIcon(preferred_size, /*use_high_res_file=*/false,
+                                /*icon_params=*/{.has_padding = false});
   return status;
 }

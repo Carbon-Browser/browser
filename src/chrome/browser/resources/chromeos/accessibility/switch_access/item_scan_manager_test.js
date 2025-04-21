@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,22 +9,7 @@ SwitchAccessItemScanManagerTest = class extends SwitchAccessE2ETest {
   /** @override */
   async setUpDeferred() {
     await super.setUpDeferred();
-    await importModule(
-        'BackButtonNode', '/switch_access/nodes/back_button_node.js');
-    await importModule(
-        ['BasicNode', 'BasicRootNode'], '/switch_access/nodes/basic_node.js');
-    await importModule('EventGenerator', '/common/event_generator.js');
-    await importModule(
-        ['KeyboardNode', 'KeyboardRootNode'],
-        '/switch_access/nodes/keyboard_node.js');
-    await importModule(
-        'ItemScanManager', '/switch_access/item_scan_manager.js');
-    await importModule('Navigator', '/switch_access/navigator.js');
-    await importModule('SACache', '/switch_access/cache.js');
-    await importModule(
-        'SwitchAccessMenuAction', '/switch_access/switch_access_constants.js');
-    await importModule(
-        'SwitchAccessPredicate', '/switch_access/switch_access_predicate.js');
+    globalThis.MenuAction = chrome.accessibilityPrivate.SwitchAccessMenuAction;
 
     BackButtonNode
         .locationForTesting = {top: 10, left: 10, width: 20, height: 20};
@@ -195,7 +180,7 @@ AX_TEST_F('SwitchAccessItemScanManagerTest', 'EnterGroup', async function() {
 
   const originalGroup = Navigator.byItem.group_;
   assertEquals(
-      Navigator.byItem.node_.automationNode.htmlAttributes.id, 'group',
+      Navigator.byItem.node_.automationNode.htmlId, 'group',
       'Did not move to group properly');
 
   Navigator.byItem.enterGroup();
@@ -225,8 +210,7 @@ AX_TEST_F('SwitchAccessItemScanManagerTest', 'MoveForward', async function() {
       button1 instanceof BackButtonNode,
       'button1 should not be a BackButtonNode');
   assertEquals(
-      'button1', button1.automationNode.htmlAttributes.id,
-      'Current node is not button1');
+      'button1', button1.automationNode.htmlId, 'Current node is not button1');
 
   Navigator.byItem.moveForward();
   assertFalse(
@@ -237,8 +221,7 @@ AX_TEST_F('SwitchAccessItemScanManagerTest', 'MoveForward', async function() {
       button2 instanceof BackButtonNode,
       'button2 should not be a BackButtonNode');
   assertEquals(
-      'button2', button2.automationNode.htmlAttributes.id,
-      'Current node is not button2');
+      'button2', button2.automationNode.htmlId, 'Current node is not button2');
 
   Navigator.byItem.moveForward();
   assertFalse(
@@ -252,8 +235,7 @@ AX_TEST_F('SwitchAccessItemScanManagerTest', 'MoveForward', async function() {
       button3 instanceof BackButtonNode,
       'button3 should not be a BackButtonNode');
   assertEquals(
-      'button3', button3.automationNode.htmlAttributes.id,
-      'Current node is not button3');
+      'button3', button3.automationNode.htmlId, 'Current node is not button3');
 
   Navigator.byItem.moveForward();
   assertTrue(
@@ -279,8 +261,7 @@ AX_TEST_F('SwitchAccessItemScanManagerTest', 'MoveBackward', async function() {
       button1 instanceof BackButtonNode,
       'button1 should not be a BackButtonNode');
   assertEquals(
-      'button1', button1.automationNode.htmlAttributes.id,
-      'Current node is not button1');
+      'button1', button1.automationNode.htmlId, 'Current node is not button1');
 
   Navigator.byItem.moveBackward();
   assertTrue(
@@ -296,8 +277,7 @@ AX_TEST_F('SwitchAccessItemScanManagerTest', 'MoveBackward', async function() {
       button3 instanceof BackButtonNode,
       'button3 should not be a BackButtonNode');
   assertEquals(
-      'button3', button3.automationNode.htmlAttributes.id,
-      'Current node is not button3');
+      'button3', button3.automationNode.htmlId, 'Current node is not button3');
 
   Navigator.byItem.moveBackward();
   assertFalse(
@@ -309,8 +289,7 @@ AX_TEST_F('SwitchAccessItemScanManagerTest', 'MoveBackward', async function() {
       button2 instanceof BackButtonNode,
       'button2 should not be a BackButtonNode');
   assertEquals(
-      'button2', button2.automationNode.htmlAttributes.id,
-      'Current node is not button2');
+      'button2', button2.automationNode.htmlId, 'Current node is not button2');
 
   Navigator.byItem.moveBackward();
   assertTrue(
@@ -331,7 +310,7 @@ AX_TEST_F(
           button1 instanceof BackButtonNode,
           'button1 should not be a BackButtonNode');
       assertEquals(
-          'button1', button1.automationNode.htmlAttributes.id,
+          'button1', button1.automationNode.htmlId,
           'Current node is not button1');
 
       // Simulate the underlying node's deletion. Note that this is different
@@ -346,8 +325,9 @@ AX_TEST_F(
           {type: chrome.automation.TreeChangeType.NODE_REMOVED});
     });
 
+// TODO(crbug.com/336827654): Investigate failures.
 AX_TEST_F(
-    'SwitchAccessItemScanManagerTest', 'ScanAndTypeVirtualKeyboard',
+  'SwitchAccessItemScanManagerTest', 'DISABLED_ScanAndTypeVirtualKeyboard',
     async function() {
       const website = `<input type="text" id="testinput"></input>`;
       const rootWebArea = await this.runWithLoadedTree(website);
@@ -356,9 +336,9 @@ AX_TEST_F(
       Navigator.byItem.moveTo_(this.findNodeById('testinput'));
       const input = Navigator.byItem.node_;
       assertEquals(
-          'testinput', input.automationNode.htmlAttributes.id,
+          'testinput', input.automationNode.htmlId,
           'Current node is not input');
-      input.performAction(SwitchAccessMenuAction.KEYBOARD);
+      input.performAction(MenuAction.KEYBOARD);
 
       const keyboard =
           await this.untilFocusIs({role: chrome.automation.RoleType.KEYBOARD});
@@ -381,8 +361,9 @@ AX_TEST_F(
       }
     });
 
+// TODO(crbug.com/40946640): Test is flaky.
 AX_TEST_F(
-    'SwitchAccessItemScanManagerTest', 'DismissVirtualKeyboard',
+    'SwitchAccessItemScanManagerTest', 'DISABLED_DismissVirtualKeyboard',
     async function() {
       const website =
           `<input type="text" id="testinput"></input><button>ok</button>`;
@@ -392,9 +373,9 @@ AX_TEST_F(
       Navigator.byItem.moveTo_(this.findNodeById('testinput'));
       const input = Navigator.byItem.node_;
       assertEquals(
-          'testinput', input.automationNode.htmlAttributes.id,
+          'testinput', input.automationNode.htmlId,
           'Current node is not input');
-      input.performAction(SwitchAccessMenuAction.KEYBOARD);
+      input.performAction(MenuAction.KEYBOARD);
 
       const keyboard =
           await this.untilFocusIs({role: chrome.automation.RoleType.KEYBOARD});
@@ -455,8 +436,7 @@ AX_TEST_F(
       Navigator.byItem.moveTo_(this.findNodeById('slider'));
       const slider = Navigator.byItem.node_;
       assertEquals(
-          'slider', slider.automationNode.htmlAttributes.id,
-          'Current node is not slider');
+          'slider', slider.automationNode.htmlId, 'Current node is not slider');
 
       // Trigger a children changed on the group.
       const automationGroup =
@@ -493,6 +473,7 @@ AX_TEST_F('SwitchAccessItemScanManagerTest', 'InitialFocus', async function() {
       chrome.automation.RoleType.DESKTOP, desktop.role,
       `Unexpected desktop ${desktop.toString()}`);
   const manager = new ItemScanManager(desktop);
+  manager.start();
   assertEquals(
       button.automationNode, manager.node_.automationNode,
       `Unexpected focus ${manager.node_.debugString()}`);

@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "gpu/command_buffer/service/buffer_manager.h"
 
@@ -10,11 +15,12 @@
 #include <memory>
 
 #include "base/check_op.h"
+#include "base/containers/heap_array.h"
 #include "base/format_macros.h"
 #include "base/notreached.h"
 #include "base/numerics/checked_math.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/trace_event.h"
 #include "gpu/command_buffer/service/context_state.h"
@@ -23,7 +29,6 @@
 #include "gpu/command_buffer/service/memory_tracking.h"
 #include "gpu/command_buffer/service/transform_feedback_manager.h"
 #include "ui/gl/gl_bindings.h"
-#include "ui/gl/gl_version_info.h"
 #include "ui/gl/trace_util.h"
 
 namespace gpu {
@@ -51,7 +56,8 @@ BufferManager::BufferManager(MemoryTracker* memory_tracker,
   // so don't register a dump provider.
   if (memory_tracker_) {
     base::trace_event::MemoryDumpManager::GetInstance()->RegisterDumpProvider(
-        this, "gpu::BufferManager", base::ThreadTaskRunnerHandle::Get());
+        this, "gpu::BufferManager",
+        base::SingleThreadTaskRunner::GetCurrentDefault());
   }
 }
 
@@ -272,7 +278,6 @@ bool Buffer::GetMaxValueForRange(
         break;
       default:
         NOTREACHED();  // should never get here by validation.
-        break;
     }
   }
 
@@ -345,7 +350,6 @@ bool Buffer::GetMaxValueForRange(
       break;
     default:
       NOTREACHED();  // should never get here by validation.
-      break;
   }
   range_set_.insert(std::make_pair(range, max_v));
   *max_value = max_v;
@@ -401,14 +405,10 @@ bool BufferManager::UseNonZeroSizeForClientSideArrayBuffer() {
 
 bool BufferManager::UseShadowBuffer(GLenum target, GLenum usage) {
   const bool is_client_side_array = IsUsageClientSideArray(usage);
-  // feature_info_ can be null in some unit tests.
-  const bool support_fixed_attribs =
-      !feature_info_ || feature_info_->gl_version_info().SupportsFixedType();
 
   // TODO(zmo): Don't shadow buffer data on ES3. crbug.com/491002.
-  return (
-      target == GL_ELEMENT_ARRAY_BUFFER || allow_buffers_on_multiple_targets_ ||
-      (allow_fixed_attribs_ && !support_fixed_attribs) || is_client_side_array);
+  return (target == GL_ELEMENT_ARRAY_BUFFER ||
+          allow_buffers_on_multiple_targets_ || is_client_side_array);
 }
 
 void BufferManager::SetInfo(Buffer* buffer,
@@ -493,9 +493,8 @@ void BufferManager::DoBufferData(
     if (data || !size) {
       glBufferData(target, size, data, usage);
     } else {
-      std::unique_ptr<char[]> zero(new char[size]);
-      memset(zero.get(), 0, size);
-      glBufferData(target, size, zero.get(), usage);
+      auto zero = base::HeapArray<char>::WithSize(size);
+      glBufferData(target, size, zero.data(), usage);
     }
   }
   GLenum error = ERRORSTATE_PEEK_GL_ERROR(error_state, "glBufferData");
@@ -725,7 +724,6 @@ Buffer* BufferManager::GetBufferInfoForTarget(
       return state->bound_uniform_buffer.get();
     default:
       NOTREACHED();
-      return nullptr;
   }
 }
 
@@ -743,7 +741,6 @@ void BufferManager::SetPrimitiveRestartFixedIndexIfNecessary(GLenum type) {
       break;
     default:
       NOTREACHED();  // should never get here by validation.
-      break;
   }
   if (primitive_restart_fixed_index_ != index) {
     glPrimitiveRestartIndex(index);
@@ -756,7 +753,7 @@ bool BufferManager::OnMemoryDump(const base::trace_event::MemoryDumpArgs& args,
   using base::trace_event::MemoryAllocatorDump;
   using base::trace_event::MemoryDumpLevelOfDetail;
 
-  if (args.level_of_detail == MemoryDumpLevelOfDetail::BACKGROUND) {
+  if (args.level_of_detail == MemoryDumpLevelOfDetail::kBackground) {
     std::string dump_name =
         base::StringPrintf("gpu/gl/buffers/context_group_0x%" PRIX64 "",
                            memory_tracker_->ContextGroupTracingId());

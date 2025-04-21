@@ -1,10 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_POLICY_CORE_DEVICE_ATTRIBUTES_H_
 #define CHROME_BROWSER_ASH_POLICY_CORE_DEVICE_ATTRIBUTES_H_
 
+#include <optional>
 #include <string>
 
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
@@ -28,18 +29,21 @@ class DeviceAttributes {
   // identifies the SAML settings for the device.
   virtual std::string GetSSOProfile() const = 0;
 
-  // Returns the Kerberos realm (aka Windows Domain) if the device is managed by
-  // Active Directory.
-  virtual std::string GetRealm() const = 0;
-
   // Returns the device asset ID if it is set.
   virtual std::string GetDeviceAssetID() const = 0;
+
+  // Returns the device serial number if it is found.
+  virtual std::string GetDeviceSerialNumber() const = 0;
 
   // Returns the machine name if it is set.
   virtual std::string GetMachineName() const = 0;
 
   // Returns the device annotated location if it is set.
   virtual std::string GetDeviceAnnotatedLocation() const = 0;
+
+  // Returns the device's hostname as set by DeviceHostnameTemplate policy or
+  // null if no policy is set by admin.
+  virtual std::optional<std::string> GetDeviceHostname() const = 0;
 
   // Returns the cloud directory API ID or an empty string if it is not set.
   virtual std::string GetDirectoryApiID() const = 0;

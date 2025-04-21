@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,8 @@ class EventTargetIterator {
 template <typename T>
 class EventTargetIteratorPtrImpl : public EventTargetIterator {
  public:
-  explicit EventTargetIteratorPtrImpl(const std::vector<T*>& children)
+  explicit EventTargetIteratorPtrImpl(
+      const std::vector<raw_ptr<T, VectorExperimental>>& children)
       : begin_(children.rbegin()), end_(children.rend()) {}
   ~EventTargetIteratorPtrImpl() override {}
 
@@ -38,8 +39,10 @@ class EventTargetIteratorPtrImpl : public EventTargetIterator {
   }
 
  private:
-  typename std::vector<T*>::const_reverse_iterator begin_;
-  typename std::vector<T*>::const_reverse_iterator end_;
+  typename std::vector<raw_ptr<T, VectorExperimental>>::const_reverse_iterator
+      begin_;
+  typename std::vector<raw_ptr<T, VectorExperimental>>::const_reverse_iterator
+      end_;
 };
 
 template <typename T>

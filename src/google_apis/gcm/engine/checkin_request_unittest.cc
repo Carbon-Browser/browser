@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/chromeos_buildflags.h"
 #include "google_apis/gcm/engine/checkin_request.h"
 #include "google_apis/gcm/engine/gcm_request_test_base.h"
@@ -103,7 +103,8 @@ void CheckinRequestTest::CreateRequest(uint64_t android_id,
       GURL(kCheckinURL), request_info, GetBackoffPolicy(),
       base::BindOnce(&CheckinRequestTest::FetcherCallback,
                      base::Unretained(this)),
-      url_loader_factory(), base::ThreadTaskRunnerHandle::Get(), &recorder_);
+      url_loader_factory(), base::SingleThreadTaskRunner::GetCurrentDefault(),
+      &recorder_);
 
   // Setting android_id_ and security_token_ to blank value, not used elsewhere
   // in the tests.

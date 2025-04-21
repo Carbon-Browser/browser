@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
-#include "ui/base/ui_base_types.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/base/mojom/window_show_state.mojom-forward.h"
+#include "ui/display/types/display_constants.h"
 
 namespace aura {
 class Window;
@@ -30,15 +32,23 @@ COMPONENT_EXPORT(UI_WM) void DeactivateWindow(aura::Window* window);
 COMPONENT_EXPORT(UI_WM) bool IsActiveWindow(const aura::Window* window);
 COMPONENT_EXPORT(UI_WM) bool CanActivateWindow(const aura::Window* window);
 COMPONENT_EXPORT(UI_WM)
-void SetWindowFullscreen(aura::Window* window, bool fullscreen);
+void SetWindowFullscreen(
+    aura::Window* window,
+    bool fullscreen,
+    int64_t target_display_id = display::kInvalidDisplayId);
 
 // Returns true if |window|'s show state is |state|.
 COMPONENT_EXPORT(UI_WM)
-bool WindowStateIs(const aura::Window* window, ui::WindowShowState state);
+bool WindowStateIs(const aura::Window* window,
+                   ui::mojom::WindowShowState state);
+
+// Returns |window|'s current show state.
+COMPONENT_EXPORT(UI_WM)
+ui::mojom::WindowShowState GetWindowState(const aura::Window* window);
 
 // Sets the window state to |state|.
 COMPONENT_EXPORT(UI_WM)
-void SetWindowState(aura::Window* window, ui::WindowShowState state);
+void SetWindowState(aura::Window* window, ui::mojom::WindowShowState state);
 
 // Restores the window state from the current state to its previous applicable
 // state. As an example, if the current state is minimized, Restore() will
@@ -98,8 +108,8 @@ COMPONENT_EXPORT(UI_WM) aura::Window* GetTransientParent(aura::Window* window);
 COMPONENT_EXPORT(UI_WM)
 const aura::Window* GetTransientParent(const aura::Window* window);
 COMPONENT_EXPORT(UI_WM)
-const std::vector<aura::Window*>& GetTransientChildren(
-    const aura::Window* window);
+const std::vector<raw_ptr<aura::Window, VectorExperimental>>&
+GetTransientChildren(const aura::Window* window);
 COMPONENT_EXPORT(UI_WM)
 void AddTransientChild(aura::Window* parent, aura::Window* child);
 COMPONENT_EXPORT(UI_WM)

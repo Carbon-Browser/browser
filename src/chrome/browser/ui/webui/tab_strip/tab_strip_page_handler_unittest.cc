@@ -1,10 +1,11 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/webui/tab_strip/tab_strip_page_handler.h"
 
 #include <memory>
+#include <optional>
 
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
@@ -14,7 +15,7 @@
 #include "chrome/browser/ui/webui/tab_strip/tab_strip_ui.h"
 #include "chrome/browser/ui/webui/tab_strip/tab_strip_ui_embedder.h"
 #include "chrome/browser/ui/webui/tab_strip/tab_strip_ui_layout.h"
-#include "chrome/browser/ui/webui/webui_util.h"
+#include "chrome/browser/ui/webui/webui_util_desktop.h"
 #include "chrome/test/base/browser_with_test_window_test.h"
 #include "chrome/test/base/testing_profile_manager.h"
 #include "components/tab_groups/tab_group_color.h"
@@ -24,7 +25,6 @@
 #include "content/public/test/test_web_ui.h"
 #include "content/public/test/web_contents_tester.h"
 #include "testing/gmock/include/gmock/gmock.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/accelerators/accelerator.h"
 #include "ui/base/theme_provider.h"
 #include "ui/gfx/color_utils.h"
@@ -32,6 +32,7 @@
 
 using testing::_;
 using testing::AtLeast;
+using testing::InSequence;
 using testing::Truly;
 
 namespace {
@@ -86,30 +87,36 @@ class MockPage : public tab_strip::mojom::Page {
 
   MOCK_METHOD1(LayoutChanged,
                void(const base::flat_map<std::string, std::string>& layout));
-  MOCK_METHOD0(ReceivedKeyboardFocus, void());
-  MOCK_METHOD0(ContextMenuClosed, void());
-  MOCK_METHOD0(LongPress, void());
-  MOCK_METHOD2(TabGroupVisualsChanged,
-               void(const std::string& group_id,
-                    tab_strip::mojom::TabGroupVisualDataPtr tab_group));
-  MOCK_METHOD2(TabGroupMoved, void(const std::string& group_id, int32_t index));
-  MOCK_METHOD1(TabGroupClosed, void(const std::string& group_id));
-  MOCK_METHOD3(TabGroupStateChanged,
-               void(int32_t tab_id,
-                    int32_t index,
-                    const absl::optional<std::string>& group_id));
-  MOCK_METHOD1(TabCloseCancelled, void(int32_t tab_id));
-  MOCK_METHOD1(TabCreated, void(tab_strip::mojom::TabPtr tab));
-  MOCK_METHOD1(TabRemoved, void(int32_t tab_id));
-  MOCK_METHOD3(TabMoved,
-               void(int32_t tab_id, int32_t to_index, bool in_pinned));
-  MOCK_METHOD2(TabReplaced, void(int32_t tab_id, int32_t new_tab_id));
-  MOCK_METHOD1(TabActiveChanged, void(int32_t tab_id));
-  MOCK_METHOD1(TabUpdated, void(tab_strip::mojom::TabPtr tab));
-  MOCK_METHOD2(TabThumbnailUpdated,
-               void(int32_t tab_id, const std::string& data_uri));
-  MOCK_METHOD0(ShowContextMenu, void());
-  MOCK_METHOD0(ThemeChanged, void());
+  MOCK_METHOD(void, ReceivedKeyboardFocus, ());
+  MOCK_METHOD(void, ContextMenuClosed, ());
+  MOCK_METHOD(void, LongPress, ());
+  MOCK_METHOD(void,
+              TabGroupVisualsChanged,
+              (const std::string& group_id,
+               tab_strip::mojom::TabGroupVisualDataPtr tab_group));
+  MOCK_METHOD(void,
+              TabGroupMoved,
+              (const std::string& group_id, int32_t index));
+  MOCK_METHOD(void, TabGroupClosed, (const std::string& group_id));
+  MOCK_METHOD(void,
+              TabGroupStateChanged,
+              (int32_t tab_id,
+               int32_t index,
+               const std::optional<std::string>& group_id));
+  MOCK_METHOD(void, TabCloseCancelled, (int32_t tab_id));
+  MOCK_METHOD(void, TabCreated, (tab_strip::mojom::TabPtr tab));
+  MOCK_METHOD(void, TabRemoved, (int32_t tab_id));
+  MOCK_METHOD(void,
+              TabMoved,
+              (int32_t tab_id, int32_t to_index, bool in_pinned));
+  MOCK_METHOD(void, TabReplaced, (int32_t tab_id, int32_t new_tab_id));
+  MOCK_METHOD(void, TabActiveChanged, (int32_t tab_id));
+  MOCK_METHOD(void, TabUpdated, (tab_strip::mojom::TabPtr tab));
+  MOCK_METHOD(void,
+              TabThumbnailUpdated,
+              (int32_t tab_id, const std::string& data_uri));
+  MOCK_METHOD(void, ShowContextMenu, ());
+  MOCK_METHOD(void, ThemeChanged, ());
 };
 
 }  // namespace
@@ -169,16 +176,16 @@ TEST_F(TabStripPageHandlerTest, GroupStateChangedEvents) {
   tab_groups::TabGroupId expected_group_id =
       browser()->tab_strip_model()->AddToNewGroup({0, 1});
 
-  EXPECT_CALL(
-      page_, TabGroupStateChanged(
-                 extensions::ExtensionTabUtil::GetTabId(
-                     browser()->tab_strip_model()->GetWebContentsAt(0)),
-                 0, absl::optional<std::string>(expected_group_id.ToString())));
-  EXPECT_CALL(
-      page_, TabGroupStateChanged(
-                 extensions::ExtensionTabUtil::GetTabId(
-                     browser()->tab_strip_model()->GetWebContentsAt(1)),
-                 1, absl::optional<std::string>(expected_group_id.ToString())));
+  EXPECT_CALL(page_,
+              TabGroupStateChanged(
+                  extensions::ExtensionTabUtil::GetTabId(
+                      browser()->tab_strip_model()->GetWebContentsAt(0)),
+                  0, std::optional<std::string>(expected_group_id.ToString())));
+  EXPECT_CALL(page_,
+              TabGroupStateChanged(
+                  extensions::ExtensionTabUtil::GetTabId(
+                      browser()->tab_strip_model()->GetWebContentsAt(1)),
+                  1, std::optional<std::string>(expected_group_id.ToString())));
 
   // Remove the tab from the group to test for a tab-group-state-changed event.
   browser()->tab_strip_model()->RemoveFromGroup({1});
@@ -186,7 +193,7 @@ TEST_F(TabStripPageHandlerTest, GroupStateChangedEvents) {
   EXPECT_CALL(page_, TabGroupStateChanged(
                          extensions::ExtensionTabUtil::GetTabId(
                              browser()->tab_strip_model()->GetWebContentsAt(1)),
-                         1, absl::optional<std::string>()));
+                         1, std::optional<std::string>()));
 }
 
 TEST_F(TabStripPageHandlerTest, GetGroupVisualData) {
@@ -213,9 +220,9 @@ TEST_F(TabStripPageHandlerTest, GetGroupVisualData) {
 
   tab_strip::mojom::PageHandler::GetGroupVisualDataCallback callback =
       base::BindLambdaForTesting(
-          [=](base::flat_map<std::string,
-                             tab_strip::mojom::TabGroupVisualDataPtr>
-                  group_visual_datas) {
+          [=, this](base::flat_map<std::string,
+                                   tab_strip::mojom::TabGroupVisualDataPtr>
+                        group_visual_datas) {
             ExpectVisualData(group1_visuals,
                              *group_visual_datas[group1.ToString()]);
             ExpectVisualData(group2_visuals,
@@ -241,7 +248,8 @@ TEST_F(TabStripPageHandlerTest, GroupVisualDataChangedEvent) {
       TabGroupVisualsChanged(
           expected_group_id.ToString(),
           Truly(
-              [=](const tab_strip::mojom::TabGroupVisualDataPtr& visual_data) {
+              [=, this](
+                  const tab_strip::mojom::TabGroupVisualDataPtr& visual_data) {
                 if (visual_data->title.size() > 0) {
                   ExpectVisualData(new_visual_data, *visual_data);
                 }
@@ -268,23 +276,102 @@ TEST_F(TabStripPageHandlerTest, GroupTab) {
 TEST_F(TabStripPageHandlerTest, MoveGroup) {
   AddTab(browser(), GURL("http://foo/1"));
   AddTab(browser(), GURL("http://foo/2"));
-  tab_groups::TabGroupId group_id =
-      browser()->tab_strip_model()->AddToNewGroup({0});
+
+  auto* tab_strip_model = browser()->tab_strip_model();
+  const int moved_tab_id = extensions::ExtensionTabUtil::GetTabId(
+      tab_strip_model->GetWebContentsAt(0));
+  tab_groups::TabGroupId group_id = tab_strip_model->AddToNewGroup({0});
   web_ui()->ClearTrackedCalls();
 
   // Move the group to index 1.
-  int new_index = 1;
-  handler()->MoveGroup(group_id.ToString(), new_index);
+  constexpr int kMoveIndex = 1;
+  handler()->MoveGroup(group_id.ToString(), kMoveIndex);
 
-  gfx::Range tabs_in_group = browser()
-                                 ->tab_strip_model()
-                                 ->group_model()
-                                 ->GetTabGroup(group_id)
-                                 ->ListTabs();
-  ASSERT_EQ(new_index, static_cast<int>(tabs_in_group.start()));
-  ASSERT_EQ(new_index, static_cast<int>(tabs_in_group.end()) - 1);
+  gfx::Range tabs_in_group =
+      tab_strip_model->group_model()->GetTabGroup(group_id)->ListTabs();
+  ASSERT_EQ(kMoveIndex, static_cast<int>(tabs_in_group.start()));
+  ASSERT_EQ(kMoveIndex, static_cast<int>(tabs_in_group.end()) - 1);
 
-  EXPECT_CALL(page_, TabGroupMoved(group_id.ToString(), new_index));
+  EXPECT_CALL(page_, TabMoved(moved_tab_id, kMoveIndex, false));
+  EXPECT_CALL(page_, TabGroupMoved(group_id.ToString(), kMoveIndex));
+}
+
+class MockTabStripModelObserver : public TabStripModelObserver {
+ public:
+  MOCK_METHOD(void,
+              OnTabStripModelChanged,
+              (TabStripModel*,
+               const TabStripModelChange&,
+               const TabStripSelectionChange&),
+              (override));
+  MOCK_METHOD(void, OnTabGroupChanged, (const TabGroupChange&), (override));
+};
+
+// Tests the event order from a multi-tab group move. The WebUI event handling
+// implementation relies on this order of events. If it ever changes the WebUI
+// implementation should also change.
+TEST_F(TabStripPageHandlerTest, ValidateTabGroupEventStream) {
+  MockTabStripModelObserver mock_observer_;
+  auto* tab_strip_model = browser()->tab_strip_model();
+  tab_strip_model->AddObserver(&mock_observer_);
+
+  AddTab(browser(), GURL("http://foo/1"));
+  AddTab(browser(), GURL("http://foo/2"));
+  AddTab(browser(), GURL("http://foo/3"));
+  AddTab(browser(), GURL("http://foo/4"));
+  AddTab(browser(), GURL("http://foo/5"));
+
+  content::WebContents* first_tab_in_group =
+      tab_strip_model->GetWebContentsAt(0);
+  content::WebContents* second_tab_in_group =
+      tab_strip_model->GetWebContentsAt(1);
+  content::WebContents* third_tab_in_group =
+      tab_strip_model->GetWebContentsAt(2);
+
+  // Group tabs {0, 1, 2} together.
+  std::vector<int> tab_group_indicies = {0, 1, 2};
+  tab_groups::TabGroupId group_id =
+      tab_strip_model->AddToNewGroup(tab_group_indicies);
+
+  // Moving tabs {0, 1, 2} to index 2 will result in the first tab in the group
+  // being at index 2 after the move. This is how the index is calculdated,
+  // however, we process the group move operation one tab at a time. So if we
+  // want to move a group to the end of this particular array the to_index will
+  // be (length of tabstrip - 1). Ex:
+  // Indices:  0 1 2   3 4
+  // Before: { 0 1 2 } 3 4
+  // Indices:  0 1 2
+  // Middle:   3 4 (Specifying 2 puts the group at the end)
+  // Indices:  0 1   2 3 4
+  // After:    3 4 { 0 1 2 }
+  constexpr int kMoveIndex = 2;
+  constexpr int kNewGroupStartIndex = 2;
+  {
+    InSequence s;
+    EXPECT_CALL(mock_observer_,
+                OnTabStripModelChanged(
+                    _, Truly([&](const TabStripModelChange& change) {
+                      return change.type() == TabStripModelChange::kMoved;
+                    }),
+                    _))
+        .Times(3);
+    EXPECT_CALL(
+        mock_observer_,
+        OnTabGroupChanged(Truly([&](const TabGroupChange& change) {
+          TabGroupModel* group_model = tab_strip_model->group_model();
+          const int start_tab =
+              group_model->GetTabGroup(change.group)->ListTabs().start();
+          return change.type == TabGroupChange::kMoved &&
+                 change.group == group_id && start_tab == kNewGroupStartIndex;
+        })));
+  }
+  tab_strip_model->MoveGroupTo(group_id, kMoveIndex);
+  ASSERT_EQ(first_tab_in_group,
+            browser()->tab_strip_model()->GetWebContentsAt(2));
+  ASSERT_EQ(second_tab_in_group,
+            browser()->tab_strip_model()->GetWebContentsAt(3));
+  ASSERT_EQ(third_tab_in_group,
+            browser()->tab_strip_model()->GetWebContentsAt(4));
 }
 
 TEST_F(TabStripPageHandlerTest, MoveGroupAcrossWindows) {
@@ -325,7 +412,7 @@ TEST_F(TabStripPageHandlerTest, MoveGroupAcrossWindows) {
   ASSERT_EQ(moved_contents1, browser()->tab_strip_model()->GetWebContentsAt(1));
   ASSERT_EQ(moved_contents2, browser()->tab_strip_model()->GetWebContentsAt(2));
 
-  absl::optional<tab_groups::TabGroupId> new_group_id =
+  std::optional<tab_groups::TabGroupId> new_group_id =
       browser()->tab_strip_model()->GetTabGroupForTab(1);
   ASSERT_TRUE(new_group_id.has_value());
   ASSERT_EQ(browser()->tab_strip_model()->GetTabGroupForTab(1),
@@ -339,6 +426,41 @@ TEST_F(TabStripPageHandlerTest, MoveGroupAcrossWindows) {
           ->visual_data();
   ASSERT_EQ(visual_data.title(), new_visual_data->title());
   ASSERT_EQ(visual_data.color(), new_visual_data->color());
+}
+
+TEST_F(TabStripPageHandlerTest, NoopMoveGroupAcrossWindowsBreaksContiguity) {
+  AddTab(browser(), GURL("http://foo"));
+  AddTab(browser(), GURL("http://foo"));
+  browser()->tab_strip_model()->AddToNewGroup({0, 1});
+
+  // Create a new window with the same profile, and add a group to it.
+  std::unique_ptr<BrowserWindow> new_window(CreateBrowserWindow());
+  std::unique_ptr<Browser> new_browser =
+      CreateBrowser(profile(), browser()->type(), false, new_window.get());
+  AddTab(new_browser.get(), GURL("http://foo"));
+  AddTab(new_browser.get(), GURL("http://foo"));
+  tab_groups::TabGroupId group_id =
+      new_browser.get()->tab_strip_model()->AddToNewGroup({0, 1});
+
+  // Create some visual data to make sure it gets transferred.
+  const tab_groups::TabGroupVisualData visual_data(
+      u"My group", tab_groups::TabGroupColorId::kGreen);
+  new_browser.get()
+      ->tab_strip_model()
+      ->group_model()
+      ->GetTabGroup(group_id)
+      ->SetVisualData(visual_data);
+
+  web_ui()->ClearTrackedCalls();
+
+  int new_index = 1;
+  handler()->MoveGroup(group_id.ToString(), new_index);
+
+  ASSERT_EQ(2, new_browser.get()->tab_strip_model()->GetTabCount());
+  ASSERT_EQ(2, browser()->tab_strip_model()->GetTabCount());
+
+  // Close all tabs before destructing.
+  new_browser.get()->tab_strip_model()->CloseAllTabs();
 }
 
 TEST_F(TabStripPageHandlerTest, MoveGroupAcrossProfiles) {
@@ -423,6 +545,31 @@ TEST_F(TabStripPageHandlerTest, MoveTabAcrossWindows) {
   new_browser.get()->tab_strip_model()->CloseAllTabs();
 }
 
+TEST_F(TabStripPageHandlerTest, MoveTabAcrossWindowsInBetweenGroup) {
+  AddTab(browser(), GURL("http://foo"));
+  AddTab(browser(), GURL("http://foo"));
+  tab_groups::TabGroupId group_id =
+      browser()->tab_strip_model()->AddToNewGroup({0, 1});
+
+  std::unique_ptr<BrowserWindow> new_window(CreateBrowserWindow());
+  std::unique_ptr<Browser> new_browser =
+      CreateBrowser(profile(), browser()->type(), false, new_window.get());
+  AddTab(new_browser.get(), GURL("http://foo"));
+  content::WebContents* moved_contents =
+      new_browser.get()->tab_strip_model()->GetWebContentsAt(0);
+
+  handler()->MoveTab(extensions::ExtensionTabUtil::GetTabId(
+                         new_browser->tab_strip_model()->GetWebContentsAt(0)),
+                     1);
+
+  ASSERT_EQ(moved_contents, browser()->tab_strip_model()->GetWebContentsAt(1));
+  ASSERT_EQ(group_id,
+            browser()->tab_strip_model()->GetTabAtIndex(1)->GetGroup());
+
+  // Close all tabs before destructing.
+  new_browser.get()->tab_strip_model()->CloseAllTabs();
+}
+
 TEST_F(TabStripPageHandlerTest, TabCreated) {
   AddTab(browser(), GURL("http://foo"));
 
@@ -484,7 +631,7 @@ TEST_F(TabStripPageHandlerTest, TabReplaced) {
       browser()->tab_strip_model()->GetWebContentsAt(0));
 
   web_ui()->ClearTrackedCalls();
-  browser()->tab_strip_model()->ReplaceWebContentsAt(
+  browser()->tab_strip_model()->DiscardWebContentsAt(
       0, content::WebContentsTester::CreateTestWebContents(profile(), nullptr));
   int expected_new_id = extensions::ExtensionTabUtil::GetTabId(
       browser()->tab_strip_model()->GetWebContentsAt(0));
@@ -575,8 +722,7 @@ TEST_F(TabStripPageHandlerTest, PreventsInvalidTabDrags) {
                                        blink::kDragOperationMove));
 
   content::DropData invalid_drop_data;
-  invalid_drop_data.custom_data.insert(
-      std::make_pair(base::ASCIIToUTF16(kWebUITabIdDataType), u"3000"));
+  invalid_drop_data.custom_data.insert({kWebUITabIdDataType, u"3000"});
   EXPECT_FALSE(handler()->CanDragEnter(nullptr, invalid_drop_data,
                                        blink::kDragOperationMove));
 
@@ -585,16 +731,15 @@ TEST_F(TabStripPageHandlerTest, PreventsInvalidTabDrags) {
       browser()->tab_strip_model()->GetWebContentsAt(0));
   content::DropData valid_drop_data;
   valid_drop_data.custom_data.insert(
-      std::make_pair(base::ASCIIToUTF16(kWebUITabIdDataType),
-                     base::NumberToString16(valid_tab_id)));
+      {kWebUITabIdDataType, base::NumberToString16(valid_tab_id)});
   EXPECT_TRUE(handler()->CanDragEnter(nullptr, valid_drop_data,
                                       blink::kDragOperationMove));
 }
 
 TEST_F(TabStripPageHandlerTest, PreventsInvalidGroupDrags) {
   content::DropData invalid_drop_data;
-  invalid_drop_data.custom_data.insert(std::make_pair(
-      base::ASCIIToUTF16(kWebUITabGroupIdDataType), u"not a real group"));
+  invalid_drop_data.custom_data.insert(
+      {kWebUITabGroupIdDataType, u"not a real group"});
   EXPECT_FALSE(handler()->CanDragEnter(nullptr, invalid_drop_data,
                                        blink::kDragOperationMove));
 
@@ -603,8 +748,7 @@ TEST_F(TabStripPageHandlerTest, PreventsInvalidGroupDrags) {
       browser()->tab_strip_model()->AddToNewGroup({0});
   content::DropData valid_drop_data;
   valid_drop_data.custom_data.insert(
-      std::make_pair(base::ASCIIToUTF16(kWebUITabGroupIdDataType),
-                     base::ASCIIToUTF16(group_id.ToString())));
+      {kWebUITabGroupIdDataType, base::ASCIIToUTF16(group_id.ToString())});
   EXPECT_TRUE(handler()->CanDragEnter(nullptr, valid_drop_data,
                                       blink::kDragOperationMove));
 
@@ -620,8 +764,7 @@ TEST_F(TabStripPageHandlerTest, PreventsInvalidGroupDrags) {
       new_browser.get()->tab_strip_model()->AddToNewGroup({0});
   content::DropData different_profile_drop_data;
   different_profile_drop_data.custom_data.insert(
-      std::make_pair(base::ASCIIToUTF16(kWebUITabGroupIdDataType),
-                     base::ASCIIToUTF16(new_group_id.ToString())));
+      {kWebUITabGroupIdDataType, base::ASCIIToUTF16(new_group_id.ToString())});
   EXPECT_FALSE(handler()->CanDragEnter(nullptr, different_profile_drop_data,
                                        blink::kDragOperationMove));
 
@@ -630,7 +773,7 @@ TEST_F(TabStripPageHandlerTest, PreventsInvalidGroupDrags) {
 }
 
 TEST_F(TabStripPageHandlerTest, OnThemeChanged) {
-  webui::GetNativeTheme(web_ui()->GetWebContents())
+  webui::GetNativeThemeDeprecated(web_ui()->GetWebContents())
       ->NotifyOnNativeThemeUpdated();
   EXPECT_CALL(page_, ThemeChanged());
 }

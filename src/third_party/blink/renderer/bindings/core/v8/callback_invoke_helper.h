@@ -1,9 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_BINDINGS_CORE_V8_CALLBACK_INVOKE_HELPER_H_
 #define THIRD_PARTY_BLINK_RENDERER_BINDINGS_CORE_V8_CALLBACK_INVOKE_HELPER_H_
+
+#include <optional>
 
 #include "third_party/blink/renderer/bindings/core/v8/native_value_traits_impl.h"
 #include "third_party/blink/renderer/core/core_export.h"
@@ -16,6 +18,7 @@
 namespace blink {
 
 class CallbackFunctionBase;
+class CallbackFunctionWithTaskAttributionBase;
 class CallbackInterfaceBase;
 
 namespace bindings {
@@ -74,12 +77,17 @@ class CallbackInvokeHelper final {
   v8::Maybe<ReturnType> Result() {
     DCHECK(!aborted_);
     v8::Isolate* isolate = callback_->GetIsolate();
-    ExceptionState exception_state(isolate, ExceptionState::kExecutionContext,
-                                   class_like_name_, property_name_);
+    v8::TryCatch try_catch(isolate);
     auto&& result = NativeValueTraits<IDLReturnType>::NativeValue(
-        isolate, result_, exception_state);
-    if (exception_state.HadException())
+        isolate, result_, PassThroughException(isolate));
+    if (try_catch.HasCaught()) [[unlikely]] {
+      ApplyContextToException(
+          callback_->CallbackRelevantScriptState(), try_catch.Exception(),
+          ExceptionContext(v8::ExceptionContext::kOperation, class_like_name_,
+                           property_name_));
+      try_catch.ReThrow();
       return v8::Nothing<ReturnType>();
+    }
     return v8::Just<ReturnType>(result);
   }
 
@@ -100,28 +108,48 @@ class CallbackInvokeHelper final {
 
   ScriptState::Scope callback_relevant_context_scope_;
   v8::Context::BackupIncumbentScope backup_incumbent_scope_;
-  std::unique_ptr<scheduler::TaskAttributionTracker::TaskScope>
+  std::optional<scheduler::TaskAttributionTracker::TaskScope>
       task_attribution_scope_;
 };
 
 extern template class CORE_EXTERN_TEMPLATE_EXPORT
-    CallbackInvokeHelper<CallbackFunctionBase>;
-extern template class CORE_EXTERN_TEMPLATE_EXPORT
     CallbackInvokeHelper<CallbackFunctionBase,
-                         CallbackInvokeHelperMode::kConstructorCall>;
-extern template class CORE_EXTERN_TEMPLATE_EXPORT
-    CallbackInvokeHelper<CallbackFunctionBase,
-                         CallbackInvokeHelperMode::kLegacyTreatNonObjectAsNull>;
-extern template class CORE_EXTERN_TEMPLATE_EXPORT
-    CallbackInvokeHelper<CallbackInterfaceBase>;
+                         CallbackInvokeHelperMode::kDefault>;
 extern template class CORE_EXTERN_TEMPLATE_EXPORT
     CallbackInvokeHelper<CallbackFunctionBase,
                          CallbackInvokeHelperMode::kDefault,
                          CallbackReturnTypeIsPromise::kYes>;
 extern template class CORE_EXTERN_TEMPLATE_EXPORT
     CallbackInvokeHelper<CallbackFunctionBase,
+                         CallbackInvokeHelperMode::kConstructorCall>;
+extern template class CORE_EXTERN_TEMPLATE_EXPORT
+    CallbackInvokeHelper<CallbackFunctionBase,
                          CallbackInvokeHelperMode::kConstructorCall,
                          CallbackReturnTypeIsPromise::kYes>;
+extern template class CORE_EXTERN_TEMPLATE_EXPORT
+    CallbackInvokeHelper<CallbackFunctionBase,
+                         CallbackInvokeHelperMode::kLegacyTreatNonObjectAsNull>;
+
+extern template class CORE_EXTERN_TEMPLATE_EXPORT
+    CallbackInvokeHelper<CallbackFunctionWithTaskAttributionBase,
+                         CallbackInvokeHelperMode::kDefault>;
+extern template class CORE_EXTERN_TEMPLATE_EXPORT
+    CallbackInvokeHelper<CallbackFunctionWithTaskAttributionBase,
+                         CallbackInvokeHelperMode::kDefault,
+                         CallbackReturnTypeIsPromise::kYes>;
+extern template class CORE_EXTERN_TEMPLATE_EXPORT
+    CallbackInvokeHelper<CallbackFunctionWithTaskAttributionBase,
+                         CallbackInvokeHelperMode::kConstructorCall>;
+extern template class CORE_EXTERN_TEMPLATE_EXPORT
+    CallbackInvokeHelper<CallbackFunctionWithTaskAttributionBase,
+                         CallbackInvokeHelperMode::kConstructorCall,
+                         CallbackReturnTypeIsPromise::kYes>;
+extern template class CORE_EXTERN_TEMPLATE_EXPORT
+    CallbackInvokeHelper<CallbackFunctionWithTaskAttributionBase,
+                         CallbackInvokeHelperMode::kLegacyTreatNonObjectAsNull>;
+
+extern template class CORE_EXTERN_TEMPLATE_EXPORT
+    CallbackInvokeHelper<CallbackInterfaceBase>;
 
 }  // namespace bindings
 

@@ -1,16 +1,18 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CC_RESOURCES_CROSS_THREAD_SHARED_BITMAP_H_
 #define CC_RESOURCES_CROSS_THREAD_SHARED_BITMAP_H_
 
+#include <utility>
+
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/shared_memory_mapping.h"
 #include "cc/cc_export.h"
-#include "components/viz/common/resources/resource_format.h"
 #include "components/viz/common/resources/shared_bitmap.h"
+#include "components/viz/common/resources/shared_image_format.h"
 #include "ui/gfx/geometry/size.h"
 
 namespace cc {
@@ -25,17 +27,23 @@ class CC_EXPORT CrossThreadSharedBitmap
     : public base::RefCountedThreadSafe<CrossThreadSharedBitmap> {
  public:
   CrossThreadSharedBitmap(const viz::SharedBitmapId& id,
-                          base::MappedReadOnlyRegion shm,
+                          const base::ReadOnlySharedMemoryRegion region,
+                          base::WritableSharedMemoryMapping mapping,
                           const gfx::Size& size,
-                          viz::ResourceFormat format);
+                          viz::SharedImageFormat format);
 
   const viz::SharedBitmapId& id() const { return id_; }
   const base::ReadOnlySharedMemoryRegion& shared_region() const {
     return region_;
   }
-  void* memory() const { return mapping_.memory(); }
+  void* memory() { return const_cast<void*>(std::as_const(*this).memory()); }
+  const void* memory() const {
+    // TODO(crbug.com/355003196): This returns an unsafe unbounded pointer. The
+    // return type here should be changed to a span, then return span(mapping_).
+    return mapping_.data();
+  }
   const gfx::Size& size() const { return size_; }
-  viz::ResourceFormat format() const { return format_; }
+  viz::SharedImageFormat format() const { return format_; }
 
  private:
   friend base::RefCountedThreadSafe<CrossThreadSharedBitmap>;
@@ -46,7 +54,7 @@ class CC_EXPORT CrossThreadSharedBitmap
   const base::ReadOnlySharedMemoryRegion region_;
   base::WritableSharedMemoryMapping mapping_;
   const gfx::Size size_;
-  const viz::ResourceFormat format_;
+  const viz::SharedImageFormat format_;
 };
 
 }  // namespace cc

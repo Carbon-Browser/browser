@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
@@ -149,7 +149,7 @@ class FakeRegistrationManager : public RegistrationManager {
   FakeRegistrationManager() = default;
   ~FakeRegistrationManager() override = default;
 
-  // RegistrationManager implementations.
+  // RegistrationManager implementation.
   void SignOut() override { is_signed_in_ = false; }
 
   bool IsSignedIn() const override { return is_signed_in_; }
@@ -216,7 +216,7 @@ class FtlSignalStrategyTest : public testing::Test,
   void ExpectGetOAuthTokenFails(OAuthTokenGetter::Status status) {
     EXPECT_CALL(*token_getter_, CallWithToken(_))
         .WillOnce([=](OAuthTokenGetter::TokenCallback token_callback) {
-          std::move(token_callback).Run(status, {}, {});
+          std::move(token_callback).Run(status, OAuthTokenInfo());
         });
   }
 
@@ -224,8 +224,8 @@ class FtlSignalStrategyTest : public testing::Test,
     EXPECT_CALL(*token_getter_, CallWithToken(_))
         .WillOnce([](OAuthTokenGetter::TokenCallback token_callback) {
           std::move(token_callback)
-              .Run(OAuthTokenGetter::SUCCESS, kFakeLocalUsername,
-                   kFakeOAuthToken);
+              .Run(OAuthTokenGetter::SUCCESS,
+                   OAuthTokenInfo(kFakeOAuthToken, kFakeLocalUsername));
         });
   }
 
@@ -237,9 +237,12 @@ class FtlSignalStrategyTest : public testing::Test,
   base::test::TaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
 
-  raw_ptr<MockOAuthTokenGetter> token_getter_ = nullptr;
-  raw_ptr<FakeRegistrationManager> registration_manager_ = nullptr;
-  raw_ptr<FakeMessagingClient> messaging_client_ = nullptr;
+  raw_ptr<MockOAuthTokenGetter, AcrossTasksDanglingUntriaged> token_getter_ =
+      nullptr;
+  raw_ptr<FakeRegistrationManager, AcrossTasksDanglingUntriaged>
+      registration_manager_ = nullptr;
+  raw_ptr<FakeMessagingClient, AcrossTasksDanglingUntriaged> messaging_client_ =
+      nullptr;
   std::unique_ptr<FtlSignalStrategy> signal_strategy_;
 
   std::vector<SignalStrategy::State> state_history_;
@@ -328,8 +331,11 @@ TEST_F(FtlSignalStrategyTest, StartStream_Failure) {
   registration_manager_->ExpectSignInGaiaSucceeds();
 
   signal_strategy_->Connect();
+  ASSERT_TRUE(registration_manager_->IsSignedIn());
   messaging_client_->RejectReceivingMessages(
       ProtobufHttpStatus(ProtobufHttpStatus::Code::UNAVAILABLE, "unavailable"));
+  // Remain signed-in for non-auth related error.
+  ASSERT_TRUE(registration_manager_->IsSignedIn());
 
   ASSERT_EQ(2u, state_history_.size());
   ASSERT_EQ(SignalStrategy::State::CONNECTING, state_history_[0]);
@@ -352,6 +358,8 @@ TEST_F(FtlSignalStrategyTest, StreamRemotelyClosed) {
   messaging_client_->AcceptReceivingMessages();
   messaging_client_->RejectReceivingMessages(
       ProtobufHttpStatus(ProtobufHttpStatus::Code::UNAVAILABLE, "unavailable"));
+  // Remain signed-in for non-auth related error.
+  ASSERT_TRUE(registration_manager_->IsSignedIn());
 
   ASSERT_EQ(3u, state_history_.size());
   ASSERT_EQ(SignalStrategy::State::CONNECTING, state_history_[0]);
@@ -568,6 +576,9 @@ TEST_F(FtlSignalStrategyTest, SendMessage_AuthError) {
   ASSERT_EQ(SignalStrategy::State::DISCONNECTED, signal_strategy_->GetState());
   ASSERT_EQ(SignalStrategy::Error::NETWORK_ERROR, signal_strategy_->GetError());
   ASSERT_FALSE(signal_strategy_->IsSignInError());
+
+  // Sign-out due to auth related error.
+  ASSERT_FALSE(registration_manager_->IsSignedIn());
 }
 
 TEST_F(FtlSignalStrategyTest, SendMessage_NetworkError) {
@@ -592,6 +603,8 @@ TEST_F(FtlSignalStrategyTest, SendMessage_NetworkError) {
       message);
 
   ASSERT_EQ(0u, received_messages_.size());
+  // Remain signed-in for non-auth related error.
+  ASSERT_TRUE(registration_manager_->IsSignedIn());
 }
 
 }  // namespace remoting

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,16 +38,16 @@ class COMPONENT_EXPORT(DEVICE_FIDO) VirtualU2fDevice
   base::WeakPtr<FidoDevice> GetWeakPtr() override;
 
  private:
-  absl::optional<std::vector<uint8_t>> DoRegister(
+  std::optional<std::vector<uint8_t>> DoRegister(
       uint8_t ins,
       uint8_t p1,
       uint8_t p2,
       base::span<const uint8_t> data);
 
-  absl::optional<std::vector<uint8_t>> DoSign(uint8_t ins,
-                                              uint8_t p1,
-                                              uint8_t p2,
-                                              base::span<const uint8_t> data);
+  std::optional<std::vector<uint8_t>> DoSign(uint8_t ins,
+                                             uint8_t p1,
+                                             uint8_t p2,
+                                             base::span<const uint8_t> data);
 
   base::WeakPtrFactory<FidoDevice> weak_factory_{this};
 };

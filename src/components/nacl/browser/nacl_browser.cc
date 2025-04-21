@@ -1,6 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "components/nacl/browser/nacl_browser.h"
 
@@ -8,6 +13,7 @@
 #include <utility>
 
 #include "base/command_line.h"
+#include "base/containers/span.h"
 #include "base/files/file_proxy.h"
 #include "base/files/file_util.h"
 #include "base/lazy_instance.h"
@@ -17,16 +23,11 @@
 #include "base/pickle.h"
 #include "base/rand_util.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "url/gurl.h"
-
-#if BUILDFLAG(IS_WIN)
-#include "base/win/windows_version.h"
-#endif
 
 namespace {
 
@@ -46,17 +47,10 @@ const base::FilePath::StringType NaClIrtName() {
 
 #if defined(ARCH_CPU_X86_FAMILY)
 #if defined(ARCH_CPU_X86_64)
-  bool is64 = true;
-#elif BUILDFLAG(IS_WIN)
-  bool is64 = base::win::OSInfo::GetInstance()->IsWowX86OnAMD64();
+  irt_name.append(FILE_PATH_LITERAL("x86_64"));
 #else
-  bool is64 = false;
+  irt_name.append(FILE_PATH_LITERAL("x86_32"));
 #endif
-  if (is64)
-    irt_name.append(FILE_PATH_LITERAL("x86_64"));
-  else
-    irt_name.append(FILE_PATH_LITERAL("x86_32"));
-
 #elif defined(ARCH_CPU_ARM_FAMILY)
   irt_name.append(FILE_PATH_LITERAL("arm"));
 #elif defined(ARCH_CPU_MIPSEL)
@@ -87,8 +81,7 @@ void ReadCache(const base::FilePath& filename, std::string* data) {
 }
 
 void WriteCache(const base::FilePath& filename, const base::Pickle* pickle) {
-  base::WriteFile(filename, static_cast<const char*>(pickle->data()),
-                       pickle->size());
+  base::WriteFile(filename, base::span(*pickle));
 }
 
 void RemoveCache(const base::FilePath& filename, base::OnceClosure callback) {
@@ -166,9 +159,7 @@ NaClBrowserDelegate* NaClBrowser::GetDelegate() {
   return g_browser_delegate;
 }
 
-void NaClBrowser::ClearAndDeleteDelegateForTest() {
-  DCHECK(
-      !content::BrowserThread::IsThreadInitialized(content::BrowserThread::UI));
+void NaClBrowser::ClearAndDeleteDelegate() {
   DCHECK(g_browser_delegate);
   delete g_browser_delegate;
   g_browser_delegate = nullptr;
@@ -205,19 +196,6 @@ void NaClBrowser::InitIrtFilePath() {
     irt_filepath_ = plugin_dir.Append(NaClIrtName());
   }
 }
-
-#if BUILDFLAG(IS_WIN)
-bool NaClBrowser::GetNaCl64ExePath(base::FilePath* exe_path) {
-  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  base::FilePath module_path;
-  if (!base::PathService::Get(base::FILE_MODULE, &module_path)) {
-    LOG(ERROR) << "NaCl process launch failed: could not resolve module";
-    return false;
-  }
-  *exe_path = module_path.DirName().Append(L"nacl64");
-  return true;
-}
-#endif
 
 // static
 NaClBrowser* NaClBrowser::GetInstanceInternal() {
@@ -378,7 +356,8 @@ void NaClBrowser::OnValidationCacheLoaded(const std::string *data) {
     // No file found.
     validation_cache_.Reset();
   } else {
-    base::Pickle pickle(data->data(), data->size());
+    base::Pickle pickle =
+        base::Pickle::WithUnownedBuffer(base::as_byte_span(*data));
     validation_cache_.Deserialize(&pickle);
   }
   validation_cache_state_ = NaClResourceReady;
@@ -402,8 +381,8 @@ void NaClBrowser::CheckWaiting() {
     // directly.  For example, this could result in use-after-free of the
     // process host.
     for (auto iter = waiting_.begin(); iter != waiting_.end(); ++iter) {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                    std::move(*iter));
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+          FROM_HERE, std::move(*iter));
     }
     waiting_.clear();
   }
@@ -539,7 +518,7 @@ void NaClBrowser::MarkValidationCacheAsModified() {
   if (!validation_cache_is_modified_) {
     // Wait before persisting to disk.  This can coalesce multiple cache
     // modifications info a single disk write.
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&NaClBrowser::PersistValidationCache,
                        base::Unretained(this)),

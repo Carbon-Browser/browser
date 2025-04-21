@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <map>
 
+#include "base/memory/raw_ptr.h"
 #include "components/sessions/core/session_id.h"
 
 namespace sync_sessions {
@@ -18,7 +19,7 @@ class SyncedWindowDelegate;
 class SyncedWindowDelegatesGetter {
  public:
   using SyncedWindowDelegateMap =
-      std::map<SessionID, const SyncedWindowDelegate*>;
+      std::map<SessionID, raw_ptr<const SyncedWindowDelegate, CtnExperimental>>;
 
   SyncedWindowDelegatesGetter();
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@
 #include "components/viz/service/display/overlay_processor_on_gpu.h"
 #include "components/viz/service/display/overlay_strategy_underlay.h"
 #include "components/viz/service/display/skia_output_surface.h"
-#include "gpu/ipc/scheduler_sequence.h"
+#include "gpu/command_buffer/service/scheduler_sequence.h"
 #include "ui/gfx/geometry/rect_conversions.h"
 
 namespace viz {
@@ -44,7 +44,8 @@ OverlayProcessorAndroid::OverlayProcessorAndroid(
         &OverlayProcessorAndroid::InitializeOverlayProcessorOnGpu,
         base::Unretained(this), display_controller->controller_on_gpu(),
         &event);
-    gpu_task_scheduler_->ScheduleGpuTask(std::move(callback), {});
+    gpu_task_scheduler_->ScheduleGpuTask(
+        std::move(callback), /*sync_token_fences=*/{}, gpu::SyncToken());
     event.Wait();
   }
 
@@ -71,7 +72,8 @@ OverlayProcessorAndroid::~OverlayProcessorAndroid() {
     auto callback =
         base::BindOnce(&OverlayProcessorAndroid::DestroyOverlayProcessorOnGpu,
                        base::Unretained(this), &event);
-    gpu_task_scheduler_->ScheduleGpuTask(std::move(callback), {});
+    gpu_task_scheduler_->ScheduleGpuTask(
+        std::move(callback), /*sync_token_fences=*/{}, gpu::SyncToken());
     event.Wait();
   }
 }
@@ -124,7 +126,8 @@ void OverlayProcessorAndroid::ScheduleOverlays(
   auto task = base::BindOnce(&OverlayProcessorOnGpu::ScheduleOverlays,
                              base::Unretained(processor_on_gpu_.get()),
                              std::move(overlay_candidates_));
-  gpu_task_scheduler_->ScheduleGpuTask(std::move(task), locks_sync_tokens);
+  gpu_task_scheduler_->ScheduleGpuTask(std::move(task), locks_sync_tokens,
+                                       gpu::SyncToken());
   overlay_candidates_.clear();
 }
 
@@ -162,7 +165,7 @@ void OverlayProcessorAndroid::CheckOverlaySupportImpl(
     // SurfaceView.  Record that it should get a promotion hint.
     promotion_hint_info_map_[candidate.resource_id] = candidate.display_rect;
 
-    if (candidate.is_backed_by_surface_texture) {
+    if (!candidate.is_video_in_surface_view) {
       // This quad would be promoted if it were backed by a SurfaceView.  Since
       // it isn't, we can't promote it.
       return;
@@ -214,7 +217,7 @@ void OverlayProcessorAndroid::NotifyOverlayPromotion(
     const TextureDrawQuad* texture_quad = TextureDrawQuad::MaterialCast(quad);
     if (!texture_quad->is_stream_video)
       continue;
-    ResourceId id = texture_quad->resource_id();
+    ResourceId id = texture_quad->resource_id;
     if (!resource_provider->DoesResourceWantPromotionHint(id))
       continue;
     promotion_hint_requestor_set.insert(id);
@@ -261,7 +264,8 @@ void OverlayProcessorAndroid::NotifyOverlayPromotion(
                                base::Unretained(processor_on_gpu_.get()),
                                std::move(promotion_denied),
                                std::move(possible_promotions));
-    gpu_task_scheduler_->ScheduleGpuTask(std::move(task), locks_sync_tokens);
+    gpu_task_scheduler_->ScheduleGpuTask(std::move(task), locks_sync_tokens,
+                                         gpu::SyncToken());
   }
   promotion_hint_info_map_.clear();
 }

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,8 @@ import org.chromium.base.task.AsyncTask;
 import java.util.concurrent.Executor;
 
 /**
- * Forces async tasks to execute with the default executor.
- * This works around Robolectric not working out of the box with custom executors.
- *
- * @param <Result>
+ * Forces async tasks to execute with the default executor. This works around Robolectric not
+ * working out of the box with custom executors.
  */
 @Implements(AsyncTask.class)
 public class CustomShadowAsyncTask<Result> extends ShadowAsyncTask<Result> {

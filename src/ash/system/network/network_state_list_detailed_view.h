@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,15 @@
 #include <string>
 
 #include "ash/login_status.h"
+#include "ash/system/network/network_utils.h"
 #include "ash/system/network/tray_network_state_observer.h"
 #include "ash/system/tray/tray_detailed_view.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
 #include "chromeos/services/network_config/public/mojom/cros_network_config.mojom-forward.h"
 #include "chromeos/services/network_config/public/mojom/network_types.mojom-forward.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 
 namespace views {
 class Button;
@@ -33,6 +36,8 @@ bool CanNetworkConnect(
 class ASH_EXPORT NetworkStateListDetailedView
     : public TrayDetailedView,
       public TrayNetworkStateObserver {
+  METADATA_HEADER(NetworkStateListDetailedView, TrayDetailedView)
+
  public:
   NetworkStateListDetailedView(const NetworkStateListDetailedView&) = delete;
   NetworkStateListDetailedView& operator=(const NetworkStateListDetailedView&) =
@@ -44,14 +49,9 @@ class ASH_EXPORT NetworkStateListDetailedView
 
   void ToggleInfoBubbleForTesting();
 
-  // views::View:
-  const char* GetClassName() const override;
-
  protected:
-  enum ListType { LIST_TYPE_NETWORK, LIST_TYPE_VPN };
-
   NetworkStateListDetailedView(DetailedViewDelegate* delegate,
-                               ListType list_type,
+                               NetworkDetailedViewListType list_type,
                                LoginStatus login);
 
   // Refreshes the network list.
@@ -106,18 +106,18 @@ class ASH_EXPORT NetworkStateListDetailedView
   bool IsWifiEnabled();
 
   // Type of list (all networks or vpn)
-  ListType list_type_;
+  NetworkDetailedViewListType list_type_;
 
   // Track login state.
   LoginStatus login_;
 
-  TrayNetworkStateModel* model_;
+  raw_ptr<TrayNetworkStateModel> model_;
 
-  views::Button* info_button_;
-  views::Button* settings_button_;
+  raw_ptr<views::Button> info_button_;
+  raw_ptr<views::Button> settings_button_;
 
   // A small bubble for displaying network info.
-  InfoBubble* info_bubble_;
+  raw_ptr<InfoBubble> info_bubble_;
 
   // Timer for starting and stopping network scans.
   base::RepeatingTimer network_scan_repeating_timer_;

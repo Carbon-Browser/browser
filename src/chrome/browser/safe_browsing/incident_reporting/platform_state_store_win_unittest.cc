@@ -1,8 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/safe_browsing/incident_reporting/platform_state_store.h"
+
+#include <windows.h>
 
 #include <utility>
 
@@ -20,8 +22,6 @@
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
-
-#include <windows.h>
 
 namespace safe_browsing {
 namespace platform_state_store {
@@ -63,7 +63,7 @@ class PlatformStateStoreWinTest : public ::testing::Test {
     profile_ = profile_manager_.CreateTestingProfile(
         kProfileName_, std::move(prefs), base::UTF8ToUTF16(kProfileName_), 0,
         TestingProfile::TestingFactories(), /*is_supervised_profile=*/false,
-        absl::optional<bool>(new_profile));
+        std::optional<bool>(new_profile));
     if (new_profile)
       ASSERT_TRUE(profile_->IsNewProfile());
     else
@@ -104,7 +104,7 @@ class PlatformStateStoreWinTest : public ::testing::Test {
 
   static const char kProfileName_[];
   static const wchar_t kStoreKeyName_[];
-  raw_ptr<TestingProfile> profile_;
+  raw_ptr<TestingProfile, DanglingUntriaged> profile_;
 
  private:
   content::BrowserTaskEnvironment task_environment_;
@@ -117,6 +117,9 @@ const char PlatformStateStoreWinTest::kProfileName_[] = "test_profile";
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
 const wchar_t PlatformStateStoreWinTest::kStoreKeyName_[] =
     L"Software\\Google\\Chrome\\IncidentsSent";
+#elif BUILDFLAG(GOOGLE_CHROME_FOR_TESTING_BRANDING)
+const wchar_t PlatformStateStoreWinTest::kStoreKeyName_[] =
+    L"Software\\Google\\Chrome for Testing\\IncidentsSent";
 #else
 const wchar_t PlatformStateStoreWinTest::kStoreKeyName_[] =
     L"Software\\Chromium\\IncidentsSent";

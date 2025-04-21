@@ -1,10 +1,11 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef GPU_COMMAND_BUFFER_COMMON_DISCARDABLE_HANDLE_H_
 #define GPU_COMMAND_BUFFER_COMMON_DISCARDABLE_HANDLE_H_
 
+#include "base/atomicops.h"
 #include "base/memory/ref_counted.h"
 #include "base/types/id_type.h"
 #include "gpu/gpu_export.h"

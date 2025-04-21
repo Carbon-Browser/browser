@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,7 +48,6 @@ class OriginTrialsBrowserTest : public content::ContentBrowserTest {
   ~OriginTrialsBrowserTest() override {}
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
-    ContentBrowserTest::SetUpCommandLine(command_line);
     command_line->AppendSwitch(switches::kExposeInternalsForTesting);
   }
 

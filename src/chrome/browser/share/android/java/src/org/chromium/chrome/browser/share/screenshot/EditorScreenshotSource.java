@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@ import android.graphics.Bitmap;
 import androidx.annotation.Nullable;
 
 /**
- * An interface for a class that can provide screenshots to a consumer.
- * TODO(crbug/1024586): Remove this temporary class and instead move
+ * An interface for a class that can provide screenshots to a consumer. TODO(crbug.com/40107491):
+ * Remove this temporary class and instead move
  * chrome/android/java/src/org/chromium/chrome/browser/feedback/ScreenshotSource.java.
  */
 public interface EditorScreenshotSource {

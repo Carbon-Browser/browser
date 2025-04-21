@@ -1,18 +1,21 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/device_signals/core/system_signals/win/wsc_client_impl.h"
 
-#include <iwscapi.h>
 #include <windows.h>
+
+#include <iwscapi.h>
 #include <wrl/client.h>
 #include <wscapi.h>
+
 #include <memory>
+#include <optional>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/test/task_environment.h"
 #include "base/win/scoped_com_initializer.h"
@@ -21,7 +24,6 @@
 #include "components/device_signals/core/system_signals/win/com_fakes.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 using Microsoft::WRL::ComPtr;
 
@@ -90,7 +92,7 @@ TEST_F(WscClientImplTest, GetAntiVirusProducts_AllStates) {
   auto response = wsc_client_.GetAntiVirusProducts();
 
   ExpectAvInitialized();
-  EXPECT_EQ(response.query_error, absl::nullopt);
+  EXPECT_EQ(response.query_error, std::nullopt);
 
   EXPECT_EQ(response.parsing_errors.size(), 0U);
 

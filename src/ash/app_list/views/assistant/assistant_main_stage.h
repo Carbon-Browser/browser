@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "ash/assistant/model/assistant_ui_model_observer.h"
 #include "ash/public/cpp/assistant/controller/assistant_controller.h"
 #include "ash/public/cpp/assistant/controller/assistant_controller_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/separator.h"
@@ -36,9 +37,9 @@ class ASH_EXPORT AppListAssistantMainStage
       public AssistantControllerObserver,
       public AssistantInteractionModelObserver,
       public AssistantUiModelObserver {
- public:
-  METADATA_HEADER(AppListAssistantMainStage);
+  METADATA_HEADER(AppListAssistantMainStage, views::View)
 
+ public:
   explicit AppListAssistantMainStage(AssistantViewDelegate* delegate);
   AppListAssistantMainStage(const AppListAssistantMainStage&) = delete;
   AppListAssistantMainStage& operator=(const AppListAssistantMainStage&) =
@@ -66,11 +67,14 @@ class ASH_EXPORT AppListAssistantMainStage
   void OnUiVisibilityChanged(
       AssistantVisibility new_visibility,
       AssistantVisibility old_visibility,
-      absl::optional<AssistantEntryPoint> entry_point,
-      absl::optional<AssistantExitPoint> exit_point) override;
+      std::optional<AssistantEntryPoint> entry_point,
+      std::optional<AssistantExitPoint> exit_point) override;
+
+  void InitializeUIForBubbleView();
 
  private:
   void InitLayout();
+  void InitLayoutWithIph();
   std::unique_ptr<views::View> CreateContentLayoutContainer();
   std::unique_ptr<views::View> CreateMainContentLayoutContainer();
   std::unique_ptr<views::View> CreateDividerLayoutContainer();
@@ -79,20 +83,43 @@ class ASH_EXPORT AppListAssistantMainStage
   void AnimateInZeroState();
   void AnimateInFooter();
 
-  void MaybeHideZeroState();
+  void MaybeHideZeroStateAndShowFooter();
+  void InitializeUIForStartingSession(bool from_search);
 
-  AssistantViewDelegate* const delegate_;  // Owned by Shell.
+  AssistantQueryView* query_view() {
+    return query_view_observation_.GetSource();
+  }
+  const AssistantQueryView* query_view() const {
+    return query_view_observation_.GetSource();
+  }
 
-  // Whether to use dark/light mode colors, which default to dark.
-  const bool use_dark_light_mode_colors_;
+  UiElementContainerView* ui_element_container() {
+    return ui_element_container_observation_.GetSource();
+  }
+  const UiElementContainerView* ui_element_container() const {
+    return ui_element_container_observation_.GetSource();
+  }
+
+  AssistantFooterView* footer() { return footer_observation_.GetSource(); }
+  const AssistantFooterView* footer() const {
+    return footer_observation_.GetSource();
+  }
+
+  const raw_ptr<AssistantViewDelegate> delegate_;  // Owned by Shell.
 
   // Owned by view hierarchy.
-  AssistantProgressIndicator* progress_indicator_;
-  views::Separator* horizontal_separator_;
-  AssistantQueryView* query_view_;
-  UiElementContainerView* ui_element_container_;
-  AssistantZeroStateView* zero_state_view_;
-  AssistantFooterView* footer_;
+  raw_ptr<AssistantProgressIndicator> progress_indicator_;
+  raw_ptr<views::Separator> horizontal_separator_;
+  // The observed views are owned by the view hierarchy. These could be a
+  // raw_ptr to the view + ScopedObservation, but accessing the view through
+  // the ScopedObservation saves a pointer.
+  base::ScopedObservation<AssistantQueryView, ViewObserver>
+      query_view_observation_{this};
+  base::ScopedObservation<UiElementContainerView, ViewObserver>
+      ui_element_container_observation_{this};
+  raw_ptr<AssistantZeroStateView> zero_state_view_;
+  base::ScopedObservation<AssistantFooterView, ViewObserver>
+      footer_observation_{this};
 
   base::ScopedObservation<AssistantController, AssistantControllerObserver>
       assistant_controller_observation_{this};

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,11 @@
 #define CHROME_BROWSER_ASH_SETTINGS_STUB_CROS_SETTINGS_PROVIDER_H_
 
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "ash/components/settings/cros_settings_provider.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "chromeos/ash/components/settings/cros_settings_provider.h"
 #include "components/prefs/pref_value_map.h"
 
 namespace ash {
@@ -26,9 +27,9 @@ class StubCrosSettingsProvider : public CrosSettingsProvider {
   ~StubCrosSettingsProvider() override;
 
   // CrosSettingsProvider implementation.
-  const base::Value* Get(const std::string& path) const override;
+  const base::Value* Get(std::string_view path) const override;
   TrustedStatus PrepareTrustedValues(base::OnceClosure* callback) override;
-  bool HandlesSetting(const std::string& path) const override;
+  bool HandlesSetting(std::string_view path) const override;
 
   void SetTrustedStatus(TrustedStatus status);
   void SetCurrentUserIsOwner(bool owner);
@@ -65,11 +66,5 @@ class StubCrosSettingsProvider : public CrosSettingsProvider {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when Chrome OS code migration is
-// done.
-namespace chromeos {
-using ::ash::StubCrosSettingsProvider;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_SETTINGS_STUB_CROS_SETTINGS_PROVIDER_H_

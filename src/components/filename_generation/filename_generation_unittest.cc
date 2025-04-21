@@ -1,6 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "components/filename_generation/filename_generation.h"
 
@@ -10,7 +15,6 @@
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
 
@@ -189,7 +193,7 @@ TEST(FilenameGenerationTest, TestBasicTruncation) {
 
 // The file path will only be truncated o the platforms that have known
 // encoding. Otherwise no truncation will be performed.
-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_CHROMEOS)
   // The file name length is truncated to max_length.
   EXPECT_TRUE(TruncateFilename(&truncated_path, max_length));
   EXPECT_EQ(size_t(max_length), truncated_path.BaseName().value().size());

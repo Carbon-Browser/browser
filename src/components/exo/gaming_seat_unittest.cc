@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,7 @@ namespace {
 
 class MockGamepadDelegate : public GamepadDelegate {
  public:
-  MockGamepadDelegate() {}
+  MockGamepadDelegate() = default;
 
   // Overridden from GamepadDelegate:
   MOCK_METHOD(void, OnRemoved, (), (override));
@@ -54,12 +54,12 @@ class MockGamingSeatDelegate : public GamingSeatDelegate {
   MOCK_METHOD(void, GamepadAdded, (Gamepad & gamepad), (override));
   MOCK_METHOD(void, Die, (), ());
   void OnGamingSeatDestroying(GamingSeat*) override { delete this; }
-  ~MockGamingSeatDelegate() { Die(); }
+  ~MockGamingSeatDelegate() override { Die(); }
 };
 
 class GamingSeatTest : public test::ExoTestBase {
  public:
-  GamingSeatTest() {}
+  GamingSeatTest() = default;
 
   GamingSeatTest(const GamingSeatTest&) = delete;
   GamingSeatTest& operator=(const GamingSeatTest&) = delete;
@@ -110,8 +110,7 @@ TEST_F(GamingSeatTest, ConnectionChange) {
   std::unique_ptr<Surface> surface(new Surface);
   std::unique_ptr<ShellSurface> shell_surface(new ShellSurface(surface.get()));
   gfx::Size buffer_size(10, 10);
-  std::unique_ptr<Buffer> buffer(
-      new Buffer(exo_test_helper()->CreateGpuMemoryBuffer(buffer_size)));
+  auto buffer = test::ExoTestHelper::CreateBuffer(buffer_size);
   surface->Attach(buffer.get());
   surface->Commit();
 
@@ -198,8 +197,7 @@ TEST_F(GamingSeatTest, Timestamp) {
   std::unique_ptr<Surface> surface(new Surface);
   std::unique_ptr<ShellSurface> shell_surface(new ShellSurface(surface.get()));
   gfx::Size buffer_size(10, 10);
-  std::unique_ptr<Buffer> buffer(
-      new Buffer(exo_test_helper()->CreateGpuMemoryBuffer(buffer_size)));
+  auto buffer = test::ExoTestHelper::CreateBuffer(buffer_size);
   surface->Attach(buffer.get());
   surface->Commit();
 

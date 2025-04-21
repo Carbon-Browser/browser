@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,12 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/uuid.h"
 #include "components/download/internal/background_service/entry.h"
 #include "components/download/internal/background_service/proto/entry.pb.h"
 #include "components/download/internal/background_service/proto_conversions.h"
@@ -18,7 +19,6 @@
 #include "components/leveldb_proto/testing/fake_db.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 using testing::_;
 
@@ -57,8 +57,12 @@ class DownloadStoreTest : public testing::Test {
   MOCK_METHOD1(StoreCallback, void(bool));
 
   void PrepopulateSampleEntries() {
-    Entry item1 = test::BuildEntry(DownloadClient::TEST, base::GenerateGUID());
-    Entry item2 = test::BuildEntry(DownloadClient::TEST, base::GenerateGUID());
+    Entry item1 =
+        test::BuildEntry(DownloadClient::TEST,
+                         base::Uuid::GenerateRandomV4().AsLowercaseString());
+    Entry item2 =
+        test::BuildEntry(DownloadClient::TEST,
+                         base::Uuid::GenerateRandomV4().AsLowercaseString());
     db_entries_.insert(
         std::make_pair(item1.guid, ProtoConversions::EntryToProto(item1)));
     db_entries_.insert(
@@ -67,9 +71,9 @@ class DownloadStoreTest : public testing::Test {
 
  protected:
   std::map<std::string, protodb::Entry> db_entries_;
-  raw_ptr<leveldb_proto::test::FakeDB<protodb::Entry>> db_;
+  raw_ptr<leveldb_proto::test::FakeDB<protodb::Entry>, DanglingUntriaged> db_;
   std::unique_ptr<DownloadStore> store_;
-  absl::optional<bool> hard_recover_result_;
+  std::optional<bool> hard_recover_result_;
 };
 
 TEST_F(DownloadStoreTest, Initialize) {
@@ -184,8 +188,10 @@ TEST_F(DownloadStoreTest, Update) {
   ASSERT_TRUE(store_->IsInitialized());
   ASSERT_EQ(2u, preloaded_entries.size());
 
-  Entry item1 = test::BuildEntry(DownloadClient::TEST, base::GenerateGUID());
-  Entry item2 = test::BuildEntry(DownloadClient::TEST, base::GenerateGUID());
+  Entry item1 = test::BuildEntry(
+      DownloadClient::TEST, base::Uuid::GenerateRandomV4().AsLowercaseString());
+  Entry item2 = test::BuildEntry(
+      DownloadClient::TEST, base::Uuid::GenerateRandomV4().AsLowercaseString());
   EXPECT_CALL(*this, StoreCallback(true)).Times(2);
   store_->Update(item1, base::BindOnce(&DownloadStoreTest::StoreCallback,
                                        base::Unretained(this)));
@@ -263,7 +269,8 @@ TEST_F(DownloadStoreTest, InitialLoadFailed) {
 }
 
 TEST_F(DownloadStoreTest, UnsuccessfulUpdateOrRemove) {
-  Entry item1 = test::BuildEntry(DownloadClient::TEST, base::GenerateGUID());
+  Entry item1 = test::BuildEntry(
+      DownloadClient::TEST, base::Uuid::GenerateRandomV4().AsLowercaseString());
   CreateDatabase();
 
   std::vector<Entry> entries;
@@ -297,8 +304,10 @@ TEST_F(DownloadStoreTest, AddThenRemove) {
   db_->LoadCallback(true);
   ASSERT_TRUE(entries.empty());
 
-  Entry item1 = test::BuildEntry(DownloadClient::TEST, base::GenerateGUID());
-  Entry item2 = test::BuildEntry(DownloadClient::TEST, base::GenerateGUID());
+  Entry item1 = test::BuildEntry(
+      DownloadClient::TEST, base::Uuid::GenerateRandomV4().AsLowercaseString());
+  Entry item2 = test::BuildEntry(
+      DownloadClient::TEST, base::Uuid::GenerateRandomV4().AsLowercaseString());
   EXPECT_CALL(*this, StoreCallback(true)).Times(2);
   store_->Update(item1, base::BindOnce(&DownloadStoreTest::StoreCallback,
                                        base::Unretained(this)));

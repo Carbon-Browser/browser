@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -73,7 +73,9 @@ PasswordBubbleViewTestBase::PasswordBubbleViewTestBase()
 PasswordBubbleViewTestBase::~PasswordBubbleViewTestBase() = default;
 
 void PasswordBubbleViewTestBase::CreateAnchorViewAndShow() {
-  anchor_widget_ = CreateTestWidget(views::Widget::InitParams::TYPE_WINDOW);
+  anchor_widget_ =
+      CreateTestWidget(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET,
+                       views::Widget::InitParams::TYPE_WINDOW);
   anchor_widget_->Show();
 }
 

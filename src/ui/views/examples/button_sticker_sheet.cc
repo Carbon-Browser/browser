@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,7 @@
 #include "ui/views/controls/button/md_text_button.h"
 #include "ui/views/layout/table_layout.h"
 
-namespace views {
-namespace examples {
+namespace views::examples {
 
 namespace {
 
@@ -30,8 +29,9 @@ TableLayout* MakeStretchyTableLayout(View* host, int ncols) {
 
   auto* layout = host->SetLayoutManager(std::make_unique<views::TableLayout>());
   for (int i = 0; i < ncols; ++i) {
-    if (i != 0)
+    if (i != 0) {
       layout->AddPaddingColumn(kPaddingResizesEqually, kPaddingWidth);
+    }
     layout->AddColumn(LayoutAlignment::kStretch, LayoutAlignment::kStretch,
                       TableLayout::kFixedSize, TableLayout::ColumnSize::kFixed,
                       kColumnWidth, kColumnWidth);
@@ -49,8 +49,9 @@ void AddLabeledRow(View* parent,
                    const std::string& label_text,
                    std::vector<std::unique_ptr<T>> views) {
   parent->AddChildView(MakePlainLabel(label_text));
-  for (auto& view : views)
+  for (auto& view : views) {
     parent->AddChildView(std::move(view));
+  }
 }
 
 // Constructs a pair of MdTextButtons in the specified |state| with the
@@ -63,7 +64,7 @@ std::vector<std::unique_ptr<MdTextButton>> MakeButtonsInState(
   const std::u16string button_text = u"Button";
   auto primary = std::make_unique<views::MdTextButton>(
       Button::PressedCallback(), button_text);
-  primary->SetProminent(true);
+  primary->SetStyle(ui::ButtonStyle::kProminent);
   primary->SetState(state);
   buttons.push_back(std::move(primary));
 
@@ -105,5 +106,4 @@ void ButtonStickerSheet::CreateExampleView(View* container) {
                 MakeButtonsInState(Button::STATE_DISABLED));
 }
 
-}  // namespace examples
-}  // namespace views
+}  // namespace views::examples

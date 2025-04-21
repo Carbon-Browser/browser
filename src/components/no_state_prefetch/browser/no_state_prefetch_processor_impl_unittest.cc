@@ -1,9 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/no_state_prefetch/browser/no_state_prefetch_processor_impl.h"
 
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
@@ -21,9 +22,10 @@ class MockNoStatePrefetchLinkManager final : public NoStatePrefetchLinkManager {
   MockNoStatePrefetchLinkManager()
       : NoStatePrefetchLinkManager(/*manager=*/nullptr) {}
 
-  absl::optional<int> OnStartLinkTrigger(
+  std::optional<int> OnStartLinkTrigger(
       int launcher_render_process_id,
       int launcher_render_view_id,
+      int launcher_render_frame_id,
       blink::mojom::PrerenderAttributesPtr attributes,
       const url::Origin& initiator_origin) override {
     DCHECK(!is_start_called_);
@@ -67,7 +69,8 @@ class MockNoStatePrefetchProcessorImplDelegate final
   }
 
  private:
-  raw_ptr<MockNoStatePrefetchLinkManager> link_manager_;
+  raw_ptr<MockNoStatePrefetchLinkManager, AcrossTasksDanglingUntriaged>
+      link_manager_;
 };
 
 class NoStatePrefetchProcessorImplTest
@@ -169,6 +172,9 @@ TEST_F(NoStatePrefetchProcessorImplTest, StartTwice) {
   remote->Start(std::move(attributes2));
   remote.FlushForTesting();
   EXPECT_EQ(bad_message_error, "NSPPI_START_TWICE");
+  // Clean up error handler, to avoid causing other tests run in the same
+  // process from crashing.
+  mojo::SetDefaultProcessErrorHandler(base::NullCallback());
 }
 
 TEST_F(NoStatePrefetchProcessorImplTest, Cancel) {

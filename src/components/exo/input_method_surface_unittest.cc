@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,8 +39,7 @@ TEST_F(InputMethodSurfaceTest, SetGeometryShouldIgnoreWorkArea) {
                                            gfx::Insets::TLBR(200, 0, 0, 0));
 
   gfx::Size buffer_size(800, 600);
-  std::unique_ptr<Buffer> buffer(
-      new Buffer(exo_test_helper()->CreateGpuMemoryBuffer(buffer_size)));
+  auto buffer = test::ExoTestHelper::CreateBuffer(buffer_size);
   std::unique_ptr<Surface> surface(new Surface);
   auto shell_surface =
       exo_test_helper()->CreateInputMethodSurface(surface.get(), this);

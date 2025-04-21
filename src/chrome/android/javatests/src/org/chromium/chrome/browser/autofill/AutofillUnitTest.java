@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,7 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.BaseActivityTestRule;
 import org.chromium.base.test.BaseJUnit4ClassRunner;
 import org.chromium.base.test.util.Batch;
@@ -26,9 +27,8 @@ import org.chromium.base.test.util.Feature;
 import org.chromium.components.autofill.AutofillDelegate;
 import org.chromium.components.autofill.AutofillPopup;
 import org.chromium.components.autofill.AutofillSuggestion;
-import org.chromium.content_public.browser.test.util.TestThreadUtils;
+import org.chromium.components.autofill.SuggestionType;
 import org.chromium.content_public.browser.test.util.TouchCommon;
-import org.chromium.ui.DropdownItem;
 import org.chromium.ui.base.ViewAndroidDelegate;
 import org.chromium.ui.test.util.BlankUiTestActivity;
 
@@ -56,18 +56,23 @@ public class AutofillUnitTest {
     @Before
     public void setUp() throws Exception {
         mMockAutofillCallback = new MockAutofillCallback();
-        final ViewAndroidDelegate viewDelegate = ViewAndroidDelegate.createBasicDelegate(
-                sActivityTestRule.getActivity().findViewById(android.R.id.content));
+        final ViewAndroidDelegate viewDelegate =
+                ViewAndroidDelegate.createBasicDelegate(
+                        sActivityTestRule.getActivity().findViewById(android.R.id.content));
 
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            View anchorView = viewDelegate.acquireView();
-            viewDelegate.setViewPosition(anchorView, 50f, 500f, 500f, 500f, 10, 10);
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    View anchorView = viewDelegate.acquireView();
+                    viewDelegate.setViewPosition(anchorView, 50f, 500f, 500f, 500f, 10, 10);
 
-            mAutofillPopup = new AutofillPopup(
-                    sActivityTestRule.getActivity(), anchorView, mMockAutofillCallback);
-            mAutofillPopup.filterAndShow(
-                    new AutofillSuggestion[0], /* isRtl= */ false, /* isRefresh= */ false);
-        });
+                    mAutofillPopup =
+                            new AutofillPopup(
+                                    sActivityTestRule.getActivity(),
+                                    anchorView,
+                                    mMockAutofillCallback,
+                                    null);
+                    mAutofillPopup.filterAndShow(new AutofillSuggestion[0], /* isRtl= */ false);
+                });
     }
 
     private static final long CALLBACK_TIMEOUT_MS = 4000L;
@@ -101,41 +106,71 @@ public class AutofillUnitTest {
 
     private AutofillSuggestion[] createTwoAutofillSuggestionArray() {
         return new AutofillSuggestion[] {
-                new AutofillSuggestion("Sherlock Holmes", "221B Baker Street", /*itemTag=*/"",
-                        DropdownItem.NO_ICON, false, 42, false, false, false,
-                        /* featureForIPH= */ ""),
-                new AutofillSuggestion("Arthur Dent", "West Country", /*itemTag=*/"",
-                        DropdownItem.NO_ICON, false, 43, false, false, false,
-                        /* featureForIPH= */ ""),
+            new AutofillSuggestion.Builder()
+                    .setLabel("Sherlock Holmes")
+                    .setSubLabel("221B Baker Street")
+                    .setItemTag("")
+                    .setSuggestionType(SuggestionType.ADDRESS_ENTRY)
+                    .setFeatureForIph("")
+                    .build(),
+            new AutofillSuggestion.Builder()
+                    .setLabel("Arthur Dent")
+                    .setSubLabel("West Country")
+                    .setItemTag("")
+                    .setSuggestionType(SuggestionType.ADDRESS_ENTRY)
+                    .setFeatureForIph("")
+                    .build()
         };
     }
 
     private AutofillSuggestion[] createFiveAutofillSuggestionArray() {
         return new AutofillSuggestion[] {
-                new AutofillSuggestion("Sherlock Holmes", "221B Baker Street", /*itemTag=*/"",
-                        DropdownItem.NO_ICON, false, 42, false, false, false,
-                        /* featureForIPH= */ ""),
-                new AutofillSuggestion("Arthur Dent", "West Country", /*itemTag=*/"",
-                        DropdownItem.NO_ICON, false, 43, false, false, false,
-                        /* featureForIPH= */ ""),
-                new AutofillSuggestion("Arthos", "France", /*itemTag=*/"", DropdownItem.NO_ICON,
-                        false, 44, false, false, false, /* featureForIPH= */ ""),
-                new AutofillSuggestion("Porthos", "France", /*itemTag=*/"", DropdownItem.NO_ICON,
-                        false, 45, false, false, false, /* featureForIPH= */ ""),
-                new AutofillSuggestion("Aramis", "France", /*itemTag=*/"", DropdownItem.NO_ICON,
-                        false, 46, false, false, false, /* featureForIPH= */ ""),
+            new AutofillSuggestion.Builder()
+                    .setLabel("Sherlock Holmes")
+                    .setSubLabel("221B Baker Street")
+                    .setItemTag("")
+                    .setSuggestionType(SuggestionType.ADDRESS_ENTRY)
+                    .setFeatureForIph("")
+                    .build(),
+            new AutofillSuggestion.Builder()
+                    .setLabel("Arthur Dent")
+                    .setSubLabel("West Country")
+                    .setItemTag("")
+                    .setSuggestionType(SuggestionType.ADDRESS_ENTRY)
+                    .setFeatureForIph("")
+                    .build(),
+            new AutofillSuggestion.Builder()
+                    .setLabel("Arthos")
+                    .setSubLabel("France")
+                    .setItemTag("")
+                    .setSuggestionType(SuggestionType.ADDRESS_ENTRY)
+                    .setFeatureForIph("")
+                    .build(),
+            new AutofillSuggestion.Builder()
+                    .setLabel("Porthos")
+                    .setSubLabel("France")
+                    .setItemTag("")
+                    .setSuggestionType(SuggestionType.ADDRESS_ENTRY)
+                    .setFeatureForIph("")
+                    .build(),
+            new AutofillSuggestion.Builder()
+                    .setLabel("Aramis")
+                    .setSubLabel("France")
+                    .setItemTag("")
+                    .setSuggestionType(SuggestionType.ADDRESS_ENTRY)
+                    .setFeatureForIph("")
+                    .build()
         };
     }
 
     public void openAutofillPopupAndWaitUntilReady(final AutofillSuggestion[] suggestions) {
-        TestThreadUtils.runOnUiThreadBlocking(
-                ()
-                        -> mAutofillPopup.filterAndShow(
-                                suggestions, /* isRtl= */ false, /* isRefresh= */ false));
-        CriteriaHelper.pollInstrumentationThread(() -> {
-            Criteria.checkThat(
-                    mAutofillPopup.getListView().getChildCount(), Matchers.greaterThan(0));
-        });
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> mAutofillPopup.filterAndShow(suggestions, /* isRtl= */ false));
+        CriteriaHelper.pollInstrumentationThread(
+                () -> {
+                    Criteria.checkThat(
+                            mAutofillPopup.getListView().getChildCount(), Matchers.greaterThan(0));
+                });
     }
 
     @Test

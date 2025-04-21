@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,10 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_helpers.h"
 #include "base/component_export.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
@@ -28,10 +29,10 @@ class Clock;
 class Value;
 }  // namespace base
 
-namespace chromeos {
+namespace ash {
 
-class NetworkState;
 class ManagedNetworkConfigurationHandler;
+class NetworkState;
 
 namespace internal {
 struct NetworkAndMatchingCert;
@@ -91,7 +92,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) ClientCertResolver
   static bool ResolveClientCertificateSync(
       const client_cert::ConfigType client_cert_type,
       const client_cert::ClientCertConfig& client_cert_config,
-      base::Value* shill_properties);
+      base::Value::Dict* shill_properties);
 
   // Allows overwriting the function which gets the client certificate
   // provisioning profile id of a certificate. This is necessary for unit tests,
@@ -155,22 +156,21 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) ClientCertResolver
   bool network_properties_changed_;
 
   // Unowned associated (global or test) instance.
-  NetworkStateHandler* network_state_handler_;
-  base::ScopedObservation<chromeos::NetworkStateHandler,
-                          chromeos::NetworkStateHandlerObserver>
+  raw_ptr<NetworkStateHandler> network_state_handler_;
+  base::ScopedObservation<NetworkStateHandler, NetworkStateHandlerObserver>
       network_state_handler_observer_{this};
 
   // Unowned associated (global or test) instance.
-  ManagedNetworkConfigurationHandler* managed_network_config_handler_;
+  raw_ptr<ManagedNetworkConfigurationHandler> managed_network_config_handler_;
 
   // Can be set for testing.
-  base::Clock* testing_clock_;
+  raw_ptr<base::Clock> testing_clock_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 
   base::WeakPtrFactory<ClientCertResolver> weak_ptr_factory_{this};
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_CLIENT_CERT_RESOLVER_H_

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,14 +10,12 @@ import android.content.Intent;
 import org.chromium.components.permissions.nfc.NfcSystemLevelSetting;
 import org.chromium.content_public.browser.BrowserContextHandle;
 
-/**
- * A class for dealing with the NFC category.
- */
+/** A class for dealing with the NFC category. */
 public class NfcCategory extends SiteSettingsCategory {
     public NfcCategory(BrowserContextHandle browserContextHandle) {
         // As NFC is not a per-app permission, passing an empty string means the NFC permission is
         // always enabled for Chrome.
-        super(browserContextHandle, Type.NFC, "" /* androidPermission*/);
+        super(browserContextHandle, Type.NFC, /* androidPermission= */ "");
     }
 
     @Override
@@ -27,7 +25,7 @@ public class NfcCategory extends SiteSettingsCategory {
 
     @Override
     protected String getMessageIfNotSupported(Context context) {
-        return context.getResources().getString(R.string.android_nfc_unsupported);
+        return context.getString(R.string.android_nfc_unsupported);
     }
 
     @Override
@@ -42,6 +40,6 @@ public class NfcCategory extends SiteSettingsCategory {
 
     @Override
     protected String getMessageForEnablingOsGlobalPermission(Context context) {
-        return context.getResources().getString(R.string.android_nfc_off_globally);
+        return context.getString(R.string.android_nfc_off_globally);
     }
 }

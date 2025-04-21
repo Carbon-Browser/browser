@@ -1,6 +1,11 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/342213636): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "base/run_loop.h"
 #include "build/build_config.h"
@@ -42,7 +47,7 @@ class TestClient: public DevToolsAgentHostClient {
                                base::span<const uint8_t> message) override {
     if (waiting_for_reply_) {
       waiting_for_reply_ = false;
-      base::RunLoop::QuitCurrentDeprecated();
+      std::move(quit_closure_).Run();
     }
   }
 
@@ -52,13 +57,28 @@ class TestClient: public DevToolsAgentHostClient {
 
   void WaitForReply() {
     waiting_for_reply_ = true;
-    base::RunLoop().Run();
+    base::RunLoop loop;
+    quit_closure_ = loop.QuitClosure();
+    loop.Run();
   }
 
  private:
   bool closed_;
   bool waiting_for_reply_;
+  base::OnceClosure quit_closure_;
 };
+
+DevToolsAgentHost::List ExtractPageOrFrameTargets(
+    DevToolsAgentHost::List list) {
+  DevToolsAgentHost::List result;
+  for (auto& entry : list) {
+    if (entry->GetType() == DevToolsAgentHost::kTypePage ||
+        entry->GetType() == DevToolsAgentHost::kTypeFrame) {
+      result.push_back(std::move(entry));
+    }
+  }
+  return result;
+}
 
 // Fails on Android, http://crbug.com/464993.
 #if BUILDFLAG(IS_ANDROID)
@@ -77,7 +97,7 @@ IN_PROC_BROWSER_TEST_P(SitePerProcessDevToolsBrowserTest,
                             ->GetPrimaryFrameTree()
                             .root();
 
-  list = DevToolsAgentHost::GetOrCreateAll();
+  list = ExtractPageOrFrameTargets(DevToolsAgentHost::GetOrCreateAll());
   EXPECT_EQ(1U, list.size());
   EXPECT_EQ(DevToolsAgentHost::kTypePage, list[0]->GetType());
   EXPECT_EQ(main_url.spec(), list[0]->GetURL().spec());
@@ -87,7 +107,7 @@ IN_PROC_BROWSER_TEST_P(SitePerProcessDevToolsBrowserTest,
   GURL http_url(embedded_test_server()->GetURL("/title1.html"));
   EXPECT_TRUE(NavigateToURLFromRenderer(child, http_url));
 
-  list = DevToolsAgentHost::GetOrCreateAll();
+  list = ExtractPageOrFrameTargets(DevToolsAgentHost::GetOrCreateAll());
   EXPECT_EQ(1U, list.size());
   EXPECT_EQ(DevToolsAgentHost::kTypePage, list[0]->GetType());
   EXPECT_EQ(main_url.spec(), list[0]->GetURL().spec());
@@ -99,7 +119,7 @@ IN_PROC_BROWSER_TEST_P(SitePerProcessDevToolsBrowserTest,
   cross_site_url = cross_site_url.ReplaceComponents(replace_host);
   EXPECT_TRUE(NavigateToURLFromRenderer(root->child_at(0), cross_site_url));
 
-  list = DevToolsAgentHost::GetOrCreateAll();
+  list = ExtractPageOrFrameTargets(DevToolsAgentHost::GetOrCreateAll());
   EXPECT_EQ(2U, list.size());
   EXPECT_EQ(DevToolsAgentHost::kTypePage, list[0]->GetType());
   EXPECT_EQ(main_url.spec(), list[0]->GetURL().spec());
@@ -119,7 +139,7 @@ IN_PROC_BROWSER_TEST_P(SitePerProcessDevToolsBrowserTest,
 
   // Send message to parent and child frames and get result back.
   constexpr char kMsg[] = R"({"id":0,"method":"incorrect.method"})";
-  auto message = base::as_bytes(base::make_span(kMsg, strlen(kMsg)));
+  auto message = base::byte_span_from_cstring(kMsg);
   child_host->DispatchProtocolMessage(&child_client, message);
   child_client.WaitForReply();
   parent_host->DispatchProtocolMessage(&parent_client, message);
@@ -128,7 +148,7 @@ IN_PROC_BROWSER_TEST_P(SitePerProcessDevToolsBrowserTest,
   // Load back same-site page into iframe.
   EXPECT_TRUE(NavigateToURLFromRenderer(root->child_at(0), http_url));
 
-  list = DevToolsAgentHost::GetOrCreateAll();
+  list = ExtractPageOrFrameTargets(DevToolsAgentHost::GetOrCreateAll());
   EXPECT_EQ(1U, list.size());
   EXPECT_EQ(DevToolsAgentHost::kTypePage, list[0]->GetType());
   EXPECT_EQ(main_url.spec(), list[0]->GetURL().spec());
@@ -240,7 +260,7 @@ IN_PROC_BROWSER_TEST_P(SitePerProcessDownloadDevToolsBrowserTest,
   TestClient client;
   agent->AttachClient(&client);
   constexpr char kMsg[] = R"({"id":0,"method":"incorrect.method"})";
-  auto message = base::as_bytes(base::make_span(kMsg, strlen(kMsg)));
+  auto message = base::byte_span_from_cstring(kMsg);
   // Check that client is responsive.
   agent->DispatchProtocolMessage(&client, message);
   client.WaitForReply();

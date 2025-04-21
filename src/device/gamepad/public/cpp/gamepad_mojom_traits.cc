@@ -1,6 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "device/gamepad/public/cpp/gamepad_mojom_traits.h"
 
@@ -76,8 +81,6 @@ EnumTraits<device::mojom::GamepadHapticActuatorType,
   }
 
   NOTREACHED();
-  return device::mojom::GamepadHapticActuatorType::
-      GamepadHapticActuatorTypeVibration;
 }
 
 // static
@@ -101,7 +104,6 @@ bool EnumTraits<device::mojom::GamepadHapticActuatorType,
   }
 
   NOTREACHED();
-  return false;
 }
 
 // static
@@ -120,6 +122,20 @@ bool StructTraits<device::mojom::GamepadHapticActuatorDataView,
   out->not_null = true;
   if (!data.ReadType(&out->type))
     return false;
+  return true;
+}
+
+// static
+bool StructTraits<device::mojom::GamepadTouchDataView, device::GamepadTouch>::
+    Read(device::mojom::GamepadTouchDataView data, device::GamepadTouch* out) {
+  out->touch_id = data.touch_id();
+  out->surface_id = data.surface_id();
+  out->x = data.x();
+  out->y = data.y();
+  out->has_surface_dimensions = data.has_surface_dimensions();
+  out->surface_width = data.surface_width();
+  out->surface_height = data.surface_height();
+
   return true;
 }
 
@@ -173,7 +189,6 @@ EnumTraits<device::mojom::GamepadMapping, device::GamepadMapping>::ToMojom(
   }
 
   NOTREACHED();
-  return device::mojom::GamepadMapping::GamepadMappingNone;
 }
 
 // static
@@ -193,7 +208,6 @@ bool EnumTraits<device::mojom::GamepadMapping, device::GamepadMapping>::
   }
 
   NOTREACHED();
-  return false;
 }
 
 // static
@@ -210,7 +224,6 @@ EnumTraits<device::mojom::GamepadHand, device::GamepadHand>::ToMojom(
   }
 
   NOTREACHED();
-  return device::mojom::GamepadHand::GamepadHandNone;
 }
 
 // static
@@ -230,7 +243,6 @@ bool EnumTraits<device::mojom::GamepadHand, device::GamepadHand>::FromMojom(
   }
 
   NOTREACHED();
-  return false;
 }
 
 // static
@@ -241,7 +253,7 @@ StructTraits<device::mojom::GamepadDataView, device::Gamepad>::id(
   while (id_length < device::Gamepad::kIdLengthCap && r.id[id_length] != 0) {
     id_length++;
   }
-  return base::make_span(reinterpret_cast<const uint16_t*>(r.id), id_length);
+  return base::span(reinterpret_cast<const uint16_t*>(r.id), id_length);
 }
 
 // static
@@ -283,6 +295,12 @@ bool StructTraits<device::mojom::GamepadDataView, device::Gamepad>::Read(
   if (!data.ReadPose(&out->pose)) {
     return false;
   }
+
+  base::span<device::GamepadTouch> touch_events(out->touch_events);
+  if (!data.ReadTouchEvents(&touch_events)) {
+    return false;
+  }
+  out->touch_events_length = static_cast<uint32_t>(touch_events.size());
 
   device::GamepadHand hand;
   if (!data.ReadHand(&hand)) {

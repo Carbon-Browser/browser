@@ -1,21 +1,24 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/browser/api/offscreen/offscreen_document_manager.h"
 
 #include "base/check.h"
+#include "base/containers/contains.h"
 #include "base/dcheck_is_on.h"
-#include "base/feature_list.h"
+#include "base/not_fatal_until.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 #include "content/public/browser/browser_context.h"
+#include "extensions/browser/api/offscreen/lifetime_enforcer_factories.h"
+#include "extensions/browser/api/offscreen/offscreen_document_lifetime_enforcer.h"
 #include "extensions/browser/extension_registry_factory.h"
 #include "extensions/browser/extension_util.h"
+#include "extensions/browser/extensions_browser_client.h"
 #include "extensions/browser/offscreen_document_host.h"
 #include "extensions/browser/process_manager.h"
 #include "extensions/browser/process_manager_factory.h"
-#include "extensions/common/extension_features.h"
 #include "extensions/common/manifest_handlers/incognito_info.h"
 #include "url/gurl.h"
 #include "url/origin.h"
@@ -41,7 +44,7 @@ class OffscreenDocumentManagerFactory
   // BrowserContextKeyedServiceFactory:
   content::BrowserContext* GetBrowserContextToUse(
       content::BrowserContext* context) const override;
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
 };
 
@@ -64,12 +67,13 @@ OffscreenDocumentManagerFactory::GetBrowserContextToUse(
     content::BrowserContext* context) const {
   // Use the `context` passed in; this service has separate instances in
   // on-the-record and incognito.
-  return context;
+  return ExtensionsBrowserClient::Get()->GetContextOwnInstance(context);
 }
 
-KeyedService* OffscreenDocumentManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+OffscreenDocumentManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new OffscreenDocumentManager(context);
+  return std::make_unique<OffscreenDocumentManager>(context);
 }
 
 }  // namespace
@@ -107,13 +111,13 @@ BrowserContextKeyedServiceFactory* OffscreenDocumentManager::GetFactory() {
 
 OffscreenDocumentHost* OffscreenDocumentManager::CreateOffscreenDocument(
     const Extension& extension,
-    const GURL& url) {
-  DCHECK(base::FeatureList::IsEnabled(
-      extensions_features::kExtensionsOffscreenDocuments));
+    const GURL& url,
+    std::set<api::offscreen::Reason> reasons) {
   DCHECK_EQ(url::Origin::Create(url), extension.origin());
   // Currently only a single offscreen document is supported per extension.
   DCHECK_EQ(nullptr, GetOffscreenDocumentForExtension(extension));
   DCHECK(!base::Contains(offscreen_documents_, extension.id()));
+  CHECK(!base::Contains(reasons, api::offscreen::Reason::kNone));
 #if DCHECK_IS_ON()
   // This should only be for an off-the-record context if the extension is both
   // enabled in incognito *and* runs in split mode. For spanning mode
@@ -129,13 +133,26 @@ OffscreenDocumentHost* OffscreenDocumentManager::CreateOffscreenDocument(
 
   scoped_refptr<content::SiteInstance> site_instance =
       process_manager_->GetSiteInstanceForURL(url);
-  data.host = std::make_unique<OffscreenDocumentHost>(extension,
-                                                      site_instance.get(), url);
+  data.host = std::make_unique<OffscreenDocumentHost>(
+      extension, site_instance.get(), browser_context_, url);
   OffscreenDocumentHost* host = data.host.get();
 
-  // The following Unretained() is safe because this class owns the offscreen
-  // document host, so it can't possibly be called after the manager's
-  // destruction.
+  // The following Unretained()s are safe because this class owns the offscreen
+  // document host and lifetime enforcer, so these callbacks can't possibly be
+  // called after the manager's destruction.
+  auto notify_inactive_callback = base::BindRepeating(
+      &OffscreenDocumentManager::OnOffscreenDocumentActivityChanged,
+      base::Unretained(this), extension.id());
+
+  for (auto reason : reasons) {
+    auto termination_callback = base::BindOnce(
+        &OffscreenDocumentManager::CloseOffscreenDocumentForExtensionId,
+        base::Unretained(this), extension.id());
+    data.enforcers.push_back(LifetimeEnforcerFactories::GetLifetimeEnforcer(
+        reason, host, std::move(termination_callback),
+        notify_inactive_callback));
+  }
+
   host->SetCloseHandler(
       base::BindOnce(&OffscreenDocumentManager::CloseOffscreenDocument,
                      base::Unretained(this)));
@@ -155,8 +172,31 @@ OffscreenDocumentManager::GetOffscreenDocumentForExtension(
 
 void OffscreenDocumentManager::CloseOffscreenDocumentForExtension(
     const Extension& extension) {
-  DCHECK_NE(nullptr, GetOffscreenDocumentForExtension(extension));
-  offscreen_documents_.erase(extension.id());
+  CloseOffscreenDocumentForExtensionId(extension.id());
+}
+
+void OffscreenDocumentManager::CloseOffscreenDocumentForExtensionId(
+    const ExtensionId& extension_id) {
+  DCHECK(base::Contains(offscreen_documents_, extension_id));
+  offscreen_documents_.erase(extension_id);
+}
+
+void OffscreenDocumentManager::OnOffscreenDocumentActivityChanged(
+    const ExtensionId& extension_id) {
+  DCHECK(base::Contains(offscreen_documents_, extension_id));
+  OffscreenDocumentData& data = offscreen_documents_[extension_id];
+  DCHECK(data.host);
+
+  bool any_active = false;
+  for (auto& enforcer : data.enforcers) {
+    if (enforcer->IsActive()) {
+      any_active = true;
+      break;
+    }
+  }
+
+  if (!any_active)
+    CloseOffscreenDocumentForExtensionId(extension_id);
 }
 
 void OffscreenDocumentManager::OnExtensionUnloaded(
@@ -178,7 +218,7 @@ void OffscreenDocumentManager::Shutdown() {
 void OffscreenDocumentManager::CloseOffscreenDocument(
     ExtensionHost* offscreen_document) {
   auto iter = offscreen_documents_.find(offscreen_document->extension_id());
-  DCHECK(iter != offscreen_documents_.end());
+  CHECK(iter != offscreen_documents_.end(), base::NotFatalUntil::M130);
   DCHECK_EQ(iter->second.host.get(), offscreen_document);
   offscreen_documents_.erase(iter);
 }

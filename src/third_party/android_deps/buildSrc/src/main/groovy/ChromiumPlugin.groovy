@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,6 +48,16 @@ class ChromiumPlugin implements Plugin<Project> {
                         details.useVersion version
                     }
                 }
+
+                // Not ideal but necessary for https://crbug.com/359896493. If you can find a way to use attributes
+                // instead, please delete this code.
+                if (details.requested.name.endsWith("-desktop")) {
+                    String newName = details.requested.name.replace("-desktop", "-android")
+                    details.useTarget("${details.requested.group}:${newName}:${details.requested.version}")
+                } else if (details.requested.name.endsWith("-jvmstubs")) {
+                    String newName = details.requested.name.replace("-jvmstubs", "-android")
+                    details.useTarget("${details.requested.group}:${newName}:${details.requested.version}")
+                }
             }
         }
 
@@ -56,6 +66,10 @@ class ChromiumPlugin implements Plugin<Project> {
                 // This attribute is used to resolve the caffeine error in: https://crbug.com/1216032#c3
                 attribute(Bundling.BUNDLING_ATTRIBUTE, project.objects.named(Bundling, Bundling.EXTERNAL))
             }
+        }
+        project.configurations.buildCompileNoDeps {
+            // transitive false means do not also pull in the deps of these deps.
+            transitive = false
         }
     }
 

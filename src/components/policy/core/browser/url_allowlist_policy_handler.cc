@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/values.h"
+#include "components/policy/core/browser/configuration_policy_handler.h"
 #include "components/policy/core/browser/policy_error_map.h"
 #include "components/policy/core/common/policy_map.h"
 #include "components/policy/core/common/policy_pref_names.h"
@@ -19,6 +20,19 @@
 #include "components/prefs/pref_value_map.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/url_matcher/url_util.h"
+
+namespace {
+
+// Checks if the host contains an * (asterik) that would have no effect on the
+// domain or subdomain. It is a common mistake that admins allow sites with * as
+// a wildcard in the hostname although it has no effect on the domain and
+// subdomains. Two example for such a common mistake are: 1- *.android.com 2-
+// developer.*.com which allow neither android.com nor developer.android.com
+bool ValidateHost(const std::string& host) {
+  return host == "*" || host.find('*') == std::string::npos;
+}
+
+}  // namespace
 
 namespace policy {
 
@@ -42,7 +56,7 @@ bool URLAllowlistPolicyHandler::CheckPolicySettings(const PolicyMap& policies,
 
   // Filters more than |policy::kMaxUrlFiltersPerPolicy| are ignored, add a
   // warning message.
-  if (url_allowlist->GetListDeprecated().size() > kMaxUrlFiltersPerPolicy) {
+  if (url_allowlist->GetList().size() > kMaxUrlFiltersPerPolicy) {
     errors->AddError(policy_name(),
                      IDS_POLICY_URL_ALLOW_BLOCK_LIST_MAX_FILTERS_LIMIT_WARNING,
                      base::NumberToString(kMaxUrlFiltersPerPolicy));
@@ -51,7 +65,7 @@ bool URLAllowlistPolicyHandler::CheckPolicySettings(const PolicyMap& policies,
   bool type_error = false;
   std::string policy;
   std::vector<std::string> invalid_policies;
-  for (const auto& policy_iter : url_allowlist->GetListDeprecated()) {
+  for (const auto& policy_iter : url_allowlist->GetList()) {
     if (!policy_iter.is_string()) {
       type_error = true;
       continue;
@@ -93,12 +107,13 @@ void URLAllowlistPolicyHandler::ApplyPolicySettings(const PolicyMap& policies,
                   base::Value(std::move(filtered_url_allowlist)));
 }
 
-bool URLAllowlistPolicyHandler::ValidatePolicy(const std::string& policy) {
+bool URLAllowlistPolicyHandler::ValidatePolicy(const std::string& url_pattern) {
   url_matcher::util::FilterComponents components;
   return url_matcher::util::FilterToComponents(
-      policy, &components.scheme, &components.host,
-      &components.match_subdomains, &components.port, &components.path,
-      &components.query);
+             url_pattern, &components.scheme, &components.host,
+             &components.match_subdomains, &components.port, &components.path,
+             &components.query) &&
+         ValidateHost(components.host);
 }
 
 }  // namespace policy

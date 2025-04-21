@@ -1,28 +1,33 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/cdm/library_cdm/clear_key_cdm/cdm_video_decoder.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/containers/queue.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/no_destructor.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 // Necessary to convert async media::VideoDecoder to sync CdmVideoDecoder.
 // Typically not recommended for production code, but is ok here since
 // ClearKeyCdm is only for testing.
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_executor.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "media/base/decoder_status.h"
 #include "media/base/media_switches.h"
 #include "media/base/media_util.h"
@@ -41,10 +46,6 @@
 
 #if BUILDFLAG(ENABLE_FFMPEG_VIDEO_DECODERS)
 #include "media/filters/ffmpeg_video_decoder.h"
-#endif
-
-#if BUILDFLAG(ENABLE_LIBGAV1_DECODER)
-#include "media/filters/gav1_video_decoder.h"
 #endif
 
 namespace media {
@@ -108,13 +109,13 @@ bool ToCdmVideoFrame(const VideoFrame& video_frame,
   cdm_video_frame->SetSize(
       {video_frame.coded_size().width(), video_frame.coded_size().height()});
   cdm_video_frame->SetTimestamp(video_frame.timestamp().InMicroseconds());
-  // TODO(crbug.com/707127): Set ColorSpace here. It's not trivial to convert
+  // TODO(crbug.com/40513452): Set ColorSpace here. It's not trivial to convert
   // a gfx::ColorSpace (from VideoFrame) to another other ColorSpace like
   // cdm::ColorSpace.
 
-  static_assert(VideoFrame::kYPlane == cdm::kYPlane && cdm::kYPlane == 0, "");
-  static_assert(VideoFrame::kUPlane == cdm::kUPlane && cdm::kUPlane == 1, "");
-  static_assert(VideoFrame::kVPlane == cdm::kVPlane && cdm::kVPlane == 2, "");
+  static_assert(VideoFrame::Plane::kY == cdm::kYPlane && cdm::kYPlane == 0, "");
+  static_assert(VideoFrame::Plane::kU == cdm::kUPlane && cdm::kUPlane == 1, "");
+  static_assert(VideoFrame::Plane::kV == cdm::kVPlane && cdm::kVPlane == 2, "");
 
   uint8_t* dst = buffer->Data();
   uint32_t offset = 0;
@@ -139,14 +140,15 @@ bool ToCdmVideoFrame(const VideoFrame& video_frame,
 }
 
 // Media VideoDecoders typically assumes a global environment where a lot of
-// things are already setup in the process, e.g. base::ThreadTaskRunnerHandle
-// and base::CommandLine. These will be available in the component build because
-// the CDM and the host is depending on the same base/ target. In static build,
-// they will not be available and we have to setup it by ourselves.
+// things are already setup in the process,
+// e.g. base::SingleThreadTaskRunnerCurrentDefautHandle and
+// base::CommandLine. These will be available in the component build because the
+// CDM and the host is depending on the same base/ target. In static build, they
+// will not be available and we have to setup it by ourselves.
 void SetupGlobalEnvironmentIfNeeded() {
   // Creating a base::SingleThreadTaskExecutor to setup
-  // base::ThreadTaskRunnerHandle.
-  if (!base::ThreadTaskRunnerHandle::IsSet()) {
+  // base::SingleThreadTaskRunner::CurrentDefaultHandle.
+  if (!base::SingleThreadTaskRunner::HasCurrentDefault()) {
     static base::NoDestructor<base::SingleThreadTaskExecutor> task_executor;
   }
 
@@ -293,8 +295,8 @@ class VideoDecoderAdapter final : public CdmVideoDecoder {
 
   // Results of |video_decoder_| operations. Set iff the callback of the
   // operation has been called.
-  absl::optional<DecoderStatus> last_init_result_;
-  absl::optional<DecoderStatus> last_decode_status_;
+  std::optional<DecoderStatus> last_init_result_;
+  std::optional<DecoderStatus> last_decode_status_;
 
   // Queue of decoded video frames.
   using VideoFrameQueue = base::queue<scoped_refptr<VideoFrame>>;
@@ -310,7 +312,6 @@ std::unique_ptr<CdmVideoDecoder> CreateVideoDecoder(
     const cdm::VideoDecoderConfig_3& config) {
   SetupGlobalEnvironmentIfNeeded();
 
-  static base::NoDestructor<media::NullMediaLog> null_media_log;
   std::unique_ptr<VideoDecoder> video_decoder;
 
 #if BUILDFLAG(ENABLE_LIBVPX)
@@ -318,20 +319,16 @@ std::unique_ptr<CdmVideoDecoder> CreateVideoDecoder(
     video_decoder = std::make_unique<VpxVideoDecoder>();
 #endif
 
-#if BUILDFLAG(ENABLE_LIBGAV1_DECODER)
-  if (base::FeatureList::IsEnabled(kGav1VideoDecoder)) {
-    if (config.codec == cdm::kCodecAv1)
-      video_decoder.reset(new Gav1VideoDecoder(null_media_log.get()));
-  } else
-#endif  // BUILDFLAG(ENABLE_LIBGAV1_DECODER)
-  {
 #if BUILDFLAG(ENABLE_DAV1D_DECODER)
-    if (config.codec == cdm::kCodecAv1)
-      video_decoder = std::make_unique<Dav1dVideoDecoder>(null_media_log.get());
-#endif
+  if (config.codec == cdm::kCodecAv1) {
+    video_decoder =
+        std::make_unique<Dav1dVideoDecoder>(std::make_unique<NullMediaLog>());
   }
+#endif
 
 #if BUILDFLAG(ENABLE_FFMPEG_VIDEO_DECODERS)
+  static base::NoDestructor<media::NullMediaLog> null_media_log;
+
   if (!video_decoder)
     video_decoder = std::make_unique<FFmpegVideoDecoder>(null_media_log.get());
 #endif

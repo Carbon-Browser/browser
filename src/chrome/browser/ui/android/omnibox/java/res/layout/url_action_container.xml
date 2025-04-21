@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright 2016 The Chromium Authors. All rights reserved.
-     Use of this source code is governed by a BSD-style license that can be
-     found in the LICENSE file. -->
+<!--
+Copyright 2016 The Chromium Authors
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
+-->
 
 <merge
     xmlns:android="http://schemas.android.com/apk/res/android">
@@ -23,13 +25,10 @@
         <org.chromium.ui.widget.ChromeImageButton
             android:id="@+id/mic_button"
             style="@style/LocationBarActionButton"
-            android:src="@drawable/btn_mic"
+            android:src="@drawable/ic_mic_white_24dp"
             android:visibility="invisible"
             android:contentDescription="@string/accessibility_toolbar_btn_mic" />
 
-    <!-- This is a short term solution to have 2 Lens buttons in this xml to
-         support different position variants in experiment.
-         TODO(b/182195615): only keep one Lens button after the experiment. -->
         <org.chromium.ui.widget.ChromeImageButton
             android:id="@+id/lens_camera_button"
             style="@style/LocationBarActionButton"

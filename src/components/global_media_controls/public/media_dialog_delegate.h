@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,6 +30,11 @@ class MediaDialogDelegate {
 
   // Hides a media item.
   virtual void HideMediaItem(const std::string& id) = 0;
+
+  // Updates the media item's UI.
+  virtual void RefreshMediaItem(
+      const std::string& id,
+      base::WeakPtr<media_message_center::MediaNotificationItem> item) = 0;
 
   // Closes the dialog.
   virtual void HideMediaDialog() = 0;

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -147,8 +147,9 @@ class COMPONENT_EXPORT(UI_BASE) OSExchangeDataProviderWin
 
   // OSExchangeDataProvider methods.
   std::unique_ptr<OSExchangeDataProvider> Clone() const override;
-  void MarkOriginatedFromRenderer() override;
-  bool DidOriginateFromRenderer() const override;
+  void MarkRendererTaintedFromOrigin(const url::Origin& origin) override;
+  bool IsRendererTainted() const override;
+  std::optional<url::Origin> GetRendererTaintedOrigin() const override;
   void MarkAsFromPrivileged() override;
   bool IsFromPrivileged() const override;
   void SetString(const std::u16string& data) override;
@@ -168,23 +169,22 @@ class COMPONENT_EXPORT(UI_BASE) OSExchangeDataProviderWin
                        const std::string& file_contents) override;
   void SetHtml(const std::u16string& html, const GURL& base_url) override;
 
-  bool GetString(std::u16string* data) const override;
-  bool GetURLAndTitle(FilenameToURLPolicy policy,
-                      GURL* url,
-                      std::u16string* title) const override;
-  bool GetFilename(base::FilePath* path) const override;
-  bool GetFilenames(std::vector<FileInfo>* filenames) const override;
+  std::optional<std::u16string> GetString() const override;
+  std::optional<UrlInfo> GetURLAndTitle(
+      FilenameToURLPolicy policy) const override;
+  std::optional<std::vector<GURL>> GetURLs(
+      FilenameToURLPolicy policy) const override;
+  std::optional<std::vector<FileInfo>> GetFilenames() const override;
   bool HasVirtualFilenames() const override;
-  bool GetVirtualFilenames(std::vector<FileInfo>* filenames) const override;
-  bool GetVirtualFilesAsTempFiles(
+  std::optional<std::vector<FileInfo>> GetVirtualFilenames() const override;
+  void GetVirtualFilesAsTempFiles(
       base::OnceCallback<
           void(const std::vector<std::pair<base::FilePath, base::FilePath>>&)>
           callback) const override;
-  bool GetPickledData(const ClipboardFormatType& format,
-                      base::Pickle* data) const override;
-  bool GetFileContents(base::FilePath* filename,
-                       std::string* file_contents) const override;
-  bool GetHtml(std::u16string* html, GURL* base_url) const override;
+  std::optional<base::Pickle> GetPickledData(
+      const ClipboardFormatType& format) const override;
+  std::optional<FileContentsInfo> GetFileContents() const override;
+  std::optional<HtmlInfo> GetHtml() const override;
   bool HasString() const override;
   bool HasURL(FilenameToURLPolicy policy) const override;
   bool HasFile() const override;
@@ -203,7 +203,7 @@ class COMPONENT_EXPORT(UI_BASE) OSExchangeDataProviderWin
  private:
   void SetVirtualFileContentAtIndexForTesting(base::span<const uint8_t> data,
                                               DWORD tymed,
-                                              size_t index);
+                                              LONG index);
 
   scoped_refptr<DataObjectImpl> data_;
   Microsoft::WRL::ComPtr<IDataObject> source_object_;

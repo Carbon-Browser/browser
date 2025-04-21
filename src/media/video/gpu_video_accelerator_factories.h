@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,14 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <vector>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/unguessable_token.h"
 #include "gpu/command_buffer/client/gles2_interface.h"
+#include "gpu/command_buffer/common/capabilities.h"
 #include "gpu/command_buffer/common/mailbox.h"
 #include "gpu/ipc/common/gpu_channel.mojom.h"
 #include "media/base/media_export.h"
@@ -23,7 +25,6 @@
 #include "media/base/video_decoder.h"
 #include "media/base/video_types.h"
 #include "media/video/video_encode_accelerator.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/gpu_memory_buffer.h"
 
 namespace base {
@@ -58,16 +59,26 @@ class MediaLog;
 //   runnner, unless otherwise documented below.
 class MEDIA_EXPORT GpuVideoAcceleratorFactories {
  public:
+  // These values are persisted to logs. Entries should not be renumbered and
+  // numeric values should never be reused
   enum class OutputFormat {
-    UNDEFINED = 0,    // Unset state
-    I420,             // 3 x R8 GMBs
-    NV12_SINGLE_GMB,  // One NV12 GMB
-    NV12_DUAL_GMB,    // One R8, one RG88 GMB
-    XR30,             // 10:10:10:2 BGRX in one GMB (Usually Mac)
-    XB30,             // 10:10:10:2 RGBX in one GMB
-    RGBA,             // One 8:8:8:8 RGBA
-    BGRA,             // One 8:8:8:8 BGRA (Usually Mac)
-    P010,             // One P010 GMB.
+    UNDEFINED = 0,  // Unset state
+    // DEPRECATED: I420 is no longer used and deprecated. Use YV12 instead.
+    // I420 = 1,             // 3 x R8 GMBs
+    NV12 = 2,  // One NV12 GMB
+    // DEPRECATED: NV12_DUAL_GMB is no longer used and deprecated. Use
+    // NV12 instead.
+    // NV12_DUAL_GMB = 3,  // One R8, one RG88 GMB
+    XR30 = 4,  // 10:10:10:2 BGRX in one GMB (Usually Mac)
+    XB30 = 5,  // 10:10:10:2 RGBX in one GMB
+    // DEPRECATED: These are only used for I420A, but converting to RGBA at this
+    // stage compromises color accuracy and complicates WebGL.
+    // See https://crbug.com/355923583 and https://crbug.com/367746309
+    // RGBA = 6,  // One 8:8:8:8 RGBA
+    // BGRA = 7,  // One 8:8:8:8 BGRA (Usually Mac)
+    P010 = 8,  // One P010 GMB.
+    YV12 = 9,  // One YV12 GMB.
+    kMaxValue = YV12
   };
 
   enum class Supported {
@@ -132,6 +143,13 @@ class MEDIA_EXPORT GpuVideoAcceleratorFactories {
       MediaLog* media_log,
       RequestOverlayInfoCB request_overlay_info_cb) = 0;
 
+  // Returns the supported video decoder configs. It is required that all
+  // clients check IsDecoderSupportKnown() before calling this method.
+  //
+  // May be called on any thread.
+  virtual std::optional<SupportedVideoDecoderConfigs>
+  GetSupportedVideoDecoderConfigs() = 0;
+
   // Returns the supported codec profiles of video encode accelerator.
   // Returns nullopt if GpuVideoAcceleratorFactories don't know the VEA
   // supported profiles.
@@ -140,7 +158,7 @@ class MEDIA_EXPORT GpuVideoAcceleratorFactories {
   //
   // TODO(sandersd): Remove Optional if/when all clients check
   // IsEncoderSupportKnown().
-  virtual absl::optional<VideoEncodeAccelerator::SupportedProfiles>
+  virtual std::optional<VideoEncodeAccelerator::SupportedProfiles>
   GetVideoEncodeAcceleratorSupportedProfiles() = 0;
 
   // Returns true if GetVideoEncodeAcceleratorSupportedProfiles() is populated.
@@ -159,9 +177,6 @@ class MEDIA_EXPORT GpuVideoAcceleratorFactories {
   // May be called on any thread.
   virtual void NotifyEncoderSupportKnown(base::OnceClosure callback) = 0;
 
-  // Caller owns returned pointer, but should call Destroy() on it (instead of
-  // directly deleting) for proper destruction, as per the
-  // VideoEncodeAccelerator interface.
   virtual std::unique_ptr<VideoEncodeAccelerator>
   CreateVideoEncodeAccelerator() = 0;
 
@@ -173,9 +188,6 @@ class MEDIA_EXPORT GpuVideoAcceleratorFactories {
   // |for_media_stream| specifies webrtc use case of media streams.
   virtual bool ShouldUseGpuMemoryBuffersForVideoFrames(
       bool for_media_stream) const = 0;
-
-  // The GLContextLock must be taken when calling this.
-  virtual unsigned ImageTextureTarget(gfx::BufferFormat format) = 0;
 
   // Pixel format of the hardware video frames created when GpuMemoryBuffers
   // video frames are enabled.
@@ -201,6 +213,8 @@ class MEDIA_EXPORT GpuVideoAcceleratorFactories {
   virtual scoped_refptr<base::SequencedTaskRunner> GetTaskRunner() = 0;
 
   virtual viz::RasterContextProvider* GetMediaContextProvider() = 0;
+
+  virtual const gpu::Capabilities* ContextCapabilities() = 0;
 
   // Sets or gets the current pipeline rendering color space.
   virtual void SetRenderingColorSpace(const gfx::ColorSpace& color_space) = 0;

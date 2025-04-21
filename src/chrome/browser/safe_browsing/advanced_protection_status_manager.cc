@@ -1,12 +1,13 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/safe_browsing/advanced_protection_status_manager.h"
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/safe_browsing/advanced_protection_status_manager_factory.h"
@@ -14,6 +15,7 @@
 #include "components/prefs/pref_service.h"
 #include "components/safe_browsing/core/common/features.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
+#include "components/safe_browsing/core/common/safebrowsing_switches.h"
 #include "components/signin/public/base/consent_level.h"
 #include "components/signin/public/identity_manager/account_info.h"
 #include "components/signin/public/identity_manager/accounts_mutator.h"
@@ -35,8 +37,10 @@ const base::TimeDelta kRefreshAdvancedProtectionDelay = base::Days(1);
 const base::TimeDelta kRetryDelay = base::Minutes(5);
 const base::TimeDelta kMinimumRefreshDelay = base::Minutes(1);
 
-const char kForceTreatUserAsAdvancedProtection[] =
-    "safe-browsing-treat-user-as-advanced-protection";
+void RecordUMA(AdvancedProtectionStatusManager::UmaEvent event) {
+  base::UmaHistogramEnumeration("SafeBrowsing.AdvancedProtection.Enabled",
+                                event);
+}
 
 }  // namespace
 
@@ -54,14 +58,34 @@ void AdvancedProtectionStatusManager::Initialize() {
   SubscribeToSigninEvents();
 }
 
+void AdvancedProtectionStatusManager::AddObserver(
+    StatusChangedObserver* observer) {
+  observers_.AddObserver(observer);
+}
+
+void AdvancedProtectionStatusManager::RemoveObserver(
+    StatusChangedObserver* observer) {
+  observers_.RemoveObserver(observer);
+}
+
+void AdvancedProtectionStatusManager::NotifyStatusChanged() {
+  for (StatusChangedObserver& observer : observers_) {
+    observer.OnAdvancedProtectionStatusChanged(is_under_advanced_protection_);
+  }
+}
+
 void AdvancedProtectionStatusManager::MaybeRefreshOnStartUp() {
   // Retrieves advanced protection service status from primary account's info.
   CoreAccountInfo core_info =
       identity_manager_->GetPrimaryAccountInfo(signin::ConsentLevel::kSignin);
-  if (core_info.account_id.empty())
+  if (core_info.account_id.empty()) {
     return;
+  }
 
   is_under_advanced_protection_ = core_info.is_under_advanced_protection;
+  RecordUMA(is_under_advanced_protection_ ? UmaEvent::kEnabled
+                                          : UmaEvent::kDisabled);
+  NotifyStatusChanged();
 
   if (pref_service_->HasPrefPath(prefs::kAdvancedProtectionLastRefreshInUs)) {
     last_refreshed_ = base::Time::FromDeltaSinceWindowsEpoch(base::Microseconds(
@@ -82,7 +106,7 @@ void AdvancedProtectionStatusManager::Shutdown() {
   UnsubscribeFromSigninEvents();
 }
 
-AdvancedProtectionStatusManager::~AdvancedProtectionStatusManager() {}
+AdvancedProtectionStatusManager::~AdvancedProtectionStatusManager() = default;
 
 void AdvancedProtectionStatusManager::SubscribeToSigninEvents() {
   identity_manager_->AddObserver(this);
@@ -118,7 +142,6 @@ void AdvancedProtectionStatusManager::OnExtendedAccountInfoRemoved(
       GetUnconsentedPrimaryAccountId();
   if (!unconsented_primary_account_id.empty() &&
       unconsented_primary_account_id == info.account_id) {
-    is_under_advanced_protection_ = false;
     OnAdvancedProtectionDisabled();
   }
 }
@@ -127,7 +150,7 @@ void AdvancedProtectionStatusManager::OnPrimaryAccountChanged(
     const signin::PrimaryAccountChangeEvent& event) {
   switch (event.GetEventTypeFor(signin::ConsentLevel::kSignin)) {
     case signin::PrimaryAccountChangeEvent::Type::kSet: {
-      // TODO(crbug.com/926204): remove IdentityManager ensures that primary
+      // TODO(crbug.com/41437854): remove IdentityManager ensures that primary
       // account always has valid refresh token when it is set.
       if (event.GetCurrentState().primary_account.is_under_advanced_protection)
         OnAdvancedProtectionEnabled();
@@ -144,15 +167,23 @@ void AdvancedProtectionStatusManager::OnPrimaryAccountChanged(
 }
 
 void AdvancedProtectionStatusManager::OnAdvancedProtectionEnabled() {
+  if (!is_under_advanced_protection_) {
+    RecordUMA(UmaEvent::kEnabledAfterDisabled);
+  }
   is_under_advanced_protection_ = true;
   UpdateLastRefreshTime();
   ScheduleNextRefresh();
+  NotifyStatusChanged();
 }
 
 void AdvancedProtectionStatusManager::OnAdvancedProtectionDisabled() {
+  if (is_under_advanced_protection_) {
+    RecordUMA(UmaEvent::kDisabledAfterEnabled);
+  }
   is_under_advanced_protection_ = false;
   UpdateLastRefreshTime();
   CancelFutureRefresh();
+  NotifyStatusChanged();
 }
 
 void AdvancedProtectionStatusManager::OnAccessTokenFetchComplete(
@@ -161,18 +192,8 @@ void AdvancedProtectionStatusManager::OnAccessTokenFetchComplete(
     signin::AccessTokenInfo token_info) {
   DCHECK(access_token_fetcher_);
 
-  if (is_under_advanced_protection_) {
-    // Those already known to be under AP should have much lower error rates.
-    UMA_HISTOGRAM_ENUMERATION(
-        "SafeBrowsing.AdvancedProtection.APTokenFetchStatus", error.state(),
-        GoogleServiceAuthError::NUM_STATES);
-  }
-
   if (error.state() == GoogleServiceAuthError::NONE)
     OnGetIDToken(account_id, token_info.id_token);
-
-  UMA_HISTOGRAM_ENUMERATION("SafeBrowsing.AdvancedProtection.TokenFetchStatus",
-                            error.state(), GoogleServiceAuthError::NUM_STATES);
 
   access_token_fetcher_.reset();
 
@@ -196,7 +217,11 @@ void AdvancedProtectionStatusManager::RefreshAdvancedProtectionStatus() {
   if (access_token_fetcher_)
     return;
 
-  // Refresh OAuth access token.
+  // Refresh OAuth access token. This class isn't actually interested in the
+  // access token itself, but the account's "under advanced protection" status
+  // can be determined from the "service flags" contained in the response.
+  // Note that the (quite powerful) `kOAuth1LoginScope` is required for the
+  // server to return the service flags.
   signin::ScopeSet scopes;
   scopes.insert(GaiaConstants::kOAuth1LoginScope);
 
@@ -206,7 +231,8 @@ void AdvancedProtectionStatusManager::RefreshAdvancedProtectionStatus() {
           base::BindOnce(
               &AdvancedProtectionStatusManager::OnAccessTokenFetchComplete,
               base::Unretained(this), unconsented_primary_account_id),
-          signin::PrimaryAccountAccessTokenFetcher::Mode::kImmediate);
+          signin::PrimaryAccountAccessTokenFetcher::Mode::kImmediate,
+          signin::ConsentLevel::kSignin);
 }
 
 void AdvancedProtectionStatusManager::ScheduleNextRefresh() {
@@ -241,8 +267,9 @@ bool AdvancedProtectionStatusManager::IsUnderAdvancedProtection() const {
     return false;
 
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-          kForceTreatUserAsAdvancedProtection))
+          switches::kForceTreatUserAsAdvancedProtection)) {
     return true;
+  }
 
   return is_under_advanced_protection_;
 }
@@ -288,7 +315,6 @@ AdvancedProtectionStatusManager::AdvancedProtectionStatusManager(
     const base::TimeDelta& min_delay)
     : pref_service_(pref_service),
       identity_manager_(identity_manager),
-      is_under_advanced_protection_(false),
       minimum_delay_(min_delay) {
   DCHECK(identity_manager_);
   DCHECK(pref_service_);
@@ -307,6 +333,7 @@ CoreAccountId AdvancedProtectionStatusManager::GetUnconsentedPrimaryAccountId()
 void AdvancedProtectionStatusManager::SetAdvancedProtectionStatusForTesting(
     bool enrolled) {
   is_under_advanced_protection_ = enrolled;
+  NotifyStatusChanged();
 }
 
 }  // namespace safe_browsing

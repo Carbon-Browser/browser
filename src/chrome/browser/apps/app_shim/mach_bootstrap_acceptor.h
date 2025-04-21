@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/mac/dispatch_source_mach.h"
+#include "base/apple/dispatch_source_mach.h"
 #include "base/memory/raw_ptr.h"
 #include "base/process/process_handle.h"
 #include "mojo/public/cpp/platform/named_platform_channel.h"
@@ -26,10 +26,10 @@ class MachBootstrapAcceptor {
  public:
   class Delegate {
    public:
-    // Called when a client identified by |peer_pid| connects with the
+    // Called when a client identified by |audit_token| connects with the
     // Mach port it provided in |endpoint|.
     virtual void OnClientConnected(mojo::PlatformChannelEndpoint endpoint,
-                                   base::ProcessId peer_pid) = 0;
+                                   audit_token_t audit_token) = 0;
 
     // Called when there is an error creating the server channel.
     virtual void OnServerChannelCreateError() = 0;
@@ -62,9 +62,9 @@ class MachBootstrapAcceptor {
   mach_port_t port();
 
   mojo::NamedPlatformChannel::ServerName server_name_;
-  raw_ptr<Delegate> delegate_;
+  raw_ptr<Delegate, AcrossTasksDanglingUntriaged> delegate_;
   mojo::PlatformChannelServerEndpoint endpoint_;
-  std::unique_ptr<base::DispatchSourceMach> dispatch_source_;
+  std::unique_ptr<base::apple::DispatchSourceMach> dispatch_source_;
 };
 
 }  // namespace apps

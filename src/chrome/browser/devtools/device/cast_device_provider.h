@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,9 +43,11 @@ class CastDeviceProvider
   void OnDeviceRemoved(const std::string& service_type,
                        const std::string& service_name) override;
   void OnDeviceCacheFlushed(const std::string& service_type) override;
+  void OnPermissionRejected() override;
 
  private:
   class DeviceListerDelegate;
+  friend class CastDeviceProviderTest;
 
   ~CastDeviceProvider() override;
 

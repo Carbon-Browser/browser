@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,10 +62,8 @@ class ImportDataHandler : public SettingsPageUIHandler,
   void ImportEnded() override;
 
   // ui::SelectFileDialog::Listener:
-  void FileSelected(const base::FilePath& path,
-                    int index,
-                    void* params) override;
-  void FileSelectionCanceled(void* params) override;
+  void FileSelected(const ui::SelectedFileInfo& file, int index) override;
+  void FileSelectionCanceled() override;
 
   std::unique_ptr<ImporterList> importer_list_;
 

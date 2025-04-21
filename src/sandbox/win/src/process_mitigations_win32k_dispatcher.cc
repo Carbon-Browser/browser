@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,6 @@
 #include "base/memory/platform_shared_memory_region.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/unguessable_token.h"
-#include "base/win/windows_version.h"
 #include "sandbox/win/src/interception.h"
 #include "sandbox/win/src/interceptors.h"
 #include "sandbox/win/src/ipc_tags.h"
@@ -29,7 +28,7 @@ ProcessMitigationsWin32KDispatcher::~ProcessMitigationsWin32KDispatcher() {}
 bool ProcessMitigationsWin32KDispatcher::SetupService(
     InterceptionManager* manager,
     IpcTag service) {
-  if (!(policy_base_->GetProcessMitigations() &
+  if (!(policy_base_->GetConfig()->GetProcessMitigations() &
         sandbox::MITIGATION_WIN32K_DISABLE)) {
     return false;
   }

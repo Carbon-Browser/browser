@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,13 +46,18 @@ bool IsLandscapeOrientation(OrientationType type);
 COMPONENT_EXPORT(CHROMEOS_UI_BASE)
 bool IsPortraitOrientation(OrientationType type);
 
-// Returns true if the current layout of |display| is horizontal.
+// Returns the current orientation of `display`.
 COMPONENT_EXPORT(CHROMEOS_UI_BASE)
-bool IsDisplayLayoutHorizontal(const display::Display& display);
+OrientationType GetDisplayCurrentOrientation(const display::Display& display);
 
 // Returns true if the current layout of |display| is primary.
 COMPONENT_EXPORT(CHROMEOS_UI_BASE)
 bool IsDisplayLayoutPrimary(const display::Display& display);
+
+// Given a list of displays, selects one DSF to represent them all.
+COMPONENT_EXPORT(CHROMEOS_UI_BASE)
+float GetRepresentativeDeviceScaleFactor(
+    const std::vector<display::Display>& displays);
 
 }  // namespace chromeos
 

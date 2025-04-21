@@ -1,11 +1,13 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "sql/test/scoped_error_expecter.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/types/pass_key.h"
+#include "sql/database.h"
+#include "sql/sqlite_result_code_values.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace sql {
@@ -28,6 +30,10 @@ void ScopedErrorExpecter::ExpectError(int err) {
   EXPECT_EQ(0u, errors_expected_.count(err))
       << " Error " << err << " is already expected";
   errors_expected_.insert(err);
+}
+
+void ScopedErrorExpecter::ExpectError(SqliteResultCode err) {
+  ExpectError(static_cast<int>(err));
 }
 
 bool ScopedErrorExpecter::SawExpectedErrors() {

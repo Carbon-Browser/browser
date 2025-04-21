@@ -1,40 +1,32 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "chrome/browser/ash/login/existing_user_controller.h"
 
 #include <string>
 #include <vector>
 
-#include "ash/components/arc/enterprise/arc_data_snapshotd_manager.h"
 #include "ash/components/arc/test/arc_util_test_support.h"
-#include "ash/components/cryptohome/cryptohome_parameters.h"
-#include "ash/components/login/auth/public/key.h"
-#include "ash/components/login/auth/public/user_context.h"
-#include "ash/components/login/auth/stub_authenticator_builder.h"
-#include "ash/components/settings/cros_settings_names.h"
-#include "ash/components/settings/cros_settings_provider.h"
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
 #include "ash/public/cpp/login_screen_test_api.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/ref_counted.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/bind.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/timer/timer.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_list_prefs_factory.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
-#include "chrome/browser/ash/authpolicy/authpolicy_credentials_manager.h"
-#include "chrome/browser/ash/login/existing_user_controller.h"
 #include "chrome/browser/ash/login/help_app_launcher.h"
 #include "chrome/browser/ash/login/helper.h"
 #include "chrome/browser/ash/login/lock/screen_locker_tester.h"
@@ -43,39 +35,42 @@
 #include "chrome/browser/ash/login/session/user_session_manager.h"
 #include "chrome/browser/ash/login/session/user_session_manager_test_api.h"
 #include "chrome/browser/ash/login/test/cryptohome_mixin.h"
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
 #include "chrome/browser/ash/login/test/js_checker.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/ash/login/test/oobe_base_test.h"
 #include "chrome/browser/ash/login/test/oobe_screen_waiter.h"
 #include "chrome/browser/ash/login/test/oobe_screens_utils.h"
 #include "chrome/browser/ash/login/test/user_policy_mixin.h"
-#include "chrome/browser/ash/login/ui/mock_login_display.h"
-#include "chrome/browser/ash/login/ui/mock_login_display_host.h"
-#include "chrome/browser/ash/login/ui/mock_signin_ui.h"
-#include "chrome/browser/ash/login/ui/signin_ui.h"
-#include "chrome/browser/ash/login/users/chrome_user_manager.h"
+#include "chrome/browser/ash/login/wizard_context.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ash/policy/core/browser_policy_connector_ash.h"
-#include "chrome/browser/ash/policy/core/device_local_account.h"
 #include "chrome/browser/ash/policy/core/device_local_account_policy_service.h"
 #include "chrome/browser/ash/policy/core/device_policy_cros_browser_test.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
-#include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_list_prefs_factory.h"
+#include "chrome/browser/ui/ash/login/mock_login_display_host.h"
+#include "chrome/browser/ui/ash/login/mock_signin_ui.h"
+#include "chrome/browser/ui/ash/login/signin_ui.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/browser/ui/webui/chromeos/login/gaia_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/terms_of_service_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/tpm_error_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/gaia_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/locale_switch_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/terms_of_service_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/tpm_error_screen_handler.h"
 #include "chrome/grit/generated_resources.h"
+#include "chrome/test/base/fake_gaia_mixin.h"
 #include "chrome/test/base/testing_browser_process.h"
-#include "chromeos/ash/components/dbus/authpolicy/fake_authpolicy_client.h"
+#include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
 #include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
 #include "chromeos/ash/components/dbus/userdataauth/fake_userdataauth_client.h"
+#include "chromeos/ash/components/login/auth/public/key.h"
+#include "chromeos/ash/components/login/auth/public/user_context.h"
+#include "chromeos/ash/components/login/auth/stub_authenticator_builder.h"
 #include "chromeos/ash/components/network/network_state_test_helper.h"
+#include "chromeos/ash/components/settings/cros_settings.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
+#include "chromeos/ash/components/settings/cros_settings_provider.h"
 #include "chromeos/dbus/power/fake_power_manager_client.h"
 #include "chromeos/strings/grit/chromeos_strings.h"
 #include "components/account_id/account_id.h"
@@ -85,6 +80,7 @@
 #include "components/policy/core/common/cloud/cloud_policy_store.h"
 #include "components/policy/core/common/cloud/mock_cloud_policy_store.h"
 #include "components/policy/core/common/cloud/test/policy_builder.h"
+#include "components/policy/core/common/device_local_account_type.h"
 #include "components/policy/core/common/mock_configuration_policy_provider.h"
 #include "components/policy/policy_constants.h"
 #include "components/policy/proto/chrome_device_policy.pb.h"
@@ -100,11 +96,13 @@
 #include "components/user_manager/user_type.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_utils.h"
+#include "google_apis/gaia/gaia_id.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/l10n/l10n_util.h"
 
 namespace ash {
+
 namespace {
 
 namespace em = ::enterprise_management;
@@ -125,9 +123,6 @@ const char kManagedUser[] = "user@example.com";
 const char kManagedGaiaID[] = "33333";
 const char kManager[] = "admin@example.com";
 const char kManagedDomain[] = "example.com";
-const char kUserAllowlist[] = "*@ad-domain.com";
-const char kUserNotMatchingAllowlist[] = "user@another_mail.com";
-const char kPassword[] = "test_password";
 
 const char kPublicSessionUserEmail[] = "public_session_user@localhost";
 const char kPublicSessionSecondUserEmail[] =
@@ -155,33 +150,6 @@ void WaitForPermanentlyUntrustedStatusAndRun(base::OnceClosure callback) {
         break;
     }
   }
-}
-
-base::FilePath GetKerberosConfigPath() {
-  base::FilePath path;
-  EXPECT_TRUE(base::PathService::Get(base::DIR_HOME, &path));
-  return path.Append("kerberos").Append("krb5.conf");
-}
-
-base::FilePath GetKerberosCredentialsCachePath() {
-  base::FilePath path;
-  EXPECT_TRUE(base::PathService::Get(base::DIR_HOME, &path));
-  return path.Append("kerberos").Append("krb5cc");
-}
-
-void EnableArcForProfile(Profile* profile) {
-  arc::SetArcAvailableCommandLineForTesting(
-      base::CommandLine::ForCurrentProcess());
-  arc::ResetArcAllowedCheckForTesting(profile);
-  arc::SetArcPlayStoreEnabledForProfile(profile, true);
-
-  ArcAppListPrefsFactory::GetInstance()->RecreateServiceInstanceForTesting(
-      profile);
-  arc::ArcSessionManager::Get()->SetProfile(profile);
-}
-
-arc::data_snapshotd::ArcDataSnapshotdManager* arc_data_snapshotd_manager() {
-  return arc::data_snapshotd::ArcDataSnapshotdManager::Get();
 }
 
 class UserProfileLoadedObserver
@@ -215,12 +183,13 @@ class UserProfileLoadedObserver
 }  // namespace
 
 class ExistingUserControllerTest : public policy::DevicePolicyCrosBrowserTest {
- protected:
-  ExistingUserControllerTest() = default;
-
+ public:
   ExistingUserControllerTest(const ExistingUserControllerTest&) = delete;
   ExistingUserControllerTest& operator=(const ExistingUserControllerTest&) =
       delete;
+
+ protected:
+  ExistingUserControllerTest() = default;
 
   ExistingUserController* existing_user_controller() {
     return ExistingUserController::current_controller();
@@ -234,19 +203,16 @@ class ExistingUserControllerTest : public policy::DevicePolicyCrosBrowserTest {
     DevicePolicyCrosBrowserTest::SetUpInProcessBrowserTestFixture();
 
     mock_login_display_host_ = std::make_unique<MockLoginDisplayHost>();
-    mock_login_display_ = std::make_unique<MockLoginDisplay>();
     mock_signin_ui_ = std::make_unique<MockSigninUI>();
     SetUpLoginDisplay();
   }
 
   virtual void SetUpLoginDisplay() {
-    EXPECT_CALL(*mock_login_display_host_, GetLoginDisplay())
-        .Times(AnyNumber())
-        .WillRepeatedly(Return(mock_login_display_.get()));
-    EXPECT_CALL(*mock_login_display_host_, GetSigninUI())
-        .Times(AnyNumber())
-        .WillRepeatedly(Return(mock_signin_ui_.get()));
-    EXPECT_CALL(*mock_login_display_, Init(_, true)).Times(1);
+    ON_CALL(*mock_login_display_host_, GetSigninUI())
+        .WillByDefault(Return(mock_signin_ui_.get()));
+
+    ON_CALL(*mock_login_display_host_, GetWizardContext())
+        .WillByDefault(Return(&dummy_wizard_context_));
   }
 
   void SetUpOnMainThread() override {
@@ -261,8 +227,11 @@ class ExistingUserControllerTest : public policy::DevicePolicyCrosBrowserTest {
 
     // Prevent browser start in user session so that we do not need to wait
     // for its initialization.
-    ash::test::UserSessionManagerTestApi(ash::UserSessionManager::GetInstance())
+    test::UserSessionManagerTestApi(UserSessionManager::GetInstance())
         .SetShouldLaunchBrowserInTests(false);
+
+    ash::AuthEventsRecorder::Get()->OnAuthenticationSurfaceChange(
+        AuthEventsRecorder::AuthenticationSurface::kLogin);
   }
 
   void TearDownOnMainThread() override {
@@ -284,11 +253,9 @@ class ExistingUserControllerTest : public policy::DevicePolicyCrosBrowserTest {
   }
 
   void ExpectLoginFailure() {
-    EXPECT_CALL(*mock_login_display_, SetUIEnabled(false)).Times(1);
     EXPECT_CALL(*mock_signin_ui_,
                 ShowSigninError(SigninError::kOwnerKeyLost, std::string()))
         .Times(1);
-    EXPECT_CALL(*mock_login_display_, SetUIEnabled(true)).Times(1);
   }
 
   void MakeCrosSettingsPermanentlyUntrusted() {
@@ -321,27 +288,26 @@ class ExistingUserControllerTest : public policy::DevicePolicyCrosBrowserTest {
   std::unique_ptr<ExistingUserController> existing_user_controller_;
 
   std::unique_ptr<MockSigninUI> mock_signin_ui_;
-  std::unique_ptr<MockLoginDisplay> mock_login_display_;
   std::unique_ptr<MockLoginDisplayHost> mock_login_display_host_;
 
   const AccountId ad_account_id_ =
       AccountId::AdFromUserEmailObjGuid(kAdUsername, kObjectGuid);
 
   const LoginManagerMixin::TestUserInfo new_user_{
-      AccountId::FromUserEmailGaiaId(kNewUser, kNewGaiaID)};
+      AccountId::FromUserEmailGaiaId(kNewUser, GaiaId(kNewGaiaID))};
   const LoginManagerMixin::TestUserInfo existing_user_{
-      AccountId::FromUserEmailGaiaId(kExistingUser, kExistingGaiaID)};
+      AccountId::FromUserEmailGaiaId(kExistingUser, GaiaId(kExistingGaiaID))};
 
   CryptohomeMixin cryptohome_mixin_{&mixin_host_};
   LoginManagerMixin login_manager_{&mixin_host_,
                                    {existing_user_},
                                    nullptr,
                                    &cryptohome_mixin_};
+
+  WizardContext dummy_wizard_context_;
 };
 
 IN_PROC_BROWSER_TEST_F(ExistingUserControllerTest, ExistingUserLogin) {
-  EXPECT_CALL(*mock_login_display_, SetUIEnabled(false)).Times(2);
-  EXPECT_CALL(*mock_login_display_, SetUIEnabled(true)).Times(1);
   EXPECT_CALL(*mock_login_display_host_,
               StartWizard(TermsOfServiceScreenView::kScreenId.AsId()))
       .Times(0);
@@ -386,12 +352,8 @@ IN_PROC_BROWSER_TEST_F(ExistingUserControllerUntrustedTest,
 IN_PROC_BROWSER_TEST_F(ExistingUserControllerUntrustedTest,
                        GuestLoginForbidden) {
   existing_user_controller()->Login(
-      UserContext(user_manager::USER_TYPE_GUEST, EmptyAccountId()),
+      UserContext(user_manager::UserType::kGuest, EmptyAccountId()),
       SigninSpecifics());
-}
-
-MATCHER_P(HasDetails, expected, "") {
-  return expected == *content::Details<const std::string>(arg).ptr();
 }
 
 class ExistingUserControllerPublicSessionTest
@@ -404,16 +366,10 @@ class ExistingUserControllerPublicSessionTest
       const ExistingUserControllerPublicSessionTest&) = delete;
 
  protected:
-  ExistingUserControllerPublicSessionTest() {}
+  ExistingUserControllerPublicSessionTest() = default;
 
   void SetUpOnMainThread() override {
     ExistingUserControllerTest::SetUpOnMainThread();
-
-    // By default ArcDataSnapshotdManager does not influence an auto login
-    // flow.
-    EXPECT_TRUE(arc_data_snapshotd_manager());
-    EXPECT_TRUE(arc_data_snapshotd_manager()->IsAutoLoginAllowed());
-    EXPECT_FALSE(arc_data_snapshotd_manager()->IsAutoLoginConfigured());
 
     // Wait for the public session user to be created.
     if (!user_manager::UserManager::Get()->IsKnownUser(
@@ -472,16 +428,6 @@ class ExistingUserControllerPublicSessionTest
         kPublicSessionUserEmail, device_local_account_policy.GetBlob());
   }
 
-  void SetUpLoginDisplay() override {
-    EXPECT_CALL(*mock_login_display_host_, GetLoginDisplay())
-        .Times(AnyNumber())
-        .WillRepeatedly(Return(mock_login_display_.get()));
-    EXPECT_CALL(*mock_login_display_host_, GetSigninUI())
-        .Times(AnyNumber())
-        .WillRepeatedly(Return(mock_signin_ui_.get()));
-    EXPECT_CALL(*mock_login_display_, Init(_, _)).Times(AnyNumber());
-  }
-
   void TearDownOnMainThread() override {
     ExistingUserControllerTest::TearDownOnMainThread();
 
@@ -508,8 +454,6 @@ class ExistingUserControllerPublicSessionTest
     EXPECT_CALL(*mock_login_display_host_,
                 StartWizard(LocaleSwitchView::kScreenId.AsId()))
         .Times(AnyNumber());
-    EXPECT_CALL(*mock_login_display_, SetUIEnabled(false)).Times(AnyNumber());
-    EXPECT_CALL(*mock_login_display_, SetUIEnabled(true)).Times(AnyNumber());
   }
 
   void SetAutoLoginPolicy(const std::string& user_email, int delay) {
@@ -565,7 +509,7 @@ class ExistingUserControllerPublicSessionTest
   const AccountId public_session_account_id_ =
       AccountId::FromUserEmail(policy::GenerateDeviceLocalAccountUserId(
           kPublicSessionUserEmail,
-          policy::DeviceLocalAccount::TYPE_PUBLIC_SESSION));
+          policy::DeviceLocalAccountType::kPublicSession));
 
  private:
   std::unique_ptr<base::RunLoop> local_state_changed_run_loop_;
@@ -595,7 +539,7 @@ IN_PROC_BROWSER_TEST_F(ExistingUserControllerPublicSessionTest,
 IN_PROC_BROWSER_TEST_F(ExistingUserControllerPublicSessionTest,
                        AutoLoginNoDelay) {
   // Set up mocks to check login success.
-  UserContext user_context(user_manager::USER_TYPE_PUBLIC_ACCOUNT,
+  UserContext user_context(user_manager::UserType::kPublicAccount,
                            public_session_account_id_);
   user_context.SetUserIDHash(user_context.GetAccountId().GetUserEmail());
   ExpectSuccessfulLogin(user_context);
@@ -608,7 +552,7 @@ IN_PROC_BROWSER_TEST_F(ExistingUserControllerPublicSessionTest,
 IN_PROC_BROWSER_TEST_F(ExistingUserControllerPublicSessionTest,
                        AutoLoginShortDelay) {
   // Set up mocks to check login success.
-  UserContext user_context(user_manager::USER_TYPE_PUBLIC_ACCOUNT,
+  UserContext user_context(user_manager::UserType::kPublicAccount,
                            public_session_account_id_);
   user_context.SetUserIDHash(user_context.GetAccountId().GetUserEmail());
   ExpectSuccessfulLogin(user_context);
@@ -664,7 +608,6 @@ IN_PROC_BROWSER_TEST_F(ExistingUserControllerPublicSessionTest,
 
 IN_PROC_BROWSER_TEST_F(ExistingUserControllerPublicSessionTest,
                        GuestModeLoginStopsAutoLogin) {
-  EXPECT_CALL(*mock_login_display_, SetUIEnabled(false)).Times(2);
   UserContext user_context(
       LoginManagerMixin::CreateDefaultUserContext(new_user_));
   test::UserSessionManagerTestApi session_manager_test_api(
@@ -676,7 +619,7 @@ IN_PROC_BROWSER_TEST_F(ExistingUserControllerPublicSessionTest,
 
   // Login and check that it stopped the timer.
   existing_user_controller()->Login(
-      UserContext(user_manager::USER_TYPE_GUEST, EmptyAccountId()),
+      UserContext(user_manager::UserType::kGuest, EmptyAccountId()),
       SigninSpecifics());
   EXPECT_TRUE(is_login_in_progress());
   ASSERT_TRUE(auto_login_timer());
@@ -720,7 +663,7 @@ IN_PROC_BROWSER_TEST_F(ExistingUserControllerPublicSessionTest,
 IN_PROC_BROWSER_TEST_F(ExistingUserControllerPublicSessionTest,
                        PublicSessionLoginStopsAutoLogin) {
   // Set up mocks to check login success.
-  UserContext user_context(user_manager::USER_TYPE_PUBLIC_ACCOUNT,
+  UserContext user_context(user_manager::UserType::kPublicAccount,
                            public_session_account_id_);
   user_context.SetUserIDHash(user_context.GetAccountId().GetUserEmail());
   ExpectSuccessfulLogin(user_context);
@@ -731,7 +674,7 @@ IN_PROC_BROWSER_TEST_F(ExistingUserControllerPublicSessionTest,
 
   // Login and check that it stopped the timer.
   existing_user_controller()->Login(
-      UserContext(user_manager::USER_TYPE_PUBLIC_ACCOUNT,
+      UserContext(user_manager::UserType::kPublicAccount,
                   public_session_account_id_),
       SigninSpecifics());
 
@@ -775,54 +718,6 @@ IN_PROC_BROWSER_TEST_F(ExistingUserControllerPublicSessionTest,
   FireAutoLogin();
 }
 
-IN_PROC_BROWSER_TEST_F(ExistingUserControllerPublicSessionTest,
-                       ArcDataSnapshotdAutoLogin) {
-  arc_data_snapshotd_manager()->set_state_for_testing(
-      arc::data_snapshotd::ArcDataSnapshotdManager::State::kBlockedUi);
-  EXPECT_FALSE(arc_data_snapshotd_manager()->IsAutoLoginAllowed());
-  EXPECT_TRUE(arc_data_snapshotd_manager()->IsAutoLoginConfigured());
-
-  ConfigureAutoLogin();
-
-  // Do not start an auto-login public account session when in blocked UI mode.
-  EXPECT_TRUE(auto_login_account_id().is_valid());
-  EXPECT_EQ(public_session_account_id_, auto_login_account_id());
-  EXPECT_EQ(0, auto_login_delay());
-  EXPECT_FALSE(auto_login_timer());
-  auto& reset_autologin_callback =
-      arc_data_snapshotd_manager()->get_reset_autologin_callback_for_testing();
-  EXPECT_FALSE(reset_autologin_callback.is_null());
-
-  // Allow to launch public account session (MGS).
-  arc_data_snapshotd_manager()->set_state_for_testing(
-      arc::data_snapshotd::ArcDataSnapshotdManager::State::kMgsToLaunch);
-  EXPECT_TRUE(arc_data_snapshotd_manager()->IsAutoLoginAllowed());
-  EXPECT_TRUE(arc_data_snapshotd_manager()->IsAutoLoginConfigured());
-
-  // Set up mocks to check login success.
-  UserContext user_context(user_manager::USER_TYPE_PUBLIC_ACCOUNT,
-                           public_session_account_id_);
-  user_context.SetUserIDHash(user_context.GetAccountId().GetUserEmail());
-  ExpectSuccessfulLogin(user_context);
-
-  std::move(reset_autologin_callback).Run();
-
-  // Start auto-login and wait for login tasks to complete.
-  content::RunAllPendingInMessageLoop();
-
-  // Setup profile before changing the state.
-  EXPECT_TRUE(user_manager::UserManager::Get()->IsLoggedInAsPublicAccount());
-  EnableArcForProfile(ProfileManager::GetActiveUserProfile());
-
-  arc_data_snapshotd_manager()->OnSnapshotSessionStarted();
-
-  EXPECT_TRUE(auto_login_account_id().is_valid());
-  EXPECT_EQ(0, auto_login_delay());
-  EXPECT_TRUE(auto_login_timer());
-  EXPECT_EQ(arc::data_snapshotd::ArcDataSnapshotdManager::State::kMgsLaunched,
-            arc_data_snapshotd_manager()->state());
-}
-
 class ExistingUserControllerSecondPublicSessionTest
     : public ExistingUserControllerPublicSessionTest {
  public:
@@ -855,348 +750,22 @@ class ExistingUserControllerSecondPublicSessionTest
         kPublicSessionSecondUserEmail, device_local_account_policy.GetBlob());
   }
 };
-// Test that if two public session accounts are configured for the device, auto
-// login is not happening.
-IN_PROC_BROWSER_TEST_F(ExistingUserControllerSecondPublicSessionTest,
-                       ArcDataSnapshotdTwoAccounts) {
-  // Allow to launch public account session (MGS).
-  arc_data_snapshotd_manager()->set_state_for_testing(
-      arc::data_snapshotd::ArcDataSnapshotdManager::State::kMgsToLaunch);
-  EXPECT_TRUE(arc_data_snapshotd_manager()->IsAutoLoginAllowed());
-  EXPECT_TRUE(arc_data_snapshotd_manager()->IsAutoLoginConfigured());
-
-  ConfigureAutoLogin();
-
-  // Do not configure auto login if more than one public session is configured.
-  EXPECT_FALSE(auto_login_account_id().is_valid());
-  EXPECT_EQ(0, auto_login_delay());
-  EXPECT_FALSE(auto_login_timer());
-}
-
-class ExistingUserControllerActiveDirectoryTest
-    : public ExistingUserControllerTest {
- public:
-  ExistingUserControllerActiveDirectoryTest() = default;
-
-  // Overriden from ExistingUserControllerTest:
-  void SetUp() override {
-    device_state_.SetState(
-        DeviceStateMixin::State::OOBE_COMPLETED_ACTIVE_DIRECTORY_ENROLLED);
-    ExistingUserControllerTest::SetUp();
-  }
-
-  void SetUpInProcessBrowserTestFixture() override {
-    ExistingUserControllerTest::SetUpInProcessBrowserTestFixture();
-
-    // This is called before ChromeBrowserMain initializes the fake dbus
-    // clients, and DisableOperationDelayForTesting() needs to be called before
-    // other ChromeBrowserMain initialization occurs.
-    AuthPolicyClient::InitializeFake();
-    FakeAuthPolicyClient::Get()->DisableOperationDelayForTesting();
-    // Required for tpm_util. Will be destroyed in browser shutdown.
-    UserDataAuthClient::InitializeFake();
-
-    RefreshDevicePolicy();
-    policy_provider_.SetDefaultReturns(
-        /*is_initialization_complete_return=*/true,
-        /*is_first_policy_load_complete_return=*/true);
-    policy::BrowserPolicyConnector::SetPolicyProviderForTesting(
-        &policy_provider_);
-  }
-
-  void TearDownOnMainThread() override {
-    base::RunLoop().RunUntilIdle();
-    ExistingUserControllerTest::TearDownOnMainThread();
-  }
-
- protected:
-  // Needs to be a member because this class is a friend of
-  // AuthPolicyCredentialsManagerFactory to access GetServiceForBrowserContext.
-  KerberosFilesHandler* GetKerberosFilesHandler() {
-    auto* authpolicy_credentials_manager =
-        static_cast<AuthPolicyCredentialsManager*>(
-            AuthPolicyCredentialsManagerFactory::GetInstance()
-                ->GetServiceForBrowserContext(
-                    ProfileManager::GetLastUsedProfile(), false /* create */));
-    EXPECT_TRUE(authpolicy_credentials_manager);
-    return authpolicy_credentials_manager->GetKerberosFilesHandlerForTesting();
-  }
-
-  void LoginAdOnline() {
-    ExpectLoginSuccess();
-    UserContext user_context(user_manager::UserType::USER_TYPE_ACTIVE_DIRECTORY,
-                             ad_account_id_);
-    user_context.SetKey(Key(kPassword));
-    user_context.SetUserIDHash(ad_account_id_.GetUserEmail());
-    user_context.SetAuthFlow(UserContext::AUTH_FLOW_ACTIVE_DIRECTORY);
-    ASSERT_EQ(user_manager::UserType::USER_TYPE_ACTIVE_DIRECTORY,
-              user_context.GetUserType());
-    UserProfileLoadedObserver profile_loaded_observer;
-    existing_user_controller()->CompleteLogin(user_context);
-
-    profile_loaded_observer.Wait();
-
-    // This only works if no RunLoop::Run() call is made after the Kerberos file
-    // writer task has been posted. Ideally, SetFilesChangedForTesting() should
-    // be called before the task is posted, but we don't have a profile yet at
-    // that point, so we can't get the files handler.
-    base::RunLoop run_loop;
-    GetKerberosFilesHandler()->SetFilesChangedForTesting(
-        run_loop.QuitClosure());
-    run_loop.Run();
-    CheckKerberosFiles(true /* enable_dns_cname_lookup */);
-  }
-
-  void UpdateProviderPolicy(const policy::PolicyMap& policy) {
-    policy_provider_.UpdateChromePolicy(policy);
-  }
-
-  void ExpectLoginFailure() {
-    EXPECT_CALL(*mock_login_display_, SetUIEnabled(false)).Times(2);
-    EXPECT_CALL(
-        *mock_signin_ui_,
-        ShowSigninError(SigninError::kGoogleAccountNotAllowed,
-                        "Google accounts are not allowed on this device"))
-        .Times(1);
-    EXPECT_CALL(*mock_login_display_, SetUIEnabled(true)).Times(1);
-  }
-
-  void ExpectLoginAllowlistFailure() {
-    EXPECT_CALL(*mock_login_display_, SetUIEnabled(false)).Times(2);
-    EXPECT_CALL(*mock_login_display_host_, ShowAllowlistCheckFailedError())
-        .Times(1);
-    EXPECT_CALL(*mock_login_display_, SetUIEnabled(true)).Times(1);
-  }
-
-  void ExpectLoginSuccess() {
-    EXPECT_CALL(*mock_login_display_, SetUIEnabled(false)).Times(2);
-    EXPECT_CALL(*mock_login_display_, SetUIEnabled(true)).Times(1);
-  }
-
-  std::string GetExpectedKerberosConfig(bool enable_dns_cname_lookup) {
-    std::string config(base::StringPrintf(
-        kKrb5CnameSettings, enable_dns_cname_lookup ? "true" : "false"));
-    config += FakeAuthPolicyClient::Get()->user_kerberos_conf();
-    return config;
-  }
-
-  void CheckKerberosFiles(bool enable_dns_cname_lookup) {
-    base::ScopedAllowBlockingForTesting allow_io;
-    std::string file_contents;
-    EXPECT_TRUE(
-        base::ReadFileToString(GetKerberosConfigPath(), &file_contents));
-    EXPECT_EQ(GetExpectedKerberosConfig(enable_dns_cname_lookup),
-              file_contents);
-
-    EXPECT_TRUE(base::ReadFileToString(GetKerberosCredentialsCachePath(),
-                                       &file_contents));
-    EXPECT_EQ(file_contents,
-              FakeAuthPolicyClient::Get()->user_kerberos_creds());
-  }
-
-  // Applies policy and waits until both config and credentials files changed.
-  void ApplyPolicyAndWaitFilesChanged(bool enable_dns_cname_lookup) {
-    policy::PolicyMap policies;
-    policies.Set(policy::key::kDisableAuthNegotiateCnameLookup,
-                 policy::POLICY_LEVEL_MANDATORY, policy::POLICY_SCOPE_USER,
-                 policy::POLICY_SOURCE_CLOUD,
-                 base::Value(!enable_dns_cname_lookup), nullptr);
-    base::RunLoop run_loop;
-    GetKerberosFilesHandler()->SetFilesChangedForTesting(
-        run_loop.QuitClosure());
-    UpdateProviderPolicy(policies);
-    run_loop.Run();
-  }
-
- private:
-  testing::NiceMock<policy::MockConfigurationPolicyProvider> policy_provider_;
-};
-
-class ExistingUserControllerActiveDirectoryTestCreateProfileDir
-    : public ExistingUserControllerActiveDirectoryTest,
-      public ::testing::WithParamInterface<bool> {
- public:
-  ExistingUserControllerActiveDirectoryTestCreateProfileDir() {
-    cryptohome_mixin_.MarkUserAsExisting(ad_account_id_);
-
-    // TODO(crbug.com/1311355): This test is run with the feature
-    // kUseAuthsessionAuthentication enabled and disabled because of a
-    // transitive dependency of AffiliationTestHelper on that feature. Remove
-    // the parameter when kUseAuthsessionAuthentication is removed.
-    if (GetParam()) {
-      scoped_feature_list_.InitAndEnableFeature(
-          features::kUseAuthsessionAuthentication);
-    } else {
-      scoped_feature_list_.InitAndDisableFeature(
-          features::kUseAuthsessionAuthentication);
-    }
-  }
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
-  CryptohomeMixin cryptohome_mixin_{&mixin_host_};
-};
-
-INSTANTIATE_TEST_SUITE_P(
-    ActiveDirectory,
-    ExistingUserControllerActiveDirectoryTestCreateProfileDir,
-    ::testing::Bool());
-
-class ExistingUserControllerActiveDirectoryUserAllowlistTest
-    : public ExistingUserControllerActiveDirectoryTest {
- public:
-  ExistingUserControllerActiveDirectoryUserAllowlistTest() = default;
-
-  void SetUpInProcessBrowserTestFixture() override {
-    ExistingUserControllerActiveDirectoryTest::
-        SetUpInProcessBrowserTestFixture();
-    em::ChromeDeviceSettingsProto device_policy;
-    device_policy.mutable_user_allowlist()->add_user_allowlist()->assign(
-        kUserAllowlist);
-    device_policy.mutable_allow_new_users()->set_allow_new_users(false);
-    FakeAuthPolicyClient::Get()->set_device_policy(device_policy);
-  }
-
-  void SetUpLoginDisplay() override {
-    EXPECT_CALL(*mock_login_display_host_, GetLoginDisplay())
-        .Times(AnyNumber())
-        .WillRepeatedly(Return(mock_login_display_.get()));
-    EXPECT_CALL(*mock_login_display_host_, GetSigninUI())
-        .Times(AnyNumber())
-        .WillRepeatedly(Return(mock_signin_ui_.get()));
-    EXPECT_CALL(*mock_login_display_, Init(_, true)).Times(1);
-  }
-};
-
-// Tests that Active Directory online login succeeds on the Active Directory
-// managed device.
-IN_PROC_BROWSER_TEST_F(ExistingUserControllerActiveDirectoryTest,
-                       ActiveDirectoryOnlineLogin_Success) {
-  LoginAdOnline();
-}
-
-// Tests if DisabledAuthNegotiateCnameLookup changes trigger updating user
-// Kerberos files.
-IN_PROC_BROWSER_TEST_F(ExistingUserControllerActiveDirectoryTest,
-                       PolicyChangeTriggersFileUpdate) {
-  LoginAdOnline();
-
-  ApplyPolicyAndWaitFilesChanged(false /* enable_dns_cname_lookup */);
-  CheckKerberosFiles(false /* enable_dns_cname_lookup */);
-
-  ApplyPolicyAndWaitFilesChanged(true /* enable_dns_cname_lookup */);
-  CheckKerberosFiles(true /* enable_dns_cname_lookup */);
-}
-
-// Tests if user Kerberos files changed D-Bus signal triggers updating user
-// Kerberos files.
-IN_PROC_BROWSER_TEST_F(ExistingUserControllerActiveDirectoryTest,
-                       UserKerberosFilesChangedSignalTriggersFileUpdate) {
-  LoginAdOnline();
-
-  // Set authpolicyd's copy of the Kerberos files and wait until Chrome's copy
-  // has updated.
-  base::RunLoop run_loop;
-  GetKerberosFilesHandler()->SetFilesChangedForTesting(run_loop.QuitClosure());
-  FakeAuthPolicyClient::Get()->SetUserKerberosFiles("new_kerberos_creds",
-                                                    "new_kerberos_config");
-  run_loop.Run();
-  CheckKerberosFiles(true /* enable_dns_cname_lookup */);
-}
-
-// Tests that Active Directory offline login succeeds on the Active Directory
-// managed device.
-IN_PROC_BROWSER_TEST_P(
-    ExistingUserControllerActiveDirectoryTestCreateProfileDir,
-    ActiveDirectoryOfflineLogin_Success) {
-  ExpectLoginSuccess();
-  UserContext user_context(user_manager::UserType::USER_TYPE_ACTIVE_DIRECTORY,
-                           ad_account_id_);
-  user_context.SetKey(Key(kPassword));
-  user_context.SetUserIDHash(ad_account_id_.GetUserEmail());
-  ASSERT_EQ(user_manager::UserType::USER_TYPE_ACTIVE_DIRECTORY,
-            user_context.GetUserType());
-
-  UserProfileLoadedObserver profile_loaded_observer;
-  existing_user_controller()->Login(user_context, SigninSpecifics());
-  profile_loaded_observer.Wait();
-
-  // Note: Can't call SetFilesChangedForTesting() earlier, see LoginAdOnline().
-  base::RunLoop run_loop;
-  GetKerberosFilesHandler()->SetFilesChangedForTesting(run_loop.QuitClosure());
-  run_loop.Run();
-  CheckKerberosFiles(true /* enable_dns_cname_lookup */);
-}
-
-// Tests that Gaia login fails on the Active Directory managed device.
-IN_PROC_BROWSER_TEST_F(ExistingUserControllerActiveDirectoryTest,
-                       GAIAAccountLogin_Failure) {
-  ExpectLoginFailure();
-  UserContext user_context(
-      LoginManagerMixin::CreateDefaultUserContext(new_user_));
-  existing_user_controller()->CompleteLogin(user_context);
-}
-
-// Tests that authentication succeeds if user email matches allowlist.
-IN_PROC_BROWSER_TEST_F(ExistingUserControllerActiveDirectoryUserAllowlistTest,
-                       Success) {
-  ExpectLoginSuccess();
-  UserContext user_context(user_manager::UserType::USER_TYPE_ACTIVE_DIRECTORY,
-                           ad_account_id_);
-  user_context.SetKey(Key(kPassword));
-  user_context.SetUserIDHash(ad_account_id_.GetUserEmail());
-  user_context.SetAuthFlow(UserContext::AUTH_FLOW_ACTIVE_DIRECTORY);
-  ASSERT_EQ(user_manager::UserType::USER_TYPE_ACTIVE_DIRECTORY,
-            user_context.GetUserType());
-  UserProfileLoadedObserver profile_loaded_observer;
-  existing_user_controller()->CompleteLogin(user_context);
-
-  profile_loaded_observer.Wait();
-}
-
-// Tests that authentication fails if user email does not match allowlist.
-IN_PROC_BROWSER_TEST_F(ExistingUserControllerActiveDirectoryUserAllowlistTest,
-                       Fail) {
-  ExpectLoginAllowlistFailure();
-  AccountId account_id =
-      AccountId::AdFromUserEmailObjGuid(kUserNotMatchingAllowlist, kObjectGuid);
-  UserContext user_context(user_manager::UserType::USER_TYPE_ACTIVE_DIRECTORY,
-                           account_id);
-  user_context.SetKey(Key(kPassword));
-  user_context.SetUserIDHash(account_id.GetUserEmail());
-  user_context.SetAuthFlow(UserContext::AUTH_FLOW_ACTIVE_DIRECTORY);
-  ASSERT_EQ(user_manager::UserType::USER_TYPE_ACTIVE_DIRECTORY,
-            user_context.GetUserType());
-  existing_user_controller()->CompleteLogin(user_context);
-}
 
 class ExistingUserControllerSavePasswordHashTest
-    : public ExistingUserControllerTest,
-      public ::testing::WithParamInterface<bool> {
+    : public ExistingUserControllerTest {
  public:
-  ExistingUserControllerSavePasswordHashTest() {
-    if (GetParam()) {
-      scoped_feature_list_.InitAndEnableFeature(
-          features::kUseAuthsessionAuthentication);
-    } else {
-      scoped_feature_list_.InitAndDisableFeature(
-          features::kUseAuthsessionAuthentication);
-    }
-  }
+  ExistingUserControllerSavePasswordHashTest() = default;
   ~ExistingUserControllerSavePasswordHashTest() override = default;
 
   void SetUpInProcessBrowserTestFixture() override {
     ExistingUserControllerTest::SetUpInProcessBrowserTestFixture();
     RefreshDevicePolicy();
   }
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 // Tests that successful GAIA online login saves SyncPasswordData to user
 // profile prefs.
-IN_PROC_BROWSER_TEST_P(ExistingUserControllerSavePasswordHashTest,
+IN_PROC_BROWSER_TEST_F(ExistingUserControllerSavePasswordHashTest,
                        GaiaOnlineLoginSavesPasswordHashToPrefs) {
   UserContext user_context(
       LoginManagerMixin::CreateDefaultUserContext(new_user_));
@@ -1213,7 +782,7 @@ IN_PROC_BROWSER_TEST_P(ExistingUserControllerSavePasswordHashTest,
 
 // Tests that successful offline login saves SyncPasswordData to user profile
 // prefs.
-IN_PROC_BROWSER_TEST_P(ExistingUserControllerSavePasswordHashTest,
+IN_PROC_BROWSER_TEST_F(ExistingUserControllerSavePasswordHashTest,
                        OfflineLoginSavesPasswordHashToPrefs) {
   UserContext user_context(
       LoginManagerMixin::CreateDefaultUserContext(existing_user_));
@@ -1277,7 +846,7 @@ class ExistingUserControllerAuthFailureTest : public OobeBaseTest {
  protected:
   FakeGaiaMixin fake_gaia_{&mixin_host_};
   const LoginManagerMixin::TestUserInfo test_user_{
-      AccountId::FromUserEmailGaiaId("user@gmail.com", "user")};
+      AccountId::FromUserEmailGaiaId("user@gmail.com", GaiaId("user"))};
   LoginManagerMixin login_manager_{&mixin_host_, {test_user_}};
 };
 
@@ -1317,12 +886,14 @@ IN_PROC_BROWSER_TEST_F(ExistingUserControllerAuthFailureTest, TpmError) {
   OobeScreenWaiter(TpmErrorView::kScreenId).Wait();
   EXPECT_TRUE(LoginScreenTestApi::IsOobeDialogVisible());
 
-  EXPECT_EQ(0, FakePowerManagerClient::Get()->num_request_restart_calls());
+  EXPECT_EQ(
+      0, chromeos::FakePowerManagerClient::Get()->num_request_restart_calls());
 
   test::TapOnPathAndWaitForOobeToBeDestroyed(
       {"tpm-error-message", "restartButton"});
 
-  EXPECT_EQ(1, FakePowerManagerClient::Get()->num_request_restart_calls());
+  EXPECT_EQ(
+      1, chromeos::FakePowerManagerClient::Get()->num_request_restart_calls());
 }
 
 IN_PROC_BROWSER_TEST_F(ExistingUserControllerAuthFailureTest, OwnerRequired) {
@@ -1338,7 +909,7 @@ IN_PROC_BROWSER_TEST_F(ExistingUserControllerAuthFailureTest, WrongPassword) {
 IN_PROC_BROWSER_TEST_F(ExistingUserControllerAuthFailureTest,
                        WrongPasswordWhileOffline) {
   NetworkStateTestHelper network_state_test_helper(
-      false /*use_default_devices_and_services*/);
+      /*use_default_devices_and_services=*/false);
   network_state_test_helper.ClearServices();
 
   SetUpStubAuthenticatorAndAttemptLoginWithWrongPassword();
@@ -1388,7 +959,8 @@ class ExistingUserControllerProfileTest : public LoginManagerTest {
     login_manager_mixin_.SkipPostLoginScreens();
 
     auto context = LoginManagerMixin::CreateDefaultUserContext(test_user);
-    login_manager_mixin_.LoginAndWaitForActiveSession(context);
+    login_manager_mixin_.LoginAsNewRegularUser(context);
+    login_manager_mixin_.WaitForActiveSession();
   }
 
   std::u16string ConstructManagedSessionUserWarning(std::string manager) {
@@ -1398,9 +970,9 @@ class ExistingUserControllerProfileTest : public LoginManagerTest {
   }
 
   const LoginManagerMixin::TestUserInfo not_managed_user_{
-      AccountId::FromUserEmailGaiaId(kNewUser, kNewGaiaID)};
+      AccountId::FromUserEmailGaiaId(kNewUser, GaiaId(kNewGaiaID))};
   const LoginManagerMixin::TestUserInfo managed_user_{
-      AccountId::FromUserEmailGaiaId(kManagedUser, kManagedGaiaID)};
+      AccountId::FromUserEmailGaiaId(kManagedUser, GaiaId(kManagedGaiaID))};
   UserPolicyMixin user_policy_mixin_{&mixin_host_, managed_user_.account_id};
   LoginManagerMixin login_manager_mixin_{&mixin_host_};
 };
@@ -1421,6 +993,8 @@ IN_PROC_BROWSER_TEST_F(ExistingUserControllerProfileTest,
 
   // Set the lock screen so that the managed warning can be queried.
   ScreenLockerTester().Lock();
+  EXPECT_TRUE(
+      LoginScreenTestApi::ShowRemoveAccountDialog(managed_user_.account_id));
 
   EXPECT_TRUE(LoginScreenTestApi::IsManagedMessageInDialogShown(
       managed_user_.account_id));
@@ -1445,6 +1019,8 @@ IN_PROC_BROWSER_TEST_F(ExistingUserControllerProfileTest, ManagedUserDomain) {
 
   // Set the lock screen so that the managed warning can be queried.
   ScreenLockerTester().Lock();
+  EXPECT_TRUE(
+      LoginScreenTestApi::ShowRemoveAccountDialog(managed_user_.account_id));
 
   EXPECT_TRUE(LoginScreenTestApi::IsManagedMessageInDialogShown(
       managed_user_.account_id));
@@ -1464,14 +1040,12 @@ IN_PROC_BROWSER_TEST_F(ExistingUserControllerProfileTest, NotManagedUserLogin) {
   EXPECT_FALSE(known_user.GetAccountManager(not_managed_user_.account_id));
 
   ScreenLockerTester().Lock();
+  EXPECT_TRUE(LoginScreenTestApi::ShowRemoveAccountDialog(
+      not_managed_user_.account_id));
 
   // Verify that no managed warning is shown for an unmanaged user.
   EXPECT_FALSE(LoginScreenTestApi::IsManagedMessageInDialogShown(
       not_managed_user_.account_id));
 }
-
-INSTANTIATE_TEST_SUITE_P(All,
-                         ExistingUserControllerSavePasswordHashTest,
-                         testing::Bool());
 
 }  // namespace ash

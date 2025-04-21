@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,9 +54,8 @@ void MaybeShowExtensionControlledSearchNotification(
 // Shows a bubble notifying the user that the new tab page is controlled by an
 // extension. This bubble is shown only the first time the new tab page is shown
 // after the controlling extension takes effect.
-void MaybeShowExtensionControlledNewTabPage(
-    Browser* browser,
-    content::WebContents* web_contents);
+void MaybeShowExtensionControlledNewTabPage(Browser* browser,
+                                            content::WebContents* web_contents);
 
 }  // namespace extensions
 

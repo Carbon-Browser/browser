@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,7 @@ export class PhotoResolutionSettings extends BaseSettings {
     super(ViewName.PHOTO_RESOLUTION_SETTINGS);
 
     this.menu = dom.getFrom(this.root, 'div.menu', HTMLDivElement);
-    cameraManager.registerCameraUI({
+    cameraManager.registerCameraUi({
       onCameraUnavailable: () => {
         for (const input of dom.getAllFrom(
                  this.menu, 'input', HTMLInputElement)) {
@@ -77,7 +77,7 @@ export class PhotoResolutionSettings extends BaseSettings {
     const label = util.toPhotoResolutionOptionLabel(option.resolutionLevel);
     const resolution = option.resolutions[0];
     let megaPixels = resolution.mp;
-    if (this.cameraManager.preferSquarePhoto()) {
+    if (this.cameraManager.useSquareResolution()) {
       const croppedEdge = Math.min(resolution.width, resolution.height);
       megaPixels = (new Resolution(croppedEdge, croppedEdge)).mp;
     }
@@ -98,16 +98,16 @@ export class PhotoResolutionSettings extends BaseSettings {
     input.checked = option.checked;
 
     if (!input.checked) {
-      input.addEventListener('click', (event) => {
+      input.addEventListener('click', async (event) => {
+        event.preventDefault();
         this.focusedDeviceId = deviceId;
         this.menuScrollTop = this.menu.scrollTop;
         if (expert.isEnabled(expert.ExpertOption.SHOW_ALL_RESOLUTIONS)) {
-          this.cameraManager.setPrefPhotoResolution(deviceId, resolution);
+          await this.cameraManager.setPrefPhotoResolution(deviceId, resolution);
         } else {
-          this.cameraManager.setPrefPhotoResolutionLevel(
+          await this.cameraManager.setPrefPhotoResolutionLevel(
               deviceId, option.resolutionLevel);
         }
-        event.preventDefault();
       });
     }
     this.menu.appendChild(optionElement);

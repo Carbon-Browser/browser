@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,22 +6,22 @@
 #define CHROMEOS_ASH_SERVICES_ASSISTANT_DEVICE_SETTINGS_HOST_H_
 
 #include "base/component_export.h"
-#include "chromeos/services/libassistant/public/mojom/device_settings_delegate.mojom.h"
+#include "base/memory/raw_ref.h"
+#include "chromeos/ash/services/libassistant/public/mojom/device_settings_delegate.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 
 namespace ash {
-class AssistantNotificationController;
-}  // namespace ash
 
-namespace chromeos {
+class AssistantNotificationController;
+
 namespace assistant {
 
 class DeviceActions;
 class ServiceContext;
 
 class COMPONENT_EXPORT(ASSISTANT_SERVICE) DeviceSettingsHost
-    : public chromeos::libassistant::mojom::DeviceSettingsDelegate {
+    : public libassistant::mojom::DeviceSettingsDelegate {
  public:
   explicit DeviceSettingsHost(ServiceContext* context);
   DeviceSettingsHost(const DeviceSettingsHost&) = delete;
@@ -29,8 +29,9 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) DeviceSettingsHost
   ~DeviceSettingsHost() override;
 
   void Bind(mojo::PendingReceiver<DeviceSettingsDelegate> pending_receiver);
+  void Stop();
 
-  // chromeos::libassistant::mojom::DeviceSettingsDelegate implementation:
+  // libassistant::mojom::DeviceSettingsDelegate implementation:
   void GetScreenBrightnessLevel(
       GetScreenBrightnessLevelCallback callback) override;
   void SetBluetoothEnabled(bool enabled) override;
@@ -45,16 +46,16 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) DeviceSettingsHost
   void reset_has_setting_changed();
 
  private:
-  ServiceContext& context_;
+  const raw_ref<ServiceContext> context_;
 
   DeviceActions& device_actions();
-  ash::AssistantNotificationController& assistant_notification_controller();
+  AssistantNotificationController& assistant_notification_controller();
 
   bool has_setting_changed_ = false;
 
   mojo::Receiver<DeviceSettingsDelegate> receiver_{this};
 };
 }  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_SERVICES_ASSISTANT_DEVICE_SETTINGS_HOST_H_

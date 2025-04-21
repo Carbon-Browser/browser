@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "base/threading/platform_thread.h"
 #include "build/build_config.h"
 #include "third_party/blink/common/crash_helpers.h"
+#include "third_party/blink/common/rust_crash/src/lib.rs.h"
 #include "url/gurl.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -22,60 +23,8 @@
 #include <zircon/syscalls.h>
 #endif
 
+
 namespace blink {
-
-// See the comment in chrome_debug_urls.h about why these exist here.
-// https://crbug.com/1197375.
-const char kChromeUIBadCastCrashURL[] = "chrome://badcastcrash/";
-const char kChromeUICheckCrashURL[] = "chrome://checkcrash/";
-const char kChromeUIBrowserCrashURL[] = "chrome://inducebrowsercrashforrealz/";
-const char kChromeUIBrowserDcheckURL[] =
-    "chrome://inducebrowserdcheckforrealz/";
-const char kChromeUIBrowserUIHang[] = "chrome://uithreadhang/";
-const char kChromeUICrashURL[] = "chrome://crash/";
-const char kChromeUIDelayedBrowserUIHang[] = "chrome://delayeduithreadhang/";
-const char kChromeUIDumpURL[] = "chrome://crashdump/";
-const char kChromeUIGpuCleanURL[] = "chrome://gpuclean/";
-const char kChromeUIGpuCrashURL[] = "chrome://gpucrash/";
-const char kChromeUIGpuHangURL[] = "chrome://gpuhang/";
-const char kChromeUIHangURL[] = "chrome://hang/";
-const char kChromeUIKillURL[] = "chrome://kill/";
-const char kChromeUIMemoryExhaustURL[] = "chrome://memory-exhaust/";
-const char kChromeUIMemoryPressureCriticalURL[] =
-    "chrome://memory-pressure-critical/";
-const char kChromeUIMemoryPressureModerateURL[] =
-    "chrome://memory-pressure-moderate/";
-const char kChromeUINetworkErrorURL[] = "chrome://network-error/";
-const char kChromeUINetworkErrorsListingURL[] = "chrome://network-errors/";
-const char kChromeUIProcessInternalsURL[] = "chrome://process-internals";
-#if BUILDFLAG(IS_ANDROID)
-const char kChromeUIGpuJavaCrashURL[] = "chrome://gpu-java-crash/";
-#endif
-#if BUILDFLAG(IS_WIN)
-const char kChromeUIBrowserHeapCorruptionURL[] =
-    "chrome://inducebrowserheapcorruption/";
-const char kChromeUICfgViolationCrashURL[] = "chrome://crash/cfg";
-const char kChromeUIHeapCorruptionCrashURL[] = "chrome://heapcorruptioncrash/";
-#endif
-
-#if defined(ADDRESS_SANITIZER)
-const char kChromeUICrashHeapOverflowURL[] = "chrome://crash/heap-overflow";
-const char kChromeUICrashHeapUnderflowURL[] = "chrome://crash/heap-underflow";
-const char kChromeUICrashUseAfterFreeURL[] = "chrome://crash/use-after-free";
-
-#if BUILDFLAG(IS_WIN)
-const char kChromeUICrashCorruptHeapBlockURL[] =
-    "chrome://crash/corrupt-heap-block";
-const char kChromeUICrashCorruptHeapURL[] = "chrome://crash/corrupt-heap";
-#endif  // BUILDFLAG(IS_WIN)
-#endif  // ADDRESS_SANITIZER
-
-#if DCHECK_IS_ON()
-const char kChromeUICrashDcheckURL[] = "chrome://crash/dcheck";
-#endif
-
-const char kChromeUIResourcesURL[] = "chrome://resources/";
-const char kChromeUIShorthangURL[] = "chrome://shorthang/";
 
 bool IsRendererDebugURL(const GURL& url) {
   if (!url.is_valid())
@@ -90,17 +39,19 @@ bool IsRendererDebugURL(const GURL& url) {
   if (url == kChromeUICheckCrashURL || url == kChromeUIBadCastCrashURL ||
       url == kChromeUICrashURL || url == kChromeUIDumpURL ||
       url == kChromeUIKillURL || url == kChromeUIHangURL ||
-      url == kChromeUIShorthangURL || url == kChromeUIMemoryExhaustURL) {
+      url == kChromeUIShorthangURL || url == kChromeUIMemoryExhaustURL ||
+      url == kChromeUICrashRustURL) {
     return true;
   }
 
 #if defined(ADDRESS_SANITIZER)
   if (url == kChromeUICrashHeapOverflowURL ||
       url == kChromeUICrashHeapUnderflowURL ||
-      url == kChromeUICrashUseAfterFreeURL) {
+      url == kChromeUICrashUseAfterFreeURL ||
+      url == kChromeUICrashRustOverflowURL) {
     return true;
   }
-#endif
+#endif  // defined(ADDRESS_SANITIZER)
 
 #if BUILDFLAG(IS_WIN)
   if (url == kChromeUICfgViolationCrashURL)
@@ -162,6 +113,11 @@ NOINLINE void MaybeTriggerAsanError(const GURL& url) {
                << " because user navigated to " << url.spec();
     base::debug::AsanCorruptHeap();
 #endif  // BUILDFLAG(IS_WIN)
+  } else if (url == kChromeUICrashRustOverflowURL) {
+    // Ensure that ASAN works even in Rust code.
+    LOG(ERROR) << "Intentionally causing ASAN heap overflow in Rust"
+               << " because user navigated to " << url.spec();
+    crash_in_rust_with_overflow();
   }
 }
 #endif  // ADDRESS_SANITIZER
@@ -178,6 +134,10 @@ void HandleChromeDebugURL(const GURL& url) {
     LOG(ERROR) << "Intentionally crashing (with null pointer dereference)"
                << " because user navigated to " << url.spec();
     internal::CrashIntentionally();
+  } else if (url == kChromeUICrashRustURL) {
+    // Cause a typical crash in Rust code, so we can test that call stack
+    // collection and symbol mangling work across the language boundary.
+    crash_in_rust();
   } else if (url == kChromeUIDumpURL) {
     // This URL will only correctly create a crash dump file if content is
     // hosted in a process that has correctly called

@@ -1,20 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 GEN_INCLUDE(['../switch_access_e2e_test_base.js']);
 
 /** Test fixture for the node wrapper type. */
-SwitchAccessGroupNodeTest = class extends SwitchAccessE2ETest {
-  async setUpDeferred() {
-    await super.setUpDeferred();
-    await importModule(
-        ['BasicNode', 'BasicRootNode'], '/switch_access/nodes/basic_node.js');
-    await importModule('GroupNode', '/switch_access/nodes/group_node.js');
-    await importModule(
-        'SwitchAccessMenuAction', '/switch_access/switch_access_constants.js');
-  }
-};
+SwitchAccessGroupNodeTest = class extends SwitchAccessE2ETest {};
 
 TEST_F('SwitchAccessGroupNodeTest', 'NodesRemoved', function() {
   const website = `<button></button>`;

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@ import android.view.WindowInsets;
 import androidx.annotation.RequiresApi;
 import androidx.annotation.VisibleForTesting;
 
+import org.chromium.android_webview.common.Lifetime;
 import org.chromium.base.Log;
 
 /**
@@ -21,17 +22,17 @@ import org.chromium.base.Log;
  * This object should be constructed in WebView's constructor to support set listener logic for
  * Android P and above.
  */
+@Lifetime.WebView
 @RequiresApi(Build.VERSION_CODES.P)
 public class AwDisplayCutoutController {
     private static final boolean DEBUG = false;
     private static final String TAG = "DisplayCutout";
 
-    /**
-     * This is a delegate that the embedder needs to implement.
-     */
+    /** This is a delegate that the embedder needs to implement. */
     public interface Delegate {
         /** @return The DIP scale. */
         float getDipScale();
+
         /**
          * Set display cutout safe area such that webpage can read safe-area-insets CSS properties.
          * Note that this can be called with the same parameter repeatedly, and the embedder needs
@@ -128,20 +129,21 @@ public class AwDisplayCutoutController {
         // our logic, which seems like a natural behavior.
         // For Android S, WebViewChromium can get onApplyWindowInsets(WindowInsets) call, so we do
         // not need to set the listener.
-        // TODO(https://crbug.com/1094366): do not set listener and plumb WebViewChromium to handle
+        // TODO(crbug.com/40699457): do not set listener and plumb WebViewChromium to handle
         // onApplyWindowInsets in S and above.
-        containerView.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
-            @Override
-            public WindowInsets onApplyWindowInsets(View view, WindowInsets insets) {
-                // Ignore if this is not the current container view.
-                if (view == mContainerView) {
-                    return AwDisplayCutoutController.this.onApplyWindowInsets(insets);
-                } else {
-                    if (DEBUG) Log.i(TAG, "Ignoring onApplyWindowInsets on View: " + view);
-                    return insets;
-                }
-            }
-        });
+        containerView.setOnApplyWindowInsetsListener(
+                new View.OnApplyWindowInsetsListener() {
+                    @Override
+                    public WindowInsets onApplyWindowInsets(View view, WindowInsets insets) {
+                        // Ignore if this is not the current container view.
+                        if (view == mContainerView) {
+                            return AwDisplayCutoutController.this.onApplyWindowInsets(insets);
+                        } else {
+                            if (DEBUG) Log.i(TAG, "Ignoring onApplyWindowInsets on View: " + view);
+                            return insets;
+                        }
+                    }
+                });
     }
 
     /**
@@ -165,14 +167,17 @@ public class AwDisplayCutoutController {
     @VisibleForTesting
     public WindowInsets onApplyWindowInsets(final WindowInsets insets) {
         if (DEBUG) Log.i(TAG, "onApplyWindowInsets: " + insets.toString());
-        // TODO(https://crbug.com/1094366): add a throttling logic.
+        // TODO(crbug.com/40699457): add a throttling logic.
         DisplayCutout cutout = insets.getDisplayCutout();
         // DisplayCutout can be null if there is no notch, or layoutInDisplayCutoutMode is DEFAULT
         // (before R) or consumed in the parent view.
         if (cutout != null) {
             Insets displayCutoutInsets =
-                    new Insets(cutout.getSafeInsetLeft(), cutout.getSafeInsetTop(),
-                            cutout.getSafeInsetRight(), cutout.getSafeInsetBottom());
+                    new Insets(
+                            cutout.getSafeInsetLeft(),
+                            cutout.getSafeInsetTop(),
+                            cutout.getSafeInsetRight(),
+                            cutout.getSafeInsetBottom());
             onApplyWindowInsetsInternal(displayCutoutInsets);
         }
         return insets;
@@ -193,9 +198,12 @@ public class AwDisplayCutoutController {
         adjustInsetsForScale(displayCutoutInsets, dipScale);
 
         if (DEBUG) {
-            Log.i(TAG,
-                    "onApplyWindowInsetsInternal. insets: " + displayCutoutInsets
-                            + ", dip scale: " + dipScale);
+            Log.i(
+                    TAG,
+                    "onApplyWindowInsetsInternal. insets: "
+                            + displayCutoutInsets
+                            + ", dip scale: "
+                            + dipScale);
         }
         // Note that internally we apply this logic only when the display is in fullscreen mode.
         // See AwDisplayModeController for more details on how we check the fullscreen mode.

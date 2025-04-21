@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,7 +55,7 @@ bool ReferrerScriptInfo::IsDefaultValue(
     const KURL& script_origin_resource_name) const {
   return GetStoredBaseUrl(*this, script_origin_resource_name).IsNull() &&
          credentials_mode_ == network::mojom::CredentialsMode::kSameOrigin &&
-         nonce_.IsEmpty() && parser_state_ == kNotParserInserted &&
+         nonce_.empty() && parser_state_ == kNotParserInserted &&
          referrer_policy_ == network::mojom::ReferrerPolicy::kDefault;
 }
 
@@ -78,8 +78,8 @@ ReferrerScriptInfo ReferrerScriptInfo::FromV8HostDefinedOptions(
       host_defined_options->Get(isolate, kBaseURL);
   SECURITY_CHECK(base_url_value->IsString());
   String base_url_string =
-      ToCoreString(v8::Local<v8::String>::Cast(base_url_value));
-  KURL base_url = base_url_string.IsEmpty() ? KURL() : KURL(base_url_string);
+      ToCoreString(isolate, v8::Local<v8::String>::Cast(base_url_value));
+  KURL base_url = base_url_string.empty() ? KURL() : KURL(base_url_string);
   DCHECK(base_url.IsNull() || base_url.IsValid());
   if (base_url.IsNull()) {
     // If base URL is null, defer to `script_origin_resource_name`.
@@ -95,7 +95,8 @@ ReferrerScriptInfo ReferrerScriptInfo::FromV8HostDefinedOptions(
   v8::Local<v8::Primitive> nonce_value =
       host_defined_options->Get(isolate, kNonce);
   SECURITY_CHECK(nonce_value->IsString());
-  String nonce = ToCoreString(v8::Local<v8::String>::Cast(nonce_value));
+  String nonce =
+      ToCoreString(isolate, v8::Local<v8::String>::Cast(nonce_value));
 
   v8::Local<v8::Primitive> parser_state_value =
       host_defined_options->Get(isolate, kParserState);

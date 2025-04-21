@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <memory>
 
-#include "components/autofill/core/browser/autofill_test_utils.h"
+#include "components/autofill/core/browser/data_manager/test_personal_data_manager.h"
 #include "components/autofill/core/browser/geo/autofill_country.h"
-#include "components/autofill/core/browser/test_personal_data_manager.h"
+#include "components/autofill/core/browser/test_utils/autofill_test_utils.h"
 #include "components/prefs/pref_service.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/libaddressinput/src/cpp/include/libaddressinput/address_ui.h"
@@ -22,7 +22,6 @@ class CountryComboboxModelTest : public testing::Test {
   CountryComboboxModelTest()
       : pref_service_(autofill::test::PrefServiceForTesting()) {
     manager_.SetPrefService(pref_service_.get());
-    manager_.set_timezone_country_code("KR");
     model_ = std::make_unique<CountryComboboxModel>();
     model_->SetCountries(
         manager_, base::RepeatingCallback<bool(const std::string&)>(), "en-US");
@@ -41,7 +40,11 @@ class CountryComboboxModelTest : public testing::Test {
 
 TEST_F(CountryComboboxModelTest, DefaultCountryCode) {
   std::string default_country = model()->GetDefaultCountryCode();
-  EXPECT_EQ(manager()->GetDefaultCountryCodeForNewAddress(), default_country);
+  EXPECT_EQ(manager()
+                ->address_data_manager()
+                .GetDefaultCountryCodeForNewAddress()
+                .value(),
+            default_country);
 
   AutofillCountry country(default_country, "en-US");
   EXPECT_EQ(country.name(), model()->GetItemAt(0));

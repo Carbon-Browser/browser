@@ -1,22 +1,19 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_BINDINGS_CORE_V8_SCRIPT_CUSTOM_ELEMENT_DEFINITION_H_
 #define THIRD_PARTY_BLINK_RENDERER_BINDINGS_CORE_V8_SCRIPT_CUSTOM_ELEMENT_DEFINITION_H_
 
-#include "base/memory/scoped_refptr.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/html/custom/custom_element_definition.h"
-#include "third_party/blink/renderer/platform/bindings/script_state.h"
-#include "third_party/blink/renderer/platform/bindings/trace_wrapper_v8_reference.h"
 #include "v8/include/v8.h"
 
 namespace blink {
 
 class CustomElementDescriptor;
-class CustomElementRegistry;
 class ScriptCustomElementDefinitionData;
+class ScriptState;
 class V8CustomElementAdoptedCallback;
 class V8CustomElementAttributeChangedCallback;
 class V8CustomElementConstructor;
@@ -28,14 +25,8 @@ class V8VoidFunction;
 class CORE_EXPORT ScriptCustomElementDefinition final
     : public CustomElementDefinition {
  public:
-  static ScriptCustomElementDefinition* ForConstructor(
-      ScriptState*,
-      CustomElementRegistry*,
-      v8::Local<v8::Value> constructor);
-
   ScriptCustomElementDefinition(const ScriptCustomElementDefinitionData& data,
-                                const CustomElementDescriptor&,
-                                CustomElementDefinition::Id);
+                                const CustomElementDescriptor&);
 
   ScriptCustomElementDefinition(const ScriptCustomElementDefinition&) = delete;
   ScriptCustomElementDefinition& operator=(
@@ -52,6 +43,7 @@ class CORE_EXPORT ScriptCustomElementDefinition final
 
   bool HasConnectedCallback() const override;
   bool HasDisconnectedCallback() const override;
+  bool HasConnectedMoveCallback() const override;
   bool HasAdoptedCallback() const override;
   bool HasFormAssociatedCallback() const override;
   bool HasFormResetCallback() const override;
@@ -60,6 +52,7 @@ class CORE_EXPORT ScriptCustomElementDefinition final
 
   void RunConnectedCallback(Element&) override;
   void RunDisconnectedCallback(Element&) override;
+  void RunConnectedMoveCallback(Element&) override;
   void RunAdoptedCallback(Element&,
                           Document& old_owner,
                           Document& new_owner) override;
@@ -79,19 +72,18 @@ class CORE_EXPORT ScriptCustomElementDefinition final
   // Implementations of |CustomElementDefinition|
   ScriptValue GetConstructorForScript() final;
   bool RunConstructor(Element&) override;
+  V8CustomElementConstructor* GetV8CustomElementConstructor() final {
+    return constructor_.Get();
+  }
 
   // Calls the constructor. The script scope, etc. must already be set up.
   Element* CallConstructor();
-
-  HTMLElement* HandleCreateElementSyncException(Document&,
-                                                const QualifiedName& tag_name,
-                                                v8::Isolate*,
-                                                ExceptionState&);
 
   Member<ScriptState> script_state_;
   Member<V8CustomElementConstructor> constructor_;
   Member<V8VoidFunction> connected_callback_;
   Member<V8VoidFunction> disconnected_callback_;
+  Member<V8VoidFunction> connected_move_callback_;
   Member<V8CustomElementAdoptedCallback> adopted_callback_;
   Member<V8CustomElementAttributeChangedCallback> attribute_changed_callback_;
   Member<V8CustomElementFormAssociatedCallback> form_associated_callback_;

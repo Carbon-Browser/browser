@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@
 #include <cmath>
 #include <limits>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/task/single_thread_task_runner.h"
 #include "media/capabilities/bucket_utility.h"
 #include "media/mojo/mojom/media_types.mojom.h"
 
@@ -19,7 +20,7 @@ VideoDecodeStatsReporter::VideoDecodeStatsReporter(
     GetPipelineStatsCB get_pipeline_stats_cb,
     media::VideoCodecProfile codec_profile,
     const gfx::Size& natural_size,
-    absl::optional<media::CdmConfig> cdm_config,
+    std::optional<media::CdmConfig> cdm_config,
     scoped_refptr<base::SingleThreadTaskRunner> task_runner,
     const base::TickClock* tick_clock)
     : kRecordingInterval(base::Milliseconds(kRecordingIntervalMs)),
@@ -66,7 +67,7 @@ void VideoDecodeStatsReporter::OnPaused() {
   is_playing_ = false;
 
   // Stop timer until playing resumes.
-  stats_cb_timer_.AbandonAndStop();
+  stats_cb_timer_.Stop();
 }
 
 void VideoDecodeStatsReporter::OnHidden() {
@@ -78,7 +79,7 @@ void VideoDecodeStatsReporter::OnHidden() {
   is_backgrounded_ = true;
 
   // Stop timer until no longer hidden.
-  stats_cb_timer_.AbandonAndStop();
+  stats_cb_timer_.Stop();
 }
 
 void VideoDecodeStatsReporter::OnShown() {
@@ -176,7 +177,7 @@ void VideoDecodeStatsReporter::OnIpcConnectionError() {
   // service is unavailable. Otherwise, errors are unexpected.
   DVLOG(2) << __func__ << " IPC disconnected. Stopping reporting.";
   is_ipc_connected_ = false;
-  stats_cb_timer_.AbandonAndStop();
+  stats_cb_timer_.Stop();
 }
 
 bool VideoDecodeStatsReporter::UpdateDecodeProgress(
@@ -231,7 +232,7 @@ bool VideoDecodeStatsReporter::UpdateFrameRateStability(
         if (num_consecutive_tiny_fps_windows_ >= kMaxTinyFpsWindows) {
           DVLOG(2) << __func__ << " Too many tiny fps windows. Stopping timer";
           fps_stabilization_failed_ = true;
-          stats_cb_timer_.AbandonAndStop();
+          stats_cb_timer_.Stop();
           return false;
         }
       } else {
@@ -244,7 +245,7 @@ bool VideoDecodeStatsReporter::UpdateFrameRateStability(
       // config) to change before trying again.
       DVLOG(2) << __func__ << " Unable to stabilize FPS. Stopping timer.";
       fps_stabilization_failed_ = true;
-      stats_cb_timer_.AbandonAndStop();
+      stats_cb_timer_.Stop();
       return false;
     }
 

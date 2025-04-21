@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <limits>
 
 #include "base/check.h"
+#include "base/check_op.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "build/build_config.h"
@@ -148,6 +149,19 @@ void RectF::UnionEvenIfEmpty(const RectF& rect) {
   float rb = std::max(bottom(), rect.bottom());
 
   SetRect(rx, ry, rr - rx, rb - ry);
+
+  // Due to floating errors and SizeF::clamp(), the new rect may not fully
+  // contain the original rects at the right/bottom side. Expand the rect in
+  // the case.
+  constexpr auto kFloatMax = std::numeric_limits<float>::max();
+  if (right() < rr && width() < kFloatMax) [[unlikely]] {
+    size_.SetToNextWidth();
+    DCHECK_GE(right(), rr);
+  }
+  if (bottom() < rb && height() < kFloatMax) [[unlikely]] {
+    size_.SetToNextHeight();
+    DCHECK_GE(bottom(), rb);
+  }
 }
 
 void RectF::Subtract(const RectF& rect) {
@@ -207,13 +221,16 @@ void RectF::Transpose() {
   SetRect(y(), x(), height(), width());
 }
 
-void RectF::SplitVertically(RectF* left_half, RectF* right_half) const {
-  DCHECK(left_half);
-  DCHECK(right_half);
+void RectF::SplitVertically(RectF& left_half, RectF& right_half) const {
+  left_half.SetRect(x(), y(), width() / 2, height());
+  right_half.SetRect(left_half.right(), y(), width() - left_half.width(),
+                     height());
+}
 
-  left_half->SetRect(x(), y(), width() / 2, height());
-  right_half->SetRect(
-      left_half->right(), y(), width() - left_half->width(), height());
+void RectF::SplitHorizontally(RectF& top_half, RectF& bottom_half) const {
+  top_half.SetRect(x(), y(), width(), height() / 2);
+  bottom_half.SetRect(x(), top_half.bottom(), width(),
+                      height() - top_half.height());
 }
 
 bool RectF::SharesEdgeWith(const RectF& rect) const {
@@ -268,6 +285,14 @@ RectF UnionRects(const RectF& a, const RectF& b) {
   return result;
 }
 
+RectF UnionRects(base::span<const RectF> rects) {
+  RectF result;
+  for (const RectF& rect : rects) {
+    result.Union(rect);
+  }
+  return result;
+}
+
 RectF UnionRectsEvenIfEmpty(const RectF& a, const RectF& b) {
   RectF result = a;
   result.UnionEvenIfEmpty(b);
@@ -280,12 +305,34 @@ RectF SubtractRects(const RectF& a, const RectF& b) {
   return result;
 }
 
+// Construct a rectangle with top-left corner at |p1| and bottom-right corner
+// at |p2|. If the exact result of top - bottom or left - right cannot be
+// presented in float, then the height/width will be grown to the next
+// float, so that it includes both |p1| and |p2|.
 RectF BoundingRect(const PointF& p1, const PointF& p2) {
-  float rx = std::min(p1.x(), p2.x());
-  float ry = std::min(p1.y(), p2.y());
-  float rr = std::max(p1.x(), p2.x());
-  float rb = std::max(p1.y(), p2.y());
-  return RectF(rx, ry, rr - rx, rb - ry);
+  float left = std::min(p1.x(), p2.x());
+  float top = std::min(p1.y(), p2.y());
+  float right = std::max(p1.x(), p2.x());
+  float bottom = std::max(p1.y(), p2.y());
+  float width = right - left;
+  float height = bottom - top;
+
+  // If the precision is lost during the calculation, always grow to the next
+  // value to include both ends.
+  if (left + width != right) {
+    width = std::nextafter((width), std::numeric_limits<float>::infinity());
+    if (std::isinf(width)) {
+      width = std::numeric_limits<float>::max();
+    }
+  }
+  if (top + height != bottom) {
+    height = std::nextafter((height), std::numeric_limits<float>::infinity());
+    if (std::isinf(height)) {
+      height = std::numeric_limits<float>::max();
+    }
+  }
+
+  return RectF(left, top, width, height);
 }
 
 RectF MaximumCoveredRect(const RectF& a, const RectF& b) {

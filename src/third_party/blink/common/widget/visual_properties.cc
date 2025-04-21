@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,11 +30,16 @@ bool VisualProperties::operator==(const VisualProperties& other) const {
          display_mode == other.display_mode &&
          capture_sequence_number == other.capture_sequence_number &&
          zoom_level == other.zoom_level &&
+         css_zoom_factor == other.css_zoom_factor &&
          page_scale_factor == other.page_scale_factor &&
          compositing_scale_factor == other.compositing_scale_factor &&
-         root_widget_window_segments == other.root_widget_window_segments &&
+         cursor_accessibility_scale_factor ==
+             other.cursor_accessibility_scale_factor &&
+         root_widget_viewport_segments == other.root_widget_viewport_segments &&
          is_pinch_gesture_active == other.is_pinch_gesture_active &&
-         window_controls_overlay_rect == other.window_controls_overlay_rect;
+         window_controls_overlay_rect == other.window_controls_overlay_rect &&
+         window_show_state == other.window_show_state &&
+         resizable == other.resizable;
 }
 
 bool VisualProperties::operator!=(const VisualProperties& other) const {

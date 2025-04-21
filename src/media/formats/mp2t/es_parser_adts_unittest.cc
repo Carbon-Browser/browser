@@ -1,10 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/time/time.h"
 #include "media/base/stream_parser_buffer.h"
 #include "media/formats/mp2t/es_parser_adts.h"
@@ -77,7 +77,7 @@ TEST_F(EsParserAdtsTest, AacLcAdts) {
 
 TEST_F(EsParserAdtsTest, AacSampleRate) {
   std::vector<Packet> pes_packets =
-      LoadPacketsFromFiles("aac-44100-packet-%d", 4);
+      LoadPacketsFromFiles("aac-44100-packet-", 4);
 
   pes_packets.front().pts = base::Seconds(0);
   EXPECT_TRUE(Process(pes_packets, true /* sbr_in_mimetype */));

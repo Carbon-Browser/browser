@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,8 @@ struct SharedHighlightingDataDrivenTestResults {
   // Indicates that the expected text was highlighted for a data-driven test
   // case.
   bool highlighting_success = false;
-  // TODO(crbug.com/1318483): Add highlighted text to results for easier failure
-  // diagosis
+  // TODO(crbug.com/40835417): Add highlighted text to results for easier
+  // failure diagosis
 };
 }  // namespace shared_highlighting
 

@@ -1,10 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/public/cpp/external_arc/message_center/arc_notification_surface_impl.h"
 
+#include "ash/public/cpp/external_arc/message_center/arc_notification_surface_manager.h"
 #include "base/check_op.h"
+#include "base/memory/raw_ptr.h"
 #include "components/exo/notification_surface.h"
 #include "components/exo/surface.h"
 #include "ui/aura/client/aura_constants.h"
@@ -32,7 +34,9 @@ class CustomWindowDelegate : public aura::WindowDelegate {
 
   // Overridden from aura::WindowDelegate:
   gfx::Size GetMinimumSize() const override { return gfx::Size(); }
-  gfx::Size GetMaximumSize() const override { return gfx::Size(); }
+  std::optional<gfx::Size> GetMaximumSize() const override {
+    return gfx::Size();
+  }
   void OnBoundsChanged(const gfx::Rect& old_bounds,
                        const gfx::Rect& new_bounds) override {}
   gfx::NativeCursor GetCursor(const gfx::Point& point) override {
@@ -75,7 +79,7 @@ class CustomWindowDelegate : public aura::WindowDelegate {
   }
 
  private:
-  exo::NotificationSurface* const notification_surface_;
+  const raw_ptr<exo::NotificationSurface> notification_surface_;
 };
 
 }  // namespace
@@ -152,6 +156,11 @@ void ArcNotificationSurfaceImpl::FocusSurfaceWindow() {
 
 void ArcNotificationSurfaceImpl::SetAXTreeId(ui::AXTreeID ax_tree_id) {
   ax_tree_id_ = ax_tree_id;
+
+  auto* surface_manager = ash::ArcNotificationSurfaceManager::Get();
+  if (surface_manager) {
+    surface_manager->OnNotificationSurfaceAXTreeIdChanged(this);
+  }
 }
 
 ui::AXTreeID ArcNotificationSurfaceImpl::GetAXTreeId() const {

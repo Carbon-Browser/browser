@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,10 @@
 
 #include <string>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "chromeos/ash/components/dbus/cicerone/cicerone_service.pb.h"
-#include "chromeos/ash/components/dbus/concierge/concierge_service.pb.h"
+#include "chromeos/ash/components/dbus/vm_concierge/concierge_service.pb.h"
 
 // This file contains simple C++ types. Simple isn't a precise term, but as a
 // guideline enums and PoD structs are simple while structs/classes with methods
@@ -111,7 +111,13 @@ enum class CrostiniResult {
   STOP_VM_NO_RESPONSE = 76,
   SIGNAL_NOT_CONNECTED = 77,
   INSTALL_TERMINA_CANCELLED = 78,
-  kMaxValue = INSTALL_TERMINA_CANCELLED,
+  START_TIMED_OUT = 79,
+  DISK_IMAGE_NO_RESPONSE = 80,
+  DISK_IMAGE_IN_PROGRESS = 81,
+  DISK_IMAGE_FAILED = 82,
+  DISK_IMAGE_FAILED_NO_SPACE = 83,
+  DISK_IMAGE_CANCELLED = 84,
+  kMaxValue = DISK_IMAGE_CANCELLED,
   // When adding a new value, check you've followed the steps in the comment at
   // the top of this enum.
 };
@@ -147,6 +153,11 @@ enum class UninstallPackageProgressStatus {
   UNINSTALLING,  // In progress
 };
 
+enum class DiskImageProgressStatus {
+  IN_PROGRESS,
+  FAILURE_SPACE,
+};
+
 enum class ImportContainerProgressStatus {
   UPLOAD,
   UNPACK,
@@ -165,6 +176,7 @@ enum class ContainerVersion {
   STRETCH,
   BUSTER,
   BULLSEYE,
+  BOOKWORM,
 };
 
 struct VmInfo {
@@ -283,7 +295,8 @@ enum class ContainerOsVersion {
   kDebianOther = 3,
   kOtherOs = 4,
   kDebianBullseye = 5,
-  kMaxValue = kDebianBullseye,
+  kDebianBookworm = 6,
+  kMaxValue = kDebianBookworm,
 };
 
 #endif  // CHROME_BROWSER_ASH_CROSTINI_CROSTINI_SIMPLE_TYPES_H_

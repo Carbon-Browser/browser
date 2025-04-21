@@ -1,11 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_LOGIN_SECURE_MODULE_UTIL_CHROMEOS_H_
 #define COMPONENTS_LOGIN_SECURE_MODULE_UTIL_CHROMEOS_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/login/login_export.h"
 
 namespace login {

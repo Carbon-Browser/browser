@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,14 +12,21 @@
 #include "chrome/browser/media/router/providers/cast/cast_session_client.h"
 #include "chrome/browser/media/router/providers/cast/cast_session_tracker.h"
 #include "chrome/browser/media/router/test/provider_test_helpers.h"
-#include "components/cast_channel/cast_test_util.h"
 #include "components/media_router/common/discovery/media_sink_internal.h"
 #include "components/media_router/common/media_route.h"
+#include "components/media_router/common/mojom/debugger.mojom.h"
+#include "components/media_router/common/mojom/logger.mojom.h"
+#include "components/media_router/common/providers/cast/channel/cast_test_util.h"
+#include "components/media_router/common/test/mock_logger.h"
 #include "components/media_router/common/test/test_helper.h"
 #include "content/public/test/browser_task_environment.h"
+#include "mojo/public/cpp/bindings/receiver.h"
+#include "mojo/public/cpp/bindings/remote.h"
 #include "services/data_decoder/public/cpp/test_support/in_process_data_decoder.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+
+using testing::NiceMock;
 
 namespace media_router {
 
@@ -27,7 +34,7 @@ class MockCastSessionClient : public CastSessionClient {
  public:
   MockCastSessionClient(const std::string& client_id,
                         const url::Origin& origin,
-                        int tab_id);
+                        content::FrameTreeNodeId tab_id);
   ~MockCastSessionClient() override;
 
   static const std::vector<MockCastSessionClient*>& instances() {
@@ -37,20 +44,21 @@ class MockCastSessionClient : public CastSessionClient {
   MOCK_METHOD0(Init, mojom::RoutePresentationConnectionPtr());
   MOCK_METHOD1(SendMessageToClient,
                void(blink::mojom::PresentationConnectionMessagePtr message));
-  MOCK_METHOD2(SendMediaStatusToClient,
-               void(const base::Value& media_status,
-                    absl::optional<int> request_id));
+  MOCK_METHOD2(SendMediaMessageToClient,
+               void(const base::Value::Dict& payload,
+                    std::optional<int> request_id));
   MOCK_METHOD1(
       CloseConnection,
       void(blink::mojom::PresentationConnectionCloseReason close_reason));
   MOCK_METHOD0(TerminateConnection, void());
   MOCK_CONST_METHOD2(MatchesAutoJoinPolicy,
-                     bool(url::Origin origin, int tab_id));
+                     bool(url::Origin origin, content::FrameTreeNodeId tab_id));
   MOCK_METHOD3(SendErrorCodeToClient,
                void(int sequence_number,
                     CastInternalMessage::ErrorCode error_code,
-                    absl::optional<std::string> description));
-  MOCK_METHOD2(SendErrorToClient, void(int sequence_number, base::Value error));
+                    std::optional<std::string> description));
+  MOCK_METHOD2(SendErrorToClient,
+               void(int sequence_number, base::Value::Dict error));
   MOCK_METHOD1(OnMessage,
                void(blink::mojom::PresentationConnectionMessagePtr message));
   MOCK_METHOD1(DidChangeState,
@@ -60,6 +68,24 @@ class MockCastSessionClient : public CastSessionClient {
 
  private:
   static std::vector<MockCastSessionClient*> instances_;
+};
+
+class MockMediaRouterDebugger : public mojom::Debugger {
+ public:
+  MockMediaRouterDebugger();
+  ~MockMediaRouterDebugger() override;
+  MOCK_METHOD(void,
+              ShouldFetchMirroringStats,
+              (base::OnceCallback<void(bool)> callback),
+              (override));
+  MOCK_METHOD(void,
+              OnMirroringStats,
+              (const base::Value json_stats_cb),
+              (override));
+  MOCK_METHOD(void,
+              BindReceiver,
+              (mojo::PendingReceiver<mojom::Debugger> receiver),
+              (override));
 };
 
 class MockCastActivityManager : public CastActivityManagerBase {
@@ -96,16 +122,17 @@ class CastActivityTestBase : public testing::Test,
   std::unique_ptr<CastSessionClient> MakeClientForTest(
       const std::string& client_id,
       const url::Origin& origin,
-      int tab_id) override;
+      content::FrameTreeNodeId tab_id) override;
 
   // Adds a client to |activity| and returns a mock instance.
   MockCastSessionClient* AddMockClient(CastActivity* activity,
                                        const std::string& client_id,
-                                       int tab_id);
+                                       content::FrameTreeNodeId tab_id);
 
-  // TODO(crbug.com/954797): Factor out members also present in
+  // TODO(crbug.com/40623998): Factor out members also present in
   // CastActivityManagerTest.
-  content::BrowserTaskEnvironment task_environment_;
+  content::BrowserTaskEnvironment task_environment_{
+      base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   data_decoder::test::InProcessDataDecoder in_process_data_decoder_;
   TestMediaSinkService media_sink_service_;
   cast_channel::MockCastSocketService socket_service_{
@@ -116,6 +143,12 @@ class CastActivityTestBase : public testing::Test,
   MediaSinkInternal sink_ = CreateCastSink(kChannelId);
   MockCastActivityManager manager_;
   raw_ptr<CastSession> session_ = nullptr;
+  NiceMock<MockLogger> mock_logger_;
+  mojo::Remote<mojom::Logger> logger_;
+  std::unique_ptr<mojo::Receiver<mojom::Logger>> logger_receiver_;
+  NiceMock<MockMediaRouterDebugger> mock_debugger_;
+  mojo::Remote<mojom::Debugger> debugger_;
+  std::unique_ptr<mojo::Receiver<mojom::Debugger>> debugger_receiver_;
 };
 
 }  // namespace media_router

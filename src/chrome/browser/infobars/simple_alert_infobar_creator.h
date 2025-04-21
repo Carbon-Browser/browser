@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,6 +26,7 @@ void CreateSimpleAlertInfoBar(
     const gfx::VectorIcon* vector_icon,
     const std::u16string& message,
     bool auto_expire = true,
-    bool should_animate = true);
+    bool should_animate = true,
+    bool closeable = true);
 
 #endif  // CHROME_BROWSER_INFOBARS_SIMPLE_ALERT_INFOBAR_CREATOR_H_

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,7 @@
 
 #include "ash/accelerometer/accelerometer_reader.h"
 #include "ash/accelerometer/accelerometer_types.h"
-#include "ash/constants/app_types.h"
 #include "ash/constants/ash_switches.h"
-#include "ash/display/screen_orientation_controller.h"
 #include "ash/display/screen_orientation_controller_test_api.h"
 #include "ash/shell.h"
 #include "ash/system/screen_layout_observer.h"
@@ -25,13 +23,17 @@
 #include "ash/wm/window_util.h"
 #include "base/command_line.h"
 #include "base/numerics/math_constants.h"
+#include "chromeos/ui/base/app_types.h"
+#include "chromeos/ui/base/window_properties.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/window.h"
+#include "ui/base/mojom/ui_base_types.mojom-shared.h"
 #include "ui/compositor/layer_type.h"
 #include "ui/display/display.h"
 #include "ui/display/display_switches.h"
 #include "ui/display/manager/display_manager.h"
 #include "ui/display/manager/managed_display_info.h"
+#include "ui/display/screen.h"
 #include "ui/display/test/display_manager_test_api.h"
 #include "ui/events/event_constants.h"
 #include "ui/wm/core/window_util.h"
@@ -43,13 +45,6 @@ namespace {
 using base::kMeanGravityFloat;
 
 const float kDegreesToRadians = 3.1415926f / 180.0f;
-
-display::ManagedDisplayInfo CreateDisplayInfo(int64_t id,
-                                              const gfx::Rect& bounds) {
-  display::ManagedDisplayInfo info(id, "dummy", false);
-  info.SetBounds(bounds);
-  return info;
-}
 
 void EnableTabletMode(bool enable) {
   Shell::Get()->tablet_mode_controller()->ForceUiTabletModeState(enable);
@@ -135,8 +130,7 @@ class ScreenOrientationControllerTest : public AshTestBase {
  protected:
   aura::Window* CreateAppWindowInShellWithId(int id) {
     aura::Window* window = CreateTestWindowInShellWithId(id);
-    window->SetProperty(aura::client::kAppType,
-                        static_cast<int>(AppType::CHROME_APP));
+    window->SetProperty(chromeos::kAppTypeKey, chromeos::AppType::CHROME_APP);
     return window;
   }
 
@@ -162,6 +156,17 @@ class ScreenOrientationControllerTest : public AshTestBase {
   SplitViewController* split_view_controller() {
     return SplitViewController::Get(Shell::GetPrimaryRootWindow());
   }
+
+  display::ManagedDisplayInfo CreateDisplayInfo(int64_t id,
+                                                const gfx::Rect& bounds) {
+    display::ManagedDisplayInfo info = display::CreateDisplayInfo(id, bounds);
+    // Each display should have at least one native mode.
+    display::ManagedDisplayMode mode(bounds.size(), /*refresh_rate=*/60.f,
+                                     /*is_interlaced=*/true,
+                                     /*native=*/true);
+    info.SetManagedDisplayModes({mode});
+    return info;
+  }
 };
 
 // Tests that a Window can lock rotation.
@@ -179,7 +184,7 @@ TEST_F(ScreenOrientationControllerTest, LockOrientation) {
   EXPECT_TRUE(RotationLocked());
 
   auto modal = CreateTestWindow(gfx::Rect(0, 0, 400, 400));
-  modal->SetProperty(aura::client::kModalKey, ui::MODAL_TYPE_SYSTEM);
+  modal->SetProperty(aura::client::kModalKey, ui::mojom::ModalType::kSystem);
   EXPECT_EQ(display::Display::ROTATE_0, GetCurrentInternalDisplayRotation());
   EXPECT_TRUE(RotationLocked());
 }
@@ -359,9 +364,9 @@ TEST_F(ScreenOrientationControllerTest, SplitViewPreventsLock) {
   ASSERT_TRUE(RotationLocked());
 
   split_view_controller()->SnapWindow(focus_window1.get(),
-                                      SplitViewController::LEFT);
+                                      SnapPosition::kPrimary);
   split_view_controller()->SnapWindow(focus_window1.get(),
-                                      SplitViewController::RIGHT);
+                                      SnapPosition::kSecondary);
   EXPECT_FALSE(RotationLocked());
 
   split_view_controller()->EndSplitView();
@@ -728,7 +733,7 @@ TEST_F(ScreenOrientationControllerTest, ClamshellPhysicalTabletState) {
   // Once the device goes into tablet mode, it becomes possible to auto-rotate.
   tablet_mode_controller_test_api.OpenLidToAngle(270);
   EXPECT_TRUE(tablet_mode_controller_test_api.IsInPhysicalTabletState());
-  EXPECT_TRUE(tablet_mode_controller_test_api.IsTabletModeStarted());
+  EXPECT_TRUE(display::Screen::GetScreen()->InTabletMode());
   TriggerLidUpdate(gfx::Vector3dF(kMeanGravityFloat, 0.0f, 0.0f));
   EXPECT_EQ(display::Display::ROTATE_90, GetCurrentInternalDisplayRotation());
 
@@ -737,7 +742,7 @@ TEST_F(ScreenOrientationControllerTest, ClamshellPhysicalTabletState) {
   // still possible.
   tablet_mode_controller_test_api.AttachExternalMouse();
   EXPECT_TRUE(tablet_mode_controller_test_api.IsInPhysicalTabletState());
-  EXPECT_FALSE(tablet_mode_controller_test_api.IsTabletModeStarted());
+  EXPECT_FALSE(display::Screen::GetScreen()->InTabletMode());
   TriggerLidUpdate(gfx::Vector3dF(0.0f, -kMeanGravityFloat, 0.0f));
   EXPECT_EQ(display::Display::ROTATE_180, GetCurrentInternalDisplayRotation());
 }
@@ -755,7 +760,7 @@ TEST_F(ScreenOrientationControllerTest,
 
   tablet_mode_controller_test_api.OpenLidToAngle(270);
   EXPECT_TRUE(tablet_mode_controller_test_api.IsInPhysicalTabletState());
-  EXPECT_TRUE(tablet_mode_controller_test_api.IsTabletModeStarted());
+  EXPECT_TRUE(display::Screen::GetScreen()->InTabletMode());
   EXPECT_EQ(display::Display::ROTATE_0, GetCurrentInternalDisplayRotation());
 
   ScreenOrientationController* orientation_controller =
@@ -773,7 +778,7 @@ TEST_F(ScreenOrientationControllerTest,
   // should restore the user rotation lock, and ignore the app-requested one.
   tablet_mode_controller_test_api.AttachExternalMouse();
   EXPECT_TRUE(tablet_mode_controller_test_api.IsInPhysicalTabletState());
-  EXPECT_FALSE(tablet_mode_controller_test_api.IsTabletModeStarted());
+  EXPECT_FALSE(display::Screen::GetScreen()->InTabletMode());
   EXPECT_TRUE(orientation_controller->user_rotation_locked());
   EXPECT_EQ(display::Display::ROTATE_0, GetCurrentInternalDisplayRotation());
   EXPECT_EQ(chromeos::OrientationType::kLandscapePrimary,
@@ -789,14 +794,14 @@ TEST_F(ScreenOrientationControllerTest,
   // orientation lock for the active window will be applied.
   tablet_mode_controller_test_api.DetachAllMice();
   EXPECT_TRUE(tablet_mode_controller_test_api.IsInPhysicalTabletState());
-  EXPECT_TRUE(tablet_mode_controller_test_api.IsTabletModeStarted());
+  EXPECT_TRUE(display::Screen::GetScreen()->InTabletMode());
   EXPECT_EQ(display::Display::ROTATE_90, GetCurrentInternalDisplayRotation());
 
   // Orientation should be restored once the device exits the physical tablet
   // state.
   tablet_mode_controller_test_api.OpenLidToAngle(90);
   EXPECT_FALSE(tablet_mode_controller_test_api.IsInPhysicalTabletState());
-  EXPECT_FALSE(tablet_mode_controller_test_api.IsTabletModeStarted());
+  EXPECT_FALSE(display::Screen::GetScreen()->InTabletMode());
   EXPECT_EQ(display::Display::ROTATE_0, GetCurrentInternalDisplayRotation());
 }
 
@@ -844,7 +849,7 @@ TEST_F(ScreenOrientationControllerTest, GetCurrentAppRequestedOrientationLock) {
   EXPECT_EQ(display::Display::ROTATE_270, GetCurrentInternalDisplayRotation());
   EXPECT_EQ(chromeos::OrientationType::kAny, UserLockedOrientation());
 
-  display_manager()->SetMirrorMode(display::MirrorMode::kOff, absl::nullopt);
+  display_manager()->SetMirrorMode(display::MirrorMode::kOff, std::nullopt);
   base::RunLoop().RunUntilIdle();
 
   roots = Shell::GetAllRootWindows();
@@ -874,7 +879,7 @@ TEST_F(ScreenOrientationControllerTest, GetCurrentAppRequestedOrientationLock) {
 
   // Once `win0` is snapped in splitview, it can no longer lock the rotation.
   SplitViewController::Get(win0->GetRootWindow())
-      ->SnapWindow(win0.get(), SplitViewController::RIGHT);
+      ->SnapWindow(win0.get(), SnapPosition::kSecondary);
   EXPECT_EQ(
       chromeos::OrientationType::kAny,
       screen_orientation_controller->GetCurrentAppRequestedOrientationLock());
@@ -890,7 +895,7 @@ TEST_F(ScreenOrientationControllerTest,
   base::RunLoop().RunUntilIdle();
   EXPECT_TRUE(display_manager()->IsInSoftwareMirrorMode());
   // Now switch mirror mode off so that we can have two displays in tablet mode.
-  display_manager()->SetMirrorMode(display::MirrorMode::kOff, absl::nullopt);
+  display_manager()->SetMirrorMode(display::MirrorMode::kOff, std::nullopt);
   base::RunLoop().RunUntilIdle();
   auto roots = Shell::GetAllRootWindows();
   ASSERT_EQ(2u, roots.size());
@@ -946,6 +951,28 @@ TEST_F(ScreenOrientationControllerTest,
   EXPECT_EQ(chromeos::OrientationType::kAny, UserLockedOrientation());
 }
 
+// Tests that the controller ignores the app-requested orientation of floated
+// windows.
+TEST_F(ScreenOrientationControllerTest, IgnoreFloatWindowOrientationLock) {
+  EnableTabletMode(true);
+
+  std::unique_ptr<aura::Window> child_window = CreateControlWindow();
+  std::unique_ptr<aura::Window> focus_window(CreateAppWindow());
+  ASSERT_EQ(display::Display::ROTATE_0, GetCurrentInternalDisplayRotation());
+  ASSERT_FALSE(RotationLocked());
+
+  AddWindowAndActivateParent(child_window.get(), focus_window.get());
+  Lock(child_window.get(), chromeos::OrientationType::kPortrait);
+  EXPECT_TRUE(RotationLocked());
+
+  // Float `focus_window`.
+  const WindowFloatWMEvent float_event(
+      chromeos::FloatStartLocation::kBottomRight);
+  WindowState::Get(focus_window.get())->OnWMEvent(&float_event);
+
+  EXPECT_FALSE(RotationLocked());
+}
+
 class SupportsClamshellAutoRotation : public ScreenOrientationControllerTest {
  public:
   SupportsClamshellAutoRotation() = default;
@@ -966,7 +993,7 @@ class SupportsClamshellAutoRotation : public ScreenOrientationControllerTest {
 // kSupportsClamshellAutoRotation is set.
 TEST_F(SupportsClamshellAutoRotation, ScreenRotation) {
   TabletModeControllerTestApi tablet_mode_controller_test_api;
-  ASSERT_FALSE(tablet_mode_controller_test_api.IsTabletModeStarted());
+  ASSERT_FALSE(display::Screen::GetScreen()->InTabletMode());
 
   // Test rotating in all directions are supported.
   TriggerLidUpdate(gfx::Vector3dF(kMeanGravityFloat, 0.0f, 0.0f));

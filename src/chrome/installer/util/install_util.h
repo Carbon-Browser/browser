@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -10,20 +10,21 @@
 #define CHROME_INSTALLER_UTIL_INSTALL_UTIL_H_
 
 #include <windows.h>
+
+#include <optional>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <utility>
 #include <vector>
 
 #include "base/command_line.h"
 #include "base/files/file_path.h"
-#include "base/strings/string_piece.h"
 #include "base/types/strong_alias.h"
 #include "base/version.h"
 #include "base/win/registry.h"
 #include "base/win/scoped_handle.h"
 #include "chrome/installer/util/util_constants.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class WorkItemList;
 
@@ -87,6 +88,10 @@ class InstallUtil {
   // CLSID registered.
   static bool IsStartMenuShortcutWithActivatorGuidInstalled();
 
+  // Returns true if the current process has the interactive user token. False
+  // otherwise.
+  static bool IsRunningAsInteractiveUser();
+
   // Returns the toast activator registry path.
   static std::wstring GetToastActivatorRegistryPath();
 
@@ -110,7 +115,7 @@ class InstallUtil {
 
   // Returns the highest Chrome version that was installed prior to a downgrade,
   // or no value if Chrome was not previously downgraded from a newer version.
-  static absl::optional<base::Version> GetDowngradeVersion();
+  static std::optional<base::Version> GetDowngradeVersion();
 
   // Returns pairs of registry key paths and value names where the enrollment
   // token is stored for machine level user cloud policies. The locations are
@@ -180,7 +185,7 @@ class InstallUtil {
 
   // Converts a product GUID into a SQuished gUID that is used for MSI installer
   // registry entries.
-  static std::wstring GuidToSquid(base::WStringPiece guid);
+  static std::wstring GuidToSquid(std::wstring_view guid);
 };
 
 #endif  // CHROME_INSTALLER_UTIL_INSTALL_UTIL_H_

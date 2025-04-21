@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 #define CHROME_BROWSER_ASH_ARC_ARC_DEMO_MODE_DELEGATE_IMPL_H_
 
 #include "ash/components/arc/session/arc_client_adapter.h"
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 
 namespace arc {
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -8,10 +8,12 @@ import sys
 import idl_schema
 import json_schema
 
+
 class SchemaLoader(object):
   '''Loads a schema from a provided filename.
   |root|: path to the root directory.
   '''
+
   def __init__(self, root):
     self._root = root
 

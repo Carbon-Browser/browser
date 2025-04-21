@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,10 @@
 // Please run the closure compiler before committing changes.
 // See https://chromium.googlesource.com/chromium/src/+/main/docs/closure_compilation.md
 
-/** @fileoverview Externs generated from namespace: settingsPrivate */
+/**
+ * @fileoverview Externs generated from namespace: settingsPrivate
+ * @externs
+ */
 
 /** @const */
 chrome.settingsPrivate = {};
@@ -52,7 +55,7 @@ chrome.settingsPrivate.Enforcement = {
  * @typedef {{
  *   key: string,
  *   type: !chrome.settingsPrivate.PrefType,
- *   value: *,
+ *   value: (*|undefined),
  *   controlledBy: (!chrome.settingsPrivate.ControlledBy|undefined),
  *   controlledByName: (string|undefined),
  *   enforcement: (!chrome.settingsPrivate.Enforcement|undefined),
@@ -90,14 +93,14 @@ chrome.settingsPrivate.getPref = function(name, callback) {};
 
 /**
  * Gets the default page zoom factor. Possible values are currently between 0.25
- * and 5. For a full list, see zoom::kPresetZoomFactors.
+ * and 5. For a full list, see zoom::kPresetBrowserZoomFactors.
  * @param {function(number): void} callback
  */
 chrome.settingsPrivate.getDefaultZoom = function(callback) {};
 
 /**
  * Sets the page zoom factor. Must be less than 0.001 different than a value in
- * zoom::kPresetZoomFactors.
+ * zoom::kPresetBrowserZoomFactors.
  * @param {number} zoom
  * @param {function(boolean): void=} callback
  */

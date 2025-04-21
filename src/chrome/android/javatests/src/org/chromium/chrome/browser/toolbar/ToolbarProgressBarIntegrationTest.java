@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,7 @@ package org.chromium.chrome.browser.toolbar;
 
 import static org.junit.Assert.assertEquals;
 
-import android.support.test.InstrumentationRegistry;
-
+import androidx.test.core.app.ApplicationProvider;
 import androidx.test.filters.MediumTest;
 
 import org.junit.Before;
@@ -15,9 +14,10 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.util.CommandLineFlags;
+import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.Feature;
-import org.chromium.base.test.util.FlakyTest;
 import org.chromium.base.test.util.Restriction;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
@@ -26,19 +26,16 @@ import org.chromium.content_public.browser.WebContents;
 import org.chromium.content_public.browser.test.util.JavaScriptUtils;
 import org.chromium.content_public.browser.test.util.TestCallbackHelperContainer.OnPageFinishedHelper;
 import org.chromium.content_public.browser.test.util.TestCallbackHelperContainer.OnPageStartedHelper;
-import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.content_public.browser.test.util.TestWebContentsObserver;
 import org.chromium.net.test.EmbeddedTestServer;
-import org.chromium.ui.test.util.UiRestriction;
+import org.chromium.ui.base.DeviceFormFactor;
 
 import java.util.concurrent.TimeoutException;
 
-/**
- * Integration tests for the toolbar progress bar.
- */
+/** Integration tests for the toolbar progress bar. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
-@Restriction(UiRestriction.RESTRICTION_TYPE_PHONE)
+@Restriction(DeviceFormFactor.PHONE)
 public class ToolbarProgressBarIntegrationTest {
     private static final String TEST_PAGE = "/chrome/test/data/android/progressbar_test.html";
 
@@ -54,24 +51,23 @@ public class ToolbarProgressBarIntegrationTest {
                 mActivityTestRule.getActivity().getToolbarManager().getToolbar().getProgressBar();
 
         mProgressBar.resetStartCountForTesting();
-        TestThreadUtils.runOnUiThreadBlocking(() -> mProgressBar.finish(false));
+        ThreadUtils.runOnUiThreadBlocking(() -> mProgressBar.finish(false));
     }
 
-    /**
-     * Test that the progress bar only traverses the page a single time per navigation.
-     */
+    /** Test that the progress bar only traverses the page a single time per navigation. */
     @Test
     @Feature({"Android-Progress-Bar"})
     @MediumTest
-    @FlakyTest(message = "https://crbug.com/1269029")
+    @DisabledTest(message = "https://crbug.com/1269029")
     public void testProgressBarTraversesScreenOnce() throws TimeoutException {
         EmbeddedTestServer testServer =
-                EmbeddedTestServer.createAndStartServer(InstrumentationRegistry.getContext());
+                EmbeddedTestServer.createAndStartServer(
+                        ApplicationProvider.getApplicationContext());
 
         final WebContents webContents = mActivityTestRule.getWebContents();
 
-        TestWebContentsObserver observer = TestThreadUtils.runOnUiThreadBlockingNoException(
-                () -> new TestWebContentsObserver(webContents));
+        TestWebContentsObserver observer =
+                ThreadUtils.runOnUiThreadBlocking(() -> new TestWebContentsObserver(webContents));
         // Start and stop load events are carefully tracked; there should be two start-stop pairs
         // that do not overlap.
         OnPageStartedHelper startHelper = observer.getOnPageStartedHelper();
@@ -105,7 +101,9 @@ public class ToolbarProgressBarIntegrationTest {
 
         // Though the page triggered two load events, the progress bar should have only appeared a
         // single time.
-        assertEquals("The progress bar should have only started once.", 1,
+        assertEquals(
+                "The progress bar should have only started once.",
+                1,
                 mProgressBar.getStartCountForTesting());
     }
 }

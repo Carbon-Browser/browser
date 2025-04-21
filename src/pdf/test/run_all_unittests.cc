@@ -1,24 +1,26 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/path_service.h"
 #include "base/test/launcher/unit_test_launcher.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_suite.h"
 #include "mojo/core/embedder/embedder.h"
 #include "mojo/public/cpp/bindings/binder_map.h"
+#include "pdf/test/test_helpers.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
 #include "third_party/blink/public/platform/scheduler/web_thread_scheduler.h"
 #include "third_party/blink/public/web/blink.h"
+#include "tools/v8_context_snapshot/buildflags.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/base/ui_base_paths.h"
 #include "v8/include/v8.h"
@@ -31,11 +33,11 @@ namespace {
 
 #if defined(V8_USE_EXTERNAL_STARTUP_DATA)
 constexpr gin::V8SnapshotFileType kSnapshotType =
-#if defined(USE_V8_CONTEXT_SNAPSHOT)
+#if BUILDFLAG(USE_V8_CONTEXT_SNAPSHOT)
     gin::V8SnapshotFileType::kWithAdditionalContext;
 #else
     gin::V8SnapshotFileType::kDefault;
-#endif  // defined(USE_V8_CONTEXT_SNAPSHOT)
+#endif  // BUILDFLAG(USE_V8_CONTEXT_SNAPSHOT)
 #endif  // defined(V8_USE_EXTERNAL_STARTUP_DATA)
 
 class BlinkPlatformForTesting : public blink::Platform {
@@ -75,13 +77,15 @@ class PdfTestSuite final : public base::TestSuite {
     platform_ = std::make_unique<BlinkPlatformForTesting>();
 
     mojo::BinderMap binders;
-    blink::Initialize(platform_.get(), &binders,
-                      platform_->GetMainThreadScheduler());
-
+    blink::InitializeWithoutIsolateForTesting(
+        platform_.get(), &binders, platform_->GetMainThreadScheduler());
+    v8::Isolate* isolate = blink::CreateMainThreadIsolate();
+    chrome_pdf::SetBlinkIsolate(isolate);
     InitializeResourceBundle();
   }
 
   void Shutdown() override {
+    chrome_pdf::SetBlinkIsolate(nullptr);
     platform_.reset();
     ui::ResourceBundle::CleanupSharedInstance();
     base::TestSuite::Shutdown();
@@ -90,12 +94,12 @@ class PdfTestSuite final : public base::TestSuite {
  private:
   void InitializeResourceBundle() {
     ui::RegisterPathProvider();
-    base::FilePath ui_test_pak_path;
-    ASSERT_TRUE(base::PathService::Get(ui::UI_TEST_PAK, &ui_test_pak_path));
+    base::FilePath ui_test_pak_path =
+        base::PathService::CheckedGet(ui::UI_TEST_PAK);
     ui::ResourceBundle::InitSharedInstanceWithPakPath(ui_test_pak_path);
 
-    base::FilePath pdf_tests_pak_path;
-    ASSERT_TRUE(base::PathService::Get(base::DIR_ASSETS, &pdf_tests_pak_path));
+    base::FilePath pdf_tests_pak_path =
+        base::PathService::CheckedGet(base::DIR_ASSETS);
     pdf_tests_pak_path =
         pdf_tests_pak_path.AppendASCII("pdf_tests_resources.pak");
     ui::ResourceBundle::GetSharedInstance().AddDataPackFromPath(

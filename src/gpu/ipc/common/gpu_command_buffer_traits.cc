@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "gpu/ipc/common/gpu_command_buffer_traits.h"
 
@@ -12,6 +17,7 @@
 #include "gpu/command_buffer/common/mailbox_holder.h"
 #include "gpu/command_buffer/common/sync_token.h"
 #include "gpu/ipc/common/vulkan_ycbcr_info.h"
+#include "ui/gfx/buffer_format_util.h"
 
 // Generate param traits write methods.
 #include "ipc/param_traits_write_macros.h"
@@ -151,6 +157,40 @@ void ParamTraits<gpu::VulkanYCbCrInfo>::Log(const param_type& p,
       static_cast<long long>(p.external_format), p.suggested_ycbcr_model,
       p.suggested_ycbcr_range, p.suggested_xchroma_offset,
       p.suggested_ychroma_offset, p.format_features);
+}
+
+void ParamTraits<gpu::GpuMemoryBufferFormatSet>::Write(base::Pickle* m,
+                                                       const param_type& p) {
+  WriteParam(m, p.ToEnumBitmask());
+}
+
+bool ParamTraits<gpu::GpuMemoryBufferFormatSet>::Read(
+    const base::Pickle* m,
+    base::PickleIterator* iter,
+    param_type* p) {
+  uint64_t bitmask = 0;
+  if (!ReadParam(m, iter, &bitmask)) {
+    return false;
+  }
+  // Check deserialized bitmask contains only bits GpuMemoryBufferFormatSet
+  // expects to be set based on largest enum it expects.
+  if (bitmask & ~gpu::GpuMemoryBufferFormatSet::All().ToEnumBitmask()) {
+    return false;
+  }
+  *p = gpu::GpuMemoryBufferFormatSet::FromEnumBitmask(bitmask);
+  return true;
+}
+
+void ParamTraits<gpu::GpuMemoryBufferFormatSet>::Log(const param_type& p,
+                                                     std::string* l) {
+  std::string str;
+  for (gfx::BufferFormat format : p) {
+    if (!str.empty()) {
+      str += "|";
+    }
+    str += gfx::BufferFormatToString(format);
+  }
+  *l += str;
 }
 
 }  // namespace IPC

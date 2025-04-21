@@ -1,13 +1,14 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/loader/link_header.h"
 
+#include <string_view>
+
 #include "base/strings/string_util.h"
 #include "components/link_header_util/link_header_util.h"
 #include "third_party/blink/public/common/web_package/signed_exchange_consts.h"
-#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/wtf/text/parsing_utilities.h"
 
 namespace blink {
@@ -19,7 +20,7 @@ static bool IsExtensionParameter(LinkHeader::LinkParameterName name) {
 }
 
 static LinkHeader::LinkParameterName ParameterNameFromString(
-    base::StringPiece name) {
+    std::string_view name) {
   if (base::EqualsCaseInsensitiveASCII(name, "rel"))
     return LinkHeader::kLinkParameterRel;
   if (base::EqualsCaseInsensitiveASCII(name, "anchor"))
@@ -60,62 +61,68 @@ static LinkHeader::LinkParameterName ParameterNameFromString(
   if (base::EqualsCaseInsensitiveASCII(name, kSignedExchangeVariantKeyHeader))
     return LinkHeader::kLinkParameterVariantKey;
 
-  if (RuntimeEnabledFeatures::BlockingAttributeEnabled() &&
-      base::EqualsCaseInsensitiveASCII(name, "blocking")) {
+  if (base::EqualsCaseInsensitiveASCII(name, "blocking")) {
     return LinkHeader::kLinkParameterBlocking;
+  }
+
+  if (base::EqualsCaseInsensitiveASCII(name, "fetchpriority")) {
+    return LinkHeader::kLinkParameterFetchPriority;
   }
 
   return LinkHeader::kLinkParameterUnknown;
 }
 
 void LinkHeader::SetValue(LinkParameterName name, const String& value) {
-  if (name == kLinkParameterRel && !rel_)
+  if (name == kLinkParameterRel && !rel_) {
     rel_ = value.DeprecatedLower();
-  else if (name == kLinkParameterAnchor)
+  } else if (name == kLinkParameterAnchor) {
     anchor_ = value;
-  else if (name == kLinkParameterCrossOrigin)
+  } else if (name == kLinkParameterCrossOrigin) {
     cross_origin_ = value;
-  else if (name == kLinkParameterAs)
+  } else if (name == kLinkParameterAs) {
     as_ = value.DeprecatedLower();
-  else if (name == kLinkParameterType)
+  } else if (name == kLinkParameterType) {
     mime_type_ = value.DeprecatedLower();
-  else if (name == kLinkParameterMedia)
+  } else if (name == kLinkParameterMedia) {
     media_ = value.DeprecatedLower();
-  else if (name == kLinkParameterNonce)
+  } else if (name == kLinkParameterNonce) {
     nonce_ = value;
-  else if (name == kLinkParameterIntegrity)
+  } else if (name == kLinkParameterIntegrity) {
     integrity_ = value;
-  else if (name == kLinkParameterImageSrcset)
+  } else if (name == kLinkParameterImageSrcset) {
     image_srcset_ = value;
-  else if (name == kLinkParameterImageSizes)
+  } else if (name == kLinkParameterImageSizes) {
     image_sizes_ = value;
-  else if (name == kLinkParameterHeaderIntegrity)
+  } else if (name == kLinkParameterHeaderIntegrity) {
     header_integrity_ = value;
-  else if (name == kLinkParameterVariants)
+  } else if (name == kLinkParameterVariants) {
     variants_ = value;
-  else if (name == kLinkParameterVariantKey)
+  } else if (name == kLinkParameterVariantKey) {
     variant_key_ = value;
-  else if (name == kLinkParameterBlocking)
+  } else if (name == kLinkParameterBlocking) {
     blocking_ = value;
-  else if (name == kLinkParameterReferrerPolicy)
+  } else if (name == kLinkParameterReferrerPolicy) {
     referrer_policy_ = value;
+  } else if (name == kLinkParameterFetchPriority) {
+    fetch_priority_ = value;
+  }
 }
 
 template <typename Iterator>
 LinkHeader::LinkHeader(Iterator begin, Iterator end) : is_valid_(true) {
   std::string url;
-  std::unordered_map<std::string, absl::optional<std::string>> params;
+  std::unordered_map<std::string, std::optional<std::string>> params;
   is_valid_ = link_header_util::ParseLinkHeaderValue(begin, end, &url, &params);
   if (!is_valid_)
     return;
 
-  url_ = String(&url[0], url.length());
+  url_ = String(url);
   for (const auto& param : params) {
     LinkParameterName name = ParameterNameFromString(param.first);
     if (!IsExtensionParameter(name) && !param.second)
       is_valid_ = false;
     std::string value = param.second.value_or("");
-    SetValue(name, String(&value[0], value.length()));
+    SetValue(name, String(value));
   }
   // According to Section 5.2 of RFC 5988, "anchor" parameters in Link headers
   // must be either respected, or the entire header must be ignored:

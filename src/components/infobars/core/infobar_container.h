@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -82,7 +82,7 @@ class InfoBarContainer : public InfoBarManager::Observer {
   virtual void PlatformSpecificInfoBarStateChanged(bool is_animating) {}
 
  private:
-  typedef std::vector<InfoBar*> InfoBars;
+  typedef std::vector<raw_ptr<InfoBar, VectorExperimental>> InfoBars;
 
   // InfoBarManager::Observer:
   void OnInfoBarAdded(InfoBar* infobar) override;

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -179,10 +179,6 @@ SerializationWarningObserverForTesting::
     ~SerializationWarningObserverForTesting() {
   DCHECK(g_serialization_warning_observer == this);
   g_serialization_warning_observer = nullptr;
-}
-
-void RecordInvalidStringDeserialization() {
-  base::UmaHistogramBoolean("Mojo.InvalidUTF8String", false);
 }
 
 }  // namespace internal

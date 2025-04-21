@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,10 +20,6 @@ class BASE_EXPORT PostTaskAndroid {
   // Routes tasks posted via the Java PostTask APIs through the C++ PostTask
   // APIs. Invoked once the C++ PostTask APIs are fully initialized.
   static void SignalNativeSchedulerReady();
-
-  // Signals that the C++ PostTask APIs have shutdown. Needed to make unit tests
-  // that repeatedly create and destroy the scheduler work.
-  static void SignalNativeSchedulerShutdownForTesting();
 };
 
 }  // namespace base

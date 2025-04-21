@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,13 @@
 // Delegate protocol to update UI with current user account avatar.
 @protocol UserAccountImageUpdateDelegate
 
-// Updates current user account avatar with supplied image.
-- (void)updateAccountImage:(UIImage*)image;
+// Sets up an avatar for signed-out state.
+- (void)setSignedOutAccountImage;
+// Updates current signed-in user account avatar with supplied image.
+// `image` and `email` must not be nil.
+- (void)updateAccountImage:(UIImage*)image
+                      name:(NSString*)name
+                     email:(NSString*)email;
 
 @end
 

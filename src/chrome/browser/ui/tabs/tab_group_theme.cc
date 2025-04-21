@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -97,6 +97,40 @@ ui::ColorId GetTabGroupDialogColorId(TabGroupColorId group_color_id) {
           {TabGroupColorId::kPurple, kColorTabGroupDialogPurple},
           {TabGroupColorId::kCyan, kColorTabGroupDialogCyan},
           {TabGroupColorId::kOrange, kColorTabGroupDialogOrange},
+      });
+
+  return group_id_map.at(group_color_id);
+}
+
+ui::ColorId GetSavedTabGroupForegroundColorId(TabGroupColorId group_color_id) {
+  static constexpr auto group_id_map =
+      base::MakeFixedFlatMap<TabGroupColorId, int>({
+          {TabGroupColorId::kGrey, kColorSavedTabGroupForegroundGrey},
+          {TabGroupColorId::kBlue, kColorSavedTabGroupForegroundBlue},
+          {TabGroupColorId::kRed, kColorSavedTabGroupForegroundRed},
+          {TabGroupColorId::kYellow, kColorSavedTabGroupForegroundYellow},
+          {TabGroupColorId::kGreen, kColorSavedTabGroupForegroundGreen},
+          {TabGroupColorId::kPink, kColorSavedTabGroupForegroundPink},
+          {TabGroupColorId::kPurple, kColorSavedTabGroupForegroundPurple},
+          {TabGroupColorId::kCyan, kColorSavedTabGroupForegroundCyan},
+          {TabGroupColorId::kOrange, kColorSavedTabGroupForegroundOrange},
+      });
+
+  return group_id_map.at(group_color_id);
+}
+
+ui::ColorId GetSavedTabGroupOutlineColorId(TabGroupColorId group_color_id) {
+  static constexpr auto group_id_map =
+      base::MakeFixedFlatMap<TabGroupColorId, int>({
+          {TabGroupColorId::kGrey, kColorSavedTabGroupOutlineGrey},
+          {TabGroupColorId::kBlue, kColorSavedTabGroupOutlineBlue},
+          {TabGroupColorId::kRed, kColorSavedTabGroupOutlineRed},
+          {TabGroupColorId::kYellow, kColorSavedTabGroupOutlineYellow},
+          {TabGroupColorId::kGreen, kColorSavedTabGroupOutlineGreen},
+          {TabGroupColorId::kPink, kColorSavedTabGroupOutlinePink},
+          {TabGroupColorId::kPurple, kColorSavedTabGroupOutlinePurple},
+          {TabGroupColorId::kCyan, kColorSavedTabGroupOutlineCyan},
+          {TabGroupColorId::kOrange, kColorSavedTabGroupOutlineOrange},
       });
 
   return group_id_map.at(group_color_id);

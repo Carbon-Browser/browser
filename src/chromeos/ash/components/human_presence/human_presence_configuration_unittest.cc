@@ -1,15 +1,16 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/components/human_presence/human_presence_configuration.h"
+
+#include <optional>
 
 #include "ash/constants/ash_features.h"
 #include "base/test/scoped_feature_list.h"
 #include "chromeos/ash/components/dbus/hps/hps_service.pb.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace hps {
 

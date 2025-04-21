@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,15 @@
 
 #include <stddef.h>
 #include <utility>
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/weak_ptr.h"
 #include "base/notreached.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "net/base/io_buffer.h"
 #include "net/http/http_byte_range.h"
 #include "net/http/http_request_headers.h"
@@ -22,7 +22,6 @@
 #include "net/http/http_response_info.h"
 #include "net/http/http_status_code.h"
 #include "net/http/http_util.h"
-#include "net/url_request/url_request.h"
 #include "services/network/public/cpp/constants.h"
 #include "services/network/public/cpp/features.h"
 #include "services/network/public/cpp/resource_request.h"
@@ -64,10 +63,8 @@ scoped_refptr<net::HttpResponseHeaders> GenerateHeaders(
       headers->SetHeader(net::HttpResponseHeaders::kContentRange,
                          content_range_header);
     }
-    if (!blob_handle->content_type().empty()) {
-      headers->SetHeader(net::HttpRequestHeaders::kContentType,
-                         blob_handle->content_type());
-    }
+    headers->SetHeader(net::HttpRequestHeaders::kContentType,
+                       blob_handle->content_type());
     if (!blob_handle->content_disposition().empty()) {
       headers->SetHeader("Content-Disposition",
                          blob_handle->content_disposition());
@@ -85,8 +82,9 @@ void BlobURLLoader::CreateAndStart(
     const network::ResourceRequest& request,
     mojo::PendingRemote<network::mojom::URLLoaderClient> client,
     std::unique_ptr<BlobDataHandle> blob_handle) {
-  new BlobURLLoader(std::move(url_loader_receiver), request.method,
-                    request.headers, std::move(client), std::move(blob_handle));
+  (new BlobURLLoader(std::move(url_loader_receiver), std::move(client),
+                     std::move(blob_handle)))
+      ->Start(request.method, request.headers);
 }
 
 // static
@@ -96,26 +94,20 @@ void BlobURLLoader::CreateAndStart(
     const net::HttpRequestHeaders& headers,
     mojo::PendingRemote<network::mojom::URLLoaderClient> client,
     std::unique_ptr<BlobDataHandle> blob_handle) {
-  new BlobURLLoader(std::move(url_loader_receiver), method, headers,
-                    std::move(client), std::move(blob_handle));
+  (new BlobURLLoader(std::move(url_loader_receiver), std::move(client),
+                     std::move(blob_handle)))
+      ->Start(method, headers);
 }
 
 BlobURLLoader::~BlobURLLoader() = default;
 
 BlobURLLoader::BlobURLLoader(
     mojo::PendingReceiver<network::mojom::URLLoader> url_loader_receiver,
-    const std::string& method,
-    const net::HttpRequestHeaders& headers,
     mojo::PendingRemote<network::mojom::URLLoaderClient> client,
     std::unique_ptr<BlobDataHandle> blob_handle)
     : receiver_(this, std::move(url_loader_receiver)),
       client_(std::move(client)),
-      blob_handle_(std::move(blob_handle)) {
-  // PostTask since it might destruct.
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(&BlobURLLoader::Start,
-                                weak_factory_.GetWeakPtr(), method, headers));
-}
+      blob_handle_(std::move(blob_handle)) {}
 
 void BlobURLLoader::Start(const std::string& method,
                           const net::HttpRequestHeaders& headers) {
@@ -132,11 +124,12 @@ void BlobURLLoader::Start(const std::string& method,
     return;
   }
 
-  std::string range_header;
-  if (headers.GetHeader(net::HttpRequestHeaders::kRange, &range_header)) {
+  if (std::optional<std::string> range_header =
+          headers.GetHeader(net::HttpRequestHeaders::kRange);
+      range_header) {
     // We only care about "Range" header here.
     std::vector<net::HttpByteRange> ranges;
-    if (net::HttpUtil::ParseRangeHeader(range_header, &ranges)) {
+    if (net::HttpUtil::ParseRangeHeader(range_header.value(), &ranges)) {
       if (ranges.size() == 1) {
         byte_range_set_ = true;
         byte_range_ = ranges[0];
@@ -174,7 +167,7 @@ void BlobURLLoader::FollowRedirect(
     const std::vector<std::string>& removed_headers,
     const net::HttpRequestHeaders& modified_headers,
     const net::HttpRequestHeaders& modified_cors_exempt_headers,
-    const absl::optional<GURL>& new_url) {
+    const std::optional<GURL>& new_url) {
   NOTREACHED();
 }
 
@@ -195,11 +188,11 @@ MojoBlobReader::Delegate::RequestSideData BlobURLLoader::DidCalculateSize(
     return REQUEST_SIDE_DATA;
   }
 
-  HeadersCompleted(status_code, content_size, absl::nullopt);
+  HeadersCompleted(status_code, content_size, std::nullopt);
   return DONT_REQUEST_SIDE_DATA;
 }
 
-void BlobURLLoader::DidReadSideData(absl::optional<mojo_base::BigBuffer> data) {
+void BlobURLLoader::DidReadSideData(std::optional<mojo_base::BigBuffer> data) {
   HeadersCompleted(net::HTTP_OK, total_size_, std::move(data));
 }
 
@@ -213,7 +206,7 @@ void BlobURLLoader::OnComplete(net::Error error_code,
 void BlobURLLoader::HeadersCompleted(
     net::HttpStatusCode status_code,
     uint64_t content_size,
-    absl::optional<mojo_base::BigBuffer> metadata) {
+    std::optional<mojo_base::BigBuffer> metadata) {
   auto response = network::mojom::URLResponseHead::New();
   response->content_length = 0;
   if (status_code == net::HTTP_OK || status_code == net::HTTP_PARTIAL_CONTENT)
@@ -232,11 +225,9 @@ void BlobURLLoader::HeadersCompleted(
   // services/network/url_loader.h
 
   client_->OnReceiveResponse(std::move(response),
-                             std::move(response_body_consumer_handle_));
+                             std::move(response_body_consumer_handle_),
+                             std::move(metadata));
   sent_headers_ = true;
-
-  if (metadata.has_value())
-    client_->OnReceiveCachedMetadata(std::move(metadata.value()));
 }
 
 }  // namespace storage

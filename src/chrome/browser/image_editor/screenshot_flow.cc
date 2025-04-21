@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/supports_user_data.h"
@@ -18,6 +18,7 @@
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/cursor/cursor.h"
 #include "ui/compositor/paint_recorder.h"
+#include "ui/events/event_target.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/rect.h"
@@ -124,9 +125,16 @@ void ScreenshotFlow::RemoveUIOverlay() {
   event_capture_mac_.reset();
 #else
   const gfx::NativeWindow& native_window = web_contents_->GetNativeView();
+#if BUILDFLAG(IS_WIN)
+  // This handles cases where the overlay is removed while a drag is still in
+  // progress, including if ScreenshotFlow is destroyed. It is safe to call
+  // ReleaseCapture() even if the capture has not been set or has already been
+  // released.
+  native_window->ReleaseCapture();
+#endif  // BUILDFLAG(IS_WIN)
   event_capture_.Reset();
   ui::Layer* content_layer = native_window->layer();
-#endif
+#endif  // else
 
   content_layer->Remove(screen_capture_layer_.get());
 
@@ -163,22 +171,11 @@ void ScreenshotFlow::CaptureAndRunScreenshotCompleteCallback(
   }
 
   gfx::Rect bounds = web_contents_->GetViewBounds();
-#if BUILDFLAG(IS_MAC)
-  const gfx::NativeView& native_view = web_contents_->GetContentNativeView();
-  gfx::Image img;
-  bool rval = ui::GrabViewSnapshot(native_view, region, &img);
-  // If |img| is empty, clients should treat it as a canceled action, but
-  // we have a DCHECK for development as we expected this call to succeed.
-  DCHECK(rval);
-  RunScreenshotCompleteCallback(result_code, bounds, img);
-#else
-  ui::GrabWindowSnapshotAsyncCallback screenshot_callback =
+  ui::GrabSnapshotImageCallback screenshot_callback =
       base::BindOnce(&ScreenshotFlow::RunScreenshotCompleteCallback, weak_this_,
                      result_code, bounds);
-  const gfx::NativeWindow& native_window = web_contents_->GetNativeView();
-  ui::GrabWindowSnapshotAsync(native_window, region,
-                              std::move(screenshot_callback));
-#endif
+  ui::GrabViewSnapshot(web_contents_->GetNativeView(), region,
+                       std::move(screenshot_callback));
 }
 
 void ScreenshotFlow::CancelCapture() {
@@ -188,7 +185,7 @@ void ScreenshotFlow::CancelCapture() {
 }
 
 void ScreenshotFlow::OnKeyEvent(ui::KeyEvent* event) {
-  if (event->type() == ui::ET_KEY_PRESSED &&
+  if (event->type() == ui::EventType::kKeyPressed &&
       event->key_code() == ui::VKEY_ESCAPE) {
     event->StopPropagation();
     CompleteCapture(ScreenshotCaptureResultCode::USER_ESCAPE_EXIT, gfx::Rect());
@@ -219,11 +216,11 @@ void ScreenshotFlow::OnMouseEvent(ui::MouseEvent* event) {
   location.set_y(location.y() + (widget_bounds.y() - web_contents_bounds.y()));
 #endif
   switch (event->type()) {
-    case ui::ET_MOUSE_MOVED:
+    case ui::EventType::kMouseMoved:
       SetCursor(ui::mojom::CursorType::kCross);
       event->SetHandled();
       break;
-    case ui::ET_MOUSE_PRESSED:
+    case ui::EventType::kMousePressed:
       if (event->IsOnlyLeftMouseButton()) {
         // Don't capture initial clicks on browser ui outside the webcontents.
         if (location.x() < 0 || location.y() < 0 ||
@@ -231,34 +228,34 @@ void ScreenshotFlow::OnMouseEvent(ui::MouseEvent* event) {
             location.y() > web_contents_bounds.height()) {
           return;
         }
-        is_dragging_ = true;
+        SetIsDragging(true);
         drag_start_ = location;
         drag_end_ = location;
         event->SetHandled();
       }
       break;
-    case ui::ET_MOUSE_DRAGGED:
+    case ui::EventType::kMouseDragged:
       if (event->IsOnlyLeftMouseButton() && is_dragging_) {
         drag_end_ = location;
         RequestRepaint(gfx::Rect());
         event->SetHandled();
       }
       break;
-    case ui::ET_MOUSE_RELEASED:
+    case ui::EventType::kMouseReleased:
       if ((capture_mode_ == CaptureMode::SELECTION_RECTANGLE ||
            capture_mode_ == CaptureMode::SELECTION_ELEMENT) &&
           is_dragging_) {
-        is_dragging_ = false;
+        SetIsDragging(false);
         AttemptRegionCapture(web_contents_bounds);
         event->SetHandled();
       }
       break;
     // This event type is never called on Mac.
-    case ui::ET_MOUSEWHEEL:
+    case ui::EventType::kMousewheel:
       if ((capture_mode_ == CaptureMode::SELECTION_RECTANGLE ||
            capture_mode_ == CaptureMode::SELECTION_ELEMENT) &&
           event->AsMouseWheelEvent()->y_offset() > 0 && is_dragging_) {
-        is_dragging_ = false;
+        SetIsDragging(false);
         AttemptRegionCapture(web_contents_bounds);
         event->SetHandled();
       }
@@ -271,15 +268,16 @@ void ScreenshotFlow::OnMouseEvent(ui::MouseEvent* event) {
 void ScreenshotFlow::OnScrollEvent(ui::ScrollEvent* event) {
   // A single tap can create a scroll event, so ignore scroll starts and
   // cancels but complete capture when scrolls actually occur.
-  if (event->type() == ui::EventType::ET_SCROLL_FLING_START ||
-      event->type() == ui::EventType::ET_SCROLL_FLING_CANCEL)
+  if (event->type() == ui::EventType::kScrollFlingStart ||
+      event->type() == ui::EventType::kScrollFlingCancel) {
     return;
+  }
 
   gfx::Rect web_contents_bounds = web_contents_->GetViewBounds();
   if ((capture_mode_ == CaptureMode::SELECTION_RECTANGLE ||
        capture_mode_ == CaptureMode::SELECTION_ELEMENT) &&
       event->y_offset() > 0 && is_dragging_) {
-    is_dragging_ = false;
+    SetIsDragging(false);
     AttemptRegionCapture(web_contents_bounds);
     event->SetHandled();
   }
@@ -381,8 +379,7 @@ void ScreenshotFlow::SetCursor(ui::mojom::CursorType cursor_type) {
   }
 
 #if BUILDFLAG(IS_MAC)
-  if (cursor_type == ui::mojom::CursorType::kCross &&
-      lens::features::kRegionSearchMacCursorFix.Get()) {
+  if (cursor_type == ui::mojom::CursorType::kCross) {
     EventCaptureMac::SetCrossCursor();
     return;
   }
@@ -394,6 +391,18 @@ void ScreenshotFlow::SetCursor(ui::mojom::CursorType cursor_type) {
     ui::Cursor cursor(cursor_type);
     host->SetCursor(cursor);
   }
+}
+
+void ScreenshotFlow::SetIsDragging(bool value) {
+  is_dragging_ = value;
+#if BUILDFLAG(IS_WIN)
+  const gfx::NativeWindow& native_window = web_contents_->GetNativeView();
+  if (value) {
+    native_window->SetCapture();
+  } else {
+    native_window->ReleaseCapture();
+  }
+#endif
 }
 
 bool ScreenshotFlow::IsCaptureModeActive() {

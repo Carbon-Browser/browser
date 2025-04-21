@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,11 +55,10 @@ class ExceptionHandler {
   // Safely runs an `extension_callback` with the provided `callback_arguments`,
   // handling any exceptions that arise. If an exception is found, prefixes the
   // exception with `message`.
-  void RunExtensionCallback(
-      v8::Local<v8::Context> context,
-      v8::Local<v8::Function> extension_callback,
-      std::vector<v8::Local<v8::Value>> callback_arguments,
-      const std::string& message);
+  void RunExtensionCallback(v8::Local<v8::Context> context,
+                            v8::Local<v8::Function> extension_callback,
+                            v8::LocalVector<v8::Value> callback_arguments,
+                            const std::string& message);
 
  private:
   // Returns the custom handler for the given |context|, or an empty handle if

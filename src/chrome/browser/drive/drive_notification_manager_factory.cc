@@ -1,30 +1,39 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/drive/drive_notification_manager_factory.h"
 
+#include <stdint.h>
+
 #include "chrome/browser/invalidation/profile_invalidation_provider_factory.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/sync/sync_service_factory.h"
 #include "components/drive/drive_notification_manager.h"
-#include "components/invalidation/impl/profile_invalidation_provider.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
-#include "components/sync/base/command_line_switches.h"
+#include "components/invalidation/invalidation_listener.h"
+#include "components/invalidation/profile_invalidation_provider.h"
+#include "components/invalidation/public/invalidation_service.h"
 
 namespace drive {
 namespace {
 
-constexpr char kDriveFcmSenderId[] = "947318989803";
+constexpr int64_t kDriveFcmSenderId = 947318989803;
 
 invalidation::InvalidationService* GetInvalidationService(Profile* profile) {
-  if (!invalidation::ProfileInvalidationProviderFactory::GetForProfile(
-          profile)) {
+  auto* profile_invalidation_factory =
+      invalidation::ProfileInvalidationProviderFactory::GetForProfile(profile);
+  if (!profile_invalidation_factory) {
     return nullptr;
   }
-  return invalidation::ProfileInvalidationProviderFactory::GetForProfile(
-             profile)
-      ->GetInvalidationServiceForCustomSender(kDriveFcmSenderId);
+  auto invalidation_service_or_listener =
+      profile_invalidation_factory->GetInvalidationServiceOrListener(
+          kDriveFcmSenderId);
+  CHECK(std::holds_alternative<invalidation::InvalidationService*>(
+      invalidation_service_or_listener))
+      << "Drive does not support InvalidationListener and must be used with "
+         "InvalidationService";
+
+  return std::get<invalidation::InvalidationService*>(
+      invalidation_service_or_listener);
 }
 
 }  // namespace
@@ -38,15 +47,12 @@ DriveNotificationManagerFactory::FindForBrowserContext(
 }
 
 // static
-DriveNotificationManager*
-DriveNotificationManagerFactory::GetForBrowserContext(
+DriveNotificationManager* DriveNotificationManagerFactory::GetForBrowserContext(
     content::BrowserContext* context) {
-  if (!syncer::IsSyncAllowedByFlag())
-    return NULL;
   if (!GetInvalidationService(Profile::FromBrowserContext(context))) {
     // Do not create a DriveNotificationManager for |context|s that do not
     // support invalidation.
-    return NULL;
+    return nullptr;
   }
 
   return static_cast<DriveNotificationManager*>(
@@ -56,22 +62,31 @@ DriveNotificationManagerFactory::GetForBrowserContext(
 // static
 DriveNotificationManagerFactory*
 DriveNotificationManagerFactory::GetInstance() {
-  return base::Singleton<DriveNotificationManagerFactory>::get();
+  static base::NoDestructor<DriveNotificationManagerFactory> instance;
+  return instance.get();
 }
 
 DriveNotificationManagerFactory::DriveNotificationManagerFactory()
-    : BrowserContextKeyedServiceFactory(
-        "DriveNotificationManager",
-        BrowserContextDependencyManager::GetInstance()) {
-  DependsOn(SyncServiceFactory::GetInstance());
+    : ProfileKeyedServiceFactory(
+          "DriveNotificationManager",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/40257657): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/41488885): Check if this service is needed for
+              // Ash Internals.
+              .WithAshInternals(ProfileSelection::kOriginalOnly)
+              .Build()) {
   DependsOn(invalidation::ProfileInvalidationProviderFactory::GetInstance());
 }
 
-DriveNotificationManagerFactory::~DriveNotificationManagerFactory() {}
+DriveNotificationManagerFactory::~DriveNotificationManagerFactory() = default;
 
-KeyedService* DriveNotificationManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+DriveNotificationManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new DriveNotificationManager(
+  return std::make_unique<DriveNotificationManager>(
       GetInvalidationService(Profile::FromBrowserContext(context)));
 }
 

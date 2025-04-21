@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,6 +43,8 @@ TEST(WebSandboxFlagsTest, All) {
        {~WebSandboxFlags::kTopNavigationByUserActivation, ""}},
       {"allow-top-navigation-to-custom-protocols",
        {~WebSandboxFlags::kTopNavigationToCustomProtocols, ""}},
+      {"allow-same-site-none-cookies",
+       {~WebSandboxFlags::kAllowSameSiteNoneCookies, ""}},
 
       // Two tokens:
       {"allow-downloads allow-forms",

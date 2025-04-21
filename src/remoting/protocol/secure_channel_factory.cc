@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,19 +6,17 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "remoting/protocol/authenticator.h"
 #include "remoting/protocol/channel_authenticator.h"
 #include "remoting/protocol/p2p_stream_socket.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 SecureChannelFactory::SecureChannelFactory(
     StreamChannelFactory* channel_factory,
     Authenticator* authenticator)
-    : channel_factory_(channel_factory),
-      authenticator_(authenticator) {
+    : channel_factory_(channel_factory), authenticator_(authenticator) {
   DCHECK_EQ(authenticator_->state(), Authenticator::ACCEPTED);
 }
 
@@ -35,8 +33,7 @@ void SecureChannelFactory::CreateChannel(const std::string& name,
                            base::Unretained(this), name, std::move(callback)));
 }
 
-void SecureChannelFactory::CancelChannelCreation(
-    const std::string& name) {
+void SecureChannelFactory::CancelChannelCreation(const std::string& name) {
   auto it = channel_authenticators_.find(name);
   if (it == channel_authenticators_.end()) {
     channel_factory_->CancelChannelCreation(name);
@@ -79,5 +76,4 @@ void SecureChannelFactory::OnSecureChannelCreated(
   std::move(callback).Run(std::move(socket));
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,11 @@
 #define CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_EXTENSION_PROVIDER_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
+#include "base/memory/weak_ptr.h"
+#include "base/scoped_observation.h"
 #include "chrome/browser/ash/file_system_provider/icon_set.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_info.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_interface.h"
@@ -21,29 +24,19 @@ namespace extensions {
 class ExtensionRegistry;
 }  // namespace extensions
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 
-// Holds information for a providing extension.
-struct ProvidingExtensionInfo {
-  ProvidingExtensionInfo();
-  ~ProvidingExtensionInfo();
-
-  extensions::ExtensionId extension_id;
-  std::string name;
-  extensions::FileSystemProviderCapabilities capabilities;
-};
+class RequestDispatcher;
+class ODFSMetrics;
 
 class ExtensionProvider : public ProviderInterface,
                           public apps::AppRegistryCache::Observer {
  public:
   ExtensionProvider(Profile* profile,
-                    const extensions::ExtensionId& extension_id,
-                    const ProvidingExtensionInfo& info);
-  ExtensionProvider(Profile* profile,
                     ProviderId id,
                     Capabilities capabilities,
-                    std::string name);
+                    std::string name,
+                    std::optional<IconSet> icon_set);
 
   ~ExtensionProvider() override;
 
@@ -56,12 +49,14 @@ class ExtensionProvider : public ProviderInterface,
   // ProviderInterface overrides.
   std::unique_ptr<ProvidedFileSystemInterface> CreateProvidedFileSystem(
       Profile* profile,
-      const ProvidedFileSystemInfo& file_system_info) override;
+      const ProvidedFileSystemInfo& file_system_info,
+      CacheManager* cache_manager) override;
   const Capabilities& GetCapabilities() const override;
   const ProviderId& GetId() const override;
   const std::string& GetName() const override;
   const IconSet& GetIconSet() const override;
-  bool RequestMount(Profile* profile) override;
+  RequestManager* GetRequestManager() override;
+  bool RequestMount(Profile* profile, RequestMountCallback callback) override;
 
  private:
   // This method is only partially functional since non-app extensions are not
@@ -77,9 +72,17 @@ class ExtensionProvider : public ProviderInterface,
   Capabilities capabilities_;
   std::string name_;
   IconSet icon_set_;
+  std::unique_ptr<RequestDispatcher> request_dispatcher_;
+  std::unique_ptr<ODFSMetrics> odfs_metrics_;
+  std::unique_ptr<RequestManager> request_manager_;
+
+  base::ScopedObservation<apps::AppRegistryCache,
+                          apps::AppRegistryCache::Observer>
+      app_registry_cache_observer_{this};
+
+  base::WeakPtrFactory<ExtensionProvider> weak_ptr_factory_{this};
 };
 
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider
 
 #endif  // CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_EXTENSION_PROVIDER_H_

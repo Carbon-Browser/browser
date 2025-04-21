@@ -1,24 +1,35 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/network/public/cpp/client_hints.h"
 
+#include <algorithm>
+#include <optional>
 #include <utility>
 #include <vector>
 
-#include "base/cxx17_backports.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/no_destructor.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_tokenizer.h"
 #include "base/strings/string_util.h"
+#include "base/time/time.h"
 #include "net/http/structured_headers.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
 namespace network {
+
+const char kPrefersColorSchemeDark[] = "dark";
+const char kPrefersColorSchemeLight[] = "light";
+
+const char kPrefersReducedMotionNoPreference[] = "no-preference";
+const char kPrefersReducedMotionReduce[] = "reduce";
+
+const char kPrefersReducedTransparencyNoPreference[] = "no-preference";
+const char kPrefersReducedTransparencyReduce[] = "reduce";
 
 ClientHintToNameMap MakeClientHintToNameMap() {
   return {
@@ -43,7 +54,6 @@ ClientHintToNameMap MakeClientHintToNameMap() {
       {network::mojom::WebClientHintsType::kPrefersColorScheme,
        "sec-ch-prefers-color-scheme"},
       {network::mojom::WebClientHintsType::kUABitness, "sec-ch-ua-bitness"},
-      {network::mojom::WebClientHintsType::kUAReduced, "sec-ch-ua-reduced"},
       {network::mojom::WebClientHintsType::kViewportHeight,
        "sec-ch-viewport-height"},
       {network::mojom::WebClientHintsType::kDeviceMemory,
@@ -54,9 +64,14 @@ ClientHintToNameMap MakeClientHintToNameMap() {
        "sec-ch-viewport-width"},
       {network::mojom::WebClientHintsType::kUAFullVersionList,
        "sec-ch-ua-full-version-list"},
-      {network::mojom::WebClientHintsType::kFullUserAgent, "sec-ch-ua-full"},
       {network::mojom::WebClientHintsType::kUAWoW64, "sec-ch-ua-wow64"},
       {network::mojom::WebClientHintsType::kSaveData, "save-data"},
+      {network::mojom::WebClientHintsType::kPrefersReducedMotion,
+       "sec-ch-prefers-reduced-motion"},
+      {network::mojom::WebClientHintsType::kUAFormFactors,
+       "sec-ch-ua-form-factors"},
+      {network::mojom::WebClientHintsType::kPrefersReducedTransparency,
+       "sec-ch-prefers-reduced-transparency"},
   };
 }
 
@@ -95,23 +110,23 @@ const DecodeMap& GetDecodeMap() {
 
 }  // namespace
 
-absl::optional<std::vector<network::mojom::WebClientHintsType>>
+std::optional<std::vector<network::mojom::WebClientHintsType>>
 ParseClientHintsHeader(const std::string& header) {
   // Accept-CH is an sh-list of tokens; see:
   // https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-header-structure-19#section-3.1
-  absl::optional<net::structured_headers::List> maybe_list =
+  std::optional<net::structured_headers::List> maybe_list =
       net::structured_headers::ParseList(header);
   if (!maybe_list.has_value())
-    return absl::nullopt;
+    return std::nullopt;
 
   // Standard validation rules: we want a list of tokens, so this better
   // only have tokens (but params are OK!)
   for (const auto& list_item : maybe_list.value()) {
     // Make sure not a nested list.
     if (list_item.member.size() != 1u)
-      return absl::nullopt;
+      return std::nullopt;
     if (!list_item.member[0].item.is_token())
-      return absl::nullopt;
+      return std::nullopt;
   }
 
   std::vector<network::mojom::WebClientHintsType> result;
@@ -141,48 +156,11 @@ const ClientHintToDelegatedThirdPartiesHeader
 ParseClientHintToDelegatedThirdPartiesHeader(const std::string& header,
                                              MetaCHType type) {
   const DecodeMap& decode_map = GetDecodeMap();
-  ClientHintToDelegatedThirdPartiesHeader result;
 
   switch (type) {
     case MetaCHType::HttpEquivAcceptCH: {
       // ParseClientHintsHeader should have been called instead.
       NOTREACHED();
-      return ClientHintToDelegatedThirdPartiesHeader();
-    }
-    case MetaCHType::NameAcceptCH: {
-      // Accept-CH is an sh-dictionary of tokens to origins; see:
-      // https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-header-structure-19#section-3.2
-      absl::optional<net::structured_headers::Dictionary> maybe_dictionary =
-          // We need to lower-case the string here or dictionary parsing refuses
-          // to see the keys.
-          net::structured_headers::ParseDictionary(base::ToLowerASCII(header));
-      if (!maybe_dictionary.has_value())
-        return ClientHintToDelegatedThirdPartiesHeader();
-
-      // Now convert those to actual hint enums.
-      for (const auto& dictionary_pair : maybe_dictionary.value()) {
-        std::vector<url::Origin> delegates;
-        for (const auto& member : dictionary_pair.second.member) {
-          if (!member.item.is_token())
-            continue;
-          const GURL maybe_gurl = GURL(member.item.GetString());
-          if (!maybe_gurl.is_valid()) {
-            result.had_invalid_origins = true;
-            continue;
-          }
-          url::Origin maybe_origin = url::Origin::Create(maybe_gurl);
-          if (maybe_origin.opaque()) {
-            result.had_invalid_origins = true;
-            continue;
-          }
-          delegates.push_back(maybe_origin);
-        }
-        const std::string& client_hint_string = dictionary_pair.first;
-        auto iter = decode_map.find(client_hint_string);
-        if (iter != decode_map.end())
-          result.map.insert(std::make_pair(iter->second, delegates));
-      }  // for dictionary_pair
-      return result;
     }
     case MetaCHType::HttpEquivDelegateCH: {
       // We're building a scoped down version of
@@ -220,6 +198,16 @@ ParseClientHintToDelegatedThirdPartiesHeader(const std::string& header,
       return result;
     }
   }
+}
+
+// static
+void LogClientHintsPersistenceMetrics(
+    const base::TimeTicks& persistence_started,
+    std::size_t hints_stored) {
+  base::UmaHistogramTimes("ClientHints.StoreLatency",
+                          base::TimeTicks::Now() - persistence_started);
+  base::UmaHistogramExactLinear("ClientHints.UpdateEventCount", 1, 2);
+  base::UmaHistogramCounts100("ClientHints.UpdateSize", hints_stored);
 }
 
 }  // namespace network

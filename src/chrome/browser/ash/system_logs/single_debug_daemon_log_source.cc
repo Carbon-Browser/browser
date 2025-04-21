@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "chromeos/dbus/debug_daemon/debug_daemon_client.h"
+#include "base/functional/bind.h"
+#include "chromeos/ash/components/dbus/debug_daemon/debug_daemon_client.h"
 #include "content/public/browser/browser_thread.h"
 
 namespace system_logs {
@@ -31,7 +31,6 @@ std::string GetLogName(SupportedSource source_type) {
       return "uptime";
   }
   NOTREACHED();
-  return "";
 }
 
 }  // namespace
@@ -40,13 +39,13 @@ SingleDebugDaemonLogSource::SingleDebugDaemonLogSource(
     SupportedSource source_type)
     : SystemLogsSource(GetLogName(source_type)) {}
 
-SingleDebugDaemonLogSource::~SingleDebugDaemonLogSource() {}
+SingleDebugDaemonLogSource::~SingleDebugDaemonLogSource() = default;
 
 void SingleDebugDaemonLogSource::Fetch(SysLogsSourceCallback callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   DCHECK(!callback.is_null());
 
-  chromeos::DebugDaemonClient::Get()->GetLog(
+  ash::DebugDaemonClient::Get()->GetLog(
       source_name(),
       base::BindOnce(&SingleDebugDaemonLogSource::OnFetchComplete,
                      weak_ptr_factory_.GetWeakPtr(), source_name(),
@@ -56,7 +55,7 @@ void SingleDebugDaemonLogSource::Fetch(SysLogsSourceCallback callback) {
 void SingleDebugDaemonLogSource::OnFetchComplete(
     const std::string& log_name,
     SysLogsSourceCallback callback,
-    absl::optional<std::string> result) const {
+    std::optional<std::string> result) const {
   // |result| and |response| are the same type, but |result| is passed in from
   // DebugDaemonClient, which does not use the SystemLogsResponse alias.
   auto response = std::make_unique<SystemLogsResponse>();

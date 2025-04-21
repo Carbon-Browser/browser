@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,15 @@
 #include <string>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
+#include "base/macros/uniquify.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/task/task_runner_util.h"
+#include "base/thread_annotations.h"
 #include "content/common/content_export.h"
+#include "content/public/browser/browser_task_traits.h"
 
 #if defined(UNIT_TEST)
 #include "base/logging.h"
@@ -23,17 +25,35 @@
 
 namespace content {
 
-// TODO(1026641): Include browser_task_traits.h directly when the migration to
-// Get(UI|IO)ThreadTaskrunner() is complete and the cyclic dependency of
-// browser_task_traits.h on BrowserThread::ID is broken.
-class BrowserTaskTraits;
-
-// Use DCHECK_CURRENTLY_ON(BrowserThread::ID) to assert that a function can only
+// Use DCHECK_CURRENTLY_ON(BrowserThread::ID) to DCHECK that a function can only
 // be called on the named BrowserThread.
-#define DCHECK_CURRENTLY_ON(thread_identifier)                      \
-  (DCHECK(::content::BrowserThread::CurrentlyOn(thread_identifier)) \
-   << ::content::BrowserThread::GetDCheckCurrentlyOnErrorMessage(   \
-          thread_identifier))
+#define DCHECK_CURRENTLY_ON(thread_identifier)                                \
+  ::content::internal::ScopedValidateBrowserThreadDebugChecker BASE_UNIQUIFY( \
+      scoped_validate_browser_thread_dchecker_)(thread_identifier)
+
+// Use CHECK_CURRENTLY_ON(BrowserThread::ID) to CHECK that a function can only
+// be called on the named BrowserThread.
+#define CHECK_CURRENTLY_ON(thread_identifier, ...)                       \
+  ::content::internal::ScopedValidateBrowserThreadChecker BASE_UNIQUIFY( \
+      scoped_validate_browser_thread_checker_)(                          \
+      thread_identifier __VA_OPT__(, ) __VA_ARGS__)
+
+// GUARDED_BY_BROWSER_THREAD() enforces that a member variable is only accessed
+// from a scope that invokes DCHECK_CURRENTLY_ON() or CHECK_CURRENTLY_ON() or
+// from a function annotated with VALID_BROWSER_THREAD_REQUIRED(). The code will
+// not compile if the member variable is accessed and these conditions are not
+// met.
+#define GUARDED_BY_BROWSER_THREAD(thread_identifier) \
+  GUARDED_BY(::content::internal::GetBrowserThreadChecker(thread_identifier))
+
+// VALID_CONTEXT_REQUIRED() enforces that a member function is only accessed
+// from a scope that invokes DCHECK_CURRENTLY_ON() or CHECK_CURRENTLY_ON() or
+// from another function annotated with VALID_BROWSER_THREAD_REQUIRED(). The
+// code will not compile if the member function is accessed and these conditions
+// are not met.
+#define VALID_BROWSER_THREAD_REQUIRED(thread_identifier) \
+  EXCLUSIVE_LOCKS_REQUIRED(                              \
+      ::content::internal::GetBrowserThreadChecker(thread_identifier))
 
 // The main entry point to post tasks to the UI thread. Tasks posted with the
 // same |traits| will run in posting order (i.e. according to the
@@ -44,16 +64,12 @@ class BrowserTaskTraits;
 //
 // In unit tests, there must be a content::BrowserTaskEnvironment in scope for
 // this API to be available.
-//
-// TODO(1026641): Make default traits |{}| the default param when it's possible
-// to include browser_task_traits.h in this file (see note above on the
-// BrowserTaskTraits fwd-decl).
 CONTENT_EXPORT scoped_refptr<base::SingleThreadTaskRunner>
-GetUIThreadTaskRunner(const BrowserTaskTraits& traits);
+GetUIThreadTaskRunner(const BrowserTaskTraits& traits = {});
 
 // The BrowserThread::IO counterpart to GetUIThreadTaskRunner().
 CONTENT_EXPORT scoped_refptr<base::SingleThreadTaskRunner>
-GetIOThreadTaskRunner(const BrowserTaskTraits& traits);
+GetIOThreadTaskRunner(const BrowserTaskTraits& traits = {});
 
 ///////////////////////////////////////////////////////////////////////////////
 // BrowserThread
@@ -70,6 +86,11 @@ class CONTENT_EXPORT BrowserThread {
     // This is the thread that processes non-blocking I/O, i.e. IPC and network.
     // Blocking I/O should happen in base::ThreadPool. It is joined on shutdown
     // (and thus any task posted to it may block shutdown).
+    //
+    // The name is admittedly confusing, as the IO thread is not for blocking
+    // I/O like calling base::File::Read. "The highly responsive, non-blocking
+    // I/O thread for IPC" is more accurate but too long for an enum name. See
+    // docs/transcripts/wuwt-e08-processes.md at 44:20 for more history.
     IO,
 
     // NOTE: do not add new threads here. Instead you should just use
@@ -88,8 +109,8 @@ class CONTENT_EXPORT BrowserThread {
   // its associated thread. If you already have a task runner bound to a
   // BrowserThread you should use its SequencedTaskRunner::DeleteSoon() member
   // method.
-  // TODO(1026641): Get rid of the last few callers to these in favor of an
-  // explicit call to content::GetUIThreadTaskRunner({})->DeleteSoon(...).
+  // TODO(crbug.com/40108370): Get rid of the last few callers to these in favor
+  // of an explicit call to GetUIThreadTaskRunner({})->DeleteSoon(...).
 
   template <class T>
   static bool DeleteSoon(ID identifier,
@@ -118,8 +139,8 @@ class CONTENT_EXPORT BrowserThread {
   //
   // This is useful when a task needs to run on |task_runner| (for thread-safety
   // reasons) but should be delayed until after critical phases (e.g. startup).
-  // TODO(crbug.com/793069): Add support for sequence-funneling and remove this
-  // method.
+  // TODO(crbug.com/40553790): Add support for sequence-funneling and remove
+  // this method.
   static void PostBestEffortTask(const base::Location& from_here,
                                  scoped_refptr<base::TaskRunner> task_runner,
                                  base::OnceClosure task);
@@ -142,10 +163,9 @@ class CONTENT_EXPORT BrowserThread {
   // UI), and thread switching delays can mean that the final UI tasks executes
   // before the IO task's stack unwinds. This would lead to the object
   // destructing on the IO thread, which often is not what you want (i.e. to
-  // unregister from NotificationService, to notify other objects on the
-  // creating thread etc). Note: see base::OnTaskRunnerDeleter and
-  // base::RefCountedDeleteOnSequence to bind to SequencedTaskRunner instead of
-  // specific BrowserThreads.
+  // notify other objects on the creating thread etc). Note: see
+  // base::OnTaskRunnerDeleter and base::RefCountedDeleteOnSequence to bind to
+  // SequencedTaskRunner instead of specific BrowserThreads.
   template <ID thread>
   struct DeleteOnThread {
     template <typename T>
@@ -190,7 +210,7 @@ class CONTENT_EXPORT BrowserThread {
   struct DeleteOnIOThread : public DeleteOnThread<IO> {};
 
   // Returns an appropriate error message for when DCHECK_CURRENTLY_ON() fails.
-  static std::string GetDCheckCurrentlyOnErrorMessage(ID expected);
+  static std::string GetCurrentlyOnErrorMessage(ID expected);
 
   // Runs all pending tasks for the given thread. Tasks posted after this method
   // is called (in particular any task posted from within any of the pending
@@ -214,6 +234,56 @@ class CONTENT_EXPORT BrowserThread {
   friend class BrowserThreadImpl;
   BrowserThread() = default;
 };
+
+namespace internal {
+
+class THREAD_ANNOTATION_ATTRIBUTE__(capability("BrowserThread checker"))
+    CONTENT_EXPORT BrowserThreadChecker {
+ public:
+  [[nodiscard]] bool CalledOnValidBrowserThread(
+      BrowserThread::ID thread_identifier) const;
+};
+
+// Returns the global BrowserThreadChecker associated with `thread_identifier`.
+CONTENT_EXPORT const BrowserThreadChecker& GetBrowserThreadChecker(
+    BrowserThread::ID thread_identifier);
+
+// CHECK version.
+class CONTENT_EXPORT SCOPED_LOCKABLE ScopedValidateBrowserThreadChecker {
+ public:
+  explicit ScopedValidateBrowserThreadChecker(
+      BrowserThread::ID thread_identifier,
+      base::NotFatalUntil fatal_milestone =
+          base::NotFatalUntil::NoSpecifiedMilestoneInternal)
+      EXCLUSIVE_LOCK_FUNCTION(GetBrowserThreadChecker(thread_identifier));
+  ~ScopedValidateBrowserThreadChecker() UNLOCK_FUNCTION();
+};
+
+// DCHECK version.
+// Note: When DCHECKs are disabled, this class needs to be completely optimized
+// out in order to not regress binary size. This is achieved by inlining the
+// constructor and the destructor. When DCHECKs are enabled, the constructor
+// is not unnecessarily inlined.
+class CONTENT_EXPORT SCOPED_LOCKABLE ScopedValidateBrowserThreadDebugChecker {
+ public:
+  explicit ScopedValidateBrowserThreadDebugChecker(
+      BrowserThread::ID thread_identifier)
+      EXCLUSIVE_LOCK_FUNCTION(GetBrowserThreadChecker(thread_identifier))
+// Only inlined when DCHECKs are turned off.
+#if DCHECK_IS_ON()
+          ;
+#else
+  {
+  }
+#endif
+
+  // Note: Can't use = default as it does not work well with UNLOCK_FUNCTION().
+  // Clang will discard the UNLOCK_FUNCTION() attribute.
+  // See https://github.com/llvm/llvm-project/issues/101199.
+  ~ScopedValidateBrowserThreadDebugChecker() UNLOCK_FUNCTION() {}
+};
+
+}  // namespace internal
 
 }  // namespace content
 

@@ -1,10 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/ozone/demo/renderer_base.h"
 
-#include "base/numerics/math_constants.h"
+#include <numbers>
 
 namespace ui {
 
@@ -21,7 +21,8 @@ RendererBase::~RendererBase() {
 
 float RendererBase::CurrentFraction() const {
   float fraction =
-      (sinf(iteration_ * 2 * base::kPiFloat / kAnimationSteps) + 1) / 2;
+      (sinf(iteration_ * 2 * std::numbers::pi_v<float> / kAnimationSteps) + 1) /
+      2;
   return fraction;
 }
 

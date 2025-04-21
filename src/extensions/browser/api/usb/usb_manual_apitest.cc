@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,17 @@
 
 using UsbManualApiTest = extensions::ExtensionApiTest;
 
-// TODO(1020591): The win7 bots do not seem to recognize the MANUAL_ prefix,
-// so we explicitly disable this test.
+// TODO(crbug.com/40656552): The win7 bots do not seem to recognize the MANUAL_
+// prefix, so we explicitly disable this test.
 #if BUILDFLAG(IS_WIN)
 #define MAYBE_MANUAL_ListInterfaces DISABLED_MANUAL_ListInterfaces
 #else
 #define MAYBE_MANUAL_ListInterfaces MANUAL_ListInterfaces
 #endif
 IN_PROC_BROWSER_TEST_F(UsbManualApiTest, MAYBE_MANUAL_ListInterfaces) {
+  auto dialog_action_reset =
+      extensions::PermissionsRequestFunction::SetDialogActionForTests(
+          extensions::PermissionsRequestFunction::DialogAction::kAutoConfirm);
   extensions::PermissionsRequestFunction::SetIgnoreUserGestureForTests(true);
-  extensions::PermissionsRequestFunction::SetAutoConfirmForTests(true);
   ASSERT_TRUE(RunExtensionTest("usb_manual/list_interfaces"));
 }

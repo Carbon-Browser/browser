@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_ASH_SHARESHEET_SHARESHEET_EXPAND_BUTTON_H_
 #define CHROME_BROWSER_UI_ASH_SHARESHEET_SHARESHEET_EXPAND_BUTTON_H_
 
+#include "base/memory/raw_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/controls/button/button.h"
 #include "ui/views/controls/image_view.h"
@@ -14,9 +15,9 @@ namespace ash {
 namespace sharesheet {
 
 class SharesheetExpandButton : public views::Button {
- public:
-  METADATA_HEADER(SharesheetExpandButton);
+  METADATA_HEADER(SharesheetExpandButton, views::Button)
 
+ public:
   explicit SharesheetExpandButton(PressedCallback callback);
   SharesheetExpandButton(const SharesheetExpandButton&) = delete;
   SharesheetExpandButton& operator=(const SharesheetExpandButton&) = delete;
@@ -25,8 +26,8 @@ class SharesheetExpandButton : public views::Button {
   void SetToExpandedState();
 
  private:
-  views::ImageView* icon_ = nullptr;
-  views::Label* label_ = nullptr;
+  raw_ptr<views::ImageView> icon_ = nullptr;
+  raw_ptr<views::Label> label_ = nullptr;
 };
 
 }  // namespace sharesheet

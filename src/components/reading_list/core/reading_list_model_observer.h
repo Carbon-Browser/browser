@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,9 +43,15 @@ class ReadingListModelObserver {
   // Invoked when elements are about to be removed from the read or unread list.
   virtual void ReadingListWillRemoveEntry(const ReadingListModel* model,
                                           const GURL& url) {}
-  // Invoked when elements |MarkEntryUpdated| is called on an entry. This means
-  // that the order of the entry may change and read/unread list may change
-  // too.
+
+  // Invoked when elements have been removed.
+  virtual void ReadingListDidRemoveEntry(const ReadingListModel* model,
+                                         const GURL& url) {}
+
+  // TODO(crbug.com/40260548): Update the below comment as it seems not
+  // accurate. Invoked when elements |MarkEntryUpdated| is called on an entry.
+  // This means that the order of the entry may change and read/unread list may
+  // change too.
   virtual void ReadingListWillMoveEntry(const ReadingListModel* model,
                                         const GURL& url) {}
 
@@ -71,14 +77,18 @@ class ReadingListModelObserver {
   virtual void ReadingListWillUpdateEntry(const ReadingListModel* model,
                                           const GURL& url) {}
 
+  // Invoked when an entry is changed.
+  virtual void ReadingListDidUpdateEntry(const ReadingListModel* model,
+                                         const GURL& url) {}
+
   // Called after all the changes signaled by calls to the "Will" methods are
   // done. All the "Will" methods are called as necessary, then the changes
   // are applied and then this method is called.
   virtual void ReadingListDidApplyChanges(ReadingListModel* model) {}
 
  protected:
-  ReadingListModelObserver() {}
-  virtual ~ReadingListModelObserver() {}
+  ReadingListModelObserver() = default;
+  virtual ~ReadingListModelObserver() = default;
 };
 
 #endif  // COMPONENTS_READING_LIST_CORE_READING_LIST_MODEL_OBSERVER_H_

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,43 +7,41 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
+#include "base/files/scoped_file.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
+#include "chrome/browser/ash/exo/chrome_security_delegate.h"
 #include "components/exo/security_delegate.h"
 
-namespace base {
-class FilePath;
+namespace exo {
+class WaylandServerHandle;
 }
 
 namespace guest_os {
 
 // This is a safer wrapper
-class GuestOsSecurityDelegate : public exo::SecurityDelegate {
+class GuestOsSecurityDelegate : public ash::ChromeSecurityDelegate {
  public:
-  GuestOsSecurityDelegate();
+  explicit GuestOsSecurityDelegate(std::string vm_name);
 
   ~GuestOsSecurityDelegate() override;
-
-  using BuildCallback =
-      base::OnceCallback<void(base::WeakPtr<GuestOsSecurityDelegate>,
-                              bool,
-                              const base::FilePath& path)>;
 
   // When |security_delegate| is used to build a wayland server, we transfer
   // ownership to Exo. The |callback| will be invoked with the result of that
   // build.
-  static void BuildServer(
+  static void MakeServerWithFd(
       std::unique_ptr<GuestOsSecurityDelegate> security_delegate,
-      BuildCallback callback);
+      base::ScopedFD fd,
+      base::OnceCallback<void(base::WeakPtr<GuestOsSecurityDelegate>,
+                              std::unique_ptr<exo::WaylandServerHandle>)>
+          callback);
 
-  // This method safely removes the server at |path| based on whether
-  // |security_delegate| is still valid or not. This is useful if you think
-  // removing the server might race against exo's shutdown.
-  static void MaybeRemoveServer(
-      base::WeakPtr<GuestOsSecurityDelegate> security_delegate,
-      const base::FilePath& path);
+  // ash::ChromeSecurityDelegate:
+  std::string GetVmName(ui::EndpointType target) const override;
 
  private:
+  std::string vm_name_;
+
   base::WeakPtrFactory<GuestOsSecurityDelegate> weak_factory_;
 };
 

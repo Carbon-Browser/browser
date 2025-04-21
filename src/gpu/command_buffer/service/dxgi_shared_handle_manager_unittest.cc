@@ -1,17 +1,17 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "gpu/command_buffer/service/dxgi_shared_handle_manager.h"
 
-#include <d3d11_1.h>
 #include <windows.h>
+
+#include <d3d11_1.h>
 
 #include "base/synchronization/condition_variable.h"
 #include "base/synchronization/lock.h"
 #include "base/task/thread_pool.h"
 #include "base/test/bind.h"
-#include "base/win/windows_version.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gl/gl_angle_util_win.h"
 
@@ -21,18 +21,12 @@ namespace {
 class DXGISharedHandleManagerTest : public testing::Test {
  protected:
   void SetUp() override {
-    // Using DXGI NT handles is universally supported only on Win8 and above.
-    // TODO(sunnyps): Unify this with the check in D3DImageBackingFactory.
-    const bool shared_handles_supported =
-        base::win::GetVersion() >= base::win::Version::WIN8;
     d3d11_device_ = gl::QueryD3D11DeviceObjectFromANGLE();
-    if (shared_handles_supported && d3d11_device_) {
-      dxgi_shared_handle_manager_ =
-          base::MakeRefCounted<DXGISharedHandleManager>(d3d11_device_);
-    }
+    dxgi_shared_handle_manager_ =
+        base::MakeRefCounted<DXGISharedHandleManager>();
   }
 
-  bool ShouldSkipTest() const { return !dxgi_shared_handle_manager_; }
+  bool ShouldSkipTest() const { return !d3d11_device_; }
 
   Microsoft::WRL::ComPtr<ID3D11Texture2D> CreateTexture() {
     D3D11_TEXTURE2D_DESC desc;
@@ -89,7 +83,7 @@ TEST_F(DXGISharedHandleManagerTest, LookupByToken) {
 
   scoped_refptr<DXGISharedHandleState> orig_state =
       dxgi_shared_handle_manager_->GetOrCreateSharedHandleState(
-          orig_token, std::move(orig_handle));
+          orig_token, std::move(orig_handle), d3d11_device_);
   ASSERT_NE(orig_state, nullptr);
 
   EXPECT_EQ(dxgi_shared_handle_manager_->GetSharedHandleMapSizeForTesting(),
@@ -106,7 +100,7 @@ TEST_F(DXGISharedHandleManagerTest, LookupByToken) {
 
     scoped_refptr<DXGISharedHandleState> state =
         dxgi_shared_handle_manager_->GetOrCreateSharedHandleState(
-            orig_token, std::move(new_handle));
+            orig_token, std::move(new_handle), d3d11_device_);
     EXPECT_EQ(state, orig_state);
 
     EXPECT_EQ(dxgi_shared_handle_manager_->GetSharedHandleMapSizeForTesting(),
@@ -134,7 +128,7 @@ TEST_F(DXGISharedHandleManagerTest, LookupByTokenMultiThread) {
 
   scoped_refptr<DXGISharedHandleState> orig_state =
       dxgi_shared_handle_manager_->GetOrCreateSharedHandleState(
-          orig_token, std::move(orig_handle));
+          orig_token, std::move(orig_handle), d3d11_device_);
   ASSERT_NE(orig_state, nullptr);
 
   EXPECT_EQ(dxgi_shared_handle_manager_->GetSharedHandleMapSizeForTesting(),
@@ -160,7 +154,7 @@ TEST_F(DXGISharedHandleManagerTest, LookupByTokenMultiThread) {
 
           scoped_refptr<DXGISharedHandleState> state =
               dxgi_shared_handle_manager_->GetOrCreateSharedHandleState(
-                  orig_token, std::move(new_handle));
+                  orig_token, std::move(new_handle), d3d11_device_);
           EXPECT_EQ(state, orig_state);
 
           EXPECT_EQ(

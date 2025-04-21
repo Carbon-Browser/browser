@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ namespace zucchini {
 // A vacuous ReferenceReader that produces no references.
 class EmptyReferenceReader : public ReferenceReader {
  public:
-  absl::optional<Reference> GetNext() override;
+  std::optional<Reference> GetNext() override;
 };
 
 // A vacuous EmptyReferenceWriter that does not write.

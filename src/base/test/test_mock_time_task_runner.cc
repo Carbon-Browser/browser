@@ -1,9 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/test/test_mock_time_task_runner.h"
 
+#include <optional>
 #include <utility>
 
 #include "base/check_op.h"
@@ -11,17 +12,16 @@
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace base {
 
 // A SingleThreadTaskRunner which forwards everything to its |target_|. This
 // serves two purposes:
-// 1) If a ThreadTaskRunnerHandle owned by TestMockTimeTaskRunner were to be
-//    set to point to that TestMockTimeTaskRunner, a reference cycle would
-//    result.  As |target_| here is a non-refcounting raw pointer, the cycle is
-//    broken.
+// 1) If a TaskRunner CurrentDefaultHandle owned by TestMockTimeTaskRunner were
+//    to be set to point to that TestMockTimeTaskRunner, a reference cycle
+//    would result. As |target_| here is a non-refcounting raw pointer, the
+//    cycle is broken.
 // 2) Since SingleThreadTaskRunner is ref-counted, it's quite easy for it to
 //    accidentally get captured between tests in a singleton somewhere.
 //    Indirecting via NonOwningProxyTaskRunner permits TestMockTimeTaskRunner
@@ -50,8 +50,9 @@ class TestMockTimeTaskRunner::NonOwningProxyTaskRunner
   // SingleThreadTaskRunner:
   bool RunsTasksInCurrentSequence() const override {
     AutoLock scoped_lock(lock_);
-    if (target_)
+    if (target_) {
       return target_->RunsTasksInCurrentSequence();
+    }
     return thread_checker_.CalledOnValidThread();
   }
 
@@ -59,8 +60,9 @@ class TestMockTimeTaskRunner::NonOwningProxyTaskRunner
                        OnceClosure task,
                        TimeDelta delay) override {
     AutoLock scoped_lock(lock_);
-    if (target_)
+    if (target_) {
       return target_->PostDelayedTask(from_here, std::move(task), delay);
+    }
 
     // The associated TestMockTimeTaskRunner is dead, so fail this PostTask.
     return false;
@@ -118,8 +120,7 @@ struct TestMockTimeTaskRunner::TestOrderedPendingTask
 };
 
 TestMockTimeTaskRunner::TestOrderedPendingTask::TestOrderedPendingTask()
-    : ordinal(0) {
-}
+    : ordinal(0) {}
 
 TestMockTimeTaskRunner::TestOrderedPendingTask::TestOrderedPendingTask(
     TestOrderedPendingTask&&) = default;
@@ -151,7 +152,7 @@ TestMockTimeTaskRunner::TestOrderedPendingTask::operator=(
 // Ref. TestMockTimeTaskRunner::RunsTasksInCurrentSequence().
 TestMockTimeTaskRunner::ScopedContext::ScopedContext(
     scoped_refptr<TestMockTimeTaskRunner> scope)
-    : thread_task_runner_handle_override_(scope) {
+    : single_thread_task_runner_current_default_handle_override_(scope) {
   scope->RunUntilIdle();
 }
 
@@ -160,8 +161,9 @@ TestMockTimeTaskRunner::ScopedContext::~ScopedContext() = default;
 bool TestMockTimeTaskRunner::TemporalOrder::operator()(
     const TestOrderedPendingTask& first_task,
     const TestOrderedPendingTask& second_task) const {
-  if (first_task.GetTimeToRun() == second_task.GetTimeToRun())
+  if (first_task.GetTimeToRun() == second_task.GetTimeToRun()) {
     return first_task.ordinal > second_task.ordinal;
+  }
   return first_task.GetTimeToRun() > second_task.GetTimeToRun();
 }
 
@@ -179,7 +181,8 @@ TestMockTimeTaskRunner::TestMockTimeTaskRunner(Time start_time,
   if (type == Type::kBoundToThread) {
     RunLoop::RegisterDelegateForCurrentThread(this);
     thread_task_runner_handle_ =
-        std::make_unique<ThreadTaskRunnerHandle>(proxy_task_runner_);
+        std::make_unique<SingleThreadTaskRunner::CurrentDefaultHandle>(
+            proxy_task_runner_);
   }
 }
 
@@ -237,8 +240,9 @@ void TestMockTimeTaskRunner::ClearPendingTasks() {
     // |NonOwningProxyTaskRunner::lock_| followed by |tasks_lock_|, so it's
     // desirable to avoid the reverse order, for deadlock freedom.
     AutoUnlock scoped_unlock(tasks_lock_);
-    while (!cleanup_tasks.empty())
+    while (!cleanup_tasks.empty()) {
       cleanup_tasks.pop();
+    }
   }
 }
 
@@ -281,8 +285,9 @@ TestMockTimeTaskRunner::TakePendingTasks() {
 bool TestMockTimeTaskRunner::HasPendingTask() {
   DCHECK(thread_checker_.CalledOnValidThread());
   AutoLock scoped_lock(tasks_lock_);
-  while (!tasks_.empty() && tasks_.top().task.IsCancelled())
+  while (!tasks_.empty() && tasks_.top().task.IsCancelled()) {
     tasks_.pop();
+  }
   return !tasks_.empty();
 }
 
@@ -304,8 +309,9 @@ size_t TestMockTimeTaskRunner::GetPendingTaskCount() {
 TimeDelta TestMockTimeTaskRunner::NextPendingTaskDelay() {
   DCHECK(thread_checker_.CalledOnValidThread());
   AutoLock scoped_lock(tasks_lock_);
-  while (!tasks_.empty() && tasks_.top().task.IsCancelled())
+  while (!tasks_.empty() && tasks_.top().task.IsCancelled()) {
     tasks_.pop();
+  }
   return tasks_.empty() ? TimeDelta::Max()
                         : tasks_.top().GetTimeToRun() - now_ticks_;
 }
@@ -369,9 +375,10 @@ void TestMockTimeTaskRunner::ProcessTasksNoLaterThan(TimeDelta max_delta,
 
   // Multiple test task runners can share the same thread for determinism in
   // unit tests. Make sure this TestMockTimeTaskRunner's tasks run in its scope.
-  absl::optional<ThreadTaskRunnerHandleOverrideForTesting> ttrh_override;
-  if (!ThreadTaskRunnerHandle::IsSet() ||
-      ThreadTaskRunnerHandle::Get() != proxy_task_runner_.get()) {
+  std::optional<SingleThreadTaskRunner::CurrentHandleOverrideForTesting>
+      ttrh_override;
+  if (!SingleThreadTaskRunner::HasCurrentDefault() ||
+      SingleThreadTaskRunner::GetCurrentDefault() != proxy_task_runner_.get()) {
     ttrh_override.emplace(proxy_task_runner_.get());
   }
 
@@ -379,10 +386,12 @@ void TestMockTimeTaskRunner::ProcessTasksNoLaterThan(TimeDelta max_delta,
   for (int i = 0; !quit_run_loop_ && (limit < 0 || i < limit); i++) {
     OnBeforeSelectingTask();
     TestPendingTask task_info;
-    if (!DequeueNextTask(original_now_ticks, max_delta, &task_info))
+    if (!DequeueNextTask(original_now_ticks, max_delta, &task_info)) {
       break;
-    if (task_info.task.IsCancelled())
+    }
+    if (task_info.task.IsCancelled()) {
       continue;
+    }
     // If tasks were posted with a negative delay, task_info.GetTimeToRun() will
     // be less than |now_ticks_|. ForwardClocksUntilTickTime() takes care of not
     // moving the clock backwards in this case.
@@ -396,8 +405,9 @@ void TestMockTimeTaskRunner::ForwardClocksUntilTickTime(TimeTicks later_ticks) {
   DCHECK(thread_checker_.CalledOnValidThread());
   {
     AutoLock scoped_lock(tasks_lock_);
-    if (later_ticks <= now_ticks_)
+    if (later_ticks <= now_ticks_) {
       return;
+    }
 
     now_ += later_ticks - now_ticks_;
     now_ticks_ = later_ticks;
@@ -437,8 +447,9 @@ void TestMockTimeTaskRunner::Run(bool application_tasks_allowed,
   TimeTicks run_until = now_ticks_ + timeout;
   while (!quit_run_loop_ && now_ticks_ < run_until) {
     RunUntilIdle();
-    if (quit_run_loop_ || ShouldQuitWhenIdle())
+    if (quit_run_loop_ || ShouldQuitWhenIdle()) {
       break;
+    }
 
     // Peek into |tasks_| to perform one of two things:
     //   A) If there are no remaining tasks, wait until one is posted and
@@ -449,8 +460,9 @@ void TestMockTimeTaskRunner::Run(bool application_tasks_allowed,
     {
       AutoLock scoped_lock(tasks_lock_);
       if (tasks_.empty()) {
-        while (tasks_.empty())
+        while (tasks_.empty()) {
           tasks_lock_cv_.Wait();
+        }
         continue;
       }
       auto_fast_forward_by =

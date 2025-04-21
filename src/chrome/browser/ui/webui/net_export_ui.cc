@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,12 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
+#include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -44,6 +45,7 @@
 #include "extensions/buildflags/buildflags.h"
 #include "net/log/net_log_capture_mode.h"
 #include "ui/shell_dialogs/select_file_dialog.h"
+#include "ui/shell_dialogs/selected_file_info.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "components/browser_ui/share/android/intent_helper.h"
@@ -56,34 +58,24 @@ using content::WebUIMessageHandler;
 namespace {
 
 // May only be accessed on the UI thread
-base::LazyInstance<base::FilePath>::Leaky
-    last_save_dir = LAZY_INSTANCE_INITIALIZER;
+base::LazyInstance<base::FilePath>::Leaky last_save_dir =
+    LAZY_INSTANCE_INITIALIZER;
 
-content::WebUIDataSource* CreateNetExportHTMLSource() {
-  content::WebUIDataSource* source =
-      content::WebUIDataSource::Create(chrome::kChromeUINetExportHost);
+void CreateAndAddNetExportHTMLSource(Profile* profile) {
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      profile, chrome::kChromeUINetExportHost);
 
   source->UseStringsJs();
   source->AddResourcePath(net_log::kNetExportUICSS, IDR_NET_LOG_NET_EXPORT_CSS);
   source->AddResourcePath(net_log::kNetExportUIJS, IDR_NET_LOG_NET_EXPORT_JS);
   source->SetDefaultResource(IDR_NET_LOG_NET_EXPORT_HTML);
-  return source;
-}
-
-void SetIfNotNull(base::Value::Dict& dict,
-                  const base::StringPiece& path,
-                  std::unique_ptr<base::Value> in_value) {
-  if (in_value) {
-    dict.Set(path, base::Value::FromUniquePtrValue(std::move(in_value)));
-  }
 }
 
 // This class receives javascript messages from the renderer.
 // Note that the WebUI infrastructure runs on the UI thread, therefore all of
 // this class's public methods are expected to run on the UI thread.
-class NetExportMessageHandler
+class NetExportMessageHandler final
     : public WebUIMessageHandler,
-      public base::SupportsWeakPtr<NetExportMessageHandler>,
       public ui::SelectFileDialog::Listener,
       public net_log::NetExportFileWriter::StateObserver {
  public:
@@ -105,13 +97,11 @@ class NetExportMessageHandler
   void OnShowFile(const base::Value::List& list);
 
   // ui::SelectFileDialog::Listener implementation.
-  void FileSelected(const base::FilePath& path,
-                    int index,
-                    void* params) override;
-  void FileSelectionCanceled(void* params) override;
+  void FileSelected(const ui::SelectedFileInfo& file, int index) override;
+  void FileSelectionCanceled() override;
 
   // net_log::NetExportFileWriter::StateObserver implementation.
-  void OnNewState(const base::DictionaryValue& state) override;
+  void OnNewState(const base::Value::Dict& state) override;
 
  private:
   // Send NetLog data via email.
@@ -136,7 +126,7 @@ class NetExportMessageHandler
 
   // Fires net-log-info-changed event to update the JavaScript UI in the
   // renderer.
-  void NotifyUIWithState(std::unique_ptr<base::DictionaryValue> state);
+  void NotifyUIWithState(const base::Value::Dict& state);
 
   // Opens the SelectFileDialog UI with the default path to save a
   // NetLog file.
@@ -170,8 +160,9 @@ NetExportMessageHandler::NetExportMessageHandler()
 NetExportMessageHandler::~NetExportMessageHandler() {
   // There may be a pending file dialog, it needs to be told that the user
   // has gone away so that it doesn't try to call back.
-  if (select_file_dialog_)
+  if (select_file_dialog_) {
     select_file_dialog_->ListenerDestroyed();
+  }
 
   file_writer_->StopNetLog();
 }
@@ -233,10 +224,12 @@ void NetExportMessageHandler::OnStartNetLog(const base::Value::List& params) {
   if (UsingMobileUI()) {
     StartNetLog(base::FilePath());
   } else {
-    base::FilePath initial_dir = last_save_dir.Pointer()->empty() ?
-        DownloadPrefs::FromBrowserContext(
-            web_ui()->GetWebContents()->GetBrowserContext())->DownloadPath() :
-        *last_save_dir.Pointer();
+    base::FilePath initial_dir =
+        last_save_dir.Pointer()->empty()
+            ? DownloadPrefs::FromBrowserContext(
+                  web_ui()->GetWebContents()->GetBrowserContext())
+                  ->DownloadPath()
+            : *last_save_dir.Pointer();
     base::FilePath initial_path =
         initial_dir.Append(FILE_PATH_LITERAL("chrome-net-export-log.json"));
     ShowSelectFileDialog(initial_path);
@@ -249,13 +242,13 @@ void NetExportMessageHandler::OnStopNetLog(const base::Value::List& list) {
   base::Value::Dict ui_thread_polled_data;
 
   Profile* profile = Profile::FromWebUI(web_ui());
-  SetIfNotNull(ui_thread_polled_data, "prerenderInfo",
-               chrome_browser_net::GetPrerenderInfo(profile));
-  SetIfNotNull(ui_thread_polled_data, "extensionInfo",
-               chrome_browser_net::GetExtensionInfo(profile));
+  ui_thread_polled_data.Set("prerenderInfo",
+                            chrome_browser_net::GetPrerenderInfo(profile));
+  ui_thread_polled_data.Set("extensionInfo",
+                            chrome_browser_net::GetExtensionInfo(profile));
 #if BUILDFLAG(IS_WIN)
-  SetIfNotNull(ui_thread_polled_data, "serviceProviders",
-               chrome_browser_net::GetWindowsServiceProviders());
+  ui_thread_polled_data.Set("serviceProviders",
+                            chrome_browser_net::GetWindowsServiceProviders());
 #endif
 
   file_writer_->StopNetLog(std::move(ui_thread_polled_data));
@@ -270,38 +263,39 @@ void NetExportMessageHandler::OnSendNetLog(const base::Value::List& list) {
 void NetExportMessageHandler::OnShowFile(const base::Value::List& list) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   file_writer_->GetFilePathToCompletedLog(
-      base::BindOnce(&NetExportMessageHandler::ShowFileInShell, AsWeakPtr()));
+      base::BindOnce(&NetExportMessageHandler::ShowFileInShell,
+                     weak_ptr_factory_.GetWeakPtr()));
 }
 
-void NetExportMessageHandler::FileSelected(const base::FilePath& path,
-                                           int index,
-                                           void* params) {
+void NetExportMessageHandler::FileSelected(const ui::SelectedFileInfo& file,
+                                           int index) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK(select_file_dialog_);
-  *last_save_dir.Pointer() = path.DirName();
+  *last_save_dir.Pointer() = file.path().DirName();
 
-  StartNetLog(path);
+  StartNetLog(file.path());
 
   // IMPORTANT: resetting the dialog may lead to the deletion of |path|, so keep
   // this line last.
   select_file_dialog_ = nullptr;
 }
 
-void NetExportMessageHandler::FileSelectionCanceled(void* params) {
+void NetExportMessageHandler::FileSelectionCanceled() {
   DCHECK(select_file_dialog_);
   select_file_dialog_ = nullptr;
 }
 
-void NetExportMessageHandler::OnNewState(const base::DictionaryValue& state) {
-  NotifyUIWithState(state.CreateDeepCopy());
+void NetExportMessageHandler::OnNewState(const base::Value::Dict& state) {
+  NotifyUIWithState(state);
 }
 
 // static
 void NetExportMessageHandler::SendEmail(const base::FilePath& file_to_send) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 #if BUILDFLAG(IS_ANDROID)
-  if (file_to_send.empty())
+  if (file_to_send.empty()) {
     return;
+  }
   std::string email;
   std::string subject = "net_internals_log";
   std::string title = "Issue number: ";
@@ -328,8 +322,9 @@ void NetExportMessageHandler::StartNetLog(const base::FilePath& path) {
 
 void NetExportMessageHandler::ShowFileInShell(const base::FilePath& path) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  if (path.empty())
+  if (path.empty()) {
     return;
+  }
 
   // (The |profile| parameter is relevant for Chrome OS)
   Profile* profile = Profile::FromWebUI(web_ui());
@@ -347,29 +342,30 @@ bool NetExportMessageHandler::UsingMobileUI() {
 }
 
 void NetExportMessageHandler::NotifyUIWithState(
-    std::unique_ptr<base::DictionaryValue> state) {
+    const base::Value::Dict& state) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK(web_ui());
-  FireWebUIListener(net_log::kNetLogInfoChangedEvent, *state);
+  FireWebUIListener(net_log::kNetLogInfoChangedEvent, state);
 }
 
 void NetExportMessageHandler::ShowSelectFileDialog(
     const base::FilePath& default_path) {
   // User may have clicked more than once before the save dialog appears.
   // This prevents creating more than one save dialog.
-  if (select_file_dialog_)
+  if (select_file_dialog_) {
     return;
+  }
 
   WebContents* webcontents = web_ui()->GetWebContents();
 
   select_file_dialog_ = ui::SelectFileDialog::Create(
       this, std::make_unique<ChromeSelectFilePolicy>(webcontents));
-  ui::SelectFileDialog::FileTypeInfo file_type_info;
-  file_type_info.extensions = {{FILE_PATH_LITERAL("json")}};
+  ui::SelectFileDialog::FileTypeInfo file_type_info{
+      {FILE_PATH_LITERAL("json")}};
   gfx::NativeWindow owning_window = webcontents->GetTopLevelNativeWindow();
   select_file_dialog_->SelectFile(
       ui::SelectFileDialog::SELECT_SAVEAS_FILE, std::u16string(), default_path,
-      &file_type_info, 0, base::FilePath::StringType(), owning_window, nullptr);
+      &file_type_info, 0, base::FilePath::StringType(), owning_window);
 }
 
 }  // namespace
@@ -378,6 +374,5 @@ NetExportUI::NetExportUI(content::WebUI* web_ui) : WebUIController(web_ui) {
   web_ui->AddMessageHandler(std::make_unique<NetExportMessageHandler>());
 
   // Set up the chrome://net-export/ source.
-  Profile* profile = Profile::FromWebUI(web_ui);
-  content::WebUIDataSource::Add(profile, CreateNetExportHTMLSource());
+  CreateAndAddNetExportHTMLSource(Profile::FromWebUI(web_ui));
 }

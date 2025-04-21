@@ -1,15 +1,16 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/web_package/mock_signed_exchange_handler.h"
 
 #include <memory>
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/strings/string_piece.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/task/sequenced_task_runner.h"
 #include "content/browser/web_package/prefetched_signed_exchange_cache_entry.h"
 #include "content/browser/web_package/signed_exchange_cert_fetcher_factory.h"
 #include "net/filter/source_stream.h"
@@ -36,7 +37,7 @@ namespace {
 // [1] https://web.dev/signed-exchanges/#the-sxg-format
 class PrefixStrippingSourceStream : public net::SourceStream {
  public:
-  PrefixStrippingSourceStream(base::StringPiece prefix_to_strip,
+  PrefixStrippingSourceStream(std::string_view prefix_to_strip,
                               std::unique_ptr<net::SourceStream> stream_to_wrap)
       : net::SourceStream(stream_to_wrap->type()),
         remaining_prefix_to_strip_(prefix_to_strip),
@@ -136,8 +137,8 @@ class PrefixStrippingSourceStream : public net::SourceStream {
     }
 
     // Strip `remaining_prefix_to_strip_` bytes from `bytes_read`.
-    base::StringPiece bytes_read(pending_read->dest_buffer->data(),
-                                 number_of_bytes_read);
+    std::string_view bytes_read(pending_read->dest_buffer->data(),
+                                number_of_bytes_read);
     int maybe_consumed_bytes =
         std::min(bytes_read.size(), remaining_prefix_to_strip_.size());
     CHECK_EQ(remaining_prefix_to_strip_.substr(0, maybe_consumed_bytes),
@@ -165,7 +166,7 @@ class PrefixStrippingSourceStream : public net::SourceStream {
     return Read(pending_read);
   }
 
-  base::StringPiece remaining_prefix_to_strip_;
+  std::string_view remaining_prefix_to_strip_;
   const std::unique_ptr<net::SourceStream> wrapped_stream_;
   base::WeakPtrFactory<PrefixStrippingSourceStream> weak_factory_;
 };
@@ -217,7 +218,7 @@ MockSignedExchangeHandler::MockSignedExchangeHandler(
   }
   body = std::make_unique<PrefixStrippingSourceStream>(kMockSxgPrefix,
                                                        std::move(body));
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(headers_callback), params.result, params.error,
                      params.inner_url, std::move(head), std::move(body)));
@@ -253,7 +254,6 @@ std::unique_ptr<SignedExchangeHandler> MockSignedExchangeHandlerFactory::Create(
     }
   }
   NOTREACHED();
-  return nullptr;
 }
 
 }  // namespace content

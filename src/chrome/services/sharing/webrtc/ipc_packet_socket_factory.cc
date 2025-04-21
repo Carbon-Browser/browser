@@ -1,6 +1,11 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/services/sharing/webrtc/ipc_packet_socket_factory.h"
 
@@ -8,11 +13,13 @@
 
 #include <algorithm>
 #include <list>
+#include <optional>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/strings/stringprintf.h"
 #include "base/threading/thread_checker.h"
@@ -22,6 +29,7 @@
 #include "components/webrtc/net_address_utils.h"
 #include "net/base/ip_address.h"
 #include "third_party/webrtc/rtc_base/async_packet_socket.h"
+#include "third_party/webrtc/rtc_base/network/received_packet.h"
 
 namespace sharing {
 
@@ -50,6 +58,9 @@ bool JingleSocketOptionToP2PSocketOption(rtc::Socket::Option option,
     case rtc::Socket::OPT_DSCP:
       *ipc_option = network::P2P_SOCKET_OPT_DSCP;
       break;
+    case rtc::Socket::OPT_RECV_ECN:
+      *ipc_option = network::P2P_SOCKET_OPT_RECV_ECN;
+      break;
     case rtc::Socket::OPT_DONTFRAGMENT:
     case rtc::Socket::OPT_NODELAY:
     case rtc::Socket::OPT_IPV6_V6ONLY:
@@ -57,7 +68,6 @@ bool JingleSocketOptionToP2PSocketOption(rtc::Socket::Option option,
       return false;  // Not supported by the chrome sockets.
     default:
       NOTREACHED();
-      return false;
   }
   return true;
 }
@@ -120,7 +130,7 @@ class IpcPacketSocket : public rtc::AsyncPacketSocket,
       const network::P2PSendPacketMetrics& send_metrics) override;
   void OnError() override;
   void OnDataReceived(const net::IPEndPoint& address,
-                      const std::vector<int8_t>& data,
+                      base::span<const uint8_t> data,
                       const base::TimeTicks& timestamp) override;
 
  private:
@@ -197,18 +207,25 @@ class IpcPacketSocket : public rtc::AsyncPacketSocket,
 // P2PAsyncAddressResolver. Libjingle sig slots are not thread safe. In case
 // of MT sig slots clients must call disconnect. This class is to make sure
 // we destruct from the same thread on which is created.
-class AsyncAddressResolverImpl : public rtc::AsyncResolverInterface {
+class AsyncDnsAddressResolverImpl : public webrtc::AsyncDnsResolverInterface,
+                                    webrtc::AsyncDnsResolverResult {
  public:
-  explicit AsyncAddressResolverImpl(
+  explicit AsyncDnsAddressResolverImpl(
       const mojo::SharedRemote<network::mojom::P2PSocketManager>&
           socket_manager);
-  ~AsyncAddressResolverImpl() override;
+  ~AsyncDnsAddressResolverImpl() override;
 
-  // rtc::AsyncResolverInterface interface.
-  void Start(const rtc::SocketAddress& addr) override;
+  // rtc::AsyncDnsResolverInterface interface.
+  void Start(const rtc::SocketAddress& addr,
+             absl::AnyInvocable<void()> callback) override;
+  void Start(const rtc::SocketAddress& addr,
+             int family,
+             absl::AnyInvocable<void()> callback) override;
+  const AsyncDnsResolverResult& result() const override { return *this; }
+
+  // webrtc::AsyncDnsResolverResult interface
   bool GetResolvedAddress(int family, rtc::SocketAddress* addr) const override;
   int GetError() const override;
-  void Destroy(bool wait) override;
 
  private:
   virtual void OnAddressResolved(const std::vector<net::IPAddress>& addresses);
@@ -218,7 +235,10 @@ class AsyncAddressResolverImpl : public rtc::AsyncResolverInterface {
   SEQUENCE_CHECKER(sequence_checker_);
 
   rtc::SocketAddress addr_;                // Address to resolve.
+  absl::AnyInvocable<void()> callback_;
   std::vector<rtc::IPAddress> addresses_;  // Resolved addresses.
+
+  base::WeakPtrFactory<AsyncDnsAddressResolverImpl> weak_factory_{this};
 };
 
 IpcPacketSocket::IpcPacketSocket()
@@ -339,8 +359,6 @@ int IpcPacketSocket::SendTo(const void* data,
   switch (state_) {
     case IS_UNINITIALIZED:
       NOTREACHED();
-      error_ = EWOULDBLOCK;
-      return -1;
     case IS_OPENING:
       error_ = EWOULDBLOCK;
       return -1;
@@ -356,7 +374,6 @@ int IpcPacketSocket::SendTo(const void* data,
 
   if (data_size == 0) {
     NOTREACHED();
-    return 0;
   }
 
   total_packets_++;
@@ -377,22 +394,18 @@ int IpcPacketSocket::SendTo(const void* data,
     address_chrome = net::IPEndPoint(net::IPAddress(), address.port());
   } else {
     if (!webrtc::SocketAddressToIPEndPoint(address, &address_chrome)) {
-      LOG(WARNING) << "Failed to convert remote address to IPEndPoint: address="
+      NOTREACHED() << "Failed to convert remote address to IPEndPoint: address="
                    << address.ipaddr().ToSensitiveString()
                    << ", remote_address_="
                    << remote_address_.ipaddr().ToSensitiveString();
-      NOTREACHED();
-      error_ = EINVAL;
-      return -1;
     }
   }
 
   send_bytes_available_ -= data_size;
 
-  std::vector<int8_t> data_vector;
-  data_vector.insert(data_vector.end(), reinterpret_cast<const int8_t*>(data),
-                     reinterpret_cast<const int8_t*>(data) + data_size);
-  uint64_t packet_id = client_->Send(address_chrome, data_vector, options);
+  uint64_t packet_id = client_->Send(
+      address_chrome, base::span(static_cast<const uint8_t*>(data), data_size),
+      options);
 
   // Ensure packet_id is not 0. It can't be the case according to
   // P2PSocketClient::Send().
@@ -420,7 +433,6 @@ rtc::AsyncPacketSocket::State IpcPacketSocket::GetState() const {
   switch (state_) {
     case IS_UNINITIALIZED:
       NOTREACHED();
-      return STATE_CLOSED;
 
     case IS_OPENING:
       return STATE_BINDING;
@@ -438,7 +450,6 @@ rtc::AsyncPacketSocket::State IpcPacketSocket::GetState() const {
   }
 
   NOTREACHED();
-  return STATE_CLOSED;
 }
 
 int IpcPacketSocket::GetOption(rtc::Socket::Option option, int* value) {
@@ -495,8 +506,6 @@ void IpcPacketSocket::OnOpen(const net::IPEndPoint& local_address,
   if (!webrtc::IPEndPointToSocketAddress(local_address, &local_address_)) {
     // Always expect correct IPv4 address to be allocated.
     NOTREACHED();
-    OnError();
-    return;
   }
 
   state_ = IS_OPEN;
@@ -573,7 +582,7 @@ void IpcPacketSocket::OnError() {
 }
 
 void IpcPacketSocket::OnDataReceived(const net::IPEndPoint& address,
-                                     const std::vector<int8_t>& data,
+                                     base::span<const uint8_t> data,
                                      const base::TimeTicks& timestamp) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
@@ -588,34 +597,50 @@ void IpcPacketSocket::OnDataReceived(const net::IPEndPoint& address,
       // We should always be able to convert address here because we
       // don't expect IPv6 address on IPv4 connections.
       NOTREACHED();
-      return;
     }
   }
-
-  SignalReadPacket(this, reinterpret_cast<const char*>(&data[0]), data.size(),
-                   address_lj, timestamp.since_origin().InMicroseconds());
+  NotifyPacketReceived(rtc::ReceivedPacket(
+      data, address_lj,
+      webrtc::Timestamp::Micros(timestamp.since_origin().InMicroseconds())));
 }
 
-AsyncAddressResolverImpl::AsyncAddressResolverImpl(
+AsyncDnsAddressResolverImpl::AsyncDnsAddressResolverImpl(
     const mojo::SharedRemote<network::mojom::P2PSocketManager>& socket_manager)
     : resolver_(socket_manager) {}
 
-AsyncAddressResolverImpl::~AsyncAddressResolverImpl() {
+AsyncDnsAddressResolverImpl::~AsyncDnsAddressResolverImpl() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  resolver_.Cancel();
 }
 
-void AsyncAddressResolverImpl::Start(const rtc::SocketAddress& addr) {
+void AsyncDnsAddressResolverImpl::Start(const rtc::SocketAddress& addr,
+                                        absl::AnyInvocable<void()> callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // Port and hostname must be copied to the resolved address returned from
   // GetResolvedAddress.
   addr_ = addr;
-
-  resolver_.Start(addr,
-                  base::BindOnce(&AsyncAddressResolverImpl::OnAddressResolved,
-                                 base::Unretained(this)));
+  callback_ = std::move(callback);
+  resolver_.Start(
+      addr, std::nullopt,
+      base::BindOnce(&AsyncDnsAddressResolverImpl::OnAddressResolved,
+                     base::Unretained(this)));
 }
 
-bool AsyncAddressResolverImpl::GetResolvedAddress(
+void AsyncDnsAddressResolverImpl::Start(const rtc::SocketAddress& addr,
+                                        int address_family,
+                                        absl::AnyInvocable<void()> callback) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  // Port and hostname must be copied to the resolved address returned from
+  // GetResolvedAddress.
+  addr_ = addr;
+  callback_ = std::move(callback);
+  resolver_.Start(
+      addr, address_family,
+      base::BindOnce(&AsyncDnsAddressResolverImpl::OnAddressResolved,
+                     base::Unretained(this)));
+}
+
+bool AsyncDnsAddressResolverImpl::GetResolvedAddress(
     int family,
     rtc::SocketAddress* addr) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -633,20 +658,12 @@ bool AsyncAddressResolverImpl::GetResolvedAddress(
   return false;
 }
 
-int AsyncAddressResolverImpl::GetError() const {
+int AsyncDnsAddressResolverImpl::GetError() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   return addresses_.empty() ? -1 : 0;
 }
 
-void AsyncAddressResolverImpl::Destroy(bool wait) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  resolver_.Cancel();
-  // Libjingle doesn't need this object any more and it's not going to delete
-  // it explicitly.
-  delete this;
-}
-
-void AsyncAddressResolverImpl::OnAddressResolved(
+void AsyncDnsAddressResolverImpl::OnAddressResolved(
     const std::vector<net::IPAddress>& addresses) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   for (const auto& address : addresses) {
@@ -657,7 +674,7 @@ void AsyncAddressResolverImpl::OnAddressResolved(
     }
     addresses_.push_back(socket_address.ipaddr());
   }
-  SignalDone(this);
+  callback_();
 }
 
 }  // namespace
@@ -691,14 +708,11 @@ rtc::AsyncListenSocket* IpcPacketSocketFactory::CreateServerTcpSocket(
     uint16_t max_port,
     int opts) {
   NOTREACHED();
-  return nullptr;
 }
 
 rtc::AsyncPacketSocket* IpcPacketSocketFactory::CreateClientTcpSocket(
     const rtc::SocketAddress& local_address,
     const rtc::SocketAddress& remote_address,
-    const rtc::ProxyInfo& proxy_info,
-    const std::string& user_agent,
     const rtc::PacketSocketTcpOptions& opts) {
   network::P2PSocketType type;
   if (opts.opts & rtc::PacketSocketFactory::OPT_SSLTCP) {
@@ -723,10 +737,9 @@ rtc::AsyncPacketSocket* IpcPacketSocketFactory::CreateClientTcpSocket(
   return socket.release();
 }
 
-rtc::AsyncResolverInterface* IpcPacketSocketFactory::CreateAsyncResolver() {
-  std::unique_ptr<AsyncAddressResolverImpl> resolver(
-      new AsyncAddressResolverImpl(socket_manager_));
-  return resolver.release();
+std::unique_ptr<webrtc::AsyncDnsResolverInterface>
+IpcPacketSocketFactory::CreateAsyncDnsResolver() {
+  return std::make_unique<AsyncDnsAddressResolverImpl>(socket_manager_);
 }
 
 }  // namespace sharing

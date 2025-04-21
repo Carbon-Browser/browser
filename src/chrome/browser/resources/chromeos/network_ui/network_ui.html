@@ -7,7 +7,13 @@
     margin-bottom: 10px;
   }
 
-  #global-policy {
+  #global-policy,
+  #tethering-capabilities-div,
+  #tethering-status-div,
+  #tethering-config-div,
+  #wifi-direct-capabilities-div,
+  #wifi-direct-owner-info-div,
+  #wifi-direct-client-info-div {
     white-space: pre-wrap;
   }
 
@@ -19,6 +25,11 @@
 
   #onc-import-result {
     margin: 10px 0
+  }
+
+  #tethering-config-input {
+    margin-bottom: 0;
+    margin-top: 10px;
   }
 
   iron-pages {
@@ -65,7 +76,7 @@
 
     <div>
       <h2>$i18n{resetESimCacheLabel}</h2>
-      <cr-button class="action-button" on-click="onResetESimCacheClick_">
+      <cr-button class="action-button" on-click="onResetEsimCacheClick_">
         $i18n{resetESimCacheButtonText}
       </cr-button>
     </div>
@@ -73,7 +84,7 @@
     <div>
       <h2>$i18n{disableESimProfilesLabel}</h2>
       <cr-button class="action-button"
-          on-click="onDisableActiveESimProfileClick_">
+          on-click="onDisableActiveEsimProfileClick_">
         $i18n{disableActiveESimProfileButtonText}
       </cr-button>
     </div>
@@ -87,6 +98,14 @@
         </cr-button>
       </div>
     </template>
+
+    <div>
+      <h2>$i18n{resetApnMigratorLabel}</h2>
+      <cr-button class="action-button"
+          on-click="onResetApnMigratorClick_">
+        $i18n{resetApnMigratorLabel}
+      </cr-button>
+    </div>
 
     <div>
       <h2>$i18n{addNewWifiLabel}</h2>
@@ -129,15 +148,86 @@
   </div>
 
   <div class="tabpanel" id="select">
-    <div id="select-div">
-      <network-select
-          on-network-item-selected="onNetworkItemSelected_"
-          on-custom-item-selected="onCustomItemSelected_">
-      </network-select>
-    </div>
+    <div>$i18n{renderNetworkSelectButtonDescription}</div>
+    <cr-button class="action-button" on-click="renderNetworkSelect_">
+      $i18n{renderNetworkSelectButtonText}
+    </cr-button>
+    <template is="dom-if" if="[[showNetworkSelect_]]">
+      <div id="select-div">
+        <network-select
+            on-network-item-selected="onNetworkItemSelected_"
+            on-custom-item-selected="onCustomItemSelected_">
+        </network-select>
+      </div>
+    </template>
   </div>
 
   <div class="tabpanel" id="counters">
     <traffic-counters id="traffic-counters"></traffic-counters>
   </div>
+
+  <div class="tabpanel" id="metrics">
+    <network-metrics-ui></network-metrics-ui>
+  </div>
+
+  <div class="tabpanel" id="hotspot">
+    <h2>$i18n{tetheringCapabilitiesLabel}</h2>
+    <div id="tethering-capabilities-div"></div>
+    <cr-button class="action-button" on-click="getTetheringCapabilities_">
+      $i18n{refreshTetheringCapabilitiesButtonText}
+    </cr-button>
+
+    <h2>$i18n{tetheringStatusLabel}</h2>
+    <div id="tethering-status-div"></div>
+    <cr-button class="action-button" on-click="getTetheringStatus_">
+      $i18n{refreshTetheringStatusButtonText}
+    </cr-button>
+
+    <h2>$i18n{tetheringConfigLabel}</h2>
+    <div id="tethering-config-div"></div>
+    <cr-button class="action-button" on-click="getTetheringConfig_">
+      $i18n{refreshTetheringConfigButtonText}
+    </cr-button>
+    <cr-input id="tethering-config-input" value="{{tetheringConfigToSet_}}"
+        placeholder='Example: {"ssid": "test_ssid",
+"passphrase": "test_password", "auto_disable": true, "security": "wpa2",
+"band": "5GHz"}'
+        type="text" on-input="validateJson_"
+        error-message="Please enter valid JSON object"
+        invalid="[[invalidJSON_]]">
+    </cr-input>
+    <cr-button class="action-button" on-click="setTetheringConfig_"
+        disabled="[[invalidJSON_]]">
+      $i18n{setTetheringConfigButtonText}
+    </cr-button>
+    <div id="set-tethering-config-result"></div>
+
+    <h2>$i18n{tetheringReadinessLabel}</h2>
+    <div id="check-tethering-readiness-result">Unknown</div>
+    <cr-button class="action-button" on-click="checkTetheringReadiness_">
+      $i18n{checkTetheringReadinessButtonText}
+    </cr-button>
+  </div>
+
+  <template is="dom-if" if="[[isWifiDirectEnabled_]]">
+    <div class="tabpanel" id="wifi-direct">
+      <h2>$i18n{wifiDirectCapabilitiesLabel}</h2>
+      <div id="wifi-direct-capabilities-div"></div>
+      <cr-button class="action-button" on-click="getWifiDirectCapabilities_">
+        $i18n{refreshWifiDirectCapabilitiesButtonText}
+      </cr-button>
+
+      <h2>$i18n{wifiDirectOwnerInfoLabel}</h2>
+      <div id="wifi-direct-owner-info-div"></div>
+      <cr-button class="action-button" on-click="getWifiDirectOwnerInfo_">
+        $i18n{refreshWifiDirectOwnerInfoButtonText}
+      </cr-button>
+
+      <h2>$i18n{wifiDirectClientInfoLabel}</h2>
+      <div id="wifi-direct-client-info-div"></div>
+      <cr-button class="action-button" on-click="getWifiDirectClientInfo_">
+        $i18n{refreshWifiDirectClientInfoButtonText}
+      </cr-button>
+    </div>
+  </template>
 </iron-pages>

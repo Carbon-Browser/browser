@@ -10,7 +10,7 @@ UNKNOWN focusable has_input_focus
 ++++++++++STATIC_TEXT label='Button'
 ++++++++++++UNKNOWN label='Button'
 ++++++UNKNOWN
-++++++++UNKNOWN focusable
+++++++++UNKNOWN
 ++++++++++UNKNOWN focusable
 ++++++++++++UNKNOWN hidden
 ++++++++++++++UNKNOWN hidden
@@ -19,7 +19,7 @@ UNKNOWN focusable has_input_focus
 ++++++++++++++++++++STATIC_TEXT label='Ordinary Button'
 ++++++++++++++++++++++UNKNOWN label='Ordinary Button'
 ++++++UNKNOWN
-++++++++UNKNOWN focusable
+++++++++UNKNOWN
 ++++++++++UNKNOWN focusable
 ++++++++++++UNKNOWN hidden
 ++++++++++++++UNKNOWN hidden

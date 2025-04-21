@@ -1,14 +1,14 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// <if expr="is_linux or chromeos_ash or chromeos_lacros">
-import './strings.m.js';
+// <if expr="is_linux or is_chromeos">
+import '/strings.m.js';
 
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
 // </if>
 
-import {$} from 'chrome://resources/js/util.m.js';
+import {getRequiredElement} from 'chrome://resources/js/util.js';
 
 /**
  * CSS classes for different statuses.
@@ -42,7 +42,7 @@ function addStatusRow(
     valueCol.classList.add(cssClass);
   }
 
-  $('sandbox-status').appendChild(row);
+  getRequiredElement('sandbox-status').appendChild(row);
   return row;
 }
 
@@ -52,7 +52,7 @@ function addStatusRow(
 function setEvaluation(result: boolean) {
   const message = result ? 'You are adequately sandboxed.' :
                            'You are NOT adequately sandboxed.';
-  $('evaluation').innerText = message;
+  getRequiredElement('evaluation').innerText = message;
 }
 
 // <if expr="is_android">
@@ -121,7 +121,7 @@ function androidHandler() {
 }
 // </if>
 
-// <if expr="is_linux or chromeos_ash or chromeos_lacros">
+// <if expr="is_linux or is_chromeos">
 
 /**
  * Adds a status row that reports either Yes or No.
@@ -182,7 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // <if expr="is_android">
   androidHandler();
   // </if>
-  // <if expr="is_linux or chromeos_ash or chromeos_lacros">
+  // <if expr="is_linux or is_chromeos">
   linuxHandler();
   // </if>
 });

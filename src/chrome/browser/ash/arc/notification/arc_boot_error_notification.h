@@ -1,10 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_ARC_NOTIFICATION_ARC_BOOT_ERROR_NOTIFICATION_H_
 #define CHROME_BROWSER_ASH_ARC_NOTIFICATION_ARC_BOOT_ERROR_NOTIFICATION_H_
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager_observer.h"
 #include "components/keyed_service/core/keyed_service.h"
 
@@ -36,8 +37,10 @@ class ArcBootErrorNotification : public KeyedService,
   // ArcSessionManagerObserver:
   void OnArcSessionStopped(ArcStopReason reason) override;
 
+  static void EnsureFactoryBuilt();
+
  private:
-  content::BrowserContext* const context_;
+  const raw_ptr<content::BrowserContext> context_;
 };
 
 }  // namespace arc

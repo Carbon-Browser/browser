@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 
 namespace views {
 
-MouseWatcherViewHost::MouseWatcherViewHost(View* view,
+MouseWatcherViewHost::MouseWatcherViewHost(const View* view,
                                            const gfx::Insets& hot_zone_insets)
     : view_(view), hot_zone_insets_(hot_zone_insets) {}
 
@@ -19,8 +19,9 @@ MouseWatcherViewHost::~MouseWatcherViewHost() = default;
 bool MouseWatcherViewHost::Contains(const gfx::Point& screen_point,
                                     EventType type) {
   bool in_view = IsCursorInViewZone(screen_point);
-  if (!in_view || (type == EventType::kExit && !IsMouseOverWindow()))
+  if (!in_view || (type == EventType::kExit && !IsMouseOverWindow())) {
     return false;
+  }
   return true;
 }
 
@@ -41,9 +42,10 @@ bool MouseWatcherViewHost::IsCursorInViewZone(const gfx::Point& screen_point) {
 
 // Returns true if the mouse is over the view's window.
 bool MouseWatcherViewHost::IsMouseOverWindow() {
-  Widget* widget = view_->GetWidget();
-  if (!widget)
+  const Widget* const widget = view_->GetWidget();
+  if (!widget) {
     return false;
+  }
 
   return display::Screen::GetScreen()->IsWindowUnderCursor(
       widget->GetNativeWindow());

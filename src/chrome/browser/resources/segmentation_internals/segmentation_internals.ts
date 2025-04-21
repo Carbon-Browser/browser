@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {$} from 'chrome://resources/js/util.m.js';
+import {getTrustedHTML} from 'chrome://resources/js/static_types.js';
+import {getRequiredElement} from 'chrome://resources/js/util.js';
 
-import {ClientInfo, SegmentInfo} from './segmentation_internals.mojom-webui.js';
+import type {ClientInfo, SegmentInfo} from './segmentation_internals.mojom-webui.js';
 import {SegmentationInternalsBrowserProxy} from './segmentation_internals_browser_proxy.js';
 
 function getProxy(): SegmentationInternalsBrowserProxy {
@@ -33,19 +34,20 @@ function addSegmentInfoToParent(
   targetDiv.textContent = 'Segment Id: ' + String(info.segmentName);
   div.appendChild(targetDiv);
   const resultDiv = document.createElement('div');
-  resultDiv.textContent = 'Result: ' + String(info.predictionResult);
+  resultDiv.textContent = 'Result: ' + String(info.predictionResult) +
+      ' Time: ' + String(info.predictionTimestamp.internalValue);
   div.appendChild(resultDiv);
   const buttonDiv = document.createElement('div');
   if (info.canExecuteSegment) {
     const btn = document.createElement('button');
-    btn.innerHTML = 'Execute model';
+    btn.innerHTML = getTrustedHTML`Execute model`;
     btn.addEventListener('click', () => {
       getProxy().executeModel(info.segmentId);
     });
     buttonDiv.appendChild(btn);
   }
   const overwriteText = document.createElement('label');
-  overwriteText.innerHTML = 'Overwrite result: ';
+  overwriteText.innerHTML = getTrustedHTML`Overwrite result: `;
   buttonDiv.appendChild(overwriteText);
   const overwriteValue = document.createElement('input');
   overwriteValue.type = 'number';
@@ -53,14 +55,14 @@ function addSegmentInfoToParent(
   overwriteValue.className = 'overwrite';
   buttonDiv.appendChild(overwriteValue);
   const overwriteBtn = document.createElement('button');
-  overwriteBtn.innerHTML = 'Overwrite';
+  overwriteBtn.innerHTML = getTrustedHTML`Overwrite`;
   overwriteBtn.addEventListener('click', () => {
     getProxy().overwriteResult(
         info.segmentId, parseFloat(overwriteValue.value));
   });
   buttonDiv.appendChild(overwriteBtn);
   const setSelectionBtn = document.createElement('button');
-  setSelectionBtn.innerHTML = 'Set Selected';
+  setSelectionBtn.innerHTML = getTrustedHTML`Set Selected`;
   setSelectionBtn.addEventListener('click', () => {
     getProxy().setSelected(segmentationKey, info.segmentId);
   });
@@ -90,13 +92,13 @@ function addSegmentInfoToParent(
 function initialize() {
   getProxy().getCallbackRouter().onServiceStatusChanged.addListener(
       (initialized: boolean, status: number) => {
-        $('initialized').textContent = String(initialized);
-        $('service-status').textContent = String(status);
+        getRequiredElement('initialized').textContent = String(initialized);
+        getRequiredElement('service-status').textContent = String(status);
       });
 
   getProxy().getCallbackRouter().onClientInfoAvailable.addListener(
       (clientInfos: ClientInfo[]) => {
-        const parent = $('client-container');
+        const parent = getRequiredElement('client-container');
         // Remove all current children.
         while (parent.firstChild) {
           parent.removeChild(parent.firstChild);

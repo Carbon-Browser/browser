@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,6 +26,10 @@ class FakePartialTranslateBubbleModel : public PartialTranslateBubbleModel {
     current_view_state_ = view_state;
   }
 
+  void AddObserver(PartialTranslateBubbleModel::Observer* observer) override {}
+  void RemoveObserver(
+      PartialTranslateBubbleModel::Observer* observer) override {}
+
   PartialTranslateBubbleModel::ViewState GetViewState() const override {
     return current_view_state_;
   }
@@ -35,18 +39,29 @@ class FakePartialTranslateBubbleModel : public PartialTranslateBubbleModel {
     current_view_state_ = view_state;
   }
 
-  void ShowError(translate::TranslateErrors::Type error_type) override {}
+  void SetSourceLanguage(const std::string& language_code) override {}
+  void SetTargetLanguage(const std::string& language_code) override {}
+
+  void SetSourceText(const std::u16string& text) override {}
+  std::u16string GetSourceText() const override { return u"source"; }
+  void SetTargetText(const std::u16string& text) override {}
+  std::u16string GetTargetText() const override { return u"target"; }
+
+  void SetError(translate::TranslateErrors error_type) override {}
+  translate::TranslateErrors GetError() const override {
+    return translate::TranslateErrors::NONE;
+  }
 
   int GetNumberOfSourceLanguages() const override { return 1000; }
 
   int GetNumberOfTargetLanguages() const override { return 1000; }
 
   std::u16string GetSourceLanguageNameAt(int index) const override {
-    return u"English";
+    return source_name_;
   }
 
   std::u16string GetTargetLanguageNameAt(int index) const override {
-    return u"English";
+    return target_name_;
   }
 
   int GetSourceLanguageIndex() const override { return 1; }
@@ -57,17 +72,23 @@ class FakePartialTranslateBubbleModel : public PartialTranslateBubbleModel {
 
   void UpdateTargetLanguageIndex(int index) override {}
 
-  void Translate() override { translate_called_ = true; }
+  std::string GetSourceLanguageCode() const override { return "en"; }
 
-  void RevertTranslation() override {}
+  std::string GetTargetLanguageCode() const override { return "en"; }
 
-  bool IsCurrentSelectionTranslated() const override { return false; }
+  void Translate(content::WebContents* web_contents) override {
+    translate_called_ = true;
+  }
 
   void TranslateFullPage(content::WebContents* web_contents) override {
     full_page_translate_called_ = true;
   }
 
+  void SetSourceTextTruncated(bool is_truncated) override {}
+
   ViewState current_view_state_;
+  std::u16string source_name_ = u"English";
+  std::u16string target_name_ = u"English";
   bool translate_called_ = false;
   bool full_page_translate_called_ = false;
 };
@@ -83,7 +104,9 @@ class PartialTranslateBubbleViewTest : public ChromeViewsTestBase {
     ChromeViewsTestBase::SetUp();
 
     // The bubble needs the parent as an anchor.
-    anchor_widget_ = CreateTestWidget(views::Widget::InitParams::TYPE_WINDOW);
+    anchor_widget_ =
+        CreateTestWidget(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET,
+                         views::Widget::InitParams::TYPE_WINDOW);
     anchor_widget_->Show();
 
     mock_model_ = new FakePartialTranslateBubbleModel(
@@ -92,17 +115,16 @@ class PartialTranslateBubbleViewTest : public ChromeViewsTestBase {
 
   void CreateAndShowBubble() {
     std::unique_ptr<PartialTranslateBubbleModel> model(mock_model_);
-    bubble_ = new PartialTranslateBubbleView(
-        anchor_widget_->GetContentsView(), std::move(model),
-        translate::TranslateErrors::NONE, nullptr, std::u16string(),
-        base::DoNothing());
+    bubble_ = new PartialTranslateBubbleView(anchor_widget_->GetContentsView(),
+                                             std::move(model), nullptr,
+                                             base::DoNothing());
     views::BubbleDialogDelegateView::CreateBubble(bubble_)->Show();
   }
 
   void PressButton(PartialTranslateBubbleView::ButtonID id) {
     views::Button* button =
         static_cast<views::Button*>(bubble_->GetViewByID(id));
-    ui::KeyEvent key_event(ui::ET_KEY_PRESSED, ui::VKEY_RETURN,
+    ui::KeyEvent key_event(ui::EventType::kKeyPressed, ui::VKEY_RETURN,
                            ui::DomCode::ENTER, ui::EF_NONE);
     views::test::ButtonTestApi(button).NotifyClick(key_event);
   }
@@ -115,18 +137,19 @@ class PartialTranslateBubbleViewTest : public ChromeViewsTestBase {
   }
 
   std::unique_ptr<views::Widget> anchor_widget_;
-  raw_ptr<FakePartialTranslateBubbleModel> mock_model_;
-  raw_ptr<PartialTranslateBubbleView> bubble_;
+  raw_ptr<FakePartialTranslateBubbleModel, DanglingUntriaged> mock_model_;
+  raw_ptr<PartialTranslateBubbleView, DanglingUntriaged> bubble_;
 };
 
-TEST_F(PartialTranslateBubbleViewTest, TargetLanguageTabTriggersTranslate) {
+TEST_F(PartialTranslateBubbleViewTest,
+       TargetLanguageTabDoesntTriggerTranslate) {
   base::HistogramTester histogram_tester;
   CreateAndShowBubble();
   EXPECT_FALSE(mock_model_->translate_called_);
 
   // Press the target language tab to start translation.
   bubble_->TabSelectedAt(1);
-  EXPECT_TRUE(mock_model_->translate_called_);
+  EXPECT_FALSE(mock_model_->translate_called_);
   histogram_tester.ExpectUniqueSample(
       translate::kPartialTranslateBubbleUiEventHistogramName,
       translate::PartialTranslateBubbleUiEvent::TARGET_LANGUAGE_TAB_SELECTED,
@@ -142,11 +165,24 @@ TEST_F(PartialTranslateBubbleViewTest, TabSelectedAfterTranslation) {
             static_cast<size_t>(1));
 }
 
+TEST_F(PartialTranslateBubbleViewTest, UpdateLanguageTabsFromResponse) {
+  CreateAndShowBubble();
+  EXPECT_EQ(bubble_->tabbed_pane_->GetTabAt(0)->GetTitleText(), u"English");
+  EXPECT_EQ(bubble_->tabbed_pane_->GetTabAt(1)->GetTitleText(), u"English");
+
+  mock_model_->source_name_ = u"Japanese";
+  mock_model_->target_name_ = u"French";
+  bubble_->SwitchView(PartialTranslateBubbleModel::VIEW_STATE_AFTER_TRANSLATE);
+
+  EXPECT_EQ(bubble_->tabbed_pane_->GetTabAt(0)->GetTitleText(), u"Japanese");
+  EXPECT_EQ(bubble_->tabbed_pane_->GetTabAt(1)->GetTitleText(), u"French");
+}
+
 TEST_F(PartialTranslateBubbleViewTest, SourceLanguageTabUpdatesViewState) {
   CreateAndShowBubble();
   // Select target language tab to translate.
   bubble_->TabSelectedAt(1);
-  EXPECT_EQ(PartialTranslateBubbleModel::VIEW_STATE_TRANSLATING,
+  EXPECT_EQ(PartialTranslateBubbleModel::VIEW_STATE_AFTER_TRANSLATE,
             bubble_->GetViewState());
 
   // Select source language tab to revert translation.
@@ -155,7 +191,7 @@ TEST_F(PartialTranslateBubbleViewTest, SourceLanguageTabUpdatesViewState) {
             bubble_->GetViewState());
 }
 
-// TODO(crbug.com/1337110): For some reason calling bubble_->TabSelectedAt(1)
+// TODO(crbug.com/40848161): For some reason calling bubble_->TabSelectedAt(1)
 // before bubble_->TabSelectedAt(0) in a test causes TabSelectedAt(0) to be
 // run twice, resulting in the corresponding sample being logged twice. This
 // does not happen in production. For now, test this logging separately to avoid

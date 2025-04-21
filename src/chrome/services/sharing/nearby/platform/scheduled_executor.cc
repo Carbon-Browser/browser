@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,14 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "chrome/services/sharing/nearby/platform/atomic_boolean.h"
 
-namespace location {
-namespace nearby {
-namespace chrome {
+namespace nearby::chrome {
 
 namespace {
 
@@ -182,6 +181,4 @@ bool ScheduledExecutor::OnTaskCancelled(const base::UnguessableToken& id) {
   return true;
 }
 
-}  // namespace chrome
-}  // namespace nearby
-}  // namespace location
+}  // namespace nearby::chrome

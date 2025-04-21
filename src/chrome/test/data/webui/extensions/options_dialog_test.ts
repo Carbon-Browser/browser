@@ -1,30 +1,21 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 /** @fileoverview Suite of tests for extension-options-dialog. */
 import 'chrome://extensions/extensions.js';
 
-import {ExtensionsOptionsDialogElement, OptionsDialogMaxHeight, OptionsDialogMinWidth, Service} from 'chrome://extensions/extensions.js';
-import {assert} from 'chrome://resources/js/assert.m.js';
+import type {ExtensionsOptionsDialogElement} from 'chrome://extensions/extensions.js';
+import {OptionsDialogMaxHeight, OptionsDialogMinWidth, Service} from 'chrome://extensions/extensions.js';
 import {assertEquals, assertFalse, assertGE, assertLE, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {eventToPromise} from 'chrome://webui-test/test_util.js';
 
-const extension_options_dialog_tests = {
-  suiteName: 'ExtensionOptionsDialogTests',
-  TestNames: {
-    Layout: 'Layout',
-  },
-};
-
-Object.assign(window, {extension_options_dialog_tests});
-
-suite(extension_options_dialog_tests.suiteName, function() {
+suite('ExtensionOptionsDialogTests', function() {
   let optionsDialog: ExtensionsOptionsDialogElement;
   let data: chrome.developerPrivate.ExtensionInfo;
 
   setup(function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     optionsDialog = document.createElement('extensions-options-dialog');
     document.body.appendChild(optionsDialog);
 
@@ -41,7 +32,7 @@ suite(extension_options_dialog_tests.suiteName, function() {
     return rect.width * rect.height > 0;
   }
 
-  test(assert(extension_options_dialog_tests.TestNames.Layout), function() {
+  test('Layout', function() {
     // Try showing the dialog.
     assertFalse(isDialogVisible());
     optionsDialog.show(data);

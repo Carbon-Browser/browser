@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,16 @@
 
 history_clusters::HistoryClustersService*
 AutocompleteProviderClient::GetHistoryClustersService() {
+  return nullptr;
+}
+
+history_embeddings::HistoryEmbeddingsService*
+AutocompleteProviderClient::GetHistoryEmbeddingsService() {
+  return nullptr;
+}
+
+DocumentSuggestionsService*
+AutocompleteProviderClient::GetDocumentSuggestionsService() const {
   return nullptr;
 }
 
@@ -22,6 +32,18 @@ bool AutocompleteProviderClient::IsIncognitoModeAvailable() const {
 }
 
 bool AutocompleteProviderClient::IsSharingHubAvailable() const {
+  return false;
+}
+
+bool AutocompleteProviderClient::IsHistoryEmbeddingsEnabled() const {
+  return false;
+}
+
+bool AutocompleteProviderClient::IsHistoryEmbeddingsSettingVisible() const {
+  return false;
+}
+
+bool AutocompleteProviderClient::in_background_state() const {
   return false;
 }
 

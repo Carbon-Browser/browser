@@ -23,14 +23,13 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/editing/commands/editing_commands_utilities.h"
 
 #include "third_party/blink/public/web/web_local_frame_client.h"
-#include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/dom/text.h"
 #include "third_party/blink/renderer/core/editing/commands/selection_for_undo_step.h"
 #include "third_party/blink/renderer/core/editing/commands/typing_command.h"
@@ -43,7 +42,11 @@
 #include "third_party/blink/renderer/core/frame/local_frame_client.h"
 #include "third_party/blink/renderer/core/frame/web_feature_forward.h"
 #include "third_party/blink/renderer/core/html/html_body_element.h"
+#include "third_party/blink/renderer/core/html/html_frame_set_element.h"
+#include "third_party/blink/renderer/core/html/html_head_element.h"
 #include "third_party/blink/renderer/core/html/html_html_element.h"
+#include "third_party/blink/renderer/core/html/html_olist_element.h"
+#include "third_party/blink/renderer/core/html/html_ulist_element.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
 #include "third_party/blink/renderer/core/layout/layout_object.h"
 #include "third_party/blink/renderer/core/layout/layout_text.h"
@@ -97,12 +100,30 @@ bool IsNodeRendered(const Node& node) {
   return layout_object->Style()->Visibility() == EVisibility::kVisible;
 }
 
-bool IsInline(const Node* node) {
-  if (!node)
+bool IsInlineElement(const Node* node) {
+  const Element* element = DynamicTo<Element>(node);
+  if (!element) {
     return false;
+  }
+  const ComputedStyle* style = element->GetComputedStyle();
+  // Should we apply IsDisplayInlineType()?
+  return style && (style->Display() == EDisplay::kInline ||
+                   style->Display() == EDisplay::kRuby);
+}
 
-  const ComputedStyle* style = node->GetComputedStyle();
-  return style && style->Display() == EDisplay::kInline;
+bool IsInlineNode(const Node* node) {
+  if (!node) {
+    return false;
+  }
+
+  if (IsInlineElement(node)) {
+    return true;
+  }
+
+  if (LayoutObject* layout_object = node->GetLayoutObject()) {
+    return layout_object->IsInline();
+  }
+  return false;
 }
 
 // FIXME: This method should not need to call
@@ -254,8 +275,10 @@ bool LineBreakExistsAtPosition(const Position& position) {
     return false;
 
   const auto* text_node = DynamicTo<Text>(position.AnchorNode());
-  if (!text_node || !text_node->GetLayoutObject()->Style()->PreserveNewline())
+  if (!text_node ||
+      text_node->GetLayoutObject()->Style()->ShouldCollapseBreaks()) {
     return false;
+  }
 
   unsigned offset = position.OffsetInContainerNode();
   return offset < text_node->length() && text_node->data()[offset] == '\n';
@@ -322,8 +345,9 @@ Position LeadingCollapsibleWhitespacePosition(const Position& position,
     return Position();
   if (option == kNotConsiderNonCollapsibleWhitespace &&
       anchor_node->GetLayoutObject() &&
-      !anchor_node->GetLayoutObject()->Style()->CollapseWhiteSpace())
+      anchor_node->GetLayoutObject()->Style()->ShouldPreserveWhiteSpaces()) {
     return Position();
+  }
   const String& string = anchor_text_node->data();
   const UChar previous_character = string[prev.ComputeOffsetInContainerNode()];
   const bool is_space = option == kConsiderNonCollapsibleWhitespace
@@ -499,7 +523,7 @@ VisibleSelection SelectionForParagraphIteration(
 
 const String& NonBreakingSpaceString() {
   DEFINE_STATIC_LOCAL(String, non_breaking_space_string,
-                      (&kNoBreakSpaceCharacter, 1u));
+                      (base::span_from_ref(kNoBreakSpaceCharacter)));
   return non_breaking_space_string;
 }
 
@@ -617,11 +641,17 @@ void DispatchInputEventEditableContentChanged(
 
 SelectionInDOMTree CorrectedSelectionAfterCommand(
     const SelectionForUndoStep& passed_selection,
-    const Document* document) {
-  if (!passed_selection.Base().IsValidFor(*document) ||
-      !passed_selection.Extent().IsValidFor(*document))
+    Document* document) {
+  if (!passed_selection.Anchor().IsValidFor(*document) ||
+      !passed_selection.Focus().IsValidFor(*document)) {
     return SelectionInDOMTree();
-  return passed_selection.AsSelection();
+  }
+  if (RuntimeEnabledFeatures::RemoveVisibleSelectionInDOMSelectionEnabled()) {
+    document->UpdateStyleAndLayout(DocumentUpdateReason::kEditing);
+    return CreateVisibleSelection(passed_selection.AsSelection()).AsSelection();
+  } else {
+    return passed_selection.AsSelection();
+  }
 }
 
 void ChangeSelectionAfterCommand(LocalFrame* frame,

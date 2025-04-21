@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
+#include "base/types/expected_macros.h"
 #include "base/values.h"
+#include "components/policy/core/common/chrome_schema.h"
 #include "components/policy/core/common/configuration_policy_provider.h"
 #include "components/policy/core/common/external_data_fetcher.h"
 #include "components/policy/core/common/mock_configuration_policy_provider.h"
@@ -21,8 +23,8 @@
 #include "components/policy/core/common/policy_types.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
-using ::testing::Mock;
 using ::testing::_;
+using ::testing::Mock;
 
 namespace policy {
 
@@ -126,9 +128,9 @@ const char kKeyDictionary[] = "DictionaryPolicy";
 
 }  // namespace test_keys
 
-PolicyTestBase::PolicyTestBase() {}
+PolicyTestBase::PolicyTestBase() = default;
 
-PolicyTestBase::~PolicyTestBase() {}
+PolicyTestBase::~PolicyTestBase() = default;
 
 void PolicyTestBase::SetUp() {
   const PolicyNamespace ns(POLICY_DOMAIN_CHROME, "");
@@ -141,14 +143,17 @@ void PolicyTestBase::TearDown() {
 
 bool PolicyTestBase::RegisterSchema(const PolicyNamespace& ns,
                                     const std::string& schema_string) {
-  std::string error;
-  Schema schema = Schema::Parse(schema_string, &error);
-  if (schema.valid()) {
-    schema_registry_.RegisterComponent(ns, schema);
-    return true;
-  }
-  ADD_FAILURE() << error;
-  return false;
+  ASSIGN_OR_RETURN(const auto schema, Schema::Parse(schema_string),
+                   [](const auto& e) {
+                     ADD_FAILURE() << e;
+                     return false;
+                   });
+  schema_registry_.RegisterComponent(ns, schema);
+  return true;
+}
+
+void PolicyTestBase::RegisterChromeSchema(const PolicyNamespace& ns) {
+  schema_registry_.RegisterComponent(ns, policy::GetChromeSchema());
 }
 
 PolicyProviderTestHarness::PolicyProviderTestHarness(PolicyLevel level,
@@ -156,7 +161,7 @@ PolicyProviderTestHarness::PolicyProviderTestHarness(PolicyLevel level,
                                                      PolicySource source)
     : level_(level), scope_(scope), source_(source) {}
 
-PolicyProviderTestHarness::~PolicyProviderTestHarness() {}
+PolicyProviderTestHarness::~PolicyProviderTestHarness() = default;
 
 PolicyLevel PolicyProviderTestHarness::policy_level() const {
   return level_;
@@ -171,13 +176,13 @@ PolicySource PolicyProviderTestHarness::policy_source() const {
 }
 
 void PolicyProviderTestHarness::Install3rdPartyPolicy(
-    const base::DictionaryValue* policies) {
+    const base::Value::Dict& policies) {
   FAIL();
 }
 
-ConfigurationPolicyProviderTest::ConfigurationPolicyProviderTest() {}
+ConfigurationPolicyProviderTest::ConfigurationPolicyProviderTest() = default;
 
-ConfigurationPolicyProviderTest::~ConfigurationPolicyProviderTest() {}
+ConfigurationPolicyProviderTest::~ConfigurationPolicyProviderTest() = default;
 
 void ConfigurationPolicyProviderTest::SetUp() {
   PolicyTestBase::SetUp();
@@ -216,6 +221,8 @@ void ConfigurationPolicyProviderTest::SetUp() {
 }
 
 void ConfigurationPolicyProviderTest::TearDown() {
+  test_harness_->TearDown();
+
   // Give providers the chance to clean up after themselves on the file thread.
   provider_->Shutdown();
   provider_.reset();
@@ -229,7 +236,7 @@ void ConfigurationPolicyProviderTest::CheckValue(
     base::OnceClosure install_value) {
   // Install the value, reload policy and check the provider for the value.
   std::move(install_value).Run();
-  provider_->RefreshPolicies();
+  provider_->RefreshPolicies(PolicyFetchReason::kTest);
   task_environment_.RunUntilIdle();
   PolicyBundle expected_bundle;
   expected_bundle.Get(PolicyNamespace(POLICY_DOMAIN_CHROME, std::string()))
@@ -240,7 +247,7 @@ void ConfigurationPolicyProviderTest::CheckValue(
 }
 
 TEST_P(ConfigurationPolicyProviderTest, Empty) {
-  provider_->RefreshPolicies();
+  provider_->RefreshPolicies(PolicyFetchReason::kTest);
   task_environment_.RunUntilIdle();
   const PolicyBundle kEmptyBundle;
   EXPECT_TRUE(provider_->policies().Equals(kEmptyBundle));
@@ -272,53 +279,53 @@ TEST_P(ConfigurationPolicyProviderTest, IntegerValue) {
 }
 
 TEST_P(ConfigurationPolicyProviderTest, StringListValue) {
-  base::ListValue expected_value;
+  base::Value::List expected_value;
   expected_value.Append("first");
   expected_value.Append("second");
-  CheckValue(test_keys::kKeyStringList, expected_value,
+  CheckValue(test_keys::kKeyStringList, base::Value(expected_value.Clone()),
              base::BindOnce(&PolicyProviderTestHarness::InstallStringListPolicy,
                             base::Unretained(test_harness_.get()),
-                            test_keys::kKeyStringList, &expected_value));
+                            test_keys::kKeyStringList, expected_value.Clone()));
 }
 
 TEST_P(ConfigurationPolicyProviderTest, DictionaryValue) {
-  base::Value expected_value(base::Value::Type::DICTIONARY);
-  expected_value.SetBoolKey("bool", true);
-  expected_value.SetDoubleKey("double", 123.456);
-  expected_value.SetIntKey("int", 123);
-  expected_value.SetStringKey("string", "omg");
+  base::Value::Dict expected_value;
+  expected_value.Set("bool", true);
+  expected_value.Set("double", 123.456);
+  expected_value.Set("int", 123);
+  expected_value.Set("string", "omg");
 
   {
-    base::Value list(base::Value::Type::LIST);
+    base::Value::List list;
     list.Append("first");
     list.Append("second");
-    expected_value.SetKey("array", std::move(list));
+    expected_value.Set("array", std::move(list));
   }
 
-  base::Value sublist(base::Value::Type::LIST);
+  base::Value::List sublist;
   {
-    base::Value sub(base::Value::Type::DICTIONARY);
-    sub.SetIntKey("aaa", 111);
-    sub.SetIntKey("bbb", 222);
+    base::Value::Dict sub;
+    sub.Set("aaa", 111);
+    sub.Set("bbb", 222);
     sublist.Append(std::move(sub));
   }
 
   {
-    base::Value sub(base::Value::Type::DICTIONARY);
-    sub.SetStringKey("ccc", "333");
-    sub.SetStringKey("ddd", "444");
+    base::Value::Dict sub;
+    sub.Set("ccc", "333");
+    sub.Set("ddd", "444");
     sublist.Append(std::move(sub));
   }
 
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetStringKey("sub", "value");
-  dict.SetKey("sublist", std::move(sublist));
-  expected_value.SetKey("dictionary", std::move(dict));
+  base::Value::Dict dict;
+  dict.Set("sub", "value");
+  dict.Set("sublist", std::move(sublist));
+  expected_value.Set("dictionary", std::move(dict));
 
-  CheckValue(test_keys::kKeyDictionary, expected_value,
+  CheckValue(test_keys::kKeyDictionary, base::Value(expected_value.Clone()),
              base::BindOnce(&PolicyProviderTestHarness::InstallDictionaryPolicy,
                             base::Unretained(test_harness_.get()),
-                            test_keys::kKeyDictionary, &expected_value));
+                            test_keys::kKeyDictionary, expected_value.Clone()));
 }
 
 TEST_P(ConfigurationPolicyProviderTest, RefreshPolicies) {
@@ -329,7 +336,7 @@ TEST_P(ConfigurationPolicyProviderTest, RefreshPolicies) {
   MockConfigurationPolicyObserver observer;
   provider_->AddObserver(&observer);
   EXPECT_CALL(observer, OnUpdatePolicy(provider_.get())).Times(1);
-  provider_->RefreshPolicies();
+  provider_->RefreshPolicies(PolicyFetchReason::kTest);
   task_environment_.RunUntilIdle();
   Mock::VerifyAndClearExpectations(&observer);
 
@@ -338,7 +345,7 @@ TEST_P(ConfigurationPolicyProviderTest, RefreshPolicies) {
   // OnUpdatePolicy is called when there are changes.
   test_harness_->InstallStringPolicy(test_keys::kKeyString, "value");
   EXPECT_CALL(observer, OnUpdatePolicy(provider_.get())).Times(1);
-  provider_->RefreshPolicies();
+  provider_->RefreshPolicies(PolicyFetchReason::kTest);
   task_environment_.RunUntilIdle();
   Mock::VerifyAndClearExpectations(&observer);
 
@@ -351,17 +358,17 @@ TEST_P(ConfigurationPolicyProviderTest, RefreshPolicies) {
 }
 
 Configuration3rdPartyPolicyProviderTest::
-    Configuration3rdPartyPolicyProviderTest() {}
+    Configuration3rdPartyPolicyProviderTest() = default;
 
 Configuration3rdPartyPolicyProviderTest::
-    ~Configuration3rdPartyPolicyProviderTest() {}
+    ~Configuration3rdPartyPolicyProviderTest() = default;
 
 TEST_P(Configuration3rdPartyPolicyProviderTest, Load3rdParty) {
-  base::DictionaryValue policy_dict;
-  policy_dict.SetBoolKey("bool", true);
-  policy_dict.SetDoubleKey("double", 123.456);
-  policy_dict.SetIntKey("int", 789);
-  policy_dict.SetStringKey("string", "string value");
+  base::Value::Dict policy_dict;
+  policy_dict.Set("bool", true);
+  policy_dict.Set("double", 123.456);
+  policy_dict.Set("int", 789);
+  policy_dict.Set("string", "string value");
 
   base::Value::List list;
   for (int i = 0; i < 2; ++i) {
@@ -370,39 +377,39 @@ TEST_P(Configuration3rdPartyPolicyProviderTest, Load3rdParty) {
     dict.Set("subdict", policy_dict.Clone());
     list.Append(std::move(dict));
   }
-  policy_dict.SetKey("list", base::Value(std::move(list)));
-  policy_dict.SetKey("dict", policy_dict.Clone());
+  policy_dict.Set("list", std::move(list));
+  policy_dict.Set("dict", policy_dict.Clone());
 
   // Install these policies as a Chrome policy.
   test_harness_->InstallDictionaryPolicy(test_keys::kKeyDictionary,
-                                         &policy_dict);
+                                         policy_dict.Clone());
   // Install them as 3rd party policies too.
-  base::DictionaryValue policy_3rdparty;
-  policy_3rdparty.SetPath({"extensions", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
-                          policy_dict.Clone());
-  policy_3rdparty.SetPath({"extensions", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
-                          policy_dict.Clone());
+  base::Value::Dict policy_3rdparty;
+  policy_3rdparty.SetByDottedPath("extensions.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                                  base::Value(policy_dict.Clone()));
+  policy_3rdparty.SetByDottedPath("extensions.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                                  base::Value(policy_dict.Clone()));
   // Install invalid 3rd party policies that shouldn't be loaded. These also
   // help detecting memory leaks in the code paths that detect invalid input.
-  policy_3rdparty.SetPath({"invalid-domain", "component"}, policy_dict.Clone());
-  policy_3rdparty.SetStringPath("extensions.cccccccccccccccccccccccccccccccc",
-                                "invalid-value");
-  test_harness_->Install3rdPartyPolicy(&policy_3rdparty);
+  policy_3rdparty.SetByDottedPath("invalid-domain.component",
+                                  base::Value(policy_dict.Clone()));
+  policy_3rdparty.SetByDottedPath("extensions.cccccccccccccccccccccccccccccccc",
+                                  "invalid-value");
+  test_harness_->Install3rdPartyPolicy(policy_3rdparty);
 
-  provider_->RefreshPolicies();
+  provider_->RefreshPolicies(PolicyFetchReason::kTest);
   task_environment_.RunUntilIdle();
 
   PolicyMap expected_policy;
   expected_policy.Set(test_keys::kKeyDictionary, test_harness_->policy_level(),
                       test_harness_->policy_scope(),
-                      test_harness_->policy_source(), policy_dict.Clone(),
-                      nullptr);
+                      test_harness_->policy_source(),
+                      base::Value(policy_dict.Clone()), nullptr);
   PolicyBundle expected_bundle;
   expected_bundle.Get(PolicyNamespace(POLICY_DOMAIN_CHROME, std::string())) =
       expected_policy.Clone();
   expected_policy.Clear();
-  expected_policy.LoadFrom(&policy_dict,
-                           test_harness_->policy_level(),
+  expected_policy.LoadFrom(policy_dict, test_harness_->policy_level(),
                            test_harness_->policy_scope(),
                            test_harness_->policy_source());
   expected_bundle.Get(PolicyNamespace(POLICY_DOMAIN_EXTENSIONS,

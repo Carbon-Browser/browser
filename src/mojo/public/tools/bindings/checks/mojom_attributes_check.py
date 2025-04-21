@@ -1,4 +1,4 @@
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Validate mojo attributes are allowed in Chrome before generation."""
@@ -27,15 +27,17 @@ _ENUM_ATTRIBUTES = _COMMON_ATTRIBUTES | {
     'Uuid',
 }
 
-# TODO(crbug.com/1234883) MinVersion is not needed for EnumVal.
+# TODO(crbug.com/40192185) MinVersion is not needed for EnumVal.
 _ENUMVAL_ATTRIBUTES = _COMMON_ATTRIBUTES | {
     'Default',
     'MinVersion',
 }
 
 _INTERFACE_ATTRIBUTES = _COMMON_ATTRIBUTES | {
+    'DispatchDebugAlias',
     'RenamedFrom',
     'RequireContext',
+    'RuntimeFeature',
     'ServiceSandbox',
     'Stable',
     'Uuid',
@@ -43,8 +45,11 @@ _INTERFACE_ATTRIBUTES = _COMMON_ATTRIBUTES | {
 
 _METHOD_ATTRIBUTES = _COMMON_ATTRIBUTES | {
     'AllowedContext',
+    'EstimateSize',
     'MinVersion',
     'NoInterrupt',
+    'RuntimeFeature',
+    'SupportsUrgent',
     'Sync',
     'UnlimitedSize',
 }
@@ -78,7 +83,7 @@ _UNION_FIELD_ATTRIBUTES = _COMMON_FIELD_ATTRIBUTES | {
     'Default',
 }
 
-# TODO(https://crbug.com/1193875) empty this set and remove the allowlist.
+# TODO(crbug.com/40758130) empty this set and remove the allowlist.
 _STABLE_ONLY_ALLOWLISTED_ENUMS = {
     'crosapi.mojom.OptionalBool',
     'crosapi.mojom.TriState',

@@ -1,5 +1,5 @@
 #!/usr/bin/env vpython3
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -8,45 +8,32 @@ import json
 import os
 import sys
 
+import common
 
-# Add src/testing/ into sys.path for importing xvfb and common.
 sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
+# //testing imports.
 import xvfb
-from scripts import common
-
-
-# Unfortunately we need to copy these variables from ../test_env.py.
-# Importing it and using its get_sandbox_env breaks test runs on Linux
-# (it seems to unset DISPLAY).
-CHROME_SANDBOX_ENV = 'CHROME_DEVEL_SANDBOX'
-CHROME_SANDBOX_PATH = '/opt/chromium/chrome_sandbox'
 
 
 def main(argv):
   parser = argparse.ArgumentParser()
-  parser.add_argument(
-      '--isolated-script-test-output', type=str,
-      required=False)
-  parser.add_argument(
-      '--isolated-script-test-chartjson-output', type=str,
-      required=False)
-  parser.add_argument(
-      '--isolated-script-test-perf-output', type=str,
-      required=False)
-  parser.add_argument(
-      '--isolated-script-test-filter', type=str,
-      required=False)
-  parser.add_argument(
-      '--platform', type=str, default=sys.platform, required=False)
+  parser.add_argument('--isolated-script-test-output', type=str, required=False)
+  parser.add_argument('--isolated-script-test-chartjson-output',
+                      type=str,
+                      required=False)
+  parser.add_argument('--isolated-script-test-perf-output',
+                      type=str,
+                      required=False)
+  parser.add_argument('--isolated-script-test-filter', type=str, required=False)
+  parser.add_argument('--platform',
+                      type=str,
+                      default=sys.platform,
+                      required=False)
 
   args = parser.parse_args(argv)
 
   env = os.environ.copy()
-  # Assume we want to set up the sandbox environment variables all the
-  # time; doing so is harmless on non-Linux platforms and is needed
-  # all the time on Linux.
-  env[CHROME_SANDBOX_ENV] = CHROME_SANDBOX_PATH
 
   additional_args = []
   if args.platform == 'win32':
@@ -60,8 +47,8 @@ def main(argv):
     additional_args = [
         '--additional-binary',
         os.path.join('.', 'Content Shell.app', 'Contents', 'Frameworks',
-                     'Content Shell Framework.framework', 'Versions',
-                     'Current', 'Content Shell Framework')
+                     'Content Shell Framework.framework', 'Versions', 'Current',
+                     'Content Shell Framework')
     ]
   elif args.platform == 'android':
     exe = os.path.join('.', 'lib.unstripped',
@@ -76,10 +63,14 @@ def main(argv):
         os.path.join(common.SRC_DIR, 'content', 'shell', 'tools',
                      'breakpad_integration_test.py'),
         '--verbose',
-        '--build-dir', '.',
-        '--binary', exe,
-        '--json', tempfile_path,
-        '--platform', args.platform,
+        '--build-dir',
+        '.',
+        '--binary',
+        exe,
+        '--json',
+        tempfile_path,
+        '--platform',
+        args.platform,
     ] + additional_args, env)
 
     with open(tempfile_path) as f:
@@ -87,8 +78,8 @@ def main(argv):
 
   if args.isolated_script_test_output:
     with open(args.isolated_script_test_output, 'w') as fp:
-      common.record_local_script_results(
-          'content_shell_crash_test', fp, failures, True)
+      common.record_local_script_results('content_shell_crash_test', fp,
+                                         failures, True)
 
   return rc
 
@@ -101,8 +92,8 @@ if __name__ == '__main__':
   # Conform minimally to the protocol defined by ScriptTest.
   if 'compile_targets' in sys.argv:
     funcs = {
-      'run': None,
-      'compile_targets': main_compile_targets,
+        'run': None,
+        'compile_targets': main_compile_targets,
     }
     sys.exit(common.run_script(sys.argv[1:], funcs))
   sys.exit(main(sys.argv[1:]))

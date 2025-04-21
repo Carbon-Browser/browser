@@ -1,15 +1,15 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/media/active_media_session_controller.h"
 
-#include <algorithm>
 #include <utility>
 #include <vector>
 
 #include "base/containers/contains.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/unguessable_token.h"
 #include "content/browser/browser_main_loop.h"
 #include "content/browser/media/media_keys_listener_manager_impl.h"
 #include "content/public/browser/media_keys_listener_manager.h"
@@ -22,17 +22,25 @@ namespace content {
 
 using media_session::mojom::MediaSessionAction;
 
-ActiveMediaSessionController::ActiveMediaSessionController() {
+ActiveMediaSessionController::ActiveMediaSessionController(
+    base::UnguessableToken request_id)
+    : request_id_(request_id) {
   // Connect to the MediaControllerManager and create a MediaController that
-  // controls the active session.
-  mojo::Remote<media_session::mojom::MediaControllerManager>
-      controller_manager_remote;
+  // controls the session given by `request_id`.
   GetMediaSessionService().BindMediaControllerManager(
-      controller_manager_remote.BindNewPipeAndPassReceiver());
-  controller_manager_remote->CreateActiveMediaController(
-      media_controller_remote_.BindNewPipeAndPassReceiver());
+      controller_manager_remote_.BindNewPipeAndPassReceiver());
 
-  // Observe the active media controller for changes to playback state and
+  if (request_id == base::UnguessableToken::Null()) {
+    // Create a controller that automatically follows the active session.
+    controller_manager_remote_->CreateActiveMediaController(
+        media_controller_remote_.BindNewPipeAndPassReceiver());
+  } else {
+    // Create a controller for the media session with ID `request_id`.
+    controller_manager_remote_->CreateMediaControllerForSession(
+        media_controller_remote_.BindNewPipeAndPassReceiver(), request_id);
+  }
+
+  // Observe the media controller for changes to playback state and
   // supported actions.
   media_controller_remote_->AddObserver(
       media_controller_observer_receiver_.BindNewPipeAndPassRemote());
@@ -60,26 +68,30 @@ void ActiveMediaSessionController::MediaSessionActionsChanged(
 
   // Stop listening to any keys that are currently being watched, but aren't in
   // |actions|.
+  // This loop is what tells the media keys listener manager to stop watching
+  // next/previous when a new tab is active because next/previous are in
+  // actions_ but NOT in |actions|.
   for (const MediaSessionAction& action : actions_) {
-    absl::optional<ui::KeyboardCode> action_key_code =
+    std::optional<ui::KeyboardCode> action_key_code =
         MediaSessionActionToKeyCode(action);
     if (!action_key_code.has_value())
       continue;
-    if (std::find(actions.begin(), actions.end(), action) == actions.end())
-      media_keys_listener_manager->StopWatchingMediaKey(*action_key_code, this);
+    if (!base::Contains(actions, action))
+      media_keys_listener_manager->StopWatchingMediaKey(*action_key_code, this,
+                                                        request_id_);
   }
 
   // Populate |actions_| with the new MediaSessionActions and start listening
   // to necessary media keys.
   actions_.clear();
   for (const MediaSessionAction& action : actions) {
-    absl::optional<ui::KeyboardCode> action_key_code =
+    std::optional<ui::KeyboardCode> action_key_code =
         MediaSessionActionToKeyCode(action);
     if (action_key_code.has_value()) {
       // It's okay to call this even on keys we're already listening to, since
       // it's a no-op in that case.
-      if (media_keys_listener_manager->StartWatchingMediaKey(*action_key_code,
-                                                             this)) {
+      if (media_keys_listener_manager->StartWatchingMediaKey(
+              *action_key_code, this, request_id_)) {
         actions_.insert(action);
       }
     } else {
@@ -92,7 +104,7 @@ void ActiveMediaSessionController::MediaSessionActionsChanged(
 }
 
 void ActiveMediaSessionController::MediaSessionPositionChanged(
-    const absl::optional<media_session::MediaPosition>& position) {
+    const std::optional<media_session::MediaPosition>& position) {
   position_ = position;
 }
 
@@ -204,8 +216,10 @@ void ActiveMediaSessionController::PerformAction(MediaSessionAction action) {
     case MediaSessionAction::kHangUp:
     case MediaSessionAction::kRaise:
     case MediaSessionAction::kSetMute:
+    case MediaSessionAction::kPreviousSlide:
+    case MediaSessionAction::kNextSlide:
+    case MediaSessionAction::kEnterAutoPictureInPicture:
       NOTREACHED();
-      return;
   }
 }
 
@@ -227,11 +241,10 @@ MediaSessionAction ActiveMediaSessionController::KeyCodeToMediaSessionAction(
       return MediaSessionAction::kPreviousTrack;
     default:
       NOTREACHED();
-      return MediaSessionAction::kPlay;
   }
 }
 
-absl::optional<ui::KeyboardCode>
+std::optional<ui::KeyboardCode>
 ActiveMediaSessionController::MediaSessionActionToKeyCode(
     MediaSessionAction action) const {
   switch (action) {
@@ -257,7 +270,10 @@ ActiveMediaSessionController::MediaSessionActionToKeyCode(
     case MediaSessionAction::kHangUp:
     case MediaSessionAction::kRaise:
     case MediaSessionAction::kSetMute:
-      return absl::nullopt;
+    case MediaSessionAction::kPreviousSlide:
+    case MediaSessionAction::kNextSlide:
+    case MediaSessionAction::kEnterAutoPictureInPicture:
+      return std::nullopt;
   }
 }
 

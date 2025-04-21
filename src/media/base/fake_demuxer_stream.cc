@@ -1,6 +1,11 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/base/fake_demuxer_stream.h"
 
@@ -9,14 +14,14 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
+#include "base/task/bind_post_task.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "media/base/bind_to_current_loop.h"
 #include "media/base/decoder_buffer.h"
 #include "media/base/decrypt_config.h"
 #include "media/base/media_util.h"
@@ -53,7 +58,7 @@ FakeDemuxerStream::FakeDemuxerStream(int num_configs,
                                      bool is_encrypted,
                                      gfx::Size start_coded_size,
                                      gfx::Vector2dF coded_size_delta)
-    : task_runner_(base::ThreadTaskRunnerHandle::Get()),
+    : task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       num_configs_(num_configs),
       num_buffers_in_one_config_(num_buffers_in_one_config),
       config_changes_(num_configs > 1),
@@ -80,23 +85,21 @@ void FakeDemuxerStream::Initialize() {
   next_read_num_ = 0;
 }
 
-void FakeDemuxerStream::Read(ReadCB read_cb) {
+void FakeDemuxerStream::Read(uint32_t count, ReadCB read_cb) {
   DCHECK(task_runner_->BelongsToCurrentThread());
   DCHECK(!read_cb_);
 
-  read_cb_ = BindToCurrentLoop(std::move(read_cb));
+  read_cb_ = base::BindPostTaskToCurrentDefault(std::move(read_cb));
 
   if (read_to_hold_ == next_read_num_)
     return;
 
   DCHECK(read_to_hold_ == -1 || read_to_hold_ > next_read_num_);
-  DoRead();
+  DoRead(count);
 }
 
 AudioDecoderConfig FakeDemuxerStream::audio_decoder_config() {
-  DCHECK(task_runner_->BelongsToCurrentThread());
   NOTREACHED();
-  return AudioDecoderConfig();
 }
 
 VideoDecoderConfig FakeDemuxerStream::video_decoder_config() {
@@ -148,14 +151,14 @@ void FakeDemuxerStream::Reset() {
   read_to_hold_ = -1;
 
   if (read_cb_)
-    std::move(read_cb_).Run(kAborted, nullptr);
+    std::move(read_cb_).Run(kAborted, {});
 }
 
 void FakeDemuxerStream::Error() {
   read_to_hold_ = -1;
 
   if (read_cb_)
-    std::move(read_cb_).Run(kError, nullptr);
+    std::move(read_cb_).Run(kError, {});
 }
 
 void FakeDemuxerStream::SeekToStart() {
@@ -179,45 +182,52 @@ void FakeDemuxerStream::UpdateVideoDecoderConfig() {
   next_size_.set_height(next_size_.height() + coded_size_delta_.y());
 }
 
-void FakeDemuxerStream::DoRead() {
+void FakeDemuxerStream::DoRead(int read_count) {
   DCHECK(task_runner_->BelongsToCurrentThread());
   DCHECK(read_cb_);
+  DCHECK_GE(read_count, 1);
 
   next_read_num_++;
 
   if (num_buffers_left_in_current_config_ == 0) {
     // End of stream.
     if (num_configs_left_ == 0) {
-      std::move(read_cb_).Run(kOk, DecoderBuffer::CreateEOSBuffer());
+      std::move(read_cb_).Run(kOk, {DecoderBuffer::CreateEOSBuffer()});
       return;
     }
 
     // Config change.
     num_buffers_left_in_current_config_ = num_buffers_in_one_config_;
     UpdateVideoDecoderConfig();
-    std::move(read_cb_).Run(kConfigChanged, nullptr);
+    std::move(read_cb_).Run(kConfigChanged, {});
     return;
   }
 
-  scoped_refptr<DecoderBuffer> buffer = CreateFakeVideoBufferForTest(
-      video_decoder_config_, current_timestamp_, duration_);
+  DemuxerStream::DecoderBufferVector output_buffers;
+  for (int i = 0; i < read_count; ++i) {
+    scoped_refptr<DecoderBuffer> buffer = CreateFakeVideoBufferForTest(
+        video_decoder_config_, current_timestamp_, duration_);
 
-  // TODO(xhwang): Output out-of-order buffers if needed.
-  if (is_encrypted_) {
-    buffer->set_decrypt_config(DecryptConfig::CreateCencConfig(
-        std::string(kKeyId, kKeyId + std::size(kKeyId)),
-        std::string(kIv, kIv + std::size(kIv)), std::vector<SubsampleEntry>()));
+    // TODO(xhwang): Output out-of-order buffers if needed.
+    if (is_encrypted_) {
+      buffer->set_decrypt_config(DecryptConfig::CreateCencConfig(
+          std::string(kKeyId, kKeyId + std::size(kKeyId)),
+          std::string(kIv, kIv + std::size(kIv)),
+          std::vector<SubsampleEntry>()));
+    }
+    buffer->set_timestamp(current_timestamp_);
+    buffer->set_duration(duration_);
+    current_timestamp_ += duration_;
+
+    num_buffers_left_in_current_config_--;
+    if (num_buffers_left_in_current_config_ == 0) {
+      num_configs_left_--;
+    }
+
+    num_buffers_returned_++;
+    output_buffers.emplace_back(std::move(buffer));
   }
-  buffer->set_timestamp(current_timestamp_);
-  buffer->set_duration(duration_);
-  current_timestamp_ += duration_;
-
-  num_buffers_left_in_current_config_--;
-  if (num_buffers_left_in_current_config_ == 0)
-    num_configs_left_--;
-
-  num_buffers_returned_++;
-  std::move(read_cb_).Run(kOk, buffer);
+  std::move(read_cb_).Run(kOk, std::move(output_buffers));
 }
 
 FakeMediaResource::FakeMediaResource(int num_video_configs,

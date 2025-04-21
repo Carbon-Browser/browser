@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,7 @@ class UsbContext::UsbEventHandler : public base::SimpleThread {
 
  private:
   base::subtle::Atomic32 running_;
-  raw_ptr<libusb_context> context_;
+  raw_ptr<libusb_context, DanglingUntriaged> context_;
 };
 
 UsbContext::UsbEventHandler::UsbEventHandler(libusb_context* context)

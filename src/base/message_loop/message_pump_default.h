@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,9 +28,6 @@ class BASE_EXPORT MessagePumpDefault : public MessagePump {
   void ScheduleWork() override;
   void ScheduleDelayedWork(
       const Delegate::NextWorkInfo& next_work_info) override;
-#if BUILDFLAG(IS_APPLE)
-  void SetTimerSlack(TimerSlack timer_slack) override;
-#endif
 
  private:
   // This flag is set to false when Run should return.

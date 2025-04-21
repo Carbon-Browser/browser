@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Copyright 2013 The Chromium Authors. All rights reserved.
+# Copyright 2013 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -18,10 +18,6 @@ set -e -x
 #   iOS 13/macOS 10.15 - https://support.apple.com/en-us/HT210176
 # 730 is used here as just a short-hand for 2 years
 CERT_LIFETIME=730
-# Some tests mock a test cert as being a public cert, so use the max public
-# cert lifetime for those certs. The current limit is 398 days for certs issued
-# after 2020-09-01.
-PUBLIC_CERT_LIFETIME=397
 
 rm -rf out
 mkdir out
@@ -102,14 +98,6 @@ openssl req \
   -out out/ok_cert.req \
   -config ee.cnf
 
-copy_or_generate_key ../certificates/name_constraint_good.pem \
-  out/name_constrained.key
-openssl req \
-  -new \
-  -key out/name_constrained.key \
-  -out out/name_constrained.req \
-  -config ee.cnf
-
 copy_or_generate_key ../certificates/wildcard.pem out/wildcard.key
 openssl req \
   -new \
@@ -134,15 +122,6 @@ openssl req \
   -out out/test_names.req \
   -reqexts req_test_names \
   -config ee.cnf
-
-copy_or_generate_key ../certificates/ev-multi-oid.pem out/ev-multi-oid.key
-SUBJECT_NAME="req_dn" \
-openssl req \
-  -new \
-  -key out/ev-multi-oid.key \
-  -out out/ev-multi-oid.req \
-  -reqexts req_extensions \
-  -config ee.cnf \
 
 # Generate the leaf certificates
 CA_NAME="req_ca_dn" \
@@ -186,26 +165,6 @@ CA_NAME="req_ca_dn" \
 CA_NAME="req_ca_dn" \
   openssl ca \
     -batch \
-    -extensions name_constraint_bad \
-    -subj "/CN=Leaf certificate/" \
-    -days ${CERT_LIFETIME} \
-    -in out/name_constrained.req \
-    -out out/name_constraint_bad.pem \
-    -config ca.cnf
-
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
-    -extensions name_constraint_good \
-    -subj "/CN=Leaf Certificate/" \
-    -days ${CERT_LIFETIME} \
-    -in out/name_constrained.req \
-    -out out/name_constraint_good.pem \
-    -config ca.cnf
-
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
     -extensions user_cert \
     -days ${CERT_LIFETIME} \
     -in out/localhost_cert.req \
@@ -232,16 +191,6 @@ CA_NAME="req_ca_dn" \
     -out out/test_names.pem \
     -config ca.cnf
 
-## Certificate for testing EV with multiple OIDs
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
-    -extensions ev_multi_oid \
-    -days ${CERT_LIFETIME} \
-    -in out/ev-multi-oid.req \
-    -out out/ev-multi-oid.pem \
-    -config ca.cnf
-
 /bin/sh -c "cat out/ok_cert.key out/ok_cert.pem \
     > ../certificates/ok_cert.pem"
 /bin/sh -c "cat out/wildcard.key out/wildcard.pem \
@@ -252,10 +201,6 @@ CA_NAME="req_ca_dn" \
     > ../certificates/expired_cert.pem"
 /bin/sh -c "cat out/2048-sha256-root.key out/2048-sha256-root.pem \
     > ../certificates/root_ca_cert.pem"
-/bin/sh -c "cat out/name_constrained.key out/name_constraint_bad.pem \
-    > ../certificates/name_constraint_bad.pem"
-/bin/sh -c "cat out/name_constrained.key out/name_constraint_good.pem \
-    > ../certificates/name_constraint_good.pem"
 /bin/sh -c "cat out/ok_cert.key out/bad_validity.pem \
     > ../certificates/bad_validity.pem"
 /bin/sh -c "cat out/ok_cert.key out/int/ok_cert.pem \
@@ -268,8 +213,6 @@ CA_NAME="req_ca_dn" \
     > ../certificates/x509_verify_results.chain.pem"
 /bin/sh -c "cat out/test_names.key out/test_names.pem \
     > ../certificates/test_names.pem"
-/bin/sh -c "cat out/ev-multi-oid.key out/ev-multi-oid.pem \
-    > ../certificates/ev-multi-oid.pem"
 
 # Now generate the one-off certs
 ## Self-signed cert for SPDY/QUIC/HTTP2 pooling testing
@@ -298,19 +241,6 @@ SUBJECT_NAME="req_punycode_dn" \
     -config ../scripts/ee.cnf -newkey rsa:2048 -text \
     -out ../certificates/punycodetest.pem
 
-## Reject intranet hostnames in "publicly" trusted certs
-SUBJECT_NAME="req_intranet_dn" \
-  openssl req -x509 -days ${PUBLIC_CERT_LIFETIME} -extensions req_intranet_san \
-    -config ../scripts/ee.cnf -newkey rsa:2048 -text \
-    -out ../certificates/reject_intranet_hosts.pem
-
-## Leaf certificate with a large key; Apple's certificate verifier rejects with
-## a fatal error if the key is bigger than 8192 bits.
-openssl req -x509 -days 3650 \
-    -config ../scripts/ee.cnf -newkey rsa:8200 -text \
-    -sha256 \
-    -out ../certificates/large_key.pem
-
 ## SHA1 certificate expiring in 2016.
 openssl req -config ../scripts/ee.cnf \
   -newkey rsa:2048 -text -out out/sha1_2016.req
@@ -324,241 +254,6 @@ CA_NAME="req_ca_dn" \
     -out ../certificates/sha1_2016.pem \
     -config ca.cnf \
     -md sha1
-
-## Validity too long unit test support.
-openssl req -config ../scripts/ee.cnf \
-  -newkey rsa:2048 -text -out out/10_year_validity.req
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
-    -extensions user_cert \
-    -startdate 081030000000Z \
-    -enddate   181029000000Z \
-    -in out/10_year_validity.req \
-    -out ../certificates/10_year_validity.pem \
-    -config ca.cnf
-openssl req -config ../scripts/ee.cnf \
-  -newkey rsa:2048 -text -out out/11_year_validity.req
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
-    -extensions user_cert \
-    -startdate 141030000000Z \
-    -enddate   251030000000Z \
-    -in out/11_year_validity.req \
-    -out ../certificates/11_year_validity.pem \
-    -config ca.cnf
-openssl req -config ../scripts/ee.cnf \
-  -newkey rsa:2048 -text -out out/39_months_after_2015_04.req
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
-    -extensions user_cert \
-    -startdate 150402000000Z \
-    -enddate   180702000000Z \
-    -in out/39_months_after_2015_04.req \
-    -out ../certificates/39_months_after_2015_04.pem \
-    -config ca.cnf
-openssl req -config ../scripts/ee.cnf \
-  -newkey rsa:2048 -text -out out/40_months_after_2015_04.req
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
-    -extensions user_cert \
-    -startdate 150402000000Z \
-    -enddate   180801000000Z \
-    -in out/40_months_after_2015_04.req \
-    -out ../certificates/40_months_after_2015_04.pem \
-    -config ca.cnf
-openssl req -config ../scripts/ee.cnf \
-  -newkey rsa:2048 -text -out out/60_months_after_2012_07.req
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
-    -extensions user_cert \
-    -startdate 141030000000Z \
-    -enddate   190930000000Z \
-    -in out/60_months_after_2012_07.req \
-    -out ../certificates/60_months_after_2012_07.pem \
-    -config ca.cnf
-openssl req -config ../scripts/ee.cnf \
-  -newkey rsa:2048 -text -out out/61_months_after_2012_07.req
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
-    -extensions user_cert \
-    -startdate 141030000000Z \
-    -enddate   191103000000Z \
-    -in out/61_months_after_2012_07.req \
-    -out ../certificates/61_months_after_2012_07.pem \
-    -config ca.cnf
-# 39 months, based on a CA calculating one month as 'last day of Month 0' to
-# last day of 'Month 1'.
-openssl req -config ../scripts/ee.cnf \
-  -newkey rsa:2048 -text -out out/39_months_based_on_last_day.req
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
-    -extensions user_cert \
-    -startdate 170228000000Z \
-    -enddate   200530000000Z \
-    -in out/39_months_based_on_last_day.req \
-    -out ../certificates/39_months_based_on_last_day.pem \
-    -config ca.cnf
-# start date after expiry date
-openssl req -config ../scripts/ee.cnf \
-  -newkey rsa:2048 -text -out out/start_after_expiry.req
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
-    -extensions user_cert \
-    -startdate 180901000000Z \
-    -enddate   150402000000Z \
-    -in out/start_after_expiry.req \
-    -out ../certificates/start_after_expiry.pem \
-    -config ca.cnf
-openssl req -config ../scripts/ee.cnf \
-  -newkey rsa:2048 -text -out out/start_after_expiry.req
-# Issued pre-BRs, lifetime < 120 months, expires before 2019-07-01
-openssl req -config ../scripts/ee.cnf \
-  -newkey rsa:2048 -text -out out/pre_br_validity_ok.req
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
-    -extensions user_cert \
-    -startdate 080101000000Z \
-    -enddate   150101000000Z \
-    -in out/pre_br_validity_ok.req \
-    -out ../certificates/pre_br_validity_ok.pem \
-    -config ca.cnf
-openssl req -config ../scripts/ee.cnf \
-  -newkey rsa:2048 -text -out out/pre_br_validity_ok.req
-# Issued pre-BRs, lifetime > 120 months, expires before 2019-07-01
-openssl req -config ../scripts/ee.cnf \
-  -newkey rsa:2048 -text -out out/pre_br_validity_bad_121.req
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
-    -extensions user_cert \
-    -startdate 080101000000Z \
-    -enddate   180501000000Z \
-    -in out/pre_br_validity_bad_121.req \
-    -out ../certificates/pre_br_validity_bad_121.pem \
-    -config ca.cnf
-openssl req -config ../scripts/ee.cnf \
-  -newkey rsa:2048 -text -out out/pre_br_validity_bad_121.req
-# Issued pre-BRs, lifetime < 120 months, expires after 2019-07-01
-openssl req -config ../scripts/ee.cnf \
-  -newkey rsa:2048 -text -out out/pre_br_validity_bad_2020.req
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
-    -extensions user_cert \
-    -startdate 120501000000Z \
-    -enddate   190703000000Z \
-    -in out/pre_br_validity_bad_2020.req \
-    -out ../certificates/pre_br_validity_bad_2020.pem \
-    -config ca.cnf
-# Issued after 2018-03-01, lifetime == 826 days (bad)
-openssl req -config ../scripts/ee.cnf \
-  -newkey rsa:2048 -text -out out/826_days_after_2018_03_01.req
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
-    -extensions user_cert \
-    -startdate 180302000000Z \
-    -enddate   200605000000Z \
-    -in out/826_days_after_2018_03_01.req \
-    -out ../certificates/826_days_after_2018_03_01.pem \
-    -config ca.cnf
-# Issued after 2018-03-01, lifetime == 825 days (good)
-openssl req -config ../scripts/ee.cnf \
-  -newkey rsa:2048 -text -out out/825_days_after_2018_03_01.req
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
-    -extensions user_cert \
-    -startdate 180302000000Z \
-    -enddate   200604000000Z \
-    -in out/825_days_after_2018_03_01.req \
-    -out ../certificates/825_days_after_2018_03_01.pem \
-    -config ca.cnf
-# Issued after 2018-03-01, lifetime == 825 days and one second (bad)
-openssl req -config ../scripts/ee.cnf \
-  -newkey rsa:2048 -text -out out/825_days_1_second_after_2018_03_01.req
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
-    -extensions user_cert \
-    -startdate 180302000000Z \
-    -enddate   200604000001Z \
-    -in out/825_days_1_second_after_2018_03_01.req \
-    -out ../certificates/825_days_1_second_after_2018_03_01.pem \
-    -config ca.cnf
-
-# Issued prior to 1 June 2016 (Symantec CT Enforcement Date)
-openssl req -config ../scripts/ee.cnf \
-  -newkey rsa:2048 -text -out out/pre_june_2016.req
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
-    -extensions user_cert \
-    -startdate 160501000000Z \
-    -enddate   170703000000Z \
-    -in out/pre_june_2016.req \
-    -out ../certificates/pre_june_2016.pem \
-    -config ca.cnf
-
-# Issued after 2020-09-01, lifetime == 399 days (bad)
-openssl req -config ../scripts/ee.cnf \
-  -newkey rsa:2048 -text -out out/399_days_after_2020_09_01.req
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
-    -extensions user_cert \
-    -startdate 200902000000Z \
-    -enddate   211006000000Z \
-    -in out/399_days_after_2020_09_01.req \
-    -out ../certificates/399_days_after_2020_09_01.pem \
-    -config ca.cnf
-# Issued after 2020-09-01, lifetime == 398 days (good)
-openssl req -config ../scripts/ee.cnf \
-  -newkey rsa:2048 -text -out out/398_days_after_2020_09_01.req
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
-    -extensions user_cert \
-    -startdate 200902000000Z \
-    -enddate   211005000000Z \
-    -in out/398_days_after_2020_09_01.req \
-    -out ../certificates/398_days_after_2020_09_01.pem \
-    -config ca.cnf
-# Issued after 2020-09-01, lifetime == 825 days and one second (bad)
-openssl req -config ../scripts/ee.cnf \
-  -newkey rsa:2048 -text -out out/398_days_1_second_after_2020_09_01.req
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
-    -extensions user_cert \
-    -startdate 200902000000Z \
-    -enddate   211005000001Z \
-    -in out/398_days_1_second_after_2020_09_01.req \
-    -out ../certificates/398_days_1_second_after_2020_09_01.pem \
-    -config ca.cnf
-
-
-# Issued after 1 June 2016 (Symantec CT Enforcement Date)
-openssl req -config ../scripts/ee.cnf \
-  -newkey rsa:2048 -text -out out/post_june_2016.req
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
-    -extensions user_cert \
-    -startdate 160601000000Z \
-    -enddate   170703000000Z \
-    -in out/post_june_2016.req \
-    -out ../certificates/post_june_2016.pem \
-    -config ca.cnf
 
 # Includes the canSignHttpExchangesDraft extension
 openssl req -x509 -newkey rsa:2048 \
@@ -619,22 +314,6 @@ CA_NAME="req_ca_dn" \
 /bin/sh -c "cat out/common_name_only.key out/common_name_only.pem \
     > ../certificates/common_name_only.pem"
 
-# Issued after 1 Dec 2017 (Symantec Legacy Distrust Date)
-openssl req \
-  -config ../scripts/ee.cnf \
-  -newkey rsa:2048 \
-  -text \
-  -out out/dec_2017.req
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
-    -extensions user_cert \
-    -startdate 171220000000Z \
-    -enddate   201220000000Z \
-    -in out/dec_2017.req \
-    -out ../certificates/dec_2017.pem \
-    -config ca.cnf
-
 # Issued on 1 May 2018 (after the 30 Apr 2018 CT Requirement date)
 openssl req \
   -config ../scripts/ee.cnf \
@@ -649,24 +328,6 @@ CA_NAME="req_ca_dn" \
     -enddate   200803000000Z \
     -in out/may_2018.req \
     -out ../certificates/may_2018.pem \
-    -config ca.cnf
-
-# Issued after 1 July 2019 (The macOS 10.15+ date for additional
-# policies for locally-trusted certificates - see
-# https://support.apple.com/en-us/HT210176 ) and valid for >825
-# days, even accounting for rounding issues.
-openssl req \
-  -config ../scripts/ee.cnf \
-  -newkey rsa:2048 \
-  -text \
-  -out out/900_days_after_2019_07_01.req
-CA_NAME="req_ca_dn" \
-  openssl ca \
-    -batch \
-    -extensions user_cert \
-    -days 900 \
-    -in out/900_days_after_2019_07_01.req \
-    -out ../certificates/900_days_after_2019_07_01.pem \
     -config ca.cnf
 
 ## Certificates for testing EV display (DN set with different variations)
@@ -741,7 +402,7 @@ python3 crlsetutil.py -o ../certificates/crlset_by_root_subject_no_spki.raw \
   "LimitedSubjects": {
     "../certificates/root_ca_cert.pem": []
   },
-  "Sequence": 1
+  "Sequence": 2
 }
 CRLSETBYROOTSUBJECTNOSPKI
 

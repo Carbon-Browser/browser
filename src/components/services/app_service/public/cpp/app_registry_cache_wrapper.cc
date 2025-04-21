@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,6 +32,10 @@ AppRegistryCache* AppRegistryCacheWrapper::GetAppRegistryCache(
 void AppRegistryCacheWrapper::AddAppRegistryCache(const AccountId& account_id,
                                                   AppRegistryCache* cache) {
   app_registry_caches_[account_id] = cache;
+
+  for (Observer& obs : observers_) {
+    obs.OnAppRegistryCacheAdded(account_id);
+  }
 }
 
 void AppRegistryCacheWrapper::RemoveAppRegistryCache(AppRegistryCache* cache) {
@@ -41,6 +45,14 @@ void AppRegistryCacheWrapper::RemoveAppRegistryCache(AppRegistryCache* cache) {
       return;
     }
   }
+}
+
+void AppRegistryCacheWrapper::AddObserver(Observer* observer) {
+  observers_.AddObserver(observer);
+}
+
+void AppRegistryCacheWrapper::RemoveObserver(Observer* observer) {
+  observers_.RemoveObserver(observer);
 }
 
 }  // namespace apps

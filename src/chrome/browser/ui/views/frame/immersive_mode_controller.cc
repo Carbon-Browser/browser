@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,7 @@
 ImmersiveModeController::ImmersiveModeController() = default;
 
 ImmersiveModeController::~ImmersiveModeController() {
-  for (Observer& observer : observers_)
-    observer.OnImmersiveModeControllerDestroyed();
+  observers_.Notify(&Observer::OnImmersiveModeControllerDestroyed);
 }
 
 void ImmersiveModeController::AddObserver(Observer* observer) {

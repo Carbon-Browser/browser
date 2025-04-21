@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,9 +18,7 @@ import org.chromium.url.GURL;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Interfaces in this class are used to pass data into keyboard accessory component.
- */
+/** Interfaces in this class are used to pass data into keyboard accessory component. */
 public class KeyboardAccessoryData {
     /**
      * Describes a tab which should be displayed as a small icon at the start of the keyboard
@@ -29,16 +27,13 @@ public class KeyboardAccessoryData {
     public static final class Tab {
         private final String mTitle;
         private Drawable mIcon;
-        private final @Nullable String mOpeningAnnouncement;
         private final String mContentDescription;
         private final int mTabLayout;
         private final @AccessoryTabType int mRecordingType;
         private final @Nullable Listener mListener;
         private final PropertyProvider<Drawable> mIconProvider = new PropertyProvider<>();
 
-        /**
-         * A Tab's Listener get's notified when e.g. the Tab was assigned a view.
-         */
+        /** A Tab's Listener get's notified when e.g. the Tab was assigned a view. */
         public interface Listener {
             /**
              * Triggered when the tab was successfully created.
@@ -47,24 +42,20 @@ public class KeyboardAccessoryData {
              */
             void onTabCreated(ViewGroup view);
 
-            /**
-             * Triggered when the tab becomes visible to the user.
-             */
+            /** Triggered when the tab becomes visible to the user. */
             void onTabShown();
         }
 
-        public Tab(String title, Drawable icon, String contentDescription, @LayoutRes int tabLayout,
-                @AccessoryTabType int recordingType, @Nullable Listener listener) {
-            this(title, icon, contentDescription, null, tabLayout, recordingType, listener);
-        }
-
-        public Tab(String title, Drawable icon, String contentDescription,
-                @Nullable String openingAnnouncement, @LayoutRes int tabLayout,
-                @AccessoryTabType int recordingType, @Nullable Listener listener) {
+        public Tab(
+                String title,
+                Drawable icon,
+                String contentDescription,
+                @LayoutRes int tabLayout,
+                @AccessoryTabType int recordingType,
+                @Nullable Listener listener) {
             mTitle = title;
             mIcon = icon;
             mContentDescription = contentDescription;
-            mOpeningAnnouncement = openingAnnouncement;
             mTabLayout = tabLayout;
             mListener = listener;
             mRecordingType = recordingType;
@@ -86,6 +77,7 @@ public class KeyboardAccessoryData {
 
         /**
          * Returns the title describing the source of the tab's content.
+         *
          * @return A {@link String}
          */
         public String getTitle() {
@@ -94,6 +86,7 @@ public class KeyboardAccessoryData {
 
         /**
          * Provides the icon that will be displayed in the KeyboardAccessoryCoordinator.
+         *
          * @return The small icon that identifies this tab uniquely.
          */
         public Drawable getIcon() {
@@ -102,6 +95,7 @@ public class KeyboardAccessoryData {
 
         /**
          * The description for this tab. It will become the content description of the icon.
+         *
          * @return A short string describing the name of this tab.
          */
         public String getContentDescription() {
@@ -109,15 +103,8 @@ public class KeyboardAccessoryData {
         }
 
         /**
-         * An optional announcement triggered when the Tab is opened.
-         * @return A string describing the contents of this tab.
-         */
-        public String getOpeningAnnouncement() {
-            return mOpeningAnnouncement;
-        }
-
-        /**
          * Recording type of this tab. Used to sort it into the correct UMA bucket.
+         *
          * @return A {@link AccessoryTabType}.
          */
         public @AccessoryTabType int getRecordingType() {
@@ -126,6 +113,7 @@ public class KeyboardAccessoryData {
 
         /**
          * Returns the tab layout which allows to create the tab's view on demand.
+         *
          * @return The layout resource that allows to create the view necessary for this tab.
          */
         public @LayoutRes int getTabLayout() {
@@ -134,6 +122,7 @@ public class KeyboardAccessoryData {
 
         /**
          * Returns the listener which might need to react on changes to this tab.
+         *
          * @return A {@link Listener} to be called, e.g. when the tab is created.
          */
         public @Nullable Listener getListener() {
@@ -146,24 +135,21 @@ public class KeyboardAccessoryData {
      * The most prominent example hereof is the "Generate Password" action.
      */
     public static final class Action {
-        private final String mCaption;
         private final Callback<Action> mActionCallback;
         private final Callback<Action> mLongPressCallback;
         private @AccessoryAction int mType;
 
-        public Action(String caption, @AccessoryAction int type, Callback<Action> actionCallback) {
-            this(caption, type, actionCallback, null);
+        public Action(@AccessoryAction int type, Callback<Action> actionCallback) {
+            this(type, actionCallback, null);
         }
-        public Action(String caption, @AccessoryAction int type, Callback<Action> actionCallback,
+
+        public Action(
+                @AccessoryAction int type,
+                Callback<Action> actionCallback,
                 @Nullable Callback<Action> longPressCallback) {
-            mCaption = caption;
             mActionCallback = actionCallback;
             mLongPressCallback = longPressCallback;
             mType = type;
-        }
-
-        public String getCaption() {
-            return mCaption;
         }
 
         public Callback<Action> getCallback() {
@@ -191,8 +177,11 @@ public class KeyboardAccessoryData {
                 case AccessoryAction.MANAGE_PASSWORDS:
                     typeName = "MANAGE_PASSWORDS";
                     break;
+                case AccessoryAction.CREDMAN_CONDITIONAL_UI_REENTRY:
+                    typeName = "CREDMAN_CONDITIONAL_UI_REENTRY";
+                    break;
             }
-            return "'" + mCaption + "' of type " + typeName;
+            return typeName;
         }
     }
 
@@ -207,7 +196,10 @@ public class KeyboardAccessoryData {
         private final Callback<Boolean> mCallback;
         private final @AccessoryAction int mType;
 
-        public OptionToggle(String displayText, boolean enabled, @AccessoryAction int type,
+        public OptionToggle(
+                String displayText,
+                boolean enabled,
+                @AccessoryAction int type,
                 Callback<Boolean> callback) {
             mDisplayText = displayText;
             mEnabled = enabled;
@@ -222,11 +214,79 @@ public class KeyboardAccessoryData {
         public boolean isEnabled() {
             return mEnabled;
         }
+
         public Callback<Boolean> getCallback() {
             return mCallback;
         }
+
         public @AccessoryAction int getActionType() {
             return mType;
+        }
+    }
+
+    public static final class PlusAddressInfo {
+        private final String mOrigin;
+        private final UserInfoField mPlusAddressInfo;
+
+        public PlusAddressInfo(String origin, UserInfoField plusAddressInfo) {
+            mOrigin = origin;
+            mPlusAddressInfo = plusAddressInfo;
+        }
+
+        public String getOrigin() {
+            return mOrigin;
+        }
+
+        public UserInfoField getPlusAddress() {
+            return mPlusAddressInfo;
+        }
+    }
+
+    public static final class PlusAddressSection {
+        private final String mTitle;
+        private final List<PlusAddressInfo> mPlusAddressInfoList = new ArrayList<>();
+
+        public PlusAddressSection(String title) {
+            mTitle = title;
+        }
+
+        public String getTitle() {
+            return mTitle;
+        }
+
+        public List<PlusAddressInfo> getPlusAddressInfoList() {
+            return mPlusAddressInfoList;
+        }
+    }
+
+    /** Represents a Passkey (name and ID), to be shown on the manual fallback UI. */
+    public static final class PasskeySection {
+        private final String mDisplayName;
+        private final Runnable mSelectPasskeyCallback;
+
+        /**
+         * Creates a new PasskeySection.
+         *
+         * @param displayName The text to be displayed on the footer.
+         * @param selectPasskeyCallback Called when the user taps the suggestions.
+         */
+        public PasskeySection(String displayName, Runnable selectPasskeyCallback) {
+            mDisplayName = displayName;
+            mSelectPasskeyCallback = selectPasskeyCallback;
+        }
+
+        /**
+         * This text is used for accessibility.
+         *
+         * @return The formatted username.
+         */
+        public String getDisplayName() {
+            return mDisplayName;
+        }
+
+        /** Invokes the stored callback. To be called when the user taps on the chip. */
+        public void triggerSelection() {
+            mSelectPasskeyCallback.run();
         }
     }
 
@@ -252,6 +312,7 @@ public class KeyboardAccessoryData {
 
         /**
          * Adds a new field to the group.
+         *
          * @param field The field to be added.
          */
         public void addField(UserInfoField field) {
@@ -291,8 +352,28 @@ public class KeyboardAccessoryData {
     }
 
     /**
-     * Represents a Promo Code Offer to be shown on the manual fallback UI.
+     * Represents a list of Profiles, or a Credit Cards, or the credentials for a website (username
+     * + password), to be shown on the manual fallback UI. Contains a possibly empty title for the
+     * user info section.
      */
+    public static final class UserInfoSection {
+        private final String mTitle;
+        private final List<UserInfo> mUserInfoList = new ArrayList();
+
+        public UserInfoSection(String title) {
+            mTitle = title;
+        }
+
+        public String getTitle() {
+            return mTitle;
+        }
+
+        public List<UserInfo> getUserInfoList() {
+            return mUserInfoList;
+        }
+    }
+
+    /** Represents a Promo Code Offer to be shown on the manual fallback UI. */
     public static final class PromoCodeInfo {
         private UserInfoField mPromoCode;
         private String mDetailsText;
@@ -316,15 +397,29 @@ public class KeyboardAccessoryData {
         }
     }
 
-    /**
-     * Represents a command below the suggestions, such as "Manage password...".
-     */
+    /** Represents an IBAN to be shown on the manual fallback UI. */
+    public static final class IbanInfo {
+        private UserInfoField mIbanInfo;
+
+        public IbanInfo() {}
+
+        public void setValue(UserInfoField ibanInfo) {
+            mIbanInfo = ibanInfo;
+        }
+
+        public UserInfoField getValue() {
+            return mIbanInfo;
+        }
+    }
+
+    /** Represents a command below the suggestions, such as "Manage password...". */
     public static final class FooterCommand {
         private final String mDisplayText;
         private final Callback<FooterCommand> mCallback;
 
         /**
          * Creates a new FooterCommand.
+         *
          * @param displayText The text to be displayed on the footer.
          * @param callback Called when the user taps the suggestions.
          */
@@ -341,9 +436,7 @@ public class KeyboardAccessoryData {
             return mDisplayText;
         }
 
-        /**
-         * Invokes the stored callback. To be called when the user taps on the footer command.
-         */
+        /** Invokes the stored callback. To be called when the user taps on the footer command. */
         public void execute() {
             mCallback.onResult(this);
         }
@@ -351,27 +444,38 @@ public class KeyboardAccessoryData {
 
     /**
      * Represents the contents of a accessory sheet tab below the keyboard accessory, which can
-     * correspond to passwords, credit cards, or profiles data. Created natively.
+     * correspond to passwords, credit cards, IBANs, or profiles data. Created natively.
      */
     public static final class AccessorySheetData {
-        private final String mTitle;
         private final String mWarning;
         private final @AccessoryTabType int mSheetType;
         private OptionToggle mToggle;
-        private final List<UserInfo> mUserInfoList = new ArrayList<>();
+        private final PlusAddressSection mPlusAddressSection;
+        private final UserInfoSection mUserInfoSection;
+        private final List<PasskeySection> mPasskeySectionList = new ArrayList<>();
         private final List<PromoCodeInfo> mPromoCodeInfoList = new ArrayList<>();
+        private final List<IbanInfo> mIbanInfoList = new ArrayList<>();
         private final List<FooterCommand> mFooterCommands = new ArrayList<>();
 
         /**
          * Creates the AccessorySheetData object.
-         * @param title The title of accessory sheet tab.
+         *
+         * @param sheetType The type of the accessory manual filling sheet (addresses, credit cards,
+         *     passwords).
+         * @param userInfoTitle The user info title of accessory sheet tab.
+         * @param plusAddressTitle The plus address section title.
          * @param warning An optional warning to be displayed the beginning of the sheet.
          */
-        public AccessorySheetData(@AccessoryTabType int sheetType, String title, String warning) {
-            mSheetType = sheetType;
-            mTitle = title;
+        public AccessorySheetData(
+                @AccessoryTabType int sheetType,
+                String userInfoTitle,
+                String plusAddressTitle,
+                String warning) {
             mWarning = warning;
+            mSheetType = sheetType;
             mToggle = null;
+            mUserInfoSection = new UserInfoSection(userInfoTitle);
+            mPlusAddressSection = new PlusAddressSection(plusAddressTitle);
         }
 
         public @AccessoryTabType int getSheetType() {
@@ -382,16 +486,8 @@ public class KeyboardAccessoryData {
             mToggle = toggle;
         }
 
-        @Nullable
-        public OptionToggle getOptionToggle() {
+        public @Nullable OptionToggle getOptionToggle() {
             return mToggle;
-        }
-
-        /**
-         * Returns the title of the accessory sheet. This text is also used for accessibility.
-         */
-        public String getTitle() {
-            return mTitle;
         }
 
         /**
@@ -402,22 +498,49 @@ public class KeyboardAccessoryData {
         }
 
         /**
-         * Returns the list of {@link UserInfo} to be shown on the accessory sheet.
+         * Returns the possible empty title for the user info section to be shown on the accessory
+         * sheet
          */
+        public String getUserInfoTitle() {
+            return mUserInfoSection.getTitle();
+        }
+
+        /** Returns the list of {@link UserInfo} to be shown on the accessory sheet. */
         public List<UserInfo> getUserInfoList() {
-            return mUserInfoList;
+            return mUserInfoSection.getUserInfoList();
         }
 
         /**
-         * Returns the list of {@link PromoCodeInfo} to be shown on the accessory sheet.
+         * @return a possibly empty title for the plus address section to be shown on the accessory
+         *     sheet
          */
+        public String getPlusAddressSectionTitle() {
+            return mPlusAddressSection.getTitle();
+        }
+
+        /**
+         * @return a list if {@link PlusAddressInfo} to be shown on the accessory sheet.
+         */
+        public List<PlusAddressInfo> getPlusAddressInfoList() {
+            return mPlusAddressSection.getPlusAddressInfoList();
+        }
+
+        /** Returns the list of {@link PasskeySection} to be shown on the accessory sheet. */
+        public List<PasskeySection> getPasskeySectionList() {
+            return mPasskeySectionList;
+        }
+
+        /** Returns the list of {@link PromoCodeInfo} to be shown on the accessory sheet. */
         public List<PromoCodeInfo> getPromoCodeInfoList() {
             return mPromoCodeInfoList;
         }
 
-        /**
-         * Returns the list of {@link FooterCommand} to be shown on the accessory sheet.
-         */
+        /** Returns the list of {@link IbanInfo} to be shown on the accessory sheet. */
+        public List<IbanInfo> getIbanInfoList() {
+            return mIbanInfoList;
+        }
+
+        /** Returns the list of {@link FooterCommand} to be shown on the accessory sheet. */
         public List<FooterCommand> getFooterCommands() {
             return mFooterCommands;
         }

@@ -1,16 +1,19 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/proxy_resolution/win/proxy_config_service_win.h"
 
 #include <windows.h>
+
 #include <winhttp.h>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
+#include "base/not_fatal_until.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_tokenizer.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -26,21 +29,25 @@ namespace {
 const int kPollIntervalSec = 10;
 
 void FreeIEConfig(WINHTTP_CURRENT_USER_IE_PROXY_CONFIG* ie_config) {
-  if (ie_config->lpszAutoConfigUrl)
+  if (ie_config->lpszAutoConfigUrl) {
     GlobalFree(ie_config->lpszAutoConfigUrl);
-  if (ie_config->lpszProxy)
+  }
+  if (ie_config->lpszProxy) {
     GlobalFree(ie_config->lpszProxy);
-  if (ie_config->lpszProxyBypass)
+  }
+  if (ie_config->lpszProxyBypass) {
     GlobalFree(ie_config->lpszProxyBypass);
+  }
 }
 
 }  // namespace
 
 ProxyConfigServiceWin::ProxyConfigServiceWin(
     const NetworkTrafficAnnotationTag& traffic_annotation)
-    : PollingProxyConfigService(base::Seconds(kPollIntervalSec),
-                                &ProxyConfigServiceWin::GetCurrentProxyConfig,
-                                traffic_annotation) {
+    : PollingProxyConfigService(
+          base::Seconds(kPollIntervalSec),
+          base::BindRepeating(&ProxyConfigServiceWin::GetCurrentProxyConfig),
+          traffic_annotation) {
   NetworkChangeNotifier::AddNetworkChangeObserver(this);
 }
 
@@ -48,7 +55,7 @@ ProxyConfigServiceWin::~ProxyConfigServiceWin() {
   NetworkChangeNotifier::RemoveNetworkChangeObserver(this);
   // The registry functions below will end up going to disk.  TODO: Do this on
   // another thread to avoid slowing the current thread.  http://crbug.com/61453
-  base::ThreadRestrictions::ScopedAllowIO allow_io;
+  base::ScopedAllowBlocking scoped_allow_blocking;
   keys_to_watch_.clear();
 }
 
@@ -70,17 +77,19 @@ void ProxyConfigServiceWin::OnNetworkChanged(
   // This is conditioned on CONNECTION_NONE to avoid duplicating work, as
   // NetworkChangeNotifier additionally sends it preceding completion.
   // See https://crbug.com/1071901.
-  if (type == NetworkChangeNotifier::CONNECTION_NONE)
+  if (type == NetworkChangeNotifier::CONNECTION_NONE) {
     CheckForChangesNow();
+  }
 }
 
 void ProxyConfigServiceWin::StartWatchingRegistryForChanges() {
-  if (!keys_to_watch_.empty())
+  if (!keys_to_watch_.empty()) {
     return;  // Already initialized.
+  }
 
   // The registry functions below will end up going to disk.  Do this on another
   // thread to avoid slowing the current thread.  http://crbug.com/61453
-  base::ThreadRestrictions::ScopedAllowIO allow_io;
+  base::ScopedAllowBlocking scoped_allow_blocking;
 
   // There are a number of different places where proxy settings can live
   // in the registry. In some cases it appears in a binary value, in other
@@ -111,8 +120,9 @@ bool ProxyConfigServiceWin::AddKeyToWatchList(HKEY rootkey,
                                               const wchar_t* subkey) {
   std::unique_ptr<base::win::RegKey> key =
       std::make_unique<base::win::RegKey>();
-  if (key->Create(rootkey, subkey, KEY_NOTIFY) != ERROR_SUCCESS)
+  if (key->Create(rootkey, subkey, KEY_NOTIFY) != ERROR_SUCCESS) {
     return false;
+  }
 
   if (!key->StartWatching(base::BindOnce(
           &ProxyConfigServiceWin::OnObjectSignaled, base::Unretained(this),
@@ -126,11 +136,9 @@ bool ProxyConfigServiceWin::AddKeyToWatchList(HKEY rootkey,
 
 void ProxyConfigServiceWin::OnObjectSignaled(base::win::RegKey* key) {
   // Figure out which registry key signalled this change.
-  auto it = std::find_if(keys_to_watch_.begin(), keys_to_watch_.end(),
-                         [key](const std::unique_ptr<base::win::RegKey>& ptr) {
-                           return ptr.get() == key;
-                         });
-  DCHECK(it != keys_to_watch_.end());
+  auto it = base::ranges::find(keys_to_watch_, key,
+                               &std::unique_ptr<base::win::RegKey>::get);
+  CHECK(it != keys_to_watch_.end(), base::NotFatalUntil::M130);
 
   // Keep watching the registry key.
   if (!key->StartWatching(
@@ -149,8 +157,8 @@ void ProxyConfigServiceWin::GetCurrentProxyConfig(
     ProxyConfigWithAnnotation* config) {
   WINHTTP_CURRENT_USER_IE_PROXY_CONFIG ie_config = {0};
   if (!WinHttpGetIEProxyConfigForCurrentUser(&ie_config)) {
-    LOG(ERROR) << "WinHttpGetIEProxyConfigForCurrentUser failed: " <<
-        GetLastError();
+    LOG(ERROR) << "WinHttpGetIEProxyConfigForCurrentUser failed: "
+               << GetLastError();
     *config = ProxyConfigWithAnnotation::CreateDirect();
     return;
   }
@@ -165,8 +173,9 @@ void ProxyConfigServiceWin::GetCurrentProxyConfig(
 void ProxyConfigServiceWin::SetFromIEConfig(
     ProxyConfig* config,
     const WINHTTP_CURRENT_USER_IE_PROXY_CONFIG& ie_config) {
-  if (ie_config.fAutoDetect)
+  if (ie_config.fAutoDetect) {
     config->set_auto_detect(true);
+  }
   if (ie_config.lpszProxy) {
     // lpszProxy may be a single proxy, or a proxy per scheme. The format
     // is compatible with ProxyConfig::ProxyRules's string format.
@@ -182,8 +191,9 @@ void ProxyConfigServiceWin::SetFromIEConfig(
       config->proxy_rules().bypass_rules.AddRuleFromString(bypass_url_domain);
     }
   }
-  if (ie_config.lpszAutoConfigUrl)
+  if (ie_config.lpszAutoConfigUrl) {
     config->set_pac_url(GURL(base::as_u16cstr(ie_config.lpszAutoConfigUrl)));
+  }
 }
 
 }  // namespace net

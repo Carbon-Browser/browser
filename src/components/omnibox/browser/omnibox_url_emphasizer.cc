@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,9 @@
 #include "components/omnibox/browser/autocomplete_input.h"
 #include "components/omnibox/browser/autocomplete_scheme_classifier.h"
 #include "components/omnibox/browser/autocomplete_scheme_classifier_android.h"
-#include "components/omnibox/browser/jni_headers/OmniboxUrlEmphasizer_jni.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "components/omnibox/browser/scheme_classifier_jni/OmniboxUrlEmphasizer_jni.h"
 
 using base::android::JavaParamRef;
 using base::android::ScopedJavaLocalRef;
@@ -32,5 +34,5 @@ JNI_OmniboxUrlEmphasizer_ParseForEmphasizeComponents(
       text, *autocomplete_scheme_classifier, &scheme, &host);
 
   int emphasize_values[] = {scheme.begin, scheme.len, host.begin, host.len};
-  return base::android::ToJavaIntArray(env, emphasize_values, 4);
+  return base::android::ToJavaIntArray(env, emphasize_values);
 }

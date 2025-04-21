@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "extensions/browser/api/api_resource_manager.h"
 #include "extensions/browser/api/sockets_tcp/sockets_tcp_api.h"
 #include "extensions/browser/api/sockets_tcp_server/sockets_tcp_server_api.h"
+#include "extensions/common/extension_id.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "services/network/public/mojom/tcp_socket.mojom.h"
 
@@ -30,18 +31,16 @@ namespace api {
 
 // Dispatch events related to "sockets.tcp" sockets from callback on native
 // socket instances. There is one instance per profile.
-class TCPServerSocketEventDispatcher
-    : public BrowserContextKeyedAPI,
-      public base::SupportsWeakPtr<TCPServerSocketEventDispatcher> {
+class TCPServerSocketEventDispatcher : public BrowserContextKeyedAPI {
  public:
   explicit TCPServerSocketEventDispatcher(content::BrowserContext* context);
   ~TCPServerSocketEventDispatcher() override;
 
   // Server socket is active, start accepting connections from it.
-  void OnServerSocketListen(const std::string& extension_id, int socket_id);
+  void OnServerSocketListen(const ExtensionId& extension_id, int socket_id);
 
   // Server socket is active again, start accepting connections from it.
-  void OnServerSocketResume(const std::string& extension_id, int socket_id);
+  void OnServerSocketResume(const ExtensionId& extension_id, int socket_id);
 
   // BrowserContextKeyedAPI implementation.
   static BrowserContextKeyedAPIFactory<TCPServerSocketEventDispatcher>*
@@ -69,15 +68,15 @@ class TCPServerSocketEventDispatcher
     ~AcceptParams();
 
     content::BrowserThread::ID thread_id;
-    raw_ptr<void> browser_context_id;
-    std::string extension_id;
+    raw_ptr<void, LeakedDanglingUntriaged> browser_context_id;
+    ExtensionId extension_id;
     scoped_refptr<ServerSocketData> server_sockets;
     scoped_refptr<ClientSocketData> client_sockets;
     int socket_id;
   };
 
   // Start an accept and register a callback.
-  void StartSocketAccept(const std::string& extension_id, int socket_id);
+  void StartSocketAccept(const ExtensionId& extension_id, int socket_id);
 
   // Start an accept and register a callback.
   static void StartAccept(const AcceptParams& params);
@@ -87,7 +86,7 @@ class TCPServerSocketEventDispatcher
       const AcceptParams& params,
       int result,
       mojo::PendingRemote<network::mojom::TCPConnectedSocket> socket,
-      const absl::optional<net::IPEndPoint>& remote_addr,
+      const std::optional<net::IPEndPoint>& remote_addr,
       mojo::ScopedDataPipeConsumerHandle receive_pipe_handle,
       mojo::ScopedDataPipeProducerHandle send_pipe_handle);
 
@@ -97,12 +96,12 @@ class TCPServerSocketEventDispatcher
 
   // Dispatch an extension event on to EventRouter instance on UI thread.
   static void DispatchEvent(void* browser_context_id,
-                            const std::string& extension_id,
+                            const ExtensionId& extension_id,
                             std::unique_ptr<Event> event);
 
   // Usually IO thread (except for unit testing).
   content::BrowserThread::ID thread_id_;
-  const raw_ptr<content::BrowserContext> browser_context_;
+  raw_ptr<content::BrowserContext> browser_context_;
   scoped_refptr<ServerSocketData> server_sockets_;
   scoped_refptr<ClientSocketData> client_sockets_;
 };

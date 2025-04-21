@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define HEADLESS_LIB_BROWSER_HEADLESS_SHELL_APPLICATION_MAC_H_
 
 #include "base/mac/scoped_sending_event.h"
-#include "base/message_loop/message_pump_mac.h"
+#include "base/message_loop/message_pump_apple.h"
 
 // Headless shell uses |MessagePumpMac|, so it needs to implement the
 // |CRAppProtocol|.

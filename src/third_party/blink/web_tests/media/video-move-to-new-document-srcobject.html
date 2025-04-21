@@ -11,12 +11,14 @@
           {video:true},
           t.step_func(stream => video.srcObject = stream),
           t.unreached_func("Did not get mediastream"));
-        video.onloadeddata = this.step_func(function() {
+        video.onloadeddata = t.step_func(function() {
             video.onloadeddata = null;
             assert_true(video.networkState == video.NETWORK_IDLE || video.networkState == video.NETWORK_LOADING);
             assert_greater_than(video.readyState, video.HAVE_METADATA);
             // Move the video element to iframe document from
-            // main document and verify that it loads properly
+            // main document and verify that it does reload
+            // Video does reload because player reuse is currently
+            // not enabled for non-pip related move.
             document.querySelector('iframe').contentDocument.body.appendChild(video);
             assert_equals(video.networkState, video.NETWORK_NO_SOURCE);
             assert_equals(video.readyState, video.HAVE_NOTHING);

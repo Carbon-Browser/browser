@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "content/browser/android/synchronous_compositor_host.h"
 #include "content/browser/renderer_host/render_process_host_impl.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -42,9 +42,9 @@ void SynchronousCompositorSyncCallBridge::RemoteClosedOnIOThread() {
 bool SynchronousCompositorSyncCallBridge::ReceiveFrameOnIOThread(
     int layer_tree_frame_sink_id,
     uint32_t metadata_version,
-    absl::optional<viz::LocalSurfaceId> local_surface_id,
-    absl::optional<viz::CompositorFrame> compositor_frame,
-    absl::optional<viz::HitTestRegionList> hit_test_region_list) {
+    std::optional<viz::LocalSurfaceId> local_surface_id,
+    std::optional<viz::CompositorFrame> compositor_frame,
+    std::optional<viz::HitTestRegionList> hit_test_region_list) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
   base::AutoLock lock(lock_);
   if (remote_state_ != RemoteState::READY || frame_futures_.empty())
@@ -157,8 +157,9 @@ void SynchronousCompositorSyncCallBridge::BeginFrameCompleteOnUIThread() {
       render_params = last_render_params_.Clone();
     }
   }
-  if (render_params)
-    host_->UpdateState(std::move(render_params));
+  if (render_params) {
+    host_->BeginFrameComplete(std::move(render_params));
+  }
 }
 
 void SynchronousCompositorSyncCallBridge::ProcessFrameMetadataOnUIThread(

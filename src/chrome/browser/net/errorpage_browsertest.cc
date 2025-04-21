@@ -1,17 +1,21 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+// This source code is a part of eyeo Chromium SDK.
+// Use of this source code is governed by the GPLv3 that can be found in the
+// components/adblock/LICENSE file.
 
 #include <algorithm>
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/weak_ptr.h"
 #include "base/path_service.h"
@@ -20,7 +24,6 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/synchronization/lock.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -39,6 +42,7 @@
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
+#include "components/adblock/core/common/adblock_switches.h"
 #include "components/browsing_data/content/browsing_data_helper.h"
 #include "components/embedder_support/switches.h"
 #include "components/error_page/content/browser/net_error_auto_reloader.h"
@@ -60,6 +64,7 @@
 #include "content/public/browser/storage_partition.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
+#include "content/public/common/isolated_world_ids.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/test_navigation_observer.h"
@@ -245,7 +250,7 @@ class TestFailProvisionalLoadObserver : public content::WebContentsObserver {
   TestFailProvisionalLoadObserver& operator=(
       const TestFailProvisionalLoadObserver&) = delete;
 
-  ~TestFailProvisionalLoadObserver() override {}
+  ~TestFailProvisionalLoadObserver() override = default;
 
   void DidFinishNavigation(
       content::NavigationHandle* navigation_handle) override {
@@ -411,12 +416,12 @@ IN_PROC_BROWSER_TEST_F(DNSErrorPageTest, DNSError_DoReload) {
 
   // Clicking the reload button should load the error page again.
   content::TestNavigationObserver nav_observer(web_contents, 1);
-  // Can't use content::ExecuteScript because it waits for scripts to send
+  // Can't use content::ExecJs because it waits for scripts to send
   // notification that they've run, and scripts that trigger a navigation may
   // not send that notification.
   web_contents->GetPrimaryMainFrame()->ExecuteJavaScriptForTests(
       u"document.getElementById('reload-button').click();",
-      base::NullCallback());
+      base::NullCallback(), content::ISOLATED_WORLD_ID_GLOBAL);
   nav_observer.Wait();
   ExpectDisplayingErrorPage(browser(), net::ERR_NAME_NOT_RESOLVED);
 }
@@ -437,19 +442,20 @@ IN_PROC_BROWSER_TEST_F(DNSErrorPageTest,
   // Do a same-document navigation on the error page, which should not result
   // in a new navigation.
   web_contents->GetPrimaryMainFrame()->ExecuteJavaScriptForTests(
-      u"document.location='#';", base::NullCallback());
+      u"document.location='#';", base::NullCallback(),
+      content::ISOLATED_WORLD_ID_GLOBAL);
   content::WaitForLoadStop(web_contents);
   // Page being displayed should not change.
   ExpectDisplayingErrorPage(browser(), net::ERR_NAME_NOT_RESOLVED);
 
   // Clicking the reload button should load the error page again.
   content::TestNavigationObserver nav_observer2(web_contents);
-  // Can't use content::ExecuteScript because it waits for scripts to send
+  // Can't use content::ExecJs because it waits for scripts to send
   // notification that they've run, and scripts that trigger a navigation may
   // not send that notification.
   web_contents->GetPrimaryMainFrame()->ExecuteJavaScriptForTests(
       u"document.getElementById('reload-button').click();",
-      base::NullCallback());
+      base::NullCallback(), content::ISOLATED_WORLD_ID_GLOBAL);
   nav_observer2.Wait();
   ExpectDisplayingErrorPage(browser(), net::ERR_NAME_NOT_RESOLVED);
 }
@@ -529,7 +535,8 @@ IN_PROC_BROWSER_TEST_F(DNSErrorPageTest, IFrameDNSError_JavaScript) {
     TestFailProvisionalLoadObserver fail_observer(wc);
     content::LoadStopObserver load_observer(wc);
     wc->GetPrimaryMainFrame()->ExecuteJavaScriptForTests(
-        base::ASCIIToUTF16(script), base::NullCallback());
+        base::ASCIIToUTF16(script), base::NullCallback(),
+        content::ISOLATED_WORLD_ID_GLOBAL);
     load_observer.Wait();
 
     // Ensure we saw the expected failure.
@@ -548,7 +555,8 @@ IN_PROC_BROWSER_TEST_F(DNSErrorPageTest, IFrameDNSError_JavaScript) {
   {
     content::LoadStopObserver load_observer(wc);
     wc->GetPrimaryMainFrame()->ExecuteJavaScriptForTests(
-        base::ASCIIToUTF16(script), base::NullCallback());
+        base::ASCIIToUTF16(script), base::NullCallback(),
+        content::ISOLATED_WORLD_ID_GLOBAL);
     load_observer.Wait();
   }
 
@@ -558,7 +566,8 @@ IN_PROC_BROWSER_TEST_F(DNSErrorPageTest, IFrameDNSError_JavaScript) {
     TestFailProvisionalLoadObserver fail_observer(wc);
     content::LoadStopObserver load_observer(wc);
     wc->GetPrimaryMainFrame()->ExecuteJavaScriptForTests(
-        base::ASCIIToUTF16(script), base::NullCallback());
+        base::ASCIIToUTF16(script), base::NullCallback(),
+        content::ISOLATED_WORLD_ID_GLOBAL);
     load_observer.Wait();
 
     EXPECT_EQ(fail_url, fail_observer.fail_url());
@@ -615,7 +624,7 @@ IN_PROC_BROWSER_TEST_F(DNSErrorPageTest, Incognito) {
 
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
       incognito_browser,
-      URLRequestFailedJob::GetMockHttpUrl(net::ERR_NAME_NOT_RESOLVED)));
+      URLRequestFailedJob::GetMockHttpsUrl(net::ERR_NAME_NOT_RESOLVED)));
 
   // Verify that the expected error page is being displayed.
   ExpectDisplayingErrorPage(incognito_browser, net::ERR_NAME_NOT_RESOLVED);
@@ -637,6 +646,9 @@ class ErrorPageAutoReloadTest : public InProcessBrowserTest {
  public:
   void SetUpCommandLine(base::CommandLine* command_line) override {
     command_line->AppendSwitch(embedder_support::kEnableAutoReload);
+    // The URLLoaderInterceptor is not resilient to the browser making
+    // adblock-related requests, they confuse this test.
+    command_line->AppendSwitch(adblock::switches::kDisableAdblock);
   }
 
   void TearDownOnMainThread() override { url_loader_interceptor_.reset(); }
@@ -698,7 +710,7 @@ class ErrorPageAutoReloadTest : public InProcessBrowserTest {
     web_contents->GetController().LoadURL(url, content::Referrer(),
                                           ui::PAGE_TRANSITION_TYPED,
                                           /*extra_headers=*/std::string());
-    first_navigation.WaitForNavigationFinished();
+    ASSERT_TRUE(first_navigation.WaitForNavigationFinished());
     EXPECT_TRUE(first_navigation.was_committed());
     EXPECT_FALSE(first_navigation.was_successful());
 
@@ -706,7 +718,7 @@ class ErrorPageAutoReloadTest : public InProcessBrowserTest {
     // This should not be committed.
     content::TestNavigationManager failed_auto_reload_navigation(web_contents,
                                                                  url);
-    failed_auto_reload_navigation.WaitForNavigationFinished();
+    ASSERT_TRUE(failed_auto_reload_navigation.WaitForNavigationFinished());
     EXPECT_FALSE(failed_auto_reload_navigation.was_committed());
   }
 
@@ -738,7 +750,9 @@ IN_PROC_BROWSER_TEST_F(ErrorPageAutoReloadTest, MAYBE_AutoReload) {
   EXPECT_EQ(kRequestsToFail + 1, interceptor_requests());
 }
 
-IN_PROC_BROWSER_TEST_F(ErrorPageAutoReloadTest, ManualReloadNotSuppressed) {
+// TODO(crbug.com/40856405): Test is flaky.
+IN_PROC_BROWSER_TEST_F(ErrorPageAutoReloadTest,
+                       DISABLED_ManualReloadNotSuppressed) {
   GURL test_url("http://error.page.auto.reload");
   const int32_t kRequestsToFail = 3;
   InstallInterceptor(test_url, kRequestsToFail);
@@ -759,7 +773,7 @@ IN_PROC_BROWSER_TEST_F(ErrorPageAutoReloadTest, ManualReloadNotSuppressed) {
   content::TestNavigationObserver nav_observer(web_contents, 1);
   web_contents->GetPrimaryMainFrame()->ExecuteJavaScriptForTests(
       u"document.getElementById('reload-button').click();",
-      base::NullCallback());
+      base::NullCallback(), content::ISOLATED_WORLD_ID_GLOBAL);
   nav_observer.Wait();
   EXPECT_FALSE(IsDisplayingText(
       browser(), l10n_util::GetStringUTF8(
@@ -769,7 +783,7 @@ IN_PROC_BROWSER_TEST_F(ErrorPageAutoReloadTest, ManualReloadNotSuppressed) {
 // Make sure that a same document navigation does not cause issues with the
 // auto-reload timer.  Note that this test was added due to this case causing
 // a crash.  On regression, this test may hang due to a crashed renderer.
-// TODO(crbug.com/1111535): Flaky.
+// TODO(crbug.com/40709227): Flaky.
 IN_PROC_BROWSER_TEST_F(ErrorPageAutoReloadTest,
                        DISABLED_IgnoresSameDocumentNavigation) {
   GURL test_url("http://error.page.auto.reload");
@@ -789,7 +803,8 @@ IN_PROC_BROWSER_TEST_F(ErrorPageAutoReloadTest,
   // Same-document navigation on an error page should not interrupt the
   // scheduled auto-reload which should still be pending on the WebContents.
   web_contents->GetPrimaryMainFrame()->ExecuteJavaScriptForTests(
-      u"document.location='#';", base::NullCallback());
+      u"document.location='#';", base::NullCallback(),
+      content::ISOLATED_WORLD_ID_GLOBAL);
 
   // Wait for the second auto reload to happen. It will succeed and update the
   // WebContents' title.
@@ -993,12 +1008,23 @@ class ErrorPageForIDNTest : public InProcessBrowserTest {
   static const char kHostname[];
   static const char kHostnameJSUnicode[];
 
+  ErrorPageForIDNTest() {
+    // TODO(crbug.com/334954143) This test clears the AcceptLanguage Prefs which
+    // causes Accept-Language to not work correctly. Fix the tests when turning
+    // on the reduce accept-language feature.
+    scoped_feature_list_.InitWithFeatures(
+        {}, {network::features::kReduceAcceptLanguage});
+  }
+
   // InProcessBrowserTest:
   void SetUpOnMainThread() override {
     // Clear AcceptLanguages to force punycode decoding.
     browser()->profile()->GetPrefs()->SetString(
         language::prefs::kAcceptLanguages, std::string());
   }
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 const char ErrorPageForIDNTest::kHostname[] =
@@ -1067,28 +1093,27 @@ void ClickDiagnosticsLink(Browser* browser) {
 // launch chrome://diagnostics/?connectivity app by default. Not running test on
 // LaCROS due to errors on Wayland initialization and to keep test to ChromeOS
 // devices.
-// TODO(crbug.com/1285441): Disabled due to test flakes.
-class ErrorPageOfflineAppLaunchTest : public ash::SystemWebAppBrowserTestBase {
- public:
-  ErrorPageOfflineAppLaunchTest() : ash::SystemWebAppBrowserTestBase(true) {}
-};
+using ErrorPageOfflineAppLaunchTest = ash::SystemWebAppBrowserTestBase;
 
-IN_PROC_BROWSER_TEST_F(ErrorPageOfflineAppLaunchTest,
-                       DISABLED_DiagnosticsConnectivity) {
+IN_PROC_BROWSER_TEST_F(ErrorPageOfflineAppLaunchTest, DiagnosticsConnectivity) {
   WaitForTestSystemAppInstall();
   ASSERT_TRUE(ui_test_utils::NavigateToURL(
       browser(),
       URLRequestFailedJob::GetMockHttpUrl(net::ERR_INTERNET_DISCONNECTED)));
 
+  const GURL expected_url = GURL("chrome://diagnostics/?connectivity");
+  content::TestNavigationObserver observer(expected_url);
+  observer.StartWatchingNewWebContents();
+
   // Click to open diagnostics app.
   ClickDiagnosticsLink(browser());
-  ash::FlushSystemWebAppLaunchesForTesting(browser()->profile());
+  observer.Wait();
+  EXPECT_TRUE(observer.last_navigation_succeeded());
 
   // The active screen should be Connectivity Diagnostics app.
   content::WebContents* contents =
       ::chrome::FindLastActive()->tab_strip_model()->GetActiveWebContents();
-  EXPECT_EQ(GURL("chrome://diagnostics/?connectivity"),
-            contents->GetVisibleURL());
+  EXPECT_EQ(expected_url, contents->GetVisibleURL());
 }
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 

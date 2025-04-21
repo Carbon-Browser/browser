@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,7 +45,11 @@ class HistoryProvider : public AutocompleteProvider {
   AutocompleteProviderClient* client() const { return client_; }
 
  private:
-  raw_ptr<AutocompleteProviderClient> client_;
+  // TODO(https://issues.chromium.org/issues/41485238#comment6) investigate why
+  // this pointer is kept dangling, for longer than the duration of the task.
+  raw_ptr<AutocompleteProviderClient,
+          FlakyDanglingUntriaged | AcrossTasksDanglingUntriaged>
+      client_;
 };
 
 #endif  // COMPONENTS_OMNIBOX_BROWSER_HISTORY_PROVIDER_H_

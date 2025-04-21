@@ -1,9 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "content/public/browser/browser_thread.h"
 #include "extensions/browser/guest_view/web_view/web_view_renderer_state.h"
+
+#include "base/containers/contains.h"
+#include "content/public/browser/browser_thread.h"
 
 using content::BrowserThread;
 
@@ -31,8 +33,7 @@ WebViewRendererState::~WebViewRendererState() {
 
 bool WebViewRendererState::IsGuest(int render_process_id) const {
   base::AutoLock auto_lock(web_view_partition_id_map_lock_);
-  return web_view_partition_id_map_.find(render_process_id) !=
-         web_view_partition_id_map_.end();
+  return base::Contains(web_view_partition_id_map_, render_process_id);
 }
 
 void WebViewRendererState::AddGuest(int guest_process_id,
@@ -45,8 +46,9 @@ void WebViewRendererState::AddGuest(int guest_process_id,
   bool updating =
       web_view_info_map_.find(global_routing_id) != web_view_info_map_.end();
   web_view_info_map_[global_routing_id] = web_view_info;
-  if (updating)
+  if (updating) {
     return;
+  }
 
   auto iter = web_view_partition_id_map_.find(guest_process_id);
   if (iter != web_view_partition_id_map_.end()) {
@@ -67,8 +69,9 @@ void WebViewRendererState::RemoveGuest(int guest_process_id,
   // this case, ensure that the refcount in web_view_partition_id_map_ isn't
   // double-decremented.  In particular, this can happen when a <webview>'s
   // process is terminated and then reloaded.
-  if (web_view_info_map_.erase(global_routing_id) == 0)
+  if (web_view_info_map_.erase(global_routing_id) == 0) {
     return;
+  }
 
   auto iter = web_view_partition_id_map_.find(guest_process_id);
   if (iter != web_view_partition_id_map_.end() &&
@@ -102,10 +105,12 @@ bool WebViewRendererState::GetOwnerInfo(int guest_process_id,
   // WebViewInfo.
   for (const auto& info : web_view_info_map_) {
     if (info.first.child_id == guest_process_id) {
-      if (owner_process_id)
+      if (owner_process_id) {
         *owner_process_id = info.second.embedder_process_id;
-      if (owner_host)
+      }
+      if (owner_host) {
         *owner_host = info.second.owner_host;
+      }
       return true;
     }
   }

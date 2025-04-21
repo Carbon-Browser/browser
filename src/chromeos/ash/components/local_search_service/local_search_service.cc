@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,7 @@
 #include "chromeos/ash/components/local_search_service/inverted_index_search.h"
 #include "chromeos/ash/components/local_search_service/linear_map_search.h"
 
-namespace chromeos {
-namespace local_search_service {
+namespace ash::local_search_service {
 
 LocalSearchService::LocalSearchService(
     mojo::PendingReceiver<mojom::LocalSearchService> receiver)
@@ -48,8 +47,7 @@ void LocalSearchService::BindIndex(
   }
 
   it->second->BindReceiver(std::move(index_receiver));
-  std::move(callback).Run(absl::nullopt);
+  std::move(callback).Run(std::nullopt);
 }
 
-}  // namespace local_search_service
-}  // namespace chromeos
+}  // namespace ash::local_search_service

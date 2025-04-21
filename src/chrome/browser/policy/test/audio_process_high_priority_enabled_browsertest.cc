@@ -1,6 +1,8 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include <optional>
 
 #include "base/feature_list.h"
 #include "base/values.h"
@@ -15,14 +17,13 @@
 #include "content/public/test/browser_test.h"
 #include "sandbox/policy/features.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace policy {
 
 class AudioProcessHighPriorityEnabledTest
     : public InProcessBrowserTest,
       public ::testing::WithParamInterface<
-          /*policy::key::kAudioProcessHighPriorityEnabled=*/absl::optional<
+          /*policy::key::kAudioProcessHighPriorityEnabled=*/std::optional<
               bool>> {
  public:
   // InProcessBrowserTest implementation:
@@ -49,12 +50,9 @@ class AudioProcessHighPriorityEnabledTest
 };
 
 IN_PROC_BROWSER_TEST_P(AudioProcessHighPriorityEnabledTest, IsRespected) {
-  absl::optional<bool> enable_high_priority_via_policy = GetParam();
-  bool is_high_priority_enabled_by_default =
-      base::FeatureList::IsEnabled(features::kAudioProcessHighPriorityWin);
+  std::optional<bool> enable_high_priority_via_policy = GetParam();
 
-  ASSERT_EQ(enable_high_priority_via_policy.value_or(
-                is_high_priority_enabled_by_default),
+  ASSERT_EQ(enable_high_priority_via_policy.value_or(false),
             IsAudioProcessHighPriorityEnabled());
 }
 
@@ -72,6 +70,6 @@ INSTANTIATE_TEST_SUITE_P(
     NotSet,
     AudioProcessHighPriorityEnabledTest,
     ::testing::Values(
-        /*policy::key::kAudioProcessHighPriorityEnabled=*/absl::nullopt));
+        /*policy::key::kAudioProcessHighPriorityEnabled=*/std::nullopt));
 
 }  // namespace policy

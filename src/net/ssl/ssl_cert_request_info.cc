@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@ void SSLCertRequestInfo::Reset() {
   host_and_port = HostPortPair();
   is_proxy = false;
   cert_authorities.clear();
-  cert_key_types.clear();
+  signature_algorithms.clear();
 }
 
 SSLCertRequestInfo::~SSLCertRequestInfo() = default;

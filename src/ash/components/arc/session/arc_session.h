@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,11 @@
 #include "ash/components/arc/session/arc_client_adapter.h"
 #include "ash/components/arc/session/arc_stop_reason.h"
 #include "ash/components/arc/session/arc_upgrade_params.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/observer_list.h"
+#include "base/observer_list_types.h"
 
-namespace chromeos {
+namespace ash {
 class SchedulerConfigurationManagerBase;
 }
 
@@ -40,7 +41,7 @@ class ArcBridgeService;
 class ArcSession {
  public:
   // Observer to notify events corresponding to one ARC session run.
-  class Observer {
+  class Observer : public base::CheckedObserver {
    public:
     // Called when ARC instance is stopped. This is called exactly once per
     // instance.  |was_running| is true if the stopped instance was fully set
@@ -51,15 +52,14 @@ class ArcSession {
                                   bool full_requested) = 0;
 
    protected:
-    virtual ~Observer() = default;
+    ~Observer() override = default;
   };
 
   // Creates a default instance of ArcSession.
   static std::unique_ptr<ArcSession> Create(
       ArcBridgeService* arc_bridge_service,
       version_info::Channel channel,
-      chromeos::SchedulerConfigurationManagerBase*
-          scheduler_configuration_manager,
+      ash::SchedulerConfigurationManagerBase* scheduler_configuration_manager,
       AdbSideloadingAvailabilityDelegate*
           adb_sideloading_availability_delegate);
 
@@ -108,7 +108,14 @@ class ArcSession {
       base::OnceCallback<void(bool success, const std::string& failure_reason)>;
   virtual void TrimVmMemory(TrimVmMemoryCallback callback, int page_limit) = 0;
 
+  // Sets the default display resolution scale factor.
   virtual void SetDefaultDeviceScaleFactor(float scale_factor) = 0;
+
+  // Sets whether the device should use virtio-blk for /data user directory.
+  virtual void SetUseVirtioBlkData(bool use_virtio_blk_data) = 0;
+
+  // Sets whether the user is signed into ARC or provisioned.
+  virtual void SetArcSignedIn(bool arc_signed_in) = 0;
 
   void AddObserver(Observer* observer);
   void RemoveObserver(Observer* observer);
@@ -116,7 +123,7 @@ class ArcSession {
  protected:
   ArcSession();
 
-  base::ObserverList<Observer>::Unchecked observer_list_;
+  base::ObserverList<Observer> observer_list_;
 };
 
 }  // namespace arc

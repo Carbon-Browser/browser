@@ -1,10 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/background_fetch/storage/get_registration_task.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "content/browser/background_fetch/storage/database_helpers.h"
 #include "content/browser/background_fetch/storage/get_metadata_task.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
@@ -63,15 +63,9 @@ void GetRegistrationTask::FinishWithError(
         metadata_proto_->registration().unique_id());
   }
 
-  ReportStorageError();
-
   std::move(callback_).Run(error, std::move(registration_id),
                            std::move(registration_data));
   Finished();  // Destroys |this|.
-}
-
-std::string GetRegistrationTask::HistogramName() const {
-  return "GetRegistrationTask";
 }
 
 }  // namespace background_fetch

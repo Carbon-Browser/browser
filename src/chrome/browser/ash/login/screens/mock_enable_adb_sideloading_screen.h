@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/login/screens/enable_adb_sideloading_screen.h"
-#include "chrome/browser/ui/webui/chromeos/login/enable_adb_sideloading_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/enable_adb_sideloading_screen_handler.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
 namespace ash {
@@ -21,11 +21,12 @@ class MockEnableAdbSideloadingScreen : public EnableAdbSideloadingScreen {
 
   MOCK_METHOD(void, ShowImpl, ());
   MOCK_METHOD(void, HideImpl, ());
+  MOCK_METHOD(void, OnUserAction, (const base::Value::List&));
 
   void ExitScreen();
 };
 
-class MockEnableAdbSideloadingScreenView
+class MockEnableAdbSideloadingScreenView final
     : public EnableAdbSideloadingScreenView {
  public:
   MockEnableAdbSideloadingScreenView();
@@ -33,15 +34,15 @@ class MockEnableAdbSideloadingScreenView
 
   MOCK_METHOD(void, Show, ());
   MOCK_METHOD(void, SetScreenState, (UIState value));
+
+  base::WeakPtr<EnableAdbSideloadingScreenView> AsWeakPtr() override {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
+ private:
+  base::WeakPtrFactory<EnableAdbSideloadingScreenView> weak_ptr_factory_{this};
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::MockEnableAdbSideloadingScreen;
-using ::ash::MockEnableAdbSideloadingScreenView;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SCREENS_MOCK_ENABLE_ADB_SIDELOADING_SCREEN_H_

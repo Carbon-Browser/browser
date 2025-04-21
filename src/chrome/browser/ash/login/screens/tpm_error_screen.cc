@@ -1,14 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/screens/tpm_error_screen.h"
 
 #include "base/memory/weak_ptr.h"
-#include "chrome/browser/ui/webui/chromeos/login/tpm_error_screen_handler.h"
+#include "chrome/browser/ash/login/startup_utils.h"
+#include "chrome/browser/ash/login/wizard_context.h"
+#include "chrome/browser/ui/webui/ash/login/tpm_error_screen_handler.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 
 namespace ash {
+
 namespace {
 
 constexpr char kUserActionReboot[] = "reboot-system";
@@ -25,6 +28,11 @@ TpmErrorScreen::~TpmErrorScreen() = default;
 void TpmErrorScreen::ShowImpl() {
   if (!view_)
     return;
+  // Set the OobeScreenPending variable to its default value. This will allow
+  // users to resume the out-of-box experience (OOBE) after a restart without
+  // being blocked. we set this when showing screen as user may use the hardware
+  // button to reboot insread of  clicking the UI button
+  StartupUtils::SaveOobePendingScreen("");
   DCHECK(!context()->tpm_owned_error || !context()->tpm_dbus_error);
   if (context()->tpm_owned_error) {
     view_->SetTPMOwnedErrorStep();

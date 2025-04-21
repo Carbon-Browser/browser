@@ -1,6 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/fuchsia/common/vmo_buffer_writer_queue.h"
 
@@ -29,7 +34,7 @@ const uint8_t* VmoBufferWriterQueue::PendingBuffer::data() const {
 }
 
 size_t VmoBufferWriterQueue::PendingBuffer::bytes_left() const {
-  return buffer->data_size() - buffer_pos;
+  return buffer->size() - buffer_pos;
 }
 
 void VmoBufferWriterQueue::PendingBuffer::AdvanceCurrentPos(size_t bytes) {
@@ -45,7 +50,7 @@ VmoBufferWriterQueue::~VmoBufferWriterQueue() = default;
 
 void VmoBufferWriterQueue::EnqueueBuffer(scoped_refptr<DecoderBuffer> buffer) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  pending_buffers_.push_back(PendingBuffer(buffer));
+  pending_buffers_.emplace_back(std::move(buffer));
   PumpPackets();
 }
 
@@ -106,14 +111,14 @@ void VmoBufferWriterQueue::PumpPackets() {
     unused_buffers_.pop_back();
 
     size_t bytes_filled = buffers_[buffer_index].Write(
-        base::make_span(current_buffer->data(), current_buffer->bytes_left()));
+        base::span(current_buffer->data(), current_buffer->bytes_left()));
     current_buffer->AdvanceCurrentPos(bytes_filled);
 
     bool buffer_end = current_buffer->bytes_left() == 0;
 
-    auto packet = StreamProcessorHelper::IoPacket(
+    StreamProcessorHelper::IoPacket packet(
         buffer_index, /*offset=*/0, bytes_filled,
-        current_buffer->buffer->timestamp(), buffer_end,
+        current_buffer->buffer->timestamp(), buffer_end, /*key_frame=*/false,
         base::BindOnce(&VmoBufferWriterQueue::ReleaseBuffer,
                        weak_factory_.GetWeakPtr(), buffer_index));
 
@@ -155,7 +160,7 @@ void VmoBufferWriterQueue::ResetPositionAndPause() {
     // All packets that were pending will need to be resent. Reset
     // |tail_sysmem_buffer_index| to ensure that these packets are not removed
     // from the queue in ReleaseBuffer().
-    buffer.tail_sysmem_buffer_index = absl::nullopt;
+    buffer.tail_sysmem_buffer_index = std::nullopt;
   }
   input_queue_position_ = 0;
   is_paused_ = true;

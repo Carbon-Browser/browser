@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #import <Foundation/Foundation.h>
 
+#include "base/memory/raw_ptr.h"
 #include "components/autofill/ios/form_util/form_activity_observer.h"
 
 @protocol FormActivityObserver<NSObject>
@@ -18,11 +19,9 @@
 
 // Invoked by FormActivityObserverBridge::DidSubmitDocument.
 - (void)webState:(web::WebState*)webState
-    didSubmitDocumentWithFormNamed:(const std::string&)formName
-                          withData:(const std::string&)formData
-                    hasUserGesture:(BOOL)hasUserGesture
-                   formInMainFrame:(BOOL)formInMainFrame
-                           inFrame:(web::WebFrame*)frame;
+    didSubmitDocumentWithFormData:(const autofill::FormData&)formData
+                   hasUserGesture:(BOOL)hasUserGesture
+                          inFrame:(web::WebFrame*)frame;
 
 // Invoked by FormActivityObserverBridge::FormRemoved.
 - (void)webState:(web::WebState*)webState
@@ -59,17 +58,15 @@ class FormActivityObserverBridge : public FormActivityObserver {
 
   void DocumentSubmitted(web::WebState* web_state,
                          web::WebFrame* sender_frame,
-                         const std::string& form_name,
-                         const std::string& form_data,
-                         bool has_user_gesture,
-                         bool form_in_main_frame) override;
+                         const FormData& form_data,
+                         bool has_user_gesture) override;
 
   void FormRemoved(web::WebState* web_state,
                    web::WebFrame* sender_frame,
                    const FormRemovalParams& params) override;
 
  private:
-  web::WebState* web_state_ = nullptr;
+  raw_ptr<web::WebState> web_state_ = nullptr;
   __weak id<FormActivityObserver> owner_ = nil;
 };
 

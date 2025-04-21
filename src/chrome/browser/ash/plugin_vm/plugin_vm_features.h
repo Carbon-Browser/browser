@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 
 class Profile;
 
@@ -38,6 +38,7 @@ class PluginVmFeatures {
     kErrorNotAllowedByDevicePolicy,
     kErrorNotAllowedByUserPolicy,
     kErrorLicenseNotSetUp,
+    kErrorVirtualMachinesNotAllowed,
   };
 
   // Remember to update `plugin_vm::GetDiagnostics()` when this struct or the

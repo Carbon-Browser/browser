@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@ package org.chromium.chrome.browser.feed;
 
 import androidx.annotation.VisibleForTesting;
 
+import org.chromium.base.TraceEvent;
 import org.chromium.chrome.browser.feed.ScrollListener.ScrollState;
 import org.chromium.components.feature_engagement.FeatureConstants;
 import org.chromium.components.feature_engagement.Tracker;
@@ -21,21 +22,20 @@ import org.chromium.components.feature_engagement.TriggerState;
  * 3) The user has scrolled up to the top.
  */
 public class RefreshIphScrollListener implements ScrollListener {
-    @VisibleForTesting
-    static final long FETCH_TIME_AGE_THREASHOLD_MS = 5 * 60 * 1000; // 5 minutes.
+    @VisibleForTesting static final long FETCH_TIME_AGE_THREASHOLD_MS = 5 * 60 * 1000; // 5 minutes.
 
     private final FeedBubbleDelegate mDelegate;
     private final ScrollableContainerDelegate mScrollableContainerDelegate;
     private final Runnable mShowIPHRunnable;
 
-    /**
-     * Constructor for IPH triggering.
-     */
-    RefreshIphScrollListener(FeedBubbleDelegate delegate,
-            ScrollableContainerDelegate scrollableContainerDelegate, Runnable showIPHRunnable) {
+    /** Constructor for IPH triggering. */
+    RefreshIphScrollListener(
+            FeedBubbleDelegate delegate,
+            ScrollableContainerDelegate scrollableContainerDelegate,
+            Runnable showIphRunnable) {
         mDelegate = delegate;
         mScrollableContainerDelegate = scrollableContainerDelegate;
-        mShowIPHRunnable = showIPHRunnable;
+        mShowIPHRunnable = showIphRunnable;
     }
 
     @Override
@@ -44,32 +44,36 @@ public class RefreshIphScrollListener implements ScrollListener {
     @Override
     public void onScrolled(int dx, int dy) {
         if (dy == 0) return;
-        maybeTriggerIPH();
+        maybeTriggerIph();
     }
 
     @Override
     public void onHeaderOffsetChanged(int verticalOffset) {
-        maybeTriggerIPH();
+        maybeTriggerIph();
     }
 
-    private void maybeTriggerIPH() {
-        final String featureForIph = FeatureConstants.FEED_SWIPE_REFRESH_FEATURE;
-        final Tracker tracker = mDelegate.getFeatureEngagementTracker();
+    private void maybeTriggerIph() {
+        try (TraceEvent e = TraceEvent.scoped("RefreshIphScrollListener.maybeTriggerIph")) {
+            final String featureForIph = FeatureConstants.FEED_SWIPE_REFRESH_FEATURE;
+            final Tracker tracker = mDelegate.getFeatureEngagementTracker();
 
-        if (tracker.getTriggerState(featureForIph) == TriggerState.HAS_BEEN_DISPLAYED) {
-            mScrollableContainerDelegate.removeScrollListener(this);
-            return;
+            if (tracker.getTriggerState(featureForIph) == TriggerState.HAS_BEEN_DISPLAYED) {
+                mScrollableContainerDelegate.removeScrollListener(this);
+                return;
+            }
+
+            if (mDelegate.canScrollUp()) return;
+
+            if (!mDelegate.isFeedExpanded()) return;
+
+            long lastFetchTimeMs = mDelegate.getLastFetchTimeMs();
+            // If last fetch time is not available, bail out.
+            if (lastFetchTimeMs == 0) return;
+            if (mDelegate.getCurrentTimeMs() - lastFetchTimeMs < FETCH_TIME_AGE_THREASHOLD_MS) {
+                return;
+            }
+
+            mShowIPHRunnable.run();
         }
-
-        if (mDelegate.canScrollUp()) return;
-
-        if (!mDelegate.isFeedExpanded()) return;
-
-        long lastFetchTimeMs = mDelegate.getLastFetchTimeMs();
-        // If last fetch time is not available, bail out.
-        if (lastFetchTimeMs == 0) return;
-        if (mDelegate.getCurrentTimeMs() - lastFetchTimeMs < FETCH_TIME_AGE_THREASHOLD_MS) return;
-
-        mShowIPHRunnable.run();
     }
 }

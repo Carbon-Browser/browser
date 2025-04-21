@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,18 +9,7 @@ SwitchAccessPointScanManagerTest = class extends SwitchAccessE2ETest {
   /** @override */
   async setUpDeferred() {
     await super.setUpDeferred();
-    await importModule(
-        'BackButtonNode', '/switch_access/nodes/back_button_node.js');
-    await importModule(
-        ['BasicNode', 'BasicRootNode'], '/switch_access/nodes/basic_node.js');
-    await importModule('SACache', '/switch_access/cache.js');
-    await importModule(
-        'SwitchAccessPredicate', '/switch_access/switch_access_predicate.js');
-    await importModule('Navigator', '/switch_access/navigator.js');
-    await importModule('SwitchAccess', '/switch_access/switch_access.js');
-    await importModule(
-        ['SwitchAccessMenuAction', 'SAConstants'],
-        '/switch_access/switch_access_constants.js');
+    globalThis.MenuAction = chrome.accessibilityPrivate.SwitchAccessMenuAction;
   }
 };
 
@@ -45,9 +34,9 @@ AX_TEST_F(
       };
       await new Promise(verifyChecked(true));
 
-      SwitchAccess.mode = SAConstants.Mode.POINT_SCAN;
+      SwitchAccess.mode = Mode.POINT_SCAN;
       Navigator.byPoint.point_ = {x: 600, y: 600};
-      Navigator.byPoint.performMouseAction(SwitchAccessMenuAction.LEFT_CLICK);
+      Navigator.byPoint.performMouseAction(MenuAction.LEFT_CLICK);
       await new Promise(verifyChecked(false));
     });
 
@@ -73,9 +62,9 @@ AX_TEST_F(
         chrome.automation.addTreeChangeObserver('allTreeChanges', observer);
       };
 
-      SwitchAccess.mode = SAConstants.Mode.POINT_SCAN;
+      SwitchAccess.mode = Mode.POINT_SCAN;
       Navigator.byPoint.point_ = {x: 400, y: 400};
-      Navigator.byPoint.performMouseAction(SwitchAccessMenuAction.RIGHT_CLICK);
+      Navigator.byPoint.performMouseAction(MenuAction.RIGHT_CLICK);
       await new Promise(menuItemLoaded());
     });
 

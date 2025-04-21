@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/metrics/power/power_metrics_reporter.h"
 
 #include <memory>
+#include <optional>
 
 #include "base/memory/raw_ptr.h"
 #include "base/strings/strcat.h"
@@ -22,47 +23,35 @@
 #include "services/metrics/public/cpp/ukm_source_id.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-#if BUILDFLAG(IS_MAC)
-#include "chrome/browser/metrics/power/coalition_resource_usage_provider_test_util_mac.h"
-#include "components/power_metrics/resource_coalition_mac.h"
-#endif
-
 namespace {
 
-#if HAS_BATTERY_LEVEL_PROVIDER_IMPL()
-constexpr const char* kBatteryDischargeRateHistogramName =
-    "Power.BatteryDischargeRate2";
-constexpr const char* kBatteryDischargeModeHistogramName =
-    "Power.BatteryDischargeMode2";
-
-constexpr double kTolerableTimeElapsedRatio = 0.10;
-constexpr double kTolerablePositiveDrift = 1 + kTolerableTimeElapsedRatio;
-
-BatteryLevelProvider::BatteryState MakeBatteryDischarginState(
+base::BatteryLevelProvider::BatteryState MakeBatteryDischargingState(
     int battery_percent) {
-  return BatteryLevelProvider::BatteryState{
+  return base::BatteryLevelProvider::BatteryState{
       .battery_count = 1,
       .is_external_power_connected = false,
       .current_capacity = battery_percent,
       .full_charged_capacity = 100,
+      .charge_unit = base::BatteryLevelProvider::BatteryLevelUnit::kMWh,
       .capture_time = base::TimeTicks::Now()};
 }
-#endif  // HAS_BATTERY_LEVEL_PROVIDER_IMPL()
 
-ProcessMonitor::Metrics GetFakeProcessMetrics() {
+ProcessMonitor::Metrics GetFakeProcessMetrics(bool with_cpu_usage = true) {
   ProcessMonitor::Metrics metrics;
-  metrics.cpu_usage = 5;
+  if (with_cpu_usage) {
+    metrics.cpu_usage = 5;
+  }
   return metrics;
 }
 
 struct HistogramSampleExpectation {
   std::string histogram_name_prefix;
-  base::Histogram::Sample sample;
+  std::optional<base::Histogram::Sample> sample;
 };
 
 // For each histogram named after the combination of prefixes from
 // `expectations` and suffixes from `suffixes`, verifies that there is a unique
-// sample `expectation.sample`.
+// sample `expectation.sample`, or no sample if `expectation.sample` is nullopt.
 void ExpectHistogramSamples(
     base::HistogramTester* histogram_tester,
     const std::vector<const char*>& suffixes,
@@ -72,24 +61,27 @@ void ExpectHistogramSamples(
       std::string histogram_name =
           base::StrCat({expectation.histogram_name_prefix, suffix});
       SCOPED_TRACE(histogram_name);
-      histogram_tester->ExpectUniqueSample(histogram_name, expectation.sample,
-                                           1);
+      if (expectation.sample.has_value()) {
+        histogram_tester->ExpectUniqueSample(histogram_name,
+                                             expectation.sample.value(), 1);
+      } else {
+        histogram_tester->ExpectTotalCount(histogram_name, 0);
+      }
     }
   }
 }
 
 using UkmEntry = ukm::builders::PowerUsageScenariosIntervalData;
 
-#if HAS_BATTERY_LEVEL_PROVIDER_IMPL()
-class FakeBatteryLevelProvider : public BatteryLevelProvider {
+class FakeBatteryLevelProvider : public base::BatteryLevelProvider {
  public:
   explicit FakeBatteryLevelProvider(
-      std::queue<absl::optional<BatteryLevelProvider::BatteryState>>*
+      std::queue<std::optional<base::BatteryLevelProvider::BatteryState>>*
           battery_states)
       : battery_states_(battery_states) {}
 
   void GetBatteryState(
-      base::OnceCallback<void(const absl::optional<BatteryState>&)> callback)
+      base::OnceCallback<void(const std::optional<BatteryState>&)> callback)
       override {
     DCHECK(!battery_states_->empty());
     auto state = battery_states_->front();
@@ -98,10 +90,9 @@ class FakeBatteryLevelProvider : public BatteryLevelProvider {
   }
 
  private:
-  raw_ptr<std::queue<absl::optional<BatteryLevelProvider::BatteryState>>>
+  raw_ptr<std::queue<std::optional<base::BatteryLevelProvider::BatteryState>>>
       battery_states_;
 };
-#endif  // HAS_BATTERY_LEVEL_PROVIDER_IMPL()
 
 class TestProcessMonitor : public ProcessMonitor {
  public:
@@ -159,84 +150,78 @@ class TestUsageScenarioDataStoreImpl : public UsageScenarioDataStoreImpl {
 // This doesn't use the typical {class being tested}Test name pattern because
 // there's already a PowerMetricsReporterTest class in the chromeos namespace
 // and this conflicts with it.
-class PowerMetricsReporterUnitTest : public testing::Test {
+class PowerMetricsReporterUnitTestBase : public testing::Test {
  public:
-  PowerMetricsReporterUnitTest() = default;
-  PowerMetricsReporterUnitTest(const PowerMetricsReporterUnitTest& rhs) =
-      delete;
-  PowerMetricsReporterUnitTest& operator=(
-      const PowerMetricsReporterUnitTest& rhs) = delete;
-  ~PowerMetricsReporterUnitTest() override = default;
+  PowerMetricsReporterUnitTestBase() = default;
+  PowerMetricsReporterUnitTestBase(
+      const PowerMetricsReporterUnitTestBase& rhs) = delete;
+  PowerMetricsReporterUnitTestBase& operator=(
+      const PowerMetricsReporterUnitTestBase& rhs) = delete;
+  ~PowerMetricsReporterUnitTestBase() override = default;
 
   void SetUp() override {
-#if HAS_BATTERY_LEVEL_PROVIDER_IMPL()
-    // Start with a half-full battery
-    battery_states_.push(MakeBatteryDischarginState(50));
-    auto battery_provider =
-        std::make_unique<FakeBatteryLevelProvider>(&battery_states_);
+    auto battery_provider = CreateBatteryLevelProvider();
     battery_provider_ = battery_provider.get();
-#endif  // HAS_BATTERY_LEVEL_PROVIDER_IMPL()
-
-#if BUILDFLAG(IS_MAC)
-    auto coalition_resource_usage_provider =
-        std::make_unique<TestCoalitionResourceUsageProvider>();
-    // Ensure that coalition resource usage is available from Init().
-    coalition_resource_usage_provider->SetCoalitionResourceUsage(
-        std::make_unique<coalition_resource_usage>());
-    coalition_resource_usage_provider_ =
-        coalition_resource_usage_provider.get();
-#endif  // BUILDFLAG(IS_MAC)
 
     power_metrics_reporter_ = std::make_unique<PowerMetricsReporter>(
-        &process_monitor_, &short_data_store_, &long_data_store_
-#if HAS_BATTERY_LEVEL_PROVIDER_IMPL()
-        ,
-        std::move(battery_provider)
-#endif  // HAS_BATTERY_LEVEL_PROVIDER_IMPL()
-#if BUILDFLAG(IS_MAC)
-            ,
-        std::move(coalition_resource_usage_provider)
-#endif  // BUILDFLAG(IS_MAC)
-    );
+        &process_monitor_, &long_data_store_, std::move(battery_provider));
 
-#if HAS_BATTERY_LEVEL_PROVIDER_IMPL()
     // Ensure the first battery state is sampled.
     task_environment_.RunUntilIdle();
-#endif  // HAS_BATTERY_LEVEL_PROVIDER_IMPL()
   }
 
  protected:
+  virtual std::unique_ptr<base::BatteryLevelProvider>
+  CreateBatteryLevelProvider() = 0;
+
   content::BrowserTaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   TestProcessMonitor process_monitor_;
-  TestUsageScenarioDataStoreImpl short_data_store_;
   TestUsageScenarioDataStoreImpl long_data_store_;
 
   base::HistogramTester histogram_tester_;
 
-#if HAS_BATTERY_LEVEL_PROVIDER_IMPL()
   ukm::TestAutoSetUkmRecorder test_ukm_recorder_;
 
-  std::queue<absl::optional<BatteryLevelProvider::BatteryState>>
-      battery_states_;
-  raw_ptr<BatteryLevelProvider> battery_provider_;
-#endif  // HAS_BATTERY_LEVEL_PROVIDER_IMPL()
-
-#if BUILDFLAG(IS_MAC)
-  raw_ptr<TestCoalitionResourceUsageProvider>
-      coalition_resource_usage_provider_;
-#endif  // BUILDFLAG(IS_MAC)
+  raw_ptr<base::BatteryLevelProvider, DanglingUntriaged> battery_provider_;
 
   std::unique_ptr<PowerMetricsReporter> power_metrics_reporter_;
 };
 
+class PowerMetricsReporterUnitTest : public PowerMetricsReporterUnitTestBase {
+ public:
+  ~PowerMetricsReporterUnitTest() override = default;
+
+  std::unique_ptr<base::BatteryLevelProvider> CreateBatteryLevelProvider()
+      override {
+    // Start with a half-full battery
+    battery_states_.push(MakeBatteryDischargingState(50));
+    auto battery_provider =
+        std::make_unique<FakeBatteryLevelProvider>(&battery_states_);
+    return std::move(battery_provider);
+  }
+
+ protected:
+  std::queue<std::optional<base::BatteryLevelProvider::BatteryState>>
+      battery_states_;
+};
+
+class PowerMetricsReporterWithoutBatteryLevelProviderUnitTest
+    : public PowerMetricsReporterUnitTestBase {
+ public:
+  ~PowerMetricsReporterWithoutBatteryLevelProviderUnitTest() override = default;
+
+  std::unique_ptr<base::BatteryLevelProvider> CreateBatteryLevelProvider()
+      override {
+    return nullptr;
+  }
+};
+
 }  // namespace
 
-TEST_F(PowerMetricsReporterUnitTest, LongIntervalHistograms) {
+TEST_F(PowerMetricsReporterWithoutBatteryLevelProviderUnitTest,
+       CPUTimeRecorded) {
   process_monitor_.SetMetricsToReturn(GetFakeProcessMetrics());
-#if HAS_BATTERY_LEVEL_PROVIDER_IMPL()
-  battery_states_.push(MakeBatteryDischarginState(30));
-#endif
 
   UsageScenarioDataStore::IntervalData interval_data;
   interval_data.max_tab_count = 1;
@@ -248,14 +233,22 @@ TEST_F(PowerMetricsReporterUnitTest, LongIntervalHistograms) {
 
   const char* kScenarioSuffix = ".VideoCapture";
   const std::vector<const char*> suffixes({"", kScenarioSuffix});
+#if BUILDFLAG(IS_WIN) && defined(ARCH_CPU_ARM64)
+  // Windows ARM64 does not support Constant Rate TSC so
+  // PerformanceMonitor.AverageCPU8.Total is not recorded there.
+  ExpectHistogramSamples(
+      &histogram_tester_, suffixes,
+      {{"PerformanceMonitor.AverageCPU8.Total", std::nullopt}});
+#else
   ExpectHistogramSamples(&histogram_tester_, suffixes,
-                         {{"PerformanceMonitor.AverageCPU5.Total", 500}});
+                         {{"PerformanceMonitor.AverageCPU8.Total", 500}});
+#endif
 }
 
-#if BUILDFLAG(IS_MAC)
-TEST_F(PowerMetricsReporterUnitTest, ResourceCoalitionHistograms_EndToEnd) {
-  process_monitor_.SetMetricsToReturn({});
-  battery_states_.push(MakeBatteryDischarginState(30));
+TEST_F(PowerMetricsReporterWithoutBatteryLevelProviderUnitTest,
+       CPUTimeMissing) {
+  process_monitor_.SetMetricsToReturn(
+      GetFakeProcessMetrics(/*with_cpu_usage=*/false));
 
   UsageScenarioDataStore::IntervalData interval_data;
   interval_data.max_tab_count = 1;
@@ -263,65 +256,47 @@ TEST_F(PowerMetricsReporterUnitTest, ResourceCoalitionHistograms_EndToEnd) {
   interval_data.time_capturing_video = base::Seconds(1);
   long_data_store_.SetIntervalDataToReturn(interval_data);
 
-  auto cru1 = std::make_unique<coalition_resource_usage>();
-  cru1->cpu_time = base::Seconds(5).InNanoseconds();
-  coalition_resource_usage_provider_->SetCoalitionResourceUsage(
-      std::move(cru1));
-
-  task_environment_.FastForwardBy(kLongPowerMetricsIntervalDuration -
-                                  kShortPowerMetricsIntervalDuration);
-
-  auto cru2 = std::make_unique<coalition_resource_usage>();
-  cru2->cpu_time = base::Seconds(6).InNanoseconds();
-  coalition_resource_usage_provider_->SetCoalitionResourceUsage(
-      std::move(cru2));
-
-  task_environment_.FastForwardBy(kShortPowerMetricsIntervalDuration);
+  task_environment_.FastForwardBy(kLongPowerMetricsIntervalDuration);
 
   const char* kScenarioSuffix = ".VideoCapture";
   const std::vector<const char*> suffixes({"", kScenarioSuffix});
+#if BUILDFLAG(IS_WIN) && defined(ARCH_CPU_ARM64)
+  // Windows ARM64 does not support Constant Rate TSC so
+  // PerformanceMonitor.AverageCPU8.Total is not recorded there.
   ExpectHistogramSamples(
       &histogram_tester_, suffixes,
-      {{"PerformanceMonitor.ResourceCoalition.CPUTime2", 500}});
-}
+      {{"PerformanceMonitor.AverageCPU8.Total", std::nullopt}});
+#else
+  // Missing `cpu_usage` recorded as 0.
+  ExpectHistogramSamples(&histogram_tester_, suffixes,
+                         {{"PerformanceMonitor.AverageCPU8.Total", 0}});
 #endif
-
-#if HAS_BATTERY_LEVEL_PROVIDER_IMPL()
-TEST_F(PowerMetricsReporterUnitTest, BatteryDischargeCaptureIsTooLate) {
-  ProcessMonitor::Metrics aggregated_process_metrics = {};
-  process_monitor_.SetMetricsToReturn(aggregated_process_metrics);
-
-  // Pretend that the battery has dropped by 2%.
-  battery_states_.push(MakeBatteryDischarginState(48));
-
-  const base::TimeDelta kTooLate =
-      kLongPowerMetricsIntervalDuration * kTolerablePositiveDrift +
-      base::Microseconds(1);
-  process_monitor_.ForceSampleAllProcessesIn(power_metrics_reporter_.get(),
-                                             &task_environment_, kTooLate);
-
-  histogram_tester_.ExpectTotalCount(kBatteryDischargeRateHistogramName, 0);
-  histogram_tester_.ExpectUniqueSample(kBatteryDischargeModeHistogramName,
-                                       BatteryDischargeMode::kInvalidInterval,
-                                       1);
 }
 
-TEST_F(PowerMetricsReporterUnitTest, BatteryDischargeCaptureIsLate) {
-  ProcessMonitor::Metrics aggregated_process_metrics = {};
-  process_monitor_.SetMetricsToReturn(aggregated_process_metrics);
+TEST_F(PowerMetricsReporterUnitTest, LongIntervalHistograms) {
+  process_monitor_.SetMetricsToReturn(GetFakeProcessMetrics());
+  battery_states_.push(MakeBatteryDischargingState(30));
 
-  // Pretend that the battery has dropped by 2%.
-  battery_states_.push(MakeBatteryDischarginState(48));
+  UsageScenarioDataStore::IntervalData interval_data;
+  interval_data.max_tab_count = 1;
+  interval_data.max_visible_window_count = 1;
+  interval_data.time_capturing_video = base::Seconds(1);
+  long_data_store_.SetIntervalDataToReturn(interval_data);
 
-  const base::TimeDelta kLate =
-      kLongPowerMetricsIntervalDuration * kTolerablePositiveDrift -
-      base::Microseconds(1);
-  process_monitor_.ForceSampleAllProcessesIn(power_metrics_reporter_.get(),
-                                             &task_environment_, kLate);
+  task_environment_.FastForwardBy(kLongPowerMetricsIntervalDuration);
 
-  histogram_tester_.ExpectTotalCount(kBatteryDischargeRateHistogramName, 1);
-  histogram_tester_.ExpectUniqueSample(kBatteryDischargeModeHistogramName,
-                                       BatteryDischargeMode::kDischarging, 1);
+  const char* kScenarioSuffix = ".VideoCapture";
+  const std::vector<const char*> suffixes({"", kScenarioSuffix});
+#if BUILDFLAG(IS_WIN) && defined(ARCH_CPU_ARM64)
+  // Windows ARM64 does not support Constant Rate TSC so
+  // PerformanceMonitor.AverageCPU8.Total is not recorded there.
+  ExpectHistogramSamples(
+      &histogram_tester_, suffixes,
+      {{"PerformanceMonitor.AverageCPU8.Total", std::nullopt}});
+#else
+  ExpectHistogramSamples(&histogram_tester_, suffixes,
+                         {{"PerformanceMonitor.AverageCPU8.Total", 500}});
+#endif
 }
 
 TEST_F(PowerMetricsReporterUnitTest, UKMs) {
@@ -332,13 +307,12 @@ TEST_F(PowerMetricsReporterUnitTest, UKMs) {
 #if BUILDFLAG(IS_MAC)
   fake_metrics.idle_wakeups = ++fake_value;
   fake_metrics.package_idle_wakeups = ++fake_value;
-  fake_metrics.energy_impact = ++fake_value;
 #endif
   process_monitor_.SetMetricsToReturn(fake_metrics);
 
   // Pretend that the battery has dropped by 20% in 2 minutes, for a rate of
   // 10% per minute.
-  battery_states_.push(MakeBatteryDischarginState(30));
+  battery_states_.push(MakeBatteryDischargingState(30));
 
   UsageScenarioDataStore::IntervalData fake_interval_data;
   fake_interval_data.uptime_at_interval_end = base::Hours(++fake_value);
@@ -386,14 +360,12 @@ TEST_F(PowerMetricsReporterUnitTest, UKMs) {
   test_ukm_recorder_.ExpectEntryMetric(
       entries[0], UkmEntry::kCPUTimeMsName,
       kLongPowerMetricsIntervalDuration.InSeconds() * 1000 *
-          fake_metrics.cpu_usage);
+          fake_metrics.cpu_usage.value());
 #if BUILDFLAG(IS_MAC)
   test_ukm_recorder_.ExpectEntryMetric(entries[0], UkmEntry::kIdleWakeUpsName,
                                        fake_metrics.idle_wakeups);
   test_ukm_recorder_.ExpectEntryMetric(entries[0], UkmEntry::kPackageExitsName,
                                        fake_metrics.package_idle_wakeups);
-  test_ukm_recorder_.ExpectEntryMetric(
-      entries[0], UkmEntry::kEnergyImpactScoreName, fake_metrics.energy_impact);
 #endif
   test_ukm_recorder_.ExpectEntryMetric(
       entries[0], UkmEntry::kMaxTabCountName,
@@ -450,11 +422,6 @@ TEST_F(PowerMetricsReporterUnitTest, UKMs) {
           fake_interval_data.longest_visible_origin_duration));
   test_ukm_recorder_.ExpectEntryMetric(
       entries[0], UkmEntry::kDeviceSleptDuringIntervalName, false);
-
-  histogram_tester_.ExpectUniqueSample(kBatteryDischargeRateHistogramName, 2500,
-                                       1);
-  histogram_tester_.ExpectUniqueSample(kBatteryDischargeModeHistogramName,
-                                       BatteryDischargeMode::kDischarging, 1);
 }
 
 TEST_F(PowerMetricsReporterUnitTest, UKMsBrowserShuttingDown) {
@@ -463,10 +430,9 @@ TEST_F(PowerMetricsReporterUnitTest, UKMsBrowserShuttingDown) {
 #if BUILDFLAG(IS_MAC)
   fake_metrics.idle_wakeups = 42;
   fake_metrics.package_idle_wakeups = 43;
-  fake_metrics.energy_impact = 44;
 #endif
   process_monitor_.SetMetricsToReturn(fake_metrics);
-  battery_states_.push(MakeBatteryDischarginState(50));
+  battery_states_.push(MakeBatteryDischargingState(50));
 
   const ukm::SourceId kTestSourceId =
       ukm::ConvertToSourceId(42, ukm::SourceIdType::NAVIGATION_ID);
@@ -502,11 +468,12 @@ TEST_F(PowerMetricsReporterUnitTest, UKMsPluggedIn) {
 
   // Push a battery state that indicates that the system is still not running
   // on battery.
-  battery_states_.push(BatteryLevelProvider::BatteryState{
+  battery_states_.push(base::BatteryLevelProvider::BatteryState{
       .battery_count = 1,
       .is_external_power_connected = true,
       .current_capacity = 50,
       .full_charged_capacity = 100,
+      .charge_unit = base::BatteryLevelProvider::BatteryLevelUnit::kMWh,
       .capture_time = base::TimeTicks::Now()});
 
   UsageScenarioDataStore::IntervalData fake_interval_data;
@@ -524,10 +491,6 @@ TEST_F(PowerMetricsReporterUnitTest, UKMsPluggedIn) {
   test_ukm_recorder_.ExpectEntryMetric(
       entries[0], UkmEntry::kBatteryDischargeModeName,
       static_cast<int64_t>(BatteryDischargeMode::kPluggedIn));
-
-  histogram_tester_.ExpectTotalCount(kBatteryDischargeRateHistogramName, 0);
-  histogram_tester_.ExpectUniqueSample(kBatteryDischargeModeHistogramName,
-                                       BatteryDischargeMode::kPluggedIn, 1);
 }
 
 TEST_F(PowerMetricsReporterUnitTest, UKMsBatteryStateChanges) {
@@ -535,11 +498,12 @@ TEST_F(PowerMetricsReporterUnitTest, UKMsBatteryStateChanges) {
 
   // The initial battery state indicates that the system is running on battery,
   // pretends that this has changed.
-  battery_states_.push(BatteryLevelProvider::BatteryState{
+  battery_states_.push(base::BatteryLevelProvider::BatteryState{
       .battery_count = 1,
       .is_external_power_connected = true,
       .current_capacity = 100,
       .full_charged_capacity = 100,
+      .charge_unit = base::BatteryLevelProvider::BatteryLevelUnit::kMWh,
       .capture_time = base::TimeTicks::Now()});
 
   UsageScenarioDataStore::IntervalData fake_interval_data;
@@ -557,17 +521,13 @@ TEST_F(PowerMetricsReporterUnitTest, UKMsBatteryStateChanges) {
   test_ukm_recorder_.ExpectEntryMetric(
       entries[0], UkmEntry::kBatteryDischargeModeName,
       static_cast<int64_t>(BatteryDischargeMode::kStateChanged));
-
-  histogram_tester_.ExpectTotalCount(kBatteryDischargeRateHistogramName, 0);
-  histogram_tester_.ExpectUniqueSample(kBatteryDischargeModeHistogramName,
-                                       BatteryDischargeMode::kStateChanged, 1);
 }
 
 TEST_F(PowerMetricsReporterUnitTest, UKMsBatteryStateUnavailable) {
   process_monitor_.SetMetricsToReturn({});
 
   // A nullopt battery value indicates that the battery level is unavailable.
-  battery_states_.push(absl::nullopt);
+  battery_states_.push(std::nullopt);
 
   UsageScenarioDataStore::IntervalData fake_interval_data;
   fake_interval_data.source_id_for_longest_visible_origin =
@@ -584,11 +544,6 @@ TEST_F(PowerMetricsReporterUnitTest, UKMsBatteryStateUnavailable) {
   test_ukm_recorder_.ExpectEntryMetric(
       entries[0], UkmEntry::kBatteryDischargeModeName,
       static_cast<int64_t>(BatteryDischargeMode::kRetrievalError));
-
-  histogram_tester_.ExpectTotalCount(kBatteryDischargeRateHistogramName, 0);
-  histogram_tester_.ExpectUniqueSample(kBatteryDischargeModeHistogramName,
-                                       BatteryDischargeMode::kRetrievalError,
-                                       1);
 }
 
 TEST_F(PowerMetricsReporterUnitTest, UKMsNoBattery) {
@@ -599,11 +554,12 @@ TEST_F(PowerMetricsReporterUnitTest, UKMsNoBattery) {
   process_monitor_.SetMetricsToReturn({});
 
   // Indicates that the system has no battery interface.
-  battery_states_.push(BatteryLevelProvider::BatteryState{
+  battery_states_.push(base::BatteryLevelProvider::BatteryState{
       .battery_count = 0,
       .is_external_power_connected = true,
-      .current_capacity = absl::nullopt,
-      .full_charged_capacity = absl::nullopt,
+      .current_capacity = std::nullopt,
+      .full_charged_capacity = std::nullopt,
+      .charge_unit = std::nullopt,
       .capture_time = base::TimeTicks::Now()});
 
   UsageScenarioDataStore::IntervalData fake_interval_data;
@@ -621,10 +577,6 @@ TEST_F(PowerMetricsReporterUnitTest, UKMsNoBattery) {
   test_ukm_recorder_.ExpectEntryMetric(
       entries[0], UkmEntry::kBatteryDischargeModeName,
       static_cast<int64_t>(BatteryDischargeMode::kNoBattery));
-
-  histogram_tester_.ExpectTotalCount(kBatteryDischargeRateHistogramName, 0);
-  histogram_tester_.ExpectUniqueSample(kBatteryDischargeModeHistogramName,
-                                       BatteryDischargeMode::kNoBattery, 1);
 }
 
 #if BUILDFLAG(IS_MAC)
@@ -635,7 +587,7 @@ TEST_F(PowerMetricsReporterUnitTest, UKMsMacFullyCharged) {
   power_metrics_reporter_->battery_state_for_testing()->current_capacity = 100;
 
   process_monitor_.SetMetricsToReturn({});
-  battery_states_.push(MakeBatteryDischarginState(100));
+  battery_states_.push(MakeBatteryDischargingState(100));
 
   UsageScenarioDataStore::IntervalData fake_interval_data;
   fake_interval_data.source_id_for_longest_visible_origin =
@@ -652,11 +604,6 @@ TEST_F(PowerMetricsReporterUnitTest, UKMsMacFullyCharged) {
   test_ukm_recorder_.ExpectEntryMetric(
       entries[0], UkmEntry::kBatteryDischargeModeName,
       static_cast<int64_t>(BatteryDischargeMode::kMacFullyCharged));
-
-  histogram_tester_.ExpectTotalCount(kBatteryDischargeRateHistogramName, 0);
-  histogram_tester_.ExpectUniqueSample(kBatteryDischargeModeHistogramName,
-                                       BatteryDischargeMode::kMacFullyCharged,
-                                       1);
 }
 #endif  // BUILDFLAG(IS_MAC)
 
@@ -664,7 +611,7 @@ TEST_F(PowerMetricsReporterUnitTest, UKMsBatteryStateIncrease) {
   process_monitor_.SetMetricsToReturn({});
 
   // Set the new battery state at 75%.
-  battery_states_.push(MakeBatteryDischarginState(75));
+  battery_states_.push(MakeBatteryDischargingState(75));
 
   UsageScenarioDataStore::IntervalData fake_interval_data;
   fake_interval_data.source_id_for_longest_visible_origin =
@@ -682,16 +629,11 @@ TEST_F(PowerMetricsReporterUnitTest, UKMsBatteryStateIncrease) {
   test_ukm_recorder_.ExpectEntryMetric(
       entries[0], UkmEntry::kBatteryDischargeModeName,
       static_cast<int64_t>(BatteryDischargeMode::kBatteryLevelIncreased));
-
-  histogram_tester_.ExpectTotalCount(kBatteryDischargeRateHistogramName, 0);
-  histogram_tester_.ExpectUniqueSample(
-      kBatteryDischargeModeHistogramName,
-      BatteryDischargeMode::kBatteryLevelIncreased, 1);
 }
 
 TEST_F(PowerMetricsReporterUnitTest, UKMsNoTab) {
   process_monitor_.SetMetricsToReturn(GetFakeProcessMetrics());
-  battery_states_.push(MakeBatteryDischarginState(50));
+  battery_states_.push(MakeBatteryDischargingState(50));
 
   UsageScenarioDataStore::IntervalData fake_interval_data;
   fake_interval_data.max_tab_count = 0;
@@ -715,7 +657,7 @@ TEST_F(PowerMetricsReporterUnitTest, UKMsNoTab) {
 
 TEST_F(PowerMetricsReporterUnitTest, DurationsLongerThanIntervalAreCapped) {
   process_monitor_.SetMetricsToReturn(GetFakeProcessMetrics());
-  battery_states_.push(MakeBatteryDischarginState(50));
+  battery_states_.push(MakeBatteryDischargingState(50));
 
   UsageScenarioDataStore::IntervalData fake_interval_data;
   fake_interval_data.time_playing_video_full_screen_single_monitor =
@@ -739,7 +681,7 @@ TEST_F(PowerMetricsReporterUnitTest, DurationsLongerThanIntervalAreCapped) {
 
 TEST_F(PowerMetricsReporterUnitTest, UKMsWithSleepEvent) {
   process_monitor_.SetMetricsToReturn({});
-  battery_states_.push(MakeBatteryDischarginState(50));
+  battery_states_.push(MakeBatteryDischargingState(50));
 
   UsageScenarioDataStore::IntervalData fake_interval_data = {};
   fake_interval_data.sleep_events = 1;
@@ -754,35 +696,26 @@ TEST_F(PowerMetricsReporterUnitTest, UKMsWithSleepEvent) {
   test_ukm_recorder_.ExpectEntryMetric(
       entries[0], UkmEntry::kDeviceSleptDuringIntervalName, true);
 }
-#endif  // HAS_BATTERY_LEVEL_PROVIDER_IMPL()
 
-#if BUILDFLAG(IS_MAC)
-// Verify that "_10sec" resource coalition histograms are recorded when time
-// advances and resource coalition data is available.
-TEST_F(PowerMetricsReporterUnitTest, ShortIntervalHistograms_EndToEnd) {
-  process_monitor_.SetMetricsToReturn({});
-  battery_states_.push(MakeBatteryDischarginState(30));
+TEST_F(PowerMetricsReporterUnitTest, UKMsWithoutCPU) {
+  process_monitor_.SetMetricsToReturn(
+      GetFakeProcessMetrics(/*with_cpu_usage=*/false));
+  battery_states_.push(MakeBatteryDischargingState(30));
 
-  UsageScenarioDataStore::IntervalData interval_data;
-  interval_data.max_tab_count = 1;
-  interval_data.max_visible_window_count = 0;
-  short_data_store_.SetIntervalDataToReturn(interval_data);
+  UsageScenarioDataStore::IntervalData fake_interval_data = {};
+  fake_interval_data.source_id_for_longest_visible_origin =
+      ukm::ConvertToSourceId(42, ukm::SourceIdType::NAVIGATION_ID);
+  long_data_store_.SetIntervalDataToReturn(fake_interval_data);
 
-  auto cru1 = std::make_unique<coalition_resource_usage>();
-  cru1->cpu_time = base::Seconds(4).InNanoseconds();
-  coalition_resource_usage_provider_->SetCoalitionResourceUsage(
-      std::move(cru1));
-  task_environment_.FastForwardBy(kLongPowerMetricsIntervalDuration -
-                                  kShortPowerMetricsIntervalDuration);
+  task_environment_.FastForwardBy(kLongPowerMetricsIntervalDuration);
 
-  auto cru2 = std::make_unique<coalition_resource_usage>();
-  cru2->cpu_time = base::Seconds(10).InNanoseconds();
-  coalition_resource_usage_provider_->SetCoalitionResourceUsage(
-      std::move(cru2));
+  auto entries = test_ukm_recorder_.GetEntriesByName(
+      ukm::builders::PowerUsageScenariosIntervalData::kEntryName);
+  ASSERT_EQ(1u, entries.size());
 
-  task_environment_.FastForwardBy(kShortPowerMetricsIntervalDuration);
-
-  histogram_tester_.ExpectUniqueSample(
-      "PerformanceMonitor.ResourceCoalition.CPUTime2_10sec", 6000, 1);
+  EXPECT_EQ(entries[0]->source_id,
+            fake_interval_data.source_id_for_longest_visible_origin);
+  // Missing `cpu_usage` should be skipped, not logged as 0% CPU.
+  EXPECT_FALSE(
+      test_ukm_recorder_.EntryHasMetric(entries[0], UkmEntry::kCPUTimeMsName));
 }
-#endif  // BUILDFLAG(IS_MAC)

@@ -5,17 +5,21 @@
 
 const duplex = "half";
 
-function testUpload(desc, url, method, createBody, expectedBody) {
+async function assertUpload(url, method, createBody, expectedBody) {
   const requestInit = {method};
+  const body = createBody();
+  if (body) {
+    requestInit["body"] = body;
+    requestInit.duplex = "half";
+  }
+  const resp = await fetch(url, requestInit);
+  const text = await resp.text();
+  assert_equals(text, expectedBody);
+}
+
+function testUpload(desc, url, method, createBody, expectedBody) {
   promise_test(async () => {
-    const body = createBody();
-    if (body) {
-      requestInit["body"] = body;
-      requestInit.duplex = "half";
-    }
-    const resp = await fetch(url, requestInit);
-    const text = await resp.text();
-    assert_equals(text, expectedBody);
+    await assertUpload(url, method, createBody, expectedBody);
   }, desc);
 }
 
@@ -98,6 +102,63 @@ promise_test(async (test) => {
   assert_equals(await response.text(), 'test', `Response has correct body`);
 }, "Feature detect for POST with ReadableStream, using request object");
 
+test(() => {
+  let duplexAccessed = false;
+
+  const request = new Request("", {
+    body: new ReadableStream(),
+    method: "POST",
+    get duplex() {
+      duplexAccessed = true;
+      return "half";
+    },
+  });
+
+  assert_equals(
+    request.headers.get("Content-Type"),
+    null,
+    `Request should not have a content-type set`
+  );
+  assert_true(duplexAccessed, `duplex dictionary property should be accessed`);
+}, "Synchronous feature detect");
+
+// The asserts the synchronousFeatureDetect isn't broken by a partial implementation.
+// An earlier feature detect was broken by Safari implementing streaming bodies as part of Request,
+// but it failed when passed to fetch().
+// This tests ensures that UAs must not implement RequestInit.duplex and streaming request bodies without also implementing the fetch() parts.
+promise_test(async () => {
+  let duplexAccessed = false;
+
+  const request = new Request("", {
+    body: new ReadableStream(),
+    method: "POST",
+    get duplex() {
+      duplexAccessed = true;
+      return "half";
+    },
+  });
+
+  const supported =
+    request.headers.get("Content-Type") === null && duplexAccessed;
+
+  // If the feature detect fails, assume the browser is being truthful (other tests pick up broken cases here)
+  if (!supported) return false;
+
+  await assertUpload(
+    url,
+    "POST",
+    () =>
+      new ReadableStream({
+        start: (controller) => {
+          const encoder = new TextEncoder();
+          controller.enqueue(encoder.encode("Test"));
+          controller.close();
+        },
+      }),
+    "Test"
+  );
+}, "Synchronous feature detect fails if feature unsupported");
+
 promise_test(async (t) => {
   const body = createStream(["hello"]);
   const method = "POST";
@@ -123,3 +184,26 @@ promise_test(async (t) => {
   await promise_rejects_js(t, TypeError, fetch(url, { method, body, duplex }));
 }, "Streaming upload should fail on a 401 response");
 
+promise_test(async (t) => {
+  const abortMessage = 'foo abort';
+  let streamCancelPromise = new Promise(async res => {
+    var stream = new ReadableStream({
+      cancel: function(reason) {
+        res(reason);
+      }
+    });
+    let abortController = new AbortController();
+    let fetchPromise = promise_rejects_exactly(t, abortMessage, fetch('', {
+                                                 method: 'POST',
+                                                 body: stream,
+                                                 duplex: 'half',
+                                                 signal: abortController.signal
+                                               }));
+    abortController.abort(abortMessage);
+    await fetchPromise;
+  });
+
+  let cancelReason = await streamCancelPromise;
+  assert_equals(
+      cancelReason, abortMessage, 'ReadableStream.cancel should be called.');
+}, 'ReadbleStream should be closed on signal.abort');

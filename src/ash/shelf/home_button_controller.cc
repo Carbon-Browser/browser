@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,14 +12,15 @@
 #include "ash/shelf/home_button.h"
 #include "ash/shelf/shelf_button.h"
 #include "ash/shell.h"
-#include "ash/wm/tablet_mode/tablet_mode_controller.h"
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
 #include "base/metrics/user_metrics_action.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "components/account_id/account_id.h"
 #include "ui/display/screen.h"
+#include "ui/display/tablet_state.h"
 #include "ui/views/animation/ink_drop.h"
 #include "ui/views/animation/ink_drop_state.h"
 #include "ui/views/widget/widget.h"
@@ -28,12 +29,6 @@ namespace ash {
 namespace {
 
 constexpr base::TimeDelta kAssistantAnimationDelay = base::Milliseconds(200);
-
-// Returns true if the button should appear activatable.
-bool CanActivate(int64_t display_id) {
-  return Shell::Get()->IsInTabletMode() ||
-         !Shell::Get()->app_list_controller()->IsVisible(display_id);
-}
 
 }  // namespace
 
@@ -46,7 +41,6 @@ HomeButtonController::HomeButtonController(HomeButton* button)
 
   Shell* shell = Shell::Get();
   shell->app_list_controller()->AddObserver(this);
-  shell->tablet_mode_controller()->AddObserver(this);
   AssistantUiController::Get()->GetModel()->AddObserver(this);
   AssistantState::Get()->AddObserver(this);
 }
@@ -54,49 +48,36 @@ HomeButtonController::HomeButtonController(HomeButton* button)
 HomeButtonController::~HomeButtonController() {
   Shell* shell = Shell::Get();
 
-  // AppListController and TabletModeController are destroyed early when Shell
-  // is being destroyed, so they may not exist.
+  // AppListController are destroyed early when Shel is being destroyed, so they
+  // may not exist.
   if (AssistantUiController::Get())
     AssistantUiController::Get()->GetModel()->RemoveObserver(this);
   if (shell->app_list_controller())
     shell->app_list_controller()->RemoveObserver(this);
-  if (shell->tablet_mode_controller())
-    shell->tablet_mode_controller()->RemoveObserver(this);
   if (AssistantState::Get())
     AssistantState::Get()->RemoveObserver(this);
 }
 
 bool HomeButtonController::MaybeHandleGestureEvent(ui::GestureEvent* event) {
   switch (event->type()) {
-    case ui::ET_GESTURE_TAP:
-    case ui::ET_GESTURE_TAP_CANCEL:
+    case ui::EventType::kGestureTap:
+    case ui::EventType::kGestureTapCancel:
       if (IsAssistantAvailable()) {
         assistant_overlay_->EndAnimation();
         assistant_animation_delay_timer_->Stop();
       }
 
-      if (CanActivate(button_->GetDisplayId())) {
-        views::InkDrop::Get(button_)->AnimateToState(
-            views::InkDropState::ACTION_TRIGGERED, event);
-      }
-
       // After animating the ripple, let the button handle the event.
       return false;
-    case ui::ET_GESTURE_TAP_DOWN:
+    case ui::EventType::kGestureTapDown:
       if (IsAssistantAvailable()) {
         assistant_animation_delay_timer_->Start(
             FROM_HERE, kAssistantAnimationDelay,
             base::BindOnce(&HomeButtonController::StartAssistantAnimation,
                            base::Unretained(this)));
       }
-
-      if (CanActivate(button_->GetDisplayId())) {
-        views::InkDrop::Get(button_)->AnimateToState(
-            views::InkDropState::ACTION_PENDING, event);
-      }
-
       return false;
-    case ui::ET_GESTURE_LONG_PRESS:
+    case ui::EventType::kGestureLongPress:
       // Only consume the long press event if the Assistant is available.
       if (!IsAssistantAvailable())
         return false;
@@ -110,14 +91,10 @@ bool HomeButtonController::MaybeHandleGestureEvent(ui::GestureEvent* event) {
       AssistantUiController::Get()->ShowUi(
           AssistantEntryPoint::kLongPressLauncher);
       return true;
-    case ui::ET_GESTURE_LONG_TAP:
+    case ui::EventType::kGestureLongTap:
       // Only consume the long tap event if the Assistant is available.
       if (!IsAssistantAvailable())
         return false;
-
-      // This event happens after the user long presses and lifts the finger.
-      views::InkDrop::Get(button_)->AnimateToState(views::InkDropState::HIDDEN,
-                                                   event);
 
       // We already handled the long press; consume the long tap to avoid
       // bringing up the context menu again.
@@ -130,8 +107,7 @@ bool HomeButtonController::MaybeHandleGestureEvent(ui::GestureEvent* event) {
 
 bool HomeButtonController::IsAssistantAvailable() {
   AssistantStateBase* state = AssistantState::Get();
-  return state->allowed_state() ==
-             chromeos::assistant::AssistantAllowedState::ALLOWED &&
+  return state->allowed_state() == assistant::AssistantAllowedState::ALLOWED &&
          state->settings_enabled().value_or(false);
 }
 
@@ -150,13 +126,15 @@ void HomeButtonController::OnAppListVisibilityWillChange(bool shown,
     OnAppListDismissed();
 }
 
-void HomeButtonController::OnTabletModeStarted() {
-  views::InkDrop::Get(button_)->AnimateToState(views::InkDropState::DEACTIVATED,
-                                               nullptr);
+void HomeButtonController::OnDisplayTabletStateChanged(
+    display::TabletState state) {
+  if (state != display::TabletState::kInTabletMode) {
+    return;
+  }
 }
 
 void HomeButtonController::OnAssistantFeatureAllowedChanged(
-    chromeos::assistant::AssistantAllowedState state) {
+    assistant::AssistantAllowedState state) {
   button_->OnAssistantAvailabilityChanged();
 }
 
@@ -167,8 +145,8 @@ void HomeButtonController::OnAssistantSettingsEnabled(bool enabled) {
 void HomeButtonController::OnUiVisibilityChanged(
     AssistantVisibility new_visibility,
     AssistantVisibility old_visibility,
-    absl::optional<AssistantEntryPoint> entry_point,
-    absl::optional<AssistantExitPoint> exit_point) {
+    std::optional<AssistantEntryPoint> entry_point,
+    std::optional<AssistantExitPoint> exit_point) {
   button_->OnAssistantAvailabilityChanged();
 }
 
@@ -177,29 +155,23 @@ void HomeButtonController::StartAssistantAnimation() {
 }
 
 void HomeButtonController::OnAppListShown() {
-  // Do not show a highlight in tablet mode, since the home screen view is
-  // always open in the background.
+  // Do not show the button as toggled in tablet mode, since the home screen
+  // view is always open in the background.
   if (!Shell::Get()->IsInTabletMode()) {
-    views::InkDrop::Get(button_)->AnimateToState(views::InkDropState::ACTIVATED,
-                                                 nullptr);
+    button_->SetToggled(true);
   }
+  button_->UpdateTooltipText();
 }
 
 void HomeButtonController::OnAppListDismissed() {
-  // If ink drop is not hidden already, snap it to active state, so animation to
-  // DEACTIVATED state starts immediately (the animation would otherwise wait
-  // for the current animation to finish).
-  views::InkDrop* const ink_drop = views::InkDrop::Get(button_)->GetInkDrop();
-  if (ink_drop->GetTargetInkDropState() != views::InkDropState::HIDDEN)
-    ink_drop->SnapToActivated();
-  views::InkDrop::Get(button_)->AnimateToState(views::InkDropState::DEACTIVATED,
-                                               nullptr);
+  button_->SetToggled(false);
+  button_->UpdateTooltipText();
 }
 
 void HomeButtonController::InitializeAssistantOverlay() {
   DCHECK_EQ(nullptr, assistant_overlay_);
   assistant_overlay_ = new AssistantOverlay(button_);
-  button_->AddChildView(assistant_overlay_);
+  button_->AddChildView(assistant_overlay_.get());
   assistant_overlay_->SetVisible(false);
   assistant_animation_delay_timer_ = std::make_unique<base::OneShotTimer>();
 }

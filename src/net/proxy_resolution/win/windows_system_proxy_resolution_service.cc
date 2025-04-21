@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,7 +68,7 @@ WindowsSystemProxyResolutionService::~WindowsSystemProxyResolutionService() {
 int WindowsSystemProxyResolutionService::ResolveProxy(
     const GURL& url,
     const std::string& method,
-    const NetworkIsolationKey& network_isolation_key,
+    const NetworkAnonymizationKey& network_anonymization_key,
     ProxyInfo* results,
     CompletionOnceCallback callback,
     std::unique_ptr<ProxyResolutionRequest>* request,
@@ -96,30 +96,19 @@ int WindowsSystemProxyResolutionService::ResolveProxy(
 
 void WindowsSystemProxyResolutionService::ReportSuccess(
     const ProxyInfo& proxy_info) {
-  // TODO(https://crbug.com/1032820): Update proxy retry info with new proxy
+  // TODO(crbug.com/40111093): Update proxy retry info with new proxy
   // resolution data.
 }
 
 void WindowsSystemProxyResolutionService::SetProxyDelegate(
     ProxyDelegate* delegate) {
-  // TODO(https://crbug.com/1032820): Implement proxy delegates.
+  // TODO(crbug.com/40111093): Implement proxy delegates.
 }
 
 void WindowsSystemProxyResolutionService::OnShutdown() {
-  // TODO(https://crbug.com/1032820): Add cleanup here as necessary. If cleanup
+  // TODO(crbug.com/40111093): Add cleanup here as necessary. If cleanup
   // is unnecessary, update the interface to not require an implementation for
   // this so OnShutdown() can be removed.
-}
-
-bool WindowsSystemProxyResolutionService::MarkProxiesAsBadUntil(
-    const ProxyInfo& results,
-    base::TimeDelta retry_delay,
-    const std::vector<ProxyServer>& additional_bad_proxies,
-    const NetLogWithSource& net_log) {
-  // TODO(https://crbug.com/1032820): Implement bad proxy cache. We should be
-  // able to share logic with the ConfiguredProxyResolutionService to accomplish
-  // this.
-  return false;
 }
 
 void WindowsSystemProxyResolutionService::ClearBadProxiesCache() {
@@ -165,9 +154,9 @@ int WindowsSystemProxyResolutionService::DidFinishResolvingProxy(
     const NetLogWithSource& net_log) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  // TODO(https://crbug.com/1032820): Implement net logs.
-  // TODO(https://crbug.com/1032820): Implement proxy delegate.
-  // TODO(https://crbug.com/1032820): Implement proxy retry info.
+  // TODO(crbug.com/40111093): Implement net logs.
+  // TODO(crbug.com/40111093): Implement proxy delegate.
+  // TODO(crbug.com/40111093): Implement proxy retry info.
 
   if (winhttp_status != WinHttpStatus::kOk)
     result->UseDirect();

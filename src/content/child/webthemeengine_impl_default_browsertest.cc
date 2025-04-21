@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,14 @@
 
 #if BUILDFLAG(IS_WIN)
 #include "base/win/windows_version.h"
+#include "content/public/test/browser_test_utils.h"
 #endif
 
 namespace content {
 
 class WebThemeEngineImplDefaultBrowserTest : public ContentBrowserTest {
  public:
-  WebThemeEngineImplDefaultBrowserTest() {}
+  WebThemeEngineImplDefaultBrowserTest() = default;
 };
 
 #if BUILDFLAG(IS_WIN)
@@ -23,6 +24,9 @@ IN_PROC_BROWSER_TEST_F(WebThemeEngineImplDefaultBrowserTest, GetSystemColor) {
   // The test non-deterministically fails on Windows-2008ServerR2 builders due
   // to a difference in the default theme. As a result, only run the test on
   // non-server versions.
+  // TODO(crbug.com/40246975): Remove this, and the windows_version.h
+  // include, if the failure turns out to be specific to Windows-2008ServerR2
+  // and not any Windows server.
   if (base::win::OSInfo::GetInstance()->version_type() ==
       base::win::VersionType::SUITE_SERVER) {
     return;
@@ -112,36 +116,19 @@ IN_PROC_BROWSER_TEST_F(WebThemeEngineImplDefaultBrowserTest, GetSystemColor) {
                                   "window",
                                   "windowFrame",
                                   "windowText"};
-  std::vector<std::string> expected_colors;
-  if (base::win::GetVersion() <= base::win::Version::WIN8_1) {
-    expected_colors = {
-        "rgb(0, 0, 0)",       "rgb(0, 0, 0)",       "rgb(0, 102, 204)",
-        "rgb(255, 255, 255)", "rgb(255, 255, 255)", "rgb(240, 240, 240)",
-        "rgb(240, 240, 240)", "rgb(240, 240, 240)", "rgb(0, 0, 0)",
-        "rgb(255, 255, 255)", "rgb(0, 0, 0)",       "rgb(0, 0, 0)",
-        "rgb(255, 255, 255)", "rgb(0, 0, 0)",       "rgb(109, 109, 109)",
-        "rgb(51, 153, 255)",  "rgb(255, 255, 255)", "rgb(0, 0, 0)",
-        "rgb(255, 255, 255)", "rgb(128, 128, 128)", "rgb(255, 255, 255)",
-        "rgb(0, 0, 0)",       "rgb(0, 102, 204)",   "rgb(255, 255, 255)",
-        "rgb(0, 0, 0)",       "rgb(255, 255, 255)", "rgb(0, 0, 0)",
-        "rgb(240, 240, 240)", "rgb(0, 0, 0)",       "rgb(0, 0, 0)",
-        "rgb(0, 0, 0)",       "rgb(0, 102, 204)",   "rgb(255, 255, 255)",
-        "rgb(0, 0, 0)",       "rgb(0, 0, 0)"};
-  } else {
-    expected_colors = {
-        "rgb(0, 0, 0)",       "rgb(0, 0, 0)",       "rgb(0, 102, 204)",
-        "rgb(255, 255, 255)", "rgb(255, 255, 255)", "rgb(240, 240, 240)",
-        "rgb(240, 240, 240)", "rgb(240, 240, 240)", "rgb(0, 0, 0)",
-        "rgb(255, 255, 255)", "rgb(0, 0, 0)",       "rgb(0, 0, 0)",
-        "rgb(255, 255, 255)", "rgb(0, 0, 0)",       "rgb(109, 109, 109)",
-        "rgb(0, 120, 215)",   "rgb(255, 255, 255)", "rgb(0, 0, 0)",
-        "rgb(255, 255, 255)", "rgb(128, 128, 128)", "rgb(255, 255, 255)",
-        "rgb(0, 0, 0)",       "rgb(0, 102, 204)",   "rgb(255, 255, 255)",
-        "rgb(0, 0, 0)",       "rgb(255, 255, 255)", "rgb(0, 0, 0)",
-        "rgb(240, 240, 240)", "rgb(0, 0, 0)",       "rgb(0, 0, 0)",
-        "rgb(0, 0, 0)",       "rgb(0, 102, 204)",   "rgb(255, 255, 255)",
-        "rgb(0, 0, 0)",       "rgb(0, 0, 0)"};
-  }
+  const std::vector<std::string> expected_colors = {
+      "rgb(0, 0, 0)",       "rgb(0, 0, 0)",       "rgb(0, 102, 204)",
+      "rgb(255, 255, 255)", "rgb(255, 255, 255)", "rgb(240, 240, 240)",
+      "rgb(240, 240, 240)", "rgb(240, 240, 240)", "rgb(0, 0, 0)",
+      "rgb(255, 255, 255)", "rgb(0, 0, 0)",       "rgb(0, 0, 0)",
+      "rgb(255, 255, 255)", "rgb(0, 0, 0)",       "rgb(109, 109, 109)",
+      "rgb(0, 120, 215)",   "rgb(255, 255, 255)", "rgb(0, 0, 0)",
+      "rgb(255, 255, 255)", "rgb(128, 128, 128)", "rgb(255, 255, 255)",
+      "rgb(0, 0, 0)",       "rgb(0, 102, 204)",   "rgb(255, 255, 255)",
+      "rgb(0, 0, 0)",       "rgb(255, 255, 255)", "rgb(0, 0, 0)",
+      "rgb(240, 240, 240)", "rgb(0, 0, 0)",       "rgb(0, 0, 0)",
+      "rgb(0, 0, 0)",       "rgb(0, 102, 204)",   "rgb(255, 255, 255)",
+      "rgb(0, 0, 0)",       "rgb(0, 0, 0)"};
 
   ASSERT_EQ(ids.size(), expected_colors.size());
 

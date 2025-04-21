@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,34 +7,26 @@
 #include <utility>
 
 #include "base/check.h"
+#include "base/not_fatal_until.h"
 
 namespace content_settings {
 
-Rule::Rule() = default;
-
-Rule::Rule(const ContentSettingsPattern& primary_pattern,
-           const ContentSettingsPattern& secondary_pattern,
+Rule::Rule(ContentSettingsPattern primary_pattern,
+           ContentSettingsPattern secondary_pattern,
            base::Value value,
-           base::Time expiration,
-           SessionModel session_model)
-    : primary_pattern(primary_pattern),
-      secondary_pattern(secondary_pattern),
+           RuleMetaData metadata)
+    : primary_pattern(std::move(primary_pattern)),
+      secondary_pattern(std::move(secondary_pattern)),
       value(std::move(value)),
-      expiration(expiration),
-      session_model(session_model) {}
-
-Rule::Rule(Rule&& other) = default;
-
-Rule& Rule::operator=(Rule&& other) = default;
+      metadata(std::move(metadata)) {}
 
 Rule::~Rule() = default;
 
 RuleIterator::~RuleIterator() = default;
 
 ConcatenationIterator::ConcatenationIterator(
-    std::vector<std::unique_ptr<RuleIterator>> iterators,
-    base::AutoLock* auto_lock)
-    : iterators_(std::move(iterators)), auto_lock_(auto_lock) {
+    std::vector<std::unique_ptr<RuleIterator>> iterators)
+    : iterators_(std::move(iterators)) {
   auto it = iterators_.begin();
   while (it != iterators_.end()) {
     if (!(*it)->HasNext())
@@ -50,17 +42,15 @@ bool ConcatenationIterator::HasNext() const {
   return !iterators_.empty();
 }
 
-Rule ConcatenationIterator::Next() {
+std::unique_ptr<Rule> ConcatenationIterator::Next() {
   auto current_iterator = iterators_.begin();
-  DCHECK(current_iterator != iterators_.end());
+  CHECK(current_iterator != iterators_.end(), base::NotFatalUntil::M130);
   DCHECK((*current_iterator)->HasNext());
-  const Rule& next_rule = (*current_iterator)->Next();
-  Rule to_return(next_rule.primary_pattern, next_rule.secondary_pattern,
-                 next_rule.value.Clone(), next_rule.expiration,
-                 next_rule.session_model);
-  if (!(*current_iterator)->HasNext())
+  std::unique_ptr<Rule> next_rule = (*current_iterator)->Next();
+  if (!(*current_iterator)->HasNext()) {
     iterators_.erase(current_iterator);
-  return to_return;
+  }
+  return next_rule;
 }
 
 }  // namespace content_settings

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,8 +27,11 @@ class TapFarFromPreviousSuppression extends ContextualSearchHeuristic {
      * @param y The y coordinate of the tap gesture.
      * @param wasSelectionEmptyBeforeTap Whether the selection was empty just before this tap.
      */
-    TapFarFromPreviousSuppression(ContextualSearchSelectionController controller,
-            @Nullable ContextualSearchTapState previousTapState, int x, int y,
+    TapFarFromPreviousSuppression(
+            ContextualSearchSelectionController controller,
+            @Nullable ContextualSearchTapState previousTapState,
+            int x,
+            int y,
             boolean wasSelectionEmptyBeforeTap) {
         mPxToDp = controller.getPxToDp();
         mPreviousTapState = previousTapState;

@@ -1,4 +1,4 @@
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -88,6 +88,14 @@ class MojoBindingsCheckTest(MojomParserTestCase):
         Foo@0(int32 a) => (int32 b);
         [MinVersion=2,Sync,UnlimitedSize,NoInterrupt]
         Bar@1(int32 b, [MinVersion=2]Structure? s) => (bool c);
+      };
+
+      [RuntimeFeature=test.mojom.FeatureName]
+      interface FooFeatureControlled {};
+
+      interface FooMethodFeatureControlled {
+        [RuntimeFeature=test.mojom.FeatureName]
+        MethodWithFeature() => (bool c);
       };
     """)
 

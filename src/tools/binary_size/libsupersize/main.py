@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Collect, archive, and analyze Chrome's binary size."""
 
 import argparse
 import atexit
-import distutils.spawn
 import logging
 import pathlib
 import platform
@@ -50,7 +49,8 @@ class _PathResolver:
     for p in candidates:
       if p.exists():
         return p
-    raise Exception('Paths do not exist: ' + ', '.join(candidates))
+    raise Exception('Paths do not exist: ' +
+                    ', '.join(str(t) for t in candidates))
 
 
 class _DiffAction:

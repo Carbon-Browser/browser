@@ -1,11 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.tab;
 
+import android.content.Context;
 import android.view.View;
 
+import androidx.annotation.ColorInt;
 import androidx.annotation.IntDef;
 
 import java.lang.annotation.Retention;
@@ -41,13 +43,15 @@ public interface TabViewProvider {
      */
     View getView();
 
-    /**
-     * Called when the {@link View} provided by {@link #getView()} is provided to {@link Tab}.
-     * */
+    /** Called when the {@link View} provided by {@link #getView()} is provided to {@link Tab}. */
     default void onShown() {}
 
-    /**
-     * Called when the {@link View} provided by {@link #getView()} is removed from {@link Tab}.
-     * */
+    /** Called when the {@link View} provided by {@link #getView()} is removed from {@link Tab}. */
     default void onHidden() {}
+
+    /**
+     * @return The background color for the content to show.
+     */
+    @ColorInt
+    int getBackgroundColor(Context context);
 }

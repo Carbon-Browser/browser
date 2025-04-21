@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <jni.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -12,8 +13,9 @@
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
 #include "base/android/scoped_java_ref.h"
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/synchronization/waitable_event.h"
 #include "chrome/browser/browser_process.h"
@@ -22,7 +24,6 @@
 #include "chrome/browser/net/secure_dns_util.h"
 #include "chrome/browser/net/stub_resolver_config_reader.h"
 #include "chrome/browser/net/system_network_context_manager.h"
-#include "chrome/browser/privacy/jni_headers/SecureDnsBridge_jni.h"
 #include "chrome/common/pref_names.h"
 #include "components/country_codes/country_codes.h"
 #include "components/prefs/pref_service.h"
@@ -31,7 +32,9 @@
 #include "net/dns/public/dns_over_https_config.h"
 #include "net/dns/public/doh_provider_entry.h"
 #include "net/dns/public/secure_dns_mode.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "chrome/browser/privacy/jni_headers/SecureDnsBridge_jni.h"
 
 using base::android::JavaParamRef;
 using base::android::ScopedJavaLocalRef;
@@ -42,9 +45,13 @@ namespace secure_dns = chrome_browser_net::secure_dns;
 namespace {
 
 net::DohProviderEntry::List GetFilteredProviders() {
-  return secure_dns::ProvidersForCountry(
-      secure_dns::SelectEnabledProviders(net::DohProviderEntry::GetList()),
-      country_codes::GetCurrentCountryID());
+  // Note: Check whether each provider is enabled *after* filtering based on
+  // country code so that if we are doing experimentation via Finch for a
+  // regional provider, the experiment groups will be less likely to include
+  // users from other regions unnecessarily (since a client will be included in
+  // the experiment if the provider feature flag is checked).
+  return secure_dns::SelectEnabledProviders(secure_dns::ProvidersForCountry(
+      net::DohProviderEntry::GetList(), country_codes::GetCurrentCountryID()));
 }
 
 // Runs a DNS probe according to the configuration in |overrides|,
@@ -53,7 +60,7 @@ net::DohProviderEntry::List GetFilteredProviders() {
 void RunProbe(base::WaitableEvent* waiter,
               bool* success,
               const std::string& doh_config) {
-  absl::optional<net::DnsOverHttpsConfig> parsed =
+  std::optional<net::DnsOverHttpsConfig> parsed =
       net::DnsOverHttpsConfig::FromString(doh_config);
   DCHECK(parsed.has_value());  // `doh_config` must be valid.
   auto* manager = g_browser_process->system_network_context_manager();
@@ -98,13 +105,14 @@ static ScopedJavaLocalRef<jobjectArray> JNI_SecureDnsBridge_GetProviders(
   net::DohProviderEntry::List providers = GetFilteredProviders();
   std::vector<std::vector<std::u16string>> ret;
   ret.reserve(providers.size());
-  std::transform(providers.begin(), providers.end(), std::back_inserter(ret),
-                 [](const auto* entry) -> std::vector<std::u16string> {
-                   net::DnsOverHttpsConfig config({entry->doh_server_config});
-                   return {base::UTF8ToUTF16(entry->ui_name),
-                           base::UTF8ToUTF16(config.ToString()),
-                           base::UTF8ToUTF16(entry->privacy_policy)};
-                 });
+  base::ranges::transform(
+      providers, std::back_inserter(ret),
+      [](const net::DohProviderEntry* entry) -> std::vector<std::u16string> {
+        net::DnsOverHttpsConfig config({entry->doh_server_config});
+        return {base::UTF8ToUTF16(entry->ui_name),
+                base::UTF8ToUTF16(config.ToString()),
+                base::UTF8ToUTF16(entry->privacy_policy)};
+      });
   return base::android::ToJavaArrayOfStringArray(env, ret);
 }
 
@@ -138,16 +146,6 @@ static jint JNI_SecureDnsBridge_GetManagementMode(JNIEnv* env) {
           ->GetSecureDnsConfiguration(
               true /* force_check_parental_controls_for_automatic_mode */)
           .management_mode());
-}
-
-static void JNI_SecureDnsBridge_UpdateDropdownHistograms(
-    JNIEnv* env,
-    const JavaParamRef<jstring>& old_config,
-    const JavaParamRef<jstring>& new_config) {
-  secure_dns::UpdateDropdownHistograms(
-      GetFilteredProviders(),
-      base::android::ConvertJavaStringToUTF8(old_config),
-      base::android::ConvertJavaStringToUTF8(new_config));
 }
 
 static void JNI_SecureDnsBridge_UpdateValidationHistogram(JNIEnv* env,

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/platform/geometry/layout_point.h"
-#include "third_party/blink/renderer/platform/geometry/layout_size.h"
 #include "third_party/blink/renderer/platform/geometry/layout_unit.h"
 #include "third_party/blink/renderer/platform/text/writing_direction_mode.h"
 #include "ui/gfx/geometry/point.h"
@@ -15,10 +14,13 @@
 #include "ui/gfx/geometry/vector2d.h"
 #include "ui/gfx/geometry/vector2d_f.h"
 
+namespace WTF {
+class String;
+}  // namespace WTF
+
 namespace blink {
 
 class LayoutPoint;
-class LayoutSize;
 struct LogicalOffset;
 struct PhysicalSize;
 
@@ -92,13 +94,10 @@ struct CORE_EXPORT PhysicalOffset {
   // logical/physical distinctions.
   constexpr explicit PhysicalOffset(const LayoutPoint& point)
       : left(point.X()), top(point.Y()) {}
-  constexpr explicit PhysicalOffset(const LayoutSize& size)
-      : left(size.Width()), top(size.Height()) {}
 
   // Conversions from/to existing code. New code prefers type safety for
   // logical/physical distinctions.
   constexpr LayoutPoint ToLayoutPoint() const { return {left, top}; }
-  constexpr LayoutSize ToLayoutSize() const { return {left, top}; }
 
   explicit PhysicalOffset(const gfx::Point& point)
       : left(point.x()), top(point.y()) {}
@@ -130,7 +129,7 @@ struct CORE_EXPORT PhysicalOffset {
   constexpr explicit operator gfx::PointF() const { return {left, top}; }
   constexpr explicit operator gfx::Vector2dF() const { return {left, top}; }
 
-  String ToString() const;
+  WTF::String ToString() const;
 };
 
 // TODO(crbug.com/962299): These functions should upgraded to force correct
@@ -153,16 +152,6 @@ inline gfx::Vector2d ToFlooredVector2d(const PhysicalOffset& o) {
 }
 inline gfx::Vector2d ToCeiledVector2d(const PhysicalOffset& o) {
   return {o.left.Ceil(), o.top.Ceil()};
-}
-
-// TODO(wangxianzhu): For temporary conversion from LayoutPoint/LayoutSize to
-// PhysicalOffset, where the input will be changed to PhysicalOffset soon, to
-// avoid redundant PhysicalOffset() which can't be discovered by the compiler.
-inline PhysicalOffset PhysicalOffsetToBeNoop(const LayoutPoint& p) {
-  return PhysicalOffset(p);
-}
-inline PhysicalOffset PhysicalOffsetToBeNoop(const LayoutSize& s) {
-  return PhysicalOffset(s);
 }
 
 CORE_EXPORT std::ostream& operator<<(std::ostream&, const PhysicalOffset&);

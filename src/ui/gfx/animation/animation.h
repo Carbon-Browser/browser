@@ -1,14 +1,15 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_GFX_ANIMATION_ANIMATION_H_
 #define UI_GFX_ANIMATION_ANIMATION_H_
 
+#include <optional>
+
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/animation/animation_container_element.h"
 #include "ui/gfx/animation/animation_export.h"
 
@@ -87,6 +88,10 @@ class ANIMATION_EXPORT Animation : public AnimationContainerElement {
   // Should only be called from the browser process, on the UI thread.
   static bool PrefersReducedMotion();
   static void UpdatePrefersReducedMotion();
+#if BUILDFLAG(IS_CHROMEOS)
+  // This should only be used by the ChromeOS Accessibility system.
+  static void SetPrefersReducedMotionForA11y(bool prefers_reduced_motion);
+#endif  // BUILDFLAG(IS_CHROMEOS)
   static void SetPrefersReducedMotionForTesting(bool prefers_reduced_motion) {
     prefers_reduced_motion_ = prefers_reduced_motion;
   }
@@ -128,7 +133,7 @@ class ANIMATION_EXPORT Animation : public AnimationContainerElement {
   bool is_animating_;
 
   // Our delegate; may be null.
-  raw_ptr<AnimationDelegate> delegate_;
+  raw_ptr<AnimationDelegate, DanglingUntriaged> delegate_;
 
   // Container we're in. If non-null we're animating.
   scoped_refptr<AnimationContainer> container_;
@@ -138,7 +143,7 @@ class ANIMATION_EXPORT Animation : public AnimationContainerElement {
 
   // Obtaining the PrefersReducedMotion system setting can be expensive, so it
   // is cached in this boolean.
-  static absl::optional<bool> prefers_reduced_motion_;
+  static std::optional<bool> prefers_reduced_motion_;
 };
 
 }  // namespace gfx

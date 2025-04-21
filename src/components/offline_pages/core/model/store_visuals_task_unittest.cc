@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,7 @@ OfflinePageVisuals CreateVisualsItem(base::Time now) {
 
 class StoreVisualsTaskTest : public ModelTaskTestBase {
  public:
-  ~StoreVisualsTaskTest() override {}
+  ~StoreVisualsTaskTest() override = default;
 
   std::unique_ptr<OfflinePageVisuals> ReadVisuals(int64_t offline_id) {
     std::unique_ptr<OfflinePageVisuals> visuals;

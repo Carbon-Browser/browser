@@ -2,9 +2,11 @@ Name: QUnit
 Short Name: QUnit
 URL: https://github.com/jquery/qunit
 Version: 1.17.1
+Revision: 08173d004fe5cc9308d85d6044690a3ab4cd65bf
 License: MIT
-License File: NOT_SHIPPED
+License File: LICENSE
 Security Critical: no
+Shipped: no
 
 Description:
 QUnit is a powerful, easy-to-use, JavaScript unit testing framework. It's used

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,13 +45,14 @@ class CONTENT_EXPORT PaymentAppProviderImpl
       const SupportedDelegations& supported_delegations,
       RegistrationIdCallback registration_id_callback,
       InvokePaymentAppCallback callback) override;
-  void UpdatePaymentAppIcon(int64_t registration_id,
-                            const std::string& instrument_key,
-                            const std::string& name,
-                            const std::string& string_encoded_icon,
-                            const std::string& method_name,
-                            const SupportedDelegations& supported_delegations,
-                            UpdatePaymentAppIconCallback callback) override;
+  void UpdatePaymentAppMetadata(
+      int64_t registration_id,
+      const std::string& instrument_key,
+      const std::string& name,
+      const std::string& string_encoded_icon,
+      const std::string& method_name,
+      const SupportedDelegations& supported_delegations,
+      UpdatePaymentAppMetadataCallback callback) override;
   void CanMakePayment(int64_t registration_id,
                       const url::Origin& sw_origin,
                       const std::string& payment_request_id,
@@ -66,13 +67,21 @@ class CONTENT_EXPORT PaymentAppProviderImpl
   void OnClosingOpenedWindow(
       payments::mojom::PaymentEventResponseType reason) override;
 
+  DevToolsBackgroundServicesContextImpl* GetDevTools(
+      const url::Origin& sw_origin);
+
+  void InstallPaymentAppForTesting(
+      const SkBitmap& app_icon,
+      const GURL& sw_js_url,
+      const GURL& sw_scope,
+      const std::string& method,
+      base::OnceCallback<void(bool success)> callback) override;
+
  private:
   explicit PaymentAppProviderImpl(WebContents* payment_request_web_contents);
   friend class WebContentsUserData<PaymentAppProviderImpl>;
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 
-  scoped_refptr<DevToolsBackgroundServicesContextImpl> GetDevTools(
-      const url::Origin& sw_origin);
   void StartServiceWorkerForDispatch(
       int64_t registration_id,
       PaymentEventDispatcher::ServiceWorkerStartCallback callback);

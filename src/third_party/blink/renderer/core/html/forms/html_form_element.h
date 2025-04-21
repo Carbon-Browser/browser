@@ -60,6 +60,7 @@ class CORE_EXPORT HTMLFormElement final : public HTMLElement {
 
   HTMLFormControlsCollection* elements();
   void GetNamedElements(const AtomicString&, HeapVector<Member<Element>>&);
+  bool HasNamedElements(const AtomicString&);
 
   unsigned length() const;
   HTMLElement* item(unsigned index);
@@ -92,6 +93,9 @@ class CORE_EXPORT HTMLFormElement final : public HTMLElement {
   void requestSubmit(HTMLElement* submitter, ExceptionState& exception_state);
   void reset();
 
+  void AttachLayoutTree(AttachContext& context) override;
+  void DetachLayoutTree(bool performing_reattach) override;
+
   void SubmitImplicitly(const Event&, bool from_implicit_submission_trigger);
 
   String GetName() const;
@@ -117,11 +121,26 @@ class CORE_EXPORT HTMLFormElement final : public HTMLElement {
     return radio_button_group_scope_;
   }
 
-  const ListedElement::List& ListedElements(
-      bool include_shadow_trees = false) const;
+  // Returns the listed elements (form controls) associated with `this`.
+  const ListedElement::List& ListedElements() const {
+    return CollectAndCacheListedElements(/*include_shadow_trees*/ false);
+  }
+
+  // Returns the contained form control elements associated with `this`, also
+  // including descendants of `this` that are form control elements and inside
+  // Shadow DOM. The result will contain the form control elements of <form>s
+  // nested inside `this`. In principle, form nesting is prohibited by the HTML
+  // standard, but in practice it can still occur - e.g., by dynamically
+  // appending <form> children to (a descendant of) `this`.
+  const ListedElement::List& AllContainedFormElementsForAutofill() const {
+    return CollectAndCacheListedElements(/*include_shadow_trees*/ true);
+  }
+
   const HeapVector<Member<HTMLImageElement>>& ImageElements();
 
   V8UnionElementOrRadioNodeList* AnonymousNamedGetter(const AtomicString& name);
+  bool NamedPropertyQuery(const AtomicString& name, ExceptionState&);
+
   void InvalidateDefaultButtonStyle() const;
 
   // 'construct the entry list'
@@ -130,9 +149,9 @@ class CORE_EXPORT HTMLFormElement final : public HTMLElement {
   FormData* ConstructEntryList(HTMLFormControlElement* submit_button,
                                const WTF::TextEncoding& encoding);
 
-  uint64_t UniqueRendererFormId() const { return unique_renderer_form_id_; }
-
   void InvalidateListedElementsIncludingShadowTrees();
+  void UseCountPropertyAccess(v8::Local<v8::Name>&,
+                              const v8::PropertyCallbackInfo<v8::Value>&);
 
  private:
   InsertionNotificationRequest InsertedInto(ContainerNode&) override;
@@ -154,11 +173,24 @@ class CORE_EXPORT HTMLFormElement final : public HTMLElement {
                               HTMLFormControlElement* submit_button);
 
   void CollectListedElements(
-      const Node& root,
+      const Node* root,
       ListedElement::List& elements,
       ListedElement::List* elements_including_shadow_trees = nullptr,
       bool in_shadow_tree = false) const;
   void CollectImageElements(Node& root, HeapVector<Member<HTMLImageElement>>&);
+
+  // Utility function used by ListedElements and
+  // AllContainedFormElementsForAutofill. Takes care of caching two lists of
+  // listed elements, one including shadow- contained elements, and one "normal"
+  // list without those. If `include_shadow_trees` is `true`, then the list will
+  // also contain descendants of `this` that are form control elements and
+  // inside Shadow DOM. Note that if `include_shadow_trees` is true, then,
+  // additionally, the result will contain the form control elements of <form>s
+  // nested inside `this`. In principle, form nesting is prohibited by the HTML
+  // standard, but in practice it can still occur - e.g., by dynamically
+  // appending <form> children to (a descendant of) `this`.
+  const ListedElement::List& CollectAndCacheListedElements(
+      bool include_shadow_trees) const;
 
   // Returns true if the submission should proceed.
   bool ValidateInteractively();
@@ -182,12 +214,10 @@ class CORE_EXPORT HTMLFormElement final : public HTMLElement {
   // Do not access listed_elements_ directly. Use ListedElements() instead.
   ListedElement::List listed_elements_;
   // Do not access listed_elements_including_shadow_trees_ directly. Use
-  // ListedElements(true) instead.
+  // AllContainedFormElementsForAutofill() instead.
   ListedElement::List listed_elements_including_shadow_trees_;
   // Do not access image_elements_ directly. Use ImageElements() instead.
   HeapVector<Member<HTMLImageElement>> image_elements_;
-
-  uint64_t unique_renderer_form_id_;
 
   base::OnceClosure cancel_last_submission_;
 

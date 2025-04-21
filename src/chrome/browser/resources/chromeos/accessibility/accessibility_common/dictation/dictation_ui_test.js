@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -176,5 +176,58 @@ AX_TEST_F(
         icon: this.iconType.STANDBY,
         hints:
             [this.hintType.TRY_SAYING, this.hintType.UNDO, this.hintType.HELP],
+      });
+    });
+
+AX_TEST_F(
+    'DictationUIE2ETest', 'HintsTimeoutWithoutChromevox', async function() {
+      this.mockSetTimeoutMethod();
+      this.toggleDictationOn();
+
+      // No hint shown yet.
+      await this.waitForUIProperties({
+        visible: true,
+        icon: this.iconType.STANDBY,
+      });
+
+      // A callback should have been set to show hints later.
+      const callback = this.getCallbackWithDelay(
+          UIController.HintsTimeouts.STANDARD_HINT_TIMEOUT_MS_);
+      assertNotNullNorUndefined(callback);
+
+      // Triggering the timeout should cause the hints to be shown.
+      callback();
+      await this.waitForUIProperties({
+        visible: true,
+        icon: this.iconType.STANDBY,
+        hints:
+            [this.hintType.TRY_SAYING, this.hintType.TYPE, this.hintType.HELP],
+      });
+    });
+
+// TODO(crbug.com/41483025): This test is flaky.
+AX_TEST_F(
+    'DictationUIE2ETest', 'DISABLED_HintsTimeoutWithChromeVox',
+    async function() {
+      // Turn on ChromeVox
+      await this.setPref(Dictation.SPOKEN_FEEDBACK_PREF, true);
+      // Wait for the callbacks to Dictation.
+      await this.getPref(Dictation.SPOKEN_FEEDBACK_PREF);
+
+      this.mockSetTimeoutMethod();
+      this.toggleDictationOn();
+
+      // A callback should have been set to show hints later.
+      const callback = this.getCallbackWithDelay(
+          UIController.HintsTimeouts.LONGER_HINT_TIMEOUT_MS_);
+      assertNotNullNorUndefined(callback);
+
+      // Triggering the timeout should cause the hints to be shown.
+      callback();
+      await this.waitForUIProperties({
+        visible: true,
+        icon: this.iconType.STANDBY,
+        hints:
+            [this.hintType.TRY_SAYING, this.hintType.TYPE, this.hintType.HELP],
       });
     });

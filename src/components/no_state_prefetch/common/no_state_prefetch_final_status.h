@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,18 @@ namespace prerender {
 
 // FinalStatus indicates whether |this| was used, or why it was cancelled.
 // NOTE: New values need to be appended, since they are used in histograms.
-
+//
+// If you change this, please follow the process in
+// go/preloading-dashboard-updates to update the mapping reflected in dashboard,
+// or if you are not a Googler, please file an FYI bug on https://crbug.new with
+// component Internals>Preload.
+//
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused. The values should remain
 // synchronized with the enum PrerenderFinalStatus in
 // //tools/metrics/histograms/enums.xml.
+//
+// LINT.IfChange
 enum FinalStatus {
   FINAL_STATUS_USED = 0,
   FINAL_STATUS_TIMED_OUT = 1,
@@ -68,7 +75,7 @@ enum FinalStatus {
   // Obsolete: FINAL_STATUS_NON_EMPTY_BROWSING_INSTANCE = 50,
   FINAL_STATUS_NAVIGATION_INTERCEPTED = 51,
   FINAL_STATUS_PRERENDERING_DISABLED = 52,
-  FINAL_STATUS_CELLULAR_NETWORK = 53,
+  // Obsolete: FINAL_STATUS_CELLULAR_NETWORK = 53,
   FINAL_STATUS_BLOCK_THIRD_PARTY_COOKIES = 54,
   // Obsolete: FINAL_STATUS_CREDENTIAL_MANAGER_API = 55,
   FINAL_STATUS_NOSTATE_PREFETCH_FINISHED = 56,
@@ -79,8 +86,10 @@ enum FinalStatus {
   FINAL_STATUS_NAVIGATION_PREDICTOR_HOLDBACK = 61,
   FINAL_STATUS_SINGLE_PROCESS = 62,
   FINAL_STATUS_LINK_REL_NEXT_NOT_ALLOWED = 63,
+  FINAL_STATUS_PREFETCH_HOLDBACK = 64,
   FINAL_STATUS_MAX,
 };
+// LINT.ThenChange()
 
 // Return a human-readable name for |final_status|. |final_status|
 // is expected to be a valid value.

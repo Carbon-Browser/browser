@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,16 +9,22 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
+#include <ostream>
 #include <string>
 #include <utility>
 
 #include "base/check.h"
+#include "base/containers/heap_array.h"
+#include "base/containers/span.h"
+#include "base/memory/raw_span.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/shared_memory_mapping.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
+#include "media/base/decoder_buffer_side_data.h"
 #include "media/base/decrypt_config.h"
 #include "media/base/media_export.h"
 #include "media/base/timestamp_constants.h"
@@ -33,23 +39,20 @@ namespace media {
 class MEDIA_EXPORT DecoderBuffer
     : public base::RefCountedThreadSafe<DecoderBuffer> {
  public:
-  enum {
-    kPaddingSize = 64,
-#if defined(ARCH_CPU_ARM_FAMILY)
-    kAlignmentSize = 16
-#else
-    kAlignmentSize = 32
-#endif
+  // ExternalMemory wraps a class owning a buffer and expose the data interface
+  // through Span(). This class is derived by a class that owns the class owning
+  // the buffer owner class.
+  struct MEDIA_EXPORT ExternalMemory {
+   public:
+    virtual ~ExternalMemory() = default;
+    virtual const base::span<const uint8_t> Span() const = 0;
   };
 
-  using DiscardPadding = std::pair<base::TimeDelta, base::TimeDelta>;
+  using DiscardPadding = DecoderBufferSideData::DiscardPadding;
 
+  // TODO(crbug.com/365814210): Remove this structure. It's barely used outside
+  // of unit tests.
   struct MEDIA_EXPORT TimeInfo {
-    TimeInfo();
-    ~TimeInfo();
-    TimeInfo(const TimeInfo&);
-    TimeInfo& operator=(const TimeInfo&);
-
     // Presentation time of the frame.
     base::TimeDelta timestamp;
 
@@ -63,32 +66,24 @@ class MEDIA_EXPORT DecoderBuffer
     DiscardPadding discard_padding;
   };
 
-  // Allocates buffer with |size| >= 0. |is_key_frame_| will default to false.
+  // Allocates buffer with |size| > 0. |is_key_frame_| will default to false.
+  // If size is 0, no buffer will be allocated.
+  // TODO(crbug.com/365814210): Remove this constructor. Clients should use the
+  // FromArray constructor instead asking for a writable DecoderBuffer.
   explicit DecoderBuffer(size_t size);
 
   DecoderBuffer(const DecoderBuffer&) = delete;
   DecoderBuffer& operator=(const DecoderBuffer&) = delete;
 
-  // Create a DecoderBuffer whose |data_| is copied from |data|. |data| must not
-  // be NULL and |size| >= 0. The buffer's |is_key_frame_| will default to
-  // false.
-  static scoped_refptr<DecoderBuffer> CopyFrom(const uint8_t* data,
-                                               size_t size);
-
-  // Create a DecoderBuffer whose |data_| is copied from |data| and |side_data_|
-  // is copied from |side_data|. Data pointers must not be NULL and sizes must
-  // be >= 0. The buffer's |is_key_frame_| will default to false.
-  static scoped_refptr<DecoderBuffer> CopyFrom(const uint8_t* data,
-                                               size_t size,
-                                               const uint8_t* side_data,
-                                               size_t side_data_size);
+  // Create a DecoderBuffer whose |data_| is copied from |data|. The buffer's
+  // |is_key_frame_| will default to false.
+  static scoped_refptr<DecoderBuffer> CopyFrom(base::span<const uint8_t> data);
 
   // Create a DecoderBuffer where data() of |size| bytes resides within the heap
   // as byte array. The buffer's |is_key_frame_| will default to false.
   //
   // Ownership of |data| is transferred to the buffer.
-  static scoped_refptr<DecoderBuffer> FromArray(std::unique_ptr<uint8_t[]> data,
-                                                size_t size);
+  static scoped_refptr<DecoderBuffer> FromArray(base::HeapArray<uint8_t> data);
 
   // Create a DecoderBuffer where data() of |size| bytes resides within the
   // memory referred to by |region| at non-negative offset |offset|. The
@@ -112,29 +107,43 @@ class MEDIA_EXPORT DecoderBuffer
       uint64_t offset,
       size_t size);
 
-  // Create a DecoderBuffer indicating we've reached end of stream.
-  //
-  // Calling any method other than end_of_stream() on the resulting buffer
-  // is disallowed.
-  static scoped_refptr<DecoderBuffer> CreateEOSBuffer();
+  // Creates a DecoderBuffer with ExternalMemory. The buffer accessed through
+  // the created DecoderBuffer is |span| of |external_memory||.
+  // |external_memory| is owned by DecoderBuffer until it is destroyed.
+  static scoped_refptr<DecoderBuffer> FromExternalMemory(
+      std::unique_ptr<ExternalMemory> external_memory);
 
-  const TimeInfo& time_info() const {
+  // Create a DecoderBuffer indicating we've reached end of stream. If this is
+  // an EOS buffer for a config change, the upcoming config may optionally be
+  // provided to allow the decoder to make more optimal configuration decisions.
+  //
+  // Calling any method other than end_of_stream() or next_config() on the
+  // resulting buffer is disallowed.
+  using ConfigVariant = DecoderBufferSideData::ConfigVariant;
+  static scoped_refptr<DecoderBuffer> CreateEOSBuffer(
+      std::optional<ConfigVariant> next_config = std::nullopt);
+
+  // Method to verify if subsamples of a DecoderBuffer match.
+  static bool DoSubsamplesMatch(const DecoderBuffer& buffer);
+
+  // TODO(crbug.com/365814210): Remove this method.
+  TimeInfo time_info() const {
     DCHECK(!end_of_stream());
-    return time_info_;
+    return {timestamp_, duration_, discard_padding()};
   }
 
   base::TimeDelta timestamp() const {
     DCHECK(!end_of_stream());
-    return time_info_.timestamp;
+    return timestamp_;
   }
 
-  // TODO(dalecurtis): This should be renamed at some point, but to avoid a yak
-  // shave keep as a virtual with hacker_style() for now.
+  // TODO(crbug.com/365814210): This should be renamed at some point, but to
+  // avoid a yak shave keep as a virtual with hacker_style() for now.
   virtual void set_timestamp(base::TimeDelta timestamp);
 
   base::TimeDelta duration() const {
     DCHECK(!end_of_stream());
-    return time_info_.duration;
+    return duration_;
   }
 
   void set_duration(base::TimeDelta duration) {
@@ -142,72 +151,94 @@ class MEDIA_EXPORT DecoderBuffer
     DCHECK(duration == kNoTimestamp ||
            (duration >= base::TimeDelta() && duration != kInfiniteDuration))
         << duration.InSecondsF();
-    time_info_.duration = duration;
+    duration_ = duration;
   }
 
+  // The pointer to the start of the buffer. Prefer to construct a span around
+  // the buffer, such as `base::span(decoder_buffer)`.
+  // TODO(crbug.com/365814210): Remove in favor of AsSpan().
   const uint8_t* data() const {
     DCHECK(!end_of_stream());
-    if (read_only_mapping_.IsValid())
-      return read_only_mapping_.GetMemoryAs<const uint8_t>();
-    if (writable_mapping_.IsValid())
-      return writable_mapping_.GetMemoryAs<const uint8_t>();
-    return data_.get();
+    if (external_memory_)
+      return external_memory_->Span().data();
+    return data_.data();
   }
 
-  // TODO(sandersd): Remove writable_data(). https://crbug.com/834088
+  // TODO(crbug.com/373790934): This is unnecessary; this type can be implicitly
+  // converted to a span<const uint8_t>.
+  base::span<const uint8_t> AsSpan() const;
+
+  // The number of bytes in the buffer.
+  size_t size() const {
+    DCHECK(!end_of_stream());
+    return external_memory_ ? external_memory_->Span().size() : data_.size();
+  }
+
+  // Prefer writable_span(), though it should also be removed.
+  //
+  // TODO(crbug.com/41383992): Remove writable_data().
   uint8_t* writable_data() const {
     DCHECK(!end_of_stream());
-    DCHECK(!read_only_mapping_.IsValid());
-    DCHECK(!writable_mapping_.IsValid());
-    return data_.get();
+    DCHECK(!external_memory_);
+    return const_cast<uint8_t*>(data_.data());
   }
 
-  size_t data_size() const {
+  // TODO(crbug.com/41383992): Remove writable_span().
+  base::span<uint8_t> writable_span() const {
+    // TODO(crbug.com/40284755): `data_` should be converted to HeapArray, then
+    // it can give out a span safely.
+    return UNSAFE_TODO(base::span(writable_data(), size()));
+  }
+
+  bool empty() const {
+    return external_memory_ ? external_memory_->Span().empty() : data_.empty();
+  }
+
+  // Read-only iteration as bytes. This allows this type to meet the
+  // requirements of `std::ranges::contiguous_range`, and thus be implicitly
+  // convertible to a span.
+  auto begin() const {
+    return external_memory_ ? external_memory_->Span().begin() : data_.begin();
+  }
+  auto end() const {
+    return external_memory_ ? external_memory_->Span().end() : data_.end();
+  }
+
+  // TODO(crbug.com/365814210): Change the return type to std::optional.
+  DiscardPadding discard_padding() const {
     DCHECK(!end_of_stream());
-    return size_;
+    return side_data_ ? side_data_->discard_padding : DiscardPadding();
   }
 
-  const uint8_t* side_data() const {
-    DCHECK(!end_of_stream());
-    return side_data_.get();
-  }
+  // TODO(crbug.com/365814210): Remove this method and force callers to get it
+  // through side_data().
+  void set_discard_padding(const DiscardPadding& discard_padding);
 
-  size_t side_data_size() const {
-    DCHECK(!end_of_stream());
-    return side_data_size_;
-  }
-
-  const DiscardPadding& discard_padding() const {
-    DCHECK(!end_of_stream());
-    return time_info_.discard_padding;
-  }
-
-  void set_discard_padding(const DiscardPadding& discard_padding) {
-    DCHECK(!end_of_stream());
-    time_info_.discard_padding = discard_padding;
-  }
-
-  // Returns DecryptConfig associated with |this|. Returns null iff |this| is
+  // Returns DecryptConfig associated with |this|. Returns null if |this| is
   // not encrypted.
   const DecryptConfig* decrypt_config() const {
     DCHECK(!end_of_stream());
     return decrypt_config_.get();
   }
 
+  // TODO(b/331652782): integrate the setter function into the constructor to
+  // make |decrypt_config_| immutable.
   void set_decrypt_config(std::unique_ptr<DecryptConfig> decrypt_config) {
     DCHECK(!end_of_stream());
     decrypt_config_ = std::move(decrypt_config);
   }
 
-  // If there's no data in this buffer, it represents end of stream.
-  bool end_of_stream() const {
-    return !read_only_mapping_.IsValid() && !writable_mapping_.IsValid() &&
-           !data_;
-  }
+  bool end_of_stream() const { return is_end_of_stream_; }
 
   bool is_key_frame() const {
     DCHECK(!end_of_stream());
     return is_key_frame_;
+  }
+
+  bool is_encrypted() const {
+    DCHECK(!end_of_stream());
+    return decrypt_config() && decrypt_config()->encryption_scheme() !=
+                                   EncryptionScheme::kUnencrypted;
   }
 
   void set_is_key_frame(bool is_key_frame) {
@@ -215,65 +246,85 @@ class MEDIA_EXPORT DecoderBuffer
     is_key_frame_ = is_key_frame;
   }
 
-  // Returns true if all fields in |buffer| matches this buffer
-  // including |data_| and |side_data_|.
+  // Returns DecoderBufferSideData associated with `this`. Check if `side_data_`
+  // exists using `has_side_data()` before calling this function.
+  const DecoderBufferSideData* side_data() const {
+    DCHECK(!end_of_stream());
+    return side_data_.get();
+  }
+
+  // TODO(b/331652782): integrate the setter function into the constructor to
+  // make |side_data_| immutable.
+  DecoderBufferSideData& WritableSideData();
+  void set_side_data(std::unique_ptr<DecoderBufferSideData> side_data);
+
+  // Returns true if all fields in |buffer| matches this buffer including
+  // |data_|.
   bool MatchesForTesting(const DecoderBuffer& buffer) const;
 
-  // As above, except that |data_| and |side_data_| are not compared.
+  // As above, except that |data_| is not compared.
   bool MatchesMetadataForTesting(const DecoderBuffer& buffer) const;
 
   // Returns a human-readable string describing |*this|.
   std::string AsHumanReadableString(bool verbose = false) const;
 
-  // Replaces any existing side data with data copied from |side_data|.
-  void CopySideDataFrom(const uint8_t* side_data, size_t side_data_size);
+  // Returns total memory usage for both bookkeeping and buffered data. The
+  // function is added for more accurately memory management.
+  virtual size_t GetMemoryUsage() const;
+
+  // Accessor for DecoderBufferSideData::next_config.
+  std::optional<ConfigVariant> next_config() const {
+    DCHECK(end_of_stream());
+    return side_data_ ? side_data_->next_config : std::nullopt;
+  }
 
  protected:
   friend class base::RefCountedThreadSafe<DecoderBuffer>;
+  enum class DecoderBufferType { kNormal, kEndOfStream };
 
-  // Allocates a buffer of size |size| >= 0 and copies |data| into it. If |data|
-  // is NULL then |data_| is set to NULL and |buffer_size_| to 0.
-  // |is_key_frame_| will default to false.
-  DecoderBuffer(const uint8_t* data,
-                size_t size,
-                const uint8_t* side_data,
-                size_t side_data_size);
+  // Allocates a buffer with a copy of |data| in it. |is_key_frame_| will
+  // default to false.
+  explicit DecoderBuffer(base::span<const uint8_t> data);
 
-  DecoderBuffer(std::unique_ptr<uint8_t[]> data, size_t size);
+  explicit DecoderBuffer(base::HeapArray<uint8_t> data);
 
-  DecoderBuffer(base::ReadOnlySharedMemoryMapping mapping, size_t size);
+  explicit DecoderBuffer(std::unique_ptr<ExternalMemory> external_memory);
 
-  DecoderBuffer(base::WritableSharedMemoryMapping mapping, size_t size);
+  DecoderBuffer(DecoderBufferType decoder_buffer_type,
+                std::optional<ConfigVariant> next_config);
 
   virtual ~DecoderBuffer();
 
   // Encoded data, if it is stored on the heap.
-  std::unique_ptr<uint8_t[]> data_;
+  const base::HeapArray<uint8_t> data_;
 
  private:
-  TimeInfo time_info_;
+  // ***************************************************************************
+  // WARNING: This is a highly allocated object. Care should be taken when
+  // adding any fields to make sure they are absolutely necessary. If a field
+  // must be added and can be optional, ensure it is heap allocated through the
+  // usage of something like std::unique_ptr.
+  // ***************************************************************************
 
-  // Size of the encoded data.
-  size_t size_;
+  // Presentation time of the frame.
+  base::TimeDelta timestamp_;
 
-  // Side data. Used for alpha channel in VPx, and for text cues.
-  size_t side_data_size_ = 0;
-  std::unique_ptr<uint8_t[]> side_data_;
+  // Presentation duration of the frame.
+  base::TimeDelta duration_;
 
-  // Encoded data, if it is stored in a read-only shared memory mapping.
-  base::ReadOnlySharedMemoryMapping read_only_mapping_;
+  // Structured side data.
+  std::unique_ptr<DecoderBufferSideData> side_data_;
 
-  // Encoded data, if it is stored in a writable shared memory mapping.
-  base::WritableSharedMemoryMapping writable_mapping_;
+  const std::unique_ptr<ExternalMemory> external_memory_;
 
   // Encryption parameters for the encoded data.
   std::unique_ptr<DecryptConfig> decrypt_config_;
 
   // Whether the frame was marked as a keyframe in the container.
-  bool is_key_frame_ = false;
+  bool is_key_frame_ : 1 = false;
 
-  // Constructor helper method for memory allocations.
-  void Initialize();
+  // Whether the buffer represent the end of stream.
+  const bool is_end_of_stream_ : 1 = false;
 };
 
 }  // namespace media

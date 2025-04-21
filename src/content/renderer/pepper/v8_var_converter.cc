@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,9 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "base/bind.h"
 #include "base/containers/circular_deque.h"
 #include "base/containers/stack.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "content/public/renderer/renderer_ppapi_host.h"
@@ -131,8 +131,6 @@ bool GetOrCreateV8Value(v8::Local<v8::Context> context,
       StringVar* string = StringVar::FromPPVar(var);
       if (!string) {
         NOTREACHED();
-        result->Clear();
-        return false;
       }
       const std::string& value = string->value();
       // Create a string primitive rather than a string object. This is lossy
@@ -149,13 +147,11 @@ bool GetOrCreateV8Value(v8::Local<v8::Context> context,
       ArrayBufferVar* buffer = ArrayBufferVar::FromPPVar(var);
       if (!buffer) {
         NOTREACHED();
-        result->Clear();
-        return false;
       }
       HostArrayBufferVar* host_buffer =
           static_cast<HostArrayBufferVar*>(buffer);
       *result = blink::WebArrayBufferConverter::ToV8Value(
-          &host_buffer->webkit_buffer(), context->Global(), isolate);
+          &host_buffer->webkit_buffer(), isolate);
       break;
     }
     case PP_VARTYPE_ARRAY:
@@ -171,14 +167,10 @@ bool GetOrCreateV8Value(v8::Local<v8::Context> context,
       if (object_vars_allowed == V8VarConverter::kDisallowObjectVars ||
           visited_ids->size() != 0) {
         NOTREACHED();
-        result->Clear();
-        return false;
       }
       scoped_refptr<V8ObjectVar> v8_object_var = V8ObjectVar::FromPPVar(var);
       if (!v8_object_var.get()) {
         NOTREACHED();
-        result->Clear();
-        return false;
       }
       *result = v8_object_var->GetHandle();
       break;
@@ -330,7 +322,8 @@ bool V8VarConverter::ToV8Value(const PP_Var& var,
   v8::Isolate* isolate = context->GetIsolate();
   v8::EscapableHandleScope handle_scope(isolate);
   v8::MicrotasksScope microtasks_scope(
-      isolate, v8::MicrotasksScope::kDoNotRunMicrotasks);
+      isolate, context->GetMicrotaskQueue(),
+      v8::MicrotasksScope::kDoNotRunMicrotasks);
 
   VarHandleMap visited_ids;
   ParentVarSet parent_ids;
@@ -376,7 +369,6 @@ bool V8VarConverter::ToV8Value(const PP_Var& var,
       ArrayVar* array_var = ArrayVar::FromPPVar(stack[current_var_index].val);
       if (!array_var) {
         NOTREACHED();
-        return false;
       }
       DCHECK(current_v8->IsArray());
       v8::Local<v8::Array> v8_array = current_v8.As<v8::Array>();
@@ -408,7 +400,6 @@ bool V8VarConverter::ToV8Value(const PP_Var& var,
           DictionaryVar::FromPPVar(stack[current_var_index].val);
       if (!dict_var) {
         NOTREACHED();
-        return false;
       }
       DCHECK(current_v8->IsObject());
       v8::Local<v8::Object> v8_object = current_v8.As<v8::Object>();
@@ -486,7 +477,8 @@ bool V8VarConverter::FromV8ValueInternal(
   v8::Isolate* isolate = context->GetIsolate();
   v8::HandleScope handle_scope(isolate);
   v8::MicrotasksScope microtasks_scope(
-      isolate, v8::MicrotasksScope::kDoNotRunMicrotasks);
+      isolate, context->GetMicrotaskQueue(),
+      v8::MicrotasksScope::kDoNotRunMicrotasks);
 
   HandleVarMap visited_handles;
   ParentHandleSet parent_handles;
@@ -537,7 +529,6 @@ bool V8VarConverter::FromV8ValueInternal(
       ArrayVar* array_var = ArrayVar::FromPPVar(current_var);
       if (!array_var) {
         NOTREACHED();
-        return false;
       }
 
       for (uint32_t i = 0; i < v8_array->Length(); ++i) {
@@ -573,7 +564,6 @@ bool V8VarConverter::FromV8ValueInternal(
       DictionaryVar* dict_var = DictionaryVar::FromPPVar(current_var);
       if (!dict_var) {
         NOTREACHED();
-        return false;
       }
 
       v8::Local<v8::Array> property_names(
@@ -587,7 +577,6 @@ bool V8VarConverter::FromV8ValueInternal(
           NOTREACHED() << "Key \"" << *v8::String::Utf8Value(isolate, key)
                        << "\" "
                           "is neither a string nor a number";
-          return false;
         }
 
         v8::Local<v8::String> key_string =

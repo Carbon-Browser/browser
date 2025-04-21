@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,19 +36,31 @@ class SafeBrowsingServiceImpl : public SafeBrowsingService {
   SafeBrowsingServiceImpl& operator=(const SafeBrowsingServiceImpl&) = delete;
 
   // SafeBrowsingService:
-  void Initialize(PrefService* prefs,
-                  const base::FilePath& user_data_path,
-                  safe_browsing::SafeBrowsingMetricsCollector*
-                      safe_browsing_metrics_collector) override;
+  void Initialize(const base::FilePath& user_data_path) override;
+  void OnBrowserStateCreated(
+      PrefService* prefs,
+      safe_browsing::SafeBrowsingMetricsCollector* metrics_collector) override;
+  void OnBrowserStateDestroyed(PrefService* prefs) override;
   void ShutDown() override;
   std::unique_ptr<safe_browsing::SafeBrowsingUrlCheckerImpl> CreateUrlChecker(
       network::mojom::RequestDestination request_destination,
       web::WebState* web_state,
       SafeBrowsingClient* client) override;
+  std::unique_ptr<safe_browsing::SafeBrowsingUrlCheckerImpl> CreateAsyncChecker(
+      network::mojom::RequestDestination request_destination,
+      web::WebState* web_state,
+      SafeBrowsingClient* client) override;
+  std::unique_ptr<safe_browsing::SafeBrowsingUrlCheckerImpl> CreateSyncChecker(
+      network::mojom::RequestDestination request_destination,
+      web::WebState* web_state,
+      SafeBrowsingClient* client) override;
+  bool ShouldCreateAsyncChecker(web::WebState* web_state,
+                                SafeBrowsingClient* client) override;
   bool CanCheckUrl(const GURL& url) const override;
   scoped_refptr<network::SharedURLLoaderFactory> GetURLLoaderFactory() override;
   scoped_refptr<safe_browsing::SafeBrowsingDatabaseManager> GetDatabaseManager()
       override;
+  network::mojom::NetworkContext* GetNetworkContext() override;
   void ClearCookies(const net::CookieDeletionInfo::TimeRange& creation_range,
                     base::OnceClosure callback) override;
 
@@ -59,68 +71,39 @@ class SafeBrowsingServiceImpl : public SafeBrowsingService {
   // thread.
   class IOThreadEnabler : public base::RefCountedThreadSafe<IOThreadEnabler> {
    public:
-    IOThreadEnabler(scoped_refptr<safe_browsing::SafeBrowsingDatabaseManager>
-                        database_manager);
+    IOThreadEnabler();
 
     IOThreadEnabler(const IOThreadEnabler&) = delete;
     IOThreadEnabler& operator=(const IOThreadEnabler&) = delete;
 
     // Creates the network context and URL loader factory used by the
     // SafeBrowsingDatabaseManager.
-    void Initialize(
-        scoped_refptr<SafeBrowsingServiceImpl> safe_browsing_service,
-        mojo::PendingReceiver<network::mojom::NetworkContext>
-            network_context_receiver,
-        const base::FilePath& safe_browsing_data_path);
+    void Initialize(mojo::PendingReceiver<network::mojom::NetworkContext>
+                        network_context_receiver,
+                    const base::FilePath& safe_browsing_data_path,
+                    const std::string& user_agent);
 
     // Disables Safe Browsing, and destroys the network context and URL loader
     // factory used by the SafeBrowsingDatabaseManager.
     void ShutDown();
 
-    // Enables or disables Safe Browsing database updates and lookups.
-    void SetSafeBrowsingEnabled(bool enabled);
-
-    // Clears all cookies. Calls the given |callback| when deletion is complete.
+    // Clears all cookies. Calls the given `callback` when deletion is complete.
     void ClearAllCookies(base::OnceClosure callback);
 
    private:
     friend base::RefCountedThreadSafe<IOThreadEnabler>;
     ~IOThreadEnabler();
 
-    // Starts the SafeBrowsingDatabaseManager, making it ready to accept
-    // queries.
-    void StartSafeBrowsingDBManager();
-
     // Constructs a URLRequestContext, using the given path as the location for
     // the cookie store.
-    void SetUpURLRequestContext(const base::FilePath& safe_browsing_data_path);
+    void SetUpURLRequestContext(const base::FilePath& safe_browsing_data_path,
+                                const std::string& user_agent);
 
-    // Constructs a SharedURLLoaderFactory.
-    void SetUpURLLoaderFactory(
-        scoped_refptr<SafeBrowsingServiceImpl> safe_browsing_service);
-
-    // This tracks whether the service is running.
-    bool enabled_ = false;
-
-    // This tracks whether ShutDown() has been called.
-    bool shutting_down_ = false;
-
-    // This is wrapped by |network_context|.
+    // This is wrapped by `network_context`.
     std::unique_ptr<net::URLRequestContext> url_request_context_;
 
     // The network context used for Safe Browsing related network requests.
     std::unique_ptr<network::NetworkContext> network_context_;
-
-    // An IO thread remote for a URLLoaderFactory created on the UI thread.
-    mojo::Remote<network::mojom::URLLoaderFactory> url_loader_factory_;
-
-    // A SharedURLLoaderFactory that wraps |url_loader_factory_|.
-    scoped_refptr<network::WeakWrapperSharedURLLoaderFactory>
-        shared_url_loader_factory_;
-
-    // The database manager used for Safe Browsing queries.
-    scoped_refptr<safe_browsing::SafeBrowsingDatabaseManager>
-        safe_browsing_db_manager_;
   };
 
   ~SafeBrowsingServiceImpl() override;
@@ -140,7 +123,12 @@ class SafeBrowsingServiceImpl : public SafeBrowsingService {
   // The URLLoaderFactory used for Safe Browsing network requests.
   mojo::Remote<network::mojom::URLLoaderFactory> url_loader_factory_;
 
-  // A SharedURLLoaderFactory that wraps |url_loader_factory_|.
+  // A PendingReceiver for `url_loader_factory_`, used during service
+  // initialization.
+  mojo::PendingReceiver<network::mojom::URLLoaderFactory>
+      url_loader_factory_pending_receiver_;
+
+  // A SharedURLLoaderFactory that wraps `url_loader_factory_`.
   scoped_refptr<network::WeakWrapperSharedURLLoaderFactory>
       shared_url_loader_factory_;
 
@@ -149,8 +137,12 @@ class SafeBrowsingServiceImpl : public SafeBrowsingService {
   scoped_refptr<safe_browsing::SafeBrowsingDatabaseManager>
       safe_browsing_db_manager_;
 
-  // This watches for changes to the Safe Browsing opt-out preference.
-  std::unique_ptr<PrefChangeRegistrar> pref_change_registrar_;
+  // This tracks whether the service is running.
+  bool enabled_ = false;
+
+  // Holds the preferences watchers for the BrowserStates.
+  std::map<PrefService*, std::unique_ptr<PrefChangeRegistrar>>
+      pref_change_registrars_;
 
   // Encapsulates methods and objects that are used on the IO thread.
   scoped_refptr<IOThreadEnabler> io_thread_enabler_;

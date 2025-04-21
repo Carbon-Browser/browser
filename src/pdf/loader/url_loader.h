@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,10 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/containers/circular_deque.h"
 #include "base/containers/span.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_span.h"
 #include "base/memory/weak_ptr.h"
 #include "third_party/blink/public/web/web_associated_url_loader_client.h"
 
@@ -143,7 +144,7 @@ class UrlLoader final : public blink::WebAssociatedURLLoaderClient {
                    uint64_t total_bytes_to_be_sent) override;
   void DidReceiveResponse(const blink::WebURLResponse& response) override;
   void DidDownloadData(uint64_t data_length) override;
-  void DidReceiveData(const char* data, int data_length) override;
+  void DidReceiveData(base::span<const char> data) override;
   void DidFinishLoading() override;
   void DidFail(const blink::WebURLError& error) override;
 
@@ -191,7 +192,7 @@ class UrlLoader final : public blink::WebAssociatedURLLoaderClient {
   base::circular_deque<char> buffer_;
 
   base::OnceCallback<void(int)> read_callback_;
-  base::span<char> client_buffer_;
+  base::raw_span<char> client_buffer_;
 };
 
 }  // namespace chrome_pdf

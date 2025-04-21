@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,6 +43,8 @@ class PermissionRequestManagerTestApi {
   void AddSimpleRequest(content::RenderFrameHost* source_frame,
                         permissions::RequestType type);
 
+  void SetOrigin(const GURL& permission_request_origin);
+
   // Return the Widget for the permission prompt bubble, or nullptr if
   // there is no prompt currently showing.
   views::Widget* GetPromptWindow();
@@ -50,7 +52,9 @@ class PermissionRequestManagerTestApi {
   void SimulateWebContentsDestroyed();
 
  private:
-  raw_ptr<permissions::PermissionRequestManager> manager_;
+  raw_ptr<permissions::PermissionRequestManager, AcrossTasksDanglingUntriaged>
+      manager_;
+  GURL permission_request_origin_ = GURL("https://example.com");
 };
 
 }  // namespace test

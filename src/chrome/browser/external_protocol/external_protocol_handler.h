@@ -1,15 +1,18 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_EXTERNAL_PROTOCOL_EXTERNAL_PROTOCOL_HANDLER_H_
 #define CHROME_BROWSER_EXTERNAL_PROTOCOL_EXTERNAL_PROTOCOL_HANDLER_H_
 
+#include <optional>
 #include <string>
 
+#include "build/build_config.h"
 #include "chrome/browser/shell_integration.h"
 #include "content/public/browser/web_contents.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "mojo/public/cpp/bindings/pending_remote.h"
+#include "services/network/public/mojom/url_loader_factory.mojom-forward.h"
 #include "ui/base/page_transition_types.h"
 
 namespace content {
@@ -33,6 +36,23 @@ class ExternalProtocolHandler {
   };
 
   // This is used to back a UMA histogram, so it should be treated as
+  // append-only.
+  // This metric is related to BlockState but is only used for metrics
+  // reporting, and it differentiates multiple possible states that map to
+  // BlockState.
+  enum class BlockStateMetric {
+    kDeniedDefault,
+    kAllowedDefaultMail,
+    kAllowedDefaultNews_Deprecated,  // No longer emitted.
+    kNewsNotDefault_Deprecated,      // No longer emitted.
+    kAllowedByEnterprisePolicy,
+    kAllowedByPreference,
+    kPrompt,
+    // Insert new metric values above this line and update kMaxValue.
+    kMaxValue = kPrompt,
+  };
+
+  // This is used to back a UMA histogram, so it should be treated as
   // append-only. Any new values should be inserted immediately prior to
   // HANDLE_STATE_LAST.
   enum HandleState {
@@ -46,8 +66,8 @@ class ExternalProtocolHandler {
   // Delegate to allow unit testing to provide different behavior.
   class Delegate {
    public:
-    virtual scoped_refptr<shell_integration::DefaultProtocolClientWorker>
-    CreateShellWorker(const std::string& protocol) = 0;
+    virtual scoped_refptr<shell_integration::DefaultSchemeClientWorker>
+    CreateShellWorker(const GURL& url) = 0;
     virtual BlockState GetBlockState(const std::string& scheme,
                                      Profile* profile) = 0;
     virtual void BlockRequest() = 0;
@@ -56,7 +76,8 @@ class ExternalProtocolHandler {
         content::WebContents* web_contents,
         ui::PageTransition page_transition,
         bool has_user_gesture,
-        const absl::optional<url::Origin>& initiating_origin) = 0;
+        const std::optional<url::Origin>& initiating_origin,
+        const std::u16string& program_name) = 0;
     virtual void LaunchUrlWithoutSecurityCheck(
         const GURL& url,
         content::WebContents* web_contents) = 0;
@@ -65,10 +86,14 @@ class ExternalProtocolHandler {
     virtual void OnSetBlockState(const std::string& scheme,
                                  const url::Origin& initiating_origin,
                                  ExternalProtocolHandler::BlockState state) {}
+    virtual void ReportExternalAppRedirectToSafeBrowsing(
+        const GURL& url,
+        content::WebContents* web_contents) {}
     virtual ~Delegate() = default;
   };
 
   // UMA histogram metric names.
+  static const char kBlockStateMetric[];
   static const char kHandleStateMetric[];
 
   ExternalProtocolHandler(const ExternalProtocolHandler&) = delete;
@@ -108,13 +133,19 @@ class ExternalProtocolHandler {
   // If possible, |initiator_document| identifies the document that requested
   // the external protocol launch.
   // Must run on the UI thread.
-  static void LaunchUrl(const GURL& url,
-                        content::WebContents::Getter web_contents_getter,
-                        ui::PageTransition page_transition,
-                        bool has_user_gesture,
-                        bool is_in_fenced_frame_tree,
-                        const absl::optional<url::Origin>& initiating_origin,
-                        content::WeakDocumentPtr initiator_document);
+  static void LaunchUrl(
+      const GURL& url,
+      content::WebContents::Getter web_contents_getter,
+      ui::PageTransition page_transition,
+      bool has_user_gesture,
+      bool is_in_fenced_frame_tree,
+      const std::optional<url::Origin>& initiating_origin,
+      content::WeakDocumentPtr initiator_document
+#if BUILDFLAG(IS_ANDROID)
+      ,
+      mojo::PendingRemote<network::mojom::URLLoaderFactory>* out_factory
+#endif
+  );
 
   // Starts a url using the external protocol handler with the help
   // of shellexecute. Should only be called if the protocol is allowlisted
@@ -144,6 +175,7 @@ class ExternalProtocolHandler {
   // Register the ExcludedSchemes preference.
   static void RegisterPrefs(PrefRegistrySimple* registry);
 
+#if !BUILDFLAG(IS_ANDROID)
   // Creates and runs a External Protocol dialog box.
   // |url| - The url of the request.
   // |render_process_host_id| and |routing_id| are used by
@@ -168,8 +200,10 @@ class ExternalProtocolHandler {
       ui::PageTransition page_transition,
       bool has_user_gesture,
       bool is_in_fenced_frame_tree,
-      const absl::optional<url::Origin>& initiating_origin,
-      content::WeakDocumentPtr initiator_document);
+      const std::optional<url::Origin>& initiating_origin,
+      content::WeakDocumentPtr initiator_document,
+      const std::u16string& program_name);
+#endif
 
   // Clears the external protocol handling data.
   static void ClearData(Profile* profile);

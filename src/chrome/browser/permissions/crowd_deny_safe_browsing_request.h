@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
@@ -64,17 +65,16 @@ class CrowdDenySafeBrowsingRequest {
   CrowdDenySafeBrowsingRequest& operator=(const CrowdDenySafeBrowsingRequest&) =
       delete;
 
-  // Posted by the |client_| from the IO thread when it gets a response.
+  // Posted by the |client_| when it gets a response.
   void OnReceivedResult(Verdict verdict);
 
-  // The client interfacing with Safe Browsing. Created on |this| thread, but
-  // used on the IO thread for the rest of its life and destroyed there.
+  // The client interfacing with Safe Browsing.
   std::unique_ptr<SafeBrowsingClient> client_;
 
   VerdictCallback callback_;
 
   // For telemetry purposes. The caller guarantees |clock_| to outlive |this|.
-  const base::Clock* clock_;
+  raw_ptr<const base::Clock> clock_;
   const base::Time request_start_time_;
 
   base::WeakPtrFactory<CrowdDenySafeBrowsingRequest> weak_factory_{this};

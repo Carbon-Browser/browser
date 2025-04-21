@@ -1,27 +1,22 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package com.android.webview.chromium;
 
 import android.graphics.Canvas;
-import android.os.Build;
 import android.view.View;
 import android.webkit.WebViewDelegate;
 
 import org.chromium.android_webview.AwContents;
-import org.chromium.base.annotations.JniIgnoreNatives;
+import org.chromium.build.annotations.UsedByReflection;
 
 /**
- * Simple Java abstraction and wrapper for the native DrawGLFunctor flow.
- * An instance of this class can be constructed, bound to a single view context (i.e. AwContents)
- * and then drawn and detached from the view tree any number of times (using requestDrawGL and
- * detach respectively).
+ * Simple Java abstraction and wrapper for the native DrawGLFunctor flow. An instance of this class
+ * can be constructed, bound to a single view context (i.e. AwContents) and then drawn and detached
+ * from the view tree any number of times (using requestDrawGL and detach respectively).
  */
-@JniIgnoreNatives
 class DrawGLFunctor implements AwContents.NativeDrawGLFunctor {
-    private static final String TAG = DrawGLFunctor.class.getSimpleName();
-
     // Pointer to native side instance
     private final WebViewDelegate mWebViewDelegate;
     private long mNativeDrawGLFunctor;
@@ -39,24 +34,14 @@ class DrawGLFunctor implements AwContents.NativeDrawGLFunctor {
         mWebViewDelegate.detachDrawGlFunctor(containerView, mNativeDrawGLFunctor);
     }
 
-    private static final boolean sSupportFunctorReleasedCallback =
-            (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N);
-
     @Override
     public boolean requestDrawGL(Canvas canvas, Runnable releasedCallback) {
         if (mNativeDrawGLFunctor == 0) {
             throw new RuntimeException("requestDrawGL on already destroyed DrawGLFunctor");
         }
         assert canvas != null;
-        if (sSupportFunctorReleasedCallback) {
-            assert releasedCallback != null;
-            GlueApiHelperForN.callDrawGlFunction(
-                    mWebViewDelegate, canvas, mNativeDrawGLFunctor, releasedCallback);
-
-        } else {
-            assert releasedCallback == null;
-            mWebViewDelegate.callDrawGlFunction(canvas, mNativeDrawGLFunctor);
-        }
+        assert releasedCallback != null;
+        mWebViewDelegate.callDrawGlFunction(canvas, mNativeDrawGLFunctor, releasedCallback);
         return true;
     }
 
@@ -65,19 +50,9 @@ class DrawGLFunctor implements AwContents.NativeDrawGLFunctor {
         if (mNativeDrawGLFunctor == 0) {
             throw new RuntimeException("requestInvokeGL on already destroyed DrawGLFunctor");
         }
-        if (!sSupportFunctorReleasedCallback
-                && !mWebViewDelegate.canInvokeDrawGlFunctor(containerView)) {
-            return false;
-        }
-
         mWebViewDelegate.invokeDrawGlFunctor(
                 containerView, mNativeDrawGLFunctor, waitForCompletion);
         return true;
-    }
-
-    @Override
-    public boolean supportsDrawGLFunctorReleasedCallback() {
-        return sSupportFunctorReleasedCallback;
     }
 
     @Override
@@ -91,9 +66,15 @@ class DrawGLFunctor implements AwContents.NativeDrawGLFunctor {
         nativeSetChromiumAwDrawGLFunction(functionPointer);
     }
 
-    // The Android framework performs manual JNI registration on these methods,
-    // so the method signatures cannot change without updating the framework.
+    // The Android framework performs manual JNI registration on these methods, so the method
+    // signatures cannot change without updating the framework. We use @UsedByReflection, while not
+    // technically true, as a way to preserve these methods and their names.
+    @UsedByReflection("Android framework manual registration")
     private static native long nativeCreateGLFunctor(long viewContext);
+
+    @UsedByReflection("Android framework manual registration")
     private static native void nativeDestroyGLFunctor(long functor);
+
+    @UsedByReflection("Android framework manual registration")
     private static native void nativeSetChromiumAwDrawGLFunction(long functionPointer);
 }

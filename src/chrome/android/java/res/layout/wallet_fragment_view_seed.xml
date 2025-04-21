@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="20dp"
+    android:gravity="center_horizontal"
+    android:background="#1E1E1E">
+
+    <TextView
+        android:id="@+id/wallet_tab_title"
+        android:layout_height="wrap_content"
+        android:layout_width="wrap_content"
+        android:textColor="@android:color/white"
+        android:textAllCaps="true"
+        android:layout_marginTop="10dp"
+        android:layout_marginBottom="40dp"
+        android:textStyle="bold"
+        android:text="Your seed phrase"
+        tools:ignore="HardcodedText" />
+
+    <LinearLayout
+        android:background="@drawable/rounded_background_wallet_info"
+        android:orientation="vertical"
+        android:padding="20dp"
+        android:layout_height="wrap_content"
+        android:layout_width="match_parent">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@android:color/white"
+            android:textAllCaps="true"
+            android:layout_marginBottom="12dp"
+            android:text="Important note"
+            tools:ignore="HardcodedText"/>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#848277"
+            android:text="Be very careful with your Seed. Nobody from Carbon Browser team or Carbon partners will never ask you about it. Save this Seed to have the access to your funds. If you lose a Seed Phrase wallet can’t be recovered"
+            tools:ignore="HardcodedText"/>
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_marginTop="15dp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" >
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@android:color/white"
+            android:textAllCaps="true"
+            android:text="SEED PHRASE"
+            android:textSize="18sp"
+            android:layout_gravity="center"
+            tools:ignore="HardcodedText" />
+
+        <View
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_gravity="center_horizontal|end"/>
+    </FrameLayout>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="12 words"
+        android:textColor="#808080"
+        android:layout_gravity="center"/>
+
+    <LinearLayout
+        android:layout_marginTop="20dp"
+        android:id="@+id/create_wallet_seed"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"/>
+
+    <Space android:layout_width="wrap_content"
+        android:layout_height="0dp"
+        android:layout_weight="1"/>
+
+</LinearLayout>

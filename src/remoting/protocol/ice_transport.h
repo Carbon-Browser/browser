@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,8 +16,7 @@
 #include "remoting/protocol/jingle_messages.h"
 #include "remoting/protocol/transport.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 class ChannelMultiplexer;
 class PseudoTcpChannelFactory;
@@ -50,13 +49,18 @@ class IceTransport : public Transport,
   MessageChannelFactory* GetChannelFactory();
   MessageChannelFactory* GetMultiplexedChannelFactory();
 
+  void ApplyNetworkSettings(const NetworkSettings& settings);
+
   // Transport interface.
   void Start(Authenticator* authenticator,
              SendTransportInfoCallback send_transport_info_callback) override;
   bool ProcessTransportInfo(jingle_xmpp::XmlElement* transport_info) override;
 
  private:
-  typedef std::map<std::string, IceTransportChannel*> ChannelsMap;
+  typedef std::map<std::string, raw_ptr<IceTransportChannel, CtnExperimental>>
+      ChannelsMap;
+  using PendingChannelCreatedCallbacks =
+      std::map<std::string, ChannelCreatedCallback>;
 
   // DatagramChannelFactory interface.
   void CreateChannel(const std::string& name,
@@ -110,10 +114,14 @@ class IceTransport : public Transport,
   std::unique_ptr<IceTransportInfo> pending_transport_info_message_;
   base::OneShotTimer transport_info_timer_;
 
+  // Pending channel creations to be executed after network settings are
+  // applied.
+  PendingChannelCreatedCallbacks pending_channel_created_callbacks_;
+  std::unique_ptr<NetworkSettings> network_settings_;
+
   base::WeakPtrFactory<IceTransport> weak_factory_{this};
 };
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol
 
 #endif  // REMOTING_PROTOCOL_ICE_TRANSPORT_H_

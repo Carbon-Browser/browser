@@ -1,18 +1,20 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/apps/digital_goods/util.h"
 
+#include <optional>
+
 #include "chrome/browser/ash/apps/apk_web_app_service.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/web_applications/app_browser_controller.h"
+#include "chrome/browser/web_applications/proto/web_app_install_state.pb.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
 #include "content/public/browser/document_user_data.h"
 #include "content/public/browser/web_contents.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace apps {
 
@@ -22,7 +24,7 @@ std::string GetTwaPackageName(content::RenderFrameHost* render_frame_host) {
   if (!web_contents)
     return std::string();
 
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents);
   if (!web_app::AppBrowserController::IsWebApp(browser)) {
     return std::string();
   }
@@ -38,7 +40,7 @@ std::string GetTwaPackageName(content::RenderFrameHost* render_frame_host) {
     return std::string();
   }
 
-  absl::optional<std::string> twa_package_name =
+  std::optional<std::string> twa_package_name =
       apk_web_app_service->GetPackageNameForWebApp(
           render_frame_host->GetMainFrame()->GetLastCommittedURL());
 
@@ -52,9 +54,15 @@ std::string GetScope(content::RenderFrameHost* render_frame_host) {
     return std::string();
   }
 
-  const web_app::WebAppRegistrar& registrar = provider->registrar();
-  absl::optional<web_app::AppId> app_id = registrar.FindAppWithUrlInScope(
-      render_frame_host->GetMainFrame()->GetLastCommittedURL());
+  const web_app::WebAppRegistrar& registrar = provider->registrar_unsafe();
+  // TODO(crbug.com/379827962): Evaluate call sites of FindBestAppWithUrlInScope
+  // for correctness.
+  std::optional<webapps::AppId> app_id = registrar.FindBestAppWithUrlInScope(
+      render_frame_host->GetMainFrame()->GetLastCommittedURL(),
+      {
+          web_app::proto::InstallState::INSTALLED_WITH_OS_INTEGRATION,
+          web_app::proto::InstallState::INSTALLED_WITHOUT_OS_INTEGRATION,
+      });
   if (!app_id) {
     return std::string();
   }

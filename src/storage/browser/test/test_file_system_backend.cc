@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "components/file_access/scoped_file_access_delegate.h"
 #include "storage/browser/file_system/copy_or_move_file_validator.h"
 #include "storage/browser/file_system/file_observers.h"
 #include "storage/browser/file_system/file_system_operation.h"
@@ -68,22 +68,17 @@ class TestFileSystemBackend::QuotaUtil : public FileSystemQuotaUtil,
   ~QuotaUtil() override = default;
 
   // FileSystemQuotaUtil overrides.
-  base::File::Error DeleteStorageKeyDataOnFileTaskRunner(
-      FileSystemContext* context,
-      QuotaManagerProxy* proxy,
-      const blink::StorageKey& storage_key,
-      FileSystemType type) override {
+  void DeleteCachedDefaultBucket(
+      const blink::StorageKey& storage_key) override {
     NOTREACHED();
-    return base::File::FILE_OK;
   }
-  // FileSystemQuotaUtil overrides.
+
   base::File::Error DeleteBucketDataOnFileTaskRunner(
       FileSystemContext* context,
       QuotaManagerProxy* proxy,
       const BucketLocator& bucket_locator,
       FileSystemType type) override {
     NOTREACHED();
-    return base::File::FILE_OK;
   }
 
   void PerformStorageCleanupOnFileTaskRunner(FileSystemContext* context,
@@ -94,20 +89,11 @@ class TestFileSystemBackend::QuotaUtil : public FileSystemQuotaUtil,
       const blink::StorageKey& storage_key,
       FileSystemType type) override {
     NOTREACHED();
-    return scoped_refptr<QuotaReservation>();
   }
 
   std::vector<blink::StorageKey> GetStorageKeysForTypeOnFileTaskRunner(
       FileSystemType type) override {
     NOTREACHED();
-    return std::vector<blink::StorageKey>();
-  }
-
-  int64_t GetStorageKeyUsageOnFileTaskRunner(
-      FileSystemContext* context,
-      const blink::StorageKey& storage_key,
-      FileSystemType type) override {
-    return usage_;
   }
 
   int64_t GetBucketUsageOnFileTaskRunner(FileSystemContext* context,
@@ -187,6 +173,7 @@ void TestFileSystemBackend::InitializeCopyOrMoveFileValidatorFactory(
 
 std::unique_ptr<FileSystemOperation>
 TestFileSystemBackend::CreateFileSystemOperation(
+    OperationType type,
     const FileSystemURL& url,
     FileSystemContext* context,
     base::File::Error* error_code) const {
@@ -194,7 +181,7 @@ TestFileSystemBackend::CreateFileSystemOperation(
       std::make_unique<FileSystemOperationContext>(context));
   operation_context->set_update_observers(*GetUpdateObservers(url.type()));
   operation_context->set_change_observers(*GetChangeObservers(url.type()));
-  return FileSystemOperation::Create(url, context,
+  return FileSystemOperation::Create(type, url, context,
                                      std::move(operation_context));
 }
 
@@ -212,7 +199,9 @@ std::unique_ptr<FileStreamReader> TestFileSystemBackend::CreateFileStreamReader(
     int64_t offset,
     int64_t max_bytes_to_read,
     const base::Time& expected_modification_time,
-    FileSystemContext* context) const {
+    FileSystemContext* context,
+    file_access::ScopedFileAccessDelegate::
+        RequestFilesAccessIOCallback /*file_access*/) const {
   return std::make_unique<SandboxFileStreamReader>(context, url, offset,
                                                    expected_modification_time);
 }

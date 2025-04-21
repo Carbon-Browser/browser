@@ -1,12 +1,12 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_BROWSER_DEVTOOLS_PROTOCOL_SECURITY_HANDLER_H_
 #define CONTENT_BROWSER_DEVTOOLS_PROTOCOL_SECURITY_HANDLER_H_
 
-#include <unordered_map>
-
+#include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "content/browser/devtools/protocol/devtools_domain_handler.h"
 #include "content/browser/devtools/protocol/security.h"
 #include "content/public/browser/certificate_request_result_type.h"
@@ -55,18 +55,21 @@ class SecurityHandler : public DevToolsDomainHandler,
                               const GURL& request_url,
                               CertErrorCallback callback);
 
+  bool IsIgnoreCertificateErrorsSet() const;
+
  private:
-  using CertErrorCallbackMap = std::unordered_map<int, CertErrorCallback>;
+  using CertErrorCallbackMap = base::flat_map<int, CertErrorCallback>;
 
   void AttachToRenderFrameHost();
   void FlushPendingCertificateErrorNotifications();
+  Response AssureTopLevelActiveFrame();
 
   // WebContentsObserver overrides
   void DidFinishNavigation(NavigationHandle* navigation_handle) override;
 
   std::unique_ptr<Security::Frontend> frontend_;
   bool enabled_;
-  RenderFrameHostImpl* host_;
+  raw_ptr<RenderFrameHostImpl> host_;
   int last_cert_error_id_ = 0;
   CertErrorCallbackMap cert_error_callbacks_;
   enum class CertErrorOverrideMode { kDisabled, kHandleEvents, kIgnoreAll };

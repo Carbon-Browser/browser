@@ -1,10 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/performance_manager/public/decorators/page_load_tracker_decorator_helper.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "components/performance_manager/decorators/page_load_tracker_decorator.h"
 #include "components/performance_manager/graph/page_node_impl.h"
@@ -74,11 +74,16 @@ class PageLoadTrackerDecoratorHelper::WebContentsObserver
     DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     DCHECK(web_contents()->IsLoading());
-    DCHECK_EQ(loading_state_, LoadingState::kNotLoading);
+
+    // May be called spuriously when the `WebContents` is already loading.
+    if (loading_state_ != LoadingState::kNotLoading) {
+      return;
+    }
 
     // Only observe top-level navigation to a different document.
-    if (!web_contents()->ShouldShowLoadingUI())
+    if (!web_contents()->ShouldShowLoadingUI()) {
       return;
+    }
 
     loading_state_ = LoadingState::kWaitingForNavigation;
     NotifyPageLoadTrackerDecoratorOnPMSequence(
@@ -100,7 +105,16 @@ class PageLoadTrackerDecoratorHelper::WebContentsObserver
     if (loading_state_ == LoadingState::kLoading)
       return;
 
-    DCHECK_EQ(loading_state_, LoadingState::kWaitingForNavigation);
+    // There are a few cases where an ongoing navigation will get upgraded to
+    // show loading ui without a DidStartLoading (e.g., if an iframe navigates,
+    // then the top-level frame begins navigating before the iframe navigation
+    // completes). If that happened, emulate the DidStartLoading now before
+    // notifying PrimaryPageChanged.
+    if (loading_state_ != LoadingState::kWaitingForNavigation) {
+      NotifyPageLoadTrackerDecoratorOnPMSequence(
+          web_contents(), &PageLoadTrackerDecorator::DidStartLoading);
+    }
+
     loading_state_ = LoadingState::kLoading;
     NotifyPageLoadTrackerDecoratorOnPMSequence(
         web_contents(), &PageLoadTrackerDecorator::PrimaryPageChanged);
@@ -148,7 +162,7 @@ class PageLoadTrackerDecoratorHelper::WebContentsObserver
   }
 
  private:
-  // TODO(https://crbug.com/1048719): Extract the logic to manage a linked list
+  // TODO(crbug.com/40117344): Extract the logic to manage a linked list
   // of WebContentsObservers to a helper class.
   const raw_ptr<PageLoadTrackerDecoratorHelper> outer_;
   raw_ptr<WebContentsObserver> prev_ GUARDED_BY_CONTEXT(sequence_checker_);

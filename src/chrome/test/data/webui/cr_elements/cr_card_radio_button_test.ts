@@ -1,12 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // clang-format off
-import 'chrome://resources/cr_elements/cr_radio_button/cr_card_radio_button.m.js';
+import 'chrome://resources/cr_elements/cr_radio_button/cr_card_radio_button.js';
 
-import {CrCardRadioButtonElement} from 'chrome://resources/cr_elements/cr_radio_button/cr_card_radio_button.m.js';
-import {assertEquals, assertFalse, assertNotEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import type {CrCardRadioButtonElement} from 'chrome://resources/cr_elements/cr_radio_button/cr_card_radio_button.js';
+import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 
 // clang-format on
 
@@ -14,7 +14,7 @@ suite('cr-card-radio-button', function() {
   let radioButton: CrCardRadioButtonElement;
 
   setup(function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     radioButton = document.createElement('cr-card-radio-button');
     document.body.appendChild(radioButton);
   });
@@ -23,21 +23,23 @@ suite('cr-card-radio-button', function() {
     assertTrue(radioButton.hasAttribute('checked'));
     assertEquals('true', radioButton.$.button.getAttribute('aria-checked'));
     assertTrue(
-        getComputedStyle(radioButton.$$('#checkMark')!).display !== 'none');
+        getComputedStyle(radioButton.shadowRoot!.querySelector('#checkMark')!)
+            .display !== 'none');
   }
 
   function assertNotChecked() {
     assertFalse(radioButton.hasAttribute('checked'));
     assertEquals('false', radioButton.$.button.getAttribute('aria-checked'));
     assertTrue(
-        getComputedStyle(radioButton.$$('#checkMark')!).display === 'none');
+        getComputedStyle(radioButton.shadowRoot!.querySelector('#checkMark')!)
+            .display === 'none');
   }
 
   function assertDisabled() {
     assertTrue(radioButton.hasAttribute('disabled'));
     assertEquals('true', radioButton.$.button.getAttribute('aria-disabled'));
     assertEquals('none', getComputedStyle(radioButton).pointerEvents);
-    assertNotEquals('1', getComputedStyle(radioButton).opacity);
+    assertEquals('1', getComputedStyle(radioButton).opacity);
   }
 
   function assertNotDisabled() {
@@ -49,19 +51,36 @@ suite('cr-card-radio-button', function() {
   // Setting selection by mouse/keyboard is cr-radio-group's job, so
   // these tests simply set states programmatically and make sure the element
   // is visually correct.
-  test('Checked', () => {
+  test('Checked', async () => {
     assertNotChecked();
     radioButton.checked = true;
+    await radioButton.updateComplete;
     assertChecked();
     radioButton.checked = false;
+    await radioButton.updateComplete;
     assertNotChecked();
   });
 
-  test('Disabled', () => {
+  test('Disabled', async () => {
     assertNotDisabled();
     radioButton.disabled = true;
+    await radioButton.updateComplete;
     assertDisabled();
     radioButton.disabled = false;
+    await radioButton.updateComplete;
     assertNotChecked();
+  });
+
+  test('Ripple', function() {
+    function getRipple() {
+      return radioButton.shadowRoot!.querySelector('cr-ripple');
+    }
+
+    assertFalse(!!getRipple());
+    radioButton.dispatchEvent(
+        new CustomEvent('up', {bubbles: true, composed: true}));
+    const ripple = getRipple();
+    assertTrue(!!ripple);
+    assertFalse(ripple.holdDown);
   });
 });

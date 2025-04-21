@@ -1,18 +1,19 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CC_METRICS_VIDEO_PLAYBACK_ROUGHNESS_REPORTER_H_
 #define CC_METRICS_VIDEO_PLAYBACK_ROUGHNESS_REPORTER_H_
 
-#include "base/callback.h"
+#include <optional>
+
 #include "base/containers/circular_deque.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "cc/cc_export.h"
 #include "media/base/video_frame.h"
 #include "media/base/video_types.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/size.h"
 
 namespace cc {
@@ -83,10 +84,14 @@ class CC_EXPORT VideoPlaybackRoughnessReporter {
   void ProcessFrameWindow();
   void Reset();
 
-  // A lower bund on how many frames can be in ConsecutiveFramesWindow
+  void set_is_media_stream(bool is_media_stream) {
+    is_media_stream_ = is_media_stream;
+  }
+
+  // A lower bound on how many frames can be in ConsecutiveFramesWindow
   static constexpr int kMinWindowSize = 6;
 
-  // An upper bund on how many frames can be in ConsecutiveFramesWindow
+  // An upper bound on how many frames can be in ConsecutiveFramesWindow
   static constexpr int kMaxWindowSize = 60;
 
   // How many frame windows should be observed before reporting smoothness
@@ -111,10 +116,10 @@ class CC_EXPORT VideoPlaybackRoughnessReporter {
     FrameInfo();
     FrameInfo(const FrameInfo&);
     TokenType token = 0;
-    absl::optional<base::TimeTicks> decode_time;
-    absl::optional<base::TimeTicks> presentation_time;
-    absl::optional<base::TimeDelta> actual_duration;
-    absl::optional<base::TimeDelta> intended_duration;
+    std::optional<base::TimeTicks> decode_time;
+    std::optional<base::TimeTicks> presentation_time;
+    std::optional<base::TimeDelta> actual_duration;
+    std::optional<base::TimeDelta> intended_duration;
     int refresh_rate_hz = 60;
     gfx::Size size;
   };
@@ -162,6 +167,8 @@ class CC_EXPORT VideoPlaybackRoughnessReporter {
   // Worst case difference between a frame's intended duration and
   // actual duration, calculated for all frames in the reporting interval.
   base::TimeDelta max_single_frame_error_;
+
+  bool is_media_stream_ = false;
 };
 
 }  // namespace cc

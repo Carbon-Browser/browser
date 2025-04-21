@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,7 @@ class WebMainDelegate {
   virtual void BasicStartupComplete() {}
 
   // Called right before the process exits.
-  // TODO(crbug.com/965895): This may not be used for anything.  Remove if
+  // TODO(crbug.com/41460422): This may not be used for anything.  Remove if
   // useless.
   virtual void ProcessExiting() {}
 };

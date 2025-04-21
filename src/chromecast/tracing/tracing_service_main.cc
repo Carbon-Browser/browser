@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,15 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/un.h>
+
 #include <memory>
+#include <string_view>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/containers/heap_array.h"
+#include "base/containers/span.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/weak_ptr.h"
 #include "base/message_loop/message_pump_for_io.h"
@@ -24,7 +28,7 @@
 #include "base/strings/string_util.h"
 #include "base/task/current_thread.h"
 #include "base/task/single_thread_task_executor.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "chromecast/tracing/ftrace.h"
 #include "chromecast/tracing/system_tracing_common.h"
@@ -66,7 +70,7 @@ base::ScopedFD CreateServerSocket() {
   return socket_fd;
 }
 
-std::vector<std::string> ParseCategories(base::StringPiece message) {
+std::vector<std::string> ParseCategories(std::string_view message) {
   std::vector<std::string> requested_categories = base::SplitString(
       message, ",", base::KEEP_WHITESPACE, base::SPLIT_WANT_ALL);
   std::vector<std::string> categories;
@@ -79,7 +83,7 @@ std::vector<std::string> ParseCategories(base::StringPiece message) {
   return categories;
 }
 
-class TraceCopyTask : public base::MessagePumpLibevent::FdWatcher {
+class TraceCopyTask : public base::MessagePumpEpoll::FdWatcher {
  public:
   // Read 64 kB at a time (standard pipe capacity).
   static constexpr size_t kCopyBufferSize = 1UL << 16;
@@ -92,7 +96,7 @@ class TraceCopyTask : public base::MessagePumpLibevent::FdWatcher {
   TraceCopyTask(base::ScopedFD in_fd,
                 base::ScopedFD out_fd,
                 base::OnceCallback<void(Status, size_t)> callback)
-      : buffer_(new char[kCopyBufferSize]),
+      : buffer_(base::HeapArray<char>::Uninit(kCopyBufferSize)),
         in_fd_(std::move(in_fd)),
         out_fd_(std::move(out_fd)),
         out_watcher_(FROM_HERE),
@@ -105,7 +109,7 @@ class TraceCopyTask : public base::MessagePumpLibevent::FdWatcher {
         base::MessagePumpForIO::WATCH_WRITE, &out_watcher_, this);
   }
 
-  // base::MessagePumpLibevent::FdWatcher:
+  // base::MessagePumpEpoll::FdWatcher:
   void OnFileCanReadWithoutBlocking(int fd) override { NOTREACHED(); }
   void OnFileCanWriteWithoutBlocking(int fd) override {
     DCHECK_EQ(out_fd_.get(), fd);
@@ -121,7 +125,7 @@ class TraceCopyTask : public base::MessagePumpLibevent::FdWatcher {
 
         // Read trace data from debugfs.
         ssize_t read_bytes =
-            HANDLE_EINTR(read(in_fd_.get(), buffer_.get(), kCopyBufferSize));
+            HANDLE_EINTR(read(in_fd_.get(), buffer_.data(), buffer_.size()));
         if (read_bytes == 0) {
           // EOF, we're done;
           Finish(Status::SUCCESS);
@@ -136,8 +140,10 @@ class TraceCopyTask : public base::MessagePumpLibevent::FdWatcher {
       }
 
       // Write trace data to output pipe.
+      base::span<char> data_to_write =
+          buffer_.subspan(written_, read_ - written_);
       ssize_t written_bytes = HANDLE_EINTR(
-          write(out_fd_.get(), buffer_.get() + written_, read_ - written_));
+          write(out_fd_.get(), data_to_write.data(), data_to_write.size()));
       if (written_bytes < 0) {
         if (errno == EAGAIN)
           return;  // Wait for more space.
@@ -153,12 +159,12 @@ class TraceCopyTask : public base::MessagePumpLibevent::FdWatcher {
     out_watcher_.StopWatchingFileDescriptor();
     in_fd_.reset();
     out_fd_.reset();
-    buffer_.reset();
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    buffer_ = base::HeapArray<char>();
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback_), status, total_copied_));
   }
 
-  std::unique_ptr<char[]> buffer_;
+  base::HeapArray<char> buffer_;
   size_t read_ = 0;
   size_t written_ = 0;
   size_t total_copied_ = 0;
@@ -168,16 +174,16 @@ class TraceCopyTask : public base::MessagePumpLibevent::FdWatcher {
 
   // Pipe for trace data.
   base::ScopedFD out_fd_;
-  base::MessagePumpLibevent::FdWatchController out_watcher_;
+  base::MessagePumpEpoll::FdWatchController out_watcher_;
 
   // Callback for when copy finishes.
   base::OnceCallback<void(Status, size_t)> callback_;
 };
 
-class TraceConnection : public base::MessagePumpLibevent::FdWatcher {
+class TraceConnection : public base::MessagePumpEpoll::FdWatcher {
  public:
   TraceConnection(base::ScopedFD connection_fd, base::OnceClosure callback)
-      : recv_buffer_(new char[kMessageSize]),
+      : recv_buffer_(base::HeapArray<char>::Uninit(kMessageSize)),
         connection_fd_(std::move(connection_fd)),
         connection_watcher_(FROM_HERE),
         callback_(std::move(callback)),
@@ -190,7 +196,7 @@ class TraceConnection : public base::MessagePumpLibevent::FdWatcher {
         base::MessagePumpForIO::WATCH_READ, &connection_watcher_, this);
   }
 
-  // base::MessagePumpLibevent::FdWatcher:
+  // base::MessagePumpEpoll::FdWatcher:
   void OnFileCanReadWithoutBlocking(int fd) override {
     DCHECK_EQ(connection_fd_.get(), fd);
     ReceiveClientMessage();
@@ -209,7 +215,7 @@ class TraceConnection : public base::MessagePumpLibevent::FdWatcher {
   void ReceiveClientMessage() {
     std::vector<base::ScopedFD> fds;
     ssize_t bytes = base::UnixDomainSocket::RecvMsg(
-        connection_fd_.get(), recv_buffer_.get(), kMessageSize, &fds);
+        connection_fd_.get(), recv_buffer_.data(), recv_buffer_.size(), &fds);
     if (bytes < 0) {
       PLOG(ERROR) << "recvmsg";
       Finish();
@@ -218,12 +224,12 @@ class TraceConnection : public base::MessagePumpLibevent::FdWatcher {
       LOG(INFO) << "connection closed";
       Finish();
     } else {
-      base::StringPiece message(recv_buffer_.get(), bytes);
+      std::string_view message = base::as_string_view(recv_buffer.first(bytes));
       HandleClientMessage(message);
     }
   }
 
-  void HandleClientMessage(base::StringPiece message) {
+  void HandleClientMessage(std::string_view message) {
     if (state_ == State::INITIAL) {
       std::vector<std::string> categories = ParseCategories(message);
 
@@ -305,24 +311,24 @@ class TraceConnection : public base::MessagePumpLibevent::FdWatcher {
       LOG(WARNING) << "Ending tracing without sending data";
     trace_copy_task_.reset();
     state_ = State::FINISHED;
-    recv_buffer_.reset();
+    recv_buffer_ = base::HeapArray<char>();
     connection_watcher_.StopWatchingFileDescriptor();
     connection_fd_.reset();
     StopFtrace();
     ClearFtrace();
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  std::move(callback_));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(callback_));
   }
 
   // Tracing state.
   State state_ = State::INITIAL;
 
   // Buffer for incoming messages.
-  std::unique_ptr<char[]> recv_buffer_;
+  base::HeapArray<char> recv_buffer_;
 
   // Client connection.
   base::ScopedFD connection_fd_;
-  base::MessagePumpLibevent::FdWatchController connection_watcher_;
+  base::MessagePumpEpoll::FdWatchController connection_watcher_;
 
   // Pipe for trace output.
   base::ScopedFD trace_pipe_;
@@ -336,7 +342,7 @@ class TraceConnection : public base::MessagePumpLibevent::FdWatcher {
   base::WeakPtrFactory<TraceConnection> weak_ptr_factory_;
 };
 
-class TracingService : public base::MessagePumpLibevent::FdWatcher {
+class TracingService : public base::MessagePumpEpoll::FdWatcher {
  public:
   TracingService()
       : server_socket_watcher_(FROM_HERE), weak_ptr_factory_(this) {}
@@ -354,7 +360,7 @@ class TracingService : public base::MessagePumpLibevent::FdWatcher {
     return true;
   }
 
-  // base::MessagePumpLibevent::FdWatcher:
+  // base::MessagePumpEpoll::FdWatcher:
   void OnFileCanReadWithoutBlocking(int fd) override {
     DCHECK_EQ(server_socket_.get(), fd);
     AcceptConnection();
@@ -381,7 +387,7 @@ class TracingService : public base::MessagePumpLibevent::FdWatcher {
 
   // Socket and watcher for listening socket.
   base::ScopedFD server_socket_;
-  base::MessagePumpLibevent::FdWatchController server_socket_watcher_;
+  base::MessagePumpEpoll::FdWatchController server_socket_watcher_;
 
   // Currently active tracing connection.
   // There can only be one; ftrace affects the whole system.

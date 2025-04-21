@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ struct DrmOverlayPlane;
 
 class GbmOverlaySurface : public OverlaySurface {
  public:
-  GbmOverlaySurface(std::unique_ptr<DrmWindowProxy> window);
+  explicit GbmOverlaySurface(std::unique_ptr<DrmWindowProxy> window);
 
   GbmOverlaySurface(const GbmOverlaySurface&) = delete;
   GbmOverlaySurface& operator=(const GbmOverlaySurface&) = delete;

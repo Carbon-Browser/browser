@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@ SystemWebAppBackgroundTaskInfo::SystemWebAppBackgroundTaskInfo(
     const SystemWebAppBackgroundTaskInfo& other) = default;
 
 SystemWebAppBackgroundTaskInfo::SystemWebAppBackgroundTaskInfo(
-    const absl::optional<base::TimeDelta>& period,
+    const std::optional<base::TimeDelta>& period,
     const GURL& url,
     bool open_immediately)
     : period(period), url(url), open_immediately(open_immediately) {}

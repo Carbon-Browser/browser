@@ -1,11 +1,12 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/frame/desktop_browser_frame_aura_linux.h"
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/shell_integration_linux.h"
 #include "chrome/browser/ui/views/frame/browser_desktop_window_tree_host_linux.h"
 #include "chrome/browser/ui/views/frame/browser_frame.h"
@@ -13,8 +14,8 @@
 #include "chrome/browser/ui/views/frame/native_browser_frame_factory.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/pref_names.h"
-#include "ui/views/widget/widget.h"
 #include "ui/ozone/public/ozone_platform.h"
+#include "ui/views/widget/widget.h"
 
 DesktopBrowserFrameAuraLinux::DesktopBrowserFrameAuraLinux(
     BrowserFrame* browser_frame,
@@ -31,7 +32,8 @@ DesktopBrowserFrameAuraLinux::DesktopBrowserFrameAuraLinux(
 DesktopBrowserFrameAuraLinux::~DesktopBrowserFrameAuraLinux() = default;
 
 views::Widget::InitParams DesktopBrowserFrameAuraLinux::GetWidgetParams() {
-  views::Widget::InitParams params;
+  views::Widget::InitParams params(
+      views::Widget::InitParams::NATIVE_WIDGET_OWNS_WIDGET);
   params.native_widget = this;
 
   // Set up a custom WM_CLASS for some sorts of window types. This allows
@@ -59,7 +61,7 @@ views::Widget::InitParams DesktopBrowserFrameAuraLinux::GetWidgetParams() {
     params.wayland_app_id = shell_integration_linux::GetXdgAppIdForWebApp(
         browser.app_name(), browser.profile()->GetPath());
   } else {
-    params.wayland_app_id = params.wm_class_name;
+    params.wayland_app_id = params.wm_class_class;
   }
 
   return params;

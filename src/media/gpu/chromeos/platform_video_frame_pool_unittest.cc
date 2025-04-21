@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,20 @@
 
 #include <stddef.h>
 #include <stdint.h>
+
 #include <memory>
 #include <vector>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "gpu/command_buffer/common/mailbox_holder.h"
 #include "media/base/format_utils.h"
+#include "media/base/video_types.h"
 #include "media/base/video_util.h"
 #include "media/gpu/chromeos/fourcc.h"
-#include "media/video/fake_gpu_memory_buffer.h"
+#include "media/gpu/chromeos/mock_native_pixmap_dmabuf.h"
+#include "media/gpu/chromeos/native_pixmap_frame_resource.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace media {
@@ -24,36 +27,41 @@ namespace media {
 namespace {
 
 template <uint64_t modifier>
-CroStatus::Or<scoped_refptr<VideoFrame>> CreateGpuMemoryBufferVideoFrame(
+CroStatus::Or<scoped_refptr<FrameResource>> CreateGpuMemoryBufferFrameResource(
     VideoPixelFormat format,
     const gfx::Size& coded_size,
     const gfx::Rect& visible_rect,
     const gfx::Size& natural_size,
     bool use_protected,
     bool use_linear_buffers,
+    bool needs_detiling,
     base::TimeDelta timestamp) {
-  absl::optional<gfx::BufferFormat> gfx_format =
+  constexpr gfx::BufferUsage kBufferUsage = gfx::BufferUsage::GPU_READ;
+
+  std::optional<gfx::BufferFormat> gfx_format =
       VideoPixelFormatToGfxBufferFormat(format);
   DCHECK(gfx_format);
-  const gpu::MailboxHolder mailbox_holders[VideoFrame::kMaxPlanes] = {};
-  return VideoFrame::WrapExternalGpuMemoryBuffer(
-      visible_rect, natural_size,
-      std::make_unique<FakeGpuMemoryBuffer>(coded_size, *gfx_format, modifier),
-      mailbox_holders, base::NullCallback(), timestamp);
+  scoped_refptr<const gfx::NativePixmapDmaBuf> pixmap =
+      CreateMockNativePixmapDmaBuf(format, coded_size, modifier);
+
+  return static_cast<scoped_refptr<FrameResource>>(
+      NativePixmapFrameResource::Create(visible_rect, natural_size, timestamp,
+                                        kBufferUsage, std::move(pixmap)));
 }
 
 }  // namespace
 
-class PlatformVideoFramePoolTest
-    : public ::testing::TestWithParam<VideoPixelFormat> {
+class PlatformVideoFramePoolTestBase : public ::testing::Test {
  public:
-  PlatformVideoFramePoolTest()
+  PlatformVideoFramePoolTestBase()
       : task_environment_(base::test::TaskEnvironment::TimeSource::MOCK_TIME),
         pool_(new PlatformVideoFramePool()) {
-    SetCreateFrameCB(
-        base::BindRepeating(&CreateGpuMemoryBufferVideoFrame<
-                            gfx::NativePixmapHandle::kNoModifier>));
-    pool_->set_parent_task_runner(base::ThreadTaskRunnerHandle::Get());
+    pool_->SetCustomFrameAllocator(
+        base::BindRepeating(&CreateGpuMemoryBufferFrameResource<
+                            gfx::NativePixmapHandle::kNoModifier>),
+        VideoFrame::STORAGE_DMABUFS);
+    pool_->set_parent_task_runner(
+        base::SingleThreadTaskRunner::GetCurrentDefault());
   }
 
   bool Initialize(const Fourcc& fourcc) {
@@ -72,15 +80,15 @@ class PlatformVideoFramePoolTest
                                               natural_size_, kNumFrames,
                                               /*use_protected=*/false,
                                               /*use_linear_buffers=*/false);
-    if (status_or_layout.has_error()) {
+    if (!status_or_layout.has_value()) {
       return false;
     }
     layout_ = std::move(status_or_layout).value();
     return true;
   }
 
-  scoped_refptr<VideoFrame> GetFrame(int timestamp_ms) {
-    scoped_refptr<VideoFrame> frame = pool_->GetFrame();
+  scoped_refptr<FrameResource> GetFrame(int timestamp_ms) {
+    scoped_refptr<FrameResource> frame = pool_->GetFrame();
     frame->set_timestamp(base::Milliseconds(timestamp_ms));
 
     EXPECT_EQ(layout_->modifier(), frame->layout().modifier());
@@ -89,67 +97,69 @@ class PlatformVideoFramePoolTest
     EXPECT_EQ(layout_->size(), frame->coded_size());
     EXPECT_EQ(visible_rect_, frame->visible_rect());
     EXPECT_EQ(natural_size_, frame->natural_size());
+    // We can't assert any of the |frame| metadata because the frame creation
+    // callback is a fake.
 
     return frame;
-  }
-
-  void SetCreateFrameCB(PlatformVideoFramePool::CreateFrameCB cb) {
-    base::AutoLock auto_lock(pool_->lock_);
-    pool_->create_frame_cb_ = cb;
   }
 
  protected:
   base::test::TaskEnvironment task_environment_;
   std::unique_ptr<PlatformVideoFramePool> pool_;
 
-  absl::optional<GpuBufferLayout> layout_;
+  std::optional<GpuBufferLayout> layout_;
   gfx::Rect visible_rect_;
   gfx::Size natural_size_;
 };
 
-INSTANTIATE_TEST_SUITE_P(All,
-                         PlatformVideoFramePoolTest,
-                         testing::Values(PIXEL_FORMAT_YV12,
-                                         PIXEL_FORMAT_NV12,
-                                         PIXEL_FORMAT_P016LE));
+class PlatformVideoFramePoolTest
+    : public PlatformVideoFramePoolTestBase,
+      public testing::WithParamInterface<VideoPixelFormat> {};
+
+constexpr VideoPixelFormat kPixelFormats[] = {
+    PIXEL_FORMAT_YV12, PIXEL_FORMAT_NV12, PIXEL_FORMAT_P010LE};
+INSTANTIATE_TEST_SUITE_P(
+    All,
+    PlatformVideoFramePoolTest,
+    testing::ValuesIn(kPixelFormats),
+    [](const ::testing::TestParamInfo<VideoPixelFormat>& info) {
+      return VideoPixelFormatToString(info.param);
+    });
 
 TEST_P(PlatformVideoFramePoolTest, SingleFrameReuse) {
   const auto fourcc = Fourcc::FromVideoPixelFormat(GetParam());
   ASSERT_TRUE(fourcc.has_value());
   ASSERT_TRUE(Initialize(fourcc.value()));
-  scoped_refptr<VideoFrame> frame = GetFrame(10);
-  gfx::GpuMemoryBufferId id =
-      PlatformVideoFramePool::GetGpuMemoryBufferId(*frame);
+  scoped_refptr<FrameResource> frame = GetFrame(10);
+  base::UnguessableToken id = frame->tracking_token();
 
   // Clear frame reference to return the frame to the pool.
   frame = nullptr;
   task_environment_.RunUntilIdle();
 
   // Verify that the next frame from the pool uses the same memory.
-  scoped_refptr<VideoFrame> new_frame = GetFrame(20);
-  EXPECT_EQ(id, PlatformVideoFramePool::GetGpuMemoryBufferId(*new_frame));
+  scoped_refptr<FrameResource> new_frame = GetFrame(20);
+  EXPECT_EQ(id, new_frame->tracking_token());
 }
 
 TEST_P(PlatformVideoFramePoolTest, MultipleFrameReuse) {
   const auto fourcc = Fourcc::FromVideoPixelFormat(GetParam());
   ASSERT_TRUE(fourcc.has_value());
   ASSERT_TRUE(Initialize(fourcc.value()));
-  scoped_refptr<VideoFrame> frame1 = GetFrame(10);
-  scoped_refptr<VideoFrame> frame2 = GetFrame(20);
-  gfx::GpuMemoryBufferId id1 =
-      PlatformVideoFramePool::GetGpuMemoryBufferId(*frame1);
-  gfx::GpuMemoryBufferId id2 =
-      PlatformVideoFramePool::GetGpuMemoryBufferId(*frame2);
+  scoped_refptr<FrameResource> frame1 = GetFrame(10);
+  scoped_refptr<FrameResource> frame2 = GetFrame(20);
+  base::UnguessableToken id1 = frame1->tracking_token();
+  base::UnguessableToken id2 = frame2->tracking_token();
 
   frame1 = nullptr;
   task_environment_.RunUntilIdle();
   frame1 = GetFrame(30);
-  EXPECT_EQ(id1, PlatformVideoFramePool::GetGpuMemoryBufferId(*frame1));
+  EXPECT_EQ(id1, frame1->tracking_token());
 
   frame2 = nullptr;
   task_environment_.RunUntilIdle();
   frame2 = GetFrame(40);
-  EXPECT_EQ(id2, PlatformVideoFramePool::GetGpuMemoryBufferId(*frame2));
+  EXPECT_EQ(id2, frame2->tracking_token());
 
   frame1 = nullptr;
   frame2 = nullptr;
@@ -161,8 +171,8 @@ TEST_P(PlatformVideoFramePoolTest, InitializeWithDifferentFourcc) {
   const auto fourcc = Fourcc::FromVideoPixelFormat(GetParam());
   ASSERT_TRUE(fourcc.has_value());
   ASSERT_TRUE(Initialize(fourcc.value()));
-  scoped_refptr<VideoFrame> frame_a = GetFrame(10);
-  scoped_refptr<VideoFrame> frame_b = GetFrame(10);
+  scoped_refptr<FrameResource> frame_a = GetFrame(10);
+  scoped_refptr<FrameResource> frame_b = GetFrame(10);
 
   // Clear frame references to return the frames to the pool.
   frame_a = nullptr;
@@ -177,7 +187,7 @@ TEST_P(PlatformVideoFramePoolTest, InitializeWithDifferentFourcc) {
   const Fourcc different_fourcc(*fourcc != Fourcc(Fourcc::NV12) ? Fourcc::NV12
                                                                 : Fourcc::P010);
   ASSERT_TRUE(Initialize(different_fourcc));
-  scoped_refptr<VideoFrame> new_frame = GetFrame(10);
+  scoped_refptr<FrameResource> new_frame = GetFrame(10);
   EXPECT_EQ(0u, pool_->GetPoolSizeForTesting());
 }
 
@@ -188,8 +198,8 @@ TEST_P(PlatformVideoFramePoolTest, InitializeWithDifferentUsableArea) {
   constexpr gfx::Size kCodedSize(640, 368);
   constexpr gfx::Rect kInitialVisibleRect(10, 20, 300, 200);
   ASSERT_TRUE(Initialize(kCodedSize, kInitialVisibleRect, fourcc.value()));
-  scoped_refptr<VideoFrame> frame_a = GetFrame(10);
-  scoped_refptr<VideoFrame> frame_b = GetFrame(10);
+  scoped_refptr<FrameResource> frame_a = GetFrame(10);
+  scoped_refptr<FrameResource> frame_b = GetFrame(10);
 
   // Clear frame references to return the frames to the pool.
   frame_a = nullptr;
@@ -209,7 +219,7 @@ TEST_P(PlatformVideoFramePoolTest, InitializeWithDifferentUsableArea) {
   ASSERT_NE(GetRectSizeFromOrigin(kInitialVisibleRect),
             GetRectSizeFromOrigin(kDifferentVisibleRect));
   ASSERT_TRUE(Initialize(kCodedSize, kDifferentVisibleRect, fourcc.value()));
-  scoped_refptr<VideoFrame> new_frame = GetFrame(10);
+  scoped_refptr<FrameResource> new_frame = GetFrame(10);
   EXPECT_EQ(0u, pool_->GetPoolSizeForTesting());
 }
 
@@ -220,8 +230,8 @@ TEST_P(PlatformVideoFramePoolTest, InitializeWithDifferentCodedSize) {
   constexpr gfx::Size kInitialCodedSize(640, 368);
   constexpr gfx::Rect kVisibleRect(10, 20, 300, 200);
   ASSERT_TRUE(Initialize(kInitialCodedSize, kVisibleRect, fourcc.value()));
-  scoped_refptr<VideoFrame> frame_a = GetFrame(10);
-  scoped_refptr<VideoFrame> frame_b = GetFrame(10);
+  scoped_refptr<FrameResource> frame_a = GetFrame(10);
+  scoped_refptr<FrameResource> frame_b = GetFrame(10);
 
   // Clear frame references to return the frames to the pool.
   frame_a = nullptr;
@@ -235,24 +245,24 @@ TEST_P(PlatformVideoFramePoolTest, InitializeWithDifferentCodedSize) {
   // to get drained.
   constexpr gfx::Size kDifferentCodedSize(624, 368);
   ASSERT_TRUE(Initialize(kDifferentCodedSize, kVisibleRect, fourcc.value()));
-  scoped_refptr<VideoFrame> new_frame = GetFrame(10);
+  scoped_refptr<FrameResource> new_frame = GetFrame(10);
   EXPECT_EQ(0u, pool_->GetPoolSizeForTesting());
 }
 
-TEST_P(PlatformVideoFramePoolTest, UnwrapVideoFrame) {
+TEST_P(PlatformVideoFramePoolTest, GetOriginalFrame) {
   const auto fourcc = Fourcc::FromVideoPixelFormat(GetParam());
   ASSERT_TRUE(fourcc.has_value());
   ASSERT_TRUE(Initialize(fourcc.value()));
-  scoped_refptr<VideoFrame> frame_1 = GetFrame(10);
-  scoped_refptr<VideoFrame> frame_2 = VideoFrame::WrapVideoFrame(
-      frame_1, frame_1->format(), frame_1->visible_rect(),
-      frame_1->natural_size());
-  EXPECT_EQ(pool_->UnwrapFrame(*frame_1), pool_->UnwrapFrame(*frame_2));
-  EXPECT_EQ(frame_1->GetGpuMemoryBuffer(), frame_2->GetGpuMemoryBuffer());
+  scoped_refptr<FrameResource> frame_1 = GetFrame(10);
+  scoped_refptr<FrameResource> frame_2 = frame_1->CreateWrappingFrame();
+  EXPECT_EQ(pool_->GetOriginalFrame(frame_1->GetSharedMemoryId()),
+            pool_->GetOriginalFrame(frame_2->GetSharedMemoryId()));
+  EXPECT_EQ(frame_1->GetSharedMemoryId().id, frame_2->GetSharedMemoryId().id);
 
-  scoped_refptr<VideoFrame> frame_3 = GetFrame(20);
-  EXPECT_NE(pool_->UnwrapFrame(*frame_1), pool_->UnwrapFrame(*frame_3));
-  EXPECT_NE(frame_1->GetGpuMemoryBuffer(), frame_3->GetGpuMemoryBuffer());
+  scoped_refptr<FrameResource> frame_3 = GetFrame(20);
+  EXPECT_NE(pool_->GetOriginalFrame(frame_1->GetSharedMemoryId()),
+            pool_->GetOriginalFrame(frame_3->GetSharedMemoryId()));
+  EXPECT_NE(frame_1->GetSharedMemoryId().id, frame_3->GetSharedMemoryId().id);
 }
 
 TEST_P(PlatformVideoFramePoolTest,
@@ -263,9 +273,8 @@ TEST_P(PlatformVideoFramePoolTest,
   constexpr gfx::Size kCodedSize(640, 368);
   constexpr gfx::Rect kInitialVisibleRect(kCodedSize);
   ASSERT_TRUE(Initialize(kCodedSize, kInitialVisibleRect, fourcc.value()));
-  scoped_refptr<VideoFrame> frame1 = GetFrame(10);
-  gfx::GpuMemoryBufferId id1 =
-      PlatformVideoFramePool::GetGpuMemoryBufferId(*frame1);
+  scoped_refptr<FrameResource> frame1 = GetFrame(10);
+  base::UnguessableToken id1 = frame1->tracking_token();
 
   // Clear frame references to return the frames to the pool.
   frame1 = nullptr;
@@ -283,23 +292,25 @@ TEST_P(PlatformVideoFramePoolTest,
             GetRectSizeFromOrigin(kDifferentVisibleRect));
   ASSERT_TRUE(Initialize(kCodedSize, kDifferentVisibleRect, fourcc.value()));
 
-  scoped_refptr<VideoFrame> frame2 = GetFrame(20);
-  gfx::GpuMemoryBufferId id2 =
-      PlatformVideoFramePool::GetGpuMemoryBufferId(*frame2);
+  scoped_refptr<FrameResource> frame2 = GetFrame(20);
+  base::UnguessableToken id2 = frame2->tracking_token();
   EXPECT_EQ(id1, id2);
 }
 
 TEST_P(PlatformVideoFramePoolTest, InitializeFail) {
   const auto fourcc = Fourcc::FromVideoPixelFormat(GetParam());
   ASSERT_TRUE(fourcc.has_value());
-  SetCreateFrameCB(base::BindRepeating(
-      [](VideoPixelFormat format, const gfx::Size& coded_size,
-         const gfx::Rect& visible_rect, const gfx::Size& natural_size,
-         bool use_protected, bool use_linear_buffers,
-         base::TimeDelta timestamp) {
-        return CroStatus::Or<scoped_refptr<VideoFrame>>(
+  pool_->SetCustomFrameAllocator(
+      base::BindRepeating([](VideoPixelFormat format,
+                             const gfx::Size& coded_size,
+                             const gfx::Rect& visible_rect,
+                             const gfx::Size& natural_size, bool use_protected,
+                             bool use_linear_buffers, bool needs_detiling,
+                             base::TimeDelta timestamp) {
+        return CroStatus::Or<scoped_refptr<FrameResource>>(
             CroStatus::Codes::kFailedToCreateVideoFrame);
-      }));
+      }),
+      VideoFrame::STORAGE_DMABUFS);
 
   EXPECT_FALSE(Initialize(fourcc.value()));
 }
@@ -308,8 +319,9 @@ TEST_P(PlatformVideoFramePoolTest, ModifierIsPassed) {
   const uint64_t kSampleModifier = 0x001234567890abcdULL;
   const auto fourcc = Fourcc::FromVideoPixelFormat(GetParam());
   ASSERT_TRUE(fourcc.has_value());
-  SetCreateFrameCB(
-      base::BindRepeating(&CreateGpuMemoryBufferVideoFrame<kSampleModifier>));
+  pool_->SetCustomFrameAllocator(
+      base::BindRepeating(&CreateGpuMemoryBufferFrameResource<kSampleModifier>),
+      VideoFrame::STORAGE_DMABUFS);
   ASSERT_TRUE(Initialize(fourcc.value()));
 
   EXPECT_EQ(layout_->modifier(), kSampleModifier);

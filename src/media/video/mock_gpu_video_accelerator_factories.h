@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "gpu/ipc/common/gpu_channel.mojom.h"
 #include "media/video/gpu_video_accelerator_factories.h"
@@ -49,7 +49,9 @@ class MockGpuVideoAcceleratorFactories : public GpuVideoAcceleratorFactories {
                                                     RequestOverlayInfoCB));
 
   MOCK_METHOD0(GetVideoEncodeAcceleratorSupportedProfiles,
-               absl::optional<VideoEncodeAccelerator::SupportedProfiles>());
+               std::optional<VideoEncodeAccelerator::SupportedProfiles>());
+  MOCK_METHOD0(GetSupportedVideoDecoderConfigs,
+               std::optional<media::SupportedVideoDecoderConfigs>());
   MOCK_METHOD0(IsEncoderSupportKnown, bool());
   MOCK_METHOD1(NotifyEncoderSupportKnown, void(base::OnceClosure));
   // CreateVideoEncodeAccelerator returns scoped_ptr, which the mocking
@@ -58,6 +60,7 @@ class MockGpuVideoAcceleratorFactories : public GpuVideoAcceleratorFactories {
 
   MOCK_METHOD0(GetTaskRunner, scoped_refptr<base::SequencedTaskRunner>());
   MOCK_METHOD0(GetMediaContextProvider, viz::RasterContextProvider*());
+  MOCK_METHOD0(ContextCapabilities, gpu::Capabilities*());
   MOCK_METHOD1(SetRenderingColorSpace, void(const gfx::ColorSpace&));
   MOCK_CONST_METHOD0(GetRenderingColorSpace, const gfx::ColorSpace&());
 
@@ -68,7 +71,6 @@ class MockGpuVideoAcceleratorFactories : public GpuVideoAcceleratorFactories {
 
   bool ShouldUseGpuMemoryBuffersForVideoFrames(
       bool for_media_stream) const override;
-  unsigned ImageTextureTarget(gfx::BufferFormat format) override;
   OutputFormat VideoFrameOutputFormat(VideoPixelFormat pixel_format) override {
     return video_frame_output_format_;
   }
@@ -98,13 +100,14 @@ class MockGpuVideoAcceleratorFactories : public GpuVideoAcceleratorFactories {
   std::unique_ptr<VideoEncodeAccelerator> CreateVideoEncodeAccelerator()
       override;
 
-  const std::vector<gfx::GpuMemoryBuffer*>& created_memory_buffers() {
+  const std::vector<raw_ptr<gfx::GpuMemoryBuffer, VectorExperimental>>&
+  created_memory_buffers() {
     return created_memory_buffers_;
   }
 
  private:
   base::Lock lock_;
-  OutputFormat video_frame_output_format_ = OutputFormat::I420;
+  OutputFormat video_frame_output_format_ = OutputFormat::YV12;
 
   bool fail_to_allocate_gpu_memory_buffer_ = false;
 
@@ -112,7 +115,8 @@ class MockGpuVideoAcceleratorFactories : public GpuVideoAcceleratorFactories {
 
   raw_ptr<gpu::SharedImageInterface> sii_;
 
-  std::vector<gfx::GpuMemoryBuffer*> created_memory_buffers_;
+  std::vector<raw_ptr<gfx::GpuMemoryBuffer, VectorExperimental>>
+      created_memory_buffers_;
 };
 
 }  // namespace media

@@ -1,12 +1,12 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_EXTENSIONS_API_LANGUAGE_SETTINGS_PRIVATE_LANGUAGE_SETTINGS_PRIVATE_DELEGATE_FACTORY_H_
 #define CHROME_BROWSER_EXTENSIONS_API_LANGUAGE_SETTINGS_PRIVATE_LANGUAGE_SETTINGS_PRIVATE_DELEGATE_FACTORY_H_
 
-#include "base/memory/singleton.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "base/no_destructor.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 namespace extensions {
 
@@ -17,7 +17,7 @@ class LanguageSettingsPrivateDelegate;
 // (since the extension event router and language preferences are per browsing
 // context).
 class LanguageSettingsPrivateDelegateFactory
-    : public BrowserContextKeyedServiceFactory {
+    : public ProfileKeyedServiceFactory {
  public:
   LanguageSettingsPrivateDelegateFactory(
       const LanguageSettingsPrivateDelegateFactory&) = delete;
@@ -34,19 +34,16 @@ class LanguageSettingsPrivateDelegateFactory
 
  protected:
   // BrowserContextKeyedServiceFactory overrides:
-  content::BrowserContext* GetBrowserContextToUse(
-      content::BrowserContext* context) const override;
   bool ServiceIsCreatedWithBrowserContext() const override;
 
  private:
-  friend struct base::DefaultSingletonTraits<
-      LanguageSettingsPrivateDelegateFactory>;
+  friend base::NoDestructor<LanguageSettingsPrivateDelegateFactory>;
 
   LanguageSettingsPrivateDelegateFactory();
   ~LanguageSettingsPrivateDelegateFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* profile) const override;
 };
 

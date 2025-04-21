@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,7 @@
 #include "base/task/thread_pool.h"
 #include "chrome/services/sharing/nearby/platform/bidirectional_stream.h"
 
-namespace location {
-namespace nearby {
-namespace chrome {
+namespace nearby::chrome {
 
 BluetoothSocket::BluetoothSocket(
     bluetooth::mojom::DeviceInfoPtr device,
@@ -62,7 +60,7 @@ Exception BluetoothSocket::Close() {
 }
 
 api::BluetoothDevice* BluetoothSocket::GetRemoteDevice() {
-  return &remote_device_ref_;
+  return &*remote_device_ref_;
 }
 
 void BluetoothSocket::CloseMojoSocketIfNecessary() {
@@ -71,7 +69,7 @@ void BluetoothSocket::CloseMojoSocketIfNecessary() {
   if (!socket_)
     return;
 
-  // TODO(https://crbug.com/1270499): Remove CHECKs when crash fix is verified.
+  // TODO(crbug.com/40057928): Remove CHECKs when crash fix is verified.
   // If not for the lock--or if thread safety is violated in some unexpected
   // way--these CHECKs would be triggered when Close() is called simultaneously
   // from multiple threads.
@@ -81,6 +79,4 @@ void BluetoothSocket::CloseMojoSocketIfNecessary() {
   socket_.reset();
 }
 
-}  // namespace chrome
-}  // namespace nearby
-}  // namespace location
+}  // namespace nearby::chrome

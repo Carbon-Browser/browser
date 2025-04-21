@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,6 +32,11 @@ class CSSCustomListInterpolationType : public CSSInterpolationType {
   InterpolationValue MaybeConvertValue(const CSSValue&,
                                        const StyleResolverState*,
                                        ConversionCheckers&) const final;
+  InterpolationValue PreInterpolationCompositeIfNeeded(
+      InterpolationValue value,
+      const InterpolationValue& underlying,
+      EffectModel::CompositeOperation,
+      ConversionCheckers&) const override;
   const CSSValue* CreateCSSValue(const InterpolableValue&,
                                  const NonInterpolableValue*,
                                  const StyleResolverState&) const final;
@@ -50,7 +55,6 @@ class CSSCustomListInterpolationType : public CSSInterpolationType {
   InterpolationValue MaybeConvertStandardPropertyUnderlyingValue(
       const ComputedStyle&) const final {
     NOTREACHED();
-    return nullptr;
   }
   void ApplyStandardPropertyValue(const InterpolableValue&,
                                   const NonInterpolableValue*,
@@ -60,16 +64,14 @@ class CSSCustomListInterpolationType : public CSSInterpolationType {
   InterpolationValue MaybeConvertInitial(const StyleResolverState&,
                                          ConversionCheckers&) const final {
     NOTREACHED();
-    return nullptr;
   }
   InterpolationValue MaybeConvertInherit(const StyleResolverState&,
                                          ConversionCheckers&) const final {
     NOTREACHED();
-    return nullptr;
   }
 
-  ListInterpolationFunctions::NonInterpolableValuesAreCompatibleCallback
-  GetNonInterpolableValuesAreCompatibleCallback() const;
+  static bool NonInterpolableValuesAreCompatible(const NonInterpolableValue*,
+                                                 const NonInterpolableValue*);
 
   // This InterpolationType represents the interpolation of elements inside
   // the list.

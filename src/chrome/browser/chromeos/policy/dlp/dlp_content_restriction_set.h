@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,6 +54,8 @@ struct RestrictionLevelAndUrl {
 class DlpContentRestrictionSet {
  public:
   DlpContentRestrictionSet();
+  // TODO(b/324549895): Remove this constructor. Content restrictions shouldn't
+  // be set without a url since it's used for reporting.
   DlpContentRestrictionSet(DlpContentRestriction restriction,
                            DlpRulesManager::Level level);
 
@@ -102,6 +104,8 @@ class DlpContentRestrictionSet {
       const DlpContentRestrictionSet& restrictions);
 
  private:
+  friend class DlpContentManagerTestHelper;
+
   // The current level and url of each of the restrictions.
   std::array<RestrictionLevelAndUrl,
              static_cast<int>(DlpContentRestriction::kMaxValue) + 1>

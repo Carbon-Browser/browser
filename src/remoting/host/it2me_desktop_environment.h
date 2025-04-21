@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "remoting/host/basic_desktop_environment.h"
+#include "remoting/host/client_session_control.h"
 
 namespace remoting {
 
@@ -25,6 +26,14 @@ class It2MeDesktopEnvironment : public BasicDesktopEnvironment {
 
   ~It2MeDesktopEnvironment() override;
 
+  // Initializes the curtain mode if needed.
+  // Returns `false` if the curtain mode failed to start for any reason.
+  void InitializeCurtainMode(
+      base::WeakPtr<ClientSessionControl> client_session_control);
+
+  // BasicDesktopEnvironment implementation:
+  std::string GetCapabilities() const override;
+
  protected:
   friend class It2MeDesktopEnvironmentFactory;
   It2MeDesktopEnvironment(
@@ -36,6 +45,10 @@ class It2MeDesktopEnvironment : public BasicDesktopEnvironment {
       const DesktopEnvironmentOptions& options);
 
  private:
+  void InitializeCurtainModeIfNoUserLoggedIn(
+      base::WeakPtr<ClientSessionControl> client_session_control,
+      bool is_user_logged_in);
+
   // Presents the continue window to the local user.
   std::unique_ptr<HostWindow> continue_window_;
 
@@ -44,6 +57,8 @@ class It2MeDesktopEnvironment : public BasicDesktopEnvironment {
 
   // Notifies the client session about the local mouse movements.
   std::unique_ptr<LocalInputMonitor> local_input_monitor_;
+
+  base::WeakPtrFactory<It2MeDesktopEnvironment> weak_ptr_factory_{this};
 };
 
 // Used to create |It2MeDesktopEnvironment| instances.

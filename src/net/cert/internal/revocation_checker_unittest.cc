@@ -1,19 +1,21 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/cert/internal/revocation_checker.h"
 
+#include <string_view>
+
 #include "base/time/time.h"
 #include "net/cert/mock_cert_net_fetcher.h"
-#include "net/cert/pki/cert_errors.h"
-#include "net/cert/pki/common_cert_errors.h"
-#include "net/cert/pki/parse_certificate.h"
-#include "net/cert/pki/parsed_certificate.h"
 #include "net/test/cert_builder.h"
 #include "net/test/revocation_builder.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/boringssl/src/pki/cert_errors.h"
+#include "third_party/boringssl/src/pki/common_cert_errors.h"
+#include "third_party/boringssl/src/pki/parse_certificate.h"
+#include "third_party/boringssl/src/pki/parsed_certificate.h"
 #include "url/gurl.h"
 
 namespace net {
@@ -27,9 +29,9 @@ using ::testing::Return;
 using ::testing::StrictMock;
 
 bool AddCertsToList(std::vector<CertBuilder*> builders,
-                    ParsedCertificateList* out_certs) {
+                    bssl::ParsedCertificateList* out_certs) {
   for (auto* builder : builders) {
-    if (!ParsedCertificate::CreateAndAddToVector(
+    if (!bssl::ParsedCertificate::CreateAndAddToVector(
             builder->DupCertBuffer(), {}, out_certs, /*errors=*/nullptr)) {
       return false;
     }
@@ -38,10 +40,9 @@ bool AddCertsToList(std::vector<CertBuilder*> builders,
 }
 
 TEST(RevocationChecker, NoRevocationMechanism) {
-  std::unique_ptr<CertBuilder> leaf, root;
-  CertBuilder::CreateSimpleChain(&leaf, &root);
+  auto [leaf, root] = CertBuilder::CreateSimpleChain2();
 
-  ParsedCertificateList chain;
+  bssl::ParsedCertificateList chain;
   ASSERT_TRUE(AddCertsToList({leaf.get(), root.get()}, &chain));
 
   RevocationPolicy policy;
@@ -57,14 +58,15 @@ TEST(RevocationChecker, NoRevocationMechanism) {
     // No methods on |mock_fetcher| should be called.
     auto mock_fetcher = base::MakeRefCounted<StrictMock<MockCertNetFetcher>>();
 
-    CertPathErrors errors;
+    bssl::CertPathErrors errors;
     CheckValidatedChainRevocation(
         chain, policy, /*deadline=*/base::TimeTicks(),
-        /*stapled_leaf_ocsp_response=*/base::StringPiece(), mock_fetcher.get(),
-        &errors, /*stapled_ocsp_verify_result=*/nullptr);
+        /*stapled_leaf_ocsp_response=*/std::string_view(), base::Time::Now(),
+        mock_fetcher.get(), &errors, /*stapled_ocsp_verify_result=*/nullptr);
 
     EXPECT_TRUE(errors.ContainsHighSeverityErrors());
-    EXPECT_TRUE(errors.ContainsError(cert_errors::kNoRevocationMechanism));
+    EXPECT_TRUE(
+        errors.ContainsError(bssl::cert_errors::kNoRevocationMechanism));
   }
 
   {
@@ -74,11 +76,12 @@ TEST(RevocationChecker, NoRevocationMechanism) {
     // No methods on |mock_fetcher| should be called.
     auto mock_fetcher = base::MakeRefCounted<StrictMock<MockCertNetFetcher>>();
 
-    CertPathErrors errors;
+    bssl::CertPathErrors errors;
     CheckValidatedChainRevocation(
         chain, policy, /*deadline=*/base::TimeTicks(),
-        /*stapled_leaf_ocsp_response=*/base::StringPiece(), mock_fetcher.get(),
-        &errors, /*stapled_ocsp_verify_result=*/nullptr);
+        /*stapled_leaf_ocsp_response=*/std::string_view(), base::Time::Now(),
+        mock_fetcher.get(), &errors,
+        /*stapled_ocsp_verify_result=*/nullptr);
 
     EXPECT_FALSE(errors.ContainsHighSeverityErrors());
   }
@@ -93,24 +96,23 @@ TEST(RevocationChecker, NoRevocationMechanism) {
     // No methods on |mock_fetcher| should be called.
     auto mock_fetcher = base::MakeRefCounted<StrictMock<MockCertNetFetcher>>();
 
-    CertPathErrors errors;
+    bssl::CertPathErrors errors;
     CheckValidatedChainRevocation(
         chain, policy, /*deadline=*/base::TimeTicks(),
-        /*stapled_leaf_ocsp_response=*/base::StringPiece(), mock_fetcher.get(),
-        &errors, /*stapled_ocsp_verify_result=*/nullptr);
+        /*stapled_leaf_ocsp_response=*/std::string_view(), base::Time::Now(),
+        mock_fetcher.get(), &errors, /*stapled_ocsp_verify_result=*/nullptr);
 
     EXPECT_FALSE(errors.ContainsHighSeverityErrors());
   }
 }
 
 TEST(RevocationChecker, ValidCRL) {
-  std::unique_ptr<CertBuilder> leaf, root;
-  CertBuilder::CreateSimpleChain(&leaf, &root);
+  auto [leaf, root] = CertBuilder::CreateSimpleChain2();
 
   const GURL kTestCrlUrl("http://example.com/crl1");
   leaf->SetCrlDistributionPointUrl(kTestCrlUrl);
 
-  ParsedCertificateList chain;
+  bssl::ParsedCertificateList chain;
   ASSERT_TRUE(AddCertsToList({leaf.get(), root.get()}, &chain));
 
   RevocationPolicy policy;
@@ -120,7 +122,7 @@ TEST(RevocationChecker, ValidCRL) {
 
   std::string crl_data_as_string_for_some_reason =
       BuildCrl(root->GetSubject(), root->GetKey(),
-               /*revoked_serials=*/{}, DigestAlgorithm::Sha256);
+               /*revoked_serials=*/{});
   std::vector<uint8_t> crl_data(crl_data_as_string_for_some_reason.begin(),
                                 crl_data_as_string_for_some_reason.end());
 
@@ -132,11 +134,11 @@ TEST(RevocationChecker, ValidCRL) {
     EXPECT_CALL(*mock_fetcher, FetchCrl(kTestCrlUrl, _, _))
         .WillOnce(Return(ByMove(MockCertNetFetcherRequest::Create(crl_data))));
 
-    CertPathErrors errors;
+    bssl::CertPathErrors errors;
     CheckValidatedChainRevocation(
         chain, policy, /*deadline=*/base::TimeTicks(),
-        /*stapled_leaf_ocsp_response=*/base::StringPiece(), mock_fetcher.get(),
-        &errors, /*stapled_ocsp_verify_result=*/nullptr);
+        /*stapled_leaf_ocsp_response=*/std::string_view(), base::Time::Now(),
+        mock_fetcher.get(), &errors, /*stapled_ocsp_verify_result=*/nullptr);
 
     EXPECT_FALSE(errors.ContainsHighSeverityErrors());
   }
@@ -148,14 +150,15 @@ TEST(RevocationChecker, ValidCRL) {
     // No methods on |mock_fetcher| should be called.
     auto mock_fetcher = base::MakeRefCounted<StrictMock<MockCertNetFetcher>>();
 
-    CertPathErrors errors;
+    bssl::CertPathErrors errors;
     CheckValidatedChainRevocation(
         chain, policy, /*deadline=*/base::TimeTicks(),
-        /*stapled_leaf_ocsp_response=*/base::StringPiece(), mock_fetcher.get(),
-        &errors, /*stapled_ocsp_verify_result=*/nullptr);
+        /*stapled_leaf_ocsp_response=*/std::string_view(), base::Time::Now(),
+        mock_fetcher.get(), &errors, /*stapled_ocsp_verify_result=*/nullptr);
 
     EXPECT_TRUE(errors.ContainsHighSeverityErrors());
-    EXPECT_TRUE(errors.ContainsError(cert_errors::kUnableToCheckRevocation));
+    EXPECT_TRUE(
+        errors.ContainsError(bssl::cert_errors::kUnableToCheckRevocation));
   }
 
   {
@@ -165,27 +168,27 @@ TEST(RevocationChecker, ValidCRL) {
     // No methods on |mock_fetcher| should be called.
     auto mock_fetcher = base::MakeRefCounted<StrictMock<MockCertNetFetcher>>();
 
-    CertPathErrors errors;
+    bssl::CertPathErrors errors;
     CheckValidatedChainRevocation(
         chain, policy, /*deadline=*/base::TimeTicks(),
-        /*stapled_leaf_ocsp_response=*/base::StringPiece(), mock_fetcher.get(),
-        &errors, /*stapled_ocsp_verify_result=*/nullptr);
+        /*stapled_leaf_ocsp_response=*/std::string_view(), base::Time::Now(),
+        mock_fetcher.get(), &errors, /*stapled_ocsp_verify_result=*/nullptr);
 
     EXPECT_TRUE(errors.ContainsHighSeverityErrors());
     // Since CRLs were not considered, the error should be "no revocation
     // mechanism".
-    EXPECT_TRUE(errors.ContainsError(cert_errors::kNoRevocationMechanism));
+    EXPECT_TRUE(
+        errors.ContainsError(bssl::cert_errors::kNoRevocationMechanism));
   }
 }
 
 TEST(RevocationChecker, RevokedCRL) {
-  std::unique_ptr<CertBuilder> leaf, root;
-  CertBuilder::CreateSimpleChain(&leaf, &root);
+  auto [leaf, root] = CertBuilder::CreateSimpleChain2();
 
   const GURL kTestCrlUrl("http://example.com/crl1");
   leaf->SetCrlDistributionPointUrl(kTestCrlUrl);
 
-  ParsedCertificateList chain;
+  bssl::ParsedCertificateList chain;
   ASSERT_TRUE(AddCertsToList({leaf.get(), root.get()}, &chain));
 
   RevocationPolicy policy;
@@ -193,9 +196,9 @@ TEST(RevocationChecker, RevokedCRL) {
   policy.networking_allowed = true;
   policy.crl_allowed = true;
 
-  std::string crl_data_as_string_for_some_reason = BuildCrl(
-      root->GetSubject(), root->GetKey(),
-      /*revoked_serials=*/{leaf->GetSerialNumber()}, DigestAlgorithm::Sha256);
+  std::string crl_data_as_string_for_some_reason =
+      BuildCrl(root->GetSubject(), root->GetKey(),
+               /*revoked_serials=*/{leaf->GetSerialNumber()});
   std::vector<uint8_t> crl_data(crl_data_as_string_for_some_reason.begin(),
                                 crl_data_as_string_for_some_reason.end());
 
@@ -208,14 +211,14 @@ TEST(RevocationChecker, RevokedCRL) {
     EXPECT_CALL(*mock_fetcher, FetchCrl(kTestCrlUrl, _, _))
         .WillOnce(Return(ByMove(MockCertNetFetcherRequest::Create(crl_data))));
 
-    CertPathErrors errors;
+    bssl::CertPathErrors errors;
     CheckValidatedChainRevocation(
         chain, policy, /*deadline=*/base::TimeTicks(),
-        /*stapled_leaf_ocsp_response=*/base::StringPiece(), mock_fetcher.get(),
-        &errors, /*stapled_ocsp_verify_result=*/nullptr);
+        /*stapled_leaf_ocsp_response=*/std::string_view(), base::Time::Now(),
+        mock_fetcher.get(), &errors, /*stapled_ocsp_verify_result=*/nullptr);
 
     EXPECT_TRUE(errors.ContainsHighSeverityErrors());
-    EXPECT_TRUE(errors.ContainsError(cert_errors::kCertificateRevoked));
+    EXPECT_TRUE(errors.ContainsError(bssl::cert_errors::kCertificateRevoked));
   }
 
   {
@@ -227,25 +230,24 @@ TEST(RevocationChecker, RevokedCRL) {
     EXPECT_CALL(*mock_fetcher, FetchCrl(kTestCrlUrl, _, _))
         .WillOnce(Return(ByMove(MockCertNetFetcherRequest::Create(crl_data))));
 
-    CertPathErrors errors;
+    bssl::CertPathErrors errors;
     CheckValidatedChainRevocation(
         chain, policy, /*deadline=*/base::TimeTicks(),
-        /*stapled_leaf_ocsp_response=*/base::StringPiece(), mock_fetcher.get(),
-        &errors, /*stapled_ocsp_verify_result=*/nullptr);
+        /*stapled_leaf_ocsp_response=*/std::string_view(), base::Time::Now(),
+        mock_fetcher.get(), &errors, /*stapled_ocsp_verify_result=*/nullptr);
 
     EXPECT_TRUE(errors.ContainsHighSeverityErrors());
-    EXPECT_TRUE(errors.ContainsError(cert_errors::kCertificateRevoked));
+    EXPECT_TRUE(errors.ContainsError(bssl::cert_errors::kCertificateRevoked));
   }
 }
 
 TEST(RevocationChecker, CRLRequestFails) {
-  std::unique_ptr<CertBuilder> leaf, root;
-  CertBuilder::CreateSimpleChain(&leaf, &root);
+  auto [leaf, root] = CertBuilder::CreateSimpleChain2();
 
   const GURL kTestCrlUrl("http://example.com/crl1");
   leaf->SetCrlDistributionPointUrl(kTestCrlUrl);
 
-  ParsedCertificateList chain;
+  bssl::ParsedCertificateList chain;
   ASSERT_TRUE(AddCertsToList({leaf.get(), root.get()}, &chain));
 
   RevocationPolicy policy;
@@ -262,14 +264,15 @@ TEST(RevocationChecker, CRLRequestFails) {
         .WillOnce(Return(
             ByMove(MockCertNetFetcherRequest::Create(ERR_CONNECTION_FAILED))));
 
-    CertPathErrors errors;
+    bssl::CertPathErrors errors;
     CheckValidatedChainRevocation(
         chain, policy, /*deadline=*/base::TimeTicks(),
-        /*stapled_leaf_ocsp_response=*/base::StringPiece(), mock_fetcher.get(),
-        &errors, /*stapled_ocsp_verify_result=*/nullptr);
+        /*stapled_leaf_ocsp_response=*/std::string_view(), base::Time::Now(),
+        mock_fetcher.get(), &errors, /*stapled_ocsp_verify_result=*/nullptr);
 
     EXPECT_TRUE(errors.ContainsHighSeverityErrors());
-    EXPECT_TRUE(errors.ContainsError(cert_errors::kUnableToCheckRevocation));
+    EXPECT_TRUE(
+        errors.ContainsError(bssl::cert_errors::kUnableToCheckRevocation));
   }
 
   {
@@ -281,14 +284,15 @@ TEST(RevocationChecker, CRLRequestFails) {
         .WillOnce(Return(
             ByMove(MockCertNetFetcherRequest::Create(ERR_CONNECTION_FAILED))));
 
-    CertPathErrors errors;
+    bssl::CertPathErrors errors;
     CheckValidatedChainRevocation(
         chain, policy, /*deadline=*/base::TimeTicks(),
-        /*stapled_leaf_ocsp_response=*/base::StringPiece(), mock_fetcher.get(),
-        &errors, /*stapled_ocsp_verify_result=*/nullptr);
+        /*stapled_leaf_ocsp_response=*/std::string_view(), base::Time::Now(),
+        mock_fetcher.get(), &errors, /*stapled_ocsp_verify_result=*/nullptr);
 
     EXPECT_TRUE(errors.ContainsHighSeverityErrors());
-    EXPECT_TRUE(errors.ContainsError(cert_errors::kUnableToCheckRevocation));
+    EXPECT_TRUE(
+        errors.ContainsError(bssl::cert_errors::kUnableToCheckRevocation));
   }
 
   {
@@ -300,24 +304,23 @@ TEST(RevocationChecker, CRLRequestFails) {
         .WillOnce(Return(
             ByMove(MockCertNetFetcherRequest::Create(ERR_CONNECTION_FAILED))));
 
-    CertPathErrors errors;
+    bssl::CertPathErrors errors;
     CheckValidatedChainRevocation(
         chain, policy, /*deadline=*/base::TimeTicks(),
-        /*stapled_leaf_ocsp_response=*/base::StringPiece(), mock_fetcher.get(),
-        &errors, /*stapled_ocsp_verify_result=*/nullptr);
+        /*stapled_leaf_ocsp_response=*/std::string_view(), base::Time::Now(),
+        mock_fetcher.get(), &errors, /*stapled_ocsp_verify_result=*/nullptr);
 
     EXPECT_FALSE(errors.ContainsHighSeverityErrors());
   }
 }
 
 TEST(RevocationChecker, CRLNonHttpUrl) {
-  std::unique_ptr<CertBuilder> leaf, root;
-  CertBuilder::CreateSimpleChain(&leaf, &root);
+  auto [leaf, root] = CertBuilder::CreateSimpleChain2();
 
   const GURL kTestCrlUrl("https://example.com/crl1");
   leaf->SetCrlDistributionPointUrl(kTestCrlUrl);
 
-  ParsedCertificateList chain;
+  bssl::ParsedCertificateList chain;
   ASSERT_TRUE(AddCertsToList({leaf.get(), root.get()}, &chain));
 
   RevocationPolicy policy;
@@ -330,19 +333,18 @@ TEST(RevocationChecker, CRLNonHttpUrl) {
   // HTTPS CRL URLs should not be fetched.
   auto mock_fetcher = base::MakeRefCounted<StrictMock<MockCertNetFetcher>>();
 
-  CertPathErrors errors;
+  bssl::CertPathErrors errors;
   CheckValidatedChainRevocation(
       chain, policy, /*deadline=*/base::TimeTicks(),
-      /*stapled_leaf_ocsp_response=*/base::StringPiece(), mock_fetcher.get(),
-      &errors, /*stapled_ocsp_verify_result=*/nullptr);
+      /*stapled_leaf_ocsp_response=*/std::string_view(), base::Time::Now(),
+      mock_fetcher.get(), &errors, /*stapled_ocsp_verify_result=*/nullptr);
 
   EXPECT_TRUE(errors.ContainsHighSeverityErrors());
-  EXPECT_TRUE(errors.ContainsError(cert_errors::kNoRevocationMechanism));
+  EXPECT_TRUE(errors.ContainsError(bssl::cert_errors::kNoRevocationMechanism));
 }
 
 TEST(RevocationChecker, SkipEntireInvalidCRLDistributionPoints) {
-  std::unique_ptr<CertBuilder> leaf, root;
-  CertBuilder::CreateSimpleChain(&leaf, &root);
+  auto [leaf, root] = CertBuilder::CreateSimpleChain2();
 
   const GURL kSecondCrlUrl("http://www.example.com/bar.crl");
 
@@ -353,7 +355,7 @@ TEST(RevocationChecker, SkipEntireInvalidCRLDistributionPoints) {
   //   SEQUENCE {
   //     [0] {
   //       [0] {
-  //         # [9] is not a valid tag in GeneralNames
+  //         # [9] is not a valid tag in bssl::GeneralNames
   //         [9 PRIMITIVE] { "foo" }
   //       }
   //     }
@@ -375,10 +377,10 @@ TEST(RevocationChecker, SkipEntireInvalidCRLDistributionPoints) {
                            0x70, 0x6c, 0x65, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x62,
                            0x61, 0x72, 0x2e, 0x63, 0x72, 0x6c};
   leaf->SetExtension(
-      der::Input(kCrlDistributionPointsOid),
+      bssl::der::Input(bssl::kCrlDistributionPointsOid),
       std::string(reinterpret_cast<const char*>(crldp), std::size(crldp)));
 
-  ParsedCertificateList chain;
+  bssl::ParsedCertificateList chain;
   ASSERT_TRUE(AddCertsToList({leaf.get(), root.get()}, &chain));
 
   RevocationPolicy policy;
@@ -390,28 +392,27 @@ TEST(RevocationChecker, SkipEntireInvalidCRLDistributionPoints) {
 
   std::string crl_data_as_string_for_some_reason =
       BuildCrl(root->GetSubject(), root->GetKey(),
-               /*revoked_serials=*/{}, DigestAlgorithm::Sha256);
+               /*revoked_serials=*/{});
   std::vector<uint8_t> crl_data(crl_data_as_string_for_some_reason.begin(),
                                 crl_data_as_string_for_some_reason.end());
 
   // No methods on |mock_fetcher| should be called.
   auto mock_fetcher = base::MakeRefCounted<StrictMock<MockCertNetFetcher>>();
 
-  CertPathErrors errors;
+  bssl::CertPathErrors errors;
   CheckValidatedChainRevocation(
       chain, policy, /*deadline=*/base::TimeTicks(),
-      /*stapled_leaf_ocsp_response=*/base::StringPiece(), mock_fetcher.get(),
-      &errors, /*stapled_ocsp_verify_result=*/nullptr);
+      /*stapled_leaf_ocsp_response=*/std::string_view(), base::Time::Now(),
+      mock_fetcher.get(), &errors, /*stapled_ocsp_verify_result=*/nullptr);
 
   // Should fail since the entire cRLDistributionPoints extension was skipped
   // and no other revocation method is present.
   EXPECT_TRUE(errors.ContainsHighSeverityErrors());
-  EXPECT_TRUE(errors.ContainsError(cert_errors::kNoRevocationMechanism));
+  EXPECT_TRUE(errors.ContainsError(bssl::cert_errors::kNoRevocationMechanism));
 }
 
 TEST(RevocationChecker, SkipUnsupportedCRLDistPointWithNonUriFullname) {
-  std::unique_ptr<CertBuilder> leaf, root;
-  CertBuilder::CreateSimpleChain(&leaf, &root);
+  auto [leaf, root] = CertBuilder::CreateSimpleChain2();
 
   const GURL kSecondCrlUrl("http://www.example.com/bar.crl");
 
@@ -461,10 +462,10 @@ TEST(RevocationChecker, SkipUnsupportedCRLDistPointWithNonUriFullname) {
       0x77, 0x77, 0x2e, 0x65, 0x78, 0x61, 0x6d, 0x70, 0x6c, 0x65, 0x2e,
       0x63, 0x6f, 0x6d, 0x2f, 0x62, 0x61, 0x72, 0x2e, 0x63, 0x72, 0x6c};
   leaf->SetExtension(
-      der::Input(kCrlDistributionPointsOid),
+      bssl::der::Input(bssl::kCrlDistributionPointsOid),
       std::string(reinterpret_cast<const char*>(crldp), std::size(crldp)));
 
-  ParsedCertificateList chain;
+  bssl::ParsedCertificateList chain;
   ASSERT_TRUE(AddCertsToList({leaf.get(), root.get()}, &chain));
 
   RevocationPolicy policy;
@@ -476,7 +477,7 @@ TEST(RevocationChecker, SkipUnsupportedCRLDistPointWithNonUriFullname) {
 
   std::string crl_data_as_string_for_some_reason =
       BuildCrl(root->GetSubject(), root->GetKey(),
-               /*revoked_serials=*/{}, DigestAlgorithm::Sha256);
+               /*revoked_serials=*/{});
   std::vector<uint8_t> crl_data(crl_data_as_string_for_some_reason.begin(),
                                 crl_data_as_string_for_some_reason.end());
 
@@ -485,18 +486,17 @@ TEST(RevocationChecker, SkipUnsupportedCRLDistPointWithNonUriFullname) {
   EXPECT_CALL(*mock_fetcher, FetchCrl(kSecondCrlUrl, _, _))
       .WillOnce(Return(ByMove(MockCertNetFetcherRequest::Create(crl_data))));
 
-  CertPathErrors errors;
+  bssl::CertPathErrors errors;
   CheckValidatedChainRevocation(
       chain, policy, /*deadline=*/base::TimeTicks(),
-      /*stapled_leaf_ocsp_response=*/base::StringPiece(), mock_fetcher.get(),
-      &errors, /*stapled_ocsp_verify_result=*/nullptr);
+      /*stapled_leaf_ocsp_response=*/std::string_view(), base::Time::Now(),
+      mock_fetcher.get(), &errors, /*stapled_ocsp_verify_result=*/nullptr);
 
   EXPECT_FALSE(errors.ContainsHighSeverityErrors());
 }
 
 TEST(RevocationChecker, SkipUnsupportedCRLDistPointWithReasons) {
-  std::unique_ptr<CertBuilder> leaf, root;
-  CertBuilder::CreateSimpleChain(&leaf, &root);
+  auto [leaf, root] = CertBuilder::CreateSimpleChain2();
 
   const GURL kSecondCrlUrl("http://www.example.com/bar.crl");
 
@@ -531,10 +531,10 @@ TEST(RevocationChecker, SkipUnsupportedCRLDistPointWithReasons) {
       0x77, 0x77, 0x2e, 0x65, 0x78, 0x61, 0x6d, 0x70, 0x6c, 0x65, 0x2e, 0x63,
       0x6f, 0x6d, 0x2f, 0x62, 0x61, 0x72, 0x2e, 0x63, 0x72, 0x6c};
   leaf->SetExtension(
-      der::Input(kCrlDistributionPointsOid),
+      bssl::der::Input(bssl::kCrlDistributionPointsOid),
       std::string(reinterpret_cast<const char*>(crldp), std::size(crldp)));
 
-  ParsedCertificateList chain;
+  bssl::ParsedCertificateList chain;
   ASSERT_TRUE(AddCertsToList({leaf.get(), root.get()}, &chain));
 
   RevocationPolicy policy;
@@ -546,7 +546,7 @@ TEST(RevocationChecker, SkipUnsupportedCRLDistPointWithReasons) {
 
   std::string crl_data_as_string_for_some_reason =
       BuildCrl(root->GetSubject(), root->GetKey(),
-               /*revoked_serials=*/{}, DigestAlgorithm::Sha256);
+               /*revoked_serials=*/{});
   std::vector<uint8_t> crl_data(crl_data_as_string_for_some_reason.begin(),
                                 crl_data_as_string_for_some_reason.end());
 
@@ -555,18 +555,17 @@ TEST(RevocationChecker, SkipUnsupportedCRLDistPointWithReasons) {
   EXPECT_CALL(*mock_fetcher, FetchCrl(kSecondCrlUrl, _, _))
       .WillOnce(Return(ByMove(MockCertNetFetcherRequest::Create(crl_data))));
 
-  CertPathErrors errors;
+  bssl::CertPathErrors errors;
   CheckValidatedChainRevocation(
       chain, policy, /*deadline=*/base::TimeTicks(),
-      /*stapled_leaf_ocsp_response=*/base::StringPiece(), mock_fetcher.get(),
-      &errors, /*stapled_ocsp_verify_result=*/nullptr);
+      /*stapled_leaf_ocsp_response=*/std::string_view(), base::Time::Now(),
+      mock_fetcher.get(), &errors, /*stapled_ocsp_verify_result=*/nullptr);
 
   EXPECT_FALSE(errors.ContainsHighSeverityErrors());
 }
 
 TEST(RevocationChecker, SkipUnsupportedCRLDistPointWithCrlIssuer) {
-  std::unique_ptr<CertBuilder> leaf, root;
-  CertBuilder::CreateSimpleChain(&leaf, &root);
+  auto [leaf, root] = CertBuilder::CreateSimpleChain2();
 
   const GURL kSecondCrlUrl("http://www.example.com/bar.crl");
 
@@ -633,10 +632,10 @@ TEST(RevocationChecker, SkipUnsupportedCRLDistPointWithCrlIssuer) {
       0x77, 0x77, 0x77, 0x2e, 0x65, 0x78, 0x61, 0x6d, 0x70, 0x6c, 0x65, 0x2e,
       0x63, 0x6f, 0x6d, 0x2f, 0x62, 0x61, 0x72, 0x2e, 0x63, 0x72, 0x6c};
   leaf->SetExtension(
-      der::Input(kCrlDistributionPointsOid),
+      bssl::der::Input(bssl::kCrlDistributionPointsOid),
       std::string(reinterpret_cast<const char*>(crldp), std::size(crldp)));
 
-  ParsedCertificateList chain;
+  bssl::ParsedCertificateList chain;
   ASSERT_TRUE(AddCertsToList({leaf.get(), root.get()}, &chain));
 
   RevocationPolicy policy;
@@ -648,7 +647,7 @@ TEST(RevocationChecker, SkipUnsupportedCRLDistPointWithCrlIssuer) {
 
   std::string crl_data_as_string_for_some_reason =
       BuildCrl(root->GetSubject(), root->GetKey(),
-               /*revoked_serials=*/{}, DigestAlgorithm::Sha256);
+               /*revoked_serials=*/{});
   std::vector<uint8_t> crl_data(crl_data_as_string_for_some_reason.begin(),
                                 crl_data_as_string_for_some_reason.end());
 
@@ -657,11 +656,11 @@ TEST(RevocationChecker, SkipUnsupportedCRLDistPointWithCrlIssuer) {
   EXPECT_CALL(*mock_fetcher, FetchCrl(kSecondCrlUrl, _, _))
       .WillOnce(Return(ByMove(MockCertNetFetcherRequest::Create(crl_data))));
 
-  CertPathErrors errors;
+  bssl::CertPathErrors errors;
   CheckValidatedChainRevocation(
       chain, policy, /*deadline=*/base::TimeTicks(),
-      /*stapled_leaf_ocsp_response=*/base::StringPiece(), mock_fetcher.get(),
-      &errors, /*stapled_ocsp_verify_result=*/nullptr);
+      /*stapled_leaf_ocsp_response=*/std::string_view(), base::Time::Now(),
+      mock_fetcher.get(), &errors, /*stapled_ocsp_verify_result=*/nullptr);
 
   EXPECT_FALSE(errors.ContainsHighSeverityErrors());
 }

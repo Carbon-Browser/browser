@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -19,7 +19,7 @@ void BinaryFeatureExtractor::CheckSignature(
 
 #if !BUILDFLAG(IS_MAC)
 bool BinaryFeatureExtractor::ExtractImageFeaturesFromData(
-    const uint8_t* data, size_t data_size,
+    base::span<const uint8_t> data,
     ExtractHeadersOption options,
     ClientDownloadRequest_ImageHeaders* image_headers,
     google::protobuf::RepeatedPtrField<std::string>* signed_data) {

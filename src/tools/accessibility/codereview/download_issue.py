@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (c) 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Downloads a patch and changed files from Rietveld.
@@ -9,7 +9,7 @@ Prints the patch of the most recent patchset to stdout.
 
 try:
   import base64
-  import fix_encoding
+
   import gerrit_util
   import git_cl
   import optparse
@@ -81,6 +81,6 @@ def main(argv):
 if __name__ == '__main__':
   # These affect sys.stdout so do it outside of main() to simplify mocks in
   # unit testing.
-  fix_encoding.fix_encoding()
+
   colorama.init()
   sys.exit(main(sys.argv[1:]))

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include "base/android/build_info.h"
 #include "base/memory/singleton.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/display/screen.h"
 #include "ui/gfx/android/view_configuration.h"
 
@@ -44,7 +45,11 @@ class GestureConfigurationAndroid : public GestureConfiguration {
 #if defined(USE_AURA)
     set_gesture_begin_end_types_enabled(true);
 #else
-    set_gesture_begin_end_types_enabled(false);
+    if (base::FeatureList::IsEnabled(features::kEnableGestureBeginEndTypes)) {
+      set_gesture_begin_end_types_enabled(true);
+    } else {
+      set_gesture_begin_end_types_enabled(false);
+    }
 #endif
     set_long_press_time_in_ms(ViewConfiguration::GetLongPressTimeoutInMs());
     set_max_distance_between_taps_for_double_tap(
@@ -54,6 +59,8 @@ class GestureConfigurationAndroid : public GestureConfiguration {
     set_max_gesture_bounds_length(kMaxGestureBoundsLengthDips);
     set_max_touch_move_in_pixels_for_click(
         ViewConfiguration::GetTouchSlopInDips());
+    set_max_stylus_move_in_pixels_for_click(
+        ViewConfiguration::GetTouchSlopInDips() * 1.5f);
     set_min_fling_velocity(
         ViewConfiguration::GetMinimumFlingVelocityInDipsPerSecond());
     set_min_gesture_bounds_length(kMinGestureBoundsLengthDips);
@@ -73,7 +80,7 @@ class GestureConfigurationAndroid : public GestureConfiguration {
     // using the heuristic that it would be 100ms less than the long-press
     // provided this is not too close with show-press.
     //
-    // TODO(https://crbug.com/1294280): Replace this with platform-defined
+    // TODO(crbug.com/40820457): Replace this with platform-defined
     // timeout when available.
     set_short_press_time(base::Milliseconds(
         std::max(long_press_time_in_ms() - 100, long_press_time_in_ms() / 2)));

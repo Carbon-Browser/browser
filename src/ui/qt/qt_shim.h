@@ -1,9 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_QT_QT_SHIM_H_
 #define UI_QT_QT_SHIM_H_
+
+#include <vector>
 
 #include <QApplication>
 #include <QImage>
@@ -24,7 +26,8 @@ class QtShim : public QObject, public QtInterface {
   ~QtShim() override;
 
   // QtInterface:
-  double GetScaleFactor() const override;
+  size_t GetMonitorConfig(MonitorScale** monitors,
+                          float* primary_scale) override;
   FontRenderParams GetFontRenderParams() const override;
   FontDescription GetFontDescription() const override;
   Image GetIconForContentType(const String& content_type,
@@ -42,6 +45,10 @@ class QtShim : public QObject, public QtInterface {
  private slots:
   void FontChanged(const QFont& font);
   void PaletteChanged(const QPalette& palette);
+  void ScreenAdded(QScreen* screen);
+  void ScreenRemoved(QScreen* screen);
+  void LogicalDotsPerInchChanged(qreal dpi);
+  void PhysicalDotsPerInchChanged(qreal dpi);
 
  private:
   QImage DrawHeaderImpl(int width,
@@ -52,6 +59,7 @@ class QtShim : public QObject, public QtInterface {
   QtInterface::Delegate* const delegate_;
 
   QApplication app_;
+  std::vector<MonitorScale> monitor_scales_;
 };
 
 }  // namespace qt

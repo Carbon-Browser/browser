@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/guid.h"
-#include "base/task/task_runner_util.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/uuid.h"
 #include "storage/browser/blob/blob_data_builder.h"
 #include "storage/browser/blob/blob_data_handle.h"
 #include "storage/browser/blob/blob_storage_context.h"
@@ -26,7 +25,7 @@ std::unique_ptr<BlobTaskProxy> BlobTaskProxy::Create(
 BlobTaskProxy::BlobTaskProxy(
     BlobContextGetter blob_context_getter,
     scoped_refptr<base::SingleThreadTaskRunner> io_task_runner)
-    : main_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+    : main_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       io_task_runner_(io_task_runner) {
   // Unretained the raw pointer because owner on UI thread should destroy this
   // object on IO thread.
@@ -60,7 +59,7 @@ void BlobTaskProxy::SaveAsBlobOnIO(std::unique_ptr<std::string> data,
   DCHECK(io_task_runner_->BelongsToCurrentThread());
 
   // Build blob data. This has to do a copy into blob's internal storage.
-  std::string blob_uuid = base::GenerateGUID();
+  std::string blob_uuid = base::Uuid::GenerateRandomV4().AsLowercaseString();
   auto builder = std::make_unique<storage::BlobDataBuilder>(blob_uuid);
   builder->AppendData(*data);
   blob_data_handle_ =

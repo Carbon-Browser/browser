@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 
 #include "base/android/scoped_java_ref.h"
 #include "base/memory/raw_ptr.h"
-#include "chrome/browser/ui/autofill/payments/autofill_snackbar_controller.h"
-#include "chrome/browser/ui/autofill/payments/autofill_snackbar_view.h"
+#include "chrome/browser/ui/autofill/autofill_snackbar_controller.h"
+#include "chrome/browser/ui/autofill/autofill_snackbar_view.h"
 
 namespace autofill {
 

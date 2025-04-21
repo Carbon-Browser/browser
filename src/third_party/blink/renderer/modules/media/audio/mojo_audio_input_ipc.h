@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 
 #include <string>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "media/audio/audio_input_ipc.h"
@@ -80,9 +81,9 @@ class MODULES_EXPORT MojoAudioInputIPC
       mojo::PendingRemote<media::mojom::blink::AudioInputStream> stream,
       mojo::PendingReceiver<media::mojom::blink::AudioInputStreamClient>
           stream_client_receiver,
-      media::mojom::blink::ReadOnlyAudioDataPipePtr data_pipe,
+      media::mojom::blink::ReadWriteAudioDataPipePtr data_pipe,
       bool initially_muted,
-      const absl::optional<base::UnguessableToken>& stream_id) override;
+      const std::optional<base::UnguessableToken>& stream_id) override;
   void OnError(media::mojom::InputStreamErrorCode code) override;
   void OnMutedStateChanged(bool is_muted) override;
 
@@ -99,11 +100,11 @@ class MODULES_EXPORT MojoAudioInputIPC
   mojo::Remote<media::mojom::blink::AudioProcessorControls> processor_controls_;
 
   // Initialized on StreamCreated.
-  absl::optional<base::UnguessableToken> stream_id_;
+  std::optional<base::UnguessableToken> stream_id_;
   mojo::Receiver<AudioInputStreamClient> stream_client_receiver_{this};
   mojo::Receiver<mojom::blink::RendererAudioInputStreamFactoryClient>
       factory_client_receiver_{this};
-  media::AudioInputIPCDelegate* delegate_ = nullptr;
+  raw_ptr<media::AudioInputIPCDelegate> delegate_ = nullptr;
 
   base::WeakPtrFactory<MojoAudioInputIPC> weak_factory_{this};
 };

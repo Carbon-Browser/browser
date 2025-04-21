@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@
 #include "components/services/storage/public/cpp/quota_error_or.h"
 #include "components/services/storage/public/mojom/blob_storage_context.mojom.h"
 #include "components/services/storage/public/mojom/cache_storage_control.mojom.h"
-#include "components/services/storage/public/mojom/quota_client.mojom-forward.h"
+#include "components/services/storage/public/mojom/quota_client.mojom.h"
 #include "content/browser/cache_storage/cache_storage_manager.h"
 #include "content/common/content_export.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -24,8 +24,10 @@
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/network/public/mojom/cross_origin_embedder_policy.mojom.h"
+#include "storage/browser/quota/quota_manager_proxy.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/mojom/cache_storage/cache_storage.mojom-forward.h"
+#include "url/origin.h"
 
 namespace base {
 class FilePath;
@@ -33,7 +35,7 @@ class SequencedTaskRunner;
 }
 
 namespace storage {
-class QuotaManagerProxy;
+struct BucketLocator;
 struct BucketInfo;
 }
 
@@ -71,13 +73,10 @@ class CONTENT_EXPORT CacheStorageContextImpl
       const network::CrossOriginEmbedderPolicy& cross_origin_embedder_policy,
       mojo::PendingRemote<network::mojom::CrossOriginEmbedderPolicyReporter>
           coep_reporter_remote,
-      const blink::StorageKey& storage_key,
+      const network::DocumentIsolationPolicy& document_isolation_policy,
+      const storage::BucketLocator& bucket,
       storage::mojom::CacheStorageOwner owner,
       mojo::PendingReceiver<blink::mojom::CacheStorage> receiver) override;
-  void DeleteForStorageKey(const blink::StorageKey& storage_key) override;
-  void GetAllStorageKeysInfo(
-      storage::mojom::CacheStorageControl::GetAllStorageKeysInfoCallback
-          callback) override;
   void AddObserver(mojo::PendingRemote<storage::mojom::CacheStorageObserver>
                        observer) override;
   void ApplyPolicyUpdates(std::vector<storage::mojom::StoragePolicyUpdatePtr>
@@ -97,13 +96,14 @@ class CONTENT_EXPORT CacheStorageContextImpl
       const network::CrossOriginEmbedderPolicy& cross_origin_embedder_policy,
       mojo::PendingRemote<network::mojom::CrossOriginEmbedderPolicyReporter>
           coep_reporter_remote,
+      const network::DocumentIsolationPolicy& document_isolation_policy,
       const blink::StorageKey& storage_key,
       storage::mojom::CacheStorageOwner owner,
       mojo::PendingReceiver<blink::mojom::CacheStorage> receiver,
       storage::QuotaErrorOr<storage::BucketInfo> result);
 
   // The set of storage keys whose storage should be cleared on shutdown.
-  std::set<blink::StorageKey> storage_keys_to_purge_on_shutdown_;
+  std::set<url::Origin> origins_to_purge_on_shutdown_;
 
   // Initialized in Init(); true if the user data directory is empty.
   bool is_incognito_ = false;

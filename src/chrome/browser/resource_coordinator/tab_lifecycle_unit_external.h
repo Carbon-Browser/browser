@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,13 +41,15 @@ class TabLifecycleUnitExternal {
   virtual void SetAutoDiscardable(bool auto_discardable) = 0;
 
   // Discards the tab.
-  virtual bool DiscardTab(mojom::LifecycleUnitDiscardReason reason) = 0;
+  virtual bool DiscardTab(mojom::LifecycleUnitDiscardReason reason,
+                          uint64_t memory_footprint_estimate = 0) = 0;
 
-  // Returns true if the tab is discarded.
-  virtual bool IsDiscarded() const = 0;
+  // Returns the state of the LifecycleUnit.
+  virtual mojom::LifecycleUnitState GetTabState() const = 0;
 
-  // Returns the number of times that the tab was discarded.
-  virtual int GetDiscardCount() const = 0;
+  // Last time ticks at which this tab was focused, or Time::Max() if it is
+  // currently focused.
+  virtual base::Time GetLastFocusedTime() const = 0;
 };
 
 }  // namespace resource_coordinator

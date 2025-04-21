@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,10 @@ class EVENTS_EXPORT PlatformEventObserver {
 
   // This is called after the event has been dispatched to the dispatcher(s).
   virtual void DidProcessEvent(const PlatformEvent& event) = 0;
+
+  // Called shortly before the PlatformEventSource the observer belongs to is
+  // destroyed.
+  virtual void PlatformEventSourceDestroying() {}
 
  protected:
   virtual ~PlatformEventObserver() {}

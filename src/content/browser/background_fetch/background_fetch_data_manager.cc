@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "base/observer_list.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
+#include "components/services/storage/public/cpp/buckets/bucket_locator.h"
 #include "components/services/storage/public/mojom/cache_storage_control.mojom.h"
 #include "content/browser/background_fetch/background_fetch_constants.h"
 #include "content/browser/background_fetch/background_fetch_data_manager_observer.h"
@@ -98,9 +99,12 @@ BackgroundFetchDataManager::GetOrOpenCacheStorage(
   // This storage key and unique_id has never been opened before.
   mojo::Remote<blink::mojom::CacheStorage> remote;
   network::CrossOriginEmbedderPolicy cross_origin_embedder_policy;
+  network::DocumentIsolationPolicy document_isolation_policy;
 
   storage_partition_->GetCacheStorageControl()->AddReceiver(
-      cross_origin_embedder_policy, mojo::NullRemote(), storage_key,
+      cross_origin_embedder_policy, mojo::NullRemote(),
+      document_isolation_policy,
+      storage::BucketLocator::ForDefaultBucket(storage_key),
       storage::mojom::CacheStorageOwner::kBackgroundFetch,
       remote.BindNewPipeAndPassReceiver());
 

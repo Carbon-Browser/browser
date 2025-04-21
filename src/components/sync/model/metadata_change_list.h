@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <string>
 
 namespace sync_pb {
+class DataTypeState;
 class EntityMetadata;
-class ModelTypeState;
 }  // namespace sync_pb
 
 namespace syncer {
@@ -24,15 +24,15 @@ namespace syncer {
 // same metadata record the last one is supposed to win.
 class MetadataChangeList {
  public:
-  MetadataChangeList() {}
-  virtual ~MetadataChangeList() {}
+  MetadataChangeList() = default;
+  virtual ~MetadataChangeList() = default;
 
-  // Requests ModelTypeState to be updated in the storage.
-  virtual void UpdateModelTypeState(
-      const sync_pb::ModelTypeState& model_type_state) = 0;
+  // Requests DataTypeState to be updated in the storage.
+  virtual void UpdateDataTypeState(
+      const sync_pb::DataTypeState& data_type_state) = 0;
 
-  // Requests ModelTypeState to be cleared from the storage.
-  virtual void ClearModelTypeState() = 0;
+  // Requests DataTypeState to be cleared from the storage.
+  virtual void ClearDataTypeState() = 0;
 
   // Requests metadata entry to be updated in the storage.
   // Please note that the update might contain a deleted entry if

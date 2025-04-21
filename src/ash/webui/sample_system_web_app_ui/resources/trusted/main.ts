@@ -1,19 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {PageCallbackRouter, PageHandlerRemote} from '/ash/webui/sample_system_web_app_ui/mojom/sample_system_web_app_ui.mojom-webui.js';
-
 import {callbackRouter, pageHandler} from './page_handler.js';
+import {PageCallbackRouter, PageHandlerRemote} from './sample_system_web_app_ui.mojom-webui.js';
 
 const first = document.querySelector<HTMLInputElement>('#number1')!;
 const second = document.querySelector<HTMLInputElement>('#number2')!;
 const additional = document.querySelector<HTMLInputElement>('#additional')!;
 
 const result = document.querySelector('#result')!;
-
-// TODO(crbug.com/1002798): Replace this with real type definitions.
-declare const trustedTypes: any;
 
 declare global {
   interface Window {
@@ -23,10 +19,15 @@ declare global {
   }
 }
 
-const workerUrlPolicy = trustedTypes.createPolicy(
-    'worker-js-static',
-    {createScriptURL: () => 'chrome://sample-system-web-app/worker.js'});
-const myWorker = new SharedWorker(workerUrlPolicy.createScriptURL(''));
+const workerUrlPolicy = window.trustedTypes!.createPolicy('worker-js-static', {
+  createScriptURL: (_ignored: string) =>
+      'chrome://sample-system-web-app/worker.js',
+});
+
+// Currently TypeScript doesn't support trusted types so cast TrustedScriptURL
+// to URL. See https://github.com/microsoft/TypeScript/issues/30024.
+const myWorker = new SharedWorker(
+    workerUrlPolicy.createScriptURL('') as unknown as URL, {type: 'module'});
 
 first.onchange = () => {
   myWorker.port.postMessage([first.value, second.value]);
@@ -40,7 +41,6 @@ myWorker.port.onmessage = (event: any) => {
   result.textContent = event.data[0];
   additional.value = event.data[1];
 };
-
 
 // Exposes the pageHandler to the user as a window's global variable for
 // testing.

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,13 +12,13 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/views/controls/combobox/combobox.h"
+#include "ui/views/controls/editable_combobox/editable_combobox.h"
 #include "ui/views/examples/examples_window.h"
 #include "ui/views/examples/grit/views_examples_resources.h"
 #include "ui/views/layout/box_layout_view.h"
 #include "ui/views/layout/fill_layout.h"
 
-namespace views {
-namespace examples {
+namespace views::examples {
 
 namespace {
 
@@ -71,18 +71,28 @@ void ComboboxExample::CreateExampleView(View* container) {
                   .SetAccessibleName(
                       l10n_util::GetStringUTF16(IDS_COMBOBOX_NAME_2))
                   .SetCallback(base::BindRepeating(
-                      &ComboboxExample::ValueChanged, base::Unretained(this))))
+                      &ComboboxExample::ValueChanged, base::Unretained(this))),
+              Builder<EditableCombobox>()
+                  .CopyAddressTo(&editable_combobox_)
+                  .SetModel(std::make_unique<ComboboxModelExample>())
+                  .SetEnabled(true)
+                  .SetAccessibleName(
+                      l10n_util::GetStringUTF16(IDS_COMBOBOX_NAME_2))
+                  .SetCallback(base::BindRepeating(
+                      &ComboboxExample::EditableValueChanged,
+                      base::Unretained(this))))
           .Build();
 
   container->AddChildView(std::move(view));
 }
 
 void ComboboxExample::ValueChanged() {
-  PrintStatus("Selected: %s",
-              base::UTF16ToUTF8(combobox_->GetModel()->GetItemAt(
-                                    combobox_->GetSelectedIndex().value()))
-                  .c_str());
+  PrintStatus("Selected: " + base::UTF16ToUTF8(combobox_->GetModel()->GetItemAt(
+                                 combobox_->GetSelectedIndex().value())));
 }
 
-}  // namespace examples
-}  // namespace views
+void ComboboxExample::EditableValueChanged() {
+  PrintStatus("Changed: " + base::UTF16ToUTF8(editable_combobox_->GetText()));
+}
+
+}  // namespace views::examples

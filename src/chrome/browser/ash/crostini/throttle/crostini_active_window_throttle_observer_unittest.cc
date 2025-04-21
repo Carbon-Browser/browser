@@ -1,13 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/crostini/throttle/crostini_active_window_throttle_observer.h"
 
-#include "ash/constants/app_types.h"
 #include "ash/public/cpp/window_properties.h"
 #include "base/test/task_environment.h"
-#include "chrome/browser/ash/crostini/crostini_terminal.h"
+#include "chrome/browser/ash/guest_os/guest_os_terminal.h"
+#include "chromeos/ui/base/app_types.h"
+#include "chromeos/ui/base/window_properties.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/test/test_window_delegate.h"
@@ -49,16 +50,15 @@ TEST_F(CrostiniActiveWindowThrottleObserverTest, TestOnWindowActivated) {
   std::unique_ptr<aura::Window> chrome_app_window(
       aura::test::CreateTestWindowWithDelegate(&dummy_delegate, 4, gfx::Rect(),
                                                nullptr));
-  crostini_window->SetProperty(aura::client::kAppType,
-                               static_cast<int>(ash::AppType::CROSTINI_APP));
-  chrome_window->SetProperty(aura::client::kAppType,
-                             static_cast<int>(ash::AppType::BROWSER));
-  terminal_window->SetProperty(aura::client::kAppType,
-                               static_cast<int>(ash::AppType::CHROME_APP));
+  crostini_window->SetProperty(chromeos::kAppTypeKey,
+                               chromeos::AppType::CROSTINI_APP);
+  chrome_window->SetProperty(chromeos::kAppTypeKey, chromeos::AppType::BROWSER);
+  terminal_window->SetProperty(chromeos::kAppTypeKey,
+                               chromeos::AppType::CHROME_APP);
   terminal_window->SetProperty<std::string>(ash::kAppIDKey,
-                                            crostini::kTerminalSystemAppId);
-  chrome_app_window->SetProperty(aura::client::kAppType,
-                                 static_cast<int>(ash::AppType::CHROME_APP));
+                                            guest_os::kTerminalSystemAppId);
+  chrome_app_window->SetProperty(chromeos::kAppTypeKey,
+                                 chromeos::AppType::CHROME_APP);
   chrome_app_window->SetProperty<std::string>(ash::kAppIDKey,
                                               "this_is_another_chrome_app");
 

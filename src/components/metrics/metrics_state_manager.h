@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,22 +7,19 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 
-#include "base/callback.h"
+#include "base/callback_list.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/field_trial.h"
-#include "build/chromeos_buildflags.h"
 #include "components/metrics/clean_exit_beacon.h"
 #include "components/metrics/client_info.h"
 #include "components/metrics/cloned_install_detector.h"
 #include "components/metrics/entropy_state.h"
-#include "components/version_info/channel.h"
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "components/metrics/structured/neutrino_logging.h"  // nogncheck
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#include "components/variations/entropy_provider.h"
 
 class PrefService;
 class PrefRegistrySimple;
@@ -47,10 +44,22 @@ enum class StartupVisibility {
   kMaxValue = kForeground,
 };
 
-// Denotes the type of EntropyProvider to use for one-time randomization.
+// Denotes the type of EntropyProvider to use for default one-time
+// randomization.
 enum class EntropyProviderType {
-  kDefault = 0,  // Use CreateDefaultEntropyProvider().
-  kLow = 1,      // Use CreateLowEntropyProvider().
+  kDefault = 0,  // Enable high entropy randomization if possible.
+  kLow = 1,      // Always use low entropy randomization.
+};
+
+// Options to apply to trial randomization.
+struct EntropyParams {
+  // The type of entropy to use for default one-time randomization.
+  EntropyProviderType default_entropy_provider_type =
+      EntropyProviderType::kDefault;
+  // Force trial randomization into benchmarking mode, which disables
+  // randomization. Users may also be put in this mode if the
+  // --enable_benchmarking command line flag is passed.
+  bool force_benchmarking_mode = false;
 };
 
 // Responsible for managing MetricsService state prefs, specifically the UMA
@@ -96,8 +105,10 @@ class MetricsStateManager final {
   // not opted in to metrics reporting.
   const std::string& client_id() const { return client_id_; }
 
-  // Returns the low entropy source for this client.
+  // Returns the low entropy sources for this client.
   int GetLowEntropySource();
+  int GetOldLowEntropySource();
+  int GetPseudoLowEntropySource();
 
   // The CleanExitBeacon, used to determine whether the previous Chrome browser
   // session terminated gracefully.
@@ -120,17 +131,10 @@ class MetricsStateManager final {
     return startup_visibility_ == StartupVisibility::kForeground;
   }
 
-  // Instantiates the FieldTrialList. Uses |enable_gpu_benchmarking_switch| to
-  // set up the FieldTrialList for benchmarking runs. Uses
-  // |entropy_provider_type| to determine the type of EntropyProvider to use for
-  // one-time randomization. See CreateLowEntropyProvider() and
-  // CreateDefaultEntropyProvider() for more details.
+  // Instantiates the FieldTrialList.
   //
   // Side effect: Initializes |clean_exit_beacon_|.
-  void InstantiateFieldTrialList(
-      const char* enable_gpu_benchmarking_switch = nullptr,
-      EntropyProviderType entropy_provider_type =
-          EntropyProviderType::kDefault);
+  void InstantiateFieldTrialList();
 
   // Signals whether the session has shutdown cleanly. Passing `false` for
   // |has_session_shutdown_cleanly| means that Chrome has launched and has not
@@ -155,10 +159,6 @@ class MetricsStateManager final {
   // before recording.
   void ForceClientIdCreation();
 
-  // Sets the external client id. Useful for callers that want explicit control
-  // of the next metrics client id.
-  void SetExternalClientId(const std::string& id);
-
   // Checks if this install was cloned or imaged from another machine. If a
   // clone is detected, resets the client id and low entropy source. This
   // should not be called more than once.
@@ -167,22 +167,29 @@ class MetricsStateManager final {
   // Checks if the cloned install detector says that client ids should be reset.
   bool ShouldResetClientIdsOnClonedInstall();
 
-  // Returns the preferred entropy provider used to seed persistent activities
-  // based on whether or not metrics reporting is permitted on this client.
+  // Wrapper around ClonedInstallDetector::AddOnClonedInstallDetectedCallback().
+  base::CallbackListSubscription AddOnClonedInstallDetectedCallback(
+      base::OnceClosure callback);
+
+  // Creates entropy providers for trial randomization.
   //
-  // If there's consent to report metrics or this is the first run of Chrome,
+  // If this StateManager supports high entropy randomization, and there is
+  // either consent to report metrics or this is the first run of Chrome,
   // this method returns an entropy provider that has a high source of entropy,
   // partially based on the client ID or provisional client ID. Otherwise, it
-  // returns an entropy provider that is based on a low entropy source.
-  std::unique_ptr<const base::FieldTrial::EntropyProvider>
-  CreateDefaultEntropyProvider();
+  // only returns an entropy provider that is based on a low entropy source.
+  //
+  // When |enable_limited_entropy_mode| is true, a limited entropy
+  // randomization source value will be generated for this client. This
+  // parameter can only be false before the limited entropy synthetic trial
+  // completes (See limited_entropy_synthetic_trial.h), after which it should be
+  // removed (TODO(crbug.com/40948861)).
+  std::unique_ptr<const variations::EntropyProviders> CreateEntropyProviders(
+      bool enable_limited_entropy_mode);
 
-  // Returns an entropy provider that is based on a low entropy source. This
-  // provider is the same type of provider returned by
-  // CreateDefaultEntropyProvider() when there's no consent to report metrics,
-  // but will be a new instance.
-  std::unique_ptr<const base::FieldTrial::EntropyProvider>
-  CreateLowEntropyProvider();
+  ClonedInstallDetector* cloned_install_detector_for_testing() {
+    return &cloned_install_detector_;
+  }
 
   // Creates the MetricsStateManager, enforcing that only a single instance
   // of the class exists at a time. Returns nullptr if an instance exists
@@ -196,20 +203,15 @@ class MetricsStateManager final {
   //
   // |startup_visibility| denotes whether this session is expected to come to
   // the foreground.
-  //
-  // TODO(crbug/1241702): Remove |channel| at the end of the Extended Variations
-  // Safe Mode experiment. |channel| is used to enable the experiment on only
-  // certain channels.
   static std::unique_ptr<MetricsStateManager> Create(
       PrefService* local_state,
       EnabledStateProvider* enabled_state_provider,
       const std::wstring& backup_registry_key,
       const base::FilePath& user_data_dir,
       StartupVisibility startup_visibility = StartupVisibility::kUnknown,
-      version_info::Channel channel = version_info::Channel::UNKNOWN,
+      EntropyParams entropy_params = {},
       StoreClientInfoCallback store_client_info = StoreClientInfoCallback(),
-      LoadClientInfoCallback load_client_info = LoadClientInfoCallback(),
-      base::StringPiece external_client_id = base::StringPiece());
+      LoadClientInfoCallback load_client_info = LoadClientInfoCallback());
 
   // Registers local state prefs used by this class.
   static void RegisterPrefs(PrefRegistrySimple* registry);
@@ -259,11 +261,9 @@ class MetricsStateManager final {
     // Recorded when we are somehow missing the client ID in Local State, cache
     // and backup, so we promote the provisional client ID.
     kClientIdFromProvisionalId = 4,
-    // Recorded when the client ID is passed in from external source.
-    // This is needed for Lacros since the client id is passed in from
-    // ash chrome.
-    kClientIdFromExternal = 5,
-    kMaxValue = kClientIdFromExternal,
+    // Not recorded anymore.
+    kClientIdFromExternalDeprecated = 5,
+    kMaxValue = kClientIdFromExternalDeprecated,
   };
 
   // Creates the MetricsStateManager with the given |local_state|. Uses
@@ -276,11 +276,10 @@ class MetricsStateManager final {
                       EnabledStateProvider* enabled_state_provider,
                       const std::wstring& backup_registry_key,
                       const base::FilePath& user_data_dir,
+                      EntropyParams entropy_params,
                       StartupVisibility startup_visibility,
-                      version_info::Channel channel,
                       StoreClientInfoCallback store_client_info,
-                      LoadClientInfoCallback load_client_info,
-                      base::StringPiece external_client_id);
+                      LoadClientInfoCallback load_client_info);
 
   // Returns a MetricsStateManagerProvider instance and sets its
   // |log_normal_metric_state_.gen| with the provided random seed.
@@ -293,14 +292,16 @@ class MetricsStateManager final {
   // Loads the client info via |load_client_info_|.
   std::unique_ptr<ClientInfo> LoadClientInfo();
 
+  // Gets the limited entropy randomization source. For clients that only use
+  // the low entropy source (e.g. Android Webview), this will return the empty
+  // string.
+  std::string_view GetLimitedEntropyRandomizationSource();
+
   // Returns the high entropy source for this client, which is composed of a
   // client ID and the low entropy source. This is intended to be unique for
   // each install. UMA must be enabled (and |client_id_| must be set) or
   // |kMetricsProvisionalClientID| must be set before calling this.
   std::string GetHighEntropySource();
-
-  // Returns the old low entropy source for this client.
-  int GetOldLowEntropySource();
 
   // Updates |entropy_source_returned_| with |type| iff the current value is
   // ENTROPY_SOURCE_NONE and logs the new value in a histogram.
@@ -323,12 +324,6 @@ class MetricsStateManager final {
 
   bool ShouldGenerateProvisionalClientId(bool is_first_run);
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  // Log to structured metrics when the client id is changed.
-  void LogClientIdChanged(metrics::structured::NeutrinoDevicesLocation location,
-                          std::string previous_client_id);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-
   // Whether an instance of this class exists. Used to enforce that there aren't
   // multiple instances of this class at a given time.
   static bool instance_exists_;
@@ -339,6 +334,9 @@ class MetricsStateManager final {
   // Weak pointer to an enabled state provider. Used to know whether the user
   // has consented to reporting, and if reporting should be done.
   raw_ptr<EnabledStateProvider> enabled_state_provider_;
+
+  // Specified options for controlling trial randomization.
+  const EntropyParams entropy_params_;
 
   // A callback run during client id creation so this MetricsStateManager can
   // store a backup of the newly generated ID.
@@ -360,11 +358,6 @@ class MetricsStateManager final {
   // should left blank iff a client id was not used to do field trial
   // randomization.
   std::string initial_client_id_;
-
-  // If not empty, use an external client id passed in from another browser as
-  // |client_id_|. This is needed for the Lacros browser where client id needs
-  // be passed in from ash chrome.
-  std::string external_client_id_;
 
   // An instance of EntropyState for getting the entropy source values.
   EntropyState entropy_state_;

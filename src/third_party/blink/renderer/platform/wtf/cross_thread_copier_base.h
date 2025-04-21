@@ -32,15 +32,16 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_WTF_CROSS_THREAD_COPIER_BASE_H_
 
 #include "base/files/file.h"
+#include "base/files/file_error_or.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_copier.h"
 
 namespace base {
+template <typename T, typename Deleter>
+class HeapArray;
 template <typename, typename>
 class RefCountedThreadSafe;
-template <typename>
-class FileErrorOr;
 class TimeDelta;
 class TimeTicks;
 class Time;
@@ -100,6 +101,19 @@ template <typename T>
 struct CrossThreadCopier<base::WeakPtr<T>>
     : public CrossThreadCopierPassThrough<base::WeakPtr<T>> {
   STATIC_ONLY(CrossThreadCopier);
+};
+
+template <typename T,
+          typename Deleter,
+          wtf_size_t inlineCapacity,
+          typename Allocator>
+struct CrossThreadCopier<
+    Vector<base::HeapArray<T, Deleter>, inlineCapacity, Allocator>> {
+  STATIC_ONLY(CrossThreadCopier);
+  using Type = Vector<base::HeapArray<T, Deleter>, inlineCapacity, Allocator>;
+  static Type Copy(Type pointer) {
+    return pointer;  // This is in fact a move.
+  }
 };
 
 }  // namespace WTF

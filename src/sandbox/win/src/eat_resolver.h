@@ -1,4 +1,4 @@
-// Copyright (c) 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,7 +43,7 @@ class EatResolverThunk : public ResolverThunk {
 
  private:
   // The entry to patch.
-  // The field is accessed too early during the process startup to support
+  // RAW_PTR_EXCLUSION: Accessed too early during the process startup to support
   // raw_ptr<T>.
   RAW_PTR_EXCLUSION DWORD* eat_entry_;
 };

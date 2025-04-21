@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 #define COMPONENTS_SIGNIN_INTERNAL_IDENTITY_MANAGER_ACCOUNTS_MUTATOR_IMPL_H_
 
 #include <string>
+#include <vector>
 
 #include "base/memory/raw_ptr.h"
-#include "build/chromeos_buildflags.h"
 #include "components/signin/public/base/signin_buildflags.h"
 #include "components/signin/public/identity_manager/accounts_mutator.h"
 
@@ -39,11 +39,17 @@ class AccountsMutatorImpl : public AccountsMutator {
 
   // AccountsMutator:
   CoreAccountId AddOrUpdateAccount(
-      const std::string& gaia_id,
+      const GaiaId& gaia_id,
       const std::string& email,
       const std::string& refresh_token,
       bool is_under_advanced_protection,
-      signin_metrics::SourceForRefreshTokenOperation source) override;
+      signin_metrics::AccessPoint access_point,
+      signin_metrics::SourceForRefreshTokenOperation source
+#if BUILDFLAG(ENABLE_BOUND_SESSION_CREDENTIALS)
+      ,
+      const std::vector<uint8_t>& wrapped_binding_key = std::vector<uint8_t>()
+#endif  // BUILDFLAG(ENABLE_BOUND_SESSION_CREDENTIALS)
+          ) override;
   void UpdateAccountInfo(const CoreAccountId& account_id,
                          Tribool is_child_account,
                          Tribool is_under_advanced_protection) override;
@@ -60,8 +66,8 @@ class AccountsMutatorImpl : public AccountsMutator {
                    const CoreAccountId& account_id) override;
 #endif
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  CoreAccountId SeedAccountInfo(const std::string& gaia,
+#if BUILDFLAG(IS_CHROMEOS)
+  CoreAccountId SeedAccountInfo(const GaiaId& gaia,
                                 const std::string& email) override;
 #endif
 

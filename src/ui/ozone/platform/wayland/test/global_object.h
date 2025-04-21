@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,9 +40,11 @@ class GlobalObject {
   // Called from Bind() to send additional information to clients.
   virtual void OnBind() {}
 
+  const wl_global* global() const { return global_.get(); }
+
   // The first resource bound to this global, which is usually all that is
   // useful when testing a simple client.
-  wl_resource* resource() const { return resource_; }
+  wl_resource* resource() { return resource_; }
 
   // Sends the global event to clients.
   static void Bind(wl_client* client,

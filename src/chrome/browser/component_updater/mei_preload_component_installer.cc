@@ -1,6 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/component_updater/mei_preload_component_installer.h"
 
@@ -9,14 +14,15 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/path_service.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
+#include "base/values.h"
 #include "base/version.h"
 #include "chrome/browser/media/media_engagement_preloaded_list.h"
 #include "components/component_updater/component_updater_paths.h"
@@ -66,7 +72,7 @@ bool MediaEngagementPreloadComponentInstallerPolicy::RequiresNetworkEncryption()
 
 update_client::CrxInstaller::Result
 MediaEngagementPreloadComponentInstallerPolicy::OnCustomInstall(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) {
   return update_client::CrxInstaller::Result(0);  // Nothing custom here.
 }
@@ -81,7 +87,7 @@ base::FilePath MediaEngagementPreloadComponentInstallerPolicy::GetInstalledPath(
 void MediaEngagementPreloadComponentInstallerPolicy::ComponentReady(
     const base::Version& version,
     const base::FilePath& install_dir,
-    base::Value manifest) {
+    base::Value::Dict manifest) {
   constexpr base::TaskTraits kTaskTraits = {
       base::MayBlock(), base::TaskPriority::BEST_EFFORT,
       base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN};
@@ -98,7 +104,7 @@ void MediaEngagementPreloadComponentInstallerPolicy::ComponentReady(
 
 // Called during startup and installation before ComponentReady().
 bool MediaEngagementPreloadComponentInstallerPolicy::VerifyInstallation(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) const {
   // No need to actually validate the proto here, since we'll do the checking
   // in LoadFromFile().
@@ -128,8 +134,9 @@ MediaEngagementPreloadComponentInstallerPolicy::GetInstallerAttributes() const {
 
 void RegisterMediaEngagementPreloadComponent(ComponentUpdateService* cus,
                                              base::OnceClosure on_load) {
-  if (!base::FeatureList::IsEnabled(media::kPreloadMediaEngagementData))
+  if (!base::FeatureList::IsEnabled(media::kPreloadMediaEngagementData)) {
     return;
+  }
 
   auto installer = base::MakeRefCounted<ComponentInstaller>(
       std::make_unique<MediaEngagementPreloadComponentInstallerPolicy>(

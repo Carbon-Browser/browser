@@ -1,26 +1,32 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/media/webrtc/webrtc_rtp_dump_handler.h"
 
 #include <stddef.h>
 #include <stdint.h>
 
+#include <array>
 #include <memory>
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/run_loop.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/media/webrtc/webrtc_rtp_dump_writer.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -58,7 +64,7 @@ class FakeDumpWriter : public WebRtcRtpDumpWriter {
     else if (type == RTP_DUMP_OUTGOING)
       incoming_success = false;
 
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(finished_callback),
                                   incoming_success, outgoing_success));
   }
@@ -98,8 +104,10 @@ class WebRtcRtpDumpHandlerTest : public testing::Test {
     *incoming_dump = dir.AppendASCII("recv");
     *outgoing_dump = dir.AppendASCII("send");
     const char dummy[] = "dummy";
-    EXPECT_GT(base::WriteFile(*incoming_dump, dummy, std::size(dummy)), 0);
-    EXPECT_GT(base::WriteFile(*outgoing_dump, dummy, std::size(dummy)), 0);
+    EXPECT_TRUE(base::WriteFile(*incoming_dump,
+                                std::string_view(dummy, std::size(dummy))));
+    EXPECT_TRUE(base::WriteFile(*outgoing_dump,
+                                std::string_view(dummy, std::size(dummy))));
   }
 
   void FlushTaskRunners() {
@@ -120,7 +128,7 @@ class WebRtcRtpDumpHandlerTest : public testing::Test {
 TEST_F(WebRtcRtpDumpHandlerTest, StateTransition) {
   std::string error;
 
-  RtpDumpType types[3];
+  std::array<RtpDumpType, 3> types;
   types[0] = RTP_DUMP_INCOMING;
   types[1] = RTP_DUMP_OUTGOING;
   types[2] = RTP_DUMP_BOTH;
@@ -213,7 +221,7 @@ TEST_F(WebRtcRtpDumpHandlerTest, CannotStartMoreThanFiveDumps) {
 
   handler_.reset();
 
-  std::unique_ptr<WebRtcRtpDumpHandler> handlers[6];
+  std::array<std::unique_ptr<WebRtcRtpDumpHandler>, 6> handlers;
 
   for (size_t i = 0; i < std::size(handlers); ++i) {
     handlers[i] = std::make_unique<WebRtcRtpDumpHandler>(base::FilePath());

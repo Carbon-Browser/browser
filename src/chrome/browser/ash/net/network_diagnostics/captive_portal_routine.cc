@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "chromeos/services/network_config/in_process_instance.h"
+#include "base/functional/bind.h"
+#include "chromeos/ash/services/network_config/in_process_instance.h"
 #include "chromeos/services/network_config/public/cpp/cros_network_config_util.h"
 
 namespace ash {
@@ -15,9 +15,9 @@ namespace network_diagnostics {
 
 namespace {
 
-// TODO(https://crbug.com/1164001): remove when migrated to namespace ash.
 namespace mojom = ::chromeos::network_diagnostics::mojom;
 namespace network_config = ::chromeos::network_config;
+using ::ash::network_config::BindToInProcessInstance;
 
 mojom::CaptivePortalProblem GetProblemFromPortalState(
     network_config::mojom::PortalState portal_state) {
@@ -31,19 +31,19 @@ mojom::CaptivePortalProblem GetProblemFromPortalState(
       return mojom::CaptivePortalProblem::kPortalSuspected;
     case network_config::mojom::PortalState::kPortal:
       return mojom::CaptivePortalProblem::kPortal;
-    case network_config::mojom::PortalState::kProxyAuthRequired:
-      return mojom::CaptivePortalProblem::kProxyAuthRequired;
+    case network_config::mojom::PortalState::kDeprecatedProxyAuthRequired:
+      NOTREACHED();
     case network_config::mojom::PortalState::kNoInternet:
       return mojom::CaptivePortalProblem::kNoInternet;
   }
   NOTREACHED();
-  return mojom::CaptivePortalProblem::kUnknownPortalState;
 }
 
 }  // namespace
 
-CaptivePortalRoutine::CaptivePortalRoutine() {
-  network_config::BindToInProcessInstance(
+CaptivePortalRoutine::CaptivePortalRoutine(mojom::RoutineCallSource source)
+    : NetworkDiagnosticsRoutine(source) {
+  BindToInProcessInstance(
       remote_cros_network_config_.BindNewPipeAndPassReceiver());
 }
 

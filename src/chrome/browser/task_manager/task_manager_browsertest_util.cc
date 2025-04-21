@@ -1,14 +1,16 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/task_manager/task_manager_browsertest_util.h"
 
+#include <iomanip>
 #include <string>
+#include <string_view>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/strings/pattern.h"
@@ -16,7 +18,6 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/test_timeouts.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/task_manager/task_manager_tester.h"
@@ -79,8 +80,8 @@ class ResourceChangeObserver {
     if (!IsSatisfied())
       return;
 
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  run_loop_.QuitClosure());
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, run_loop_.QuitClosure());
   }
 
   bool IsSatisfied() { return CountMatches() == required_count_; }
@@ -129,8 +130,8 @@ class ResourceChangeObserver {
   }
 
   void OnTimeout() {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  run_loop_.QuitClosure());
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, run_loop_.QuitClosure());
     FAIL() << "Timed out.\n" << DumpTaskManagerModel();
   }
 
@@ -187,7 +188,7 @@ void WaitForTaskManagerStatToExceed(const std::u16string& title_pattern,
   observer.RunUntilSatisfied();
 }
 
-std::u16string MatchTab(base::StringPiece title) {
+std::u16string MatchTab(std::string_view title) {
   return l10n_util::GetStringFUTF16(IDS_TASK_MANAGER_TAB_PREFIX,
                                     base::UTF8ToUTF16(title));
 }
@@ -200,7 +201,7 @@ std::u16string MatchAboutBlankTab() {
   return MatchTab("about:blank");
 }
 
-std::u16string MatchIncognitoTab(base::StringPiece title) {
+std::u16string MatchIncognitoTab(std::string_view title) {
   return l10n_util::GetStringFUTF16(IDS_TASK_MANAGER_TAB_INCOGNITO_PREFIX,
                                     base::UTF8ToUTF16(title));
 }
@@ -271,7 +272,7 @@ std::u16string MatchAnyUtility() {
   return MatchUtility(u"*");
 }
 
-std::u16string MatchBFCache(base::StringPiece title) {
+std::u16string MatchBFCache(std::string_view title) {
   return l10n_util::GetStringFUTF16(IDS_TASK_MANAGER_BACK_FORWARD_CACHE_PREFIX,
                                     base::UTF8ToUTF16(title));
 }
@@ -280,7 +281,7 @@ std::u16string MatchAnyBFCache() {
   return MatchBFCache("*");
 }
 
-std::u16string MatchPrerender(base::StringPiece title) {
+std::u16string MatchPrerender(std::string_view title) {
   return l10n_util::GetStringFUTF16(IDS_TASK_MANAGER_PRERENDER_PREFIX,
                                     base::UTF8ToUTF16(title));
 }
@@ -289,7 +290,7 @@ std::u16string MatchAnyPrerender() {
   return MatchPrerender("*");
 }
 
-std::u16string MatchFencedFrame(base::StringPiece title) {
+std::u16string MatchFencedFrame(std::string_view title) {
   return l10n_util::GetStringFUTF16(IDS_TASK_MANAGER_FENCED_FRAME_PREFIX,
                                     base::UTF8ToUTF16(title));
 }
@@ -298,7 +299,7 @@ std::u16string MatchAnyFencedFrame() {
   return MatchFencedFrame("*");
 }
 
-std::u16string MatchIncognitoFencedFrame(base::StringPiece title) {
+std::u16string MatchIncognitoFencedFrame(std::string_view title) {
   return l10n_util::GetStringFUTF16(
       IDS_TASK_MANAGER_FENCED_FRAME_INCOGNITO_PREFIX, base::UTF8ToUTF16(title));
 }

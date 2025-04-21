@@ -1,9 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef BASE_MEMORY_DISCARDABLE_MEMORY_INTERNAL_H_
 #define BASE_MEMORY_DISCARDABLE_MEMORY_INTERNAL_H_
+
+#include <array>
 
 #include "base/base_export.h"
 #include "base/feature_list.h"
@@ -28,13 +30,24 @@ enum DiscardableMemoryTrialGroup : int {
 
 namespace features {
 // Feature flag enabling the discardable memory backing trial.
-BASE_EXPORT extern const base::Feature kDiscardableMemoryBackingTrial;
+BASE_EXPORT BASE_DECLARE_FEATURE(kDiscardableMemoryBackingTrial);
 
-BASE_EXPORT extern const base::FeatureParam<DiscardableMemoryTrialGroup>::Option
-    kDiscardableMemoryBackingParamOptions[];
+// Association of trial group names to trial group enum. Array order must match
+// order of DiscardableMemoryTrialGroup enum.
+constexpr inline auto kDiscardableMemoryBackingParamOptions =
+    std::to_array<base::FeatureParam<DiscardableMemoryTrialGroup>::Option>({
+        {DiscardableMemoryTrialGroup::kEmulatedSharedMemory, "shmem"},
+        {DiscardableMemoryTrialGroup::kMadvFree, "madvfree"},
+        {DiscardableMemoryTrialGroup::kAshmem, "ashmem"},
+    });
 
-BASE_EXPORT extern const base::FeatureParam<DiscardableMemoryTrialGroup>
-    kDiscardableMemoryBackingParam;
+constexpr inline base::FeatureParam<DiscardableMemoryTrialGroup>
+    kDiscardableMemoryBackingParam(
+        &kDiscardableMemoryBackingTrial,
+        "DiscardableMemoryBacking",
+        DiscardableMemoryTrialGroup::kEmulatedSharedMemory,
+        kDiscardableMemoryBackingParamOptions);
+
 }  // namespace features
 
 // Whether we should do the discardable memory backing trial for this session.
@@ -50,4 +63,4 @@ GetDiscardableMemoryBackingFieldTrialGroup();
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) ||
         // BUILDFLAG(IS_ANDROID)
 
-#endif  //  BASE_MEMORY_DISCARDABLE_MEMORY_INTERNAL_H_
+#endif  // BASE_MEMORY_DISCARDABLE_MEMORY_INTERNAL_H_

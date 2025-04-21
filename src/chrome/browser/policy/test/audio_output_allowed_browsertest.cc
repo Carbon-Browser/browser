@@ -1,10 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ash/components/audio/cras_audio_handler.h"
 #include "base/values.h"
 #include "chrome/browser/policy/policy_test_utils.h"
+#include "chromeos/ash/components/audio/cras_audio_handler.h"
 #include "components/policy/core/common/policy_map.h"
 #include "components/policy/core/common/policy_types.h"
 #include "components/policy/policy_constants.h"
@@ -17,7 +17,7 @@ namespace {
 class TestAudioObserver : public ash::CrasAudioHandler::AudioObserver {
  public:
   TestAudioObserver() : output_mute_changed_count_(0) {}
-  ~TestAudioObserver() override {}
+  ~TestAudioObserver() override = default;
 
   TestAudioObserver(const TestAudioObserver&) = delete;
   TestAudioObserver& operator=(const TestAudioObserver&) = delete;

@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 namespace sharing {
 
-// TODO(crbug.com/1044522): reuse code from blink instead.
+// TODO(crbug.com/40115622): reuse code from blink instead.
 class P2PPortAllocator : public cricket::BasicPortAllocator {
  public:
   struct Config {

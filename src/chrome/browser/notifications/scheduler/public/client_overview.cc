@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,13 @@ ClientOverview::ClientOverview(ImpressionDetail impression_detail,
       num_scheduled_notifications(num_scheduled_notifications) {}
 
 ClientOverview::ClientOverview(const ClientOverview& other) = default;
+
+ClientOverview::ClientOverview(ClientOverview&& other) = default;
+
+ClientOverview& ClientOverview::operator=(const ClientOverview& other) =
+    default;
+
+ClientOverview& ClientOverview::operator=(ClientOverview&& other) = default;
 
 ClientOverview::~ClientOverview() = default;
 

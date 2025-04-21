@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -64,7 +64,7 @@ USBAlternateInterface* USBInterface::alternate() const {
   // and how UsbInterfaceInfo is constructed by BuildUsbInterfaceInfoPtr() and
   // AggregateInterfacesForConfig() in services/device/usb/usb_descriptors.cc.
   DCHECK_LT(index, alternates_.size());
-  return alternates_[index];
+  return alternates_[index].Get();
 }
 
 HeapVector<Member<USBAlternateInterface>> USBInterface::alternates() const {

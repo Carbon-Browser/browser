@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,25 +9,19 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "cc/cc_export.h"
 #include "cc/metrics/frame_sequence_metrics.h"
 
-namespace gfx {
-struct PresentationFeedback;
-}
-
 namespace viz {
-struct BeginFrameAck;
 struct BeginFrameArgs;
 }  // namespace viz
 
 namespace cc {
 class FrameSequenceTracker;
 class CompositorFrameReportingController;
-class ThroughputUkmReporter;
 class UkmManager;
 
 // Map of kCustom tracker results keyed by a sequence id.
@@ -82,26 +76,9 @@ class CC_EXPORT FrameSequenceTrackerCollection {
 
   // Notifies all trackers of various events.
   void NotifyBeginImplFrame(const viz::BeginFrameArgs& args);
-  void NotifyBeginMainFrame(const viz::BeginFrameArgs& args);
-  void NotifyMainFrameProcessed(const viz::BeginFrameArgs& args);
-  void NotifyImplFrameCausedNoDamage(const viz::BeginFrameAck& ack);
-  void NotifyMainFrameCausedNoDamage(const viz::BeginFrameArgs& args,
-                                     bool aborted);
   void NotifyPauseFrameProduction();
-  void NotifySubmitFrame(uint32_t frame_token,
-                         bool has_missing_content,
-                         const viz::BeginFrameAck& ack,
-                         const viz::BeginFrameArgs& origin_args);
   void NotifyFrameEnd(const viz::BeginFrameArgs& args,
                       const viz::BeginFrameArgs& main_args);
-
-  // Note that this notifies the trackers of the presentation-feedbacks, and
-  // destroys any tracker that had been scheduled for destruction (using
-  // |ScheduleRemoval()|) if it has no more pending frames. Data from non
-  // kCustom typed trackers are reported to UMA. Data from kCustom typed
-  // trackers are added to |custom_tracker_results_| for caller to pick up.
-  void NotifyFramePresented(uint32_t frame_token,
-                            const gfx::PresentationFeedback& feedback);
 
   // Return the type of each active frame tracker, encoded into a 16 bit
   // integer with the bit at each position corresponding to the enum value of
@@ -145,14 +122,6 @@ class CC_EXPORT FrameSequenceTrackerCollection {
       const FrameSequenceMetrics::CustomReportData& data);
 
   const bool is_single_threaded_;
-  // The reporter takes throughput data and connect to UkmManager to report it.
-  // Note: this has to be before the frame_trackers_. The reason is that a
-  // FrameSequenceTracker owners a FrameSequenceMetrics, so the destructor of
-  // the former calls the destructor of the later. FrameSequenceMetrics's
-  // destructor calls its ReportMetrics() which requires
-  // |throughput_ukm_reporter_| to be alive. So putting it before
-  // |frame_trackers_| to ensure that it is destroyed after the tracker.
-  std::unique_ptr<ThroughputUkmReporter> throughput_ukm_reporter_;
 
   // The callsite can use the type to manipulate the tracker.
   base::flat_map<
@@ -169,7 +138,7 @@ class CC_EXPORT FrameSequenceTrackerCollection {
   NotifyCustomerTrackerResutlsCallback custom_tracker_results_added_callback_;
 
   std::vector<std::unique_ptr<FrameSequenceTracker>> removal_trackers_;
-  const raw_ptr<CompositorFrameReportingController, DanglingUntriaged>
+  const raw_ptr<CompositorFrameReportingController>
       compositor_frame_reporting_controller_;
 
   base::flat_map<
@@ -180,6 +149,7 @@ class CC_EXPORT FrameSequenceTrackerCollection {
   // Tracks how many smoothness effects are driven by each thread.
   size_t main_thread_driving_smoothness_ = 0;
   size_t compositor_thread_driving_smoothness_ = 0;
+  size_t raster_thread_driving_smoothness_ = 0;
 };
 
 }  // namespace cc

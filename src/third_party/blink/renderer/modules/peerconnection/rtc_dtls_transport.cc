@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,10 @@
 
 #include <memory>
 
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/web/web_local_frame.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_rtc_dtls_transport_state.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
 #include "third_party/blink/renderer/core/frame/deprecation/deprecation.h"
@@ -26,22 +28,24 @@
 namespace blink {
 
 namespace {
-String TransportStateToString(webrtc::DtlsTransportState state) {
+V8RTCDtlsTransportState::Enum TransportStateToEnum(
+    webrtc::DtlsTransportState state) {
   switch (state) {
     case webrtc::DtlsTransportState::kNew:
-      return String("new");
+      return V8RTCDtlsTransportState::Enum::kNew;
     case webrtc::DtlsTransportState::kConnecting:
-      return String("connecting");
+      return V8RTCDtlsTransportState::Enum::kConnecting;
     case webrtc::DtlsTransportState::kConnected:
-      return String("connected");
+      return V8RTCDtlsTransportState::Enum::kConnected;
     case webrtc::DtlsTransportState::kClosed:
-      return String("closed");
+      return V8RTCDtlsTransportState::Enum::kClosed;
     case webrtc::DtlsTransportState::kFailed:
-      return String("failed");
-    default:
-      NOTREACHED();
-      return String("failed");
+      return V8RTCDtlsTransportState::Enum::kFailed;
+    case webrtc::DtlsTransportState::kNumValues:
+      // Should not happen.
+      break;
   }
+  NOTREACHED();
 }
 
 std::unique_ptr<DtlsTransportProxy> CreateProxy(
@@ -72,11 +76,11 @@ RTCDtlsTransport::RTCDtlsTransport(
 
 RTCDtlsTransport::~RTCDtlsTransport() {}
 
-String RTCDtlsTransport::state() const {
+V8RTCDtlsTransportState RTCDtlsTransport::state() const {
   if (closed_from_owner_) {
-    return TransportStateToString(webrtc::DtlsTransportState::kClosed);
+    return V8RTCDtlsTransportState(V8RTCDtlsTransportState::Enum::kClosed);
   }
-  return TransportStateToString(current_state_.state());
+  return V8RTCDtlsTransportState(TransportStateToEnum(current_state_.state()));
 }
 
 const HeapVector<Member<DOMArrayBuffer>>&
@@ -85,7 +89,7 @@ RTCDtlsTransport::getRemoteCertificates() const {
 }
 
 RTCIceTransport* RTCDtlsTransport::iceTransport() const {
-  return ice_transport_;
+  return ice_transport_.Get();
 }
 
 webrtc::DtlsTransportInterface* RTCDtlsTransport::native_transport() {
@@ -103,7 +107,7 @@ void RTCDtlsTransport::Close() {
   if (current_state_.state() != webrtc::DtlsTransportState::kClosed) {
     DispatchEvent(*Event::Create(event_type_names::kStatechange));
   }
-  ice_transport_->stop();
+  ice_transport_->Stop();
 }
 
 // Implementation of DtlsTransportProxy::Delegate
@@ -139,8 +143,7 @@ void RTCDtlsTransport::OnStateChange(webrtc::DtlsTransportInformation info) {
         auto& cert = certs->Get(i);
         rtc::Buffer der_cert;
         cert.ToDER(&der_cert);
-        DOMArrayBuffer* dab_cert = DOMArrayBuffer::Create(
-            der_cert.data(), static_cast<unsigned int>(der_cert.size()));
+        DOMArrayBuffer* dab_cert = DOMArrayBuffer::Create(der_cert);
         remote_certificates_.push_back(dab_cert);
       }
     } else {
@@ -149,8 +152,7 @@ void RTCDtlsTransport::OnStateChange(webrtc::DtlsTransportInformation info) {
         auto& cert = certs->Get(i);
         rtc::Buffer der_cert;
         cert.ToDER(&der_cert);
-        DOMArrayBuffer* dab_cert = DOMArrayBuffer::Create(
-            der_cert.data(), static_cast<unsigned int>(der_cert.size()));
+        DOMArrayBuffer* dab_cert = DOMArrayBuffer::Create(der_cert);
         // Don't replace the certificate if it's unchanged.
         // Should have been "if (*dab_cert != *remote_certificates_[i])"
         if (dab_cert->ByteLength() != remote_certificates_[i]->ByteLength() ||
@@ -180,7 +182,7 @@ void RTCDtlsTransport::Trace(Visitor* visitor) const {
   visitor->Trace(remote_certificates_);
   visitor->Trace(ice_transport_);
   DtlsTransportProxy::Delegate::Trace(visitor);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   ExecutionContextClient::Trace(visitor);
 }
 

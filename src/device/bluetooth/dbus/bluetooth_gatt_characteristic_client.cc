@@ -1,12 +1,17 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "device/bluetooth/dbus/bluetooth_gatt_characteristic_client.h"
 
 #include <stddef.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -105,8 +110,7 @@ class BluetoothGattCharacteristicClientImpl
 
     // Append empty option dict
     dbus::MessageWriter writer(&method_call);
-    base::DictionaryValue dict;
-    dbus::AppendValueData(&writer, dict);
+    dbus::AppendValueData(&writer, base::Value::Dict());
 
     object_proxy->CallMethodWithErrorCallback(
         &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
@@ -119,8 +123,8 @@ class BluetoothGattCharacteristicClientImpl
 
   // BluetoothGattCharacteristicClient override.
   void WriteValue(const dbus::ObjectPath& object_path,
-                  const std::vector<uint8_t>& value,
-                  base::StringPiece type_option,
+                  base::span<const uint8_t> value,
+                  std::string_view type_option,
                   base::OnceClosure callback,
                   ErrorCallback error_callback) override {
     dbus::ObjectProxy* object_proxy =
@@ -134,15 +138,14 @@ class BluetoothGattCharacteristicClientImpl
         bluetooth_gatt_characteristic::kBluetoothGattCharacteristicInterface,
         bluetooth_gatt_characteristic::kWriteValue);
     dbus::MessageWriter writer(&method_call);
-    writer.AppendArrayOfBytes(value.data(), value.size());
+    writer.AppendArrayOfBytes(value);
 
     // Append option dict
-    base::DictionaryValue dict;
+    base::Value::Dict dict;
     if (!type_option.empty()) {
       // NB: the "type" option was added in BlueZ 5.51. Older versions of BlueZ
       // will ignore this option.
-      dict.SetStringKey(bluetooth_gatt_characteristic::kOptionType,
-                        type_option);
+      dict.Set(bluetooth_gatt_characteristic::kOptionType, type_option);
     }
     dbus::AppendValueData(&writer, dict);
 
@@ -156,7 +159,7 @@ class BluetoothGattCharacteristicClientImpl
   }
 
   void PrepareWriteValue(const dbus::ObjectPath& object_path,
-                         const std::vector<uint8_t>& value,
+                         base::span<const uint8_t> value,
                          base::OnceClosure callback,
                          ErrorCallback error_callback) override {
     dbus::ObjectProxy* object_proxy =
@@ -170,10 +173,9 @@ class BluetoothGattCharacteristicClientImpl
         bluetooth_gatt_characteristic::kBluetoothGattCharacteristicInterface,
         bluetooth_gatt_characteristic::kPrepareWriteValue);
     dbus::MessageWriter writer(&method_call);
-    writer.AppendArrayOfBytes(value.data(), value.size());
+    writer.AppendArrayOfBytes(value);
 
-    base::DictionaryValue dict;
-    dbus::AppendValueData(&writer, dict);
+    dbus::AppendValueData(&writer, base::Value::Dict());
 
     object_proxy->CallMethodWithErrorCallback(
         &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
@@ -316,7 +318,7 @@ class BluetoothGattCharacteristicClientImpl
     if (bytes)
       value.assign(bytes, bytes + length);
 
-    std::move(callback).Run(/*error_code=*/absl::nullopt, value);
+    std::move(callback).Run(/*error_code=*/std::nullopt, value);
   }
 
   // Called when a response for a failed method call is received.

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,7 @@ class GoogleServiceAuthError;
 
 namespace feedback {
 
-class FeedbackUploaderChrome : public FeedbackUploader {
+class FeedbackUploaderChrome final : public FeedbackUploader {
  public:
   explicit FeedbackUploaderChrome(content::BrowserContext* context);
 
@@ -38,6 +38,8 @@ class FeedbackUploaderChrome : public FeedbackUploader {
   FeedbackUploaderChrome& operator=(const FeedbackUploaderChrome&) = delete;
 
   ~FeedbackUploaderChrome() override;
+
+  base::WeakPtr<FeedbackUploader> AsWeakPtr() override;
 
   class Delegate {
    public:
@@ -80,6 +82,8 @@ class FeedbackUploaderChrome : public FeedbackUploader {
   raw_ptr<Delegate> delegate_ = nullptr;  // Not owned.
 
   raw_ptr<content::BrowserContext> context_ = nullptr;
+
+  base::WeakPtrFactory<FeedbackUploaderChrome> weak_ptr_factory_{this};
 };
 
 }  // namespace feedback

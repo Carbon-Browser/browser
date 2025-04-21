@@ -12,6 +12,10 @@ target_cpu = "x86"  # or "x64" if you have an x86_64 emulator
 
 ## Running an Emulator
 
+### Googler-only Emulator Instructions
+
+See http://go/clank-emulator/
+
 ### Using Prebuilt CIPD packages
 
 Chromium has a set of prebuilt images stored as CIPD packages. These are used
@@ -22,27 +26,26 @@ You can run this command to list them:
 tools/android/avd/avd.py list
 ```
 
-| Configurations | Android Version | AVD Target | Builder |
-|:-------------- |:--------------- |:---------- |:------- |
-| `generic_android19.textpb` | K | google_apis | N/A |
-| `generic_android22.textpb` | L | google_apis | N/A |
-| `generic_android23.textpb` | M | google_apis | [android-marshmallow-x86-rel][android-marshmallow-x86-rel] |
-| `generic_android27.textpb` | O | google_apis | N/A |
-| `generic_playstore_android27.textpb` | O | google_apis_playstore | N/A |
-| `generic_android28.textpb` | P | google_apis | [android-pie-x86-rel][android-pie-x86-rel] |
-| `generic_playstore_android28.textpb` | P | google_apis_playstore | [android-pie-x86-rel][android-pie-x86-rel] |
-| `generic_android29.textpb` | 10 (Q) | google_apis | N/A |
-| `generic_android30.textpb` | 11 (R) | google_apis | [android-11-x86-rel][android-11-x86-rel] |
-| `generic_playstore_android30.textpb` | 11 (R) | google_apis_playstore | [android-11-x86-rel][android-11-x86-rel] |
-| `generic_android31.textpb` | 12 (S) | google_apis | [android-12-x64-rel][android-12-x64-rel] |
-| `generic_playstore_android31.textpb` | 12 (S) | google_apis_playstore | [android-12-x64-rel][android-12-x64-rel] |
+| Configurations | Android Version | CPU Arch| AVD Target | Builder |
+|:-------------- |:--------------- |:------- |:---------- |:------- |
+| `generic_android26.textpb` | 8.0 (O) | x86 | google_apis | N/A |
+| `generic_android27.textpb` | 8.1 (O_MR1) | x86 | google_apis | N/A |
+| `android_28_google_apis_x86.textpb` | 9 (P) | x86 | google_apis | [android-pie-x86-rel][android-pie-x86-rel] |
+| `android_29_google_apis_x86.textpb` | 10 (Q) | x86 | google_apis | N/A |
+| `android_30_google_apis_x86.textpb` | 11 (R) | x86 | google_apis | [android-11-x86-rel][android-11-x86-rel] |
+| `android_31_google_apis_x64.textpb` | 12 (S) | x86_64 | google_apis | [android-12-x64-rel][android-12-x64-rel] |
+| `android_32_google_apis_x64_foldable.textpb` | 12L (S_V2) | x86_64 | google_apis | [android-12l-x64-dbg-tests][android-12l-x64-dbg-tests] |
+| `android_33_google_apis_x64.textpb` | 13 (T) | x86_64 | google_apis | [android-13-x64-rel][android-13-x64-rel] |
+| `android_34_google_apis_x64.textpb` | 14 (U) | x86_64 | google_apis | [android-14-x64-rel][android-14-x64-rel] |
 
 You can use these configuration files to run the same emulator images locally.
 
-[android-marshmallow-x86-rel]: https://ci.chromium.org/p/chromium/builders/ci/android-marshmallow-x86-rel
 [android-pie-x86-rel]: https://ci.chromium.org/p/chromium/builders/ci/android-pie-x86-rel
 [android-11-x86-rel]: https://ci.chromium.org/p/chromium/builders/ci/android-11-x86-rel
 [android-12-x64-rel]: https://ci.chromium.org/p/chromium/builders/ci/android-12-x64-rel
+[android-12l-x64-dbg-tests]: https://ci.chromium.org/p/chromium/builders/ci/android-12l-x64-dbg-tests
+[android-13-x64-rel]: https://ci.chromium.org/p/chromium/builders/ci/android-13-x64-rel
+[android-14-x64-rel]: https://ci.chromium.org/p/chromium/builders/ci/android-14-x64-rel
 
 #### Prerequisite
 
@@ -65,12 +68,7 @@ You can use these configuration files to run the same emulator images locally.
      $ newgrp kvm
    ```
 
-   You need to log out and log back in so the new groups take effect. Or you
-   can use the following on a per-shell basis without logging out:
-
-   ```
-     $ su - $USER
-   ```
+   You need to log out and log back in so the new groups take effect.
 
 #### Running via the test runner
 
@@ -86,7 +84,7 @@ down. This is how builders run the emulator.
 
     ```
       $ out/Debug/bin/run_base_unittests \
-          --avd-config tools/android/avd/proto/generic_android28.textpb
+          --avd-config tools/android/avd/proto/android_33_google_apis_x64.textpb
     ```
 
  * `--emulator-count`
@@ -96,8 +94,19 @@ down. This is how builders run the emulator.
 
     ```
       $ out/Debug/bin/run_base_unittests \
-          --avd-config tools/android/avd/proto/generic_android28.textpb \
+          --avd-config tools/android/avd/proto/android_33_google_apis_x64.textpb \
           --emulator-count 4
+    ```
+
+ * `--emulator-enable-network`
+
+    The test runner runs the emulator without network access by default. To have
+    it run with network access, use `--emulator-enable-network`:
+
+    ```
+    $ out/Debug/bin/run_base_unittests \
+          --avd-config tools/android/avd/proto/android_33_google_apis_x64.textpb \
+          --emulator-enable-network
     ```
 
  * `--emulator-window`
@@ -107,7 +116,7 @@ down. This is how builders run the emulator.
 
     ```
       $ out/Debug/bin/run_base_unittests \
-          --avd-config tools/android/avd/proto/generic_android28.textpb \
+          --avd-config tools/android/avd/proto/android_33_google_apis_x64.textpb \
           --emulator-window
     ```
 
@@ -124,11 +133,22 @@ To manage emulator lifetime independently, use `tools/android/avd/avd.py`.
 
     ```
       $ tools/android/avd/avd.py start \
-          --avd-config tools/android/avd/proto/generic_android28.textpb
+          --avd-config tools/android/avd/proto/android_33_google_apis_x64.textpb
     ```
 
     > Note: `avd.py start` will start an emulator instance and then terminate.
     > To shut down the emulator, use `adb emu kill`.
+
+ * `--enable-network`
+
+    Like the test runner, `avd.py` runs the emulator without network access by
+    default. To enable network access, use `--enable-network`:
+
+    ```
+      $ tools/android/avd/avd.py start \
+          --avd-config tools/android/avd/proto/android_33_google_apis_x64.textpb \
+          --enable-network
+    ```
 
  * `--emulator-window`
 
@@ -137,7 +157,7 @@ To manage emulator lifetime independently, use `tools/android/avd/avd.py`.
 
     ```
       $ tools/android/avd/avd.py start \
-          --avd-config tools/android/avd/proto/generic_android28.textpb \
+          --avd-config tools/android/avd/proto/android_33_google_apis_x64.textpb \
           --emulator-window
     ```
 
@@ -153,20 +173,18 @@ To manage emulator lifetime independently, use `tools/android/avd/avd.py`.
 
     ```
       $ tools/android/avd/avd.py start \
-          --avd-config tools/android/avd/proto/generic_android28.textpb \
+          --avd-config tools/android/avd/proto/android_33_google_apis_x64.textpb \
           --no-read-only
     ```
 
  * `--wipe-data`
 
-    Since the prebuilt playstore images use adbkey from the GCE bots that created
-    them, they may appear to be "unauthorized" when used locally. Pass this flag
-    to reset the user data image locally to fix it after installing a prebuilt
-    image:
+    Reset the /data partition to the factory defaults. This removes all user
+    settings from the AVD.
 
     ```
       $ tools/android/avd/avd.py start \
-          --avd-config tools/android/avd/proto/generic_playstore_android28.textpb \
+          --avd-config tools/android/avd/proto/android_33_google_apis_x64.textpb \
           --wipe-data
     ```
 
@@ -184,12 +202,12 @@ To manage emulator lifetime independently, use `tools/android/avd/avd.py`.
     `avd.py` disables the emulator log by default. When this option is used,
     emulator log will be enabled. It is useful when the emulator cannot be
     launched correctly. See `emulator -help-debug-tags` for a full list of tags.
-    Use `--debug-tags="*"` if you want to output all logs (warning: it is quite
+    Use `--debug-tags=all` if you want to output all logs (warning: it is quite
     verbose).
 
     ```
       $ tools/android/avd/avd.py start \
-          --avd-config tools/android/avd/proto/generic_android28.textpb \
+          --avd-config tools/android/avd/proto/android_33_google_apis_x64.textpb \
           --debug-tags init,snapshot
     ```
 

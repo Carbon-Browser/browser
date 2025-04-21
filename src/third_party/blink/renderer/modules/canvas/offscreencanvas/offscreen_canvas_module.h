@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,15 +16,16 @@ namespace blink {
 
 class CanvasContextCreationAttributesModule;
 class OffscreenCanvas;
+class V8OffscreenRenderingContextType;
 
 class MODULES_EXPORT OffscreenCanvasModule {
   STATIC_ONLY(OffscreenCanvasModule);
 
  public:
   static V8OffscreenRenderingContext* getContext(
-      ExecutionContext* execution_context,
+      ScriptState* script_state,
       OffscreenCanvas& offscreen_canvas,
-      const String& context_id,
+      const V8OffscreenRenderingContextType& context_id,
       const CanvasContextCreationAttributesModule* attributes,
       ExceptionState& exception_state);
 };

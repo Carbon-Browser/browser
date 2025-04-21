@@ -20,40 +20,48 @@
 #include <algorithm>
 #include <cctype>
 
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 #include "components/adblock/core/common/keyword_extractor_utils.h"
 
 namespace adblock {
 namespace {
 
-bool IsKeywordCharacter(char c) {
-  return std::isalnum(c) || c == '%';
+bool IsSeparatorCharacter(char c) {
+  return !(std::isalnum(c) || c == '%');
 }
 
 }  // namespace
 
-absl::optional<std::string> UrlKeywordExtractor::GetNextKeyword() {
-  std::string current_keyword;
+absl::optional<std::string_view> UrlKeywordExtractor::GetNextKeyword() {
+  std::string_view current_keyword;
   do {
-    current_keyword.clear();
-    if (end_of_last_keyword_ == input_.end())
+    const auto start_of_next_keyword = input_.find_first_not_of('\0');
+    if (start_of_next_keyword == std::string_view::npos) {
       return absl::nullopt;
-    const auto* start_of_next_keyword =
-        std::find_if(end_of_last_keyword_, input_.end(), &IsKeywordCharacter);
-    if (start_of_next_keyword == input_.end())
-      return absl::nullopt;
-    const auto* end_of_next_keyword = std::find_if_not(
-        start_of_next_keyword, input_.end(), &IsKeywordCharacter);
-    for (const auto* i = start_of_next_keyword; i < end_of_next_keyword; i++) {
-      current_keyword.push_back(base::ToLowerASCII(*i));
     }
-    end_of_last_keyword_ = end_of_next_keyword;
+    input_.remove_prefix(start_of_next_keyword);
+    const auto end_of_keyword = input_.find_first_of('\0');
+    current_keyword = input_.substr(0, end_of_keyword);
+    input_.remove_prefix(current_keyword.size());
   } while (utils::IsBadKeyword(current_keyword));
   return current_keyword;
 }
 
-UrlKeywordExtractor::UrlKeywordExtractor(base::StringPiece url)
-    : input_(url.data(), url.size()), end_of_last_keyword_(input_.begin()) {}
+UrlKeywordExtractor::UrlKeywordExtractor(std::string_view url)
+    : url_with_nulls_(url.data(), url.size()) {
+  // The keywords returned by GetNextKeyword() will be passed to
+  // flatbuffers::Vector::LookupByKey(const char* key) which assumes |key| is
+  // null-terminated. In order to avoid allocating a null-terminated
+  // std::string for every extracted keyword, we instead replace separator
+  // characters by nulls, so that a StringPiece referring to a keyword is also
+  // null-terminated.
+  // This isn't elegant, but it's a valid workaround for the limitations of
+  // the flatbuffers generated API.
+  base::ranges::replace_if(url_with_nulls_, &IsSeparatorCharacter, '\0');
+  input_ = url_with_nulls_;
+}
+
 UrlKeywordExtractor::~UrlKeywordExtractor() = default;
 
 }  // namespace adblock

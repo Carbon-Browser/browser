@@ -1,8 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/link_header_util/link_header_util.h"
+
+#include <algorithm>
 
 #include "base/strings/string_util.h"
 #include "net/http/http_util.h"
@@ -154,7 +156,7 @@ bool ParseLinkHeaderValue(
     std::string::const_iterator begin,
     std::string::const_iterator end,
     std::string* url,
-    std::unordered_map<std::string, absl::optional<std::string>>* params) {
+    std::unordered_map<std::string, std::optional<std::string>>* params) {
   // Can't parse an empty string.
   if (begin == end)
     return false;
@@ -168,24 +170,26 @@ bool ParseLinkHeaderValue(
 
   // Trim any remaining whitespace, and make sure there is a ';' separating
   // parameters from the URL.
-  net::HttpUtil::TrimLWS(&begin, &end);
-  if (begin != end && *begin != ';')
+  std::string_view value = net::HttpUtil::TrimLWS(std::string_view(begin, end));
+  if (!value.empty() && value.front() != ';') {
     return false;
+  }
 
   // Parse all the parameters.
   net::HttpUtil::NameValuePairsIterator params_iterator(
-      begin, end, ';',
+      value, /*delimiter=*/';',
       net::HttpUtil::NameValuePairsIterator::Values::NOT_REQUIRED,
       net::HttpUtil::NameValuePairsIterator::Quotes::STRICT_QUOTES);
   while (params_iterator.GetNext()) {
-    if (!net::HttpUtil::IsParmName(params_iterator.name_piece()))
+    if (!net::HttpUtil::IsParmName(params_iterator.name())) {
       return false;
-    std::string name = base::ToLowerASCII(params_iterator.name_piece());
-    if (!params_iterator.value_is_quoted() &&
-        params_iterator.value_piece().empty())
-      params->insert(std::make_pair(name, absl::nullopt));
-    else
+    }
+    std::string name = base::ToLowerASCII(params_iterator.name());
+    if (!params_iterator.value_is_quoted() && params_iterator.value().empty()) {
+      params->insert(std::make_pair(name, std::nullopt));
+    } else {
       params->insert(std::make_pair(name, params_iterator.value()));
+    }
   }
   return params_iterator.valid();
 }

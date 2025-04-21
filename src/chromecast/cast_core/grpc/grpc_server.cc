@@ -1,15 +1,17 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromecast/cast_core/grpc/grpc_server.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/run_loop.h"
-#include "base/task/task_traits.h"
+#include <algorithm>
+#include <utility>
+
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/logging.h"
+#include "base/task/bind_post_task.h"
 #include "base/task/thread_pool.h"
-#include "base/time/time.h"
 #include "chromecast/cast_core/grpc/grpc_call_options.h"
 
 namespace cast {
@@ -25,9 +27,7 @@ static void StopGrpcServer(
     std::unique_ptr<ServerReactorTracker> server_reactor_tracker,
     int64_t timeout_ms,
     base::OnceClosure server_stopped_callback) {
-  LOG(INFO) << "Shutting down gRPC server with "
-            << server_reactor_tracker->active_reactor_count()
-            << " active reactors: " << *server_reactor_tracker;
+  LOG(INFO) << "Shutting down gRPC server";
 
   // The gRPC Reactors are owned by the gRPC framework and are 'pending'
   // unless Reactor::Finish or similar (StartWriteAndFinish) API is called.
@@ -40,9 +40,7 @@ static void StopGrpcServer(
 
   // As mentioned above, all the pending reactors are now cancelled and must
   // be destroyed by the ServerReactorTracker.
-  DCHECK_EQ(server_reactor_tracker->active_reactor_count(), 0UL)
-      << "Not all reactors were cancelled: " << *server_reactor_tracker;
-  LOG(INFO) << "All active reactors are finished";
+  server_reactor_tracker.reset();
 
   // Finish server shutdown.
   server->Wait();
@@ -61,15 +59,20 @@ GrpcServer::~GrpcServer() {
   DCHECK(!server_) << "gRPC server must be explicitly stopped";
 }
 
-void GrpcServer::Start(const std::string& endpoint) {
+grpc::Status GrpcServer::Start(const std::string& endpoint) {
   DCHECK(!server_) << "Server is already running";
-  DCHECK(server_reactor_tracker_) << "Server was already shutdown";
+  DCHECK(server_reactor_tracker_) << "Server was alreadys shutdown";
 
   server_ = grpc::ServerBuilder()
                 .AddListeningPort(endpoint, grpc::InsecureServerCredentials())
                 .RegisterCallbackGenericService(this)
                 .BuildAndStart();
-  DCHECK(server_) << "Failed to start server";
+  if (!server_) {
+    return grpc::Status(grpc::StatusCode::INTERNAL,
+                        "can't start gRPC server on " + endpoint);
+  }
+  LOG(INFO) << "Grpc server started: " << endpoint;
+  return grpc::Status::OK;
 }
 
 void GrpcServer::Stop() {
@@ -79,7 +82,7 @@ void GrpcServer::Stop() {
   }
 
   StopGrpcServer(std::move(server_), std::move(server_reactor_tracker_),
-                 kDefaultServerStopTimeoutMs, base::DoNothing());
+                 kDefaultServerStopTimeoutMs, base::BindOnce([]() {}));
 }
 
 void GrpcServer::Stop(int64_t timeout_ms,
@@ -90,12 +93,13 @@ void GrpcServer::Stop(int64_t timeout_ms,
     return;
   }
 
-  scoped_refptr<base::SequencedTaskRunner> task_runner =
-      base::ThreadPool::CreateSequencedTaskRunner({base::MayBlock()});
-  task_runner->PostTask(
-      FROM_HERE, base::BindOnce(&StopGrpcServer, std::move(server_),
-                                std::move(server_reactor_tracker_), timeout_ms,
-                                std::move(server_stopped_callback)));
+  // Synchronous requests will block gRPC shutdown unless we post shutdown on
+  // a different thread.
+  base::ThreadPool::PostTask(
+      FROM_HERE, {base::MayBlock()},
+      base::BindOnce(&StopGrpcServer, std::move(server_),
+                     std::move(server_reactor_tracker_), timeout_ms,
+                     std::move(server_stopped_callback)));
 }
 
 grpc::ServerGenericBidiReactor* GrpcServer::CreateReactor(

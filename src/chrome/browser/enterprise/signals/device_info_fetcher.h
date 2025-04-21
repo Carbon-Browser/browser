@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@
 #define CHROME_BROWSER_ENTERPRISE_SIGNALS_DEVICE_INFO_FETCHER_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "chrome/browser/enterprise/signals/signals_common.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace enterprise_signals {
 
@@ -30,9 +30,9 @@ struct DeviceInfo {
   SettingValue disk_encrypted;
 
   std::vector<std::string> mac_addresses;
-  absl::optional<std::string> windows_machine_domain;
-  absl::optional<std::string> windows_user_domain;
-  absl::optional<SettingValue> secure_boot_enabled;
+  std::optional<std::string> windows_machine_domain;
+  std::optional<std::string> windows_user_domain;
+  std::optional<SettingValue> secure_boot_enabled;
 };
 
 // Interface used by the chrome.enterprise.reportingPrivate.getDeviceInfo()
@@ -59,6 +59,10 @@ class DeviceInfoFetcher {
 
   // Fetches the device information for the current platform.
   virtual DeviceInfo Fetch() = 0;
+
+ protected:
+  // Implements a platform specific instance of DeviceInfoFetcher.
+  static std::unique_ptr<DeviceInfoFetcher> CreateInstanceInternal();
 };
 
 }  // namespace enterprise_signals

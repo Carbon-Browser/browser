@@ -1,10 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/offline_pages/core/background/pending_state_updater.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "components/offline_items_collection/core/pending_state.h"
 #include "components/offline_pages/core/background/request_coordinator.h"
 
@@ -15,7 +15,7 @@ PendingStateUpdater::PendingStateUpdater(
     : request_coordinator_(request_coordinator),
       requests_pending_another_download_(false) {}
 
-PendingStateUpdater::~PendingStateUpdater() {}
+PendingStateUpdater::~PendingStateUpdater() = default;
 
 void PendingStateUpdater::UpdateRequestsOnLossOfNetwork() {
   requests_pending_another_download_ = false;

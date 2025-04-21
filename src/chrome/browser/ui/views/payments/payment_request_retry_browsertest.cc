@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/ui/views/payments/payment_request_browsertest_base.h"
 #include "chrome/browser/ui/views/payments/payment_request_dialog_view_ids.h"
-#include "components/autofill/core/browser/autofill_test_utils.h"
+#include "components/autofill/core/browser/test_utils/autofill_test_utils.h"
 #include "content/public/common/content_features.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 
 namespace payments {
 
@@ -18,10 +19,10 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestRetryTest,
                        DoNotAllowPaymentInstrumentChange) {
   // Installs two apps so that the Payment Request UI will be shown.
   std::string a_method_name;
-  InstallPaymentApp("a.com", "payment_request_success_responder.js",
+  InstallPaymentApp("a.com", "/payment_request_success_responder.js",
                     &a_method_name);
   std::string b_method_name;
-  InstallPaymentApp("b.com", "payment_request_success_responder.js",
+  InstallPaymentApp("b.com", "/payment_request_success_responder.js",
                     &b_method_name);
 
   NavigateTo("/payment_request_retry_with_payer_errors.html");
@@ -51,15 +52,15 @@ IN_PROC_BROWSER_TEST_F(PaymentRequestRetryTest,
                                DialogEvent::PROCESSING_SPINNER_HIDDEN,
                                DialogEvent::BACK_TO_PAYMENT_SHEET_NAVIGATION,
                                DialogEvent::CONTACT_INFO_EDITOR_OPENED});
-  ASSERT_TRUE(content::ExecuteScript(GetActiveWebContents(),
-                                     "retry({"
-                                     "  payer: {"
-                                     "    email: 'EMAIL ERROR',"
-                                     "    name: 'NAME ERROR',"
-                                     "    phone: 'PHONE ERROR'"
-                                     "  }"
-                                     "});"));
-  WaitForObservedEvent();
+  ASSERT_TRUE(content::ExecJs(GetActiveWebContents(),
+                              "retry({"
+                              "  payer: {"
+                              "    email: 'EMAIL ERROR',"
+                              "    name: 'NAME ERROR',"
+                              "    phone: 'PHONE ERROR'"
+                              "  }"
+                              "});"));
+  ASSERT_TRUE(WaitForObservedEvent());
   EXPECT_EQ(1U, request->state()->available_apps().size());
 }
 

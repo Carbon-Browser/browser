@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,33 +14,33 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-/**
- * Represents the view inside the page info popup.
- */
+/** Represents the view inside the page info popup. */
 public class PageInfoView extends FrameLayout implements OnClickListener {
+    private static final int COOKIES_ROW_POSITION = 1;
+
     private LinearLayout mRowWrapper;
     private PageInfoRowView mConnectionRow;
     private PageInfoRowView mPermissionsRow;
     private PageInfoRowView mCookiesRow;
     private Button mForgetSiteButton;
     private TextView mHttpsImageCompressionMessage;
-    private Button mInstantAppButton;
     private Button mOpenOnlineButton;
-    private Runnable mOnUiClosingCallback;
 
     /**  Parameters to configure the view of the page info popup. */
     public static class Params {
-        public boolean instantAppButtonShown = true;
         public boolean openOnlineButtonShown = true;
         public boolean httpsImageCompressionMessageShown;
-        public Runnable instantAppButtonClickCallback;
         public Runnable openOnlineButtonClickCallback;
-        public Runnable onUiClosingCallback;
     }
 
     public PageInfoView(Context context, Params params) {
         super(context);
         LayoutInflater.from(context).inflate(R.layout.page_info, this, true);
+        // Elevate the "Cookies and site data" item.
+        LinearLayout rowWrapper = (LinearLayout) findViewById(R.id.page_info_row_wrapper);
+        PageInfoRowView cookiesRow = (PageInfoRowView) findViewById(R.id.page_info_cookies_row);
+        rowWrapper.removeView(cookiesRow);
+        rowWrapper.addView(cookiesRow, COOKIES_ROW_POSITION);
         init(params);
     }
 
@@ -48,10 +48,9 @@ public class PageInfoView extends FrameLayout implements OnClickListener {
         initRowWrapper();
         initConnection();
         initPermissions();
-        initCookies(params);
+        initCookies();
         initForgetSiteButton();
         initHttpsImageCompression(params);
-        initInstantApp(params);
         initOpenOnline(params);
     }
 
@@ -68,9 +67,8 @@ public class PageInfoView extends FrameLayout implements OnClickListener {
         mPermissionsRow = findViewById(R.id.page_info_permissions_row);
     }
 
-    private void initCookies(Params params) {
+    private void initCookies() {
         mCookiesRow = findViewById(R.id.page_info_cookies_row);
-        mOnUiClosingCallback = params.onUiClosingCallback;
     }
 
     private void initForgetSiteButton() {
@@ -85,16 +83,12 @@ public class PageInfoView extends FrameLayout implements OnClickListener {
                 mHttpsImageCompressionMessage, params.httpsImageCompressionMessageShown, null);
     }
 
-    private void initInstantApp(Params params) {
-        mInstantAppButton = findViewById(R.id.page_info_instant_app_button);
-        initializePageInfoViewChild(mInstantAppButton, params.instantAppButtonShown,
-                params.instantAppButtonClickCallback);
-    }
-
     private void initOpenOnline(Params params) {
         mOpenOnlineButton = findViewById(R.id.page_info_open_online_button);
         // The open online button should not fade in.
-        initializePageInfoViewChild(mOpenOnlineButton, params.openOnlineButtonShown,
+        initializePageInfoViewChild(
+                mOpenOnlineButton,
+                params.openOnlineButtonShown,
                 params.openOnlineButtonClickCallback);
     }
 
@@ -118,10 +112,6 @@ public class PageInfoView extends FrameLayout implements OnClickListener {
         return mForgetSiteButton;
     }
 
-    public void disableInstantAppButton() {
-        mInstantAppButton.setEnabled(false);
-    }
-
     private void initializePageInfoViewChild(View child, boolean shown, Runnable clickCallback) {
         child.setVisibility(shown ? View.VISIBLE : View.GONE);
         child.setTag(R.id.page_info_click_callback, clickCallback);
@@ -133,7 +123,6 @@ public class PageInfoView extends FrameLayout implements OnClickListener {
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
-        mOnUiClosingCallback.run();
     }
 
     // OnClickListener interface.

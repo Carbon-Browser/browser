@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <utility>
 
 #include "ash/shell.h"
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "ui/aura/window_tracker.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/events/event_dispatcher.h"
@@ -31,12 +31,12 @@ void DispatchPressedEvent(const ui::KeyEvent& key_event,
 void PostPressedEvent(ui::KeyEvent* event) {
   // Modify RELEASED event to PRESSED event.
   const ui::KeyEvent pressed_event(
-      ui::ET_KEY_PRESSED, event->key_code(), event->code(),
+      ui::EventType::kKeyPressed, event->key_code(), event->code(),
       event->flags() | ui::EF_SHIFT_DOWN | ui::EF_IS_SYNTHESIZED);
   std::unique_ptr<aura::WindowTracker> tracker(new aura::WindowTracker);
   tracker->Add(static_cast<aura::Window*>(event->target()));
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&DispatchPressedEvent, pressed_event, std::move(tracker)));
 }
@@ -57,13 +57,14 @@ void KeyHoldDetector::OnKeyEvent(ui::KeyEvent* event) {
       case INITIAL:
         // Pass through posted event.
         if (event->flags() & ui::EF_IS_SYNTHESIZED) {
-          event->set_flags(event->flags() & ~ui::EF_IS_SYNTHESIZED);
+          event->SetFlags(event->flags() & ~ui::EF_IS_SYNTHESIZED);
           return;
         }
         state_ = PRESSED;
         if (delegate_->ShouldStopEventPropagation()) {
-          // Don't process ET_KEY_PRESSED event yet. The ET_KEY_PRESSED
-          // event will be generated upon ET_KEY_RELEASEED event below.
+          // Don't process EventType::kKeyPressed event yet. The
+          // EventType::kKeyPressed event will be generated upon
+          // EventType::kKeyReleaseed event below.
           event->StopPropagation();
         }
         break;
@@ -76,7 +77,7 @@ void KeyHoldDetector::OnKeyEvent(ui::KeyEvent* event) {
           event->StopPropagation();
         break;
     }
-  } else if (event->type() == ui::ET_KEY_RELEASED) {
+  } else if (event->type() == ui::EventType::kKeyReleased) {
     switch (state_) {
       case INITIAL:
         break;

@@ -1,12 +1,12 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/safe_browsing/core/browser/sync/safe_browsing_sync_observer_impl.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/task_environment.h"
-#include "components/sync/driver/test_sync_service.h"
+#include "components/sync/test/test_sync_service.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/platform_test.h"
 
@@ -16,20 +16,16 @@ class SafeBrowsingSyncObserverImplTest : public PlatformTest {
  public:
   SafeBrowsingSyncObserverImplTest() = default;
 
-  void SetUp() override {
-    sync_service_.SetDisableReasons(
-        syncer::SyncService::DISABLE_REASON_NOT_SIGNED_IN);
-  }
+  void SetUp() override { sync_service_.SetSignedOut(); }
 
  protected:
   void EnableSync() {
-    sync_service_.SetDisableReasons({});
+    sync_service_.SetSignedIn(signin::ConsentLevel::kSync);
     sync_service_.FireStateChanged();
   }
 
   void DisableSync() {
-    sync_service_.SetDisableReasons(
-        syncer::SyncService::DISABLE_REASON_NOT_SIGNED_IN);
+    sync_service_.SetSignedOut();
     sync_service_.FireStateChanged();
   }
 
@@ -40,7 +36,7 @@ class SafeBrowsingSyncObserverImplTest : public PlatformTest {
 TEST_F(SafeBrowsingSyncObserverImplTest, ObserveSyncState) {
   SafeBrowsingSyncObserverImpl observer(&sync_service_);
   int invoke_cnt = 0;
-  observer.ObserveSyncStateChanged(base::BindRepeating(
+  observer.ObserveHistorySyncStateChanged(base::BindRepeating(
       [](int* invoke_cnt) { (*invoke_cnt)++; }, &invoke_cnt));
 
   EnableSync();
@@ -57,7 +53,7 @@ TEST_F(SafeBrowsingSyncObserverImplTest, ObserveSyncState) {
 TEST_F(SafeBrowsingSyncObserverImplTest, NullSyncService) {
   SafeBrowsingSyncObserverImpl observer(nullptr);
   int invoke_cnt = 0;
-  observer.ObserveSyncStateChanged(base::BindRepeating(
+  observer.ObserveHistorySyncStateChanged(base::BindRepeating(
       [](int* invoke_cnt) { (*invoke_cnt)++; }, &invoke_cnt));
 
   EnableSync();

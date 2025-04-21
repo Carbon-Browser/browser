@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ static base::LazyInstance<HistogramManager>::Leaky g_histogram_manager =
 
 HistogramManager::HistogramManager() : histogram_snapshot_manager_(this) {}
 
-HistogramManager::~HistogramManager() {}
+HistogramManager::~HistogramManager() = default;
 
 // static
 HistogramManager* HistogramManager::GetInstance() {

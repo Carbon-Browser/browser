@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "ash/public/cpp/session/session_controller.h"
 #include "ash/public/cpp/session/session_observer.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "components/exo/toast_surface_manager.h"
 
@@ -39,7 +40,7 @@ class ASH_PUBLIC_EXPORT ArcToastSurfaceManager
 
   void UpdateVisibility();
 
-  std::vector<exo::ToastSurface*> toast_surfaces_;
+  std::vector<raw_ptr<exo::ToastSurface, VectorExperimental>> toast_surfaces_;
 
   bool locked_;
 

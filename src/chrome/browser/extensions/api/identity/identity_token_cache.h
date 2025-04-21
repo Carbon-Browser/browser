@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -84,8 +84,6 @@ class IdentityTokenCacheValue {
 // used at different stages of the `getAuthToken` flow before a token is
 // obtained. The cache automatically handles token expiration. Extensions can
 // manually remove tokens from the cache using `removeCachedAuthToken` API.
-//
-// chrome://identity-internals provides a view of cache's content for debugging.
 class IdentityTokenCache {
  public:
   IdentityTokenCache();

@@ -25,17 +25,17 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_TRANSFORMS_TRANSFORM_OPERATION_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_TRANSFORMS_TRANSFORM_OPERATION_H_
 
-#include "base/memory/scoped_refptr.h"
-#include "third_party/blink/renderer/platform/transforms/transformation_matrix.h"
-#include "third_party/blink/renderer/platform/wtf/ref_counted.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/platform_export.h"
 #include "ui/gfx/geometry/size_f.h"
+#include "ui/gfx/geometry/transform.h"
 
 namespace blink {
 
 // CSS Transforms (may become part of CSS3)
 
 class PLATFORM_EXPORT TransformOperation
-    : public RefCounted<TransformOperation> {
+    : public GarbageCollected<TransformOperation> {
  public:
   enum OperationType {
     kScaleX,
@@ -68,24 +68,24 @@ class PLATFORM_EXPORT TransformOperation
   TransformOperation& operator=(const TransformOperation&) = delete;
   virtual ~TransformOperation() = default;
 
+  virtual void Trace(Visitor*) const {}
+
   bool operator==(const TransformOperation& o) const {
     return IsSameType(o) && IsEqualAssumingSameType(o);
   }
   bool operator!=(const TransformOperation& o) const { return !(*this == o); }
 
-  virtual void Apply(TransformationMatrix&,
+  virtual void Apply(gfx::Transform&,
                      const gfx::SizeF& border_box_size) const = 0;
 
   // Implements the accumulative behavior described in
   // https://drafts.csswg.org/css-transforms-2/#combining-transform-lists
-  virtual scoped_refptr<TransformOperation> Accumulate(
-      const TransformOperation& other) = 0;
+  virtual TransformOperation* Accumulate(const TransformOperation& other) = 0;
 
-  virtual scoped_refptr<TransformOperation> Blend(
-      const TransformOperation* from,
-      double progress,
-      bool blend_to_identity = false) = 0;
-  virtual scoped_refptr<TransformOperation> Zoom(double factor) = 0;
+  virtual TransformOperation* Blend(const TransformOperation* from,
+                                    double progress,
+                                    bool blend_to_identity = false) = 0;
+  virtual TransformOperation* Zoom(double factor) = 0;
 
   virtual OperationType GetType() const = 0;
 

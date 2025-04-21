@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,18 +10,23 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
-#include "base/strings/string_piece.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_runner.h"
-#include "base/task/task_runner_util.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/certificate_provider/certificate_provider.h"
+#include "extensions/common/extension_id.h"
 #include "net/base/net_errors.h"
+
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+#include "chromeos/crosapi/mojom/cert_database.mojom.h"
+#include "chromeos/lacros/lacros_service.h"
+#endif  // IS_CHROMEOS_LACROS
 
 namespace chromeos {
 
@@ -30,14 +35,14 @@ namespace {
 void PostSignResult(net::SSLPrivateKey::SignCallback callback,
                     net::Error error,
                     const std::vector<uint8_t>& signature) {
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), error, signature));
 }
 
 void PostIdentities(
     base::OnceCallback<void(net::ClientCertIdentityList)> callback,
     net::ClientCertIdentityList certs) {
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), std::move(certs)));
 }
 
@@ -86,7 +91,7 @@ class CertificateProviderService::SSLPrivateKey : public net::SSLPrivateKey {
  private:
   ~SSLPrivateKey() override;
 
-  const std::string extension_id_;
+  const extensions::ExtensionId extension_id_;
   const CertificateInfo cert_info_;
   const base::WeakPtr<CertificateProviderService> service_;
   SEQUENCE_CHECKER(sequence_checker_);
@@ -207,7 +212,7 @@ CertificateProviderService::SSLPrivateKey::~SSLPrivateKey() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 }
 
-CertificateProviderService::CertificateProviderService() {}
+CertificateProviderService::CertificateProviderService() = default;
 
 CertificateProviderService::~CertificateProviderService() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -236,6 +241,17 @@ void CertificateProviderService::SetCertificatesProvidedByExtension(
     const std::string& extension_id,
     const CertificateInfoList& certificate_infos) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  // Synchronize with Ash-Chrome
+  chromeos::LacrosService* service = chromeos::LacrosService::Get();
+  if (service && service->IsAvailable<crosapi::mojom::CertDatabase>() &&
+      service->GetInterfaceVersion<crosapi::mojom::CertDatabase>() >=
+          static_cast<int>(crosapi::mojom::CertDatabase::MethodMinVersions::
+                               kSetCertsProvidedByExtensionMinVersion)) {
+    service->GetRemote<crosapi::mojom::CertDatabase>()
+        ->SetCertsProvidedByExtension(extension_id, certificate_infos);
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
   certificate_map_.UpdateCertificatesForExtension(extension_id,
                                                   certificate_infos);
   for (auto& observer : observers_)
@@ -268,7 +284,7 @@ bool CertificateProviderService::ReplyToSignRequest(
     const std::vector<uint8_t>& signature) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  // TODO(crbug.com/1046860): Remove logging after stabilizing the feature.
+  // TODO(crbug.com/40671053): Remove logging after stabilizing the feature.
   LOG(WARNING) << "Extension " << extension_id
                << " replied to signature request " << sign_request_id
                << ", size " << signature.size();
@@ -337,7 +353,7 @@ void CertificateProviderService::RequestSignatureBySpki(
     const std::string& subject_public_key_info,
     uint16_t algorithm,
     base::span<const uint8_t> input,
-    const absl::optional<AccountId>& authenticating_user_account_id,
+    const std::optional<AccountId>& authenticating_user_account_id,
     net::SSLPrivateKey::SignCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   bool is_currently_provided = false;
@@ -389,7 +405,7 @@ void CertificateProviderService::AbortSignatureRequestsForAuthenticatingUser(
     const std::string& extension_id = sign_request.first;
     const int sign_request_id = sign_request.second;
 
-    // TODO(crbug.com/1046860): Remove logging after stabilizing the feature.
+    // TODO(crbug.com/40671053): Remove logging after stabilizing the feature.
     LOG(WARNING) << "Aborting user login signature request from extension "
                  << extension_id << " id " << sign_request_id;
 
@@ -462,7 +478,7 @@ void CertificateProviderService::RequestSignatureFromExtension(
     const scoped_refptr<net::X509Certificate>& certificate,
     uint16_t algorithm,
     base::span<const uint8_t> input,
-    const absl::optional<AccountId>& authenticating_user_account_id,
+    const std::optional<AccountId>& authenticating_user_account_id,
     net::SSLPrivateKey::SignCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
@@ -470,7 +486,7 @@ void CertificateProviderService::RequestSignatureFromExtension(
       extension_id, certificate, authenticating_user_account_id,
       std::move(callback));
 
-  // TODO(crbug.com/1046860): Remove logging after stabilizing the feature.
+  // TODO(crbug.com/40671053): Remove logging after stabilizing the feature.
   LOG(WARNING) << "Starting signature request to extension " << extension_id
                << " id " << sign_request_id;
 
@@ -478,7 +494,7 @@ void CertificateProviderService::RequestSignatureFromExtension(
                                        authenticating_user_account_id);
   if (!delegate_->DispatchSignRequestToExtension(
           extension_id, sign_request_id, algorithm, certificate, input)) {
-    // TODO(crbug.com/1046860): Remove logging after stabilizing the feature.
+    // TODO(crbug.com/40671053): Remove logging after stabilizing the feature.
     LOG(WARNING) << "Failed to dispatch signature request to extension "
                  << extension_id << " id " << sign_request_id;
     scoped_refptr<net::X509Certificate> local_certificate;

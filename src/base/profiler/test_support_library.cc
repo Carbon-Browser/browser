@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,8 @@
 #if BUILDFLAG(IS_WIN)
 #define BASE_PROFILER_TEST_SUPPORT_LIBRARY_EXPORT __declspec(dllexport)
 #else  // BUILDFLAG(IS_WIN)
-#define BASE_PROFILER_TEST_SUPPORT_LIBRARY_EXPORT __attribute__((visibility("default")))
+#define BASE_PROFILER_TEST_SUPPORT_LIBRARY_EXPORT \
+  __attribute__((visibility("default")))
 #endif
 
 namespace base {

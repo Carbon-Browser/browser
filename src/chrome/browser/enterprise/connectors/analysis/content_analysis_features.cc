@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,16 @@
 
 namespace enterprise_connectors {
 
-const base::Feature kLocalContentAnalysisEnabled{
-    "LocalContentAnalysisEnabled", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kStopRegisterFcmEnabled,
+             "StopRegisterFcmEnabled",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kEnableAsyncUploadAfterVerdict,
+             "EnableAsyncUploadAfterVerdict",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+bool IsStopRegisterFcmEnabled() {
+  return base::FeatureList::IsEnabled(kStopRegisterFcmEnabled);
+}
 
 }  // namespace enterprise_connectors

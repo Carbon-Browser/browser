@@ -1,10 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "remoting/test/fake_webrtc_connection.h"
 
 #include "components/webrtc/thread_wrapper.h"
+#include "remoting/base/errors.h"
 #include "remoting/base/logging.h"
 #include "remoting/protocol/transport_context.h"
 
@@ -34,7 +35,7 @@ void FakeWebrtcConnection::OnWebrtcTransportConnected() {
 }
 
 void FakeWebrtcConnection::OnWebrtcTransportError(protocol::ErrorCode error) {
-  LOG(ERROR) << "Webrtc transport error: " << error;
+  LOG(ERROR) << "Webrtc transport error: " << ErrorCodeToString(error);
   std::move(on_closed_).Run();
 }
 

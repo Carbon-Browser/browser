@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,12 +28,17 @@ chrome.test.runTests([
       chrome.test.assertEq('explicit', info.cause);
       chrome.test.assertEq(SET_REMOVE_COOKIE, info.cookie);
     });
-    chrome.cookies.set({
-      url: 'http://a.com/path',
-      name: 'testSetRemove',
-      value: '42',
-      expirationDate: TEST_EXPIRATION_DATE,
-      storeId: '1'
+
+    // The test uses this signal to create an off-the-record profile for us.
+    // Once that's created we follow up with the cookie set.
+    chrome.test.sendMessage('listening', function(response){
+      chrome.cookies.set({
+        url: 'http://a.com/path',
+        name: 'testSetRemove',
+        value: '42',
+        expirationDate: TEST_EXPIRATION_DATE,
+        storeId: '1'
+      });
     });
   },
   function testRemove() {

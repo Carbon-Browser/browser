@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,7 @@ package org.chromium.base;
 
 import java.lang.ref.WeakReference;
 
-/**
- * Utils for doing garbage collection tests.
- */
+/** Utils for doing garbage collection tests. */
 public class GarbageCollectionTestUtils {
     /**
      * Relying on just one single GC might make instrumentation tests flaky.
@@ -16,6 +14,7 @@ public class GarbageCollectionTestUtils {
      * since there are tests asserting objects NOT garbage collected.
      */
     private static final int MAX_GC_ITERATIONS = 3;
+
     private static final long GC_SLEEP_TIME = 10;
 
     /**

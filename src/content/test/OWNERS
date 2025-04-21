@@ -1,5 +1,3 @@
-sky@chromium.org
-
 # For RenderFrameHost/RenderWidgetHost/RenderViewHost-related test harnesses
 # and NavigationSimulator.
 file://content/browser/renderer_host/OWNERS
@@ -33,6 +31,9 @@ per-file attribution_*=file://content/browser/attribution_reporting/OWNERS
 
 # Anyone can add rules to include new test files.
 per-file BUILD.gn=*
+
+# Anyone can update the test bundle data filelists.
+per-file *.filelist=*
 
 # Make the mojom security presubmit happy with the following lines, despite also
 # allowing wildcard ownership for any test mojom here.

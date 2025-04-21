@@ -1,12 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMEOS_DBUS_MACHINE_LEARNING_FAKE_MACHINE_LEARNING_CLIENT_H_
 #define CHROMEOS_DBUS_MACHINE_LEARNING_FAKE_MACHINE_LEARNING_CLIENT_H_
 
-#include "base/callback_forward.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/callback_forward.h"
 #include "chromeos/dbus/machine_learning/machine_learning_client.h"
 
 namespace chromeos {

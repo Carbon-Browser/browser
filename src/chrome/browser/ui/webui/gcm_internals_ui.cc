@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/weak_ptr.h"
 #include "base/values.h"
 #include "chrome/browser/gcm/gcm_profile_service_factory.h"
@@ -24,6 +24,10 @@
 #include "content/public/browser/web_ui_controller.h"
 #include "content/public/browser/web_ui_data_source.h"
 #include "content/public/browser/web_ui_message_handler.h"
+
+GCMInternalsUIConfig::GCMInternalsUIConfig()
+    : DefaultWebUIConfig(content::kChromeUIScheme,
+                         chrome::kChromeUIGCMInternalsHost) {}
 
 namespace {
 
@@ -63,16 +67,16 @@ class GcmInternalsUIMessageHandler : public content::WebUIMessageHandler {
   base::WeakPtrFactory<GcmInternalsUIMessageHandler> weak_ptr_factory_{this};
 };
 
-GcmInternalsUIMessageHandler::GcmInternalsUIMessageHandler() {}
+GcmInternalsUIMessageHandler::GcmInternalsUIMessageHandler() = default;
 
-GcmInternalsUIMessageHandler::~GcmInternalsUIMessageHandler() {}
+GcmInternalsUIMessageHandler::~GcmInternalsUIMessageHandler() = default;
 
 void GcmInternalsUIMessageHandler::ReturnResults(
     Profile* profile,
     gcm::GCMProfileService* profile_service,
     const gcm::GCMClient::GCMStatistics* stats) {
-  base::Value results = gcm_driver::SetGCMInternalsInfo(stats, profile_service,
-                                                        profile->GetPrefs());
+  base::Value::Dict results = gcm_driver::SetGCMInternalsInfo(
+      stats, profile_service, profile->GetPrefs());
   FireWebUIListener(gcm_driver::kSetGcmInternalsInfo, results);
 }
 
@@ -81,7 +85,6 @@ void GcmInternalsUIMessageHandler::RequestAllInfo(
   AllowJavascript();
   if (list.size() != 1) {
     NOTREACHED();
-    return;
   }
   const bool clear_logs = list[0].GetBool();
 
@@ -90,10 +93,10 @@ void GcmInternalsUIMessageHandler::RequestAllInfo(
 
   Profile* profile = Profile::FromWebUI(web_ui());
   gcm::GCMProfileService* profile_service =
-    gcm::GCMProfileServiceFactory::GetForProfile(profile);
+      gcm::GCMProfileServiceFactory::GetForProfile(profile);
 
   if (!profile_service || !profile_service->driver()) {
-    ReturnResults(profile, NULL, NULL);
+    ReturnResults(profile, nullptr, nullptr);
   } else {
     profile_service->driver()->GetGCMStatistics(
         base::BindOnce(
@@ -106,7 +109,6 @@ void GcmInternalsUIMessageHandler::RequestAllInfo(
 void GcmInternalsUIMessageHandler::SetRecording(const base::Value::List& list) {
   if (list.size() != 1) {
     NOTREACHED();
-    return;
   }
   const bool recording = list[0].GetBool();
 
@@ -115,7 +117,7 @@ void GcmInternalsUIMessageHandler::SetRecording(const base::Value::List& list) {
       gcm::GCMProfileServiceFactory::GetForProfile(profile);
 
   if (!profile_service) {
-    ReturnResults(profile, NULL, NULL);
+    ReturnResults(profile, nullptr, nullptr);
     return;
   }
   // Get fresh stats after changing recording setting.
@@ -165,7 +167,8 @@ GCMInternalsUI::GCMInternalsUI(content::WebUI* web_ui)
     : content::WebUIController(web_ui) {
   // Set up the chrome://gcm-internals source.
   content::WebUIDataSource* html_source =
-      content::WebUIDataSource::Create(chrome::kChromeUIGCMInternalsHost);
+      content::WebUIDataSource::CreateAndAdd(Profile::FromWebUI(web_ui),
+                                             chrome::kChromeUIGCMInternalsHost);
 
   html_source->UseStringsJs();
 
@@ -176,10 +179,7 @@ GCMInternalsUI::GCMInternalsUI(content::WebUI* web_ui)
                                IDR_GCM_DRIVER_GCM_INTERNALS_JS);
   html_source->SetDefaultResource(IDR_GCM_DRIVER_GCM_INTERNALS_HTML);
 
-  Profile* profile = Profile::FromWebUI(web_ui);
-  content::WebUIDataSource::Add(profile, html_source);
-
   web_ui->AddMessageHandler(std::make_unique<GcmInternalsUIMessageHandler>());
 }
 
-GCMInternalsUI::~GCMInternalsUI() {}
+GCMInternalsUI::~GCMInternalsUI() = default;

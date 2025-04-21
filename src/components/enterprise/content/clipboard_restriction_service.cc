@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -70,11 +70,11 @@ void ClipboardRestrictionService::UpdateSettings() {
     return;
   }
 
-  const base::Value* settings = pref_service_->GetDictionary(
-      enterprise::content::kCopyPreventionSettings);
-  const base::Value* enable = settings->FindListKey(
+  const base::Value::Dict& settings =
+      pref_service_->GetDict(enterprise::content::kCopyPreventionSettings);
+  const base::Value::List* enable = settings.FindList(
       enterprise::content::kCopyPreventionSettingsEnableFieldName);
-  const base::Value* disable = settings->FindListKey(
+  const base::Value::List* disable = settings.FindList(
       enterprise::content::kCopyPreventionSettingsDisableFieldName);
 
   DCHECK(enable);
@@ -92,12 +92,12 @@ void ClipboardRestrictionService::UpdateSettings() {
   // and the copy will be blocked. While confusing, this is mostly to map to the
   // same policy format as the content analysis connector, which also has
   // "enable" and "disable" lists used in this way.
-  url_matcher::util::AddFilters(enable_url_matcher_.get(), true, &next_id_,
-                                enable->GetList());
-  url_matcher::util::AddFilters(disable_url_matcher_.get(), false, &next_id_,
-                                disable->GetList());
+  url_matcher::util::AddFiltersWithLimit(enable_url_matcher_.get(), true,
+                                         &next_id_, *enable);
+  url_matcher::util::AddFiltersWithLimit(disable_url_matcher_.get(), false,
+                                         &next_id_, *disable);
 
-  absl::optional<int> min_data_size = settings->FindIntKey(
+  std::optional<int> min_data_size = settings.FindInt(
       enterprise::content::kCopyPreventionSettingsMinDataSizeFieldName);
   DCHECK(min_data_size);
   DCHECK(min_data_size >= 0);
@@ -132,7 +132,9 @@ ClipboardRestrictionServiceFactory::GetBrowserContextToUse(
   return context;
 }
 
-KeyedService* ClipboardRestrictionServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ClipboardRestrictionServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new ClipboardRestrictionService(user_prefs::UserPrefs::Get(context));
+  return std::make_unique<ClipboardRestrictionService>(
+      user_prefs::UserPrefs::Get(context));
 }

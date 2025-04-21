@@ -1,25 +1,22 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/content_suggestions/cells/content_suggestions_shortcut_tile_view.h"
 
-#import <MaterialComponents/MaterialTypography.h>
-
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/shared/ui/symbols/symbols.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
+#import "ios/chrome/browser/ui/content_suggestions/cells/content_suggestions_cells_constants.h"
 #import "ios/chrome/browser/ui/content_suggestions/cells/content_suggestions_most_visited_action_item.h"
-#import "ios/chrome/browser/ui/icons/chrome_symbol.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/common/ui/util/dynamic_type_util.h"
 
 namespace {
 
 const CGFloat kCountWidth = 20;
 const CGFloat kCountBorderWidth = 24;
-const CGFloat kIconSize = 56;
 
 }  // namespace
 
@@ -27,7 +24,9 @@ const CGFloat kIconSize = 56;
 @synthesize countLabel = _countLabel;
 
 - (instancetype)initWithFrame:(CGRect)frame {
-  self = [super initWithFrame:frame placeholder:NO];
+  self = [super initWithFrame:frame
+                     tileType:ContentSuggestionsTileType::kShortcuts
+                 inMagicStack:YES];
   if (self) {
     _iconView = [[UIImageView alloc] initWithFrame:self.bounds];
     _iconView.translatesAutoresizingMaskIntoConstraints = NO;
@@ -35,11 +34,15 @@ const CGFloat kIconSize = 56;
     [self.imageContainerView addSubview:_iconView];
     AddSameConstraints(self.imageContainerView, _iconView);
     [NSLayoutConstraint activateConstraints:@[
-      [_iconView.widthAnchor constraintEqualToConstant:kIconSize],
+      [_iconView.widthAnchor
+          constraintEqualToConstant:kMagicStackImageContainerWidth],
       [_iconView.heightAnchor constraintEqualToAnchor:_iconView.widthAnchor],
     ]];
 
     self.imageBackgroundView.tintColor = [UIColor colorNamed:kBlueHaloColor];
+    if (@available(iOS 17, *)) {
+      [self registerViewForTraitChanges];
+    }
   }
   return self;
 }
@@ -49,34 +52,45 @@ const CGFloat kIconSize = 56;
   self = [self initWithFrame:CGRectZero];
   if (self) {
     self.accessibilityCustomActions = nil;
-    self.titleLabel.text = config.title;
     self.isAccessibilityElement = YES;
-    self.accessibilityTraits = config.accessibilityTraits;
-    self.accessibilityLabel = config.accessibilityLabel.length
-                                  ? config.accessibilityLabel
-                                  : config.title;
-    // The accessibilityUserInputLabel should just be the title, with nothing
-    // extra from the accessibilityLabel.
-    self.accessibilityUserInputLabels = @[ config.title ];
-    _iconView.image =
-        UseSymbols()
-            ? SymbolForCollectionShortcutType(config.collectionShortcutType)
-            : ImageForCollectionShortcutType(config.collectionShortcutType);
     _iconView.contentMode = UIViewContentModeCenter;
 
-    _countContainer.hidden = !config.count;
-    _countLabel.text = [@(config.count) stringValue];
-    _config = config;
+    [self updateConfiguration:config];
+
+    if (@available(iOS 17, *)) {
+      [self registerViewForTraitChanges];
+    }
   }
   return self;
 }
 
-- (void)updateCount:(NSInteger)count {
-  self.countContainer.hidden = count == 0;
-  if (count > 0) {
-    self.countLabel.text = [@(count) stringValue];
+- (void)shortcutsItemConfigDidChange:
+    (ContentSuggestionsMostVisitedActionItem*)config {
+  if (config.index != _config.index) {
+    return;
   }
-  self.config.count = count;
+  [self updateConfiguration:config];
+}
+
+- (void)updateConfiguration:(ContentSuggestionsMostVisitedActionItem*)config {
+  _config = config;
+  self.titleLabel.text = config.title;
+    self.titleLabel.font = [self titleLabelFont];
+  self.accessibilityTraits =
+      UIAccessibilityTraitButton | config.accessibilityTraits;
+  self.accessibilityLabel = config.accessibilityLabel.length
+                                ? config.accessibilityLabel
+                                : config.title;
+  // The accessibilityUserInputLabel should just be the title, with nothing
+  // extra from the accessibilityLabel.
+  self.accessibilityUserInputLabels = @[ config.title ];
+  self.iconView.image =
+      SymbolForCollectionShortcutType(config.collectionShortcutType);
+  self.countContainer.hidden = config.count == 0;
+  if (config.count > 0) {
+    self.countLabel.text = [@(config.count) stringValue];
+  }
+  self.alpha = config.disabled ? 0.3 : 1.0;
 }
 
 - (UILabel*)countLabel {
@@ -120,6 +134,46 @@ const CGFloat kIconSize = 56;
     AddSameCenterConstraints(_countLabel, _countContainer);
   }
   return _countLabel;
+}
+
+#pragma mark - UIView
+
+#if !defined(__IPHONE_17_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_17_0
+- (void)traitCollectionDidChange:(UITraitCollection*)previousTraitCollection {
+  [super traitCollectionDidChange:previousTraitCollection];
+  if (@available(iOS 17, *)) {
+    return;
+  }
+
+  if (previousTraitCollection.preferredContentSizeCategory !=
+      self.traitCollection.preferredContentSizeCategory) {
+    [self updateTitleLabelFontOnTraitChange];
+  }
+}
+#endif
+
+#pragma mark - Private
+
+- (UIFont*)titleLabelFont {
+  return PreferredFontForTextStyleWithMaxCategory(
+      UIFontTextStyleCaption2,
+      self.traitCollection.preferredContentSizeCategory,
+      UIContentSizeCategoryAccessibilityLarge);
+}
+
+// Registers a list of UITraits to observe and invokes the
+// `updateTitleLabelFontOnTraitChange` function whenever one of the observed
+// trait's values change.
+- (void)registerViewForTraitChanges API_AVAILABLE(ios(17.0)) {
+  NSArray<UITrait>* traits = TraitCollectionSetForTraits(
+      @[ UITraitPreferredContentSizeCategory.class ]);
+  [self registerForTraitChanges:traits
+                     withAction:@selector(updateTitleLabelFontOnTraitChange)];
+}
+
+// Update the `titleLabel` font when the device's content size changes.
+- (void)updateTitleLabelFontOnTraitChange {
+  self.titleLabel.font = [self titleLabelFont];
 }
 
 @end

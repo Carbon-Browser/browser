@@ -1,16 +1,24 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/profiler/stack_sampling_profiler_test_util.h"
-#include "base/memory/raw_ptr.h"
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
+#include "base/profiler/stack_sampling_profiler_test_util.h"
+
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
+#include "base/profiler/native_unwinder_android_map_delegate.h"
+#include "base/profiler/native_unwinder_android_memory_regions_map.h"
 #include "base/profiler/profiler_buildflags.h"
 #include "base/profiler/stack_buffer.h"
 #include "base/profiler/stack_sampling_profiler.h"
@@ -22,16 +30,15 @@
 
 #if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_ARM_CFI_TABLE)
 #include "base/android/apk_assets.h"
-#include "base/files/memory_mapped_file.h"
-#include "base/profiler/native_unwinder_android.h"
-
-#if BUILDFLAG(USE_ANDROID_UNWINDER_V2)
 #include "base/android/library_loader/anchor_functions.h"
-#include "base/profiler/chrome_unwinder_android_v2.h"
-#else
-#include "base/profiler/chrome_unwinder_android.h"
+#include "base/files/memory_mapped_file.h"
+#include "base/no_destructor.h"
+#include "base/profiler/chrome_unwinder_android_32.h"
+#include "base/profiler/native_unwinder_android.h"
 #endif
 
+#if !BUILDFLAG(IS_ANDROID)
+#include "base/profiler/core_unwinders.h"
 #endif
 
 #if BUILDFLAG(IS_WIN)
@@ -102,49 +109,56 @@ void OtherLibraryCallback(void* arg) {
 }
 
 #if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_ARM_CFI_TABLE)
-std::unique_ptr<NativeUnwinderAndroid> CreateNativeUnwinderAndroidForTesting(
-    uintptr_t exclude_module_with_base_address) {
-  class NativeUnwinderAndroidForTesting : public NativeUnwinderAndroid {
-   public:
-    explicit NativeUnwinderAndroidForTesting(
-        std::unique_ptr<unwindstack::Maps> memory_regions_map,
-        std::unique_ptr<unwindstack::Memory> process_memory,
-        uintptr_t exclude_module_with_base_address)
-        : NativeUnwinderAndroid(memory_regions_map.get(),
-                                process_memory.get(),
-                                exclude_module_with_base_address),
-          memory_regions_map_(std::move(memory_regions_map)),
-          process_memory_(std::move(process_memory)) {}
-    ~NativeUnwinderAndroidForTesting() override = default;
+class NativeUnwinderAndroidMapDelegateForTesting
+    : public NativeUnwinderAndroidMapDelegate {
+ public:
+  explicit NativeUnwinderAndroidMapDelegateForTesting(
+      std::unique_ptr<NativeUnwinderAndroidMemoryRegionsMap> memory_regions_map)
+      : memory_regions_map_(std::move(memory_regions_map)) {}
 
-   private:
-    std::unique_ptr<unwindstack::Maps> memory_regions_map_;
-    std::unique_ptr<unwindstack::Memory> process_memory_;
-  };
-  auto maps = NativeUnwinderAndroid::CreateMaps();
-  auto memory = NativeUnwinderAndroid::CreateProcessMemory();
-  return std::make_unique<NativeUnwinderAndroidForTesting>(
-      std::move(maps), std::move(memory), exclude_module_with_base_address);
+  NativeUnwinderAndroidMemoryRegionsMap* GetMapReference() override {
+    return memory_regions_map_.get();
+  }
+  void ReleaseMapReference() override {}
+
+ private:
+  const std::unique_ptr<NativeUnwinderAndroidMemoryRegionsMap>
+      memory_regions_map_;
+};
+
+// `map_delegate` should outlive the unwinder instance, so we cannot make a
+// derived `NativeUnwinderAndroidForTesting` to own the `map_delegate`, as
+// the base class outlives the derived class.
+NativeUnwinderAndroidMapDelegateForTesting* GetMapDelegateForTesting() {
+  static base::NoDestructor<NativeUnwinderAndroidMapDelegateForTesting>
+      map_delegate(NativeUnwinderAndroid::CreateMemoryRegionsMap());
+  return map_delegate.get();
 }
 
-#if BUILDFLAG(USE_ANDROID_UNWINDER_V2)
-std::unique_ptr<Unwinder> CreateChromeUnwinderAndroidForTesting(
+std::unique_ptr<NativeUnwinderAndroid> CreateNativeUnwinderAndroidForTesting(
+    uintptr_t exclude_module_with_base_address) {
+  return std::make_unique<NativeUnwinderAndroid>(
+      exclude_module_with_base_address, GetMapDelegateForTesting());
+}
+
+std::unique_ptr<Unwinder> CreateChromeUnwinderAndroid32ForTesting(
     uintptr_t chrome_module_base_address) {
   static constexpr char kCfiFileName[] = "assets/unwind_cfi_32_v2";
 
   // The wrapper class ensures that `MemoryMappedFile` has the same lifetime
   // as the unwinder.
-  class ChromeUnwinderAndroidForTesting : public ChromeUnwinderAndroidV2 {
+  class ChromeUnwinderAndroid32ForTesting : public ChromeUnwinderAndroid32 {
    public:
-    ChromeUnwinderAndroidForTesting(std::unique_ptr<MemoryMappedFile> cfi_file,
-                                    const ChromeUnwindInfoAndroid& unwind_info,
-                                    uintptr_t chrome_module_base_address,
-                                    uintptr_t text_section_start_address)
-        : ChromeUnwinderAndroidV2(unwind_info,
+    ChromeUnwinderAndroid32ForTesting(
+        std::unique_ptr<MemoryMappedFile> cfi_file,
+        const ChromeUnwindInfoAndroid32& unwind_info,
+        uintptr_t chrome_module_base_address,
+        uintptr_t text_section_start_address)
+        : ChromeUnwinderAndroid32(unwind_info,
                                   chrome_module_base_address,
                                   text_section_start_address),
           cfi_file_(std::move(cfi_file)) {}
-    ~ChromeUnwinderAndroidForTesting() override = default;
+    ~ChromeUnwinderAndroid32ForTesting() override = default;
 
    private:
     std::unique_ptr<MemoryMappedFile> cfi_file_;
@@ -156,48 +170,13 @@ std::unique_ptr<Unwinder> CreateChromeUnwinderAndroidForTesting(
   auto cfi_file = std::make_unique<MemoryMappedFile>();
   bool ok = cfi_file->Initialize(base::File(fd), cfi_region);
   DCHECK(ok);
-  return std::make_unique<ChromeUnwinderAndroidForTesting>(
+  return std::make_unique<ChromeUnwinderAndroid32ForTesting>(
       std::move(cfi_file),
-      base::CreateChromeUnwindInfoAndroid(
+      base::CreateChromeUnwindInfoAndroid32(
           {cfi_file->data(), cfi_file->length()}),
       chrome_module_base_address,
       /* text_section_start_address= */ base::android::kStartOfText);
 }
-#else
-std::unique_ptr<Unwinder> CreateChromeUnwinderAndroidForTesting(
-    uintptr_t chrome_module_base_address) {
-  static constexpr char kCfiFileName[] = "assets/unwind_cfi_32";
-
-  // The wrapper class ensures that `MemoryMappedFile` has the same lifetime
-  // as the unwinder.
-  class ChromeUnwinderAndroidForTesting : public ChromeUnwinderAndroid {
-   public:
-    ChromeUnwinderAndroidForTesting(std::unique_ptr<MemoryMappedFile> cfi_file,
-                                    std::unique_ptr<ArmCFITable> cfi_table,
-                                    uintptr_t chrome_module_base_address)
-        : ChromeUnwinderAndroid(cfi_table.get(), chrome_module_base_address),
-          cfi_file_(std::move(cfi_file)),
-          cfi_table_(std::move(cfi_table)) {}
-    ~ChromeUnwinderAndroidForTesting() override = default;
-
-   private:
-    std::unique_ptr<MemoryMappedFile> cfi_file_;
-    std::unique_ptr<ArmCFITable> cfi_table_;
-  };
-
-  MemoryMappedFile::Region cfi_region;
-  int fd = base::android::OpenApkAsset(kCfiFileName, &cfi_region);
-  DCHECK_GT(fd, 0);
-  auto cfi_file = std::make_unique<MemoryMappedFile>();
-  bool ok = cfi_file->Initialize(base::File(fd), cfi_region);
-  DCHECK(ok);
-  std::unique_ptr<ArmCFITable> cfi_table =
-      ArmCFITable::Parse({cfi_file->data(), cfi_file->length()});
-  DCHECK(cfi_table);
-  return std::make_unique<ChromeUnwinderAndroidForTesting>(
-      std::move(cfi_file), std::move(cfi_table), chrome_module_base_address);
-}
-#endif  // #if BUILDFLAG(USE_ANDROID_UNWINDER_V2)
 #endif  // #if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_ARM_CFI_TABLE)
 
 }  // namespace
@@ -249,7 +228,7 @@ UnwindScenario::InvokeSetupFunction(const SetupFunction& setup_function,
 
   if (!setup_function.is_null()) {
     const auto wait_for_sample_closure =
-        BindLambdaForTesting([&]() { UnwindScenario::WaitForSample(events); });
+        BindLambdaForTesting([&] { UnwindScenario::WaitForSample(events); });
     setup_function.Run(wait_for_sample_closure);
   }
 
@@ -279,8 +258,9 @@ NOINLINE FunctionAddressRange
 CallWithPlainFunction(OnceClosure wait_for_sample) {
   const void* start_program_counter = GetProgramCounter();
 
-  if (!wait_for_sample.is_null())
+  if (!wait_for_sample.is_null()) {
     std::move(wait_for_sample).Run();
+  }
 
   // Volatile to prevent a tail call to GetProgramCounter().
   const void* volatile end_program_counter = GetProgramCounter();
@@ -297,11 +277,13 @@ NOINLINE FunctionAddressRange CallWithAlloca(OnceClosure wait_for_sample) {
   // optimized out.
   volatile char* const allocation =
       const_cast<volatile char*>(static_cast<char*>(alloca(alloca_size)));
-  for (volatile char* p = allocation; p < allocation + alloca_size; ++p)
+  for (volatile char* p = allocation; p < allocation + alloca_size; ++p) {
     *p = '\0';
+  }
 
-  if (!wait_for_sample.is_null())
+  if (!wait_for_sample.is_null()) {
     std::move(wait_for_sample).Run();
+  }
 
   // Volatile to prevent a tail call to GetProgramCounter().
   const void* volatile end_program_counter = GetProgramCounter();
@@ -332,7 +314,7 @@ void WithTargetThread(UnwindScenario* scenario,
                       ProfileCallback profile_callback) {
   UnwindScenario::SampleEvents events;
   TargetThread target_thread(
-      BindLambdaForTesting([&]() { scenario->Execute(&events); }));
+      BindLambdaForTesting([&] { scenario->Execute(&events); }));
 
   target_thread.Start();
   events.ready_for_sample.Wait();
@@ -368,8 +350,9 @@ std::vector<Frame> SampleScenario(UnwindScenario* scenario,
                       sampling_thread_completed.Signal();
                     })),
                 CreateCoreUnwindersFactoryForTesting(module_cache));
-            if (aux_unwinder_factory)
+            if (aux_unwinder_factory) {
               profiler.AddAuxUnwinder(std::move(aux_unwinder_factory).Run());
+            }
             profiler.Start();
             sampling_thread_completed.Wait();
           }));
@@ -395,9 +378,9 @@ void ExpectStackContains(const std::vector<Frame>& stack,
   for (; frame_it != stack.end() && function_it != functions.end();
        ++frame_it) {
     if (frame_it->instruction_pointer >=
-            reinterpret_cast<uintptr_t>(function_it->start) &&
+            reinterpret_cast<uintptr_t>(function_it->start.get()) &&
         frame_it->instruction_pointer <=
-            reinterpret_cast<uintptr_t>(function_it->end)) {
+            reinterpret_cast<uintptr_t>(function_it->end.get())) {
       ++function_it;
     }
   }
@@ -423,9 +406,9 @@ void ExpectStackDoesNotContain(
   for (const auto& frame : stack) {
     for (const auto& function : functions) {
       if (frame.instruction_pointer >=
-              reinterpret_cast<uintptr_t>(function.start) &&
+              reinterpret_cast<uintptr_t>(function.start.get()) &&
           frame.instruction_pointer <=
-              reinterpret_cast<uintptr_t>(function.end)) {
+              reinterpret_cast<uintptr_t>(function.end.get())) {
         seen_functions.insert(function);
       }
     }
@@ -438,29 +421,33 @@ void ExpectStackDoesNotContain(
   }
 }
 
-NativeLibrary LoadOtherLibrary() {
+NativeLibrary LoadTestLibrary(std::string_view library_name) {
   // The lambda gymnastics works around the fact that we can't use ASSERT_*
   // macros in a function returning non-null.
-  const auto load = [](NativeLibrary* library) {
-    FilePath other_library_path;
-#if BUILDFLAG(IS_FUCHSIA)
-    // TODO(crbug.com/1262430): Find a solution that works across platforms.
-    ASSERT_TRUE(PathService::Get(DIR_ASSETS, &other_library_path));
+  const auto load = [&](NativeLibrary* library) {
+    FilePath library_path;
+#if BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(IS_IOS)
+    // TODO(crbug.com/40799492): Find a solution that works across platforms.
+    ASSERT_TRUE(PathService::Get(DIR_ASSETS, &library_path));
 #else
     // The module is next to the test module rather than with test data.
-    ASSERT_TRUE(PathService::Get(DIR_MODULE, &other_library_path));
+    ASSERT_TRUE(PathService::Get(DIR_MODULE, &library_path));
 #endif  // BUILDFLAG(IS_FUCHSIA)
-    other_library_path = other_library_path.AppendASCII(
-        GetLoadableModuleName("base_profiler_test_support_library"));
+    library_path =
+        library_path.AppendASCII(GetLoadableModuleName(library_name));
     NativeLibraryLoadError load_error;
-    *library = LoadNativeLibrary(other_library_path, &load_error);
-    ASSERT_TRUE(*library) << "error loading " << other_library_path.value()
-                          << ": " << load_error.ToString();
+    *library = LoadNativeLibrary(library_path, &load_error);
+    ASSERT_TRUE(*library) << "error loading " << library_path.value() << ": "
+                          << load_error.ToString();
   };
 
   NativeLibrary library = nullptr;
   load(&library);
   return library;
+}
+
+NativeLibrary LoadOtherLibrary() {
+  return LoadTestLibrary("base_profiler_test_support_library");
 }
 
 uintptr_t GetAddressInOtherLibrary(NativeLibrary library) {
@@ -477,15 +464,17 @@ StackSamplingProfiler::UnwindersFactory CreateCoreUnwindersFactoryForTesting(
   std::vector<std::unique_ptr<Unwinder>> unwinders;
   unwinders.push_back(CreateNativeUnwinderAndroidForTesting(
       reinterpret_cast<uintptr_t>(&__executable_start)));
-  unwinders.push_back(CreateChromeUnwinderAndroidForTesting(
+  unwinders.push_back(CreateChromeUnwinderAndroid32ForTesting(
       reinterpret_cast<uintptr_t>(&__executable_start)));
   return BindOnce(
       [](std::vector<std::unique_ptr<Unwinder>> unwinders) {
         return unwinders;
       },
       std::move(unwinders));
-#else
+#elif BUILDFLAG(IS_ANDROID)
   return StackSamplingProfiler::UnwindersFactory();
+#else
+  return CreateCoreUnwindersFactory();
 #endif
 }
 
@@ -508,4 +497,5 @@ bool TestModule::IsNative() const {
 bool operator==(const Frame& a, const Frame& b) {
   return a.instruction_pointer == b.instruction_pointer && a.module == b.module;
 }
+
 }  // namespace base

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "components/keyed_service/core/keyed_service.h"
+#include "content/public/browser/render_frame_host.h"
 #include "url/gurl.h"
 
 namespace payments {
@@ -24,6 +25,23 @@ using PaymentHandlerOpenWindowCallback =
     base::OnceCallback<void(bool /* success */,
                             int /* render_process_id */,
                             int /* render_frame_id */)>;
+
+// Enum of possible outcomes from a call to
+// PaymentRequestDisplayManager::TryShow, used for logging purposes.
+//
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+//
+// LINT.IfChange(PaymentRequestTryShowOutcome)
+enum class PaymentRequestTryShowOutcome {
+  kAbleToShow = 0,
+  kCannotShowUnknownReason = 1,
+  kCannotShowDelegateWasNull = 2,
+  kCannotShowExistingPaymentRequestSameTab = 3,
+  kCannotShowExistingPaymentRequestDifferentTab = 4,
+  kMaxValue = kCannotShowExistingPaymentRequestDifferentTab,
+};
+// LINT.ThenChange(//tools/metrics/histograms/metadata/payment/enums.xml:PaymentRequestTryShowOutcome)
 
 // This KeyedService is responsible for displaying and hiding Payment Request
 // UI. It ensures that only one Payment Request is showing per profile.
@@ -48,6 +66,10 @@ class PaymentRequestDisplayManager : public KeyedService {
 
     // Returns true after Show() was called.
     bool was_shown() const { return was_shown_; }
+
+    base::WeakPtr<ContentPaymentRequestDelegate> delegate() {
+      return delegate_;
+    }
 
     base::WeakPtr<DisplayHandle> GetWeakPtr();
 

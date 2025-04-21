@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,7 @@ namespace content {
 // events without calling TakeRequest in between will record metrics for all
 // events using the same timestamps instead of tracking each event separately.
 //
-// TODO(crbug.com/1263687): Stop doing that. There should be a separate start
+// TODO(crbug.com/40203057): Stop doing that. There should be a separate start
 // time for each event.
 class CONTENT_EXPORT VisibleTimeRequestTrigger {
  public:
@@ -68,20 +68,10 @@ class CONTENT_EXPORT VisibleTimeRequestTrigger {
   // |last_request_| to null.
   blink::mojom::RecordContentToVisibleTimeRequestPtr TakeRequest();
 
-  // Returns true if blink::features::kTabSwitchMetrics2 is enabled, which
-  // affects the measurement behaviour. This lets any caller with access to a
-  // VisibleTimeRequestTrigger check the cached value to avoid slow feature
-  // lookups on the critical path.
-  bool is_tab_switch_metrics2_feature_enabled() const {
-    return is_tab_switch_metrics2_feature_enabled_;
-  }
-
  private:
   // The last visible event start request. This should only be set and
   // retrieved using UpdateRequest and TakeRequest.
   blink::mojom::RecordContentToVisibleTimeRequestPtr last_request_;
-
-  bool is_tab_switch_metrics2_feature_enabled_;
 };
 
 }  // namespace content

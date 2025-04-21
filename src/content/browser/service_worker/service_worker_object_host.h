@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,9 +41,10 @@ class CONTENT_EXPORT ServiceWorkerObjectHost
     : public blink::mojom::ServiceWorkerObjectHost,
       public ServiceWorkerVersion::Observer {
  public:
-  ServiceWorkerObjectHost(base::WeakPtr<ServiceWorkerContextCore> context,
-                          ServiceWorkerContainerHost* container_host,
-                          scoped_refptr<ServiceWorkerVersion> version);
+  ServiceWorkerObjectHost(
+      base::WeakPtr<ServiceWorkerContextCore> context,
+      base::WeakPtr<ServiceWorkerContainerHost> container_host,
+      scoped_refptr<ServiceWorkerVersion> version);
 
   ServiceWorkerObjectHost(const ServiceWorkerObjectHost&) = delete;
   ServiceWorkerObjectHost& operator=(const ServiceWorkerObjectHost&) = delete;
@@ -65,22 +66,6 @@ class CONTENT_EXPORT ServiceWorkerObjectHost
   // been sent. If the info cannot be sent immediately, use
   // CreateIncompleteObjectInfo() instead.
   blink::mojom::ServiceWorkerObjectInfoPtr CreateCompleteObjectInfoToSend();
-
-  // Similar to CreateCompleteObjectInfoToSend(), except the returned info has
-  // an empty Mojo request for ServiceWorkerObject. To make the info usable, the
-  // caller should add a request to the info, send the info over Mojo, and
-  // then call AddRemoteObjectPtrAndUpdateState().
-  //
-  // This function is useful when an info is needed before it can be sent over
-  // Mojo.
-  blink::mojom::ServiceWorkerObjectInfoPtr CreateIncompleteObjectInfo();
-
-  // Starts to use the |pending_object| as a valid remote, and triggers
-  // statechanged event if |sent_state| is old and needs to be updated.
-  void AddRemoteObjectPtrAndUpdateState(
-      mojo::PendingAssociatedRemote<blink::mojom::ServiceWorkerObject>
-          pending_object,
-      blink::mojom::ServiceWorkerState sent_state);
 
   base::WeakPtr<ServiceWorkerObjectHost> AsWeakPtr();
 
@@ -104,7 +89,22 @@ class CONTENT_EXPORT ServiceWorkerObjectHost
   base::WeakPtr<ServiceWorkerContextCore> context_;
   // |container_host_| is valid throughout lifetime of |this| because it owns
   // |this|.
-  const raw_ptr<ServiceWorkerContainerHost, DanglingUntriaged> container_host_;
+  //
+  // However, there exists an exception, because of an ownership cycle
+  // between 1,2,3,4,5:
+  // 1. ServiceWorkerContainerHost owns as member (2)
+  // 2. ServiceWorkerObjectManager owns via unique_ptr (3)
+  // 3. ServiceWorkerObjectHost owns via scoped_ptr(4)
+  // 4. ServiceWorkerVersion owns via unique_ptr (5)
+  // 5. ServiceWorkerHost owns via unique_ptr (1)
+  //
+  // The cycle is broken in `ServiceWorkerObjectManager::RemoveHost`, by
+  // transferring ownership of |this| to the stack, while deleting
+  // |container_host_|.
+  //
+  // As a result, |container_host_| is always valid, except during the
+  // destructor.
+  const base::WeakPtr<ServiceWorkerContainerHost> container_host_;
   // The origin of the |container_host_|. Note that this is const because once a
   // JavaScript ServiceWorker object is created for an execution context, we
   // don't expect that context to change origins and still hold on to the

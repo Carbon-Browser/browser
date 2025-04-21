@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,13 @@
 #include "base/memory/singleton.h"
 #include "base/notreached.h"
 #include "ui/base/idle/idle_internal.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
 #include "ui/base/ui_base_jni_headers/IdleDetector_jni.h"
 
-using base::android::AttachCurrentThread;
 using base::android::ConvertJavaStringToUTF8;
 using base::android::ScopedJavaLocalRef;
+using jni_zero::AttachCurrentThread;
 
 namespace ui {
 
@@ -79,7 +81,7 @@ bool CheckIdleStateIsLocked() {
 }
 
 IdleState CalculateIdleState(int idle_threshold) {
-  // TODO(crbug.com/878979): implementation pending.
+  // TODO(crbug.com/40591477): implementation pending.
   NOTIMPLEMENTED();
   return IdleState::IDLE_STATE_UNKNOWN;
 }

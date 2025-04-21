@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@ LanguageModelManager::LanguageModelManager(PrefService* prefs,
     : primary_model_type_(ModelType::BASELINE) {
 }
 
-LanguageModelManager::~LanguageModelManager() {}
+LanguageModelManager::~LanguageModelManager() = default;
 
 void LanguageModelManager::AddModel(const ModelType type,
                                     std::unique_ptr<LanguageModel> model) {

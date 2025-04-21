@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,13 @@
 #define COMPONENTS_AUTOFILL_CORE_BROWSER_DATA_MODEL_AUTOFILL_STRUCTURED_ADDRESS_CONSTANTS_H_
 
 namespace autofill {
-namespace structured_address {
 
 // List of name separators.
 extern const char kNameSeparators[];
 
-}  // namespace structured_address
+// Regular expression pattern to match separators as used in CJK names:
+// Included separators: \u002D, \u30FB, \u00B7, \u3000 or a simple space.
+inline constexpr char kCjkNameSeperatorsRe[] = "(?:-|・|·|　|\\s+)";
+
 }  // namespace autofill
 #endif  // COMPONENTS_AUTOFILL_CORE_BROWSER_DATA_MODEL_AUTOFILL_STRUCTURED_ADDRESS_CONSTANTS_H_

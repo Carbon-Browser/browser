@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,6 @@ class CC_EXPORT TileDrawInfo {
         return true;
     }
     NOTREACHED();
-    return false;
   }
   bool NeedsRaster() const {
     switch (mode_) {
@@ -44,7 +43,6 @@ class CC_EXPORT TileDrawInfo {
         return true;
     }
     NOTREACHED();
-    return false;
   }
 
   viz::ResourceId resource_id_for_export() const {
@@ -59,7 +57,7 @@ class CC_EXPORT TileDrawInfo {
     return resource_.size();
   }
 
-  const viz::ResourceFormat& resource_format() const {
+  const viz::SharedImageFormat& resource_shared_image_format() const {
     DCHECK(mode_ == RESOURCE_MODE);
     DCHECK(resource_);
     return resource_.format();
@@ -77,6 +75,7 @@ class CC_EXPORT TileDrawInfo {
   }
 
   inline bool has_resource() const { return !!resource_; }
+  bool is_resource_ready_to_draw() const { return is_resource_ready_to_draw_; }
 
   const ResourcePool::InUsePoolResource& GetResource() const;
 

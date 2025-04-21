@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include <set>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/sequence_checker.h"
@@ -52,7 +52,7 @@ class ServiceWorkerDiskCacheEntry {
 
  private:
   // The disk_cache::Entry is owned by this entry and closed on destruction.
-  raw_ptr<disk_cache::Entry> disk_cache_entry_;
+  raw_ptr<disk_cache::Entry, DanglingUntriaged> disk_cache_entry_;
 
   // The cache that this entry belongs to.
   const raw_ptr<ServiceWorkerDiskCache> cache_;
@@ -129,7 +129,7 @@ class ServiceWorkerDiskCache {
   std::map</*call_id=*/uint64_t, EntryCallback> active_entry_calls_;
   std::map</*call_id=*/uint64_t, net::CompletionOnceCallback>
       active_doom_calls_;
-  std::set<ServiceWorkerDiskCacheEntry*> open_entries_;
+  std::set<raw_ptr<ServiceWorkerDiskCacheEntry>> open_entries_;
   std::unique_ptr<disk_cache::Backend> disk_cache_;
 
   SEQUENCE_CHECKER(sequence_checker_);

@@ -1,12 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/gpu/chromeos/vda_video_frame_pool.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/gpu/chromeos/gpu_buffer_layout.h"
 #include "media/gpu/macros.h"
 #include "media/media_buildflags.h"
@@ -16,7 +17,9 @@ namespace media {
 VdaVideoFramePool::VdaVideoFramePool(
     base::WeakPtr<VdaDelegate> vda,
     scoped_refptr<base::SequencedTaskRunner> vda_task_runner)
-    : vda_(std::move(vda)), vda_task_runner_(std::move(vda_task_runner)) {
+    : vda_(std::move(vda)),
+      vda_task_runner_(std::move(vda_task_runner)),
+      vda_frame_storage_type_(vda_->GetFrameStorageType()) {
   DVLOGF(3);
   DETACH_FROM_SEQUENCE(parent_sequence_checker_);
 
@@ -40,7 +43,6 @@ CroStatus::Or<GpuBufferLayout> VdaVideoFramePool::Initialize(
     bool use_linear_buffers) {
   DVLOGF(3);
   DCHECK_CALLED_ON_VALID_SEQUENCE(parent_sequence_checker_);
-  DCHECK(!use_linear_buffers);
 
 #if !BUILDFLAG(USE_ARC_PROTECTED_MEDIA)
   if (use_protected) {
@@ -67,8 +69,8 @@ CroStatus::Or<GpuBufferLayout> VdaVideoFramePool::Initialize(
   // back to the pool.
   frame_pool_ = {};
   max_num_frames_ = 0;
-  layout_ = absl::nullopt;
-  fourcc_ = absl::nullopt;
+  layout_ = std::nullopt;
+  fourcc_ = std::nullopt;
   coded_size_ = gfx::Size();
 
   CroStatus::Or<GpuBufferLayout> status_or_layout =
@@ -84,7 +86,7 @@ CroStatus::Or<GpuBufferLayout> VdaVideoFramePool::Initialize(
                                          parent_task_runner_, weak_this_)));
   done.Wait();
 
-  if (status_or_layout.has_error())
+  if (!status_or_layout.has_value())
     return status_or_layout;
 
   GpuBufferLayout layout = std::move(status_or_layout).value();
@@ -115,8 +117,8 @@ void VdaVideoFramePool::OnRequestFramesDone(
 // static
 void VdaVideoFramePool::ImportFrameThunk(
     scoped_refptr<base::SequencedTaskRunner> task_runner,
-    absl::optional<base::WeakPtr<VdaVideoFramePool>> weak_this,
-    scoped_refptr<VideoFrame> frame) {
+    std::optional<base::WeakPtr<VdaVideoFramePool>> weak_this,
+    scoped_refptr<FrameResource> frame) {
   DVLOGF(3);
   DCHECK(weak_this);
 
@@ -125,7 +127,7 @@ void VdaVideoFramePool::ImportFrameThunk(
                                 std::move(frame)));
 }
 
-void VdaVideoFramePool::ImportFrame(scoped_refptr<VideoFrame> frame) {
+void VdaVideoFramePool::ImportFrame(scoped_refptr<FrameResource> frame) {
   DVLOGF(3);
   DCHECK_CALLED_ON_VALID_SEQUENCE(parent_sequence_checker_);
 
@@ -139,24 +141,32 @@ void VdaVideoFramePool::ImportFrame(scoped_refptr<VideoFrame> frame) {
   CallFrameAvailableCbIfNeeded();
 }
 
-scoped_refptr<VideoFrame> VdaVideoFramePool::GetFrame() {
+scoped_refptr<FrameResource> VdaVideoFramePool::GetFrame() {
   DVLOGF(3);
   DCHECK_CALLED_ON_VALID_SEQUENCE(parent_sequence_checker_);
 
   if (IsExhausted())
     return nullptr;
 
-  scoped_refptr<VideoFrame> origin_frame = std::move(frame_pool_.front());
+  scoped_refptr<FrameResource> origin_frame = std::move(frame_pool_.front());
   frame_pool_.pop();
 
   // Update visible_rect and natural_size.
-  scoped_refptr<VideoFrame> wrapped_frame = VideoFrame::WrapVideoFrame(
-      origin_frame, origin_frame->format(), visible_rect_, natural_size_);
-  DCHECK(wrapped_frame);
+  scoped_refptr<FrameResource> wrapped_frame =
+      origin_frame->CreateWrappingFrame(visible_rect_, natural_size_);
+  if (!wrapped_frame) {
+    DLOG(WARNING) << __func__ << "Failed to wrap a FrameResource";
+    return nullptr;
+  }
+
   wrapped_frame->AddDestructionObserver(
       base::BindOnce(&VdaVideoFramePool::ImportFrameThunk, parent_task_runner_,
                      weak_this_, std::move(origin_frame)));
   return wrapped_frame;
+}
+
+VideoFrame::StorageType VdaVideoFramePool::GetFrameStorageType() const {
+  return vda_frame_storage_type_;
 }
 
 bool VdaVideoFramePool::IsExhausted() {
@@ -178,6 +188,12 @@ void VdaVideoFramePool::ReleaseAllFrames() {
   // TODO(jkardatzke): Implement this when we do protected content on Android
   // for Intel platforms. I will do this in a follow up CL, removing the
   // NOREACHED() for now in order to prevent a DCHECK when this occurs.
+}
+
+std::optional<GpuBufferLayout> VdaVideoFramePool::GetGpuBufferLayout() {
+  DVLOGF(3);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(parent_sequence_checker_);
+  return layout_;
 }
 
 void VdaVideoFramePool::CallFrameAvailableCbIfNeeded() {

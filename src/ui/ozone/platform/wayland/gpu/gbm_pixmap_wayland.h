@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define UI_OZONE_PLATFORM_WAYLAND_GPU_GBM_PIXMAP_WAYLAND_H_
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/files/scoped_file.h"
@@ -40,7 +41,7 @@ class GbmPixmapWayland : public gfx::NativePixmap {
       gfx::Size size,
       gfx::BufferFormat format,
       gfx::BufferUsage usage,
-      absl::optional<gfx::Size> visible_area_size = absl::nullopt);
+      std::optional<gfx::Size> visible_area_size = std::nullopt);
 
   // Creates a buffer object from native pixmap handle and initializes the
   // pixmap buffer. If |widget| is provided, browser side wl_buffer is also
@@ -67,7 +68,7 @@ class GbmPixmapWayland : public gfx::NativePixmap {
                             const gfx::OverlayPlaneData& overlay_plane_data,
                             std::vector<gfx::GpuFence> acquire_fences,
                             std::vector<gfx::GpuFence> release_fences) override;
-  gfx::NativePixmapHandle ExportHandle() override;
+  gfx::NativePixmapHandle ExportHandle() const override;
 
  private:
   ~GbmPixmapWayland() override;

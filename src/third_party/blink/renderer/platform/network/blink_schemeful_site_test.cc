@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -134,6 +134,14 @@ TEST(BlinkSchemefulSiteTest, HashBlinkSchemefulSite) {
   blink_schemeful_site_map_.erase(opaque_site_1);
   EXPECT_FALSE(blink_schemeful_site_map_.Contains(blink_site_1));
   EXPECT_FALSE(blink_schemeful_site_map_.Contains(opaque_site_1));
+}
+
+TEST(BlinkSchemefulSiteTest, IsOpaque) {
+  BlinkSchemefulSite site(
+      SecurityOrigin::CreateFromString("https://example.com"));
+  EXPECT_FALSE(site.IsOpaque());
+  BlinkSchemefulSite opaque_site;
+  EXPECT_TRUE(opaque_site.IsOpaque());
 }
 
 }  // namespace blink

@@ -1,10 +1,8 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/infobars/core/infobar_container.h"
-
-#include <algorithm>
 
 #include "base/auto_reset.h"
 #include "base/check_op.h"
@@ -12,14 +10,14 @@
 #include "base/metrics/histogram_base.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/metrics_hashes.h"
+#include "base/ranges/algorithm.h"
 #include "build/build_config.h"
 #include "components/infobars/core/infobar.h"
 #include "components/infobars/core/infobar_delegate.h"
 
 namespace infobars {
 
-InfoBarContainer::Delegate::~Delegate() {
-}
+InfoBarContainer::Delegate::~Delegate() = default;
 
 InfoBarContainer::InfoBarContainer(Delegate* delegate)
     : delegate_(delegate),
@@ -29,13 +27,15 @@ InfoBarContainer::InfoBarContainer(Delegate* delegate)
 InfoBarContainer::~InfoBarContainer() {
   // RemoveAllInfoBarsForDestruction() should have already cleared our infobars.
   DCHECK(infobars_.empty());
-  if (infobar_manager_)
+  if (infobar_manager_) {
     infobar_manager_->RemoveObserver(this);
+  }
 }
 
 void InfoBarContainer::ChangeInfoBarManager(InfoBarManager* infobar_manager) {
-  if (infobar_manager_)
+  if (infobar_manager_) {
     infobar_manager_->RemoveObserver(this);
+  }
 
   bool state_changed = false;
   {
@@ -57,30 +57,33 @@ void InfoBarContainer::ChangeInfoBarManager(InfoBarManager* infobar_manager) {
     if (infobar_manager_) {
       infobar_manager_->AddObserver(this);
 
-      for (size_t i = 0; i < infobar_manager_->infobar_count(); ++i) {
-        AddInfoBar(infobar_manager_->infobar_at(i), i, false);
+      for (size_t i = 0; i < infobar_manager_->infobars().size(); ++i) {
+        AddInfoBar(infobar_manager_->infobars()[i], i, false);
         state_changed = true;
       }
     }
   }
 
   // Now that everything is up to date, signal the delegate to re-layout.
-  if (state_changed)
+  if (state_changed) {
     OnInfoBarStateChanged(false);
+  }
 }
 
 void InfoBarContainer::OnInfoBarStateChanged(bool is_animating) {
-  if (ignore_infobar_state_changed_)
+  if (ignore_infobar_state_changed_) {
     return;
-  if (delegate_)
+  }
+  if (delegate_) {
     delegate_->InfoBarContainerStateChanged(is_animating);
+  }
   PlatformSpecificInfoBarStateChanged(is_animating);
 }
 
 void InfoBarContainer::RemoveInfoBar(InfoBar* infobar) {
   infobar->set_container(nullptr);
-  auto i(std::find(infobars_.begin(), infobars_.end(), infobar));
-  DCHECK(i != infobars_.end());
+  auto i = base::ranges::find(infobars_, infobar);
+  CHECK(i != infobars_.end());
   PlatformSpecificRemoveInfoBar(infobar);
   infobars_.erase(i);
 }
@@ -107,9 +110,8 @@ void InfoBarContainer::OnInfoBarRemoved(InfoBar* infobar, bool animate) {
 void InfoBarContainer::OnInfoBarReplaced(InfoBar* old_infobar,
                                          InfoBar* new_infobar) {
   PlatformSpecificReplaceInfoBar(old_infobar, new_infobar);
-  InfoBars::const_iterator i(std::find(infobars_.begin(), infobars_.end(),
-                                       old_infobar));
-  DCHECK(i != infobars_.end());
+  InfoBars::const_iterator i = base::ranges::find(infobars_, old_infobar);
+  CHECK(i != infobars_.end());
   size_t position = i - infobars_.begin();
   old_infobar->Hide(false);
   AddInfoBar(new_infobar, position, false);
@@ -133,9 +135,8 @@ void InfoBarContainer::AddInfoBar(InfoBar* infobar,
   infobar->Show(infobar_manager_->animations_enabled() && animate);
 
   // Record the infobar being displayed.
-  DCHECK_NE(InfoBarDelegate::INVALID, infobar->delegate()->GetIdentifier());
-  base::UmaHistogramSparse("InfoBar.Shown",
-                           infobar->delegate()->GetIdentifier());
+  DCHECK_NE(InfoBarDelegate::INVALID, infobar->GetIdentifier());
+  base::UmaHistogramSparse("InfoBar.Shown", infobar->GetIdentifier());
 }
 
 }  // namespace infobars

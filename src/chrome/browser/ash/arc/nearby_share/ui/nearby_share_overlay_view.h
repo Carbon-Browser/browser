@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,9 +18,9 @@ class View;
 namespace arc {
 
 class NearbyShareOverlayView : public views::FlexLayoutView {
- public:
-  METADATA_HEADER(NearbyShareOverlayView);
+  METADATA_HEADER(NearbyShareOverlayView, views::FlexLayoutView)
 
+ public:
   NearbyShareOverlayView(const NearbyShareOverlayView&) = delete;
   NearbyShareOverlayView& operator=(const NearbyShareOverlayView&) = delete;
   ~NearbyShareOverlayView() override;

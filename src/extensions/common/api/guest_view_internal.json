@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,6 +57,10 @@
             "nodoc": true
           },
           {
+            "type": "string",
+            "name": "ownerFrameToken"
+          },
+          {
             "type": "object",
             "name": "createParams",
             "additionalProperties": {"type": "any"}
@@ -66,27 +70,21 @@
           "name": "callback",
           "parameters": [
             {
-              "type": "object",
-              "name": "returnParams",
-              "additionalProperties": {"type": "any"}
+              "type": "integer",
+              "name": "instanceId"
             }
           ]
         }
       },
       {
-        "name": "destroyGuest",
+        "name": "destroyUnattachedGuest",
         "type": "function",
         "parameters": [
           {
             "type": "integer",
             "name": "instanceId"
           }
-        ],
-        "returns_async": {
-          "name": "callback",
-          "parameters": [],
-          "optional": true
-        }
+        ]
       },
       {
         "name": "setSize",

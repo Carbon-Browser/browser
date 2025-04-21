@@ -1,21 +1,20 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/html/trust_token_attribute_parsing.h"
+#include "base/logging.h"
 #include "services/network/public/mojom/trust_tokens.mojom-blink.h"
 #include "services/network/public/mojom/trust_tokens.mojom-shared.h"
-#include "third_party/blink/renderer/bindings/core/v8/v8_trust_token.h"
 #include "third_party/blink/renderer/core/fetch/trust_token_to_mojom.h"
 #include "third_party/blink/renderer/platform/json/json_values.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
-namespace blink {
-
-namespace internal {
+namespace blink::internal {
 
 namespace {
-bool ParseType(const String& in, network::mojom::TrustTokenOperationType* out) {
+bool ParseOperation(const String& in,
+                    network::mojom::TrustTokenOperationType* out) {
   if (in == "token-request") {
     *out = network::mojom::TrustTokenOperationType::kIssuance;
     return true;
@@ -40,20 +39,6 @@ bool ParseRefreshPolicy(const String& in,
   }
   return false;
 }
-bool ParseSignRequestData(const String& in,
-                          network::mojom::TrustTokenSignRequestData* out) {
-  if (in == "omit") {
-    *out = network::mojom::TrustTokenSignRequestData::kOmit;
-    return true;
-  } else if (in == "headers-only") {
-    *out = network::mojom::TrustTokenSignRequestData::kHeadersOnly;
-    return true;
-  } else if (in == "include") {
-    *out = network::mojom::TrustTokenSignRequestData::kInclude;
-    return true;
-  }
-  return false;
-}
 }  // namespace
 
 // Given a JSON representation of a Trust Token parameters struct, constructs
@@ -68,12 +53,27 @@ network::mojom::blink::TrustTokenParamsPtr TrustTokenParamsFromJson(
 
   auto ret = network::mojom::blink::TrustTokenParams::New();
 
-  // |type| is required.
-  String type;
-  if (!object->GetString("type", &type))
+  // |version| is required, though unused.
+  int version;
+  if (!object->GetInteger("version", &version)) {
+    LOG(WARNING) << "expected integer trust token version, got none";
     return nullptr;
-  if (!ParseType(type, &ret->type))
+  }
+  // Although we don't use the version number internally, it's still the case
+  // that we only understand version 1.
+  if (version != 1) {
+    LOG(WARNING) << "expected trust token version 1, got " << version;
     return nullptr;
+  }
+
+  // |operation| is required.
+  String operation;
+  if (!object->GetString("operation", &operation)) {
+    return nullptr;
+  }
+  if (!ParseOperation(operation, &ret->operation)) {
+    return nullptr;
+  }
 
   // |refreshPolicy| is optional.
   if (JSONValue* refresh_policy = object->Get("refreshPolicy")) {
@@ -81,23 +81,6 @@ network::mojom::blink::TrustTokenParamsPtr TrustTokenParamsFromJson(
     if (!refresh_policy->AsString(&str_policy))
       return nullptr;
     if (!ParseRefreshPolicy(str_policy, &ret->refresh_policy))
-      return nullptr;
-  }
-
-  // |signRequestData| is optional.
-  if (JSONValue* sign_request_data = object->Get("signRequestData")) {
-    String str_sign_request_data;
-    if (!sign_request_data->AsString(&str_sign_request_data))
-      return nullptr;
-    if (!ParseSignRequestData(str_sign_request_data, &ret->sign_request_data)) {
-      return nullptr;
-    }
-  }
-
-  // |includeTimestampHeader| is optional.
-  if (JSONValue* include_timestamp_header =
-          object->Get("includeTimestampHeader")) {
-    if (!include_timestamp_header->AsBoolean(&ret->include_timestamp_header))
       return nullptr;
   }
 
@@ -126,34 +109,7 @@ network::mojom::blink::TrustTokenParamsPtr TrustTokenParamsFromJson(
     }
   }
 
-  // |additionalSignedHeaders| is optional.
-  if (JSONValue* additional_signed_headers =
-          object->Get("additionalSignedHeaders")) {
-    JSONArray* signed_headers_array =
-        JSONArray::Cast(additional_signed_headers);
-    if (!signed_headers_array)
-      return nullptr;
-
-    // Because of the characteristics of the Trust Tokens protocol, we expect
-    // roughly 2-5 elements in this array.
-    for (wtf_size_t i = 0; i < signed_headers_array->size(); ++i) {
-      String next;
-      if (!signed_headers_array->at(i)->AsString(&next))
-        return nullptr;
-      ret->additional_signed_headers.push_back(std::move(next));
-    }
-  }
-
-  // |additionalSigningData| is optional.
-  if (JSONValue* additional_signing_data =
-          object->Get("additionalSigningData")) {
-    if (!additional_signing_data->AsString(
-            &ret->possibly_unsafe_additional_signing_data))
-      return nullptr;
-  }
-
   return ret;
 }
 
-}  // namespace internal
-}  // namespace blink
+}  // namespace blink::internal

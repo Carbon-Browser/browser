@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -119,9 +119,9 @@ export class VideoEncoderOptions {
     // result video size.
     const max = Math.min(Math.floor(maxBitrate / resolution.area), 15);
     this.bitrateMultiplierInput.max = max.toString();
-    this.bitrateMultiplierInput.value =
-        (this.bitrateMultiplierInput.valueAsNumber || Math.min(max, 2))
-            .toString();
+    if (this.bitrateMultiplierInput.valueAsNumber === 0) {
+      this.bitrateMultiplierInput.value = Math.min(max, 2).toString();
+    }
     this.updateBitrate();
     this.bitrateSlider.hidden = false;
   }

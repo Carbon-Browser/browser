@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@
 #include "ui/events/win/system_event_state_lookup.h"
 #endif
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #include "ui/base/ui_base_features.h"
 #include "ui/events/event_constants.h"
 #include "ui/ozone/public/ozone_platform.h"
@@ -46,7 +46,7 @@ void FireFocusAfterMenuClose(base::WeakPtr<Widget> widget) {
   }
 }
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 bool IsAltPressed() {
   if (const auto* const platorm_menu_utils =
           ui::OzonePlatform::GetInstance()->GetPlatformMenuUtils()) {
@@ -55,7 +55,7 @@ bool IsAltPressed() {
   }
   return false;
 }
-#endif  // defined(USE_OZONE)
+#endif  // BUILDFLAG(IS_OZONE)
 
 }  // namespace
 
@@ -71,13 +71,8 @@ MenuRunnerImplInterface* MenuRunnerImplInterface::Create(
 }
 #endif
 
-MenuRunnerImpl::MenuRunnerImpl(MenuItemView* menu)
-    : menu_(menu),
-      running_(false),
-      delete_after_run_(false),
-      for_drop_(false),
-      controller_(nullptr),
-      owns_controller_(false) {}
+MenuRunnerImpl::MenuRunnerImpl(std::unique_ptr<MenuItemView> menu)
+    : menu_(std::move(menu)) {}
 
 bool MenuRunnerImpl::IsRunning() const {
   return running_;
@@ -85,8 +80,9 @@ bool MenuRunnerImpl::IsRunning() const {
 
 void MenuRunnerImpl::Release() {
   if (running_) {
-    if (delete_after_run_)
+    if (delete_after_run_) {
       return;  // We already canceled.
+    }
 
     // The menu is running a nested run loop, we can't delete it now
     // otherwise the stack would be in a really bad state (many frames would
@@ -96,8 +92,9 @@ void MenuRunnerImpl::Release() {
 
     // Swap in a different delegate. That way we know the original MenuDelegate
     // won't be notified later on (when it's likely already been deleted).
-    if (!empty_delegate_.get())
+    if (!empty_delegate_.get()) {
       empty_delegate_ = std::make_unique<MenuDelegate>();
+    }
     menu_->set_delegate(empty_delegate_.get());
 
     // Verify that the MenuController is still active. It may have been
@@ -114,12 +111,16 @@ void MenuRunnerImpl::Release() {
   delete this;
 }
 
-void MenuRunnerImpl::RunMenuAt(Widget* parent,
-                               MenuButtonController* button_controller,
-                               const gfx::Rect& bounds,
-                               MenuAnchorPosition anchor,
-                               int32_t run_types,
-                               gfx::NativeView native_view_for_gestures) {
+void MenuRunnerImpl::RunMenuAt(
+    Widget* parent,
+    MenuButtonController* button_controller,
+    const gfx::Rect& bounds,
+    MenuAnchorPosition anchor,
+    ui::mojom::MenuSourceType source_type,
+    int32_t run_types,
+    gfx::NativeView native_view_for_gestures,
+    std::optional<gfx::RoundedCornersF> corners,
+    std::optional<std::string> show_menu_host_duration_histogram) {
   closing_event_time_ = base::TimeTicks();
   if (running_) {
     // Ignore requests to show the menu while it's already showing. MenuItemView
@@ -129,6 +130,7 @@ void MenuRunnerImpl::RunMenuAt(Widget* parent,
 
   MenuController* controller = MenuController::GetActiveInstance();
   if (controller) {
+    controller->SetMenuRoundedCorners(corners);
     if ((run_types & MenuRunner::IS_NESTED) != 0) {
       if (controller->for_drop()) {
         controller->Cancel(MenuController::ExitType::kAll);
@@ -162,34 +164,42 @@ void MenuRunnerImpl::RunMenuAt(Widget* parent,
     // No menus are showing, show one.
     controller = new MenuController(for_drop_, this);
     owns_controller_ = true;
+    controller->SetMenuRoundedCorners(corners);
   }
   DCHECK((run_types & MenuRunner::COMBOBOX) == 0 ||
          (run_types & MenuRunner::EDITABLE_COMBOBOX) == 0);
   using ComboboxType = MenuController::ComboboxType;
-  if (run_types & MenuRunner::COMBOBOX)
+  if (run_types & MenuRunner::COMBOBOX) {
     controller->set_combobox_type(ComboboxType::kReadonly);
-  else if (run_types & MenuRunner::EDITABLE_COMBOBOX)
+  } else if (run_types & MenuRunner::EDITABLE_COMBOBOX) {
     controller->set_combobox_type(ComboboxType::kEditable);
-  else
+  } else {
     controller->set_combobox_type(ComboboxType::kNone);
+  }
   controller->set_send_gesture_events_to_owner(
       (run_types & MenuRunner::SEND_GESTURE_EVENTS_TO_OWNER) != 0);
   controller->set_use_ash_system_ui_layout(
       (run_types & MenuRunner::USE_ASH_SYS_UI_LAYOUT) != 0);
   controller_ = controller->AsWeakPtr();
   menu_->set_controller(controller_.get());
-  menu_->PrepareForRun(owns_controller_, has_mnemonics,
+  menu_->PrepareForRun(has_mnemonics,
                        !for_drop_ && ShouldShowMnemonics(run_types));
+  if (show_menu_host_duration_histogram.has_value() &&
+      !show_menu_host_duration_histogram.value().empty()) {
+    controller->SetShowMenuHostDurationHistogram(
+        std::move(show_menu_host_duration_histogram));
+  }
 
-  controller->Run(parent, button_controller, menu_, bounds, anchor,
-                  (run_types & MenuRunner::CONTEXT_MENU) != 0,
+  controller->Run(parent, button_controller, menu_.get(), bounds, anchor,
+                  source_type, (run_types & MenuRunner::CONTEXT_MENU) != 0,
                   (run_types & MenuRunner::NESTED_DRAG) != 0,
                   native_view_for_gestures);
 }
 
 void MenuRunnerImpl::Cancel() {
-  if (running_)
+  if (running_) {
     controller_->Cancel(MenuController::ExitType::kAll);
+  }
 }
 
 base::TimeTicks MenuRunnerImpl::GetClosingEventTime() const {
@@ -203,11 +213,11 @@ void MenuRunnerImpl::OnMenuClosed(NotifyType type,
   if (controller_) {
     closing_event_time_ = controller_->closing_event_time();
     // Get a pointer to the parent widget before destroying the menu.
-    if (controller_->owner())
+    if (controller_->owner()) {
       parent_widget = controller_->owner()->GetWeakPtr();
+    }
   }
 
-  menu_->RemoveEmptyMenus();
   menu_->set_controller(nullptr);
 
   if (owns_controller_ && controller_) {
@@ -234,21 +244,23 @@ void MenuRunnerImpl::OnMenuClosed(NotifyType type,
                                            mouse_event_flags);
     }
     // Only notify the delegate if it did not delete this.
-    if (ref && type == NOTIFY_DELEGATE)
+    if (ref && type == NOTIFY_DELEGATE) {
       menu_->GetDelegate()->OnMenuClosed(menu);
+    }
   }
   FireFocusAfterMenuClose(parent_widget);
 }
 
 void MenuRunnerImpl::SiblingMenuCreated(MenuItemView* menu) {
-  if (menu != menu_ && sibling_menus_.count(menu) == 0)
+  if (menu != menu_.get() && sibling_menus_.count(menu) == 0) {
     sibling_menus_.insert(menu);
+  }
 }
 
 MenuRunnerImpl::~MenuRunnerImpl() {
-  delete menu_;
-  for (auto* sibling_menu : sibling_menus_)
+  for (MenuItemView* sibling_menu : sibling_menus_) {
     delete sibling_menu;
+  }
 }
 
 bool MenuRunnerImpl::ShouldShowMnemonics(int32_t run_types) {
@@ -256,7 +268,7 @@ bool MenuRunnerImpl::ShouldShowMnemonics(int32_t run_types) {
   // Show mnemonics if the button has focus or alt is pressed.
 #if BUILDFLAG(IS_WIN)
   show_mnemonics |= ui::win::IsAltPressed();
-#elif defined(USE_OZONE)
+#elif BUILDFLAG(IS_OZONE)
   show_mnemonics |= IsAltPressed();
 #elif BUILDFLAG(IS_MAC)
   show_mnemonics = false;

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,10 +26,9 @@ class FakeBlobURLStore : public mojom::blink::BlobURLStore {
       const KURL&,
       // TODO(https://crbug.com/1224926): Remove this once experiment is over.
       const base::UnguessableToken& unsafe_agent_cluster_id,
-      const absl::optional<BlinkSchemefulSite>& unsafe_top_level_site,
+      const std::optional<BlinkSchemefulSite>& unsafe_top_level_site,
       RegisterCallback) override;
   void Revoke(const KURL&) override;
-  void Resolve(const KURL&, ResolveCallback) override;
   void ResolveAsURLLoaderFactory(
       const KURL&,
       mojo::PendingReceiver<network::mojom::blink::URLLoaderFactory>,
@@ -37,7 +36,10 @@ class FakeBlobURLStore : public mojom::blink::BlobURLStore {
   void ResolveForNavigation(const KURL&,
                             mojo::PendingReceiver<mojom::blink::BlobURLToken>,
                             ResolveForNavigationCallback) override;
-
+  void ResolveForWorkerScriptFetch(
+      const KURL& url,
+      mojo::PendingReceiver<mojom::blink::BlobURLToken> token,
+      ResolveForNavigationCallback callback) override;
   HashMap<KURL, mojo::Remote<mojom::blink::Blob>> registrations;
   HashMap<KURL, base::UnguessableToken> agent_registrations;
   Vector<KURL> revocations;

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,6 @@ struct EnumTraits<viz::mojom::OverlayStrategy, viz::OverlayStrategy> {
         break;
     }
     NOTREACHED();
-    return viz::mojom::OverlayStrategy::kFullscreen;
   }
 
   static bool FromMojom(viz::mojom::OverlayStrategy reason,

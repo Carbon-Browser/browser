@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 The Chromium Authors. All rights reserved.
+ * Copyright 2017 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -8,7 +8,7 @@
  * Invokes PaymentRequest with shipping and immediately rejects all shipping
  * addresses by calling updateWith({}), which is an "empty update."
  */
-function buy() { // eslint-disable-line no-unused-vars
+function buy() {
   buyWithMethods([{supportedMethods: 'basic-card'}]);
 }
 
@@ -20,7 +20,7 @@ function buy() { // eslint-disable-line no-unused-vars
  */
 function buyWithMethods(methodData) {
   try {
-    var details = {
+    const details = {
       total: {label: 'Total', amount: {currency: 'USD', value: '5.00'}},
       displayItems: [
         {
@@ -32,8 +32,8 @@ function buyWithMethods(methodData) {
       ],
     };
 
-    var request = new PaymentRequest(
-        methodData, details, {requestShipping: true});
+    const request =
+        new PaymentRequest(methodData, details, {requestShipping: true});
 
     request.addEventListener('shippingaddresschange', function(evt) {
       evt.updateWith({});

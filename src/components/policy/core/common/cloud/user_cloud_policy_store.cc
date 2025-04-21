@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,14 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/policy/proto/cloud_policy.pb.h"
 #include "components/policy/proto/device_management_backend.pb.h"
@@ -49,8 +48,7 @@ bool WriteStringToFile(const base::FilePath path, const std::string& data) {
     return false;
   }
 
-  int size = data.size();
-  if (base::WriteFile(path, data.c_str(), size) != size) {
+  if (!base::WriteFile(path, data)) {
     DLOG(WARNING) << "Failed to write " << path.value();
     return false;
   }
@@ -80,6 +78,10 @@ void StorePolicyToDiskOnBackgroundThread(
     key_info.set_signing_key(policy.new_public_key());
     key_info.set_signing_key_signature(
         policy.new_public_key_verification_signature_deprecated());
+    key_info.set_new_public_key_verification_data(
+        policy.new_public_key_verification_data());
+    key_info.set_new_public_key_verification_data_signature(
+        policy.new_public_key_verification_data_signature());
     key_info.set_verification_key(GetPolicyVerificationKey());
     std::string key_data;
     if (!key_info.SerializeToString(&key_data)) {
@@ -104,7 +106,7 @@ DesktopCloudPolicyStore::DesktopCloudPolicyStore(
       key_path_(key_path),
       policy_load_filter_(std::move(policy_load_filter)) {}
 
-DesktopCloudPolicyStore::~DesktopCloudPolicyStore() {}
+DesktopCloudPolicyStore::~DesktopCloudPolicyStore() = default;
 
 void DesktopCloudPolicyStore::LoadImmediately() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -142,8 +144,8 @@ void DesktopCloudPolicyStore::Load() {
 
   // Start a new Load operation and have us get called back when it is
   // complete.
-  base::PostTaskAndReplyWithResult(
-      background_task_runner().get(), FROM_HERE,
+  background_task_runner()->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&DesktopCloudPolicyStore::LoadAndFilterPolicyFromDisk,
                      policy_path_, key_path_, policy_load_filter_),
       base::BindOnce(&DesktopCloudPolicyStore::PolicyLoaded,
@@ -271,9 +273,10 @@ void DesktopCloudPolicyStore::ValidateKeyAndSignature(
     DLOG_IF(WARNING, !cached_key->has_signing_key())
         << "Unsigned policy blob detected";
 
-    validator->ValidateCachedKey(cached_key->signing_key(),
-                                 cached_key->signing_key_signature(),
-                                 owning_domain);
+    validator->ValidateCachedKey(
+        cached_key->signing_key(), cached_key->signing_key_signature(),
+        owning_domain, cached_key->new_public_key_verification_data(),
+        cached_key->new_public_key_verification_data_signature());
     // Loading from cache, so don't allow key rotation.
     validator->ValidateSignature(cached_key->signing_key());
   } else {
@@ -321,8 +324,7 @@ void DesktopCloudPolicyStore::InstallLoadedPolicyAfterValidation(
     persisted_policy_key_ = signing_key;
   }
 
-  InstallPolicy(std::move(validator->policy()),
-                std::move(validator->policy_data()),
+  InstallPolicy(std::move(validator->policy_data()),
                 std::move(validator->payload()), persisted_policy_key_);
   status_ = STATUS_OK;
   NotifyStoreLoaded();
@@ -340,6 +342,10 @@ void DesktopCloudPolicyStore::Store(const em::PolicyFetchResponse& policy) {
       std::move(policy_copy), std::unique_ptr<em::PolicySigningKey>(), true,
       base::BindRepeating(&DesktopCloudPolicyStore::OnPolicyToStoreValidated,
                           weak_factory_.GetWeakPtr()));
+}
+
+void DesktopCloudPolicyStore::ResetPolicyKey() {
+  persisted_policy_key_.clear();
 }
 
 void DesktopCloudPolicyStore::OnPolicyToStoreValidated(
@@ -363,8 +369,7 @@ void DesktopCloudPolicyStore::OnPolicyToStoreValidated(
   if (validator->policy()->has_new_public_key())
     persisted_policy_key_ = validator->policy()->new_public_key();
 
-  InstallPolicy(std::move(validator->policy()),
-                std::move(validator->policy_data()),
+  InstallPolicy(std::move(validator->policy_data()),
                 std::move(validator->payload()), persisted_policy_key_);
   status_ = STATUS_OK;
   NotifyStoreLoaded();
@@ -380,7 +385,7 @@ UserCloudPolicyStore::UserCloudPolicyStore(
                               background_task_runner,
                               PolicyScope::POLICY_SCOPE_USER) {}
 
-UserCloudPolicyStore::~UserCloudPolicyStore() {}
+UserCloudPolicyStore::~UserCloudPolicyStore() = default;
 
 // static
 std::unique_ptr<UserCloudPolicyStore> UserCloudPolicyStore::Create(

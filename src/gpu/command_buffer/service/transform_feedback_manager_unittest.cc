@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,7 @@ class TransformFeedbackManagerTest : public GpuServiceTest {
  protected:
   void SetUp() override {
     const GLuint kMaxTransformFeedbackSeparateAttribs = 16;
-    GpuServiceTest::SetUpWithGLVersion("4.1", "");
+    GpuServiceTest::SetUpWithGLVersion("OpenGL ES 3.0", "");
     manager_ = std::make_unique<TransformFeedbackManager>(
         kMaxTransformFeedbackSeparateAttribs, true);
   }
@@ -60,5 +60,3 @@ TEST_F(TransformFeedbackManagerTest, LifeTime) {
 
 }  // namespace gles2
 }  // namespace gpu
-
-

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,6 @@
 #import "ios/web_view/shell/shell_translation_delegate.h"
 #import "ios/web_view/shell/shell_trusted_vault_provider.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 // Externed accessibility identifier.
 NSString* const kWebViewShellBackButtonAccessibilityLabel = @"Back";
 NSString* const kWebViewShellForwardButtonAccessibilityLabel = @"Forward";
@@ -25,9 +21,9 @@ NSString* const kWebViewShellJavaScriptDialogTextFieldAccessibilityIdentifier =
 
 @interface ShellViewController () <CWVAutofillDataManagerObserver,
                                    CWVDownloadTaskDelegate,
+                                   CWVLeakCheckServiceObserver,
                                    CWVNavigationDelegate,
                                    CWVUIDelegate,
-                                   CWVScriptCommandHandler,
                                    CWVSyncControllerDelegate,
                                    UIScrollViewDelegate,
                                    UITextFieldDelegate>
@@ -65,6 +61,11 @@ NSString* const kWebViewShellJavaScriptDialogTextFieldAccessibilityIdentifier =
 // The newly opened popup windows e.g., by JavaScript function "window.open()",
 // HTML "<a target='_blank'>".
 @property(nonatomic, strong) NSMutableArray<CWVWebView*>* popupWebViews;
+// A list of active leak checks. These map to a list of passwords since
+// you can have multiple passwords that map to the same canonical leak check.
+@property(nonatomic, strong)
+    NSMutableDictionary<CWVLeakCheckCredential*, NSMutableArray<CWVPassword*>*>*
+        pendingLeakChecks;
 
 - (void)back;
 - (void)forward;
@@ -94,6 +95,7 @@ NSString* const kWebViewShellJavaScriptDialogTextFieldAccessibilityIdentifier =
 @synthesize authService = _authService;
 @synthesize trustedVaultProvider = _trustedVaultProvider;
 @synthesize popupWebViews = _popupWebViews;
+@synthesize pendingLeakChecks = _pendingLeakChecks;
 
 - (void)viewDidLoad {
   [super viewDidLoad];
@@ -267,6 +269,8 @@ NSString* const kWebViewShellJavaScriptDialogTextFieldAccessibilityIdentifier =
   [CWVWebView setUserAgentProduct:@"Dummy/1.0"];
   CWVWebView.chromeContextMenuEnabled = YES;
 
+  CWVWebView.webInspectorEnabled = YES;
+
   _authService = [[ShellAuthService alloc] init];
   CWVSyncController.dataSource = _authService;
 
@@ -274,10 +278,18 @@ NSString* const kWebViewShellJavaScriptDialogTextFieldAccessibilityIdentifier =
       [[ShellTrustedVaultProvider alloc] initWithAuthService:_authService];
   CWVSyncController.trustedVaultProvider = _trustedVaultProvider;
 
+  _pendingLeakChecks = [NSMutableDictionary dictionary];
+
   CWVWebViewConfiguration* configuration =
       [CWVWebViewConfiguration defaultConfiguration];
   [configuration.autofillDataManager addObserver:self];
   configuration.syncController.delegate = self;
+  [configuration.leakCheckService addObserver:self];
+  [configuration.userContentController
+      addMessageHandler:^(NSDictionary* payload) {
+        NSLog(@"message handler payload received =\n%@", payload);
+      }
+             forCommand:@"messageHandlerCommand"];
   self.webView = [self createWebViewWithConfiguration:configuration];
 }
 
@@ -681,6 +693,27 @@ NSString* const kWebViewShellJavaScriptDialogTextFieldAccessibilityIdentifier =
                                          [weakSelf showPasswordData];
                                        }]];
   [alertController
+      addAction:[UIAlertAction actionWithTitle:@"Check leaked passwords"
+                                         style:UIAlertActionStyleDefault
+                                       handler:^(UIAlertAction* action) {
+                                         [weakSelf checkLeakedPasswords];
+                                       }]];
+
+  [alertController
+      addAction:[UIAlertAction actionWithTitle:@"Check weak passwords"
+                                         style:UIAlertActionStyleDefault
+                                       handler:^(UIAlertAction* action) {
+                                         [weakSelf checkWeakPasswords];
+                                       }]];
+
+  [alertController
+      addAction:[UIAlertAction actionWithTitle:@"Check reused passwords"
+                                         style:UIAlertActionStyleDefault
+                                       handler:^(UIAlertAction* action) {
+                                         [weakSelf checkReusedPasswords];
+                                       }]];
+
+  [alertController
       addAction:[UIAlertAction actionWithTitle:@"Cancel"
                                          style:UIAlertActionStyleCancel
                                        handler:nil]];
@@ -813,12 +846,37 @@ NSString* const kWebViewShellJavaScriptDialogTextFieldAccessibilityIdentifier =
                                          [weakSelf showCertificateDetails];
                                        }]];
 
+  [alertController
+      addAction:[UIAlertAction actionWithTitle:@"Evaluate JavaScript"
+                                         style:UIAlertActionStyleDefault
+                                       handler:^(UIAlertAction* action) {
+                                         [weakSelf showEvaluateJavaScriptUI];
+                                       }]];
+
+  [alertController
+      addAction:[UIAlertAction actionWithTitle:@"User Scripts"
+                                         style:UIAlertActionStyleDefault
+                                       handler:^(UIAlertAction* action) {
+                                         [weakSelf showUserScriptsUI];
+                                       }]];
+
   if (self.downloadTask) {
     [alertController
         addAction:[UIAlertAction actionWithTitle:@"Cancel download"
                                            style:UIAlertActionStyleDefault
                                          handler:^(UIAlertAction* action) {
                                            [weakSelf.downloadTask cancel];
+                                         }]];
+  }
+
+  // Using native FiP through is only available for 16.0, otherwise fallback
+  // to iGA JS FiP.
+  if (@available(iOS 16.0, *)) {
+    [alertController
+        addAction:[UIAlertAction actionWithTitle:@"Start Find In Page"
+                                           style:UIAlertActionStyleDefault
+                                         handler:^(UIAlertAction* action) {
+                                           [weakSelf startFindInPageSession];
                                          }]];
   }
 
@@ -846,6 +904,206 @@ NSString* const kWebViewShellJavaScriptDialogTextFieldAccessibilityIdentifier =
   [self presentViewController:alertController animated:YES completion:nil];
 }
 
+- (void)checkLeakedPasswords {
+  CWVAutofillDataManager* dataManager =
+      _webView.configuration.autofillDataManager;
+
+  // Request a check for any password in autofill data manager that is not
+  // currently being requested.
+  [dataManager fetchPasswordsWithCompletionHandler:^(
+                   NSArray<CWVPassword*>* _Nonnull passwords) {
+    NSMutableArray<CWVLeakCheckCredential*>* credentialsToCheck =
+        [NSMutableArray array];
+    for (CWVPassword* password in passwords) {
+      CWVLeakCheckCredential* credential = [CWVLeakCheckCredential
+          canonicalLeakCheckCredentialWithPassword:password];
+      NSMutableArray<CWVPassword*>* passwordsForCredential =
+          self.pendingLeakChecks[credential];
+      if (!passwordsForCredential) {
+        passwordsForCredential = [NSMutableArray array];
+        self.pendingLeakChecks[credential] = passwordsForCredential;
+        [credentialsToCheck addObject:credential];
+      }
+      [passwordsForCredential addObject:password];
+    }
+
+    NSLog(@"Checking leaks for %@ credentials.", @(credentialsToCheck.count));
+    [self.webView.configuration.leakCheckService
+        checkCredentials:credentialsToCheck];
+  }];
+}
+
+- (void)checkWeakPasswords {
+  CWVAutofillDataManager* dataManager =
+      _webView.configuration.autofillDataManager;
+  [dataManager fetchPasswordsWithCompletionHandler:^(
+                   NSArray<CWVPassword*>* _Nonnull passwords) {
+    NSLog(@"Checking weak status of %@ passwords.", @(passwords.count));
+    for (CWVPassword* password in passwords) {
+      dispatch_async(dispatch_get_main_queue(), ^{
+        BOOL isWeak = [CWVWeakCheckUtils isPasswordWeak:password.password];
+        NSLog(@"Weak password status for %@ at %@ is %s", password.username,
+              password.site, isWeak ? "true" : "false");
+      });
+    }
+  }];
+}
+
+- (void)checkReusedPasswords {
+  CWVAutofillDataManager* dataManager =
+      _webView.configuration.autofillDataManager;
+  [dataManager fetchPasswordsWithCompletionHandler:^(
+                   NSArray<CWVPassword*>* _Nonnull passwords) {
+    NSLog(@"Checking reuse status of %@ passwords.", @(passwords.count));
+    [self.webView.configuration.reuseCheckService
+        checkReusedPasswords:passwords
+           completionHandler:^(NSSet<NSString*>* reusedPasswords) {
+             int useCount = 0;
+             for (CWVPassword* password in passwords) {
+               if ([reusedPasswords containsObject:password.password]) {
+                 useCount++;
+               }
+             }
+             NSLog(@"%@ reused password(s).", @(reusedPasswords.count));
+             NSLog(@"Used %d times.", useCount);
+
+             UIAlertController* alertController = [UIAlertController
+                 alertControllerWithTitle:@"Reuse Check Complete"
+                                  message:[NSString
+                                              stringWithFormat:
+                                                  @"%@ reused password(s). "
+                                                  @"Used %d times.",
+                                                  @(reusedPasswords.count),
+                                                  useCount]
+                           preferredStyle:UIAlertControllerStyleAlert];
+             [alertController
+                 addAction:[UIAlertAction
+                               actionWithTitle:@"OK"
+                                         style:UIAlertActionStyleDefault
+                                       handler:nil]];
+             [self presentViewController:alertController
+                                animated:YES
+                              completion:nil];
+           }];
+  }];
+}
+
+- (void)showEvaluateJavaScriptUI {
+  UIAlertController* alertController =
+      [self alertControllerWithTitle:@"Evaluate JavaScript"
+                             message:nil
+                      preferredStyle:UIAlertControllerStyleAlert];
+
+  [alertController
+      addTextFieldWithConfigurationHandler:^(UITextField* textField) {
+        textField.placeholder = @"alert('Hello')";
+      }];
+
+  __weak UIAlertController* weakAlertController = alertController;
+  __weak ShellViewController* weakSelf = self;
+  [alertController
+      addAction:[UIAlertAction
+                    actionWithTitle:@"Evaluate"
+                              style:UIAlertActionStyleDefault
+                            handler:^(UIAlertAction* action) {
+                              NSString* javascript =
+                                  weakAlertController.textFields[0].text;
+                              [weakSelf evaluateJavaScript:javascript];
+                            }]];
+
+  [alertController
+      addAction:[UIAlertAction actionWithTitle:@"Cancel"
+                                         style:UIAlertActionStyleCancel
+                                       handler:nil]];
+  [self presentViewController:alertController animated:YES completion:nil];
+}
+
+- (void)evaluateJavaScript:(NSString*)javascript {
+  [self.webView
+      evaluateJavaScript:javascript
+              completion:^(id result, NSError* error) {
+                if (error) {
+                  NSLog(
+                      @"JavaScript evaluation FAILED with error: %@ result: %@",
+                      error, result);
+                } else {
+                  NSLog(@"JavaScript evaluation finished with result: %@",
+                        result);
+                }
+              }];
+}
+
+- (void)showUserScriptsUI {
+  UIAlertController* alertController =
+      [self alertControllerWithTitle:@"Add or Remove User Scripts"
+                             message:@"This will also recreate the web view."
+                      preferredStyle:UIAlertControllerStyleAlert];
+
+  [alertController
+      addTextFieldWithConfigurationHandler:^(UITextField* textField) {
+        textField.placeholder = @"All frames script";
+      }];
+
+  [alertController
+      addTextFieldWithConfigurationHandler:^(UITextField* textField) {
+        textField.placeholder = @"Main frame script";
+      }];
+
+  __weak UIAlertController* weakAlertController = alertController;
+  __weak ShellViewController* weakSelf = self;
+  [alertController
+      addAction:[UIAlertAction
+                    actionWithTitle:@"Add"
+                              style:UIAlertActionStyleDefault
+                            handler:^(UIAlertAction* action) {
+                              NSString* allFramesSource =
+                                  weakAlertController.textFields[0].text;
+                              NSString* mainFrameSource =
+                                  weakAlertController.textFields[1].text;
+                              [weakSelf
+                                  addUserScriptForAllFrames:allFramesSource
+                                           forMainFrameOnly:mainFrameSource];
+                            }]];
+  [alertController
+      addAction:[UIAlertAction actionWithTitle:@"Remove All"
+                                         style:UIAlertActionStyleDestructive
+                                       handler:^(UIAlertAction* action) {
+                                         [weakSelf removeAllUserScripts];
+                                       }]];
+
+  [alertController
+      addAction:[UIAlertAction actionWithTitle:@"Cancel"
+                                         style:UIAlertActionStyleCancel
+                                       handler:nil]];
+  [self presentViewController:alertController animated:YES completion:nil];
+}
+
+- (void)addUserScriptForAllFrames:(nullable NSString*)allFramesSource
+                 forMainFrameOnly:(nullable NSString*)mainFrameSource {
+  CWVWebViewConfiguration* configuration = self.webView.configuration;
+  [self removeWebView];
+  if (allFramesSource.length) {
+    CWVUserScript* allFramesScript =
+        [[CWVUserScript alloc] initWithSource:allFramesSource
+                             forMainFrameOnly:NO];
+    [configuration.userContentController addUserScript:allFramesScript];
+  }
+  if (mainFrameSource.length) {
+    CWVUserScript* mainFrameScript =
+        [[CWVUserScript alloc] initWithSource:mainFrameSource
+                             forMainFrameOnly:YES];
+    [configuration.userContentController addUserScript:mainFrameScript];
+  }
+  self.webView = [self createWebViewWithConfiguration:configuration];
+}
+
+- (void)removeAllUserScripts {
+  CWVWebViewConfiguration* configuration = self.webView.configuration;
+  [self removeWebView];
+  [configuration.userContentController removeAllUserScripts];
+  self.webView = [self createWebViewWithConfiguration:configuration];
+}
+
 - (void)resetTranslateSettings {
   CWVWebViewConfiguration* configuration =
       [CWVWebViewConfiguration defaultConfiguration];
@@ -864,6 +1122,16 @@ NSString* const kWebViewShellJavaScriptDialogTextFieldAccessibilityIdentifier =
       wasPersistent ? [CWVWebViewConfiguration nonPersistentConfiguration]
                     : [CWVWebViewConfiguration defaultConfiguration];
   self.webView = [self createWebViewWithConfiguration:newConfiguration];
+}
+
+- (void)startFindInPageSession {
+  // Using native FiP through is only available for 16.0, otherwise fallback
+  // to iGA JS FiP.
+  if (@available(iOS 16.0, *)) {
+    if ([_webView.findInPageController canFindInPage]) {
+      [_webView.findInPageController startFindInPage];
+    }
+  }
 }
 
 - (CWVWebView*)createWebViewWithConfiguration:
@@ -919,7 +1187,11 @@ NSString* const kWebViewShellJavaScriptDialogTextFieldAccessibilityIdentifier =
                        NSKeyValueObservingOptionInitial
                context:nil];
 
-  [webView addScriptCommandHandler:self commandPrefix:@"test"];
+  [webView
+      addMessageHandler:^(NSDictionary* payload) {
+        NSLog(@"webview message handler payload received =\n%@", payload);
+      }
+             forCommand:@"webViewMessageHandlerCommand"];
 
   return webView;
 }
@@ -929,7 +1201,7 @@ NSString* const kWebViewShellJavaScriptDialogTextFieldAccessibilityIdentifier =
   [_webView removeObserver:self forKeyPath:@"canGoBack"];
   [_webView removeObserver:self forKeyPath:@"canGoForward"];
   [_webView removeObserver:self forKeyPath:@"loading"];
-  [_webView removeScriptCommandHandlerForCommandPrefix:@"test"];
+  [_webView removeMessageHandlerForCommand:@"webViewMessageHandlerCommand"];
 
   _webView = nil;
 }
@@ -938,12 +1210,14 @@ NSString* const kWebViewShellJavaScriptDialogTextFieldAccessibilityIdentifier =
   [_webView removeObserver:self forKeyPath:@"canGoBack"];
   [_webView removeObserver:self forKeyPath:@"canGoForward"];
   [_webView removeObserver:self forKeyPath:@"loading"];
-  [_webView removeScriptCommandHandlerForCommandPrefix:@"test"];
+  [_webView removeMessageHandlerForCommand:@"webViewMessageHandlerCommand"];
 }
 
 - (BOOL)textFieldShouldReturn:(UITextField*)field {
-  NSURL* URL = [NSURL URLWithString:field.text];
-  if (URL.scheme.length == 0) {
+  CWVOmniboxInput* input = [[CWVOmniboxInput alloc] initWithText:field.text
+                                   shouldUseHTTPSAsDefaultScheme:NO];
+  NSURL* URL = input.URL;
+  if (input.type != CWVOmniboxInputTypeURL) {
     NSString* enteredText = field.text;
     enteredText =
         [enteredText stringByAddingPercentEncodingWithAllowedCharacters:
@@ -970,10 +1244,19 @@ NSString* const kWebViewShellJavaScriptDialogTextFieldAccessibilityIdentifier =
 
 - (UIAlertController*)actionSheetWithTitle:(nullable NSString*)title
                                    message:(nullable NSString*)message {
-  UIAlertController* alertController = [UIAlertController
-      alertControllerWithTitle:title
-                       message:message
-                preferredStyle:UIAlertControllerStyleActionSheet];
+  return [self alertControllerWithTitle:title
+                                message:message
+                         preferredStyle:UIAlertControllerStyleActionSheet];
+}
+
+- (UIAlertController*)alertControllerWithTitle:(nullable NSString*)title
+                                       message:(nullable NSString*)message
+                                preferredStyle:
+                                    (UIAlertControllerStyle)preferredStyle {
+  UIAlertController* alertController =
+      [UIAlertController alertControllerWithTitle:title
+                                          message:message
+                                   preferredStyle:preferredStyle];
   alertController.popoverPresentationController.sourceView = _menuButton;
   alertController.popoverPresentationController.sourceRect =
       CGRectMake(CGRectGetWidth(_menuButton.bounds) / 2,
@@ -1022,6 +1305,49 @@ NSString* const kWebViewShellJavaScriptDialogTextFieldAccessibilityIdentifier =
 
 - (void)webViewDidClose:(CWVWebView*)webView {
   NSLog(@"webViewDidClose");
+}
+
+- (void)webView:(CWVWebView*)webView
+    requestMediaCapturePermissionForType:(CWVMediaCaptureType)type
+                         decisionHandler:
+                             (void (^)(CWVPermissionDecision decision))
+                                 decisionHandler {
+  NSString* mediaCaptureType;
+  switch (type) {
+    case CWVMediaCaptureTypeCamera:
+      mediaCaptureType = @"Camera";
+      break;
+    case CWVMediaCaptureTypeMicrophone:
+      mediaCaptureType = @"Microphone";
+      break;
+    case CWVMediaCaptureTypeCameraAndMicrophone:
+      mediaCaptureType = @"Camera and Microphone";
+      break;
+  }
+
+  NSString* title =
+      [NSString stringWithFormat:@"Request %@ Permission", mediaCaptureType];
+  UIAlertController* alertController =
+      [UIAlertController alertControllerWithTitle:title
+                                          message:nil
+                                   preferredStyle:UIAlertControllerStyleAlert];
+
+  [alertController
+      addAction:[UIAlertAction
+                    actionWithTitle:@"Grant"
+                              style:UIAlertActionStyleDefault
+                            handler:^(UIAlertAction* action) {
+                              decisionHandler(CWVPermissionDecisionGrant);
+                            }]];
+  [alertController
+      addAction:[UIAlertAction
+                    actionWithTitle:@"Deny"
+                              style:UIAlertActionStyleDestructive
+                            handler:^(UIAlertAction* action) {
+                              decisionHandler(CWVPermissionDecisionDeny);
+                            }]];
+
+  [self presentViewController:alertController animated:YES completion:nil];
 }
 
 - (void)webView:(CWVWebView*)webView
@@ -1156,6 +1482,8 @@ NSString* const kWebViewShellJavaScriptDialogTextFieldAccessibilityIdentifier =
 
 #pragma mark CWVNavigationDelegate methods
 
+// Deprecated: this method will not work when `-[CWVNavigationDelegate
+// webView:decidePolicyForNavigationAction:decisionHandler:]` is implemented
 - (BOOL)webView:(CWVWebView*)webView
     shouldStartLoadWithRequest:(NSURLRequest*)request
                 navigationType:(CWVNavigationType)navigationType {
@@ -1163,11 +1491,29 @@ NSString* const kWebViewShellJavaScriptDialogTextFieldAccessibilityIdentifier =
   return YES;
 }
 
+// Deprecated: this method will not work when `-[CWVNavigationDelegate
+// webView:decidePolicyForNavigationResponse:decisionHandler:]` is implemented
 - (BOOL)webView:(CWVWebView*)webView
     shouldContinueLoadWithResponse:(NSURLResponse*)response
                       forMainFrame:(BOOL)forMainFrame {
   NSLog(@"%@", NSStringFromSelector(_cmd));
   return YES;
+}
+
+- (void)webView:(CWVWebView*)webView
+    decidePolicyForNavigationAction:(CWVNavigationAction*)navigationAction
+                    decisionHandler:
+                        (void (^)(CWVNavigationActionPolicy))decisionHandler {
+  NSLog(@"%@", NSStringFromSelector(_cmd));
+  decisionHandler(CWVNavigationActionPolicyAllow);
+}
+
+- (void)webView:(CWVWebView*)webView
+    decidePolicyForNavigationResponse:(CWVNavigationResponse*)navigationResponse
+                      decisionHandler:(void (^)(CWVNavigationResponsePolicy))
+                                          decisionHandler {
+  NSLog(@"%@", NSStringFromSelector(_cmd));
+  decisionHandler(CWVNavigationResponsePolicyAllow);
 }
 
 - (void)webViewDidStartNavigation:(CWVWebView*)webView {
@@ -1182,7 +1528,7 @@ NSString* const kWebViewShellJavaScriptDialogTextFieldAccessibilityIdentifier =
 
 - (void)webViewDidFinishNavigation:(CWVWebView*)webView {
   NSLog(@"%@", NSStringFromSelector(_cmd));
-  // TODO(crbug.com/679895): Add some visual indication that the page load has
+  // TODO(crbug.com/41294395): Add some visual indication that the page load has
   // finished.
   [self updateToolbar];
 }
@@ -1312,15 +1658,6 @@ NSString* const kWebViewShellJavaScriptDialogTextFieldAccessibilityIdentifier =
   [task startDownloadToLocalFileAtPath:self.downloadFilePath];
 }
 
-#pragma mark CWVScriptCommandHandler
-
-- (BOOL)webView:(CWVWebView*)webView
-    handleScriptCommand:(nonnull CWVScriptCommand*)command
-          fromMainFrame:(BOOL)fromMainFrame {
-  NSLog(@"%@ command.content=%@", NSStringFromSelector(_cmd), command.content);
-  return YES;
-}
-
 #pragma mark CWVAutofillDataManagerObserver
 
 - (void)autofillDataManagerDataDidChange:
@@ -1375,6 +1712,39 @@ NSString* const kWebViewShellJavaScriptDialogTextFieldAccessibilityIdentifier =
 
 - (void)syncControllerDidUpdateState:(CWVSyncController*)syncController {
   NSLog(@"%@", NSStringFromSelector(_cmd));
+}
+
+#pragma mark CWVLeakCheckServiceObserver
+
+- (void)leakCheckServiceDidChangeState:(CWVLeakCheckService*)leakCheckService {
+  NSLog(@"%@:%d", NSStringFromSelector(_cmd), (int)leakCheckService.state);
+  if (leakCheckService.state != CWVLeakCheckServiceStateRunning) {
+    [self.pendingLeakChecks removeAllObjects];
+  }
+}
+
+- (void)leakCheckService:(CWVLeakCheckService*)leakCheckService
+      didCheckCredential:(CWVLeakCheckCredential*)credential
+                isLeaked:(BOOL)isLeaked {
+  NSMutableArray<CWVPassword*>* passwordsForCredential =
+      [self.pendingLeakChecks objectForKey:credential];
+  if (!passwordsForCredential) {
+    NSLog(@"No passwords for CWVLeakCheckCredential!");
+    return;
+  }
+
+  [self.pendingLeakChecks removeObjectForKey:credential];
+
+  NSMutableArray<NSString*>* passwordDescriptions = [passwordsForCredential
+      valueForKey:NSStringFromSelector(@selector(debugDescription))];
+  NSString* passwordsDescription =
+      [passwordDescriptions componentsJoinedByString:@"\n\n"];
+  NSString* message = [NSString
+      stringWithFormat:@"Leak check returned %@ for %@ passwords:\n%@",
+                       isLeaked ? @"LEAKED" : @"OK",
+                       @(passwordsForCredential.count), passwordsDescription];
+  NSLog(@"%@", message);
+  NSLog(@"%@ Leak checks remaining...", @(self.pendingLeakChecks.count));
 }
 
 #pragma mark UIScrollViewDelegate

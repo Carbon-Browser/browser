@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,6 @@ namespace updater {
 // Only features that are used by Windows legacy offline installers AND those
 // supported by `ProtocolParser` (components/update_client/protocol_parser.h)
 // are implemented. Element types that are not (fully) handled:
-//   * <systemrequirements> is ignored.
 //   * All elements related with diff update are ignored.
 //   * Parse fails if <package> only has SHA1 hash.
 //   * Only the first manifest action is honored and the rest are ignored.

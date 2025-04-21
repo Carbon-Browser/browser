@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,12 @@
 #include <math.h>
 
 #include <memory>
+#include <string_view>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/singleton.h"
@@ -20,13 +21,13 @@
 #include "base/run_loop.h"
 #include "base/sequence_checker.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/synchronization/lock.h"
 #include "base/system/sys_info.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/thread_pool.h"
 #include "base/time/time.h"
 #include "base/trace_event/memory_allocator_dump_guid.h"
 #include "base/trace_event/memory_dump_manager.h"
@@ -41,6 +42,7 @@
 #include "mojo/public/cpp/bindings/shared_remote.h"
 #include "net/base/net_errors.h"
 #include "services/network/public/cpp/features.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/thread_safe_browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/user_metrics_action.h"
 #include "third_party/blink/public/platform/web_data.h"
@@ -50,7 +52,7 @@
 #include "third_party/blink/public/resources/grit/blink_image_resources.h"
 #include "third_party/blink/public/resources/grit/blink_resources.h"
 #include "third_party/blink/public/strings/grit/blink_strings.h"
-#include "ui/base/layout.h"
+#include "ui/base/resource/resource_scale_factor.h"
 #include "ui/base/ui_base_features.h"
 #include "ui/events/gestures/blink/web_gesture_curve_impl.h"
 
@@ -60,7 +62,6 @@ using blink::WebURL;
 using blink::WebURLError;
 
 namespace content {
-
 namespace {
 
 // This must match third_party/WebKit/public/blink_resources.grd.
@@ -141,6 +142,11 @@ BlinkPlatformImpl::BlinkPlatformImpl() : BlinkPlatformImpl(nullptr) {}
 BlinkPlatformImpl::BlinkPlatformImpl(
     scoped_refptr<base::SingleThreadTaskRunner> io_thread_task_runner)
     : io_thread_task_runner_(std::move(io_thread_task_runner)),
+      media_stream_video_source_video_task_runner_(
+          base::FeatureList::IsEnabled(
+              blink::features::kUseThreadPoolForMediaStreamVideoTaskRunner)
+              ? base::ThreadPool::CreateSequencedTaskRunner(base::TaskTraits{})
+              : io_thread_task_runner_),
       browser_interface_broker_proxy_(
           base::MakeRefCounted<ThreadSafeBrowserInterfaceBrokerProxyImpl>()) {}
 
@@ -151,12 +157,16 @@ void BlinkPlatformImpl::RecordAction(const blink::UserMetricsAction& name) {
     child_thread->RecordComputedAction(name.Action());
 }
 
+bool BlinkPlatformImpl::HasDataResource(int resource_id) const {
+  return GetContentClient()->HasDataResource(resource_id);
+}
+
 WebData BlinkPlatformImpl::GetDataResource(
     int resource_id,
     ui::ResourceScaleFactor scale_factor) {
-  base::StringPiece resource =
+  std::string_view resource =
       GetContentClient()->GetDataResource(resource_id, scale_factor);
-  return WebData(resource.data(), resource.size());
+  return WebData(base::as_byte_span(resource));
 }
 
 std::string BlinkPlatformImpl::GetDataResourceString(int resource_id) {
@@ -259,6 +269,11 @@ bool BlinkPlatformImpl::IsLowEndDevice() {
 scoped_refptr<base::SingleThreadTaskRunner> BlinkPlatformImpl::GetIOTaskRunner()
     const {
   return io_thread_task_runner_;
+}
+
+scoped_refptr<base::SequencedTaskRunner>
+BlinkPlatformImpl::GetMediaStreamVideoSourceVideoTaskRunner() const {
+  return media_stream_video_source_video_task_runner_;
 }
 
 std::unique_ptr<blink::Platform::NestedMessageLoopRunner>

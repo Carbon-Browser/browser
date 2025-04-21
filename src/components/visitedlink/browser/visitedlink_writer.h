@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,17 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <map>
 #include <memory>
 #include <set>
 #include <vector>
 
-#include "base/callback.h"
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/files/scoped_file.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/free_deleter.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/ref_counted.h"
@@ -40,6 +43,10 @@ namespace content {
 class BrowserContext;
 }
 
+namespace url {
+class Origin;
+}
+
 namespace visitedlink {
 
 class VisitedLinkDelegate;
@@ -56,7 +63,7 @@ class VisitedLinkWriter : public VisitedLinkCommon {
   // event as a constructor argument and dispatches events using it.
   class Listener {
    public:
-    virtual ~Listener() {}
+    virtual ~Listener() = default;
 
     // Called when link coloring database has been created or replaced. The
     // argument is a memory region containing the new table.
@@ -133,7 +140,7 @@ class VisitedLinkWriter : public VisitedLinkCommon {
     virtual bool HasNextURL() const = 0;
 
    protected:
-    virtual ~URLIterator() {}
+    virtual ~URLIterator() = default;
   };
 
   // Deletes the specified URLs from |rows| from the table.
@@ -145,6 +152,12 @@ class VisitedLinkWriter : public VisitedLinkCommon {
 
   // Returns the Delegate of this Writer.
   VisitedLinkDelegate* GetDelegate();
+
+  // Return the salt used to hash visited links from this origin. If we have not
+  // visited this origin before, a new <origin, salt> pair will be added to the
+  // map, and that new salt value will be retuned. Will return
+  // std::optional if the table is currently being built or rebuilt.
+  std::optional<uint64_t> GetOrAddOriginSalt(const url::Origin& origin);
 
 #if defined(UNIT_TEST) || !defined(NDEBUG) || defined(PERF_TEST)
   // This is a debugging function that can be called to double-check internal
@@ -175,6 +188,8 @@ class VisitedLinkWriter : public VisitedLinkCommon {
   FRIEND_TEST_ALL_PREFIXES(VisitedLinkTest, Delete);
   FRIEND_TEST_ALL_PREFIXES(VisitedLinkTest, BigDelete);
   FRIEND_TEST_ALL_PREFIXES(VisitedLinkTest, BigImport);
+  FRIEND_TEST_ALL_PREFIXES(VisitedLinkTest, HashRangeWraparound);
+  FRIEND_TEST_ALL_PREFIXES(VisitedLinkTest, ResizeErrorHandling);
 
   // Keeps the result of loading the table from the database file to the UI
   // thread.
@@ -229,7 +244,7 @@ class VisitedLinkWriter : public VisitedLinkCommon {
   void PostIOTask(const base::Location& from_here, base::OnceClosure task);
 
   // Writes the entire table to disk. It will leave the table file open and
-  // the handle to it will be stored in file_.
+  // the handle to it will be stored in |scoped_file_holder_|.
   void WriteFullTable();
 
   // Tries to load asynchronously the table from the database file.
@@ -271,7 +286,10 @@ class VisitedLinkWriter : public VisitedLinkCommon {
 
   // Wrapper around Window's WriteFile using asynchronous I/O. This will proxy
   // the write to a background thread.
-  void WriteToFile(FILE** hfile, off_t offset, void* data, int32_t data_size);
+  void WriteToFile(base::ScopedFILE* file,
+                   off_t offset,
+                   void* data,
+                   int32_t data_size);
 
   // Helper function to schedule and asynchronous write of the used count to
   // disk (this is a common operation).
@@ -329,17 +347,6 @@ class VisitedLinkWriter : public VisitedLinkCommon {
                                   const uint8_t salt[LINK_SALT_LENGTH],
                                   base::MappedReadOnlyRegion* memory);
 
-  // A wrapper for CreateURLTable, this will allocate a new table, initialized
-  // to empty. The caller is responsible for saving the shared memory pointer
-  // and handles before this call (they will be replaced with new ones) and
-  // releasing them later. This is designed for callers that make a new table
-  // and then copy values from the old table to the new one, then release the
-  // old table.
-  //
-  // Returns true on success. On failure, the old table will be restored. The
-  // caller should not attemp to release the pointer/handle in this case.
-  bool BeginReplaceURLTable(int32_t num_entries);
-
   // unallocates the Fingerprint table
   void FreeURLTable();
 
@@ -396,14 +403,14 @@ class VisitedLinkWriter : public VisitedLinkCommon {
   // Returns a pointer to the start of the hash table, given the mapping
   // containing the hash table.
   static Fingerprint* GetHashTableFromMapping(
-      const base::WritableSharedMemoryMapping& hash_table_mapping);
+      base::WritableSharedMemoryMapping& hash_table_mapping);
 
   // Reference to the browser context that this object belongs to
   // (it knows the path to where the data is stored)
   raw_ptr<content::BrowserContext> browser_context_ = nullptr;
 
   // Client owns the delegate and is responsible for it being valid through
-  // the life time this VisitedLinkWriter.
+  // the lifetime this VisitedLinkWriter.
   raw_ptr<VisitedLinkDelegate> delegate_;
 
   // VisitedLinkEventListener to handle incoming events.
@@ -421,6 +428,27 @@ class VisitedLinkWriter : public VisitedLinkCommon {
   // history query is running. We must only delete it when the query is done.
   scoped_refptr<TableBuilder> table_builder_;
 
+  // Contains every per-origin salt used in creating the hashtable.
+  //
+  // NOTE: When VisitedLinkWriter is created, salts_ is empty.
+  //
+  // At initialization time, we will construct the partitioned hashtable on the
+  // DB thread, where salts_ will be accessed and added to as the table is
+  // built. During this time on the DB thread (when table_builder_ is not null),
+  // salts_ CANNOT be added to or accessed by the UI thread.
+  //
+  // Once initialization is complete and we are marshalled back to the UI
+  // thread (once table_builder_ is set to null again), salts_ can be added to
+  // and accessed by the UI thread, whether we are adding new visits via the
+  // History Service or sending salt values via the
+  // VisitedLinksNavigationThrottle.
+  //
+  // TODO(crbug.com/330548738): Currently we store all salts relevant to this
+  // profile in this one map, but there can be many StoragePartitions per
+  // profile. We should revisit in a future phase to take into account which
+  // StoragePartition each origin is being committed to.
+  std::map<url::Origin, uint64_t> salts_;
+
   // Indicates URLs added and deleted since we started rebuilding the table.
   std::set<Fingerprint> added_since_rebuild_;
   std::set<Fingerprint> deleted_since_rebuild_;
@@ -430,20 +458,18 @@ class VisitedLinkWriter : public VisitedLinkCommon {
   std::set<GURL> added_since_load_;
   std::set<GURL> deleted_since_load_;
 
-  // The currently open file with the table in it. This may be NULL if we're
+  // The currently open file with the table in it. This may be nullptr if we're
   // rebuilding and haven't written a new version yet or if |persist_to_disk_|
-  // is false. Writing to the file may be safely ignored in this case. Also
-  // |file_| may be non-NULL but point to a NULL pointer. That would mean that
-  // opening of the file is already scheduled in a background thread and any
-  // writing to the file can also be scheduled to the background thread as it's
-  // guaranteed to be executed after the opening.
-  // The class owns both the |file_| pointer and the pointer pointed
-  // by |*file_|.
-  raw_ptr<FILE*> file_ = nullptr;
+  // is false. Writing to the file may be safely ignored in this case. Also the
+  // ScopedFILE may point to null. That would mean that opening of the file is
+  // already scheduled in a background thread and any writing to the file can
+  // also be scheduled to the background thread as it's guaranteed to be
+  // executed after the opening.
+  std::unique_ptr<base::ScopedFILE> scoped_file_holder_;
 
   // If true, will try to persist the hash table to disk. Will rebuild from
   // VisitedLinkDelegate::RebuildTable if there are disk corruptions.
-  bool persist_to_disk_;
+  const bool persist_to_disk_;
 
   // Shared memory consists of a SharedHeader followed by the table.
   base::MappedReadOnlyRegion mapped_table_memory_;
@@ -467,10 +493,10 @@ class VisitedLinkWriter : public VisitedLinkCommon {
   // in release builds that give "regular" behavior.
 
   // Overridden database file name for testing
-  base::FilePath database_name_override_;
+  const base::FilePath database_name_override_;
 
   // When nonzero, overrides the table size for new databases for testing
-  int32_t table_size_override_ = 0;
+  const int32_t table_size_override_ = 0;
 
   // When set, indicates the task that should be run after the next rebuild from
   // history is complete.
@@ -479,7 +505,11 @@ class VisitedLinkWriter : public VisitedLinkCommon {
   // Set to prevent us from attempting to rebuild the database from global
   // history if we have an error opening the file. This is used for testing,
   // will be false in production.
-  bool suppress_rebuild_ = false;
+  const bool suppress_rebuild_ = false;
+
+  // Set to fail CreateURLTable(), to simulate shared memory allocation failure.
+  // This is used for testing, will be false in production.
+  static bool fail_table_creation_for_testing_;
 
   base::WeakPtrFactory<VisitedLinkWriter> weak_ptr_factory_{this};
 };

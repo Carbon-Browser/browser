@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <cmath>
 
+#include "base/check_op.h"
 #include "skia/ext/image_operations.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/image/image.h"
@@ -13,7 +14,7 @@
 
 namespace gfx {
 
-ImageFamily::const_iterator::const_iterator() {}
+ImageFamily::const_iterator::const_iterator() = default;
 
 ImageFamily::const_iterator::const_iterator(const const_iterator& other)
     : map_iterator_(other.map_iterator_) {}
@@ -22,11 +23,11 @@ ImageFamily::const_iterator::const_iterator(
     const std::map<MapKey, gfx::Image>::const_iterator& other)
     : map_iterator_(other) {}
 
-ImageFamily::const_iterator::~const_iterator() {}
+ImageFamily::const_iterator::~const_iterator() = default;
 
-ImageFamily::ImageFamily() {}
+ImageFamily::ImageFamily() = default;
 ImageFamily::ImageFamily(ImageFamily&& other) = default;
-ImageFamily::~ImageFamily() {}
+ImageFamily::~ImageFamily() = default;
 
 ImageFamily& ImageFamily::operator=(ImageFamily&& other) = default;
 

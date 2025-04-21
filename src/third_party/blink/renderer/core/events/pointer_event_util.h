@@ -1,13 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_EVENTS_POINTER_EVENT_UTIL_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_EVENTS_POINTER_EVENT_UTIL_H_
 
-#include "third_party/blink/renderer/bindings/core/v8/v8_pointer_event_init.h"
+#include <cstdint>
+
 #include "third_party/blink/renderer/core/core_export.h"
-#include "third_party/blink/renderer/platform/wtf/math_extras.h"
 
 namespace blink {
 
@@ -15,9 +15,8 @@ class CORE_EXPORT PointerEventUtil {
  public:
   PointerEventUtil() = delete;
 
-  static double AzimuthFromTilt(int32_t tilt_x_degrees, int32_t tilt_y_degrees);
-  static double AltitudeFromTilt(int32_t tilt_x_degrees,
-                                 int32_t tilt_y_degrees);
+  static double AzimuthFromTilt(double tilt_x_degrees, double tilt_y_degrees);
+  static double AltitudeFromTilt(double tilt_x_degrees, double tilt_y_degrees);
   static int32_t TiltXFromSpherical(double azimuth_radians,
                                     double altitude_radians);
   static int32_t TiltYFromSpherical(double azimuth_radians,

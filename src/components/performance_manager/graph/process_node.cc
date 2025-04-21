@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,5 @@ ProcessNode::~ProcessNode() = default;
 
 ProcessNodeObserver::ProcessNodeObserver() = default;
 ProcessNodeObserver::~ProcessNodeObserver() = default;
-
-ProcessNode::ObserverDefaultImpl::ObserverDefaultImpl() = default;
-ProcessNode::ObserverDefaultImpl::~ObserverDefaultImpl() = default;
 
 }  // namespace performance_manager

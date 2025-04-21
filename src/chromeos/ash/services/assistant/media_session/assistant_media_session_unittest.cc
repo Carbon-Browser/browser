@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,7 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 namespace {
 
@@ -54,8 +53,7 @@ class AssistantMediaSessionTest : public testing::Test {
   ScopedAssistantBrowserDelegate delegate_;
   testing::StrictMock<LibassistantMediaControllerMock>
       libassistant_media_controller_;
-  mojo::Remote<chromeos::libassistant::mojom::MediaDelegate>
-      libassistant_media_delegate_;
+  mojo::Remote<libassistant::mojom::MediaDelegate> libassistant_media_delegate_;
   MediaHost media_host_{AssistantBrowserDelegate::Get(),
                         /*interaction_subscribers=*/nullptr};
   AssistantMediaSession assistant_media_session_{&media_host_};
@@ -87,5 +85,4 @@ TEST_F(AssistantMediaSessionTest,
   EXPECT_TRUE(assistant_media_session()->IsSessionStateSuspended());
 }
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant

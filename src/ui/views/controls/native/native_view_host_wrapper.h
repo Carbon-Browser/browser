@@ -1,11 +1,9 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_VIEWS_CONTROLS_NATIVE_NATIVE_VIEW_HOST_WRAPPER_H_
 #define UI_VIEWS_CONTROLS_NATIVE_NATIVE_VIEW_HOST_WRAPPER_H_
-
-#include <memory>
 
 #include "ui/base/cursor/cursor.h"
 #include "ui/gfx/native_widget_types.h"
@@ -13,11 +11,11 @@
 
 namespace gfx {
 class RoundedCornersF;
-}
+}  // namespace gfx
 
 namespace ui {
-class LayerOwner;
-}
+class Layer;
+}  // namespace ui
 
 namespace views {
 
@@ -49,14 +47,10 @@ class NativeViewHostWrapper {
   // rooted at a valid Widget.
   virtual void RemovedFromWidget() = 0;
 
-  // Clips the corners of the gfx::NativeView to the |corner_radii| specififed.
+  // Clips the corners of the gfx::NativeView to the `corner_radii` specified.
   // Returns true on success or false if the platform doesn't support the
   // operation.
   virtual bool SetCornerRadii(const gfx::RoundedCornersF& corner_radii) = 0;
-
-  // Sets the custom mask for clipping gfx::NativeView. Returns true on
-  // success or false if the platform doesn't support the operation.
-  virtual bool SetCustomMask(std::unique_ptr<ui::LayerOwner> mask) = 0;
 
   // Sets the height of the top region where gfx::NativeView shouldn't be
   // targeted.
@@ -117,6 +111,9 @@ class NativeViewHostWrapper {
 
   // Returns the parent accessible object to the native view.
   virtual gfx::NativeViewAccessible GetParentAccessible() = 0;
+
+  // Returns the ui::Layer hosting the WebContents.
+  virtual ui::Layer* GetUILayer() = 0;
 
   // Creates a platform-specific instance of an object implementing this
   // interface.

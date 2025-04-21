@@ -1,10 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/payments/core/currency_formatter.h"
 
 #include <memory>
+#include <string_view>
 
 #include "base/logging.h"
 #include "base/numerics/safe_conversions.h"
@@ -85,7 +86,7 @@ CurrencyFormatter::CurrencyFormatter(const std::string& currency_code,
   icu_formatter_->setMaximumFractionDigits(kMaximumNumFractionalDigits);
 }
 
-CurrencyFormatter::~CurrencyFormatter() {}
+CurrencyFormatter::~CurrencyFormatter() = default;
 
 void CurrencyFormatter::SetMaxFractionalDigits(const int maxFractionalDigits) {
   icu_formatter_->setMaximumFractionDigits(maxFractionalDigits);

@@ -1,9 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.webapk.shell_apk;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -25,13 +26,6 @@ import android.util.Log;
  */
 public class NotificationPermissionRequestActivity extends Activity {
     private static final String TAG = "PermissionRequestActivity";
-
-    // TODO: Use Manifest.permission.POST_NOTIFICATIONS when it is released.
-    private static final String PERMISSION_POST_NOTIFICATIONS =
-            "android.permission.POST_NOTIFICATIONS";
-
-    // TODO: Use Build.VERSION_CODES when it is released.
-    private static final int VERSION_T = 33;
 
     // An intent extra for a notification channel name string.
     private static final String EXTRA_NOTIFICATION_CHANNEL_NAME = "notificationChannelName";
@@ -56,8 +50,10 @@ public class NotificationPermissionRequestActivity extends Activity {
      */
     public static PendingIntent createPermissionRequestPendingIntent(
             Context context, String channelName, String channelId) {
-        Intent intent = new Intent(
-                context.getApplicationContext(), NotificationPermissionRequestActivity.class);
+        Intent intent =
+                new Intent(
+                        context.getApplicationContext(),
+                        NotificationPermissionRequestActivity.class);
         intent.putExtra(EXTRA_NOTIFICATION_CHANNEL_NAME, channelName);
         intent.putExtra(EXTRA_NOTIFICATION_CHANNEL_ID, channelId);
         // Starting with Build.VERSION_CODES.S it is required to explicitly specify the mutability
@@ -70,7 +66,7 @@ public class NotificationPermissionRequestActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        if (Build.VERSION.SDK_INT < VERSION_T) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
             Log.w(TAG, "Cannot request notification permission before Android T.");
             finish();
             return;
@@ -87,13 +83,15 @@ public class NotificationPermissionRequestActivity extends Activity {
 
         // When running on T or greater, with the app targeting less than T, creating a channel for
         // the first time will trigger the permission dialog.
-        if (getApplicationContext().getApplicationInfo().targetSdkVersion < VERSION_T) {
-            NotificationChannel channel = new NotificationChannel(
-                    mChannelId, mChannelName, NotificationManager.IMPORTANCE_DEFAULT);
+        if (getApplicationContext().getApplicationInfo().targetSdkVersion
+                < Build.VERSION_CODES.TIRAMISU) {
+            NotificationChannel channel =
+                    new NotificationChannel(
+                            mChannelId, mChannelName, NotificationManager.IMPORTANCE_DEFAULT);
             getNotificationManager().createNotificationChannel(channel);
         }
 
-        requestPermissions(new String[] {PERMISSION_POST_NOTIFICATIONS}, 0);
+        requestPermissions(new String[] {Manifest.permission.POST_NOTIFICATIONS}, 0);
     }
 
     @Override
@@ -101,7 +99,7 @@ public class NotificationPermissionRequestActivity extends Activity {
             int requestCode, String[] permissions, int[] grantResults) {
         boolean enabled = false;
         for (int i = 0; i < permissions.length; i++) {
-            if (!permissions[i].equals(PERMISSION_POST_NOTIFICATIONS)) continue;
+            if (!permissions[i].equals(Manifest.permission.POST_NOTIFICATIONS)) continue;
 
             PrefUtils.setHasRequestedNotificationPermission(this);
             enabled = grantResults[i] == PackageManager.PERMISSION_GRANTED;
@@ -112,7 +110,7 @@ public class NotificationPermissionRequestActivity extends Activity {
         // running on and targeting >= T. Check whether notifications are actually enabled, perhaps
         // because the system displayed a permission dialog after the first notification channel was
         // created and the user approved it.
-        if (!enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        if (!enabled) {
             enabled = getNotificationManager().areNotificationsEnabled();
         }
 
@@ -120,13 +118,10 @@ public class NotificationPermissionRequestActivity extends Activity {
         finish();
     }
 
-    /**
-     * Sends a message to the messenger containing the permission status.
-     */
+    /** Sends a message to the messenger containing the permission status. */
     private static void sendPermissionMessage(Messenger messenger, boolean enabled) {
         Bundle data = new Bundle();
-        @PermissionStatus
-        int status = enabled ? PermissionStatus.ALLOW : PermissionStatus.BLOCK;
+        @PermissionStatus int status = enabled ? PermissionStatus.ALLOW : PermissionStatus.BLOCK;
         data.putInt(KEY_PERMISSION_STATUS, status);
         Message message = Message.obtain();
         message.setData(data);

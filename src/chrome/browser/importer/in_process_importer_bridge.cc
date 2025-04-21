@@ -1,10 +1,12 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/importer/in_process_importer_bridge.h"
 
 #include <stddef.h>
+
+#include <iterator>
 
 #include "base/files/file_util.h"
 #include "base/strings/string_util.h"
@@ -14,15 +16,13 @@
 #include "chrome/browser/search_engines/ui_thread_search_terms_data.h"
 #include "chrome/common/importer/imported_bookmark_entry.h"
 #include "chrome/common/importer/importer_autofill_form_data_entry.h"
-#include "components/autofill/core/browser/webdata/autofill_entry.h"
+#include "components/autofill/core/browser/webdata/autocomplete/autocomplete_entry.h"
 #include "components/favicon_base/favicon_usage_data.h"
 #include "components/password_manager/core/browser/password_form.h"
 #include "components/search_engines/template_url.h"
 #include "components/search_engines/template_url_parser.h"
 #include "components/search_engines/template_url_prepopulate_data.h"
 #include "ui/base/l10n/l10n_util.h"
-
-#include <iterator>
 
 namespace {
 
@@ -55,7 +55,6 @@ history::VisitSource ConvertImporterVisitSourceToHistoryVisitSource(
       return history::SOURCE_SAFARI_IMPORTED;
   }
   NOTREACHED();
-  return history::SOURCE_SYNCED;
 }
 
 password_manager::PasswordForm::Scheme ConvertToPasswordFormScheme(
@@ -68,7 +67,6 @@ password_manager::PasswordForm::Scheme ConvertToPasswordFormScheme(
   }
 
   NOTREACHED();
-  return password_manager::PasswordForm::Scheme::kHtml;
 }
 
 password_manager::PasswordForm ConvertImportedPasswordForm(
@@ -155,20 +153,19 @@ void InProcessImporterBridge::SetPasswordForm(
 
 void InProcessImporterBridge::SetAutofillFormData(
     const std::vector<ImporterAutofillFormDataEntry>& entries) {
-  std::vector<autofill::AutofillEntry> autofill_entries;
-  for (size_t i = 0; i < entries.size(); ++i) {
+  std::vector<autofill::AutocompleteEntry> autocomplete_entries;
+  for (const ImporterAutofillFormDataEntry& entry : entries) {
     // Using method c_str() in order to avoid data which contains null
     // terminating symbols.
-    const std::u16string name = entries[i].name.c_str();
-    const std::u16string value = entries[i].value.c_str();
+    const std::u16string name = entry.name.c_str();
+    const std::u16string value = entry.value.c_str();
     if (name.empty() || value.empty())
       continue;
-    autofill_entries.push_back(
-        autofill::AutofillEntry(autofill::AutofillKey(name, value),
-                                entries[i].first_used, entries[i].last_used));
+    autocomplete_entries.emplace_back(autofill::AutocompleteKey(name, value),
+                                      entry.first_used, entry.last_used);
   }
 
-  writer_->AddAutofillFormDataEntries(autofill_entries);
+  writer_->AddAutocompleteFormDataEntries(autocomplete_entries);
 }
 
 void InProcessImporterBridge::NotifyStarted() {
@@ -191,4 +188,4 @@ std::u16string InProcessImporterBridge::GetLocalizedString(int message_id) {
   return l10n_util::GetStringUTF16(message_id);
 }
 
-InProcessImporterBridge::~InProcessImporterBridge() {}
+InProcessImporterBridge::~InProcessImporterBridge() = default;

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,7 @@ import android.content.ComponentCallbacks;
 import android.content.Context;
 import android.content.ContextWrapper;
 
-/**
- * ContextWrapper that can be used to wrap Application.
- */
+/** ContextWrapper that can be used to wrap Application. */
 public class ApplicationContextWrapper extends ContextWrapper {
     public ApplicationContextWrapper(Context base) {
         super(base);

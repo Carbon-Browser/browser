@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import subprocess
 from name_utilities import enum_key_for_css_keyword
 import json5_generator
 
@@ -65,6 +64,10 @@ class CSSValueKeywordsWriter(json5_generator.Writer):
         for keyword in self._value_keywords:
             keyword_offsets.append(current_offset)
             current_offset += len(keyword["name"].original) + 1
+
+        # Add an additional offset to be able to compute the length of each
+        # keyword string based on consecutive offsets.
+        keyword_offsets.append(current_offset)
 
         return {
             'value_keywords':

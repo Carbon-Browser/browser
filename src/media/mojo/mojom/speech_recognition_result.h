@@ -1,15 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_MOJO_MOJOM_SPEECH_RECOGNITION_RESULT_H_
 #define MEDIA_MOJO_MOJOM_SPEECH_RECOGNITION_RESULT_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace media {
 
@@ -59,7 +59,7 @@ struct TimingInformation {
   // chromeos/services/machine_learning/public/mojom/soda.mojom. Therefore, it
   // must be optional. Hypothesis parts maybe non-empty optional containing a
   // zero length vector if no words were spoken during the event's time span.
-  absl::optional<std::vector<HypothesisParts>> hypothesis_parts;
+  std::optional<std::vector<HypothesisParts>> hypothesis_parts;
 };
 
 // A speech recognition result created by the speech service and passed to the
@@ -83,7 +83,7 @@ struct SpeechRecognitionResult {
   bool is_final = false;
 
   // Timing information for the current transcription.
-  absl::optional<TimingInformation> timing_information;
+  std::optional<TimingInformation> timing_information;
 };
 
 }  // namespace media

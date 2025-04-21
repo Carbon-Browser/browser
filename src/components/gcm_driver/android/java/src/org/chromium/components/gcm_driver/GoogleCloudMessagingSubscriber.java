@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,7 @@ import androidx.annotation.Nullable;
 
 import java.io.IOException;
 
-/**
- * Helper to subscribe to and unsubscribe from Google Cloud Messaging.
- */
+/** Helper to subscribe to and unsubscribe from Google Cloud Messaging. */
 public interface GoogleCloudMessagingSubscriber {
     /**
      * Subscribes to a source to start receiving messages from it.

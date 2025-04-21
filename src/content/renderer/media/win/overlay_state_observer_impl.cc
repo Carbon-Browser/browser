@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@ OverlayStateObserverImpl::Create(
     StateChangedCB state_changed_cb) {
   if (overlay_state_service_provider) {
     return base::WrapUnique(new OverlayStateObserverImpl(
-        overlay_state_service_provider, mailbox, state_changed_cb));
+        overlay_state_service_provider, mailbox, std::move(state_changed_cb)));
   }
   return nullptr;
 }

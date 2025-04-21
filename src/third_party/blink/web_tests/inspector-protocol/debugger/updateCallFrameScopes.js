@@ -1,4 +1,4 @@
-(async function(testRunner) {
+(async function(/** @type {import('test_runner').TestRunner} */ testRunner) {
   var {page, session, dp} = await testRunner.startBlank('Tests that evaluation on call frame affects scope variables.');
 
   var newVariableValue = 55;
@@ -18,7 +18,7 @@
   var topFrame = messageObject.params.callFrames[0];
   var topFrameId = topFrame.callFrameId;
 
-  dp.Debugger.evaluateOnCallFrame({callFrameId: topFrameId, expression: 'a = ' + newVariableValue });
+  await dp.Debugger.evaluateOnCallFrame({callFrameId: topFrameId, expression: 'a = ' + newVariableValue });
   testRunner.log('Variable value changed');
   dp.Debugger.resume();
 

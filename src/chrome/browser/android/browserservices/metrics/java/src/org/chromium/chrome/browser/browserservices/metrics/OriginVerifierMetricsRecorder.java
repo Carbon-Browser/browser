@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,14 +11,17 @@ import org.chromium.base.metrics.RecordHistogram;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
-/**
- * Class to record Uma related to Origin Verifier
- */
+/** Class to record Uma related to Origin Verifier */
 public class OriginVerifierMetricsRecorder {
-    @IntDef({VerificationResult.ONLINE_SUCCESS, VerificationResult.ONLINE_FAILURE,
-            VerificationResult.OFFLINE_SUCCESS, VerificationResult.OFFLINE_FAILURE,
-            VerificationResult.HTTPS_FAILURE, VerificationResult.REQUEST_FAILURE,
-            VerificationResult.CACHED_SUCCESS})
+    @IntDef({
+        VerificationResult.ONLINE_SUCCESS,
+        VerificationResult.ONLINE_FAILURE,
+        VerificationResult.OFFLINE_SUCCESS,
+        VerificationResult.OFFLINE_FAILURE,
+        VerificationResult.HTTPS_FAILURE,
+        VerificationResult.REQUEST_FAILURE,
+        VerificationResult.CACHED_SUCCESS
+    })
     @Retention(RetentionPolicy.SOURCE)
     public @interface VerificationResult {
         // Don't reuse values or reorder values. If you add something new, change NUM_ENTRIES as

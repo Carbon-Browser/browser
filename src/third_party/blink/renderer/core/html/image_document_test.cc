@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,7 @@
 #include "third_party/blink/renderer/core/testing/sim/sim_request.h"
 #include "third_party/blink/renderer/core/testing/sim/sim_test.h"
 #include "third_party/blink/renderer/platform/heap/thread_state.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 
 namespace blink {
@@ -58,7 +59,7 @@ Vector<unsigned char> JpegImage() {
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x00, 0x00, 0x00, 0x00, 0x03, 0xff, 0xd9};
 
-  jpeg.Append(kData, sizeof(kData));
+  jpeg.AppendSpan(base::span(kData));
   return jpeg;
 }
 
@@ -81,7 +82,7 @@ Vector<unsigned char> AnimatedWebpImage() {
       0x40, 0x0c, 0x00, 0x07, 0xd0, 0xbf, 0x88, 0xfe, 0x07, 0x80, 0x84, 0xf0,
       0x7f, 0xbd, 0x18, 0xd1, 0xff, 0x94, 0x0b, 0x00};
 
-  animated_webp.Append(kData, sizeof(kData));
+  animated_webp.AppendSpan(base::span(kData));
   return animated_webp;
 }
 }  // namespace
@@ -123,11 +124,12 @@ class ImageDocumentTest : public testing::Test {
   void SetForceZeroLayoutHeight(bool);
 
  private:
+  test::TaskEnvironment task_environment_;
   Persistent<WindowToViewportScalingChromeClient> chrome_client_;
   std::unique_ptr<DummyPageHolder> dummy_page_holder_;
-  float page_zoom_factor_ = 0.0f;
+  float zoom_factor_ = 0.0f;
   float viewport_scaling_factor_ = 0.0f;
-  absl::optional<bool> force_zero_layout_height_;
+  std::optional<bool> force_zero_layout_height_;
 };
 
 void ImageDocumentTest::CreateDocumentWithoutLoadingImage(int view_width,
@@ -138,8 +140,9 @@ void ImageDocumentTest::CreateDocumentWithoutLoadingImage(int view_width,
   dummy_page_holder_ = std::make_unique<DummyPageHolder>(
       gfx::Size(view_width, view_height), chrome_client_);
 
-  if (page_zoom_factor_)
-    dummy_page_holder_->GetFrame().SetPageZoomFactor(page_zoom_factor_);
+  if (zoom_factor_) {
+    dummy_page_holder_->GetFrame().SetLayoutZoomFactor(zoom_factor_);
+  }
   if (viewport_scaling_factor_)
     chrome_client_->SetScalingFactor(viewport_scaling_factor_);
   if (force_zero_layout_height_.has_value()) {
@@ -155,7 +158,7 @@ void ImageDocumentTest::CreateDocumentWithoutLoadingImage(int view_width,
       is_animated ? AnimatedWebpImage() : JpegImage();
   WebNavigationParams::FillStaticResponse(
       params.get(), is_animated ? "image/webp" : "image/jpeg", "UTF-8",
-      base::make_span(reinterpret_cast<const char*>(data.data()), data.size()));
+      base::as_chars(base::span(data)));
   dummy_page_holder_->GetFrame().Loader().CommitNavigation(std::move(params),
                                                            nullptr);
 }
@@ -174,9 +177,9 @@ ImageDocument& ImageDocumentTest::GetDocument() const {
 }
 
 void ImageDocumentTest::SetPageZoom(float factor) {
-  page_zoom_factor_ = factor;
+  zoom_factor_ = factor;
   if (dummy_page_holder_)
-    dummy_page_holder_->GetFrame().SetPageZoomFactor(factor);
+    dummy_page_holder_->GetFrame().SetLayoutZoomFactor(factor);
 }
 
 void ImageDocumentTest::SetWindowToViewportScalingFactor(float factor) {
@@ -349,7 +352,8 @@ class ImageDocumentViewportTest : public SimTest {
 // Tests that hiding the URL bar doesn't cause a "jump" when viewing an image
 // much wider than the viewport.
 TEST_F(ImageDocumentViewportTest, HidingURLBarDoesntChangeImageLocation) {
-  v8::HandleScope handle_scope(v8::Isolate::GetCurrent());
+  v8::HandleScope handle_scope(
+      WebView().GetPage()->GetAgentGroupScheduler().Isolate());
 
   // Initialize with the URL bar showing. Make the viewport very thin so that
   // we load an image much wider than the viewport but fits vertically. The
@@ -358,15 +362,14 @@ TEST_F(ImageDocumentViewportTest, HidingURLBarDoesntChangeImageLocation) {
   SimRequest request("https://example.com/test.jpg", "image/jpeg");
   LoadURL("https://example.com/test.jpg");
 
-  Vector<unsigned char> jpeg = JpegImage();
-  Vector<char> data = Vector<char>();
-  data.Append(jpeg.data(), jpeg.size());
+  Vector<char> data;
+  data.AppendVector(JpegImage());
   request.Complete(data);
 
   Compositor().BeginFrame();
 
   HTMLImageElement* img = GetDocument().ImageElement();
-  DOMRect* rect = img->getBoundingClientRect();
+  DOMRect* rect = img->GetBoundingClientRect();
 
   // Some initial sanity checking. We'll use the BoundingClientRect for the
   // image location since that's relative to the layout viewport and the layout
@@ -383,7 +386,7 @@ TEST_F(ImageDocumentViewportTest, HidingURLBarDoesntChangeImageLocation) {
   // layout size so the image location shouldn't change.
   WebView().ResizeWithBrowserControls(gfx::Size(5, 50), 10, 10, false);
   Compositor().BeginFrame();
-  rect = img->getBoundingClientRect();
+  rect = img->GetBoundingClientRect();
   EXPECT_EQ(50, rect->width());
   EXPECT_EQ(50, rect->height());
   EXPECT_EQ(0, rect->x());
@@ -391,13 +394,13 @@ TEST_F(ImageDocumentViewportTest, HidingURLBarDoesntChangeImageLocation) {
 }
 
 TEST_F(ImageDocumentViewportTest, ScaleImage) {
-  v8::HandleScope handle_scope(v8::Isolate::GetCurrent());
+  v8::HandleScope handle_scope(
+      WebView().GetPage()->GetAgentGroupScheduler().Isolate());
   SimRequest request("https://example.com/test.jpg", "image/jpeg");
   LoadURL("https://example.com/test.jpg");
 
-  Vector<unsigned char> jpeg = JpegImage();
-  Vector<char> data = Vector<char>();
-  data.Append(jpeg.data(), jpeg.size());
+  Vector<char> data;
+  data.AppendVector(JpegImage());
   request.Complete(data);
 
   HTMLImageElement* img = GetDocument().ImageElement();
@@ -431,13 +434,13 @@ TEST_F(ImageDocumentViewportTest, ScaleImage) {
 // Tests that with zoom factor for device scale factor, image with different
 // size fit in the viewport correctly.
 TEST_F(ImageDocumentViewportTest, DivWidth) {
-  v8::HandleScope handle_scope(v8::Isolate::GetCurrent());
+  v8::HandleScope handle_scope(
+      WebView().GetPage()->GetAgentGroupScheduler().Isolate());
   SimRequest request("https://example.com/test.jpg", "image/jpeg");
   LoadURL("https://example.com/test.jpg");
 
-  Vector<unsigned char> jpeg = JpegImage();
-  Vector<char> data = Vector<char>();
-  data.Append(jpeg.data(), jpeg.size());
+  Vector<char> data;
+  data.AppendVector(JpegImage());
   request.Complete(data);
 
   HTMLImageElement* img = GetDocument().ImageElement();
@@ -454,7 +457,7 @@ TEST_F(ImageDocumentViewportTest, DivWidth) {
   EXPECT_EQ(1.f, GetVisualViewport().Scale());
   EXPECT_EQ(100, GetVisualViewport().Width());
   EXPECT_EQ(100, GetVisualViewport().Height());
-  DOMRect* rect = img->getBoundingClientRect();
+  DOMRect* rect = img->GetBoundingClientRect();
   EXPECT_EQ(25, rect->x());
   EXPECT_EQ(25, rect->y());
 
@@ -479,7 +482,7 @@ TEST_F(ImageDocumentViewportTest, DivWidth) {
   EXPECT_EQ(0.1f, GetVisualViewport().Scale());
   EXPECT_EQ(20, GetVisualViewport().Width());
   EXPECT_EQ(100, GetVisualViewport().Height());
-  rect = img->getBoundingClientRect();
+  rect = img->GetBoundingClientRect();
   EXPECT_EQ(0, rect->x());
   EXPECT_EQ(40, rect->y());
 }

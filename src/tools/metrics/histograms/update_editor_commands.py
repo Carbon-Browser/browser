@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -24,8 +24,8 @@ import path_util
 import histogram_paths
 import histogram_configuration_model
 
-
-ENUMS_PATH = histogram_paths.ENUMS_XML
+# MappedEditingCommands Enum is defined in:
+ENUMS_PATH = 'tools/metrics/histograms/metadata/web_core/enums.xml'
 ENUM_NAME = 'MappedEditingCommands'
 
 EDITOR_COMMAND_CPP = 'third_party/blink/renderer/core/editing/editor_command.cc'

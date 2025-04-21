@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,9 @@
 #include "base/android/scoped_java_ref.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
+#include "net/base/network_handle.h"
 #include "net/http/bidirectional_stream.h"
-#include "net/third_party/quiche/src/quiche/spdy/core/spdy_header_block.h"
+#include "net/third_party/quiche/src/quiche/common/http/http_header_block.h"
 
 namespace net {
 struct BidirectionalStreamRequestInfo;
@@ -76,7 +77,7 @@ class CronetBidirectionalStreamAdapter
       int32_t traffic_stats_tag,
       bool traffic_stats_uid_set,
       int32_t traffic_stats_uid,
-      net::NetworkChangeNotifier::NetworkHandle network);
+      net::handles::NetworkHandle network);
 
   CronetBidirectionalStreamAdapter(const CronetBidirectionalStreamAdapter&) =
       delete;
@@ -147,10 +148,10 @@ class CronetBidirectionalStreamAdapter
   // net::BidirectionalStream::Delegate implementations:
   void OnStreamReady(bool request_headers_sent) override;
   void OnHeadersReceived(
-      const spdy::Http2HeaderBlock& response_headers) override;
+      const quiche::HttpHeaderBlock& response_headers) override;
   void OnDataRead(int bytes_read) override;
   void OnDataSent() override;
-  void OnTrailersReceived(const spdy::Http2HeaderBlock& trailers) override;
+  void OnTrailersReceived(const quiche::HttpHeaderBlock& trailers) override;
   void OnFailed(int error) override;
 
   void StartOnNetworkThread(
@@ -165,8 +166,9 @@ class CronetBidirectionalStreamAdapter
   // Gets headers as a Java array.
   base::android::ScopedJavaLocalRef<jobjectArray> GetHeadersArray(
       JNIEnv* env,
-      const spdy::Http2HeaderBlock& header_block);
-  // Helper method to report metrics to the Java layer.
+      const quiche::HttpHeaderBlock& header_block);
+  // Reports metrics to the Java layer if the stream was ever started. Called on
+  // the network thread immediately before the adapter destroys itself.
   void MaybeReportMetrics();
   const raw_ptr<CronetContextAdapter> context_;
 
@@ -181,9 +183,9 @@ class CronetBidirectionalStreamAdapter
   const bool traffic_stats_uid_set_;
   // UID to be applied to URLRequest.
   const int32_t traffic_stats_uid_;
-  // If not equal to net::NetworkChangeNotifier::kInvalidNetworkHandle, the
-  // network to be used to send this request.
-  const net::NetworkChangeNotifier::NetworkHandle network_;
+  // If not equal to net::handles::kInvalidNetworkHandle, the network to be used
+  // to send this request.
+  const net::handles::NetworkHandle network_;
 
   scoped_refptr<IOBufferWithByteBuffer> read_buffer_;
   std::unique_ptr<PendingWriteData> pending_write_data_;

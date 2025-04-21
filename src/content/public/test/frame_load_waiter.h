@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,9 +20,6 @@ class FrameLoadWaiter : public RenderFrameObserver {
   FrameLoadWaiter(const FrameLoadWaiter&) = delete;
   FrameLoadWaiter& operator=(const FrameLoadWaiter&) = delete;
 
-  // Note: single-process browser tests need to enable nestable tasks by
-  // instantiating a base::CurrentThread::ScopedNestableTaskAllower or this
-  // method will never return.
   void Wait();
 
  private:

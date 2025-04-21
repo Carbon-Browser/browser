@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,13 @@
 // Please run the closure compiler before committing changes.
 // See https://chromium.googlesource.com/chromium/src/+/main/docs/closure_compilation.md
 
-// IMPORTANT NOTE: Work-around for crbug.com/543822
+// TODO(crbug.com/543822): Disable automatic extern generation until fixed.
 // s/chrome.windows.tabs.Tab/chrome.tabs.Tab/
 
-/** @fileoverview Externs generated from namespace: windows */
+/**
+ * @fileoverview Externs generated from namespace: windows
+ * @externs
+ */
 
 /** @const */
 chrome.windows = {};

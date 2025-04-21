@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "components/signin/public/identity_manager/access_token_info.h"
 #include "google_apis/gaia/core_account_id.h"
 #include "google_apis/gaia/google_service_auth_error.h"
@@ -122,12 +122,14 @@ void PrimaryAccountAccessTokenFetcher::OnIdentityManagerShutdown(
 }
 
 void PrimaryAccountAccessTokenFetcher::ProcessSigninStateChange() {
-  if (!waiting_for_account_available_)
+  if (!waiting_for_account_available_) {
     return;
+  }
 
   DCHECK_EQ(Mode::kWaitUntilAvailable, mode_);
-  if (!AreCredentialsAvailable())
+  if (!AreCredentialsAvailable()) {
     return;
+  }
 
   waiting_for_account_available_ = false;
   StartAccessTokenRequest();
@@ -144,9 +146,6 @@ void PrimaryAccountAccessTokenFetcher::OnAccessTokenFetchComplete(
   // Moreover, OnRefreshTokenAvailable might happen after startup when the
   // credentials are changed/updated.
   // To handle these cases, we retry a canceled request once.
-  // However, a request may also get cancelled for legitimate reasons, e.g.
-  // because the user signed out. In those cases, there's no point in retrying,
-  // so only retry if there (still) is a valid refresh token.
   // NOTE: Maybe we should retry for all transient errors here, so that clients
   // don't have to.
   if (mode_ == Mode::kWaitUntilAvailable && !access_token_retried_ &&

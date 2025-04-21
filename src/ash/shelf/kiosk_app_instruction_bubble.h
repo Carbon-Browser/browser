@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,9 @@
 
 #include "ash/ash_export.h"
 #include "ash/public/cpp/shelf_types.h"
+#include "base/memory/raw_ptr.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
 
 namespace views {
@@ -21,6 +23,8 @@ namespace ash {
 // button.
 class ASH_EXPORT KioskAppInstructionBubble
     : public views::BubbleDialogDelegateView {
+  METADATA_HEADER(KioskAppInstructionBubble, views::BubbleDialogDelegateView)
+
  public:
   KioskAppInstructionBubble(views::View* anchor, ShelfAlignment alignment);
 
@@ -32,10 +36,10 @@ class ASH_EXPORT KioskAppInstructionBubble
  private:
   // views::View:
   void OnThemeChanged() override;
-  gfx::Size CalculatePreferredSize() const override;
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override;
 
-  views::Label* title_ = nullptr;
+  raw_ptr<views::Label> title_ = nullptr;
 };
 
 }  // namespace ash

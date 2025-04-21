@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,24 +29,23 @@ class CertificatePolicyCache
 
   // Everything from here on can only be called from the IO thread.
 
-  // Records that |cert| is permitted to be used for |host| in the future.
-  virtual void AllowCertForHost(net::X509Certificate* cert,
-                                const std::string& host,
-                                net::CertStatus error);
+  // Records that `cert` is permitted to be used for `host` in the future.
+  void AllowCertForHost(const net::X509Certificate* cert,
+                        const std::string& host,
+                        net::CertStatus error);
 
-  // Queries whether |cert| is allowed or denied for |host|.
-  virtual CertPolicy::Judgment QueryPolicy(net::X509Certificate* cert,
-                                           const std::string& host,
-                                           net::CertStatus error);
+  // Queries whether `cert` is allowed or denied for `host`.
+  CertPolicy::Judgment QueryPolicy(const net::X509Certificate* cert,
+                                   const std::string& host,
+                                   net::CertStatus error);
 
   // Removes all policies stored in this instance.
-  virtual void ClearCertificatePolicies();
-
- protected:
-  virtual ~CertificatePolicyCache();
+  void ClearCertificatePolicies();
 
  private:
   friend class base::RefCountedThreadSafe<CertificatePolicyCache>;
+
+  ~CertificatePolicyCache();
 
   // Certificate policies for each host.
   std::map<std::string, CertPolicy> cert_policy_for_host_;

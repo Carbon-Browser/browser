@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,22 +14,25 @@ ContentSecurityNotifier::ContentSecurityNotifier(
 
 void ContentSecurityNotifier::NotifyContentWithCertificateErrorsRan() {
   auto* render_frame_host = RenderFrameHostImpl::FromID(render_frame_host_id_);
-  if (render_frame_host)
+  if (render_frame_host) {
     render_frame_host->OnDidRunContentWithCertificateErrors();
+  }
 }
 
 void ContentSecurityNotifier::NotifyContentWithCertificateErrorsDisplayed() {
   auto* render_frame_host = RenderFrameHostImpl::FromID(render_frame_host_id_);
-  if (render_frame_host)
+  if (render_frame_host) {
     render_frame_host->OnDidDisplayContentWithCertificateErrors();
+  }
 }
 
 void ContentSecurityNotifier::NotifyInsecureContentRan(
     const GURL& origin,
     const GURL& insecure_url) {
   auto* render_frame_host = RenderFrameHostImpl::FromID(render_frame_host_id_);
-  if (render_frame_host)
+  if (render_frame_host) {
     render_frame_host->OnDidRunInsecureContent(origin, insecure_url);
+  }
 }
 
 }  // namespace content

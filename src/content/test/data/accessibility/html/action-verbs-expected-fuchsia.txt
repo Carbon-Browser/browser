@@ -30,11 +30,11 @@ UNKNOWN focusable has_input_focus label='Action verbs'
 ++++++++UNKNOWN hidden
 ++++++++++UNKNOWN focusable label='Summary' actions='{DEFAULT}'
 ++++++++++++LIST_ELEMENT_MARKER hidden
-++++++++++++++STATIC_TEXT hidden label='%E2%96%B8 '
+++++++++++++++STATIC_TEXT hidden
 ++++++++++++STATIC_TEXT label='Summary'
 ++++++++++++++UNKNOWN label='Summary'
 ++++++++UNKNOWN hidden
-++++++++++STATIC_TEXT hidden label='Details'
+++++++++++STATIC_TEXT hidden
 ++++++UNKNOWN focusable actions='{DEFAULT}' value='Pop-up button'
 ++++++++UNKNOWN hidden
 ++++++++++UNKNOWN focusable selected label='Pop-up button' actions='{DEFAULT}'
@@ -42,7 +42,7 @@ UNKNOWN focusable has_input_focus label='Action verbs'
 ++++++++STATIC_TEXT label='Div with click handler'
 ++++++++++UNKNOWN label='Div with click handler'
 ++++++UNKNOWN actions='{DEFAULT}'
-++++++++PARAGRAPH actions='{DEFAULT}'
+++++++++PARAGRAPH
 ++++++++++STATIC_TEXT label='Paragraph with click handler on parent'
 ++++++++++++UNKNOWN label='Paragraph with click handler on parent'
 ++++++UNKNOWN
@@ -72,6 +72,6 @@ UNKNOWN focusable has_input_focus label='Action verbs'
 ++++++++UNKNOWN label='ARIA switch in clickable container' actions='{DEFAULT}' checked_state='UNCHECKED'
 ++++++++++STATIC_TEXT label='ARIA switch in clickable container'
 ++++++++++++UNKNOWN label='ARIA switch in clickable container'
-++++++++UNKNOWN actions='{DEFAULT}'
+++++++++UNKNOWN
 ++++++++++STATIC_TEXT label='Generic in clickable container'
 ++++++++++++UNKNOWN label='Generic in clickable container'

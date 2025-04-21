@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <unordered_set>
 #include <utility>
 
+#include "base/not_fatal_until.h"
 #include "base/unguessable_token.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/probe/core_probes.h"
@@ -60,7 +61,7 @@ Vector<WebString> MediaInspectorContextImpl::AllPlayerIdsAndMarkSent() {
 const MediaPlayer& MediaInspectorContextImpl::MediaPlayerFromId(
     const WebString& player_id) {
   const auto& player = players_.find(player_id);
-  DCHECK_NE(player, players_.end());
+  CHECK_NE(player, players_.end(), base::NotFatalUntil::M130);
   return *player->value;
 }
 
@@ -109,18 +110,22 @@ void MediaInspectorContextImpl::TrimPlayer(const WebString& playerId) {
 
 void MediaInspectorContextImpl::CullPlayers(const WebString& prefer_keep) {
   // Erase all the dead players, but only erase the required number of others.
-  for (const auto& playerId : dead_players_)
+  while (!dead_players_.empty()) {
+    auto playerId = dead_players_.back();
+    // remove it first, since |RemovePlayer| can cause a GC event which can
+    // potentially caues more players to get added to |dead_players_|.
+    dead_players_.pop_back();
     RemovePlayer(playerId);
-  dead_players_.clear();
+  }
 
-  while (!expendable_players_.IsEmpty()) {
+  while (!expendable_players_.empty()) {
     if (total_event_count_ <= kMaxCachedPlayerEvents)
       return;
     RemovePlayer(expendable_players_.back());
     expendable_players_.pop_back();
   }
 
-  while (!unsent_players_.IsEmpty()) {
+  while (!unsent_players_.empty()) {
     if (total_event_count_ <= kMaxCachedPlayerEvents)
       return;
     RemovePlayer(unsent_players_.back());

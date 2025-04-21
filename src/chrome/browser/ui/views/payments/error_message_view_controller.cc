@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,8 +21,9 @@
 namespace {
 
 class PaymentsErrorLabel : public views::Label {
+  METADATA_HEADER(PaymentsErrorLabel, views::Label)
+
  public:
-  METADATA_HEADER(PaymentsErrorLabel);
   PaymentsErrorLabel()
       : Label(l10n_util::GetStringUTF16(IDS_PAYMENTS_ERROR_MESSAGE)) {
     SetMultiLine(true);
@@ -37,7 +38,7 @@ class PaymentsErrorLabel : public views::Label {
   }
 };
 
-BEGIN_METADATA(PaymentsErrorLabel, views::Label)
+BEGIN_METADATA(PaymentsErrorLabel)
 END_METADATA
 
 }  // namespace
@@ -50,7 +51,7 @@ ErrorMessageViewController::ErrorMessageViewController(
     base::WeakPtr<PaymentRequestDialogView> dialog)
     : PaymentRequestSheetController(spec, state, dialog) {}
 
-ErrorMessageViewController::~ErrorMessageViewController() {}
+ErrorMessageViewController::~ErrorMessageViewController() = default;
 
 std::u16string ErrorMessageViewController::GetPrimaryButtonLabel() {
   return l10n_util::GetStringUTF16(IDS_CLOSE);
@@ -91,6 +92,25 @@ void ErrorMessageViewController::FillContentView(views::View* content_view) {
       views::BoxLayout::CrossAxisAlignment::kStart);
   content_view->SetLayoutManager(std::move(layout));
   content_view->AddChildView(std::make_unique<PaymentsErrorLabel>());
+}
+
+bool ErrorMessageViewController::GetSheetId(DialogViewID* sheet_id) {
+  *sheet_id = DialogViewID::ERROR_SHEET;
+  return true;
+}
+
+bool ErrorMessageViewController::ShouldAccelerateEnterKey() {
+  return true;
+}
+
+bool ErrorMessageViewController::CanContentViewBeScrollable() {
+  // The error message is a single line of text that doesn't need a scroll view.
+  return false;
+}
+
+base::WeakPtr<PaymentRequestSheetController>
+ErrorMessageViewController::GetWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
 }
 
 }  // namespace payments

@@ -1,10 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/service_worker/payment_handler_support.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "content/browser/service_worker/service_worker_context_core.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
 #include "content/browser/storage_partition_impl.h"
@@ -54,7 +55,7 @@ class ShowPaymentHandlerWindowReplier {
     DCHECK_CURRENTLY_ON(BrowserThread::UI);
     if (response_callback_) {
       DCHECK(fallback_);
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(std::move(fallback_), std::move(response_callback_)));
     }

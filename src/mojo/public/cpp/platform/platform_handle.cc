@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,14 +22,18 @@
 #elif BUILDFLAG(IS_APPLE)
 #include <mach/vm_map.h>
 
-#include "base/mac/mach_logging.h"
-#include "base/mac/scoped_mach_port.h"
+#include "base/apple/mach_logging.h"
+#include "base/apple/scoped_mach_port.h"
 #endif
 
 #if BUILDFLAG(IS_POSIX)
 #include <unistd.h>
 
 #include "base/files/scoped_file.h"
+#endif
+
+#if BUILDFLAG(IS_ANDROID)
+#include "base/android/binder.h"
 #endif
 
 namespace mojo {
@@ -72,17 +76,17 @@ zx::handle CloneHandle(const zx::handle& handle) {
   return std::move(dupe);
 }
 #elif BUILDFLAG(IS_APPLE)
-base::mac::ScopedMachSendRight CloneMachPort(
-    const base::mac::ScopedMachSendRight& mach_port) {
+base::apple::ScopedMachSendRight CloneMachPort(
+    const base::apple::ScopedMachSendRight& mach_port) {
   DCHECK(mach_port.is_valid());
 
   kern_return_t kr = mach_port_mod_refs(mach_task_self(), mach_port.get(),
                                         MACH_PORT_RIGHT_SEND, 1);
   if (kr != KERN_SUCCESS) {
     MACH_DLOG(ERROR, kr) << "mach_port_mod_refs";
-    return base::mac::ScopedMachSendRight();
+    return base::apple::ScopedMachSendRight();
   }
-  return base::mac::ScopedMachSendRight(mach_port.get());
+  return base::apple::ScopedMachSendRight(mach_port.get());
 }
 #endif
 
@@ -108,9 +112,9 @@ PlatformHandle::PlatformHandle(base::win::ScopedHandle handle)
 PlatformHandle::PlatformHandle(zx::handle handle)
     : type_(Type::kHandle), handle_(std::move(handle)) {}
 #elif BUILDFLAG(IS_APPLE)
-PlatformHandle::PlatformHandle(base::mac::ScopedMachSendRight mach_port)
+PlatformHandle::PlatformHandle(base::apple::ScopedMachSendRight mach_port)
     : type_(Type::kMachSend), mach_send_(std::move(mach_port)) {}
-PlatformHandle::PlatformHandle(base::mac::ScopedMachReceiveRight mach_port)
+PlatformHandle::PlatformHandle(base::apple::ScopedMachReceiveRight mach_port)
     : type_(Type::kMachReceive), mach_receive_(std::move(mach_port)) {}
 #endif
 
@@ -121,6 +125,11 @@ PlatformHandle::PlatformHandle(base::ScopedFD fd)
   DCHECK_LT(fd_.get(), FDIO_MAX_FD);
 #endif
 }
+#endif
+
+#if BUILDFLAG(IS_ANDROID)
+PlatformHandle::PlatformHandle(base::android::BinderRef binder)
+    : type_(Type::kBinder), binder_(std::move(binder)) {}
 #endif
 
 PlatformHandle::~PlatformHandle() = default;
@@ -142,6 +151,9 @@ PlatformHandle& PlatformHandle::operator=(PlatformHandle&& other) {
   fd_ = std::move(other.fd_);
 #endif
 
+#if BUILDFLAG(IS_ANDROID)
+  binder_ = std::move(other.binder_);
+#endif
   return *this;
 }
 
@@ -181,6 +193,14 @@ void PlatformHandle::ToMojoPlatformHandle(PlatformHandle handle,
     }
 #endif
 
+#if BUILDFLAG(IS_ANDROID)
+    if (handle.type_ == Type::kBinder) {
+      out_handle->type = MOJO_PLATFORM_HANDLE_TYPE_BINDER;
+      out_handle->value = reinterpret_cast<uint64_t>(handle.binder_.release());
+      return;
+    }
+#endif
+
 #if BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
     DCHECK(handle.is_fd());
     out_handle->type = MOJO_PLATFORM_HANDLE_TYPE_FILE_DESCRIPTOR;
@@ -210,11 +230,18 @@ PlatformHandle PlatformHandle::FromMojoPlatformHandle(
     return PlatformHandle(zx::handle(handle->value));
 #elif BUILDFLAG(IS_APPLE)
   if (handle->type == MOJO_PLATFORM_HANDLE_TYPE_MACH_SEND_RIGHT) {
-    return PlatformHandle(base::mac::ScopedMachSendRight(
+    return PlatformHandle(base::apple::ScopedMachSendRight(
         static_cast<mach_port_t>(handle->value)));
   } else if (handle->type == MOJO_PLATFORM_HANDLE_TYPE_MACH_RECEIVE_RIGHT) {
-    return PlatformHandle(base::mac::ScopedMachReceiveRight(
+    return PlatformHandle(base::apple::ScopedMachReceiveRight(
         static_cast<mach_port_t>(handle->value)));
+  }
+#endif
+
+#if BUILDFLAG(IS_ANDROID)
+  if (handle->type == MOJO_PLATFORM_HANDLE_TYPE_BINDER) {
+    return PlatformHandle(
+        base::android::BinderRef(reinterpret_cast<AIBinder*>(handle->value)));
   }
 #endif
 
@@ -240,6 +267,10 @@ void PlatformHandle::reset() {
 #if BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
   fd_.reset();
 #endif
+
+#if BUILDFLAG(IS_ANDROID)
+  binder_.reset();
+#endif
 }
 
 void PlatformHandle::release() {
@@ -257,6 +288,10 @@ void PlatformHandle::release() {
 #if BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
   std::ignore = fd_.release();
 #endif
+
+#if BUILDFLAG(IS_ANDROID)
+  std::ignore = binder_.release();
+#endif
 }
 
 PlatformHandle PlatformHandle::Clone() const {
@@ -272,6 +307,11 @@ PlatformHandle PlatformHandle::Clone() const {
   CHECK(!is_valid_mach_receive()) << "Cannot clone Mach receive rights";
   return PlatformHandle(CloneFD(fd_));
 #elif BUILDFLAG(IS_POSIX)
+#if BUILDFLAG(IS_ANDROID)
+  if (is_valid_binder()) {
+    return PlatformHandle(binder_);
+  }
+#endif
   return PlatformHandle(CloneFD(fd_));
 #endif
 }

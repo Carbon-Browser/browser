@@ -1,43 +1,43 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/network/network_service_network_delegate.h"
 
+#include <optional>
 #include <string>
 
-#include "base/bind.h"
 #include "base/debug/dump_without_crashing.h"
-#include "base/stl_util.h"
+#include "base/functional/bind.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/types/optional_util.h"
 #include "build/build_config.h"
 #include "components/domain_reliability/monitor.h"
 #include "net/base/features.h"
 #include "net/base/isolation_info.h"
 #include "net/base/load_flags.h"
 #include "net/base/net_errors.h"
-#include "net/cookies/same_party_context.h"
+#include "net/cookies/cookie_setting_override.h"
+#include "net/cookies/cookie_util.h"
+#include "net/url_request/clear_site_data.h"
 #include "net/url_request/referrer_policy.h"
 #include "net/url_request/url_request.h"
 #include "services/network/cookie_manager.h"
+#include "services/network/cookie_settings.h"
 #include "services/network/network_context.h"
 #include "services/network/network_service.h"
 #include "services/network/network_service_proxy_delegate.h"
 #include "services/network/pending_callback_chain.h"
+#include "services/network/public/cpp/features.h"
 #include "services/network/url_loader.h"
 #include "url/gurl.h"
 
-#if !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(ENABLE_WEBSOCKETS)
 #include "services/network/websocket.h"
 #endif
 
 namespace network {
-
-namespace {
-
-const char kClearSiteDataHeader[] = "Clear-Site-Data";
-
-}  // anonymous namespace
 
 NetworkServiceNetworkDelegate::NetworkServiceNetworkDelegate(
     bool enable_referrers,
@@ -80,24 +80,25 @@ int NetworkServiceNetworkDelegate::OnBeforeURLRequest(
 
   auto* const loader = URLLoader::ForRequest(*request);
   const GURL* effective_url = nullptr;
-
   if (loader && loader->new_redirect_url()) {
     DCHECK(new_url);
     *new_url = loader->new_redirect_url().value();
     effective_url = new_url;
   } else {
     effective_url = &request->url();
-    // if (effective_url->GetContent().find(".bit") != std::string::npos) {
-    //   effective_url = new GURL("https://" + effective_url->GetContent() + ".cc");
-    // }
   }
 
   MaybeTruncateReferrer(request, *effective_url);
 
+  NetworkService* network_service = network_context_->network_service();
+  if (network_service) {
+    network_service->NotifyNetworkRequestWithAnnotation(
+        request->traffic_annotation());
+  }
+
   if (!loader)
     return net::OK;
 
-  NetworkService* network_service = network_context_->network_service();
   if (network_service) {
     loader->SetEnableReportingRawHeaders(network_service->HasRawHeadersAccess(
         loader->GetProcessId(), *effective_url));
@@ -113,11 +114,11 @@ int NetworkServiceNetworkDelegate::OnBeforeStartTransaction(
   if (url_loader)
     return url_loader->OnBeforeStartTransaction(headers, std::move(callback));
 
-#if !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(ENABLE_WEBSOCKETS)
   WebSocket* web_socket = WebSocket::ForRequest(*request);
   if (web_socket)
     return web_socket->OnBeforeStartTransaction(headers, std::move(callback));
-#endif  // !BUILDFLAG(IS_IOS)
+#endif  // BUILDFLAG(ENABLE_WEBSOCKETS)
 
   return net::OK;
 }
@@ -128,7 +129,7 @@ int NetworkServiceNetworkDelegate::OnHeadersReceived(
     const net::HttpResponseHeaders* original_response_headers,
     scoped_refptr<net::HttpResponseHeaders>* override_response_headers,
     const net::IPEndPoint& endpoint,
-    absl::optional<GURL>* preserve_fragment_on_redirect_url) {
+    std::optional<GURL>* preserve_fragment_on_redirect_url) {
   auto chain = base::MakeRefCounted<PendingCallbackChain>(std::move(callback));
   URLLoader* url_loader = URLLoader::ForRequest(*request);
   if (url_loader) {
@@ -138,14 +139,14 @@ int NetworkServiceNetworkDelegate::OnHeadersReceived(
         preserve_fragment_on_redirect_url));
   }
 
-#if !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(ENABLE_WEBSOCKETS)
   WebSocket* web_socket = WebSocket::ForRequest(*request);
   if (web_socket) {
     chain->AddResult(web_socket->OnHeadersReceived(
         chain->CreateCallback(), original_response_headers,
         override_response_headers, preserve_fragment_on_redirect_url));
   }
-#endif  // !BUILDFLAG(IS_IOS)
+#endif  // BUILDFLAG(ENABLE_WEBSOCKETS)
 
   chain->AddResult(HandleClearSiteDataHeader(request, chain->CreateCallback(),
                                              original_response_headers));
@@ -188,23 +189,44 @@ void NetworkServiceNetworkDelegate::OnPACScriptError(
   proxy_error_client_->OnPACScriptError(line_number, base::UTF16ToUTF8(error));
 }
 
+std::optional<net::cookie_util::StorageAccessStatus>
+NetworkServiceNetworkDelegate::OnGetStorageAccessStatus(
+    const net::URLRequest& request,
+    base::optional_ref<const net::RedirectInfo> redirect_info) const {
+  if (redirect_info) {
+    return network_context_->cookie_manager()
+        ->cookie_settings()
+        .GetStorageAccessStatus(redirect_info->new_url,
+                                redirect_info->new_site_for_cookies,
+                                request.isolation_info().top_frame_origin(),
+                                request.cookie_setting_overrides());
+  }
+  return network_context_->cookie_manager()
+      ->cookie_settings()
+      .GetStorageAccessStatus(request.url(), request.site_for_cookies(),
+                              request.isolation_info().top_frame_origin(),
+                              request.cookie_setting_overrides());
+}
+
+bool NetworkServiceNetworkDelegate::OnIsStorageAccessHeaderEnabled(
+    const url::Origin* top_frame_origin,
+    const GURL& url) const {
+  return network_context_->cookie_manager()
+      ->cookie_settings()
+      .IsStorageAccessHeadersEnabled(url, top_frame_origin);
+}
+
 bool NetworkServiceNetworkDelegate::OnAnnotateAndMoveUserBlockedCookies(
     const net::URLRequest& request,
+    const net::FirstPartySetMetadata& first_party_set_metadata,
     net::CookieAccessResultList& maybe_included_cookies,
-    net::CookieAccessResultList& excluded_cookies,
-    bool allowed_from_caller) {
-  if (!allowed_from_caller) {
-    ExcludeAllCookies(net::CookieInclusionStatus::EXCLUDE_USER_PREFERENCES,
-                      maybe_included_cookies, excluded_cookies);
-    return false;
-  }
-
+    net::CookieAccessResultList& excluded_cookies) {
   if (!network_context_->cookie_manager()
            ->cookie_settings()
            .AnnotateAndMoveUserBlockedCookies(
                request.url(), request.site_for_cookies(),
-               base::OptionalOrNullptr(
-                   request.isolation_info().top_frame_origin()),
+               base::OptionalToPtr(request.isolation_info().top_frame_origin()),
+               first_party_set_metadata, request.cookie_setting_overrides(),
                maybe_included_cookies, excluded_cookies)) {
     // CookieSettings has already moved and annotated the cookies.
     return false;
@@ -214,18 +236,34 @@ bool NetworkServiceNetworkDelegate::OnAnnotateAndMoveUserBlockedCookies(
   URLLoader* url_loader = URLLoader::ForRequest(request);
   if (url_loader) {
     allowed =
-        url_loader->AllowCookies(request.url(), request.site_for_cookies());
-#if !BUILDFLAG(IS_IOS)
+        url_loader->AllowFullCookies(request.url(), request.site_for_cookies());
+    if (!allowed) {
+      // AllowFullCookies returns false if "all" cookies are not allowed by a
+      // URL but it could still be the case that cookies are allowed, but it was
+      // 3PCs that were not allowed. If that is the case, we should still
+      // preserve partitioned cookies.
+      if (url_loader->CookiesDisabled()) {
+        ExcludeAllCookies(net::CookieInclusionStatus::EXCLUDE_USER_PREFERENCES,
+                          maybe_included_cookies, excluded_cookies);
+      } else {
+        ExcludeAllCookiesExceptPartitioned(
+            net::CookieInclusionStatus::EXCLUDE_USER_PREFERENCES,
+            maybe_included_cookies, excluded_cookies);
+      }
+    }
+#if BUILDFLAG(ENABLE_WEBSOCKETS)
   } else {
     WebSocket* web_socket = WebSocket::ForRequest(request);
     if (web_socket) {
       allowed = web_socket->AllowCookies(request.url());
+      // TODO(crbug/324211435): Fix partitioned cookies for web sockets.
+      if (!allowed) {
+        ExcludeAllCookies(net::CookieInclusionStatus::EXCLUDE_USER_PREFERENCES,
+                          maybe_included_cookies, excluded_cookies);
+      }
     }
-#endif  // !BUILDFLAG(IS_IOS)
+#endif  // BUILDFLAG(ENABLE_WEBSOCKETS)
   }
-  if (!allowed)
-    ExcludeAllCookies(net::CookieInclusionStatus::EXCLUDE_USER_PREFERENCES,
-                      maybe_included_cookies, excluded_cookies);
 
   return allowed;
 }
@@ -234,35 +272,38 @@ bool NetworkServiceNetworkDelegate::OnCanSetCookie(
     const net::URLRequest& request,
     const net::CanonicalCookie& cookie,
     net::CookieOptions* options,
-    bool allowed_from_caller) {
+    const net::FirstPartySetMetadata& first_party_set_metadata,
+    net::CookieInclusionStatus* inclusion_status) {
   bool allowed =
-      allowed_from_caller &&
       network_context_->cookie_manager()->cookie_settings().IsCookieAccessible(
           cookie, request.url(), request.site_for_cookies(),
-          request.isolation_info().top_frame_origin());
+          request.isolation_info().top_frame_origin(), first_party_set_metadata,
+          request.cookie_setting_overrides(), inclusion_status);
   if (!allowed)
     return false;
+  // The remaining checks do not consider setting overrides since they enforce
+  // explicit disablement via Android Webview APIs.
   URLLoader* url_loader = URLLoader::ForRequest(request);
-  if (url_loader)
-    return url_loader->AllowCookies(request.url(), request.site_for_cookies());
-#if !BUILDFLAG(IS_IOS)
+  if (url_loader) {
+    return url_loader->AllowCookie(cookie, request.url(),
+                                   request.site_for_cookies());
+  }
+#if BUILDFLAG(ENABLE_WEBSOCKETS)
   WebSocket* web_socket = WebSocket::ForRequest(request);
   if (web_socket)
     return web_socket->AllowCookies(request.url());
-#endif  // !BUILDFLAG(IS_IOS)
+#endif  // BUILDFLAG(ENABLE_WEBSOCKETS)
   return true;
 }
 
 net::NetworkDelegate::PrivacySetting
 NetworkServiceNetworkDelegate::OnForcePrivacyMode(
-    const GURL& url,
-    const net::SiteForCookies& site_for_cookies,
-    const absl::optional<url::Origin>& top_frame_origin,
-    net::SamePartyContext::Type same_party_context_type) const {
+    const net::URLRequest& request) const {
   return network_context_->cookie_manager()
       ->cookie_settings()
-      .IsPrivacyModeEnabled(url, site_for_cookies, top_frame_origin,
-                            same_party_context_type);
+      .IsPrivacyModeEnabled(request.url(), request.site_for_cookies(),
+                            request.isolation_info().top_frame_origin(),
+                            request.cookie_setting_overrides());
 }
 
 bool NetworkServiceNetworkDelegate::
@@ -281,9 +322,11 @@ bool NetworkServiceNetworkDelegate::
   // Record information to help debug issues like http://crbug.com/422871.
   if (target_url.SchemeIsHTTPOrHTTPS()) {
     auto referrer_policy = request.referrer_policy();
-    base::debug::Alias(&referrer_policy);
-    DEBUG_ALIAS_FOR_GURL(target_buf, target_url);
-    DEBUG_ALIAS_FOR_GURL(referrer_buf, referrer_url);
+    SCOPED_CRASH_KEY_NUMBER("Bug1485060", "referrer_policy",
+                            static_cast<int>(referrer_policy));
+    SCOPED_CRASH_KEY_STRING256("Bug1485060", "target_url", target_url.spec());
+    SCOPED_CRASH_KEY_STRING256("Bug1485060", "referrer_url",
+                               referrer_url.spec());
     base::debug::DumpWithoutCrashing();
   }
   return true;
@@ -293,7 +336,9 @@ bool NetworkServiceNetworkDelegate::OnCanQueueReportingReport(
     const url::Origin& origin) const {
   return network_context_->cookie_manager()
       ->cookie_settings()
-      .IsFullCookieAccessAllowed(origin.GetURL(), origin.GetURL());
+      .IsFullCookieAccessAllowed(origin.GetURL(),
+                                 net::SiteForCookies::FromOrigin(origin),
+                                 origin, net::CookieSettingOverrides());
 }
 
 void NetworkServiceNetworkDelegate::OnCanSendReportingReports(
@@ -312,7 +357,7 @@ void NetworkServiceNetworkDelegate::OnCanSendReportingReports(
   }
 
   std::vector<url::Origin> origin_vector;
-  std::copy(origins.begin(), origins.end(), std::back_inserter(origin_vector));
+  base::ranges::copy(origins, std::back_inserter(origin_vector));
   client->OnCanSendReportingReports(
       origin_vector,
       base::BindOnce(
@@ -325,7 +370,9 @@ bool NetworkServiceNetworkDelegate::OnCanSetReportingClient(
     const GURL& endpoint) const {
   return network_context_->cookie_manager()
       ->cookie_settings()
-      .IsFullCookieAccessAllowed(origin.GetURL(), origin.GetURL());
+      .IsFullCookieAccessAllowed(origin.GetURL(),
+                                 net::SiteForCookies::FromOrigin(origin),
+                                 origin, net::CookieSettingOverrides());
 }
 
 bool NetworkServiceNetworkDelegate::OnCanUseReportingClient(
@@ -333,7 +380,9 @@ bool NetworkServiceNetworkDelegate::OnCanUseReportingClient(
     const GURL& endpoint) const {
   return network_context_->cookie_manager()
       ->cookie_settings()
-      .IsFullCookieAccessAllowed(origin.GetURL(), origin.GetURL());
+      .IsFullCookieAccessAllowed(origin.GetURL(),
+                                 net::SiteForCookies::FromOrigin(origin),
+                                 origin, net::CookieSettingOverrides());
 }
 
 int NetworkServiceNetworkDelegate::HandleClearSiteDataHeader(
@@ -353,16 +402,25 @@ int NetworkServiceNetworkDelegate::HandleClearSiteDataHeader(
   if (!url_loader_network_observer)
     return net::OK;
 
-  std::string header_value;
-  if (!original_response_headers->GetNormalizedHeader(kClearSiteDataHeader,
-                                                      &header_value)) {
+  std::optional<std::string> header_value =
+      original_response_headers->GetNormalizedHeader(net::kClearSiteDataHeader);
+  if (!header_value) {
     return net::OK;
   }
 
+  auto& cookie_settings = network_context_->cookie_manager()->cookie_settings();
+  net::NetworkDelegate::PrivacySetting privacy_settings =
+      cookie_settings.IsPrivacyModeEnabled(
+          request->url(), request->site_for_cookies(),
+          request->isolation_info().top_frame_origin(),
+          request->cookie_setting_overrides());
+  bool partitioned_state_allowed_only =
+      privacy_settings ==
+      net::NetworkDelegate::PrivacySetting::kPartitionedStateAllowedOnly;
+
   url_loader_network_observer->OnClearSiteData(
-      request->url(), header_value, request->load_flags(),
-      net::CookiePartitionKey::FromNetworkIsolationKey(
-          request->isolation_info().network_isolation_key()),
+      request->url(), *header_value, request->load_flags(),
+      request->cookie_partition_key(), partitioned_state_allowed_only,
       base::BindOnce(&NetworkServiceNetworkDelegate::FinishedClearSiteData,
                      weak_ptr_factory_.GetWeakPtr(), request->GetWeakPtr(),
                      std::move(callback)));
@@ -388,7 +446,7 @@ void NetworkServiceNetworkDelegate::ForwardProxyErrors(int net_error) {
   if (!proxy_error_client_)
     return;
 
-  // TODO(https://crbug.com/876848): Provide justification for the currently
+  // TODO(crbug.com/41409550): Provide justification for the currently
   // enumerated errors.
   switch (net_error) {
     case net::ERR_PROXY_AUTH_UNSUPPORTED:

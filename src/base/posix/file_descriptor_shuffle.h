@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,10 +56,7 @@ class BASE_EXPORT FileDescriptorTableInjection : public InjectionDelegate {
 // A single arc of the directed graph which describes an injective multimapping.
 struct InjectionArc {
   InjectionArc(int in_source, int in_dest, bool in_close)
-      : source(in_source),
-        dest(in_dest),
-        close(in_close) {
-  }
+      : source(in_source), dest(in_dest), close(in_close) {}
 
   int source;
   int dest;

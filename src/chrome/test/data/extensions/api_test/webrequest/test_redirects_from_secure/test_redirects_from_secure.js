@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,8 +21,9 @@ loadScript.then(async function() {
   runTests([
     function redirectToInsecure() {
       var listener = function(details) {
-        if (details.url.endsWith("page_with_referrer.html"))
+        if (details.url.endsWith("page_with_referrer.html")) {
           return {redirectUrl: redirectURL};
+        }
       };
       chrome.webRequest.onHeadersReceived.addListener(listener,
           {urls: ['<all_urls>'] }, ['blocking']);

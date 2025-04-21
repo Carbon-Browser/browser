@@ -1,13 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromecast/ui/display_settings/screen_power_controller_aura.h"
 
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 
 namespace chromecast {
@@ -150,7 +150,7 @@ void ScreenPowerControllerAura::SetScreenPowerOn() {
 }
 
 void ScreenPowerControllerAura::SetScreenPowerOff() {
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&ScreenPowerControllerAura::OnDisplayOffTimeoutCompleted,
                      weak_factory_.GetWeakPtr()),
@@ -162,7 +162,6 @@ void ScreenPowerControllerAura::OnScreenPoweredOn(bool succeeded) {
     // Fatal since the user has no other way of turning the screen on if this
     // failed.
     LOG(FATAL) << "Failed to power on the screen";
-    return;
   }
   LOG(INFO) << "Screen is powered on";
   screen_power_on_ = true;
@@ -172,7 +171,7 @@ void ScreenPowerControllerAura::OnScreenPoweredOn(bool succeeded) {
     case PendingTask::kBrightnessOff:
       // TODO(b/161268188): This can be simplified and the delays removed if
       // backlight timing is handled by the kernel
-      base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
           FROM_HERE,
           base::BindOnce(
               &ScreenPowerControllerAura::OnDisplayOnTimeoutCompleted,
@@ -184,7 +183,6 @@ void ScreenPowerControllerAura::OnScreenPoweredOn(bool succeeded) {
       return;
     case PendingTask::kNone:
       NOTREACHED();
-      return;
   }
 }
 
@@ -206,7 +204,6 @@ void ScreenPowerControllerAura::OnScreenPoweredOff(bool succeeded) {
       return;
     case PendingTask::kNone:
       NOTREACHED();
-      return;
   }
 }
 
@@ -221,7 +218,6 @@ void ScreenPowerControllerAura::OnDisplayOnTimeoutCompleted() {
       return;
     case PendingTask::kNone:
       NOTREACHED();
-      return;
   }
 }
 
@@ -240,7 +236,6 @@ void ScreenPowerControllerAura::OnDisplayOffTimeoutCompleted() {
       return;
     case PendingTask::kNone:
       NOTREACHED();
-      return;
   }
 }
 

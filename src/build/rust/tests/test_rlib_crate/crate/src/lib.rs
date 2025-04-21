@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,8 +28,8 @@ pub fn say_hello_from_crate() {
 
 #[cfg(test)]
 mod tests {
-    /// Test features are passed through from BUILD.gn correctly. This test is the target1
-    /// configuration.
+    /// Test features are passed through from BUILD.gn correctly. This test is
+    /// the target1 configuration.
     #[test]
     #[cfg(test_a_and_b)]
     fn test_features_passed_target1() {

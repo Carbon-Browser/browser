@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,10 +48,9 @@ public class Snackbar {
      */
     public static final int TYPE_PERSISTENT = 2;
 
-    /**
-     * UMA Identifiers of features using snackbar. See SnackbarIdentifier enum in histograms.
-     */
+    /** UMA Identifiers of features using snackbar. See SnackbarIdentifier enum in histograms. */
     public static final int UMA_TEST_SNACKBAR = -2;
+
     public static final int UMA_UNKNOWN = -1;
     public static final int UMA_BOOKMARK_ADDED = 0;
     public static final int UMA_BOOKMARK_DELETE_UNDO = 1;
@@ -88,7 +87,7 @@ public class Snackbar {
     public static final int UMA_TAB_GROUP_MANUAL_CREATION_UNDO = 32;
     public static final int UMA_TWA_PRIVACY_DISCLOSURE_V2 = 33;
     public static final int UMA_HOMEPAGE_PROMO_CHANGED_UNDO = 34;
-    public static final int UMA_CONDITIONAL_TAB_STRIP_DISMISS_UNDO = 35;
+    // Obsolete; don't use: UMA_CONDITIONAL_TAB_STRIP_DISMISS_UNDO = 35;
     public static final int UMA_PAINT_PREVIEW_UPGRADE_NOTIFICATION = 36;
     public static final int UMA_READING_LIST_BOOKMARK_ADDED = 37;
     public static final int UMA_PRIVACY_SANDBOX_PAGE_OPEN = 38;
@@ -106,13 +105,34 @@ public class Snackbar {
     public static final int UMA_PRIVACY_SANDBOX_REMOVE_INTEREST = 50;
     public static final int UMA_BAD_FLAGS = 51;
     public static final int UMA_DOWNLOAD_INTERSTITIAL_DOWNLOAD_DELETED = 52;
+    public static final int UMA_INCOGNITO_REAUTH_ENABLED_FROM_PROMO = 53;
+    public static final int UMA_PRIVACY_SANDBOX_ADD_SITE = 54;
+    public static final int UMA_PRIVACY_SANDBOX_REMOVE_SITE = 55;
+    public static final int UMA_CREATOR_FOLLOW_SUCCESS = 56;
+    public static final int UMA_CREATOR_FOLLOW_FAILURE = 57;
+    public static final int UMA_CREATOR_UNFOLLOW_SUCCESS = 58;
+    public static final int UMA_CREATOR_UNFOLLOW_FAILURE = 59;
+    public static final int UMA_QUICK_DELETE = 60;
+    public static final int UMA_AUTO_TRANSLATE = 61;
+    public static final int UMA_BOOKMARK_MOVED = 62;
+    public static final int UMA_CLEAR_BROWSING_DATA = 63;
+    public static final int UMA_SIGN_OUT = 64;
+    public static final int UMA_TAB_GROUP_DELETE_UNDO = 65;
+    public static final int UMA_SINGLE_TAB_GROUP_DELETE_UNDO = 66;
+    public static final int UMA_SAFETY_HUB_REGRANT_SINGLE_PERMISSION = 67;
+    public static final int UMA_SAFETY_HUB_REGRANT_MULTIPLE_PERMISSIONS = 68;
+    public static final int UMA_SAFETY_HUB_SINGLE_SITE_NOTIFICATIONS = 69;
+    public static final int UMA_SAFETY_HUB_MULTIPLE_SITE_NOTIFICATIONS = 70;
+    public static final int UMA_SETTINGS_BATCH_UPLOAD = 71;
+    public static final int UMA_REVOKE_FILE_EDIT_GRANT = 72;
+    public static final int UMA_SEARCH_ENGINE_CHANGED_NOTIFICATION = 73;
+    public static final int UMA_BOOKMARK_BATCH_UPLOAD = 74;
 
     private @Nullable SnackbarController mController;
     private CharSequence mText;
     private String mTemplateText;
     private String mActionText;
     private Object mActionData;
-    private String mAccessibilityActionAnnouncement;
     private int mBackgroundColor;
     private int mTextApperanceResId;
     private boolean mSingleLine = true;
@@ -120,8 +140,7 @@ public class Snackbar {
     private Drawable mProfileImage;
     private int mType;
     private int mIdentifier = UMA_UNKNOWN;
-    @Theme
-    private int mTheme = Theme.BASIC;
+    private @Theme int mTheme = Theme.BASIC;
 
     @IntDef({Theme.BASIC, Theme.GOOGLE})
     @Retention(RetentionPolicy.SOURCE)
@@ -153,8 +172,7 @@ public class Snackbar {
         if (type == TYPE_PERSISTENT) {
             // For persistent snackbars we set a default action text to ensure the snackbar can be
             // closed.
-            s.mActionText =
-                    ContextUtils.getApplicationContext().getResources().getString(R.string.ok);
+            s.mActionText = ContextUtils.getApplicationContext().getString(R.string.ok);
         }
         return s;
     }
@@ -182,19 +200,9 @@ public class Snackbar {
     }
 
     /**
-     * Sets the text to accessibility announce when the action button is pressed.
-     * @param accessibilityActionAnnouncement An optional string to be announced when the action
-     *        button is pressed.
-     */
-    public Snackbar setActionAccessibilityAnnouncement(String accessibilityActionAnnouncement) {
-        mAccessibilityActionAnnouncement = accessibilityActionAnnouncement;
-        return this;
-    }
-
-    /**
-     * Sets the identity profile image that will be displayed at the beginning of the snackbar.
-     * If null, there won't be a profile image. The ability to have an icon is exclusive to
-     * identity snackbars.
+     * Sets the identity profile image that will be displayed at the beginning of the snackbar. If
+     * null, there won't be a profile image. The ability to have an icon is exclusive to identity
+     * snackbars.
      */
     public Snackbar setProfileImage(Drawable profileImage) {
         mProfileImage = profileImage;
@@ -219,9 +227,7 @@ public class Snackbar {
         return this;
     }
 
-    /**
-     * Sets the background color for the snackbar. If 0, the snackbar will use default color.
-     */
+    /** Sets the background color for the snackbar. If 0, the snackbar will use default color. */
     // TODO(fgorski): Clean up background color and text appearance -- transition all the consumers
     // to the Theme based styling.
     public Snackbar setBackgroundColor(int color) {
@@ -271,10 +277,6 @@ public class Snackbar {
         return mActionData;
     }
 
-    String getActionAccessibilityAnnouncement() {
-        return mAccessibilityActionAnnouncement;
-    }
-
     boolean getSingleLine() {
         return mSingleLine;
     }
@@ -287,16 +289,12 @@ public class Snackbar {
         return mIdentifier;
     }
 
-    /**
-     * If method returns zero, then default color for snackbar will be used.
-     */
+    /** If method returns zero, then default color for snackbar will be used. */
     int getBackgroundColor() {
         return mBackgroundColor;
     }
 
-    /**
-     * If method returns zero, then default text appearance for snackbar will be used.
-     */
+    /** If method returns zero, then default text appearance for snackbar will be used. */
     int getTextAppearance() {
         return mTextApperanceResId;
     }
@@ -310,9 +308,7 @@ public class Snackbar {
         return mTheme;
     }
 
-    /**
-     * If method returns null, then no profileImage will be shown in snackbar.
-     */
+    /** If method returns null, then no profileImage will be shown in snackbar. */
     Drawable getProfileImage() {
         return mProfileImage;
     }
@@ -332,17 +328,14 @@ public class Snackbar {
     }
 
     /** So tests can trigger a press on a Snackbar. */
-    @VisibleForTesting
     public Object getActionDataForTesting() {
         return mActionData;
     }
 
-    @VisibleForTesting
     public int getIdentifierForTesting() {
         return mIdentifier;
     }
 
-    @VisibleForTesting
     public CharSequence getTextForTesting() {
         return mText;
     }

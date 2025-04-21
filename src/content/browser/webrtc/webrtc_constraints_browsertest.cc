@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,9 +56,9 @@ class WebRtcConstraintsBrowserTest
 };
 
 // Test fails under MSan, https://crbug.com/445745.
-// Test is also flaky (on Mac, Linux, LaCrOS, Android, but mostly on Mac):
+// Test is also flaky (on Mac, Linux, Android, but mostly on Mac):
 // https://crbug.com/1241538
-// TODO(https://crbug.com/1318234): Fix and enable on Fuchsia.
+// TODO(crbug.com/40835236): Fix and enable on Fuchsia.
 #if defined(MEMORY_SANITIZER) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_FUCHSIA)
 #define MAYBE_GetUserMediaConstraints DISABLED_GetUserMediaConstraints
 #else
@@ -80,7 +80,7 @@ IN_PROC_BROWSER_TEST_P(WebRtcConstraintsBrowserTest,
                                               user_media().max_frame_rate);
   DVLOG(1) << "Calling getUserMedia: " << call;
   EXPECT_TRUE(NavigateToURL(shell(), url));
-  ExecuteJavascriptAndWaitForOk(call);
+  EXPECT_TRUE(ExecJs(shell(), call));
 }
 
 INSTANTIATE_TEST_SUITE_P(UserMedia,

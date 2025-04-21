@@ -1,20 +1,21 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/notifications/scheduler/internal/notification_scheduler.h"
 
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/notifications/scheduler/internal/background_task_coordinator.h"
 #include "chrome/browser/notifications/scheduler/internal/display_decider.h"
 #include "chrome/browser/notifications/scheduler/internal/impression_history_tracker.h"
@@ -29,7 +30,6 @@
 #include "chrome/browser/notifications/scheduler/public/notification_scheduler_client.h"
 #include "chrome/browser/notifications/scheduler/public/notification_scheduler_client_registrar.h"
 #include "chrome/browser/notifications/scheduler/public/user_action_handler.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace notifications {
 namespace {
@@ -125,7 +125,7 @@ class DisplayHelper {
     }
 
     // Inform the client to update notification data.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&DisplayHelper::NotifyClientBeforeDisplay,
                        weak_ptr_factory_.GetWeakPtr(), std::move(entry)));
@@ -265,7 +265,7 @@ class NotificationSchedulerImpl : public NotificationScheduler,
     std::vector<SchedulerClientType> clients;
     context_->client_registrar()->GetRegisteredClients(&clients);
     for (auto type : clients) {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(&NotificationSchedulerImpl::NotifyClientAfterInit,
                          weak_ptr_factory_.GetWeakPtr(), type, success));
@@ -288,8 +288,6 @@ class NotificationSchedulerImpl : public NotificationScheduler,
 
   // NotificationBackgroundTaskScheduler::Handler implementation.
   void OnStartTask(TaskFinishedCallback callback) override {
-    stats::LogBackgroundTaskEvent(stats::BackgroundTaskEvent::kStart);
-
     // Updates the impression data to compute daily notification shown budget.
     context_->impression_tracker()->AnalyzeImpressionHistory();
 
@@ -297,10 +295,7 @@ class NotificationSchedulerImpl : public NotificationScheduler,
     FindNotificationToShow(std::move(callback));
   }
 
-  void OnStopTask() override {
-    stats::LogBackgroundTaskEvent(stats::BackgroundTaskEvent::kStopByOS);
-    ScheduleBackgroundTask();
-  }
+  void OnStopTask() override { ScheduleBackgroundTask(); }
 
   void FindNotificationToShow(TaskFinishedCallback task_finish_callback) {
     DisplayDecider::Results results;
@@ -330,7 +325,6 @@ class NotificationSchedulerImpl : public NotificationScheduler,
     // Schedule the next background task based on scheduled notifications.
     ScheduleBackgroundTask();
 
-    stats::LogBackgroundTaskEvent(stats::BackgroundTaskEvent::kFinish);
     std::move(task_finish_callback).Run(false /*need_reschedule*/);
   }
 
@@ -347,7 +341,7 @@ class NotificationSchedulerImpl : public NotificationScheduler,
   void OnUserAction(const UserActionData& action_data) override {
     context_->impression_tracker()->OnUserAction(action_data);
     ScheduleBackgroundTask();
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&NotificationSchedulerImpl::NotifyClientAfterUserAction,
                        weak_ptr_factory_.GetWeakPtr(), action_data));

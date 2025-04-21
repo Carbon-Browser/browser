@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 namespace password_manager {
 
-// TODO(crbug.com/1300837): Remove once GMS definition will be exposed.
+// TODO(crbug.com/40824450): Remove once GMS definition will be exposed.
 // Status codes redefinition for the GMS ChromeSync API.
 // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.chrome.browser.password_manager
 enum class ChromeSyncStatusCode {

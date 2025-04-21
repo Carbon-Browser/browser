@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,7 @@
 CrowdDenyFakeSafeBrowsingDatabaseManager::
     CrowdDenyFakeSafeBrowsingDatabaseManager()
     : safe_browsing::TestSafeBrowsingDatabaseManager(
-          content::GetUIThreadTaskRunner({}),
-          content::GetIOThreadTaskRunner({})) {}
+          content::GetUIThreadTaskRunner({})) {}
 
 void CrowdDenyFakeSafeBrowsingDatabaseManager::SetSimulatedMetadataForUrl(
     const GURL& url,
@@ -51,9 +50,6 @@ bool CrowdDenyFakeSafeBrowsingDatabaseManager::CancelApiCheck(Client* client) {
   return true;
 }
 
-bool CrowdDenyFakeSafeBrowsingDatabaseManager::ChecksAreAlwaysAsync() const {
-  return false;
-}
 safe_browsing::ThreatMetadata
 CrowdDenyFakeSafeBrowsingDatabaseManager::GetSimulatedMetadataOrSafe(
     const GURL& url) {

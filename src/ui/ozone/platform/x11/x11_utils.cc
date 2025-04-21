@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,11 +24,6 @@ std::string X11Utils::GetWmWindowClass(const std::string& desktop_base_name) {
     window_class[0] = base::ToUpperASCII(window_class[0]);
   }
   return window_class;
-}
-
-std::unique_ptr<PlatformUtils::ScopedDisableClientSideDecorationsForTest>
-X11Utils::DisableClientSideDecorationsForTest() {
-  return {};
 }
 
 void X11Utils::OnUnhandledKeyEvent(const KeyEvent& key_event) {

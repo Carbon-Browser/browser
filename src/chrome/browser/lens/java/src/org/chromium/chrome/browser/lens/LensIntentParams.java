@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,23 +16,18 @@ public class LensIntentParams {
     private String mImageTitleOrAltText;
     private String mPageUrl;
     private boolean mIsIncognito;
-    // TODO(b/182675578): Remove requiresConfirmation from LensIntentParams.
-    private boolean mRequiresConfirmation;
     private int mIntentType;
     private String mProactiveSessionId;
     private int mProactiveQueryId;
     private @LensEntryPoint int mLensEntryPoint;
 
-    /**
-     * Builder class for LensIntentParams.
-     */
+    /** Builder class for LensIntentParams. */
     public static class Builder {
         private Uri mImageUri = Uri.EMPTY;
         private String mSrcUrl;
         private String mImageTitleOrAltText;
         private String mPageUrl;
         private boolean mIsIncognito;
-        private boolean mRequiresConfirmation;
         private int mIntentType;
         private String mProactiveSessionId;
         private int mProactiveQueryId;
@@ -89,17 +84,6 @@ public class LensIntentParams {
         }
 
         /**
-         * Sets whether the client requires account confirmation.
-         *
-         * @param requiresConfirmation Whether the client requires account confirmation as a boolean
-         *         parameter
-         */
-        public Builder withRequiresConfirmation(boolean requiresConfirmation) {
-            this.mRequiresConfirmation = requiresConfirmation;
-            return this;
-        }
-
-        /**
          * Sets the intent type.
          *
          * @param intentType The intent type to set as a parameter
@@ -130,15 +114,12 @@ public class LensIntentParams {
             return this;
         }
 
-        /**
-         * Build LensIntentParams object from parameters set.
-         */
+        /** Build LensIntentParams object from parameters set. */
         public LensIntentParams build() {
             LensIntentParams lensIntentParams = new LensIntentParams();
             lensIntentParams.mIsIncognito = mIsIncognito;
             lensIntentParams.mLensEntryPoint = mLensEntryPoint;
             lensIntentParams.mIntentType = mIntentType;
-            lensIntentParams.mRequiresConfirmation = mRequiresConfirmation;
             lensIntentParams.mProactiveSessionId = mProactiveSessionId;
             lensIntentParams.mProactiveQueryId = mProactiveQueryId;
             if (!Uri.EMPTY.equals(mImageUri)) {
@@ -180,11 +161,6 @@ public class LensIntentParams {
     /** Returns the isIncognito for this set of params. */
     public boolean getIsIncognito() {
         return mIsIncognito;
-    }
-
-    /** Returns the requiresConfirmation for this set of params. */
-    public boolean getRequiresConfirmation() {
-        return mRequiresConfirmation;
     }
 
     /** Returns the intentType for this set of params. */

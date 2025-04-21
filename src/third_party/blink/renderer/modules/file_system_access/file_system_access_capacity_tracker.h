@@ -1,21 +1,16 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_FILE_SYSTEM_ACCESS_FILE_SYSTEM_ACCESS_CAPACITY_TRACKER_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_FILE_SYSTEM_ACCESS_FILE_SYSTEM_ACCESS_CAPACITY_TRACKER_H_
 
-#include "base/callback.h"
-#include "base/memory/scoped_refptr.h"
+#include "base/functional/callback.h"
 #include "base/types/pass_key.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
-#include "third_party/blink/public/mojom/file_system_access/file_system_access_capacity_allocation_host.mojom-blink.h"
+#include "third_party/blink/public/mojom/file_system_access/file_system_access_file_modification_host.mojom-blink.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
-
-namespace base {
-class SequencedTaskRunner;
-}  // namespace base
 
 namespace blink {
 
@@ -33,8 +28,8 @@ class FileSystemAccessCapacityTracker final
  public:
   explicit FileSystemAccessCapacityTracker(
       ExecutionContext* context,
-      mojo::PendingRemote<mojom::blink::FileSystemAccessCapacityAllocationHost>
-          capacity_allocation_host_remote,
+      mojo::PendingRemote<mojom::blink::FileSystemAccessFileModificationHost>
+          file_modification_host_remote,
       int64_t file_size,
       base::PassKey<FileSystemAccessRegularFileDelegate>);
 
@@ -62,13 +57,14 @@ class FileSystemAccessCapacityTracker final
   // through the synchronous API of Access Handles.
   bool RequestFileCapacityChangeSync(int64_t required_capacity);
 
-  // Records a change of the file's size to `new_size`. The caller must make
-  // sure that `file_capacity` is at least `new_size`.
-  void CommitFileSizeChange(int64_t new_size);
+  // This method should be called for each modification to the file, even if the
+  // file's size does not change. The caller must make sure that
+  // `file_capacity_` is at least `new_size`.
+  void OnFileContentsModified(int64_t new_size);
 
   // GarbageCollected
   void Trace(Visitor* visitor) const {
-    visitor->Trace(capacity_allocation_host_);
+    visitor->Trace(file_modification_host_);
   }
 
  private:
@@ -85,8 +81,8 @@ class FileSystemAccessCapacityTracker final
   SEQUENCE_CHECKER(sequence_checker_);
 
   // Used to route capacity allocation requests to the browser.
-  HeapMojoRemote<mojom::blink::FileSystemAccessCapacityAllocationHost>
-      capacity_allocation_host_;
+  HeapMojoRemote<mojom::blink::FileSystemAccessFileModificationHost>
+      file_modification_host_;
 
   // Size of the file represented by the FileSystemAccessRegularFileDelegate
   // owning this.
@@ -98,8 +94,6 @@ class FileSystemAccessCapacityTracker final
   // A file's initial capacity is its size, hence `file_capacity_` is
   // initialized with `file_size_`.
   int64_t file_capacity_ GUARDED_BY_CONTEXT(sequence_checker_);
-
-  const scoped_refptr<base::SequencedTaskRunner> task_runner_;
 };
 
 }  // namespace blink

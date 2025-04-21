@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,12 +29,23 @@
         "description": "The collection of user-specified settings relating to an extension's action."
       },
       {
+        "id": "UserSettingsChange",
+        "type": "object",
+        "properties": {
+          "isOnToolbar": {
+            "type": "boolean",
+            "description": "Whether the extension's action icon is visible on browser windows' top-level toolbar (i.e., whether the extension has been 'pinned' by the user).",
+            "optional": true
+          }
+        }
+      },
+      {
         "id": "OpenPopupOptions",
         "type": "object",
         "properties": {
           "windowId": {
             "type": "integer",
-            "description": "The id of the window to open the action popup in. Defaults to the currently-active window if unspecified.",
+            "description": "The ID of the window to open the action popup in. Defaults to the currently-active window if unspecified.",
             "optional": true
           }
         }
@@ -175,7 +186,8 @@
         "properties": {
           "text": {
             "type": "string",
-            "description": "Any number of characters can be passed, but only about four can fit in the space."
+            "optional": true,
+            "description": "Any number of characters can be passed, but only about four can fit in the space. If an empty string (<code>''</code>) is passed, the badge text is cleared.  If <code>tabId</code> is specified and <code>text</code> is null, the text for the specified tab is cleared and defaults to the global badge text."
           },
           "tabId": {
             "type": "integer",
@@ -193,7 +205,7 @@
     }, {
       "name": "getBadgeText",
       "type": "function",
-      "description": "Gets the badge text of the action. If no tab is specified, the non-tab-specific badge text is returned. If <a href='declarativeNetRequest#setExtensionActionOptions'>displayActionCountAsBadgeText</a> is enabled, a placeholder text will be returned unless the <a href='declare_permissions#declarativeNetRequestFeedback'>declarativeNetRequestFeedback</a> permission is present or tab-specific badge text was provided.",
+      "description": "Gets the badge text of the action. If no tab is specified, the non-tab-specific badge text is returned. If <a href='declarativeNetRequest#setExtensionActionOptions'>displayActionCountAsBadgeText</a> is enabled, a placeholder text will be returned unless the <a href='/docs/extensions/develop/concepts/declare-permissions#declarativeNetRequestFeedback'>declarativeNetRequestFeedback</a> permission is present or tab-specific badge text was provided.",
       "parameters": [{
         "name": "details",
         "$ref": "TabDetails"
@@ -249,6 +261,59 @@
         }]
       }
     }, {
+      "name": "setBadgeTextColor",
+      "type": "function",
+      "description": "Sets the text color for the badge.",
+      "parameters": [
+        {
+          "name": "details",
+          "type": "object",
+          "properties": {
+            "color": {
+              "description": "An array of four integers in the range [0,255] that make up the RGBA color of the badge. For example, opaque red is <code>[255, 0, 0, 255]</code>. Can also be a string with a CSS value, with opaque red being <code>#FF0000</code> or <code>#F00</code>. Not setting this value will cause a color to be automatically chosen that will contrast with the badge's background color so the text will be visible. Colors with alpha values equivalent to 0 will not be set and will return an error.",
+              "choices": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "browserAction.ColorArray"
+                }
+              ]
+            },
+            "tabId": {
+              "type": "integer",
+              "optional": true,
+              "minimum": 0,
+              "description": "Limits the change to when a particular tab is selected. Automatically resets when the tab is closed."
+            }
+          }
+        }
+      ],
+      "returns_async": {
+        "name": "callback",
+        "parameters": [],
+        "optional": true
+      }
+    }, {
+      "name": "getBadgeTextColor",
+      "type": "function",
+      "description": "Gets the text color of the action.",
+      "parameters": [
+        {
+          "name": "details",
+          "$ref": "TabDetails"
+        }
+      ],
+      "returns_async": {
+        "name": "callback",
+        "parameters": [
+          {
+            "name": "result",
+            "$ref": "browserAction.ColorArray"
+          }
+        ]
+      }
+    }, {
       "name": "enable",
       "type": "function",
       "description": "Enables the action for a tab. By default, actions are enabled.",
@@ -257,7 +322,7 @@
         "optional": true,
         "name": "tabId",
         "minimum": 0,
-        "description": "The id of the tab for which you want to modify the action."
+        "description": "The ID of the tab for which you want to modify the action."
       }],
       "returns_async": {
         "name": "callback",
@@ -273,12 +338,35 @@
         "optional": true,
         "name": "tabId",
         "minimum": 0,
-        "description": "The id of the tab for which you want to modify the action."
+        "description": "The ID of the tab for which you want to modify the action."
       }],
       "returns_async": {
         "name": "callback",
         "parameters": [],
         "optional": true
+      }
+    }, {
+      "name": "isEnabled",
+      "type": "function",
+      "description": "Indicates whether the extension action is enabled for a tab (or globally if no <code>tabId</code> is provided). Actions enabled using only $(ref:declarativeContent) always return false.",
+      "parameters": [
+        {
+          "type": "integer",
+          "optional": true,
+          "name": "tabId",
+          "minimum": 0,
+          "description": "The ID of the tab for which you want check enabled status."
+        }
+      ],
+      "returns_async": {
+        "name": "callback",
+        "parameters": [
+          {
+            "name": "isEnabled",
+            "type": "boolean",
+            "description": "True if the extension action is enabled."
+          }
+        ]
       }
     }, {
       "name": "getUserSettings",
@@ -295,7 +383,7 @@
     }, {
       "name": "openPopup",
       "type": "function",
-      "description": "Opens the extension's popup.",
+      "description": "Opens the extension's popup. Between Chrome 118 and Chrome 126, this is only available to policy installed extensions.",
       "parameters": [{
         "$ref": "OpenPopupOptions",
         "name": "options",
@@ -314,6 +402,14 @@
       "parameters": [{
         "name": "tab",
         "$ref": "tabs.Tab"
+      }]
+    }, {
+      "name": "onUserSettingsChanged",
+      "type": "function",
+      "description": "Fired when user-specified settings relating to an extension's action change.",
+      "parameters": [{
+        "name": "change",
+        "$ref": "UserSettingsChange"
       }]
     }]
   }

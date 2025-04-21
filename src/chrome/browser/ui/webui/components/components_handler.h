@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,19 +37,13 @@ class ComponentsHandler : public content::WebUIMessageHandler,
   void HandleCheckUpdate(const base::Value::List& args);
 
   // ServiceObserver implementation.
-  void OnEvent(Events event, const std::string& id) override;
-
-#if BUILDFLAG(IS_CHROMEOS)
-  // Callback for the "crosUrlComponentsRedirect" message.
-  void HandleCrosUrlComponentsRedirect(const base::Value::List& args);
-#endif
+  void OnEvent(const update_client::CrxUpdateItem& item) override;
 
  private:
-  static std::u16string ComponentEventToString(Events event);
   static std::u16string ServiceStatusToString(
       update_client::ComponentState state);
 
-  std::unique_ptr<base::ListValue> LoadComponents();
+  base::Value::List LoadComponents();
   void OnDemandUpdate(const std::string& component_id);
 
   // Weak pointer; injected for testing.

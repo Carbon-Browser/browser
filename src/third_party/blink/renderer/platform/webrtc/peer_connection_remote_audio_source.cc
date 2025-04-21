@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,11 @@
 
 #include "base/check_op.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
+#include "base/trace_event/trace_event.h"
 #include "media/base/audio_bus.h"
+#include "media/base/audio_glitch_info.h"
 #include "third_party/blink/public/platform/modules/webrtc/webrtc_logging.h"
 
 namespace blink {
@@ -58,14 +61,12 @@ void PeerConnectionRemoteAudioTrack::SetEnabled(bool enabled) {
       "PCRAT::SetEnabled([id=%s] {enabled=%s})", track_interface_->id().c_str(),
       (enabled ? "true" : "false")));
 
-  // This affects the shared state of the source for whether or not it's a part
-  // of the mixed audio that's rendered for remote tracks from WebRTC.
-  // All tracks from the same source will share this state and thus can step
-  // on each other's toes.
-  // This is also why we can't check the enabled state for equality with
-  // |enabled| before setting the mixing enabled state. This track's enabled
-  // state and the shared state might not be the same.
-  track_interface_->set_enabled(enabled);
+  // TODO(crbug.com/40849402): AudioTrackInterface::set_enabled() is not called
+  // because doing so would set the volume to 0 for the source level in the
+  // receiving audio in the WebRTC side.
+  // For now, we skip calling AudioTrackInterface::set_enabled() to avoid these
+  // issues. We need to monitor this approach to ensure that skipping
+  // set_enabled() does not introduce regressions.
 
   MediaStreamAudioTrack::SetEnabled(enabled);
 }
@@ -133,10 +134,12 @@ void PeerConnectionRemoteAudioSource::OnData(const void* audio_data,
   // legitimate for libjingle to use a different thread to invoke this method
   // whenever the audio format changes.
 #ifndef NDEBUG
-  const bool is_only_thread_here = single_audio_thread_guard_.Try();
-  DCHECK(is_only_thread_here);
+  CHECK(single_audio_thread_guard_.Try());
 #endif
 
+  TRACE_EVENT2("audio", "PeerConnectionRemoteAudioSource::OnData",
+               "sample_rate", sample_rate, "number_of_frames",
+               number_of_frames);
   // TODO(tommi): We should get the timestamp from WebRTC.
   base::TimeTicks playout_time(base::TimeTicks::Now());
 
@@ -159,16 +162,16 @@ void PeerConnectionRemoteAudioSource::OnData(const void* audio_data,
       params.channels() != channels_int ||
       params.sample_rate() != sample_rate ||
       params.frames_per_buffer() != frames_int) {
-    MediaStreamAudioSource::SetFormat(media::AudioParameters(
-        media::AudioParameters::AUDIO_PCM_LOW_LATENCY,
-        media::GuessChannelLayout(channels_int), sample_rate, frames_int));
+    MediaStreamAudioSource::SetFormat(
+        media::AudioParameters(media::AudioParameters::AUDIO_PCM_LOW_LATENCY,
+                               media::ChannelLayoutConfig::Guess(channels_int),
+                               sample_rate, frames_int));
   }
 
-  MediaStreamAudioSource::DeliverDataToTracks(*audio_bus_, playout_time);
+  MediaStreamAudioSource::DeliverDataToTracks(*audio_bus_, playout_time, {});
 
 #ifndef NDEBUG
-  if (is_only_thread_here)
-    single_audio_thread_guard_.Release();
+  single_audio_thread_guard_.Release();
 #endif
 }
 

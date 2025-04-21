@@ -1,4 +1,4 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -205,7 +205,7 @@ def _parse_translation_expectations(path):
     not be read by this helper (since they might contain parts not
     available publicly).
   """
-  with open(path) as f:
+  with open(path, encoding='utf-8') as f:
     file_contents = f.read()
 
   def assert_list_of_strings(l, name):

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,6 +43,10 @@ class MODULES_EXPORT AuthenticatorAttestationResponse final
   int32_t getPublicKeyAlgorithm() const { return public_key_algo_; }
 
   Vector<String> getTransports() const;
+
+  absl::variant<AuthenticatorAssertionResponseJSON*,
+                AuthenticatorAttestationResponseJSON*>
+  toJSON() const override;
 
   void Trace(Visitor*) const override;
 

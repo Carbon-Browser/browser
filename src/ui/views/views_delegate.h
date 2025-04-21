@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,8 @@
 #include <windows.h>
 #endif
 
-#include "base/callback.h"
-#include "ui/base/ui_base_types.h"
+#include "base/functional/callback.h"
+#include "ui/base/mojom/window_show_state.mojom-forward.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/views/buildflags.h"
 #include "ui/views/views_export.h"
@@ -31,7 +31,6 @@ namespace ui {
 #if BUILDFLAG(IS_MAC)
 class ContextFactory;
 #endif
-class TouchEditingControllerFactory;
 }  // namespace ui
 
 namespace views {
@@ -102,14 +101,15 @@ class VIEWS_EXPORT ViewsDelegate {
   virtual void SaveWindowPlacement(const Widget* widget,
                                    const std::string& window_name,
                                    const gfx::Rect& bounds,
-                                   ui::WindowShowState show_state);
+                                   ui::mojom::WindowShowState show_state);
 
   // Retrieves the saved position and size and "show" state for the window with
   // the specified name.
-  virtual bool GetSavedWindowPlacement(const Widget* widget,
-                                       const std::string& window_name,
-                                       gfx::Rect* bounds,
-                                       ui::WindowShowState* show_state) const;
+  virtual bool GetSavedWindowPlacement(
+      const Widget* widget,
+      const std::string& window_name,
+      gfx::Rect* bounds,
+      ui::mojom::WindowShowState* show_state) const;
 
   // For accessibility, notify the delegate that a menu item was focused
   // so that alternate feedback (speech / magnified text) can be provided.
@@ -195,9 +195,6 @@ class VIEWS_EXPORT ViewsDelegate {
 #endif
 
  private:
-  std::unique_ptr<ui::TouchEditingControllerFactory>
-      editing_controller_factory_;
-
 #if defined(USE_AURA)
   std::unique_ptr<TouchSelectionMenuRunnerViews> touch_selection_menu_runner_;
 #endif

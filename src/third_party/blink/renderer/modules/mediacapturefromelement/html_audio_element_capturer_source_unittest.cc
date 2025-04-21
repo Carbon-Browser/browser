@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,13 +15,14 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/platform/modules/mediastream/web_media_stream_audio_sink.h"
 #include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
+#include "third_party/blink/public/platform/web_audio_source_provider_impl.h"
 #include "third_party/blink/public/platform/web_string.h"
-#include "third_party/blink/public/platform/webaudiosourceprovider_impl.h"
 #include "third_party/blink/public/web/web_heap.h"
 #include "third_party/blink/renderer/modules/mediastream/mock_media_stream_audio_sink.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_audio_track.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_component_impl.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_source.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 namespace blink {
 
@@ -80,7 +81,7 @@ class HTMLAudioElementCapturerSourceTest : public testing::Test {
   void SetUpAudioTrack() {
     const media::AudioParameters params(
         media::AudioParameters::AUDIO_PCM_LOW_LATENCY,
-        media::GuessChannelLayout(kNumChannelsForTest),
+        media::ChannelLayoutConfig::Guess(kNumChannelsForTest),
         kAudioTrackSampleRate /* sample_rate */,
         kAudioTrackSamplesPerBuffer /* frames_per_buffer */);
     audio_source_->Initialize(params, &fake_callback_);
@@ -92,11 +93,14 @@ class HTMLAudioElementCapturerSourceTest : public testing::Test {
         String::FromUTF8("audio_track"), false /* remote */,
         std::move(capture_source));
     media_stream_component_ = MakeGarbageCollected<MediaStreamComponentImpl>(
-        media_stream_source_->Id(), media_stream_source_);
+        media_stream_source_->Id(), media_stream_source_,
+        std::make_unique<MediaStreamAudioTrack>(/*is_local=*/true));
 
-    ASSERT_TRUE(source()->ConnectToTrack(media_stream_component_.Get()));
+    ASSERT_TRUE(
+        source()->ConnectToInitializedTrack(media_stream_component_.Get()));
   }
 
+  test::TaskEnvironment task_environment_;
   Persistent<MediaStreamSource> media_stream_source_;
   Persistent<MediaStreamComponent> media_stream_component_;
 

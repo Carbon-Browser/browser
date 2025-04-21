@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,19 @@ import "mojo/public/mojom/base/file.mojom";
 import "mojo/public/mojom/base/file_path.mojom";
 import "mojo/public/mojom/base/memory_pressure_level.mojom";
 import "mojo/public/mojom/base/time.mojom";
+import "services/network/public/mojom/address_list.mojom";
 import "services/network/public/mojom/host_resolver.mojom";
 import "services/network/public/mojom/network_change_manager.mojom";
+import "services/network/public/mojom/network_interface_change_listener.mojom";
 import "services/network/public/mojom/network_param.mojom";
 import "services/network/public/mojom/network_types.mojom";
 import "services/network/public/mojom/http_cache_backend_file_operations.mojom";
+import "services/network/public/mojom/ip_endpoint.mojom";
+import "services/network/public/mojom/transferable_socket.mojom";
 
 // Maps to net::RuleBasedHostResolverProc::Rule::ResolverType.
 //
-// TODO(https://crbug.com/1298106) Deduplicate this enum's definition.
+// TODO(crbug.com/40822747) Deduplicate this enum's definition.
 enum ResolverType {
   kResolverTypeFail,
   kResolverTypeFailTimeout,
@@ -147,15 +151,6 @@ interface NetworkServiceTest {
       CertVerifyResult verify_result,
       int32 rv) => ();
 
-  // Toggles requiring CT for testing
-  enum RequireCT {
-    DEFAULT = 0,
-    REQUIRE = 1,
-  };
-
-  [Sync]
-  SetRequireCT(RequireCT required) => ();
-
   // Set the global transport security state preloaded static data source to
   // the unittest_default source, with the reporting URIs rewritten to use
   // |reporting_port|.  If |reporting_port| is 0, the source will be reset to
@@ -234,4 +229,28 @@ interface NetworkServiceTest {
       mojo_base.mojom.FilePath path,
       bool reset)
       => (pending_remote<SimpleCache>? backend);
+
+  // Make a HTTP 1.0 GET request for / to `endpoint` using connected socket `s`.
+  // Returns true if request was successfully sent. Intended for use verifying
+  // that a TransferableSocket can be transferred between processes.
+  MakeRequestToServer(TransferableSocket s, IPEndPoint endpoint)
+      => (bool result);
+
+  // Resolves the machine's own hostname with net::HostResolverSystemTask.
+  ResolveOwnHostnameWithSystemDns()
+      => (network.mojom.AddressList addr_list, int32 os_error, int32 net_error);
+
+  // Sets the last IPv6 probe result.
+  SetIPv6ProbeResult(bool success) => ();
+
+  // Get the network service's cached AddressMap, which contains a list of
+  // network interfaces on the user's machine.
+  [Sync, EnableIf=use_network_interface_change_listener]
+  GetAddressMapCacheLinux()
+      => (network.mojom.AddressMap addr_map, network.mojom.OnlineLinks links);
+
+  // Returns true if the network service is allowed to load a GSSAPI library.
+  // Only relevant on ChromeOS and Linux.
+  [Sync]
+  AllowsGSSAPILibraryLoad() => (bool allow_gssapi_library_load);
 };

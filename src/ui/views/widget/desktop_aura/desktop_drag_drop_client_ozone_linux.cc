@@ -1,11 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/views/widget/desktop_aura/desktop_drag_drop_client_ozone_linux.h"
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "ui/aura/client/cursor_client.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_tree_host.h"
@@ -34,15 +34,16 @@ void DesktopDragDropClientOzoneLinux::OnDragLocationChanged(
     const gfx::Point& screen_point_px) {
   DCHECK(drag_context());
 
-  if (!drag_context()->widget)
+  if (!drag_context()->widget) {
     return;
+  }
   const bool dispatch_mouse_event = !drag_context()->last_screen_location_px;
   drag_context()->last_screen_location_px = screen_point_px;
   if (dispatch_mouse_event) {
     // Post a task to dispatch mouse movement event when control returns to the
     // message loop. This allows smoother dragging since the events are
     // dispatched without waiting for the drag widget updates.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(
             &DesktopDragDropClientOzoneLinux::UpdateDragWidgetLocation,
@@ -54,8 +55,9 @@ void DesktopDragDropClientOzoneLinux::OnDragOperationChanged(
     ui::mojom::DragOperation operation) {
   aura::client::CursorClient* cursor_client =
       aura::client::GetCursorClient(root_window());
-  if (!cursor_client)
+  if (!cursor_client) {
     return;
+  }
 
   ui::mojom::CursorType cursor_type = ui::mojom::CursorType::kNull;
   switch (operation) {
@@ -75,20 +77,22 @@ void DesktopDragDropClientOzoneLinux::OnDragOperationChanged(
   cursor_client->SetCursor(cursor_type);
 }
 
-absl::optional<gfx::AcceleratedWidget>
+std::optional<gfx::AcceleratedWidget>
 DesktopDragDropClientOzoneLinux::GetDragWidget() {
   DCHECK(drag_context());
-  if (drag_context()->widget)
+  if (drag_context()->widget) {
     return drag_context()
         ->widget->GetNativeWindow()
         ->GetHost()
         ->GetAcceleratedWidget();
-  return absl::nullopt;
+  }
+  return std::nullopt;
 }
 
 void DesktopDragDropClientOzoneLinux::UpdateDragWidgetLocation() {
-  if (!drag_context())
+  if (!drag_context()) {
     return;
+  }
 
   float scale_factor = ui::GetScaleFactorForNativeView(
       drag_context()->widget->GetNativeWindow());

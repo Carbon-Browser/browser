@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,17 +8,16 @@
 
 #include "base/run_loop.h"
 #include "base/task/current_thread.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
-#include "content/browser/compositor/test/test_image_transport_factory.h"
+#include "components/input/render_widget_host_input_event_router.h"
 #include "content/browser/gpu/gpu_data_manager_impl.h"
 #include "content/browser/renderer_host/frame_tree_node.h"
 #include "content/browser/renderer_host/navigation_entry_impl.h"
 #include "content/browser/renderer_host/navigation_request.h"
 #include "content/browser/renderer_host/render_view_host_factory.h"
 #include "content/browser/renderer_host/render_widget_host_impl.h"
-#include "content/browser/renderer_host/render_widget_host_input_event_router.h"
 #include "content/browser/site_instance_impl.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -28,8 +27,11 @@
 #include "content/public/test/mock_render_process_host.h"
 #include "content/public/test/navigation_simulator.h"
 #include "content/public/test/test_browser_context.h"
+#include "content/public/test/test_image_transport_factory.h"
+#include "content/public/test/test_utils.h"
 #include "content/test/content_browser_consistency_checker.h"
 #include "content/test/test_navigation_url_loader_factory.h"
+#include "content/test/test_page_factory.h"
 #include "content/test/test_render_frame_host.h"
 #include "content/test/test_render_frame_host_factory.h"
 #include "content/test/test_render_view_host.h"
@@ -78,11 +80,6 @@ bool RenderFrameHostTester::TestOnMessageReceived(RenderFrameHost* rfh,
 // static
 void RenderFrameHostTester::CommitPendingLoad(
     NavigationController* controller) {
-  // This function is currently used by BrowserWithTestWindowTest. It would be
-  // ideal to instead make the users of that class create TestWebContents
-  // (rather than WebContentsImpl directly). It is not trivial to make
-  // that change, so for now we have this extra function for
-  // non-TestWebContents.
   auto navigation = NavigationSimulator::CreateFromPending(*controller);
   navigation->Commit();
 }
@@ -120,6 +117,7 @@ RenderViewHostTestEnabler::RenderViewHostTestEnabler(
     NavigationURLLoaderFactoryType url_loader_factory_type)
     : rph_factory_(new MockRenderProcessHostFactory()),
       asgh_factory_(new MockAgentSchedulingGroupHostFactory()),
+      page_factory_(new TestPageFactory()),
       rvh_factory_(new TestRenderViewHostFactory(rph_factory_.get(),
                                                  asgh_factory_.get())),
       rfh_factory_(new TestRenderFrameHostFactory()),
@@ -145,8 +143,9 @@ RenderViewHostTestEnabler::RenderViewHostTestEnabler(
   display::Screen::SetScreenInstance(screen_.get());
 #endif
 #if BUILDFLAG(IS_MAC)
-  if (base::ThreadTaskRunnerHandle::IsSet())
-    ui::WindowResizeHelperMac::Get()->Init(base::ThreadTaskRunnerHandle::Get());
+  if (base::SingleThreadTaskRunner::HasCurrentDefault())
+    ui::WindowResizeHelperMac::Get()->Init(
+        base::SingleThreadTaskRunner::GetCurrentDefault());
 #endif  // BUILDFLAG(IS_MAC)
 }
 
@@ -174,7 +173,7 @@ NavigationController& RenderViewHostTestHarness::controller() {
   return web_contents()->GetController();
 }
 
-WebContents* RenderViewHostTestHarness::web_contents() {
+WebContents* RenderViewHostTestHarness::web_contents() const {
   return contents_.get();
 }
 
@@ -221,10 +220,12 @@ RenderViewHostTestHarness::CreateTestWebContents() {
   return TestWebContents::Create(GetBrowserContext(), std::move(instance));
 }
 void RenderViewHostTestHarness::FocusWebContentsOnMainFrame() {
-  TestWebContents* contents = static_cast<TestWebContents*>(web_contents());
-  auto* root = contents->GetPrimaryFrameTree().root();
-  contents->GetPrimaryFrameTree().SetFocusedFrame(
-      root, root->current_frame_host()->GetSiteInstance()->group());
+  FocusWebContentsOnFrame(web_contents()->GetPrimaryMainFrame());
+}
+
+void RenderViewHostTestHarness::FocusWebContentsOnFrame(
+    content::RenderFrameHost* rfh) {
+  content::FocusWebContentsOnFrame(web_contents(), rfh);
 }
 
 void RenderViewHostTestHarness::NavigateAndCommit(
@@ -292,8 +293,7 @@ void RenderViewHostTestHarness::TearDown() {
   // queue. This is preferable to immediate deletion because it will behave
   // properly if the |rph_factory_| reset above enqueued any tasks which
   // depend on |browser_context_|.
-  content::GetUIThreadTaskRunner({})->DeleteSoon(FROM_HERE,
-                                                 browser_context_.release());
+  GetUIThreadTaskRunner({})->DeleteSoon(FROM_HERE, browser_context_.release());
 
   // Although this isn't required by many, some subclasses members require that
   // the task environment is gone by the time that they are destroyed (akin to

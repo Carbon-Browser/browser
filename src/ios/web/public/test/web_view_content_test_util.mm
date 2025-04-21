@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,21 +7,18 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 
-#include "base/bind.h"
-#include "base/run_loop.h"
-#include "base/strings/stringprintf.h"
-#include "base/strings/sys_string_conversions.h"
-#include "base/values.h"
+#import "base/containers/contains.h"
+#import "base/functional/bind.h"
+#import "base/run_loop.h"
+#import "base/strings/stringprintf.h"
+#import "base/strings/sys_string_conversions.h"
+#import "base/values.h"
 #import "ios/web/find_in_page/find_in_page_java_script_feature.h"
 #import "ios/web/public/js_messaging/web_frames_manager.h"
 #import "ios/web/public/test/web_view_interaction_test_util.h"
 #import "ios/web/public/web_state.h"
-#import "net/base/mac/url_conversions.h"
-#include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "net/base/apple/url_conversions.h"
+#import "url/gurl.h"
 
 using base::test::ios::kWaitForDownloadTimeout;
 using base::test::ios::WaitUntilConditionOrTimeout;
@@ -61,7 +58,7 @@ char kGetDocumentBodyJavaScript[] =
     "}"
     "allTextContent(document.body);";
 
-// Fetches the image from |image_url|.
+// Fetches the image from `image_url`.
 UIImage* LoadImage(const GURL& image_url) {
   __block UIImage* image;
   __block NSError* error;
@@ -107,7 +104,7 @@ bool IsWebViewContainingText(web::WebState* web_state,
       web::test::ExecuteJavaScript(web_state, kGetDocumentBodyJavaScript);
   std::string body;
   if (value && value->is_string()) {
-    return value->GetString().find(text) != std::string::npos;
+    return base::Contains(value->GetString(), text);
   }
   return false;
 }
@@ -116,13 +113,14 @@ bool IsWebViewContainingTextInFrame(web::WebState* web_state,
                                     const std::string& text) {
   __block NSInteger number_frames_processing = 0;
   __block bool text_found = false;
-  for (WebFrame* frame : web_state->GetWebFramesManager()->GetAllWebFrames()) {
+  for (WebFrame* frame :
+       web_state->GetPageWorldWebFramesManager()->GetAllWebFrames()) {
     number_frames_processing++;
 
     FindInPageJavaScriptFeature* find_in_page_feature =
         FindInPageJavaScriptFeature::GetInstance();
     find_in_page_feature->Search(
-        frame, text, base::BindOnce(^(absl::optional<int> result_matches) {
+        frame, text, base::BindOnce(^(std::optional<int> result_matches) {
           if (result_matches && result_matches.value() >= 1) {
             text_found = true;
           }
@@ -139,7 +137,7 @@ bool IsWebViewContainingTextInFrame(web::WebState* web_state,
 
 bool WaitForWebViewContainingText(web::WebState* web_state,
                                   std::string text,
-                                  NSTimeInterval timeout) {
+                                  base::TimeDelta timeout) {
   return WaitUntilConditionOrTimeout(timeout, ^{
     base::RunLoop().RunUntilIdle();
     return IsWebViewContainingText(web_state, text);
@@ -148,7 +146,7 @@ bool WaitForWebViewContainingText(web::WebState* web_state,
 
 bool WaitForWebViewNotContainingText(web::WebState* web_state,
                                      std::string text,
-                                     NSTimeInterval timeout) {
+                                     base::TimeDelta timeout) {
   return WaitUntilConditionOrTimeout(timeout, ^{
     base::RunLoop().RunUntilIdle();
     return !IsWebViewContainingText(web_state, text);
@@ -157,7 +155,7 @@ bool WaitForWebViewNotContainingText(web::WebState* web_state,
 
 bool WaitForWebViewContainingTextInFrame(web::WebState* web_state,
                                          std::string text,
-                                         NSTimeInterval timeout) {
+                                         base::TimeDelta timeout) {
   return WaitUntilConditionOrTimeout(timeout, ^{
     base::RunLoop().RunUntilIdle();
     return IsWebViewContainingTextInFrame(web_state, text);

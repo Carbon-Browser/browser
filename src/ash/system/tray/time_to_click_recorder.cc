@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,8 @@ TimeToClickRecorder::TimeToClickRecorder(Delegate* delegate,
 
 void TimeToClickRecorder::OnEvent(ui::Event* event) {
   // Ignore if the event is neither click nor tap.
-  if (event->type() != ui::ET_MOUSE_PRESSED &&
-      event->type() != ui::ET_GESTURE_TAP) {
+  if (event->type() != ui::EventType::kMousePressed &&
+      event->type() != ui::EventType::kGestureTap) {
     return;
   }
 

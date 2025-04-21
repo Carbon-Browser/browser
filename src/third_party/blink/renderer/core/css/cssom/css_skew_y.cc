@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,7 +48,6 @@ CSSSkewY* CSSSkewY::FromCSSValue(const CSSFunctionValue& value) {
         CSSNumericValue::FromCSSValue(To<CSSPrimitiveValue>(value.Item(0))));
   }
   NOTREACHED();
-  return nullptr;
 }
 
 DOMMatrix* CSSSkewY::toMatrix(ExceptionState&) const {
@@ -61,8 +60,9 @@ DOMMatrix* CSSSkewY::toMatrix(ExceptionState&) const {
 
 const CSSFunctionValue* CSSSkewY::ToCSSValue() const {
   const CSSValue* ay = ay_->ToCSSValue();
-  if (!ay)
+  if (!ay) {
     return nullptr;
+  }
 
   CSSFunctionValue* result =
       MakeGarbageCollected<CSSFunctionValue>(CSSValueID::kSkewY);

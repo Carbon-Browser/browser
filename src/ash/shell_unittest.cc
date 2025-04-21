@@ -1,14 +1,18 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/shell.h"
 
-#include <algorithm>
 #include <memory>
 #include <queue>
 #include <vector>
 
+#include "ash/accelerators//accelerator_tracker.h"
+#include "ash/accessibility/chromevox/key_accessibility_enabler.h"
+#include "ash/accessibility/magnifier/fullscreen_magnifier_controller.h"
+#include "ash/constants/ash_features.h"
+#include "ash/constants/ash_switches.h"
 #include "ash/display/mouse_cursor_event_filter.h"
 #include "ash/drag_drop/drag_drop_controller.h"
 #include "ash/drag_drop/drag_drop_controller_test_api.h"
@@ -31,28 +35,32 @@
 #include "ash/test/ash_test_helper.h"
 #include "ash/test/test_widget_builder.h"
 #include "ash/test_shell_delegate.h"
-#include "ash/wallpaper/wallpaper_widget_controller.h"
+#include "ash/wallpaper/views/wallpaper_widget_controller.h"
 #include "ash/wm/desks/desks_util.h"
 #include "ash/wm/overview/overview_controller.h"
 #include "base/command_line.h"
 #include "base/containers/flat_set.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/test/scoped_feature_list.h"
 #include "components/account_id/account_id.h"
 #include "ui/aura/env.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_event_dispatcher.h"
-#include "ui/base/models/simple_menu_model.h"
+#include "ui/base/mojom/menu_source_type.mojom.h"
+#include "ui/base/mojom/ui_base_types.mojom-shared.h"
 #include "ui/display/scoped_display_for_new_windows.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/events/test/events_test_utils.h"
 #include "ui/events/test/test_event_handler.h"
 #include "ui/gfx/geometry/size.h"
+#include "ui/menus/simple_menu_model.h"
 #include "ui/views/controls/menu/menu_controller.h"
 #include "ui/views/controls/menu/menu_runner.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_delegate.h"
 #include "ui/views/window/dialog_delegate.h"
+#include "ui/wm/core/accelerator_filter.h"
 
 using aura::RootWindow;
 
@@ -113,6 +121,8 @@ void ExpectAllContainers() {
   EXPECT_TRUE(Shell::GetContainer(root_window,
                                   kShellWindowId_LockSystemModalContainer));
   EXPECT_TRUE(Shell::GetContainer(root_window, kShellWindowId_MenuContainer));
+  EXPECT_TRUE(Shell::GetContainer(
+      root_window, kShellWindowId_CaptureModeSearchResultsPanel));
   EXPECT_TRUE(Shell::GetContainer(root_window,
                                   kShellWindowId_DragImageAndTooltipContainer));
   EXPECT_TRUE(
@@ -134,7 +144,7 @@ void ExpectAllContainers() {
 std::unique_ptr<views::WidgetDelegateView> CreateModalWidgetDelegate() {
   auto delegate = std::make_unique<views::WidgetDelegateView>();
   delegate->SetCanResize(true);
-  delegate->SetModalType(ui::MODAL_TYPE_SYSTEM);
+  delegate->SetModalType(ui::mojom::ModalType::kSystem);
   delegate->SetOwnedByWidget(true);
   delegate->SetTitle(u"Modal Window");
   return delegate;
@@ -230,16 +240,15 @@ TEST_F(ShellTest, CreateWindow) {
 }
 
 // Verifies that a window with a preferred size is created centered on the
-// default display for new windows. Mojo apps like shortcut_viewer rely on this
-// behavior.
+// default display for new windows.
 TEST_F(ShellTest, CreateWindowWithPreferredSize) {
   UpdateDisplay("1024x768,800x600");
 
   aura::Window* secondary_root = Shell::GetAllRootWindows()[1];
   display::ScopedDisplayForNewWindows scoped_display(secondary_root);
 
-  views::Widget::InitParams params;
-  params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
+  views::Widget::InitParams params(
+      views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET);
   // Don't specify bounds, parent or context.
   {
     auto delegate = std::make_unique<views::WidgetDelegateView>();
@@ -393,7 +402,7 @@ TEST_F(ShellTest, LockScreenClosesActiveMenu) {
 
   menu_runner->RunMenuAt(widget, nullptr, gfx::Rect(),
                          views::MenuAnchorPosition::kTopLeft,
-                         ui::MENU_SOURCE_MOUSE);
+                         ui::mojom::MenuSourceType::kMouse);
   LockScreenAndVerifyMenuClosed();
 }
 
@@ -436,12 +445,103 @@ TEST_F(ShellTest, TestPreTargetHandlerOrder) {
 
   ui::EventHandlerList handlers = test_api.GetPreTargetHandlers();
   ui::EventHandlerList::const_iterator cursor_filter =
-      std::find(handlers.begin(), handlers.end(), shell->mouse_cursor_filter());
-  ui::EventHandlerList::const_iterator drag_drop = std::find(
-      handlers.begin(), handlers.end(), shell_test_api.drag_drop_controller());
+      base::ranges::find(handlers, shell->mouse_cursor_filter());
+  ui::EventHandlerList::const_iterator drag_drop =
+      base::ranges::find(handlers, shell_test_api.drag_drop_controller());
   EXPECT_NE(handlers.end(), cursor_filter);
   EXPECT_NE(handlers.end(), drag_drop);
   EXPECT_GT(drag_drop, cursor_filter);
+}
+
+// Tests that the accelerator_tracker is ahead of the accelerator_filter in the
+// pre-target list to make sure the accelerators won't be filtered out before
+// getting AcceleratorTracker.
+TEST_F(ShellTest, AcceleratorPreTargetHandlerOrder) {
+  Shell* shell = Shell::Get();
+  ui::EventTargetTestApi test_api(shell);
+
+  ui::EventHandlerList handlers = test_api.GetPreTargetHandlers();
+  ui::EventHandlerList::const_iterator accelerator_tracker =
+      base::ranges::find(handlers, shell->accelerator_tracker());
+  ui::EventHandlerList::const_iterator accelerator_filter =
+      base::ranges::find(handlers, shell->accelerator_filter());
+  EXPECT_NE(handlers.end(), accelerator_tracker);
+  EXPECT_NE(handlers.end(), accelerator_filter);
+  EXPECT_GT(accelerator_filter, accelerator_tracker);
+}
+
+TEST_F(ShellTest, TestAccessibilityHandlerOrder) {
+  Shell* shell = Shell::Get();
+  ui::EventTargetTestApi test_api(shell);
+  ShellTestApi shell_test_api;
+
+  ui::EventHandler select_to_speak;
+  shell->AddAccessibilityEventHandler(
+      &select_to_speak,
+      AccessibilityEventHandlerManager::HandlerType::kSelectToSpeak);
+
+  // Check ordering.
+  ui::EventHandlerList handlers = test_api.GetPreTargetHandlers();
+
+  ui::EventHandlerList::const_iterator cursor_filter =
+      base::ranges::find(handlers, shell->mouse_cursor_filter());
+  ui::EventHandlerList::const_iterator fullscreen_magnifier_filter =
+      base::ranges::find(handlers, shell->fullscreen_magnifier_controller());
+  ui::EventHandlerList::const_iterator chromevox_filter =
+      base::ranges::find(handlers, shell->key_accessibility_enabler());
+  ui::EventHandlerList::const_iterator select_to_speak_filter =
+      base::ranges::find(handlers, &select_to_speak);
+  EXPECT_NE(handlers.end(), cursor_filter);
+  EXPECT_NE(handlers.end(), fullscreen_magnifier_filter);
+  EXPECT_NE(handlers.end(), chromevox_filter);
+  EXPECT_NE(handlers.end(), select_to_speak_filter);
+
+  EXPECT_LT(cursor_filter, fullscreen_magnifier_filter);
+  EXPECT_LT(fullscreen_magnifier_filter, chromevox_filter);
+  EXPECT_LT(chromevox_filter, select_to_speak_filter);
+
+  // Removing works.
+  shell->RemoveAccessibilityEventHandler(&select_to_speak);
+
+  handlers = test_api.GetPreTargetHandlers();
+  cursor_filter = base::ranges::find(handlers, shell->mouse_cursor_filter());
+  fullscreen_magnifier_filter =
+      base::ranges::find(handlers, shell->fullscreen_magnifier_controller());
+  chromevox_filter =
+      base::ranges::find(handlers, shell->key_accessibility_enabler());
+  select_to_speak_filter = base::ranges::find(handlers, &select_to_speak);
+  EXPECT_NE(handlers.end(), cursor_filter);
+  EXPECT_NE(handlers.end(), fullscreen_magnifier_filter);
+  EXPECT_NE(handlers.end(), chromevox_filter);
+  EXPECT_EQ(handlers.end(), select_to_speak_filter);
+
+  // Ordering still works.
+  EXPECT_LT(cursor_filter, fullscreen_magnifier_filter);
+  EXPECT_LT(fullscreen_magnifier_filter, chromevox_filter);
+
+  // Adding another is correct.
+  ui::EventHandler docked_magnifier;
+  shell->AddAccessibilityEventHandler(
+      &docked_magnifier,
+      AccessibilityEventHandlerManager::HandlerType::kDockedMagnifier);
+
+  handlers = test_api.GetPreTargetHandlers();
+  cursor_filter = base::ranges::find(handlers, shell->mouse_cursor_filter());
+  fullscreen_magnifier_filter =
+      base::ranges::find(handlers, shell->fullscreen_magnifier_controller());
+  chromevox_filter =
+      base::ranges::find(handlers, shell->key_accessibility_enabler());
+  ui::EventHandlerList::const_iterator docked_magnifier_filter =
+      base::ranges::find(handlers, &docked_magnifier);
+  EXPECT_NE(handlers.end(), cursor_filter);
+  EXPECT_NE(handlers.end(), fullscreen_magnifier_filter);
+  EXPECT_NE(handlers.end(), docked_magnifier_filter);
+  EXPECT_NE(handlers.end(), chromevox_filter);
+
+  // Inserted in proper order.
+  EXPECT_LT(cursor_filter, fullscreen_magnifier_filter);
+  EXPECT_LT(fullscreen_magnifier_filter, docked_magnifier_filter);
+  EXPECT_LT(docked_magnifier_filter, chromevox_filter);
 }
 
 // Verifies an EventHandler added to Env gets notified from EventGenerator.
@@ -467,7 +567,8 @@ TEST_F(ShellTest, NoWindowTabFocus) {
   ShelfNavigationWidget* home_button = GetPrimaryShelf()->navigation_widget();
 
   // Create a normal window.  It is not maximized.
-  auto widget = CreateTestWidget();
+  auto widget =
+      CreateTestWidget(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET);
 
   // Hit tab with window open, and expect that focus is not on the navigation
   // widget or status widget.

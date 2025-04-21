@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/devtools/devtools_file_watcher.h"
@@ -48,7 +49,7 @@ class DevToolsFileHelper {
 
   class Delegate {
    public:
-    virtual ~Delegate() {}
+    virtual ~Delegate() = default;
     virtual void FileSystemAdded(const std::string& error,
                                  const FileSystem* file_system) = 0;
     virtual void FileSystemRemoved(const std::string& file_system_path) = 0;
@@ -77,6 +78,7 @@ class DevToolsFileHelper {
   void Save(const std::string& url,
             const std::string& content,
             bool save_as,
+            bool is_base64,
             SaveCallback saveCallback,
             base::OnceClosure cancelCallback);
 
@@ -130,6 +132,7 @@ class DevToolsFileHelper {
                           platform_util::OpenOperationResult result);
   void SaveAsFileSelected(const std::string& url,
                           const std::string& content,
+                          bool is_base64,
                           SaveCallback callback,
                           const base::FilePath& path);
   void InnerAddFileSystem(const ShowInfoBarCallback& show_info_bar_callback,
@@ -144,9 +147,9 @@ class DevToolsFileHelper {
                         const std::vector<std::string>& added_paths,
                         const std::vector<std::string>& removed_paths);
 
-  content::WebContents* web_contents_;
-  Profile* profile_;
-  DevToolsFileHelper::Delegate* delegate_;
+  raw_ptr<content::WebContents> web_contents_;
+  raw_ptr<Profile> profile_;
+  raw_ptr<DevToolsFileHelper::Delegate> delegate_;
   typedef std::map<std::string, base::FilePath> PathsMap;
   PathsMap saved_files_;
   PrefChangeRegistrar pref_change_registrar_;

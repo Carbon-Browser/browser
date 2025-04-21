@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/xr/xr_plane_manager.h"
 
 #include "base/containers/contains.h"
+#include "base/not_fatal_until.h"
 #include "base/trace_event/trace_event.h"
 #include "third_party/blink/renderer/modules/xr/xr_plane.h"
 #include "third_party/blink/renderer/modules/xr/xr_plane_set.h"
@@ -65,7 +66,7 @@ void XRPlaneManager::ProcessPlaneInformation(
     // as-is.
     if (!base::Contains(updated_planes, plane_id)) {
       auto it = plane_ids_to_planes_.find(plane_id);
-      DCHECK(it != plane_ids_to_planes_.end());
+      CHECK(it != plane_ids_to_planes_.end(), base::NotFatalUntil::M130);
       updated_planes.insert(plane_id, it->value);
     }
   }

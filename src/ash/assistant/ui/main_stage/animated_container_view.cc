@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,9 @@
 #include "ash/assistant/ui/assistant_view_delegate.h"
 #include "ash/assistant/ui/main_stage/element_animator.h"
 #include "ash/public/cpp/assistant/controller/assistant_interaction_controller.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "chromeos/ash/services/assistant/public/cpp/features.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/callback_layer_animation_observer.h"
@@ -34,7 +36,7 @@ class AnimatedContainerView::ScopedDisablePreferredSizeChanged {
   }
 
  private:
-  AnimatedContainerView* const view_;
+  const raw_ptr<AnimatedContainerView> view_;
   const bool original_value_;
 };
 
@@ -235,10 +237,10 @@ void AnimatedContainerView::AddResponse(
 }
 
 bool AnimatedContainerView::IsAnimatingViews() const {
-  return std::any_of(animators_.begin(), animators_.end(),
-                     [](const std::unique_ptr<ElementAnimator>& animator) {
-                       return animator->layer()->GetAnimator()->is_animating();
-                     });
+  return base::ranges::any_of(
+      animators_, [](const std::unique_ptr<ElementAnimator>& animator) {
+        return animator->layer()->GetAnimator()->is_animating();
+      });
 }
 
 void AnimatedContainerView::AddElementAnimatorAndAnimateInView(
@@ -371,7 +373,7 @@ bool AnimatedContainerView::FadeOutObserverCallback(
   return true;
 }
 
-BEGIN_METADATA(AnimatedContainerView, AssistantScrollView)
+BEGIN_METADATA(AnimatedContainerView)
 END_METADATA
 
 }  // namespace ash

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "components/download/public/common/download_danger_type.h"
 #include "components/download/public/common/download_interrupt_reasons.h"
 #include "components/download/public/common/download_item.h"
+#include "components/download/public/common/download_target_info.h"
 
 namespace chromecast {
 namespace shell {
@@ -27,14 +28,14 @@ void CastDownloadManagerDelegate::GetNextId(
 
 bool CastDownloadManagerDelegate::DetermineDownloadTarget(
     download::DownloadItem* item,
-    content::DownloadTargetCallback* callback) {
-  base::FilePath empty;
-  std::move(*callback).Run(
-      empty, download::DownloadItem::TARGET_DISPOSITION_OVERWRITE,
-      download::DOWNLOAD_DANGER_TYPE_MAYBE_DANGEROUS_CONTENT,
-      download::DownloadItem::MixedContentStatus::UNKNOWN, empty, empty,
-      std::string() /*mime_type*/,
-      download::DOWNLOAD_INTERRUPT_REASON_USER_CANCELED);
+    download::DownloadTargetCallback* callback) {
+  download::DownloadTargetInfo target_info;
+  target_info.danger_type =
+      download::DOWNLOAD_DANGER_TYPE_MAYBE_DANGEROUS_CONTENT;
+  target_info.interrupt_reason =
+      download::DOWNLOAD_INTERRUPT_REASON_USER_CANCELED;
+
+  std::move(*callback).Run(std::move(target_info));
   return true;
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,7 @@
 #include "third_party/webrtc/modules/desktop_capture/desktop_geometry.h"
 #include "ui/events/keycodes/dom/dom_code.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 // Filtering InputStub which tracks mouse and keyboard input events before
 // passing them on to |input_stub|, and can dispatch release events to
@@ -31,9 +30,7 @@ class InputEventTracker : public InputStub {
 
   ~InputEventTracker() override;
 
-  void set_input_stub(InputStub* input_stub) {
-    input_stub_ = input_stub;
-  }
+  void set_input_stub(InputStub* input_stub) { input_stub_ = input_stub; }
 
   // Returns true if the key with the specified USB code is currently pressed.
   bool IsKeyPressed(ui::DomCode usb_keycode) const;
@@ -48,8 +45,10 @@ class InputEventTracker : public InputStub {
   // Similar to ReleaseAll, but conditional on a modifier key tracked by this
   // class being pressed without the corresponding parameter indicating that it
   // should be.
-  void ReleaseAllIfModifiersStuck(bool alt_expected, bool ctrl_expected,
-                                  bool os_expected, bool shift_expected);
+  void ReleaseAllIfModifiersStuck(bool alt_expected,
+                                  bool ctrl_expected,
+                                  bool os_expected,
+                                  bool shift_expected);
 
   // InputStub interface.
   void InjectKeyEvent(const KeyEvent& event) override;
@@ -68,7 +67,6 @@ class InputEventTracker : public InputStub {
   std::set<uint32_t> touch_point_ids_;
 };
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol
 
 #endif  // REMOTING_PROTOCOL_INPUT_EVENT_TRACKER_H_

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,44 +43,19 @@ base::TimeDelta GetVSyncInterval() {
 
 namespace ui {
 
-GLSurfaceCast::GLSurfaceCast(gfx::AcceleratedWidget widget,
+GLSurfaceCast::GLSurfaceCast(gl::GLDisplayEGL* display,
+                             gfx::AcceleratedWidget widget,
                              GLOzoneEglCast* parent)
     : NativeViewGLSurfaceEGL(
-          GLSurfaceEGL::GetGLDisplayEGL(),
+          display,
           parent->GetNativeWindow(),
           std::make_unique<gfx::FixedVSyncProvider>(base::TimeTicks(),
                                                     GetVSyncInterval())),
       widget_(widget),
       parent_(parent),
-      supports_swap_buffer_with_bounds_(
-          base::CommandLine::ForCurrentProcess()->HasSwitch(
-              switches::kEnableSwapBuffersWithBounds)),
       uses_triple_buffering_(
           chromecast::IsFeatureEnabled(chromecast::kTripleBuffer720)) {
   DCHECK(parent_);
-}
-
-bool GLSurfaceCast::SupportsSwapBuffersWithBounds() {
-  return supports_swap_buffer_with_bounds_;
-}
-
-gfx::SwapResult GLSurfaceCast::SwapBuffersWithBounds(
-    const std::vector<gfx::Rect>& rects,
-    PresentationCallback callback) {
-  DCHECK(supports_swap_buffer_with_bounds_);
-
-  // TODO(halliwell): Request new EGL extension so we're not abusing
-  // SwapBuffersWithDamage here.
-  std::vector<int> rects_data(rects.size() * 4);
-  for (size_t i = 0; i != rects.size(); ++i) {
-    rects_data[i * 4 + 0] = rects[i].x();
-    rects_data[i * 4 + 1] = rects[i].y();
-    rects_data[i * 4 + 2] = rects[i].width();
-    rects_data[i * 4 + 3] = rects[i].height();
-  }
-
-  return NativeViewGLSurfaceEGL::SwapBuffersWithDamage(rects_data,
-                                                       std::move(callback));
 }
 
 bool GLSurfaceCast::Resize(const gfx::Size& size,

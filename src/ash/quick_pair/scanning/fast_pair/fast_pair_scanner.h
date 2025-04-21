@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@
 namespace ash {
 namespace quick_pair {
 
-struct Device;
+class Device;
 
 // This registers a BluetoothLowEnergyScanner with the Advertisement Monitoring
 // API and exposes the Fast Pair devices found/lost events to its observers.

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,7 @@ class ConflictsHandler : public content::WebUIMessageHandler {
   // Callback for the "requestModuleList" message.
   void HandleRequestModuleList(const base::Value::List& args);
 
-  void OnConflictsDataFetched(base::DictionaryValue results);
+  void OnConflictsDataFetched(base::Value::Dict results);
 
   // The ID of the callback that will get invoked with the module list.
   std::string module_list_callback_id_;

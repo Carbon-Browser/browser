@@ -1,30 +1,32 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 
-#include "ash/components/login/auth/public/user_context.h"
-#include "ash/components/login/auth/stub_authenticator_builder.h"
-#include "ash/components/settings/cros_settings_names.h"
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/login_screen_test_api.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/ash/login/login_manager_test.h"
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/ash/login/test/session_manager_state_waiter.h"
+#include "chrome/browser/ash/login/test/user_auth_config.h"
 #include "chrome/browser/ash/login/test/user_policy_mixin.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ash/policy/core/device_policy_cros_browser_test.h"
-#include "chrome/browser/lifetime/application_lifetime.h"
+#include "chrome/browser/lifetime/application_lifetime_chromeos.h"
 #include "chrome/browser/lifetime/termination_notification.h"
+#include "chrome/test/base/fake_gaia_mixin.h"
+#include "chromeos/ash/components/login/auth/public/user_context.h"
+#include "chromeos/ash/components/login/auth/stub_authenticator_builder.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
 #include "components/account_id/account_id.h"
 #include "components/policy/proto/chrome_device_policy.pb.h"
 #include "components/user_manager/user_manager.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_utils.h"
+#include "google_apis/gaia/gaia_id.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace ash {
@@ -97,19 +99,20 @@ class DeviceFamilyLinkAllowedPolicyTest : public LoginManagerTest {
     fake_gaia_.SetupFakeGaiaForChildUser(
         family_link_user_.account_id.GetUserEmail(),
         family_link_user_.account_id.GetGaiaId(),
-        FakeGaiaMixin::kFakeRefreshToken, false /*issue_any_scope_token*/);
+        FakeGaiaMixin::kFakeRefreshToken, /*issue_any_scope_token=*/true);
     login_manager_.AttemptLoginUsingAuthenticator(
         user_context, std::make_unique<StubAuthenticatorBuilder>(user_context));
   }
 
  private:
   const LoginManagerMixin::TestUserInfo school_user_{
-      AccountId::FromUserEmailGaiaId(kSchoolUser, kSchoolGaiaID)};
+      AccountId::FromUserEmailGaiaId(kSchoolUser, GaiaId(kSchoolGaiaID))};
   const LoginManagerMixin::TestUserInfo regular_user_{
-      AccountId::FromUserEmailGaiaId(kRegularUser, kRegularGaiaID)};
+      AccountId::FromUserEmailGaiaId(kRegularUser, GaiaId(kRegularGaiaID))};
   const LoginManagerMixin::TestUserInfo family_link_user_{
-      AccountId::FromUserEmailGaiaId(kFamilyLinkUser, kFamilyLinkGaiaID),
-      user_manager::USER_TYPE_CHILD};
+      AccountId::FromUserEmailGaiaId(kFamilyLinkUser,
+                                     GaiaId(kFamilyLinkGaiaID)),
+      test::kDefaultAuthSetup, user_manager::UserType::kChild};
 
   policy::DevicePolicyCrosTestHelper policy_helper_;
   DeviceStateMixin device_state_{
@@ -170,7 +173,7 @@ IN_PROC_BROWSER_TEST_F(DeviceFamilyLinkAllowedPolicyTest, InSessionUpdate) {
 
   // Family link off - Family Link user session should be terminated.
   SetDeviceFamilyLinkAccountsAllowedPolicy(false);
-  EXPECT_TRUE(chrome::IsAttemptingShutdown());
+  EXPECT_TRUE(chrome::IsSendingStopRequestToSessionManager());
   termination_waiter.Run();
 }
 

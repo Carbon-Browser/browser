@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,6 +24,15 @@ struct PLATFORM_EXPORT AudioProcessingProperties {
     kEchoCancellationSystem
   };
 
+  enum class VoiceIsolationType {
+    // Voice isolation behavior selected by the system is used.
+    kVoiceIsolationDefault,
+    // Voice isolation is disabled.
+    kVoiceIsolationDisabled,
+    // Voice isolation is enabled.
+    kVoiceIsolationEnabled,
+  };
+
   // Disables properties that are enabled by default.
   void DisableDefaultProperties();
 
@@ -38,6 +47,9 @@ struct PLATFORM_EXPORT AudioProcessingProperties {
 
   bool HasSameNonReconfigurableSettings(
       const AudioProcessingProperties& other) const;
+
+  // Returns if AGC is enabled in either WebRTC or system.
+  bool GainControlEnabled() const;
 
   // Converts this struct to an equivalent media::AudioProcessingSettings.
   media::AudioProcessingSettings ToAudioProcessingSettings(
@@ -59,24 +71,10 @@ struct PLATFORM_EXPORT AudioProcessingProperties {
   // `disable_hw_noise_suppression` is false.
   bool disable_hw_noise_suppression = false;
 
-  bool goog_audio_mirroring = false;
-  bool goog_auto_gain_control = true;
-  // TODO(https://crbug.com/1269723): Deprecate this constraint. The flag no
-  // longer toggles meaningful processing effects, but it still forces the audio
-  // processing module to be created and used.
-  bool goog_experimental_echo_cancellation =
-#if BUILDFLAG(IS_ANDROID)
-      false;
-#else
-      true;
-#endif
-  bool goog_noise_suppression = true;
-  // Experimental noise suppression maps to transient suppression (keytap
-  // removal).
-  bool goog_experimental_noise_suppression = true;
-  bool goog_highpass_filter = true;
-  // TODO(bugs.webrtc.org/7494): Effectively a no-op, remove this flag.
-  bool goog_experimental_auto_gain_control = true;
+  bool auto_gain_control = true;
+  bool noise_suppression = true;
+  VoiceIsolationType voice_isolation =
+      VoiceIsolationType::kVoiceIsolationDefault;
 };
 }  // namespace blink
 

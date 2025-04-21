@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,13 +20,13 @@ UIResourceLayerImpl::UIResourceLayerImpl(LayerTreeImpl* tree_impl, int id)
       ui_resource_id_(0),
       uv_top_left_(0.f, 0.f),
       uv_bottom_right_(1.f, 1.f) {
-  vertex_opacity_[0] = 1.0f;
-  vertex_opacity_[1] = 1.0f;
-  vertex_opacity_[2] = 1.0f;
-  vertex_opacity_[3] = 1.0f;
 }
 
 UIResourceLayerImpl::~UIResourceLayerImpl() = default;
+
+mojom::LayerType UIResourceLayerImpl::GetLayerType() const {
+  return mojom::LayerType::kUIResource;
+}
 
 std::unique_ptr<LayerImpl> UIResourceLayerImpl::CreateLayerImpl(
     LayerTreeImpl* tree_impl) const {
@@ -40,7 +40,6 @@ void UIResourceLayerImpl::PushPropertiesTo(LayerImpl* layer) {
   layer_impl->SetUIResourceId(ui_resource_id_);
   layer_impl->SetImageBounds(image_bounds_);
   layer_impl->SetUV(uv_top_left_, uv_bottom_right_);
-  layer_impl->SetVertexOpacity(vertex_opacity_);
 }
 
 void UIResourceLayerImpl::SetUIResourceId(UIResourceId uid) {
@@ -69,19 +68,6 @@ void UIResourceLayerImpl::SetUV(const gfx::PointF& top_left,
     return;
   uv_top_left_ = top_left;
   uv_bottom_right_ = bottom_right;
-  NoteLayerPropertyChanged();
-}
-
-void UIResourceLayerImpl::SetVertexOpacity(const float vertex_opacity[4]) {
-  if (vertex_opacity_[0] == vertex_opacity[0] &&
-      vertex_opacity_[1] == vertex_opacity[1] &&
-      vertex_opacity_[2] == vertex_opacity[2] &&
-      vertex_opacity_[3] == vertex_opacity[3])
-    return;
-  vertex_opacity_[0] = vertex_opacity[0];
-  vertex_opacity_[1] = vertex_opacity[1];
-  vertex_opacity_[2] = vertex_opacity[2];
-  vertex_opacity_[3] = vertex_opacity[3];
   NoteLayerPropertyChanged();
 }
 
@@ -115,7 +101,6 @@ void UIResourceLayerImpl::AppendQuads(viz::CompositorRenderPass* render_pass,
   if (!resource)
     return;
 
-  static const bool flipped = false;
   static const bool nearest_neighbor = false;
   static const bool premultiplied_alpha = true;
 
@@ -130,14 +115,9 @@ void UIResourceLayerImpl::AppendQuads(viz::CompositorRenderPass* render_pass,
   auto* quad = render_pass->CreateAndAppendDrawQuad<viz::TextureDrawQuad>();
   quad->SetNew(shared_quad_state, quad_rect, visible_quad_rect, needs_blending,
                resource, premultiplied_alpha, uv_top_left_, uv_bottom_right_,
-               SkColors::kTransparent, vertex_opacity_, flipped,
-               nearest_neighbor,
+               SkColors::kTransparent, nearest_neighbor,
                /*secure_output_only=*/false, gfx::ProtectedVideoType::kClear);
   ValidateQuadResources(quad);
-}
-
-const char* UIResourceLayerImpl::LayerTypeAsString() const {
-  return "cc::UIResourceLayerImpl";
 }
 
 void UIResourceLayerImpl::AsValueInto(
@@ -145,14 +125,6 @@ void UIResourceLayerImpl::AsValueInto(
   LayerImpl::AsValueInto(state);
 
   MathUtil::AddToTracedValue("ImageBounds", image_bounds_, state);
-
-  state->BeginArray("VertexOpacity");
-  state->AppendDouble(vertex_opacity_[0]);
-  state->AppendDouble(vertex_opacity_[1]);
-  state->AppendDouble(vertex_opacity_[2]);
-  state->AppendDouble(vertex_opacity_[3]);
-  state->EndArray();
-
   MathUtil::AddToTracedValue("UVTopLeft", uv_top_left_, state);
   MathUtil::AddToTracedValue("UVBottomRight", uv_bottom_right_, state);
 }

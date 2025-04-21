@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "third_party/blink/renderer/bindings/core/v8/v8_typedefs.h"
 #include "third_party/blink/renderer/core/core_export.h"
+#include "third_party/blink/renderer/core/dom/element_rare_data_field.h"
 #include "third_party/blink/renderer/core/dom/qualified_name.h"
 #include "third_party/blink/renderer/core/html/forms/labels_node_list.h"
 #include "third_party/blink/renderer/core/html/forms/listed_element.h"
@@ -21,8 +22,12 @@ class CustomStateSet;
 class HTMLElement;
 class ValidityStateFlags;
 
+template <typename IDLType>
+class FrozenArray;
+
 class CORE_EXPORT ElementInternals : public ScriptWrappable,
-                                     public ListedElement {
+                                     public ListedElement,
+                                     public ElementRareDataField {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
@@ -46,7 +51,7 @@ class CORE_EXPORT ElementInternals : public ScriptWrappable,
                    ExceptionState& exception_state);
   void setValidity(ValidityStateFlags* flags,
                    const String& message,
-                   Element* anchor,
+                   HTMLElement* anchor,
                    ExceptionState& exception_state);
   bool willValidate(ExceptionState& exception_state) const;
   ValidityState* validity(ExceptionState& exception_state);
@@ -65,20 +70,39 @@ class CORE_EXPORT ElementInternals : public ScriptWrappable,
   const AtomicString& FastGetAttribute(const QualifiedName&) const;
   void setAttribute(const QualifiedName& attribute, const AtomicString& value);
 
-  void SetElementAttribute(const QualifiedName& name, Element* element);
-  Element* GetElementAttribute(const QualifiedName& name);
-  HeapVector<Member<Element>>* GetElementArrayAttribute(
-      const QualifiedName& name) const;
-  void SetElementArrayAttribute(const QualifiedName& name,
-                                const HeapVector<Member<Element>>* elements);
+  // These methods are used in the implementation of the DOM API setters/getters
+  // for Element/FrozenArray<Element> attributes.
+  void SetElementAttribute(const QualifiedName& attribute, Element* element);
+  Element* GetElementAttribute(const QualifiedName& attribute) const;
+  void SetElementArrayAttribute(
+      const QualifiedName& attribute,
+      const HeapVector<Member<Element>>* given_elements);
+  const FrozenArray<Element>* GetElementArrayAttribute(
+      const QualifiedName& attribute) const;
+
+  const FrozenArray<Element>* ariaControlsElements() const;
+  void setAriaControlsElements(HeapVector<Member<Element>>* given_elements);
+  const FrozenArray<Element>* ariaDescribedByElements() const;
+  void setAriaDescribedByElements(HeapVector<Member<Element>>* given_elements);
+  const FrozenArray<Element>* ariaDetailsElements() const;
+  void setAriaDetailsElements(HeapVector<Member<Element>>* given_elements);
+  const FrozenArray<Element>* ariaErrorMessageElements() const;
+  void setAriaErrorMessageElements(HeapVector<Member<Element>>* given_elements);
+  const FrozenArray<Element>* ariaFlowToElements() const;
+  void setAriaFlowToElements(HeapVector<Member<Element>>* given_elements);
+  const FrozenArray<Element>* ariaLabelledByElements() const;
+  void setAriaLabelledByElements(HeapVector<Member<Element>>* given_elements);
+  const FrozenArray<Element>* ariaOwnsElements() const;
+  void setAriaOwnsElements(HeapVector<Member<Element>>* given_elements);
+
   bool HasAttribute(const QualifiedName& attribute) const;
+  bool HasAnyAttribute() const { return !accessibility_semantics_map_.empty(); }
   const HashMap<QualifiedName, AtomicString>& GetAttributes() const;
 
  private:
   bool IsTargetFormAssociated() const;
 
   // ListedElement overrides:
-  bool IsFormControlElement() const override;
   bool IsElementInternals() const override;
   bool IsEnumeratable() const override;
   void AppendToFormData(FormData& form_data) override;
@@ -116,7 +140,7 @@ class CORE_EXPORT ElementInternals : public ScriptWrappable,
 
   // See
   // https://whatpr.org/html/3917/common-dom-interfaces.html#reflecting-content-attributes-in-idl-attributes:element
-  HeapHashMap<QualifiedName, Member<HeapLinkedHashSet<WeakMember<Element>>>>
+  HeapHashMap<QualifiedName, Member<FrozenArray<Element>>>
       explicitly_set_attr_elements_map_;
 };
 

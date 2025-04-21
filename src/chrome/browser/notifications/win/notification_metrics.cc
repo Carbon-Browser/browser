@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -67,11 +67,6 @@ void LogActivationStatus(ActivationStatus status) {
 
 void LogSetReadyCallbackStatus(SetReadyCallbackStatus status) {
   base::UmaHistogramEnumeration("Notifications.Windows.SetReadyCallbackStatus2",
-                                status);
-}
-
-void LogOnDismissedStatus(OnDismissedStatus status) {
-  base::UmaHistogramEnumeration("Notifications.Windows.OnDismissedStatus",
                                 status);
 }
 

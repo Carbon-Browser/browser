@@ -1,8 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/components/network/cellular_esim_uninstall_handler.h"
+
+#include <optional>
 
 #include "base/containers/flat_set.h"
 #include "base/metrics/histogram_functions.h"
@@ -19,19 +21,18 @@
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_state.h"
 #include "components/device_event_log/device_event_log.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cros_system_api/dbus/hermes/dbus-constants.h"
 
-namespace chromeos {
+namespace ash {
 
 // static
 const base::TimeDelta CellularESimUninstallHandler::kNetworkListWaitTimeout =
     base::Seconds(20);
 
 CellularESimUninstallHandler::UninstallRequest::UninstallRequest(
-    const absl::optional<std::string>& iccid,
-    const absl::optional<dbus::ObjectPath>& esim_profile_path,
-    const absl::optional<dbus::ObjectPath>& euicc_path,
+    const std::optional<std::string>& iccid,
+    const std::optional<dbus::ObjectPath>& esim_profile_path,
+    const std::optional<dbus::ObjectPath>& euicc_path,
     bool reset_euicc,
     UninstallRequestCallback callback)
     : iccid(iccid),
@@ -60,7 +61,7 @@ void CellularESimUninstallHandler::Init(
   network_connection_handler_ = network_connection_handler;
   network_state_handler_ = network_state_handler;
 
-  network_state_handler_observer_.Observe(network_state_handler_);
+  network_state_handler_observer_.Observe(network_state_handler_.get());
 }
 
 void CellularESimUninstallHandler::UninstallESim(
@@ -78,7 +79,7 @@ void CellularESimUninstallHandler::ResetEuiccMemory(
     const dbus::ObjectPath& euicc_path,
     UninstallRequestCallback callback) {
   uninstall_requests_.push_back(std::make_unique<UninstallRequest>(
-      /*iccid=*/absl::nullopt, /*esim_profile_path=*/absl::nullopt, euicc_path,
+      /*iccid=*/std::nullopt, /*esim_profile_path=*/std::nullopt, euicc_path,
       /*reset_euicc=*/true, std::move(callback)));
   ProcessPendingUninstallRequests();
 }
@@ -134,6 +135,8 @@ void CellularESimUninstallHandler::CompleteCurrentRequest(
   NET_LOG(EVENT) << "Completed uninstall request for "
                  << *uninstall_requests_.front() << ". Success = " << success;
   std::move(uninstall_requests_.front()->callback).Run(success);
+  last_service_count_removal_for_testing_ =
+      uninstall_requests_.front()->removed_service_paths.size();
   uninstall_requests_.pop_front();
 
   TransitionToUninstallState(UninstallState::kIdle);
@@ -142,7 +145,7 @@ void CellularESimUninstallHandler::CompleteCurrentRequest(
 
 const NetworkState*
 CellularESimUninstallHandler::GetNetworkStateForCurrentRequest() const {
-  absl::optional<std::string> current_request_iccid =
+  std::optional<std::string> current_request_iccid =
       uninstall_requests_.front()->iccid;
 
   if (!current_request_iccid) {
@@ -264,7 +267,7 @@ void CellularESimUninstallHandler::OnRefreshProfileListResult(
 
 void CellularESimUninstallHandler::AttemptDisableProfile() {
   DCHECK_EQ(state_, UninstallState::kDisablingProfile);
-  absl::optional<dbus::ObjectPath> esim_profile_path;
+  std::optional<dbus::ObjectPath> esim_profile_path;
   if (uninstall_requests_.front()->reset_euicc) {
     esim_profile_path = GetEnabledCellularESimProfilePath();
     // Skip disabling profile if there are no enabled profiles.
@@ -340,8 +343,9 @@ void CellularESimUninstallHandler::OnUninstallProfile(
   }
 
   if (managed_cellular_pref_handler_) {
-    for (const auto& iccid : removed_iccids)
-      managed_cellular_pref_handler_->RemovePairWithIccid(iccid);
+    for (const auto& iccid : removed_iccids) {
+      managed_cellular_pref_handler_->RemoveESimMetadata(iccid);
+    }
   }
   TransitionToUninstallState(UninstallState::kRemovingShillService);
   AttemptRemoveShillService();
@@ -378,15 +382,19 @@ void CellularESimUninstallHandler::AttemptRemoveShillService() {
   NET_LOG(EVENT) << "Attempting to remove Shill service for network: "
                  << network->path();
   network_configuration_handler_->RemoveConfiguration(
-      network->path(), absl::nullopt,
+      network->path(), std::nullopt,
       base::BindOnce(&CellularESimUninstallHandler::OnRemoveServiceSuccess,
-                     weak_ptr_factory_.GetWeakPtr()),
+                     weak_ptr_factory_.GetWeakPtr(), network->path()),
       base::BindOnce(&CellularESimUninstallHandler::OnRemoveServiceFailure,
                      weak_ptr_factory_.GetWeakPtr()));
 }
 
-void CellularESimUninstallHandler::OnRemoveServiceSuccess() {
+void CellularESimUninstallHandler::OnRemoveServiceSuccess(
+    const std::string& removed_service_path) {
   DCHECK_EQ(state_, UninstallState::kRemovingShillService);
+  uninstall_requests_.front()->removed_service_paths.insert(
+      removed_service_path);
+
   if (uninstall_requests_.front()->reset_euicc) {
     // Wait for next network list update before removing the next shill service.
     TransitionToUninstallState(UninstallState::kWaitingForNetworkListUpdate);
@@ -409,6 +417,7 @@ void CellularESimUninstallHandler::OnRemoveServiceFailure(
 }
 
 void CellularESimUninstallHandler::OnNetworkListWaitTimeout() {
+  DCHECK_EQ(state_, UninstallState::kWaitingForNetworkListUpdate);
   NET_LOG(ERROR)
       << "Timedout waiting for network list update after removing service.";
   TransitionToUninstallState(UninstallState::kRemovingShillService);
@@ -433,7 +442,7 @@ CellularESimUninstallHandler::GetESimCellularNetworks() const {
   return network_list;
 }
 
-absl::optional<dbus::ObjectPath>
+std::optional<dbus::ObjectPath>
 CellularESimUninstallHandler::GetEnabledCellularESimProfilePath() {
   for (const auto& esim_profile :
        cellular_esim_profile_handler_->GetESimProfiles()) {
@@ -441,7 +450,7 @@ CellularESimUninstallHandler::GetEnabledCellularESimProfilePath() {
       return esim_profile.path();
     }
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 base::flat_set<std::string> CellularESimUninstallHandler::GetAllIccidsOnEuicc(
@@ -469,6 +478,21 @@ const NetworkState* CellularESimUninstallHandler::GetNextResetServiceToRemove()
     // Non Shill cellular services cannot be removed. They'll be automatically
     // removed when eSIM profile list updates.
     if (network->IsNonShillCellularNetwork()) {
+      continue;
+    }
+
+    // b/249825186: When the success callback of
+    // NetworkConfigurationHandler::RemoveConfiguration() is called on eSIM
+    // cellular shill service(s), the service may be still be exposed as it
+    // is still in the process of guaranteed destruction. Chrome relies on Shill
+    // pushing an update to the kServiceCompleteList property, which it should
+    // eventually, but removing a profile entry is a disk operation so it won't
+    // be instantaneous. Successful
+    // NetworkConfigurationHandler::RemoveConfiguration() calls to these
+    // services should be ignored, as these loadable profile entries no
+    // longer exist.
+    if (uninstall_requests_.front()->removed_service_paths.contains(
+            network->path())) {
       continue;
     }
     if (network->eid() == eid)
@@ -525,4 +549,4 @@ std::ostream& operator<<(
   return stream;
 }
 
-}  // namespace chromeos
+}  // namespace ash

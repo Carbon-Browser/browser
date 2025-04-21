@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,22 +9,20 @@
 #include "base/json/json_writer.h"
 #include "base/values.h"
 #include "media/base/video_frame.h"
-#include "media/cast/common/encoded_frame.h"
 #include "media/cast/common/frame_id.h"
 #include "media/cast/common/openscreen_conversion_helpers.h"
 #include "media/cast/common/rtp_time.h"
 #include "media/cast/common/sender_encoded_frame.h"
 #include "media/cast/constants.h"
 
-namespace media {
-namespace cast {
+namespace media::cast {
 
 FakeSoftwareVideoEncoder::FakeSoftwareVideoEncoder(
     const FrameSenderConfig& video_config)
     : video_config_(video_config),
       next_frame_is_key_(true),
       frame_id_(FrameId::first()),
-      frame_size_(0) {
+      frame_size_(0u) {
   DCHECK_GT(video_config_.max_frame_rate, 0);
 }
 
@@ -44,28 +42,34 @@ void FakeSoftwareVideoEncoder::Encode(
   }
 
   encoded_frame->frame_id = frame_id_++;
+  encoded_frame->is_key_frame = next_frame_is_key_;
   if (next_frame_is_key_) {
-    encoded_frame->dependency = EncodedFrame::KEY;
     encoded_frame->referenced_frame_id = encoded_frame->frame_id;
     next_frame_is_key_ = false;
   } else {
-    encoded_frame->dependency = EncodedFrame::DEPENDENT;
     encoded_frame->referenced_frame_id = encoded_frame->frame_id - 1;
   }
   encoded_frame->rtp_timestamp =
       ToRtpTimeTicks(video_frame->timestamp(), kVideoFrequency);
   encoded_frame->reference_time = reference_time;
 
-  base::Value values(base::Value::Type::DICTIONARY);
-  values.SetBoolKey("key", encoded_frame->dependency == EncodedFrame::KEY);
-  values.SetIntKey("ref", encoded_frame->referenced_frame_id.lower_32_bits());
-  values.SetIntKey("id", encoded_frame->frame_id.lower_32_bits());
-  values.SetIntKey("size", frame_size_);
-  base::JSONWriter::Write(values, &encoded_frame->data);
-  encoded_frame->data.resize(
-      std::max<size_t>(encoded_frame->data.size(), frame_size_), ' ');
+  const auto values =
+      base::Value::Dict()
+          .Set("key", encoded_frame->is_key_frame)
+          .Set("ref", static_cast<int>(
+                          encoded_frame->referenced_frame_id.lower_32_bits()))
+          .Set("id", static_cast<int>(encoded_frame->frame_id.lower_32_bits()))
+          .Set("size", frame_size_);
 
-  if (encoded_frame->dependency == EncodedFrame::KEY) {
+  std::string raw_data;
+  base::JSONWriter::Write(values, &raw_data);
+  if (static_cast<size_t>(frame_size_) > raw_data.size()) {
+    raw_data.append(' ', frame_size_ - raw_data.size());
+  }
+  encoded_frame->data = base::HeapArray<uint8_t>::CopiedFrom(
+      base::as_bytes(base::span(raw_data)));
+
+  if (encoded_frame->is_key_frame) {
     encoded_frame->encoder_utilization = 1.0;
     encoded_frame->lossiness = 6.0;
   } else {
@@ -82,5 +86,4 @@ void FakeSoftwareVideoEncoder::GenerateKeyFrame() {
   next_frame_is_key_ = true;
 }
 
-}  // namespace cast
-}  // namespace media
+}  // namespace media::cast

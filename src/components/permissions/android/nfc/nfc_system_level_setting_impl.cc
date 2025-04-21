@@ -1,18 +1,20 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/permissions/android/nfc/nfc_system_level_setting_impl.h"
 
 #include "base/android/jni_android.h"
-#include "components/permissions/android/jni_headers/NfcSystemLevelSetting_jni.h"
 #include "content/public/browser/web_contents.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "components/permissions/android/jni_headers/NfcSystemLevelSetting_jni.h"
 
 namespace permissions {
 
-NfcSystemLevelSettingImpl::NfcSystemLevelSettingImpl() {}
+NfcSystemLevelSettingImpl::NfcSystemLevelSettingImpl() = default;
 
-NfcSystemLevelSettingImpl::~NfcSystemLevelSettingImpl() {}
+NfcSystemLevelSettingImpl::~NfcSystemLevelSettingImpl() = default;
 
 bool NfcSystemLevelSettingImpl::IsNfcAccessPossible() {
   JNIEnv* env = base::android::AttachCurrentThread();

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,21 +8,12 @@
 #include <iterator>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
-#include "base/metrics/histogram_functions.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 
 namespace storage {
-
-namespace {
-
-void RecordSkippedOriginHistogram(const InvalidOriginReason reason) {
-  base::UmaHistogramEnumeration("Quota.SkippedInvalidOriginUsage", reason);
-}
-
-}  // namespace
 
 struct ClientUsageTracker::AccumulateInfo {
   int64_t limited_usage = 0;
@@ -62,22 +53,6 @@ void ClientUsageTracker::GetBucketsUsage(const std::set<BucketLocator>& buckets,
                      std::move(info)));
 
   for (const auto& bucket : buckets) {
-    // TODO(https://crbug.com/941480): `storage_key` should not be opaque or
-    // have an empty url, but sometimes it is.
-    if (bucket.storage_key.origin().opaque()) {
-      DVLOG(1) << "GetBucketsUsage for opaque storage_key!";
-      RecordSkippedOriginHistogram(InvalidOriginReason::kIsOpaque);
-      barrier.Run();
-      continue;
-    }
-
-    if (bucket.storage_key.origin().GetURL().is_empty()) {
-      DVLOG(1) << "GetBucketsUsage for storage_key with empty url!";
-      RecordSkippedOriginHistogram(InvalidOriginReason::kIsEmpty);
-      barrier.Run();
-      continue;
-    }
-
     // Use a cached usage value, if we have one.
     int64_t cached_usage = GetCachedBucketUsage(bucket);
     if (cached_usage != -1) {
@@ -97,23 +72,26 @@ void ClientUsageTracker::GetBucketsUsage(const std::set<BucketLocator>& buckets,
 }
 
 void ClientUsageTracker::UpdateBucketUsageCache(const BucketLocator& bucket,
-                                                int64_t delta) {
+                                                std::optional<int64_t> delta) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (!IsUsageCacheEnabledForStorageKey(bucket.storage_key))
-    return;
-
-  auto bucket_it = cached_bucket_usage_.find(bucket);
-  if (bucket_it != cached_bucket_usage_.end()) {
-    // Constrain `delta` to avoid negative usage values.
-    // TODO(crbug.com/463729): At least one storage API sends deltas that
-    // result in negative total usage. The line below works around this bug.
-    // Fix the bug, and remove the workaround.
-    delta = std::max(delta, -bucket_it->second);
-    bucket_it->second += delta;
+  if (!IsUsageCacheEnabledForStorageKey(bucket.storage_key)) {
     return;
   }
-  // Retrieve bucket usage and update cache.
-  GetBucketUsage(bucket, base::DoNothing());
+
+  auto bucket_it = cached_bucket_usage_.find(bucket);
+  if (bucket_it == cached_bucket_usage_.end()) {
+    return;
+  }
+
+  if (delta.has_value()) {
+    // Constrain `delta` to avoid negative usage values.
+    // TODO(crbug.com/40408082): At least one storage API sends deltas that
+    // result in negative total usage. The line below works around this bug.
+    // Fix the bug, and remove the workaround.
+    bucket_it->second += std::max(*delta, -bucket_it->second);
+  } else {
+    cached_bucket_usage_.erase(bucket_it);
+  }
 }
 
 void ClientUsageTracker::DeleteBucketCache(const BucketLocator& bucket) {
@@ -129,26 +107,10 @@ int64_t ClientUsageTracker::GetCachedUsage() const {
   return usage;
 }
 
-std::map<std::string, int64_t> ClientUsageTracker::GetCachedHostsUsage() const {
+const ClientUsageTracker::BucketUsageMap&
+ClientUsageTracker::GetCachedBucketsUsage() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  std::map<std::string, int64_t> host_usage;
-  for (const auto& bucket_and_usage : cached_bucket_usage_) {
-    const std::string& host =
-        bucket_and_usage.first.storage_key.origin().host();
-    host_usage[host] += bucket_and_usage.second;
-  }
-  return host_usage;
-}
-
-std::map<blink::StorageKey, int64_t>
-ClientUsageTracker::GetCachedStorageKeysUsage() const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  std::map<blink::StorageKey, int64_t> storage_key_usage;
-  for (const auto& bucket_and_usage : cached_bucket_usage_) {
-    const blink::StorageKey& storage_key = bucket_and_usage.first.storage_key;
-    storage_key_usage[storage_key] += bucket_and_usage.second;
-  }
-  return storage_key_usage;
+  return cached_bucket_usage_;
 }
 
 void ClientUsageTracker::SetUsageCacheEnabled(
@@ -198,7 +160,7 @@ void ClientUsageTracker::AccumulateBucketsUsage(
     int64_t usage) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // Defend against confusing inputs from clients.
-  // TODO(crbug.com/1292210): Remove this check after fixing QuotaClients.
+  // TODO(crbug.com/40213066): Remove this check after fixing QuotaClients.
   if (usage < 0)
     usage = 0;
 
@@ -264,9 +226,10 @@ void ClientUsageTracker::DidGetBucketUsage(const BucketLocator& bucket,
 void ClientUsageTracker::OnGranted(const url::Origin& origin_url,
                                    int change_flags) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  // TODO(crbug.com/1215208): Remove this conversion once the storage policy
+  // TODO(crbug.com/40184305): Remove this conversion once the storage policy
   // APIs are converted to use StorageKey instead of Origin.
-  const blink::StorageKey storage_key(origin_url);
+  const blink::StorageKey storage_key =
+      blink::StorageKey::CreateFirstParty(origin_url);
   if (change_flags & SpecialStoragePolicy::STORAGE_UNLIMITED) {
     if (non_cached_limited_storage_keys_.erase(storage_key))
       non_cached_unlimited_storage_keys_.insert(storage_key);
@@ -276,9 +239,10 @@ void ClientUsageTracker::OnGranted(const url::Origin& origin_url,
 void ClientUsageTracker::OnRevoked(const url::Origin& origin_url,
                                    int change_flags) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  // TODO(crbug.com/1215208): Remove this conversion once the storage policy
+  // TODO(crbug.com/40184305): Remove this conversion once the storage policy
   // APIs are converted to use StorageKey instead of Origin.
-  const blink::StorageKey storage_key(origin_url);
+  const blink::StorageKey storage_key =
+      blink::StorageKey::CreateFirstParty(origin_url);
   if (change_flags & SpecialStoragePolicy::STORAGE_UNLIMITED) {
     if (non_cached_unlimited_storage_keys_.erase(storage_key))
       non_cached_limited_storage_keys_.insert(storage_key);

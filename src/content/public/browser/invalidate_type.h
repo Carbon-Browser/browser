@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ enum InvalidateTypes {
   INVALIDATE_TYPE_TITLE = 1 << 3,  // The title changed.
   INVALIDATE_TYPE_AUDIO = 1 << 4,  // The tab became audible or
                                    // inaudible.
-                                   // TODO(crbug.com/846374):
+                                   // TODO(crbug.com/41390955):
                                    // remove this.
 
   INVALIDATE_TYPE_ALL = (1 << 5) - 1,

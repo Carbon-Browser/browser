@@ -1,13 +1,15 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/net/network_diagnostics/dns_resolver_present_routine.h"
+#include "base/memory/values_equivalent.h"
 #include "base/no_destructor.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/values.h"
 #include "chrome/browser/ash/net/network_diagnostics/network_diagnostics_test_helper.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
-#include "chromeos/dbus/debug_daemon/fake_debug_daemon_client.h"
+#include "chromeos/ash/components/dbus/dbus_thread_manager.h"
+#include "chromeos/ash/components/dbus/debug_daemon/fake_debug_daemon_client.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 
@@ -16,7 +18,6 @@ namespace network_diagnostics {
 
 namespace {
 
-// TODO(https://crbug.com/1164001): remove when migrated to namespace ash.
 namespace mojom = ::chromeos::network_diagnostics::mojom;
 
 // The IP config path specified here must match the IP config path specified in
@@ -36,8 +37,8 @@ const std::vector<std::string>& GetWellFormedDnsServers() {
 class DnsResolverPresentRoutineTest : public NetworkDiagnosticsTestHelper {
  public:
   DnsResolverPresentRoutineTest() {
-    dns_resolver_present_routine_ =
-        std::make_unique<DnsResolverPresentRoutine>();
+    dns_resolver_present_routine_ = std::make_unique<DnsResolverPresentRoutine>(
+        mojom::RoutineCallSource::kDiagnosticsUI);
   }
   DnsResolverPresentRoutineTest(const DnsResolverPresentRoutineTest&) = delete;
   DnsResolverPresentRoutineTest& operator=(
@@ -64,22 +65,23 @@ class DnsResolverPresentRoutineTest : public NetworkDiagnosticsTestHelper {
                         const std::string& type = shill::kTypeIPv4) {
     DCHECK(!wifi_path().empty());
     // Set up the name servers
-    base::ListValue dns_servers;
+    base::Value::List dns_servers;
     for (const std::string& name_server : name_servers) {
       dns_servers.Append(name_server);
     }
 
     // Set up the IP config
-    base::DictionaryValue ip_config_properties;
-    ip_config_properties.SetKey(shill::kMethodProperty, base::Value(type));
-    ip_config_properties.SetKey(shill::kNameServersProperty,
-                                base::Value(dns_servers.Clone()));
+    auto ip_config_properties =
+        base::Value::Dict()
+            .Set(shill::kMethodProperty, type)
+            .Set(shill::kNameServersProperty, dns_servers.Clone());
     helper()->ip_config_test()->AddIPConfig(kIPConfigPath,
-                                            ip_config_properties);
+                                            ip_config_properties.Clone());
     std::string wifi_device_path =
         helper()->device_test()->GetDevicePathForType(shill::kTypeWifi);
     helper()->device_test()->SetDeviceProperty(
-        wifi_device_path, shill::kIPConfigsProperty, ip_config_properties,
+        wifi_device_path, shill::kIPConfigsProperty,
+        base::Value(std::move(ip_config_properties)),
         /*notify_changed=*/true);
     SetServiceProperty(wifi_path(), shill::kIPConfigProperty,
                        base::Value(kIPConfigPath));
@@ -167,7 +169,7 @@ TEST_F(DnsResolverPresentRoutineTest, TestValidAndMalformedNameServers) {
 }
 
 TEST_F(DnsResolverPresentRoutineTest, TestNoActiveNetwork) {
-  SetUpWiFi(shill::kStateDisconnect);
+  SetUpWiFi(shill::kStateDisconnecting);
   SetUpNameServers(GetWellFormedDnsServers());
   RunRoutine(mojom::RoutineVerdict::kNotRun, {});
 }

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/component_export.h"
+#include "base/uuid.h"
 #include "ui/base/class_property.h"
 #include "ui/views/widget/widget.h"
 
@@ -65,17 +66,16 @@ void AddChromeBrowserLaunchInfoForTesting(const base::FilePath& profile_path);
 COMPONENT_EXPORT(APP_RESTORE)
 std::string GetAppId(aura::Window* window);
 
-// Invoked when an Chrome app Lacros window is created. `app_id` is the
-// AppService id, and `window_id` is the wayland app_id property for the window.
+// Invoked when a desk is being removed. `removing_desk_guid` is the GUID for
+// the removing desk.
 COMPONENT_EXPORT(APP_RESTORE)
-void OnLacrosChromeAppWindowAdded(const std::string& app_id,
-                                  const std::string& window_id);
+void SaveRemovingDeskGuid(const base::Uuid& removing_desk_guid);
 
-// Invoked when an Chrome app Lacros window is removed. `app_id` is the
-// AppService id, and `window_id` is the wayland app_id property for the window.
+// Invoked when desk removal is completed. The desk is either fully closed or
+// the removal has been undone. In either case, the full restore service should
+// no longer consider this desk to be in the process of removal.
 COMPONENT_EXPORT(APP_RESTORE)
-void OnLacrosChromeAppWindowRemoved(const std::string& app_id,
-                                    const std::string& window_id);
+void ResetRemovingDeskGuid();
 
 }  // namespace full_restore
 

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,12 @@
 #include <string>
 
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 
 class PrefService;
 
 namespace signin {
 
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
+#if !BUILDFLAG(IS_CHROMEOS)
 
 // Returns device id that is scoped to single signin. This device id will be
 // regenerated if user signs out and signs back in.
@@ -29,12 +28,6 @@ std::string RecreateSigninScopedDeviceId(PrefService* prefs);
 // GetSigninScopedDeviceId().
 // Creates a new device ID value.
 std::string GenerateSigninScopedDeviceId();
-
-// Helper method. The device ID should generally be obtained through
-// GetSigninScopedDeviceId().
-// Returns the device id read from the kGoogleServicesSigninScopedDeviceId pref.
-// If the pref is empty, a new device ID is created and stored in the pref.
-std::string GetOrCreateScopedDeviceId(PrefService* prefs);
 
 #endif
 

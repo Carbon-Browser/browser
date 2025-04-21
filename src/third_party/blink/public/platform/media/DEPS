@@ -1,7 +1,5 @@
 include_rules = [
-  "+base/bind.h",
-  "+base/containers/lru_cache.h",
-  "+base/hash/hash.h",
+  "+base/functional/bind.h",
   "+base/thread_annotations.h",
   "+base/timer/timer.h",
   "+media/base",

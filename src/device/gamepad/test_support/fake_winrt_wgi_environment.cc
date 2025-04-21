@@ -1,11 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "device/gamepad/test_support/fake_winrt_wgi_environment.h"
 
 #include "base/notreached.h"
-#include "base/strings/string_piece.h"
 #include "base/test/bind.h"
 #include "base/win/scoped_hstring.h"
 #include "device/gamepad/test_support/fake_igamepad_statics.h"
@@ -27,7 +26,7 @@ HRESULT FakeWinrtWgiEnvironment::FakeRoGetActivationFactory(
 
   if (class_id_hstring.Get() == RuntimeClass_Windows_Gaming_Input_Gamepad) {
     if (FakeWinrtWgiEnvironment::GetError() ==
-        ErrorCode::kErrorWgiGamepadActivateFailed) {
+        WgiTestErrorCode::kErrorWgiGamepadActivateFailed) {
       hr = E_FAIL;
     } else {
       Microsoft::WRL::ComPtr<ABI::Windows::Gaming::Input::IGamepadStatics>
@@ -40,7 +39,7 @@ HRESULT FakeWinrtWgiEnvironment::FakeRoGetActivationFactory(
   else if (class_id_hstring.Get() ==
            RuntimeClass_Windows_Gaming_Input_RawGameController) {
     if (FakeWinrtWgiEnvironment::GetError() ==
-        ErrorCode::kErrorWgiRawGameControllerActivateFailed) {
+        WgiTestErrorCode::kErrorWgiRawGameControllerActivateFailed) {
       hr = E_FAIL;
     } else {
       Microsoft::WRL::ComPtr<
@@ -65,9 +64,9 @@ HRESULT FakeWinrtWgiEnvironment::FakeRoGetActivationFactory(
 }
 
 // static
-ErrorCode FakeWinrtWgiEnvironment::s_error_code_ = ErrorCode::kOk;
+WgiTestErrorCode FakeWinrtWgiEnvironment::s_error_code_ = WgiTestErrorCode::kOk;
 
-FakeWinrtWgiEnvironment::FakeWinrtWgiEnvironment(ErrorCode error_code) {
+FakeWinrtWgiEnvironment::FakeWinrtWgiEnvironment(WgiTestErrorCode error_code) {
   s_error_code_ = error_code;
   WgiDataFetcherWin::OverrideActivationFactoryFunctionForTesting(
       base::BindLambdaForTesting([]() {
@@ -77,12 +76,12 @@ FakeWinrtWgiEnvironment::FakeWinrtWgiEnvironment(ErrorCode error_code) {
 
 FakeWinrtWgiEnvironment::~FakeWinrtWgiEnvironment() = default;
 
-void FakeWinrtWgiEnvironment::SimulateError(ErrorCode error_code) {
+void FakeWinrtWgiEnvironment::SimulateError(WgiTestErrorCode error_code) {
   s_error_code_ = error_code;
 }
 
 // static
-ErrorCode FakeWinrtWgiEnvironment::GetError() {
+WgiTestErrorCode FakeWinrtWgiEnvironment::GetError() {
   return s_error_code_;
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,18 +8,19 @@
 
 #include "ash/quick_pair/common/logging.h"
 #include "ash/quick_pair/message_stream/fake_bluetooth_socket.h"
-#include "ash/services/quick_pair/fast_pair_data_parser.h"
-#include "ash/services/quick_pair/mock_quick_pair_process_manager.h"
-#include "ash/services/quick_pair/quick_pair_process.h"
-#include "ash/services/quick_pair/quick_pair_process_manager.h"
-#include "ash/services/quick_pair/quick_pair_process_manager_impl.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
+#include "chromeos/ash/services/quick_pair/fast_pair_data_parser.h"
+#include "chromeos/ash/services/quick_pair/mock_quick_pair_process_manager.h"
+#include "chromeos/ash/services/quick_pair/quick_pair_process.h"
+#include "chromeos/ash/services/quick_pair/quick_pair_process_manager.h"
+#include "chromeos/ash/services/quick_pair/quick_pair_process_manager_impl.h"
 #include "device/bluetooth/bluetooth_socket.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -153,7 +154,7 @@ class FakeQuickPairProcessManager
   mojo::PendingRemote<ash::quick_pair::mojom::FastPairDataParser>
       fast_pair_data_parser_;
   std::unique_ptr<ash::quick_pair::FastPairDataParser> data_parser_;
-  base::test::SingleThreadTaskEnvironment* task_enviornment_;
+  raw_ptr<base::test::SingleThreadTaskEnvironment> task_enviornment_;
   ProcessStoppedCallback on_process_stopped_callback_;
 };
 
@@ -272,7 +273,7 @@ class MessageStreamTest : public testing::Test, public MessageStream::Observer {
   mojo::SharedRemote<mojom::FastPairDataParser> data_parser_remote_;
   mojo::PendingRemote<mojom::FastPairDataParser> fast_pair_data_parser_;
   std::unique_ptr<FastPairDataParser> data_parser_;
-  FakeQuickPairProcessManager* fake_process_manager_;
+  raw_ptr<FakeQuickPairProcessManager> fake_process_manager_;
   bool battery_update_ = false;
   uint16_t remaining_battery_time_ = 0;
   bool enable_silence_mode_ = false;

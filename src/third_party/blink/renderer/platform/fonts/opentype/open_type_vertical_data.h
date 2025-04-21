@@ -27,10 +27,10 @@
 
 #include "base/memory/scoped_refptr.h"
 #include "third_party/blink/renderer/platform/fonts/glyph.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
-#include "third_party/blink/renderer/platform/wtf/ref_counted.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
 #include "third_party/skia/include/core/SkTypeface.h"
@@ -40,21 +40,18 @@ class SkFont;
 namespace blink {
 
 class PLATFORM_EXPORT OpenTypeVerticalData
-    : public RefCounted<OpenTypeVerticalData> {
-  USING_FAST_MALLOC(OpenTypeVerticalData);
-
+    : public GarbageCollected<OpenTypeVerticalData> {
  public:
-  static scoped_refptr<OpenTypeVerticalData> CreateUnscaled(
-      sk_sp<SkTypeface> typeface) {
-    return base::AdoptRef(new OpenTypeVerticalData(typeface));
-  }
+  explicit OpenTypeVerticalData(sk_sp<SkTypeface>);
+
+  void Trace(Visitor*) const {}
 
   void SetScaleAndFallbackMetrics(float size_per_unit,
                                   float ascent,
                                   int height);
 
-  bool IsOpenType() const { return !advance_widths_.IsEmpty(); }
-  bool HasVerticalMetrics() const { return !advance_heights_.IsEmpty(); }
+  bool IsOpenType() const { return !advance_widths_.empty(); }
+  bool HasVerticalMetrics() const { return !advance_heights_.empty(); }
   float AdvanceHeight(Glyph) const;
 
   void GetVerticalTranslationsForGlyphs(const SkFont&,
@@ -63,10 +60,8 @@ class PLATFORM_EXPORT OpenTypeVerticalData
                                         float* out_xy_array) const;
 
  private:
-  explicit OpenTypeVerticalData(sk_sp<SkTypeface>);
-
   void LoadMetrics(sk_sp<SkTypeface>);
-  bool HasVORG() const { return !vert_origin_y_.IsEmpty(); }
+  bool HasVORG() const { return !vert_origin_y_.empty(); }
 
   HashMap<Glyph, Glyph> vertical_glyph_map_;
   Vector<uint16_t> advance_widths_;

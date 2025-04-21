@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -85,7 +85,7 @@ int64_t CrosapiTask::GetCumulativeNetworkUsage() const {
 }
 
 bool CrosapiTask::ReportsWebCacheStats() const {
-  return mojo_task_->web_cache_stats ? true : false;
+  return !!mojo_task_->web_cache_stats;
 }
 
 blink::WebCacheResourceTypeStats CrosapiTask::GetWebCacheStats() const {

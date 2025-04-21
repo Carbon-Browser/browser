@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,14 @@
 #define CHROME_BROWSER_SAFE_BROWSING_INCIDENT_REPORTING_PREFERENCE_VALIDATION_DELEGATE_H_
 
 #include <memory>
+#include <optional>
 
 #include "base/memory/raw_ptr.h"
+#include "base/scoped_observation.h"
 #include "base/values.h"
+#include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/profiles/profile_observer.h"
 #include "services/preferences/public/mojom/tracked_preference_validation_delegate.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-
-class Profile;
 
 namespace safe_browsing {
 
@@ -22,7 +23,8 @@ class IncidentReceiver;
 // for preference validation failures. The profile for which the delegate
 // operates must outlive the delegate itself.
 class PreferenceValidationDelegate
-    : public prefs::mojom::TrackedPreferenceValidationDelegate {
+    : public prefs::mojom::TrackedPreferenceValidationDelegate,
+      public ProfileObserver {
  public:
   PreferenceValidationDelegate(
       Profile* profile,
@@ -38,7 +40,7 @@ class PreferenceValidationDelegate
   // TrackedPreferenceValidationDelegate methods.
   void OnAtomicPreferenceValidation(
       const std::string& pref_path,
-      absl::optional<base::Value> value,
+      std::optional<base::Value> value,
       prefs::mojom::TrackedPreferenceValidationDelegate::ValueState value_state,
       prefs::mojom::TrackedPreferenceValidationDelegate::ValueState
           external_validation_value_state,
@@ -52,8 +54,13 @@ class PreferenceValidationDelegate
           external_validation_value_state,
       bool is_personal) override;
 
+  // ProfileManagerObserver methods:
+  void OnProfileWillBeDestroyed(Profile* profile) override;
+
   raw_ptr<Profile> profile_;
   std::unique_ptr<IncidentReceiver> incident_receiver_;
+
+  base::ScopedObservation<Profile, ProfileObserver> profile_observation_{this};
 };
 
 }  // namespace safe_browsing

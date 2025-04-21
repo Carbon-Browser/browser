@@ -1,26 +1,32 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/public/app/content_main.h"
 
-#include "base/allocator/buildflags.h"
+#include <memory>
+#include <optional>
+
 #include "base/allocator/partition_alloc_support.h"
 #include "base/at_exit.h"
 #include "base/base_switches.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
-#include "base/debug/activity_tracker.h"
 #include "base/debug/debugger.h"
 #include "base/debug/stack_trace.h"
+#include "base/feature_list.h"
 #include "base/i18n/icu_util.h"
 #include "base/logging.h"
-#include "base/memory/shared_memory_hooks.h"
+#include "base/memory/ptr_util.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/process/launch.h"
 #include "base/process/memory.h"
 #include "base/process/process.h"
+#include "base/process/set_process_title.h"
+#include "base/profiler/sample_metadata.h"
 #include "base/run_loop.h"
+#include "base/strings/string_number_conversions.h"
+#include "base/synchronization/condition_variable.h"
 #include "base/task/single_thread_task_executor.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/threading/platform_thread.h"
@@ -28,23 +34,17 @@
 #include "base/trace_event/trace_config.h"
 #include "base/trace_event/trace_log.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "components/tracing/common/trace_to_console.h"
 #include "components/tracing/common/tracing_switches.h"
 #include "content/app/content_main_runner_impl.h"
-#include "content/common/mojo_core_library_support.h"
-#include "content/common/set_process_title.h"
-#include "content/common/shared_file_util.h"
 #include "content/public/app/content_main_delegate.h"
 #include "content/public/common/content_switches.h"
 #include "mojo/core/embedder/configuration.h"
 #include "mojo/core/embedder/embedder.h"
 #include "mojo/core/embedder/scoped_ipc_support.h"
-#include "mojo/public/cpp/base/shared_memory_utils.h"
 #include "mojo/public/cpp/platform/platform_channel.h"
-#include "mojo/public/cpp/system/dynamic_library_support.h"
+#include "partition_alloc/buildflags.h"
 #include "sandbox/policy/sandbox_type.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/ui_base_paths.h"
 #include "ui/base/ui_base_switches.h"
 
@@ -55,14 +55,14 @@
 #include "base/win/win_util.h"
 #include "base/win/windows_version.h"
 #include "ui/base/win/atl_module.h"
+#include "ui/gfx/switches.h"
 #endif
 
 #if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_ANDROID)
 #include <locale.h>
 #include <signal.h>
 
-#include "base/file_descriptor_store.h"
-#include "base/posix/global_descriptors.h"
+#include "content/common/shared_file_util.h"
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
@@ -70,21 +70,19 @@
 #endif
 
 #if BUILDFLAG(IS_MAC)
-#include "base/mac/scoped_nsautorelease_pool.h"
+#include "base/apple/scoped_nsautorelease_pool.h"
 #include "content/app/mac_init.h"
+#endif
 
-#if BUILDFLAG(USE_ALLOCATOR_SHIM)
-#include "base/allocator/allocator_shim.h"
+#if BUILDFLAG(IS_APPLE)
+#if PA_BUILDFLAG(USE_ALLOCATOR_SHIM)
+#include "partition_alloc/shim/allocator_shim.h"
 #endif
 #endif  // BUILDFLAG(IS_MAC)
 
 namespace content {
 
 namespace {
-
-// Maximum message size allowed to be read from a Mojo message pipe in any
-// service manager embedder process.
-constexpr size_t kMaximumMojoMessageSize = 128 * 1024 * 1024;
 
 #if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_ANDROID)
 
@@ -113,27 +111,6 @@ void SetupSignalHandlers() {
                                          SIGTERM, SIGCHLD, SIGBUS,  SIGTRAP};
   for (int signal_to_reset : signals_to_reset)
     CHECK_EQ(0, sigaction(signal_to_reset, &sigact, nullptr));
-}
-
-void PopulateFDsFromCommandLine() {
-  const std::string& shared_file_param =
-      base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
-          switches::kSharedFiles);
-  if (shared_file_param.empty())
-    return;
-
-  absl::optional<std::map<int, std::string>> shared_file_descriptors =
-      ParseSharedFileSwitchValue(shared_file_param);
-  if (!shared_file_descriptors)
-    return;
-
-  for (const auto& descriptor : *shared_file_descriptors) {
-    base::MemoryMappedFile::Region region;
-    const std::string& key = descriptor.second;
-    base::ScopedFD fd = base::GlobalDescriptors::GetInstance()->TakeFD(
-        descriptor.first, &region);
-    base::FileDescriptorStore::GetInstance().Set(key, std::move(fd), region);
-  }
 }
 
 #endif  // BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_ANDROID)
@@ -165,57 +142,46 @@ void CommonSubprocessInit() {
 #endif
 }
 
-void InitializeMojo(mojo::core::Configuration* config) {
-  // If this is the browser process and there's no Mojo invitation pipe on the
-  // command line, we will serve as the global Mojo broker.
-  const auto& command_line = *base::CommandLine::ForCurrentProcess();
-  const bool is_browser = !command_line.HasSwitch(switches::kProcessType);
-  if (is_browser) {
-    // On Lacros, Chrome is not always the broker, because ash-chrome is.
-    // Otherwise, look at the command line flag to decide whether it is
-    // a broker.
-    config->is_broker_process =
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-        false
-#else
-        !command_line.HasSwitch(switches::kDisableMojoBroker) &&
-        !mojo::PlatformChannel::CommandLineHasPassedEndpoint(command_line)
-#endif
-        ;
-    if (!config->is_broker_process)
-      config->force_direct_shared_memory_allocation = true;
-  } else {
-#if BUILDFLAG(IS_WIN)
-    if (base::win::GetVersion() >= base::win::Version::WIN8_1) {
-      // On Windows 8.1 and later it's not necessary to broker shared memory
-      // allocation, as even sandboxed processes can allocate their own without
-      // trouble.
-      config->force_direct_shared_memory_allocation = true;
-    }
-#endif
-  }
-
-  if (!IsMojoCoreSharedLibraryEnabled()) {
-    mojo::core::Init(*config);
+void InitTimeTicksAtUnixEpoch() {
+  const auto* command_line = base::CommandLine::ForCurrentProcess();
+  if (!command_line->HasSwitch(switches::kTimeTicksAtUnixEpoch)) {
     return;
   }
 
-  if (!is_browser) {
-    // Note that when dynamic Mojo Core is used, initialization for child
-    // processes happens elsewhere. See ContentMainRunnerImpl::Run() and
-    // ChildProcess construction.
+  std::string time_ticks_at_unix_epoch_as_string =
+      command_line->GetSwitchValueASCII(switches::kTimeTicksAtUnixEpoch);
+
+  int64_t time_ticks_at_unix_epoch_delta_micro;
+  if (!base::StringToInt64(time_ticks_at_unix_epoch_as_string,
+                           &time_ticks_at_unix_epoch_delta_micro)) {
     return;
   }
 
-  MojoInitializeFlags flags = MOJO_INITIALIZE_FLAG_NONE;
-  if (config->is_broker_process)
-    flags |= MOJO_INITIALIZE_FLAG_AS_BROKER;
-  if (config->force_direct_shared_memory_allocation)
-    flags |= MOJO_INITIALIZE_FLAG_FORCE_DIRECT_SHARED_MEMORY_ALLOCATION;
-  MojoResult result =
-      mojo::LoadAndInitializeCoreLibrary(GetMojoCoreSharedLibraryPath(), flags);
-  CHECK_EQ(MOJO_RESULT_OK, result);
+  base::TimeDelta time_ticks_at_unix_epoch_delta =
+      base::Microseconds(time_ticks_at_unix_epoch_delta_micro);
+
+  base::TimeTicks time_ticks_at_unix_epoch =
+      base::TimeTicks() + time_ticks_at_unix_epoch_delta;
+
+  base::TimeTicks::SetSharedUnixEpoch(time_ticks_at_unix_epoch);
 }
+
+// Apply metadata to samples collected by the StackSamplingProfiler when tracing
+// is enabled. This helps distinguish profiles with tracing overhead, e.g. due
+// to background tracing, from those without.
+class TracingEnabledStateObserver
+    : public base::trace_event::TraceLog::EnabledStateObserver {
+ public:
+  void OnTraceLogEnabled() override {
+    apply_sample_metadata_.emplace("TracingEnabled", 1,
+                                   base::SampleMetadataScope::kProcess);
+  }
+
+  void OnTraceLogDisabled() override { apply_sample_metadata_.reset(); }
+
+ private:
+  std::optional<base::ScopedSampleMetadata> apply_sample_metadata_;
+};
 
 }  // namespace
 
@@ -229,18 +195,13 @@ ContentMainParams& ContentMainParams::operator=(ContentMainParams&&) = default;
 
 // This function must be marked with NO_STACK_PROTECTOR or it may crash on
 // return, see the --change-stack-guard-on-fork command line flag.
-int NO_STACK_PROTECTOR
-RunContentProcess(ContentMainParams params,
-                  ContentMainRunner* content_main_runner) {
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  // Lacros is launched with inherited priority. Revert to normal priority
-  // before spawning more processes.
-  base::PlatformThread::SetCurrentThreadType(base::ThreadType::kDefault);
-#endif
+NO_STACK_PROTECTOR int RunContentProcess(
+    ContentMainParams params,
+    ContentMainRunner* content_main_runner) {
+  base::FeatureList::FailOnFeatureAccessWithoutFeatureList();
   int exit_code = -1;
-  base::debug::GlobalActivityTracker* tracker = nullptr;
 #if BUILDFLAG(IS_MAC)
-  std::unique_ptr<base::mac::ScopedNSAutoreleasePool> autorelease_pool;
+  base::apple::ScopedNSAutoreleasePool autorelease_pool;
 #endif
 
   // A flag to indicate whether Main() has been called before. On Android, we
@@ -254,10 +215,11 @@ RunContentProcess(ContentMainParams params,
     content_main_runner->ReInitializeParams(std::move(params));
   } else {
     is_initialized = true;
-#if BUILDFLAG(IS_MAC) && BUILDFLAG(USE_ALLOCATOR_SHIM)
-    base::allocator::InitializeAllocatorShim();
+#if BUILDFLAG(IS_APPLE) && PA_BUILDFLAG(USE_ALLOCATOR_SHIM)
+    allocator_shim::InitializeAllocatorShim();
 #endif
     base::EnableTerminationOnOutOfMemory();
+    logging::RegisterAbslAbortHook();
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
     // The various desktop environments set this environment variable that
@@ -292,13 +254,15 @@ RunContentProcess(ContentMainParams params,
     base::CommandLine::Init(argc, argv);
 
 #if BUILDFLAG(IS_POSIX)
-    PopulateFDsFromCommandLine();
+    PopulateFileDescriptorStoreFromFdTable();
 #endif
 
     base::EnableTerminationOnHeapCorruption();
 
-    SetProcessTitleFromCommandLine(argv);
+    base::SetProcessTitleFromCommandLine(argv);
 #endif  // !BUILDFLAG(IS_ANDROID)
+
+    InitTimeTicksAtUnixEpoch();
 
 // On Android setlocale() is not supported, and we don't override the signal
 // handlers so we can get a stack trace when crashing.
@@ -328,76 +292,54 @@ RunContentProcess(ContentMainParams params,
     // We need this pool for all the objects created before we get to the event
     // loop, but we don't want to leave them hanging around until the app quits.
     // Each "main" needs to flush this pool right before it goes into its main
-    // event loop to get rid of the cruft.
-    autorelease_pool = std::make_unique<base::mac::ScopedNSAutoreleasePool>();
-    params.autorelease_pool = autorelease_pool.get();
+    // event loop to get rid of the cruft. TODO(crbug.com/40260311): This
+    // is not safe. Each main loop should create and destroy its own pool; it
+    // should not be flushing the pool at the base of the autorelease pool
+    // stack.
+    params.autorelease_pool = &autorelease_pool;
     InitializeMac();
 #endif
 
-#if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)
+#if BUILDFLAG(IS_IOS)
+    base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
+    command_line->AppendSwitch(switches::kEnableViewport);
+    command_line->AppendSwitch(switches::kUseMobileUserAgent);
+#endif
+
+#if (BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)) && !defined(COMPONENT_BUILD)
     base::subtle::EnableFDOwnershipEnforcement(true);
 #endif
 
-    mojo::core::Configuration mojo_config;
-    mojo_config.max_message_num_bytes = kMaximumMojoMessageSize;
-    InitializeMojo(&mojo_config);
-
     ui::RegisterPathProvider();
-    tracker = base::debug::GlobalActivityTracker::Get();
     exit_code = content_main_runner->Initialize(std::move(params));
 
     if (exit_code >= 0) {
-      if (tracker) {
-        tracker->SetProcessPhase(
-            base::debug::GlobalActivityTracker::PROCESS_LAUNCH_FAILED);
-        tracker->process_data().SetInt("exit-code", exit_code);
-      }
       return exit_code;
     }
 
-    // Note #1: the installed shared memory hooks require a live instance of
-    // mojo::core::ScopedIPCSupport to function, which is instantiated below by
-    // the process type's main function. However, some Content embedders
-    // allocate within the ContentMainRunner::Initialize call above, so the
-    // hooks cannot be installed before that or the shared memory allocation
-    // will simply fail.
-    //
-    // Note #2: some platforms can directly allocated shared memory in a
-    // sandboxed process. The defines below must be in sync with the
-    // implementation of mojo::NodeController::CreateSharedBuffer().
-#if !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_NACL) && !BUILDFLAG(IS_FUCHSIA)
-    if (sandbox::policy::IsUnsandboxedSandboxType(
-            sandbox::policy::SandboxTypeFromCommandLine(
-                *base::CommandLine::ForCurrentProcess()))) {
-      // Unsandboxed processes don't need shared memory brokering... because
-      // they're not sandboxed.
-    } else if (mojo_config.force_direct_shared_memory_allocation) {
-      // Don't bother with hooks if direct shared memory allocation has been
-      // requested.
-    } else {
-      // Sanity check, since installing the shared memory hooks in a broker
-      // process will lead to infinite recursion.
-      DCHECK(!mojo_config.is_broker_process);
-      // Otherwise, this is a sandboxed process that will need brokering to
-      // allocate shared memory.
-      mojo::SharedMemoryUtils::InstallBaseHooks();
-    }
-#endif  // !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_NACL) && !BUILDFLAG(IS_FUCHSIA)
-
 #if BUILDFLAG(IS_WIN)
-    // Route stdio to parent console (if any) or create one.
-    if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-            switches::kEnableLogging)) {
-      base::RouteStdioToConsole(true);
+    base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
+    if (command_line->HasSwitch(switches::kHeadless)) {
+      // When running in headless mode we want stdio routed however if
+      // console does not exist we should not create one.
+      base::RouteStdioToConsole(/*create_console_if_not_found*/ false);
+    } else if (command_line->HasSwitch(switches::kEnableLogging)) {
+      // Route stdio to parent console (if any) or create one, do not create a
+      // console in children if handles are being passed.
+      bool create_console = command_line->GetSwitchValueASCII(
+                                switches::kEnableLogging) != "handle";
+      base::RouteStdioToConsole(create_console);
     }
 #endif
+
+    base::trace_event::TraceLog::GetInstance()->AddOwnedEnabledStateObserver(
+        base::WrapUnique(new TracingEnabledStateObserver));
 
     if (base::CommandLine::ForCurrentProcess()->HasSwitch(
             ::switches::kTraceToConsole)) {
       base::trace_event::TraceConfig trace_config =
           tracing::GetConfigForTraceToConsole();
-      base::trace_event::TraceLog::GetInstance()->SetEnabled(
-          trace_config, base::trace_event::TraceLog::RECORDING_MODE);
+      base::trace_event::TraceLog::GetInstance()->SetEnabled(trace_config);
     }
   }
 
@@ -405,22 +347,7 @@ RunContentProcess(ContentMainParams params,
     CommonSubprocessInit();
   exit_code = content_main_runner->Run();
 
-  if (tracker) {
-    if (exit_code == 0) {
-      tracker->SetProcessPhaseIfEnabled(
-          base::debug::GlobalActivityTracker::PROCESS_EXITED_CLEANLY);
-    } else {
-      tracker->SetProcessPhaseIfEnabled(
-          base::debug::GlobalActivityTracker::PROCESS_EXITED_WITH_CODE);
-      tracker->process_data().SetInt("exit-code", exit_code);
-    }
-  }
-
-#if BUILDFLAG(IS_MAC)
-  autorelease_pool.reset();
-#endif
-
-#if !BUILDFLAG(IS_ANDROID)
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
   content_main_runner->Shutdown();
 #endif
 
@@ -429,7 +356,7 @@ RunContentProcess(ContentMainParams params,
 
 // This function must be marked with NO_STACK_PROTECTOR or it may crash on
 // return, see the --change-stack-guard-on-fork command line flag.
-int NO_STACK_PROTECTOR ContentMain(ContentMainParams params) {
+NO_STACK_PROTECTOR int ContentMain(ContentMainParams params) {
   auto runner = ContentMainRunner::Create();
   return RunContentProcess(std::move(params), runner.get());
 }

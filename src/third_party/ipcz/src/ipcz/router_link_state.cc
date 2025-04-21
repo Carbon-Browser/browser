@@ -1,14 +1,36 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ipcz/router_link_state.h"
 
 #include <cstring>
+#include <limits>
 
 #include "ipcz/link_side.h"
 
 namespace ipcz {
+
+namespace {
+
+template <typename T, typename U>
+void StoreSaturated(std::atomic<T>& dest, U value) {
+  if (value < std::numeric_limits<T>::max()) {
+    dest.store(value, std::memory_order_relaxed);
+  } else {
+    dest.store(std::numeric_limits<T>::max(), std::memory_order_relaxed);
+  }
+}
+
+template <typename T>
+T& SelectBySide(LinkSide side, T& for_a, T& for_b) {
+  if (side.is_side_a()) {
+    return for_a;
+  }
+  return for_b;
+}
+
+}  // namespace
 
 RouterLinkState::RouterLinkState() = default;
 
@@ -16,7 +38,6 @@ RouterLinkState::RouterLinkState() = default;
 RouterLinkState& RouterLinkState::Initialize(void* where) {
   auto& state = *static_cast<RouterLinkState*>(where);
   new (&state) RouterLinkState();
-  memset(state.reserved, 0, sizeof(state.reserved));
   std::atomic_thread_fence(std::memory_order_release);
   return state;
 }

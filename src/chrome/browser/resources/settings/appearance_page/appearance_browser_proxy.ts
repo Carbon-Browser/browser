@@ -1,10 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // clang-format off
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
+
+import {loadTimeData} from '../i18n_setup.js';
 // clang-format on
 
 export interface AppearanceBrowserProxy {
@@ -14,30 +15,49 @@ export interface AppearanceBrowserProxy {
   /** @return Whether the current profile is a child account. */
   isChildAccount(): boolean;
 
+  openCustomizeChrome(): void;
+  openCustomizeChromeToolbarSection(): void;
+  recordHoverCardImagesEnabledChanged(enabled: boolean): void;
+  resetPinnedToolbarActions(): void;
   useDefaultTheme(): void;
 
   // <if expr="is_linux">
-  useSystemTheme(): void;
+  useGtkTheme(): void;
+  useQtTheme(): void;
   // </if>
 
   validateStartupPage(url: string): Promise<boolean>;
+  pinnedToolbarActionsAreDefault(): Promise<boolean>;
 }
 
 export class AppearanceBrowserProxyImpl implements AppearanceBrowserProxy {
   getDefaultZoom(): Promise<number> {
-    return new Promise(function(resolve) {
-      chrome.settingsPrivate.getDefaultZoom(resolve);
-    });
+    return chrome.settingsPrivate.getDefaultZoom();
   }
 
   getThemeInfo(themeId: string): Promise<chrome.management.ExtensionInfo> {
-    return new Promise(function(resolve) {
-      chrome.management.get(themeId, resolve);
-    });
+    return chrome.management.get(themeId);
   }
 
   isChildAccount() {
     return loadTimeData.getBoolean('isChildAccount');
+  }
+
+  openCustomizeChrome() {
+    chrome.send('openCustomizeChrome');
+  }
+
+  openCustomizeChromeToolbarSection() {
+    chrome.send('openCustomizeChromeToolbarSection');
+  }
+
+  recordHoverCardImagesEnabledChanged(enabled: boolean) {
+    chrome.metricsPrivate.recordBoolean(
+        'Settings.HoverCards.ImagePreview.Enabled', enabled);
+  }
+
+  resetPinnedToolbarActions() {
+    chrome.send('resetPinnedToolbarActions');
   }
 
   useDefaultTheme() {
@@ -45,13 +65,21 @@ export class AppearanceBrowserProxyImpl implements AppearanceBrowserProxy {
   }
 
   // <if expr="is_linux">
-  useSystemTheme() {
-    chrome.send('useSystemTheme');
+  useGtkTheme() {
+    chrome.send('useGtkTheme');
+  }
+
+  useQtTheme() {
+    chrome.send('useQtTheme');
   }
   // </if>
 
   validateStartupPage(url: string) {
     return sendWithPromise('validateStartupPage', url);
+  }
+
+  pinnedToolbarActionsAreDefault() {
+    return sendWithPromise('pinnedToolbarActionsAreDefault');
   }
 
   static getInstance(): AppearanceBrowserProxy {

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,7 @@ base::FilePath DiagnosticsBrowserDelegateImpl::GetActiveUserProfileDir() {
 
   auto* user = user_manager::UserManager::Get()->GetActiveUser();
   DCHECK(user);
-  auto* profile = ash::ProfileHelper::Get()->GetProfileByUser(user);
+  auto* profile = ProfileHelper::Get()->GetProfileByUser(user);
 
   // Profile may be null if called before profile load is complete.
   if (profile == nullptr) {

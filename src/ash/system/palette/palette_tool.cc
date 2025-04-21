@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@
 #include "ash/system/palette/tools/enter_capture_mode.h"
 #include "ash/system/palette/tools/laser_pointer_mode.h"
 #include "ash/system/palette/tools/magnifier_mode.h"
-#include "ash/system/palette/tools/metalayer_mode.h"
+#include "ash/system/palette/tools/marker_mode.h"
 #include "ui/gfx/paint_vector_icon.h"
 
 namespace ash {
@@ -23,10 +23,11 @@ namespace ash {
 void PaletteTool::RegisterToolInstances(PaletteToolManager* tool_manager) {
   tool_manager->AddTool(std::make_unique<EnterCaptureMode>(tool_manager));
   tool_manager->AddTool(std::make_unique<CreateNoteAction>(tool_manager));
-  if (assistant::util::IsGoogleDevice())
-    tool_manager->AddTool(std::make_unique<MetalayerMode>(tool_manager));
   tool_manager->AddTool(std::make_unique<LaserPointerMode>(tool_manager));
   tool_manager->AddTool(std::make_unique<MagnifierMode>(tool_manager));
+  if (features::IsAnnotatorModeEnabled()) {
+    tool_manager->AddTool(std::make_unique<MarkerMode>(tool_manager));
+  }
 }
 
 PaletteTool::PaletteTool(Delegate* delegate) : delegate_(delegate) {}

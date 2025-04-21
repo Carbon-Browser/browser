@@ -1,12 +1,17 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
-import './keyboard_icons.js';
+import './keyboard_icons.html.js';
+import 'chrome://resources/ash/common/cr_elements/cr_shared_style.css.js';
 
-import {I18nBehavior, I18nBehaviorInterface} from 'chrome://resources/js/i18n_behavior.m.js';
+import {I18nBehavior, I18nBehaviorInterface} from 'chrome://resources/ash/common/i18n_behavior.js';
 import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {getTemplate} from './keyboard_key.html.js';
+
+// TODO(michaelcheco): Add unit test coverage for keyboard-key.
 
 /**
  * @fileoverview
@@ -61,11 +66,11 @@ import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v
  */
 export const KeyboardKeyState = {
   /** The key has not been pressed during this test session. */
-  kNotPressed: 'not-pressed',
+  NOT_PRESSED: 'not-pressed',
   /** The key is currently pressed. */
-  kPressed: 'pressed',
+  PRESSED: 'pressed',
   /** The key is not currently pressed, but we've seen it pressed previously. */
-  kTested: 'tested',
+  TESTED: 'tested',
 };
 
 /**
@@ -83,7 +88,7 @@ export class KeyboardKeyElement extends KeyboardKeyElementBase {
   }
 
   static get template() {
-    return html`{__html_template__}`;
+    return getTemplate();
   }
 
   static get properties() {
@@ -146,8 +151,9 @@ export class KeyboardKeyElement extends KeyboardKeyElementBase {
        */
       state: {
         type: String,
-        value: KeyboardKeyState.kNotPressed,
+        value: KeyboardKeyState.NOT_PRESSED,
         reflectToAttribute: true,
+        observer: KeyboardKeyElement.prototype.keyboardKeyStateChanged,
       },
 
       /**
@@ -171,9 +177,9 @@ export class KeyboardKeyElement extends KeyboardKeyElementBase {
     const name =
         ariaName || mainGlyph || bottomRightGlyph || bottomLeftGlyph || '';
     const stateStringIds = {
-      [KeyboardKeyState.kNotPressed]: 'keyboardDiagramAriaLabelNotPressed',
-      [KeyboardKeyState.kPressed]: 'keyboardDiagramAriaLabelPressed',
-      [KeyboardKeyState.kTested]: 'keyboardDiagramAriaLabelTested',
+      [KeyboardKeyState.NOT_PRESSED]: 'keyboardDiagramAriaLabelNotPressed',
+      [KeyboardKeyState.PRESSED]: 'keyboardDiagramAriaLabelPressed',
+      [KeyboardKeyState.TESTED]: 'keyboardDiagramAriaLabelTested',
     };
     return this.i18n(stateStringIds[state], name);
   }
@@ -200,6 +206,21 @@ export class KeyboardKeyElement extends KeyboardKeyElementBase {
    */
   computeShowSecondColumn_(topRightGlyph, bottomRightGlyph) {
     return !!(topRightGlyph || bottomRightGlyph);
+  }
+
+  /**
+   * Triggers 'announce-text' event to be used in pair with cr-a11y-announcer.
+   * Event provides A11Y "live" update to screen readers when a key is pressed.
+   * @protected
+   */
+  keyboardKeyStateChanged() {
+    if (this.state === KeyboardKeyState.PRESSED) {
+      this.dispatchEvent(new CustomEvent('announce-text', {
+        bubbles: true,
+        composed: true,
+        detail: {text: this.ariaLabel_},
+      }));
+    }
   }
 }
 

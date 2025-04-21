@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 #define PPAPI_TESTS_TEST_CRYPTO_H_
 
 #include <string>
-#include <vector>
 
 #include "ppapi/c/dev/ppb_crypto_dev.h"
 #include "ppapi/tests/test_case.h"

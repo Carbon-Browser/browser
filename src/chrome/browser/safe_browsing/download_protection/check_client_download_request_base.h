@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,14 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/callback_list.h"
 #include "base/cancelable_callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/time/time.h"
@@ -31,7 +32,6 @@
 #include "components/safe_browsing/core/browser/db/database_manager.h"
 #include "components/safe_browsing/core/browser/sync/safe_browsing_primary_account_token_fetcher.h"
 #include "content/public/browser/browser_thread.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 #if BUILDFLAG(IS_MAC)
@@ -67,6 +67,8 @@ class CheckClientDownloadRequestBase {
 
   DownloadProtectionService* service() const { return service_; }
 
+  virtual download::DownloadItem* item() const = 0;
+
  protected:
   // Subclasses can call this method to mark the request as finished (for
   // example because the download was cancelled) before the safe browsing
@@ -89,6 +91,16 @@ class CheckClientDownloadRequestBase {
   void SendRequest();
   void OnURLLoaderComplete(std::unique_ptr<std::string> response_body);
 
+  // If we need to perform additional prompting (e.g. deep scanning, local
+  // password decryption) due to the response, this method will update `result`
+  // and `reason` appropriately. This method also performs logging related to
+  // these additional prompts. If both prompts are allowed, deep scanning will
+  // be prioritized.
+  void GetAdditionalPromptResult(const ClientDownloadResponse& response,
+                                 DownloadCheckResult* result,
+                                 DownloadCheckResultReason* reason,
+                                 std::string* token) const;
+
   virtual bool IsSupportedDownload(DownloadCheckResultReason* reason) = 0;
   virtual content::BrowserContext* GetBrowserContext() const = 0;
   virtual bool IsCancelled() = 0;
@@ -102,20 +114,24 @@ class CheckClientDownloadRequestBase {
   // for concrete sub classes to implement, rather than having three separate
   // hooks with slightly different logic when they are called.
 
-  // Called with the download ping token as returned by the server, if one was
-  // returned.
-  virtual void SetDownloadPingToken(const std::string& token) = 0;
+  // Called with the client download response as returned by the server, if one
+  // was returned and the returned verdict is unsafe (i.e. not safe or unknown).
+  virtual void SetDownloadProtectionData(
+      const std::string& token,
+      const ClientDownloadResponse::Verdict& verdict,
+      const ClientDownloadResponse::TailoredVerdict& tailored_verdict) = 0;
 
   // Called when a valid response has been received from the server.
-  virtual void MaybeStorePingsForDownload(DownloadCheckResult result,
-                                          bool upload_requested,
-                                          const std::string& request_data,
-                                          const std::string& response_body) = 0;
+  virtual void MaybeBeginFeedbackForDownload(
+      DownloadCheckResult result,
+      bool upload_requested,
+      const std::string& request_data,
+      const std::string& response_body) = 0;
 
   // Returns whether or not the file should be uploaded to Safe Browsing for
   // deep scanning. Returns the settings to apply for analysis if the file
-  // should be uploaded for deep scanning, or absl::nullopt if it should not.
-  virtual absl::optional<enterprise_connectors::AnalysisSettings>
+  // should be uploaded for deep scanning, or std::nullopt if it should not.
+  virtual std::optional<enterprise_connectors::AnalysisSettings>
   ShouldUploadBinary(DownloadCheckResultReason reason) = 0;
 
   // If ShouldUploadBinary returns settings, actually performs the upload to
@@ -129,9 +145,20 @@ class CheckClientDownloadRequestBase {
   virtual void NotifyRequestFinished(DownloadCheckResult result,
                                      DownloadCheckResultReason reason) = 0;
 
+  // Called when finishing the download, to decide whether to
+  // immediately start deep scanning or not. Implementations should log
+  // metrics only when `log_metrics` is true.
+  virtual bool ShouldImmediatelyDeepScan(bool server_requests_prompt,
+                                         bool log_metrics) const = 0;
+
   // Called when finishing the download, to decide whether to prompt the user
   // for deep scanning or not.
   virtual bool ShouldPromptForDeepScanning(
+      bool server_requests_prompt) const = 0;
+
+  // Called when finishing the download, to decide whether to prompt the user
+  // for local decryption or not.
+  virtual bool ShouldPromptForLocalDecryption(
       bool server_requests_prompt) const = 0;
 
   // Called when |token_fetcher_| has finished fetching the access token.
@@ -145,7 +172,19 @@ class CheckClientDownloadRequestBase {
   // |client_download_request_| with their origin.
   void SanitizeRequest();
 
-  // Source URL being downloaded from. This shuold always be set, but could be
+  // Called when we decide whether or not to show a deep scanning prompt
+  virtual void LogDeepScanningPrompt(bool did_prompt) const = 0;
+
+  // Returns whether we should skip sending a ping to Safe Browsing because the
+  // provided password was incorrect.
+  virtual bool ShouldPromptForIncorrectPassword() const = 0;
+
+  // Returns whether we should skip sending a ping to Safe Browsing because
+  // extraction failed in a way that makes the data useless (e.g. disk write
+  // failure).
+  virtual bool ShouldShowScanFailure() const = 0;
+
+  // Source URL being downloaded from. This should always be set, but could be
   // for example an artificial blob: URL if there is no source URL.
   const GURL source_url_;
   const base::FilePath target_file_path_;

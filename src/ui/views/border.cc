@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -346,6 +346,11 @@ std::unique_ptr<Border> CreateThemedRoundedRectBorder(
 std::unique_ptr<Border> CreateSolidSidedBorder(const gfx::Insets& insets,
                                                SkColor color) {
   return std::make_unique<SolidSidedBorder>(insets, color);
+}
+
+std::unique_ptr<Border> CreateThemedSolidSidedBorder(const gfx::Insets& insets,
+                                                     ui::ColorId color_id) {
+  return std::make_unique<ThemedSolidSidedBorder>(insets, color_id);
 }
 
 std::unique_ptr<Border> CreatePaddedBorder(std::unique_ptr<Border> border,

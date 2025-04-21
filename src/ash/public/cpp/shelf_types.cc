@@ -1,9 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/public/cpp/shelf_types.h"
 
+#include "base/check_op.h"
+#include "base/containers/contains.h"
 #include "base/logging.h"
 #include "base/notreached.h"
 #include "base/strings/string_split.h"
@@ -16,6 +18,19 @@ namespace {
 constexpr char kDelimiter[] = "|";
 
 }  // namespace
+
+std::ostream& operator<<(std::ostream& out, ShelfAlignment alignment) {
+  switch (alignment) {
+    case ShelfAlignment::kBottom:
+      return out << "Bottom";
+    case ShelfAlignment::kLeft:
+      return out << "Left";
+    case ShelfAlignment::kRight:
+      return out << "Right";
+    case ShelfAlignment::kBottomLocked:
+      return out << "BottomLocked";
+  }
+}
 
 std::ostream& operator<<(std::ostream& out, ShelfAutoHideState state) {
   switch (state) {
@@ -32,12 +47,8 @@ std::ostream& operator<<(std::ostream& out, ShelfBackgroundType type) {
       return out << "DefaultBg";
     case ShelfBackgroundType::kMaximized:
       return out << "Maximized";
-    case ShelfBackgroundType::kAppList:
-      return out << "AppList";
     case ShelfBackgroundType::kHomeLauncher:
       return out << "HomeLauncher";
-    case ShelfBackgroundType::kMaximizedWithAppList:
-      return out << "MaximizedWithAppList";
     case ShelfBackgroundType::kOobe:
       return out << "Oobe";
     case ShelfBackgroundType::kLogin:
@@ -76,7 +87,6 @@ bool IsPinnedShelfItemType(ShelfItemType type) {
       return false;
   }
   NOTREACHED();
-  return false;
 }
 
 bool SamePinState(ShelfItemType a, ShelfItemType b) {
@@ -120,8 +130,8 @@ bool ShelfID::IsNull() const {
 }
 
 std::string ShelfID::Serialize() const {
-  DCHECK_EQ(std::string::npos, app_id.find(kDelimiter)) << "Invalid ShelfID";
-  DCHECK_EQ(std::string::npos, launch_id.find(kDelimiter)) << "Invalid ShelfID";
+  DCHECK(!base::Contains(app_id, kDelimiter)) << "Invalid ShelfID";
+  DCHECK(!base::Contains(launch_id, kDelimiter)) << "Invalid ShelfID";
   return app_id + kDelimiter + launch_id;
 }
 

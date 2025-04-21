@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -167,7 +167,7 @@ interface Connector {
   // order to inform the Service Manager about which process is actually hosting
   // the service instance.
   //
-  // TODO(https://crbug.com/904137): We should be able to be more typesafe here
+  // TODO(crbug.com/40601908): We should be able to be more typesafe here
   // for the |service| argument, but Service's definition requires Connector's
   // definition and we don't yet support circular mojom imports. Hence the raw
   // message pipe.

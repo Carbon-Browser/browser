@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,11 +16,6 @@
 #include "base/synchronization/lock.h"
 #include "base/thread_annotations.h"
 #include "base/threading/thread_id_name_manager.h"
-#include "build/build_config.h"
-
-namespace heap_profiling {
-class HeapProfilerControllerTest;
-}
 
 namespace base {
 
@@ -42,13 +37,13 @@ class BASE_EXPORT SamplingHeapProfiler
     // Total size attributed to the sample.
     size_t total;
     // Type of the allocator.
-    PoissonAllocationSampler::AllocatorType allocator;
+    base::allocator::dispatcher::AllocationSubsystem allocator;
     // Context as provided by the allocation hook.
     const char* context = nullptr;
     // Name of the thread that made the sampled allocation.
     const char* thread_name = nullptr;
     // Call stack of PC addresses responsible for the allocation.
-    std::vector<void*> stack;
+    std::vector<const void*> stack;
 
     // Public for testing.
     Sample(size_t size, size_t total, uint32_t ordinal);
@@ -56,8 +51,16 @@ class BASE_EXPORT SamplingHeapProfiler
    private:
     friend class SamplingHeapProfiler;
 
-
     uint32_t ordinal;
+  };
+
+  enum class StackUnwinder {
+    // Use default unwind tables.
+    kDefault,
+    // No stack unwinder available - profiler will be disabled.
+    kUnavailable,
+    // Use frame pointers, which are faster if available.
+    kFramePointers,
   };
 
   // Starts collecting allocation samples. Returns the current profile_id.
@@ -72,7 +75,7 @@ class BASE_EXPORT SamplingHeapProfiler
   void SetSamplingInterval(size_t sampling_interval_bytes);
 
   // Enables recording thread name that made the sampled allocation.
-  void SetRecordThreadNames(bool value);
+  void EnableRecordThreadNames();
 
   // Returns the current thread name.
   static const char* CachedThreadName();
@@ -87,10 +90,10 @@ class BASE_EXPORT SamplingHeapProfiler
   // List of strings used in the profile call stacks.
   std::vector<const char*> GetStrings();
 
-  // Captures up to |max_entries| stack frames using the buffer pointed by
-  // |frames|. Puts the number of captured frames into the |count| output
-  // parameters. Returns the pointer to the topmost frame.
-  void** CaptureStackTrace(void** frames, size_t max_entries, size_t* count);
+  // Captures stack `frames`, up to as many as the size of the `frames` span.
+  // Returns a subspan of `frames` holding the captured frames. The top-most
+  // frame is at the front of the returned span.
+  span<const void*> CaptureStackTrace(span<const void*> frames);
 
   static void Init();
   static SamplingHeapProfiler* Get();
@@ -101,6 +104,13 @@ class BASE_EXPORT SamplingHeapProfiler
   // ThreadIdNameManager::Observer implementation:
   void OnThreadNameChanged(const char* name) override;
 
+  // Deletes all samples recorded, to ensure the profiler is in a consistent
+  // state at the beginning of a test, and creates a
+  // ScopedMuteHookedSamplesForTesting so that new hooked samples don't arrive
+  // while it's running.
+  PoissonAllocationSampler::ScopedMuteHookedSamplesForTesting
+  MuteHookedSamplesForTesting();
+
  private:
   SamplingHeapProfiler();
   ~SamplingHeapProfiler() override;
@@ -109,18 +119,12 @@ class BASE_EXPORT SamplingHeapProfiler
   void SampleAdded(void* address,
                    size_t size,
                    size_t total,
-                   PoissonAllocationSampler::AllocatorType type,
+                   base::allocator::dispatcher::AllocationSubsystem type,
                    const char* context) override;
   void SampleRemoved(void* address) override;
 
   void CaptureNativeStack(const char* context, Sample* sample);
   const char* RecordString(const char* string) EXCLUSIVE_LOCKS_REQUIRED(mutex_);
-
-  // Delete all samples recorded, to ensure the profiler is in a consistent
-  // state at the beginning of a test. This should only be called within the
-  // scope of a PoissonAllocationSampler::ScopedMuteHookedSamplesForTesting so
-  // that new hooked samples don't arrive while it's running.
-  void ClearSamplesForTesting();
 
   // Mutex to access |samples_| and |strings_|.
   Lock mutex_;
@@ -131,12 +135,11 @@ class BASE_EXPORT SamplingHeapProfiler
   // Contains pointers to static sample context strings that are never deleted.
   std::unordered_set<const char*> strings_ GUARDED_BY(mutex_);
 
-  // Mutex to make |running_sessions_| and Add/Remove samples observer access
-  // atomic.
+  // Mutex to guard |running_sessions_| and Add/Remove samples.
   Lock start_stop_mutex_;
 
   // Number of the running sessions.
-  int running_sessions_ = 0;
+  int running_sessions_ GUARDED_BY(start_stop_mutex_) = 0;
 
   // Last sample ordinal used to mark samples recorded during single session.
   std::atomic<uint32_t> last_sample_ordinal_{1};
@@ -144,12 +147,9 @@ class BASE_EXPORT SamplingHeapProfiler
   // Whether it should record thread names.
   std::atomic<bool> record_thread_names_{false};
 
-#if BUILDFLAG(IS_ANDROID)
-  // Whether to use CFI unwinder or default unwinder.
-  std::atomic<bool> use_default_unwinder_{false};
-#endif
+  // Which unwinder to use.
+  std::atomic<StackUnwinder> unwinder_{StackUnwinder::kDefault};
 
-  friend class heap_profiling::HeapProfilerControllerTest;
   friend class NoDestructor<SamplingHeapProfiler>;
   friend class SamplingHeapProfilerTest;
 };

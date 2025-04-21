@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include "third_party/blink/renderer/core/css/style_engine.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/tree_scope.h"
-#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
 
@@ -39,8 +38,9 @@ bool ListStyleTypeData::IsCounterStyleReferenceValid(Document& document) const {
     return true;
   }
 
-  if (!counter_style_ || counter_style_->IsDirty())
+  if (!counter_style_ || counter_style_->IsDirty()) {
     return false;
+  }
 
   // Even if the referenced counter style is clean, it may still be stale if new
   // counter styles have been inserted, in which case the same (scope, name) now

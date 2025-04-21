@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 namespace cast_streaming {
 
-void SetNetworkContextGetter(NetworkContextGetter getter) {
+void SetNetworkContextGetter(network::NetworkContextGetter getter) {
   openscreen_platform::SetNetworkContextGetter(std::move(getter));
 }
 

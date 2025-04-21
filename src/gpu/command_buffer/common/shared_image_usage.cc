@@ -1,85 +1,83 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "gpu/command_buffer/common/shared_image_usage.h"
 
+#include <cstdint>
+#include <string>
+#include <utility>
+
 #include "base/check.h"
 
 namespace gpu {
 
-bool IsValidClientUsage(uint32_t usage) {
+const char kExoTextureLabelPrefix[] = "ExoTexture";
+
+bool IsValidClientUsage(SharedImageUsageSet usage) {
+  const uint32_t usage_as_int = uint32_t(usage);
   constexpr int32_t kClientMax = (LAST_CLIENT_USAGE << 1) - 1;
-  return 0 < usage && usage <= kClientMax;
+  return 0 < usage_as_int && usage_as_int <= kClientMax;
 }
 
-std::string CreateLabelForSharedImageUsage(uint32_t usage) {
-  if (!usage)
-    return "";
+bool HasGLES2ReadOrWriteUsage(SharedImageUsageSet usage) {
+  return usage.HasAny(SHARED_IMAGE_USAGE_GLES2_READ |
+                      SHARED_IMAGE_USAGE_GLES2_WRITE);
+}
+
+std::string CreateLabelForSharedImageUsage(SharedImageUsageSet usage) {
+  if (usage.empty()) {
+    return {};
+  }
+
+  const std::pair<SharedImageUsage, const char*> kUsages[] = {
+      {SHARED_IMAGE_USAGE_GLES2_READ, "Gles2Read"},
+      {SHARED_IMAGE_USAGE_RASTER_READ, "RasterRead"},
+      {SHARED_IMAGE_USAGE_DISPLAY_READ, "DisplayRead"},
+      {SHARED_IMAGE_USAGE_DISPLAY_WRITE, "DisplayWrite"},
+      {SHARED_IMAGE_USAGE_SCANOUT, "Scanout"},
+      {SHARED_IMAGE_USAGE_OOP_RASTERIZATION, "OopRasterization"},
+      {SHARED_IMAGE_USAGE_WEBGPU_READ, "WebgpuRead"},
+      {SHARED_IMAGE_USAGE_CONCURRENT_READ_WRITE, "ConcurrentReadWrite"},
+      {SHARED_IMAGE_USAGE_VIDEO_DECODE, "VideoDecode"},
+      {SHARED_IMAGE_USAGE_WEBGPU_SWAP_CHAIN_TEXTURE, "WebgpuSwapChainTexture"},
+      {SHARED_IMAGE_USAGE_MACOS_VIDEO_TOOLBOX, "MacosVideoToolbox"},
+      {SHARED_IMAGE_USAGE_MIPMAP, "Mipmap"},
+      {SHARED_IMAGE_USAGE_CPU_WRITE_ONLY, "CpuWriteOnly"},
+      {SHARED_IMAGE_USAGE_RAW_DRAW, "RawDraw"},
+      {SHARED_IMAGE_USAGE_HIGH_PERFORMANCE_GPU, "HighPerformanceGpu"},
+      {SHARED_IMAGE_USAGE_CPU_UPLOAD, "CpuUpload"},
+      {SHARED_IMAGE_USAGE_SCANOUT_DCOMP_SURFACE, "ScanoutDCompSurface"},
+      {SHARED_IMAGE_USAGE_SCANOUT_DXGI_SWAP_CHAIN, "ScanoutDxgiSwapChain"},
+      {SHARED_IMAGE_USAGE_WEBGPU_STORAGE_TEXTURE, "WebgpuStorageTexture"},
+      {SHARED_IMAGE_USAGE_GLES2_WRITE, "Gles2Write"},
+      {SHARED_IMAGE_USAGE_RASTER_WRITE, "RasterWrite"},
+      {SHARED_IMAGE_USAGE_WEBGPU_WRITE, "WebgpuWrite"},
+      {SHARED_IMAGE_USAGE_GLES2_FOR_RASTER_ONLY, "GLES2ForRasterOnly"},
+      {SHARED_IMAGE_USAGE_RASTER_OVER_GLES2_ONLY, "RasterOverGLES2Only"},
+      {SHARED_IMAGE_USAGE_PROTECTED_VIDEO, "ProtectedVideo"},
+      {SHARED_IMAGE_USAGE_WEBGPU_SHARED_BUFFER, "WebgpuSharedBuffer"},
+      {SHARED_IMAGE_USAGE_CPU_ONLY_READ_WRITE, "CpuOnlyReadWrite"},
+  };
 
   std::string label;
-
-  if (usage & SHARED_IMAGE_USAGE_GLES2) {
-    label += "|Gles2";
-  }
-  if (usage & SHARED_IMAGE_USAGE_GLES2_FRAMEBUFFER_HINT) {
-    label += "|Gles2FramebufferHint";
-  }
-  if (usage & SHARED_IMAGE_USAGE_RASTER) {
-    label += "|Raster";
-  }
-  if (usage & SHARED_IMAGE_USAGE_RAW_DRAW) {
-    label += "|RawDraw";
-  }
-  if (usage & SHARED_IMAGE_USAGE_DISPLAY) {
-    label += "|Display";
-  }
-  if (usage & SHARED_IMAGE_USAGE_SCANOUT) {
-    label += "|Scanout";
-  }
-  if (usage & SHARED_IMAGE_USAGE_OOP_RASTERIZATION) {
-    label += "|OopRasterization";
-  }
-  if (usage & SHARED_IMAGE_USAGE_RGB_EMULATION) {
-    label += "|RgbEmulation";
-  }
-  if (usage & SHARED_IMAGE_USAGE_WEBGPU) {
-    label += "|Webgpu";
-  }
-  if (usage & SHARED_IMAGE_USAGE_PROTECTED) {
-    label += "|Protected";
-  }
-  if (usage & SHARED_IMAGE_USAGE_CONCURRENT_READ_WRITE) {
-    label += "|ConcurrentReadWrite";
-  }
-  if (usage & SHARED_IMAGE_USAGE_VIDEO_DECODE) {
-    label += "|VideoDecode";
-  }
-  if (usage & SHARED_IMAGE_USAGE_WEBGPU_SWAP_CHAIN_TEXTURE) {
-    label += "|WebgpuSwapChainTexture";
-  }
-  if (usage & SHARED_IMAGE_USAGE_MACOS_VIDEO_TOOLBOX) {
-    label += "|MacosVideoToolbox";
-  }
-  if (usage & SHARED_IMAGE_USAGE_MIPMAP) {
-    label += "|Mipmap";
-  }
-  if (usage & SHARED_IMAGE_USAGE_CPU_WRITE) {
-    label += "|CpuWrite";
-  }
-  if (usage & SHARED_IMAGE_USAGE_RAW_DRAW) {
-    label += "|RawDraw";
-  }
-  if (usage & SHARED_IMAGE_USAGE_RASTER_DELEGATED_COMPOSITING) {
-    label += "|RasterDelegatedCompositing";
-  }
-  if (usage & SHARED_IMAGE_USAGE_CPU_UPLOAD) {
-    label += "|CpuUpload";
+  for (const auto& [value, name] : kUsages) {
+    if (!usage.Has(value)) {
+      continue;
+    }
+    if (!label.empty()) {
+      label.append("|");
+    }
+    label.append(name);
   }
 
   DCHECK(!label.empty());
 
   return label;
+}
+
+std::string SharedImageUsageSet::ToString() const {
+  return CreateLabelForSharedImageUsage(*this);
 }
 
 }  // namespace gpu

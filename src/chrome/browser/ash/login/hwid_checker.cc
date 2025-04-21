@@ -1,10 +1,16 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/ash/login/hwid_checker.h"
 
 #include <cstdio>
+#include <string_view>
 
 #include "ash/constants/ash_switches.h"
 #include "base/command_line.h"
@@ -15,7 +21,7 @@
 #include "base/system/sys_info.h"
 #include "build/branding_buildflags.h"
 #include "chrome/common/chrome_switches.h"
-#include "chromeos/system/statistics_provider.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #include "content/public/common/content_switches.h"
 #include "third_party/re2/src/re2/re2.h"
 #include "third_party/zlib/zlib.h"
@@ -23,12 +29,12 @@
 namespace ash {
 namespace {
 
-unsigned CalculateCRC32(const std::string& data) {
+unsigned CalculateCRC32(std::string_view data) {
   return static_cast<unsigned>(
-      crc32(0, reinterpret_cast<const Bytef*>(data.c_str()), data.length()));
+      crc32(0, reinterpret_cast<const Bytef*>(data.data()), data.length()));
 }
 
-std::string CalculateHWIDv2Checksum(const std::string& data) {
+std::string CalculateHWIDv2Checksum(std::string_view data) {
   unsigned crc32 = CalculateCRC32(data);
   // We take four least significant decimal digits of CRC-32.
   char checksum[5];
@@ -37,19 +43,20 @@ std::string CalculateHWIDv2Checksum(const std::string& data) {
   return checksum;
 }
 
-bool IsCorrectHWIDv2(const std::string& hwid) {
+bool IsCorrectHWIDv2(std::string_view hwid) {
   std::string body;
   std::string checksum;
-  if (!RE2::FullMatch(hwid, "([\\s\\S]*) (\\d{4})", &body, &checksum))
+  if (!RE2::FullMatch(hwid, "([\\s\\S]*) (\\d{4})", &body, &checksum)) {
     return false;
+  }
   return CalculateHWIDv2Checksum(body) == checksum;
 }
 
-bool IsExceptionalHWID(const std::string& hwid) {
+bool IsExceptionalHWID(std::string_view hwid) {
   return RE2::PartialMatch(hwid, "^(SPRING [A-D])|(FALCO A)");
 }
 
-std::string CalculateExceptionalHWIDChecksum(const std::string& data) {
+std::string CalculateExceptionalHWIDChecksum(std::string_view data) {
   static const char base32_alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
   unsigned crc32 = CalculateCRC32(data);
   // We take 10 least significant bits of CRC-32 and encode them in 2 characters
@@ -60,12 +67,14 @@ std::string CalculateExceptionalHWIDChecksum(const std::string& data) {
   return checksum;
 }
 
-bool IsCorrectExceptionalHWID(const std::string& hwid) {
+bool IsCorrectExceptionalHWID(std::string_view hwid) {
   if (!IsExceptionalHWID(hwid))
     return false;
   std::string bom;
-  if (!RE2::FullMatch(hwid, "[A-Z0-9]+ ((?:[A-Z2-7]{4}-)*[A-Z2-7]{1,4})", &bom))
+  if (!RE2::FullMatch(hwid, "[A-Z0-9]+ ((?:[A-Z2-7]{4}-)*[A-Z2-7]{1,4})",
+                      &bom)) {
     return false;
+  }
   if (bom.length() < 2)
     return false;
   std::string hwid_without_dashes;
@@ -78,7 +87,7 @@ bool IsCorrectExceptionalHWID(const std::string& hwid) {
   return CalculateExceptionalHWIDChecksum(not_checksum) == checksum;
 }
 
-std::string CalculateHWIDv3Checksum(const std::string& data) {
+std::string CalculateHWIDv3Checksum(std::string_view data) {
   static const char base8_alphabet[] = "23456789";
   static const char base32_alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
   unsigned crc32 = CalculateCRC32(data);
@@ -89,7 +98,7 @@ std::string CalculateHWIDv3Checksum(const std::string& data) {
   return checksum;
 }
 
-bool IsCorrectHWIDv3(const std::string& hwid) {
+bool IsCorrectHWIDv3(std::string_view hwid) {
   if (IsExceptionalHWID(hwid))
     return false;
 
@@ -144,7 +153,7 @@ bool IsCorrectHWIDv3(const std::string& hwid) {
 
 }  // anonymous namespace
 
-bool IsHWIDCorrect(const std::string& hwid) {
+bool IsHWIDCorrect(std::string_view hwid) {
   return IsCorrectHWIDv2(hwid) || IsCorrectExceptionalHWID(hwid) ||
          IsCorrectHWIDv3(hwid);
 }
@@ -167,18 +176,18 @@ bool IsMachineHWIDCorrect() {
   if (!base::SysInfo::IsRunningOnChromeOS())
     return true;
 
-  chromeos::system::StatisticsProvider* stats =
-      chromeos::system::StatisticsProvider::GetInstance();
+  system::StatisticsProvider* stats = system::StatisticsProvider::GetInstance();
   if (stats->IsRunningOnVm())
     return true;
 
-  std::string hwid;
-  if (!stats->GetMachineStatistic(chromeos::system::kHardwareClassKey, &hwid)) {
+  const std::optional<std::string_view> hwid =
+      stats->GetMachineStatistic(system::kHardwareClassKey);
+  if (!hwid) {
     LOG(ERROR) << "Couldn't get machine statistic 'hardware_class'.";
     return false;
   }
-  if (!IsHWIDCorrect(hwid)) {
-    LOG(ERROR) << "Machine has malformed HWID '" << hwid << "'. ";
+  if (!IsHWIDCorrect(hwid.value())) {
+    LOG(ERROR) << "Machine has malformed HWID '" << hwid.value() << "'. ";
     return false;
   }
 #endif

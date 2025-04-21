@@ -1,5 +1,5 @@
 <?php
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,8 @@ Header("Feature-Policy: fullscreen 'self'");
 <script src="../../resources/testharness.js"></script>
 <script src="../../resources/testharnessreport.js"></script>
 <script src="resources/helper.js"></script>
-<iframe></iframe>
-<iframe allowfullscreen></iframe>
+<iframe allow="focus-without-user-activation"></iframe>
+<iframe allow="focus-without-user-activation" allowfullscreen></iframe>
 <script>
 var srcs = [
   "resources/feature-policy-fullscreen.html",

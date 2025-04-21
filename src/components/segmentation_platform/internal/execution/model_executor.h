@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "components/segmentation_platform/internal/execution/model_execution_status.h"
+#include "components/segmentation_platform/internal/execution/execution_request.h"
 #include "components/segmentation_platform/internal/proto/model_prediction.pb.h"
 
 namespace segmentation_platform {
@@ -21,14 +20,12 @@ class ModelExecutor {
   ModelExecutor() = default;
   virtual ~ModelExecutor() = default;
 
-  ModelExecutor(ModelExecutor&) = delete;
-  ModelExecutor& operator=(ModelExecutor&) = delete;
+  ModelExecutor(const ModelExecutor&) = delete;
+  ModelExecutor& operator=(const ModelExecutor&) = delete;
 
   // Called to execute a given model. This assumes that data has been collected
   // for long enough for each of the individual ML features.
-  // The float value is only valid when ModelExecutionStatus == kSuccess.
-  using ModelExecutionCallback =
-      base::OnceCallback<void(const std::pair<float, ModelExecutionStatus>&)>;
+  using ModelExecutionCallback = ExecutionRequest::ModelExecutionCallback;
 
   // Computes input features using `segment_info` and executes the model using
   // `model_provider`, and returns result.

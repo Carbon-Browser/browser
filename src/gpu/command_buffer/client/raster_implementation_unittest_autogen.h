@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,11 @@
 // It's formatted by clang-format using chromium coding style:
 //    clang-format -i -style=chromium filename
 // DO NOT EDIT!
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 // This file is included by raster_implementation.h to declare the
 // GL api functions.
@@ -25,9 +30,7 @@ TEST_F(RasterImplementationTest, Flush) {
 }
 
 TEST_F(RasterImplementationTest, GenQueriesEXT) {
-  GLuint ids[2] = {
-      0,
-  };
+  GLuint ids[2] = {};
   struct Cmds {
     cmds::GenQueriesEXTImmediate gen;
     GLuint data[2];

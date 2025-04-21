@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,6 @@ EnumTraits<mojo_base::mojom::TextDirection, base::i18n::TextDirection>::ToMojom(
       return mojo_base::mojom::TextDirection::LEFT_TO_RIGHT;
   }
   NOTREACHED();
-  return mojo_base::mojom::TextDirection::UNKNOWN_DIRECTION;
 }
 
 // static

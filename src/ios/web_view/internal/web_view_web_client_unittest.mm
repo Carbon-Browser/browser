@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,10 +14,6 @@
 #include "testing/gtest_mac.h"
 #include "ui/base/l10n/l10n_util_mac.h"
 #include "ui/base/resource/resource_bundle.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace ios_web_view {
 
@@ -87,6 +83,17 @@ TEST_F(WebViewWebClientTest, GetUserAgent) {
             web_client->GetUserAgent(web::UserAgentType::MOBILE));
   EXPECT_EQ("FooCustomUserAgent",
             web_client->GetUserAgent(web::UserAgentType::DESKTOP));
+}
+
+// Tests that `WebViewWebClientTest::EnableWebInspector` is configurable.
+TEST_F(WebViewWebClientTest, EnableWebInspector) {
+  web::WebClient* web_client = GetWebClient();
+
+  CWVWebView.webInspectorEnabled = NO;
+  EXPECT_FALSE(web_client->EnableWebInspector(/*browser_state=*/nullptr));
+
+  CWVWebView.webInspectorEnabled = YES;
+  EXPECT_TRUE(web_client->EnableWebInspector(/*browser_state=*/nullptr));
 }
 
 }  // namespace ios_web_view

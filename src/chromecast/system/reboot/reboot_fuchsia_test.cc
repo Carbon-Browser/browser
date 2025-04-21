@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,13 +13,15 @@
 #include <lib/fpromise/result.h>
 #include <lib/sys/cpp/outgoing_directory.h>
 #include <lib/sys/cpp/service_directory.h>
+
 #include <memory>
+#include <string_view>
 #include <tuple>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/fuchsia/scoped_service_binding.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/message_loop/message_pump_type.h"
@@ -231,9 +233,8 @@ class RebootFuchsiaTest : public ::testing::Test {
       fidl::InterfaceRequest<fuchsia::io::Directory> channel) {
     outgoing_directory_ = std::make_unique<sys::OutgoingDirectory>();
     outgoing_directory_->GetOrCreateDirectory("svc")->Serve(
-        fuchsia::io::OpenFlags::RIGHT_READABLE |
-            fuchsia::io::OpenFlags::RIGHT_WRITABLE,
-        channel.TakeChannel());
+        fuchsia_io::wire::kPermReadable,
+        fidl::ServerEnd<fuchsia_io::Directory>(channel.TakeChannel()));
   }
 
   const base::test::SingleThreadTaskEnvironment task_environment_;
@@ -246,7 +247,7 @@ class RebootFuchsiaTest : public ::testing::Test {
   base::FilePath full_path_;
 
  protected:
-  base::FilePath GenerateFlagFilePath(const base::StringPiece& name) {
+  base::FilePath GenerateFlagFilePath(std::string_view name) {
     return full_path_.Append(name);
   }
 

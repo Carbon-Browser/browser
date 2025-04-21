@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@ class Status;
 
 class Adb {
  public:
-  virtual ~Adb() {}
+  virtual ~Adb() = default;
 
   virtual Status GetDevices(std::vector<std::string>* devices) = 0;
   virtual Status ForwardPort(const std::string& device_serial,

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
@@ -78,7 +78,7 @@ void SetFlagAndRunClosure(bool* flag, base::OnceClosure closure) {
 // and connects to background_service_manager_test_service, verifying we can
 // send a message to the service.
 #if BUILDFLAG(IS_ANDROID)
-// TODO(crbug.com/589784): This test is disabled, as it fails
+// TODO(crbug.com/40458478): This test is disabled, as it fails
 // on the Android GN bot.
 #define MAYBE_Basic DISABLED_Basic
 #else

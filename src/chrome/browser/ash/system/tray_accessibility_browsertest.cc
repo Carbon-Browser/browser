@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,19 +6,19 @@
 #include "ash/constants/ash_switches.h"
 #include "ash/public/cpp/ash_view_ids.h"
 #include "ash/public/cpp/system_tray_test_api.h"
-#include "base/callback.h"
+#include "ash/system/accessibility/accessibility_detailed_view.h"
+#include "ash/system/tray/tray_detailed_view.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
-#include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "chrome/browser/ash/accessibility/accessibility_manager.h"
 #include "chrome/browser/ash/accessibility/magnification_manager.h"
 #include "chrome/browser/ash/login/helper.h"
 #include "chrome/browser/ash/login/startup_utils.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/ui/ash/session_controller_client_impl.h"
+#include "chrome/browser/ui/ash/session/session_controller_client_impl.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/testing_profile.h"
@@ -33,15 +33,14 @@
 #include "components/user_manager/user_manager.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_utils.h"
-#include "media/base/media_switches.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
 #include "ui/views/controls/button/button.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/widget/widget.h"
 
-using testing::Return;
 using testing::_;
+using testing::Return;
 using testing::WithParamInterface;
 
 namespace ash {
@@ -79,8 +78,9 @@ void EnableSelectToSpeak(bool enabled) {
 
 void EnableDictation(bool enabled) {
   bool already_enabled = AccessibilityManager::Get()->IsDictationEnabled();
-  if (enabled == already_enabled)
+  if (enabled == already_enabled) {
     return;
+  }
   AccessibilityManager::Get()->ToggleDictation();
   base::RunLoop().RunUntilIdle();
 }
@@ -144,16 +144,12 @@ void EnableStickyKeys(bool enabled) {
 
 // Uses InProcessBrowserTest instead of OobeBaseTest because most of the tests
 // don't need to test the login screen.
-class TrayAccessibilityTest
-    : public InProcessBrowserTest,
-      public WithParamInterface<PrefSettingMechanism> {
+class TrayAccessibilityTest : public InProcessBrowserTest,
+                              public WithParamInterface<PrefSettingMechanism> {
  public:
   TrayAccessibilityTest()
       : disable_animations_(
-            ui::ScopedAnimationDurationScaleMode::ZERO_DURATION) {
-    scoped_feature_list_.InitWithFeatures(
-        {media::kLiveCaption, media::kLiveCaptionSystemWideOnChromeOS}, {});
-  }
+            ui::ScopedAnimationDurationScaleMode::ZERO_DURATION) {}
   ~TrayAccessibilityTest() override = default;
 
   // The profile which should be used by these tests.
@@ -193,7 +189,7 @@ class TrayAccessibilityTest
 
   bool IsMenuButtonVisible() {
     bool visible = tray_test_api_->IsBubbleViewVisible(
-        ash::VIEW_ID_ACCESSIBILITY_TRAY_ITEM, true /* open_tray */);
+        ash::VIEW_ID_FEATURE_TILE_ACCESSIBILITY, true /* open_tray */);
     tray_test_api_->CloseBubble();
     return visible;
   }
@@ -203,14 +199,18 @@ class TrayAccessibilityTest
   bool IsBubbleOpen() { return tray_test_api_->IsTrayBubbleOpen(); }
 
   void ClickVirtualKeyboardOnDetailMenu() {
+    // Scroll the detailed view to show the virtual keyboard option.
+    tray_test_api_->ScrollToShowView(
+        tray_test_api_->GetAccessibilityDetailedView()
+            ->scroll_view_for_testing(),
+        ash::VIEW_ID_ACCESSIBILITY_VIRTUAL_KEYBOARD);
     tray_test_api_->ClickBubbleView(
         ash::VIEW_ID_ACCESSIBILITY_VIRTUAL_KEYBOARD);
   }
 
   bool IsVirtualKeyboardEnabledOnDetailMenu() const {
-    return tray_test_api_->IsBubbleViewVisible(
-        ash::VIEW_ID_ACCESSIBILITY_VIRTUAL_KEYBOARD_ENABLED,
-        false /* open_tray */);
+    return tray_test_api_->IsToggleOn(
+        ash::VIEW_ID_ACCESSIBILITY_VIRTUAL_KEYBOARD_ENABLED);
   }
 
   // Disable animations so that tray icons hide immediately.
@@ -218,7 +218,6 @@ class TrayAccessibilityTest
 
   testing::NiceMock<policy::MockConfigurationPolicyProvider> provider_;
   std::unique_ptr<ash::SystemTrayTestApi> tray_test_api_;
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 IN_PROC_BROWSER_TEST_P(TrayAccessibilityTest, DISABLED_ShowMenu) {

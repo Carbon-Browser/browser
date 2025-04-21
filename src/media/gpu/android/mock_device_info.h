@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,6 @@ class MockDeviceInfo : public DeviceInfo {
   MOCK_METHOD0(IsSetOutputSurfaceSupported, bool());
   MOCK_METHOD0(SupportsOverlaySurfaces, bool());
   MOCK_METHOD1(CodecNeedsFlushWorkaround, bool(MediaCodecBridge* codec));
-  MOCK_METHOD0(IsAsyncApiSupported, bool());
   MOCK_METHOD1(AddSupportedCodecProfileLevels,
                void(std::vector<CodecProfileLevel>*));
 };

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <string>
 
+#include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
@@ -19,6 +20,7 @@
 #include "components/media_router/browser/presentation/start_presentation_context.h"
 #include "components/media_router/browser/presentation/web_contents_presentation_manager.h"
 #include "components/media_router/common/issue.h"
+#include "content/public/browser/presentation_observer.h"
 #include "url/origin.h"
 
 namespace content {
@@ -30,15 +32,13 @@ class WebContents;
 namespace media_router {
 class MediaRouter;
 class QueryResultManager;
+struct MediaRouterUIParameters;
 
 // Provides cast services (lists of sinks, routes, start & terminate route) to
 // UI controllers
-class MediaRouteStarter : public WebContentsPresentationManager::Observer {
+class MediaRouteStarter : public content::PresentationObserver {
  public:
-  MediaRouteStarter(
-      const CastModeSet& initial_modes,
-      content::WebContents* web_contents,
-      std::unique_ptr<StartPresentationContext> start_presentation_context);
+  explicit MediaRouteStarter(MediaRouterUIParameters params);
   MediaRouteStarter(const MediaRouteStarter&) = delete;
   MediaRouteStarter& operator=(const MediaRouteStarter&) = delete;
 
@@ -96,6 +96,10 @@ class MediaRouteStarter : public WebContentsPresentationManager::Observer {
   // provide.
   static bool GetScreenCapturePermission(MediaCastMode cast_mode);
 
+  QueryResultManager* GetQueryResultManagerForTesting() const {
+    return query_result_manager_.get();
+  }
+
  private:
   friend class MediaRouteStarterTest;
   friend class MediaRouterViewsUITest;
@@ -105,11 +109,13 @@ class MediaRouteStarter : public WebContentsPresentationManager::Observer {
                            OnPresentationRequestSourceUpdated);
   FRIEND_TEST_ALL_PREFIXES(MediaRouteStarterTest, GetScreenCapturePermission);
   FRIEND_TEST_ALL_PREFIXES(MediaRouterViewsUITest, SetDialogHeader);
-  FRIEND_TEST_ALL_PREFIXES(MediaRouterViewsUITest,
-                           RouteCreationTimeoutForPresentation);
+  FRIEND_TEST_ALL_PREFIXES(MediaRouterViewsUITest, RouteCreationTimeout);
 
   void InitPresentationSources(const CastModeSet& initial_modes);
   void InitMirroringSources(const CastModeSet& initial_modes);
+  void InitRemotePlaybackSources(const CastModeSet& initial_modes,
+                                 media::VideoCodec video_codec,
+                                 media::AudioCodec audio_codec);
 
   content::BrowserContext* GetBrowserContext() const;
 
@@ -126,7 +132,7 @@ class MediaRouteStarter : public WebContentsPresentationManager::Observer {
   // as supported for the service when initialized.
   static bool IsCastModeAvailable(const CastModeSet& modes, MediaCastMode mode);
 
-  // WebContentsPresentationManager::Observer
+  // content::PresentationObserver:
   void OnDefaultPresentationChanged(
       const content::PresentationRequest* presentation_request) override;
 
@@ -140,7 +146,8 @@ class MediaRouteStarter : public WebContentsPresentationManager::Observer {
 
   // If set, this is the tab for which this casting request was initiated. May
   // be null in the case of desktop tab casting.
-  const raw_ptr<content::WebContents> web_contents_;
+  const raw_ptr<content::WebContents, AcrossTasksDanglingUntriaged>
+      web_contents_;
 
   // If set, then the result of the next presentation route request will
   // be handled by this object instead of |presentation_manager_|
@@ -155,7 +162,7 @@ class MediaRouteStarter : public WebContentsPresentationManager::Observer {
 
   // Set to the presentation request corresponding to the presentation cast
   // mode, if supported. Otherwise set to nullopt.
-  absl::optional<content::PresentationRequest> presentation_request_;
+  std::optional<content::PresentationRequest> presentation_request_;
 
   // Registered observers.
   base::ObserverList<PresentationRequestSourceObserver>::Unchecked observers_;

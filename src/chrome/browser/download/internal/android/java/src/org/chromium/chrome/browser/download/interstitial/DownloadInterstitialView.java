@@ -1,10 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.download.interstitial;
 
 import static org.chromium.chrome.browser.download.interstitial.DownloadInterstitialProperties.STATE;
+import static org.chromium.chrome.browser.download.interstitial.DownloadInterstitialProperties.State.CANCELLED;
 
 import android.content.Context;
 import android.view.LayoutInflater;
@@ -15,10 +16,12 @@ import android.widget.FrameLayout;
 import android.widget.TextView;
 
 import org.chromium.chrome.browser.download.home.list.ListItem;
+import org.chromium.chrome.browser.download.home.list.ListProperties;
 import org.chromium.chrome.browser.download.home.list.holder.GenericViewHolder;
 import org.chromium.chrome.browser.download.home.list.holder.InProgressGenericViewHolder;
 import org.chromium.chrome.browser.download.internal.R;
 import org.chromium.components.browser_ui.widget.DualControlLayout;
+import org.chromium.components.browser_ui.widget.DualControlLayout.ButtonType;
 import org.chromium.components.offline_items_collection.OfflineItem;
 import org.chromium.components.offline_items_collection.OfflineItemState;
 import org.chromium.ui.modelutil.PropertyModel;
@@ -27,6 +30,7 @@ import org.chromium.ui.modelutil.PropertyModel;
 class DownloadInterstitialView {
     private final View mView;
     private final TextView mTitle;
+    private final TextView mLoadingMessage;
     private final GenericViewHolder mGenericViewHolder;
     private final InProgressGenericViewHolder mInProgressGenericViewHolder;
     private final Button mPrimaryButton;
@@ -44,6 +48,7 @@ class DownloadInterstitialView {
     private DownloadInterstitialView(View view, Context context) {
         mView = view;
         mTitle = mView.findViewById(R.id.heading);
+        mLoadingMessage = mView.findViewById(R.id.loading_message);
         FrameLayout fileInfo = mView.findViewById(R.id.file_info);
         mGenericViewHolder = GenericViewHolder.create(fileInfo);
         mInProgressGenericViewHolder = InProgressGenericViewHolder.create(fileInfo);
@@ -52,15 +57,23 @@ class DownloadInterstitialView {
         fileInfo.addView(mGenericViewHolder.itemView);
         fileInfo.addView(mInProgressGenericViewHolder.itemView);
 
-        mPrimaryButton = DualControlLayout.createButtonForLayout(context, true, "", null);
-        mPrimaryButton.setLayoutParams(new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        mPrimaryButton =
+                DualControlLayout.createButtonForLayout(
+                        context, ButtonType.PRIMARY_FILLED, "", null);
+        mPrimaryButton.setLayoutParams(
+                new ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         mPrimaryButton.setVisibility(View.INVISIBLE);
 
-        mSecondaryButton = DualControlLayout.createButtonForLayout(
-                context, false, mView.getResources().getString(R.string.cancel), null);
-        mSecondaryButton.setLayoutParams(new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        mSecondaryButton =
+                DualControlLayout.createButtonForLayout(
+                        context,
+                        ButtonType.SECONDARY_TEXT,
+                        mView.getResources().getString(R.string.cancel),
+                        null);
+        mSecondaryButton.setLayoutParams(
+                new ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         mSecondaryButton.setVisibility(View.INVISIBLE);
 
         DualControlLayout buttonBar = mView.findViewById(R.id.button_bar);
@@ -79,13 +92,12 @@ class DownloadInterstitialView {
      * @param model The property model of the DownloadInterstitial.
      */
     void updateFileInfo(OfflineItem item, PropertyModel model) {
-        // TODO(alexmitra): Investigate removing code which sets the item's state directly.
-        if (model.get(STATE) == DownloadInterstitialProperties.State.PENDING_REMOVAL) {
-            item.state = OfflineItemState.CANCELLED;
-        } else if (model.get(STATE) == DownloadInterstitialProperties.State.SUCCESSFUL) {
-            item.state = OfflineItemState.COMPLETE;
-        }
+        if (item == null) return;
 
+        if (item.state == OfflineItemState.COMPLETE && model.get(STATE) == CANCELLED) {
+            model.get(ListProperties.CALLBACK_REMOVE).onResult(item);
+            return;
+        }
         if (item.state == OfflineItemState.COMPLETE) {
             mInProgressGenericViewHolder.itemView.setVisibility(View.GONE);
             mGenericViewHolder.itemView.setVisibility(View.VISIBLE);
@@ -153,8 +165,22 @@ class DownloadInterstitialView {
         mSecondaryButton.setOnClickListener(v -> callback.run());
     }
 
-    /** Removes the message shown before a download initially begins. */
-    void removePendingMessage() {
-        mView.findViewById(R.id.loading_message).setVisibility(View.GONE);
+    void setPendingMessageIsVisible(boolean isVisible) {
+        if (isVisible) {
+            mLoadingMessage.setVisibility(View.VISIBLE);
+            mInProgressGenericViewHolder.itemView.setVisibility(View.INVISIBLE);
+            mGenericViewHolder.itemView.setVisibility(View.INVISIBLE);
+            mPrimaryButton.setVisibility(View.GONE);
+            mSecondaryButton.setVisibility(View.GONE);
+        } else {
+            mLoadingMessage.setVisibility(View.GONE);
+        }
+    }
+
+    void switchToCancelledViewHolder(OfflineItem item, PropertyModel model) {
+        mGenericViewHolder.itemView.setVisibility(View.GONE);
+        item.state = OfflineItemState.CANCELLED;
+        mInProgressGenericViewHolder.bind(model, new ListItem.OfflineItemListItem(item));
+        mInProgressGenericViewHolder.itemView.setVisibility(View.VISIBLE);
     }
 }

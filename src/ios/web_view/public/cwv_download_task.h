@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -63,7 +63,7 @@ CWV_EXPORT
 //
 // NOTE: It is currently required that an instance of CWVWebView which created
 // this task is not deallocated before this method is called.
-// TODO(crbug.com/932099): Remove the restriction.
+// TODO(crbug.com/40613954): Remove the restriction.
 - (void)startDownloadToLocalFileAtPath:(NSString*)path;
 
 // Cancels the download.

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -9,22 +9,25 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/message_loop/message_pump_type.h"
+#include "base/notreached.h"
 #include "base/task/current_thread.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "ipc/ipc_channel_proxy.h"
 #include "remoting/base/auto_thread.h"
 #include "remoting/base/auto_thread_task_runner.h"
-#include "remoting/host/chromoting_messages.h"
 #include "remoting/host/crash_process.h"
 #include "remoting/host/desktop_environment.h"
 #include "remoting/host/desktop_session_agent.h"
 
 #if BUILDFLAG(IS_WIN)
+#include <windows.h>
+
 #include "base/win/windows_version.h"
 #endif  // BUILDFLAG(IS_WIN)
 
@@ -83,7 +86,7 @@ void DesktopProcess::LockWorkstation() {
   }
 
   if (!::LockWorkStation()) {
-    LOG(ERROR) << "LockWorkStation() failed: " << ::GetLastError();
+    PLOG(ERROR) << "LockWorkStation() failed";
   }
 #else
   NOTREACHED();
@@ -92,15 +95,7 @@ void DesktopProcess::LockWorkstation() {
 
 bool DesktopProcess::OnMessageReceived(const IPC::Message& message) {
   DCHECK(caller_task_runner_->BelongsToCurrentThread());
-
-  bool handled = true;
-  IPC_BEGIN_MESSAGE_MAP(DesktopProcess, message)
-    IPC_MESSAGE_HANDLER(ChromotingDaemonMsg_Crash, OnCrash)
-    IPC_MESSAGE_UNHANDLED(handled = false)
-  IPC_END_MESSAGE_MAP()
-
-  CHECK(handled) << "Received unexpected IPC type: " << message.type();
-  return handled;
+  NOTREACHED() << "Received unexpected IPC type: " << message.type();
 }
 
 void DesktopProcess::OnChannelConnected(int32_t peer_pid) {
@@ -112,16 +107,38 @@ void DesktopProcess::OnChannelConnected(int32_t peer_pid) {
 void DesktopProcess::OnChannelError() {
   // Shutdown the desktop process.
   daemon_channel_.reset();
-  if (desktop_agent_.get()) {
+  if (desktop_agent_) {
     desktop_agent_->Stop();
     desktop_agent_ = nullptr;
   }
   desktop_session_request_handler_.reset();
+  worker_process_control_.reset();
 
   caller_task_runner_ = nullptr;
   input_task_runner_ = nullptr;
   io_task_runner_ = nullptr;
   desktop_environment_factory_.reset();
+}
+
+void DesktopProcess::OnAssociatedInterfaceRequest(
+    const std::string& interface_name,
+    mojo::ScopedInterfaceEndpointHandle handle) {
+  DCHECK(caller_task_runner_->BelongsToCurrentThread());
+  if (interface_name == mojom::WorkerProcessControl::Name_) {
+    if (worker_process_control_.is_bound()) {
+      LOG(ERROR) << "Receiver already bound for associated interface: "
+                 << mojom::WorkerProcessControl::Name_;
+      CrashProcess(__func__, __FILE__, __LINE__);
+    }
+
+    mojo::PendingAssociatedReceiver<mojom::WorkerProcessControl>
+        pending_receiver(std::move(handle));
+    worker_process_control_.Bind(std::move(pending_receiver));
+  } else {
+    LOG(ERROR) << "Received unexpected associated interface request: "
+               << interface_name;
+    CrashProcess(__func__, __FILE__, __LINE__);
+  }
 }
 
 bool DesktopProcess::Start(
@@ -157,7 +174,7 @@ bool DesktopProcess::Start(
   // Connect to the daemon.
   daemon_channel_ = IPC::ChannelProxy::Create(
       daemon_channel_handle_.release(), IPC::Channel::MODE_CLIENT, this,
-      io_task_runner_, base::ThreadTaskRunnerHandle::Get());
+      io_task_runner_, base::SingleThreadTaskRunner::GetCurrentDefault());
 
   daemon_channel_->GetRemoteAssociatedInterface(
       &desktop_session_request_handler_);
@@ -169,11 +186,11 @@ bool DesktopProcess::Start(
   return true;
 }
 
-void DesktopProcess::OnCrash(const std::string& function_name,
-                             const std::string& file_name,
-                             const int& line_number) {
+void DesktopProcess::CrashProcess(const std::string& function_name,
+                                  const std::string& file_name,
+                                  int line_number) {
   // The daemon requested us to crash the process.
-  CrashProcess(function_name, file_name, line_number);
+  ::remoting::CrashProcess(function_name, file_name, line_number);
 }
 
-} // namespace remoting
+}  // namespace remoting

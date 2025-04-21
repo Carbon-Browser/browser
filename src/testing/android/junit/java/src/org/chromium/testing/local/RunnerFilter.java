@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,16 +8,12 @@ import org.junit.runner.Description;
 import org.junit.runner.RunWith;
 import org.junit.runner.manipulation.Filter;
 
-/**
- *  Filters tests based on the Runner class annotating the test class.
- */
+/** Filters tests based on the Runner class annotating the test class. */
 class RunnerFilter extends Filter {
 
     private final Class<?> mRunnerClass;
 
-    /**
-     *  Creates the filter.
-     */
+    /** Creates the filter. */
     public RunnerFilter(Class<?> runnerClass) {
         mRunnerClass = runnerClass;
     }
@@ -29,17 +25,14 @@ class RunnerFilter extends Filter {
     @Override
     public boolean shouldRun(Description description) {
         Class<?> c = description.getTestClass();
-        return c != null && c.isAnnotationPresent(RunWith.class)
+        return c != null
+                && c.isAnnotationPresent(RunWith.class)
                 && c.getAnnotation(RunWith.class).value() == mRunnerClass;
     }
 
-    /**
-     *  Returns a description of this filter.
-     */
+    /** Returns a description of this filter. */
     @Override
     public String describe() {
         return "runner-filter: " + mRunnerClass.getName();
     }
-
 }
-

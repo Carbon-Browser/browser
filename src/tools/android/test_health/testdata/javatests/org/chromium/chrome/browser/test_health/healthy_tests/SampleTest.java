@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import org.chromium.base.test.BaseJUnit4ClassRunner;
+import org.chromium.chrome.test.transit.MyStation;
 
 /** A sample Java test. */
 @SmallTest
@@ -18,6 +19,7 @@ import org.chromium.base.test.BaseJUnit4ClassRunner;
 public class SampleTest {
     @Test
     public void testTrueIsTrue() {
+        MyStation myStation = new MyStation();
         Assert.assertTrue(true);
     }
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,8 @@ GtkKeyBindingsHandler::GtkKeyBindingsHandler()
     : fake_window_(gtk_offscreen_window_new()), handler_(CreateNewHandler()) {
   DCHECK(!GtkCheckVersion(4));
   gtk_container_add(
-      GlibCast<GtkContainer>(fake_window_, gtk_container_get_type()), handler_);
+      GlibCast<GtkContainer>(fake_window_.get(), gtk_container_get_type()),
+      handler_);
 }
 
 GtkKeyBindingsHandler::~GtkKeyBindingsHandler() {
@@ -50,7 +51,7 @@ bool GtkKeyBindingsHandler::MatchEvent(
 
   auto* key = reinterpret_cast<GdkEventKey*>(gdk_event);
   DCHECK(key->type == GdkKeyPress() || key->type == GdkKeyRelease());
-  gtk_bindings_activate_event(G_OBJECT(handler_), key);
+  gtk_bindings_activate_event(G_OBJECT(handler_.get()), key);
   gdk_event_free(gdk_event);
 
   bool matched = !edit_commands_.empty();
@@ -120,17 +121,17 @@ void GtkKeyBindingsHandler::HandlerClassInit(HandlerClass* klass) {
 }
 
 GType GtkKeyBindingsHandler::HandlerGetType() {
-  static volatile gsize type_id_volatile = 0;
-  if (g_once_init_enter(&type_id_volatile)) {
-    GType type_id = g_type_register_static_simple(
+  static gsize type_id = 0;
+  if (g_once_init_enter(&type_id)) {
+    GType type = g_type_register_static_simple(
         GTK_TYPE_TEXT_VIEW, g_intern_static_string("GtkKeyBindingsHandler"),
         sizeof(HandlerClass),
         reinterpret_cast<GClassInitFunc>(HandlerClassInit), sizeof(Handler),
         reinterpret_cast<GInstanceInitFunc>(HandlerInit),
         static_cast<GTypeFlags>(0));
-    g_once_init_leave(&type_id_volatile, type_id);
+    g_once_init_leave(&type_id, type);
   }
-  return type_id_volatile;
+  return type_id;
 }
 
 GtkKeyBindingsHandler* GtkKeyBindingsHandler::GetHandlerOwner(

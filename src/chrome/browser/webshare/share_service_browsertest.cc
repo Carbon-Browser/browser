@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,10 +13,13 @@
 #include "chrome/common/chrome_features.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
+#include "components/safe_browsing/content/common/file_type_policies_test_util.h"
 #include "components/safe_browsing/core/browser/db/fake_database_manager.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
+#include "content/public/browser/render_frame_host.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
+#include "content/public/test/prerender_test_util.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 
 #if BUILDFLAG(IS_CHROMEOS)
@@ -36,14 +39,6 @@ class ShareServiceBrowserTest : public InProcessBrowserTest {
  public:
   ShareServiceBrowserTest() {
     feature_list_.InitAndEnableFeature(features::kWebShare);
-  }
-
-  void SetUp() override {
-#if BUILDFLAG(IS_WIN)
-    if (!webshare::ScopedShareOperationFakeComponents::IsSupportedEnvironment())
-      GTEST_SKIP();
-#endif
-    InProcessBrowserTest::SetUp();
   }
 
   void SetUpOnMainThread() override {
@@ -113,6 +108,27 @@ IN_PROC_BROWSER_TEST_F(ShareServiceBrowserTest, Text) {
                                      WebShareMethod::kShare, kRepeats);
 }
 
+#if BUILDFLAG(IS_WIN)
+IN_PROC_BROWSER_TEST_F(ShareServiceBrowserTest, Fullscreen) {
+  base::HistogramTester histogram_tester;
+  ASSERT_TRUE(embedded_test_server()->Start());
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(
+      browser(), embedded_test_server()->GetURL("/webshare/index.html")));
+  content::WebContents* const web_contents =
+      browser()->tab_strip_model()->GetActiveWebContents();
+
+  ui_test_utils::FullscreenWaiter waiter(browser(), {.tab_fullscreen = true});
+  EXPECT_TRUE(
+      content::ExecJs(web_contents, "document.body.requestFullscreen();"));
+  waiter.Wait();
+  ASSERT_TRUE(web_contents->IsFullscreen());
+
+  EXPECT_EQ("share succeeded",
+            content::EvalJs(web_contents, "share_text('hello')"));
+  EXPECT_FALSE(web_contents->IsFullscreen());
+}
+#endif  // BUILDFLAG(IS_WIN)
+
 class SafeBrowsingShareServiceBrowserTest : public ShareServiceBrowserTest {
  public:
   SafeBrowsingShareServiceBrowserTest()
@@ -125,8 +141,7 @@ class SafeBrowsingShareServiceBrowserTest : public ShareServiceBrowserTest {
       content::BrowserMainParts* browser_main_parts) override {
     fake_safe_browsing_database_manager_ =
         base::MakeRefCounted<safe_browsing::FakeSafeBrowsingDatabaseManager>(
-            content::GetUIThreadTaskRunner({}),
-            content::GetIOThreadTaskRunner({}));
+            content::GetUIThreadTaskRunner({}));
     safe_browsing_factory_->SetTestDatabaseManager(
         fake_safe_browsing_database_manager_.get());
     safe_browsing::SafeBrowsingService::RegisterFactory(
@@ -136,7 +151,8 @@ class SafeBrowsingShareServiceBrowserTest : public ShareServiceBrowserTest {
 
   void AddDangerousUrl(const GURL& dangerous_url) {
     fake_safe_browsing_database_manager_->AddDangerousUrl(
-        dangerous_url, safe_browsing::SB_THREAT_TYPE_URL_BINARY_MALWARE);
+        dangerous_url,
+        safe_browsing::SBThreatType::SB_THREAT_TYPE_URL_BINARY_MALWARE);
   }
 
   void TearDown() override {
@@ -153,6 +169,19 @@ class SafeBrowsingShareServiceBrowserTest : public ShareServiceBrowserTest {
 
 IN_PROC_BROWSER_TEST_F(SafeBrowsingShareServiceBrowserTest,
                        PortableDocumentFile) {
+  safe_browsing::FileTypePoliciesTestOverlay policies;
+  std::unique_ptr<safe_browsing::DownloadFileTypeConfig> file_type_config =
+      std::make_unique<safe_browsing::DownloadFileTypeConfig>();
+  auto* file_type = file_type_config->mutable_default_file_type();
+  file_type->set_uma_value(-1);
+  file_type->set_ping_setting(safe_browsing::DownloadFileType::FULL_PING);
+  auto* platform_settings = file_type->add_platform_settings();
+  platform_settings->set_danger_level(
+      safe_browsing::DownloadFileType::NOT_DANGEROUS);
+  platform_settings->set_auto_open_hint(
+      safe_browsing::DownloadFileType::ALLOW_AUTO_OPEN);
+  policies.SwapConfig(file_type_config);
+
   ASSERT_TRUE(embedded_test_server()->Start());
   GURL url(embedded_test_server()->GetURL("/webshare/index.html"));
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
@@ -164,4 +193,63 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingShareServiceBrowserTest,
   AddDangerousUrl(url);
   EXPECT_EQ("share failed: NotAllowedError: Permission denied",
             content::EvalJs(contents, "share_pdf_file()"));
+}
+
+class ShareServicePrerenderBrowserTest : public ShareServiceBrowserTest {
+ public:
+  ShareServicePrerenderBrowserTest()
+      : prerender_helper_(
+            base::BindRepeating(&ShareServicePrerenderBrowserTest::web_contents,
+                                base::Unretained(this))) {}
+  ~ShareServicePrerenderBrowserTest() override = default;
+
+ protected:
+  content::WebContents* web_contents() {
+    return browser()->tab_strip_model()->GetActiveWebContents();
+  }
+
+  content::test::PrerenderTestHelper prerender_helper_;
+};
+
+IN_PROC_BROWSER_TEST_F(ShareServicePrerenderBrowserTest, Text) {
+  base::HistogramTester histogram_tester;
+  ASSERT_TRUE(embedded_test_server()->Start());
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(
+      browser(), embedded_test_server()->GetURL("/empty.html")));
+
+  content::WebContents* const contents =
+      browser()->tab_strip_model()->GetActiveWebContents();
+
+  // Start a prerender.
+  const GURL kPrerenderUrl =
+      embedded_test_server()->GetURL("/webshare/index.html");
+  const content::FrameTreeNodeId kPrerenderHostId =
+      prerender_helper_.AddPrerender((kPrerenderUrl));
+  ASSERT_EQ(prerender_helper_.GetHostForUrl(kPrerenderUrl), kPrerenderHostId);
+
+  content::RenderFrameHost* prerender_rfh =
+      prerender_helper_.GetPrerenderedMainFrameHost(kPrerenderHostId);
+  EXPECT_EQ(prerender_rfh->GetLifecycleState(),
+            content::RenderFrameHost::LifecycleState::kPrerendering);
+  const std::string script = "share_text('hello')";
+  const content::EvalJsResult prerendered_result =
+      content::EvalJs(prerender_rfh, script);
+  EXPECT_EQ(
+      "share failed: NotAllowedError: Failed to execute 'share' on "
+      "'Navigator': Must be handling a user gesture to perform a share "
+      "request.",
+      prerendered_result);
+  histogram_tester.ExpectBucketCount(kWebShareApiCountMetric,
+                                     WebShareMethod::kShare, 0);
+
+  // Activate the prerendered page.
+  prerender_helper_.NavigatePrimaryPage(kPrerenderUrl);
+  EXPECT_EQ(prerender_rfh->GetLifecycleState(),
+            content::RenderFrameHost::LifecycleState::kActive);
+  ASSERT_EQ(kPrerenderUrl, contents->GetLastCommittedURL());
+  const content::EvalJsResult activated_result =
+      content::EvalJs(prerender_rfh, script);
+  EXPECT_EQ("share succeeded", activated_result);
+  histogram_tester.ExpectBucketCount(kWebShareApiCountMetric,
+                                     WebShareMethod::kShare, 1);
 }

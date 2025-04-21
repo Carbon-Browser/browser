@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,12 +18,9 @@ class MockCertVerifierRuleAndroid {
       delete;
 
   // Sets the certificate verification result to force.
-  void SetResult(JNIEnv* env,
-                 const base::android::JavaParamRef<jobject>& obj,
-                 int result);
-
-  void SetUp(JNIEnv* env, const base::android::JavaParamRef<jobject>& obj);
-  void TearDown(JNIEnv* env, const base::android::JavaParamRef<jobject>& obj);
+  void SetResult(JNIEnv* env, int result);
+  void SetUp(JNIEnv* env);
+  void TearDown(JNIEnv* env);
 
  private:
   content::ContentMockCertVerifier mock_cert_verifier_;

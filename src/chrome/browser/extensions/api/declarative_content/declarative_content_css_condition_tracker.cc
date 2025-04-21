@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,21 +6,18 @@
 
 #include <stddef.h>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/not_fatal_until.h"
 #include "base/strings/stringprintf.h"
 #include "base/values.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/extensions/api/declarative_content/content_predicate_evaluator.h"
 #include "chrome/browser/profiles/profile.h"
 #include "content/public/browser/navigation_handle.h"
-#include "content/public/browser/notification_service.h"
-#include "content/public/browser/notification_source.h"
 #include "content/public/browser/render_process_host.h"
 #include "extensions/browser/renderer_startup_helper.h"
 #include "extensions/common/api/declarative/declarative_constants.h"
-#include "extensions/common/extension_messages.h"
 #include "extensions/common/mojom/renderer.mojom.h"
 
 namespace extensions {
@@ -44,7 +41,7 @@ DeclarativeContentCssPredicate::Create(ContentPredicateEvaluator* evaluator,
                                        std::string* error) {
   std::vector<std::string> css_rules;
   if (value.is_list()) {
-    for (const base::Value& css_rule_value : value.GetListDeprecated()) {
+    for (const base::Value& css_rule_value : value.GetList()) {
       if (!css_rule_value.is_string()) {
         *error = base::StringPrintf(kCssInvalidTypeOfParameter,
                                     declarative_content_constants::kCss);
@@ -127,11 +124,7 @@ WebContentsDestroyed() {
 
 DeclarativeContentCssConditionTracker::DeclarativeContentCssConditionTracker(
     Delegate* delegate)
-    : delegate_(delegate) {
-  registrar_.Add(this,
-                 content::NOTIFICATION_RENDERER_PROCESS_CREATED,
-                 content::NotificationService::AllBrowserContextsAndSources());
-}
+    : delegate_(delegate) {}
 
 DeclarativeContentCssConditionTracker::
     ~DeclarativeContentCssConditionTracker() = default;
@@ -181,7 +174,8 @@ void DeclarativeContentCssConditionTracker::StopTrackingPredicates(
     for (const DeclarativeContentCssPredicate* predicate : it->second) {
       for (const std::string& selector : predicate->css_selectors()) {
         auto loc = watched_css_selector_predicate_count_.find(selector);
-        DCHECK(loc != watched_css_selector_predicate_count_.end());
+        CHECK(loc != watched_css_selector_predicate_count_.end(),
+              base::NotFatalUntil::M130);
         if (--loc->second == 0) {
           watched_css_selector_predicate_count_.erase(loc);
           watched_selectors_updated = true;
@@ -230,7 +224,7 @@ bool DeclarativeContentCssConditionTracker::EvaluatePredicate(
   const DeclarativeContentCssPredicate* typed_predicate =
       static_cast<const DeclarativeContentCssPredicate*>(predicate);
   auto loc = per_web_contents_tracker_.find(tab);
-  DCHECK(loc != per_web_contents_tracker_.end());
+  CHECK(loc != per_web_contents_tracker_.end(), base::NotFatalUntil::M130);
   const std::unordered_set<std::string>& matching_css_selectors =
       loc->second->matching_css_selectors();
   for (const std::string& predicate_css_selector :
@@ -242,16 +236,9 @@ bool DeclarativeContentCssConditionTracker::EvaluatePredicate(
   return true;
 }
 
-void DeclarativeContentCssConditionTracker::Observe(
-    int type,
-    const content::NotificationSource& source,
-    const content::NotificationDetails& details) {
-  DCHECK_EQ(content::NOTIFICATION_RENDERER_PROCESS_CREATED, type);
-
-  content::RenderProcessHost* process =
-      content::Source<content::RenderProcessHost>(source).ptr();
-  InstructRenderProcessIfManagingBrowserContext(process,
-                                                GetWatchedCssSelectors());
+void DeclarativeContentCssConditionTracker::OnRenderProcessHostCreated(
+    content::RenderProcessHost* host) {
+  InstructRenderProcessIfManagingBrowserContext(host, GetWatchedCssSelectors());
 }
 
 void DeclarativeContentCssConditionTracker::

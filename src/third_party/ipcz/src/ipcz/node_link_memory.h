@@ -1,10 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IPCZ_SRC_IPCZ_NODE_LINK_MEMORY_H_
 #define IPCZ_SRC_IPCZ_NODE_LINK_MEMORY_H_
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -14,9 +15,11 @@
 #include "ipcz/buffer_pool.h"
 #include "ipcz/driver_memory.h"
 #include "ipcz/driver_memory_mapping.h"
+#include "ipcz/features.h"
 #include "ipcz/fragment_descriptor.h"
 #include "ipcz/fragment_ref.h"
 #include "ipcz/ipcz.h"
+#include "ipcz/link_side.h"
 #include "ipcz/ref_counted_fragment.h"
 #include "ipcz/router_link_state.h"
 #include "ipcz/sublink_id.h"
@@ -34,49 +37,42 @@ class NodeLink;
 // single NodeLink. Each end of a NodeLink has its own NodeLinkMemory instance
 // cooperatively managing the same dynamic pool of memory, shared exclusively
 // between the two endpoint nodes.
-class NodeLinkMemory : public RefCounted {
+class NodeLinkMemory : public RefCounted<NodeLinkMemory> {
  public:
+  static constexpr BufferId kPrimaryBufferId{0};
+
   // The maximum number of initial portals supported on ConnectNode() API calls.
   // The first kMaxInitialPortals SublinkIds on a NodeLinkMemory will always be
   // reserved for use by initial portals.
   static constexpr size_t kMaxInitialPortals = 12;
 
-  NodeLinkMemory(NodeLinkMemory&&);
+  // The side of the node link to which this NodeLinkMemory belongs.
+  LinkSide link_side() const { return link_side_; }
 
-  // Returned by Allocate().
-  struct Allocation {
-    // The NodeLinkMemory created by a succesful call to Allocate(), or null if
-    // memory could not be allocated. This memory is initialized with a
-    // primary buffer (BufferId 0) whose contents have also been appropriately
-    // initialized. This object is ready for immediate use by a new NodeLink on
-    // the `node` passed to Allocate().
-    Ref<NodeLinkMemory> node_link_memory;
-
-    // A handle to the region underlying the new NodeLinkMemory's primary
-    // buffer. This should be shared with the corresponding NodeLink's remote
-    // node, where it can be passed to Adopt() to establish a new NodeLinkMemory
-    // there.
-    DriverMemory primary_buffer_memory;
-  };
+  // The set of runtime features available to both nodes using this memory.
+  const Features& available_features() const { return available_features_; }
 
   // Sets a reference to the NodeLink using this NodeLinkMemory. This is called
   // by the NodeLink itself before any other methods can be called on the
   // NodeLinkMemory, and it's only reset to null once the NodeLink is
   // deactivated. This link may be used to share information with the remote
   // node, where another NodeLinkMemory is cooperatively managing the same
-  // memory pool as this one.
+  // memory pool as this one. `link` must belong to the same side of the node
+  // link as this object.
   void SetNodeLink(Ref<NodeLink> link);
 
-  // Constructs a new NodeLinkMemory over a newly allocated DriverMemory object.
-  // The new DriverMemory is returned in `primary_buffer_memory`, while the
-  // returned NodeLinkMemory internally retains a mapping of that memory.
-  static Allocation Allocate(Ref<Node> node);
+  // Allocates a new DriverMemory object and initializes its contents to be
+  // suitable as the primary buffer of a new NodeLinkMemory. Returns the memory
+  // along with a mapping of it.
+  static DriverMemoryWithMapping AllocateMemory(const IpczDriver& driver);
 
   // Constructs a new NodeLinkMemory with BufferId 0 (the primary buffer) mapped
-  // from `primary_buffer_memory`. The buffer must have been created and
-  // initialized by a prior call to Allocate() above.
-  static Ref<NodeLinkMemory> Adopt(Ref<Node> node,
-                                   DriverMemory primary_buffer_memory);
+  // as `primary_buffer_memory`. The buffer must have been created and
+  // initialized by a prior call to AllocateMemory() above.
+  static Ref<NodeLinkMemory> Create(Ref<Node> node,
+                                    LinkSide side,
+                                    const Features& remote_features,
+                                    DriverMemoryMapping primary_buffer_memory);
 
   // Returns a new BufferId which should still be unused by any buffer in this
   // NodeLinkMemory's BufferPool, or that of its peer NodeLinkMemory. When
@@ -102,13 +98,32 @@ class NodeLinkMemory : public RefCounted {
   // with the same BufferId and dimensions as `descriptor`.
   Fragment GetFragment(const FragmentDescriptor& descriptor);
 
-  // Adopts an existing reference to a RefCountedFragment within `fragment`.
-  // This does NOT increment the ref count of the RefCountedFragment.
+  // Adopts an existing reference to a RefCountedFragment within `fragment`,
+  // which must be a valid, properly aligned, and sufficiently sized fragment to
+  // hold a T. This does NOT increment the ref count of the RefCountedFragment.
   template <typename T>
   FragmentRef<T> AdoptFragmentRef(const Fragment& fragment) {
     ABSL_ASSERT(sizeof(T) <= fragment.size());
-    return FragmentRef<T>(RefCountedFragment::kAdoptExistingRef,
-                          WrapRefCounted(this), fragment);
+    return FragmentRef<T>(kAdoptExistingRef, WrapRefCounted(this), fragment);
+  }
+
+  // Attempts to adopt an existing reference to a RefCountedFragment located at
+  // `fragment`. Returns null if the fragment descriptor is null, misaligned,
+  // or of insufficient size. This does NOT increment the ref count of the
+  // RefCountedFragment.
+  template <typename T>
+  FragmentRef<T> AdoptFragmentRefIfValid(const FragmentDescriptor& descriptor) {
+    if (descriptor.is_null() || descriptor.size() < sizeof(T) ||
+        descriptor.offset() % 8 != 0) {
+      return {};
+    }
+
+    const Fragment fragment = GetFragment(descriptor);
+    if (fragment.is_null()) {
+      return {};
+    }
+
+    return AdoptFragmentRef<T>(fragment);
   }
 
   // Adds a new buffer to the underlying BufferPool to use as additional
@@ -122,6 +137,11 @@ class NodeLinkMemory : public RefCounted {
   // Allocates a Fragment of `size` bytes from the underlying BufferPool. May
   // return a null Fragment if there was no readily available capacity.
   Fragment AllocateFragment(size_t size);
+
+  // Attempts to allocate a Fragment of at least `size` bytes. If there are no
+  // readily available fragments large enough, this may return a fragment
+  // smaller than `size`.
+  Fragment AllocateFragmentBestEffort(size_t size);
 
   // Frees a Fragment previously allocated through this NodeLinkMemory. Returns
   // true on success. Returns false if `fragment` does not represent an
@@ -149,11 +169,24 @@ class NodeLinkMemory : public RefCounted {
   void WaitForBufferAsync(BufferId id,
                           BufferPool::WaitForBufferCallback callback);
 
+  // Called when the corresponding NodeLink has had its transport disconnected.
+  // This should clean up any resources that might have been retained pending
+  // future transport activity.
+  void NotifyLinkDisconnected();
+
  private:
   struct PrimaryBuffer;
 
-  NodeLinkMemory(Ref<Node> node, DriverMemoryMapping primary_buffer);
-  ~NodeLinkMemory() override;
+  friend class RefCounted<NodeLinkMemory>;
+
+  // Constructs a new NodeLinkMemory over `mapping`, which must correspond to
+  // a DriverMemory whose contents have already been initialized as a
+  // NodeLinkMemory primary buffer.
+  NodeLinkMemory(Ref<Node> node,
+                 LinkSide side,
+                 const Features& remote_features,
+                 DriverMemoryMapping mapping);
+  ~NodeLinkMemory();
 
   // Indicates whether the NodeLinkMemory should be allowed to expand its
   // allocation capacity further for blocks of size `block_size`.
@@ -172,6 +205,14 @@ class NodeLinkMemory : public RefCounted {
       const Fragment& fragment);
 
   const Ref<Node> node_;
+  const LinkSide link_side_;
+  const Features available_features_;
+  const bool allow_memory_expansion_for_parcel_data_;
+
+  // Atomic ID generators for buffers and sublinks allocated by this side of the
+  // link when memv2 is enabled.
+  std::atomic<uint64_t> next_buffer_id_{1};
+  std::atomic<uint64_t> next_sublink_id_{kMaxInitialPortals};
 
   // The underlying BufferPool. Note that this object is itself thread-safe, so
   // access to it is not synchronized by NodeLinkMemory.

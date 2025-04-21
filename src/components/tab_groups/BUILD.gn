@@ -1,6 +1,10 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
+
+if (is_android) {
+  import("//build/config/android/rules.gni")
+}
 
 component("tab_groups") {
   sources = [
@@ -8,6 +12,8 @@ component("tab_groups") {
     "tab_group_color.h",
     "tab_group_id.cc",
     "tab_group_id.h",
+    "tab_group_info.cc",
+    "tab_group_info.h",
     "tab_group_visual_data.cc",
     "tab_group_visual_data.h",
   ]
@@ -17,9 +23,21 @@ component("tab_groups") {
   deps = [
     "//base",
     "//components/strings",
-    "//components/tab_groups/public/mojom:mojo_bindings_webui_js",
+    "//components/tab_groups/public/mojom:mojo_bindings_ts__generator",
     "//skia",
     "//ui/base",
     "//ui/gfx",
   ]
+}
+
+if (is_android) {
+  java_cpp_enum("java_enums") {
+    visibility = [ ":*" ]
+    sources = [ "//components/tab_groups/tab_group_color.h" ]
+  }
+
+  android_library("tab_groups_java") {
+    deps = [ "//third_party/androidx:androidx_annotation_annotation_java" ]
+    srcjar_deps = [ ":java_enums" ]
+  }
 }

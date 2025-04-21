@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 namespace ui {
 
-EmptyFilter::EmptyFilter() {}
-EmptyFilter::~EmptyFilter() {}
+EmptyFilter::EmptyFilter() = default;
+EmptyFilter::~EmptyFilter() = default;
 
 bool EmptyFilter::Filter(const base::TimeTicks& timestamp,
                          gfx::PointF* position) const {
@@ -18,11 +18,5 @@ bool EmptyFilter::Filter(const base::TimeTicks& timestamp,
 const char* EmptyFilter::GetName() const {
   return features::kFilterNameEmpty;
 }
-
-InputFilter* EmptyFilter::Clone() {
-  return new EmptyFilter();
-}
-
-void EmptyFilter::Reset() {}
 
 }  // namespace ui

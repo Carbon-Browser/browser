@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,8 @@
 
 #include <utility>
 #include <vector>
+
+#include "base/memory/raw_ptr.h"
 
 namespace bookmarks {
 
@@ -24,11 +26,11 @@ struct TitledUrlMatch {
   TitledUrlMatch(const TitledUrlMatch& other);
   ~TitledUrlMatch();
 
-  // Extracts and returns the offsets from |match_positions|.
+  // Extracts and returns the offsets from `match_positions`.
   static std::vector<size_t> OffsetsFromMatchPositions(
       const MatchPositions& match_positions);
 
-  // Replaces the offsets in |match_positions| with those given in |offsets|,
+  // Replaces the offsets in `match_positions` with those given in `offsets`,
   // deleting any which are npos, and returns the updated list of match
   // positions.
   static MatchPositions ReplaceOffsetsInMatchPositions(
@@ -36,7 +38,7 @@ struct TitledUrlMatch {
       const std::vector<size_t>& offsets);
 
   // The matching node of a query.
-  const TitledUrlNode* node;
+  raw_ptr<const TitledUrlNode> node;
 
   // Location of the matching words in the title of the node.
   MatchPositions title_match_positions;

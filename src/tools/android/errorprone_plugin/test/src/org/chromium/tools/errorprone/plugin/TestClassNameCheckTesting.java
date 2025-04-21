@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,7 @@ import org.junit.runner.RunWith;
 
 import org.chromium.base.test.BaseJUnit4ClassRunner;
 
-/**
- * Should cause 'TestClassNameCheck' errorprone warning.
- */
+/** Should cause 'TestClassNameCheck' errorprone warning. */
 @RunWith(BaseJUnit4ClassRunner.class)
 public class TestClassNameCheckTesting {
     @Test

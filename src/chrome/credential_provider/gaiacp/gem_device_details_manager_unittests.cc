@@ -1,6 +1,8 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "chrome/credential_provider/gaiacp/gem_device_details_manager.h"
 
 #include <windows.h>
 
@@ -12,7 +14,6 @@
 #include "base/test/scoped_path_override.h"
 #include "chrome/credential_provider/extension/user_device_context.h"
 #include "chrome/credential_provider/gaiacp/gcpw_strings.h"
-#include "chrome/credential_provider/gaiacp/gem_device_details_manager.h"
 #include "chrome/credential_provider/gaiacp/mdm_utils.h"
 #include "chrome/credential_provider/gaiacp/reg_utils.h"
 #include "chrome/credential_provider/test/gls_runner_test_base.h"
@@ -68,9 +69,8 @@ TEST_P(GemDeviceDetailsExtensionTest, WithUserDeviceContext) {
     fake_os_user_manager()->FailFindUserBySID(user_sid.c_str(), 1);
   }
 
-  base::Value expected_response_value(base::Value::Type::DICTIONARY);
-  expected_response_value.SetStringKey("deviceResourceId",
-                                       base::WideToUTF8(device_resource_id));
+  auto expected_response_value = base::Value::Dict().Set(
+      "deviceResourceId", base::WideToUTF8(device_resource_id));
   std::string expected_response;
   base::JSONWriter::Write(expected_response_value, &expected_response);
 
@@ -101,15 +101,15 @@ TEST_P(GemDeviceDetailsExtensionTest, WithUserDeviceContext) {
     ASSERT_EQ(1UL, fake_http_url_fetcher_factory()->requests_created());
     FakeWinHttpUrlFetcherFactory::RequestData request_data =
         fake_http_url_fetcher_factory()->GetRequestData(0);
-    base::Value body_value = base::JSONReader::Read(request_data.body).value();
+    base::Value::Dict body_dict =
+        base::JSONReader::ReadDict(request_data.body).value();
 
-    std::string uploaded_dm_token = GetDictStringUTF8(body_value, "dm_token");
+    std::string uploaded_dm_token = GetDictStringUTF8(body_dict, "dm_token");
     ASSERT_EQ(uploaded_dm_token, base::WideToUTF8(dm_token));
 
     std::string uploaded_username =
-        GetDictStringUTF8(body_value, "account_username");
-    std::string uploaded_domain =
-        GetDictStringUTF8(body_value, "device_domain");
+        GetDictStringUTF8(body_dict, "account_username");
+    std::string uploaded_domain = GetDictStringUTF8(body_dict, "device_domain");
     if (!fail_sid_lookup) {
       ASSERT_EQ(uploaded_username, base::WideToUTF8(kDefaultUsername));
       ASSERT_EQ(uploaded_domain, base::WideToUTF8(domain_name));

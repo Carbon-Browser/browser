@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,9 @@ const minify =
         '../../third_party/node/node_modules/html-minifier/src/htmlminifier.js')
         .minify;
 
-const path = require('path');
+const assert = require('assert');
 const fs = require('fs/promises');
+const path = require('path');
 
 // Regex to extract the CSS contents out of the HTML string. It matches anything
 // that is wrapped by a '<style>...</style>' pair.
@@ -32,6 +33,7 @@ async function processFile(inputFile, outputFile) {
 
   // Pass through html-minifier.
   let result = minify(contents, {
+    caseSensitive: true,
     removeComments: true,
     minifyCSS: true,
   });
@@ -40,7 +42,7 @@ async function processFile(inputFile, outputFile) {
     // If this is a CSS file, remove the <style>...</style> wrapper that was
     // added above.
     const match = result.match(REGEX);
-    result = match.groups['content'];
+    result = match === null ? '' : match.groups['content'];
   }
 
   // Save result.

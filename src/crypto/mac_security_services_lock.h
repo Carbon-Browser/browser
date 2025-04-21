@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@ namespace crypto {
 // thread-safe. In particular, code that accesses the CSSM database is
 // problematic.
 //
-// http://developer.apple.com/mac/library/documentation/Security/Reference/certifkeytrustservices/Reference/reference.html
+// https://developer.apple.com/documentation/security/certificate_key_and_trust_services/working_with_concurrency
 CRYPTO_EXPORT base::Lock& GetMacSecurityServicesLock();
 
 }  // namespace crypto

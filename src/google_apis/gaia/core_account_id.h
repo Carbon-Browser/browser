@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,10 @@
 #include <string>
 #include <vector>
 
+#include "base/component_export.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "google_apis/gaia/gaia_id.h"
 
 // Represent the id of an account for interaction with GAIA.
 //
@@ -24,7 +26,7 @@
 // change on start-up.
 // --------------------------------------------------------------------------
 
-struct CoreAccountId {
+struct COMPONENT_EXPORT(GOOGLE_APIS) CoreAccountId {
   CoreAccountId();
   CoreAccountId(const CoreAccountId&);
   CoreAccountId(CoreAccountId&&) noexcept;
@@ -56,7 +58,19 @@ struct CoreAccountId {
 
   // Create a CoreAccountId from a Gaia ID.
   // Returns an empty CoreAccountId if |gaia_id| is empty.
-  static CoreAccountId FromGaiaId(const std::string& gaia_id);
+  static CoreAccountId FromGaiaId(const GaiaId& gaia_id);
+
+  // Temporary API to construct from a string, while class GaiaId is being
+  // adopted in unit-tests.
+  // TODO(crbug.com/380416867): Remove this API.
+#if defined(UNIT_TEST)
+  static CoreAccountId FromGaiaId(std::string gaia_id) {
+    return FromGaiaId(GaiaId(std::move(gaia_id)));
+  }
+  static CoreAccountId FromGaiaId(const char gaia_id[]) {
+    return FromGaiaId(GaiaId(gaia_id));
+  }
+#endif  // defined(UNIT_TEST)
 
   // Create a CoreAccountId object from an email of a robot account.
   // Returns an empty CoreAccountId if |email| is empty.
@@ -72,37 +86,28 @@ struct CoreAccountId {
   // Create a CoreAccountId object from an email.
   // Returns an empty CoreAccountId if |email| is empty.
   static CoreAccountId FromEmail(const std::string& email);
-#endif
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   // ---------------------------------------- ---------------------------------
-
-  // --------------------------------------------------------------------------
-  // -------------------- ONLY FOR TESTING ------------------------------------
-  // The following constructors are only used for testing. Their implementation
-  // is defined in core_account_id_for_testing.cc and is not linked in the
-  // production code. The reason for this is that they are currently being
-  // removed, but they are extensively used by the testing code.
-  //
-  // TODO(crbug.com/1028578): Update the tests to use one of FromEmail(),
-  // FromGaia() or FromString() methods above.
-  explicit CoreAccountId(const char* id);
-  explicit CoreAccountId(std::string&& id);
-  explicit CoreAccountId(const std::string& id);
-  // --------------------------------------------------------------------------
 
  private:
   std::string id_;
 };
 
+COMPONENT_EXPORT(GOOGLE_APIS)
 bool operator<(const CoreAccountId& lhs, const CoreAccountId& rhs);
 
+COMPONENT_EXPORT(GOOGLE_APIS)
 bool operator==(const CoreAccountId& lhs, const CoreAccountId& rhs);
 
+COMPONENT_EXPORT(GOOGLE_APIS)
 bool operator!=(const CoreAccountId& lhs, const CoreAccountId& rhs);
 
+COMPONENT_EXPORT(GOOGLE_APIS)
 std::ostream& operator<<(std::ostream& out, const CoreAccountId& a);
 
 // Returns the values of the account ids in a vector. Useful especially for
 // logs.
+COMPONENT_EXPORT(GOOGLE_APIS)
 std::vector<std::string> ToStringList(
     const std::vector<CoreAccountId>& account_ids);
 

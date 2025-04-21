@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,12 +30,14 @@ class V8IntersectionObserverDelegate final
 
   void Trace(Visitor*) const override;
 
-  LocalFrameUkmAggregator::MetricId GetUkmMetricId() const override {
-    return LocalFrameUkmAggregator::kJavascriptIntersectionObserver;
-  }
-
   IntersectionObserver::DeliveryBehavior GetDeliveryBehavior() const override {
     return IntersectionObserver::kPostTaskToDeliver;
+  }
+
+  // The IntersectionObserver spec requires that at least one observation be
+  // recorded after observe() is called, even if the target is detached.
+  bool NeedsInitialObservationWithDetachedTarget() const override {
+    return true;
   }
 
   void Deliver(const HeapVector<Member<IntersectionObserverEntry>>&,

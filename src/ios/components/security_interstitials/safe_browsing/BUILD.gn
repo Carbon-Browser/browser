@@ -1,4 +1,4 @@
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -11,6 +11,8 @@ source_set("safe_browsing") {
     "safe_browsing_client.h",
     "safe_browsing_error.h",
     "safe_browsing_error.mm",
+    "safe_browsing_helper.cc",
+    "safe_browsing_helper.h",
     "safe_browsing_query_manager.h",
     "safe_browsing_query_manager.mm",
     "safe_browsing_service.h",
@@ -27,6 +29,7 @@ source_set("safe_browsing") {
 
   deps = [
     "//base",
+    "//build:branding_buildflags",
     "//components/keyed_service/core",
     "//components/keyed_service/ios",
     "//components/prefs",
@@ -40,7 +43,7 @@ source_set("safe_browsing") {
     "//components/safe_browsing/ios/browser:allow_list",
     "//components/safe_browsing/ios/browser/password_protection",
     "//components/security_interstitials/core:unsafe_resource",
-    "//components/security_interstitials/core:unsafe_resource",
+    "//components/sessions:session_id",
     "//ios/components/cookie_util",
     "//ios/components/security_interstitials/safe_browsing:util",
     "//ios/net",
@@ -48,14 +51,12 @@ source_set("safe_browsing") {
     "//ios/web/public",
     "//services/network:network_service",
   ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("util") {
   sources = [
-    "unsafe_resource_util.h",
-    "unsafe_resource_util.mm",
+    "ios_unsafe_resource_util.h",
+    "ios_unsafe_resource_util.mm",
   ]
 
   deps = [
@@ -66,8 +67,6 @@ source_set("util") {
     "//components/security_interstitials/core:unsafe_resource",
     "//ios/web/public",
   ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("test_support") {
@@ -83,13 +82,13 @@ source_set("test_support") {
     ":safe_browsing",
     "//components/safe_browsing/core/browser",
     "//components/safe_browsing/core/browser/db:test_database_manager",
+    "//components/safe_browsing/core/common",
+    "//components/safe_browsing/ios/browser:allow_list",
     "//ios/web/public",
     "//services/network:test_support",
     "//services/network/public/cpp",
     "//services/network/public/mojom",
   ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("unit_tests") {
@@ -115,7 +114,6 @@ source_set("unit_tests") {
     "//components/safe_browsing/core/browser:token_fetcher",
     "//components/safe_browsing/core/browser:verdict_cache_manager",
     "//components/safe_browsing/core/browser/db:database_manager",
-    "//components/safe_browsing/core/browser/db:metadata_proto",
     "//components/safe_browsing/core/browser/db:util",
     "//components/safe_browsing/core/browser/db:v4_database",
     "//components/safe_browsing/core/browser/db:v4_get_hash_protocol_manager",
@@ -137,6 +135,4 @@ source_set("unit_tests") {
     "//testing/gmock",
     "//testing/gtest",
   ]
-
-  configs += [ "//build/config/compiler:enable_arc" ]
 }

@@ -1,12 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_NET_NETWORK_DIAGNOSTICS_NETWORK_DIAGNOSTICS_ROUTINE_H_
 #define CHROME_BROWSER_ASH_NET_NETWORK_DIAGNOSTICS_NETWORK_DIAGNOSTICS_ROUTINE_H_
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "chromeos/services/network_health/public/mojom/network_diagnostics.mojom.h"
 
 namespace ash {
@@ -19,7 +19,8 @@ using RoutineResultCallback = base::OnceCallback<void(
 // expected to be implemented by every network diagnostics routine.
 class NetworkDiagnosticsRoutine {
  public:
-  NetworkDiagnosticsRoutine();
+  explicit NetworkDiagnosticsRoutine(
+      chromeos::network_diagnostics::mojom::RoutineCallSource source);
   NetworkDiagnosticsRoutine(const NetworkDiagnosticsRoutine&) = delete;
   NetworkDiagnosticsRoutine& operator=(const NetworkDiagnosticsRoutine&) =
       delete;
@@ -58,6 +59,11 @@ class NetworkDiagnosticsRoutine {
       chromeos::network_diagnostics::mojom::RoutineResultValuePtr
           result_value) {
     result_.result_value = std::move(result_value);
+  }
+
+  void set_source_for_testing(
+      chromeos::network_diagnostics::mojom::RoutineCallSource source) {
+    result_.source = source;
   }
 
  private:

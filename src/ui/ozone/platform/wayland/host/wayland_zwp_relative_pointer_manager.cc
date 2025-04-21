@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <relative-pointer-unstable-v1-client-protocol.h>
 
 #include "base/logging.h"
+#include "build/buildflag.h"
 #include "ui/ozone/platform/wayland/host/wayland_connection.h"
 #include "ui/ozone/platform/wayland/host/wayland_event_source.h"
 #include "ui/ozone/platform/wayland/host/wayland_pointer.h"
@@ -28,23 +29,23 @@ void WaylandZwpRelativePointerManager::Instantiate(
     uint32_t name,
     const std::string& interface,
     uint32_t version) {
-  DCHECK_EQ(interface, kInterfaceName);
+  CHECK_EQ(interface, kInterfaceName) << "Expected \"" << kInterfaceName
+                                      << "\" but got \"" << interface << "\"";
 
-  if (connection->wayland_zwp_relative_pointer_manager_ ||
+  if (connection->zwp_relative_pointer_manager_ ||
       !wl::CanBind(interface, version, kMinVersion, kMinVersion)) {
     return;
   }
 
-  auto zwp_relative_pointer_manager_v1 =
-      wl::Bind<struct zwp_relative_pointer_manager_v1>(registry, name,
-                                                       kMinVersion);
-  if (!zwp_relative_pointer_manager_v1) {
+  auto new_pointer_manager =
+      wl::Bind<zwp_relative_pointer_manager_v1>(registry, name, kMinVersion);
+  if (!new_pointer_manager) {
     LOG(ERROR) << "Failed to bind zwp_relative_pointer_manager_v1";
     return;
   }
-  connection->wayland_zwp_relative_pointer_manager_ =
+  connection->zwp_relative_pointer_manager_ =
       std::make_unique<WaylandZwpRelativePointerManager>(
-          zwp_relative_pointer_manager_v1.release(), connection);
+          new_pointer_manager.release(), connection);
 }
 
 WaylandZwpRelativePointerManager::WaylandZwpRelativePointerManager(
@@ -64,12 +65,12 @@ void WaylandZwpRelativePointerManager::EnableRelativePointer() {
   relative_pointer_.reset(zwp_relative_pointer_manager_v1_get_relative_pointer(
       obj_.get(), connection_->seat()->pointer()->wl_object()));
 
-  static constexpr zwp_relative_pointer_v1_listener relative_pointer_listener =
-      {
-          &WaylandZwpRelativePointerManager::OnHandleMotion,
-      };
+  static constexpr zwp_relative_pointer_v1_listener kRelativePointerListener = {
+      .relative_motion = &OnRelativeMotion,
+  };
   zwp_relative_pointer_v1_add_listener(relative_pointer_.get(),
-                                       &relative_pointer_listener, this);
+                                       &kRelativePointerListener, this);
+
   delegate_->SetRelativePointerMotionEnabled(true);
 }
 
@@ -79,17 +80,16 @@ void WaylandZwpRelativePointerManager::DisableRelativePointer() {
 }
 
 // static
-void WaylandZwpRelativePointerManager::OnHandleMotion(
+void WaylandZwpRelativePointerManager::OnRelativeMotion(
     void* data,
-    struct zwp_relative_pointer_v1* pointer,
+    zwp_relative_pointer_v1* pointer,
     uint32_t utime_hi,
     uint32_t utime_lo,
     wl_fixed_t dx,
     wl_fixed_t dy,
     wl_fixed_t dx_unaccel,
     wl_fixed_t dy_unaccel) {
-  auto* relative_pointer_manager =
-      static_cast<WaylandZwpRelativePointerManager*>(data);
+  auto* self = static_cast<WaylandZwpRelativePointerManager*>(data);
 
   gfx::Vector2dF delta = {static_cast<float>(wl_fixed_to_double(dx)),
                           static_cast<float>(wl_fixed_to_double(dy))};
@@ -97,7 +97,8 @@ void WaylandZwpRelativePointerManager::OnHandleMotion(
       static_cast<float>(wl_fixed_to_double(dx_unaccel)),
       static_cast<float>(wl_fixed_to_double(dy_unaccel))};
 
-  relative_pointer_manager->delegate_->OnRelativePointerMotion(delta);
+  self->delegate_->OnRelativePointerMotion(
+      delta, wl::EventMillisecondsToTimeTicks(utime_lo));
 }
 
 }  // namespace ui

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,10 @@
 #include <vector>
 
 #include "base/component_export.h"
+#include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "chromeos/ash/components/dbus/audio/cras_audio_client.h"
+#include "chromeos/ash/components/dbus/audio/voice_isolation_ui_appearance.h"
 
 namespace ash {
 
@@ -30,39 +32,71 @@ class COMPONENT_EXPORT(DBUS_AUDIO) FakeCrasAudioClient
 
   static FakeCrasAudioClient* Get();
 
+  void SetVoiceIsolationUIAppearance(VoiceIsolationUIAppearance appearance);
+  bool GetVoiceIsolationUIEnabled();
+  uint32_t GetVoiceIsolationUIPreferredEffect();
   void SetNoiseCancellationSupported(bool noise_cancellation_supported);
   uint32_t GetNoiseCancellationEnabledCount();
+  void SetStyleTransferSupported(bool style_transfer_supported);
+  bool GetStyleTransferEnabled();
+  void SetHfpMicSrSupported(bool hfp_mic_sr_supported);
+  uint32_t GetHfpMicSrEnabled();
+  void SetSpatialAudioSupported(bool spatial_audio_supported);
 
   // CrasAudioClient overrides:
   void AddObserver(Observer* observer) override;
   void RemoveObserver(Observer* observer) override;
   bool HasObserver(const Observer* observer) const override;
-  void GetVolumeState(DBusMethodCallback<VolumeState> callback) override;
-  void GetDefaultOutputBufferSize(DBusMethodCallback<int> callback) override;
-  void GetSystemAecSupported(DBusMethodCallback<bool> callback) override;
-  void GetSystemAecGroupId(DBusMethodCallback<int32_t> callback) override;
-  void GetSystemNsSupported(DBusMethodCallback<bool> callback) override;
-  void GetSystemAgcSupported(DBusMethodCallback<bool> callback) override;
-  void GetNodes(DBusMethodCallback<AudioNodeList> callback) override;
+  void GetVolumeState(
+      chromeos::DBusMethodCallback<VolumeState> callback) override;
+  void GetDefaultOutputBufferSize(
+      chromeos::DBusMethodCallback<int> callback) override;
+  void GetSystemAecSupported(
+      chromeos::DBusMethodCallback<bool> callback) override;
+  void GetSystemAecGroupId(
+      chromeos::DBusMethodCallback<int32_t> callback) override;
+  void GetSystemNsSupported(
+      chromeos::DBusMethodCallback<bool> callback) override;
+  void GetSystemAgcSupported(
+      chromeos::DBusMethodCallback<bool> callback) override;
+  void GetNodes(chromeos::DBusMethodCallback<AudioNodeList> callback) override;
+  void GetNumberOfNonChromeOutputStreams(
+      chromeos::DBusMethodCallback<int32_t> callback) override;
   void GetNumberOfActiveOutputStreams(
-      DBusMethodCallback<int> callback) override;
+      chromeos::DBusMethodCallback<int> callback) override;
   void GetNumberOfInputStreamsWithPermission(
-      DBusMethodCallback<ClientTypeToInputStreamCount>) override;
-  void GetDeprioritizeBtWbsMic(DBusMethodCallback<bool> callback) override;
+      chromeos::DBusMethodCallback<ClientTypeToInputStreamCount>) override;
+  void GetSpeakOnMuteDetectionEnabled(
+      chromeos::DBusMethodCallback<bool> callback) override;
   void SetOutputNodeVolume(uint64_t node_id, int32_t volume) override;
   void SetOutputUserMute(bool mute_on) override;
   void SetInputNodeGain(uint64_t node_id, int32_t gain) override;
   void SetInputMute(bool mute_on) override;
+  void GetAudioEffectDlcs(
+      chromeos::DBusMethodCallback<std::string> callback) override;
+  void GetVoiceIsolationUIAppearance(
+      chromeos::DBusMethodCallback<VoiceIsolationUIAppearance> callback)
+      override;
+  void SetVoiceIsolationUIEnabled(bool voice_isolation_on) override;
+  void SetVoiceIsolationUIPreferredEffect(uint32_t effect_mode) override;
   void SetNoiseCancellationEnabled(bool noise_cancellation_on) override;
   void GetNoiseCancellationSupported(
-      DBusMethodCallback<bool> callback) override;
+      chromeos::DBusMethodCallback<bool> callback) override;
+  void SetStyleTransferEnabled(bool style_transfer_on) override;
+  void GetStyleTransferSupported(
+      chromeos::DBusMethodCallback<bool> callback) override;
   void SetActiveOutputNode(uint64_t node_id) override;
   void SetActiveInputNode(uint64_t node_id) override;
   void SetHotwordModel(uint64_t node_id,
                        const std::string& hotword_model,
-                       VoidDBusMethodCallback callback) override;
+                       chromeos::VoidDBusMethodCallback callback) override;
   void SetFixA2dpPacketSize(bool enabled) override;
   void SetFlossEnabled(bool enabled) override;
+  void SetSpeakOnMuteDetection(bool enabled) override;
+  void SetEwmaPowerReportEnabled(bool enabled) override;
+  void SetSidetoneEnabled(bool enabled) override;
+  void GetSidetoneSupported(
+      chromeos::DBusMethodCallback<bool> callback) override;
   void AddActiveInputNode(uint64_t node_id) override;
   void RemoveActiveInputNode(uint64_t node_id) override;
   void AddActiveOutputNode(uint64_t node_id) override;
@@ -80,7 +114,21 @@ class COMPONENT_EXPORT(DBUS_AUDIO) FakeCrasAudioClient
       const std::map<std::string, std::string>& metadata) override;
   void ResendBluetoothBattery() override;
   void WaitForServiceToBeAvailable(
-      WaitForServiceToBeAvailableCallback callback) override;
+      chromeos::WaitForServiceToBeAvailableCallback callback) override;
+  void SetForceRespectUiGains(bool force_respect_ui_gains_enabled) override;
+  void GetNumStreamIgnoreUiGains(
+      chromeos::DBusMethodCallback<int> callback) override;
+  void GetNumberOfArcStreams(
+      chromeos::DBusMethodCallback<int> callback) override;
+  void SetHfpMicSrEnabled(bool hfp_mic_sr_on) override;
+  void GetHfpMicSrSupported(
+      chromeos::DBusMethodCallback<bool> callback) override;
+  void SetSpatialAudio(bool spatial_audio_enabled) override;
+  void GetSpatialAudioSupported(
+      chromeos::DBusMethodCallback<bool> callback) override;
+
+  // Sets the number of non chrome audio streams in output mode.
+  void SetNumberOfNonChromeOutputStreams(int32_t streams);
 
   // Modifies an AudioNode from |node_list_| based on |audio_node.id|.
   // if the |audio_node.id| cannot be found in list, Add an
@@ -100,6 +148,9 @@ class COMPONENT_EXPORT(DBUS_AUDIO) FakeCrasAudioClient
   // Generates fake signal for OutputNodeVolumeChanged.
   void NotifyOutputNodeVolumeChangedForTesting(uint64_t node_id, int volume);
 
+  // Generates fake signal for InputNodeGainChanged.
+  void NotifyInputNodeGainChangedForTesting(uint64_t node_id, int gain);
+
   // Generates fake hotword signal for HotwordTriggered.
   void NotifyHotwordTriggeredForTesting(uint64_t tv_sec, uint64_t tv_nsec);
 
@@ -111,18 +162,54 @@ class COMPONENT_EXPORT(DBUS_AUDIO) FakeCrasAudioClient
   void SetActiveInputStreamsWithPermission(
       const ClientTypeToInputStreamCount& input_streams);
 
+  // Generates fake signal for SurveyTriggered.
+  void NotifySurveyTriggered(
+      const base::flat_map<std::string, std::string>& survey_specific_data);
+
+  // Sets the number of ARC streams.
+  void SetNumberOfArcStreams(int32_t streams);
+
+  void SetAudioEffectDlcsForTesting(const std::string& audio_effect_dlcs);
+
   const AudioNodeList& node_list() const { return node_list_; }
   const uint64_t& active_input_node_id() const { return active_input_node_id_; }
   const uint64_t& active_output_node_id() const {
     return active_output_node_id_;
   }
-  void set_notify_volume_change_with_delay(bool notify_with_delay) {
-    notify_volume_change_with_delay_ = notify_with_delay;
+
+  // By default the observers are informed when `SetOutputNodeVolume` is
+  // invoked. This disables that. You can then manually invoke the observers by
+  // calling `NotifyOutputNodeVolumeChangedForTesting`.
+  void disable_volume_change_events() { enable_volume_change_events_ = false; }
+
+  // The real `CrasAudioClient` sends the volume change events asynchronously,
+  // so this method instructs our fake to do the same.
+  void send_volume_change_events_asynchronous() {
+    send_volume_change_events_synchronous_ = false;
   }
 
+  // By default the observers are informed when `SetInputGain` is
+  // invoked. This disables that. You can then manually invoke the observers by
+  // calling `NotifyInputNodeGainChangedForTesting`.
+  void disable_gain_change_events() { enable_gain_change_events_ = false; }
+
   bool noise_cancellation_enabled() const {
-    return noise_cancellation_enabled_;
+    return voice_isolation_ui_enabled_;
   }
+
+  bool style_transfer_enabled() const { return voice_isolation_ui_enabled_; }
+
+  bool speak_on_mute_detection_enabled() const {
+    return speak_on_mute_detection_enabled_;
+  }
+
+  bool force_respect_ui_gains_enabled() const {
+    return force_respect_ui_gains_enabled_;
+  }
+
+  bool hfp_mic_sr_enabled() const { return hfp_mic_sr_enabled_; }
+
+  bool spatial_audio_enabled() const { return spatial_audio_enabled_; }
 
  private:
   // Finds a node in the list based on the id.
@@ -130,27 +217,40 @@ class COMPONENT_EXPORT(DBUS_AUDIO) FakeCrasAudioClient
 
   VolumeState volume_state_;
   AudioNodeList node_list_;
+  VoiceIsolationUIAppearance voice_isolation_ui_appearance_;
   uint64_t active_input_node_id_ = 0;
   uint64_t active_output_node_id_ = 0;
-  // By default, immediately sends OutputNodeVolumeChange signal following the
-  // SetOutputNodeVolume fake dbus call.
-  bool notify_volume_change_with_delay_ = false;
+  bool enable_volume_change_events_ = true;
+  // TODO(b/273520282): Change default behavior to send events asynchronously.
+  bool send_volume_change_events_synchronous_ = true;
+  bool enable_gain_change_events_ = true;
   bool noise_cancellation_supported_ = false;
+  bool style_transfer_supported_ = false;
   uint32_t battery_level_ = 0;
   uint32_t noise_cancellation_enabled_counter_ = 0;
-  bool noise_cancellation_enabled_ = false;
+  int32_t number_non_chrome_output_streams_ = 0;
+  bool voice_isolation_ui_enabled_ = false;
+  uint32_t voice_isolation_preferred_effect_ = 0;
+  bool speak_on_mute_detection_enabled_ = false;
+  bool ewma_power_report_enabled_ = false;
+  bool sidetone_enabled_ = false;
+  bool sidetone_supported_ = false;
+  bool force_respect_ui_gains_enabled_ = false;
+  bool hfp_mic_sr_enabled_ = false;
+  bool hfp_mic_sr_supported_ = false;
+  bool spatial_audio_enabled_ = false;
+  bool spatial_audio_supported_ = false;
   // Maps audio client type to the number of active input streams for clients
   // with the type specified
   ClientTypeToInputStreamCount active_input_streams_;
+  int32_t number_arc_streams_ = 0;
+  std::string audio_effect_dlcs_;
 
   base::ObserverList<Observer>::Unchecked observers_;
+
+  base::WeakPtrFactory<FakeCrasAudioClient> weak_ptr_factory_{this};
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::FakeCrasAudioClient;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_DBUS_AUDIO_FAKE_CRAS_AUDIO_CLIENT_H_

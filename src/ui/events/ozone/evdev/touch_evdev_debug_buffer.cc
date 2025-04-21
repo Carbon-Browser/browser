@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 
+#include "base/containers/span.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
 #include "base/strings/stringprintf.h"
@@ -66,7 +67,7 @@ void TouchEventLogEvdev::DumpLog(const char* filename) {
         te->slot);
     report_content += event_string;
   }
-  file.Write(0, report_content.c_str(), report_content.length());
+  file.Write(0, base::as_byte_span(report_content));
 }
 
 TouchEventLogEvdev::AbsAxisData::AbsAxisData(int code,

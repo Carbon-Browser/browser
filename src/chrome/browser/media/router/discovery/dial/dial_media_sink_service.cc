@@ -1,10 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/media/router/discovery/dial/dial_media_sink_service.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/media/router/discovery/dial/dial_media_sink_service_impl.h"
 #include "components/media_router/common/media_source.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -19,30 +20,44 @@ DialMediaSinkService::~DialMediaSinkService() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 }
 
-void DialMediaSinkService::Start(
+void DialMediaSinkService::Initialize(
     const OnSinksDiscoveredCallback& sink_discovery_cb) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!impl_);
 
   OnSinksDiscoveredCallback sink_discovery_cb_impl = base::BindRepeating(
       &RunSinksDiscoveredCallbackOnSequence,
-      base::SequencedTaskRunnerHandle::Get(),
+      base::SequencedTaskRunner::GetCurrentDefault(),
       base::BindRepeating(&DialMediaSinkService::RunSinksDiscoveredCallback,
                           weak_ptr_factory_.GetWeakPtr(), sink_discovery_cb));
 
   impl_ = CreateImpl(sink_discovery_cb_impl);
 
   impl_->task_runner()->PostTask(
-      FROM_HERE, base::BindOnce(&DialMediaSinkServiceImpl::Start,
+      FROM_HERE, base::BindOnce(&DialMediaSinkServiceImpl::Initialize,
                                 base::Unretained(impl_.get())));
 }
 
-void DialMediaSinkService::OnUserGesture() {
+void DialMediaSinkService::StartDiscovery() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK(impl_);
+
+  if (discovery_started_) {
+    return;
+  }
+  discovery_started_ = true;
+
+  impl_->task_runner()->PostTask(
+      FROM_HERE, base::BindOnce(&DialMediaSinkServiceImpl::StartDiscovery,
+                                base::Unretained(impl_.get())));
+}
+
+void DialMediaSinkService::DiscoverSinksNow() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(impl_);
 
   impl_->task_runner()->PostTask(
-      FROM_HERE, base::BindOnce(&DialMediaSinkServiceImpl::OnUserGesture,
+      FROM_HERE, base::BindOnce(&DialMediaSinkServiceImpl::DiscoverSinksNow,
                                 base::Unretained(impl_.get())));
 }
 
@@ -62,16 +77,6 @@ void DialMediaSinkService::RunSinksDiscoveredCallback(
     const OnSinksDiscoveredCallback& sinks_discovered_cb,
     std::vector<MediaSinkInternal> sinks) {
   sinks_discovered_cb.Run(std::move(sinks));
-}
-
-void DialMediaSinkService::BindLogger(
-    mojo::PendingRemote<mojom::Logger> pending_remote) {
-  // TODO(crbug.com/1293535): Simplify how logger instances are made available
-  // to their clients.
-  impl_->task_runner()->PostTask(
-      FROM_HERE,
-      base::BindOnce(&DialMediaSinkServiceImpl::BindLogger,
-                     base::Unretained(impl_.get()), std::move(pending_remote)));
 }
 
 }  // namespace media_router

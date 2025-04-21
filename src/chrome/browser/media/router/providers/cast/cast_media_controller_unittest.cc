@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,9 @@
 #include <vector>
 
 #include "base/json/json_reader.h"
+#include "base/test/values_test_util.h"
 #include "base/time/time.h"
+#include "base/values.h"
 #include "chrome/browser/media/router/providers/cast/app_activity.h"
 #include "chrome/browser/media/router/providers/cast/mock_app_activity.h"
 #include "chrome/browser/media/router/test/media_router_mojo_test.h"
@@ -36,17 +38,17 @@ constexpr char kSessionId[] = "sessionId123";
 constexpr int kMediaSessionId = 12345678;
 
 // Verifies that the session ID is |kSessionId|.
-void VerifySessionId(const Value& v2_message_body) {
-  const Value* sessionId = v2_message_body.FindKey("sessionId");
+void VerifySessionId(const Value::Dict& v2_message_body) {
+  const Value* sessionId = v2_message_body.Find("sessionId");
   ASSERT_TRUE(sessionId);
   ASSERT_TRUE(sessionId->is_string());
   EXPECT_EQ(kSessionId, sessionId->GetString());
 }
 
 // Verifies that the media session ID is |kMediaSessionId|.
-void VerifySessionAndMediaSessionIds(const Value& v2_message_body) {
+void VerifySessionAndMediaSessionIds(const Value::Dict& v2_message_body) {
   VerifySessionId(v2_message_body);
-  const Value* mediaSessionId = v2_message_body.FindKey("mediaSessionId");
+  const Value* mediaSessionId = v2_message_body.Find("mediaSessionId");
   ASSERT_TRUE(mediaSessionId);
   ASSERT_TRUE(mediaSessionId->is_int());
   EXPECT_EQ(kMediaSessionId, mediaSessionId->GetInt());
@@ -63,53 +65,59 @@ Value GetPlayerStateValue(const mojom::MediaStatus& status) {
   }
 }
 
-Value GetSupportedMediaCommandsValue(const mojom::MediaStatus& status) {
-  base::ListValue commands;
+base::Value::List GetSupportedMediaCommandsValue(
+    const mojom::MediaStatus& status) {
+  base::Value::List commands;
   // |can_set_volume| and |can_mute| are not used, because the receiver volume
   // is used instead.
-  if (status.can_play_pause)
+  if (status.can_play_pause) {
     commands.Append("pause");
-  if (status.can_seek)
+  }
+  if (status.can_seek) {
     commands.Append("seek");
-  if (status.can_skip_to_next_track)
+  }
+  if (status.can_skip_to_next_track) {
     commands.Append("queue_next");
-  if (status.can_skip_to_previous_track)
+  }
+  if (status.can_skip_to_previous_track) {
     commands.Append("queue_next");
-  return std::move(commands);
+  }
+  return commands;
 }
 
-Value CreateImagesValue(const std::vector<mojom::MediaImagePtr>& images) {
-  Value image_list(Value::Type::LIST);
+Value::List CreateImagesValue(const std::vector<mojom::MediaImagePtr>& images) {
+  Value::List image_list;
   for (const mojom::MediaImagePtr& image : images) {
-    Value image_value(Value::Type::DICTIONARY);
-    image_value.SetStringKey("url", image->url.spec());
+    Value::Dict image_value;
+    image_value.Set("url", image->url.spec());
     // CastMediaController should be able to handle images that are missing the
     // width or the height.
     if (image->size) {
-      image_value.SetIntKey("width", image->size->width());
-      image_value.SetIntKey("height", image->size->height());
+      image_value.Set("width", image->size->width());
+      image_value.Set("height", image->size->height());
     }
     image_list.Append(std::move(image_value));
   }
   return image_list;
 }
 
-Value CreateMediaStatus(const mojom::MediaStatus& status) {
-  Value status_value(Value::Type::DICTIONARY);
-  status_value.SetKey("mediaSessionId", Value(kMediaSessionId));
-  status_value.SetKey("media", Value(Value::Type::DICTIONARY));
-  status_value.SetPath("media.metadata", Value(Value::Type::DICTIONARY));
-  status_value.SetPath("media.metadata.title", Value(status.title));
-  status_value.SetPath("media.metadata.images",
-                       CreateImagesValue(status.images));
-  status_value.SetPath("media.duration", Value(status.duration.InSecondsF()));
-  status_value.SetPath("currentTime", Value(status.current_time.InSecondsF()));
-  status_value.SetPath("playerState", GetPlayerStateValue(status));
-  status_value.SetPath("supportedMediaCommands",
-                       GetSupportedMediaCommandsValue(status));
-  status_value.SetPath("volume", Value(Value::Type::DICTIONARY));
-  status_value.SetPath("volume.level", Value(status.volume));
-  status_value.SetPath("volume.muted", Value(status.is_muted));
+Value::Dict CreateMediaStatus(const mojom::MediaStatus& status) {
+  Value::Dict status_value;
+  status_value.Set("mediaSessionId", Value(kMediaSessionId));
+  status_value.Set("media", Value::Dict());
+  status_value.SetByDottedPath("media.metadata", Value::Dict());
+  status_value.SetByDottedPath("media.metadata.title", Value(status.title));
+  status_value.SetByDottedPath("media.metadata.images",
+                               CreateImagesValue(status.images));
+  status_value.SetByDottedPath("media.duration",
+                               Value(status.duration.InSecondsF()));
+  status_value.Set("currentTime", Value(status.current_time.InSecondsF()));
+  status_value.Set("playerState", GetPlayerStateValue(status));
+  status_value.Set("supportedMediaCommands",
+                   GetSupportedMediaCommandsValue(status));
+  status_value.Set("volume", Value::Dict());
+  status_value.SetByDottedPath("volume.level", Value(status.volume));
+  status_value.SetByDottedPath("volume.muted", Value(status.is_muted));
 
   return status_value;
 }
@@ -134,7 +142,7 @@ mojom::MediaStatusPtr CreateSampleMediaStatus() {
 std::unique_ptr<CastSession> CreateSampleSession() {
   MediaSinkInternal sink{CreateCastSink("sinkId123", "name"),
                          CastSinkExtraData{}};
-  absl::optional<Value> receiver_status = base::JSONReader::Read(R"({
+  base::Value::Dict receiver_status = base::test::ParseJsonDict(R"({
     "applications": [{
       "appId": "ABCD1234",
       "displayName": "My App",
@@ -149,7 +157,7 @@ std::unique_ptr<CastSession> CreateSampleSession() {
       "stepInterval": 0.1
     }
   })");
-  return CastSession::From(sink, receiver_status.value());
+  return CastSession::From(sink, receiver_status);
 }
 
 }  // namespace
@@ -165,8 +173,9 @@ class CastMediaControllerTest : public testing::Test {
     mojo::PendingRemote<mojom::MediaStatusObserver> mojo_status_observer;
     status_observer_ = std::make_unique<NiceMock<MockMediaStatusObserver>>(
         mojo_status_observer.InitWithNewPipeAndPassReceiver());
-    controller_ = std::make_unique<CastMediaController>(
-        &activity_, mojo_controller_.BindNewPipeAndPassReceiver(),
+    controller_ = std::make_unique<CastMediaController>(&activity_);
+    controller_->AddMediaController(
+        mojo_controller_.BindNewPipeAndPassReceiver(),
         std::move(mojo_status_observer));
   }
 
@@ -190,10 +199,10 @@ class CastMediaControllerTest : public testing::Test {
     SetMediaStatus(CreateMediaStatus(status));
   }
 
-  void SetMediaStatus(Value status_value) {
-    Value status_list(Value::Type::DICTIONARY);
-    status_list.SetKey("status", Value(Value::Type::LIST));
-    status_list.FindKey("status")->Append(std::move(status_value));
+  void SetMediaStatus(Value::Dict status_value) {
+    Value::Dict status_list;
+    status_list.Set("status", Value(Value::List()));
+    status_list.FindList("status")->Append(std::move(status_value));
 
     controller_->SetMediaStatus(status_list);
   }
@@ -233,8 +242,9 @@ TEST_F(CastMediaControllerTest, SendMuteRequests) {
   EXPECT_CALL(activity_, SendSetVolumeRequestToReceiver(_, _))
       .WillOnce(WithArg<0>([](const CastInternalMessage& cast_message) {
         EXPECT_EQ("SET_VOLUME", cast_message.v2_message_type());
-        EXPECT_TRUE(
-            cast_message.v2_message_body().FindPath("volume.muted")->GetBool());
+        EXPECT_TRUE(cast_message.v2_message_body()
+                        .FindByDottedPath("volume.muted")
+                        ->GetBool());
         VerifySessionId(cast_message.v2_message_body());
         return 0;
       }));
@@ -244,8 +254,9 @@ TEST_F(CastMediaControllerTest, SendMuteRequests) {
   EXPECT_CALL(activity_, SendSetVolumeRequestToReceiver(_, _))
       .WillOnce(WithArg<0>([](const CastInternalMessage& cast_message) {
         EXPECT_EQ("SET_VOLUME", cast_message.v2_message_type());
-        EXPECT_FALSE(
-            cast_message.v2_message_body().FindPath("volume.muted")->GetBool());
+        EXPECT_FALSE(cast_message.v2_message_body()
+                         .FindByDottedPath("volume.muted")
+                         ->GetBool());
         VerifySessionId(cast_message.v2_message_body());
         return 0;
       }));
@@ -258,7 +269,7 @@ TEST_F(CastMediaControllerTest, SendVolumeRequest) {
       .WillOnce(WithArg<0>([&](const CastInternalMessage& cast_message) {
         EXPECT_EQ("SET_VOLUME", cast_message.v2_message_type());
         EXPECT_FLOAT_EQ(0.314, cast_message.v2_message_body()
-                                   .FindPath("volume.level")
+                                   .FindByDottedPath("volume.level")
                                    ->GetDouble());
         VerifySessionId(cast_message.v2_message_body());
         return 0;
@@ -273,7 +284,7 @@ TEST_F(CastMediaControllerTest, SendSeekRequest) {
         EXPECT_EQ("SEEK", cast_message.v2_message_type());
         EXPECT_DOUBLE_EQ(
             12.34,
-            cast_message.v2_message_body().FindKey("currentTime")->GetDouble());
+            cast_message.v2_message_body().Find("currentTime")->GetDouble());
         VerifySessionId(cast_message.v2_message_body());
         return 0;
       });
@@ -285,7 +296,7 @@ TEST_F(CastMediaControllerTest, SendNextTrackRequest) {
   EXPECT_CALL(activity_, SendMediaRequestToReceiver(_))
       .WillOnce([](const CastInternalMessage& cast_message) {
         EXPECT_EQ("QUEUE_UPDATE", cast_message.v2_message_type());
-        EXPECT_EQ(1, cast_message.v2_message_body().FindKey("jump")->GetInt());
+        EXPECT_EQ(1, cast_message.v2_message_body().Find("jump")->GetInt());
         VerifySessionAndMediaSessionIds(cast_message.v2_message_body());
         return 0;
       });
@@ -297,7 +308,7 @@ TEST_F(CastMediaControllerTest, SendPreviousTrackRequest) {
   EXPECT_CALL(activity_, SendMediaRequestToReceiver(_))
       .WillOnce([](const CastInternalMessage& cast_message) {
         EXPECT_EQ("QUEUE_UPDATE", cast_message.v2_message_type());
-        EXPECT_EQ(-1, cast_message.v2_message_body().FindKey("jump")->GetInt());
+        EXPECT_EQ(-1, cast_message.v2_message_body().Find("jump")->GetInt());
         VerifySessionAndMediaSessionIds(cast_message.v2_message_body());
         return 0;
       });
@@ -341,9 +352,9 @@ TEST_F(CastMediaControllerTest, UpdateMediaStatusWithDoubleDurations) {
 }
 
 TEST_F(CastMediaControllerTest, IgnoreInvalidUpdate) {
-  Value invalid_status = CreateMediaStatus(*CreateSampleMediaStatus());
-  invalid_status.SetIntPath("media.duration", -100);
-  invalid_status.SetIntPath("currentTime", -100);
+  Value::Dict invalid_status = CreateMediaStatus(*CreateSampleMediaStatus());
+  invalid_status.SetByDottedPath("media.duration", -100);
+  invalid_status.SetByDottedPath("currentTime", -100);
 
   EXPECT_CALL(*status_observer_, OnMediaStatusUpdated(_))
       .WillOnce([&](mojom::MediaStatusPtr status) {
@@ -361,9 +372,9 @@ TEST_F(CastMediaControllerTest, IgnoreInvalidUpdate) {
 TEST_F(CastMediaControllerTest, UpdateMediaImages) {
   mojom::MediaStatusPtr expected_status = CreateSampleMediaStatus();
   expected_status->images.emplace_back(
-      absl::in_place, GURL("https://example.com/1.png"), gfx::Size(123, 456));
+      std::in_place, GURL("https://example.com/1.png"), gfx::Size(123, 456));
   expected_status->images.emplace_back(
-      absl::in_place, GURL("https://example.com/2.png"), gfx::Size(789, 0));
+      std::in_place, GURL("https://example.com/2.png"), gfx::Size(789, 0));
   const mojom::MediaImage& image1 = *expected_status->images.at(0);
   const mojom::MediaImage& image2 = *expected_status->images.at(1);
 
@@ -374,7 +385,7 @@ TEST_F(CastMediaControllerTest, UpdateMediaImages) {
         EXPECT_EQ(image1.size->width(), status->images.at(0)->size->width());
         EXPECT_EQ(image1.size->height(), status->images.at(0)->size->height());
         EXPECT_EQ(image2.url.spec(), status->images.at(1)->url.spec());
-        EXPECT_EQ(absl::nullopt, status->images.at(1)->size);
+        EXPECT_EQ(std::nullopt, status->images.at(1)->size);
       });
   SetMediaStatus(*expected_status);
   VerifyAndClearExpectations();
@@ -384,10 +395,11 @@ TEST_F(CastMediaControllerTest, IgnoreInvalidImage) {
   // Set one valid image and one invalid image.
   mojom::MediaStatusPtr expected_status = CreateSampleMediaStatus();
   expected_status->images.emplace_back(
-      absl::in_place, GURL("https://example.com/1.png"), gfx::Size(123, 456));
+      std::in_place, GURL("https://example.com/1.png"), gfx::Size(123, 456));
   const mojom::MediaImage& valid_image = *expected_status->images.at(0);
-  Value status_value = CreateMediaStatus(*expected_status);
-  status_value.FindListPath("media.metadata.images")->Append("invalid image");
+  Value::Dict status_value = CreateMediaStatus(*expected_status);
+  status_value.FindListByDottedPath("media.metadata.images")
+      ->Append("invalid image");
 
   EXPECT_CALL(*status_observer_, OnMediaStatusUpdated(_))
       .WillOnce([&](const mojom::MediaStatusPtr& status) {
@@ -401,9 +413,9 @@ TEST_F(CastMediaControllerTest, IgnoreInvalidImage) {
 TEST_F(CastMediaControllerTest, UpdateVolumeStatus) {
   auto session = CreateSampleSession();
   const float session_volume =
-      session->value().FindPath("receiver.volume.level")->GetDouble();
+      session->value().FindByDottedPath("receiver.volume.level")->GetDouble();
   const bool session_muted =
-      session->value().FindPath("receiver.volume.muted")->GetBool();
+      session->value().FindByDottedPath("receiver.volume.muted")->GetBool();
   EXPECT_CALL(*status_observer_, OnMediaStatusUpdated(_))
       .WillOnce([&](mojom::MediaStatusPtr status) {
         EXPECT_FLOAT_EQ(session_volume, status->volume);

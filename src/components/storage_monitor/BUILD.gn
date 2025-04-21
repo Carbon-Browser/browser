@@ -1,8 +1,7 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//build/config/chromeos/ui_mode.gni")
 import("//build/config/features.gni")
 
 static_library("storage_monitor") {
@@ -22,7 +21,6 @@ static_library("storage_monitor") {
 
   deps = [
     "//base",
-    "//build:chromeos_buildflags",
     "//content/public/browser",
     "//mojo/public/cpp/bindings",
     "//services/service_manager/public/cpp",
@@ -51,15 +49,17 @@ static_library("storage_monitor") {
       "DiskArbitration.framework",
       "Foundation.framework",
       "ImageCaptureCore.framework",
+      "UniformTypeIdentifiers.framework",
     ]
-  } else if (is_chromeos_ash) {
-    # For Chrome OS, |is_linux| is also true. Put this in an else-if block above
-    # the |is_linux| else-if block, so they do not clash.
+  } else if (is_chromeos) {
     sources += [
       "storage_monitor_chromeos.cc",
       "storage_monitor_chromeos.h",
     ]
-    deps += [ "//ash/components/disks" ]
+    deps += [
+      "//chromeos/ash/components/dbus/cros_disks",
+      "//chromeos/ash/components/disks",
+    ]
 
     if (use_dbus) {
       sources += [
@@ -70,7 +70,7 @@ static_library("storage_monitor") {
       ]
       deps += [ "//services/device/public/mojom" ]
     }
-  } else if (is_linux || is_chromeos_lacros) {
+  } else if (is_linux) {
     if (use_udev) {
       sources += [
         "mtab_watcher_linux.cc",
@@ -113,9 +113,9 @@ static_library("test_support") {
     "//content/public/browser",
   ]
 
-  deps = [ "//build:chromeos_buildflags" ]
+  deps = []
 
-  if (is_chromeos_ash) {
+  if (is_chromeos) {
     sources += [
       "test_media_transfer_protocol_manager_chromeos.cc",
       "test_media_transfer_protocol_manager_chromeos.h",
@@ -162,9 +162,11 @@ source_set("unit_tests") {
       "image_capture_device_manager_unittest.mm",
       "storage_monitor_mac_unittest.mm",
     ]
+    frameworks = [ "UniformTypeIdentifiers.framework" ]
   }
 
-  if (is_chromeos_ash) {
+  if (is_chromeos) {
+    deps += [ "//chromeos/ash/components/disks:test_support" ]
     if (use_dbus) {
       deps += [
         "//services/device/public/mojom",
@@ -175,12 +177,9 @@ source_set("unit_tests") {
         "storage_monitor_chromeos_unittest.cc",
       ]
     }
-  } else if (is_linux || is_chromeos_lacros) {
+  } else if (is_linux) {
     if (use_udev) {
       sources += [ "storage_monitor_linux_unittest.cc" ]
     }
-  }
-  if (is_chromeos_ash) {
-    deps += [ "//ash/components/disks:test_support" ]
   }
 }

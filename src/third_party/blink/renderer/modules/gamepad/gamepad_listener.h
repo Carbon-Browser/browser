@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,9 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_GAMEPAD_GAMEPAD_LISTENER_H_
 
 namespace device {
-class Gamepad;
+template <class T>
+class GamepadImpl;
+using Gamepad = GamepadImpl<void>;
 }
 
 namespace blink {

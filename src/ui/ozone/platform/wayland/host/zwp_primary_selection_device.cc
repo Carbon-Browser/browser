@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,10 +17,11 @@ ZwpPrimarySelectionDevice::ZwpPrimarySelectionDevice(
     WaylandConnection* connection,
     zwp_primary_selection_device_v1* data_device)
     : WaylandDataDeviceBase(connection), data_device_(data_device) {
-  static constexpr zwp_primary_selection_device_v1_listener kListener = {
-      &OnDataOffer, &OnSelection};
-  zwp_primary_selection_device_v1_add_listener(data_device_.get(), &kListener,
-                                               this);
+  static constexpr zwp_primary_selection_device_v1_listener
+      kPrimarySelectionListener = {.data_offer = &OnDataOffer,
+                                   .selection = &OnSelection};
+  zwp_primary_selection_device_v1_add_listener(
+      data_device_.get(), &kPrimarySelectionListener, this);
 }
 
 ZwpPrimarySelectionDevice::~ZwpPrimarySelectionDevice() = default;
@@ -31,13 +32,13 @@ void ZwpPrimarySelectionDevice::SetSelectionSource(
   auto* data_source = source ? source->data_source() : nullptr;
   zwp_primary_selection_device_v1_set_selection(data_device_.get(), data_source,
                                                 serial);
-  connection()->ScheduleFlush();
+  connection()->Flush();
 }
 
 // static
 void ZwpPrimarySelectionDevice::OnDataOffer(
     void* data,
-    zwp_primary_selection_device_v1* data_device,
+    zwp_primary_selection_device_v1* selection_device,
     zwp_primary_selection_offer_v1* offer) {
   auto* self = static_cast<ZwpPrimarySelectionDevice*>(data);
   DCHECK(self);
@@ -47,7 +48,7 @@ void ZwpPrimarySelectionDevice::OnDataOffer(
 // static
 void ZwpPrimarySelectionDevice::OnSelection(
     void* data,
-    zwp_primary_selection_device_v1* data_device,
+    zwp_primary_selection_device_v1* selection_device,
     zwp_primary_selection_offer_v1* offer) {
   auto* self = static_cast<ZwpPrimarySelectionDevice*>(data);
   DCHECK(self);

@@ -1,26 +1,33 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "remoting/host/webauthn/remote_webauthn_extension_notifier.h"
 
 #include <vector>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
+#include "base/containers/span.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "base/path_service.h"
 #include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "build/build_config.h"
 
 #if BUILDFLAG(IS_LINUX)
@@ -59,7 +66,7 @@ static constexpr char kExtensionWakeupFileContent[] = "";
 //
 // DEFAULT_UDD (default user data directory) is documented here:
 //
-//   https://chromium.googlesource.com/chromium/src/+/master/docs/user_data_dir.md#default-location
+//   https://chromium.googlesource.com/chromium/src/+/main/docs/user_data_dir.md#default-location
 //
 // Note that the default UDD is always used, and UDD overrides from browser
 // launch args or env vars are ignored so the path is more discoverable by the
@@ -90,6 +97,8 @@ std::vector<base::FilePath> GetRemoteStateChangeDirPaths() {
   dirs.push_back(base_path.Append("google-chrome").Append(kStateChangeDirName));
   dirs.push_back(
       base_path.Append("google-chrome-beta").Append(kStateChangeDirName));
+  dirs.push_back(
+      base_path.Append("google-chrome-canary").Append(kStateChangeDirName));
   dirs.push_back(
       base_path.Append("google-chrome-unstable").Append(kStateChangeDirName));
   dirs.push_back(base_path.Append("chromium").Append(kStateChangeDirName));
@@ -154,18 +163,6 @@ std::vector<base::FilePath> GetRemoteStateChangeDirPaths() {
 
 }  // namespace
 
-#if defined(NDEBUG)
-// Prod extension ID
-const base::FilePath::CharType
-    RemoteWebAuthnExtensionNotifier::kRemoteWebAuthnExtensionId[] =
-        FILE_PATH_LITERAL("djjmngfglakhkhmgcfdmjalogilepkhd");
-#else
-// Dev extension ID
-const base::FilePath::CharType
-    RemoteWebAuthnExtensionNotifier::kRemoteWebAuthnExtensionId[] =
-        FILE_PATH_LITERAL("hfmpidnhglhndeamkbopljnclamhmnaj");
-#endif
-
 // Core class for writing wakeup files on the IO sequence. Must be used and
 // deleted on the same sequence.
 class RemoteWebAuthnExtensionNotifier::Core final {
@@ -198,14 +195,34 @@ void RemoteWebAuthnExtensionNotifier::Core::WakeUpExtension() {
       VLOG(1) << "Ignored non-directory path: " << dir;
       continue;
     }
-    auto file_path = dir.Append(kRemoteWebAuthnExtensionId);
-    VLOG(1) << "Writing extension wakeup file: " << file_path;
-    base::File file(file_path,
-                    base::File::FLAG_CREATE_ALWAYS | base::File::FLAG_WRITE);
-    file.WriteAtCurrentPos(kExtensionWakeupFileContent,
-                           sizeof(kExtensionWakeupFileContent));
-    file.Flush();
+    for (const auto& id : GetRemoteWebAuthnExtensionIds()) {
+      auto file_path = dir.Append(id);
+      VLOG(1) << "Writing extension wakeup file: " << file_path;
+      base::File file(file_path,
+                      base::File::FLAG_CREATE_ALWAYS | base::File::FLAG_WRITE);
+      file.WriteAtCurrentPos(
+          base::byte_span_with_nul_from_cstring(kExtensionWakeupFileContent));
+      file.Flush();
+    }
   }
+}
+
+// static
+const std::vector<base::FilePath::StringType>&
+RemoteWebAuthnExtensionNotifier::GetRemoteWebAuthnExtensionIds() {
+  static const base::NoDestructor<std::vector<base::FilePath::StringType>> ids({
+    // Prod extension ID
+    FILE_PATH_LITERAL("djjmngfglakhkhmgcfdmjalogilepkhd"),
+
+    // For debug builds we wake up both extensions, so that developers don't
+    // have to build and install the dev extension for using WebAuthn
+    // forwarding.
+#if !defined(NDEBUG)
+        // Dev extension ID
+        FILE_PATH_LITERAL("hfmpidnhglhndeamkbopljnclamhmnaj"),
+#endif
+  });
+  return *ids;
 }
 
 RemoteWebAuthnExtensionNotifier::RemoteWebAuthnExtensionNotifier()
@@ -241,7 +258,7 @@ void RemoteWebAuthnExtensionNotifier::NotifyStateChange() {
     return;
   }
   is_wake_up_scheduled_ = true;
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&RemoteWebAuthnExtensionNotifier::WakeUpExtension,
                      weak_factory_.GetWeakPtr()));

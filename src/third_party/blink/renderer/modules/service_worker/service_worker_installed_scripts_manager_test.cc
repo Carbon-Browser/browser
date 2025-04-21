@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <utility>
 
+#include "base/containers/span.h"
 #include "base/run_loop.h"
 #include "base/synchronization/waitable_event.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -14,8 +15,9 @@
 #include "third_party/blink/public/mojom/service_worker/service_worker_installed_scripts_manager.mojom-blink.h"
 #include "third_party/blink/public/platform/web_url.h"
 #include "third_party/blink/public/web/web_embedded_worker.h"
+#include "third_party/blink/renderer/platform/scheduler/public/non_main_thread.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
-#include "third_party/blink/renderer/platform/scheduler/public/thread.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
@@ -94,15 +96,23 @@ class BrowserSideSender
     std::move(requested_script_closure_).Run();
   }
 
+  // Send |data| with null terminator.
   void PushDataPipe(const std::string& data,
                     const mojo::DataPipeProducerHandle& handle) {
-    // Send |data| with null terminator.
     ASSERT_TRUE(handle.is_valid());
-    uint32_t written_bytes = static_cast<uint32_t>(data.size() + 1);
-    MojoResult rv = handle.WriteData(data.c_str(), &written_bytes,
-                                     MOJO_WRITE_DATA_FLAG_NONE);
+
+    size_t actually_written_bytes = 0;
+    MojoResult rv =
+        handle.WriteData(base::as_byte_span(data), MOJO_WRITE_DATA_FLAG_NONE,
+                         actually_written_bytes);
     ASSERT_EQ(MOJO_RESULT_OK, rv);
-    ASSERT_EQ(data.size() + 1, written_bytes);
+    ASSERT_EQ(data.size(), actually_written_bytes);
+
+    char nul_char = '\0';
+    rv = handle.WriteData(base::byte_span_from_ref(nul_char),
+                          MOJO_WRITE_DATA_FLAG_NONE, actually_written_bytes);
+    ASSERT_EQ(MOJO_RESULT_OK, rv);
+    ASSERT_EQ(1u, actually_written_bytes);
   }
 
   base::OnceClosure requested_script_closure_;
@@ -129,12 +139,12 @@ CrossThreadHTTPHeaderMapData ToCrossThreadHTTPHeaderMapData(
 class ServiceWorkerInstalledScriptsManagerTest : public testing::Test {
  public:
   ServiceWorkerInstalledScriptsManagerTest()
-      : io_thread_(
-            Thread::CreateThread(ThreadCreationParams(ThreadType::kTestThread)
-                                     .SetThreadNameForTest("io thread"))),
-        worker_thread_(
-            Thread::CreateThread(ThreadCreationParams(ThreadType::kTestThread)
-                                     .SetThreadNameForTest("worker thread"))),
+      : io_thread_(NonMainThread::CreateThread(
+            ThreadCreationParams(ThreadType::kTestThread)
+                .SetThreadNameForTest("io thread"))),
+        worker_thread_(NonMainThread::CreateThread(
+            ThreadCreationParams(ThreadType::kTestThread)
+                .SetThreadNameForTest("worker thread"))),
         worker_waiter_(std::make_unique<base::WaitableEvent>(
             base::WaitableEvent::ResetPolicy::AUTOMATIC,
             base::WaitableEvent::InitialState::NOT_SIGNALED)) {}
@@ -200,8 +210,9 @@ class ServiceWorkerInstalledScriptsManagerTest : public testing::Test {
     waiter->Signal();
   }
 
-  std::unique_ptr<Thread> io_thread_;
-  std::unique_ptr<Thread> worker_thread_;
+  test::TaskEnvironment task_environment_;
+  std::unique_ptr<NonMainThread> io_thread_;
+  std::unique_ptr<NonMainThread> worker_thread_;
 
   std::unique_ptr<base::WaitableEvent> worker_waiter_;
 

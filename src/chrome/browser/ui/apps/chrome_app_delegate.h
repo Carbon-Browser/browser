@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/callback_list.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "extensions/browser/app_window/app_delegate.h"
@@ -32,10 +32,6 @@ class ChromeAppDelegate : public extensions::AppDelegate {
 
   static void DisableExternalOpenForTesting();
 
-  void set_for_lock_screen_app(bool for_lock_screen_app) {
-    for_lock_screen_app_ = for_lock_screen_app;
-  }
-
  private:
   static void RelinquishKeepAliveAfterTimeout(
       const base::WeakPtr<ChromeAppDelegate>& chrome_app_delegate);
@@ -50,12 +46,14 @@ class ChromeAppDelegate : public extensions::AppDelegate {
   content::WebContents* OpenURLFromTab(
       content::BrowserContext* context,
       content::WebContents* source,
-      const content::OpenURLParams& params) override;
+      const content::OpenURLParams& params,
+      base::OnceCallback<void(content::NavigationHandle&)>
+          navigation_handle_callback) override;
   void AddNewContents(content::BrowserContext* context,
                       std::unique_ptr<content::WebContents> new_contents,
                       const GURL& target_url,
                       WindowOpenDisposition disposition,
-                      const gfx::Rect& initial_rect,
+                      const blink::mojom::WindowFeatures& window_features,
                       bool user_gesture) override;
   void RunFileChooser(content::RenderFrameHost* render_frame_host,
                       scoped_refptr<content::FileSelectListener> listener,
@@ -67,7 +65,7 @@ class ChromeAppDelegate : public extensions::AppDelegate {
       const extensions::Extension* extension) override;
   bool CheckMediaAccessPermission(
       content::RenderFrameHost* render_frame_host,
-      const GURL& security_origin,
+      const url::Origin& security_origin,
       blink::mojom::MediaStreamType type,
       const extensions::Extension* extension) override;
   int PreferredIconSize() const override;
@@ -86,7 +84,6 @@ class ChromeAppDelegate : public extensions::AppDelegate {
 
   bool has_been_shown_;
   bool is_hidden_;
-  bool for_lock_screen_app_;
   const raw_ptr<Profile> profile_;
   std::unique_ptr<ScopedKeepAlive> keep_alive_;
   std::unique_ptr<ScopedProfileKeepAlive> profile_keep_alive_;

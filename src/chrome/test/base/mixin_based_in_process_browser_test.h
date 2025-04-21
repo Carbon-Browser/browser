@@ -1,4 +1,4 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/test/base/in_process_browser_test.h"
 
 //
@@ -76,9 +77,10 @@ class InProcessBrowserTestMixin {
   //   SetUpInProcessBrowserTestFixture
   //   CreatedBrowserMainParts
   //   SetUpOnMainThread
+  //   PostRunTestOnMainThread
   //   TearDownOnMainThread
   //   TearDownInProcessBrowserTestFixture
-  // TearDown
+  //   TearDown
   //
   // SetUp is the function which calls SetUpCommandLine,
   // SetUpDefaultCommandLine, etc.
@@ -90,6 +92,7 @@ class InProcessBrowserTestMixin {
   virtual void CreatedBrowserMainParts(
       content::BrowserMainParts* browser_main_parts);
   virtual void SetUpOnMainThread();
+  virtual void PostRunTestOnMainThread();
   virtual void TearDownOnMainThread();
   virtual void TearDownInProcessBrowserTestFixture();
   virtual void TearDown();
@@ -111,6 +114,7 @@ class InProcessBrowserTestMixinHost final {
   void SetUpInProcessBrowserTestFixture();
   void CreatedBrowserMainParts(content::BrowserMainParts* browser_main_parts);
   void SetUpOnMainThread();
+  void PostRunTestOnMainThread();
   void TearDownOnMainThread();
   void TearDownInProcessBrowserTestFixture();
   void TearDown();
@@ -121,7 +125,7 @@ class InProcessBrowserTestMixinHost final {
   // simpler.
   friend class InProcessBrowserTestMixin;
 
-  std::vector<InProcessBrowserTestMixin*> mixins_;
+  std::vector<raw_ptr<InProcessBrowserTestMixin, VectorExperimental>> mixins_;
 };
 
 // An InProcessBrowserTest which supports mixins.
@@ -143,6 +147,7 @@ class MixinBasedInProcessBrowserTest : public InProcessBrowserTest {
   void CreatedBrowserMainParts(
       content::BrowserMainParts* browser_main_parts) override;
   void SetUpOnMainThread() override;
+  void PostRunTestOnMainThread() override;
   void TearDownOnMainThread() override;
   void TearDownInProcessBrowserTestFixture() override;
   void TearDown() override;

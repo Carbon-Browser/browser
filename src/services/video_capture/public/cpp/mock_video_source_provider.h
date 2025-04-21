@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
+#include "mojo/public/cpp/bindings/remote_set.h"
 #include "services/video_capture/public/mojom/devices_changed_observer.mojom.h"
 #include "services/video_capture/public/mojom/producer.mojom.h"
 #include "services/video_capture/public/mojom/video_source_provider.mojom.h"
@@ -29,7 +30,6 @@ class MockVideoSourceProvider
   void AddSharedMemoryVirtualDevice(
       const media::VideoCaptureDeviceInfo& device_info,
       mojo::PendingRemote<video_capture::mojom::Producer> producer,
-      bool send_buffer_handles_to_producer_as_raw_file_descriptors,
       mojo::PendingReceiver<video_capture::mojom::SharedMemoryVirtualDevice>
           virtual_device_receiver) override;
 
@@ -41,7 +41,24 @@ class MockVideoSourceProvider
       mojo::PendingRemote<video_capture::mojom::DevicesChangedObserver>
           observer,
       bool raise_event_if_virtual_devices_already_present) override {
-    NOTIMPLEMENTED();
+    virtual_device_observers_.Add(std::move(observer));
+  }
+  void RegisterDevicesChangedObserver(
+      mojo::PendingRemote<video_capture::mojom::DevicesChangedObserver>
+          observer) override {
+    device_observers_.Add(std::move(observer));
+  }
+
+  void RaiseVirtualDeviceChangeEvent() {
+    for (const auto& observer : virtual_device_observers_) {
+      observer->OnDevicesChanged();
+    }
+  }
+
+  void RaiseDeviceChangeEvent() {
+    for (const auto& observer : device_observers_) {
+      observer->OnDevicesChanged();
+    }
   }
 
   void Close(CloseCallback callback) override;
@@ -64,6 +81,9 @@ class MockVideoSourceProvider
            mojo::PendingReceiver<video_capture::mojom::TextureVirtualDevice>
                virtual_device_receiver));
   MOCK_METHOD1(DoClose, void(CloseCallback& callback));
+
+  mojo::RemoteSet<mojom::DevicesChangedObserver> device_observers_;
+  mojo::RemoteSet<mojom::DevicesChangedObserver> virtual_device_observers_;
 };
 
 }  // namespace video_capture

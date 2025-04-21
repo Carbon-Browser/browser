@@ -1,6 +1,8 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+import {getSingleTab} from '/_test_resources/test_util/tabs_util.js';
 
 const NEW_TITLE_FROM_FUNCTION = 'Hello, world!';
 const NEW_TITLE_FROM_FILE = 'Goodnight';
@@ -33,14 +35,6 @@ function getExecutionWorldFlags() {
     isolatedWorld: window.isolatedWorldFlag || '<none>',
     mainWorld: window.mainWorldFlag || '<none>',
   };
-}
-
-async function getSingleTab(query) {
-  const tabs = await new Promise(resolve => {
-    chrome.tabs.query(query, resolve);
-  });
-  chrome.test.assertEq(1, tabs.length);
-  return tabs[0];
 }
 
 chrome.test.runTests([
@@ -308,7 +302,7 @@ chrome.test.runTests([
     let tab = await getSingleTab(query);
     // Double-check that the title is not the one from the script file to be
     // injected.
-    chrome.test.assertFalse(tab.title == NEW_TITLE_FROM_FILE);
+    chrome.test.assertNe(NEW_TITLE_FROM_FILE, tab.title);
     const results = await chrome.scripting.executeScript({
       target: {
         tabId: tab.id,

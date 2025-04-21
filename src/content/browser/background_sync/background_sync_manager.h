@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/cancelable_callback.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
@@ -74,7 +74,7 @@ class CONTENT_EXPORT BackgroundSyncManager
 
   static std::unique_ptr<BackgroundSyncManager> Create(
       scoped_refptr<ServiceWorkerContextWrapper> service_worker_context,
-      scoped_refptr<DevToolsBackgroundServicesContextImpl> devtools_context);
+      DevToolsBackgroundServicesContextImpl& devtools_context);
 
   BackgroundSyncManager(const BackgroundSyncManager&) = delete;
   BackgroundSyncManager& operator=(const BackgroundSyncManager&) = delete;
@@ -204,7 +204,7 @@ class CONTENT_EXPORT BackgroundSyncManager
  protected:
   BackgroundSyncManager(
       scoped_refptr<ServiceWorkerContextWrapper> context,
-      scoped_refptr<DevToolsBackgroundServicesContextImpl> devtools_context);
+      DevToolsBackgroundServicesContextImpl& devtools_context);
 
   // Init must be called before any public member function. Only call it once.
   void Init();
@@ -496,7 +496,11 @@ class CONTENT_EXPORT BackgroundSyncManager
   scoped_refptr<ServiceWorkerContextWrapper> service_worker_context_;
   std::unique_ptr<BackgroundSyncProxy> proxy_;
 
-  scoped_refptr<DevToolsBackgroundServicesContextImpl> devtools_context_;
+  // Owned by StoragePartitionImpl; cleared on destruction during
+  // BackgroundSyncContextImpl shutdown, as part of StoragePartitionImpl
+  // shutdown.
+  raw_ptr<DevToolsBackgroundServicesContextImpl> devtools_context_;
+
   std::unique_ptr<BackgroundSyncParameters> parameters_;
 
   // True if the manager is disabled and registrations should fail.

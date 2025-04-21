@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,14 +13,14 @@
 
 namespace login_detection {
 
-const base::Feature kLoginDetection {
-  "LoginDetection",
+BASE_FEATURE(kLoginDetection,
+             "LoginDetection",
 #if BUILDFLAG(IS_ANDROID)
-      base::FEATURE_ENABLED_BY_DEFAULT
+             base::FEATURE_ENABLED_BY_DEFAULT
 #else
-      base::FEATURE_DISABLED_BY_DEFAULT
+             base::FEATURE_DISABLED_BY_DEFAULT
 #endif
-};
+);
 
 bool IsLoginDetectionFeatureEnabled() {
   return base::FeatureList::IsEnabled(kLoginDetection);
@@ -34,9 +34,8 @@ std::string GetSiteNameForURL(const GURL& url) {
   // Use the default port for the scheme to ignore any non-standard ports for
   // the scheme from the final string being returned. So,
   // https://www.foo.com:1000/page.html would return just https://foo.com
-  return url::SchemeHostPort(
-             scheme, domain.empty() ? url.host() : domain,
-             url::DefaultPortForScheme(scheme.c_str(), scheme.length()))
+  return url::SchemeHostPort(scheme, domain.empty() ? url.host() : domain,
+                             url::DefaultPortForScheme(scheme))
       .Serialize();
 }
 

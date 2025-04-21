@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -91,12 +91,10 @@ class CastDeviceCountMetrics : public DeviceCountMetrics {
 
   static const char kHistogramCastKnownDeviceCount[];
   static const char kHistogramCastConnectedDeviceCount[];
-  static const char kHistogramCastCachedSinksAvailableCount[];
   static const char kHistogramCastDiscoverySinkSource[];
 
   void RecordDeviceCounts(size_t available_device_count,
                           size_t known_device_count) override;
-  void RecordCachedSinksAvailableCount(size_t cached_sink_count);
   void RecordCastSinkDiscoverySource(SinkSource sink_source);
 };
 
@@ -104,7 +102,6 @@ class CastAnalytics {
  public:
   static const char kHistogramCastChannelConnectResult[];
   static const char kHistogramCastChannelError[];
-  static const char kHistogramCastDeviceNameLength[];
   static const char kHistogramCastMdnsChannelOpenSuccess[];
   static const char kHistogramCastMdnsChannelOpenFailure[];
 
@@ -113,7 +110,6 @@ class CastAnalytics {
   static void RecordDeviceChannelError(MediaRouterChannelError channel_error);
   static void RecordDeviceChannelOpenDuration(bool success,
                                               const base::TimeDelta& duration);
-  static void RecordDeviceNameLength(size_t length);
 };
 
 // Metrics for wired display (local screen) sink counts.

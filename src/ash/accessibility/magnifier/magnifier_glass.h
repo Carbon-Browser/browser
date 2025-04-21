@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_observer.h"
 #include "ui/gfx/shadow_value.h"
@@ -82,17 +83,18 @@ class ASH_EXPORT MagnifierGlass : public aura::WindowObserver,
 
   // The host widget is the root parent for all of the layers. The widget's
   // location follows the mouse, which causes the layers to also move.
-  views::Widget* host_widget_ = nullptr;
+  raw_ptr<views::Widget> host_widget_ = nullptr;
+
+  // Draws a multicolored black/white/black border on top of |border_layer_|.
+  // Also draws a shadow around the border. This must be ordered before
+  // |border_layer_| so that it gets destroyed after |border_layer_|, otherwise
+  // |border_layer_| will have a pointer to a deleted delegate.
+  std::unique_ptr<BorderRenderer> border_renderer_;
 
   // Draws the background with a zoom filter applied.
   std::unique_ptr<ui::Layer> zoom_layer_;
   // Draws an outline that is overlaid on top of |zoom_layer_|.
   std::unique_ptr<ui::Layer> border_layer_;
-  // Draws a multicolored black/white/black border on top of |border_layer_|.
-  // Also draws a shadow around the border. This must be ordered after
-  // |border_layer_| so that it gets destroyed after |border_layer_|, otherwise
-  // |border_layer_| will have a pointer to a deleted delegate.
-  std::unique_ptr<BorderRenderer> border_renderer_;
 };
 
 }  // namespace ash

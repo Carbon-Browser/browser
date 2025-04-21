@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,10 @@ const LoginAcceleratorData kLoginAcceleratorData[] = {
     }, {
         kShowFeedback,
         ui::VKEY_I, ui::EF_SHIFT_DOWN | ui::EF_ALT_DOWN,
+        true, kScopeOobe | kScopeLogin,
+    },{
+        kShowFeedback,
+        ui::VKEY_I, ui::EF_CONTROL_DOWN | ui::EF_COMMAND_DOWN,
         true, kScopeOobe | kScopeLogin,
     }, {
         kShowResetScreen,
@@ -59,13 +63,13 @@ const LoginAcceleratorData kLoginAcceleratorData[] = {
        ui::VKEY_H, ui::EF_CONTROL_DOWN | ui::EF_ALT_DOWN,
        false, kScopeOobe,
     }, {
-       kEnableConsumerKiosk,
-       ui::VKEY_K, ui::EF_CONTROL_DOWN | ui::EF_ALT_DOWN | ui::EF_SHIFT_DOWN,
-       false, kScopeOobe,
-    }, {
        kLaunchDiagnostics,
        ui::VKEY_ESCAPE, ui::EF_CONTROL_DOWN | ui::EF_COMMAND_DOWN,
        true, kScopeOobe | kScopeLogin,
+    }, {
+      kEnableQuickStart,
+      ui::VKEY_Q, ui::EF_CONTROL_DOWN | ui::EF_ALT_DOWN,
+       false, kScopeOobe,
     },
 };
 // clang-format on

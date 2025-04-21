@@ -1,16 +1,19 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.contextualsearch;
 
+import org.chromium.chrome.browser.profiles.Profile;
+
 /**
- * A mock ContextualSearchPolicy class that excludes any business logic.
- * TODO(mdjones): Allow the return values of these function to be set.
+ * A mock ContextualSearchPolicy class that excludes any business logic. TODO(mdjones): Allow the
+ * return values of these function to be set.
  */
 public class MockContextualSearchPolicy extends ContextualSearchPolicy {
-    public MockContextualSearchPolicy(ContextualSearchSelectionController selectionController) {
-        super(selectionController, null);
+    public MockContextualSearchPolicy(
+            Profile profile, ContextualSearchSelectionController selectionController) {
+        super(profile, selectionController, null);
     }
 
     @Override

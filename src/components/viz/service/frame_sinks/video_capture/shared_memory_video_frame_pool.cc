@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <algorithm>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 
 using media::VideoFrame;
@@ -81,7 +81,7 @@ SharedMemoryVideoFramePool::CloneHandleForDelivery(const VideoFrame& frame) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   const auto it = utilized_buffers_.find(&frame);
-  DCHECK(it != utilized_buffers_.end());
+  CHECK(it != utilized_buffers_.end());
 
   return media::mojom::VideoBufferHandle::NewReadOnlyShmemRegion(
       it->second.Duplicate());
@@ -117,9 +117,9 @@ scoped_refptr<VideoFrame> SharedMemoryVideoFramePool::WrapBuffer(
       format, size, gfx::Rect(size), size,
       static_cast<uint8_t*>(pooled_buffer.mapping.memory()),
       pooled_buffer.mapping.size(), base::TimeDelta());
-  DCHECK(frame);
+  CHECK(frame);
   // Sanity-check the assumption being made for SetMarkedBuffer():
-  DCHECK_EQ(frame->data(0), pooled_buffer.mapping.memory());
+  CHECK_EQ(frame->data(0), pooled_buffer.mapping.memory());
   utilized_buffers_.emplace(frame.get(), std::move(pooled_buffer.region));
   frame->AddDestructionObserver(
       base::BindOnce(&SharedMemoryVideoFramePool::OnFrameWrapperDestroyed,
@@ -137,12 +137,12 @@ void SharedMemoryVideoFramePool::OnFrameWrapperDestroyed(
   // Return the buffer to the pool by moving the PooledBuffer back into
   // |available_buffers_|.
   const auto it = utilized_buffers_.find(frame);
-  DCHECK(it != utilized_buffers_.end());
+  CHECK(it != utilized_buffers_.end());
   available_buffers_.emplace_back(
       PooledBuffer{std::move(it->second), std::move(mapping)});
   DCHECK(available_buffers_.back().IsValid());
   utilized_buffers_.erase(it);
-  DCHECK_LE(available_buffers_.size() + utilized_buffers_.size(), capacity());
+  CHECK_LE(available_buffers_.size() + utilized_buffers_.size(), capacity());
 }
 
 bool SharedMemoryVideoFramePool::CanLogSharedMemoryFailure() {

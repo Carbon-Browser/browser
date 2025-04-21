@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "chromecast/device/bluetooth/shlib/gatt_client.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
@@ -57,7 +58,7 @@ class MockGattClient : public GattClient {
   Gatt::Client::Delegate* delegate() const { return delegate_; }
 
  private:
-  Gatt::Client::Delegate* delegate_ = nullptr;
+  raw_ptr<Gatt::Client::Delegate> delegate_ = nullptr;
 };
 
 inline MockGattClient::MockGattClient() {

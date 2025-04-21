@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 #include "third_party/blink/renderer/modules/indexeddb/idb_key_path.h"
 #include "third_party/blink/renderer/modules/indexeddb/idb_value_wrapping.h"
 #include "third_party/blink/renderer/platform/blob/blob_data.h"
-#include "third_party/blink/renderer/platform/wtf/shared_buffer.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
 namespace blink {
@@ -23,14 +22,10 @@ std::unique_ptr<IDBValue> CreateNullIDBValueForTesting(v8::Isolate* isolate) {
 
   base::span<const uint8_t> ssv_wire_bytes = null_ssv->GetWireData();
 
-  scoped_refptr<SharedBuffer> idb_value_buffer = SharedBuffer::Create();
-  idb_value_buffer->Append(reinterpret_cast<const char*>(ssv_wire_bytes.data()),
-                           ssv_wire_bytes.size());
-  auto idb_value = std::make_unique<IDBValue>(std::move(idb_value_buffer),
+  auto idb_value = std::make_unique<IDBValue>(Vector<char>(ssv_wire_bytes),
                                               Vector<WebBlobInfo>());
   idb_value->SetInjectedPrimaryKey(IDBKey::CreateNumber(42.0),
                                    IDBKeyPath(String("primaryKey")));
-  idb_value->SetIsolate(isolate);
   return idb_value;
 }
 
@@ -46,19 +41,16 @@ std::unique_ptr<IDBValue> CreateIDBValueForTesting(v8::Isolate* isolate,
   IDBValueWrapper wrapper(isolate, v8_array,
                           SerializedScriptValue::SerializeOptions::kSerialize,
                           non_throwable_exception_state);
+  wrapper.set_wrapping_threshold_for_test(
+      create_wrapped_value ? 0 : 1024 * element_count);
   wrapper.DoneCloning();
-  wrapper.WrapIfBiggerThan(create_wrapped_value ? 0 : 1024 * element_count);
 
-  Vector<scoped_refptr<BlobDataHandle>> blob_data_handles =
-      wrapper.TakeBlobDataHandles();
   Vector<WebBlobInfo> blob_infos = wrapper.TakeBlobInfo();
-  scoped_refptr<SharedBuffer> wrapped_marker_buffer = wrapper.TakeWireBytes();
 
-  auto idb_value = std::make_unique<IDBValue>(std::move(wrapped_marker_buffer),
+  auto idb_value = std::make_unique<IDBValue>(wrapper.TakeWireBytes(),
                                               std::move(blob_infos));
   idb_value->SetInjectedPrimaryKey(IDBKey::CreateNumber(42.0),
                                    IDBKeyPath(String("primaryKey")));
-  idb_value->SetIsolate(isolate);
 
   DCHECK_EQ(create_wrapped_value,
             IDBValueUnwrapper::IsWrapped(idb_value.get()));

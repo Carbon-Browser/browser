@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <sstream>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
@@ -31,18 +31,12 @@ void Log(const media::MediaLogRecord& event) {
   if (event.type == media::MediaLogRecord::Type::kMediaStatus) {
     DVLOG(1) << "MediaEvent: " << ToJSON(event);
   } else if (event.type == media::MediaLogRecord::Type::kMessage &&
-             event.params.FindKey("error")) {
+             event.params.Find("error")) {
     DVLOG(1) << "MediaEvent: " << ToJSON(event);
   } else if (event.type != media::MediaLogRecord::Type::kMediaPropertyChange) {
     DVLOG(1) << "MediaEvent: " << ToJSON(event);
   }
 }
-
-// This string comes from the TypeName template specialization
-// in media_log_type_enforcement.h, it's not encoded anywhere, so it's
-// just typed out here.
-constexpr char kDurationChangedMessage[] = "kDurationChanged";
-constexpr char kBufferingStateChangedMessage[] = "kBufferingStateChanged";
 
 }  // namespace
 
@@ -105,15 +99,22 @@ void BatchingMediaLog::AddLogRecordLocked(
         break;
 
       case media::MediaLogRecord::Type::kMediaEventTriggered: {
-        DCHECK(event->params.FindKey(MediaLog::kEventKey));
-        const auto* event_key =
-            event->params.FindStringKey(MediaLog::kEventKey);
-        if (*event_key == kDurationChangedMessage) {
+        const base::Value* event_key = event->params.Find(MediaLog::kEventKey);
+        DCHECK(event_key);
+
+        // These strings come from the TypeName template specialization
+        // in media_log_type_enforcement.h, it's not encoded anywhere, so it's
+        // just typed out here.
+        if (*event_key == "kDurationChanged") {
           // This may fire many times for badly muxed media; only keep the last.
           last_duration_changed_event_ = *event;
-        } else if (*event_key == kBufferingStateChangedMessage) {
+        } else if (*event_key == "kBufferingStateChanged") {
           // This may fire many times on poor networks; only keep the last.
           last_buffering_state_event_ = *event;
+        } else if (*event_key == "kPlay") {
+          last_play_event_ = *event;
+        } else if (*event_key == "kPause") {
+          last_pause_event_ = *event;
         } else {
           MaybeQueueEvent_Locked(std::move(event));
         }
@@ -121,7 +122,7 @@ void BatchingMediaLog::AddLogRecordLocked(
       }
 
       case media::MediaLogRecord::Type::kMessage:
-        if (event->params.FindKey(media::MediaLogMessageLevelToString(
+        if (event->params.Find(media::MediaLogMessageLevelToString(
                 media::MediaLogMessageLevel::kERROR)) &&
             !cached_media_error_for_message_) {
           cached_media_error_for_message_ = *event;
@@ -183,9 +184,9 @@ std::string BatchingMediaLog::MediaEventToMessageString(
   switch (event.type) {
     case media::MediaLogRecord::Type::kMediaStatus: {
       const std::string* group =
-          event.params.FindStringKey(media::StatusConstants::kGroupKey);
+          event.params.FindString(media::StatusConstants::kGroupKey);
       auto code =
-          event.params.FindIntKey(media::StatusConstants::kCodeKey).value_or(0);
+          event.params.FindInt(media::StatusConstants::kCodeKey).value_or(0);
       DCHECK_NE(code, 0);
       if (group && *group == media::PipelineStatus::Traits::Group()) {
         return PipelineStatusToString(
@@ -196,18 +197,20 @@ std::string BatchingMediaLog::MediaEventToMessageString(
       return formatted.str();
     }
     case media::MediaLogRecord::Type::kMessage: {
-      std::string result;
-      if (event.params.GetString(
-              MediaLogMessageLevelToString(media::MediaLogMessageLevel::kERROR),
-              &result)) {
-        base::ReplaceChars(result, "\n", " ", &result);
+      const std::string* result = event.params.FindString(
+          MediaLogMessageLevelToString(media::MediaLogMessageLevel::kERROR));
+      if (result) {
+        std::string result_copy;
+        base::ReplaceChars(*result, "\n", " ", &result_copy);
+        return result_copy;
       }
-      return result;
-    }
-    default:
-      NOTREACHED();
       return "";
+    }
+    case media::MediaLogRecord::Type::kMediaPropertyChange:
+    case media::MediaLogRecord::Type::kMediaEventTriggered:
+      NOTREACHED();
   }
+  NOTREACHED();
 }
 
 void BatchingMediaLog::SendQueuedMediaEvents() {
@@ -225,6 +228,16 @@ void BatchingMediaLog::SendQueuedMediaEvents() {
   if (last_buffering_state_event_) {
     queued_media_events_.push_back(*last_buffering_state_event_);
     last_buffering_state_event_.reset();
+  }
+
+  if (last_play_event_) {
+    queued_media_events_.push_back(*last_play_event_);
+    last_play_event_.reset();
+  }
+
+  if (last_pause_event_) {
+    queued_media_events_.push_back(*last_pause_event_);
+    last_pause_event_.reset();
   }
 
   last_ipc_send_time_ = tick_clock_->NowTicks();
@@ -267,7 +280,7 @@ void BatchingMediaLog::MaybeQueueEvent_Locked(
   queued_media_events_.back().id = event->id;
   queued_media_events_.back().type = media::MediaLogRecord::Type::kMessage;
   queued_media_events_.back().time = base::TimeTicks::Now();
-  queued_media_events_.back().params.SetStringPath(
+  queued_media_events_.back().params.Set(
       media::MediaLogMessageLevelToString(
           media::MediaLogMessageLevel::kWARNING),
       message);

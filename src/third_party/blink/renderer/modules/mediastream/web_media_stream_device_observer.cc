@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,15 +26,8 @@ MediaStreamDevices WebMediaStreamDeviceObserver::GetNonScreenCaptureDevices() {
 void WebMediaStreamDeviceObserver::AddStreams(
     const WebString& label,
     const mojom::blink::StreamDevicesSet& stream_devices_set,
-    OnDeviceStoppedCb on_device_stopped_cb,
-    OnDeviceChangedCb on_device_changed_cb,
-    OnDeviceRequestStateChangeCb on_device_request_state_change_cb,
-    OnDeviceCaptureHandleChangeCb on_device_capture_handle_change_cb) {
-  observer_->AddStreams(label, stream_devices_set,
-                        std::move(on_device_stopped_cb),
-                        std::move(on_device_changed_cb),
-                        std::move(on_device_request_state_change_cb),
-                        std::move(on_device_capture_handle_change_cb));
+    const StreamCallbacks& stream_callbacks) {
+  observer_->AddStreams(label, stream_devices_set, stream_callbacks);
 }
 
 void WebMediaStreamDeviceObserver::AddStream(const WebString& label,

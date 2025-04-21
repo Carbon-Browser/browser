@@ -1,12 +1,15 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef NET_SSL_CLIENT_CERT_STORE_NSS_H_
 #define NET_SSL_CLIENT_CERT_STORE_NSS_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/memory/weak_ptr.h"
 #include "net/base/net_export.h"
+#include "net/ssl/client_cert_matcher.h"
 #include "net/ssl/client_cert_store.h"
 
 typedef struct CERTCertListStr CERTCertList;
@@ -27,6 +30,11 @@ class NET_EXPORT ClientCertStoreNSS : public ClientCertStore {
           const HostPortPair& /* server */)>;
   using CertFilter = base::RepeatingCallback<bool(CERTCertificate*)>;
 
+  class IssuerSourceNSS : public ClientCertIssuerSource {
+    std::vector<bssl::UniquePtr<CRYPTO_BUFFER>> GetCertsByName(
+        base::span<const uint8_t> name) override;
+  };
+
   explicit ClientCertStoreNSS(
       const PasswordDelegateFactory& password_delegate_factory);
 
@@ -36,7 +44,7 @@ class NET_EXPORT ClientCertStoreNSS : public ClientCertStore {
   ~ClientCertStoreNSS() override;
 
   // ClientCertStore:
-  void GetClientCerts(const SSLCertRequestInfo& cert_request_info,
+  void GetClientCerts(scoped_refptr<const SSLCertRequestInfo> cert_request_info,
                       ClientCertListCallback callback) override;
 
   // Examines the certificates in |identities| to find all certificates that
@@ -58,14 +66,19 @@ class NET_EXPORT ClientCertStoreNSS : public ClientCertStore {
       ClientCertIdentityList* identities);
 
  private:
-  ClientCertIdentityList GetAndFilterCertsOnWorkerThread(
+  static ClientCertIdentityList GetAndFilterCertsOnWorkerThread(
       scoped_refptr<crypto::CryptoModuleBlockingPasswordDelegate>
           password_delegate,
-      const SSLCertRequestInfo* request);
+      scoped_refptr<const SSLCertRequestInfo> request);
+
+  void OnClientCertsResponse(ClientCertListCallback callback,
+                             ClientCertIdentityList identities);
 
   // The factory for creating the delegate for requesting a password to a
   // PKCS#11 token. May be null.
   PasswordDelegateFactory password_delegate_factory_;
+
+  base::WeakPtrFactory<ClientCertStoreNSS> weak_factory_{this};
 };
 
 }  // namespace net

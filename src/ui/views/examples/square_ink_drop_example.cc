@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,13 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "ui/views/animation/ink_drop_host_view.h"
+#include "base/functional/bind.h"
+#include "ui/views/animation/ink_drop_host.h"
 #include "ui/views/animation/ink_drop_ripple.h"
 #include "ui/views/animation/ink_drop_state.h"
 #include "ui/views/view.h"
 
-namespace views {
-namespace examples {
+namespace views::examples {
 
 SquareInkDropExample::SquareInkDropExample()
     : InkDropExample("Square Ink Drop") {}
@@ -35,5 +34,4 @@ void SquareInkDropExample::CreateInkDrop() {
   InkDrop::Install(ink_drop_view(), std::move(ink_drop_host));
 }
 
-}  // namespace examples
-}  // namespace views
+}  // namespace views::examples

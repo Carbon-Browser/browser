@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,12 @@
 #include <stddef.h>
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "cc/paint/filter_operations.h"
 #include "components/viz/common/quads/quad_list.h"
 #include "components/viz/common/viz_common_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/display_color_spaces.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/rrect_f.h"
@@ -39,6 +39,16 @@ class VIZ_COMMON_EXPORT RenderPassInternal {
                                          SkColor4f color,
                                          SkBlendMode blend_mode);
 
+  // Replaces a quad in `quad_list` with a SolidColorDrawQuad with a transparent
+  // hole. This will either be:
+  // * If `quad` requires blending and uses SkBlendMode::kSrcOver then
+  //   use SkColors::kBlack with SkBlendMode::kDstOut and set
+  //   `*quad_was_opaque` to false.
+  // * SkColors::kTransparent with SkBlendMode::kSrcOver blend and set
+  //   `*quad_was_opaque` to true;
+  void ReplaceExistingQuadWithHolePunch(QuadList::Iterator quad,
+                                        bool* quad_was_opaque = nullptr);
+
   // These are in the space of the render pass' physical pixels.
   gfx::Rect output_rect;
   gfx::Rect damage_rect;
@@ -54,17 +64,23 @@ class VIZ_COMMON_EXPORT RenderPassInternal {
   // backdrop of the render pass, from behind it.
   cc::FilterOperations backdrop_filters;
 
-  // Clipping bounds for backdrop filter.
-  absl::optional<gfx::RRectF> backdrop_filter_bounds;
+  // Clipping bounds for backdrop filter. If defined, is in a coordinate space
+  // equivalent to render pass physical pixels after applying
+  // `RenderPassDrawQuad::filter_scale`.
+  std::optional<gfx::RRectF> backdrop_filter_bounds;
 
   // If false, the pixels in the render pass' texture are all opaque.
   bool has_transparent_background = true;
 
   // If true we might reuse the texture if there is no damage.
   bool cache_render_pass = false;
+
   // Indicates whether there is accumulated damage from contributing render
   // surface or layer or surface quad. Not including property changes on itself.
-  bool has_damage_from_contributing_content = false;
+  // TODO(crbug.com/40237077): By default we assume the pass is damaged. Remove
+  // this field in favour of using |damage_rect| for feature
+  // kAllowUndamagedNonrootRenderPassToSkip.
+  bool has_damage_from_contributing_content = true;
 
   // Generate mipmap for trilinear filtering, applied to render pass' texture.
   bool generate_mipmap = false;

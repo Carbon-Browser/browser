@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,7 +48,23 @@ AccessibilityTextRunInfo::AccessibilityTextRunInfo(
     const gfx::RectF& bounds,
     AccessibilityTextDirection direction,
     const AccessibilityTextStyleInfo& style)
-    : len(len), bounds(bounds), direction(direction), style(style) {}
+    : AccessibilityTextRunInfo(len,
+                               bounds,
+                               direction,
+                               style,
+                               /*is_searchified=*/false) {}
+
+AccessibilityTextRunInfo::AccessibilityTextRunInfo(
+    uint32_t len,
+    const gfx::RectF& bounds,
+    AccessibilityTextDirection direction,
+    const AccessibilityTextStyleInfo& style,
+    bool is_searchified)
+    : len(len),
+      bounds(bounds),
+      direction(direction),
+      style(style),
+      is_searchified(is_searchified) {}
 
 AccessibilityTextRunInfo::AccessibilityTextRunInfo(
     const AccessibilityTextRunInfo& other) = default;
@@ -77,11 +93,11 @@ AccessibilityImageInfo::AccessibilityImageInfo() = default;
 AccessibilityImageInfo::AccessibilityImageInfo(const std::string& alt_text,
                                                uint32_t text_run_index,
                                                const gfx::RectF& bounds,
-                                               const SkBitmap& image_data)
+                                               int32_t page_object_index)
     : alt_text(alt_text),
       text_run_index(text_run_index),
       bounds(bounds),
-      image_data(image_data) {}
+      page_object_index(page_object_index) {}
 
 AccessibilityImageInfo::AccessibilityImageInfo(
     const AccessibilityImageInfo& other) = default;
@@ -217,6 +233,11 @@ AccessibilityPageObjects::AccessibilityPageObjects(
     const AccessibilityPageObjects& other) = default;
 
 AccessibilityPageObjects::~AccessibilityPageObjects() = default;
+
+AccessibilityViewportInfo::AccessibilityViewportInfo() = default;
+AccessibilityViewportInfo::AccessibilityViewportInfo(
+    const AccessibilityViewportInfo& other) = default;
+AccessibilityViewportInfo::~AccessibilityViewportInfo() = default;
 
 AccessibilityActionData::AccessibilityActionData() = default;
 

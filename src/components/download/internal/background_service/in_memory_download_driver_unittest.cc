@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -109,7 +109,7 @@ class TestInMemoryDownloadFactory : public InMemoryDownload::Factory {
   TestInMemoryDownload* last_created_download() { return download_; }
 
  private:
-  TestInMemoryDownload* download_ = nullptr;
+  raw_ptr<TestInMemoryDownload, DanglingUntriaged> download_ = nullptr;
 };
 
 class InMemoryDownloadDriverTest : public testing::Test {
@@ -155,7 +155,7 @@ class InMemoryDownloadDriverTest : public testing::Test {
  private:
   testing::NiceMock<MockDriverClient> driver_client_;
   std::unique_ptr<InMemoryDownloadDriver> driver_;
-  raw_ptr<TestInMemoryDownloadFactory> factory_;
+  raw_ptr<TestInMemoryDownloadFactory, DanglingUntriaged> factory_;
 };
 
 // Verifies in memory download success and remove API.
@@ -170,7 +170,7 @@ TEST_F(InMemoryDownloadDriverTest, DownloadSuccessAndRemove) {
 
   // After starting a download, we should be able to find a record in the
   // driver.
-  absl::optional<DriverEntry> entry = driver()->Find(guid);
+  std::optional<DriverEntry> entry = driver()->Find(guid);
   EXPECT_TRUE(entry.has_value());
   EXPECT_EQ(guid, entry->guid);
   EXPECT_EQ(DriverEntry::State::IN_PROGRESS, entry->state);
@@ -222,7 +222,7 @@ TEST_F(InMemoryDownloadDriverTest, DownloadFailure) {
   // Trigger download complete.
   factory()->last_created_download()->SimulateDownloadComplete(
       false /* success*/);
-  absl::optional<DriverEntry> entry = driver()->Find(guid);
+  std::optional<DriverEntry> entry = driver()->Find(guid);
   EXPECT_TRUE(entry.has_value());
   EXPECT_EQ(guid, entry->guid);
   EXPECT_EQ(DriverEntry::State::INTERRUPTED, entry->state);

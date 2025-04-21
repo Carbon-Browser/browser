@@ -1,12 +1,13 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_BROWSER_DEVTOOLS_PROTOCOL_TARGET_AUTO_ATTACHER_H_
 #define CONTENT_BROWSER_DEVTOOLS_PROTOCOL_TARGET_AUTO_ATTACHER_H_
 
-#include "base/callback.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/observer_list.h"
 
@@ -39,6 +40,7 @@ class TargetAutoAttacher {
     virtual std::unique_ptr<NavigationThrottle> CreateThrottleForNavigation(
         TargetAutoAttacher* auto_attacher,
         NavigationHandle* navigation_handle) = 0;
+    virtual void TargetInfoChanged(DevToolsAgentHost* host) = 0;
 
    protected:
     Client() = default;
@@ -81,10 +83,12 @@ class TargetAutoAttacher {
   void DispatchSetAttachedTargetsOfType(
       const base::flat_set<scoped_refptr<DevToolsAgentHost>>& hosts,
       const std::string& type);
+  void DispatchTargetInfoChanged(DevToolsAgentHost* host);
 
  private:
   base::ObserverList<Client, false, true> clients_;
-  base::flat_set<Client*> clients_requesting_wait_for_debugger_;
+  base::flat_set<raw_ptr<Client, CtnExperimental>>
+      clients_requesting_wait_for_debugger_;
 };
 
 class RendererAutoAttacherBase : public TargetAutoAttacher {
@@ -98,7 +102,7 @@ class RendererAutoAttacherBase : public TargetAutoAttacher {
                           bool waiting_for_debugger);
 
  private:
-  DevToolsRendererChannel* const renderer_channel_;
+  const raw_ptr<DevToolsRendererChannel> renderer_channel_;
 };
 
 }  // namespace protocol

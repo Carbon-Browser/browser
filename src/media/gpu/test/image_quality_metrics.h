@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 #define MEDIA_GPU_TEST_IMAGE_QUALITY_METRICS_H_
 
 #include <stdint.h>
+
+#include "base/memory/scoped_refptr.h"
 
 namespace media {
 
@@ -29,6 +31,21 @@ size_t CompareFramesWithErrorDiff(const VideoFrame& frame1,
 // |frame2| if they are not I420.
 double ComputePSNR(const VideoFrame& frame1, const VideoFrame& frame2);
 double ComputeSSIM(const VideoFrame& frame1, const VideoFrame& frame2);
+
+// Compute the log likelihood ratio between a golden frame and a test frame.
+// This metric performs a statistical analysis on the distribution of colors in
+// each frame, and looks for anomalies consistent with encoding or decoding
+// bugs. More details on this algorithm can be found here:
+// go/log-likelihood-artifact-detection
+double ComputeLogLikelihoodRatio(scoped_refptr<const VideoFrame> golden_frame,
+                                 scoped_refptr<const VideoFrame> test_frame);
+
+double ComputeAR30PSNR(const uint32_t* frame1_data,
+                       size_t frame1_stride,
+                       const uint32_t* frame2_data,
+                       size_t frame2_stride,
+                       size_t width,
+                       size_t height);
 
 }  // namespace test
 }  // namespace media

@@ -1,10 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/tabs/tab_strip_layout.h"
 
 #include <stddef.h>
+
 #include <string>
 
 #include "base/strings/string_number_conversions.h"
@@ -21,8 +22,9 @@ namespace {
 std::string TabWidthsAsString(const std::vector<gfx::Rect>& tab_bounds) {
   std::string result;
   for (const auto& bounds : tab_bounds) {
-    if (!result.empty())
+    if (!result.empty()) {
       result += " ";
+    }
     result += base::NumberToString(bounds.width());
   }
   return result;
@@ -33,8 +35,9 @@ std::string TabWidthsAsString(const std::vector<gfx::Rect>& tab_bounds) {
 std::string TabXPositionsAsString(const std::vector<gfx::Rect>& tab_bounds) {
   std::string result;
   for (const auto& bounds : tab_bounds) {
-    if (!result.empty())
+    if (!result.empty()) {
       result += " ";
+    }
     result += base::NumberToString(bounds.x());
   }
   return result;

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2013 The Chromium Authors. All rights reserved.
+# Copyright 2013 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -56,6 +56,7 @@ class IDLLexer(object):
       'any': 'ANY',
       'async': 'ASYNC',
       'attribute': 'ATTRIBUTE',
+      'bigint': 'BIGINT',
       'boolean': 'BOOLEAN',
       'byte': 'BYTE',
       'ByteString': 'BYTESTRING',
@@ -100,6 +101,7 @@ class IDLLexer(object):
       'stringifier': 'STRINGIFIER',
       'true': 'TRUE',
       'typedef': 'TYPEDEF',
+      'undefined': 'UNDEFINED',
       'unrestricted': 'UNRESTRICTED',
       'unsigned': 'UNSIGNED',
       'USVString': 'USVSTRING',

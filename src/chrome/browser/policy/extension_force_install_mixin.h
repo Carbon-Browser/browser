@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <atomic>
 #include <map>
+#include <optional>
 #include <string>
 
 #include "base/files/file_path.h"
@@ -17,7 +18,6 @@
 #include "components/policy/core/common/cloud/test/policy_builder.h"
 #include "extensions/common/extension_id.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class GURL;
 class Profile;
@@ -87,13 +87,17 @@ class ExtensionForceInstallMixin final : public InProcessBrowserTestMixin {
     kLoad,
     // Wait until the extension's background page is loaded for the first time.
     kBackgroundPageFirstLoad,
+    // Wait until the extension is loaded and its (presumably javascript
+    // typescript) code sends the hard-coded message 'ready'. The extension
+    // needs to send a message via `chrome.test.sendMessage('ready')`.
+    kReadyMessageReceived,
   };
 
   // The type of the waiting mode for the force-installed extension update.
   enum class UpdateWaitMode {
     // Don't wait, and return immediately.
     kNone,
-    // TODO(crbug.com/1090941): Add other wait modes as necessary.
+    // TODO(crbug.com/40697472): Add other wait modes as necessary.
   };
 
   // The type of the server error that should be simulated.
@@ -157,7 +161,7 @@ class ExtensionForceInstallMixin final : public InProcessBrowserTestMixin {
   // version.
   [[nodiscard]] bool ForceInstallFromSourceDir(
       const base::FilePath& extension_dir_path,
-      const absl::optional<base::FilePath>& pem_path,
+      const std::optional<base::FilePath>& pem_path,
       WaitMode wait_mode,
       extensions::ExtensionId* extension_id = nullptr,
       base::Version* extension_version = nullptr);
@@ -214,7 +218,7 @@ class ExtensionForceInstallMixin final : public InProcessBrowserTestMixin {
   // random key otherwise) and makes the produced CRX file served by the
   // embedded test server.
   bool CreateAndServeCrx(const base::FilePath& extension_dir_path,
-                         const absl::optional<base::FilePath>& pem_path,
+                         const std::optional<base::FilePath>& pem_path,
                          const base::Version& extension_version,
                          extensions::ExtensionId* extension_id);
   // Force-installs the CRX file served by the embedded test server.
@@ -239,14 +243,16 @@ class ExtensionForceInstallMixin final : public InProcessBrowserTestMixin {
   base::ScopedTempDir temp_dir_;
   net::EmbeddedTestServer embedded_test_server_;
   bool initialized_ = false;
-  raw_ptr<Profile> profile_ = nullptr;
+  raw_ptr<Profile, DanglingUntriaged> profile_ = nullptr;
   raw_ptr<policy::MockConfigurationPolicyProvider> mock_policy_provider_ =
       nullptr;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  ash::DeviceStateMixin* device_state_mixin_ = nullptr;
-  policy::DevicePolicyCrosTestHelper* device_policy_cros_test_helper_ = nullptr;
-  ash::EmbeddedPolicyTestServerMixin* policy_test_server_mixin_ = nullptr;
-  policy::UserPolicyBuilder* user_policy_builder_ = nullptr;
+  raw_ptr<ash::DeviceStateMixin> device_state_mixin_ = nullptr;
+  raw_ptr<policy::DevicePolicyCrosTestHelper> device_policy_cros_test_helper_ =
+      nullptr;
+  raw_ptr<ash::EmbeddedPolicyTestServerMixin> policy_test_server_mixin_ =
+      nullptr;
+  raw_ptr<policy::UserPolicyBuilder> user_policy_builder_ = nullptr;
   // |account_id_| and |policy_type_| are only used with
   // |policy_test_server_mixin_|.
   std::string account_id_;

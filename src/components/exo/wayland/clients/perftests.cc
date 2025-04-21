@@ -1,17 +1,32 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/command_line.h"
 #include "base/strings/stringprintf.h"
+#include "base/test/scoped_feature_list.h"
 #include "components/exo/wayland/clients/blur.h"
 #include "components/exo/wayland/clients/simple.h"
 #include "components/exo/wayland/clients/test/wayland_client_test.h"
+#include "components/viz/common/features.h"
 #include "testing/perf/perf_result_reporter.h"
 
 namespace {
 
-using WaylandClientPerfTests = exo::WaylandClientTest;
+class WaylandClientPerfTests : public exo::WaylandClientTest {
+ public:
+  WaylandClientPerfTests();
+  ~WaylandClientPerfTests() override = default;
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+WaylandClientPerfTests::WaylandClientPerfTests() {
+  // TODO(crbug.com/40249908): Figure out the missing/misordered
+  // PresentationFeedback when using this feature.
+  scoped_feature_list_.InitAndDisableFeature(features::kOnBeginFrameAcks);
+}
 
 constexpr char kMetricPrefixWaylandClient[] = "WaylandClient.";
 constexpr char kMetricFramerate[] = "framerate";
@@ -27,8 +42,16 @@ perf_test::PerfResultReporter SetUpReporter(const std::string& story) {
   return reporter;
 }
 
+// TODO(crbug.com/335313263): Flaky on Linux/ChromeOS ASAN.
+#if BUILDFLAG(IS_LINUX) && defined(ADDRESS_SANITIZER)
+#define MAYBE_Simple DISABLED_Simple
+#elif BUILDFLAG(IS_CHROMEOS) && defined(ADDRESS_SANITIZER)
+#define MAYBE_Simple DISABLED_Simple
+#else
+#define MAYBE_Simple Simple
+#endif
 // Test simple double-buffered client performance.
-TEST_F(WaylandClientPerfTests, Simple) {
+TEST_F(WaylandClientPerfTests, MAYBE_Simple) {
   const int kWarmUpFrames = 20;
   const int kTestFrames = 600;
 
@@ -40,11 +63,13 @@ TEST_F(WaylandClientPerfTests, Simple) {
   exo::wayland::clients::Simple client;
   EXPECT_TRUE(client.Init(params));
 
-  client.Run(kWarmUpFrames, false, nullptr);
+  const exo::wayland::clients::Simple::RunParam run_params = {false, false};
+
+  client.Run(kWarmUpFrames, run_params, nullptr);
 
   exo::wayland::clients::Simple::PresentationFeedback feedback;
   auto start_time = base::Time::Now();
-  client.Run(kTestFrames, false, &feedback);
+  client.Run(kTestFrames, run_params, &feedback);
   auto time_delta = base::Time::Now() - start_time;
   float fps = kTestFrames / time_delta.InSecondsF();
   auto reporter = SetUpReporter(kStorySimple);

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,8 @@
 #include <cmath>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "chromecast/media/audio/audio_fader.h"
 #include "chromecast/media/audio/audio_log.h"
@@ -33,6 +32,7 @@ namespace {
 const int64_t kMicrosecondsPerSecond = 1000 * 1000;
 const int kDefaultSlewTimeMs = 50;
 const int kDefaultFillBufferFrames = 2048;
+constexpr int kMaxChannels = 32;
 
 int RoundUpMultiple(int value, int multiple) {
   return multiple * ((value + (multiple - 1)) / multiple);
@@ -70,14 +70,15 @@ MixerInput::MixerInput(Source* source, FilterGroup* filter_group)
       output_samples_per_second_ != input_samples_per_second_) {
     if (source_->require_clock_rate_simulation()) {
       // Minimize latency.
-      source_read_size_ = ::media::SincResampler::kKernelSize * 2;
+      source_read_size_ = ::media::SincResampler::kSmallRequestSize;
     } else {
-      // Round up to nearest multiple of SincResampler::kKernelSize. The read
-      // size must be > kKernelSize, so we round up to at least 2 * kKernelSize.
+      // Round up to nearest multiple of SincResampler::kMaxKernelSize. The read
+      // size must be > kMaxKernelSize, so we round up to at least 2 *
+      // kMaxKernelSize.
       source_read_size_ =
           RoundUpMultiple(std::max(source_->desired_read_size(),
-                                   ::media::SincResampler::kKernelSize + 1),
-                          ::media::SincResampler::kKernelSize);
+                                   ::media::SincResampler::kMaxKernelSize + 1),
+                          ::media::SincResampler::kMaxKernelSize);
     }
     resample_ratio_ = static_cast<double>(input_samples_per_second_) /
                       output_samples_per_second_;
@@ -96,8 +97,6 @@ MixerInput::MixerInput(Source* source, FilterGroup* filter_group)
 }
 
 MixerInput::~MixerInput() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  SetFilterGroup(nullptr);
   source_->FinalizeAudioPlayback();
 }
 
@@ -118,6 +117,11 @@ void MixerInput::Initialize() {
 
   source_->InitializeAudioPlayback(source_read_size_, initial_rendering_delay);
   filter_group_->AddInput(this);
+}
+
+void MixerInput::Destroy() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  SetFilterGroup(nullptr);
 }
 
 void MixerInput::SetFilterGroup(FilterGroup* filter_group) {
@@ -143,6 +147,7 @@ bool MixerInput::SetFilterGroupInternal(FilterGroup* filter_group) {
     filter_group_tag_ = filter_group->tag();
 
     prerender_pipeline_ = filter_group->CreatePrerenderPipeline(num_channels_);
+    playout_channel_ = source_->playout_channel();
 
     AudioPostProcessor2::Config config;
     config.output_sample_rate = output_samples_per_second_;
@@ -151,23 +156,13 @@ bool MixerInput::SetFilterGroupInternal(FilterGroup* filter_group) {
     config.output_frames_per_write = filter_group->input_frames_per_write();
     CHECK(prerender_pipeline_->SetOutputConfig(config));
     prerender_pipeline_->SetContentType(content_type_);
-    prerender_pipeline_->UpdatePlayoutChannel(source_->playout_channel());
+    prerender_pipeline_->UpdatePlayoutChannel(playout_channel_);
     DCHECK_EQ(prerender_pipeline_->GetInputSampleRate(),
               output_samples_per_second_);
     DCHECK_EQ(prerender_pipeline_->NumOutputChannels(), num_channels_);
     prerender_delay_seconds_ = prerender_pipeline_->GetDelaySeconds();
 
-    int effective_channels = num_channels_;
-    ::media::ChannelLayout channel_layout = channel_layout_;
-    const int playout_channel = source_->playout_channel();
-    if (playout_channel != kChannelAll && playout_channel < num_channels_) {
-      effective_channels = 1;
-      channel_layout = ::media::CHANNEL_LAYOUT_MONO;
-    }
-    channel_mixer_ = std::make_unique<InterleavedChannelMixer>(
-        channel_layout, effective_channels,
-        mixer::GuessChannelLayout(filter_group->num_channels()),
-        filter_group->num_channels(), filter_group->input_frames_per_write());
+    CreateChannelMixer(playout_channel_, filter_group);
   }
   filter_group_ = filter_group;
   return (filter_group != nullptr);
@@ -176,6 +171,20 @@ bool MixerInput::SetFilterGroupInternal(FilterGroup* filter_group) {
 void MixerInput::SetPostProcessorConfig(const std::string& name,
                                         const std::string& config) {
   prerender_pipeline_->SetPostProcessorConfig(name, config);
+}
+
+void MixerInput::CreateChannelMixer(int playout_channel,
+                                    FilterGroup* filter_group) {
+  int effective_channels = num_channels_;
+  ::media::ChannelLayout channel_layout = channel_layout_;
+  if (playout_channel != kChannelAll && playout_channel < num_channels_) {
+    effective_channels = 1;
+    channel_layout = ::media::CHANNEL_LAYOUT_MONO;
+  }
+  channel_mixer_ = std::make_unique<InterleavedChannelMixer>(
+      channel_layout, effective_channels,
+      mixer::GuessChannelLayout(filter_group->num_channels()),
+      filter_group->num_channels(), filter_group->input_frames_per_write());
 }
 
 void MixerInput::AddAudioOutputRedirector(
@@ -237,6 +246,13 @@ bool MixerInput::Render(
                            num_output_frames, num_channels_,
                            interleaved_.data());
 
+  const int playout_channel = source_->playout_channel();
+  if (playout_channel != playout_channel_) {
+    prerender_pipeline_->UpdatePlayoutChannel(playout_channel);
+    CreateChannelMixer(playout_channel, filter_group_);
+    playout_channel_ = playout_channel;
+  }
+
   const bool is_silence = (filled == 0);
   prerender_pipeline_->ProcessFrames(interleaved_.data(), num_output_frames,
                                      InstantaneousVolume(), TargetVolume(),
@@ -254,12 +270,12 @@ void MixerInput::RenderInterleaved(int num_output_frames) {
   // bother doing channel selection since the result would be the same as
   // doing nothing anyway.
   float* data = prerender_pipeline_->GetOutputBuffer();
-  const int playout_channel = source_->playout_channel();
-  if (playout_channel != kChannelAll && playout_channel < num_channels_) {
+
+  if (playout_channel_ != kChannelAll && playout_channel_ < num_channels_) {
     // Keep only the samples from the selected channel.
     float* dest = interleaved_.data();
     for (int f = 0; f < num_output_frames; ++f) {
-      dest[f] = data[f * num_channels_ + playout_channel];
+      dest[f] = data[f * num_channels_ + playout_channel_];
     }
     data = dest;
   }
@@ -293,7 +309,8 @@ int MixerInput::FillAudioData(int num_frames,
     redirected = true;
   }
 
-  float* channels[num_channels_];
+  CHECK_LE(num_channels_, kMaxChannels);
+  float* channels[kMaxChannels];
   for (int c = 0; c < num_channels_; ++c) {
     channels[c] = dest->channel(c);
   }
@@ -336,7 +353,7 @@ int MixerInput::FillBuffer(int num_frames,
     // Based on testing, the buffered frames reported by SincResampler does not
     // include the delay incurred by the filter kernel, so add it explicitly.
     resampler_buffered_frames_ =
-        resampler_->BufferedFrames() + ::media::SincResampler::kKernelSize / 2;
+        resampler_->BufferedFrames() + resampler_->KernelSize() / 2;
     filled_for_resampler_ = 0;
     tried_to_fill_resampler_ = false;
     resampler_->Resample(num_frames, dest);
@@ -484,13 +501,13 @@ void MixerInput::SetMuted(bool muted) {
 float MixerInput::TargetVolume() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   float output_volume = stream_volume_multiplier_ * type_volume_multiplier_;
-  float clamped_volume = base::clamp(output_volume, volume_min_, volume_max_);
+  float clamped_volume = std::clamp(output_volume, volume_min_, volume_max_);
   float limited_volume = std::min(clamped_volume, output_volume_limit_);
   float muted_volume = limited_volume * mute_volume_multiplier_;
   // Volume is clamped after all gains have been multiplied, to avoid clipping.
   // TODO(kmackay): Consider removing this clamp and use a postprocessor filter
   // to avoid clipping instead.
-  return base::clamp(muted_volume, 0.0f, 1.0f);
+  return std::clamp(muted_volume, 0.0f, 1.0f);
 }
 
 float MixerInput::InstantaneousVolume() {

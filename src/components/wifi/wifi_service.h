@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
@@ -33,7 +33,7 @@ class WIFI_EXPORT WiFiService {
   WiFiService(const WiFiService&) = delete;
   WiFiService& operator=(const WiFiService&) = delete;
 
-  virtual ~WiFiService() {}
+  virtual ~WiFiService() = default;
 
   // Initialize WiFiService, store |task_runner| for posting worker tasks.
   virtual void Initialize(
@@ -126,7 +126,7 @@ class WIFI_EXPORT WiFiService {
                                        std::string* error) = 0;
 
  protected:
-  WiFiService() {}
+  WiFiService() = default;
 
   // Error constants.
   static const char kErrorAssociateToNetwork[];

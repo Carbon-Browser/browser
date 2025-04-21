@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ class TestTFLiteModelExecutor
   bool Preprocess(const std::vector<TfLiteTensor*>& input_tensors,
                   const std::vector<float>& input) override;
 
-  absl::optional<std::vector<float>> Postprocess(
+  std::optional<std::vector<float>> Postprocess(
       const std::vector<const TfLiteTensor*>& output_tensors) override;
 };
 

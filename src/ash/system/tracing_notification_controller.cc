@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,7 @@
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/model/system_tray_model.h"
-#include "base/bind.h"
-#include "base/metrics/user_metrics.h"
+#include "base/functional/bind.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/message_center/message_center.h"
 #include "ui/message_center/public/cpp/notification.h"
@@ -27,8 +26,6 @@ namespace {
 const char kNotifierId[] = "ash.tracing";
 
 void HandleNotificationClick() {
-  base::RecordAction(
-      base::UserMetricsAction("StatusArea_Tracing_Default_Selected"));
   Shell::Get()->system_tray_model()->client()->ShowChromeSlow();
 }
 
@@ -61,7 +58,7 @@ void TracingNotificationController::OnTracingModeChanged() {
 }
 
 void TracingNotificationController::CreateNotification() {
-  std::unique_ptr<Notification> notification = CreateSystemNotification(
+  std::unique_ptr<Notification> notification = CreateSystemNotificationPtr(
       message_center::NOTIFICATION_TYPE_SIMPLE, kNotificationId,
       l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_TRACING_NOTIFICATION_TITLE),
       l10n_util::GetStringUTF16(

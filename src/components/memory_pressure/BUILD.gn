@@ -1,8 +1,6 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
-
-import("//build/config/chromeos/ui_mode.gni")
 
 source_set("memory_pressure") {
   sources = [
@@ -12,14 +10,14 @@ source_set("memory_pressure") {
     "memory_pressure_voter.h",
     "multi_source_memory_pressure_monitor.cc",
     "multi_source_memory_pressure_monitor.h",
+    "reclaim_target.h",
     "system_memory_pressure_evaluator.cc",
     "system_memory_pressure_evaluator.h",
+    "unnecessary_discard_monitor.cc",
+    "unnecessary_discard_monitor.h",
   ]
 
-  deps = [
-    "//base",
-    "//build:chromeos_buildflags",
-  ]
+  deps = [ "//base" ]
 
   if (is_win) {
     sources += [
@@ -28,7 +26,7 @@ source_set("memory_pressure") {
     ]
   }
 
-  if (is_mac) {
+  if (is_apple) {
     sources += [
       "system_memory_pressure_evaluator_mac.cc",
       "system_memory_pressure_evaluator_mac.h",
@@ -37,19 +35,12 @@ source_set("memory_pressure") {
 
   if (is_fuchsia) {
     deps += [
-      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.memorypressure",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.memorypressure:fuchsia.memorypressure_hlcpp",
       "//third_party/fuchsia-sdk/sdk/pkg/sys_cpp",
     ]
     sources += [
       "system_memory_pressure_evaluator_fuchsia.cc",
       "system_memory_pressure_evaluator_fuchsia.h",
-    ]
-  }
-
-  if (is_linux || is_chromeos_lacros) {
-    sources += [
-      "system_memory_pressure_evaluator_linux.cc",
-      "system_memory_pressure_evaluator_linux.h",
     ]
   }
 }
@@ -61,6 +52,7 @@ source_set("unit_tests") {
     "memory_pressure_level_reporter_unittest.cc",
     "memory_pressure_voter_unittest.cc",
     "multi_source_memory_pressure_monitor_unittest.cc",
+    "unnecessary_discard_monitor_unittest.cc",
   ]
 
   deps = [
@@ -80,12 +72,8 @@ source_set("unit_tests") {
   }
 
   if (is_fuchsia) {
-    deps += [ "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.memorypressure" ]
+    deps += [ "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.memorypressure:fuchsia.memorypressure_hlcpp" ]
     sources += [ "system_memory_pressure_evaluator_fuchsia_unittest.cc" ]
-  }
-
-  if (is_linux || is_chromeos_lacros) {
-    sources += [ "system_memory_pressure_evaluator_linux_unittest.cc" ]
   }
 }
 

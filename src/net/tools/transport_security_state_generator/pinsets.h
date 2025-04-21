@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 
-#include "base/strings/string_piece.h"
 #include "net/tools/transport_security_state_generator/cert_util.h"
 #include "net/tools/transport_security_state_generator/pinset.h"
 #include "net/tools/transport_security_state_generator/spki_hash.h"
@@ -30,7 +30,7 @@ class Pinsets {
 
   ~Pinsets();
 
-  void RegisterSPKIHash(base::StringPiece name, const SPKIHash& hash);
+  void RegisterSPKIHash(std::string_view name, const SPKIHash& hash);
   void RegisterPinset(std::unique_ptr<Pinset> set);
 
   size_t size() const { return pinsets_.size(); }

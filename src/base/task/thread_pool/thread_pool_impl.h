@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,16 @@
 #define BASE_TASK_THREAD_POOL_THREAD_POOL_IMPL_H_
 
 #include <memory>
+#include <optional>
+#include <string_view>
 
 #include "base/base_export.h"
-#include "base/callback.h"
 #include "base/dcheck_is_on.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/sequence_checker.h"
-#include "base/strings/string_piece.h"
 #include "base/synchronization/atomic_flag.h"
 #include "base/task/single_thread_task_runner_thread_mode.h"
-#include "base/task/task_executor.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool/delayed_task_manager.h"
 #include "base/task/thread_pool/environment_config.h"
@@ -25,12 +25,10 @@
 #include "base/task/thread_pool/task_source.h"
 #include "base/task/thread_pool/task_tracker.h"
 #include "base/task/thread_pool/thread_group.h"
-#include "base/task/thread_pool/thread_group_impl.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/task/updateable_sequenced_task_runner.h"
 #include "base/thread_annotations.h"
 #include "build/build_config.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_WIN)
 #include "base/win/com_init_check_hook.h"
@@ -43,7 +41,6 @@ namespace internal {
 // Default ThreadPoolInstance implementation. This class is thread-safe, except
 // for methods noted otherwise in thread_pool_instance.h.
 class BASE_EXPORT ThreadPoolImpl : public ThreadPoolInstance,
-                                   public TaskExecutor,
                                    public ThreadGroup::Delegate,
                                    public PooledTaskRunnerDelegate {
  public:
@@ -51,11 +48,14 @@ class BASE_EXPORT ThreadPoolImpl : public ThreadPoolInstance,
 
   // Creates a ThreadPoolImpl with a production TaskTracker. |histogram_label|
   // is used to label histograms. No histograms are recorded if it is empty.
-  explicit ThreadPoolImpl(StringPiece histogram_label);
+  explicit ThreadPoolImpl(std::string_view histogram_label);
 
   // For testing only. Creates a ThreadPoolImpl with a custom TaskTracker.
-  ThreadPoolImpl(StringPiece histogram_label,
-                 std::unique_ptr<TaskTrackerImpl> task_tracker);
+  // If |!use_background_threads|, background threads will run with default
+  // priority.
+  ThreadPoolImpl(std::string_view histogram_label,
+                 std::unique_ptr<TaskTrackerImpl> task_tracker,
+                 bool use_background_threads = true);
 
   ThreadPoolImpl(const ThreadPoolImpl&) = delete;
   ThreadPoolImpl& operator=(const ThreadPoolImpl&) = delete;
@@ -76,25 +76,10 @@ class BASE_EXPORT ThreadPoolImpl : public ThreadPoolInstance,
   void EndFence() override;
   void BeginBestEffortFence() override;
   void EndBestEffortFence() override;
-
-  // TaskExecutor:
-  bool PostDelayedTask(const Location& from_here,
-                       const TaskTraits& traits,
-                       OnceClosure task,
-                       TimeDelta delay) override;
-  scoped_refptr<TaskRunner> CreateTaskRunner(const TaskTraits& traits) override;
-  scoped_refptr<SequencedTaskRunner> CreateSequencedTaskRunner(
-      const TaskTraits& traits) override;
-  scoped_refptr<SingleThreadTaskRunner> CreateSingleThreadTaskRunner(
-      const TaskTraits& traits,
-      SingleThreadTaskRunnerThreadMode thread_mode) override;
-#if BUILDFLAG(IS_WIN)
-  scoped_refptr<SingleThreadTaskRunner> CreateCOMSTATaskRunner(
-      const TaskTraits& traits,
-      SingleThreadTaskRunnerThreadMode thread_mode) override;
-#endif  // BUILDFLAG(IS_WIN)
-  scoped_refptr<UpdateableSequencedTaskRunner>
-  CreateUpdateableSequencedTaskRunner(const TaskTraits& traits);
+  void BeginRestrictedTasks() override;
+  void EndRestrictedTasks() override;
+  void BeginFizzlingBlockShutdownTasks() override;
+  void EndFizzlingBlockShutdownTasks() override;
 
   // PooledTaskRunnerDelegate:
   bool EnqueueJobTaskSource(scoped_refptr<JobTaskSource> task_source) override;
@@ -108,7 +93,7 @@ class BASE_EXPORT ThreadPoolImpl : public ThreadPoolInstance,
   // immediate, nullopt if none). This is thread-safe, i.e., it's safe if tasks
   // are being posted in parallel with this call but such a situation obviously
   // results in a race as to whether this call will see the new tasks in time.
-  absl::optional<TimeTicks> NextScheduledRunTimeForTesting() const;
+  std::optional<TimeTicks> NextScheduledRunTimeForTesting() const;
 
   // Forces ripe delayed tasks to be posted (e.g. when time is mocked and
   // advances faster than the real-time delay on ServiceThread).
@@ -120,6 +105,54 @@ class BASE_EXPORT ThreadPoolImpl : public ThreadPoolInstance,
   // exposed here on this internal API rather than as a ThreadPoolInstance
   // configuration param because only one internal test truly needs this.
   static void SetSynchronousThreadStartForTesting(bool enabled);
+
+  // Posts |task| with a |delay| and specific |traits|. |delay| can be zero. For
+  // one off tasks that don't require a TaskRunner. Returns false if the task
+  // definitely won't run because of current shutdown state.
+  bool PostDelayedTask(const Location& from_here,
+                       const TaskTraits& traits,
+                       OnceClosure task,
+                       TimeDelta delay);
+
+  // Returns a TaskRunner whose PostTask invocations result in scheduling tasks
+  // using |traits|. Tasks may run in any order and in parallel.
+  scoped_refptr<TaskRunner> CreateTaskRunner(const TaskTraits& traits);
+
+  // Returns a SequencedTaskRunner whose PostTask invocations result in
+  // scheduling tasks using |traits|. Tasks run one at a time in posting order.
+  scoped_refptr<SequencedTaskRunner> CreateSequencedTaskRunner(
+      const TaskTraits& traits);
+
+  // Returns a SingleThreadTaskRunner whose PostTask invocations result in
+  // scheduling tasks using |traits|. Tasks run on a single thread in posting
+  // order. If |traits| identifies an existing thread,
+  // SingleThreadTaskRunnerThreadMode::SHARED must be used.
+  scoped_refptr<SingleThreadTaskRunner> CreateSingleThreadTaskRunner(
+      const TaskTraits& traits,
+      SingleThreadTaskRunnerThreadMode thread_mode);
+
+#if BUILDFLAG(IS_WIN)
+  // Returns a SingleThreadTaskRunner whose PostTask invocations result in
+  // scheduling tasks using |traits| in a COM Single-Threaded Apartment. Tasks
+  // run in the same Single-Threaded Apartment in posting order for the returned
+  // SingleThreadTaskRunner. If |traits| identifies an existing thread,
+  // SingleThreadTaskRunnerThreadMode::SHARED must be used.
+  scoped_refptr<SingleThreadTaskRunner> CreateCOMSTATaskRunner(
+      const TaskTraits& traits,
+      SingleThreadTaskRunnerThreadMode thread_mode);
+#endif  // BUILDFLAG(IS_WIN)
+
+  // Returns a task runner whose PostTask invocations result in scheduling tasks
+  // using |traits|. The priority in |traits| can be updated at any time via
+  // UpdateableSequencedTaskRunner::UpdatePriority(). An update affects all
+  // tasks posted to the task runner that aren't running yet. Tasks run one at a
+  // time in posting order.
+  //
+  // |traits| requirements:
+  // - base::ThreadPolicy must be specified if the priority of the task runner
+  //   will ever be increased from BEST_EFFORT.
+  scoped_refptr<UpdateableSequencedTaskRunner>
+  CreateUpdateableSequencedTaskRunner(const TaskTraits& traits);
 
  private:
   // Invoked after |num_fences_| or |num_best_effort_fences_| is updated. Sets
@@ -141,21 +174,15 @@ class BASE_EXPORT ThreadPoolImpl : public ThreadPoolInstance,
                             scoped_refptr<Sequence> sequence) override;
   bool ShouldYield(const TaskSource* task_source) override;
 
+  const std::string histogram_label_;
   const std::unique_ptr<TaskTrackerImpl> task_tracker_;
   ServiceThread service_thread_;
   DelayedTaskManager delayed_task_manager_;
   PooledSingleThreadTaskRunnerManager single_thread_task_runner_manager_;
 
   std::unique_ptr<ThreadGroup> foreground_thread_group_;
+  std::unique_ptr<ThreadGroup> utility_thread_group_;
   std::unique_ptr<ThreadGroup> background_thread_group_;
-
-  bool disable_job_yield_ = false;
-  bool disable_fair_scheduling_ = false;
-  std::atomic<bool> disable_job_update_priority_{false};
-  // Leeway value applied to delayed tasks. An atomic is used here because the
-  // value is queried from multiple threads when tasks are posted cross-thread,
-  // which can race with its initialization.
-  std::atomic<TimeDelta> task_leeway_{PendingTask::kDefaultLeeway};
 
   // Whether this TaskScheduler was started.
   bool started_ GUARDED_BY_CONTEXT(sequence_checker_) = false;

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,6 @@ const idb = new Promise<IDBDatabase>((resolve, reject) => {
  * Retrieves serializable object from idb.
  *
  * @param key The key of the object.
- * @return The promise of the retrieved object.
  */
 export async function get<T>(key: string): Promise<T|null> {
   const transaction = (await idb).transaction(DB_STORE, 'readonly');

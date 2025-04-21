@@ -1,20 +1,22 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import '//resources/cr_components/localized_link/localized_link.js';
 
-import {LocalizedLinkElement} from '//resources/cr_components/localized_link/localized_link.js';
+import type {LocalizedLinkElement} from '//resources/cr_components/localized_link/localized_link.js';
 import {assertEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {eventToPromise, flushTasks} from 'chrome://webui-test/test_util.js';
+import {eventToPromise, microtasksFinished} from 'chrome://webui-test/test_util.js';
+import {getTrustedHtml} from 'chrome://webui-test/trusted_html.js';
 
 suite('localized_link', function() {
   let localizedStringWithLink: LocalizedLinkElement|null;
 
   function getLocalizedStringWithLinkElementHtml(
-      localizedString: string, linkUrl: string): string {
-    return `<localized-link localized-string="${localizedString}"` +
-        ` link-url="${linkUrl}"></localized-link>`;
+      localizedString: string, linkUrl: string): TrustedHTML {
+    return getTrustedHtml(
+        `<localized-link localized-string="${localizedString}"` +
+        ` link-url="${linkUrl}"></localized-link>`);
   }
 
   test('LinkFirst', function() {
@@ -53,23 +55,23 @@ suite('localized_link', function() {
 
   test('PopulatedLink', function() {
     document.body.innerHTML = getLocalizedStringWithLinkElementHtml(
-        `<a>populated link</a>`, `http://google.com`);
+        `<a>populated link</a>`, `https://google.com`);
     localizedStringWithLink = document.body.querySelector('localized-link');
     assertTrue(!!localizedStringWithLink);
     assertEquals(
         localizedStringWithLink.$.container.innerHTML,
         `<a id="id0" aria-labelledby="id0" tabindex="0" ` +
-            `href="http://google.com" target="_blank">populated link</a>`);
+            `href="https://google.com" target="_blank">populated link</a>`);
   });
 
   test('PrepopulatedLink', function() {
     document.body.innerHTML = getLocalizedStringWithLinkElementHtml(
-        `<a href='http://google.com'>pre-populated link</a>`, ``);
+        `<a href='https://google.com'>pre-populated link</a>`, ``);
     localizedStringWithLink = document.body.querySelector('localized-link');
     assertTrue(!!localizedStringWithLink);
     assertEquals(
         localizedStringWithLink.$.container.innerHTML,
-        `<a href="http://google.com" id="id0" aria-labelledby="id0" tabindex="0">` +
+        `<a href="https://google.com" id="id0" aria-labelledby="id0" tabindex="0">` +
             `pre-populated link</a>`);
   });
 
@@ -83,51 +85,56 @@ suite('localized_link', function() {
         `No anchor tags in this sentence.`);
   });
 
-  test('LinkClick', function() {
+  test('LinkClick', async () => {
     document.body.innerHTML = getLocalizedStringWithLinkElementHtml(
         `Text with a <a href='#'>link</a>`, ``);
+    const localizedLink = document.body.querySelector('localized-link');
+    assertTrue(!!localizedLink);
+    const anchorTag = localizedLink.shadowRoot!.querySelector('a');
+    assertTrue(!!anchorTag);
+    const localizedLinkPromise = eventToPromise('link-clicked', localizedLink);
 
-    return flushTasks().then(async () => {
-      const localizedLink = document.body.querySelector('localized-link');
-      assertTrue(!!localizedLink);
-      const anchorTag = localizedLink.shadowRoot!.querySelector('a');
-      assertTrue(!!anchorTag);
-      const localizedLinkPromise =
-          eventToPromise('link-clicked', localizedLink);
+    anchorTag.click();
+    await localizedLinkPromise;
+  });
 
-      anchorTag.click();
-      await Promise.all([localizedLinkPromise, flushTasks()]);
-    });
+  test('LinkAuxclick', async () => {
+    document.body.innerHTML = getLocalizedStringWithLinkElementHtml(
+        `Text with a <a href='#'>link</a>`, ``);
+    const localizedLink = document.body.querySelector('localized-link');
+    assertTrue(!!localizedLink);
+    const anchorTag = localizedLink.shadowRoot!.querySelector('a');
+    assertTrue(!!anchorTag);
+    const localizedLinkPromise = eventToPromise('link-clicked', localizedLink);
+
+    // simulate a middle-button click
+    anchorTag.dispatchEvent(new MouseEvent('auxclick', {button: 1}));
+
+    await localizedLinkPromise;
   });
 
   test('link disabled', async function() {
     document.body.innerHTML = getLocalizedStringWithLinkElementHtml(
         `Text with a <a href='#'>link</a>`, ``);
-
-    await flushTasks();
     const localizedLink = document.body.querySelector('localized-link');
     assertTrue(!!localizedLink);
     const anchorTag = localizedLink.shadowRoot!.querySelector('a');
     assertTrue(!!anchorTag);
     assertEquals(anchorTag.getAttribute('tabindex'), '0');
     localizedLink.linkDisabled = true;
-    await flushTasks();
+    await microtasksFinished();
     assertEquals(anchorTag.getAttribute('tabindex'), '-1');
   });
 
   test('change localizedString', async function() {
     document.body.innerHTML = getLocalizedStringWithLinkElementHtml(
         `Text with a <a href='#'>link</a>`, ``);
-    await flushTasks();
-
     const localizedLink = document.body.querySelector('localized-link');
     assertTrue(!!localizedLink);
-    localizedLink.linkDisabled = true;
     const localizedLinkPromise = eventToPromise('link-clicked', localizedLink);
-    await flushTasks();
-
+    localizedLink.linkDisabled = true;
     localizedLink.localizedString = `Different text with <a href='#'>link</a>`;
-    await flushTasks();
+    await microtasksFinished();
 
     // Tab index is still -1 due to it being disabled.
     const anchorTag = localizedLink.shadowRoot!.querySelector('a');
@@ -135,10 +142,10 @@ suite('localized_link', function() {
     assertEquals(anchorTag.getAttribute('tabindex'), '-1');
 
     localizedLink.linkDisabled = false;
-    await flushTasks();
+    await microtasksFinished();
 
     // Clicking the link still fires the link-clicked event.
     anchorTag.click();
-    await Promise.all([localizedLinkPromise, flushTasks()]);
+    await localizedLinkPromise;
   });
 });

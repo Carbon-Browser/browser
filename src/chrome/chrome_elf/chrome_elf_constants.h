@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,8 @@
 #ifndef CHROME_CHROME_ELF_CHROME_ELF_CONSTANTS_H_
 #define CHROME_CHROME_ELF_CHROME_ELF_CONSTANTS_H_
 
-namespace chrome {
-
 // Needed to register the WER helper DLL.
 extern const wchar_t kWerDll[];
-
-}  // namespace chrome
 
 namespace elf_sec {
 

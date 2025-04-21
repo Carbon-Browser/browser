@@ -1,15 +1,18 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.content_public.browser;
 
-import android.content.Intent;
 import android.view.ActionMode;
 import android.view.textclassifier.TextClassifier;
 
 import org.chromium.base.supplier.ObservableSupplier;
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 import org.chromium.content.browser.selection.SelectionPopupControllerImpl;
+import org.chromium.content_public.browser.selection.SelectionActionMenuDelegate;
+import org.chromium.content_public.browser.selection.SelectionDropdownMenuDelegate;
 import org.chromium.ui.base.WindowAndroid;
 
 /**
@@ -21,6 +24,7 @@ import org.chromium.ui.base.WindowAndroid;
  * this interface to create {@link ActionMode.Callback} instance and configure the selection
  * action mode tasks to their requirements.
  */
+@NullMarked
 public interface SelectionPopupController {
     // User action of clicking on the Share option within the selection UI.
     static final String UMA_MOBILE_ACTION_MODE_SHARE = "MobileActionMode.Share";
@@ -30,15 +34,17 @@ public interface SelectionPopupController {
      * @return {@link SelectionPopupController} object used for the give WebContents.
      *         {@code null} if not available.
      */
-    static SelectionPopupController fromWebContents(WebContents webContents) {
+    static @Nullable SelectionPopupController fromWebContents(WebContents webContents) {
         return SelectionPopupControllerImpl.fromWebContents(webContents);
     }
 
     /**
-     * Makes {@link SelectionPopupcontroller} only use the WebContents context when inflating menus.
+     * @param webContents {@link WebContents} object.
+     * @return {@link SelectionPopupController} object used for the given WebContents if created.
+     *         {@code null} if not available.
      */
-    static void setMustUseWebContentsContext() {
-        SelectionPopupControllerImpl.setMustUseWebContentsContext();
+    static @Nullable SelectionPopupController fromWebContentsNoCreate(WebContents webContents) {
+        return SelectionPopupControllerImpl.fromWebContentsNoCreate(webContents);
     }
 
     /**
@@ -48,18 +54,18 @@ public interface SelectionPopupController {
         SelectionPopupControllerImpl.setShouldGetReadbackViewFromWindowAndroid();
     }
 
-    /**
-     * Set {@link ActionMode.Callback} used by {@link SelectionPopupController}.
-     * @param callback ActionMode.Callback instance.
-     */
-    void setActionModeCallback(ActionMode.Callback2 callback);
+    /** Set allow using magnifer built using surface control instead of the system-proivded one. */
+    static void setAllowSurfaceControlMagnifier() {
+        SelectionPopupControllerImpl.setAllowSurfaceControlMagnifier();
+    }
 
-    /**
-     * Set {@link ActionMode.Callback} used by {@link SelectionPopupController} when no text is
-     * selected.
-     * @param callback ActionMode.Callback instance.
-     */
-    void setNonSelectionActionModeCallback(ActionMode.Callback callback);
+    /** Check if need to disable SurfaceControl during selection. */
+    static boolean needsSurfaceViewDuringSelection() {
+        return !SelectionPopupControllerImpl.isMagnifierWithSurfaceControlSupported();
+    }
+
+    /** Set {@link ActionModeCallback} used by {@link SelectionPopupController}. */
+    void setActionModeCallback(ActionModeCallback callback);
 
     /**
      * @return {@link SelectionClient.ResultCallback} instance.
@@ -81,9 +87,7 @@ public interface SelectionPopupController {
      */
     boolean hasSelection();
 
-    /**
-     * Hide action mode and put into destroyed state.
-     */
+    /** Hide action mode and put into destroyed state. */
     void destroySelectActionMode();
 
     boolean isSelectActionBarShowing();
@@ -106,19 +110,18 @@ public interface SelectionPopupController {
     void clearSelection();
 
     /**
-     * Called when the processed text is replied from an activity that supports
-     * Intent.ACTION_PROCESS_TEXT.
-     * @param resultCode the code that indicates if the activity successfully processed the text
-     * @param data the reply that contains the processed text.
+     * Replaces the current selection in editable field.
+     * @param text String with which current selection need to be replaced.
      */
-    void onReceivedProcessTextResult(int resultCode, Intent data);
+    void handleTextReplacementAction(String text);
 
     /** Sets the given {@link SelectionClient} in the selection popup controller. */
     void setSelectionClient(SelectionClient selectionClient);
 
-    /**
-     * Sets TextClassifier for Smart Text selection.
-     */
+    /** Returns the {@link SelectionClient} in the selection popup controller. */
+    public @Nullable SelectionClient getSelectionClient();
+
+    /** Sets TextClassifier for Smart Text selection. */
     void setTextClassifier(TextClassifier textClassifier);
 
     /**
@@ -126,11 +129,11 @@ public interface SelectionPopupController {
      * has been set with setTextClassifier, returns that object, otherwise returns the system
      * classifier.
      */
+    @Nullable
     TextClassifier getTextClassifier();
 
-    /**
-     * Returns the TextClassifier which has been set with setTextClassifier(), or null.
-     */
+    /** Returns the TextClassifier which has been set with setTextClassifier(), or null. */
+    @Nullable
     TextClassifier getCustomTextClassifier();
 
     /**
@@ -148,4 +151,22 @@ public interface SelectionPopupController {
      * @param focused If the WebContents currently has focus.
      */
     void updateTextSelectionUI(boolean focused);
+
+    /** Set the dropdown menu delegate that handles showing a dropdown style text selection menu. */
+    void setDropdownMenuDelegate(SelectionDropdownMenuDelegate dropdownMenuDelegate);
+
+    /**
+     * Set the {@link SelectionActionMenuDelegate} used by {@link SelectionPopupController} while
+     * modifying menu items.
+     */
+    void setSelectionActionMenuDelegate(@Nullable SelectionActionMenuDelegate delegate);
+
+    /**
+     * Returns the {@link SelectionActionMenuDelegate} used by {@link SelectionPopupController}
+     * while modifying menu items.
+     *
+     * @return SelectionActionMenuDelegate instance if available, Otherwise Null.
+     */
+    @Nullable
+    SelectionActionMenuDelegate getSelectionActionMenuDelegate();
 }

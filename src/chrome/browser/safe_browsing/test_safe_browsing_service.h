@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,7 +55,7 @@ class TestSafeBrowsingService : public SafeBrowsingService,
   // SafeBrowsingService overrides
   V4ProtocolConfig GetV4ProtocolConfig() const override;
 
-  std::string serilized_download_report();
+  std::string serialized_download_report();
   void ClearDownloadReport();
 
   // In browser tests, the following setters must be called before
@@ -86,9 +86,13 @@ class TestSafeBrowsingService : public SafeBrowsingService,
   // SafeBrowsingService overrides
   ~TestSafeBrowsingService() override;
   SafeBrowsingUIManager* CreateUIManager() override;
-  PingManager::ReportThreatDetailsResult SendDownloadReport(
-      Profile* profile,
-      std::unique_ptr<ClientSafeBrowsingReportRequest> report) override;
+#if BUILDFLAG(FULL_SAFE_BROWSING)
+  void SendDownloadReport(
+      download::DownloadItem* download,
+      ClientSafeBrowsingReportRequest::ReportType report_type,
+      bool did_proceed,
+      std::optional<bool> show_download_in_folder) override;
+#endif
 
   // ServicesDelegate::ServicesCreator:
   bool CanCreateDatabaseManager() override;
@@ -144,7 +148,8 @@ class TestSafeBrowsingServiceFactory : public SafeBrowsingServiceFactory {
   void UseV4LocalDatabaseManager();
 
  private:
-  raw_ptr<TestSafeBrowsingService> test_safe_browsing_service_;
+  raw_ptr<TestSafeBrowsingService, DanglingUntriaged>
+      test_safe_browsing_service_;
   scoped_refptr<TestSafeBrowsingDatabaseManager> test_database_manager_;
   scoped_refptr<TestSafeBrowsingUIManager> test_ui_manager_;
   bool use_v4_local_db_manager_;

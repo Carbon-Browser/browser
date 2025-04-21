@@ -1,14 +1,15 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/extensions/error_console/error_console.h"
 
+#include <optional>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/lazy_instance.h"
 #include "base/observer_list.h"
 #include "base/strings/utf_string_conversions.h"
@@ -89,13 +90,15 @@ void ErrorConsole::SetReportingForExtension(const std::string& extension_id,
   // if it does, because we just use the default mask instead.
   prefs_->ReadPrefAsInteger(extension_id, kStoreExtensionErrorsPref, &mask);
 
-  if (enabled)
-    mask |= 1 << type;
-  else
-    mask &= ~(1 << type);
+  int intType = static_cast<int>(type);
+  if (enabled) {
+    mask |= 1 << intType;
+  } else {
+    mask &= ~(1 << intType);
+  }
 
   prefs_->UpdateExtensionPref(extension_id, kStoreExtensionErrorsPref,
-                              std::make_unique<base::Value>(mask));
+                              base::Value(mask));
 }
 
 void ErrorConsole::SetReportingAllForExtension(
@@ -104,10 +107,13 @@ void ErrorConsole::SetReportingAllForExtension(
   if (!enabled_ || !crx_file::id_util::IdIsValid(extension_id))
     return;
 
-  int mask = enabled ? (1 << ExtensionError::NUM_ERROR_TYPES) - 1 : 0;
+  int mask =
+      enabled
+          ? (1 << static_cast<int>(ExtensionError::Type::kNumErrorTypes)) - 1
+          : 0;
 
   prefs_->UpdateExtensionPref(extension_id, kStoreExtensionErrorsPref,
-                              std::make_unique<base::Value>(mask));
+                              base::Value(mask));
 }
 
 bool ErrorConsole::IsReportingEnabledForExtension(
@@ -125,7 +131,8 @@ void ErrorConsole::UseDefaultReportingForExtension(
   if (!enabled_ || !crx_file::id_util::IdIsValid(extension_id))
     return;
 
-  prefs_->UpdateExtensionPref(extension_id, kStoreExtensionErrorsPref, nullptr);
+  prefs_->UpdateExtensionPref(extension_id, kStoreExtensionErrorsPref,
+                              std::nullopt);
 }
 
 void ErrorConsole::ReportError(std::unique_ptr<ExtensionError> error) {
@@ -137,8 +144,9 @@ void ErrorConsole::ReportError(std::unique_ptr<ExtensionError> error) {
       << "Errors less than severity warning should not be reported.";
 
   int mask = GetMaskForExtension(error->extension_id());
-  if (!(mask & (1 << error->type())))
+  if (!(mask & (1 << static_cast<int>(error->type())))) {
     return;
+  }
 
   const ExtensionError* weak_error = errors_.AddError(std::move(error));
   for (auto& observer : observers_)
@@ -236,8 +244,10 @@ void ErrorConsole::OnExtensionInstalled(
   // to keep runtime errors, though, because extensions are reloaded on a
   // refresh of chrome:extensions, and we don't want to wipe our history
   // whenever that happens.
-  errors_.RemoveErrors(ErrorMap::Filter::ErrorsForExtensionWithType(
-      extension->id(), ExtensionError::MANIFEST_ERROR), nullptr);
+  errors_.RemoveErrors(
+      ErrorMap::Filter::ErrorsForExtensionWithType(
+          extension->id(), ExtensionError::Type::kManifestError),
+      nullptr);
   AddManifestErrorsForExtension(extension);
 }
 
@@ -252,10 +262,10 @@ void ErrorConsole::OnExtensionUninstalled(
 void ErrorConsole::AddManifestErrorsForExtension(const Extension* extension) {
   const std::vector<InstallWarning>& warnings =
       extension->install_warnings();
-  for (auto iter = warnings.begin(); iter != warnings.end(); ++iter) {
-    ReportError(std::unique_ptr<ExtensionError>(new ManifestError(
-        extension->id(), base::UTF8ToUTF16(iter->message),
-        base::UTF8ToUTF16(iter->key), base::UTF8ToUTF16(iter->specific))));
+  for (const auto& warning : warnings) {
+    ReportError(std::make_unique<ManifestError>(
+        extension->id(), base::UTF8ToUTF16(warning.message), warning.key,
+        base::UTF8ToUTF16(warning.specific)));
   }
 }
 
@@ -274,15 +284,19 @@ void ErrorConsole::OnProfileWillBeDestroyed(Profile* profile) {
 int ErrorConsole::GetMaskForExtension(const std::string& extension_id) const {
   // Registered preferences take priority over everything else.
   int pref = 0;
-  if (prefs_->ReadPrefAsInteger(extension_id, kStoreExtensionErrorsPref, &pref))
+  if (prefs_->ReadPrefAsInteger(extension_id, kStoreExtensionErrorsPref,
+                                &pref)) {
     return pref;
+  }
 
   // If the extension is unpacked, we report all error types by default.
   const Extension* extension =
       ExtensionRegistry::Get(profile_)->GetExtensionById(
           extension_id, ExtensionRegistry::EVERYTHING);
-  if (extension && extension->location() == mojom::ManifestLocation::kUnpacked)
-    return (1 << ExtensionError::NUM_ERROR_TYPES) - 1;
+  if (extension &&
+      extension->location() == mojom::ManifestLocation::kUnpacked) {
+    return (1 << static_cast<int>(ExtensionError::Type::kNumErrorTypes)) - 1;
+  }
 
   // Otherwise, use the default mask.
   return default_mask_;

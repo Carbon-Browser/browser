@@ -1,9 +1,9 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // clang-format off
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
 // clang-format on
 
 // All actions related to showing & interacting with the privacy sandbox
@@ -23,9 +23,26 @@ export enum PrivacySandboxPromptAction {
   CONSENT_MORE_INFO_CLOSED = 9,
   CONSENT_CLOSED_NO_DECISION = 10,
   NOTICE_LEARN_MORE = 11,
+  NOTICE_MORE_INFO_OPENED = 12,
+  NOTICE_MORE_INFO_CLOSED = 13,
+  CONSENT_MORE_BUTTON_CLICKED = 14,
+  NOTICE_MORE_BUTTON_CLICKED = 15,
+  RESTRICTED_NOTICE_ACKNOWLEDGE = 16,
+  RESTRICTED_NOTICE_OPEN_SETTINGS = 17,
+  RESTRICTED_NOTICE_SHOWN = 18,
+  RESTRICTED_NOTICE_CLOSED_NO_INTERACTION = 19,
+  RESTRICTED_NOTICE_MORE_BUTTON_CLICKED = 20,
+  PRIVACY_POLICY_LINK_CLICKED = 21,
+  NOTICE_SITE_SUGGESTED_ADS_MORE_INFO_OPENED = 22,
+  NOTICE_SITE_SUGGESTED_ADS_MORE_INFO_CLOSED = 23,
+  NOTICE_ADS_MEASUREMENT_MORE_INFO_OPENED = 24,
+  NOTICE_ADS_MEASUREMENT_MORE_INFO_CLOSED = 25,
 }
 
 export class PrivacySandboxDialogBrowserProxy {
+  recordPrivacyPolicyLoadTime(privacyPolicyLoadDuration: number) {
+    chrome.send('recordPrivacyPolicyLoadTime', [privacyPolicyLoadDuration]);
+  }
   promptActionOccurred(action: PrivacySandboxPromptAction) {
     chrome.send('promptActionOccurred', [action]);
   }
@@ -36,6 +53,10 @@ export class PrivacySandboxDialogBrowserProxy {
 
   showDialog() {
     chrome.send('showDialog');
+  }
+
+  shouldShowPrivacySandboxPrivacyPolicy() {
+    return sendWithPromise('shouldShowPrivacySandboxPrivacyPolicy');
   }
 
   static getInstance(): PrivacySandboxDialogBrowserProxy {

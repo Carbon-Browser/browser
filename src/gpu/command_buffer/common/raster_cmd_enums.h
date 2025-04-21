@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,4 +19,4 @@ enum MsaaMode : uint32_t {
 }  // namespace raster
 }  // namespace gpu
 
-#endif
+#endif  // GPU_COMMAND_BUFFER_COMMON_RASTER_CMD_ENUMS_H_

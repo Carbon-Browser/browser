@@ -1,8 +1,7 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/strings/stringprintf.h"
 #include "base/threading/thread_restrictions.h"
@@ -37,13 +36,15 @@ class MockShellAppDelegate : public extensions::ShellAppDelegate {
       content::MediaResponseCallback callback,
       const extensions::Extension* extension) override {
     media_access_requested_ = true;
-    if (media_access_request_quit_closure_)
+    if (media_access_request_quit_closure_) {
       std::move(media_access_request_quit_closure_).Run();
+    }
   }
 
   void WaitForRequestMediaPermission() {
-    if (media_access_requested_)
+    if (media_access_requested_) {
       return;
+    }
     base::RunLoop run_loop;
     media_access_request_quit_closure_ = run_loop.QuitClosure();
     run_loop.Run();
@@ -66,7 +67,7 @@ class MockShellAppViewGuestDelegate
   MockShellAppViewGuestDelegate() = default;
 
   extensions::AppDelegate* CreateAppDelegate(
-      content::WebContents* web_contents) override {
+      content::BrowserContext* browser_context) override {
     return new MockShellAppDelegate();
   }
 };
@@ -117,20 +118,15 @@ class AppViewTest : public AppShellTest {
     ExtensionTestMessageListener launch_listener("LAUNCHED");
     ASSERT_TRUE(launch_listener.WaitUntilSatisfied());
 
-    embedder_web_contents_ = GetFirstAppWindowWebContents();
-
     ExtensionTestMessageListener done_listener("TEST_PASSED");
     done_listener.set_failure_message("TEST_FAILED");
-    ASSERT_TRUE(content::ExecuteScript(
-        embedder_web_contents_.get(),
+    ASSERT_TRUE(content::ExecJs(
+        GetFirstAppWindowWebContents(),
         base::StringPrintf("runTest('%s', '%s')", test_name.c_str(),
                            app_embedded->id().c_str())))
         << "Unable to start test.";
     ASSERT_TRUE(done_listener.WaitUntilSatisfied());
   }
-
- private:
-  raw_ptr<content::WebContents> embedder_web_contents_;
 };
 
 // Tests that <appview> correctly processes parameters passed on connect.

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,18 +8,18 @@
 #include <string>
 
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
-#include "base/scoped_observation.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "chromeos/ash/components/network/client_cert_resolver.h"
 #include "chromeos/ash/components/network/network_connection_observer.h"
-#include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_policy_observer.h"
-#include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_state_handler_observer.h"
-#include "chromeos/login/login_state/login_state.h"
 
-namespace chromeos {
+namespace ash {
+
+class NetworkStateHandler;
 
 class COMPONENT_EXPORT(CHROMEOS_NETWORK) AutoConnectHandler
     : public LoginState::Observer,
@@ -43,8 +43,14 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) AutoConnectHandler
 
   AutoConnectHandler(const AutoConnectHandler&) = delete;
   AutoConnectHandler& operator=(const AutoConnectHandler&) = delete;
-
+  AutoConnectHandler();
   ~AutoConnectHandler() override;
+
+  void Init(ClientCertResolver* client_cert_resolver,
+            NetworkConnectionHandler* network_connection_handler,
+            NetworkStateHandler* network_state_handler,
+            ManagedNetworkConfigurationHandler*
+                managed_network_configuration_handler);
 
   // LoginState::Observer
   void LoggedInStateChanged() override;
@@ -67,17 +73,6 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) AutoConnectHandler
   void NotifyAutoConnectInitiatedForTest(int auto_connect_reasons);
 
  private:
-  friend class NetworkHandler;
-  friend class AutoConnectHandlerTest;
-
-  AutoConnectHandler();
-
-  void Init(ClientCertResolver* client_cert_resolver,
-            NetworkConnectionHandler* network_connection_handler,
-            NetworkStateHandler* network_state_handler,
-            ManagedNetworkConfigurationHandler*
-                managed_network_configuration_handler);
-
   void NotifyAutoConnectInitiated(int auto_connect_reasons);
 
   // This function is called whenever the logged in state changes or when a new
@@ -135,13 +130,11 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) AutoConnectHandler
   void CallShillScanAndConnectToBestServices();
 
   // Local references to the associated handler instances.
-  ClientCertResolver* client_cert_resolver_;
-  NetworkConnectionHandler* network_connection_handler_;
-  NetworkStateHandler* network_state_handler_;
-  base::ScopedObservation<chromeos::NetworkStateHandler,
-                          chromeos::NetworkStateHandlerObserver>
-      network_state_handler_observer_{this};
-  ManagedNetworkConfigurationHandler* managed_configuration_handler_;
+  raw_ptr<ClientCertResolver> client_cert_resolver_;
+  raw_ptr<NetworkConnectionHandler> network_connection_handler_;
+  raw_ptr<NetworkStateHandler> network_state_handler_;
+  NetworkStateHandlerScopedObservation network_state_handler_observer_{this};
+  raw_ptr<ManagedNetworkConfigurationHandler> managed_configuration_handler_;
 
   // Whether a request to connect to the best network is pending. If true, once
   // all requirements are met (like policy loaded, certificate patterns being
@@ -175,6 +168,6 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) AutoConnectHandler
   base::WeakPtrFactory<AutoConnectHandler> weak_ptr_factory_{this};
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_AUTO_CONNECT_HANDLER_H_

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,10 @@ import android.text.TextUtils;
 import android.util.AttributeSet;
 
 import org.chromium.chrome.browser.language.AppLocaleUtils;
+import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.components.browser_ui.settings.ChromeBasePreference;
 
-/**
- * Chrome Preference that enables selecting a single LanguageItem.
- */
+/** Chrome Preference that enables selecting a single LanguageItem. */
 public class LanguageItemPickerPreference extends ChromeBasePreference {
     private LanguageItem mLanguageItem;
     private boolean mUseLanguageItemForTitle;
@@ -42,14 +41,16 @@ public class LanguageItemPickerPreference extends ChromeBasePreference {
     /**
      * Set the LanguageItem value based on the string locale code. If null is used the system
      * default language is set as the preference's LanguageItem
-     * @param String languageCode The iso639 languageCode for LanguageItem
+     *
+     * @param profile The Profile for the current session.
+     * @param languageCode The iso639 languageCode for LanguageItem
      */
-    public void setLanguageItem(String languageCode) {
+    public void setLanguageItem(Profile profile, String languageCode) {
         LanguageItem languageItem;
         if (AppLocaleUtils.isFollowSystemLanguage(languageCode)) {
             languageItem = LanguageItem.makeFollowSystemLanguageItem();
         } else {
-            languageItem = LanguagesManager.getInstance().getLanguageItem(languageCode);
+            languageItem = LanguagesManager.getForProfile(profile).getLanguageItem(languageCode);
         }
         setLanguageItem(languageItem);
     }
@@ -64,9 +65,7 @@ public class LanguageItemPickerPreference extends ChromeBasePreference {
         updateDisplay();
     }
 
-    /**
-     * Update the title and summary to display
-     */
+    /** Update the title and summary to display */
     private void updateDisplay() {
         if (mLanguageItem == null) {
             return;

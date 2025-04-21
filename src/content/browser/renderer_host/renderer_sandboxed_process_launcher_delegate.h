@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,14 +20,15 @@ class CONTENT_EXPORT RendererSandboxedProcessLauncherDelegate
 
   ~RendererSandboxedProcessLauncherDelegate() override = default;
 
-#if BUILDFLAG(USE_ZYGOTE_HANDLE)
-  ZygoteHandle GetZygote() override;
-#endif  // BUILDFLAG(USE_ZYGOTE_HANDLE)
+#if BUILDFLAG(USE_ZYGOTE)
+  ZygoteCommunication* GetZygote() override;
+#endif  // BUILDFLAG(USE_ZYGOTE)
 
 #if BUILDFLAG(IS_MAC)
   bool EnableCpuSecurityMitigations() override;
 #endif  // BUILDFLAG(IS_MAC)
 
+  // sandbox::policy::SandboxDelegate:
   sandbox::mojom::Sandbox GetSandboxType() override;
 };
 
@@ -36,17 +37,22 @@ class CONTENT_EXPORT RendererSandboxedProcessLauncherDelegate
 class CONTENT_EXPORT RendererSandboxedProcessLauncherDelegateWin
     : public RendererSandboxedProcessLauncherDelegate {
  public:
-  RendererSandboxedProcessLauncherDelegateWin(base::CommandLine* cmd_line,
+  RendererSandboxedProcessLauncherDelegateWin(const base::CommandLine& cmd_line,
+                                              bool is_pdf_renderer,
                                               bool is_jit_disabled);
-
-  bool PreSpawnTarget(sandbox::TargetPolicy* policy) override;
+  // sandbox::policy::SandboxDelegate:
+  std::string GetSandboxTag() override;
+  bool InitializeConfig(sandbox::TargetConfig* config) override;
   void PostSpawnTarget(base::ProcessHandle process) override;
-
   bool CetCompatible() override;
+
+  // SandboxedProcessLauncherDelegate:
+  bool ShouldUseUntrustedMojoInvitation() override;
 
  private:
   const bool renderer_code_integrity_enabled_;
   const bool renderer_app_container_disabled_;
+  const bool is_pdf_renderer_ = false;
   bool dynamic_code_can_be_disabled_ = false;
 };
 #endif  // BUILDFLAG(IS_WIN)

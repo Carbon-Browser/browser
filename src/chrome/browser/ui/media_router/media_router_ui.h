@@ -1,21 +1,18 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_MEDIA_ROUTER_MEDIA_ROUTER_UI_H_
 #define CHROME_BROWSER_UI_MEDIA_ROUTER_MEDIA_ROUTER_UI_H_
 
-#include <memory>
 #include <set>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
-#include "build/build_config.h"
 #include "chrome/browser/ui/media_router/cast_dialog_controller.h"
 #include "chrome/browser/ui/media_router/cast_dialog_model.h"
 #include "chrome/browser/ui/media_router/media_cast_mode.h"
@@ -24,15 +21,11 @@
 #include "chrome/browser/ui/media_router/media_sink_with_cast_modes.h"
 #include "chrome/browser/ui/media_router/media_sink_with_cast_modes_observer.h"
 #include "chrome/browser/ui/media_router/presentation_request_source_observer.h"
-#include "chrome/browser/ui/webui/media_router/web_contents_display_observer.h"
 #include "components/media_router/browser/issues_observer.h"
 #include "components/media_router/browser/media_router_dialog_controller.h"
+#include "components/media_router/browser/mirroring_media_controller_host.h"
 #include "components/media_router/common/issue.h"
 #include "components/media_router/common/media_source.h"
-#include "url/origin.h"
-
-class Browser;
-class GURL;
 
 namespace content {
 struct PresentationRequest;
@@ -50,11 +43,13 @@ class MediaRouter;
 class MediaRoutesObserver;
 class MediaSink;
 class RouteRequestResult;
+class WebContentsDisplayObserver;
 
 // Functions as an intermediary between MediaRouter and Views Cast dialog.
 class MediaRouterUI : public CastDialogController,
                       public MediaSinkWithCastModesObserver,
-                      public PresentationRequestSourceObserver {
+                      public PresentationRequestSourceObserver,
+                      public MirroringMediaControllerHost::Observer {
  public:
   // MediaRouterUI's are typically created with one of the CreateWith* methods
   // below.
@@ -93,6 +88,11 @@ class MediaRouterUI : public CastDialogController,
   CreateWithStartPresentationContextAndMirroring(
       content::WebContents* initiator,
       std::unique_ptr<StartPresentationContext> context);
+  // Initializes RemotePlayback source only.
+  static std::unique_ptr<MediaRouterUI> CreateWithMediaSessionRemotePlayback(
+      content::WebContents* initiator,
+      media::VideoCodec video_codec,
+      media::AudioCodec audio_codec);
 
   // CastDialogController:
   void AddObserver(CastDialogController::Observer* observer) override;
@@ -101,10 +101,13 @@ class MediaRouterUI : public CastDialogController,
                     MediaCastMode cast_mode) override;
   void StopCasting(const std::string& route_id) override;
   void ClearIssue(const Issue::Id& issue_id) override;
-  content::WebContents* GetInitiator() override;
+  void FreezeRoute(const std::string& route_id) override;
+  void UnfreezeRoute(const std::string& route_id) override;
   // Note that |MediaRouterUI| should not be used after |TakeMediaRouteStarter|
-  // is called.
+  // is called. To enforce that, |TakeMediaRouteStarter| calls the destructor
+  // callback given to |RegisterDestructor| to destroy itself.
   std::unique_ptr<MediaRouteStarter> TakeMediaRouteStarter() override;
+  void RegisterDestructor(base::OnceClosure destructor) override;
 
   // Requests a route be created from the source mapped to
   // |cast_mode|, to the sink given by |sink_id|.
@@ -136,8 +139,6 @@ class MediaRouterUI : public CastDialogController,
     return media_route_starter()->GetWebContents();
   }
 
-  void SimulateDocumentAvailableForTest();
-
  private:
   friend class MediaRouterViewsUITest;
   friend class MediaRouterCastUiForTest;
@@ -152,8 +153,9 @@ class MediaRouterUI : public CastDialogController,
   FRIEND_TEST_ALL_PREFIXES(MediaRouterViewsUITest, ShowDomainForHangouts);
   FRIEND_TEST_ALL_PREFIXES(MediaRouterViewsUIIncognitoTest,
                            HidesCloudSinksForIncognito);
+  FRIEND_TEST_ALL_PREFIXES(MediaRouterViewsUITest, RouteCreationTimeout);
   FRIEND_TEST_ALL_PREFIXES(MediaRouterViewsUITest,
-                           RouteCreationTimeoutForPresentation);
+                           RouteCreationTimeoutIssueTitle);
   FRIEND_TEST_ALL_PREFIXES(MediaRouterViewsUITest,
                            DesktopMirroringFailsWhenDisallowedOnMac);
   FRIEND_TEST_ALL_PREFIXES(MediaRouterViewsUITest,
@@ -164,6 +166,7 @@ class MediaRouterUI : public CastDialogController,
                            UIMediaRoutesObserverSkipsUnavailableCastModes);
   FRIEND_TEST_ALL_PREFIXES(MediaRouterUITest,
                            UpdateSinksWhenDialogMovesToAnotherDisplay);
+  FRIEND_TEST_ALL_PREFIXES(MediaRouterViewsUITest, OnFreezeInfoChanged);
 
   class WebContentsFullscreenOnLoadedObserver;
 
@@ -216,8 +219,13 @@ class MediaRouterUI : public CastDialogController,
   // PresentationRequestSourceObserver
   void OnSourceUpdated(std::u16string& source_name) override;
 
+  // MirroringObserver
+  void OnFreezeInfoChanged() override;
+
   // Called to update the dialog with the current list of of enabled sinks.
   void UpdateSinks();
+
+  std::u16string GetSinkFriendlyNameFromId(const MediaSink::Id& sink_id);
 
   // Creates and sends an issue if route creation timed out.
   void SendIssueForRouteTimeout(
@@ -237,6 +245,14 @@ class MediaRouterUI : public CastDialogController,
   // Creates and sends an issue for notifying the user that the tab audio cannot
   // be mirrored from their device.
   void SendIssueForTabAudioNotSupported(const MediaSink::Id& sink_id);
+
+  // Creates and sends an issue when the user rejects the Cast request on the
+  // receiver device.
+  void SendIssueForUserNotAllowed(const MediaSink::Id& sink_id);
+
+  // Creates and send an issue when casting did not start because notifications
+  // are disabled on the receiver device.
+  void SendIssueForNotificationDisabled(const MediaSink::Id& sink_id);
 
   // Returns the IssueManager associated with |router_|.
   IssueManager* GetIssueManager();
@@ -268,18 +284,14 @@ class MediaRouterUI : public CastDialogController,
 
   UIMediaSink ConvertToUISink(const MediaSinkWithCastModes& sink,
                               const MediaRoute* route,
-                              const absl::optional<Issue>& issue);
+                              const std::optional<Issue>& issue);
 
-  // Opens the URL in a tab, returns the tab it was opened in.
-  content::WebContents* OpenTabWithUrl(const GURL& url);
+  void StopObservingMirroringMediaControllerHosts();
 
   // Returns the MediaRouter for this instance's BrowserContext.
   virtual MediaRouter* GetMediaRouter() const;
 
-  // Retrieves the browser associated with this UI.
-  Browser* GetBrowser();
-
-  const absl::optional<RouteRequest> current_route_request() const {
+  const std::optional<RouteRequest> current_route_request() const {
     return current_route_request_;
   }
 
@@ -292,22 +304,20 @@ class MediaRouterUI : public CastDialogController,
   // Helper factory that creates both the |MediaRouteStarter| and then a
   // |MediaRouterUI| in a single step.
   static std::unique_ptr<MediaRouterUI> CreateMediaRouterUI(
-      const CastModeSet& initial_modes,
-      content::WebContents* initiator,
-      std::unique_ptr<StartPresentationContext> start_presentation_context);
+      MediaRouterUIParameters params);
 
   raw_ptr<content::WebContentsObserver> web_contents_observer_for_test_ =
       nullptr;
 
   // This value is set whenever there is an outstanding issue.
-  absl::optional<Issue> issue_;
+  std::optional<Issue> issue_;
 
   // Contains up-to-date data to show in the dialog.
   CastDialogModel model_;
 
   // This value is set when the UI requests a route to be terminated, and gets
   // reset when the route is removed.
-  absl::optional<MediaRoute::Id> terminating_route_id_;
+  std::optional<MediaRoute::Id> terminating_route_id_;
 
   // Observers for dialog model updates.
   // TODO(takumif): CastDialogModel should manage the observers.
@@ -318,7 +328,7 @@ class MediaRouterUI : public CastDialogController,
   std::unique_ptr<MediaRoutesObserver> routes_observer_;
 
   // This contains a value only when tracking a pending route request.
-  absl::optional<RouteRequest> current_route_request_;
+  std::optional<RouteRequest> current_route_request_;
 
   // Used for locale-aware sorting of sinks by name. Set during
   // Init() using the current locale.
@@ -338,6 +348,8 @@ class MediaRouterUI : public CastDialogController,
 
   raw_ptr<MediaRouter> router_;
   raw_ptr<LoggerImpl> logger_;
+
+  base::OnceClosure destructor_;
 
   // NOTE: Weak pointers must be invalidated before all other member variables.
   // Therefore |weak_factory_| must be placed at the end.

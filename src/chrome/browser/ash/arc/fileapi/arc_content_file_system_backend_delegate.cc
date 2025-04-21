@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,12 +53,6 @@ storage::WatcherManager* ArcContentFileSystemBackendDelegate::GetWatcherManager(
     storage::FileSystemType type) {
   NOTIMPLEMENTED();
   return nullptr;
-}
-
-void ArcContentFileSystemBackendDelegate::GetRedirectURLForContents(
-    const storage::FileSystemURL& url,
-    storage::URLCallback callback) {
-  NOTIMPLEMENTED();
 }
 
 }  // namespace arc

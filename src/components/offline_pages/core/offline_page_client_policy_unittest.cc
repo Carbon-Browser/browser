@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -168,16 +168,6 @@ TEST_F(ClientPolicyTest, CheckNTPSuggestionsDefined) {
   ExpectRequiresSpecificUserSettings(kNTPSuggestionsNamespace, false);
 }
 
-TEST_F(ClientPolicyTest, CheckSuggestedArticlesDefined) {
-  OfflinePageClientPolicy policy = GetPolicy(kSuggestedArticlesNamespace);
-  EXPECT_EQ(policy.name_space, kSuggestedArticlesNamespace);
-  EXPECT_TRUE(isTemporary(policy));
-  ExpectTemporary(kSuggestedArticlesNamespace);
-  ExpectDownloadSupport(kSuggestedArticlesNamespace, true);
-  ExpectRestrictedToTabFromClientId(kSuggestedArticlesNamespace, false);
-  ExpectRequiresSpecificUserSettings(kSuggestedArticlesNamespace, false);
-}
-
 TEST_F(ClientPolicyTest, CheckLivePageSharingDefined) {
   OfflinePageClientPolicy policy = GetPolicy(kLivePageSharingNamespace);
   EXPECT_EQ(policy.name_space, kLivePageSharingNamespace);
@@ -195,10 +185,11 @@ TEST_F(ClientPolicyTest, AllTemporaryNamespaces) {
   std::set<std::string> cache_reset_namespaces(
       cache_reset_namespaces_list.begin(), cache_reset_namespaces_list.end());
   for (auto name_space : cache_reset_namespaces) {
-    if (cache_reset_namespaces.count(name_space) > 0)
+    if (cache_reset_namespaces.count(name_space) > 0) {
       ExpectTemporary(name_space);
-    else
+    } else {
       ExpectPersistent(name_space);
+    }
   }
 }
 

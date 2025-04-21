@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include "chrome/browser/ash/login/test/oobe_base_test.h"
 #include "chrome/browser/ash/login/test/oobe_screen_exit_waiter.h"
 #include "chrome/browser/ash/login/test/oobe_screen_waiter.h"
-#include "chrome/browser/ui/webui/chromeos/login/wrong_hwid_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/wrong_hwid_screen_handler.h"
 #include "content/public/test/browser_test.h"
 
 namespace ash {

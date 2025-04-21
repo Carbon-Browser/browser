@@ -1,10 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/cronet/native/test/test_url_request_callback.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "components/cronet/native/test/test_util.h"
 
 namespace cronet {
@@ -109,8 +109,8 @@ void TestUrlRequestCallback::OnRedirectReceived(Cronet_UrlRequestPtr request,
   CHECK(!last_error_);
 
   response_step_ = ON_RECEIVED_REDIRECT;
-  redirect_url_list_.push_back(newLocationUrl);
-  redirect_response_info_list_.push_back(
+  redirect_url_list().emplace_back(newLocationUrl);
+  redirect_response_info_list().emplace_back(
       std::make_unique<UrlResponseInfo>(info));
   ++redirect_count_;
   if (MaybeCancelOrPause(request)) {

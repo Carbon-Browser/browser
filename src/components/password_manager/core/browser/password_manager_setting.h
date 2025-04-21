@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,11 @@ enum class PasswordManagerSetting {
   // which support this.
   kAutoSignIn = 1,
 
-  kMaxValue = kAutoSignIn,
+  // Setting controlling whether the biometric re-authentication will be
+  // required before password filling.
+  kBiometricReauthBeforePwdFilling = 2,
+
+  kMaxValue = kBiometricReauthBeforePwdFilling,
 };
 }  // namespace password_manager
 

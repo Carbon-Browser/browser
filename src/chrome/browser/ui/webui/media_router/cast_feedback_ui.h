@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/values.h"
 #include "content/public/browser/web_ui_controller.h"
+#include "content/public/browser/webui_config.h"
 
 class Profile;
 
@@ -32,6 +33,16 @@ class CastFeedbackUI : public content::WebUIController {
   const raw_ptr<content::WebContents> web_contents_;
 
   WEB_UI_CONTROLLER_TYPE_DECL();
+};
+
+// WebUIConfig for chrome://cast-feedback
+class CastFeedbackUIConfig
+    : public content::DefaultWebUIConfig<CastFeedbackUI> {
+ public:
+  CastFeedbackUIConfig();
+
+  // content::WebUIConfig:
+  bool IsWebUIEnabled(content::BrowserContext* browser_context) override;
 };
 
 }  // namespace media_router

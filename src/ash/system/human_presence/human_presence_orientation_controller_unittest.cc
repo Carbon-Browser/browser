@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
 #include "base/command_line.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_command_line.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/time/time.h"
@@ -56,7 +57,7 @@ class HumanPresenceOrientationControllerTest : public AshTestBase {
                                           {ash::features::kQuickDim});
     base::CommandLine::ForCurrentProcess()->AppendSwitch(switches::kHasHps);
 
-    PowerManagerClient::InitializeFake();
+    chromeos::PowerManagerClient::InitializeFake();
     AshTestBase::SetUp();
 
     orientation_controller_ =
@@ -79,10 +80,14 @@ class HumanPresenceOrientationControllerTest : public AshTestBase {
         display::Display::RotationSource::ACTIVE);
   }
 
-  HumanPresenceOrientationController* orientation_controller_ = nullptr;
-  TabletModeController* tablet_mode_controller_ = nullptr;
-  display::DisplayManager* display_manager_ = nullptr;
-  chromeos::FakePowerManagerClient* power_manager_client_ = nullptr;
+  raw_ptr<HumanPresenceOrientationController, DanglingUntriaged>
+      orientation_controller_ = nullptr;
+  raw_ptr<TabletModeController, DanglingUntriaged> tablet_mode_controller_ =
+      nullptr;
+  raw_ptr<display::DisplayManager, DanglingUntriaged> display_manager_ =
+      nullptr;
+  raw_ptr<chromeos::FakePowerManagerClient, DanglingUntriaged>
+      power_manager_client_ = nullptr;
 
  private:
   base::test::ScopedFeatureList scoped_feature_list_;

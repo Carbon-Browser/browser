@@ -1,13 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/win/atl.h"
+#include <unknwn.h>
 
-#include <atlcomcli.h>
 #include <datetimeapi.h>
 #include <lmerr.h>
-#include <unknwn.h>
 #include <wrl/client.h>
 
 #include <memory>
@@ -22,13 +20,14 @@
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/process/launch.h"
+#include "base/strings/strcat_win.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/syslog_logging.h"
 #include "base/test/scoped_path_override.h"
 #include "base/test/test_reg_util_win.h"
+#include "base/win/atl.h"
 #include "base/win/registry.h"
 #include "base/win/scoped_com_initializer.h"
 #include "base/win/win_util.h"
@@ -106,8 +105,7 @@ class GcpSetupTest : public ::testing::Test {
   }
 
   void CreateJsonFile(const base::FilePath& path, const std::string& data) {
-    ASSERT_EQ(static_cast<int>(data.size()),
-              base::WriteFile(path, data.data(), data.size()));
+    ASSERT_TRUE(base::WriteFile(path, data));
   }
 
   void assert_addremove_reg_exists() {
@@ -181,7 +179,7 @@ class GcpSetupTest : public ::testing::Test {
  private:
   std::wstring GetCurrentDateForTesting() {
     static const wchar_t kDateFormat[] = L"yyyyMMdd";
-    wchar_t date_str[std::size(kDateFormat)] = {0};
+    wchar_t date_str[std::size(kDateFormat)] = {};
     int len = GetDateFormatW(LOCALE_INVARIANT, 0, nullptr, kDateFormat,
                              date_str, std::size(date_str));
     if (len) {
@@ -281,7 +279,7 @@ void GcpSetupTest::ExpectCredentialProviderToBeRegistered(
 
   // Make sure COM object is registered.
   std::wstring register_key_path =
-      base::StringPrintf(L"CLSID\\%ls\\InprocServer32", guid_string.c_str());
+      base::StrCat({L"CLSID\\", guid_string, L"\\InprocServer32"});
   base::win::RegKey clsid_key(HKEY_CLASSES_ROOT, register_key_path.c_str(),
                               KEY_READ);
   EXPECT_EQ(registered, clsid_key.Valid());
@@ -294,10 +292,10 @@ void GcpSetupTest::ExpectCredentialProviderToBeRegistered(
     EXPECT_EQ(path.value(), value);
   }
 
-  std::wstring cp_key_path = base::StringPrintf(
-      L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\"
-      L"Authentication\\Credential Providers\\%ls",
-      guid_string.c_str());
+  std::wstring cp_key_path =
+      L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Authentication\\"
+      L"Credential Providers\\" +
+      guid_string;
 
   // Make sure credential provider is registered.
   base::win::RegKey cp_key(HKEY_LOCAL_MACHINE, cp_key_path.c_str(), KEY_READ);
@@ -446,7 +444,13 @@ class GcpInstallOverOldInstallTest : public GcpSetupTest,
   }
 };
 
-TEST_P(GcpInstallOverOldInstallTest, DoInstallOverOldInstall) {
+// TODO: crbug.com/347201817 - Fix ODR violation.
+#if BUILDFLAG(IS_WIN) && defined(ADDRESS_SANITIZER)
+#define MAYBE_DoInstallOverOldInstall DISABLED_DoInstallOverOldInstall
+#else
+#define MAYBE_DoInstallOverOldInstall DoInstallOverOldInstall
+#endif
+TEST_P(GcpInstallOverOldInstallTest, MAYBE_DoInstallOverOldInstall) {
   logging::ResetEventSourceForTesting();
 
   // Set installer data argument to indicate the installation source.
@@ -505,7 +509,14 @@ INSTANTIATE_TEST_SUITE_P(All,
                          GcpInstallOverOldInstallTest,
                          ::testing::Values(0, 1));
 
-TEST_F(GcpSetupTest, DoInstallOverOldLockedInstall) {
+// TODO: crbug.com/347201817 - Fix ODR violation.
+#if BUILDFLAG(IS_WIN) && defined(ADDRESS_SANITIZER)
+#define MAYBE_DoInstallOverOldLockedInstall \
+  DISABLED_DoInstallOverOldLockedInstall
+#else
+#define MAYBE_DoInstallOverOldLockedInstall DoInstallOverOldLockedInstall
+#endif
+TEST_F(GcpSetupTest, MAYBE_DoInstallOverOldLockedInstall) {
   logging::ResetEventSourceForTesting();
 
   // Install using some old version.
@@ -538,7 +549,13 @@ TEST_F(GcpSetupTest, DoInstallOverOldLockedInstall) {
   }
 }
 
-TEST_F(GcpSetupTest, LaunchGcpAfterInstall) {
+// TODO: crbug.com/347201817 - Fix ODR violation.
+#if BUILDFLAG(IS_WIN) && defined(ADDRESS_SANITIZER)
+#define MAYBE_LaunchGcpAfterInstall DISABLED_LaunchGcpAfterInstall
+#else
+#define MAYBE_LaunchGcpAfterInstall LaunchGcpAfterInstall
+#endif
+TEST_F(GcpSetupTest, MAYBE_LaunchGcpAfterInstall) {
   logging::ResetEventSourceForTesting();
 
   // Install using some old version.
@@ -590,7 +607,13 @@ TEST_F(GcpSetupTest, LaunchGcpAfterInstall) {
 class GcpInstallerTest : public GcpSetupTest,
                          public ::testing::WithParamInterface<int> {};
 
-TEST_P(GcpInstallerTest, DoUninstall) {
+// TODO: crbug.com/347201817 - Fix ODR violation.
+#if BUILDFLAG(IS_WIN) && defined(ADDRESS_SANITIZER)
+#define MAYBE_DoUninstall DISABLED_DoUninstall
+#else
+#define MAYBE_DoUninstall DoUninstall
+#endif
+TEST_P(GcpInstallerTest, MAYBE_DoUninstall) {
   int standalone_installer = GetParam();
 
   logging::ResetEventSourceForTesting();
@@ -641,7 +664,13 @@ TEST_P(GcpInstallerTest, DoUninstall) {
 
 INSTANTIATE_TEST_SUITE_P(All, GcpInstallerTest, ::testing::Values(0, 1));
 
-TEST_F(GcpSetupTest, DoUninstallWithExtension) {
+// TODO: crbug.com/347201817 - Fix ODR violation.
+#if BUILDFLAG(IS_WIN) && defined(ADDRESS_SANITIZER)
+#define MAYBE_DoUninstallWithExtension DISABLED_DoUninstallWithExtension
+#else
+#define MAYBE_DoUninstallWithExtension DoUninstallWithExtension
+#endif
+TEST_F(GcpSetupTest, MAYBE_DoUninstallWithExtension) {
   logging::ResetEventSourceForTesting();
 
   base::win::RegKey key;

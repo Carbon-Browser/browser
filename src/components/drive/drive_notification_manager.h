@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,18 +8,19 @@
 #include <stdint.h>
 
 #include <map>
-#include <memory>
 #include <set>
 #include <string>
+#include <string_view>
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
-#include "base/strings/string_piece_forward.h"
 #include "base/time/default_tick_clock.h"
 #include "base/timer/timer.h"
+#include "components/drive/drive_export.h"
 #include "components/drive/drive_notification_observer.h"
+#include "components/drive/features.h"
 #include "components/invalidation/public/invalidation_handler.h"
 #include "components/invalidation/public/invalidation_util.h"
 #include "components/keyed_service/core/keyed_service.h"
@@ -34,8 +35,9 @@ namespace drive {
 // Conditions under which updates should be searched:
 // 1. XMPP invalidation is received from Google Drive.
 // 2. Polling timer counts down.
-class DriveNotificationManager : public KeyedService,
-                                 public invalidation::InvalidationHandler {
+class COMPONENTS_DRIVE_EXPORT DriveNotificationManager
+    : public KeyedService,
+      public invalidation::InvalidationHandler {
  public:
   // |clock| can be injected for testing.
   explicit DriveNotificationManager(
@@ -53,7 +55,7 @@ class DriveNotificationManager : public KeyedService,
   // invalidation::InvalidationHandler implementation.
   void OnInvalidatorStateChange(invalidation::InvalidatorState state) override;
   void OnIncomingInvalidation(
-      const invalidation::TopicInvalidationMap& invalidation_map) override;
+      const invalidation::Invalidation& invalidation) override;
   std::string GetOwnerName() const override;
   bool IsPublicTopic(const invalidation::Topic& topic) const override;
 
@@ -68,15 +70,8 @@ class DriveNotificationManager : public KeyedService,
   // Unsubscribe from invalidations from all team drives.
   void ClearTeamDriveIds();
 
-  // True when XMPP notification is currently enabled.
-  bool push_notification_enabled() const {
-    return push_notification_enabled_;
-  }
-
-  // True when XMPP notification has been registered.
-  bool push_notification_registered() const {
-    return push_notification_registered_;
-  }
+  // True when FCM notification is currently enabled.
+  bool push_notification_enabled() const { return AreInvalidationsEnabled(); }
 
   const std::set<std::string>& team_drive_ids_for_test() const {
     return team_drive_ids_;
@@ -88,9 +83,18 @@ class DriveNotificationManager : public KeyedService,
   }
 
  private:
+  // Returns true if `this` is observing `invalidation_service_`.
+  bool IsRegistered() const;
+
+  // Returns true if `IsRegistered()` and `invalidation_service_` is enabled.
+  bool AreInvalidationsEnabled() const;
+
+  // These values are persisted to logs. Entries should not be renumbered and
+  // numeric values should never be reused.
   enum NotificationSource {
-    NOTIFICATION_XMPP,
-    NOTIFICATION_POLLING,
+    kNotificationXMPP = 0,
+    kNotificationPolling = 1,
+    kMaxValue = kNotificationPolling
   };
 
   // Restarts the polling timer. Used for polling-based notification.
@@ -120,15 +124,11 @@ class DriveNotificationManager : public KeyedService,
   invalidation::Topic GetDriveInvalidationTopic() const;
   invalidation::Topic GetTeamDriveInvalidationTopic(
       const std::string& team_drive_id) const;
-  std::string ExtractTeamDriveId(base::StringPiece topic_name) const;
+  std::string ExtractTeamDriveId(std::string_view topic_name) const;
 
   raw_ptr<invalidation::InvalidationService> invalidation_service_;
   base::ObserverList<DriveNotificationObserver>::Unchecked observers_;
 
-  // True when Drive File Sync Service is registered for Drive notifications.
-  bool push_notification_registered_;
-  // True if the XMPP-based push notification is currently enabled.
-  bool push_notification_enabled_;
   // True once observers are notified for the first time.
   bool observers_notified_;
 

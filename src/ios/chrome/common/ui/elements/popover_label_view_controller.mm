@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,6 @@
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
 #import "ios/chrome/common/ui/util/text_view_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -114,7 +110,7 @@ constexpr CGFloat kIconSize = 16;
 
   AddSameConstraints(self.view.safeAreaLayoutGuide, _scrollView);
 
-  // TODO(crbug.com/1100884): Remove the following workaround:
+  // TODO(crbug.com/40138105): Remove the following workaround:
   // Using a UIView instead of UILayoutGuide as the later behaves weirdly with
   // the scroll view.
   UIView* textContainerView = [[UIView alloc] init];
@@ -142,7 +138,7 @@ constexpr CGFloat kIconSize = 16;
 
   [_scrollView addSubview:textView];
 
-  // Only create secondary TextView when |secondaryAttributedString| is not nil
+  // Only create secondary TextView when `secondaryAttributedString` is not nil
   // or empty. Set the constraint accordingly.
   if (self.secondaryAttributedString.length) {
     UITextView* secondaryTextView = CreateUITextViewWithTextKit1();
@@ -272,6 +268,22 @@ constexpr CGFloat kIconSize = 16;
   }
 }
 
+- (void)viewDidLayoutSubviews {
+  [super viewDidLayoutSubviews];
+  [self updatePreferredContentSize];
+}
+
+#pragma mark - UIPopoverPresentationControllerDelegate
+
+- (void)popoverPresentationController:
+            (UIPopoverPresentationController*)popoverPresentationController
+          willRepositionPopoverToRect:(inout CGRect*)rect
+                               inView:(inout UIView**)view {
+  // Popover moved to a different location, there might be more space available
+  // now so a new layout pass is needed.
+  [self.view setNeedsLayout];
+}
+
 #pragma mark - Private methods
 
 - (void)updateBackgroundColor {
@@ -323,25 +335,28 @@ constexpr CGFloat kIconSize = 16;
 // Updates the preferred content size according to the presenting view size and
 // the layout size of the view.
 - (void)updatePreferredContentSize {
-  // Expected width of the |self.scrollView|.
+  // Expected width of the `self.scrollView`.
   CGFloat width =
       self.presentingViewController.view.bounds.size.width * kWidthProportion;
   // Cap max width at 300pt.
   if (width > kMaxWidth) {
     width = kMaxWidth;
   }
-  // |scrollView| is used here instead of |self.view|, because |self.view|
+  // `scrollView` is used here instead of `self.view`, because `self.view`
   // includes arrow size during calculation although it's being added to the
   // result size anyway.
   CGSize size =
       [self.scrollView systemLayoutSizeFittingSize:CGSizeMake(width, 0)
                      withHorizontalFittingPriority:UILayoutPriorityRequired
                            verticalFittingPriority:500];
-  self.preferredContentSize = size;
+  [UIView performWithoutAnimation:^{
+    self.preferredContentSize = size;
+  }];
 }
 
 #pragma mark - UITextViewDelegate
 
+#if __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_17_0
 - (BOOL)textView:(UITextView*)textView
     shouldInteractWithURL:(NSURL*)URL
                   inRange:(NSRange)characterRange
@@ -351,6 +366,21 @@ constexpr CGFloat kIconSize = 16;
   }
   // Returns NO as the app is handling the opening of the URL.
   return NO;
+}
+#endif
+
+- (UIAction*)textView:(UITextView*)textView
+    primaryActionForTextItem:(UITextItem*)textItem
+               defaultAction:(UIAction*)defaultAction API_AVAILABLE(ios(17.0)) {
+  NSURL* URL = textItem.link;
+  if (URL) {
+    __weak __typeof(self) weakSelf = self;
+    return [UIAction actionWithHandler:^(UIAction* action) {
+      [weakSelf.delegate didTapLinkURL:URL];
+    }];
+  }
+
+  return defaultAction;
 }
 
 @end

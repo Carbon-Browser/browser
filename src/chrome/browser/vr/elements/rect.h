@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,8 +48,6 @@ class VR_UI_EXPORT Rect : public UiElement {
   void OnFloatAnimated(const float& value,
                        int target_property_id,
                        gfx::KeyframeModel* keyframe_model) override;
-
-  float ComputedAndLocalOpacityForTest() const override;
 
  private:
   SkColor center_color_ = SK_ColorWHITE;

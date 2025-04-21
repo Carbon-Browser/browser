@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,8 @@
 
 #include "base/atomicops.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/memory/weak_ptr.h"
-#include "base/metrics/histogram_macros.h"
 #include "base/power_monitor/power_observer.h"
 #include "base/task/task_observer.h"
 #include "base/threading/thread.h"
@@ -93,12 +92,19 @@ class GPU_IPC_SERVICE_EXPORT GpuWatchdogThread
  public:
   static std::unique_ptr<GpuWatchdogThread> Create(
       bool start_backgrounded,
+      bool software_rendering,
+      const std::string& thread_name);
+
+  // Use the existing GpuWatchdogThread to create a second one. This is used
+  // for DrDC thread only.
+  static std::unique_ptr<GpuWatchdogThread> Create(
+      bool start_backgrounded,
+      const GpuWatchdogThread* existing_watchdog,
       const std::string& thread_name);
 
   static std::unique_ptr<GpuWatchdogThread> Create(
       bool start_backgrounded,
       base::TimeDelta timeout,
-      int init_factor,
       int restart_factor,
       bool test_mode,
       const std::string& thread_name);
@@ -160,7 +166,6 @@ class GPU_IPC_SERVICE_EXPORT GpuWatchdogThread
   };
 
   GpuWatchdogThread(base::TimeDelta timeout,
-                    int init_factor,
                     int restart_factor,
                     bool test_mode,
                     const std::string& thread_name);
@@ -217,9 +222,6 @@ class GPU_IPC_SERVICE_EXPORT GpuWatchdogThread
   // Timeout on the watchdog thread to check if gpu hangs.
   base::TimeDelta watchdog_timeout_;
 
-  // The one-time watchdog timeout multiplier in the gpu initialization.
-  const int watchdog_init_factor_;
-
   // The one-time watchdog timeout multiplier after the watchdog pauses and
   // restarts.
   const int watchdog_restart_factor_;
@@ -258,7 +260,8 @@ class GPU_IPC_SERVICE_EXPORT GpuWatchdogThread
   base::TimeDelta remaining_watched_thread_ticks_;
 
   // The Windows thread hanndle of the watched GPU main thread.
-  void* watched_thread_handle_ = nullptr;
+  // RAW_PTR_EXCLUSION: This field holds windows handles
+  RAW_PTR_EXCLUSION void* watched_thread_handle_ = nullptr;
 
   // After GPU hang detected, how many times has the GPU thread been allowed to
   // continue due to not enough thread time.
@@ -271,7 +274,13 @@ class GPU_IPC_SERVICE_EXPORT GpuWatchdogThread
 #endif
 
 #if BUILDFLAG(IS_LINUX) && !BUILDFLAG(IS_CASTOS)
-  raw_ptr<FILE> tty_file_ = nullptr;
+  struct Deleter {
+    inline void operator()(FILE* f) {
+      if (f)
+        fclose(f);
+    }
+  };
+  std::unique_ptr<FILE, Deleter> tty_file_;
   int host_tty_ = -1;
   int active_tty_ = -1;
   int last_active_tty_ = -1;
@@ -315,7 +324,6 @@ class GPU_IPC_SERVICE_EXPORT GpuWatchdogThread
   // Set by the watchdog thread and Read by the test thread.
   base::AtomicFlag test_result_timeout_and_gpu_hang_;
 
-  SEQUENCE_CHECKER(watchdog_thread_sequence_checker_);
   SEQUENCE_CHECKER(watched_thread_sequence_checker_);
 
   base::WeakPtr<GpuWatchdogThread> weak_ptr_;

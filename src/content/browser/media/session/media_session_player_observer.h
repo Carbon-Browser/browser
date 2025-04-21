@@ -1,12 +1,14 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_BROWSER_MEDIA_SESSION_MEDIA_SESSION_PLAYER_OBSERVER_H_
 #define CONTENT_BROWSER_MEDIA_SESSION_MEDIA_SESSION_PLAYER_OBSERVER_H_
 
+#include <optional>
+
+#include "base/functional/callback.h"
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace media {
 enum class MediaContentType;
@@ -48,9 +50,6 @@ class MediaSessionPlayerObserver {
   // The given |player_id| has been requested picture-in-picture.
   virtual void OnEnterPictureInPicture(int player_id) = 0;
 
-  // The given |player_id| has been requested to exit picture-in-picture.
-  virtual void OnExitPictureInPicture(int player_id) = 0;
-
   // The given |player_id| has been requested to route audio output to the
   // specified audio device.
   virtual void OnSetAudioSinkId(int player_id,
@@ -59,18 +58,41 @@ class MediaSessionPlayerObserver {
   // The given |player_id| has been requested to mute or unmute.
   virtual void OnSetMute(int player_id, bool mute) = 0;
 
+  // The given |player_id| has been requested to start Media Remoting.
+  virtual void OnRequestMediaRemoting(int player_id) = 0;
+
+  // `RequestVisibilityCallback` is used to enable computing video visibility
+  // on-demand. The callback is passed to the MediaVideoVisibilityTracker, where
+  // the on-demand visibility computation will take place.
+  //
+  // The boolean parameter represents whether a video element meets a given
+  // visibility threshold. This threshold (`kVisibilityThreshold`) is defined by
+  // the HTMLVideoElement.
+  using RequestVisibilityCallback = base::OnceCallback<void(bool)>;
+
+  // The given |player_id| has been requested to report its video visibility.
+  virtual void OnRequestVisibility(
+      int player_id,
+      RequestVisibilityCallback request_visibility_callback) = 0;
+
   // Returns the position for |player_id|.
-  virtual absl::optional<media_session::MediaPosition> GetPosition(
+  virtual std::optional<media_session::MediaPosition> GetPosition(
       int player_id) const = 0;
 
   // Returns if picture-in-picture is available for |player_id|.
   virtual bool IsPictureInPictureAvailable(int player_id) const = 0;
+
+  // Returns if player's |player_id| video is sufficiently visible.
+  virtual bool HasSufficientlyVisibleVideo(int player_id) const = 0;
 
   // Returns true if the |player_id| has audio tracks.
   virtual bool HasAudio(int player_id) const = 0;
 
   // Returns true if the |player_id| has video tracks.
   virtual bool HasVideo(int player_id) const = 0;
+
+  // Returns true if `player_id` is paused.
+  virtual bool IsPaused(int player_id) const = 0;
 
   // Returns the id of the audio output device used by |player_id|. Returns the
   // empty string if unavailable.

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "net/base/load_flags.h"
@@ -43,7 +43,7 @@ class FixedKeyCommitmentParser
     : public TrustTokenKeyCommitmentController::Parser {
  public:
   mojom::TrustTokenKeyCommitmentResultPtr Parse(
-      base::StringPiece response_body) override {
+      std::string_view response_body) override {
     return DeterministicallyReturnedValue();
   }
   static mojom::TrustTokenKeyCommitmentResultPtr
@@ -57,7 +57,7 @@ class FixedKeyCommitmentParser
 class FailingKeyCommitmentParser
     : public TrustTokenKeyCommitmentController::Parser {
   mojom::TrustTokenKeyCommitmentResultPtr Parse(
-      base::StringPiece response_body) override {
+      std::string_view response_body) override {
     return nullptr;
   }
 };
@@ -175,10 +175,8 @@ TEST_F(TrustTokenKeyCommitmentControllerTest,
           IssuerURLRequest(),
           url::Origin::Create(GURL("https://toplevel.com")));
 
-  std::string origin_from_header;
-  EXPECT_TRUE(request->headers.GetHeader(net::HttpRequestHeaders::kOrigin,
-                                         &origin_from_header));
-  EXPECT_EQ(origin_from_header, "https://toplevel.com");
+  EXPECT_THAT(request->headers.GetHeader(net::HttpRequestHeaders::kOrigin),
+              Optional(std::string("https://toplevel.com")));
 }
 
 // On network error, the key commitment controller should
@@ -238,7 +236,7 @@ TEST_F(TrustTokenKeyCommitmentControllerTest, Redirect) {
   redirect_info.status_code = 301;
   redirect_info.new_url = GURL("https://unused-redirect-destination.com/");
   network::TestURLLoaderFactory::Redirects redirects;
-  redirects.push_back({redirect_info, network::mojom::URLResponseHead::New()});
+  redirects.emplace_back(redirect_info, network::mojom::URLResponseHead::New());
   auto head = network::CreateURLResponseHead(net::HTTP_OK);
   factory.AddResponse(IssuerDotComKeyCommitmentPath(), std::move(head),
                       /*content=*/"", network::URLLoaderCompletionStatus(),

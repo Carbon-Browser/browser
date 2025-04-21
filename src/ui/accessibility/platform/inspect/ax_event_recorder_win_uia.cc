@@ -1,15 +1,16 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/accessibility/platform/inspect/ax_event_recorder_win_uia.h"
 
-#include <algorithm>
 #include <numeric>
 #include <utility>
 
 #include <psapi.h>
 
+#include "base/logging.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -49,12 +50,15 @@ static std::pair<uintptr_t, uintptr_t> GetModuleAddressRange(
 std::string UiaIdentifierToStringPretty(int32_t id) {
   auto str = base::WideToUTF8(UiaIdentifierToString(id));
   // Remove UIA_ prefix, and EventId/PropertyId suffixes
-  if (base::StartsWith(str, "UIA_", base::CompareCase::SENSITIVE))
+  if (str.starts_with("UIA_")) {
     str = str.substr(std::size("UIA_") - 1);
-  if (base::EndsWith(str, "EventId", base::CompareCase::SENSITIVE))
+  }
+  if (str.ends_with("EventId")) {
     str = str.substr(0, str.size() - std::size("EventId") + 1);
-  if (base::EndsWith(str, "PropertyId", base::CompareCase::SENSITIVE))
+  }
+  if (str.ends_with("PropertyId")) {
     str = str.substr(0, str.size() - std::size("PropertyId") + 1);
+  }
   return str;
 }
 
@@ -89,9 +93,9 @@ void AXEventRecorderWinUia::WaitForDoneRecording() {
   base::PlatformThread::Join(thread_handle_);
 }
 
-AXEventRecorderWinUia::Thread::Thread() {}
+AXEventRecorderWinUia::Thread::Thread() = default;
 
-AXEventRecorderWinUia::Thread::~Thread() {}
+AXEventRecorderWinUia::Thread::~Thread() = default;
 
 void AXEventRecorderWinUia::Thread::Init(AXEventRecorderWinUia* owner,
                                          HWND hwnd,
@@ -218,7 +222,7 @@ AXEventRecorderWinUia::Thread::EventHandler::EventHandler() {
           : L"RPCRT4.dll");
 }
 
-AXEventRecorderWinUia::Thread::EventHandler::~EventHandler() {}
+AXEventRecorderWinUia::Thread::EventHandler::~EventHandler() = default;
 
 void AXEventRecorderWinUia::Thread::EventHandler::Init(
     AXEventRecorderWinUia::Thread* owner,
@@ -266,9 +270,7 @@ AXEventRecorderWinUia::Thread::EventHandler::HandleFocusChangedEvent(
   }
   if (auto lock_scope = id.CreateLockScope<VT_I4>()) {
     // Debounce focus events received from the same |sender|.
-    if (std::equal(lock_scope->begin(), lock_scope->end(),
-                   last_focused_runtime_id_.begin(),
-                   last_focused_runtime_id_.end())) {
+    if (base::ranges::equal(*lock_scope, last_focused_runtime_id_)) {
       return S_OK;
     }
 

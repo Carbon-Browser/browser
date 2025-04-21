@@ -29,6 +29,7 @@
 
 #include "base/memory/scoped_refptr.h"
 #include "third_party/blink/renderer/core/core_export.h"
+#include "third_party/blink/renderer/platform/graphics/canvas_resource_provider.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_types.h"
 #include "third_party/blink/renderer/platform/graphics/image_orientation.h"
 #include "third_party/blink/renderer/platform/graphics/static_bitmap_image.h"
@@ -44,26 +45,19 @@ enum SourceImageStatus {
   kUndecodableSourceImageStatus,     // Image element with a 'broken' image
   kZeroSizeCanvasSourceImageStatus,  // Source is a canvas with width or heigh
                                      // of zero
+  kZeroSizeImageSourceStatus,    // Image element with width or height of zero
   kIncompleteSourceImageStatus,  // Image element with no source media
   kInvalidSourceImageStatus,
+  kLayersOpenInCanvasSource,  // Source is a canvas with open layers
 };
-
-// This is the helper function to get the canvas image with a
-// specific alpha op requirements.
-// This function will be a no op if the image is opaque, or if the image was
-// already in the preferred state (if it was premultiplied and it is requested
-// to be premultiplied or if it was unpremultiplied and it is requested to be
-// unpremultiplied).
-scoped_refptr<StaticBitmapImage> GetImageWithAlphaDisposition(
-    scoped_refptr<StaticBitmapImage>&&,
-    const AlphaDisposition);
 
 class CORE_EXPORT CanvasImageSource {
  public:
   virtual scoped_refptr<Image> GetSourceImageForCanvas(
+      FlushReason,
       SourceImageStatus*,
       const gfx::SizeF&,
-      const AlphaDisposition alpha_disposition = kPremultiplyAlpha) = 0;
+      const AlphaDisposition alpha_disposition) = 0;
 
   // IMPORTANT: Result must be independent of whether destinationContext is
   // already tainted because this function may be used to determine whether

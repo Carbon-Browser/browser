@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -16,8 +16,6 @@ source_set("first_party_sets_manager") {
   sources = [
     "first_party_sets_access_delegate.cc",
     "first_party_sets_access_delegate.h",
-    "first_party_sets_context_config.cc",
-    "first_party_sets_context_config.h",
     "first_party_sets_manager.cc",
     "first_party_sets_manager.h",
   ]
@@ -31,6 +29,8 @@ source_set("first_party_sets_manager") {
     "//sql",
     "//url",
   ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 }
 
 source_set("test_support") {

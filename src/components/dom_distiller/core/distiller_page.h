@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
-#include "base/memory/weak_ptr.h"
-#include "base/time/time.h"
+#include "base/functional/callback.h"
 #include "base/values.h"
 #include "third_party/dom_distiller_js/dom_distiller.pb.h"
 #include "ui/gfx/geometry/size.h"
@@ -66,7 +64,6 @@ class DistillerPage {
  private:
   bool ready_;
   DistillerPageCallback distiller_page_callback_;
-  base::TimeTicks distillation_start_;
 };
 
 // Factory for generating a |DistillerPage|.

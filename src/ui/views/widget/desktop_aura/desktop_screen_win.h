@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,7 @@ class VIEWS_EXPORT DesktopScreenWin : public display::win::ScreenWin {
   HWND GetHWNDFromNativeWindow(gfx::NativeWindow window) const override;
   gfx::NativeWindow GetNativeWindowFromHWND(HWND hwnd) const override;
   bool IsNativeWindowOccluded(gfx::NativeWindow window) const override;
-  absl::optional<bool> IsWindowOnCurrentVirtualDesktop(
+  std::optional<bool> IsWindowOnCurrentVirtualDesktop(
       gfx::NativeWindow window) const override;
 };
 

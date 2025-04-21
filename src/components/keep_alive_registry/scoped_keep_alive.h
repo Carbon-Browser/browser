@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,8 @@ enum class KeepAliveRestartOption;
 //
 // If you need to access a particular Profile (or its KeyedServices) during the
 // same period, you should use a ScopedProfileKeepAlive as well.
+//
+// Note: The objects should only be created and destroyed on the main thread.
 //
 // Note: The registration will hit a CHECK if it happens while we are
 // shutting down. Caller code should make sure that this can't happen.

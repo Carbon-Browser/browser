@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,10 +20,10 @@
 #include <vector>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/process/launch.h"
 #include "base/test/scoped_path_override.h"
@@ -245,7 +245,7 @@ TEST_F(SynchronizedMinidumpManagerTest,
 TEST_F(SynchronizedMinidumpManagerTest,
        AddEntryToLockFile_FailsWithInvalidEntry) {
   // Create invalid dump info value
-  base::DictionaryValue val;
+  base::Value val{base::Value::Dict()};
 
   // Test that the manager tried to log the entry and failed.
   SynchronizedMinidumpManagerSimple manager;
@@ -488,8 +488,7 @@ TEST_F(SynchronizedMinidumpManagerTest, HasDumpsNotInLockFile) {
   const base::FilePath path =
       base::FilePath(manager.dump_path()).Append("hello123");
   const char kFileContents[] = "foobar";
-  ASSERT_EQ(static_cast<int>(sizeof(kFileContents)),
-            WriteFile(path, kFileContents, sizeof(kFileContents)));
+  ASSERT_TRUE(WriteFile(path, kFileContents));
 
   ASSERT_TRUE(manager.HasDumps());
 }

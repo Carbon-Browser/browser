@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,11 @@
 #include "base/containers/flat_map.h"
 #include "base/values.h"
 #include "chrome/browser/ash/printing/oauth2/constants.h"
+#include "chrome/browser/ash/printing/oauth2/mock_client_ids_database.h"
 #include "chrome/browser/ash/printing/oauth2/status_code.h"
 #include "chrome/browser/ash/printing/oauth2/test_authorization_server.h"
 #include "net/http/http_status_code.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
 
@@ -28,17 +30,18 @@ void ExpectOneElementListOfStrings(const base::Value::Dict& dict,
                                    const std::string& value) {
   const base::Value::List* list = dict.FindList(name);
   ASSERT_TRUE(list);
-  ASSERT_EQ(list->size(), 1);
+  ASSERT_EQ(list->size(), 1u);
   ASSERT_TRUE(list->front().is_string());
   EXPECT_EQ(list->front().GetString(), value);
 }
 
 TEST(PrintingOAuth2AuthorizationServerDataTest, InitialState) {
   FakeAuthorizationServer server;
+  testing::StrictMock<MockClientIdsDatabase> client_ids_database;
   AuthorizationServerData asd(server.GetURLLoaderFactory(),
-                              GURL("https://a.b/c"), "abc");
+                              GURL("https://a.b/c"), &client_ids_database);
   EXPECT_EQ(asd.AuthorizationServerURI().spec(), "https://a.b/c");
-  EXPECT_EQ(asd.ClientId(), "abc");
+  EXPECT_EQ(asd.ClientId(), "");
   EXPECT_TRUE(asd.AuthorizationEndpointURI().is_empty());
   EXPECT_TRUE(asd.TokenEndpointURI().is_empty());
   EXPECT_TRUE(asd.RegistrationEndpointURI().is_empty());
@@ -48,8 +51,17 @@ TEST(PrintingOAuth2AuthorizationServerDataTest, InitialState) {
 
 TEST(PrintingOAuth2AuthorizationServerDataTest, MetadataRequest) {
   FakeAuthorizationServer server;
+  testing::StrictMock<MockClientIdsDatabase> client_ids_database;
   AuthorizationServerData asd(server.GetURLLoaderFactory(),
-                              GURL("https://a.b/c"), "abc");
+                              GURL("https://a.b/c"), &client_ids_database);
+
+  // Simulate fetching client_id from the database.
+  EXPECT_CALL(client_ids_database, FetchId)
+      .WillOnce([](const GURL& url, StatusCallback callback) {
+        EXPECT_EQ(url.spec(), "https://a.b/c");
+        std::move(callback).Run(StatusCode::kOK, "abc");
+      });
+
   CallbackResult cr;
   asd.Initialize(BindResult(cr));
 
@@ -76,8 +88,9 @@ TEST(PrintingOAuth2AuthorizationServerDataTest, MetadataRequest) {
 
 TEST(PrintingOAuth2AuthorizationServerDataTest, RegistrationRequest) {
   FakeAuthorizationServer server;
+  testing::NiceMock<MockClientIdsDatabase> client_ids_database;
   AuthorizationServerData asd(server.GetURLLoaderFactory(),
-                              GURL("https://a.b/c"), "");
+                              GURL("https://a.b/c"), &client_ids_database);
   CallbackResult cr;
   asd.Initialize(BindResult(cr));
 
@@ -89,6 +102,13 @@ TEST(PrintingOAuth2AuthorizationServerDataTest, RegistrationRequest) {
       BuildMetadata("https://a.b/c", "https://a/auth", "https://b/token",
                     "https://c/reg", "https://d/rev");
   server.ResponseWithJSON(net::HttpStatusCode::HTTP_OK, params);
+
+  // Expect saving the new client id.
+  EXPECT_CALL(client_ids_database, StoreId)
+      .WillOnce([](const GURL& url, const std::string& id) {
+        EXPECT_EQ(url.spec(), "https://a.b/c");
+        EXPECT_EQ(id, "new_client_id");
+      });
 
   // Simulate processing of Registration Request (rfc7591, section 3).
   ASSERT_EQ(server.ReceivePOSTWithJSON("https://c/reg", params), "");

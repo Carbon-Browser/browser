@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <wayland-server-core.h>
 
 #include <cstdint>
+#include <memory>
 
 #include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
@@ -16,6 +17,7 @@
 #include "ui/ozone/platform/wayland/test/test_data_offer.h"
 #include "ui/ozone/platform/wayland/test/test_data_source.h"
 #include "ui/ozone/platform/wayland/test/test_selection_device_manager.h"
+#include "ui/ozone/platform/wayland/test/test_wayland_server_thread.h"
 
 namespace wl {
 
@@ -48,7 +50,7 @@ struct WlDataDeviceImpl : public TestSelectionDevice::Delegate {
   TestSelectionOffer* CreateAndSendOffer() override {
     wl_resource* device_resource = device_->resource();
     wl_resource* new_offer_resource = CreateResourceWithImpl<TestDataOffer>(
-        device_->client(), &wl_data_offer_interface,
+        wl_resource_get_client(device_resource), &wl_data_offer_interface,
         wl_resource_get_version(device_resource), &kTestDataOfferImpl, 0);
     wl_data_device_send_data_offer(device_resource, new_offer_resource);
     return GetUserDataAs<TestSelectionOffer>(new_offer_resource);
@@ -65,8 +67,6 @@ struct WlDataDeviceImpl : public TestSelectionDevice::Delegate {
                                   selection_offer->resource());
   }
 
-  void OnDestroying() override { delete this; }
-
  private:
   const raw_ptr<TestDataDevice> device_;
 };
@@ -78,10 +78,8 @@ const struct wl_data_device_interface kTestDataDeviceImpl = {
     &DataDeviceRelease};
 
 TestDataDevice::TestDataDevice(wl_resource* resource,
-                               wl_client* client,
                                TestDataDeviceManager* manager)
-    : TestSelectionDevice(resource, new WlDataDeviceImpl(this)),
-      client_(client),
+    : TestSelectionDevice(resource, std::make_unique<WlDataDeviceImpl>(this)),
       manager_(manager) {}
 
 TestDataDevice::~TestDataDevice() = default;
@@ -103,11 +101,30 @@ void TestDataDevice::StartDrag(TestDataSource* source,
   DCHECK(origin);
 
   CHECK(manager_);
+  drag_serial_ = serial;
   manager_->set_data_source(source);
+  if (auto_send_start_drag_events_) {
+    SendOfferAndEnter(origin, {});
+  }
+  auto_send_start_drag_events_ = true;
+  wl_client_flush(wl_resource_get_client(resource()));
+}
 
-  if (drag_delegate_)
-    drag_delegate_->StartDrag(source, origin, serial);
-  wl_client_flush(client_);
+void TestDataDevice::SendOfferAndEnter(MockSurface* origin,
+                                       const gfx::Point& location) {
+  DCHECK(manager_->data_source());
+  auto* data_offer = OnDataOffer();
+  DCHECK(data_offer);
+  for (const auto& mime_type : manager_->data_source()->mime_types())
+    data_offer->OnOffer(mime_type, {});
+
+  auto* client = wl_resource_get_client(resource());
+  auto* display = wl_client_get_display(client);
+  DCHECK(display);
+  wl_data_device_send_enter(resource(), wl_display_get_serial(display),
+                            origin->resource(), wl_fixed_from_int(location.x()),
+                            wl_fixed_from_int(location.y()),
+                            data_offer->resource());
 }
 
 void TestDataDevice::OnEnter(uint32_t serial,

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,21 +8,19 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/hash/sha1.h"
 #include "base/i18n/case_conversion.h"
-#include "base/metrics/histogram_macros.h"
+#include "base/not_fatal_until.h"
 #include "base/path_service.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
 #include "base/win/registry.h"
-#include "base/win/windows_version.h"
 #include "chrome/browser/win/conflicts/module_blocklist_cache_util.h"
 #include "chrome/browser/win/conflicts/module_database.h"
 #include "chrome/browser/win/conflicts/module_info_util.h"
@@ -42,22 +40,11 @@ using ModuleBlockingDecision =
 
 // The maximum number of modules allowed in the cache. This keeps the cache
 // from growing indefinitely.
-// Note: This value is tied to the "ModuleBlocklistCache.ModuleCount" histogram.
-//       Rename the histogram if this value is ever changed.
 static constexpr size_t kMaxModuleCount = 5000u;
 
 // The maximum amount of time a stale entry is kept in the cache before it is
 // deleted.
 static constexpr base::TimeDelta kMaxEntryAge = base::Days(180);
-
-// This enum is used for UMA. Therefore, the values should never change.
-enum class BlocklistStatus {
-  // A module was marked as blocklisted during the current browser execution.
-  kNewlyBlocklisted = 0,
-  // A module was blocked when it tried to load into the process.
-  kBlocked = 1,
-  kMaxValue = kBlocked,
-};
 
 // Updates the module blocklist cache asynchronously on a background sequence
 // and return a CacheUpdateResult value.
@@ -71,42 +58,24 @@ ModuleBlocklistCacheUpdater::CacheUpdateResult UpdateModuleBlocklistCache(
     uint32_t min_time_date_stamp) {
   DCHECK(module_list_filter);
 
-  // Emit some UMA metrics about the update.
-  for (size_t i = 0; i < newly_blocklisted_modules.size(); ++i) {
-    UMA_HISTOGRAM_ENUMERATION("ModuleBlocklistCache.BlocklistStatus",
-                              BlocklistStatus::kNewlyBlocklisted);
-  }
-  for (size_t i = 0; i < blocked_modules.size(); ++i) {
-    UMA_HISTOGRAM_ENUMERATION("ModuleBlocklistCache.BlocklistStatus",
-                              BlocklistStatus::kBlocked);
-  }
-
   ModuleBlocklistCacheUpdater::CacheUpdateResult result;
 
   // Read the existing cache.
   third_party_dlls::PackedListMetadata metadata;
   std::vector<third_party_dlls::PackedListModule> blocklisted_modules;
-  ReadResult read_result =
-      ReadModuleBlocklistCache(module_blocklist_cache_path, &metadata,
-                               &blocklisted_modules, &result.old_md5_digest);
-  UMA_HISTOGRAM_ENUMERATION("ModuleBlocklistCache.ReadResult", read_result);
+  ReadModuleBlocklistCache(module_blocklist_cache_path, &metadata,
+                           &blocklisted_modules, &result.old_md5_digest);
 
   // Update the existing data with |newly_blocklisted_modules| and
   // |blocked_modules|.
   UpdateModuleBlocklistCacheData(
       *module_list_filter, newly_blocklisted_modules, blocked_modules,
       max_module_count, min_time_date_stamp, &metadata, &blocklisted_modules);
-  // Note: This histogram is tied to the current value of kMaxModuleCount.
-  //       Rename the histogram if that value is ever changed.
-  UMA_HISTOGRAM_CUSTOM_COUNTS("ModuleBlocklistCache.ModuleCount",
-                              blocklisted_modules.size(), 1, kMaxModuleCount,
-                              50);
 
   // Then write the updated cache to disk.
   bool write_result =
       WriteModuleBlocklistCache(module_blocklist_cache_path, metadata,
                                 blocklisted_modules, &result.new_md5_digest);
-  UMA_HISTOGRAM_BOOLEAN("ModuleBlocklistCache.WriteResult", write_result);
 
   if (write_result) {
     // Write the path of the cache into the registry so that chrome_elf can find
@@ -117,11 +86,8 @@ ModuleBlocklistCacheUpdater::CacheUpdateResult UpdateModuleBlocklistCache(
     base::win::RegKey registry_key(
         HKEY_CURRENT_USER, cache_path_registry_key.c_str(), KEY_SET_VALUE);
 
-    bool cache_path_updated = SUCCEEDED(
-        registry_key.WriteValue(third_party_dlls::kBlFilePathRegValue,
-                                module_blocklist_cache_path.value().c_str()));
-    UMA_HISTOGRAM_BOOLEAN("ModuleBlocklistCache.BlocklistPathUpdated",
-                          cache_path_updated);
+    registry_key.WriteValue(third_party_dlls::kBlFilePathRegValue,
+                            module_blocklist_cache_path.value().c_str());
   }
 
   return result;
@@ -134,15 +100,13 @@ void PopulatePackedListModule(
   // Hash the basename.
   const std::string module_basename = base::UTF16ToUTF8(
       base::i18n::ToLower(module_key.module_path.BaseName().AsUTF16Unsafe()));
-  base::SHA1HashBytes(reinterpret_cast<const uint8_t*>(module_basename.data()),
-                      module_basename.length(),
-                      &packed_list_module->basename_hash[0]);
+  base::span(packed_list_module->basename_hash)
+      .copy_from(base::SHA1Hash(base::as_byte_span(module_basename)));
 
   // Hash the code id.
   const std::string module_code_id = GenerateCodeId(module_key);
-  base::SHA1HashBytes(reinterpret_cast<const uint8_t*>(module_code_id.data()),
-                      module_code_id.length(),
-                      &packed_list_module->code_id_hash[0]);
+  base::span(packed_list_module->code_id_hash)
+      .copy_from(base::SHA1Hash(base::as_byte_span(module_code_id)));
 
   packed_list_module->time_date_stamp =
       CalculateTimeDateStamp(base::Time::Now());
@@ -174,7 +138,6 @@ bool ShouldInsertInBlocklistCache(ModuleBlockingDecision blocking_decision) {
   }
 
   NOTREACHED() << static_cast<int>(blocking_decision);
-  return false;
 }
 
 }  // namespace
@@ -207,8 +170,7 @@ ModuleBlocklistCacheUpdater::~ModuleBlocklistCacheUpdater() {
 
 // static
 bool ModuleBlocklistCacheUpdater::IsBlockingEnabled() {
-  return base::win::GetVersion() >= base::win::Version::WIN8 &&
-         base::FeatureList::IsEnabled(features::kThirdPartyModulesBlocking);
+  return base::FeatureList::IsEnabled(features::kThirdPartyModulesBlocking);
 }
 
 // static
@@ -223,8 +185,7 @@ base::FilePath ModuleBlocklistCacheUpdater::GetModuleBlocklistCachePath() {
 
 // static
 void ModuleBlocklistCacheUpdater::DeleteModuleBlocklistCache() {
-  bool delete_result = base::DeleteFile(GetModuleBlocklistCachePath());
-  UMA_HISTOGRAM_BOOLEAN("ModuleBlocklistCache.DeleteResult", delete_result);
+  base::DeleteFile(GetModuleBlocklistCachePath());
 }
 
 void ModuleBlocklistCacheUpdater::OnNewModuleFound(
@@ -241,8 +202,8 @@ void ModuleBlocklistCacheUpdater::OnNewModuleFound(
 
   // Determine if the module was in the initial blocklist cache.
   blocking_state.was_in_blocklist_cache =
-      std::binary_search(std::begin(initial_blocklisted_modules_),
-                         std::end(initial_blocklisted_modules_),
+      std::binary_search(std::begin(*initial_blocklisted_modules_),
+                         std::end(*initial_blocklisted_modules_),
                          packed_list_module, internal::ModuleLess());
 
   // Make note of the fact that the module was blocked. It could be that the
@@ -300,7 +261,7 @@ const ModuleBlocklistCacheUpdater::ModuleBlockingState&
 ModuleBlocklistCacheUpdater::GetModuleBlockingState(
     const ModuleInfoKey& module_key) const {
   auto it = module_blocking_states_.find(module_key);
-  DCHECK(it != module_blocking_states_.end());
+  CHECK(it != module_blocking_states_.end(), base::NotFatalUntil::M130);
   return it->second;
 }
 
@@ -354,8 +315,8 @@ ModuleBlocklistCacheUpdater::DetermineModuleBlockingDecision(
   // Explicitly allowlist modules whose signing cert's Subject field matches the
   // one in the current executable. No attempt is made to check the validity of
   // module signatures or of signing certs.
-  if (exe_certificate_info_.type != CertificateInfo::Type::NO_CERTIFICATE &&
-      exe_certificate_info_.subject ==
+  if (exe_certificate_info_->type != CertificateInfo::Type::NO_CERTIFICATE &&
+      exe_certificate_info_->subject ==
           module_data.inspection_result->certificate_info.subject) {
     return ModuleBlockingDecision::kAllowedSameCertificate;
   }
@@ -415,8 +376,8 @@ void ModuleBlocklistCacheUpdater::StartModuleBlocklistCacheUpdate() {
       CalculateTimeDateStamp(base::Time::Now() - kMaxEntryAge);
 
   // Update the module blocklist cache on a background sequence.
-  base::PostTaskAndReplyWithResult(
-      background_sequence_.get(), FROM_HERE,
+  background_sequence_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&UpdateModuleBlocklistCache, cache_file_path,
                      module_list_filter_, std::move(newly_blocklisted_modules_),
                      std::move(blocked_modules_), kMaxModuleCount,

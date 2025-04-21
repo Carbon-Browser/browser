@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,22 +6,23 @@
 #define CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_CONNECTION_HANDLER_IMPL_H_
 
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/timer/timer.h"
 #include "chromeos/ash/components/network/network_cert_loader.h"
 #include "chromeos/ash/components/network/network_connection_handler.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 #include "chromeos/ash/components/network/network_state_handler_observer.h"
-#include "chromeos/dbus/common/dbus_method_call_status.h"
+#include "chromeos/dbus/common/dbus_callback.h"
 
-namespace chromeos {
+namespace ash {
 
 // Implementation of NetworkConnectionHandler.
 class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConnectionHandlerImpl
     : public NetworkConnectionHandler,
       public NetworkCertLoader::Observer,
-      public NetworkStateHandlerObserver,
-      public base::SupportsWeakPtr<NetworkConnectionHandlerImpl> {
+      public NetworkStateHandlerObserver {
  public:
   NetworkConnectionHandlerImpl();
 
@@ -41,6 +42,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConnectionHandlerImpl
       const std::string& service_path,
       base::OnceClosure success_callback,
       network_handler::ErrorCallback error_callback) override;
+  void OnAutoConnectedInitiated(int auto_connect_reasons) override;
 
   // NetworkStateHandlerObserver
   void NetworkListChanged() override;
@@ -99,6 +101,12 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConnectionHandlerImpl
   ConnectRequest* GetPendingRequest(const std::string& service_path);
   bool HasPendingCellularRequest() const;
 
+  // Callback when PrepareExistingCellularNetworkForConnection succeeded.
+  void OnPrepareCellularNetworkForConnectionSuccess(
+      const std::string& service_path,
+      bool auto_connected);
+
+  // Callback when PrepareExistingCellularNetworkForConnection failed.
   void OnPrepareCellularNetworkForConnectionFailure(
       const std::string& service_path,
       const std::string& error_name);
@@ -114,7 +122,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConnectionHandlerImpl
   // ConnectToNetwork(), see comment for info.
   void VerifyConfiguredAndConnect(bool check_error_state,
                                   const std::string& service_path,
-                                  absl::optional<base::Value> properties);
+                                  std::optional<base::Value::Dict> properties);
 
   // Queues a connect request until certificates have loaded.
   void QueueConnectRequest(const std::string& service_path);
@@ -177,14 +185,14 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConnectionHandlerImpl
       CellularConfigurationFailureType failure_type);
 
   // Local references to the associated handler instances.
-  NetworkCertLoader* network_cert_loader_ = nullptr;
-  NetworkStateHandler* network_state_handler_ = nullptr;
-  base::ScopedObservation<chromeos::NetworkStateHandler,
-                          chromeos::NetworkStateHandlerObserver>
+  raw_ptr<NetworkCertLoader> network_cert_loader_ = nullptr;
+  raw_ptr<NetworkStateHandler> network_state_handler_ = nullptr;
+  base::ScopedObservation<NetworkStateHandler, NetworkStateHandlerObserver>
       network_state_handler_observer_{this};
-  NetworkConfigurationHandler* configuration_handler_ = nullptr;
-  ManagedNetworkConfigurationHandler* managed_configuration_handler_ = nullptr;
-  CellularConnectionHandler* cellular_connection_handler_ = nullptr;
+  raw_ptr<NetworkConfigurationHandler> configuration_handler_ = nullptr;
+  raw_ptr<ManagedNetworkConfigurationHandler, DanglingUntriaged>
+      managed_configuration_handler_ = nullptr;
+  raw_ptr<CellularConnectionHandler> cellular_connection_handler_ = nullptr;
 
   // Map of pending connect requests, used to prevent repeated attempts while
   // waiting for Shill and to trigger callbacks on eventual success or failure.
@@ -192,9 +200,13 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkConnectionHandlerImpl
   std::unique_ptr<ConnectRequest> queued_connect_;
 
   // Track certificate loading state.
-  bool certificates_loaded_;
+  bool certificates_loaded_ = false;
+  // Track if there's a connection triggered by policy auto-connect.
+  bool has_policy_auto_connect_ = false;
+
+  base::WeakPtrFactory<NetworkConnectionHandlerImpl> weak_ptr_factory_{this};
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_CONNECTION_HANDLER_IMPL_H_

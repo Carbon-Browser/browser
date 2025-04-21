@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,15 +10,17 @@
 
 #include <limits>
 #include <memory>
+#include <string_view>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/compiler_specific.h"
 #include "base/component_export.h"
 #include "base/containers/span.h"
+#include "base/feature_list.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/strings/string_piece.h"
 #include "mojo/public/cpp/bindings/connection_group.h"
 #include "mojo/public/cpp/bindings/lib/buffer.h"
 #include "mojo/public/cpp/bindings/lib/message_internal.h"
@@ -32,7 +34,10 @@ namespace mojo {
 class AssociatedGroupController;
 
 using ReportBadMessageCallback =
-    base::OnceCallback<void(base::StringPiece error)>;
+    base::OnceCallback<void(std::string_view error)>;
+
+COMPONENT_EXPORT(MOJO_CPP_BINDINGS_BASE)
+BASE_DECLARE_FEATURE(kMojoMessageAlwaysUseLatestVersion);
 
 // Message is a holder for the data and handles to be sent over a MessagePipe.
 // Message owns its data and handles, but a consumer of Message is free to
@@ -44,6 +49,7 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS_BASE) Message {
   static const uint32_t kFlagIsResponse = 1 << 1;
   static const uint32_t kFlagIsSync = 1 << 2;
   static const uint32_t kFlagNoInterrupt = 1 << 3;
+  static const uint32_t kFlagIsUrgent = 1 << 4;
 
   // Constructs an uninitialized Message object.
   Message();
@@ -66,19 +72,35 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS_BASE) Message {
   // Note that |payload_size| is only the initially known size of the message
   // payload, if any. The payload can be expanded after construction using the
   // interface returned by |payload_buffer()|.
+  //
+  // |estimated_payload_size| will be used to preallocate an appropriate amount
+  // of memory for the message buffer, based on the history of previous
+  // allocations for this message's |name|.
   Message(uint32_t name,
           uint32_t flags,
           size_t payload_size,
           size_t payload_interface_id_count,
           MojoCreateMessageFlags create_message_flags,
-          std::vector<ScopedHandle>* handles);
+          std::vector<ScopedHandle>* handles,
+          size_t estimated_payload_size = 0);
 
   // Same as above, but the with default MojoCreateMessageFlags.
   Message(uint32_t name,
           uint32_t flags,
           size_t payload_size,
           size_t payload_interface_id_count,
-          std::vector<ScopedHandle>* handles);
+          std::vector<ScopedHandle>* handles,
+          size_t estimated_payload_size = 0);
+
+  // Constructor for the common case of unknown `payload_size`, unspecified
+  // `payload_interface_id_count`, and no `handles` vector.
+  Message(uint32_t name,
+          uint32_t flags,
+          MojoCreateMessageFlags create_message_flags,
+          size_t estimated_payload_size);
+
+  // Same as above, but the with default MojoCreateMessageFlags.
+  Message(uint32_t name, uint32_t flags, size_t estimated_payload_size);
 
   // Constructs a new Message object from an existing message handle. Used
   // exclusively for serializing an existing unserialized message.
@@ -168,6 +190,15 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS_BASE) Message {
     return reinterpret_cast<internal::MessageHeaderV2*>(mutable_data());
   }
 
+  const internal::MessageHeaderV3* header_v3() const {
+    DCHECK_GE(version(), 3u);
+    return reinterpret_cast<const internal::MessageHeaderV3*>(data());
+  }
+  internal::MessageHeaderV3* header_v3() {
+    DCHECK_GE(version(), 3u);
+    return reinterpret_cast<internal::MessageHeaderV3*>(mutable_data());
+  }
+
   uint32_t version() const { return header()->version; }
 
   uint32_t interface_id() const { return header()->interface_id; }
@@ -228,7 +259,7 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS_BASE) Message {
 
   // Notifies the system that this message is "bad," in this case meaning it was
   // rejected by bindings validation code.
-  void NotifyBadMessage(base::StringPiece error);
+  void NotifyBadMessage(std::string_view error);
 
   // Serializes and attaches Mojo handles and associated endpoint handles from
   // |handles_| and |associated_endpoint_handles_| respectively.
@@ -239,6 +270,14 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS_BASE) Message {
   bool DeserializeAssociatedEndpointHandles(
       AssociatedGroupController* group_controller);
 
+  // If this message contains serialized associated interface endponits but is
+  // going to be destroyed without being sent across a pipe, this notifies any
+  // relevant local peer endpoints about peer closure. Must be called on any
+  // unsent Message that is going to be destroyed after calling
+  // SerializeHandles().
+  void NotifyPeerClosureForSerializedHandles(
+      AssociatedGroupController* group_controller);
+
   // If this Message has an unserialized message context attached, force it to
   // be serialized immediately. Otherwise this does nothing.
   void SerializeIfNecessary();
@@ -246,11 +285,12 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS_BASE) Message {
   // Takes the unserialized message context from this Message if its tag matches
   // |tag|.
   std::unique_ptr<internal::UnserializedMessageContext> TakeUnserializedContext(
-      const internal::UnserializedMessageContext::Tag* tag);
+      uintptr_t tag);
 
   template <typename MessageType>
   std::unique_ptr<MessageType> TakeUnserializedContext() {
-    auto generic_context = TakeUnserializedContext(&MessageType::kMessageTag);
+    auto generic_context = TakeUnserializedContext(
+        reinterpret_cast<uintptr_t>(&MessageType::kMessageTag));
     if (!generic_context)
       return nullptr;
     return base::WrapUnique(
@@ -278,6 +318,8 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS_BASE) Message {
   const char* method_name() const { return method_name_; }
   void set_method_name(const char* method_name) { method_name_ = method_name; }
 #endif
+
+  int64_t creation_timeticks_us() const;
 
  private:
   // Internal constructor used by |CreateFromMessageHandle()| when either there
@@ -410,8 +452,8 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS_BASE) PassThroughFilter
 // you need to do asynchronous work before you can determine the legitimacy of
 // a message, use GetBadMessageCallback() and retain its result until you're
 // ready to invoke or discard it.
-COMPONENT_EXPORT(MOJO_CPP_BINDINGS_BASE)
-void ReportBadMessage(base::StringPiece error);
+NOT_TAIL_CALLED COMPONENT_EXPORT(MOJO_CPP_BINDINGS_BASE) void ReportBadMessage(
+    std::string_view error);
 
 // Acquires a callback which may be run to report the currently dispatching
 // Message as bad. Note that this is only legal to call from directly within the

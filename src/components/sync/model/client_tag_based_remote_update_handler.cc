@@ -1,48 +1,72 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/sync/model/client_tag_based_remote_update_handler.h"
 
+#include <optional>
 #include <utility>
 #include <vector>
 
+#include "base/check.h"
+#include "base/containers/flat_set.h"
 #include "base/logging.h"
+#include "components/sync/base/data_type.h"
 #include "components/sync/base/data_type_histogram.h"
 #include "components/sync/base/time.h"
-#include "components/sync/engine/model_type_processor_metrics.h"
+#include "components/sync/engine/commit_and_get_updates_types.h"
+#include "components/sync/engine/data_type_processor_metrics.h"
+#include "components/sync/model/conflict_resolution.h"
+#include "components/sync/model/data_type_sync_bridge.h"
 #include "components/sync/model/metadata_change_list.h"
-#include "components/sync/model/model_type_sync_bridge.h"
 #include "components/sync/model/processor_entity.h"
 #include "components/sync/model/processor_entity_tracker.h"
+#include "components/sync/protocol/data_type_state_helper.h"
+#include "components/sync/protocol/entity_specifics.pb.h"
+#include "components/sync/protocol/unique_position.pb.h"
 
 namespace syncer {
 
+namespace {
+
+std::optional<sync_pb::UniquePosition> ExtractUniquePositionIfSupported(
+    const UpdateResponseData& update,
+    const DataTypeSyncBridge& bridge) {
+  CHECK(!update.entity.is_deleted());
+  if (!bridge.SupportsUniquePositions()) {
+    return std::nullopt;
+  }
+  return bridge.GetUniquePosition(update.entity.specifics);
+}
+
+}  // namespace
+
 ClientTagBasedRemoteUpdateHandler::ClientTagBasedRemoteUpdateHandler(
-    ModelType type,
-    ModelTypeSyncBridge* bridge,
+    DataType type,
+    DataTypeSyncBridge* bridge,
     ProcessorEntityTracker* entity_tracker)
     : type_(type), bridge_(bridge), entity_tracker_(entity_tracker) {
   DCHECK(bridge_);
   DCHECK(entity_tracker_);
 }
 
-absl::optional<ModelError>
+std::optional<ModelError>
 ClientTagBasedRemoteUpdateHandler::ProcessIncrementalUpdate(
-    const sync_pb::ModelTypeState& model_type_state,
-    UpdateResponseDataList updates) {
+    const sync_pb::DataTypeState& data_type_state,
+    UpdateResponseDataList updates,
+    std::optional<sync_pb::GarbageCollectionDirective> gc_directive) {
   std::unique_ptr<MetadataChangeList> metadata_changes =
       bridge_->CreateMetadataChangeList();
   EntityChangeList entity_changes;
 
-  metadata_changes->UpdateModelTypeState(model_type_state);
+  metadata_changes->UpdateDataTypeState(data_type_state);
   const bool got_new_encryption_requirements =
-      entity_tracker_->model_type_state().encryption_key_name() !=
-      model_type_state.encryption_key_name();
-  entity_tracker_->set_model_type_state(model_type_state);
+      entity_tracker_->data_type_state().encryption_key_name() !=
+      data_type_state.encryption_key_name();
+  entity_tracker_->set_data_type_state(data_type_state);
 
   // If new encryption requirements come from the server, the entities that are
-  // in |updates| will be recorded here so they can be ignored during the
+  // in `updates` will be recorded here so they can be ignored during the
   // re-encryption phase at the end.
   std::unordered_set<std::string> already_updated;
 
@@ -57,13 +81,20 @@ ClientTagBasedRemoteUpdateHandler::ProcessIncrementalUpdate(
       // 2. Reflection, thus should be ignored.
       // 3. Update without a client tag hash (including permanent nodes, which
       // have server tags instead).
+      // 4. Remote creation or update containing invalid data according to the
+      // bridge.
       continue;
     }
 
-    LogNonReflectionUpdateFreshnessToUma(
-        type_,
-        /*remote_modification_time=*/
-        ProtoTimeToTime(entity->metadata().modification_time()));
+    // Log update freshness metrics only if the initial sync is fully done (for
+    // data types in ApplyUpdatesImmediatelyTypes(), it may only be
+    // PARTIALLY_DONE here).
+    if (IsInitialSyncDone(data_type_state.initial_sync_state())) {
+      LogNonReflectionUpdateFreshnessToUma(
+          type_,
+          /*remote_modification_time=*/
+          ProtoTimeToTime(entity->metadata().modification_time()));
+    }
 
     if (entity->storage_key().empty()) {
       // Storage key of this entity is not known yet. Don't update metadata, it
@@ -86,11 +117,26 @@ ClientTagBasedRemoteUpdateHandler::ProcessIncrementalUpdate(
 
     if (entity->CanClearMetadata()) {
       metadata_changes->ClearMetadata(entity->storage_key());
-      // The line below frees |entity| and it shouldn't be used afterwards.
+      // The line below frees `entity` and it shouldn't be used afterwards.
       entity_tracker_->RemoveEntityForStorageKey(entity->storage_key());
     } else {
       metadata_changes->UpdateMetadata(entity->storage_key(),
                                        entity->metadata());
+    }
+  }
+
+  if (gc_directive && gc_directive->has_collaboration_gc()) {
+    auto active_collaborations = base::MakeFlatSet<std::string>(
+        gc_directive->collaboration_gc().active_collaboration_ids());
+    std::vector<std::string> removed_storage_keys =
+        entity_tracker_->RemoveInactiveCollaborations(active_collaborations);
+    DVLOG(2) << "Storage keys to remove for inactive collaborations: "
+             << removed_storage_keys.size();
+    for (const std::string& removed_storage_key : removed_storage_keys) {
+      metadata_changes->ClearMetadata(removed_storage_key);
+      entity_changes.push_back(
+          EntityChange::CreateDeletedCollaborationMembership(
+              removed_storage_key));
     }
   }
 
@@ -107,8 +153,8 @@ ClientTagBasedRemoteUpdateHandler::ProcessIncrementalUpdate(
   }
 
   // Inform the bridge of the new or updated data.
-  return bridge_->ApplySyncChanges(std::move(metadata_changes),
-                                   std::move(entity_changes));
+  return bridge_->ApplyIncrementalSyncChanges(std::move(metadata_changes),
+                                              std::move(entity_changes));
 }
 
 ProcessorEntity* ClientTagBasedRemoteUpdateHandler::ProcessUpdate(
@@ -128,10 +174,10 @@ ProcessorEntity* ClientTagBasedRemoteUpdateHandler::ProcessUpdate(
   if (!data.is_deleted() && bridge_->SupportsGetClientTag() &&
       client_tag_hash !=
           ClientTagHash::FromUnhashed(type_, bridge_->GetClientTag(data))) {
-    SyncRecordModelTypeUpdateDropReason(
-        UpdateDropReason::kInconsistentClientTag, type_);
+    SyncRecordDataTypeUpdateDropReason(UpdateDropReason::kInconsistentClientTag,
+                                       type_);
     DLOG(WARNING) << "Received unexpected client tag hash: " << client_tag_hash
-                  << " for " << ModelTypeToDebugString(type_);
+                  << " for " << DataTypeToDebugString(type_);
     return nullptr;
   }
 
@@ -141,20 +187,32 @@ ProcessorEntity* ClientTagBasedRemoteUpdateHandler::ProcessUpdate(
   // Handle corner cases first.
   if (entity == nullptr && data.is_deleted()) {
     // Local entity doesn't exist and update is tombstone.
-    SyncRecordModelTypeUpdateDropReason(
+    SyncRecordDataTypeUpdateDropReason(
         UpdateDropReason::kTombstoneForNonexistentInIncrementalUpdate, type_);
     DLOG(WARNING) << "Received remote delete for a non-existing item."
                   << " client_tag_hash: " << client_tag_hash << " for "
-                  << ModelTypeToDebugString(type_);
+                  << DataTypeToDebugString(type_);
     return nullptr;
   }
 
-  if (entity && entity->UpdateIsReflection(update.response_version)) {
+  if (entity && entity->IsVersionAlreadyKnown(update.response_version)) {
     // Seen this update before; just ignore it.
     return nullptr;
   }
 
-  // Cache update encryption_key_name and is_deleted in case |update| will be
+  // TODO(crbug.com/40889096): Remove the storage key check as storage keys
+  // should not be empty after IsEntityDataValid() has been implemented by all
+  // bridges.
+  if (!data.is_deleted() && (!bridge_->IsEntityDataValid(data) ||
+                             (bridge_->SupportsGetStorageKey() &&
+                              bridge_->GetStorageKey(data).empty()))) {
+    DLOG(WARNING) << "Received invalid remote update."
+                  << " client_tag_hash: " << client_tag_hash << " for "
+                  << DataTypeToDebugString(type_);
+    return nullptr;
+  }
+
+  // Cache update encryption_key_name and is_deleted in case `update` will be
   // moved away into ResolveConflict().
   const std::string update_encryption_key_name = update.encryption_key_name;
   const bool update_is_tombstone = data.is_deleted();
@@ -162,6 +220,7 @@ ProcessorEntity* ClientTagBasedRemoteUpdateHandler::ProcessUpdate(
     // Remote creation.
     DCHECK(!data.is_deleted());
     entity = CreateEntity(update);
+    CHECK(entity);
     entity_changes->push_back(EntityChange::CreateAdd(
         entity->storage_key(), std::move(update.entity)));
   } else if (entity->IsUnsynced()) {
@@ -172,17 +231,22 @@ ProcessorEntity* ClientTagBasedRemoteUpdateHandler::ProcessUpdate(
     // Remote deletion. Note that the local data cannot be already deleted,
     // because it would have been treated as a conflict earlier above.
     DCHECK(!entity->metadata().is_deleted());
-    entity->RecordAcceptedRemoteUpdate(update, /*trimmed_specifics=*/{});
+    entity->RecordAcceptedRemoteUpdate(update, /*trimmed_specifics=*/{},
+                                       /*unique_position=*/std::nullopt);
     entity_changes->push_back(
         EntityChange::CreateDelete(entity->storage_key()));
   } else if (entity->MatchesData(data)) {
     // Remote update that is a no-op, metadata should still be updated.
     entity->RecordAcceptedRemoteUpdate(
-        update, bridge_->TrimRemoteSpecificsForCaching(data.specifics));
+        update,
+        bridge_->TrimAllSupportedFieldsFromRemoteSpecifics(data.specifics),
+        ExtractUniquePositionIfSupported(update, *bridge_));
   } else {
     // Remote update.
     entity->RecordAcceptedRemoteUpdate(
-        update, bridge_->TrimRemoteSpecificsForCaching(data.specifics));
+        update,
+        bridge_->TrimAllSupportedFieldsFromRemoteSpecifics(data.specifics),
+        ExtractUniquePositionIfSupported(update, *bridge_));
     entity_changes->push_back(EntityChange::CreateUpdate(
         entity->storage_key(), std::move(update.entity)));
   }
@@ -191,12 +255,12 @@ ProcessorEntity* ClientTagBasedRemoteUpdateHandler::ProcessUpdate(
   // commit to fix it. Tombstones aren't encrypted and hence shouldn't be
   // checked.
   if (!update_is_tombstone &&
-      entity_tracker_->model_type_state().encryption_key_name() !=
+      entity_tracker_->data_type_state().encryption_key_name() !=
           update_encryption_key_name) {
-    DVLOG(2) << ModelTypeToDebugString(type_)
+    DVLOG(2) << DataTypeToDebugString(type_)
              << ": Requesting re-encrypt commit " << update_encryption_key_name
              << " -> "
-             << entity_tracker_->model_type_state().encryption_key_name();
+             << entity_tracker_->data_type_state().encryption_key_name();
 
     entity->IncrementSequenceNumber(base::Time::Now());
   }
@@ -233,14 +297,26 @@ void ClientTagBasedRemoteUpdateHandler::ResolveConflict(
     resolution_type =
         bridge_->ResolveConflict(entity->storage_key(), remote_data);
   }
+  RecordDataTypeEntityConflictResolution(type_, resolution_type);
 
   // Apply the resolution.
   switch (resolution_type) {
     case ConflictResolution::kChangesMatch:
-      // Record the update and squash the pending commit.
-      entity->RecordForcedRemoteUpdate(
-          update,
-          bridge_->TrimRemoteSpecificsForCaching(update.entity.specifics));
+      // Record the update and squash the pending commit. Trimming should not be
+      // called for matching deleted entities to avoid failing its requirement
+      // to have a `password` field present.
+      // TODO(crbug.com/40214653): Consider introducing a dedicated function for
+      // recording exact matching updates.
+      if (!update.entity.is_deleted()) {
+        entity->RecordForcedRemoteUpdate(
+            update,
+            bridge_->TrimAllSupportedFieldsFromRemoteSpecifics(
+                update.entity.specifics),
+            ExtractUniquePositionIfSupported(update, *bridge_));
+      } else {
+        entity->RecordForcedRemoteUpdate(update, /*trimmed_specifics=*/{},
+                                         /*unique_position=*/std::nullopt);
+      }
       break;
     case ConflictResolution::kUseLocal:
     case ConflictResolution::kIgnoreRemoteEncryption:
@@ -255,13 +331,16 @@ void ClientTagBasedRemoteUpdateHandler::ResolveConflict(
         DCHECK(!entity->metadata().is_deleted());
         // Squash the pending commit.
         entity->RecordForcedRemoteUpdate(update,
-                                         /*trimmed_specifics=*/{});
+                                         /*trimmed_specifics=*/{},
+                                         /*unique_position=*/std::nullopt);
         changes->push_back(EntityChange::CreateDelete(entity->storage_key()));
       } else if (!entity->metadata().is_deleted()) {
         // Squash the pending commit.
         entity->RecordForcedRemoteUpdate(
             update,
-            bridge_->TrimRemoteSpecificsForCaching(update.entity.specifics));
+            bridge_->TrimAllSupportedFieldsFromRemoteSpecifics(
+                update.entity.specifics),
+            ExtractUniquePositionIfSupported(update, *bridge_));
         changes->push_back(EntityChange::CreateUpdate(
             entity->storage_key(), std::move(update.entity)));
       } else {
@@ -275,7 +354,9 @@ void ClientTagBasedRemoteUpdateHandler::ResolveConflict(
         // Squash the pending commit.
         entity->RecordForcedRemoteUpdate(
             update,
-            bridge_->TrimRemoteSpecificsForCaching(update.entity.specifics));
+            bridge_->TrimAllSupportedFieldsFromRemoteSpecifics(
+                update.entity.specifics),
+            ExtractUniquePositionIfSupported(update, *bridge_));
         changes->push_back(EntityChange::CreateAdd(entity->storage_key(),
                                                    std::move(update.entity)));
       }
@@ -285,6 +366,7 @@ void ClientTagBasedRemoteUpdateHandler::ResolveConflict(
 
 ProcessorEntity* ClientTagBasedRemoteUpdateHandler::CreateEntity(
     const UpdateResponseData& update) {
+  CHECK(bridge_->IsEntityDataValid(update.entity));
   DCHECK(!update.entity.client_tag_hash.value().empty());
   if (bridge_->SupportsGetClientTag()) {
     DCHECK_EQ(update.entity.client_tag_hash,
@@ -294,11 +376,14 @@ ProcessorEntity* ClientTagBasedRemoteUpdateHandler::CreateEntity(
   std::string storage_key;
   if (bridge_->SupportsGetStorageKey()) {
     storage_key = bridge_->GetStorageKey(update.entity);
-    DCHECK(!storage_key.empty());
+    // If the storage key was empty, CreateEntity() won't be reached.
+    CHECK(!storage_key.empty());
   }
   return entity_tracker_->AddRemote(
       storage_key, update,
-      bridge_->TrimRemoteSpecificsForCaching(update.entity.specifics));
+      bridge_->TrimAllSupportedFieldsFromRemoteSpecifics(
+          update.entity.specifics),
+      ExtractUniquePositionIfSupported(update, *bridge_));
 }
 
 }  // namespace syncer

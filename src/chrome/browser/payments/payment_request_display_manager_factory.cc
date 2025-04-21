@@ -1,18 +1,17 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/payments/payment_request_display_manager_factory.h"
 
-#include "chrome/browser/profiles/incognito_helpers.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/payments/content/payment_request_display_manager.h"
 
 namespace payments {
 
 PaymentRequestDisplayManagerFactory*
 PaymentRequestDisplayManagerFactory::GetInstance() {
-  return base::Singleton<PaymentRequestDisplayManagerFactory>::get();
+  static base::NoDestructor<PaymentRequestDisplayManagerFactory> instance;
+  return instance.get();
 }
 
 PaymentRequestDisplayManager*
@@ -23,23 +22,27 @@ PaymentRequestDisplayManagerFactory::GetForBrowserContext(
 }
 
 PaymentRequestDisplayManagerFactory::PaymentRequestDisplayManagerFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "PaymentRequestDisplayManager",
-          BrowserContextDependencyManager::GetInstance()) {}
+          // Returns non-NULL even for Incognito contexts so that a separate
+          // instance of a service is created for the Incognito context.
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/40257657): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/41488885): Check if this service is needed for
+              // Ash Internals.
+              .WithAshInternals(ProfileSelection::kOwnInstance)
+              .Build()) {}
 
-PaymentRequestDisplayManagerFactory::~PaymentRequestDisplayManagerFactory() {}
+PaymentRequestDisplayManagerFactory::~PaymentRequestDisplayManagerFactory() =
+    default;
 
-KeyedService* PaymentRequestDisplayManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+PaymentRequestDisplayManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new PaymentRequestDisplayManager();
-}
-
-content::BrowserContext*
-PaymentRequestDisplayManagerFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  // Returns non-NULL even for Incognito contexts so that a separate
-  // instance of a service is created for the Incognito context.
-  return chrome::GetBrowserContextOwnInstanceInIncognito(context);
+  return std::make_unique<PaymentRequestDisplayManager>();
 }
 
 }  // namespace payments

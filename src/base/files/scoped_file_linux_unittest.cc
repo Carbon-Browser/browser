@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,7 +34,7 @@ TEST_F(ScopedFDOwnershipTrackingTest, BasicTracking) {
   EXPECT_FALSE(IsFDOwned(fd_value));
 }
 
-#if defined(GTEST_HAS_DEATH_TEST)
+#if defined(GTEST_HAS_DEATH_TEST) && !defined(COMPONENT_BUILD)
 
 TEST_F(ScopedFDOwnershipTrackingTest, NoDoubleOwnership) {
   ScopedFD fd = OpenFD();
@@ -48,7 +48,7 @@ TEST_F(ScopedFDOwnershipTrackingTest, CrashOnUnownedClose) {
   EXPECT_DEATH(close(fd.get()), "");
 }
 
-#endif  // defined(GTEST_HAS_DEATH_TEST)
+#endif  // defined(GTEST_HAS_DEATH_TEST) && !defined(COMPONENT_BUILD)
 
 }  // namespace
 }  // namespace base

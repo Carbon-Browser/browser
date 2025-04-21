@@ -1,11 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/extensions/api/crash_report_private/crash_report_private_api.h"
 
 #include "base/time/time.h"
-#include "chrome/browser/browser_process.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/web_applications/app_browser_controller.h"
@@ -15,21 +14,23 @@
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/web_contents.h"
+#include "extensions/browser/extensions_browser_client.h"
 
 namespace extensions {
 namespace api {
 
 namespace {
 
-WindowType GetWindowType(content::WebContents* web_contents) {
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents);
+JavaScriptErrorReport::WindowType GetWindowType(
+    content::WebContents* web_contents) {
+  Browser* browser = chrome::FindBrowserWithTab(web_contents);
   if (!browser)
-    return WindowType::kNoBrowser;
+    return JavaScriptErrorReport::WindowType::kNoBrowser;
   if (!browser->app_controller())
-    return WindowType::kRegularTabbed;
+    return JavaScriptErrorReport::WindowType::kRegularTabbed;
   if (browser->app_controller()->system_app())
-    return WindowType::kSystemWebApp;
-  return WindowType::kWebApp;
+    return JavaScriptErrorReport::WindowType::kSystemWebApp;
+  return JavaScriptErrorReport::WindowType::kWebApp;
 }
 
 }  // namespace
@@ -49,7 +50,7 @@ ExtensionFunction::ResponseAction CrashReportPrivateReportErrorFunction::Run() {
   }
 
   const auto params = crash_report_private::ReportError::Params::Create(args());
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   auto processor = JsErrorReportProcessor::Get();
   if (!processor) {
@@ -103,7 +104,8 @@ ExtensionFunction::ResponseAction CrashReportPrivateReportErrorFunction::Run() {
         render_process_uptime.InMilliseconds();
   }
 
-  error_report.app_locale = g_browser_process->GetApplicationLocale();
+  error_report.app_locale =
+      ExtensionsBrowserClient::Get()->GetApplicationLocale();
 
   processor->SendErrorReport(
       std::move(error_report),

@@ -37,17 +37,19 @@
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/renderer/bindings/core/v8/serialization/serialized_script_value.h"
-#include "third_party/blink/renderer/bindings/core/v8/source_location.h"
 #include "third_party/blink/renderer/core/dom/document.h"
+#include "third_party/blink/renderer/core/dom/events/event.h"
 #include "third_party/blink/renderer/core/events/message_event.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/frame/user_activation.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
 #include "third_party/blink/renderer/core/messaging/blink_transferable_message.h"
+#include "third_party/blink/renderer/core/workers/custom_event_message.h"
 #include "third_party/blink/renderer/core/workers/dedicated_worker_messaging_proxy.h"
 #include "third_party/blink/renderer/core/workers/parent_execution_context_task_runners.h"
 #include "third_party/blink/renderer/core/workers/worker_global_scope.h"
 #include "third_party/blink/renderer/core/workers/worker_thread.h"
+#include "third_party/blink/renderer/platform/bindings/source_location.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_copier_std.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
@@ -74,6 +76,18 @@ void DedicatedWorkerObjectProxy::ProcessMessageFromWorkerObject(
       ->ReceiveMessage(std::move(message));
 }
 
+void DedicatedWorkerObjectProxy::ProcessCustomEventFromWorkerObject(
+    CustomEventMessage message,
+    WorkerThread* worker_thread,
+    CrossThreadFunction<Event*(ScriptState*, CustomEventMessage)>
+        event_factory_callback,
+    CrossThreadFunction<Event*(ScriptState*)> event_factory_error_callback) {
+  To<WorkerGlobalScope>(worker_thread->GlobalScope())
+      ->ReceiveCustomEvent(std::move(event_factory_callback),
+                           std::move(event_factory_error_callback),
+                           std::move(message));
+}
+
 void DedicatedWorkerObjectProxy::ProcessUnhandledException(
     int exception_id,
     WorkerThread* worker_thread) {
@@ -96,7 +110,7 @@ void DedicatedWorkerObjectProxy::ReportException(
 
 void DedicatedWorkerObjectProxy::DidFailToFetchClassicScript() {
   PostCrossThreadTask(
-      *GetParentExecutionContextTaskRunners()->Get(TaskType::kInternalDefault),
+      *GetParentExecutionContextTaskRunners()->Get(TaskType::kInternalLoading),
       FROM_HERE,
       CrossThreadBindOnce(&DedicatedWorkerMessagingProxy::DidFailToFetchScript,
                           messaging_proxy_weak_ptr_));
@@ -104,7 +118,7 @@ void DedicatedWorkerObjectProxy::DidFailToFetchClassicScript() {
 
 void DedicatedWorkerObjectProxy::DidFailToFetchModuleScript() {
   PostCrossThreadTask(
-      *GetParentExecutionContextTaskRunners()->Get(TaskType::kInternalDefault),
+      *GetParentExecutionContextTaskRunners()->Get(TaskType::kInternalLoading),
       FROM_HERE,
       CrossThreadBindOnce(&DedicatedWorkerMessagingProxy::DidFailToFetchScript,
                           messaging_proxy_weak_ptr_));
@@ -112,7 +126,7 @@ void DedicatedWorkerObjectProxy::DidFailToFetchModuleScript() {
 
 void DedicatedWorkerObjectProxy::DidEvaluateTopLevelScript(bool success) {
   PostCrossThreadTask(
-      *GetParentExecutionContextTaskRunners()->Get(TaskType::kInternalDefault),
+      *GetParentExecutionContextTaskRunners()->Get(TaskType::kInternalLoading),
       FROM_HERE,
       CrossThreadBindOnce(&DedicatedWorkerMessagingProxy::DidEvaluateScript,
                           messaging_proxy_weak_ptr_, success));
@@ -122,7 +136,8 @@ DedicatedWorkerObjectProxy::DedicatedWorkerObjectProxy(
     DedicatedWorkerMessagingProxy* messaging_proxy_weak_ptr,
     ParentExecutionContextTaskRunners* parent_execution_context_task_runners,
     const DedicatedWorkerToken& token)
-    : ThreadedObjectProxyBase(parent_execution_context_task_runners),
+    : ThreadedObjectProxyBase(parent_execution_context_task_runners,
+                              /*parent_agent_group_task_runner=*/nullptr),
       token_(token),
       messaging_proxy_weak_ptr_(messaging_proxy_weak_ptr) {}
 

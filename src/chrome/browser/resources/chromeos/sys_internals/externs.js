@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@
  *   user: number,
  * }}
  */
-var SysInfoApiCpuResult;
+let SysInfoApiCpuResult;
 
 /**
  * |getSysInfo| memory result.
@@ -29,7 +29,7 @@ var SysInfoApiCpuResult;
  *   total: number,
  * }}
  */
-var SysInfoApiMemoryResult;
+let SysInfoApiMemoryResult;
 
 /**
  * |getSysInfo| zram result.
@@ -41,7 +41,23 @@ var SysInfoApiMemoryResult;
  *   origDataSize: number,
  * }}
  */
-var SysInfoApiZramResult;
+let SysInfoApiZramResult;
+
+/**
+ * |getSysInfo| gpu result.
+ * @typedef {{
+ *   busy: number,
+ * }}
+ */
+let SysInfoApiGpuResult;
+
+/**
+ * |getSysInfo| npu result.
+ * @typedef {{
+ *   busy: number,
+ * }}
+ */
+let SysInfoApiNpuResult;
 
 /**
  * |getSysInfo| api result.
@@ -50,6 +66,8 @@ var SysInfoApiZramResult;
  *   cpus: !Array<!SysInfoApiCpuResult>,
  *   memory: !SysInfoApiMemoryResult,
  *   zram: !SysInfoApiZramResult,
+ *   gpu: ?SysInfoApiGpuResult,
+ *   npu: ?SysInfoApiNpuResult,
  * }}
  */
-var SysInfoApiResult;
+let SysInfoApiResult;

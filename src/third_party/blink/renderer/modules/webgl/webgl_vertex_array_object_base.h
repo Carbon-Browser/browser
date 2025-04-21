@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,7 @@ class WebGLVertexArrayObjectBase : public WebGLContextObject {
   void SetHasEverBeenBound() { has_ever_been_bound_ = true; }
 
   WebGLBuffer* BoundElementArrayBuffer() const {
-    return bound_element_array_buffer_;
+    return bound_element_array_buffer_.Get();
   }
   void SetElementArrayBuffer(WebGLBuffer*);
 
@@ -39,6 +39,9 @@ class WebGLVertexArrayObjectBase : public WebGLContextObject {
   bool GetAttribEnabled(GLuint) const;
   bool IsAllEnabledAttribBufferBound() const {
     return is_all_enabled_attrib_buffer_bound_;
+  }
+  bool HasArrayBuffer(const WebGLBuffer* buffer) {
+    return array_buffer_list_.Contains(buffer);
   }
   void UnbindBuffer(WebGLBuffer*);
 

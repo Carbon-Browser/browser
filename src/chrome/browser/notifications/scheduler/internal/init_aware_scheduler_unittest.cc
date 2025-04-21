@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "chrome/browser/notifications/scheduler/public/notification_params.h"
@@ -70,7 +70,7 @@ class InitAwareNotificationSchedulerTest : public testing::Test {
 
  private:
   base::test::TaskEnvironment task_environment_;
-  raw_ptr<MockNotificationScheduler> scheduler_impl_;
+  raw_ptr<MockNotificationScheduler, DanglingUntriaged> scheduler_impl_;
   std::unique_ptr<NotificationScheduler> init_aware_scheduler_;
 };
 

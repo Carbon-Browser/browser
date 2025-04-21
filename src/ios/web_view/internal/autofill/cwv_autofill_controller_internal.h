@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,18 +13,14 @@
 #import "components/password_manager/ios/shared_password_controller.h"
 #import "ios/web/public/web_state_observer_bridge.h"
 #import "ios/web_view/internal/autofill/cwv_autofill_client_ios_bridge.h"
+#import "ios/web_view/internal/autofill/web_view_autofill_client_ios.h"
 #import "ios/web_view/internal/passwords/web_view_password_manager_client.h"
 #import "ios/web_view/public/cwv_autofill_controller.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
-namespace autofill {
-class WebViewAutofillClientIOS;
-}  // namespace autofill
-
 namespace ios_web_view {
 class WebViewPasswordManagerClient;
-class WebViewPasswordManagerDriver;
 }  // namespace ios_web_view
 
 namespace password_manager {
@@ -45,22 +41,18 @@ class WebState;
                                      PasswordManagerClientBridge,
                                      SharedPasswordControllerDelegate>
 
-- (instancetype)
-         initWithWebState:(web::WebState*)webState
-           autofillClient:(std::unique_ptr<autofill::WebViewAutofillClientIOS>)
-                              autofillClient
-            autofillAgent:(AutofillAgent*)autofillAgent
-          passwordManager:(std::unique_ptr<password_manager::PasswordManager>)
-                              passwordManager
-    passwordManagerClient:
-        (std::unique_ptr<ios_web_view::WebViewPasswordManagerClient>)
-            passwordManagerClient
-    passwordManagerDriver:
-        (std::unique_ptr<ios_web_view::WebViewPasswordManagerDriver>)
-            passwordManagerDriver
-       passwordController:(SharedPasswordController*)passwordController
-        applicationLocale:(const std::string&)applicationLocale
-    NS_DESIGNATED_INITIALIZER;
+- (instancetype)initWithWebState:(web::WebState*)webState
+                   autofillAgent:(AutofillAgent*)autofillAgent
+                 passwordManager:
+                     (std::unique_ptr<password_manager::PasswordManager>)
+                         passwordManager
+           passwordManagerClient:
+               (std::unique_ptr<ios_web_view::WebViewPasswordManagerClient>)
+                   passwordManagerClient
+              passwordController:(SharedPasswordController*)passwordController;
+
+@property(nonatomic, readonly)
+    autofill::WebViewAutofillClientIOS* autofillClient;
 
 @end
 

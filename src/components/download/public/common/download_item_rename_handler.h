@@ -1,14 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2024 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_DOWNLOAD_PUBLIC_COMMON_DOWNLOAD_ITEM_RENAME_HANDLER_H_
 #define COMPONENTS_DOWNLOAD_PUBLIC_COMMON_DOWNLOAD_ITEM_RENAME_HANDLER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "components/download/public/common/download_interrupt_reasons.h"
-#include "components/download/public/common/download_item_rename_progress_update.h"
 
 namespace base {
 class FilePath;
@@ -27,32 +26,25 @@ class DownloadItem;
 // Instances of DownloadItemRenameHandler are owned by DownloadItem.
 class COMPONENTS_DOWNLOAD_EXPORT DownloadItemRenameHandler {
  public:
-  // Callback to update the DownloadItem and send some info into databases.
-  using ProgressUpdateCallback = base::RepeatingCallback<void(
-      const download::DownloadItemRenameProgressUpdate&)>;
-  // Callback when the rename handler processing completes. Args indicate
-  // processing result to be updated to UX, and the final file name validated at
-  // rerouted location.
-  using DownloadCallback =
-      base::OnceCallback<void(DownloadInterruptReason, const base::FilePath&)>;
+  using ProgressCallback = base::RepeatingCallback<void(int64_t bytes_so_far,
+                                                        int64_t bytes_per_sec)>;
+  using RenameCallback = base::OnceCallback<void(DownloadInterruptReason reason,
+                                                 const base::FilePath& path)>;
 
   explicit DownloadItemRenameHandler(DownloadItem* download_item);
   virtual ~DownloadItemRenameHandler();
 
   DownloadItem* download_item() { return download_item_; }
 
-  // Starts the process of renaming the file and invokes |callback| when
-  // done.
-  virtual void Start(ProgressUpdateCallback progress_update_cb,
-                     DownloadCallback upload_complete_cb) = 0;
+  // Starts the process of renaming the file, invokes |progress_callback| with
+  // renaming progress and invokes |rename_callback| when done.
+  virtual void Start(ProgressCallback progress_callback,
+                     RenameCallback rename_callback);
 
-  // Opens the file associated with this download.
-  virtual void OpenDownload() = 0;
+  // Returns whether there's rename progress to be shown.
+  virtual bool ShowRenameProgress();
 
-  // Shows the download in the context of its container.
-  virtual void ShowDownloadInContext() = 0;
-
- private:
+ protected:
   raw_ptr<DownloadItem> download_item_;
 };
 

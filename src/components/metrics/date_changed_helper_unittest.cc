@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@ using base::subtle::TimeNowIgnoringOverride;
 
 const char kTestPrefName[] = "TestPref";
 
-// TODO(crbug.com/1004987): Use TaskEnvironment::TimeSource::MOCK_TIME here
+// TODO(crbug.com/40099277): Use TaskEnvironment::TimeSource::MOCK_TIME here
 // instead of explicit clock overrides when it better supports setting a
 // specific time of day and rewinding time.
 class DateChangedHelperTest : public testing::Test {

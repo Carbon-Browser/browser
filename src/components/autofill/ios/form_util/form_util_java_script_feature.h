@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,6 @@
 
 #include "base/no_destructor.h"
 #import "ios/web/public/js_messaging/java_script_feature.h"
-
-namespace web {
-class WebFrame;
-}  // namespace web
 
 namespace autofill {
 
@@ -21,10 +17,6 @@ class FormUtilJavaScriptFeature : public web::JavaScriptFeature {
   // This feature holds no state, so only a single static instance is ever
   // needed.
   static FormUtilJavaScriptFeature* GetInstance();
-
-  // Sets up the next available unique ID value in a document.
-  void SetUpForUniqueIDsWithInitialState(web::WebFrame* frame,
-                                         uint32_t next_available_id);
 
  private:
   friend class base::NoDestructor<FormUtilJavaScriptFeature>;

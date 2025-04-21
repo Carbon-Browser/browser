@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -73,8 +73,7 @@ FontListImpl::FontListImpl(const std::string& font_description_string)
       font_weight_(Font::Weight::INVALID) {
   DCHECK(!font_description_string.empty());
   // DCHECK description string ends with "px" for size in pixel.
-  DCHECK(base::EndsWith(font_description_string, "px",
-                        base::CompareCase::SENSITIVE));
+  DCHECK(font_description_string.ends_with("px"));
 }
 
 FontListImpl::FontListImpl(const std::vector<std::string>& font_names,

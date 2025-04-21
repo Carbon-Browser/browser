@@ -1,9 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.services.service_manager;
 
+import org.chromium.build.annotations.NullMarked;
 import org.chromium.mojo.bindings.ConnectionErrorHandler;
 import org.chromium.mojo.bindings.Interface;
 import org.chromium.mojo.bindings.InterfaceRequest;
@@ -12,15 +13,16 @@ import org.chromium.mojo.system.MessagePipeHandle;
 import org.chromium.mojo.system.MojoException;
 import org.chromium.mojo.system.Pair;
 
-/**
- * Provides access to interfaces exposed by an InterfaceProvider mojo interface.
- */
+/** Provides access to interfaces exposed by an InterfaceProvider mojo interface. */
+@NullMarked
 public class InterfaceProvider implements ConnectionErrorHandler {
     private Core mCore;
     private org.chromium.service_manager.mojom.InterfaceProvider.Proxy mInterfaceProvider;
 
     public InterfaceProvider(MessagePipeHandle pipe) {
-        mCore = pipe.getCore();
+        Core core = pipe.getCore();
+        assert core != null;
+        mCore = core;
         mInterfaceProvider =
                 org.chromium.service_manager.mojom.InterfaceProvider.MANAGER.attachProxy(pipe, 0);
         mInterfaceProvider.getProxyHandler().setErrorHandler(this);

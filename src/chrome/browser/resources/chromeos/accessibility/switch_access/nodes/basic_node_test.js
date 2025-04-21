@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,16 +8,7 @@ GEN_INCLUDE(['../switch_access_e2e_test_base.js']);
 SwitchAccessBasicNodeTest = class extends SwitchAccessE2ETest {
   async setUpDeferred() {
     await super.setUpDeferred();
-    await importModule(
-        ['BasicNode', 'BasicRootNode'], '/switch_access/nodes/basic_node.js');
-    await importModule(
-        'BackButtonNode', '/switch_access/nodes/back_button_node.js');
-
-    await importModule('DesktopNode', '/switch_access/nodes/desktop_node.js');
-    await importModule(
-        'SARootNode', '/switch_access/nodes/switch_access_node.js');
-    await importModule(
-        'SwitchAccessMenuAction', '/switch_access/switch_access_constants.js');
+    globalThis.MenuAction = chrome.accessibilityPrivate.SwitchAccessMenuAction;
   }
 };
 
@@ -126,7 +117,10 @@ TEST_F('SwitchAccessBasicNodeTest', 'Equals', function() {
 
 AX_TEST_F('SwitchAccessBasicNodeTest', 'Actions', async function() {
   const website = `<input type="text">
-                   <button></button>
+                   <div role="button" aria-label="group">
+                     <button>A</button>
+                     <button>B</button>
+                   </div>
                    <input type="range" min=1 max=5 value=3>`;
   const rootWebArea = await this.runWithLoadedTree(website);
   const textField = BasicNode.create(
@@ -137,31 +131,52 @@ AX_TEST_F('SwitchAccessBasicNodeTest', 'Actions', async function() {
       chrome.automation.RoleType.TEXT_FIELD, textField.role,
       'Text field node is not a text field');
   assertTrue(
-      textField.hasAction(SwitchAccessMenuAction.KEYBOARD),
+      textField.hasAction(MenuAction.KEYBOARD),
       'Text field does not have action KEYBOARD');
   assertTrue(
-      textField.hasAction(SwitchAccessMenuAction.DICTATION),
+      textField.hasAction(MenuAction.DICTATION),
       'Text field does not have action DICTATION');
   assertFalse(
-      textField.hasAction(SwitchAccessMenuAction.SELECT),
-      'Text field has action SELECT');
+      textField.hasAction(MenuAction.SELECT), 'Text field has action SELECT');
 
-  const button = BasicNode.create(
-      rootWebArea.find({role: chrome.automation.RoleType.BUTTON}),
+  const buttonGroup = BasicNode.create(
+      rootWebArea.find({
+        role: chrome.automation.RoleType.BUTTON,
+        attributes: {name: 'group'},
+      }),
       new SARootNode());
+  assertNotNullNorUndefined(buttonGroup);
 
   assertEquals(
-      chrome.automation.RoleType.BUTTON, button.role,
-      'Button node is not a button');
+      chrome.automation.RoleType.BUTTON, buttonGroup.role,
+      'Button group node is not a button');
   assertTrue(
-      button.hasAction(SwitchAccessMenuAction.SELECT),
-      'Button does not have action SELECT');
+      buttonGroup.hasAction(MenuAction.SELECT),
+      'Button group does not have action SELECT');
   assertFalse(
-      button.hasAction(SwitchAccessMenuAction.KEYBOARD),
-      'Button has action KEYBOARD');
+      buttonGroup.hasAction(MenuAction.KEYBOARD), 'Button has action KEYBOARD');
   assertFalse(
-      button.hasAction(SwitchAccessMenuAction.DICTATION),
+      buttonGroup.hasAction(MenuAction.DICTATION),
       'Button has action DICTATION');
+  assertTrue(buttonGroup.isGroup(), 'Button group is not a group');
+  assertTrue(
+      buttonGroup.hasAction(MenuAction.DRILL_DOWN),
+      'Button group does not have action DRILL_DOWN');
+  assertTrue(
+      buttonGroup.asRootNode().children.length === 3,
+      'Button group does not have three children (A, B, and the back button)');
+
+  const buttonA = buttonGroup.asRootNode().firstChild;
+  assertEquals(
+      chrome.automation.RoleType.BUTTON, buttonA.role,
+      'Button node A is not a button');
+  assertTrue(
+      buttonA.hasAction(MenuAction.SELECT),
+      'Button A does not have action SELECT');
+  assertFalse(
+      buttonA.hasAction(MenuAction.DRILL_DOWN),
+      'Button A should not have action DRILL_DOWN');
+  assertFalse(buttonA.isGroup(), 'Button A should not be a group');
 
   const slider = BasicNode.create(
       rootWebArea.find({role: chrome.automation.RoleType.SLIDER}),
@@ -171,9 +186,9 @@ AX_TEST_F('SwitchAccessBasicNodeTest', 'Actions', async function() {
       chrome.automation.RoleType.SLIDER, slider.role,
       'Slider node is not a slider');
   assertTrue(
-      slider.hasAction(SwitchAccessMenuAction.INCREMENT),
+      slider.hasAction(MenuAction.INCREMENT),
       'Slider does not have action INCREMENT');
   assertTrue(
-      slider.hasAction(SwitchAccessMenuAction.DECREMENT),
+      slider.hasAction(MenuAction.DECREMENT),
       'Slider does not have action DECREMENT');
 });

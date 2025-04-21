@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,50 +39,47 @@ void RemoveLoginDetectionData(PrefService* prefs) {
 }
 
 void SaveSiteToOAuthSignedInList(PrefService* pref_service, const GURL& url) {
-  DictionaryPrefUpdate update(pref_service, kOAuthSignedInSitesPref);
-  base::Value* dict = update.Get();
-  dict->SetKey(GetSiteNameForURL(url), base::TimeToValue(base::Time::Now()));
+  ScopedDictPrefUpdate update(pref_service, kOAuthSignedInSitesPref);
+  base::Value::Dict& dict = update.Get();
+  dict.Set(GetSiteNameForURL(url), base::TimeToValue(base::Time::Now()));
 
   // Try making space by removing sites having invalid sign-in time. This should
   // not happen unless the pref is corrupt somehow.
-  if (dict->DictSize() > GetOauthLoggedInSitesMaxSize()) {
+  if (dict.size() > GetOauthLoggedInSitesMaxSize()) {
     std::vector<std::string> invalid_sites;
-    for (auto site_entry : dict->DictItems()) {
+    for (auto site_entry : dict) {
       if (!base::ValueToTime(site_entry.second))
         invalid_sites.push_back(site_entry.first);
     }
     for (const auto& invalid_site : invalid_sites)
-      dict->RemoveKey(invalid_site);
+      dict.Remove(invalid_site);
   }
 
   // Limit the dict to its allowed max size, by removing the site entries which
   // are signed-in the earliest.
-  while (dict->DictSize() > GetOauthLoggedInSitesMaxSize()) {
+  while (dict.size() > GetOauthLoggedInSitesMaxSize()) {
     // Holds the pair of site name, its last login time for the site that was
     // least recently signed-in to be removed.
-    absl::optional<std::pair<std::string, base::Time>> site_entry_to_remove;
-    for (auto site_entry : dict->DictItems()) {
+    std::optional<std::pair<std::string, base::Time>> site_entry_to_remove;
+    for (auto site_entry : dict) {
       base::Time signin_time = *base::ValueToTime(site_entry.second);
       if (!site_entry_to_remove || signin_time < site_entry_to_remove->second) {
         site_entry_to_remove = std::make_pair(site_entry.first, signin_time);
       }
     }
-    dict->RemoveKey(site_entry_to_remove->first);
+    dict.Remove(site_entry_to_remove->first);
   }
 }
 
 bool IsSiteInOAuthSignedInList(PrefService* pref_service, const GURL& url) {
-  if (auto* dict = pref_service->GetDictionary(kOAuthSignedInSitesPref))
-    return dict->FindKey(GetSiteNameForURL(url));
-  return false;
+  return pref_service->GetDict(kOAuthSignedInSitesPref)
+      .contains(GetSiteNameForURL(url));
 }
 
 std::vector<url::Origin> GetOAuthSignedInSites(PrefService* pref_service) {
   std::vector<url::Origin> sites;
-  if (auto* dict = pref_service->GetDictionary(kOAuthSignedInSitesPref)) {
-    for (auto site_entry : dict->DictItems()) {
-      sites.push_back(url::Origin::Create(GURL(site_entry.first)));
-    }
+  for (const auto site_entry : pref_service->GetDict(kOAuthSignedInSitesPref)) {
+    sites.push_back(url::Origin::Create(GURL(site_entry.first)));
   }
   return sites;
 }

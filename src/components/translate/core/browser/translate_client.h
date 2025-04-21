@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include <memory>
 #include <string>
 
-#include "base/memory/ref_counted.h"
 #include "build/build_config.h"
 #include "components/language/core/browser/accept_languages_service.h"
 #include "components/translate/core/browser/translate_prefs.h"
@@ -38,7 +37,7 @@ class TranslateInfoBarDelegate;
 // TranslateManager is used (e.g. a single tab).
 class TranslateClient {
  public:
-  virtual ~TranslateClient() {}
+  virtual ~TranslateClient() = default;
 
   // Gets the TranslateDriver associated with the client.
   virtual TranslateDriver* GetTranslateDriver() = 0;
@@ -52,13 +51,10 @@ class TranslateClient {
   // Returns the associated AcceptLanguagesService.
   virtual language::AcceptLanguagesService* GetAcceptLanguagesService() = 0;
 
-#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
+#if BUILDFLAG(IS_IOS)
   // Returns a translate infobar that owns |delegate|.
   virtual std::unique_ptr<infobars::InfoBar> CreateInfoBar(
       std::unique_ptr<TranslateInfoBarDelegate> delegate) const = 0;
-
-  // Returns the resource ID of the icon to be shown for the Translate infobars.
-  virtual int GetInfobarIconID() const = 0;
 #endif
 
   // Called when the embedder should present UI to the user corresponding to the
@@ -68,15 +64,11 @@ class TranslateClient {
   virtual bool ShowTranslateUI(translate::TranslateStep step,
                                const std::string& source_language,
                                const std::string& target_language,
-                               TranslateErrors::Type error_type,
+                               TranslateErrors error_type,
                                bool triggered_from_menu) = 0;
 
   // Returns true if the URL can be translated.
   virtual bool IsTranslatableURL(const GURL& url) = 0;
-
-  // Returns if AutofillAssistant is running. Translation should be disabled
-  // while AutofillAssistant is running.
-  virtual bool IsAutofillAssistantRunning() const = 0;
 };
 
 }  // namespace translate

@@ -1,8 +1,7 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//build/config/chromeos/ui_mode.gni")
 import("//components/signin/features.gni")
 
 if (is_android) {
@@ -16,16 +15,18 @@ static_library("browser") {
     "about_signin_internals.h",
     "account_investigator.cc",
     "account_investigator.h",
+    "account_management_type_metrics_recorder.cc",
+    "account_management_type_metrics_recorder.h",
     "account_reconcilor.cc",
     "account_reconcilor.h",
     "account_reconcilor_delegate.cc",
     "account_reconcilor_delegate.h",
     "account_reconcilor_throttler.cc",
     "account_reconcilor_throttler.h",
+    "active_primary_accounts_metrics_recorder.cc",
+    "active_primary_accounts_metrics_recorder.h",
     "chrome_connected_header_helper.cc",
     "chrome_connected_header_helper.h",
-    "cookie_reminter.cc",
-    "cookie_reminter.h",
     "cookie_settings_util.cc",
     "cookie_settings_util.h",
     "dice_account_reconcilor_delegate.cc",
@@ -40,8 +41,8 @@ static_library("browser") {
     "signin_header_helper.h",
     "signin_internals_util.cc",
     "signin_internals_util.h",
-    "signin_investigator.cc",
-    "signin_investigator.h",
+    "signin_metrics_service.cc",
+    "signin_metrics_service.h",
     "signin_status_metrics_provider_helpers.cc",
     "signin_status_metrics_provider_helpers.h",
   ]
@@ -49,6 +50,7 @@ static_library("browser") {
   public_deps = [
     "//base",
     "//components/content_settings/core/browser",
+    "//components/content_settings/core/browser:cookie_settings",
     "//components/content_settings/core/common",
     "//components/keyed_service/core",
     "//components/prefs",
@@ -61,11 +63,12 @@ static_library("browser") {
   ]
   deps = [
     "//base:i18n",
-    "//build:chromeos_buildflags",
     "//components/google/core/common",
     "//components/metrics",
-    "//components/os_crypt",
+    "//components/os_crypt/sync",
     "//components/signin/public/identity_manager",
+    "//components/supervised_user/core/common:buildflags",
+    "//components/supervised_user/core/common:features",
     "//components/webdata/common",
     "//crypto",
     "//services/network/public/cpp",
@@ -74,27 +77,10 @@ static_library("browser") {
     "//third_party/icu",
   ]
 
-  if (is_chromeos_ash) {
-    sources += [
-      "active_directory_account_reconcilor_delegate.cc",
-      "active_directory_account_reconcilor_delegate.h",
-    ]
-    deps += [
-      "//ash/components/tpm",
-      "//chromeos/crosapi/mojom",
-    ]
-  }
-
-  if (is_chromeos_lacros) {
+  if (is_chromeos) {
     deps += [
       "//chromeos/crosapi/mojom",
-      "//chromeos/lacros",
-    ]
-    sources += [
-      "consistency_cookie_manager.cc",
-      "consistency_cookie_manager.h",
-      "mirror_landing_account_reconcilor_delegate.cc",
-      "mirror_landing_account_reconcilor_delegate.h",
+      "//components/account_manager_core",
     ]
   }
 
@@ -114,9 +100,10 @@ source_set("unit_tests") {
     "account_investigator_unittest.cc",
     "account_reconcilor_delegate_unittest.cc",
     "account_reconcilor_unittest.cc",
+    "active_primary_accounts_metrics_recorder_unittest.cc",
     "signin_error_controller_unittest.cc",
     "signin_header_helper_unittest.cc",
-    "signin_investigator_unittest.cc",
+    "signin_metrics_service_unittest.cc",
     "signin_status_metrics_provider_helpers_unittest.cc",
   ]
 
@@ -124,14 +111,16 @@ source_set("unit_tests") {
     ":browser",
     "//base",
     "//base/test:test_support",
-    "//build:chromeos_buildflags",
     "//components/content_settings/core/browser",
     "//components/prefs",
     "//components/prefs:test_support",
+    "//components/privacy_sandbox:privacy_sandbox_prefs",
     "//components/signin/public/base:signin_buildflags",
     "//components/signin/public/base:test_support",
     "//components/signin/public/identity_manager",
     "//components/signin/public/identity_manager:test_support",
+    "//components/supervised_user/core/common:buildflags",
+    "//components/supervised_user/core/common:features",
     "//components/sync_preferences:test_support",
     "//google_apis",
     "//net:test_support",
@@ -142,10 +131,11 @@ source_set("unit_tests") {
     "//url",
   ]
 
-  if (is_chromeos_ash) {
+  if (is_chromeos) {
     deps += [
-      "//ash/components/tpm:test_support",
+      "//chromeos/ash/components/install_attributes:test_support",
       "//chromeos/crosapi/mojom",
+      "//components/account_manager_core:test_support",
     ]
     sources -= [
       "account_investigator_unittest.cc",
@@ -153,16 +143,8 @@ source_set("unit_tests") {
     ]
   }
 
-  if (is_chromeos_lacros) {
-    deps += [
-      "//chromeos/crosapi/mojom",
-      "//chromeos/lacros",
-      "//chromeos/lacros:test_support",
-    ]
-    sources += [
-      "consistency_cookie_manager_unittest.cc",
-      "mirror_landing_account_reconcilor_delegate_unittest.cc",
-    ]
+  if (enable_dice_support) {
+    sources += [ "dice_account_reconcilor_delegate_unittest.cc" ]
   }
 }
 
@@ -173,10 +155,7 @@ if (is_android) {
   }
 
   java_cpp_enum("signin_enums_javagen") {
-    sources = [
-      "signin_header_helper.h",
-      "signin_investigator.h",
-    ]
+    sources = [ "signin_header_helper.h" ]
     visibility = [ ":*" ]  # Depend on through :signin_enums_java
   }
 }

@@ -1,10 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/capture/video/gpu_memory_buffer_utils.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "gpu/ipc/common/gpu_memory_buffer_support.h"
 #include "ui/gfx/gpu_memory_buffer.h"
 
@@ -54,7 +54,8 @@ VideoCaptureDevice::Client::ReserveResult AllocateNV12GpuMemoryBuffer(
   const int arbitrary_frame_feedback_id = 0;
   const auto reserve_result = capture_client->ReserveOutputBuffer(
       buffer_size, kOpaqueVideoFormat, arbitrary_frame_feedback_id,
-      out_capture_buffer);
+      out_capture_buffer, /*require_new_buffer_id=*/nullptr,
+      /*retire_old_buffer_id=*/nullptr);
   if (reserve_result != VideoCaptureDevice::Client::ReserveResult::kSucceeded) {
     return reserve_result;
   }

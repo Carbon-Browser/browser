@@ -1,6 +1,8 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "chrome/browser/ash/child_accounts/parent_access_code/parent_access_service.h"
 
 #include <map>
 #include <memory>
@@ -8,16 +10,17 @@
 #include <utility>
 
 #include "ash/public/cpp/child_accounts/parent_access_controller.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "chrome/browser/ash/child_accounts/parent_access_code/config_source.h"
-#include "chrome/browser/ash/child_accounts/parent_access_code/parent_access_service.h"
 #include "chrome/browser/ash/child_accounts/parent_access_code/parent_access_test_utils.h"
+#include "chrome/browser/ash/login/test/feature_parameter_interface.h"
 #include "chrome/browser/ash/login/test/logged_in_user_mixin.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/ash/policy/core/user_policy_test_helper.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/common/chrome_features.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
 #include "components/account_id/account_id.h"
 #include "components/prefs/pref_service.h"
@@ -25,31 +28,10 @@
 #include "content/public/test/browser_test.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace ash {
-namespace parent_access {
+namespace ash::parent_access {
 
-namespace {
-
-// Dictionary keys for ParentAccessCodeConfig policy.
-constexpr char kFutureConfigDictKey[] = "future_config";
-constexpr char kCurrentConfigDictKey[] = "current_config";
-constexpr char kOldConfigsDictKey[] = "old_configs";
-
-base::DictionaryValue PolicyFromConfigs(
-    const AccessCodeConfig& future_config,
-    const AccessCodeConfig& current_config,
-    const std::vector<AccessCodeConfig>& old_configs) {
-  base::DictionaryValue dict;
-  dict.SetKey(kFutureConfigDictKey, future_config.ToDictionary());
-  dict.SetKey(kCurrentConfigDictKey, current_config.ToDictionary());
-  base::Value old_configs_value(base::Value::Type::LIST);
-  for (const auto& config : old_configs)
-    old_configs_value.Append(config.ToDictionary());
-  dict.SetKey(kOldConfigsDictKey, std::move(old_configs_value));
-  return dict;
-}
-
-}  // namespace
+const auto kAllFeatureStates = FeatureAsParameterInterface<1>::Generator(
+    {&::features::kSkipParentAccessCodeForReauth});
 
 // Stores information about results of the access code validation.
 struct CodeValidationResults {
@@ -74,7 +56,7 @@ class TestParentAccessServiceObserver : public ParentAccessService::Observer {
   ~TestParentAccessServiceObserver() override = default;
 
   void OnAccessCodeValidation(ParentCodeValidationResult result,
-                              absl::optional<AccountId> account_id) override {
+                              std::optional<AccountId> account_id) override {
     ASSERT_TRUE(account_id);
     EXPECT_EQ(account_id_, account_id.value());
     result == ParentCodeValidationResult::kValid
@@ -88,7 +70,9 @@ class TestParentAccessServiceObserver : public ParentAccessService::Observer {
   const AccountId account_id_;
 };
 
-class ParentAccessServiceTest : public MixinBasedInProcessBrowserTest {
+class ParentAccessServiceTest
+    : public MixinBasedInProcessBrowserTest,
+      public ::testing::WithParamInterface<FeatureStateArray<1>> {
  public:
   ParentAccessServiceTest()
       : test_observer_(std::make_unique<TestParentAccessServiceObserver>(
@@ -113,7 +97,7 @@ class ParentAccessServiceTest : public MixinBasedInProcessBrowserTest {
 
  protected:
   // Updates the policy containing the Parent Access Code config.
-  void UpdatePolicy(const base::DictionaryValue& dict) {
+  void UpdatePolicy(const base::Value& dict) {
     std::string config_string;
     base::JSONWriter::Write(dict, &config_string);
 
@@ -150,17 +134,13 @@ class ParentAccessServiceTest : public MixinBasedInProcessBrowserTest {
   }
 
   AccessCodeValues test_values_;
-  LoggedInUserMixin logged_in_user_mixin_{&mixin_host_,
-                                          LoggedInUserMixin::LogInType::kChild,
+  LoggedInUserMixin logged_in_user_mixin_{&mixin_host_, /*test_base=*/this,
                                           embedded_test_server(),
-                                          this,
-                                          true /*should_launch_browser*/,
-                                          absl::nullopt /*account_id*/,
-                                          true /*include_initial_user*/};
+                                          LoggedInUserMixin::LogInType::kChild};
   std::unique_ptr<TestParentAccessServiceObserver> test_observer_;
 };
 
-IN_PROC_BROWSER_TEST_F(ParentAccessServiceTest, NoConfigAvailable) {
+IN_PROC_BROWSER_TEST_P(ParentAccessServiceTest, NoConfigAvailable) {
   auto test_value = test_values_.begin();
   EXPECT_EQ(ParentCodeValidationResult::kNoConfig,
             ValidateAccessCode(test_value->second, test_value->first));
@@ -168,7 +148,7 @@ IN_PROC_BROWSER_TEST_F(ParentAccessServiceTest, NoConfigAvailable) {
   ExpectResults(0, 1);
 }
 
-IN_PROC_BROWSER_TEST_F(ParentAccessServiceTest, NoValidConfigAvailable) {
+IN_PROC_BROWSER_TEST_P(ParentAccessServiceTest, NoValidConfigAvailable) {
   std::vector<AccessCodeConfig> old_configs;
   old_configs.emplace_back(GetInvalidTestConfig());
   UpdatePolicy(PolicyFromConfigs(GetInvalidTestConfig(), GetInvalidTestConfig(),
@@ -181,7 +161,7 @@ IN_PROC_BROWSER_TEST_F(ParentAccessServiceTest, NoValidConfigAvailable) {
   ExpectResults(0, 1);
 }
 
-IN_PROC_BROWSER_TEST_F(ParentAccessServiceTest, ValidationWithFutureConfig) {
+IN_PROC_BROWSER_TEST_P(ParentAccessServiceTest, ValidationWithFutureConfig) {
   std::vector<AccessCodeConfig> old_configs;
   old_configs.emplace_back(GetInvalidTestConfig());
   UpdatePolicy(PolicyFromConfigs(GetDefaultTestConfig(), GetInvalidTestConfig(),
@@ -194,7 +174,7 @@ IN_PROC_BROWSER_TEST_F(ParentAccessServiceTest, ValidationWithFutureConfig) {
   ExpectResults(1, 0);
 }
 
-IN_PROC_BROWSER_TEST_F(ParentAccessServiceTest, ValidationWithCurrentConfig) {
+IN_PROC_BROWSER_TEST_P(ParentAccessServiceTest, ValidationWithCurrentConfig) {
   std::vector<AccessCodeConfig> old_configs;
   old_configs.emplace_back(GetInvalidTestConfig());
   UpdatePolicy(PolicyFromConfigs(GetInvalidTestConfig(), GetDefaultTestConfig(),
@@ -207,7 +187,7 @@ IN_PROC_BROWSER_TEST_F(ParentAccessServiceTest, ValidationWithCurrentConfig) {
   ExpectResults(1, 0);
 }
 
-IN_PROC_BROWSER_TEST_F(ParentAccessServiceTest, ValidationWithOldConfig) {
+IN_PROC_BROWSER_TEST_P(ParentAccessServiceTest, ValidationWithOldConfig) {
   std::vector<AccessCodeConfig> old_configs;
   old_configs.emplace_back(GetInvalidTestConfig());
   old_configs.emplace_back(GetDefaultTestConfig());
@@ -221,7 +201,7 @@ IN_PROC_BROWSER_TEST_F(ParentAccessServiceTest, ValidationWithOldConfig) {
   ExpectResults(1, 0);
 }
 
-IN_PROC_BROWSER_TEST_F(ParentAccessServiceTest, MultipleValidationAttempts) {
+IN_PROC_BROWSER_TEST_P(ParentAccessServiceTest, MultipleValidationAttempts) {
   AccessCodeValues::iterator test_value = test_values_.begin();
 
   // No config - validation should fail.
@@ -247,7 +227,7 @@ IN_PROC_BROWSER_TEST_F(ParentAccessServiceTest, MultipleValidationAttempts) {
   ExpectResults(test_values_.size(), 2);
 }
 
-IN_PROC_BROWSER_TEST_F(ParentAccessServiceTest, NoObserver) {
+IN_PROC_BROWSER_TEST_P(ParentAccessServiceTest, NoObserver) {
   ParentAccessService::Get().RemoveObserver(test_observer_.get());
 
   UpdatePolicy(
@@ -260,7 +240,7 @@ IN_PROC_BROWSER_TEST_F(ParentAccessServiceTest, NoObserver) {
   ExpectResults(0, 0);
 }
 
-IN_PROC_BROWSER_TEST_F(ParentAccessServiceTest, NoAccountId) {
+IN_PROC_BROWSER_TEST_P(ParentAccessServiceTest, NoAccountId) {
   ParentAccessService::Get().RemoveObserver(test_observer_.get());
 
   UpdatePolicy(
@@ -273,7 +253,7 @@ IN_PROC_BROWSER_TEST_F(ParentAccessServiceTest, NoAccountId) {
                 EmptyAccountId(), test_value->second, test_value->first));
 }
 
-IN_PROC_BROWSER_TEST_F(ParentAccessServiceTest, InvalidAccountId) {
+IN_PROC_BROWSER_TEST_P(ParentAccessServiceTest, InvalidAccountId) {
   ParentAccessService::Get().RemoveObserver(test_observer_.get());
 
   UpdatePolicy(
@@ -287,7 +267,7 @@ IN_PROC_BROWSER_TEST_F(ParentAccessServiceTest, InvalidAccountId) {
                 other_child, test_value->second, test_value->first));
 }
 
-IN_PROC_BROWSER_TEST_F(ParentAccessServiceTest,
+IN_PROC_BROWSER_TEST_P(ParentAccessServiceTest,
                        ChildDeviceOwner_IsApprovalRequired) {
   auto* const user_manager =
       static_cast<FakeChromeUserManager*>(user_manager::UserManager::Get());
@@ -313,8 +293,8 @@ IN_PROC_BROWSER_TEST_F(ParentAccessServiceTest,
   // Login screen.
   EXPECT_TRUE(
       ParentAccessService::IsApprovalRequired(SupervisedAction::kAddUser));
-  EXPECT_TRUE(
-      ParentAccessService::IsApprovalRequired(SupervisedAction::kReauth));
+  EXPECT_EQ(::features::IsParentAccessCodeForReauthEnabled(),
+            ParentAccessService::IsApprovalRequired(SupervisedAction::kReauth));
   // In session, because child user is logged in the test fixture.
   EXPECT_TRUE(ParentAccessService::IsApprovalRequired(
       SupervisedAction::kUnlockTimeLimits));
@@ -324,7 +304,7 @@ IN_PROC_BROWSER_TEST_F(ParentAccessServiceTest,
       SupervisedAction::kUpdateTimezone));
 }
 
-IN_PROC_BROWSER_TEST_F(ParentAccessServiceTest,
+IN_PROC_BROWSER_TEST_P(ParentAccessServiceTest,
                        RegularDeviceOwner_IsApprovalRequired) {
   auto* const user_manager =
       static_cast<FakeChromeUserManager*>(user_manager::UserManager::Get());
@@ -363,5 +343,9 @@ IN_PROC_BROWSER_TEST_F(ParentAccessServiceTest,
       SupervisedAction::kUpdateTimezone));
 }
 
-}  // namespace parent_access
-}  // namespace ash
+INSTANTIATE_TEST_SUITE_P(All,
+                         ParentAccessServiceTest,
+                         testing::ValuesIn(kAllFeatureStates),
+                         FeatureAsParameterInterface<1>::ParamInfoToString);
+
+}  // namespace ash::parent_access

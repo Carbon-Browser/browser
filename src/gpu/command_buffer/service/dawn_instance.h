@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,11 +20,30 @@ struct GpuPreferences;
 
 namespace webgpu {
 
+enum class SafetyLevel {
+  // Enables stable features that are safe to use from unprivileged processes.
+  kSafe,
+  // Enables experimental features that are safe to use from unprivileged
+  // processes.
+  kSafeExperimental,
+  // Enables all the features, including ones that might not be secure yet and
+  // could allow
+  // compromising the GPU process.
+  kUnsafe,
+};
+
 class DawnInstance : public dawn::native::Instance {
  public:
   static std::unique_ptr<DawnInstance> Create(
       dawn::platform::Platform* platform,
-      const GpuPreferences& gpu_preferences);
+      const GpuPreferences& gpu_preferences,
+      SafetyLevel safety,
+#ifdef WGPU_BREAKING_CHANGE_LOGGING_CALLBACK_TYPE
+      wgpu::LoggingCallback<void> logging_callback);
+#else
+      WGPULoggingCallback logging_callback,
+      void* logging_callback_userdata);
+#endif
 
  private:
   using dawn::native::Instance::Instance;

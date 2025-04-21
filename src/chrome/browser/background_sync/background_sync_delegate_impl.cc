@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "components/keep_alive_registry/keep_alive_registry.h"
 #include "components/keep_alive_registry/keep_alive_types.h"
 #include "components/site_engagement/content/site_engagement_service.h"
+#include "components/webapps/common/web_app_id.h"
 #include "content/public/browser/background_sync_context.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/storage_partition.h"
@@ -46,11 +47,15 @@ BackgroundSyncDelegateImpl::BackgroundSyncEventKeepAliveImpl::
                                content::BrowserThread::DeleteOnUIThread>(
       new ScopedKeepAlive(KeepAliveOrigin::BACKGROUND_SYNC,
                           KeepAliveRestartOption::DISABLED));
-  profile_keepalive_ =
-      std::unique_ptr<ScopedProfileKeepAlive,
-                      content::BrowserThread::DeleteOnUIThread>(
-          new ScopedProfileKeepAlive(profile,
-                                     ProfileKeepAliveOrigin::kBackgroundSync));
+  if (!profile->IsOffTheRecord()) {
+    // TODO(crbug.com/40159237): Remove this guard when OTR profiles become
+    // refcounted and support ScopedProfileKeepAlive.
+    profile_keepalive_ =
+        std::unique_ptr<ScopedProfileKeepAlive,
+                        content::BrowserThread::DeleteOnUIThread>(
+            new ScopedProfileKeepAlive(
+                profile, ProfileKeepAliveOrigin::kBackgroundSync));
+  }
 }
 
 BackgroundSyncDelegateImpl::BackgroundSyncEventKeepAliveImpl::
@@ -66,7 +71,7 @@ BackgroundSyncDelegateImpl::CreateBackgroundSyncEventKeepAlive() {
 
 void BackgroundSyncDelegateImpl::GetUkmSourceId(
     const url::Origin& origin,
-    base::OnceCallback<void(absl::optional<ukm::SourceId>)> callback) {
+    base::OnceCallback<void(std::optional<ukm::SourceId>)> callback) {
   ukm_background_service_->GetBackgroundSourceIdIfAllowed(origin,
                                                           std::move(callback));
 }
@@ -117,7 +122,6 @@ int BackgroundSyncDelegateImpl::GetSiteEngagementPenalty(const GURL& url) {
   }
 
   NOTREACHED();
-  return kEngagementLevelNonePenalty;
 }
 
 #if BUILDFLAG(IS_ANDROID)
@@ -148,7 +152,9 @@ void BackgroundSyncDelegateImpl::OnEngagementEvent(
     content::WebContents* web_contents,
     const GURL& url,
     double score,
-    site_engagement::EngagementType engagement_type) {
+    double old_score,
+    site_engagement::EngagementType engagement_type,
+    const std::optional<webapps::AppId>& app_id) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
   if (score == 0.0)

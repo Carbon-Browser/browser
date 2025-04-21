@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include <string>
 
 #include "base/base_export.h"
+#include "base/compiler_specific.h"
 #include "base/gtest_prod_util.h"
 #include "base/version.h"
 
@@ -54,8 +55,12 @@ enum class Version {
   WIN10_20H2 = 17,   // 20H2: Build 19042.
   WIN10_21H1 = 18,   // 21H1: Build 19043.
   WIN10_21H2 = 19,   // Win10 21H2: Build 19044.
-  SERVER_2022 = 20,  // Server 2022: Build 20348.
-  WIN11 = 21,        // Win11 21H2: Build 22000.
+  WIN10_22H2 = 20,   // Win10 21H2: Build 19045.
+  SERVER_2022 = 21,  // Server 2022: Build 20348.
+  WIN11 = 22,        // Win11 21H2: Build 22000.
+  WIN11_22H2 = 23,   // Win11 22H2: Build 22621.
+  WIN11_23H2 = 24,   // Win11 23H2: Build 22631.
+  WIN11_24H2 = 25,   // Win11 24H2: Build 26100.
   WIN_LAST,          // Indicates error condition.
 };
 
@@ -108,9 +113,14 @@ class BASE_EXPORT OSInfo {
   OSInfo(const OSInfo&) = delete;
   OSInfo& operator=(const OSInfo&) = delete;
 
-  // Separate from the rest of OSInfo so it can be used during early process
+  // Separate from the rest of OSInfo so they can be used during early process
   // initialization.
   static WindowsArchitecture GetArchitecture();
+  // This is necessary because GetArchitecture doesn't return correct OS
+  // architectures for x86/x64 binaries running on ARM64 - it says the OS is
+  // x86/x64. This function returns true if the process is an x86 or x64 process
+  // running emulated on ARM64.
+  static bool IsRunningEmulatedOnArm64();
 
   // Returns the OS Version as returned from a call to GetVersionEx().
   const Version& version() const { return version_; }
@@ -121,9 +131,9 @@ class BASE_EXPORT OSInfo {
   // The Kernel32* set of functions return the OS version as determined by a
   // call to VerQueryValue() on kernel32.dll. This avoids any running App Compat
   // shims from manipulating the version reported.
-  Version Kernel32Version() const;
-  VersionNumber Kernel32VersionNumber() const;
-  base::Version Kernel32BaseVersion() const;
+  static Version Kernel32Version();
+  static VersionNumber Kernel32VersionNumber();
+  static base::Version Kernel32BaseVersion();
 
   // These helper functions return information about common scenarios of
   // interest in regards to WOW emulation.
@@ -136,9 +146,15 @@ class BASE_EXPORT OSInfo {
 
   // Functions to determine Version Type (e.g. Enterprise/Home) and Service Pack
   // value. See above for definitions of these values.
-  const VersionType& version_type() const { return version_type_; }
-  const ServicePack& service_pack() const { return service_pack_; }
-  const std::string& service_pack_str() const { return service_pack_str_; }
+  const VersionType& version_type() const LIFETIME_BOUND {
+    return version_type_;
+  }
+  const ServicePack& service_pack() const LIFETIME_BOUND {
+    return service_pack_;
+  }
+  const std::string& service_pack_str() const LIFETIME_BOUND {
+    return service_pack_str_;
+  }
 
   // Returns the number of processors on the system.
   const int& processors() const { return processors_; }
@@ -149,11 +165,15 @@ class BASE_EXPORT OSInfo {
     return allocation_granularity_;
   }
 
-  // Processor name as read from registry.
+  // Processor info as read from registry.
   std::string processor_model_name();
+  std::string processor_vendor_name();
 
   // Returns the "ReleaseId" (Windows 10 release number) from the registry.
-  const std::string& release_id() const { return release_id_; }
+  const std::string& release_id() const LIFETIME_BOUND { return release_id_; }
+
+  // It returns true if the Windows SKU is N edition.
+  bool IsWindowsNSku() const;
 
  private:
   friend class base::test::ScopedOSInfoOverride;
@@ -227,6 +247,8 @@ class BASE_EXPORT OSInfo {
   WowProcessMachine wow_process_machine_;
   WowNativeMachine wow_native_machine_;
   std::string processor_model_name_;
+  std::string processor_vendor_name_;
+  DWORD os_type_;
 };
 
 // Because this is by far the most commonly-requested value from the above

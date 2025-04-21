@@ -1,10 +1,14 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {ElementsTestRunner} from 'elements_test_runner';
+
+import * as UIModule from 'devtools/ui/legacy/legacy.js';
+
 (async function() {
   TestRunner.addResult(`Tests that editing is canceled properly after incremental editing.\n`);
-  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
       <div id="inspected" style="color: red">Text</div>
@@ -25,7 +29,7 @@
       treeElement = ElementsTestRunner.getElementStylePropertyTreeItem('color');
       treeOutline = treeElement.treeOutline;
 
-      treeElement.startEditing();
+      treeElement.startEditingName();
       treeElement.nameElement.textContent = 'color';
       treeElement.nameElement.dispatchEvent(TestRunner.createKeyEvent('Enter'));
 
@@ -38,14 +42,14 @@
     function testCommitEditing(next) {
       // Commit editing.
       treeElement.valueElement.textContent = 'green';
-      treeElement.valueElement.firstChild.select();
+      TestRunner.selectTextInTextNode(treeElement.valueElement.firstChild);
       ElementsTestRunner.waitForStyleCommitted(next);
       treeElement.valueElement.dispatchEvent(TestRunner.createKeyEvent('Enter'));
     },
 
     function testNewPropertyEditorIsCreated(next) {
       var blankTreeElement = treeOutline.rootElement().childAt(1);
-      if (!UI.isBeingEdited(blankTreeElement.nameElement)) {
+      if (!UIModule.UIUtils.isBeingEdited(blankTreeElement.nameElement)) {
         TestRunner.addResult('No new property editor active!');
         TestRunner.completeTest();
         return;
@@ -57,7 +61,7 @@
     },
 
     function testCycleThroughPropertyEditing(next) {
-      if (!UI.isBeingEdited(treeOutline.firstChild().nameElement)) {
+      if (!UIModule.UIUtils.isBeingEdited(treeOutline.firstChild().nameElement)) {
         TestRunner.addResult('Original property name editor not active!');
         TestRunner.completeTest();
         return;

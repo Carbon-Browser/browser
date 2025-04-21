@@ -1,35 +1,37 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/display/manager/test/test_native_display_delegate.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/strcat.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "ui/display/manager/test/action_logger.h"
 #include "ui/display/types/display_mode.h"
 #include "ui/display/types/display_snapshot.h"
 #include "ui/display/types/native_display_observer.h"
 #include "ui/gfx/geometry/size.h"
 
-namespace display {
-namespace test {
+namespace display::test {
 
-std::string GetModesetFlag(uint32_t flag) {
+std::string GetModesetFlag(display::ModesetFlags modeset_flags) {
   std::string flags_str;
-  if (flag & kTestModeset)
-    flags_str = base::StrCat({flags_str, kTestModesetStr, ", "});
-  if (flag & kCommitModeset)
-    flags_str = base::StrCat({flags_str, kCommitModesetStr, ", "});
-  if (flag & kSeamlessModeset)
-    flags_str = base::StrCat({flags_str, kSeamlessModesetStr, ", "});
+  if (modeset_flags.Has(display::ModesetFlag::kTestModeset)) {
+    flags_str = base::StrCat({flags_str, kTestModesetStr, ","});
+  }
+  if (modeset_flags.Has(display::ModesetFlag::kCommitModeset)) {
+    flags_str = base::StrCat({flags_str, kCommitModesetStr, ","});
+  }
+  if (modeset_flags.Has(display::ModesetFlag::kSeamlessModeset)) {
+    flags_str = base::StrCat({flags_str, kSeamlessModesetStr, ","});
+  }
 
-  // Remove trailing comma and space.
+  // Remove trailing comma.
   if (!flags_str.empty())
-    flags_str.resize(flags_str.size() - 2);
+    flags_str.resize(flags_str.size() - 1);
   return flags_str;
 }
 
@@ -43,6 +45,22 @@ TestNativeDisplayDelegate::TestNativeDisplayDelegate(ActionLogger* log)
       log_(log) {}
 
 TestNativeDisplayDelegate::~TestNativeDisplayDelegate() = default;
+
+const std::vector<raw_ptr<DisplaySnapshot, VectorExperimental>>
+TestNativeDisplayDelegate::GetOutputs() const {
+  std::vector<raw_ptr<DisplaySnapshot, VectorExperimental>> outputs;
+  for (const auto& output : outputs_) {
+    outputs.push_back(output.get());
+  }
+  return outputs;
+}
+
+void TestNativeDisplayDelegate::SetOutputs(
+    std::vector<std::unique_ptr<DisplaySnapshot>> outputs) {
+  std::move(begin(outputs_), end(outputs_),
+            std::back_inserter(cached_outputs_));
+  outputs_ = std::move(outputs);
+}
 
 void TestNativeDisplayDelegate::Initialize() {
   log_->AppendAction(kInit);
@@ -62,14 +80,14 @@ void TestNativeDisplayDelegate::RelinquishDisplayControl(
 
 void TestNativeDisplayDelegate::GetDisplays(GetDisplaysCallback callback) {
   // This mimics the behavior of Ozone DRM when new display state arrives.
-  for (NativeDisplayObserver& observer : observers_)
-    observer.OnDisplaySnapshotsInvalidated();
+  observers_.Notify(&NativeDisplayObserver::OnDisplaySnapshotsInvalidated);
+  cached_outputs_.clear();
 
   if (run_async_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
-        FROM_HERE, base::BindOnce(std::move(callback), outputs_));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(std::move(callback), GetOutputs()));
   } else {
-    std::move(callback).Run(outputs_);
+    std::move(callback).Run(GetOutputs());
   }
 }
 
@@ -82,8 +100,8 @@ bool TestNativeDisplayDelegate::Configure(
   else if (max_configurable_pixels_ < 0)
     return false;
 
-  if (display_config_params.mode.has_value()) {
-    return display_config_params.mode.value()->size().GetArea() <=
+  if (display_config_params.mode) {
+    return display_config_params.mode->size().GetArea() <=
            max_configurable_pixels_;
   }
 
@@ -101,7 +119,7 @@ bool TestNativeDisplayDelegate::IsConfigurationWithinSystemBandwidth(
       display_id_to_used_system_bw_;
   for (const DisplayConfigurationParams& config : config_requests) {
     requested_ids_with_bandwidth[config.id] =
-        config.mode.has_value() ? config.mode.value()->size().GetArea() : 0;
+        config.mode ? config.mode->size().GetArea() : 0;
   }
 
   int requested_bandwidth = 0;
@@ -118,15 +136,15 @@ void TestNativeDisplayDelegate::SaveCurrentConfigSystemBandwidth(
   // current system usage.
   for (const DisplayConfigurationParams& config : config_requests) {
     display_id_to_used_system_bw_[config.id] =
-        config.mode.has_value() ? config.mode.value()->size().GetArea() : 0;
+        config.mode ? config.mode->size().GetArea() : 0;
   }
 }
 
 void TestNativeDisplayDelegate::Configure(
     const std::vector<display::DisplayConfigurationParams>& config_requests,
     ConfigureCallback callback,
-    uint32_t modeset_flag) {
-  log_->AppendAction(GetModesetFlag(modeset_flag));
+    display::ModesetFlags modeset_flags) {
+  log_->AppendAction(GetModesetFlag(modeset_flags));
   bool config_success = true;
   for (const auto& config : config_requests)
     config_success &= Configure(config);
@@ -141,17 +159,32 @@ void TestNativeDisplayDelegate::Configure(
   log_->AppendAction(config_outcome);
 
   if (run_async_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
-        FROM_HERE, base::BindOnce(std::move(callback), config_success));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE,
+        base::BindOnce(std::move(callback), config_requests, config_success));
   } else {
-    std::move(callback).Run(config_success);
+    std::move(callback).Run(config_requests, config_success);
+  }
+}
+
+void TestNativeDisplayDelegate::SetHdcpKeyProp(
+    int64_t display_id,
+    const std::string& key,
+    SetHdcpKeyPropCallback callback) {
+  log_->AppendAction(GetSetHdcpKeyPropAction(display_id, true));
+
+  if (run_async_) {
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(std::move(callback), true));
+  } else {
+    std::move(callback).Run(true);
   }
 }
 
 void TestNativeDisplayDelegate::GetHDCPState(const DisplaySnapshot& output,
                                              GetHDCPStateCallback callback) {
   if (run_async_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), get_hdcp_expectation_,
                                   hdcp_state_, content_protection_method_));
   } else {
@@ -166,7 +199,7 @@ void TestNativeDisplayDelegate::SetHDCPState(
     ContentProtectionMethod protection_method,
     SetHDCPStateCallback callback) {
   if (run_async_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&TestNativeDisplayDelegate::DoSetHDCPState,
                        base::Unretained(this), output.display_id(), state,
@@ -188,7 +221,6 @@ void TestNativeDisplayDelegate::DoSetHDCPState(
   switch (state) {
     case HDCP_STATE_ENABLED:
       NOTREACHED();
-      break;
 
     case HDCP_STATE_DESIRED:
       hdcp_state_ =
@@ -208,20 +240,22 @@ void TestNativeDisplayDelegate::DoSetHDCPState(
   std::move(callback).Run(set_hdcp_expectation_);
 }
 
-bool TestNativeDisplayDelegate::SetColorMatrix(
+void TestNativeDisplayDelegate::SetColorCalibration(
     int64_t display_id,
-    const std::vector<float>& color_matrix) {
-  log_->AppendAction(SetColorMatrixAction(display_id, color_matrix));
-  return true;
+    const ColorCalibration& calibration) {
+  log_->AppendAction(SetColorCalibrationAction(display_id, calibration));
 }
 
-bool TestNativeDisplayDelegate::SetGammaCorrection(
+void TestNativeDisplayDelegate::SetColorTemperatureAdjustment(
     int64_t display_id,
-    const std::vector<display::GammaRampRGBEntry>& degamma_lut,
-    const std::vector<display::GammaRampRGBEntry>& gamma_lut) {
-  log_->AppendAction(
-      SetGammaCorrectionAction(display_id, degamma_lut, gamma_lut));
-  return true;
+    const ColorTemperatureAdjustment& cta) {
+  log_->AppendAction(SetColorTemperatureAdjustmentAction(display_id, cta));
+}
+
+void TestNativeDisplayDelegate::SetGammaAdjustment(
+    int64_t display_id,
+    const GammaAdjustment& gamma) {
+  log_->AppendAction(SetGammaAdjustmentAction(display_id, gamma));
 }
 
 void TestNativeDisplayDelegate::SetPrivacyScreen(
@@ -230,6 +264,41 @@ void TestNativeDisplayDelegate::SetPrivacyScreen(
     SetPrivacyScreenCallback callback) {
   log_->AppendAction(SetPrivacyScreenAction(display_id, enabled));
   std::move(callback).Run(true);
+}
+
+void TestNativeDisplayDelegate::GetSeamlessRefreshRates(
+    int64_t display_id,
+    GetSeamlessRefreshRatesCallback callback) const {
+  const DisplaySnapshot* snapshot = nullptr;
+  for (const auto& output : outputs_) {
+    if (output->display_id() == display_id) {
+      snapshot = output.get();
+      break;
+    }
+  }
+  // Return nullopt if there is no snapshot with this display_id.
+  std::optional<std::vector<float>> result;
+  if (snapshot) {
+    // Return empty vector if there is no current mode.
+    std::vector<float> refresh_rates;
+    if (snapshot->current_mode()) {
+      for (auto& mode : snapshot->modes()) {
+        // If a mode has the same size as the currently configured mode, then
+        // include that mode's refresh rate.
+        if (mode->size() == snapshot->current_mode()->size()) {
+          refresh_rates.push_back(mode->refresh_rate());
+        }
+      }
+    }
+    result.emplace(refresh_rates);
+  }
+
+  if (run_async_) {
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(std::move(callback), result));
+  } else {
+    std::move(callback).Run(result);
+  }
 }
 
 void TestNativeDisplayDelegate::AddObserver(NativeDisplayObserver* observer) {
@@ -245,5 +314,4 @@ FakeDisplayController* TestNativeDisplayDelegate::GetFakeDisplayController() {
   return nullptr;
 }
 
-}  // namespace test
-}  // namespace display
+}  // namespace display::test

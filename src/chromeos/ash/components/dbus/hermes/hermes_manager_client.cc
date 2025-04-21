@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "chromeos/ash/components/dbus/hermes/fake_hermes_manager_client.h"
@@ -33,13 +34,9 @@ class HermesManagerClientImpl : public HermesManagerClient {
     dbus::ObjectPath hermes_manager_path(hermes::kHermesManagerPath);
     object_proxy_ =
         bus->GetObjectProxy(hermes::kHermesServiceName, hermes_manager_path);
-    properties_ = std::make_unique<Properties>(
-        object_proxy_,
-        base::BindRepeating(&HermesManagerClientImpl::OnPropertyChanged,
-                            weak_ptr_factory_.GetWeakPtr(),
-                            hermes_manager_path));
-    properties_->ConnectSignals();
-    properties_->GetAll();
+    object_proxy_->WaitForServiceToBeAvailable(
+        base::BindOnce(&HermesManagerClientImpl::OnHermesAvailable,
+                       weak_ptr_factory_.GetWeakPtr()));
   }
   explicit HermesManagerClientImpl(const HermesManagerClient&) = delete;
   HermesManagerClientImpl& operator=(const HermesManagerClient&) = delete;
@@ -47,7 +44,10 @@ class HermesManagerClientImpl : public HermesManagerClient {
 
   // HermesManagerClient:
   const std::vector<dbus::ObjectPath>& GetAvailableEuiccs() override {
-    return properties_->available_euiccs().value();
+    if (properties_) {
+      available_euiccs_ = properties_->available_euiccs().value();
+    }
+    return available_euiccs_;
   }
 
   TestInterface* GetTestInterface() override { return nullptr; }
@@ -82,8 +82,20 @@ class HermesManagerClientImpl : public HermesManagerClient {
     }
   }
 
-  dbus::ObjectProxy* object_proxy_;
+  void OnHermesAvailable(bool service_is_available) {
+    dbus::ObjectPath hermes_manager_path(hermes::kHermesManagerPath);
+    properties_ = std::make_unique<Properties>(
+        object_proxy_,
+        base::BindRepeating(&HermesManagerClientImpl::OnPropertyChanged,
+                            weak_ptr_factory_.GetWeakPtr(),
+                            hermes_manager_path));
+    properties_->ConnectSignals();
+    properties_->GetAll();
+  }
+
+  raw_ptr<dbus::ObjectProxy> object_proxy_;
   std::unique_ptr<Properties> properties_;
+  std::vector<dbus::ObjectPath> available_euiccs_;
   base::WeakPtrFactory<HermesManagerClientImpl> weak_ptr_factory_{this};
 };
 
@@ -94,6 +106,9 @@ HermesManagerClient::HermesManagerClient() {
 
 HermesManagerClient::~HermesManagerClient() {
   DCHECK_EQ(g_instance, this);
+  for (auto& observer : observers()) {
+    observer.OnShutdown();
+  }
   g_instance = nullptr;
 }
 

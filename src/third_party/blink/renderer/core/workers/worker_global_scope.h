@@ -29,20 +29,24 @@
 
 #include <memory>
 
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "services/network/public/mojom/fetch_api.mojom-blink-forward.h"
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/common/loader/worker_main_script_load_parameters.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
-#include "third_party/blink/public/mojom/loader/code_cache.mojom.h"
+#include "third_party/blink/public/mojom/loader/code_cache.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/script/script_type.mojom-blink-forward.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/frame_request_callback_collection.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/frame/csp/content_security_policy.h"
 #include "third_party/blink/renderer/core/frame/policy_container.h"
+#include "third_party/blink/renderer/core/frame/universal_global_scope.h"
+#include "third_party/blink/renderer/core/frame/window_or_worker_global_scope.h"
 #include "third_party/blink/renderer/core/script/script.h"
+#include "third_party/blink/renderer/core/workers/custom_event_message.h"
 #include "third_party/blink/renderer/core/workers/worker_classic_script_loader.h"
 #include "third_party/blink/renderer/core/workers/worker_or_worklet_global_scope.h"
 #include "third_party/blink/renderer/core/workers/worker_settings.h"
@@ -50,7 +54,10 @@
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/loader/fetch/code_cache_host.h"
 #include "third_party/blink/renderer/platform/loader/fetch/url_loader/cached_metadata_handler.h"
+#include "third_party/blink/renderer/platform/mojo/browser_interface_broker_proxy_impl.h"
+#include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
+#include "third_party/blink/renderer/platform/wtf/gc_plugin.h"
 #include "v8/include/v8-inspector.h"
 
 namespace blink {
@@ -66,13 +73,14 @@ class InstalledScriptsManager;
 class OffscreenFontSelector;
 class WorkerResourceTimingNotifier;
 class TrustedTypePolicyFactory;
-class V8VoidFunction;
 class WorkerLocation;
 class WorkerNavigator;
 class WorkerThread;
 
 class CORE_EXPORT WorkerGlobalScope
     : public WorkerOrWorkletGlobalScope,
+      public WindowOrWorkerGlobalScope,
+      public UniversalGlobalScope,
       public ActiveScriptWrappable<WorkerGlobalScope>,
       public Supplementable<WorkerGlobalScope> {
   DEFINE_WRAPPERTYPEINFO();
@@ -85,7 +93,7 @@ class CORE_EXPORT WorkerGlobalScope
   // use it because we don't create a CachedMetadtaHandler. Only service workers
   // override this method and provide a valid handler. We need to implement it
   // for Dedicated / Shared workers too so we can benefit from code caches.
-  virtual SingleCachedMetadataHandler* CreateWorkerScriptCachedMetadataHandler(
+  virtual CachedMetadataHandler* CreateWorkerScriptCachedMetadataHandler(
       const KURL& script_url,
       std::unique_ptr<Vector<uint8_t>> meta_data) {
     return nullptr;
@@ -98,6 +106,11 @@ class CORE_EXPORT WorkerGlobalScope
   const base::UnguessableToken& GetDevToolsToken() const override;
   bool IsInitialized() const final { return !url_.IsNull(); }
   CodeCacheHost* GetCodeCacheHost() override;
+  std::optional<mojo::PendingRemote<network::mojom::blink::URLLoaderFactory>>
+  FindRaceNetworkRequestURLLoaderFactory(
+      const base::UnguessableToken& token) override {
+    return std::nullopt;
+  }
 
   void ExceptionUnhandled(int exception_id);
 
@@ -106,7 +119,6 @@ class CORE_EXPORT WorkerGlobalScope
   WorkerLocation* location() const;
   WorkerNavigator* navigator() const override;
   void close();
-  bool isSecureContextForBindings() const { return IsSecureContext(); }
 
   String origin() const;
 
@@ -136,9 +148,15 @@ class CORE_EXPORT WorkerGlobalScope
   ScriptWrappable* ToScriptWrappable() final { return this; }
 
   void AddConsoleMessageImpl(ConsoleMessage*, bool discard_duplicates) final;
-  const BrowserInterfaceBrokerProxy& GetBrowserInterfaceBroker() const final;
+  const BrowserInterfaceBrokerProxyImpl& GetBrowserInterfaceBroker()
+      const final;
 
-  OffscreenFontSelector* GetFontSelector() { return font_selector_; }
+  scoped_refptr<base::SingleThreadTaskRunner>
+  GetAgentGroupSchedulerCompositorTaskRunner() final {
+    return agent_group_scheduler_compositor_task_runner_;
+  }
+
+  OffscreenFontSelector* GetFontSelector() { return font_selector_.Get(); }
 
   CoreProbeSink* GetProbeSink() final;
 
@@ -173,8 +191,9 @@ class CORE_EXPORT WorkerGlobalScope
   // At this time, WorkerGlobalScope::Initialize() should be already called.
   // Spec: https://html.spec.whatwg.org/C/#run-a-worker Step 12 is completed,
   // and it's ready to proceed to Step 23.
-  void WorkerScriptFetchFinished(Script&,
-                                 absl::optional<v8_inspector::V8StackTraceId>);
+  virtual void WorkerScriptFetchFinished(
+      Script&,
+      std::optional<v8_inspector::V8StackTraceId>);
 
   // Fetches and evaluates the top-level classic script.
   virtual void FetchAndRunClassicScript(
@@ -198,21 +217,28 @@ class CORE_EXPORT WorkerGlobalScope
       RejectCoepUnsafeNone reject_coep_unsafe_none) = 0;
 
   void ReceiveMessage(BlinkTransferableMessage);
+  Event* ReceiveCustomEventInternal(
+      CrossThreadFunction<Event*(ScriptState*, CustomEventMessage)>,
+      CrossThreadFunction<Event*(ScriptState*)>,
+      CustomEventMessage);
+  void ReceiveCustomEvent(
+      CrossThreadFunction<Event*(ScriptState*, CustomEventMessage)>
+          event_factory_callback,
+      CrossThreadFunction<Event*(ScriptState*)> event_factory_error_callback,
+      CustomEventMessage);
   base::TimeTicks TimeOrigin() const { return time_origin_; }
   WorkerSettings* GetWorkerSettings() const { return worker_settings_.get(); }
 
   void Trace(Visitor*) const override;
 
+  // ActiveScriptWrappable.
+  bool HasPendingActivity() const override;
+
   virtual InstalledScriptsManager* GetInstalledScriptsManager() {
     return nullptr;
   }
 
-  // TODO(fserb): This can be removed once we WorkerGlobalScope implements
-  // FontFaceSource on the IDL.
   FontFaceSet* fonts();
-
-  // https://html.spec.whatwg.org/C/#windoworworkerglobalscope-mixin
-  void queueMicrotask(V8VoidFunction*);
 
   TrustedTypePolicyFactory* GetTrustedTypes() const override;
   TrustedTypePolicyFactory* trustedTypes() const { return GetTrustedTypes(); }
@@ -243,8 +269,12 @@ class CORE_EXPORT WorkerGlobalScope
     main_resource_identifier_ = identifier;
   }
 
-  absl::optional<uint64_t> MainResourceIdentifier() const {
+  std::optional<uint64_t> MainResourceIdentifier() const {
     return main_resource_identifier_;
+  }
+
+  const SecurityOrigin* top_level_frame_security_origin() const {
+    return top_level_frame_security_origin_.get();
   }
 
  protected:
@@ -287,9 +317,11 @@ class CORE_EXPORT WorkerGlobalScope
   // Used for importScripts().
   void ImportScriptsInternal(const Vector<String>& urls);
   // ExecutionContext
-  void AddInspectorIssue(mojom::blink::InspectorIssueInfoPtr) final;
   void AddInspectorIssue(AuditsIssue) final;
   EventTarget* ErrorEventTarget() final { return this; }
+
+  // WorkerOrWorkletGlobalScope
+  void WillBeginLoading() override;
 
   KURL url_;
   const mojom::blink::ScriptType script_type_;
@@ -302,6 +334,11 @@ class CORE_EXPORT WorkerGlobalScope
   mutable Member<TrustedTypePolicyFactory> trusted_types_;
 
   WorkerThread* thread_;
+
+  // The compositor task runner associated with the |AgentGroupScheduler| this
+  // worker belongs to.
+  scoped_refptr<base::SingleThreadTaskRunner>
+      agent_group_scheduler_compositor_task_runner_;
 
   bool closing_ = false;
 
@@ -316,7 +353,7 @@ class CORE_EXPORT WorkerGlobalScope
   // attempts (both successful and not successful) by the worker.
   std::unique_ptr<FontMatchingMetrics> font_matching_metrics_;
 
-  blink::BrowserInterfaceBrokerProxy browser_interface_broker_proxy_;
+  blink::BrowserInterfaceBrokerProxyImpl browser_interface_broker_proxy_;
 
   // State transition about worker top-level script evaluation.
   enum class ScriptEvalState {
@@ -333,7 +370,7 @@ class CORE_EXPORT WorkerGlobalScope
   ScriptEvalState script_eval_state_;
 
   Member<Script> worker_script_;
-  absl::optional<v8_inspector::V8StackTraceId> stack_id_;
+  std::optional<v8_inspector::V8StackTraceId> stack_id_;
 
   HttpsState https_state_;
 
@@ -348,13 +385,24 @@ class CORE_EXPORT WorkerGlobalScope
   // |main_resource_identifier_| is used to track main script that was started
   // in the browser process. This field not having a value does not imply
   // anything.
-  absl::optional<uint64_t> main_resource_identifier_;
+  std::optional<uint64_t> main_resource_identifier_;
 
   // This is the interface that handles generated code cache
   // requests both to fetch code cache when loading resources.
   std::unique_ptr<CodeCacheHost> code_cache_host_;
 
   const ukm::SourceId ukm_source_id_;
+
+  // Pauses virtual time from the time the thread has initialized (including
+  // DevTools agents being configured while waiting for debugger) till the main
+  // script has completed loading. This is so that VT does not run while script
+  // is being loaded.
+  WebScopedVirtualTimePauser loading_virtual_time_pauser_;
+
+  // The security origin of the top level frame associated with the worker. This
+  // can be used, for instance, to check if the top level frame has an opaque
+  // origin.
+  scoped_refptr<const SecurityOrigin> top_level_frame_security_origin_;
 };
 
 template <>

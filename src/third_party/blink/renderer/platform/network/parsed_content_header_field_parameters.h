@@ -1,11 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_NETWORK_PARSED_CONTENT_HEADER_FIELD_PARAMETERS_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_NETWORK_PARSED_CONTENT_HEADER_FIELD_PARAMETERS_H_
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
+
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
@@ -41,10 +42,10 @@ class PLATFORM_EXPORT ParsedContentHeaderFieldParameters final {
     kRelaxed,
   };
 
-  // We use absl::optional instead of WTF::Optional which requires its content
+  // We use std::optional instead of WTF::Optional which requires its content
   // type to be fully defined. They are essentially same, so uses of this class
   // can (and should) use WTF::Optional to store the returned value.
-  static absl::optional<ParsedContentHeaderFieldParameters> Parse(
+  static std::optional<ParsedContentHeaderFieldParameters> Parse(
       HeaderFieldTokenizer,
       Mode);
 

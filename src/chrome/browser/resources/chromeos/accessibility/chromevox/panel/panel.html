@@ -1,6 +1,8 @@
-<!-- Copyright 2015 The Chromium Authors. All rights reserved.
-     Use of this source code is governed by a BSD-style license that can be
-     found in the LICENSE file. -->
+<!--
+Copyright 2015 The Chromium Authors
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
+-->
 <html>
 <head>
 <meta charset="utf-8">
@@ -8,7 +10,23 @@
 
 <link href="panel.css" rel="stylesheet" type="text/css">
 
-<script type="text/javascript" src="../chromeVoxPanelScript.js"></script>
+<!-- Closure files, with a blank line between levels of the dependency tree. -->
+
+<script src="../closure/base.js" charset="utf-8"></script>;
+
+<script src="../closure/debug/error.js" charset="utf-8"></script>
+<script src="../closure/dom/nodetype.js" charset="utf-8"></script>
+<script src="../closure/i18n/ordinalrules.js" charset="utf-8"></script>
+<script src="../closure/i18n/pluralrules.js" charset="utf-8"></script>
+<script src="../closure/string/string.js" charset="utf-8"></script>
+
+<script src="../closure/asserts/asserts.js" charset="utf-8"></script>
+
+<script src="../closure/i18n/messageformat.js" charset="utf-8"></script>
+
+<script src="../common/closure_loader.js" charset="utf-8"></script>
+
+<!-- End closure files -->
 
 <script type="module" src="panel.js"></script>
 </head>

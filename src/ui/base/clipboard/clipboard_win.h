@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <stdint.h>
 
 #include <memory>
+#include <string_view>
 
 #include "ui/base/clipboard/clipboard.h"
 #include "ui/base/clipboard/clipboard_format_type.h"
@@ -37,7 +38,8 @@ class ClipboardWin : public Clipboard {
 
   // Clipboard overrides:
   void OnPreShutdown() override;
-  DataTransferEndpoint* GetSource(ClipboardBuffer buffer) const override;
+  std::optional<DataTransferEndpoint> GetSource(
+      ClipboardBuffer buffer) const override;
   const ClipboardSequenceNumberToken& GetSequenceNumber(
       ClipboardBuffer buffer) const override;
   std::vector<std::u16string> GetStandardFormats(
@@ -71,10 +73,10 @@ class ClipboardWin : public Clipboard {
   void ReadPng(ClipboardBuffer buffer,
                const DataTransferEndpoint* data_dst,
                ReadPngCallback callback) const override;
-  void ReadCustomData(ClipboardBuffer buffer,
-                      const std::u16string& type,
-                      const DataTransferEndpoint* data_dst,
-                      std::u16string* result) const override;
+  void ReadDataTransferCustomData(ClipboardBuffer buffer,
+                                  const std::u16string& type,
+                                  const DataTransferEndpoint* data_dst,
+                                  std::u16string* result) const override;
   void ReadFilenames(ClipboardBuffer buffer,
                      const DataTransferEndpoint* data_dst,
                      std::vector<ui::FileInfo>* result) const override;
@@ -88,24 +90,22 @@ class ClipboardWin : public Clipboard {
       ClipboardBuffer buffer,
       const ObjectMap& objects,
       std::vector<Clipboard::PlatformRepresentation> platform_representations,
-      std::unique_ptr<DataTransferEndpoint> data_src) override;
-  void WriteText(const char* text_data, size_t text_len) override;
-  void WriteHTML(const char* markup_data,
-                 size_t markup_len,
-                 const char* url_data,
-                 size_t url_len) override;
-  void WriteSvg(const char* markup_data, size_t markup_len) override;
-  void WriteRTF(const char* rtf_data, size_t data_len) override;
+      std::unique_ptr<DataTransferEndpoint> data_src,
+      uint32_t privacy_types) override;
+  void WriteText(std::string_view text) override;
+  void WriteHTML(std::string_view markup,
+                 std::optional<std::string_view> source_url) override;
+  void WriteSvg(std::string_view markup) override;
+  void WriteRTF(std::string_view rtf) override;
   void WriteFilenames(std::vector<ui::FileInfo> filenames) override;
-  void WriteBookmark(const char* title_data,
-                     size_t title_len,
-                     const char* url_data,
-                     size_t url_len) override;
+  void WriteBookmark(std::string_view title, std::string_view url) override;
   void WriteWebSmartPaste() override;
   void WriteBitmap(const SkBitmap& bitmap) override;
   void WriteData(const ClipboardFormatType& format,
-                 const char* data_data,
-                 size_t data_len) override;
+                 base::span<const uint8_t> data) override;
+  void WriteClipboardHistory() override;
+  void WriteUploadCloudClipboard() override;
+  void WriteConfidentialDataForPassword() override;
   std::vector<uint8_t> ReadPngInternal(ClipboardBuffer buffer) const;
   SkBitmap ReadBitmapInternal(ClipboardBuffer buffer) const;
 

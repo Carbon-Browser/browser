@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,7 @@ class Worklet;
 class CORE_EXPORT WorkletPendingTasks final
     : public GarbageCollected<WorkletPendingTasks> {
  public:
-  WorkletPendingTasks(Worklet*, ScriptPromiseResolver*);
+  WorkletPendingTasks(Worklet*, ScriptPromiseResolver<IDLUndefined>*);
 
   // This must be called after the construction and before decrementing the
   // counter.
@@ -44,7 +44,7 @@ class CORE_EXPORT WorkletPendingTasks final
   // |resolver_| already rejected the promise.
   int counter_;
 
-  Member<ScriptPromiseResolver> resolver_;
+  Member<ScriptPromiseResolver<IDLUndefined>> resolver_;
 
   Member<Worklet> worklet_;
 };

@@ -1,26 +1,54 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/supervised_user/supervised_user_google_auth_navigation_throttle.h"
 
-#include "base/bind.h"
+#include <utility>
+
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/notreached.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
+#include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
-#include "chrome/browser/supervised_user/child_accounts/child_account_service.h"
 #include "chrome/browser/supervised_user/child_accounts/child_account_service_factory.h"
+#include "chrome/browser/supervised_user/supervised_user_browser_utils.h"
+#include "chrome/browser/supervised_user/supervised_user_verification_page_blocked_sites.h"
+#include "chrome/common/webui_url_constants.h"
 #include "components/google/core/common/google_util.h"
+#include "components/security_interstitials/content/security_interstitial_tab_helper.h"
 #include "components/signin/public/base/consent_level.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
+#include "components/supervised_user/core/browser/child_account_service.h"
+#include "components/supervised_user/core/common/features.h"
+#include "content/public/browser/frame_type.h"
 #include "content/public/browser/navigation_handle.h"
+#include "content/public/browser/navigation_throttle.h"
 #include "content/public/browser/web_contents.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "chrome/browser/supervised_user/child_accounts/child_account_service_android.h"
+#include "components/signin/public/identity_manager/identity_manager.h"
+#include "ui/android/view_android.h"
+#elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
+#include "chrome/browser/supervised_user/supervised_user_verification_controller_client.h"
+#include "chrome/browser/supervised_user/supervised_user_verification_page.h"
+#endif
+
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
+namespace {
+bool IsYouTubeInfrastructureSubframe(content::NavigationHandle* handle) {
+  if (handle->GetNavigatingFrameType() != content::FrameType::kSubframe) {
+    return false;
+  }
+  // TODO(crbug.com/385299439): Consider extracting to common URL manipulations.
+  return handle->GetURL().DomainIs("accounts.youtube.com");
+}
+}  // namespace
 #endif
 
 // static
@@ -29,8 +57,9 @@ SupervisedUserGoogleAuthNavigationThrottle::MaybeCreate(
     content::NavigationHandle* navigation_handle) {
   Profile* profile = Profile::FromBrowserContext(
       navigation_handle->GetWebContents()->GetBrowserContext());
-  if (!profile->IsChild())
+  if (!profile->IsChild()) {
     return nullptr;
+  }
 
   return base::WrapUnique(new SupervisedUserGoogleAuthNavigationThrottle(
       profile, navigation_handle));
@@ -122,26 +151,89 @@ void SupervisedUserGoogleAuthNavigationThrottle::OnGoogleAuthStateChanged() {
 
 content::NavigationThrottle::ThrottleCheckResult
 SupervisedUserGoogleAuthNavigationThrottle::ShouldProceed() {
-  ChildAccountService::AuthState authStatus =
+  supervised_user::ChildAccountService::AuthState authStatus =
       child_account_service_->GetGoogleAuthState();
-  if (authStatus == ChildAccountService::AuthState::AUTHENTICATED)
+  if (authStatus ==
+      supervised_user::ChildAccountService::AuthState::AUTHENTICATED) {
     return content::NavigationThrottle::PROCEED;
-  if (authStatus == ChildAccountService::AuthState::PENDING)
+  }
+  if (authStatus == supervised_user::ChildAccountService::AuthState::
+                        TRANSIENT_MOVING_TO_AUTHENTICATED) {
     return content::NavigationThrottle::DEFER;
+  }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
+  // When an unauthenticated supervised user tries to access YouTube, we force
+  // re-authentication with an interstitial so that YouTube can be subject to
+  // content restrictions. This interstitial is only available on Desktop
+  // platforms as ChromeOS and Android have different re-auth mechanisms.
+  //
+  // Other Google-owned sites either already requires authentication (e.g.
+  // Google Photos), or have restrictions forced (e.g. SafeSearch).
+  GURL request_url = navigation_handle()->GetURL();
+  if (!base::FeatureList::IsEnabled(
+          supervised_user::kForceSupervisedUserReauthenticationForYouTube) ||
+      !google_util::IsYoutubeDomainUrl(request_url,
+                                       google_util::ALLOW_SUBDOMAIN,
+                                       google_util::ALLOW_NON_STANDARD_PORTS) ||
+     !SupervisedUserVerificationPage::ShouldShowPage(
+          *child_account_service_)) {
+    // This interstitial should only be displayed for YouTube request.
+    return content::NavigationThrottle::PROCEED;
+  }
+
+  if (base::FeatureList::IsEnabled(
+          supervised_user::kExemptYouTubeInfrastructureFromBlocking) &&
+      IsYouTubeInfrastructureSubframe(navigation_handle())) {
+    // Controls integration between google.com and youtube.com.
+    return content::NavigationThrottle::PROCEED;
+  }
+
+  // We only show the interstitial for the primary main frame and subframes.
+  // Navigation is allowed otherwise;
+  switch (navigation_handle()->GetNavigatingFrameType()) {
+    case content::FrameType::kSubframe:
+      if (!base::FeatureList::IsEnabled(
+              supervised_user::
+                  kAllowSupervisedUserReauthenticationForSubframes)) {
+        return content::NavigationThrottle::PROCEED;
+      }
+      break;
+    case content::FrameType::kPrimaryMainFrame:
+      break;
+    case content::FrameType::kFencedFrameRoot:
+    case content::FrameType::kPrerenderMainFrame:
+      return content::NavigationThrottle::PROCEED;
+    default:
+      NOTREACHED();
+  }
+
+  // Cancel the navigation and show the re-authentication page.
+  std::string interstitial_html =
+      supervised_user::CreateReauthenticationInterstitialForYouTube(
+          *navigation_handle());
+  return content::NavigationThrottle::ThrottleCheckResult(
+      content::NavigationThrottle::CANCEL, net::ERR_BLOCKED_BY_CLIENT,
+      std::move(interstitial_html));
+#elif BUILDFLAG(IS_CHROMEOS_ASH)
   // A credentials re-mint is already underway when we reach here (Mirror
   // account reconciliation). Nothing to do here except block the navigation
   // while re-minting is underway.
   return content::NavigationThrottle::DEFER;
 #elif BUILDFLAG(IS_ANDROID)
+  // TODO(crbug.com/375383826): Improve / verify coverage of the code below.
   if (!has_shown_reauth_) {
     has_shown_reauth_ = true;
 
     content::WebContents* web_contents = navigation_handle()->GetWebContents();
+    if (!web_contents->GetNativeView()->GetWindowAndroid()) {
+      return content::NavigationThrottle::CANCEL_AND_IGNORE;
+    }
+
     Profile* profile =
         Profile::FromBrowserContext(web_contents->GetBrowserContext());
-    auto* identity_manager = IdentityManagerFactory::GetForProfile(profile);
+    signin::IdentityManager* identity_manager =
+        IdentityManagerFactory::GetForProfile(profile);
     // This class doesn't care about browser sync consent.
     CoreAccountInfo account_info =
         identity_manager->GetPrimaryAccountInfo(signin::ConsentLevel::kSignin);
@@ -150,23 +242,28 @@ SupervisedUserGoogleAuthNavigationThrottle::ShouldProceed() {
       return content::NavigationThrottle::DEFER;
     }
 
-    ReauthenticateChildAccount(
-        web_contents, account_info.email,
-        base::BindRepeating(&SupervisedUserGoogleAuthNavigationThrottle::
-                                OnReauthenticationFailed,
-                            weak_ptr_factory_.GetWeakPtr()));
+    if (skip_jni_call_for_testing_) {
+      // Returns callback without JNI call for testing. Resets
+      // has_shown_reauth_.
+      base::BindRepeating(
+          &SupervisedUserGoogleAuthNavigationThrottle::OnReauthenticationFailed,
+          weak_ptr_factory_.GetWeakPtr())
+          .Run();
+    } else {
+      ReauthenticateChildAccount(
+          web_contents, account_info.email,
+          base::BindRepeating(&SupervisedUserGoogleAuthNavigationThrottle::
+                                  OnReauthenticationFailed,
+                              weak_ptr_factory_.GetWeakPtr()));
+    }
   }
   return content::NavigationThrottle::DEFER;
 #else
-  NOTREACHED();
-
-  // This should never happen but needs to be included to avoid compilation
-  // error on debug builds.
-  return content::NavigationThrottle::CANCEL_AND_IGNORE;
+#error Unsupported platform
 #endif
 }
 
 void SupervisedUserGoogleAuthNavigationThrottle::OnReauthenticationFailed() {
-  // Cancel the navifation if reauthentication failed.
+  // Cancel the navigation if reauthentication failed.
   CancelDeferredNavigation(content::NavigationThrottle::CANCEL_AND_IGNORE);
 }

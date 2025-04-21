@@ -29,13 +29,19 @@
 #include <utility>
 
 #include "base/metrics/histogram_macros.h"
+#include "base/notreached.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/types/expected.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
 #include "third_party/blink/public/mojom/loader/code_cache.mojom-blink.h"
 #include "third_party/blink/public/mojom/loader/request_context_frame_type.mojom-blink.h"
+#include "third_party/blink/public/platform/platform.h"
+#include "third_party/blink/public/platform/web_url.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_code_cache.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_compile_hints_consumer.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_compile_hints_producer.h"
 #include "third_party/blink/renderer/core/dom/document.h"
-#include "third_party/blink/renderer/core/loader/subresource_integrity_helper.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/web_memory_allocator_dump.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/web_process_memory_dump.h"
 #include "third_party/blink/renderer/platform/loader/fetch/cached_metadata.h"
@@ -48,9 +54,9 @@
 #include "third_party/blink/renderer/platform/loader/fetch/response_body_loader.h"
 #include "third_party/blink/renderer/platform/loader/fetch/script_cached_metadata_handler.h"
 #include "third_party/blink/renderer/platform/loader/fetch/text_resource_decoder_options.h"
+#include "third_party/blink/renderer/platform/loader/fetch/url_loader/background_response_processor.h"
 #include "third_party/blink/renderer/platform/loader/subresource_integrity.h"
 #include "third_party/blink/renderer/platform/network/mime/mime_type_registry.h"
-#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/weborigin/scheme_registry.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/shared_buffer.h"
@@ -59,40 +65,60 @@ namespace blink {
 
 namespace {
 
-// Returns true if the given request context is a script-like destination
-// defined in the Fetch spec:
-// https://fetch.spec.whatwg.org/#request-destination-script-like
+// Returns true if the given request context is a valid destination for
+// scripts or modules. This includes:
+// - script-like https://fetch.spec.whatwg.org/#request-destination-script-like
+// - json
+// - style
+// These contextes to the destinations that the request performed by
+// https://html.spec.whatwg.org/#fetch-a-single-module-script can have.
 bool IsRequestContextSupported(
     mojom::blink::RequestContextType request_context) {
   // TODO(nhiroki): Support "audioworklet" and "paintworklet" destinations.
   switch (request_context) {
+    // script-like
     case mojom::blink::RequestContextType::SCRIPT:
     case mojom::blink::RequestContextType::WORKER:
     case mojom::blink::RequestContextType::SERVICE_WORKER:
     case mojom::blink::RequestContextType::SHARED_WORKER:
+    // json
+    case mojom::blink::RequestContextType::JSON:
+    // style
+    case mojom::blink::RequestContextType::STYLE:
       return true;
     default:
       break;
   }
   NOTREACHED() << "Incompatible request context type: " << request_context;
-  return false;
 }
 
 }  // namespace
 
-ScriptResource* ScriptResource::Fetch(FetchParameters& params,
-                                      ResourceFetcher* fetcher,
-                                      ResourceClient* client,
-                                      StreamingAllowed streaming_allowed) {
+ScriptResource* ScriptResource::Fetch(
+    FetchParameters& params,
+    ResourceFetcher* fetcher,
+    ResourceClient* client,
+    v8::Isolate* isolate,
+    StreamingAllowed streaming_allowed,
+    v8_compile_hints::V8CrowdsourcedCompileHintsProducer*
+        v8_compile_hints_producer,
+    v8_compile_hints::V8CrowdsourcedCompileHintsConsumer*
+        v8_compile_hints_consumer,
+    v8_compile_hints::MagicCommentMode magic_comment_mode) {
   DCHECK(IsRequestContextSupported(
       params.GetResourceRequest().GetRequestContext()));
   auto* resource = To<ScriptResource>(fetcher->RequestResource(
-      params, ScriptResourceFactory(streaming_allowed, params.GetScriptType()),
+      params,
+      ScriptResourceFactory(isolate, streaming_allowed,
+                            v8_compile_hints_producer,
+                            v8_compile_hints_consumer, magic_comment_mode,
+                            params.GetScriptType()),
       client));
   return resource;
 }
 
 ScriptResource* ScriptResource::CreateForTest(
+    v8::Isolate* isolate,
     const KURL& url,
     const WTF::TextEncoding& encoding,
     mojom::blink::ScriptType script_type) {
@@ -101,26 +127,43 @@ ScriptResource* ScriptResource::CreateForTest(
   ResourceLoaderOptions options(nullptr /* world */);
   TextResourceDecoderOptions decoder_options(
       TextResourceDecoderOptions::kPlainTextContent, encoding);
-  return MakeGarbageCollected<ScriptResource>(request, options, decoder_options,
-                                              kNoStreaming, script_type);
+  return MakeGarbageCollected<ScriptResource>(
+      request, options, decoder_options, isolate, kNoStreaming,
+      /*v8_compile_hints_producer=*/nullptr,
+      /*v8_compile_hints_consumer=*/nullptr,
+      v8_compile_hints::MagicCommentMode::kNever, script_type);
 }
 
 ScriptResource::ScriptResource(
     const ResourceRequest& resource_request,
     const ResourceLoaderOptions& options,
     const TextResourceDecoderOptions& decoder_options,
+    v8::Isolate* isolate,
     StreamingAllowed streaming_allowed,
+    v8_compile_hints::V8CrowdsourcedCompileHintsProducer*
+        v8_compile_hints_producer,
+    v8_compile_hints::V8CrowdsourcedCompileHintsConsumer*
+        v8_compile_hints_consumer,
+    v8_compile_hints::MagicCommentMode magic_comment_mode,
     mojom::blink::ScriptType initial_request_script_type)
     : TextResource(resource_request,
                    ResourceType::kScript,
                    options,
                    decoder_options),
+      // Only storing the isolate for the main thread is safe.
+      // See variable definition for details.
+      isolate_if_main_thread_(IsMainThread() ? isolate : nullptr),
       consume_cache_state_(ConsumeCacheState::kWaitingForCache),
       initial_request_script_type_(initial_request_script_type),
       stream_text_decoder_(
-          std::make_unique<TextResourceDecoder>(decoder_options)) {
+          std::make_unique<TextResourceDecoder>(decoder_options)),
+      v8_compile_hints_producer_(v8_compile_hints_producer),
+      v8_compile_hints_consumer_(v8_compile_hints_consumer),
+      magic_comment_mode_(magic_comment_mode) {
   static bool script_streaming_enabled =
       base::FeatureList::IsEnabled(features::kScriptStreaming);
+  static bool script_streaming_for_non_http_enabled =
+      base::FeatureList::IsEnabled(features::kScriptStreamingForNonHTTP);
   // TODO(leszeks): This could be static to avoid the cost of feature flag
   // lookup on every ScriptResource creation, but it has to be re-calculated for
   // unit tests.
@@ -132,7 +175,8 @@ ScriptResource::ScriptResource(
         ScriptStreamer::NotStreamingReason::kDisabledByFeatureList);
   } else if (streaming_allowed == kNoStreaming) {
     DisableStreaming(ScriptStreamer::NotStreamingReason::kStreamingDisabled);
-  } else if (!Url().ProtocolIsInHTTPFamily()) {
+  } else if (!Url().ProtocolIsInHTTPFamily() &&
+             !script_streaming_for_non_http_enabled) {
     DisableStreaming(ScriptStreamer::NotStreamingReason::kNotHTTP);
   }
 
@@ -140,6 +184,9 @@ ScriptResource::ScriptResource(
     DisableOffThreadConsumeCache();
   } else if (initial_request_script_type == mojom::blink::ScriptType::kModule) {
     // TODO(leszeks): Enable off-thread cache consumption for modules.
+    DisableOffThreadConsumeCache();
+  } else if (!isolate_if_main_thread_) {
+    // If we have a null isolate disable off thread cache consumption.
     DisableOffThreadConsumeCache();
   }
 }
@@ -150,6 +197,9 @@ void ScriptResource::Trace(Visitor* visitor) const {
   visitor->Trace(streamer_);
   visitor->Trace(cached_metadata_handler_);
   visitor->Trace(cache_consumer_);
+  visitor->Trace(v8_compile_hints_producer_);
+  visitor->Trace(v8_compile_hints_consumer_);
+  visitor->Trace(background_streamer_);
   TextResource::Trace(visitor);
 }
 
@@ -180,85 +230,27 @@ const ParkableString& ScriptResource::SourceText() {
   return source_text_;
 }
 
-// RawSourceText() should be only used for Experimental Web Snapshots behind the
-// flag. This is intended for experiments and should be redesigned before
-// shipping, because this method conflicts with the invariants around
-// ScriptResource in corner cases. Do not derive new code based on this method.
-// This is expected to be removed (and the real Blink integration landed)
-// before M102. See crbug.com/1173534.
-const ParkableString& ScriptResource::RawSourceText() {
-  CHECK(RuntimeEnabledFeatures::ExperimentalWebSnapshotsEnabled());
-
-  CHECK(IsLoaded());
-
-  if (source_text_.IsNull() && Data()) {
-    String source_text = RawText();
-    ClearData();
-    SetDecodedSize(source_text.CharactersSizeInBytes());
-    source_text_ = ParkableString(source_text.ReleaseImpl());
-  }
-
-  return source_text_;
-}
-
-bool ScriptResource::IsWebSnapshot() const {
-  const char web_snapshot_prefix[4] = {'+', '+', '+', ';'};
-  return RuntimeEnabledFeatures::ExperimentalWebSnapshotsEnabled() &&
-         DataHasPrefix(base::span<const char>(web_snapshot_prefix));
-}
-
-bool ScriptResource::DataHasPrefix(const base::span<const char>& prefix) const {
-  CHECK(RuntimeEnabledFeatures::ExperimentalWebSnapshotsEnabled());
-
-  if (Data() == nullptr) {
-    return false;
-  }
-  size_t checked_bytes = 0;
-  for (const auto& span : *Data()) {
-    for (const auto& byte : span) {
-      if (prefix[checked_bytes] != byte) {
-        return false;
-      }
-      ++checked_bytes;
-      if (checked_bytes == prefix.size()) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 String ScriptResource::TextForInspector() const {
   // If the resource buffer exists, we can safely return the decoded text.
-  if (ResourceBuffer())
+  if (ResourceBuffer()) {
     return DecodedText();
-
-  // If there is no resource buffer, then we have three cases.
-  // TODO(crbug.com/865098): Simplify the below code and remove the CHECKs once
-  // the assumptions are confirmed.
-
-  if (IsLoaded()) {
-    if (!source_text_.IsNull()) {
-      // 1. We have finished loading, and have already decoded the buffer into
-      //    the source text and cleared the resource buffer to save space.
-      return source_text_.ToString();
-    }
-
-    // 2. We have finished loading with no data received, so no streaming ever
-    //    happened or streaming was suppressed.
-    DCHECK(!streamer_ ||
-           streamer_->StreamingSuppressedReason() ==
-               ScriptStreamer::NotStreamingReason::kScriptTooSmall);
-    return "";
   }
 
-  // 3. We haven't started loading, and actually haven't received any data yet
-  //    at all to initialise the resource buffer, so the resource is empty.
+  // If there is no resource buffer, then we've finished loading and have
+  // already decoded the buffer into the source text, clearing the resource
+  // buffer to save space...
+  if (IsLoaded() && !source_text_.IsNull()) {
+    return source_text_.ToString();
+  }
+
+  // ... or we either haven't started loading and haven't received data yet, or
+  // we finished loading with an error/cancellation, and thus don't have data.
+  // In both cases, we can treat the resource as empty.
   return "";
 }
 
-SingleCachedMetadataHandler* ScriptResource::CacheHandler() {
-  return cached_metadata_handler_;
+CachedMetadataHandler* ScriptResource::CacheHandler() {
+  return cached_metadata_handler_.Get();
 }
 
 void ScriptResource::SetSerializedCachedMetadata(mojo_base::BigBuffer data) {
@@ -267,33 +259,40 @@ void ScriptResource::SetSerializedCachedMetadata(mojo_base::BigBuffer data) {
   if (cached_metadata_handler_) {
     cached_metadata_handler_->SetSerializedCachedMetadata(std::move(data));
   }
-  if (consume_cache_state_ == ConsumeCacheState::kWaitingForCache &&
-      V8CodeCache::HasCodeCache(
-          cached_metadata_handler_,
-          // It's safe to access unchecked cached metadata here, because the
-          // ScriptCacheConsumer result will be ignored if the cached metadata
-          // check fails later.
-          SingleCachedMetadataHandler::kAllowUnchecked)) {
-    cache_consumer_ = MakeGarbageCollected<ScriptCacheConsumer>(
-        V8CodeCache::GetCachedMetadata(
-            CacheHandler(), SingleCachedMetadataHandler::kAllowUnchecked),
-        Url(), InspectorId());
-    AdvanceConsumeCacheState(ConsumeCacheState::kRunningOffThread);
-  } else {
-    DisableOffThreadConsumeCache();
-  }
-}
-
-bool ScriptResource::CodeCacheHashRequired() const {
-  if (cached_metadata_handler_) {
-    bool result = cached_metadata_handler_->HashRequired();
-    if (result) {
-      DCHECK(SchemeRegistry::SchemeSupportsCodeCacheWithHashing(
-          GetResourceRequest().Url().Protocol()));
+  if (consume_cache_state_ == ConsumeCacheState::kWaitingForCache) {
+    // If `background_streamer_` has decoded the code cache, use the decoded
+    // code cache.
+    if (background_streamer_ &&
+        background_streamer_->HasConsumeCodeCacheTask()) {
+      cache_consumer_ = MakeGarbageCollected<ScriptCacheConsumer>(
+          isolate_if_main_thread_,
+          V8CodeCache::GetCachedMetadata(
+              CacheHandler(), CachedMetadataHandler::kAllowUnchecked),
+          background_streamer_->TakeConsumeCodeCacheTask(), Url(),
+          InspectorId());
+      AdvanceConsumeCacheState(ConsumeCacheState::kRunningOffThread);
+      return;
     }
-    return result;
+
+    // If `cached_metadata_handler_` has a valid code cache, use the code cache.
+    if (V8CodeCache::HasCodeCache(
+            cached_metadata_handler_,
+            // It's safe to access unchecked cached metadata here, because the
+            // ScriptCacheConsumer result will be ignored if the cached metadata
+            // check fails later.
+            CachedMetadataHandler::kAllowUnchecked)) {
+      CHECK(isolate_if_main_thread_);
+      cache_consumer_ = MakeGarbageCollected<ScriptCacheConsumer>(
+          isolate_if_main_thread_,
+          V8CodeCache::GetCachedMetadata(
+              CacheHandler(), CachedMetadataHandler::kAllowUnchecked),
+          Url(), InspectorId());
+      AdvanceConsumeCacheState(ConsumeCacheState::kRunningOffThread);
+      return;
+    }
   }
-  return false;
+
+  DisableOffThreadConsumeCache();
 }
 
 void ScriptResource::DestroyDecodedDataIfPossible() {
@@ -340,12 +339,14 @@ bool ScriptResource::CanUseCacheValidator() const {
   // Do not revalidate until ClassicPendingScript is removed, i.e. the script
   // content is retrieved in ScriptLoader::ExecuteScriptBlock().
   // crbug.com/692856
-  if (HasClientsOrObservers())
+  if (HasClientsOrObservers()) {
     return false;
+  }
 
   // Do not revalidate until streaming is complete.
-  if (!IsLoaded())
+  if (!IsLoaded()) {
     return false;
+  }
 
   return Resource::CanUseCacheValidator();
 }
@@ -364,6 +365,11 @@ void ScriptResource::ResponseReceived(const ResourceResponse& response) {
     return;
   }
 
+  if (background_streamer_ && background_streamer_->HasDecodedData()) {
+    source_text_ = background_streamer_->TakeDecodedData();
+    SetDecodedSize(source_text_.CharactersSizeInBytes());
+  }
+
   cached_metadata_handler_ = nullptr;
   // Currently we support the metadata caching only for HTTP family and any
   // schemes defined by SchemeRegistry as requiring a hash check.
@@ -374,6 +380,18 @@ void ScriptResource::ResponseReceived(const ResourceResponse& response) {
           GetResourceRequest().Url().Protocol()) &&
       GetResourceRequest().Url().ProtocolIs(
           response.CurrentRequestUrl().Protocol());
+
+  // There is also a flag on ResourceResponse so that hash-based code caching
+  // can be used on resources other than those specified by the scheme registry.
+  code_cache_with_hashing_supported |=
+      response.ShouldUseSourceHashForJSCodeCache();
+
+  // Embedders may override whether hash-based code caching can be used for a
+  // given resource request.
+  code_cache_with_hashing_supported &=
+      Platform::Current()->ShouldUseCodeCacheWithHashing(
+          WebURL(GetResourceRequest().Url()));
+
   bool code_cache_supported = http_family || code_cache_with_hashing_supported;
   if (code_cache_supported) {
     std::unique_ptr<CachedMetadataSender> sender = CachedMetadataSender::Create(
@@ -394,13 +412,15 @@ void ScriptResource::ResponseReceived(const ResourceResponse& response) {
 void ScriptResource::ResponseBodyReceived(
     ResponseBodyLoaderDrainableInterface& body_loader,
     scoped_refptr<base::SingleThreadTaskRunner> loader_task_runner) {
-  if (streaming_state_ == StreamingState::kStreamingDisabled)
+  if (streaming_state_ == StreamingState::kStreamingDisabled) {
     return;
+  }
 
   CHECK_EQ(streaming_state_, StreamingState::kWaitingForDataPipe);
 
   // Checked in the constructor.
-  CHECK(Url().ProtocolIsInHTTPFamily());
+  CHECK(Url().ProtocolIsInHTTPFamily() ||
+        base::FeatureList::IsEnabled(features::kScriptStreamingForNonHTTP));
   CHECK(base::FeatureList::IsEnabled(features::kScriptStreaming));
 
   ResponseBodyLoaderClient* response_body_loader_client;
@@ -413,7 +433,7 @@ void ScriptResource::ResponseBodyReceived(
 
   CheckStreamingState();
   CHECK(!ErrorOccurred());
-
+  CHECK(!background_streamer_);
   streamer_ = MakeGarbageCollected<ResourceScriptStreamer>(
       this, std::move(data_pipe), response_body_loader_client,
       std::move(stream_text_decoder_), loader_task_runner);
@@ -424,10 +444,6 @@ void ScriptResource::ResponseBodyReceived(
 void ScriptResource::DidReceiveDecodedData(
     const String& data,
     std::unique_ptr<ParkableStringImpl::SecureDigest> digest) {
-  // Web snapshots use RawSourceText(), and don't need the decoded data.
-  if (IsWebSnapshot())
-    return;
-
   source_text_ = ParkableString(data.Impl(), std::move(digest));
   SetDecodedSize(source_text_.CharactersSizeInBytes());
 }
@@ -466,8 +482,6 @@ void ScriptResource::NotifyFinished() {
   CheckStreamingState();
 
   if (!source_text_.IsNull() && Data()) {
-    DCHECK(
-        base::FeatureList::IsEnabled(features::kDecodeScriptSourceOffThread));
     // Wait to call ClearData() here instead of in DidReceiveDecodedData() since
     // the integrity check requires Data() to not be null.
     ClearData();
@@ -484,15 +498,20 @@ void ScriptResource::SetEncoding(const String& chs) {
   }
 }
 
-ResourceScriptStreamer* ScriptResource::TakeStreamer() {
+ScriptStreamer* ScriptResource::TakeStreamer() {
   CHECK(IsLoaded());
-  if (!streamer_)
+  CHECK(!(streamer_ && background_streamer_));
+  ScriptStreamer* streamer;
+  // A second use of the streamer is not possible, so we release it out and
+  // disable streaming for subsequent uses.
+  if (streamer_) {
+    streamer = streamer_.Release();
+  } else if (background_streamer_) {
+    streamer = background_streamer_.Release();
+  } else {
+    CHECK_NE(NoStreamerReason(), ScriptStreamer::NotStreamingReason::kInvalid);
     return nullptr;
-
-  ResourceScriptStreamer* streamer = streamer_;
-  // A second use of the streamer is not possible, so we null it out and disable
-  // streaming for subsequent uses.
-  streamer_ = nullptr;
+  }
   DisableStreaming(
       ScriptStreamer::NotStreamingReason::kSecondScriptResourceUse);
   return streamer;
@@ -519,8 +538,7 @@ void ScriptResource::AdvanceStreamingState(StreamingState new_state) {
       CHECK_EQ(new_state, StreamingState::kStreamingDisabled);
       break;
     case StreamingState::kStreamingDisabled:
-      CHECK(false);
-      break;
+      NOTREACHED();
   }
 
   streaming_state_ = new_state;
@@ -553,8 +571,9 @@ void ScriptResource::CheckStreamingState() const {
 ScriptCacheConsumer* ScriptResource::TakeCacheConsumer() {
   CHECK(IsLoaded());
   CheckConsumeCacheState();
-  if (!cache_consumer_)
+  if (!cache_consumer_) {
     return nullptr;
+  }
   CHECK_EQ(consume_cache_state_, ConsumeCacheState::kRunningOffThread);
 
   ScriptCacheConsumer* cache_consumer = cache_consumer_;
@@ -601,6 +620,35 @@ void ScriptResource::CheckConsumeCacheState() const {
       CHECK(!cache_consumer_);
       break;
   }
+}
+
+std::unique_ptr<BackgroundResponseProcessorFactory>
+ScriptResource::MaybeCreateBackgroundResponseProcessorFactory() {
+  if (!features::kBackgroundScriptResponseProcessor.Get()) {
+    return nullptr;
+  }
+  CHECK(!streamer_);
+  background_streamer_ = nullptr;
+  if (no_streamer_reason_ != ScriptStreamer::NotStreamingReason::kInvalid) {
+    // Streaming is already disabled.
+    return nullptr;
+  }
+  // We don't support script streaming when this ScriptResource is not created
+  // on the main thread.
+  CHECK(isolate_if_main_thread_);
+  // Set `no_streamer_reason_` to kBackgroundResponseProcessorWillBeUsed. This
+  // is intended to prevent starting the ScriptStreamer from the main thread,
+  // because BackgroundResourceScriptStreamer will be started from the
+  // background thread.
+  // TODO(crbug.com/40244488): When BackgroundURLLoader will be able to support
+  // all types of script loading, remove the code path of starting
+  // ScriptStreamer from the main thread.
+  DisableStreaming(ScriptStreamer::NotStreamingReason::
+                       kBackgroundResponseProcessorWillBeUsed);
+
+  background_streamer_ =
+      MakeGarbageCollected<BackgroundResourceScriptStreamer>(this);
+  return background_streamer_->CreateBackgroundResponseProcessorFactory();
 }
 
 }  // namespace blink

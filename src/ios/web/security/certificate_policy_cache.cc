@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@ CertificatePolicyCache::CertificatePolicyCache() {}
 
 CertificatePolicyCache::~CertificatePolicyCache() {}
 
-void CertificatePolicyCache::AllowCertForHost(net::X509Certificate* cert,
+void CertificatePolicyCache::AllowCertForHost(const net::X509Certificate* cert,
                                               const std::string& host,
                                               net::CertStatus error) {
   DCHECK_CURRENTLY_ON(WebThread::IO);
@@ -21,7 +21,7 @@ void CertificatePolicyCache::AllowCertForHost(net::X509Certificate* cert,
 }
 
 CertPolicy::Judgment CertificatePolicyCache::QueryPolicy(
-    net::X509Certificate* cert,
+    const net::X509Certificate* cert,
     const std::string& host,
     net::CertStatus error) {
   DCHECK_CURRENTLY_ON(WebThread::IO);

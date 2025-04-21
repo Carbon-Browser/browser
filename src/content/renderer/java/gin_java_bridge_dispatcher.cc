@@ -1,37 +1,26 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/renderer/java/gin_java_bridge_dispatcher.h"
 
 #include "base/auto_reset.h"
+#include "base/containers/contains.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
-#include "content/common/gin_java_bridge_messages.h"
+#include "content/public/common/content_features.h"
 #include "content/public/renderer/render_frame.h"
 #include "content/renderer/java/gin_java_bridge_object.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/web/web_local_frame.h"
 #include "third_party/blink/public/web/web_view.h"
 
 namespace content {
 
 GinJavaBridgeDispatcher::GinJavaBridgeDispatcher(RenderFrame* render_frame)
-    : RenderFrameObserver(render_frame),
-      inside_did_clear_window_object_(false) {
-}
+    : RenderFrameObserver(render_frame) {}
 
-GinJavaBridgeDispatcher::~GinJavaBridgeDispatcher() {
-}
-
-bool GinJavaBridgeDispatcher::OnMessageReceived(const IPC::Message& msg) {
-  bool handled = true;
-  IPC_BEGIN_MESSAGE_MAP(GinJavaBridgeDispatcher, msg)
-    IPC_MESSAGE_HANDLER(GinJavaBridgeMsg_AddNamedObject, OnAddNamedObject)
-    IPC_MESSAGE_HANDLER(GinJavaBridgeMsg_RemoveNamedObject, OnRemoveNamedObject)
-    IPC_MESSAGE_UNHANDLED(handled = false)
-  IPC_END_MESSAGE_MAP()
-  return handled;
-}
+GinJavaBridgeDispatcher::~GinJavaBridgeDispatcher() = default;
 
 void GinJavaBridgeDispatcher::DidClearWindowObject() {
   // Accessing window object when adding properties to it may trigger
@@ -39,6 +28,10 @@ void GinJavaBridgeDispatcher::DidClearWindowObject() {
   if (inside_did_clear_window_object_)
     return;
   base::AutoReset<bool> flag_entry(&inside_did_clear_window_object_, true);
+  if (!named_objects_.empty()) {
+    // Ensure we have a `remote_` if we have named objects.
+    CHECK(remote_);
+  }
   for (NamedObjectMap::const_iterator iter = named_objects_.begin();
        iter != named_objects_.end(); ++iter) {
     // Always create a new GinJavaBridgeObject, so we don't pull any of the V8
@@ -50,71 +43,45 @@ void GinJavaBridgeDispatcher::DidClearWindowObject() {
     if (objects_.Lookup(iter->second))
       objects_.Remove(iter->second);
     GinJavaBridgeObject* object = GinJavaBridgeObject::InjectNamed(
-        render_frame()->GetWebFrame(), AsWeakPtr(), iter->first, iter->second);
+        render_frame()->GetWebFrame(), weak_ptr_factory_.GetWeakPtr(),
+        iter->first, iter->second);
     if (object) {
       objects_.AddWithID(object, iter->second);
     } else {
-      // Inform the host about wrapper creation failure.
-      render_frame()->Send(new GinJavaBridgeHostMsg_ObjectWrapperDeleted(
-          routing_id(), iter->second));
+      GetRemoteObjectHost()->ObjectWrapperDeleted(iter->second);
     }
   }
 }
 
-void GinJavaBridgeDispatcher::OnAddNamedObject(
-    const std::string& name,
-    ObjectID object_id) {
+void GinJavaBridgeDispatcher::AddNamedObject(const std::string& name,
+                                             ObjectID object_id) {
+  // We should already have received the `remote_` via the SetHost method.
+  CHECK(remote_);
   // Added objects only become available after page reload, so here they
   // are only added into the internal map.
   named_objects_.insert(std::make_pair(name, object_id));
 }
 
-void GinJavaBridgeDispatcher::OnRemoveNamedObject(const std::string& name) {
+void GinJavaBridgeDispatcher::RemoveNamedObject(const std::string& name) {
   // Removal becomes in effect on next reload. We simply removing the entry
   // from the map here.
-  NamedObjectMap::iterator iter = named_objects_.find(name);
-  DCHECK(iter != named_objects_.end());
-  named_objects_.erase(iter);
+  DCHECK(base::Contains(named_objects_, name));
+  named_objects_.erase(name);
 }
 
-void GinJavaBridgeDispatcher::GetJavaMethods(
-    ObjectID object_id,
-    std::set<std::string>* methods) {
-  render_frame()->Send(new GinJavaBridgeHostMsg_GetMethods(
-      routing_id(), object_id, methods));
-}
-
-bool GinJavaBridgeDispatcher::HasJavaMethod(ObjectID object_id,
-                                            const std::string& method_name) {
-  bool result;
-  render_frame()->Send(new GinJavaBridgeHostMsg_HasMethod(
-      routing_id(), object_id, method_name, &result));
-  return result;
-}
-
-std::unique_ptr<base::Value> GinJavaBridgeDispatcher::InvokeJavaMethod(
-    ObjectID object_id,
-    const std::string& method_name,
-    const base::ListValue& arguments,
-    GinJavaBridgeError* error) {
-  base::ListValue result_wrapper;
-  render_frame()->Send(
-      new GinJavaBridgeHostMsg_InvokeMethod(routing_id(),
-                                            object_id,
-                                            method_name,
-                                            arguments,
-                                            &result_wrapper,
-                                            error));
-  const auto& list = result_wrapper.GetListDeprecated();
-  if (list.empty())
-    return nullptr;
-  return base::Value::ToUniquePtrValue(list[0].Clone());
+void GinJavaBridgeDispatcher::SetHost(
+    mojo::PendingRemote<mojom::GinJavaBridgeHost> host) {
+  CHECK(!remote_);
+  CHECK(named_objects_.empty());
+  remote_.Bind(std::move(host));
 }
 
 GinJavaBridgeObject* GinJavaBridgeDispatcher::GetObject(ObjectID object_id) {
   GinJavaBridgeObject* result = objects_.Lookup(object_id);
   if (!result) {
-    result = GinJavaBridgeObject::InjectAnonymous(AsWeakPtr(), object_id);
+    result = GinJavaBridgeObject::InjectAnonymous(
+        render_frame()->GetWebFrame(), weak_ptr_factory_.GetWeakPtr(),
+        object_id);
     if (result)
       objects_.AddWithID(result, object_id);
   }
@@ -127,12 +94,19 @@ void GinJavaBridgeDispatcher::OnGinJavaBridgeObjectDeleted(
   // Ignore cleaning up of old object wrappers.
   if (objects_.Lookup(object_id) != object) return;
   objects_.Remove(object_id);
-  render_frame()->Send(
-      new GinJavaBridgeHostMsg_ObjectWrapperDeleted(routing_id(), object_id));
+
+  GetRemoteObjectHost()->ObjectWrapperDeleted(object_id);
 }
 
 void GinJavaBridgeDispatcher::OnDestruct() {
-  delete this;
+  // This is a self owned receiver.
+}
+
+mojom::GinJavaBridgeHost* GinJavaBridgeDispatcher::GetRemoteObjectHost() {
+  // Remote should always be sent because it is the first method sent to
+  // this object.
+  CHECK(remote_);
+  return remote_.get();
 }
 
 }  // namespace content

@@ -1,16 +1,18 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SYNC_INVALIDATIONS_FCM_HANDLER_H_
 #define COMPONENTS_SYNC_INVALIDATIONS_FCM_HANDLER_H_
 
+#include <optional>
 #include <string>
 
 #include "base/containers/circular_deque.h"
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
+#include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "components/gcm_driver/gcm_app_handler.h"
 #include "components/gcm_driver/instance_id/instance_id.h"
@@ -41,9 +43,9 @@ class FCMHandler : public gcm::GCMAppHandler {
   FCMHandler& operator=(const FCMHandler&) = delete;
 
   // Used to start handling incoming invalidations from the server and to obtain
-  // an FCM token. This method gets called after sign-in, or during browser
-  // startup if the user is already signed in. Before StartListening() is called
-  // for the first time, the FCM registration token will be empty.
+  // an FCM token. This method gets called after data types are configured.
+  // Before StartListening() is called for the first time, the FCM registration
+  // token will be null.
   void StartListening();
 
   // Stop handling incoming invalidations. It doesn't cleanup the FCM
@@ -59,27 +61,25 @@ class FCMHandler : public gcm::GCMAppHandler {
   // Returns if the handler is listening for incoming invalidations.
   bool IsListening() const;
 
-  // Add a new |listener| which will be notified on each new incoming
-  // invalidation. |listener| must not be nullptr. Does nothing if the
-  // |listener| has already been added before. When a new |listener| is added,
+  // Add a new `listener` which will be notified on each new incoming
+  // invalidation. `listener` must not be nullptr. Does nothing if the
+  // `listener` has already been added before. When a new `listener` is added,
   // previously received messages will be immediately replayed.
   void AddListener(InvalidationsListener* listener);
 
-  // Removes |listener|, does nothing if it wasn't added before. |listener| must
+  // Returns whether `listener` was added before.
+  bool HasListener(InvalidationsListener* listener);
+
+  // Removes `listener`, does nothing if it wasn't added before. `listener` must
   // not be nullptr.
   void RemoveListener(InvalidationsListener* listener);
 
-  // Add or remove an FCM token change observer. |observer| must not be nullptr.
+  // Add or remove an FCM token change observer. `observer` must not be nullptr.
   void AddTokenObserver(FCMRegistrationTokenObserver* observer);
   void RemoveTokenObserver(FCMRegistrationTokenObserver* observer);
 
-  // Used to get an obtained FCM token. Returns empty string if it hasn't
-  // been received yet, or if the handler has stopped listening permanently.
-  const std::string& GetFCMRegistrationToken() const;
-
-  // Returns true if an FCM registration token has never been retreived after
-  // the last StartListening() call.
-  bool IsWaitingForToken() const;
+  // Used to get an obtained FCM token. Returns null if it doesn't have a token.
+  const std::optional<std::string>& GetFCMRegistrationToken() const;
 
   // GCMAppHandler overrides.
   void ShutdownHandler() override;
@@ -94,14 +94,14 @@ class FCMHandler : public gcm::GCMAppHandler {
 
  private:
   // Called when a subscription token is obtained from the GCM server.
-  void DidRetrieveToken(const std::string& subscription_token,
+  void DidRetrieveToken(base::TimeTicks fetch_time_for_metrics,
+                        bool is_validation,
+                        const std::string& subscription_token,
                         instance_id::InstanceID::Result result);
   void ScheduleNextTokenValidation();
   void StartTokenValidation();
-  void DidReceiveTokenForValidation(const std::string& new_token,
-                                    instance_id::InstanceID::Result result);
 
-  void StartTokenFetch(instance_id::InstanceID::GetTokenCallback callback);
+  void StartTokenFetch(bool is_validation);
 
   SEQUENCE_CHECKER(sequence_checker_);
 
@@ -110,12 +110,11 @@ class FCMHandler : public gcm::GCMAppHandler {
   const std::string sender_id_;
   const std::string app_id_;
 
-  // Contains an FCM registration token if not empty.
-  std::string fcm_registration_token_;
+  // Contains an FCM registration token. Token is null if the experiment is off
+  // or we don't have a valid token yet and contains valid token otherwise.
+  std::optional<std::string> fcm_registration_token_;
 
   base::OneShotTimer token_validation_timer_;
-
-  bool waiting_for_token_ = false;
 
   // A list of the latest incoming messages, used to replay incoming messages
   // whenever a new listener is added.

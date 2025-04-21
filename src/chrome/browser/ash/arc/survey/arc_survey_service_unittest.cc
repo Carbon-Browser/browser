@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "ash/components/arc/session/arc_bridge_service.h"
 #include "ash/components/arc/session/arc_service_manager.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "chrome/test/base/testing_profile.h"
 #include "content/public/test/browser_task_environment.h"
@@ -39,7 +40,11 @@ class ArcSurveyServiceTest : public testing::Test {
     EXPECT_EQ(2u, arc_survey_service_->GetAllowedPackagesForTesting()->size());
   }
 
-  void OnTaskCreated(int32_t task_id, const std::string package_name) {
+  void TearDown() override {
+    arc_service_manager_.set_browser_context(nullptr);
+  }
+
+  void OnTaskCreated(int32_t task_id, const std::string& package_name) {
     arc_survey_service_->OnTaskCreated(task_id, package_name, "" /* activity */,
                                        "" /* intent */, 0 /* session_id */);
   }
@@ -72,7 +77,7 @@ class ArcSurveyServiceTest : public testing::Test {
   content::BrowserTaskEnvironment task_environment_;
   TestingProfile testing_profile_;
   ArcServiceManager arc_service_manager_;
-  ArcSurveyService* arc_survey_service_ = nullptr;
+  raw_ptr<ArcSurveyService> arc_survey_service_ = nullptr;
 };
 
 TEST_F(ArcSurveyServiceTest, ConstructDestruct) {}

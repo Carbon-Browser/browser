@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,15 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
 #include "base/files/important_file_writer.h"
-#include "base/types/pass_key.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/types/expected.h"
+#include "base/types/expected_macros.h"
 #include "build/build_config.h"
 #include "components/services/storage/public/cpp/filesystem/filesystem_impl.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
-#include "mojo/public/cpp/bindings/self_owned_receiver.h"
 
 namespace storage {
 
@@ -82,7 +82,6 @@ FilesystemProxy::FilesystemProxy(
     mojo::PendingRemote<mojom::Directory> directory,
     scoped_refptr<base::SequencedTaskRunner> ipc_task_runner)
     : root_(root),
-      num_root_components_(root_.GetComponents().size()),
       remote_directory_(std::move(directory), ipc_task_runner) {
   DCHECK(root_.IsAbsolute());
 }
@@ -112,7 +111,7 @@ FilesystemProxy::GetDirectoryEntries(const base::FilePath& path,
   std::vector<base::FilePath> entries;
   remote_directory_->GetEntries(MakeRelative(path), mode, &error, &entries);
   if (error != base::File::FILE_OK)
-    return error;
+    return base::unexpected(error);
 
   // Fix up all the relative paths to be absolute.
   const base::FilePath root = path.IsAbsolute() ? path : root_.Append(path);
@@ -127,7 +126,7 @@ base::FileErrorOr<base::File> FilesystemProxy::OpenFile(
   if (!remote_directory_) {
     base::File file(MaybeMakeAbsolute(path), flags);
     if (!file.IsValid())
-      return file.error_details();
+      return base::unexpected(file.error_details());
     return file;
   }
 
@@ -161,7 +160,6 @@ base::FileErrorOr<base::File> FilesystemProxy::OpenFile(
       break;
     default:
       NOTREACHED() << "Invalid open mode flags: " << mode_flags;
-      return base::File::FILE_ERROR_FAILED;
   }
 
   mojom::FileReadAccess read_access =
@@ -183,7 +181,6 @@ base::FileErrorOr<base::File> FilesystemProxy::OpenFile(
       break;
     default:
       NOTREACHED() << "Invalid write access flags: " << write_flags;
-      return base::File::FILE_ERROR_FAILED;
   }
 
   base::File::Error error = base::File::FILE_ERROR_IO;
@@ -191,21 +188,8 @@ base::FileErrorOr<base::File> FilesystemProxy::OpenFile(
   remote_directory_->OpenFile(MakeRelative(path), mode, read_access,
                               write_access, &error, &file);
   if (error != base::File::FILE_OK)
-    return error;
+    return base::unexpected(error);
   return file;
-}
-
-bool FilesystemProxy::WriteFileAtomically(const base::FilePath& path,
-                                          const std::string& contents) {
-  if (!remote_directory_) {
-    return base::ImportantFileWriter::WriteFileAtomically(
-        MaybeMakeAbsolute(path), contents);
-  }
-
-  bool success = false;
-  remote_directory_->WriteFileAtomically(MakeRelative(path), contents,
-                                         &success);
-  return success;
 }
 
 base::File::Error FilesystemProxy::CreateDirectory(const base::FilePath& path) {
@@ -231,32 +215,21 @@ bool FilesystemProxy::DeleteFile(const base::FilePath& path) {
   return success;
 }
 
-bool FilesystemProxy::DeletePathRecursively(const base::FilePath& path) {
-  if (!remote_directory_) {
-    const base::FilePath full_path = MaybeMakeAbsolute(path);
-    return base::DeletePathRecursively(full_path);
-  }
-
-  bool success = false;
-  remote_directory_->DeletePathRecursively(MakeRelative(path), &success);
-  return success;
-}
-
-absl::optional<base::File::Info> FilesystemProxy::GetFileInfo(
+std::optional<base::File::Info> FilesystemProxy::GetFileInfo(
     const base::FilePath& path) {
   if (!remote_directory_) {
     base::File::Info info;
     if (base::GetFileInfo(MaybeMakeAbsolute(path), &info))
       return info;
-    return absl::nullopt;
+    return std::nullopt;
   }
 
-  absl::optional<base::File::Info> info;
+  std::optional<base::File::Info> info;
   remote_directory_->GetFileInfo(MakeRelative(path), &info);
   return info;
 }
 
-absl::optional<FilesystemProxy::PathAccessInfo> FilesystemProxy::GetPathAccess(
+std::optional<FilesystemProxy::PathAccessInfo> FilesystemProxy::GetPathAccess(
     const base::FilePath& path) {
   mojom::PathAccessInfoPtr info;
   if (!remote_directory_)
@@ -265,23 +238,9 @@ absl::optional<FilesystemProxy::PathAccessInfo> FilesystemProxy::GetPathAccess(
     remote_directory_->GetPathAccess(MakeRelative(path), &info);
 
   if (!info)
-    return absl::nullopt;
+    return std::nullopt;
 
   return PathAccessInfo{info->can_read, info->can_write};
-}
-
-absl::optional<int> FilesystemProxy::GetMaximumPathComponentLength(
-    const base::FilePath& path) {
-  if (!remote_directory_)
-    return base::GetMaximumPathComponentLength(MaybeMakeAbsolute(path));
-
-  int len = -1;
-  bool success = false;
-  remote_directory_->GetMaximumPathComponentLength(MakeRelative(path), &success,
-                                                   &len);
-  if (!success)
-    return absl::nullopt;
-  return len;
 }
 
 base::File::Error FilesystemProxy::RenameFile(const base::FilePath& old_path,
@@ -301,64 +260,24 @@ base::File::Error FilesystemProxy::RenameFile(const base::FilePath& old_path,
 }
 
 base::FileErrorOr<std::unique_ptr<FilesystemProxy::FileLock>>
-FilesystemProxy::LockFile(const base::FilePath& path) {
+FilesystemProxy::LockFile(const base::FilePath& path,
+                          bool* same_process_failure) {
   if (!remote_directory_) {
     base::FilePath full_path = MaybeMakeAbsolute(path);
-    base::FileErrorOr<base::File> result =
-        FilesystemImpl::LockFileLocal(full_path);
-    if (result.is_error())
-      return result.error();
-    std::unique_ptr<FileLock> lock = std::make_unique<LocalFileLockImpl>(
-        std::move(full_path), std::move(result.value()));
-    return lock;
+    ASSIGN_OR_RETURN(base::File result, FilesystemImpl::LockFileLocal(
+                                            full_path, same_process_failure));
+    return std::make_unique<LocalFileLockImpl>(std::move(full_path),
+                                               std::move(result));
   }
 
   mojo::PendingRemote<mojom::FileLock> remote_lock;
   base::File::Error error = base::File::FILE_ERROR_IO;
   if (!remote_directory_->LockFile(MakeRelative(path), &error, &remote_lock))
-    return error;
+    return base::unexpected(error);
   if (error != base::File::FILE_OK)
-    return error;
+    return base::unexpected(error);
 
-  std::unique_ptr<FileLock> lock =
-      std::make_unique<RemoteFileLockImpl>(std::move(remote_lock));
-  return lock;
-}
-
-bool FilesystemProxy::SetOpenedFileLength(base::File* file, uint64_t length) {
-  if (!remote_directory_)
-    return file->SetLength(length);
-
-  bool success = false;
-  remote_directory_->SetOpenedFileLength(std::move(*file), length, &success,
-                                         file);
-  return success;
-}
-
-// TODO(enne): this could be a lot of sync ipcs.  Should this be implemented
-// as a Directory API instead?
-int64_t FilesystemProxy::ComputeDirectorySize(const base::FilePath& path) {
-  if (!remote_directory_)
-    return base::ComputeDirectorySize(MaybeMakeAbsolute(path));
-
-  int64_t running_size = 0;
-
-  const mojom::GetEntriesMode mode = mojom::GetEntriesMode::kFilesOnly;
-  base::File::Error error = base::File::FILE_ERROR_IO;
-  std::vector<base::FilePath> entries;
-  base::FilePath relative_path = MakeRelative(path);
-  remote_directory_->GetEntries(relative_path, mode, &error, &entries);
-  if (error != base::File::FILE_OK)
-    return running_size;
-
-  for (auto& entry : entries) {
-    absl::optional<base::File::Info> info;
-    remote_directory_->GetFileInfo(relative_path.Append(entry), &info);
-    if (info.has_value())
-      running_size += info->size;
-  }
-
-  return running_size;
+  return std::make_unique<RemoteFileLockImpl>(std::move(remote_lock));
 }
 
 base::FilePath FilesystemProxy::MakeRelative(const base::FilePath& path) const {
@@ -372,11 +291,9 @@ base::FilePath FilesystemProxy::MakeRelative(const base::FilePath& path) const {
   if (path == root_)
     return base::FilePath();
 
-  // Absolute paths need to be rebased onto |root_|.
-  std::vector<base::FilePath::StringType> components = path.GetComponents();
   base::FilePath relative_path;
-  for (size_t i = num_root_components_; i < components.size(); ++i)
-    relative_path = relative_path.Append(components[i]);
+  CHECK(root_.AppendRelativePath(path, &relative_path))
+      << " Failed making " << path << " relative to " << root_;
   return relative_path;
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
@@ -46,7 +46,8 @@ class BackgroundThumbnailVideoCapturer
       const gfx::Rect& content_rect,
       mojo::PendingRemote<::viz::mojom::FrameSinkVideoConsumerFrameCallbacks>
           callbacks) override;
-  void OnNewCropVersion(uint32_t crop_version) override;
+  void OnNewSubCaptureTargetVersion(
+      uint32_t sub_capture_target_version) override;
   void OnFrameWithEmptyRegionCapture() override;
   void OnStopped() override;
   void OnLog(const std::string& /*message*/) override;

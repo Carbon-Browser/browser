@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,7 +43,7 @@ TEST_F(AndroidCombinedPolicyProviderTest, SetShouldWaitForPolicy) {
   AndroidCombinedPolicyProvider::SetShouldWaitForPolicy(true);
   SchemaRegistry registry;
   AndroidCombinedPolicyProvider manager(&registry);
-  EXPECT_TRUE(manager.IsInitializationComplete(POLICY_DOMAIN_CHROME));
+  EXPECT_FALSE(manager.IsInitializationComplete(POLICY_DOMAIN_CHROME));
   manager.FlushPolicies(nullptr, nullptr);
   EXPECT_TRUE(manager.IsInitializationComplete(POLICY_DOMAIN_CHROME));
   // If the manager is deleted (by going out of scope) without being shutdown
@@ -60,10 +60,10 @@ TEST_F(AndroidCombinedPolicyProviderTest, FlushPolices) {
       "}";
 
   PolicyNamespace ns(POLICY_DOMAIN_CHROME, std::string());
-  std::string error;
-  Schema schema = Schema::Parse(kSchemaTemplate, &error);
+  const auto schema = Schema::Parse(kSchemaTemplate);
+  ASSERT_TRUE(schema.has_value());
   SchemaRegistry registry;
-  registry.RegisterComponent(ns, schema);
+  registry.RegisterComponent(ns, *schema);
   AndroidCombinedPolicyProvider manager(&registry);
   JNIEnv* env = AttachCurrentThread();
   ScopedJavaLocalRef<jstring> jpolicy =

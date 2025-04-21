@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <queue>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/no_destructor.h"
 #include "base/sequence_checker.h"
 #include "build/build_config.h"
@@ -18,7 +18,6 @@
 
 // Only use from the UI Thread.
 
-namespace chrome {
 namespace enterprise_util {
 
 class AndroidEnterpriseInfoFriendHelper;
@@ -70,6 +69,5 @@ class AndroidEnterpriseInfo {
 };
 
 }  // namespace enterprise_util
-}  // namespace chrome
 
 #endif  // CHROME_BROWSER_ENTERPRISE_UTIL_ANDROID_ENTERPRISE_INFO_H_

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,11 @@ import android.graphics.Point;
 import android.graphics.Rect;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.inputmethod.EditorBoundsInfo;
 import android.view.inputmethod.EditorInfo;
+
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 
 /**
  * Interface that provides Stylus handwriting to text input functionality in HTML edit fields. This
@@ -17,6 +21,7 @@ import android.view.inputmethod.EditorInfo;
  * in this interface outside of //content (i.e. //components/stylus_handwriting) and these are
  * called from the current WebContents related classes in //content.
  */
+@NullMarked
 public interface StylusWritingHandler {
     /**
      * @return true if soft keyboard can be shown during stylus writing.
@@ -24,12 +29,11 @@ public interface StylusWritingHandler {
     boolean canShowSoftKeyboard();
 
     /**
-     * Requests to start stylus writing for input field in web page.
+     * Check if stylus writing can be started for input field in web page.
      *
-     * @return true if writing can be started or if started successfully, false if writing cannot
-     * be started.
+     * @return true if stylus writing can be started, false otherwise.
      */
-    boolean requestStartStylusWriting(StylusWritingImeCallback imeCallback);
+    boolean shouldInitiateStylusWriting();
 
     /**
      * Update current input state parameters to stylus writing system.
@@ -41,10 +45,19 @@ public interface StylusWritingHandler {
 
     /**
      * Notify focused node has changed in web page.
-     *  @param editableBounds the Editable element bounds Rect in pix
-     * @param isEditable is true if focused node is of editable type.
+     *
+     * @param editableBoundsOnScreenDip the Editable element bounds Rect in dip
+     * @param isEditable     is true if focused node is of editable type.
+     * @param currentView the {@link View} in which the focused node changed.
      */
-    default void onFocusedNodeChanged(Rect editableBounds, boolean isEditable) {}
+    default @Nullable EditorBoundsInfo onFocusedNodeChanged(
+            Rect editableBoundsOnScreenDip,
+            boolean isEditable,
+            View currentView,
+            float scaleFactor,
+            int contentOffsetY) {
+        return null;
+    }
 
     /**
      * Handle touch events if needed for stylus writing.
@@ -88,8 +101,22 @@ public interface StylusWritingHandler {
 
     /**
      * This message is sent when the stylus writable element has been focused.
+     *
      * @param focusedEditBounds the input field bounds in view
      * @param cursorPosition the input cursor Position point in pix
+     * @param scaleFactor current device scale factor
+     * @param contentOffsetY the Physical on-screen Y offset amount below the browser controls
+     * @param view the view on which to start stylus handwriting
      */
-    void onEditElementFocusedForStylusWriting(Rect focusedEditBounds, Point cursorPosition);
+    default @Nullable EditorBoundsInfo onEditElementFocusedForStylusWriting(
+            Rect focusedEditBounds,
+            Point cursorPosition,
+            float scaleFactor,
+            int contentOffsetY,
+            View view) {
+        return null;
+    }
+
+    /** Notify that ImeAdapter is destroyed. */
+    default void onImeAdapterDestroyed() {}
 }

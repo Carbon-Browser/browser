@@ -25,10 +25,13 @@
 </body>
 
 <script>
-
 var isDone = false;
 var startTime;
+
+// Ensure test content is generated before page load, so that the test
+// construction is not part of the collected traces.
 var container = document.getElementById('container');
+generateAllContent();
 
 function runTest() {
   if (startTime) {
@@ -39,16 +42,12 @@ function runTest() {
     PerfTestRunner.addRunTestStartMarker();
     startTime = PerfTestRunner.now();
 
-    container.innerHTML = '';
-
-    generateAllContent();
-
-    setTimeout(toggleDisplay, 10);
+    toggleDisplay();
 
     // Re-run the same test.
     // Wait to allow the asynchronous accessibility code that's
     // covered by traceEventsToMeasure to have a chance to run.
-    setTimeout(runTest, 1500);
+    setTimeout(runTest, 2500);
   }
 }
 
@@ -61,7 +60,7 @@ function generateAllContent() {
   root2.id = 'root2';
   root2.className = 'root';
 
-  for (let i = 0; i < 300; i++) {
+  for (let i = 0; i < 50; i++) {
     const child1 = generateNodes(12, "blue");
     root1.appendChild(child1);
     const child2 = generateNodes(12, "green");
@@ -103,9 +102,14 @@ PerfTestRunner.startMeasureValuesAsync({
   iterationCount: 6,
   tracingCategories: 'accessibility',
   traceEventsToMeasure: [
-    'AXObjectCacheImpl::ChildrenChanged(LayoutObject)',
-    'ProcessDeferredAccessibilityEvents',
-    'RenderAccessibilityImpl::SendPendingAccessibilityEvents'
+    'TotalAccessibilityCleanLayoutLifecycleStages',
+    'ProcessDeferredUpdatesLifecycleStage',
+    'FinalizingTreeLifecycleStage',
+    'SerializeLifecycleStage',
+    'RenderAccessibilityImpl::SendPendingAccessibilityEvents',
+    'BrowserAccessibilityManager::OnAccessibilityEvents',
+    'SerializeLocationChanges',
+    "BrowserAccessibilityManager::OnLocationChanges"
   ]
 });
 </script>

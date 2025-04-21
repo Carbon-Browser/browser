@@ -1,8 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/events/scoped_target_handler.h"
+
+#include <string_view>
 
 #include "ui/events/event.h"
 #include "ui/events/event_handler.h"
@@ -38,7 +40,7 @@ void ScopedTargetHandler::OnEvent(Event* event) {
   new_handler_->OnEvent(event);
 }
 
-base::StringPiece ScopedTargetHandler::GetLogContext() const {
+std::string_view ScopedTargetHandler::GetLogContext() const {
   return "ScopedTargetHandler";
 }
 

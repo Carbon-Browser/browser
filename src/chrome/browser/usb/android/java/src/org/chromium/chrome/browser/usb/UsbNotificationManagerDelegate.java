@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,7 @@ package org.chromium.chrome.browser.usb;
 
 import android.content.Intent;
 
-/**
- * Delegate for {@link UsbNotificationManager}.
- */
+/** Delegate for {@link UsbNotificationManager}. */
 public interface UsbNotificationManagerDelegate {
     /**
      * Creates an Intent to bring an Activity for a particular Tab back to the
@@ -18,9 +16,7 @@ public interface UsbNotificationManagerDelegate {
      */
     Intent createTrustedBringTabToFrontIntent(int tabId);
 
-    /**
-     * Stops the service.
-     */
+    /** Stops the service. */
     void stopSelf();
 
     /**

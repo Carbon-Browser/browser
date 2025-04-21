@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,17 +7,19 @@
 
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/layout/geometry/logical_size.h"
-#include "third_party/blink/renderer/platform/geometry/layout_size.h"
 #include "third_party/blink/renderer/platform/geometry/layout_unit.h"
 #include "third_party/blink/renderer/platform/text/writing_mode.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/geometry/size_f.h"
 
+namespace WTF {
+class String;
+}  // namespace WTF
+
 namespace blink {
 
 enum AspectRatioFit { kAspectRatioFitShrink, kAspectRatioFitGrow };
 
-class LayoutSize;
 struct LogicalSize;
 
 // PhysicalSize is the size of a rect (typically a fragment) in the physical
@@ -65,6 +67,12 @@ struct CORE_EXPORT PhysicalSize {
     return *this;
   }
 
+  // Returns a new PhysicalSize scaling `this` by `scale`.
+  PhysicalSize operator*(float scale) const {
+    return PhysicalSize(LayoutUnit(this->width * scale),
+                        LayoutUnit(this->height * scale));
+  }
+
   constexpr bool operator==(const PhysicalSize& other) const {
     return std::tie(other.width, other.height) == std::tie(width, height);
   }
@@ -91,6 +99,20 @@ struct CORE_EXPORT PhysicalSize {
     height *= s;
   }
 
+  // Returns a new PhysicalSize with the maximum width of `this` and `other`,
+  // and the maximum height of `this` and `other`.
+  PhysicalSize ExpandedTo(const PhysicalSize& other) const {
+    return {std::max(this->width, other.width),
+            std::max(this->height, other.height)};
+  }
+
+  // Returns a new PhysicalSize with the minimum width of `this` and `other`,
+  // and the minimum height of `this` and `other`.
+  PhysicalSize ShrunkTo(const PhysicalSize& other) const {
+    return {std::min(this->width, other.width),
+            std::min(this->height, other.height)};
+  }
+
   void ClampNegativeToZero() {
     width = std::max(width, LayoutUnit());
     height = std::max(height, LayoutUnit());
@@ -98,12 +120,6 @@ struct CORE_EXPORT PhysicalSize {
 
   PhysicalSize FitToAspectRatio(const PhysicalSize& aspect_ratio,
                                 AspectRatioFit fit) const;
-
-  // Conversions from/to existing code. New code prefers type safety for
-  // logical/physical distinctions.
-  constexpr explicit PhysicalSize(const LayoutSize& size)
-      : width(size.Width()), height(size.Height()) {}
-  constexpr LayoutSize ToLayoutSize() const { return {width, height}; }
 
   constexpr explicit operator gfx::SizeF() const { return {width, height}; }
 
@@ -119,7 +135,7 @@ struct CORE_EXPORT PhysicalSize {
   explicit PhysicalSize(const gfx::Size& size)
       : width(size.width()), height(size.height()) {}
 
-  String ToString() const;
+  WTF::String ToString() const;
 };
 
 CORE_EXPORT std::ostream& operator<<(std::ostream&, const PhysicalSize&);
@@ -140,13 +156,6 @@ inline gfx::Size ToFlooredSize(const PhysicalSize& s) {
 }
 inline gfx::Size ToCeiledSize(const PhysicalSize& s) {
   return {s.width.Ceil(), s.height.Ceil()};
-}
-
-// TODO(wangxianzhu): For temporary conversion from LayoutSize to PhysicalSize,
-// where the input will be changed to PhysicalSize soon, to avoid redundant
-// PhysicalSize() which can't be discovered by the compiler.
-inline PhysicalSize PhysicalSizeToBeNoop(const LayoutSize& s) {
-  return PhysicalSize(s);
 }
 
 }  // namespace blink

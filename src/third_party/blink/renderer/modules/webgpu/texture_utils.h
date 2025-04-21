@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,10 @@
 
 namespace blink {
 
-size_t EstimateWriteTextureBytesUpperBound(WGPUTextureDataLayout layout,
-                                           WGPUExtent3D extent,
-                                           WGPUTextureFormat format,
-                                           WGPUTextureAspect aspect);
+size_t EstimateWriteTextureBytesUpperBound(wgpu::TextureDataLayout layout,
+                                           wgpu::Extent3D extent,
+                                           wgpu::TextureFormat format,
+                                           wgpu::TextureAspect aspect);
 
 }  // namespace blink
 

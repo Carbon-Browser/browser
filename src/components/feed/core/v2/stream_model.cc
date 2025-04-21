@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -81,6 +81,10 @@ void StreamModel::SetStoreObserver(StoreObserver* store_observer) {
 
 void StreamModel::SetStreamType(const StreamType& stream_type) {
   stream_type_ = stream_type;
+}
+
+const StreamType& StreamModel::GetStreamType() const {
+  return stream_type_;
 }
 
 void StreamModel::AddObserver(Observer* observer) {
@@ -322,11 +326,7 @@ const std::string& StreamModel::GetRootEventId() const {
 std::string StreamModel::DumpStateForTesting() {
   std::stringstream ss;
   ss << "StreamModel{\n";
-  {
-    std::string base64_root_id;
-    base::Base64Encode(GetRootEventId(), &base64_root_id);
-    ss << "root_event_id=" << base64_root_id << "'\n";
-  }
+  { ss << "root_event_id=" << base::Base64Encode(GetRootEventId()) << "'\n"; }
   ss << "next_page_token='" << GetNextPageToken() << "'\n";
   for (auto& entry : shared_states_) {
     ss << "shared_state[" << entry.first

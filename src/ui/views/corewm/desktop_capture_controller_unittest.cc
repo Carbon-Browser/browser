@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,8 @@
 #include "ui/aura/test/test_window_delegate.h"
 #include "ui/aura/window_event_dispatcher.h"
 #include "ui/aura/window_tree_host.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/events/event.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/views/test/native_widget_factory.h"
@@ -29,6 +31,8 @@ using DesktopCaptureControllerTest = test::DesktopWidgetTestInteractive;
 // This class provides functionality to verify whether the View instance
 // received the gesture event.
 class DesktopViewInputTest : public View {
+  METADATA_HEADER(DesktopViewInputTest, View)
+
  public:
   DesktopViewInputTest() = default;
 
@@ -49,13 +53,16 @@ class DesktopViewInputTest : public View {
   bool received_gesture_event_ = false;
 };
 
-views::Widget* CreateWidget() {
-  views::Widget* widget = new views::Widget;
-  views::Widget::InitParams params;
-  params.type = views::Widget::InitParams::TYPE_WINDOW_FRAMELESS;
+BEGIN_METADATA(DesktopViewInputTest)
+END_METADATA
+
+std::unique_ptr<views::Widget> CreateWidget() {
+  auto widget = std::make_unique<views::Widget>();
+  views::Widget::InitParams params(
+      views::Widget::InitParams::CLIENT_OWNS_WIDGET,
+      views::Widget::InitParams::TYPE_WINDOW_FRAMELESS);
   params.accept_events = true;
-  params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
-  params.native_widget = new DesktopNativeWidgetAura(widget);
+  params.native_widget = new DesktopNativeWidgetAura(widget.get());
   params.bounds = gfx::Rect(0, 0, 200, 100);
   widget->Init(std::move(params));
   widget->Show();
@@ -94,21 +101,20 @@ TEST_F(DesktopCaptureControllerTest, CaptureWindowInputEventTest) {
   std::unique_ptr<aura::client::ScreenPositionClient> desktop_position_client1;
   std::unique_ptr<aura::client::ScreenPositionClient> desktop_position_client2;
 
-  std::unique_ptr<Widget> widget1(new Widget());
-  Widget::InitParams params = CreateParams(Widget::InitParams::TYPE_POPUP);
+  auto widget1 = std::make_unique<Widget>();
+  Widget::InitParams params = CreateParams(
+      Widget::InitParams::CLIENT_OWNS_WIDGET, Widget::InitParams::TYPE_POPUP);
   std::unique_ptr<wm::ScopedCaptureClient> scoped_capture_client(
       new wm::ScopedCaptureClient(params.context->GetRootWindow()));
   aura::client::CaptureClient* capture_client = wm::CaptureController::Get();
-  params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
   params.bounds = gfx::Rect(50, 50, 650, 650);
   params.native_widget = test::CreatePlatformNativeWidgetImpl(
       widget1.get(), test::kStubCapture, nullptr);
+  desktop_position_client1 = std::make_unique<DesktopScreenPositionClient>(
+      params.context->GetRootWindow());
   widget1->Init(std::move(params));
   internal::RootView* root1 =
       static_cast<internal::RootView*>(widget1->GetRootView());
-
-  desktop_position_client1 = std::make_unique<DesktopScreenPositionClient>(
-      params.context->GetRootWindow());
   aura::client::SetScreenPositionClient(
       widget1->GetNativeView()->GetRootWindow(),
       desktop_position_client1.get());
@@ -118,19 +124,18 @@ TEST_F(DesktopCaptureControllerTest, CaptureWindowInputEventTest) {
   root1->AddChildView(v1);
   widget1->Show();
 
-  std::unique_ptr<Widget> widget2(new Widget());
+  auto widget2 = std::make_unique<Widget>();
 
-  params = CreateParams(Widget::InitParams::TYPE_POPUP);
-  params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
+  params = CreateParams(Widget::InitParams::CLIENT_OWNS_WIDGET,
+                        Widget::InitParams::TYPE_POPUP);
   params.bounds = gfx::Rect(50, 50, 650, 650);
   params.native_widget = test::CreatePlatformNativeWidgetImpl(
       widget2.get(), test::kStubCapture, nullptr);
-  widget2->Init(std::move(params));
-
-  internal::RootView* root2 =
-      static_cast<internal::RootView*>(widget2->GetRootView());
   desktop_position_client2 = std::make_unique<DesktopScreenPositionClient>(
       params.context->GetRootWindow());
+  widget2->Init(std::move(params));
+  internal::RootView* root2 =
+      static_cast<internal::RootView*>(widget2->GetRootView());
   aura::client::SetScreenPositionClient(
       widget2->GetNativeView()->GetRootWindow(),
       desktop_position_client2.get());
@@ -150,8 +155,9 @@ TEST_F(DesktopCaptureControllerTest, CaptureWindowInputEventTest) {
   EXPECT_FALSE(widget2->GetNativeView()->HasCapture());
   EXPECT_EQ(capture_client->GetCaptureWindow(), widget1->GetNativeView());
 
-  ui::GestureEvent g1(80, 80, 0, base::TimeTicks(),
-                      ui::GestureEventDetails(ui::ET_GESTURE_LONG_PRESS));
+  ui::GestureEvent g1(
+      80, 80, 0, base::TimeTicks(),
+      ui::GestureEventDetails(ui::EventType::kGestureLongPress));
   details = root1->OnEventFromSource(&g1);
   EXPECT_FALSE(details.dispatcher_destroyed);
   EXPECT_FALSE(details.target_destroyed);

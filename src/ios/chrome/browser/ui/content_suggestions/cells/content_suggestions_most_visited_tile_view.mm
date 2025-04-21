@@ -1,27 +1,26 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/content_suggestions/cells/content_suggestions_most_visited_tile_view.h"
 
 #import "base/check.h"
-#import "ios/chrome/browser/ui/content_suggestions/cells/content_suggestions_gesture_commands.h"
+#import "ios/chrome/browser/shared/public/features/features.h"
+#import "ios/chrome/browser/ui/content_suggestions/cells/content_suggestions_cells_constants.h"
 #import "ios/chrome/browser/ui/content_suggestions/cells/content_suggestions_most_visited_item.h"
+#import "ios/chrome/browser/ui/content_suggestions/cells/most_visited_tiles_commands.h"
+#import "ios/chrome/browser/ui/content_suggestions/content_suggestions_constants.h"
 #import "ios/chrome/browser/ui/content_suggestions/content_suggestions_menu_provider.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/favicon/favicon_view.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
-#include "ios/chrome/grit/ios_strings.h"
-#include "ui/base/l10n/l10n_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/grit/ios_strings.h"
+#import "ui/base/l10n/l10n_util.h"
 
 @interface ContentSuggestionsMostVisitedTileView ()
 
-// Command handler for the accessibility custom actions.
-@property(nonatomic, weak) id<ContentSuggestionsGestureCommands> commandHandler;
+// Command handler for actions.
+@property(nonatomic, weak) id<MostVisitedTilesCommands> commandHandler;
 
 // Whether the incognito action should be available.
 @property(nonatomic, assign) BOOL incognitoAvailable;
@@ -30,27 +29,57 @@
 
 @implementation ContentSuggestionsMostVisitedTileView
 
-- (instancetype)initWithFrame:(CGRect)frame placeholder:(BOOL)isPlaceholder {
-  self = [super initWithFrame:frame placeholder:isPlaceholder];
+- (instancetype)initWithFrame:(CGRect)frame inMagicStack:(BOOL)inMagicStack {
+  self = [super initWithFrame:frame
+                     tileType:ContentSuggestionsTileType::kMostVisited
+                 inMagicStack:inMagicStack];
   if (self) {
+      self.imageContainerView.backgroundColor =
+          [UIColor colorNamed:kGrey100Color];
+      self.imageContainerView.layer.cornerRadius =
+          kMagicStackImageContainerWidth / 2;
+      self.imageContainerView.layer.masksToBounds = NO;
+      self.imageContainerView.clipsToBounds = YES;
+
+      UIStackView* stackView = [[UIStackView alloc] init];
+      stackView.translatesAutoresizingMaskIntoConstraints = NO;
+      stackView.axis = UILayoutConstraintAxisVertical;
+      stackView.spacing = 10;
+      stackView.alignment = UIStackViewAlignmentCenter;
+      stackView.distribution = UIStackViewDistributionFill;
+
+      [stackView addArrangedSubview:self.imageContainerView];
+      [stackView addArrangedSubview:self.titleLabel];
+
+      [NSLayoutConstraint activateConstraints:@[
+        [self.imageContainerView.widthAnchor
+            constraintEqualToConstant:kMagicStackImageContainerWidth],
+        [self.imageContainerView.heightAnchor
+            constraintEqualToAnchor:self.imageContainerView.widthAnchor],
+      ]];
+
+      [self addSubview:stackView];
+      AddSameConstraints(stackView, self);
+
     _faviconView = [[FaviconView alloc] init];
     _faviconView.font = [UIFont systemFontOfSize:22];
     _faviconView.translatesAutoresizingMaskIntoConstraints = NO;
     [NSLayoutConstraint activateConstraints:@[
-      [_faviconView.heightAnchor constraintEqualToConstant:32],
+      [_faviconView.heightAnchor
+          constraintEqualToConstant:kMagicStackFaviconWidth],
       [_faviconView.widthAnchor
           constraintEqualToAnchor:_faviconView.heightAnchor],
     ]];
 
-    [self.imageContainerView addSubview:_faviconView];
-    AddSameConstraints(self.imageContainerView, _faviconView);
+    [self addSubview:_faviconView];
+    AddSameCenterConstraints(_faviconView, self.imageContainerView);
   }
   return self;
 }
 
-- (instancetype)initWithConfiguration:
-    (ContentSuggestionsMostVisitedItem*)config {
-  self = [self initWithFrame:CGRectZero placeholder:!config];
+- (instancetype)initInMagicStack:(BOOL)inMagicStack
+               withConfiguration:(ContentSuggestionsMostVisitedItem*)config {
+  self = [self initWithFrame:CGRectZero inMagicStack:inMagicStack];
   if (self) {
     if (!config) {
       // If there is no config, then this is a placeholder tile.
@@ -63,6 +92,7 @@
       [_faviconView configureWithAttributes:config.attributes];
       _commandHandler = config.commandHandler;
       self.isAccessibilityElement = YES;
+      self.accessibilityTraits = UIAccessibilityTraitButton;
       self.accessibilityCustomActions = [self customActions];
       [self addInteraction:[[UIContextMenuInteraction alloc]
                                initWithDelegate:self]];

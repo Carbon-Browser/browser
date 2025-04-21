@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,6 @@
 #include "chrome/browser/sharesheet/share_action/example_action.h"
 #include "chrome/browser/sharesheet/share_action/share_action.h"
 #include "chrome/browser/sharesheet/sharesheet_types.h"
-#include "chrome/common/chrome_features.h"
 #include "ui/gfx/vector_icon_types.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -30,10 +29,8 @@ ShareActionCache::ShareActionCache(Profile* profile) {
     AddShareAction(std::make_unique<NearbyShareAction>(profile));
   }
   AddShareAction(std::make_unique<ash::sharesheet::DriveShareAction>());
-  if (base::FeatureList::IsEnabled(features::kSharesheetCopyToClipboard)) {
-    AddShareAction(
-        std::make_unique<ash::sharesheet::CopyToClipboardShareAction>(profile));
-  }
+  AddShareAction(
+      std::make_unique<ash::sharesheet::CopyToClipboardShareAction>(profile));
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 }
 
@@ -44,11 +41,10 @@ ShareActionCache::GetShareActions() {
   return share_actions_;
 }
 
-ShareAction* ShareActionCache::GetActionFromName(
-    const std::u16string& action_name) {
+ShareAction* ShareActionCache::GetActionFromType(ShareActionType action_type) {
   auto iter = share_actions_.begin();
   while (iter != share_actions_.end()) {
-    if ((*iter)->GetActionName() == action_name) {
+    if ((*iter)->GetActionType() == action_type) {
       return iter->get();
     } else {
       iter++;
@@ -57,9 +53,9 @@ ShareAction* ShareActionCache::GetActionFromName(
   return nullptr;
 }
 
-const gfx::VectorIcon* ShareActionCache::GetVectorIconFromName(
-    const std::u16string& display_name) {
-  ShareAction* share_action = GetActionFromName(display_name);
+const gfx::VectorIcon* ShareActionCache::GetVectorIconFromType(
+    ShareActionType action_type) {
+  ShareAction* share_action = GetActionFromType(action_type);
   if (share_action == nullptr) {
     return nullptr;
   }

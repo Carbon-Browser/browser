@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,10 +17,6 @@
 #include "chrome/common/chrome_constants.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-#if BUILDFLAG(IS_FUCHSIA)
-#include "base/fuchsia/file_utils.h"
-#endif
-
 namespace chrome {
 
 // Test the behavior of chrome::GetUserCacheDirectory.
@@ -32,12 +28,6 @@ TEST(ChromePaths, UserCacheDir) {
 #if BUILDFLAG(IS_WIN)
   test_profile_dir = base::FilePath(FILE_PATH_LITERAL("C:\\Users\\Foo\\Bar"));
   expected_cache_dir = base::FilePath(FILE_PATH_LITERAL("C:\\Users\\Foo\\Bar"));
-#elif BUILDFLAG(IS_FUCHSIA)
-  // Fuchsia uses the Component's cache directory as the base.
-  expected_cache_dir = base::FilePath(base::kPersistedCacheDirectoryPath);
-  test_profile_dir =
-      base::FilePath(base::kPersistedDataDirectoryPath).Append("foobar");
-  expected_cache_dir = expected_cache_dir.Append("foobar");
 #elif BUILDFLAG(IS_MAC)
   ASSERT_TRUE(base::PathService::Get(base::DIR_APP_DATA, &test_profile_dir));
   test_profile_dir = test_profile_dir.Append("foobar");
@@ -100,7 +90,9 @@ TEST(ChromePaths, DefaultUserDataDir) {
   base::PathService::Get(base::DIR_HOME, &home_dir);
 
   std::string expected_branding;
-#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+#if BUILDFLAG(GOOGLE_CHROME_FOR_TESTING_BRANDING)
+  std::string data_dir_basename = "google-chrome-for-testing";
+#elif BUILDFLAG(GOOGLE_CHROME_BRANDING)
   // TODO(skobes): Test channel suffixes with $CHROME_VERSION_EXTRA.
   expected_branding = "google-chrome";
 #else

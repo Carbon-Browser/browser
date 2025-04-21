@@ -1,12 +1,13 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file
+// found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_TEST_FUZZER_THREAD_POOL_MANAGER_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_TEST_FUZZER_THREAD_POOL_MANAGER_H_
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/synchronization/condition_variable.h"
 #include "base/synchronization/lock.h"
 #include "base/threading/simple_thread.h"
@@ -92,7 +93,7 @@ class PLATFORM_EXPORT ThreadPoolManager {
   void AdvanceThreadClock(ThreadManager* thread_manager);
 
   // Owner of this class.
-  SequenceManagerFuzzerProcessor* const processor_;
+  const raw_ptr<SequenceManagerFuzzerProcessor> processor_;
 
   // Used to protect all the members below.
   Lock lock_;

@@ -30,20 +30,28 @@
 
 #include "third_party/blink/public/web/web_form_control_element.h"
 
+#include "base/time/time.h"
+#include "third_party/blink/public/common/features.h"
+#include "third_party/blink/public/common/input/web_input_event.h"
+#include "third_party/blink/public/common/input/web_keyboard_event.h"
 #include "third_party/blink/public/mojom/input/focus_type.mojom-blink.h"
+#include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
-#include "third_party/blink/renderer/core/dom/node_computed_style.h"
+#include "third_party/blink/renderer/core/events/keyboard_event.h"
 #include "third_party/blink/renderer/core/html/forms/html_form_control_element.h"
+#include "third_party/blink/renderer/core/html/forms/html_form_control_element_with_state.h"
 #include "third_party/blink/renderer/core/html/forms/html_form_element.h"
 #include "third_party/blink/renderer/core/html/forms/html_input_element.h"
 #include "third_party/blink/renderer/core/html/forms/html_select_element.h"
-#include "third_party/blink/renderer/core/html/forms/html_select_menu_element.h"
 #include "third_party/blink/renderer/core/html/forms/html_text_area_element.h"
 #include "third_party/blink/renderer/core/input_type_names.h"
-
-#include "base/memory/scoped_refptr.h"
+#include "third_party/blink/renderer/core/style/computed_style.h"
+#include "third_party/blink/renderer/platform/keyboard_codes.h"
+#include "ui/events/keycodes/dom/dom_key.h"
 
 namespace blink {
+
+using mojom::blink::FormControlType;
 
 bool WebFormControlElement::IsEnabled() const {
   return !ConstUnwrap<HTMLFormControlElement>()->IsDisabledFormControl();
@@ -57,17 +65,17 @@ WebString WebFormControlElement::FormControlName() const {
   return ConstUnwrap<HTMLFormControlElement>()->GetName();
 }
 
-WebString WebFormControlElement::FormControlType() const {
-  return ConstUnwrap<HTMLFormControlElement>()->type();
+FormControlType WebFormControlElement::FormControlType() const {
+  return ConstUnwrap<HTMLFormControlElement>()->FormControlType();
 }
 
-WebString WebFormControlElement::FormControlTypeForAutofill() const {
+FormControlType WebFormControlElement::FormControlTypeForAutofill() const {
   if (auto* input = ::blink::DynamicTo<HTMLInputElement>(*private_)) {
-    if (input->IsTextField() && input->HasBeenPasswordField())
-      return input_type_names::kPassword;
+    if (input->IsTextField() && input->HasBeenPasswordField()) {
+      return FormControlType::kInputPassword;
+    }
   }
-
-  return ConstUnwrap<HTMLFormControlElement>()->type();
+  return FormControlType();
 }
 
 WebAutofillState WebFormControlElement::GetAutofillState() const {
@@ -78,63 +86,31 @@ bool WebFormControlElement::IsAutofilled() const {
   return ConstUnwrap<HTMLFormControlElement>()->IsAutofilled();
 }
 
+bool WebFormControlElement::IsPreviewed() const {
+  return ConstUnwrap<HTMLFormControlElement>()->IsPreviewed();
+}
+
 bool WebFormControlElement::UserHasEditedTheField() const {
-  if (auto* input = ::blink::DynamicTo<HTMLInputElement>(*private_))
-    return input->UserHasEditedTheField();
-  if (auto* select_element = ::blink::DynamicTo<HTMLSelectElement>(*private_))
-    return select_element->UserHasEditedTheField();
-  if (auto* select_menu_element =
-          ::blink::DynamicTo<HTMLSelectMenuElement>(*private_))
-    return select_menu_element->UserHasEditedTheField();
-  return true;
+  if (auto* control =
+          ::blink::DynamicTo<HTMLFormControlElementWithState>(*private_)) {
+    return control->UserHasEditedTheField();
+  }
+  return false;
 }
 
 void WebFormControlElement::SetUserHasEditedTheField(bool value) {
-  if (auto* input = ::blink::DynamicTo<HTMLInputElement>(*private_))
-    input->SetUserHasEditedTheField(value);
-  if (auto* select_element = ::blink::DynamicTo<HTMLSelectElement>(*private_))
-    select_element->SetUserHasEditedTheField(value);
-  if (auto* select_menu_element =
-          ::blink::DynamicTo<HTMLSelectMenuElement>(*private_))
-    select_menu_element->SetUserHasEditedTheField(value);
-}
-
-void WebFormControlElement::SetUserHasEditedTheFieldForTest() {
-  if (auto* input = ::blink::DynamicTo<HTMLInputElement>(*private_))
-    input->SetUserHasEditedTheFieldForTest();
+  if (auto* control =
+          ::blink::DynamicTo<HTMLFormControlElementWithState>(*private_)) {
+    if (value) {
+      control->SetUserHasEditedTheField();
+    } else {
+      control->ClearUserHasEditedTheField();
+    }
+  }
 }
 
 void WebFormControlElement::SetAutofillState(WebAutofillState autofill_state) {
   Unwrap<HTMLFormControlElement>()->SetAutofillState(autofill_state);
-}
-
-void WebFormControlElement::SetPreventHighlightingOfAutofilledFields(
-    bool prevent_highlighting) {
-  Unwrap<HTMLFormControlElement>()->SetPreventHighlightingOfAutofilledFields(
-      prevent_highlighting);
-}
-
-bool WebFormControlElement::PreventHighlightingOfAutofilledFields() const {
-  return ConstUnwrap<HTMLFormControlElement>()
-      ->PreventHighlightingOfAutofilledFields();
-}
-
-WebString WebFormControlElement::AutofillSection() const {
-  return ConstUnwrap<HTMLFormControlElement>()->AutofillSection();
-}
-
-void WebFormControlElement::SetAutofillSection(const WebString& section) {
-  Unwrap<HTMLFormControlElement>()->SetAutofillSection(section);
-}
-
-FormElementPiiType WebFormControlElement::GetFormElementPiiType() const {
-  return ConstUnwrap<HTMLFormControlElement>()->GetFormElementPiiType();
-}
-
-void WebFormControlElement::SetFormElementPiiType(
-    FormElementPiiType form_element_pii_type) {
-  Unwrap<HTMLFormControlElement>()->SetFormElementPiiType(
-      form_element_pii_type);
 }
 
 WebString WebFormControlElement::NameForAutofill() const {
@@ -184,12 +160,45 @@ void WebFormControlElement::SetAutofillValue(const WebString& value,
   if (IsA<HTMLInputElement>(*private_) || IsA<HTMLTextAreaElement>(*private_)) {
     if (!Focused())
       DispatchFocusEvent();
-    Unwrap<Element>()->DispatchScopedEvent(
-        *Event::CreateBubble(event_type_names::kKeydown));
+
+    auto send_event = [local_dom_window =
+                           Unwrap<Element>()->GetDocument().domWindow(),
+                       this](WebInputEvent::Type event_type) {
+      WebKeyboardEvent web_event{event_type, WebInputEvent::kNoModifiers,
+                                 base::TimeTicks::Now()};
+      web_event.dom_key = ui::DomKey::UNIDENTIFIED;
+      web_event.dom_code = static_cast<int>(ui::DomKey::UNIDENTIFIED);
+      web_event.native_key_code = blink::VKEY_UNKNOWN;
+      web_event.windows_key_code = blink::VKEY_UNKNOWN;
+      web_event.text[0] = blink::VKEY_UNKNOWN;
+      web_event.unmodified_text[0] = blink::VKEY_UNKNOWN;
+
+      KeyboardEvent* event = KeyboardEvent::Create(web_event, local_dom_window);
+      Unwrap<Element>()->DispatchScopedEvent(*event);
+    };
+
+    // Simulate key events in case the website checks via JS that a keyboard
+    // interaction took place.
+    if (base::FeatureList::IsEnabled(
+            blink::features::kAutofillSendUnidentifiedKeyAfterFill)) {
+      send_event(WebInputEvent::Type::kRawKeyDown);
+    } else {
+      Unwrap<Element>()->DispatchScopedEvent(
+          *Event::CreateBubble(event_type_names::kKeydown));
+    }
+
     Unwrap<TextControlElement>()->SetAutofillValue(
         value, value.IsEmpty() ? WebAutofillState::kNotFilled : autofill_state);
-    Unwrap<Element>()->DispatchScopedEvent(
-        *Event::CreateBubble(event_type_names::kKeyup));
+
+    if (base::FeatureList::IsEnabled(
+            blink::features::kAutofillSendUnidentifiedKeyAfterFill)) {
+      send_event(WebInputEvent::Type::kChar);
+      send_event(WebInputEvent::Type::kKeyUp);
+    } else {
+      Unwrap<Element>()->DispatchScopedEvent(
+          *Event::CreateBubble(event_type_names::kKeyup));
+    }
+
     if (!Focused())
       DispatchBlurEvent();
   } else if (auto* select = ::blink::DynamicTo<HTMLSelectElement>(*private_)) {
@@ -240,14 +249,21 @@ WebString WebFormControlElement::EditingValue() const {
   return WebString();
 }
 
-void WebFormControlElement::SetSelectionRange(int start, int end) {
+int WebFormControlElement::MaxLength() const {
+  if (auto* text_control = ::blink::DynamicTo<TextControlElement>(*private_)) {
+    return text_control->maxLength();
+  }
+  return -1;
+}
+
+void WebFormControlElement::SetSelectionRange(unsigned start, unsigned end) {
   if (auto* input = ::blink::DynamicTo<HTMLInputElement>(*private_))
     input->SetSelectionRange(start, end);
   if (auto* textarea = ::blink::DynamicTo<HTMLTextAreaElement>(*private_))
     textarea->SetSelectionRange(start, end);
 }
 
-int WebFormControlElement::SelectionStart() const {
+unsigned WebFormControlElement::SelectionStart() const {
   if (auto* input = ::blink::DynamicTo<HTMLInputElement>(*private_))
     return input->selectionStart();
   if (auto* textarea = ::blink::DynamicTo<HTMLTextAreaElement>(*private_))
@@ -255,7 +271,7 @@ int WebFormControlElement::SelectionStart() const {
   return 0;
 }
 
-int WebFormControlElement::SelectionEnd() const {
+unsigned WebFormControlElement::SelectionEnd() const {
   if (auto* input = ::blink::DynamicTo<HTMLInputElement>(*private_))
     return input->selectionEnd();
   if (auto* textarea = ::blink::DynamicTo<HTMLTextAreaElement>(*private_))
@@ -263,32 +279,29 @@ int WebFormControlElement::SelectionEnd() const {
   return 0;
 }
 
-WebString WebFormControlElement::AlignmentForFormData() const {
+WebFormControlElement::Alignment WebFormControlElement::AlignmentForFormData()
+    const {
   if (const ComputedStyle* style =
           ConstUnwrap<HTMLFormControlElement>()->GetComputedStyle()) {
     if (style->GetTextAlign() == ETextAlign::kRight)
-      return WebString::FromUTF8("right");
+      return Alignment::kRight;
     if (style->GetTextAlign() == ETextAlign::kLeft)
-      return WebString::FromUTF8("left");
+      return Alignment::kLeft;
   }
-  return WebString();
+  return Alignment::kNotSet;
 }
 
-WebString WebFormControlElement::DirectionForFormData() const {
+base::i18n::TextDirection WebFormControlElement::DirectionForFormData() const {
   if (const ComputedStyle* style =
           ConstUnwrap<HTMLFormControlElement>()->GetComputedStyle()) {
-    return style->IsLeftToRightDirection() ? WebString::FromUTF8("ltr")
-                                           : WebString::FromUTF8("rtl");
+    return style->IsLeftToRightDirection() ? base::i18n::LEFT_TO_RIGHT
+                                           : base::i18n::RIGHT_TO_LEFT;
   }
-  return WebString::FromUTF8("ltr");
+  return base::i18n::LEFT_TO_RIGHT;
 }
 
 WebFormElement WebFormControlElement::Form() const {
   return WebFormElement(ConstUnwrap<HTMLFormControlElement>()->Form());
-}
-
-uint64_t WebFormControlElement::UniqueRendererFormControlId() const {
-  return ConstUnwrap<HTMLFormControlElement>()->UniqueRendererFormControlId();
 }
 
 int32_t WebFormControlElement::GetAxId() const {

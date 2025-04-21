@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <string>
 
+class GaiaId;
 class Profile;
 class SigninUIError;
 
@@ -19,13 +20,11 @@ class SigninUIError;
 // TODO(alexilin): consider renaming this function to CanOfferSyncOrReauth() or
 // similar to make it clear that this function is about signin into Sync.
 SigninUIError CanOfferSignin(Profile* profile,
-                             const std::string& gaia_id,
+                             const GaiaId& gaia_id,
                              const std::string& email);
 
-// Return true if the account given by |email| and |gaia_id| is signed in to
-// Chrome in a different profile.
-bool IsCrossAccountError(Profile* profile,
-                         const std::string& email,
-                         const std::string& gaia_id);
+// Return true if an account other than `gaia_id` was previously signed into
+// `profile`.
+bool IsCrossAccountError(Profile* profile, const GaiaId& gaia_id);
 
 #endif  // CHROME_BROWSER_UI_WEBUI_SIGNIN_SIGNIN_UTILS_DESKTOP_H_

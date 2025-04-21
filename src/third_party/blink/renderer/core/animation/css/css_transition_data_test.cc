@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,12 @@
 
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/platform/animation/timing_function.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 namespace blink {
 
 TEST(CSSTransitionData, TransitionsMatchForStyleRecalc_Initial) {
+  test::TaskEnvironment task_environment;
   std::unique_ptr<CSSTransitionData> transition1 =
       std::make_unique<CSSTransitionData>();
   std::unique_ptr<CSSTransitionData> transition2 =
@@ -18,6 +20,7 @@ TEST(CSSTransitionData, TransitionsMatchForStyleRecalc_Initial) {
 }
 
 TEST(CSSTransitionData, TransitionsMatchForStyleRecalc_CubicBezierSameObject) {
+  test::TaskEnvironment task_environment;
   std::unique_ptr<CSSTransitionData> transition1 =
       std::make_unique<CSSTransitionData>();
   std::unique_ptr<CSSTransitionData> transition2 =

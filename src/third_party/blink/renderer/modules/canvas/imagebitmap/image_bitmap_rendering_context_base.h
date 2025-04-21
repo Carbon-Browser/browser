@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,24 +33,28 @@ class MODULES_EXPORT ImageBitmapRenderingContextBase
   bool CanCreateCanvas2dResourceProvider() const;
   V8UnionHTMLCanvasElementOrOffscreenCanvas* getHTMLOrOffscreenCanvas() const;
 
-  void SetIsInHiddenPage(bool) override {}
-  void SetIsBeingDisplayed(bool) override {}
+  void PageVisibilityChanged() override {}
   bool isContextLost() const override { return false; }
   // If SetImage receives a null imagebitmap, it will Reset the internal bitmap
   // to a black and transparent bitmap.
   void SetImage(ImageBitmap*);
-  scoped_refptr<StaticBitmapImage> GetImage() final;
+  scoped_refptr<StaticBitmapImage> GetImage(FlushReason) final;
 
   void SetUV(const gfx::PointF& left_top, const gfx::PointF& right_bottom);
-  bool IsComposited() const final { return true; }
-  bool IsAccelerated() const final;
-  bool PushFrame() override;
 
-  bool IsOriginTopLeft() const override;
+  SkAlphaType GetAlphaType() const override { return kPremul_SkAlphaType; }
+  SkColorType GetSkColorType() const override { return kN32_SkColorType; }
+  sk_sp<SkColorSpace> GetSkColorSpace() const override {
+    return SkColorSpace::MakeSRGB();
+  }
+  bool IsComposited() const final { return true; }
+  bool PushFrame() override;
 
   cc::Layer* CcLayer() const final;
   // TODO(junov): handle lost contexts when content is GPU-backed
   void LoseContext(LostContextMode) override {}
+
+  void Reset() override;
 
   void Stop() override;
 

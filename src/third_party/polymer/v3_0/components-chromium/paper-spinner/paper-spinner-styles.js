@@ -8,10 +8,9 @@ found at http://polymer.github.io/CONTRIBUTORS.txt Code distributed by Google as
 part of the polymer project is also subject to an additional IP rights grant
 found at http://polymer.github.io/PATENTS.txt
 */
-const $_documentContainer = document.createElement('template');
-$_documentContainer.setAttribute('style', 'display: none;');
+import {html} from '../polymer/polymer_bundled.min.js';
 
-$_documentContainer.innerHTML = `<dom-module id="paper-spinner-styles">
+const template = html`<dom-module id="paper-spinner-styles">
   <template>
     <style>
       /*
@@ -48,6 +47,12 @@ $_documentContainer.innerHTML = `<dom-module id="paper-spinner-styles">
 
         /* SHRINK_TIME */
         --paper-spinner-cooldown-duration: 400ms;
+
+        /* Colors */
+        --google-red-500: #db4437;
+        --google-blue-500: #4285f4;
+        --google-green-500: #0f9d58;
+        --google-yellow-500: #f4b400;
       }
 
       #spinnerContainer {
@@ -324,6 +329,6 @@ $_documentContainer.innerHTML = `<dom-module id="paper-spinner-styles">
   </template>
 </dom-module>`;
 
-document.head.appendChild($_documentContainer.content);
+document.head.appendChild(template.content);
 
 export {};

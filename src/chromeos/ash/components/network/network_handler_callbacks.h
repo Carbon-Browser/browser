@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,31 +6,30 @@
 #define CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_HANDLER_CALLBACKS_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/values.h"
-#include "chromeos/dbus/common/dbus_method_call_status.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chromeos/dbus/common/dbus_callback.h"
 
-namespace chromeos {
-namespace network_handler {
+namespace ash::network_handler {
 
 COMPONENT_EXPORT(CHROMEOS_NETWORK) extern const char kDBusFailedError[];
 
 // On success, |result| contains the result. On failure, |result| is nullopt.
 using ResultCallback =
     base::OnceCallback<void(const std::string& service_path,
-                            absl::optional<base::Value> result)>;
+                            std::optional<base::Value::Dict> result)>;
 
 // On success, |properties| contains the resulting properties and |error| is
 // nullopt. On failure, |result| is nullopt and |error| may contain an error
 // identifier.
 using PropertiesCallback =
     base::OnceCallback<void(const std::string& service_path,
-                            absl::optional<base::Value> properties,
-                            absl::optional<std::string> error)>;
+                            std::optional<base::Value::Dict> properties,
+                            std::optional<std::string> error)>;
 
 // An error callback used by both the configuration handler and the state
 // handler to receive error results from the API.
@@ -58,12 +57,6 @@ void ShillErrorCallbackFunction(const std::string& error_name,
                                 const std::string& dbus_error_name,
                                 const std::string& dbus_error_message);
 
-}  // namespace network_handler
-}  // namespace chromeos
-
-namespace ash {
-// TODO(https://crbug.com/1164001): remove when moved to ash.
-namespace network_handler = ::chromeos::network_handler;
-}  // namespace ash
+}  // namespace ash::network_handler
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_HANDLER_CALLBACKS_H_

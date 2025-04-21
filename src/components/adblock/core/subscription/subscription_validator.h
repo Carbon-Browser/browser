@@ -19,34 +19,39 @@
 #define COMPONENTS_ADBLOCK_CORE_SUBSCRIPTION_SUBSCRIPTION_VALIDATOR_H_
 
 #include "base/files/file_path.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback_forward.h"
 #include "components/adblock/core/common/flatbuffer_data.h"
 
 namespace adblock {
 
 // Validates potentially untrusted Subscriptions read from disk.
-// Is thread-safe, can be called from a background thread.
-class SubscriptionValidator
-    : public base::RefCountedThreadSafe<SubscriptionValidator> {
+// Is thread-safe, returned callbacks can be called from a background thread.
+class SubscriptionValidator {
  public:
+  virtual ~SubscriptionValidator() = default;
   // Verifies if |data| has a signature that matches a previously stored
   // signature for |path| and whether the schema version is supported. To avoid
-  // race conditions, only the initial state is considered. Subsequent calls to
-  // |StoreTrustedSignature| will not affect the results. You need to recreate
-  // the object to read new initial state.
-  virtual bool IsSignatureValid(const FlatbufferData& data,
-                                const base::FilePath& path) const = 0;
+  // race conditions, only the state current for the time of retrieving the
+  // callback is considered, subsequent calls to |StoreTrustedSignature| will
+  // not affect the results. You need to recreate the callback to read new
+  // state.
+  using IsSignatureValidThreadSafeCallback =
+      base::RepeatingCallback<bool(const FlatbufferData& data,
+                                   const base::FilePath& path)>;
+  virtual IsSignatureValidThreadSafeCallback IsSignatureValid() const = 0;
+
   // Asynchronously persistently store the signature of |data| associated with
   // |path|.
-  virtual void StoreTrustedSignature(const FlatbufferData& data,
-                                     const base::FilePath& path) = 0;
+  using StoreTrustedSignatureThreadSafeCallback =
+      base::OnceCallback<void(const FlatbufferData& data,
+                              const base::FilePath& path)>;
+  virtual StoreTrustedSignatureThreadSafeCallback StoreTrustedSignature() = 0;
+
   // Asynchronously removes the signature of file |path| from persistent
   // storage.
-  virtual void RemoveStoredSignature(const base::FilePath& path) = 0;
-
- protected:
-  friend class base::RefCountedThreadSafe<SubscriptionValidator>;
-  virtual ~SubscriptionValidator();
+  using RemoveStoredSignatureThreadSafeCallback =
+      base::OnceCallback<void(const base::FilePath& path)>;
+  virtual RemoveStoredSignatureThreadSafeCallback RemoveStoredSignature() = 0;
 };
 
 }  // namespace adblock

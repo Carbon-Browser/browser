@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,12 @@
 #include <utility>
 
 #include "base/files/file_path.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_future.h"
 #include "components/device_signals/core/common/common_types.h"
-#include "components/device_signals/core/common/file_system_service.h"
-#include "components/device_signals/core/common/mock_file_system_service.h"
+#include "components/device_signals/core/system_signals/file_system_service.h"
+#include "components/device_signals/core/system_signals/mock_file_system_service.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -28,15 +29,20 @@ class LinuxSystemSignalsServiceTest : public testing::Test {
         std::make_unique<testing::StrictMock<MockFileSystemService>>();
     file_system_service_ = file_system_service.get();
 
+    mojo::PendingReceiver<device_signals::mojom::SystemSignalsService>
+        fake_receiver;
+
     // Have to use "new" since make_unique doesn't have access to friend private
     // constructor.
     linux_system_signals_service_ = std::unique_ptr<LinuxSystemSignalsService>(
-        new LinuxSystemSignalsService(std::move(file_system_service)));
+        new LinuxSystemSignalsService(std::move(fake_receiver),
+                                      std::move(file_system_service)));
   }
 
   base::test::TaskEnvironment task_environment_;
-  MockFileSystemService* file_system_service_;
   std::unique_ptr<LinuxSystemSignalsService> linux_system_signals_service_;
+  // Owned by linux_system_signals_service_.
+  raw_ptr<MockFileSystemService> file_system_service_;
 };
 
 // Tests that GetFileSystemSignals forwards the signal collection to

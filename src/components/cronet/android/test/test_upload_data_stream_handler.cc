@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,11 +10,13 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
-#include "components/cronet/android/cronet_tests_jni_headers/TestUploadDataStreamHandler_jni.h"
+#include "base/functional/bind.h"
 #include "components/cronet/android/test/cronet_test_util.h"
 #include "net/base/net_errors.h"
 #include "net/log/net_log_with_source.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "components/cronet/android/cronet_test_apk_jni/TestUploadDataStreamHandler_jni.h"
 
 using base::android::JavaParamRef;
 
@@ -39,9 +41,7 @@ TestUploadDataStreamHandler::TestUploadDataStreamHandler(
 TestUploadDataStreamHandler::~TestUploadDataStreamHandler() {
 }
 
-void TestUploadDataStreamHandler::Destroy(
-    JNIEnv* env,
-    const JavaParamRef<jobject>& jcaller) {
+void TestUploadDataStreamHandler::Destroy(JNIEnv* env) {
   DCHECK(!network_thread_->BelongsToCurrentThread());
   network_thread_->DeleteSoon(FROM_HERE, this);
 }
@@ -61,8 +61,7 @@ void TestUploadDataStreamHandler::OnReadCompleted(int res) {
   NotifyJavaReadCompleted();
 }
 
-void TestUploadDataStreamHandler::Init(JNIEnv* env,
-                                       const JavaParamRef<jobject>& jcaller) {
+void TestUploadDataStreamHandler::Init(JNIEnv* env) {
   DCHECK(!network_thread_->BelongsToCurrentThread());
   network_thread_->PostTask(
       FROM_HERE,
@@ -70,8 +69,7 @@ void TestUploadDataStreamHandler::Init(JNIEnv* env,
                      base::Unretained(this)));
 }
 
-void TestUploadDataStreamHandler::Read(JNIEnv* env,
-                                       const JavaParamRef<jobject>& jcaller) {
+void TestUploadDataStreamHandler::Read(JNIEnv* env) {
   DCHECK(!network_thread_->BelongsToCurrentThread());
   network_thread_->PostTask(
       FROM_HERE,
@@ -79,8 +77,7 @@ void TestUploadDataStreamHandler::Read(JNIEnv* env,
                      base::Unretained(this)));
 }
 
-void TestUploadDataStreamHandler::Reset(JNIEnv* env,
-                                        const JavaParamRef<jobject>& jcaller) {
+void TestUploadDataStreamHandler::Reset(JNIEnv* env) {
   DCHECK(!network_thread_->BelongsToCurrentThread());
   network_thread_->PostTask(
       FROM_HERE,
@@ -88,9 +85,7 @@ void TestUploadDataStreamHandler::Reset(JNIEnv* env,
                      base::Unretained(this)));
 }
 
-void TestUploadDataStreamHandler::CheckInitCallbackNotInvoked(
-    JNIEnv* env,
-    const JavaParamRef<jobject>& jcaller) {
+void TestUploadDataStreamHandler::CheckInitCallbackNotInvoked(JNIEnv* env) {
   DCHECK(!network_thread_->BelongsToCurrentThread());
   network_thread_->PostTask(
       FROM_HERE, base::BindOnce(&TestUploadDataStreamHandler::
@@ -98,9 +93,7 @@ void TestUploadDataStreamHandler::CheckInitCallbackNotInvoked(
                                 base::Unretained(this)));
 }
 
-void TestUploadDataStreamHandler::CheckReadCallbackNotInvoked(
-    JNIEnv* env,
-    const JavaParamRef<jobject>& jcaller) {
+void TestUploadDataStreamHandler::CheckReadCallbackNotInvoked(JNIEnv* env) {
   DCHECK(!network_thread_->BelongsToCurrentThread());
   network_thread_->PostTask(
       FROM_HERE, base::BindOnce(&TestUploadDataStreamHandler::

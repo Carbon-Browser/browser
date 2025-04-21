@@ -1,16 +1,13 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_CDM_CENC_DECRYPTOR_H_
 #define MEDIA_CDM_CENC_DECRYPTOR_H_
 
-#include "base/memory/ref_counted.h"
+#include "base/containers/span.h"
+#include "base/memory/scoped_refptr.h"
 #include "media/base/media_export.h"
-
-namespace crypto {
-class SymmetricKey;
-}
 
 namespace media {
 class DecoderBuffer;
@@ -39,7 +36,7 @@ class DecoderBuffer;
 // |input|->DecryptConfig. The key size must be 128 bits.
 MEDIA_EXPORT scoped_refptr<DecoderBuffer> DecryptCencBuffer(
     const DecoderBuffer& input,
-    const crypto::SymmetricKey& key);
+    base::span<const uint8_t> key);
 
 }  // namespace media
 

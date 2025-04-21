@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@ namespace variable_expander {
 
 // Disable logging.
 struct Environment {
-  Environment() { logging::SetMinLogLevel(logging::LOG_FATAL); }
+  Environment() { logging::SetMinLogLevel(logging::LOGGING_FATAL); }
 };
 
 Environment* env = new Environment();

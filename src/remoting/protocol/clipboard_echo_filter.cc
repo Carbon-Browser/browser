@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,13 @@
 
 #include "remoting/proto/event.pb.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 ClipboardEchoFilter::ClipboardEchoFilter()
-  : host_stub_(nullptr),
-    client_stub_(nullptr),
-    client_filter_(this),
-    host_filter_(this) {
-}
+    : host_stub_(nullptr),
+      client_stub_(nullptr),
+      client_filter_(this),
+      host_filter_(this) {}
 
 ClipboardEchoFilter::~ClipboardEchoFilter() = default;
 
@@ -55,23 +53,20 @@ void ClipboardEchoFilter::InjectClipboardEventToHost(
   }
 }
 
-ClipboardEchoFilter::ClientFilter::ClientFilter(
-    ClipboardEchoFilter* filter) : filter_(filter) {
-}
+ClipboardEchoFilter::ClientFilter::ClientFilter(ClipboardEchoFilter* filter)
+    : filter_(filter) {}
 
 void ClipboardEchoFilter::ClientFilter::InjectClipboardEvent(
     const ClipboardEvent& event) {
   filter_->InjectClipboardEventToClient(event);
 }
 
-ClipboardEchoFilter::HostFilter::HostFilter(
-    ClipboardEchoFilter* filter) : filter_(filter) {
-}
+ClipboardEchoFilter::HostFilter::HostFilter(ClipboardEchoFilter* filter)
+    : filter_(filter) {}
 
 void ClipboardEchoFilter::HostFilter::InjectClipboardEvent(
     const ClipboardEvent& event) {
   filter_->InjectClipboardEventToHost(event);
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

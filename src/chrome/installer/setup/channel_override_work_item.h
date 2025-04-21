@@ -1,13 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_INSTALLER_SETUP_CHANNEL_OVERRIDE_WORK_ITEM_H_
 #define CHROME_INSTALLER_SETUP_CHANNEL_OVERRIDE_WORK_ITEM_H_
 
+#include <optional>
+
 #include "chrome/installer/util/additional_parameters.h"
 #include "chrome/installer/util/work_item.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 // A WorkItem that, when run, will change the browser's "ap" value so that the
 // update channel identified by "ap" matches the current channel. No change is
@@ -38,7 +39,7 @@ class ChannelOverrideWorkItem : public WorkItem {
 
   // The original value to be used in rollback. Only valid when a change has
   // been made.
-  absl::optional<installer::AdditionalParameters> original_ap_;
+  std::optional<installer::AdditionalParameters> original_ap_;
 };
 
 #endif  // CHROME_INSTALLER_SETUP_CHANNEL_OVERRIDE_WORK_ITEM_H_

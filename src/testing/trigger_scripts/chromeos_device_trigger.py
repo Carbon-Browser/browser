@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Custom swarming trigger script for ChromeOS device tests.
@@ -59,9 +59,8 @@ def parse_args(triggerer):
         action='append',
         nargs=2,
         dest='dimensions',
-        help=
-        'Dimensions to filter on. Duplicated from the `swarming.py trigger` '
-        'command. Parsed here to ensure `device_os` is not added.')
+        help='Dimensions to filter on. Duplicated from the `swarming.py '
+        'trigger` command. Parsed here to ensure `device_os` is not added.')
     parser.add_argument(
         '--optional-dimension',
         default=[],
@@ -77,10 +76,8 @@ def parse_args(triggerer):
                                             args.dump_json)
 
     if additional_args[0] != 'trigger':
-        parser.error(
-            'This script is only supported for `swarming.py trigger`'
-            ' invocations.'
-        )
+        parser.error('This script is only supported for `swarming.py trigger`'
+                     ' invocations.')
 
     for k, _ in args.dimensions:
         if k == 'device_os':
@@ -127,8 +124,8 @@ def main():
     ])
     new_args += additional_args[1:]
 
-    return triggerer.run_swarming_go(new_args, args.dump_json,
-                                     args.shard_index or 0, args.shards)
+    return triggerer.run_swarming_go(new_args, args.dump_json, args.shard_index
+                                     or 0, args.shards)
 
 
 if __name__ == '__main__':

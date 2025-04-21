@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,12 +10,16 @@
 #include "chrome/browser/ui/views/webauthn/authenticator_request_sheet_view.h"
 #include "chrome/browser/ui/webauthn/account_hover_list_model.h"
 #include "chrome/browser/ui/webauthn/sheet_models.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 
 // Web Authentication request dialog sheet view for selecting between one or
 // more accounts.
 class AuthenticatorSelectAccountSheetView
     : public AuthenticatorRequestSheetView,
       public AccountHoverListModel::Delegate {
+  METADATA_HEADER(AuthenticatorSelectAccountSheetView,
+                  AuthenticatorRequestSheetView)
+
  public:
   explicit AuthenticatorSelectAccountSheetView(
       std::unique_ptr<AuthenticatorSelectAccountSheetModel> model);
@@ -38,7 +42,7 @@ class AuthenticatorSelectAccountSheetView
       override;
 
   // AccountHoverListModel::Delegate:
-  void OnItemSelected(int index) override;
+  void CredentialSelected(size_t index) override;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_WEBAUTHN_AUTHENTICATOR_SELECT_ACCOUNT_SHEET_VIEW_H_

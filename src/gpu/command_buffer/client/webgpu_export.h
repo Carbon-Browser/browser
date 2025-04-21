@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef GPU_COMMAND_BUFFER_CLIENT_WEBGPU_EXPORT_H_
 #define GPU_COMMAND_BUFFER_CLIENT_WEBGPU_EXPORT_H_
 
-#if defined(COMPONENT_BUILD) && !defined(NACL_WIN64)
+#if defined(COMPONENT_BUILD)
 #if defined(WIN32)
 
 #if defined(WEBGPU_IMPLEMENTATION)

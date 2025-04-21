@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "content/public/browser/web_contents_user_data.h"
 
 class GURL;
+class PrefChangeRegistrar;
 
 namespace content {
 class WebContents;
@@ -62,7 +63,13 @@ class QRCodeGeneratorBubbleController
   // Handler for when the back button is pressed.
   void OnBackButtonPressed();
 
-  void UpdateIcon();
+  // Hides the bubble if the policy controlling the QR code generator is
+  // disabled.
+  void OnPolicyPrefChanged();
+
+  // When the bubble is visible, used for tracking changes to the policy
+  // controlling the QR code generator.
+  std::unique_ptr<PrefChangeRegistrar> pref_change_registrar_;
 
   // Will be nullptr if no bubble is currently shown.
   raw_ptr<QRCodeGeneratorBubbleView> qrcode_generator_bubble_ = nullptr;

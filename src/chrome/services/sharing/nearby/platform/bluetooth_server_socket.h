@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,13 @@
 
 #include <memory>
 
+#include "base/task/sequenced_task_runner.h"
 #include "device/bluetooth/public/mojom/adapter.mojom.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/shared_remote.h"
 #include "third_party/nearby/src/internal/platform/implementation/bluetooth_classic.h"
 
-namespace location {
-namespace nearby {
-namespace chrome {
+namespace nearby::chrome {
 
 // Concrete BluetoothServerSocket implementation.
 class BluetoothServerSocket : public api::BluetoothServerSocket {
@@ -42,8 +41,6 @@ class BluetoothServerSocket : public api::BluetoothServerSocket {
   mojo::SharedRemote<bluetooth::mojom::ServerSocket> server_socket_;
 };
 
-}  // namespace chrome
-}  // namespace nearby
-}  // namespace location
+}  // namespace nearby::chrome
 
 #endif  // CHROME_SERVICES_SHARING_NEARBY_PLATFORM_BLUETOOTH_SERVER_SOCKET_H_

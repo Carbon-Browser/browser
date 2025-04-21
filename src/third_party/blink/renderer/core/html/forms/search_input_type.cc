@@ -42,13 +42,14 @@
 #include "third_party/blink/renderer/core/html/shadow/shadow_element_names.h"
 #include "third_party/blink/renderer/core/html_names.h"
 #include "third_party/blink/renderer/core/input_type_names.h"
+#include "third_party/blink/renderer/core/keywords.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 
 namespace blink {
 
 SearchInputType::SearchInputType(HTMLInputElement& element)
-    : BaseTextInputType(element),
+    : BaseTextInputType(Type::kSearch, element),
       search_event_timer_(
           element.GetDocument().GetTaskRunner(TaskType::kUserInteraction),
           this,
@@ -58,12 +59,8 @@ void SearchInputType::CountUsage() {
   CountUsageIfVisible(WebFeature::kInputTypeSearch);
 }
 
-const AtomicString& SearchInputType::FormControlType() const {
-  return input_type_names::kSearch;
-}
-
-ControlPart SearchInputType::AutoAppearance() const {
-  return kSearchFieldPart;
+AppearanceValue SearchInputType::AutoAppearance() const {
+  return AppearanceValue::kSearchField;
 }
 
 bool SearchInputType::NeedsContainer() const {
@@ -88,7 +85,8 @@ void SearchInputType::HandleKeydownEvent(KeyboardEvent& event) {
     return;
   }
 
-  if (event.key() == "Escape" && GetElement().InnerEditorValue().length()) {
+  if (event.key() == keywords::kEscape &&
+      GetElement().InnerEditorValue().length()) {
     GetElement().SetValueForUser("");
     GetElement().OnSearch();
     event.SetDefaultHandled();
@@ -106,8 +104,8 @@ void SearchInputType::StartSearchEventTimer() {
     GetElement()
         .GetDocument()
         .GetTaskRunner(TaskType::kUserInteraction)
-        ->PostTask(FROM_HERE, WTF::Bind(&HTMLInputElement::OnSearch,
-                                        WrapPersistent(&GetElement())));
+        ->PostTask(FROM_HERE, WTF::BindOnce(&HTMLInputElement::OnSearch,
+                                            WrapPersistent(&GetElement())));
     return;
   }
 
@@ -147,11 +145,11 @@ void SearchInputType::UpdateView() {
 }
 
 void SearchInputType::UpdateCancelButtonVisibility() {
-  Element* button = GetElement().UserAgentShadowRoot()->getElementById(
+  Element* button = GetElement().EnsureShadowSubtree()->getElementById(
       shadow_element_names::kIdSearchClearButton);
   if (!button)
     return;
-  if (GetElement().Value().IsEmpty()) {
+  if (GetElement().Value().empty()) {
     button->SetInlineStyleProperty(CSSPropertyID::kOpacity, 0.0,
                                    CSSPrimitiveValue::UnitType::kNumber);
     button->SetInlineStyleProperty(CSSPropertyID::kPointerEvents,

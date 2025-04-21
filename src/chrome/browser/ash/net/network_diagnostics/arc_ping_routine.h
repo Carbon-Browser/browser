@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 
 #include "ash/components/arc/mojom/net.mojom.h"
 #include "ash/components/arc/session/arc_bridge_service.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/net/network_diagnostics/network_diagnostics_routine.h"
 #include "chromeos/services/network_config/public/mojom/cros_network_config.mojom.h"
@@ -18,12 +19,6 @@
 namespace ash {
 namespace network_diagnostics {
 
-namespace {
-
-using chromeos::network_config::mojom::ManagedPropertiesPtr;
-
-}  // namespace
-
 // Performs ICMP echo requests from within ARC to a random set of addresses
 // and returns the result.
 class ArcPingRoutine : public NetworkDiagnosticsRoutine {
@@ -31,7 +26,8 @@ class ArcPingRoutine : public NetworkDiagnosticsRoutine {
   using RunArcHttpCallback = chromeos::network_diagnostics::mojom::
       NetworkDiagnosticsRoutines::RunArcPingCallback;
 
-  ArcPingRoutine();
+  explicit ArcPingRoutine(
+      chromeos::network_diagnostics::mojom::RoutineCallSource source);
   ArcPingRoutine(const ArcPingRoutine&) = delete;
   ArcPingRoutine& operator=(const ArcPingRoutine&) = delete;
   ~ArcPingRoutine() override;
@@ -100,7 +96,7 @@ class ArcPingRoutine : public NetworkDiagnosticsRoutine {
   std::string default_network_gateway_;
   int guids_remaining_ = 0;
   int gateways_remaining_ = 0;
-  arc::mojom::NetInstance* net_instance_ = nullptr;
+  raw_ptr<arc::mojom::NetInstance, DanglingUntriaged> net_instance_ = nullptr;
   base::WeakPtrFactory<ArcPingRoutine> weak_ptr_factory_{this};
 };
 

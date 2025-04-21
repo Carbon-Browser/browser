@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,13 @@
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 
 namespace media {
 
 OffloadingAudioEncoder::OffloadingAudioEncoder(
     std::unique_ptr<AudioEncoder> wrapped_encoder,
-    const scoped_refptr<base::SequencedTaskRunner> work_runner,
-    const scoped_refptr<base::SequencedTaskRunner> callback_runner)
+    scoped_refptr<base::SequencedTaskRunner> work_runner,
+    scoped_refptr<base::SequencedTaskRunner> callback_runner)
     : wrapped_encoder_(std::move(wrapped_encoder)),
       work_runner_(std::move(work_runner)),
       callback_runner_(std::move(callback_runner)) {
@@ -23,6 +22,10 @@ OffloadingAudioEncoder::OffloadingAudioEncoder(
   DCHECK(work_runner_);
   DCHECK(callback_runner_);
   DCHECK_NE(callback_runner_, work_runner_);
+
+  // Tell the inner encoder not to bother wrapping callbacks into separate
+  // runner tasks and call them directly.
+  wrapped_encoder_->DisablePostedCallbacks();
 }
 
 OffloadingAudioEncoder::OffloadingAudioEncoder(
@@ -30,7 +33,7 @@ OffloadingAudioEncoder::OffloadingAudioEncoder(
     : OffloadingAudioEncoder(std::move(wrapped_encoder),
                              base::ThreadPool::CreateSequencedTaskRunner(
                                  {base::TaskPriority::USER_BLOCKING}),
-                             base::SequencedTaskRunnerHandle::Get()) {}
+                             base::SequencedTaskRunner::GetCurrentDefault()) {}
 
 void OffloadingAudioEncoder::Initialize(const Options& options,
                                         OutputCB output_cb,

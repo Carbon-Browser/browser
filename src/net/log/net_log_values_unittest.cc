@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@ namespace net {
 
 // Calls NetLogASCIIStringValue() on |raw| and returns the resulting string
 // (rather than the base::Value).
-std::string GetNetLogString(base::StringPiece raw) {
+std::string GetNetLogString(std::string_view raw) {
   base::Value value = NetLogStringValue(raw);
   EXPECT_TRUE(value.is_string());
   return value.GetString();

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,12 +16,11 @@
 
 class Profile;
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 
 class FakeExtensionProvider : public ProviderInterface {
  public:
-  ~FakeExtensionProvider() override {}
+  ~FakeExtensionProvider() override = default;
 
   // Returns a fake provider instance for the specified extension. The extension
   // doesn't have to exist.
@@ -31,12 +30,14 @@ class FakeExtensionProvider : public ProviderInterface {
   // ProviderInterface overrides.
   std::unique_ptr<ProvidedFileSystemInterface> CreateProvidedFileSystem(
       Profile* profile,
-      const ProvidedFileSystemInfo& file_system_info) override;
+      const ProvidedFileSystemInfo& file_system_info,
+      CacheManager* cache_manager) override;
   const Capabilities& GetCapabilities() const override;
   const ProviderId& GetId() const override;
   const std::string& GetName() const override;
   const IconSet& GetIconSet() const override;
-  bool RequestMount(Profile* profile) override;
+  RequestManager* GetRequestManager() override;
+  bool RequestMount(Profile* profile, RequestMountCallback callback) override;
 
  protected:
   FakeExtensionProvider(const extensions::ExtensionId& extension_id,
@@ -48,7 +49,6 @@ class FakeExtensionProvider : public ProviderInterface {
   IconSet icon_set_;
 };
 
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider
 
 #endif  // CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_FAKE_EXTENSION_PROVIDER_H_

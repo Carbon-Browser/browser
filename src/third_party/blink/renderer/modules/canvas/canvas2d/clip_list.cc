@@ -1,16 +1,20 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/canvas/canvas2d/clip_list.h"
 
-#include "third_party/blink/renderer/platform/graphics/paint/paint_canvas.h"
-#include "third_party/blink/renderer/platform/transforms/affine_transform.h"
+#include "cc/paint/paint_canvas.h"
+#include "third_party/blink/renderer/platform/graphics/graphics_types.h"
+#include "third_party/skia/include/core/SkClipOp.h"
+#include "third_party/skia/include/core/SkPath.h"
 #include "third_party/skia/include/pathops/SkPathOps.h"
+
+class SkMatrix;
 
 namespace blink {
 
-ClipList::ClipList(const ClipList& other) : clip_list_(other.clip_list_) {}
+ClipList::ClipList(const ClipList& other) = default;
 
 void ClipList::ClipPath(const SkPath& path,
                         AntiAliasingMode anti_aliasing_mode,
@@ -23,16 +27,16 @@ void ClipList::ClipPath(const SkPath& path,
 }
 
 void ClipList::Playback(cc::PaintCanvas* canvas) const {
-  for (const ClipOp* it = clip_list_.begin(); it < clip_list_.end(); it++) {
-    canvas->clipPath(it->path_, SkClipOp::kIntersect,
-                     it->anti_aliasing_mode_ == kAntiAliased);
+  for (const auto& clip : clip_list_) {
+    canvas->clipPath(clip.path_, SkClipOp::kIntersect,
+                     clip.anti_aliasing_mode_ == kAntiAliased);
   }
 }
 
 SkPath ClipList::IntersectPathWithClip(const SkPath& path) const {
   SkPath total = path;
-  for (const ClipOp* it = clip_list_.begin(); it < clip_list_.end(); it++) {
-    Op(total, it->path_, SkPathOp::kIntersect_SkPathOp, &total);
+  for (const auto& clip : clip_list_) {
+    Op(total, clip.path_, SkPathOp::kIntersect_SkPathOp, &total);
   }
   return total;
 }

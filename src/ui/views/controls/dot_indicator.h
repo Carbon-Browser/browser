@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,9 @@ namespace views {
 // Dot indicator that can be added to a view, usually used as a status
 // indicator.
 class VIEWS_EXPORT DotIndicator : public View {
+  METADATA_HEADER(DotIndicator, View)
+
  public:
-  METADATA_HEADER(DotIndicator);
   DotIndicator(DotIndicator&) = delete;
   DotIndicator& operator=(const DotIndicator&) = delete;
   ~DotIndicator() override;
@@ -35,8 +36,8 @@ class VIEWS_EXPORT DotIndicator : public View {
   void OnPaint(gfx::Canvas* canvas) override;
   void OnThemeChanged() override;
 
-  absl::optional<SkColor> dot_color_;
-  absl::optional<SkColor> border_color_;
+  std::optional<SkColor> dot_color_;
+  std::optional<SkColor> border_color_;
 };
 
 }  // namespace views

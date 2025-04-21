@@ -23,10 +23,11 @@ OF THIS SOFTWARE.
 -->
 
 <xcb header="dri3" extension-xname="DRI3" extension-name="DRI3"
-  major-version="1" minor-version="2">
+  major-version="1" minor-version="4">
   <import>xproto</import>
 
   <!-- Types -->
+  <xidtype name="SYNCOBJ" />
 
   <!-- Requests -->
   <request name="QueryVersion" opcode="0">
@@ -162,5 +163,23 @@ OF THIS SOFTWARE.
         <fieldref>nfd</fieldref>
       </list>
     </reply>
+  </request>
+
+  <!-- v1.3 -->
+  <request name="SetDRMDeviceInUse" opcode="9">
+    <field type="WINDOW" name="window" />
+    <field type="CARD32" name="drmMajor" />
+    <field type="CARD32" name="drmMinor" />
+  </request>
+
+  <!-- v1.4 -->
+  <request name="ImportSyncobj" opcode="10">
+    <field type="SYNCOBJ" name="syncobj" />
+    <field type="DRAWABLE" name="drawable" />
+    <fd name="syncobj_fd" />
+  </request>
+
+  <request name="FreeSyncobj" opcode="11">
+    <field type="SYNCOBJ" name="syncobj" />
   </request>
 </xcb>

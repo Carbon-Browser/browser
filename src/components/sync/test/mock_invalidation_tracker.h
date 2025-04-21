@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,7 +53,7 @@ class MockInvalidationTracker {
  private:
   // A counter used to assign strictly increasing IDs to each invalidation
   // issued by this class.
-  int next_id_;
+  int next_id_ = 0;
 
   // Acknowledgements and drops are tracked by adding the IDs for the
   // acknowledged or dropped items to the proper set.  An invalidation may be

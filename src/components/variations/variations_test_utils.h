@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,20 +9,32 @@
 #include <string>
 
 #include "base/containers/span.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/field_trial.h"
+#include "base/test/mock_entropy_provider.h"
+#include "components/variations/active_field_trials.h"
+#include "components/variations/client_filterable_state.h"
+#include "components/variations/entropy_provider.h"
 #include "components/variations/field_trial_config/fieldtrial_testing_config.h"
+#include "components/variations/proto/variations_seed.pb.h"
+#include "components/variations/seed_reader_writer.h"
+#include "components/variations/synthetic_trial_registry.h"
 #include "components/variations/variations_associated_data.h"
 
 class PrefService;
 
 namespace variations {
 
+struct ClientFilterableState;
+
 // Packages signed variations seed data into a tuple for use with
 // WriteSeedData(). This allows for encapsulated seed information to be created
 // below for generic test seeds as well as seeds which cause crashes.
 struct SignedSeedData {
-  base::span<const char*> study_names;  // Names of all studies in the seed.
+  // TODO(367764863) Rewrite to base::raw_span.
+  RAW_PTR_EXCLUSION base::span<const char*>
+      study_names;  // Names of all studies in the seed.
   const char* base64_uncompressed_data;
   const char* base64_compressed_data;
   const char* base64_signature;
@@ -103,6 +115,58 @@ bool FieldTrialListHasAllStudiesFrom(const SignedSeedData& seed_data);
 // Resets variations. Ensures that maps can be cleared between tests since they
 // are stored as process singleton.
 void ResetVariations();
+
+// A no-op UIStringOverrideCallback implementation.
+inline void NoopUIStringOverrideCallback(uint32_t hash,
+                                         const std::u16string& string) {}
+
+// Create a ClientFilterableState with valid, but unimportant values.
+// Tests that actually expect specific values should set them on the result.
+std::unique_ptr<ClientFilterableState> CreateDummyClientFilterableState();
+
+// An mock entropy result that will always pick the first non-zero weight group.
+constexpr double kAlwaysUseFirstGroup = 0;
+// An mock entropy result that will always pick the last non-zero weight group.
+constexpr double kAlwaysUseLastGroup = 1.0 - 1e-8;
+
+// EntropyProviders that return known values.
+class MockEntropyProviders : public EntropyProviders {
+ public:
+  struct Results {
+    double low_entropy = kAlwaysUseLastGroup;
+    std::optional<double> high_entropy = std::nullopt;
+    std::optional<double> limited_entropy = std::nullopt;
+  };
+  explicit MockEntropyProviders(Results results,
+                                uint32_t low_entropy_domain = 8000);
+  ~MockEntropyProviders() override;
+
+  const base::FieldTrial::EntropyProvider& low_entropy() const override;
+  const base::FieldTrial::EntropyProvider& default_entropy() const override;
+  const base::FieldTrial::EntropyProvider& limited_entropy() const override;
+
+ private:
+  base::MockEntropyProvider low_provider_;
+  base::MockEntropyProvider high_provider_;
+  base::MockEntropyProvider limited_provider_;
+};
+
+// Returns a hex string of the GZipped, base64 encoded, and serialized seed.
+std::string GZipAndB64EncodeToHexString(const VariationsSeed& seed);
+
+// Returns whether the active group ids includes the given trial name.
+bool ContainsTrialName(const std::vector<ActiveGroupId>& active_group_ids,
+                       std::string_view trial_name);
+
+// Returns whether the active group ids includes the given trial name with the
+// given group name.
+bool ContainsTrialAndGroupName(
+    const std::vector<ActiveGroupId>& active_group_ids,
+    std::string_view trial_name,
+    std::string_view group_name);
+
+// Sets up the seed file experiment where `group_name` is the active group.
+void SetUpSeedFileTrial(std::string group_name);
 
 }  // namespace variations
 

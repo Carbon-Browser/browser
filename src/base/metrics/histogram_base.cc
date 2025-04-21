@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 
 #include <memory>
 #include <set>
+#include <string_view>
 #include <utility>
 
 #include "base/check_op.h"
@@ -45,13 +46,13 @@ std::string HistogramTypeToString(HistogramType type) {
       return "DUMMY_HISTOGRAM";
   }
   NOTREACHED();
-  return "UNKNOWN";
 }
 
 HistogramBase* DeserializeHistogramInfo(PickleIterator* iter) {
   int type;
-  if (!iter->ReadInt(&type))
+  if (!iter->ReadInt(&type)) {
     return nullptr;
+  }
 
   switch (type) {
     case HISTOGRAM:
@@ -89,8 +90,8 @@ HistogramBase::HistogramBase(const char* name)
 
 HistogramBase::~HistogramBase() = default;
 
-void HistogramBase::CheckName(const StringPiece& name) const {
-  DCHECK_EQ(StringPiece(histogram_name()), name)
+void HistogramBase::CheckName(std::string_view name) const {
+  DCHECK_EQ(std::string_view(histogram_name()), name)
       << "Provided histogram name doesn't match instance name. Are you using a "
          "dynamic string in a macro?";
 }
@@ -103,6 +104,12 @@ void HistogramBase::ClearFlags(int32_t flags) {
   flags_.fetch_and(~flags, std::memory_order_relaxed);
 }
 
+bool HistogramBase::HasFlags(int32_t flags) const {
+  // Check this->flags() is a superset of |flags|, i.e. every flag in |flags| is
+  // included.
+  return (this->flags() & flags) == flags;
+}
+
 void HistogramBase::AddScaled(Sample value, int count, int scale) {
   DCHECK_GT(scale, 0);
 
@@ -111,10 +118,12 @@ void HistogramBase::AddScaled(Sample value, int count, int scale) {
   // count when there are a large number of records. RandInt is "inclusive",
   // hence the -1 for the max value.
   int count_scaled = count / scale;
-  if (count - (count_scaled * scale) > base::RandInt(0, scale - 1))
+  if (count - (count_scaled * scale) > base::RandInt(0, scale - 1)) {
     ++count_scaled;
-  if (count_scaled <= 0)
+  }
+  if (count_scaled <= 0) {
     return;
+  }
 
   AddCount(value, count_scaled);
 }
@@ -135,8 +144,9 @@ void HistogramBase::AddTimeMicrosecondsGranularity(const TimeDelta& time) {
   // Intentionally drop high-resolution reports on clients with low-resolution
   // clocks. High-resolution metrics cannot make use of low-resolution data and
   // reporting it merely adds noise to the metric. https://crbug.com/807615#c16
-  if (TimeTicks::IsHighResolution())
+  if (TimeTicks::IsHighResolution()) {
     Add(saturated_cast<Sample>(time.InMicroseconds()));
+  }
 }
 
 void HistogramBase::AddBoolean(bool value) {
@@ -153,8 +163,6 @@ uint32_t HistogramBase::FindCorruption(const HistogramSamples& samples) const {
   return NO_INCONSISTENCIES;
 }
 
-void HistogramBase::ValidateHistogramContents() const {}
-
 void HistogramBase::WriteJSON(std::string* output,
                               JSONVerbosityLevel verbosity_level) const {
   CountAndBucketData count_and_bucket_data = GetCountAndBucketData();
@@ -167,8 +175,9 @@ void HistogramBase::WriteJSON(std::string* output,
   root.Set("sum", static_cast<double>(count_and_bucket_data.sum));
   root.Set("flags", flags());
   root.Set("params", std::move(parameters));
-  if (verbosity_level != JSON_VERBOSITY_LEVEL_OMIT_BUCKETS)
+  if (verbosity_level != JSON_VERBOSITY_LEVEL_OMIT_BUCKETS) {
     root.Set("buckets", std::move(count_and_bucket_data.buckets));
+  }
   root.Set("pid", static_cast<int>(GetUniqueIdForProcess().GetUnsafeValue()));
   serializer.Serialize(root);
 }
@@ -176,13 +185,15 @@ void HistogramBase::WriteJSON(std::string* output,
 void HistogramBase::FindAndRunCallbacks(HistogramBase::Sample sample) const {
   StatisticsRecorder::GlobalSampleCallback global_sample_callback =
       StatisticsRecorder::global_sample_callback();
-  if (global_sample_callback)
+  if (global_sample_callback) {
     global_sample_callback(histogram_name(), name_hash(), sample);
+  }
 
   // We check the flag first since it is very cheap and we can avoid the
   // function call and lock overhead of FindAndRunHistogramCallbacks().
-  if ((flags() & kCallbackExists) == 0)
+  if (!HasFlags(kCallbackExists)) {
     return;
+  }
 
   StatisticsRecorder::FindAndRunHistogramCallbacks(
       base::PassKey<HistogramBase>(), histogram_name(), name_hash(), sample);
@@ -203,8 +214,8 @@ HistogramBase::CountAndBucketData HistogramBase::GetCountAndBucketData() const {
 
     Value::Dict bucket_value;
     bucket_value.Set("low", bucket_min);
-    // TODO(crbug.com/1334256): Make base::Value able to hold int64_t and remove
-    // this cast.
+    // TODO(crbug.com/40228085): Make base::Value able to hold int64_t and
+    // remove this cast.
     bucket_value.Set("high", static_cast<int>(bucket_max));
     bucket_value.Set("count", bucket_count);
     buckets.Append(std::move(bucket_value));
@@ -219,11 +230,13 @@ void HistogramBase::WriteAsciiBucketGraph(double x_count,
                                           std::string* output) const {
   int x_remainder = line_length - x_count;
 
-  while (0 < x_count--)
+  while (0 < x_count--) {
     output->append("-");
+  }
   output->append("O");
-  while (0 < x_remainder--)
+  while (0 < x_remainder--) {
     output->append(" ");
+  }
 }
 
 const std::string HistogramBase::GetSimpleAsciiBucketRange(
@@ -245,7 +258,7 @@ void HistogramBase::WriteAscii(std::string* output) const {
 }
 
 // static
-char const* HistogramBase::GetPermanentName(const std::string& name) {
+char const* HistogramBase::GetPermanentName(std::string_view name) {
   // A set of histogram names that provides the "permanent" lifetime required
   // by histogram objects for those strings that are not already code constants
   // or held in persistent memory.
@@ -253,7 +266,7 @@ char const* HistogramBase::GetPermanentName(const std::string& name) {
   static base::NoDestructor<Lock> permanent_names_lock;
 
   AutoLock lock(*permanent_names_lock);
-  auto result = permanent_names->insert(name);
+  auto result = permanent_names->insert(std::string(name));
   return result.first->c_str();
 }
 

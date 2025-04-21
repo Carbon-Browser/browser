@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "net/base/completion_once_callback.h"
@@ -27,20 +27,21 @@ namespace disk_cache {
 
 class BackendImpl;
 class EntryImpl;
+class InFlightBackendIO;
 
 // This class represents a single asynchronous disk cache IO operation while it
 // is being bounced between threads.
 class BackendIO : public BackgroundIO {
  public:
-  BackendIO(InFlightIO* controller,
+  BackendIO(InFlightBackendIO* controller,
             BackendImpl* backend,
             net::CompletionOnceCallback callback);
 
-  BackendIO(InFlightIO* controller,
+  BackendIO(InFlightBackendIO* controller,
             BackendImpl* backend,
             EntryResultCallback callback);
 
-  BackendIO(InFlightIO* controller,
+  BackendIO(InFlightBackendIO* controller,
             BackendImpl* backend,
             RangeResultCallback callback);
 
@@ -108,7 +109,7 @@ class BackendIO : public BackgroundIO {
   void ReadyForSparseIO(EntryImpl* entry);
 
  private:
-  BackendIO(InFlightIO* controller, BackendImpl* backend);
+  BackendIO(InFlightBackendIO* controller, BackendImpl* backend);
 
   // There are two types of operations to proxy: regular backend operations are
   // executed sequentially (queued by the message loop). On the other hand,
@@ -154,14 +155,14 @@ class BackendIO : public BackgroundIO {
   void ExecuteBackendOperation();
   void ExecuteEntryOperation();
 
-  raw_ptr<BackendImpl, DanglingUntriaged> backend_;
+  raw_ptr<BackendImpl, AcrossTasksDanglingUntriaged> backend_;
   net::CompletionOnceCallback callback_;
   Operation operation_ = OP_NONE;
 
   // Used for ops that open or create entries.
   EntryResultCallback entry_result_callback_;
   // if set, already has the user's ref added.
-  raw_ptr<Entry, DanglingUntriaged> out_entry_ = nullptr;
+  raw_ptr<EntryImpl> out_entry_ = nullptr;
   bool out_entry_opened_ = false;
 
   // For GetAvailableRange
@@ -172,7 +173,7 @@ class BackendIO : public BackgroundIO {
   std::string key_;
   base::Time initial_time_;
   base::Time end_time_;
-  raw_ptr<Rankings::Iterator, DanglingUntriaged> iterator_ = nullptr;
+  raw_ptr<Rankings::Iterator> iterator_ = nullptr;
   std::unique_ptr<Rankings::Iterator> scoped_iterator_;
   raw_ptr<EntryImpl> entry_ = nullptr;
   int index_ = 0;
@@ -183,6 +184,8 @@ class BackendIO : public BackgroundIO {
   int64_t offset64_ = 0;
   base::TimeTicks start_time_;
   base::OnceClosure task_;
+
+  scoped_refptr<base::SingleThreadTaskRunner> background_task_runner_;
 };
 
 // The specialized controller that keeps track of current operations.

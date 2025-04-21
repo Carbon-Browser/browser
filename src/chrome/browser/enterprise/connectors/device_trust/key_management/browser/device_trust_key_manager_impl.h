@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,14 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/callback_list.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/browser/commands/key_rotation_command.h"
+#include "chrome/browser/enterprise/connectors/device_trust/key_management/browser/key_loader.h"
 #include "components/enterprise/browser/device_trust/device_trust_key_manager.h"
 
 namespace enterprise_connectors {
@@ -27,12 +28,13 @@ class DeviceTrustKeyManagerImpl : public DeviceTrustKeyManager {
   using RotateKeyCallback =
       base::OnceCallback<void(DeviceTrustKeyManager::KeyRotationResult)>;
   using ExportPublicKeyCallback =
-      base::OnceCallback<void(absl::optional<std::string>)>;
+      base::OnceCallback<void(std::optional<std::string>)>;
   using SignStringCallback =
-      base::OnceCallback<void(absl::optional<std::vector<uint8_t>>)>;
+      base::OnceCallback<void(std::optional<std::vector<uint8_t>>)>;
 
-  explicit DeviceTrustKeyManagerImpl(
-      std::unique_ptr<KeyRotationLauncher> key_rotation_launcher);
+  DeviceTrustKeyManagerImpl(
+      std::unique_ptr<KeyRotationLauncher> key_rotation_launcher,
+      std::unique_ptr<KeyLoader> key_loader);
   ~DeviceTrustKeyManagerImpl() override;
 
   // DeviceTrustKeyManager:
@@ -41,7 +43,8 @@ class DeviceTrustKeyManagerImpl : public DeviceTrustKeyManager {
   void ExportPublicKeyAsync(ExportPublicKeyCallback callback) override;
   void SignStringAsync(const std::string& str,
                        SignStringCallback callback) override;
-  absl::optional<KeyMetadata> GetLoadedKeyMetadata() const override;
+  std::optional<KeyMetadata> GetLoadedKeyMetadata() const override;
+  bool HasPermanentFailure() const override;
 
  private:
   enum class InitializationState { kDefault, kLoadingKey, kRotatingKey };
@@ -55,12 +58,12 @@ class DeviceTrustKeyManagerImpl : public DeviceTrustKeyManager {
     RotateKeyCallback callback;
   };
 
-  // Starts a background task to try and load the key. If `create_on_fail` is
-  // true, a key-creation task will be started if key loading fails. If it's
-  // false, the manager will simply respond to all pending callbacks.
+  // Starts a background task to try to load and synchronize the key. If
+  // `create_on_fail` is true, a key-creation task will be started if key
+  // loading fails. If it's false, the manager will simply respond to all
+  // pending callbacks.
   void LoadKey(bool create_on_fail);
-  void OnKeyLoaded(bool create_on_fail,
-                   std::unique_ptr<SigningKeyPair> loaded_key_pair);
+  void OnKeyLoaded(bool create_on_fail, KeyLoader::DTCLoadKeyResult result);
 
   // Starts a background task to try and rotate the key. Forwards `nonce` to
   // the process in charge of handling the key rotation and upload. An empty
@@ -102,13 +105,25 @@ class DeviceTrustKeyManagerImpl : public DeviceTrustKeyManager {
   // Owned instance in charge of creating and launching key rotation commands.
   std::unique_ptr<KeyRotationLauncher> key_rotation_launcher_;
 
+  // Owned instance in charge of loading and performing key synchronization on
+  // the signing key.
+  std::unique_ptr<KeyLoader> key_loader_;
+
   // The manager's current initialization state. Depending on its value,
   // incoming client requests can be marked as pending.
   InitializationState state_ = InitializationState::kDefault;
 
   // Currently loaded device-trust key pair. If nullptr, it effectively means
   // that a key hasn't been loaded into memory yet.
-  std::unique_ptr<SigningKeyPair> key_pair_;
+  scoped_refptr<SigningKeyPair> key_pair_;
+
+  // When set, represents the response code for the synchronization request
+  // of `key_pair_`.
+  std::optional<int> sync_key_response_code_;
+
+  // If a failure deemed as "permanent" (i.e. no use in retrying) is
+  // encountered, the key manager flows will be disabled.
+  std::optional<PermanentFailure> permanent_failure_;
 
   // List of pending client requests.
   base::OnceClosureList pending_client_requests_;

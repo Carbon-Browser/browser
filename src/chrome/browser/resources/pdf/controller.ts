@@ -1,45 +1,57 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {NativeEventTarget as EventTarget} from 'chrome://resources/js/cr/event_target.m.js';
-import {PromiseResolver} from 'chrome://resources/js/promise_resolver.m.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {PromiseResolver} from 'chrome://resources/js/promise_resolver.js';
 
-import {NamedDestinationMessageData, SaveRequestType} from './constants.js';
-import {PdfPluginElement} from './internal_plugin.js';
-import {PinchPhase, Viewport} from './viewport.js';
+// <if expr="enable_pdf_ink2">
+import type {AnnotationBrush, AnnotationBrushType} from './constants.js';
+// </if>
+import type {NamedDestinationMessageData, Rect, SaveRequestType} from './constants.js';
+import type {PdfPluginElement} from './internal_plugin.js';
+import type {DestinationMessageData} from './pdf_viewer_utils.js';
+import type {Viewport} from './viewport.js';
+import {PinchPhase} from './viewport.js';
 
-export type MessageData = {
-  type: string,
-  messageId?: string,
-};
+export interface MessageData {
+  type: string;
+  messageId?: string;
+}
 
-export type SaveAttachmentMessageData = {
-  type: string,
-  dataToSave: ArrayBuffer,
-  messageId: string,
-};
+export interface SaveAttachmentMessageData {
+  type: string;
+  dataToSave: ArrayBuffer;
+  messageId: string;
+}
 
-type SaveDataMessageData = {
-  dataToSave: ArrayBuffer,
-  token: string,
-  fileName: string,
-};
+interface SaveDataMessageData {
+  dataToSave: ArrayBuffer;
+  token: string;
+  fileName: string;
+}
 
-export type PrintPreviewParams = {
-  type: string,
-  url: string,
-  grayscale: boolean,
-  modifiable: boolean,
-  pageNumbers: number[],
-};
+export interface PrintPreviewParams {
+  type: string;
+  url: string;
+  grayscale: boolean;
+  modifiable: boolean;
+  pageNumbers: number[];
+}
 
-type ThumbnailMessageData = {
-  imageData: ArrayBuffer,
-  width: number,
-  height: number,
-};
+interface ThumbnailMessageData {
+  imageData: ArrayBuffer;
+  width: number;
+  height: number;
+}
+
+// <if expr="enable_pdf_ink2">
+// Messages for setting and getting the annotation brush.
+interface AnnotationBrushMessage {
+  type: string;
+  data: AnnotationBrush;
+}
+// </if>
 
 /**
  * Creates a cryptographically secure pseudorandom 128-bit token.
@@ -66,10 +78,10 @@ export interface ContentController {
   /** Triggers printing of the current document. */
   print(): void;
 
-  /** Undo an edit action. */
+  /** Undo an annotation mode edit action. */
   undo(): void;
 
-  /** Redo an edit action. */
+  /** Redo an annotation mode edit action. */
   redo(): void;
 
   /**
@@ -82,7 +94,7 @@ export interface ContentController {
     fileName: string,
     dataToSave: ArrayBuffer,
     editModeForTesting?: boolean,
-  }>;
+  }|null>;
 
   /**
    * Requests that the attachment at a certain index be saved.
@@ -99,6 +111,11 @@ export interface ContentController {
 
 /** Event types dispatched by the plugin controller. */
 export enum PluginControllerEventType {
+  // <if expr="enable_pdf_ink2">
+  CONTENT_FOCUSED = 'PluginControllerEventType.CONTENT_FOCUSED',
+  FINISH_INK_STROKE = 'PluginControllerEventType.FINISH_INK_STROKE',
+  UPDATE_INK_THUMBNAIL = 'PluginControllerEventType.UPDATE_INK_THUMBNAIL',
+  // </if>
   IS_ACTIVE_CHANGED = 'PluginControllerEventType.IS_ACTIVE_CHANGED',
   PLUGIN_MESSAGE = 'PluginControllerEventType.PLUGIN_MESSAGE',
 }
@@ -112,37 +129,30 @@ export enum PluginControllerEventType {
 export class PluginController implements ContentController {
   private eventTarget_: EventTarget = new EventTarget();
   private isActive_: boolean = false;
-  private plugin_: PdfPluginElement;
+  private plugin_?: PdfPluginElement;
   private delayedMessages_: Array<{message: any, transfer?: Transferable[]}>|
       null = [];
-  private viewport_: Viewport;
-  private getIsUserInitiatedCallback_: () => boolean;
-  private getLoadedCallback_: () => Promise<void>| null;
+  private viewport_?: Viewport;
+  private getIsUserInitiatedCallback_: () => boolean = () => false;
+  private getLoadedCallback_?: () => Promise<void>| null;
   private pendingTokens_:
       Map<string,
-          PromiseResolver<{fileName: string, dataToSave: ArrayBuffer}|null>>;
-  private requestResolverMap_: Map<string, PromiseResolver<any>>;
+          PromiseResolver<{fileName: string, dataToSave: ArrayBuffer}|null>> =
+          new Map();
+  private requestResolverMap_: Map<string, PromiseResolver<any>> = new Map();
   private uidCounter_: number = 1;
 
   init(
       plugin: HTMLEmbedElement, viewport: Viewport,
       getIsUserInitiatedCallback: () => boolean,
       getLoadedCallback: () => Promise<void>| null) {
-    this.plugin_ = plugin as PdfPluginElement;
-    this.plugin_.addEventListener(
-        'message', e => this.handlePluginMessage_(e as MessageEvent), false);
-    this.plugin_.postMessage = (message, transfer) => {
-      this.delayedMessages_!.push({message, transfer});
-    };
-
     this.viewport_ = viewport;
     this.getIsUserInitiatedCallback_ = getIsUserInitiatedCallback;
     this.getLoadedCallback_ = getLoadedCallback;
     this.pendingTokens_ = new Map();
     this.requestResolverMap_ = new Map();
 
-    this.viewport_.setContent(this.plugin_);
-    this.viewport_.setRemoteContent(this.plugin_);
+    this.setPlugin_(plugin);
   }
 
   get isActive(): boolean {
@@ -161,6 +171,21 @@ export class PluginController implements ContentController {
         PluginControllerEventType.IS_ACTIVE_CHANGED, {detail: this.isActive}));
   }
 
+  private setPlugin_(plugin: HTMLEmbedElement) {
+    this.plugin_ = plugin as PdfPluginElement;
+    this.plugin_.addEventListener(
+        'message', e => this.handlePluginMessage_(e as MessageEvent), false);
+    if (this.delayedMessages_) {
+      this.plugin_.postMessage = (message, transfer) => {
+        this.delayedMessages_!.push({message, transfer});
+      };
+    }
+
+    // Called only from init() which always initializes |viewport_|.
+    this.viewport_!.setContent(this.plugin_);
+    this.viewport_!.setRemoteContent(this.plugin_);
+  }
+
   private createUid_(): number {
     return this.uidCounter_++;
   }
@@ -171,9 +196,43 @@ export class PluginController implements ContentController {
 
   viewportChanged() {}
 
-  redo() {}
+  // <if expr="enable_pdf_ink2">
+  setAnnotationMode(enable: boolean) {
+    this.postMessage_({
+      type: 'setAnnotationMode',
+      enable,
+    });
+  }
 
-  undo() {}
+  getAnnotationBrush(brushType?: AnnotationBrushType):
+      Promise<AnnotationBrushMessage> {
+    return this.postMessageWithReply_({
+      type: 'getAnnotationBrush',
+      brushType,
+    });
+  }
+
+  setAnnotationBrush(brush: AnnotationBrush) {
+    const message: AnnotationBrushMessage = {
+      type: 'setAnnotationBrush',
+      data: brush,
+    };
+
+    this.postMessage_(message);
+  }
+  // </if>
+
+  redo() {
+    // <if "enable_pdf_ink2">
+    this.postMessage_({type: 'annotationRedo'});
+    // </if>
+  }
+
+  undo() {
+    // <if "enable_pdf_ink2">
+    this.postMessage_({type: 'annotationUndo'});
+    // </if>
+  }
 
   /**
    * Notify the plugin to stop reacting to scroll events while zoom is taking
@@ -181,7 +240,7 @@ export class PluginController implements ContentController {
    */
   beforeZoom() {
     this.postMessage_({type: 'stopScrolling'});
-
+    assert(this.viewport_);
     if (this.viewport_.pinchPhase === PinchPhase.START) {
       const position = this.viewport_.position;
       const zoom = this.viewport_.getZoom();
@@ -204,6 +263,7 @@ export class PluginController implements ContentController {
    * events.
    */
   afterZoom() {
+    assert(this.viewport_);
     const position = this.viewport_.position;
     const zoom = this.viewport_.getZoom();
     const layoutOptions = this.viewport_.getLayoutOptions();
@@ -231,6 +291,7 @@ export class PluginController implements ContentController {
    * received through handlePluginMessage_().
    */
   private postMessage_<M extends MessageData>(message: M) {
+    assert(this.plugin_);
     this.plugin_.postMessage(message);
   }
 
@@ -286,11 +347,10 @@ export class PluginController implements ContentController {
    * Post a thumbnail request message to the plugin.
    * @return A promise holding the thumbnail response from the plugin.
    */
-  requestThumbnail(page: number): Promise<ThumbnailMessageData> {
+  requestThumbnail(pageIndex: number): Promise<ThumbnailMessageData> {
     return this.postMessageWithReply_({
       type: 'getThumbnail',
-      // The plugin references pages using zero-based indices.
-      page: page - 1,
+      pageIndex: pageIndex,
     });
   }
 
@@ -323,6 +383,13 @@ export class PluginController implements ContentController {
     this.postMessage_({type: 'loadPreviewPage', url: url, index: index});
   }
 
+  getPageBoundingBox(page: number): Promise<Rect> {
+    return this.postMessageWithReply_({
+      type: 'getPageBoundingBox',
+      page,
+    });
+  }
+
   getPasswordComplete(password: string) {
     this.postMessage_({type: 'getPasswordComplete', password: password});
   }
@@ -348,7 +415,7 @@ export class PluginController implements ContentController {
 
   save(requestType: SaveRequestType) {
     const resolver =
-        new PromiseResolver<{fileName: string, dataToSave: ArrayBuffer}>();
+        new PromiseResolver<{fileName: string, dataToSave: ArrayBuffer}|null>();
     const newToken = createToken();
     this.pendingTokens_.set(newToken, resolver);
     this.postMessage_({
@@ -367,17 +434,22 @@ export class PluginController implements ContentController {
   }
 
   async load(_fileName: string, data: ArrayBuffer) {
+    assert(this.viewport_);
+    assert(this.plugin_);
     // Load `data` into the PDF plugin. The plugin transfers the data to be
     // loaded within the inner frame.
     this.viewport_.setRemoteContent(this.plugin_);
     this.plugin_.postMessage({type: 'loadArray', dataToLoad: data}, [data]);
 
     this.plugin_.style.display = 'block';
-    await this.getLoadedCallback_();
+    if (this.getLoadedCallback_) {
+      await this.getLoadedCallback_();
+    }
     this.isActive = true;
   }
 
   unload() {
+    assert(this.plugin_);
     this.plugin_.style.display = 'none';
     this.isActive = false;
   }
@@ -385,7 +457,7 @@ export class PluginController implements ContentController {
   /**
    * Binds an event handler for messages received from the plugin.
    *
-   * TODO(crbug.com/1228987): Remove this method when a permanent postMessage()
+   * TODO(crbug.com/40189769): Remove this method when a permanent postMessage()
    * bridge is implemented for the viewer.
    */
   bindMessageHandler(port: MessagePort) {
@@ -419,36 +491,48 @@ export class PluginController implements ContentController {
       return;
     }
 
+    assert(this.viewport_);
     switch (messageData.type) {
-      case 'gesture':
-        this.viewport_.dispatchGesture(messageData.gesture);
-        break;
-      case 'swipe':
-        this.viewport_.dispatchSwipe(messageData.direction);
-        break;
-      case 'goToPage':
-        this.viewport_.goToPage(messageData.page);
-        break;
-      case 'setScrollPosition':
-        this.viewport_.scrollTo(messageData);
-        break;
-      case 'scrollBy':
-        this.viewport_.scrollBy(messageData);
-        break;
-      case 'syncScrollFromRemote':
-        this.viewport_.syncScrollFromRemote(messageData);
-        break;
       case 'ackScrollToRemote':
         this.viewport_.ackScrollToRemote(messageData);
-        break;
-      case 'saveData':
-        this.saveData_(messageData);
         break;
       case 'consumeSaveToken':
         const resolver = this.pendingTokens_.get(messageData.token);
         assert(resolver);
         assert(this.pendingTokens_.delete(messageData.token));
         resolver.resolve(null);
+        break;
+      case 'gesture':
+        this.viewport_.dispatchGesture(messageData.gesture);
+        break;
+      case 'goToPage':
+        this.viewport_.goToPage(messageData.page);
+        break;
+      case 'navigateToDestination':
+        const destinationData = messageData as DestinationMessageData;
+        this.viewport_.handleNavigateToDestination(
+            destinationData.page, destinationData.x, destinationData.y,
+            destinationData.zoom);
+        return;
+      case 'saveData':
+        this.saveData_(messageData);
+        break;
+      case 'scrollBy':
+        this.viewport_.scrollBy(messageData);
+        break;
+      case 'setScrollPosition':
+        this.viewport_.scrollTo(messageData);
+        break;
+      case 'setSmoothScrolling':
+        this.viewport_.setSmoothScrolling((messageData as unknown as {
+                                            smoothScrolling: boolean,
+                                          }).smoothScrolling);
+        return;
+      case 'swipe':
+        this.viewport_.dispatchSwipe(messageData.direction);
+        break;
+      case 'syncScrollFromRemote':
+        this.viewport_.syncScrollFromRemote(messageData);
         break;
       default:
         this.eventTarget_.dispatchEvent(new CustomEvent(
@@ -482,11 +566,17 @@ export class PluginController implements ContentController {
         `File too large to be saved: ${bufView.length} bytes.`);
     assert(bufView.length >= MIN_FILE_SIZE);
     assert(
-        String.fromCharCode(bufView[0], bufView[1], bufView[2], bufView[3]) ===
-        '%PDF');
+        String.fromCharCode(
+            bufView[0]!, bufView[1]!, bufView[2]!, bufView[3]!) === '%PDF');
 
     resolver.resolve(messageData);
   }
+
+  // <if expr="enable_pdf_ink2">
+  setPluginForTesting(plugin: HTMLEmbedElement) {
+    this.setPlugin_(plugin);
+  }
+  // </if>
 
   static getInstance(): PluginController {
     return instance || (instance = new PluginController());

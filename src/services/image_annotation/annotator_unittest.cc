@@ -1,14 +1,28 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "services/image_annotation/annotator.h"
+#include <memory>
 
+#include "base/memory/ptr_util.h"
+#include "base/test/scoped_feature_list.h"
+#include "base/values.h"
+#include "components/manta/anchovy/anchovy_provider.h"
+#include "components/manta/manta_status.h"
+#include "services/network/public/cpp/shared_url_loader_factory.h"
+#include "ui/accessibility/accessibility_features.h"
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
+#include <array>
 #include <cstring>
+#include <optional>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/strings/stringprintf.h"
@@ -22,6 +36,7 @@
 #include "services/data_decoder/public/cpp/data_decoder.h"
 #include "services/data_decoder/public/cpp/test_support/in_process_data_decoder.h"
 #include "services/data_decoder/public/mojom/json_parser.mojom.h"
+#include "services/image_annotation/annotator.h"
 #include "services/image_annotation/image_annotation_metrics.h"
 #include "services/image_annotation/public/mojom/image_annotation.mojom.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
@@ -29,7 +44,6 @@
 #include "services/network/test/test_url_loader_factory.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace image_annotation {
 
@@ -300,8 +314,7 @@ class TestServerURLLoaderFactory {
   // to the second-earliest received request and so on).
   void ExpectRequestAndSimulateResponse(
       const std::string& expected_url_suffix,
-      const std::map<std::string, absl::optional<std::string>>&
-          expected_headers,
+      const std::map<std::string, std::optional<std::string>>& expected_headers,
       const std::string& expected_body,
       const std::string& response,
       const net::HttpStatusCode response_code) {
@@ -318,14 +331,7 @@ class TestServerURLLoaderFactory {
 
     // Expect that specified headers are accurate.
     for (const auto& kv : expected_headers) {
-      if (kv.second.has_value()) {
-        std::string actual_value;
-        EXPECT_THAT(request.headers.GetHeader(kv.first, &actual_value),
-                    Eq(true));
-        EXPECT_THAT(actual_value, Eq(*kv.second));
-      } else {
-        EXPECT_THAT(request.headers.HasHeader(kv.first), Eq(false));
-      }
+      EXPECT_THAT(request.headers.GetHeader(kv.first), kv.second);
     }
 
     // Extract request body.
@@ -363,8 +369,7 @@ class TestServerURLLoaderFactory {
 // Returns a "canonically" formatted version of a JSON string by parsing and
 // then rewriting it.
 std::string ReformatJson(const std::string& in) {
-  const std::unique_ptr<base::Value> json =
-      base::JSONReader::ReadDeprecated(in);
+  const std::optional<base::Value> json = base::JSONReader::Read(in);
   CHECK(json);
 
   std::string out;
@@ -375,7 +380,7 @@ std::string ReformatJson(const std::string& in) {
 
 // Receives the result of an annotation request and writes the result data into
 // the given variables.
-void ReportResult(absl::optional<mojom::AnnotateImageError>* const error,
+void ReportResult(std::optional<mojom::AnnotateImageError>* const error,
                   std::vector<mojom::Annotation>* const annotations,
                   mojom::AnnotateImageResultPtr result) {
   if (result->which() == mojom::AnnotateImageResult::Tag::kErrorCode) {
@@ -431,16 +436,16 @@ TEST(AnnotatorTest, OcrSuccessAndCache) {
   data_decoder::test::InProcessDataDecoder in_process_data_decoder;
   base::HistogramTester histogram_tester;
 
-  Annotator annotator(GURL(kTestServerUrl), GURL(""),
-                      std::string() /* api_key */, kThrottle,
-                      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
-                      test_url_factory.AsSharedURLLoaderFactory(),
-                      std::make_unique<TestAnnotatorClient>());
+  Annotator annotator(
+      GURL(kTestServerUrl), GURL(""), std::string() /* api_key */, kThrottle,
+      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
+      test_url_factory.AsSharedURLLoaderFactory(), /*anchovy_provider=*/nullptr,
+      std::make_unique<TestAnnotatorClient>());
   TestImageProcessor processor;
 
   // First call performs original image annotation.
   {
-    absl::optional<mojom::AnnotateImageError> error;
+    std::optional<mojom::AnnotateImageError> error;
     std::vector<mojom::Annotation> annotations;
 
     annotator.AnnotateImage(
@@ -471,7 +476,7 @@ TEST(AnnotatorTest, OcrSuccessAndCache) {
     test_task_env.RunUntilIdle();
 
     // HTTP response should have completed and callback should have been called.
-    ASSERT_THAT(error, Eq(absl::nullopt));
+    ASSERT_THAT(error, Eq(std::nullopt));
     EXPECT_THAT(annotations,
                 UnorderedElementsAre(AnnotatorEq(mojom::AnnotationType::kOcr,
                                                  1.0, "Region 1\nRegion 2")));
@@ -506,7 +511,7 @@ TEST(AnnotatorTest, OcrSuccessAndCache) {
 
   // Second call uses cached results.
   {
-    absl::optional<mojom::AnnotateImageError> error;
+    std::optional<mojom::AnnotateImageError> error;
     std::vector<mojom::Annotation> annotations;
 
     annotator.AnnotateImage(
@@ -518,7 +523,7 @@ TEST(AnnotatorTest, OcrSuccessAndCache) {
     ASSERT_THAT(processor.callbacks(), IsEmpty());
 
     // Results should have been directly returned without any server call.
-    ASSERT_THAT(error, Eq(absl::nullopt));
+    ASSERT_THAT(error, Eq(std::nullopt));
     EXPECT_THAT(annotations,
                 UnorderedElementsAre(AnnotatorEq(mojom::AnnotationType::kOcr,
                                                  1.0, "Region 1\nRegion 2")));
@@ -538,14 +543,14 @@ TEST(AnnotatorTest, DescriptionSuccess) {
   data_decoder::test::InProcessDataDecoder in_process_data_decoder;
   base::HistogramTester histogram_tester;
 
-  Annotator annotator(GURL(kTestServerUrl), GURL(""),
-                      std::string() /* api_key */, kThrottle,
-                      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
-                      test_url_factory.AsSharedURLLoaderFactory(),
-                      std::make_unique<TestAnnotatorClient>());
+  Annotator annotator(
+      GURL(kTestServerUrl), GURL(""), std::string() /* api_key */, kThrottle,
+      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
+      test_url_factory.AsSharedURLLoaderFactory(), /*anchovy_provider=*/nullptr,
+      std::make_unique<TestAnnotatorClient>());
   TestImageProcessor processor;
 
-  absl::optional<mojom::AnnotateImageError> error;
+  std::optional<mojom::AnnotateImageError> error;
   std::vector<mojom::Annotation> annotations;
 
   annotator.AnnotateImage(kImage1Url, kDescLang, processor.GetPendingRemote(),
@@ -604,7 +609,7 @@ TEST(AnnotatorTest, DescriptionSuccess) {
   test_task_env.RunUntilIdle();
 
   // HTTP response should have completed and callback should have been called.
-  ASSERT_THAT(error, Eq(absl::nullopt));
+  ASSERT_THAT(error, Eq(std::nullopt));
   EXPECT_THAT(
       annotations,
       UnorderedElementsAre(
@@ -646,14 +651,14 @@ TEST(AnnotatorTest, DoubleOcrResult) {
   data_decoder::test::InProcessDataDecoder in_process_data_decoder;
   base::HistogramTester histogram_tester;
 
-  Annotator annotator(GURL(kTestServerUrl), GURL(""),
-                      std::string() /* api_key */, kThrottle,
-                      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
-                      test_url_factory.AsSharedURLLoaderFactory(),
-                      std::make_unique<TestAnnotatorClient>());
+  Annotator annotator(
+      GURL(kTestServerUrl), GURL(""), std::string() /* api_key */, kThrottle,
+      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
+      test_url_factory.AsSharedURLLoaderFactory(), /*anchovy_provider=*/nullptr,
+      std::make_unique<TestAnnotatorClient>());
   TestImageProcessor processor;
 
-  absl::optional<mojom::AnnotateImageError> error;
+  std::optional<mojom::AnnotateImageError> error;
   std::vector<mojom::Annotation> annotations;
 
   annotator.AnnotateImage(kImage1Url, kDescLang, processor.GetPendingRemote(),
@@ -719,7 +724,7 @@ TEST(AnnotatorTest, DoubleOcrResult) {
   test_task_env.RunUntilIdle();
 
   // HTTP response should have completed and callback should have been called.
-  ASSERT_THAT(error, Eq(absl::nullopt));
+  ASSERT_THAT(error, Eq(std::nullopt));
   EXPECT_THAT(annotations,
               UnorderedElementsAre(
                   AnnotatorEq(mojom::AnnotationType::kOcr, 1.0, "Region 1"),
@@ -762,14 +767,14 @@ TEST(AnnotatorTest, HttpError) {
   data_decoder::test::InProcessDataDecoder in_process_data_decoder;
   base::HistogramTester histogram_tester;
 
-  Annotator annotator(GURL(kTestServerUrl), GURL(""),
-                      std::string() /* api_key */, kThrottle,
-                      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
-                      test_url_factory.AsSharedURLLoaderFactory(),
-                      std::make_unique<TestAnnotatorClient>());
+  Annotator annotator(
+      GURL(kTestServerUrl), GURL(""), std::string() /* api_key */, kThrottle,
+      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
+      test_url_factory.AsSharedURLLoaderFactory(), /*anchovy_provider=*/nullptr,
+      std::make_unique<TestAnnotatorClient>());
 
   TestImageProcessor processor;
-  absl::optional<mojom::AnnotateImageError> error;
+  std::optional<mojom::AnnotateImageError> error;
   std::vector<mojom::Annotation> annotations;
 
   annotator.AnnotateImage(kImage1Url, kDescLang, processor.GetPendingRemote(),
@@ -819,14 +824,14 @@ TEST(AnnotatorTest, BackendError) {
   data_decoder::test::InProcessDataDecoder in_process_data_decoder;
   base::HistogramTester histogram_tester;
 
-  Annotator annotator(GURL(kTestServerUrl), GURL(""),
-                      std::string() /* api_key */, kThrottle,
-                      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
-                      test_url_factory.AsSharedURLLoaderFactory(),
-                      std::make_unique<TestAnnotatorClient>());
+  Annotator annotator(
+      GURL(kTestServerUrl), GURL(""), std::string() /* api_key */, kThrottle,
+      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
+      test_url_factory.AsSharedURLLoaderFactory(), /*anchovy_provider=*/nullptr,
+      std::make_unique<TestAnnotatorClient>());
 
   TestImageProcessor processor;
-  absl::optional<mojom::AnnotateImageError> error;
+  std::optional<mojom::AnnotateImageError> error;
   std::vector<mojom::Annotation> annotations;
 
   annotator.AnnotateImage(kImage1Url, kDescLang, processor.GetPendingRemote(),
@@ -903,14 +908,14 @@ TEST(AnnotatorTest, OcrBackendError) {
   data_decoder::test::InProcessDataDecoder in_process_data_decoder;
   base::HistogramTester histogram_tester;
 
-  Annotator annotator(GURL(kTestServerUrl), GURL(""),
-                      std::string() /* api_key */, kThrottle,
-                      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
-                      test_url_factory.AsSharedURLLoaderFactory(),
-                      std::make_unique<TestAnnotatorClient>());
+  Annotator annotator(
+      GURL(kTestServerUrl), GURL(""), std::string() /* api_key */, kThrottle,
+      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
+      test_url_factory.AsSharedURLLoaderFactory(), /*anchovy_provider=*/nullptr,
+      std::make_unique<TestAnnotatorClient>());
 
   TestImageProcessor processor;
-  absl::optional<mojom::AnnotateImageError> error;
+  std::optional<mojom::AnnotateImageError> error;
   std::vector<mojom::Annotation> annotations;
 
   annotator.AnnotateImage(kImage1Url, kDescLang, processor.GetPendingRemote(),
@@ -964,7 +969,7 @@ TEST(AnnotatorTest, OcrBackendError) {
   test_task_env.RunUntilIdle();
 
   // HTTP response should have completed and callback should have been called.
-  EXPECT_THAT(error, Eq(absl::nullopt));
+  EXPECT_THAT(error, Eq(std::nullopt));
   EXPECT_THAT(annotations, UnorderedElementsAre(
                                AnnotatorEq(mojom::AnnotationType::kCaption, 0.9,
                                            "This is an example image.")));
@@ -998,14 +1003,14 @@ TEST(AnnotatorTest, DescriptionBackendError) {
   data_decoder::test::InProcessDataDecoder in_process_data_decoder;
   base::HistogramTester histogram_tester;
 
-  Annotator annotator(GURL(kTestServerUrl), GURL(""),
-                      std::string() /* api_key */, kThrottle,
-                      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
-                      test_url_factory.AsSharedURLLoaderFactory(),
-                      std::make_unique<TestAnnotatorClient>());
+  Annotator annotator(
+      GURL(kTestServerUrl), GURL(""), std::string() /* api_key */, kThrottle,
+      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
+      test_url_factory.AsSharedURLLoaderFactory(), /*anchovy_provider=*/nullptr,
+      std::make_unique<TestAnnotatorClient>());
 
   TestImageProcessor processor;
-  absl::optional<mojom::AnnotateImageError> error;
+  std::optional<mojom::AnnotateImageError> error;
   std::vector<mojom::Annotation> annotations;
 
   annotator.AnnotateImage(kImage1Url, kDescLang, processor.GetPendingRemote(),
@@ -1058,7 +1063,7 @@ TEST(AnnotatorTest, DescriptionBackendError) {
   test_task_env.RunUntilIdle();
 
   // HTTP response should have completed and callback should have been called.
-  EXPECT_THAT(error, Eq(absl::nullopt));
+  EXPECT_THAT(error, Eq(std::nullopt));
   EXPECT_THAT(annotations, UnorderedElementsAre(AnnotatorEq(
                                mojom::AnnotationType::kOcr, 1.0, "1")));
 
@@ -1089,14 +1094,14 @@ TEST(AnnotatorTest, ServerError) {
   data_decoder::test::InProcessDataDecoder in_process_data_decoder;
   base::HistogramTester histogram_tester;
 
-  Annotator annotator(GURL(kTestServerUrl), GURL(""),
-                      std::string() /* api_key */, kThrottle,
-                      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
-                      test_url_factory.AsSharedURLLoaderFactory(),
-                      std::make_unique<TestAnnotatorClient>());
+  Annotator annotator(
+      GURL(kTestServerUrl), GURL(""), std::string() /* api_key */, kThrottle,
+      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
+      test_url_factory.AsSharedURLLoaderFactory(), /*anchovy_provider=*/nullptr,
+      std::make_unique<TestAnnotatorClient>());
 
   TestImageProcessor processor;
-  absl::optional<mojom::AnnotateImageError> error;
+  std::optional<mojom::AnnotateImageError> error;
   std::vector<mojom::Annotation> annotations;
 
   annotator.AnnotateImage(kImage1Url, kDescLang, processor.GetPendingRemote(),
@@ -1148,14 +1153,14 @@ TEST(AnnotatorTest, AdultError) {
   data_decoder::test::InProcessDataDecoder in_process_data_decoder;
   base::HistogramTester histogram_tester;
 
-  Annotator annotator(GURL(kTestServerUrl), GURL(""),
-                      std::string() /* api_key */, kThrottle,
-                      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
-                      test_url_factory.AsSharedURLLoaderFactory(),
-                      std::make_unique<TestAnnotatorClient>());
+  Annotator annotator(
+      GURL(kTestServerUrl), GURL(""), std::string() /* api_key */, kThrottle,
+      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
+      test_url_factory.AsSharedURLLoaderFactory(), /*anchovy_provider=*/nullptr,
+      std::make_unique<TestAnnotatorClient>());
 
   TestImageProcessor processor;
-  absl::optional<mojom::AnnotateImageError> error;
+  std::optional<mojom::AnnotateImageError> error;
   std::vector<mojom::Annotation> annotations;
 
   annotator.AnnotateImage(kImage1Url, kDescLang, processor.GetPendingRemote(),
@@ -1224,15 +1229,15 @@ TEST(AnnotatorTest, ProcessorFails) {
   data_decoder::test::InProcessDataDecoder in_process_data_decoder;
   base::HistogramTester histogram_tester;
 
-  Annotator annotator(GURL(kTestServerUrl), GURL(""),
-                      std::string() /* api_key */, kThrottle,
-                      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
-                      test_url_factory.AsSharedURLLoaderFactory(),
-                      std::make_unique<TestAnnotatorClient>());
+  Annotator annotator(
+      GURL(kTestServerUrl), GURL(""), std::string() /* api_key */, kThrottle,
+      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
+      test_url_factory.AsSharedURLLoaderFactory(), /*anchovy_provider=*/nullptr,
+      std::make_unique<TestAnnotatorClient>());
 
-  TestImageProcessor processor[3];
-  absl::optional<mojom::AnnotateImageError> error[3];
-  std::vector<mojom::Annotation> annotations[3];
+  std::array<TestImageProcessor, 3> processor;
+  std::array<std::optional<mojom::AnnotateImageError>, 3> error;
+  std::array<std::vector<mojom::Annotation>, 3> annotations;
 
   for (int i = 0; i < 3; ++i) {
     annotator.AnnotateImage(
@@ -1276,7 +1281,7 @@ TEST(AnnotatorTest, ProcessorFails) {
   // Annotator should have called all callbacks, but request 1 received an error
   // when we returned empty bytes.
   ASSERT_THAT(error, ElementsAre(mojom::AnnotateImageError::kFailure,
-                                 absl::nullopt, absl::nullopt));
+                                 std::nullopt, std::nullopt));
   EXPECT_THAT(annotations[0], IsEmpty());
   EXPECT_THAT(annotations[1],
               UnorderedElementsAre(AnnotatorEq(mojom::AnnotationType::kOcr, 1.0,
@@ -1305,15 +1310,15 @@ TEST(AnnotatorTest, ProcessorFailedPreviously) {
   data_decoder::test::InProcessDataDecoder in_process_data_decoder;
   base::HistogramTester histogram_tester;
 
-  Annotator annotator(GURL(kTestServerUrl), GURL(""),
-                      std::string() /* api_key */, kThrottle,
-                      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
-                      test_url_factory.AsSharedURLLoaderFactory(),
-                      std::make_unique<TestAnnotatorClient>());
+  Annotator annotator(
+      GURL(kTestServerUrl), GURL(""), std::string() /* api_key */, kThrottle,
+      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
+      test_url_factory.AsSharedURLLoaderFactory(), /*anchovy_provider=*/nullptr,
+      std::make_unique<TestAnnotatorClient>());
 
-  TestImageProcessor processor[2];
-  absl::optional<mojom::AnnotateImageError> error[2];
-  std::vector<mojom::Annotation> annotations[2];
+  std::array<TestImageProcessor, 2> processor;
+  std::array<std::optional<mojom::AnnotateImageError>, 2> error;
+  std::array<std::vector<mojom::Annotation>, 2> annotations;
 
   // Processor 1 makes a request for annotation of a given image.
   annotator.AnnotateImage(
@@ -1359,7 +1364,7 @@ TEST(AnnotatorTest, ProcessorFailedPreviously) {
   // Annotator should have called all callbacks, but request 1 received an error
   // when we returned empty bytes.
   ASSERT_THAT(error,
-              ElementsAre(mojom::AnnotateImageError::kFailure, absl::nullopt));
+              ElementsAre(mojom::AnnotateImageError::kFailure, std::nullopt));
   EXPECT_THAT(annotations[0], IsEmpty());
   EXPECT_THAT(annotations[1],
               UnorderedElementsAre(AnnotatorEq(mojom::AnnotationType::kOcr, 1.0,
@@ -1375,15 +1380,15 @@ TEST(AnnotatorTest, ProcessorDies) {
   data_decoder::test::InProcessDataDecoder in_process_data_decoder;
   base::HistogramTester histogram_tester;
 
-  Annotator annotator(GURL(kTestServerUrl), GURL(""),
-                      std::string() /* api_key */, kThrottle,
-                      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
-                      test_url_factory.AsSharedURLLoaderFactory(),
-                      std::make_unique<TestAnnotatorClient>());
+  Annotator annotator(
+      GURL(kTestServerUrl), GURL(""), std::string() /* api_key */, kThrottle,
+      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
+      test_url_factory.AsSharedURLLoaderFactory(), /*anchovy_provider=*/nullptr,
+      std::make_unique<TestAnnotatorClient>());
 
-  TestImageProcessor processor[3];
-  absl::optional<mojom::AnnotateImageError> error[3];
-  std::vector<mojom::Annotation> annotations[3];
+  std::array<TestImageProcessor, 3> processor;
+  std::array<std::optional<mojom::AnnotateImageError>, 3> error;
+  std::array<std::vector<mojom::Annotation>, 3> annotations;
 
   for (int i = 0; i < 3; ++i) {
     annotator.AnnotateImage(
@@ -1426,7 +1431,7 @@ TEST(AnnotatorTest, ProcessorDies) {
   // Annotator should have called all callbacks, but request 1 was canceled when
   // we reset processor 1.
   ASSERT_THAT(error, ElementsAre(mojom::AnnotateImageError::kCanceled,
-                                 absl::nullopt, absl::nullopt));
+                                 std::nullopt, std::nullopt));
   EXPECT_THAT(annotations[0], IsEmpty());
   EXPECT_THAT(annotations[1],
               UnorderedElementsAre(AnnotatorEq(mojom::AnnotationType::kOcr, 1.0,
@@ -1451,15 +1456,15 @@ TEST(AnnotatorTest, ConcurrentSameBatch) {
   data_decoder::test::InProcessDataDecoder in_process_data_decoder;
   base::HistogramTester histogram_tester;
 
-  Annotator annotator(GURL(kTestServerUrl), GURL(""),
-                      std::string() /* api_key */, kThrottle,
-                      3 /* batch_size */, 1.0 /* min_ocr_confidence */,
-                      test_url_factory.AsSharedURLLoaderFactory(),
-                      std::make_unique<TestAnnotatorClient>());
+  Annotator annotator(
+      GURL(kTestServerUrl), GURL(""), std::string() /* api_key */, kThrottle,
+      3 /* batch_size */, 1.0 /* min_ocr_confidence */,
+      test_url_factory.AsSharedURLLoaderFactory(), /*anchovy_provider=*/nullptr,
+      std::make_unique<TestAnnotatorClient>());
 
-  TestImageProcessor processor[3];
-  absl::optional<mojom::AnnotateImageError> error[3];
-  std::vector<mojom::Annotation> annotations[3];
+  std::array<TestImageProcessor, 3> processor;
+  std::array<std::optional<mojom::AnnotateImageError>, 3> error;
+  std::array<std::vector<mojom::Annotation>, 3> annotations;
 
   // Request OCR for images 1, 2 and 3.
   annotator.AnnotateImage(
@@ -1501,7 +1506,7 @@ TEST(AnnotatorTest, ConcurrentSameBatch) {
 
   // Annotator should have called each callback with its corresponding text or
   // failure.
-  ASSERT_THAT(error, ElementsAre(absl::nullopt, absl::nullopt,
+  ASSERT_THAT(error, ElementsAre(std::nullopt, std::nullopt,
                                  mojom::AnnotateImageError::kFailure));
   EXPECT_THAT(annotations[0], UnorderedElementsAre(AnnotatorEq(
                                   mojom::AnnotationType::kOcr, 1.0, "1")));
@@ -1539,15 +1544,15 @@ TEST(AnnotatorTest, ConcurrentSeparateBatches) {
   data_decoder::test::InProcessDataDecoder in_process_data_decoder;
   base::HistogramTester histogram_tester;
 
-  Annotator annotator(GURL(kTestServerUrl), GURL(""),
-                      std::string() /* api_key */, kThrottle,
-                      3 /* batch_size */, 1.0 /* min_ocr_confidence */,
-                      test_url_factory.AsSharedURLLoaderFactory(),
-                      std::make_unique<TestAnnotatorClient>());
+  Annotator annotator(
+      GURL(kTestServerUrl), GURL(""), std::string() /* api_key */, kThrottle,
+      3 /* batch_size */, 1.0 /* min_ocr_confidence */,
+      test_url_factory.AsSharedURLLoaderFactory(), /*anchovy_provider=*/nullptr,
+      std::make_unique<TestAnnotatorClient>());
 
-  TestImageProcessor processor[2];
-  absl::optional<mojom::AnnotateImageError> error[2];
-  std::vector<mojom::Annotation> annotations[2];
+  std::array<TestImageProcessor, 2> processor;
+  std::array<std::optional<mojom::AnnotateImageError>, 2> error;
+  std::array<std::vector<mojom::Annotation>, 2> annotations;
 
   // Request OCR for image 1.
   annotator.AnnotateImage(
@@ -1652,7 +1657,7 @@ TEST(AnnotatorTest, ConcurrentSeparateBatches) {
   test_task_env.RunUntilIdle();
 
   // Annotator should have called each callback with its corresponding text.
-  ASSERT_THAT(error, ElementsAre(absl::nullopt, absl::nullopt));
+  ASSERT_THAT(error, ElementsAre(std::nullopt, std::nullopt));
   EXPECT_THAT(annotations[0], UnorderedElementsAre(AnnotatorEq(
                                   mojom::AnnotationType::kOcr, 1.0, "1")));
   EXPECT_THAT(annotations[1], UnorderedElementsAre(AnnotatorEq(
@@ -1684,15 +1689,15 @@ TEST(AnnotatorTest, DuplicateWork) {
   data_decoder::test::InProcessDataDecoder in_process_data_decoder;
   base::HistogramTester histogram_tester;
 
-  Annotator annotator(GURL(kTestServerUrl), GURL(""),
-                      std::string() /* api_key */, kThrottle,
-                      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
-                      test_url_factory.AsSharedURLLoaderFactory(),
-                      std::make_unique<TestAnnotatorClient>());
+  Annotator annotator(
+      GURL(kTestServerUrl), GURL(""), std::string() /* api_key */, kThrottle,
+      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
+      test_url_factory.AsSharedURLLoaderFactory(), /*anchovy_provider=*/nullptr,
+      std::make_unique<TestAnnotatorClient>());
 
-  TestImageProcessor processor[4];
-  absl::optional<mojom::AnnotateImageError> error[4];
-  std::vector<mojom::Annotation> annotations[4];
+  std::array<TestImageProcessor, 4> processor;
+  std::array<std::optional<mojom::AnnotateImageError>, 4> error;
+  std::array<std::vector<mojom::Annotation>, 4> annotations;
 
   // First request annotation of the image with processor 1.
   annotator.AnnotateImage(
@@ -1763,8 +1768,8 @@ TEST(AnnotatorTest, DuplicateWork) {
   test_task_env.RunUntilIdle();
 
   // Annotator should have called all callbacks with annotation results.
-  ASSERT_THAT(error, ElementsAre(absl::nullopt, absl::nullopt, absl::nullopt,
-                                 absl::nullopt));
+  ASSERT_THAT(error, ElementsAre(std::nullopt, std::nullopt, std::nullopt,
+                                 std::nullopt));
   EXPECT_THAT(annotations[0],
               UnorderedElementsAre(AnnotatorEq(mojom::AnnotationType::kOcr, 1.0,
                                                "Region 1\nRegion 2")));
@@ -1793,15 +1798,15 @@ TEST(AnnotatorTest, DescPolicy) {
   data_decoder::test::InProcessDataDecoder in_process_data_decoder;
   base::HistogramTester histogram_tester;
 
-  Annotator annotator(GURL(kTestServerUrl), GURL(""),
-                      std::string() /* api_key */, kThrottle,
-                      3 /* batch_size */, 1.0 /* min_ocr_confidence */,
-                      test_url_factory.AsSharedURLLoaderFactory(),
-                      std::make_unique<TestAnnotatorClient>());
+  Annotator annotator(
+      GURL(kTestServerUrl), GURL(""), std::string() /* api_key */, kThrottle,
+      3 /* batch_size */, 1.0 /* min_ocr_confidence */,
+      test_url_factory.AsSharedURLLoaderFactory(), /*anchovy_provider=*/nullptr,
+      std::make_unique<TestAnnotatorClient>());
 
-  TestImageProcessor processor[3];
-  absl::optional<mojom::AnnotateImageError> error[3];
-  std::vector<mojom::Annotation> annotations[3];
+  std::array<TestImageProcessor, 3> processor;
+  std::array<std::optional<mojom::AnnotateImageError>, 3> error;
+  std::array<std::vector<mojom::Annotation>, 3> annotations;
 
   // Request annotation for images 1, 2 and 3.
   annotator.AnnotateImage(
@@ -1953,7 +1958,7 @@ TEST(AnnotatorTest, DescPolicy) {
   test_task_env.RunUntilIdle();
 
   // Annotator should have called each callback with its corresponding results.
-  ASSERT_THAT(error, ElementsAre(absl::nullopt, absl::nullopt, absl::nullopt));
+  ASSERT_THAT(error, ElementsAre(std::nullopt, std::nullopt, std::nullopt));
   EXPECT_THAT(
       annotations[0],
       UnorderedElementsAre(AnnotatorEq(mojom::AnnotationType::kOcr, 1.0, "1"),
@@ -1998,16 +2003,16 @@ TEST(AnnotatorTest, DescLanguage) {
   data_decoder::test::InProcessDataDecoder in_process_data_decoder;
   base::HistogramTester histogram_tester;
 
-  Annotator annotator(GURL(kTestServerUrl), GURL(""),
-                      std::string() /* api_key */, kThrottle,
-                      3 /* batch_size */, 1.0 /* min_ocr_confidence */,
-                      test_url_factory.AsSharedURLLoaderFactory(),
-                      std::make_unique<TestAnnotatorClient>());
+  Annotator annotator(
+      GURL(kTestServerUrl), GURL(""), std::string() /* api_key */, kThrottle,
+      3 /* batch_size */, 1.0 /* min_ocr_confidence */,
+      test_url_factory.AsSharedURLLoaderFactory(), /*anchovy_provider=*/nullptr,
+      std::make_unique<TestAnnotatorClient>());
   annotator.server_languages_ = {"en", "it", "fr"};
 
-  TestImageProcessor processor[3];
-  absl::optional<mojom::AnnotateImageError> error[3];
-  std::vector<mojom::Annotation> annotations[3];
+  std::array<TestImageProcessor, 3> processor;
+  std::array<std::optional<mojom::AnnotateImageError>, 3> error;
+  std::array<std::vector<mojom::Annotation>, 3> annotations;
 
   // Request annotation for one image in two languages, and one other image in
   // one language.
@@ -2172,7 +2177,7 @@ TEST(AnnotatorTest, DescLanguage) {
   test_task_env.RunUntilIdle();
 
   // Annotator should have called each callback with its corresponding results.
-  ASSERT_THAT(error, ElementsAre(absl::nullopt, absl::nullopt, absl::nullopt));
+  ASSERT_THAT(error, ElementsAre(std::nullopt, std::nullopt, std::nullopt));
   EXPECT_THAT(
       annotations[0],
       UnorderedElementsAre(AnnotatorEq(mojom::AnnotationType::kOcr, 1.0, "1"),
@@ -2197,15 +2202,15 @@ TEST(AnnotatorTest, LanguageFallback) {
   data_decoder::test::InProcessDataDecoder in_process_data_decoder;
   base::HistogramTester histogram_tester;
 
-  Annotator annotator(GURL(kTestServerUrl), GURL(""),
-                      std::string() /* api_key */, kThrottle,
-                      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
-                      test_url_factory.AsSharedURLLoaderFactory(),
-                      std::make_unique<TestAnnotatorClient>());
+  Annotator annotator(
+      GURL(kTestServerUrl), GURL(""), std::string() /* api_key */, kThrottle,
+      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
+      test_url_factory.AsSharedURLLoaderFactory(), /*anchovy_provider=*/nullptr,
+      std::make_unique<TestAnnotatorClient>());
   annotator.server_languages_ = {"en", "it", "fr"};
 
   TestImageProcessor processor;
-  absl::optional<mojom::AnnotateImageError> error;
+  std::optional<mojom::AnnotateImageError> error;
   std::vector<mojom::Annotation> annotations;
 
   // Send a request in an unsupported language.
@@ -2281,7 +2286,7 @@ TEST(AnnotatorTest, LanguageFallback) {
   test_task_env.RunUntilIdle();
 
   // Annotator should have called each callback with its corresponding results.
-  ASSERT_EQ(error, absl::nullopt);
+  ASSERT_EQ(error, std::nullopt);
   EXPECT_THAT(
       annotations,
       UnorderedElementsAre(AnnotatorEq(mojom::AnnotationType::kOcr, 1.0, "1"),
@@ -2305,6 +2310,7 @@ TEST(AnnotatorTest, ApiKey) {
     Annotator annotator(GURL(kTestServerUrl), GURL(""), "my_api_key", kThrottle,
                         1 /* batch_size */, 1.0 /* min_ocr_confidence */,
                         test_url_factory.AsSharedURLLoaderFactory(),
+                        /*anchovy_provider=*/nullptr,
                         std::make_unique<TestAnnotatorClient>());
     TestImageProcessor processor;
 
@@ -2339,6 +2345,7 @@ TEST(AnnotatorTest, ApiKey) {
                         GURL(""), "my_api_key", kThrottle, 1 /* batch_size */,
                         1.0 /* min_ocr_confidence */,
                         test_url_factory.AsSharedURLLoaderFactory(),
+                        /*anchovy_provider=*/nullptr,
                         std::make_unique<TestAnnotatorClient>());
     TestImageProcessor processor;
 
@@ -2357,7 +2364,7 @@ TEST(AnnotatorTest, ApiKey) {
 
     // HTTP request should have been made without the API key included.
     test_url_factory.ExpectRequestAndSimulateResponse(
-        "annotation", {{Annotator::kGoogApiKeyHeader, absl::nullopt}},
+        "annotation", {{Annotator::kGoogApiKeyHeader, std::nullopt}},
         ReformatJson(base::StringPrintf(kTemplateRequest, kImage1Url, "AQID")),
         kOcrSuccessResponse, net::HTTP_OK);
   }
@@ -2366,11 +2373,11 @@ TEST(AnnotatorTest, ApiKey) {
   {
     TestServerURLLoaderFactory test_url_factory("https://datascraper.com/");
 
-    Annotator annotator(GURL("https://datascraper.com/annotation"), GURL(""),
-                        "my_api_key", kThrottle, 1 /* batch_size */,
-                        1.0 /* min_ocr_confidence */,
-                        test_url_factory.AsSharedURLLoaderFactory(),
-                        std::make_unique<TestAnnotatorClient>());
+    Annotator annotator(
+        GURL("https://datascraper.com/annotation"), GURL(""), "my_api_key",
+        kThrottle, 1 /* batch_size */, 1.0 /* min_ocr_confidence */,
+        test_url_factory.AsSharedURLLoaderFactory(),
+        /*anchovy_provider=*/nullptr, std::make_unique<TestAnnotatorClient>());
     TestImageProcessor processor;
 
     annotator.AnnotateImage(kImage1Url, kDescLang, processor.GetPendingRemote(),
@@ -2388,7 +2395,7 @@ TEST(AnnotatorTest, ApiKey) {
 
     // HTTP request should have been made without the API key included.
     test_url_factory.ExpectRequestAndSimulateResponse(
-        "annotation", {{Annotator::kGoogApiKeyHeader, absl::nullopt}},
+        "annotation", {{Annotator::kGoogApiKeyHeader, std::nullopt}},
         ReformatJson(base::StringPrintf(kTemplateRequest, kImage1Url, "AQID")),
         kOcrSuccessResponse, net::HTTP_OK);
   }
@@ -2401,11 +2408,11 @@ TEST(AnnotatorTest, ComputePreferredLanguage) {
   TestAnnotatorClient* annotator_client = new TestAnnotatorClient();
   TestServerURLLoaderFactory test_url_factory(
       "https://ia-pa.googleapis.com/v1/");
-  Annotator annotator(GURL("https://datascraper.com/annotation"), GURL(""),
-                      "my_api_key", kThrottle, 1 /* batch_size */,
-                      1.0 /* min_ocr_confidence */,
-                      test_url_factory.AsSharedURLLoaderFactory(),
-                      base::WrapUnique(annotator_client));
+  Annotator annotator(
+      GURL("https://datascraper.com/annotation"), GURL(""), "my_api_key",
+      kThrottle, 1 /* batch_size */, 1.0 /* min_ocr_confidence */,
+      test_url_factory.AsSharedURLLoaderFactory(), /*anchovy_provider=*/nullptr,
+      base::WrapUnique(annotator_client));
 
   // Simplest case: the page language is in the list of top languages,
   // accept languages, and server languages.
@@ -2469,11 +2476,11 @@ TEST(AnnotatorTest, FetchServerLanguages) {
       "https://ia-pa.googleapis.com/v1/");
   data_decoder::test::InProcessDataDecoder in_process_data_decoder;
 
-  Annotator annotator(GURL(kTestServerUrl), GURL(kLangsServerUrl),
-                      std::string() /* api_key */, kThrottle,
-                      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
-                      test_url_factory.AsSharedURLLoaderFactory(),
-                      std::make_unique<TestAnnotatorClient>());
+  Annotator annotator(
+      GURL(kTestServerUrl), GURL(kLangsServerUrl), std::string() /* api_key */,
+      kThrottle, 1 /* batch_size */, 1.0 /* min_ocr_confidence */,
+      test_url_factory.AsSharedURLLoaderFactory(), /*anchovy_provider=*/nullptr,
+      std::make_unique<TestAnnotatorClient>());
 
   // Assert that initially server_languages_ doesn't contain the made-up
   // language code zz.
@@ -2504,11 +2511,11 @@ TEST(AnnotatorTest, ServerLanguagesMustContainEnglish) {
       "https://ia-pa.googleapis.com/v1/");
   data_decoder::test::InProcessDataDecoder in_process_data_decoder;
 
-  Annotator annotator(GURL(kTestServerUrl), GURL(kLangsServerUrl),
-                      std::string() /* api_key */, kThrottle,
-                      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
-                      test_url_factory.AsSharedURLLoaderFactory(),
-                      std::make_unique<TestAnnotatorClient>());
+  Annotator annotator(
+      GURL(kTestServerUrl), GURL(kLangsServerUrl), std::string() /* api_key */,
+      kThrottle, 1 /* batch_size */, 1.0 /* min_ocr_confidence */,
+      test_url_factory.AsSharedURLLoaderFactory(), /*anchovy_provider=*/nullptr,
+      std::make_unique<TestAnnotatorClient>());
 
   // Assert that initially server_languages_ does contain "en" but
   // doesn't contain the made-up language code zz.
@@ -2531,6 +2538,181 @@ TEST(AnnotatorTest, ServerLanguagesMustContainEnglish) {
   // include "en".
   EXPECT_TRUE(base::Contains(annotator.server_languages_, "en"));
   EXPECT_FALSE(base::Contains(annotator.server_languages_, "zz"));
+}
+
+// Alternative Routing Tests.
+
+class FakeAnchovyProvider : public manta::AnchovyProvider {
+ public:
+  explicit FakeAnchovyProvider(base::Value::Dict fake_result)
+      : manta::AnchovyProvider(nullptr, nullptr, {}),
+        fake_result_(std::move(fake_result)) {}
+
+  FakeAnchovyProvider(const FakeAnchovyProvider&) = delete;
+  FakeAnchovyProvider& operator=(const FakeAnchovyProvider&) = delete;
+
+  void GetImageDescription(manta::anchovy::ImageDescriptionRequest& request,
+                           net::NetworkTrafficAnnotationTag traffic_annotation,
+                           manta::MantaGenericCallback callback) override {
+    manta::MantaStatus status;
+    status.status_code = manta::MantaStatusCode::kOk;
+    status.locale = "en";
+    status.message = "ok";
+    std::move(callback).Run(std::move(fake_result_), status);
+  }
+
+ private:
+  base::Value::Dict fake_result_;
+};
+
+void RunAnchovyAnnotatorTest(
+    std::unique_ptr<manta::AnchovyProvider> fake_provider,
+    std::vector<mojom::Annotation>* annotations) {
+  base::test::ScopedFeatureList enabled_features;
+  enabled_features.InitAndEnableFeature(
+      features::kImageDescriptionsAlternateRouting);
+
+  base::test::TaskEnvironment test_task_env(
+      base::test::TaskEnvironment::TimeSource::MOCK_TIME);
+  TestServerURLLoaderFactory test_url_factory(
+      "https://ia-pa.googleapis.com/v1/");
+
+  Annotator annotator(
+      GURL(kTestServerUrl), GURL(""), std::string() /* api_key */, kThrottle,
+      1 /* batch_size */, 1.0 /* min_ocr_confidence */,
+      test_url_factory.AsSharedURLLoaderFactory(), std::move(fake_provider),
+      std::make_unique<TestAnnotatorClient>());
+  TestImageProcessor processor;
+
+  std::optional<mojom::AnnotateImageError> error;
+
+  annotator.AnnotateImage(kImage1Url, kDescLang, processor.GetPendingRemote(),
+                          base::BindOnce(&ReportResult, &error, annotations));
+  test_task_env.RunUntilIdle();
+
+  // Annotator should have asked processor for pixels.
+  ASSERT_THAT(processor.callbacks(), SizeIs(1));
+
+  // Send back image data.
+  std::move(processor.callbacks()[0]).Run({1, 2, 3}, kDescDim, kDescDim);
+  processor.callbacks().pop_back();
+  test_task_env.RunUntilIdle();
+
+  // No request should be sent yet (because service is waiting to batch up
+  // multiple requests).
+  EXPECT_THAT(test_url_factory.requests(), IsEmpty());
+  test_task_env.FastForwardBy(base::Seconds(1));
+  test_task_env.RunUntilIdle();
+}
+
+void SimpleAnchovySuccessTest(std::string str_type,
+                              mojom::AnnotationType expected_type) {
+  const std::string best_text = "best";
+  const std::string type = str_type;
+  const double best_score = 0.9;
+  const std::string other_text = "other";
+  const double other_score = 0.8;
+
+  base::Value::List results;
+  results.Append(base::Value::Dict()
+                     .Set("type", type)
+                     .Set("score", best_score)
+                     .Set("text", best_text));
+  results.Append(base::Value::Dict()
+                     .Set("type", type)
+                     .Set("score", other_score)
+                     .Set("text", other_text));
+
+  std::vector<mojom::Annotation> annotations;
+  RunAnchovyAnnotatorTest(
+      std::make_unique<FakeAnchovyProvider>(
+          base::Value::Dict().Set("results", std::move(results))),
+      &annotations);
+
+  EXPECT_FALSE(annotations.empty());
+  EXPECT_EQ(1, (int)annotations.size());
+  auto annotation = annotations[0];
+  EXPECT_EQ(annotation.text, best_text);
+  EXPECT_EQ(annotation.score, best_score);
+  EXPECT_EQ(annotation.type, expected_type);
+}
+
+TEST(AnnotatorTest, EmptyResultIfDictIsEmpty) {
+  std::vector<mojom::Annotation> annotations;
+  RunAnchovyAnnotatorTest(
+      std::make_unique<FakeAnchovyProvider>(base::Value::Dict()), &annotations);
+  EXPECT_TRUE(annotations.empty());
+}
+
+TEST(AnnotatorTest, EmptyResultIfListIsEmpty) {
+  std::vector<mojom::Annotation> annotations;
+  RunAnchovyAnnotatorTest(
+      std::make_unique<FakeAnchovyProvider>(
+          base::Value::Dict().Set("results", base::Value::List())),
+      &annotations);
+  EXPECT_TRUE(annotations.empty());
+}
+
+TEST(AnnotatorTest, AnchovySuccessMultiple) {
+  const std::string text_ocr = "ocr";
+  const std::string type_ocr = "OCR";
+  const double score = 0.9;
+  const std::string text_caption = "caption";
+  const std::string type_caption = "CAPTION";
+
+  base::Value::List results;
+  results.Append(base::Value::Dict()
+                     .Set("type", type_ocr)
+                     .Set("score", score)
+                     .Set("text", text_ocr));
+  results.Append(base::Value::Dict()
+                     .Set("type", type_caption)
+                     .Set("score", score)
+                     .Set("text", text_caption));
+
+  std::vector<mojom::Annotation> annotations;
+  RunAnchovyAnnotatorTest(
+      std::make_unique<FakeAnchovyProvider>(
+          base::Value::Dict().Set("results", std::move(results))),
+      &annotations);
+
+  EXPECT_FALSE(annotations.empty());
+  EXPECT_EQ(2, (int)annotations.size());
+  auto annotation_caption = annotations[0];
+  EXPECT_EQ(annotation_caption.text, text_caption);
+  EXPECT_EQ(annotation_caption.score, score);
+  EXPECT_EQ(annotation_caption.type, mojom::AnnotationType::kCaption);
+  auto annotation_ocr = annotations[1];
+  EXPECT_EQ(annotation_ocr.text, text_ocr);
+  EXPECT_EQ(annotation_ocr.score, score);
+  EXPECT_EQ(annotation_ocr.type, mojom::AnnotationType::kOcr);
+}
+
+TEST(AnnotatorTest, AnchovySuccessOCR) {
+  SimpleAnchovySuccessTest("OCR", mojom::AnnotationType::kOcr);
+}
+
+TEST(AnnotatorTest, AnchovySuccessCaption) {
+  SimpleAnchovySuccessTest("CAPTION", mojom::AnnotationType::kCaption);
+}
+
+TEST(AnnotatorTest, AnchovySuccessLabel) {
+  SimpleAnchovySuccessTest("LABEL", mojom::AnnotationType::kLabel);
+}
+
+TEST(AnnotatorTest, CrashIfNoText) {
+  base::Value::List results;
+  results.Append(base::Value::Dict().Set("type", "OCR").Set("score", 12));
+
+  std::unique_ptr<manta::AnchovyProvider> fake_provider_ptr =
+      std::make_unique<FakeAnchovyProvider>(
+          base::Value::Dict().Set("results", std::move(results)));
+  EXPECT_DEATH_IF_SUPPORTED(
+      RunAnchovyAnnotatorTest(std::move(fake_provider_ptr), {}), "");
+}
+
+TEST(AnnotatorTest, CrashIfNoAnchovyProvider) {
+  EXPECT_DEATH_IF_SUPPORTED(RunAnchovyAnnotatorTest(nullptr, {}), "");
 }
 
 }  // namespace image_annotation

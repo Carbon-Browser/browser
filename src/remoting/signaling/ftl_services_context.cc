@@ -1,10 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "remoting/signaling/ftl_services_context.h"
 
-#include "base/guid.h"
+#include "base/uuid.h"
 #include "build/build_config.h"
 #include "google_apis/google_api_keys.h"
 #include "remoting/base/service_urls.h"
@@ -75,7 +75,7 @@ ftl::Id FtlServicesContext::CreateIdFromString(const std::string& ftl_id) {
 ftl::RequestHeader FtlServicesContext::CreateRequestHeader(
     const std::string& ftl_auth_token) {
   ftl::RequestHeader header;
-  header.set_request_id(base::GenerateGUID());
+  header.set_request_id(base::Uuid::GenerateRandomV4().AsLowercaseString());
   header.set_app(kChromotingAppIdentifier);
   if (!ftl_auth_token.empty()) {
     header.set_auth_token_payload(ftl_auth_token);

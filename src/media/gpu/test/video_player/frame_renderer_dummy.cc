@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -127,7 +127,7 @@ scoped_refptr<VideoFrame> FrameRendererDummy::CreateVideoFrame(
   // Create a dummy video frame. No actual rendering will be done but the video
   // frame's properties such as timestamp will be used.
   // TODO(dstaessens): Remove this function when allocate mode is deprecated.
-  absl::optional<VideoFrameLayout> layout =
+  std::optional<VideoFrameLayout> layout =
       CreateVideoFrameLayout(pixel_format, size);
   DCHECK(layout);
   return VideoFrame::CreateFrameWithLayout(*layout, gfx::Rect(size), size,

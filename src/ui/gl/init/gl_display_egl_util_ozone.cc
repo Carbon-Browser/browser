@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,12 +32,12 @@ void GLDisplayEglUtilOzone::ChoosePlatformCustomAlphaAndBufferSize(
     utility->ChooseEGLAlphaAndBufferSize(alpha_size, buffer_size);
 }
 
-absl::optional<base::ScopedEnvironmentVariableOverride>
+std::optional<base::ScopedEnvironmentVariableOverride>
 GLDisplayEglUtilOzone::MaybeGetScopedDisplayUnsetForVulkan() {
   auto* utility = ui::OzonePlatform::GetInstance()->GetPlatformGLEGLUtility();
   if (utility)
     return utility->MaybeGetScopedDisplayUnsetForVulkan();
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 GLDisplayEglUtilOzone::GLDisplayEglUtilOzone() = default;

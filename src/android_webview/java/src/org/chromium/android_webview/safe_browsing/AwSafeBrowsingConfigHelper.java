@@ -1,36 +1,36 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.android_webview.safe_browsing;
 
-import android.content.Context;
-import android.content.pm.ApplicationInfo;
-import android.content.pm.PackageManager;
-
 import androidx.annotation.IntDef;
-import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+
+import org.chromium.android_webview.ManifestMetadataUtil;
 import org.chromium.android_webview.common.AwSwitches;
 import org.chromium.android_webview.common.PlatformServiceBridge;
 import org.chromium.base.Callback;
 import org.chromium.base.CommandLine;
-import org.chromium.base.Log;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.metrics.ScopedSysTraceEvent;
 
-/**
- * Helper class for getting the configuration settings related to safebrowsing in WebView.
- */
+/** Helper class for getting the configuration settings related to safebrowsing in WebView. */
 @JNINamespace("android_webview")
 public class AwSafeBrowsingConfigHelper {
-    private static final String TAG = "AwSafeBrowsingConfi-";
-
-    private static final String OPT_IN_META_DATA_STR = "android.webkit.WebView.EnableSafeBrowsing";
-
+    // This does not track the user opt-in. This value tracks whether or not the user opt-in
+    // callback has returned. Until the callback has returned, the user opt-in state is unknown.
+    private static volatile boolean sUserOptInCallbackReturned;
+    // Indicates whether or not we have already invoked getSafeBrowsingUserOptIn().
+    private static volatile boolean sHasCalledGetSafeBrowsingUserOptIn;
+    // Tracks user opt-in state.
     private static volatile boolean sSafeBrowsingUserOptIn;
+    // Tracks developer opt-in state, as expressed via the manifest tag. Note that developers can
+    // also invoke WebSettings.setSafeBrowsingEnabled() which overrides the manifest tag, however
+    // that state is tracked in AwSettings.
     private static volatile boolean sEnabledByManifest;
 
     // Used to record the UMA histogram SafeBrowsing.WebView.AppOptIn. Since these values are
@@ -49,19 +49,21 @@ public class AwSafeBrowsingConfigHelper {
                 "SafeBrowsing.WebView.AppOptIn", value, AppOptIn.COUNT);
     }
 
-    public static void setSafeBrowsingEnabledByManifest(boolean enabled) {
+    private static void setSafeBrowsingEnabledByManifest(boolean enabled) {
         sEnabledByManifest = enabled;
     }
 
+    @CalledByNative
     public static boolean getSafeBrowsingEnabledByManifest() {
         return sEnabledByManifest;
     }
 
     // Should only be called once during startup. Calling this multiple times will skew UMA metrics.
-    public static void maybeEnableSafeBrowsingFromManifest(final Context appContext) {
-        try (ScopedSysTraceEvent e = ScopedSysTraceEvent.scoped(
-                     "AwSafeBrowsingConfigHelper.maybeEnableSafeBrowsingFromManifest")) {
-            Boolean appOptIn = getAppOptInPreference(appContext);
+    public static void maybeEnableSafeBrowsingFromManifest() {
+        try (ScopedSysTraceEvent e =
+                ScopedSysTraceEvent.scoped(
+                        "AwSafeBrowsingConfigHelper.maybeEnableSafeBrowsingFromManifest")) {
+            Boolean appOptIn = getOptInPreferenceTraced();
             if (appOptIn == null) {
                 recordAppOptIn(AppOptIn.NO_PREFERENCE);
             } else if (appOptIn) {
@@ -75,44 +77,26 @@ public class AwSafeBrowsingConfigHelper {
             setSafeBrowsingEnabledByManifest(
                     appOptIn == null ? !isDisabledByCommandLine() : appOptIn);
 
-            Callback<Boolean> cb = verifyAppsValue
-                    -> setSafeBrowsingUserOptIn(Boolean.TRUE.equals(verifyAppsValue));
+            Callback<Boolean> cb =
+                    verifyAppsValue ->
+                            setSafeBrowsingUserOptIn(Boolean.TRUE.equals(verifyAppsValue));
             PlatformServiceBridge.getInstance().querySafeBrowsingUserConsent(cb);
         }
     }
 
-    private static boolean isDisabledByCommandLine() {
-        try (ScopedSysTraceEvent e = ScopedSysTraceEvent.scoped(
-                     "AwSafeBrowsingConfigHelper.isDisabledByCommandLine")) {
-            CommandLine cli = CommandLine.getInstance();
-            // Disable flag has higher precedence than the default
-            return cli.hasSwitch(AwSwitches.WEBVIEW_DISABLE_SAFEBROWSING_SUPPORT);
+    private static Boolean getOptInPreferenceTraced() {
+        try (ScopedSysTraceEvent e =
+                ScopedSysTraceEvent.scoped("AwSafeBrowsingConfigHelper.getAppOptInPreference")) {
+            return ManifestMetadataUtil.getSafeBrowsingAppOptInPreference();
         }
     }
 
-    /**
-     * Checks the application manifest for Safe Browsing opt-in preference.
-     *
-     * @param appContext application context.
-     * @return true if app has opted in, false if opted out, and null if no preference specified.
-     */
-    @Nullable
-    private static Boolean getAppOptInPreference(Context appContext) {
-        try (ScopedSysTraceEvent e = ScopedSysTraceEvent.scoped(
-                     "AwSafeBrowsingConfigHelper.getAppOptInPreference")) {
-            ApplicationInfo info = appContext.getPackageManager().getApplicationInfo(
-                    appContext.getPackageName(), PackageManager.GET_META_DATA);
-            if (info.metaData == null) {
-                // No <meta-data> tag was found.
-                return null;
-            }
-            return info.metaData.containsKey(OPT_IN_META_DATA_STR)
-                    ? info.metaData.getBoolean(OPT_IN_META_DATA_STR)
-                    : null;
-        } catch (PackageManager.NameNotFoundException e) {
-            // This should never happen.
-            Log.e(TAG, "App could not find itself by package name!");
-            return false;
+    private static boolean isDisabledByCommandLine() {
+        try (ScopedSysTraceEvent e =
+                ScopedSysTraceEvent.scoped("AwSafeBrowsingConfigHelper.isDisabledByCommandLine")) {
+            CommandLine cli = CommandLine.getInstance();
+            // Disable flag has higher precedence than the default
+            return cli.hasSwitch(AwSwitches.WEBVIEW_DISABLE_SAFEBROWSING_SUPPORT);
         }
     }
 
@@ -120,10 +104,26 @@ public class AwSafeBrowsingConfigHelper {
     // preference. This returns false if we don't know yet what the user's preference is.
     @CalledByNative
     private static boolean getSafeBrowsingUserOptIn() {
+        if (!sHasCalledGetSafeBrowsingUserOptIn) {
+            sHasCalledGetSafeBrowsingUserOptIn = true;
+            RecordHistogram.recordBooleanHistogram(
+                    "SafeBrowsing.WebView.UserOptInKnown.FirstLoad", sUserOptInCallbackReturned);
+        }
+        RecordHistogram.recordBooleanHistogram(
+                "SafeBrowsing.WebView.UserOptInKnown.EveryLoad", sUserOptInCallbackReturned);
         return sSafeBrowsingUserOptIn;
     }
 
+    // This feature checks if GMS is present, enabled, accessible to WebView and has minimum
+    // version to support safe browsing
+    @CalledByNative
+    private static boolean canUseGms() {
+        return PlatformServiceBridge.getInstance().canUseGms();
+    }
+
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
     public static void setSafeBrowsingUserOptIn(boolean optin) {
+        sUserOptInCallbackReturned = true;
         sSafeBrowsingUserOptIn = optin;
     }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <vector>
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
@@ -28,13 +29,11 @@ class Image;
 
 namespace message_center {
 
-namespace test {
-class NotificationListTest;
-}
-
 class Notification;
 class NotificationDelegate;
 struct NotifierId;
+
+enum class ExpandState { DEFAULT = 0, USER_EXPANDED = 1, USER_COLLAPSED = 2 };
 
 // Comparers used to auto-sort the lists of Notifications.
 struct MESSAGE_CENTER_EXPORT ComparePriorityTimestampSerial {
@@ -63,11 +62,13 @@ class MESSAGE_CENTER_EXPORT NotificationList {
 
     bool shown_as_popup = false;
     bool is_read = false;
+    ExpandState expand_state = ExpandState::DEFAULT;
   };
 
   // Auto-sorted set. Matches the order in which Notifications are shown in
   // Notification Center.
-  using Notifications = std::set<Notification*, ComparePriorityTimestampSerial>;
+  using Notifications = std::set<raw_ptr<Notification, SetExperimental>,
+                                 ComparePriorityTimestampSerial>;
   using OwnedNotifications =
       std::map<std::unique_ptr<Notification>,
                NotificationState,
@@ -83,6 +84,19 @@ class MESSAGE_CENTER_EXPORT NotificationList {
   NotificationList& operator=(const NotificationList&) = delete;
 
   virtual ~NotificationList();
+
+  int size() const { return notifications_.size(); }
+
+#if BUILDFLAG(IS_CHROMEOS)
+  // Returns the notification IDs prioritized for removal as follows:
+  // 1. Lower priority notifications are removed before higher priority ones.
+  // 2. For notifications with equal priority, older ones are removed first.
+  // 3. The most recent notifications are kept.
+  // NOTE:
+  // 1. This function is used only if the notification limit feature is enabled.
+  // 2. The returned array's size could be less than `count`.
+  std::vector<std::string> GetTopKRemovableNotificationIds(size_t count) const;
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
   // Makes a message "read". Collects the set of ids whose state have changed
   // and set to |udpated_ids|. NULL if updated ids don't matter.
@@ -155,6 +169,12 @@ class MESSAGE_CENTER_EXPORT NotificationList {
   // bring up a grouped notification when a new item is added to it.
   void ResetSinglePopup(const std::string& id);
 
+  // `ExpandState` signifies whether the notification with the specified `id`
+  // has been manually expanded or collapsed by the user.
+  ExpandState GetNotificationExpandState(const std::string& id);
+  void SetNotificationExpandState(const std::string& id,
+                                  ExpandState expand_state);
+
   NotificationDelegate* GetNotificationDelegate(const std::string& id);
 
   bool quiet_mode() const { return quiet_mode_; }
@@ -176,12 +196,17 @@ class MESSAGE_CENTER_EXPORT NotificationList {
   // Suitable for rendering notifications in a MessageCenter.
   Notifications GetVisibleNotifications(
       const NotificationBlockers& blockers) const;
+
+  // Returns all visible notifications if not for the provided blocker.
+  Notifications GetVisibleNotificationsWithoutBlocker(
+      const NotificationBlockers& blockers,
+      const NotificationBlocker* ignored_blocker) const;
+
   size_t NotificationCount(const NotificationBlockers& blockers) const;
 
  private:
   friend class NotificationListTest;
-  FRIEND_TEST_ALL_PREFIXES(NotificationListTest,
-                           TestPushingShownNotification);
+  FRIEND_TEST_ALL_PREFIXES(NotificationListTest, TestPushingShownNotification);
 
   // Iterates through the list and returns the first notification matching |id|.
   OwnedNotifications::iterator GetNotification(const std::string& id);
@@ -199,4 +224,4 @@ class MESSAGE_CENTER_EXPORT NotificationList {
 
 }  // namespace message_center
 
-#endif // UI_MESSAGE_CENTER_NOTIFICATION_LIST_H_
+#endif  // UI_MESSAGE_CENTER_NOTIFICATION_LIST_H_

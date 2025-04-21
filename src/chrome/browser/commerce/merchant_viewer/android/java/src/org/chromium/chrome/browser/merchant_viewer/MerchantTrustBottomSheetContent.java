@@ -1,10 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.merchant_viewer;
 
+import android.content.Context;
 import android.view.View;
+
+import androidx.annotation.NonNull;
 
 import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.supplier.Supplier;
@@ -17,6 +20,7 @@ import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent;
 public class MerchantTrustBottomSheetContent implements BottomSheetContent {
     /** Ratio of the height when in half mode. */
     private static final float HALF_HEIGHT_RATIO = 0.6f;
+
     /** Ratio of the height when in full mode. Used in half-open variation. */
     public static final float FULL_HEIGHT_RATIO = 0.9f;
 
@@ -27,11 +31,12 @@ public class MerchantTrustBottomSheetContent implements BottomSheetContent {
     private final ObservableSupplierImpl<Boolean> mBackPressStateChangedSupplier =
             new ObservableSupplierImpl<>();
 
-    /**
-     * Creates a new instance.
-     */
-    public MerchantTrustBottomSheetContent(View toolbarView, View contentView,
-            Supplier<Integer> verticalScrollOffset, Runnable backPressHandler) {
+    /** Creates a new instance. */
+    public MerchantTrustBottomSheetContent(
+            View toolbarView,
+            View contentView,
+            Supplier<Integer> verticalScrollOffset,
+            Runnable backPressHandler) {
         mToolbarView = toolbarView;
         mContentView = contentView;
         mVerticalScrollOffset = verticalScrollOffset;
@@ -99,8 +104,8 @@ public class MerchantTrustBottomSheetContent implements BottomSheetContent {
     }
 
     @Override
-    public int getSheetContentDescriptionStringId() {
-        return R.string.merchant_viewer_preview_sheet_description;
+    public @NonNull String getSheetContentDescription(Context context) {
+        return context.getString(R.string.merchant_viewer_preview_sheet_description);
     }
 
     @Override

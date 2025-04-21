@@ -1,9 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/hash/legacy_hash.h"
 
+#include <cstdint>
+
+#include "base/containers/span.h"
 #include "base/third_party/cityhash_v103/src/city_v103.h"
 
 namespace base {

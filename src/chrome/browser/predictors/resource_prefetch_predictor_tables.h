@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,6 +26,7 @@ namespace predictors {
 // Currently manages:
 //  - HostRedirectTable - key: host, value: RedirectData
 //  - OriginTable - key: host, value: OriginData
+//  - LcppTable - key: host, value: LcppData
 class ResourcePrefetchPredictorTables : public sqlite_proto::TableManager {
  public:
   ResourcePrefetchPredictorTables(const ResourcePrefetchPredictorTables&) =

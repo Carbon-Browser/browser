@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,27 +13,35 @@
 namespace mojo {
 
 template <>
-class StructTraits<media::mojom::ResolutionBitrateLimitDataView,
-                   media::ResolutionBitrateLimit> {
+class StructTraits<media::mojom::ResolutionRateLimitDataView,
+                   media::ResolutionRateLimit> {
  public:
   static const gfx::Size& frame_size(
-      const media::ResolutionBitrateLimit& resolution_bitrate_limit) {
-    return resolution_bitrate_limit.frame_size;
+      const media::ResolutionRateLimit& resolution_rate_limit) {
+    return resolution_rate_limit.frame_size;
   }
   static int min_start_bitrate_bps(
-      const media::ResolutionBitrateLimit& resolution_bitrate_limit) {
-    return resolution_bitrate_limit.min_start_bitrate_bps;
+      const media::ResolutionRateLimit& resolution_rate_limit) {
+    return resolution_rate_limit.min_start_bitrate_bps;
   }
   static int min_bitrate_bps(
-      const media::ResolutionBitrateLimit& resolution_bitrate_limit) {
-    return resolution_bitrate_limit.min_bitrate_bps;
+      const media::ResolutionRateLimit& resolution_rate_limit) {
+    return resolution_rate_limit.min_bitrate_bps;
   }
   static int max_bitrate_bps(
-      const media::ResolutionBitrateLimit& resolution_bitrate_limit) {
-    return resolution_bitrate_limit.max_bitrate_bps;
+      const media::ResolutionRateLimit& resolution_rate_limit) {
+    return resolution_rate_limit.max_bitrate_bps;
   }
-  static bool Read(media::mojom::ResolutionBitrateLimitDataView data,
-                   media::ResolutionBitrateLimit* out);
+  static uint32_t max_framerate_numerator(
+      const media::ResolutionRateLimit& resolution_rate_limit) {
+    return resolution_rate_limit.max_framerate_numerator;
+  }
+  static uint32_t max_framerate_denominator(
+      const media::ResolutionRateLimit& resolution_rate_limit) {
+    return resolution_rate_limit.max_framerate_denominator;
+  }
+  static bool Read(media::mojom::ResolutionRateLimitDataView data,
+                   media::ResolutionRateLimit* out);
 };
 
 template <>
@@ -43,6 +51,22 @@ class StructTraits<media::mojom::VideoEncoderInfoDataView,
   static const std::string& implementation_name(
       const media::VideoEncoderInfo& video_encoder_info) {
     return video_encoder_info.implementation_name;
+  }
+  static bool has_frame_delay(
+      const media::VideoEncoderInfo& video_encoder_info) {
+    return video_encoder_info.frame_delay.has_value();
+  }
+  static int32_t frame_delay(
+      const media::VideoEncoderInfo& video_encoder_info) {
+    return video_encoder_info.frame_delay.value_or(0);
+  }
+  static bool has_input_capacity(
+      const media::VideoEncoderInfo& video_encoder_info) {
+    return video_encoder_info.input_capacity.has_value();
+  }
+  static int32_t input_capacity(
+      const media::VideoEncoderInfo& video_encoder_info) {
+    return video_encoder_info.input_capacity.value_or(0);
   }
   static bool supports_native_handle(
       const media::VideoEncoderInfo& video_encoder_info) {
@@ -64,14 +88,26 @@ class StructTraits<media::mojom::VideoEncoderInfoDataView,
       const media::VideoEncoderInfo& video_encoder_info) {
     return video_encoder_info.reports_average_qp;
   }
+  static bool apply_alignment_to_all_simulcast_layers(
+      const media::VideoEncoderInfo& video_encoder_info) {
+    return video_encoder_info.apply_alignment_to_all_simulcast_layers;
+  }
+  static uint32_t requested_resolution_alignment(
+      const media::VideoEncoderInfo& video_encoder_info) {
+    return video_encoder_info.requested_resolution_alignment;
+  }
+  static bool supports_frame_size_change(
+      const media::VideoEncoderInfo& video_encoder_info) {
+    return video_encoder_info.supports_frame_size_change;
+  }
   static base::span<const std::vector<uint8_t>,
                     media::VideoEncoderInfo::kMaxSpatialLayers>
   fps_allocation(const media::VideoEncoderInfo& video_encoder_info) {
     return video_encoder_info.fps_allocation;
   }
-  static const std::vector<media::ResolutionBitrateLimit>&
-  resolution_bitrate_limits(const media::VideoEncoderInfo& video_encoder_info) {
-    return video_encoder_info.resolution_bitrate_limits;
+  static const std::vector<media::ResolutionRateLimit>& resolution_rate_limits(
+      const media::VideoEncoderInfo& video_encoder_info) {
+    return video_encoder_info.resolution_rate_limits;
   }
 
   static bool Read(media::mojom::VideoEncoderInfoDataView data,

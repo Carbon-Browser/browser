@@ -1,23 +1,23 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.m.js';
-import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
-import 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
-import 'chrome://resources/cr_elements/cr_radio_button/cr_radio_button.m.js';
-import 'chrome://resources/cr_elements/cr_radio_group/cr_radio_group.m.js';
-import 'chrome://resources/cr_elements/shared_style_css.m.js';
+import 'chrome://resources/ash/common/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/ash/common/cr_elements/cr_checkbox/cr_checkbox.js';
+import 'chrome://resources/ash/common/cr_elements/cr_dialog/cr_dialog.js';
+import 'chrome://resources/ash/common/cr_elements/cr_icon_button/cr_icon_button.js';
+import 'chrome://resources/ash/common/cr_elements/cr_input/cr_input.js';
+import 'chrome://resources/ash/common/cr_elements/cr_radio_button/cr_radio_button.js';
+import 'chrome://resources/ash/common/cr_elements/cr_radio_group/cr_radio_group.js';
+import 'chrome://resources/ash/common/cr_elements/cr_shared_style.css.js';
 import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
 import './icons.js';
 import './shared_styles.js';
 
-import {addWebUIListener, sendWithPromise} from 'chrome://resources/js/cr.m.js';
+import {addWebUIListener, sendWithPromise} from 'chrome://resources/ash/common/cr.m.js';
 import {html, Polymer} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-/** @enum {string} */ var AudioNodeType = {
+/** @enum {string} */ const AudioNodeType = {
   HEADPHONE: 'HEADPHONE',
   MIC: 'MIC',
   USB: 'USB',
@@ -37,7 +37,7 @@ import {html, Polymer} from 'chrome://resources/polymer/v3_0/polymer/polymer_bun
  * @constructor
  * @suppress {checkTypes}
  */
-var AudioNode = function() {
+const AudioNode = function() {
   // Whether node will input or output audio.
   this.isInput = false;
 
@@ -147,7 +147,7 @@ Polymer({
    * Adds a new node with default settings to the list of nodes.
    */
   appendNewNode() {
-    var newNode = new AudioNode();
+    const newNode = new AudioNode();
     newNode.id += this.nodeCount;
     this.nodeCount++;
     this.push('nodes', newNode);
@@ -160,7 +160,7 @@ Polymer({
    */
   insertAudioNode(e) {
     // Create a new audio node and add all the properties from |nodes[i]|.
-    var info = this.nodes[e.model.index];
+    const info = this.nodes[e.model.index];
     chrome.send('insertAudioNode', [info]);
   },
 
@@ -171,7 +171,7 @@ Polymer({
   insertEditedAudioNode() {
     // Insert a new node or update an existing node using all the properties
     // in |node|.
-    var node = this.nodes[this.currentEditIndex];
+    const node = this.nodes[this.currentEditIndex];
     chrome.send('insertAudioNode', [node]);
     this.$.editDialog.close();
   },
@@ -182,7 +182,7 @@ Polymer({
    *     the index in |nodes| to remove.
    */
   removeAudioNode(e) {
-    var info = this.nodes[e.model.index];
+    const info = this.nodes[e.model.index];
     chrome.send('removeAudioNode', [info.id]);
   },
 
@@ -194,7 +194,7 @@ Polymer({
    */
   copyDevice(event) {
     // Create a shallow copy of the selected device.
-    var newNode = new AudioNode();
+    const newNode = new AudioNode();
     Object.assign(newNode, this.nodes[event.model.index]);
     newNode.name += ' (Copy)';
     newNode.deviceName += ' (Copy)';
@@ -210,7 +210,7 @@ Polymer({
    *     of the item which the target is contained in.
    */
   showEditDialog(event) {
-    var index = event.model.index;
+    const index = event.model.index;
     this.currentEditIndex = index;
     this.currentEditableObject = this.nodes[index];
     this.$.editDialog.showModal();
@@ -222,10 +222,10 @@ Polymer({
    * @private
    */
   updateAudioNodes_(nodeList) {
-    /** @type {!Array<!AudioNode>} */ var newNodeList = [];
-    for (var i = 0; i < nodeList.length; ++i) {
+    /** @type {!Array<!AudioNode>} */ const newNodeList = [];
+    for (let i = 0; i < nodeList.length; ++i) {
       // Create a new audio node and add all the properties from |nodeList[i]|.
-      var node = new AudioNode();
+      const node = new AudioNode();
       Object.assign(node, nodeList[i]);
       newNodeList.push(node);
     }

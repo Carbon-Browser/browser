@@ -1,11 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <stdio.h>
 
+#include <string_view>
+
 #include "base/run_loop.h"
-#include "base/test/metrics/histogram_tester.h"
 #include "build/build_config.h"
 #include "chrome/browser/ash/printing/printers_sync_bridge.h"
 #include "chrome/browser/sync/test/integration/printers_helper.h"
@@ -43,6 +44,17 @@ class TwoClientPrintersSyncTest : public SyncTest {
       delete;
 
   ~TwoClientPrintersSyncTest() override = default;
+
+  bool SetupClients() override {
+    if (!SyncTest::SetupClients()) {
+      return false;
+    }
+
+    CHECK(!UseVerifier());
+    printers_helper::WaitForPrinterStoreToLoad(GetProfile(0));
+    printers_helper::WaitForPrinterStoreToLoad(GetProfile(1));
+    return true;
+  }
 };
 
 }  // namespace
@@ -68,7 +80,7 @@ IN_PROC_BROWSER_TEST_F(TwoClientPrintersSyncTest, SimultaneousAdd) {
   AddPrinter(GetPrinterStore(1), CreateTestPrinter(2));
 
   // Each store is guaranteed to have 1 printer because the tests run on the UI
-  // thread.  ApplySyncChanges happens after we wait on the checker.
+  // thread.  ApplyIncrementalSyncChanges happens after we wait on the checker.
   ASSERT_EQ(1, GetPrinterCount(0));
   ASSERT_EQ(1, GetPrinterCount(1));
 
@@ -137,26 +149,26 @@ IN_PROC_BROWSER_TEST_F(TwoClientPrintersSyncTest, ConflictResolution) {
   // Wait for a non-zero period (200ms) for modification timestamps to differ.
   base::PlatformThread::Sleep(base::Milliseconds(200));
 
-  // Client 0 goes offline, to make this test deterministic (client 1 commits
+  // Client 0 is paused to make this test deterministic (client 1 commits
   // first).
-  GetClient(0)->StopSyncServiceWithoutClearingData();
+  GetClient(0)->EnterSyncPausedStateForPrimaryAccount();
 
-  // Client 0 makes a change while offline.
+  // Client 0 makes a change while paused.
   ASSERT_TRUE(
       EditPrinterDescription(GetPrinterStore(0), 0, kLatestDescription));
 
-  // We must wait until the sync cycle is completed before client 0 goes online
-  // in order to make the outcome of conflict resolution deterministic (needed
-  // due to lack of a strong consistency model on the server).
-  SyncServiceImplHarness::AwaitQuiescence({GetClient(1)});
+  // We must wait until the sync cycle is completed before client 0 resumes in
+  // order to make the outcome of conflict resolution deterministic (needed due
+  // to lack of a strong consistency model on the server).
+  ASSERT_TRUE(SyncServiceImplHarness::AwaitQuiescence({GetClient(1)}));
 
   ASSERT_EQ(GetPrinterStore(0)->GetSavedPrinters()[0].description(),
             kLatestDescription);
   ASSERT_EQ(GetPrinterStore(1)->GetSavedPrinters()[0].description(),
             kOverwrittenDescription);
 
-  // Client 0 goes online, which results in a conflict (local wins).
-  GetClient(0)->StartSyncService();
+  // Client 0 gets unpaused, which results in a conflict (local wins).
+  GetClient(0)->ExitSyncPausedStateForPrimaryAccount();
 
   // Run tasks until the most recent update has been applied to all stores.
   ASSERT_TRUE(PrintersMatchChecker().Wait());
@@ -226,7 +238,6 @@ IN_PROC_BROWSER_TEST_F(TwoClientPrintersSyncTest, SimpleMerge) {
 
 IN_PROC_BROWSER_TEST_F(TwoClientPrintersSyncTest, MakeAndModelMigration) {
   ASSERT_TRUE(SetupClients());
-  base::HistogramTester histograms;
   const char kMake[] = "make";
   const char kModel[] = "model";
 
@@ -240,7 +251,7 @@ IN_PROC_BROWSER_TEST_F(TwoClientPrintersSyncTest, MakeAndModelMigration) {
   bridge->AddPrinter(std::move(printer));
 
   // Confirm that the bridge is not migrated.
-  absl::optional<sync_pb::PrinterSpecifics> spec_printer =
+  std::optional<sync_pb::PrinterSpecifics> spec_printer =
       bridge->GetPrinter(spec_printer_id);
   ASSERT_TRUE(spec_printer);
   ASSERT_THAT(spec_printer->make_and_model(), IsEmpty());
@@ -249,12 +260,10 @@ IN_PROC_BROWSER_TEST_F(TwoClientPrintersSyncTest, MakeAndModelMigration) {
   spec_printer = bridge->GetPrinter(spec_printer_id);
   ASSERT_TRUE(spec_printer);
 
-  base::StringPiece make_and_model = spec_printer->make_and_model();
+  std::string_view make_and_model = spec_printer->make_and_model();
   EXPECT_THAT(make_and_model, Not(IsEmpty()));
   EXPECT_THAT(make_and_model, StartsWith(kMake));
   EXPECT_THAT(make_and_model, EndsWith(kModel));
-  histograms.ExpectBucketCount("Printing.CUPS.MigratedMakeAndModel",
-                               1 /* kMigrated */, 1);
 }
 
 IN_PROC_BROWSER_TEST_F(TwoClientPrintersSyncTest,
@@ -275,7 +284,7 @@ IN_PROC_BROWSER_TEST_F(TwoClientPrintersSyncTest,
   bridge->AddPrinter(std::move(printer));
 
   // Confirm that the bridge is not migrated.
-  absl::optional<sync_pb::PrinterSpecifics> spec_printer =
+  std::optional<sync_pb::PrinterSpecifics> spec_printer =
       bridge->GetPrinter(spec_printer_id);
   ASSERT_TRUE(spec_printer);
   ASSERT_TRUE(spec_printer->has_ppd_reference());

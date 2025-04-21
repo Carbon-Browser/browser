@@ -1,11 +1,14 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_GFX_ANIMATION_KEYFRAME_TIMING_FUNCTION_H_
 #define UI_GFX_ANIMATION_KEYFRAME_TIMING_FUNCTION_H_
 
+#include <stddef.h>
+
 #include <memory>
+#include <vector>
 
 #include "ui/gfx/animation/keyframe/keyframe_animation_export.h"
 #include "ui/gfx/geometry/cubic_bezier.h"
@@ -23,10 +26,11 @@ class GFX_KEYFRAME_ANIMATION_EXPORT TimingFunction {
   enum class Type { LINEAR, CUBIC_BEZIER, STEPS };
 
   // Which limit to apply at a discontinuous boundary.
+  // See https://drafts.csswg.org/css-easing/#step-easing-algo
   enum class LimitDirection { LEFT, RIGHT };
 
   virtual Type GetType() const = 0;
-  virtual double GetValue(double t) const = 0;
+  virtual double GetValue(double t, LimitDirection limit_direction) const = 0;
   virtual double Velocity(double time) const = 0;
   virtual std::unique_ptr<TimingFunction> Clone() const = 0;
 
@@ -52,7 +56,9 @@ class GFX_KEYFRAME_ANIMATION_EXPORT CubicBezierTimingFunction
 
   // TimingFunction implementation.
   Type GetType() const override;
-  double GetValue(double time) const override;
+  double GetValue(
+      double time,
+      LimitDirection limit_direction = LimitDirection::RIGHT) const override;
   double Velocity(double time) const override;
   std::unique_ptr<TimingFunction> Clone() const override;
 
@@ -97,13 +103,12 @@ class GFX_KEYFRAME_ANIMATION_EXPORT StepsTimingFunction
 
   // TimingFunction implementation.
   Type GetType() const override;
-  double GetValue(double t) const override;
+  double GetValue(double t, LimitDirection limit_direction) const override;
   std::unique_ptr<TimingFunction> Clone() const override;
   double Velocity(double time) const override;
 
   int steps() const { return steps_; }
   StepPosition step_position() const { return step_position_; }
-  double GetPreciseValue(double t, LimitDirection limit_direction) const;
 
  private:
   StepsTimingFunction(int steps, StepPosition step_position);
@@ -122,20 +127,51 @@ class GFX_KEYFRAME_ANIMATION_EXPORT StepsTimingFunction
   StepPosition step_position_;
 };
 
+struct GFX_KEYFRAME_ANIMATION_EXPORT LinearEasingPoint {
+  double input;
+  double output;
+
+  LinearEasingPoint() = default;
+  LinearEasingPoint(double input, double output) {
+    this->input = input;
+    this->output = output;
+  }
+
+  bool operator==(const LinearEasingPoint& other) const {
+    return input == other.input && output == other.output;
+  }
+  bool operator!=(const LinearEasingPoint& other) const {
+    return !(*this == other);
+  }
+};
+
 class GFX_KEYFRAME_ANIMATION_EXPORT LinearTimingFunction
     : public TimingFunction {
  public:
   static std::unique_ptr<LinearTimingFunction> Create();
+  static std::unique_ptr<LinearTimingFunction> Create(
+      std::vector<LinearEasingPoint> points);
+
+  LinearTimingFunction& operator=(const LinearTimingFunction&) = delete;
   ~LinearTimingFunction() override;
 
   // TimingFunction implementation.
   Type GetType() const override;
-  double GetValue(double t) const override;
+  double GetValue(
+      double t,
+      LimitDirection limit_direction = LimitDirection::RIGHT) const override;
   std::unique_ptr<TimingFunction> Clone() const override;
   double Velocity(double time) const override;
 
+  const LinearEasingPoint& Point(size_t i) const { return points_[i]; }
+  const std::vector<LinearEasingPoint>& Points() const { return points_; }
+  bool IsTrivial() const { return !points_.size(); }
+
  private:
   LinearTimingFunction();
+  explicit LinearTimingFunction(std::vector<LinearEasingPoint> points);
+  LinearTimingFunction(const LinearTimingFunction&);
+  std::vector<LinearEasingPoint> points_;
 };
 
 }  // namespace gfx

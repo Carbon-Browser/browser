@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chromeos/ash/components/network/network_ui_data.h"
 
@@ -11,7 +16,7 @@
 #include "base/memory/ptr_util.h"
 #include "base/values.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
@@ -68,24 +73,23 @@ NetworkUIData::NetworkUIData(const NetworkUIData& other) {
 
 NetworkUIData& NetworkUIData::operator=(const NetworkUIData& other) {
   onc_source_ = other.onc_source_;
-  if (other.user_settings_.is_dict()) {
-    user_settings_ = other.user_settings_.Clone();
+  if (other.user_settings_.has_value()) {
+    user_settings_ = other.user_settings_->Clone();
   }
   return *this;
 }
 
-NetworkUIData::NetworkUIData(const base::Value& dict) {
-  const base::Value* source_value =
-      dict.FindKeyOfType(kKeyONCSource, base::Value::Type::STRING);
+NetworkUIData::NetworkUIData(const base::Value::Dict& dict) {
+  const std::string* source_value = dict.FindString(kKeyONCSource);
   if (source_value) {
-    onc_source_ = StringToEnum(kONCSourceTable, source_value->GetString(),
-                               ::onc::ONC_SOURCE_NONE);
+    onc_source_ =
+        StringToEnum(kONCSourceTable, *source_value, ::onc::ONC_SOURCE_NONE);
   } else {
     onc_source_ = ::onc::ONC_SOURCE_NONE;
   }
 
-  const base::Value* user_settings_value =
-      dict.FindKeyOfType(kKeyUserSettings, base::Value::Type::DICTIONARY);
+  const base::Value::Dict* user_settings_value =
+      dict.FindDict(kKeyUserSettings);
   if (user_settings_value) {
     user_settings_ = user_settings_value->Clone();
   }
@@ -103,24 +107,26 @@ std::unique_ptr<NetworkUIData> NetworkUIData::CreateFromONC(
   return ui_data;
 }
 
-const base::Value* NetworkUIData::GetUserSettingsDictionary() const {
-  if (user_settings_.is_none())
+const base::Value::Dict* NetworkUIData::GetUserSettingsDictionary() const {
+  if (!user_settings_.has_value()) {
     return nullptr;
-  return &user_settings_;
+  }
+  return &user_settings_.value();
 }
 
-void NetworkUIData::SetUserSettingsDictionary(base::Value dict) {
-  DCHECK(dict.is_dict());
+void NetworkUIData::SetUserSettingsDictionary(base::Value::Dict dict) {
   user_settings_ = std::move(dict);
 }
 
 std::string NetworkUIData::GetAsJson() const {
-  base::Value dict(base::Value::Type::DICTIONARY);
+  base::Value::Dict dict;
   const std::string source_string = GetONCSourceAsString();
-  if (!source_string.empty())
-    dict.SetKey(kKeyONCSource, base::Value(source_string));
-  if (user_settings_.is_dict())
-    dict.SetKey(kKeyUserSettings, user_settings_.Clone());
+  if (!source_string.empty()) {
+    dict.Set(kKeyONCSource, source_string);
+  }
+  if (user_settings_.has_value()) {
+    dict.Set(kKeyUserSettings, user_settings_->Clone());
+  }
 
   std::string json;
   base::JSONWriter::Write(dict, &json);
@@ -131,4 +137,4 @@ std::string NetworkUIData::GetONCSourceAsString() const {
   return EnumToString(kONCSourceTable, onc_source_);
 }
 
-}  // namespace chromeos
+}  // namespace ash

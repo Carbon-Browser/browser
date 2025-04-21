@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,7 @@
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
 namespace blink {
-
-class ScriptValue;
+class PaymentDetailsUpdate;
 
 // The interface for updating the payment details (shopping cart, shipping
 // options, total) in response to shipping address or option change, or through
@@ -20,8 +19,7 @@ class MODULES_EXPORT PaymentRequestDelegate : public GarbageCollectedMixin {
  public:
   // Updates the payment details in response to a change in, e.g., shipping
   // address. This stops the spinner in the UI.
-  virtual void OnUpdatePaymentDetails(
-      const ScriptValue& details_script_value) = 0;
+  virtual void OnUpdatePaymentDetails(PaymentDetailsUpdate*) = 0;
 
   // Called when the merchant failed to update the payment details in response
   // to a change in, e.g., shipping address. This will abort the payment.

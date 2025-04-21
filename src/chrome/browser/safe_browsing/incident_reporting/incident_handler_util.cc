@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,6 @@ uint32_t HashMessage(const google::protobuf::MessageLite& message) {
   std::string message_string;
   if (!message.SerializeToString(&message_string)) {
     NOTREACHED();
-    return 0;
   }
   return base::Hash(message_string);
 }

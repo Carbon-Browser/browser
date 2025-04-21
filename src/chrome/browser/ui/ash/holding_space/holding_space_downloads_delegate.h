@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,16 +12,9 @@
 
 #include "base/containers/unique_ptr_adapters.h"
 #include "base/scoped_observation.h"
-#include "chrome/browser/ash/crosapi/download_controller_ash.h"
+#include "chrome/browser/ash/arc/fileapi/arc_file_system_bridge.h"
 #include "chrome/browser/download/notification/multi_profile_download_notifier.h"
 #include "chrome/browser/ui/ash/holding_space/holding_space_keyed_service_delegate.h"
-#include "chromeos/crosapi/mojom/download_controller.mojom-forward.h"
-#include "components/arc/intent_helper/arc_intent_helper_bridge.h"
-#include "components/arc/intent_helper/arc_intent_helper_observer.h"
-
-namespace base {
-class FilePath;
-}  // namespace base
 
 namespace content {
 class DownloadManager;
@@ -34,8 +27,7 @@ namespace ash {
 class HoldingSpaceDownloadsDelegate
     : public HoldingSpaceKeyedServiceDelegate,
       public MultiProfileDownloadNotifier::Client,
-      public arc::ArcIntentHelperObserver,
-      public crosapi::DownloadControllerAsh::DownloadControllerObserver {
+      public arc::ArcFileSystemBridge::Observer {
  public:
   HoldingSpaceDownloadsDelegate(HoldingSpaceKeyedService* service,
                                 HoldingSpaceModel* model);
@@ -44,21 +36,14 @@ class HoldingSpaceDownloadsDelegate
       const HoldingSpaceDownloadsDelegate&) = delete;
   ~HoldingSpaceDownloadsDelegate() override;
 
-  // Attempts to cancel/pause/resume the download underlying the given `item`.
-  void Cancel(const HoldingSpaceItem* item);
-  void Pause(const HoldingSpaceItem* item);
-  void Resume(const HoldingSpaceItem* item);
-
   // Attempts to mark the download underlying the given `item` to open when
-  // complete. Returns `absl::nullopt` on success or the reason if the attempt
+  // complete. Returns `std::nullopt` on success or the reason if the attempt
   // was not successful.
-  absl::optional<holding_space_metrics::ItemFailureToLaunchReason>
+  std::optional<holding_space_metrics::ItemLaunchFailureReason>
   OpenWhenComplete(const HoldingSpaceItem* item);
 
  private:
   class InProgressDownload;
-  class InProgressAshDownload;
-  class InProgressLacrosDownload;
 
   // HoldingSpaceKeyedServiceDelegate:
   void OnPersistenceRestored() override;
@@ -73,26 +58,15 @@ class HoldingSpaceDownloadsDelegate
   void OnDownloadUpdated(content::DownloadManager* manager,
                          download::DownloadItem* item) override;
 
-  // arc::ArcIntentHelperObserver:
-  void OnArcDownloadAdded(const base::FilePath& relative_path,
-                          const std::string& owner_package_name) override;
-
-  // crosapi::DownloadControllerAsh::DownloadControllerObserver:
-  void OnLacrosDownloadCreated(
-      const crosapi::mojom::DownloadItem& mojo_download_item) override;
-  void OnLacrosDownloadUpdated(
-      const crosapi::mojom::DownloadItem& mojo_download_item) override;
-
-  // Invoked when the initial collection of `mojo_download_items` are synced
-  // from Lacros. Downloads are sorted chronologically by start time.
-  void OnLacrosDownloadsSynced(
-      std::vector<crosapi::mojom::DownloadItemPtr> mojo_download_items);
+  // arc::ArcFileSystemBridge::Observer:
+  void OnMediaStoreUriAdded(
+      const GURL& uri,
+      const arc::mojom::MediaStoreMetadata& metadata) override;
 
   // Invoked when the specified `in_progress_download` is updated. If
   // `invalidate_image` is `true`, the image for the associated holding space
   // item will be explicitly invalidated. This is necessary if, for example, the
-  // underlying download is transitioning to/from a dangerous or mixed content
-  // state.
+  // underlying download is transitioning to/from a dangerous or insecure state.
   void OnDownloadUpdated(InProgressDownload* in_progress_download,
                          bool invalidate_image);
 
@@ -111,17 +85,22 @@ class HoldingSpaceDownloadsDelegate
   // specified `in_progress_download`. If `invalidate_image` is `true`, the
   // image for the holding space item will be explicitly invalidated. This is
   // necessary if, for example, the underlying download is transitioning to/from
-  // a dangerous or mixed content state.
+  // a dangerous or insecure state.
   void CreateOrUpdateHoldingSpaceItem(InProgressDownload* in_progress_download,
                                       bool invalidate_image);
+
+  // Attempts to cancel/pause/resume the download underlying the given `item`.
+  void Cancel(const HoldingSpaceItem* item, HoldingSpaceCommandId command_id);
+  void Pause(const HoldingSpaceItem* item, HoldingSpaceCommandId command_id);
+  void Resume(const HoldingSpaceItem* item, HoldingSpaceCommandId command_id);
 
   // The collection of currently in-progress downloads.
   std::set<std::unique_ptr<InProgressDownload>, base::UniquePtrComparator>
       in_progress_downloads_;
 
-  base::ScopedObservation<arc::ArcIntentHelperBridge,
-                          arc::ArcIntentHelperObserver>
-      arc_intent_helper_observation_{this};
+  base::ScopedObservation<arc::ArcFileSystemBridge,
+                          arc::ArcFileSystemBridge::Observer>
+      arc_file_system_bridge_observation_{this};
 
   // Notifies this delegate of download events created for the profile
   // associated with this delegate's service. If the incognito profile

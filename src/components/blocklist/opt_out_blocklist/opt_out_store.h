@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "components/blocklist/opt_out_blocklist/opt_out_blocklist_data.h"
 
@@ -26,7 +26,7 @@ typedef base::OnceCallback<void(std::unique_ptr<BlocklistData>)>
 // multiple asynchronous operations in parallel and maintain ordering.
 class OptOutStore {
  public:
-  virtual ~OptOutStore() {}
+  virtual ~OptOutStore() = default;
 
   // Adds a new navigation to the store. |opt_out| is whether the user opted out
   // of the action.

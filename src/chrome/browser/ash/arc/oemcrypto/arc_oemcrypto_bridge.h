@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include "ash/components/arc/mojom/oemcrypto.mojom.h"
+#include "base/memory/raw_ptr.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -41,8 +42,11 @@ class ArcOemCryptoBridge : public KeyedService,
   void Connect(
       mojo::PendingReceiver<mojom::OemCryptoService> receiver) override;
 
+  static void EnsureFactoryBuilt();
+
  private:
-  ArcBridgeService* const arc_bridge_service_;  // Owned by ArcServiceManager.
+  const raw_ptr<ArcBridgeService>
+      arc_bridge_service_;  // Owned by ArcServiceManager.
 
   // WeakPtrFactory to use for callbacks.
   base::WeakPtrFactory<ArcOemCryptoBridge> weak_factory_{this};

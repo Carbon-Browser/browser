@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <utility>
 
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/public/platform/web_content_settings_client.h"
 #include "third_party/blink/public/platform/web_security_origin.h"
@@ -24,7 +24,7 @@
 #include "third_party/blink/renderer/core/frame/web_feature.h"
 #include "third_party/blink/renderer/core/workers/worker_global_scope.h"
 #include "third_party/blink/renderer/modules/locks/lock.h"
-#include "third_party/blink/renderer/platform/bindings/microtask.h"
+#include "third_party/blink/renderer/modules/shared_storage/shared_storage_worklet_global_scope.h"
 #include "third_party/blink/renderer/platform/bindings/name_client.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -42,11 +42,12 @@ namespace blink {
 
 namespace {
 
-constexpr char kRequestAbortedMessage[] = "The request was aborted.";
+constexpr char kSecurityErrorMessage[] = "The request was denied.";
+constexpr char kInvalidStateErrorMessage[] = "The document is not active.";
 
 LockInfo* ToLockInfo(const mojom::blink::LockInfoPtr& record) {
   LockInfo* info = LockInfo::Create();
-  info->setMode(Lock::ModeToString(record->mode));
+  info->setMode(Lock::ModeToEnum(record->mode));
   info->setName(record->name);
   info->setClientId(record->client_id);
   return info;
@@ -70,7 +71,7 @@ class LockManager::LockRequestImpl final
  public:
   LockRequestImpl(
       V8LockGrantedCallback* callback,
-      ScriptPromiseResolver* resolver,
+      ScriptPromiseResolver<IDLAny>* resolver,
       const String& name,
       mojom::blink::LockMode mode,
       mojo::PendingAssociatedReceiver<mojom::blink::LockRequest> receiver,
@@ -98,6 +99,7 @@ class LockManager::LockRequestImpl final
     visitor->Trace(manager_);
     visitor->Trace(callback_);
     visitor->Trace(receiver_);
+    visitor->Trace(abort_handle_);
   }
 
   const char* NameInHeapSnapshot() const override {
@@ -108,13 +110,20 @@ class LockManager::LockRequestImpl final
   // unblocking further requests, without waiting for GC finalize the object.
   void Cancel() { receiver_.reset(); }
 
-  void Abort(const String& reason) override {
+  void InitializeAbortAlgorithm(AbortSignal::AlgorithmHandle& handle) {
+    DCHECK(!abort_handle_);
+    abort_handle_ = &handle;
+  }
+
+  void Abort(AbortSignal* signal) {
     // Abort signal after acquisition should be ignored.
-    if (!manager_->IsPendingRequest(this))
+    if (!manager_->IsPendingRequest(this)) {
       return;
+    }
 
     manager_->RemovePendingRequest(this);
     receiver_.reset();
+    abort_handle_.Clear();
 
     DCHECK(resolver_);
 
@@ -127,8 +136,7 @@ class LockManager::LockRequestImpl final
 
     ScriptState::Scope script_state_scope(script_state);
 
-    resolver_->Reject(V8ThrowDOMException::CreateOrDie(
-        script_state->GetIsolate(), DOMExceptionCode::kAbortError, reason));
+    resolver_->Reject(signal->reason(script_state));
   }
 
   void Failed() override {
@@ -136,6 +144,7 @@ class LockManager::LockRequestImpl final
 
     manager_->RemovePendingRequest(this);
     receiver_.reset();
+    abort_handle_.Clear();
 
     ScriptState* script_state = resolver_->GetScriptState();
     if (!script_state->ContextIsValid())
@@ -161,6 +170,7 @@ class LockManager::LockRequestImpl final
 
     manager_->RemovePendingRequest(this);
     receiver_.reset();
+    abort_handle_.Clear();
 
     ScriptState* script_state = resolver_->GetScriptState();
     if (!script_state->ContextIsValid()) {
@@ -173,21 +183,22 @@ class LockManager::LockRequestImpl final
         std::move(lock_lifetime_), manager_);
     manager_->held_locks_.insert(lock);
 
-    // Note that either invoking `callback` or calling ScriptPromise::Cast to
-    // convert the resulting value to a Promise can or will execute javascript.
-    // This means that the ExecutionContext could be synchronously destroyed,
-    // and the `lock` might be released before HoldUntil is called. This is
-    // safe, as releasing a lock twice is harmless.
+    // Note that either invoking `callback` or calling
+    // ToResolvedPromise to convert the resulting value to a Promise
+    // can or will execute javascript. This means that the ExecutionContext
+    // could be synchronously destroyed, and the `lock` might be released before
+    // HoldUntil is called. This is safe, as releasing a lock twice is harmless.
     ScriptState::Scope scope(script_state);
     v8::TryCatch try_catch(script_state->GetIsolate());
     v8::Maybe<ScriptValue> result = callback->Invoke(nullptr, lock);
     if (try_catch.HasCaught()) {
       lock->HoldUntil(
-          ScriptPromise::Reject(script_state, try_catch.Exception()),
+          ScriptPromise<IDLAny>::Reject(script_state, try_catch.Exception()),
           resolver_);
     } else if (!result.IsNothing()) {
-      lock->HoldUntil(ScriptPromise::Cast(script_state, result.FromJust()),
-                      resolver_);
+      lock->HoldUntil(
+          ToResolvedPromise<IDLAny>(script_state, result.FromJust()),
+          resolver_);
     }
   }
 
@@ -197,7 +208,7 @@ class LockManager::LockRequestImpl final
 
   // Rejects if the request was aborted, otherwise resolves/rejects with
   // |callback_|'s result.
-  Member<ScriptPromiseResolver> resolver_;
+  Member<ScriptPromiseResolver<IDLAny>> resolver_;
 
   // Held to stamp the Lock object's |name| property.
   String name_;
@@ -216,6 +227,10 @@ class LockManager::LockRequestImpl final
   // registered. If the context is destroyed then |manager_| will dispose of
   // |this| which terminates the request on the service side.
   Member<LockManager> manager_;
+
+  // Handle that keeps the associated abort algorithm alive for the duration of
+  // the request.
+  Member<AbortSignal::AlgorithmHandle> abort_handle_;
 };
 
 const char LockManager::kSupplementName[] = "LockManager";
@@ -236,22 +251,32 @@ LockManager::LockManager(NavigatorBase& navigator)
       service_(navigator.GetExecutionContext()),
       observer_(navigator.GetExecutionContext()) {}
 
-ScriptPromise LockManager::request(ScriptState* script_state,
-                                   const String& name,
-                                   V8LockGrantedCallback* callback,
-                                   ExceptionState& exception_state) {
+void LockManager::SetManager(
+    mojo::PendingRemote<mojom::blink::LockManager> manager,
+    ExecutionContext* execution_context) {
+  service_.Bind(std::move(manager),
+                execution_context->GetTaskRunner(TaskType::kMiscPlatformAPI));
+}
+
+ScriptPromise<IDLAny> LockManager::request(ScriptState* script_state,
+                                           const String& name,
+                                           V8LockGrantedCallback* callback,
+                                           ExceptionState& exception_state) {
   return request(script_state, name, LockOptions::Create(), callback,
                  exception_state);
 }
 
-ScriptPromise LockManager::request(ScriptState* script_state,
-                                   const String& name,
-                                   const LockOptions* options,
-                                   V8LockGrantedCallback* callback,
-                                   ExceptionState& exception_state) {
+ScriptPromise<IDLAny> LockManager::request(ScriptState* script_state,
+                                           const String& name,
+                                           const LockOptions* options,
+                                           V8LockGrantedCallback* callback,
+                                           ExceptionState& exception_state) {
   // Observed context may be gone if frame is detached.
-  if (!GetExecutionContext())
-    return ScriptPromise();
+  if (!GetExecutionContext()) {
+    exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
+                                      kInvalidStateErrorMessage);
+    return EmptyPromise();
+  }
 
   ExecutionContext* context = ExecutionContext::From(script_state);
   DCHECK(context->IsContextThread());
@@ -262,40 +287,28 @@ ScriptPromise LockManager::request(ScriptState* script_state,
 
   // 5. If origin is an opaque origin, then reject promise with a
   // "SecurityError" DOMException.
-  if (!context->GetSecurityOrigin()->CanAccessLocks() ||
-      !AllowLocks(script_state)) {
+  //
+  // TODO(crbug.com/373899208): It's safe to bypass the opaque origin check for
+  // shared storage worklets. However, it'd be better to give shared storage
+  // worklets the correct security origin to avoid bypassing this check.
+  if (!context->GetSecurityOrigin()->CanAccessLocks() &&
+      !context->IsSharedStorageWorkletGlobalScope()) {
     exception_state.ThrowSecurityError(
         "Access to the Locks API is denied in this context.");
-    return ScriptPromise();
+    return EmptyPromise();
   }
   if (context->GetSecurityOrigin()->IsLocal()) {
     UseCounter::Count(context, WebFeature::kFileAccessedLocks);
   }
 
-  if (!service_.is_bound()) {
-    context->GetBrowserInterfaceBroker().GetInterface(
-        service_.BindNewPipeAndPassReceiver(
-            context->GetTaskRunner(TaskType::kMiscPlatformAPI)));
-
-    if (!service_.is_bound()) {
-      exception_state.ThrowTypeError("Service not available.");
-      return ScriptPromise();
-    }
-  }
-  if (!observer_.is_bound()) {
-    context->GetBrowserInterfaceBroker().GetInterface(
-        observer_.BindNewPipeAndPassReceiver(
-            context->GetTaskRunner(TaskType::kMiscPlatformAPI)));
-  }
-
-  mojom::blink::LockMode mode = Lock::StringToMode(options->mode());
+  mojom::blink::LockMode mode = Lock::EnumToMode(options->mode().AsEnum());
 
   // 6. Otherwise, if name starts with U+002D HYPHEN-MINUS (-), then reject
   // promise with a "NotSupportedError" DOMException.
   if (name.StartsWith("-")) {
     exception_state.ThrowDOMException(DOMExceptionCode::kNotSupportedError,
                                       "Names cannot start with '-'.");
-    return ScriptPromise();
+    return EmptyPromise();
   }
 
   // 7. Otherwise, if both options’ steal dictionary member and option’s
@@ -305,7 +318,7 @@ ScriptPromise LockManager::request(ScriptState* script_state,
     exception_state.ThrowDOMException(
         DOMExceptionCode::kNotSupportedError,
         "The 'steal' and 'ifAvailable' options cannot be used together.");
-    return ScriptPromise();
+    return EmptyPromise();
   }
 
   // 8. Otherwise, if options’ steal dictionary member is true and option’s mode
@@ -315,7 +328,7 @@ ScriptPromise LockManager::request(ScriptState* script_state,
     exception_state.ThrowDOMException(
         DOMExceptionCode::kNotSupportedError,
         "The 'steal' option may only be used with 'exclusive' locks.");
-    return ScriptPromise();
+    return EmptyPromise();
   }
 
   // 9. Otherwise, if option’s signal dictionary member is present, and either
@@ -326,37 +339,72 @@ ScriptPromise LockManager::request(ScriptState* script_state,
     exception_state.ThrowDOMException(
         DOMExceptionCode::kNotSupportedError,
         "The 'signal' and 'ifAvailable' options cannot be used together.");
-    return ScriptPromise();
+    return EmptyPromise();
   }
   if (options->hasSignal() && options->steal()) {
     exception_state.ThrowDOMException(
         DOMExceptionCode::kNotSupportedError,
         "The 'signal' and 'steal' options cannot be used together.");
-    return ScriptPromise();
+    return EmptyPromise();
   }
 
-  // 10. Otherwise, if options’ signal dictionary member is present and its
-  // aborted flag is set, then reject promise with an "AbortError" DOMException.
+  // If options["signal"] exists and is aborted, then return a promise rejected
+  // with options["signal"]'s abort reason.
   if (options->hasSignal() && options->signal()->aborted()) {
-    exception_state.ThrowDOMException(DOMExceptionCode::kAbortError,
-                                      kRequestAbortedMessage);
-    return ScriptPromise();
+    return ScriptPromise<IDLAny>::Reject(
+        script_state, options->signal()->reason(script_state));
+  }
+
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver<IDLAny>>(
+      script_state, exception_state.GetContext());
+  auto promise = resolver->Promise();
+
+  CheckStorageAccessAllowed(
+      context, resolver,
+      resolver->WrapCallbackInScriptScope(WTF::BindOnce(
+          &LockManager::RequestImpl, WrapWeakPersistent(this),
+          WrapPersistent(options), name, WrapPersistent(callback), mode)));
+
+  // 12. Return promise.
+  return promise;
+}
+
+void LockManager::RequestImpl(const LockOptions* options,
+                              const String& name,
+                              V8LockGrantedCallback* callback,
+                              mojom::blink::LockMode mode,
+                              ScriptPromiseResolver<IDLAny>* resolver) {
+  ExecutionContext* context = resolver->GetExecutionContext();
+  if (!service_.is_bound()) {
+    context->GetBrowserInterfaceBroker().GetInterface(
+        service_.BindNewPipeAndPassReceiver(
+            context->GetTaskRunner(TaskType::kMiscPlatformAPI)));
+
+    if (!service_.is_bound()) {
+      resolver->RejectWithDOMException(DOMExceptionCode::kAbortError, "");
+    }
+  }
+  if (!observer_.is_bound()) {
+    context->GetBrowserInterfaceBroker().GetInterface(
+        observer_.BindNewPipeAndPassReceiver(
+            context->GetTaskRunner(TaskType::kMiscPlatformAPI)));
+
+    if (!observer_.is_bound()) {
+      resolver->RejectWithDOMException(DOMExceptionCode::kAbortError, "");
+    }
   }
 
   mojom::blink::LockManager::WaitMode wait =
-      options->steal() ? mojom::blink::LockManager::WaitMode::PREEMPT
-                       : options->ifAvailable()
-                             ? mojom::blink::LockManager::WaitMode::NO_WAIT
-                             : mojom::blink::LockManager::WaitMode::WAIT;
-
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
-  ScriptPromise promise = resolver->Promise();
+      options->steal()         ? mojom::blink::LockManager::WaitMode::PREEMPT
+      : options->ifAvailable() ? mojom::blink::LockManager::WaitMode::NO_WAIT
+                               : mojom::blink::LockManager::WaitMode::WAIT;
 
   mojo::PendingRemote<mojom::blink::ObservedFeature> lock_lifetime;
   observer_->Register(lock_lifetime.InitWithNewPipeAndPassReceiver(),
                       mojom::blink::ObservedFeatureType::kWebLock);
 
   mojo::PendingAssociatedRemote<mojom::blink::LockRequest> request_remote;
+
   // 11.1. Let request be the result of running the steps to request a lock with
   // promise, the current agent, environment’s id, origin, callback, name,
   // options’ mode dictionary member, options’ ifAvailable dictionary member,
@@ -370,55 +418,64 @@ ScriptPromise LockManager::request(ScriptState* script_state,
   // 11.2. If options’ signal dictionary member is present, then add the
   // following abort steps to options’ signal dictionary member:
   if (options->hasSignal()) {
-    // 11.2.1. Enqueue the steps to abort the request request to the lock task
-    // queue.
-    // 11.2.2. Reject promise with an "AbortError" DOMException.
-    options->signal()->AddAlgorithm(WTF::Bind(&LockRequestImpl::Abort,
-                                              WrapWeakPersistent(request),
-                                              String(kRequestAbortedMessage)));
+    // In "Request a lock": If signal is present, then add the algorithm signal
+    // to abort the request request with signal to signal.
+    AbortSignal::AlgorithmHandle* handle = options->signal()->AddAlgorithm(
+        WTF::BindOnce(&LockRequestImpl::Abort, WrapWeakPersistent(request),
+                      WrapPersistent(options->signal())));
+    request->InitializeAbortAlgorithm(*handle);
   }
-
   service_->RequestLock(name, mode, wait, std::move(request_remote));
-
-  // 12. Return promise.
-  return promise;
 }
 
-ScriptPromise LockManager::query(ScriptState* script_state,
-                                 ExceptionState& exception_state) {
+ScriptPromise<LockManagerSnapshot> LockManager::query(
+    ScriptState* script_state,
+    ExceptionState& exception_state) {
   // Observed context may be gone if frame is detached.
-  if (!GetExecutionContext())
-    return ScriptPromise();
-
+  if (!GetExecutionContext()) {
+    exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
+                                      kInvalidStateErrorMessage);
+    return EmptyPromise();
+  }
   ExecutionContext* context = ExecutionContext::From(script_state);
   DCHECK(context->IsContextThread());
 
-  if (!context->GetSecurityOrigin()->CanAccessLocks() ||
-      !AllowLocks(script_state)) {
+  if (!context->GetSecurityOrigin()->CanAccessLocks()) {
     exception_state.ThrowSecurityError(
         "Access to the Locks API is denied in this context.");
-    return ScriptPromise();
+    return EmptyPromise();
   }
   if (context->GetSecurityOrigin()->IsLocal()) {
     UseCounter::Count(context, WebFeature::kFileAccessedLocks);
   }
 
+  auto* resolver =
+      MakeGarbageCollected<ScriptPromiseResolver<LockManagerSnapshot>>(
+          script_state, exception_state.GetContext());
+  auto promise = resolver->Promise();
+
+  CheckStorageAccessAllowed(
+      context, resolver,
+      resolver->WrapCallbackInScriptScope(
+          WTF::BindOnce(&LockManager::QueryImpl, WrapWeakPersistent(this))));
+  return promise;
+}
+
+void LockManager::QueryImpl(
+    ScriptPromiseResolver<LockManagerSnapshot>* resolver) {
+  ExecutionContext* context = resolver->GetExecutionContext();
   if (!service_.is_bound()) {
     context->GetBrowserInterfaceBroker().GetInterface(
         service_.BindNewPipeAndPassReceiver(
             context->GetTaskRunner(TaskType::kMiscPlatformAPI)));
 
     if (!service_.is_bound()) {
-      exception_state.ThrowTypeError("Service not available.");
-      return ScriptPromise();
+      resolver->RejectWithDOMException(DOMExceptionCode::kAbortError, "");
     }
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
-  ScriptPromise promise = resolver->Promise();
-
-  service_->QueryState(WTF::Bind(
-      [](ScriptPromiseResolver* resolver,
+  service_->QueryState(WTF::BindOnce(
+      [](ScriptPromiseResolver<LockManagerSnapshot>* resolver,
          Vector<mojom::blink::LockInfoPtr> pending,
          Vector<mojom::blink::LockInfoPtr> held) {
         LockManagerSnapshot* snapshot = LockManagerSnapshot::Create();
@@ -427,8 +484,6 @@ ScriptPromise LockManager::query(ScriptState* script_state,
         resolver->Resolve(snapshot);
       },
       WrapPersistent(resolver)));
-
-  return promise;
 }
 
 void LockManager::AddPendingRequest(LockRequestImpl* request) {
@@ -466,36 +521,79 @@ void LockManager::OnLockReleased(Lock* lock) {
   held_locks_.erase(lock);
 }
 
-bool LockManager::AllowLocks(ScriptState* script_state) {
-  if (!cached_allowed_.has_value()) {
-    ExecutionContext* execution_context = ExecutionContext::From(script_state);
-    DCHECK(execution_context->IsContextThread());
-    SECURITY_DCHECK(execution_context->IsWindow() ||
-                    execution_context->IsWorkerGlobalScope());
-    if (auto* window = DynamicTo<LocalDOMWindow>(execution_context)) {
-      LocalFrame* frame = window->GetFrame();
-      if (!frame) {
-        cached_allowed_ = false;
-      } else if (auto* settings_client = frame->GetContentSettingsClient()) {
-        // This triggers a sync IPC.
-        cached_allowed_ = settings_client->AllowStorageAccessSync(
-            WebContentSettingsClient::StorageType::kWebLocks);
-      } else {
-        cached_allowed_ = true;
-      }
-    } else {
-      WebContentSettingsClient* content_settings_client =
-          To<WorkerGlobalScope>(execution_context)->ContentSettingsClient();
-      if (!content_settings_client) {
-        cached_allowed_ = true;
-      } else {
-        // This triggers a sync IPC.
-        cached_allowed_ = content_settings_client->AllowStorageAccessSync(
-            WebContentSettingsClient::StorageType::kWebLocks);
-      }
-    }
+void LockManager::CheckStorageAccessAllowed(
+    ExecutionContext* context,
+    ScriptPromiseResolverBase* resolver,
+    base::OnceCallback<void()> callback) {
+  DCHECK(context->IsWindow() || context->IsWorkerGlobalScope() ||
+         context->IsSharedStorageWorkletGlobalScope());
+
+  auto wrapped_callback = WTF::BindOnce(
+      &LockManager::DidCheckStorageAccessAllowed, WrapWeakPersistent(this),
+      WrapPersistent(resolver), std::move(callback));
+
+  if (cached_allowed_.has_value()) {
+    std::move(wrapped_callback).Run(cached_allowed_.value());
+    return;
   }
-  return cached_allowed_.value();
+
+  if (auto* window = DynamicTo<LocalDOMWindow>(context)) {
+    LocalFrame* frame = window->GetFrame();
+    if (!frame) {
+      std::move(wrapped_callback).Run(false);
+      return;
+    }
+    frame->AllowStorageAccessAndNotify(
+        WebContentSettingsClient::StorageType::kWebLocks,
+        std::move(wrapped_callback));
+  } else if (auto* worker_global_scope =
+                 DynamicTo<WorkerGlobalScope>(context)) {
+    WebContentSettingsClient* content_settings_client =
+        worker_global_scope->ContentSettingsClient();
+    if (!content_settings_client) {
+      std::move(wrapped_callback).Run(true);
+      return;
+    }
+    content_settings_client->AllowStorageAccess(
+        WebContentSettingsClient::StorageType::kWebLocks,
+        std::move(wrapped_callback));
+  } else {
+    // Shared storage always allows WebLocks as long as the
+    // `SharedStorageWorkletGlobalScope` is allowed in the first place.
+    //
+    // TODO(crbug.com/373891801): A more generic way is to provide
+    // `WebContentSettingsClient` to shared storage worklets.
+    CHECK(context->IsSharedStorageWorkletGlobalScope());
+    std::move(wrapped_callback).Run(true);
+  }
+}
+
+void LockManager::DidCheckStorageAccessAllowed(
+    ScriptPromiseResolverBase* resolver,
+    base::OnceCallback<void()> callback,
+    bool allow_access) {
+  if (cached_allowed_.has_value()) {
+    DCHECK_EQ(cached_allowed_.value(), allow_access);
+  } else {
+    cached_allowed_ = allow_access;
+  }
+
+  ScriptState* script_state = resolver->GetScriptState();
+
+  if (!script_state->ContextIsValid()) {
+    return;
+  }
+
+  if (cached_allowed_.value()) {
+    std::move(callback).Run();
+    return;
+  }
+
+  ScriptState::Scope scope(script_state);
+
+  resolver->Reject(V8ThrowDOMException::CreateOrDie(
+      script_state->GetIsolate(), DOMExceptionCode::kSecurityError,
+      kSecurityErrorMessage));
 }
 
 }  // namespace blink

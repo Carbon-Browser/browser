@@ -1,22 +1,24 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_NEARBY_SHARING_CERTIFICATES_TEST_UTIL_H_
 #define CHROME_BROWSER_NEARBY_SHARING_CERTIFICATES_TEST_UTIL_H_
 
+#include <array>
 #include <memory>
 #include <vector>
 
 #include "base/time/time.h"
+#include "chrome/browser/nearby_sharing/certificates/constants.h"
 #include "chrome/browser/nearby_sharing/certificates/nearby_share_decrypted_public_certificate.h"
 #include "chrome/browser/nearby_sharing/certificates/nearby_share_encrypted_metadata_key.h"
 #include "chrome/browser/nearby_sharing/certificates/nearby_share_private_certificate.h"
-#include "chrome/browser/nearby_sharing/proto/encrypted_metadata.pb.h"
-#include "chrome/browser/nearby_sharing/proto/rpc_resources.pb.h"
-#include "chrome/browser/ui/webui/nearby_share/public/mojom/nearby_share_settings.mojom.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_share_settings.mojom.h"
 #include "crypto/ec_private_key.h"
 #include "crypto/symmetric_key.h"
+#include "third_party/nearby/sharing/proto/encrypted_metadata.pb.h"
+#include "third_party/nearby/sharing/proto/rpc_resources.pb.h"
 
 extern const char kTestMetadataFullName[];
 extern const char kTestMetadataIconUrl[];
@@ -30,25 +32,29 @@ const std::vector<uint8_t>& GetNearbyShareTestP256PublicKey();
 std::unique_ptr<crypto::SymmetricKey> GetNearbyShareTestSecretKey();
 const std::vector<uint8_t>& GetNearbyShareTestCertificateId();
 
-const std::vector<uint8_t>& GetNearbyShareTestMetadataEncryptionKey();
+const std::array<uint8_t, kNearbyShareNumBytesMetadataEncryptionKey>&
+GetNearbyShareTestMetadataEncryptionKey();
 const std::vector<uint8_t>& GetNearbyShareTestMetadataEncryptionKeyTag();
-const std::vector<uint8_t>& GetNearbyShareTestSalt();
+const std::array<uint8_t, kNearbyShareNumBytesMetadataEncryptionKeySalt>&
+GetNearbyShareTestSalt();
 const NearbyShareEncryptedMetadataKey& GetNearbyShareTestEncryptedMetadataKey();
 
 base::Time GetNearbyShareTestNotBefore();
 base::TimeDelta GetNearbyShareTestValidityOffset();
 
-const nearbyshare::proto::EncryptedMetadata& GetNearbyShareTestMetadata();
+const nearby::sharing::proto::EncryptedMetadata& GetNearbyShareTestMetadata();
 const std::vector<uint8_t>& GetNearbyShareTestEncryptedMetadata();
 
 const std::vector<uint8_t>& GetNearbyShareTestPayloadToSign();
-const std::vector<uint8_t>& GetNearbyShareTestSampleSignature();
-const std::vector<uint8_t>& GetNearbyShareTestPayloadHashUsingSecretKey();
+const std::array<uint8_t, kNearbyShareNumBytesRandomSignature>&
+GetNearbyShareTestSampleSignature();
+const std::array<uint8_t, kNearbyShareNumBytesAuthenticationTokenHash>&
+GetNearbyShareTestPayloadHashUsingSecretKey();
 
 NearbySharePrivateCertificate GetNearbyShareTestPrivateCertificate(
     nearby_share::mojom::Visibility visibility,
     base::Time not_before = GetNearbyShareTestNotBefore());
-nearbyshare::proto::PublicCertificate GetNearbyShareTestPublicCertificate(
+nearby::sharing::proto::PublicCertificate GetNearbyShareTestPublicCertificate(
     nearby_share::mojom::Visibility visibility,
     base::Time not_before = GetNearbyShareTestNotBefore());
 
@@ -57,7 +63,7 @@ nearbyshare::proto::PublicCertificate GetNearbyShareTestPublicCertificate(
 std::vector<NearbySharePrivateCertificate>
 GetNearbyShareTestPrivateCertificateList(
     nearby_share::mojom::Visibility visibility);
-std::vector<nearbyshare::proto::PublicCertificate>
+std::vector<nearby::sharing::proto::PublicCertificate>
 GetNearbyShareTestPublicCertificateList(
     nearby_share::mojom::Visibility visibility);
 

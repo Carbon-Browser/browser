@@ -1,11 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/events/keycodes/keyboard_code_conversion_fuchsia.h"
 
-#include <fuchsia/input/cpp/fidl.h>
-#include <fuchsia/ui/input3/cpp/fidl.h>
+#include <fidl/fuchsia.ui.input3/cpp/fidl.h>
 #include <cstdint>
 
 #include "base/logging.h"
@@ -15,9 +14,9 @@
 
 namespace {
 
-using fuchsia::input::Key;
-using fuchsia::ui::input3::KeyMeaning;
-using fuchsia::ui::input3::NonPrintableKey;
+using fuchsia_input::Key;
+using fuchsia_ui_input3::KeyMeaning;
+using fuchsia_ui_input3::NonPrintableKey;
 
 #define EXPECT_CODEPOINT_MAPS(codepoint)                                     \
   EXPECT_EQ(                                                                 \
@@ -60,8 +59,8 @@ TEST(FuchsiaKeyboardCodeConversion, FuchsiaKeyToDomKeySpecificValues) {
 
   // Check that NonPrintableKeys are converted correctly.
   EXPECT_EQ(ui::DomKey::ENTER,
-            ui::DomKeyFromFuchsiaKeyMeaning(KeyMeaning::WithNonPrintableKey(
-                NonPrintableKey(NonPrintableKey::ENTER))));
+            ui::DomKeyFromFuchsiaKeyMeaning(
+                KeyMeaning::WithNonPrintableKey(NonPrintableKey::kEnter)));
 }
 
 }  // namespace

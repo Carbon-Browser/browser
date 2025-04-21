@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,12 @@ Impression::Impression(SchedulerClientType type,
     : create_time(create_time), guid(guid), type(type) {}
 
 Impression::Impression(const Impression& other) = default;
+
+Impression::Impression(Impression&& other) = default;
+
+Impression& Impression::operator=(const Impression& other) = default;
+
+Impression& Impression::operator=(Impression&& other) = default;
 
 Impression::~Impression() = default;
 
@@ -47,6 +53,12 @@ ClientState::ClientState()
       negative_events_count(0) {}
 
 ClientState::ClientState(const ClientState& other) = default;
+
+ClientState::ClientState(ClientState&& other) = default;
+
+ClientState& ClientState::operator=(const ClientState& other) = default;
+
+ClientState& ClientState::operator=(ClientState&& other) = default;
 
 ClientState::~ClientState() = default;
 

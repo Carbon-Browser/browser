@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
-#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/thumbnails/thumbnail_tab_helper.h"
 #include "content/public/browser/web_contents_observer.h"
 
@@ -20,8 +19,9 @@ class ThumbnailTracker::ContentsData : public content::WebContentsObserver {
   ContentsData(ThumbnailTracker* parent, content::WebContents* contents)
       : content::WebContentsObserver(contents), parent_(parent) {
     thumbnail_ = parent_->thumbnail_getter_.Run(contents);
-    if (!thumbnail_)
+    if (!thumbnail_) {
       return;
+    }
 
     subscription_ = thumbnail_->Subscribe();
     subscription_->SetCompressedImageCallback(base::BindRepeating(
@@ -32,8 +32,9 @@ class ThumbnailTracker::ContentsData : public content::WebContentsObserver {
   ContentsData& operator=(const ContentsData&) = delete;
 
   void RequestThumbnail() {
-    if (thumbnail_)
+    if (thumbnail_) {
       thumbnail_->RequestCompressedThumbnailData();
+    }
   }
 
   // content::WebContents:

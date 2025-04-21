@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,12 @@
 #include <string>
 #include <utility>
 
-#include "base/guid.h"
+#include "base/containers/contains.h"
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
+#include "content/browser/devtools/devtools_manager.h"
 #include "content/browser/devtools/shared_worker_devtools_manager.h"
 #include "content/common/content_constants_internal.h"
 #include "content/public/browser/browser_context.h"
@@ -20,6 +20,7 @@
 #include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/devtools_external_agent_proxy.h"
 #include "content/public/browser/devtools_external_agent_proxy_delegate.h"
+#include "content/public/browser/devtools_manager_delegate.h"
 #include "content/public/browser/web_contents_delegate.h"
 #include "content/public/test/navigation_simulator.h"
 #include "content/public/test/test_utils.h"
@@ -90,6 +91,16 @@ class TestWebContentsDelegate : public WebContentsDelegate {
   bool renderer_unresponsive_received_;
 };
 
+class BrowserClient : public ContentBrowserClient {
+ public:
+  BrowserClient() = default;
+  ~BrowserClient() override = default;
+  std::unique_ptr<content::DevToolsManagerDelegate>
+  CreateDevToolsManagerDelegate() override {
+    return std::make_unique<DevToolsManagerDelegate>();
+  }
+};
+
 }  // namespace
 
 class DevToolsAgentHostImplTest : public RenderViewHostImplTestHarness {
@@ -100,7 +111,21 @@ class DevToolsAgentHostImplTest : public RenderViewHostImplTestHarness {
   void SetUp() override {
     RenderViewHostImplTestHarness::SetUp();
     TestDevToolsClientHost::ResetCounters();
+    browser_content_client_ = std::make_unique<BrowserClient>();
+    original_client_ =
+        SetBrowserClientForTesting(browser_content_client_.get());
+    DevToolsManager::ShutdownForTests();
   }
+  void TearDown() override {
+    SetBrowserClientForTesting(original_client_);
+    DevToolsManager::ShutdownForTests();
+
+    RenderViewHostImplTestHarness::TearDown();
+  }
+
+ private:
+  std::unique_ptr<ContentBrowserClient> browser_content_client_;
+  raw_ptr<ContentBrowserClient> original_client_ = nullptr;
 };
 
 TEST_F(DevToolsAgentHostImplTest, OpenAndManuallyCloseDevToolsClientHost) {
@@ -165,8 +190,9 @@ class TestExternalAgentDelegate : public DevToolsExternalAgentProxyDelegate {
   std::map<std::string, int> event_counter_;
 
   void recordEvent(const std::string& name) {
-    if (event_counter_.find(name) == event_counter_.end())
+    if (!base::Contains(event_counter_, name)) {
       event_counter_[name] = 0;
+    }
     event_counter_[name] = event_counter_[name] + 1;
   }
 
@@ -204,22 +230,19 @@ TEST_F(DevToolsAgentHostImplTest, TestExternalProxy) {
   std::unique_ptr<TestExternalAgentDelegate> delegate(
       new TestExternalAgentDelegate());
 
-  scoped_refptr<DevToolsAgentHost> agent_host =
-      DevToolsAgentHost::Forward(base::GenerateGUID(), std::move(delegate));
+  scoped_refptr<DevToolsAgentHost> agent_host = DevToolsAgentHost::Forward(
+      base::Uuid::GenerateRandomV4().AsLowercaseString(), std::move(delegate));
   EXPECT_EQ(agent_host, DevToolsAgentHost::GetForId(agent_host->GetId()));
 
   TestDevToolsClientHost client_host;
   client_host.InspectAgentHost(agent_host.get());
 
-  agent_host->DispatchProtocolMessage(
-      &client_host,
-      base::as_bytes(base::make_span("message1", strlen("message1"))));
-  agent_host->DispatchProtocolMessage(
-      &client_host,
-      base::as_bytes(base::make_span("message2", strlen("message2"))));
-  agent_host->DispatchProtocolMessage(
-      &client_host,
-      base::as_bytes(base::make_span("message2", strlen("message2"))));
+  agent_host->DispatchProtocolMessage(&client_host,
+                                      base::byte_span_from_cstring("message1"));
+  agent_host->DispatchProtocolMessage(&client_host,
+                                      base::byte_span_from_cstring("message2"));
+  agent_host->DispatchProtocolMessage(&client_host,
+                                      base::byte_span_from_cstring("message2"));
 
   client_host.Close();
 }

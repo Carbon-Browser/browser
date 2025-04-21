@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,20 +15,20 @@
 #include <utility>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/lazy_instance.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/message_loop/message_pump_type.h"
-#include "base/metrics/histogram_macros.h"
 #include "base/metrics/statistics_recorder.h"
+#include "base/synchronization/waitable_event.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "build/build_config.h"
@@ -46,7 +46,10 @@
 #include "net/cert/caching_cert_verifier.h"
 #include "net/cert/cert_verifier.h"
 #include "net/cert/x509_certificate.h"
+#include "net/cookies/cookie_inclusion_status.h"
 #include "net/cookies/cookie_monster.h"
+#include "net/cookies/cookie_setting_override.h"
+#include "net/first_party_sets/first_party_set_metadata.h"
 #include "net/http/http_auth_handler_factory.h"
 #include "net/http/transport_security_state.h"
 #include "net/log/file_net_log_observer.h"
@@ -110,7 +113,7 @@ static base::LazyInstance<NetLogWithNetworkChangeEvents>::Leaky g_net_log =
 
 class BasicNetworkDelegate : public net::NetworkDelegateImpl {
  public:
-  BasicNetworkDelegate() {}
+  BasicNetworkDelegate() = default;
 
   BasicNetworkDelegate(const BasicNetworkDelegate&) = delete;
   BasicNetworkDelegate& operator=(const BasicNetworkDelegate&) = delete;
@@ -121,19 +124,21 @@ class BasicNetworkDelegate : public net::NetworkDelegateImpl {
   // net::NetworkDelegate implementation.
   bool OnAnnotateAndMoveUserBlockedCookies(
       const net::URLRequest& request,
+      const net::FirstPartySetMetadata& first_party_set_metadata,
       net::CookieAccessResultList& maybe_included_cookies,
-      net::CookieAccessResultList& excluded_cookies,
-      bool allowed_from_caller) override {
+      net::CookieAccessResultList& excluded_cookies) override {
     // Disallow sending cookies by default.
     ExcludeAllCookies(net::CookieInclusionStatus::EXCLUDE_USER_PREFERENCES,
                       maybe_included_cookies, excluded_cookies);
     return false;
   }
 
-  bool OnCanSetCookie(const net::URLRequest& request,
-                      const net::CanonicalCookie& cookie,
-                      net::CookieOptions* options,
-                      bool allowed_from_caller) override {
+  bool OnCanSetCookie(
+      const net::URLRequest& request,
+      const net::CanonicalCookie& cookie,
+      net::CookieOptions* options,
+      const net::FirstPartySetMetadata& first_party_set_metadata,
+      net::CookieInclusionStatus* inclusion_status) override {
     // Disallow saving cookies by default.
     return false;
   }
@@ -170,9 +175,10 @@ void SetQuicHint(net::URLRequestContext* context,
 
   url::SchemeHostPort quic_server("https", canon_host, quic_hint->port);
   net::AlternativeService alternative_service(
-      net::kProtoQUIC, "", static_cast<uint16_t>(quic_hint->alternate_port));
+      net::NextProto::kProtoQUIC, "",
+      static_cast<uint16_t>(quic_hint->alternate_port));
   context->http_server_properties()->SetQuicAlternativeService(
-      quic_server, net::NetworkIsolationKey(), alternative_service,
+      quic_server, net::NetworkAnonymizationKey(), alternative_service,
       base::Time::Max(), quic::ParsedQuicVersionVector());
 }
 
@@ -180,8 +186,7 @@ void SetQuicHint(net::URLRequestContext* context,
 // network has become disconnected. For these network though, it will return
 // CONNECTION_UNKNOWN as their connection type. This should be a good enough
 // approximation for the time being.
-bool IsNetworkNoLongerConnected(
-    net::NetworkChangeNotifier::NetworkHandle network) {
+bool IsNetworkNoLongerConnected(net::handles::NetworkHandle network) {
   return net::NetworkChangeNotifier::GetNetworkConnectionType(network) ==
          net::NetworkChangeNotifier::CONNECTION_UNKNOWN;
 }
@@ -199,7 +204,9 @@ CronetContext::CronetContext(
       heartbeat_interval_(context_config->heartbeat_interval),
       default_load_flags_(
           net::LOAD_NORMAL |
-          (context_config->load_disable_cache ? net::LOAD_DISABLE_CACHE : 0)),
+          (context_config->load_disable_cache ? net::LOAD_DISABLE_CACHE : 0) |
+          (context_config->enable_brotli ? net::LOAD_CAN_USE_SHARED_DICTIONARY
+                                         : 0)),
       network_tasks_(
           new NetworkTasks(std::move(context_config), std::move(callback))),
       network_task_runner_(network_task_runner) {
@@ -286,7 +293,7 @@ void CronetContext::ConfigureNetworkQualityEstimatorForTesting(
 }
 
 bool CronetContext::URLRequestContextExistsForTesting(
-    net::NetworkChangeNotifier::NetworkHandle network) {
+    net::handles::NetworkHandle network) {
   DCHECK(IsOnNetworkThread());
   return network_tasks_->URLRequestContextExistsForTesting(network);  // IN-TEST
 }
@@ -329,25 +336,16 @@ void CronetContext::ProvideThroughputObservations(bool should) {
 }
 
 void CronetContext::NetworkTasks::SpawnNetworkBoundURLRequestContextForTesting(
-    net::NetworkChangeNotifier::NetworkHandle network) {
+    net::handles::NetworkHandle network) {
   DCHECK_CALLED_ON_VALID_THREAD(network_thread_checker_);
   DCHECK(!contexts_.contains(network));
   contexts_[network] = BuildNetworkBoundURLRequestContext(network);
 }
 
 bool CronetContext::NetworkTasks::URLRequestContextExistsForTesting(
-    net::NetworkChangeNotifier::NetworkHandle network) {
+    net::handles::NetworkHandle network) {
   DCHECK_CALLED_ON_VALID_THREAD(network_thread_checker_);
   return contexts_.contains(network);
-}
-
-void CronetContext::NetworkTasks::InitializeNQEPrefs() const {
-  DCHECK_CALLED_ON_VALID_THREAD(network_thread_checker_);
-  // Initializing |network_qualities_prefs_manager_| may post a callback to
-  // |this|. So, |network_qualities_prefs_manager_| should be initialized after
-  // |callback_| has been initialized.
-  DCHECK(is_default_context_initialized_);
-  cronet_prefs_manager_->SetupNqePersistence(network_quality_estimator_.get());
 }
 
 std::unique_ptr<net::URLRequestContext>
@@ -424,7 +422,7 @@ CronetContext::NetworkTasks::BuildDefaultURLRequestContext(
 
 std::unique_ptr<net::URLRequestContext>
 CronetContext::NetworkTasks::BuildNetworkBoundURLRequestContext(
-    net::NetworkChangeNotifier::NetworkHandle network) {
+    net::handles::NetworkHandle network) {
   net::URLRequestContextBuilder context_builder;
   context_config_->ConfigureURLRequestContextBuilder(&context_builder, network);
   SetSharedURLRequestContextBuilderConfig(&context_builder);
@@ -461,6 +459,7 @@ void CronetContext::NetworkTasks::SetSharedURLRequestContextBuilderConfig(
 
   context_builder->set_check_cleartext_permitted(true);
   context_builder->set_enable_brotli(context_config_->enable_brotli);
+  context_builder->set_enable_shared_dictionary(context_config_->enable_brotli);
 }
 
 void CronetContext::NetworkTasks::SetSharedURLRequestContextConfig(
@@ -475,7 +474,7 @@ void CronetContext::NetworkTasks::SetSharedURLRequestContextConfig(
     // Add the host pinning.
     context->transport_security_state()->AddHPKP(
         pkp->host, pkp->expiration_date, pkp->include_subdomains,
-        pkp->pin_hashes, GURL::EmptyGURL());
+        pkp->pin_hashes);
   }
 
   context->transport_security_state()
@@ -487,7 +486,7 @@ void CronetContext::NetworkTasks::SetSharedURLRequestContextConfig(
     for (const auto& preloaded_header :
          context_config_->preloaded_report_to_headers) {
       context->reporting_service()->ProcessReportToHeader(
-          preloaded_header.origin, net::NetworkIsolationKey(),
+          preloaded_header.origin, net::NetworkAnonymizationKey(),
           preloaded_header.value);
     }
   }
@@ -496,8 +495,8 @@ void CronetContext::NetworkTasks::SetSharedURLRequestContextConfig(
     for (const auto& preloaded_header :
          context_config_->preloaded_nel_headers) {
       context->network_error_logging_service()->OnHeader(
-          net::NetworkIsolationKey(), preloaded_header.origin, net::IPAddress(),
-          preloaded_header.value);
+          net::NetworkAnonymizationKey(), preloaded_header.origin,
+          net::IPAddress(), preloaded_header.value);
     }
   }
 #endif  // BUILDFLAG(ENABLE_REPORTING)
@@ -519,8 +518,8 @@ void CronetContext::NetworkTasks::Initialize(
   effective_experimental_options_ =
       context_config_->effective_experimental_options.Clone();
 
-  const net::NetworkChangeNotifier::NetworkHandle default_network =
-      net::NetworkChangeNotifier::kInvalidNetworkHandle;
+  const net::handles::NetworkHandle default_network =
+      net::handles::kInvalidNetworkHandle;
   contexts_[default_network] =
       BuildDefaultURLRequestContext(std::move(proxy_config_service));
   default_context_ = contexts_[default_network].get();
@@ -533,13 +532,8 @@ void CronetContext::NetworkTasks::Initialize(
 
   if (context_config_->enable_network_quality_estimator &&
       cronet_prefs_manager_) {
-    // TODO(crbug.com/758401): Provide a better way for to configure the NQE
-    // for testing.. Currently, tests rely on posting a task to this network
-    // thread and hope it executes before the one below does.
-    network_task_runner_->PostTask(
-        FROM_HERE,
-        base::BindOnce(&CronetContext::NetworkTasks::InitializeNQEPrefs,
-                       base::Unretained(this)));
+    cronet_prefs_manager_->SetupNqePersistence(
+        network_quality_estimator_.get());
   }
 
   while (!tasks_waiting_for_context_.empty()) {
@@ -549,11 +543,11 @@ void CronetContext::NetworkTasks::Initialize(
 }
 
 net::URLRequestContext* CronetContext::NetworkTasks::GetURLRequestContext(
-    net::NetworkChangeNotifier::NetworkHandle network) {
+    net::handles::NetworkHandle network) {
   DCHECK_CALLED_ON_VALID_THREAD(network_thread_checker_);
   DCHECK(is_default_context_initialized_);
 
-  if (network == net::NetworkChangeNotifier::kInvalidNetworkHandle)
+  if (network == net::handles::kInvalidNetworkHandle)
     return default_context_;
 
   // Non-default contexts are created on the fly.
@@ -563,11 +557,11 @@ net::URLRequestContext* CronetContext::NetworkTasks::GetURLRequestContext(
 }
 
 void CronetContext::NetworkTasks::MaybeDestroyURLRequestContext(
-    net::NetworkChangeNotifier::NetworkHandle network) {
+    net::handles::NetworkHandle network) {
   DCHECK_CALLED_ON_VALID_THREAD(network_thread_checker_);
 
   // Default network context is never deleted.
-  if (network == net::NetworkChangeNotifier::kInvalidNetworkHandle)
+  if (network == net::handles::kInvalidNetworkHandle)
     return;
   if (!contexts_.contains(network))
     return;
@@ -616,7 +610,7 @@ net::URLRequestContextGetter* CronetContext::CreateURLRequestContextGetter() {
 }
 
 net::URLRequestContext* CronetContext::GetURLRequestContext(
-    net::NetworkChangeNotifier::NetworkHandle network) {
+    net::handles::NetworkHandle network) {
   DCHECK(IsOnNetworkThread());
   return network_tasks_->GetURLRequestContext(network);
 }
@@ -685,8 +679,26 @@ void CronetContext::StopNetLog() {
                                 base::Unretained(network_tasks_)));
 }
 
+void CronetContext::FlushWritePropertiesForTesting() {
+  base::WaitableEvent wait_for_callback;
+  network_task_runner_->PostTask(
+      FROM_HERE,
+      base::BindOnce(
+          [](NetworkTasks* network_tasks, base::OnceClosure callback) {
+            network_tasks
+                ->GetURLRequestContext(net::handles::kInvalidNetworkHandle)
+                ->http_server_properties()
+                ->FlushWritePropertiesForTesting(  // IN-TEST
+                    std::move(callback));
+          },
+          network_tasks_,
+          base::BindOnce(&base::WaitableEvent::Signal,
+                         base::Unretained(&wait_for_callback))));
+  wait_for_callback.Wait();
+}
+
 void CronetContext::MaybeDestroyURLRequestContext(
-    net::NetworkChangeNotifier::NetworkHandle network) {
+    net::handles::NetworkHandle network) {
   DCHECK(IsOnNetworkThread());
   network_tasks_->MaybeDestroyURLRequestContext(network);
 }
@@ -751,7 +763,7 @@ void CronetContext::NetworkTasks::OnThroughputObservation(
 }
 
 void CronetContext::NetworkTasks::OnNetworkDisconnected(
-    net::NetworkChangeNotifier::NetworkHandle network) {
+    net::handles::NetworkHandle network) {
   DCHECK_CALLED_ON_VALID_THREAD(network_thread_checker_);
 
   if (!contexts_.contains(network))
@@ -767,15 +779,15 @@ void CronetContext::NetworkTasks::OnNetworkDisconnected(
 }
 
 void CronetContext::NetworkTasks::OnNetworkConnected(
-    net::NetworkChangeNotifier::NetworkHandle network) {
+    net::handles::NetworkHandle network) {
   DCHECK_CALLED_ON_VALID_THREAD(network_thread_checker_);
 }
 void CronetContext::NetworkTasks::OnNetworkSoonToDisconnect(
-    net::NetworkChangeNotifier::NetworkHandle network) {
+    net::handles::NetworkHandle network) {
   DCHECK_CALLED_ON_VALID_THREAD(network_thread_checker_);
 }
 void CronetContext::NetworkTasks::OnNetworkMadeDefault(
-    net::NetworkChangeNotifier::NetworkHandle network) {
+    net::handles::NetworkHandle network) {
   DCHECK_CALLED_ON_VALID_THREAD(network_thread_checker_);
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_ASH_ACCOUNT_MANAGER_ACCOUNT_APPS_AVAILABILITY_H_
 
 #include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
 #include "base/sequence_checker.h"
@@ -23,7 +24,7 @@ namespace ash {
 // changes it manually in OS Settings.
 // There should be only one instance of this class, which is attached to the
 // only regular Ash profile. The class should exist only if Account Manager
-// exists (if `ash::IsAccountManagerAvailable(profile)` is `true`).
+// exists (if `IsAccountManagerAvailable(profile)` is `true`).
 class AccountAppsAvailability
     : public KeyedService,
       public account_manager::AccountManagerFacade::Observer,
@@ -65,8 +66,7 @@ class AccountAppsAvailability
   AccountAppsAvailability(const AccountAppsAvailability&) = delete;
   AccountAppsAvailability& operator=(const AccountAppsAvailability&) = delete;
 
-  // Returns `true` if `kArcAccountRestrictions` and `kLacrosSupport` are
-  // enabled.
+  // ARC account restrictions are enabled iff Lacros is enabled.
   static bool IsArcAccountRestrictionsEnabled();
 
   static void RegisterPrefs(PrefRegistrySimple* registry);
@@ -103,6 +103,8 @@ class AccountAppsAvailability
   // `AccountManagerFacade::Observer`:
   void OnAccountUpserted(const account_manager::Account& account) override;
   void OnAccountRemoved(const account_manager::Account& account) override;
+  void OnAuthErrorChanged(const account_manager::AccountKey& account,
+                          const GoogleServiceAuthError& error) override;
 
   // Initialize the prefs: add all Gaia accounts from Account Manager with
   // is_available_in_arc=true.
@@ -116,14 +118,14 @@ class AccountAppsAvailability
   // with the resulted account or with `nullopt` if requested account is not in
   // Account Manager.
   void FindAccountByGaiaId(
-      const std::string& gaia_id,
-      base::OnceCallback<void(const absl::optional<account_manager::Account>&)>
+      const GaiaId& gaia_id,
+      base::OnceCallback<void(const std::optional<account_manager::Account>&)>
           callback);
 
   // Call `NotifyObservers` if account is not `nullopt`.
   void MaybeNotifyObservers(
       bool is_available_in_arc,
-      const absl::optional<account_manager::Account>& account);
+      const std::optional<account_manager::Account>& account);
 
   // Call `OnAccountAvailableInArc` if `is_available_in_arc` is `true`.
   // Otherwise call `OnAccountUnavailableInArc`.
@@ -136,9 +138,9 @@ class AccountAppsAvailability
   std::vector<base::OnceClosure> initialization_callbacks_;
 
   // Non-owning pointers:
-  account_manager::AccountManagerFacade* const account_manager_facade_;
-  signin::IdentityManager* const identity_manager_;
-  PrefService* const prefs_;
+  const raw_ptr<account_manager::AccountManagerFacade> account_manager_facade_;
+  const raw_ptr<signin::IdentityManager> identity_manager_;
+  const raw_ptr<PrefService> prefs_;
 
   // A list of observers registered via `AddObserver`.
   base::ObserverList<Observer> observer_list_;

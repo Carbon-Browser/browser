@@ -1,12 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef AX_TREE_SERVER_H_
 #define AX_TREE_SERVER_H_
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "build/build_config.h"
 #include "ui/accessibility/platform/inspect/ax_api_type.h"
 

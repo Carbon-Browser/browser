@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,12 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
+#include "base/functional/callback_forward.h"
 #include "chromeos/ash/components/network/network_connection_handler.h"
 #include "chromeos/ash/components/network/network_handler_callbacks.h"
 
-namespace chromeos {
+namespace ash {
 
 // Fake NetworkConnectionHandler implementation for tests.
 class COMPONENT_EXPORT(CHROMEOS_NETWORK) FakeNetworkConnectionHandler
@@ -62,8 +62,8 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) FakeNetworkConnectionHandler
     std::string service_path_;
     base::OnceClosure success_callback_;
     network_handler::ErrorCallback error_callback_;
-    absl::optional<bool> check_error_state_;
-    absl::optional<ConnectCallbackMode> connect_callback_mode_;
+    std::optional<bool> check_error_state_;
+    std::optional<ConnectCallbackMode> connect_callback_mode_;
   };
 
   std::vector<ConnectionParams>& connect_calls() { return connect_calls_; }
@@ -87,16 +87,12 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) FakeNetworkConnectionHandler
       NetworkConfigurationHandler* network_configuration_handler,
       ManagedNetworkConfigurationHandler* managed_network_configuration_handler,
       CellularConnectionHandler* cellular_connection_handler) override;
+  void OnAutoConnectedInitiated(int reason) override {}
 
   std::vector<ConnectionParams> connect_calls_;
   std::vector<ConnectionParams> disconnect_calls_;
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove after the migration is finished.
-namespace ash {
-using ::chromeos::FakeNetworkConnectionHandler;
-}
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_FAKE_NETWORK_CONNECTION_HANDLER_H_

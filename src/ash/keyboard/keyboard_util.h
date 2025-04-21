@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@ ASH_EXPORT bool IsArrowKeyCode(const ui::KeyboardCode key_code);
 
 // Closes the active (Chrome OS or Android VK). Returns false if no keyboard was
 // active.
-// TODO(crbug.com/1060272): Move this to KeyboardControllerImpl once that class
+// TODO(crbug.com/40121961): Move this to KeyboardControllerImpl once that class
 // handles both VKs.
 bool CloseKeyboardIfActive();
 

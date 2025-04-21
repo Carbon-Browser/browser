@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,11 @@ namespace ash {
 // Describes the various attributes of the keyboard's appearance and usability.
 struct KeyboardStateDescriptor {
   bool is_visible;
+
+  // True if the current state is temporary and another change will happen
+  // immediately. This happens, for example, when changing VK to floating
+  // keyboard.
+  bool is_temporary;
 
   // The bounds of the keyboard window on the screen.
   gfx::Rect visual_bounds;

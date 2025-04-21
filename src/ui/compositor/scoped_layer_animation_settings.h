@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <set>
 
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "ui/compositor/compositor_export.h"
 #include "ui/compositor/layer_animation_element.h"
@@ -68,7 +69,7 @@ class COMPOSITOR_EXPORT ScopedLayerAnimationSettings {
   base::TimeDelta old_transition_duration_;
   gfx::Tween::Type old_tween_type_;
   LayerAnimator::PreemptionStrategy old_preemption_strategy_;
-  std::set<ImplicitAnimationObserver*> observers_;
+  std::set<raw_ptr<ImplicitAnimationObserver, SetExperimental>> observers_;
 };
 
 }  // namespace ui

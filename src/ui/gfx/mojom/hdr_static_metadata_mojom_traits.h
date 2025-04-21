@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,9 @@ struct COMPONENT_EXPORT(GFX_SHARED_MOJOM_TRAITS)
     return input.max_avg;
   }
   static float min(const gfx::HDRStaticMetadata& input) { return input.min; }
+  static uint8_t supported_eotf_mask(const gfx::HDRStaticMetadata& input) {
+    return input.supported_eotf_mask;
+  }
 
   static bool Read(gfx::mojom::HDRStaticMetadataDataView data,
                    gfx::HDRStaticMetadata* output);

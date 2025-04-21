@@ -1,4 +1,4 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -12,9 +12,13 @@ mojom("mojom") {
   if (use_viz_debugger) {
     enabled_features += [ "use_viz_debugger" ]
   }
+  if (use_ozone) {
+    enabled_features += [ "use_ozone" ]
+  }
 
   public_deps = [
     "//components/discardable_memory/public/mojom",
+    "//components/viz/service/debugger/mojom",
     "//services/network/public/mojom",
     "//services/viz/privileged/mojom/compositing",
     "//services/viz/privileged/mojom/gl",

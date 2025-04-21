@@ -18,7 +18,7 @@ var nonConvertibleToString = {toString: function() { throw "Exception in toStrin
 function startTest()
 {
     debug("");
-    evalAndLog("trans = db.transaction('storeName')");
+    evalAndLog("trans = db.transaction('storeName', 'readonly')");
 
     debug("");
     debug("IDBTransaction.error should be null if transaction is not finished:");

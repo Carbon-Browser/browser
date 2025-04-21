@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.any;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -35,7 +35,7 @@ import org.robolectric.shadows.ShadowService;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.chromecast.base.ReactiveRecorder;
-import org.chromium.content.browser.MediaSessionImpl;
+import org.chromium.content_public.browser.MediaSession;
 import org.chromium.content_public.browser.WebContents;
 
 /**
@@ -47,7 +47,7 @@ public class CastWebContentsServiceTest {
     private static final String WEBCONTENTS_TITLE = "CastWebContentsServiceTest_title";
 
     private @Mock WebContents mWebContents;
-    private @Mock MediaSessionImpl mMediaSessionImpl;
+    private @Mock MediaSession mMediaSession;
     private String mInstanceId;
     private Intent mIntent;
     private ServiceController<CastWebContentsService> mServiceLifecycle;
@@ -79,17 +79,18 @@ public class CastWebContentsServiceTest {
     public void setUp() {
         mWebContents = mock(WebContents.class);
         when(mWebContents.getTitle()).thenReturn(WEBCONTENTS_TITLE);
-        mMediaSessionImpl = mock(MediaSessionImpl.class);
+        mMediaSession = mock(MediaSession.class);
         mInstanceId = "1";
         mIntent = CastWebContentsIntentUtils.requestStartCastService(
                 RuntimeEnvironment.application, mWebContents, mInstanceId);
         mServiceLifecycle =
                 Robolectric.buildService(CastWebContentsService.class).withIntent(mIntent);
         mService = mServiceLifecycle.get();
-        mService.setMediaSessionImplGetterForTesting(webContents -> {
-            assertEquals(webContents, mWebContents);
-            return mMediaSessionImpl;
-        });
+        mService.setMediaSessionGetterForTesting(
+                webContents -> {
+                    assertEquals(webContents, mWebContents);
+                    return mMediaSession;
+                });
         mShadowService = Shadows.shadowOf(mService);
     }
 
@@ -141,6 +142,13 @@ public class CastWebContentsServiceTest {
     }
 
     @Test
+    public void testBroadcastsComponentClosedWhenUnbind() {
+        mServiceLifecycle.bind();
+        IntentFilter filter = filterFor(CastWebContentsIntentUtils.ACTION_ACTIVITY_STOPPED);
+        expectBroadcastedIntent(filter, () -> mServiceLifecycle.unbind());
+    }
+
+    @Test
     public void testDisplaysContentsOnBindAndReleasesOnUnbind() {
         ReactiveRecorder recordWebContentsPresentation =
                 ReactiveRecorder.record(mService.observeWebContentsStateForTesting());
@@ -163,6 +171,6 @@ public class CastWebContentsServiceTest {
     @Test
     public void testRequestsSystemAudioFocusOnBind() {
         mServiceLifecycle.bind();
-        verify(mMediaSessionImpl).requestSystemAudioFocus();
+        verify(mMediaSession).requestSystemAudioFocus();
     }
 }

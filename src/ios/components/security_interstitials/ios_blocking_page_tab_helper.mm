@@ -1,40 +1,25 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/components/security_interstitials/ios_blocking_page_tab_helper.h"
 
-#include "base/logging.h"
-#include "base/strings/string_number_conversions.h"
-#include "base/values.h"
-#include "ios/components/security_interstitials/ios_security_interstitial_page.h"
+#import "base/logging.h"
+#import "base/strings/string_number_conversions.h"
+#import "base/values.h"
+#import "ios/components/security_interstitials/ios_security_interstitial_page.h"
 #import "ios/web/public/navigation/navigation_context.h"
 #import "ios/web/public/web_state.h"
 #import "ios/web/public/web_state_user_data.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace security_interstitials {
 
 WEB_STATE_USER_DATA_KEY_IMPL(IOSBlockingPageTabHelper)
 
-namespace {
-// Script command prefix.
-const char kCommandPrefix[] = "blockingPage";
-}  // namespace
-
 #pragma mark - IOSBlockingPageTabHelper
 
 IOSBlockingPageTabHelper::IOSBlockingPageTabHelper(web::WebState* web_state)
-    : navigation_id_listener_(web_state, this) {
-  auto command_callback =
-      base::BindRepeating(&IOSBlockingPageTabHelper::OnBlockingPageCommand,
-                          weak_factory_.GetWeakPtr());
-  subscription_ =
-      web_state->AddScriptCommandCallback(command_callback, kCommandPrefix);
-}
+    : navigation_id_listener_(web_state, this) {}
 
 IOSBlockingPageTabHelper::~IOSBlockingPageTabHelper() = default;
 
@@ -58,36 +43,16 @@ IOSSecurityInterstitialPage* IOSBlockingPageTabHelper::GetCurrentBlockingPage()
   return blocking_page_for_currently_committed_navigation_.get();
 }
 
-void IOSBlockingPageTabHelper::OnBlockingPageCommand(
-    const base::Value& message,
-    const GURL& url,
-    bool user_is_interacting,
-    web::WebFrame* sender_frame) {
+void IOSBlockingPageTabHelper::OnBlockingPageCommandReceived(
+    SecurityInterstitialCommand command) {
   if (!blocking_page_for_currently_committed_navigation_)
     return;
 
-  const std::string* command = message.FindStringKey("command");
-  if (!command)
-    return;
+  blocking_page_for_currently_committed_navigation_->HandleCommand(command);
+}
 
-  // Remove the command prefix since it is ignored when converting the value
-  // to a SecurityInterstitialCommand.
-  const std::size_t pos = command->find('.');
-  if (pos == std::string::npos || pos + 1 == command->size())
-    return;
-
-  // Use a string piece to avoid creating a copy of the suffix (as calling
-  // std::string::substr would do). This is safe as `*command` is owned by
-  // the base::Value which stay in scope for the whole method.
-  const base::StringPiece suffix = base::StringPiece(*command).substr(pos + 1);
-
-  int command_id;
-  if (!base::StringToInt(suffix, &command_id))
-    return;
-
-  blocking_page_for_currently_committed_navigation_->HandleCommand(
-      static_cast<SecurityInterstitialCommand>(command_id), url,
-      user_is_interacting, sender_frame);
+void IOSBlockingPageTabHelper::UpdateForBlockingPageDismissed() {
+  blocking_page_for_currently_committed_navigation_->WasDismissed();
 }
 
 void IOSBlockingPageTabHelper::UpdateForFinishedNavigation(
@@ -115,6 +80,19 @@ IOSBlockingPageTabHelper::CommittedNavigationIDListener::
     ~CommittedNavigationIDListener() = default;
 
 void IOSBlockingPageTabHelper::CommittedNavigationIDListener::
+    DidStartNavigation(web::WebState* web_state,
+                       web::NavigationContext* navigation_context) {
+  IOSSecurityInterstitialPage* page = tab_helper_->GetCurrentBlockingPage();
+  if (page && (navigation_context->GetPageTransition() &
+               ui::PAGE_TRANSITION_FORWARD_BACK)) {
+    // Interstitial page would be the last page shown so looking for this page
+    // transition would mean that a user is using the back button and is
+    // leaving the interstitial page.
+    tab_helper_->UpdateForBlockingPageDismissed();
+  }
+}
+
+void IOSBlockingPageTabHelper::CommittedNavigationIDListener::
     DidFinishNavigation(web::WebState* web_state,
                         web::NavigationContext* navigation_context) {
   if (navigation_context->IsSameDocument())
@@ -126,12 +104,27 @@ void IOSBlockingPageTabHelper::CommittedNavigationIDListener::
 
   // Interstitials may change the visibility of the URL or other security state.
   web_state->DidChangeVisibleSecurityState();
+
+  IOSSecurityInterstitialPage* page = tab_helper_->GetCurrentBlockingPage();
+  if (!page) {
+    // `page` will be null if a IOSSecurityInterstitialPage is not being
+    // displayed to the user.
+    return;
+  }
+  page->ShowInfobar();
 }
 
 void IOSBlockingPageTabHelper::CommittedNavigationIDListener::WebStateDestroyed(
     web::WebState* web_state) {
   DCHECK(scoped_observation_.IsObservingSource(web_state));
   scoped_observation_.Reset();
+
+  IOSSecurityInterstitialPage* page = tab_helper_->GetCurrentBlockingPage();
+  if (page) {
+    // Logs closing the tab as `DONT_PROCEED` since an interstitial page is
+    // being dismissed.
+    tab_helper_->UpdateForBlockingPageDismissed();
+  }
 }
 
 }  // namespace security_interstitials

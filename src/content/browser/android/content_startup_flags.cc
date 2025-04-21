@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "base/command_line.h"
 #include "base/system/sys_info.h"
 #include "cc/base/switches.h"
+#include "components/input/switches.h"
 #include "content/public/browser/android/compositor.h"
 #include "content/public/common/content_switches.h"
 #include "gpu/command_buffer/service/gpu_switches.h"
@@ -35,13 +36,14 @@ void SetContentCommandLineFlags(bool single_process) {
   }
 
   parsed_command_line->AppendSwitch(switches::kEnableViewport);
-  parsed_command_line->AppendSwitch(switches::kValidateInputEventStream);
+  parsed_command_line->AppendSwitch(input::switches::kValidateInputEventStream);
 
   if (base::android::BuildInfo::GetInstance()->sdk_int() >=
       base::android::SDK_VERSION_MARSHMALLOW) {
     parsed_command_line->AppendSwitch(switches::kEnableLongpressDragSelection);
     parsed_command_line->AppendSwitchASCII(
-        blink::switches::kTouchTextSelectionStrategy, "direction");
+        blink::switches::kTouchTextSelectionStrategy,
+        blink::switches::kTouchTextSelectionStrategy_Direction);
   }
 
   // On legacy low-memory devices the behavior has not been studied with regard
@@ -52,8 +54,7 @@ void SetContentCommandLineFlags(bool single_process) {
     parsed_command_line->AppendSwitch(switches::kInProcessGPU);
 
   // Disable anti-aliasing.
-  parsed_command_line->AppendSwitch(
-      cc::switches::kDisableCompositedAntialiasing);
+  parsed_command_line->AppendSwitch(switches::kDisableCompositedAntialiasing);
 }
 
 }  // namespace content

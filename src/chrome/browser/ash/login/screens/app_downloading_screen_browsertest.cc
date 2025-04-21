@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,10 @@
 
 #include "ash/components/arc/arc_prefs.h"
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
-#include "base/run_loop.h"
-#include "base/strings/string_piece.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/test_future.h"
 #include "chrome/browser/ash/login/login_wizard.h"
 #include "chrome/browser/ash/login/oobe_screen.h"
 #include "chrome/browser/ash/login/test/js_checker.h"
@@ -19,13 +19,13 @@
 #include "chrome/browser/ash/login/test/oobe_base_test.h"
 #include "chrome/browser/ash/login/test/oobe_screen_exit_waiter.h"
 #include "chrome/browser/ash/login/test/oobe_screen_waiter.h"
-#include "chrome/browser/ash/login/ui/login_display_host.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/ui/webui/chromeos/login/app_downloading_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/gaia_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/oobe_ui.h"
+#include "chrome/browser/ui/ash/login/login_display_host.h"
+#include "chrome/browser/ui/webui/ash/login/app_downloading_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/gaia_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/oobe_ui.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/test/browser_test.h"
@@ -50,8 +50,8 @@ class AppDownloadingScreenTest : public OobeBaseTest {
     OobeBaseTest::SetUpOnMainThread();
     app_downloading_screen_ = WizardController::default_controller()
                                   ->GetScreen<AppDownloadingScreen>();
-    app_downloading_screen_->set_exit_callback_for_testing(base::BindRepeating(
-        &AppDownloadingScreenTest::HandleScreenExit, base::Unretained(this)));
+    app_downloading_screen_->set_exit_callback_for_testing(
+        screen_exit_waiter_.GetRepeatingCallback());
   }
 
   void Login() {
@@ -65,26 +65,13 @@ class AppDownloadingScreenTest : public OobeBaseTest {
     OobeScreenWaiter(AppDownloadingScreenView::kScreenId).Wait();
   }
 
-  void WaitForScreenExit() {
-    if (screen_exited_)
-      return;
-    base::RunLoop run_loop;
-    screen_exit_callback_ = run_loop.QuitClosure();
-    run_loop.Run();
-  }
+  void WaitForScreenExit() { EXPECT_TRUE(screen_exit_waiter_.Wait()); }
 
-  AppDownloadingScreen* app_downloading_screen_;
+  raw_ptr<AppDownloadingScreen, DanglingUntriaged> app_downloading_screen_;
   bool screen_exited_ = false;
 
  private:
-  void HandleScreenExit() {
-    ASSERT_FALSE(screen_exited_);
-    screen_exited_ = true;
-    if (screen_exit_callback_)
-      std::move(screen_exit_callback_).Run();
-  }
-
-  base::OnceClosure screen_exit_callback_;
+  base::test::TestFuture<void> screen_exit_waiter_;
 
   LoginManagerMixin login_manager_{&mixin_host_};
 };
@@ -113,10 +100,10 @@ IN_PROC_BROWSER_TEST_F(AppDownloadingScreenTest, SingleAppSelected) {
       ->defer_oobe_flow_finished_for_tests = true;
 
   Login();
-  base::Value apps(base::Value::Type::LIST);
+  base::Value::List apps;
   apps.Append("app.test.package.1");
 
-  ProfileManager::GetActiveUserProfile()->GetPrefs()->Set(
+  ProfileManager::GetActiveUserProfile()->GetPrefs()->SetList(
       arc::prefs::kArcFastAppReinstallPackages, std::move(apps));
   ShowAppDownloadingScreen();
 
@@ -136,11 +123,11 @@ IN_PROC_BROWSER_TEST_F(AppDownloadingScreenTest, MultipleAppsSelected) {
       ->defer_oobe_flow_finished_for_tests = true;
 
   Login();
-  base::Value apps(base::Value::Type::LIST);
+  base::Value::List apps;
   apps.Append("app.test.package.1");
   apps.Append("app.test.package.2");
 
-  ProfileManager::GetActiveUserProfile()->GetPrefs()->Set(
+  ProfileManager::GetActiveUserProfile()->GetPrefs()->SetList(
       arc::prefs::kArcFastAppReinstallPackages, std::move(apps));
 
   ShowAppDownloadingScreen();

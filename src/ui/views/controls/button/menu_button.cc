@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,7 +45,7 @@ void MenuButton::NotifyClick(const ui::Event& event) {
   button_controller()->Activate(&event);
 }
 
-BEGIN_METADATA(MenuButton, LabelButton)
+BEGIN_METADATA(MenuButton)
 END_METADATA
 
 }  // namespace views

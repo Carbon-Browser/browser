@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,8 @@
 #include <memory>
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/core/animation/property_handle.h"
+#include "third_party/blink/renderer/core/css/properties/longhands.h"
+#include "third_party/blink/renderer/core/css/properties/shorthands.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/testing/page_test_base.h"
@@ -46,25 +48,21 @@ class AnimationAnimationInputHelpersTest : public PageTestBase {
                                                       exception_state);
   }
 
-  void TimingFunctionRoundTrips(const String& string,
-                                ExceptionState& exception_state) {
-    ASSERT_FALSE(exception_state.HadException());
+  void TimingFunctionRoundTrips(const String& string) {
+    DummyExceptionStateForTesting exception_state;
     scoped_refptr<TimingFunction> timing_function =
         ParseTimingFunction(string, exception_state);
     EXPECT_FALSE(exception_state.HadException());
     EXPECT_NE(nullptr, timing_function);
     EXPECT_EQ(string, timing_function->ToString());
-    exception_state.ClearException();
   }
 
-  void TimingFunctionThrows(const String& string,
-                            ExceptionState& exception_state) {
-    ASSERT_FALSE(exception_state.HadException());
+  void TimingFunctionThrows(const String& string) {
+    DummyExceptionStateForTesting exception_state;
     scoped_refptr<TimingFunction> timing_function =
         ParseTimingFunction(string, exception_state);
     EXPECT_TRUE(exception_state.HadException());
     EXPECT_EQ(ESErrorType::kTypeError, exception_state.CodeAs<ESErrorType>());
-    exception_state.ClearException();
   }
 
  protected:
@@ -121,34 +119,34 @@ TEST_F(AnimationAnimationInputHelpersTest, ParseKeyframePropertyAttributes) {
 }
 
 TEST_F(AnimationAnimationInputHelpersTest, ParseAnimationTimingFunction) {
-  DummyExceptionStateForTesting exception_state;
-  TimingFunctionThrows("", exception_state);
-  TimingFunctionThrows("initial", exception_state);
-  TimingFunctionThrows("inherit", exception_state);
-  TimingFunctionThrows("unset", exception_state);
+  TimingFunctionThrows("");
+  TimingFunctionThrows("initial");
+  TimingFunctionThrows("inherit");
+  TimingFunctionThrows("unset");
 
-  TimingFunctionRoundTrips("ease", exception_state);
-  TimingFunctionRoundTrips("linear", exception_state);
-  TimingFunctionRoundTrips("ease-in", exception_state);
-  TimingFunctionRoundTrips("ease-out", exception_state);
-  TimingFunctionRoundTrips("ease-in-out", exception_state);
-  TimingFunctionRoundTrips("cubic-bezier(0.1, 5, 0.23, 0)", exception_state);
+  TimingFunctionRoundTrips("ease");
+  TimingFunctionRoundTrips("linear");
+  TimingFunctionRoundTrips("ease-in");
+  TimingFunctionRoundTrips("ease-out");
+  TimingFunctionRoundTrips("ease-in-out");
+  TimingFunctionRoundTrips("cubic-bezier(0.1, 5, 0.23, 0)");
 
   EXPECT_EQ("steps(1, start)",
-            ParseTimingFunction("step-start", exception_state)->ToString());
+            ParseTimingFunction("step-start", ASSERT_NO_EXCEPTION)->ToString());
   EXPECT_EQ("steps(1)",
-            ParseTimingFunction("step-end", exception_state)->ToString());
+            ParseTimingFunction("step-end", ASSERT_NO_EXCEPTION)->ToString());
   EXPECT_EQ(
       "steps(3, start)",
-      ParseTimingFunction("steps(3, start)", exception_state)->ToString());
+      ParseTimingFunction("steps(3, start)", ASSERT_NO_EXCEPTION)->ToString());
+  EXPECT_EQ(
+      "steps(3)",
+      ParseTimingFunction("steps(3, end)", ASSERT_NO_EXCEPTION)->ToString());
   EXPECT_EQ("steps(3)",
-            ParseTimingFunction("steps(3, end)", exception_state)->ToString());
-  EXPECT_EQ("steps(3)",
-            ParseTimingFunction("steps(3)", exception_state)->ToString());
+            ParseTimingFunction("steps(3)", ASSERT_NO_EXCEPTION)->ToString());
 
-  TimingFunctionThrows("steps(3, nowhere)", exception_state);
-  TimingFunctionThrows("steps(-3, end)", exception_state);
-  TimingFunctionThrows("cubic-bezier(0.1, 0, 4, 0.4)", exception_state);
+  TimingFunctionThrows("steps(3, nowhere)");
+  TimingFunctionThrows("steps(-3, end)");
+  TimingFunctionThrows("cubic-bezier(0.1, 0, 4, 0.4)");
 }
 
 TEST_F(AnimationAnimationInputHelpersTest, PropertyHandleToKeyframeAttribute) {
@@ -162,8 +160,9 @@ TEST_F(AnimationAnimationInputHelpersTest, PropertyHandleToKeyframeAttribute) {
             PropertyHandleToKeyframeAttribute(GetCSSPropertyOffset()));
 
   // CSS custom properties.
-  EXPECT_EQ("--x", PropertyHandleToKeyframeAttribute("--x"));
-  EXPECT_EQ("--test-prop", PropertyHandleToKeyframeAttribute("--test-prop"));
+  EXPECT_EQ("--x", PropertyHandleToKeyframeAttribute(AtomicString("--x")));
+  EXPECT_EQ("--test-prop",
+            PropertyHandleToKeyframeAttribute(AtomicString("--test-prop")));
 
   // Presentation attributes.
   EXPECT_EQ("svg-top",
@@ -176,11 +175,11 @@ TEST_F(AnimationAnimationInputHelpersTest, PropertyHandleToKeyframeAttribute) {
             PropertyHandleToKeyframeAttribute(GetCSSPropertyOffset(), true));
 
   // SVG attributes.
-  EXPECT_EQ("calcMode", PropertyHandleToKeyframeAttribute(QualifiedName(
-                            g_null_atom, "calcMode", g_null_atom)));
+  EXPECT_EQ("calcMode", PropertyHandleToKeyframeAttribute(
+                            QualifiedName(AtomicString("calcMode"))));
   EXPECT_EQ("overline-position",
             PropertyHandleToKeyframeAttribute(
-                QualifiedName(g_null_atom, "overline-position", g_null_atom)));
+                QualifiedName(AtomicString("overline-position"))));
 }
 
 }  // namespace blink

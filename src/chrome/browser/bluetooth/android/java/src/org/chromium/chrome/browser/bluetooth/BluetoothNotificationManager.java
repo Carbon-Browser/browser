@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,13 +12,15 @@ import androidx.annotation.IntDef;
 import androidx.annotation.Nullable;
 
 import org.chromium.base.ContextUtils;
+import org.chromium.base.shared_preferences.SharedPreferencesManager;
 import org.chromium.chrome.browser.notifications.NotificationUmaTracker;
 import org.chromium.chrome.browser.notifications.NotificationWrapperBuilderFactory;
 import org.chromium.chrome.browser.notifications.channels.ChromeChannelDefinitions;
 import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
-import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
+import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
 import org.chromium.chrome.browser.tab.Tab;
-import org.chromium.components.browser_ui.notifications.NotificationManagerProxy;
+import org.chromium.components.browser_ui.notifications.BaseNotificationManagerProxy;
+import org.chromium.components.browser_ui.notifications.BaseNotificationManagerProxyFactory;
 import org.chromium.components.browser_ui.notifications.NotificationMetadata;
 import org.chromium.components.browser_ui.notifications.NotificationWrapper;
 import org.chromium.components.browser_ui.notifications.NotificationWrapperBuilder;
@@ -26,6 +28,7 @@ import org.chromium.components.browser_ui.notifications.PendingIntentProvider;
 import org.chromium.components.url_formatter.SchemeDisplay;
 import org.chromium.components.url_formatter.UrlFormatter;
 import org.chromium.content_public.browser.ContentFeatureList;
+import org.chromium.content_public.browser.ContentFeatureMap;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.url.GURL;
 
@@ -38,8 +41,6 @@ import java.util.Set;
  * to a Bluetooth device or scanning for nearby Bluetooth devices.
  */
 public class BluetoothNotificationManager {
-    private static final String TAG = "BluetoothNotificationManager";
-
     private static final String NOTIFICATION_NAMESPACE = "BluetoothNotificationManager";
 
     public static final String ACTION_BLUETOOTH_UPDATE =
@@ -58,15 +59,14 @@ public class BluetoothNotificationManager {
     }
 
     private BluetoothNotificationManagerDelegate mDelegate;
-    private NotificationManagerProxy mNotificationManager;
+    private BaseNotificationManagerProxy mNotificationManager;
     private SharedPreferencesManager mSharedPreferences;
     private final SparseIntArray mNotifications = new SparseIntArray();
 
-    public BluetoothNotificationManager(NotificationManagerProxy notificationManager,
-            BluetoothNotificationManagerDelegate delegate) {
+    public BluetoothNotificationManager(BluetoothNotificationManagerDelegate delegate) {
         mDelegate = delegate;
-        mNotificationManager = notificationManager;
-        mSharedPreferences = SharedPreferencesManager.getInstance();
+        mNotificationManager = BaseNotificationManagerProxyFactory.create();
+        mSharedPreferences = ChromeSharedPreferences.getInstance();
     }
 
     /**
@@ -94,8 +94,9 @@ public class BluetoothNotificationManager {
             mDelegate.stopSelf();
         } else if (ACTION_BLUETOOTH_UPDATE.equals(intent.getAction())) {
             int notificationId = intent.getIntExtra(NOTIFICATION_ID_EXTRA, Tab.INVALID_TAB_ID);
-            int bluetoothType = intent.getIntExtra(
-                    NOTIFICATION_BLUETOOTH_TYPE_EXTRA, BluetoothType.NO_BLUETOOTH);
+            int bluetoothType =
+                    intent.getIntExtra(
+                            NOTIFICATION_BLUETOOTH_TYPE_EXTRA, BluetoothType.NO_BLUETOOTH);
             String url = intent.getStringExtra(NOTIFICATION_URL_EXTRA);
             boolean isIncognito = intent.getBooleanExtra(NOTIFICATION_IS_INCOGNITO, false);
             updateNotification(notificationId, bluetoothType, url, isIncognito, startId);
@@ -107,8 +108,9 @@ public class BluetoothNotificationManager {
      * after a browser crash which caused old notifications to exist).
      */
     public void cancelPreviousBluetoothNotifications() {
-        Set<String> notificationIds = mSharedPreferences.readStringSet(
-                ChromePreferenceKeys.BLUETOOTH_NOTIFICATION_IDS, null);
+        Set<String> notificationIds =
+                mSharedPreferences.readStringSet(
+                        ChromePreferenceKeys.BLUETOOTH_NOTIFICATION_IDS, null);
         if (notificationIds == null) return;
         Iterator<String> iterator = notificationIds.iterator();
         while (iterator.hasNext()) {
@@ -126,8 +128,12 @@ public class BluetoothNotificationManager {
      * @param isIncognito Whether the notification comes from incognito mode.
      * @param startId Id for the service start request
      */
-    private void updateNotification(int notificationId, @BluetoothType int bluetoothType,
-            String url, boolean isIncognito, int startId) {
+    private void updateNotification(
+            int notificationId,
+            @BluetoothType int bluetoothType,
+            String url,
+            boolean isIncognito,
+            int startId) {
         if (doesNotificationExist(notificationId)
                 && !doesNotificationNeedUpdate(notificationId, bluetoothType)) {
             return;
@@ -167,12 +173,15 @@ public class BluetoothNotificationManager {
                         ChromeChannelDefinitions.ChannelId.BLUETOOTH,
                         new NotificationMetadata(
                                 NotificationUmaTracker.SystemNotificationType.BLUETOOTH,
-                                NOTIFICATION_NAMESPACE, notificationId));
+                                NOTIFICATION_NAMESPACE,
+                                notificationId));
 
         Intent tabIntent = mDelegate.createTrustedBringTabToFrontIntent(notificationId);
-        PendingIntentProvider contentIntent = tabIntent == null
-                ? null
-                : PendingIntentProvider.getActivity(appContext, notificationId, tabIntent, 0);
+        PendingIntentProvider contentIntent =
+                tabIntent == null
+                        ? null
+                        : PendingIntentProvider.getActivity(
+                                appContext, notificationId, tabIntent, 0);
 
         builder.setAutoCancel(false)
                 .setOngoing(true)
@@ -187,13 +196,15 @@ public class BluetoothNotificationManager {
                     appContext.getString(R.string.bluetooth_notification_content_text_incognito);
             builder.setSubText(appContext.getString(R.string.notification_incognito_tab));
         } else {
-            String urlForDisplay = UrlFormatter.formatUrlForSecurityDisplay(
-                    new GURL(url), SchemeDisplay.OMIT_HTTP_AND_HTTPS);
+            String urlForDisplay =
+                    UrlFormatter.formatUrlForSecurityDisplay(
+                            new GURL(url), SchemeDisplay.OMIT_HTTP_AND_HTTPS);
             if (contentIntent == null) {
                 contentText = urlForDisplay;
             } else {
-                contentText = appContext.getString(
-                        R.string.bluetooth_notification_content_text, urlForDisplay);
+                contentText =
+                        appContext.getString(
+                                R.string.bluetooth_notification_content_text, urlForDisplay);
             }
         }
 
@@ -203,10 +214,12 @@ public class BluetoothNotificationManager {
         mNotificationManager.notify(notification);
         mNotifications.put(notificationId, bluetoothType);
         updateSharedPreferencesEntry(notificationId, false);
-        NotificationUmaTracker.getInstance().onNotificationShown(
-                NotificationUmaTracker.SystemNotificationType.BLUETOOTH,
-                notification.getNotification());
+        NotificationUmaTracker.getInstance()
+                .onNotificationShown(
+                        NotificationUmaTracker.SystemNotificationType.BLUETOOTH,
+                        notification.getNotification());
     }
+
     /**
      * @param bluetoothType Bluetooth type of the notification.
      * @return user-facing text for the provided bluetoothType.
@@ -243,9 +256,12 @@ public class BluetoothNotificationManager {
      * @param remove Boolean describing if the notification was added or removed.
      */
     private void updateSharedPreferencesEntry(int notificationId, boolean remove) {
-        Set<String> notificationIds = new HashSet<>(mSharedPreferences.readStringSet(
-                ChromePreferenceKeys.BLUETOOTH_NOTIFICATION_IDS, new HashSet<>()));
-        if (remove && !notificationIds.isEmpty()
+        Set<String> notificationIds =
+                new HashSet<>(
+                        mSharedPreferences.readStringSet(
+                                ChromePreferenceKeys.BLUETOOTH_NOTIFICATION_IDS, new HashSet<>()));
+        if (remove
+                && !notificationIds.isEmpty()
                 && notificationIds.contains(String.valueOf(notificationId))) {
             notificationIds.remove(String.valueOf(notificationId));
         } else if (!remove) {
@@ -256,15 +272,16 @@ public class BluetoothNotificationManager {
     }
 
     private static boolean shouldStartService(
-            Context context, @BluetoothType int bluetoothType, int notificationTabId) {
-        if (!ContentFeatureList.isEnabled(
-                    ContentFeatureList.WEB_BLUETOOTH_NEW_PERMISSIONS_BACKEND)) {
+            @BluetoothType int bluetoothType, int notificationTabId) {
+        if (!ContentFeatureMap.isEnabled(
+                ContentFeatureList.WEB_BLUETOOTH_NEW_PERMISSIONS_BACKEND)) {
             return false;
         }
         if (bluetoothType != BluetoothType.NO_BLUETOOTH) return true;
-        SharedPreferencesManager sharedPreferences = SharedPreferencesManager.getInstance();
-        Set<String> notificationIds = sharedPreferences.readStringSet(
-                ChromePreferenceKeys.BLUETOOTH_NOTIFICATION_IDS, null);
+        SharedPreferencesManager sharedPreferences = ChromeSharedPreferences.getInstance();
+        Set<String> notificationIds =
+                sharedPreferences.readStringSet(
+                        ChromePreferenceKeys.BLUETOOTH_NOTIFICATION_IDS, null);
         if (notificationIds == null || notificationIds.isEmpty()) return false;
         return notificationIds.contains(String.valueOf(notificationTabId));
     }
@@ -272,6 +289,7 @@ public class BluetoothNotificationManager {
     /**
      * Send an intent to the bluetooth notification service to either create or destroy the
      * notification identified by notificationTabId.
+     *
      * @param context The activity context.
      * @param service The bluetooth notification service class.
      * @param notificationTabId The tab id.
@@ -279,13 +297,15 @@ public class BluetoothNotificationManager {
      * @param url Url of the website interacting with Bluetooth devices.
      * @param isIncognito Whether tab is in incognito mode.
      */
-
-    public static void updateBluetoothNotificationForTab(Context context, Class service,
-            int notificationTabId, @Nullable WebContents webContents, GURL url,
+    public static void updateBluetoothNotificationForTab(
+            Context context,
+            Class service,
+            int notificationTabId,
+            @Nullable WebContents webContents,
+            GURL url,
             boolean isIncognito) {
-        @BluetoothType
-        int bluetoothType = getBluetoothType(webContents);
-        if (!shouldStartService(context, bluetoothType, notificationTabId)) return;
+        @BluetoothType int bluetoothType = getBluetoothType(webContents);
+        if (!shouldStartService(bluetoothType, notificationTabId)) return;
         Intent intent = new Intent(context, service);
         intent.setAction(ACTION_BLUETOOTH_UPDATE);
         intent.putExtra(NOTIFICATION_ID_EXTRA, notificationTabId);
@@ -300,13 +320,14 @@ public class BluetoothNotificationManager {
      * @param service The bluetooth notification service class.
      */
     public static void clearBluetoothNotifications(Class service) {
-        if (!ContentFeatureList.isEnabled(
-                    ContentFeatureList.WEB_BLUETOOTH_NEW_PERMISSIONS_BACKEND)) {
+        if (!ContentFeatureMap.isEnabled(
+                ContentFeatureList.WEB_BLUETOOTH_NEW_PERMISSIONS_BACKEND)) {
             return;
         }
-        SharedPreferencesManager sharedPreferences = SharedPreferencesManager.getInstance();
-        Set<String> notificationIds = sharedPreferences.readStringSet(
-                ChromePreferenceKeys.BLUETOOTH_NOTIFICATION_IDS, null);
+        SharedPreferencesManager sharedPreferences = ChromeSharedPreferences.getInstance();
+        Set<String> notificationIds =
+                sharedPreferences.readStringSet(
+                        ChromePreferenceKeys.BLUETOOTH_NOTIFICATION_IDS, null);
         if (notificationIds == null || notificationIds.isEmpty()) return;
 
         Context context = ContextUtils.getApplicationContext();

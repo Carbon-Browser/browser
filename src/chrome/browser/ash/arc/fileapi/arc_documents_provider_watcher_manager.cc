@@ -1,12 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/arc/fileapi/arc_documents_provider_watcher_manager.h"
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/arc/fileapi/arc_documents_provider_root.h"
 #include "chrome/browser/ash/arc/fileapi/arc_documents_provider_root_map.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -98,7 +98,8 @@ void RemoveWatcherOnUIThread(
 
 }  // namespace
 
-ArcDocumentsProviderWatcherManager::ArcDocumentsProviderWatcherManager() {}
+ArcDocumentsProviderWatcherManager::ArcDocumentsProviderWatcherManager() =
+    default;
 
 ArcDocumentsProviderWatcherManager::~ArcDocumentsProviderWatcherManager() {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);

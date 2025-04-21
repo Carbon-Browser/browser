@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,9 +16,9 @@
 // More badges, e.g. for syncing, will be supported in the future (project
 // DICE).
 class BadgedProfilePhoto : public views::View {
- public:
-  METADATA_HEADER(BadgedProfilePhoto);
+  METADATA_HEADER(BadgedProfilePhoto, views::View)
 
+ public:
   enum BadgeType {
     BADGE_TYPE_NONE,
     BADGE_TYPE_SUPERVISOR,

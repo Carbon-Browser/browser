@@ -1,6 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "third_party/blink/renderer/platform/media/multi_buffer_reader.h"
 
@@ -8,8 +13,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
 #include "net/base/net_errors.h"
@@ -20,6 +25,7 @@ MultiBufferReader::MultiBufferReader(
     MultiBuffer* multibuffer,
     int64_t start,
     int64_t end,
+    bool is_client_audio_element,
     base::RepeatingCallback<void(int64_t, int64_t)> progress_callback,
     scoped_refptr<base::SingleThreadTaskRunner> task_runner)
     : multibuffer_(multibuffer),
@@ -32,6 +38,7 @@ MultiBufferReader::MultiBufferReader(
       current_buffer_size_(0),
       pinned_range_(0, 0),
       pos_(start),
+      is_client_audio_element_(is_client_audio_element),
       preload_pos_(-1),
       loading_(true),
       current_wait_size_(0),
@@ -92,19 +99,24 @@ int64_t MultiBufferReader::TryReadAt(int64_t pos, uint8_t* data, int64_t len) {
                                     &buffers);
   int64_t bytes_read = 0;
   for (auto& buffer : buffers) {
-    if (buffer->end_of_stream())
+    if (buffer->end_of_stream()) {
       break;
-    int64_t offset = pos & ((1LL << multibuffer_->block_size_shift()) - 1);
-    if (offset > static_cast<int64_t>(buffer->data_size()))
+    }
+    const size_t offset = pos & ((1LL << multibuffer_->block_size_shift()) - 1);
+    if (offset > buffer->size()) {
       break;
-    int64_t tocopy = std::min(len - bytes_read, buffer->data_size() - offset);
-    memcpy(data, buffer->data() + offset, static_cast<size_t>(tocopy));
+    }
+    const auto tocopy =
+        std::min<size_t>(len - bytes_read, buffer->size() - offset);
+    memcpy(data, buffer->data().data() + offset, tocopy);
     data += tocopy;
     bytes_read += tocopy;
-    if (bytes_read == len)
+    if (bytes_read == len) {
       break;
-    if (block(pos + tocopy) != block(pos) + 1)
+    }
+    if (block(pos + tocopy) != block(pos) + 1) {
       break;
+    }
     pos += tocopy;
   }
   return bytes_read;

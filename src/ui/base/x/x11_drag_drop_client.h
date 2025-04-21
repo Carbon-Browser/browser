@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,7 +42,7 @@ class COMPONENT_EXPORT(UI_BASE_X) XDragDropClient {
    public:
     // Get the window being dragged. This window should be ignored when finding
     // the topmost window.
-    virtual absl::optional<gfx::AcceleratedWidget> GetDragWidget() = 0;
+    virtual std::optional<gfx::AcceleratedWidget> GetDragWidget() = 0;
 
     // Updates the drag status by the new position. Returns the drag operations
     // possible at that position.

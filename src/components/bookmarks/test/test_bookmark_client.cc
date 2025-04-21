@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/notreached.h"
 #include "base/time/time.h"
-#include "components/bookmarks/browser/bookmark_load_details.h"
 #include "components/bookmarks/browser/bookmark_model.h"
 #include "components/bookmarks/browser/bookmark_node.h"
 #include "components/bookmarks/browser/bookmark_storage.h"
@@ -33,21 +32,15 @@ std::unique_ptr<BookmarkModel> TestBookmarkClient::CreateModel() {
 
 // static
 std::unique_ptr<BookmarkModel> TestBookmarkClient::CreateModelWithClient(
-    std::unique_ptr<BookmarkClient> client) {
-  BookmarkClient* client_ptr = client.get();
-  std::unique_ptr<BookmarkModel> bookmark_model(
-      new BookmarkModel(std::move(client)));
-  std::unique_ptr<BookmarkLoadDetails> details =
-      std::make_unique<BookmarkLoadDetails>(client_ptr);
-  details->LoadManagedNode();
-  details->CreateUrlIndex();
-  bookmark_model->DoneLoading(std::move(details));
+    std::unique_ptr<TestBookmarkClient> client) {
+  auto bookmark_model = std::make_unique<BookmarkModel>(std::move(client));
+  bookmark_model->LoadEmptyForTest();
   return bookmark_model;
 }
 
 BookmarkPermanentNode* TestBookmarkClient::EnableManagedNode() {
   managed_node_ = BookmarkPermanentNode::CreateManagedBookmarks(/*id=*/100);
-  // Keep a copy of the node in |unowned_managed_node_| for the accessor
+  // Keep a copy of the node in `unowned_managed_node_` for the accessor
   // functions.
   unowned_managed_node_ = managed_node_.get();
   return unowned_managed_node_;
@@ -55,10 +48,6 @@ BookmarkPermanentNode* TestBookmarkClient::EnableManagedNode() {
 
 bool TestBookmarkClient::IsManagedNodeRoot(const BookmarkNode* node) {
   return unowned_managed_node_ == node;
-}
-
-bool TestBookmarkClient::IsAManagedNode(const BookmarkNode* node) {
-  return node && node->HasAncestor(unowned_managed_node_.get());
 }
 
 bool TestBookmarkClient::SimulateFaviconLoaded(const GURL& page_url,
@@ -96,25 +85,14 @@ bool TestBookmarkClient::HasFaviconLoadTasks() const {
   return !requests_per_page_url_.empty();
 }
 
-bool TestBookmarkClient::IsPermanentNodeVisibleWhenEmpty(
-    BookmarkNode::Type type) {
-  switch (type) {
-    case bookmarks::BookmarkNode::URL:
-      NOTREACHED();
-      return false;
-    case bookmarks::BookmarkNode::BOOKMARK_BAR:
-    case bookmarks::BookmarkNode::OTHER_NODE:
-      return true;
-    case bookmarks::BookmarkNode::FOLDER:
-    case bookmarks::BookmarkNode::MOBILE:
-      return false;
-  }
-
-  NOTREACHED();
-  return false;
+void TestBookmarkClient::SetIsSyncFeatureEnabledIncludingBookmarks(bool value) {
+  is_sync_feature_enabled_including_bookmarks_for_uma = value;
 }
 
-void TestBookmarkClient::RecordAction(const base::UserMetricsAction& action) {
+void TestBookmarkClient::SetAccountBookmarkSyncMetadataAndScheduleWrite(
+    const std::string& account_bookmark_sync_metadata) {
+  account_bookmark_sync_metadata_ = account_bookmark_sync_metadata;
+  account_bookmark_sync_metadata_save_closure_.Run();
 }
 
 LoadManagedNodeCallback TestBookmarkClient::GetLoadManagedNodeCallback() {
@@ -122,26 +100,37 @@ LoadManagedNodeCallback TestBookmarkClient::GetLoadManagedNodeCallback() {
                         std::move(managed_node_));
 }
 
+bool TestBookmarkClient::IsSyncFeatureEnabledIncludingBookmarks() {
+  return is_sync_feature_enabled_including_bookmarks_for_uma;
+}
+
 bool TestBookmarkClient::CanSetPermanentNodeTitle(
     const BookmarkNode* permanent_node) {
   return IsManagedNodeRoot(permanent_node);
 }
 
-bool TestBookmarkClient::CanSyncNode(const BookmarkNode* node) {
-  return !IsAManagedNode(node);
+bool TestBookmarkClient::IsNodeManaged(const BookmarkNode* node) {
+  return node && node->HasAncestor(unowned_managed_node_.get());
 }
 
-bool TestBookmarkClient::CanBeEditedByUser(const BookmarkNode* node) {
-  return !IsAManagedNode(node);
-}
-
-std::string TestBookmarkClient::EncodeBookmarkSyncMetadata() {
+std::string TestBookmarkClient::EncodeLocalOrSyncableBookmarkSyncMetadata() {
   return std::string();
 }
 
-void TestBookmarkClient::DecodeBookmarkSyncMetadata(
+std::string TestBookmarkClient::EncodeAccountBookmarkSyncMetadata() {
+  return account_bookmark_sync_metadata_;
+}
+
+void TestBookmarkClient::DecodeLocalOrSyncableBookmarkSyncMetadata(
     const std::string& metadata_str,
     const base::RepeatingClosure& schedule_save_closure) {}
+
+void TestBookmarkClient::DecodeAccountBookmarkSyncMetadata(
+    const std::string& metadata_str,
+    const base::RepeatingClosure& schedule_save_closure) {
+  account_bookmark_sync_metadata_ = metadata_str;
+  account_bookmark_sync_metadata_save_closure_ = schedule_save_closure;
+}
 
 base::CancelableTaskTracker::TaskId
 TestBookmarkClient::GetFaviconImageForPageURL(
@@ -151,6 +140,11 @@ TestBookmarkClient::GetFaviconImageForPageURL(
   requests_per_page_url_[page_url].push_back(std::move(callback));
   return next_task_id_++;
 }
+
+void TestBookmarkClient::OnBookmarkNodeRemovedUndoable(
+    const BookmarkNode* parent,
+    size_t index,
+    std::unique_ptr<BookmarkNode> node) {}
 
 // static
 std::unique_ptr<BookmarkPermanentNode> TestBookmarkClient::LoadManagedNode(

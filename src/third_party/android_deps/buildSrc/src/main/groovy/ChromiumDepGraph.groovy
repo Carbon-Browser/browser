@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,157 +24,173 @@ class ChromiumDepGraph {
     // Some libraries don't properly fill their POM with the appropriate licensing information. It is provided here from
     // manual lookups. Note that licenseUrl must provide textual content rather than be an html page.
     static final Map<String, PropertyOverride> PROPERTY_OVERRIDES = [
-        me_superlink_sdk: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-
-        com_github_bumptech_glide_glide: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-        com_github_bumptech_glide_gifdecoder: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-        com_github_bumptech_glide_disklrucache: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-        com_github_bumptech_glide_annotations: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-
-        com_github_komputing_kethereum_bip39: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-        com_github_komputing_kethereum_bip32: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-        com_github_komputing_kethereum_crypto: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-        com_github_komputing_kethereum_crypto_api: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-        com_github_komputing_kethereum_model: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-        com_github_komputing_kethereum_extensions_kotlin: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-        com_github_komputing_khex: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-        com_github_komputing_kethereum_keccak_shortcut: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-        com_github_komputing_kethereum_crypto_impl_spongycastle: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-        com_github_komputing_kethereum_crypto_impl_java_provider: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-        com_github_komputing_kethereum_bip39_wordlist_en: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-        com_github_WalletConnect_Scarlet_lifecycle_android: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-        com_github_WalletConnect_Scarlet_scarlet: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-        com_tinder_statemachine_statemachine: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-        com_github_WalletConnect_Scarlet_scarlet_core_internal: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-        com_github_WalletConnect_Scarlet_scarlet_core: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-
-        com_github_BrotherV_Floating_ArcMenu: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-
-        com_android_tools_desugar_jdk_libs: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-
-        com_trustwallet_wallet_core: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-
-        io_grpc_grpc_context: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-
-        io_grpc_grpc_api: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-
-        io_grpc_grpc_protobuf_lite: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-
-        io_grpc_grpc_protobuf: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-
-        com_squareup_okhttp3_okhttp: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-
-        org_slf4j_slf4j_api: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-        net_jcip_jcip_annotations: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-        org_bouncycastle_bcprov_jdk15to18: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-        com_squareup_moshi_moshi: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-        commons_codec_commons_codec: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-        com_github_salomonbrys_kotson_kotson: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-
-        org_java_websocket_Java_WebSocket: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-        net_i2p_crypto_eddsa: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
 
 
-        com_squareup_okio_okio: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
 
-        com_google_flatbuffers_flatbuffers_java: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
+    com_quickblox_quickblox_android_sdk_chat: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    com_quickblox_quickblox_android_sdk_videochat_webrtc: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    com_quickblox_google_webrtc: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
 
-        androidx_security_security_crypto: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
+    org_hamcrest_hamcrest: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
 
-        com_google_zxing_core: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
+
+    com_github_heremaps_oksse: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    com_github_bumptech_glide_glide: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    com_github_bumptech_glide_gifdecoder: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    com_github_bumptech_glide_disklrucache: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    com_github_bumptech_glide_annotations: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+
+    com_github_komputing_kethereum_bip39: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    com_github_komputing_kethereum_bip32: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    com_github_komputing_kethereum_crypto: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    com_github_komputing_kethereum_crypto_api: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    com_github_komputing_kethereum_model: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    com_github_komputing_kethereum_extensions_kotlin: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    com_github_komputing_khex: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    com_github_komputing_kethereum_keccak_shortcut: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    com_github_komputing_kethereum_crypto_impl_spongycastle: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    com_github_komputing_kethereum_crypto_impl_java_provider: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    com_github_komputing_kethereum_bip39_wordlist_en: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    com_github_WalletConnect_Scarlet_lifecycle_android: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    com_github_WalletConnect_Scarlet_scarlet: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    com_tinder_statemachine_statemachine: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    com_github_WalletConnect_Scarlet_scarlet_core_internal: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    com_github_WalletConnect_Scarlet_scarlet_core: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+
+    com_github_BrotherV_Floating_ArcMenu: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+
+    com_android_tools_desugar_jdk_libs: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+
+    com_trustwallet_wallet_core: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+
+    io_grpc_grpc_context: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+
+    io_grpc_grpc_api: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+
+    io_grpc_grpc_protobuf_lite: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+
+    io_grpc_grpc_protobuf: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+
+    com_squareup_okhttp3_okhttp: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+
+    org_slf4j_slf4j_api: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    net_jcip_jcip_annotations: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    org_bouncycastle_bcprov_jdk15to18: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    com_squareup_moshi_moshi: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    commons_codec_commons_codec: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    com_github_salomonbrys_kotson_kotson: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+
+    org_java_websocket_Java_WebSocket: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+    net_i2p_crypto_eddsa: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+
+
+    com_squareup_okio_okio: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+
+    com_google_flatbuffers_flatbuffers_java: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+
+    androidx_security_security_crypto: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+
+    com_google_zxing_core: new PropertyOverride(
+        licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+        licenseName: 'Apache 2.0'),
+
+        com_google_protobuf_protobuf_java: new PropertyOverride(
+                url: 'https://github.com/protocolbuffers/protobuf/blob/master/java/README.md',
+                licenseUrl: 'https://raw.githubusercontent.com/protocolbuffers/protobuf/master/LICENSE',
+                licenseName: 'BSD'),
+
+
 
         androidx_multidex_multidex: new PropertyOverride(
             url: 'https://maven.google.com/androidx/multidex/multidex/2.0.0/multidex-2.0.0.aar'),
-
-        com_android_tools_desugar_jdk_libs_configuration: new PropertyOverride(
-            licensePath: 'licenses/desugar_jdk_libs_configuration.txt',
-            licenseName: 'BSD 3-Clause',
-            generateTarget: false),
-        com_github_kevinstern_software_and_algorithms: new PropertyOverride(
-            licenseUrl: 'https://raw.githubusercontent.com/KevinStern/software-and-algorithms/master/LICENSE',
-            licenseName: 'MIT License'),
         com_google_android_datatransport_transport_api: new PropertyOverride(
             description: 'Interfaces for data logging in GmsCore SDKs.'),
         com_google_android_datatransport_transport_backend_cct: new PropertyOverride(
@@ -183,12 +199,8 @@ class ChromiumDepGraph {
             exclude: true),  // We're not using datatransport functionality.
         com_google_android_gms_play_services_cloud_messaging: new PropertyOverride(
             description: 'Firebase Cloud Messaging library that interfaces with GmsCore.'),
-        com_google_auto_auto_common: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-        com_google_auto_service_auto_service: new PropertyOverride(
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
+        com_google_android_gms_play_services_location: new PropertyOverride(
+            description: 'Provides data about the device\'s physical location via gmscore.'),
         com_google_auto_service_auto_service_annotations: new PropertyOverride(
             licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
             licenseName: 'Apache 2.0'),
@@ -197,16 +209,20 @@ class ChromiumDepGraph {
             licenseName: 'Apache 2.0'),
         com_google_code_gson_gson: new PropertyOverride(
             url: 'https://github.com/google/gson',
+            description: 'A Java serialization/deserialization library to convert Java Objects into JSON and back',
             licenseUrl: 'https://raw.githubusercontent.com/google/gson/master/LICENSE',
             licenseName: 'Apache 2.0'),
         com_google_errorprone_error_prone_annotation: new PropertyOverride(
-            url: 'https://errorprone.info/',
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
+            // Robolectric has a (seemingly unnecessary) dep on this. It's meant to be needed
+            // only for writing custom Error Prone checks. Chrome's copy is within the
+            // Error Prone fat jar: //third_party/android_build_tools/error_prone
+            // Depending on this fat jar pulls in a conflicting copy of protobuf library.
+            exclude: true),
         com_google_errorprone_error_prone_annotations: new PropertyOverride(
-            url: 'https://errorprone.info/',
+            url: 'https://github.com/google/error-prone/tree/master/annotations',
             licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
+            licenseName: 'Apache 2.0',
+            description: 'ErrorProne Annotations.',),
         com_google_firebase_firebase_annotations: new PropertyOverride(
             description: 'Common annotations for Firebase SKDs.'),
         com_google_firebase_firebase_common: new PropertyOverride(
@@ -231,10 +247,6 @@ class ChromiumDepGraph {
             description: 'Bridge interfaces for Firebase analytics into GmsCore.'),
         com_google_firebase_firebase_messaging: new PropertyOverride(
             description: 'Firebase Cloud Messaging SDK to send and receive push messages via FCM.'),
-        com_google_googlejavaformat_google_java_format: new PropertyOverride(
-            url: 'https://github.com/google/google-java-format',
-            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
         com_google_guava_failureaccess: new PropertyOverride(
             url: 'https://github.com/google/guava',
             licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
@@ -242,34 +254,37 @@ class ChromiumDepGraph {
         com_google_guava_guava: new PropertyOverride(
             url: 'https://github.com/google/guava',
             licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
+            licenseName: 'Apache 2.0',
+            // Both -jre and -android versions are listed. Filter to only the -jre ones.
+            versionFilter: '-jre'),
         com_google_guava_guava_android: new PropertyOverride(
             url: 'https://github.com/google/guava',
             licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
-            licenseName: 'Apache 2.0'),
-        com_google_guava_listenablefuture: new PropertyOverride(
-            url: 'https://github.com/google/guava',
-            // Avoid resolving to 9999 version, which  is empty.
-            resolveVersion: '1.0',
+            licenseName: 'Apache 2.0',
+            // Both -jre and -android versions are listed. Filter to only the -android ones.
+            versionFilter: '-android'),
+        com_google_testparameterinjector_test_parameter_injector: new PropertyOverride(
+        url: 'https://github.com/google/TestParameterInjector',
             licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
             licenseName: 'Apache 2.0'),
-        org_bouncycastle_bcprov_jdk15on: new PropertyOverride(
+        com_squareup_wire_wire_runtime_jvm: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
+        org_bouncycastle_bcprov_jdk18on: new PropertyOverride(
+            cpePrefix: 'cpe:/a:bouncycastle:legion-of-the-bouncy-castle:1.72',
             url: 'https://github.com/bcgit/bc-java',
             licensePath: 'licenses/Bouncy_Castle-2015.txt',
-            licenseName: 'MIT',
-            overrideLatest: true),
+            licenseName: 'MIT'),
         org_codehaus_mojo_animal_sniffer_annotations: new PropertyOverride(
             url: 'http://www.mojohaus.org/animal-sniffer/animal-sniffer-annotations/',
+            description: 'Animal Sniffer Annotations allow marking methods which Animal Sniffer should ignore ' +
+                         'signature violations of.',
             /* groovylint-disable-next-line LineLength */
             licenseUrl: 'https://raw.githubusercontent.com/mojohaus/animal-sniffer/master/animal-sniffer-annotations/pom.xml',
             licensePath: 'licenses/Codehaus_License-2009.txt',
             licenseName: 'MIT'),
-        org_eclipse_jgit_org_eclipse_jgit: new PropertyOverride(
-            url: 'https://www.eclipse.org/jgit/',
-            licenseUrl: 'https://www.eclipse.org/org/documents/edl-v10.html',
-            licensePath: 'licenses/Eclipse_EDL.txt',
-            licenseName: 'BSD 3-Clause'),
-        com_google_protobuf_protobuf_java: new PropertyOverride(
+        com_google_protobuf_protobuf_lite: new PropertyOverride(
+            exclude: true, // There is a phantom dep on this target, but this is deprecated and not used in chrome.
             url: 'https://github.com/protocolbuffers/protobuf/blob/master/java/README.md',
             licenseUrl: 'https://raw.githubusercontent.com/protocolbuffers/protobuf/master/LICENSE',
             licenseName: 'BSD'),
@@ -277,10 +292,9 @@ class ChromiumDepGraph {
             url: 'https://github.com/protocolbuffers/protobuf/blob/master/java/lite.md',
             licenseUrl: 'https://raw.githubusercontent.com/protocolbuffers/protobuf/master/LICENSE',
             licenseName: 'BSD'),
-        com_google_protobuf_protobuf_lite: new PropertyOverride(
-            url: 'https://github.com/protocolbuffers/protobuf/blob/master/java/lite.md',
-            licenseUrl: 'https://raw.githubusercontent.com/protocolbuffers/protobuf/master/LICENSE',
-            licenseName: 'BSD'),
+        jakarta_inject_jakarta_inject_api: new PropertyOverride(
+            // Help gradle resolve the same version that our 3pp script does.
+            versionFilter: '\\d+\\.\\d+\\.\\d+$'),
         javax_annotation_javax_annotation_api: new PropertyOverride(
             isShipped: false,  // Annotations are stripped by R8.
             licenseName: 'CDDLv1.1',
@@ -289,25 +303,50 @@ class ChromiumDepGraph {
             isShipped: false,  // Annotations are stripped by R8.
             licenseName: 'CDDLv1.0',
             licensePath: 'licenses/CDDLv1.0.txt'),
-        net_sf_kxml_kxml2: new PropertyOverride(
-            licenseUrl: 'https://raw.githubusercontent.com/stefanhaustein/kxml2/master/license.txt',
-            licenseName: 'MIT'),
+        net_bytebuddy_byte_buddy: new PropertyOverride(
+            url: 'https://github.com/raphw/byte-buddy',
+            licenseUrl: 'https://raw.githubusercontent.com/raphw/byte-buddy/master/LICENSE',
+            licenseName: 'Apache 2.0'),
+        net_bytebuddy_byte_buddy_agent: new PropertyOverride(
+            url: 'https://github.com/raphw/byte-buddy',
+            licenseUrl: 'https://raw.githubusercontent.com/raphw/byte-buddy/master/LICENSE',
+            licenseName: 'Apache 2.0'),
+        net_bytebuddy_byte_buddy_android: new PropertyOverride(
+            url: 'https://github.com/raphw/byte-buddy',
+            licenseUrl: 'https://raw.githubusercontent.com/raphw/byte-buddy/master/LICENSE',
+            licenseName: 'Apache 2.0'),
         org_checkerframework_checker_compat_qual: new PropertyOverride(
             licenseUrl: 'https://raw.githubusercontent.com/typetools/checker-framework/master/LICENSE.txt',
-            licenseName: 'GPL v2 with the classpath exception'),
+            licenseName: 'GPL-2.0-with-classpath-exception'),
         org_checkerframework_checker_qual: new PropertyOverride(
             licenseUrl: 'https://raw.githubusercontent.com/typetools/checker-framework/master/LICENSE.txt',
-            licenseName: 'GPL v2 with the classpath exception'),
-        org_checkerframework_dataflow_errorprone: new PropertyOverride(
-            licenseUrl: 'https://raw.githubusercontent.com/typetools/checker-framework/master/LICENSE.txt',
-            licenseName: 'GPL v2 with the classpath exception'),
+            licenseName: 'GPL-2.0-with-classpath-exception'),
+        org_checkerframework_checker_util: new PropertyOverride(
+            licenseUrl: 'https://raw.githubusercontent.com/typetools/checker-framework/master/checker-util/LICENSE.txt',
+            licenseName: 'MIT'),
+        org_conscrypt_conscrypt_openjdk_uber: new PropertyOverride(
+            licenseUrl: 'https://raw.githubusercontent.com/google/conscrypt/master/LICENSE',
+            licenseName: 'Apache 2.0'),
         org_hamcrest_hamcrest: new PropertyOverride(
-            licenseUrl: 'https://raw.githubusercontent.com/hamcrest/JavaHamcrest/master/LICENSE.txt',
+            licenseUrl: 'https://raw.githubusercontent.com/hamcrest/JavaHamcrest/master/LICENSE',
             licenseName: 'BSD'),
         org_jsoup_jsoup: new PropertyOverride(
             cpePrefix: 'cpe:/a:jsoup:jsoup:1.14.3',
             licenseUrl: 'https://raw.githubusercontent.com/jhy/jsoup/master/LICENSE',
             licenseName: 'The MIT License'),
+        org_mockito_mockito_android: new PropertyOverride(
+            licenseUrl: 'https://raw.githubusercontent.com/mockito/mockito/main/LICENSE',
+            licenseName: 'The MIT License'),
+        org_mockito_mockito_core: new PropertyOverride(
+            licenseUrl: 'https://raw.githubusercontent.com/mockito/mockito/main/LICENSE',
+            licenseName: 'The MIT License'),
+        org_mockito_mockito_subclass: new PropertyOverride(
+            licenseUrl: 'https://raw.githubusercontent.com/mockito/mockito/main/LICENSE',
+            licenseName: 'The MIT License'),
+        org_objenesis_objenesis: new PropertyOverride(
+            url: 'http://objenesis.org/index.html',
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
         org_ow2_asm_asm: new PropertyOverride(
             licenseUrl: 'https://gitlab.ow2.org/asm/asm/raw/master/LICENSE.txt',
             licenseName: 'BSD'),
@@ -323,70 +362,82 @@ class ChromiumDepGraph {
         org_ow2_asm_asm_util: new PropertyOverride(
             licenseUrl: 'https://gitlab.ow2.org/asm/asm/raw/master/LICENSE.txt',
             licenseName: 'BSD'),
-        org_pcollections_pcollections: new PropertyOverride(
-            licenseUrl: 'https://raw.githubusercontent.com/hrldcpr/pcollections/master/LICENSE',
-            licenseName: 'The MIT License'),
         org_robolectric_annotations: new PropertyOverride(
-            licensePath: 'licenses/Codehaus_License-2009.txt',
+            licenseUrl: 'https://raw.githubusercontent.com/robolectric/robolectric/master/LICENSE',
             licenseName: 'MIT'),
         org_robolectric_junit: new PropertyOverride(
-            licensePath: 'licenses/Codehaus_License-2009.txt',
+            licenseUrl: 'https://raw.githubusercontent.com/robolectric/robolectric/master/LICENSE',
             licenseName: 'MIT'),
         org_robolectric_nativeruntime: new PropertyOverride(
-            licensePath: 'licenses/Codehaus_License-2009.txt',
+            licenseUrl: 'https://raw.githubusercontent.com/robolectric/robolectric/master/LICENSE',
+            licenseName: 'MIT'),
+        org_robolectric_nativeruntime_dist_compat: new PropertyOverride(
+            licenseUrl: 'https://raw.githubusercontent.com/robolectric/robolectric/master/LICENSE',
             licenseName: 'MIT'),
         org_robolectric_pluginapi: new PropertyOverride(
-            licensePath: 'licenses/Codehaus_License-2009.txt',
+            licenseUrl: 'https://raw.githubusercontent.com/robolectric/robolectric/master/LICENSE',
             licenseName: 'MIT'),
         org_robolectric_plugins_maven_dependency_resolver: new PropertyOverride(
-            licensePath: 'licenses/Codehaus_License-2009.txt',
+            licenseUrl: 'https://raw.githubusercontent.com/robolectric/robolectric/master/LICENSE',
             licenseName: 'MIT'),
         org_robolectric_resources: new PropertyOverride(
-            licensePath: 'licenses/Codehaus_License-2009.txt',
+            licenseUrl: 'https://raw.githubusercontent.com/robolectric/robolectric/master/LICENSE',
             licenseName: 'MIT'),
         org_robolectric_robolectric: new PropertyOverride(
-            licensePath: 'licenses/Codehaus_License-2009.txt',
+            licenseUrl: 'https://raw.githubusercontent.com/robolectric/robolectric/master/LICENSE',
             licenseName: 'MIT'),
         org_robolectric_sandbox: new PropertyOverride(
-            licensePath: 'licenses/Codehaus_License-2009.txt',
+            licenseUrl: 'https://raw.githubusercontent.com/robolectric/robolectric/master/LICENSE',
             licenseName: 'MIT'),
         org_robolectric_shadowapi: new PropertyOverride(
-            licensePath: 'licenses/Codehaus_License-2009.txt',
+            licenseUrl: 'https://raw.githubusercontent.com/robolectric/robolectric/master/LICENSE',
             licenseName: 'MIT'),
         org_robolectric_shadows_framework: new PropertyOverride(
-            licensePath: 'licenses/Codehaus_License-2009.txt',
-            licenseName: 'MIT'),
-        org_robolectric_shadows_multidex: new PropertyOverride(
-            licensePath: 'licenses/Codehaus_License-2009.txt',
-            licenseName: 'MIT'),
-        org_robolectric_shadows_playservices: new PropertyOverride(
-            licensePath: 'licenses/Codehaus_License-2009.txt',
+            licenseUrl: 'https://raw.githubusercontent.com/robolectric/robolectric/master/LICENSE',
             licenseName: 'MIT'),
         org_robolectric_utils: new PropertyOverride(
-            licensePath: 'licenses/Codehaus_License-2009.txt',
+            licenseUrl: 'https://raw.githubusercontent.com/robolectric/robolectric/master/LICENSE',
             licenseName: 'MIT'),
         org_robolectric_utils_reflector: new PropertyOverride(
-            licensePath: 'licenses/Codehaus_License-2009.txt',
+            licenseUrl: 'https://raw.githubusercontent.com/robolectric/robolectric/master/LICENSE',
             licenseName: 'MIT'),
         // Prevent version changing ~weekly. https://crbug.com/1257197
         org_jetbrains_kotlinx_kotlinx_coroutines_core_jvm: new PropertyOverride(
-            resolveVersion: '1.6.1'),
+            resolveVersion: '1.8.1'),
         org_jetbrains_kotlinx_kotlinx_coroutines_android: new PropertyOverride(
-            resolveVersion: '1.6.1'),
-        org_jetbrains_kotlin_kotlin_stdlib_jdk8: new PropertyOverride(
-            resolveVersion: '1.6.20'),
-        org_jetbrains_kotlin_kotlin_stdlib_jdk7: new PropertyOverride(
-            resolveVersion: '1.6.20'),
+            resolveVersion: '1.8.1'),
+        org_jetbrains_kotlinx_kotlinx_coroutines_guava: new PropertyOverride(
+            resolveVersion: '1.8.1'),
+        org_jetbrains_kotlinx_kotlinx_serialization_core_jvm: new PropertyOverride(
+            resolveVersion: '1.7.2'),
+        org_jetbrains_kotlinx_kotlinx_coroutines_test_jvm: new PropertyOverride(
+            resolveVersion: '1.7.3'),
+        io_grpc_grpc_binder: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
+        io_grpc_grpc_core: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
+        io_grpc_grpc_api: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
+        io_grpc_grpc_context: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
+        io_grpc_grpc_protobuf_lite: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
+        io_grpc_grpc_stub: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
+        io_perfmark_perfmark_api: new PropertyOverride(
+            licenseUrl: 'https://www.apache.org/licenses/LICENSE-2.0.txt',
+            licenseName: 'Apache 2.0'),
     ]
 
-    private static final Set<String> ALLOWED_EMPTY_DEPS = [
-        // Bill of materials (BOM) deps are used to specify versions for other dependencies and don't have children or
-        // artifacts of their own. Add other such empty deps here when we encounter them.
-        'org_jetbrains_kotlinx_kotlinx_coroutines_bom',
-        'com_squareup_okhttp3_okhttp_bom',
-        'com_fasterxml_jackson_jackson_bom',
-        'org_jetbrains_kotlin_kotlin_bom',
-    ] as Set
+    // Bill of materials (BOM) deps are used to specify versions for other dependencies and don't have children or
+    // artifacts of their own. Add other such empty deps here when we encounter them.
+    private static final Set<String> ALLOWED_EMPTY_DEPS = [] as Set
 
     // Local text versions of HTML licenses. This cannot replace PROPERTY_OVERRIDES because some libraries refer to
     // license templates such as https://opensource.org/licenses/MIT.
@@ -431,7 +482,6 @@ class ChromiumDepGraph {
 
     void collectDependencies() {
         Set<ResolvedConfiguration> deps = [] as Set
-        Set<ResolvedConfiguration> buildDepsNoRecurse = [] as Set
         Map<String, List<ResolvedArtifact>> resolvedArtifacts = [:]
         String[] configNames = [
             'compile',
@@ -442,22 +492,19 @@ class ChromiumDepGraph {
         ]
         for (Project project : projects) {
             for (String configName : configNames) {
-                ResolvedConfiguration config = project.configurations.getByName(configName).resolvedConfiguration
-                deps += config.firstLevelModuleDependencies
-                if (configName == 'buildCompileNoDeps') {
-                    buildDepsNoRecurse += config.firstLevelModuleDependencies
-                }
+                ResolvedConfiguration resolvedConfig = project.configurations.getByName(configName).resolvedConfiguration
+                deps += resolvedConfig.firstLevelModuleDependencies
                 if (!resolvedArtifacts.containsKey(configName)) {
                     resolvedArtifacts[configName] = []
                 }
-                resolvedArtifacts[configName].addAll(config.resolvedArtifacts)
+                resolvedArtifacts[configName].addAll(resolvedConfig.resolvedArtifacts)
             }
         }
 
         List<String> topLevelIds = []
         deps.each { dependency ->
             topLevelIds.add(makeModuleId(dependency.module))
-            collectDependenciesInternal(dependency, !buildDepsNoRecurse.contains(dependency))
+            collectDependenciesInternal(dependency)
         }
 
         topLevelIds.each { id -> dependencies.get(id).visible = true }
@@ -471,12 +518,20 @@ class ChromiumDepGraph {
 
         resolvedArtifacts['androidTestCompile'].each { artifact ->
             DependencyDescription dep = dependencies.get(makeModuleId(artifact))
-            assert dep : "No dependency collected for artifact ${artifact.name}"
+            assert dep : "No dependency collected for artifact ${artifact.name} (${makeModuleId(artifact)})"
             dep.supportsAndroid = true
             dep.testOnly = true
         }
 
         resolvedArtifacts['buildCompile'].each { artifact ->
+            String id = makeModuleId(artifact)
+            DependencyDescription dep = dependencies.get(id)
+            assert dep : "No dependency collected for artifact ${artifact.name}"
+            dep.usedInBuild = true
+            dep.testOnly = false
+        }
+
+        resolvedArtifacts['buildCompileNoDeps'].each { artifact ->
             String id = makeModuleId(artifact)
             DependencyDescription dep = dependencies.get(id)
             assert dep : "No dependency collected for artifact ${artifact.name}"
@@ -494,29 +549,33 @@ class ChromiumDepGraph {
             dep.isShipped = true
         }
 
-        buildDepsNoRecurse.each { resolvedDep ->
-            String id = makeModuleId(resolvedDep.module)
-            DependencyDescription dep = dependencies.get(id)
-            assert dep : "No dependency collected for artifact ${artifact.name}"
-            dep.usedInBuild = true
-            dep.testOnly = false
+        // We only add testOnly after constructing the dependencies map, so now go through and see
+        // if we need to add testOnly to anything which depends on testOnly. In theory, this may
+        // need some recursion or looping to deal with multiple levels of unmarked targets, but I
+        // think in practice the only things getting annotated here will be a single level of
+        // synthetic groups which depend on testOnly targets.
+        dependencies.each { _, dep ->
+            dep.testOnly = dep.children.any { id ->
+                dependencies.get(id).testOnly
+            }
         }
 
-        PROPERTY_OVERRIDES.each { id, fallbackProperties ->
+        PROPERTY_OVERRIDES.each { id, overrides ->
             DependencyDescription dep = dependencies.get(id)
             if (dep) {
                 // Null-check is required since isShipped is a boolean. This
                 // check must come after all the deps are resolved instead of in
                 // customizeDep, since otherwise it gets overwritten.
-                if (fallbackProperties?.isShipped != null) {
-                    dep.isShipped = fallbackProperties.isShipped
+                if (overrides?.isShipped != null) {
+                    dep.isShipped = overrides.isShipped
                 }
-                // if overrideLatest is truey, set it recursively on the dep and
+                // if overrideLatest is true, set it recursively on the dep and
                 // all its children. This makes it easier to manage since you do
                 // not have to set it on a whole set of old deps.
-                if (fallbackProperties?.overrideLatest) {
+                if (overrides?.overrideLatest) {
                     recursivelyOverrideLatestVersion(dep)
                 }
+                dep.versionFilter = overrides.versionFilter
             } else {
                 logger.warn('PROPERTY_OVERRIDES has stale dep: ' + id)
             }
@@ -530,12 +589,15 @@ class ChromiumDepGraph {
     private void recursivelyOverrideLatestVersion(DependencyDescription dep) {
         dep.overrideLatest = true
         dep.children.each { childID ->
-            DependencyDescription child = dependencies.get(childID)
-            recursivelyOverrideLatestVersion(child)
+            PropertyOverride overrides = PROPERTY_OVERRIDES.get(childID)
+            if (!overrides?.resolveVersion) {
+                DependencyDescription child = dependencies.get(childID)
+                recursivelyOverrideLatestVersion(child)
+            }
         }
     }
 
-    private void collectDependenciesInternal(ResolvedDependency dependency, boolean recurse = true) {
+    private void collectDependenciesInternal(ResolvedDependency dependency) {
         String id = makeModuleId(dependency.module)
         if (dependencies.containsKey(id)) {
             String gotVersion = dependency.module.id.version
@@ -556,40 +618,37 @@ class ChromiumDepGraph {
 
         List<ResolvedDependency> childDependenciesWithArtifacts = []
         List<String> childModules = []
-        if (recurse) {
-            dependency.children.each { childDependency ->
-                // Replace dependency which acts as a redirect (ex: org.jetbrains.kotlinx:kotlinx-coroutines-core) with
-                // dependencies it redirects to.
-                if (childDependency.moduleArtifacts) {
-                    childDependenciesWithArtifacts += childDependency
+        dependency.children.each { childDependency ->
+            // Replace dependency which acts as a redirect (ex: org.jetbrains.kotlinx:kotlinx-coroutines-core) with
+            // dependencies it redirects to.
+            if (childDependency.moduleArtifacts) {
+                childDependenciesWithArtifacts += childDependency
+            } else {
+                if (childDependency.children) {
+                    childDependenciesWithArtifacts += childDependency.children
                 } else {
-                    if (childDependency.children) {
-                        childDependenciesWithArtifacts += childDependency.children
-                    } else {
-                        String childDepId = makeModuleId(childDependency.module)
-                        if (childDepId !in ALLOWED_EMPTY_DEPS) {
-                            // BOM dependencies are deps that only specify other deps as dependencies but have no
-                            // artifact of their own. These typically have _bom at the end of their names but may also
-                            // be identified by looking at their pom.xml file. For more context see maven's doc:
-                            /* groovylint-disable-next-line LineLength */
-                            // https://maven.apache.org/guides/introduction/introduction-to-dependency-mechanism.html#bill-of-materials-bom-poms
-                            throw new IllegalStateException(
-                                    "The dependency ${childDepId} has no children and no artifacts. If this is " +
-                                    'expected (e.g. for BOM dependencies), then please add it to the ' +
-                                    '|ALLOWED_EMPTY_DEPS| set.')
-                        }
+                    String childDepId = makeModuleId(childDependency.module)
+                    if (!childDepId.endsWith("_bom") && childDepId !in ALLOWED_EMPTY_DEPS) {
+                        // BOM dependencies are deps that only specify other deps as dependencies but have no
+                        // artifact of their own. These typically have _bom at the end of their names but may also
+                        // be identified by looking at their pom.xml file. For more context see maven's doc:
+                        /* groovylint-disable-next-line LineLength */
+                        // https://maven.apache.org/guides/introduction/introduction-to-dependency-mechanism.html#bill-of-materials-bom-poms
+                        throw new IllegalStateException(
+                                "The dependency ${childDepId} has no children and no artifacts. If this is " +
+                                'expected (e.g. for BOM dependencies), then please add it to the ' +
+                                '|ALLOWED_EMPTY_DEPS| set.')
                     }
                 }
             }
+        }
 
-            childDependenciesWithArtifacts.each { childDependency ->
-                childModules += makeModuleId(childDependency.module)
-            }
+        childDependenciesWithArtifacts.each { childDependency ->
+            childModules += makeModuleId(childDependency.module)
         }
 
         if (dependency.moduleArtifacts.empty) {
             assert childModules : "${id} has no children and no artifacts."
-            assert recurse : "${id} has no artifacts so it needs to have child modules."
             dependencies.put(id, buildDepDescriptionNoArtifact(id, dependency, childModules))
             childDependenciesWithArtifacts.each {
                 childDependency -> collectDependenciesInternal(childDependency)
@@ -602,13 +661,9 @@ class ChromiumDepGraph {
             if (artifact.extension != 'jar' && artifact.extension != 'aar') {
                 throw new IllegalStateException("Type ${artifact.extension} of ${id} not supported.")
             }
-            if (recurse) {
-                dependencies.put(id, buildDepDescription(id, dependency, artifact, childModules))
-                childDependenciesWithArtifacts.each {
-                    childDependency -> collectDependenciesInternal(childDependency)
-                }
-            } else {
-                dependencies.put(id, buildDepDescription(id, dependency, artifact, []))
+            dependencies.put(id, buildDepDescription(id, dependency, artifact, childModules))
+            childDependenciesWithArtifacts.each {
+                childDependency -> collectDependenciesInternal(childDependency)
             }
         }
     }
@@ -689,7 +744,7 @@ class ChromiumDepGraph {
         ))
     }
 
-    private void customizeLicenses(DependencyDescription dep, PropertyOverride fallbackProperties) {
+    private void customizeLicenses(DependencyDescription dep, PropertyOverride overrides) {
         for (LicenseSpec license : dep.licenses) {
             if (!license.url) {
                 continue
@@ -710,17 +765,17 @@ class ChromiumDepGraph {
                 path: 'licenses/Android_SDK_License-December_9_2016.txt'))
         }
 
-        if (fallbackProperties) {
-            if (fallbackProperties.licenseName) {
+        if (overrides) {
+            if (overrides.licenseName) {
                 dep.licenses.clear()
                 LicenseSpec license = new LicenseSpec(
-                    name : fallbackProperties.licenseName,
-                    path: fallbackProperties.licensePath,
-                    url: fallbackProperties.licenseUrl,
+                    name : overrides.licenseName,
+                    path: overrides.licensePath,
+                    url: overrides.licenseUrl,
                 )
                 dep.licenses.add(license)
             } else {
-                if (fallbackProperties.licensePath || fallbackProperties.licenseUrl) {
+                if (overrides.licensePath || overrides.licenseUrl) {
                     throw new IllegalStateException('PropertyOverride must specify "licenseName" if either ' +
                                                     '"licensePath" or "licenseUrl" is specified.')
                 }
@@ -735,33 +790,59 @@ class ChromiumDepGraph {
         } else if (dep.id?.startsWith('com_google_firebase_')) {
             // Same as above for some firebase dependencies.
             dep.url = dep.url ?: 'https://firebase.google.com'
+        } else if (dep.id?.startsWith('androidx_')) {
+            // Some androidx dependencies don't set their URL, here is a good default.
+            dep.url = dep.url ?: 'https://developer.android.com/jetpack/androidx'
         }
 
-        PropertyOverride fallbackProperties = PROPERTY_OVERRIDES.get(dep.id)
-        if (fallbackProperties) {
-            logger.debug("Using fallback properties for $dep.id")
+        if (!dep.description && dep.id) {
+            // Some libraries do not come with a description. The only description we have for most
+            // of them is the name of the lib so might as well automate a fallback.
+            String lib_name = dep.id
+            String description = "pulled in via gradle."
+            // Removing common prefixes.
+            if (lib_name.startsWith('com_') || lib_name.startsWith('org_')) {
+                lib_name = lib_name.substring('com_'.length())
+            }
+            if (lib_name.startsWith('google_')) {
+                lib_name = lib_name.substring('google_'.length())
+            }
+            if (lib_name.startsWith('android_')) {
+                lib_name = lib_name.substring('android_'.length())
+            }
+            if (lib_name.startsWith('gms_play_services_')) {
+                lib_name = lib_name.substring('gms_play_services_'.length())
+                description = "library for gmscore / Google Play Services."
+            }
+            lib_name = lib_name.replace('_', ' ').capitalize()
+            dep.description = "$lib_name $description"
+        }
+
+        PropertyOverride overrides = PROPERTY_OVERRIDES.get(dep.id)
+        if (overrides) {
+            logger.debug("Using override properties for $dep.id")
             dep.with {
-                description = fallbackProperties.description ?: description
-                url = fallbackProperties.url ?: url
-                cipdSuffix = fallbackProperties.cipdSuffix ?: cipdSuffix
-                cpePrefix = fallbackProperties.cpePrefix ?: cpePrefix
+                description = overrides.description ?: description
+                url = overrides.url ?: url
+                cipdSuffix = overrides.cipdSuffix ?: cipdSuffix
+                cpePrefix = overrides.cpePrefix ?: cpePrefix
                 // Boolean properties require explicit null checks instead of only when truish.
-                if (fallbackProperties.generateTarget != null) {
-                    generateTarget = fallbackProperties.generateTarget
+                if (overrides.generateTarget != null) {
+                    generateTarget = overrides.generateTarget
                 }
-                if (fallbackProperties.exclude != null) {
-                    exclude = fallbackProperties.exclude
+                if (overrides.exclude != null) {
+                    exclude = overrides.exclude
                 }
             }
         }
 
         if (skipLicenses) {
-            dep.licenses.clear()
+            dep.licenses = []
             if (dep.id?.endsWith('license')) {
                 dep.exclude = true
             }
         } else {
-            customizeLicenses(dep, fallbackProperties)
+            customizeLicenses(dep, overrides)
         }
 
         return dep
@@ -840,17 +921,26 @@ class ChromiumDepGraph {
     }
 
     private void checkDownloadable(String url) {
+        // file: URLs happen when using fetch_all_androidx.py --local-repo.
+        if (url.startsWith('file:')) {
+            if (!new File(new URI(url).getPath()).exists()) {
+                throw new RuntimeException('File not found: ' + url)
+            }
+            return
+        }
         // Use a background thread to avoid slowing down main thread.
         // Saves about 80 seconds currently.
         new Thread().start(() -> {
-            HttpURLConnection http = new URL(url).openConnection();
-            http.setRequestMethod("HEAD");
-            if (http.getResponseCode() != 200) {
-                new RuntimeException("Resolved POM but could not resolve $url").printStackTrace();
+            HttpURLConnection http = new URL(url).openConnection()
+            http.requestMethod = 'HEAD'
+            if (http.responseCode != 200) {
+                /* groovylint-disable-next-line PrintStackTrace */
+                new RuntimeException("Resolved POM but could not resolve $url").printStackTrace()
                 // Exception is logged and ignored if thrown, so explicitly exit.
-                System.exit(1);
-              }
-            http.disconnect();
+                /* groovylint-disable-next-line SystemExit */
+                System.exit(1)
+            }
+            http.disconnect()
         });
     }
 
@@ -909,6 +999,8 @@ class ChromiumDepGraph {
         // be, instead of the latest available, the resolved version by gradle
         // in this run.
         Boolean overrideLatest
+        // When set, consider only versions that contain this string.
+        String versionFilter
 
     }
 
@@ -931,9 +1023,8 @@ class ChromiumDepGraph {
         Boolean exclude
         // Set to false to skip creation of BUILD.gn target.
         Boolean generateTarget
-        // Set to override the 3pp fetch script returing the latest version and
-        // instead forcibly return the version required by gradle.
         Boolean overrideLatest
+        String versionFilter
 
     }
 

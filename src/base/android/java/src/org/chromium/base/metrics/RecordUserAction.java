@@ -1,10 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.base.metrics;
 
 import org.chromium.base.TimeUtils;
+import org.chromium.build.annotations.NullMarked;
 
 /**
  * Java API for recording UMA actions.
@@ -16,6 +17,7 @@ import org.chromium.base.TimeUtils;
  * We use a script ({@code extract_actions.py{}) to scan the source code and extract actions. A
  * string literal (not a variable) must be passed to {@link #record(String)}.
  */
+@NullMarked
 public class RecordUserAction {
     /**
      * Similar to {@code base::RecordAction()} in C++.

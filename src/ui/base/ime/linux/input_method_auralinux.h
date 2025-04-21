@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 #define UI_BASE_IME_LINUX_INPUT_METHOD_AURALINUX_H_
 
 #include <memory>
+#include <optional>
 
 #include "base/component_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/ime/composition_text.h"
 #include "ui/base/ime/input_method_base.h"
 #include "ui/base/ime/linux/linux_input_method_context.h"
@@ -22,7 +22,8 @@ class COMPONENT_EXPORT(UI_BASE_IME_LINUX) InputMethodAuraLinux
     : public InputMethodBase,
       public LinuxInputMethodContextDelegate {
  public:
-  explicit InputMethodAuraLinux(internal::InputMethodDelegate* delegate);
+  explicit InputMethodAuraLinux(
+      ImeKeyEventDispatcher* ime_key_event_dispatcher);
   InputMethodAuraLinux(const InputMethodAuraLinux&) = delete;
   InputMethodAuraLinux& operator=(const InputMethodAuraLinux&) = delete;
   ~InputMethodAuraLinux() override;
@@ -39,15 +40,16 @@ class COMPONENT_EXPORT(UI_BASE_IME_LINUX) InputMethodAuraLinux
 
   // Overriden from ui::LinuxInputMethodContextDelegate
   void OnCommit(const std::u16string& text) override;
+  void OnConfirmCompositionText(bool keep_selection) override;
   void OnDeleteSurroundingText(size_t before, size_t after) override;
   void OnPreeditChanged(const CompositionText& composition_text) override;
   void OnPreeditEnd() override;
   void OnPreeditStart() override {}
   void OnSetPreeditRegion(const gfx::Range& range,
                           const std::vector<ImeTextSpan>& spans) override;
-  void OnClearGrammarFragments(const gfx::Range& range) override;
-  void OnAddGrammarFragment(const ui::GrammarFragment& fragment) override;
-  void OnSetAutocorrectRange(const gfx::Range& range) override;
+  void OnSetVirtualKeyboardOccludedBounds(
+      const gfx::Rect& screen_bounds) override;
+  void OnInsertImage(const GURL& src) override;
 
  protected:
   // Overridden from InputMethodBase.
@@ -57,7 +59,7 @@ class COMPONENT_EXPORT(UI_BASE_IME_LINUX) InputMethodAuraLinux
                                 TextInputClient* focused) override;
 
  private:
-  // Continues to dispatch the ET_KEY_PRESSED event to the client.
+  // Continues to dispatch the EventType::kKeyPressed event to the client.
   // This needs to be called "before" committing the result string or
   // the composition string.
   ui::EventDispatchDetails DispatchImeFilteredKeyPressEvent(
@@ -68,16 +70,17 @@ class COMPONENT_EXPORT(UI_BASE_IME_LINUX) InputMethodAuraLinux
     kTargetDestroyed,  // Target was destroyed during the commit.
   };
   CommitResult MaybeCommitResult(bool filtered, const KeyEvent& event);
-  bool MaybeUpdateComposition(bool text_committed);
+  bool UpdateCompositionIfTextSelected();
+  bool UpdateCompositionIfChanged(bool text_committed);
 
   // Shared implementation of OnPreeditChanged and OnPreeditEnd.
   // |force_update_client| is designed to dispatch key event/update
   // the client's composition string, specifically for async-mode case.
   void OnPreeditUpdate(const ui::CompositionText& composition_text,
                        bool force_update_client);
-  void ConfirmCompositionText();
+  void ConfirmCompositionText(bool keep_selection);
   bool HasInputMethodResult();
-  bool NeedInsertChar(const absl::optional<std::u16string>& result_text) const;
+  bool NeedInsertChar(const std::optional<std::u16string>& result_text) const;
   [[nodiscard]] ui::EventDispatchDetails SendFakeProcessKeyEvent(
       ui::KeyEvent* event) const;
   void UpdateContextFocusState();
@@ -88,12 +91,15 @@ class COMPONENT_EXPORT(UI_BASE_IME_LINUX) InputMethodAuraLinux
 
   // The last key event that IME is probably in process in
   // async-mode.
-  absl::optional<ui::KeyEvent> ime_filtered_key_event_;
+  std::optional<ui::KeyEvent> ime_filtered_key_event_;
 
   // Tracks last commit result during one key dispatch event.
-  absl::optional<CommitResult> last_commit_result_;
+  std::optional<CommitResult> last_commit_result_;
 
-  absl::optional<std::u16string> result_text_;
+  std::optional<std::u16string> result_text_;
+  std::optional<std::u16string> surrounding_text_;
+  gfx::Range text_range_;
+  gfx::Range selection_range_;
 
   ui::CompositionText composition_;
 

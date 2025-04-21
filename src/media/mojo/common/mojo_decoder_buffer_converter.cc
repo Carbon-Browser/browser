@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,16 @@
 #include <memory>
 #include <tuple>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/trace_event/trace_event.h"
 #include "media/base/audio_buffer.h"
 #include "media/base/cdm_context.h"
 #include "media/base/decoder_buffer.h"
+#include "media/base/media_util.h"
 #include "media/mojo/common/media_type_converters.h"
 #include "media/mojo/common/mojo_pipe_read_write_util.h"
 
@@ -59,8 +61,6 @@ uint32_t GetDefaultDecoderBufferConverterCapacity(DemuxerStream::Type type) {
     capacity = 2 * (1024 * 1024);
   } else {
     NOTREACHED() << "Unsupported type: " << type;
-    // Choose an arbitrary size.
-    capacity = 512 * 1024;
   }
 
   return capacity;
@@ -88,7 +88,7 @@ MojoDecoderBufferReader::MojoDecoderBufferReader(
     : consumer_handle_(std::move(consumer_handle)),
       pipe_watcher_(FROM_HERE,
                     mojo::SimpleWatcher::ArmingPolicy::MANUAL,
-                    base::SequencedTaskRunnerHandle::Get()),
+                    base::SequencedTaskRunner::GetCurrentDefault()),
       armed_(false),
       bytes_read_(0) {
   DVLOG(1) << __func__;
@@ -115,6 +115,66 @@ MojoDecoderBufferReader::~MojoDecoderBufferReader() {
   CancelAllPendingReadCBs();
   if (flush_cb_)
     std::move(flush_cb_).Run();
+}
+
+void MojoDecoderBufferReader::ReadDecoderBuffer(
+    mojom::DecoderBufferPtr mojo_buffer,
+    ReadCB read_cb) {
+  DVLOG(3) << __func__;
+  DCHECK(!flush_cb_);
+
+  if (!consumer_handle_.is_valid()) {
+    DCHECK(pending_read_cbs_.empty());
+    CancelReadCB(std::move(read_cb));
+    return;
+  }
+
+  scoped_refptr<DecoderBuffer> media_buffer(
+      mojo_buffer.To<scoped_refptr<DecoderBuffer>>());
+  DCHECK(media_buffer);
+
+  if (MediaTraceIsEnabled() && !media_buffer->end_of_stream()) {
+    TRACE_EVENT_NESTABLE_ASYNC_BEGIN0(
+        "media,gpu", "MojoDecoderBufferReader::Read",
+        media_buffer->timestamp().InMicroseconds());
+    read_cb = base::BindOnce(
+        [](ReadCB read_cb, scoped_refptr<DecoderBuffer> buffer) {
+          TRACE_EVENT_NESTABLE_ASYNC_END2(
+              "media,gpu", "MojoDecoderBufferReader::Read",
+              buffer->timestamp().InMicroseconds(), "timestamp",
+              buffer->timestamp().InMicroseconds(), "read_bytes",
+              buffer->size());
+          std::move(read_cb).Run(std::move(buffer));
+        },
+        std::move(read_cb));
+  }
+  // We don't want reads to complete out of order, so we queue them even if they
+  // are zero-sized.
+  pending_read_cbs_.push_back(std::move(read_cb));
+  pending_buffers_.push_back(std::move(media_buffer));
+
+  // Do nothing if a read is already scheduled.
+  if (armed_)
+    return;
+
+  // To reduce latency, always process pending reads immediately.
+  ProcessPendingReads();
+}
+
+void MojoDecoderBufferReader::Flush(base::OnceClosure flush_cb) {
+  DVLOG(2) << __func__;
+  DCHECK(!flush_cb_);
+
+  if (pending_read_cbs_.empty()) {
+    std::move(flush_cb).Run();
+    return;
+  }
+
+  flush_cb_ = std::move(flush_cb);
+}
+
+bool MojoDecoderBufferReader::HasPendingReads() const {
+  return !pending_read_cbs_.empty();
 }
 
 void MojoDecoderBufferReader::CancelReadCB(ReadCB read_cb) {
@@ -144,13 +204,14 @@ void MojoDecoderBufferReader::CompleteCurrentRead() {
   scoped_refptr<DecoderBuffer> buffer = std::move(pending_buffers_.front());
   pending_buffers_.pop_front();
 
-  DCHECK(buffer->end_of_stream() || buffer->data_size() == bytes_read_);
+  DCHECK(buffer->end_of_stream() || buffer->size() == bytes_read_);
   bytes_read_ = 0;
 
   std::move(read_cb).Run(std::move(buffer));
 
-  if (pending_read_cbs_.empty() && flush_cb_)
+  if (pending_read_cbs_.empty() && flush_cb_) {
     std::move(flush_cb_).Run();
+  }
 }
 
 void MojoDecoderBufferReader::ScheduleNextRead() {
@@ -160,52 +221,6 @@ void MojoDecoderBufferReader::ScheduleNextRead() {
 
   armed_ = true;
   pipe_watcher_.ArmOrNotify();
-}
-
-// TODO(xhwang): Move this up to match declaration order.
-void MojoDecoderBufferReader::ReadDecoderBuffer(
-    mojom::DecoderBufferPtr mojo_buffer,
-    ReadCB read_cb) {
-  DVLOG(3) << __func__;
-  DCHECK(!flush_cb_);
-
-  if (!consumer_handle_.is_valid()) {
-    DCHECK(pending_read_cbs_.empty());
-    CancelReadCB(std::move(read_cb));
-    return;
-  }
-
-  scoped_refptr<DecoderBuffer> media_buffer(
-      mojo_buffer.To<scoped_refptr<DecoderBuffer>>());
-  DCHECK(media_buffer);
-
-  // We don't want reads to complete out of order, so we queue them even if they
-  // are zero-sized.
-  pending_read_cbs_.push_back(std::move(read_cb));
-  pending_buffers_.push_back(std::move(media_buffer));
-
-  // Do nothing if a read is already scheduled.
-  if (armed_)
-    return;
-
-  // To reduce latency, always process pending reads immediately.
-  ProcessPendingReads();
-}
-
-void MojoDecoderBufferReader::Flush(base::OnceClosure flush_cb) {
-  DVLOG(2) << __func__;
-  DCHECK(!flush_cb_);
-
-  if (pending_read_cbs_.empty()) {
-    std::move(flush_cb).Run();
-    return;
-  }
-
-  flush_cb_ = std::move(flush_cb);
-}
-
-bool MojoDecoderBufferReader::HasPendingReads() const {
-  return !pending_read_cbs_.empty();
 }
 
 void MojoDecoderBufferReader::OnPipeReadable(
@@ -236,9 +251,10 @@ void MojoDecoderBufferReader::ProcessPendingReads() {
   while (!pending_buffers_.empty()) {
     DecoderBuffer* buffer = pending_buffers_.front().get();
 
-    uint32_t buffer_size = 0u;
-    if (!pending_buffers_.front()->end_of_stream())
-      buffer_size = base::checked_cast<uint32_t>(buffer->data_size());
+    size_t buffer_size = 0u;
+    if (!pending_buffers_.front()->end_of_stream()) {
+      buffer_size = buffer->size();
+    }
 
     // Immediately complete empty reads.
     // A non-EOS buffer can have zero size. See http://crbug.com/663438
@@ -249,14 +265,12 @@ void MojoDecoderBufferReader::ProcessPendingReads() {
       continue;
     }
 
-    // We may be starting to read a new buffer (|bytes_read_| == 0), or
-    // recovering from a previous partial read (|bytes_read_| > 0).
-    DCHECK_GT(buffer_size, bytes_read_);
-    uint32_t num_bytes = buffer_size - bytes_read_;
-
-    MojoResult result =
-        consumer_handle_->ReadData(buffer->writable_data() + bytes_read_,
-                                   &num_bytes, MOJO_WRITE_DATA_FLAG_NONE);
+    size_t actually_read_bytes = 0;
+    MojoResult result = consumer_handle_->ReadData(
+        MOJO_WRITE_DATA_FLAG_NONE,
+        // We may be starting to read a new buffer (|bytes_read_| == 0), or
+        // recovering from a previous partial read (|bytes_read_| > 0).
+        buffer->writable_span().subspan(bytes_read_), actually_read_bytes);
 
     if (IsPipeReadWriteError(result)) {
       OnPipeError(result);
@@ -269,14 +283,15 @@ void MojoDecoderBufferReader::ProcessPendingReads() {
     }
 
     DCHECK_EQ(result, MOJO_RESULT_OK);
-    DVLOG(4) << __func__ << ": " << num_bytes << " bytes read.";
-    DCHECK_GT(num_bytes, 0u);
-    bytes_read_ += num_bytes;
+    DVLOG(4) << __func__ << ": " << actually_read_bytes << " bytes read.";
+    DCHECK_GT(actually_read_bytes, 0u);
+    bytes_read_ += actually_read_bytes;
 
     // TODO(sandersd): Make sure there are no possible re-entrancy issues
     // here.
-    if (bytes_read_ == buffer_size)
+    if (bytes_read_ == buffer_size) {
       CompleteCurrentRead();
+    }
 
     // Since we can still read, try to read more.
   }
@@ -290,7 +305,7 @@ void MojoDecoderBufferReader::OnPipeError(MojoResult result) {
 
   if (!pending_buffers_.empty()) {
     DVLOG(1) << __func__ << ": reading from data pipe failed. result=" << result
-             << ", buffer size=" << pending_buffers_.front()->data_size()
+             << ", buffer size=" << pending_buffers_.front()->size()
              << ", num_bytes(read)=" << bytes_read_;
     bytes_read_ = 0;
     pending_buffers_.clear();
@@ -320,7 +335,7 @@ MojoDecoderBufferWriter::MojoDecoderBufferWriter(
     : producer_handle_(std::move(producer_handle)),
       pipe_watcher_(FROM_HERE,
                     mojo::SimpleWatcher::ArmingPolicy::MANUAL,
-                    base::SequencedTaskRunnerHandle::Get()),
+                    base::SequencedTaskRunner::GetCurrentDefault()),
       armed_(false),
       bytes_written_(0) {
   DVLOG(1) << __func__;
@@ -371,9 +386,13 @@ mojom::DecoderBufferPtr MojoDecoderBufferWriter::WriteDecoderBuffer(
       mojom::DecoderBuffer::From(*media_buffer);
 
   // A non-EOS buffer can have zero size. See http://crbug.com/663438
-  if (media_buffer->end_of_stream() || media_buffer->data_size() == 0)
+  if (media_buffer->end_of_stream() || media_buffer->empty()) {
     return mojo_buffer;
+  }
 
+  TRACE_EVENT_NESTABLE_ASYNC_BEGIN0("media,gpu",
+                                    "MojoDecoderBufferWriter::Write",
+                                    media_buffer->timestamp().InMicroseconds());
   // Queue writing the buffer's data into our DataPipe.
   pending_buffers_.push_back(std::move(media_buffer));
 
@@ -413,16 +432,17 @@ void MojoDecoderBufferWriter::ProcessPendingWrites() {
   while (!pending_buffers_.empty()) {
     DecoderBuffer* buffer = pending_buffers_.front().get();
 
-    uint32_t buffer_size = base::checked_cast<uint32_t>(buffer->data_size());
-    DCHECK_GT(buffer_size, 0u) << "Unexpected EOS or empty buffer";
+    base::span<const uint8_t> bytes_to_write(*buffer);
+    DCHECK_GT(bytes_to_write.size(), 0u) << "Unexpected EOS or empty buffer";
 
     // We may be starting to write a new buffer (|bytes_written_| == 0), or
     // recovering from a previous partial write (|bytes_written_| > 0).
-    uint32_t num_bytes = buffer_size - bytes_written_;
-    DCHECK_GT(num_bytes, 0u);
+    bytes_to_write = bytes_to_write.subspan(bytes_written_);
+    DCHECK_GT(bytes_to_write.size(), 0u);
 
+    size_t actually_written_bytes = 0;
     MojoResult result = producer_handle_->WriteData(
-        buffer->data() + bytes_written_, &num_bytes, MOJO_WRITE_DATA_FLAG_NONE);
+        bytes_to_write, MOJO_WRITE_DATA_FLAG_NONE, actually_written_bytes);
 
     if (IsPipeReadWriteError(result)) {
       OnPipeError(result);
@@ -435,10 +455,14 @@ void MojoDecoderBufferWriter::ProcessPendingWrites() {
     }
 
     DCHECK_EQ(MOJO_RESULT_OK, result);
-    DVLOG(4) << __func__ << ": " << num_bytes << " bytes written.";
-    DCHECK_GT(num_bytes, 0u);
-    bytes_written_ += num_bytes;
-    if (bytes_written_ == buffer_size) {
+    DVLOG(4) << __func__ << ": " << actually_written_bytes << " bytes written.";
+    DCHECK_GT(actually_written_bytes, 0u);
+    bytes_written_ += actually_written_bytes;
+    if (actually_written_bytes == bytes_to_write.size()) {
+      TRACE_EVENT_NESTABLE_ASYNC_END2(
+          "media,gpu", "MojoDecoderBufferWriter::Write",
+          buffer->timestamp().InMicroseconds(), "timestamp",
+          buffer->timestamp().InMicroseconds(), "write_bytes", bytes_written_);
       pending_buffers_.pop_front();
       bytes_written_ = 0;
     }
@@ -455,8 +479,17 @@ void MojoDecoderBufferWriter::OnPipeError(MojoResult result) {
 
   if (!pending_buffers_.empty()) {
     DVLOG(1) << __func__ << ": writing to data pipe failed. result=" << result
-             << ", buffer size=" << pending_buffers_.front()->data_size()
+             << ", buffer size=" << pending_buffers_.front()->size()
              << ", num_bytes(written)=" << bytes_written_;
+    if (MediaTraceIsEnabled()) {
+      for (const auto& buffer : pending_buffers_) {
+        TRACE_EVENT_NESTABLE_ASYNC_END2(
+            "media,gpu", "MojoDecoderBufferWriter::Write",
+            buffer->timestamp().InMicroseconds(), "timestamp",
+            buffer->timestamp().InMicroseconds(), "write_bytes",
+            bytes_written_);
+      }
+    }
     pending_buffers_.clear();
     bytes_written_ = 0;
   }

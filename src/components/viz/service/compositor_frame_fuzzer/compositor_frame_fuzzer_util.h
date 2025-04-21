@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,17 +15,19 @@
 namespace viz {
 
 struct FuzzedBitmap {
-  FuzzedBitmap(const SharedBitmapId& id,
-               const gfx::Size& size,
-               base::ReadOnlySharedMemoryRegion shared_region);
+  FuzzedBitmap(const gfx::Size& size,
+               base::WritableSharedMemoryMapping mapping,
+               scoped_refptr<gpu::ClientSharedImage> shared_image,
+               gpu::SyncToken sync_token);
   ~FuzzedBitmap();
 
   FuzzedBitmap(FuzzedBitmap&& other) noexcept;
   FuzzedBitmap& operator=(FuzzedBitmap&& other) = default;
 
-  SharedBitmapId id;
   gfx::Size size;
-  base::ReadOnlySharedMemoryRegion shared_region;
+  base::WritableSharedMemoryMapping mapping;
+  scoped_refptr<gpu::ClientSharedImage> shared_image;
+  gpu::SyncToken sync_token;
 };
 
 struct FuzzedData {

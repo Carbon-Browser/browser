@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,8 +26,7 @@ class MockAnimationTimeline : public AnimationTimeline {
   MOCK_METHOD0(Phase, TimelinePhase());
   MOCK_CONST_METHOD0(IsActive, bool());
   MOCK_METHOD0(ZeroTime, AnimationTimeDelta());
-  MOCK_METHOD0(InitialStartTimeForAnimations,
-               absl::optional<base::TimeDelta>());
+  MOCK_METHOD0(InitialStartTimeForAnimations, std::optional<base::TimeDelta>());
   MOCK_METHOD0(NeedsAnimationTimingUpdate, bool());
   MOCK_CONST_METHOD0(HasOutdatedAnimation, bool());
   MOCK_CONST_METHOD0(HasAnimations, bool());

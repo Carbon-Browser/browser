@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -122,7 +122,7 @@ TEST(NetworkQualityEstimatorParamsTest, GetForcedECTCellularOnly) {
        ++i) {
     NetworkChangeNotifier::ConnectionType connection_type =
         static_cast<NetworkChangeNotifier::ConnectionType>(i);
-    absl::optional<EffectiveConnectionType> ect =
+    std::optional<EffectiveConnectionType> ect =
         params.GetForcedEffectiveConnectionType(connection_type);
 
     if (net::NetworkChangeNotifier::IsConnectionCellular(connection_type)) {
@@ -131,7 +131,7 @@ TEST(NetworkQualityEstimatorParamsTest, GetForcedECTCellularOnly) {
     } else {
       // Test for non-cellular connection types. Make sure that there is no
       // forced ect.
-      EXPECT_EQ(absl::nullopt, ect);
+      EXPECT_EQ(std::nullopt, ect);
     }
   }
 }

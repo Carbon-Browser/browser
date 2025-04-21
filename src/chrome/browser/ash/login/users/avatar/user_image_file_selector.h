@@ -1,11 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_LOGIN_USERS_AVATAR_USER_IMAGE_FILE_SELECTOR_H_
 #define CHROME_BROWSER_ASH_LOGIN_USERS_AVATAR_USER_IMAGE_FILE_SELECTOR_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "content/public/browser/web_ui.h"
 #include "ui/gfx/native_widget_types.h"
@@ -34,11 +34,8 @@ class UserImageFileSelector : public ui::SelectFileDialog::Listener {
   gfx::NativeWindow GetBrowserWindow();
 
   // ui::SelectFileDialog::Listener implementation.
-  void FileSelected(const base::FilePath& path,
-                    int index,
-                    void* params) override;
-
-  void FileSelectionCanceled(void* params) override;
+  void FileSelected(const ui::SelectedFileInfo& file, int index) override;
+  void FileSelectionCanceled() override;
 
   raw_ptr<content::WebUI> web_ui_;
 

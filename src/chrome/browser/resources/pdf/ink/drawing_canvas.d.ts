@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,12 @@ declare namespace drawings {
   /**
    * A simple rectangle type.  The coordinate system depends on context.
    */
-  export type Box = {left: number, top: number, right: number, bottom: number};
+  export interface Box {
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+  }
 
   /**
    * A PointerEvent-like record type that can be used to pass PointerEvents or
@@ -26,17 +31,17 @@ declare namespace drawings {
    * Ink depends on the timestamps of events and offsetX/Y, none of which can be
    * set in the synthetic PointerEvent constructor.
    */
-  export type InputEvent = {
-    type: string,
-    timeStamp: number,
-    pointerType: string,
-    pointerId: number,
-    offsetX: number,
-    offsetY: number,
-    pressure: number,
-    button: number,
-    buttons: number,
-  };
+  export interface InputEvent {
+    type: string;
+    timeStamp: number;
+    pointerType: string;
+    pointerId: number;
+    offsetX: number;
+    offsetY: number;
+    pressure: number;
+    button: number;
+    buttons: number;
+  }
 
   /**
    * Tool types supported in the Ink engine.
@@ -52,13 +57,16 @@ declare namespace drawings {
     ERASER = 'eraser',
   }
 
-  export type UndoState = {canUndo: boolean, canRedo: boolean};
+  export interface UndoState {
+    canUndo: boolean;
+    canRedo: boolean;
+  }
 
-  type ToolParams = {
-    tool: ToolType | string,
-    color?: string,
-    size?: number,
-  };
+  interface ToolParams {
+    tool: ToolType|string;
+    color?: string;
+    size?: number;
+  }
 
   /**
    * The main interface to Ink.
@@ -85,7 +93,7 @@ declare namespace drawings {
      * Returns a copy of the currently-edited PDF with the Ink annotations
      * serialized into it.
      */
-    getPDF(): Promise<Uint8Array>;
+    getPDF(): Promise<Uint8Array<ArrayBuffer>>;
 
     /**
      * Returns the currently-edited PDF with the Ink annotations serialized into
@@ -93,7 +101,7 @@ declare namespace drawings {
      * engine should not be issued any further strokes or functions calls until
      * setPDF is called again.
      */
-    getPDFDestructive(): Promise<Uint8Array>;
+    getPDFDestructive(): Promise<Uint8Array<ArrayBuffer>>;
 
     /**
      * Set the camera to the provided box in PDF coordinates.

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,14 @@
 
 #include <map>
 
-#include "ash/constants/app_types.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/public/cpp/window_properties.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "chrome/test/base/testing_profile.h"
+#include "chromeos/ui/base/app_types.h"
+#include "chromeos/ui/base/window_properties.h"
 #include "components/exo/wm_helper.h"
-#include "components/exo/wm_helper_chromeos.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/aura/client/aura_constants.h"
@@ -23,7 +24,7 @@ namespace arc {
 
 namespace {
 
-class FakeWMHelper : public exo::WMHelperChromeOS {
+class FakeWMHelper : public exo::WMHelper {
  public:
   FakeWMHelper() = default;
   ~FakeWMHelper() override = default;
@@ -39,7 +40,7 @@ class FakeWMHelper : public exo::WMHelperChromeOS {
   }
 
  private:
-  std::map<int, aura::Window*> map_;
+  std::map<int, raw_ptr<aura::Window, CtnExperimental>> map_;
 };
 
 }  // namespace
@@ -66,10 +67,9 @@ class ArcPipWindowThrottleObserverTest : public testing::Test {
         &dummy_delegate_, 1, gfx::Rect(), nullptr));
     chrome_window_.reset(aura::test::CreateTestWindowWithDelegate(
         &dummy_delegate_, 2, gfx::Rect(), nullptr));
-    arc_window_->SetProperty(aura::client::kAppType,
-                             static_cast<int>(ash::AppType::ARC_APP));
-    chrome_window_->SetProperty(aura::client::kAppType,
-                                static_cast<int>(ash::AppType::BROWSER));
+    arc_window_->SetProperty(chromeos::kAppTypeKey, chromeos::AppType::ARC_APP);
+    chrome_window_->SetProperty(chromeos::kAppTypeKey,
+                                chromeos::AppType::BROWSER);
   }
 
   void TearDown() override { wm_helper_.reset(); }

@@ -1,6 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <atk/atk.h>
 #include <map>
@@ -9,10 +14,15 @@
 #include <string>
 #include <utility>
 
+#if defined(USE_GIO)
+#include <gio/gio.h>
+#endif
+
 #include "base/environment.h"
 #include "base/memory/singleton.h"
 #include "base/no_destructor.h"
 #include "ui/accessibility/platform/atk_util_auralinux.h"
+#include "ui/accessibility/platform/ax_platform.h"
 #include "ui/accessibility/platform/ax_platform_node.h"
 #include "ui/accessibility/platform/ax_platform_node_auralinux.h"
 
@@ -110,13 +120,64 @@ AtkUtilAuraLinux* AtkUtilAuraLinux::GetInstance() {
 }
 
 bool AtkUtilAuraLinux::ShouldEnableAccessibility() {
+  // Check enabled/disabled accessibility based on env variable
   std::unique_ptr<base::Environment> env(base::Environment::Create());
   for (const auto* variable : kAccessibilityEnabledVariables) {
     std::string enable_accessibility;
     env->GetVar(variable, &enable_accessibility);
     if (enable_accessibility == "1")
       return true;
+    if (enable_accessibility == "0") {
+      return false;
+    }
   }
+
+#if defined(USE_GIO)
+  // Do not run additional checks when Chrome runs in headless mode, which means
+  // we are in a test environment
+  std::string chrome_headless;
+  env->GetVar("CHROME_HEADLESS", &chrome_headless);
+  if (chrome_headless == "1") {
+    return false;
+  }
+
+  // Check enabled accessibility based on a11y DBus interface
+  GDBusConnection* connection =
+      g_bus_get_sync(G_BUS_TYPE_SESSION, nullptr, nullptr);
+
+  if (connection) {
+    GVariant* result = g_dbus_connection_call_sync(
+        connection, "org.a11y.Bus", "/org/a11y/bus",
+        "org.freedesktop.DBus.Properties", "Get",
+        g_variant_new("(ss)", "org.a11y.Status", "IsEnabled"), nullptr,
+        G_DBUS_CALL_FLAGS_NONE, -1, nullptr, nullptr);
+    g_object_unref(connection);
+
+    if (result) {
+      GVariant* property;
+      g_variant_get(result, "(v)", &property);
+      const bool accessibilityEnabled = g_variant_get_boolean(property);
+      g_variant_unref(result);
+      g_variant_unref(property);
+      return accessibilityEnabled;
+    }
+  }
+
+  // Check enabled accessibility based on GSettings
+  GSettingsSchemaSource* source = g_settings_schema_source_get_default();
+  GSettingsSchema* gschema = nullptr;
+
+  gschema = g_settings_schema_source_lookup(
+      source, "org.gnome.desktop.interface", TRUE);
+  if (gschema) {
+    GSettings* settings = g_settings_new("org.gnome.desktop.interface");
+    const bool accessibilityEnabled =
+        g_settings_get_boolean(settings, "toolkit-accessibility");
+    g_settings_schema_unref(gschema);
+    g_object_unref(settings);
+    return accessibilityEnabled;
+  }
+#endif
 
   return false;
 }
@@ -149,9 +210,9 @@ DiscardAtkKeyEvent AtkUtilAuraLinux::HandleAtkKeyEvent(
     AtkKeyEventStruct* key_event) {
   DCHECK(key_event);
 
-  if (!ui::AXPlatformNode::GetAccessibilityMode().has_mode(
-          ui::AXMode::kNativeAPIs))
+  if (!AXPlatform::GetInstance().GetMode().has_mode(AXMode::kNativeAPIs)) {
     return DiscardAtkKeyEvent::Retain;
+  }
 
   GetInstance()->InitializeAsync();
 

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/download/download_core_service_factory.h"
 #include "chrome/browser/download/download_core_service_impl.h"
@@ -33,7 +33,7 @@ class TestDownloadCoreService : public DownloadCoreServiceImpl {
   TestDownloadCoreService(const TestDownloadCoreService&) = delete;
   TestDownloadCoreService& operator=(const TestDownloadCoreService&) = delete;
 
-  ~TestDownloadCoreService() override {}
+  ~TestDownloadCoreService() override = default;
 
   void Shutdown() override {
     DownloadCoreServiceImpl::Shutdown();
@@ -67,12 +67,12 @@ class TestDownloadCoreService : public DownloadCoreServiceImpl {
 
 class DownloadsApiUnitTest : public ExtensionApiUnittest {
  public:
-  DownloadsApiUnitTest() {}
+  DownloadsApiUnitTest() = default;
 
   DownloadsApiUnitTest(const DownloadsApiUnitTest&) = delete;
   DownloadsApiUnitTest& operator=(const DownloadsApiUnitTest&) = delete;
 
-  ~DownloadsApiUnitTest() override {}
+  ~DownloadsApiUnitTest() override = default;
   void SetUp() override {
     ExtensionApiUnittest::SetUp();
 
@@ -116,7 +116,8 @@ class DownloadsApiUnitTest : public ExtensionApiUnittest {
       content::BrowserContext* browser_context);
 
   std::unique_ptr<MockDownloadManager> manager_;
-  content::DownloadManager::Observer* download_history_manager_observer_;
+  raw_ptr<content::DownloadManager::Observer>
+      download_history_manager_observer_;
 };
 
 // static

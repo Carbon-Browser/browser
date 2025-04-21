@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include "ash/shell.h"
 #include "ash/wm/splitview/split_view_controller.h"
+#include "ash/wm/splitview/split_view_types.h"
 
 namespace ash {
 
@@ -17,38 +18,25 @@ SplitViewController* split_view_controller() {
 
 }  // namespace
 
-SplitViewTestApi::SplitViewTestApi() = default;
+SplitViewTestApi::SplitViewTestApi() : controller_(split_view_controller()) {}
 
 SplitViewTestApi::~SplitViewTestApi() = default;
 
-void SplitViewTestApi::SnapWindow(
-    aura::Window* window,
-    SplitViewTestApi::SnapPosition snap_position) {
-  SplitViewController::SnapPosition position;
-  switch (snap_position) {
-    case SnapPosition::NONE:
-      position = SplitViewController::NONE;
-      break;
-    case SnapPosition::LEFT:
-      position = SplitViewController::LEFT;
-      break;
-    case SnapPosition::RIGHT:
-      position = SplitViewController::RIGHT;
-      break;
-  }
-  split_view_controller()->SnapWindow(window, position);
+void SplitViewTestApi::SnapWindow(aura::Window* window,
+                                  SnapPosition snap_position) {
+  controller_->SnapWindow(window, snap_position);
 }
 
 void SplitViewTestApi::SwapWindows() {
-  split_view_controller()->SwapWindows();
+  controller_->SwapWindows();
 }
 
-aura::Window* SplitViewTestApi::GetLeftWindow() const {
-  return split_view_controller()->left_window();
+aura::Window* SplitViewTestApi::GetPrimaryWindow() const {
+  return controller_->primary_window();
 }
 
-aura::Window* SplitViewTestApi::GetRightWindow() const {
-  return split_view_controller()->right_window();
+aura::Window* SplitViewTestApi::GetSecondaryWindow() const {
+  return controller_->secondary_window();
 }
 
 }  // namespace ash

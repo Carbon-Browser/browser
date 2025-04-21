@@ -1,11 +1,29 @@
 <style include="cr-shared-style print-management-shared print-management-fonts">
-  html {
-    background-color: var(--cros-bg-color);
+  :host-context(body.jelly-enabled) .column-headers {
+    font: var(--cros-button-2-font);
+  }
+
+  :host-context(body.jelly-enabled) .column-headers {
+    font: var(--cros-button-2-font);
+  }
+
+  :host-context(body.jelly-enabled) #clearAllButton {
+    font: var(--cros-button-2-font);
+  }
+
+  :host-context(body.jelly-enabled) #ongoingEmptyState {
+    font: var(--cros-body-2-font);
+  }
+
+  :host-context(body.jelly-enabled) #printJobTitle {
+    font: var(--cros-display-6-font);
   }
 
   .column-headers {
-    @apply --print-management-header-font;
     color: var(--print-management-header-text-color);
+    font-family: var(--print-management-header-font-family);
+    font-size: var(--print-management-header-font-size);
+    font-weight: var(--print-management-header-font-weight);
     line-height: 20px;
     min-height: var(--cr-section-min-height);
   }
@@ -23,14 +41,17 @@
   }
 
   #clearAllButton {
-    @apply --print-management-button-font;
+    font-family: var(--print-management-button-font-family);
+    font-size: var(--print-management-button-font-size);
+    font-weight: var(--print-management-button-font-weight);
   }
 
   #clearAllContainer {
+    column-gap: 8px;
     display: flex;
   }
 
-  #deleteIcon {
+  :host-context(body:not(.jelly-enabled)) #deleteIcon {
     --iron-icon-height: 20px;
     --iron-icon-width: 20px;
     margin-inline-end: 4px;
@@ -61,8 +82,10 @@
   }
 
   #printJobTitle {
-    @apply --print-management-title-font;
     color: var(--print-management-title-text-color);
+    font-family: var(--print-management-title-font-family);
+    font-size: var(--print-management-title-font-size);
+    font-weight: var(--print-management-title-font-weight);
     line-height: 28px;
     margin: 0;
   }
@@ -82,8 +105,14 @@
   h1 {
     font-size: 200%;
     font-weight: 500;
-    margin-bottom: 0px;
-    margin-top: 0px;
+    margin-bottom: 0;
+    margin-top: 0;
+  }
+
+  printer-setup-info {
+    align-items: center;
+    flex: 1 1 auto;
+    height: 100%;
   }
 </style>
 
@@ -91,85 +120,101 @@
   <div id="headerContainer">
     <h1 id="printJobTitle">[[i18n('printJobTitle')]]</h1>
     <div id="clearAllContainer">
-      <template is="dom-if" if="[[!deletePrintJobHistoryAllowedByPolicy_]]">
+      <template is="dom-if" if="[[!deletePrintJobHistoryAllowedByPolicy]]">
         <cr-policy-indicator id="policyIcon" indicator-type="userPolicy">
         </cr-policy-indicator>
       </template>
-      <cr-button id="clearAllButton" on-click="onClearHistoryClicked_"
-          disabled="[[shouldDisableClearAllButton_]]"
-          hidden="[[!showClearAllButton_]]">
-        <iron-icon id="deleteIcon" icon="print-management:delete"></iron-icon>
+      <cr-button id="clearAllButton" on-click="onClearHistoryClicked"
+          disabled="[[shouldDisableClearAllButton]]"
+          hidden="[[!showClearAllButton]]">
+        <iron-icon id="deleteIcon" icon="print-management:delete"
+            slot="prefix-icon">
+        </iron-icon>
         [[i18n('clearAllHistoryLabel')]]
+      </cr-button>
+      <cr-button id="managePrinters" hidden="[[!shouldShowManagePrinterButton(
+          ongoingPrintJobs.length, printJobs.length)]]"
+          on-click="onManagePrintersClicked">
+        <iron-icon id="openInNewIcon" icon="cr:open-in-new" slot="suffix-icon">
+        </iron-icon>
+        [[i18n('managePrintersButtonLabel')]]
       </cr-button>
     </div>
   </div>
 
-  <template is="dom-if" if="[[showClearAllDialog_]]" restamp>
+  <template is="dom-if" if="[[showClearAllDialog]]" restamp>
     <print-job-clear-history-dialog id="clearHistoryDialog"
-        on-close="onClearHistoryDialogClosed_">
+        on-close="onClearHistoryDialogClosed">
     </print-job-clear-history-dialog>
   </template>
 
-  <div class="column-headers flex-center"
-      aria-labeledby="fileNameColumn printerNameColumn dateColumn statusColumn">
-    <div id="fileNameColumn" class="file-name-header-column overflow-ellipsis"
-        aria-hidden="true">
-      [[i18n('fileNameColumn')]]
-    </div>
-    <div id="printerNameColumn"
-        class="printer-name-column overflow-ellipsis padded-left"
-        aria-hidden="true">
-      [[i18n('printerNameColumn')]]
-    </div>
-    <div id="dateColumn" class="date-column overflow-ellipsis padded-left"
-        aria-hidden="true">
-      [[i18n('dateColumn')]]
-    </div>
-    <div id="statusColumn" class="status-column overflow-ellipsis padded-left"
-        aria-hidden="true">
-      [[i18n('statusColumn')]]
-    </div>
-  </div>
-
-  <template is="dom-if" if="[[ongoingPrintJobs_.length]]" restamp>
-    <iron-list id="ongoingList" items="[[ongoingPrintJobs_]]" role="grid">
-      <template>
-        <print-job-entry job-entry="[[item]]" tabindex$="[[tabIndex]]"
-            last-focused="{{lastFocused_}}" list-blurred="{{listBlurred_}}"
-            focus-row-index="[[index]]" iron-list-tab-index="[[tabIndex]]">
-        </print-job-entry>
-      </template>
-    </iron-list>
-  </template>
-
-  <div id="ongoingEmptyState" hidden="[[ongoingPrintJobs_.length]]">
-    [[i18n('noPrintJobInProgress')]]
-  </div>
-
-  <template is="dom-if" if="[[printJobs_.length]]" restamp>
-    <div id="historyHeaderContainer" class="column-headers flex-center">
-      <div aria-label$="[[printJobHistoryExpirationPeriod_]]">
-        [[i18n('historyHeader')]]
-      </div>
-      <iron-icon id="infoIcon" icon="cr:info-outline" aria-hidden="true"
-          hidden="[[isPolicyControlled_]]">
-      </iron-icon>
-      <iron-icon id="enterpriseIcon" icon="print-management:enterprise-icon"
-          aria-hidden="true" hidden="[[!isPolicyControlled_]]">
-      </iron-icon>
-      <paper-tooltip for="[[activeHistoryInfoIcon_]]" fit-to-visible-bounds
+  <div class="data-container">
+    <div class="column-headers flex-center"
+        aria-labelledby="fileNameColumn printerNameColumn dateColumn statusColumn">
+      <div id="fileNameColumn" class="file-name-header-column overflow-ellipsis"
           aria-hidden="true">
-        [[printJobHistoryExpirationPeriod_]]
-      </paper-tooltip>
+        [[i18n('fileNameColumn')]]
+      </div>
+      <div id="printerNameColumn"
+          class="printer-name-column overflow-ellipsis padded-left"
+          aria-hidden="true">
+        [[i18n('printerNameColumn')]]
+      </div>
+      <div id="dateColumn" class="date-column overflow-ellipsis padded-left"
+          aria-hidden="true">
+        [[i18n('dateColumn')]]
+      </div>
+      <div id="statusColumn" class="status-column overflow-ellipsis padded-left"
+          aria-hidden="true">
+        [[i18n('statusColumn')]]
+      </div>
     </div>
 
-    <iron-list id="entryList" items="[[printJobs_]]" role="grid">
-      <template>
-        <print-job-entry job-entry="[[item]]" tabindex$="[[tabIndex]]"
-            last-focused="{{lastFocused_}}" list-blurred="{{listBlurred_}}"
-            focus-row-index="[[index]]" iron-list-tab-index="[[tabIndex]]">
-        </print-job-entry>
-      </template>
-    </iron-list>
-  </template>
+    <template is="dom-if" if="[[ongoingPrintJobs.length]]" restamp>
+      <iron-list id="ongoingList" items="[[ongoingPrintJobs]]" role="grid">
+        <template>
+          <print-job-entry job-entry="[[item]]" tabindex$="[[tabIndex]]"
+              last-focused="{{lastFocused}}" list-blurred="{{listBlurred}}"
+              focus-row-index="[[index]]" iron-list-tab-index="[[tabIndex]]">
+          </print-job-entry>
+        </template>
+      </iron-list>
+    </template>
+
+    <div id="ongoingEmptyState" hidden="[[!shouldShowOngoingEmptyState(
+          ongoingPrintJobs.length, printJobs.length)]]">
+      [[i18n('noPrintJobInProgress')]]
+    </div>
+
+    <printer-setup-info hidden="[[!shouldShowSetupAssistance(
+        printJobsLoaded, ongoingPrintJobs.length, printJobs.length)]]">
+    </printer-setup-info>
+
+    <template is="dom-if" if="[[printJobs.length]]" restamp>
+      <div id="historyHeaderContainer" class="column-headers flex-center">
+        <div aria-label$="[[printJobHistoryExpirationPeriod]]">
+          [[i18n('historyHeader')]]
+        </div>
+        <iron-icon id="infoIcon" icon="cr:info-outline" aria-hidden="true"
+            hidden="[[isPolicyControlled]]">
+        </iron-icon>
+        <iron-icon id="enterpriseIcon" icon="print-management:enterprise-icon"
+            aria-hidden="true" hidden="[[!isPolicyControlled]]">
+        </iron-icon>
+        <paper-tooltip for="[[activeHistoryInfoIcon]]" fit-to-visible-bounds
+            aria-hidden="true">
+          [[printJobHistoryExpirationPeriod]]
+        </paper-tooltip>
+      </div>
+
+      <iron-list id="entryList" items="[[printJobs]]" role="grid">
+        <template>
+          <print-job-entry job-entry="[[item]]" tabindex$="[[tabIndex]]"
+              last-focused="{{lastFocused}}" list-blurred="{{listBlurred}}"
+              focus-row-index="[[index]]" iron-list-tab-index="[[tabIndex]]">
+          </print-job-entry>
+        </template>
+      </iron-list>
+    </template>
+  </div>
 </div>

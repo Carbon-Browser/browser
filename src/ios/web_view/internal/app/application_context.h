@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,6 +33,10 @@ namespace mojom {
 class NetworkContext;
 }
 }  // namespace network
+
+namespace os_crypt_async {
+class OSCryptAsync;
+}
 
 class PrefService;
 class SafeBrowsingService;
@@ -70,9 +74,16 @@ class ApplicationContext {
   // Gets the ComponentUpdateService.
   component_updater::ComponentUpdateService* GetComponentUpdateService();
 
+  // Gets the application specific OSCryptAsync instance.
+  os_crypt_async::OSCryptAsync* GetOSCryptAsync();
+
   // Creates state tied to application threads. It is expected this will be
   // called from web::WebMainParts::PreCreateThreads.
   void PreCreateThreads();
+
+  // Called after the browser threads are created. It is expected this will be
+  // called from web::WebMainParts::PostCreateThreads.
+  void PostCreateThreads();
 
   // Saves application context state if |local_state_| exists. This should be
   // called during shutdown to save application state.
@@ -120,6 +131,8 @@ class ApplicationContext {
   std::unique_ptr<component_updater::ComponentUpdateService> component_updater_;
 
   scoped_refptr<SafeBrowsingService> safe_browsing_service_;
+
+  std::unique_ptr<os_crypt_async::OSCryptAsync> os_crypt_async_;
 };
 
 }  // namespace ios_web_view

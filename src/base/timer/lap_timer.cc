@@ -1,8 +1,9 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/timer/lap_timer.h"
+
 #include "base/check_op.h"
 
 namespace base {
@@ -37,8 +38,9 @@ LapTimer::LapTimer(LapTimer::TimerMethod method)
 
 void LapTimer::Reset() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (ThreadTicks::IsSupported() && method_ == TimerMethod::kUseThreadTicks)
+  if (ThreadTicks::IsSupported() && method_ == TimerMethod::kUseThreadTicks) {
     ThreadTicks::WaitUntilInitialized();
+  }
   num_laps_ = 0;
   remaining_warmups_ = warmup_laps_;
   remaining_no_check_laps_ = check_interval_;

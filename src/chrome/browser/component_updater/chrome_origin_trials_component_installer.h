@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,6 @@ class ChromeOriginTrialsComponentInstallerPolicy
     : public OriginTrialsComponentInstallerPolicy {
  public:
   ChromeOriginTrialsComponentInstallerPolicy() = default;
-  ~ChromeOriginTrialsComponentInstallerPolicy() override = default;
   ChromeOriginTrialsComponentInstallerPolicy(
       const ChromeOriginTrialsComponentInstallerPolicy&) = delete;
   ChromeOriginTrialsComponentInstallerPolicy& operator=(
@@ -30,7 +29,7 @@ class ChromeOriginTrialsComponentInstallerPolicy
  private:
   void ComponentReady(const base::Version& version,
                       const base::FilePath& install_dir,
-                      base::Value manifest) override;
+                      base::Value::Dict manifest) override;
 };
 
 // Call once during startup to make the component update service aware of

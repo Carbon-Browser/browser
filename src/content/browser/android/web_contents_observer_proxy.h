@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,7 @@
 
 namespace content {
 
+class MediaSession;
 class WebContents;
 class RenderFrameHost;
 
@@ -64,6 +65,7 @@ class WebContentsObserverProxy : public WebContentsObserver {
   void FrameReceivedUserActivation(RenderFrameHost*) override;
   void WebContentsDestroyed() override;
   void DidChangeThemeColor() override;
+  void OnBackgroundColorChanged() override;
   void MediaStartedPlaying(const MediaPlayerInfo& video_type,
                            const MediaPlayerId& id) override;
   void MediaStoppedPlaying(
@@ -75,8 +77,11 @@ class WebContentsObserverProxy : public WebContentsObserver {
                                      bool will_cause_resize) override;
   bool SetToBaseURLForDataURLIfNeeded(GURL* url);
   void ViewportFitChanged(blink::mojom::ViewportFit value) override;
+  void SafeAreaConstraintChanged(bool has_constriant) override;
+  void VirtualKeyboardModeChanged(ui::mojom::VirtualKeyboardMode mode) override;
   void OnWebContentsFocused(RenderWidgetHost*) override;
   void OnWebContentsLostFocus(RenderWidgetHost*) override;
+  void MediaSessionCreated(MediaSession* media_session) override;
 
   base::android::ScopedJavaGlobalRef<jobject> java_observer_;
   GURL base_url_of_last_started_data_url_;

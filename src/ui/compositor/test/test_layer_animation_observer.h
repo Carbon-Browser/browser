@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -115,32 +115,30 @@ class TestLayerAnimationObserver : public LayerAnimationObserver {
  private:
   int next_epoch_;
 
-  // TODO(crbug.com/1298696): Breaks compositor_unittests.
-  raw_ptr<const LayerAnimationSequence, DegradeToNoOpWhenMTE>
+  raw_ptr<const LayerAnimationSequence, AcrossTasksDanglingUntriaged>
       last_attached_sequence_;
   int last_attached_sequence_epoch_;
 
-  raw_ptr<const LayerAnimationSequence, DegradeToNoOpWhenMTE>
+  raw_ptr<const LayerAnimationSequence, AcrossTasksDanglingUntriaged>
       last_scheduled_sequence_;
   int last_scheduled_sequence_epoch_;
 
-  raw_ptr<const LayerAnimationSequence, DegradeToNoOpWhenMTE>
+  raw_ptr<const LayerAnimationSequence, AcrossTasksDanglingUntriaged>
       last_started_sequence_;
   int last_started_sequence_epoch_;
 
-  raw_ptr<const LayerAnimationSequence, DegradeToNoOpWhenMTE>
+  raw_ptr<const LayerAnimationSequence, AcrossTasksDanglingUntriaged>
       last_aborted_sequence_;
   int last_aborted_sequence_epoch_;
 
-  raw_ptr<const LayerAnimationSequence, DegradeToNoOpWhenMTE>
+  raw_ptr<const LayerAnimationSequence, AcrossTasksDanglingUntriaged>
       last_ended_sequence_;
   int last_ended_sequence_epoch_;
 
-  raw_ptr<const LayerAnimationSequence, DegradeToNoOpWhenMTE>
-      last_repetition_ended_sequence_;
+  raw_ptr<const LayerAnimationSequence> last_repetition_ended_sequence_;
   int last_repetition_ended_sequence_epoch_;
 
-  raw_ptr<const LayerAnimationSequence, DegradeToNoOpWhenMTE>
+  raw_ptr<const LayerAnimationSequence, AcrossTasksDanglingUntriaged>
       last_detached_sequence_;
   int last_detached_sequence_epoch_;
 

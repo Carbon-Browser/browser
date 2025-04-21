@@ -1,21 +1,19 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "device/bluetooth/test/mock_bluetooth_cbdescriptor_mac.h"
 
-#include "base/mac/foundation_util.h"
-#include "base/mac/scoped_nsobject.h"
+#include "base/apple/foundation_util.h"
 #include "device/bluetooth/bluetooth_gatt_characteristic.h"
 
-using base::mac::ObjCCast;
-using base::scoped_nsobject;
+using base::apple::ObjCCast;
 
 @interface MockCBDescriptor () {
   // Owner of this instance.
   CBCharacteristic* _characteristic;
-  scoped_nsobject<CBUUID> _UUID;
-  scoped_nsobject<NSData> _value;
+  CBUUID* __strong _UUID;
+  NSData* __strong _value;
 }
 @end
 
@@ -26,7 +24,7 @@ using base::scoped_nsobject;
   self = [super init];
   if (self) {
     _characteristic = characteristic;
-    _UUID.reset([uuid retain]);
+    _UUID = uuid;
   }
   return self;
 }
@@ -64,7 +62,7 @@ using base::scoped_nsobject;
 }
 
 - (void)simulateReadWithValue:(id)value error:(NSError*)error {
-  _value.reset([value copy]);
+  _value = [value copy];
   CBPeripheral* peripheral = _characteristic.service.peripheral;
   [peripheral.delegate peripheral:peripheral
       didUpdateValueForDescriptor:self.descriptor

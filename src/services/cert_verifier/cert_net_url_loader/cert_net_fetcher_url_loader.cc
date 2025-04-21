@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -62,18 +62,21 @@
 #include <tuple>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/containers/span.h"
+#include "base/containers/to_vector.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/not_fatal_until.h"
 #include "base/numerics/safe_math.h"
+#include "base/ranges/algorithm.h"
 #include "base/sequence_checker.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -256,12 +259,8 @@ class CertNetFetcherURLLoader::RequestCore
     DCHECK_EQ(job_, job);
     job_ = nullptr;
 
-    const uint8_t* string_data =
-        reinterpret_cast<const uint8_t*>(response_body->data());
-
     error_ = error;
-    bytes_ =
-        std::vector<uint8_t>(string_data, string_data + response_body->size());
+    bytes_ = base::ToVector(base::as_byte_span(*response_body));
     completion_event_.Signal();
   }
 
@@ -378,7 +377,8 @@ class Job {
   void Cancel();
 
  private:
-  void OnReceivedRedirect(const net::RedirectInfo& redirect_info,
+  void OnReceivedRedirect(const GURL& url_before_redirect,
+                          const net::RedirectInfo& redirect_info,
                           const network::mojom::URLResponseHead& response_head,
                           std::vector<std::string>* removed_headers);
   void OnResponseStarted(const GURL& final_url,
@@ -469,8 +469,8 @@ void Job::AttachRequest(
 void Job::DetachRequest(CertNetFetcherURLLoader::RequestCore* request) {
   std::unique_ptr<Job> delete_this;
 
-  auto it = std::find(requests_.begin(), requests_.end(), request);
-  DCHECK(it != requests_.end());
+  auto it = base::ranges::find(requests_, request);
+  CHECK(it != requests_.end(), base::NotFatalUntil::M130);
   requests_.erase(it);
 
   // If there are no longer any requests attached to the job then
@@ -526,6 +526,10 @@ void Job::StartURLLoader(network::mojom::URLLoaderFactory* factory) {
   request->trusted_params = network::ResourceRequest::TrustedParams();
   request->trusted_params->disable_secure_dns = true;
   request->credentials_mode = network::mojom::CredentialsMode::kOmit;
+  // Ensure that we bypass HSTS for all requests sent through
+  // CertNetFetcherURLLoader, since AIA/CRL/OCSP requests must be in HTTP to
+  // avoid circular dependencies.
+  request->load_flags |= net::LOAD_SHOULD_BYPASS_HSTS;
   url_loader_ =
       network::SimpleURLLoader::Create(std::move(request), traffic_annotation);
   // base::Unretained(this) is safe because |this| owns |url_loader_|, which
@@ -549,6 +553,7 @@ void Job::Cancel() {
 }
 
 void Job::OnReceivedRedirect(
+    const GURL& url_before_redirect,
     const net::RedirectInfo& redirect_info,
     const network::mojom::URLResponseHead& response_head,
     std::vector<std::string>* removed_headers) {
@@ -746,7 +751,7 @@ class CertNetFetcherRequestImpl : public net::CertNetFetcher::Request {
 }  // namespace
 
 CertNetFetcherURLLoader::CertNetFetcherURLLoader()
-    : task_runner_(base::SequencedTaskRunnerHandle::Get()) {}
+    : task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {}
 
 CertNetFetcherURLLoader::~CertNetFetcherURLLoader() = default;
 

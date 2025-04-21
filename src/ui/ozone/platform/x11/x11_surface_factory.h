@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,13 +38,14 @@ class X11SurfaceFactory : public SurfaceFactoryOzone {
       gfx::AcceleratedWidget widget) override;
   scoped_refptr<gfx::NativePixmap> CreateNativePixmap(
       gfx::AcceleratedWidget widget,
-      VkDevice vk_device,
+      gpu::VulkanDeviceQueue* device_queue,
       gfx::Size size,
       gfx::BufferFormat format,
       gfx::BufferUsage usage,
-      absl::optional<gfx::Size> framebuffer_size = absl::nullopt) override;
+      std::optional<gfx::Size> framebuffer_size = std::nullopt) override;
+  bool CanCreateNativePixmapForFormat(gfx::BufferFormat format) override;
   void CreateNativePixmapAsync(gfx::AcceleratedWidget widget,
-                               VkDevice vk_device,
+                               gpu::VulkanDeviceQueue* device_queue,
                                gfx::Size size,
                                gfx::BufferFormat format,
                                gfx::BufferUsage usage,
@@ -55,8 +56,10 @@ class X11SurfaceFactory : public SurfaceFactoryOzone {
       gfx::BufferFormat format,
       gfx::NativePixmapHandle handle) override;
 
+  std::vector<gfx::BufferFormat> GetSupportedFormatsForTexturing()
+      const override;
+
  private:
-  std::unique_ptr<GLOzone> glx_implementation_;
   std::unique_ptr<GLOzone> egl_implementation_;
 
   std::unique_ptr<x11::Connection> connection_;

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <list>
 
+#include "base/memory/raw_ptr.h"
 #include "content/common/content_export.h"
 
 namespace IPC {
@@ -41,7 +42,8 @@ class CONTENT_EXPORT BrowserChildProcessHostIterator {
  private:
   bool all_;
   int process_type_;
-  std::list<BrowserChildProcessHostImpl*>::iterator iterator_;
+  std::list<raw_ptr<BrowserChildProcessHostImpl, CtnExperimental>>::iterator
+      iterator_;
 };
 
 // Helper class so that subclasses of BrowserChildProcessHostDelegate can be

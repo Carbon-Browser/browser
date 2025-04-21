@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@
  * @param optObj The object use as 'this' within f.
  */
 export function objectForEach(obj, f, optObj) {
-  var key;
+  let key;
   for (key in obj) {
     if (obj.hasOwnProperty(key)) {
       f.call(optObj, obj[key], key, obj);
@@ -35,7 +35,7 @@ export function millisecondsToString(timeMillis) {
     return num;
   }
 
-  var date = new Date(timeMillis);
+  const date = new Date(timeMillis);
   return pad(date.getUTCHours(), 2) + ':' + pad(date.getUTCMinutes(), 2) + ':' +
       pad(date.getUTCSeconds(), 2) + '.' +
       pad((date.getMilliseconds()) % 1000, 3);

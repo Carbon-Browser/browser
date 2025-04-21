@@ -1,10 +1,11 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/shell/common/v8_crashpad_support_win.h"
 
 #include <windows.h>
+
 #include "components/crash/core/app/crash_export_thunks.h"
 #include "gin/public/debug.h"
 

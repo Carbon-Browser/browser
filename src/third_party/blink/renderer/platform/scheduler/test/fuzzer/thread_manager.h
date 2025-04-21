@@ -1,16 +1,18 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file
+// found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_TEST_FUZZER_THREAD_MANAGER_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_TEST_FUZZER_THREAD_MANAGER_H_
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/lock.h"
 #include "base/task/sequence_manager/test/sequence_manager_for_test.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/test_mock_time_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
@@ -76,7 +78,7 @@ class PLATFORM_EXPORT ThreadManager {
     bool is_running_;
 
     // Should outlive |this|.
-    ThreadManager* thread_manager_;
+    raw_ptr<ThreadManager> thread_manager_;
     base::WeakPtrFactory<Task> weak_ptr_factory_{this};
   };
 
@@ -129,6 +131,9 @@ class PLATFORM_EXPORT ThreadManager {
 
   scoped_refptr<TaskQueueWithVoters> GetTaskQueueFor(uint64_t task_queue_id);
 
+  scoped_refptr<SingleThreadTaskRunner> GetTaskRunnerFor(
+      uint64_t task_queue_id);
+
   // Used to protect |task_queues_| and |pending_tasks_|.
   Lock lock_;
 
@@ -157,7 +162,7 @@ class PLATFORM_EXPORT ThreadManager {
 
   // Outlives this class. |processor_| owns a thread pool manager that creates
   // threads.
-  SequenceManagerFuzzerProcessor* const processor_;
+  const raw_ptr<SequenceManagerFuzzerProcessor> processor_;
 
   THREAD_CHECKER(thread_checker_);
 };

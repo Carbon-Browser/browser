@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -135,7 +135,6 @@ TEST_F(TransferableDirectoryTestWithHandle, MojoTraitsWithHandle) {
 #else
 
 TEST_F(TransferableDirectoryTest, OpenAndMountNotSupportedForPlatform) {
-  const base::FilePath kDirPath(FILE_PATH_LITERAL("/some/directory"));
   TransferableDirectory dir;
   dir = kDirPath;
   EXPECT_EQ(dir.path(), kDirPath);

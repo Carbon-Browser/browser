@@ -1,4 +1,4 @@
-// Copyright 2018 the Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,7 +38,7 @@ class CORE_EXPORT PaintWorkletStylePropertyMap
   // TODO(xidachen): consider making the input_property_ids as part of the
   // return value. Or make both CrossThreadData and input_property_ids as
   // params and return a bool.
-  static absl::optional<CrossThreadData> BuildCrossThreadData(
+  static std::optional<CrossThreadData> BuildCrossThreadData(
       const Document&,
       UniqueObjectId unique_object_id,
       const ComputedStyle&,
@@ -75,7 +75,8 @@ class CORE_EXPORT PaintWorkletStylePropertyMap
   CrossThreadData& StyleMapData() { return data_; }
 
  private:
-  IterationSource* StartIteration(ScriptState*, ExceptionState&) override;
+  IterationSource* CreateIterationSource(ScriptState*,
+                                         ExceptionState&) override;
 
   CrossThreadData data_;
 };

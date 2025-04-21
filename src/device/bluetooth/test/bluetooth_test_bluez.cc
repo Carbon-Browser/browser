@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "dbus/object_path.h"
@@ -35,7 +35,7 @@ namespace {
 void GetValueCallback(
     base::OnceClosure quit_closure,
     BluetoothLocalGattService::Delegate::ValueCallback value_callback,
-    absl::optional<BluetoothGattService::GattErrorCode> error_code,
+    std::optional<BluetoothGattService::GattErrorCode> error_code,
     const std::vector<uint8_t>& value) {
   std::move(value_callback).Run(error_code, value);
   std::move(quit_closure).Run();
@@ -65,15 +65,13 @@ void BluetoothTestBlueZ::SetUp() {
   std::unique_ptr<bluez::BluezDBusManagerSetter> dbus_setter =
       bluez::BluezDBusManager::GetSetterForTesting();
 
-  fake_bluetooth_adapter_client_ = new bluez::FakeBluetoothAdapterClient;
-  dbus_setter->SetBluetoothAdapterClient(
-      std::unique_ptr<bluez::BluetoothAdapterClient>(
-          fake_bluetooth_adapter_client_));
+  auto adapter_client = std::make_unique<bluez::FakeBluetoothAdapterClient>();
+  fake_bluetooth_adapter_client_ = adapter_client.get();
+  dbus_setter->SetBluetoothAdapterClient(std::move(adapter_client));
 
-  fake_bluetooth_device_client_ = new bluez::FakeBluetoothDeviceClient;
-  dbus_setter->SetBluetoothDeviceClient(
-      std::unique_ptr<bluez::BluetoothDeviceClient>(
-          fake_bluetooth_device_client_));
+  auto device_client = std::make_unique<bluez::FakeBluetoothDeviceClient>();
+  fake_bluetooth_device_client_ = device_client.get();
+  dbus_setter->SetBluetoothDeviceClient(std::move(device_client));
 
   // Make the fake adapter post tasks without delay in order to avoid timing
   // issues.
@@ -94,6 +92,8 @@ void BluetoothTestBlueZ::TearDown() {
   discovery_sessions_.clear();
 
   adapter_ = nullptr;
+  fake_bluetooth_adapter_client_ = nullptr;
+  fake_bluetooth_device_client_ = nullptr;
   bluez::BluezDBusManager::Shutdown();
   BluetoothTestBase::TearDown();
 }

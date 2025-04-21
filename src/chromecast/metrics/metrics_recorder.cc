@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,10 +11,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
@@ -22,7 +22,6 @@
 #include "base/observer_list.h"
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "chromecast/metrics/cast_event_builder.h"
 #include "net/base/ip_address.h"
@@ -111,6 +110,11 @@ class DummyEventBuilder : public CastEventBuilder {
     return *this;
   }
 
+  CastEventBuilder& SetAoghStandardAgentId(
+      const std::string& agent_id) override {
+    return *this;
+  }
+
   CastEventBuilder& SetUiVersion(const std::string& ui_version) override {
     return *this;
   }
@@ -164,10 +168,7 @@ class DummyEventBuilder : public CastEventBuilder {
     return *this;
   }
 
-  ::metrics::CastLogsProto_CastEventProto* Build() override {
-    NOTREACHED();
-    return nullptr;
-  }
+  ::metrics::CastLogsProto_CastEventProto* Build() override { NOTREACHED(); }
 };
 
 MetricsRecorder* g_instance = nullptr;

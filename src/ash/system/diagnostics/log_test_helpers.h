@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,9 @@ extern const char kNewline[];
 std::vector<std::string> GetLogLines(const std::string& log);
 
 // Splits a single line of the log at `kSeparator`.
-std::vector<std::string> GetLogLineContents(const std::string& log_line);
+std::vector<std::string> GetLogLineContents(
+    const std::string& log_line,
+    const std::string& separators = kSeparator);
 
 }  // namespace diagnostics
 }  // namespace ash

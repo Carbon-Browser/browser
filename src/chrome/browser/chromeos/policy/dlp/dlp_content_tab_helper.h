@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,6 +54,11 @@ class DlpContentTabHelper
       content::NavigationHandle* navigation_handle) override;
   void WebContentsDestroyed() override;
   void OnVisibilityChanged(content::Visibility visibility) override;
+
+  using RfhInfo =
+      std::pair<content::RenderFrameHost*, DlpContentRestrictionSet>;
+  // Returns a vector of DLP restrictions info for all the tracked frames.
+  std::vector<RfhInfo> GetFramesInfo() const;
 
  private:
   friend class content::WebContentsUserData<DlpContentTabHelper>;

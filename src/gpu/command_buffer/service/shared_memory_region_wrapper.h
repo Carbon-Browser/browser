@@ -1,14 +1,19 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef GPU_COMMAND_BUFFER_SERVICE_SHARED_MEMORY_REGION_WRAPPER_H_
 #define GPU_COMMAND_BUFFER_SERVICE_SHARED_MEMORY_REGION_WRAPPER_H_
 
+#include <utility>
+#include <vector>
+
 #include "base/containers/span.h"
 #include "base/memory/shared_memory_mapping.h"
 #include "base/unguessable_token.h"
-#include "components/viz/common/resources/resource_format.h"
+#include "gpu/gpu_gles2_export.h"
+#include "third_party/skia/include/core/SkPixmap.h"
+#include "ui/gfx/buffer_types.h"
 #include "ui/gfx/geometry/size.h"
 
 namespace gfx {
@@ -19,7 +24,7 @@ namespace gpu {
 
 // Wrapper for shared memory region from a GpuMemoryBuffer with type
 // SHARED_MEMORY_BUFFER.
-class SharedMemoryRegionWrapper {
+class GPU_GLES2_EXPORT SharedMemoryRegionWrapper {
  public:
   SharedMemoryRegionWrapper();
   SharedMemoryRegionWrapper(SharedMemoryRegionWrapper&& other);
@@ -31,18 +36,28 @@ class SharedMemoryRegionWrapper {
   // until destruction.
   bool Initialize(const gfx::GpuMemoryBufferHandle& handle,
                   const gfx::Size& size,
-                  viz::ResourceFormat format);
+                  gfx::BufferFormat format);
 
   bool IsValid() const;
-  uint8_t* GetMemory() const;
-  base::span<const uint8_t> GetMemoryAsSpan() const;
-  size_t GetStride() const;
-  const base::UnguessableToken& GetMappingGuid();
+  uint8_t* GetMemory(int plane_index) {
+    return const_cast<uint8_t*>(std::as_const(*this).GetMemory(plane_index));
+  }
+  const uint8_t* GetMemory(int plane_index) const;
+  size_t GetStride(int plane_index) const;
+
+  // Returns SkPixmap pointing to memory for offset.
+  SkPixmap MakePixmapForPlane(const SkImageInfo& info, int plane_index) const;
+
+  const base::UnguessableToken& GetMappingGuid() const;
 
  private:
+  struct PlaneData {
+    size_t offset = 0;
+    size_t stride = 0;
+  };
+
   base::WritableSharedMemoryMapping mapping_;
-  size_t offset_ = 0;
-  size_t stride_ = 0;
+  std::vector<PlaneData> planes_;
 };
 
 }  // namespace gpu

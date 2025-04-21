@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 
 #include <list>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "media/base/callback_holder.h"
@@ -45,6 +45,10 @@ class FakeVideoDecoder : public VideoDecoder {
 
   // Enables encrypted config supported. Must be called before Initialize().
   void EnableEncryptedConfigSupport();
+
+  // Enables returning kElidedEndOfStreamForConfigChange for config changes.
+  // Must be called before Initialize().
+  void enable_eliding_eos() { enable_eliding_eos_ = true; }
 
   // Sets whether this decoder is a platform decoder. Must be called before
   // Initialize().
@@ -88,6 +92,10 @@ class FakeVideoDecoder : public VideoDecoder {
   void SimulateFailureToInit();
 
   int total_bytes_decoded() const { return total_bytes_decoded_; }
+
+  int total_decoded_frames() const { return total_decoded_frames_; }
+
+  auto eos_next_configs() const { return eos_next_configs_; }
 
  protected:
   enum State {
@@ -141,6 +149,12 @@ class FakeVideoDecoder : public VideoDecoder {
   int total_bytes_decoded_;
 
   bool fail_to_initialize_;
+
+  int total_decoded_frames_ = 0;
+
+  std::vector<VideoDecoderConfig> eos_next_configs_;
+
+  bool enable_eliding_eos_ = false;
 
   // NOTE: Weak pointers must be invalidated before all other member variables.
   base::WeakPtrFactory<FakeVideoDecoder> weak_factory_{this};

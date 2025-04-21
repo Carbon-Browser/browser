@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 
 class UndoManagerObserver;
@@ -124,7 +125,7 @@ class UndoManager {
   std::unique_ptr<UndoGroup> pending_grouped_action_;
 
   // The action that is in the process of being undone.
-  UndoGroup* undo_in_progress_action_;
+  raw_ptr<UndoGroup> undo_in_progress_action_;
 
   // Supports the suspension of undo tracking.
   int undo_suspended_count_;

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,16 @@ module blink.mojom;
 // Types of UserActivationV2 state updates sent between the browser and the
 // renderer processes.
 enum UserActivationUpdateType {
+  // Used to give a document sticky and transient user activation as a result of
+  // a user gesture.
   kNotifyActivation,
   kNotifyActivationPendingBrowserVerification,
+  // Used to propagate the sticky user activation state during cross-document
+  // navigations.
+  kNotifyActivationStickyOnly,
+  // Used after a sensitive API is called to prevent abuse of the API.
   kConsumeTransientActivation,
+  // Used during cross-document navigations when the user activation state
+  // shouldn't be propagated.
   kClearActivation
 };

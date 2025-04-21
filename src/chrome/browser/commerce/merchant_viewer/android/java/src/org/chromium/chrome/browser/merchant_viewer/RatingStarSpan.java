@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 package org.chromium.chrome.browser.merchant_viewer;
@@ -39,14 +39,14 @@ public class RatingStarSpan extends DynamicDrawableSpan {
 
     @Override
     public Drawable getDrawable() {
-        Drawable drawable = ResourcesCompat.getDrawable(
-                mContext.getResources(), getResourceId(mType), mContext.getTheme());
+        Drawable drawable =
+                ResourcesCompat.getDrawable(
+                        mContext.getResources(), getResourceId(mType), mContext.getTheme());
         drawable.setBounds(0, 0, drawable.getIntrinsicWidth(), drawable.getIntrinsicHeight());
         return drawable;
     }
 
-    @DrawableRes
-    private int getResourceId(@RatingStarType int type) {
+    private @DrawableRes int getResourceId(@RatingStarType int type) {
         switch (type) {
             case RatingStarType.OUTLINE:
                 return R.drawable.ic_rating_star_outline;

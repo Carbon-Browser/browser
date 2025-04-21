@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,14 +14,14 @@
 #include "content/public/renderer/render_frame.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "pdf/buildflags.h"
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/web/web_document.h"
 #include "third_party/blink/public/web/web_element.h"
 #include "third_party/blink/public/web/web_local_frame.h"
 #include "url/origin.h"
 
 #if BUILDFLAG(ENABLE_PDF)
-#include "chrome/common/pdf_util.h"
+#include "components/pdf/common/pdf_util.h"
 #include "extensions/renderer/guest_view/mime_handler_view/post_message_support.h"
 #endif  // BUILDFLAG(ENABLE_PDF)
 

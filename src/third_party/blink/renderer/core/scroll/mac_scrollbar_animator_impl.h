@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,7 +38,6 @@ class CORE_EXPORT MacScrollbarImplV2
 
   // MacScrollbar:
   void SetEnabled(bool) final {}
-  void SetOverlayColorTheme(ScrollbarOverlayColorTheme) final {}
   float GetKnobAlpha() final;
   float GetTrackAlpha() final;
   int GetTrackBoxWidth() final;
@@ -78,10 +77,7 @@ class CORE_EXPORT MacScrollbarAnimatorV2 : public MacScrollbarAnimator {
   bool SetScrollbarsVisibleForTesting(bool) final { return true; }
   void DidChangeUserVisibleScrollOffset(const ScrollOffset&) final;
   void UpdateScrollerStyle() final { NOTREACHED(); }
-  bool ScrollbarPaintTimerIsActive() const final {
-    NOTREACHED();
-    return false;
-  }
+  bool ScrollbarPaintTimerIsActive() const final { NOTREACHED(); }
   void StartScrollbarPaintTimer() final { NOTREACHED(); }
   void StopScrollbarPaintTimer() final { NOTREACHED(); }
   void Dispose() final;

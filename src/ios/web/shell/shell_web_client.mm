@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,18 +6,17 @@
 
 #import <UIKit/UIKit.h>
 
-#include "base/bind.h"
-#include "ios/web/common/user_agent.h"
-#import "ios/web/public/web_state.h"
-#include "ios/web/shell/shell_web_main_parts.h"
-#import "ios/web/shell/web_usage_controller.mojom.h"
-#include "mojo/public/cpp/bindings/pending_receiver.h"
-#include "mojo/public/cpp/bindings/self_owned_receiver.h"
-#include "ui/base/resource/resource_bundle.h"
+#import <string_view>
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/functional/bind.h"
+#import "base/memory/raw_ptr.h"
+#import "ios/web/common/user_agent.h"
+#import "ios/web/public/web_state.h"
+#import "ios/web/shell/shell_web_main_parts.h"
+#import "ios/web/shell/web_usage_controller.mojom.h"
+#import "mojo/public/cpp/bindings/pending_receiver.h"
+#import "mojo/public/cpp/bindings/self_owned_receiver.h"
+#import "ui/base/resource/resource_bundle.h"
 
 namespace web {
 
@@ -37,7 +36,7 @@ class WebUsageController : public mojom::WebUsageController {
     std::move(callback).Run();
   }
 
-  WebState* web_state_;
+  raw_ptr<WebState> web_state_;
 };
 
 }  // namespace
@@ -61,7 +60,7 @@ std::string ShellWebClient::GetUserAgent(UserAgentType type) const {
   return web::BuildMobileUserAgent("CriOS/36.77.34.45");
 }
 
-base::StringPiece ShellWebClient::GetDataResource(
+std::string_view ShellWebClient::GetDataResource(
     int resource_id,
     ui::ResourceScaleFactor scale_factor) const {
   return ui::ResourceBundle::GetSharedInstance().GetRawDataResourceForScale(
@@ -84,6 +83,10 @@ void ShellWebClient::BindInterfaceReceiverFromMainFrame(
 }
 
 bool ShellWebClient::EnableLongPressUIContextMenu() const {
+  return true;
+}
+
+bool ShellWebClient::EnableWebInspector(BrowserState* browser_state) const {
   return true;
 }
 

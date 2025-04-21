@@ -1,14 +1,16 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/android/compositor/scene_layer/toolbar_swipe_scene_layer.h"
 
-#include "chrome/android/chrome_jni_headers/ToolbarSwipeSceneLayer_jni.h"
 #include "chrome/browser/android/compositor/layer/content_layer.h"
 #include "chrome/browser/android/compositor/tab_content_manager.h"
 #include "ui/gfx/geometry/point_f.h"
 #include "ui/gfx/geometry/size.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "chrome/android/chrome_jni_headers/ToolbarSwipeSceneLayer_jni.h"
 
 using base::android::JavaParamRef;
 using base::android::JavaRef;
@@ -22,7 +24,7 @@ ToolbarSwipeSceneLayer::ToolbarSwipeSceneLayer(JNIEnv* env,
       right_content_layer_(nullptr),
       tab_content_manager_(nullptr) {}
 
-ToolbarSwipeSceneLayer::~ToolbarSwipeSceneLayer() {}
+ToolbarSwipeSceneLayer::~ToolbarSwipeSceneLayer() = default;
 
 void ToolbarSwipeSceneLayer::UpdateLayer(
     JNIEnv* env,

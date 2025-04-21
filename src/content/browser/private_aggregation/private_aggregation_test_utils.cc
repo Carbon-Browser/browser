@@ -1,14 +1,37 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/private_aggregation/private_aggregation_test_utils.h"
 
+#include <memory>
 #include <tuple>
 
+#include "base/functional/callback_helpers.h"
 #include "content/browser/private_aggregation/private_aggregation_budget_key.h"
+#include "content/browser/storage_partition_impl.h"
 
 namespace content {
+
+MockPrivateAggregationBudgeter::MockPrivateAggregationBudgeter() = default;
+MockPrivateAggregationBudgeter::~MockPrivateAggregationBudgeter() = default;
+
+MockPrivateAggregationHost::MockPrivateAggregationHost()
+    : PrivateAggregationHost(
+          /*on_report_request_details_received=*/base::DoNothing(),
+          &test_browser_context_) {}
+
+MockPrivateAggregationHost::~MockPrivateAggregationHost() = default;
+
+MockPrivateAggregationManagerImpl::MockPrivateAggregationManagerImpl(
+    StoragePartitionImpl* partition)
+    : PrivateAggregationManagerImpl(
+          std::make_unique<MockPrivateAggregationBudgeter>(),
+          std::make_unique<MockPrivateAggregationHost>(),
+          partition) {}
+
+MockPrivateAggregationManagerImpl::~MockPrivateAggregationManagerImpl() =
+    default;
 
 bool operator==(const PrivateAggregationBudgetKey::TimeWindow& a,
                 const PrivateAggregationBudgetKey::TimeWindow& b) {

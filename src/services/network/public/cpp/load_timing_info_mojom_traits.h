@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,14 +16,14 @@ template <>
 struct COMPONENT_EXPORT(NETWORK_CPP_BASE)
     StructTraits<network::mojom::LoadTimingInfoConnectTimingDataView,
                  net::LoadTimingInfo::ConnectTiming> {
-  static base::TimeTicks dns_start(
+  static base::TimeTicks domain_lookup_start(
       const net::LoadTimingInfo::ConnectTiming& obj) {
-    return obj.dns_start;
+    return obj.domain_lookup_start;
   }
 
-  static base::TimeTicks dns_end(
+  static base::TimeTicks domain_lookup_end(
       const net::LoadTimingInfo::ConnectTiming& obj) {
-    return obj.dns_end;
+    return obj.domain_lookup_end;
   }
 
   static base::TimeTicks connect_start(
@@ -129,6 +129,16 @@ struct COMPONENT_EXPORT(NETWORK_CPP_BASE)
   static base::TimeTicks service_worker_fetch_start(
       const net::LoadTimingInfo& obj) {
     return obj.service_worker_fetch_start;
+  }
+
+  static base::TimeTicks service_worker_router_evaluation_start(
+      const net::LoadTimingInfo& obj) {
+    return obj.service_worker_router_evaluation_start;
+  }
+
+  static base::TimeTicks service_worker_cache_lookup_start(
+      const net::LoadTimingInfo& obj) {
+    return obj.service_worker_cache_lookup_start;
   }
 
   static base::TimeTicks service_worker_respond_with_settled(

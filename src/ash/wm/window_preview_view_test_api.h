@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "ash/wm/window_mirror_view.h"
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/window.h"
 #include "ui/gfx/geometry/rect_f.h"
 
@@ -30,15 +31,16 @@ class WindowPreviewViewTestApi {
 
   gfx::RectF GetUnionRect() const;
 
-  const base::flat_map<aura::Window*, WindowMirrorView*>& GetMirrorViews()
-      const;
+  const base::flat_map<aura::Window*,
+                       raw_ptr<WindowMirrorView, CtnExperimental>>&
+  GetMirrorViews() const;
 
   // Gets the mirror view in |mirror_views_| associated with |widget|. Returns
   // null if |widget|'s window does not exist in |mirror_views_|.
   WindowMirrorView* GetMirrorViewForWidget(views::Widget* widget);
 
  private:
-  WindowPreviewView* preview_view_;
+  raw_ptr<WindowPreviewView, DanglingUntriaged> preview_view_;
 };
 
 }  // namespace ash

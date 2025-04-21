@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,9 @@ class ResizeAreaDelegate;
 
 // An invisible area that acts like a horizontal resizer.
 class VIEWS_EXPORT ResizeArea : public View {
- public:
-  METADATA_HEADER(ResizeArea);
+  METADATA_HEADER(ResizeArea, View)
 
+ public:
   explicit ResizeArea(ResizeAreaDelegate* delegate);
 
   ResizeArea(const ResizeArea&) = delete;
@@ -31,7 +31,6 @@ class VIEWS_EXPORT ResizeArea : public View {
   bool OnMouseDragged(const ui::MouseEvent& event) override;
   void OnMouseReleased(const ui::MouseEvent& event) override;
   void OnMouseCaptureLost() override;
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
 
  private:
   // Report the amount the user resized by to the delegate, accounting for
@@ -48,7 +47,7 @@ class VIEWS_EXPORT ResizeArea : public View {
   // The event's x-position at the start of the resize operation. The resize
   // area will move while being dragged, so |initial_position_| is represented
   // in screen coordinates so that we don't lose our bearings.
-  int initial_position_;
+  int initial_position_ = 0;
 };
 
 }  // namespace views

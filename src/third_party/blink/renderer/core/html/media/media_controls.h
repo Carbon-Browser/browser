@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -60,12 +60,12 @@ class CORE_EXPORT MediaControls : public GarbageCollectedMixin {
 
   // Returns the layout object for the part of the controls that should be
   // used for overlap checking during text track layout. May be null.
-  // TODO(mlamouri): required by LayoutVTTCue.
+  // TODO(mlamouri): required by VttCueLayoutAlgorithm.
   virtual LayoutObject* PanelLayoutObject() = 0;
   virtual LayoutObject* TimelineLayoutObject() = 0;
   virtual LayoutObject* ButtonPanelLayoutObject() = 0;
   // Returns the layout object of the media controls container. Maybe null.
-  // TODO(mlamouri): required by LayoutVTTCue.
+  // TODO(mlamouri): required by VttCueLayoutAlgorithm.
   virtual LayoutObject* ContainerLayoutObject() = 0;
 
   // Used for web tests to disable some animations.

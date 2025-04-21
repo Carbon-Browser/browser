@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include "base/values.h"
 #include "chrome/browser/sync_file_system/remote_file_sync_service.h"
 #include "chrome/browser/sync_file_system/sync_action.h"
 #include "chrome/browser/sync_file_system/sync_callbacks.h"
@@ -18,7 +19,6 @@ class GURL;
 
 namespace base {
 class FilePath;
-class ListValue;
 }
 
 namespace storage {
@@ -49,15 +49,15 @@ class SyncWorkerInterface {
                                     const std::string& description) = 0;
 
    protected:
-    virtual ~Observer() {}
+    virtual ~Observer() = default;
   };
 
-  SyncWorkerInterface() {}
+  SyncWorkerInterface() = default;
 
   SyncWorkerInterface(const SyncWorkerInterface&) = delete;
   SyncWorkerInterface& operator=(const SyncWorkerInterface&) = delete;
 
-  virtual ~SyncWorkerInterface() {}
+  virtual ~SyncWorkerInterface() = default;
 
   // Initializes SyncWorkerInterface after constructions of some member classes.
   virtual void Initialize(
@@ -77,10 +77,6 @@ class SyncWorkerInterface {
   virtual void SetRemoteChangeProcessor(
       RemoteChangeProcessorOnWorker* remote_change_processor_on_worker) = 0;
   virtual RemoteServiceState GetCurrentState() const = 0;
-  virtual void GetOriginStatusMap(
-      RemoteFileSyncService::StatusMapCallback callback) = 0;
-  virtual std::unique_ptr<base::ListValue> DumpFiles(const GURL& origin) = 0;
-  virtual std::unique_ptr<base::ListValue> DumpDatabase() = 0;
   virtual void SetSyncEnabled(bool enabled) = 0;
   virtual void PromoteDemotedChanges(base::OnceClosure callback) = 0;
 

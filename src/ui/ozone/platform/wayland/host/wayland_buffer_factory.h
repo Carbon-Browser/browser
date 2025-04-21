@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,7 +49,7 @@ class WaylandBufferFactory {
   // |length| and |size|. Whereas |with_alpha_channel| indicates whether the
   // buffer's color format should use or not the alpha channel.
   //
-  // TODO(crbug.com/1269044): Remove |with_alpha_channel| parameter once
+  // TODO(crbug.com/40204912): Remove |with_alpha_channel| parameter once
   // Exo-side Skia Renderer issue is fixed.
   wl::Object<struct wl_buffer> CreateShmBuffer(
       const base::ScopedFD& fd,

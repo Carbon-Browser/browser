@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,14 +9,15 @@
 #include <tuple>
 #include <utility>
 
-#include "base/callback_forward.h"
 #include "base/check.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "mojo/public/cpp/bindings/associated_interface_ptr_info.h"
 #include "mojo/public/cpp/bindings/lib/associated_interface_ptr_state.h"
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
+#include "mojo/public/cpp/bindings/runtime_features.h"
 #include "mojo/public/cpp/bindings/scoped_interface_endpoint_handle.h"
 
 namespace mojo {
@@ -50,8 +51,8 @@ class AssociatedRemote {
 
   // Constructs a new AssociatedRemote which is bound from |pending_remote| and
   // which schedules response callbacks and disconnection notifications on the
-  // default SequencedTaskRunner (i.e., base::SequencedTaskRunnerHandle::Get()
-  // at construction time).
+  // default SequencedTaskRunner (i.e.,
+  // base::SequencedTaskRunner::GetCurrentDefault() at construction time).
   explicit AssociatedRemote(PendingAssociatedRemote<Interface> pending_remote)
       : AssociatedRemote(std::move(pending_remote), nullptr) {}
 
@@ -77,6 +78,9 @@ class AssociatedRemote {
   // Exposes access to callable Interface methods directed at this
   // AssociatedRemote's receiver. Must only be called on a bound
   // AssociatedRemote.
+  //
+  // Please also see comments of |is_bound()| about when it is safe to make
+  // calls using the returned pointer.
   typename Interface::Proxy_* get() const {
     DCHECK(is_bound())
         << "Cannot issue Interface method calls on an unbound AssociatedRemote";
@@ -87,15 +91,25 @@ class AssociatedRemote {
   typename Interface::Proxy_* operator->() const { return get(); }
   typename Interface::Proxy_& operator*() const { return *get(); }
 
-  // Indicates whether this AssociatedRemote is bound and thus can issue
-  // Interface method calls via the above accessors.
+  // Indicates whether this AssociatedRemote is bound.
   //
-  // NOTE: The state of being "bound" should not be confused with the state of
+  // NOTE:
+  // 1) The state of being "bound" should not be confused with the state of
   // being "connected" (see |is_connected()| below). An AssociatedRemote is
   // NEVER passively unbound and the only way for it to become unbound is to
   // explicitly call |reset()| or |Unbind()|. As such, unless you make explicit
   // calls to those methods, it is always safe to assume that an
-  // AssociatedRemote you've bound will remain bound and callable.
+  // AssociatedRemote you've bound will remain bound.
+  //
+  // 2) The state of being "bound" is a necessary but not sufficient condition
+  // for Interface methods to be callable. For them to be callable, the
+  // AssociatedRemote must also be "associated", which means either one of
+  // the following cases:
+  //   2-1) Either itself or its entangled AssociatedReceiver must be sent over
+  //   a Remote/Receiver pair or an already-established
+  //   AssociatedRemote/AssociatedReceiver pair.
+  //   2-2) It is bound with a dedicated message pipe. Please see comments of
+  //   BindNewEndpointAndPassDedicatedReceiver().
   bool is_bound() const { return internal_state_.is_bound(); }
   explicit operator bool() const { return is_bound(); }
 
@@ -183,8 +197,11 @@ class AssociatedRemote {
   [[nodiscard]] PendingAssociatedReceiver<Interface>
   BindNewEndpointAndPassReceiver(
       scoped_refptr<base::SequencedTaskRunner> task_runner = nullptr) {
-    DCHECK(!is_bound()) << "AssociatedRemote is already bound";
-
+    DCHECK(!is_bound()) << "AssociatedRemote for " << Interface::Name_
+                        << " is already bound";
+    if (!internal::GetRuntimeFeature_ExpectEnabled<Interface>()) {
+      return PendingAssociatedReceiver<Interface>();
+    }
     ScopedInterfaceEndpointHandle remote_handle;
     ScopedInterfaceEndpointHandle receiver_handle;
     ScopedInterfaceEndpointHandle::CreatePairPendingAssociation(
@@ -201,9 +218,14 @@ class AssociatedRemote {
   // SequencedTaskRunner.
   void Bind(PendingAssociatedRemote<Interface> pending_remote,
             scoped_refptr<base::SequencedTaskRunner> task_runner = nullptr) {
-    DCHECK(!is_bound()) << "AssociatedRemote is already bound";
+    DCHECK(!is_bound()) << "AssociatedRemote for " << Interface::Name_
+                        << " is already bound";
 
     if (!pending_remote) {
+      reset();
+      return;
+    }
+    if (!internal::GetRuntimeFeature_ExpectEnabled<Interface>()) {
       reset();
       return;
     }
@@ -231,11 +253,14 @@ class AssociatedRemote {
   // endpoints in tests.
   [[nodiscard]] PendingAssociatedReceiver<Interface>
   BindNewEndpointAndPassDedicatedReceiver() {
-    DCHECK(!is_bound()) << "AssociatedReceiver is already bound";
+    DCHECK(!is_bound()) << "AssociatedRemote for " << Interface::Name_
+                        << " is already bound";
 
     PendingAssociatedReceiver<Interface> receiver =
         BindNewEndpointAndPassReceiver();
-    receiver.EnableUnassociatedUsage();
+    if (receiver) {
+      receiver.EnableUnassociatedUsage();
+    }
     return receiver;
   }
 

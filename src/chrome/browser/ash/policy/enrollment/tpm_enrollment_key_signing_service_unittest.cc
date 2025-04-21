@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,14 @@
 
 #include <utility>
 
-#include "ash/components/attestation/attestation_flow_utils.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_forward.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
+#include "chromeos/ash/components/dbus/attestation/attestation.pb.h"
 #include "chromeos/ash/components/dbus/attestation/attestation_client.h"
-#include "chromeos/dbus/attestation/attestation.pb.h"
+#include "chromeos/ash/components/dbus/constants/attestation_constants.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -53,10 +53,7 @@ TEST_F(TpmEnrollmentKeySigningServiceTest, SigningSuccess) {
   ash::AttestationClient::Get()
       ->GetTestInterface()
       ->AllowlistSignSimpleChallengeKey(
-          /*username=*/"",
-          ash::attestation::GetKeyNameForProfile(
-              chromeos::attestation::PROFILE_ENTERPRISE_ENROLLMENT_CERTIFICATE,
-              ""));
+          /*username=*/"", ash::attestation::kEnterpriseEnrollmentKey);
 
   base::RunLoop run_loop;
   bool returned_success = false;

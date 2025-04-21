@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -67,11 +67,13 @@ int main(int argc, char* argv[]) {
   install_static::ScopedInstallDetails install_details;
 
   testing::InitGoogleTest(&argc, argv);
-  RUN_ALL_TESTS();
+  int ret = RUN_ALL_TESTS();
 
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(kManualLaunchTests)) {
     call_dynamically();
     call_statically();
     printf("LaunchChrome returned %d.\n", LaunchGoogleChrome());
   }
+
+  return ret;
 }

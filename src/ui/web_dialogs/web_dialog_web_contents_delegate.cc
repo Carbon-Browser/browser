@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,22 +38,28 @@ void WebDialogWebContentsDelegate::Detach() {
 }
 
 WebContents* WebDialogWebContentsDelegate::OpenURLFromTab(
-    WebContents* source, const OpenURLParams& params) {
-  return handler_->OpenURLFromTab(browser_context_, source, params);
+    WebContents* source,
+    const OpenURLParams& params,
+    base::OnceCallback<void(content::NavigationHandle&)>
+        navigation_handle_callback) {
+  return handler_->OpenURLFromTab(browser_context_, source, params,
+                                  std::move(navigation_handle_callback));
 }
 
-void WebDialogWebContentsDelegate::AddNewContents(
+WebContents* WebDialogWebContentsDelegate::AddNewContents(
     WebContents* source,
     std::unique_ptr<WebContents> new_contents,
     const GURL& target_url,
     WindowOpenDisposition disposition,
-    const gfx::Rect& initial_rect,
+    const blink::mojom::WindowFeatures& window_features,
     bool user_gesture,
     bool* was_blocked) {
   // TODO(erikchen): Refactor AddNewContents to take strong ownership semantics.
   // https://crbug.com/832879.
   handler_->AddNewContents(browser_context_, source, std::move(new_contents),
-                           target_url, disposition, initial_rect, user_gesture);
+                           target_url, disposition, window_features,
+                           user_gesture);
+  return nullptr;
 }
 
 bool WebDialogWebContentsDelegate::PreHandleGestureEvent(

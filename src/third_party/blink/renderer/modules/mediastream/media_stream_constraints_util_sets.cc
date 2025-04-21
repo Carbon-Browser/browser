@@ -1,14 +1,19 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "third_party/blink/renderer/modules/mediastream/media_stream_constraints_util_sets.h"
 
 #include <cmath>
 
 #include "third_party/blink/public/platform/web_string.h"
+#include "third_party/blink/renderer/modules/mediastream/media_constraints.h"
 #include "third_party/blink/renderer/modules/mediastream/media_stream_constraints_util.h"
-#include "third_party/blink/renderer/platform/mediastream/media_constraints.h"
 
 namespace blink {
 namespace media_constraints {
@@ -95,9 +100,9 @@ bool IsPositiveFiniteAspectRatio(double aspect_ratio) {
 // |vertices| must have 1 or 2 elements. Otherwise, behavior is undefined.
 // This function is called when |point| has already been determined to be
 // outside a polygon and |vertices| is the vertex or side closest to |point|.
-Point GetClosestPointToVertexOrSide(const Vector<Point> vertices,
+Point GetClosestPointToVertexOrSide(const Vector<Point>& vertices,
                                     const Point& point) {
-  DCHECK(!vertices.IsEmpty());
+  DCHECK(!vertices.empty());
   // If only a single vertex closest to |point|, return that vertex.
   if (vertices.size() == 1U)
     return vertices[0];
@@ -360,8 +365,6 @@ Point ResolutionSet::SelectClosestPointToIdeal(
     default:
       NOTREACHED();
   }
-  NOTREACHED();
-  return Point(-1, -1);
 }
 
 Point ResolutionSet::SelectClosestPointToIdealAspectRatio(
@@ -437,7 +440,7 @@ Vector<Point> ResolutionSet::GetClosestVertices(double (Point::*accessor)()
       closest_vertices.push_back(vertex);
     }
   }
-  DCHECK(!closest_vertices.IsEmpty());
+  DCHECK(!closest_vertices.empty());
   DCHECK_LE(closest_vertices.size(), 2U);
   return closest_vertices;
 }
@@ -529,7 +532,7 @@ void ResolutionSet::TryAddVertex(Vector<Point>* vertices,
   // Add the point to the |vertices| if not already added.
   // This is to prevent duplicates in case an aspect ratio intersects a width
   // or height right on a vertex.
-  if (vertices->IsEmpty() ||
+  if (vertices->empty() ||
       (*(vertices->end() - 1) != point && *vertices->begin() != point)) {
     vertices->push_back(point);
   }
@@ -573,7 +576,7 @@ DiscreteSet<bool> RescaleSetFromConstraint(
       WebString::FromASCII(WebMediaStreamTrack::kResizeModeNone));
   bool contains_rescale = resize_mode_constraint.Matches(
       WebString::FromASCII(WebMediaStreamTrack::kResizeModeRescale));
-  if (resize_mode_constraint.Exact().IsEmpty() ||
+  if (resize_mode_constraint.Exact().empty() ||
       (contains_none && contains_rescale)) {
     return DiscreteSet<bool>::UniversalSet();
   }

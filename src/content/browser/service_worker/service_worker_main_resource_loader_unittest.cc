@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,30 +7,31 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/time/time.h"
 #include "content/browser/loader/navigation_loader_interceptor.h"
-#include "content/browser/loader/single_request_url_loader_factory.h"
+#include "content/browser/loader/response_head_update_params.h"
 #include "content/browser/service_worker/embedded_worker_test_helper.h"
 #include "content/browser/service_worker/fake_embedded_worker_instance_client.h"
 #include "content/browser/service_worker/fake_service_worker.h"
-#include "content/browser/service_worker/service_worker_container_host.h"
+#include "content/browser/service_worker/service_worker_client.h"
 #include "content/browser/service_worker/service_worker_context_core.h"
+#include "content/browser/service_worker/service_worker_fetch_dispatcher.h"
 #include "content/browser/service_worker/service_worker_registration.h"
 #include "content/browser/service_worker/service_worker_test_utils.h"
 #include "content/browser/service_worker/service_worker_version.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/mock_render_process_host.h"
 #include "mojo/public/cpp/system/data_pipe_utils.h"
-#include "net/ssl/ssl_info.h"
 #include "net/test/cert_test_util.h"
 #include "net/test/test_data_directory.h"
 #include "services/network/public/cpp/features.h"
+#include "services/network/public/cpp/single_request_url_loader_factory.h"
 #include "services/network/public/mojom/fetch_api.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 #include "services/network/test/test_url_loader_client.h"
@@ -49,9 +50,27 @@
 namespace content {
 namespace service_worker_main_resource_loader_unittest {
 
+class ScopedOverrideToDisableHighPriorityFetchResponseCallback {
+ public:
+  ScopedOverrideToDisableHighPriorityFetchResponseCallback() {
+    ServiceWorkerFetchDispatcher::
+        ForceDisableHighPriorityFetchResponseCallbackForTesting(
+            /*force_disable=*/true);
+  }
+  ScopedOverrideToDisableHighPriorityFetchResponseCallback(
+      const ScopedOverrideToDisableHighPriorityFetchResponseCallback&) = delete;
+  ScopedOverrideToDisableHighPriorityFetchResponseCallback& operator=(
+      const ScopedOverrideToDisableHighPriorityFetchResponseCallback&) = delete;
+  ~ScopedOverrideToDisableHighPriorityFetchResponseCallback() {
+    ServiceWorkerFetchDispatcher::
+        ForceDisableHighPriorityFetchResponseCallbackForTesting(
+            /*force_disable=*/false);
+  }
+};
+
 void ReceiveRequestHandler(
-    SingleRequestURLLoaderFactory::RequestHandler* out_handler,
-    SingleRequestURLLoaderFactory::RequestHandler handler) {
+    network::SingleRequestURLLoaderFactory::RequestHandler* out_handler,
+    network::SingleRequestURLLoaderFactory::RequestHandler handler) {
   *out_handler = std::move(handler);
 }
 
@@ -290,7 +309,7 @@ class FetchEventServiceWorker : public FakeServiceWorker {
             .Run(blink::mojom::ServiceWorkerEventStatus::COMPLETED);
         break;
       case ResponseMode::kFallbackResponse:
-        response_callback->OnFallback(/*request_body=*/absl::nullopt,
+        response_callback->OnFallback(/*request_body=*/std::nullopt,
                                       std::move(timing));
         std::move(finish_callback)
             .Run(blink::mojom::ServiceWorkerEventStatus::COMPLETED);
@@ -407,6 +426,8 @@ network::mojom::URLResponseHeadPtr CreateResponseInfoFromServiceWorker() {
   head->response_type = network::mojom::FetchResponseType::kDefault;
   head->cache_storage_cache_name = std::string();
   head->did_service_worker_navigation_preload = false;
+  head->initial_service_worker_status =
+      network::mojom::ServiceWorkerStatus::kRunning;
   return head;
 }
 
@@ -434,7 +455,8 @@ class ServiceWorkerMainResourceLoaderTest : public testing::Test {
     options.scope = GURL("https://example.com/");
     registration_ = CreateNewServiceWorkerRegistration(
         helper_->context()->registry(), options,
-        blink::StorageKey(url::Origin::Create(options.scope)));
+        blink::StorageKey::CreateFirstParty(
+            url::Origin::Create(options.scope)));
     version_ = CreateNewServiceWorkerVersion(
         helper_->context()->registry(), registration_.get(),
         GURL("https://example.com/service_worker.js"),
@@ -444,14 +466,18 @@ class ServiceWorkerMainResourceLoaderTest : public testing::Test {
         GetStorageControl(), version_->script_url(), {} /* headers */,
         "I'm the body", "I'm the meta data"));
     version_->script_cache_map()->SetResources(records);
-    version_->set_fetch_handler_existence(
-        ServiceWorkerVersion::FetchHandlerExistence::EXISTS);
+    version_->set_fetch_handler_type(
+        ServiceWorkerVersion::FetchHandlerType::kNotSkippable);
     version_->SetStatus(ServiceWorkerVersion::ACTIVATED);
+    PolicyContainerPolicies policies;
+    policies.ip_address_space = network::mojom::IPAddressSpace::kPrivate;
+    version_->set_policy_container_host(
+        base::MakeRefCounted<PolicyContainerHost>(std::move(policies)));
     registration_->SetActiveVersion(version_);
 
     // Make the registration findable via storage functions.
     registration_->set_last_update_check(base::Time::Now());
-    absl::optional<blink::ServiceWorkerStatusCode> status;
+    std::optional<blink::ServiceWorkerStatusCode> status;
     base::RunLoop run_loop;
     registry()->StoreRegistration(
         registration_.get(), version_.get(),
@@ -493,19 +519,13 @@ class ServiceWorkerMainResourceLoaderTest : public testing::Test {
   // caller can use functions like client_.RunUntilComplete() to wait for
   // completion.
   void StartRequest(std::unique_ptr<network::ResourceRequest> request) {
-    // Create a ServiceWorkerContainerHost and simulate what
+    // Create a ServiceWorkerClient and simulate what
     // ServiceWorkerControlleeRequestHandler does to assign it a controller.
-    if (!container_host_) {
-      container_host_ = CreateContainerHostForWindow(
-          GlobalRenderFrameHostId(helper_->mock_render_process_id(),
-                                  /*mock frame_routing_id=*/1),
-          /*is_parent_frame_secure=*/true, helper_->context()->AsWeakPtr(),
-          &container_endpoints_);
-      container_host_->UpdateUrls(
-          request->url, url::Origin::Create(request->url),
-          blink::StorageKey(url::Origin::Create(request->url)));
-      container_host_->AddMatchingRegistration(registration_.get());
-      container_host_->SetControllerRegistration(
+    if (!service_worker_client_) {
+      service_worker_client_ = std::make_unique<ScopedServiceWorkerClient>(
+          CreateServiceWorkerClient(helper_->context(), request->url));
+      service_worker_client()->AddMatchingRegistration(registration_.get());
+      service_worker_client()->SetControllerRegistration(
           registration_, /*notify_controllerchange=*/false);
     }
 
@@ -513,8 +533,9 @@ class ServiceWorkerMainResourceLoaderTest : public testing::Test {
     loader_ = std::make_unique<ServiceWorkerMainResourceLoader>(
         base::BindOnce(&ServiceWorkerMainResourceLoaderTest::Fallback,
                        base::Unretained(this)),
-        container_host_,
-        /*frame_tree_node_id=*/RenderFrameHost::kNoFrameTreeNodeId);
+        /*fetch_event_client_id=*/"", service_worker_client()->AsWeakPtr(),
+        FrameTreeNodeId(),
+        /*find_registration_start_time=*/base::TimeTicks::Now());
 
     // Load |request.url|.
     loader_->StartRequest(*request, loader_remote_.BindNewPipeAndPassReceiver(),
@@ -523,9 +544,8 @@ class ServiceWorkerMainResourceLoaderTest : public testing::Test {
 
   // The |fallback_callback| passed to the ServiceWorkerMainResourceLoader in
   // StartRequest().
-  void Fallback(bool reset_subresource_loader_params) {
+  void Fallback(ResponseHeadUpdateParams) {
     did_call_fallback_callback_ = true;
-    reset_subresource_loader_params_ = reset_subresource_loader_params;
     if (quit_closure_for_fallback_callback_)
       std::move(quit_closure_for_fallback_callback_).Run();
   }
@@ -567,6 +587,10 @@ class ServiceWorkerMainResourceLoaderTest : public testing::Test {
               info.cache_storage_cache_name);
     EXPECT_EQ(expected_info.did_service_worker_navigation_preload,
               info.did_service_worker_navigation_preload);
+    EXPECT_EQ(expected_info.initial_service_worker_status,
+              info.initial_service_worker_status);
+    // TODO(crbug.com/40944544): Write tests about Static Routing API, in
+    // particular, checking the correctness of `service_worker_router_info`.
   }
 
   std::unique_ptr<network::ResourceRequest> CreateRequest() {
@@ -586,6 +610,10 @@ class ServiceWorkerMainResourceLoaderTest : public testing::Test {
   }
 
  protected:
+  ServiceWorkerClient* service_worker_client() const {
+    return service_worker_client_->get();
+  }
+
   BrowserTaskEnvironment task_environment_;
   std::unique_ptr<EmbeddedWorkerTestHelper> helper_;
   scoped_refptr<ServiceWorkerRegistration> registration_;
@@ -595,11 +623,9 @@ class ServiceWorkerMainResourceLoaderTest : public testing::Test {
   network::TestURLLoaderClient client_;
   std::unique_ptr<ServiceWorkerMainResourceLoader> loader_;
   mojo::Remote<network::mojom::URLLoader> loader_remote_;
-  base::WeakPtr<ServiceWorkerContainerHost> container_host_;
-  ServiceWorkerRemoteContainerEndpoint container_endpoints_;
+  std::unique_ptr<ScopedServiceWorkerClient> service_worker_client_;
 
   bool did_call_fallback_callback_ = false;
-  bool reset_subresource_loader_params_ = false;
   base::OnceClosure quit_closure_for_fallback_callback_;
 };
 
@@ -617,6 +643,9 @@ TEST_F(ServiceWorkerMainResourceLoaderTest, Basic) {
   EXPECT_FALSE(info->load_timing.receive_headers_end.is_null());
   EXPECT_LE(info->load_timing.receive_headers_start,
             info->load_timing.receive_headers_end);
+  EXPECT_TRUE(info->was_fetched_via_service_worker);
+  EXPECT_EQ(info->client_address_space,
+            network::mojom::IPAddressSpace::kPrivate);
   ExpectResponseInfo(*info, *CreateResponseInfoFromServiceWorker());
 
   histogram_tester.ExpectUniqueSample(kHistogramMainResourceFetchEvent,
@@ -634,15 +663,9 @@ TEST_F(ServiceWorkerMainResourceLoaderTest, NoActiveWorker) {
   base::HistogramTester histogram_tester;
 
   // Make a container host without a controller.
-  container_host_ = CreateContainerHostForWindow(
-      GlobalRenderFrameHostId(helper_->mock_render_process_id(),
-                              /*mock frame_routing_id=*/1),
-      /*is_parent_frame_secure=*/true, helper_->context()->AsWeakPtr(),
-      &container_endpoints_);
-  container_host_->UpdateUrls(
-      GURL("https://example.com/"),
-      url::Origin::Create(GURL("https://example.com/")),
-      blink::StorageKey(url::Origin::Create(GURL("https://example.com/"))));
+  service_worker_client_ =
+      std::make_unique<ScopedServiceWorkerClient>(CreateServiceWorkerClient(
+          helper_->context(), GURL("https://example.com/")));
 
   // Perform the request.
   StartRequest(CreateRequest());
@@ -665,7 +688,7 @@ TEST_F(ServiceWorkerMainResourceLoaderTest, RequestBody) {
 
   // Create a request with a body.
   auto request_body = base::MakeRefCounted<network::ResourceRequestBody>();
-  request_body->AppendBytes(kData.c_str(), kData.length());
+  request_body->AppendCopyOfBytes(base::as_byte_span(kData));
   std::unique_ptr<network::ResourceRequest> request = CreateRequest();
   request->method = "POST";
   request->request_body = request_body;
@@ -782,7 +805,7 @@ TEST_F(ServiceWorkerMainResourceLoaderTest, StreamResponse) {
   base::HistogramTester histogram_tester;
 
   // Construct the Stream to respond with.
-  const char kResponseBody[] = "Here is sample text for the Stream.";
+  const std::string_view kResponseBody = "Here is sample text for the Stream.";
   mojo::Remote<blink::mojom::ServiceWorkerStreamCallback> stream_callback;
   mojo::ScopedDataPipeProducerHandle producer_handle;
   mojo::ScopedDataPipeConsumerHandle consumer_handle;
@@ -802,11 +825,12 @@ TEST_F(ServiceWorkerMainResourceLoaderTest, StreamResponse) {
   EXPECT_FALSE(version_->HasNoWork());
 
   // Write the body stream.
-  uint32_t written_bytes = sizeof(kResponseBody) - 1;
+  size_t actually_written_bytes = 0;
   MojoResult mojo_result = producer_handle->WriteData(
-      kResponseBody, &written_bytes, MOJO_WRITE_DATA_FLAG_NONE);
+      base::as_byte_span(kResponseBody), MOJO_WRITE_DATA_FLAG_NONE,
+      actually_written_bytes);
   ASSERT_EQ(MOJO_RESULT_OK, mojo_result);
-  EXPECT_EQ(sizeof(kResponseBody) - 1, written_bytes);
+  EXPECT_EQ(kResponseBody.size(), actually_written_bytes);
   stream_callback->OnCompleted();
   producer_handle.reset();
 
@@ -834,7 +858,7 @@ TEST_F(ServiceWorkerMainResourceLoaderTest, StreamResponse_Abort) {
   base::HistogramTester histogram_tester;
 
   // Construct the Stream to respond with.
-  const char kResponseBody[] = "Here is sample text for the Stream.";
+  const std::string_view kResponseBody = "Here is sample text for the Stream.";
   mojo::Remote<blink::mojom::ServiceWorkerStreamCallback> stream_callback;
   mojo::ScopedDataPipeProducerHandle producer_handle;
   mojo::ScopedDataPipeConsumerHandle consumer_handle;
@@ -852,11 +876,12 @@ TEST_F(ServiceWorkerMainResourceLoaderTest, StreamResponse_Abort) {
   ExpectResponseInfo(*info, *CreateResponseInfoFromServiceWorker());
 
   // Start writing the body stream, then abort before finishing.
-  uint32_t written_bytes = sizeof(kResponseBody) - 1;
+  size_t actually_written_bytes = 0;
   MojoResult mojo_result = producer_handle->WriteData(
-      kResponseBody, &written_bytes, MOJO_WRITE_DATA_FLAG_NONE);
+      base::as_byte_span(kResponseBody), MOJO_WRITE_DATA_FLAG_NONE,
+      actually_written_bytes);
   ASSERT_EQ(MOJO_RESULT_OK, mojo_result);
-  EXPECT_EQ(sizeof(kResponseBody) - 1, written_bytes);
+  EXPECT_EQ(kResponseBody.size(), actually_written_bytes);
   stream_callback->OnAborted();
   producer_handle.reset();
 
@@ -888,7 +913,7 @@ TEST_F(ServiceWorkerMainResourceLoaderTest, StreamResponseAndCancel) {
   base::HistogramTester histogram_tester;
 
   // Construct the Stream to respond with.
-  const char kResponseBody[] = "Here is sample text for the Stream.";
+  const std::string_view kResponseBody = "Here is sample text for the Stream.";
   mojo::Remote<blink::mojom::ServiceWorkerStreamCallback> stream_callback;
   mojo::ScopedDataPipeProducerHandle producer_handle;
   mojo::ScopedDataPipeConsumerHandle consumer_handle;
@@ -907,11 +932,12 @@ TEST_F(ServiceWorkerMainResourceLoaderTest, StreamResponseAndCancel) {
 
   // Start writing the body stream, then break the Mojo connection to the loader
   // before finishing.
-  uint32_t written_bytes = sizeof(kResponseBody) - 1;
+  size_t actually_written_bytes = 0;
   MojoResult mojo_result = producer_handle->WriteData(
-      kResponseBody, &written_bytes, MOJO_WRITE_DATA_FLAG_NONE);
+      base::as_byte_span(kResponseBody), MOJO_WRITE_DATA_FLAG_NONE,
+      actually_written_bytes);
   ASSERT_EQ(MOJO_RESULT_OK, mojo_result);
-  EXPECT_EQ(sizeof(kResponseBody) - 1, written_bytes);
+  EXPECT_EQ(kResponseBody.size(), actually_written_bytes);
   EXPECT_TRUE(producer_handle.is_valid());
   loader_remote_.reset();
   base::RunLoop().RunUntilIdle();
@@ -920,8 +946,9 @@ TEST_F(ServiceWorkerMainResourceLoaderTest, StreamResponseAndCancel) {
   // on connection error, the URLLoaderClient still exists. In this test, it is
   // |client_| which owns the data pipe, so it's still valid to write data to
   // it.
-  mojo_result = producer_handle->WriteData(kResponseBody, &written_bytes,
-                                           MOJO_WRITE_DATA_FLAG_NONE);
+  mojo_result = producer_handle->WriteData(base::as_byte_span(kResponseBody),
+                                           MOJO_WRITE_DATA_FLAG_NONE,
+                                           actually_written_bytes);
   // TODO(falken): This should probably be an error.
   EXPECT_EQ(MOJO_RESULT_OK, mojo_result);
 
@@ -952,11 +979,10 @@ TEST_F(ServiceWorkerMainResourceLoaderTest, FallbackResponse) {
 
   // The fallback callback should be called.
   RunUntilFallbackCallback();
-  EXPECT_FALSE(reset_subresource_loader_params_);
 
   // The request should not be handled by the loader, but it shouldn't be a
   // failure.
-  EXPECT_TRUE(container_host_->controller());
+  EXPECT_TRUE(service_worker_client()->controller());
   histogram_tester.ExpectUniqueSample(kHistogramMainResourceFetchEvent,
                                       blink::ServiceWorkerStatusCode::kOk, 1);
   if (LoaderRecordsTimingMetrics()) {
@@ -992,6 +1018,15 @@ TEST_F(ServiceWorkerMainResourceLoaderTest, ErrorResponse) {
 
 // Test when dispatching the fetch event to the service worker failed.
 TEST_F(ServiceWorkerMainResourceLoaderTest, FailFetchDispatch) {
+  // This test simulates failure to dispatch the fetch event to the
+  // service worker by calling
+  // `service_worker_->FailToDispatchFetchEvent()`. But without
+  // disabling high priority fetch response callback, request processing
+  // comes earlier, and doesn't fail to fetch dispatch.  This test is
+  // still valid after introducing HighPriorityFetchResponseCallback.
+  ScopedOverrideToDisableHighPriorityFetchResponseCallback
+      disable_high_priority_fetch_response_callback;
+
   base::HistogramTester histogram_tester;
   service_worker_->FailToDispatchFetchEvent();
 
@@ -1000,8 +1035,7 @@ TEST_F(ServiceWorkerMainResourceLoaderTest, FailFetchDispatch) {
 
   // The fallback callback should be called.
   RunUntilFallbackCallback();
-  EXPECT_TRUE(reset_subresource_loader_params_);
-  EXPECT_FALSE(container_host_->controller());
+  EXPECT_FALSE(service_worker_client()->controller());
 
   histogram_tester.ExpectUniqueSample(
       kHistogramMainResourceFetchEvent,
@@ -1102,13 +1136,21 @@ TEST_F(ServiceWorkerMainResourceLoaderTest, ConnectionErrorDuringFetchEvent) {
 }
 
 TEST_F(ServiceWorkerMainResourceLoaderTest, CancelNavigationDuringFetchEvent) {
+  // This test simulates failure by resetting ServiceWorkerClient.  But without
+  // disabling HighPriorityFetchResponseCallback,
+  // `Release()` comes later than
+  // request processing, and doesn't cancel navigation during the fetch
+  // event.  This test is still valid after introducing
+  // HighPriorityFetchResponseCallback.
+  ScopedOverrideToDisableHighPriorityFetchResponseCallback
+      disable_high_priority_fetch_response_callback;
+
   StartRequest(CreateRequest());
 
   // Delete the container host during the request. The load should abort without
   // crashing.
-  container_endpoints_.host_remote()->reset();
+  service_worker_client_.reset();
   base::RunLoop().RunUntilIdle();
-  EXPECT_FALSE(container_host_);
 
   client_.RunUntilComplete();
   EXPECT_EQ(net::ERR_ABORTED, client_.completion_status().error_code);

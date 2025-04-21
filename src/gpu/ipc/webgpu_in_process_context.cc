@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,7 @@ WebGPUInProcessContext::~WebGPUInProcessContext() {
   // Trigger any pending lost contexts. First do a full sync between client
   // and service threads. Then execute any pending tasks.
   if (webgpu_implementation_) {
-    // TODO(crbug.com/868192): do the equivalent of a glFinish here?
+    // TODO(crbug.com/40586882): do the equivalent of a glFinish here?
     client_task_runner_->RunUntilIdle();
     webgpu_implementation_.reset();
   }
@@ -41,8 +41,7 @@ WebGPUInProcessContext::~WebGPUInProcessContext() {
 ContextResult WebGPUInProcessContext::Initialize(
     CommandBufferTaskExecutor* task_executor,
     const ContextCreationAttribs& attribs,
-    const SharedMemoryLimits& memory_limits,
-    ImageFactory* image_factory) {
+    const SharedMemoryLimits& memory_limits) {
   DCHECK(attribs.context_type == CONTEXT_TYPE_WEBGPU);
 
   if (attribs.context_type != CONTEXT_TYPE_WEBGPU ||
@@ -54,9 +53,10 @@ ContextResult WebGPUInProcessContext::Initialize(
   command_buffer_ =
       std::make_unique<InProcessCommandBuffer>(task_executor, GURL());
 
-  auto result = command_buffer_->Initialize(
-      attribs, image_factory, client_task_runner_, /*gr_shader_cache=*/nullptr,
-      /*activity_flags=*/nullptr);
+  auto result =
+      command_buffer_->Initialize(attribs, client_task_runner_,
+                                  /*gr_shader_cache=*/nullptr,
+                                  /*use_shader_cache_shm_count=*/nullptr);
   if (result != ContextResult::kSuccess) {
     DLOG(ERROR) << "Failed to initialize InProcessCommmandBuffer";
     return result;
@@ -105,6 +105,11 @@ ServiceTransferCache* WebGPUInProcessContext::GetTransferCacheForTest() const {
 InProcessCommandBuffer* WebGPUInProcessContext::GetCommandBufferForTest()
     const {
   return command_buffer_.get();
+}
+
+CommandBufferHelper* WebGPUInProcessContext::GetCommandBufferHelperForTest()
+    const {
+  return helper_.get();
 }
 
 }  // namespace gpu

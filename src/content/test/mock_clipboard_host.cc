@@ -1,6 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/342213636): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "content/test/mock_clipboard_host.h"
 
@@ -47,13 +52,13 @@ void MockClipboardHost::GetSequenceNumber(ui::ClipboardBuffer clipboard_buffer,
 std::vector<std::u16string> MockClipboardHost::ReadStandardFormatNames() {
   std::vector<std::u16string> types;
   if (!plain_text_.empty())
-    types.push_back(u"text/plain");
+    types.push_back(base::ASCIIToUTF16(ui::kMimeTypeText));
   if (!html_text_.empty())
-    types.push_back(u"text/html");
+    types.push_back(base::ASCIIToUTF16(ui::kMimeTypeHTML));
   if (!svg_text_.empty())
-    types.push_back(u"image/svg+xml");
+    types.push_back(base::ASCIIToUTF16(ui::kMimeTypeSvg));
   if (!png_.empty())
-    types.push_back(u"image/png");
+    types.push_back(base::ASCIIToUTF16(ui::kMimeTypePNG));
   for (auto& it : custom_data_) {
     CHECK(!base::Contains(types, it.first));
     types.push_back(it.first);
@@ -119,9 +124,10 @@ void MockClipboardHost::ReadFiles(ui::ClipboardBuffer clipboard_buffer,
   std::move(callback).Run(blink::mojom::ClipboardFiles::New());
 }
 
-void MockClipboardHost::ReadCustomData(ui::ClipboardBuffer clipboard_buffer,
-                                       const std::u16string& type,
-                                       ReadCustomDataCallback callback) {
+void MockClipboardHost::ReadDataTransferCustomData(
+    ui::ClipboardBuffer clipboard_buffer,
+    const std::u16string& type,
+    ReadDataTransferCustomDataCallback callback) {
   auto it = custom_data_.find(type);
   std::move(callback).Run(it != custom_data_.end() ? it->second
                                                    : std::u16string());
@@ -153,7 +159,7 @@ void MockClipboardHost::WriteSmartPasteMarker() {
   write_smart_paste_ = true;
 }
 
-void MockClipboardHost::WriteCustomData(
+void MockClipboardHost::WriteDataTransferCustomData(
     const base::flat_map<std::u16string, std::u16string>& data) {
   if (needs_reset_)
     Reset();
@@ -167,7 +173,9 @@ void MockClipboardHost::WriteBookmark(const std::string& url,
 void MockClipboardHost::WriteImage(const SkBitmap& bitmap) {
   if (needs_reset_)
     Reset();
-  gfx::PNGCodec::EncodeBGRASkBitmap(bitmap, false, &png_);
+  png_ =
+      gfx::PNGCodec::EncodeBGRASkBitmap(bitmap, /*discard_transparency=*/false)
+          .value_or(std::vector<uint8_t>());
 }
 
 void MockClipboardHost::CommitWrite() {
@@ -190,8 +198,7 @@ void MockClipboardHost::ReadUnsanitizedCustomFormat(
   if (it == unsanitized_custom_data_map_.end())
     return;
 
-  mojo_base::BigBuffer buffer = mojo_base::BigBuffer(
-      base::make_span(it->second.data(), it->second.size()));
+  mojo_base::BigBuffer buffer = mojo_base::BigBuffer(it->second);
   std::move(callback).Run(std::move(buffer));
 }
 

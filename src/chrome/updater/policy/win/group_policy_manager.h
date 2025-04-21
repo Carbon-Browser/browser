@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_UPDATER_POLICY_WIN_GROUP_POLICY_MANAGER_H_
 #define CHROME_UPDATER_POLICY_WIN_GROUP_POLICY_MANAGER_H_
 
+#include <optional>
 #include <string>
 
 #include "chrome/updater/policy/policy_manager.h"
@@ -14,14 +15,20 @@ namespace updater {
 // The GroupPolicyManager returns policies for domain-joined machines.
 class GroupPolicyManager : public PolicyManager {
  public:
-  GroupPolicyManager();
+  GroupPolicyManager(
+      bool should_take_policy_critical_section,
+      std::optional<bool> override_is_managed_device = std::nullopt);
   GroupPolicyManager(const GroupPolicyManager&) = delete;
   GroupPolicyManager& operator=(const GroupPolicyManager&) = delete;
-  ~GroupPolicyManager() override;
 
   // Overrides for PolicyManagerInterface.
   std::string source() const override;
-  bool IsManaged() const override;
+  bool HasActiveDevicePolicies() const override;
+
+ private:
+  ~GroupPolicyManager() override;
+
+  const bool is_managed_device_;
 };
 
 }  // namespace updater

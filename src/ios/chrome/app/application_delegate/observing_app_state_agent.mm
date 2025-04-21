@@ -1,20 +1,26 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/app/application_delegate/observing_app_state_agent.h"
 
-#include "base/check.h"
+#import "base/check.h"
 #import "ios/chrome/app/application_delegate/app_state.h"
-#import "ios/chrome/browser/ui/main/scene_state.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/browser/shared/coordinator/scene/scene_state.h"
 
 @implementation ObservingAppAgent
 
 #pragma mark - AppStateAgent
+
++ (instancetype)agentFromApp:(AppState*)appState {
+  for (id agent in appState.connectedAgents) {
+    if ([agent isMemberOfClass:[self class]]) {
+      return agent;
+    }
+  }
+
+  return nil;
+}
 
 - (void)setAppState:(AppState*)appState {
   // This should only be called once!
@@ -44,8 +50,6 @@
 - (instancetype)init {
   self = [super init];
   if (self) {
-    _minimumStageForNotifications = InitStageFinal;
-    _notifyOfPastEventsWhenMinimumStageReached = YES;
     // The app starts with no connected scenes, so the first event should be
     // foreground.
     _notifiedBackground = YES;
@@ -72,9 +76,8 @@
 }
 
 - (void)appState:(AppState*)appState
-    didTransitionFromInitStage:(InitStage)previousInitStage {
-  if (appState.initStage == self.minimumStageForNotifications &&
-      self.notifyOfPastEventsWhenMinimumStageReached) {
+    didTransitionFromInitStage:(AppInitStage)previousInitStage {
+  if (appState.initStage == AppInitStage::kFinal) {
     [self notifyOfConvenienceEventsIfNecessary];
   }
 }
@@ -83,7 +86,7 @@
 
 - (void)sceneState:(SceneState*)sceneState
     transitionedToActivationLevel:(SceneActivationLevel)level {
-  if (self.appState.initStage < self.minimumStageForNotifications) {
+  if (self.appState.initStage < AppInitStage::kFinal) {
     return;
   }
 

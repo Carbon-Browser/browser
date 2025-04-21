@@ -1,16 +1,16 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/services/system_signals/win/metrics_utils.h"
 
 #include <cmath>
+#include <optional>
+#include <string_view>
 
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/strcat.h"
-#include "base/strings/string_piece.h"
 #include "base/win/wmi.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace system_signals {
 
@@ -29,9 +29,9 @@ int CalculateErrorRate(size_t items_count, size_t errors_count) {
 }
 
 template <typename T, typename U>
-void LogResponse(const base::StringPiece& histogram_variant,
+void LogResponse(std::string_view histogram_variant,
                  size_t items_count,
-                 const absl::optional<T>& query_error,
+                 const std::optional<T>& query_error,
                  const std::vector<U>& parsing_errors) {
   static constexpr char kCollectionHistogramPrefix[] =
       "Enterprise.SystemSignals.Collection";
@@ -62,11 +62,6 @@ void LogResponse(const base::StringPiece& histogram_variant,
 
 void LogWscAvResponse(const device_signals::WscAvProductsResponse& response) {
   LogResponse(".WSC.AntiVirus", response.av_products.size(),
-              response.query_error, response.parsing_errors);
-}
-
-void LogWmiAvResponse(const device_signals::WmiAvProductsResponse& response) {
-  LogResponse(".WMI.AntiVirus", response.av_products.size(),
               response.query_error, response.parsing_errors);
 }
 

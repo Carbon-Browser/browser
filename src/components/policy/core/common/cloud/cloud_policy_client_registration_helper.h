@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,9 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "components/policy/core/common/cloud/cloud_policy_client.h"
@@ -22,10 +21,6 @@
 
 namespace signin {
 class IdentityManager;
-}
-
-namespace network {
-class SharedURLLoaderFactory;
 }
 
 namespace policy {
@@ -66,6 +61,24 @@ class POLICY_EXPORT CloudPolicyClientRegistrationHelper
       bool is_mandatory,
       base::OnceClosure callback);
 
+  // Starts the client registration with an OIDC token enrollment process.
+  // `oauth_token` and `id_token` pair is received and extracted from a valid
+  // OIDC authentication redirection response. The `oauth_token` is from a 3P
+  // IdP, different from a refresh_token or access_token from GAIA. `client_id`
+  // is randomized if an empty string is provided. `state` contains details
+  // relevant for OIDC profile enrollment. `callback` is invoked when
+  // the registration is complete.
+  // Slightly different from other methods, the callback is invoked inside the
+  // policy client rather than in this class.
+  void StartRegistrationWithOidcTokens(
+      const std::string& oauth_token,
+      const std::string& id_token,
+      const std::string& client_id,
+      const std::string& state,
+      const base::TimeDelta& timeout_duration,
+      bool is_token_encrypted,
+      CloudPolicyClient::ResultCallback callback);
+
  private:
   class IdentityManagerHelper;
 
@@ -95,7 +108,6 @@ class POLICY_EXPORT CloudPolicyClientRegistrationHelper
   // GAIA to get information about the signed in user.
   std::string oauth_access_token_;
 
-  scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
   raw_ptr<CloudPolicyClient> client_;
   enterprise_management::DeviceRegisterRequest::Type registration_type_;
   base::OnceClosure callback_;

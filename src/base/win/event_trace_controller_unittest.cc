@@ -1,29 +1,28 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
 // Unit tests for event trace controller.
 
+#include "base/win/event_trace_controller.h"
+
 #include <objbase.h>
 
-#include <initguid.h>  // NOLINT - has to be last
+#include <initguid.h>
 
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/logging.h"
 #include "base/process/process_handle.h"
+#include "base/strings/string_number_conversions_win.h"
 #include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
 #include "base/system/sys_info.h"
-#include "base/win/event_trace_controller.h"
 #include "base/win/event_trace_provider.h"
 #include "base/win/scoped_handle.h"
-#include "base/win/windows_version.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace base {
-namespace win {
+namespace base::win {
 
 namespace {
 
@@ -107,7 +106,7 @@ namespace {
 class EtwTraceControllerTest : public testing::Test {
  public:
   EtwTraceControllerTest()
-      : session_name_(StringPrintf(L"TestSession-%d", GetCurrentProcId())) {}
+      : session_name_(L"TestSession-" + NumberToWString(GetCurrentProcId())) {}
 
   void SetUp() override {
     EtwTraceProperties ignore;
@@ -224,16 +223,11 @@ TEST_F(EtwTraceControllerTest, DISABLED_EnableDisable) {
 
   EXPECT_HRESULT_SUCCEEDED(controller.Stop(nullptr));
 
-  // Windows 7 does not call the callback when Stop() is called so we
-  // can't wait, and enable_level and enable_flags are not zeroed.
-  if (GetVersion() >= Version::WIN8) {
-    provider.WaitForCallback();
+  provider.WaitForCallback();
 
-    // Session should have wound down.
-    EXPECT_EQ(0, provider.enable_level());
-    EXPECT_EQ(0u, provider.enable_flags());
-  }
+  // Session should have wound down.
+  EXPECT_EQ(0, provider.enable_level());
+  EXPECT_EQ(0u, provider.enable_flags());
 }
 
-}  // namespace win
-}  // namespace base
+}  // namespace base::win

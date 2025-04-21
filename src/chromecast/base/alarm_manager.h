@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,8 @@
 #include <queue>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
@@ -23,7 +24,18 @@ class SingleThreadTaskRunner;
 namespace chromecast {
 
 // Alarm handle for scoping the in-flight alarm.
-class AlarmHandle : public base::SupportsWeakPtr<AlarmHandle> {};
+class AlarmHandle final {
+ public:
+  AlarmHandle();
+  ~AlarmHandle();
+
+  base::WeakPtr<AlarmHandle> AsWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
+ private:
+  base::WeakPtrFactory<AlarmHandle> weak_ptr_factory_{this};
+};
 
 // Alarm manager allows setting a task for wall clock time rather than for an
 // elapsed amount of time. This is different from using long PostDelayedTasks
@@ -108,7 +120,7 @@ class AlarmManager {
       next_alarm_;
 
   // Poller for wall clock time.
-  const base::Clock* const clock_;
+  const raw_ptr<const base::Clock> clock_;
   base::RepeatingTimer clock_tick_timer_;
   scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
 

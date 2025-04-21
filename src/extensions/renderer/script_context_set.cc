@@ -1,23 +1,30 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/renderer/script_context_set.h"
 
-#include "base/bind.h"
-#include "base/feature_list.h"
+#include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "content/public/common/url_constants.h"
 #include "content/public/renderer/render_frame.h"
+#include "content/public/renderer/worker_thread.h"
+#include "extensions/common/constants.h"
 #include "extensions/common/extension.h"
-#include "extensions/common/extension_features.h"
+#include "extensions/common/extension_id.h"
+#include "extensions/common/mojom/context_type.mojom.h"
+#include "extensions/common/mojom/host_id.mojom.h"
+#include "extensions/common/utils/extension_utils.h"
 #include "extensions/renderer/extension_frame_helper.h"
 #include "extensions/renderer/extensions_renderer_client.h"
+#include "extensions/renderer/isolated_world_manager.h"
+#include "extensions/renderer/renderer_frame_context_data.h"
 #include "extensions/renderer/script_context.h"
-#include "extensions/renderer/script_injection.h"
-#include "third_party/blink/public/web/blink.h"
+#include "pdf/buildflags.h"
+#include "third_party/blink/public/platform/scheduler/web_agent_group_scheduler.h"
 #include "third_party/blink/public/web/web_document.h"
 #include "third_party/blink/public/web/web_local_frame.h"
 #include "v8/include/v8-isolate.h"
@@ -43,7 +50,8 @@ ScriptContextSet::~ScriptContextSet() {
 ScriptContext* ScriptContextSet::Register(
     blink::WebLocalFrame* frame,
     const v8::Local<v8::Context>& v8_context,
-    int32_t world_id) {
+    int32_t world_id,
+    bool is_webview) {
   const Extension* extension =
       GetExtensionFromFrameAndWorld(frame, world_id, false);
   const Extension* effective_extension =
@@ -59,24 +67,48 @@ ScriptContext* ScriptContextSet::Register(
         ExtensionFrameHelper::Get(render_frame);
     DCHECK(frame_helper);
     view_type = frame_helper->view_type();
-    // We should only find an offscreen document if the corresponding feature
-    // is enabled.
-    DCHECK(base::FeatureList::IsEnabled(
-               extensions_features::kExtensionsOffscreenDocuments) ||
-           view_type != mojom::ViewType::kOffscreenDocument);
   }
   GURL frame_url = ScriptContext::GetDocumentLoaderURLForFrame(frame);
-  Feature::Context context_type = ClassifyJavaScriptContext(
+  mojom::ContextType context_type = ClassifyJavaScriptContext(
       extension, world_id, frame_url, frame->GetDocument().GetSecurityOrigin(),
-      view_type);
-  Feature::Context effective_context_type = ClassifyJavaScriptContext(
+      view_type, is_webview);
+  mojom::ContextType effective_context_type = ClassifyJavaScriptContext(
       effective_extension, world_id,
       ScriptContext::GetEffectiveDocumentURLForContext(frame, frame_url, true),
-      frame->GetDocument().GetSecurityOrigin(), view_type);
+      frame->GetDocument().GetSecurityOrigin(), view_type, is_webview);
 
-  ScriptContext* context =
-      new ScriptContext(v8_context, frame, extension, context_type,
-                        effective_extension, effective_context_type);
+  mojom::HostID host_id;
+  RendererFrameContextData context_data = RendererFrameContextData(frame);
+  // By default, the context will use a HostID kExtensions type. Specific
+  // cases override that value below.
+  host_id.type = mojom::HostID::HostType::kExtensions;
+  if (extension) {
+    host_id.id = extension->id();
+  } else if (effective_context_type == mojom::ContextType::kWebUi) {
+    host_id.type = mojom::HostID::HostType::kWebUi;
+  } else if (effective_context_type == mojom::ContextType::kWebPage &&
+             !is_webview && context_data.HasControlledFrameCapability()) {
+    host_id.type = mojom::HostID::HostType::kControlledFrameEmbedder;
+    // TODO(crbug.com/41490370): Improve how we derive origin for controlled
+    // frame embedders in renderer.
+    host_id.id = "";
+    if (frame_url.has_scheme()) {
+      host_id.id += frame_url.scheme() + "://";
+    }
+    host_id.id += frame_url.host();
+    if (frame_url.has_port()) {
+      host_id.id += ":" + frame_url.port();
+    }
+  }
+
+  std::optional<int> blink_isolated_world_id;
+  if (IsolatedWorldManager::IsExtensionIsolatedWorld(world_id)) {
+    blink_isolated_world_id = world_id;
+  }
+
+  ScriptContext* context = new ScriptContext(
+      v8_context, frame, host_id, extension, std::move(blink_isolated_world_id),
+      context_type, effective_extension, effective_context_type);
   contexts_.insert(context);  // takes ownership
   return context;
 }
@@ -84,12 +116,16 @@ ScriptContext* ScriptContextSet::Register(
 void ScriptContextSet::Remove(ScriptContext* context) {
   if (contexts_.erase(context)) {
     context->Invalidate();
-    base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, context);
+    base::SingleThreadTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                                  context);
   }
 }
 
 ScriptContext* ScriptContextSet::GetCurrent() const {
-  v8::Isolate* isolate = v8::Isolate::GetCurrent();
+  v8::Isolate* isolate = v8::Isolate::TryGetCurrent();
+  if (!isolate) [[unlikely]] {
+    return nullptr;
+  }
   return isolate->InContext() ? GetByV8Context(isolate->GetCurrentContext())
                               : nullptr;
 }
@@ -119,41 +155,65 @@ ScriptContext* ScriptContextSet::GetContextByV8Context(
 
 ScriptContext* ScriptContextSet::GetMainWorldContextForFrame(
     content::RenderFrame* render_frame) {
-  v8::HandleScope handle_scope(blink::MainThreadIsolate());
-  return GetContextByV8Context(
-      render_frame->GetWebFrame()->MainWorldScriptContext());
+  blink::WebLocalFrame* web_frame = render_frame->GetWebFrame();
+  v8::HandleScope handle_scope(web_frame->GetAgentGroupScheduler()->Isolate());
+  return GetContextByV8Context(web_frame->MainWorldScriptContext());
 }
 
 void ScriptContextSet::ForEach(
-    const std::string& extension_id,
+    const mojom::HostID& host_id,
     content::RenderFrame* render_frame,
     const base::RepeatingCallback<void(ScriptContext*)>& callback) {
   // We copy the context list, because calling into javascript may modify it
   // out from under us.
-  std::set<ScriptContext*> contexts_copy = contexts_;
+  std::set<raw_ptr<ScriptContext, SetExperimental>> contexts_copy = contexts_;
 
   for (ScriptContext* context : contexts_copy) {
     // For the same reason as above, contexts may become invalid while we run.
-    if (!context->is_valid())
+    if (!context->is_valid()) {
       continue;
-
-    if (!extension_id.empty()) {
-      const Extension* extension = context->extension();
-      if (!extension || (extension_id != extension->id()))
-        continue;
     }
 
-    content::RenderFrame* context_render_frame = context->GetRenderFrame();
-    if (render_frame && render_frame != context_render_frame)
-      continue;
+    switch (host_id.type) {
+      case mojom::HostID::HostType::kExtensions:
+        // Note: If the type is kExtensions and host_id.id is empty, then the
+        // call should affect all extensions. See comment in dispatcher.cc
+        // UpdateAllBindings().
+        if (host_id.id.empty() || context->GetExtensionID() == host_id.id) {
+          ExecuteCallbackWithContext(context, render_frame, callback);
+        }
+        break;
 
+      case mojom::HostID::HostType::kWebUi:
+        DCHECK(host_id.id.empty());
+        ExecuteCallbackWithContext(context, render_frame, callback);
+        break;
+
+      case mojom::HostID::HostType::kControlledFrameEmbedder:
+        DCHECK(!host_id.id.empty());
+        // Verify that host_id matches context->host_id.
+        if (context->host_id().type == host_id.type &&
+            context->host_id().id == host_id.id) {
+          ExecuteCallbackWithContext(context, render_frame, callback);
+        }
+    }
+  }
+}
+
+void ScriptContextSet::ExecuteCallbackWithContext(
+    ScriptContext* context,
+    content::RenderFrame* render_frame,
+    const base::RepeatingCallback<void(ScriptContext*)>& callback) {
+  CHECK(context);
+  content::RenderFrame* context_render_frame = context->GetRenderFrame();
+  if (!render_frame || render_frame == context_render_frame) {
     callback.Run(context);
   }
 }
 
-void ScriptContextSet::OnExtensionUnloaded(const std::string& extension_id) {
+void ScriptContextSet::OnExtensionUnloaded(const ExtensionId& extension_id) {
   ScriptContextSetIterable::ForEach(
-      extension_id,
+      GenerateHostIdFromExtensionId(extension_id),
       base::BindRepeating(&ScriptContextSet::Remove, base::Unretained(this)));
 }
 
@@ -165,10 +225,11 @@ const Extension* ScriptContextSet::GetExtensionFromFrameAndWorld(
     blink::WebLocalFrame* frame,
     int32_t world_id,
     bool use_effective_url) {
-  std::string extension_id;
+  ExtensionId extension_id;
   if (world_id != 0) {
     // Isolated worlds (content script).
-    extension_id = ScriptInjection::GetHostIdForIsolatedWorld(world_id);
+    extension_id =
+        IsolatedWorldManager::GetInstance().GetHostIdForIsolatedWorld(world_id);
   } else {
     // For looking up the extension associated with this frame, we either want
     // to use the current url or possibly the data source url (which this frame
@@ -195,52 +256,84 @@ const Extension* ScriptContextSet::GetExtensionFromFrameAndWorld(
   return extension;
 }
 
-Feature::Context ScriptContextSet::ClassifyJavaScriptContext(
+mojom::ContextType ScriptContextSet::ClassifyJavaScriptContext(
     const Extension* extension,
     int32_t world_id,
     const GURL& url,
     const blink::WebSecurityOrigin& origin,
-    mojom::ViewType view_type) {
-  // WARNING: This logic must match ProcessMap::GetContextType, as much as
-  // possible.
+    mojom::ViewType view_type,
+    bool is_webview) {
+  // WARNING: This logic must match `ProcessMap::GetMostLikelyContextType()`
+  // as much as possible.
 
   // Worlds not within this range are not for content scripts, so ignore them.
   // TODO(devlin): Isolated worlds with a non-zero id could belong to
   // chrome-internal pieces, like dom distiller and translate. Do we need any
   // bindings (even those for basic web pages) for those?
   if (world_id >= ExtensionsRendererClient::Get()->GetLowestIsolatedWorldId()) {
+    // A non-main-world should (currently) only ever happen on the main thread.
+    // We don't support injection of content scripts or user scripts into worker
+    // contexts.
+    CHECK_EQ(kMainThreadId, content::WorkerThread::GetCurrentId());
+    std::optional<mojom::ExecutionWorld> execution_world =
+        IsolatedWorldManager::GetInstance().GetExecutionWorldForIsolatedWorld(
+            world_id);
+    if (execution_world == mojom::ExecutionWorld::kUserScript) {
+      CHECK(extension);
+      return mojom::ContextType::kUserScript;
+    }
+
     return extension ?  // TODO(kalman): when does this happen?
-               Feature::CONTENT_SCRIPT_CONTEXT
-                     : Feature::UNSPECIFIED_CONTEXT;
+               mojom::ContextType::kContentScript
+                     : mojom::ContextType::kUnspecified;
   }
 
   // We have an explicit check for sandboxed pages before checking whether the
   // extension is active in this process because:
-  // 1. Sandboxed pages run in the same process as regular extension pages, so
-  //    the extension is considered active.
+  // 1. Sandboxed extension pages which are not listed in the extension's
+  //    manifest sandbox section run in the same process as regular extension
+  //    pages, so the extension is considered active. (In contrast,
+  //    manifest-sandboxed pages run in a different process because they do not
+  //    have API access.)
   // 2. ScriptContext creation (which triggers bindings injection) happens
   //    before the SecurityContext is updated with the sandbox flags (after
   //    reading the CSP header), so the caller can't check if the context's
   //    security origin is unique yet.
-  if (ScriptContext::IsSandboxedPage(url))
-    return Feature::WEB_PAGE_CONTEXT;
+  if (ScriptContext::IsSandboxedPage(url)) {
+    // TODO(https://crbug.com/347031402): it's weird returning kWebPage if
+    // `extension` is non-null (which it is if `IsSandboxedPage` returns true).
+    // It would be better to return kUnprivileged in that case.
+    return mojom::ContextType::kWebPage;
+  }
 
   if (extension && active_extension_ids_->count(extension->id()) > 0) {
     // |extension| is active in this process, but it could be either a true
     // extension process or within the extent of a hosted app. In the latter
-    // case this would usually be considered a (blessed) web page context,
+    // case this would usually be considered a (privileged) web page context,
     // unless the extension in question is a component extension, in which case
-    // we cheat and call it blessed.
+    // we cheat and call it privileged.
     if (extension->is_hosted_app() &&
         extension->location() != mojom::ManifestLocation::kComponent) {
-      return Feature::BLESSED_WEB_PAGE_CONTEXT;
+      return mojom::ContextType::kPrivilegedWebPage;
     }
 
-    if (is_lock_screen_context_)
-      return Feature::LOCK_SCREEN_EXTENSION_CONTEXT;
-    if (view_type == mojom::ViewType::kOffscreenDocument)
-      return Feature::OFFSCREEN_EXTENSION_CONTEXT;
-    return Feature::BLESSED_EXTENSION_CONTEXT;
+    if (is_webview) {
+#if BUILDFLAG(ENABLE_PDF)
+      // The PDF Viewer extension in a webview needs to be a privileged
+      // extension in order to load.
+      if (extension->id() == extension_misc::kPdfExtensionId) {
+        return mojom::ContextType::kPrivilegedExtension;
+      }
+#endif  // BUILDFLAG(ENABLE_PDF)
+
+      return mojom::ContextType::kUnprivilegedExtension;
+    }
+
+    if (view_type == mojom::ViewType::kOffscreenDocument) {
+      return mojom::ContextType::kOffscreenExtension;
+    }
+
+    return mojom::ContextType::kPrivilegedExtension;
   }
 
   // None of the following feature types should ever be present in an
@@ -252,21 +345,25 @@ Feature::Context ScriptContextSet::ClassifyJavaScriptContext(
   if (!origin.IsOpaque() &&
       RendererExtensionRegistry::Get()->ExtensionBindingsAllowed(url)) {
     if (!extension)  // TODO(kalman): when does this happen?
-      return Feature::UNSPECIFIED_CONTEXT;
-    return extension->is_hosted_app() ? Feature::BLESSED_WEB_PAGE_CONTEXT
-                                      : Feature::UNBLESSED_EXTENSION_CONTEXT;
+      return mojom::ContextType::kUnspecified;
+    return extension->is_hosted_app()
+               ? mojom::ContextType::kPrivilegedWebPage
+               : mojom::ContextType::kUnprivilegedExtension;
   }
 
-  if (!url.is_valid())
-    return Feature::UNSPECIFIED_CONTEXT;
+  if (!url.is_valid()) {
+    return mojom::ContextType::kUnspecified;
+  }
 
-  if (url.SchemeIs(content::kChromeUIScheme))
-    return Feature::WEBUI_CONTEXT;
+  if (url.SchemeIs(content::kChromeUIScheme)) {
+    return mojom::ContextType::kWebUi;
+  }
 
-  if (url.SchemeIs(content::kChromeUIUntrustedScheme))
-    return Feature::WEBUI_UNTRUSTED_CONTEXT;
+  if (url.SchemeIs(content::kChromeUIUntrustedScheme)) {
+    return mojom::ContextType::kUntrustedWebUi;
+  }
 
-  return Feature::WEB_PAGE_CONTEXT;
+  return mojom::ContextType::kWebPage;
 }
 
 }  // namespace extensions

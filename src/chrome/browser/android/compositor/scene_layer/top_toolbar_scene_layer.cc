@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,15 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/jni_array.h"
-#include "cc/layers/solid_color_layer.h"
+#include "cc/input/android/offset_tag_android.h"
+#include "cc/slim/solid_color_layer.h"
 #include "chrome/browser/android/compositor/layer/toolbar_layer.h"
-#include "chrome/browser/ui/android/toolbar/jni_headers/TopToolbarSceneLayer_jni.h"
+#include "components/viz/common/quads/offset_tag.h"
 #include "ui/android/resources/resource_manager_impl.h"
 #include "ui/gfx/android/java_bitmap.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "chrome/browser/ui/android/toolbar/jni_headers/TopToolbarSceneLayer_jni.h"
 
 using base::android::JavaParamRef;
 using base::android::JavaRef;
@@ -22,7 +26,7 @@ TopToolbarSceneLayer::TopToolbarSceneLayer(JNIEnv* env,
     : SceneLayer(env, jobj),
       should_show_background_(false),
       background_color_(SK_ColorWHITE),
-      content_container_(cc::Layer::Create()) {
+      content_container_(cc::slim::Layer::Create()) {
   layer()->AddChild(content_container_);
   layer()->SetIsDrawable(true);
 }
@@ -41,7 +45,8 @@ void TopToolbarSceneLayer::UpdateToolbarLayer(
     jfloat content_offset,
     bool show_shadow,
     bool visible,
-    bool anonymize) {
+    bool anonymize,
+    const base::android::JavaParamRef<jobject>& joffset_tag) {
   // If the toolbar layer has not been created yet, create it.
   if (!toolbar_layer_) {
     ui::ResourceManager* resource_manager =
@@ -52,12 +57,15 @@ void TopToolbarSceneLayer::UpdateToolbarLayer(
   }
 
   toolbar_layer_->layer()->SetHideLayerAndSubtree(!visible);
-  if (!visible)
+  if (!visible) {
     return;
+  }
 
+  viz::OffsetTag offset_tag = cc::android::FromJavaOffsetTag(env, joffset_tag);
   toolbar_layer_->PushResource(toolbar_resource_id, toolbar_background_color,
                                anonymize, url_bar_color, url_bar_resource_id,
-                               x_offset, content_offset, false, !show_shadow);
+                               x_offset, content_offset, false, !show_shadow,
+                               offset_tag);
 }
 
 void TopToolbarSceneLayer::UpdateProgressBar(

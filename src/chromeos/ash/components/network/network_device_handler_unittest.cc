@@ -1,32 +1,35 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
+#include <optional>
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/values.h"
+#include "chromeos/ash/components/dbus/dbus_thread_manager.h"
+#include "chromeos/ash/components/dbus/shill/fake_shill_device_client.h"
+#include "chromeos/ash/components/dbus/shill/shill_clients.h"
+#include "chromeos/ash/components/dbus/shill/shill_manager_client.h"
 #include "chromeos/ash/components/network/cellular_metrics_logger.h"
 #include "chromeos/ash/components/network/network_device_handler_impl.h"
+#include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_handler_callbacks.h"
+#include "chromeos/ash/components/network/network_handler_test_helper.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
-#include "chromeos/dbus/shill/fake_shill_device_client.h"
-#include "chromeos/dbus/shill/shill_clients.h"
-#include "chromeos/dbus/shill/shill_manager_client.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
@@ -55,6 +58,8 @@ class NetworkDeviceHandlerTest : public testing::Test {
     fake_device_client_ = ShillDeviceClient::Get();
     fake_device_client_->GetTestInterface()->ClearDevices();
 
+    network_handler_test_helper_ = std::make_unique<NetworkHandlerTestHelper>();
+
     network_state_handler_ = NetworkStateHandler::InitializeForTest();
     NetworkDeviceHandlerImpl* device_handler = new NetworkDeviceHandlerImpl;
     device_handler->Init(network_state_handler_.get());
@@ -67,10 +72,11 @@ class NetworkDeviceHandlerTest : public testing::Test {
                            "cellular1");
     device_test->AddDevice(kDefaultWifiDevicePath, shill::kTypeWifi, "wifi1");
 
-    base::Value test_ip_configs(base::Value::Type::LIST);
+    base::Value::List test_ip_configs;
     test_ip_configs.Append("ip_config1");
     device_test->SetDeviceProperty(kDefaultWifiDevicePath,
-                                   shill::kIPConfigsProperty, test_ip_configs,
+                                   shill::kIPConfigsProperty,
+                                   base::Value(std::move(test_ip_configs)),
                                    /*notify_changed=*/true);
 
     base::RunLoop().RunUntilIdle();
@@ -78,6 +84,7 @@ class NetworkDeviceHandlerTest : public testing::Test {
 
   void TearDown() override {
     network_state_handler_->Shutdown();
+    network_handler_test_helper_.reset();
     network_device_handler_.reset();
     network_state_handler_.reset();
     shill_clients::Shutdown();
@@ -101,13 +108,13 @@ class NetworkDeviceHandlerTest : public testing::Test {
   void SuccessCallback() { result_ = kResultSuccess; }
 
   void GetPropertiesCallback(const std::string& device_path,
-                             absl::optional<base::Value> properties) {
+                             std::optional<base::Value::Dict> properties) {
     if (!properties) {
       result_ = kResultFailure;
       return;
     }
     result_ = kResultSuccess;
-    properties_ = std::move(*properties);
+    properties_ = std::move(properties.value());
   }
 
   void StringSuccessCallback(const std::string& result) {
@@ -129,7 +136,7 @@ class NetworkDeviceHandlerTest : public testing::Test {
                             const std::string& property_name,
                             const std::string& expected_value) {
     GetDeviceProperties(device_path, kResultSuccess);
-    std::string* value = properties_.FindStringKey(property_name);
+    std::string* value = properties_.FindString(property_name);
     ASSERT_NE(value, nullptr);
     ASSERT_EQ(*value, expected_value);
   }
@@ -137,15 +144,16 @@ class NetworkDeviceHandlerTest : public testing::Test {
  protected:
   base::test::SingleThreadTaskEnvironment task_environment_;
   std::string result_;
-  ShillDeviceClient* fake_device_client_ = nullptr;
+  raw_ptr<ShillDeviceClient, DanglingUntriaged> fake_device_client_ = nullptr;
   std::unique_ptr<NetworkDeviceHandler> network_device_handler_;
   std::unique_ptr<NetworkStateHandler> network_state_handler_;
-  base::Value properties_;
+  std::unique_ptr<NetworkHandlerTestHelper> network_handler_test_helper_;
+  base::Value::Dict properties_;
 };
 
 TEST_F(NetworkDeviceHandlerTest, GetDeviceProperties) {
   GetDeviceProperties(kDefaultWifiDevicePath, kResultSuccess);
-  std::string* type = properties_.FindStringKey(shill::kTypeProperty);
+  std::string* type = properties_.FindString(shill::kTypeProperty);
   ASSERT_TRUE(type);
   EXPECT_EQ(shill::kTypeWifi, *type);
 }
@@ -162,8 +170,8 @@ TEST_F(NetworkDeviceHandlerTest, SetDeviceProperty) {
   // GetDeviceProperties should return the value set by SetDeviceProperty.
   GetDeviceProperties(kDefaultCellularDevicePath, kResultSuccess);
 
-  absl::optional<int> interval =
-      properties_.FindIntKey(shill::kScanIntervalProperty);
+  std::optional<int> interval =
+      properties_.FindInt(shill::kScanIntervalProperty);
   EXPECT_TRUE(interval.has_value());
   EXPECT_EQ(1, interval.value());
 
@@ -176,7 +184,7 @@ TEST_F(NetworkDeviceHandlerTest, SetDeviceProperty) {
 
   GetDeviceProperties(kDefaultCellularDevicePath, kResultSuccess);
 
-  interval = properties_.FindIntKey(shill::kScanIntervalProperty);
+  interval = properties_.FindInt(shill::kScanIntervalProperty);
   EXPECT_TRUE(interval.has_value());
   EXPECT_EQ(2, interval.value());
 
@@ -208,8 +216,8 @@ TEST_F(NetworkDeviceHandlerTest, CellularAllowRoaming) {
 
   GetDeviceProperties(kDefaultCellularDevicePath, kResultSuccess);
 
-  absl::optional<bool> policy_allow_roaming =
-      properties_.FindBoolKey(shill::kCellularPolicyAllowRoamingProperty);
+  std::optional<bool> policy_allow_roaming =
+      properties_.FindBool(shill::kCellularPolicyAllowRoamingProperty);
   EXPECT_TRUE(policy_allow_roaming.has_value());
   EXPECT_TRUE(policy_allow_roaming.value());
 
@@ -219,7 +227,7 @@ TEST_F(NetworkDeviceHandlerTest, CellularAllowRoaming) {
   GetDeviceProperties(kDefaultCellularDevicePath, kResultSuccess);
 
   policy_allow_roaming =
-      properties_.FindBoolKey(shill::kCellularPolicyAllowRoamingProperty);
+      properties_.FindBool(shill::kCellularPolicyAllowRoamingProperty);
   EXPECT_TRUE(policy_allow_roaming.has_value());
   EXPECT_FALSE(policy_allow_roaming.value());
 }
@@ -443,6 +451,11 @@ TEST_F(NetworkDeviceHandlerTest, RequirePin) {
   histogram_tester.ExpectBucketCount(
       CellularMetricsLogger::kSimPinRequireLockSuccessHistogram,
       CellularMetricsLogger::SimPinOperationResult::kSuccess, 1);
+  histogram_tester.ExpectTotalCount(
+      CellularMetricsLogger::kRequirePinSuccessSimPinLockPolicyHistogram, 1);
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kRequirePinSuccessSimPinLockPolicyHistogram, true,
+      1);
 
   // Test that the shill error propagates to the error callback.
   network_device_handler_->RequirePin(kUnknownCellularDevicePath, true,
@@ -455,22 +468,36 @@ TEST_F(NetworkDeviceHandlerTest, RequirePin) {
       CellularMetricsLogger::kSimPinRequireLockSuccessHistogram, 2);
   histogram_tester.ExpectBucketCount(
       CellularMetricsLogger::kSimPinRequireLockSuccessHistogram,
-      CellularMetricsLogger::SimPinOperationResult::kErrorUnknown, 1);
+      CellularMetricsLogger::SimPinOperationResult::kErrorDeviceMissing, 1);
+  histogram_tester.ExpectTotalCount(
+      CellularMetricsLogger::kRequirePinSuccessSimPinLockPolicyHistogram, 2);
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kRequirePinSuccessSimPinLockPolicyHistogram, true,
+      2);
 }
 
-TEST_F(NetworkDeviceHandlerTest, EnterPin) {
+TEST_F(NetworkDeviceHandlerTest, EnterPinOnManagedDevice) {
   base::HistogramTester histogram_tester;
 
-  // Test that the success callback gets called.
+  NetworkHandler::Get()->SetIsEnterpriseManaged(true);
+  network_device_handler_->SetAllowCellularSimLock(
+      /*allow_cellular_sim_lock=*/true);
+
+  // Test that the success metrics get emitted for managed devices.
   network_device_handler_->EnterPin(kDefaultCellularDevicePath, kDefaultPin,
                                     GetSuccessCallback(), GetErrorCallback());
   base::RunLoop().RunUntilIdle();
-  EXPECT_EQ(kResultSuccess, result_);
   histogram_tester.ExpectTotalCount(
-      CellularMetricsLogger::kSimPinUnlockSuccessHistogram, 1);
+      CellularMetricsLogger::kManagedSimPinUnlockSuccessHistogram, 1);
   histogram_tester.ExpectBucketCount(
-      CellularMetricsLogger::kSimPinUnlockSuccessHistogram,
+      CellularMetricsLogger::kManagedSimPinUnlockSuccessHistogram,
       CellularMetricsLogger::SimPinOperationResult::kSuccess, 1);
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kUnrestrictedSimPinUnlockSuccessHistogram,
+      CellularMetricsLogger::SimPinOperationResult::kSuccess, 1);
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kRestrictedSimPinUnlockSuccessHistogram,
+      CellularMetricsLogger::SimPinOperationResult::kSuccess, 0);
 
   // Test that the shill error propagates to the error callback.
   network_device_handler_->EnterPin(kUnknownCellularDevicePath, kDefaultPin,
@@ -478,16 +505,141 @@ TEST_F(NetworkDeviceHandlerTest, EnterPin) {
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(NetworkDeviceHandler::kErrorDeviceMissing, result_);
   histogram_tester.ExpectTotalCount(
-      CellularMetricsLogger::kSimPinUnlockSuccessHistogram, 2);
+      CellularMetricsLogger::kManagedSimPinUnlockSuccessHistogram, 2);
   histogram_tester.ExpectBucketCount(
-      CellularMetricsLogger::kSimPinUnlockSuccessHistogram,
-      CellularMetricsLogger::SimPinOperationResult::kErrorUnknown, 1);
+      CellularMetricsLogger::kManagedSimPinUnlockSuccessHistogram,
+      CellularMetricsLogger::SimPinOperationResult::kErrorDeviceMissing, 1);
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kUnrestrictedSimPinUnlockSuccessHistogram,
+      CellularMetricsLogger::SimPinOperationResult::kErrorDeviceMissing, 1);
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kRestrictedSimPinUnlockSuccessHistogram,
+      CellularMetricsLogger::SimPinOperationResult::kErrorDeviceMissing, 0);
+
+  network_device_handler_->SetAllowCellularSimLock(
+      /*allow_cellular_sim_lock=*/false);
+
+  network_device_handler_->EnterPin(kDefaultCellularDevicePath, kDefaultPin,
+                                    GetSuccessCallback(), GetErrorCallback());
+  base::RunLoop().RunUntilIdle();
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kRestrictedSimPinUnlockSuccessHistogram,
+      CellularMetricsLogger::SimPinOperationResult::kSuccess, 1);
+
+  network_device_handler_->EnterPin(kUnknownCellularDevicePath, kDefaultPin,
+                                    GetSuccessCallback(), GetErrorCallback());
+  base::RunLoop().RunUntilIdle();
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kRestrictedSimPinUnlockSuccessHistogram,
+      CellularMetricsLogger::SimPinOperationResult::kErrorDeviceMissing, 1);
 }
 
-TEST_F(NetworkDeviceHandlerTest, UnblockPin) {
+TEST_F(NetworkDeviceHandlerTest, EnterPinOnUnmanagedDevice) {
   base::HistogramTester histogram_tester;
+
+  NetworkHandler::Get()->SetIsEnterpriseManaged(false);
+
+  // Test that the success callback gets called.
+  network_device_handler_->EnterPin(kDefaultCellularDevicePath, kDefaultPin,
+                                    GetSuccessCallback(), GetErrorCallback());
+  base::RunLoop().RunUntilIdle();
+  EXPECT_EQ(kResultSuccess, result_);
+  histogram_tester.ExpectTotalCount(
+      CellularMetricsLogger::kUnmanagedSimPinUnlockSuccessHistogram, 1);
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kUnmanagedSimPinUnlockSuccessHistogram,
+      CellularMetricsLogger::SimPinOperationResult::kSuccess, 1);
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kUnrestrictedSimPinUnlockSuccessHistogram,
+      CellularMetricsLogger::SimPinOperationResult::kSuccess, 0);
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kRestrictedSimPinUnlockSuccessHistogram,
+      CellularMetricsLogger::SimPinOperationResult::kSuccess, 0);
+
+  // Test that the shill error propagates to the error callback.
+  network_device_handler_->EnterPin(kUnknownCellularDevicePath, kDefaultPin,
+                                    GetSuccessCallback(), GetErrorCallback());
+  base::RunLoop().RunUntilIdle();
+  EXPECT_EQ(NetworkDeviceHandler::kErrorDeviceMissing, result_);
+  histogram_tester.ExpectTotalCount(
+      CellularMetricsLogger::kUnmanagedSimPinUnlockSuccessHistogram, 2);
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kUnmanagedSimPinUnlockSuccessHistogram,
+      CellularMetricsLogger::SimPinOperationResult::kErrorDeviceMissing, 1);
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kUnrestrictedSimPinUnlockSuccessHistogram,
+      CellularMetricsLogger::SimPinOperationResult::kErrorDeviceMissing, 0);
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kRestrictedSimPinUnlockSuccessHistogram,
+      CellularMetricsLogger::SimPinOperationResult::kErrorDeviceMissing, 0);
+}
+
+TEST_F(NetworkDeviceHandlerTest, UnblockPinOnManagedDevice) {
+  base::HistogramTester histogram_tester;
+
   const char kPuk[] = "12345678";
   const char kPin[] = "1234";
+
+  NetworkHandler::Get()->SetIsEnterpriseManaged(true);
+  network_device_handler_->SetAllowCellularSimLock(
+      /*allow_cellular_sim_lock=*/true);
+
+  // Test that the success metrics get emitted for managed devices.
+  network_device_handler_->UnblockPin(kDefaultCellularDevicePath, kPin, kPuk,
+                                      GetSuccessCallback(), GetErrorCallback());
+  base::RunLoop().RunUntilIdle();
+  histogram_tester.ExpectTotalCount(
+      CellularMetricsLogger::kManagedSimPinUnblockSuccessHistogram, 1);
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kManagedSimPinUnblockSuccessHistogram,
+      CellularMetricsLogger::SimPinOperationResult::kSuccess, 1);
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kUnrestrictedSimPinUnblockSuccessHistogram,
+      CellularMetricsLogger::SimPinOperationResult::kSuccess, 1);
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kRestrictedSimPinUnblockSuccessHistogram,
+      CellularMetricsLogger::SimPinOperationResult::kSuccess, 0);
+
+  // Test that the error metrics get emitted for managed devices.
+  network_device_handler_->UnblockPin(kUnknownCellularDevicePath, kPin, kPuk,
+                                      GetSuccessCallback(), GetErrorCallback());
+  base::RunLoop().RunUntilIdle();
+  histogram_tester.ExpectTotalCount(
+      CellularMetricsLogger::kManagedSimPinUnblockSuccessHistogram, 2);
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kManagedSimPinUnblockSuccessHistogram,
+      CellularMetricsLogger::SimPinOperationResult::kErrorDeviceMissing, 1);
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kUnrestrictedSimPinUnblockSuccessHistogram,
+      CellularMetricsLogger::SimPinOperationResult::kErrorDeviceMissing, 1);
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kRestrictedSimPinUnblockSuccessHistogram,
+      CellularMetricsLogger::SimPinOperationResult::kErrorDeviceMissing, 0);
+
+  network_device_handler_->SetAllowCellularSimLock(
+      /*allow_cellular_sim_lock=*/false);
+  network_device_handler_->UnblockPin(kDefaultCellularDevicePath, kPin, kPuk,
+                                      GetSuccessCallback(), GetErrorCallback());
+  base::RunLoop().RunUntilIdle();
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kRestrictedSimPinUnblockSuccessHistogram,
+      CellularMetricsLogger::SimPinOperationResult::kSuccess, 1);
+
+  network_device_handler_->UnblockPin(kUnknownCellularDevicePath, kPin, kPuk,
+                                      GetSuccessCallback(), GetErrorCallback());
+  base::RunLoop().RunUntilIdle();
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kRestrictedSimPinUnblockSuccessHistogram,
+      CellularMetricsLogger::SimPinOperationResult::kErrorDeviceMissing, 1);
+}
+
+TEST_F(NetworkDeviceHandlerTest, UnblockPinOnUnmanagedDevice) {
+  base::HistogramTester histogram_tester;
+
+  const char kPuk[] = "12345678";
+  const char kPin[] = "1234";
+
+  NetworkHandler::Get()->SetIsEnterpriseManaged(false);
 
   // Test that the success callback gets called.
   network_device_handler_->UnblockPin(kDefaultCellularDevicePath, kPin, kPuk,
@@ -495,10 +647,16 @@ TEST_F(NetworkDeviceHandlerTest, UnblockPin) {
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(kResultSuccess, result_);
   histogram_tester.ExpectTotalCount(
-      CellularMetricsLogger::kSimPinUnblockSuccessHistogram, 1);
+      CellularMetricsLogger::kUnmanagedSimPinUnblockSuccessHistogram, 1);
   histogram_tester.ExpectBucketCount(
-      CellularMetricsLogger::kSimPinUnblockSuccessHistogram,
+      CellularMetricsLogger::kUnmanagedSimPinUnblockSuccessHistogram,
       CellularMetricsLogger::SimPinOperationResult::kSuccess, 1);
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kUnrestrictedSimPinUnblockSuccessHistogram,
+      CellularMetricsLogger::SimPinOperationResult::kSuccess, 0);
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kRestrictedSimPinUnblockSuccessHistogram,
+      CellularMetricsLogger::SimPinOperationResult::kSuccess, 0);
 
   // Test that the shill error propagates to the error callback.
   network_device_handler_->UnblockPin(kUnknownCellularDevicePath, kPin, kPuk,
@@ -506,10 +664,16 @@ TEST_F(NetworkDeviceHandlerTest, UnblockPin) {
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(NetworkDeviceHandler::kErrorDeviceMissing, result_);
   histogram_tester.ExpectTotalCount(
-      CellularMetricsLogger::kSimPinUnblockSuccessHistogram, 2);
+      CellularMetricsLogger::kUnmanagedSimPinUnblockSuccessHistogram, 2);
   histogram_tester.ExpectBucketCount(
-      CellularMetricsLogger::kSimPinUnblockSuccessHistogram,
-      CellularMetricsLogger::SimPinOperationResult::kErrorUnknown, 1);
+      CellularMetricsLogger::kUnmanagedSimPinUnblockSuccessHistogram,
+      CellularMetricsLogger::SimPinOperationResult::kErrorDeviceMissing, 1);
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kUnrestrictedSimPinUnblockSuccessHistogram,
+      CellularMetricsLogger::SimPinOperationResult::kErrorDeviceMissing, 0);
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kRestrictedSimPinUnblockSuccessHistogram,
+      CellularMetricsLogger::SimPinOperationResult::kErrorDeviceMissing, 0);
 
   histogram_tester.ExpectTotalCount(
       CellularMetricsLogger::kSimPinRemoveLockSuccessHistogram, 0);
@@ -544,6 +708,11 @@ TEST_F(NetworkDeviceHandlerTest, ChangePin) {
   histogram_tester.ExpectBucketCount(
       CellularMetricsLogger::kSimPinChangeSuccessHistogram,
       CellularMetricsLogger::SimPinOperationResult::kSuccess, 1);
+  histogram_tester.ExpectTotalCount(
+      CellularMetricsLogger::kChangePinSuccessSimPinLockPolicyHistogram, 1);
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kChangePinSuccessSimPinLockPolicyHistogram, true,
+      1);
 
   // Test that the shill error propagates to the error callback.
   network_device_handler_->ChangePin(kDefaultCellularDevicePath, kIncorrectPin,
@@ -555,7 +724,12 @@ TEST_F(NetworkDeviceHandlerTest, ChangePin) {
       CellularMetricsLogger::kSimPinChangeSuccessHistogram, 2);
   histogram_tester.ExpectBucketCount(
       CellularMetricsLogger::kSimPinChangeSuccessHistogram,
-      CellularMetricsLogger::SimPinOperationResult::kErrorUnknown, 1);
+      CellularMetricsLogger::SimPinOperationResult::kErrorIncorrectPin, 1);
+  histogram_tester.ExpectTotalCount(
+      CellularMetricsLogger::kChangePinSuccessSimPinLockPolicyHistogram, 2);
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kChangePinSuccessSimPinLockPolicyHistogram, true,
+      2);
 }
 
 TEST_F(NetworkDeviceHandlerTest, RequirePinBlockedByPolicy) {
@@ -573,6 +747,11 @@ TEST_F(NetworkDeviceHandlerTest, RequirePinBlockedByPolicy) {
   EXPECT_EQ(NetworkDeviceHandler::kErrorBlockedByPolicy, result_);
   histogram_tester.ExpectTotalCount(
       CellularMetricsLogger::kSimPinRequireLockSuccessHistogram, 0);
+  histogram_tester.ExpectTotalCount(
+      CellularMetricsLogger::kRequirePinSuccessSimPinLockPolicyHistogram, 0);
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kRequirePinSuccessSimPinLockPolicyHistogram, true,
+      0);
 
   // Test that the success callback gets called when removing a PIN lock.
   network_device_handler_->RequirePin(kDefaultCellularDevicePath, false,
@@ -602,6 +781,11 @@ TEST_F(NetworkDeviceHandlerTest, ChangePinBlockedByPolicy) {
   EXPECT_EQ(NetworkDeviceHandler::kErrorBlockedByPolicy, result_);
   histogram_tester.ExpectTotalCount(
       CellularMetricsLogger::kSimPinChangeSuccessHistogram, 0);
+  histogram_tester.ExpectTotalCount(
+      CellularMetricsLogger::kChangePinSuccessSimPinLockPolicyHistogram, 0);
+  histogram_tester.ExpectBucketCount(
+      CellularMetricsLogger::kChangePinSuccessSimPinLockPolicyHistogram, true,
+      0);
 }
 
 TEST_F(NetworkDeviceHandlerTest, EnterPinWhenSimPinLockPolicyRestricted) {
@@ -619,7 +803,7 @@ TEST_F(NetworkDeviceHandlerTest, EnterPinWhenSimPinLockPolicyRestricted) {
   histogram_tester.ExpectTotalCount(
       CellularMetricsLogger::kSimPinRemoveLockSuccessHistogram, 0);
   histogram_tester.ExpectTotalCount(
-      CellularMetricsLogger::kSimPinUnlockSuccessHistogram, 1);
+      CellularMetricsLogger::kUnmanagedSimPinUnlockSuccessHistogram, 1);
 
   network_device_handler_->SetAllowCellularSimLock(
       /*allow_cellular_sim_lock=*/false);
@@ -633,6 +817,6 @@ TEST_F(NetworkDeviceHandlerTest, EnterPinWhenSimPinLockPolicyRestricted) {
   histogram_tester.ExpectTotalCount(
       CellularMetricsLogger::kSimPinRemoveLockSuccessHistogram, 1);
   histogram_tester.ExpectTotalCount(
-      CellularMetricsLogger::kSimPinUnlockSuccessHistogram, 1);
+      CellularMetricsLogger::kUnmanagedSimPinUnlockSuccessHistogram, 2);
 }
-}  // namespace chromeos
+}  // namespace ash

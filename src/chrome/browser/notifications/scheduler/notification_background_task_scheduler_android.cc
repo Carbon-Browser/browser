@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,6 @@
 #include "chrome/browser/notifications/scheduler/public/notification_background_task_scheduler.h"
 #include "chrome/browser/notifications/scheduler/public/notification_schedule_service.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_android.h"
 #include "chrome/browser/profiles/profile_key.h"
 
 // static

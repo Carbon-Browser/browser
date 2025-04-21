@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,6 @@
 #include "third_party/blink/renderer/core/layout/layout_object.h"
 #include "third_party/blink/renderer/core/layout/map_coordinates_flags.h"
 #include "third_party/blink/renderer/core/pointer_type_names.h"
-#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/widget/frame_widget.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
@@ -130,7 +129,7 @@ MouseEvent* CreateMouseOrPointerEvent(
                                   ? underlying_event->PlatformTimeStamp()
                                   : base::TimeTicks::Now();
   MouseEvent::SyntheticEventType synthetic_type = MouseEvent::kPositionless;
-  if (const auto* mouse_event = DynamicTo<MouseEvent>(underlying_event)) {
+  if (IsA<MouseEvent>(underlying_event)) {
     synthetic_type = MouseEvent::kRealOrIndistinguishable;
   }
   if (creation_scope == SimulatedClickCreationScope::kFromAccessibility) {
@@ -198,8 +197,7 @@ Event* SimulatedEventUtil::CreateEvent(
          event_type == event_type_names::kPointerup);
 
   EventClassType event_class_type = EventClassType::kMouse;
-  if ((RuntimeEnabledFeatures::ClickPointerEventEnabled() &&
-       event_type == event_type_names::kClick) ||
+  if (event_type == event_type_names::kClick ||
       event_type == event_type_names::kPointerdown ||
       event_type == event_type_names::kPointerup) {
     event_class_type = EventClassType::kPointer;

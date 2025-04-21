@@ -1,8 +1,9 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//build/buildflag_header.gni")
+import("//build/config/apple/swift_source_set.gni")
 import("//build/config/ios/ios_sdk.gni")
 
 source_set("util") {
@@ -19,17 +20,18 @@ source_set("util") {
     "pointer_interaction_util.mm",
     "text_view_util.h",
     "text_view_util.mm",
+    "ui_util.h",
+    "ui_util.mm",
   ]
   deps = [
     "//base",
     "//ios/chrome/common:constants",
     "//ios/chrome/common/ui/colors",
+    "//ui/gfx/ios:uikit_util",
   ]
-  configs += [ "//build/config/compiler:enable_arc" ]
 }
 
 source_set("dynamic_type_util") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "dynamic_type_util.h",
     "dynamic_type_util.mm",
@@ -38,7 +40,6 @@ source_set("dynamic_type_util") {
 }
 
 source_set("image_util") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   sources = [
     "image_util.h",
     "image_util.mm",
@@ -51,15 +52,16 @@ source_set("image_util") {
 }
 
 source_set("unit_tests") {
-  configs += [ "//build/config/compiler:enable_arc" ]
   testonly = true
   sources = [
     "dynamic_type_util_unittest.mm",
     "image_util_unittest.mm",
+    "ui_util_unittest.mm",
   ]
   deps = [
     ":dynamic_type_util",
     ":image_util",
+    ":util",
     "//base",
     "//testing/gtest",
     "//third_party/ocmock",

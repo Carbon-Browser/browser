@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,9 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/values.h"
 #include "extensions/browser/api/messaging/native_message_host.h"
-
-namespace base {
-class DictionaryValue;
-class SingleThreadTaskRunner;
-}  // namespace base
 
 namespace {
 class BrowserContext;
@@ -47,7 +44,8 @@ class NativeMessageEchoHost : public NativeMessageHost {
   scoped_refptr<base::SingleThreadTaskRunner> task_runner() const override;
 
  private:
-  void ProcessEcho(const base::DictionaryValue& request);
+  void ProcessEcho(const base::Value::Dict& request);
+  void SendInvalidResponse();
 
   // Counter used to ensure message uniqueness for testing.
   int message_number_ = 0;

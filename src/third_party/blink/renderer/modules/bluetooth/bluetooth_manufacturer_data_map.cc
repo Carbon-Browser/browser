@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,32 +10,29 @@
 namespace blink {
 
 class BluetoothManufacturerDataMapIterationSource final
-    : public PairIterable<uint16_t,
-                          IDLUnsignedShort,
-                          Member<DOMDataView>,
-                          DOMDataView>::IterationSource {
+    : public PairSyncIterable<BluetoothManufacturerDataMap>::IterationSource {
  public:
   explicit BluetoothManufacturerDataMapIterationSource(
       const BluetoothManufacturerDataMap& map)
       : map_(map), iterator_(map_->Map().begin()) {}
 
-  bool Next(ScriptState* script_state,
-            uint16_t& map_key,
-            Member<DOMDataView>& map_value,
-            ExceptionState&) override {
+  bool FetchNextItem(ScriptState* script_state,
+                     uint16_t& map_key,
+                     NotShared<DOMDataView>& map_value,
+                     ExceptionState&) override {
     if (iterator_ == map_->Map().end())
       return false;
-    map_key = iterator_->key;
-    map_value =
-        BluetoothRemoteGATTUtils::ConvertWTFVectorToDataView(iterator_->value);
+    map_key = iterator_->key->id;
+    map_value = NotShared<DOMDataView>(
+        BluetoothRemoteGATTUtils::ConvertSpanToDataView(iterator_->value));
     ++iterator_;
     return true;
   }
 
   void Trace(Visitor* visitor) const override {
     visitor->Trace(map_);
-    PairIterable<uint16_t, IDLUnsignedShort, Member<DOMDataView>,
-                 DOMDataView>::IterationSource::Trace(visitor);
+    PairSyncIterable<BluetoothManufacturerDataMap>::IterationSource::Trace(
+        visitor);
   }
 
  private:
@@ -45,31 +42,32 @@ class BluetoothManufacturerDataMapIterationSource final
 };
 
 BluetoothManufacturerDataMap::BluetoothManufacturerDataMap(
-    const BluetoothManufacturerDataMap::MapType& map)
-    : parameter_map_(map) {}
+    const BluetoothManufacturerDataMap::MapType& map) {
+  for (const auto& entry : map) {
+    parameter_map_.insert(entry.key.Clone(), entry.value);
+  }
+}
 
 BluetoothManufacturerDataMap::~BluetoothManufacturerDataMap() {}
 
-PairIterable<uint16_t, IDLUnsignedShort, Member<DOMDataView>, DOMDataView>::
-    IterationSource*
-    BluetoothManufacturerDataMap::StartIteration(ScriptState*,
-                                                 ExceptionState&) {
+PairSyncIterable<BluetoothManufacturerDataMap>::IterationSource*
+BluetoothManufacturerDataMap::CreateIterationSource(ScriptState*,
+                                                    ExceptionState&) {
   return MakeGarbageCollected<BluetoothManufacturerDataMapIterationSource>(
       *this);
 }
 
 bool BluetoothManufacturerDataMap::GetMapEntry(ScriptState*,
                                                const uint16_t& key,
-                                               Member<DOMDataView>& value,
+                                               NotShared<DOMDataView>& value,
                                                ExceptionState&) {
-  auto it = parameter_map_.find(key);
+  mojom::blink::WebBluetoothCompanyPtr company =
+      mojom::blink::WebBluetoothCompany::New(key);
+  auto it = parameter_map_.find(company);
   if (it == parameter_map_.end())
     return false;
 
-  DOMDataView* dom_data_view =
-      BluetoothRemoteGATTUtils::ConvertWTFVectorToDataView(it->value);
-
-  value = dom_data_view;
+  value = BluetoothRemoteGATTUtils::ConvertSpanToDataView(it->value);
   return true;
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,9 @@
 #include "third_party/blink/renderer/core/html/html_element.h"
 #include "third_party/blink/renderer/core/layout/geometry/logical_rect.h"
 #include "third_party/blink/renderer/core/layout/geometry/physical_rect.h"
+#include "third_party/blink/renderer/core/layout/hit_test_result.h"
+#include "third_party/blink/renderer/core/layout/inline/inline_node.h"
 #include "third_party/blink/renderer/core/layout/layout_view.h"
-#include "third_party/blink/renderer/core/layout/ng/layout_ng_block_flow.h"
 #include "third_party/blink/renderer/core/loader/empty_clients.h"
 #include "third_party/blink/renderer/core/testing/page_test_base.h"
 #include "third_party/blink/renderer/platform/testing/layer_tree_host_embedder.h"
@@ -64,8 +65,8 @@ class RenderingTestChromeClient : public EmptyChromeClient {
   void SetUp() {
     // Runtime flags can affect LayerTreeHost's settings so this needs to be
     // recreated for each test.
-    layer_tree_.reset(new LayerTreeHostEmbedder());
-    device_emulation_transform_ = TransformationMatrix();
+    layer_tree_ = std::make_unique<LayerTreeHostEmbedder>();
+    device_emulation_transform_ = gfx::Transform();
   }
 
   bool HasLayer(const cc::Layer& layer) {
@@ -81,29 +82,37 @@ class RenderingTestChromeClient : public EmptyChromeClient {
     return layer_tree_->layer_tree_host();
   }
 
-  void SetDeviceEmulationTransform(const TransformationMatrix& t) {
+  void SetDeviceEmulationTransform(const gfx::Transform& t) {
     device_emulation_transform_ = t;
   }
-  TransformationMatrix GetDeviceEmulationTransform() const override {
+  gfx::Transform GetDeviceEmulationTransform() const override {
     return device_emulation_transform_;
   }
 
-  void InjectGestureScrollEvent(LocalFrame& local_frame,
-                                WebGestureDevice device,
-                                const gfx::Vector2dF& delta,
-                                ui::ScrollGranularity granularity,
-                                CompositorElementId scrollable_area_element_id,
-                                WebInputEvent::Type injected_type) override;
+  void InjectScrollbarGestureScroll(
+      LocalFrame& local_frame,
+      const gfx::Vector2dF& delta,
+      ui::ScrollGranularity granularity,
+      CompositorElementId scrollable_area_element_id,
+      WebInputEvent::Type injected_type) override;
+
+  void ScheduleAnimation(const LocalFrameView*, base::TimeDelta) override {
+    animation_scheduled_ = true;
+  }
+  bool AnimationScheduled() const { return animation_scheduled_; }
+  void UnsetAnimationScheduled() { animation_scheduled_ = false; }
 
  private:
   std::unique_ptr<LayerTreeHostEmbedder> layer_tree_;
-  TransformationMatrix device_emulation_transform_;
+  gfx::Transform device_emulation_transform_;
+  bool animation_scheduled_ = false;
 };
 
 class RenderingTest : public PageTestBase {
   USING_FAST_MALLOC(RenderingTest);
 
  public:
+  RenderingTest(base::test::TaskEnvironment::TimeSource time_source);
   virtual FrameSettingOverrideFunction SettingOverrider() const {
     return nullptr;
   }
@@ -144,6 +153,14 @@ class RenderingTest : public PageTestBase {
     return To<LayoutBox>(GetLayoutObjectByElementId(id));
   }
 
+  LayoutBlockFlow* GetLayoutBlockFlowByElementId(const char* id) const {
+    return To<LayoutBlockFlow>(GetLayoutObjectByElementId(id));
+  }
+
+  InlineNode GetInlineNodeByElementId(const char* id) const {
+    return InlineNode(GetLayoutBlockFlowByElementId(id));
+  }
+
   PaintLayer* GetPaintLayerByElementId(const char* id) {
     return To<LayoutBoxModelObject>(GetLayoutObjectByElementId(id))->Layer();
   }
@@ -157,6 +174,10 @@ class RenderingTest : public PageTestBase {
       const char* id) const {
     return GetDisplayItemClientFromLayoutObject(GetLayoutObjectByElementId(id));
   }
+
+  // Create a `ConstraintSpace` for the given available inline size. The
+  // available block sizes is `LayoutUnit::Max()`.
+  ConstraintSpace ConstraintSpaceForAvailableSize(LayoutUnit inline_size) const;
 
  private:
   Persistent<LocalFrameClient> local_frame_client_;
@@ -179,6 +200,19 @@ constexpr PhysicalSize::PhysicalSize(int width, int height)
     : width(width), height(height) {}
 constexpr PhysicalRect::PhysicalRect(int left, int top, int width, int height)
     : offset(left, top), size(width, height) {}
+
+// Returns the rect that should have raster invalidated whenever this object
+// changes. The rect is in the coordinate space of the document's scrolling
+// contents. This method deals with outlines and overflow.
+PhysicalRect VisualRectInDocument(const LayoutObject& object,
+                                  VisualRectFlags = kDefaultVisualRectFlags);
+
+// Returns the rect that should have raster invalidated whenever the specified
+// object changes. The rect is in the object's local physical coordinate space.
+// This is for non-SVG objects and LayoutSVGRoot only. SVG objects (except
+// LayoutSVGRoot) should use VisualRectInLocalSVGCoordinates() and map with
+// SVG transforms instead.
+PhysicalRect LocalVisualRect(const LayoutObject& object);
 
 }  // namespace blink
 

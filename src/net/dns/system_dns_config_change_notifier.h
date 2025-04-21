@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,12 @@
 #define NET_DNS_SYSTEM_DNS_CONFIG_CHANGE_NOTIFIER_H_
 
 #include <memory>
+#include <optional>
 
 #include "base/memory/scoped_refptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "net/base/net_export.h"
 #include "net/dns/dns_config.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace net {
 
@@ -26,16 +26,16 @@ class DnsConfigService;
 // This class is thread and sequence safe except that RemoveObserver() must be
 // called on the same sequence as the matched AddObserver() call.
 //
-// TODO(crbug.com/971411): Use this class in HostResolverManager.
+// TODO(crbug.com/40630884): Use this class in HostResolverManager.
 class NET_EXPORT_PRIVATE SystemDnsConfigChangeNotifier {
  public:
   class Observer {
    public:
     // Called on loading new config, including the initial read once the first
     // valid config has been read. If a config read encounters errors or an
-    // invalid config is read, will be invoked with |absl::nullopt|. Only
+    // invalid config is read, will be invoked with |std::nullopt|. Only
     // invoked when |config| changes.
-    virtual void OnSystemDnsConfigChanged(absl::optional<DnsConfig> config) = 0;
+    virtual void OnSystemDnsConfigChanged(std::optional<DnsConfig> config) = 0;
   };
 
   SystemDnsConfigChangeNotifier();
@@ -74,8 +74,12 @@ class NET_EXPORT_PRIVATE SystemDnsConfigChangeNotifier {
   // expecting network-stack-external notifications of DNS config changes.
   void RefreshConfig();
 
+  // Sets the DnsConfigService. If `done_cb` is non-null, this also runs
+  // dns_config_service->RefreshConfig() on the DnsConfigService sequence and
+  // then invokes `done_cb` on the current sequence.
   void SetDnsConfigServiceForTesting(
-      std::unique_ptr<DnsConfigService> dns_config_service);
+      std::unique_ptr<DnsConfigService> dns_config_service,
+      base::OnceClosure done_cb);
 
  private:
   class Core;

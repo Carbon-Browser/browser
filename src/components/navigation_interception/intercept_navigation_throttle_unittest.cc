@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "content/public/browser/navigation_handle.h"
@@ -68,11 +68,9 @@ class InterceptNavigationThrottleTest
   InterceptNavigationThrottleTest()
       : mock_callback_receiver_(new MockInterceptCallbackReceiver()) {
     if (GetParam()) {
-      scoped_feature_.InitAndEnableFeature(
-          InterceptNavigationThrottle::kAsyncCheck);
+      scoped_feature_.InitAndEnableFeature(kAsyncCheck);
     } else {
-      scoped_feature_.InitAndDisableFeature(
-          InterceptNavigationThrottle::kAsyncCheck);
+      scoped_feature_.InitAndDisableFeature(kAsyncCheck);
     }
   }
 
@@ -125,17 +123,8 @@ class InterceptNavigationThrottleTest
   std::unique_ptr<MockInterceptCallbackReceiver> mock_callback_receiver_;
 };
 
-// TODO(https://crbug.com/1009359): Fix flakes on win10_chromium_x64_rel_ng and
-// re-enable this test.
-#if BUILDFLAG(IS_WIN)
-#define MAYBE_RequestCompletesIfNavigationNotIgnored \
-  DISABLED_RequestCompletesIfNavigationNotIgnored
-#else
-#define MAYBE_RequestCompletesIfNavigationNotIgnored \
-  RequestCompletesIfNavigationNotIgnored
-#endif
 TEST_P(InterceptNavigationThrottleTest,
-       MAYBE_RequestCompletesIfNavigationNotIgnored) {
+       RequestCompletesIfNavigationNotIgnored) {
   ON_CALL(*mock_callback_receiver_, ShouldIgnoreNavigation(_))
       .WillByDefault(Return(false));
   EXPECT_CALL(*mock_callback_receiver_,
@@ -146,17 +135,7 @@ TEST_P(InterceptNavigationThrottleTest,
   EXPECT_EQ(NavigationThrottle::PROCEED, result);
 }
 
-// TODO(https://crbug.com/1010187): Fix flakes on win10_chromium_x64_rel_ng and
-// re-enable this test.
-#if BUILDFLAG(IS_WIN)
-#define MAYBE_RequestCancelledIfNavigationIgnored \
-  DISABLED_RequestCancelledIfNavigationIgnored
-#else
-#define MAYBE_RequestCancelledIfNavigationIgnored \
-  RequestCancelledIfNavigationIgnored
-#endif
-TEST_P(InterceptNavigationThrottleTest,
-       MAYBE_RequestCancelledIfNavigationIgnored) {
+TEST_P(InterceptNavigationThrottleTest, RequestCancelledIfNavigationIgnored) {
   ON_CALL(*mock_callback_receiver_, ShouldIgnoreNavigation(_))
       .WillByDefault(Return(true));
   EXPECT_CALL(*mock_callback_receiver_,

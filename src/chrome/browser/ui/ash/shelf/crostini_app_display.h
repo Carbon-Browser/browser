@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,7 @@ class CrostiniAppDisplay {
  private:
   // Since there is no message when an app quits, maintain a maximum number so
   // that older ones are deleted.
-  const uint kMaxAppIdSize = 32;
+  const unsigned kMaxAppIdSize = 32;
 
   std::map<std::string, int64_t> app_id_to_display_id_;
   std::deque<std::string> app_ids_;

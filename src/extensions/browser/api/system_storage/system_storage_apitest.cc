@@ -1,6 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/377326291): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <stddef.h>
 
@@ -9,7 +14,6 @@
 
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
-#include "base/strings/utf_string_conversions.h"
 #include "components/storage_monitor/storage_monitor.h"
 #include "components/storage_monitor/test_storage_monitor.h"
 #include "extensions/browser/api/system_storage/storage_api_test_util.h"
@@ -71,29 +75,29 @@ TestStorageInfoProvider::TestStorageInfoProvider(
     : testing_data_(testing_data, testing_data + n) {
 }
 
-TestStorageInfoProvider::~TestStorageInfoProvider() {
-}
+TestStorageInfoProvider::~TestStorageInfoProvider() = default;
 
 double TestStorageInfoProvider::GetStorageFreeSpaceFromTransientIdAsync(
     const std::string& transient_id) {
   double result = -1;
   std::string device_id =
       StorageMonitor::GetInstance()->GetDeviceIdForTransientId(transient_id);
-  for (size_t i = 0; i < testing_data_.size(); ++i) {
-    if (testing_data_[i].device_id == device_id) {
-      result = static_cast<double>(testing_data_[i].available_capacity);
+  for (const auto& info : testing_data_) {
+    if (info.device_id == device_id) {
+      result = static_cast<double>(info.available_capacity);
       break;
     }
   }
-  if (++callback_count_ == expected_call_count_)
+  if (++callback_count_ == expected_call_count_) {
     run_loop_.QuitWhenIdle();
+  }
   return result;
 }
 
 class SystemStorageApiTest : public extensions::ShellApiTest {
  public:
-  SystemStorageApiTest() {}
-  ~SystemStorageApiTest() override {}
+  SystemStorageApiTest() = default;
+  ~SystemStorageApiTest() override = default;
 
   void SetUpOnMainThread() override {
     ShellApiTest::SetUpOnMainThread();
@@ -101,8 +105,8 @@ class SystemStorageApiTest : public extensions::ShellApiTest {
   }
 
   void SetUpAllMockStorageDevices() {
-    for (size_t i = 0; i < std::size(kTestingData); ++i) {
-      AttachRemovableStorage(kTestingData[i]);
+    for (const auto& entry : kTestingData) {
+      AttachRemovableStorage(entry);
     }
   }
 

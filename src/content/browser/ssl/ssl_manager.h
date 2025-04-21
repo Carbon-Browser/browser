@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,6 +68,7 @@ class SSLManager {
   NavigationControllerImpl* controller() { return controller_; }
 
   void DidCommitProvisionalLoad(const LoadCommittedDetails& details);
+
   void DidStartResourceResponse(const url::SchemeHostPort& final_response_url,
                                 bool has_certificate_errors);
 
@@ -85,6 +86,10 @@ class SSLManager {
 
   // An error occurred with the certificate in an SSL connection.
   void OnCertError(std::unique_ptr<SSLErrorHandler> handler);
+
+  // Returns true if any HTTPS-related warning exceptions has been allowed by
+  // the user for any host.
+  bool HasAllowExceptionForAnyHost();
 
  private:
   // Helper method for handling certificate errors.

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,10 +17,6 @@ class SingleThreadTaskRunner;
 }  // namespace base
 
 namespace chromecast {
-namespace external_service_support {
-class ExternalConnector;
-}  // namespace external_service_support
-
 namespace media {
 class CmaBackendFactory;
 
@@ -31,8 +27,7 @@ class AudioOutputServiceReceiver : public Receiver {
  public:
   explicit AudioOutputServiceReceiver(
       CmaBackendFactory* cma_backend_factory,
-      scoped_refptr<base::SingleThreadTaskRunner> media_task_runner,
-      std::unique_ptr<external_service_support::ExternalConnector> connector);
+      scoped_refptr<base::SingleThreadTaskRunner> media_task_runner);
   AudioOutputServiceReceiver(const AudioOutputServiceReceiver&) = delete;
   AudioOutputServiceReceiver& operator=(const AudioOutputServiceReceiver&) =
       delete;
@@ -40,10 +35,6 @@ class AudioOutputServiceReceiver : public Receiver {
 
   CmaBackendFactory* cma_backend_factory() const {
     return cma_backend_factory_;
-  }
-
-  external_service_support::ExternalConnector* connector() const {
-    return connector_.get();
   }
 
   scoped_refptr<base::SingleThreadTaskRunner> media_task_runner() const {
@@ -61,7 +52,6 @@ class AudioOutputServiceReceiver : public Receiver {
 
   CmaBackendFactory* const cma_backend_factory_;
   const scoped_refptr<base::SingleThreadTaskRunner> media_task_runner_;
-  const std::unique_ptr<external_service_support::ExternalConnector> connector_;
 
   base::flat_map<Stream*, std::unique_ptr<Stream>> streams_;
 };

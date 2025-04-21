@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/gtest_prod_util.h"
 #include "chrome/browser/ui/media_router/ui_media_sink.h"
-#include "chrome/browser/ui/views/hover_button.h"
+#include "chrome/browser/ui/views/controls/hover_button.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 
 namespace ui {
@@ -22,8 +21,9 @@ namespace media_router {
 // A button representing a sink in the Cast dialog. It is highlighted when
 // hovered.
 class CastDialogSinkButton : public HoverButton {
+  METADATA_HEADER(CastDialogSinkButton, HoverButton)
+
  public:
-  METADATA_HEADER(CastDialogSinkButton);
   CastDialogSinkButton(PressedCallback callback, const UIMediaSink& sink);
   CastDialogSinkButton(const CastDialogSinkButton&) = delete;
   CastDialogSinkButton& operator=(const CastDialogSinkButton&) = delete;
@@ -57,15 +57,13 @@ class CastDialogSinkButton : public HoverButton {
   FRIEND_TEST_ALL_PREFIXES(CastDialogSinkButtonTest,
                            SetStatusLabelForDialSinks);
 
-  void OnEnabledChanged();
+  // views::Button:
+  void OnEnabledChanged() override;
+
   void UpdateTitleTextStyle();
 
   const UIMediaSink sink_;
-  absl::optional<std::u16string> saved_status_text_;
-  base::CallbackListSubscription enabled_changed_subscription_ =
-      AddEnabledChangedCallback(
-          base::BindRepeating(&CastDialogSinkButton::OnEnabledChanged,
-                              base::Unretained(this)));
+  std::optional<std::u16string> saved_status_text_;
 };
 
 }  // namespace media_router

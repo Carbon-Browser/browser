@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ class DhcpWpadUrlClient : public network::mojom::DhcpWpadUrlClient {
   DhcpWpadUrlClient(const DhcpWpadUrlClient&) = delete;
   DhcpWpadUrlClient& operator=(const DhcpWpadUrlClient&) = delete;
 
-  ~DhcpWpadUrlClient() override {}
+  ~DhcpWpadUrlClient() override = default;
 
   // Gets the PAC script URL from the DefaultNetwork and calls |callback| with
   // the result. If an error occurs or no PAC URL is provided, |callback| is

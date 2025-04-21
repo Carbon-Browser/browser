@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,7 @@ struct Environment {
   Environment() {
     // Disable noisy logging as per "libFuzzer in Chrome" documentation:
     // testing/libfuzzer/getting_started.md#Disable-noisy-error-message-logging.
-    logging::SetMinLogLevel(logging::LOG_FATAL);
+    logging::SetMinLogLevel(logging::LOGGING_FATAL);
     // Disable noisy logging in securemessage.
     std::cerr.setstate(std::ios_base::failbit);
 

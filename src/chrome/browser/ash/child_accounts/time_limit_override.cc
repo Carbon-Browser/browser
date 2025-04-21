@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,8 @@ constexpr char kOverrideActionDuration[] = "duration_mins";
 // Returns string containing |timestamp| int64_t value in milliseconds. This is
 // how timestamp is sent in a policy.
 std::string PolicyTimestamp(base::Time timestamp) {
-  return std::to_string((timestamp - base::Time::UnixEpoch()).InMilliseconds());
+  return base::NumberToString(
+      (timestamp - base::Time::UnixEpoch()).InMilliseconds());
 }
 
 }  // namespace
@@ -45,26 +46,26 @@ std::string TimeLimitOverride::ActionToString(Action action) {
 }
 
 // static
-absl::optional<TimeLimitOverride> TimeLimitOverride::FromDictionary(
-    const base::Value* dict) {
-  if (!dict || !dict->is_dict()) {
+std::optional<TimeLimitOverride> TimeLimitOverride::FromDictionary(
+    const base::Value::Dict* dict) {
+  if (!dict) {
     DLOG(ERROR) << "Override entry is not a dictionary";
-    return absl::nullopt;
+    return std::nullopt;
   }
 
-  const std::string* action_string = dict->FindStringKey(kOverrideAction);
+  const std::string* action_string = dict->FindString(kOverrideAction);
   if (!action_string || action_string->empty()) {
     DLOG(ERROR) << "Invalid override action.";
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   const std::string* creation_time_string =
-      dict->FindStringKey(kOverrideActionCreatedAt);
+      dict->FindString(kOverrideActionCreatedAt);
   int64_t creation_time_millis;
   if (!creation_time_string || creation_time_string->empty() ||
       !base::StringToInt64(*creation_time_string, &creation_time_millis)) {
     DLOG(ERROR) << "Invalid override creation time.";
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   Action action =
@@ -73,28 +74,30 @@ absl::optional<TimeLimitOverride> TimeLimitOverride::FromDictionary(
   base::Time creation_time =
       base::Time::UnixEpoch() + base::Milliseconds(creation_time_millis);
 
-  const base::Value* duration_value = dict->FindPath(
-      {kOverrideActionSpecificData, kOverrideActionDurationMins});
-  absl::optional<base::TimeDelta> duration =
+  const base::Value::Dict* action_dict =
+      dict->FindDict(kOverrideActionSpecificData);
+  const base::Value* duration_value =
+      action_dict ? action_dict->Find(kOverrideActionDurationMins) : nullptr;
+  std::optional<base::TimeDelta> duration =
       duration_value ? base::Minutes(duration_value->GetInt())
-                     : absl::optional<base::TimeDelta>();
+                     : std::optional<base::TimeDelta>();
 
   return TimeLimitOverride(action, creation_time, duration);
 }
 
 // static
-absl::optional<TimeLimitOverride> TimeLimitOverride::MostRecentFromList(
-    const base::Value* list) {
-  if (!list || !list->is_list()) {
+std::optional<TimeLimitOverride> TimeLimitOverride::MostRecentFromList(
+    const base::Value::List* list) {
+  if (!list) {
     DLOG(ERROR) << "Override entries should be a list.";
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   // The most recent override created.
-  absl::optional<TimeLimitOverride> last_override;
-  for (const base::Value& override_value : list->GetListDeprecated()) {
-    absl::optional<TimeLimitOverride> current_override =
-        FromDictionary(&override_value);
+  std::optional<TimeLimitOverride> last_override;
+  for (const base::Value& override_value : *list) {
+    std::optional<TimeLimitOverride> current_override =
+        FromDictionary(&override_value.GetDict());
     if (!current_override.has_value()) {
       DLOG(ERROR) << "Invalid override entry";
       continue;
@@ -110,7 +113,7 @@ absl::optional<TimeLimitOverride> TimeLimitOverride::MostRecentFromList(
 
 TimeLimitOverride::TimeLimitOverride(Action action,
                                      base::Time created_at,
-                                     absl::optional<base::TimeDelta> duration)
+                                     std::optional<base::TimeDelta> duration)
     : action_(action), created_at_(created_at), duration_(duration) {}
 
 TimeLimitOverride::~TimeLimitOverride() = default;
@@ -128,16 +131,15 @@ bool TimeLimitOverride::IsLock() const {
   return action_ == Action::kLock;
 }
 
-base::Value TimeLimitOverride::ToDictionary() const {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetKey(kOverrideAction, base::Value(ActionToString(action_)));
-  dict.SetKey(kOverrideActionCreatedAt,
-              base::Value(PolicyTimestamp(created_at_)));
+base::Value::Dict TimeLimitOverride::ToDictionary() const {
+  base::Value::Dict dict;
+  dict.Set(kOverrideAction, base::Value(ActionToString(action_)));
+  dict.Set(kOverrideActionCreatedAt, base::Value(PolicyTimestamp(created_at_)));
   if (duration_.has_value()) {
-    base::Value duration_dict(base::Value::Type::DICTIONARY);
-    duration_dict.SetKey(kOverrideActionDuration,
-                         base::Value(duration_->InMinutes()));
-    dict.SetKey(kOverrideActionSpecificData, std::move(duration_dict));
+    base::Value::Dict duration_dict;
+    duration_dict.Set(kOverrideActionDuration,
+                      base::Value(duration_->InMinutes()));
+    dict.Set(kOverrideActionSpecificData, std::move(duration_dict));
   }
   return dict;
 }

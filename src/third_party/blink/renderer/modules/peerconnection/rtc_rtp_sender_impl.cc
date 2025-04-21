@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "base/check_op.h"
 #include "base/notreached.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_dtmf_sender_handler.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_encoded_audio_stream_transformer.h"
 #include "third_party/blink/renderer/platform/peerconnection/rtc_encoded_video_stream_transformer.h"
@@ -186,11 +187,11 @@ class RTCRtpSenderImpl::RTCRtpSenderInternal
           RTCRtpSenderImpl::RTCRtpSenderInternalTraits> {
  public:
   RTCRtpSenderInternal(
-      scoped_refptr<webrtc::PeerConnectionInterface> native_peer_connection,
+      rtc::scoped_refptr<webrtc::PeerConnectionInterface>
+          native_peer_connection,
       scoped_refptr<blink::WebRtcMediaStreamTrackAdapterMap> track_map,
       RtpSenderState state,
-      bool force_encoded_audio_insertable_streams,
-      bool force_encoded_video_insertable_streams)
+      bool require_encoded_insertable_streams)
       : native_peer_connection_(std::move(native_peer_connection)),
         track_map_(std::move(track_map)),
         main_task_runner_(state.main_task_runner()),
@@ -199,21 +200,19 @@ class RTCRtpSenderImpl::RTCRtpSenderInternal
         state_(std::move(state)) {
     DCHECK(track_map_);
     DCHECK(state_.is_initialized());
-    if (force_encoded_audio_insertable_streams &&
-        webrtc_sender_->media_type() == cricket::MEDIA_TYPE_AUDIO) {
+    if (webrtc_sender_->media_type() == cricket::MEDIA_TYPE_AUDIO) {
       encoded_audio_transformer_ =
           std::make_unique<RTCEncodedAudioStreamTransformer>(main_task_runner_);
       webrtc_sender_->SetEncoderToPacketizerFrameTransformer(
           encoded_audio_transformer_->Delegate());
-    }
-    if (force_encoded_video_insertable_streams &&
-        webrtc_sender_->media_type() == cricket::MEDIA_TYPE_VIDEO) {
+    } else {
+      CHECK(webrtc_sender_->media_type() == cricket::MEDIA_TYPE_VIDEO);
       encoded_video_transformer_ =
-          std::make_unique<RTCEncodedVideoStreamTransformer>(main_task_runner_);
+          std::make_unique<RTCEncodedVideoStreamTransformer>(
+              main_task_runner_, /*metronome=*/nullptr);
       webrtc_sender_->SetEncoderToPacketizerFrameTransformer(
           encoded_video_transformer_->Delegate());
     }
-    DCHECK(!encoded_audio_transformer_ || !encoded_video_transformer_);
   }
 
   const RtpSenderState& state() const {
@@ -267,7 +266,7 @@ class RTCRtpSenderImpl::RTCRtpSenderInternal
 
   void SetParameters(
       Vector<webrtc::RtpEncodingParameters> encodings,
-      absl::optional<webrtc::DegradationPreference> degradation_preference,
+      std::optional<webrtc::DegradationPreference> degradation_preference,
       base::OnceCallback<void(webrtc::RTCError)> callback) {
     DCHECK(main_task_runner_->BelongsToCurrentThread());
 
@@ -289,8 +288,13 @@ class RTCRtpSenderImpl::RTCRtpSenderInternal
       new_parameters.encodings[i].rid = encoding.rid;
       new_parameters.encodings[i].scale_resolution_down_by =
           encoding.scale_resolution_down_by;
+      new_parameters.encodings[i].scale_resolution_down_to =
+          encoding.scale_resolution_down_to;
       new_parameters.encodings[i].scalability_mode = encoding.scalability_mode;
       new_parameters.encodings[i].adaptive_ptime = encoding.adaptive_ptime;
+      new_parameters.encodings[i].codec = encoding.codec;
+      new_parameters.encodings[i].request_key_frame =
+          encoding.request_key_frame;
     }
 
     PostCrossThreadTask(
@@ -301,14 +305,12 @@ class RTCRtpSenderImpl::RTCRtpSenderInternal
                             CrossThreadBindOnce(std::move(callback))));
   }
 
-  void GetStats(RTCStatsReportCallback callback,
-                const Vector<webrtc::NonStandardGroupId>& exposed_group_ids) {
+  void GetStats(RTCStatsReportCallback callback) {
     PostCrossThreadTask(
         *signaling_task_runner_.get(), FROM_HERE,
         CrossThreadBindOnce(
             &RTCRtpSenderImpl::RTCRtpSenderInternal::GetStatsOnSignalingThread,
-            WrapRefCounted(this), CrossThreadBindOnce(std::move(callback)),
-            exposed_group_ids));
+            WrapRefCounted(this), CrossThreadBindOnce(std::move(callback))));
   }
 
   bool RemoveFromPeerConnection(webrtc::PeerConnectionInterface* pc) {
@@ -380,33 +382,26 @@ class RTCRtpSenderImpl::RTCRtpSenderInternal
   using RTCStatsReportCallbackInternal =
       CrossThreadOnceFunction<void(std::unique_ptr<RTCStatsReportPlatform>)>;
 
-  void GetStatsOnSignalingThread(
-      RTCStatsReportCallbackInternal callback,
-      const Vector<webrtc::NonStandardGroupId>& exposed_group_ids) {
+  void GetStatsOnSignalingThread(RTCStatsReportCallbackInternal callback) {
     native_peer_connection_->GetStats(
         rtc::scoped_refptr<webrtc::RtpSenderInterface>(webrtc_sender_.get()),
         CreateRTCStatsCollectorCallback(
-            main_task_runner_, ConvertToBaseOnceCallback(std::move(callback)),
-            exposed_group_ids));
+            main_task_runner_, ConvertToBaseOnceCallback(std::move(callback))));
   }
 
   void SetParametersOnSignalingThread(
       webrtc::RtpParameters parameters,
       CrossThreadOnceFunction<void(webrtc::RTCError)> callback) {
     DCHECK(signaling_task_runner_->BelongsToCurrentThread());
-    webrtc::RTCError result = webrtc_sender_->SetParameters(parameters);
-    PostCrossThreadTask(
-        *main_task_runner_.get(), FROM_HERE,
-        CrossThreadBindOnce(
-            &RTCRtpSenderImpl::RTCRtpSenderInternal::SetParametersCallback,
-            WrapRefCounted(this), std::move(result), std::move(callback)));
-  }
 
-  void SetParametersCallback(
-      webrtc::RTCError result,
-      CrossThreadOnceFunction<void(webrtc::RTCError)> callback) {
-    DCHECK(main_task_runner_->BelongsToCurrentThread());
-    std::move(callback).Run(std::move(result));
+    webrtc_sender_->SetParametersAsync(
+        parameters,
+        [callback = std::move(callback),
+         task_runner = main_task_runner_](webrtc::RTCError error) mutable {
+          PostCrossThreadTask(
+              *task_runner.get(), FROM_HERE,
+              CrossThreadBindOnce(std::move(callback), std::move(error)));
+        });
   }
 
   void SetStreamsOnSignalingThread(const Vector<String>& stream_ids) {
@@ -418,7 +413,8 @@ class RTCRtpSenderImpl::RTCRtpSenderInternal
     webrtc_sender_->SetStreams(std::move(ids));
   }
 
-  const scoped_refptr<webrtc::PeerConnectionInterface> native_peer_connection_;
+  const rtc::scoped_refptr<webrtc::PeerConnectionInterface>
+      native_peer_connection_;
   const scoped_refptr<blink::WebRtcMediaStreamTrackAdapterMap> track_map_;
   // Task runners and webrtc sender: Same information as stored in
   // |state_| but const and safe to touch on the signaling thread to
@@ -454,17 +450,15 @@ uintptr_t RTCRtpSenderImpl::getId(
 }
 
 RTCRtpSenderImpl::RTCRtpSenderImpl(
-    scoped_refptr<webrtc::PeerConnectionInterface> native_peer_connection,
+    rtc::scoped_refptr<webrtc::PeerConnectionInterface> native_peer_connection,
     scoped_refptr<blink::WebRtcMediaStreamTrackAdapterMap> track_map,
     RtpSenderState state,
-    bool force_encoded_audio_insertable_streams,
-    bool force_encoded_video_insertable_streams)
+    bool require_encoded_insertable_streams)
     : internal_(base::MakeRefCounted<RTCRtpSenderInternal>(
           std::move(native_peer_connection),
           std::move(track_map),
           std::move(state),
-          force_encoded_audio_insertable_streams,
-          force_encoded_video_insertable_streams)) {}
+          require_encoded_insertable_streams)) {}
 
 RTCRtpSenderImpl::RTCRtpSenderImpl(const RTCRtpSenderImpl& other)
     : internal_(other.internal_) {}
@@ -518,8 +512,8 @@ Vector<String> RTCRtpSenderImpl::StreamIds() const {
 
 void RTCRtpSenderImpl::ReplaceTrack(MediaStreamComponent* with_track,
                                     RTCVoidRequest* request) {
-  internal_->ReplaceTrack(
-      with_track, WTF::Bind(&OnReplaceTrackCompleted, WrapPersistent(request)));
+  internal_->ReplaceTrack(with_track, WTF::BindOnce(&OnReplaceTrackCompleted,
+                                                    WrapPersistent(request)));
 }
 
 std::unique_ptr<blink::RtcDtmfSenderHandler> RTCRtpSenderImpl::GetDtmfSender()
@@ -533,17 +527,15 @@ std::unique_ptr<webrtc::RtpParameters> RTCRtpSenderImpl::GetParameters() const {
 
 void RTCRtpSenderImpl::SetParameters(
     Vector<webrtc::RtpEncodingParameters> encodings,
-    absl::optional<webrtc::DegradationPreference> degradation_preference,
+    std::optional<webrtc::DegradationPreference> degradation_preference,
     blink::RTCVoidRequest* request) {
   internal_->SetParameters(
       std::move(encodings), degradation_preference,
-      WTF::Bind(&OnSetParametersCompleted, WrapPersistent(request)));
+      WTF::BindOnce(&OnSetParametersCompleted, WrapPersistent(request)));
 }
 
-void RTCRtpSenderImpl::GetStats(
-    RTCStatsReportCallback callback,
-    const Vector<webrtc::NonStandardGroupId>& exposed_group_ids) {
-  internal_->GetStats(std::move(callback), exposed_group_ids);
+void RTCRtpSenderImpl::GetStats(RTCStatsReportCallback callback) {
+  internal_->GetStats(std::move(callback));
 }
 
 void RTCRtpSenderImpl::SetStreams(const Vector<String>& stream_ids) {
@@ -568,69 +560,6 @@ RTCRtpSenderImpl::GetEncodedAudioStreamTransformer() const {
 RTCEncodedVideoStreamTransformer*
 RTCRtpSenderImpl::GetEncodedVideoStreamTransformer() const {
   return internal_->GetEncodedVideoStreamTransformer();
-}
-
-RTCRtpSenderOnlyTransceiver::RTCRtpSenderOnlyTransceiver(
-    std::unique_ptr<blink::RTCRtpSenderPlatform> sender)
-    : sender_(std::move(sender)) {
-  DCHECK(sender_);
-}
-
-RTCRtpSenderOnlyTransceiver::~RTCRtpSenderOnlyTransceiver() {}
-
-RTCRtpTransceiverPlatformImplementationType
-RTCRtpSenderOnlyTransceiver::ImplementationType() const {
-  return RTCRtpTransceiverPlatformImplementationType::kPlanBSenderOnly;
-}
-
-uintptr_t RTCRtpSenderOnlyTransceiver::Id() const {
-  NOTIMPLEMENTED();
-  return 0u;
-}
-
-String RTCRtpSenderOnlyTransceiver::Mid() const {
-  NOTIMPLEMENTED();
-  return String();
-}
-
-std::unique_ptr<blink::RTCRtpSenderPlatform>
-RTCRtpSenderOnlyTransceiver::Sender() const {
-  return sender_->ShallowCopy();
-}
-
-std::unique_ptr<RTCRtpReceiverPlatform> RTCRtpSenderOnlyTransceiver::Receiver()
-    const {
-  NOTIMPLEMENTED();
-  return nullptr;
-}
-
-webrtc::RtpTransceiverDirection RTCRtpSenderOnlyTransceiver::Direction() const {
-  NOTIMPLEMENTED();
-  return webrtc::RtpTransceiverDirection::kSendOnly;
-}
-
-webrtc::RTCError RTCRtpSenderOnlyTransceiver::SetDirection(
-    webrtc::RtpTransceiverDirection direction) {
-  NOTIMPLEMENTED();
-  return webrtc::RTCError::OK();
-}
-
-absl::optional<webrtc::RtpTransceiverDirection>
-RTCRtpSenderOnlyTransceiver::CurrentDirection() const {
-  NOTIMPLEMENTED();
-  return webrtc::RtpTransceiverDirection::kSendOnly;
-}
-
-absl::optional<webrtc::RtpTransceiverDirection>
-RTCRtpSenderOnlyTransceiver::FiredDirection() const {
-  NOTIMPLEMENTED();
-  return webrtc::RtpTransceiverDirection::kSendOnly;
-}
-
-webrtc::RTCError RTCRtpSenderOnlyTransceiver::SetCodecPreferences(
-    Vector<webrtc::RtpCodecCapability>) {
-  NOTIMPLEMENTED();
-  return {};
 }
 
 }  // namespace blink

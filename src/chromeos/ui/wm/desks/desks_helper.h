@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 #include <string>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "build/chromeos_buildflags.h"
 
 namespace aura {
@@ -32,6 +32,9 @@ class COMPONENT_EXPORT(CHROMEOS_UI_WM) DesksHelper {
 
   // Returns true if |window| exists on the currently active desk.
   virtual bool BelongsToActiveDesk(aura::Window* window) = 0;
+
+  // Returns true if `Window` exists on the desk with the given `index`.
+  virtual bool BelongsToDesk(aura::Window* window, size_t index) = 0;
 
   // Returns the active desk's index.
   virtual int GetActiveDeskIndex() const = 0;

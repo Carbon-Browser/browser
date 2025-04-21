@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include "third_party/blink/renderer/platform/graphics/paint/float_clip_rect.h"
 #include "third_party/blink/renderer/platform/graphics/paint/geometry_mapper.h"
 #include "third_party/blink/renderer/platform/graphics/paint/property_tree_state.h"
-#include "third_party/skia/include/core/SkMatrix.h"
 
 namespace blink {
 
@@ -19,21 +18,31 @@ struct PaintChunk;
 // It provides higher performance than GeometryMapper by reusing computed
 // transforms and clips for unchanged states within or across paint chunks.
 class PLATFORM_EXPORT ChunkToLayerMapper {
-  DISALLOW_NEW();
+  STACK_ALLOCATED();
 
  public:
   ChunkToLayerMapper(const PropertyTreeState& layer_state,
                      const gfx::Vector2dF& layer_offset);
 
+  const PropertyTreeState& LayerState() const { return layer_state_; }
+  gfx::Vector2dF LayerOffset() const { return layer_offset_; }
+
   // This class can map from multiple chunks. Before mapping from a chunk, this
   // method must be called to prepare for the chunk.
   void SwitchToChunk(const PaintChunk&);
+  void SwitchToChunkWithState(const PaintChunk&, const PropertyTreeState&);
+
+  const PropertyTreeState& ChunkState() const { return chunk_state_; }
 
   // Maps a visual rectangle in the current chunk space into the layer space.
   gfx::Rect MapVisualRect(const gfx::Rect&) const;
 
+  // Maps a visual rectangle from the give state into the layer space.
+  gfx::Rect MapVisualRectFromState(const gfx::Rect&,
+                                   const PropertyTreeState&) const;
+
   // Returns the combined transform from the current chunk to the layer.
-  SkMatrix Transform() const { return translation_2d_or_matrix_.ToSkMatrix(); }
+  const gfx::Transform& Transform() const { return transform_; }
 
   // Returns the combined clip from the current chunk to the layer if it can
   // be calculated (there is no filter that moves pixels), or infinite loose
@@ -52,7 +61,7 @@ class PLATFORM_EXPORT ChunkToLayerMapper {
   // The following fields are chunk-specific which are updated in
   // SwitchToChunk().
   PropertyTreeState chunk_state_;
-  GeometryMapper::Translation2DOrMatrix translation_2d_or_matrix_;
+  gfx::Transform transform_;
   FloatClipRect clip_rect_;
   RasterEffectOutset raster_effect_outset_ = RasterEffectOutset::kNone;
   // True if there is any pixel-moving filter between chunk state and layer

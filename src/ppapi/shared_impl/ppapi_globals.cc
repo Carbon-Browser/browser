@@ -1,22 +1,21 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ppapi/shared_impl/ppapi_globals.h"
 
 #include "base/check.h"
-#include "base/lazy_instance.h"  // For testing purposes only.
+#include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_local.h"  // For testing purposes only.
-#include "base/threading/thread_task_runner_handle.h"
 
 namespace ppapi {
 
 namespace {
+
 // Thread-local globals for testing. See SetPpapiGlobalsOnThreadForTest for more
 // information.
-base::LazyInstance<base::ThreadLocalPointer<PpapiGlobals>>::Leaky
-    tls_ppapi_globals_for_test = LAZY_INSTANCE_INITIALIZER;
+constinit thread_local PpapiGlobals* ppapi_globals_for_test = nullptr;
+
 }  // namespace
 
 PpapiGlobals* ppapi_globals = NULL;
@@ -24,16 +23,19 @@ PpapiGlobals* ppapi_globals = NULL;
 PpapiGlobals::PpapiGlobals() {
   DCHECK(!ppapi_globals);
   ppapi_globals = this;
-  main_task_runner_ = base::ThreadTaskRunnerHandle::Get();
+  main_task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
 }
 
 PpapiGlobals::PpapiGlobals(PerThreadForTest) {
   DCHECK(!ppapi_globals);
-  main_task_runner_ = base::ThreadTaskRunnerHandle::Get();
+  main_task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
 }
 
 PpapiGlobals::~PpapiGlobals() {
   DCHECK(ppapi_globals == this || !ppapi_globals);
+  while (!message_loop_quit_closures_.empty()) {
+    QuitMsgLoop();
+  }
   ppapi_globals = NULL;
 }
 
@@ -51,7 +53,20 @@ void PpapiGlobals::SetPpapiGlobalsOnThreadForTest(PpapiGlobals* ptr) {
   // If we're using a per-thread PpapiGlobals, we should not have a global one.
   // If we allowed it, it would always over-ride the "test" versions.
   DCHECK(!ppapi_globals);
-  tls_ppapi_globals_for_test.Pointer()->Set(ptr);
+  ppapi_globals_for_test = ptr;
+}
+
+void PpapiGlobals::RunMsgLoop() {
+  base::RunLoop loop{base::RunLoop::Type::kNestableTasksAllowed};
+  message_loop_quit_closures_.push(loop.QuitClosure());
+  loop.Run();
+}
+
+void PpapiGlobals::QuitMsgLoop() {
+  if (!message_loop_quit_closures_.empty()) {
+    std::move(message_loop_quit_closures_.top()).Run();
+    message_loop_quit_closures_.pop();
+  }
 }
 
 base::SingleThreadTaskRunner* PpapiGlobals::GetMainThreadMessageLoop() {
@@ -59,7 +74,7 @@ base::SingleThreadTaskRunner* PpapiGlobals::GetMainThreadMessageLoop() {
 }
 
 void PpapiGlobals::ResetMainThreadMessageLoopForTesting() {
-  main_task_runner_ = base::ThreadTaskRunnerHandle::Get();
+  main_task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
 }
 
 bool PpapiGlobals::IsHostGlobals() const { return false; }
@@ -68,7 +83,7 @@ bool PpapiGlobals::IsPluginGlobals() const { return false; }
 
 // static
 PpapiGlobals* PpapiGlobals::GetThreadLocalPointer() {
-  return tls_ppapi_globals_for_test.Pointer()->Get();
+  return ppapi_globals_for_test;
 }
 
 }  // namespace ppapi

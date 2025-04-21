@@ -1,16 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "components/autofill/ios/browser/fake_autofill_agent.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "ios/web/public/thread/web_task_traits.h"
 #include "ios/web/public/thread/web_thread.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using autofill::FormRendererId;
 using autofill::FieldRendererId;
@@ -62,7 +58,6 @@ using autofill::FieldRendererId;
 
 - (void)checkIfSuggestionsAvailableForForm:
             (FormSuggestionProviderQuery*)formQuery
-                               isMainFrame:(BOOL)isMainFrame
                             hasUserGesture:(BOOL)hasUserGesture
                                   webState:(web::WebState*)webState
                          completionHandler:
@@ -91,10 +86,11 @@ using autofill::FieldRendererId;
 }
 
 - (void)didSelectSuggestion:(FormSuggestion*)suggestion
+                    atIndex:(NSInteger)index
                        form:(NSString*)formName
-               uniqueFormID:(FormRendererId)uniqueFormID
+             formRendererID:(FormRendererId)formRendererID
             fieldIdentifier:(NSString*)fieldIdentifier
-              uniqueFieldID:(FieldRendererId)uniqueFieldID
+            fieldRendererID:(FieldRendererId)fieldRendererID
                     frameID:(NSString*)frameID
           completionHandler:(SuggestionHandledCompletion)completion {
   web::GetUIThreadTaskRunner({})->PostTask(

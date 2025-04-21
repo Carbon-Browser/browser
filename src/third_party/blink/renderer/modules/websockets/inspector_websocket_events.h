@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,6 +34,16 @@ class InspectorWebSocketEvent {
   static void Data(perfetto::TracedValue context,
                    ExecutionContext*,
                    uint64_t identifier);
+};
+
+class InspectorWebSocketTransferEvent {
+  STATIC_ONLY(InspectorWebSocketTransferEvent);
+
+ public:
+  static void Data(perfetto::TracedValue context,
+                   ExecutionContext*,
+                   uint64_t identifier,
+                   uint64_t data_length);
 };
 
 }  // namespace blink

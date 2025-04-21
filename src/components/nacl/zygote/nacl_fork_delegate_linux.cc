@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "components/nacl/zygote/nacl_fork_delegate_linux.h"
 
@@ -12,12 +17,14 @@
 
 #include <memory>
 #include <set>
+#include <string>
 
 #include "base/command_line.h"
 #include "base/cpu.h"
 #include "base/files/file_path.h"
 #include "base/files/scoped_file.h"
 #include "base/logging.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/path_service.h"
 #include "base/pickle.h"
 #include "base/posix/eintr_wrapper.h"
@@ -32,6 +39,7 @@
 #include "components/nacl/loader/nacl_helper_linux.h"
 #include "content/public/common/content_descriptors.h"
 #include "content/public/common/content_switches.h"
+#include "mojo/core/embedder/embedder.h"
 #include "sandbox/linux/services/namespace_sandbox.h"
 #include "sandbox/linux/suid/client/setuid_sandbox_client.h"
 #include "sandbox/linux/suid/client/setuid_sandbox_host.h"
@@ -218,8 +226,7 @@ void NaClForkDelegate::Init(const int sandboxdesc,
       };
       const base::CommandLine& current_cmd_line =
           *base::CommandLine::ForCurrentProcess();
-      cmd_line.CopySwitchesFrom(current_cmd_line, kForwardSwitches,
-                                std::size(kForwardSwitches));
+      cmd_line.CopySwitchesFrom(current_cmd_line, kForwardSwitches);
 
       // The command line needs to be tightly controlled to use
       // |helper_bootstrap_exe|. So from now on, argv_to_launch should be
@@ -238,7 +245,9 @@ void NaClForkDelegate::Init(const int sandboxdesc,
                             bootstrap_prepend.end());
     }
 
+    std::vector<int> max_these_limits;  // must outlive `options`
     base::LaunchOptions options;
+    options.maximize_rlimits = &max_these_limits;
     options.fds_to_remap.push_back(
         std::make_pair(fds[1], kNaClZygoteDescriptor));
     options.fds_to_remap.push_back(
@@ -260,9 +269,7 @@ void NaClForkDelegate::Init(const int sandboxdesc,
     // because the existing limit may prevent the initial exec of
     // nacl_helper_bootstrap from succeeding, with its large address space
     // reservation.
-    std::vector<int> max_these_limits;
     max_these_limits.push_back(RLIMIT_AS);
-    options.maximize_rlimits = &max_these_limits;
 
     // Clear the environment for the NaCl Helper process.
     options.clear_environment = true;
@@ -294,7 +301,7 @@ void NaClForkDelegate::Init(const int sandboxdesc,
   if (IGNORE_EINTR(close(fds[1])) != 0)
     LOG(ERROR) << "close(fds[1]) failed";
   if (status_ == kNaClHelperUnused) {
-    const ssize_t kExpectedLength = strlen(kNaClHelperStartupAck);
+    constexpr ssize_t kExpectedLength = sizeof(kNaClHelperStartupAck) - 1;
     char buf[kExpectedLength];
 
     // Wait for ack from nacl_helper, indicating it is ready to help
@@ -346,11 +353,17 @@ bool NaClForkDelegate::CanHelp(const std::string& process_type,
 }
 
 pid_t NaClForkDelegate::Fork(const std::string& process_type,
+                             const std::vector<std::string>& args,
                              const std::vector<int>& fds,
                              const std::string& channel_id) {
   VLOG(1) << "NaClForkDelegate::Fork";
 
-  DCHECK(fds.size() == kNumPassedFDs);
+  // The metrics shared memory handle may or may not be in |fds|, depending on
+  // whether the feature flag to pass the handle on startup was enabled in the
+  // parent; there should either be kNumPassedFDs or kNumPassedFDs-1 present.
+  // TODO(crbug.com/40109064): Only check for kNumPassedFDs once passing the
+  // metrics shared memory handle on startup is launched.
+  DCHECK(fds.size() == kNumPassedFDs || fds.size() == kNumPassedFDs - 1);
 
   if (status_ != kNaClHelperSuccess) {
     LOG(ERROR) << "Cannot launch NaCl process: nacl_helper failed to start";
@@ -361,6 +374,10 @@ pid_t NaClForkDelegate::Fork(const std::string& process_type,
   base::Pickle write_pickle;
   write_pickle.WriteInt(nacl::kNaClForkRequest);
   write_pickle.WriteString(channel_id);
+  write_pickle.WriteInt(base::checked_cast<int>(args.size()));
+  for (const std::string& arg : args) {
+    write_pickle.WriteString(arg);
+  }
 
   char reply_buf[kNaClMaxIPCMessageLength];
   ssize_t reply_size = 0;
@@ -373,7 +390,9 @@ pid_t NaClForkDelegate::Fork(const std::string& process_type,
   }
 
   // Now see if the other end managed to fork.
-  base::Pickle reply_pickle(reply_buf, reply_size);
+  base::Pickle reply_pickle = base::Pickle::WithUnownedBuffer(
+      base::span(reinterpret_cast<uint8_t*>(reply_buf),
+                 base::checked_cast<size_t>(reply_size)));
   base::PickleIterator iter(reply_pickle);
   pid_t nacl_child;
   if (!iter.ReadInt(&nacl_child)) {
@@ -407,7 +426,9 @@ bool NaClForkDelegate::GetTerminationStatus(pid_t pid, bool known_dead,
     return false;
   }
 
-  base::Pickle reply_pickle(reply_buf, reply_size);
+  base::Pickle reply_pickle = base::Pickle::WithUnownedBuffer(
+      base::span(reinterpret_cast<uint8_t*>(reply_buf),
+                 base::checked_cast<size_t>(reply_size)));
   base::PickleIterator iter(reply_pickle);
   int termination_status;
   if (!iter.ReadInt(&termination_status) ||

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,21 +6,48 @@
 
 #include <fontconfig/fontconfig.h>
 
+#include "base/check_op.h"
 #include "base/memory/raw_ptr.h"
+#include "base/metrics/histogram_macros.h"
 #include "base/no_destructor.h"
+#include "base/task/thread_pool.h"
+#include "base/task/thread_pool/thread_pool_instance.h"
+#include "base/trace_event/trace_event.h"
 #include "ui/gfx/font_render_params.h"
+
+#if BUILDFLAG(IS_CHROMEOS)
+#include "base/check_deref.h"
+#include "base/containers/flat_set.h"
+#include "base/files/file_path.h"
+#include "base/files/file_util.h"
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 namespace gfx {
 
 namespace {
 
+#if BUILDFLAG(IS_CHROMEOS)
+constexpr base::FilePath::CharType kGoogleSansVariablePath[] =
+    FILE_PATH_LITERAL("/usr/share/fonts/google-sans/variable");
+constexpr base::FilePath::CharType kGoogleSansStaticPath[] =
+    FILE_PATH_LITERAL("/usr/share/fonts/google-sans/static");
+
+// This should match `imageloader::kImageloaderMountBase` from
+// //third_party/cros_system_api/constants/imageloader.h.
+constexpr base::FilePath::CharType kImageloaderMountBase[] =
+    FILE_PATH_LITERAL("/run/imageloader/");
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
 // A singleton class to wrap a global font-config configuration. The
 // configuration reference counter is incremented to avoid the deletion of the
 // structure while being used. This class is single-threaded and should only be
 // used on the UI-Thread.
-class GFX_EXPORT GlobalFontConfig {
+class COMPONENT_EXPORT(GFX) GlobalFontConfig {
  public:
   GlobalFontConfig() {
+    TRACE_EVENT0("ui", "GlobalFontConfig::GlobalFontConfig");
+    SCOPED_UMA_HISTOGRAM_TIMER("Startup.InitializeFontConfigDuration");
+
     // Without this call, the FontConfig library gets implicitly initialized
     // on the first call to FontConfig. Since it's not safe to initialize it
     // concurrently from multiple threads, we explicitly initialize it here
@@ -34,6 +61,22 @@ class GFX_EXPORT GlobalFontConfig {
     // being used (see http://crbug.com/1004254).
     fc_config_ = FcConfigGetCurrent();
     FcConfigReference(fc_config_);
+#if BUILDFLAG(IS_CHROMEOS)
+    // TODO(b/268691415): Leave until M119 when all builds have the variable
+    // font.
+    if (base::PathExists(base::FilePath(kGoogleSansVariablePath))) {
+      const FcChar8* kVariableFontPath =
+          reinterpret_cast<const FcChar8*>(kGoogleSansVariablePath);
+      // Adds the folder to the available fonts in the application. Returns
+      // false only when fonts cannot be added due to "allocation failure".
+      // https://www.freedesktop.org/software/fontconfig/fontconfig-devel/fcconfigappfontadddir.html
+      CHECK(FcConfigAppFontAddDir(fc_config_, kVariableFontPath));
+    } else {
+      const FcChar8* kStaticFontPath =
+          reinterpret_cast<const FcChar8*>(kGoogleSansStaticPath);
+      CHECK(FcConfigAppFontAddDir(fc_config_, kStaticFontPath));
+    }
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
     // Set rescan interval to 0 to disable re-scan. Re-scanning in the
     // background is a source of thread safety issues.
@@ -45,13 +88,40 @@ class GFX_EXPORT GlobalFontConfig {
   GlobalFontConfig(const GlobalFontConfig&) = delete;
   GlobalFontConfig& operator=(const GlobalFontConfig&) = delete;
 
-  ~GlobalFontConfig() { FcConfigDestroy(fc_config_); }
+  ~GlobalFontConfig() { FcConfigDestroy(fc_config_.ExtractAsDangling()); }
 
   // Retrieve the native font-config FcConfig pointer.
   FcConfig* Get() const {
     DCHECK_EQ(fc_config_, FcConfigGetCurrent());
     return fc_config_;
   }
+
+#if BUILDFLAG(IS_CHROMEOS)
+  bool AddAppFontDir(const base::FilePath& dir) {
+    if (dir.ReferencesParent()) {
+      // Possible path traversal.
+      return false;
+    }
+    if (!base::FilePath(kImageloaderMountBase).IsParent(dir)) {
+      // Not a DLC path.
+      return false;
+    }
+    if (app_font_dirs_added_.contains(dir)) {
+      // Added before.
+      return false;
+    }
+    app_font_dirs_added_.insert(dir);
+
+    // Points to memory owned by `dir`.
+    const FcChar8* dir_fcstring =
+        reinterpret_cast<const FcChar8*>(dir.value().c_str());
+
+    // Adds the folder to the available fonts in the application. Returns
+    // false only when fonts cannot be added due to "allocation failure".
+    // https://www.freedesktop.org/software/fontconfig/fontconfig-devel/fcconfigappfontadddir.html
+    return FcConfigAppFontAddDir(fc_config_, dir_fcstring);
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
   // Override the font-config configuration.
   void OverrideForTesting(FcConfig* config) {
@@ -67,6 +137,9 @@ class GFX_EXPORT GlobalFontConfig {
 
  private:
   raw_ptr<FcConfig> fc_config_ = nullptr;
+#if BUILDFLAG(IS_CHROMEOS)
+  base::flat_set<base::FilePath> app_font_dirs_added_;
+#endif  // BUILDFLAG(IS_CHROMEOS)
 };
 
 // Converts Fontconfig FC_HINT_STYLE to FontRenderParams::Hinting.
@@ -115,20 +188,34 @@ int GetFontConfigPropertyAsInt(FcPattern* pattern,
                                const char* property,
                                int default_value) {
   int value = -1;
-  if (FcPatternGetInteger(pattern, property, 0, &value) != FcResultMatch)
+  if (FcPatternGetInteger(pattern, property, 0, &value) != FcResultMatch) {
     return default_value;
+  }
   return value;
 }
 
 // Extracts an boolean property from a font-config pattern (e.g. FcPattern).
 bool GetFontConfigPropertyAsBool(FcPattern* pattern, const char* property) {
   FcBool value = FcFalse;
-  if (FcPatternGetBool(pattern, property, 0, &value) != FcResultMatch)
+  if (FcPatternGetBool(pattern, property, 0, &value) != FcResultMatch) {
     return false;
+  }
   return value != FcFalse;
 }
 
 }  // namespace
+
+void InitializeGlobalFontConfigAsync() {
+  if (base::ThreadPoolInstance::Get()) {
+    base::ThreadPool::PostTask(
+        FROM_HERE,
+        {base::MayBlock(), base::TaskPriority::USER_BLOCKING,
+         base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
+        base::BindOnce([]() { GlobalFontConfig::GetInstance(); }));
+  } else {
+    GlobalFontConfig::GetInstance();
+  }
+}
 
 FcConfig* GetGlobalFontConfig() {
   return GlobalFontConfig::GetInstance()->Get();
@@ -154,16 +241,19 @@ base::FilePath GetFontPath(FcPattern* pattern) {
   // relative to this system root directory.
   const char* sysroot =
       reinterpret_cast<const char*>(FcConfigGetSysRoot(nullptr));
-  if (!sysroot)
+  if (!sysroot) {
     return base::FilePath(filename);
+  }
 
   // Paths may be specified with a heading slash (e.g.
   // /test_fonts/DejaVuSans.ttf).
-  if (!filename.empty() && base::FilePath::IsSeparator(filename[0]))
+  if (!filename.empty() && base::FilePath::IsSeparator(filename[0])) {
     filename = filename.substr(1);
+  }
 
-  if (filename.empty())
+  if (filename.empty()) {
     return base::FilePath();
+  }
 
   return base::FilePath(sysroot).Append(filename);
 }
@@ -220,8 +310,15 @@ void GetFontRenderParamsFromFcPattern(FcPattern* pattern,
   }
 
   int fc_rgba = FC_RGBA_NONE;
-  if (FcPatternGetInteger(pattern, FC_RGBA, 0, &fc_rgba) == FcResultMatch)
+  if (FcPatternGetInteger(pattern, FC_RGBA, 0, &fc_rgba) == FcResultMatch) {
     param_out->subpixel_rendering = ConvertFontconfigRgba(fc_rgba);
+  }
 }
+
+#if BUILDFLAG(IS_CHROMEOS)
+bool AddAppFontDir(const base::FilePath& dir) {
+  return CHECK_DEREF(GlobalFontConfig::GetInstance()).AddAppFontDir(dir);
+}
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 }  // namespace gfx

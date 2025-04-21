@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,6 +30,7 @@ TouchObserverHud::TouchObserverHud(aura::Window* initial_root,
   content->SetSize(display_size);
 
   views::Widget::InitParams params(
+      views::Widget::InitParams::NATIVE_WIDGET_OWNS_WIDGET,
       views::Widget::InitParams::TYPE_WINDOW_FRAMELESS);
   params.opacity = views::Widget::InitParams::WindowOpacity::kTranslucent;
   params.activatable = views::Widget::InitParams::Activatable::kNo;
@@ -47,12 +48,12 @@ TouchObserverHud::TouchObserverHud(aura::Window* initial_root,
 
   // Observe changes in display size and mode to update touch HUD.
   Shell::Get()->display_configurator()->AddObserver(this);
-  Shell::Get()->window_tree_host_manager()->AddObserver(this);
+  Shell::Get()->display_manager()->AddDisplayManagerObserver(this);
   root_window_->AddPreTargetHandler(this);
 }
 
 TouchObserverHud::~TouchObserverHud() {
-  Shell::Get()->window_tree_host_manager()->RemoveObserver(this);
+  Shell::Get()->display_manager()->RemoveDisplayManagerObserver(this);
   Shell::Get()->display_configurator()->RemoveObserver(this);
 
   widget_->RemoveObserver(this);
@@ -74,10 +75,14 @@ void TouchObserverHud::OnWidgetDestroying(views::Widget* widget) {
   delete this;
 }
 
-void TouchObserverHud::OnDisplayRemoved(const display::Display& old_display) {
-  if (old_display.id() != display_id_)
-    return;
-  widget_->CloseNow();
+void TouchObserverHud::OnDisplaysRemoved(
+    const display::Displays& removed_displays) {
+  for (const auto& display : removed_displays) {
+    if (display.id() == display_id_) {
+      widget_->CloseNow();
+      break;
+    }
+  }
 }
 
 void TouchObserverHud::OnDisplayMetricsChanged(const display::Display& display,
@@ -88,18 +93,18 @@ void TouchObserverHud::OnDisplayMetricsChanged(const display::Display& display,
   widget_->SetSize(display.size());
 }
 
-void TouchObserverHud::OnDisplayModeChanged(
+void TouchObserverHud::OnDisplayConfigurationChanged(
     const display::DisplayConfigurator::DisplayStateList& outputs) {
-  // Clear touch HUD for any change in display mode (single, dual extended, dual
-  // mirrored, ...).
+  // Clear touch HUD for any change in display state (single, dual extended,
+  // dual mirrored, ...).
   Clear();
 }
 
 void TouchObserverHud::OnDisplaysInitialized() {
-  OnDisplayConfigurationChanged();
+  OnDidApplyDisplayChanges();
 }
 
-void TouchObserverHud::OnDisplayConfigurationChanging() {
+void TouchObserverHud::OnWillApplyDisplayChanges() {
   if (!root_window_)
     return;
 
@@ -113,10 +118,10 @@ void TouchObserverHud::OnDisplayConfigurationChanging() {
       widget_->GetNativeView(),
       Shell::GetContainer(root_window_, kShellWindowId_UnparentedContainer));
 
-  root_window_ = NULL;
+  root_window_ = nullptr;
 }
 
-void TouchObserverHud::OnDisplayConfigurationChanged() {
+void TouchObserverHud::OnDidApplyDisplayChanges() {
   if (root_window_)
     return;
 

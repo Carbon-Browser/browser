@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,8 +21,14 @@ import java.lang.annotation.RetentionPolicy;
  */
 public interface BottomSheetController {
     /** The different states that the bottom sheet can have. */
-    @IntDef({SheetState.NONE, SheetState.HIDDEN, SheetState.PEEK, SheetState.HALF, SheetState.FULL,
-            SheetState.SCROLLING})
+    @IntDef({
+        SheetState.NONE,
+        SheetState.HIDDEN,
+        SheetState.PEEK,
+        SheetState.HALF,
+        SheetState.FULL,
+        SheetState.SCROLLING
+    })
     @Retention(RetentionPolicy.SOURCE)
     @interface SheetState {
         /**
@@ -30,6 +36,7 @@ public interface BottomSheetController {
          * transitioning between states.
          */
         int NONE = -1;
+
         // Values are used for indexing mStateRatios, should start from 0
         // and can't have gaps. Additionally order is important for these,
         // they go from smallest to largest.
@@ -48,11 +55,19 @@ public interface BottomSheetController {
      * persisted to logs. Entries should not be renumbered and numeric values should never be
      * reused.
      */
-    @IntDef({StateChangeReason.NONE, StateChangeReason.SWIPE, StateChangeReason.BACK_PRESS,
-            StateChangeReason.TAP_SCRIM, StateChangeReason.NAVIGATION,
-            StateChangeReason.COMPOSITED_UI, StateChangeReason.VR, StateChangeReason.PROMOTE_TAB,
-            StateChangeReason.OMNIBOX_FOCUS, StateChangeReason.INTERACTION_COMPLETE,
-            StateChangeReason.MAX_VALUE})
+    @IntDef({
+        StateChangeReason.NONE,
+        StateChangeReason.SWIPE,
+        StateChangeReason.BACK_PRESS,
+        StateChangeReason.TAP_SCRIM,
+        StateChangeReason.NAVIGATION,
+        StateChangeReason.COMPOSITED_UI,
+        StateChangeReason.VR,
+        StateChangeReason.PROMOTE_TAB,
+        StateChangeReason.OMNIBOX_FOCUS,
+        StateChangeReason.INTERACTION_COMPLETE,
+        StateChangeReason.MAX_VALUE
+    })
     @Retention(RetentionPolicy.SOURCE)
     @interface StateChangeReason {
         int NONE = 0;
@@ -98,9 +113,7 @@ public interface BottomSheetController {
     /** @param observer The observer to remove. */
     void removeObserver(BottomSheetObserver observer);
 
-    /**
-     * Expand the sheet. If there is no content in the sheet, this is a noop.
-     */
+    /** Expand the sheet. If there is no content in the sheet, this is a noop. */
     void expandSheet();
 
     /**
@@ -133,14 +146,22 @@ public interface BottomSheetController {
 
     /**
      * @return The height of the bottom sheet's container in px. This will return 0 if the sheet has
-     *         not been initialized (content has not been requested).
+     *     not been initialized (content has not been requested).
      */
     int getContainerHeight();
 
     /**
+     * @return The maximum width of the bottom sheet. This will return 0 if the sheet has not been
+     *     initialized (content has not been requested). Can be used to measure content if needed in
+     *     {@link BottomSheetContent#getHalfHeightRatio()} and {@link
+     *     BottomSheetContent#getFullHeightRatio()}.
+     */
+    int getMaxSheetWidth();
+
+    /**
      * @return The srcim's coordinator. This can be used to customize the bottom sheet's interaction
-     *         with the scrim if the default behavior is not desired -- fading in behind the sheet
-     *         as the sheet is expanded.
+     *     with the scrim if the default behavior is not desired -- fading in behind the sheet as
+     *     the sheet is expanded.
      */
     ScrimCoordinator getScrimCoordinator();
 
@@ -160,7 +181,19 @@ public interface BottomSheetController {
 
     /**
      * @return The {@link BackPressHandler} that will handle a back press event when the bottom
-     *         sheet is open or holds sheet content.
+     *     sheet is open or holds sheet content.
      */
     BackPressHandler getBottomSheetBackPressHandler();
+
+    /**
+     * @return Whether the sheet covers the full width of the container, or is limited to only
+     *     partial width.
+     */
+    boolean isFullWidth();
+
+    /**
+     * @return Whether the bottom sheet is being shown on a small screen. This disables the half
+     *     sheet state.
+     */
+    boolean isSmallScreen();
 }

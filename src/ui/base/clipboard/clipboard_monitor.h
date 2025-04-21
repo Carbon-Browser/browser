@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,6 @@
 #include "base/observer_list.h"
 #include "base/threading/thread_checker.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 
 namespace ui {
 
@@ -34,7 +33,7 @@ class COMPONENT_EXPORT(UI_BASE_CLIPBOARD) ClipboardMonitor {
   // Notifies all observers for clipboard data change.
   virtual void NotifyClipboardDataChanged();
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   // Notifies all observers for clipboard data read.
   virtual void NotifyClipboardDataRead();
 #endif

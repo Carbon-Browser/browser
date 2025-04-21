@@ -1,8 +1,10 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/policy/handlers/bluetooth_policy_handler.h"
+
+#include <utility>
 
 #include "base/test/task_environment.h"
 #include "chrome/browser/ash/settings/scoped_testing_cros_settings.h"
@@ -16,17 +18,28 @@ namespace policy {
 class BluetoothPolicyHandlerTest : public testing::Test {
  protected:
   class TestingBluetoothAdapter : public device::MockBluetoothAdapter {
-   protected:
-    ~TestingBluetoothAdapter() override {}
-
    public:
-    TestingBluetoothAdapter() : is_shutdown_(false), is_powered_(true) {}
+    TestingBluetoothAdapter() = default;
 
-    void Shutdown() override { is_shutdown_ = true; }
+    void Shutdown() override {
+      is_shutdown_ = true;
+      for (auto observer : GetObservers()) {
+        observer.AdapterPresentChanged(this, false);
+      }
+    }
+    void Initialize(base::OnceClosure callback) override {
+      is_shutdown_ = false;
+
+      adapter_observer_->AdapterPresentChanged(this, true);
+      std::move(callback).Run();
+    }
     void SetPowered(bool powered,
-                    base::OnceClosure callack,
+                    base::OnceClosure callback,
                     ErrorCallback error_callback) override {
       is_powered_ = powered;
+
+      adapter_observer_->AdapterPoweredChanged(this, powered);
+      std::move(callback).Run();
     }
     void SetServiceAllowList(const UUIDList& uuids,
                              base::OnceClosure callback,
@@ -37,14 +50,24 @@ class BluetoothPolicyHandlerTest : public testing::Test {
     bool IsPowered() const override { return is_powered_; }
     const UUIDList& GetAllowList() const { return uuids_; }
 
+    void AddObserver(device::BluetoothAdapter::Observer* observer) override {
+      DCHECK(!adapter_observer_);
+      adapter_observer_ = observer;
+    }
+
    protected:
-    bool is_shutdown_;
-    bool is_powered_;
+    ~TestingBluetoothAdapter() override = default;
+
+    bool is_shutdown_ = false;
+    bool is_powered_ = true;
     UUIDList uuids_;
+    raw_ptr<device::BluetoothAdapter::Observer, DanglingUntriaged>
+        adapter_observer_ = nullptr;
   };
 
-  BluetoothPolicyHandlerTest() : adapter_(new TestingBluetoothAdapter) {}
-  ~BluetoothPolicyHandlerTest() override {}
+  BluetoothPolicyHandlerTest()
+      : adapter_(base::MakeRefCounted<TestingBluetoothAdapter>()) {}
+  ~BluetoothPolicyHandlerTest() override = default;
 
   // testing::Test
   void SetUp() override {
@@ -52,17 +75,16 @@ class BluetoothPolicyHandlerTest : public testing::Test {
     device::BluetoothAdapterFactory::SetAdapterForTesting(adapter_);
   }
 
-  void TearDown() override {}
-
  protected:
   void SetAllowBluetooth(bool allow_bluetooth) {
     scoped_testing_cros_settings_.device_settings()->SetBoolean(
         ash::kAllowBluetooth, allow_bluetooth);
   }
 
-  void SetDeviceAllowedBluetoothServices(const base::ListValue& allowlist) {
+  void SetDeviceAllowedBluetoothServices(base::Value::List allowlist) {
     scoped_testing_cros_settings_.device_settings()->Set(
-        ash::kDeviceAllowedBluetoothServices, allowlist);
+        ash::kDeviceAllowedBluetoothServices,
+        base::Value(std::move(allowlist)));
   }
 
   base::test::TaskEnvironment task_environment_;
@@ -100,19 +122,73 @@ TEST_F(BluetoothPolicyHandlerTest, OnDuringStartup) {
 }
 
 TEST_F(BluetoothPolicyHandlerTest, TestSetServiceAllowList) {
-  base::ListValue allowlist;
-  const char* test_uuid1_str = "0x1124";
-  const char* test_uuid2_str = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
-  allowlist.Append(base::Value(test_uuid1_str));
-  allowlist.Append(base::Value(test_uuid2_str));
-  SetDeviceAllowedBluetoothServices(allowlist);
+  base::Value::List allowlist;
+  const char kTestUuid1[] = "0x1124";
+  const char kTestUuid2[] = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+  allowlist.Append(kTestUuid1);
+  allowlist.Append(kTestUuid2);
+  SetDeviceAllowedBluetoothServices(std::move(allowlist));
   BluetoothPolicyHandler bluetooth_policy_handler(ash::CrosSettings::Get());
-  const device::BluetoothUUID test_uuid1(test_uuid1_str);
-  const device::BluetoothUUID test_uuid2(test_uuid2_str);
-  const std::vector<device::BluetoothUUID>& allowlist_ =
+  const device::BluetoothUUID test_uuid1(kTestUuid1);
+  const device::BluetoothUUID test_uuid2(kTestUuid2);
+  const std::vector<device::BluetoothUUID>& allowlist_result =
       adapter_->GetAllowList();
-  EXPECT_EQ(test_uuid1, allowlist_[0]);
-  EXPECT_EQ(test_uuid2, allowlist_[1]);
+  ASSERT_EQ(2u, allowlist_result.size());
+  EXPECT_EQ(test_uuid1, allowlist_result[0]);
+  EXPECT_EQ(test_uuid2, allowlist_result[1]);
 }
 
+TEST_F(BluetoothPolicyHandlerTest, TestPolicySettingsWhileBTNotReady) {
+  base::Value::List allowlist;
+  const char kTestUuid1[] = "0x1124";
+  const char kTestUuid2[] = "0x1108";
+  std::vector<device::BluetoothUUID> allowlist_result;
+  const device::BluetoothUUID test_uuid1(kTestUuid1);
+  const device::BluetoothUUID test_uuid2(kTestUuid2);
+
+  BluetoothPolicyHandler bluetooth_policy_handler(ash::CrosSettings::Get());
+
+  allowlist.Append(kTestUuid1);
+
+  adapter_->Shutdown();
+  ASSERT_TRUE(!adapter_->IsPresent());
+  ASSERT_TRUE(adapter_->IsPowered());
+
+  SetDeviceAllowedBluetoothServices(allowlist.Clone());
+
+  // policy is not propagated to adapter since it's not yet ready.
+  allowlist_result = adapter_->GetAllowList();
+  EXPECT_EQ(0u, allowlist_result.size());
+
+  adapter_->Initialize(base::DoNothing());
+  ASSERT_TRUE(adapter_->IsPresent());
+  ASSERT_TRUE(adapter_->IsPowered());
+  ASSERT_TRUE(adapter_->IsInitialized());
+
+  allowlist_result = adapter_->GetAllowList();
+  // policy should be set to adapter after adapter is ready.
+  ASSERT_EQ(1u, allowlist_result.size());
+  EXPECT_EQ(test_uuid1, allowlist_result[0]);
+
+  adapter_->SetPowered(false, base::DoNothing(), base::DoNothing());
+
+  allowlist.Append(kTestUuid2);
+  SetDeviceAllowedBluetoothServices(allowlist.Clone());
+
+  // policy is not propagated to adapter since it's not powered.
+  allowlist_result = adapter_->GetAllowList();
+  ASSERT_EQ(1u, allowlist_result.size());
+  EXPECT_EQ(test_uuid1, allowlist_result[0]);
+
+  adapter_->SetPowered(true, base::DoNothing(), base::DoNothing());
+  ASSERT_TRUE(adapter_->IsPresent());
+  ASSERT_TRUE(adapter_->IsPowered());
+  ASSERT_TRUE(adapter_->IsInitialized());
+
+  // policy should be set to adapter after adapter is ready.
+  allowlist_result = adapter_->GetAllowList();
+  ASSERT_EQ(2u, allowlist_result.size());
+  EXPECT_EQ(test_uuid1, allowlist_result[0]);
+  EXPECT_EQ(test_uuid2, allowlist_result[1]);
+}
 }  // namespace policy

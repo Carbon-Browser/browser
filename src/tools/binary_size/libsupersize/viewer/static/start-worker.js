@@ -1,14 +1,8 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 'use strict';
-
-/** @type {Object} */
-window.supersize = window.supersize || {};
-
-/** @type {?Worker} */
-window.supersize.worker = null;
 
 /**
  * We use a worker to keep large tree creation logic off the UI thread.
@@ -32,6 +26,12 @@ class TreeWorker {
         onProgressHandler(event.data);
       }
     });
+  }
+
+  /** @public **/
+  dispose() {
+    this._worker.terminate();
+    delete this._worker;
   }
 
   /**
@@ -66,10 +66,11 @@ class TreeWorker {
    * @returns {Promise<BuildTreeResults, string>}
    */
   loadAndBuildTree(input=null, accessToken=null) {
+    const buildOptions = state.exportToBuildOptions();
     return this._waitForResponse('loadAndBuildTree', {
       input,
       accessToken,
-      optionsStr: location.search.slice(1),
+      buildOptions,
     });
   }
 
@@ -78,8 +79,10 @@ class TreeWorker {
    * @returns {Promise<BuildTreeResults>}
    */
   buildTree() {
+    state.stFocus.set('');
+    const buildOptions = state.exportToBuildOptions();
     return this._waitForResponse('buildTree', {
-      optionsStr: location.search.slice(1),
+      buildOptions,
     });
   }
 
@@ -93,12 +96,24 @@ class TreeWorker {
   openNode(idPath) {
     return this._waitForResponse('open', idPath);
   }
+
+  /**
+   * @param {number} id
+   * @return {Promise<QueryAncestryResults>}
+   */
+  queryAncestryById(id) {
+    return this._waitForResponse('queryAncestryById', id);
+  }
 }
 /**
  * @param {function(TreeProgress): *} onProgressHandler
  * @return {TreeWorker}
  */
 function restartWorker(onProgressHandler) {
+  if (window.supersize.worker) {
+    window.supersize.worker.dispose();
+    window.supersize.worker = null;
+  }
   const innerWorker = new Worker('tree-worker-wasm.js');
   window.supersize.worker = new TreeWorker(innerWorker, onProgressHandler);
   return window.supersize.worker;

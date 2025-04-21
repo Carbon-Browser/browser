@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -9,6 +9,7 @@ Builds and packages ChromeWebView.framework.
 
 import argparse
 import os
+import platform
 import shutil
 import sys
 
@@ -52,9 +53,9 @@ def build(build_config, target_device, extra_gn_options, extra_ninja_options):
         'target_environment="device"',
     ])
   else:
+    target_cpu = {'x86_64': 'x64', 'arm64': 'arm64'}[platform.machine()]
     gn_args.extend([
-        'target_cpu="x64"',
-        'additional_target_cpus = [ "arm64" ]',
+        'target_cpu="%s"' % target_cpu,
         'target_environment="simulator"',
     ])
 
@@ -195,12 +196,8 @@ def main():
 
   parser.add_argument('out_dir', nargs='?', default='out/IOSWebViewBuild',
                       help='path to output directory')
-  parser.add_argument('--no_goma', action='store_true',
-                      help='Prevents adding use_goma=true to the gn args.')
   parser.add_argument('--ninja_args',
                       help='Additional gn args to pass through to ninja.')
-  parser.add_argument('--include_cronet', action='store_true',
-                      help='Combines Cronet and ChromeWebView as 1 framework.')
   build_configs = ['Debug', 'Release']
   target_devices = ['iphonesimulator', 'iphoneos']
   parser.add_argument('--build_configs', nargs='+', default=build_configs,
@@ -225,14 +222,6 @@ def main():
 
   output_name = 'ChromeWebView'
   extra_gn_options = []
-  if not options.no_goma:
-    extra_gn_options.append('use_goma=true')
-  if options.include_cronet:
-    extra_gn_options.append('ios_web_view_include_cronet=true')
-    output_name = 'CronetChromeWebView'
-  else:
-    extra_gn_options.append('ios_web_view_include_cronet=false')
-  extra_gn_options.append('ios_web_view_output_name="%s"' % output_name)
   # This prevents Breakpad from being included in the final binary to avoid
   # duplicate symbols with the client app.
   extra_gn_options.append('use_crash_key_stubs=true')

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,15 +41,14 @@ TEST_F(StorageServiceImplTest, UniqueInMemoryPartitions) {
 
   mojo::Remote<mojom::Partition> in_memory_partition1;
   remote_service()->BindPartition(
-      /*path=*/absl::nullopt,
-      in_memory_partition1.BindNewPipeAndPassReceiver());
+      /*path=*/std::nullopt, in_memory_partition1.BindNewPipeAndPassReceiver());
   in_memory_partition1.FlushForTesting();
 
   EXPECT_EQ(1u, service_impl().partitions().size());
 
   mojo::Remote<mojom::Partition> in_memory_partition2;
   remote_service()->BindPartition(
-      absl::nullopt /* path */,
+      std::nullopt /* path */,
       in_memory_partition2.BindNewPipeAndPassReceiver());
   in_memory_partition2.FlushForTesting();
 

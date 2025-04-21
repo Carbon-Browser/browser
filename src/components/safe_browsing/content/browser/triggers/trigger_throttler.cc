@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,12 @@
 
 #include "base/containers/contains.h"
 #include "base/metrics/field_trial_params.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/time/default_clock.h"
 #include "base/time/time.h"
+#include "base/values.h"
 #include "components/prefs/pref_service.h"
 #include "components/safe_browsing/core/common/features.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
@@ -22,18 +24,6 @@ const char kSuspiciousSiteTriggerQuotaParam[] = "suspicious_site_trigger_quota";
 namespace {
 const size_t kUnlimitedTriggerQuota = std::numeric_limits<size_t>::max();
 constexpr base::TimeDelta kOneDayTimeDelta = base::Days(1);
-
-// Predicate used to search |trigger_type_and_quota_list_| by trigger type.
-class TriggerTypeIs {
- public:
-  explicit TriggerTypeIs(const TriggerType type) : type_(type) {}
-  bool operator()(const TriggerTypeAndQuotaItem& trigger_type_and_quota) {
-    return type_ == trigger_type_and_quota.first;
-  }
-
- private:
-  TriggerType type_;
-};
 
 void ParseTriggerTypeAndQuotaParam(
     std::vector<TriggerTypeAndQuotaItem>* trigger_type_and_quota_list) {
@@ -56,9 +46,8 @@ bool TryFindQuotaForTrigger(
     const TriggerType trigger_type,
     const std::vector<TriggerTypeAndQuotaItem>& trigger_quota_list,
     size_t* out_quota) {
-  const auto& trigger_quota_iter =
-      std::find_if(trigger_quota_list.begin(), trigger_quota_list.end(),
-                   TriggerTypeIs(trigger_type));
+  const auto& trigger_quota_iter = base::ranges::find(
+      trigger_quota_list, trigger_type, &TriggerTypeAndQuotaItem::first);
   if (trigger_quota_iter != trigger_quota_list.end()) {
     *out_quota = trigger_quota_iter->second;
     return true;
@@ -75,7 +64,7 @@ TriggerThrottler::TriggerThrottler(PrefService* local_state_prefs)
   LoadTriggerEventsFromPref();
 }
 
-TriggerThrottler::~TriggerThrottler() {}
+TriggerThrottler::~TriggerThrottler() = default;
 
 void TriggerThrottler::SetClockForTesting(base::Clock* test_clock) {
   clock_ = test_clock;
@@ -159,9 +148,9 @@ void TriggerThrottler::LoadTriggerEventsFromPref() {
   if (!local_state_prefs_)
     return;
 
-  const base::Value* event_dict = local_state_prefs_->GetDictionary(
-      prefs::kSafeBrowsingTriggerEventTimestamps);
-  for (auto trigger_pair : event_dict->DictItems()) {
+  const base::Value::Dict& event_dict =
+      local_state_prefs_->GetDict(prefs::kSafeBrowsingTriggerEventTimestamps);
+  for (auto trigger_pair : event_dict) {
     // Check that the first item in the pair is convertible to a trigger type
     // and that the second item is a list.
     int trigger_type_int;
@@ -174,10 +163,10 @@ void TriggerThrottler::LoadTriggerEventsFromPref() {
       continue;
 
     const TriggerType trigger_type = static_cast<TriggerType>(trigger_type_int);
-    for (const auto& timestamp : trigger_pair.second.GetListDeprecated()) {
+    for (const auto& timestamp : trigger_pair.second.GetList()) {
       if (timestamp.is_double())
         trigger_events_[trigger_type].push_back(
-            base::Time::FromDoubleT(timestamp.GetDouble()));
+            base::Time::FromSecondsSinceUnixEpoch(timestamp.GetDouble()));
     }
   }
 }
@@ -186,18 +175,19 @@ void TriggerThrottler::WriteTriggerEventsToPref() {
   if (!local_state_prefs_)
     return;
 
-  base::DictionaryValue trigger_dict;
+  base::Value::Dict trigger_dict;
   for (const auto& trigger_item : trigger_events_) {
-    base::Value* pref_timestamps = trigger_dict.SetKey(
-        base::NumberToString(static_cast<int>(trigger_item.first)),
-        base::Value(base::Value::Type::LIST));
+    base::Value::List timestamps;
     for (const base::Time timestamp : trigger_item.second) {
-      pref_timestamps->Append(base::Value(timestamp.ToDoubleT()));
+      timestamps.Append(timestamp.InSecondsFSinceUnixEpoch());
     }
+
+    trigger_dict.Set(base::NumberToString(static_cast<int>(trigger_item.first)),
+                     std::move(timestamps));
   }
 
-  local_state_prefs_->Set(prefs::kSafeBrowsingTriggerEventTimestamps,
-                          trigger_dict);
+  local_state_prefs_->SetDict(prefs::kSafeBrowsingTriggerEventTimestamps,
+                              std::move(trigger_dict));
 }
 
 size_t TriggerThrottler::GetDailyQuotaForTrigger(
@@ -207,6 +197,7 @@ size_t TriggerThrottler::GetDailyQuotaForTrigger(
     case TriggerType::SECURITY_INTERSTITIAL:
     case TriggerType::GAIA_PASSWORD_REUSE:
     case TriggerType::APK_DOWNLOAD:
+    case TriggerType::PHISHY_SITE_INTERACTION:
       return kUnlimitedTriggerQuota;
 
     case TriggerType::DEPRECATED_AD_POPUP:

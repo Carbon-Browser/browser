@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,19 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/arc/arc_support_host.h"
 #include "chrome/browser/ash/arc/optin/arc_optin_preference_handler_observer.h"
 #include "chrome/browser/ash/arc/optin/arc_terms_of_service_negotiator.h"
 
 class PrefService;
+
+namespace metrics {
+
+class MetricsService;
+
+}
 
 namespace arc {
 
@@ -25,7 +32,8 @@ class ArcTermsOfServiceDefaultNegotiator
       public ArcOptInPreferenceHandlerObserver {
  public:
   ArcTermsOfServiceDefaultNegotiator(PrefService* pref_service,
-                                     ArcSupportHost* support_host);
+                                     ArcSupportHost* support_host,
+                                     metrics::MetricsService* metrics_service);
 
   ArcTermsOfServiceDefaultNegotiator(
       const ArcTermsOfServiceDefaultNegotiator&) = delete;
@@ -41,21 +49,31 @@ class ArcTermsOfServiceDefaultNegotiator
                      bool is_location_service_enabled) override;
   void OnTermsRejected() override;
   void OnTermsRetryClicked() override;
+  void OnTermsLoadResult(bool success) override;
 
   // ArcOptInPreferenceHandlerObserver:
   void OnMetricsModeChanged(bool enabled, bool managed) override;
   void OnBackupAndRestoreModeChanged(bool enabled, bool managed) override;
   void OnLocationServicesModeChanged(bool enabled, bool managed) override;
 
+  // Callback when metrics prefs have successfully been updated by
+  // |preference_handler_|.
+  void OnMetricsPrefsUpdated();
+
   // ArcTermsOfServiceNegotiator:
   // Shows "Terms of service" page on ARC support Chrome App.
   void StartNegotiationImpl() override;
 
-  PrefService* const pref_service_;
+  const raw_ptr<PrefService> pref_service_;
   // Owned by ArcSessionManager.
-  ArcSupportHost* const support_host_;
+  const raw_ptr<ArcSupportHost> support_host_;
+
+  const raw_ptr<metrics::MetricsService> metrics_service_;
 
   std::unique_ptr<ArcOptInPreferenceHandler> preference_handler_;
+
+  base::WeakPtrFactory<ArcTermsOfServiceDefaultNegotiator> weak_ptr_factory_{
+      this};
 };
 
 }  // namespace arc

@@ -1,9 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_POLICY_WEBHID_DEVICE_POLICY_HANDLER_H_
 #define CHROME_BROWSER_POLICY_WEBHID_DEVICE_POLICY_HANDLER_H_
+
+#include <string_view>
 
 #include "components/policy/core/browser/configuration_policy_handler.h"
 
@@ -13,12 +15,13 @@ namespace policy {
 
 class PolicyMap;
 
-// Handles the WebHidAllowDevicesForUrls and
+// Handles the WebHidAllowDevicesForUrls,
+// DeviceLoginScreenWebHidAllowDevicesForUrls, and
 // WebHidAllowDevicesWithHidUsagesForUrls policies.
 class WebHidDevicePolicyHandler : public SchemaValidatingPolicyHandler {
  public:
   explicit WebHidDevicePolicyHandler(const char* policy_key,
-                                     base::StringPiece pref_name,
+                                     std::string_view pref_name,
                                      const Schema& schema);
   WebHidDevicePolicyHandler(const WebHidDevicePolicyHandler&) = delete;
   WebHidDevicePolicyHandler& operator=(const WebHidDevicePolicyHandler&) =

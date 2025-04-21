@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,13 +20,13 @@
  * string with a link and sometimes returns a normal string.
  */
 
-import '../../cr_elements/shared_vars_css.m.js';
-import '../../cr_elements/shared_style_css.m.js';
+import {assert, assertNotReached} from '//resources/js/assert.js';
+import {sanitizeInnerHtml} from '//resources/js/parse_html_subset.js';
+import type {PropertyValues} from '//resources/lit/v3_0/lit.rollup.js';
+import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
 
-import {assert, assertNotReached} from '//resources/js/assert.m.js';
-import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-
-import {getTemplate} from './localized_link.html.js';
+import {getCss} from './localized_link.css.js';
+import {getHtml} from './localized_link.html.js';
 
 export interface LocalizedLinkElement {
   $: {
@@ -34,59 +34,78 @@ export interface LocalizedLinkElement {
   };
 }
 
-export class LocalizedLinkElement extends PolymerElement {
+export class LocalizedLinkElement extends CrLitElement {
   static get is() {
     return 'localized-link';
   }
 
-  static get template() {
-    return getTemplate();
+  static override get styles() {
+    return getCss();
   }
 
-  static get properties() {
+  override render() {
+    return getHtml.bind(this)();
+  }
+
+  static override get properties() {
     return {
       /**
        * The localized string that contains up to one anchor tag, the text
        * within which will be aria-labelledby the entire localizedString.
        */
-      localizedString: String,
+      localizedString: {type: String},
 
       /**
        * If provided, the URL that the anchor tag will point to. There is no
        * need to provide a linkUrl if the URL is embedded in the
        * localizedString.
        */
-      linkUrl: {
-        type: String,
-        value: '',
-      },
+      linkUrl: {type: String},
 
       /**
        * If true, localized link will be disabled.
        */
       linkDisabled: {
         type: Boolean,
-        value: false,
-        reflectToAttribute: true,
-        observer: 'updateAnchorTagTabIndex_',
+        reflect: true,
       },
 
       /**
-       * localizedString, with aria attributes and the optionally provided link.
+       * localizedString, with aria attributes and the optionally provided
+       * link.
        */
-      containerInnerHTML_: {
-        type: String,
-        value: '',
-        computed: 'getAriaLabelledContent_(localizedString, linkUrl)',
-        observer: 'setContainerInnerHTML_',
-      },
+      containerInnerHTML_: {type: String},
     };
   }
 
-  localizedString: string;
-  linkUrl: string;
-  linkDisabled: boolean;
-  private containerInnerHTML_: string;
+  localizedString: string = '';
+  linkUrl: string = '';
+  linkDisabled: boolean = false;
+  private containerInnerHTML_: string = '';
+
+  override willUpdate(changedProperties: PropertyValues<this>) {
+    super.willUpdate(changedProperties);
+    if (changedProperties.has('localizedString') ||
+        changedProperties.has('linkUrl')) {
+      this.containerInnerHTML_ =
+          this.getAriaLabelledContent_(this.localizedString, this.linkUrl);
+    }
+  }
+
+  override updated(changedProperties: PropertyValues<this>) {
+    super.updated(changedProperties);
+
+    const changedPrivateProperties =
+        changedProperties as Map<PropertyKey, unknown>;
+
+    if (changedPrivateProperties.has('containerInnerHTML_')) {
+      this.setContainerInnerHtml_();
+    }
+
+    if (changedProperties.has('linkDisabled')) {
+      this.updateAnchorTagTabIndex_();
+    }
+  }
 
   /**
    * Attaches aria attributes and optionally provided link to the provided
@@ -97,7 +116,7 @@ export class LocalizedLinkElement extends PolymerElement {
   private getAriaLabelledContent_(localizedString: string, linkUrl: string):
       string {
     const tempEl = document.createElement('div');
-    tempEl.innerHTML = localizedString;
+    tempEl.innerHTML = sanitizeInnerHtml(localizedString, {attrs: ['id']});
 
     const ariaLabelledByIds: string[] = [];
     tempEl.childNodes.forEach((node, index) => {
@@ -147,12 +166,25 @@ export class LocalizedLinkElement extends PolymerElement {
     return tempEl.innerHTML;
   }
 
-  private setContainerInnerHTML_() {
-    this.$.container.innerHTML = this.containerInnerHTML_;
+  private setContainerInnerHtml_() {
+    this.$.container.innerHTML = sanitizeInnerHtml(this.containerInnerHTML_, {
+      attrs: [
+        'aria-hidden',
+        'aria-labelledby',
+        'id',
+        'tabindex',
+      ],
+    });
     const anchorTag = this.shadowRoot!.querySelector('a');
     if (anchorTag) {
       anchorTag.addEventListener(
           'click', (event) => this.onAnchorTagClick_(event));
+      anchorTag.addEventListener('auxclick', (event) => {
+        // trigger the click handler on middle-button clicks
+        if (event.button === 1) {
+          this.onAnchorTagClick_(event);
+        }
+      });
     }
   }
 

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/numerics/safe_math.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "content/common/pepper_file_util.h"
 #include "content/public/common/gpu_stream_constants.h"
@@ -40,19 +39,6 @@ namespace content {
 namespace {
 
 const uint32_t kDefaultNumberOfBitstreamBuffers = 4;
-
-int32_t PP_FromMediaEncodeAcceleratorError(
-    media::VideoEncodeAccelerator::Error error) {
-  switch (error) {
-    case media::VideoEncodeAccelerator::kInvalidArgumentError:
-      return PP_ERROR_MALFORMED_INPUT;
-    case media::VideoEncodeAccelerator::kIllegalStateError:
-    case media::VideoEncodeAccelerator::kPlatformFailureError:
-      return PP_ERROR_RESOURCE_FAILED;
-    // No default case, to catch unhandled enum values.
-  }
-  return PP_ERROR_FAILED;
-}
 
 // TODO(llandwerlin): move following to media_conversion.cc/h?
 media::VideoCodecProfile PP_ToMediaVideoProfile(PP_VideoProfile profile) {
@@ -118,7 +104,6 @@ PP_VideoProfile PP_FromMediaVideoProfile(media::VideoCodecProfile profile) {
       return PP_VIDEOPROFILE_VP9_ANY;
     default:
       NOTREACHED();
-      return static_cast<PP_VideoProfile>(-1);
   }
 }
 
@@ -281,7 +266,10 @@ int32_t PepperVideoEncoderHost::OnHostMsgInitialize(
   initialize_reply_context_ = context->MakeReplyMessageContext();
   const media::VideoEncodeAccelerator::Config config(
       media_input_format_, input_size, media_profile,
-      media::Bitrate::ConstantBitrate(initial_bitrate));
+      media::Bitrate::ConstantBitrate(initial_bitrate),
+      media::VideoEncodeAccelerator::kDefaultFramerate,
+      media::VideoEncodeAccelerator::Config::StorageType::kShmem,
+      media::VideoEncodeAccelerator::Config::ContentType::kDisplay);
   if (encoder_->Initialize(config, this))
     return PP_OK_COMPLETIONPENDING;
 
@@ -342,7 +330,7 @@ int32_t PepperVideoEncoderHost::OnHostMsgRequestEncodingParametersChange(
     return encoder_last_error_;
 
   encoder_->RequestEncodingParametersChange(
-      media::Bitrate::ConstantBitrate(bitrate), framerate);
+      media::Bitrate::ConstantBitrate(bitrate), framerate, std::nullopt);
 
   return PP_OK;
 }
@@ -428,10 +416,14 @@ void PepperVideoEncoderHost::BitstreamBufferReady(
           metadata.key_frame));
 }
 
-void PepperVideoEncoderHost::NotifyError(
-    media::VideoEncodeAccelerator::Error error) {
+void PepperVideoEncoderHost::NotifyErrorStatus(
+    const media::EncoderStatus& status) {
   DCHECK(RenderThreadImpl::current());
-  NotifyPepperError(PP_FromMediaEncodeAcceleratorError(error));
+  CHECK(!status.is_ok());
+  LOG(ERROR) << "NotifyErrorStatus() is called, code="
+             << static_cast<int32_t>(status.code())
+             << ", message=" << status.message();
+  NotifyPepperError(PP_ERROR_RESOURCE_FAILED);
 }
 
 void PepperVideoEncoderHost::GetSupportedProfiles(
@@ -462,7 +454,6 @@ void PepperVideoEncoderHost::AllocateVideoFrames() {
   if (buffer_manager_.number_of_buffers() > 0) {
     SendGetFramesErrorReply(PP_ERROR_FAILED);
     NOTREACHED();
-    return;
   }
 
   base::CheckedNumeric<uint32_t> size =

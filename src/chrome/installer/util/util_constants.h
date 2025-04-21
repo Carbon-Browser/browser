@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -125,7 +125,13 @@ enum InstallStatus {
   DELETE_DMTOKEN_FAILED = 74,     // Failed to delete DMToken from the registry.
   DELETE_DMTOKEN_SUCCESS = 75,    // Successfully deleted DMToken from the
                                   // registry.
-  MAX_INSTALL_STATUS = 76,  // When adding a new result, bump this and update
+  ROTATE_DTKEY_FAILED_PERMISSIONS = 76,  // Failed to rotate the device trust
+                                         // key due to missing permissions.
+  ROTATE_DTKEY_FAILED_CONFLICT = 77,  // Failed to rotate the device trust key
+                                      // due to a conflict during upload.
+  CONFIGURE_APP_CONTAINER_SANDBOX_SUCCESS = 78,
+  CONFIGURE_APP_CONTAINER_SANDBOX_FAILED = 79,
+  MAX_INSTALL_STATUS = 80,  // When adding a new result, bump this and update
                             // the SetupInstallResult enum in enums.xml.
 };
 
@@ -177,7 +183,6 @@ extern const char kDoNotRemoveSharedItems[];
 extern const char kEnableLogging[];
 extern const char kForceConfigureUserSettings[];
 extern const char kForceUninstall[];
-extern const char kInputFile[];
 extern const char kInstallArchive[];
 extern const char kInstallerData[];
 extern const char kInstallLevel[];
@@ -187,9 +192,6 @@ extern const char kMsi[];
 extern const char kNewSetupExe[];
 extern const char kNonce[];
 extern const char kOnOsUpgrade[];
-extern const char kOutputFile[];
-extern const char kPatch[];
-extern const char kPatchFile[];
 extern const char kPreviousVersion[];
 extern const char kReenableAutoupdates[];
 extern const char kRegisterChromeBrowser[];
@@ -226,6 +228,8 @@ extern const wchar_t kChromeOldExe[];
 extern const wchar_t kChromeProxyExe[];
 extern const wchar_t kChromeProxyNewExe[];
 extern const wchar_t kChromeProxyOldExe[];
+extern const wchar_t kCmdAlternateRenameChromeExe[];
+extern const wchar_t kCmdRenameChromeExe[];
 extern const wchar_t kCmdOnOsUpgrade[];
 extern const wchar_t kCmdRotateDeviceTrustKey[];
 extern const wchar_t kCmdStoreDMToken[];
@@ -235,7 +239,6 @@ extern const wchar_t kInstallBinaryDir[];
 extern const wchar_t kInstallerDir[];
 extern const wchar_t kInstallTempDir[];
 extern const wchar_t kLnkExt[];
-extern const wchar_t kNaClExe[];
 extern const wchar_t kNotificationHelperExe[];
 extern const wchar_t kRegDowngradeVersion[];
 extern const wchar_t kSetupExe[];

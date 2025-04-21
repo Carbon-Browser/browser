@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,11 @@ TEST_F(AssistantSetupControllerTest, ShouldCloseAssistantUiWhenOnboarding) {
   ShowAssistantUi(AssistantEntryPoint::kUnspecified);
   EXPECT_TRUE(IsVisible());
 
-  SetConsentStatus(chromeos::assistant::prefs::ConsentStatus::kUnknown);
+  // When Launcher Search IPH is enabled and it is not in zero state view, we
+  // show the opt-in chips as needed.
+  MockTextInteraction().WithTextResponse("The response");
+
+  SetConsentStatus(assistant::prefs::ConsentStatus::kUnknown);
   EXPECT_TRUE(opt_in_view()->GetVisible());
 
   ClickOnAndWait(opt_in_view());
@@ -43,7 +47,13 @@ TEST_F(AssistantSetupControllerTest,
   ShowAssistantUi(AssistantEntryPoint::kUnspecified);
   EXPECT_TRUE(IsVisible());
 
-  SetConsentStatus(chromeos::assistant::prefs::ConsentStatus::kUnknown);
+  // When Launcher Search IPH is enabled and it is not in zero state view, we
+  // show the opt-in chips as needed.
+  // Show Assistant UI in text mode, which is required to set text query.
+  TapOnAndWait(keyboard_input_toggle());
+  MockTextInteraction().WithTextResponse("The response");
+
+  SetConsentStatus(assistant::prefs::ConsentStatus::kUnknown);
   EXPECT_TRUE(opt_in_view()->GetVisible());
 
   ClickOnAndWait(opt_in_view());
@@ -56,7 +66,11 @@ TEST_F(AssistantSetupControllerTest,
   ShowAssistantUi(AssistantEntryPoint::kUnspecified);
   EXPECT_TRUE(IsVisible());
 
-  SetConsentStatus(chromeos::assistant::prefs::ConsentStatus::kUnknown);
+  // When Launcher Search IPH is enabled and it is not in zero state view, we
+  // show the opt-in chips as needed.
+  MockTextInteraction().WithTextResponse("The response");
+
+  SetConsentStatus(assistant::prefs::ConsentStatus::kUnknown);
   EXPECT_TRUE(opt_in_view()->GetVisible());
 
   ClickOnAndWait(opt_in_view());
@@ -73,7 +87,11 @@ TEST_F(AssistantSetupControllerTest,
   ShowAssistantUi(AssistantEntryPoint::kUnspecified);
   EXPECT_TRUE(IsVisible());
 
-  SetConsentStatus(chromeos::assistant::prefs::ConsentStatus::kUnknown);
+  // When Launcher Search IPH is enabled and it is not in zero state view, we
+  // show the opt-in chips as needed.
+  MockTextInteraction().WithTextResponse("The response");
+
+  SetConsentStatus(assistant::prefs::ConsentStatus::kUnknown);
   EXPECT_TRUE(opt_in_view()->GetVisible());
 
   ClickOnAndWait(opt_in_view());

@@ -1,27 +1,30 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ui/gl/direct_composition_surface_win.h"
 #include "ui/gl/init/gl_initializer.h"
 
 #include <dwmapi.h>
 
 #include "base/at_exit.h"
 #include "base/base_paths.h"
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/native_library.h"
 #include "base/path_service.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/trace_event/trace_event.h"
 #include "base/win/windows_version.h"
+#include "ui/gl/direct_composition_support.h"
+#include "ui/gl/gl_angle_util_win.h"
 #include "ui/gl/gl_bindings.h"
 #include "ui/gl/gl_display.h"
 #include "ui/gl/gl_egl_api_implementation.h"
 #include "ui/gl/gl_gl_api_implementation.h"
 #include "ui/gl/gl_utils.h"
+#include "ui/gl/init/gl_display_initializer.h"
+#include "ui/gl/startup_trace.h"
 #include "ui/gl/vsync_provider_win.h"
 
 namespace gl {
@@ -33,6 +36,7 @@ const wchar_t kD3DCompiler[] = L"D3DCompiler_47.dll";
 
 bool LoadD3DXLibrary(const base::FilePath& module_path,
                      const base::FilePath::StringType& name) {
+  GPU_STARTUP_TRACE_EVENT(__func__);
   base::NativeLibrary library =
       base::LoadNativeLibrary(module_path.Append(name), nullptr);
   if (!library) {
@@ -48,7 +52,7 @@ bool LoadD3DXLibrary(const base::FilePath& module_path,
 bool InitializeStaticEGLInternalFromLibrary(GLImplementation implementation) {
 #if BUILDFLAG(USE_STATIC_ANGLE)
   NOTREACHED();
-#endif
+#else
 
   base::FilePath module_path;
   if (!base::PathService::Get(base::DIR_MODULE, &module_path))
@@ -64,8 +68,12 @@ bool InitializeStaticEGLInternalFromLibrary(GLImplementation implementation) {
   // Load libglesv2.dll before libegl.dll because the latter is dependent on
   // the former and if there is another version of libglesv2.dll in the dll
   // search path, it will get loaded instead.
-  base::NativeLibrary gles_library =
-      base::LoadNativeLibrary(gles_path.Append(L"libglesv2.dll"), nullptr);
+  base::NativeLibrary gles_library;
+  {
+    GPU_STARTUP_TRACE_EVENT("Load gles_library");
+    gles_library =
+        base::LoadNativeLibrary(gles_path.Append(L"libglesv2.dll"), nullptr);
+  }
   if (!gles_library) {
     DVLOG(1) << "libglesv2.dll not found";
     return false;
@@ -73,8 +81,12 @@ bool InitializeStaticEGLInternalFromLibrary(GLImplementation implementation) {
 
   // When using EGL, first try eglGetProcAddress and then Windows
   // GetProcAddress on both the EGL and GLES2 DLLs.
-  base::NativeLibrary egl_library =
-      base::LoadNativeLibrary(gles_path.Append(L"libegl.dll"), nullptr);
+  base::NativeLibrary egl_library;
+  {
+    GPU_STARTUP_TRACE_EVENT("Load egl_library");
+    egl_library =
+        base::LoadNativeLibrary(gles_path.Append(L"libegl.dll"), nullptr);
+  }
   if (!egl_library) {
     DVLOG(1) << "libegl.dll not found.";
     base::UnloadNativeLibrary(gles_library);
@@ -97,6 +109,7 @@ bool InitializeStaticEGLInternalFromLibrary(GLImplementation implementation) {
   AddGLNativeLibrary(gles_library);
 
   return true;
+#endif
 }
 
 bool InitializeStaticEGLInternal(GLImplementationParts implementation) {
@@ -123,18 +136,21 @@ bool InitializeStaticEGLInternal(GLImplementationParts implementation) {
 
 }  // namespace
 
-GLDisplay* InitializeGLOneOffPlatform(uint64_t system_device_id) {
+GLDisplay* InitializeGLOneOffPlatform(gl::GpuPreference gpu_preference) {
   VSyncProviderWin::InitializeOneOff();
 
-  GLDisplayEGL* display = GetDisplayEGL(system_device_id);
+  GLDisplayEGL* display = GetDisplayEGL(gpu_preference);
   switch (GetGLImplementation()) {
-    case kGLImplementationEGLANGLE:
-      if (!display->Initialize(EGLDisplayPlatform(GetDC(nullptr)))) {
+    case kGLImplementationEGLANGLE: {
+      if (!InitializeDisplay(display, EGLDisplayPlatform(GetDC(nullptr)))) {
         LOG(ERROR) << "GLDisplayEGL::Initialize failed.";
         return nullptr;
       }
-      DirectCompositionSurfaceWin::InitializeOneOff(display);
+      if (auto d3d11_device = QueryD3D11DeviceObjectFromANGLE()) {
+        InitializeDirectComposition(std::move(d3d11_device));
+      }
       break;
+    }
     case kGLImplementationMockGL:
     case kGLImplementationStubGL:
       break;
@@ -154,7 +170,7 @@ bool InitializeStaticGLBindings(GLImplementationParts implementation) {
   // after instituting restrictions on I/O. Going forward they will
   // likely be used in the browser process on most platforms. The
   // one-time initialization cost is small, between 2 and 5 ms.
-  base::ThreadRestrictions::ScopedAllowIO allow_io;
+  base::ScopedAllowBlocking allow_blocking;
 
   switch (implementation.gl) {
     case kGLImplementationEGLANGLE:
@@ -167,12 +183,10 @@ bool InitializeStaticGLBindings(GLImplementationParts implementation) {
     default:
       NOTREACHED();
   }
-
-  return false;
 }
 
 void ShutdownGLPlatform(GLDisplay* display) {
-  DirectCompositionSurfaceWin::ShutdownOneOff();
+  ShutdownDirectComposition();
   if (display)
     display->Shutdown();
   ClearBindingsEGL();

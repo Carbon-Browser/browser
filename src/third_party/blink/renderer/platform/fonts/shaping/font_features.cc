@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/fonts/shaping/font_features.h"
 
 #include "third_party/blink/renderer/platform/fonts/font.h"
+#include "third_party/blink/renderer/platform/fonts/font_description.h"
 
 namespace blink {
 
@@ -24,12 +25,12 @@ constexpr hb_feature_t CreateFeature(char c1,
 
 }  // namespace
 
-absl::optional<unsigned> FontFeatures::FindValueForTesting(hb_tag_t tag) const {
+std::optional<unsigned> FontFeatures::FindValueForTesting(hb_tag_t tag) const {
   for (const hb_feature_t& feature : features_) {
     if (feature.tag == tag)
       return feature.value;
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 void FontFeatures::Initialize(const FontDescription& description) {
@@ -105,7 +106,7 @@ void FontFeatures::Initialize(const FontDescription& description) {
 
   // font-variant-east-asian:
   const FontVariantEastAsian east_asian = description.VariantEastAsian();
-  if (UNLIKELY(!east_asian.IsAllNormal())) {
+  if (!east_asian.IsAllNormal()) [[unlikely]] {
     static constexpr hb_feature_t jp78 = CreateFeature('j', 'p', '7', '8', 1);
     static constexpr hb_feature_t jp83 = CreateFeature('j', 'p', '8', '3', 1);
     static constexpr hb_feature_t jp90 = CreateFeature('j', 'p', '9', '0', 1);
@@ -196,10 +197,11 @@ void FontFeatures::Initialize(const FontDescription& description) {
 
   const hb_tag_t chws_or_vchw =
       is_horizontal ? HB_TAG('c', 'h', 'w', 's') : HB_TAG('v', 'c', 'h', 'w');
-  bool default_enable_chws = true;
+  bool default_enable_chws =
+      ShouldTrimAdjacent(description.GetTextSpacingTrim());
 
   const FontFeatureSettings* settings = description.FeatureSettings();
-  if (UNLIKELY(settings)) {
+  if (settings) [[unlikely]] {
     // TODO(drott): crbug.com/450619 Implement feature resolution instead of
     // just appending the font-feature-settings.
     const hb_tag_t halt_or_vhal =
@@ -222,6 +224,17 @@ void FontFeatures::Initialize(const FontDescription& description) {
 
   if (default_enable_chws)
     Append(CreateFeature(chws_or_vchw, 1));
+
+  const FontDescription::FontVariantPosition variant_position =
+      description.VariantPosition();
+  if (variant_position == FontDescription::kSubVariantPosition) {
+    const hb_feature_t feature = CreateFeature('s', 'u', 'b', 's', 1);
+    Append(feature);
+  }
+  if (variant_position == FontDescription::kSuperVariantPosition) {
+    const hb_feature_t feature = CreateFeature('s', 'u', 'p', 's', 1);
+    Append(feature);
+  }
 }
 
 }  // namespace blink

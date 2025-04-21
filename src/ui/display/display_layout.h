@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "base/strings/string_piece.h"
 #include "ui/display/display_export.h"
 
 namespace gfx {
@@ -81,8 +81,7 @@ struct DISPLAY_EXPORT DisplayPlacement {
   std::string ToString() const;
 
   static std::string PositionToString(Position position);
-  static bool StringToPosition(const base::StringPiece& string,
-                               Position* position);
+  static bool StringToPosition(std::string_view string, Position* position);
 };
 
 class DISPLAY_EXPORT DisplayLayout final {
@@ -124,7 +123,7 @@ class DISPLAY_EXPORT DisplayLayout final {
   // as mirrored, primary_id are ignored.
   bool HasSamePlacementList(const DisplayLayout& layout) const;
 
-  // Removes the display placemenats created for `display_id_list`.
+  // Removes the display placements created for `display_id_list`.
   void RemoveDisplayPlacements(const DisplayIdList& display_id_list);
 
   // Returns string representation of the layout for debugging/testing.

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -63,8 +63,8 @@ class MockXRDeviceHookBase : public device_test::mojom::XRTestHook {
   void SetCanCreateSession(bool can_create_session);
 
  protected:
-  device_test::mojom::TrackedDeviceClass
-      tracked_classes_[device::kMaxTrackedDevices];
+  std::array<device_test::mojom::TrackedDeviceClass, device::kMaxTrackedDevices>
+      tracked_classes_;
   base::flat_map<unsigned int, device::ControllerFrameData>
       controller_data_map_;
   std::queue<device_test::mojom::EventData> event_data_queue_;

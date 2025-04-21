@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/bookmarks/bookmark_html_writer.h"
 
@@ -44,13 +49,15 @@ namespace {
 const int kIconWidth = 16;
 const int kIconHeight = 16;
 
-void MakeTestSkBitmap(int w, int h, SkBitmap* bmp) {
-  bmp->allocN32Pixels(w, h);
+SkBitmap MakeTestSkBitmap(int w, int h) {
+  SkBitmap bmp;
+  bmp.allocN32Pixels(w, h);
 
-  uint32_t* src_data = bmp->getAddr32(0, 0);
+  uint32_t* src_data = bmp.getAddr32(0, 0);
   for (int i = 0; i < w * h; i++) {
     src_data[i] = SkPreMultiplyARGB(i % 255, i % 250, i % 245, i % 240);
   }
+  return bmp;
 }
 
 }  // namespace
@@ -171,10 +178,9 @@ TEST_F(BookmarkHTMLWriterTest, Test) {
   bookmarks::test::WaitForBookmarkModelToLoad(model);
 
   // Create test PNG representing favicon for url1.
-  SkBitmap bitmap;
-  MakeTestSkBitmap(kIconWidth, kIconHeight, &bitmap);
-  std::vector<unsigned char> icon_data;
-  gfx::PNGCodec::EncodeBGRASkBitmap(bitmap, false, &icon_data);
+  SkBitmap bitmap = MakeTestSkBitmap(kIconWidth, kIconHeight);
+  std::optional<std::vector<uint8_t>> icon_data =
+      gfx::PNGCodec::EncodeBGRASkBitmap(bitmap, /*discard_transparency=*/false);
 
   // Populate the BookmarkModel. This creates the following bookmark structure:
   // Bookmarks bar
@@ -270,7 +276,7 @@ TEST_F(BookmarkHTMLWriterTest, Test) {
       auto iter = favicons[i].urls.find(url1);
       ASSERT_TRUE(iter != favicons[i].urls.end());
       ASSERT_TRUE(*iter == url1);
-      ASSERT_TRUE(favicons[i].png_data == icon_data);
+      ASSERT_TRUE(favicons[i].png_data == icon_data.value());
     }
   }
 

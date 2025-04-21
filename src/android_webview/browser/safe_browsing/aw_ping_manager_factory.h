@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 namespace safe_browsing {
 
 // Factory for creating the KeyedService PingManager for Android WebView.
+// Lifetime: Singleton
 class AwPingManagerFactory : public BrowserContextKeyedServiceFactory {
  public:
   static AwPingManagerFactory* GetInstance();
@@ -27,7 +28,7 @@ class AwPingManagerFactory : public BrowserContextKeyedServiceFactory {
   ~AwPingManagerFactory() override;
 
   // BrowserContextKeyedServiceFactory override:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
 
   std::string GetProtocolConfigClientName() const;

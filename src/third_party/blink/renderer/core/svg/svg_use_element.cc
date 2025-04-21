@@ -26,26 +26,36 @@
 #include "third_party/blink/renderer/core/svg/svg_use_element.h"
 
 #include "third_party/blink/public/platform/task_type.h"
-#include "third_party/blink/renderer/core/css/style_change_reason.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/element_traversal.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
 #include "third_party/blink/renderer/core/dom/id_target_observer.h"
+#include "third_party/blink/renderer/core/dom/increment_load_event_delay_count.h"
+#include "third_party/blink/renderer/core/dom/node_cloning_data.h"
 #include "third_party/blink/renderer/core/dom/shadow_root.h"
 #include "third_party/blink/renderer/core/dom/xml_document.h"
+#include "third_party/blink/renderer/core/frame/deprecation/deprecation.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/layout/svg/layout_svg_transformable_container.h"
 #include "third_party/blink/renderer/core/svg/svg_animated_length.h"
+#include "third_party/blink/renderer/core/svg/svg_circle_element.h"
+#include "third_party/blink/renderer/core/svg/svg_ellipse_element.h"
 #include "third_party/blink/renderer/core/svg/svg_g_element.h"
 #include "third_party/blink/renderer/core/svg/svg_length_context.h"
+#include "third_party/blink/renderer/core/svg/svg_path_element.h"
+#include "third_party/blink/renderer/core/svg/svg_polygon_element.h"
+#include "third_party/blink/renderer/core/svg/svg_polyline_element.h"
+#include "third_party/blink/renderer/core/svg/svg_rect_element.h"
 #include "third_party/blink/renderer/core/svg/svg_resource_document_content.h"
 #include "third_party/blink/renderer/core/svg/svg_svg_element.h"
 #include "third_party/blink/renderer/core/svg/svg_symbol_element.h"
+#include "third_party/blink/renderer/core/svg/svg_text_element.h"
 #include "third_party/blink/renderer/core/svg/svg_title_element.h"
 #include "third_party/blink/renderer/core/svg_names.h"
 #include "third_party/blink/renderer/core/xlink_names.h"
 #include "third_party/blink/renderer/core/xml/parser/xml_document_parser.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/loader/fetch/fetch_initiator_type_names.h"
 #include "third_party/blink/renderer/platform/loader/fetch/fetch_parameters.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_fetcher.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_loader_options.h"
@@ -79,14 +89,8 @@ SVGUseElement::SVGUseElement(Document& document)
           SVGLengthMode::kHeight,
           SVGLength::Initial::kUnitlessZero)),
       element_url_is_local_(true),
-      have_fired_load_event_(false),
       needs_shadow_tree_recreation_(false) {
   DCHECK(HasCustomStyleCallbacks());
-
-  AddToPropertyMap(x_);
-  AddToPropertyMap(y_);
-  AddToPropertyMap(width_);
-  AddToPropertyMap(height_);
 
   CreateUserAgentShadowRoot();
 }
@@ -95,6 +99,7 @@ SVGUseElement::~SVGUseElement() = default;
 
 void SVGUseElement::Trace(Visitor* visitor) const {
   visitor->Trace(document_content_);
+  visitor->Trace(external_resource_target_);
   visitor->Trace(x_);
   visitor->Trace(y_);
   visitor->Trace(width_);
@@ -102,7 +107,6 @@ void SVGUseElement::Trace(Visitor* visitor) const {
   visitor->Trace(target_id_observer_);
   SVGGraphicsElement::Trace(visitor);
   SVGURIReference::Trace(visitor);
-  ResourceClient::Trace(visitor);
 }
 
 #if DCHECK_IS_ON()
@@ -135,6 +139,9 @@ void SVGUseElement::RemovedFrom(ContainerNode& root_parent) {
 
 void SVGUseElement::DidMoveToNewDocument(Document& old_document) {
   SVGGraphicsElement::DidMoveToNewDocument(old_document);
+  if (load_event_delayer_) {
+    load_event_delayer_->DocumentChanged(GetDocument());
+  }
   UpdateTargetReference();
 }
 
@@ -169,26 +176,30 @@ static void TransferUseWidthAndHeightIfNeeded(
   shadow_element.setAttribute(svg_names::kHeightAttr, height_value);
 }
 
-void SVGUseElement::CollectStyleForPresentationAttribute(
-    const QualifiedName& name,
-    const AtomicString& value,
-    MutableCSSPropertyValueSet* style) {
-  SVGAnimatedPropertyBase* property = PropertyFromAttribute(name);
-  if (property == x_) {
-    AddPropertyToPresentationAttributeStyle(style, property->CssPropertyId(),
-                                            x_->CssValue());
-  } else if (property == y_) {
-    AddPropertyToPresentationAttributeStyle(style, property->CssPropertyId(),
-                                            y_->CssValue());
-  } else {
-    SVGGraphicsElement::CollectStyleForPresentationAttribute(name, value,
-                                                             style);
-  }
-}
-
 bool SVGUseElement::IsStructurallyExternal() const {
   return !element_url_is_local_ &&
          !EqualIgnoringFragmentIdentifier(element_url_, GetDocument().Url());
+}
+
+bool SVGUseElement::HaveLoadedRequiredResources() {
+  return !document_content_ || !document_content_->IsLoading();
+}
+
+void SVGUseElement::UpdateDocumentContent(
+    SVGResourceDocumentContent* document_content) {
+  if (document_content_ == document_content) {
+    return;
+  }
+  auto old_load_event_delayer = std::move(load_event_delayer_);
+  if (document_content_) {
+    document_content_->RemoveObserver(this);
+  }
+  document_content_ = document_content;
+  if (document_content_) {
+    load_event_delayer_ =
+        std::make_unique<IncrementLoadEventDelayCount>(GetDocument());
+    document_content_->AddObserver(this);
+  }
 }
 
 void SVGUseElement::UpdateTargetReference() {
@@ -196,8 +207,8 @@ void SVGUseElement::UpdateTargetReference() {
   element_url_ = GetDocument().CompleteURL(url_string);
   element_url_is_local_ = url_string.StartsWith('#');
   if (!IsStructurallyExternal() || !GetDocument().IsActive()) {
-    ClearResource();
-    document_content_ = nullptr;
+    UpdateDocumentContent(nullptr);
+    pending_event_.Cancel();
     return;
   }
   if (!element_url_.HasFragmentIdentifier() ||
@@ -206,13 +217,23 @@ void SVGUseElement::UpdateTargetReference() {
     return;
   }
 
+  pending_event_.Cancel();
+
+  if (element_url_.ProtocolIsData()) {
+    Deprecation::CountDeprecation(GetDocument().domWindow(),
+                                  WebFeature::kDataUrlInSvgUse);
+  }
+
   auto* context_document = &GetDocument();
   ExecutionContext* execution_context = context_document->GetExecutionContext();
   ResourceLoaderOptions options(execution_context->GetCurrentWorld());
-  options.initiator_info.name = localName();
+  options.initiator_info.name = fetch_initiator_type_names::kUse;
   FetchParameters params(ResourceRequest(element_url_), options);
-  document_content_ =
-      SVGResourceDocumentContent::Fetch(params, *context_document, this);
+  params.MutableResourceRequest().SetMode(
+      network::mojom::blink::RequestMode::kSameOrigin);
+  auto* document_content =
+      SVGResourceDocumentContent::Fetch(params, *context_document);
+  UpdateDocumentContent(document_content);
 }
 
 void SVGUseElement::SvgAttributeChanged(
@@ -221,13 +242,8 @@ void SVGUseElement::SvgAttributeChanged(
   if (attr_name == svg_names::kXAttr || attr_name == svg_names::kYAttr ||
       attr_name == svg_names::kWidthAttr ||
       attr_name == svg_names::kHeightAttr) {
-    SVGElement::InvalidationGuard invalidation_guard(this);
-
     if (attr_name == svg_names::kXAttr || attr_name == svg_names::kYAttr) {
-      InvalidateSVGPresentationAttributeStyle();
-      SetNeedsStyleRecalc(
-          kLocalStyleChange,
-          StyleChangeReasonForTracing::FromAttribute(attr_name));
+      UpdatePresentationAttributeStyle(params.property);
     }
 
     UpdateRelativeLengthsInformation();
@@ -243,7 +259,6 @@ void SVGUseElement::SvgAttributeChanged(
   }
 
   if (SVGURIReference::IsKnownAttribute(attr_name)) {
-    SVGElement::InvalidationGuard invalidation_guard(this);
     UpdateTargetReference();
     InvalidateShadowTree();
     return;
@@ -290,6 +305,7 @@ void SVGUseElement::CancelShadowTreeRecreation() {
 }
 
 void SVGUseElement::ClearResourceReference() {
+  external_resource_target_.Clear();
   UnobserveTarget(target_id_observer_);
   RemoveAllOutgoingReferences();
 }
@@ -312,9 +328,15 @@ Element* SVGUseElement::ResolveTargetElement() {
                              WrapWeakPersistent(this)));
     }
   }
-  if (!document_content_ || !document_content_->GetDocument())
+  if (!document_content_) {
     return nullptr;
-  return document_content_->GetDocument()->getElementById(element_identifier);
+  }
+  external_resource_target_ =
+      document_content_->GetResourceTarget(element_identifier);
+  if (!external_resource_target_) {
+    return nullptr;
+  }
+  return external_resource_target_->target;
 }
 
 SVGElement* SVGUseElement::InstanceRoot() const {
@@ -364,41 +386,58 @@ String SVGUseElement::title() const {
   return String();
 }
 
-static void AssociateCorrespondingElements(SVGElement& target_root,
-                                           SVGElement& instance_root) {
-  auto target_range =
-      Traversal<SVGElement>::InclusiveDescendantsOf(target_root);
-  auto target_iterator = target_range.begin();
-  for (SVGElement& instance :
-       Traversal<SVGElement>::InclusiveDescendantsOf(instance_root)) {
-    DCHECK(!instance.CorrespondingElement());
-    instance.SetCorrespondingElement(&*target_iterator);
-    ++target_iterator;
-  }
-  DCHECK(!(target_iterator != target_range.end()));
-}
+static void PostProcessInstanceTree(SVGElement& target_root,
+                                    SVGElement& instance_root) {
+  DCHECK(!instance_root.isConnected());
+  // We checked this before creating the cloned subtree.
+  DCHECK(!IsDisallowedElement(instance_root));
+  // Associate the roots.
+  instance_root.SetCorrespondingElement(&target_root);
 
-// We don't walk the target tree element-by-element, and clone each element,
-// but instead use cloneNode(deep=true). This is an optimization for the common
-// case where <use> doesn't contain disallowed elements (ie. <foreignObject>).
-// Though if there are disallowed elements in the subtree, we have to remove
-// them.  For instance: <use> on <g> containing <foreignObject> (indirect
-// case).
-static inline void RemoveDisallowedElementsFromSubtree(SVGElement& subtree) {
-  DCHECK(!subtree.isConnected());
-  Element* element = ElementTraversal::FirstWithin(subtree);
-  while (element) {
-    if (IsDisallowedElement(*element)) {
-      Element* next =
-          ElementTraversal::NextSkippingChildren(*element, &subtree);
-      // The subtree is not in document so this won't generate events that could
-      // mutate the tree.
-      element->parentNode()->RemoveChild(element);
-      element = next;
+  // The subtrees defined by |target_root| and |instance_root| should be
+  // isomorphic at this point, so we can walk both trees simultaneously to be
+  // able to create the corresponding element mapping.
+  //
+  // We don't walk the target tree element-by-element, and clone each element,
+  // but instead use cloneNode(deep=true). This is an optimization for the
+  // common case where <use> doesn't contain disallowed elements
+  // (ie. <foreignObject>).  Though if there are disallowed elements in the
+  // subtree, we have to remove them. For instance: <use> on <g> containing
+  // <foreignObject> (indirect case).
+  // We do that at the same time as the association back to the corresponding
+  // element is performed to avoid having instance elements in a half-way
+  // inconsistent state.
+  Element* target_element = ElementTraversal::FirstWithin(target_root);
+  Element* instance_element = ElementTraversal::FirstWithin(instance_root);
+  while (target_element) {
+    DCHECK(instance_element);
+    DCHECK(!IsA<SVGElement>(*instance_element) ||
+           !To<SVGElement>(*instance_element).CorrespondingElement());
+    if (IsDisallowedElement(*target_element)) {
+      Element* instance_next = ElementTraversal::NextSkippingChildren(
+          *instance_element, &instance_root);
+      // The subtree is not in the document so this won't generate events that
+      // could mutate the tree.
+      instance_element->parentNode()->RemoveChild(instance_element);
+
+      // Since the target subtree isn't mutated, it can just be traversed in
+      // the normal way (without saving next traversal target).
+      target_element =
+          ElementTraversal::NextSkippingChildren(*target_element, &target_root);
+      instance_element = instance_next;
     } else {
-      element = ElementTraversal::Next(*element, &subtree);
+      // Set up the corresponding element association.
+      if (auto* svg_instance_element =
+              DynamicTo<SVGElement>(instance_element)) {
+        svg_instance_element->SetCorrespondingElement(
+            To<SVGElement>(target_element));
+      }
+      target_element = ElementTraversal::Next(*target_element, &target_root);
+      instance_element =
+          ElementTraversal::Next(*instance_element, &instance_root);
     }
   }
+  DCHECK(!instance_element);
 }
 
 static void MoveChildrenToReplacementElement(ContainerNode& source_root,
@@ -411,8 +450,9 @@ static void MoveChildrenToReplacementElement(ContainerNode& source_root,
 }
 
 SVGElement* SVGUseElement::CreateInstanceTree(SVGElement& target_root) const {
-  SVGElement* instance_root =
-      &To<SVGElement>(target_root.CloneWithChildren(CloneChildrenFlag::kClone));
+  NodeCloningData data{CloneOption::kIncludeDescendants};
+  SVGElement* instance_root = &To<SVGElement>(target_root.CloneWithChildren(
+      data, /*document*/ nullptr, /*append_to*/ nullptr));
   if (IsA<SVGSymbolElement>(target_root)) {
     // Spec: The referenced 'symbol' and its contents are deep-cloned into
     // the generated tree, with the exception that the 'symbol' is replaced
@@ -432,8 +472,7 @@ SVGElement* SVGUseElement::CreateInstanceTree(SVGElement& target_root) const {
     instance_root = svg_element;
   }
   TransferUseWidthAndHeightIfNeeded(*this, *instance_root, target_root);
-  AssociateCorrespondingElements(target_root, *instance_root);
-  RemoveDisallowedElementsFromSubtree(*instance_root);
+  PostProcessInstanceTree(target_root, *instance_root);
   return instance_root;
 }
 
@@ -475,8 +514,7 @@ void SVGUseElement::DetachShadowTree() {
   shadow_root.RemoveChildren(kOmitSubtreeModifiedEvent);
 }
 
-LayoutObject* SVGUseElement::CreateLayoutObject(const ComputedStyle& style,
-                                                LegacyLayout) {
+LayoutObject* SVGUseElement::CreateLayoutObject(const ComputedStyle&) {
   return MakeGarbageCollected<LayoutSVGTransformableContainer>(this);
 }
 
@@ -580,35 +618,70 @@ gfx::RectF SVGUseElement::GetBBox() {
   return bbox;
 }
 
-void SVGUseElement::DispatchPendingEvent() {
-  DCHECK(IsStructurallyExternal());
-  DCHECK(have_fired_load_event_);
-  DispatchEvent(*Event::Create(event_type_names::kLoad));
-}
-
-void SVGUseElement::NotifyFinished(Resource* resource) {
-  if (!isConnected())
-    return;
-
-  InvalidateShadowTree();
-  if (resource->ErrorOccurred() || !document_content_->GetDocument()) {
-    DispatchEvent(*Event::Create(event_type_names::kError));
+void SVGUseElement::QueueOrDispatchPendingEvent(
+    const AtomicString& event_name) {
+  if (GetDocument().GetExecutionContext() &&
+      GetDocument().GetExecutionContext()->is_in_back_forward_cache()) {
+    // Queue the event if the page is in back/forward cache.
+    EnqueueEvent(*Event::Create(event_name), TaskType::kDOMManipulation);
   } else {
-    if (have_fired_load_event_)
-      return;
-    if (!IsStructurallyExternal())
-      return;
-    DCHECK(!have_fired_load_event_);
-    have_fired_load_event_ = true;
-    GetDocument()
-        .GetTaskRunner(TaskType::kDOMManipulation)
-        ->PostTask(FROM_HERE, WTF::Bind(&SVGUseElement::DispatchPendingEvent,
-                                        WrapPersistent(this)));
+    DispatchEvent(*Event::Create(event_name));
   }
 }
 
-String SVGUseElement::DebugName() const {
-  return "SVGUseElement";
+void SVGUseElement::ResourceNotifyFinished(
+    SVGResourceDocumentContent* document_content) {
+  DCHECK_EQ(document_content_, document_content);
+  load_event_delayer_.reset();
+  if (!isConnected())
+    return;
+  InvalidateShadowTree();
+
+  const bool is_error = document_content->ErrorOccurred();
+  const AtomicString& event_name =
+      is_error ? event_type_names::kError : event_type_names::kLoad;
+  DCHECK(!pending_event_.IsActive());
+  pending_event_ = PostCancellableTask(
+      *GetDocument().GetTaskRunner(TaskType::kDOMManipulation), FROM_HERE,
+      WTF::BindOnce(&SVGUseElement::QueueOrDispatchPendingEvent,
+                    WrapPersistent(this), event_name));
+}
+
+SVGAnimatedPropertyBase* SVGUseElement::PropertyFromAttribute(
+    const QualifiedName& attribute_name) const {
+  if (attribute_name == svg_names::kXAttr) {
+    return x_.Get();
+  } else if (attribute_name == svg_names::kYAttr) {
+    return y_.Get();
+  } else if (attribute_name == svg_names::kWidthAttr) {
+    return width_.Get();
+  } else if (attribute_name == svg_names::kHeightAttr) {
+    return height_.Get();
+  } else {
+    SVGAnimatedPropertyBase* ret =
+        SVGURIReference::PropertyFromAttribute(attribute_name);
+    if (ret) {
+      return ret;
+    } else {
+      return SVGGraphicsElement::PropertyFromAttribute(attribute_name);
+    }
+  }
+}
+
+void SVGUseElement::SynchronizeAllSVGAttributes() const {
+  SVGAnimatedPropertyBase* attrs[]{x_.Get(), y_.Get(), width_.Get(),
+                                   height_.Get()};
+  SynchronizeListOfSVGAttributes(attrs);
+  SVGURIReference::SynchronizeAllSVGAttributes();
+  SVGGraphicsElement::SynchronizeAllSVGAttributes();
+}
+
+void SVGUseElement::CollectExtraStyleForPresentationAttribute(
+    MutableCSSPropertyValueSet* style) {
+  auto pres_attrs =
+      std::to_array<const SVGAnimatedPropertyBase*>({x_.Get(), y_.Get()});
+  AddAnimatedPropertiesToPresentationAttributeStyle(pres_attrs, style);
+  SVGGraphicsElement::CollectExtraStyleForPresentationAttribute(style);
 }
 
 }  // namespace blink

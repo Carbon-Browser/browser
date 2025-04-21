@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,8 @@ constexpr char kFeatureDirname[] = "tab_service";
 
 // static
 PaintPreviewTabServiceFactory* PaintPreviewTabServiceFactory::GetInstance() {
-  return base::Singleton<PaintPreviewTabServiceFactory>::get();
+  static base::NoDestructor<PaintPreviewTabServiceFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -53,7 +54,7 @@ PaintPreviewTabServiceFactory::BuildServiceInstanceFor(
   if (key->IsOffTheRecord())
     return nullptr;
 
-  // TODO(crbug/1060556): Inject a useful policy.
+  // TODO(crbug.com/40122082): Inject a useful policy.
   return std::make_unique<paint_preview::PaintPreviewTabService>(
       std::make_unique<PaintPreviewTabServiceFileMixin>(key->GetPath(),
                                                         kFeatureDirname),

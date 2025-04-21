@@ -1,5 +1,0 @@
-Tracing of network activity FLEDGE worklets.
-Recording started
-Auction winner:undefined
-Tracing complete
-

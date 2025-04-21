@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,7 +55,7 @@ int SandboxedVfsDelegate::DeleteFile(const base::FilePath& file_path,
       StringFromFullPath(file_path), sync_dir);
 }
 
-absl::optional<sql::SandboxedVfs::PathAccessInfo>
+std::optional<sql::SandboxedVfs::PathAccessInfo>
 SandboxedVfsDelegate::GetPathAccess(const base::FilePath& file_path) {
   int32_t attributes = WebDatabaseHost::GetInstance().GetFileAttributes(
       StringFromFullPath(file_path));
@@ -71,7 +71,7 @@ SandboxedVfsDelegate::GetPathAccess(const base::FilePath& file_path) {
 #endif  // BUILDFLAG(IS_WIN)
 
   if (!file_exists)
-    return absl::nullopt;
+    return std::nullopt;
 
   sql::SandboxedVfs::PathAccessInfo access;
 #if BUILDFLAG(IS_WIN)
@@ -82,13 +82,6 @@ SandboxedVfsDelegate::GetPathAccess(const base::FilePath& file_path) {
   access.can_write = (attributes & W_OK) != 0;
 #endif  // BUILDFLAG(IS_WIN)
   return access;
-}
-
-bool SandboxedVfsDelegate::SetFileLength(const base::FilePath& file_path,
-                                         base::File& file,
-                                         size_t size) {
-  return WebDatabaseHost::GetInstance().SetFileSize(
-      StringFromFullPath(file_path), size);
 }
 
 }  // namespace blink

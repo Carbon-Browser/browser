@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -71,13 +71,13 @@ class MultipleTapDetectorTest : public aura::test::AuraTestBase {
 
   // Simulate a tap event.
   void Tap(const gfx::Point& tap_point) {
-    ui::TouchEvent press(ui::ET_TOUCH_PRESSED, tap_point,
+    ui::TouchEvent press(ui::EventType::kTouchPressed, tap_point,
                          simulated_clock_.NowTicks(),
                          ui::PointerDetails(ui::EventPointerType::kTouch,
                                             ui::kPointerIdUnknown));
     generator_->Dispatch(&press);
     simulated_clock_.Advance(base::Milliseconds(kTapLengthMs));
-    ui::TouchEvent release(ui::ET_TOUCH_RELEASED, tap_point,
+    ui::TouchEvent release(ui::EventType::kTouchReleased, tap_point,
                            simulated_clock_.NowTicks(),
                            ui::PointerDetails(ui::EventPointerType::kTouch,
                                               ui::kPointerIdUnknown));

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,11 +23,11 @@ IgnorableEditingAbortState::~IgnorableEditingAbortState() = default;
 #if DCHECK_IS_ON()
 // ---
 
-NoEditingAbortChecker::NoEditingAbortChecker(const char* file, int line)
-    : file_(file), line_(line) {}
+NoEditingAbortChecker::NoEditingAbortChecker(const base::Location& location)
+    : location_(std::move(location)) {}
 
 NoEditingAbortChecker::~NoEditingAbortChecker() {
-  DCHECK_AT(!editing_state_.IsAborted(), file_, line_)
+  DCHECK_AT(!editing_state_.IsAborted(), location_)
       << "The operation should not have been aborted.";
 }
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -11,26 +11,18 @@ import sys
 import urllib.request
 
 # TODO(crbug.com/1336630): This is compared lexically. Remove it before M1000.
-MIN_VERSION = '105.0.5151.0'
+MIN_VERSION = '129.0.6651.0'
 
 def fetch():
     """
     Queries the VersionHistory API to determine the version of the updater that
-    was serving on Monday.
+    is serving with a fraction of 1.
   """
-    # TODO(crbug.com/1293206): Once this script is python3 only, use
-    # datetime.timezone.utc to make it consistent regardless of local timezone.
-    datum = datetime.datetime.now()
-    datum = (datum - datetime.timedelta(days=datum.weekday())).replace(
-        hour=0, minute=0, second=0, microsecond=0)
-    datum = datum.isoformat() + 'Z'
-
     return json.load(
         urllib.request.urlopen(
             'https://versionhistory.googleapis.com/v1/chromium_updater/'
             'platforms/mac/channels/all/versions/all/releases?'
-            'filter=starttime%%3C%s,endtime%%3E%s' %
-            (datum, datum)))['releases'][0]['version']
+            'filter=fraction=1'))['releases'][0]['version']
 
 
 def print_latest():
@@ -42,10 +34,10 @@ def get_url():
         json.dumps({
             'url': [
                 'https://edgedl.me.gvt1.com/edgedl/release2/182l0/latest/'
-                '%s_UpdaterSetup' % os.environ['_3PP_VERSION']
+                'GoogleUpdater-%s.zip' % os.environ['_3PP_VERSION']
             ],
-            'ext': '',
-            'name': ['UpdaterSetup']
+            'ext': '.zip',
+            'name': ['GoogleUpdater-%s.zip' % os.environ['_3PP_VERSION']]
         }))
 
 

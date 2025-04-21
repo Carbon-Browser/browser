@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/cancelable_callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/local_discovery/service_discovery_client.h"
@@ -50,9 +50,8 @@ class ServiceDiscoveryClientImpl : public ServiceDiscoveryClient {
   raw_ptr<net::MDnsClient> mdns_client_;
 };
 
-class ServiceWatcherImpl : public ServiceWatcher,
-                           public net::MDnsListener::Delegate,
-                           public base::SupportsWeakPtr<ServiceWatcherImpl> {
+class ServiceWatcherImpl final : public ServiceWatcher,
+                                 public net::MDnsListener::Delegate {
  public:
   ServiceWatcherImpl(const std::string& service_type,
                      ServiceWatcher::UpdatedCallback callback,
@@ -80,10 +79,9 @@ class ServiceWatcherImpl : public ServiceWatcher,
 
   void OnCachePurged() override;
 
-  virtual void OnTransactionResponse(
-      std::unique_ptr<net::MDnsTransaction>* transaction,
-      net::MDnsTransaction::Result result,
-      const net::RecordParsed* record);
+  void OnTransactionResponse(std::unique_ptr<net::MDnsTransaction>* transaction,
+                             net::MDnsTransaction::Result result,
+                             const net::RecordParsed* record);
 
  private:
   struct ServiceListeners {
@@ -158,11 +156,10 @@ class ServiceWatcherImpl : public ServiceWatcher,
   bool actively_refresh_services_;
 
   const raw_ptr<net::MDnsClient> mdns_client_;
+  base::WeakPtrFactory<ServiceWatcherImpl> weak_ptr_factory_{this};
 };
 
-class ServiceResolverImpl
-    : public ServiceResolver,
-      public base::SupportsWeakPtr<ServiceResolverImpl> {
+class ServiceResolverImpl final : public ServiceResolver {
  public:
   ServiceResolverImpl(const std::string& service_name,
                       ServiceResolver::ResolveCompleteCallback callback,
@@ -226,6 +223,7 @@ class ServiceResolverImpl
   ServiceDescription service_staging_;
 
   const raw_ptr<net::MDnsClient> mdns_client_;
+  base::WeakPtrFactory<ServiceResolverImpl> weak_ptr_factory_{this};
 };
 
 class LocalDomainResolverImpl : public LocalDomainResolver {

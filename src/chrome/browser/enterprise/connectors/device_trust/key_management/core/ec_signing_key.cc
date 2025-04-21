@@ -1,14 +1,20 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/enterprise/connectors/device_trust/key_management/core/ec_signing_key.h"
 
 #include <memory>
+#include <optional>
 
 #include "base/check.h"
 #include "base/check_op.h"
+#include "build/build_config.h"
 #include "crypto/ec_signature_creator.h"
+
+#if BUILDFLAG(IS_MAC)
+#include "base/notreached.h"
+#endif  // BUILDFLAG(IS_MAC)
 
 namespace enterprise_connectors {
 
@@ -26,8 +32,12 @@ class ECSigningKey : public crypto::UnexportableSigningKey {
   crypto::SignatureVerifier::SignatureAlgorithm Algorithm() const override;
   std::vector<uint8_t> GetSubjectPublicKeyInfo() const override;
   std::vector<uint8_t> GetWrappedKey() const override;
-  absl::optional<std::vector<uint8_t>> SignSlowly(
+  std::optional<std::vector<uint8_t>> SignSlowly(
       base::span<const uint8_t> data) override;
+
+#if BUILDFLAG(IS_MAC)
+  SecKeyRef GetSecKeyRef() const override;
+#endif  // BUILDFLAG(IS_MAC)
 
  private:
   std::unique_ptr<crypto::ECPrivateKey> key_;
@@ -63,7 +73,7 @@ std::vector<uint8_t> ECSigningKey::GetWrappedKey() const {
   return wrapped;
 }
 
-absl::optional<std::vector<uint8_t>> ECSigningKey::SignSlowly(
+std::optional<std::vector<uint8_t>> ECSigningKey::SignSlowly(
     base::span<const uint8_t> data) {
   std::vector<uint8_t> signature;
   auto signer = crypto::ECSignatureCreator::Create(key_.get());
@@ -73,12 +83,18 @@ absl::optional<std::vector<uint8_t>> ECSigningKey::SignSlowly(
   return signature;
 }
 
+#if BUILDFLAG(IS_MAC)
+SecKeyRef ECSigningKey::GetSecKeyRef() const {
+  NOTREACHED();
+}
+#endif  // BUILDFLAG(IS_MAC)
+
 }  // namespace
 
 ECSigningKeyProvider::ECSigningKeyProvider() = default;
 ECSigningKeyProvider::~ECSigningKeyProvider() = default;
 
-absl::optional<crypto::SignatureVerifier::SignatureAlgorithm>
+std::optional<crypto::SignatureVerifier::SignatureAlgorithm>
 ECSigningKeyProvider::SelectAlgorithm(
     base::span<const crypto::SignatureVerifier::SignatureAlgorithm>
         acceptable_algorithms) {
@@ -87,7 +103,7 @@ ECSigningKeyProvider::SelectAlgorithm(
       return crypto::SignatureVerifier::ECDSA_SHA256;
   }
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 std::unique_ptr<crypto::UnexportableSigningKey>
@@ -106,6 +122,12 @@ std::unique_ptr<crypto::UnexportableSigningKey>
 ECSigningKeyProvider::FromWrappedSigningKeySlowly(
     base::span<const uint8_t> wrapped_key) {
   return std::make_unique<ECSigningKey>(wrapped_key);
+}
+
+bool ECSigningKeyProvider::DeleteSigningKeySlowly(
+    base::span<const uint8_t> wrapped_key) {
+  // Software keys are stateless.
+  return true;
 }
 
 }  // namespace enterprise_connectors

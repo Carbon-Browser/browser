@@ -1,8 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/net/secure_dns_config.h"
+
+#include <string_view>
 
 // static
 constexpr char SecureDnsConfig::kModeOff[];
@@ -20,8 +22,8 @@ SecureDnsConfig& SecureDnsConfig::operator=(SecureDnsConfig&& other) = default;
 SecureDnsConfig::~SecureDnsConfig() = default;
 
 // static
-absl::optional<net::SecureDnsMode> SecureDnsConfig::ParseMode(
-    base::StringPiece name) {
+std::optional<net::SecureDnsMode> SecureDnsConfig::ParseMode(
+    std::string_view name) {
   if (name == kModeSecure) {
     return net::SecureDnsMode::kSecure;
   } else if (name == kModeAutomatic) {
@@ -29,7 +31,7 @@ absl::optional<net::SecureDnsMode> SecureDnsConfig::ParseMode(
   } else if (name == kModeOff) {
     return net::SecureDnsMode::kOff;
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 // static

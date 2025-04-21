@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,9 @@
 
 #include <fuchsia/web/cpp/fidl.h>
 
-#include "base/callback.h"
-#include "components/cast_streaming/public/mojom/demuxer_connector.mojom.h"
+#include "components/cast_streaming/common/public/mojom/demuxer_connector.mojom.h"
+#include "components/cast_streaming/common/public/mojom/renderer_controller.mojom.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
-#include "third_party/openscreen/src/cast/common/public/message_port.h"
 
 namespace cast_streaming {
 class ReceiverSession;
@@ -28,9 +27,11 @@ class ReceiverSessionClient {
 
   ReceiverSessionClient& operator=(const ReceiverSessionClient&) = delete;
 
-  void SetDemuxerConnector(
+  void SetMojoEndpoints(
       mojo::AssociatedRemote<cast_streaming::mojom::DemuxerConnector>
-          demuxer_connector);
+          demuxer_connector,
+      mojo::AssociatedRemote<cast_streaming::mojom::RendererController>
+          renderer_controller);
 
   bool HasReceiverSession();
 

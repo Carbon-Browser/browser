@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 #include "base/component_export.h"
 
-namespace chromeos {
+namespace ash {
 
 struct COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkProfile {
   enum Type {
@@ -33,11 +33,6 @@ struct COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkProfile {
   std::string ToDebugString() const;
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove when it moved to ash.
-namespace ash {
-using ::chromeos::NetworkProfile;
-}
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_NETWORK_PROFILE_H_

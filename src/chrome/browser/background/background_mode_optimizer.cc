@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/memory/ptr_util.h"
-#include "base/metrics/histogram_macros.h"
 #include "build/build_config.h"
 #include "chrome/browser/background/background_mode_manager.h"
 #include "chrome/browser/browser_process.h"
@@ -25,15 +24,18 @@ BackgroundModeOptimizer::~BackgroundModeOptimizer() {
 
 // static
 std::unique_ptr<BackgroundModeOptimizer> BackgroundModeOptimizer::Create() {
-  // If the -keep-alive-for-test flag is passed, then always keep chrome running
-  // in the background until the user explicitly terminates it.
+  // If the --keep-alive-for-test flag is passed, then always keep the browser
+  // running in the background until the user explicitly terminates it.
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-          switches::kKeepAliveForTest))
+          switches::kKeepAliveForTest)) {
     return nullptr;
+  }
 
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
-  if (base::FeatureList::IsEnabled(features::kBackgroundModeAllowRestart))
+  if (base::FeatureList::IsEnabled(features::kBackgroundModeAllowRestart)) {
+    // Private ctor.
     return base::WrapUnique(new BackgroundModeOptimizer());
+  }
 #endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 
   return nullptr;
@@ -47,8 +49,9 @@ void BackgroundModeOptimizer::OnKeepAliveStateChanged(bool is_keeping_alive) {
 }
 
 void BackgroundModeOptimizer::OnKeepAliveRestartStateChanged(bool can_restart) {
-  if (can_restart)
+  if (can_restart) {
     TryBrowserRestart();
+  }
 }
 ///////////////////////////////////////////////////////////////////////////////
 //  BrowserListObserver implementation
@@ -60,8 +63,7 @@ void BackgroundModeOptimizer::OnBrowserAdded(Browser* browser) {
 ///////////////////////////////////////////////////////////////////////////////
 //  private methods
 
-BackgroundModeOptimizer::BackgroundModeOptimizer()
-    : creation_time_(base::TimeTicks::Now()), browser_was_added_(false) {
+BackgroundModeOptimizer::BackgroundModeOptimizer() {
   KeepAliveRegistry::GetInstance()->AddObserver(this);
   BrowserList::AddObserver(this);
 }
@@ -84,8 +86,6 @@ void BackgroundModeOptimizer::TryBrowserRestart() {
 
   DVLOG(1) << "TryBrowserRestart: Restarting.";
 
-  base::TimeDelta uptime = base::TimeTicks::Now() - creation_time_;
-  UMA_HISTOGRAM_LONG_TIMES("BackgroundMode.TimeBeforeOptimizedRestart", uptime);
   DoRestart();
 }
 

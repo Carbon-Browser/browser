@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "base/observer_list_types.h"
+#include "base/scoped_observation_traits.h"
 #include "build/build_config.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/bluetooth_chooser.h"
@@ -19,7 +20,7 @@
 // Some OS Bluetooth stacks (macOS and Android) automatically bond to a device
 // when accessing a characteristic/descriptor which requires an authenticated
 // client. For other platforms Chrome does the on-demand pairing.
-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #define PAIR_BLUETOOTH_ON_DEMAND() true
 #else
 #define PAIR_BLUETOOTH_ON_DEMAND() false
@@ -41,7 +42,7 @@ class RenderFrameHost;
 // Provides an interface for managing device permissions for Web Bluetooth and
 // Web Bluetooth Scanning API. An embedder may implement this to manage these
 // permissions.
-// TODO(https://crbug.com/1048325): There are several Bluetooth related methods
+// TODO(crbug.com/40117221): There are several Bluetooth related methods
 // in WebContentsDelegate and ContentBrowserClient that can be moved into this
 // class.
 class CONTENT_EXPORT BluetoothDelegate {
@@ -69,7 +70,7 @@ class CONTENT_EXPORT BluetoothDelegate {
   // if |result_code| is |kSuccess|
   struct PairPromptResult {
     PairPromptResult() = default;
-    explicit PairPromptResult(PairPromptStatus code) : result_code(code){}
+    explicit PairPromptResult(PairPromptStatus code) : result_code(code) {}
     ~PairPromptResult() = default;
 
     PairPromptStatus result_code = PairPromptStatus::kCancelled;
@@ -80,7 +81,7 @@ class CONTENT_EXPORT BluetoothDelegate {
       base::OnceCallback<void(const PairPromptResult& result)>;
 
   // An observer used to track permission revocation events for a particular
-  // render frame host.
+  // RenderFrameHost.
   class CONTENT_EXPORT FramePermissionObserver : public base::CheckedObserver {
    public:
     // Notify observer that an object permission was revoked for |origin|.
@@ -110,10 +111,12 @@ class CONTENT_EXPORT BluetoothDelegate {
   // from this function, for example, if a credential prompt for the given
   // |frame| is already displayed.
   // |pairing_kind| is to determine which pairing kind of prompt to be created
-  virtual void ShowDevicePairPrompt(RenderFrameHost* frame,
-                                    const std::u16string& device_identifier,
-                                    PairPromptCallback callback,
-                                    PairingKind pairing_kind) = 0;
+  virtual void ShowDevicePairPrompt(
+      RenderFrameHost* frame,
+      const std::u16string& device_identifier,
+      PairPromptCallback callback,
+      PairingKind pairing_kind,
+      const std::optional<std::u16string>& pin) = 0;
 
   // This should return the WebBluetoothDeviceId that corresponds to the device
   // with |device_address| in the current |frame|. If there is not a
@@ -159,6 +162,9 @@ class CONTENT_EXPORT BluetoothDelegate {
       RenderFrameHost* frame,
       const blink::WebBluetoothDeviceId& device_id) = 0;
 
+  // This should return true if |frame| is allowed to use bluetooth.
+  virtual bool MayUseBluetooth(RenderFrameHost* frame) = 0;
+
   // This should return true if |frame| has permission to access |service| from
   // the device with |device_id|.
   virtual bool IsAllowedToAccessService(
@@ -200,5 +206,25 @@ class CONTENT_EXPORT BluetoothDelegate {
 };
 
 }  // namespace content
+
+namespace base {
+
+template <>
+struct ScopedObservationTraits<
+    content::BluetoothDelegate,
+    content::BluetoothDelegate::FramePermissionObserver> {
+  static void AddObserver(
+      content::BluetoothDelegate* source,
+      content::BluetoothDelegate::FramePermissionObserver* observer) {
+    source->AddFramePermissionObserver(observer);
+  }
+  static void RemoveObserver(
+      content::BluetoothDelegate* source,
+      content::BluetoothDelegate::FramePermissionObserver* observer) {
+    source->RemoveFramePermissionObserver(observer);
+  }
+};
+
+}  // namespace base
 
 #endif  // CONTENT_PUBLIC_BROWSER_BLUETOOTH_DELEGATE_H_

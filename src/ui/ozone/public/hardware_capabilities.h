@@ -1,15 +1,23 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_OZONE_PUBLIC_HARDWARE_CAPABILITIES_H_
 #define UI_OZONE_PUBLIC_HARDWARE_CAPABILITIES_H_
 
-#include "base/callback.h"
+#include "base/component_export.h"
+#include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
+#include "ui/gfx/buffer_types.h"
 
 namespace ui {
 
-struct HardwareCapabilities {
+struct COMPONENT_EXPORT(OZONE_BASE) HardwareCapabilities {
+  HardwareCapabilities();
+  HardwareCapabilities(const HardwareCapabilities& other);
+  HardwareCapabilities& operator=(const HardwareCapabilities& other);
+  ~HardwareCapabilities();
+
   // Whether this is a valid response from the HardwareDisplayPlaneManager.
   bool is_valid = false;
   // Number of planes available to the current CRTC(s).
@@ -21,6 +29,8 @@ struct HardwareCapabilities {
   // plane before presentation, so all transformations on the topmost plane
   // (e.g. translation, scaling) are erroneously applied to the CURSOR as well.
   bool has_independent_cursor_plane = true;
+  // Supported buffer formats for overlaying.
+  base::flat_set<gfx::BufferFormat> supported_buffer_formats;
 };
 using HardwareCapabilitiesCallback =
     base::RepeatingCallback<void(HardwareCapabilities)>;

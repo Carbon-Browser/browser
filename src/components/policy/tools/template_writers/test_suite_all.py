@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 '''Unit test suite that collects template_writer tests.'''
@@ -20,8 +20,6 @@ class TestSuiteAll(unittest.TestSuite):
     import writers.adml_writer_unittest
     import writers.admx_writer_unittest
     import writers.android_policy_writer_unittest
-    import writers.chromeos_adml_writer_unittest
-    import writers.chromeos_admx_writer_unittest
     import writers.doc_writer_unittest
     import writers.google_adml_writer_unittest
     import writers.google_admx_writer_unittest
@@ -40,8 +38,6 @@ class TestSuiteAll(unittest.TestSuite):
         writers.adml_writer_unittest.AdmlWriterUnittest,
         writers.admx_writer_unittest.AdmxWriterUnittest,
         writers.android_policy_writer_unittest.AndroidPolicyWriterUnittest,
-        writers.chromeos_adml_writer_unittest.ChromeOsAdmlWriterUnittest,
-        writers.chromeos_admx_writer_unittest.ChromeOsAdmxWriterUnittest,
         writers.doc_writer_unittest.DocWriterUnittest,
         writers.google_adml_writer_unittest.GoogleAdmlWriterUnittest,
         writers.google_admx_writer_unittest.GoogleAdmxWriterUnittest,

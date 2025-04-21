@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@ import android.util.SparseArray;
 
 import org.chromium.base.ApiCompatibilityUtils;
 import org.chromium.base.ContextUtils;
+import org.chromium.build.annotations.NullMarked;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -22,6 +23,7 @@ import java.util.Map;
  * AndroidPermissionDelegate that implements much of the logic around requesting permissions.
  * Subclasses need to implement only the basic permissions checking and requesting methods.
  */
+@NullMarked
 public abstract class AndroidPermissionDelegateWithRequester implements AndroidPermissionDelegate {
     private Handler mHandler;
     private SparseArray<PermissionRequestInfo> mOutstandingPermissionRequests;
@@ -37,11 +39,14 @@ public abstract class AndroidPermissionDelegateWithRequester implements AndroidP
     }
 
     @Override
-    public boolean hasPermission(String permission) {
+    public final boolean hasPermission(String permission) {
         boolean isGranted =
-                ApiCompatibilityUtils.checkPermission(ContextUtils.getApplicationContext(),
-                        permission, Process.myPid(), Process.myUid())
-                == PackageManager.PERMISSION_GRANTED;
+                ApiCompatibilityUtils.checkPermission(
+                                ContextUtils.getApplicationContext(),
+                                permission,
+                                Process.myPid(),
+                                Process.myUid())
+                        == PackageManager.PERMISSION_GRANTED;
         if (isGranted) {
             PermissionPrefs.clearPermissionWasDenied(permission);
         }
@@ -49,9 +54,7 @@ public abstract class AndroidPermissionDelegateWithRequester implements AndroidP
     }
 
     @Override
-    public boolean canRequestPermission(String permission) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return false;
-
+    public final boolean canRequestPermission(String permission) {
         if (hasPermission(permission)) {
             // There is no need to call clearPermissionWasDenied - hasPermission already cleared
             // the shared pref if needed.
@@ -80,7 +83,6 @@ public abstract class AndroidPermissionDelegateWithRequester implements AndroidP
 
     @Override
     public final boolean isPermissionRevokedByPolicy(String permission) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return false;
         return isPermissionRevokedByPolicyInternal(permission);
     }
 
@@ -96,17 +98,20 @@ public abstract class AndroidPermissionDelegateWithRequester implements AndroidP
         // callback with whatever the current permission state is for all the requested
         // permissions.  The response is posted to keep the async behavior of this method
         // consistent.
-        mHandler.post(new Runnable() {
-            @Override
-            public void run() {
-                int[] results = new int[permissions.length];
-                for (int i = 0; i < permissions.length; i++) {
-                    results[i] = hasPermission(permissions[i]) ? PackageManager.PERMISSION_GRANTED
-                                                               : PackageManager.PERMISSION_DENIED;
-                }
-                callback.onRequestPermissionsResult(permissions, results);
-            }
-        });
+        mHandler.post(
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        int[] results = new int[permissions.length];
+                        for (int i = 0; i < permissions.length; i++) {
+                            results[i] =
+                                    hasPermission(permissions[i])
+                                            ? PackageManager.PERMISSION_GRANTED
+                                            : PackageManager.PERMISSION_DENIED;
+                        }
+                        callback.onRequestPermissionsResult(permissions, results);
+                    }
+                });
     }
 
     @Override
@@ -157,12 +162,8 @@ public abstract class AndroidPermissionDelegateWithRequester implements AndroidP
     protected abstract boolean requestPermissionsFromRequester(
             String[] permissions, int requestCode);
 
-    /**
-     * Issues the permission request and returns whether it was sent successfully.
-     */
+    /** Issues the permission request and returns whether it was sent successfully. */
     private boolean requestPermissionsInternal(String[] permissions, PermissionCallback callback) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return false;
-
         int requestCode = REQUEST_CODE_PREFIX + mNextRequestCode;
         mNextRequestCode = (mNextRequestCode + 1) % REQUEST_CODE_RANGE_SIZE;
         mOutstandingPermissionRequests.put(

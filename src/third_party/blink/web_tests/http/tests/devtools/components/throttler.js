@@ -1,6 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+import {TestRunner} from 'test_runner';
+
+import * as Common from 'devtools/core/common/common.js';
 
 (async function() {
   TestRunner.addResult(`This test verifies throttler behavior.\n`);
@@ -88,7 +92,7 @@
     }
   }
 
-  var throttler = new Common.Throttler(1989);
+  var throttler = new Common.Throttler.Throttler(1989);
   var timeoutMock = new TimeoutMock();
   throttler.setTimeout = timeoutMock.setTimeout;
   throttler.clearTimeout = timeoutMock.clearTimeout;
@@ -97,7 +101,7 @@
 
   function testSimpleSchedule(next, runningProcess) {
     assertThrottlerIdle();
-    throttler.schedule(ProcessMock.create('operation #1').run, false);
+    throttler.schedule(ProcessMock.create('operation #1').run, 'Default');
     var process = ProcessMock.create('operation #2');
     throttler.schedule(process.run);
 
@@ -119,7 +123,7 @@
     assertThrottlerIdle();
     throttler.schedule(ProcessMock.create('operation #1').run);
     var process = ProcessMock.create('operation #2');
-    throttler.schedule(process.run, true);
+    throttler.schedule(process.run, 'AsSoonAsPossible');
 
     var promise = Promise.resolve();
     if (runningProcess) {
@@ -142,7 +146,7 @@
     var process = null;
     for (var i = 0; i < 4; ++i) {
       process = ProcessMock.create('operation #' + i);
-      throttler.schedule(process.run, i % 2 === 0);
+      throttler.schedule(process.run, i % 2 === 0 ? 'AsSoonAsPossible' : 'Default');
     }
     var promise = Promise.resolve();
     if (runningProcess) {
@@ -206,7 +210,7 @@
 
       function processBody() {
         nextProcess = ProcessMock.create('operation #2');
-        throttler.schedule(nextProcess.run, false);
+        throttler.schedule(nextProcess.run, 'Default');
       }
     },
 
@@ -241,7 +245,7 @@
   function waitForProcessFinish() {
     var promiseResolve;
     var hasFinished;
-    TestRunner.addSniffer(Common.Throttler.prototype, 'processCompletedForTests', onFinished);
+    TestRunner.addSniffer(Common.Throttler.Throttler.prototype, 'processCompletedForTests', onFinished);
     function onFinished() {
       hasFinished = true;
       if (promiseResolve)

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <unordered_map>
 
 #include "base/feature_list.h"
+#include "third_party/blink/renderer/platform/allow_discouraged_type.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/widget/input/prediction/predictor_factory.h"
 #include "ui/base/prediction/input_filter.h"
@@ -47,7 +48,7 @@ struct FilterParamMapKeyHash {
 };
 
 using FilterParams = std::unordered_map<std::string, double>;
-using FilterParamsMap =
+using FilterParamsMap ALLOW_DISCOURAGED_TYPE("TODO(crbug.com/1404327)") =
     std::unordered_map<FilterParamMapKey, FilterParams, FilterParamMapKeyHash>;
 
 // FilterFactory is a class containing methods to create filters.
@@ -62,18 +63,20 @@ class PLATFORM_EXPORT FilterFactory {
 
   // Returns the FilterType associated to the given filter
   // name if found, otherwise returns kFilterTypeEmpty
-  input_prediction::FilterType GetFilterTypeFromName(
+  static input_prediction::FilterType GetFilterTypeFromName(
       const std::string& filter_name);
 
-  // Returns the filter designed by its type.
-  // Since filters can have different parameters in function of the current
-  // predictor used, it also needs to be given as parameter.
-  std::unique_ptr<ui::InputFilter> CreateFilter(
-      const input_prediction::FilterType filter_type,
-      const input_prediction::PredictorType predictor_type);
+  // Creates and returns a filter. The filter type and params are set when
+  // creating the factory.
+  std::unique_ptr<ui::InputFilter> CreateFilter();
 
  private:
   friend class test::FilterFactoryTest;
+
+  // Predictor type used to decide parameters when creating the filter.
+  input_prediction::PredictorType predictor_type_;
+  // Filter type used to create the filter.
+  input_prediction::FilterType filter_type_;
 
   // Map storing filter parameters for a pair {FilterType, PredictorType}.
   // Currently the map is only storing values from fieldtrials params, but

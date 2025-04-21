@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@ import android.graphics.Color;
 import android.graphics.Rect;
 import android.graphics.drawable.ClipDrawable;
 import android.graphics.drawable.ColorDrawable;
+import android.util.AttributeSet;
 import android.view.Gravity;
-import android.view.ViewGroup.LayoutParams;
 import android.widget.ImageView;
 
 import androidx.annotation.VisibleForTesting;
@@ -18,13 +18,9 @@ import androidx.core.view.ViewCompat;
 
 import org.chromium.components.browser_ui.styles.SemanticColorUtils;
 
-/**
- * An alternative progress bar implemented using ClipDrawable for simplicity and performance.
- */
+/** An alternative progress bar implemented using ClipDrawable for simplicity and performance. */
 public class ClipDrawableProgressBar extends ImageView {
-    /**
-     * Structure that has complete {@link ClipDrawableProgressBar} drawing information.
-     */
+    /** Structure that has complete {@link ClipDrawableProgressBar} drawing information. */
     public static class DrawingInfo {
         public final Rect progressBarRect = new Rect();
         public final Rect progressBarBackgroundRect = new Rect();
@@ -33,9 +29,7 @@ public class ClipDrawableProgressBar extends ImageView {
         public int progressBarBackgroundColor;
     }
 
-    /**
-     * An observer for visible progress updates.
-     */
+    /** An observer for visible progress updates. */
     @VisibleForTesting
     public interface ProgressBarObserver {
         /**
@@ -44,9 +38,7 @@ public class ClipDrawableProgressBar extends ImageView {
          */
         void onVisibleProgressUpdated();
 
-        /**
-         * A notification that the visibility of the progress bar has changed.
-         */
+        /** A notification that the visibility of the progress bar has changed. */
         void onVisibilityChanged();
     }
 
@@ -64,11 +56,11 @@ public class ClipDrawableProgressBar extends ImageView {
 
     /**
      * Create the progress bar with a custom height.
+     *
      * @param context An Android context.
-     * @param height The height in px of the progress bar.
      */
-    public ClipDrawableProgressBar(Context context, int height) {
-        super(context);
+    public ClipDrawableProgressBar(Context context, AttributeSet attrs) {
+        super(context, attrs);
 
         mDesiredVisibility = getVisibility();
 
@@ -79,13 +71,9 @@ public class ClipDrawableProgressBar extends ImageView {
         setImageDrawable(
                 new ClipDrawable(mForegroundDrawable, Gravity.START, ClipDrawable.HORIZONTAL));
         setBackgroundColor(mBackgroundColor);
-
-        setLayoutParams(new LayoutParams(LayoutParams.MATCH_PARENT, height));
     }
 
-    /**
-     * @param observer An update observer for the progress bar.
-     */
+    /** @param observer An update observer for the progress bar. */
     @VisibleForTesting
     public void setProgressBarObserver(ProgressBarObserver observer) {
         assert mProgressBarObserver == null;
@@ -115,15 +103,21 @@ public class ClipDrawableProgressBar extends ImageView {
         if (mProgressBarObserver != null) mProgressBarObserver.onVisibleProgressUpdated();
     }
 
-    /**
-     * @return Foreground color of the progress bar.
-     */
+    /** @return Foreground color of the progress bar. */
     public int getForegroundColor() {
         return mForegroundDrawable.getColor();
     }
 
     /**
+     * @return Background color of the progress bar.
+     */
+    public int getBackgroundColor() {
+        return mBackgroundColor;
+    }
+
+    /**
      * Get progress bar drawing information.
+     *
      * @param drawingInfoOut An instance that the result will be written.
      */
     public void getDrawingInfo(DrawingInfo drawingInfoOut) {
@@ -133,13 +127,19 @@ public class ClipDrawableProgressBar extends ImageView {
         drawingInfoOut.progressBarBackgroundColor = applyAlpha(mBackgroundColor, effectiveAlpha);
 
         if (ViewCompat.getLayoutDirection(this) == LAYOUT_DIRECTION_LTR) {
-            drawingInfoOut.progressBarRect.set(getLeft(), getTop(),
-                    getLeft() + Math.round(mProgress * getWidth()), getBottom());
+            drawingInfoOut.progressBarRect.set(
+                    getLeft(),
+                    getTop(),
+                    getLeft() + Math.round(mProgress * getWidth()),
+                    getBottom());
             drawingInfoOut.progressBarBackgroundRect.set(
                     drawingInfoOut.progressBarRect.right, getTop(), getRight(), getBottom());
         } else {
-            drawingInfoOut.progressBarRect.set(getRight() - Math.round(mProgress * getWidth()),
-                    getTop(), getRight(), getBottom());
+            drawingInfoOut.progressBarRect.set(
+                    getRight() - Math.round(mProgress * getWidth()),
+                    getTop(),
+                    getRight(),
+                    getBottom());
             drawingInfoOut.progressBarBackgroundRect.set(
                     getLeft(), getTop(), drawingInfoOut.progressBarRect.left, getBottom());
         }

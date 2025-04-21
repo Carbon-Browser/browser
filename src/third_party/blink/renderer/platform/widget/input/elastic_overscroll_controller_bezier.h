@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,7 +40,6 @@ class PLATFORM_EXPORT ElasticOverscrollControllerBezier
       const gfx::CubicBezier bounce_forwards_curve,
       const base::TimeDelta& delta,
       const base::TimeDelta& bounce_forwards_duration,
-      const double velocity,
       const double initial_stretch,
       const double bounce_forwards_distance) const;
   double StretchAmountForBackwardBounce(

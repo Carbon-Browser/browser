@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 
 #include <memory>
 
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/task/single_thread_task_runner.h"
 #include "media/cast/cast_config.h"

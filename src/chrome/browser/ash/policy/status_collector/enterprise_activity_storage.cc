@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <map>
 #include <set>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
@@ -45,14 +45,13 @@ void EnterpriseActivityStorage::FilterActivityPeriodsByUsers(
 const std::map<std::string, ActivityStorage::Activities>
 EnterpriseActivityStorage::GetRedactedActivityPeriods(
     const std::vector<std::string>& reporting_users) const {
-  const auto& activity_periods = GetActivityPeriods();
   std::set<std::string> reporting_users_set(reporting_users.begin(),
                                             reporting_users.end());
 
   std::map<std::string, ActivityStorage::Activities> filtered_activity_periods;
   std::map<int64_t, enterprise_management::TimePeriod> unreported_activities;
   const std::string empty;
-  for (const auto& activity_pair : activity_periods) {
+  for (const auto& activity_pair : GetActivityPeriods()) {
     const std::string& user_email = activity_pair.first;
     const Activities& activity_periods = activity_pair.second;
 

@@ -1,11 +1,21 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "third_party/blink/renderer/platform/text/character.h"
 
+#include <ubidi_props.h>
+
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/renderer/platform/text/emoji_segmentation_category.h"
+#include "third_party/blink/renderer/platform/text/emoji_segmentation_category_inline_header.h"
 #include "third_party/blink/renderer/platform/wtf/text/character_names.h"
+#include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
 namespace blink {
 
@@ -23,10 +33,39 @@ testing::AssertionResult IsCJKIdeographOrSymbolWithMessage(UChar32 codepoint) {
                                      << " is not a CJKIdeographOrSymbol.";
 }
 
-TEST(CharacterTest, HammerEmojiVsCJKIdeographOrSymbol) {
-  for (UChar32 test_char = 0; test_char < kMaxCodepoint; test_char++) {
-    if (Character::IsEmojiEmojiDefault(test_char)) {
-      EXPECT_TRUE(IsCJKIdeographOrSymbolWithMessage(test_char));
+// Test Unicode-derived functions work as intended.
+// These functions may need to be adjusted if Unicode changes.
+TEST(CharacterTest, Derived) {
+  StringBuilder builder;
+  for (UChar32 ch = 0; ch < kMaxCodepoint; ++ch) {
+    if (Character::IsEmojiEmojiDefault(ch)) {
+      EXPECT_TRUE(IsCJKIdeographOrSymbolWithMessage(ch));
+    }
+
+    const UBlockCode block = ublock_getCode(ch);
+    EXPECT_EQ(Character::IsBlockCjkSymbolsAndPunctuation(ch),
+              block == UBLOCK_CJK_SYMBOLS_AND_PUNCTUATION);
+    EXPECT_EQ(Character::IsBlockHalfwidthAndFullwidthForms(ch),
+              block == UBLOCK_HALFWIDTH_AND_FULLWIDTH_FORMS);
+
+    const UEastAsianWidth eaw = Character::EastAsianWidth(ch);
+    EXPECT_EQ(Character::IsEastAsianWidthFullwidth(ch),
+              eaw == UEastAsianWidth::U_EA_FULLWIDTH);
+
+    if (!Character::MaybeHanKerningOpenOrCloseFast(ch)) {
+      DCHECK(!Character::MaybeHanKerningOpenSlow(ch));
+      DCHECK(!Character::MaybeHanKerningCloseSlow(ch));
+    }
+
+    // Test UTF-16 functions.
+    const UCharDirection bidi = ubidi_getClass(ch);
+    if (bidi == UCharDirection::U_RIGHT_TO_LEFT ||
+        bidi == UCharDirection::U_RIGHT_TO_LEFT_ARABIC ||
+        Character::IsBidiControl(ch)) {
+      builder.Clear();
+      builder.Append(ch);
+      const String utf16 = builder.ToString();
+      DCHECK(Character::MaybeBidiRtl(utf16));
     }
   }
 }
@@ -224,6 +263,30 @@ TEST(CharacterTest, TestIsCJKIdeographOrSymbol) {
   TestSpecificUChar32RangeIdeographSymbol(0x1F150, 0x1F169);
   TestSpecificUChar32RangeIdeographSymbol(0x1F170, 0x1F189);
   TestSpecificUChar32RangeIdeographSymbol(0x1F1E6, 0x1F6FF);
+}
+
+TEST(CharacterTest, HanKerning) {
+  struct Data {
+    UChar32 ch;
+    HanKerningCharType type;
+  } data_list[] = {
+      {kLeftDoubleQuotationMarkCharacter, HanKerningCharType::kOpenQuote},
+      {kRightDoubleQuotationMarkCharacter, HanKerningCharType::kCloseQuote},
+      {kMiddleDotCharacter, HanKerningCharType::kMiddle},
+      {kIdeographicSpaceCharacter, HanKerningCharType::kMiddle},
+      {kFullwidthComma, HanKerningCharType::kDot},
+      {0x3008, HanKerningCharType::kOpen},
+      {0xFF5F, HanKerningCharType::kOpen},
+      {0x3009, HanKerningCharType::kClose},
+      {0xFF60, HanKerningCharType::kClose},
+      {0x0028, HanKerningCharType::kOpenNarrow},
+      {0xFF62, HanKerningCharType::kOpenNarrow},
+      {0x0029, HanKerningCharType::kCloseNarrow},
+      {0xFF63, HanKerningCharType::kCloseNarrow},
+  };
+  for (const Data& data : data_list) {
+    EXPECT_EQ(Character::GetHanKerningCharType(data.ch), data.type);
+  }
 }
 
 TEST(CharacterTest, CanTextDecorationSkipInk) {
@@ -465,6 +528,45 @@ TEST(CharacterTest, EmojiComponents) {
 
   for (auto true_test : true_set)
     EXPECT_TRUE(Character::IsEmojiComponent(true_test));
+}
+
+// Ensure that the iterator forwarding in SymbolsIterator is not
+// skipping any other categories that would be computed for the same cursor
+// position and codepoint.
+TEST(CharacterTest, MaybeEmojiPresentationNoIllegalShortcut) {
+  for (UChar32 ch = 0; ch < kMaxCodepoint; ++ch) {
+    const EmojiSegmentationCategory emoji = GetEmojiSegmentationCategory(ch);
+    if (IsEmojiPresentationCategory(emoji)) {
+      EXPECT_TRUE(Character::MaybeEmojiPresentation(ch));
+    }
+    if (!Character::MaybeEmojiPresentation(ch)) {
+      EXPECT_FALSE(IsEmojiPresentationCategory(emoji));
+    }
+  }
+}
+
+TEST(CharacterTest, TestIsStandardizedVariationSequence) {
+  EXPECT_TRUE(Character::IsStandardizedVariationSequence(0x2293, 0xfe00));
+  EXPECT_TRUE(Character::IsStandardizedVariationSequence(0x8279, 0xfe00));
+  EXPECT_TRUE(Character::IsStandardizedVariationSequence(0x8279, 0xfe01));
+  EXPECT_FALSE(Character::IsStandardizedVariationSequence(0x8279, 0xe0100));
+  EXPECT_FALSE(Character::IsStandardizedVariationSequence(0x8279, 0xfe03));
+}
+
+TEST(CharacterTest, TestIsEmojiVariationSequence) {
+  EXPECT_TRUE(Character::IsEmojiVariationSequence(0x1fae8, 0xfe0f));
+  EXPECT_TRUE(Character::IsEmojiVariationSequence(0x0030, 0xfe0e));
+  EXPECT_FALSE(Character::IsEmojiVariationSequence(0x1faf0, 0xfe00));
+  EXPECT_FALSE(Character::IsEmojiVariationSequence(0x0041, 0xfe0f));
+}
+
+TEST(CharacterTest, TestIsIdeographicVariationSequence) {
+  EXPECT_TRUE(Character::IsIdeographicVariationSequence(0x8279, 0xe0100));
+  EXPECT_TRUE(Character::IsIdeographicVariationSequence(0x8279, 0xe01ef));
+  EXPECT_TRUE(Character::IsIdeographicVariationSequence(0x9038, 0xe0101));
+  EXPECT_TRUE(Character::IsIdeographicVariationSequence(0x9038, 0xe01ef));
+  EXPECT_FALSE(Character::IsIdeographicVariationSequence(0x9038, 0xfe00));
+  EXPECT_FALSE(Character::IsIdeographicVariationSequence(0x0041, 0xe0100));
 }
 
 }  // namespace blink

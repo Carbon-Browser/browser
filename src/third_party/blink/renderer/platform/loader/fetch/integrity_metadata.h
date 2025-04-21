@@ -1,10 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_LOADER_FETCH_INTEGRITY_METADATA_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_LOADER_FETCH_INTEGRITY_METADATA_H_
 
+#include "services/network/public/mojom/integrity_algorithm.mojom-blink.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
@@ -15,10 +16,23 @@
 namespace blink {
 
 class IntegrityMetadata;
-enum class IntegrityAlgorithm : uint8_t;
 
+using IntegrityAlgorithm = network::mojom::blink::IntegrityAlgorithm;
 using IntegrityMetadataPair = std::pair<String, IntegrityAlgorithm>;
-using IntegrityMetadataSet = WTF::HashSet<IntegrityMetadataPair>;
+
+// Contains the result of SRI's "Parse Metadata" algorithm:
+//
+// https://wicg.github.io/signature-based-sri/#abstract-opdef-parse-metadata
+struct IntegrityMetadataSet {
+  IntegrityMetadataSet() {}
+  bool empty() const { return hashes.empty() && signatures.empty(); }
+  WTF::HashSet<IntegrityMetadataPair> hashes;
+  WTF::HashSet<IntegrityMetadataPair> signatures;
+
+  bool operator==(const IntegrityMetadataSet& other) const {
+    return this->hashes == other.hashes && this->signatures == other.signatures;
+  }
+};
 
 class PLATFORM_EXPORT IntegrityMetadata {
   STACK_ALLOCATED();
@@ -35,9 +49,6 @@ class PLATFORM_EXPORT IntegrityMetadata {
 
   IntegrityMetadataPair ToPair() const;
 
-  static bool SetsEqual(const IntegrityMetadataSet& set1,
-                        const IntegrityMetadataSet& set2);
-
  private:
   String digest_;
   IntegrityAlgorithm algorithm_;
@@ -45,28 +56,12 @@ class PLATFORM_EXPORT IntegrityMetadata {
 
 enum class ResourceIntegrityDisposition : uint8_t {
   kNotChecked = 0,
-  kFailed,
+  kNetworkError,
+  kFailedIdentityDigest,
+  kFailedIntegrityMetadata,
   kPassed
 };
 
-enum class IntegrityAlgorithm : uint8_t { kSha256, kSha384, kSha512 };
-
 }  // namespace blink
-
-namespace WTF {
-
-template <>
-struct DefaultHash<blink::IntegrityAlgorithm> {
-  STATIC_ONLY(DefaultHash);
-  typedef IntHash<blink::IntegrityAlgorithm> Hash;
-};
-
-template <>
-struct HashTraits<blink::IntegrityAlgorithm>
-    : UnsignedWithZeroKeyHashTraits<blink::IntegrityAlgorithm> {
-  STATIC_ONLY(HashTraits);
-};
-
-}  // namespace WTF
 
 #endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_LOADER_FETCH_INTEGRITY_METADATA_H_

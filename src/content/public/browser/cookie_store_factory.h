@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,6 +30,11 @@ struct CONTENT_EXPORT CookieStoreConfig {
   // Convenience constructor for an in-memory cookie store with no delegate.
   CookieStoreConfig();
 
+  // This struct is move-only but also intentionally deletes the move assignment
+  // operator as base::FilePath does not implement this operator.
+  CookieStoreConfig(CookieStoreConfig&&);
+  CookieStoreConfig& operator=(CookieStoreConfig&&) = delete;
+
   // If |path| is empty, then this specifies an in-memory cookie store.
   // With in-memory cookie stores, |session_cookie_mode| must be
   // EPHEMERAL_SESSION_COOKIES.
@@ -38,23 +43,19 @@ struct CONTENT_EXPORT CookieStoreConfig {
   // created using this config.
   CookieStoreConfig(const base::FilePath& path,
                     bool restore_old_session_cookies,
-                    bool persist_session_cookies,
-                    bool first_party_sets_enabled);
+                    bool persist_session_cookies);
   ~CookieStoreConfig();
 
   const base::FilePath path;
   const bool restore_old_session_cookies;
   const bool persist_session_cookies;
-  const bool first_party_sets_enabled;
   // The following are infrequently used cookie store parameters.
   // Rather than clutter the constructor API, these are assigned a default
   // value on CookieStoreConfig construction. Clients should then override
   // them as necessary.
 
-  // Used to provide encryption hooks for the cookie store. The
-  // CookieCryptoDelegate must outlive any cookie store created with this
-  // config.
-  raw_ptr<net::CookieCryptoDelegate> crypto_delegate;
+  // Used to provide encryption hooks for the cookie store.
+  std::unique_ptr<net::CookieCryptoDelegate> crypto_delegate;
 
   // Callbacks for data load events will be performed on |client_task_runner|.
   // If nullptr, uses the task runner for BrowserThread::IO.
@@ -74,7 +75,7 @@ struct CONTENT_EXPORT CookieStoreConfig {
 };
 
 CONTENT_EXPORT std::unique_ptr<net::CookieStore> CreateCookieStore(
-    const CookieStoreConfig& config,
+    CookieStoreConfig config,
     net::NetLog* net_log);
 
 }  // namespace content

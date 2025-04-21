@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,9 @@
 
 #include <string>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/net/system_network_context_manager.h"
 #include "chromeos/dbus/constants/dbus_switches.h"
@@ -73,7 +72,7 @@ class CAProxyLookupClient : public network::mojom::ProxyLookupClient {
   // network::mojom::ProxyLookupClient:
   void OnProxyLookupComplete(
       int32_t net_error,
-      const absl::optional<net::ProxyInfo>& proxy_info) override {
+      const std::optional<net::ProxyInfo>& proxy_info) override {
     LOG_IF(WARNING, !proxy_info.has_value())
         << " Error determining the proxy information: " << net_error;
     // Assume there is a proxy if failing to get proxy information.
@@ -91,15 +90,15 @@ class CAProxyLookupClient : public network::mojom::ProxyLookupClient {
     CHECK(network_context);
   }
   void Start(network::mojom::NetworkContext* network_context, const GURL& url) {
-    const net::NetworkIsolationKey network_isolation_key =
-        net::NetworkIsolationKey::CreateTransient();
+    const net::NetworkAnonymizationKey network_anonymization_key =
+        net::NetworkAnonymizationKey::CreateTransient();
     mojo::PendingRemote<network::mojom::ProxyLookupClient> proxy_lookup_client =
         receiver_.BindNewPipeAndPassRemote();
-    receiver_.set_disconnect_handler(base::BindOnce(
-        &CAProxyLookupClient::OnProxyLookupComplete, base::Unretained(this),
-        net::ERR_ABORTED, absl::nullopt));
+    receiver_.set_disconnect_handler(
+        base::BindOnce(&CAProxyLookupClient::OnProxyLookupComplete,
+                       base::Unretained(this), net::ERR_ABORTED, std::nullopt));
 
-    network_context->LookUpProxyForURL(url, network_isolation_key,
+    network_context->LookUpProxyForURL(url, network_anonymization_key,
                                        std::move(proxy_lookup_client));
   }
 
@@ -129,7 +128,7 @@ AttestationCAClient::AttestationCAClient() {
   pca_type_ = GetAttestationServerType();
 }
 
-AttestationCAClient::~AttestationCAClient() {}
+AttestationCAClient::~AttestationCAClient() = default;
 
 void AttestationCAClient::SendEnrollRequest(const std::string& request,
                                             DataCallback on_response) {
@@ -203,10 +202,8 @@ void AttestationCAClient::FetchURL(const std::string& url,
         policy {
           cookies_allowed: NO
           setting:
-            "The device setting DeviceAttestationEnabled can disable the "
-            "attestation requests and AttestationForContentProtectionEnabled "
-            "can disable the attestation for content protection. But they "
-            "cannot be controlled by a policy or through settings."
+            "The device setting AttestationForContentProtectionEnabled "
+            "can disable the attestation for content protection."
           policy_exception_justification: "Not implemented."
         })");
   auto resource_request = std::make_unique<network::ResourceRequest>();

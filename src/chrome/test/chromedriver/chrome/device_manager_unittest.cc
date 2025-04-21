@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,8 @@ namespace {
 
 class FakeAdb : public Adb {
  public:
-  FakeAdb() {}
-  ~FakeAdb() override {}
+  FakeAdb() = default;
+  ~FakeAdb() override = default;
 
   Status GetDevices(std::vector<std::string>* devices) override {
     devices->push_back("a");
@@ -101,8 +101,8 @@ class ClearAppDataCalledFakeAdb : public FakeAdb {
 
 class SucceedsForwardPortFakeAdb : public FakeAdb {
  public:
-  SucceedsForwardPortFakeAdb() {}
-  ~SucceedsForwardPortFakeAdb() override {}
+  SucceedsForwardPortFakeAdb() = default;
+  ~SucceedsForwardPortFakeAdb() override = default;
 
   Status ForwardPort(const std::string& device_serial,
                      const std::string& remote_abstract,
@@ -126,8 +126,8 @@ class SucceedsForwardPortFakeAdb : public FakeAdb {
 
 class FailsForwardPortFakeAdb : public SucceedsForwardPortFakeAdb {
  public:
-  FailsForwardPortFakeAdb() {}
-  ~FailsForwardPortFakeAdb() override {}
+  FailsForwardPortFakeAdb() = default;
+  ~FailsForwardPortFakeAdb() override = default;
 
   Status ForwardPort(const std::string& device_serial,
                      const std::string& remote_abstract,
@@ -149,7 +149,7 @@ TEST(DeviceManager, AcquireDevice) {
   ASSERT_TRUE(device_manager.AcquireDevice(&device1).IsOk());
   ASSERT_TRUE(device_manager.AcquireDevice(&device2).IsOk());
   ASSERT_FALSE(device_manager.AcquireDevice(&device3).IsOk());
-  device1.reset(NULL);
+  device1.reset();
   ASSERT_TRUE(device_manager.AcquireDevice(&device3).IsOk());
   ASSERT_FALSE(device_manager.AcquireDevice(&device1).IsOk());
 }
@@ -163,7 +163,7 @@ TEST(DeviceManager, AcquireSpecificDevice) {
   ASSERT_TRUE(device_manager.AcquireSpecificDevice("a", &device1).IsOk());
   ASSERT_FALSE(device_manager.AcquireSpecificDevice("a", &device2).IsOk());
   ASSERT_TRUE(device_manager.AcquireSpecificDevice("b", &device3).IsOk());
-  device1.reset(NULL);
+  device1.reset();
   ASSERT_TRUE(device_manager.AcquireSpecificDevice("a", &device2).IsOk());
   ASSERT_FALSE(device_manager.AcquireSpecificDevice("a", &device1).IsOk());
   ASSERT_FALSE(device_manager.AcquireSpecificDevice("b", &device1).IsOk());

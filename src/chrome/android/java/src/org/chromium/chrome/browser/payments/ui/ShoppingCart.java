@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * The shopping cart contents and total.
- */
+/** The shopping cart contents and total. */
 public class ShoppingCart {
     private LineItem mTotal;
     @Nullable private List<LineItem> mContents;
@@ -53,7 +51,8 @@ public class ShoppingCart {
      *
      * @return The shopping cart items. Can be null. Should not be modified.
      */
-    @Nullable public List<LineItem> getContents() {
+    @Nullable
+    public List<LineItem> getContents() {
         if (mContents == null && mAdditionalContents == null) return null;
 
         List<LineItem> result = new ArrayList<>();

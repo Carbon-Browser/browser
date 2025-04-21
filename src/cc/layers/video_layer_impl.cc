@@ -1,4 +1,4 @@
-// Copyright 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
-#include "cc/base/features.h"
 #include "cc/layers/video_frame_provider_client_impl.h"
 #include "cc/trees/layer_tree_frame_sink.h"
 #include "cc/trees/layer_tree_impl.h"
@@ -20,7 +19,7 @@
 #include "cc/trees/task_runner_provider.h"
 #include "components/viz/client/client_resource_provider.h"
 #include "components/viz/common/quads/texture_draw_quad.h"
-#include "components/viz/common/quads/yuv_video_draw_quad.h"
+#include "gpu/ipc/client/client_shared_image_interface.h"
 #include "media/base/video_frame.h"
 #include "media/renderers/video_resource_updater.h"
 #include "ui/gfx/color_space.h"
@@ -33,8 +32,6 @@ std::unique_ptr<VideoLayerImpl> VideoLayerImpl::Create(
     int id,
     VideoFrameProvider* provider,
     const media::VideoTransformation& video_transform) {
-  DCHECK(tree_impl->task_runner_provider()->IsMainThreadBlocked() ||
-         base::FeatureList::IsEnabled(features::kNonBlockingCommit));
   DCHECK(tree_impl->task_runner_provider()->IsImplThread());
 
   scoped_refptr<VideoFrameProviderClientImpl> provider_client_impl =
@@ -58,16 +55,13 @@ VideoLayerImpl::VideoLayerImpl(
 
 VideoLayerImpl::~VideoLayerImpl() {
   if (!provider_client_impl_->Stopped()) {
-    // In impl side painting, we may have a pending and active layer
-    // associated with the video provider at the same time. Both have a ref
-    // on the VideoFrameProviderClientImpl, but we stop when the first
-    // LayerImpl (the one on the pending tree) is destroyed since we know
-    // the main thread is blocked for this commit.
-    DCHECK(layer_tree_impl()->task_runner_provider()->IsMainThreadBlocked() ||
-           base::FeatureList::IsEnabled(features::kNonBlockingCommit));
     DCHECK(layer_tree_impl()->task_runner_provider()->IsImplThread());
     provider_client_impl_->Stop();
   }
+}
+
+mojom::LayerType VideoLayerImpl::GetLayerType() const {
+  return mojom::LayerType::kVideo;
 }
 
 std::unique_ptr<LayerImpl> VideoLayerImpl::CreateLayerImpl(
@@ -109,19 +103,15 @@ bool VideoLayerImpl::WillDraw(DrawMode draw_mode,
 
   if (!updater_) {
     const LayerTreeSettings& settings = layer_tree_impl()->settings();
-    // TODO(sergeyu): Pass RasterContextProvider when it's available. Then
-    // remove ContextProvider parameter from VideoResourceUpdater.
     updater_ = std::make_unique<media::VideoResourceUpdater>(
         layer_tree_impl()->context_provider(),
-        /*raster_context_provider=*/nullptr,
-        layer_tree_impl()->layer_tree_frame_sink(),
         layer_tree_impl()->resource_provider(),
+        layer_tree_impl()->layer_tree_frame_sink()->shared_image_interface(),
         settings.use_stream_video_draw_quad,
-        settings.resource_settings.use_gpu_memory_buffer_resources,
-        settings.resource_settings.use_r16_texture,
+        settings.use_gpu_memory_buffer_resources,
         layer_tree_impl()->max_texture_size());
   }
-  updater_->ObtainFrameResources(frame_);
+  updater_->ObtainFrameResource(frame_);
   return true;
 }
 
@@ -141,16 +131,16 @@ void VideoLayerImpl::AppendQuads(viz::CompositorRenderPass* render_pass,
   switch (media_transform.rotation) {
     case media::VIDEO_ROTATION_90:
       rotated_size = gfx::Size(rotated_size.height(), rotated_size.width());
-      transform.RotateAboutZAxis(90.0);
+      transform *= gfx::Transform::Make90degRotation();
       transform.Translate(0.0, -rotated_size.height());
       break;
     case media::VIDEO_ROTATION_180:
-      transform.RotateAboutZAxis(180.0);
+      transform *= gfx::Transform::Make180degRotation();
       transform.Translate(-rotated_size.width(), -rotated_size.height());
       break;
     case media::VIDEO_ROTATION_270:
       rotated_size = gfx::Size(rotated_size.height(), rotated_size.width());
-      transform.RotateAboutZAxis(270.0);
+      transform *= gfx::Transform::Make270degRotation();
       transform.Translate(-rotated_size.width(), 0);
       break;
     case media::VIDEO_ROTATION_0:
@@ -172,14 +162,14 @@ void VideoLayerImpl::AppendQuads(viz::CompositorRenderPass* render_pass,
   if (visible_quad_rect.IsEmpty())
     return;
 
-  absl::optional<gfx::Rect> clip_rect_opt;
+  std::optional<gfx::Rect> clip_rect_opt;
   if (is_clipped()) {
     clip_rect_opt = clip_rect();
   }
-  updater_->AppendQuads(render_pass, frame_, transform, quad_rect,
-                        visible_quad_rect, draw_properties().mask_filter_info,
-                        clip_rect_opt, contents_opaque(), draw_opacity(),
-                        GetSortingContextId());
+  updater_->AppendQuad(render_pass, frame_, transform, quad_rect,
+                       visible_quad_rect, draw_properties().mask_filter_info,
+                       clip_rect_opt, contents_opaque(), draw_opacity(),
+                       GetSortingContextId());
 }
 
 void VideoLayerImpl::DidDraw(viz::ClientResourceProvider* resource_provider) {
@@ -188,7 +178,7 @@ void VideoLayerImpl::DidDraw(viz::ClientResourceProvider* resource_provider) {
 
   DCHECK(frame_.get());
 
-  updater_->ReleaseFrameResources();
+  updater_->ReleaseFrameResource();
   provider_client_impl_->PutCurrentFrame();
   frame_ = nullptr;
 
@@ -218,8 +208,22 @@ void VideoLayerImpl::SetNeedsRedraw() {
   layer_tree_impl()->SetNeedsRedraw();
 }
 
-const char* VideoLayerImpl::LayerTypeAsString() const {
-  return "cc::VideoLayerImpl";
+DamageReasonSet VideoLayerImpl::GetDamageReasons() const {
+  // Treat all update_rect() as kVideoLayer updates. However keep
+  // LayerPropertyChanged() as kUntracked because it probably has nothing to do
+  // with the video itself.
+  DamageReasonSet reasons;
+  if (!update_rect().IsEmpty()) {
+    reasons.Put(DamageReason::kVideoLayer);
+  }
+  if (LayerPropertyChanged()) {
+    reasons.Put(DamageReason::kUntracked);
+  }
+  return reasons;
+}
+
+std::optional<base::TimeDelta> VideoLayerImpl::GetPreferredRenderInterval() {
+  return provider_client_impl_->GetPreferredRenderInterval();
 }
 
 }  // namespace cc

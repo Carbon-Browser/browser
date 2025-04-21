@@ -1,8 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/video_rvfc/video_frame_callback_requester_impl.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
+#include "third_party/blink/renderer/core/page/page_animator.h"
 
 #include "base/time/time.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -38,7 +41,7 @@ class MockWebMediaPlayer : public EmptyWebMediaPlayer {
                std::unique_ptr<VideoFramePresentationMetadata>());
 };
 
-class MockFunction : public ScriptFunction::Callable {
+class MockFunction : public ScriptFunction {
  public:
   MockFunction() = default;
 
@@ -99,11 +102,11 @@ VideoFramePresentationMetadata MetadataHelper::metadata_;
 class VfcRequesterParameterVerifierCallback
     : public VideoFrameRequestCallbackCollection::VideoFrameCallback {
  public:
-  explicit VfcRequesterParameterVerifierCallback(DocumentLoadTiming& timing)
-      : timing_(timing) {}
+  explicit VfcRequesterParameterVerifierCallback(DocumentLoader* loader)
+      : loader_(loader) {}
   ~VfcRequesterParameterVerifierCallback() override = default;
 
-  void Invoke(double now, const VideoFrameMetadata* metadata) override {
+  void Invoke(double now, const VideoFrameCallbackMetadata* metadata) override {
     was_invoked_ = true;
     now_ = now;
 
@@ -137,6 +140,11 @@ class VfcRequesterParameterVerifierCallback
   double last_now() const { return now_; }
   bool was_invoked() const { return was_invoked_; }
 
+  void Trace(Visitor* visitor) const override {
+    visitor->Trace(loader_);
+    VideoFrameRequestCallbackCollection::VideoFrameCallback::Trace(visitor);
+  }
+
  private:
   void VerifyTicksClamping(base::TimeTicks reference,
                            double actual,
@@ -149,12 +157,13 @@ class VfcRequesterParameterVerifierCallback
 
   double TicksToClampedMillisecondsF(base::TimeTicks ticks) {
     return Performance::ClampTimeResolution(
-        timing_.MonotonicTimeToZeroBasedDocumentTime(ticks),
+        loader_->GetTiming().MonotonicTimeToZeroBasedDocumentTime(ticks),
         /*cross_origin_isolated_capability_=*/false);
   }
 
   double TicksToMillisecondsF(base::TimeTicks ticks) {
-    return timing_.MonotonicTimeToZeroBasedDocumentTime(ticks)
+    return loader_->GetTiming()
+        .MonotonicTimeToZeroBasedDocumentTime(ticks)
         .InMillisecondsF();
   }
 
@@ -164,7 +173,7 @@ class VfcRequesterParameterVerifierCallback
 
   double now_;
   bool was_invoked_ = false;
-  DocumentLoadTiming& timing_;
+  const Member<DocumentLoader> loader_;
 };
 
 }  // namespace
@@ -186,7 +195,7 @@ class VideoFrameCallbackRequesterImplTest : public PageTestBase {
     video_ = MakeGarbageCollected<HTMLVideoElement>(GetDocument());
     GetDocument().body()->appendChild(video_);
 
-    video()->SetSrc("http://example.com/foo.mp4");
+    video()->SetSrc(AtomicString("http://example.com/foo.mp4"));
     test::RunPendingTasks();
     UpdateAllLifecyclePhasesForTest();
   }
@@ -202,15 +211,14 @@ class VideoFrameCallbackRequesterImplTest : public PageTestBase {
   void SimulateFramePresented() { video_->OnRequestVideoFrameCallback(); }
 
   void SimulateVideoFrameCallback(base::TimeTicks now) {
-    GetDocument().GetScriptedAnimationController().ServiceScriptedAnimations(
-        now);
+    PageAnimator::ServiceScriptedAnimations(
+        now, {{GetDocument().GetScriptedAnimationController(), false}});
   }
 
   V8VideoFrameRequestCallback* GetCallback(ScriptState* script_state,
                                            MockFunction* function) {
     return V8VideoFrameRequestCallback::Create(
-        MakeGarbageCollected<ScriptFunction>(script_state, function)
-            ->V8Function());
+        function->ToV8Function(script_state));
   }
 
   void RegisterCallbackDirectly(
@@ -222,7 +230,7 @@ class VideoFrameCallbackRequesterImplTest : public PageTestBase {
   Persistent<HTMLVideoElement> video_;
 
   // Owned by HTMLVideoElementFrameClient.
-  MockWebMediaPlayer* media_player_;
+  raw_ptr<MockWebMediaPlayer, DanglingUntriaged> media_player_;
 };
 
 class VideoFrameCallbackRequesterImplNullMediaPlayerTest
@@ -328,11 +336,12 @@ TEST_F(VideoFrameCallbackRequesterImplTest,
 }
 
 TEST_F(VideoFrameCallbackRequesterImplTest, VerifyParameters_WindowRaf) {
-  auto timing = GetDocument().Loader()->GetTiming();
+  DocumentLoader* loader = GetDocument().Loader();
+  DocumentLoadTiming& timing = loader->GetTiming();
   MetadataHelper::ReinitializeFields(timing.ReferenceMonotonicTime());
 
   auto* callback =
-      MakeGarbageCollected<VfcRequesterParameterVerifierCallback>(timing);
+      MakeGarbageCollected<VfcRequesterParameterVerifierCallback>(loader);
 
   // Register the non-V8 callback.
   RegisterCallbackDirectly(callback);

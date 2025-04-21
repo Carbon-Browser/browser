@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@ namespace language {
 
 class LanguageCodeLocator {
  public:
-  virtual ~LanguageCodeLocator() {}
+  virtual ~LanguageCodeLocator() = default;
   // Get suitable language codes given a coordinate.
   // If the latitude, longitude pair is not found, will return an empty vector.
   virtual std::vector<std::string> GetLanguageCodes(double latitude,

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/rand_util.h"
 #include "base/test/task_environment.h"
 #include "net/base/ip_address.h"
@@ -306,7 +306,8 @@ TEST_F(DnsClientTest, GetPresetAddrs) {
   EXPECT_FALSE(client_->GetPresetAddrs(
       url::SchemeHostPort("https", "www.doh.com", 9999)));
 
-  AddressList expected({{{4, 3, 2, 1}, 443}, {{4, 3, 2, 2}, 443}});
+  std::vector<IPEndPoint> expected({{{4, 3, 2, 1}, 443}, {{4, 3, 2, 2}, 443}});
+
   EXPECT_THAT(
       client_->GetPresetAddrs(url::SchemeHostPort("https", "www.doh.com", 443)),
       testing::Optional(expected));

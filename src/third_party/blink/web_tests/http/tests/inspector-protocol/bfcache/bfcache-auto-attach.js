@@ -1,4 +1,4 @@
-(async function(testRunner) {
+(async function(/** @type {import('test_runner').TestRunner} */ testRunner) {
   var {page, session, dp} = await testRunner.startURL(
     'http://localhost:8000/inspector-protocol/bfcache/resources/page-with-oopif.html',
     'Tests that target for oopif is attached after BFCache navigation');
@@ -15,7 +15,9 @@
   testRunner.log('detached OOPIF');
 
   attachedToTargetPromise = dp.Target.onceAttachedToTarget();
-  await session.evaluate('window.history.back()');
+  // Intentionally ignore evaluation errors - since we are navigating, we might
+  // get the "Inspected target navigated or closed" error response.
+  await dp.Runtime.evaluate({expression: 'window.history.back()'});
   targetInfo = (await attachedToTargetPromise).params.targetInfo;
   testRunner.log('OOPIF attached after BFCache navigation: ' + targetInfo.url);
 

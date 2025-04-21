@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.browserservices.ui.trustedwebactivity;
 
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.robolectric.Shadows.shadowOf;
@@ -28,16 +29,13 @@ import org.chromium.chrome.browser.browserservices.BrowserServicesStore;
 import org.chromium.components.browser_ui.notifications.NotificationManagerProxy;
 import org.chromium.components.browser_ui.notifications.PendingIntentProvider;
 
-/**
- * Tests for {@link DisclosureAcceptanceBroadcastReceiver}.
- */
+/** Tests for {@link DisclosureAcceptanceBroadcastReceiver}. */
 @RunWith(BaseRobolectricTestRunner.class)
-@Config(manifest = Config.NONE, shadows = {ShadowPendingIntent.class})
+@Config(
+        manifest = Config.NONE,
+        shadows = {ShadowPendingIntent.class})
 public class DisclosureAcceptanceBroadcastReceiverTest {
-    @Mock
-    public NotificationManagerProxy mNotificationManager;
-    @Mock
-    public BrowserServicesStore mStore;
+    @Mock public NotificationManagerProxy mNotificationManager;
 
     private DisclosureAcceptanceBroadcastReceiver mService;
 
@@ -45,7 +43,7 @@ public class DisclosureAcceptanceBroadcastReceiverTest {
     public void setUp() {
         MockitoAnnotations.initMocks(this);
 
-        mService = new DisclosureAcceptanceBroadcastReceiver(mNotificationManager, mStore);
+        mService = new DisclosureAcceptanceBroadcastReceiver(mNotificationManager);
     }
 
     @Test
@@ -56,8 +54,9 @@ public class DisclosureAcceptanceBroadcastReceiverTest {
         int id = 0;
         String packageName = "com.example";
 
-        PendingIntentProvider provider = DisclosureAcceptanceBroadcastReceiver.createPendingIntent(
-                context, tag, id, packageName);
+        PendingIntentProvider provider =
+                DisclosureAcceptanceBroadcastReceiver.createPendingIntent(
+                        context, tag, id, packageName);
 
         mService.onReceive(context, extractIntent(provider));
         verify(mNotificationManager).cancel(eq(tag), eq(id));
@@ -71,11 +70,12 @@ public class DisclosureAcceptanceBroadcastReceiverTest {
         int id = 0;
         String packageName = "com.example";
 
-        PendingIntentProvider provider = DisclosureAcceptanceBroadcastReceiver.createPendingIntent(
-                context, tag, id, packageName);
+        PendingIntentProvider provider =
+                DisclosureAcceptanceBroadcastReceiver.createPendingIntent(
+                        context, tag, id, packageName);
 
         mService.onReceive(context, extractIntent(provider));
-        verify(mStore).setUserAcceptedTwaDisclosureForPackage(eq(packageName));
+        assertTrue(BrowserServicesStore.hasUserAcceptedTwaDisclosureForPackage(packageName));
     }
 
     private static Intent extractIntent(PendingIntentProvider provider) {

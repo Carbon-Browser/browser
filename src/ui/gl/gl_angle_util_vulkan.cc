@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,10 +36,15 @@ EGLDeviceEXT GetEGLDeviceFromANGLE() {
   return reinterpret_cast<EGLDeviceEXT>(egl_device);
 }
 
-gfx::ExtensionSet ToExtensionSet(const char* const* extensions) {
+gfx::ExtensionSet ToExtensionSet(intptr_t extensions) {
+  const char* const* extensions_ptr =
+      reinterpret_cast<const char* const*>(extensions);
   gfx::ExtensionSet extension_set;
-  for (const char* const* p = extensions; *p != nullptr; ++p)
+  // SAFETY: required from OpenGL C style API.
+  for (const char* const* p = extensions_ptr; *p != nullptr;
+       UNSAFE_BUFFERS(++p)) {
     extension_set.insert(*p);
+  }
   return extension_set;
 }
 
@@ -145,7 +150,7 @@ gfx::ExtensionSet QueryVkDeviceExtensionsFromANGLE() {
     return {};
   }
 
-  return ToExtensionSet(reinterpret_cast<const char* const*>(extensions));
+  return ToExtensionSet(extensions);
 }
 
 gfx::ExtensionSet QueryVkInstanceExtensionsFromANGLE() {
@@ -160,7 +165,7 @@ gfx::ExtensionSet QueryVkInstanceExtensionsFromANGLE() {
     return {};
   }
 
-  return ToExtensionSet(reinterpret_cast<const char* const*>(extensions));
+  return ToExtensionSet(extensions);
 }
 
 const VkPhysicalDeviceFeatures2KHR* QueryVkEnabledDeviceFeaturesFromANGLE() {

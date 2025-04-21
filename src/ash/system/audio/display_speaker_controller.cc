@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/system/audio/display_speaker_controller.h"
 
-#include "ash/components/audio/cras_audio_handler.h"
 #include "ash/shell.h"
+#include "chromeos/ash/components/audio/cras_audio_handler.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 #include "ui/display/manager/display_manager.h"
 #include "ui/display/manager/managed_display_info.h"
@@ -48,16 +48,20 @@ void DisplaySpeakerController::OnDisplayAdded(
   CrasAudioHandler::Get()->SetActiveHDMIOutoutRediscoveringIfNecessary(true);
 }
 
-void DisplaySpeakerController::OnDisplayRemoved(
-    const display::Display& old_display) {
-  if (!old_display.IsInternal())
-    return;
-  UpdateInternalSpeakerForDisplayRotation();
+void DisplaySpeakerController::OnDisplaysRemoved(
+    const display::Displays& removed_displays) {
+  for (const auto& display : removed_displays) {
+    if (display.IsInternal()) {
+      UpdateInternalSpeakerForDisplayRotation();
 
-  // This event will be triggered when the lid of the device is closed to enter
-  // the docked mode, we should always start or re-start HDMI re-discovering
-  // grace period right after this event.
-  CrasAudioHandler::Get()->SetActiveHDMIOutoutRediscoveringIfNecessary(true);
+      // This event will be triggered when the lid of the device is closed to
+      // enter the docked mode, we should always start or re-start HDMI
+      // re-discovering grace period right after this event.
+      CrasAudioHandler::Get()->SetActiveHDMIOutoutRediscoveringIfNecessary(
+          true);
+      break;
+    }
+  }
 }
 
 void DisplaySpeakerController::OnDisplayMetricsChanged(

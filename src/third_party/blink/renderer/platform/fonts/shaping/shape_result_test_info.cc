@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,7 +54,7 @@ float ShapeResultTestInfo::AdvanceForTesting(unsigned run_index,
 
 SimpleFontData* ShapeResultTestInfo::FontDataForTesting(
     unsigned run_index) const {
-  return runs_[run_index]->font_data_.get();
+  return runs_[run_index]->font_data_.Get();
 }
 
 Vector<unsigned> ShapeResultTestInfo::CharacterIndexesForTesting() const {

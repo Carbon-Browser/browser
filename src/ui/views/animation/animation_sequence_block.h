@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,12 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "base/types/pass_key.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/geometry/transform.h"
@@ -26,6 +26,7 @@ class LinearGradient;
 }  // namespace gfx
 
 namespace ui {
+class InterpolatedTransform;
 class Layer;
 class LayerOwner;
 }  // namespace ui
@@ -82,11 +83,11 @@ class VIEWS_EXPORT AnimationSequenceBlock {
       gfx::Tween::Type tween_type = gfx::Tween::LINEAR);
   AnimationSequenceBlock& SetColor(
       ui::Layer* target,
-      SkColor color,
+      SkColor4f color,
       gfx::Tween::Type tween_type = gfx::Tween::LINEAR);
   AnimationSequenceBlock& SetColor(
       ui::LayerOwner* target,
-      SkColor color,
+      SkColor4f color,
       gfx::Tween::Type tween_type = gfx::Tween::LINEAR);
   AnimationSequenceBlock& SetGrayscale(
       ui::Layer* target,
@@ -135,6 +136,26 @@ class VIEWS_EXPORT AnimationSequenceBlock {
   AnimationSequenceBlock& SetVisibility(
       ui::LayerOwner* target,
       bool visible,
+      gfx::Tween::Type tween_type = gfx::Tween::LINEAR);
+
+  // NOTE: Generally an `ui::InterpolatedTransform` animation can be expressed
+  // more simply as a `gfx::Transform` animation. As such, `SetTransform()` APIs
+  // are preferred over `SetInterpolatedTransform()` APIs where possible.
+  //
+  // Exception #1: It may be preferable to use `SetInterpolatedTransform()` APIs
+  // to animate overlapping transforms on the same `target`.
+  //
+  // Exception #2: It may be preferable to use `SetInterpolatedTransform()` APIs
+  // when synchronous updates are required, as these APIs dispatch updates at
+  // each animation step whereas `SetTransform()` APIs dispatch updates only at
+  // animation start, complete, and abort.
+  AnimationSequenceBlock& SetInterpolatedTransform(
+      ui::Layer* target,
+      std::unique_ptr<ui::InterpolatedTransform> interpolated_transform,
+      gfx::Tween::Type tween_type = gfx::Tween::LINEAR);
+  AnimationSequenceBlock& SetInterpolatedTransform(
+      ui::LayerOwner* target,
+      std::unique_ptr<ui::InterpolatedTransform> interpolated_transform,
       gfx::Tween::Type tween_type = gfx::Tween::LINEAR);
 
   // Creates a new block.
@@ -143,13 +164,15 @@ class VIEWS_EXPORT AnimationSequenceBlock {
   AnimationSequenceBlock& Then();
 
  private:
-  using AnimationValue = absl::variant<gfx::Rect,
-                                       float,
-                                       SkColor,
-                                       gfx::RoundedCornersF,
-                                       gfx::LinearGradient,
-                                       bool,
-                                       gfx::Transform>;
+  using AnimationValue =
+      absl::variant<gfx::Rect,
+                    float,
+                    SkColor4f,
+                    gfx::RoundedCornersF,
+                    gfx::LinearGradient,
+                    bool,
+                    gfx::Transform,
+                    std::unique_ptr<ui::InterpolatedTransform>>;
 
   // Data for the animation of a given AnimationKey.
   struct Element {
@@ -173,7 +196,7 @@ class VIEWS_EXPORT AnimationSequenceBlock {
 
   // The block duration.  This will contain nullopt (interpreted as zero) until
   // explicitly set by the caller, at which point it may not be reset.
-  absl::optional<base::TimeDelta> duration_;
+  std::optional<base::TimeDelta> duration_;
 
   // The animation element data for this block. LayerAnimationElements are not
   // used directly because they must be created with a duration, whereas blocks

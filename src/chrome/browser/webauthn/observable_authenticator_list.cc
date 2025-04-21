@@ -1,15 +1,22 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/webauthn/observable_authenticator_list.h"
 
-#include <algorithm>
+#include <string_view>
 #include <utility>
 
+#include "base/ranges/algorithm.h"
 #include "chrome/browser/webauthn/authenticator_list_observer.h"
 
 ObservableAuthenticatorList::ObservableAuthenticatorList() = default;
+
+ObservableAuthenticatorList::ObservableAuthenticatorList(
+    ObservableAuthenticatorList&&) = default;
+
+ObservableAuthenticatorList& ObservableAuthenticatorList::operator=(
+    ObservableAuthenticatorList&&) = default;
 
 ObservableAuthenticatorList::~ObservableAuthenticatorList() = default;
 
@@ -21,7 +28,7 @@ void ObservableAuthenticatorList::AddAuthenticator(
 }
 
 void ObservableAuthenticatorList::RemoveAuthenticator(
-    base::StringPiece authenticator_id) {
+    std::string_view authenticator_id) {
   auto it = GetAuthenticatorIterator(authenticator_id);
   if (it == authenticator_list_.end())
     return;
@@ -42,7 +49,7 @@ void ObservableAuthenticatorList::RemoveAllAuthenticators() {
 }
 
 AuthenticatorReference* ObservableAuthenticatorList::GetAuthenticator(
-    base::StringPiece authenticator_id) {
+    std::string_view authenticator_id) {
   auto it = GetAuthenticatorIterator(authenticator_id);
   if (it == authenticator_list_.end())
     return nullptr;
@@ -62,10 +69,7 @@ void ObservableAuthenticatorList::RemoveObserver() {
 
 ObservableAuthenticatorList::AuthenticatorListIterator
 ObservableAuthenticatorList::GetAuthenticatorIterator(
-    base::StringPiece authenticator_id) {
-  return std::find_if(authenticator_list_.begin(), authenticator_list_.end(),
-                      [authenticator_id](const auto& authenticator) {
-                        return authenticator.authenticator_id ==
-                               authenticator_id;
-                      });
+    std::string_view authenticator_id) {
+  return base::ranges::find(authenticator_list_, authenticator_id,
+                            &AuthenticatorReference::authenticator_id);
 }

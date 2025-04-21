@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -81,7 +81,7 @@ void PlatformAuthenticatorCredentialStore::DoCountCredentials(
 
 void PlatformAuthenticatorCredentialStore::OnDeleteCredentialsFinished(
     base::OnceClosure callback,
-    absl::optional<u2f::DeleteCredentialsInTimeRangeResponse> response) {
+    std::optional<u2f::DeleteCredentialsInTimeRangeResponse> response) {
   if (!response) {
     FIDO_LOG(ERROR) << "DeleteCredentialsInTimeRange dbus call failed";
   } else if (
@@ -96,7 +96,7 @@ void PlatformAuthenticatorCredentialStore::OnDeleteCredentialsFinished(
 
 void PlatformAuthenticatorCredentialStore::OnCountCredentialsFinished(
     base::OnceCallback<void(size_t)> callback,
-    absl::optional<u2f::CountCredentialsInTimeRangeResponse> response) {
+    std::optional<u2f::CountCredentialsInTimeRangeResponse> response) {
   if (!response) {
     FIDO_LOG(ERROR) << "CountCredentialsInTimeRange dbus call failed";
     std::move(callback).Run(0);

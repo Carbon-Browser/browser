@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,22 +6,27 @@
 #define CHROMEOS_DBUS_POWER_POWER_MANAGER_CLIENT_H_
 
 #include <map>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
+#include "base/observer_list_types.h"
 #include "base/power_monitor/power_observer.h"
 #include "base/time/time.h"
-#include "chromeos/dbus/common/dbus_method_call_status.h"
+#include "chromeos/dbus/common/dbus_callback.h"
+#include "chromeos/dbus/power_manager/backlight.pb.h"
+#include "chromeos/dbus/power_manager/battery_saver.pb.h"
+#include "chromeos/dbus/power_manager/charge_history_state.pb.h"
 #include "chromeos/dbus/power_manager/peripheral_battery_status.pb.h"
 #include "chromeos/dbus/power_manager/policy.pb.h"
 #include "chromeos/dbus/power_manager/power_supply_properties.pb.h"
 #include "chromeos/dbus/power_manager/suspend.pb.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/cros_system_api/dbus/power_manager/dbus-constants.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
 namespace base {
@@ -36,6 +41,7 @@ namespace power_manager {
 class BacklightBrightnessChange;
 class ScreenIdleState;
 class SetBacklightBrightnessRequest;
+class SetAmbientLightSensorEnabledRequest;
 }  // namespace power_manager
 
 namespace chromeos {
@@ -63,10 +69,8 @@ class COMPONENT_EXPORT(DBUS_POWER) PowerManagerClient {
   };
 
   // Interface for observing changes from the power manager.
-  class Observer {
+  class Observer : public base::CheckedObserver {
    public:
-    virtual ~Observer() {}
-
     // Called when the power manager service becomes available. Will be called
     // immediately and synchronously when a new observer is added to
     // PowerManagerClient if the service's availability is already known.
@@ -81,6 +85,14 @@ class COMPONENT_EXPORT(DBUS_POWER) PowerManagerClient {
     // Called when the screen brightness is changed.
     virtual void ScreenBrightnessChanged(
         const power_manager::BacklightBrightnessChange& change) {}
+
+    // Called when the ambient light sensor status changes.
+    virtual void AmbientLightSensorEnabledChanged(
+        const power_manager::AmbientLightSensorChange& change) {}
+
+    // Called when the keyboard ambient light sensor status changes.
+    virtual void KeyboardAmbientLightSensorEnabledChanged(
+        const power_manager::AmbientLightSensorChange& change) {}
 
     // Called when the ambient light changed.
     virtual void AmbientColorChanged(const int32_t color_temperature) {}
@@ -98,6 +110,11 @@ class COMPONENT_EXPORT(DBUS_POWER) PowerManagerClient {
     // locks or audio activity.
     virtual void InactivityDelaysChanged(
         const power_manager::PowerManagementPolicy::Delays& delays) {}
+
+    // Called when the state of Battery Saver Mode has changed, and on powerd
+    // startup.
+    virtual void BatterySaverModeStateChanged(
+        const power_manager::BatterySaverModeState& state) {}
 
     // Called when peripheral device battery status is received.
     // |path| is the sysfs path for the battery of the peripheral device.
@@ -141,6 +158,14 @@ class COMPONENT_EXPORT(DBUS_POWER) PowerManagerClient {
     // suspended (if e.g. the user canceled the suspend attempt).
     virtual void SuspendDone(base::TimeDelta sleep_duration) {}
 
+    // Called when a suspend attempt (previously announced via
+    // SuspendImminent()) has completed. The system may not have actually
+    // suspended (if e.g. the user canceled the suspend attempt). This is the
+    // same callback as SuspendDone() except that it receives the complete
+    // SuspendDone protobuf rather than only the sleep duration. Clients that
+    // override SuspendDoneEx() will not also get a SuspendDone() callback.
+    virtual void SuspendDoneEx(const power_manager::SuspendDone& proto);
+
     // Called when the system is about to resuspend from a dark resume.  Like
     // SuspendImminent(), the suspend will be deferred until all observers have
     // finished running and those observers that wish to asynchronously delay
@@ -148,6 +173,11 @@ class COMPONENT_EXPORT(DBUS_POWER) PowerManagerClient {
     // from within this method.  UnblockSuspend() must be called once the
     // observer is ready for suspend.
     virtual void DarkSuspendImminent() {}
+
+    // Called when the browser is about to request system restart. Restart is
+    // deferred until all observers' implementations of this method have
+    // finished running.
+    virtual void RestartRequested(power_manager::RequestRestartReason reason) {}
 
     // Called when the browser is about to request shutdown. Shutdown is
     // deferred until all observers' implementations of this method have
@@ -220,6 +250,25 @@ class COMPONENT_EXPORT(DBUS_POWER) PowerManagerClient {
   virtual void GetScreenBrightnessPercent(
       DBusMethodCallback<double> callback) = 0;
 
+  // Sets whether the ambient light sensor should be used in brightness
+  // calculations.
+  virtual void SetAmbientLightSensorEnabled(
+      const power_manager::SetAmbientLightSensorEnabledRequest& request) = 0;
+
+  // Asynchronously gets whether the ambient light sensor is currently enabled
+  // (i.e. whether it's being used in brightness calculations). On error (e.g.
+  // powerd not running), |callback| will be run with nullopt.
+  virtual void GetAmbientLightSensorEnabled(
+      DBusMethodCallback<bool> callback) = 0;
+
+  // Asynchronously gets whether the device has at least one ambient light
+  // sensor. On error (e.g. powerd not running), |callback| will be run with
+  // nullopt.
+  virtual void HasAmbientLightSensor(DBusMethodCallback<bool> callback) = 0;
+
+  // Check if the keyboard has a backlight.
+  virtual void HasKeyboardBacklight(DBusMethodCallback<bool> callback) = 0;
+
   // Decreases the keyboard brightness.
   virtual void DecreaseKeyboardBrightness() = 0;
 
@@ -231,15 +280,26 @@ class COMPONENT_EXPORT(DBUS_POWER) PowerManagerClient {
   virtual void GetKeyboardBrightnessPercent(
       DBusMethodCallback<double> callback) = 0;
 
-  // Set the toggled-off state of the keyboard backlight.
-  virtual void SetKeyboardBacklightToggledOff(bool toggled_off) = 0;
+  // Sets the keyboard backlight brightness per |request|.
+  virtual void SetKeyboardBrightness(
+      const power_manager::SetBacklightBrightnessRequest& request) = 0;
 
-  // Get the toggled-off state of the keyboard backlight.
-  virtual void GetKeyboardBacklightToggledOff(
+  // Toggle the keyboard backlight on or off.
+  virtual void ToggleKeyboardBacklight() = 0;
+
+  // Sets whether the ambient light sensor should be used in keyboard brightness
+  // calculations.
+  virtual void SetKeyboardAmbientLightSensorEnabled(
+      const power_manager::SetAmbientLightSensorEnabledRequest& request) = 0;
+
+  // Asynchronously gets whether the keyboard ambient light sensor is currently
+  // enabled. On error (e.g. powerd not running), |callback| will be run with
+  // nullopt.
+  virtual void GetKeyboardAmbientLightSensorEnabled(
       DBusMethodCallback<bool> callback) = 0;
 
   // Returns the last power status that was received from D-Bus, if any.
-  virtual const absl::optional<power_manager::PowerSupplyProperties>&
+  virtual const std::optional<power_manager::PowerSupplyProperties>&
   GetLastStatus() = 0;
 
   // Requests an updated copy of the power status. Observer::PowerChanged()
@@ -253,8 +313,13 @@ class COMPONENT_EXPORT(DBUS_POWER) PowerManagerClient {
   // Requests the current thermal state.
   virtual void RequestThermalState() = 0;
 
-  // Requests suspend of the system.
-  virtual void RequestSuspend() = 0;
+  // Requests suspend of the system. If |duration_secs| is non-zero, an alarm
+  // will be set to wake up the system after this many seconds (a dark resume).
+  // |flavor| is a platform-specific flavor of suspend (to RAM, disk, etc.).
+  // |wakeup_count| is an optional wakeup count to pass to powerd.
+  virtual void RequestSuspend(std::optional<uint64_t> wakeup_count,
+                              int32_t duration_secs,
+                              power_manager::RequestSuspendFlavor flavor) = 0;
 
   // Requests restart of the system. |description| contains a human-readable
   // string describing the source of the request that will be logged by powerd.
@@ -301,6 +366,15 @@ class COMPONENT_EXPORT(DBUS_POWER) PowerManagerClient {
   // error (e.g. powerd not running), |callback| will be called with nullopt.
   virtual void GetBacklightsForcedOff(DBusMethodCallback<bool> callback) = 0;
 
+  // Gets the current state of Battery Saver Mode. On error (e.g. powerd not
+  // running), |callback| will be called with nullopt.
+  virtual void GetBatterySaverModeState(
+      DBusMethodCallback<power_manager::BatterySaverModeState> callback) = 0;
+
+  // Updates the state of Battery Saver Mode.
+  virtual void SetBatterySaverModeState(
+      const power_manager::SetBatterySaverModeStateRequest& request) = 0;
+
   // Asynchronously fetches the current state of various hardware switches (e.g.
   // the lid switch and the tablet-mode switch). On error (e.g. powerd not
   // running), |callback| will be called with nullopt.
@@ -324,17 +398,14 @@ class COMPONENT_EXPORT(DBUS_POWER) PowerManagerClient {
   // ready for a suspend.
   virtual void UnblockSuspend(const base::UnguessableToken& token) = 0;
 
-  // Whether the device supports Ambient color.
-  virtual bool SupportsAmbientColor() = 0;
-
   // Creates timers corresponding to clocks present in |arc_timer_requests|.
   // ScopedFDs are used to indicate timer expiration as described in
   // |StartArcTimer|. Aysnchronously runs |callback| with the created timers'
   // ids corresponding to all clocks in the arguments i.e timer id at index 0
   // corresponds to the clock id at position 0 in |arc_timer_requests|. Only one
   // timer per clock is allowed per tag, asynchronously runs |callback| with
-  // absl::nullopt if the same clock is present more than once in the arguments.
-  // Also, runs |callback| with absl::nullopt if timers are already created for
+  // std::nullopt if the same clock is present more than once in the arguments.
+  // Also, runs |callback| with std::nullopt if timers are already created for
   // |tag|.
   virtual void CreateArcTimers(
       const std::string& tag,
@@ -360,10 +431,6 @@ class COMPONENT_EXPORT(DBUS_POWER) PowerManagerClient {
   // The time power manager will wait before resuspending from a dark resume.
   virtual base::TimeDelta GetDarkSuspendDelayTimeout() = 0;
 
-  // Refreshes the battery signal of the specified Bluetooth device.
-  // TODO(b/166543531): Remove after migrating to BlueZ Battery Provider API.
-  virtual void RefreshBluetoothBattery(const std::string& address) = 0;
-
   // On devices that support external displays with ambient light sensors, this
   // enables/disables the ALS-based brightness adjustment on those displays.
   virtual void SetExternalDisplayALSBrightness(bool enabled) = 0;
@@ -379,6 +446,10 @@ class COMPONENT_EXPORT(DBUS_POWER) PowerManagerClient {
   // when AdaptiveCharging is inactive will not cause any issue except extra
   // execution which does nothing).
   virtual void ChargeNowForAdaptiveCharging() = 0;
+
+  // Get charge history for Adaptive Charging.
+  virtual void GetChargeHistoryForAdaptiveCharging(
+      DBusMethodCallback<power_manager::ChargeHistoryState> callback) = 0;
 
   PowerManagerClient();
 
@@ -401,10 +472,5 @@ class COMPONENT_EXPORT(DBUS_POWER) PowerManagerClient {
 };
 
 }  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove when moved to ash.
-namespace ash {
-using ::chromeos::PowerManagerClient;
-}
 
 #endif  // CHROMEOS_DBUS_POWER_POWER_MANAGER_CLIENT_H_

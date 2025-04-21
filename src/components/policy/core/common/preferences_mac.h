@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,16 +20,6 @@
 //  AppValueIsForced()
 class POLICY_EXPORT MacPreferences {
  public:
-  // Wraps Apple's private `CFPrefsManagedSource` API to determine the scope of
-  // a policy.
-  class PolicyScope {
-   public:
-    virtual ~PolicyScope() = default;
-    virtual void Init(CFStringRef application_id) = 0;
-    virtual Boolean IsManagedPolicyAvailable(CFStringRef key) = 0;
-    virtual void Enable(bool enable) = 0;
-  };
-
   MacPreferences();
   MacPreferences(const MacPreferences&) = delete;
   MacPreferences& operator=(const MacPreferences&) = delete;
@@ -50,9 +40,8 @@ class POLICY_EXPORT MacPreferences {
   // `AppSynchronize()` function above.
   virtual Boolean IsManagedPolicyAvailableForMachineScope(CFStringRef key);
 
-  virtual void LoadPolicyScopeDetectionPolicy(CFStringRef application_id);
-
  private:
+  class PolicyScope;
   std::unique_ptr<PolicyScope> policy_scope_;
 };
 

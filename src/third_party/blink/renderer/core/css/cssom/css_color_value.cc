@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,7 +43,7 @@ CSSHWB* CSSColorValue::toHWB() const {
 }
 
 const CSSValue* CSSColorValue::ToCSSValue() const {
-  return cssvalue::CSSColor::Create(ToColor().Rgb());
+  return cssvalue::CSSColor::Create(ToColor());
 }
 
 CSSNumericValue* CSSColorValue::ToNumberOrPercentage(
@@ -61,21 +61,23 @@ CSSNumericValue* CSSColorValue::ToNumberOrPercentage(
 CSSNumericValue* CSSColorValue::ToPercentage(const V8CSSNumberish* input) {
   CSSNumericValue* value = CSSNumericValue::FromPercentish(input);
   DCHECK(value);
-  if (!CSSOMTypes::IsCSSStyleValuePercentage(*value))
+  if (!CSSOMTypes::IsCSSStyleValuePercentage(*value)) {
     return nullptr;
+  }
 
   return value;
 }
 
 float CSSColorValue::ComponentToColorInput(CSSNumericValue* input) {
-  if (CSSOMTypes::IsCSSStyleValuePercentage(*input))
+  if (CSSOMTypes::IsCSSStyleValuePercentage(*input)) {
     return input->to(CSSPrimitiveValue::UnitType::kPercentage)->value() / 100;
+  }
   return input->to(CSSPrimitiveValue::UnitType::kNumber)->value();
 }
 
-static CSSColorType DetermineColorType(CSSParserTokenRange& range) {
-  if (range.Peek().GetType() == kFunctionToken) {
-    switch (range.Peek().FunctionId()) {
+static CSSColorType DetermineColorType(CSSParserTokenStream& stream) {
+  if (stream.Peek().GetType() == kFunctionToken) {
+    switch (stream.Peek().FunctionId()) {
       case CSSValueID::kRgb:
       case CSSValueID::kRgba:
         return CSSColorType::kRGB;
@@ -87,7 +89,7 @@ static CSSColorType DetermineColorType(CSSParserTokenRange& range) {
       default:
         return CSSColorType::kInvalid;
     }
-  } else if (range.Peek().GetType() == kHashToken) {
+  } else if (stream.Peek().GetType() == kHashToken) {
     return CSSColorType::kRGB;
   }
   return CSSColorType::kInvalidOrNamedColor;
@@ -108,13 +110,10 @@ V8UnionCSSColorValueOrCSSStyleValue* CSSColorValue::parse(
     const ExecutionContext* execution_context,
     const String& css_text,
     ExceptionState& exception_state) {
-  CSSTokenizer tokenizer(css_text);
-  CSSParserTokenStream stream(tokenizer);
-  stream.ConsumeWhitespace();
-  auto range = stream.ConsumeUntilPeekedTypeIs<>();
+  CSSParserTokenStream stream(css_text);
   stream.ConsumeWhitespace();
 
-  const CSSColorType color_type = DetermineColorType(range);
+  const CSSColorType color_type = DetermineColorType(stream);
 
   // Validate it is not color function before parsing execution
   if (color_type == CSSColorType::kInvalid) {
@@ -124,7 +123,8 @@ V8UnionCSSColorValueOrCSSStyleValue* CSSColorValue::parse(
   }
 
   const CSSValue* parsed_value = css_parsing_utils::ConsumeColor(
-      range, *MakeGarbageCollected<CSSParserContext>(*execution_context));
+      stream, *MakeGarbageCollected<CSSParserContext>(*execution_context));
+  stream.ConsumeWhitespace();
 
   if (!parsed_value) {
     exception_state.ThrowDOMException(DOMExceptionCode::kSyntaxError,
@@ -139,7 +139,7 @@ V8UnionCSSColorValueOrCSSStyleValue* CSSColorValue::parse(
         return MakeGarbageCollected<V8UnionCSSColorValueOrCSSStyleValue>(
             CreateCSSRGBByNumbers(
                 result->Value().Red(), result->Value().Green(),
-                result->Value().Blue(), result->Value().Alpha()));
+                result->Value().Blue(), result->Value().AlphaAsInteger()));
       case CSSColorType::kHSL:
         return MakeGarbageCollected<V8UnionCSSColorValueOrCSSStyleValue>(
             MakeGarbageCollected<CSSHSL>(result->Value()));
@@ -151,21 +151,19 @@ V8UnionCSSColorValueOrCSSStyleValue* CSSColorValue::parse(
     }
   }
 
-  DCHECK(parsed_value->IsIdentifierValue());
-
-  const char* value_name =
-      getValueName(To<CSSIdentifierValue>(parsed_value)->GetValueID());
-  if (const NamedColor* named_color =
-          FindColor(value_name, static_cast<wtf_size_t>(strlen(value_name)))) {
-    Color color(named_color->argb_value);
+  const CSSValueID value_id =
+      To<CSSIdentifierValue>(parsed_value)->GetValueID();
+  std::string_view value_name = GetCSSValueName(value_id);
+  if (const NamedColor* named_color = FindColor(value_name)) {
+    Color color = Color::FromRGBA32(named_color->argb_value);
 
     return MakeGarbageCollected<V8UnionCSSColorValueOrCSSStyleValue>(
         CreateCSSRGBByNumbers(color.Red(), color.Green(), color.Blue(),
-                              color.Alpha()));
+                              color.AlphaAsInteger()));
   }
 
   return MakeGarbageCollected<V8UnionCSSColorValueOrCSSStyleValue>(
-      CSSKeywordValue::Create(css_text));
+      MakeGarbageCollected<CSSKeywordValue>(value_id));
 }
 
 }  // namespace blink

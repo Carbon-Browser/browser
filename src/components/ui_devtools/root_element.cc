@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@ namespace ui_devtools {
 RootElement::RootElement(UIElementDelegate* ui_element_delegate)
     : UIElement(UIElementType::ROOT, ui_element_delegate, nullptr) {}
 
-RootElement::~RootElement() {}
+RootElement::~RootElement() = default;
 
 void RootElement::GetBounds(gfx::Rect* bounds) const {
   NOTREACHED();
@@ -33,13 +33,11 @@ void RootElement::SetVisible(bool visible) {
 
 std::vector<std::string> RootElement::GetAttributes() const {
   NOTREACHED();
-  return {};
 }
 
 std::pair<gfx::NativeWindow, gfx::Rect>
 RootElement::GetNodeWindowAndScreenBounds() const {
   NOTREACHED();
-  return {};
 }
 
 }  // namespace ui_devtools

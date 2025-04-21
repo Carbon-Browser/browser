@@ -1,13 +1,13 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/device/media_transfer_protocol/mtp_device_manager.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "chromeos/ash/components/dbus/dbus_thread_manager.h"
 #include "dbus/bus.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
@@ -22,7 +22,7 @@ MtpDeviceManager* g_mtp_device_manager = nullptr;
 }  // namespace
 
 MtpDeviceManager::MtpDeviceManager()
-    : bus_(chromeos::DBusThreadManager::Get()->GetSystemBus()) {
+    : bus_(ash::DBusThreadManager::Get()->GetSystemBus()) {
   // Listen for future mtpd service owner changes, in case it is not
   // available right now. There is no guarantee that mtpd is running already.
   dbus::Bus::ServiceOwnerChangeCallback mtpd_owner_changed_callback =
@@ -319,7 +319,7 @@ void MtpDeviceManager::OnGetStorageInfo(
     // attachments, which should not be in |storage_info_map_|, or for
     // storage detachments, which do not add to |storage_info_map_|.
     // Return to avoid giving client phantom detach events.
-    NOTREACHED();
+    DUMP_WILL_BE_NOTREACHED();
     return;
   }
 
@@ -351,7 +351,6 @@ void MtpDeviceManager::OnOpenStorage(const std::string& handle) {
     std::move(open_storage_callbacks_.front()).Run(handle, false);
   } else {
     NOTREACHED();
-    std::move(open_storage_callbacks_.front()).Run(std::string(), true);
   }
   open_storage_callbacks_.pop();
 }
@@ -369,7 +368,6 @@ void MtpDeviceManager::OnCloseStorage() {
     std::move(close_storage_callbacks_.front().first).Run(false);
   } else {
     NOTREACHED();
-    std::move(close_storage_callbacks_.front().first).Run(true);
   }
   close_storage_callbacks_.pop();
 }

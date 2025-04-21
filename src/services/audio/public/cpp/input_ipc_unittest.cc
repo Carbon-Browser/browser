@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/task_environment.h"
 #include "media/base/audio_capturer_source.h"
 #include "media/mojo/mojom/audio_data_pipe.mojom.h"
@@ -51,11 +51,10 @@ class TestStreamFactory : public audio::FakeStreamFactory {
       const media::AudioParameters& params,
       uint32_t shared_memory_count,
       bool enable_agc,
-      base::ReadOnlySharedMemoryRegion key_press_count_buffer,
       media::mojom::AudioProcessingConfigPtr processing_config,
       CreateInputStreamCallback created_callback) override {
     if (should_fail_) {
-      std::move(created_callback).Run(nullptr, initially_muted_, absl::nullopt);
+      std::move(created_callback).Run(nullptr, initially_muted_, std::nullopt);
       return;
     }
 
@@ -71,8 +70,7 @@ class TestStreamFactory : public audio::FakeStreamFactory {
     base::SyncSocket socket1, socket2;
     base::SyncSocket::CreatePair(&socket1, &socket2);
     std::move(created_callback)
-        .Run({absl::in_place,
-              base::ReadOnlySharedMemoryRegion::Create(kShMemSize).region,
+        .Run({std::in_place, base::UnsafeSharedMemoryRegion::Create(kShMemSize),
               mojo::PlatformHandle(socket1.Take())},
              initially_muted_, base::UnguessableToken::Create());
   }
@@ -97,7 +95,7 @@ class MockDelegate : public media::AudioInputIPCDelegate {
   MockDelegate() = default;
   ~MockDelegate() override = default;
 
-  void OnStreamCreated(base::ReadOnlySharedMemoryRegion mem_handle,
+  void OnStreamCreated(base::UnsafeSharedMemoryRegion mem_handle,
                        base::SyncSocket::ScopedHandle socket_handle,
                        bool initially_muted) override {
     GotOnStreamCreated(initially_muted);
@@ -115,7 +113,7 @@ class InputIPCTest : public ::testing::Test {
   std::unique_ptr<audio::InputIPC> ipc;
   const media::AudioParameters audioParameters =
       media::AudioParameters(media::AudioParameters::AUDIO_PCM_LINEAR,
-                             media::CHANNEL_LAYOUT_STEREO,
+                             media::ChannelLayoutConfig::Stereo(),
                              16000,
                              1600);
 

@@ -1,6 +1,11 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "base/files/important_file_writer.h"
 
@@ -10,17 +15,18 @@
 
 #include <algorithm>
 #include <string>
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/check.h"
+#include "base/check_op.h"
 #include "base/critical_closure.h"
 #include "base/debug/alias.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/important_file_writer_cleaner.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
@@ -29,10 +35,8 @@
 #include "base/strings/string_util.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "base/threading/platform_thread.h"
 #include "base/threading/scoped_thread_priority.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/threading/thread.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -43,27 +47,81 @@ namespace base {
 namespace {
 
 constexpr auto kDefaultCommitInterval = Seconds(10);
+
 #if BUILDFLAG(IS_WIN)
 // This is how many times we will retry ReplaceFile on Windows.
 constexpr int kReplaceRetries = 5;
-// This is the result code recorded if ReplaceFile still fails.
-// It should stay constant even if we change kReplaceRetries.
+
+// This is the result code recorded to ImportantFile.FileReplaceRetryCount if
+// ReplaceFile still fails. It should stay constant even if we change
+// kReplaceRetries.
 constexpr int kReplaceRetryFailure = 10;
 static_assert(kReplaceRetryFailure > kReplaceRetries, "No overlap allowed");
+
 constexpr auto kReplacePauseInterval = Milliseconds(100);
+
+// Alternate representation of ReplaceFile results, recorded to
+// ImportantFile.FileReplaceResult.
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class ReplaceResult {
+  // ReplaceFile succeeded on the first try.
+  kSuccessWithoutRetry = 0,
+  // ReplaceFile succeeded after one or more retries.
+  kSuccessWithRetry = 1,
+  // ReplaceFile never succeeded, even after retries.
+  kFailure = 2,
+  kMaxValue = kFailure
+};
+
+void UmaHistogramRetryCountWithSuffix(std::string_view histogram_suffix,
+                                      int retry_count,
+                                      bool success) {
+  constexpr char kCountHistogramName[] = "ImportantFile.FileReplaceRetryCount2";
+  constexpr char kResultHistogramName[] = "ImportantFile.FileReplaceResult";
+  CHECK_LE(retry_count, kReplaceRetries);
+  auto result = success
+                    ? (retry_count > 0 ? ReplaceResult::kSuccessWithRetry
+                                       : ReplaceResult::kSuccessWithoutRetry)
+                    : ReplaceResult::kFailure;
+
+  // Log with the given suffix and the aggregated ".All" suffix.
+  if (histogram_suffix.empty()) {
+    UmaHistogramEnumeration(kResultHistogramName, result);
+  } else {
+    UmaHistogramEnumeration(
+        base::JoinString({kResultHistogramName, histogram_suffix}, "."),
+        result);
+  }
+  UmaHistogramEnumeration(base::JoinString({kResultHistogramName, "All"}, "."),
+                          result);
+  if (retry_count > 0) {
+    if (histogram_suffix.empty()) {
+      UmaHistogramExactLinear(kCountHistogramName, retry_count,
+                              kReplaceRetries + 1);
+    } else {
+      UmaHistogramExactLinear(
+          base::JoinString({kCountHistogramName, histogram_suffix}, "."),
+          retry_count, kReplaceRetries + 1);
+    }
+    UmaHistogramExactLinear(base::JoinString({kCountHistogramName, "All"}, "."),
+                            retry_count, kReplaceRetries + 1);
+  }
+}
 #endif
 
 void UmaHistogramTimesWithSuffix(const char* histogram_name,
-                                 StringPiece histogram_suffix,
+                                 std::string_view histogram_suffix,
                                  base::TimeDelta sample) {
   DCHECK(histogram_name);
-  std::string histogram_full_name(histogram_name);
-  if (!histogram_suffix.empty()) {
-    histogram_full_name.append(".");
-    histogram_full_name.append(histogram_suffix.data(),
-                               histogram_suffix.length());
+  // Log with the given suffix and the aggregated ".All" suffix.
+  if (histogram_suffix.empty()) {
+    UmaHistogramTimes(histogram_name, sample);
+  } else {
+    UmaHistogramTimes(base::JoinString({histogram_name, histogram_suffix}, "."),
+                      sample);
   }
-  UmaHistogramTimes(histogram_full_name, sample);
+  UmaHistogramTimes(base::JoinString({histogram_name, "All"}, "."), sample);
 }
 
 // Deletes the file named |tmp_file_path| (which may be open as |tmp_file|),
@@ -78,8 +136,9 @@ void DeleteTmpFileWithRetry(File tmp_file,
 #if BUILDFLAG(IS_WIN)
   // Mark the file for deletion when it is closed and then close it implicitly.
   if (tmp_file.IsValid()) {
-    if (tmp_file.DeleteOnClose(true))
+    if (tmp_file.DeleteOnClose(true)) {
       return;
+    }
     // The file was opened with exclusive r/w access, so failures are primarily
     // due to I/O errors or other phenomena out of the process's control. Go
     // ahead and close the file. The call to DeleteFile below will basically
@@ -96,8 +155,8 @@ void DeleteTmpFileWithRetry(File tmp_file,
   constexpr TimeDelta kDeleteFileRetryDelay = Milliseconds(250);
 
   if (!DeleteFile(tmp_file_path) && ++attempt < kMaxDeleteAttempts &&
-      SequencedTaskRunnerHandle::IsSet()) {
-    SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+      SequencedTaskRunner::HasCurrentDefault()) {
+    SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         BindOnce(&DeleteTmpFileWithRetry, base::File(), tmp_file_path, attempt),
         kDeleteFileRetryDelay);
@@ -107,13 +166,15 @@ void DeleteTmpFileWithRetry(File tmp_file,
 }  // namespace
 
 // static
-bool ImportantFileWriter::WriteFileAtomically(const FilePath& path,
-                                              StringPiece data,
-                                              StringPiece histogram_suffix) {
+bool ImportantFileWriter::WriteFileAtomically(
+    const FilePath& path,
+    std::string_view data,
+    std::string_view histogram_suffix) {
   // Calling the impl by way of the public WriteFileAtomically, so
   // |from_instance| is false.
   return WriteFileAtomicallyImpl(path, data, histogram_suffix,
-                                 /*from_instance=*/false);
+                                 /*from_instance=*/false,
+                                 BindRepeating(&ReplaceFile));
 }
 
 // static
@@ -122,35 +183,43 @@ void ImportantFileWriter::ProduceAndWriteStringToFileAtomically(
     BackgroundDataProducerCallback data_producer_for_background_sequence,
     OnceClosure before_write_callback,
     OnceCallback<void(bool success)> after_write_callback,
+    ReplaceFileCallback replace_file_callback,
     const std::string& histogram_suffix) {
   // Produce the actual data string on the background sequence.
-  std::string data;
-  if (!std::move(data_producer_for_background_sequence).Run(&data)) {
+  std::optional<std::string> data =
+      std::move(data_producer_for_background_sequence).Run();
+  if (!data) {
     DLOG(WARNING) << "Failed to serialize data to be saved in " << path.value();
     return;
   }
 
-  if (!before_write_callback.is_null())
+  if (!before_write_callback.is_null()) {
     std::move(before_write_callback).Run();
+  }
 
   // Calling the impl by way of the private
   // ProduceAndWriteStringToFileAtomically, which originated from an
   // ImportantFileWriter instance, so |from_instance| is true.
-  const bool result = WriteFileAtomicallyImpl(path, data, histogram_suffix,
-                                              /*from_instance=*/true);
+  const bool result = WriteFileAtomicallyImpl(path, *data, histogram_suffix,
+                                              /*from_instance=*/true,
+                                              std::move(replace_file_callback));
 
-  if (!after_write_callback.is_null())
+  if (!after_write_callback.is_null()) {
     std::move(after_write_callback).Run(result);
+  }
 }
 
 // static
-bool ImportantFileWriter::WriteFileAtomicallyImpl(const FilePath& path,
-                                                  StringPiece data,
-                                                  StringPiece histogram_suffix,
-                                                  bool from_instance) {
+bool ImportantFileWriter::WriteFileAtomicallyImpl(
+    const FilePath& path,
+    std::string_view data,
+    std::string_view histogram_suffix,
+    bool from_instance,
+    ReplaceFileCallback replace_file_callback) {
   const TimeTicks write_start = TimeTicks::Now();
-  if (!from_instance)
+  if (!from_instance) {
     ImportantFileWriterCleaner::AddDirectory(path.DirName());
+  }
 
 #if BUILDFLAG(IS_WIN) && DCHECK_IS_ON()
   // In https://crbug.com/920174, we have cases where CreateTemporaryFileInDir
@@ -226,7 +295,8 @@ bool ImportantFileWriter::WriteFileAtomicallyImpl(const FilePath& path,
   {
     ScopedBoostPriority scoped_boost_priority(ThreadType::kDisplayCritical);
     tmp_file.Close();
-    result = ReplaceFile(tmp_file_path, path, &replace_file_error);
+    result =
+        replace_file_callback.Run(tmp_file_path, path, &replace_file_error);
     // Save and restore the last error code so that it's not polluted by the
     // thread priority change.
     last_error = ::GetLastError();
@@ -235,20 +305,26 @@ bool ImportantFileWriter::WriteFileAtomicallyImpl(const FilePath& path,
       // gets hit on a regular basis on some systems
       // (https://crbug.com/1099284), so we retry a few times before giving up.
       PlatformThread::Sleep(kReplacePauseInterval);
-      result = ReplaceFile(tmp_file_path, path, &replace_file_error);
+      result =
+          replace_file_callback.Run(tmp_file_path, path, &replace_file_error);
       last_error = ::GetLastError();
     }
   }
 
   // Log how many times we had to retry the ReplaceFile operation before it
-  // succeeded. If we never succeeded then return a special value.
-  if (!result)
+  // succeeded.
+  UmaHistogramRetryCountWithSuffix(histogram_suffix, retry_count, result);
+
+  // Log to an unsuffixed histogram as well. If we never succeeded then return a
+  // special value.
+  if (!result) {
     retry_count = kReplaceRetryFailure;
+  }
   UmaHistogramExactLinear("ImportantFile.FileReplaceRetryCount", retry_count,
                           kReplaceRetryFailure);
 #else
   tmp_file.Close();
-  result = ReplaceFile(tmp_file_path, path, &replace_file_error);
+  result = replace_file_callback.Run(tmp_file_path, path, &replace_file_error);
 #endif  // BUILDFLAG(IS_WIN)
 
   if (!result) {
@@ -272,7 +348,7 @@ bool ImportantFileWriter::WriteFileAtomicallyImpl(const FilePath& path,
 ImportantFileWriter::ImportantFileWriter(
     const FilePath& path,
     scoped_refptr<SequencedTaskRunner> task_runner,
-    StringPiece histogram_suffix)
+    std::string_view histogram_suffix)
     : ImportantFileWriter(path,
                           std::move(task_runner),
                           kDefaultCommitInterval,
@@ -282,11 +358,12 @@ ImportantFileWriter::ImportantFileWriter(
     const FilePath& path,
     scoped_refptr<SequencedTaskRunner> task_runner,
     TimeDelta interval,
-    StringPiece histogram_suffix)
+    std::string_view histogram_suffix)
     : path_(path),
       task_runner_(std::move(task_runner)),
       commit_interval_(interval),
-      histogram_suffix_(histogram_suffix) {
+      histogram_suffix_(histogram_suffix),
+      replace_file_callback_(BindRepeating(&ReplaceFile)) {
   DCHECK(task_runner_);
   ImportantFileWriterCleaner::AddDirectory(path.DirName());
 }
@@ -304,41 +381,38 @@ bool ImportantFileWriter::HasPendingWrite() const {
   return timer().IsRunning();
 }
 
-void ImportantFileWriter::WriteNow(std::unique_ptr<std::string> data) {
+void ImportantFileWriter::WriteNow(std::string data) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (!IsValueInRangeForNumericType<int32_t>(data->length())) {
-    NOTREACHED();
-    return;
-  }
+  CHECK(IsValueInRangeForNumericType<int32_t>(data.length()));
 
   WriteNowWithBackgroundDataProducer(base::BindOnce(
-      [](std::string data, std::string* output) {
-        *output = std::move(data);
-        return true;
-      },
-      std::move(*data)));
+      [](std::string data) { return std::make_optional(std::move(data)); },
+      std::move(data)));
+}
+
+void ImportantFileWriter::SetReplaceFileCallbackForTesting(
+    ReplaceFileCallback callback) {
+  replace_file_callback_ = std::move(callback);
 }
 
 void ImportantFileWriter::WriteNowWithBackgroundDataProducer(
     BackgroundDataProducerCallback background_data_producer) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  auto split_task = SplitOnceCallback(
-      BindOnce(&ProduceAndWriteStringToFileAtomically, path_,
-               std::move(background_data_producer),
-               std::move(before_next_write_callback_),
-               std::move(after_next_write_callback_), histogram_suffix_));
+  auto split_task =
+      SplitOnceCallback(BindOnce(&ProduceAndWriteStringToFileAtomically, path_,
+                                 std::move(background_data_producer),
+                                 std::move(before_next_write_callback_),
+                                 std::move(after_next_write_callback_),
+                                 replace_file_callback_, histogram_suffix_));
 
   if (!task_runner_->PostTask(
           FROM_HERE, MakeCriticalClosure("ImportantFileWriter::WriteNow",
                                          std::move(split_task.first),
                                          /*is_immediate=*/true))) {
     // Posting the task to background message loop is not expected
-    // to fail, but if it does, avoid losing data and just hit the disk
-    // on the current thread.
+    // to fail.
     NOTREACHED();
-
-    std::move(split_task.second).Run();
   }
   ClearPendingWrite();
 }
@@ -378,27 +452,19 @@ void ImportantFileWriter::DoScheduledWrite() {
   BackgroundDataProducerCallback data_producer_for_background_sequence;
 
   if (absl::holds_alternative<DataSerializer*>(serializer_)) {
-    std::string data;
-
-    // Pre-allocate previously needed memory plus 1kB for potential growth of
-    // data. Reduces the number of memory allocations to grow |data| step by
-    // step from tiny to very large.
-    data.reserve(previous_data_size_ + 1024);
-
-    if (!absl::get<DataSerializer*>(serializer_)->SerializeData(&data)) {
+    std::optional<std::string> data;
+    data = absl::get<DataSerializer*>(serializer_)->SerializeData();
+    if (!data) {
       DLOG(WARNING) << "Failed to serialize data to be saved in "
                     << path_.value();
       ClearPendingWrite();
       return;
     }
 
-    previous_data_size_ = data.size();
+    previous_data_size_ = data->size();
     data_producer_for_background_sequence = base::BindOnce(
-        [](std::string data, std::string* result) {
-          *result = std::move(data);
-          return true;
-        },
-        std::move(data));
+        [](std::string data) { return std::make_optional(std::move(data)); },
+        std::move(data).value());
   } else {
     data_producer_for_background_sequence =
         absl::get<BackgroundDataSerializer*>(serializer_)

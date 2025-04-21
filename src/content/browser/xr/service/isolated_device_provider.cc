@@ -1,10 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/xr/service/isolated_device_provider.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "content/browser/xr/service/xr_device_service.h"
 #include "content/browser/xr/xr_utils.h"
 #include "content/public/browser/xr_integration_client.h"
@@ -16,7 +16,8 @@ constexpr int kMaxRetries = 3;
 namespace content {
 
 void IsolatedVRDeviceProvider::Initialize(
-    device::VRDeviceProviderClient* client) {
+    device::VRDeviceProviderClient* client,
+    content::WebContents* initializing_web_contents) {
   client_ = client;
   SetupDeviceProvider();
 }
@@ -27,35 +28,24 @@ bool IsolatedVRDeviceProvider::Initialized() {
 
 void IsolatedVRDeviceProvider::OnDeviceAdded(
     mojo::PendingRemote<device::mojom::XRRuntime> device,
-    mojo::PendingRemote<device::mojom::XRCompositorHost> compositor_host,
     device::mojom::XRDeviceDataPtr device_data,
     device::mojom::XRDeviceId device_id) {
   client_->AddRuntime(device_id, std::move(device_data), std::move(device));
-
-  auto* integration_client = GetXrIntegrationClient();
-  if (!integration_client)
-    return;
-
-  // It's perfectly valid to insert nullptr, and doing so avoids the extra move
-  // if we were to do an assignment/check to avoid inserting it.
-  ui_host_map_.insert(
-      std::make_pair(device_id, integration_client->CreateVrUiHost(
-                                    device_id, std::move(compositor_host))));
+  active_device_ids_.insert(device_id);
 }
 
 void IsolatedVRDeviceProvider::OnDeviceRemoved(device::mojom::XRDeviceId id) {
   client_->RemoveRuntime(id);
-  ui_host_map_.erase(id);
+  active_device_ids_.erase(id);
 }
 
 void IsolatedVRDeviceProvider::OnServerError() {
   // An error occurred - any devices we have added are now disconnected and
   // should be removed.
-  for (auto& entry : ui_host_map_) {
-    auto id = entry.first;
+  for (auto& id : active_device_ids_) {
     client_->RemoveRuntime(id);
   }
-  ui_host_map_.clear();
+  active_device_ids_.clear();
 
   // At this point, XRRuntimeManagerImpl may be blocked waiting for us to return
   // that we've enumerated all runtimes/devices.  If we lost the connection to

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,12 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/observer_list.h"
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/proxy_resolution/proxy_config_with_annotation.h"
 
 namespace net {
@@ -101,7 +100,7 @@ class PollingProxyConfigService::Core
 
   void PollAsync(GetConfigFunction func) {
     ProxyConfigWithAnnotation config;
-    func(traffic_annotation_, &config);
+    func.Run(traffic_annotation_, &config);
 
     base::AutoLock lock(lock_);
     if (origin_task_runner_.get()) {
@@ -115,8 +114,9 @@ class PollingProxyConfigService::Core
     DCHECK(poll_task_outstanding_);
     poll_task_outstanding_ = false;
 
-    if (!origin_task_runner_.get())
+    if (!origin_task_runner_.get()) {
       return;  // Was orphaned (parent has already been destroyed).
+    }
 
     DCHECK(origin_task_runner_->BelongsToCurrentThread());
 
@@ -124,12 +124,14 @@ class PollingProxyConfigService::Core
       // If the configuration has changed, notify the observers.
       has_config_ = true;
       last_config_ = config;
-      for (auto& observer : observers_)
+      for (auto& observer : observers_) {
         observer.OnProxyConfigChanged(config, ProxyConfigService::CONFIG_VALID);
+      }
     }
 
-    if (poll_task_queued_)
+    if (poll_task_queued_) {
       CheckForChangesNow();
+    }
   }
 
   void LazyInitializeOriginLoop() {
@@ -139,7 +141,7 @@ class PollingProxyConfigService::Core
     //               can't cache the main thread for the purpose of DCHECKs
     //               until the first call is made.
     if (!have_initialized_origin_runner_) {
-      origin_task_runner_ = base::ThreadTaskRunnerHandle::Get();
+      origin_task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
       have_initialized_origin_runner_ = true;
     }
   }
@@ -177,6 +179,10 @@ PollingProxyConfigService::GetLatestProxyConfig(
 
 void PollingProxyConfigService::OnLazyPoll() {
   core_->OnLazyPoll();
+}
+
+bool PollingProxyConfigService::UsesPolling() {
+  return true;
 }
 
 PollingProxyConfigService::PollingProxyConfigService(

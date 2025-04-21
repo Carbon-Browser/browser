@@ -34,7 +34,7 @@ template <typename ModularInt>
 void FillWithEveryPower(const ModularInt& base, unsigned int n,
                         std::vector<ModularInt>* row,
                         const typename ModularInt::Params* params) {
-  for (int i = 0; i < n; i++) {
+  for (unsigned int i = 0; i < n; i++) {
     (*row)[i].AddInPlace(base.ModExp(i, params), params);
   }
 }
@@ -169,7 +169,7 @@ struct NttParameters {
   ~NttParameters() = default;
 
   int number_coeffs;
-  absl::optional<ModularInt> n_inv_ptr;
+  std::optional<ModularInt> n_inv_ptr;
   std::vector<ModularInt> psis_bitrev;
   std::vector<ModularInt> psis_inv_bitrev;
   std::vector<unsigned int> bitrevs;
@@ -183,7 +183,7 @@ rlwe::StatusOr<NttParameters<ModularInt>> InitializeNttParameters(
   // Abort if log_n is non-positive.
   if (log_n <= 0) {
     return absl::InvalidArgumentError("log_n must be positive");
-  } else if (log_n > kMaxLogNumCoeffs) {
+  } else if (static_cast<Uint64>(log_n) > kMaxLogNumCoeffs) {
     return absl::InvalidArgumentError(absl::StrCat(
         "log_n, ", log_n, ", must be less than ", kMaxLogNumCoeffs, "."));
   }

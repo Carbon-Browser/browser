@@ -1,10 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/net/network_diagnostics/has_secure_wifi_connection_routine.h"
 
-#include "chromeos/services/network_config/public/cpp/cros_network_config_test_helper.h"
+#include "chromeos/ash/services/network_config/public/cpp/cros_network_config_test_helper.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/cros_system_api/dbus/shill/dbus-constants.h"
@@ -14,11 +14,10 @@ namespace network_diagnostics {
 
 namespace {
 
-// TODO(https://crbug.com/1164001): remove when migrated to namespace ash.
 namespace mojom = ::chromeos::network_diagnostics::mojom;
 
-const char* kInsecureSecurity = shill::kSecurityWep;
-const char* kSecureSecurity = shill::kSecurityPsk;
+const char* kInsecureSecurity = shill::kSecurityClassWep;
+const char* kSecureSecurity = shill::kSecurityClassPsk;
 
 }  // namespace
 
@@ -26,7 +25,8 @@ class HasSecureWiFiConnectionRoutineTest : public ::testing::Test {
  public:
   HasSecureWiFiConnectionRoutineTest() {
     has_secure_wifi_connection_routine_ =
-        std::make_unique<HasSecureWiFiConnectionRoutine>();
+        std::make_unique<HasSecureWiFiConnectionRoutine>(
+            mojom::RoutineCallSource::kDiagnosticsUI);
   }
 
   HasSecureWiFiConnectionRoutineTest(
@@ -56,7 +56,7 @@ class HasSecureWiFiConnectionRoutineTest : public ::testing::Test {
     base::RunLoop().RunUntilIdle();
   }
 
-  chromeos::NetworkStateTestHelper& network_state_helper() {
+  NetworkStateTestHelper& network_state_helper() {
     return cros_network_config_test_helper_.network_state_helper();
   }
   HasSecureWiFiConnectionRoutine* has_secure_wifi_connection_routine() {
@@ -107,7 +107,7 @@ TEST_F(HasSecureWiFiConnectionRoutineTest, TestInsecureWiFiConnection) {
 }
 
 TEST_F(HasSecureWiFiConnectionRoutineTest, TestWiFiNotConnected) {
-  SetUpWiFi(shill::kStateOffline, kSecureSecurity);
+  SetUpWiFi(shill::kStateIdle, kSecureSecurity);
   std::vector<mojom::HasSecureWiFiConnectionProblem> expected_problems = {};
   has_secure_wifi_connection_routine()->RunRoutine(base::BindOnce(
       &HasSecureWiFiConnectionRoutineTest::CompareResult, weak_ptr(),

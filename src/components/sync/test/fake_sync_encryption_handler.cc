@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include "base/base64.h"
 #include "base/logging.h"
-#include "components/sync/base/model_type.h"
+#include "components/sync/base/data_type.h"
 #include "components/sync/engine/nigori/nigori.h"
 #include "components/sync/protocol/nigori_specifics.pb.h"
 
@@ -18,7 +18,7 @@ FakeSyncEncryptionHandler::~FakeSyncEncryptionHandler() = default;
 
 void FakeSyncEncryptionHandler::NotifyInitialStateToObservers() {}
 
-ModelTypeSet FakeSyncEncryptionHandler::GetEncryptedTypes() {
+DataTypeSet FakeSyncEncryptionHandler::GetEncryptedTypes() {
   return AlwaysEncryptedUserTypes();
 }
 

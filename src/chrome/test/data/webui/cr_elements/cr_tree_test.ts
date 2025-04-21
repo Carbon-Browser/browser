@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 import 'chrome://resources/cr_elements/cr_tree/cr_tree_item.js';
 import 'chrome://resources/cr_elements/cr_tree/cr_tree.js';
 
-import {CrTreeElement} from 'chrome://resources/cr_elements/cr_tree/cr_tree.js';
-import {CrTreeItemElement, SELECTED_ATTR} from 'chrome://resources/cr_elements/cr_tree/cr_tree_item.js';
+import type {CrTreeElement} from 'chrome://resources/cr_elements/cr_tree/cr_tree.js';
+import type {CrTreeItemElement} from 'chrome://resources/cr_elements/cr_tree/cr_tree_item.js';
+import { SELECTED_ATTR} from 'chrome://resources/cr_elements/cr_tree/cr_tree_item.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {eventToPromise} from 'chrome://webui-test/test_util.js';
 
@@ -21,7 +22,7 @@ suite('cr-tree', function() {
   let baz: CrTreeItemElement;
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     tree = document.createElement('cr-tree');
     document.body.appendChild(tree);
 
@@ -135,5 +136,28 @@ suite('cr-tree', function() {
     assertTrue(bar.hasAttribute(SELECTED_ATTR));
     assertFalse(bar.hasChildren);
     assertEquals(0, bar.items.length);
+  });
+
+  test('expand on icon click', async () => {
+    tree.selectedItem = root;
+    assertFalse(root.expanded);
+    let whenExpand = eventToPromise('cr-tree-item-expand', tree);
+    const expand = root.shadowRoot!.querySelector<HTMLElement>('.expand-icon');
+    assertTrue(!!expand);
+    expand.click();
+    await whenExpand;
+
+    assertTrue(root.expanded);
+    assertFalse(bar.expanded);
+    whenExpand = eventToPromise('cr-tree-item-expand', tree);
+    const barExpand =
+        bar.shadowRoot!.querySelector<HTMLElement>('.expand-icon');
+    assertTrue(!!barExpand);
+    barExpand.click();
+
+    assertTrue(root.expanded);
+    assertTrue(bar.expanded);
+    // Selection isn't impacted by clicking the expand icon.
+    assertEquals(root, tree.selectedItem);
   });
 });

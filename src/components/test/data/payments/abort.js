@@ -1,27 +1,25 @@
 /*
- * Copyright 2016 The Chromium Authors. All rights reserved.
+ * Copyright 2016 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
-/* global PaymentRequest:false */
-
-var request;
+let request;
 
 /**
  * Launches the PaymentRequest UI with basic-card request.
  */
- function buy() { // eslint-disable-line no-unused-vars
+function buy() {
   buyWithMethods([{
       supportedMethods: 'basic-card',
       data: {supportedNetworks: ['visa']}}]);
- }
+}
 
 /**
  * Launches the PaymentRequest UI.
  * @param {Array<Object>} methodData An array of payment method objects.
  */
-function buyWithMethods(methodData) { // eslint-disable-line no-unused-vars
+function buyWithMethods(methodData) {
   try {
     request = new PaymentRequest(
         methodData,
@@ -37,7 +35,7 @@ function buyWithMethods(methodData) { // eslint-disable-line no-unused-vars
 /**
  * Aborts the PaymentRequest UI.
  */
-function abort() { // eslint-disable-line no-unused-vars
+function abort() {
   try {
     request.abort()
         .then(function() {

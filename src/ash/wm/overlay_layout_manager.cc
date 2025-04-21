@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,7 +34,8 @@ void OverlayLayoutManager::OnDisplayMetricsChanged(
   for (aura::Window* child : overlay_container_->children()) {
     WindowState* window_state = WindowState::Get(child);
     if (window_state->IsFullscreen()) {
-      const WMEvent event(WM_EVENT_WORKAREA_BOUNDS_CHANGED);
+      const DisplayMetricsChangedWMEvent event(
+          display::DisplayObserver::DISPLAY_METRIC_WORK_AREA);
       window_state->OnWMEvent(&event);
     }
   }

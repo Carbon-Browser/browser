@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "ui/events/ozone/evdev/input_controller_evdev.h"
 
 namespace base {
 class Thread;
@@ -37,7 +38,8 @@ class EventThreadEvdev {
   // must be synchronized accordingly.
   void Start(std::unique_ptr<DeviceEventDispatcherEvdev> dispatcher,
              CursorDelegateEvdev* cursor,
-             EventThreadStartCallback callback);
+             EventThreadStartCallback callback,
+             InputControllerEvdev* input_controller);
 
  private:
   std::unique_ptr<base::Thread> thread_;

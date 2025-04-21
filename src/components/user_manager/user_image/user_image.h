@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,6 +26,21 @@ class USER_MANAGER_EXPORT UserImage {
     FORMAT_JPEG,
     FORMAT_PNG,
     FORMAT_UNKNOWN,
+    // Useful when the image is external and animated.
+    FORMAT_WEBP,
+  };
+
+  // TODO(jasontt): Explore adding a new value for image taken from camera.
+  // These special values are used instead of actual default image indices.
+  struct Type {
+    static inline constexpr int kInvalid{-3};
+
+    // Returned as |image_index| when user profile image is used as user image.
+    static inline constexpr int kProfile{-2};
+
+    // Returned as |image_index| when user-selected file or photo is used as
+    // user image.
+    static inline constexpr int kExternal{-1};
   };
 
   // Encodes the given bitmap to bytes representation in |image_format| for
@@ -40,6 +55,9 @@ class USER_MANAGER_EXPORT UserImage {
   static std::unique_ptr<UserImage> CreateAndEncode(
       const gfx::ImageSkia& image,
       ImageFormat image_format);
+
+  // Returns a stub image.
+  static std::unique_ptr<UserImage> CreateStub();
 
   // Choose the image format suitable for the given bitmap. Returns
   // FORMAT_PNG if the bitmap contains transparent/translucent

@@ -1,8 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/installer/util/l10n_string_util.h"
+
+#include <string>
 
 #include "build/branding_buildflags.h"
 #include "chrome/install_static/install_modes.h"
@@ -34,6 +36,23 @@ TEST(GetLocalizedStringTest, DistinctStrings) {
           << the_string << " is found in more than one install mode.";
     }
   }
+}
+
+TEST(GetLocalizedStringFTest, ElevationServiceDescription) {
+  constexpr std::wstring_view placeholder = L"$1";
+  const std::wstring replacement = L"foobar";
+
+  std::wstring string_with_placeholder =
+      GetLocalizedString(IDS_ELEVATION_SERVICE_DESCRIPTION_BASE);
+  for (std::wstring::size_type n = 0;
+       (n = string_with_placeholder.find(placeholder, n)) != std::wstring::npos;
+       n += replacement.size()) {
+    string_with_placeholder.replace(n, placeholder.size(), replacement);
+  }
+
+  ASSERT_EQ(GetLocalizedStringF(IDS_ELEVATION_SERVICE_DESCRIPTION_BASE,
+                                {replacement}),
+            string_with_placeholder);
 }
 
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)

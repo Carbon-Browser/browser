@@ -1,10 +1,9 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/webcodecs/reclaimable_codec.h"
 
-#include "base/feature_list.h"
 #include "base/location.h"
 #include "base/time/default_tick_clock.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
@@ -12,16 +11,9 @@
 #include "third_party/blink/renderer/modules/webcodecs/codec_pressure_manager.h"
 #include "third_party/blink/renderer/modules/webcodecs/codec_pressure_manager_provider.h"
 #include "third_party/blink/renderer/platform/heap/persistent.h"
-#include "third_party/blink/renderer/platform/scheduler/public/thread.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
-
-const base::Feature kReclaimInactiveWebCodecs{"ReclaimInactiveWebCodecs",
-                                              base::FEATURE_ENABLED_BY_DEFAULT};
-
-const base::Feature kOnlyReclaimBackgroundWebCodecs{
-    "OnlyReclaimBackgroundWebCodecs", base::FEATURE_ENABLED_BY_DEFAULT};
 
 constexpr base::TimeDelta ReclaimableCodec::kInactivityReclamationThreshold;
 
@@ -31,20 +23,15 @@ ReclaimableCodec::ReclaimableCodec(CodecType type, ExecutionContext* context)
       tick_clock_(base::DefaultTickClock::GetInstance()),
       inactivity_threshold_(kInactivityReclamationThreshold),
       last_activity_(tick_clock_->NowTicks()),
-      activity_timer_(Thread::Current()->GetTaskRunner(),
+      activity_timer_(context->GetTaskRunner(TaskType::kInternalMedia),
                       this,
                       &ReclaimableCodec::OnActivityTimerFired) {
   DCHECK(context);
-  if (base::FeatureList::IsEnabled(kOnlyReclaimBackgroundWebCodecs)) {
-    // Do this last, it will immediately re-enter via OnLifecycleStateChanged().
-    observer_handle_ = context->GetScheduler()->AddLifecycleObserver(
-        FrameOrWorkerScheduler::ObserverType::kWorkerScheduler,
-        WTF::BindRepeating(&ReclaimableCodec::OnLifecycleStateChanged,
-                           WrapWeakPersistent(this)));
-  } else {
-    // Pretend we're always in the background to _always_ reclaim.
-    is_backgrounded_ = true;
-  }
+  // Do this last, it will immediately re-enter via OnLifecycleStateChanged().
+  observer_handle_ = context->GetScheduler()->AddLifecycleObserver(
+      FrameOrWorkerScheduler::ObserverType::kWorkerScheduler,
+      WTF::BindRepeating(&ReclaimableCodec::OnLifecycleStateChanged,
+                         WrapWeakPersistent(this)));
 }
 
 void ReclaimableCodec::Trace(Visitor* visitor) const {
@@ -174,10 +161,8 @@ void ReclaimableCodec::StartIdleReclamationTimer() {
   if (activity_timer_.IsActive())
     return;
 
-  if (base::FeatureList::IsEnabled(kReclaimInactiveWebCodecs)) {
-    DVLOG(5) << __func__ << " Starting timer.";
-    activity_timer_.StartRepeating(inactivity_threshold_ / 2, FROM_HERE);
-  }
+  DVLOG(5) << __func__ << " Starting timer.";
+  activity_timer_.StartRepeating(inactivity_threshold_ / 2, FROM_HERE);
 }
 
 void ReclaimableCodec::StopIdleReclamationTimer() {
@@ -187,7 +172,6 @@ void ReclaimableCodec::StopIdleReclamationTimer() {
 }
 
 void ReclaimableCodec::OnActivityTimerFired(TimerBase*) {
-  DCHECK(base::FeatureList::IsEnabled(kReclaimInactiveWebCodecs));
   DCHECK(AreReclamationPreconditionsMet());
 
   auto time_inactive = tick_clock_->NowTicks() - last_activity_;

@@ -1,11 +1,16 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "chromeos/components/onc/onc_signature.h"
 
+#include "base/memory/raw_ptr_exclusion.h"
 #include "components/onc/onc_constants.h"
-
 using base::Value;
 
 namespace chromeos {
@@ -160,6 +165,7 @@ const OncFieldSignature openvpn_fields[] = {
 
 const OncFieldSignature wireguard_fields[] = {
     {::onc::kRecommended, &kRecommendedSignature},
+    {::onc::wireguard::kIPAddresses, &kStringListSignature},
     {::onc::wireguard::kPrivateKey, &kStringSignature},
     {::onc::wireguard::kPublicKey, &kStringSignature},
     {::onc::wireguard::kPeers, &kWireGuardPeerListSignature},
@@ -180,6 +186,8 @@ const OncFieldSignature third_party_vpn_fields[] = {
 
 const OncFieldSignature arc_vpn_fields[] = {
     {::onc::kRecommended, &kRecommendedSignature},
+    // Deprecated. Keeping the signature for ONC backward compatibility. See
+    // b/185202698 for details.
     {::onc::arc_vpn::kTunnelChrome, &kStringSignature},
     {nullptr}};
 
@@ -225,8 +233,10 @@ const OncFieldSignature ipconfig_fields[] = {
     {::onc::ipconfig::kSearchDomains, &kStringListSignature},
     {::onc::ipconfig::kIncludedRoutes, &kStringListSignature},
     {::onc::ipconfig::kExcludedRoutes, &kStringListSignature},
-    {::onc::ipconfig::kType, &kStringSignature},
+    {::onc::ipconfig::kType, &kStringSignature,
+     []() { return base::Value(::onc::ipconfig::kIPv4); }},
     {::onc::ipconfig::kWebProxyAutoDiscoveryUrl, &kStringSignature},
+    {::onc::ipconfig::kMTU, &kIntegerSignature},
     {nullptr}};
 
 const OncFieldSignature proxy_location_fields[] = {
@@ -253,6 +263,8 @@ const OncFieldSignature wifi_fields[] = {
     {::onc::kRecommended, &kRecommendedSignature},
     {::onc::wifi::kAllowGatewayARPPolling, &kBoolSignature},
     {::onc::wifi::kAutoConnect, &kBoolSignature},
+    {::onc::wifi::kBSSIDAllowlist, &kStringListSignature},
+    {::onc::wifi::kBSSIDRequested, &kStringSignature},
     {::onc::wifi::kEAP, &kEAPSignature},
     {::onc::wifi::kHexSSID, &kStringSignature},
     {::onc::wifi::kHiddenSSID, &kBoolSignature},
@@ -267,6 +279,8 @@ const OncFieldSignature wifi_with_state_fields[] = {
     {::onc::wifi::kFrequencyList, &kIntegerListSignature},
     {::onc::wifi::kSignalStrength, &kIntegerSignature},
     {::onc::wifi::kSignalStrengthRssi, &kIntegerSignature},
+    {::onc::wifi::kPasspointId, &kStringSignature},
+    {::onc::wifi::kPasspointMatchType, &kStringSignature},
     {nullptr}};
 
 const OncFieldSignature cellular_payment_portal_fields[] = {
@@ -282,6 +296,7 @@ const OncFieldSignature cellular_provider_fields[] = {
     {nullptr}};
 
 const OncFieldSignature cellular_apn_fields[] = {
+    {::onc::kRecommended, &kRecommendedSignature},
     {::onc::cellular_apn::kAccessPointName, &kStringSignature},
     {::onc::cellular_apn::kName, &kStringSignature},
     {::onc::cellular_apn::kUsername, &kStringSignature},
@@ -290,6 +305,10 @@ const OncFieldSignature cellular_apn_fields[] = {
     {::onc::cellular_apn::kLocalizedName, &kStringSignature},
     {::onc::cellular_apn::kLanguage, &kStringSignature},
     {::onc::cellular_apn::kAttach, &kStringSignature},
+    {::onc::cellular_apn::kId, &kStringSignature},
+    {::onc::cellular_apn::kState, &kStringSignature},
+    {::onc::cellular_apn::kIpType, &kStringSignature},
+    {::onc::cellular_apn::kApnTypes, &kStringListSignature},
     {nullptr}};
 
 const OncFieldSignature cellular_found_network_fields[] = {
@@ -311,9 +330,12 @@ const OncFieldSignature cellular_fields[] = {
     {::onc::cellular::kAllowRoaming, &kBoolSignature},
     {::onc::cellular::kAPN, &kCellularApnSignature},
     {::onc::cellular::kAPNList, &kCellularApnListSignature},
+    {::onc::cellular::kAdminAssignedAPNIds, &kStringListSignature},
     {::onc::cellular::kAutoConnect, &kBoolSignature},
+    {::onc::cellular::kCustomAPNList, &kCellularApnListSignature},
     {::onc::cellular::kICCID, &kStringSignature},
     {::onc::cellular::kSMDPAddress, &kStringSignature},
+    {::onc::cellular::kSMDSAddress, &kStringSignature},
     {nullptr}};
 
 const OncFieldSignature cellular_with_state_fields[] = {
@@ -328,6 +350,8 @@ const OncFieldSignature cellular_with_state_fields[] = {
     {::onc::cellular::kEID, &kStringSignature},
     {::onc::cellular::kIMEI, &kStringSignature},
     {::onc::cellular::kIMSI, &kStringSignature},
+    {::onc::cellular::kLastConnectedAttachApnProperty, &kCellularApnSignature},
+    {::onc::cellular::kLastConnectedDefaultApnProperty, &kCellularApnSignature},
     {::onc::cellular::kLastGoodAPN, &kCellularApnSignature},
     {::onc::cellular::kManufacturer, &kStringSignature},
     {::onc::cellular::kMDN, &kStringSignature},
@@ -347,6 +371,7 @@ const OncFieldSignature cellular_with_state_fields[] = {
 
 const OncFieldSignature network_configuration_fields[] = {
     {::onc::network_config::kCellular, &kCellularSignature},
+    {::onc::network_config::kCheckCaptivePortal, &kStringSignature},
     {::onc::network_config::kEthernet, &kEthernetSignature},
     {::onc::network_config::kGUID, &kStringSignature},
     {::onc::network_config::kIPAddressConfigType, &kStringSignature,
@@ -382,7 +407,10 @@ const OncFieldSignature network_with_state_fields[] = {
     {nullptr}};
 
 const OncFieldSignature global_network_configuration_fields[] = {
-    {::onc::global_network_config::kAllowCellularSimLock, &kBoolSignature},
+    {::onc::global_network_config::kAllowCellularSimLock, &kBoolSignature,
+     []() { return base::Value(true); }},
+    {::onc::global_network_config::kAllowCellularHotspot, &kBoolSignature,
+     []() { return base::Value(true); }},
     {::onc::global_network_config::kAllowOnlyPolicyCellularNetworks,
      &kBoolSignature},
     {::onc::global_network_config::kAllowOnlyPolicyNetworksToAutoconnect,
@@ -391,10 +419,24 @@ const OncFieldSignature global_network_configuration_fields[] = {
      &kBoolSignature},
     {::onc::global_network_config::kAllowOnlyPolicyWiFiToConnectIfAvailable,
      &kBoolSignature},
+    {::onc::global_network_config::kAllowTextMessages, &kStringSignature},
     {/* Deprecated */ ::onc::global_network_config::kBlacklistedHexSSIDs,
      &kStringListSignature},
     {::onc::global_network_config::kBlockedHexSSIDs, &kStringListSignature},
     {::onc::global_network_config::kDisableNetworkTypes, &kStringListSignature},
+    {::onc::global_network_config::kRecommendedValuesAreEphemeral,
+     &kBoolSignature},
+    {::onc::global_network_config::
+         kUserCreatedNetworkConfigurationsAreEphemeral,
+     &kBoolSignature},
+    {::onc::global_network_config::kAllowAPNModification, &kBoolSignature,
+     []() { return base::Value(true); }},
+    {::onc::global_network_config::kPSIMAdminAssignedAPNIds,
+     &kStringListSignature},
+    {::onc::global_network_config::kPSIMAdminAssignedAPNs,
+     &kCellularApnListSignature},
+    {::onc::global_network_config::kDisconnectWiFiOnEthernet,
+     &kStringSignature},
     {nullptr}};
 
 const OncFieldSignature certificate_fields[] = {
@@ -418,6 +460,7 @@ const OncFieldSignature toplevel_configuration_fields[] = {
      &kNetworkConfigurationListSignature},
     {::onc::toplevel_config::kGlobalNetworkConfiguration,
      &kGlobalNetworkConfigurationSignature},
+    {::onc::toplevel_config::kAdminAPNList, &kCellularApnListSignature},
     {::onc::toplevel_config::kType, &kStringSignature},
     {::onc::encrypted::kCipher, &kStringSignature},
     {::onc::encrypted::kCiphertext, &kStringSignature},
@@ -438,95 +481,95 @@ const OncFieldSignature eap_subject_alternative_name_match_fields[] = {
 
 const OncValueSignature kRecommendedSignature = {base::Value::Type::LIST,
                                                  nullptr, &kStringSignature};
-const OncValueSignature kEAPSignature = {base::Value::Type::DICTIONARY,
-                                         eap_fields, nullptr};
+const OncValueSignature kEAPSignature = {base::Value::Type::DICT, eap_fields,
+                                         nullptr};
 const OncValueSignature kIssuerSubjectPatternSignature = {
-    base::Value::Type::DICTIONARY, issuer_subject_pattern_fields, nullptr};
+    base::Value::Type::DICT, issuer_subject_pattern_fields, nullptr};
 const OncValueSignature kCertificatePatternSignature = {
-    base::Value::Type::DICTIONARY, certificate_pattern_fields, nullptr};
-const OncValueSignature kIPsecSignature = {base::Value::Type::DICTIONARY,
+    base::Value::Type::DICT, certificate_pattern_fields, nullptr};
+const OncValueSignature kIPsecSignature = {base::Value::Type::DICT,
                                            ipsec_fields, nullptr};
-const OncValueSignature kXAUTHSignature = {base::Value::Type::DICTIONARY,
+const OncValueSignature kXAUTHSignature = {base::Value::Type::DICT,
                                            xauth_fields, nullptr};
-const OncValueSignature kL2TPSignature = {base::Value::Type::DICTIONARY,
-                                          l2tp_fields, nullptr};
-const OncValueSignature kOpenVPNSignature = {base::Value::Type::DICTIONARY,
+const OncValueSignature kL2TPSignature = {base::Value::Type::DICT, l2tp_fields,
+                                          nullptr};
+const OncValueSignature kOpenVPNSignature = {base::Value::Type::DICT,
                                              openvpn_fields, nullptr};
-const OncValueSignature kWireGuardSignature = {base::Value::Type::DICTIONARY,
+const OncValueSignature kWireGuardSignature = {base::Value::Type::DICT,
                                                wireguard_fields, nullptr};
 const OncValueSignature kWireGuardPeerSignature = {
-    base::Value::Type::DICTIONARY, wireguard_peer_fields, nullptr};
+    base::Value::Type::DICT, wireguard_peer_fields, nullptr};
 const OncValueSignature kWireGuardPeerListSignature = {
     base::Value::Type::LIST, nullptr, &kWireGuardPeerSignature};
 const OncValueSignature kThirdPartyVPNSignature = {
-    base::Value::Type::DICTIONARY, third_party_vpn_fields, nullptr};
-const OncValueSignature kARCVPNSignature = {base::Value::Type::DICTIONARY,
+    base::Value::Type::DICT, third_party_vpn_fields, nullptr};
+const OncValueSignature kARCVPNSignature = {base::Value::Type::DICT,
                                             arc_vpn_fields, nullptr};
-const OncValueSignature kVerifyX509Signature = {base::Value::Type::DICTIONARY,
+const OncValueSignature kVerifyX509Signature = {base::Value::Type::DICT,
                                                 verify_x509_fields, nullptr};
-const OncValueSignature kVPNSignature = {base::Value::Type::DICTIONARY,
-                                         vpn_fields, nullptr};
-const OncValueSignature kEthernetSignature = {base::Value::Type::DICTIONARY,
+const OncValueSignature kVPNSignature = {base::Value::Type::DICT, vpn_fields,
+                                         nullptr};
+const OncValueSignature kEthernetSignature = {base::Value::Type::DICT,
                                               ethernet_fields, nullptr};
-const OncValueSignature kIPConfigSignature = {base::Value::Type::DICTIONARY,
+const OncValueSignature kIPConfigSignature = {base::Value::Type::DICT,
                                               ipconfig_fields, nullptr};
-const OncValueSignature kSavedIPConfigSignature = {
-    base::Value::Type::DICTIONARY, ipconfig_fields, nullptr};
-const OncValueSignature kStaticIPConfigSignature = {
-    base::Value::Type::DICTIONARY, ipconfig_fields, nullptr};
+const OncValueSignature kSavedIPConfigSignature = {base::Value::Type::DICT,
+                                                   ipconfig_fields, nullptr};
+const OncValueSignature kStaticIPConfigSignature = {base::Value::Type::DICT,
+                                                    ipconfig_fields, nullptr};
 const OncValueSignature kProxyLocationSignature = {
-    base::Value::Type::DICTIONARY, proxy_location_fields, nullptr};
-const OncValueSignature kProxyManualSignature = {base::Value::Type::DICTIONARY,
+    base::Value::Type::DICT, proxy_location_fields, nullptr};
+const OncValueSignature kProxyManualSignature = {base::Value::Type::DICT,
                                                  proxy_manual_fields, nullptr};
 const OncValueSignature kProxySettingsSignature = {
-    base::Value::Type::DICTIONARY, proxy_settings_fields, nullptr};
-const OncValueSignature kWiFiSignature = {base::Value::Type::DICTIONARY,
-                                          wifi_fields, nullptr};
-const OncValueSignature kCertificateSignature = {base::Value::Type::DICTIONARY,
+    base::Value::Type::DICT, proxy_settings_fields, nullptr};
+const OncValueSignature kWiFiSignature = {base::Value::Type::DICT, wifi_fields,
+                                          nullptr};
+const OncValueSignature kCertificateSignature = {base::Value::Type::DICT,
                                                  certificate_fields, nullptr};
-const OncValueSignature kScopeSignature = {base::Value::Type::DICTIONARY,
+const OncValueSignature kScopeSignature = {base::Value::Type::DICT,
                                            scope_fields, nullptr};
 const OncValueSignature kNetworkConfigurationSignature = {
-    base::Value::Type::DICTIONARY, network_configuration_fields, nullptr};
+    base::Value::Type::DICT, network_configuration_fields, nullptr};
 const OncValueSignature kGlobalNetworkConfigurationSignature = {
-    base::Value::Type::DICTIONARY, global_network_configuration_fields,
-    nullptr};
+    base::Value::Type::DICT, global_network_configuration_fields, nullptr};
 const OncValueSignature kCertificateListSignature = {
     base::Value::Type::LIST, nullptr, &kCertificateSignature};
+const OncValueSignature kAdminApnListSignature = {
+    base::Value::Type::LIST, nullptr, &kCellularApnSignature};
 const OncValueSignature kNetworkConfigurationListSignature = {
     base::Value::Type::LIST, nullptr, &kNetworkConfigurationSignature};
 const OncValueSignature kToplevelConfigurationSignature = {
-    base::Value::Type::DICTIONARY, toplevel_configuration_fields, nullptr};
+    base::Value::Type::DICT, toplevel_configuration_fields, nullptr};
 
 // Derived "ONC with State" signatures.
 const OncValueSignature kNetworkWithStateSignature = {
-    base::Value::Type::DICTIONARY, network_with_state_fields, nullptr,
+    base::Value::Type::DICT, network_with_state_fields, nullptr,
     &kNetworkConfigurationSignature};
 const OncValueSignature kWiFiWithStateSignature = {
-    base::Value::Type::DICTIONARY, wifi_with_state_fields, nullptr,
-    &kWiFiSignature};
-const OncValueSignature kTetherSignature = {base::Value::Type::DICTIONARY,
+    base::Value::Type::DICT, wifi_with_state_fields, nullptr, &kWiFiSignature};
+const OncValueSignature kTetherSignature = {base::Value::Type::DICT,
                                             tether_fields, nullptr};
 const OncValueSignature kTetherWithStateSignature = {
-    base::Value::Type::DICTIONARY, tether_with_state_fields, nullptr,
+    base::Value::Type::DICT, tether_with_state_fields, nullptr,
     &kTetherSignature};
-const OncValueSignature kCellularSignature = {base::Value::Type::DICTIONARY,
+const OncValueSignature kCellularSignature = {base::Value::Type::DICT,
                                               cellular_fields, nullptr};
 const OncValueSignature kCellularWithStateSignature = {
-    base::Value::Type::DICTIONARY, cellular_with_state_fields, nullptr,
+    base::Value::Type::DICT, cellular_with_state_fields, nullptr,
     &kCellularSignature};
 const OncValueSignature kCellularPaymentPortalSignature = {
-    base::Value::Type::DICTIONARY, cellular_payment_portal_fields, nullptr};
+    base::Value::Type::DICT, cellular_payment_portal_fields, nullptr};
 const OncValueSignature kCellularProviderSignature = {
-    base::Value::Type::DICTIONARY, cellular_provider_fields, nullptr};
-const OncValueSignature kCellularApnSignature = {base::Value::Type::DICTIONARY,
+    base::Value::Type::DICT, cellular_provider_fields, nullptr};
+const OncValueSignature kCellularApnSignature = {base::Value::Type::DICT,
                                                  cellular_apn_fields, nullptr};
 const OncValueSignature kCellularFoundNetworkSignature = {
-    base::Value::Type::DICTIONARY, cellular_found_network_fields, nullptr};
+    base::Value::Type::DICT, cellular_found_network_fields, nullptr};
 const OncValueSignature kSIMLockStatusSignature = {
-    base::Value::Type::DICTIONARY, sim_lock_status_fields, nullptr};
+    base::Value::Type::DICT, sim_lock_status_fields, nullptr};
 const OncValueSignature kEAPSubjectAlternativeNameMatchSignature = {
-    base::Value::Type::DICTIONARY, eap_subject_alternative_name_match_fields,
+    base::Value::Type::DICT, eap_subject_alternative_name_match_fields,
     nullptr};
 
 const OncFieldSignature* GetFieldSignature(const OncValueSignature& signature,
@@ -546,7 +589,9 @@ const OncFieldSignature* GetFieldSignature(const OncValueSignature& signature,
 namespace {
 
 struct CredentialEntry {
-  const OncValueSignature* value_signature;
+  // This field is not a raw_ptr<> because it only ever points to statically-
+  // allocated data which is never freed, and thus can never dangle.
+  RAW_PTR_EXCLUSION const OncValueSignature* value_signature;
   const char* field_name;
 };
 

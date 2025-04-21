@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "build/build_config.h"
 #include "content/public/browser/javascript_dialog_manager.h"
 
@@ -53,6 +53,9 @@ class ShellJavaScriptDialogManager : public JavaScriptDialogManager {
     should_proceed_on_beforeunload_ = proceed;
     beforeunload_success_ = success;
   }
+
+  [[nodiscard]] bool RunBeforeUnloadCallback(bool success,
+                                             const std::u16string& title);
 
  private:
 #if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)

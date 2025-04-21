@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "android_webview/browser/gfx/root_frame_sink.h"
 #include "android_webview/browser/gfx/viz_compositor_thread_runner_webview.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace android_webview {
 

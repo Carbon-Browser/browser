@@ -1,47 +1,56 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 #include <numeric>
+#include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_forward.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ref.h"
 #include "base/metrics/user_metrics.h"
 #include "base/metrics/user_metrics_action.h"
-#include "base/numerics/safe_conversions.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/feature_engagement/tracker_factory.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/browser_finder.h"
-#include "chrome/browser/ui/color/chrome_color_id.h"
-#include "chrome/browser/ui/page_action/page_action_icon_type.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
-#include "chrome/browser/ui/views/frame/browser_view.h"
-#include "chrome/browser/ui/views/frame/toolbar_button_provider.h"
 #include "chrome/browser/ui/views/page_action/page_action_icon_view.h"
-#include "chrome/browser/ui/views/web_apps/web_app_detailed_install_dialog.h"
+#include "chrome/browser/ui/views/web_apps/web_app_icon_name_and_origin_view.h"
 #include "chrome/browser/ui/views/web_apps/web_app_info_image_source.h"
+#include "chrome/browser/ui/views/web_apps/web_app_install_dialog_delegate.h"
+#include "chrome/browser/ui/web_applications/web_app_dialogs.h"
+#include "chrome/browser/web_applications/web_app_constants.h"
 #include "chrome/browser/web_applications/web_app_helpers.h"
-#include "chrome/browser/web_applications/web_app_prefs_utils.h"
+#include "chrome/common/chrome_features.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/constrained_window/constrained_window_views.h"
-#include "components/feature_engagement/public/event_constants.h"
-#include "components/feature_engagement/public/tracker.h"
 #include "components/prefs/pref_service.h"
 #include "components/strings/grit/components_strings.h"
+#include "components/url_formatter/elide_url.h"
+#include "components/web_modal/web_contents_modal_dialog_manager.h"
+#include "components/webapps/browser/installable/installable_data.h"
+#include "components/webapps/browser/installable/ml_install_operation_tracker.h"
 #include "components/webapps/common/constants.h"
 #include "content/public/browser/web_contents.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/dialog_model.h"
 #include "ui/base/models/dialog_model_field.h"
 #include "ui/base/models/image_model.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
+#include "ui/base/mojom/ui_base_types.mojom-shared.h"
 #include "ui/display/screen.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/image/image_skia.h"
+#include "ui/gfx/shadow_util.h"
+#include "ui/gfx/text_elider.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/animation/bounds_animator.h"
 #include "ui/views/animation/ink_drop.h"
 #include "ui/views/background.h"
@@ -56,11 +65,20 @@
 #include "ui/views/layout/layout_provider.h"
 #include "ui/views/layout/layout_types.h"
 #include "ui/views/layout/proposed_layout.h"
+#include "ui/views/style/typography.h"
+#include "ui/views/style/typography_provider.h"
 #include "ui/views/view.h"
+#include "ui/views/widget/widget.h"
+
+#if BUILDFLAG(IS_CHROMEOS)
+// TODO(crbug.com/40147906): Enable gn check once it learns about conditional
+// includes.
+#include "components/metrics/structured/structured_events.h"  // nogncheck
+#include "components/metrics/structured/structured_metrics_client.h"  // nogncheck
+#endif
 
 namespace {
 
-constexpr int kIconSize = 32;
 constexpr int kSpacingBetweenImages = 8;
 
 // Custom layout that sets host_size to be same as the child view's size.
@@ -68,12 +86,6 @@ class ImageCarouselLayoutManager : public views::LayoutManagerBase {
  public:
   ImageCarouselLayoutManager() = default;
   ~ImageCarouselLayoutManager() override = default;
-
-  int GetActualFullWidth() const {
-    views::View* const inner_container = host_view()->children().front();
-
-    return inner_container->GetPreferredSize().width();
-  }
 
  protected:
   // LayoutManagerBase:
@@ -93,11 +105,71 @@ class ImageCarouselLayoutManager : public views::LayoutManagerBase {
   }
 };
 
-class ImageCarouselView : public views::View {
+enum class ButtonType { LEADING, TRAILING };
+class ScrollButton : public views::ImageButton {
+  METADATA_HEADER(ScrollButton, views::ImageButton)
+
  public:
-  explicit ImageCarouselView(const std::vector<SkBitmap>& screenshots)
-      : screenshots_(screenshots) {
-    DCHECK(screenshots.size());
+  ScrollButton(ButtonType button_type, PressedCallback callback)
+      : views::ImageButton(std::move(callback)) {
+    ConfigureVectorImageButton(this);
+
+    SetBackground(views::CreateThemedRoundedRectBackground(
+        ui::kColorButtonBackground, web_app::kIconSize / 2));
+
+    views::HighlightPathGenerator::Install(
+        this,
+        std::make_unique<views::CircleHighlightPathGenerator>(gfx::Insets()));
+
+    GetViewAccessibility().SetName(l10n_util::GetStringUTF16(
+        button_type == ButtonType::LEADING
+            ? IDS_ACCNAME_WEB_APP_DETAILED_INSTALL_DIALOG_LEADING_SCROLL_BUTTON
+            : IDS_ACCNAME_WEB_APP_DETAILED_INSTALL_DIALOG_TRAILING_SCROLL_BUTTON));
+
+    SetImageModel(
+        views::Button::ButtonState::STATE_NORMAL,
+        button_type == ButtonType::LEADING
+            ? ui::ImageModel::FromVectorIcon(kLeadingScrollIcon, ui::kColorIcon)
+            : ui::ImageModel::FromVectorIcon(kTrailingScrollIcon,
+                                             ui::kColorIcon));
+
+    views::InkDrop::Get(this)->SetBaseColorId(
+        views::TypographyProvider::Get().GetColorId(
+            views::style::CONTEXT_BUTTON, views::style::STYLE_SECONDARY));
+
+    ink_drop_container_ =
+        AddChildView(std::make_unique<views::InkDropContainerView>());
+  }
+  ScrollButton(const ScrollButton&) = delete;
+  ScrollButton& operator=(const ScrollButton&) = delete;
+  ~ScrollButton() override = default;
+
+  void AddLayerToRegion(ui::Layer* layer, views::LayerRegion region) override {
+    // This routes background layers to `ink_drop_container_` instead of `this`
+    // to avoid painting effects underneath our background.
+    ink_drop_container_->AddLayerToRegion(layer, region);
+  }
+
+  void RemoveLayerFromRegions(ui::Layer* layer) override {
+    // This routes background layers to `ink_drop_container_` instead of `this`
+    // to avoid painting effects underneath our background.
+    ink_drop_container_->RemoveLayerFromRegions(layer);
+  }
+
+ private:
+  raw_ptr<views::InkDropContainerView> ink_drop_container_ = nullptr;
+};
+
+BEGIN_METADATA(ScrollButton)
+END_METADATA
+
+class ImageCarouselView : public views::View {
+  METADATA_HEADER(ImageCarouselView, views::View)
+
+ public:
+  explicit ImageCarouselView(std::vector<webapps::Screenshot> screenshots)
+      : screenshots_(std::move(screenshots)) {
+    DCHECK(screenshots_.size());
 
     // Use a fill layout to draw the buttons container on
     // top of the image carousel.
@@ -106,9 +178,9 @@ class ImageCarouselView : public views::View {
     // Screenshots are sanitized by `InstallableManager::OnScreenshotFetched`
     // and should all have the same aspect ratio.
 #if DCHECK_IS_ON()
-    for (const auto& screenshot : screenshots) {
-      DCHECK(screenshot.width() * screenshots_[0].height() ==
-             screenshot.height() * screenshots_[0].width());
+    for (const auto& screenshot : screenshots_) {
+      DCHECK(screenshot.image.width() * screenshots_[0].image.height() ==
+             screenshot.image.height() * screenshots_[0].image.width());
     }
 #endif
 
@@ -136,10 +208,12 @@ class ImageCarouselView : public views::View {
 
     leading_button_container->SetCrossAxisAlignment(
         views::BoxLayout::CrossAxisAlignment::kCenter);
-    leading_button_ = leading_button_container->AddChildView(CreateScrollButton(
-        ButtonType::LEADING,
-        base::BindRepeating(&ImageCarouselView::OnScrollButtonClicked,
-                            base::Unretained(this), ButtonType::LEADING)));
+
+    leading_button_ =
+        leading_button_container->AddChildView(std::make_unique<ScrollButton>(
+            ButtonType::LEADING,
+            base::BindRepeating(&ImageCarouselView::OnScrollButtonClicked,
+                                base::Unretained(this), ButtonType::LEADING)));
     leading_button_container_ =
         AddChildView(std::move(leading_button_container));
     leading_button_->SetVisible(false);
@@ -149,7 +223,7 @@ class ImageCarouselView : public views::View {
         views::BoxLayout::CrossAxisAlignment::kCenter);
 
     trailing_button_ =
-        trailing_button_container->AddChildView(CreateScrollButton(
+        trailing_button_container->AddChildView(std::make_unique<ScrollButton>(
             ButtonType::TRAILING,
             base::BindRepeating(&ImageCarouselView::OnScrollButtonClicked,
                                 base::Unretained(this), ButtonType::TRAILING)));
@@ -158,18 +232,22 @@ class ImageCarouselView : public views::View {
   }
 
   void AddedToWidget() override {
-    const display::Screen* const screen = display::Screen::GetScreen();
-
     float current_scale =
-        screen->GetDisplayNearestView(GetWidget()->GetNativeView())
-            .device_scale_factor();
+        display::Screen::GetScreen()
+            ->GetPreferredScaleFactorForView(GetWidget()->GetNativeView())
+            .value_or(1.0f);
     for (size_t i = 0; i < screenshots_.size(); i++) {
-      image_views_[i]->SetImage(ui::ImageModel::FromImageSkia(
-          gfx::ImageSkia::CreateFromBitmap(screenshots_[i], current_scale)));
+      image_views_[i]->SetImage(
+          ui::ImageModel::FromImageSkia(gfx::ImageSkia::CreateFromBitmap(
+              screenshots_[i].image, current_scale)));
+      if (screenshots_[i].label) {
+        image_views_[i]->GetViewAccessibility().SetName(
+            screenshots_[i].label.value());
+      }
     }
   }
 
-  void Layout() override {
+  void Layout(PassKey) override {
     // Use a fixed height that guarantees to fit the screenshot with max ratio
     // and still show a clip for the next screenshot.
     const int fixed_height = base::checked_cast<int>(
@@ -182,9 +260,10 @@ class ImageCarouselView : public views::View {
     // by `OnScrollButtonClicked` based on image carousel animation.
     if (!trailing_button_visibility_set_up_) {
       for (size_t i = 0; i < screenshots_.size(); i++) {
-        const int item_width = base::checked_cast<int>(
-            screenshots_[i].width() * (base::checked_cast<float>(fixed_height) /
-                                       screenshots_[i].height()));
+        const int item_width =
+            base::checked_cast<int>(screenshots_[i].image.width() *
+                                    (base::checked_cast<float>(fixed_height) /
+                                     screenshots_[i].image.height()));
         image_views_[i]->SetImageSize({item_width, fixed_height});
       }
       image_carousel_full_width_ =
@@ -193,17 +272,35 @@ class ImageCarouselView : public views::View {
       trailing_button_visibility_set_up_ = true;
     }
 
-    leading_button_container_->SetBounds(kSpacingBetweenImages, 0, kIconSize,
-                                         fixed_height);
+    leading_button_container_->SetBounds(kSpacingBetweenImages, 0,
+                                         web_app::kIconSize, fixed_height);
 
     trailing_button_container_->SetBounds(
-        width() - kSpacingBetweenImages - kIconSize, 0, kIconSize,
-        fixed_height);
+        width() - kSpacingBetweenImages - web_app::kIconSize, 0,
+        web_app::kIconSize, fixed_height);
+  }
+
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override {
+    int host_view = available_size.width().is_bounded()
+                        ? available_size.width().value()
+                        : width();
+    // Use a fixed height that guarantees to fit the screenshot with max ratio
+    // and still show a clip for the next screenshot.
+    const int fixed_height = base::checked_cast<int>(
+        base::checked_cast<float>(host_view - image_padding_ * 2) /
+        webapps::kMaximumScreenshotRatio);
+
+    int width = 0;
+    for (const auto& screenshot : screenshots_) {
+      width += base::checked_cast<int>(
+          screenshot.image.width() * (base::checked_cast<float>(fixed_height) /
+                                      screenshot.image.height()));
+    }
+    return gfx::Size(width, fixed_height);
   }
 
  private:
-  enum class ButtonType { LEADING, TRAILING };
-
   void OnScrollButtonClicked(ButtonType button_type) {
     DCHECK(image_inner_container_->children().size());
 
@@ -215,8 +312,9 @@ class ImageCarouselView : public views::View {
     // Scroll past all the fully visible images
     int delta = image_width * (container_width / image_width);
 
-    if (button_type == ButtonType::TRAILING)
+    if (button_type == ButtonType::TRAILING) {
       delta = -delta;
+    }
 
     const gfx::Rect& bounds = image_inner_container_->bounds();
     int x = bounds.x() + delta;
@@ -236,66 +334,46 @@ class ImageCarouselView : public views::View {
         gfx::Rect(x, bounds.y(), bounds.width(), bounds.height()));
   }
 
-  std::unique_ptr<views::ImageButton> CreateScrollButton(
-      ButtonType button_type,
-      views::Button::PressedCallback callback) {
-    auto scroll_button = views::CreateVectorImageButton(std::move(callback));
-    scroll_button->SetBackground(views::CreateThemedRoundedRectBackground(
-        kColorPwaScrollButtonBackground, kIconSize));
-    scroll_button->SetPreferredSize(gfx::Size(kIconSize, kIconSize));
-    views::HighlightPathGenerator::Install(
-        scroll_button.get(),
-        std::make_unique<views::CircleHighlightPathGenerator>(gfx::Insets()));
-
-    scroll_button->SetAccessibleName(l10n_util::GetStringUTF16(
-        button_type == ButtonType::LEADING
-            ? IDS_ACCNAME_WEB_APP_DETAILED_INSTALL_DIALOG_LEADING_SCROLL_BUTTON
-            : IDS_ACCNAME_WEB_APP_DETAILED_INSTALL_DIALOG_TRAILING_SCROLL_BUTTON));
-
-    scroll_button->SetImageModel(
-        views::Button::ButtonState::STATE_NORMAL,
-        button_type == ButtonType::LEADING
-            ? ui::ImageModel::FromVectorIcon(kLeadingScrollIcon, ui::kColorIcon)
-            : ui::ImageModel::FromVectorIcon(kTrailingScrollIcon,
-                                             ui::kColorIcon));
-
-    views::InkDrop::Get(scroll_button.get())
-        ->SetBaseColorCallback(base::BindRepeating(
-            [](views::ImageButton* host) {
-              return host->GetColorProvider()->GetColor(
-                  kColorPwaScrollButtonBackground);
-            },
-            scroll_button.get()));
-    views::InkDrop::Get(scroll_button.get())->SetVisibleOpacity(1);
-    views::InkDrop::Get(scroll_button.get())->SetHighlightOpacity(1);
-    scroll_button->SetFocusBehavior(FocusBehavior::ALWAYS);
-    return scroll_button;
-  }
-
-  const std::vector<SkBitmap>& screenshots_;
+  std::vector<webapps::Screenshot> screenshots_;
   std::unique_ptr<views::BoundsAnimator> bounds_animator_;
-  views::View* image_container_ = nullptr;
-  views::BoxLayoutView* image_inner_container_ = nullptr;
-  std::vector<views::ImageView*> image_views_;
-  views::View* leading_button_ = nullptr;
-  views::View* trailing_button_ = nullptr;
-  views::View* leading_button_container_ = nullptr;
-  views::View* trailing_button_container_ = nullptr;
+  raw_ptr<views::View> image_container_ = nullptr;
+  raw_ptr<views::BoxLayoutView> image_inner_container_ = nullptr;
+  std::vector<raw_ptr<views::ImageView>> image_views_;
+  raw_ptr<views::View> leading_button_ = nullptr;
+  raw_ptr<views::View> trailing_button_ = nullptr;
+  raw_ptr<views::View> leading_button_container_ = nullptr;
+  raw_ptr<views::View> trailing_button_container_ = nullptr;
   int image_carousel_full_width_ = 0;
   int image_padding_ = 0;
   bool trailing_button_visibility_set_up_ = false;
 };
 
+BEGIN_METADATA(ImageCarouselView)
+END_METADATA
+
+#if BUILDFLAG(IS_CHROMEOS)
+namespace cros_events = metrics::structured::events::v2::cr_os_events;
+#endif
+
 }  // namespace
 
-namespace chrome {
+namespace web_app {
 
 void ShowWebAppDetailedInstallDialog(
     content::WebContents* web_contents,
-    std::unique_ptr<WebAppInstallInfo> install_info,
-    chrome::AppInstallationAcceptanceCallback callback,
-    const std::vector<SkBitmap>& screenshots,
-    chrome::PwaInProductHelpState iph_state) {
+    std::unique_ptr<web_app::WebAppInstallInfo> install_info,
+    std::unique_ptr<webapps::MlInstallOperationTracker> install_tracker,
+    AppInstallationAcceptanceCallback callback,
+    std::vector<webapps::Screenshot> screenshots,
+    PwaInProductHelpState iph_state) {
+  // Do not show the dialog if it is already being shown.
+  const web_modal::WebContentsModalDialogManager* manager =
+      web_modal::WebContentsModalDialogManager::FromWebContents(web_contents);
+  if (!manager || manager->IsDialogActive()) {
+    std::move(callback).Run(/*is_accepted=*/false, nullptr);
+    return;
+  }
+
   content::BrowserContext* browser_context = web_contents->GetBrowserContext();
   PrefService* const prefs =
       Profile::FromBrowserContext(browser_context)->GetPrefs();
@@ -308,95 +386,73 @@ void ShowWebAppDetailedInstallDialog(
                             gfx::Size(kIconSize, kIconSize));
 
   auto title = install_info->title;
-  auto description = install_info->description;
+  GURL start_url = install_info->start_url();
+  std::u16string start_url_host_formatted_for_display =
+      url_formatter::FormatUrlForDisplayOmitSchemePathAndTrivialSubdomains(
+          start_url);
 
-  auto delegate =
-      std::make_unique<web_app::WebAppDetailedInstallDialogDelegate>(
-          web_contents, std::move(install_info), std::move(callback),
-          std::move(iph_state), prefs, tracker);
-  auto* delegate_ptr = delegate.get();
-  auto dialog_model =
+  const std::u16string description = gfx::TruncateString(
+      install_info->description, webapps::kMaximumDescriptionLength,
+      gfx::CHARACTER_BREAK);
+  auto manifest_id = install_info->manifest_id();
+
+  auto delegate = std::make_unique<WebAppInstallDialogDelegate>(
+      web_contents, std::move(install_info), std::move(install_tracker),
+      std::move(callback), std::move(iph_state), prefs, tracker,
+      InstallDialogType::kDetailed);
+  auto delegate_weak_ptr = delegate->AsWeakPtr();
+
+  std::unique_ptr<ui::DialogModel> dialog_model;
+  dialog_model =
       ui::DialogModel::Builder(std::move(delegate))
-          .SetIcon(ui::ImageModel::FromImageSkia(icon_image))
-          .SetTitle(title)  // TODO(pbos): Add secondary-title support for
-                            // base::UTF8ToUTF16(install_info->start_url.host())
-          .AddBodyText(ui::DialogModelLabel(description))
-          .AddOkButton(
-              base::BindOnce(
-                  &web_app::WebAppDetailedInstallDialogDelegate::OnAccept,
-                  base::Unretained(delegate_ptr)),
-              l10n_util::GetStringUTF16(IDS_INSTALL))
+          .SetInternalName("WebAppDetailedInstallDialog")
+          .SetTitle(l10n_util::GetStringUTF16(IDS_INSTALL_PWA_DIALOG_TITLE))
+          .AddCustomField(
+              std::make_unique<views::BubbleDialogModelHost::CustomView>(
+                  WebAppIconNameAndOriginView::Create(icon_image, title,
+                                                      start_url),
+                  views::BubbleDialogModelHost::FieldType::kControl))
+          .AddParagraph(
+              ui::DialogModelLabel(description).set_is_secondary(),
+              l10n_util::GetStringUTF16(
+                  IDS_WEB_APP_DETAILED_INSTALL_DIALOG_DESCRIPTION_TITLE))
+          .AddOkButton(base::BindOnce(&WebAppInstallDialogDelegate::OnAccept,
+                                      delegate_weak_ptr),
+                       ui::DialogModel::Button::Params()
+                           .SetLabel(l10n_util::GetStringUTF16(IDS_INSTALL))
+                           .SetId(WebAppInstallDialogDelegate::
+                                      kPwaInstallDialogInstallButton))
           .AddCancelButton(base::BindOnce(
-              &web_app::WebAppDetailedInstallDialogDelegate::OnCancel,
-              base::Unretained(delegate_ptr)))
+              &WebAppInstallDialogDelegate::OnCancel, delegate_weak_ptr))
+          .SetCloseActionCallback(base::BindOnce(
+              &WebAppInstallDialogDelegate::OnClose, delegate_weak_ptr))
+          .SetDialogDestroyingCallback(base::BindOnce(
+              &WebAppInstallDialogDelegate::OnDestroyed, delegate_weak_ptr))
           .AddCustomField(
               std::make_unique<views::BubbleDialogModelHost::CustomView>(
                   std::make_unique<ImageCarouselView>(screenshots),
                   views::BubbleDialogModelHost::FieldType::kControl))
+          .OverrideDefaultButton(ui::mojom::DialogButton::kCancel)
           .Build();
-
   auto dialog = views::BubbleDialogModelHost::CreateModal(
-      std::move(dialog_model), ui::MODAL_TYPE_CHILD);
-
-  constrained_window::ShowWebModalDialogViews(dialog.release(), web_contents);
-  base::RecordAction(base::UserMetricsAction("WebAppDetailedInstallShown"));
-}
-
-}  // namespace chrome
-
-namespace web_app {
-
-WebAppDetailedInstallDialogDelegate::WebAppDetailedInstallDialogDelegate(
-    content::WebContents* web_contents,
-    std::unique_ptr<WebAppInstallInfo> web_app_info,
-    chrome::AppInstallationAcceptanceCallback callback,
-    chrome::PwaInProductHelpState iph_state,
-    PrefService* prefs,
-    feature_engagement::Tracker* tracker)
-    : web_contents_(web_contents),
-      install_info_(std::move(web_app_info)),
-      callback_(std::move(callback)),
-      iph_state_(std::move(iph_state)),
-      prefs_(prefs),
-      tracker_(tracker) {
-  DCHECK(install_info_);
-  DCHECK(prefs_);
-}
-
-WebAppDetailedInstallDialogDelegate::~WebAppDetailedInstallDialogDelegate() {
-  // TODO(crbug.com/1327363): move this to dialog->SetHighlightedButton.
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents_);
-  if (!browser)
+      std::move(dialog_model), ui::mojom::ModalType::kChild);
+  views::Widget* detailed_dialog_widget =
+      constrained_window::ShowWebModalDialogViews(dialog.release(),
+                                                  web_contents);
+  if (IsWidgetCurrentSizeSmallerThanPreferredSize(detailed_dialog_widget)) {
+    delegate_weak_ptr->CloseDialogAsIgnored();
     return;
-
-  BrowserView* browser_view = BrowserView::GetBrowserViewForBrowser(browser);
-  // Dehighlight the install icon when this dialog is closed.
-  browser_view->toolbar_button_provider()
-      ->GetPageActionIconView(PageActionIconType::kPwaInstall)
-      ->SetHighlighted(false);
-}
-
-void WebAppDetailedInstallDialogDelegate::OnAccept() {
-  base::RecordAction(base::UserMetricsAction("WebAppDetailedInstallAccepted"));
-  if (iph_state_ == chrome::PwaInProductHelpState::kShown) {
-    web_app::AppId app_id = web_app::GenerateAppId(install_info_->manifest_id,
-                                                   install_info_->start_url);
-    web_app::RecordInstallIphInstalled(prefs_, app_id);
-    tracker_->NotifyEvent(feature_engagement::events::kDesktopPwaInstalled);
   }
+  delegate_weak_ptr->StartObservingWidgetForChanges(detailed_dialog_widget);
 
-  std::move(callback_).Run(true, std::move(install_info_));
-}
+  base::RecordAction(base::UserMetricsAction("WebAppDetailedInstallShown"));
 
-void WebAppDetailedInstallDialogDelegate::OnCancel() {
-  base::RecordAction(base::UserMetricsAction("WebAppDetailedInstallCancelled"));
-  if (iph_state_ == chrome::PwaInProductHelpState::kShown && install_info_) {
-    web_app::AppId app_id = web_app::GenerateAppId(install_info_->manifest_id,
-                                                   install_info_->start_url);
-    web_app::RecordInstallIphIgnored(prefs_, app_id, base::Time::Now());
-  }
-
-  std::move(callback_).Run(false, std::move(install_info_));
+#if BUILDFLAG(IS_CHROMEOS)
+  webapps::AppId app_id = web_app::GenerateAppIdFromManifestId(manifest_id);
+  metrics::structured::StructuredMetricsClient::Record(
+      cros_events::AppDiscovery_Browser_AppInstallDialogShown().SetAppId(
+          app_id));
+#endif  // BUILDFLAG(IS_CHROMEOS)
 }
 
 }  // namespace web_app

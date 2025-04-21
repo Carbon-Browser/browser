@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,9 @@ namespace test {
 
 // Waits until |script| is executed and synchronously returns the evaluation
 // result.
-id EvaluateJavaScript(CWVWebView* web_view, NSString* script, NSError** error);
+id EvaluateJavaScript(CWVWebView* web_view,
+                      NSString* script,
+                      NSError** error = nil);
 
 // Waits for |web_view| to contain |text|. Returns false if the condition is not
 // met within a timeout.

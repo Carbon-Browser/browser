@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,15 +53,11 @@ base::span<const int32_t> WebGLMultiDrawCommon::MakeSpan(
   switch (array->GetContentType()) {
     case V8UnionInt32ArrayAllowSharedOrLongSequence::ContentType::
         kInt32ArrayAllowShared:
-      return base::span<const int32_t>(
-          array->GetAsInt32ArrayAllowShared()->DataMaybeShared(),
-          array->GetAsInt32ArrayAllowShared()->length());
+      return array->GetAsInt32ArrayAllowShared()->AsSpanMaybeShared();
     case V8UnionInt32ArrayAllowSharedOrLongSequence::ContentType::kLongSequence:
-      return base::span<const int32_t>(array->GetAsLongSequence().data(),
-                                       array->GetAsLongSequence().size());
+      return array->GetAsLongSequence();
   }
   NOTREACHED();
-  return {};
 }
 
 // static
@@ -71,17 +67,12 @@ base::span<const uint32_t> WebGLMultiDrawCommon::MakeSpan(
   switch (array->GetContentType()) {
     case V8UnionUint32ArrayAllowSharedOrUnsignedLongSequence::ContentType::
         kUint32ArrayAllowShared:
-      return base::span<const uint32_t>(
-          array->GetAsUint32ArrayAllowShared()->DataMaybeShared(),
-          array->GetAsUint32ArrayAllowShared()->length());
+      return array->GetAsUint32ArrayAllowShared()->AsSpanMaybeShared();
     case V8UnionUint32ArrayAllowSharedOrUnsignedLongSequence::ContentType::
         kUnsignedLongSequence:
-      return base::span<const uint32_t>(
-          array->GetAsUnsignedLongSequence().data(),
-          array->GetAsUnsignedLongSequence().size());
+      return array->GetAsUnsignedLongSequence();
   }
   NOTREACHED();
-  return {};
 }
 
 }  // namespace blink

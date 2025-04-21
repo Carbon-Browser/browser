@@ -38,11 +38,50 @@ plumbed all the way to this folder.
 
 The [PerformanceEventTiming](https://w3c.github.io/event-timing/) interface
 provides timing information about the latency of the first discrete user
-interaction, specifically one of `key down`, `mouse down`, `click`, a
-`pointer down` followed by a `pointer up`. (Pointer down may be the start of
+interaction, specifically one of `keydown`, `mousedown`, `click`, a
+`pointerdown` followed by a `pointerup`. (Pointer down may be the start of
 scrolling, which is not tracked.) This is a subset of the EventTiming API, and
 provides key metrics to help measure and optimize the first impression on
 responsiveness of web users.
 [FirstInputStateMachine](First_input_state_machine.md) visualizes the state
 machine logic of how the first input event timing entry got dispatched from a
 pipeline of performance event entries.
+
+# Event Timing - Interactions
+
+The [PerformanceEventTiming](https://w3c.github.io/event-timing/) interface
+exposes timing information for each non-continuous
+event([fullList](https://w3c.github.io/event-timing/#sec-events-exposed)).
+Certain events can be further grouped up as interactions by assigning the same
+non-trivial [interactionId](https://www.w3.org/TR/2022/WD-event-timing-20220524/#dom-performanceeventtiming-interactionid).
+Others will have interactionId with value 0. The purpose of defining an
+interaction is to group events that fire during the same logical user gesture,
+so further analysis like [INP](https://web.dev/inp/) can be done to better reflect the page
+responsiveness on user interactions.
+
+[PointerInteractionStateMachine](Pointer_interaction_state_machine.md)
+visualizes the state machine logic of how the pointer related events
+(`pointerdown`, `pointerup`, `pointercancel`, `click`) get grouped up as a
+single interaction and get dispatched from the event timing pipeline.
+
+[KeyInteractionStateMachine](Key_interaction_state_machine.md)
+visualizes the state machine logic of how the keyboard related events
+(`keydown`, `input`, `keyup`) get grouped up as a
+single interaction and get dispatched from the event timing pipeline.
+
+# Performance.mark — mark_feature_usage convention
+
+The convention [mark_feature_usage](https://w3c.github.io/user-timing/#dfn-mark_feature_usage)
+marks the usage of a user feature which may impact performance so that tooling and
+analytics can take it into account. This requires the following steps:
+
+1. Add a feature id to [web_feature.mojom](https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/public/mojom/use_counter/metrics/web_feature.mojom).
+   It's recommended where applicable to prefix the feature name with `kUserFeature...`,
+   indicating that this feature tracks a user defined feature. For an example, see the entry
+   corresponding to `kUserFeatureNgOptimizedImage`.
+
+2. Allow-list the feature added to be used with UKM-based UseCounter, by making an entry in  [UseCounterMetricsRecorder::GetAllowedUkmFeatures()](https://chromium.googlesource.com/chromium/src/+/main/components/page_load_metrics/browser/observers/use_counter/ukm_features.cc).
+
+3. Add an entry to the map in [`PerformanceMark::GetUseCounterMapping()`](https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/core/timing/performance_mark.cc) tying the user defined feature name (`NgOptimizedImage` in our example) to the UKM feature.
+
+4. Instrument user framework/application code with `performance.mark('mark_feature_usage',` as described in the [User Timing Level 3 specification](https://w3c.github.io/user-timing/#dfn-mark_feature_usage).

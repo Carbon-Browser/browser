@@ -1,8 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.components.browser_ui.bottomsheet;
+
+import org.jni_zero.CalledByNative;
 
 import org.chromium.base.UnownedUserData;
 import org.chromium.base.UnownedUserDataKey;
@@ -21,9 +23,11 @@ public class BottomSheetControllerProvider {
 
     /**
      * Get the shared {@link BottomSheetController} from the provided {@link WindowAndroid}.
+     *
      * @param windowAndroid The window to pull the controller from.
      * @return A shared instance of a {@link BottomSheetController}.
      */
+    @CalledByNative
     public static BottomSheetController from(WindowAndroid windowAndroid) {
         return KEY.retrieveDataFromHost(windowAndroid.getUnownedUserDataHost());
     }

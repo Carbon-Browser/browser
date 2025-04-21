@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,18 +8,17 @@
 #include "base/memory/raw_ptr.h"
 #include "cc/test/test_task_graph_runner.h"
 #include "components/viz/common/display/renderer_settings.h"
-#include "components/viz/test/test_gpu_memory_buffer_manager.h"
+#include "gpu/command_buffer/client/test_gpu_memory_buffer_manager.h"
 #include "ui/compositor/compositor.h"
 
 namespace cc {
 class FakeLayerTreeFrameSink;
 class TestTaskGraphRunner;
-class TestGpuMemoryBufferManager;
 }
 
 namespace viz {
 class CompositorFrame;
-class ContextProvider;
+class TestGpuMemoryBufferManager;
 }
 
 namespace ui {
@@ -38,8 +37,6 @@ class FakeContextFactory : public ui::ContextFactory {
   // ui::ContextFactory:
   void CreateLayerTreeFrameSink(
       base::WeakPtr<ui::Compositor> compositor) override;
-  scoped_refptr<viz::ContextProvider> SharedMainThreadContextProvider()
-      override;
   scoped_refptr<viz::RasterContextProvider>
   SharedMainThreadRasterContextProvider() override;
   void RemoveCompositor(ui::Compositor* compositor) override;
@@ -54,7 +51,7 @@ class FakeContextFactory : public ui::ContextFactory {
  private:
   raw_ptr<cc::FakeLayerTreeFrameSink> frame_sink_ = nullptr;
   cc::TestTaskGraphRunner task_graph_runner_;
-  viz::TestGpuMemoryBufferManager gpu_memory_buffer_manager_;
+  gpu::TestGpuMemoryBufferManager gpu_memory_buffer_manager_;
   viz::RendererSettings renderer_settings_;
 };
 

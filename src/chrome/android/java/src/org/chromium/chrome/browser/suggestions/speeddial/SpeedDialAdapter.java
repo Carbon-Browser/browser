@@ -75,6 +75,7 @@ import org.json.JSONException;
 
 import android.util.TypedValue;
 import com.bumptech.glide.load.resource.bitmap.RoundedCorners;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 // import com.amplitude.api.Amplitude;
 
 /**
@@ -114,7 +115,7 @@ public class SpeedDialAdapter extends RecyclerView.Adapter<SpeedDialAdapter.Spee
 
         mItems = mDatabase.getSpeedDials();
 
-        mIconBridge = new LargeIconBridge(Profile.getLastUsedRegularProfile());
+        mIconBridge = new LargeIconBridge(ProfileManager.getLastUsedRegularProfile());
 
         this.speedDialInteraction = speedDialInteraction;
 
@@ -254,7 +255,7 @@ public class SpeedDialAdapter extends RecyclerView.Adapter<SpeedDialAdapter.Spee
             String url = tile.url;
             if (!tile.isSponsored) {
                 GURL gurl = new GURL(url);
-                String imageUrl = "https://hydrisapps.com/carbon/android-resources/favicon-getter/?key=wefng4398uhdsvgrqsc5677269420&url=https://" + gurl.getHost();
+                String imageUrl = "https://carbon.website/carbon/android-resources/favicon-getter/?key=wefng4398uhdsvgrqsc5677269420&url=https://" + gurl.getHost();
                 gurl = null;
 
                 Drawable iconDrawable = FaviconUtils.getIconDrawableWithoutFilter(
@@ -349,7 +350,7 @@ public class SpeedDialAdapter extends RecyclerView.Adapter<SpeedDialAdapter.Spee
                           if (speedDialInteraction != null) {
                               speedDialInteraction.onSpeedDialClicked();
                           }
-                          // Amplitude.getInstance().logEventAsync("speed_dial_click_event");
+                          // Amplitude.getInstance().logEvent("speed_dial_click_event");
                         } catch (Exception ignore) {}
                     }
                 }

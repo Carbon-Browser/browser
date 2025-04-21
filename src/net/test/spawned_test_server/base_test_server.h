@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,15 +11,16 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "base/files/file_path.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/values.h"
 #include "net/base/host_port_pair.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "net/cert/test_root_certs.h"
 
 class GURL;
 
@@ -27,6 +28,7 @@ namespace net {
 
 class AddressList;
 class ScopedPortException;
+class ScopedTestRoot;
 class X509Certificate;
 
 // The base class of Test server implementation.
@@ -142,7 +144,6 @@ class BaseTestServer {
   const HostPortPair& host_port_pair() const;
 
   const base::FilePath& document_root() const { return document_root_; }
-  const base::Value& server_data() const;
   std::string GetScheme() const;
   [[nodiscard]] bool GetAddressList(AddressList* address_list) const;
 
@@ -176,11 +177,11 @@ class BaseTestServer {
   }
 
   // Registers the test server's certs for the current process.
-  static void RegisterTestCerts();
+  [[nodiscard]] static ScopedTestRoot RegisterTestCerts();
 
   // Marks the root certificate of an HTTPS test server as trusted for
   // the duration of tests.
-  [[nodiscard]] bool LoadTestRootCert() const;
+  [[nodiscard]] bool LoadTestRootCert();
 
   // Returns the certificate that the server is using.
   scoped_refptr<X509Certificate> GetCertificate() const;
@@ -222,7 +223,7 @@ class BaseTestServer {
   // { argument-name: argument-value, ... }
   //
   // Returns nullopt if an invalid configuration is specified.
-  absl::optional<base::Value::Dict> GenerateArguments() const;
+  std::optional<base::Value::Dict> GenerateArguments() const;
 
  private:
   void Init(const std::string& host);
@@ -233,13 +234,12 @@ class BaseTestServer {
   // Directory that contains the SSL certificates.
   base::FilePath certificates_dir_;
 
+  ScopedTestRoot scoped_test_root_;
+
   // Address on which the tests should connect to the server. With
   // RemoteTestServer it may be different from the address on which the server
   // listens on.
   HostPortPair host_port_pair_;
-
-  // Holds the data sent from the server (e.g., port number).
-  absl::optional<base::Value> server_data_;
 
   // If |UsingSSL(type_)|, the TLS settings to use for the test server.
   SSLOptions ssl_options_;

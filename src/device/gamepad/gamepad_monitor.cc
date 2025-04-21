@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,11 +38,6 @@ void GamepadMonitor::OnGamepadDisconnected(uint32_t index,
                                            const Gamepad& gamepad) {
   if (gamepad_observer_remote_)
     gamepad_observer_remote_->GamepadDisconnected(index, gamepad);
-}
-
-void GamepadMonitor::OnGamepadChanged(const mojom::GamepadChanges& changes) {
-  if (gamepad_observer_remote_)
-    gamepad_observer_remote_->GamepadChanged(changes.Clone());
 }
 
 void GamepadMonitor::GamepadStartPolling(GamepadStartPollingCallback callback) {

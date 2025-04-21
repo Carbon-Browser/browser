@@ -1,10 +1,8 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.omaha;
-
-import android.content.Context;
 
 import org.chromium.chrome.browser.omaha.OmahaBase.PostResult;
 
@@ -14,9 +12,6 @@ public abstract class OmahaDelegate {
 
     OmahaDelegate() {}
 
-    /** @return Context that is used to interact with the system. */
-    abstract Context getContext();
-
     /** @return Whether Chrome is installed as part of the system image. */
     abstract boolean isInSystemImage();
 
@@ -25,7 +20,7 @@ public abstract class OmahaDelegate {
 
     /** @return The {@link RequestGenerator} used to create Omaha XML. */
     final RequestGenerator getRequestGenerator() {
-        if (mRequestGenerator == null) mRequestGenerator = createRequestGenerator(getContext());
+        if (mRequestGenerator == null) mRequestGenerator = createRequestGenerator();
         return mRequestGenerator;
     }
 
@@ -43,7 +38,7 @@ public abstract class OmahaDelegate {
     abstract void scheduleService(long currentTimestampMs, long nextTimestampMs);
 
     /** Creates a {@link RequestGenerator}. */
-    abstract RequestGenerator createRequestGenerator(Context context);
+    abstract RequestGenerator createRequestGenerator();
 
     /**
      * Called when {@link OmahaBase#registerNewRequest} finishes.

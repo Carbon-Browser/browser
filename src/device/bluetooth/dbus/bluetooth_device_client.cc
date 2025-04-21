@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
@@ -21,19 +21,9 @@
 #include "device/bluetooth/dbus/bluetooth_metrics_helper.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ash/constants/ash_features.h"
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
-
 namespace bluez {
 
 namespace {
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-// TODO(b/213229904): Remove this constant and replace with
-// |bluetooth_device::kDisconnectOld| once it has been uprev'd.
-constexpr char kDisconnectOldPlaceholder[] = "DisconnectOld";
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 // Value returned for the the RSSI or TX power if it cannot be read.
 const int kUnknownPower = 127;
@@ -41,6 +31,10 @@ const int kUnknownPower = 127;
 // TODO(b/213229904): Remove this constant and replace with
 // |bluetooth_device::kConnectClassic| once it has been uprev'd.
 constexpr char kConnectClassicPlaceholder[] = "ConnectClassic";
+
+// TODO(b/217464014): Remove this constant and replace with
+// |bluetooth_device::kBondedProperty| once it has been uprev'd.
+constexpr char kBondedPropertyPlaceholder[] = "Bonded";
 
 std::unique_ptr<BluetoothServiceAttributeValueBlueZ> ReadAttributeValue(
     dbus::MessageReader* struct_reader) {
@@ -54,7 +48,7 @@ std::unique_ptr<BluetoothServiceAttributeValueBlueZ> ReadAttributeValue(
   if (!struct_reader->PopUint32(&size))
     return nullptr;
 
-  std::unique_ptr<base::Value> value;
+  std::optional<base::Value> value;
   switch (type) {
     case bluez::BluetoothServiceAttributeValueBlueZ::NULLTYPE: {
       break;
@@ -70,19 +64,19 @@ std::unique_ptr<BluetoothServiceAttributeValueBlueZ> ReadAttributeValue(
           uint8_t byte;
           if (!struct_reader->PopVariantOfByte(&byte))
             return nullptr;
-          value = std::make_unique<base::Value>(byte);
+          value = base::Value(byte);
           break;
         case 2:
           uint16_t short_val;
           if (!struct_reader->PopVariantOfUint16(&short_val))
             return nullptr;
-          value = std::make_unique<base::Value>(short_val);
+          value = base::Value(short_val);
           break;
         case 4:
           uint32_t val;
           if (!struct_reader->PopVariantOfUint32(&val))
             return nullptr;
-          value = std::make_unique<base::Value>(static_cast<int32_t>(val));
+          value = base::Value(static_cast<int32_t>(val));
           break;
         case 8:
         // Fall through.
@@ -91,7 +85,7 @@ std::unique_ptr<BluetoothServiceAttributeValueBlueZ> ReadAttributeValue(
         // don't have any fields which use this size. If we ever decide to
         // change this, this needs to get fixed.
         default:
-          NOTREACHED();
+          DUMP_WILL_BE_NOTREACHED();
       }
       break;
     }
@@ -103,14 +97,14 @@ std::unique_ptr<BluetoothServiceAttributeValueBlueZ> ReadAttributeValue(
       std::string str;
       if (!struct_reader->PopVariantOfString(&str))
         return nullptr;
-      value = std::make_unique<base::Value>(str);
+      value = base::Value(str);
       break;
     }
     case bluez::BluetoothServiceAttributeValueBlueZ::BOOL: {
       bool b;
       if (!struct_reader->PopVariantOfBool(&b))
         return nullptr;
-      value = std::make_unique<base::Value>(b);
+      value = base::Value(b);
       break;
     }
     case bluez::BluetoothServiceAttributeValueBlueZ::SEQUENCE: {
@@ -209,6 +203,7 @@ BluetoothDeviceClient::Properties::Properties(
   RegisterProperty(bluetooth_device::kAppearanceProperty, &appearance);
   RegisterProperty(bluetooth_device::kUUIDsProperty, &uuids);
   RegisterProperty(bluetooth_device::kPairedProperty, &paired);
+  RegisterProperty(kBondedPropertyPlaceholder, &bonded);
   RegisterProperty(bluetooth_device::kConnectedProperty, &connected);
   RegisterProperty(bluetooth_device::kConnectedLEProperty, &connected_le);
   RegisterProperty(bluetooth_device::kTrustedProperty, &trusted);
@@ -370,20 +365,8 @@ class BluetoothDeviceClientImpl : public BluetoothDeviceClient,
   void Disconnect(const dbus::ObjectPath& object_path,
                   base::OnceClosure callback,
                   ErrorCallback error_callback) override {
-// TODO(b/208933029): Only use the new disconnect method, e.g.
-// |bluetooth_device::kDisconnect|, once the Bluetooth revamp is fully launched.
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-    // For the Bluetooth revamp we want to use an updated disconnect mechanism
-    // that does not disable auto-reconnect since we no longer provide a
-    // "connect" button for HID devices.
-    const char* method_name = ash::features::IsBluetoothRevampEnabled()
-                                  ? bluetooth_device::kDisconnect
-                                  : kDisconnectOldPlaceholder;
-#else   // BUILDFLAG(IS_CHROMEOS_ASH)
-    const char* method_name = bluetooth_device::kDisconnect;
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
     dbus::MethodCall method_call(bluetooth_device::kBluetoothDeviceInterface,
-                                 method_name);
+                                 bluetooth_device::kDisconnect);
 
     dbus::ObjectProxy* object_proxy =
         object_manager_->GetObjectProxy(object_path);

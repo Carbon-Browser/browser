@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "chrome/common/extensions/api/omnibox.h"
 
 namespace extensions {
@@ -56,10 +57,10 @@ using DescriptionAndStylesCallback =
 // potentially contains XML markup (e.g., the string may be
 // "visit <url>https://example.com</url>"). This parses the string in an
 // isolated process and asynchronously returns the parse result via `callback`.
-void ParseDescriptionAndStyles(base::StringPiece str,
+void ParseDescriptionAndStyles(std::string_view str,
                                DescriptionAndStylesCallback callback);
 // Same as above, but takes in multiple string inputs.
-void ParseDescriptionsAndStyles(const std::vector<base::StringPiece>& strs,
+void ParseDescriptionsAndStyles(const std::vector<std::string_view>& strs,
                                 DescriptionAndStylesCallback callback);
 
 }  // namespace extensions

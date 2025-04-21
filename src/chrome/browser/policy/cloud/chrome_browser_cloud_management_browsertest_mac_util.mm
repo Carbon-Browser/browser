@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,14 +12,14 @@ void PostAppControllerNSNotifications() {
   // Simulate the user clicking a window other than the dialog.
   // The Profile is not ready when the dialog is displayed, so it can't be
   // accessed.
-  [[NSNotificationCenter defaultCenter]
+  [NSNotificationCenter.defaultCenter
       postNotificationName:NSWindowDidResignMainNotification
                     object:nil];
 
-  // Simulate the user hiding Chrome via Cmd+h when the dialog is displayed.
+  // Simulate the user hiding Chrome via Cmd+H when the dialog is displayed.
   // The AppShimManager hasn't been created when the dialog is
   // displayed, so it must be skipped.
-  [[NSNotificationCenter defaultCenter]
+  [NSNotificationCenter.defaultCenter
       postNotificationName:NSApplicationWillHideNotification
                     object:nil];
 }

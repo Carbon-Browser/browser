@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@ TEST(WaylandInputTypesTest, TextInputType) {
   }
 
   // Passing the invalid value returns nullopt.
-  constexpr auto kInvalidValue =
+  auto kInvalidValue =
       static_cast<zcr_extended_text_input_v1_input_type>(0xFFFFFFFF);
   EXPECT_FALSE(ConvertToTextInputType(kInvalidValue).has_value());
 }
@@ -31,7 +31,7 @@ TEST(WaylandInputTypesTest, TextInputMode) {
   }
 
   // Passing the invalid value returns nullopt.
-  constexpr auto kInvalidValue =
+  auto kInvalidValue =
       static_cast<zcr_extended_text_input_v1_input_mode>(0xFFFFFFFF);
   EXPECT_FALSE(ConvertToTextInputMode(kInvalidValue).has_value());
 }

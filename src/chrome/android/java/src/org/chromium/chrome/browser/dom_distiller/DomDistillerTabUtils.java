@@ -1,25 +1,22 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.dom_distiller;
 
-import androidx.annotation.VisibleForTesting;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.JniType;
+import org.jni_zero.NativeMethods;
 
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
+import org.chromium.base.ResettersForTesting;
 import org.chromium.chrome.browser.preferences.Pref;
-import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.components.navigation_interception.InterceptNavigationDelegate;
 import org.chromium.components.user_prefs.UserPrefs;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.url.GURL;
 
-/**
- * A helper class for using the DOM Distiller.
- */
+/** A helper class for using the DOM Distiller. */
 @JNINamespace("android")
 public class DomDistillerTabUtils {
     /** Triggering heuristics encoded in native enum DistillerHeuristicsType. */
@@ -28,8 +25,9 @@ public class DomDistillerTabUtils {
     /** Used to specify whether mobile friendly is enabled for testing purposes. */
     private static Boolean sExcludeMobileFriendlyForTesting;
 
-    private DomDistillerTabUtils() {
-    }
+    @DistillerHeuristicsType private static Integer sHeuristicsForTesting;
+
+    private DomDistillerTabUtils() {}
 
     /**
      * Creates a new WebContents and navigates the {@link WebContents} to view the URL of the
@@ -102,44 +100,31 @@ public class DomDistillerTabUtils {
      */
     public static boolean shouldExcludeMobileFriendly(Tab tab) {
         if (sExcludeMobileFriendlyForTesting != null) return sExcludeMobileFriendlyForTesting;
-        WebContents webContents = tab.getWebContents();
-        assert webContents != null;
-        return !UserPrefs.get(Profile.fromWebContents(webContents))
-                        .getBoolean(Pref.READER_FOR_ACCESSIBILITY)
+        return !UserPrefs.get(tab.getProfile()).getBoolean(Pref.READER_FOR_ACCESSIBILITY)
                 && getDistillerHeuristics() == DistillerHeuristicsType.ADABOOST_MODEL;
     }
 
-    @VisibleForTesting
     public static void setExcludeMobileFriendlyForTesting(boolean excludeForTesting) {
         sExcludeMobileFriendlyForTesting = excludeForTesting;
+        ResettersForTesting.register(() -> sExcludeMobileFriendlyForTesting = null);
     }
 
-    /**
-     * Cached version of DomDistillerTabUtilsJni.get().getDistillerHeuristics().
-     */
+    /** Set a test value of DistillerHeuristicsType. */
+    public static void setDistillerHeuristicsForTesting(
+            @DistillerHeuristicsType Integer distillerHeuristicsType) {
+        sHeuristicsForTesting = distillerHeuristicsType;
+        ResettersForTesting.register(() -> sHeuristicsForTesting = null);
+    }
+
+    /** Cached version of DomDistillerTabUtilsJni.get().getDistillerHeuristics(). */
     public static @DistillerHeuristicsType int getDistillerHeuristics() {
+        if (sHeuristicsForTesting != null) {
+            return sHeuristicsForTesting;
+        }
         if (sHeuristics == null) {
             sHeuristics = DomDistillerTabUtilsJni.get().getDistillerHeuristics();
         }
         return sHeuristics;
-    }
-
-    /**
-     * Check if the distilled content should be shown in a Chrome Custom Tab (CCT).
-     *
-     * @return True if it should.
-     */
-    public static boolean isCctMode() {
-        if (!ChromeFeatureList.isInitialized()) return false;
-        return ChromeFeatureList.isEnabled(ChromeFeatureList.READER_MODE_IN_CCT);
-    }
-
-    /**
-     * Returns true if reader mode prompt should be displayed as a message. Otherwise it will be
-     * displayed as an infobar.
-     */
-    public static boolean useMessagesForReaderModePrompt() {
-        return ChromeFeatureList.isEnabled(ChromeFeatureList.MESSAGES_FOR_ANDROID_READER_MODE);
     }
 
     /**
@@ -155,10 +140,16 @@ public class DomDistillerTabUtils {
     @NativeMethods
     interface Natives {
         void distillCurrentPageAndView(WebContents webContents);
+
         void distillCurrentPage(WebContents webContents);
+
         void distillAndView(WebContents sourceWebContents, WebContents destinationWebContents);
+
+        @JniType("std::u16string")
         String getFormattedUrlFromOriginalDistillerUrl(GURL url);
+
         int getDistillerHeuristics();
+
         void setInterceptNavigationDelegate(
                 InterceptNavigationDelegate delegate, WebContents webContents);
     }

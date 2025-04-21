@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@ class Transform;
 
 namespace ash {
 
-// TODO(crbug.com/756161): This method will need to be moved to
+// TODO(crbug.com/40535513): This method will need to be moved to
 // gfx/geometry/dip_utils.h for M62 and later. This method computes the scale
 // required to convert DIP coordinates to the coordinate space of the
 // |transform|. It deduces the scale from the transform by applying it to a pair

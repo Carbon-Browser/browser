@@ -1,41 +1,75 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/frame/contents_web_view.h"
 
-#include "chrome/browser/themes/theme_properties.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/views/status_bubble_views.h"
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/web_contents.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
-#include "ui/base/theme_provider.h"
 #include "ui/color/color_provider.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_tree_owner.h"
 #include "ui/views/background.h"
+#include "ui/views/view_class_properties.h"
 
 #if defined(USE_AURA)
 #include "ui/aura/window.h"
 #include "ui/wm/core/window_util.h"
 #endif
 
+#if BUILDFLAG(ENABLE_GLIC)
+#include "chrome/browser/glic/glic_enabling.h"
+#include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/views/glic/border/border_view.h"
+#endif
+
+DEFINE_CLASS_ELEMENT_IDENTIFIER_VALUE(ContentsWebView,
+                                      kContentsWebViewElementId);
+
 ContentsWebView::ContentsWebView(content::BrowserContext* browser_context)
-    : views::WebView(browser_context),
-      status_bubble_(nullptr) {
+    : views::WebView(browser_context), status_bubble_(nullptr) {
+  SetProperty(views::kElementIdentifierKey, kContentsWebViewElementId);
+#if BUILDFLAG(ENABLE_GLIC)
+  // `IsEnabledForProfile` returns true if the feature is explicitly enabled by
+  // flags.
+  if (GlicEnabling::IsEnabledForProfile(
+          Profile::FromBrowserContext(browser_context))) {
+    glic_border_ = AddChildView(std::make_unique<glic::BorderView>());
+    // https://crbug.com/387458471: By default the border view is visible,
+    // meaning it will paint during the initial layout of the browser UI,
+    // causing a flash of the border.
+    glic_border_->SetVisible(false);
+    // Become the contents web view's observer immediately to make sure
+    // `glic_border_` is always the z-topmost child.
+    AddObserver(glic_border_);
+    // `glic_border_` should never receive input events.
+    glic_border_->SetCanProcessEventsWithinSubtree(false);
+  }
+#endif
 }
 
 ContentsWebView::~ContentsWebView() {
+#if BUILDFLAG(ENABLE_GLIC)
+  if (glic_border_) {
+    glic::BorderView* glic_border = glic_border_;
+    glic_border_ = nullptr;
+    CHECK_EQ(glic_border->parent(), this);
+    CHECK(HasObserver(glic_border));
+    RemoveObserver(glic_border);
+  }
+#endif
 }
 
 void ContentsWebView::SetStatusBubble(StatusBubbleViews* status_bubble) {
   status_bubble_ = status_bubble;
   DCHECK(!status_bubble_ || status_bubble_->base_view() == this);
-  if (status_bubble_)
+  if (status_bubble_) {
     status_bubble_->Reposition();
+  }
   OnPropertyChanged(&status_bubble_, views::kPropertyEffectsNone);
 }
 
@@ -45,8 +79,20 @@ StatusBubbleViews* ContentsWebView::GetStatusBubble() const {
 
 void ContentsWebView::SetBackgroundVisible(bool background_visible) {
   background_visible_ = background_visible;
-  if (GetWidget())
+  if (GetWidget()) {
     UpdateBackgroundColor();
+  }
+}
+
+void ContentsWebView::SetBackgroundRadii(const gfx::RoundedCornersF& radii) {
+  if (background_radii_ == radii) {
+    return;
+  }
+
+  background_radii_ = radii;
+  if (GetWidget()) {
+    UpdateBackgroundColor();
+  }
 }
 
 bool ContentsWebView::GetNeedsNotificationWhenVisibleBoundsChange() const {
@@ -54,8 +100,9 @@ bool ContentsWebView::GetNeedsNotificationWhenVisibleBoundsChange() const {
 }
 
 void ContentsWebView::OnVisibleBoundsChanged() {
-  if (status_bubble_)
+  if (status_bubble_) {
     status_bubble_->Reposition();
+  }
 }
 
 void ContentsWebView::OnThemeChanged() {
@@ -64,15 +111,17 @@ void ContentsWebView::OnThemeChanged() {
 }
 
 void ContentsWebView::OnLetterboxingChanged() {
-  if (GetWidget())
+  if (GetWidget()) {
     UpdateBackgroundColor();
+  }
 }
 
 void ContentsWebView::UpdateBackgroundColor() {
   SkColor color = GetColorProvider()->GetColor(
       is_letterboxing() ? kColorWebContentsBackgroundLetterboxing
                         : kColorWebContentsBackground);
-  SetBackground(background_visible_ ? views::CreateSolidBackground(color)
+  SetBackground(background_visible_ ? views::CreateRoundedRectBackground(
+                                          color, background_radii_)
                                     : nullptr);
 
   if (web_contents()) {
@@ -105,8 +154,9 @@ std::unique_ptr<ui::Layer> ContentsWebView::RecreateLayer() {
 }
 
 void ContentsWebView::CloneWebContentsLayer() {
-  if (!web_contents())
+  if (!web_contents()) {
     return;
+  }
 #if defined(USE_AURA)
   // We don't need to clone the layers on non-Aura (Mac), because closing an
   // NSWindow does not animate.
@@ -138,11 +188,12 @@ void ContentsWebView::DestroyClonedLayer() {
 
 void ContentsWebView::RenderViewReady() {
   // Set the background color to be the theme's ntp background on startup.
-  if (GetWidget())
+  if (GetWidget()) {
     UpdateBackgroundColor();
+  }
   WebView::RenderViewReady();
 }
 
-BEGIN_METADATA(ContentsWebView, views::WebView)
+BEGIN_METADATA(ContentsWebView)
 ADD_PROPERTY_METADATA(StatusBubbleViews*, StatusBubble)
 END_METADATA

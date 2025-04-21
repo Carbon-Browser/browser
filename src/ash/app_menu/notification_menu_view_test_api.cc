@@ -1,8 +1,8 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "notification_menu_view_test_api.h"
+#include "ash/app_menu/notification_menu_view_test_api.h"
 
 #include "ash/app_menu/notification_item_view.h"
 #include "ash/app_menu/notification_menu_header_view.h"

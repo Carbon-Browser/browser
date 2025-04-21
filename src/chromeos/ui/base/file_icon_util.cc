@@ -1,26 +1,32 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ui/base/file_icon_util.h"
 
+#include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "base/containers/fixed_flat_map.h"
 #include "base/files/file_path.h"
+#include "base/memory/raw_ref.h"
 #include "base/no_destructor.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/not_fatal_until.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chromeos/ui/vector_icons/vector_icons.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/resource/resource_bundle.h"
-#include "ui/chromeos/styles/cros_styles.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
+#include "ui/color/color_provider.h"
+#include "ui/color/color_provider_manager.h"
 #include "ui/gfx/image/image.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/image/image_skia_operations.h"
 #include "ui/gfx/paint_vector_icon.h"
+#include "ui/gfx/vector_icon_types.h"
+#include "ui/native_theme/native_theme.h"
 
 namespace chromeos {
 namespace {
@@ -36,43 +42,46 @@ enum class ColorId {
   kFiletypeGsite,
   kFiletypePpt,
   kFiletypeSites,
+  kFiletypeGform,
+  kFiletypeExcel,
+  kFiletypeWord,
 };
 
 struct IconParams {
-  const gfx::VectorIcon& icon;
+  const raw_ref<const gfx::VectorIcon> icon;
   ColorId color_id;
 };
 
+// TODO(b/280519843): Return ui::ColorId instead of SkColor so we don't need to
+// get ColorProvider from the util function.
 SkColor ResolveColor(ColorId color_id, bool dark_background) {
   // Changes to this should be reflected in
   // ui/file_manager/file_manager/foreground/css/file_types.css.
+  auto* native_theme = ui::NativeTheme::GetInstanceForNativeUi();
+  auto* color_provider = ui::ColorProviderManager::Get().GetColorProviderFor(
+      native_theme->GetColorProviderKey(nullptr));
   switch (color_id) {
     case ColorId::kBlue:
-      return cros_styles::ResolveColor(cros_styles::ColorName::kIconColorBlue,
-                                       dark_background,
-                                       /*use_debug_colors=*/false);
+      return color_provider->GetColor(cros_tokens::kCrosSysProgress);
     case ColorId::kGreen:
-      return cros_styles::ResolveColor(cros_styles::ColorName::kIconColorGreen,
-                                       dark_background,
-                                       /*use_debug_colors=*/false);
+      return color_provider->GetColor(cros_tokens::kCrosSysPositive);
     case ColorId::kGrey:
-      return cros_styles::ResolveColor(
-          cros_styles::ColorName::kIconColorPrimary, dark_background,
-          /*use_debug_colors=*/false);
+      return color_provider->GetColor(cros_tokens::kCrosSysOnSurface);
     case ColorId::kRed:
-      return cros_styles::ResolveColor(cros_styles::ColorName::kIconColorRed,
-                                       dark_background,
-                                       /*use_debug_colors=*/false);
+      return color_provider->GetColor(cros_tokens::kCrosSysError);
     case ColorId::kYellow:
-      return cros_styles::ResolveColor(cros_styles::ColorName::kIconColorYellow,
-                                       dark_background,
-                                       /*use_debug_colors=*/false);
+      return color_provider->GetColor(cros_tokens::kCrosSysWarning);
     case ColorId::kFiletypePpt:
-      return SkColorSetRGB(0xFF, 0x76, 0x37);
+      return color_provider->GetColor(cros_tokens::kCrosSysFileMsPpt);
     case ColorId::kFiletypeGsite:
     case ColorId::kFiletypeSites:
-      return dark_background ? SkColorSetRGB(0xBC, 0x9E, 0xFF)
-                             : SkColorSetRGB(0x79, 0x6E, 0xEE);
+      return color_provider->GetColor(cros_tokens::kCrosSysFileSite);
+    case ColorId::kFiletypeGform:
+      return color_provider->GetColor(cros_tokens::kCrosSysFileForm);
+    case ColorId::kFiletypeExcel:
+      return color_provider->GetColor(cros_tokens::kCrosSysFileMsExcel);
+    case ColorId::kFiletypeWord:
+      return color_provider->GetColor(cros_tokens::kCrosSysFileMsWord);
   }
 }
 
@@ -82,53 +91,74 @@ const std::map<IconType, IconParams>& GetIconTypeToIconParamsMap() {
   static const base::NoDestructor<std::map<IconType, IconParams>>
       icon_type_to_icon_params(
           {{IconType::kArchive,
-            IconParams{kFiletypeArchiveIcon, ColorId::kGrey}},
-           {IconType::kAudio, IconParams{kFiletypeAudioIcon, ColorId::kRed}},
-           {IconType::kChart, IconParams{kFiletypeChartIcon, ColorId::kGreen}},
+            IconParams{raw_ref(kFiletypeArchiveIcon), ColorId::kGrey}},
+           {IconType::kAudio,
+            IconParams{raw_ref(kFiletypeAudioIcon), ColorId::kRed}},
+           {IconType::kChart,
+            IconParams{raw_ref(kFiletypeChartIcon), ColorId::kGreen}},
            {IconType::kDrive,
-            IconParams{kFiletypeTeamDriveIcon, ColorId::kGrey}},
-           {IconType::kExcel, IconParams{kFiletypeExcelIcon, ColorId::kGreen}},
-           {IconType::kFolder, IconParams{kFiletypeFolderIcon, ColorId::kGrey}},
+            IconParams{raw_ref(kFiletypeTeamDriveIcon), ColorId::kGrey}},
+           {IconType::kExcel,
+            IconParams{raw_ref(kFiletypeExcelIcon), ColorId::kFiletypeExcel}},
+           {IconType::kFolder,
+            IconParams{raw_ref(kFiletypeFolderIcon), ColorId::kGrey}},
            {IconType::kFolderShared,
-            IconParams{kFiletypeSharedIcon, ColorId::kGrey}},
-           {IconType::kGdoc, IconParams{kFiletypeGdocIcon, ColorId::kBlue}},
-           {IconType::kGdraw, IconParams{kFiletypeGdrawIcon, ColorId::kRed}},
+            IconParams{raw_ref(kFiletypeSharedIcon), ColorId::kGrey}},
+           {IconType::kGdoc,
+            IconParams{raw_ref(kFiletypeGdocIcon), ColorId::kBlue}},
+           {IconType::kGdraw,
+            IconParams{raw_ref(kFiletypeGdrawIcon), ColorId::kRed}},
            {IconType::kGeneric,
-            IconParams{kFiletypeGenericIcon, ColorId::kGrey}},
-           {IconType::kGform, IconParams{kFiletypeGformIcon, ColorId::kGreen}},
-           {IconType::kGmap, IconParams{kFiletypeGmapIcon, ColorId::kRed}},
+            IconParams{raw_ref(kFiletypeGenericIcon), ColorId::kGrey}},
+           {IconType::kGform,
+            IconParams{raw_ref(kFiletypeGformIcon), ColorId::kFiletypeGform}},
+           {IconType::kGmap,
+            IconParams{raw_ref(kFiletypeGmapIcon), ColorId::kRed}},
            {IconType::kGsheet,
-            IconParams{kFiletypeGsheetIcon, ColorId::kGreen}},
+            IconParams{raw_ref(kFiletypeGsheetIcon), ColorId::kGreen}},
            {IconType::kGsite,
-            IconParams{kFiletypeGsiteIcon, ColorId::kFiletypeGsite}},
+            IconParams{raw_ref(kFiletypeGsiteIcon), ColorId::kFiletypeGsite}},
+           {IconType::kGmaillayout,
+            IconParams{raw_ref(kFiletypeGmaillayoutIcon), ColorId::kRed}},
            {IconType::kGslide,
-            IconParams{kFiletypeGslidesIcon, ColorId::kYellow}},
+            IconParams{raw_ref(kFiletypeGslidesIcon), ColorId::kYellow}},
            {IconType::kGtable,
-            IconParams{kFiletypeGtableIcon, ColorId::kGreen}},
-           {IconType::kImage, IconParams{kFiletypeImageIcon, ColorId::kRed}},
-           {IconType::kLinux, IconParams{kFiletypeLinuxIcon, ColorId::kGrey}},
-           {IconType::kPdf, IconParams{kFiletypePdfIcon, ColorId::kRed}},
+            IconParams{raw_ref(kFiletypeGtableIcon), ColorId::kGreen}},
+           {IconType::kImage,
+            IconParams{raw_ref(kFiletypeImageIcon), ColorId::kRed}},
+           {IconType::kLinux,
+            IconParams{raw_ref(kFiletypeLinuxIcon), ColorId::kGrey}},
+           {IconType::kPdf,
+            IconParams{raw_ref(kFiletypePdfIcon), ColorId::kRed}},
            {IconType::kPpt,
-            IconParams{kFiletypePptIcon, ColorId::kFiletypePpt}},
-           {IconType::kScript, IconParams{kFiletypeScriptIcon, ColorId::kBlue}},
+            IconParams{raw_ref(kFiletypePptIcon), ColorId::kFiletypePpt}},
+           {IconType::kScript,
+            IconParams{raw_ref(kFiletypeScriptIcon), ColorId::kBlue}},
            {IconType::kSites,
-            IconParams{kFiletypeSitesIcon, ColorId::kFiletypeSites}},
-           {IconType::kTini, IconParams{kFiletypeTiniIcon, ColorId::kBlue}},
-           {IconType::kVideo, IconParams{kFiletypeVideoIcon, ColorId::kRed}},
-           {IconType::kWord, IconParams{kFiletypeWordIcon, ColorId::kBlue}}});
+            IconParams{raw_ref(kFiletypeSitesIcon), ColorId::kFiletypeSites}},
+           {IconType::kTini,
+            IconParams{raw_ref(kFiletypeTiniIcon), ColorId::kBlue}},
+           {IconType::kVideo,
+            IconParams{raw_ref(kFiletypeVideoIcon), ColorId::kRed}},
+           {IconType::kWord,
+            IconParams{raw_ref(kFiletypeWordIcon), ColorId::kFiletypeWord}}});
   return *icon_type_to_icon_params;
+}
+
+const IconParams& GetIconParamsFromIconType(IconType icon) {
+  const auto& icon_type_to_icon_params = GetIconTypeToIconParamsMap();
+  const auto& it = icon_type_to_icon_params.find(icon);
+  CHECK(it != icon_type_to_icon_params.end(), base::NotFatalUntil::M130);
+
+  return it->second;
 }
 
 gfx::ImageSkia GetVectorIconFromIconType(IconType icon,
                                          bool dark_background,
-                                         absl::optional<int> dip_size) {
-  const auto& icon_type_to_icon_params = GetIconTypeToIconParamsMap();
-  const auto& it = icon_type_to_icon_params.find(icon);
-  DCHECK(it != icon_type_to_icon_params.end());
-
-  const IconParams& params = it->second;
+                                         std::optional<int> dip_size) {
+  const IconParams& params = GetIconParamsFromIconType(icon);
   const gfx::IconDescription description(
-      params.icon, dip_size.value_or(kIconDefaultDipSize),
+      *params.icon, dip_size.value_or(kIconDefaultDipSize),
       ResolveColor(params.color_id, dark_background));
 
   return gfx::CreateVectorIcon(description);
@@ -142,7 +172,7 @@ IconType GetIconTypeForPath(const base::FilePath& filepath) {
   // Changes to this map should be reflected in
   // ui/file_manager/base/gn/file_types.json5
   static const auto extension_to_icon =
-      base::MakeFixedFlatMap<base::StringPiece, IconType>({
+      base::MakeFixedFlatMap<std::string_view, IconType>({
           // Image
           {".JPEG", IconType::kImage},
           {".JPG", IconType::kImage},
@@ -231,6 +261,7 @@ IconType GetIconTypeForPath(const base::FilePath& filepath) {
           {".GFORM", IconType::kGform},
           {".GMAPS", IconType::kGmap},
           {".GSITE", IconType::kGsite},
+          {".GMAILLAYOUT", IconType::kGmaillayout},
 
           // Other
           {".PDF", IconType::kPdf},
@@ -248,11 +279,12 @@ IconType GetIconTypeForPath(const base::FilePath& filepath) {
           {".PPT", IconType::kPpt},
           {".PPTX", IconType::kPpt},
           {".XLS", IconType::kExcel},
+          {".XLSM", IconType::kExcel},
           {".XLSX", IconType::kExcel},
           {".TINI", IconType::kTini},
       });
 
-  const auto* const it =
+  const auto it =
       extension_to_icon.find(base::ToUpperASCII(filepath.Extension()));
   if (it != extension_to_icon.end()) {
     return it->second;
@@ -276,6 +308,7 @@ IconType GetIconTypeFromString(const std::string& icon_type_string) {
                                 {"gmap", IconType::kGmap},
                                 {"gsheet", IconType::kGsheet},
                                 {"gsite", IconType::kGsite},
+                                {"gmaillayout", IconType::kGmaillayout},
                                 {"gslides", IconType::kGslide},
                                 {"gtable", IconType::kGtable},
                                 {"image", IconType::kImage},
@@ -297,36 +330,38 @@ IconType GetIconTypeFromString(const std::string& icon_type_string) {
 
 }  // namespace internal
 
+const gfx::VectorIcon& GetIconForPath(const base::FilePath& filepath) {
+  return *GetIconParamsFromIconType(internal::GetIconTypeForPath(filepath))
+              .icon;
+}
+
 gfx::ImageSkia GetIconForPath(const base::FilePath& filepath,
                               bool dark_background,
-                              absl::optional<int> dip_size) {
+                              std::optional<int> dip_size) {
   return GetVectorIconFromIconType(internal::GetIconTypeForPath(filepath),
                                    dark_background, dip_size);
 }
 
 gfx::ImageSkia GetChipIconForPath(const base::FilePath& filepath,
                                   bool dark_background) {
-  if (!features::IsDarkLightModeEnabled()) {
-    // For a chip icon we need to draw 2 icons: a white circle background icon
-    // (kFiletypeChipBackgroundIcon) and the icon of the file.
-    return gfx::ImageSkiaOperations::CreateSuperimposedImage(
-        gfx::CreateVectorIcon(kFiletypeChipBackgroundIcon, kIconDefaultDipSize,
-                              SK_ColorWHITE),
-        GetVectorIconFromIconType(internal::GetIconTypeForPath(filepath),
-                                  /*dark_background=*/false, absl::nullopt));
-  }
-
   return GetIconForPath(filepath, dark_background);
+}
+
+const gfx::VectorIcon& GetIconFromType(const std::string& icon_type) {
+  return *GetIconParamsFromIconType(internal::GetIconTypeFromString(icon_type))
+              .icon;
 }
 
 gfx::ImageSkia GetIconFromType(const std::string& icon_type,
                                bool dark_background) {
   return GetVectorIconFromIconType(internal::GetIconTypeFromString(icon_type),
-                                   dark_background, absl::nullopt);
+                                   dark_background, std::nullopt);
 }
 
-gfx::ImageSkia GetIconFromType(IconType icon_type, bool dark_background) {
-  return GetVectorIconFromIconType(icon_type, dark_background, absl::nullopt);
+gfx::ImageSkia GetIconFromType(IconType icon_type,
+                               bool dark_background,
+                               std::optional<int> dip_size) {
+  return GetVectorIconFromIconType(icon_type, dark_background, dip_size);
 }
 
 SkColor GetIconColorForPath(const base::FilePath& filepath,
@@ -334,7 +369,7 @@ SkColor GetIconColorForPath(const base::FilePath& filepath,
   const auto& icon_type = internal::GetIconTypeForPath(filepath);
   const auto& icon_type_to_icon_params = GetIconTypeToIconParamsMap();
   const auto& it = icon_type_to_icon_params.find(icon_type);
-  DCHECK(it != icon_type_to_icon_params.end());
+  CHECK(it != icon_type_to_icon_params.end(), base::NotFatalUntil::M130);
 
   return ResolveColor(it->second.color_id, dark_background);
 }

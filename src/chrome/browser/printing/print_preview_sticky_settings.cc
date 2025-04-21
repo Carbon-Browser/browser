@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,7 @@ const std::string* PrintPreviewStickySettings::printer_app_state() const {
 }
 
 void PrintPreviewStickySettings::StoreAppState(const std::string& data) {
-  printer_app_state_ = absl::make_optional(data);
+  printer_app_state_ = std::make_optional(data);
 }
 
 void PrintPreviewStickySettings::SaveInPrefs(PrefService* prefs) const {
@@ -48,7 +48,7 @@ void PrintPreviewStickySettings::SaveInPrefs(PrefService* prefs) const {
 
 void PrintPreviewStickySettings::RestoreFromPrefs(PrefService* prefs) {
   const base::Value::Dict& value =
-      prefs->GetValueDict(prefs::kPrintPreviewStickySettings);
+      prefs->GetDict(prefs::kPrintPreviewStickySettings);
   const std::string* app_state = value.FindString(kSettingAppState);
   if (app_state)
     StoreAppState(*app_state);
@@ -70,7 +70,7 @@ std::vector<std::string> PrintPreviewStickySettings::GetRecentlyUsedPrinters() {
   if (!sticky_settings_state)
     return {};
 
-  absl::optional<base::Value> sticky_settings_state_value =
+  std::optional<base::Value> sticky_settings_state_value =
       base::JSONReader::Read(*sticky_settings_state);
   if (!sticky_settings_state_value || !sticky_settings_state_value->is_dict())
     return {};

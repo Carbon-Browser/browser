@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #ifndef SANDBOX_WIN_SRC_CROSSCALL_CLIENT_H_
 #define SANDBOX_WIN_SRC_CROSSCALL_CLIENT_H_
@@ -9,6 +14,8 @@
 #include <stdint.h>
 
 #include "base/compiler_specific.h"
+#include "base/memory/raw_ptr_exclusion.h"
+#include "base/memory/raw_ref.h"
 #include "sandbox/win/src/crosscall_params.h"
 #include "sandbox/win/src/sandbox.h"
 
@@ -42,7 +49,7 @@
 // return codes indicate that the IPC transport failed to deliver it.
 namespace sandbox {
 
-enum class IpcTag;
+enum class IpcTag : uint32_t;
 
 // this is the assumed channel size. This can be overridden in a given
 // IPC implementation.
@@ -61,7 +68,7 @@ class CopyHelper {
   explicit CopyHelper(const T& t) : t_(t) {}
 
   // Returns the pointer to the start of the input.
-  const void* GetStart() const { return &t_; }
+  const void* GetStart() const { return &*t_; }
 
   // Update the stored value with the value in the buffer. This is not
   // supported for this type.
@@ -83,7 +90,7 @@ class CopyHelper {
   }
 
  private:
-  const T& t_;
+  const raw_ref<const T> t_;
 };
 
 // This copy helper template specialization if for the void pointer
@@ -113,7 +120,8 @@ class CopyHelper<void*> {
   ArgType GetType() { return VOIDPTR_TYPE; }
 
  private:
-  const void* t_;
+  // Not a raw_ptr<> as this might be a Win32 type such as LPVOID or HANDLE.
+  RAW_PTR_EXCLUSION const void* t_;
 };
 
 // This copy helper template specialization catches the cases where the
@@ -153,7 +161,7 @@ class CopyHelper<const wchar_t*> {
   // We provide our not very optimized version of wcslen(), since we don't
   // want to risk having the linker use the version in the CRT since the CRT
   // might not be present when we do an early IPC call.
-  static size_t CDECL StringLength(const wchar_t* wcs) {
+  static size_t StringLength(const wchar_t* wcs) {
     const wchar_t* eos = wcs;
     while (*eos++)
       ;

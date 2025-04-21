@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,10 @@
 
 #include <string>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/process/launch.h"
@@ -31,9 +31,10 @@
 #include "content/public/browser/web_contents.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ash/constants/ash_features.h"
+#include "ash/webui/settings/public/constants/routes.mojom.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
-#include "chrome/browser/ui/webui/settings/chromeos/constants/routes.mojom.h"
 #include "chrome/common/webui_url_constants.h"
 #endif
 
@@ -84,7 +85,7 @@ SSLErrorControllerClient::SSLErrorControllerClient(
       request_url_(request_url),
       cert_error_(cert_error) {}
 
-SSLErrorControllerClient::~SSLErrorControllerClient() {}
+SSLErrorControllerClient::~SSLErrorControllerClient() = default;
 
 void SSLErrorControllerClient::GoBack() {
   SecurityInterstitialControllerClient::GoBackAfterNavigationCommitted();
@@ -97,7 +98,7 @@ void SSLErrorControllerClient::Proceed() {
   // Hosted Apps should not be allowed to run if there is a problem with their
   // certificate. So, when users click proceed on an interstitial, move the tab
   // to a regular Chrome window and proceed as usual there.
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents_);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents_);
   if (web_app::AppBrowserController::IsWebApp(browser))
     chrome::OpenInChrome(browser);
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
@@ -109,8 +110,12 @@ void SSLErrorControllerClient::Proceed() {
           profile->GetSSLHostStateDelegate());
   // StatefulSSLHostStateDelegate can be null during tests.
   if (state) {
-    state->AllowCert(request_url_.host(), *ssl_info_.cert.get(), cert_error_,
-                     web_contents_);
+    // Notifies the browser process when a certificate exception is allowed.
+    web_contents_->SetAlwaysSendSubresourceNotifications();
+
+    state->AllowCert(
+        request_url_.host(), *ssl_info_.cert.get(), cert_error_,
+        web_contents_->GetPrimaryMainFrame()->GetStoragePartition());
     Reload();
   }
 }
@@ -125,7 +130,7 @@ void SSLErrorControllerClient::LaunchDateAndTimeSettings() {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   chrome::SettingsWindowManager::GetInstance()->ShowOSSettings(
       ProfileManager::GetActiveUserProfile(),
-      chromeos::settings::mojom::kDateAndTimeSectionPath);
+      chromeos::settings::mojom::kSystemPreferencesSectionPath);
 #else
   base::ThreadPool::PostTask(
       FROM_HERE, {base::TaskPriority::USER_VISIBLE, base::MayBlock()},

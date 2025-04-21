@@ -1,20 +1,26 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/342213636): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <stdint.h>
 
 #include <limits>
 #include <memory>
+#include <string_view>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/unguessable_token.h"
 #include "content/public/test/browser_task_environment.h"
@@ -117,9 +123,11 @@ class BlobURLTest : public testing::Test {
   void SetUpFileSystem() {
     quota_manager_ = base::MakeRefCounted<storage::MockQuotaManager>(
         /*is_incognito=*/false, temp_dir_.GetPath(),
-        base::ThreadTaskRunnerHandle::Get(), special_storage_policy_);
+        base::SingleThreadTaskRunner::GetCurrentDefault(),
+        special_storage_policy_);
     quota_manager_proxy_ = base::MakeRefCounted<storage::MockQuotaManagerProxy>(
-        quota_manager_.get(), base::ThreadTaskRunnerHandle::Get());
+        quota_manager_.get(),
+        base::SingleThreadTaskRunner::GetCurrentDefault());
     // Prepare file system.
     file_system_context_ = storage::CreateFileSystemContextForTesting(
         quota_manager_proxy_.get(), temp_dir_.GetPath());
@@ -127,7 +135,7 @@ class BlobURLTest : public testing::Test {
     base::RunLoop run_loop;
     file_system_context_->OpenFileSystem(
         blink::StorageKey::CreateFromStringForTesting(kFileSystemURLOrigin),
-        /*bucket=*/absl::nullopt, kFileSystemType,
+        /*bucket=*/std::nullopt, kFileSystemType,
         storage::OPEN_FILE_SYSTEM_CREATE_IF_NONEXISTENT,
         base::BindOnce(&BlobURLTest::OnValidateFileSystem,
                        base::Unretained(this), run_loop.QuitClosure()));
@@ -138,12 +146,10 @@ class BlobURLTest : public testing::Test {
     const char kFilename1[] = "FileSystemFile1.dat";
     temp_file_system_file1_ = GetFileSystemURL(kFilename1);
     WriteFileSystemFile(kFilename1, kTestFileSystemFileData1,
-                        std::size(kTestFileSystemFileData1) - 1,
                         &temp_file_system_file_modification_time1_);
     const char kFilename2[] = "FileSystemFile2.dat";
     temp_file_system_file2_ = GetFileSystemURL(kFilename2);
     WriteFileSystemFile(kFilename2, kTestFileSystemFileData2,
-                        std::size(kTestFileSystemFileData2) - 1,
                         &temp_file_system_file_modification_time2_);
   }
 
@@ -152,8 +158,7 @@ class BlobURLTest : public testing::Test {
   }
 
   void WriteFileSystemFile(const std::string& filename,
-                           const char* buf,
-                           int buf_size,
+                           std::string_view data,
                            base::Time* modification_time) {
     storage::FileSystemURL url =
         file_system_context_->CreateCrackedFileSystemURL(
@@ -162,7 +167,7 @@ class BlobURLTest : public testing::Test {
 
     ASSERT_EQ(base::File::FILE_OK,
               storage::AsyncFileTestHelper::CreateFileWithData(
-                  file_system_context_.get(), url, buf, buf_size));
+                  file_system_context_.get(), url, data));
 
     base::File::Info file_info;
     ASSERT_EQ(base::File::FILE_OK,
@@ -195,19 +200,21 @@ class BlobURLTest : public testing::Test {
     expected_error_code_ = expected_error_code;
     expected_response_ = "";
     TestRequest("GET", net::HttpRequestHeaders());
-    EXPECT_TRUE(response_metadata_.empty());
+    EXPECT_FALSE(response_metadata_.has_value());
   }
 
   void TestRequest(const std::string& method,
                    const net::HttpRequestHeaders& extra_headers) {
     auto origin = url::Origin::Create(GURL("https://example.com"));
+    const auto storage_key = blink::StorageKey::CreateFirstParty(origin);
     auto url = GURL("blob:" + origin.Serialize() + "/id1");
     network::ResourceRequest request;
     request.url = url;
     request.method = method;
     request.headers = extra_headers;
 
-    storage::BlobURLStoreImpl url_store(origin, blob_url_registry_.AsWeakPtr());
+    storage::BlobURLStoreImpl url_store(storage_key, storage_key.origin(), 0,
+                                        blob_url_registry_.AsWeakPtr());
 
     mojo::PendingRemote<blink::mojom::Blob> blob_remote;
     storage::BlobImpl::Create(
@@ -227,10 +234,9 @@ class BlobURLTest : public testing::Test {
         base::BindOnce(
             [](base::OnceClosure done,
                const base::UnguessableToken& agent_registered,
-               const absl::optional<base::UnguessableToken>&
+               const std::optional<base::UnguessableToken>&
                    unsafe_agent_cluster_id,
-               const absl::optional<net::SchemefulSite>&
-                   unsafe_top_level_site) {
+               const std::optional<net::SchemefulSite>& unsafe_top_level_site) {
               EXPECT_EQ(agent_registered, unsafe_agent_cluster_id);
               std::move(done).Run();
             },
@@ -349,7 +355,7 @@ class BlobURLTest : public testing::Test {
   std::string response_;
   int response_error_code_;
   scoped_refptr<net::HttpResponseHeaders> response_headers_;
-  std::string response_metadata_;
+  std::optional<std::string> response_metadata_;
 
   int expected_error_code_;
   int expected_status_code_;
@@ -419,7 +425,7 @@ TEST_F(BlobURLTest, TestGetLargeFileSystemFileRequest) {
     large_data.append(1, static_cast<char>(i % 256));
 
   const char kFilename[] = "LargeBlob.dat";
-  WriteFileSystemFile(kFilename, large_data.data(), large_data.size(), nullptr);
+  WriteFileSystemFile(kFilename, large_data, nullptr);
 
   blob_data_->AppendFileSystemFile(
       file_system_context_->CrackURLInFirstPartyContext(
@@ -495,7 +501,7 @@ TEST_F(BlobURLTest, TestGetRangeRequest1) {
   TestRequest("GET", extra_headers);
 
   EXPECT_EQ(6, response_headers_->GetContentLength());
-  EXPECT_TRUE(response_metadata_.empty());
+  EXPECT_FALSE(response_metadata_.has_value());
 
   int64_t first = 0, last = 0, length = 0;
   EXPECT_TRUE(response_headers_->GetContentRangeFor206(&first, &last, &length));
@@ -516,7 +522,7 @@ TEST_F(BlobURLTest, TestGetRangeRequest2) {
   TestRequest("GET", extra_headers);
 
   EXPECT_EQ(10, response_headers_->GetContentLength());
-  EXPECT_TRUE(response_metadata_.empty());
+  EXPECT_FALSE(response_metadata_.has_value());
 
   int64_t total = GetTotalBlobLength();
   int64_t first = 0, last = 0, length = 0;
@@ -538,7 +544,7 @@ TEST_F(BlobURLTest, TestGetRangeRequest3) {
   TestRequest("GET", extra_headers);
 
   EXPECT_EQ(3, response_headers_->GetContentLength());
-  EXPECT_TRUE(response_metadata_.empty());
+  EXPECT_FALSE(response_metadata_.has_value());
 
   int64_t first = 0, last = 0, length = 0;
   EXPECT_TRUE(response_headers_->GetContentRangeFor206(&first, &last, &length));
@@ -558,7 +564,7 @@ TEST_F(BlobURLTest, TestExtraHeaders) {
   std::string content_type;
   EXPECT_TRUE(response_headers_->GetMimeType(&content_type));
   EXPECT_EQ(kTestContentType, content_type);
-  EXPECT_TRUE(response_metadata_.empty());
+  EXPECT_FALSE(response_metadata_.has_value());
   size_t iter = 0;
   std::string content_disposition;
   EXPECT_TRUE(response_headers_->EnumerateHeader(&iter, "Content-Disposition",
@@ -576,7 +582,7 @@ TEST_F(BlobURLTest, TestSideData) {
   EXPECT_EQ(static_cast<int>(std::size(kTestDataHandleData2) - 1),
             response_headers_->GetContentLength());
 
-  EXPECT_EQ(std::string(kTestDiskCacheSideData), response_metadata_);
+  EXPECT_EQ(std::string(kTestDiskCacheSideData), *response_metadata_);
 }
 
 TEST_F(BlobURLTest, TestZeroSizeSideData) {
@@ -589,7 +595,7 @@ TEST_F(BlobURLTest, TestZeroSizeSideData) {
   EXPECT_EQ(static_cast<int>(std::size(kTestDataHandleData2) - 1),
             response_headers_->GetContentLength());
 
-  EXPECT_TRUE(response_metadata_.empty());
+  EXPECT_FALSE(response_metadata_.has_value());
 }
 
 TEST_F(BlobURLTest, BrokenBlob) {

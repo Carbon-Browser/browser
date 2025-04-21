@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
@@ -28,6 +28,8 @@
 
 namespace {
 
+using PermissionStatus = blink::mojom::PermissionStatus;
+
 class TestPermissionContext : public payments::PaymentHandlerPermissionContext {
  public:
   explicit TestPermissionContext(Profile* profile)
@@ -35,7 +37,7 @@ class TestPermissionContext : public payments::PaymentHandlerPermissionContext {
         permission_set_(false),
         permission_granted_(false) {}
 
-  ~TestPermissionContext() override {}
+  ~TestPermissionContext() override = default;
 
   bool permission_granted() { return permission_granted_; }
 
@@ -79,15 +81,15 @@ class PaymentHandlerPermissionContextTests
 // PaymentHandler permission should be denied for insecure origin.
 TEST_F(PaymentHandlerPermissionContextTests, TestInsecureRequestingUrl) {
   TestPermissionContext permission_context(profile());
-  GURL url("http://www.example.com");
+  GURL url("http://www.example.test");
   content::WebContentsTester::For(web_contents())->NavigateAndCommit(url);
 
   const permissions::PermissionRequestID id(
-      web_contents()->GetPrimaryMainFrame()->GetProcess()->GetID(),
-      web_contents()->GetPrimaryMainFrame()->GetRoutingID(),
+      web_contents()->GetPrimaryMainFrame()->GetGlobalId(),
       permissions::PermissionRequestID::RequestLocalId());
   permission_context.RequestPermission(
-      id, url, true,
+      permissions::PermissionRequestData(&permission_context, id,
+                                         /*user_gesture=*/true, url),
       base::BindOnce(&TestPermissionContext::TrackPermissionDecision,
                      base::Unretained(&permission_context)));
 
@@ -105,8 +107,8 @@ TEST_F(PaymentHandlerPermissionContextTests, TestInsecureRequestingUrl) {
 // PaymentHandler permission status should be denied for insecure origin.
 TEST_F(PaymentHandlerPermissionContextTests, TestInsecureQueryingUrl) {
   TestPermissionContext permission_context(profile());
-  GURL insecure_url("http://www.example.com");
-  GURL secure_url("https://www.example.com");
+  GURL insecure_url("http://www.example.test");
+  GURL secure_url("https://www.example.test");
 
   // Check that there is no saved content settings.
   EXPECT_EQ(CONTENT_SETTING_ALLOW,
@@ -125,21 +127,21 @@ TEST_F(PaymentHandlerPermissionContextTests, TestInsecureQueryingUrl) {
                                     secure_url.DeprecatedGetOriginAsURL(),
                                     ContentSettingsType::PAYMENT_HANDLER));
 
-  EXPECT_EQ(CONTENT_SETTING_BLOCK,
+  EXPECT_EQ(PermissionStatus::DENIED,
             permission_context
                 .GetPermissionStatus(nullptr /* render_frame_host */,
                                      insecure_url, insecure_url)
-                .content_setting);
+                .status);
 
-  EXPECT_EQ(CONTENT_SETTING_BLOCK,
+  EXPECT_EQ(PermissionStatus::DENIED,
             permission_context
                 .GetPermissionStatus(nullptr /* render_frame_host */,
                                      secure_url, insecure_url)
-                .content_setting);
+                .status);
 
-  EXPECT_EQ(CONTENT_SETTING_BLOCK,
+  EXPECT_EQ(PermissionStatus::DENIED,
             permission_context
                 .GetPermissionStatus(nullptr /* render_frame_host */,
                                      insecure_url, secure_url)
-                .content_setting);
+                .status);
 }

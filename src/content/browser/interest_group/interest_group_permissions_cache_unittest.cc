@@ -1,9 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/interest_group/interest_group_permissions_cache.h"
 
+#include <array>
 #include <string>
 #include <vector>
 
@@ -11,8 +12,8 @@
 #include "base/strings/stringprintf.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
-#include "content/browser/interest_group/interest_group_permissions_cache.h"
 #include "net/base/network_isolation_key.h"
+#include "net/base/schemeful_site.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
 #include "url/origin.h"
@@ -33,8 +34,9 @@ class InterestGroupPermissionsCacheTest : public testing::Test {
       url::Origin::Create(GURL("https://frame.test"));
   const url::Origin kGroupOrigin =
       url::Origin::Create(GURL("https://group.test"));
+  const net::SchemefulSite kFrameSite = net::SchemefulSite(kFrameOrigin);
   const net::NetworkIsolationKey kNetworkIsolationKey =
-      net::NetworkIsolationKey(kFrameOrigin, kFrameOrigin);
+      net::NetworkIsolationKey(kFrameSite, kFrameSite);
   const Permissions kPermissions =
       Permissions{/*can_join=*/true, /*can_leave=*/false};
 
@@ -43,8 +45,10 @@ class InterestGroupPermissionsCacheTest : public testing::Test {
       url::Origin::Create(GURL("https://other_frame.test"));
   const url::Origin kOtherGroupOrigin =
       url::Origin::Create(GURL("https://other_group.test"));
+  const net::SchemefulSite kOtherFrameSite =
+      net::SchemefulSite(kOtherFrameOrigin);
   const net::NetworkIsolationKey kOtherNetworkIsolationKey =
-      net::NetworkIsolationKey(kOtherFrameOrigin, kOtherFrameOrigin);
+      net::NetworkIsolationKey(kOtherFrameSite, kOtherFrameSite);
   const Permissions kOtherPermissions =
       Permissions{/*can_join=*/false, /*can_leave=*/true};
 
@@ -110,12 +114,12 @@ TEST_F(InterestGroupPermissionsCacheTest, MultipleEntries) {
   // NetworkIsolationKey. This coincidentally covers all distinct permissions
   // values, but that is not necessary for this test. They all just need to be
   // distinct.
-  const Permissions kPermissionsValues[4] = {
+  const auto kPermissionsValues = std::to_array<Permissions, 4>({
       {/*can_join=*/true, /*can_leave=*/true},
       {/*can_join=*/true, /*can_leave=*/false},
       {/*can_join=*/false, /*can_leave=*/true},
       {/*can_join=*/false, /*can_leave=*/false},
-  };
+  });
 
   // Each set of permissions varies in only one value from the first set. Some
   // of these combinations can't actually occur (in particular, the frame origin

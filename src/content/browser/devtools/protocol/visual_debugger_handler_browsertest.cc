@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/system/sys_info.h"
 #include "base/test/scoped_feature_list.h"
@@ -27,16 +27,15 @@ IN_PROC_BROWSER_TEST_F(DevToolsProtocolTest, VisualDebuggerTest) {
   GURL url = GURL("data:text/html,<body></body>");
   NavigateToURLBlockUntilNavigationsComplete(shell(), url, 1);
   Attach();
-  SendCommand("VisualDebugger.startStream", nullptr);
+  SendCommandSync("VisualDebugger.startStream");
   WaitForNotification("VisualDebugger.frameResponse", true);
 
-  std::unique_ptr<base::DictionaryValue> command_params =
-      std::make_unique<base::DictionaryValue>();
   auto filter_param =
       std::string(R"({"filters":[{"selector":{"anno":""},"active":true}]})");
-  command_params->SetString("json", filter_param);
-  SendCommand("VisualDebugger.filterStream", std::move(command_params));
-  SendCommand("VisualDebugger.stopStream", nullptr);
+  base::Value::Dict command_params;
+  command_params.Set("json", filter_param);
+  SendCommandSync("VisualDebugger.filterStream", std::move(command_params));
+  SendCommandSync("VisualDebugger.stopStream");
 }
 
 }  // namespace content

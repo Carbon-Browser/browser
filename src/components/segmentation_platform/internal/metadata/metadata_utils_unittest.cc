@@ -1,15 +1,24 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "components/segmentation_platform/internal/metadata/metadata_utils.h"
 
 #include "base/metrics/metrics_hashes.h"
 #include "components/segmentation_platform/internal/database/ukm_types.h"
 #include "components/segmentation_platform/internal/execution/processing/query_processor.h"
-#include "components/segmentation_platform/internal/proto/aggregation.pb.h"
-#include "components/segmentation_platform/internal/proto/model_metadata.pb.h"
+#include "components/segmentation_platform/internal/metadata/metadata_writer.h"
+#include "components/segmentation_platform/internal/post_processor/post_processing_test_utils.h"
+#include "components/segmentation_platform/public/proto/aggregation.pb.h"
+#include "components/segmentation_platform/public/proto/model_metadata.pb.h"
 #include "components/segmentation_platform/public/proto/segmentation_platform.pb.h"
+#include "components/segmentation_platform/public/types/processed_value.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace segmentation_platform {
@@ -55,6 +64,35 @@ TEST_F(MetadataUtilsTest, SegmentInfoValidation) {
   segment_info.mutable_model_metadata()->set_time_unit(proto::DAY);
   EXPECT_EQ(metadata_utils::ValidationResult::kValidationSuccess,
             metadata_utils::ValidateSegmentInfo(segment_info));
+
+  EXPECT_FALSE(segment_info.has_model_source());
+  segment_info.set_model_source(proto::ModelSource::DEFAULT_MODEL_SOURCE);
+  EXPECT_EQ(proto::ModelSource::DEFAULT_MODEL_SOURCE,
+            segment_info.model_source());
+}
+
+TEST_F(MetadataUtilsTest, ValidatingPredictionResultOptionalVsRepeated) {
+  proto::SegmentInfo segment_info;
+  // PredictionResult with repeated float result.
+  proto::PredictionResult result;
+
+  // Serialised string for optional float result = 0.8.
+  proto::LegacyPredictionResultForTesting legacy_result;
+  legacy_result.set_result(0.8);
+  std::string serialised_result_without_repeated =
+      legacy_result.SerializeAsString();
+
+  // Serialised string for repeated float result = {0.8}
+  segment_info.mutable_prediction_result()->add_result(0.8);
+  std::string serialised_result_with_repeated =
+      segment_info.prediction_result().SerializeAsString();
+
+  EXPECT_EQ(serialised_result_without_repeated,
+            serialised_result_with_repeated);
+
+  // Deserialising the serialised string back.
+  result.ParseFromString(serialised_result_without_repeated);
+  EXPECT_THAT(result.result(), testing::ElementsAre(0.8f));
 }
 
 TEST_F(MetadataUtilsTest, DefaultMetadataIsInvalid) {
@@ -443,6 +481,90 @@ TEST_F(MetadataUtilsTest, ValidateSegementInfoMetadataAndFeatures) {
       metadata_utils::ValidateSegmentInfoMetadataAndFeatures(segment_info));
 }
 
+TEST_F(MetadataUtilsTest, ValidateMultiClassClassifierWithNoClasses) {
+  proto::SegmentInfo segment_info;
+  segment_info.set_segment_id(
+      proto::SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB);
+  auto* metadata = segment_info.mutable_model_metadata();
+  metadata->set_time_unit(proto::DAY);
+  metadata->mutable_output_config()
+      ->mutable_predictor()
+      ->mutable_multi_class_classifier();
+
+  EXPECT_EQ(
+      metadata_utils::ValidationResult::kMultiClassClassifierHasNoLabels,
+      metadata_utils::ValidateSegmentInfoMetadataAndFeatures(segment_info));
+}
+
+TEST_F(MetadataUtilsTest, ValidateMultiClassClassifierWithBothThresholdTypes) {
+  proto::SegmentInfo segment_info;
+  segment_info.set_segment_id(
+      proto::SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB);
+  auto* metadata = segment_info.mutable_model_metadata();
+  metadata->set_time_unit(proto::DAY);
+  auto* multi_class_classifier = metadata->mutable_output_config()
+                                     ->mutable_predictor()
+                                     ->mutable_multi_class_classifier();
+  multi_class_classifier->add_class_labels("Foo");
+  multi_class_classifier->add_class_labels("Bar");
+
+  // Either 'threshold' or 'class_thresholds' should be set, but not both.
+  multi_class_classifier->set_threshold(0.5f);
+
+  multi_class_classifier->add_class_thresholds(0.1f);
+  multi_class_classifier->add_class_thresholds(0.2f);
+
+  EXPECT_EQ(
+      metadata_utils::ValidationResult::
+          kMultiClassClassifierUsesBothThresholdTypes,
+      metadata_utils::ValidateSegmentInfoMetadataAndFeatures(segment_info));
+}
+
+TEST_F(MetadataUtilsTest,
+       ValidateMultiClassClassifierWithClassThresholdCountMismatch) {
+  proto::SegmentInfo segment_info;
+  segment_info.set_segment_id(
+      proto::SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB);
+  auto* metadata = segment_info.mutable_model_metadata();
+  metadata->set_time_unit(proto::DAY);
+  auto* multi_class_classifier = metadata->mutable_output_config()
+                                     ->mutable_predictor()
+                                     ->mutable_multi_class_classifier();
+  multi_class_classifier->add_class_labels("Foo");
+  multi_class_classifier->add_class_labels("Bar");
+  multi_class_classifier->add_class_labels("Baz");
+
+  // There are 3 'class_labels' but only 2 'class_thresholds', both should have
+  // the same count.
+  multi_class_classifier->add_class_thresholds(0.1f);
+  multi_class_classifier->add_class_thresholds(0.2f);
+
+  EXPECT_EQ(
+      metadata_utils::ValidationResult::
+          kMultiClassClassifierClassAndThresholdCountMismatch,
+      metadata_utils::ValidateSegmentInfoMetadataAndFeatures(segment_info));
+}
+
+TEST_F(MetadataUtilsTest, ValidateMultiClassClassifierSuccessfully) {
+  proto::SegmentInfo segment_info;
+  segment_info.set_segment_id(
+      proto::SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_NEW_TAB);
+  auto* metadata = segment_info.mutable_model_metadata();
+  metadata->set_time_unit(proto::DAY);
+  auto* multi_class_classifier = metadata->mutable_output_config()
+                                     ->mutable_predictor()
+                                     ->mutable_multi_class_classifier();
+  multi_class_classifier->add_class_labels("Foo");
+  multi_class_classifier->add_class_labels("Bar");
+
+  multi_class_classifier->add_class_thresholds(0.1f);
+  multi_class_classifier->add_class_thresholds(0.2f);
+
+  EXPECT_EQ(
+      metadata_utils::ValidationResult::kValidationSuccess,
+      metadata_utils::ValidateSegmentInfoMetadataAndFeatures(segment_info));
+}
+
 TEST_F(MetadataUtilsTest, SetFeatureNameHashesFromName) {
   // No crashes should happen if there are no features.
   proto::SegmentationModelMetadata empty;
@@ -559,6 +681,7 @@ TEST_F(MetadataUtilsTest, HasExpiredOrUnavailableResult) {
   base::Time result_time = base::Time::Now() - base::Days(3);
   prediction_result->set_timestamp_us(
       result_time.ToDeltaSinceWindowsEpoch().InMicroseconds());
+  prediction_result->add_result(1);
   EXPECT_FALSE(
       metadata_utils::HasExpiredOrUnavailableResult(segment_info, now));
 
@@ -608,6 +731,20 @@ TEST_F(MetadataUtilsTest, SignalTypeToSignalKind) {
                 proto::SignalType::UNKNOWN_SIGNAL_TYPE));
 }
 
+TEST_F(MetadataUtilsTest, SignalKindToSignalType) {
+  EXPECT_EQ(
+      proto::SignalType::USER_ACTION,
+      metadata_utils::SignalKindToSignalType(SignalKey::Kind::USER_ACTION));
+  EXPECT_EQ(
+      proto::SignalType::HISTOGRAM_ENUM,
+      metadata_utils::SignalKindToSignalType(SignalKey::Kind::HISTOGRAM_ENUM));
+  EXPECT_EQ(
+      proto::SignalType::HISTOGRAM_VALUE,
+      metadata_utils::SignalKindToSignalType(SignalKey::Kind::HISTOGRAM_VALUE));
+  EXPECT_EQ(proto::SignalType::UNKNOWN_SIGNAL_TYPE,
+            metadata_utils::SignalKindToSignalType(SignalKey::Kind::UNKNOWN));
+}
+
 TEST_F(MetadataUtilsTest, CheckDiscreteMapping) {
   proto::SegmentationModelMetadata metadata;
   std::string segmentation_key = "some_key";
@@ -649,8 +786,10 @@ TEST_F(MetadataUtilsTest, CheckMissingDiscreteMapping) {
   std::string segmentation_key = "some_key";
 
   // Any value should result in a 0 mapping, since no mapping exists.
-  ASSERT_EQ(0, metadata_utils::ConvertToDiscreteScore(segmentation_key, 0.9,
-                                                      metadata));
+  ASSERT_NEAR(
+      0.9,
+      metadata_utils::ConvertToDiscreteScore(segmentation_key, 0.9, metadata),
+      0.01);
 }
 
 TEST_F(MetadataUtilsTest, CheckDefaultDiscreteMapping) {
@@ -661,15 +800,20 @@ TEST_F(MetadataUtilsTest, CheckDefaultDiscreteMapping) {
   AddDiscreteMapping(&metadata, mapping_specific, 3, segmentation_key);
   AddDiscreteMapping(&metadata, mapping_default, 3, "my-default");
 
-  // No valid mapping should be found since there is no default mapping.
-  EXPECT_EQ(0, metadata_utils::ConvertToDiscreteScore("non-existing-key", 0.6,
-                                                      metadata));
+  // No valid mapping should be found since there is no default mapping, returns
+  // the score.
+  EXPECT_NEAR(
+      0.6,
+      metadata_utils::ConvertToDiscreteScore("non-existing-key", 0.6, metadata),
+      0.01);
 
   metadata.set_default_discrete_mapping("my-default");
   // Should now use the default values instead of the one from the
   // one in the configuration key.
-  EXPECT_EQ(6, metadata_utils::ConvertToDiscreteScore("non-existing-key", 0.6,
-                                                      metadata));
+  EXPECT_NEAR(
+      6,
+      metadata_utils::ConvertToDiscreteScore("non-existing-key", 0.6, metadata),
+      0.01);
 }
 
 TEST_F(MetadataUtilsTest, CheckMissingDefaultDiscreteMapping) {
@@ -680,9 +824,11 @@ TEST_F(MetadataUtilsTest, CheckMissingDefaultDiscreteMapping) {
   metadata.set_default_discrete_mapping("not-my-default");
 
   // Should not find 'not-my-default' mapping, since it is registered as
-  // 'my-default', so we should get a 0 result.
-  EXPECT_EQ(0, metadata_utils::ConvertToDiscreteScore("non-existing-key", 0.6,
-                                                      metadata));
+  // 'my-default', so we should get the score as default value.
+  EXPECT_NEAR(
+      0.6,
+      metadata_utils::ConvertToDiscreteScore("non-existing-key", 0.6, metadata),
+      0.01);
 }
 
 TEST_F(MetadataUtilsTest, SegmetationModelMetadataToString) {
@@ -774,6 +920,51 @@ TEST_F(MetadataUtilsTest, GetAllUmaFeaturesWithUMAOutput) {
       model_metadata, /*include_outputs=*/true);
   EXPECT_EQ(1u, expected.size());
   EXPECT_EQ("output", expected[0].name());
+}
+
+TEST_F(MetadataUtilsTest, GetInputKeysForMetadata) {
+  constexpr char kSqlQuery[] = "some sql query with three bind value ? ? ?";
+  std::array<MetadataWriter::CustomInput::Arg, 1> kBindValueArg1{
+      std::make_pair("name", "sql_input_1")};
+  std::array<MetadataWriter::CustomInput::Arg, 1> kBindValueArg2{
+      std::make_pair("name", "sql_input_2")};
+  MetadataWriter::BindValue custom_input1{
+      proto::SqlFeature::BindValue::DOUBLE,
+      {.tensor_length = 1,
+       .fill_policy = proto::CustomInput::FILL_FROM_INPUT_CONTEXT,
+       .arg = kBindValueArg1.data(),
+       .arg_size = kBindValueArg1.size()}};
+  MetadataWriter::BindValue custom_input2{
+      proto::SqlFeature::BindValue::BOOL,
+      {.tensor_length = 2,
+       .fill_policy = proto::CustomInput::FILL_FROM_INPUT_CONTEXT,
+       .arg = kBindValueArg2.data(),
+       .arg_size = kBindValueArg2.size()}};
+
+  proto::SegmentationModelMetadata metadata;
+  MetadataWriter writer(&metadata);
+  MetadataWriter::SqlFeature feature{.sql = kSqlQuery};
+  writer.AddSqlFeature(feature, {custom_input1, custom_input2});
+
+  writer.AddFromInputContext("input_id", "custom_input1");
+  writer.AddFromInputContext("input_id", "custom_input2");
+
+  std::set<std::string> all_inputs =
+      metadata_utils::GetInputKeysForMetadata(metadata);
+
+  EXPECT_THAT(all_inputs,
+              testing::UnorderedElementsAre("sql_input_1", "sql_input_2",
+                                            "custom_input1", "custom_input2"));
+}
+
+TEST_F(MetadataUtilsTest, ConfigUsesLegacyOutput) {
+  auto config = test_utils::CreateTestConfig(
+      "test_key", SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_FEED_USER);
+  EXPECT_FALSE(metadata_utils::ConfigUsesLegacyOutput(config.get()));
+
+  config = test_utils::CreateTestConfig(
+      "test_key", SegmentId::OPTIMIZATION_TARGET_SEGMENTATION_SEARCH_USER);
+  EXPECT_FALSE(metadata_utils::ConfigUsesLegacyOutput(config.get()));
 }
 
 }  // namespace segmentation_platform

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,14 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/timer/mock_timer.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/ash/notifications/mock_adb_sideloading_policy_change_notification.h"
 #include "chrome/browser/ash/settings/scoped_testing_cros_settings.h"
+#include "chrome/browser/ash/settings/stub_cros_settings_provider.h"
 #include "chrome/browser/prefs/browser_prefs.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
@@ -23,6 +25,7 @@
 #include "components/user_manager/fake_user_manager.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "content/public/test/browser_task_environment.h"
+#include "google_apis/gaia/gaia_id.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace {
@@ -41,7 +44,7 @@ class AdbSideloadingAllowanceModePolicyHandlerTest : public testing::Test {
   AdbSideloadingAllowanceModePolicyHandlerTest()
       : local_state_(TestingBrowserProcess::GetGlobal()),
         user_manager_(new ash::FakeChromeUserManager()),
-        user_manager_enabler_(base::WrapUnique(user_manager_)),
+        user_manager_enabler_(base::WrapUnique(user_manager_.get())),
         mock_notification_(
             new ash::MockAdbSideloadingPolicyChangeNotification()) {
     chromeos::PowerManagerClient::InitializeFake();
@@ -97,7 +100,7 @@ class AdbSideloadingAllowanceModePolicyHandlerTest : public testing::Test {
 
   void CreateUser() {
     const AccountId account_id(
-        AccountId::FromUserEmailGaiaId(kFakeUserName, kFakeGaiaId));
+        AccountId::FromUserEmailGaiaId(kFakeUserName, GaiaId(kFakeGaiaId)));
     user_manager_->AddUser(account_id);
     user_manager_->LoginUser(account_id);
   }
@@ -115,12 +118,13 @@ class AdbSideloadingAllowanceModePolicyHandlerTest : public testing::Test {
 
   content::BrowserTaskEnvironment task_environment_;
   ScopedTestingLocalState local_state_;
-  ash::FakeChromeUserManager* user_manager_;
+  raw_ptr<ash::FakeChromeUserManager, DanglingUntriaged> user_manager_;
   user_manager::ScopedUserManager user_manager_enabler_;
 
   ash::ScopedTestingCrosSettings scoped_testing_cros_settings_;
 
-  ash::MockAdbSideloadingPolicyChangeNotification* mock_notification_;
+  raw_ptr<ash::MockAdbSideloadingPolicyChangeNotification, DanglingUntriaged>
+      mock_notification_;
   std::unique_ptr<AdbSideloadingAllowanceModePolicyHandler>
       adb_sideloading_allowance_mode_policy_handler_;
 

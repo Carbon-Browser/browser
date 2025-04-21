@@ -1,4 +1,4 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -18,6 +18,11 @@ fuzzer_test("zlib_inflate_fuzzer") {
   deps = [ "../../../:zlib" ]
 }
 
+fuzzer_test("zlib_inflate_with_header_fuzzer") {
+  sources = [ "inflate_with_header_fuzzer.cc" ]
+  deps = [ "../../../:zlib" ]
+}
+
 fuzzer_test("zlib_streaming_inflate_fuzzer") {
   sources = [ "streaming_inflate_fuzzer.cc" ]
   deps = [ "../../../:zlib" ]
@@ -26,6 +31,11 @@ fuzzer_test("zlib_streaming_inflate_fuzzer") {
 
 fuzzer_test("zlib_deflate_set_dictionary_fuzzer") {
   sources = [ "deflate_set_dictionary_fuzzer.cc" ]
+  deps = [ "../../../:zlib" ]
+}
+
+fuzzer_test("zlib_compress_fuzzer") {
+  sources = [ "compress_fuzzer.cc" ]
   deps = [ "../../../:zlib" ]
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,7 +38,7 @@ void OfflineContentProvider::NotifyItemRemoved(const ContentId& id) {
 
 void OfflineContentProvider::NotifyItemUpdated(
     const OfflineItem& item,
-    const absl::optional<UpdateDelta>& update_delta) {
+    const std::optional<UpdateDelta>& update_delta) {
   for (auto& observer : observers_)
     observer.OnItemUpdated(item, update_delta);
 }

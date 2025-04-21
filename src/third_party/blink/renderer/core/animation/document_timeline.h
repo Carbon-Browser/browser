@@ -71,10 +71,8 @@ class CORE_EXPORT DocumentTimeline : public AnimationTimeline {
   void ScheduleNextService() override;
 
   bool IsActive() const override;
-  absl::optional<base::TimeDelta> InitialStartTimeForAnimations() override;
-  bool HasPendingUpdates() const {
-    return !animations_needing_update_.IsEmpty();
-  }
+  std::optional<base::TimeDelta> InitialStartTimeForAnimations() override;
+  bool HasPendingUpdates() const { return !animations_needing_update_.empty(); }
 
   // The zero time of DocumentTimeline is computed by adding a separate
   // |origin_time_| from DocumentTimelineOptions.
@@ -88,7 +86,8 @@ class CORE_EXPORT DocumentTimeline : public AnimationTimeline {
 
   void PauseAnimationsForTesting(AnimationTimeDelta);
 
-  void InvalidateKeyframeEffects(const TreeScope&);
+  void InvalidateKeyframeEffects(const TreeScope&,
+                                 const StyleChangeReasonForTracing&);
 
   void SetPlaybackRate(double);
   double PlaybackRate() const;
@@ -113,7 +112,6 @@ class CORE_EXPORT DocumentTimeline : public AnimationTimeline {
   // TODO(crbug.com/1162960) Convert DocumentTimeline::zero_time_ from
   // base::TimeTicks to AnimationTimeDelta
   base::TimeTicks zero_time_;
-  bool zero_time_initialized_;
 
   double playback_rate_;
 
@@ -121,6 +119,8 @@ class CORE_EXPORT DocumentTimeline : public AnimationTimeline {
   static const double kMinimumDelay;
 
   Member<PlatformTiming> timing_;
+
+  bool zero_time_initialized_;
 
   class DocumentTimelineTiming final : public PlatformTiming {
    public:

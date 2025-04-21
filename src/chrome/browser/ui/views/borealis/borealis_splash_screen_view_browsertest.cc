@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,13 +12,14 @@
 #include "chrome/browser/ash/borealis/borealis_context_manager.h"
 #include "chrome/browser/ash/borealis/borealis_context_manager_mock.h"
 #include "chrome/browser/ash/borealis/borealis_features.h"
+#include "chrome/browser/ash/borealis/borealis_metrics.h"
 #include "chrome/browser/ash/borealis/borealis_prefs.h"
+#include "chrome/browser/ash/borealis/borealis_service_factory.h"
 #include "chrome/browser/ash/borealis/borealis_service_fake.h"
 #include "chrome/browser/ash/borealis/borealis_task.h"
 #include "chrome/browser/ash/borealis/borealis_util.h"
 #include "chrome/browser/ash/borealis/borealis_window_manager_mock.h"
-#include "chrome/browser/ash/borealis/borealis_window_manager_test_helper.h"
-#include "chrome/browser/ash/borealis/infra/expected.h"
+#include "chrome/browser/ash/borealis/testing/windows.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/test/test_browser_dialog.h"
@@ -33,11 +34,9 @@ namespace {
 class FakeBorealisContextManager : public BorealisContextManager {
  public:
   void StartBorealis(ResultCallback callback) override {
-    std::move(callback).Run(
-        BorealisContextManager::ContextOrFailure::Unexpected(
-            Described<BorealisStartupResult>(
-                BorealisStartupResult::kMountFailed,
-                "failed on purpose for testing")));
+    std::move(callback).Run(base::unexpected(Described<BorealisStartupResult>(
+        BorealisStartupResult::kDiskImageFailed,
+        "failed on purpose for testing")));
   }
 
   bool IsRunning() override { return false; }
@@ -59,7 +58,7 @@ class BorealisSplashScreenViewBrowserTest : public DialogBrowserTest {
  public:
   BorealisSplashScreenViewBrowserTest() {
     feature_list_.InitWithFeatures(
-        {features::kBorealis, chromeos::features::kBorealisPermitted}, {});
+        {features::kBorealis, ash::features::kBorealisPermitted}, {});
   }
 
   // DialogBrowserTest:
@@ -101,8 +100,8 @@ IN_PROC_BROWSER_TEST_F(BorealisSplashScreenViewBrowserTest,
   EXPECT_TRUE(VerifyUi());
   EXPECT_NE(nullptr, BorealisSplashScreenView::GetActiveViewForTesting());
   MakeAndTrackWindow(
-      "org.chromium.borealis.foobarbaz",
-      &borealis::BorealisService::GetForProfile(browser()->profile())
+      "org.chromium.guest_os.borealis.foobarbaz",
+      &borealis::BorealisServiceFactory::GetForProfile(browser()->profile())
            ->WindowManager());
   base::RunLoop().RunUntilIdle();
   EXPECT_FALSE(VerifyUi());
@@ -118,11 +117,15 @@ IN_PROC_BROWSER_TEST_F(BorealisSplashScreenViewBrowserTest,
   CallbackFactory callback_check;
   EXPECT_CALL(callback_check, Call(BorealisAppLauncher::LaunchResult::kError));
   BorealisAppLauncherImpl launcher(browser()->profile());
-  launcher.Launch("foo.desktop", callback_check.BindOnce());
+  launcher.Launch("foo.desktop", BorealisLaunchSource::kUnknown,
+                  callback_check.BindOnce());
   base::RunLoop().RunUntilIdle();
 
-  EXPECT_FALSE(VerifyUi());
+  // The splash screen should have disappeared.
   EXPECT_EQ(nullptr, BorealisSplashScreenView::GetActiveViewForTesting());
+
+  // We should now see an error dialog instead.
+  EXPECT_TRUE(VerifyUi());
 }
 
 }  // namespace

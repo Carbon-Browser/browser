@@ -1,15 +1,15 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_CAPTURE_VIDEO_CHROMEOS_PIXEL_FORMAT_UTILS_H_
 #define MEDIA_CAPTURE_VIDEO_CHROMEOS_PIXEL_FORMAT_UTILS_H_
 
+#include <optional>
 #include <vector>
 
 #include "media/capture/video/chromeos/mojom/camera3.mojom.h"
 #include "media/capture/video_capture_types.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/buffer_types.h"
 
 namespace media {
@@ -32,7 +32,7 @@ std::vector<ChromiumPixelFormat> PixFormatHalToChromium(
 uint32_t PixFormatVideoToDrm(VideoPixelFormat from);
 
 // Converts the video pixel format |pixel_format| to gfx::BufferFormat.
-absl::optional<gfx::BufferFormat> PixFormatVideoToGfx(
+std::optional<gfx::BufferFormat> PixFormatVideoToGfx(
     VideoPixelFormat pixel_format);
 
 }  // namespace media

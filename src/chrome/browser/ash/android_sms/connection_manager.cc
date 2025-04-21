@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,10 @@
 
 #include <utility>
 
-#include "ash/components/multidevice/logging/logging.h"
 #include "chrome/browser/ash/android_sms/android_sms_urls.h"
 #include "chrome/browser/ash/android_sms/connection_establisher.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chromeos/ash/components/multidevice/logging/logging.h"
 #include "components/session_manager/core/session_manager.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/service_worker_context.h"
@@ -134,7 +134,7 @@ void ConnectionManager::OnFeatureStatesChanged(
 }
 
 void ConnectionManager::UpdateConnectionStatus() {
-  absl::optional<GURL> updated_pwa_url =
+  std::optional<GURL> updated_pwa_url =
       ConnectionManager::GenerateEnabledPwaUrl();
   if (enabled_pwa_url_ == updated_pwa_url)
     return;
@@ -160,16 +160,16 @@ void ConnectionManager::UpdateConnectionStatus() {
   StartConnection();
 }
 
-absl::optional<GURL> ConnectionManager::GenerateEnabledPwaUrl() {
+std::optional<GURL> ConnectionManager::GenerateEnabledPwaUrl() {
   const auto it = multidevice_setup_client_->GetFeatureStates().find(
       multidevice_setup::mojom::Feature::kMessages);
 
   // If the feature is not enabled, there is no enabled URL.
   if (it->second != multidevice_setup::mojom::FeatureState::kEnabledByUser)
-    return absl::nullopt;
+    return std::nullopt;
 
   // Return the installed app URL if the PWA is installed.
-  absl::optional<GURL> installed_url =
+  std::optional<GURL> installed_url =
       android_sms_app_manager_->GetCurrentAppUrl();
   if (installed_url)
     return installed_url;

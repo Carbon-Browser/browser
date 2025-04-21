@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,39 +13,6 @@ namespace blink {
 
 IceTransportAdapterImpl::IceTransportAdapterImpl(
     Delegate* delegate,
-    std::unique_ptr<cricket::PortAllocator> port_allocator,
-    std::unique_ptr<webrtc::AsyncResolverFactory> async_resolver_factory)
-    : delegate_(delegate),
-      port_allocator_(std::move(port_allocator)),
-      async_resolver_factory_(std::move(async_resolver_factory)) {
-  // These settings are copied from PeerConnection:
-  // https://codesearch.chromium.org/chromium/src/third_party/webrtc/pc/peerconnection.cc?l=4708&rcl=820ebd0f661696043959b5105b2814e0edd8b694
-  port_allocator_->set_step_delay(cricket::kMinimumStepDelay);
-  port_allocator_->set_flags(port_allocator_->flags() |
-                             cricket::PORTALLOCATOR_ENABLE_SHARED_SOCKET |
-                             cricket::PORTALLOCATOR_ENABLE_IPV6 |
-                             cricket::PORTALLOCATOR_ENABLE_IPV6_ON_WIFI);
-  port_allocator_->Initialize();
-
-  webrtc::IceTransportInit ice_transport_init;
-  ice_transport_init.set_port_allocator(port_allocator_.get());
-  ice_transport_init.set_async_resolver_factory(async_resolver_factory_.get());
-  ice_transport_channel_ =
-      webrtc::CreateIceTransport(std::move(ice_transport_init));
-  SetupIceTransportChannel();
-  // We need to set the ICE role even before Start is called since the Port
-  // assumes that the role has been set before receiving incoming connectivity
-  // checks. These checks can race with the information signaled for Start.
-  ice_transport_channel()->SetIceRole(cricket::ICEROLE_CONTROLLING);
-  // The ICE tiebreaker is used to determine which side is controlling/
-  // controlled when both sides start in the same role. The number is randomly
-  // generated so that each peer can calculate a.tiebreaker <= b.tiebreaker
-  // consistently.
-  ice_transport_channel()->SetIceTiebreaker(rtc::CreateRandomId64());
-}
-
-IceTransportAdapterImpl::IceTransportAdapterImpl(
-    Delegate* delegate,
     rtc::scoped_refptr<webrtc::IceTransportInterface> ice_transport)
     : delegate_(delegate), ice_transport_channel_(ice_transport) {
   // The native webrtc peer connection might have been closed in the meantime,
@@ -56,17 +23,11 @@ IceTransportAdapterImpl::IceTransportAdapterImpl(
     SetupIceTransportChannel();
 }
 
-IceTransportAdapterImpl::~IceTransportAdapterImpl() = default;
-
-static uint32_t GetCandidateFilterForPolicy(IceTransportPolicy policy) {
-  switch (policy) {
-    case IceTransportPolicy::kRelay:
-      return cricket::CF_RELAY;
-    case IceTransportPolicy::kAll:
-      return cricket::CF_ALL;
+IceTransportAdapterImpl::~IceTransportAdapterImpl() {
+  if (!ice_transport_channel()) {
+    return;
   }
-  NOTREACHED();
-  return 0;
+  ice_transport_channel()->RemoveGatheringStateCallback(this);
 }
 
 void IceTransportAdapterImpl::StartGathering(
@@ -74,15 +35,6 @@ void IceTransportAdapterImpl::StartGathering(
     const cricket::ServerAddresses& stun_servers,
     const WebVector<cricket::RelayServerConfig>& turn_servers,
     IceTransportPolicy policy) {
-  if (port_allocator_) {
-    port_allocator_->set_candidate_filter(GetCandidateFilterForPolicy(policy));
-    port_allocator_->SetConfiguration(
-        stun_servers,
-        const_cast<WebVector<cricket::RelayServerConfig>&>(turn_servers)
-            .ReleaseVector(),
-        port_allocator_->candidate_pool_size(),
-        port_allocator_->prune_turn_ports());
-  }
   if (!ice_transport_channel()) {
     LOG(ERROR) << "StartGathering called, but ICE transport released";
     return;
@@ -132,8 +84,10 @@ void IceTransportAdapterImpl::SetupIceTransportChannel() {
     LOG(ERROR) << "SetupIceTransportChannel called, but ICE transport released";
     return;
   }
-  ice_transport_channel()->SignalGatheringState.connect(
-      this, &IceTransportAdapterImpl::OnGatheringStateChanged);
+  ice_transport_channel()->AddGatheringStateCallback(this,
+      [this](cricket::IceTransportInternal* transport) {
+        OnGatheringStateChanged(transport);
+      });
   ice_transport_channel()->SignalCandidateGathered.connect(
       this, &IceTransportAdapterImpl::OnCandidateGathered);
   ice_transport_channel()->SignalIceTransportStateChanged.connect(
@@ -165,12 +119,12 @@ void IceTransportAdapterImpl::OnStateChanged(
 }
 
 void IceTransportAdapterImpl::OnNetworkRouteChanged(
-    absl::optional<rtc::NetworkRoute> new_network_route) {
+    std::optional<rtc::NetworkRoute> new_network_route) {
   if (!ice_transport_channel()) {
     LOG(ERROR) << "OnNetworkRouteChanged called, but ICE transport released";
     return;
   }
-  const absl::optional<const cricket::CandidatePair> selected_pair =
+  const std::optional<const cricket::CandidatePair> selected_pair =
       ice_transport_channel()->GetSelectedCandidatePair();
   if (!selected_pair) {
     // The selected connection will only be null if the ICE connection has

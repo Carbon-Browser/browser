@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,20 +6,17 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
 #include "base/task/single_thread_task_runner.h"
 #include "net/base/net_errors.h"
 #include "net/disk_cache/blockfile/backend_impl.h"
 #include "net/disk_cache/blockfile/entry_impl.h"
-#include "net/disk_cache/blockfile/histogram_macros.h"
-
-// Provide a BackendImpl object to macros from histogram_macros.h.
-#define CACHE_UMA_BACKEND_IMPL_OBJ backend_
 
 namespace disk_cache {
 
@@ -35,38 +32,46 @@ EntryImpl* LeakEntryImpl(scoped_refptr<EntryImpl> entry) {
 
 }  // namespace
 
-BackendIO::BackendIO(InFlightIO* controller,
+BackendIO::BackendIO(InFlightBackendIO* controller,
                      BackendImpl* backend,
                      net::CompletionOnceCallback callback)
     : BackendIO(controller, backend) {
   callback_ = std::move(callback);
 }
 
-BackendIO::BackendIO(InFlightIO* controller,
+BackendIO::BackendIO(InFlightBackendIO* controller,
                      BackendImpl* backend,
                      EntryResultCallback callback)
     : BackendIO(controller, backend) {
   entry_result_callback_ = std::move(callback);
 }
 
-BackendIO::BackendIO(InFlightIO* controller,
+BackendIO::BackendIO(InFlightBackendIO* controller,
                      BackendImpl* backend,
                      RangeResultCallback callback)
     : BackendIO(controller, backend) {
   range_result_callback_ = std::move(callback);
 }
 
-BackendIO::BackendIO(InFlightIO* controller, BackendImpl* backend)
-    : BackgroundIO(controller), backend_(backend) {
+BackendIO::BackendIO(InFlightBackendIO* controller, BackendImpl* backend)
+    : BackgroundIO(controller),
+      backend_(backend),
+      background_task_runner_(controller->background_thread()) {
+  DCHECK(background_task_runner_);
   start_time_ = base::TimeTicks::Now();
 }
 
 // Runs on the background thread.
 void BackendIO::ExecuteOperation() {
-  if (IsEntryOperation())
-    return ExecuteEntryOperation();
-
-  ExecuteBackendOperation();
+  if (IsEntryOperation()) {
+    ExecuteEntryOperation();
+  } else {
+    ExecuteBackendOperation();
+  }
+  // Clear our pointer to entry we operated on.  We don't need it any more, and
+  // it's possible by the time ~BackendIO gets destroyed on the main thread the
+  // entry will have been closed and freed on the cache/background thread.
+  entry_ = nullptr;
 }
 
 // Runs on the background thread.
@@ -79,15 +84,32 @@ void BackendIO::OnIOComplete(int result) {
 
 // Runs on the primary thread.
 void BackendIO::OnDone(bool cancel) {
-  if (IsEntryOperation()) {
-    CACHE_UMA(TIMES, "TotalIOTime", 0, ElapsedTime());
+  if (IsEntryOperation() && backend_->GetCacheType() == net::DISK_CACHE) {
+    switch (operation_) {
+      case OP_READ:
+        base::UmaHistogramCustomTimes("DiskCache.0.TotalIOTimeRead",
+                                      ElapsedTime(), base::Milliseconds(1),
+                                      base::Seconds(10), 50);
+        break;
+
+      case OP_WRITE:
+        base::UmaHistogramCustomTimes("DiskCache.0.TotalIOTimeWrite",
+                                      ElapsedTime(), base::Milliseconds(1),
+                                      base::Seconds(10), 50);
+        break;
+
+      default:
+        // Other operations are not recorded.
+        break;
+    }
   }
 
   if (ReturnsEntry() && result_ == net::OK) {
     static_cast<EntryImpl*>(out_entry_)->OnEntryCreated(backend_);
     if (cancel)
-      out_entry_->Close();
+      out_entry_.ExtractAsDangling()->Close();
   }
+  ClearController();
 }
 
 bool BackendIO::IsEntryOperation() {
@@ -103,9 +125,9 @@ void BackendIO::RunEntryResultCallback() {
   if (result_ != net::OK) {
     entry_result = EntryResult::MakeError(static_cast<net::Error>(result()));
   } else if (out_entry_opened_) {
-    entry_result = EntryResult::MakeOpened(out_entry_);
+    entry_result = EntryResult::MakeOpened(out_entry_.ExtractAsDangling());
   } else {
-    entry_result = EntryResult::MakeCreated(out_entry_);
+    entry_result = EntryResult::MakeCreated(out_entry_.ExtractAsDangling());
   }
   std::move(entry_result_callback_).Run(std::move(entry_result));
 }
@@ -252,7 +274,19 @@ void BackendIO::ReadyForSparseIO(EntryImpl* entry) {
   entry_ = entry;
 }
 
-BackendIO::~BackendIO() = default;
+BackendIO::~BackendIO() {
+  if (!did_notify_controller_io_signalled() && out_entry_) {
+    // At this point it's very likely the Entry does not have a
+    // `background_queue_` so that Close() would do nothing. Post a task to the
+    // background task runner to drop the reference, which should effectively
+    // destroy if there are no more references. Destruction has to happen
+    // on the background task runner.
+    background_task_runner_->PostTask(
+        FROM_HERE,
+        base::BindOnce(&EntryImpl::Release,
+                       base::Unretained(out_entry_.ExtractAsDangling())));
+  }
+}
 
 bool BackendIO::ReturnsEntry() {
   return operation_ == OP_OPEN || operation_ == OP_CREATE ||
@@ -319,6 +353,9 @@ void BackendIO::ExecuteBackendOperation() {
       result_ = backend_->SyncOpenNextEntry(iterator_, &entry);
       out_entry_ = LeakEntryImpl(std::move(entry));
       out_entry_opened_ = true;
+      // `iterator_` is a proxied argument and not needed beyond this point. Set
+      // it to nullptr so as to not leave a dangling pointer around.
+      iterator_ = nullptr;
       break;
     }
     case OP_END_ENUMERATION:
@@ -332,7 +369,7 @@ void BackendIO::ExecuteBackendOperation() {
     case OP_CLOSE_ENTRY:
       // Collect the reference to |entry_| to balance with the AddRef() in
       // LeakEntryImpl.
-      entry_->Release();
+      entry_.ExtractAsDangling()->Release();
       result_ = net::OK;
       break;
     case OP_DOOM_ENTRY:
@@ -348,7 +385,6 @@ void BackendIO::ExecuteBackendOperation() {
       break;
     default:
       NOTREACHED() << "Invalid Operation";
-      result_ = net::ERR_UNEXPECTED;
   }
   DCHECK_NE(net::ERR_IO_PENDING, result_);
   NotifyController();
@@ -392,7 +428,6 @@ void BackendIO::ExecuteEntryOperation() {
       break;
     default:
       NOTREACHED() << "Invalid Operation";
-      result_ = net::ERR_UNEXPECTED;
   }
   buf_ = nullptr;
   if (result_ != net::ERR_IO_PENDING)

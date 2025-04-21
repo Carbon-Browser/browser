@@ -1,11 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ash/webui/connectivity_diagnostics/connectivity_diagnostics_ui.h"
 
 #include <utility>
 
+#include "ash/webui/common/trusted_types_util.h"
 #include "ash/webui/connectivity_diagnostics/url_constants.h"
 #include "ash/webui/grit/connectivity_diagnostics_resources.h"
 #include "ash/webui/grit/connectivity_diagnostics_resources_map.h"
@@ -17,20 +23,20 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui_data_source.h"
 #include "content/public/browser/web_ui_message_handler.h"
-#include "ui/resources/grit/webui_generated_resources.h"
+#include "ui/webui/resources/grit/webui_resources.h"
 
 namespace ash {
 
 namespace {
 
-// TODO(crbug/1051793): Replace with webui::SetUpWebUIDataSource() once it no
-// longer requires a dependency on //chrome/browser.
+// TODO(crbug.com/40673941): Replace with webui::SetUpWebUIDataSource() once it
+// no longer requires a dependency on //chrome/browser.
 void SetUpWebUIDataSource(content::WebUIDataSource* source,
                           base::span<const webui::ResourcePath> resources,
                           int default_resource) {
   source->AddResourcePaths(resources);
   source->SetDefaultResource(default_resource);
-  source->AddResourcePath("test_loader.html", IDR_WEBUI_HTML_TEST_LOADER_HTML);
+  source->AddResourcePath("test_loader.html", IDR_WEBUI_TEST_LOADER_HTML);
   source->AddResourcePath("test_loader.js", IDR_WEBUI_JS_TEST_LOADER_JS);
   source->AddResourcePath("test_loader_util.js",
                           IDR_WEBUI_JS_TEST_LOADER_UTIL_JS);
@@ -80,8 +86,7 @@ class ConnectivityDiagnosticsMessageHandler
     response.Append(base::Value(show_feedback_button_));
 
     AllowJavascript();
-    ResolveJavascriptCallback(base::Value(callback_id),
-                              base::Value(std::move(response)));
+    ResolveJavascriptCallback(base::Value(callback_id), response);
   }
 
   ConnectivityDiagnosticsUI::SendFeedbackReportCallback
@@ -109,9 +114,9 @@ ConnectivityDiagnosticsUI::ConnectivityDiagnosticsUI(
       kChromeUIConnectivityDiagnosticsHost);
   source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::ScriptSrc,
-      "script-src chrome://resources chrome://test 'self';");
+      "script-src chrome://resources chrome://webui-test 'self';");
 
-  source->DisableTrustedTypesCSP();
+  ash::EnableTrustedTypesCSP(source);
   source->UseStringsJs();
   source->EnableReplaceI18nInJS();
 
@@ -119,9 +124,7 @@ ConnectivityDiagnosticsUI::ConnectivityDiagnosticsUI(
       std::make_unique<ConnectivityDiagnosticsMessageHandler>(
           std::move(send_feedback_report_callback), show_feedback_button));
 
-  const auto resources = base::make_span(kConnectivityDiagnosticsResources,
-                                         kConnectivityDiagnosticsResourcesSize);
-  SetUpWebUIDataSource(source, resources,
+  SetUpWebUIDataSource(source, kConnectivityDiagnosticsResources,
                        IDR_CONNECTIVITY_DIAGNOSTICS_INDEX_HTML);
   source->AddLocalizedString("appTitle", IDS_CONNECTIVITY_DIAGNOSTICS_TITLE);
   source->AddLocalizedString("networkDevicesLabel",
@@ -133,8 +136,8 @@ ConnectivityDiagnosticsUI::ConnectivityDiagnosticsUI(
   source->AddLocalizedString("closeBtn", IDS_CONNECTIVITY_DIAGNOSTICS_CLOSE);
   source->AddLocalizedString("sendFeedbackBtn",
                              IDS_CONNECTIVITY_DIAGNOSTICS_SEND_FEEDBACK);
-  chromeos::network_diagnostics::AddResources(source);
-  chromeos::network_health::AddResources(source);
+  network_diagnostics::AddResources(source);
+  network_health::AddResources(source);
 }
 
 ConnectivityDiagnosticsUI::~ConnectivityDiagnosticsUI() = default;

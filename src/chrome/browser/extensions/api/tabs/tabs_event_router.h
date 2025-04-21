@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,6 @@
 #include "base/scoped_observation.h"
 #include "chrome/browser/extensions/api/tabs/tabs_api.h"
 #include "chrome/browser/resource_coordinator/tab_lifecycle_observer.h"
-#include "chrome/browser/resource_coordinator/tab_manager.h"
 #include "chrome/browser/ui/browser_list_observer.h"
 #include "chrome/browser/ui/browser_tab_strip_tracker.h"
 #include "chrome/browser/ui/browser_tab_strip_tracker_delegate.h"
@@ -27,6 +26,10 @@
 
 namespace content {
 class WebContents;
+}
+
+namespace resource_coordinator {
+class TabManager;
 }
 
 namespace extensions {
@@ -67,11 +70,13 @@ class TabsEventRouter : public TabStripModelObserver,
   void TabPinnedStateChanged(TabStripModel* tab_strip_model,
                              content::WebContents* contents,
                              int index) override;
-  void TabGroupedStateChanged(absl::optional<tab_groups::TabGroupId> group,
-                              content::WebContents* contents,
+  void TabGroupedStateChanged(std::optional<tab_groups::TabGroupId> group,
+                              tabs::TabInterface* tab,
                               int index) override;
 
   // ZoomObserver:
+  void OnZoomControllerDestroyed(
+      zoom::ZoomController* zoom_controller) override;
   void OnZoomChanged(
       const zoom::ZoomController::ZoomChangedEventData& data) override;
 
@@ -83,11 +88,13 @@ class TabsEventRouter : public TabStripModelObserver,
                         const gfx::Image& image) override;
 
   // resource_coordinator::TabLifecycleObserver:
-  void OnDiscardedStateChange(content::WebContents* contents,
-                              ::mojom::LifecycleUnitDiscardReason reason,
-                              bool is_discarded) override;
-  void OnAutoDiscardableStateChange(content::WebContents* contents,
-                                    bool is_auto_discardable) override;
+  void OnTabLifecycleStateChange(
+      content::WebContents* contents,
+      ::mojom::LifecycleUnitState previous_state,
+      ::mojom::LifecycleUnitState new_state,
+      std::optional<LifecycleUnitDiscardReason> discard_reason) override;
+  void OnTabAutoDiscardableStateChange(content::WebContents* contents,
+                                       bool is_auto_discardable) override;
 
  private:
   // Methods called from OnTabStripModelChanged.
@@ -136,9 +143,8 @@ class TabsEventRouter : public TabStripModelObserver,
 
   // Packages |changed_property_names| as a tab updated event for the tab
   // |contents| and dispatches the event to the extension.
-  void DispatchTabUpdatedEvent(
-      content::WebContents* contents,
-      const std::set<std::string> changed_property_names);
+  void DispatchTabUpdatedEvent(content::WebContents* contents,
+                               std::set<std::string> changed_property_names);
 
   // Register ourselves to receive the various notifications we are interested
   // in for a tab. Also create tab entry to observe web contents notifications.
@@ -212,6 +218,8 @@ class TabsEventRouter : public TabStripModelObserver,
   base::ScopedMultiSourceObservation<favicon::FaviconDriver,
                                      favicon::FaviconDriverObserver>
       favicon_scoped_observations_{this};
+  base::ScopedMultiSourceObservation<zoom::ZoomController, zoom::ZoomObserver>
+      zoom_scoped_observations_{this};
 
   BrowserTabStripTracker browser_tab_strip_tracker_;
 

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,10 +24,10 @@ size_t ServiceShaderTransferCacheEntry::CachedSize() const {
 
 bool ServiceShaderTransferCacheEntry::Deserialize(
     GrDirectContext* context,
+    skgpu::graphite::Recorder* graphite_recorder,
     base::span<const uint8_t> data) {
   // These entries must be created directly via CreateLocalEntry.
   NOTREACHED();
-  return false;
 }
 
 }  // namespace cc

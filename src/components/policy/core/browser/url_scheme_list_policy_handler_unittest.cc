@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,7 +45,7 @@ class URLSchemeListPolicyHandlerTest : public testing::Test {
     policies_.Set(key, POLICY_LEVEL_MANDATORY, POLICY_SCOPE_USER,
                   POLICY_SOURCE_CLOUD, std::move(value), nullptr);
   }
-  bool CheckPolicy(const std::string& key, absl::optional<base::Value> value) {
+  bool CheckPolicy(const std::string& key, std::optional<base::Value> value) {
     if (value)
       SetPolicy(key, value.value().Clone());
     return handler_->CheckPolicySettings(policies_, &errors_);
@@ -81,24 +81,24 @@ TEST_F(URLSchemeListPolicyHandlerTest, CheckPolicySettings_WrongType) {
 
 TEST_F(URLSchemeListPolicyHandlerTest, CheckPolicySettings_NoPolicy) {
   // The policy expects a list. Give it a boolean.
-  EXPECT_TRUE(CheckPolicy(kTestPolicyName, absl::nullopt));
+  EXPECT_TRUE(CheckPolicy(kTestPolicyName, std::nullopt));
   EXPECT_TRUE(errors_.empty());
 }
 
 TEST_F(URLSchemeListPolicyHandlerTest, CheckPolicySettings_OneBadValue) {
   // The policy expects a list. Give it a boolean.
-  base::Value in(base::Value::Type::LIST);
+  base::Value::List in;
   in.Append(kNotAUrl);
   in.Append(kTestUrl);
-  EXPECT_TRUE(CheckPolicy(kTestPolicyName, std::move(in)));
+  EXPECT_TRUE(CheckPolicy(kTestPolicyName, base::Value(std::move(in))));
   EXPECT_EQ(1U, errors_.size());
 }
 
 TEST_F(URLSchemeListPolicyHandlerTest, CheckPolicySettings_SingleBadValue) {
   // The policy expects a list. Give it a boolean.
-  base::Value in(base::Value::Type::LIST);
+  base::Value::List in;
   in.Append(kNotAUrl);
-  EXPECT_FALSE(CheckPolicy(kTestPolicyName, std::move(in)));
+  EXPECT_FALSE(CheckPolicy(kTestPolicyName, base::Value(std::move(in))));
   EXPECT_EQ(1U, errors_.size());
 }
 
@@ -120,59 +120,59 @@ TEST_F(URLSchemeListPolicyHandlerTest, ApplyPolicySettings_Empty) {
   base::Value* out;
   EXPECT_TRUE(prefs_.GetValue(kTestPrefName, &out));
   ASSERT_TRUE(out->is_list());
-  EXPECT_TRUE(out->GetListDeprecated().empty());
+  EXPECT_TRUE(out->GetList().empty());
 }
 
 TEST_F(URLSchemeListPolicyHandlerTest, ApplyPolicySettings_WrongElementType) {
   // The policy expects string-valued elements. Give it booleans.
-  base::Value in(base::Value::Type::LIST);
+  base::Value::List in;
   in.Append(kNotAUrl);
   in.Append(kTestUrl);
-  SetPolicy(kTestPolicyName, std::move(in));
+  SetPolicy(kTestPolicyName, base::Value(std::move(in)));
   ApplyPolicies();
 
   // The element should be skipped.
   base::Value* out;
   EXPECT_TRUE(prefs_.GetValue(kTestPrefName, &out));
   ASSERT_TRUE(out->is_list());
-  EXPECT_EQ(1U, out->GetListDeprecated().size());
+  EXPECT_EQ(1U, out->GetList().size());
 
-  const std::string* out_string = out->GetListDeprecated()[0].GetIfString();
+  const std::string* out_string = out->GetList()[0].GetIfString();
   ASSERT_TRUE(out_string);
   EXPECT_EQ(kTestUrl, *out_string);
 }
 
 TEST_F(URLSchemeListPolicyHandlerTest, ApplyPolicySettings_BadUrl) {
   // The policy expects a gvalid url schema.
-  base::Value in(base::Value::Type::LIST);
+  base::Value::List in;
   in.Append(false);
   in.Append(kTestUrl);
-  SetPolicy(kTestPolicyName, std::move(in));
+  SetPolicy(kTestPolicyName, base::Value(std::move(in)));
   ApplyPolicies();
 
   // The element should be skipped.
   base::Value* out;
   EXPECT_TRUE(prefs_.GetValue(kTestPrefName, &out));
   ASSERT_TRUE(out->is_list());
-  EXPECT_EQ(1U, out->GetListDeprecated().size());
+  EXPECT_EQ(1U, out->GetList().size());
 
-  const std::string* out_string = out->GetListDeprecated()[0].GetIfString();
+  const std::string* out_string = out->GetList()[0].GetIfString();
   ASSERT_TRUE(out_string);
   EXPECT_EQ(kTestUrl, *out_string);
 }
 
 TEST_F(URLSchemeListPolicyHandlerTest, ApplyPolicySettings_Successful) {
-  base::Value in_url_blocklist(base::Value::Type::LIST);
+  base::Value::List in_url_blocklist;
   in_url_blocklist.Append(kTestUrl);
-  SetPolicy(kTestPolicyName, std::move(in_url_blocklist));
+  SetPolicy(kTestPolicyName, base::Value(std::move(in_url_blocklist)));
   ApplyPolicies();
 
   base::Value* out;
   EXPECT_TRUE(prefs_.GetValue(kTestPrefName, &out));
   ASSERT_TRUE(out->is_list());
-  EXPECT_EQ(1U, out->GetListDeprecated().size());
+  EXPECT_EQ(1U, out->GetList().size());
 
-  const std::string* out_string = out->GetListDeprecated()[0].GetIfString();
+  const std::string* out_string = out->GetList()[0].GetIfString();
   ASSERT_TRUE(out_string);
   EXPECT_EQ(kTestUrl, *out_string);
 }
@@ -189,7 +189,7 @@ TEST_F(URLSchemeListPolicyHandlerTest,
   base::Value* out;
   EXPECT_TRUE(prefs_.GetValue(kTestPrefName, &out));
   ASSERT_TRUE(out->is_list());
-  EXPECT_EQ(policy::kMaxUrlFiltersPerPolicy, out->GetListDeprecated().size());
+  EXPECT_EQ(policy::kMaxUrlFiltersPerPolicy, out->GetList().size());
 }
 
 // Test that the warning message, mapped to
@@ -205,7 +205,7 @@ TEST_F(URLSchemeListPolicyHandlerTest,
 
   ApplyPolicies();
 
-  auto error_str = errors_.GetErrors(kTestPolicyName);
+  auto error_str = errors_.GetErrorMessages(kTestPolicyName);
   auto expected_str = l10n_util::GetStringFUTF16(
       IDS_POLICY_URL_ALLOW_BLOCK_LIST_MAX_FILTERS_LIMIT_WARNING,
       base::NumberToString16(policy::kMaxUrlFiltersPerPolicy));
@@ -214,7 +214,7 @@ TEST_F(URLSchemeListPolicyHandlerTest,
   base::Value* out;
   EXPECT_TRUE(prefs_.GetValue(kTestPrefName, &out));
   ASSERT_TRUE(out->is_list());
-  EXPECT_EQ(policy::kMaxUrlFiltersPerPolicy, out->GetListDeprecated().size());
+  EXPECT_EQ(policy::kMaxUrlFiltersPerPolicy, out->GetList().size());
 }
 
 TEST_F(URLSchemeListPolicyHandlerTest, ValidatePolicyEntry) {

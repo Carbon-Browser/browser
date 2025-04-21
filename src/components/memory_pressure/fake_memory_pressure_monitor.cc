@@ -1,8 +1,9 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/memory_pressure/fake_memory_pressure_monitor.h"
+
 #include "base/logging.h"
 
 namespace memory_pressure {
@@ -21,11 +22,6 @@ void FakeMemoryPressureMonitor::SetAndNotifyMemoryPressure(
 base::MemoryPressureMonitor::MemoryPressureLevel
 FakeMemoryPressureMonitor::GetCurrentPressureLevel() const {
   return memory_pressure_level_;
-}
-
-void FakeMemoryPressureMonitor::SetDispatchCallback(
-    const DispatchCallback& callback) {
-  LOG(ERROR) << "FakeMemoryPressureMonitor::SetDispatchCallback";
 }
 
 }  // namespace test

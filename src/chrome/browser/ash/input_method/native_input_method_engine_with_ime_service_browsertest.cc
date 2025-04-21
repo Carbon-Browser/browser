@@ -1,23 +1,24 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "chrome/browser/ash/input_method/native_input_method_engine.h"
-
 #include "base/values.h"
+#include "chrome/browser/ash/input_method/native_input_method_engine.h"
 #include "chrome/browser/ash/input_method/stub_input_method_engine_observer.h"
+#include "chrome/browser/ui/browser.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "content/public/test/browser_test.h"
 #include "mojo/core/embedder/embedder.h"
 #include "ui/base/ime/ash/ime_bridge.h"
-#include "ui/base/ime/ash/ime_engine_handler_interface.h"
 #include "ui/base/ime/ash/input_method_ash.h"
+#include "ui/base/ime/ash/text_input_method.h"
 #include "ui/base/ime/dummy_text_input_client.h"
-#include "ui/base/ime/input_method_delegate.h"
+#include "ui/base/ime/ime_key_event_dispatcher.h"
 
 namespace ash {
 namespace input_method {
+
 namespace {
 
 class TestObserver : public StubInputMethodEngineObserver {
@@ -27,22 +28,23 @@ class TestObserver : public StubInputMethodEngineObserver {
   TestObserver(const TestObserver&) = delete;
   TestObserver& operator=(const TestObserver&) = delete;
 
-  void OnKeyEvent(
-      const std::string& engine_id,
-      const ui::KeyEvent& event,
-      ui::IMEEngineHandlerInterface::KeyEventDoneCallback callback) override {
-    std::move(callback).Run(/*handled=*/false);
+  void OnKeyEvent(const std::string& engine_id,
+                  const ui::KeyEvent& event,
+                  TextInputMethod::KeyEventDoneCallback callback) override {
+    std::move(callback).Run(ui::ime::KeyEventHandledState::kNotHandled);
   }
 };
 
 class KeyProcessingWaiter {
  public:
-  ui::IMEEngineHandlerInterface::KeyEventDoneCallback CreateCallback() {
+  TextInputMethod::KeyEventDoneCallback CreateCallback() {
     return base::BindOnce(&KeyProcessingWaiter::OnKeyEventDone,
                           base::Unretained(this));
   }
 
-  void OnKeyEventDone(bool consumed) { run_loop_.Quit(); }
+  void OnKeyEventDone(ui::ime::KeyEventHandledState handled_state) {
+    run_loop_.Quit();
+  }
 
   void Wait() { run_loop_.Run(); }
 
@@ -58,7 +60,7 @@ class KeyProcessingWaiter {
 // TODO(crbug/1197005): Migrate all these to e2e Tast tests.
 class NativeInputMethodEngineWithImeServiceTest
     : public InProcessBrowserTest,
-      public ui::internal::InputMethodDelegate {
+      public ui::ImeKeyEventDispatcher {
  public:
   NativeInputMethodEngineWithImeServiceTest() : input_method_(this) {}
 
@@ -77,14 +79,13 @@ class NativeInputMethodEngineWithImeServiceTest
     // TODO(crbug/1197005): Migrate to Tast to avoid reliance on delicate luck.
     engine_ =
         NativeInputMethodEngine::CreateForTesting(/*use_ime_service=*/true);
-    ui::IMEBridge::Get()->SetInputContextHandler(&input_method_);
-    ui::IMEBridge::Get()->SetCurrentEngineHandler(engine_.get());
+    IMEBridge::Get()->SetInputContextHandler(&input_method_);
+    IMEBridge::Get()->SetCurrentEngineHandler(engine_.get());
 
     auto observer = std::make_unique<TestObserver>();
     Profile* profile = browser()->profile();
     PrefService* prefs = profile->GetPrefs();
-    prefs->Set(::prefs::kLanguageInputMethodSpecificSettings,
-               base::DictionaryValue());
+    prefs->Set(::prefs::kLanguageInputMethodSpecificSettings, base::Value());
     engine_->Initialize(std::move(observer), /*extension_id=*/"", profile);
 
     InProcessBrowserTest::SetUpOnMainThread();
@@ -95,12 +96,12 @@ class NativeInputMethodEngineWithImeServiceTest
     // observes ChromeKeyboardControllerClient, which is tied to the browser
     // lifetime.
     engine_.reset();
-    ui::IMEBridge::Get()->SetInputContextHandler(nullptr);
-    ui::IMEBridge::Get()->SetCurrentEngineHandler(nullptr);
+    IMEBridge::Get()->SetInputContextHandler(nullptr);
+    IMEBridge::Get()->SetCurrentEngineHandler(nullptr);
     InProcessBrowserTest::TearDownOnMainThread();
   }
 
-  // Overridden from ui::internal::InputMethodDelegate:
+  // Overridden from ui::ImeKeyEventDispatcher:
   ui::EventDispatchDetails DispatchKeyEventPostIME(
       ui::KeyEvent* event) override {
     return ui::EventDispatchDetails();
@@ -111,12 +112,13 @@ class NativeInputMethodEngineWithImeServiceTest
                         int flags = ui::EF_NONE) {
     KeyProcessingWaiter waiterPressed;
     KeyProcessingWaiter waiterReleased;
-    engine_->ProcessKeyEvent({ui::ET_KEY_PRESSED, code, flags},
+    engine_->ProcessKeyEvent({ui::EventType::kKeyPressed, code, flags},
                              waiterPressed.CreateCallback());
-    engine_->ProcessKeyEvent({ui::ET_KEY_RELEASED, code, flags},
+    engine_->ProcessKeyEvent({ui::EventType::kKeyReleased, code, flags},
                              waiterReleased.CreateCallback());
-    if (need_flush)
+    if (need_flush) {
       engine_->FlushForTesting();
+    }
 
     waiterPressed.Wait();
     waiterReleased.Wait();
@@ -129,7 +131,7 @@ class NativeInputMethodEngineWithImeServiceTest
   std::unique_ptr<NativeInputMethodEngine> engine_;
 
  private:
-  ui::InputMethodAsh input_method_;
+  InputMethodAsh input_method_;
 };
 
 // ID is specified in google_xkb_manifest.json.
@@ -138,8 +140,9 @@ constexpr char kEngineIdVietnameseTelex[] = "vkd_vi_telex";
 
 }  // namespace
 
+// TODO(crbug.com/1361212): Test is flaky. Re-enable the test.
 IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithImeServiceTest,
-                       VietnameseTelex_SimpleTransform) {
+                       DISABLED_VietnameseTelex_SimpleTransform) {
   engine_->Enable(kEngineIdVietnameseTelex);
   engine_->FlushForTesting();
   EXPECT_TRUE(engine_->IsConnectedForTesting());
@@ -162,8 +165,9 @@ IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithImeServiceTest,
   SetFocus(nullptr);
 }
 
+// TODO(crbug.com/1361212): Test is flaky. Re-enable the test.
 IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithImeServiceTest,
-                       VietnameseTelex_Reset) {
+                       DISABLED_VietnameseTelex_Reset) {
   engine_->Enable(kEngineIdVietnameseTelex);
   engine_->FlushForTesting();
   EXPECT_TRUE(engine_->IsConnectedForTesting());
@@ -185,8 +189,9 @@ IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithImeServiceTest,
   SetFocus(nullptr);
 }
 
+// TODO(crbug.com/1361212): Test is flaky. Re-enable the test.
 IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithImeServiceTest,
-                       SwitchActiveController) {
+                       DISABLED_SwitchActiveController) {
   // Swap between two controllers.
   engine_->Enable(kEngineIdVietnameseTelex);
   engine_->FlushForTesting();
@@ -208,8 +213,9 @@ IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithImeServiceTest,
   SetFocus(nullptr);
 }
 
+// TODO(crbug.com/1361212): Test is flaky. Re-enable the test.
 IN_PROC_BROWSER_TEST_F(NativeInputMethodEngineWithImeServiceTest,
-                       NoActiveController) {
+                       DISABLED_NoActiveController) {
   engine_->Enable(kEngineIdVietnameseTelex);
   engine_->FlushForTesting();
   engine_->Disable();

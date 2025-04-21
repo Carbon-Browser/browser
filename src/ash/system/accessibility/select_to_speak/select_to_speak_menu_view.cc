@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include "ash/system/accessibility/select_to_speak/select_to_speak_constants.h"
 #include "ash/system/accessibility/select_to_speak/select_to_speak_metrics_utils.h"
 #include "ash/system/tray/tray_constants.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/i18n/rtl.h"
 #include "base/metrics/histogram_functions.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -33,6 +33,16 @@ namespace {
 constexpr int kButtonSize = 36;
 constexpr int kStopButtonPadding = 14;
 constexpr int kSeparatorHeight = 16;
+
+void RecordButtonMetric(SelectToSpeakPanelAction action) {
+  base::UmaHistogramEnumeration(
+      "Accessibility.CrosSelectToSpeak.BubbleButtonPress", action);
+}
+
+void RecordKeyPressMetric(SelectToSpeakPanelAction action) {
+  base::UmaHistogramEnumeration(
+      "Accessibility.CrosSelectToSpeak.BubbleKeyPress", action);
+}
 
 // Histograms in which user action statistics are recorded. These values
 // correspond to their respective entries in histograms.xml, so if they are
@@ -68,7 +78,6 @@ SelectToSpeakPanelAction PanelActionForButtonID(int button_id, bool is_paused) {
   }
 
   NOTREACHED();
-  return SelectToSpeakPanelAction::kNone;
 }
 
 }  // namespace
@@ -112,6 +121,13 @@ SelectToSpeakMenuView::SelectToSpeakMenuView(Delegate* delegate)
                       .SetVectorIcon(kSelectToSpeakPauseIcon)
                       .SetTooltipText(l10n_util::GetStringUTF16(
                           IDS_ASH_SELECT_TO_SPEAK_PAUSE))
+                      // Setting the accessible name means that ChromeVox will
+                      // read this rather than the play/pause tooltip. This
+                      // ensures that ChromeVox doesn't immediately interrupt
+                      // reading to announce that the button tooltip text
+                      // changed.
+                      .SetAccessibleName(l10n_util::GetStringUTF16(
+                          IDS_ASH_SELECT_TO_SPEAK_TOGGLE_PLAYBACK))
                       .SetCallback(base::BindRepeating(
                           &SelectToSpeakMenuView::OnButtonPressed,
                           base::Unretained(this),
@@ -190,7 +206,8 @@ void SelectToSpeakMenuView::SetInitialSpeechRate(double initial_speech_rate) {
 }
 
 void SelectToSpeakMenuView::OnKeyEvent(ui::KeyEvent* key_event) {
-  if (key_event->type() != ui::ET_KEY_PRESSED || key_event->is_repeat()) {
+  if (key_event->type() != ui::EventType::kKeyPressed ||
+      key_event->is_repeat()) {
     // Only process key when first pressed.
     return;
   }
@@ -240,6 +257,8 @@ void SelectToSpeakMenuView::OnKeyEvent(ui::KeyEvent* key_event) {
       return;
   }
 
+  RecordKeyPressMetric(action);
+
   delegate_->OnActionSelected(action);
   key_event->SetHandled();
   key_event->StopPropagation();
@@ -270,6 +289,8 @@ void SelectToSpeakMenuView::OnButtonPressed(views::Button* sender) {
   SelectToSpeakPanelAction action =
       PanelActionForButtonID(sender->GetID(), is_paused_);
 
+  RecordButtonMetric(action);
+
   switch (action) {
     case SelectToSpeakPanelAction::kPreviousParagraph:
       [[fallthrough]];
@@ -297,7 +318,7 @@ void SelectToSpeakMenuView::OnButtonPressed(views::Button* sender) {
   delegate_->OnActionSelected(action);
 }
 
-BEGIN_METADATA(SelectToSpeakMenuView, views::BoxLayoutView)
+BEGIN_METADATA(SelectToSpeakMenuView)
 END_METADATA
 
 }  // namespace ash

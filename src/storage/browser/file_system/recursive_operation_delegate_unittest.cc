@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,14 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "storage/browser/file_system/file_system_file_util.h"
 #include "storage/browser/file_system/file_system_operation.h"
 #include "storage/browser/file_system/file_system_operation_runner.h"
@@ -31,7 +30,7 @@ namespace storage {
 
 namespace {
 
-class LoggingRecursiveOperation : public RecursiveOperationDelegate {
+class LoggingRecursiveOperation final : public RecursiveOperationDelegate {
  public:
   struct LogEntry {
     enum Type { PROCESS_FILE, PROCESS_DIRECTORY, POST_PROCESS_DIRECTORY };
@@ -76,7 +75,7 @@ class LoggingRecursiveOperation : public RecursiveOperationDelegate {
     }
 
     operation_runner()->GetMetadata(
-        url, FileSystemOperation::GET_METADATA_FIELD_IS_DIRECTORY,
+        url, {FileSystemOperation::GetMetadataField::kIsDirectory},
         base::BindOnce(&LoggingRecursiveOperation::DidGetMetadata,
                        weak_factory_.GetWeakPtr(), std::move(callback)));
   }
@@ -91,6 +90,10 @@ class LoggingRecursiveOperation : public RecursiveOperationDelegate {
                             StatusCallback callback) override {
     RecordLogEntry(LogEntry::POST_PROCESS_DIRECTORY, url);
     std::move(callback).Run(base::File::FILE_OK);
+  }
+
+  base::WeakPtr<RecursiveOperationDelegate> AsWeakPtr() override {
+    return weak_factory_.GetWeakPtr();
   }
 
   void SetEntryToFail(const FileSystemURL& url) { error_url_ = url; }
@@ -133,7 +136,7 @@ void ReportStatus(base::File::Error* out_error, base::File::Error error) {
 // after |counter| times message posting.
 void CallCancelLater(RecursiveOperationDelegate* operation, int counter) {
   if (counter > 0) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&CallCancelLater, base::Unretained(operation),
                                   counter - 1));
     return;
@@ -150,10 +153,12 @@ class RecursiveOperationDelegateTest : public testing::Test {
     EXPECT_TRUE(base_.CreateUniqueTempDir());
     base::FilePath base_dir = base_.GetPath().AppendASCII("filesystem");
     quota_manager_ = base::MakeRefCounted<storage::MockQuotaManager>(
-        /*is_incognito=*/false, base_dir, base::ThreadTaskRunnerHandle::Get(),
+        /*is_incognito=*/false, base_dir,
+        base::SingleThreadTaskRunner::GetCurrentDefault(),
         base::MakeRefCounted<storage::MockSpecialStoragePolicy>());
     quota_manager_proxy_ = base::MakeRefCounted<storage::MockQuotaManagerProxy>(
-        quota_manager_.get(), base::ThreadTaskRunnerHandle::Get());
+        quota_manager_.get(),
+        base::SingleThreadTaskRunner::GetCurrentDefault());
     sandbox_file_system_.SetUp(base_dir, quota_manager_proxy_);
   }
 

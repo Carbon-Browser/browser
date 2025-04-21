@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,8 +25,6 @@ class StubCredentialsFilter : public CredentialsFilter {
   bool ShouldSaveGaiaPasswordHash(const PasswordForm& form) const override;
   bool ShouldSaveEnterprisePasswordHash(
       const PasswordForm& form) const override;
-  void ReportFormLoginSuccess(
-      const PasswordFormManager& form_manager) const override;
   bool IsSyncAccountEmail(const std::string& username) const override;
 };
 

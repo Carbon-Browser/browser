@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/files/scoped_temp_dir.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/login/demo_mode/demo_session.h"
 #include "chrome/test/base/browser_process_platform_part_test_api_chromeos.h"
 
@@ -16,7 +17,7 @@ class ScopedPathOverride;
 }  // namespace base
 
 namespace component_updater {
-class FakeCrOSComponentManager;
+class FakeComponentManagerAsh;
 }  // namespace component_updater
 
 namespace ash {
@@ -54,24 +55,20 @@ class DemoModeTestHelper {
   // Returns the path that fake Demo Mode resources will be mounted from.
   base::FilePath GetDemoResourcesPath();
 
-  // Returns the path that fake offline Demo Mode resources will be preinstalled
-  // at.
-  base::FilePath GetPreinstalledDemoResourcesPath();
-
  private:
-  void InitializeCrosComponentManager();
+  void InitializeComponentManager();
 
   BrowserProcessPlatformPartTestApi browser_process_platform_part_test_api_;
 
   base::ScopedTempDir components_temp_dir_;
   std::unique_ptr<base::ScopedPathOverride> components_path_override_;
 
-  // Raw ponter to the FakeCrOSComponentManager once created.
-  component_updater::FakeCrOSComponentManager* fake_cros_component_manager_ =
-      nullptr;
+  // Raw pointer to the FakeComponentManagerAsh once created.
+  raw_ptr<component_updater::FakeComponentManagerAsh>
+      fake_component_manager_ash_ = nullptr;
 
-  // True if this class initialized the DBusThreadManager.
-  bool dbus_thread_manager_initialized_ = false;
+  // True if this class initialized the ConciergeClient.
+  bool concierge_client_initialized_ = false;
 };
 
 }  // namespace ash

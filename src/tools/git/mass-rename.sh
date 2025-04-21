@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2011 The Chromium Authors. All rights reserved.
+# Copyright 2011 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -14,4 +14,4 @@
 #   for f in $(git diff --name-only origin); do ./tools/sort-headers.py $f; done
 
 DIR="$( cd "$( dirname "$0" )" && pwd )"
-python $DIR/mass-rename.py "$*"
+python3 $DIR/mass-rename.py "$*"

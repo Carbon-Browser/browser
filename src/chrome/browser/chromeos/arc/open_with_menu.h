@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,10 @@
 #include <utility>
 #include <vector>
 
+#include "ash/components/arc/intent_helper/link_handler_model.h"
 #include "base/memory/raw_ptr.h"
-#include "components/arc/common/intent_helper/link_handler_model.h"
 #include "components/renderer_context_menu/render_view_context_menu_observer.h"
-#include "ui/base/models/simple_menu_model.h"
+#include "ui/menus/simple_menu_model.h"
 #include "url/gurl.h"
 
 class RenderViewContextMenuProxy;
@@ -68,14 +68,14 @@ class OpenWithMenu : public RenderViewContextMenuObserver,
       const std::vector<LinkHandlerInfo>& handlers);
 
  private:
-  // Adds placeholder items and the |submenu| to the |proxy|.
+  // Adds placeholder items and the `submenu` to the `proxy`.
   static void AddPlaceholderItems(RenderViewContextMenuProxy* proxy,
                                   ui::SimpleMenuModel* submenu);
 
-  // Converts |handlers| into HandlerMap which is a map from a command ID to a
+  // Converts `handlers` into HandlerMap which is a map from a command ID to a
   // LinkHandlerInfo and returns the map. Also returns a command id for the
   // parent of the submenu. When the submenu is not needed, the function
-  // returns |kInvalidCommandId|.
+  // returns `kInvalidCommandId`.
   static std::pair<OpenWithMenu::HandlerMap, int> BuildHandlersMap(
       const std::vector<LinkHandlerInfo>& handlers);
 

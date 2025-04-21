@@ -1,9 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/nfc/ndef_record.h"
 
+#include <string_view>
+
+#include "base/containers/contains.h"
 #include "base/notreached.h"
 #include "services/device/public/mojom/nfc.mojom-blink.h"
 #include "third_party/blink/renderer/bindings/core/v8/idl_types.h"
@@ -35,7 +38,7 @@ namespace {
 WTF::Vector<uint8_t> GetUTF8DataFromString(const String& string) {
   StringUTF8Adaptor utf8_string(string);
   WTF::Vector<uint8_t> data;
-  data.Append(utf8_string.data(), utf8_string.size());
+  data.AppendSpan(base::span(utf8_string));
   return data;
 }
 
@@ -73,24 +76,19 @@ bool GetBytesOfBufferSource(const V8BufferSource* buffer_source,
     array_piece = DOMArrayPiece(buffer_source->GetAsArrayBufferView().Get());
   } else {
     NOTREACHED();
-    return true;  // true to be consistent with `exception_state`.
   }
-  wtf_size_t checked_length;
-  if (!base::CheckedNumeric<wtf_size_t>(array_piece.ByteLength())
-           .AssignIfValid(&checked_length)) {
+  if (!base::CheckedNumeric<wtf_size_t>(array_piece.ByteLength()).IsValid()) {
     exception_state.ThrowRangeError(
         "The provided buffer source exceeds the maximum supported length");
     return false;
   }
-  target->Append(array_piece.Bytes(), checked_length);
+  target->AppendSpan(array_piece.ByteSpan());
   return true;
 }
 
 // https://w3c.github.io/web-nfc/#dfn-validate-external-type
 // Validates |input| as an external type.
 bool IsValidExternalType(const String& input) {
-  static const String kOtherCharsForCustomType(":!()+,-=@;$_*'.");
-
   // Ensure |input| is an ASCII string.
   if (!input.ContainsOnlyASCIIOrEmpty())
     return false;
@@ -98,7 +96,7 @@ bool IsValidExternalType(const String& input) {
   // As all characters in |input| is ASCII, limiting its length within 255 just
   // limits the length of its utf-8 encoded bytes we finally write into the
   // record payload.
-  if (input.IsEmpty() || input.length() > 255)
+  if (input.empty() || input.length() > 255)
     return false;
 
   // Finds the first occurrence of ':'.
@@ -108,17 +106,19 @@ bool IsValidExternalType(const String& input) {
 
   // Validates the domain (the part before ':').
   String domain = input.Left(colon_index);
-  if (domain.IsEmpty())
+  if (domain.empty())
     return false;
   // TODO(https://crbug.com/520391): Validate |domain|.
 
   // Validates the type (the part after ':').
   String type = input.Substring(colon_index + 1);
-  if (type.IsEmpty())
+  if (type.empty())
     return false;
+
+  static constexpr std::string_view kOtherCharsForCustomType(":!()+,-=@;$_*'.");
   for (wtf_size_t i = 0; i < type.length(); i++) {
     if (!IsASCIIAlphanumeric(type[i]) &&
-        !kOtherCharsForCustomType.Contains(type[i])) {
+        !base::Contains(kOtherCharsForCustomType, type[i])) {
       return false;
     }
   }
@@ -157,7 +157,7 @@ String getDocumentLanguage(const ExecutionContext* execution_context) {
     if (document_element) {
       document_language = document_element->getAttribute(html_names::kLangAttr);
     }
-    if (document_language.IsEmpty()) {
+    if (document_language.empty()) {
       document_language = "en";
     }
   }
@@ -274,7 +274,7 @@ NDEFRecord* CreateMimeRecord(const ScriptState* script_state,
 
   // ExtractMIMETypeFromMediaType() ignores parameters of the MIME type.
   String mime_type;
-  if (record.hasMediaType() && !record.mediaType().IsEmpty()) {
+  if (record.hasMediaType() && !record.mediaType().empty()) {
     mime_type = ExtractMIMETypeFromMediaType(AtomicString(record.mediaType()));
   } else {
     mime_type = "application/octet-stream";
@@ -584,19 +584,18 @@ const String& NDEFRecord::mediaType() const {
   return media_type_;
 }
 
-DOMDataView* NDEFRecord::data() const {
+NotShared<DOMDataView> NDEFRecord::data() const {
   // Step 4 in https://w3c.github.io/web-nfc/#dfn-parse-an-ndef-record
   if (record_type_ == "empty") {
-    DCHECK(payload_data_.IsEmpty());
-    return nullptr;
+    DCHECK(payload_data_.empty());
+    return NotShared<DOMDataView>();
   }
-  DOMArrayBuffer* dom_buffer =
-      DOMArrayBuffer::Create(payload_data_.data(), payload_data_.size());
-  return DOMDataView::Create(dom_buffer, 0, payload_data_.size());
+  DOMArrayBuffer* dom_buffer = DOMArrayBuffer::Create(payload_data_);
+  return NotShared(DOMDataView::Create(dom_buffer, 0, payload_data_.size()));
 }
 
 // https://w3c.github.io/web-nfc/#dfn-convert-ndefrecord-data-bytes
-absl::optional<HeapVector<Member<NDEFRecord>>> NDEFRecord::toRecords(
+std::optional<HeapVector<Member<NDEFRecord>>> NDEFRecord::toRecords(
     ExceptionState& exception_state) const {
   if (record_type_ != "smart-poster" &&
       category_ != device::mojom::blink::NDEFRecordTypeCategory::kExternal &&
@@ -605,11 +604,11 @@ absl::optional<HeapVector<Member<NDEFRecord>>> NDEFRecord::toRecords(
         DOMExceptionCode::kNotSupportedError,
         "Only {smart-poster, external, local} type records could have a ndef "
         "message as payload.");
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   if (!payload_message_)
-    return absl::nullopt;
+    return std::nullopt;
 
   return payload_message_->records();
 }

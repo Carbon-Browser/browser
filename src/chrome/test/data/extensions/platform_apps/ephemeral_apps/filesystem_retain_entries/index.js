@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,8 @@ function OpenAndRetainFile() {
     { type: 'openWritableFile' },
     callbackPass(function(entry) {
       var entry_id = chrome.fileSystem.retainEntry(entry);
-      chrome.test.assertTrue(entry_id != null && entry_id.length > 0);
+      chrome.test.assertNe(null, entry_id);
+      chrome.test.assertTrue(entry_id.length > 0);
 
       // Save the file handle to local storage.
       chrome.storage.local.set(

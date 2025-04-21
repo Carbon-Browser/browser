@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -74,7 +74,6 @@ IN_PROC_BROWSER_TEST_F(FullscreenControllerStateInteractiveTest,
   // Progress of test can be examined via LOG(INFO) << GetAndClearDebugLog();
 }
 
-
 // Individual tests for each pair of state and event ---------------------------
 
 // An "empty" test is included as part of each "TEST_EVENT" because it makes
@@ -108,7 +107,6 @@ IN_PROC_BROWSER_TEST_F(FullscreenControllerStateInteractiveTest,
 
 #include "chrome/browser/ui/exclusive_access/fullscreen_controller_state_tests.h"
 
-
 // Specific one-off tests for known issues -------------------------------------
 
 // Used manually to determine what happens on a platform.
@@ -119,12 +117,12 @@ IN_PROC_BROWSER_TEST_F(FullscreenControllerStateInteractiveTest,
       AddTabAtIndex(0, GURL(url::kAboutBlankURL), ui::PAGE_TRANSITION_TYPED));
   ASSERT_TRUE(InvokeEvent(TOGGLE_FULLSCREEN)) << GetAndClearDebugLog();
   ASSERT_TRUE(InvokeEvent(WINDOW_CHANGE)) << GetAndClearDebugLog();
-  ASSERT_TRUE(InvokeEvent(TAB_FULLSCREEN_TRUE)) << GetAndClearDebugLog();
+  ASSERT_TRUE(InvokeEvent(ENTER_TAB_FULLSCREEN)) << GetAndClearDebugLog();
   ASSERT_TRUE(InvokeEvent(TOGGLE_FULLSCREEN)) << GetAndClearDebugLog();
   ASSERT_TRUE(InvokeEvent(WINDOW_CHANGE)) << GetAndClearDebugLog();
 
   // Wait, allowing human operator to observe the result.
-  scoped_refptr<content::MessageLoopRunner> message_loop
-      = new content::MessageLoopRunner();
+  scoped_refptr<content::MessageLoopRunner> message_loop =
+      new content::MessageLoopRunner();
   message_loop->Run();
 }

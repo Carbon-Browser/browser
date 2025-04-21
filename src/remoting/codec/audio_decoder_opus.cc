@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "remoting/codec/audio_decoder_opus.h"
 
@@ -57,11 +62,10 @@ bool AudioDecoderOpus::ResetForPacket(AudioPacket* packet) {
     channels_ = packet->channels();
     sampling_rate_ = packet->sampling_rate();
 
-    if (channels_ <= 0 || channels_ > 2 ||
-        sampling_rate_ != kSamplingRate) {
-      LOG(WARNING) << "Unsupported OPUS parameters: "
-                   << channels_ << " channels with "
-                   << sampling_rate_ << " samples per second.";
+    if (channels_ <= 0 || channels_ > 2 || sampling_rate_ != kSamplingRate) {
+      LOG(WARNING) << "Unsupported OPUS parameters: " << channels_
+                   << " channels with " << sampling_rate_
+                   << " samples per second.";
       return false;
     }
   }
@@ -96,10 +100,10 @@ std::unique_ptr<AudioPacket> AudioDecoderOpus::Decode(
   decoded_packet->set_bytes_per_sample(AudioPacket::BYTES_PER_SAMPLE_2);
   decoded_packet->set_channels(packet->channels());
 
-  int max_frame_samples = kMaxFrameSizeMs * kSamplingRate /
-      base::Time::kMillisecondsPerSecond;
-  int max_frame_bytes = max_frame_samples * channels_ *
-      decoded_packet->bytes_per_sample();
+  int max_frame_samples =
+      kMaxFrameSizeMs * kSamplingRate / base::Time::kMillisecondsPerSecond;
+  int max_frame_bytes =
+      max_frame_samples * channels_ * decoded_packet->bytes_per_sample();
 
   std::string* decoded_data = decoded_packet->add_data();
   decoded_data->resize(packet->data_size() * max_frame_bytes);
@@ -113,16 +117,16 @@ std::unique_ptr<AudioPacket> AudioDecoderOpus::Decode(
     std::string* frame = packet->mutable_data(i);
     unsigned char* frame_data =
         reinterpret_cast<unsigned char*>(std::data(*frame));
-    int result = opus_decode(decoder_, frame_data, frame->size(),
-                             pcm_buffer, max_frame_samples, 0);
+    int result = opus_decode(decoder_, frame_data, frame->size(), pcm_buffer,
+                             max_frame_samples, 0);
     if (result < 0) {
       LOG(ERROR) << "Failed decoding Opus frame. Error code: " << result;
       DestroyDecoder();
       return nullptr;
     }
 
-    buffer_pos += result * packet->channels() *
-        decoded_packet->bytes_per_sample();
+    buffer_pos +=
+        result * packet->channels() * decoded_packet->bytes_per_sample();
   }
 
   if (!buffer_pos) {

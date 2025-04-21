@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,20 +8,28 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/check_op.h"
 #include "base/files/file.h"
 #include "base/files/file_error_or.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/metrics/histogram_macros.h"
 #include "base/system/sys_info.h"
 #include "base/task/bind_post_task.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
+#include "base/time/time.h"
+#include "chrome/browser/ash/drive/drive_integration_service.h"
+#include "chrome/browser/ash/drive/file_system_util.h"
 #include "chrome/browser/ash/file_manager/fileapi_util.h"
+#include "chrome/browser/ash/file_manager/filesystem_api_util.h"
 #include "chrome/browser/ash/file_manager/io_task.h"
-#include "chrome/browser/chromeos/fileapi/file_system_backend.h"
+#include "chrome/browser/ash/file_manager/office_file_tasks.h"
+#include "chrome/browser/ash/fileapi/file_system_backend.h"
 #include "chrome/browser/file_util_service.h"
 #include "chrome/services/file_util/public/cpp/zip_file_creator.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -41,10 +49,12 @@ int64_t ComputeSize(base::FilePath src_dir,
   base::File::Info info;
   for (const base::FilePath& relative_path : src_files) {
     const base::FilePath absolute_path = src_dir.Append(relative_path);
-    if (base::GetFileInfo(absolute_path, &info))
+
+    if (base::GetFileInfo(absolute_path, &info)) {
       total_bytes += info.is_directory
                          ? base::ComputeDirectorySize(absolute_path)
                          : info.size;
+    }
   }
   VLOG(1) << "<<< Total size is " << total_bytes << " bytes";
   return total_bytes;
@@ -55,16 +65,20 @@ int64_t ComputeSize(base::FilePath src_dir,
 ZipIOTask::ZipIOTask(
     std::vector<storage::FileSystemURL> source_urls,
     storage::FileSystemURL parent_folder,
-    scoped_refptr<storage::FileSystemContext> file_system_context)
-    : file_system_context_(file_system_context) {
+    Profile* profile,
+    scoped_refptr<storage::FileSystemContext> file_system_context,
+    bool show_notification)
+    : IOTask(show_notification),
+      profile_(profile),
+      file_system_context_(file_system_context) {
   progress_.state = State::kQueued;
   progress_.type = OperationType::kZip;
-  progress_.destination_folder = std::move(parent_folder);
+  progress_.SetDestinationFolder(std::move(parent_folder), profile);
   progress_.bytes_transferred = 0;
   progress_.total_bytes = 0;
 
   for (auto& url : source_urls) {
-    progress_.sources.emplace_back(std::move(url), absl::nullopt);
+    progress_.sources.emplace_back(std::move(url), std::nullopt);
   }
 }
 
@@ -88,11 +102,10 @@ void ZipIOTask::Execute(IOTask::ProgressCallback progress_callback,
   progress_.state = State::kInProgress;
 
   // Convert the destination folder URL to absolute path.
-  source_dir_ = progress_.destination_folder.path();
-  if (!chromeos::FileSystemBackend::CanHandleURL(
-          progress_.destination_folder) ||
+  source_dir_ = progress_.GetDestinationFolder().path();
+  if (!ash::FileSystemBackend::CanHandleURL(progress_.GetDestinationFolder()) ||
       source_dir_.empty()) {
-    progress_.outputs.emplace_back(progress_.destination_folder,
+    progress_.outputs.emplace_back(progress_.GetDestinationFolder(),
                                    base::File::FILE_ERROR_NOT_FOUND);
     Complete(State::kError);
     return;
@@ -101,7 +114,7 @@ void ZipIOTask::Execute(IOTask::ProgressCallback progress_callback,
   // Convert source file URLs to relative paths.
   for (EntryStatus& source : progress_.sources) {
     const base::FilePath absolute_path = source.url.path();
-    if (!chromeos::FileSystemBackend::CanHandleURL(source.url) ||
+    if (!ash::FileSystemBackend::CanHandleURL(source.url) ||
         absolute_path.empty()) {
       source.error = base::File::FILE_ERROR_NOT_FOUND;
       Complete(State::kError);
@@ -115,6 +128,30 @@ void ZipIOTask::Execute(IOTask::ProgressCallback progress_callback,
       return;
     }
     source_relative_paths_.push_back(std::move(relative_path));
+
+    if (file_manager::util::IsDriveLocalPath(profile_, absolute_path) &&
+        file_manager::file_tasks::IsOfficeFile(absolute_path)) {
+      UMA_HISTOGRAM_ENUMERATION(
+          file_manager::file_tasks::kUseOutsideDriveMetricName,
+          file_manager::file_tasks::OfficeFilesUseOutsideDriveHook::ZIP);
+      auto* drive_service =
+          drive::util::GetIntegrationServiceByProfile(profile_);
+      if (drive_service) {
+        drive_service->ForceReSyncFile(
+            absolute_path, base::BindOnce(&ZipIOTask::OnFilePreprocessed,
+                                          weak_ptr_factory_.GetWeakPtr()));
+        continue;
+      }
+    }
+    OnFilePreprocessed();
+  }
+}
+
+void ZipIOTask::OnFilePreprocessed() {
+  DCHECK_LT(files_preprocessed_, progress_.sources.size());
+  files_preprocessed_++;
+  if (files_preprocessed_ < progress_.sources.size()) {
+    return;
   }
 
   base::ThreadPool::PostTaskAndReplyWithResult(
@@ -137,7 +174,7 @@ void ZipIOTask::Complete(State state) {
     base::UmaHistogramTimes("FileBrowser.ZipTask.Time",
                             base::TimeTicks::Now() - start_time_);
   }
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(complete_callback_), std::move(progress_)));
 }
@@ -153,20 +190,20 @@ void ZipIOTask::GenerateZipNameAfterGotTotalBytes(int64_t total_bytes) {
     zip_name = source_relative_paths_[0].BaseName().ReplaceExtension("zip");
   }
   util::GenerateUnusedFilename(
-      progress_.destination_folder, zip_name, file_system_context_,
+      progress_.GetDestinationFolder(), zip_name, file_system_context_,
       base::BindOnce(&ZipIOTask::ZipItems, weak_ptr_factory_.GetWeakPtr()));
 }
 
 // Starts the zip operation.
 void ZipIOTask::ZipItems(
     base::FileErrorOr<storage::FileSystemURL> destination_result) {
-  if (destination_result.is_error()) {
-    progress_.outputs.emplace_back(progress_.destination_folder,
+  if (!destination_result.has_value()) {
+    progress_.outputs.emplace_back(progress_.GetDestinationFolder(),
                                    destination_result.error());
     Complete(State::kError);
     return;
   }
-  progress_.outputs.emplace_back(destination_result.value(), absl::nullopt);
+  progress_.outputs.emplace_back(destination_result.value(), std::nullopt);
   progress_callback_.Run(progress_);
 
   zip_file_creator_ = base::MakeRefCounted<ZipFileCreator>(
@@ -175,22 +212,22 @@ void ZipIOTask::ZipItems(
   zip_file_creator_->SetProgressCallback(base::BindOnce(
       &ZipIOTask::OnZipProgress, weak_ptr_factory_.GetWeakPtr()));
   zip_file_creator_->SetCompletionCallback(
-      BindPostTask(base::SequencedTaskRunnerHandle::Get(),
-                   base::BindOnce(&ZipIOTask::OnZipComplete,
-                                  weak_ptr_factory_.GetWeakPtr())));
+      BindPostTaskToCurrentDefault(base::BindOnce(
+          &ZipIOTask::OnZipComplete, weak_ptr_factory_.GetWeakPtr())));
   zip_file_creator_->Start(LaunchFileUtilService());
 }
 
 void ZipIOTask::OnZipProgress() {
   DCHECK(zip_file_creator_);
   progress_.bytes_transferred = zip_file_creator_->GetProgress().bytes;
-  speedometer_.Update(progress_.bytes_transferred);
-  const double remaining_seconds = speedometer_.GetRemainingSeconds();
+  if (speedometer_.Update(progress_.bytes_transferred)) {
+    const base::TimeDelta remaining_time = speedometer_.GetRemainingTime();
 
-  // Speedometer can produce infinite result which can't be serialized to JSON
-  // when sending the status via private API.
-  if (std::isfinite(remaining_seconds)) {
-    progress_.remaining_seconds = remaining_seconds;
+    // Speedometer can produce infinite result which can't be serialized to JSON
+    // when sending the status via private API.
+    if (!remaining_time.is_inf()) {
+      progress_.remaining_seconds = remaining_time.InSecondsF();
+    }
   }
 
   progress_callback_.Run(progress_);

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,8 +19,10 @@ class CommitQuota {
  public:
   CommitQuota(int max_tokens, base::TimeDelta refill_interval);
 
-  CommitQuota(const CommitQuota&) = delete;
-  CommitQuota& operator=(const CommitQuota&) = delete;
+  CommitQuota(const CommitQuota&);
+  CommitQuota& operator=(const CommitQuota&);
+  CommitQuota(CommitQuota&&);
+  CommitQuota& operator=(CommitQuota&&);
 
   ~CommitQuota();
 

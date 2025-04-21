@@ -1,10 +1,11 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/media_galleries/win/mtp_device_operations_util.h"
 
 #include <objbase.h>
+
 #include <portabledevice.h>
 #include <stdint.h>
 
@@ -17,6 +18,7 @@
 #include "base/logging.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/string_util.h"
+#include "base/strings/utf_string_conversions.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "base/time/time.h"
 #include "base/win/scoped_co_mem.h"

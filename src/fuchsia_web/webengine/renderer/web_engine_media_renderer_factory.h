@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,9 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "fuchsia_web/webengine/mojom/web_engine_media_resource_provider.mojom.h"
 #include "media/base/renderer_factory.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -23,7 +25,7 @@ class VideoRendererSink;
 }  // namespace media
 
 // RendererFactory implementation used on Fuchsia. It works the same as
-// DefaultRendererFactory, except that it uses WebEngineAudioRenderer for audio.
+// RendererImplFactory, except that it uses WebEngineAudioRenderer for audio.
 class WebEngineMediaRendererFactory final : public media::RendererFactory {
  public:
   using GetGpuFactoriesCB =
@@ -39,7 +41,7 @@ class WebEngineMediaRendererFactory final : public media::RendererFactory {
 
   // RendererFactory interface.
   std::unique_ptr<media::Renderer> CreateRenderer(
-      const scoped_refptr<base::SingleThreadTaskRunner>& media_task_runner,
+      const scoped_refptr<base::SequencedTaskRunner>& media_task_runner,
       const scoped_refptr<base::TaskRunner>& worker_task_runner,
       media::AudioRendererSink* audio_renderer_sink,
       media::VideoRendererSink* video_renderer_sink,
@@ -48,16 +50,16 @@ class WebEngineMediaRendererFactory final : public media::RendererFactory {
 
  private:
   std::vector<std::unique_ptr<media::VideoDecoder>> CreateVideoDecoders(
-      const scoped_refptr<base::SingleThreadTaskRunner>& media_task_runner,
+      const scoped_refptr<base::SequencedTaskRunner>& media_task_runner,
       media::RequestOverlayInfoCB request_overlay_info_cb,
       const gfx::ColorSpace& target_color_space,
       media::GpuVideoAcceleratorFactories* gpu_factories);
 
-  media::MediaLog* const media_log_;
+  const raw_ptr<media::MediaLog> media_log_;
 
   // Factory to create extra audio and video decoders.
   // Could be nullptr if not extra decoders are available.
-  media::DecoderFactory* const decoder_factory_;
+  const raw_ptr<media::DecoderFactory> decoder_factory_;
 
   // Creates factories for supporting video accelerators. May be null.
   GetGpuFactoriesCB get_gpu_factories_cb_;

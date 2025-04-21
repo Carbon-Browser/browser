@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,7 +39,8 @@ PLATFORM_EXPORT bool IsNoCorsSafelistedHeader(const String& name,
 PLATFORM_EXPORT bool IsPrivilegedNoCorsHeaderName(const String& name);
 PLATFORM_EXPORT bool IsNoCorsSafelistedHeaderName(const String& name);
 PLATFORM_EXPORT Vector<String> PrivilegedNoCorsHeaderNames();
-PLATFORM_EXPORT bool IsForbiddenHeaderName(const String& name);
+PLATFORM_EXPORT bool IsForbiddenRequestHeader(const String& name,
+                                              const String& value);
 PLATFORM_EXPORT bool ContainsOnlyCorsSafelistedHeaders(const HTTPHeaderMap&);
 
 PLATFORM_EXPORT bool IsOkStatus(int status);

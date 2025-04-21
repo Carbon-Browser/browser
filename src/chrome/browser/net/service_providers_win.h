@@ -1,4 +1,4 @@
-// Copyright (c) 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,13 @@
 #include <string>
 #include <vector>
 
-
 struct WinsockNamespaceProvider {
   std::wstring name;
   int version;
   bool active;
   int type;
 };
-typedef std::vector<WinsockNamespaceProvider> WinsockNamespaceProviderList;
+using WinsockNamespaceProviderList = std::vector<WinsockNamespaceProvider>;
 
 struct WinsockLayeredServiceProvider {
   WinsockLayeredServiceProvider();
@@ -29,8 +28,8 @@ struct WinsockLayeredServiceProvider {
   int socket_type;
   int socket_protocol;
 };
-typedef std::vector<WinsockLayeredServiceProvider>
-    WinsockLayeredServiceProviderList;
+using WinsockLayeredServiceProviderList =
+    std::vector<WinsockLayeredServiceProvider>;
 
 // Returns all the Winsock namespace providers.
 void GetWinsockNamespaceProviders(WinsockNamespaceProviderList* namespace_list);

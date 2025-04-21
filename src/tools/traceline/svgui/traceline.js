@@ -1,4 +1,4 @@
-// Copyright (c) 2009 The Chromium Authors. All rights reserved.
+// Copyright 2009 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -501,7 +501,6 @@ function() {
   for (var i = 0, il = this.threads.length; i < il; ++i) {
     var thread = this.threads[i];
 
-    // TODO make this not so stupid...
     if (i != 0) {
       for (var j = 0; j < this.thread_set_indexes.length; j++) {
         if (i == this.thread_set_indexes[j]) {
@@ -531,7 +530,6 @@ function() {
   for (var i = 0, il = this.threads.length; i < il; ++i) {
     var thread = this.threads[i];
 
-    // TODO make this not so stupid...
     if (i != 0) {
       for (var j = 0; j < this.thread_set_indexes.length; j++) {
         if (i == this.thread_set_indexes[j]) {

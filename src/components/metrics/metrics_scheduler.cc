@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,7 @@ MetricsScheduler::MetricsScheduler(const base::RepeatingClosure& task_callback,
       running_(false),
       callback_pending_(false) {}
 
-MetricsScheduler::~MetricsScheduler() {}
+MetricsScheduler::~MetricsScheduler() = default;
 
 void MetricsScheduler::Start() {
   running_ = true;
@@ -39,6 +39,11 @@ void MetricsScheduler::Stop() {
   running_ = false;
   if (timer_.IsRunning())
     timer_.Stop();
+}
+
+// static
+int MetricsScheduler::GetInitialIntervalSeconds() {
+  return kInitialIntervalSeconds;
 }
 
 void MetricsScheduler::TaskDone(base::TimeDelta next_interval) {

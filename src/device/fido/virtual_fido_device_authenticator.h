@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,9 +24,10 @@ class COMPONENT_EXPORT(DEVICE_FIDO) VirtualFidoDeviceAuthenticator
   ~VirtualFidoDeviceAuthenticator() override;
 
   // FidoDeviceAuthenticator:
-  void GetCredentialInformationForRequest(
+  void GetPlatformCredentialInfoForRequest(
       const CtapGetAssertionRequest& request,
-      GetCredentialInformationForRequestCallback callback) override;
+      const CtapGetAssertionOptions& options,
+      GetPlatformCredentialInfoForRequestCallback callback) override;
 };
 
 }  // namespace device

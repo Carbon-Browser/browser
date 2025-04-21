@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,10 @@
 #include "base/test/values_test_util.h"
 #include "base/values.h"
 #include "printing/backend/print_backend.h"
+#include "printing/backend/print_backend_test_constants.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/gfx/geometry/rect.h"
+#include "ui/gfx/geometry/size.h"
 
 namespace cloud_print {
 
@@ -73,24 +76,47 @@ constexpr char kExpectedMediaSize[] = R"json({
     {
       "custom_display_name": "A4",
       "height_microns": 7016,
+      "imageable_area_bottom_microns": 200,
+      "imageable_area_left_microns": 100,
+      "imageable_area_right_microns": 600,
+      "imageable_area_top_microns": 1000,
       "vendor_id": "12",
-      "width_microns": 4961
+      "width_microns": 4961,
+      "has_borderless_variant": true
     }, {
       "custom_display_name": "Letter",
       "height_microns": 6600,
+      "imageable_area_bottom_microns": 0,
+      "imageable_area_left_microns": 0,
+      "imageable_area_right_microns": 5100,
+      "imageable_area_top_microns": 6600,
       "is_default": true,
       "vendor_id": "45",
       "width_microns": 5100
     }, {
       "custom_display_name": "A3",
       "height_microns": 9921,
+      "imageable_area_bottom_microns": 0,
+      "imageable_area_left_microns": 0,
+      "imageable_area_right_microns": 7016,
+      "imageable_area_top_microns": 9921,
       "vendor_id": "67",
       "width_microns": 7016
     }, {
       "custom_display_name": "Ledger",
       "height_microns": 10200,
+      "imageable_area_bottom_microns": 0,
+      "imageable_area_left_microns": 0,
+      "imageable_area_right_microns": 6600,
+      "imageable_area_top_microns": 10200,
       "vendor_id": "89",
       "width_microns": 6600
+    }, {
+      "custom_display_name": "Custom",
+      "is_continuous_feed": true,
+      "max_height_microns": 20000,
+      "min_height_microns": 5080,
+      "width_microns": 2540
     }
 ]})json";
 
@@ -111,6 +137,77 @@ constexpr char kExpectedSupportedContentType[] = R"json([
     "content_type": "application/pdf"
   }
 ])json";
+
+constexpr char kExpectedMediaSizeWithWiderPaper[] = R"json({
+  "option": [
+    {
+      "custom_display_name": "A4",
+      "height_microns": 7016,
+      "imageable_area_bottom_microns": 200,
+      "imageable_area_left_microns": 100,
+      "imageable_area_right_microns": 600,
+      "imageable_area_top_microns": 1000,
+      "vendor_id": "12",
+      "width_microns": 4961,
+      "has_borderless_variant": true
+    }, {
+      "custom_display_name": "Letter",
+      "height_microns": 6600,
+      "imageable_area_bottom_microns": 0,
+      "imageable_area_left_microns": 0,
+      "imageable_area_right_microns": 5100,
+      "imageable_area_top_microns": 6600,
+      "is_default": true,
+      "vendor_id": "45",
+      "width_microns": 5100
+    }, {
+      "custom_display_name": "NA_INDEX_3X5",
+      "height_microns": 127000,
+      "imageable_area_bottom_microns": 700,
+      "imageable_area_left_microns": 500,
+      "imageable_area_right_microns": 76000,
+      "imageable_area_top_microns": 126000,
+      "name": "NA_INDEX_3X5",
+      "vendor_id": "15",
+      "width_microns": 76200
+    }, {
+      "custom_display_name": "A3",
+      "height_microns": 9921,
+      "imageable_area_bottom_microns": 0,
+      "imageable_area_left_microns": 0,
+      "imageable_area_right_microns": 7016,
+      "imageable_area_top_microns": 9921,
+      "vendor_id": "67",
+      "width_microns": 7016
+    }, {
+      "custom_display_name": "Ledger",
+      "height_microns": 10200,
+      "imageable_area_bottom_microns": 0,
+      "imageable_area_left_microns": 0,
+      "imageable_area_right_microns": 6600,
+      "imageable_area_top_microns": 10200,
+      "vendor_id": "89",
+      "width_microns": 6600
+    }, {
+      "custom_display_name": "Custom",
+      "is_continuous_feed": true,
+      "max_height_microns": 20000,
+      "min_height_microns": 5080,
+      "width_microns": 2540
+    }
+]})json";
+
+constexpr char kExpectedMediaType[] = R"json({
+  "option": [
+    {
+      "custom_display_name": "Plain Paper",
+      "is_default": true,
+      "vendor_id": "stationery"
+    }, {
+      "custom_display_name": "Photo Paper",
+      "vendor_id": "photographic"
+    }
+]})json";
 
 #if BUILDFLAG(IS_CHROMEOS)
 constexpr char kExpectedPinSupportedTrue[] = R"json({
@@ -157,14 +254,14 @@ constexpr char kExpectedPageOutputQuality[] = R"json([
     "select_cap": {
       "option": [ {
         "display_name": "Normal",
-        "value": "ns0000:Normal"
+        "value": "ns000:Normal"
       }, {
         "display_name": "Draft",
-        "value": "ns0000:Draft",
+        "value": "ns000:Draft",
         "is_default": true
       }, {
-        "display_name": "Custom Settings",
-        "value": "ns0000:AdvancedSetting"
+        "display_name": "Advance",
+        "value": "ns000:Advance"
       } ]
     },
     "type": "SELECT"
@@ -178,130 +275,19 @@ constexpr char kExpectedPageOutputQualityNullDefault[] = R"json([
     "select_cap": {
       "option": [ {
         "display_name": "Normal",
-        "value": "ns0000:Normal"
+        "value": "ns000:Normal"
       }, {
         "display_name": "Draft",
-        "value": "ns0000:Draft"
+        "value": "ns000:Draft"
       }, {
-        "display_name": "Custom Settings",
-        "value": "ns0000:AdvancedSetting"
+        "display_name": "Advance",
+        "value": "ns000:Advance"
       } ]
     },
     "type": "SELECT"
   }
 ])json";
 #endif  // BUILDFLAG(IS_WIN)
-
-const printing::PrinterSemanticCapsAndDefaults::Paper kPaperA3{
-    /*display_name=*/"A3", /*vendor_id=*/"67",
-    /*size_um=*/gfx::Size(7016, 9921)};
-const printing::PrinterSemanticCapsAndDefaults::Paper kPaperA4{
-    /*display_name=*/"A4", /*vendor_id=*/"12",
-    /*size_um=*/gfx::Size(4961, 7016)};
-const printing::PrinterSemanticCapsAndDefaults::Paper kPaperLetter{
-    /*display_name=*/"Letter", /*vendor_id=*/"45",
-    /*size_um=*/gfx::Size(5100, 6600)};
-const printing::PrinterSemanticCapsAndDefaults::Paper kPaperLedger{
-    /*display_name=*/"Ledger", /*vendor_id=*/"89",
-    /*size_um=*/gfx::Size(6600, 10200)};
-
-#if BUILDFLAG(IS_CHROMEOS)
-const printing::AdvancedCapability kAdvancedCapability1(
-    /*name=*/"advanced_cap_bool",
-    /*display_name=*/"Advanced Capability #1 (bool)",
-    /*type=*/printing::AdvancedCapability::Type::kBoolean,
-    /*default_value=*/"true",
-    /*values=*/{});
-const printing::AdvancedCapability kAdvancedCapability2(
-    /*name=*/"advanced_cap_double",
-    /*display_name=*/"Advanced Capability #2 (double)",
-    /*type=*/printing::AdvancedCapability::Type::kFloat,
-    /*default_value=*/"3.14159",
-    /*values=*/
-    {
-        printing::AdvancedCapabilityValue(
-            /*name=*/"adv_cap_val_1",
-            /*display_name=*/"Advanced Capability #1"),
-        printing::AdvancedCapabilityValue(
-            /*name=*/"adv_cap_val_2",
-            /*display_name=*/"Advanced Capability #2"),
-        printing::AdvancedCapabilityValue(
-            /*name=*/"adv_cap_val_3",
-            /*display_name=*/"Advanced Capability #3"),
-    });
-const printing::AdvancedCapabilities kAdvancedCapabilities{
-    kAdvancedCapability1, kAdvancedCapability2};
-#endif  // BUILDFLAG(IS_CHROMEOS)
-
-#if BUILDFLAG(IS_WIN)
-const printing::PageOutputQuality
-    kPageOutputQuality(/*qualities=*/
-                       {
-                           printing::PageOutputQualityAttribute(
-                               /*display_name=*/"Normal",
-                               /*name=*/"ns0000:Normal"),
-                           printing::PageOutputQualityAttribute(
-                               /*display_name=*/"Draft",
-                               /*name=*/"ns0000:Draft"),
-                           printing::PageOutputQualityAttribute(
-                               /*display_name=*/"Custom Settings",
-                               /*name=*/"ns0000:AdvancedSetting"),
-                       },
-                       /*default_quality=*/"ns0000:Draft");
-#endif  // BUILDFLAG(IS_WIN)
-
-constexpr bool kCollateCapable = true;
-constexpr bool kCollateDefault = true;
-
-constexpr int32_t kCopiesMax = 123;
-
-const std::vector<printing::mojom::DuplexMode> kDuplexModes{
-    printing::mojom::DuplexMode::kSimplex,
-    printing::mojom::DuplexMode::kLongEdge,
-    printing::mojom::DuplexMode::kShortEdge};
-constexpr printing::mojom::DuplexMode kDuplexDefault =
-    printing::mojom::DuplexMode::kSimplex;
-
-constexpr bool kColorChangeable = true;
-constexpr bool kColorDefault = true;
-constexpr printing::mojom::ColorModel kColorModel =
-    printing::mojom::ColorModel::kRGB;
-constexpr printing::mojom::ColorModel kBwModel =
-    printing::mojom::ColorModel::kGrayscale;
-const printing::PrinterSemanticCapsAndDefaults::Papers kPapers{kPaperA4,
-                                                               kPaperLetter};
-const printing::PrinterSemanticCapsAndDefaults::Papers kUserDefinedPapers{
-    kPaperA3, kPaperLedger};
-const printing::PrinterSemanticCapsAndDefaults::Paper kDefaultPaper =
-    kPaperLetter;
-
-constexpr gfx::Size kDpi600(600, 600);
-constexpr gfx::Size kDpi1200(1200, 1200);
-constexpr gfx::Size kDpi1200x600(1200, 600);
-const std::vector<gfx::Size> kDpis{kDpi600, kDpi1200, kDpi1200x600};
-constexpr gfx::Size kDefaultDpi = kDpi600;
-
-printing::PrinterSemanticCapsAndDefaults
-GenerateSamplePrinterSemanticCapsAndDefaults() {
-  printing::PrinterSemanticCapsAndDefaults caps;
-
-  caps.collate_capable = kCollateCapable;
-  caps.collate_default = kCollateDefault;
-  caps.copies_max = kCopiesMax;
-  caps.duplex_modes = kDuplexModes;
-  caps.duplex_default = kDuplexDefault;
-  caps.color_changeable = kColorChangeable;
-  caps.color_default = kColorDefault;
-  caps.color_model = kColorModel;
-  caps.bw_model = kBwModel;
-  caps.papers = kPapers;
-  caps.user_defined_papers = kUserDefinedPapers;
-  caps.default_paper = kPaperLetter;
-  caps.dpis = kDpis;
-  caps.default_dpi = kDefaultDpi;
-
-  return caps;
-}
 
 const base::Value::Dict* GetPrinterDict(const base::Value& caps_value) {
   const base::Value::Dict* caps_dict = caps_value.GetIfDict();
@@ -317,15 +303,14 @@ const base::Value::Dict* GetPrinterDict(const base::Value& caps_value) {
 
 TEST(CloudPrintCddConversionTest, ValidCloudPrintCddConversion) {
   const printing::PrinterSemanticCapsAndDefaults input =
-      GenerateSamplePrinterSemanticCapsAndDefaults();
+      printing::GenerateSamplePrinterSemanticCapsAndDefaults({});
   const base::Value output = PrinterSemanticCapsAndDefaultsToCdd(input);
   const base::Value::Dict* printer_dict = GetPrinterDict(output);
-
   ASSERT_TRUE(printer_dict);
 #if BUILDFLAG(IS_CHROMEOS)
-  ASSERT_EQ(9u, printer_dict->size());
+  ASSERT_EQ(10u, printer_dict->size());
 #else
-  ASSERT_EQ(8u, printer_dict->size());
+  ASSERT_EQ(9u, printer_dict->size());
 #endif  // BUILDFLAG(IS_CHROMEOS)
   base::ExpectDictValue(base::test::ParseJson(kExpectedCollateDefaultTrue),
                         *printer_dict, "collate");
@@ -339,6 +324,8 @@ TEST(CloudPrintCddConversionTest, ValidCloudPrintCddConversion) {
                         "duplex");
   base::ExpectDictValue(base::test::ParseJson(kExpectedMediaSize),
                         *printer_dict, "media_size");
+  base::ExpectDictValue(base::test::ParseJson(kExpectedMediaType),
+                        *printer_dict, "media_type");
   base::ExpectDictValue(base::test::ParseJson(kExpectedPageOrientation),
                         *printer_dict, "page_orientation");
   base::ExpectDictValue(base::test::ParseJson(kExpectedSupportedContentType),
@@ -351,25 +338,8 @@ TEST(CloudPrintCddConversionTest, ValidCloudPrintCddConversion) {
 
 TEST(CloudPrintCddConversionTest, MissingEntry) {
   printing::PrinterSemanticCapsAndDefaults input =
-      GenerateSamplePrinterSemanticCapsAndDefaults();
+      printing::GenerateSamplePrinterSemanticCapsAndDefaults({});
   input.collate_capable = false;
-  input.collate_default = false;
-  const base::Value output = PrinterSemanticCapsAndDefaultsToCdd(input);
-  const base::Value::Dict* printer_dict = GetPrinterDict(output);
-
-  ASSERT_TRUE(printer_dict);
-#if BUILDFLAG(IS_CHROMEOS)
-  ASSERT_EQ(8u, printer_dict->size());
-#else
-  ASSERT_EQ(7u, printer_dict->size());
-#endif  // BUILDFLAG(IS_CHROMEOS)
-  ASSERT_FALSE(printer_dict->contains("collate"));
-}
-
-TEST(CloudPrintCddConversionTest, CollateDefaultIsFalse) {
-  printing::PrinterSemanticCapsAndDefaults input =
-      GenerateSamplePrinterSemanticCapsAndDefaults();
-  input.collate_capable = true;
   input.collate_default = false;
   const base::Value output = PrinterSemanticCapsAndDefaultsToCdd(input);
   const base::Value::Dict* printer_dict = GetPrinterDict(output);
@@ -380,21 +350,73 @@ TEST(CloudPrintCddConversionTest, CollateDefaultIsFalse) {
 #else
   ASSERT_EQ(8u, printer_dict->size());
 #endif  // BUILDFLAG(IS_CHROMEOS)
-  base::ExpectDictValue(base::test::ParseJson(kExpectedCollateDefaultFalse),
-                        *printer_dict, "collate");
+  ASSERT_FALSE(printer_dict->contains("collate"));
 }
 
-#if BUILDFLAG(IS_CHROMEOS)
-TEST(CloudPrintCddConversionTest, PinAndAdvancedCapabilities) {
+TEST(CloudPrintCddConversionTest, CollateDefaultIsFalse) {
   printing::PrinterSemanticCapsAndDefaults input =
-      GenerateSamplePrinterSemanticCapsAndDefaults();
-  input.pin_supported = true;
-  input.advanced_capabilities = kAdvancedCapabilities;
+      printing::GenerateSamplePrinterSemanticCapsAndDefaults({});
+  input.collate_capable = true;
+  input.collate_default = false;
   const base::Value output = PrinterSemanticCapsAndDefaultsToCdd(input);
   const base::Value::Dict* printer_dict = GetPrinterDict(output);
 
   ASSERT_TRUE(printer_dict);
+#if BUILDFLAG(IS_CHROMEOS)
   ASSERT_EQ(10u, printer_dict->size());
+#else
+  ASSERT_EQ(9u, printer_dict->size());
+#endif  // BUILDFLAG(IS_CHROMEOS)
+  base::ExpectDictValue(base::test::ParseJson(kExpectedCollateDefaultFalse),
+                        *printer_dict, "collate");
+}
+
+TEST(CloudPrintCddConversionTest, WiderPaper) {
+  // Test that a Paper that has a larger width swaps its width and height when
+  // converting to a CDD.  Additionally, create the printable area such that
+  // none of the margins are equal.  Create margins as so:  left: 1000,
+  // bottom: 500, right: 700, top: 200.
+  printing::PrinterSemanticCapsAndDefaults input =
+      printing::GenerateSamplePrinterSemanticCapsAndDefaults({});
+  input.papers.push_back(printing::PrinterSemanticCapsAndDefaults::Paper(
+      "NA_INDEX_3X5", "15", gfx::Size(127000, 76200),
+      gfx::Rect(1000, 500, 125300, 75500)));
+  const base::Value output = PrinterSemanticCapsAndDefaultsToCdd(input);
+  const base::Value::Dict* printer_dict = GetPrinterDict(output);
+
+  ASSERT_TRUE(printer_dict);
+#if BUILDFLAG(IS_CHROMEOS)
+  ASSERT_EQ(10u, printer_dict->size());
+#else
+  ASSERT_EQ(9u, printer_dict->size());
+#endif  // BUILDFLAG(IS_CHROMEOS)
+  base::ExpectDictValue(base::test::ParseJson(kExpectedMediaSizeWithWiderPaper),
+                        *printer_dict, "media_size");
+}
+
+#if BUILDFLAG(IS_CHROMEOS)
+TEST(CloudPrintCddConversionTest, MediaTypeOnlyOne) {
+  printing::PrinterSemanticCapsAndDefaults input =
+      printing::GenerateSamplePrinterSemanticCapsAndDefaults({});
+  input.media_types = {input.media_types[0]};
+  const base::Value output = PrinterSemanticCapsAndDefaultsToCdd(input);
+  const base::Value::Dict* printer_dict = GetPrinterDict(output);
+
+  // The media type list should only be included when more than one media type
+  // is supported.
+  ASSERT_TRUE(printer_dict);
+  EXPECT_FALSE(printer_dict->contains("media_type"));
+}
+
+TEST(CloudPrintCddConversionTest, PinAndAdvancedCapabilities) {
+  printing::PrinterSemanticCapsAndDefaults input =
+      printing::GenerateSamplePrinterSemanticCapsAndDefaults(
+          printing::SampleWithPinAndAdvancedCapabilities());
+  const base::Value output = PrinterSemanticCapsAndDefaultsToCdd(input);
+  const base::Value::Dict* printer_dict = GetPrinterDict(output);
+
+  ASSERT_TRUE(printer_dict);
+  ASSERT_EQ(11u, printer_dict->size());
   base::ExpectDictValue(base::test::ParseJson(kExpectedPinSupportedTrue),
                         *printer_dict, "pin");
   base::ExpectDictValue(base::test::ParseJson(kExpectedAdvancedCapabilities),
@@ -405,27 +427,27 @@ TEST(CloudPrintCddConversionTest, PinAndAdvancedCapabilities) {
 #if BUILDFLAG(IS_WIN)
 TEST(CloudPrintCddConversionTest, PageOutputQualityWithDefaultQuality) {
   printing::PrinterSemanticCapsAndDefaults input =
-      GenerateSamplePrinterSemanticCapsAndDefaults();
-  input.page_output_quality = kPageOutputQuality;
+      printing::GenerateSamplePrinterSemanticCapsAndDefaults(
+          printing::SampleWithPageOutputQuality());
+  input.page_output_quality->default_quality = printing::kDefaultQuality;
   const base::Value output = PrinterSemanticCapsAndDefaultsToCdd(input);
   const base::Value::Dict* printer_dict = GetPrinterDict(output);
 
   ASSERT_TRUE(printer_dict);
-  ASSERT_EQ(9u, printer_dict->size());
+  ASSERT_EQ(10u, printer_dict->size());
   base::ExpectDictValue(base::test::ParseJson(kExpectedPageOutputQuality),
                         *printer_dict, "vendor_capability");
 }
 
 TEST(CloudPrintCddConversionTest, PageOutputQualityNullDefaultQuality) {
   printing::PrinterSemanticCapsAndDefaults input =
-      GenerateSamplePrinterSemanticCapsAndDefaults();
-  input.page_output_quality = kPageOutputQuality;
-  input.page_output_quality->default_quality = absl::nullopt;
+      printing::GenerateSamplePrinterSemanticCapsAndDefaults(
+          printing::SampleWithPageOutputQuality());
   const base::Value output = PrinterSemanticCapsAndDefaultsToCdd(input);
   const base::Value::Dict* printer_dict = GetPrinterDict(output);
 
   ASSERT_TRUE(printer_dict);
-  ASSERT_EQ(9u, printer_dict->size());
+  ASSERT_EQ(10u, printer_dict->size());
   base::ExpectDictValue(
       base::test::ParseJson(kExpectedPageOutputQualityNullDefault),
       *printer_dict, "vendor_capability");

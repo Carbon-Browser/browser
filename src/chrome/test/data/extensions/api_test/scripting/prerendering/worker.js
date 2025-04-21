@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,6 +55,28 @@ async function testActivationOnExecution() {
   });
 }
 
+async function testEventRouter() {
+  chrome.scripting.executeScript(
+      {
+        target: {tabId: tabId, frameIds: [prerenderingFrameId]},
+        func: async () => {
+          return new Promise(resolve => {
+            chrome.storage.onChanged.addListener(function(
+                changes, event_namespace) {
+              resolve('ok');
+            });
+
+            chrome.storage.local.set({'test': 1}).then(() => {});
+          });
+        }
+      },
+      results => {
+        chrome.test.assertEq(1, results.length);
+        chrome.test.assertEq('ok', results[0].result);
+        chrome.test.succeed();
+      });
+}
+
 chrome.test.getConfig(async config => {
   const tabs = await chrome.tabs.query({active: true});
   chrome.test.assertEq(1, tabs.length);
@@ -73,7 +95,7 @@ chrome.test.getConfig(async config => {
         ((resolve, details) => {
           prerenderingFrameId = details.frameId;
           prerenderingDocumentId = details.documentId;
-          chrome.test.assertTrue(prerenderingFrameId != 0);
+          chrome.test.assertNe(0, prerenderingFrameId);
           chrome.webRequest.onBeforeRequest.removeListener(onBeforeRequest);
           resolve();
         }).bind(this, resolve);
@@ -86,8 +108,10 @@ chrome.test.getConfig(async config => {
   });
 
   chrome.test.runTests([
-    testGetTitleByFrameId,
-    testGetTitleByDocumentId,
-    testActivationOnExecution,
+    // TODO(crbug.com/40857271): disabled due to flakiness.
+    // testGetTitleByFrameId,
+    // testGetTitleByDocumentId,
+    testEventRouter,
+    // testActivationOnExecution,
   ]);
 });

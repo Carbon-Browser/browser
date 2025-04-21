@@ -1,12 +1,19 @@
-// Copyright (c) 2006-2010 The Chromium Authors. All rights reserved.
+// Copyright 2006-2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "sandbox/win/src/eat_resolver.h"
 
+#include <ntstatus.h>
 #include <stddef.h>
 
 #include "base/win/pe_image.h"
+#include "sandbox/win/src/nt_internals.h"
 #include "sandbox/win/src/sandbox_nt_util.h"
 
 namespace sandbox {

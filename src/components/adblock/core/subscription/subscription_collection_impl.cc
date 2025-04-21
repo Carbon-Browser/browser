@@ -20,13 +20,8 @@
 #include <algorithm>
 #include <numeric>
 #include <string>
-#include <vector>
 
-#include "base/json/json_string_value_serializer.h"
 #include "base/ranges/algorithm.h"
-#include "base/strings/string_piece.h"
-#include "base/values.h"
-#include "components/adblock/core/common/adblock_utils.h"
 
 namespace adblock {
 namespace {
@@ -37,69 +32,51 @@ std::string DocumentDomain(const GURL& request_url,
                                  : frame_hierarchy[0].host();
 }
 
-std::vector<base::StringPiece> ReduceSelectors(
-    InstalledSubscription::Selectors& combined_selectors) {
+InstalledSubscription::ContentFiltersData MaybeReduceSelectors(
+    InstalledSubscription::ContentFiltersData& combined_selectors) {
+  if (combined_selectors.elemhide_exceptions.empty()) {
+    // Nothing to reduce.
+    return combined_selectors;
+  }
   // Populate result with blocking selectors.
-  std::vector<base::StringPiece> final_selectors =
+  InstalledSubscription::ContentFiltersData final_selectors;
+  final_selectors.elemhide_selectors =
       std::move(combined_selectors.elemhide_selectors);
+  final_selectors.remove_selectors =
+      std::move(combined_selectors.remove_selectors);
+  final_selectors.selectors_to_inline_css =
+      std::move(combined_selectors.selectors_to_inline_css);
   // Remove exceptions.
-  final_selectors.erase(
-      std::remove_if(
-          final_selectors.begin(), final_selectors.end(),
-          [&](const auto& selector) {
-            return std::find(combined_selectors.elemhide_exceptions.begin(),
-                             combined_selectors.elemhide_exceptions.end(),
-                             selector) !=
-                   combined_selectors.elemhide_exceptions.end();
-          }),
-      final_selectors.end());
-  return final_selectors;
-}
-
-using GenericGetter = absl::optional<base::StringPiece> (
-    InstalledSubscription::*)(const GURL&,
-                              const std::string&,
-                              FilterCategory) const;
-
-bool IsFilterOverruled(base::StringPiece blocking,
-                       const InstalledSubscription& subscription,
-                       const GURL& request_url,
-                       const std::string& request_domain,
-                       GenericGetter getter) {
-  auto allowing = (subscription.*getter)(request_url, request_domain,
-                                         FilterCategory::Allowing);
-  if (!allowing)
-    return false;
-  return allowing->empty() || *allowing == blocking;
-}
-
-bool GenericHasAllowingFilter(const InstalledSubscription& subscription,
-                              const base::StringPiece blocking,
-                              const GURL& request_url,
-                              const std::vector<GURL>& frame_hierarchy,
-                              GenericGetter getter) {
-  const auto request_domain = DocumentDomain(request_url, frame_hierarchy);
-  // There may exist an allowing rule for this request and its immediate
-  // parent frame. We also check for document-wide allowing filters.
-  if (IsFilterOverruled(blocking, subscription, request_url, request_domain,
-                        getter) ||
-      subscription.HasSpecialFilter(SpecialFilterType::Document, request_url,
-                                    request_domain, SiteKey())) {
-    return true;
-  }
-  // For parent frames, we only match document-wide allowing filters. Parent
-  // frames' allowing rules don't propagate to child frames.
-  for (auto it = frame_hierarchy.begin(); it < frame_hierarchy.end(); ++it) {
-    const GURL& current_url = *it;
-    const std::string& current_domain = std::next(it) != frame_hierarchy.end()
-                                            ? std::next(it)->host()
-                                            : current_url.host();
-    if (subscription.HasSpecialFilter(SpecialFilterType::Document, current_url,
-                                      current_domain, SiteKey())) {
-      return true;
+  for (auto* selectors_collection : {&final_selectors.elemhide_selectors,
+                                     &final_selectors.remove_selectors}) {
+    if (selectors_collection->empty()) {
+      continue;
     }
+    selectors_collection->erase(
+        std::remove_if(
+            selectors_collection->begin(), selectors_collection->end(),
+            [&](const auto& selector) {
+              return std::find(combined_selectors.elemhide_exceptions.begin(),
+                               combined_selectors.elemhide_exceptions.end(),
+                               selector) !=
+                     combined_selectors.elemhide_exceptions.end();
+            }),
+        selectors_collection->end());
   }
-  return false;
+  if (!final_selectors.selectors_to_inline_css.empty()) {
+    final_selectors.selectors_to_inline_css.erase(
+        std::remove_if(
+            final_selectors.selectors_to_inline_css.begin(),
+            final_selectors.selectors_to_inline_css.end(),
+            [&](const auto& selector_with_css) {
+              return std::find(combined_selectors.elemhide_exceptions.begin(),
+                               combined_selectors.elemhide_exceptions.end(),
+                               selector_with_css.first) !=
+                     combined_selectors.elemhide_exceptions.end();
+            }),
+        final_selectors.selectors_to_inline_css.end());
+  }
+  return final_selectors;
 }
 
 bool SubscriptionContainsSpecialFilter(
@@ -150,68 +127,18 @@ bool HasSpecialFilter(
           DocumentDomain(request_url, frame_hierarchy), sitekey)) {
     return true;
   }
-  if (SubscriptionContainsSpecialFilter(subscription, filter_type,
-                                        frame_hierarchy, sitekey)) {
-    return true;
-  }
-  return false;
-}
-
-absl::optional<base::StringPiece> GenericFindFilter(
-    const std::vector<scoped_refptr<InstalledSubscription>>& subscriptions,
-    const GURL& request_url,
-    const std::vector<GURL>& frame_hierarchy,
-    GenericGetter getter) {
-  for (const auto& subscription : subscriptions) {
-    // Is there a blocking filter in this subscription?
-    const auto blocking = (*subscription.*getter)(
-        request_url, DocumentDomain(request_url, frame_hierarchy),
-        FilterCategory::Blocking);
-    if (!blocking) {
-      // There are no blocking filters in this subscription, check next one.
-      continue;
-    }
-    // There may be an allowing rule for the entire document or an allowing //
-    // filter in one of the subscriptions:
-    if (base::ranges::any_of(subscriptions, [&](const auto& sub) {
-          return GenericHasAllowingFilter(*sub, *blocking, request_url,
-                                          frame_hierarchy, getter);
-        })) {
-      continue;
-    }
-    // Last chance to avoid blocking: maybe there is a Genericblock filter and
-    // we should re-search for domain-specific filters only?
-    if (base::ranges::any_of(subscriptions, [&](const auto& sub) {
-          return HasSpecialFilter(sub, SpecialFilterType::Genericblock,
-                                  request_url, frame_hierarchy, SiteKey());
-        })) {
-      // This is a relatively rare case - we should have searched for
-      // domain-specific filters only.
-      const auto domain_specific_blocking = (*subscription.*getter)(
-          request_url, DocumentDomain(request_url, frame_hierarchy),
-          FilterCategory::DomainSpecificBlocking);
-      if (domain_specific_blocking) {
-        // There is a domain-specific blocking filter. No point in
-        // searching for a domain-specific allowing filter, since the
-        // previous search for non-specific allowing filters would have found
-        // it.
-        return domain_specific_blocking;
-      } else {
-        // There are no domain-specific blocking filters in this
-        // subscription.
-        continue;
-      }
-    }
-    return blocking;
-  }
-  return absl::nullopt;
+  return SubscriptionContainsSpecialFilter(subscription, filter_type,
+                                           frame_hierarchy, sitekey);
 }
 
 }  // namespace
 
 SubscriptionCollectionImpl::SubscriptionCollectionImpl(
-    std::vector<scoped_refptr<InstalledSubscription>> current_state)
-    : subscriptions_(std::move(current_state)) {}
+    std::vector<scoped_refptr<InstalledSubscription>> current_state,
+    const std::string& configuration_name)
+    : subscriptions_(std::move(current_state)),
+      configuration_name_(configuration_name) {}
+
 SubscriptionCollectionImpl::~SubscriptionCollectionImpl() = default;
 SubscriptionCollectionImpl::SubscriptionCollectionImpl(
     const SubscriptionCollectionImpl&) = default;
@@ -221,6 +148,11 @@ SubscriptionCollectionImpl& SubscriptionCollectionImpl::operator=(
     const SubscriptionCollectionImpl&) = default;
 SubscriptionCollectionImpl& SubscriptionCollectionImpl::operator=(
     SubscriptionCollectionImpl&&) = default;
+
+const std::string& SubscriptionCollectionImpl::GetFilteringConfigurationName()
+    const {
+  return configuration_name_;
+}
 
 absl::optional<GURL> SubscriptionCollectionImpl::FindBySubresourceFilter(
     const GURL& request_url,
@@ -243,14 +175,15 @@ absl::optional<GURL> SubscriptionCollectionImpl::FindBySubresourceFilter(
 
 absl::optional<GURL> SubscriptionCollectionImpl::FindByPopupFilter(
     const GURL& popup_url,
-    const GURL& opener_url,
+    const std::vector<GURL>& frame_hierarchy,
     const SiteKey& sitekey,
     FilterCategory category) const {
   const auto subscription =
       std::find_if(subscriptions_.begin(), subscriptions_.end(),
                    [&](const auto& subscription) {
-                     return subscription->HasPopupFilter(popup_url, opener_url,
-                                                         sitekey, category);
+                     return subscription->HasPopupFilter(
+                         popup_url, DocumentDomain(popup_url, frame_hierarchy),
+                         sitekey, category);
                    });
   if (subscription != subscriptions_.end()) {
     return (*subscription)->GetSourceUrl();
@@ -286,85 +219,152 @@ absl::optional<GURL> SubscriptionCollectionImpl::FindBySpecialFilter(
   return absl::nullopt;
 }
 
-std::vector<base::StringPiece>
-SubscriptionCollectionImpl::GetElementHideSelectors(
+InstalledSubscription::ContentFiltersData
+SubscriptionCollectionImpl::GetElementHideData(
     const GURL& frame_url,
     const std::vector<GURL>& frame_hierarchy,
     const SiteKey& sitekey) const {
   const bool domain_specific = !!FindBySpecialFilter(
       SpecialFilterType::Generichide, frame_url, frame_hierarchy, sitekey);
 
-  InstalledSubscription::Selectors combined_selectors;
+  InstalledSubscription::ContentFiltersData combined_selectors;
   for (const auto& subscription : subscriptions_) {
-    auto selectors =
-        subscription->GetElemhideSelectors(frame_url, domain_specific);
-    std::move(selectors.elemhide_selectors.begin(),
-              selectors.elemhide_selectors.end(),
-              std::back_inserter(combined_selectors.elemhide_selectors));
+    auto selectors = subscription->GetElemhideData(frame_url, domain_specific);
     std::move(selectors.elemhide_exceptions.begin(),
               selectors.elemhide_exceptions.end(),
               std::back_inserter(combined_selectors.elemhide_exceptions));
+    std::move(selectors.elemhide_selectors.begin(),
+              selectors.elemhide_selectors.end(),
+              std::back_inserter(combined_selectors.elemhide_selectors));
   }
-  return ReduceSelectors(combined_selectors);
+  return MaybeReduceSelectors(combined_selectors);
 }
 
-std::vector<base::StringPiece>
-SubscriptionCollectionImpl::GetElementHideEmulationSelectors(
+InstalledSubscription::ContentFiltersData
+SubscriptionCollectionImpl::GetElementHideEmulationData(
     const GURL& frame_url) const {
-  InstalledSubscription::Selectors combined_selectors;
+  InstalledSubscription::ContentFiltersData combined_selectors;
   for (const auto& subscription : subscriptions_) {
-    auto selectors = subscription->GetElemhideEmulationSelectors(frame_url);
-    std::move(selectors.elemhide_selectors.begin(),
-              selectors.elemhide_selectors.end(),
-              std::back_inserter(combined_selectors.elemhide_selectors));
+    auto selectors = subscription->GetElemhideEmulationData(frame_url);
     std::move(selectors.elemhide_exceptions.begin(),
               selectors.elemhide_exceptions.end(),
               std::back_inserter(combined_selectors.elemhide_exceptions));
+    std::move(selectors.elemhide_selectors.begin(),
+              selectors.elemhide_selectors.end(),
+              std::back_inserter(combined_selectors.elemhide_selectors));
+    std::move(selectors.remove_selectors.begin(),
+              selectors.remove_selectors.end(),
+              std::back_inserter(combined_selectors.remove_selectors));
+    std::move(selectors.selectors_to_inline_css.begin(),
+              selectors.selectors_to_inline_css.end(),
+              std::back_inserter(combined_selectors.selectors_to_inline_css));
   }
-  return ReduceSelectors(combined_selectors);
+  return MaybeReduceSelectors(combined_selectors);
 }
 
-std::string SubscriptionCollectionImpl::GenerateSnippetsJson(
+base::Value::List SubscriptionCollectionImpl::GenerateSnippets(
     const GURL& frame_url,
     const std::vector<GURL>& frame_hierarchy) const {
-  std::vector<base::Value> snippets;
+  base::Value::List snippets;
   auto document_domain = DocumentDomain(frame_url, frame_hierarchy);
 
   for (const auto& subscription : subscriptions_) {
     auto matched = subscription->MatchSnippets(document_domain);
     for (const auto& snippet : matched) {
-      std::vector<base::Value> call;
-      call.push_back(base::Value(snippet.command));
-      for (const auto& arg : snippet.arguments)
-        call.push_back(base::Value(arg));
-      snippets.push_back(base::Value(std::move(call)));
+      base::Value::List call;
+      call.Append(base::Value(snippet.command));
+      for (const auto& arg : snippet.arguments) {
+        call.Append(base::Value(arg));
+      }
+      snippets.Append(std::move(call));
     }
   }
 
-  if (snippets.size() == 0)
-    return "";
-
-  std::string serialized;
-  JSONStringValueSerializer serializer(&serialized);
-  serializer.Serialize(base::Value(std::move(snippets)));
-
-  return serialized;
+  return snippets;
 }
 
-base::StringPiece SubscriptionCollectionImpl::GetCspInjection(
+std::set<std::string_view> SubscriptionCollectionImpl::GetCspInjections(
     const GURL& request_url,
     const std::vector<GURL>& frame_hierarchy) const {
-  auto result = GenericFindFilter(subscriptions_, request_url, frame_hierarchy,
-                                  &InstalledSubscription::FindCspFilter);
-  return result ? *result : "";
+  std::set<std::string_view> blocking_filters{};
+  std::set<std::string_view> allowing_filters{};
+  for (const auto& subscription : subscriptions_) {
+    subscription->FindCspFilters(request_url,
+                                 DocumentDomain(request_url, frame_hierarchy),
+                                 FilterCategory::Blocking, blocking_filters);
+  }
+  if (blocking_filters.empty()) {
+    return {};
+  }
+
+  // If blocking filters found, check if can be overruled by allowing filters.
+  for (const auto& subscription : subscriptions_) {
+    // There may exist an allowing rule for this request and its immediate
+    // parent frame. We also check for document-wide allowing filters.
+    if (HasSpecialFilter(subscription, SpecialFilterType::Document, request_url,
+                         frame_hierarchy, SiteKey())) {
+      return {};
+    }
+    subscription->FindCspFilters(request_url,
+                                 DocumentDomain(request_url, frame_hierarchy),
+                                 FilterCategory::Allowing, allowing_filters);
+  }
+
+  // Remove overruled filters.
+  for (const auto& a_f : allowing_filters) {
+    if (a_f.empty()) {
+      return {};
+    }
+    blocking_filters.erase(a_f);
+  }
+  if (blocking_filters.empty()) {
+    return {};
+  }
+
+  // Last chance to avoid blocking: maybe there is a Genericblock filter and
+  // we should re-search for domain-specific filters only?
+  if (base::ranges::any_of(subscriptions_, [&](const auto& sub) {
+        return HasSpecialFilter(sub, SpecialFilterType::Genericblock,
+                                request_url, frame_hierarchy, SiteKey());
+      })) {
+    // This is a relatively rare case - we should have searched for
+    // domain-specific filters only.
+    std::set<std::string_view> domain_specific_blocking{};
+    for (const auto& subscription : subscriptions_) {
+      subscription->FindCspFilters(
+          request_url, DocumentDomain(request_url, frame_hierarchy),
+          FilterCategory::DomainSpecificBlocking, domain_specific_blocking);
+      // There is a domain-specific blocking filter. No point in
+      // searching for a domain-specific allowing filter, since the
+      // previous search for non-specific allowing filters would have found
+      // it.
+    }
+    if (!domain_specific_blocking.empty()) {
+      for (const auto& a_f : allowing_filters) {
+        if (a_f.empty()) {
+          return {};
+        }
+        domain_specific_blocking.erase(a_f);
+      }
+    }
+
+    return domain_specific_blocking;
+  }
+
+  return blocking_filters;
 }
 
-absl::optional<GURL> SubscriptionCollectionImpl::GetRewriteUrl(
+std::set<std::string_view> SubscriptionCollectionImpl::GetRewriteFilters(
     const GURL& request_url,
-    const std::vector<GURL>& frame_hierarchy) const {
-  auto result = GenericFindFilter(subscriptions_, request_url, frame_hierarchy,
-                                  &InstalledSubscription::FindRewriteFilter);
-  return result ? absl::optional<GURL>(GURL(*result)) : absl::nullopt;
+    const std::vector<GURL>& frame_hierarchy,
+    FilterCategory category) const {
+  std::set<std::string_view> result;
+  for (const auto& subscription : subscriptions_) {
+    const auto filters = subscription->FindRewriteFilters(
+        request_url, DocumentDomain(request_url, frame_hierarchy), category);
+    result.insert(filters.begin(), filters.end());
+  }
+  return result;
 }
 
 std::set<HeaderFilterData> SubscriptionCollectionImpl::GetHeaderFilters(

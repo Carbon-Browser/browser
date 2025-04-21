@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,17 +7,10 @@
 #include <utility>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/no_destructor.h"
 #include "base/strings/string_util.h"
-#include "chrome/browser/chromeos/extensions/login_screen/login/cleanup/browsing_data_cleanup_handler.h"
-#include "chrome/browser/chromeos/extensions/login_screen/login/cleanup/clipboard_cleanup_handler.h"
-#include "chrome/browser/chromeos/extensions/login_screen/login/cleanup/extension_cleanup_handler.h"
-#include "chrome/browser/chromeos/extensions/login_screen/login/cleanup/files_cleanup_handler.h"
-#include "chrome/browser/chromeos/extensions/login_screen/login/cleanup/lacros_cleanup_handler.h"
-#include "chrome/browser/chromeos/extensions/login_screen/login/cleanup/open_windows_cleanup_handler.h"
-#include "chrome/browser/chromeos/extensions/login_screen/login/cleanup/print_jobs_cleanup_handler.h"
 #include "mojo/public/cpp/bindings/remote.h"
 
 namespace chromeos {
@@ -71,7 +64,7 @@ void CleanupManager::SetIsCleanupInProgressForTesting(
 void CleanupManager::OnCleanupHandlerDone(
     base::RepeatingClosure barrier_closure,
     const std::string& handler_name,
-    const absl::optional<std::string>& error) {
+    const std::optional<std::string>& error) {
   if (error) {
     errors_.push_back(handler_name + ": " + *error);
   }
@@ -85,7 +78,7 @@ void CleanupManager::OnAllCleanupHandlersDone() {
   is_cleanup_in_progress_ = false;
 
   if (errors_.empty()) {
-    std::move(callback_).Run(absl::nullopt);
+    std::move(callback_).Run(std::nullopt);
     return;
   }
 

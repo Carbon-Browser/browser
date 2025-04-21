@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 namespace ui {
 
-// TODO(crbug/1264581): Remove this class once kDeviceI18nShortcutsEnabled
+// TODO(crbug.com/40203434): Remove this class once kDeviceI18nShortcutsEnabled
 // policy is deprecated.
 class COMPONENT_EXPORT(UI_BASE_FEATURES) ShortcutMappingPrefDelegate {
  public:

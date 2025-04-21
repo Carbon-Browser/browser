@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,7 +52,7 @@ class COMPONENT_EXPORT(IPC) Listener {
 #endif  // BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
 
   // Debugging helper for identifying what kind of a Listener this is.
-  // TODO(https://crbug.com/1113159): Remove this method once the bug is fixed.
+  // TODO(crbug.com/40143346): Remove this method once the bug is fixed.
   virtual std::string ToDebugString();
 
  protected:

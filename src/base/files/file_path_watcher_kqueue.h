@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,8 +44,8 @@ class FilePathWatcherKQueue : public FilePathWatcher::PlatformDelegate {
   class EventData {
    public:
     EventData(const FilePath& path, const FilePath::StringType& subdir)
-        : path_(path), subdir_(subdir) { }
-    FilePath path_;  // Full path to this item.
+        : path_(path), subdir_(subdir) {}
+    FilePath path_;                // Full path to this item.
     FilePath::StringType subdir_;  // Path to any sub item.
   };
 

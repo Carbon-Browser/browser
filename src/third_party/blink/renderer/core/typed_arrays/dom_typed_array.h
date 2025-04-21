@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_TYPED_ARRAYS_DOM_TYPED_ARRAY_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_TYPED_ARRAYS_DOM_TYPED_ARRAY_H_
@@ -18,7 +23,7 @@ class DOMTypedArray final : public DOMArrayBufferView {
   static const WrapperTypeInfo wrapper_type_info_body_;
 
  public:
-  typedef T ValueType;
+  using ValueType = T;
 
   static ThisType* Create(DOMArrayBufferBase* buffer,
                           size_t byte_offset,
@@ -32,10 +37,15 @@ class DOMTypedArray final : public DOMArrayBufferView {
     return Create(buffer, 0, length);
   }
 
-  static ThisType* Create(const ValueType* array, size_t length) {
+  static ThisType* Create(base::span<const ValueType> array)
+    requires std::is_trivially_copyable_v<ValueType>
+  {
+    // Intentionally avoids using `as_bytes`, since that requires
+    // `std::has_unique_object_representations_v<ValueType>`, which we neither
+    // need here nor can guarantee.
     DOMArrayBuffer* buffer =
-        DOMArrayBuffer::Create(array, length * sizeof(ValueType));
-    return Create(buffer, 0, length);
+        DOMArrayBuffer::Create(array.data(), array.size_bytes());
+    return Create(buffer, 0, array.size());
   }
 
   static ThisType* CreateOrNull(size_t length) {
@@ -44,10 +54,15 @@ class DOMTypedArray final : public DOMArrayBufferView {
     return buffer ? Create(buffer, 0, length) : nullptr;
   }
 
-  static ThisType* CreateOrNull(const ValueType* array, size_t length) {
+  static ThisType* CreateOrNull(base::span<const ValueType> array)
+    requires std::is_trivially_copyable_v<ValueType>
+  {
+    // Intentionally avoids using `as_bytes`, since that requires
+    // `std::has_unique_object_representations_v<ValueType>`, which we neither
+    // need here nor can guarantee.
     DOMArrayBuffer* buffer =
-        DOMArrayBuffer::CreateOrNull(array, length * sizeof(ValueType));
-    return buffer ? Create(buffer, 0, length) : nullptr;
+        DOMArrayBuffer::CreateOrNull(array.data(), array.size_bytes());
+    return buffer ? Create(buffer, 0, array.size()) : nullptr;
   }
 
   static ThisType* CreateUninitializedOrNull(size_t length) {
@@ -68,6 +83,18 @@ class DOMTypedArray final : public DOMArrayBufferView {
     return reinterpret_cast<ValueType*>(BaseAddressMaybeShared());
   }
 
+  base::span<ValueType> AsSpan() const {
+    // SAFETY: Data() and length() guarantee the span is valid
+    return UNSAFE_BUFFERS(
+        base::span(static_cast<ValueType*>(Data()), length()));
+  }
+
+  base::span<ValueType> AsSpanMaybeShared() const {
+    // SAFETY: DataMaybeShared() and length() guarantee the span is valid
+    return UNSAFE_BUFFERS(
+        base::span(static_cast<ValueType*>(DataMaybeShared()), length()));
+  }
+
   size_t length() const { return !IsDetached() ? raw_length_ : 0; }
 
   size_t byteLength() const final { return length() * sizeof(ValueType); }
@@ -83,7 +110,7 @@ class DOMTypedArray final : public DOMArrayBufferView {
     return Data()[index];
   }
 
-  v8::MaybeLocal<v8::Value> Wrap(ScriptState*) override;
+  v8::Local<v8::Value> Wrap(ScriptState*) override;
 
  private:
   // Helper to verify that a given sub-range of an ArrayBuffer is within range.
@@ -115,6 +142,7 @@ class DOMTypedArray final : public DOMArrayBufferView {
   V(uint8_t, Uint8Clamped, true)           \
   V(uint16_t, Uint16, false)               \
   V(uint32_t, Uint32, false)               \
+  V(uint16_t, Float16, false)              \
   V(float, Float32, false)                 \
   V(double, Float64, false)                \
   V(int64_t, BigInt64, false)              \

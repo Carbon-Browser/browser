@@ -1,6 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ui/base/ime/win/tsf_input_scope.h"
 
@@ -8,7 +13,6 @@
 #include <stddef.h>
 #include <wrl/client.h>
 
-#include "base/win/windows_version.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace ui {
@@ -134,8 +138,6 @@ const CreateInputScopesTestCase kCreateInputScopesTestCases[] = {
     {TEXT_INPUT_TYPE_NUMBER, TEXT_INPUT_MODE_NUMERIC, false, 1, {IS_PRIVATE}},
 };
 TEST_P(TSFCreateInputScopeTest, CreateInputScopes) {
-  if (base::win::GetVersion() < base::win::Version::WIN10)
-    return;
   const CreateInputScopesTestCase& test_case = GetParam();
   Microsoft::WRL::ComPtr<ITfInputScope> input_scope =
       tsf_inputscope::CreateInputScope(test_case.input_type,

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@ struct PasswordForm;
 
 // This is a delegate of the ExportFlow interface used to retrieve exportable
 // passwords.
-// TODO(1047726): Merge this interface with SavedPasswordsPresenter.
+// TODO(crbug.com/40116992): Merge this interface with SavedPasswordsPresenter.
 class CredentialProviderInterface {
  public:
   // Gets all password entries.

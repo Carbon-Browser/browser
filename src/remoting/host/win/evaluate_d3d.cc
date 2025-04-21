@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -103,8 +103,9 @@ bool GetD3DCapabilities(std::vector<std::string>* result) {
 }
 
 bool IsD3DAvailable() {
-  if (BlockD3DCheck())
+  if (BlockD3DCheck()) {
     return false;
+  }
 
   std::string unused;
   return (EvaluateCapability(kEvaluateD3D, &unused) == kSuccessExitCode);

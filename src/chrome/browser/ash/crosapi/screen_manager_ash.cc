@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,15 +11,18 @@
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/shell.h"
 #include "ash/wm/desks/desks_util.h"
-#include "base/bind.h"
 #include "base/containers/adapters.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
-#include "chrome/browser/ash/crosapi/video_capture_device_ash.h"
+#include "chrome/browser/ash/crosapi/browser_util.h"
+#include "components/exo/shell_surface_util.h"
 #include "content/public/browser/desktop_capture.h"
 #include "content/public/browser/desktop_media_id.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
+#include "services/video_capture/ash/video_capture_device_ash.h"
 #include "ui/aura/window_observer.h"
 #include "ui/snapshot/snapshot.h"
 
@@ -73,7 +76,7 @@ class WindowList : public aura::WindowObserver {
   //
   // The members |id_to_window_| and |window_to_id_| must be kept in sync. The
   // members exist to allow fast lookup in both directions.
-  std::map<uint64_t, aura::Window*> id_to_window_;
+  std::map<uint64_t, raw_ptr<aura::Window, CtnExperimental>> id_to_window_;
   std::map<aura::Window*, uint64_t> window_to_id_;
   uint64_t next_window_id_ = 0;
 };
@@ -98,7 +101,7 @@ class SnapshotCapturerBase : public mojom::SnapshotCapturer {
     gfx::Rect bounds = window->bounds();
     bounds.set_x(0);
     bounds.set_y(0);
-    ui::GrabWindowSnapshotAsync(
+    ui::GrabWindowSnapshot(
         window, bounds,
         base::BindOnce(
             [](TakeSnapshotCallback callback, gfx::Image image) {
@@ -133,6 +136,9 @@ class ScreenManagerAsh::ScreenCapturerImpl : public SnapshotCapturerBase {
       mojom::SnapshotSourcePtr source = mojom::SnapshotSource::New();
       source->id = window_list_.LookupOrAddId(root_window);
       source->title = base::UTF16ToUTF8(root_window->GetTitle());
+      source->display_id = display::Screen::GetScreen()
+                               ->GetDisplayNearestWindow(root_window)
+                               .id();
 
       if (root_window == ash::Shell::GetPrimaryRootWindow()) {
         sources.insert(sources.begin(), std::move(source));
@@ -185,7 +191,7 @@ class ScreenManagerAsh::WindowCapturerImpl : public SnapshotCapturerBase {
     // the most top-level window is at the end. So iterate children reversely
     // to make sure |windows| is in the expected order.
     for (aura::Window* window : base::Reversed(container->children())) {
-      // TODO(https://crbug.com/1094460): The window is currently not visible
+      // TODO(crbug.com/40135428): The window is currently not visible
       // or focusable. If the window later becomes invisible or unfocusable,
       // we don't bother removing the window from the list. We should handle
       // this more robustly.
@@ -195,6 +201,11 @@ class ScreenManagerAsh::WindowCapturerImpl : public SnapshotCapturerBase {
       mojom::SnapshotSourcePtr source = mojom::SnapshotSource::New();
       source->id = window_list_.LookupOrAddId(window);
       source->title = base::UTF16ToUTF8(window->GetTitle());
+      if (browser_util::IsLacrosWindow(window)) {
+        const std::string* app_id = exo::GetShellApplicationId(window);
+        DCHECK(app_id);
+        source->window_unique_id = *app_id;
+      }
 
       sources->push_back(std::move(source));
     }

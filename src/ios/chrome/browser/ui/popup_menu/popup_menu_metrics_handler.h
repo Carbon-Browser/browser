@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,25 @@
 // happen in the view, so it can fire the correct metrics.
 @protocol PopupMenuMetricsHandler
 
-// Called when the popup menu is scrolled.
-- (void)popupMenuScrolled;
+// Called when the popup menu is scrolled vertically.
+- (void)popupMenuScrolledVertically;
+
+// Called when the popup menu is scrolled horizontally. This is only fired on
+// the new popup menu. The old one doesn't have a horizontal scroll.
+- (void)popupMenuScrolledHorizontally;
 
 // Called when the user takes an action in the popup menu.
 - (void)popupMenuTookAction;
+
+// Called when the user uses an Action (an element from the vertical list).
+- (void)popupMenuUserSelectedAction;
+
+// Called when the user uses a Destination (an element from the horizontal
+// list).
+- (void)popupMenuUserSelectedDestination;
+
+// Called when the user scrolls to the end of the action list.
+- (void)popupMenuUserScrolledToEndOfActions;
 
 @end
 

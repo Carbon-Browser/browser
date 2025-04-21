@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,7 @@ void AwRenderThreadObserver::RegisterMojoInterfaces(
   // base::Unretained can be used here because the associated_interfaces
   // is owned by the RenderThread and will live for the duration of the
   // RenderThread.
-  associated_interfaces->AddInterface(
+  associated_interfaces->AddInterface<mojom::Renderer>(
       base::BindRepeating(&AwRenderThreadObserver::OnRendererAssociatedRequest,
                           base::Unretained(this)));
 }

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,15 +24,10 @@ class SkiaOutputDeviceVulkanSecondaryCB final : public SkiaOutputDevice {
 
   std::unique_ptr<SkiaOutputDevice::ScopedPaint> BeginScopedPaint() override;
   void Submit(bool sync_cpu, base::OnceClosure callback) override;
-  bool Reshape(const SkSurfaceCharacterization& characterization,
-               const gfx::ColorSpace& color_space,
-               float device_scale_factor,
-               gfx::OverlayTransform transform) override;
-  void SwapBuffers(BufferPresentedCallback feedback,
-                   OutputSurfaceFrame frame) override;
-  void PostSubBuffer(const gfx::Rect& rect,
-                     BufferPresentedCallback feedback,
-                     OutputSurfaceFrame frame) override;
+  bool Reshape(const ReshapeParams& params) override;
+  void Present(const std::optional<gfx::Rect>& update_rect,
+               BufferPresentedCallback feedback,
+               OutputSurfaceFrame frame) override;
   SkSurface* BeginPaint(
       std::vector<GrBackendSemaphore>* end_semaphores) override;
   void EndPaint() override;
@@ -47,7 +42,7 @@ class SkiaOutputDeviceVulkanSecondaryCB final : public SkiaOutputDevice {
             const GrBackendSemaphore wait_semaphores[],
             bool delete_semaphores_after_wait) override;
   bool Draw(SkSurface* sk_surface,
-            sk_sp<const SkDeferredDisplayList> ddl) override;
+            sk_sp<const GrDeferredDisplayList> ddl) override;
 
  private:
   const raw_ptr<VulkanContextProvider> context_provider_;

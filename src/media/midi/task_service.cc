@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@
 
 #include <limits>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 
 namespace midi {
@@ -48,7 +48,7 @@ bool TaskService::BindInstance() {
   bound_instance_id_ = ++next_instance_id_;
 
   DCHECK(!default_task_runner_);
-  default_task_runner_ = base::ThreadTaskRunnerHandle::Get();
+  default_task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
 
   return true;
 }
@@ -70,7 +70,7 @@ bool TaskService::UnbindInstance() {
   // But invoked tasks might be still running here. To ensure no task runs on
   // quitting this method, wait for all tasks to complete.
   base::AutoLock tasks_in_flight_lock(tasks_in_flight_lock_);
-  // TODO(https://crbug.com/796830): Remove sync operations on the I/O thread.
+  // TODO(crbug.com/40555725): Remove sync operations on the I/O thread.
   base::ScopedAllowBaseSyncPrimitivesOutsideBlockingScope allow_wait;
   while (tasks_in_flight_ > 0)
     no_tasks_in_flight_cv_.Wait();

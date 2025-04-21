@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,27 +21,24 @@ import androidx.test.filters.SmallTest;
 
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.BaseJUnit4ClassRunner;
-import org.chromium.ui.test.util.DisableAnimationsTestRule;
+import org.chromium.base.test.util.Batch;
+import org.chromium.components.browser_ui.settings.test.R;
 
-/**
- * Tests of {@link ChromeImageViewPreference}.
- */
+/** Tests of {@link ChromeImageViewPreference}. */
 @RunWith(BaseJUnit4ClassRunner.class)
+@Batch(Batch.PER_CLASS)
 public class ChromeImageViewPreferenceTest {
     private static final String TITLE = "Preference Title";
     private static final String SUMMARY = "This is a summary.";
     private static final int DRAWABLE_RES = R.drawable.ic_folder_blue_24dp;
     private static final int CONTENT_DESCRIPTION_RES = R.string.ok;
 
-    @ClassRule
-    public static final DisableAnimationsTestRule disableAnimationsRule =
-            new DisableAnimationsTestRule();
     @Rule
     public final BlankUiTestActivitySettingsTestRule mSettingsRule =
             new BlankUiTestActivitySettingsTestRule();
@@ -80,15 +77,37 @@ public class ChromeImageViewPreferenceTest {
         ChromeImageViewPreference preference = new ChromeImageViewPreference(mActivity);
         preference.setTitle(TITLE);
         preference.setImageView(DRAWABLE_RES, CONTENT_DESCRIPTION_RES, null);
-        preference.setManagedPreferenceDelegate(ManagedPreferencesUtilsTest.POLICY_DELEGATE);
+        preference.setManagedPreferenceDelegate(ManagedPreferenceTestDelegates.POLICY_DELEGATE);
         mPreferenceScreen.addPreference(preference);
 
         Assert.assertFalse(preference.isEnabled());
 
         getTitleView().check(matches(allOf(withText(TITLE), isDisplayed())));
-        getSummaryView().check(
-                matches(allOf(withText(R.string.managed_by_your_organization), isDisplayed())));
+        getSummaryView()
+                .check(
+                        matches(
+                                allOf(
+                                        withText(R.string.managed_by_your_organization),
+                                        isDisplayed())));
         getImageViewWidget().check(matches(isDisplayed()));
+    }
+
+    @Test
+    @SmallTest
+    public void testChromeImageViewPreferenceResetImage() {
+        ChromeImageViewPreference preference = new ChromeImageViewPreference(mActivity);
+        preference.setTitle(TITLE);
+        preference.setImageView(DRAWABLE_RES, CONTENT_DESCRIPTION_RES, null);
+        mPreferenceScreen.addPreference(preference);
+
+        getTitleView().check(matches(allOf(withText(TITLE), isDisplayed())));
+        getImageViewWidget().check(matches(isDisplayed()));
+
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    preference.setImageView(0, 0, null);
+                });
+        Assert.assertNull(preference.getButton().getDrawable());
     }
 
     private ViewInteraction getTitleView() {

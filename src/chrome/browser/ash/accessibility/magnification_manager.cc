@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,10 +11,11 @@
 #include "ash/accessibility/magnifier/fullscreen_magnifier_controller.h"
 #include "ash/constants/ash_pref_names.h"
 #include "ash/shell.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/accessibility/accessibility_manager.h"
-#include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chromeos/ash/components/browser_context_helper/browser_context_helper.h"
+#include "chromeos/ash/components/browser_context_helper/browser_context_types.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/user_manager.h"
@@ -130,16 +131,18 @@ void MagnificationManager::OnMouseEvent(ui::MouseEvent* event) {
 
 void MagnificationManager::OnViewEvent(views::View* view,
                                        ax::mojom::Event event_type) {
-  if (!fullscreen_magnifier_enabled_ && !IsDockedMagnifierEnabled())
+  if (!view) {
     return;
+  }
+
+  if (!fullscreen_magnifier_enabled_ && !IsDockedMagnifierEnabled()) {
+    return;
+  }
 
   if (event_type != ax::mojom::Event::kFocus &&
       event_type != ax::mojom::Event::kSelection) {
     return;
   }
-
-  ui::AXNodeData data;
-  view->GetViewAccessibility().GetAccessibleNodeData(&data);
 }
 
 void MagnificationManager::SetProfileForTest(Profile* profile) {
@@ -154,15 +157,22 @@ MagnificationManager::MagnificationManager() {
 
 MagnificationManager::~MagnificationManager() {
   CHECK(this == g_magnification_manager);
-  views::AXEventManager::Get()->RemoveObserver(this);
-  user_manager::UserManager::Get()->RemoveSessionStateObserver(this);
+  auto* event_manager = views::AXEventManager::Get();
+  if (event_manager) {
+    event_manager->RemoveObserver(this);
+  }
+  auto* user_manager = user_manager::UserManager::Get();
+  if (user_manager) {
+    user_manager->RemoveSessionStateObserver(this);
+  }
 }
 
 void MagnificationManager::OnLoginOrLockScreenVisible() {
   // Update `profile_` when entering the login screen.
   Profile* profile = ProfileManager::GetActiveUserProfile();
-  if (ProfileHelper::IsSigninProfile(profile))
+  if (IsSigninBrowserContext(profile)) {
     SetProfile(profile);
+  }
 }
 
 void MagnificationManager::ActiveUserChanged(user_manager::User* active_user) {
@@ -175,12 +185,13 @@ void MagnificationManager::ActiveUserChanged(user_manager::User* active_user) {
 }
 
 void MagnificationManager::SetProfileByUser(const user_manager::User* user) {
-  SetProfile(ProfileHelper::Get()->GetProfileByUser(user));
+  SetProfile(Profile::FromBrowserContext(
+      BrowserContextHelper::Get()->GetBrowserContextByUser(user)));
 }
 
 void MagnificationManager::SetProfile(Profile* profile) {
   if (profile_) {
-    DCHECK(profile_observation_.IsObservingSource(profile_));
+    DCHECK(profile_observation_.IsObservingSource(profile_.get()));
     profile_observation_.Reset();
   }
   DCHECK(!profile_observation_.IsObserving());
@@ -188,15 +199,10 @@ void MagnificationManager::SetProfile(Profile* profile) {
   pref_change_registrar_.reset();
 
   if (profile) {
-    // TODO(yoshiki): Move following code to PrefHandler.
     pref_change_registrar_ = std::make_unique<PrefChangeRegistrar>();
     pref_change_registrar_->Init(profile->GetPrefs());
     pref_change_registrar_->Add(
         prefs::kAccessibilityScreenMagnifierEnabled,
-        base::BindRepeating(&MagnificationManager::UpdateMagnifierFromPrefs,
-                            base::Unretained(this)));
-    pref_change_registrar_->Add(
-        prefs::kAccessibilityScreenMagnifierCenterFocus,
         base::BindRepeating(&MagnificationManager::UpdateMagnifierFromPrefs,
                             base::Unretained(this)));
     pref_change_registrar_->Add(
@@ -235,17 +241,6 @@ void MagnificationManager::SetMagnifierEnabledInternal(bool enabled) {
   Shell::Get()->fullscreen_magnifier_controller()->SetEnabled(enabled);
 }
 
-void MagnificationManager::SetMagnifierKeepFocusCenteredInternal(
-    bool keep_focus_centered) {
-  if (keep_focus_centered_ == keep_focus_centered)
-    return;
-
-  keep_focus_centered_ = keep_focus_centered;
-
-  Shell::Get()->fullscreen_magnifier_controller()->SetKeepFocusCentered(
-      keep_focus_centered_);
-}
-
 void MagnificationManager::SetMagnifierScaleInternal(double scale) {
   if (scale_ == scale)
     return;
@@ -269,8 +264,6 @@ void MagnificationManager::UpdateMagnifierFromPrefs() {
   PrefService* prefs = profile_->GetPrefs();
   const bool enabled =
       prefs->GetBoolean(prefs::kAccessibilityScreenMagnifierEnabled);
-  const bool keep_focus_centered =
-      prefs->GetBoolean(prefs::kAccessibilityScreenMagnifierCenterFocus);
   const double scale =
       prefs->GetDouble(prefs::kAccessibilityScreenMagnifierScale);
   const MagnifierMouseFollowingMode mouse_following_mode =
@@ -279,7 +272,6 @@ void MagnificationManager::UpdateMagnifierFromPrefs() {
 
   SetMagnifierMouseFollowingModeInternal(mouse_following_mode);
   SetMagnifierScaleInternal(scale);
-  SetMagnifierKeepFocusCenteredInternal(keep_focus_centered);
   SetMagnifierEnabledInternal(enabled);
 
   AccessibilityStatusEventDetails details(

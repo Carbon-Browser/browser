@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,17 +9,14 @@
 #include <string>
 #include <vector>
 
-#include "chrome/browser/apps/app_service/app_icon/icon_key_util.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_forward.h"
 #include "chrome/browser/apps/app_service/launch_result_type.h"
 #include "chrome/browser/apps/app_service/publishers/app_publisher.h"
 #include "chrome/browser/ash/remote_apps/remote_apps_model.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
 #include "components/services/app_service/public/cpp/icon_types.h"
-#include "components/services/app_service/public/cpp/publisher_base.h"
-#include "components/services/app_service/public/mojom/app_service.mojom.h"
-#include "mojo/public/cpp/bindings/pending_remote.h"
-#include "mojo/public/cpp/bindings/remote_set.h"
+#include "components/services/app_service/public/cpp/menu.h"
 
 class Profile;
 
@@ -37,11 +34,7 @@ struct AppLaunchParams;
 // An app publisher (in the App Service sense) of Remote apps.
 //
 // See components/services/app_service/README.md.
-//
-// TODO(crbug.com/1253250):
-// 1. Remove the parent class apps::PublisherBase.
-// 2. Remove all apps::mojom related code.
-class RemoteApps : public apps::PublisherBase, public AppPublisher {
+class RemoteApps : public AppPublisher {
  public:
   // Delegate which handles calls to get the properties of the app and also
   // handles launching of the app.
@@ -59,7 +52,7 @@ class RemoteApps : public apps::PublisherBase, public AppPublisher {
 
     virtual void LaunchApp(const std::string& id) = 0;
 
-    virtual apps::mojom::MenuItemsPtr GetMenuModel(const std::string& id) = 0;
+    virtual MenuItems GetMenuModel(const std::string& id) = 0;
   };
 
   RemoteApps(AppServiceProxy* proxy, Delegate* delegate);
@@ -78,8 +71,6 @@ class RemoteApps : public apps::PublisherBase, public AppPublisher {
 
   AppPtr CreateApp(const ash::RemoteAppsModel::AppInfo& info);
 
-  apps::mojom::AppPtr Convert(const ash::RemoteAppsModel::AppInfo& info);
-
   void Initialize();
 
   // apps::AppPublisher overrides.
@@ -95,23 +86,13 @@ class RemoteApps : public apps::PublisherBase, public AppPublisher {
               WindowInfoPtr window_info) override;
   void LaunchAppWithParams(AppLaunchParams&& params,
                            LaunchCallback callback) override;
-
-  // apps::PublisherBase:
-  void Connect(mojo::PendingRemote<apps::mojom::Subscriber> subscriber_remote,
-               apps::mojom::ConnectOptionsPtr opts) override;
-  void Launch(const std::string& app_id,
-              int32_t event_flags,
-              apps::mojom::LaunchSource launch_source,
-              apps::mojom::WindowInfoPtr window_info) override;
   void GetMenuModel(const std::string& app_id,
-                    apps::mojom::MenuType menu_type,
+                    MenuType menu_type,
                     int64_t display_id,
-                    GetMenuModelCallback callback) override;
+                    base::OnceCallback<void(MenuItems)> callback) override;
 
-  Profile* const profile_;
-  Delegate* const delegate_;
-  mojo::RemoteSet<apps::mojom::Subscriber> subscribers_;
-  apps_util::IncrementingIconKeyFactory icon_key_factory_;
+  const raw_ptr<Profile> profile_;
+  const raw_ptr<Delegate> delegate_;
 };
 
 }  // namespace apps

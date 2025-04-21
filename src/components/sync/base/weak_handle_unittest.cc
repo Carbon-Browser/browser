@@ -1,10 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/sync/base/weak_handle.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread.h"
@@ -37,7 +37,13 @@ class Base {
   base::WeakPtrFactory<Base> weak_ptr_factory_{this};
 };
 
-class Derived : public Base, public base::SupportsWeakPtr<Derived> {};
+class Derived : public Base {
+ public:
+  base::WeakPtr<Derived> AsWeakPtr() { return weak_ptr_factory_.GetWeakPtr(); }
+
+ private:
+  base::WeakPtrFactory<Derived> weak_ptr_factory_{this};
+};
 
 class WeakHandleTest : public ::testing::Test {
  protected:
@@ -220,7 +226,7 @@ TEST_F(WeakHandleTest, WithDestroyedThread) {
   // Shouldn't do anything, since the thread is gone.
   b2.Call(FROM_HERE, &Base::Test);
 
-  // |b2| shouldn't leak when it's destroyed, even if the original
+  // `b2` shouldn't leak when it's destroyed, even if the original
   // thread is gone.
 }
 
@@ -266,7 +272,7 @@ TEST_F(WeakHandleTest, TypeConversionConstructor) {
   base_weak_handle.Call(FROM_HERE, &Base::Test);
 
   EXPECT_TRUE(derived_weak_handle.IsInitialized());
-  // Copy constructor shouldn't construct a new |core_|.
+  // Copy constructor shouldn't construct a new `core_`.
   EXPECT_EQ(weak_handle.core_.get(), derived_weak_handle.core_.get());
   derived_weak_handle.Call(FROM_HERE, &Base::Test);
 
@@ -297,7 +303,7 @@ TEST_F(WeakHandleTest, TypeConversionConstructorAssignment) {
 
   EXPECT_TRUE(base_weak_handle.IsInitialized());
   EXPECT_TRUE(derived_weak_handle.IsInitialized());
-  // Copy constructor shouldn't construct a new |core_|.
+  // Copy constructor shouldn't construct a new `core_`.
   EXPECT_EQ(weak_handle.core_.get(), derived_weak_handle.core_.get());
 }
 

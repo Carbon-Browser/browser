@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "base/test/test_timeouts.h"
 #include "base/time/time.h"
 #include "chrome/browser/ui/ash/assistant/test_support/fake_s3_server.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
@@ -19,16 +20,11 @@ class PrefService;
 
 namespace ash {
 class AssistantTestApi;
-}  // namespace ash
+}
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
-class FakeS3Server;
 class LoggedInUserMixin;
-
-// Default wait time before we conclude the wait actions have timed out.
-constexpr base::TimeDelta kDefaultWaitTimeout = base::Seconds(10);
 
 // Creates everything required to test the Assistant in browser tests.
 // This includes:
@@ -38,9 +34,9 @@ constexpr base::TimeDelta kDefaultWaitTimeout = base::Seconds(10);
 //     - Enabling the Assistant service.
 //     - Disabling all Assistant animations.
 //
-// See definition of |chromeos::assistant::FakeS3Server| for an explanation of
-// the different modes the fake S3 server can run in (specified by passing
-// |FakeS3Mode| into the constructor).
+// See definition of `FakeS3Server` for an explanation of the different modes
+// the fake S3 server can run in (specified by passing `FakeS3Mode` into the
+// constructor).
 class AssistantTestMixin : public InProcessBrowserTestMixin {
  public:
   AssistantTestMixin(InProcessBrowserTestMixinHost* host,
@@ -64,7 +60,7 @@ class AssistantTestMixin : public InProcessBrowserTestMixin {
   // Starts the Assistant service and wait until it is ready to process
   // queries. Should be called as the first action in every test.
   void StartAssistantAndWaitForReady(
-      base::TimeDelta wait_timeout = kDefaultWaitTimeout);
+      base::TimeDelta wait_timeout = TestTimeouts::action_timeout());
 
   // Changes the user setting controlling if the user has enabled Assistant.
   void SetAssistantEnabled(bool enabled);
@@ -89,37 +85,41 @@ class AssistantTestMixin : public InProcessBrowserTestMixin {
   // Waits until a card response is rendered that contains the given text.
   // If |expected_response| is not received in |wait_timeout|, this will fail
   // the test.
-  void ExpectCardResponse(const std::string& expected_response,
-                          base::TimeDelta wait_timeout = kDefaultWaitTimeout);
+  void ExpectCardResponse(
+      const std::string& expected_response,
+      base::TimeDelta wait_timeout = TestTimeouts::action_timeout());
 
   // Waits until an error response is rendered that contains the given text. If
   // |expected_response| is not received in |wait_timeout|, this will fail the
   // test.
-  void ExpectErrorResponse(const std::string& expected_response,
-                           base::TimeDelta wait_timeout = kDefaultWaitTimeout);
+  void ExpectErrorResponse(
+      const std::string& expected_response,
+      base::TimeDelta wait_timeout = TestTimeouts::action_timeout());
 
   // Waits until a text response is rendered that contains the given text.
   // If |expected_response| is not received in |wait_timeout|, this will fail
   // the test.
-  void ExpectTextResponse(const std::string& expected_response,
-                          base::TimeDelta wait_timeout = kDefaultWaitTimeout);
+  void ExpectTextResponse(
+      const std::string& expected_response,
+      base::TimeDelta wait_timeout = TestTimeouts::action_timeout());
 
   // Same as above but checks if any of the given responses are encountered.
   void ExpectAnyOfTheseTextResponses(
       const std::vector<std::string>& expected_responses,
-      base::TimeDelta wait_timeout = kDefaultWaitTimeout);
+      base::TimeDelta wait_timeout = TestTimeouts::action_timeout());
 
   // Waits until a timers response is rendered that contains the given timers.
   // If the expected response is not received in |wait_timeout|, this will fail
   // the test.
-  void ExpectTimersResponse(const std::vector<base::TimeDelta>& timers,
-                            base::TimeDelta wait_timeout = kDefaultWaitTimeout);
+  void ExpectTimersResponse(
+      const std::vector<base::TimeDelta>& timers,
+      base::TimeDelta wait_timeout = TestTimeouts::action_timeout());
 
   // Waits until a timers response is rendered and returns the time remaining of
   // the rendered timers. If a timers response is not received in |wait_timeout|
   // this will fail the test.
   std::vector<base::TimeDelta> ExpectAndReturnTimersResponse(
-      base::TimeDelta wait_timeout = kDefaultWaitTimeout);
+      base::TimeDelta wait_timeout = TestTimeouts::action_timeout());
 
   // Presses the Assistant key, which will toggle the Assistant UI.
   void PressAssistantKey();
@@ -129,20 +129,20 @@ class AssistantTestMixin : public InProcessBrowserTestMixin {
 
   // Watches the view hierarchy for change and fails if
   // a view is updated / deleted / added before wait_timeout time elapses.
-  void ExpectNoChange(base::TimeDelta wait_timeout = kDefaultWaitTimeout);
+  void ExpectNoChange(
+      base::TimeDelta wait_timeout = TestTimeouts::action_timeout());
 
  private:
   PrefService* GetUserPreferences();
-  void SendKeyPress(ui::KeyboardCode key);
+  void SendKeyPress(::ui::KeyboardCode key);
   void DisableAssistant();
 
   FakeS3Server fake_s3_server_;
   FakeS3Mode mode_;
-  std::unique_ptr<ash::AssistantTestApi> test_api_;
+  std::unique_ptr<AssistantTestApi> test_api_;
   std::unique_ptr<LoggedInUserMixin> user_mixin_;
 };
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant
 
 #endif  // CHROME_BROWSER_UI_ASH_ASSISTANT_ASSISTANT_TEST_MIXIN_H_

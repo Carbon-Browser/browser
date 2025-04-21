@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,11 @@
 
 namespace device {
 
-typedef SharedMemorySeqLockBuffer<Gamepads> GamepadHardwareBuffer;
+using GamepadHardwareBuffer = SharedMemorySeqLockBuffer<Gamepads>;
+
+// GamepadHardwareBuffer is used in shared memory, so it must be trivially
+// copyable.
+static_assert(std::is_trivially_copyable_v<GamepadHardwareBuffer>);
 
 }  // namespace device
 

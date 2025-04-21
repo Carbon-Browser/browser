@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,29 +8,42 @@
  * the subpage title, a search field and a back icon.
  */
 
-import '//resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
+import '//resources/cr_elements/cr_icon_button/cr_icon_button.js';
 import '//resources/cr_elements/cr_search_field/cr_search_field.js';
-import '//resources/cr_elements/icons.m.js';
-import '//resources/cr_elements/shared_style_css.m.js';
-import '//resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
+import '//resources/cr_elements/icons.html.js';
+import '//resources/cr_elements/cr_shared_style.css.js';
 import '../settings_shared.css.js';
 import '../site_favicon.js';
 
-import {CrSearchFieldElement} from '//resources/cr_elements/cr_search_field/cr_search_field.js';
-import {FindShortcutMixin, FindShortcutMixinInterface} from '//resources/cr_elements/find_shortcut_mixin.js';
-import {assert} from '//resources/js/assert_ts.js';
-import {focusWithoutInk} from '//resources/js/cr/ui/focus_without_ink.m.js';
-import {I18nMixin, I18nMixinInterface} from '//resources/js/i18n_mixin.js';
-import {listenOnce} from '//resources/js/util.m.js';
+import type {CrSearchFieldElement} from '//resources/cr_elements/cr_search_field/cr_search_field.js';
+import type {FindShortcutListener} from '//resources/cr_elements/find_shortcut_manager.js';
+import {FindShortcutMixin} from '//resources/cr_elements/find_shortcut_mixin.js';
+import type {I18nMixinInterface} from '//resources/cr_elements/i18n_mixin.js';
+import {I18nMixin} from '//resources/cr_elements/i18n_mixin.js';
+import {assert} from '//resources/js/assert.js';
+import {focusWithoutInk} from '//resources/js/focus_without_ink.js';
+import {listenOnce} from '//resources/js/util.js';
 import {IronResizableBehavior} from '//resources/polymer/v3_0/iron-resizable-behavior/iron-resizable-behavior.js';
 import {afterNextRender, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {EventTracker} from 'chrome://resources/js/event_tracker.m.js';
+import {EventTracker} from 'chrome://resources/js/event_tracker.js';
 
 import {loadTimeData} from '../i18n_setup.js';
-import {Route, RouteObserverMixin, RouteObserverMixinInterface, Router} from '../router.js';
-import {getSettingIdParameter} from '../setting_id_param_util.js';
+import type {Route, RouteObserverMixinInterface} from '../router.js';
+import {RouteObserverMixin, Router} from '../router.js';
 
 import {getTemplate} from './settings_subpage.html.js';
+
+
+const SETTING_ID_URL_PARAM_NAME: string = 'settingId';
+
+/**
+ * Retrieves the setting ID saved in the URL's query parameter. Returns null if
+ * setting ID is unavailable.
+ */
+function getSettingIdParameter(): string|null {
+  return Router.getInstance().getQueryParameters().get(
+      SETTING_ID_URL_PARAM_NAME);
+}
 
 export interface SettingsSubpageElement {
   $: {
@@ -42,7 +55,7 @@ const SettingsSubpageElementBase =
     mixinBehaviors(
         [IronResizableBehavior],
         RouteObserverMixin(FindShortcutMixin(I18nMixin(PolymerElement)))) as {
-      new (): PolymerElement & FindShortcutMixinInterface & I18nMixinInterface &
+      new (): PolymerElement & FindShortcutListener & I18nMixinInterface &
           RouteObserverMixinInterface,
     };
 
@@ -69,21 +82,6 @@ export class SettingsSubpageElement extends SettingsSubpageElementBase {
       searchTerm: {
         type: String,
         notify: true,
-        value: '',
-      },
-
-      /** If true shows an active spinner at the end of the subpage header. */
-      showSpinner: {
-        type: Boolean,
-        value: false,
-      },
-
-      /**
-       * Title (i.e., tooltip) to be displayed on the spinner. If |showSpinner|
-       * is false, this field has no effect.
-       */
-      spinnerTitle: {
-        type: String,
         value: '',
       },
 
@@ -127,8 +125,6 @@ export class SettingsSubpageElement extends SettingsSubpageElementBase {
   learnMoreUrl: string;
   searchLabel: string;
   searchTerm: string;
-  showSpinner: boolean;
-  spinnerTitle: string;
   hideCloseButton: boolean;
   associatedControl: HTMLElement|null;
   preserveSearchTerm: boolean;
@@ -139,7 +135,7 @@ export class SettingsSubpageElement extends SettingsSubpageElementBase {
   constructor() {
     super();
 
-    // Override FindShortcutBehavior property.
+    // Override FindShortcutMixin property.
     this.findShortcutListenOnAttach = false;
   }
 
@@ -281,7 +277,11 @@ export class SettingsSubpageElement extends SettingsSubpageElementBase {
     return this.i18n('subpageBackButtonAriaRoleDescription', this.pageTitle);
   }
 
-  // Override FindShortcutBehavior methods.
+  private getLearnMoreAriaLabel_() {
+    return this.i18n('subpageLearnMoreAriaLabel', this.pageTitle);
+  }
+
+  // Override FindShortcutMixin methods.
   override handleFindShortcut(modalContextOpen: boolean) {
     if (modalContextOpen) {
       return false;
@@ -290,7 +290,7 @@ export class SettingsSubpageElement extends SettingsSubpageElementBase {
     return true;
   }
 
-  // Override FindShortcutBehavior methods.
+  // Override FindShortcutMixin methods.
   override searchInputHasFocus() {
     const field = this.shadowRoot!.querySelector('cr-search-field')!;
     return field.getSearchInput() === field.shadowRoot!.activeElement;

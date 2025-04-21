@@ -1,9 +1,9 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/polymer/v3_0/iron-pages/iron-pages.js';
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/cr_page_selector/cr_page_selector.js';
 import 'chrome://resources/cr_elements/cr_toast/cr_toast.js';
 import './data_collectors.js';
 import './issue_details.js';
@@ -12,16 +12,17 @@ import './pii_selection.js';
 import './data_export_done.js';
 import './support_tool_shared.css.js';
 
-import {CrToastElement} from 'chrome://resources/cr_elements/cr_toast/cr_toast.js';
-import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import type {CrToastElement} from 'chrome://resources/cr_elements/cr_toast/cr_toast.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {BrowserProxy, BrowserProxyImpl, PIIDataItem, StartDataCollectionResult} from './browser_proxy.js';
-import {DataCollectorsElement} from './data_collectors.js';
-import {DataExportDoneElement} from './data_export_done.js';
-import {IssueDetailsElement} from './issue_details.js';
-import {PIISelectionElement} from './pii_selection.js';
-import {SpinnerPageElement} from './spinner_page.js';
+import type {BrowserProxy, PiiDataItem, StartDataCollectionResult} from './browser_proxy.js';
+import {BrowserProxyImpl} from './browser_proxy.js';
+import type {DataCollectorsElement} from './data_collectors.js';
+import type {DataExportDoneElement} from './data_export_done.js';
+import type {IssueDetailsElement} from './issue_details.js';
+import type {PiiSelectionElement} from './pii_selection.js';
+import type {SpinnerPageElement} from './spinner_page.js';
 import {getTemplate} from './support_tool.html.js';
 
 export enum SupportToolPageIndex {
@@ -33,25 +34,25 @@ export enum SupportToolPageIndex {
   DATA_EXPORT_DONE,
 }
 
-export type DataExportResult = {
-  success: boolean,
-  path: string,
-  error: string,
-};
+export interface DataExportResult {
+  success: boolean;
+  path: string;
+  error: string;
+}
 
 export interface SupportToolElement {
   $: {
     issueDetails: IssueDetailsElement,
     dataCollectors: DataCollectorsElement,
     spinnerPage: SpinnerPageElement,
-    piiSelection: PIISelectionElement,
+    piiSelection: PiiSelectionElement,
     exportSpinner: SpinnerPageElement,
     dataExportDone: DataExportDoneElement,
     errorMessageToast: CrToastElement,
   };
 }
 
-const SupportToolElementBase = WebUIListenerMixin(PolymerElement);
+const SupportToolElementBase = WebUiListenerMixin(PolymerElement);
 
 export class SupportToolElement extends SupportToolElementBase {
   static get is() {
@@ -88,24 +89,33 @@ export class SupportToolElement extends SupportToolElementBase {
 
   override connectedCallback() {
     super.connectedCallback();
-    this.addWebUIListener(
+    this.addWebUiListener(
+        'screenshot-received', this.onScreenshotReceived_.bind(this));
+    this.addWebUiListener(
         'data-collection-completed',
         this.onDataCollectionCompleted_.bind(this));
-    this.addWebUIListener(
+    this.addWebUiListener(
         'data-collection-cancelled',
         this.onDataCollectionCancelled_.bind(this));
-    this.addWebUIListener(
+    this.addWebUiListener(
         'support-data-export-started', this.onDataExportStarted_.bind(this));
-    this.addWebUIListener(
+    this.addWebUiListener(
         'data-export-completed', this.onDataExportCompleted_.bind(this));
+  }
+
+  private onScreenshotReceived_(screenshotBase64: string) {
+    if (screenshotBase64 !== 'CANCELED') {
+      // Only continues if the user didn't cancel the screenshot.
+      this.$.dataCollectors.setScreenshotData(screenshotBase64);
+    }
   }
 
   private onDataExportStarted_() {
     this.selectedPage_ = SupportToolPageIndex.EXPORT_SPINNER;
   }
 
-  private onDataCollectionCompleted_(piiItems: PIIDataItem[]) {
-    this.$.piiSelection.updateDetectedPIIItems(piiItems);
+  private onDataCollectionCompleted_(piiItems: PiiDataItem[]) {
+    this.$.piiSelection.updateDetectedPiiItems(piiItems);
     this.selectedPage_ = SupportToolPageIndex.PII_SELECTION;
   }
 
@@ -153,7 +163,8 @@ export class SupportToolElement extends SupportToolElementBase {
       this.browserProxy_
           .startDataCollection(
               this.$.issueDetails.getIssueDetails(),
-              this.$.dataCollectors.getDataCollectors())
+              this.$.dataCollectors.getDataCollectors(),
+              this.$.dataCollectors.getEditedScreenshotBase64())
           .then(this.onDataCollectionStart_.bind(this));
     } else {
       this.selectedPage_ = this.selectedPage_ + 1;

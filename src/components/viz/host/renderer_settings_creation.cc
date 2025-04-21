@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,14 +11,14 @@
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
+#include "cc/base/switches.h"
 #include "components/viz/common/display/overlay_strategy.h"
 #include "components/viz/common/display/renderer_settings.h"
 #include "components/viz/common/features.h"
 #include "components/viz/common/switches.h"
 #include "ui/base/ui_base_switches.h"
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #include "ui/ozone/public/ozone_platform.h"
 #endif
 
@@ -52,16 +52,10 @@ RendererSettings CreateRendererSettings() {
   renderer_settings.partial_swap_enabled =
       !command_line->HasSwitch(switches::kUIDisablePartialSwap);
 
-#if BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_LINUX)
-  // Simple frame rate throttling only works on macOS and Linux
-  renderer_settings.apply_simple_frame_rate_throttling =
-      features::IsSimpleFrameRateThrottlingEnabled();
-#endif
-
 #if BUILDFLAG(IS_APPLE)
   renderer_settings.release_overlay_resources_after_gpu_query = true;
   renderer_settings.auto_resize_output_surface = false;
-#elif BUILDFLAG(IS_CHROMEOS_ASH)
+#elif BUILDFLAG(IS_CHROMEOS)
   renderer_settings.auto_resize_output_surface = false;
 #endif
   renderer_settings.allow_antialiasing =
@@ -75,19 +69,28 @@ RendererSettings CreateRendererSettings() {
                         &renderer_settings.slow_down_compositing_scale_factor);
   }
 
-#if defined(USE_OZONE)
-    if (command_line->HasSwitch(switches::kEnableHardwareOverlays)) {
-      renderer_settings.overlay_strategies = ParseOverlayStrategies(
-          command_line->GetSwitchValueASCII(switches::kEnableHardwareOverlays));
-    } else {
-      auto& host_properties =
-          ui::OzonePlatform::GetInstance()->GetPlatformRuntimeProperties();
-      if (host_properties.supports_overlays) {
-        renderer_settings.overlay_strategies = {OverlayStrategy::kFullscreen,
-                                                OverlayStrategy::kSingleOnTop,
-                                                OverlayStrategy::kUnderlay};
-      }
+#if BUILDFLAG(IS_CHROMEOS)
+  // Used finch experiment to determine the best value. See b:330617490 for
+  // details.
+  renderer_settings.occlusion_culler_settings.quad_split_limit = 12;
+#else
+  renderer_settings.occlusion_culler_settings.quad_split_limit =
+      features::DrawQuadSplitLimit();
+#endif
+
+#if BUILDFLAG(IS_OZONE)
+  if (command_line->HasSwitch(switches::kEnableHardwareOverlays)) {
+    renderer_settings.overlay_strategies = ParseOverlayStrategies(
+        command_line->GetSwitchValueASCII(switches::kEnableHardwareOverlays));
+  } else {
+    auto& host_properties =
+        ui::OzonePlatform::GetInstance()->GetPlatformRuntimeProperties();
+    if (host_properties.supports_overlays) {
+      renderer_settings.overlay_strategies = {OverlayStrategy::kFullscreen,
+                                              OverlayStrategy::kSingleOnTop,
+                                              OverlayStrategy::kUnderlay};
     }
+  }
 #endif
 
   return renderer_settings;

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define ASH_APP_LIST_VIEWS_PAGED_APPS_GRID_VIEW_H_
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "ash/app_list/app_list_metrics.h"
@@ -13,10 +14,11 @@
 #include "ash/ash_export.h"
 #include "ash/public/cpp/pagination/pagination_model.h"
 #include "ash/public/cpp/pagination/pagination_model_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/compositor/compositor_metrics_tracker.h"
 #include "ui/compositor/presentation_time_recorder.h"
-#include "ui/compositor/throughput_tracker.h"
 #include "ui/events/types/event_type.h"
 #include "ui/gfx/geometry/point_f.h"
 #include "ui/views/animation/animation_abort_handle.h"
@@ -32,7 +34,7 @@ class Layer;
 
 namespace ash {
 
-class AppsGridViewFocusDelegate;
+class AppListKeyboardController;
 class ContentsView;
 class PaginationController;
 
@@ -43,6 +45,8 @@ class PaginationController;
 class ASH_EXPORT PagedAppsGridView : public AppsGridView,
                                      public PaginationModelObserver,
                                      public views::ViewTargeterDelegate {
+  METADATA_HEADER(PagedAppsGridView, AppsGridView)
+
  public:
   class ContainerDelegate {
    public:
@@ -68,26 +72,12 @@ class ASH_EXPORT PagedAppsGridView : public AppsGridView,
 
   PagedAppsGridView(ContentsView* contents_view,
                     AppListA11yAnnouncer* a11y_announcer,
-                    AppsGridViewFolderDelegate* folder_delegate,
                     AppListFolderController* folder_controller,
                     ContainerDelegate* container_delegate,
-                    AppsGridViewFocusDelegate* focus_delegate);
+                    AppListKeyboardController* keyboard_controller);
   PagedAppsGridView(const PagedAppsGridView&) = delete;
   PagedAppsGridView& operator=(const PagedAppsGridView&) = delete;
   ~PagedAppsGridView() override;
-
-  // Called when tablet mode starts and ends.
-  void OnTabletModeChanged(bool started);
-
-  // Updates the opacity of all the items in the grid when the grid itself is
-  // being dragged. The app icons fade out as the launcher slides off the bottom
-  // of the screen.
-  // `apps_opacity_change_start` and `apps_opacity_change_end` define the range
-  // of height of centerline above screen bottom in which apps should change
-  // opacity (from 0 to 1).
-  void UpdateOpacity(bool restore_opacity,
-                     float apps_opacity_change_start,
-                     float apps_opacity_change_end);
 
   // Sets the number of max rows and columns in grid pages. Special-cases the
   // first page, which may allow smaller number of rows in certain cases (to
@@ -102,11 +92,9 @@ class ASH_EXPORT PagedAppsGridView : public AppsGridView,
 
   // ui::EventHandler:
   void OnGestureEvent(ui::GestureEvent* event) override;
-  void OnMouseEvent(ui::MouseEvent* event) override;
 
   // views::View:
-  void Layout() override;
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
+  void Layout(PassKey) override;
   void OnThemeChanged() override;
 
   // AppsGridView:
@@ -115,11 +103,13 @@ class ASH_EXPORT PagedAppsGridView : public AppsGridView,
   gfx::Size GetTileGridSize() const override;
   int GetTotalPages() const override;
   int GetSelectedPage() const override;
-  bool IsScrollAxisVertical() const override;
-  void UpdateBorder() override;
+  bool IsPageFull(size_t page_index) const override;
+  GridIndex GetGridIndexFromIndexInViewModel(int index) const override;
+  int GetNumberOfPulsingBlocksToShow(int item_count) const override;
   void MaybeStartCardifiedView() override;
   void MaybeEndCardifiedView() override;
-  void MaybeStartPageFlip() override;
+  bool IsAnimatingCardifiedState() const override;
+  bool MaybeStartPageFlip() override;
   void MaybeStopPageFlip() override;
   bool MaybeAutoScroll() override;
   void StopAutoScroll() override {}
@@ -127,19 +117,19 @@ class ASH_EXPORT PagedAppsGridView : public AppsGridView,
                                   ui::EventType type) override;
   void SetFocusAfterEndDrag(AppListItem* drag_item) override;
   void RecordAppMovingTypeMetrics(AppListAppMovingType type) override;
-  int GetMaxRowsInPage(int page) const override;
+  std::optional<int> GetMaxRowsInPage(int page) const override;
   gfx::Vector2d GetGridCenteringOffset(int page) const override;
   void UpdatePaging() override;
   void RecordPageMetrics() override;
   const gfx::Vector2d CalculateTransitionOffset(
       int page_of_view) const override;
   void EnsureViewVisible(const GridIndex& index) override;
-  absl::optional<VisibleItemIndexRange> GetVisibleItemIndexRange()
+  std::optional<VisibleItemIndexRange> GetVisibleItemIndexRange()
       const override;
-  base::ScopedClosureRunner LockAppsGridOpacity() override;
+  bool ShouldContainerHandleDragEvents() override;
+  bool IsAboveTheFold(AppListItemView* item_view) override;
 
   // PaginationModelObserver:
-  void TotalPagesChanged(int previous_page_count, int new_page_count) override;
   void SelectedPageChanged(int old_selected, int new_selected) override;
   void TransitionStarting() override;
   void TransitionStarted() override;
@@ -170,8 +160,7 @@ class ASH_EXPORT PagedAppsGridView : public AppsGridView,
   // calculate the first apps grid page layout (number of rows and the padding
   // between them).
   // `offset` is reserved space for continue section in the apps
-  // container (which is shown above the grid on the first app list page with
-  // productivity launcher).
+  // container (which is shown above the grid on the first app list page).
   // `shown_under_recent_apps` indicates whether the
   // continue section contains list of recent apps. If this is the case, the
   // apps grid will add additional padding above the apps grid (i.e. treat the
@@ -204,10 +193,6 @@ class ASH_EXPORT PagedAppsGridView : public AppsGridView,
   // Animates items to their ideal bounds when the reorder nudge gets removed.
   void AnimateOnNudgeRemoved();
 
-  bool GetBoundsAnimationForCardifiedStateInProgressForTest() {
-    return bounds_animation_for_cardified_state_in_progress_;
-  }
-
   // Set the callback that runs when cardified state has ended.
   void SetCardifiedStateEndedTestCallback(
       base::RepeatingClosure cardified_ended_callback);
@@ -230,10 +215,6 @@ class ASH_EXPORT PagedAppsGridView : public AppsGridView,
 
   // Gets the tile grid size on the provided apps grid page.
   gfx::Size GetTileGridSizeForPage(int page) const;
-
-  // Indicates whether the drag event (from the gesture or mouse) should be
-  // handled by PagedAppsGridView.
-  bool ShouldHandleDragEvent(const ui::LocatedEvent& event);
 
   // Returns true if the page is the right target to flip to.
   bool IsValidPageFlipTarget(int page) const;
@@ -270,8 +251,8 @@ class ASH_EXPORT PagedAppsGridView : public AppsGridView,
       views::AnimationSequenceBlock* animation_sequence,
       const gfx::Vector2d& translate_offset);
 
-  // Call OnBoundsAnimatorDone when all layer animations finish.
-  void MaybeCallOnBoundsAnimatorDone();
+  // Called when all cardified layer animations finish.
+  void OnCardifiedStateAnimationDone();
 
   // Called when app item animations are completed for ending cardified state.
   void OnCardifiedStateEnded();
@@ -307,11 +288,11 @@ class ASH_EXPORT PagedAppsGridView : public AppsGridView,
   int GetPaddingBetweenPages() const;
 
   // Created by AppListMainView, owned by views hierarchy.
-  ContentsView* const contents_view_;
+  const raw_ptr<ContentsView> contents_view_;
 
   // Used to get information about whether a point is within the page flip drag
   // buffer area around this view.
-  ContainerDelegate* const container_delegate_;
+  const raw_ptr<ContainerDelegate> container_delegate_;
 
   // Depends on |pagination_model_|.
   std::unique_ptr<PaginationController> pagination_controller_;
@@ -326,21 +307,8 @@ class ASH_EXPORT PagedAppsGridView : public AppsGridView,
   // the edge.
   base::TimeDelta page_flip_delay_;
 
-  // Whether the grid is in mouse drag. Used for between-item drags that move
-  // the entire grid, not for app icon drags.
-  bool is_in_mouse_drag_ = false;
-
-  // The initial mouse drag location in root window coordinate. Updates when the
-  // drag on PagedAppsGridView starts. Used for between-item drags that move the
-  // entire grid, not for app icon drags.
-  gfx::PointF mouse_drag_start_point_;
-
-  // The last mouse drag location in root window coordinate. Used for
-  // between-item drags that move the entire grid, not for app icon drags.
-  gfx::PointF last_mouse_drag_point_;
-
   // Records smoothness of pagination animation.
-  absl::optional<ui::ThroughputTracker> pagination_metrics_tracker_;
+  std::optional<ui::ThroughputTracker> pagination_metrics_tracker_;
 
   // Records the presentation time for apps grid dragging.
   std::unique_ptr<ui::PresentationTimeRecorder> presentation_time_recorder_;
@@ -351,9 +319,6 @@ class ASH_EXPORT PagedAppsGridView : public AppsGridView,
   // Layer array for apps grid background cards. Used to display the background
   // card during cardified state.
   std::vector<std::unique_ptr<BackgroundCardLayer>> background_cards_;
-
-  // Whether the feature ProductivityLauncher is enabled.
-  const bool is_productivity_launcher_enabled_;
 
   // Maximum number of rows on the first grid page.
   int max_rows_on_first_page_ = 0;
@@ -385,8 +350,8 @@ class ASH_EXPORT PagedAppsGridView : public AppsGridView,
 
   void StackCardsAtBottom() override;
 
-  // If true, ignore the calls on `UpdateOpacity()`.
-  bool lock_opacity_ = false;
+  // Whether the apps grid is currently animating  the cardified state.
+  bool is_animating_cardified_state_ = false;
 
   // The callback that runs once cardified state is ended.
   base::RepeatingClosure cardified_state_ended_test_callback_;

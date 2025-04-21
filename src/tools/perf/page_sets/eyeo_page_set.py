@@ -20,18 +20,15 @@ from telemetry import story
 from telemetry.page import cache_temperature as cache_temperature_module
 from telemetry.page import page as page_module
 
-def GetWprArchivesPath(minified = False, is_desktop = False):
-  if (is_desktop and minified):
-    raise ValueError('Desktop tests support only full filter list')
+
+def GetWprArchivesPath(is_desktop=False):
   return ('../eyeo_data/desktop/' if is_desktop else '../eyeo_data/mobile/') + \
-    ('eyeo_misc_min.json' if minified else 'eyeo_misc_full.json')
+    'eyeo_misc_full.json'
+
 
 class EyeoStorySet(loading_stories._LoadingStory):
 
-  def __init__(self,
-               story_set,
-               take_memory_measurement,
-               is_desktop):
+  def __init__(self, story_set, take_memory_measurement, is_desktop):
     super(EyeoStorySet, self).__init__(story_set, take_memory_measurement)
     self.is_desktop = is_desktop
 
@@ -48,7 +45,7 @@ class Load_office_Story2021(EyeoStorySet):
 
   def _DidLoadDocument(self, action_runner):
     if self.is_desktop:
-      if self.load_count %2 == 0:
+      if self.load_count % 2 == 0:
         action_runner.WaitForElement(text='Accept')
         action_runner.ClickElement(text='Accept')
       self.load_count += 1
@@ -73,7 +70,7 @@ class Load_britishcouncil_orgStory2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
+    if self.load_count % 2 == 0:
       cookie_button_selector = '#onetrust-accept-btn-handler'
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -94,7 +91,7 @@ class Load_pucrs_brStory2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
+    if self.load_count % 2 == 0:
       cookie_button_selector = '#banner-lgpd-active'
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -121,7 +118,7 @@ class Load_eclypsia_Story2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
+    if self.load_count % 2 == 0:
       cookie_button_selector = 'button.css-1litn2c'
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -140,17 +137,17 @@ class Load_fishki_netStory2021(EyeoStorySet):
   TAGS = [story_tags.YEAR_2021]
   load_count = 0
 
-  def __init__(self,
-               story_set,
-               take_memory_measurement,
-               is_desktop):
-    self.URL = ('https://fishki.net/3741331-memy-s-osuzhdajuwim-kotikom-kotorye-rassmeshat-ljubogo.html'
-      if is_desktop else
-      'https://m.fishki.net/3741331-memy-s-osuzhdajuwim-kotikom-kotorye-rassmeshat-ljubogo.html')
-    super(Load_fishki_netStory2021, self).__init__(story_set, take_memory_measurement, is_desktop)
+  def __init__(self, story_set, take_memory_measurement, is_desktop):
+    self.URL = (
+        'https://fishki.net/3741331-memy-s-osuzhdajuwim-kotikom-kotorye-rassmeshat-ljubogo.html'
+        if is_desktop else
+        'https://m.fishki.net/3741331-memy-s-osuzhdajuwim-kotikom-kotorye-rassmeshat-ljubogo.html'
+    )
+    super(Load_fishki_netStory2021,
+          self).__init__(story_set, take_memory_measurement, is_desktop)
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
+    if self.load_count % 2 == 0:
       cookie_button_selector = '#privacypolicy__close'
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -162,12 +159,10 @@ class Load_Riau24_comStory2021(EyeoStorySet):
   NAME = 'load:media:Riau24_com:2021'
   TAGS = [story_tags.YEAR_2021]
 
-  def __init__(self,
-               story_set,
-               take_memory_measurement,
-               is_desktop):
+  def __init__(self, story_set, take_memory_measurement, is_desktop):
     self.URL = 'https://Riau24.com' if is_desktop else 'https://m.Riau24.com'
-    super(Load_Riau24_comStory2021, self).__init__(story_set, take_memory_measurement, is_desktop)
+    super(Load_Riau24_comStory2021,
+          self).__init__(story_set, take_memory_measurement, is_desktop)
 
 
 class Load_lacote_chStory2021(EyeoStorySet):
@@ -176,15 +171,15 @@ class Load_lacote_chStory2021(EyeoStorySet):
   TAGS = [story_tags.YEAR_2021]
 
 
-class Load_goodhouse_ruStory2021(EyeoStorySet):
-  NAME = 'load:media:_goodhouse_ru:2021'
-  URL = 'https://www.goodhouse.ru/home/pets/dva-goda-nazad-devushka-dala-shans-lysomu-naydenyshu-vot-v-kogo-on-vyros/'
+class Load_novochag_ruStory2021(EyeoStorySet):
+  NAME = 'load:media:_novochag_ru:2021'
+  URL = 'https://www.novochag.ru/home/pets/dva-goda-nazad-devushka-dala-shans-lysomu-naydenyshu-vot-v-kogo-on-vyros/'
   TAGS = [story_tags.YEAR_2021]
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
     if self.is_desktop:
-      if self.load_count %2 == 0:
+      if self.load_count % 2 == 0:
         cookie_button_selector = 'button.cookies-button-confirm'
         action_runner.WaitForElement(selector=cookie_button_selector)
         action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -205,9 +200,9 @@ class Load_freenet_deStory2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
-      cookie_button_selector = ('button#save' if self.is_desktop
-        else 'button.message-button.primary')
+    if self.load_count % 2 == 0:
+      cookie_button_selector = ('button#save' if self.is_desktop else
+                                'button.message-button.primary')
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
       action_runner.ClickElement(selector=cookie_button_selector)
@@ -221,7 +216,7 @@ class Load_9gag_Story2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
+    if self.load_count % 2 == 0:
       cookie_button_selector = 'button.css-1k47zha'
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -236,7 +231,7 @@ class Load_idealista_Story2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
+    if self.load_count % 2 == 0:
       cookie_button_selector = '#didomi-notice-agree-button'
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -257,9 +252,9 @@ class Load_healthline_Story2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
-      cookie_button_selector = ('button.css-quk35p' if self.is_desktop
-        else 'button.css-17ksaeu')
+    if self.load_count % 2 == 0:
+      cookie_button_selector = ('button.css-quk35p'
+                                if self.is_desktop else 'button.css-17ksaeu')
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
       action_runner.ClickElement(selector=cookie_button_selector)
@@ -273,9 +268,9 @@ class Load_howstuffworks_Story2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
-      cookie_button_selector = ('#onetrust-accept-btn-handler' if self.is_desktop
-        else 'a.banner_continue--3t3Mf')
+    if self.load_count % 2 == 0:
+      cookie_button_selector = ('#onetrust-accept-btn-handler' if
+                                self.is_desktop else 'a.banner_continue--3t3Mf')
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
       action_runner.ClickElement(selector=cookie_button_selector)
@@ -289,7 +284,7 @@ class Load_yelp_Story2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
+    if self.load_count % 2 == 0:
       cookie_button_selector = '#onetrust-accept-btn-handler'
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -304,7 +299,7 @@ class Load_ofeminin_plStory2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
+    if self.load_count % 2 == 0:
       cookie_button_selector = 'button.cmp-button_button.cmp-intro_acceptAll '
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -319,9 +314,9 @@ class Load_merriam_webster_Story2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
-      cookie_button_selector = ('#save' if self.is_desktop
-        else '#onetrust-accept-btn-handler')
+    if self.load_count % 2 == 0:
+      cookie_button_selector = ('#save' if self.is_desktop else
+                                '#onetrust-accept-btn-handler')
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
       action_runner.ClickElement(selector=cookie_button_selector)
@@ -335,7 +330,7 @@ class Load_dw_Story2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
+    if self.load_count % 2 == 0:
       cookie_button_selector = 'a.cookie__btn--ok'
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -350,7 +345,7 @@ class Load_jneurosci_orgStory2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
+    if self.load_count % 2 == 0:
       cookie_button_selector = 'button.agree-button'
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -365,7 +360,7 @@ class Load_euronews_Story2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
+    if self.load_count % 2 == 0:
       cookie_button_selector = '#didomi-notice-agree-button'
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -386,7 +381,7 @@ class Load_tweakers_netStory2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.is_desktop or self.load_count %2 == 0:
+    if self.is_desktop or self.load_count % 2 == 0:
       cookie_button_selector = 'button.ctaButton'
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -407,7 +402,7 @@ class Load_yandex_ruStory2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
+    if self.load_count % 2 == 0:
       cookie_button_selector = 'button.sc-jrsJCI'
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -431,20 +426,13 @@ class Load_nytimes_Story2021(EyeoStorySet):
   NAME = 'load:media:_nytimes_:2021'
   URL = 'https://www.nytimes.com/'
   TAGS = [story_tags.YEAR_2021]
-  load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.is_desktop or self.load_count %2 == 0:
-      # TODO(kzlomek): Find a proper fix or remove this comment under DPD-1276
-      # In case `cookie_button_selector` won't show we will increase counter
-      # before calling `WaitForElement` so in 2nd run it will not block-wait.
-      self.load_count += 1
+    if self.is_desktop:
       cookie_button_selector = 'button.css-aovwtd'
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
       action_runner.ClickElement(selector=cookie_button_selector)
-    else:
-      self.load_count += 1
 
 
 class Load_speedtest_netStory2021(EyeoStorySet):
@@ -454,7 +442,7 @@ class Load_speedtest_netStory2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
+    if self.load_count % 2 == 0:
       cookie_button_selector = '#_evidon-banner-acceptbutton'
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -469,7 +457,7 @@ class Load_extra_globo_Story2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
+    if self.load_count % 2 == 0:
       cookie_button_selector = 'button.cookie-banner-lgpd_accept-button'
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -497,9 +485,9 @@ class Load_techradar_Story2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
-      cookie_button_selector = ('[class=" css-47sehv"]' if self.is_desktop
-        else '[class=" css-flk0bs"]')
+    if self.load_count % 2 == 0:
+      cookie_button_selector = ('[class=" css-47sehv"]'
+                                if self.is_desktop else '[class=" css-flk0bs"]')
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
       action_runner.ClickElement(selector=cookie_button_selector)
@@ -513,7 +501,7 @@ class Load_npr_orgStory2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
+    if self.load_count % 2 == 0:
       cookie_button_selector = 'button.user-action--accept'
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -540,7 +528,7 @@ class Load_search_yahoo_Story2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.is_desktop or self.load_count %2 == 0:
+    if self.is_desktop or self.load_count % 2 == 0:
       cookie_button_selector = 'button.primary'
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -555,7 +543,7 @@ class Load_stackoverflow_Story2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.is_desktop or self.load_count %2 == 0:
+    if self.is_desktop or self.load_count % 2 == 0:
       cookie_button_selector = 'button.js-accept-cookies'
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -568,6 +556,7 @@ class Load_amazon_Story2021(EyeoStorySet):
   URL = 'https://www.amazon.com/s?k=iphone&ref=nb_sb_noss_2'
   TAGS = [story_tags.YEAR_2021]
 
+
 class Load_google_Story2021(EyeoStorySet):
   NAME = 'load:media:_google_:2021'
   URL = 'https://www.google.com/search?q=laptops'
@@ -575,7 +564,7 @@ class Load_google_Story2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if not self.is_desktop and self.load_count %2 == 0:
+    if not self.is_desktop and self.load_count % 2 == 0:
       cookie_button_selector = '#zV9nZe'
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -590,7 +579,7 @@ class Load_thesun_co_ukStory2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
+    if self.load_count % 2 == 0:
       cookie_button_selector = '#message-button'
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -605,7 +594,7 @@ class Load_elmundo_esStory2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
+    if self.load_count % 2 == 0:
       cookie_button_selector = '#didomi-notice-agree-button'
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -620,7 +609,7 @@ class Load_jooble_orgStory2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.is_desktop or self.load_count %2 == 0:
+    if self.is_desktop or self.load_count % 2 == 0:
       cookie_button_selector = '[class="_3264f button_default button_size_M _2b57b e539c _69517"]'
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -635,7 +624,7 @@ class Load_meteocity_Story2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
+    if self.load_count % 2 == 0:
       cookie_button_selector = '#didomi-notice-agree-button'
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -648,18 +637,16 @@ class Load_msn_Story2021(EyeoStorySet):
   TAGS = [story_tags.YEAR_2021]
   load_count = 0
 
-  def __init__(self,
-              story_set,
-              take_memory_measurement,
-              is_desktop):
+  def __init__(self, story_set, take_memory_measurement, is_desktop):
     self.URL = 'https://www.msn.com/de-de/nachrichten/' + \
       ('politik/inflation-pandemie-krieg-%e2%80%93-in-krisen-zeigt-sich-dass-wir-mehr-staat-brauchen/ar-AAVCvaw?li=BBqg6Q9'
       if is_desktop else
       'coronavirus/falsche-angaben-impf-betr%c3%bcger-tausende-vordr%c3%a4ngler-werden-derzeit-nicht-bestraft/ar-BB1gAVJD?li=BBqg6Q9')
-    super(Load_msn_Story2021, self).__init__(story_set, take_memory_measurement, is_desktop)
+    super(Load_msn_Story2021, self).__init__(story_set, take_memory_measurement,
+                                             is_desktop)
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
+    if self.load_count % 2 == 0:
       cookie_button_selector = '#onetrust-accept-btn-handler'
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -674,9 +661,10 @@ class Load_eldiario_esStory2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
-      cookie_button_selector = ('#didomi-notice-agree-button'
-        if self.is_desktop else 'div.sibbo-panel__aside__buttons > a:nth-child(1)')
+    if self.load_count % 2 == 0:
+      cookie_button_selector = (
+          '#didomi-notice-agree-button' if self.is_desktop else
+          'div.sibbo-panel__aside__buttons > a:nth-child(1)')
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
       action_runner.ClickElement(selector=cookie_button_selector)
@@ -690,18 +678,13 @@ class Load_buzzfeed_Story2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
-      # TODO(kzlomek): Find a proper fix or remove this comment under DPD-1276
-      # In case `cookie_button_selector` won't show we will increase counter
-      # before calling `WaitForElement` so in 2nd run it will not block-wait.
-      self.load_count += 1
-      cookie_button_selector = ('button.css-2wu0d3' if self.is_desktop else
-      'button.css-15dhgct')
+    if self.load_count % 2 == 0:
+      cookie_button_selector = ('button.css-2wu0d3'
+                                if self.is_desktop else 'button.css-15dhgct')
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
       action_runner.ClickElement(selector=cookie_button_selector)
-    else:
-      self.load_count += 1
+    self.load_count += 1
 
 
 class Load_money_cnn_Story2021(EyeoStorySet):
@@ -711,7 +694,7 @@ class Load_money_cnn_Story2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
+    if self.load_count % 2 == 0:
       cookie_button_selector = 'button#onetrust-accept-btn-handler'
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -732,9 +715,9 @@ class Load_stars242021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.is_desktop or self.load_count %2 == 0:
-      cookie_button_selector = ('button.fc-cta-consent'
-        if self.is_desktop else 'button#onetrust-accept-btn-handler')
+    if self.is_desktop or self.load_count % 2 == 0:
+      cookie_button_selector = ('button.fc-cta-consent' if self.is_desktop else
+                                'button#onetrust-accept-btn-handler')
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
       action_runner.ClickElement(selector=cookie_button_selector)
@@ -748,9 +731,9 @@ class Load_idnes_czStory2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
-      cookie_button_selector = ('#didomi-notice-agree-button'
-        if self.is_desktop else 'button#onetrust-accept-btn-handler')
+    if self.load_count % 2 == 0:
+      cookie_button_selector = ('#didomi-notice-agree-button' if self.is_desktop
+                                else 'button#onetrust-accept-btn-handler')
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
       action_runner.ClickElement(selector=cookie_button_selector)
@@ -765,7 +748,7 @@ class Load_5euros_Story2021(EyeoStorySet):
 
   def _DidLoadDocument(self, action_runner):
     if self.is_desktop:
-      if self.load_count %2 == 0:
+      if self.load_count % 2 == 0:
         cookie_button_selector = 'button.cky-btn-accept'
         action_runner.WaitForElement(selector=cookie_button_selector)
         action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -786,7 +769,7 @@ class Load_petfarmfamily_Story2021(EyeoStorySet):
   load_count = 0
 
   def _DidLoadDocument(self, action_runner):
-    if self.load_count %2 == 0:
+    if self.load_count % 2 == 0:
       cookie_button_selector = 'button.react-cookie-law-accept-btn'
       action_runner.WaitForElement(selector=cookie_button_selector)
       action_runner.ScrollPageToElement(selector=cookie_button_selector)
@@ -795,194 +778,333 @@ class Load_petfarmfamily_Story2021(EyeoStorySet):
 
 
 class EyeoExtendedPageSet(story.StorySet):
-  def __init__(self, minified, is_desktop, take_memory_measurement = False):
-    super(EyeoExtendedPageSet, self).__init__(
-      archive_data_file=GetWprArchivesPath(minified, is_desktop),
-      cloud_storage_bucket=None)
 
-    self.AddStory(Load_195sports_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_britishcouncil_orgStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_buzzfeed_Story2021(self, take_memory_measurement, is_desktop))
+  def __init__(self, is_desktop, take_memory_measurement=False):
+    super(EyeoExtendedPageSet,
+          self).__init__(archive_data_file=GetWprArchivesPath(is_desktop),
+                         cloud_storage_bucket=None)
+
+    self.AddStory(
+        Load_195sports_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_britishcouncil_orgStory2021(self, take_memory_measurement,
+                                         is_desktop))
     self.AddStory(Load_dw_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_eldiario_esStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_ellitoral_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_euronews_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_genpi_coStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_goodhouse_ruStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_healthline_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_howstuffworks_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_idealista_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_idnes_czStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_jneurosci_orgStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_lacote_chStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_meteocity_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_eldiario_esStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_ellitoral_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_euronews_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_genpi_coStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_novochag_ruStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_healthline_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_howstuffworks_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_idealista_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_idnes_czStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_jneurosci_orgStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_lacote_chStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_meteocity_Story2021(self, take_memory_measurement, is_desktop))
     self.AddStory(Load_msn_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_nytimes_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_ofeminin_plStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_office_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_speedtest_netStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_nytimes_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_ofeminin_plStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_office_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_speedtest_netStory2021(self, take_memory_measurement, is_desktop))
     self.AddStory(Load_stars242021(self, take_memory_measurement, is_desktop))
     self.AddStory(Load_ups_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_yelp_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_5euros_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_extra_globo_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_jooble_orgStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_lenta_ruStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_fishki_netStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_money_cnn_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_petfarmfamily_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_search_yahoo_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_tweakers_netStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_Riau24_comStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_vegan_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_yandex_ruStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_techradar_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_npr_orgStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_stackoverflow_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Loaden_wikipedia_orgStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_amazon_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_google_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_youtube_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(Load_yelp_Story2021(self, take_memory_measurement,
+                                      is_desktop))
+    self.AddStory(
+        Load_5euros_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_extra_globo_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_jooble_orgStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_lenta_ruStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_fishki_netStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_money_cnn_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_petfarmfamily_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_search_yahoo_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_tweakers_netStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_Riau24_comStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_vegan_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_yandex_ruStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_npr_orgStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_stackoverflow_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Loaden_wikipedia_orgStory2021(self, take_memory_measurement,
+                                      is_desktop))
+    self.AddStory(
+        Load_amazon_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_google_Story2021(self, take_memory_measurement, is_desktop))
     if not is_desktop:
-      self.AddStory(Load_extreme_down_tvStory2021(self, take_memory_measurement, is_desktop))
-      self.AddStory(Load_merriam_webster_Story2021(self, take_memory_measurement, is_desktop))
-      self.AddStory(Load_poder360__brStory2021(self, take_memory_measurement, is_desktop))
-      self.AddStory(Load_pucrs_brStory2021(self, take_memory_measurement, is_desktop))
-      self.AddStory(Load_forums_macrumors_Story2021(self, take_memory_measurement, is_desktop))
-      self.AddStory(Load_scotch_ioStory2021(self, take_memory_measurement, is_desktop))
-      self.AddStory(Load_walmart_Story2021(self, take_memory_measurement, is_desktop))
-      self.AddStory(Load_ria_ruStory2021(self, take_memory_measurement, is_desktop))
+      self.AddStory(
+          Load_youtube_Story2021(self, take_memory_measurement, is_desktop))
+      self.AddStory(
+          Load_extreme_down_tvStory2021(self, take_memory_measurement,
+                                        is_desktop))
+      self.AddStory(
+          Load_merriam_webster_Story2021(self, take_memory_measurement,
+                                         is_desktop))
+      self.AddStory(
+          Load_poder360__brStory2021(self, take_memory_measurement, is_desktop))
+      self.AddStory(
+          Load_pucrs_brStory2021(self, take_memory_measurement, is_desktop))
+      self.AddStory(
+          Load_forums_macrumors_Story2021(self, take_memory_measurement,
+                                          is_desktop))
+      self.AddStory(
+          Load_scotch_ioStory2021(self, take_memory_measurement, is_desktop))
+      self.AddStory(
+          Load_walmart_Story2021(self, take_memory_measurement, is_desktop))
+      self.AddStory(
+          Load_ria_ruStory2021(self, take_memory_measurement, is_desktop))
+    else:
+      self.AddStory(
+          Load_buzzfeed_Story2021(self, take_memory_measurement, is_desktop))
+
 
 class EyeoAdHeavyPageSet(story.StorySet):
-  def __init__(self, minified, is_desktop, take_memory_measurement = False):
-    super(EyeoAdHeavyPageSet, self).__init__(
-      archive_data_file=GetWprArchivesPath(minified, is_desktop),
-      cloud_storage_bucket=None)
 
-    self.AddStory(Load_goodhouse_ruStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_idnes_czStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_lacote_chStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_meteocity_Story2021(self, take_memory_measurement, is_desktop))
+  def __init__(self, is_desktop, take_memory_measurement=False):
+    super(EyeoAdHeavyPageSet,
+          self).__init__(archive_data_file=GetWprArchivesPath(is_desktop),
+                         cloud_storage_bucket=None)
+
+    self.AddStory(
+        Load_novochag_ruStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_idnes_czStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_lacote_chStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_meteocity_Story2021(self, take_memory_measurement, is_desktop))
     self.AddStory(Load_msn_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_ofeminin_plStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_jooble_orgStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_lenta_ruStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_fishki_netStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_Riau24_comStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_techradar_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_ofeminin_plStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_jooble_orgStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_lenta_ruStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_fishki_netStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_Riau24_comStory2021(self, take_memory_measurement, is_desktop))
     if not is_desktop:
-      self.AddStory(Load_merriam_webster_Story2021(self, take_memory_measurement, is_desktop))
-      self.AddStory(Load_extreme_down_tvStory2021(self, take_memory_measurement, is_desktop))
+      self.AddStory(
+          Load_merriam_webster_Story2021(self, take_memory_measurement,
+                                         is_desktop))
+      self.AddStory(
+          Load_extreme_down_tvStory2021(self, take_memory_measurement,
+                                        is_desktop))
+
 
 class EyeoExtendedPageSetPt1(story.StorySet):
-  def __init__(self, minified, is_desktop, take_memory_measurement = False):
-    super(EyeoExtendedPageSetPt1, self).__init__(
-      archive_data_file=GetWprArchivesPath(minified, is_desktop),
-      cloud_storage_bucket=None)
 
-    self.AddStory(Load_195sports_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_britishcouncil_orgStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_buzzfeed_Story2021(self, take_memory_measurement, is_desktop))
+  def __init__(self, is_desktop, take_memory_measurement=False):
+    super(EyeoExtendedPageSetPt1,
+          self).__init__(archive_data_file=GetWprArchivesPath(is_desktop),
+                         cloud_storage_bucket=None)
+
+    self.AddStory(
+        Load_195sports_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_britishcouncil_orgStory2021(self, take_memory_measurement,
+                                         is_desktop))
     self.AddStory(Load_dw_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_eldiario_esStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_ellitoral_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_euronews_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_eldiario_esStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_ellitoral_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_euronews_Story2021(self, take_memory_measurement, is_desktop))
     if not is_desktop:
-      self.AddStory(Load_extreme_down_tvStory2021(self, take_memory_measurement, is_desktop))
+      self.AddStory(
+          Load_extreme_down_tvStory2021(self, take_memory_measurement,
+                                        is_desktop))
+    else:
+      self.AddStory(
+          Load_buzzfeed_Story2021(self, take_memory_measurement, is_desktop))
+
 
 class EyeoExtendedPageSetPt2(story.StorySet):
-  def __init__(self, minified, is_desktop, take_memory_measurement = False):
-    super(EyeoExtendedPageSetPt2, self).__init__(
-      archive_data_file=GetWprArchivesPath(minified, is_desktop),
-      cloud_storage_bucket=None)
 
-    self.AddStory(Load_genpi_coStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_goodhouse_ruStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_healthline_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_howstuffworks_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_idealista_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_idnes_czStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_jneurosci_orgStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_lacote_chStory2021(self, take_memory_measurement, is_desktop))
+  def __init__(self, is_desktop, take_memory_measurement=False):
+    super(EyeoExtendedPageSetPt2,
+          self).__init__(archive_data_file=GetWprArchivesPath(is_desktop),
+                         cloud_storage_bucket=None)
+
+    self.AddStory(
+        Load_genpi_coStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_novochag_ruStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_healthline_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_howstuffworks_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_idealista_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_idnes_czStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_jneurosci_orgStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_lacote_chStory2021(self, take_memory_measurement, is_desktop))
+
 
 class EyeoExtendedPageSetPt3(story.StorySet):
-  def __init__(self, minified, is_desktop, take_memory_measurement = False):
-    super(EyeoExtendedPageSetPt3, self).__init__(
-      archive_data_file=GetWprArchivesPath(minified, is_desktop),
-      cloud_storage_bucket=None)
 
-    self.AddStory(Load_meteocity_Story2021(self, take_memory_measurement, is_desktop))
+  def __init__(self, is_desktop, take_memory_measurement=False):
+    super(EyeoExtendedPageSetPt3,
+          self).__init__(archive_data_file=GetWprArchivesPath(is_desktop),
+                         cloud_storage_bucket=None)
+
+    self.AddStory(
+        Load_meteocity_Story2021(self, take_memory_measurement, is_desktop))
     self.AddStory(Load_msn_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_nytimes_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_ofeminin_plStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_office_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_nytimes_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_ofeminin_plStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_office_Story2021(self, take_memory_measurement, is_desktop))
     if not is_desktop:
-      self.AddStory(Load_merriam_webster_Story2021(self, take_memory_measurement, is_desktop))
-      self.AddStory(Load_poder360__brStory2021(self, take_memory_measurement, is_desktop))
-      self.AddStory(Load_pucrs_brStory2021(self, take_memory_measurement, is_desktop))
+      self.AddStory(
+          Load_merriam_webster_Story2021(self, take_memory_measurement,
+                                         is_desktop))
+      self.AddStory(
+          Load_poder360__brStory2021(self, take_memory_measurement, is_desktop))
+      self.AddStory(
+          Load_pucrs_brStory2021(self, take_memory_measurement, is_desktop))
+
 
 class EyeoExtendedPageSetPt4(story.StorySet):
-  def __init__(self, minified, is_desktop, take_memory_measurement = False):
-    super(EyeoExtendedPageSetPt4, self).__init__(
-      archive_data_file=GetWprArchivesPath(minified, is_desktop),
-      cloud_storage_bucket=None)
 
-    self.AddStory(Load_speedtest_netStory2021(self, take_memory_measurement, is_desktop))
+  def __init__(self, is_desktop, take_memory_measurement=False):
+    super(EyeoExtendedPageSetPt4,
+          self).__init__(archive_data_file=GetWprArchivesPath(is_desktop),
+                         cloud_storage_bucket=None)
+
+    self.AddStory(
+        Load_speedtest_netStory2021(self, take_memory_measurement, is_desktop))
     self.AddStory(Load_stars242021(self, take_memory_measurement, is_desktop))
     self.AddStory(Load_ups_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_yelp_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_5euros_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_extra_globo_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(Load_yelp_Story2021(self, take_memory_measurement,
+                                      is_desktop))
+    self.AddStory(
+        Load_5euros_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_extra_globo_Story2021(self, take_memory_measurement, is_desktop))
     if not is_desktop:
-      self.AddStory(Load_walmart_Story2021(self, take_memory_measurement, is_desktop))
-      self.AddStory(Load_forums_macrumors_Story2021(self, take_memory_measurement, is_desktop))
+      self.AddStory(
+          Load_walmart_Story2021(self, take_memory_measurement, is_desktop))
+      self.AddStory(
+          Load_forums_macrumors_Story2021(self, take_memory_measurement,
+                                          is_desktop))
+
 
 class EyeoExtendedPageSetPt5(story.StorySet):
-  def __init__(self, minified, is_desktop, take_memory_measurement = False):
-    super(EyeoExtendedPageSetPt5, self).__init__(
-      archive_data_file=GetWprArchivesPath(minified, is_desktop),
-      cloud_storage_bucket=None)
 
-    self.AddStory(Load_jooble_orgStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_lenta_ruStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_fishki_netStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_money_cnn_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_petfarmfamily_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_search_yahoo_Story2021(self, take_memory_measurement, is_desktop))
+  def __init__(self, is_desktop, take_memory_measurement=False):
+    super(EyeoExtendedPageSetPt5,
+          self).__init__(archive_data_file=GetWprArchivesPath(is_desktop),
+                         cloud_storage_bucket=None)
+
+    self.AddStory(
+        Load_jooble_orgStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_lenta_ruStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_fishki_netStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_money_cnn_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_petfarmfamily_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_search_yahoo_Story2021(self, take_memory_measurement, is_desktop))
     if not is_desktop:
-      self.AddStory(Load_ria_ruStory2021(self, take_memory_measurement, is_desktop))
-      self.AddStory(Load_scotch_ioStory2021(self, take_memory_measurement, is_desktop))
+      self.AddStory(
+          Load_ria_ruStory2021(self, take_memory_measurement, is_desktop))
+      self.AddStory(
+          Load_scotch_ioStory2021(self, take_memory_measurement, is_desktop))
+
 
 class EyeoExtendedPageSetPt6(story.StorySet):
-  def __init__(self, minified, is_desktop, take_memory_measurement = False):
-    super(EyeoExtendedPageSetPt6, self).__init__(
-      archive_data_file=GetWprArchivesPath(minified, is_desktop),
-      cloud_storage_bucket=None)
 
-    self.AddStory(Load_tweakers_netStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_Riau24_comStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_vegan_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_yandex_ruStory2021(self, take_memory_measurement, is_desktop))
+  def __init__(self, is_desktop, take_memory_measurement=False):
+    super(EyeoExtendedPageSetPt6,
+          self).__init__(archive_data_file=GetWprArchivesPath(is_desktop),
+                         cloud_storage_bucket=None)
+
+    self.AddStory(
+        Load_tweakers_netStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_Riau24_comStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_vegan_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_yandex_ruStory2021(self, take_memory_measurement, is_desktop))
+
 
 class EyeoSmallPageSet(story.StorySet):
-  def __init__(self, minified, is_desktop, take_memory_measurement = False):
-    super(EyeoSmallPageSet, self).__init__(
-      archive_data_file=GetWprArchivesPath(minified, is_desktop),
-      cloud_storage_bucket=None)
 
-    self.AddStory(Load_techradar_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_npr_orgStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_stackoverflow_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Loaden_wikipedia_orgStory2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_amazon_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_google_Story2021(self, take_memory_measurement, is_desktop))
-    self.AddStory(Load_youtube_Story2021(self, take_memory_measurement, is_desktop))
+  def __init__(self, is_desktop, take_memory_measurement=False):
+    super(EyeoSmallPageSet,
+          self).__init__(archive_data_file=GetWprArchivesPath(is_desktop),
+                         cloud_storage_bucket=None)
+
+    self.AddStory(
+        Load_npr_orgStory2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_stackoverflow_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Loaden_wikipedia_orgStory2021(self, take_memory_measurement,
+                                      is_desktop))
+    self.AddStory(
+        Load_amazon_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_google_Story2021(self, take_memory_measurement, is_desktop))
+    self.AddStory(
+        Load_jooble_orgStory2021(self, take_memory_measurement, is_desktop))
+    if not is_desktop:
+      self.AddStory(
+          Load_youtube_Story2021(self, take_memory_measurement, is_desktop))
+    else:
+      self.AddStory(
+          Load_lacote_chStory2021(self, take_memory_measurement, is_desktop))
 
 
 class EyeoSinglePageSet(story.StorySet):
-  def __init__(self, minified, is_desktop, take_memory_measurement = False):
-    super(EyeoSinglePageSet, self).__init__(
-      archive_data_file=GetWprArchivesPath(minified, is_desktop),
-      cloud_storage_bucket=None)
 
-    self.AddStory(Load_fishki_netStory2021(self, take_memory_measurement, is_desktop))
+  def __init__(self, is_desktop, take_memory_measurement=False):
+    super(EyeoSinglePageSet,
+          self).__init__(archive_data_file=GetWprArchivesPath(is_desktop),
+                         cloud_storage_bucket=None)
+
+    self.AddStory(
+        Load_fishki_netStory2021(self, take_memory_measurement, is_desktop))

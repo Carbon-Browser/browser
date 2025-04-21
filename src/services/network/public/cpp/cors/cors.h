@@ -1,19 +1,20 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef SERVICES_NETWORK_PUBLIC_CPP_CORS_CORS_H_
 #define SERVICES_NETWORK_PUBLIC_CPP_CORS_CORS_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/component_export.h"
+#include "base/types/expected.h"
 #include "net/http/http_request_headers.h"
 #include "services/network/public/cpp/cors/cors_error_status.h"
 #include "services/network/public/mojom/cors.mojom-shared.h"
 #include "services/network/public/mojom/fetch_api.mojom-shared.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class GURL;
 namespace url {
@@ -28,7 +29,7 @@ namespace header_names {
 
 COMPONENT_EXPORT(NETWORK_CPP)
 extern const char kAccessControlAllowCredentials[];
-// TODO(https://crbug.com/1263483): Remove this.
+// TODO(crbug.com/40202951): Remove this.
 COMPONENT_EXPORT(NETWORK_CPP)
 extern const char kAccessControlAllowExternal[];
 COMPONENT_EXPORT(NETWORK_CPP)
@@ -41,7 +42,7 @@ COMPONENT_EXPORT(NETWORK_CPP)
 extern const char kAccessControlAllowPrivateNetwork[];
 COMPONENT_EXPORT(NETWORK_CPP)
 extern const char kAccessControlMaxAge[];
-// TODO(https://crbug.com/1263483): Remove this.
+// TODO(crbug.com/40202951): Remove this.
 COMPONENT_EXPORT(NETWORK_CPP)
 extern const char kAccessControlRequestExternal[];
 COMPONENT_EXPORT(NETWORK_CPP)
@@ -50,6 +51,10 @@ COMPONENT_EXPORT(NETWORK_CPP)
 extern const char kAccessControlRequestMethod[];
 COMPONENT_EXPORT(NETWORK_CPP)
 extern const char kAccessControlRequestPrivateNetwork[];
+COMPONENT_EXPORT(NETWORK_CPP)
+extern const char kPrivateNetworkDeviceId[];
+COMPONENT_EXPORT(NETWORK_CPP)
+extern const char kPrivateNetworkDeviceName[];
 
 }  // namespace header_names
 
@@ -68,19 +73,19 @@ enum class AccessCheckResult {
 // Performs a CORS access check on the response parameters.
 // This implements https://fetch.spec.whatwg.org/#concept-cors-check
 COMPONENT_EXPORT(NETWORK_CPP)
-absl::optional<CorsErrorStatus> CheckAccess(
+base::expected<void, CorsErrorStatus> CheckAccess(
     const GURL& response_url,
-    const absl::optional<std::string>& allow_origin_header,
-    const absl::optional<std::string>& allow_credentials_header,
+    const std::optional<std::string>& allow_origin_header,
+    const std::optional<std::string>& allow_credentials_header,
     mojom::CredentialsMode credentials_mode,
     const url::Origin& origin);
 
 // Performs a CORS access check and reports result and error.
 COMPONENT_EXPORT(NETWORK_CPP)
-absl::optional<CorsErrorStatus> CheckAccessAndReportMetrics(
+base::expected<void, CorsErrorStatus> CheckAccessAndReportMetrics(
     const GURL& response_url,
-    const absl::optional<std::string>& allow_origin_header,
-    const absl::optional<std::string>& allow_credentials_header,
+    const std::optional<std::string>& allow_origin_header,
+    const std::optional<std::string>& allow_credentials_header,
     mojom::CredentialsMode credentials_mode,
     const url::Origin& origin);
 
@@ -90,7 +95,7 @@ absl::optional<CorsErrorStatus> CheckAccessAndReportMetrics(
 // schemes that the spec officially supports.
 COMPONENT_EXPORT(NETWORK_CPP)
 bool ShouldCheckCors(const GURL& request_url,
-                     const absl::optional<url::Origin>& request_initiator,
+                     const std::optional<url::Origin>& request_initiator,
                      mojom::RequestMode request_mode);
 
 COMPONENT_EXPORT(NETWORK_CPP)
@@ -128,11 +133,6 @@ std::vector<std::string> PrivilegedNoCorsHeaderNames();
 // Checks forbidden method in the fetch spec.
 // See https://fetch.spec.whatwg.org/#forbidden-method.
 COMPONENT_EXPORT(NETWORK_CPP) bool IsForbiddenMethod(const std::string& name);
-
-// https://fetch.spec.whatwg.org/#ok-status aka a successful 2xx status code,
-// https://tools.ietf.org/html/rfc7231#section-6.3 . We opt to use the Fetch
-// term in naming the predicate.
-COMPONENT_EXPORT(NETWORK_CPP) bool IsOkStatus(int status);
 
 // Returns true if |type| is a response type which makes a response
 // CORS-same-origin. See https://html.spec.whatwg.org/C/#cors-same-origin.

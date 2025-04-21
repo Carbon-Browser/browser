@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,24 +8,20 @@
 #include "base/containers/circular_deque.h"
 #include "base/gtest_prod_util.h"
 #include "base/sequence_checker.h"
-#include "components/sync/base/model_type.h"
+#include "components/sync/base/data_type.h"
 #include "components/sync/engine/cycle/debug_info_getter.h"
 #include "components/sync/engine/cycle/sync_cycle_snapshot.h"
 #include "components/sync/engine/sync_encryption_handler.h"
 #include "components/sync/engine/sync_manager.h"
-#include "components/sync/protocol/client_debug_info.pb.h"
-#include "components/sync/protocol/sync_enums.pb.h"
 
 namespace sync_pb {
+class DebugEventInfo;
+class DebugInfo;
 class EncryptedData;
-}
+enum SyncEnums_SingletonDebugEventType : int;
+}  // namespace sync_pb
 
 namespace syncer {
-
-// In order to track datatype association results, we need at least as many
-// entries as datatypes. Reserve additional space for other kinds of events that
-// are likely to happen during first sync or startup.
-const unsigned int kMaxEntries = GetNumModelTypes() + 10;
 
 // Listens to events and records them in a queue. And passes the events to
 // syncer when requested.
@@ -34,6 +30,10 @@ class DebugInfoEventListener : public SyncManager::Observer,
                                public SyncEncryptionHandler::Observer,
                                public DebugInfoGetter {
  public:
+  // Keep a few more events than there are data types, to ensure that any
+  // data-type-specific events during first sync or startup aren't dropped.
+  static constexpr const size_t kMaxEvents = GetNumDataTypes() + 10;
+
   DebugInfoEventListener();
 
   DebugInfoEventListener(const DebugInfoEventListener&) = delete;
@@ -46,8 +46,8 @@ class DebugInfoEventListener : public SyncManager::Observer,
   // SyncManager::Observer implementation.
   void OnSyncCycleCompleted(const SyncCycleSnapshot& snapshot) override;
   void OnConnectionStatusChange(ConnectionStatus connection_status) override;
-  void OnActionableError(const SyncProtocolError& sync_error) override;
-  void OnMigrationRequested(ModelTypeSet types) override;
+  void OnActionableProtocolError(const SyncProtocolError& sync_error) override;
+  void OnMigrationRequested(DataTypeSet types) override;
   void OnProtocolEvent(const ProtocolEvent& event) override;
   void OnSyncStatusChanged(const SyncStatus& status) override;
 
@@ -58,7 +58,7 @@ class DebugInfoEventListener : public SyncManager::Observer,
   void OnPassphraseAccepted() override;
   void OnTrustedVaultKeyRequired() override;
   void OnTrustedVaultKeyAccepted() override;
-  void OnEncryptedTypesChanged(ModelTypeSet encrypted_types,
+  void OnEncryptedTypesChanged(DataTypeSet encrypted_types,
                                bool encrypt_everything) override;
   void OnCryptographerStateChanged(Cryptographer* cryptographer,
                                    bool has_pending_keys) override;
@@ -66,7 +66,7 @@ class DebugInfoEventListener : public SyncManager::Observer,
                                base::Time explicit_passphrase_time) override;
 
   // Sync manager events.
-  void OnNudgeFromDatatype(ModelType datatype);
+  void OnNudgeFromDatatype(DataType datatype);
 
   // DebugInfoGetter implementation.
   sync_pb::DebugInfo GetDebugInfo() const override;
@@ -81,21 +81,21 @@ class DebugInfoEventListener : public SyncManager::Observer,
   FRIEND_TEST_ALL_PREFIXES(DebugInfoEventListenerTest, VerifyClearEvents);
 
   void AddEventToQueue(const sync_pb::DebugEventInfo& event_info);
-  void CreateAndAddEvent(sync_pb::SyncEnums::SingletonDebugEventType type);
+  void CreateAndAddEvent(sync_pb::SyncEnums_SingletonDebugEventType type);
 
-  using DebugEventInfoQueue = base::circular_deque<sync_pb::DebugEventInfo>;
-  DebugEventInfoQueue events_;
+  // Stores the most recent events, up to some limit.
+  base::circular_deque<sync_pb::DebugEventInfo> events_;
 
-  // True indicates we had to drop one or more events to keep our limit of
-  // |kMaxEntries|.
-  bool events_dropped_;
+  // Indicates whether any events had to be dropped because there were more than
+  // the limit.
+  bool events_dropped_ = false;
 
   // Cryptographer has keys that are not yet decrypted.
-  bool cryptographer_has_pending_keys_;
+  bool cryptographer_has_pending_keys_ = false;
 
   // Cryptographer is able to encrypt data, which usually means it's initialized
   // and does not have pending keys.
-  bool cryptographer_can_encrypt_;
+  bool cryptographer_can_encrypt_ = false;
 
   SEQUENCE_CHECKER(sequence_checker_);
 };

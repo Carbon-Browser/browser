@@ -1,17 +1,30 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.safe_browsing;
 
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
+import android.content.Intent;
 
-/**
- * Bridge providing access to native-side Safe Browsing data.
- */
+import androidx.annotation.VisibleForTesting;
+
+import org.jni_zero.JNINamespace;
+import org.jni_zero.JniType;
+import org.jni_zero.NativeMethods;
+
+import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.content_public.browser.WebContents;
+
+/** Bridge providing access to native-side Safe Browsing data. */
 @JNINamespace("safe_browsing")
 public final class SafeBrowsingBridge {
+    private final Profile mProfile;
+
+    /** Constructs a {@link SafeBrowsingBridge} associated with the given {@link Profile}. */
+    public SafeBrowsingBridge(Profile profile) {
+        mProfile = profile;
+    }
+
     /**
      * Reports UMA values based on files' extensions.
      *
@@ -25,73 +38,112 @@ public final class SafeBrowsingBridge {
     /**
      * @return Whether Safe Browsing Extended Reporting is currently enabled.
      */
-    public static boolean isSafeBrowsingExtendedReportingEnabled() {
-        return SafeBrowsingBridgeJni.get().getSafeBrowsingExtendedReportingEnabled();
+    public boolean isSafeBrowsingExtendedReportingEnabled() {
+        return SafeBrowsingBridgeJni.get().getSafeBrowsingExtendedReportingEnabled(mProfile);
     }
 
     /**
      * @param enabled Whether Safe Browsing Extended Reporting should be enabled.
      */
-    public static void setSafeBrowsingExtendedReportingEnabled(boolean enabled) {
-        SafeBrowsingBridgeJni.get().setSafeBrowsingExtendedReportingEnabled(enabled);
+    public void setSafeBrowsingExtendedReportingEnabled(boolean enabled) {
+        SafeBrowsingBridgeJni.get().setSafeBrowsingExtendedReportingEnabled(mProfile, enabled);
     }
 
     /**
      * @return Whether Safe Browsing Extended Reporting is managed
      */
-    public static boolean isSafeBrowsingExtendedReportingManaged() {
-        return SafeBrowsingBridgeJni.get().getSafeBrowsingExtendedReportingManaged();
+    public boolean isSafeBrowsingExtendedReportingManaged() {
+        return SafeBrowsingBridgeJni.get().getSafeBrowsingExtendedReportingManaged(mProfile);
     }
 
     /**
      * @return The Safe Browsing state. It can be Enhanced Protection, Standard Protection, or No
-     *         Protection.
+     *     Protection.
      */
-    public static @SafeBrowsingState int getSafeBrowsingState() {
-        return SafeBrowsingBridgeJni.get().getSafeBrowsingState();
+    public @SafeBrowsingState int getSafeBrowsingState() {
+        return SafeBrowsingBridgeJni.get().getSafeBrowsingState(mProfile);
     }
 
     /**
      * @param state Set the Safe Browsing state. It can be Enhanced Protection, Standard Protection,
-     *         or No Protection.
+     *     or No Protection.
      */
-    public static void setSafeBrowsingState(@SafeBrowsingState int state) {
-        SafeBrowsingBridgeJni.get().setSafeBrowsingState(state);
+    public void setSafeBrowsingState(@SafeBrowsingState int state) {
+        SafeBrowsingBridgeJni.get().setSafeBrowsingState(mProfile, state);
     }
 
     /**
-     * @return Whether the Safe Browsing preference is managed. It can be managed by either
-     * the SafeBrowsingEnabled policy(legacy) or the SafeBrowsingProtectionLevel policy(new).
+     * @return Whether the Safe Browsing preference is managed. It can be managed by either the
+     *     SafeBrowsingEnabled policy(legacy) or the SafeBrowsingProtectionLevel policy(new).
      */
-    public static boolean isSafeBrowsingManaged() {
-        return SafeBrowsingBridgeJni.get().isSafeBrowsingManaged();
+    public boolean isSafeBrowsingManaged() {
+        return SafeBrowsingBridgeJni.get().isSafeBrowsingManaged(mProfile);
     }
 
     /**
-     * @return Whether there is a Google account to use for the leak detection check.
+     * @return Whether the user is under Advanced Protection.
      */
-    public static boolean hasAccountForLeakCheckRequest() {
-        return SafeBrowsingBridgeJni.get().hasAccountForLeakCheckRequest();
+    public boolean isUnderAdvancedProtection() {
+        return SafeBrowsingBridgeJni.get().isUnderAdvancedProtection(mProfile);
     }
 
     /**
-     * @return Whether the Leak Detection for signed out users feature is enabled.
+     * @return Whether hash real-time lookup is enabled.
      */
-    public static boolean isLeakDetectionUnauthenticatedEnabled() {
-        return SafeBrowsingBridgeJni.get().isLeakDetectionUnauthenticatedEnabled();
+    public static boolean isHashRealTimeLookupEligibleInSession() {
+        return SafeBrowsingBridgeJni.get().isHashRealTimeLookupEligibleInSession();
+    }
+
+    /**
+     * Report an intent sent to open an external app. This may be summarized and sent to Safe
+     * Browsing.
+     *
+     * @param webContents The WebContents that triggered the intent
+     * @param intent The intent Chrome generated
+     */
+    public static void reportIntent(WebContents webContents, Intent intent) {
+        String packageName;
+        if (intent.getComponent() != null) {
+            packageName = intent.getComponent().getPackageName();
+        } else if (intent.getPackage() != null) {
+            packageName = intent.getPackage();
+        } else {
+            packageName = "";
+        }
+
+        String uri = "";
+        if (intent.getData() != null) {
+            uri = intent.getData().toString();
+        }
+
+        SafeBrowsingBridgeJni.get().reportIntent(webContents, packageName, uri);
     }
 
     @NativeMethods
-    interface Natives {
+    @VisibleForTesting(otherwise = VisibleForTesting.PACKAGE_PRIVATE)
+    public interface Natives {
         int umaValueForFile(String path);
-        boolean getSafeBrowsingExtendedReportingEnabled();
-        void setSafeBrowsingExtendedReportingEnabled(boolean enabled);
-        boolean getSafeBrowsingExtendedReportingManaged();
+
+        boolean getSafeBrowsingExtendedReportingEnabled(Profile profile);
+
+        void setSafeBrowsingExtendedReportingEnabled(Profile profile, boolean enabled);
+
+        boolean getSafeBrowsingExtendedReportingManaged(Profile profile);
+
         @SafeBrowsingState
-        int getSafeBrowsingState();
-        void setSafeBrowsingState(@SafeBrowsingState int state);
-        boolean isSafeBrowsingManaged();
-        boolean hasAccountForLeakCheckRequest();
-        boolean isLeakDetectionUnauthenticatedEnabled();
+        int getSafeBrowsingState(Profile profile);
+
+        void setSafeBrowsingState(Profile profile, @SafeBrowsingState int state);
+
+        boolean isSafeBrowsingManaged(Profile profile);
+
+        boolean isUnderAdvancedProtection(Profile profile);
+
+        boolean isHashRealTimeLookupEligibleInSession();
+
+        void reportIntent(
+                @JniType("content::WebContents*") WebContents webContents,
+                @JniType("std::string") String packageName,
+                @JniType("std::string") String uri);
     }
 }

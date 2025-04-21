@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright 2018 The Chromium Authors. All rights reserved.
-     Use of this source code is governed by a BSD-style license that can be
-     found in the LICENSE file.
+<!--
+Copyright 2018 The Chromium Authors
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
 -->
 
 <org.chromium.chrome.browser.download.home.list.view.AspectRatioFrameLayout
@@ -17,7 +18,7 @@
     <org.chromium.components.browser_ui.widget.async_image.AsyncImageView
         android:id="@+id/thumbnail"
         android:layout_width="match_parent"
-        android:background="@color/modern_grey_300"
+        android:background="@color/baseline_neutral_70"
         android:scaleType="centerCrop"
         android:layout_gravity="center"
         android:adjustViewBounds="true"

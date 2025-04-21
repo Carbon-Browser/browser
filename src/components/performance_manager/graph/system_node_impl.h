@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,7 @@ class SystemNodeImpl
     : public PublicNodeImpl<SystemNodeImpl, SystemNode>,
       public TypedNodeBase<SystemNodeImpl, SystemNode, SystemNodeObserver> {
  public:
-  static constexpr NodeTypeEnum Type() { return NodeTypeEnum::kSystem; }
+  using TypedNodeBase<SystemNodeImpl, SystemNode, SystemNodeObserver>::FromNode;
 
   SystemNodeImpl();
 
@@ -31,7 +31,7 @@ class SystemNodeImpl
   ~SystemNodeImpl() override;
 
   // Implements NodeBase:
-  void RemoveNodeAttachedData() override;
+  void CleanUpNodeState() override;
 
   // This should be called after refreshing the memory usage data of the process
   // nodes.

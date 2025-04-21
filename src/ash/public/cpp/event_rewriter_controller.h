@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 
 #include "ash/ash_export.h"
-#include "ui/chromeos/events/event_rewriter_chromeos.h"
+#include "ui/events/ash/event_rewriter_ash.h"
 
 namespace ui {
 class Event;
@@ -27,7 +27,7 @@ class ASH_EXPORT EventRewriterController {
 
   // Initializes this controller after ash::Shell finishes initialization.
   virtual void Initialize(
-      ui::EventRewriterChromeOS::Delegate* event_rewriter_delegate,
+      ui::EventRewriterAsh::Delegate* event_rewriter_delegate,
       AccessibilityEventRewriterDelegate*
           accessibility_event_rewriter_delegate) = 0;
 
@@ -44,7 +44,7 @@ class ASH_EXPORT EventRewriterController {
   virtual void SetArrowToTabRewritingEnabled(bool enabled) = 0;
 
   // Continue dispatch of key events that were unhandled by ChromeVox.
-  // TODO(crbug.com/839541): ChromeVox should not repost unhandled events.
+  // TODO(crbug.com/41386990): ChromeVox should not repost unhandled events.
   virtual void OnUnhandledSpokenFeedbackEvent(
       std::unique_ptr<ui::Event> event) = 0;
 

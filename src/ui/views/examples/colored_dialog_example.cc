@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,15 @@
 #include <utility>
 
 #include "base/containers/adapters.h"
+#include "base/memory/raw_ref.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
+#include "ui/base/mojom/ui_base_types.mojom-shared.h"
 #include "ui/base/ui_base_types.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/gfx/vector_icon_types.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/controls/button/checkbox.h"
 #include "ui/views/controls/button/md_text_button.h"
 #include "ui/views/controls/label.h"
@@ -23,10 +28,11 @@
 #include "ui/views/vector_icons.h"
 #include "ui/views/widget/widget.h"
 
-namespace views {
-namespace examples {
+namespace views::examples {
 
 class ThemeTrackingCheckbox : public views::Checkbox {
+  METADATA_HEADER(ThemeTrackingCheckbox, views::Checkbox)
+
  public:
   explicit ThemeTrackingCheckbox(const std::u16string& label)
       : Checkbox(label,
@@ -48,12 +54,17 @@ class ThemeTrackingCheckbox : public views::Checkbox {
   }
 };
 
+BEGIN_METADATA(ThemeTrackingCheckbox)
+END_METADATA
+
 class TextVectorImageButton : public views::MdTextButton {
+  METADATA_HEADER(TextVectorImageButton, views::MdTextButton)
+
  public:
   TextVectorImageButton(PressedCallback callback,
                         const std::u16string& text,
                         const gfx::VectorIcon& icon)
-      : MdTextButton(callback, text), icon_(icon) {}
+      : MdTextButton(std::move(callback), text), icon_(icon) {}
   TextVectorImageButton(const TextVectorImageButton&) = delete;
   TextVectorImageButton& operator=(const TextVectorImageButton&) = delete;
   ~TextVectorImageButton() override = default;
@@ -64,12 +75,15 @@ class TextVectorImageButton : public views::MdTextButton {
     // Use the text color for the associated vector image.
     SetImageModel(
         views::Button::ButtonState::STATE_NORMAL,
-        ui::ImageModel::FromVectorIcon(icon_, label()->GetEnabledColor()));
+        ui::ImageModel::FromVectorIcon(*icon_, label()->GetEnabledColor()));
   }
 
  private:
-  const gfx::VectorIcon& icon_;
+  const raw_ref<const gfx::VectorIcon> icon_;
 };
+
+BEGIN_METADATA(TextVectorImageButton)
+END_METADATA
 
 ColoredDialog::ColoredDialog(AcceptCallback accept_callback) {
   SetAcceptCallback(base::BindOnce(
@@ -78,7 +92,7 @@ ColoredDialog::ColoredDialog(AcceptCallback accept_callback) {
       },
       base::Unretained(this), std::move(accept_callback)));
 
-  SetModalType(ui::MODAL_TYPE_WINDOW);
+  SetModalType(ui::mojom::ModalType::kWindow);
   SetTitle(l10n_util::GetStringUTF16(IDS_COLORED_DIALOG_TITLE));
 
   SetLayoutManager(std::make_unique<views::FillLayout>());
@@ -88,16 +102,20 @@ ColoredDialog::ColoredDialog(AcceptCallback accept_callback) {
   textfield_ = AddChildView(std::make_unique<views::Textfield>());
   textfield_->SetPlaceholderText(
       l10n_util::GetStringUTF16(IDS_COLORED_DIALOG_TEXTFIELD_PLACEHOLDER));
-  textfield_->SetAccessibleName(
+  textfield_->GetViewAccessibility().SetName(
       l10n_util::GetStringUTF16(IDS_COLORED_DIALOG_TEXTFIELD_AX_LABEL));
   textfield_->set_controller(this);
 
-  SetButtonLabel(ui::DIALOG_BUTTON_OK,
+  SetButtonLabel(ui::mojom::DialogButton::kOk,
                  l10n_util::GetStringUTF16(IDS_COLORED_DIALOG_SUBMIT_BUTTON));
-  SetButtonEnabled(ui::DIALOG_BUTTON_OK, false);
+  SetButtonEnabled(ui::mojom::DialogButton::kOk, false);
 }
 
-ColoredDialog::~ColoredDialog() = default;
+ColoredDialog::~ColoredDialog() {
+  if (textfield_) {
+    textfield_->set_controller(nullptr);
+  }
+}
 
 bool ColoredDialog::ShouldShowCloseButton() const {
   return false;
@@ -105,9 +123,13 @@ bool ColoredDialog::ShouldShowCloseButton() const {
 
 void ColoredDialog::ContentsChanged(Textfield* sender,
                                     const std::u16string& new_contents) {
-  SetButtonEnabled(ui::DIALOG_BUTTON_OK, !textfield_->GetText().empty());
+  SetButtonEnabled(ui::mojom::DialogButton::kOk,
+                   !textfield_->GetText().empty());
   DialogModelChanged();
 }
+
+BEGIN_METADATA(ColoredDialog)
+END_METADATA
 
 ColoredDialogChooser::ColoredDialogChooser() {
   views::LayoutProvider* provider = views::LayoutProvider::Get();
@@ -157,6 +179,9 @@ void ColoredDialogChooser::OnFeedbackSubmit(std::u16string text) {
                      confirmation_label_));
 }
 
+BEGIN_METADATA(ColoredDialogChooser)
+END_METADATA
+
 ColoredDialogExample::ColoredDialogExample() : ExampleBase("Colored Dialog") {}
 
 ColoredDialogExample::~ColoredDialogExample() = default;
@@ -166,5 +191,4 @@ void ColoredDialogExample::CreateExampleView(views::View* container) {
   container->AddChildView(std::make_unique<ColoredDialogChooser>());
 }
 
-}  // namespace examples
-}  // namespace views
+}  // namespace views::examples

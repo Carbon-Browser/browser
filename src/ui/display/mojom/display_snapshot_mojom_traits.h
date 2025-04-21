@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,45 @@
 
 #include "ui/display/mojom/display_constants_mojom_traits.h"
 #include "ui/display/mojom/display_mode_mojom_traits.h"
-#include "ui/display/mojom/display_snapshot.mojom.h"
+#include "ui/display/mojom/display_snapshot.mojom-shared.h"
 #include "ui/display/types/display_mode.h"
 #include "ui/display/types/display_snapshot.h"
 #include "ui/gfx/geometry/mojom/geometry_mojom_traits.h"
 #include "ui/gfx/ipc/color/gfx_param_traits.h"
 
 namespace mojo {
+
+template <>
+struct StructTraits<display::mojom::DisplaySnapshotColorInfoDataView,
+                    display::DisplaySnapshot::ColorInfo> {
+  static const gfx::ColorSpace& color_space(
+      const display::DisplaySnapshot::ColorInfo& color_info) {
+    return color_info.color_space;
+  }
+  static const SkColorSpacePrimaries& edid_primaries(
+      const display::DisplaySnapshot::ColorInfo& color_info) {
+    return color_info.edid_primaries;
+  }
+  static float edid_gamma(
+      const display::DisplaySnapshot::ColorInfo& color_info) {
+    return color_info.edid_gamma;
+  }
+  static const std::optional<gfx::HDRStaticMetadata>& hdr_static_metadata(
+      const display::DisplaySnapshot::ColorInfo& color_info) {
+    return color_info.hdr_static_metadata;
+  }
+  static bool supports_color_temperature_adjustment(
+      const display::DisplaySnapshot::ColorInfo& color_info) {
+    return color_info.supports_color_temperature_adjustment;
+  }
+  static uint32_t bits_per_channel(
+      const display::DisplaySnapshot::ColorInfo& color_info) {
+    return color_info.bits_per_channel;
+  }
+
+  static bool Read(display::mojom::DisplaySnapshotColorInfoDataView data,
+                   display::DisplaySnapshot::ColorInfo* out);
+};
 
 template <>
 struct StructTraits<display::mojom::DisplaySnapshotDataView,
@@ -83,29 +115,14 @@ struct StructTraits<display::mojom::DisplaySnapshotDataView,
     return snapshot->privacy_screen_state();
   }
 
-  static bool has_color_correction_matrix(
+  static bool has_content_protection_key(
       const std::unique_ptr<display::DisplaySnapshot>& snapshot) {
-    return snapshot->has_color_correction_matrix();
+    return snapshot->has_content_protection_key();
   }
 
-  static bool color_correction_in_linear_space(
+  static const display::DisplaySnapshot::ColorInfo& color_info(
       const std::unique_ptr<display::DisplaySnapshot>& snapshot) {
-    return snapshot->color_correction_in_linear_space();
-  }
-
-  static const gfx::ColorSpace& color_space(
-      const std::unique_ptr<display::DisplaySnapshot>& snapshot) {
-    return snapshot->color_space();
-  }
-
-  static uint32_t bits_per_channel(
-      const std::unique_ptr<display::DisplaySnapshot>& snapshot) {
-    return snapshot->bits_per_channel();
-  }
-
-  static const absl::optional<gfx::HDRStaticMetadata>& hdr_static_metadata(
-      const std::unique_ptr<display::DisplaySnapshot>& snapshot) {
-    return snapshot->hdr_static_metadata();
+    return snapshot->color_info();
   }
 
   static std::string display_name(
@@ -155,6 +172,16 @@ struct StructTraits<display::mojom::DisplaySnapshotDataView,
   static const gfx::Size& maximum_cursor_size(
       const std::unique_ptr<display::DisplaySnapshot>& snapshot) {
     return snapshot->maximum_cursor_size();
+  }
+
+  static display::VariableRefreshRateState variable_refresh_rate_state(
+      const std::unique_ptr<display::DisplaySnapshot>& snapshot) {
+    return snapshot->variable_refresh_rate_state();
+  }
+
+  static const display::DrmFormatsAndModifiers& drm_formats_and_modifiers(
+      const std::unique_ptr<display::DisplaySnapshot>& snapshot) {
+    return snapshot->GetDRMFormatsAndModifiers();
   }
 
   static bool Read(display::mojom::DisplaySnapshotDataView data,

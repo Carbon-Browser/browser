@@ -22,6 +22,15 @@ Objective-C and Objective-C++ code also has an 80 character line length.
 Where appropriate, the [Chromium C++ style](../c++/c++.md) style guide applies
 to Chromium Objective-C and (especially) Objective-C++
 
+## File names
+
+Files should always be named using C++ style (`snake_case.mm`, not
+`CamelCase.mm`), even if they contain Objective-C++.
+
+As an exception, names of Apple system classes may retain their camel casing;
+for example a file which defines a category could be named
+`NSSomeSystemClass+my_category.h`.
+
 ## Code Formatting
 
 Use `nil` for null pointers to Objective-C objects, and `nullptr` for C++
@@ -111,6 +120,14 @@ C++ style.
 
 ## #import and #include in the `ios/` directory
 
-#import directive can be used to import C++ and Objective-C headers for all
-source code in the `ios/` directory. This differs from the Google Objective-C Style
-Guide, which requires using #include directive for C++ headers.
+\#import directive can be used to import C++ and Objective-C headers for all
+source code in the `ios/` directory. This differs from the Google Objective-C
+Style Guide, which requires using #include directive for C++ headers.
+
+## Disambiguating Symbols
+Where needed to avoid ambiguity, use backticks to quote variable names and
+symbols in comments in preference to using quotation marks or naming the symbols
+inline.
+
+This is more specific than the Google Objective-C Style Guide which allows pipes
+or backticks.

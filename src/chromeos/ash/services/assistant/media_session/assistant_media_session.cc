@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chromeos/ash/services/assistant/media_host.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_browser_delegate.h"
-#include "chromeos/services/libassistant/public/mojom/media_controller.mojom.h"
+#include "chromeos/ash/services/libassistant/public/mojom/media_controller.mojom.h"
 #include "services/media_session/public/cpp/features.h"
 
 // A macro which ensures we are running on the main thread.
@@ -23,8 +24,7 @@
     return;                                                                 \
   }
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 namespace {
 
@@ -37,7 +37,8 @@ const char kAudioFocusSourceName[] = "assistant";
 }  // namespace
 
 AssistantMediaSession::AssistantMediaSession(MediaHost* host)
-    : host_(host), main_task_runner_(base::SequencedTaskRunnerHandle::Get()) {}
+    : host_(host),
+      main_task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {}
 
 AssistantMediaSession::~AssistantMediaSession() {
   AbandonAudioFocusIfNeeded();
@@ -60,6 +61,10 @@ void AssistantMediaSession::AddObserver(
 
 void AssistantMediaSession::GetDebugInfo(GetDebugInfoCallback callback) {
   std::move(callback).Run(media_session::mojom::MediaSessionDebugInfo::New());
+}
+
+void AssistantMediaSession::GetVisibility(GetVisibilityCallback callback) {
+  std::move(callback).Run(false);
 }
 
 void AssistantMediaSession::StartDucking() {
@@ -139,7 +144,7 @@ void AssistantMediaSession::AbandonAudioFocusIfNeeded() {
 }
 
 void AssistantMediaSession::NotifyMediaSessionMetadataChanged(
-    const chromeos::libassistant::mojom::MediaState& status) {
+    const libassistant::mojom::MediaState& status) {
   media_session::MediaMetadata metadata;
 
   if (!status.metadata.is_null()) {
@@ -239,5 +244,4 @@ void AssistantMediaSession::NotifyMediaSessionInfoChanged() {
     observer->MediaSessionInfoChanged(session_info_.Clone());
 }
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant

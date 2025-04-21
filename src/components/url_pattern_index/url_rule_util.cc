@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,6 @@ std::string AnchorToString(url_pattern_index::flat::AnchorType anchor_type) {
       return "|";
   }
   NOTREACHED();
-  return std::string();
 }
 
 // Class that aids in appending options to a pretty-printed rule.

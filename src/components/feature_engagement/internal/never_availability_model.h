@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,7 @@ class NeverAvailabilityModel : public AvailabilityModel {
   void Initialize(AvailabilityModel::OnInitializedCallback callback,
                   uint32_t current_day) override;
   bool IsReady() const override;
-  absl::optional<uint32_t> GetAvailability(
+  std::optional<uint32_t> GetAvailability(
       const base::Feature& feature) const override;
 
  private:

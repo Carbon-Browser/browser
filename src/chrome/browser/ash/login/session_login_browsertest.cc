@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,34 +7,38 @@
 #include "ash/shell.h"
 #include "ash/system/power/power_event_observer_test_api.h"
 #include "base/command_line.h"
+#include "base/metrics/histogram_base.h"
 #include "base/run_loop.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "chrome/browser/ash/login/login_manager_test.h"
 #include "chrome/browser/ash/login/session/user_session_manager.h"
 #include "chrome/browser/ash/login/session/user_session_manager_test_api.h"
 #include "chrome/browser/ash/login/startup_utils.h"
+#include "chrome/browser/ash/login/test/cryptohome_mixin.h"
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
-#include "chrome/browser/ash/login/test/embedded_policy_test_server_mixin.h"
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/ash/login/test/oobe_screen_exit_waiter.h"
 #include "chrome/browser/ash/login/test/oobe_screen_waiter.h"
 #include "chrome/browser/ash/login/test/session_manager_state_waiter.h"
+#include "chrome/browser/ash/login/test/user_auth_config.h"
 #include "chrome/browser/ash/login/test/user_policy_mixin.h"
-#include "chrome/browser/ash/login/user_flow.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
+#include "chrome/browser/ash/policy/test_support/embedded_policy_test_server_mixin.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/view_ids.h"
-#include "chrome/browser/ui/webui/chromeos/login/user_creation_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/user_creation_screen_handler.h"
 #include "chrome/common/chrome_switches.h"
+#include "chrome/test/base/fake_gaia_mixin.h"
 #include "components/session_manager/core/session_manager.h"
 #include "components/user_manager/known_user.h"
 #include "components/user_manager/user_manager.h"
 #include "components/version_info/version_info.h"
 #include "content/public/test/browser_test.h"
+#include "google_apis/gaia/gaia_id.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/views/focus/focus_manager.h"
 #include "ui/views/view.h"
@@ -60,8 +64,8 @@ class BrowserLoginTest : public LoginManagerTest {
 };
 
 IN_PROC_BROWSER_TEST_F(BrowserLoginTest, PRE_BrowserActive) {
-  RegisterUser(
-      AccountId::FromUserEmailGaiaId(test::kTestEmail, test::kTestGaiaId));
+  RegisterUser(AccountId::FromUserEmailGaiaId(test::kTestEmail,
+                                              GaiaId(test::kTestGaiaId)));
   EXPECT_EQ(session_manager::SessionState::OOBE,
             session_manager::SessionManager::Get()->session_state());
   StartupUtils::MarkOobeCompleted();
@@ -71,31 +75,31 @@ IN_PROC_BROWSER_TEST_F(BrowserLoginTest, BrowserActive) {
   base::HistogramTester histograms;
   EXPECT_EQ(session_manager::SessionState::LOGIN_PRIMARY,
             session_manager::SessionManager::Get()->session_state());
-  LoginUser(
-      AccountId::FromUserEmailGaiaId(test::kTestEmail, test::kTestGaiaId));
+  LoginUser(AccountId::FromUserEmailGaiaId(test::kTestEmail,
+                                           GaiaId(test::kTestGaiaId)));
   EXPECT_EQ(session_manager::SessionState::ACTIVE,
             session_manager::SessionManager::Get()->session_state());
   histograms.ExpectTotalCount("OOBE.BootToSignInCompleted", 1);
 
   Browser* browser =
       chrome::FindAnyBrowser(ProfileManager::GetActiveUserProfile(), false);
-  EXPECT_TRUE(browser != NULL);
+  EXPECT_TRUE(browser != nullptr);
   EXPECT_TRUE(browser->window()->IsActive());
 
   gfx::NativeWindow window = browser->window()->GetNativeWindow();
   views::Widget* widget = views::Widget::GetWidgetForNativeWindow(window);
   views::FocusManager* focus_manager = widget->GetFocusManager();
-  EXPECT_TRUE(focus_manager != NULL);
+  EXPECT_TRUE(focus_manager != nullptr);
 
   const views::View* focused_view = focus_manager->GetFocusedView();
-  EXPECT_TRUE(focused_view != NULL);
+  EXPECT_TRUE(focused_view != nullptr);
   EXPECT_EQ(VIEW_ID_OMNIBOX, focused_view->GetID());
 }
 
 IN_PROC_BROWSER_TEST_F(BrowserLoginTest,
                        PRE_VirtualKeyboardFeaturesEnabledByDefault) {
-  RegisterUser(
-      AccountId::FromUserEmailGaiaId(test::kTestEmail, test::kTestGaiaId));
+  RegisterUser(AccountId::FromUserEmailGaiaId(test::kTestEmail,
+                                              GaiaId(test::kTestGaiaId)));
   EXPECT_EQ(session_manager::SessionState::OOBE,
             session_manager::SessionManager::Get()->session_state());
   StartupUtils::MarkOobeCompleted();
@@ -106,8 +110,8 @@ IN_PROC_BROWSER_TEST_F(BrowserLoginTest,
   base::HistogramTester histograms;
   EXPECT_EQ(session_manager::SessionState::LOGIN_PRIMARY,
             session_manager::SessionManager::Get()->session_state());
-  LoginUser(
-      AccountId::FromUserEmailGaiaId(test::kTestEmail, test::kTestGaiaId));
+  LoginUser(AccountId::FromUserEmailGaiaId(test::kTestEmail,
+                                           GaiaId(test::kTestGaiaId)));
   EXPECT_TRUE(
       user_manager::UserManager::Get()->IsLoggedInAsUserWithGaiaAccount());
 
@@ -130,14 +134,23 @@ class OnboardingTest : public LoginManagerTest {
     LoginManagerTest::SetUpInProcessBrowserTestFixture();
   }
 
+  void SetUpOnMainThread() override {
+    LoginManagerTest::SetUpOnMainThread();
+    cryptohome_mixin_.ApplyAuthConfigIfUserExists(
+        regular_user_, test::UserAuthConfig::Create(test::kDefaultAuthSetup));
+  }
+
  protected:
   DeviceStateMixin device_state_{
-      &mixin_host_, DeviceStateMixin::State::OOBE_COMPLETED_UNOWNED};
+      &mixin_host_,
+      DeviceStateMixin::State::OOBE_COMPLETED_PERMANENTLY_UNOWNED};
   FakeGaiaMixin gaia_mixin_{&mixin_host_};
+  CryptohomeMixin cryptohome_mixin_{&mixin_host_};
   LoginManagerMixin login_mixin_{&mixin_host_, LoginManagerMixin::UserList(),
                                  &gaia_mixin_};
   AccountId regular_user_{
-      AccountId::FromUserEmailGaiaId(test::kTestEmail, test::kTestGaiaId)};
+      AccountId::FromUserEmailGaiaId(test::kTestEmail,
+                                     GaiaId(test::kTestGaiaId))};
 
   EmbeddedPolicyTestServerMixin policy_server_mixin_{&mixin_host_};
 
@@ -156,7 +169,9 @@ IN_PROC_BROWSER_TEST_F(OnboardingTest, PRE_OnboardingUserActivityRegularUser) {
   login_mixin_.SkipPostLoginScreens();
 }
 
-IN_PROC_BROWSER_TEST_F(OnboardingTest, OnboardingUserActivityRegularUser) {
+// TODO(crbug.com/339860384): Enable the test.
+IN_PROC_BROWSER_TEST_F(OnboardingTest,
+                       DISABLED_OnboardingUserActivityRegularUser) {
   login_mixin_.LoginAsNewRegularUser();
   login_mixin_.WaitForActiveSession();
 
@@ -195,7 +210,9 @@ IN_PROC_BROWSER_TEST_F(OnboardingTest, PRE_OnboardingCompletedVersionBackfill) {
   OobeScreenWaiter(UserCreationView::kScreenId).Wait();
   LoginManagerMixin::TestUserInfo test_user(regular_user_);
   OobeScreenExitWaiter user_creation_exit_waiter(UserCreationView::kScreenId);
-  login_mixin_.LoginWithDefaultContext(test_user);
+  UserContext user_context =
+      LoginManagerMixin::CreateDefaultUserContext(test_user);
+  login_mixin_.LoginAsNewRegularUser(user_context);
   user_creation_exit_waiter.Wait();
   login_mixin_.SkipPostLoginScreens();
   login_mixin_.WaitForActiveSession();

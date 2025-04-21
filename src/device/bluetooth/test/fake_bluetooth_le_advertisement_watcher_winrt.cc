@@ -1,10 +1,9 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "device/bluetooth/test/fake_bluetooth_le_advertisement_watcher_winrt.h"
 
-#include "base/strings/string_piece.h"
 #include "device/bluetooth/test/fake_bluetooth_le_advertisement_received_event_args_winrt.h"
 #include "device/bluetooth/test/fake_bluetooth_le_advertisement_winrt.h"
 

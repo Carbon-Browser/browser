@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -58,10 +58,10 @@ void GammaConfigurator::OnCalibratedGammaLoaded(
 }
 
 void GammaConfigurator::ApplyGammaLut() {
-  if (is_inverted_)
-    display_configurator_->SetGammaCorrection({}, InvertGammaLut(gamma_lut_));
-  else
-    display_configurator_->SetGammaCorrection({}, gamma_lut_);
+  display::GammaAdjustment adjustment;
+  adjustment.curve = display::GammaCurve(
+      is_inverted_ ? InvertGammaLut(gamma_lut_) : gamma_lut_);
+  display_configurator_->SetGammaAdjustment(adjustment);
 }
 
 void GammaConfigurator::SetColorInversion(bool invert) {

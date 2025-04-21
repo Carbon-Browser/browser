@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright 2015 The Chromium Authors. All rights reserved.
-     Use of this source code is governed by a BSD-style license that can be
-     found in the LICENSE file.
+<!--
+Copyright 2015 The Chromium Authors
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
 -->
 
 <!-- AndroidManifest.xml is generated in two mustache generation passes.
@@ -23,7 +24,7 @@
     {{{raw_manifest_tags}}}
 
     <uses-sdk
-        android:minSdkVersion="23"
+        android:minSdkVersion="24"
         android:targetSdkVersion="33" />
 
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -156,9 +157,12 @@
         <meta-data android:name="org.chromium.webapk.shell_apk.displayMode" android:value="{{{display_mode}}}" />
         <meta-data android:name="org.chromium.webapk.shell_apk.orientation" android:value="{{{orientation}}}" />
         <meta-data android:name="org.chromium.webapk.shell_apk.themeColor" android:value="{{{theme_color}}}" />
+        <meta-data android:name="org.chromium.webapk.shell_apk.darkThemeColor" android:value="{{{dark_theme_color}}}" />
 
         <!-- Empty if the Web Manifest does not provide a background color. -->
         <meta-data android:name="org.chromium.webapk.shell_apk.backgroundColor" android:value="{{{background_color}}}" />
+        <!-- Empty if the Web Manifest does not provide a background color. -->
+        <meta-data android:name="org.chromium.webapk.shell_apk.darkBackgroundColor" android:value="{{{dark_background_color}}}" />
 
         <meta-data android:name="org.chromium.webapk.shell_apk.defaultBackgroundColorId" android:resource="@color/webapp_default_bg" />
         <meta-data android:name="org.chromium.webapk.shell_apk.iconId" android:resource="@mipmap/app_icon" />
@@ -180,6 +184,7 @@
 
         <meta-data android:name="org.chromium.webapk.shell_apk.isNewStyleWebApk" android:value="[[ use_new_splash ]]" />
         <meta-data android:name="org.chromium.webapk.shell_apk.enableSiteSettingsShortcut" android:value="{{{enable_site_settings_shortcut}}}" />
+        <meta-data android:name="org.chromium.webapk.shell_apk.hasCustomName" android:value="{{{has_custom_name}}}" />
         <service
             android:name="org.chromium.webapk.shell_apk.WebApkServiceFactory"
             android:exported="true"

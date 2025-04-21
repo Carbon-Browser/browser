@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,16 @@
 #include <cmath>
 #include <utility>
 
+#include "base/feature_list.h"
 #include "media/base/limits.h"
 #include "media/base/video_types.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/mediastream/media_stream_controls.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/web/modules/mediastream/media_stream_video_source.h"
+#include "third_party/blink/renderer/modules/mediastream/media_constraints.h"
 #include "third_party/blink/renderer/modules/mediastream/media_stream_constraints_util.h"
 #include "third_party/blink/renderer/modules/mediastream/media_stream_constraints_util_sets.h"
-#include "third_party/blink/renderer/platform/mediastream/media_constraints.h"
-#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 
 namespace blink {
 
@@ -85,6 +86,8 @@ class VideoContentCaptureCandidates {
 
   bool IsEmpty() const {
     return resolution_set_.IsEmpty() || frame_rate_set_.IsEmpty() ||
+           (frame_rate_set_.Max().has_value() &&
+            frame_rate_set_.Max().value() <= 0.0) ||
            device_id_set_.IsEmpty() || noise_reduction_set_.IsEmpty() ||
            rescale_set_.IsEmpty();
   }
@@ -204,11 +207,13 @@ media::VideoCaptureParams SelectVideoCaptureParamsFromCandidates(
   media::VideoCaptureParams params;
   // If zero-copy tab capture is enabled, we want the capturer to auto-select
   // the pixel format:
+  const media::VideoPixelFormat pixel_format =
+      base::FeatureList::IsEnabled(blink::features::kZeroCopyTabCapture)
+          ? media::PIXEL_FORMAT_UNKNOWN
+          : media::PIXEL_FORMAT_I420;
   params.requested_format = media::VideoCaptureFormat(
       ToGfxSize(requested_resolution), static_cast<float>(requested_frame_rate),
-      RuntimeEnabledFeatures::ZeroCopyTabCaptureEnabled()
-          ? media::PIXEL_FORMAT_UNKNOWN
-          : media::PIXEL_FORMAT_I420);
+      pixel_format);
   params.resolution_change_policy = SelectResolutionPolicyFromCandidates(
       candidates.resolution_set(), default_resolution_policy);
   // Content capture always uses default power-line frequency.
@@ -243,21 +248,21 @@ std::string SelectDeviceIDFromCandidates(
   return candidates.FirstElement();
 }
 
-absl::optional<bool> SelectNoiseReductionFromCandidates(
+std::optional<bool> SelectNoiseReductionFromCandidates(
     const BoolSet& candidates,
     const MediaTrackConstraintSetPlatform& basic_constraint_set) {
   DCHECK(!candidates.IsEmpty());
   if (basic_constraint_set.goog_noise_reduction.HasIdeal() &&
       candidates.Contains(basic_constraint_set.goog_noise_reduction.Ideal())) {
-    return absl::optional<bool>(
+    return std::optional<bool>(
         basic_constraint_set.goog_noise_reduction.Ideal());
   }
 
   if (candidates.is_universal())
-    return absl::optional<bool>();
+    return std::optional<bool>();
 
   // A non-universal BoolSet can have at most one element.
-  return absl::optional<bool>(candidates.FirstElement());
+  return std::optional<bool>(candidates.FirstElement());
 }
 
 bool SelectRescaleFromCandidates(
@@ -344,7 +349,7 @@ VideoCaptureSettings SelectResultFromCandidates(
           candidates, basic_constraint_set, default_height, default_width,
           default_frame_rate, default_resolution_policy);
 
-  absl::optional<bool> noise_reduction = SelectNoiseReductionFromCandidates(
+  std::optional<bool> noise_reduction = SelectNoiseReductionFromCandidates(
       candidates.noise_reduction_set(), basic_constraint_set);
 
   bool enable_rescale = SelectRescaleFromCandidates(candidates.rescale_set(),
@@ -371,7 +376,9 @@ VideoCaptureSettings UnsatisfiedConstraintsResult(
     return VideoCaptureSettings(constraint_set.width.GetName());
   } else if (candidates.resolution_set().IsAspectRatioEmpty()) {
     return VideoCaptureSettings(constraint_set.aspect_ratio.GetName());
-  } else if (candidates.frame_rate_set().IsEmpty()) {
+  } else if (candidates.frame_rate_set().IsEmpty() ||
+             (candidates.frame_rate_set().Max().has_value() &&
+              candidates.frame_rate_set().Max().value() <= 0)) {
     return VideoCaptureSettings(constraint_set.frame_rate.GetName());
   } else if (candidates.noise_reduction_set().IsEmpty()) {
     return VideoCaptureSettings(constraint_set.goog_noise_reduction.GetName());

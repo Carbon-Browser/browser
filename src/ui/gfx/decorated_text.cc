@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@ DecoratedText::RangedAttribute::RangedAttribute(const gfx::Range& range,
                                                 const gfx::Font& font)
     : range(range), font(font), strike(false) {}
 
-DecoratedText::DecoratedText() {}
+DecoratedText::DecoratedText() = default;
 
-DecoratedText::~DecoratedText() {}
+DecoratedText::~DecoratedText() = default;
 
 }  // namespace gfx

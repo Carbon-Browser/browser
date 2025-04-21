@@ -1,4 +1,4 @@
-// Copyright 2016 the Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include "third_party/blink/renderer/core/css/css_selector.h"
 #include "third_party/blink/renderer/core/css/cssom/style_property_map_read_only_main_thread.h"
 #include "third_party/blink/renderer/core/css/parser/css_selector_parser.h"
-#include "third_party/blink/renderer/core/dom/node.h"
+#include "third_party/blink/renderer/core/dom/element.h"
 
 namespace blink {
 
@@ -26,14 +26,17 @@ namespace blink {
 class CORE_EXPORT ComputedStylePropertyMap
     : public StylePropertyMapReadOnlyMainThread {
  public:
-  ComputedStylePropertyMap(Node* node, const String& pseudo_element = String())
-      : pseudo_id_(CSSSelectorParser::ParsePseudoElement(pseudo_element, node)),
-        node_(node) {}
+  explicit ComputedStylePropertyMap(Element* element,
+                                    const String& pseudo_element = String())
+      : pseudo_id_(CSSSelectorParser::ParsePseudoElement(pseudo_element,
+                                                         element,
+                                                         pseudo_argument_)),
+        element_(element) {}
   ComputedStylePropertyMap(const ComputedStylePropertyMap&) = delete;
   ComputedStylePropertyMap& operator=(const ComputedStylePropertyMap&) = delete;
 
   void Trace(Visitor* visitor) const override {
-    visitor->Trace(node_);
+    visitor->Trace(element_);
     StylePropertyMapReadOnlyMainThread::Trace(visitor);
   }
 
@@ -48,7 +51,7 @@ class CORE_EXPORT ComputedStylePropertyMap
  protected:
   const CSSValue* GetProperty(CSSPropertyID) const override;
   const CSSValue* GetCustomProperty(const AtomicString&) const override;
-  void ForEachProperty(const IterationCallback&) override;
+  void ForEachProperty(IterationFunction visitor) override;
 
   String SerializationForShorthand(const CSSProperty&) const final;
 
@@ -57,9 +60,10 @@ class CORE_EXPORT ComputedStylePropertyMap
   // See
   // https://github.com/w3c/css-houdini-drafts/issues/350#issuecomment-294690156
   PseudoId pseudo_id_;
-  Member<Node> node_;
+  AtomicString pseudo_argument_;
+  Member<Element> element_;
 
-  Node* StyledNode() const;
+  Element* StyledElement() const;
   const ComputedStyle* UpdateStyle() const;
 };
 

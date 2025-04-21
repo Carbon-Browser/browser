@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/threading/sequence_bound.h"
@@ -17,10 +18,11 @@
 #include "components/performance_manager/persistence/site_data/site_data_impl.h"
 #include "components/performance_manager/persistence/site_data/site_data_writer.h"
 #include "components/performance_manager/persistence/site_data/tab_visibility.h"
-#include "components/performance_manager/persistence/site_data/unittest_utils.h"
 #include "components/performance_manager/public/graph/graph.h"
 #include "components/performance_manager/public/performance_manager.h"
 #include "components/performance_manager/test_support/performance_manager_test_harness.h"
+#include "components/performance_manager/test_support/persistence/test_site_data_reader.h"
+#include "components/performance_manager/test_support/persistence/unittest_utils.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/test/web_contents_tester.h"
@@ -48,15 +50,17 @@ class LenientMockDataWriter : public SiteDataWriter {
   LenientMockDataWriter(const LenientMockDataWriter& other) = delete;
   LenientMockDataWriter& operator=(const LenientMockDataWriter&) = delete;
 
-  MOCK_METHOD1(NotifySiteLoaded, void(TabVisibility));
-  MOCK_METHOD1(NotifySiteUnloaded, void(TabVisibility));
-  MOCK_METHOD1(NotifySiteForegrounded, void(bool));
-  MOCK_METHOD1(NotifySiteBackgrounded, void(bool));
-  MOCK_METHOD0(NotifyUpdatesFaviconInBackground, void());
-  MOCK_METHOD0(NotifyUpdatesTitleInBackground, void());
-  MOCK_METHOD0(NotifyUsesAudioInBackground, void());
-  MOCK_METHOD3(NotifyLoadTimePerformanceMeasurement,
-               void(base::TimeDelta, base::TimeDelta, uint64_t));
+  MOCK_METHOD(void, NotifySiteLoaded, (TabVisibility), (override));
+  MOCK_METHOD(void, NotifySiteUnloaded, (TabVisibility), (override));
+  MOCK_METHOD(void, NotifySiteForegrounded, (bool), (override));
+  MOCK_METHOD(void, NotifySiteBackgrounded, (bool), (override));
+  MOCK_METHOD(void, NotifyUpdatesFaviconInBackground, (), (override));
+  MOCK_METHOD(void, NotifyUpdatesTitleInBackground, (), (override));
+  MOCK_METHOD(void, NotifyUsesAudioInBackground, (), (override));
+  MOCK_METHOD(void,
+              NotifyLoadTimePerformanceMeasurement,
+              (base::TimeDelta, base::TimeDelta, uint64_t),
+              (override));
 
   // Used to record the destruction of this object.
   void SetOnDestroyIndicator(bool* on_destroy_indicator) {
@@ -65,7 +69,7 @@ class LenientMockDataWriter : public SiteDataWriter {
     on_destroy_indicator_ = on_destroy_indicator;
   }
 
-  const url::Origin& Origin() const { return origin_; }
+  const url::Origin& Origin() const override { return origin_; }
 
  private:
   raw_ptr<bool> on_destroy_indicator_ = nullptr;
@@ -84,7 +88,7 @@ class MockDataCache : public SiteDataCache {
   // SiteDataCache:
   std::unique_ptr<SiteDataReader> GetReaderForOrigin(
       const url::Origin& origin) override {
-    return nullptr;
+    return std::make_unique<testing::SimpleTestSiteDataReader>();
   }
   std::unique_ptr<SiteDataWriter> GetWriterForOrigin(
       const url::Origin& origin) override {
@@ -124,7 +128,7 @@ void RunTaskOnPMSequence(base::OnceClosure task) {
 
 MockDataWriter* GetMockWriterForPageNode(const PageNode* page_node) {
   return static_cast<MockDataWriter*>(
-      SiteDataRecorder::Data::GetForTesting(page_node)->writer());
+      SiteDataRecorder::Data::GetForTesting(page_node).writer());
 }
 
 class SiteDataRecorderTest : public PerformanceManagerTestHarness {
@@ -146,8 +150,10 @@ class SiteDataRecorderTest : public PerformanceManagerTestHarness {
 
     auto browser_context_id = GetBrowserContext()->UniqueId();
     RunTaskOnPMSequence(base::BindLambdaForTesting([&]() {
-      SiteDataCacheFactory::GetInstance()->SetCacheForTesting(
-          browser_context_id, std::make_unique<MockDataCache>());
+      auto* factory = SiteDataCacheFactory::GetInstance();
+      ASSERT_TRUE(factory);
+      factory->SetCacheForTesting(browser_context_id,
+                                  std::make_unique<MockDataCache>());
     }));
 
     SetContents(CreateTestWebContents());
@@ -183,7 +189,7 @@ TEST_F(SiteDataRecorderTest, NavigationEventsBasicTests) {
   RunTaskOnPMSequence(base::BindLambdaForTesting([&]() {
     EXPECT_TRUE(page_node);
     EXPECT_FALSE(
-        SiteDataRecorder::Data::GetForTesting(page_node.get())->writer());
+        SiteDataRecorder::Data::GetForTesting(page_node.get()).writer());
   }));
 
   // Send a navigation event with the |committed| bit set and make sure that a
@@ -377,6 +383,32 @@ TEST_F(SiteDataRecorderTest, LoadEvent) {
     EXPECT_CALL(*mock_writer, NotifySiteUnloaded(TabVisibility::kBackground));
     node_impl->SetLoadingState(PageNode::LoadingState::kLoading);
     ::testing::Mock::VerifyAndClear(mock_writer);
+  }));
+}
+
+TEST_F(SiteDataRecorderTest, NodeDataAccessors) {
+  // SiteDataRecorder::Data objects should exist for all page nodes.
+  // Reader and writer objects aren't created until the page navigates to an
+  // origin.
+  base::WeakPtr<PageNode> page_node =
+      PerformanceManager::GetPrimaryPageNodeForWebContents(web_contents());
+  RunTaskOnPMSequence(base::BindLambdaForTesting([&]() {
+    ASSERT_TRUE(page_node);
+    auto& data = SiteDataRecorder::Data::FromPageNode(page_node.get());
+    EXPECT_FALSE(data.reader());
+    EXPECT_FALSE(data.writer());
+    EXPECT_FALSE(SiteDataRecorder::Data::GetReaderForPageNode(page_node.get()));
+  }));
+
+  NavigatePageNodeOnUIThread(web_contents(), kTestUrl1);
+
+  RunTaskOnPMSequence(base::BindLambdaForTesting([&]() {
+    ASSERT_TRUE(page_node);
+    auto& data = SiteDataRecorder::Data::FromPageNode(page_node.get());
+    EXPECT_TRUE(data.reader());
+    EXPECT_TRUE(data.writer());
+    EXPECT_EQ(SiteDataRecorder::Data::GetReaderForPageNode(page_node.get()),
+              data.reader());
   }));
 }
 

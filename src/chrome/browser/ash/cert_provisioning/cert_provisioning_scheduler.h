@@ -1,15 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_CERT_PROVISIONING_CERT_PROVISIONING_SCHEDULER_H_
 #define CHROME_BROWSER_ASH_CERT_PROVISIONING_CERT_PROVISIONING_SCHEDULER_H_
 
+#include <variant>
 #include <vector>
 
 #include "base/callback_list.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/sequence_checker.h"
@@ -19,11 +21,10 @@
 #include "chrome/browser/ash/cert_provisioning/cert_provisioning_invalidator.h"
 #include "chrome/browser/ash/cert_provisioning/cert_provisioning_platform_keys_helpers.h"
 #include "chrome/browser/ash/platform_keys/platform_keys_service.h"
-#include "chrome/browser/platform_keys/platform_keys.h"
-// TODO(https://crbug.com/1164001): forward declare NetworkStateHandler
-// after //chromeos/network is moved to ash.
-#include "chromeos/ash/components/network/network_state_handler.h"
+#include "chrome/browser/ash/policy/invalidation/affiliated_invalidation_service_provider.h"
+#include "chrome/browser/chromeos/platform_keys/platform_keys.h"
 #include "chromeos/ash/components/network/network_state_handler_observer.h"
+#include "components/invalidation/invalidation_listener.h"
 #include "components/prefs/pref_change_registrar.h"
 
 class Profile;
@@ -34,8 +35,12 @@ class CloudPolicyClient;
 }  // namespace policy
 
 namespace ash {
+
+class NetworkStateHandler;
+
 namespace cert_provisioning {
 
+class CertProvisioningClient;
 class CertProvisioningWorker;
 
 using WorkerMap =
@@ -55,7 +60,7 @@ struct FailedWorkerInfo {
   CertProvisioningWorkerState state_before_failure =
       CertProvisioningWorkerState::kInitState;
   // The DER-encoded X.509 SPKI.
-  std::string public_key;
+  std::vector<uint8_t> public_key;
   // Human-readable certificate profile name (UTF-8).
   std::string cert_profile_name;
   // The time the worker was last updated, i.e. when it transferred to the
@@ -76,6 +81,9 @@ class CertProvisioningScheduler {
   // Returns "false" if `cert_profile_id` is not found and "true" otherwise.
   virtual bool UpdateOneWorker(const CertProfileId& cert_profile_id) = 0;
   virtual void UpdateAllWorkers() = 0;
+  // Resets the process of provisioning a specific certificate.
+  // Returns "false" if `cert_profile_id` is not found and "true" otherwise.
+  virtual bool ResetOneWorker(const CertProfileId& cert_profile_id) = 0;
 
   // Returns all certificate provisioning workers that are currently active.
   virtual const WorkerMap& GetWorkers() const = 0;
@@ -111,14 +119,15 @@ class CertProvisioningSchedulerImpl
   static std::unique_ptr<CertProvisioningScheduler>
   CreateDeviceCertProvisioningScheduler(
       policy::CloudPolicyClient* cloud_policy_client,
-      policy::AffiliatedInvalidationServiceProvider*
-          invalidation_service_provider);
+      std::variant<policy::AffiliatedInvalidationServiceProvider*,
+                   invalidation::InvalidationListener*>
+          invalidation_service_provider_or_listener);
 
   CertProvisioningSchedulerImpl(
       CertScope cert_scope,
       Profile* profile,
       PrefService* pref_service,
-      policy::CloudPolicyClient* cloud_policy_client,
+      std::unique_ptr<CertProvisioningClient> cert_provisioning_client,
       platform_keys::PlatformKeysService* platform_keys_service,
       NetworkStateHandler* network_state_handler,
       std::unique_ptr<CertProvisioningInvalidatorFactory> invalidator_factory);
@@ -131,6 +140,7 @@ class CertProvisioningSchedulerImpl
   // CertProvisioningScheduler:
   bool UpdateOneWorker(const CertProfileId& cert_profile_id) override;
   void UpdateAllWorkers() override;
+  bool ResetOneWorker(const CertProfileId& cert_profile_id) override;
   const WorkerMap& GetWorkers() const override;
   const base::flat_map<CertProfileId, FailedWorkerInfo>&
   GetFailedCertProfileIds() const override;
@@ -140,7 +150,8 @@ class CertProvisioningSchedulerImpl
   // Invoked when the CertProvisioningWorker corresponding to |profile| reached
   // its final state.
   // Public so it can be called from tests.
-  void OnProfileFinished(const CertProfile& profile,
+  void OnProfileFinished(CertProfile profile,
+                         std::string process_id,
                          CertProvisioningWorkerState state);
 
   // Called when any state visible from the outside has changed.
@@ -180,7 +191,7 @@ class CertProvisioningSchedulerImpl
   // Continues an existing worker if it is in a waiting state.
   void ProcessProfile(const CertProfile& profile);
 
-  absl::optional<CertProfile> GetOneCertProfile(
+  std::optional<CertProfile> GetOneCertProfile(
       const CertProfileId& cert_profile_id);
   std::vector<CertProfile> GetCertProfiles();
 
@@ -191,8 +202,10 @@ class CertProvisioningSchedulerImpl
   CertProvisioningWorker* AddWorkerToMap(
       std::unique_ptr<CertProvisioningWorker> worker);
   // Removes the element referenced by |worker_iter| from |workers_|.
-  // Triggers a state change notification.
-  void RemoveWorkerFromMap(WorkerMap::iterator worker_iter);
+  // Triggers a state change notification if send_visible_state_changed_update
+  // is true.
+  void RemoveWorkerFromMap(WorkerMap::iterator worker_iter,
+                           bool send_visible_state_changed_update);
 
   // Returns true if the process can be continued (if it's not required to
   // wait).
@@ -218,15 +231,14 @@ class CertProvisioningSchedulerImpl
   CertScope cert_scope_ = CertScope::kUser;
   // |profile_| can be nullptr for the device-wide instance of
   // CertProvisioningScheduler.
-  Profile* profile_ = nullptr;
-  PrefService* pref_service_ = nullptr;
+  raw_ptr<Profile> profile_ = nullptr;
+  raw_ptr<PrefService> pref_service_ = nullptr;
   const char* pref_name_ = nullptr;
-  policy::CloudPolicyClient* cloud_policy_client_ = nullptr;
+  std::unique_ptr<CertProvisioningClient> cert_provisioning_client_;
   // |platform_keys_service_| can be nullptr if it has been shut down.
-  platform_keys::PlatformKeysService* platform_keys_service_ = nullptr;
-  NetworkStateHandler* network_state_handler_ = nullptr;
-  base::ScopedObservation<chromeos::NetworkStateHandler,
-                          chromeos::NetworkStateHandlerObserver>
+  raw_ptr<platform_keys::PlatformKeysService> platform_keys_service_ = nullptr;
+  raw_ptr<NetworkStateHandler> network_state_handler_ = nullptr;
+  base::ScopedObservation<NetworkStateHandler, NetworkStateHandlerObserver>
       network_state_handler_observer_{this};
 
   PrefChangeRegistrar pref_change_registrar_;

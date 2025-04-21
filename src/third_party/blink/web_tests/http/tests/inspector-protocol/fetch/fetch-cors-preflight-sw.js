@@ -1,4 +1,4 @@
-(async function(testRunner) {
+(async function(/** @type {import('test_runner').TestRunner} */ testRunner) {
   const {session, dp} = await testRunner.startBlank(
       `Tests that Fetch intercepts CORS preflight requests from service workers correctly.`);
 
@@ -43,6 +43,10 @@
     swFetcher.onRequest().continueRequest({});
     swdp.Runtime.runIfWaitingForDebugger();
   });
+
+  // Disable the cache so that we do not use cached OPTIONS.
+  await dp.Network.enable();
+  await dp.Network.setCacheDisabled({cacheDisabled: true});
 
   await dp.ServiceWorker.enable();
   await session.navigate("resources/service-worker.html");

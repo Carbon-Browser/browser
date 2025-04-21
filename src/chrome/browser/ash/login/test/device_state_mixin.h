@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,12 +12,14 @@
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/login/demo_mode/demo_session.h"
 #include "chrome/browser/ash/login/test/local_state_mixin.h"
-#include "chrome/browser/ash/login/test/scoped_policy_update.h"
 #include "chrome/browser/ash/policy/core/device_policy_builder.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
 #include "components/policy/core/common/cloud/test/policy_builder.h"
 
 namespace ash {
+
+class ScopedDevicePolicyUpdate;
+class ScopedUserPolicyUpdate;
 
 // A mixin for setting up device state:
 // *   OOBE completion state
@@ -37,6 +39,7 @@ class DeviceStateMixin : public InProcessBrowserTestMixin,
   enum class State {
     BEFORE_OOBE,
     OOBE_COMPLETED_UNOWNED,
+    OOBE_COMPLETED_PERMANENTLY_UNOWNED,
     OOBE_COMPLETED_CLOUD_ENROLLED,
     OOBE_COMPLETED_ACTIVE_DIRECTORY_ENROLLED,
     OOBE_COMPLETED_CONSUMER_OWNED,
@@ -90,9 +93,15 @@ class DeviceStateMixin : public InProcessBrowserTestMixin,
     skip_initial_policy_setup_ = value;
   }
 
+  // Writes the install attributes file if it doesn't exist yet (i.e. the mixin
+  // should be instantiated with OOBE_COMPLETED_UNOWNED). Primarily useful for
+  // tests that want to simulate the device locking event. The created file will
+  // contain the data corresponding to the requested `state`.
+  void WriteInstallAttrFile(State state);
+
  private:
   void SetDeviceState();
-  void WriteInstallAttrFile();
+
   void WriteOwnerKey();
 
   // Whether `state_` value indicates enrolled state.
@@ -126,11 +135,5 @@ class DeviceStateMixin : public InProcessBrowserTestMixin,
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::DeviceStateMixin;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_TEST_DEVICE_STATE_MIXIN_H_

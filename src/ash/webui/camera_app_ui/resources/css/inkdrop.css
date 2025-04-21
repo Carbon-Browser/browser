@@ -1,4 +1,4 @@
-/* Copyright 2021 The Chromium Authors. All rights reserved.
+/* Copyright 2021 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file. */
 
@@ -7,7 +7,7 @@
 }
 
 .inkdrop .inkdrop-ripple {
-  background: white;
+  background: var(--cros-sys-ripple_primary);
   border-radius: 50%;
   height: 0;
   left: var(--drop-x);
@@ -17,7 +17,7 @@
   width: 0;
 }
 
-.inkdrop.animate .inkdrop-ripple {
+.inkdrop .inkdrop-ripple.animate {
   animation: inkdrop var(--moderate1-duration) ease-out;
 }
 

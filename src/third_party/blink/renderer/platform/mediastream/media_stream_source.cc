@@ -37,6 +37,7 @@
 #include "third_party/blink/renderer/platform/mediastream/media_stream_audio_source.h"
 #include "third_party/blink/renderer/platform/mediastream/webaudio_destination_consumer.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
+#include "ui/display/types/display_constants.h"
 
 namespace blink {
 
@@ -55,7 +56,6 @@ const char* StreamTypeToString(MediaStreamSource::StreamType type) {
     default:
       NOTREACHED();
   }
-  return "Invalid";
 }
 
 const char* ReadyStateToString(MediaStreamSource::ReadyState state) {
@@ -68,21 +68,6 @@ const char* ReadyStateToString(MediaStreamSource::ReadyState state) {
       return "Ended";
     default:
       NOTREACHED();
-  }
-  return "Invalid";
-}
-
-const char* EchoCancellationModeToString(
-    MediaStreamSource::EchoCancellationMode mode) {
-  switch (mode) {
-    case MediaStreamSource::EchoCancellationMode::kDisabled:
-      return "disabled";
-    case MediaStreamSource::EchoCancellationMode::kBrowser:
-      return "browser";
-    case MediaStreamSource::EchoCancellationMode::kAec3:
-      return "AEC3";
-    case MediaStreamSource::EchoCancellationMode::kSystem:
-      return "system";
   }
 }
 
@@ -137,27 +122,6 @@ void MediaStreamSource::ConsumerWrapper::ConsumeAudio(AudioBus* bus,
   consumer_->ConsumeAudio(bus_vector_, number_of_frames);
 }
 
-MediaStreamSource::MediaStreamSource(const String& id,
-                                     StreamType type,
-                                     const String& name,
-                                     bool remote,
-                                     ReadyState ready_state,
-                                     bool requires_consumer)
-    : id_(id),
-      type_(type),
-      name_(name),
-      remote_(remote),
-      ready_state_(ready_state),
-      requires_consumer_(requires_consumer) {
-  SendLogMessage(
-      String::Format(
-          "MediaStreamSource({id=%s}, {type=%s}, {name=%s}, {remote=%d}, "
-          "{ready_state=%s})",
-          id.Utf8().c_str(), StreamTypeToString(type), name.Utf8().c_str(),
-          remote, ReadyStateToString(ready_state))
-          .Utf8());
-}
-
 MediaStreamSource::MediaStreamSource(
     const String& id,
     StreamType type,
@@ -167,13 +131,40 @@ MediaStreamSource::MediaStreamSource(
     ReadyState ready_state,
     bool requires_consumer)
     : MediaStreamSource(id,
+                        display::kInvalidDisplayId,
                         type,
                         name,
                         remote,
+                        std::move(platform_source),
                         ready_state,
-                        requires_consumer) {
-  platform_source_ = std::move(platform_source);
-  platform_source_->SetOwner(this);
+                        requires_consumer) {}
+
+MediaStreamSource::MediaStreamSource(
+    const String& id,
+    int64_t display_id,
+    StreamType type,
+    const String& name,
+    bool remote,
+    std::unique_ptr<WebPlatformMediaStreamSource> platform_source,
+    ReadyState ready_state,
+    bool requires_consumer)
+    : id_(id),
+      display_id_(display_id),
+      type_(type),
+      name_(name),
+      remote_(remote),
+      ready_state_(ready_state),
+      requires_consumer_(requires_consumer),
+      platform_source_(std::move(platform_source)) {
+  SendLogMessage(
+      String::Format(
+          "MediaStreamSource({id=%s}, {type=%s}, {name=%s}, {remote=%d}, "
+          "{ready_state=%s})",
+          id.Utf8().c_str(), StreamTypeToString(type), name.Utf8().c_str(),
+          remote, ReadyStateToString(ready_state))
+          .Utf8());
+  if (platform_source_)
+    platform_source_->SetOwner(this);
 }
 
 void MediaStreamSource::SetGroupId(const String& group_id) {
@@ -197,8 +188,8 @@ void MediaStreamSource::SetReadyState(ReadyState ready_state) {
     // until the callback is executed.
     Vector<base::OnceClosure> observer_callbacks;
     for (const auto& it : observers_) {
-      observer_callbacks.push_back(WTF::Bind(&Observer::SourceChangedState,
-                                             WrapWeakPersistent(it.Get())));
+      observer_callbacks.push_back(WTF::BindOnce(&Observer::SourceChangedState,
+                                                 WrapWeakPersistent(it.Get())));
     }
     for (auto& observer_callback : observer_callbacks) {
       std::move(observer_callback).Run();
@@ -210,20 +201,20 @@ void MediaStreamSource::AddObserver(MediaStreamSource::Observer* observer) {
   observers_.insert(observer);
 }
 
-void MediaStreamSource::SetAudioProcessingProperties(
-    EchoCancellationMode echo_cancellation_mode,
-    bool auto_gain_control,
-    bool noise_supression) {
+void MediaStreamSource::SetAudioProcessingProperties(bool echo_cancellation,
+                                                     bool auto_gain_control,
+                                                     bool noise_supression,
+                                                     bool voice_isolation) {
   SendLogMessage(
-      String::Format("%s({echo_cancellation_mode=%s}, {auto_gain_control=%d}, "
-                     "{noise_supression=%d})",
-                     __func__,
-                     EchoCancellationModeToString(echo_cancellation_mode),
-                     auto_gain_control, noise_supression)
+      String::Format("%s({echo_cancellation=%d}, {auto_gain_control=%d}, "
+                     "{noise_supression=%d}, {voice_isolation=%d})",
+                     __func__, echo_cancellation, auto_gain_control,
+                     noise_supression, voice_isolation)
           .Utf8());
-  echo_cancellation_mode_ = echo_cancellation_mode;
+  echo_cancellation_ = echo_cancellation;
   auto_gain_control_ = auto_gain_control;
   noise_supression_ = noise_supression;
+  voice_isolation_ = voice_isolation;
 }
 
 void MediaStreamSource::SetAudioConsumer(
@@ -250,33 +241,18 @@ void MediaStreamSource::GetSettings(
   settings.device_id = Id();
   settings.group_id = GroupId();
 
-  if (echo_cancellation_mode_) {
-    switch (*echo_cancellation_mode_) {
-      case EchoCancellationMode::kDisabled:
-        settings.echo_cancellation = false;
-        settings.echo_cancellation_type = String();
-        break;
-      case EchoCancellationMode::kBrowser:
-        settings.echo_cancellation = true;
-        settings.echo_cancellation_type =
-            String::FromUTF8(blink::kEchoCancellationTypeBrowser);
-        break;
-      case EchoCancellationMode::kAec3:
-        settings.echo_cancellation = true;
-        settings.echo_cancellation_type =
-            String::FromUTF8(blink::kEchoCancellationTypeAec3);
-        break;
-      case EchoCancellationMode::kSystem:
-        settings.echo_cancellation = true;
-        settings.echo_cancellation_type =
-            String::FromUTF8(blink::kEchoCancellationTypeSystem);
-        break;
-    }
+  if (echo_cancellation_) {
+    settings.echo_cancellation = *echo_cancellation_;
   }
-  if (auto_gain_control_)
+  if (auto_gain_control_) {
     settings.auto_gain_control = *auto_gain_control_;
-  if (noise_supression_)
+  }
+  if (noise_supression_) {
     settings.noise_supression = *noise_supression_;
+  }
+  if (voice_isolation_) {
+    settings.voice_isolation = *voice_isolation_;
+  }
 
   GetSourceSettings(WebMediaStreamSource(this), settings);
 }
@@ -303,10 +279,25 @@ void MediaStreamSource::ConsumeAudio(AudioBus* bus, int number_of_frames) {
                "MediaStreamSource::ConsumeAudio");
 
   DCHECK(requires_consumer_);
+
   base::AutoLock locker(audio_consumer_lock_);
   if (!audio_consumer_)
     return;
   audio_consumer_->ConsumeAudio(bus, number_of_frames);
+}
+
+void MediaStreamSource::OnDeviceCaptureConfigurationChange(
+    const MediaStreamDevice& device) {
+  if (!platform_source_) {
+    return;
+  }
+
+  // Observers may dispatch events which create and add new Observers;
+  // take a snapshot so as to safely iterate.
+  HeapVector<Member<Observer>> observers(observers_);
+  for (auto observer : observers) {
+    observer->SourceChangedCaptureConfiguration();
+  }
 }
 
 void MediaStreamSource::OnDeviceCaptureHandleChange(
@@ -324,11 +315,26 @@ void MediaStreamSource::OnDeviceCaptureHandleChange(
 
   // Observers may dispatch events which create and add new Observers;
   // take a snapshot so as to safely iterate.
-  HeapVector<Member<Observer>> observers;
-  CopyToVector(observers_, observers);
+  HeapVector<Member<Observer>> observers(observers_);
   for (auto observer : observers) {
     observer->SourceChangedCaptureHandle();
   }
+}
+
+void MediaStreamSource::OnZoomLevelChange(const MediaStreamDevice& device,
+                                          int zoom_level) {
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
+  if (!platform_source_) {
+    return;
+  }
+
+  // Observers may dispatch events which create and add new Observers;
+  // take a snapshot so as to safely iterate.
+  HeapVector<Member<Observer>> observers(observers_);
+  for (auto observer : observers) {
+    observer->SourceChangedZoomLevel(zoom_level);
+  }
+#endif
 }
 
 void MediaStreamSource::Trace(Visitor* visitor) const {
@@ -341,7 +347,6 @@ void MediaStreamSource::Dispose() {
     audio_consumer_.reset();
   }
   platform_source_.reset();
-  constraints_.Reset();
 }
 
 }  // namespace blink

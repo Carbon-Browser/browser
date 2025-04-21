@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,10 +14,12 @@
  * |setGlobalScrollTarget| should only be called once.
  */
 
-import {PromiseResolver} from 'chrome://resources/js/promise_resolver.m.js';
-import {dedupingMixin, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {PromiseResolver} from 'chrome://resources/js/promise_resolver.js';
+import type {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {dedupingMixin} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {Route, RouteObserverMixin, RouteObserverMixinInterface, Router} from './router.js';
+import type {Route, RouteObserverMixinInterface} from './router.js';
+import {RouteObserverMixin, Router} from './router.js';
 
 let scrollTargetResolver = new PromiseResolver<HTMLElement>();
 
@@ -75,7 +77,7 @@ export const GlobalScrollTargetMixin = dedupingMixin(
           // page is deactivated. This gives scroll handlers like iron-list a
           // chance to handle scroll events that are fired as a result of the
           // route changing.
-          // TODO(https://crbug.com/859794): Having this timeout can result some
+          // TODO(crbug.com/40583428): Having this timeout can result some
           // jumpy behaviour in the scroll handlers. |this.active_| can be set
           // immediately when this bug is fixed.
           if (route === this.subpageRoute) {

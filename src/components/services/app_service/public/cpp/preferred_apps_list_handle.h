@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define COMPONENTS_SERVICES_APP_SERVICE_PUBLIC_CPP_PREFERRED_APPS_LIST_HANDLE_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -14,8 +15,6 @@
 #include "base/observer_list_types.h"
 #include "components/services/app_service/public/cpp/intent.h"
 #include "components/services/app_service/public/cpp/preferred_app.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class GURL;
 
@@ -43,11 +42,11 @@ class PreferredAppsListHandle {
       const std::string& app_id) const = 0;
 
   // Find preferred app id for an |url|.
-  virtual absl::optional<std::string> FindPreferredAppForUrl(
+  virtual std::optional<std::string> FindPreferredAppForUrl(
       const GURL& url) const = 0;
 
   // Find preferred app id for an |intent|.
-  virtual absl::optional<std::string> FindPreferredAppForIntent(
+  virtual std::optional<std::string> FindPreferredAppForIntent(
       const IntentPtr& intent) const = 0;
 
   // Returns a list of app IDs that are set as preferred app to an intent

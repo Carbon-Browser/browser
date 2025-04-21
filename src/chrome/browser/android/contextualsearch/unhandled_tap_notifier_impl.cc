@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@ UnhandledTapNotifierImpl::UnhandledTapNotifierImpl(
     UnhandledTapCallback callback)
     : unhandled_tap_callback_(std::move(callback)) {}
 
-UnhandledTapNotifierImpl::~UnhandledTapNotifierImpl() {}
+UnhandledTapNotifierImpl::~UnhandledTapNotifierImpl() = default;
 
 void UnhandledTapNotifierImpl::ShowUnhandledTapUIIfNeeded(
     blink::mojom::UnhandledTapInfoPtr unhandled_tap_info) {

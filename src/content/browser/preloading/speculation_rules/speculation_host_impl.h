@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,23 +7,17 @@
 
 #include <vector>
 
-#include "content/common/content_export.h"
 #include "content/public/browser/document_service.h"
-#include "content/public/browser/speculation_host_delegate.h"
-#include "content/public/browser/web_contents_observer.h"
-#include "mojo/public/cpp/bindings/pending_receiver.h"
+#include "third_party/blink/public/mojom/speculation_rules/speculation_rules.mojom.h"
 
 namespace content {
+
 class RenderFrameHost;
-class PrerenderHostRegistry;
-class Page;
 
 // Receiver for speculation rules from the web platform. See
 // third_party/blink/renderer/core/speculation_rules/README.md
 class CONTENT_EXPORT SpeculationHostImpl final
-    : public content::DocumentService<blink::mojom::SpeculationHost>,
-      public WebContentsObserver,
-      public SpeculationHostDevToolsObserver {
+    : public DocumentService<blink::mojom::SpeculationHost> {
  public:
   // Creates and binds an instance of this per-frame.
   static void Bind(
@@ -35,20 +29,6 @@ class CONTENT_EXPORT SpeculationHostImpl final
   SpeculationHostImpl(SpeculationHostImpl&&) = delete;
   SpeculationHostImpl& operator=(SpeculationHostImpl&&) = delete;
 
-  // WebContentsObserver implementation:
-  void PrimaryPageChanged(Page& page) override;
-
-  // SpeculationHostDevToolsObserver implementation:
-  void OnStartSinglePrefetch(const std::string& request_id,
-                             const network::ResourceRequest& request) override;
-  void OnPrefetchResponseReceived(
-      const GURL& url,
-      const std::string& request_id,
-      const network::mojom::URLResponseHead& response) override;
-  void OnPrefetchRequestComplete(
-      const std::string& request_id,
-      const network::URLLoaderCompletionStatus& status) override;
-
  private:
   SpeculationHostImpl(
       RenderFrameHost& frame_host,
@@ -57,23 +37,8 @@ class CONTENT_EXPORT SpeculationHostImpl final
 
   void UpdateSpeculationCandidates(
       std::vector<blink::mojom::SpeculationCandidatePtr> candidates) override;
-
-  void ProcessCandidatesForPrerender(
-      const std::vector<blink::mojom::SpeculationCandidatePtr>& candidates);
-
-  void CancelStartedPrerenders();
-
-  std::unique_ptr<SpeculationHostDelegate> delegate_;
-
-  // TODO(https://crbug.com/1197133): Cancel started prerenders when candidates
-  // are updated.
-  // This is kept sorted by URL.
-  struct PrerenderInfo;
-  std::vector<PrerenderInfo> started_prerenders_;
-
-  base::WeakPtr<PrerenderHostRegistry> registry_;
-
-  base::WeakPtrFactory<SpeculationHostImpl> weak_ptr_factory_{this};
+  void OnLCPPredicted() override;
+  void InitiatePreview(const GURL& url) override;
 };
 
 }  // namespace content

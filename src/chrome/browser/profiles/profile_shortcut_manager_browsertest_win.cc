@@ -1,19 +1,23 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <stddef.h>
 
+#include "base/base_paths.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/scoped_os_info_override_win.h"
+#include "base/test/scoped_path_override.h"
 #include "base/threading/thread_restrictions.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_attributes_entry.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_shortcut_manager_win.h"
+#include "chrome/browser/profiles/profile_test_util.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/common/chrome_switches.h"
@@ -77,18 +81,23 @@ IN_PROC_BROWSER_TEST_F(ProfileShortcutManagerBrowserTest,
   // number of profiles is one.
   base::FilePath path_profile2 =
       g_browser_process->profile_manager()->GenerateNextProfileDirectoryPath();
-  g_browser_process->profile_manager()->CreateProfileAsync(
-      path_profile2, ProfileManager::CreateCallback());
-
-  content::RunAllTasksUntilIdle();
+  profiles::testing::CreateProfileSync(g_browser_process->profile_manager(),
+                                       path_profile2);
 
   // This is for triggering a profile icon update on the next run. 1 is just a
   // small enough number for kCurrentProfileIconVersion.
   browser()->profile()->GetPrefs()->SetInteger(prefs::kProfileIconVersion, 1);
+
+  // Ensure that any tasks started by profile creation are finished before we
+  // advance to the main test. In particular, we want to finish all tasks that
+  // might update the profile icon before the main test runs.
+  content::RunAllTasksUntilIdle();
 }
 
 IN_PROC_BROWSER_TEST_F(ProfileShortcutManagerBrowserTest,
                        UpdateProfileIconOnAvatarLoaded) {
+  base::ScopedAllowBlockingForTesting allow_blocking;
+  base::ScopedPathOverride desktop_override(base::DIR_USER_DESKTOP);
   std::string badged_icon;
   EXPECT_NO_FATAL_FAILURE(badged_icon = ReadProfileIcon());
 
@@ -106,4 +115,74 @@ IN_PROC_BROWSER_TEST_F(ProfileShortcutManagerBrowserTest,
   // badged_icon might have been created with a default avatar image and then
   // updated with GAIA picture.
   EXPECT_EQ(badged_icon, badged_icon_with_gaia_picture);
+}
+
+IN_PROC_BROWSER_TEST_F(ProfileShortcutManagerBrowserTest,
+                       ProfileIconWin10VersionPrefTest) {
+  base::test::ScopedOSInfoOverride os(
+      base::test::ScopedOSInfoOverride::Type::kWin10Pro);
+  base::ScopedAllowBlockingForTesting allow_blocking;
+  g_browser_process->profile_manager()
+      ->profile_shortcut_manager()
+      ->CreateOrUpdateProfileIcon(browser()->profile()->GetPath());
+  content::RunAllTasksUntilIdle();
+  EXPECT_FALSE(browser()->profile()->GetPrefs()->GetBoolean(
+      prefs::kProfileIconWin11Format));
+}
+
+IN_PROC_BROWSER_TEST_F(ProfileShortcutManagerBrowserTest,
+                       ProfileIconWin11VersionPrefTest) {
+  base::test::ScopedOSInfoOverride os(
+      base::test::ScopedOSInfoOverride::Type::kWin11Pro);
+  base::ScopedAllowBlockingForTesting allow_blocking;
+  g_browser_process->profile_manager()
+      ->profile_shortcut_manager()
+      ->CreateOrUpdateProfileIcon(browser()->profile()->GetPath());
+  content::RunAllTasksUntilIdle();
+  EXPECT_TRUE(browser()->profile()->GetPrefs()->GetBoolean(
+      prefs::kProfileIconWin11Format));
+}
+
+class ProfileIconUpgradeBrowserTest : public ProfileShortcutManagerBrowserTest {
+ public:
+  ProfileIconUpgradeBrowserTest() = default;
+  ~ProfileIconUpgradeBrowserTest() override = default;
+  ProfileIconUpgradeBrowserTest(const ProfileIconUpgradeBrowserTest&) = delete;
+  ProfileIconUpgradeBrowserTest& operator=(
+      const ProfileIconUpgradeBrowserTest&) = delete;
+
+  void SetUp() override {
+    os_override_ = std::make_unique<base::test::ScopedOSInfoOverride>(
+        GetTestPreCount() > 0
+            ? base::test::ScopedOSInfoOverride::Type::kWin10Pro
+            : base::test::ScopedOSInfoOverride::Type::kWin11Pro);
+    ProfileShortcutManagerBrowserTest::SetUp();
+  }
+
+ protected:
+  // Initialized in SetUp() to Win10 for PRE_ test and Win11 for test.
+  std::unique_ptr<base::test::ScopedOSInfoOverride> os_override_;
+};
+
+// The PRE test creates a profile icon in Win 10 format.
+IN_PROC_BROWSER_TEST_F(ProfileIconUpgradeBrowserTest,
+                       PRE_UpgradeWin10ToWin11Test) {
+  base::ScopedAllowBlockingForTesting allow_blocking;
+  // Force icon to be Win10 format.
+  g_browser_process->profile_manager()
+      ->profile_shortcut_manager()
+      ->CreateOrUpdateProfileIcon(browser()->profile()->GetPath());
+  content::RunAllTasksUntilIdle();
+  LOG(INFO) << "finished running all tasks";
+  EXPECT_FALSE(browser()->profile()->GetPrefs()->GetBoolean(
+      prefs::kProfileIconWin11Format));
+}
+
+// This test forces the OS version to Win 11, and checks that the profile
+// icon was migrated to Win 11.
+IN_PROC_BROWSER_TEST_F(ProfileIconUpgradeBrowserTest, UpgradeWin10ToWin11Test) {
+  // Loading the profile should trigger a migration of the profile icon, and
+  // a corresponding set of the icon format pref.
+  EXPECT_TRUE(browser()->profile()->GetPrefs()->GetBoolean(
+      prefs::kProfileIconWin11Format));
 }

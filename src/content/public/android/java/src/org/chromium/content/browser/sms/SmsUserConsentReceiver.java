@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,12 +18,13 @@ import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.Task;
 
 import org.chromium.base.ContextUtils;
+import org.chromium.base.IntentUtils;
 import org.chromium.base.Log;
+import org.chromium.build.annotations.NullMarked;
 import org.chromium.ui.base.WindowAndroid;
 
-/**
- * Encapsulates logic to retrieve OTP code via SMS User Consent API.
- */
+/** Encapsulates logic to retrieve OTP code via SMS User Consent API. */
+@NullMarked
 public class SmsUserConsentReceiver extends BroadcastReceiver {
     private static final String TAG = "SmsUserConsentRcvr";
     private static final boolean DEBUG = false;
@@ -77,12 +78,8 @@ public class SmsUserConsentReceiver extends BroadcastReceiver {
             return;
         }
 
-        final Status status;
-
-        try {
-            status = (Status) intent.getParcelableExtra(SmsRetriever.EXTRA_STATUS);
-        } catch (Throwable e) {
-            if (DEBUG) Log.d(TAG, "Error getting parceable.");
+        final Status status = IntentUtils.safeGetParcelableExtra(intent, SmsRetriever.EXTRA_STATUS);
+        if (status == null) {
             return;
         }
 
@@ -93,8 +90,12 @@ public class SmsUserConsentReceiver extends BroadcastReceiver {
                 Intent consentIntent =
                         intent.getExtras().getParcelable(SmsRetriever.EXTRA_CONSENT_INTENT);
                 try {
-                    mProvider.getWindow().showIntent(consentIntent,
-                            (resultCode, data) -> onConsentResult(resultCode, data), null);
+                    mProvider
+                            .getWindow()
+                            .showIntent(
+                                    consentIntent,
+                                    (resultCode, data) -> onConsentResult(resultCode, data),
+                                    null);
                 } catch (android.content.ActivityNotFoundException e) {
                     if (DEBUG) Log.d(TAG, "Error starting activity for result.");
                 }
@@ -119,12 +120,13 @@ public class SmsUserConsentReceiver extends BroadcastReceiver {
     public void listen(WindowAndroid windowAndroid) {
         Task<Void> task = mProvider.getClient().startSmsUserConsent(null);
 
-        task.addOnFailureListener(new OnFailureListener() {
-            @Override
-            public void onFailure(Exception e) {
-                Log.e(TAG, "Task failed to start", e);
-            }
-        });
+        task.addOnFailureListener(
+                new OnFailureListener() {
+                    @Override
+                    public void onFailure(Exception e) {
+                        Log.e(TAG, "Task failed to start", e);
+                    }
+                });
         if (DEBUG) Log.d(TAG, "Installed task");
     }
 }

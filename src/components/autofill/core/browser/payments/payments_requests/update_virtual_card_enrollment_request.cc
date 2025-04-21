@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,9 +20,9 @@ const char kUnenrollRequestPath[] = "payments/apis/virtualcardservice/unenroll";
 }  // namespace
 
 UpdateVirtualCardEnrollmentRequest::UpdateVirtualCardEnrollmentRequest(
-    const PaymentsClient::UpdateVirtualCardEnrollmentRequestDetails&
-        request_details,
-    base::OnceCallback<void(AutofillClient::PaymentsRpcResult)> callback)
+    const UpdateVirtualCardEnrollmentRequestDetails& request_details,
+    base::OnceCallback<void(PaymentsAutofillClient::PaymentsRpcResult)>
+        callback)
     : request_details_(request_details), callback_(std::move(callback)) {}
 
 UpdateVirtualCardEnrollmentRequest::~UpdateVirtualCardEnrollmentRequest() =
@@ -40,7 +40,7 @@ std::string UpdateVirtualCardEnrollmentRequest::GetRequestContentType() {
 }
 
 std::string UpdateVirtualCardEnrollmentRequest::GetRequestContent() {
-  base::Value request_dict(base::Value::Type::DICTIONARY);
+  base::Value::Dict request_dict;
 
   switch (request_details_.virtual_card_enrollment_request_type) {
     case VirtualCardEnrollmentRequestType::kEnroll:
@@ -51,7 +51,6 @@ std::string UpdateVirtualCardEnrollmentRequest::GetRequestContent() {
       break;
     case VirtualCardEnrollmentRequestType::kNone:
       NOTREACHED();
-      break;
   }
 
   std::string request_content;
@@ -61,15 +60,15 @@ std::string UpdateVirtualCardEnrollmentRequest::GetRequestContent() {
 }
 
 void UpdateVirtualCardEnrollmentRequest::ParseResponse(
-    const base::Value& response) {
+    const base::Value::Dict& response) {
   // Only enroll requests have a response to parse, unenroll request responses
-  // are empty except for possible errors which are parsed in PaymentsClient.
+  // are empty except for possible errors which are parsed in
+  // PaymentsNetworkInterface.
   if (request_details_.virtual_card_enrollment_request_type ==
       VirtualCardEnrollmentRequestType::kEnroll) {
-    auto* enroll_result =
-        response.FindKeyOfType("enroll_result", base::Value::Type::STRING);
+    auto* enroll_result = response.FindString("enroll_result");
     if (enroll_result) {
-      enroll_result_ = enroll_result->GetString();
+      enroll_result_ = *enroll_result;
     }
   }
 }
@@ -83,24 +82,48 @@ bool UpdateVirtualCardEnrollmentRequest::IsResponseComplete() {
       return enroll_result_.has_value() && enroll_result_ == "ENROLL_SUCCESS";
     case VirtualCardEnrollmentRequestType::kUnenroll:
       // Unenroll responses are empty except for having an error. In
-      // PaymentsClient, if the response has an error it will be handled before
-      // we check IsResponseComplete(), so if we ever reach this branch we know
-      // the response completed successfully as there is no error. Thus, we
-      // always return true.
+      // PaymentsNetworkInterface, if the response has an error it will be
+      // handled before we check IsResponseComplete(), so if we ever reach this
+      // branch we know the response completed successfully as there is no
+      // error. Thus, we always return true.
       return true;
     case VirtualCardEnrollmentRequestType::kNone:
       NOTREACHED();
-      return false;
   }
 }
 
 void UpdateVirtualCardEnrollmentRequest::RespondToDelegate(
-    AutofillClient::PaymentsRpcResult result) {
+    PaymentsAutofillClient::PaymentsRpcResult result) {
   std::move(callback_).Run(result);
 }
 
+std::string UpdateVirtualCardEnrollmentRequest::GetHistogramName() const {
+  switch (request_details_.virtual_card_enrollment_request_type) {
+    case VirtualCardEnrollmentRequestType::kEnroll:
+      return "UpdateVirtualCardEnrollment_Enroll";
+    default:
+      NOTREACHED();
+  }
+}
+
+std::optional<base::TimeDelta> UpdateVirtualCardEnrollmentRequest::GetTimeout()
+    const {
+  if (request_details_.virtual_card_enrollment_request_type !=
+      VirtualCardEnrollmentRequestType::kEnroll) {
+    return std::nullopt;
+  }
+
+  if (!base::FeatureList::IsEnabled(
+          features::kAutofillVcnEnrollRequestTimeout)) {
+    return std::nullopt;
+  }
+
+  return base::Milliseconds(
+      features::kAutofillVcnEnrollRequestTimeoutMilliseconds.Get());
+}
+
 void UpdateVirtualCardEnrollmentRequest::BuildEnrollRequestDictionary(
-    base::Value* request_dict) {
+    base::Value::Dict* request_dict) {
   DCHECK(request_details_.virtual_card_enrollment_request_type ==
          VirtualCardEnrollmentRequestType::kEnroll);
 
@@ -110,56 +133,54 @@ void UpdateVirtualCardEnrollmentRequest::BuildEnrollRequestDictionary(
          request_details_.instrument_id.has_value());
 
   // Builds the context and channel_type for this enroll request.
-  base::Value context(base::Value::Type::DICTIONARY);
+  base::Value::Dict context;
   switch (request_details_.virtual_card_enrollment_source) {
     case VirtualCardEnrollmentSource::kUpstream:
-      context.SetKey("billable_service",
-                     base::Value(kUploadCardBillableServiceNumber));
-      request_dict->SetKey("channel_type", base::Value("CHROME_UPSTREAM"));
+      context.Set("billable_service",
+                  kUploadPaymentMethodBillableServiceNumber);
+      request_dict->Set("channel_type", "CHROME_UPSTREAM");
       break;
     case VirtualCardEnrollmentSource::kDownstream:
       // Downstream enroll is treated the same as settings page enroll because
       // chrome client should already have a card synced from the server.
       // Fall-through.
     case VirtualCardEnrollmentSource::kSettingsPage:
-      context.SetKey("billable_service",
-                     base::Value(kUnmaskCardBillableServiceNumber));
-      request_dict->SetKey("channel_type", base::Value("CHROME_DOWNSTREAM"));
+      context.Set("billable_service",
+                  kUnmaskPaymentMethodBillableServiceNumber);
+      request_dict->Set("channel_type", "CHROME_DOWNSTREAM");
       break;
     case VirtualCardEnrollmentSource::kNone:
       NOTREACHED();
-      break;
   }
   if (request_details_.billing_customer_number != 0) {
-    context.SetKey("customer_context",
-                   BuildCustomerContextDictionary(
-                       request_details_.billing_customer_number));
+    context.Set("customer_context",
+                BuildCustomerContextDictionary(
+                    request_details_.billing_customer_number));
   }
-  request_dict->SetKey("context", std::move(context));
+  request_dict->Set("context", std::move(context));
 
   // Sets the virtual_card_enrollment_flow field in this enroll request which
   // lets the server know whether the enrollment is happening with ToS or not.
   // Chrome client requests will always be ENROLL_WITH_TOS. This field is
   // necessary because virtual card enroll through other platforms enrolls
   // without ToS, for example Web Push Provisioning.
-  request_dict->SetKey("virtual_card_enrollment_flow",
-                       base::Value("ENROLL_WITH_TOS"));
+  request_dict->Set("virtual_card_enrollment_flow", "ENROLL_WITH_TOS");
 
   // Sets the instrument_id field in this enroll request.
-  request_dict->SetKey("instrument_id",
-                       base::Value(base::NumberToString(
-                           request_details_.instrument_id.value())));
+  request_dict->Set(
+      "instrument_id",
+      base::NumberToString(request_details_.instrument_id.value()));
 
   // Sets the context_token field in this enroll request which is used by the
   // server to link this enroll request to the previous
   // GetDetailsForEnrollRequest, as well as to retrieve the specific credit card
   // to enroll.
-  request_dict->SetKey("context_token",
-                       base::Value(request_details_.vcn_context_token.value()));
+  request_dict->Set("context_token",
+                    request_details_.vcn_context_token.value());
 }
 
 void UpdateVirtualCardEnrollmentRequest::BuildUnenrollRequestDictionary(
-    base::Value* request_dict) {
+    base::Value::Dict* request_dict) {
   DCHECK(request_details_.virtual_card_enrollment_request_type ==
          VirtualCardEnrollmentRequestType::kUnenroll);
 
@@ -170,21 +191,20 @@ void UpdateVirtualCardEnrollmentRequest::BuildUnenrollRequestDictionary(
 
   // Builds the context for this unenroll request with the billable service
   // number and the billing customer number if present.
-  base::Value context(base::Value::Type::DICTIONARY);
+  base::Value::Dict context;
   if (request_details_.billing_customer_number != 0) {
-    context.SetKey("customer_context",
-                   BuildCustomerContextDictionary(
-                       request_details_.billing_customer_number));
+    context.Set("customer_context",
+                BuildCustomerContextDictionary(
+                    request_details_.billing_customer_number));
   }
-  context.SetKey("billable_service",
-                 base::Value(kUnmaskCardBillableServiceNumber));
-  request_dict->SetKey("context", std::move(context));
+  context.Set("billable_service", kUnmaskPaymentMethodBillableServiceNumber);
+  request_dict->Set("context", std::move(context));
 
   // Sets the instrument_id field in this unenroll request which is used by
   // the server to get the appropriate credit card to unenroll.
-  request_dict->SetKey("instrument_id",
-                       base::Value(base::NumberToString(
-                           request_details_.instrument_id.value())));
+  request_dict->Set(
+      "instrument_id",
+      base::NumberToString(request_details_.instrument_id.value()));
 }
 
 }  // namespace payments

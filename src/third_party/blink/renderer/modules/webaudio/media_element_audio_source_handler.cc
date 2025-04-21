@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -144,7 +144,7 @@ void MediaElementAudioSourceHandler::SetFormat(uint32_t number_of_channels,
 
     {
       // The context must be locked when changing the number of output channels.
-      BaseAudioContext::GraphAutoLocker context_locker(Context());
+      DeferredTaskHandler::GraphAutoLocker context_locker(Context());
 
       // Do any necesssary re-configuration to the output's number of channels.
       Output(0).SetNumberOfChannels(number_of_channels);

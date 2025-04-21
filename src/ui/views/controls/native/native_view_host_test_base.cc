@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,7 @@
 #include "ui/views/controls/native/native_view_host.h"
 #include "ui/views/widget/widget.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 // Testing wrapper of the NativeViewHost.
 class NativeViewHostTestBase::NativeViewHostTesting : public NativeViewHost {
@@ -45,10 +44,9 @@ void NativeViewHostTestBase::TearDown() {
 
 void NativeViewHostTestBase::CreateTopLevel(WidgetDelegate* widget_delegate) {
   toplevel_ = std::make_unique<Widget>();
-  Widget::InitParams toplevel_params =
-      CreateParams(Widget::InitParams::TYPE_WINDOW);
+  Widget::InitParams toplevel_params = CreateParams(
+      Widget::InitParams::CLIENT_OWNS_WIDGET, Widget::InitParams::TYPE_WINDOW);
   toplevel_params.delegate = widget_delegate;
-  toplevel_params.ownership = Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
   toplevel_->Init(std::move(toplevel_params));
 }
 
@@ -56,14 +54,14 @@ void NativeViewHostTestBase::CreateTestingHost() {
   host_ = std::make_unique<NativeViewHostTesting>(this);
 }
 
-Widget* NativeViewHostTestBase::CreateChildForHost(
+std::unique_ptr<Widget> NativeViewHostTestBase::CreateChildForHost(
     gfx::NativeView native_parent_view,
     View* parent_view,
     View* contents_view,
     NativeViewHost* host) {
-  Widget* child = new Widget;
-  Widget::InitParams child_params(Widget::InitParams::TYPE_CONTROL);
-  child_params.ownership = Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
+  auto child = std::make_unique<Widget>();
+  Widget::InitParams child_params(Widget::InitParams::CLIENT_OWNS_WIDGET,
+                                  Widget::InitParams::TYPE_CONTROL);
   child_params.parent = native_parent_view;
   child->Init(std::move(child_params));
   child->SetContentsView(contents_view);
@@ -91,5 +89,4 @@ NativeViewHostWrapper* NativeViewHostTestBase::GetNativeWrapper() {
   return host_->native_wrapper_.get();
 }
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

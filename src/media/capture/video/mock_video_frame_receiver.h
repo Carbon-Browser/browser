@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,17 +16,12 @@ class MockVideoFrameReceiver : public VideoFrameReceiver {
   ~MockVideoFrameReceiver() override;
 
   MOCK_METHOD1(MockOnNewBufferHandle, void(int buffer_id));
-  MOCK_METHOD3(
-      MockOnFrameReadyInBuffer,
-      void(int buffer_id,
-           std::unique_ptr<
-               VideoCaptureDevice::Client::Buffer::ScopedAccessPermission>*
-               buffer_read_permission,
-           const gfx::Size&));
+  MOCK_METHOD1(MockOnFrameReadyInBuffer, void(ReadyFrameInBuffer frame));
+  MOCK_METHOD0(OnCaptureConfigurationChanged, void());
   MOCK_METHOD1(OnError, void(media::VideoCaptureError error));
   MOCK_METHOD1(OnFrameDropped, void(media::VideoCaptureFrameDropReason reason));
   MOCK_METHOD0(OnFrameWithEmptyRegionCapture, void());
-  MOCK_METHOD1(OnNewCropVersion, void(uint32_t));
+  MOCK_METHOD1(OnNewSubCaptureTargetVersion, void(uint32_t));
   MOCK_METHOD1(OnLog, void(const std::string& message));
   MOCK_METHOD1(OnBufferRetired, void(int buffer_id));
   MOCK_METHOD0(OnStarted, void());
@@ -38,11 +33,8 @@ class MockVideoFrameReceiver : public VideoFrameReceiver {
     MockOnNewBufferHandle(buffer_id);
   }
 
-  void OnFrameReadyInBuffer(
-      ReadyFrameInBuffer frame,
-      std::vector<ReadyFrameInBuffer> scaled_frames) override {
-    MockOnFrameReadyInBuffer(frame.buffer_id, &frame.buffer_read_permission,
-                             frame.frame_info->coded_size);
+  void OnFrameReadyInBuffer(ReadyFrameInBuffer frame) override {
+    MockOnFrameReadyInBuffer(std::move(frame));
   }
 };
 

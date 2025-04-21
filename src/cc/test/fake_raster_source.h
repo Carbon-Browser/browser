@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,10 @@ class RecordingSource;
 
 class FakeRasterSource : public RasterSource {
  public:
+  explicit FakeRasterSource(const RecordingSource& recording_source);
+  FakeRasterSource(const RecordingSource& recording_source,
+                   base::WaitableEvent* playback_allowed_event);
+
   static scoped_refptr<FakeRasterSource> CreateInfiniteFilled();
   static scoped_refptr<FakeRasterSource> CreateFilled(const gfx::Size& size);
   static scoped_refptr<FakeRasterSource> CreateFilledWithImages(
@@ -33,23 +37,22 @@ class FakeRasterSource : public RasterSource {
       const gfx::Size& size);
   static scoped_refptr<FakeRasterSource> CreatePartiallyFilled(
       const gfx::Size& size,
-      const gfx::Rect& recorded_viewport);
+      const gfx::Rect& recorded_bounds);
   static scoped_refptr<FakeRasterSource> CreateEmpty(const gfx::Size& size);
   static scoped_refptr<FakeRasterSource> CreateFromRecordingSource(
-      const RecordingSource* recording_source);
+      const RecordingSource& recording_source);
   static scoped_refptr<FakeRasterSource> CreateFromRecordingSourceWithWaitable(
-      const RecordingSource* recording_source,
+      const RecordingSource& recording_source,
       base::WaitableEvent* playback_allowed_event);
 
+  void SetDirectlyCompositedImageDefaultRasterScale(gfx::Vector2dF scale);
+
  protected:
-  explicit FakeRasterSource(const RecordingSource* recording_source);
-  FakeRasterSource(const RecordingSource* recording_source,
-                   base::WaitableEvent* playback_allowed_event);
   ~FakeRasterSource() override;
 
   void PlaybackDisplayListToCanvas(
       SkCanvas* canvas,
-      ImageProvider* image_provider) const override;
+      const PlaybackSettings& settings) const override;
 
  private:
   raw_ptr<base::WaitableEvent> playback_allowed_event_;

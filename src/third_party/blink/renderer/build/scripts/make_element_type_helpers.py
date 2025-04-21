@@ -1,12 +1,10 @@
 #!/usr/bin/env python
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import sys
 from collections import defaultdict
 
-import hasher
 import json5_generator
 import template_expander
 
@@ -28,6 +26,7 @@ class MakeElementTypeHelpersWriter(json5_generator.Writer):
         'noConstructor': {},
         'noTypeHelpers': {},
         'runtimeEnabled': {},
+        'runtimeFlagHasOriginTrial': {},
     }
     default_metadata = {
         'attrsNullNamespace': None,
@@ -39,7 +38,6 @@ class MakeElementTypeHelpersWriter(json5_generator.Writer):
         'namespaceURI': '',
     }
     filters = {
-        'hash': hasher.hash,
         'symbol': _symbol,
     }
 

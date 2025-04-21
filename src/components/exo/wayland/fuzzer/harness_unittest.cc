@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,29 +7,18 @@
 #include "base/files/scoped_temp_dir.h"
 #include "base/threading/thread.h"
 #include "base/time/time.h"
-#include "build/chromeos_buildflags.h"
 #include "components/exo/display.h"
-#include "components/exo/test/exo_test_base_views.h"
+#include "components/exo/test/exo_test_base.h"
+#include "components/exo/test/test_security_delegate.h"
 #include "components/exo/wayland/fuzzer/actions.pb.h"
 #include "components/exo/wayland/server.h"
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "components/exo/test/exo_test_base.h"
-#endif
 
 namespace exo {
 namespace wayland_fuzzer {
 namespace {
 
-// Use ExoTestBase on Chrome OS because Server starts to depends on ash::Shell,
-// which is unavailable on other platforms so then ExoTestBaseViews instead.
-using TestBase =
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-    test::ExoTestBase
-#else
-    test::ExoTestBaseViews
-#endif
-    ;
+// Use ExoTestBase because Server starts to depends on ash::Shell.
+using TestBase = test::ExoTestBase;
 
 class WaylandFuzzerTest : public TestBase {
  protected:
@@ -44,7 +33,8 @@ class WaylandFuzzerTest : public TestBase {
            1 /* overwrite */);
     TestBase::SetUp();
     display_ = std::make_unique<exo::Display>();
-    server_ = wayland::Server::Create(display_.get());
+    server_ = wayland::Server::Create(
+        display_.get(), std::make_unique<test::TestSecurityDelegate>());
     server_->StartWithDefaultPath(base::DoNothing());
   }
 

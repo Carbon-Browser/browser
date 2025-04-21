@@ -1,26 +1,25 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <stdint.h>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "base/test/scoped_feature_list.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "content/browser/notifications/platform_notification_context_impl.h"
 #include "content/browser/service_worker/embedded_worker_test_helper.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
 #include "content/public/browser/notification_database_data.h"
+#include "content/public/browser/permission_result.h"
 #include "content/public/common/content_client.h"
-#include "content/public/common/content_features.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/mock_permission_manager.h"
 #include "content/public/test/test_browser_context.h"
@@ -116,7 +115,8 @@ class PlatformNotificationContextTest : public ::testing::Test {
   // Overrides the task runner in |context| with the current message loop
   // proxy, to reduce the number of threads involved in the tests.
   void OverrideTaskRunnerForTesting(PlatformNotificationContextImpl* context) {
-    context->SetTaskRunnerForTesting(base::ThreadTaskRunnerHandle::Get());
+    context->SetTaskRunnerForTesting(
+        base::SingleThreadTaskRunner::GetCurrentDefault());
   }
 
   // Gets the currently displayed notifications from |service| synchronously.
@@ -211,9 +211,11 @@ class PlatformNotificationContextTest : public ::testing::Test {
   void SetPermissionStatus(const GURL& origin,
                            blink::mojom::PermissionStatus permission_status) {
     ON_CALL(*permission_manager_,
-            GetPermissionStatus(blink::PermissionType::NOTIFICATIONS, origin,
-                                origin))
-        .WillByDefault(Return(permission_status));
+            GetPermissionResultForOriginWithoutContext(
+                blink::PermissionType::NOTIFICATIONS,
+                url::Origin::Create(origin), url::Origin::Create(origin)))
+        .WillByDefault(Return(content::PermissionResult(
+            permission_status, PermissionStatusSource::UNSPECIFIED)));
   }
 
   // Returns the file path to the leveldb database for |context|.
@@ -574,7 +576,8 @@ TEST_F(PlatformNotificationContextTest, ServiceWorkerUnregistered) {
 
   GURL origin("https://example.com");
   GURL script_url("https://example.com/worker.js");
-  blink::StorageKey key(url::Origin::Create(origin));
+  const blink::StorageKey key =
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(origin));
 
   int64_t service_worker_registration_id =
       blink::mojom::kInvalidServiceWorkerRegistrationId;
@@ -586,7 +589,8 @@ TEST_F(PlatformNotificationContextTest, ServiceWorkerUnregistered) {
       script_url, key, options, blink::mojom::FetchClientSettingsObject::New(),
       base::BindOnce(&PlatformNotificationContextTest::DidRegisterServiceWorker,
                      base::Unretained(this), &service_worker_registration_id),
-      /*requesting_frame_id=*/GlobalRenderFrameHostId());
+      /*requesting_frame_id=*/GlobalRenderFrameHostId(),
+      PolicyContainerPolicies());
 
   base::RunLoop().RunUntilIdle();
   ASSERT_NE(service_worker_registration_id,
@@ -944,9 +948,6 @@ TEST_F(PlatformNotificationContextTest, WriteReadNotificationResources) {
 }
 
 TEST_F(PlatformNotificationContextTest, ReDisplayNotifications) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(features::kNotificationTriggers);
-
   PlatformNotificationService* service =
       browser_context()->GetPlatformNotificationService();
 
@@ -997,9 +998,6 @@ TEST_F(PlatformNotificationContextTest, ReDisplayNotifications) {
 }
 
 TEST_F(PlatformNotificationContextTest, CountVisibleNotification) {
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(features::kNotificationTriggers);
-
   PlatformNotificationService* service =
       browser_context()->GetPlatformNotificationService();
 

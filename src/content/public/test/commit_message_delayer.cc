@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,6 +29,8 @@ class CommitMessageDelayer::Impl : public DidCommitNavigationInterceptor {
   Impl& operator=(const Impl&) = delete;
 
   void Wait() {
+    CHECK(deferred_action_)
+        << "The deferred action was already run before calling Wait().";
     run_loop_ = std::make_unique<base::RunLoop>();
     run_loop_->Run();
     run_loop_.reset();

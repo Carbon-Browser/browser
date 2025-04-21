@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -121,8 +121,9 @@ class ErrorConsole : public KeyedService,
 
   // Set the default reporting for all extensions.
   void set_default_reporting_for_test(ExtensionError::Type type, bool enabled) {
-    default_mask_ =
-        enabled ? default_mask_ | (1 << type) : default_mask_ & ~(1 << type);
+    int intType = static_cast<int>(type);
+    default_mask_ = enabled ? default_mask_ | (1 << intType)
+                            : default_mask_ & ~(1 << intType);
   }
 
  private:

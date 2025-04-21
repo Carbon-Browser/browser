@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -96,7 +96,7 @@ class WebCryptoImpl : public blink::WebCrypto {
   void DeriveBits(
       const blink::WebCryptoAlgorithm& algorithm,
       const blink::WebCryptoKey& base_key,
-      unsigned int length_bits,
+      std::optional<unsigned int> length_bits,
       blink::WebCryptoResult result,
       scoped_refptr<base::SingleThreadTaskRunner> task_runner) override;
 
@@ -114,8 +114,7 @@ class WebCryptoImpl : public blink::WebCrypto {
                               blink::WebCryptoKeyType type,
                               bool extractable,
                               blink::WebCryptoKeyUsageMask usages,
-                              const unsigned char* key_data,
-                              unsigned key_data_size,
+                              base::span<const unsigned char> key_data,
                               blink::WebCryptoKey& key) override;
 
   bool SerializeKeyForClone(const blink::WebCryptoKey& key,

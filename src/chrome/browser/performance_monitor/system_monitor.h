@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <array>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/containers/flat_map.h"
@@ -14,8 +15,8 @@
 #include "base/observer_list.h"
 #include "base/process/process_metrics.h"
 #include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/timer/timer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace performance_monitor {
 
@@ -159,9 +160,9 @@ class SystemMonitor {
     using ObserverArgType =
         typename std::conditional<std::is_scalar<T>::value, T, const T&>::type;
 
-    MetricEvaluatorImpl<T>(
+    MetricEvaluatorImpl(
         Type type,
-        base::OnceCallback<absl::optional<T>()> evaluate_function,
+        base::OnceCallback<std::optional<T>()> evaluate_function,
         void (SystemObserver::*notify_function)(ObserverArgType));
 
     MetricEvaluatorImpl(const MetricEvaluatorImpl&) = delete;
@@ -174,7 +175,7 @@ class SystemMonitor {
 
     bool has_value() const override { return value_.has_value(); }
 
-    absl::optional<T> value() { return value_; }
+    std::optional<T> value() { return value_; }
 
     void set_value_for_testing(T value) { value_ = value; }
 
@@ -182,14 +183,14 @@ class SystemMonitor {
     void NotifyObserver(SystemObserver* observer) override;
 
     // The callback that should be run to evaluate the metric value.
-    base::OnceCallback<absl::optional<T>()> evaluate_function_;
+    base::OnceCallback<std::optional<T>()> evaluate_function_;
 
     // A function pointer to the SystemObserver function that should be called
     // to notify of a value refresh.
     void (SystemObserver::*notify_function_)(ObserverArgType);
 
     // The value, initialized in |Evaluate|.
-    absl::optional<T> value_;
+    std::optional<T> value_;
   };
 
   // Structure storing all the functions specific to a metric.
@@ -315,13 +316,13 @@ class MetricEvaluatorsHelper {
   virtual ~MetricEvaluatorsHelper() = default;
 
   // Returns the free physical memory, in megabytes.
-  virtual absl::optional<int> GetFreePhysicalMemoryMb() = 0;
+  virtual std::optional<int> GetFreePhysicalMemoryMb() = 0;
 
   // Return a |base::SystemMetrics| snapshot.
   //
   // NOTE: This function doesn't have to be virtual, the base::SystemMetrics
   // struct is an abstraction that already has a per-platform definition.
-  absl::optional<base::SystemMetrics> GetSystemMetricsStruct();
+  std::optional<base::SystemMetrics> GetSystemMetricsStruct();
 };
 
 }  // namespace performance_monitor

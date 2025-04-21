@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,22 +29,18 @@ class DeviceCommandGetRoutineUpdateJob : public RemoteCommandJob {
   enterprise_management::RemoteCommand_Type GetType() const override;
 
  private:
-  class Payload;
-
   // RemoteCommandJob:
   bool ParseCommandPayload(const std::string& command_payload) override;
-  void RunImpl(CallbackWithResult succeeded_callback,
-               CallbackWithResult failed_callback) override;
+  void RunImpl(CallbackWithResult result_callback) override;
 
   void OnCrosHealthdResponseReceived(
-      CallbackWithResult succeeded_callback,
-      CallbackWithResult failed_callback,
-      chromeos::cros_healthd::mojom::RoutineUpdatePtr update);
+      CallbackWithResult result_callback,
+      ash::cros_healthd::mojom::RoutineUpdatePtr update);
 
   // The ID of the routine to send the command to.
   int32_t routine_id_;
   // Which command to send to the routine.
-  chromeos::cros_healthd::mojom::DiagnosticRoutineCommandEnum command_;
+  ash::cros_healthd::mojom::DiagnosticRoutineCommandEnum command_;
   // Whether or not output should be included in the response to the command.
   bool include_output_;
 

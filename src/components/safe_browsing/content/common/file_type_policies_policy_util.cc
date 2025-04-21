@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,55 +22,63 @@ constexpr char kDomainListKey[] = "domains";
 
 }  // namespace
 
-bool IsInNotDangerousOverrideList(const std::string& extension,
-                                  const GURL& url,
-                                  const PrefService* prefs) {
-  GURL normalized_url = url;
-  if (normalized_url.SchemeIsBlob()) {
-    normalized_url = url::Origin::Create(normalized_url).GetURL();
+FileTypePoliciesOverrideResult ShouldOverrideFileTypePolicies(
+    const std::string& extension,
+    const GURL& url,
+    const PrefService* prefs) {
+  if (!url.is_valid()) {
+    return FileTypePoliciesOverrideResult::kDoNotOverride;
   }
 
-  // no overrides if we don't have this policy set or the url is invalid.
-  if (!prefs || !normalized_url.is_valid() ||
+  // If the download is a local file, suppress "dangerous file" warnings because
+  // they are not helpful at this point; the file is already on disk.
+  if (url.SchemeIsFile() && url.host_piece().empty()) {
+    return FileTypePoliciesOverrideResult::kOverrideAsNotDangerous;
+  }
+
+  // Check for a match on the list of exempt URL pattern and filetype pairs.
+  // The list is supplied as a pref/policy.
+  if (!prefs ||
       !prefs->HasPrefPath(
           file_type::prefs::
               kExemptDomainFileTypePairsFromFileTypeDownloadWarnings)) {
-    return false;
+    return FileTypePoliciesOverrideResult::kDoNotOverride;
   }
-  const base::Value* heuristic_overrides = prefs->GetList(
+  const base::Value::List& heuristic_overrides = prefs->GetList(
       file_type::prefs::kExemptDomainFileTypePairsFromFileTypeDownloadWarnings);
 
   const std::string lower_extension = base::ToLowerASCII(extension);
 
-  if (heuristic_overrides) {
-    base::Value::List domains_for_extension;
-    for (const base::Value& entry : heuristic_overrides->GetListDeprecated()) {
-      const base::DictionaryValue& extension_domain_patterns_dict =
-          base::Value::AsDictionaryValue(entry);
-      const std::string* extension_for_this_entry =
-          extension_domain_patterns_dict.FindStringKey(kFileExtensionNameKey);
-      if (extension_for_this_entry &&
-          base::ToLowerASCII(*extension_for_this_entry) == lower_extension) {
-        const base::Value* domains_for_this_entry =
-            extension_domain_patterns_dict.FindListKey(kDomainListKey);
-        if (domains_for_this_entry) {
-          for (const base::Value& domain :
-               domains_for_this_entry->GetListDeprecated()) {
-            domains_for_extension.Append(domain.Clone());
-          }
+  base::Value::List domains_for_extension;
+  for (const base::Value& entry : heuristic_overrides) {
+    const base::Value::Dict& extension_domain_patterns_dict = entry.GetDict();
+    const std::string* extension_for_this_entry =
+        extension_domain_patterns_dict.FindString(kFileExtensionNameKey);
+    if (extension_for_this_entry &&
+        base::ToLowerASCII(*extension_for_this_entry) == lower_extension) {
+      const base::Value::List* domains_for_this_entry =
+          extension_domain_patterns_dict.FindList(kDomainListKey);
+      if (domains_for_this_entry) {
+        for (const base::Value& domain : *domains_for_this_entry) {
+          domains_for_extension.Append(domain.Clone());
         }
       }
     }
+  }
 
-    if (!domains_for_extension.empty()) {
-      url_matcher::URLMatcher matcher;
-      base::MatcherStringPattern::ID id(0);
-      url_matcher::util::AddFilters(&matcher, true, &id, domains_for_extension);
-      auto matching_set_size = matcher.MatchURL(normalized_url).size();
-      return matching_set_size > 0;
+  if (!domains_for_extension.empty()) {
+    url_matcher::URLMatcher matcher;
+    base::MatcherStringPattern::ID id(0);
+    url_matcher::util::AddFiltersWithLimit(&matcher, true, &id,
+                                           domains_for_extension);
+    GURL normalized_url =
+        url.SchemeIsBlob() ? url::Origin::Create(url).GetURL() : url;
+    if (!matcher.MatchURL(normalized_url).empty()) {
+      return FileTypePoliciesOverrideResult::kOverrideAsNotDangerous;
     }
   }
-  return false;
+
+  return FileTypePoliciesOverrideResult::kDoNotOverride;
 }
 
 }  // namespace safe_browsing

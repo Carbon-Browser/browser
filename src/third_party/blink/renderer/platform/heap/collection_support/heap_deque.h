@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,38 +21,46 @@ class HeapDeque final : public GarbageCollected<HeapDeque<T>>,
   DISALLOW_NEW();
 
  public:
-  HeapDeque() { CheckType(); }
+  HeapDeque() = default;
 
-  explicit HeapDeque(wtf_size_t size) : Deque<T, 0, HeapAllocator>(size) {
-    CheckType();
-  }
+  explicit HeapDeque(wtf_size_t size) : Deque<T, 0, HeapAllocator>(size) {}
 
   HeapDeque(wtf_size_t size, const T& val)
-      : Deque<T, 0, HeapAllocator>(size, val) {
-  }
+      : Deque<T, 0, HeapAllocator>(size, val) {}
+
+  HeapDeque(const HeapDeque<T>& other) : Deque<T, 0, HeapAllocator>(other) {}
 
   HeapDeque& operator=(const HeapDeque& other) {
-    HeapDeque<T> copy(other);
-    Deque<T, 0, HeapAllocator>::Swap(copy);
+    Deque<T, 0, HeapAllocator>::operator=(other);
     return *this;
   }
 
-  HeapDeque(const HeapDeque<T>& other) : Deque<T, 0, HeapAllocator>(other) {}
+  HeapDeque(HeapDeque&& other) noexcept
+      : Deque<T, 0, HeapAllocator>(std::move(other)) {}
+
+  HeapDeque& operator=(HeapDeque&& other) noexcept {
+    Deque<T, 0, HeapAllocator>::operator=(std::move(other));
+    return *this;
+  }
 
   void Trace(Visitor* visitor) const {
     Deque<T, 0, HeapAllocator>::Trace(visitor);
   }
 
  private:
-  static constexpr void CheckType() {
-    static_assert(WTF::IsMemberType<T>::value,
-                  "HeapDeque supports only Member.");
-    static_assert(std::is_trivially_destructible<HeapDeque>::value,
-                  "HeapDeque must be trivially destructible.");
-    static_assert(WTF::IsTraceable<T>::value,
-                  "For vectors without traceable elements, use Deque<> instead "
-                  "of HeapDeque<>");
-  }
+  struct TypeConstraints {
+    constexpr TypeConstraints() {
+      static_assert(WTF::IsMemberType<T>::value,
+                    "HeapDeque supports only Member.");
+      static_assert(std::is_trivially_destructible_v<HeapDeque>,
+                    "HeapDeque must be trivially destructible.");
+      static_assert(
+          WTF::IsTraceable<T>::value,
+          "For vectors without traceable elements, use Deque<> instead "
+          "of HeapDeque<>");
+    }
+  };
+  NO_UNIQUE_ADDRESS TypeConstraints type_constraints_;
 };
 
 }  // namespace blink

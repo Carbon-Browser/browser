@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,19 +13,20 @@ import android.text.format.DateUtils;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
 
+import org.chromium.base.supplier.ObservableSupplier;
+import org.chromium.base.supplier.ObservableSupplierImpl;
+import org.chromium.base.version_info.VersionInfo;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.tracing.settings.DeveloperSettings;
+import org.chromium.components.browser_ui.settings.EmbeddableSettingsPage;
 import org.chromium.components.browser_ui.settings.SettingsUtils;
-import org.chromium.components.version_info.VersionInfo;
 import org.chromium.ui.widget.Toast;
 
 import java.util.Calendar;
 
-/**
- * Settings fragment that displays information about Chrome.
- */
-public class AboutChromeSettings
-        extends PreferenceFragmentCompat implements Preference.OnPreferenceClickListener {
+/** Settings fragment that displays information about Chrome. */
+public class AboutChromeSettings extends PreferenceFragmentCompat
+        implements EmbeddableSettingsPage, Preference.OnPreferenceClickListener {
     private static final int TAPS_FOR_DEVELOPER_SETTINGS = 7;
 
     private static final String PREF_APPLICATION_VERSION = "application_version";
@@ -33,8 +34,10 @@ public class AboutChromeSettings
     private static final String PREF_LEGAL_INFORMATION = "legal_information";
 
     // Non-translated strings:
+    @SuppressWarnings("InlineFormatString")
     private static final String MSG_DEVELOPER_ENABLE_COUNTDOWN =
             "%s more taps to enable Developer options.";
+
     private static final String MSG_DEVELOPER_ENABLE_COUNTDOWN_LAST_TAP =
             "1 more tap to enable Developer options.";
     private static final String MSG_DEVELOPER_ENABLED = "Developer options are now enabled.";
@@ -44,14 +47,15 @@ public class AboutChromeSettings
     private int mDeveloperHitCountdown =
             DeveloperSettings.shouldShowDeveloperSettings() ? -1 : TAPS_FOR_DEVELOPER_SETTINGS;
     private Toast mToast;
+    private final ObservableSupplierImpl<String> mPageTitle = new ObservableSupplierImpl<>();
 
     @Override
     public void onCreatePreferences(Bundle bundle, String s) {
-        getActivity().setTitle(R.string.prefs_about_chrome);
+        mPageTitle.set(getString(R.string.prefs_about_chrome));
         SettingsUtils.addPreferencesFromResource(this, R.xml.about_chrome_preferences);
 
         Preference p = findPreference(PREF_APPLICATION_VERSION);
-        p.setSummary("v7.9");
+        p.setSummary("v8.3");
         p.setOnPreferenceClickListener(this);
         p = findPreference(PREF_OS_VERSION);
         p.setSummary(AboutSettingsBridge.getOSVersion());
@@ -60,8 +64,13 @@ public class AboutChromeSettings
         p.setSummary(getString(R.string.legal_information_summary, currentYear));
     }
 
+    @Override
+    public ObservableSupplier<String> getPageTitle() {
+        return mPageTitle;
+    }
+
     /**
-     * Build the application version to be shown.  In particular, this ensures the debug build
+     * Build the application version to be shown. In particular, this ensures the debug build
      * versions are more useful.
      */
     public static String getApplicationVersion(Context context, String version) {
@@ -76,8 +85,9 @@ public class AboutChromeSettings
         } catch (NameNotFoundException e) {
             return version;
         }
-        CharSequence updateTimeString = DateUtils.getRelativeTimeSpanString(
-                info.lastUpdateTime, System.currentTimeMillis(), 0);
+        CharSequence updateTimeString =
+                DateUtils.getRelativeTimeSpanString(
+                        info.lastUpdateTime, System.currentTimeMillis(), 0);
         return context.getString(R.string.version_with_update_time, version, updateTimeString);
     }
 

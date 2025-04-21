@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,36 +14,30 @@ import static org.chromium.base.GarbageCollectionTestUtils.canBeGarbageCollected
 import android.graphics.Bitmap;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.robolectric.annotation.Config;
 
+import org.chromium.base.Callback;
 import org.chromium.base.test.BaseRobolectricTestRunner;
-import org.chromium.base.test.util.JniMocker;
+import org.chromium.ui.resources.Resource;
 import org.chromium.ui.resources.ResourceFactory;
 import org.chromium.ui.resources.ResourceFactoryJni;
 
 import java.lang.ref.WeakReference;
 
-/**
- * Tests for {@link BitmapDynamicResource}.
- */
+/** Tests for {@link BitmapDynamicResource}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class BitmapDynamicResourceTest {
     private BitmapDynamicResource mResource;
-
-    @Rule
-    public JniMocker mJniMocker = new JniMocker();
-    @Mock
-    private ResourceFactory.Natives mResourceFactoryJni;
+    @Mock private ResourceFactory.Natives mResourceFactoryJni;
 
     @Before
     public void setup() {
         initMocks(this);
-        mJniMocker.mock(ResourceFactoryJni.TEST_HOOKS, mResourceFactoryJni);
+        ResourceFactoryJni.setInstanceForTesting(mResourceFactoryJni);
         mResource = new BitmapDynamicResource(1);
     }
 
@@ -54,7 +48,10 @@ public class BitmapDynamicResourceTest {
         assertEquals(bitmap, DynamicResourceTestUtils.getBitmapSync(mResource));
 
         // Bitmap was already returned, next onResourceRequested should no-op.
-        mResource.setOnResourceReadyCallback((resource) -> { assert false; });
+        mResource.addOnResourceReadyCallback(
+                (resource) -> {
+                    assert false;
+                });
         mResource.onResourceRequested();
     }
 
@@ -91,11 +88,15 @@ public class BitmapDynamicResourceTest {
         mResource.onResourceRequested();
 
         // No bitmap, onResourceRequested should no-op.
-        mResource.setOnResourceReadyCallback((resource) -> { assert false; });
+        Callback<Resource> callback =
+                (resource) -> {
+                    assert false;
+                };
+        mResource.addOnResourceReadyCallback(callback);
         mResource.onResourceRequested();
 
         // No callback, onResourceRequested should no-op.
-        mResource.setOnResourceReadyCallback(null);
+        mResource.removeOnResourceReadyCallback(callback);
         mResource.setBitmap(bitmap);
         mResource.onResourceRequested();
     }

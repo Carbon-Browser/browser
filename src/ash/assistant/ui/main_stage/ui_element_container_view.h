@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,9 @@
 
 #include "ash/assistant/ui/main_stage/animated_container_view.h"
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
 #include "ui/views/view_observer.h"
 
@@ -26,6 +28,8 @@ class AssistantViewDelegate;
 // model events.
 class COMPONENT_EXPORT(ASSISTANT_UI) UiElementContainerView
     : public AnimatedContainerView {
+  METADATA_HEADER(UiElementContainerView, AnimatedContainerView)
+
  public:
   explicit UiElementContainerView(AssistantViewDelegate* delegate);
 
@@ -37,11 +41,10 @@ class COMPONENT_EXPORT(ASSISTANT_UI) UiElementContainerView
   void OnOverflowIndicatorVisibilityChanged(bool is_visible);
 
   // AnimatedContainerView:
-  const char* GetClassName() const override;
-  gfx::Size CalculatePreferredSize() const override;
-  int GetHeightForWidth(int width) const override;
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override;
   gfx::Size GetMinimumSize() const override;
-  void Layout() override;
+  void Layout(PassKey) override;
   void OnCommittedQueryChanged(const AssistantQuery& query) override;
 
   // views::View:
@@ -60,13 +63,10 @@ class COMPONENT_EXPORT(ASSISTANT_UI) UiElementContainerView
       const AssistantUiElement* ui_element) override;
   void OnAllViewsAnimatedIn() override;
 
-  views::View* scroll_indicator_ = nullptr;  // Owned by view hierarchy.
+  raw_ptr<views::View> scroll_indicator_ = nullptr;  // Owned by view hierarchy.
 
   // Factory instance used to construct views for modeled UI elements.
   std::unique_ptr<AssistantUiElementViewFactory> view_factory_;
-
-  // Whether to use dark/light mode colors, which default to dark.
-  const bool use_dark_light_mode_colors_;
 };
 
 }  // namespace ash

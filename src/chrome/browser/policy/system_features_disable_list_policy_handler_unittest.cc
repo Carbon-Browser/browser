@@ -1,8 +1,9 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/policy/system_features_disable_list_policy_handler.h"
+
 #include <asm-generic/errno-base.h>
 
 #include "base/test/metrics/histogram_tester.h"
@@ -31,19 +32,19 @@ class SystemFeaturesDisableListPolicyHandlerTest : public testing::Test {
 
   void ApplyPolicySettings(std::vector<std::string> list) {
     PolicyMap policy_map;
-    base::Value features_list(base::Value::Type::LIST);
+    base::Value::List features_list;
     for (auto& i : list) {
       features_list.Append(i);
     }
     policy_map.Set(policy::key::kSystemFeaturesDisableList,
                    policy::POLICY_LEVEL_MANDATORY, policy::POLICY_SCOPE_USER,
-                   policy::POLICY_SOURCE_CLOUD, std::move(features_list),
-                   nullptr);
+                   policy::POLICY_SOURCE_CLOUD,
+                   base::Value(std::move(features_list)), nullptr);
     policy_handler_.ApplyPolicySettings(policy_map, &prefs_);
   }
 
   void VerifyPrefList(std::vector<SystemFeature> expected) {
-    base::Value expected_list(base::Value::Type::LIST);
+    base::Value::List expected_list;
     for (auto& i : expected) {
       expected_list.Append(static_cast<int>(i));
     }
@@ -71,12 +72,16 @@ TEST_F(SystemFeaturesDisableListPolicyHandlerTest, ShouldHandleSomeSettings) {
 
 TEST_F(SystemFeaturesDisableListPolicyHandlerTest, ShouldHandleAllSettings) {
   ApplyPolicySettings({"camera", "os_settings", "browser_settings", "scanning",
-                       "web_store", "canvas", "explore", "crosh"});
+                       "web_store", "canvas", "explore", "crosh", "terminal",
+                       "gallery", "print_jobs", "key_shortcuts", "recorder"});
 
   VerifyPrefList({SystemFeature::kCamera, SystemFeature::kOsSettings,
                   SystemFeature::kBrowserSettings, SystemFeature::kScanning,
                   SystemFeature::kWebStore, SystemFeature::kCanvas,
-                  SystemFeature::kExplore, SystemFeature::kCrosh});
+                  SystemFeature::kExplore, SystemFeature::kCrosh,
+                  SystemFeature::kTerminal, SystemFeature::kGallery,
+                  SystemFeature::kPrintJobs, SystemFeature::kKeyShortcuts,
+                  SystemFeature::kRecorder});
 
   std::vector<base::Bucket> expected_histogram{
       base::Bucket(static_cast<int>(SystemFeature::kCamera), 1),
@@ -86,7 +91,12 @@ TEST_F(SystemFeaturesDisableListPolicyHandlerTest, ShouldHandleAllSettings) {
       base::Bucket(static_cast<int>(SystemFeature::kWebStore), 1),
       base::Bucket(static_cast<int>(SystemFeature::kCanvas), 1),
       base::Bucket(static_cast<int>(SystemFeature::kExplore), 1),
-      base::Bucket(static_cast<int>(SystemFeature::kCrosh), 1)};
+      base::Bucket(static_cast<int>(SystemFeature::kCrosh), 1),
+      base::Bucket(static_cast<int>(SystemFeature::kTerminal), 1),
+      base::Bucket(static_cast<int>(SystemFeature::kGallery), 1),
+      base::Bucket(static_cast<int>(SystemFeature::kPrintJobs), 1),
+      base::Bucket(static_cast<int>(SystemFeature::kKeyShortcuts), 1),
+      base::Bucket(static_cast<int>(SystemFeature::kRecorder), 1)};
 
   EXPECT_EQ(
       histogram_tester_.GetAllSamples(kSystemFeaturesDisableListHistogram),

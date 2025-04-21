@@ -1,4 +1,4 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,7 @@ class MODULES_EXPORT ModulesInitializer : public CoreInitializer {
       HTMLMediaElement&,
       const WebMediaPlayerSource&,
       WebMediaPlayerClient*) const override;
-  WebRemotePlaybackClient* CreateWebRemotePlaybackClient(
+  RemotePlaybackClient* CreateRemotePlaybackClient(
       HTMLMediaElement&) const override;
 
   void ProvideModulesToPage(Page&,

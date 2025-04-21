@@ -1,29 +1,34 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_CHROME_BROWSER_UI_CONTENT_SUGGESTIONS_CONTENT_SUGGESTIONS_VIEW_CONTROLLER_AUDIENCE_H_
 #define IOS_CHROME_BROWSER_UI_CONTENT_SUGGESTIONS_CONTENT_SUGGESTIONS_VIEW_CONTROLLER_AUDIENCE_H_
 
-// Audience for the ContentSuggestions, getting informations from it.
-@protocol ContentSuggestionsViewControllerAudience
+#import "ios/chrome/browser/ui/content_suggestions/magic_stack/magic_stack_module_container_delegate.h"
 
-// Notifies the audience that the promo has been shown.
-- (void)promoShown;
+enum class ContentSuggestionsModuleType;
+enum class SafetyCheckItemType;
+@class SetUpListItemView;
+namespace segmentation_platform {
+enum class TipIdentifier;
+}  // namespace segmentation_platform
 
-// Notifies the audience of the UIKit viewDidDisappear: callback.
-- (void)viewDidDisappear;
+// Audience for the ContentSuggestions, getting information from it.
+@protocol
+    ContentSuggestionsViewControllerAudience <MagicStackModuleContainerDelegate>
 
-// Notifies the audience that the Return to Recent Tab tile has been added.
-- (void)returnToRecentTabWasAdded;
+// Notifies the audience of the UIKit viewWillDisappear: callback.
+- (void)viewWillDisappear;
 
-// Notifies the audience that a module was removed.
-- (void)moduleWasRemoved;
+// Called when a Safety Check item is selected by the user.
+- (void)didSelectSafetyCheckItem:(SafetyCheckItemType)type;
 
-// Returns current safe area insets for the window owning this discover feed.
-// TODO:(crbug.com/1285378) Remove this after Content Suggestions header is
-// moved out the Content Suggestions CollectionView.
-- (UIEdgeInsets)safeAreaInsetsForDiscoverFeed;
+// Indicates that the user has tapped the given `view`.
+- (void)didTapSetUpListItemView:(SetUpListItemView*)view;
+
+// Indicates that the user has tapped the given `tip`.
+- (void)didSelectTip:(segmentation_platform::TipIdentifier)tip;
 
 @end
 

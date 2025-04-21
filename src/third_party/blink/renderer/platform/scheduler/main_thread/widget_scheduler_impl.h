@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,9 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/task/sequence_manager/task_queue.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/scheduler/public/widget_scheduler.h"
 
@@ -41,11 +43,10 @@ class PLATFORM_EXPORT WidgetSchedulerImpl : public WidgetScheduler {
       WebInputEvent::Type web_input_event_type,
       const WebInputEventAttribution& web_input_event_attribution) override;
   void DidHandleInputEventOnMainThread(const WebInputEvent& web_input_event,
-                                       WebInputEventResult result) override;
-  void DidAnimateForInputOnCompositorThread() override;
+                                       WebInputEventResult result,
+                                       bool frame_requested) override;
   void DidRunBeginMainFrame() override;
   void SetHidden(bool hidden) override;
-  void SetHasTouchHandler(bool has_touch_handler) override;
 
  private:
   scoped_refptr<MainThreadTaskQueue> input_task_queue_;
@@ -53,10 +54,10 @@ class PLATFORM_EXPORT WidgetSchedulerImpl : public WidgetScheduler {
   std::unique_ptr<base::sequence_manager::TaskQueue::QueueEnabledVoter>
       input_task_queue_enabled_voter_;
 
-  MainThreadSchedulerImpl* const main_thread_scheduler_;
-  RenderWidgetSignals* const render_widget_signals_;
+  const raw_ptr<MainThreadSchedulerImpl, DanglingUntriaged>
+      main_thread_scheduler_;
+  const raw_ptr<RenderWidgetSignals, DanglingUntriaged> render_widget_signals_;
   bool hidden_ = false;
-  bool has_touch_handler_ = false;
 };
 
 }  // namespace blink::scheduler

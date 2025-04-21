@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,8 @@
 
 class TestOmniboxEditModel : public OmniboxEditModel {
  public:
-  TestOmniboxEditModel(OmniboxView* view,
-                       OmniboxEditController* controller,
+  TestOmniboxEditModel(OmniboxController* omnibox_controller,
+                       OmniboxView* view,
                        PrefService* pref_service);
   ~TestOmniboxEditModel() override;
   TestOmniboxEditModel(const TestOmniboxEditModel&) = delete;
@@ -33,8 +33,10 @@ class TestOmniboxEditModel : public OmniboxEditModel {
                           const std::u16string& inline_autocompletion,
                           const std::u16string& prefix_autocompletion,
                           const std::u16string& keyword,
+                          const std::u16string& keyword_placeholder,
                           bool is_keyword_hint,
-                          const std::u16string& additional_text) override;
+                          const std::u16string& additional_text,
+                          const AutocompleteMatch& match) override;
 
   bool HasTemporaryText() { return has_temporary_text_; }
 
@@ -42,7 +44,8 @@ class TestOmniboxEditModel : public OmniboxEditModel {
   bool is_temporary_text() const { return is_temporary_text_; }
 
  protected:
-  PrefService* GetPrefService() const override;
+  PrefService* GetPrefService() override;
+  const PrefService* GetPrefService() const override;
 
  private:
   bool popup_is_open_;

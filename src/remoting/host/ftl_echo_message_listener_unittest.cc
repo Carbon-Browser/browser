@@ -1,13 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "remoting/host/ftl_echo_message_listener.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "remoting/proto/ftl/v1/chromoting_message.pb.h"
 #include "remoting/proto/ftl/v1/ftl_messages.pb.h"
 #include "remoting/signaling/mock_signal_strategy.h"
@@ -49,6 +49,11 @@ ftl::ChromotingMessage CreateEchoMessageWithPayload(
   return message;
 }
 
+bool CheckAccessPermission(std::string host_owner,
+                           std::string_view email_to_check) {
+  return email_to_check == host_owner;
+}
+
 }  // namespace
 
 class FtlEchoMessageListenerTest : public testing::Test {
@@ -71,7 +76,8 @@ class FtlEchoMessageListenerTest : public testing::Test {
     unknown_sender_id_.set_id(kUnknownEmail);
 
     ftl_echo_message_listener_ = std::make_unique<FtlEchoMessageListener>(
-        kOwnerEmail, &signal_strategy_);
+        base::BindRepeating(&CheckAccessPermission, kOwnerEmail),
+        &signal_strategy_);
   }
 
   void TearDown() override {
@@ -87,7 +93,8 @@ class FtlEchoMessageListenerTest : public testing::Test {
   base::test::TaskEnvironment task_environment_;
 
   MockSignalStrategy signal_strategy_;
-  std::set<SignalStrategy::Listener*> signal_strategy_listeners_;
+  std::set<raw_ptr<SignalStrategy::Listener, SetExperimental>>
+      signal_strategy_listeners_;
   std::unique_ptr<FtlEchoMessageListener> ftl_echo_message_listener_;
 };
 

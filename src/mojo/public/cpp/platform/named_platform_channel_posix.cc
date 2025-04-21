@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -107,7 +107,7 @@ PlatformChannelServerEndpoint NamedPlatformChannel::CreateServerEndpoint(
     return PlatformChannelServerEndpoint();
 
   // Bind the socket.
-  if (bind(handle.GetFD().get(), storage.addr, storage.addr_len) < 0) {
+  if (bind(handle.GetFD().get(), storage.addr(), storage.addr_len) < 0) {
     PLOG(ERROR) << "bind " << name;
     return PlatformChannelServerEndpoint();
   }
@@ -137,9 +137,9 @@ PlatformChannelEndpoint NamedPlatformChannel::CreateClientEndpoint(
   if (!handle.is_valid())
     return PlatformChannelEndpoint();
 
-  if (HANDLE_EINTR(
-          connect(handle.GetFD().get(), storage.addr, storage.addr_len)) < 0) {
-    PLOG(ERROR) << "connect " << options.server_name;
+  if (HANDLE_EINTR(connect(handle.GetFD().get(), storage.addr(),
+                           storage.addr_len)) < 0) {
+    VPLOG(1) << "connect " << options.server_name;
     return PlatformChannelEndpoint();
   }
   return PlatformChannelEndpoint(std::move(handle));

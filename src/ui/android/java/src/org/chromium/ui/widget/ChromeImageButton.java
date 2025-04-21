@@ -1,20 +1,23 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.ui.widget;
 
 import android.content.Context;
-import android.graphics.drawable.Drawable;
-import android.os.Build;
+import android.graphics.PorterDuff.Mode;
 import android.util.AttributeSet;
 
 import androidx.appcompat.widget.AppCompatImageButton;
 
+import org.chromium.build.annotations.NullMarked;
+
+// TODO(crbug.com/40883889): See if we still need this class.
 /**
  * A subclass of AppCompatImageButton to add workarounds for bugs in Android Framework and Support
  * Library.
  */
+@NullMarked
 public class ChromeImageButton extends AppCompatImageButton {
     public ChromeImageButton(Context context) {
         super(context);
@@ -29,15 +32,13 @@ public class ChromeImageButton extends AppCompatImageButton {
     }
 
     @Override
-    protected void drawableStateChanged() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
-            // Pre-N ImageView doesn't correctly invalidate drawables, see https://crbug.com/894770.
-            Drawable drawable = getDrawable();
-            if (drawable != null && drawable.isStateful()
-                    && drawable.setState(getDrawableState())) {
-                invalidateDrawable(drawable);
-            }
+    protected void onFinishInflate() {
+        super.onFinishInflate();
+        // ImageView defaults to SRC_ATOP when there's a tint. This interacts poorly with tints that
+        // contain alpha, so adjust the default to SRC_IN when this case is found. This will cause
+        // the drawable to be mutated, but the tint should already be causing that anyway.
+        if (getImageTintList() != null && getImageTintMode() == Mode.SRC_ATOP) {
+            setImageTintMode(Mode.SRC_IN);
         }
-        super.drawableStateChanged();
     }
 }

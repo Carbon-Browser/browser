@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/accessibility/platform/atk_util_auralinux.h"
+#include "ui/accessibility/platform/ax_platform_for_test.h"
 #include "ui/accessibility/platform/ax_platform_node_auralinux.h"
 #include "ui/accessibility/platform/ax_platform_node_unittest.h"
 #include "ui/accessibility/platform/test_ax_node_wrapper.h"
@@ -25,9 +26,10 @@ class AtkUtilAuraLinuxTest : public AXPlatformNodeTest {
     Init(root);
 
     TestAXNodeWrapper* wrapper =
-        TestAXNodeWrapper::GetOrCreate(GetTree(), GetRootAsAXNode());
-    if (!wrapper)
+        TestAXNodeWrapper::GetOrCreate(GetTree(), GetRoot());
+    if (!wrapper) {
       NOTREACHED();
+    }
     AXPlatformNodeAuraLinux::SetApplication(wrapper->ax_platform_node());
 
     AtkUtilAuraLinux::GetInstance()->InitializeForTesting();
@@ -40,9 +42,10 @@ class AtkUtilAuraLinuxTest : public AXPlatformNodeTest {
 
   void TearDown() override {
     TestAXNodeWrapper* wrapper =
-        TestAXNodeWrapper::GetOrCreate(GetTree(), GetRootAsAXNode());
-    if (!wrapper)
+        TestAXNodeWrapper::GetOrCreate(GetTree(), GetRoot());
+    if (!wrapper) {
       NOTREACHED();
+    }
     g_object_unref(wrapper->ax_platform_node()->GetNativeViewAccessible());
 
     AXPlatformNodeTest::TearDown();
@@ -51,14 +54,15 @@ class AtkUtilAuraLinuxTest : public AXPlatformNodeTest {
   }
 
  private:
-  ui::testing::ScopedAxModeSetter ax_mode_setter_;
+  ScopedAXModeSetter ax_mode_setter_;
 };
 
 TEST_F(AtkUtilAuraLinuxTest, KeySnooping) {
-  AtkKeySnoopFunc key_snoop_func = reinterpret_cast<AtkKeySnoopFunc>(
-      +[](AtkKeyEventStruct* key_event, int* keyval_seen) {
-        *keyval_seen = key_event->keyval;
-      });
+  AtkKeySnoopFunc key_snoop_func = [](AtkKeyEventStruct* key_event,
+                                      void* keyval_seen) -> int {
+    *static_cast<int*>(keyval_seen) = key_event->keyval;
+    return FALSE;
+  };
 
   int keyval_seen = 0;
   guint listener_id = atk_add_key_event_listener(key_snoop_func, &keyval_seen);
@@ -78,18 +82,15 @@ TEST_F(AtkUtilAuraLinuxTest, KeySnooping) {
   EXPECT_EQ(keyval_seen, 55);
 
   TestAXNodeWrapper* wrapper =
-      TestAXNodeWrapper::GetOrCreate(GetTree(), GetRootAsAXNode());
+      TestAXNodeWrapper::GetOrCreate(GetTree(), GetRoot());
   DCHECK(wrapper);
-  AXMode prev_mode = wrapper->ax_platform_node()->ax_mode_;
-  // Disables AX mode.
-  wrapper->ax_platform_node()->ax_mode_ = 0;
-  keyval_seen = 0;
-  atk_util->HandleAtkKeyEvent(&atk_key_event);
-  // When AX mode is not enabled, Key snooping doesn't work.
-  EXPECT_EQ(keyval_seen, 0);
-
-  // Restores the previous AX mode.
-  wrapper->ax_platform_node()->ax_mode_ = prev_mode;
+  {
+    ScopedAXModeSetter disable_accessibility(AXMode::kNone);
+    keyval_seen = 0;
+    atk_util->HandleAtkKeyEvent(&atk_key_event);
+    // When AX mode is not enabled, Key snooping doesn't work.
+    EXPECT_EQ(keyval_seen, 0);
+  }  // Restores the previous AX mode.
   keyval_seen = 0;
   atk_util->HandleAtkKeyEvent(&atk_key_event);
   // AX mode is set again, Key snooping works.
@@ -111,8 +112,8 @@ TEST_F(AtkUtilAuraLinuxTest, AtSpiReady) {
   // In a normal browser execution, when a key event listener is added it means
   // the AT-SPI bridge has done it as part of its initialization, so it is set
   // as enabled.
-  AtkKeySnoopFunc key_snoop_func =
-      reinterpret_cast<AtkKeySnoopFunc>(+[](AtkKeyEventStruct* key_event) {});
+  AtkKeySnoopFunc key_snoop_func = [](AtkKeyEventStruct* key_event,
+                                      void* user_data) -> int { return FALSE; };
   atk_add_key_event_listener(key_snoop_func, nullptr);
 
   EXPECT_TRUE(atk_util->IsAtSpiReady());

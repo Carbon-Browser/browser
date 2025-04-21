@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -8,6 +8,8 @@
 #define REMOTING_BASE_NAME_VALUE_MAP_H_
 
 #include <stddef.h>
+
+#include <string_view>
 
 #include "base/check_op.h"
 
@@ -21,9 +23,10 @@ struct NameMapElement {
 
 template <typename T, size_t N>
 const char* ValueToNameUnchecked(const NameMapElement<T> (&map)[N], T value) {
-  for (size_t i = 0; i < N; ++i) {
-    if (map[i].value == value)
-      return map[i].name;
+  for (const auto& entry : map) {
+    if (entry.value == value) {
+      return entry.name;
+    }
   }
   return nullptr;
 }
@@ -37,11 +40,11 @@ const char* ValueToName(const NameMapElement<T> (&map)[N], T value) {
 
 template <typename T, size_t N>
 bool NameToValue(const NameMapElement<T> (&map)[N],
-                 const std::string& name,
+                 std::string_view name,
                  T* result) {
-  for (size_t i = 0; i < N; ++i) {
-    if (map[i].name == name) {
-      *result = map[i].value;
+  for (const auto& entry : map) {
+    if (entry.name == name) {
+      *result = entry.value;
       return true;
     }
   }

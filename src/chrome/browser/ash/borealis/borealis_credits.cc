@@ -1,18 +1,21 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/borealis/borealis_credits.h"
 
-#include "base/callback.h"
+#include <string_view>
+
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/ash/borealis/borealis_features.h"
 #include "chrome/browser/ash/borealis/borealis_service.h"
+#include "chrome/browser/ash/borealis/borealis_service_factory.h"
 #include "chrome/browser/ash/borealis/borealis_util.h"
-#include "chromeos/dbus/dlcservice/dlcservice.pb.h"
-#include "chromeos/dbus/dlcservice/dlcservice_client.h"
+#include "chromeos/ash/components/dbus/dlcservice/dlcservice.pb.h"
+#include "chromeos/ash/components/dbus/dlcservice/dlcservice_client.h"
 #include "third_party/cros_system_api/dbus/dlcservice/dbus-constants.h"
 
 namespace borealis {
@@ -33,7 +36,7 @@ std::string LoadCreditsFileBlocking(std::string dlc_root_path) {
 }
 
 void OnStateQueried(base::OnceCallback<void(std::string)> callback,
-                    const std::string& err,
+                    std::string_view err,
                     const dlcservice::DlcState& state) {
   if (err != dlcservice::kErrorNone) {
     LOG(ERROR) << "Failed to load credits file: DLC error: " << err;
@@ -55,12 +58,12 @@ void OnStateQueried(base::OnceCallback<void(std::string)> callback,
 
 void LoadBorealisCredits(Profile* profile,
                          base::OnceCallback<void(std::string)> callback) {
-  if (!BorealisService::GetForProfile(profile)->Features().IsEnabled()) {
+  if (!BorealisServiceFactory::GetForProfile(profile)->Features().IsEnabled()) {
     VLOG(1) << "Can't load credits file: Borealis not installed";
     std::move(callback).Run("");
     return;
   }
-  chromeos::DlcserviceClient::Get()->GetDlcState(
+  ash::DlcserviceClient::Get()->GetDlcState(
       kBorealisDlcName, base::BindOnce(&OnStateQueried, std::move(callback)));
 }
 

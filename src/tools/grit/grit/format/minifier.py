@@ -1,18 +1,20 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Framework for stripping whitespace and comments from resource files"""
-
-from __future__ import print_function
 
 from os import path
 import subprocess
 import sys
 
-import six
-
 __js_minifier = None
 __css_minifier = None
+
+js_minifier_ignore_list = [
+    # TODO(crbug.com/339686362): Excluded because Terser throws an error.
+    'gen/chrome/browser/resources/omnibox/tsc/',
+]
+
 
 def SetJsMinifier(minifier):
   global __js_minifier
@@ -27,6 +29,9 @@ def Minify(source, filename):
   file_type = path.splitext(filename)[1]
   minifier = None
   if file_type == '.js':
+    for f in js_minifier_ignore_list:
+      if f in filename:
+        return source
     minifier = __js_minifier
   elif file_type == '.css':
     minifier = __css_minifier

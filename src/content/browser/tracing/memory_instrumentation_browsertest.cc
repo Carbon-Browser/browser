@@ -1,12 +1,17 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/342213636): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <stdint.h>
 
 #include <algorithm>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/process/process_handle.h"
 #include "base/run_loop.h"
 #include "build/build_config.h"

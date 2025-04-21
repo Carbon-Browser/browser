@@ -1,47 +1,27 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_UPDATE_CLIENT_ACTION_RUNNER_H_
 #define COMPONENTS_UPDATE_CLIENT_ACTION_RUNNER_H_
 
-#include "base/callback.h"
-#include "base/threading/thread_checker.h"
-#include "components/update_client/update_client.h"
+#include <string>
 
-namespace base {
-class FilePath;
-class SingleThreadTaskRunner;
-}  // namespace base
+#include "base/functional/callback_forward.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/values.h"
+#include "components/update_client/update_client.h"
 
 namespace update_client {
 
-class Component;
-
-class ActionRunner {
- public:
-  using Callback = ActionHandler::Callback;
-
-  explicit ActionRunner(const Component& component);
-  ~ActionRunner();
-
-  void Run(Callback run_complete);
-
- private:
-  void Handle(const base::FilePath& crx_path);
-
-  THREAD_CHECKER(thread_checker_);
-
-  const Component& component_;
-
-  // Used to post callbacks to the main thread.
-  scoped_refptr<base::SingleThreadTaskRunner> main_task_runner_;
-
-  Callback callback_;
-
-  ActionRunner(const ActionRunner&) = delete;
-  ActionRunner& operator=(const ActionRunner&) = delete;
-};
+// Runs an action. Returns a cancellation callback.
+base::OnceClosure RunAction(
+    scoped_refptr<ActionHandler> handler,
+    scoped_refptr<CrxInstaller> installer,
+    const std::string& file,
+    const std::string& session_id,
+    base::RepeatingCallback<void(base::Value::Dict)> event_adder,
+    ActionHandler::Callback callback);
 
 }  // namespace update_client
 

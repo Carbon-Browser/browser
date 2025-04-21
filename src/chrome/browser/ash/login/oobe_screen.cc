@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,7 @@
 
 namespace ash {
 
-OobeScreenId::OobeScreenId(const std::string& name) : name(name) {}
-
-OobeScreenId::OobeScreenId(const std::string& name,
-                           const std::string& api_prefix)
-    : name(name), external_api_prefix(api_prefix) {}
+OobeScreenId::OobeScreenId(const std::string& id) : name(id) {}
 
 OobeScreenId::OobeScreenId(const StaticOobeScreenId& id)
     : name(id.name) {
@@ -41,5 +37,9 @@ std::ostream& operator<<(std::ostream& stream, const OobeScreenId& id) {
 OobeScreenId StaticOobeScreenId::AsId() const {
   return OobeScreenId(name);
 }
+
+ScreenSummary::ScreenSummary() = default;
+ScreenSummary::~ScreenSummary() = default;
+ScreenSummary::ScreenSummary(const ScreenSummary& summary) = default;
 
 }  // namespace ash

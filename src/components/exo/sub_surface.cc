@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,6 +37,11 @@ SubSurface::~SubSurface() {
   }
   if (parent_)
     parent_->RemoveSurfaceObserver(this);
+
+  // Destroying a sub-surface takes effect immediately.
+  if (surface_ && parent_ && !surface_->is_augmented()) {
+    parent_->OnSubSurfaceCommit();
+  }
 }
 
 void SubSurface::SetPosition(const gfx::PointF& position) {
@@ -47,6 +52,16 @@ void SubSurface::SetPosition(const gfx::PointF& position) {
     return;
 
   parent_->SetSubSurfacePosition(surface_, position);
+}
+
+void SubSurface::SetTransform(const gfx::Transform& transform) {
+  TRACE_EVENT1("exo", "SubSurface::SetTransform", "transform",
+               transform.ToString());
+
+  if (!parent_ || !surface_)
+    return;
+
+  surface_->SetSurfaceTransform(transform);
 }
 
 void SubSurface::PlaceAbove(Surface* reference) {
@@ -83,7 +98,7 @@ void SubSurface::SetCommitBehavior(bool synchronized) {
   TRACE_EVENT1("exo", "SubSurface::SetCommitBehavior", "synchronized",
                synchronized);
 
-  is_synchronized_ = synchronized;
+  is_synchronized_ = surface_->is_augmented() || synchronized;
 }
 
 std::unique_ptr<base::trace_event::TracedValue> SubSurface::AsTracedValue()

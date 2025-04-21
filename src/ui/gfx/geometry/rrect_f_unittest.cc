@@ -1,11 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/gfx/geometry/rrect_f.h"
 
-#include "base/cxx17_backports.h"
+#include <algorithm>
+
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/gfx/geometry/rect_f.h"
+#include "ui/gfx/geometry/rounded_corners_f.h"
 #include "ui/gfx/geometry/rrect_f_builder.h"
 
 namespace gfx {
@@ -210,9 +213,20 @@ TEST(RRectFTest, Contains) {
   EXPECT_FALSE(a.Contains(b));
 }
 
+TEST(RRectFTest, HasRoundedCorners) {
+  RRectF a;
+  EXPECT_FALSE(a.HasRoundedCorners());
+  a = gfx::RRectF(gfx::RectF(10, 10));
+  EXPECT_FALSE(a.HasRoundedCorners());
+  a = gfx::RRectF(gfx::RectF(), gfx::RoundedCornersF(1.0f));
+  EXPECT_FALSE(a.HasRoundedCorners());
+  a = gfx::RRectF(gfx::RectF(10, 10), gfx::RoundedCornersF(1.0f));
+  EXPECT_TRUE(a.HasRoundedCorners());
+  a = gfx::RRectF(gfx::RectF(10, 10), gfx::RoundedCornersF(1, 0, 0, 0));
+  EXPECT_TRUE(a.HasRoundedCorners());
+}
+
 TEST(RRectFTest, Scale) {
-  // Note that SKRRect (the backing for RRectF) does not support scaling by NaN,
-  // or scaling out of numerical bounds. So this test doesn't exercise those.
   static const struct Test {
     float x1;  // source
     float y1;
@@ -246,6 +260,22 @@ TEST(RRectFTest, Scale) {
        0.0f, 0.0f},
       {3.0f, 4.0f, 5.0f, 6.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
        0.0f, 0.0f},
+      {3.0f, 4.0f, 5.0f, 6.0f, 1.0f, 1.0f, std::numeric_limits<float>::max(),
+       1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
+      {3.0f, 4.0f, 5.0f, 6.0f, 1.0f, 1.0f, 1.0f,
+       std::numeric_limits<float>::max(), 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
+      {3.0f, 4.0f, 5.0f, 6.0f, 1.0f, 1.0f, std::numeric_limits<float>::max(),
+       std::numeric_limits<float>::max(), 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
+      {3.0f, 4.0f, 5.0f, 6.0f, 1.0f, 1.0f,
+       std::numeric_limits<double>::quiet_NaN(), 1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+       0.0f, 0.0f},
+      {3.0f, 4.0f, 5.0f, 6.0f, 1.0f, 1.0f, 1.0f,
+       std::numeric_limits<double>::quiet_NaN(), 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+       0.0f},
+      {3.0f, 4.0f, 5.0f, 6.0f, 1.0f, 1.0f,
+       std::numeric_limits<double>::quiet_NaN(),
+       std::numeric_limits<double>::quiet_NaN(), 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+       0.0f},
   };
 
   for (auto& test : tests) {

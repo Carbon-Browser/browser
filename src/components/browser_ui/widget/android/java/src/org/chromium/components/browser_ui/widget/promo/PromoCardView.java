@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@ import androidx.annotation.Nullable;
 import org.chromium.components.browser_ui.widget.MaterialCardViewNoShadow;
 import org.chromium.components.browser_ui.widget.R;
 import org.chromium.ui.widget.ButtonCompat;
+import org.chromium.ui.widget.ChromeImageButton;
 
 /**
  * A promo card view that contains an image view in the top center, a block of short description,
@@ -24,10 +25,9 @@ class PromoCardView extends MaterialCardViewNoShadow {
     TextView mTitle;
     ButtonCompat mPrimaryButton;
 
-    @Nullable
-    TextView mDescription;
-    @Nullable
-    ButtonCompat mSecondaryButton;
+    @Nullable TextView mDescription;
+    @Nullable ButtonCompat mSecondaryButton;
+    @Nullable ChromeImageButton mCloseButton;
 
     public PromoCardView(Context context) {
         this(context, null);
@@ -47,5 +47,6 @@ class PromoCardView extends MaterialCardViewNoShadow {
         mDescription = findViewById(R.id.promo_description);
         mPrimaryButton = findViewById(R.id.promo_primary_button);
         mSecondaryButton = findViewById(R.id.promo_secondary_button);
+        mCloseButton = findViewById(R.id.promo_close_button);
     }
 }

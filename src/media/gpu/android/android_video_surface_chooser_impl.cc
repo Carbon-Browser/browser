@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,7 +34,7 @@ void AndroidVideoSurfaceChooserImpl::SetClientCallbacks(
 }
 
 void AndroidVideoSurfaceChooserImpl::UpdateState(
-    absl::optional<AndroidOverlayFactoryCB> new_factory,
+    std::optional<AndroidOverlayFactoryCB> new_factory,
     const State& new_state) {
   DCHECK(use_overlay_cb_);
   bool entered_fullscreen =

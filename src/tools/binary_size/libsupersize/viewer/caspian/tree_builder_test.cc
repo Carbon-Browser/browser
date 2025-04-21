@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,6 +49,7 @@ void MakeSymbol(SizeInfo* size_info,
   sym.section_id_ = section_id;
   sym.size_ = size;
   sym.source_path_ = path;
+  sym.object_path_ = "";
   sym.component_ = component;
   sym.container_ = &size_info->containers[0];
   sym.size_info_ = size_info;
@@ -97,9 +98,9 @@ TEST(TreeBuilderTest, TestComponentLens) {
   FilterList filters;
   builder.Build(std::make_unique<ComponentLens>(), '>', false, filters);
   CheckAllTreeNodesFindable(builder, builder.Open(""));
-  EXPECT_EQ("Ct", builder.Open("A")["type"].asString());
+  EXPECT_EQ("Gt", builder.Open("A")["type"].asString());
   EXPECT_EQ(20, builder.Open("A")["size"].asInt());
-  EXPECT_EQ("Ct", builder.Open("B")["type"].asString());
+  EXPECT_EQ("Gt", builder.Open("B")["type"].asString());
   EXPECT_EQ(30, builder.Open("B")["size"].asInt());
 }
 
@@ -121,7 +122,7 @@ TEST(TreeBuilderTest, TestTemplateLens) {
   builder.Build(std::make_unique<TemplateLens>(), '/', false, filters);
   CheckAllTreeNodesFindable(builder, builder.Open(""));
   EXPECT_EQ(
-      "Ct",
+      "Gt",
       builder.Open("base::internal::Invoker<>::RunOnce")["type"].asString());
   EXPECT_EQ(50,
             builder.Open("base::internal::Invoker<>::RunOnce")["size"].asInt());
@@ -157,4 +158,23 @@ TEST(TreeBuilderTest, TestJoinDexMethodClasses) {
   EXPECT_EQ("foo", ShortName(method_symbol));
   EXPECT_EQ(0u, method_symbol["children"].size());
 }
+
+TEST(TreeBuilderTest, TestJoinDexMethodClassesStringLiteral) {
+  std::unique_ptr<SizeInfo> size_info = MakeSizeInfo();
+  MakeSymbol(size_info.get(), SectionId::kDex, 30, "a/b/c", "",
+             "\"start x.y.z end\"");
+
+  TreeBuilder builder(size_info.get());
+  FilterList filters;
+  builder.Build(std::make_unique<IdPathLens>(), '>', false, filters);
+  CheckAllTreeNodesFindable(builder, builder.Open(""));
+
+  Json::Value class_symbol = builder.Open("a/b/c");
+  EXPECT_EQ(1u, class_symbol["children"].size());
+
+  Json::Value string_literal_symbol = class_symbol["children"][0];
+  EXPECT_EQ("\"start x.y.z end\"", ShortName(string_literal_symbol));
+  EXPECT_EQ(0u, string_literal_symbol["children"].size());
+}
+
 }  // namespace caspian

@@ -44,24 +44,32 @@ class CORE_EXPORT StyleFetchedImage final : public StyleImage,
 
  public:
   StyleFetchedImage(ImageResourceContent* image,
-                    const Document&,
+                    const Document& document,
                     bool is_lazyload_possibly_deferred,
                     bool origin_clean,
                     bool is_ad_related,
-                    const KURL&);
+                    const KURL& url,
+                    const float override_image_resolution = 0.0f);
   ~StyleFetchedImage() override;
 
   WrappedImagePtr Data() const override;
 
+  float ImageScaleFactor() const override;
+
   CSSValue* CssValue() const override;
   CSSValue* ComputedCSSValue(const ComputedStyle&,
-                             bool allow_visited_style) const override;
+                             bool allow_visited_style,
+                             CSSValuePhase value_phase) const override;
 
   bool CanRender() const override;
   bool IsLoaded() const override;
+  bool IsLoading() const override;
   bool ErrorOccurred() const override;
   bool IsAccessAllowed(String&) const override;
 
+  IntrinsicSizingInfo GetNaturalSizingInfo(
+      float multiplier,
+      RespectImageOrientationEnum) const override;
   gfx::SizeF ImageSize(float multiplier,
                        const gfx::SizeF& default_object_size,
                        RespectImageOrientationEnum) const override;
@@ -83,17 +91,30 @@ class CORE_EXPORT StyleFetchedImage final : public StyleImage,
 
   void Trace(Visitor*) const override;
 
+  bool IsOriginClean() const override { return origin_clean_; }
+
  private:
   bool IsEqual(const StyleImage&) const override;
   void Prefinalize();
 
+  // Apply the image's natural/override resolution to `multiplier`, producing a
+  // scale factor that will yield "zoomed CSS pixels".
+  float ApplyImageResolution(float multiplier) const;
+
   // ImageResourceObserver overrides
   void ImageNotifyFinished(ImageResourceContent*) override;
   bool GetImageAnimationPolicy(mojom::blink::ImageAnimationPolicy&) override;
+  bool CanBeSpeculativelyDecoded() const override;
 
   Member<ImageResourceContent> image_;
   Member<const Document> document_;
+
   const KURL url_;
+
+  // This overrides an images natural resolution.
+  // A value of zero indicates no override.
+  const float override_image_resolution_;
+
   const bool origin_clean_;
 
   // Whether this was created by an ad-related CSSParserContext.

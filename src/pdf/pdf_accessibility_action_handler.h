@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,7 @@ class PdfAccessibilityActionHandler {
   virtual void EnableAccessibility() = 0;
   virtual void HandleAccessibilityAction(
       const AccessibilityActionData& action_data) = 0;
+  virtual void LoadOrReloadAccessibility() = 0;
 };
 
 }  // namespace chrome_pdf

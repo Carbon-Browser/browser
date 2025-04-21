@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,10 +18,8 @@
 
 #if BUILDFLAG(IS_WIN)
 #include <windows.h>
-#elif BUILDFLAG(IS_MAC)
-#include <ApplicationServices/ApplicationServices.h>
-#include <CoreFoundation/CoreFoundation.h>
-#include "base/mac/scoped_cftyperef.h"
+#elif BUILDFLAG(IS_APPLE)
+#include <CoreGraphics/CoreGraphics.h>
 #endif
 
 namespace base {
@@ -50,7 +48,7 @@ class COMPONENT_EXPORT(PRINTING_METAFILE) MetafilePlayer {
   // details.
   virtual bool SafePlayback(printing::NativeDrawingContext hdc) const = 0;
 
-#elif BUILDFLAG(IS_MAC)
+#elif BUILDFLAG(IS_APPLE)
   // Renders the given page into `rect` in the given context.
   // Pages use a 1-based index. `autorotate` determines whether the source PDF
   // should be autorotated to fit on the destination page. `fit_to_page`
@@ -78,7 +76,7 @@ class COMPONENT_EXPORT(PRINTING_METAFILE) MetafilePlayer {
   // a local copy made of such data.  This query determines if such a copy needs
   // to be made by the caller, since not all implementations are required to
   // automatically do so.
-  // TODO(crbug.com/1135729)  Eliminate concern about making a copy when the
+  // TODO(crbug.com/40151989)  Eliminate concern about making a copy when the
   // shared memory can't be written by the sender.
   virtual bool ShouldCopySharedMemoryRegionData() const = 0;
 
@@ -113,7 +111,6 @@ class COMPONENT_EXPORT(PRINTING_METAFILE) Metafile : public MetafilePlayer {
   virtual bool Init() = 0;
 
   // Initializes the metafile with `data`. Returns true on success.
-  // Note: It should only be called from within the browser process.
   virtual bool InitFromData(base::span<const uint8_t> data) = 0;
 
   // Prepares a context for rendering a new page with the given `page_size`,

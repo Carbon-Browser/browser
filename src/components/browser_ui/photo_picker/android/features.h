@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,11 +10,8 @@
 namespace photo_picker {
 namespace features {
 
-// Whether to use the Android stock media picker instead of the Chrome picker.
-extern const base::Feature kAndroidMediaPickerSupport;
-
-// Whether the media picker supports videos.
-extern const base::Feature kPhotoPickerVideoSupport;
+// Controls how the Android Media Picker will be introduced.
+BASE_DECLARE_FEATURE(kAndroidMediaPickerAdoption);
 
 }  // namespace features
 }  // namespace photo_picker

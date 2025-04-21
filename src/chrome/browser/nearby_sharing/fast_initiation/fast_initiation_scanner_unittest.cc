@@ -1,12 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/nearby_sharing/fast_initiation/fast_initiation_scanner.h"
 
 #include <memory>
+#include <optional>
 
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/unguessable_token.h"
 #include "device/bluetooth/bluetooth_adapter.h"
 #include "device/bluetooth/bluetooth_adapter_factory.h"
@@ -14,7 +16,6 @@
 #include "device/bluetooth/test/mock_bluetooth_device.h"
 #include "device/bluetooth/test/mock_bluetooth_low_energy_scan_session.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 using ::testing::_;
 using testing::NiceMock;
@@ -102,7 +103,8 @@ class NearbySharingFastInitiationScannerTest : public testing::Test {
 
   scoped_refptr<NiceMock<device::MockBluetoothAdapter>> mock_bluetooth_adapter_;
   std::unique_ptr<FastInitiationScanner> scanner_;
-  device::MockBluetoothLowEnergyScanSession* mock_scan_session_ = nullptr;
+  raw_ptr<device::MockBluetoothLowEnergyScanSession> mock_scan_session_ =
+      nullptr;
   std::unique_ptr<device::BluetoothLowEnergyScanFilter> scan_session_filter_;
   base::WeakPtr<device::BluetoothLowEnergyScanSession::Delegate>
       scan_session_delegate_;
@@ -128,7 +130,7 @@ TEST_F(NearbySharingFastInitiationScannerTest, CreationAndDestruction) {
 
 TEST_F(NearbySharingFastInitiationScannerTest, SessionStartedSuccess) {
   scan_session_delegate_->OnSessionStarted(mock_scan_session_,
-                                           /*error_code=*/absl::nullopt);
+                                           /*error_code=*/std::nullopt);
   EXPECT_EQ(0u, scanner_invalidated_call_count_);
 }
 
@@ -146,14 +148,14 @@ TEST_F(NearbySharingFastInitiationScannerTest, SessionInvalidatedBeforeStart) {
 
 TEST_F(NearbySharingFastInitiationScannerTest, SessionInvalidatedAfterStart) {
   scan_session_delegate_->OnSessionStarted(mock_scan_session_,
-                                           /*error_code=*/absl::nullopt);
+                                           /*error_code=*/std::nullopt);
   scan_session_delegate_->OnSessionInvalidated(mock_scan_session_);
   EXPECT_EQ(1u, scanner_invalidated_call_count_);
 }
 
 TEST_F(NearbySharingFastInitiationScannerTest, AddAndRemoveDevices) {
   scan_session_delegate_->OnSessionStarted(mock_scan_session_,
-                                           /*error_code=*/absl::nullopt);
+                                           /*error_code=*/std::nullopt);
 
   auto device_a = CreateMockDevice();
   scan_session_delegate_->OnDeviceFound(mock_scan_session_, device_a.get());
@@ -180,7 +182,7 @@ TEST_F(NearbySharingFastInitiationScannerTest, AddAndRemoveDevices) {
 
 TEST_F(NearbySharingFastInitiationScannerTest, RemoveUnknownDevice) {
   scan_session_delegate_->OnSessionStarted(mock_scan_session_,
-                                           /*error_code=*/absl::nullopt);
+                                           /*error_code=*/std::nullopt);
 
   // Ensure removing an unknown device is a successful no-op.
   auto device_a = CreateMockDevice();

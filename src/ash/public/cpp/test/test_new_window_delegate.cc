@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,9 @@ void TestNewWindowDelegate::NewWindowForDetachingTab(
     NewWindowForDetachingTabCallback closure) {
   std::move(closure).Run(/*new_window=*/nullptr);
 }
-void TestNewWindowDelegate::OpenUrl(const GURL& url, OpenUrlFrom from) {}
+void TestNewWindowDelegate::OpenUrl(const GURL& url,
+                                    OpenUrlFrom from,
+                                    Disposition disposition) {}
 void TestNewWindowDelegate::OpenCalculator() {}
 void TestNewWindowDelegate::OpenFileManager() {}
 void TestNewWindowDelegate::OpenDownloadsFolder() {}
@@ -30,30 +32,14 @@ void TestNewWindowDelegate::OpenCrosh() {}
 void TestNewWindowDelegate::OpenDiagnostics() {}
 void TestNewWindowDelegate::OpenGetHelp() {}
 void TestNewWindowDelegate::RestoreTab() {}
-void TestNewWindowDelegate::ShowKeyboardShortcutViewer() {}
+void TestNewWindowDelegate::ShowShortcutCustomizationApp() {}
 void TestNewWindowDelegate::ShowTaskManager() {}
 void TestNewWindowDelegate::OpenFeedbackPage(
     FeedbackSource source,
     const std::string& description_template) {}
 void TestNewWindowDelegate::OpenPersonalizationHub() {}
-
-TestNewWindowDelegateProvider::TestNewWindowDelegateProvider(
-    std::unique_ptr<TestNewWindowDelegate> delegate)
-    : ash_(std::move(delegate)) {}
-
-TestNewWindowDelegateProvider::TestNewWindowDelegateProvider(
-    std::unique_ptr<TestNewWindowDelegate> ash,
-    std::unique_ptr<TestNewWindowDelegate> lacros)
-    : ash_(std::move(ash)), lacros_(std::move(lacros)) {}
-
-TestNewWindowDelegateProvider::~TestNewWindowDelegateProvider() = default;
-
-NewWindowDelegate* TestNewWindowDelegateProvider::GetInstance() {
-  return ash_.get();
-}
-
-NewWindowDelegate* TestNewWindowDelegateProvider::GetPrimary() {
-  return lacros_ ? lacros_.get() : ash_.get();
-}
+void TestNewWindowDelegate::OpenCaptivePortalSignin(const GURL& url) {}
+void TestNewWindowDelegate::OpenFile(const base::FilePath& file_path) {}
+void TestNewWindowDelegate::ToggleGeminiApp() {}
 
 }  // namespace ash

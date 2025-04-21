@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,25 +6,25 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/scoped_observation.h"
 #include "base/strings/string_util.h"
 #include "base/time/time.h"
-#include "chrome/browser/ash/printing/bulk_printers_calculator_factory.h"
 #include "chrome/browser/ash/printing/printers_sync_bridge.h"
 #include "chrome/browser/ash/printing/synced_printers_manager_factory.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/testing_profile.h"
-#include "components/sync/model/model_type_store.h"
-#include "components/sync/test/model/model_type_store_test_util.h"
+#include "components/sync/model/data_type_store.h"
+#include "components/sync/test/data_type_store_test_util.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -54,19 +54,19 @@ class LoggingObserver : public SyncedPrintersManager::Observer {
   base::ScopedObservation<SyncedPrintersManager,
                           SyncedPrintersManager::Observer>
       observation_{this};
-  SyncedPrintersManager* manager_;
+  raw_ptr<SyncedPrintersManager> manager_;
 };
 
 class SyncedPrintersManagerTest : public testing::Test {
  protected:
   SyncedPrintersManagerTest()
-      : manager_(SyncedPrintersManager::Create(std::make_unique<
-                                               PrintersSyncBridge>(
-            syncer::ModelTypeStoreTestUtil::FactoryForInMemoryStoreForTest(),
-            base::BindRepeating(
-                base::IgnoreResult(&base::debug::DumpWithoutCrashing),
-                FROM_HERE,
-                base::Minutes(5))))) {
+      : manager_(
+            SyncedPrintersManager::Create(std::make_unique<PrintersSyncBridge>(
+                syncer::DataTypeStoreTestUtil::FactoryForInMemoryStoreForTest(),
+                base::BindRepeating(
+                    base::IgnoreResult(&base::debug::DumpWithoutCrashing),
+                    FROM_HERE,
+                    base::Minutes(5))))) {
     base::RunLoop().RunUntilIdle();
   }
 

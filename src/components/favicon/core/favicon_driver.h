@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,7 @@ class FaviconDriver {
   void AddObserver(FaviconDriverObserver* observer);
   void RemoveObserver(FaviconDriverObserver* observer);
 
-  // Initiates loading the favicon for the specified url. |is_same_document|
+  // Initiates loading the favicon for the specified url. `is_same_document`
   // is true for cases where this page URL follows a navigation within the same
   // document (e.g. fragment navigation).
   virtual void FetchFavicon(const GURL& page_url, bool is_same_document) = 0;

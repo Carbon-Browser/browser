@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,16 @@
 #include <stdint.h>
 
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "build/build_config.h"
 #include "services/network/public/mojom/referrer_policy.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/navigation/impression.h"
 #include "third_party/blink/public/mojom/context_menu/context_menu.mojom-forward.h"
-#include "ui/base/ui_base_types.h"
+#include "third_party/blink/public/mojom/forms/form_control_type.mojom-shared.h"
+#include "ui/base/mojom/menu_source_type.mojom-forward.h"
 #include "ui/gfx/geometry/rect.h"
 #include "url/gurl.h"
 
@@ -50,9 +51,9 @@ struct BLINK_COMMON_EXPORT UntrustworthyContextMenuParams {
   // Will be empty if |link_url| is empty.
   std::u16string link_text;
 
-  // The impression declared by the link. May be absl::nullopt even if
+  // The impression declared by the link. May be std::nullopt even if
   // |link_url| is non-empty.
-  absl::optional<blink::Impression> impression;
+  std::optional<blink::Impression> impression;
 
   // The link URL to be used ONLY for "copy link address". We don't validate
   // this field in the frontend process.
@@ -66,6 +67,11 @@ struct BLINK_COMMON_EXPORT UntrustworthyContextMenuParams {
   // This is true if the context menu was invoked on an image which has
   // non-empty contents.
   bool has_image_contents;
+
+  // This is true if the context menu was invoked on an image, media or plugin
+  // document. In these cases the resource for the hit-tested element might be
+  // the main resource, not a subresource.
+  bool is_image_media_plugin_document;
 
   // These are the parameters for the media element that the context menu
   // was invoked on.
@@ -121,12 +127,11 @@ struct BLINK_COMMON_EXPORT UntrustworthyContextMenuParams {
   GURL link_followed;
   std::vector<blink::mojom::CustomContextMenuItemPtr> custom_items;
 
-  ui::MenuSourceType source_type;
+  ui::mojom::MenuSourceType source_type;
 
-  // If this node is an input field, the type of that field.
-  blink::mojom::ContextMenuDataInputFieldType input_field_type;
-
-  // Rect representing the coordinates in the document space of the selection.
+  // For the outermost main frame's widget, this will be the selection rect in
+  // viewport space. For a local root, this is in the coordinates of the local
+  // frame root.
   gfx::Rect selection_rect;
 
   // Start position of the selection text.
@@ -136,8 +141,25 @@ struct BLINK_COMMON_EXPORT UntrustworthyContextMenuParams {
   // highlight/fragment.
   bool opened_from_highlight = false;
 
-  // The context menu was opened on an input field. Otherwise, `absl::nullopt`.
-  absl::optional<uint64_t> field_renderer_id;
+  // The type of the form control element on which the context menu is invoked,
+  // if any.
+  std::optional<mojom::FormControlType> form_control_type;
+
+  // Indicates whether the context menu is invoked on a non-form,
+  // non-form-control element that is contenteditable. Thus, it is mutually
+  // exclusive with `form_control_type`.
+  bool is_content_editable_for_autofill = false;
+
+  // Identifies the element the context menu was invoked on if either
+  // `form_control_type` is engaged or `is_content_editable_for_autofill` is
+  // true.
+  // See `autofill::FieldRendererId` for the semantics of renderer IDs.
+  uint64_t field_renderer_id = 0;
+
+  // Identifies form to which the field identified by `field_renderer_id` is
+  // associated.
+  // See `autofill::FormRendererId` for the semantics of renderer IDs.
+  uint64_t form_renderer_id = 0;
 
  private:
   void Assign(const UntrustworthyContextMenuParams& other);

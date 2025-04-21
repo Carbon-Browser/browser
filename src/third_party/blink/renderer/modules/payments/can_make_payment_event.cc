@@ -1,18 +1,40 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/payments/can_make_payment_event.h"
 
-#include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
+#include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/workers/worker_global_scope.h"
 #include "third_party/blink/renderer/core/workers/worker_location.h"
 #include "third_party/blink/renderer/modules/payments/can_make_payment_respond_with_observer.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
+#include "third_party/blink/renderer/platform/bindings/v8_binding.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
 
 namespace blink {
+
+class CanMakePaymentRespondWithFulfill final
+    : public ThenCallable<IDLBoolean, CanMakePaymentRespondWithFulfill> {
+ public:
+  explicit CanMakePaymentRespondWithFulfill(
+      CanMakePaymentRespondWithObserver* observer)
+      : observer_(observer) {}
+
+  void Trace(Visitor* visitor) const override {
+    visitor->Trace(observer_);
+    ThenCallable<IDLBoolean, CanMakePaymentRespondWithFulfill>::Trace(visitor);
+  }
+
+  void React(ScriptState* script_state, bool response) {
+    DCHECK(observer_);
+    observer_->OnResponseFulfilled(script_state, response);
+  }
+
+ private:
+  Member<CanMakePaymentRespondWithObserver> observer_;
+};
 
 CanMakePaymentEvent* CanMakePaymentEvent::Create(
     const AtomicString& type,
@@ -55,7 +77,7 @@ CanMakePaymentEvent::modifiers() const {
 }
 
 void CanMakePaymentEvent::respondWith(ScriptState* script_state,
-                                      ScriptPromise script_promise,
+                                      ScriptPromise<IDLBoolean> script_promise,
                                       ExceptionState& exception_state) {
   if (!isTrusted()) {
     exception_state.ThrowDOMException(
@@ -66,8 +88,10 @@ void CanMakePaymentEvent::respondWith(ScriptState* script_state,
 
   stopImmediatePropagation();
   if (observer_) {
-    observer_->ObservePromiseResponse(script_state, script_promise,
-                                      exception_state);
+    observer_->RespondWith(
+        script_state, script_promise,
+        MakeGarbageCollected<CanMakePaymentRespondWithFulfill>(observer_),
+        exception_state);
   }
 }
 

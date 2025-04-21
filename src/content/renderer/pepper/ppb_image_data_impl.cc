@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -234,7 +234,9 @@ void* ImageDataSimpleBackend::Map() {
     if (!shm_mapping_.IsValid())
       return nullptr;
 
-    skia_bitmap_.setPixels(shm_mapping_.memory());
+    base::span<uint8_t> mem(shm_mapping_);
+    CHECK_GE(mem.size(), skia_bitmap_.computeByteSize());
+    skia_bitmap_.setPixels(mem.data());
     // Our platform bitmaps are set to opaque by default, which we don't want.
     skia_bitmap_.setAlphaType(kPremul_SkAlphaType);
     skia_canvas_ = std::make_unique<SkCanvas>(

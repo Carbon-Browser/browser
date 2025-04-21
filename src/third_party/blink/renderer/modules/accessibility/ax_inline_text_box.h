@@ -31,25 +31,25 @@
 
 #include "base/notreached.h"
 #include "third_party/blink/renderer/core/editing/markers/document_marker.h"
-#include "third_party/blink/renderer/core/layout/line/abstract_inline_text_box.h"
+#include "third_party/blink/renderer/core/layout/inline/abstract_inline_text_box.h"
 #include "third_party/blink/renderer/modules/accessibility/ax_object.h"
 
 namespace blink {
 
-class Node;
 class AXObjectCacheImpl;
 
 // Encapsulates an AbstractInlineTextBox and adapts it for use in Blink's
 // accessibility tree.
 class AXInlineTextBox final : public AXObject {
  public:
-  AXInlineTextBox(scoped_refptr<AbstractInlineTextBox>, AXObjectCacheImpl&);
+  AXInlineTextBox(AbstractInlineTextBox*, AXObjectCacheImpl&);
+  void Trace(Visitor* visitor) const override;
 
   AXInlineTextBox(const AXInlineTextBox&) = delete;
   AXInlineTextBox& operator=(const AXInlineTextBox&) = delete;
 
   // AXObject overrides.
-  RGBA32 GetColor() const override { return Color::kTransparent; }
+  RGBA32 GetColor() const override { return Color::kTransparent.Rgb(); }
   String GetName(ax::mojom::blink::NameFrom&,
                  AXObject::AXObjectVector* name_objects) const override;
   void TextCharacterOffsets(Vector<int>&) const override;
@@ -62,16 +62,15 @@ class AXInlineTextBox final : public AXObject {
                          gfx::Transform& out_container_transform,
                          bool* clips_children = nullptr) const override;
   ax::mojom::blink::WritingDirection GetTextDirection() const override;
-  Node* GetNode() const override;
   Document* GetDocument() const override;
   AXObject* NextOnLine() const override;
   AXObject* PreviousOnLine() const override;
   void SerializeMarkerAttributes(ui::AXNodeData* node_data) const override;
   ax::mojom::blink::Role NativeRoleIgnoringAria() const override {
     NOTREACHED();
-    return ax::mojom::blink::Role::kInlineTextBox;
   }
-  void ClearChildren() const override;
+  void ClearChildren() override;
+  AbstractInlineTextBox* GetInlineTextBox() const override;
 
  protected:
   void Init(AXObject* parent) override;
@@ -85,9 +84,9 @@ class AXInlineTextBox final : public AXObject {
   void AddChildren() override {}
 
  private:
-  bool ComputeAccessibilityIsIgnored(IgnoredReasons* = nullptr) const override;
+  bool ComputeIsIgnored(IgnoredReasons* = nullptr) const override;
 
-  scoped_refptr<AbstractInlineTextBox> inline_text_box_;
+  Member<AbstractInlineTextBox> inline_text_box_;
 };
 
 }  // namespace blink

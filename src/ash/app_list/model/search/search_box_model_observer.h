@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,14 +13,17 @@ namespace ash {
 class APP_LIST_MODEL_EXPORT SearchBoxModelObserver
     : public base::CheckedObserver {
  public:
-  // Invoked when text or voice search flag is changed.
-  virtual void Update() = 0;
-
   // Invoked when the search engine is changed.
   virtual void SearchEngineChanged() = 0;
 
   // Invoked when whether to show Assistant is changed.
   virtual void ShowAssistantChanged() = 0;
+
+  // Invoked when whether to show Assistant new entry point button is changed.
+  virtual void ShowAssistantNewEntryPointChanged() = 0;
+
+  // Invoked when whether to show Sunfish is changed.
+  virtual void ShowSunfishChanged() = 0;
 
  protected:
   ~SearchBoxModelObserver() override = default;

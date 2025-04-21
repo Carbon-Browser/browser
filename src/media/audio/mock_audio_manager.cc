@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "media/audio/mock_audio_debug_recording_manager.h"
 #include "media/base/audio_parameters.h"
 
@@ -79,11 +79,6 @@ void MockAudioManager::RemoveOutputDeviceChangeListener(
     AudioDeviceListener* listener) {
 }
 
-AudioParameters MockAudioManager::GetDefaultOutputStreamParameters() {
-  DCHECK(GetTaskRunner()->BelongsToCurrentThread());
-  return default_output_params_;
-}
-
 AudioParameters MockAudioManager::GetOutputStreamParameters(
       const std::string& device_id) {
   DCHECK(GetTaskRunner()->BelongsToCurrentThread());
@@ -132,13 +127,18 @@ void MockAudioManager::InitializeDebugRecording() {
   }
 
   DCHECK(!debug_recording_manager_);
-  debug_recording_manager_ =
-      std::make_unique<MockAudioDebugRecordingManager>(GetTaskRunner());
+  debug_recording_manager_ = std::make_unique<MockAudioDebugRecordingManager>();
 }
 
 AudioDebugRecordingManager* MockAudioManager::GetAudioDebugRecordingManager() {
   DCHECK(GetTaskRunner()->BelongsToCurrentThread());
   return debug_recording_manager_.get();
+}
+
+void MockAudioManager::SetAecDumpRecordingManager(
+    base::WeakPtr<AecdumpRecordingManager>) {
+  DCHECK(GetTaskRunner()->BelongsToCurrentThread());
+  // This is no-op by default.
 }
 
 const char* MockAudioManager::GetName() {

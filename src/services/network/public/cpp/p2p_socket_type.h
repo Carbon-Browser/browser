@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,9 +18,10 @@
 namespace network {
 
 enum P2PSocketOption {
-  P2P_SOCKET_OPT_RCVBUF,  // Receive buffer size.
-  P2P_SOCKET_OPT_SNDBUF,  // Send buffer size.
-  P2P_SOCKET_OPT_DSCP,    // DSCP code.
+  P2P_SOCKET_OPT_RCVBUF,    // Receive buffer size.
+  P2P_SOCKET_OPT_SNDBUF,    // Send buffer size.
+  P2P_SOCKET_OPT_DSCP,      // DSCP code.
+  P2P_SOCKET_OPT_RECV_ECN,  // Enable ECN receiving.
   P2P_SOCKET_OPT_MAX
 };
 

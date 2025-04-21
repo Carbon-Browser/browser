@@ -1,20 +1,24 @@
 #!/usr/bin/env vpython3
 
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import argparse
 import os
-from pyfakefs import fake_filesystem_unittest
 import tempfile
 import unittest
+
+# vpython-provided modules.
+from pyfakefs import fake_filesystem_unittest  # pylint: disable=import-error
 
 import test_filtering
 from test_filtering import _TestFilter
 from test_filtering import _TestFiltersGroup
 from test_filtering import _SetOfTestFiltersGroups
 
+# Protected access is allowed for unittests.
+# pylint: disable=protected-access
 
 class FilterTests(fake_filesystem_unittest.TestCase):
     def test_exact_match(self):

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define COMPONENTS_VIZ_TEST_FAKE_DELAY_BASED_TIME_SOURCE_H_
 
 #include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "components/viz/common/frame_sinks/delay_based_time_source.h"
 

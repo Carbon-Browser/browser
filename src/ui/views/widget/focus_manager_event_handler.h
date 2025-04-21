@@ -1,12 +1,14 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_VIEWS_WIDGET_FOCUS_MANAGER_EVENT_HANDLER_H_
 #define UI_VIEWS_WIDGET_FOCUS_MANAGER_EVENT_HANDLER_H_
 
+#include <string_view>
+
 #include "base/memory/raw_ptr.h"
-#include "base/strings/string_piece.h"
+#include "base/memory/weak_ptr.h"
 #include "ui/events/event_handler.h"
 
 namespace aura {
@@ -30,10 +32,10 @@ class FocusManagerEventHandler : public ui::EventHandler {
 
   // Implementation of ui::EventHandler:
   void OnKeyEvent(ui::KeyEvent* event) override;
-  base::StringPiece GetLogContext() const override;
+  std::string_view GetLogContext() const override;
 
  private:
-  raw_ptr<Widget> widget_;
+  base::WeakPtr<Widget> widget_;
 
   // |window_| is the event target that is associated with this class.
   raw_ptr<aura::Window> window_;

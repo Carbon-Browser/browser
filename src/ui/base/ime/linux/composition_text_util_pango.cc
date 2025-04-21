@@ -1,15 +1,20 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ui/base/ime/linux/composition_text_util_pango.h"
 
 #include <pango/pango-attributes.h>
 #include <stddef.h>
 
+#include <algorithm>
 #include <string>
 
-#include "base/cxx17_backports.h"
 #include "base/i18n/char_iterator.h"
 #include "base/strings/utf_string_conversions.h"
 #include "ui/base/ime/composition_text.h"
@@ -42,7 +47,7 @@ void ExtractCompositionTextFromGtkPreedit(const char* utf8_text,
   char16_offsets.push_back(length);
 
   size_t cursor_offset =
-      char16_offsets[base::clamp(cursor_position, 0, char_length)];
+      char16_offsets[std::clamp(cursor_position, 0, char_length)];
 
   composition->selection = gfx::Range(cursor_offset);
 

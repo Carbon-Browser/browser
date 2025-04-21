@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 
 #include <string>
 
-#include "base/callback.h"
-#include "components/autofill/core/browser/autofill_client.h"
-#include "components/autofill/core/browser/payments/payments_client.h"
+#include "base/functional/callback.h"
+#include "components/autofill/core/browser/payments/payments_autofill_client.h"
+#include "components/autofill/core/browser/payments/payments_request_details.h"
 #include "components/autofill/core/browser/payments/payments_requests/payments_request.h"
 
 namespace base {
@@ -21,11 +21,10 @@ namespace autofill::payments {
 class UploadCardRequest : public PaymentsRequest {
  public:
   UploadCardRequest(
-      const PaymentsClient::UploadRequestDetails& request_details,
+      const UploadCardRequestDetails& request_details,
       const bool full_sync_enabled,
-      base::OnceCallback<void(AutofillClient::PaymentsRpcResult,
-                              const PaymentsClient::UploadCardResponseDetails&)>
-          callback);
+      base::OnceCallback<void(PaymentsAutofillClient::PaymentsRpcResult,
+                              const UploadCardResponseDetails&)> callback);
   UploadCardRequest(const UploadCardRequest&) = delete;
   UploadCardRequest& operator=(const UploadCardRequest&) = delete;
   ~UploadCardRequest() override;
@@ -34,17 +33,20 @@ class UploadCardRequest : public PaymentsRequest {
   std::string GetRequestUrlPath() override;
   std::string GetRequestContentType() override;
   std::string GetRequestContent() override;
-  void ParseResponse(const base::Value& response) override;
+  void ParseResponse(const base::Value::Dict& response) override;
   bool IsResponseComplete() override;
-  void RespondToDelegate(AutofillClient::PaymentsRpcResult result) override;
+  void RespondToDelegate(
+      PaymentsAutofillClient::PaymentsRpcResult result) override;
+  std::string GetHistogramName() const override;
+  std::optional<base::TimeDelta> GetTimeout() const override;
 
  private:
-  const PaymentsClient::UploadRequestDetails request_details_;
+  const UploadCardRequestDetails request_details_;
   const bool full_sync_enabled_;
-  base::OnceCallback<void(AutofillClient::PaymentsRpcResult,
-                          const PaymentsClient::UploadCardResponseDetails&)>
+  base::OnceCallback<void(PaymentsAutofillClient::PaymentsRpcResult,
+                          const UploadCardResponseDetails&)>
       callback_;
-  PaymentsClient::UploadCardResponseDetails upload_card_response_details_;
+  UploadCardResponseDetails upload_card_response_details_;
 };
 
 }  // namespace autofill::payments

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,19 @@
 #include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
 #include "chrome/browser/media/webrtc/media_stream_capture_indicator.h"
-#include "components/performance_manager/public/performance_manager_main_thread_observer.h"
+#include "components/performance_manager/public/performance_manager_observer.h"
+#include "content/public/browser/devtools_agent_host.h"
 
 namespace performance_manager {
 
+namespace {
+class ActiveTabObserver;
+}
+
 class PageLiveStateDecoratorHelper
     : public MediaStreamCaptureIndicator::Observer,
-      public PerformanceManagerMainThreadObserverDefaultImpl {
+      public PerformanceManagerObserverDefaultImpl,
+      public content::DevToolsAgentHostObserver {
  public:
   PageLiveStateDecoratorHelper();
   ~PageLiveStateDecoratorHelper() override;
@@ -35,7 +41,13 @@ class PageLiveStateDecoratorHelper
   void OnIsCapturingDisplayChanged(content::WebContents* contents,
                                    bool is_capturing_display) override;
 
-  // PerformanceManagerMainThreadObserver:
+  // content::DevToolsAgentHostObserver:
+  void DevToolsAgentHostAttached(
+      content::DevToolsAgentHost* agent_host) override;
+  void DevToolsAgentHostDetached(
+      content::DevToolsAgentHost* agent_host) override;
+
+  // PerformanceManagerObserver:
   void OnPageNodeCreatedForWebContents(
       content::WebContents* web_contents) override;
 
@@ -48,6 +60,10 @@ class PageLiveStateDecoratorHelper
   // Additionally, all WebContentsObservers that are still in this list when the
   // destructor of PageLiveStateDecoratorHelper is invoked are destroyed.
   raw_ptr<WebContentsObserver> first_web_contents_observer_ = nullptr;
+
+#if !BUILDFLAG(IS_ANDROID)
+  std::unique_ptr<ActiveTabObserver> active_tab_observer_;
+#endif  // !BUILDFLAG(IS_ANDROID)
 
   SEQUENCE_CHECKER(sequence_checker_);
 };

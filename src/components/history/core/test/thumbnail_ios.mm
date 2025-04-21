@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,8 +22,7 @@ gfx::Image CreateGoogleThumbnailForTest() {
                                 static_cast<const void*>(kGoogleThumbnail))
                      length:sizeof(kGoogleThumbnail)
                freeWhenDone:NO];
-    UIImage* image = [UIImage imageWithData:data scale:1];
-    return gfx::Image([image retain]);
+    return gfx::Image([UIImage imageWithData:data scale:1]);
   }
 }
 

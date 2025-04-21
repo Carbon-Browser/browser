@@ -1,25 +1,22 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// <include src="post_message_channel.js">
-// <include src="webview_event_manager.js">
-// <include src="saml_password_attributes.js">
+// <if expr="chromeos_ash">
+import {NativeEventTarget as EventTarget} from 'chrome://resources/ash/common/event_target.js';
 
-// clang-format off
-// #import {Channel} from './channel.m.js';
-// #import {PostMessageChannel} from './post_message_channel.m.js';
-// #import {WebviewEventManager} from './webview_event_manager.m.js';
-// #import {NativeEventTarget as EventTarget} from 'chrome://resources/js/cr/event_target.m.js'
-// #import {PasswordAttributes, readPasswordAttributes} from './saml_password_attributes.m.js';
-// clang-format on
+// </if>
+
+import {Channel} from './channel.js';
+import {PostMessageChannel} from './post_message_channel.js';
+import {SafeXMLUtils} from './safe_xml_utils.js';
+import {PasswordAttributes, readPasswordAttributes} from './saml_password_attributes.js';
+import {maybeAutofillUsername} from './saml_username_autofill.js';
+import {WebviewEventManager} from './webview_event_manager.js';
 
 /**
  * @fileoverview Saml support for webview based auth.
  */
-
-cr.define('cr.login', function() {
-  /* #ignore */ 'use strict';
 
   /**
    * The lowest version of the credentials passing API supported.
@@ -45,25 +42,28 @@ cr.define('cr.login', function() {
   const SAML_HEADER = 'google-accounts-saml';
 
   /** @const */
+  const SAML_DEVICE_TRUST_HEADER = 'x-device-trust';
+
+  /** @const */
   const SAML_VERIFIED_ACCESS_CHALLENGE_HEADER = 'x-verified-access-challenge';
   /** @const */
   const SAML_VERIFIED_ACCESS_RESPONSE_HEADER =
       'x-verified-access-challenge-response';
 
   /** @const */
-  const BEGIN_CERTIFICATE = '-----BEGIN CERTIFICATE-----';
-
-  /** @const */
-  const END_CERTIFICATE = '-----END CERTIFICATE-----';
-
-  /** @const */
   const injectedScriptName = 'samlInjected';
+
+  /** @const */
+  const SAML_API_Error = 'ChromeOS.SAML.APIError';
+
+  /** @const */
+  const SAML_INCORRECT_ATTESTATION = 'ChromeOS.SAML.IncorrectAttestation';
 
   /**
    * The script to inject into webview and its sub frames.
    * @type {string}
    */
-  const injectedJs = 'webview_saml_injected.js';
+  const injectedJs = 'gaia_auth_host/saml_injected.rollup.js';
 
   /**
    * @typedef {{
@@ -93,7 +93,7 @@ cr.define('cr.login', function() {
    * }}
    * @see https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/onBeforeRequest#details
    */
-  /* #export */ let OnBeforeRequestDetails;
+  export let OnBeforeRequestDetails;
 
   /**
    * Details of the request.
@@ -104,7 +104,7 @@ cr.define('cr.login', function() {
    * }}
    * @see https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/onHeadersReceived#details
    */
-  /* #export */ let OnHeadersReceivedDetails;
+  export let OnHeadersReceivedDetails;
 
   /**
    * Creates a new URL by striping all query parameters.
@@ -119,7 +119,7 @@ cr.define('cr.login', function() {
    * A handler to provide saml support for the given webview that hosts the
    * auth IdP pages.
    */
-  /* #export */ class SamlHandler extends cr.EventTarget {
+  export class SamlHandler extends EventTarget {
     /**
      * @param {!WebView} webview
      * @param {boolean} startsOnSamlPage - whether initial URL is already SAML
@@ -146,6 +146,53 @@ cr.define('cr.login', function() {
         // original Redirect is being followed with the response included in a
         // HTTP header.
         NAVIGATING_TO_REDIRECT_PAGE: 4,
+        // The attestation flow belongs to Device Trust. It should be ignored by
+        // the Verified Access for SAML feature implemented in this file.
+        DEVICE_TRUST_FLOW: 5,
+      };
+
+      /**
+       * This enum is tied directly to a UMA enum defined in
+       * //tools/metrics/histograms/metadata/chromeos/enums.xml, and should
+       * always reflect it (do not change one without changing the other). These
+       * values are persisted to logs. Entries should not be renumbered and
+       * numeric values should never be reused.
+       * @enum {number}
+       */
+      SamlHandler.ApiErrorType = {
+        // IdP sent unsupported key type.
+        UNSUPPORTED_KEY: 0,
+        // Gaia wanted to create an account while feature is not supported.
+        UNSUPPORTED_MESSAGE: 1,
+        // Gaia wanted to create an account for a user that wasn't added.
+        CREATE_TOKEN_MISMATCH: 2,
+        // IdP confirmed token that wasn't added.
+        CONFIRM_TOKEN_MISMATCH: 3,
+        // IdP sent a message that isn't supported in SAML API.
+        UNKNOWN_MESSAGE: 4,
+        // IdP didn't send user's password confirmation.
+        PASSWORD_NOT_CONFIRMED: 5,
+        // Enum Max value.
+        MAX: 6,
+      };
+
+      /**
+       * This enum is tied directly to a UMA enum defined in
+       * //tools/metrics/histograms/metadata/chromeos/enums.xml, and should
+       * always reflect it (do not change one without changing the other). These
+       * values are persisted to logs. Entries should not be renumbered and
+       * numeric values should never be reused.
+       * @enum {number}
+       */
+      SamlHandler.IncorrectAttestationStage = {
+        // onBeforeRequest_(details) method.
+        ON_BEFORE_REQUEST: 0,
+        // onBeforeSendHeaders_(details) method.
+        ON_BEFORE_SEND_HEADERS: 1,
+        // continueDelayedRedirect_(url, challengeResponse) method.
+        CONTINUE_DELAYED_REDIRECT: 2,
+        // Enum Max value.
+        MAX: 3,
       };
 
       /**
@@ -251,6 +298,13 @@ cr.define('cr.login', function() {
       this.verifiedAccessChallengeResponse_ = null;
 
       /**
+       * If set, this should handle the account creation message.
+       * If not set, this will log any account creation message as invalid call.
+       * @public {?boolean}
+       */
+      this.shouldHandleAccountCreationMessage = false;
+
+      /**
        * Certificate that were extracted from the SAMLResponse.
        * @public {?string}
        */
@@ -261,10 +315,22 @@ cr.define('cr.login', function() {
        * any. (Doesn't contain the password itself).
        * @private {!PasswordAttributes}
        */
-      this.passwordAttributes_ =
-          samlPasswordAttributes.PasswordAttributes.EMPTY;
+      this.passwordAttributes_ = PasswordAttributes.EMPTY;
 
-      this.webviewEventManager_ = WebviewEventManager.create();
+      /**
+       * User's email.
+       * @public {?string}
+       */
+      this.email = null;
+
+      /**
+       * Url parameter name for SAML IdP web page which is used to autofill the
+       * username.
+       * @public {?string}
+       */
+      this.urlParameterToAutofillSAMLUsername = null;
+
+      this.webviewEventManager_ = new WebviewEventManager();
 
       this.webviewEventManager_.addEventListener(
           this.webview_, 'contentload', this.onContentLoad_.bind(this));
@@ -284,6 +350,11 @@ cr.define('cr.login', function() {
           this.onMainFrameWebRequest.bind(this),
           {urls: ['http://*/*', 'https://*/*'], types: ['main_frame']},
           ['requestBody']);
+
+      this.webviewEventManager_.addWebRequestEventListener(
+          this.webview_.request.onBeforeRequest,
+          this.onMainFrameHttpsWebRequest_.bind(this),
+          {urls: ['https://*/*'], types: ['main_frame']}, ['blocking']);
 
       if (!this.startsOnSamlPage_) {
         this.webviewEventManager_.addEventListener(
@@ -423,6 +494,7 @@ cr.define('cr.login', function() {
      * Resets all auth states
      */
     reset() {
+      console.info('SamlHandler.reset: resets all auth states');
       this.isSamlPage_ = this.startsOnSamlPage_;
       this.pendingIsSamlPage_ = this.startsOnSamlPage_;
       this.passwordStore_ = {};
@@ -436,17 +508,11 @@ cr.define('cr.login', function() {
       this.apiTokenStore_ = {};
       this.confirmToken_ = null;
       this.lastApiPasswordBytes_ = null;
-      this.passwordAttributes_ =
-          samlPasswordAttributes.PasswordAttributes.EMPTY;
+      this.passwordAttributes_ = PasswordAttributes.EMPTY;
       this.x509certificate = null;
-    }
 
-    /**
-     * Check whether the given |password| is in the scraped passwords.
-     * @return {boolean} True if the |password| is found.
-     */
-    verifyConfirmedPassword(password) {
-      return this.getConsolidatedScrapedPasswords_().indexOf(password) >= 0;
+      this.email = null;
+      this.urlParameterToAutofillSAMLUsername = null;
     }
 
     /**
@@ -532,21 +598,8 @@ cr.define('cr.login', function() {
      * @private
      */
     setX509certificate_(samlResponse) {
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(samlResponse, 'text/xml');
-      let certificate = xmlDoc.getElementsByTagName('ds:X509Certificate');
-      if (!certificate || certificate.length === 0) {
-        // tag 'ds:X509Certificate' doesn't exist
-        certificate = xmlDoc.getElementsByTagName('X509Certificate');
-      }
-
-      if (certificate && certificate.length > 0 && certificate[0].childNodes &&
-          certificate[0].childNodes[0] &&
-          certificate[0].childNodes[0].nodeValue) {
-        certificate = certificate[0].childNodes[0].nodeValue;
-        this.x509certificate = BEGIN_CERTIFICATE + '\n' + certificate.trim() +
-            '\n' + END_CERTIFICATE + '\n';
-      }
+      const xmlUtils = new SafeXMLUtils(samlResponse);
+      this.x509certificate = xmlUtils.getX509Certificate();
     }
 
     /**
@@ -582,8 +635,28 @@ cr.define('cr.login', function() {
 
       this.setX509certificate_(samlResponse);
 
-      this.passwordAttributes_ =
-          samlPasswordAttributes.readPasswordAttributes(samlResponse);
+      this.passwordAttributes_ = readPasswordAttributes(samlResponse);
+    }
+
+    /**
+     * Handler for webRequest.onBeforeRequest, used to optionally add a url
+     * parameter to the IdP login page in order to autofill the username field.
+     * @param {OnBeforeRequestDetails} details The web-request details.
+     * @return {BlockingResponse} Allows the event handler to modify network
+     *     requests.
+     * @private
+     */
+    onMainFrameHttpsWebRequest_(details) {
+      // Ignore GAIA page - we are only interested in 3P IdP page here.
+      if (!this.isSamlPage_ && !this.pendingIsSamlPage_) {
+        return {};
+      }
+      const urlToAutofillUsername = maybeAutofillUsername(
+          details.url, this.urlParameterToAutofillSAMLUsername, this.email);
+      if (urlToAutofillUsername) {
+        return {redirectUrl: urlToAutofillUsername};
+      }
+      return {};
     }
 
     /**
@@ -599,8 +672,10 @@ cr.define('cr.login', function() {
     continueDelayedRedirect_(url, challengeResponse) {
       if (this.deviceAttestationStage_ !==
           SamlHandler.DeviceAttestationStage.ORIGINAL_REDIRECT_CANCELED) {
-        console.error(
+        console.warn(
             'SamlHandler.continueDelayedRedirect_: incorrect attestation stage');
+        this.recordInIncorrectAttestationHistogram_(
+            SamlHandler.IncorrectAttestationStage.CONTINUE_DELAYED_REDIRECT);
         return;
       }
 
@@ -659,13 +734,16 @@ cr.define('cr.login', function() {
 
       // Reset state in case of unexpected requests during device attestation.
       this.deviceAttestationStage_ = SamlHandler.DeviceAttestationStage.NONE;
-      console.error(
-          'SamlHandler.onBeforeRequest_: incorrect attestation stage');
+      console.warn('SamlHandler.onBeforeRequest_: incorrect attestation stage');
+      this.recordInIncorrectAttestationHistogram_(
+          SamlHandler.IncorrectAttestationStage.ON_BEFORE_REQUEST);
       return {};
     }
 
     /**
-     * Attaches challenge response during device attestation flow.
+     * Checks if the attestation flow belongs to Device Trust and if so skip
+     * Verified Access. Otherwise attaches challenge response during device
+     * attestation flow.
      * @param {Object} details The web-request details.
      * @return {BlockingResponse} Allows the event handler to modify network
      *     requests.
@@ -675,6 +753,22 @@ cr.define('cr.login', function() {
       // Default case without Verified Access.
       if (this.deviceAttestationStage_ ===
           SamlHandler.DeviceAttestationStage.NONE) {
+        // Check if the attestation flow was initiated by device trust.
+        const headersRequest = details.requestHeaders;
+
+        if (!headersRequest) {
+          return {};
+        }
+
+        // TODO(b/246818937): Remove this for loop.
+        for (const headerRequest of headersRequest) {
+          const headerRequestName = headerRequest.name.toLowerCase();
+          if (headerRequestName === SAML_DEVICE_TRUST_HEADER) {
+            this.deviceAttestationStage_ =
+                SamlHandler.DeviceAttestationStage.DEVICE_TRUST_FLOW;
+            return {};
+          }
+        }
         return {};
       }
 
@@ -701,8 +795,10 @@ cr.define('cr.login', function() {
 
       // Reset state in case of unexpected navigation during device attestation.
       this.deviceAttestationStage_ = SamlHandler.DeviceAttestationStage.NONE;
-      console.error(
+      console.warn(
           'SamlHandler.onBeforeSendHeaders_: incorrect attestation stage');
+      this.recordInIncorrectAttestationHistogram_(
+          SamlHandler.IncorrectAttestationStage.ON_BEFORE_SEND_HEADERS);
       return {};
     }
 
@@ -711,6 +807,11 @@ cr.define('cr.login', function() {
      * @private
      */
     onHeadersReceived_(details) {
+      if (this.deviceAttestationStage_ ===
+          SamlHandler.DeviceAttestationStage.DEVICE_TRUST_FLOW) {
+        return {};
+      }
+
       const headers = details.responseHeaders;
 
       // Check whether GAIA headers indicating the start or end of a SAML
@@ -722,8 +823,10 @@ cr.define('cr.login', function() {
         if (headerName === SAML_HEADER) {
           const action = header.value.toLowerCase();
           if (action === 'start') {
+            console.info('SamlHandler.onHeadersReceived_: SAML flow start');
             this.pendingIsSamlPage_ = true;
           } else if (action === 'end') {
+            console.info('SamlHandler.onHeadersReceived_: SAML flow end');
             this.pendingIsSamlPage_ = false;
           }
         }
@@ -752,7 +855,7 @@ cr.define('cr.login', function() {
         return;
       }
 
-      const channel = Channel.create();
+      const channel = new PostMessageChannel();
       channel.init(port);
 
       channel.registerMessage('apiCall', this.onAPICall_.bind(this, channel));
@@ -783,6 +886,37 @@ cr.define('cr.login', function() {
     }
 
     /**
+     * Invoked to record value in ChromeOS.SAML.APIError metric.
+     * @private
+     */
+    recordInAPIErrorHistogram_(value) {
+      chrome.send(
+          'metricsHandler:recordInHistogram',
+          [SAML_API_Error, value, SamlHandler.ApiErrorType.MAX]);
+    }
+
+    /**
+     * Invoked to record value in ChromeOS.SAML.IncorrectAttestation metric.
+     * @private
+     */
+    recordInIncorrectAttestationHistogram_(value) {
+      chrome.send('metricsHandler:recordInHistogram', [
+        SAML_INCORRECT_ATTESTATION,
+        value,
+        SamlHandler.IncorrectAttestationStage.MAX,
+      ]);
+    }
+
+    /**
+     * Invoked to record that password wasn't confirmed in
+     * ChromeOS.SAML.APIError metric.
+     */
+    recordPasswordNotConfirmedError() {
+      this.recordInAPIErrorHistogram_(
+          SamlHandler.ApiErrorType.PASSWORD_NOT_CONFIRMED);
+    }
+
+    /**
      * Handlers for channel messages.
      * @param {Channel} channel A channel to send back response.
      * @param {ApiCallMessage} msg Received message.
@@ -790,40 +924,66 @@ cr.define('cr.login', function() {
      */
     onAPICall_(channel, msg) {
       const call = msg.call;
+      console.info('SamlHandler.onAPICall_: call.method = ' + call.method);
       if (call.method === 'initialize') {
         if (!Number.isInteger(call.requestedVersion) ||
             call.requestedVersion < MIN_API_VERSION_VERSION) {
           this.sendInitializationFailure_(channel);
+          this.recordInAPIErrorHistogram_(
+              SamlHandler.ApiErrorType.UNSUPPORTED_KEY);
           return;
         }
 
         this.apiVersion_ =
             Math.min(call.requestedVersion, MAX_API_VERSION_VERSION);
         this.apiInitialized_ = true;
+        console.info('SamlHandler.onAPICall_ is initialized successfully');
         this.sendInitializationSuccess_(channel);
         return;
       }
 
       if (call.method === 'add') {
         if (API_KEY_TYPES.indexOf(call.keyType) === -1) {
-          console.error('SamlHandler.onAPICall_: unsupported key type');
+          console.warn('SamlHandler.onAPICall_: unsupported key type');
+          this.recordInAPIErrorHistogram_(
+              SamlHandler.ApiErrorType.UNSUPPORTED_KEY);
           return;
         }
         // Not setting |email_| and |gaiaId_| because this API call will
         // eventually be followed by onCompleteLogin_() which does set it.
         this.apiTokenStore_[call.token] = call;
         this.lastApiPasswordBytes_ = call.passwordBytes;
-
+        console.info('SamlHandler.onAPICall_: password added');
         this.dispatchEvent(new CustomEvent('apiPasswordAdded'));
+      } else if (call.method === 'createaccount') {
+        if (!this.shouldHandleAccountCreationMessage) {
+          console.warn('SamlHandler.onAPICall_: message not supported');
+          this.recordInAPIErrorHistogram_(
+              SamlHandler.ApiErrorType.UNSUPPORTED_MESSAGE);
+          return;
+        }
+        if (!(call.token in this.apiTokenStore_)) {
+          console.warn('SamlHandler.onAPICall_: token mismatch');
+          this.recordInAPIErrorHistogram_(
+              SamlHandler.ApiErrorType.CREATE_TOKEN_MISMATCH);
+          return;
+        }
+        console.info('SamlHandler.onAPICall_: new account created');
+        this.dispatchEvent(new CustomEvent('apiAccountCreated'));
       } else if (call.method === 'confirm') {
         if (!(call.token in this.apiTokenStore_)) {
-          console.error('SamlHandler.onAPICall_: token mismatch');
+          console.warn('SamlHandler.onAPICall_: token mismatch');
+          this.recordInAPIErrorHistogram_(
+              SamlHandler.ApiErrorType.CONFIRM_TOKEN_MISMATCH);
         } else {
           this.confirmToken_ = call.token;
+          console.info('SamlHandler.onAPICall_: password confirmed');
           this.dispatchEvent(new CustomEvent('apiPasswordConfirmed'));
         }
       } else {
-        console.error('SamlHandler.onAPICall_: unknown message');
+        console.warn('SamlHandler.onAPICall_: unknown message');
+        this.recordInAPIErrorHistogram_(
+            SamlHandler.ApiErrorType.UNKNOWN_MESSAGE);
       }
     }
 
@@ -867,7 +1027,3 @@ cr.define('cr.login', function() {
       return this.isSamlPage_;
     }
   }
-
-  // #cr_define_end
-  return {SamlHandler: SamlHandler};
-});

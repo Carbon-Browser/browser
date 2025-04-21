@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "net/server/http_connection.h"
 
@@ -18,7 +23,7 @@ HttpConnection::ReadIOBuffer::ReadIOBuffer()
 }
 
 HttpConnection::ReadIOBuffer::~ReadIOBuffer() {
-  data_ = nullptr;  // base_ owns data_.
+  data_ = nullptr;  // Avoid dangling ptr when `base_` is destroyed.
 }
 
 int HttpConnection::ReadIOBuffer::GetCapacity() const {
@@ -27,6 +32,7 @@ int HttpConnection::ReadIOBuffer::GetCapacity() const {
 
 void HttpConnection::ReadIOBuffer::SetCapacity(int capacity) {
   DCHECK_LE(GetSize(), capacity);
+  data_ = nullptr;
   base_->SetCapacity(capacity);
   data_ = base_->data();
 }
@@ -47,7 +53,7 @@ bool HttpConnection::ReadIOBuffer::IncreaseCapacity() {
 }
 
 char* HttpConnection::ReadIOBuffer::StartOfBuffer() const {
-  return base_->StartOfBuffer();
+  return base::as_writable_chars(base_->everything()).data();
 }
 
 int HttpConnection::ReadIOBuffer::GetSize() const {
@@ -81,6 +87,8 @@ void HttpConnection::ReadIOBuffer::DidConsume(int bytes) {
     int new_capacity = GetCapacity() / kCapacityIncreaseFactor;
     if (new_capacity < kMinimumBufSize)
       new_capacity = kMinimumBufSize;
+    // this avoids the pointer to dangle until `SetCapacity` gets called.
+    data_ = nullptr;
     // realloc() within GrowableIOBuffer::SetCapacity() could move data even
     // when size is reduced. If unconsumed_size == 0, i.e. no data exists in
     // the buffer, free internal buffer first to guarantee no data move.
@@ -129,6 +137,7 @@ void HttpConnection::QueuedWriteIOBuffer::DidConsume(int size) {
   if (size < GetSizeToWrite()) {
     data_ += size;
   } else {  // size == GetSizeToWrite(). Updates data_ to next pending data.
+    data_ = nullptr;
     pending_data_.pop();
     data_ =
         IsEmpty() ? nullptr : const_cast<char*>(pending_data_.front()->data());

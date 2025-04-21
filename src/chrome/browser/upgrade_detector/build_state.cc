@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,12 +19,12 @@ BuildState::~BuildState() {
 void BuildState::SetUpdate(
     UpdateType update_type,
     const base::Version& installed_version,
-    const absl::optional<base::Version>& critical_version) {
+    const std::optional<base::Version>& critical_version) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(update_type != UpdateType::kNone ||
          (!installed_version.IsValid() && !critical_version.has_value()));
 
-  absl::optional<base::Version> new_installed_version;
+  std::optional<base::Version> new_installed_version;
   if (installed_version.IsValid())
     new_installed_version = installed_version;
 

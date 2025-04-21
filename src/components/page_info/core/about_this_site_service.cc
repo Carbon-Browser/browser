@@ -1,47 +1,85 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/page_info/core/about_this_site_service.h"
 
+#include "base/feature_list.h"
 #include "base/metrics/histogram_functions.h"
+#include "components/optimization_guide/core/hints_processing_util.h"
 #include "components/optimization_guide/core/optimization_guide_decision.h"
 #include "components/optimization_guide/core/optimization_metadata.h"
 #include "components/page_info/core/about_this_site_validation.h"
 #include "components/page_info/core/features.h"
 #include "components/page_info/core/proto/about_this_site_metadata.pb.h"
+#include "components/search/search.h"
+#include "components/search_engines/template_url_service.h"
 #include "net/base/url_util.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
 #include "url/gurl.h"
 
 namespace page_info {
+namespace {
 using AboutThisSiteStatus = about_this_site_validation::AboutThisSiteStatus;
+using AboutThisSiteInteraction = AboutThisSiteService::AboutThisSiteInteraction;
 using OptimizationGuideDecision = optimization_guide::OptimizationGuideDecision;
 
-const char kBannerInteractionHistogram[] =
-    "Privacy.AboutThisSite.BannerInteraction";
+void RecordAboutThisSiteInteraction(AboutThisSiteInteraction interaction) {
+  base::UmaHistogramEnumeration("Security.PageInfo.AboutThisSiteInteraction",
+                                interaction);
+}
 
-// These values are persisted to logs. Entries should not be renumbered and
-// numeric values should never be reused.
-// Keep in sync with AboutThisSiteBannerInteraction in enums.xml.
-enum class BannerInteraction {
-  kUrlOpened = 0,
-  kDismissed = 1,
+}  // namespace
 
-  kMaxValue = kDismissed
-};
+AboutThisSiteService::AboutThisSiteService(
+    optimization_guide::OptimizationGuideDecider* optimization_guide_decider,
+    bool is_off_the_record,
+    PrefService* prefs,
+    TemplateURLService* template_url_service)
+    : optimization_guide_decider_(optimization_guide_decider),
+      is_off_the_record_(is_off_the_record),
+      prefs_(prefs),
+      template_url_service_(template_url_service) {
+  if (optimization_guide_decider_) {
+    optimization_guide_decider_->RegisterOptimizationTypes(
+        {optimization_guide::proto::ABOUT_THIS_SITE});
+  }
+}
 
-AboutThisSiteService::AboutThisSiteService(std::unique_ptr<Client> client)
-    : client_(std::move(client)) {}
-
-absl::optional<proto::SiteInfo> AboutThisSiteService::GetAboutThisSiteInfo(
+std::optional<proto::SiteInfo> AboutThisSiteService::GetAboutThisSiteInfo(
     const GURL& url,
-    ukm::SourceId source_id) const {
-  optimization_guide::OptimizationMetadata metadata;
-  auto decision = client_->CanApplyOptimization(url, &metadata);
-  absl::optional<proto::AboutThisSiteMetadata> about_this_site_metadata =
-      metadata.ParsedMetadata<proto::AboutThisSiteMetadata>();
+    ukm::SourceId source_id,
+    const TabHelper* tab_helper) const {
+  if (!search::DefaultSearchProviderIsGoogle(template_url_service_)) {
+    RecordAboutThisSiteInteraction(
+        AboutThisSiteInteraction::kNotShownNonGoogleDSE);
+
+    return std::nullopt;
+  }
+
+  if (!optimization_guide::IsValidURLForURLKeyedHint(url)) {
+    RecordAboutThisSiteInteraction(
+        AboutThisSiteInteraction::kNotShownLocalHost);
+    return std::nullopt;
+  }
+
+  if (!IsOptimizationGuideAllowed()) {
+    RecordAboutThisSiteInteraction(
+        AboutThisSiteInteraction::kNotShownOptimizationGuideNotAllowed);
+    return std::nullopt;
+  }
+  std::optional<proto::AboutThisSiteMetadata> about_this_site_metadata;
+  optimization_guide::OptimizationGuideDecision decision;
+  if (tab_helper) {
+    std::tie(decision, about_this_site_metadata) =
+        tab_helper->GetAboutThisSiteMetadata();
+  } else {
+    optimization_guide::OptimizationMetadata metadata;
+    decision = CanApplyOptimization(url, &metadata);
+    about_this_site_metadata =
+        metadata.ParsedMetadata<proto::AboutThisSiteMetadata>();
+  }
 
   AboutThisSiteStatus status =
       decision == OptimizationGuideDecision::kUnknown
@@ -50,6 +88,13 @@ absl::optional<proto::SiteInfo> AboutThisSiteService::GetAboutThisSiteInfo(
                 about_this_site_metadata);
   base::UmaHistogramEnumeration("Security.PageInfo.AboutThisSiteStatus",
                                 status);
+  RecordAboutThisSiteInteraction(
+      status == AboutThisSiteStatus::kValid
+          ? (about_this_site_metadata->site_info().has_description()
+                 ? AboutThisSiteInteraction::kShownWithDescription
+                 : AboutThisSiteInteraction::kShownWithoutDescription)
+          : AboutThisSiteInteraction::kNotShown);
+
   ukm::builders::AboutThisSiteStatus(source_id)
       .SetStatus(static_cast<int>(status))
       .Record(ukm::UkmRecorder::Get());
@@ -70,13 +115,6 @@ absl::optional<proto::SiteInfo> AboutThisSiteService::GetAboutThisSiteInfo(
   if (kShowSampleContent.Get()) {
     page_info::proto::SiteInfo site_info;
     if (url == GURL("https://example.com")) {
-      auto* description = site_info.mutable_description();
-      description->set_name("Example website");
-      description->set_subtitle("Website");
-      description->set_description(
-          "A domain used in illustrative examples in documents.");
-      description->mutable_source()->set_url("https://example.com");
-      description->mutable_source()->set_label("Example source");
       site_info.mutable_more_about()->set_url(
           "https://example.com/#more-about");
       return site_info;
@@ -96,24 +134,44 @@ absl::optional<proto::SiteInfo> AboutThisSiteService::GetAboutThisSiteInfo(
     }
   }
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
-bool AboutThisSiteService::CanShowBanner(GURL url) {
-  return !dismissed_banners_.contains(url::Origin::Create(url));
+// static
+GURL AboutThisSiteService::CreateMoreAboutUrlForNavigation(const GURL& url) {
+  GURL more_about_url = GURL("https://www.google.com/search");
+
+  // Strip paths of invalid urls
+  const std::string url_spec =
+      optimization_guide::IsValidURLForURLKeyedHint(url)
+          ? url.spec()
+          : url.GetWithEmptyPath().spec();
+
+  more_about_url =
+      net::AppendQueryParameter(more_about_url, "q", "About " + url_spec);
+  more_about_url = net::AppendQueryParameter(more_about_url, "tbm", "ilp");
+  more_about_url =
+      net::AppendQueryParameter(more_about_url, "ctx", "chrome_nav");
+
+  return more_about_url;
 }
 
-void AboutThisSiteService::OnBannerDismissed(GURL url,
-                                             ukm::SourceId source_id) {
-  base::UmaHistogramEnumeration(kBannerInteractionHistogram,
-                                BannerInteraction::kDismissed);
-  dismissed_banners_.insert(url::Origin::Create(url));
+// static
+void AboutThisSiteService::OnAboutThisSiteRowClicked(bool with_description) {
+  RecordAboutThisSiteInteraction(
+      with_description ? AboutThisSiteInteraction::kClickedWithDescription
+                       : AboutThisSiteInteraction::kClickedWithoutDescription);
 }
 
-void AboutThisSiteService::OnBannerURLOpened(GURL url,
-                                             ukm::SourceId source_id) {
-  base::UmaHistogramEnumeration(kBannerInteractionHistogram,
-                                BannerInteraction::kUrlOpened);
+// static
+void AboutThisSiteService::OnOpenedDirectlyFromSidePanel() {
+  RecordAboutThisSiteInteraction(
+      AboutThisSiteInteraction::kOpenedDirectlyFromSidePanel);
+}
+
+// static
+void AboutThisSiteService::OnSameTabNavigation() {
+  RecordAboutThisSiteInteraction(AboutThisSiteInteraction::kSameTabNavigation);
 }
 
 base::WeakPtr<AboutThisSiteService> AboutThisSiteService::GetWeakPtr() {
@@ -121,5 +179,21 @@ base::WeakPtr<AboutThisSiteService> AboutThisSiteService::GetWeakPtr() {
 }
 
 AboutThisSiteService::~AboutThisSiteService() = default;
+
+bool AboutThisSiteService::IsOptimizationGuideAllowed() const {
+  return optimization_guide::IsUserPermittedToFetchFromRemoteOptimizationGuide(
+      is_off_the_record_, prefs_);
+}
+
+optimization_guide::OptimizationGuideDecision
+AboutThisSiteService::CanApplyOptimization(
+    const GURL& url,
+    optimization_guide::OptimizationMetadata* optimization_metadata) const {
+  if (!IsOptimizationGuideAllowed()) {
+    return optimization_guide::OptimizationGuideDecision::kUnknown;
+  }
+  return optimization_guide_decider_->CanApplyOptimization(
+      url, optimization_guide::proto::ABOUT_THIS_SITE, optimization_metadata);
+}
 
 }  // namespace page_info

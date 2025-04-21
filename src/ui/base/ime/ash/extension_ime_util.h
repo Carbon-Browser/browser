@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -99,21 +99,10 @@ bool COMPONENT_EXPORT(UI_BASE_IME_ASH)
 std::string COMPONENT_EXPORT(UI_BASE_IME_ASH)
     GetComponentIDByInputMethodID(const std::string& input_method_id);
 
-// Returns true if |input_method_id| refers to a CrOS 1P experimental
-// multilingual input method.
 bool COMPONENT_EXPORT(UI_BASE_IME_ASH)
-    IsExperimentalMultilingual(const std::string& input_method_id);
+    IsCros1pKorean(const std::string& input_method_id);
 
 }  // namespace extension_ime_util
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-namespace extension_ime_util {
-using ::ash::extension_ime_util::GetInputMethodIDByEngineID;
-using ::ash::extension_ime_util::kMozcExtensionId;
-using ::ash::extension_ime_util::kXkbExtensionId;
-}  // namespace extension_ime_util
-}  // namespace chromeos
 
 #endif  // UI_BASE_IME_ASH_EXTENSION_IME_UTIL_H_

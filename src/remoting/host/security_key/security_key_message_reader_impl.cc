@@ -1,6 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "remoting/host/security_key/security_key_message_reader_impl.h"
 
@@ -8,12 +13,12 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/compiler_specific.h"
 #include "base/files/file.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "remoting/host/security_key/security_key_message.h"
 
 namespace remoting {
@@ -27,7 +32,7 @@ SecurityKeyMessageReaderImpl::SecurityKeyMessageReaderImpl(
   reader_thread_.StartWithOptions(std::move(options));
 
   read_task_runner_ = reader_thread_.task_runner();
-  main_task_runner_ = base::ThreadTaskRunnerHandle::Get();
+  main_task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
 }
 
 SecurityKeyMessageReaderImpl::~SecurityKeyMessageReaderImpl() {
@@ -100,23 +105,21 @@ bool SecurityKeyMessageReaderImpl::ReadFromStream(char* buffer,
                                                   size_t bytes_to_read) {
   DCHECK(buffer);
   DCHECK_GT(bytes_to_read, 0u);
-
-  size_t bytes_read = 0;
+  base::span<uint8_t> buffer_span =
+      base::as_writable_bytes(UNSAFE_TODO(base::span(buffer, bytes_to_read)));
   do {
-    int read_result = read_stream_.ReadAtCurrentPosNoBestEffort(
-        buffer + bytes_read, bytes_to_read - bytes_read);
-    if (read_result < 1) {
-      // 0 means EOF which is normal and should not be logged as an error.
-      if (read_result != 0) {
-        LOG(ERROR) << "Failed to read from stream, ReadAtCurrentPos returned "
-                   << read_result;
-      }
+    std::optional<size_t> read_result =
+        read_stream_.ReadAtCurrentPosNoBestEffort(buffer_span);
+    if (!read_result.has_value()) {
+      LOG(ERROR) << "Failed to read from stream, ReadAtCurrentPos failed";
       return false;
     }
-    bytes_read += read_result;
-  } while (bytes_read < bytes_to_read);
-  DCHECK_EQ(bytes_read, bytes_to_read);
-
+    if (*read_result == 0) {
+      // 0 means EOF which is normal and should not be logged as an error.
+      return false;
+    }
+    buffer_span = buffer_span.subspan(*read_result);
+  } while (!buffer_span.empty());
   return true;
 }
 

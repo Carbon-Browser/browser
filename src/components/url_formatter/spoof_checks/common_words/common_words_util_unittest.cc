@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@ using url_formatter::common_words::IsCommonWord;
 using url_formatter::common_words::SetCommonWordDAFSAForTesting;
 
 TEST(CommonWordsUtilTest, CommonWordsListContainsWhatsExpected) {
-  SetCommonWordDAFSAForTesting(test::kDafsa, sizeof(test::kDafsa));
+  SetCommonWordDAFSAForTesting(test::kDafsa);
 
   EXPECT_TRUE(IsCommonWord("alphabet"));
   EXPECT_FALSE(IsCommonWord("bravo"));

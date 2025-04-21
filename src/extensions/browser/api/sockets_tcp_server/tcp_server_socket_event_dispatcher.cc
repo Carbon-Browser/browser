@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "extensions/browser/api/socket/tcp_socket.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/extensions_browser_client.h"
+#include "extensions/common/extension_id.h"
 #include "net/base/net_errors.h"
 
 namespace extensions {
@@ -60,17 +61,17 @@ TCPServerSocketEventDispatcher::TCPServerSocketEventDispatcher(
   client_sockets_ = client_manager->data_;
 }
 
-TCPServerSocketEventDispatcher::~TCPServerSocketEventDispatcher() {}
+TCPServerSocketEventDispatcher::~TCPServerSocketEventDispatcher() = default;
 
-TCPServerSocketEventDispatcher::AcceptParams::AcceptParams() {}
+TCPServerSocketEventDispatcher::AcceptParams::AcceptParams() = default;
 
 TCPServerSocketEventDispatcher::AcceptParams::AcceptParams(
     const AcceptParams& other) = default;
 
-TCPServerSocketEventDispatcher::AcceptParams::~AcceptParams() {}
+TCPServerSocketEventDispatcher::AcceptParams::~AcceptParams() = default;
 
 void TCPServerSocketEventDispatcher::OnServerSocketListen(
-    const std::string& extension_id,
+    const ExtensionId& extension_id,
     int socket_id) {
   DCHECK_CURRENTLY_ON(thread_id_);
 
@@ -78,7 +79,7 @@ void TCPServerSocketEventDispatcher::OnServerSocketListen(
 }
 
 void TCPServerSocketEventDispatcher::OnServerSocketResume(
-    const std::string& extension_id,
+    const ExtensionId& extension_id,
     int socket_id) {
   DCHECK_CURRENTLY_ON(thread_id_);
 
@@ -86,7 +87,7 @@ void TCPServerSocketEventDispatcher::OnServerSocketResume(
 }
 
 void TCPServerSocketEventDispatcher::StartSocketAccept(
-    const std::string& extension_id,
+    const ExtensionId& extension_id,
     int socket_id) {
   DCHECK_CURRENTLY_ON(thread_id_);
 
@@ -115,8 +116,9 @@ void TCPServerSocketEventDispatcher::StartAccept(const AcceptParams& params) {
       << "Socket has wrong owner.";
 
   // Don't start another accept if the socket has been paused.
-  if (socket->paused())
+  if (socket->paused()) {
     return;
+  }
 
   socket->Accept(
       base::BindOnce(&TCPServerSocketEventDispatcher::AcceptCallback, params));
@@ -127,7 +129,7 @@ void TCPServerSocketEventDispatcher::AcceptCallback(
     const AcceptParams& params,
     int result_code,
     mojo::PendingRemote<network::mojom::TCPConnectedSocket> socket,
-    const absl::optional<net::IPEndPoint>& remote_addr,
+    const std::optional<net::IPEndPoint>& remote_addr,
     mojo::ScopedDataPipeConsumerHandle receive_pipe_handle,
     mojo::ScopedDataPipeProducerHandle send_pipe_handle) {
   DCHECK_CURRENTLY_ON(params.thread_id);
@@ -191,17 +193,27 @@ void TCPServerSocketEventDispatcher::PostEvent(const AcceptParams& params,
 // static
 void TCPServerSocketEventDispatcher::DispatchEvent(
     void* browser_context_id,
-    const std::string& extension_id,
+    const ExtensionId& extension_id,
     std::unique_ptr<Event> event) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
+  if (!ExtensionsBrowserClient::Get()->IsValidContext(browser_context_id)) {
+    return;
+  }
   content::BrowserContext* context =
       reinterpret_cast<content::BrowserContext*>(browser_context_id);
-  if (!extensions::ExtensionsBrowserClient::Get()->IsValidContext(context))
-    return;
   EventRouter* router = EventRouter::Get(context);
-  if (router)
+  if (router) {
+#if BUILDFLAG(IS_CHROMEOS)
+    // Terminal app is the only non-extension to use sockets
+    // (crbug.com/1350479).
+    if (extension_id == kCrOSTerminal) {
+      router->DispatchEventToURL(GURL(extension_id), std::move(event));
+      return;
+    }
+#endif
     router->DispatchEventToExtension(extension_id, std::move(event));
+  }
 }
 
 }  // namespace api

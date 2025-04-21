@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,6 +62,8 @@ class LocalFileChangeTracker : public storage::FileUpdateObserver,
   void OnCreateFile(const storage::FileSystemURL& url) override;
   void OnCreateFileFrom(const storage::FileSystemURL& url,
                         const storage::FileSystemURL& src) override;
+  void OnMoveFileFrom(const storage::FileSystemURL& url,
+                      const storage::FileSystemURL& src) override;
   void OnRemoveFile(const storage::FileSystemURL& url) override;
   void OnModifyFile(const storage::FileSystemURL& url) override;
   void OnCreateDirectory(const storage::FileSystemURL& url) override;

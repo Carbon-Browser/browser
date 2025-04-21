@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,16 @@
 
 #include <stdint.h>
 
+#include <compare>
+#include <optional>
 #include <string>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "chromeos/ash/components/dbus/update_engine/update_engine.pb.h"
 #include "chromeos/dbus/common/dbus_client.h"
 #include "dbus/message.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/cros_system_api/dbus/update_engine/dbus-constants.h"
 
 namespace ash {
@@ -24,7 +25,7 @@ class FakeUpdateEngineClient;
 
 // UpdateEngineClient is used to communicate with the update engine.
 class COMPONENT_EXPORT(ASH_DBUS_UPDATE_ENGINE) UpdateEngineClient
-    : public DBusClient {
+    : public chromeos::DBusClient {
  public:
   // The result code used for RequestUpdateCheck().
   enum UpdateCheckResult {
@@ -35,12 +36,21 @@ class COMPONENT_EXPORT(ASH_DBUS_UPDATE_ENGINE) UpdateEngineClient
 
   // Holds information related to end-of-life.
   struct EolInfo {
+    auto operator<=>(const EolInfo&) const = default;
+
     // The End of Life date. |eol_date.is_null()| will be true to signify an
     // invalid value. More than one classes will use this UpdateEngineClient, so
     // this field is used to maintain consistency instead of converting the End
     // of Life date, that is received in days since epoch, in possibly different
     // ways and at different locations.
     base::Time eol_date;
+
+    // The extended updates date, which should be before eol_date.
+    // |extended_date.is_null()| will be true to signify an empty value.
+    base::Time extended_date;
+
+    // Whether user opt-in is required to receive extended updates.
+    bool extended_opt_in_required = false;
   };
 
   // Interface for observing changes from the update engine.
@@ -185,9 +195,15 @@ class COMPONENT_EXPORT(ASH_DBUS_UPDATE_ENGINE) UpdateEngineClient
 
   // Gets the value of a feature in Update Engine. Returns null result on error.
   using IsFeatureEnabledCallback =
-      base::OnceCallback<void(absl::optional<bool> result)>;
+      base::OnceCallback<void(std::optional<bool> result)>;
   virtual void IsFeatureEnabled(const std::string& feature,
                                 IsFeatureEnabledCallback callback) = 0;
+
+  // Apply a downloaded but deferred update. When `shutdown_after_update` is set
+  // to true, shutdown after applying the update, otherwise reboot. The callback
+  // will run on dbus call failure.
+  virtual void ApplyDeferredUpdate(bool shutdown_after_update,
+                                   base::OnceClosure failure_callback) = 0;
 
  protected:
   // Initialize() should be used instead.

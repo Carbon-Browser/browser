@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,19 +8,20 @@
 #include <string>
 #include <utility>
 
-#include "ash/constants/app_types.h"
 #include "ash/public/cpp/app_types_util.h"
 #include "ash/public/cpp/window_properties.h"
 #include "ash/shelf/shelf_window_watcher.h"
 #include "ash/shell.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/scoped_multi_source_observation.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
+#include "chromeos/ui/base/app_types.h"
+#include "chromeos/ui/base/window_properties.h"
 #include "components/app_constants/constants.h"
 #include "extensions/common/constants.h"
-#include "ui/aura/client/aura_constants.h"
 #include "ui/aura/client/window_types.h"
 #include "ui/aura/window.h"
 #include "ui/base/ui_base_features.h"
@@ -49,14 +50,13 @@ constexpr int kMaxPeriodsWithoutActivity = base::Seconds(15) / kSamplePeriod;
 DemoModeApp GetAppFromAppId(const std::string& app_id) {
   // Each version of the Highlights app is bucketed into the same value.
   if (app_id == extension_misc::kHighlightsAppId ||
-      app_id == extension_misc::kHighlightsAtlasAppId) {
+      app_id == extension_misc::kNewHighlightsAppId) {
     return DemoModeApp::kHighlights;
   }
 
   // Each version of the Screensaver app is bucketed into the same value.
   if (app_id == extension_misc::kScreensaverAppId ||
-      app_id == extension_misc::kScreensaverAtlasAppId ||
-      app_id == extension_misc::kScreensaverKraneZdksAppId) {
+      app_id == extension_misc::kNewAttractLoopAppId) {
     return DemoModeApp::kScreensaver;
   }
 
@@ -154,8 +154,8 @@ DemoModeApp GetAppFromPackageName(const std::string& package_name) {
   return DemoModeApp::kOtherArcApp;
 }
 
-AppType GetAppType(const aura::Window* window) {
-  return static_cast<AppType>(window->GetProperty(aura::client::kAppType));
+chromeos::AppType GetAppType(const aura::Window* window) {
+  return window->GetProperty(chromeos::kAppTypeKey);
 }
 
 const std::string* GetArcPackageName(const aura::Window* window) {
@@ -181,10 +181,10 @@ const ShelfID GetShelfID(const aura::Window* window) {
 DemoModeApp GetAppFromWindow(const aura::Window* window) {
   DCHECK(CanGetAppFromWindow(window));
 
-  AppType app_type = GetAppType(window);
-  if (app_type == AppType::ARC_APP) {
-    // The ShelfID app id isn't used to identify ARC++ apps since it's a hash of
-    // both the package name and the activity.
+  chromeos::AppType app_type = GetAppType(window);
+  if (app_type == chromeos::AppType::ARC_APP) {
+    // The ShelfID app id isn't used to identify ARC++ apps since it's a hash
+    // of both the package name and the activity.
     const std::string* package_name = GetArcPackageName(window);
     return GetAppFromPackageName(*package_name);
   }
@@ -192,18 +192,20 @@ DemoModeApp GetAppFromWindow(const aura::Window* window) {
   std::string app_id = GetShelfID(window).app_id;
 
   // The Chrome "app" in the shelf is just the browser.
-  if (app_id == app_constants::kChromeAppId)
+  if (app_id == app_constants::kChromeAppId) {
     return DemoModeApp::kBrowser;
+  }
 
   // If the window is the "browser" type, having an app ID other than the
   // default indicates a hosted/bookmark app.
-  if (app_type == AppType::CHROME_APP ||
-      (app_type == AppType::BROWSER && !app_id.empty())) {
+  if (app_type == chromeos::AppType::CHROME_APP ||
+      (app_type == chromeos::AppType::BROWSER && !app_id.empty())) {
     return GetAppFromAppId(app_id);
   }
 
-  if (app_type == AppType::BROWSER)
+  if (app_type == chromeos::AppType::BROWSER) {
     return DemoModeApp::kBrowser;
+  }
   return DemoModeApp::kOtherWindow;
 }
 
@@ -262,11 +264,14 @@ class DemoSessionMetricsRecorder::ActiveAppArcPackageNameObserver
   }
 
   void ObserveWindow(aura::Window* window) {
+    if (scoped_observations_.IsObservingSource(window)) {
+      return;
+    }
     scoped_observations_.AddObservation(window);
   }
 
  private:
-  DemoSessionMetricsRecorder* metrics_recorder_;
+  raw_ptr<DemoSessionMetricsRecorder> metrics_recorder_;
   base::ScopedMultiSourceObservation<aura::Window, aura::WindowObserver>
       scoped_observations_{this};
 };
@@ -295,7 +300,8 @@ class DemoSessionMetricsRecorder::UniqueAppsLaunchedArcPackageNameObserver
     const std::string* package_name = GetArcPackageName(window);
 
     if (package_name) {
-      metrics_recorder_->RecordAppLaunch(*package_name, AppType::ARC_APP);
+      metrics_recorder_->RecordAppLaunch(*package_name,
+                                         chromeos::AppType::ARC_APP);
     } else {
       VLOG(1) << "Got null ARC package name";
     }
@@ -305,16 +311,17 @@ class DemoSessionMetricsRecorder::UniqueAppsLaunchedArcPackageNameObserver
   }
 
   void OnWindowDestroyed(aura::Window* window) override {
-    if (scoped_observation_.IsObservingSource(window))
-      scoped_observation_.Reset();
+    DCHECK(scoped_observation_.IsObservingSource(window));
+    scoped_observation_.Reset();
   }
 
   void ObserveWindow(aura::Window* window) {
+    scoped_observation_.Reset();
     scoped_observation_.Observe(window);
   }
 
  private:
-  DemoSessionMetricsRecorder* metrics_recorder_;
+  raw_ptr<DemoSessionMetricsRecorder> metrics_recorder_;
   base::ScopedObservation<aura::Window, aura::WindowObserver>
       scoped_observation_{this};
 };
@@ -362,15 +369,16 @@ DemoSessionMetricsRecorder::~DemoSessionMetricsRecorder() {
 }
 
 void DemoSessionMetricsRecorder::RecordAppLaunch(const std::string& id,
-                                                 AppType app_type) {
+                                                 chromeos::AppType app_type) {
   if (!ShouldRecordAppLaunch(id)) {
     return;
   }
   DemoModeApp app;
-  if (app_type == AppType::ARC_APP)
+  if (app_type == chromeos::AppType::ARC_APP) {
     app = GetAppFromPackageName(id);
-  else
+  } else {
     app = GetAppFromAppId(id);
+  }
 
   if (!unique_apps_launched_.contains(id)) {
     unique_apps_launched_.insert(id);
@@ -401,10 +409,10 @@ void DemoSessionMetricsRecorder::OnWindowActivated(ActivationReason reason,
   if (gained_active->GetType() != aura::client::WINDOW_TYPE_NORMAL)
     return;
 
-  AppType app_type = GetAppType(gained_active);
+  chromeos::AppType app_type = GetAppType(gained_active);
 
   std::string app_id;
-  if (app_type == AppType::ARC_APP) {
+  if (app_type == chromeos::AppType::ARC_APP) {
     const std::string* package_name = GetArcPackageName(gained_active);
 
     if (!package_name) {
@@ -450,14 +458,14 @@ void DemoSessionMetricsRecorder::OnUserActivity(const ui::Event* event) {
 
 void DemoSessionMetricsRecorder::OnMouseEvent(ui::MouseEvent* event) {
   // If event type is mouse/trackpad clicking, increase the metric by one.
-  if (event->type() == ui::ET_MOUSE_PRESSED) {
+  if (event->type() == ui::EventType::kMousePressed) {
     user_clicks_and_presses_++;
   }
 }
 
 void DemoSessionMetricsRecorder::OnTouchEvent(ui::TouchEvent* event) {
   // If event type is screen pressing, increase the metric by one.
-  if (event->type() == ui::ET_TOUCH_PRESSED) {
+  if (event->type() == ui::EventType::kTouchPressed) {
     user_clicks_and_presses_++;
   }
 }

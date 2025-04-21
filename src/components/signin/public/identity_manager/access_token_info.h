@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define COMPONENTS_SIGNIN_PUBLIC_IDENTITY_MANAGER_ACCESS_TOKEN_INFO_H_
 
 #include <string>
+#include <utility>
 
 #include "base/time/time.h"
 
@@ -16,7 +17,9 @@ struct AccessTokenInfo {
   // The access token itself.
   std::string token;
 
-  // The time at which this access token will expire.
+  // The time at which this access token will expire. This will be set to the
+  // NULL time value of `base::Time()` when no expiration time is available
+  // (this happens sometimes on Android).
   base::Time expiration_time;
 
   // Contains extra information regarding the user's currently registered
@@ -25,16 +28,17 @@ struct AccessTokenInfo {
   std::string id_token;
 
   AccessTokenInfo() = default;
-  AccessTokenInfo(const std::string& token_param,
-                  const base::Time& expiration_time_param,
-                  const std::string& id_token)
-      : token(token_param),
+  AccessTokenInfo(std::string token_param,
+                  base::Time expiration_time_param,
+                  std::string id_token)
+      : token(std::move(token_param)),
         expiration_time(expiration_time_param),
-        id_token(id_token) {}
-};
+        id_token(std::move(id_token)) {}
 
-// Defined for testing purposes only.
-bool operator==(const AccessTokenInfo& lhs, const AccessTokenInfo& rhs);
+  // Defined for testing purposes only.
+  friend bool operator==(const AccessTokenInfo&,
+                         const AccessTokenInfo&) = default;
+};
 
 }  // namespace signin
 

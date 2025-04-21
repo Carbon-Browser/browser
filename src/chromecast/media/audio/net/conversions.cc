@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,6 @@ media::SampleFormat ConvertSampleFormat(SampleFormat format) {
     default:
       NOTREACHED() << "Unknown sample format " << format;
   }
-  return kSampleFormatS16;
 }
 
 SampleFormat ConvertSampleFormat(media::SampleFormat format) {
@@ -47,7 +46,6 @@ SampleFormat ConvertSampleFormat(media::SampleFormat format) {
     default:
       NOTREACHED() << "Unhandled sample format " << format;
   }
-  return SAMPLE_FORMAT_INT16_I;
 }
 
 int GetSampleSizeBytes(SampleFormat format) {

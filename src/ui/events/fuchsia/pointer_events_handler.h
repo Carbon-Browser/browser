@@ -1,20 +1,20 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_EVENTS_FUCHSIA_POINTER_EVENTS_HANDLER_H_
 #define UI_EVENTS_FUCHSIA_POINTER_EVENTS_HANDLER_H_
 
-#include <fuchsia/ui/pointer/cpp/fidl.h>
+#include <fidl/fuchsia.ui.pointer/cpp/fidl.h>
 
 #include <array>
 #include <functional>
+#include <optional>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/functional/callback.h"
 #include "ui/events/event.h"
 #include "ui/events/events_export.h"
 
@@ -22,16 +22,15 @@ namespace ui {
 
 // Helper class for keying into a map.
 struct InteractionLess {
-  bool operator()(
-      const fuchsia::ui::pointer::TouchInteractionId& interaction_id,
-      const fuchsia::ui::pointer::TouchInteractionId& other_interaction_id)
-      const {
-    return (std::hash<uint32_t>()(interaction_id.device_id) ^
-            std::hash<uint32_t>()(interaction_id.pointer_id) ^
-            std::hash<uint32_t>()(interaction_id.interaction_id)) <
-           (std::hash<uint32_t>()(other_interaction_id.device_id) ^
-            std::hash<uint32_t>()(other_interaction_id.pointer_id) ^
-            std::hash<uint32_t>()(other_interaction_id.interaction_id));
+  bool operator()(const fuchsia_ui_pointer::TouchInteractionId& interaction_id,
+                  const fuchsia_ui_pointer::TouchInteractionId&
+                      other_interaction_id) const {
+    return (std::hash<uint32_t>()(interaction_id.device_id()) ^
+            std::hash<uint32_t>()(interaction_id.pointer_id()) ^
+            std::hash<uint32_t>()(interaction_id.interaction_id())) <
+           (std::hash<uint32_t>()(other_interaction_id.device_id()) ^
+            std::hash<uint32_t>()(other_interaction_id.pointer_id()) ^
+            std::hash<uint32_t>()(other_interaction_id.interaction_id()));
   }
 };
 
@@ -42,8 +41,9 @@ struct InteractionLess {
 // the view pixel ratio in FlatlandWindow to get physical coordinates.
 class EVENTS_EXPORT PointerEventsHandler {
  public:
-  PointerEventsHandler(fuchsia::ui::pointer::TouchSourceHandle touch_source,
-                       fuchsia::ui::pointer::MouseSourceHandle mouse_source);
+  PointerEventsHandler(
+      fidl::ClientEnd<fuchsia_ui_pointer::TouchSource> touch_source,
+      fidl::ClientEnd<fuchsia_ui_pointer::MouseSource> mouse_source);
   ~PointerEventsHandler();
 
   // This function collects Fuchsia's TouchPointerSample and MousePointerSample
@@ -56,18 +56,18 @@ class EVENTS_EXPORT PointerEventsHandler {
   using MouseDeviceId = uint32_t;
 
   void OnTouchSourceWatchResult(
-      std::vector<fuchsia::ui::pointer::TouchEvent> events);
+      fidl::Result<fuchsia_ui_pointer::TouchSource::Watch>& result);
   void OnMouseSourceWatchResult(
-      std::vector<fuchsia::ui::pointer::MouseEvent> events);
+      fidl::Result<fuchsia_ui_pointer::MouseSource::Watch>& result);
 
   base::RepeatingCallback<void(Event*)> event_callback_;
 
   // Touch State ---------------------------------------------------------------
   // Channel for touch events from Scenic.
-  fuchsia::ui::pointer::TouchSourcePtr touch_source_;
+  fidl::Client<fuchsia_ui_pointer::TouchSource> touch_source_;
 
   // Receive touch events from Scenic. Must be copyable.
-  fit::function<void(std::vector<fuchsia::ui::pointer::TouchEvent>)>
+  fit::function<void(std::vector<fuchsia_ui_pointer::TouchEvent>)>
       touch_responder_;
 
   // Per-interaction buffer of touch events from Scenic. When an interaction
@@ -78,7 +78,7 @@ class EVENTS_EXPORT PointerEventsHandler {
   // direct to client. When interaction ownership becomes DENIED, we delete the
   // buffer, and the client does not get any previous or future events in this
   // interaction.
-  base::flat_map<fuchsia::ui::pointer::TouchInteractionId,
+  base::flat_map<fuchsia_ui_pointer::TouchInteractionId,
                  std::vector<TouchEvent>,
                  InteractionLess>
       touch_buffer_;
@@ -87,21 +87,21 @@ class EVENTS_EXPORT PointerEventsHandler {
   // hanging-get Watch() call to gather touch events, and the client is expected
   // to respond with consumption intent on the following hanging-get Watch()
   // call. Store responses here for the next call.
-  std::vector<fuchsia::ui::pointer::TouchResponse> touch_responses_;
+  std::vector<fuchsia_ui_pointer::TouchResponse> touch_responses_;
 
   // The fuchsia.ui.pointer.TouchSource protocol issues channel-global view
   // parameters on connection and on change. Events must apply these view
   // parameters to correctly map to logical view coordinates. The "nullopt"
   // state represents the absence of view parameters, early in the protocol
   // lifecycle.
-  absl::optional<fuchsia::ui::pointer::ViewParameters> touch_view_parameters_;
+  std::optional<fuchsia_ui_pointer::ViewParameters> touch_view_parameters_;
 
   // Mouse State ---------------------------------------------------------------
   // Channel for mouse events from Scenic.
-  fuchsia::ui::pointer::MouseSourcePtr mouse_source_;
+  fidl::Client<fuchsia_ui_pointer::MouseSource> mouse_source_;
 
   // Receive mouse events from Scenic. Must be copyable.
-  fit::function<void(std::vector<fuchsia::ui::pointer::MouseEvent>)>
+  fit::function<void(std::vector<fuchsia_ui_pointer::MouseEvent>)>
       mouse_responder_;
 
   // Each MouseDeviceId maps to the bitmap of currently pressed buttons for that
@@ -110,17 +110,17 @@ class EVENTS_EXPORT PointerEventsHandler {
   // 11, as defined in ui/events/event_constants.h.
   //
   // The high level algorithm for any given mouse and button is:
-  //   if !mouse_down[id] && !button then: change = ET_MOUSE_MOVED
-  //   if !mouse_down[id] &&  button then: change = ET_MOUSE_PRESSED;
+  //   if !mouse_down[id] && !button then: change = EventType::kMouseMoved
+  //   if !mouse_down[id] &&  button then: change = EventType::kMousePressed;
   //       mouse_down[id] |= button // sets button bit to 1
-  //   if  mouse_down[id] &&  button then: change = ET_MOUSE_DRAGGED
-  //   if  mouse_down[id] && !button then: change = ET_MOUSE_RELEASED;
+  //   if  mouse_down[id] &&  button then: change = EventType::kMouseDragged
+  //   if  mouse_down[id] && !button then: change = EventType::kMouseReleased;
   //       mouse_down[id] ^= button // sets button bit to 0
   base::flat_map<MouseDeviceId, /*pressed_buttons_flags=*/int> mouse_down_;
 
   // For each mouse device, its device-specific information, such as mouse
   // button priority order.
-  base::flat_map<MouseDeviceId, fuchsia::ui::pointer::MouseDeviceInfo>
+  base::flat_map<MouseDeviceId, fuchsia_ui_pointer::MouseDeviceInfo>
       mouse_device_info_;
 
   // The fuchsia.ui.pointer.MouseSource protocol issues channel-global view
@@ -128,7 +128,7 @@ class EVENTS_EXPORT PointerEventsHandler {
   // parameters to correctly map to logical view coordinates. The "nullopt"
   // state represents the absence of view parameters, early in the protocol
   // lifecycle.
-  absl::optional<fuchsia::ui::pointer::ViewParameters> mouse_view_parameters_;
+  std::optional<fuchsia_ui_pointer::ViewParameters> mouse_view_parameters_;
 };
 
 }  // namespace ui

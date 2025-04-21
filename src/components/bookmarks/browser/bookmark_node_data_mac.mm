@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@ namespace bookmarks {
 // static
 const ui::ClipboardFormatType& BookmarkNodeData::GetBookmarkFormatType() {
   static const base::NoDestructor<ui::ClipboardFormatType> format(
-      ui::ClipboardFormatType::GetType(
+      ui::ClipboardFormatType::CustomPlatformType(
           base::SysNSStringToUTF8(kUTTypeChromiumBookmarkDictionaryList)));
 
   return *format;
@@ -29,18 +29,18 @@ const ui::ClipboardFormatType& BookmarkNodeData::GetBookmarkFormatType() {
 // static
 bool BookmarkNodeData::ClipboardContainsBookmarks() {
   NSPasteboard* pb =
-      ui::ClipboardUtil::PasteboardFromBuffer(ui::ClipboardBuffer::kCopyPaste);
+      ui::clipboard_util::PasteboardFromBuffer(ui::ClipboardBuffer::kCopyPaste);
   return PasteboardContainsBookmarks(pb);
 }
 
-void BookmarkNodeData::WriteToClipboard() {
+void BookmarkNodeData::WriteToClipboard(bool is_off_the_record) {
   NSPasteboard* pb =
-      ui::ClipboardUtil::PasteboardFromBuffer(ui::ClipboardBuffer::kCopyPaste);
-  WriteBookmarksToPasteboard(pb, elements, profile_path_);
+      ui::clipboard_util::PasteboardFromBuffer(ui::ClipboardBuffer::kCopyPaste);
+  WriteBookmarksToPasteboard(pb, elements, profile_path_, is_off_the_record);
 }
 
 bool BookmarkNodeData::ReadFromClipboard(ui::ClipboardBuffer buffer) {
-  NSPasteboard* pb = ui::ClipboardUtil::PasteboardFromBuffer(buffer);
+  NSPasteboard* pb = ui::clipboard_util::PasteboardFromBuffer(buffer);
   base::FilePath file_path;
   if (ReadBookmarksFromPasteboard(pb, &elements, &file_path)) {
     profile_path_ = file_path;
@@ -57,7 +57,10 @@ void BookmarkNodeData::Write(const base::FilePath& profile_path,
   ui::OSExchangeDataProviderMac& provider =
       static_cast<ui::OSExchangeDataProviderMac&>(data->provider());
   NSPasteboard* pb = provider.GetPasteboard();
-  WriteBookmarksToPasteboard(pb, elements, profile_path);
+  // TODO(crbug.com/40945200): Add support for off-the-record bookmarks during
+  // drag and drop.
+  WriteBookmarksToPasteboard(pb, elements, profile_path,
+                             /*is_off_the_record=*/false);
 }
 
 bool BookmarkNodeData::Read(const ui::OSExchangeData& data) {

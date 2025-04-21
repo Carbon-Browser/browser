@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,18 +10,18 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/time/time.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/timer.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "third_party/blink/renderer/platform/wtf/wtf_size_t.h"
 
 namespace base {
+class SingleThreadTaskRunner;
 class TickClock;
 }
 
 namespace blink {
-
-class SingleThreadTaskRunner;
 
 // WebSocketMessageChunkAccumulator stores chunks for one WebSocket message. A
 // user can call Append() to append bytes, and call GetView() to get a list of
@@ -29,9 +29,8 @@ class SingleThreadTaskRunner;
 // We don't use SharedBuffer due to an observed performance problem of FastFree.
 // TODO(yhirano): Remove this once the performance problem is fixed in a general
 // manner.
-class MODULES_EXPORT WebSocketMessageChunkAccumulator final {
-  DISALLOW_NEW();
-
+class MODULES_EXPORT WebSocketMessageChunkAccumulator final
+    : public GarbageCollected<WebSocketMessageChunkAccumulator> {
  public:
   explicit WebSocketMessageChunkAccumulator(
       scoped_refptr<base::SingleThreadTaskRunner> task_runner);
@@ -49,6 +48,8 @@ class MODULES_EXPORT WebSocketMessageChunkAccumulator final {
 
   // Clear all stored data and cancel timers.
   void Reset();
+
+  void Trace(Visitor*) const;
 
   // The regions will be available until Clear() is called.
   Vector<base::span<const char>> GetView() const;
@@ -76,7 +77,7 @@ class MODULES_EXPORT WebSocketMessageChunkAccumulator final {
   void OnTimerFired(TimerBase*);
 
   size_t GetLastSegmentSize() const {
-    DCHECK(!segments_.IsEmpty());
+    DCHECK(!segments_.empty());
     return size_ % kSegmentSize > 0 ? size_ % kSegmentSize : kSegmentSize;
   }
 
@@ -84,7 +85,7 @@ class MODULES_EXPORT WebSocketMessageChunkAccumulator final {
   Vector<SegmentPtr> pool_;
   size_t size_ = 0;
   wtf_size_t num_pooled_segments_to_be_removed_ = 0;
-  TaskRunnerTimer<WebSocketMessageChunkAccumulator> timer_;
+  HeapTaskRunnerTimer<WebSocketMessageChunkAccumulator> timer_;
 };
 
 }  // namespace blink

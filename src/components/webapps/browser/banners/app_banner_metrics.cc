@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,6 @@ namespace webapps {
 const char kDismissEventHistogram[] = "AppBanners.DismissEvent";
 const char kDisplayEventHistogram[] = "AppBanners.DisplayEvent";
 const char kInstallEventHistogram[] = "AppBanners.InstallEvent";
-const char kMinutesHistogram[] =
-    "AppBanners.MinutesFromFirstVisitToBannerShown";
 const char kUserResponseHistogram[] = "AppBanners.UserResponse";
 const char kBeforeInstallEventHistogram[] = "AppBanners.BeforeInstallEvent";
 const char kInstallableStatusCodeHistogram[] =
@@ -40,14 +38,6 @@ void TrackInstallEvent(int event) {
   base::UmaHistogramSparse(kInstallEventHistogram, event);
 }
 
-void TrackMinutesFromFirstVisitToBannerShown(int minutes) {
-  // Histogram ranges from 1 minute to the number of minutes in 21 days.
-  // This is one more day than the decay length of time for site engagement,
-  // and seven more days than the expiry of visits for the app banner
-  // navigation heuristic.
-  UMA_HISTOGRAM_CUSTOM_COUNTS(kMinutesHistogram, minutes, 1, 30240, 100);
-}
-
 void TrackUserResponse(int event) {
   DCHECK_LT(USER_RESPONSE_MIN, event);
   DCHECK_LT(event, USER_RESPONSE_MAX);
@@ -61,11 +51,12 @@ void TrackBeforeInstallEvent(int event) {
 }
 
 void TrackInstallableStatusCode(InstallableStatusCode code) {
-  DCHECK_LE(NO_ERROR_DETECTED, code);
-  DCHECK_LT(code, MAX_ERROR_CODE);
-  if (code != IN_INCOGNITO) {
+  DCHECK_LE(InstallableStatusCode::NO_ERROR_DETECTED, code);
+  DCHECK_LT(code, InstallableStatusCode::MAX_ERROR_CODE);
+  if (code != InstallableStatusCode::IN_INCOGNITO) {
     // Do not log that we are in incognito to UMA.
-    base::UmaHistogramSparse(kInstallableStatusCodeHistogram, code);
+    base::UmaHistogramSparse(kInstallableStatusCodeHistogram,
+                             static_cast<int>(code));
   }
 }
 

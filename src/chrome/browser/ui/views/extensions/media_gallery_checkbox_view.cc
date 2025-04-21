@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,13 +29,15 @@ MediaGalleryCheckboxView::MediaGalleryCheckboxView(
   SetBorder(views::CreateEmptyBorder(gfx::Insets::TLBR(0, dialog_insets.left(),
                                                        trailing_vertical_space,
                                                        dialog_insets.right())));
-  if (menu_controller)
+  if (menu_controller) {
     set_context_menu_controller(menu_controller);
+  }
 
   checkbox_ = AddChildView(std::make_unique<views::Checkbox>(
       pref_info.GetGalleryDisplayName(), views::Button::PressedCallback()));
-  if (menu_controller)
+  if (menu_controller) {
     checkbox_->set_context_menu_controller(menu_controller);
+  }
   checkbox_->SetElideBehavior(gfx::ELIDE_MIDDLE);
   std::u16string tooltip_text = pref_info.GetGalleryTooltip();
   checkbox_->SetTooltipText(tooltip_text);
@@ -43,8 +45,9 @@ MediaGalleryCheckboxView::MediaGalleryCheckboxView(
   std::u16string details = pref_info.GetGalleryAdditionalDetails();
   secondary_text_ = AddChildView(std::make_unique<views::Label>(
       details, views::style::CONTEXT_LABEL, views::style::STYLE_SECONDARY));
-  if (menu_controller)
+  if (menu_controller) {
     secondary_text_->set_context_menu_controller(menu_controller);
+  }
   secondary_text_->SetVisible(details.length() > 0);
   secondary_text_->SetElideBehavior(gfx::ELIDE_HEAD);
   secondary_text_->SetTooltipText(tooltip_text);
@@ -55,17 +58,22 @@ MediaGalleryCheckboxView::MediaGalleryCheckboxView(
 
 MediaGalleryCheckboxView::~MediaGalleryCheckboxView() = default;
 
-void MediaGalleryCheckboxView::Layout() {
-  views::BoxLayoutView::Layout();
-  if (GetPreferredSize().width() <= GetLocalBounds().width())
+void MediaGalleryCheckboxView::Layout(PassKey) {
+  LayoutSuperclass<views::BoxLayoutView>(this);
+  if (GetPreferredSize().width() <= GetLocalBounds().width()) {
     return;
+  }
 
   // If box layout doesn't fit, do custom layout. The secondary text should take
   // up at most half of the space and the checkbox can take up whatever is left.
   int checkbox_width = checkbox_->GetPreferredSize().width();
-  int secondary_text_width = secondary_text_->GetPreferredSize().width();
-  if (!secondary_text_->GetVisible())
+  int secondary_text_width =
+      secondary_text_
+          ->GetPreferredSize(views::SizeBounds(secondary_text_->width(), {}))
+          .width();
+  if (!secondary_text_->GetVisible()) {
     secondary_text_width = 0;
+  }
 
   gfx::Rect area = GetContentsBounds();
 
@@ -82,5 +90,5 @@ void MediaGalleryCheckboxView::Layout() {
   }
 }
 
-BEGIN_METADATA(MediaGalleryCheckboxView, views::BoxLayoutView)
+BEGIN_METADATA(MediaGalleryCheckboxView)
 END_METADATA

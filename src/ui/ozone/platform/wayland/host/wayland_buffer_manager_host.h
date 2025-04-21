@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,11 +12,13 @@
 
 #include "base/containers/flat_map.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
+#include "ui/gfx/frame_data.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/gpu_fence_handle.h"
 #include "ui/gfx/native_widget_types.h"
@@ -28,6 +30,7 @@
 
 namespace ui {
 
+class DrmSyncobjIoctlWrapper;
 class WaylandBufferBacking;
 class WaylandBufferHandle;
 class WaylandConnection;
@@ -60,14 +63,17 @@ class WaylandBufferManagerHost : public ozone::mojom::WaylandBufferManagerHost {
   // destroyed.
   void OnChannelDestroyed();
 
+  // Called by WaylandFrameManager if overlay data is invalid.
+  void OnCommitOverlayError(const std::string& message);
+
   // Returns supported buffer formats either from zwp_linux_dmabuf or wl_drm.
   wl::BufferFormatsWithModifiersMap GetSupportedBufferFormats() const;
 
   bool SupportsDmabuf() const;
   bool SupportsAcquireFence() const;
   bool SupportsViewporter() const;
-  bool SupportsNonBackedSolidColorBuffers() const;
-  uint32_t GetSurfaceAugmentorVersion() const;
+  bool SupportsOverlays() const;
+  bool SupportsSinglePixelBuffer() const;
 
   // ozone::mojom::WaylandBufferManagerHost overrides:
   //
@@ -95,13 +101,12 @@ class WaylandBufferManagerHost : public ozone::mojom::WaylandBufferManagerHost {
                             uint64_t length,
                             const gfx::Size& size,
                             uint32_t buffer_id) override;
-  // Called by the GPU and asks to import a solid color wl_buffer. Check
+  // Called by the GPU and asks to create a single pixel wl_buffer. Check
   // comments in the
   // ui/ozone/platform/wayland/mojom/wayland_buffer_manager.mojom. The
-  // availability of this depends on existence of surface-augmenter protocol.
-  void CreateSolidColorBuffer(const gfx::Size& size,
-                              SkColor color,
-                              uint32_t buffer_id) override;
+  // availability of this depends on existence of single pixel buffer protocol.
+  void CreateSinglePixelBuffer(const SkColor4f& color,
+                               uint32_t buffer_id) override;
 
   // Called by the GPU to destroy the imported wl_buffer with a |buffer_id|.
   void DestroyBuffer(uint32_t buffer_id) override;
@@ -110,6 +115,7 @@ class WaylandBufferManagerHost : public ozone::mojom::WaylandBufferManagerHost {
   // and OnPresentation on successful swap and pixels presented.
   void CommitOverlays(gfx::AcceleratedWidget widget,
                       uint32_t frame_id,
+                      const gfx::FrameData& data,
                       std::vector<wl::WaylandOverlayConfig> overlays) override;
 
   // Ensures a WaylandBufferHandle of |buffer_id| is created for the
@@ -122,15 +128,47 @@ class WaylandBufferManagerHost : public ozone::mojom::WaylandBufferManagerHost {
   WaylandBufferHandle* GetBufferHandle(WaylandSurface* requestor,
                                        uint32_t buffer_id);
 
+  // Gets the buffer format of |buffer_id| used for |requestor| if it is a
+  // DMA based buffer.
+  uint32_t GetBufferFormat(WaylandSurface* requestor, uint32_t buffer_id);
+
   // Tells the |buffer_manager_gpu_ptr_| the result of a swap call and provides
   // it with the presentation feedback.
-  void OnSubmission(gfx::AcceleratedWidget widget,
-                    uint32_t frame_id,
-                    const gfx::SwapResult& swap_result,
-                    gfx::GpuFenceHandle release_fence);
-  void OnPresentation(gfx::AcceleratedWidget widget,
-                      uint32_t frame_id,
-                      const gfx::PresentationFeedback& feedback);
+  void OnSubmission(
+      gfx::AcceleratedWidget widget,
+      uint32_t frame_id,
+      const gfx::SwapResult& swap_result,
+      gfx::GpuFenceHandle release_fence,
+      const std::vector<wl::WaylandPresentationInfo>& presentation_infos);
+  void OnPresentation(
+      gfx::AcceleratedWidget widget,
+      const std::vector<wl::WaylandPresentationInfo>& presentation_infos);
+
+  // Inserts a sync_file into the write fence list of the DMA-BUF. When the
+  // compositor tries to read from this DMA-BUF via GL, the kernel will
+  // automatically force its GPU context to wait on all write fences in the
+  // DMA-BUF, including the fence we inserted. This is used to synchronize with
+  // compositors that don't support the
+  // linux-explicit-synchronization-unstable-v1 protocol. Requires Linux 6.0 or
+  // higher.
+  void InsertAcquireFence(uint32_t buffer_id, int sync_fd);
+
+  // Extracts a sync_file that represents all pending fences inside the DMA-BUF
+  // kernel object. When the compositor reads the DMA-BUF from GL, the kernel
+  // automatically adds a completion fence to the read fences list of the
+  // DMA-BUF that will be signalled once the read operation completes. This is
+  // used to synchronize with compositors that don't support the
+  // linux-explicit-synchronization-unstable-v1 protocol. Requires Linux 6.0 or
+  // higher.
+  base::ScopedFD ExtractReleaseFence(uint32_t buffer_id);
+
+  static bool SupportsImplicitSyncInterop();
+
+  DrmSyncobjIoctlWrapper* drm_syncobj_wrapper() {
+    return drm_syncobj_wrapper_.get();
+  }
+
+  void SetDrmSyncobjWrapper(std::unique_ptr<DrmSyncobjIoctlWrapper> wrapper);
 
  private:
   // Validates data sent from GPU. If invalid, returns false and sets an error
@@ -150,7 +188,6 @@ class WaylandBufferManagerHost : public ozone::mojom::WaylandBufferManagerHost {
                            uint32_t buffer_id);
   bool ValidateDataFromGpu(const gfx::Size& size, uint32_t buffer_id);
   bool ValidateBufferExistence(uint32_t buffer_id);
-  bool ValidateOverlayData(const wl::WaylandOverlayConfig& overlay_data);
 
   // Terminates the GPU process on invalid data received
   void TerminateGpuProcess();
@@ -169,9 +206,22 @@ class WaylandBufferManagerHost : public ozone::mojom::WaylandBufferManagerHost {
   // data sent by the GPU to the browser process.
   base::OnceCallback<void(std::string)> terminate_gpu_cb_;
 
+  // This needs to be before |buffer_backings_| so that it is deleted after
+  // buffer handles which need this at the time of destruction when explicit
+  // sync is available.
+  // TODO(crbug.com/367623923) If DrmRenderNodePathFinder could cache the path
+  // we could initialize this in the constructor for this class using a
+  // DrmRenderNodeHandle, passing it the path obtained from the
+  // DrmRenderNodePathFinder and remove SetDrm() instead of doing this in
+  // OzonePlatformWayland::InitializeUI() which is where it is done currently to
+  // limit the number of path lookups.
+  std::unique_ptr<DrmSyncobjIoctlWrapper> drm_syncobj_wrapper_;
+
   // Maps buffer_id's to corresponding WaylandBufferBacking objects.
   base::flat_map<uint32_t, std::unique_ptr<WaylandBufferBacking>>
       buffer_backings_;
+
+  base::flat_map<uint32_t, base::ScopedFD> dma_buffers_;
 };
 
 }  // namespace ui

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,7 @@
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ash/shell.h"
+#include "chrome/browser/lifetime/application_lifetime_chromeos.h"
 #endif
 
 #if BUILDFLAG(ENABLE_CHROME_NOTIFICATIONS)
@@ -43,7 +44,11 @@ void HandleAppExitingForPlatform() {
   // This clears existing notifications from the message center and their
   // associated ScopedKeepAlives. Chrome OS doesn't use ScopedKeepAlives for
   // notifications.
-  g_browser_process->notification_ui_manager()->StartShutdown();
+  if (auto* notification_ui_manager =
+          g_browser_process->notification_ui_manager();
+      notification_ui_manager) {
+    notification_ui_manager->StartShutdown();
+  }
 #endif
 
   views::Widget::CloseAllSecondaryWidgets();
@@ -58,7 +63,8 @@ void HandleAppExitingForPlatform() {
     // if something prevents a browser from closing before SetTryingToQuit()
     // gets called (e.g. browser->TabsNeedBeforeUnloadFired() is true).
     // NotifyAndTerminate does nothing if called more than once.
-    browser_shutdown::NotifyAndTerminate(true /* fast_path */);
+    browser_shutdown::NotifyAppTerminating();
+    StopSession();
   }
 #endif
 }

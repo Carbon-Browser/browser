@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 #include "ash/components/arc/arc_util.h"
 #include "ash/public/cpp/assistant/assistant_state.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
 #include "chrome/browser/ash/assistant/assistant_util.h"
@@ -32,7 +32,7 @@ AssistantStateClient::~AssistantStateClient() {
 
 void AssistantStateClient::NotifyFeatureAllowed() {
   DCHECK(profile_);
-  chromeos::assistant::AssistantAllowedState state =
+  ash::assistant::AssistantAllowedState state =
       assistant::IsAssistantAllowedForProfile(profile_);
   ash::AssistantState::Get()->NotifyFeatureAllowed(state);
 }
@@ -49,8 +49,9 @@ void AssistantStateClient::NotifyLocaleChanged() {
 }
 
 void AssistantStateClient::ActiveUserChanged(user_manager::User* active_user) {
-  if (!active_user)
+  if (!active_user) {
     return;
+  }
 
   active_user->AddProfileCreatedObserver(
       base::BindOnce(&AssistantStateClient::SetProfileByUser,
@@ -69,14 +70,16 @@ void AssistantStateClient::SetProfileByUser(const user_manager::User* user) {
 }
 
 void AssistantStateClient::SetProfile(Profile* profile) {
-  if (profile_ == profile)
+  if (profile_ == profile) {
     return;
+  }
 
   profile_ = profile;
   pref_change_registrar_.reset();
 
-  if (!profile_)
+  if (!profile_) {
     return;
+  }
 
   PrefService* prefs = profile->GetPrefs();
   pref_change_registrar_ = std::make_unique<PrefChangeRegistrar>();
@@ -88,7 +91,7 @@ void AssistantStateClient::SetProfile(Profile* profile) {
                           base::Unretained(this)));
 
   pref_change_registrar_->Add(
-      chromeos::assistant::prefs::kAssistantDisabledByPolicy,
+      ash::assistant::prefs::kAssistantDisabledByPolicy,
       base::BindRepeating(&AssistantStateClient::NotifyFeatureAllowed,
                           base::Unretained(this)));
 

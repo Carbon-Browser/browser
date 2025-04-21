@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,7 @@ SessionTabHelper::SessionTabHelper(content::WebContents* contents,
 
 SessionTabHelper::~SessionTabHelper() = default;
 
-void SessionTabHelper::SetWindowID(const SessionID& id) {
+void SessionTabHelper::SetWindowID(SessionID id) {
   window_id_ = id;
   window_id_changed_callbacks_.Notify(id);
 }

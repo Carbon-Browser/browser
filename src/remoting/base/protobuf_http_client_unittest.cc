@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/gmock_callback_support.h"
@@ -156,20 +156,20 @@ class ProtobufHttpClientTest : public testing::Test {
 
 void ProtobufHttpClientTest::ExpectCallWithTokenSuccess() {
   EXPECT_CALL(mock_token_getter_, CallWithToken(_))
-      .WillOnce(RunOnceCallback<0>(OAuthTokenGetter::Status::SUCCESS, "",
-                                   kFakeAccessToken));
+      .WillOnce(RunOnceCallback<0>(OAuthTokenGetter::Status::SUCCESS,
+                                   OAuthTokenInfo(kFakeAccessToken)));
 }
 
 void ProtobufHttpClientTest::ExpectCallWithTokenAuthError() {
   EXPECT_CALL(mock_token_getter_, CallWithToken(_))
-      .WillOnce(
-          RunOnceCallback<0>(OAuthTokenGetter::Status::AUTH_ERROR, "", ""));
+      .WillOnce(RunOnceCallback<0>(OAuthTokenGetter::Status::AUTH_ERROR,
+                                   OAuthTokenInfo()));
 }
 
 void ProtobufHttpClientTest::ExpectCallWithTokenNetworkError() {
   EXPECT_CALL(mock_token_getter_, CallWithToken(_))
-      .WillOnce(
-          RunOnceCallback<0>(OAuthTokenGetter::Status::NETWORK_ERROR, "", ""));
+      .WillOnce(RunOnceCallback<0>(OAuthTokenGetter::Status::NETWORK_ERROR,
+                                   OAuthTokenInfo()));
 }
 
 // Unary request tests.
@@ -192,10 +192,9 @@ TEST_F(ProtobufHttpClientTest, SendRequestAndDecodeResponse) {
   ASSERT_TRUE(test_url_loader_factory_.IsPending(kTestFullUrl));
   ASSERT_EQ(1, test_url_loader_factory_.NumPending());
   auto* pending_request = test_url_loader_factory_.GetPendingRequest(0);
-  std::string auth_header;
-  ASSERT_TRUE(pending_request->request.headers.GetHeader(
-      kAuthorizationHeaderKey, &auth_header));
-  ASSERT_EQ(kFakeAccessTokenHeaderValue, auth_header);
+  ASSERT_THAT(
+      pending_request->request.headers.GetHeader(kAuthorizationHeaderKey),
+      testing::Optional(std::string(kFakeAccessTokenHeaderValue)));
   const auto& data_element =
       pending_request->request.request_body->elements()->front();
   ASSERT_EQ(data_element.type(), network::DataElement::Tag::kBytes);
@@ -360,7 +359,7 @@ TEST_F(ProtobufHttpClientTest,
   client_.CancelPendingRequests();
   ASSERT_TRUE(token_callback);
   std::move(token_callback)
-      .Run(OAuthTokenGetter::Status::SUCCESS, "", kFakeAccessToken);
+      .Run(OAuthTokenGetter::Status::SUCCESS, OAuthTokenInfo(kFakeAccessToken));
 
   // Verify no request.
   ASSERT_FALSE(test_url_loader_factory_.IsPending(kTestFullUrl));

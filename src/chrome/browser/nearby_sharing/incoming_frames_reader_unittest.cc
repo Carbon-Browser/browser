@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,13 @@
 
 #include <vector>
 
-#include "ash/services/nearby/public/cpp/mock_nearby_process_manager.h"
-#include "ash/services/nearby/public/cpp/mock_nearby_sharing_decoder.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/time/time.h"
-#include "chrome/browser/nearby_sharing/fake_nearby_connection.h"
 #include "chrome/services/sharing/public/proto/wire_format.pb.h"
+#include "chromeos/ash/components/nearby/common/connections_manager/fake_nearby_connection.h"
+#include "chromeos/ash/services/nearby/public/cpp/mock_nearby_process_manager.h"
+#include "chromeos/ash/services/nearby/public/cpp/mock_nearby_sharing_decoder.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -47,13 +47,12 @@ std::vector<uint8_t> GetCancelFrame() {
 }
 
 void ExpectIntroductionFrame(
-    const absl::optional<sharing::mojom::V1FramePtr>& frame) {
+    const std::optional<sharing::mojom::V1FramePtr>& frame) {
   ASSERT_TRUE(frame);
   EXPECT_TRUE((*frame)->is_introduction());
 }
 
-void ExpectCancelFrame(
-    const absl::optional<sharing::mojom::V1FramePtr>& frame) {
+void ExpectCancelFrame(const std::optional<sharing::mojom::V1FramePtr>& frame) {
   ASSERT_TRUE(frame);
   EXPECT_TRUE((*frame)->is_cancel_frame());
 }
@@ -107,7 +106,7 @@ TEST_F(IncomingFramesReaderTest, ReadTimedOut) {
   frames_reader().ReadFrame(
       sharing::mojom::V1Frame::Tag::kIntroduction,
       base::BindLambdaForTesting(
-          [&](absl::optional<sharing::mojom::V1FramePtr> frame) {
+          [&](std::optional<sharing::mojom::V1FramePtr> frame) {
             EXPECT_FALSE(frame);
             run_loop.Quit();
           }),
@@ -142,7 +141,7 @@ TEST_F(IncomingFramesReaderTest, ReadAnyFrameSuccessful) {
 
   base::RunLoop run_loop;
   frames_reader().ReadFrame(base::BindLambdaForTesting(
-      [&](absl::optional<sharing::mojom::V1FramePtr> frame) {
+      [&](std::optional<sharing::mojom::V1FramePtr> frame) {
         ExpectIntroductionFrame(frame);
         run_loop.Quit();
       }));
@@ -172,7 +171,7 @@ TEST_F(IncomingFramesReaderTest, ReadSuccessful) {
   frames_reader().ReadFrame(
       sharing::mojom::V1Frame::Tag::kIntroduction,
       base::BindLambdaForTesting(
-          [&](absl::optional<sharing::mojom::V1FramePtr> frame) {
+          [&](std::optional<sharing::mojom::V1FramePtr> frame) {
             ExpectIntroductionFrame(frame);
             run_loop.Quit();
           }),
@@ -219,7 +218,7 @@ TEST_F(IncomingFramesReaderTest, ReadSuccessful_JumbledFramesOrdering) {
   frames_reader().ReadFrame(
       sharing::mojom::V1Frame::Tag::kIntroduction,
       base::BindLambdaForTesting(
-          [&](absl::optional<sharing::mojom::V1FramePtr> frame) {
+          [&](std::optional<sharing::mojom::V1FramePtr> frame) {
             ExpectIntroductionFrame(frame);
             run_loop_introduction.Quit();
           }),
@@ -266,7 +265,7 @@ TEST_F(IncomingFramesReaderTest, JumbledFramesOrdering_ReadFromCache) {
   frames_reader().ReadFrame(
       sharing::mojom::V1Frame::Tag::kIntroduction,
       base::BindLambdaForTesting(
-          [&](absl::optional<sharing::mojom::V1FramePtr> frame) {
+          [&](std::optional<sharing::mojom::V1FramePtr> frame) {
             ExpectIntroductionFrame(frame);
             run_loop_introduction.Quit();
           }),
@@ -276,7 +275,7 @@ TEST_F(IncomingFramesReaderTest, JumbledFramesOrdering_ReadFromCache) {
   // Reading any frame should return CancelFrame.
   base::RunLoop run_loop_cancel;
   frames_reader().ReadFrame(base::BindLambdaForTesting(
-      [&](absl::optional<sharing::mojom::V1FramePtr> frame) {
+      [&](std::optional<sharing::mojom::V1FramePtr> frame) {
         ExpectCancelFrame(frame);
         run_loop_cancel.Quit();
       }));
@@ -290,7 +289,7 @@ TEST_F(IncomingFramesReaderTest, ReadAfterConnectionClosed) {
   frames_reader().ReadFrame(
       sharing::mojom::V1Frame::Tag::kIntroduction,
       base::BindLambdaForTesting(
-          [&](absl::optional<sharing::mojom::V1FramePtr> frame) {
+          [&](std::optional<sharing::mojom::V1FramePtr> frame) {
             EXPECT_FALSE(frame);
             run_loop_before_close.Quit();
           }),

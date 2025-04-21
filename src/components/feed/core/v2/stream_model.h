@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -98,6 +98,7 @@ class StreamModel {
   StreamModel& operator=(const StreamModel&) = delete;
 
   void SetStreamType(const StreamType& stream_type);
+  const StreamType& GetStreamType() const;
   void AddObserver(Observer* observer);
   void RemoveObserver(Observer* observer);
   void SetStoreObserver(StoreObserver* store_observer);

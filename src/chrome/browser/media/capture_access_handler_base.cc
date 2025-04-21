@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <string>
 #include <utility>
 
+#include "base/ranges/algorithm.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/ui/ui_features.h"
@@ -14,9 +15,12 @@
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
-#include "content/public/browser/web_contents_observer.h"
-#include "extensions/common/extension.h"
+#include "extensions/buildflags/buildflags.h"
 #include "ui/gfx/native_widget_types.h"
+
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+#include "extensions/common/extension.h"
+#endif
 
 #if defined(USE_AURA)
 #include "ui/aura/window.h"
@@ -29,40 +33,40 @@
 
 using content::BrowserThread;
 
-namespace {
-
-// Keep track of the outermost WebContents for a particular tab.
-// Similar semantics as base::WeakPtr<WebContents> as WebContentsObserver
-// will detect when the WebContents no longer exists.
-class WeakPtrToWebContents : private content::WebContentsObserver {
- public:
-  WeakPtrToWebContents() = default;
-
-  WeakPtrToWebContents(const WeakPtrToWebContents&) = delete;
-  WeakPtrToWebContents& operator=(const WeakPtrToWebContents&) = delete;
-
-  ~WeakPtrToWebContents() override = default;
-
-  void Set(int render_process_id, int render_frame_id) {
-    auto* target_web_contents = content::WebContents::FromRenderFrameHost(
-        content::RenderFrameHost::FromID(render_process_id, render_frame_id));
-    // Use the outermost WebContents in the WebContents tree, if possible.
-    // If we can't find the WebContents, clear the observer.
-    WebContentsObserver::Observe(
-        target_web_contents ? target_web_contents->GetOutermostWebContents()
-                            : nullptr);
-  }
-
-  content::WebContents* get() const {
-    return WebContentsObserver::web_contents();
-  }
-};
-
-}  // namespace
-
 // Tracks MEDIA_DESKTOP/TAB_VIDEO_CAPTURE sessions. Sessions are removed when
 // MEDIA_REQUEST_STATE_CLOSING is encountered.
 struct CaptureAccessHandlerBase::Session {
+  Session(int request_process_id,
+          int request_frame_id,
+          int page_request_id,
+          bool is_trusted,
+          bool is_capturing_link_secure,
+          content::DesktopMediaID::Type capturing_type,
+          gfx::NativeWindow target_window)
+      : request_process_id(request_process_id),
+        request_frame_id(request_frame_id),
+        page_request_id(page_request_id),
+        is_trusted(is_trusted),
+        is_capturing_link_secure(is_capturing_link_secure),
+        capturing_type(capturing_type),
+        target_window(target_window) {
+    SetWebContents(request_process_id, request_frame_id);
+  }
+
+  void SetWebContents(int render_process_id, int render_frame_id) {
+    auto* web_contents = content::WebContents::FromRenderFrameHost(
+        content::RenderFrameHost::FromID(render_process_id, render_frame_id));
+    // Use the outermost WebContents in the WebContents tree, if possible.
+    // If we can't find the WebContents, clear |target_web_contents|.
+    target_web_contents =
+        web_contents ? web_contents->GetOutermostWebContents()->GetWeakPtr()
+                     : nullptr;
+  }
+
+  content::WebContents* GetWebContents() const {
+    return target_web_contents.get();
+  }
+
   int request_process_id;
   int request_frame_id;
   int page_request_id;
@@ -78,10 +82,10 @@ struct CaptureAccessHandlerBase::Session {
   // then |capturing_type| is TYPE_SCREEN. If a specific window is specified,
   // then |capturing_type| is TYPE_WINDOW and |target_window| is set. If a
   // specific tab is the target, then |capturing_type| is TYPE_WEB_CONTENTS and
-  // |target_weak_web_contents| is set.
+  // |target_web_contents| is set.
   content::DesktopMediaID::Type capturing_type;
   gfx::NativeWindow target_window;
-  std::unique_ptr<WeakPtrToWebContents> target_weak_web_contents;
+  base::WeakPtr<content::WebContents> target_web_contents;
 };
 
 CaptureAccessHandlerBase::PendingAccessRequest::PendingAccessRequest(
@@ -114,9 +118,7 @@ void CaptureAccessHandlerBase::AddCaptureSession(int render_process_id,
       // Assume that the target is the same tab that is
       // requesting capture, not the display or any particular
       // window. This can be changed by calling UpdateTarget().
-      content::DesktopMediaID::TYPE_WEB_CONTENTS, gfx::kNullNativeWindow,
-      std::make_unique<WeakPtrToWebContents>()};
-  session.target_weak_web_contents->Set(render_process_id, render_frame_id);
+      content::DesktopMediaID::TYPE_WEB_CONTENTS, gfx::NativeWindow()};
 
   sessions_.push_back(std::move(session));
 }
@@ -133,14 +135,13 @@ std::list<CaptureAccessHandlerBase::Session>::iterator
 CaptureAccessHandlerBase::FindSession(int render_process_id,
                                       int render_frame_id,
                                       int page_request_id) {
-  return std::find_if(sessions_.begin(), sessions_.end(),
-                      [render_process_id, render_frame_id,
-                       page_request_id](const Session& session) {
-                        return session.request_process_id ==
-                                   render_process_id &&
-                               session.request_frame_id == render_frame_id &&
-                               session.page_request_id == page_request_id;
-                      });
+  return base::ranges::find_if(
+      sessions_, [render_process_id, render_frame_id,
+                  page_request_id](const Session& session) {
+        return session.request_process_id == render_process_id &&
+               session.request_frame_id == render_frame_id &&
+               session.page_request_id == page_request_id;
+      });
 }
 
 void CaptureAccessHandlerBase::UpdateMediaRequestState(
@@ -230,15 +231,14 @@ void CaptureAccessHandlerBase::UpdateTarget(
   if (target.type == content::DesktopMediaID::TYPE_WINDOW) {
     // If this is the Chrome window, then any tab in this window could be
     // captured.
-    // TODO(crbug.com/856276): Implement this for MacOS.
+    // TODO(crbug.com/41396679): Implement this for MacOS.
 #if defined(USE_AURA)
     it->target_window = content::DesktopMediaID::GetNativeWindowById(target);
 #endif
   } else if (target.type == content::DesktopMediaID::TYPE_WEB_CONTENTS) {
     // Specific tab captured.
-    it->target_weak_web_contents->Set(
-        target.web_contents_id.render_process_id,
-        target.web_contents_id.main_render_frame_id);
+    it->SetWebContents(target.web_contents_id.render_process_id,
+                       target.web_contents_id.main_render_frame_id);
   }
 }
 
@@ -288,13 +288,13 @@ bool CaptureAccessHandlerBase::MatchesSession(const Session& session,
     }
 #else
       // Unable to determine the window.
-      // TODO(crbug.com/856276): Implement this for MacOS.
+      // TODO(crbug.com/41396679): Implement this for MacOS.
       return false;
 #endif  // defined(USE_AURA)
 
     case content::DesktopMediaID::TYPE_WEB_CONTENTS:
       // Check that the target is the frame selected.
-      auto* target_web_contents = session.target_weak_web_contents->get();
+      auto* target_web_contents = session.GetWebContents();
       if (!target_web_contents)
         return false;
       auto* web_contents = content::WebContents::FromRenderFrameHost(
@@ -305,7 +305,6 @@ bool CaptureAccessHandlerBase::MatchesSession(const Session& session,
   }
 
   NOTREACHED();
-  return false;
 }
 
 void CaptureAccessHandlerBase::UpdateVideoScreenCaptureStatus(
@@ -324,6 +323,7 @@ void CaptureAccessHandlerBase::UpdateVideoScreenCaptureStatus(
   }
 }
 
+#if BUILDFLAG(ENABLE_EXTENSIONS)
 bool CaptureAccessHandlerBase::IsExtensionAllowedForScreenCapture(
     const extensions::Extension* extension) {
   if (!extension)
@@ -331,7 +331,7 @@ bool CaptureAccessHandlerBase::IsExtensionAllowedForScreenCapture(
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   std::string hash = base::SHA1HashString(extension->id());
-  std::string hex_hash = base::HexEncode(hash.c_str(), hash.length());
+  std::string hex_hash = base::HexEncode(hash);
 
   // crbug.com/446688
   return hex_hash == "4F25792AF1AA7483936DE29C07806F203C7170A0" ||
@@ -342,6 +342,7 @@ bool CaptureAccessHandlerBase::IsExtensionAllowedForScreenCapture(
   return false;
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 }
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 bool CaptureAccessHandlerBase::IsBuiltInFeedbackUI(const GURL& origin) {
   return origin.spec() == chrome::kChromeUIFeedbackURL;

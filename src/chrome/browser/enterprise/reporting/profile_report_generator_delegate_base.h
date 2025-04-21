@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,12 +40,15 @@ class ProfileReportGeneratorDelegateBase
   bool Init(const base::FilePath& path) final;
   void GetSigninUserInfo(
       enterprise_management::ChromeUserProfileInfo* report) final;
-  std::unique_ptr<policy::PolicyConversionsClient> MakePolicyConversionsClient()
-      final;
-  policy::MachineLevelUserCloudPolicyManager* GetCloudPolicyManager() final;
+  void GetAffiliationInfo(
+      enterprise_management::ChromeUserProfileInfo* report) final;
+  std::unique_ptr<policy::PolicyConversionsClient> MakePolicyConversionsClient(
+      bool is_machine_scope) final;
+  policy::CloudPolicyManager* GetCloudPolicyManager(
+      bool is_machine_scope) final;
 
  protected:
-  raw_ptr<Profile> profile_;
+  raw_ptr<Profile, DanglingUntriaged> profile_;
 };
 
 }  // namespace enterprise_reporting

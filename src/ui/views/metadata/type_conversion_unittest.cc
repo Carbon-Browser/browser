@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,11 +14,10 @@ using ViewsTypeConversionTest = PlatformTest;
 TEST_F(ViewsTypeConversionTest, CheckIsSerializable) {
   // Test types with no explicit or aliased converters.
   EXPECT_FALSE(ui::metadata::TypeConverter<
-               views::Button::PressedCallback>::IsSerializable());
-  EXPECT_FALSE(
-      ui::metadata::TypeConverter<views::FocusRing*>::IsSerializable());
+               views::Button::PressedCallback>::is_serializable);
+  EXPECT_FALSE(ui::metadata::TypeConverter<views::FocusRing*>::is_serializable);
 
-  // Test absl::optional type.
+  // Test std::optional type.
   EXPECT_FALSE(ui::metadata::TypeConverter<
-               absl::optional<views::FocusRing*>>::IsSerializable());
+               std::optional<views::FocusRing*>>::is_serializable);
 }

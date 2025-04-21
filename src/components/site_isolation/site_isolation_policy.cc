@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,12 +29,7 @@ namespace {
 using IsolatedOriginSource =
     content::ChildProcessSecurityPolicy::IsolatedOriginSource;
 
-bool g_disallow_memory_threshold_caching = false;
-
-bool ShouldCacheMemoryThresholdDecision() {
-  return base::FeatureList::IsEnabled(
-      features::kCacheSiteIsolationMemoryThreshold);
-}
+bool g_disallow_memory_threshold_caching_for_testing = false;
 
 struct IsolationDisableDecisions {
   bool should_disable_strict;
@@ -171,9 +166,9 @@ bool SiteIsolationPolicy::IsIsolationForOAuthSitesEnabled() {
 bool SiteIsolationPolicy::IsEnterprisePolicyApplicable() {
 #if BUILDFLAG(IS_ANDROID)
   // https://crbug.com/844118: Limiting policy to devices with > 1GB RAM.
-  // Using 1077 rather than 1024 because 1) it helps ensure that devices with
+  // Using 1077 rather than 1024 because it helps ensure that devices with
   // exactly 1GB of RAM won't get included because of inaccuracies or off-by-one
-  // errors and 2) this is the bucket boundary in Memory.Stats.Win.TotalPhys2.
+  // errors.
   bool have_enough_memory = base::SysInfo::AmountOfPhysicalMemoryMB() > 1077;
   return have_enough_memory;
 #else
@@ -184,9 +179,7 @@ bool SiteIsolationPolicy::IsEnterprisePolicyApplicable() {
 // static
 bool SiteIsolationPolicy::ShouldDisableSiteIsolationDueToMemoryThreshold(
     content::SiteIsolationMode site_isolation_mode) {
-  static const bool cache_memory_threshold_decision =
-      ShouldCacheMemoryThresholdDecision();
-  if (!g_disallow_memory_threshold_caching && cache_memory_threshold_decision) {
+  if (!g_disallow_memory_threshold_caching_for_testing) {
     return CachedDisableSiteIsolation(site_isolation_mode);
   }
   return ShouldDisableSiteIsolationDueToMemorySlow(site_isolation_mode);
@@ -220,12 +213,13 @@ void SiteIsolationPolicy::PersistUserTriggeredIsolatedOrigin(
   // unlimited size.
   // TODO(alexmos): Cap the maximum number of entries and evict older entries.
   // See https://crbug.com/1172407.
-  ListPrefUpdate update(user_prefs::UserPrefs::Get(context),
-                        site_isolation::prefs::kUserTriggeredIsolatedOrigins);
-  base::Value* list = update.Get();
+  ScopedListPrefUpdate update(
+      user_prefs::UserPrefs::Get(context),
+      site_isolation::prefs::kUserTriggeredIsolatedOrigins);
+  base::Value::List& list = update.Get();
   base::Value value(origin.Serialize());
-  if (!base::Contains(list->GetListDeprecated(), value))
-    list->Append(std::move(value));
+  if (!base::Contains(list, value))
+    list.Append(std::move(value));
 }
 
 // static
@@ -235,14 +229,14 @@ void SiteIsolationPolicy::PersistWebTriggeredIsolatedOrigin(
   // Web-triggered isolated origins are stored in a dictionary of (origin,
   // timestamp) pairs.  The number of entries is capped by a field trial param,
   // and older entries are evicted.
-  DictionaryPrefUpdate update(
+  ScopedDictPrefUpdate update(
       user_prefs::UserPrefs::Get(context),
       site_isolation::prefs::kWebTriggeredIsolatedOrigins);
-  base::Value* dict = update.Get();
+  base::Value::Dict& dict = update.Get();
 
   // Add the origin.  If it already exists, this will just update the
   // timestamp.
-  dict->SetKey(origin.Serialize(), base::TimeToValue(base::Time::Now()));
+  dict.Set(origin.Serialize(), base::TimeToValue(base::Time::Now()));
 
   // Check whether the maximum number of stored sites was exceeded and remove
   // one or more entries, starting with the oldest timestamp. Note that more
@@ -250,18 +244,17 @@ void SiteIsolationPolicy::PersistWebTriggeredIsolatedOrigin(
   // could change over time (via a change in the field trial param).
   size_t max_size =
       ::features::kSiteIsolationForCrossOriginOpenerPolicyMaxSitesParam.Get();
-  while (dict->DictSize() > max_size) {
-    auto items = dict->DictItems();
+  while (dict.size() > max_size) {
     auto oldest_site_time_pair = std::min_element(
-        items.begin(), items.end(), [](auto pair_a, auto pair_b) {
-          absl::optional<base::Time> time_a = base::ValueToTime(pair_a.second);
-          absl::optional<base::Time> time_b = base::ValueToTime(pair_b.second);
+        dict.begin(), dict.end(), [](auto pair_a, auto pair_b) {
+          std::optional<base::Time> time_a = base::ValueToTime(pair_a.second);
+          std::optional<base::Time> time_b = base::ValueToTime(pair_b.second);
           // has_value() should always be true unless the prefs were corrupted.
           // In that case, prioritize the corrupted entry for removal.
           return (time_a.has_value() ? time_a.value() : base::Time::Min()) <
                  (time_b.has_value() ? time_b.value() : base::Time::Min());
         });
-    dict->RemoveKey(oldest_site_time_pair->first);
+    dict.erase(oldest_site_time_pair);
   }
 }
 
@@ -275,9 +268,9 @@ void SiteIsolationPolicy::ApplyPersistedIsolatedOrigins(
   // they can be used if password-triggered isolation is re-enabled later.
   if (IsIsolationForPasswordSitesEnabled()) {
     std::vector<url::Origin> origins;
-    for (const auto& value : user_prefs::UserPrefs::Get(browser_context)
-                                 ->GetList(prefs::kUserTriggeredIsolatedOrigins)
-                                 ->GetListDeprecated()) {
+    for (const auto& value :
+         user_prefs::UserPrefs::Get(browser_context)
+             ->GetList(prefs::kUserTriggeredIsolatedOrigins)) {
       origins.push_back(url::Origin::Create(GURL(value.GetString())));
     }
 
@@ -298,32 +291,30 @@ void SiteIsolationPolicy::ApplyPersistedIsolatedOrigins(
     std::vector<std::string> expired_entries;
 
     auto* pref_service = user_prefs::UserPrefs::Get(browser_context);
-    auto* dict =
-        pref_service->GetDictionary(prefs::kWebTriggeredIsolatedOrigins);
-    if (dict) {
-      for (auto site_time_pair : dict->DictItems()) {
-        // Only isolate origins that haven't expired.
-        absl::optional<base::Time> timestamp =
-            base::ValueToTime(site_time_pair.second);
-        base::TimeDelta expiration_timeout =
-            ::features::
-                kSiteIsolationForCrossOriginOpenerPolicyExpirationTimeoutParam
-                    .Get();
-        if (timestamp.has_value() &&
-            base::Time::Now() - timestamp.value() <= expiration_timeout) {
-          origins.push_back(url::Origin::Create(GURL(site_time_pair.first)));
-        } else {
-          expired_entries.push_back(site_time_pair.first);
-        }
+    const auto& dict =
+        pref_service->GetDict(prefs::kWebTriggeredIsolatedOrigins);
+    for (auto site_time_pair : dict) {
+      // Only isolate origins that haven't expired.
+      std::optional<base::Time> timestamp =
+          base::ValueToTime(site_time_pair.second);
+      base::TimeDelta expiration_timeout =
+          ::features::
+              kSiteIsolationForCrossOriginOpenerPolicyExpirationTimeoutParam
+                  .Get();
+      if (timestamp.has_value() &&
+          base::Time::Now() - timestamp.value() <= expiration_timeout) {
+        origins.push_back(url::Origin::Create(GURL(site_time_pair.first)));
+      } else {
+        expired_entries.push_back(site_time_pair.first);
       }
-      // Remove expired entries (as well as those with an invalid timestamp).
-      if (!expired_entries.empty()) {
-        DictionaryPrefUpdate update(pref_service,
-                                    prefs::kWebTriggeredIsolatedOrigins);
-        base::Value* updated_dict = update.Get();
-        for (const auto& entry : expired_entries)
-          updated_dict->RemoveKey(entry);
-      }
+    }
+    // Remove expired entries (as well as those with an invalid timestamp).
+    if (!expired_entries.empty()) {
+      ScopedDictPrefUpdate update(pref_service,
+                                  prefs::kWebTriggeredIsolatedOrigins);
+      base::Value::Dict& updated_dict = update.Get();
+      for (const auto& entry : expired_entries)
+        updated_dict.Remove(entry);
     }
 
     if (!origins.empty()) {
@@ -379,7 +370,7 @@ void SiteIsolationPolicy::IsolateNewOAuthURL(
 // static
 bool SiteIsolationPolicy::ShouldPdfCompositorBeEnabledForOopifs() {
 #if BUILDFLAG(IS_ANDROID)
-  // TODO(crbug.com/1022917): Always enable on Android, at which point, this
+  // TODO(crbug.com/40657857): Always enable on Android, at which point, this
   // method should go away.
   //
   // Only use the PDF compositor when one of the site isolation modes that
@@ -400,7 +391,7 @@ bool SiteIsolationPolicy::ShouldPdfCompositorBeEnabledForOopifs() {
 // static
 void SiteIsolationPolicy::SetDisallowMemoryThresholdCachingForTesting(
     bool disallow_caching) {
-  g_disallow_memory_threshold_caching = disallow_caching;
+  g_disallow_memory_threshold_caching_for_testing = disallow_caching;
 }
 
 }  // namespace site_isolation

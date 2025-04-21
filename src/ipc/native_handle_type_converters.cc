@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,6 @@ IPC::MessageAttachment::Type TypeConverter<
       return IPC::MessageAttachment::Type::FUCHSIA_HANDLE;
   }
   NOTREACHED();
-  return IPC::MessageAttachment::Type::MOJO_HANDLE;
 }
 
 // static
@@ -43,7 +42,6 @@ native::SerializedHandleType TypeConverter<
       return native::SerializedHandleType::FUCHSIA_HANDLE;
   }
   NOTREACHED();
-  return native::SerializedHandleType::MOJO_HANDLE;
 }
 
 }  // namespace mojo

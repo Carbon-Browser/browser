@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "components/remote_cocoa/app_shim/drag_drop_client.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom-forward.h"
@@ -45,10 +45,8 @@ class VIEWS_EXPORT DragDropClientMac : public remote_cocoa::DragDropClient {
 
   ~DragDropClientMac() override;
 
-  // Initiates a drag and drop session. Returns the drag operation that was
-  // applied at the end of the drag drop session.
-  void StartDragAndDrop(View* view,
-                        std::unique_ptr<ui::OSExchangeData> data,
+  // Initiates a drag and drop session.
+  void StartDragAndDrop(std::unique_ptr<ui::OSExchangeData> data,
                         int operation,
                         ui::mojom::DragEventSource source);
 
@@ -65,6 +63,7 @@ class VIEWS_EXPORT DragDropClientMac : public remote_cocoa::DragDropClient {
 
   // Converts the given NSPoint to the coordinate system in Views.
   gfx::Point LocationInView(NSPoint point) const;
+  gfx::Point LocationInView(NSPoint point, NSWindow* destination_window) const;
 
   // Provides the data for the drag and drop session.
   std::unique_ptr<ui::OSExchangeData> exchange_data_;
@@ -77,7 +76,7 @@ class VIEWS_EXPORT DragDropClientMac : public remote_cocoa::DragDropClient {
   int last_operation_ = 0;
 
   // The bridge between the content view and the drag drop client.
-  raw_ptr<remote_cocoa::NativeWidgetNSWindowBridge>
+  raw_ptr<remote_cocoa::NativeWidgetNSWindowBridge, DanglingUntriaged>
       bridge_;  // Weak. Owns |this|.
 
   // The closure for the drag and drop's run loop.

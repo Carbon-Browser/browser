@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -12,13 +12,19 @@ source_set("test_support") {
   sources = [
     "fake_adapter.cc",
     "fake_adapter.h",
+    "fake_device.cc",
+    "fake_device.h",
+    "fake_gatt_service.cc",
+    "fake_gatt_service.h",
+    "fake_nearby_presence_credential_storage.cc",
+    "fake_nearby_presence_credential_storage.h",
     "mock_webrtc_dependencies.cc",
     "mock_webrtc_dependencies.h",
   ]
 
   deps = [
-    "//ash/services/nearby/public/mojom",
     "//base/test:test_support",
+    "//chromeos/ash/services/nearby/public/mojom",
     "//testing/gmock",
     "//testing/gtest",
   ]

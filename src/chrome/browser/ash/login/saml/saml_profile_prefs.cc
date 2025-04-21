@@ -1,12 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/saml/saml_profile_prefs.h"
 
-#include "ash/components/login/auth/public/saml_password_attributes.h"
 #include "chrome/browser/ash/login/login_constants.h"
 #include "chrome/browser/ash/login/login_pref_names.h"
+#include "chromeos/ash/components/login/auth/public/saml_password_attributes.h"
 #include "components/prefs/pref_registry_simple.h"
 
 namespace ash {
@@ -18,11 +18,9 @@ void RegisterSamlProfilePrefs(PrefRegistrySimple* registry) {
   registry->RegisterIntegerPref(
       prefs::kGaiaOfflineSigninTimeLimitDays,
       constants::kDefaultGaiaOfflineSigninTimeLimitDays);
-  registry->RegisterTimePref(prefs::kGaiaLastOnlineSignInTime, base::Time());
 
   registry->RegisterIntegerPref(prefs::kSAMLOfflineSigninTimeLimit,
                                 constants::kDefaultSAMLOfflineSigninTimeLimit);
-  registry->RegisterTimePref(prefs::kSAMLLastGAIASignInTime, base::Time());
 
   registry->RegisterIntegerPref(
       prefs::kGaiaLockScreenOfflineSigninTimeLimitDays,
@@ -42,7 +40,6 @@ void RegisterSamlProfilePrefs(PrefRegistrySimple* registry) {
   registry->RegisterBooleanPref(
       prefs::kLockScreenReauthenticationEnabled,
       constants::kDefaultLockScreenReauthenticationEnabled);
-  registry->RegisterStringPref(prefs::kSamlPasswordSyncToken, std::string());
 
   SamlPasswordAttributes::RegisterProfilePrefs(registry);
 }

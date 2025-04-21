@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,6 +32,9 @@ class TestTokenStorage : public TestDeviceIdProvider::TokenStorage {
 
   virtual std::string FetchAccessToken() = 0;
   virtual bool StoreAccessToken(const std::string& access_token) = 0;
+
+  virtual std::string FetchScopes() = 0;
+  virtual bool StoreScopes(const std::string& scopes) = 0;
 
   // Returns a TestTokenStorage which reads/writes to a user specific token
   // file on the local disk.

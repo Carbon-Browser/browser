@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -25,11 +25,6 @@ template("copy_dir") {
 
 copy_dir("copy_res_to_upload_dir") {
   source_dir = "//chrome/android/webapk/shell_apk/res"
-  destination_dir = "${upload_dir}/res"
-}
-
-copy_dir("copy_res_app_icon_to_upload_dir") {
-  source_dir = "//chrome/android/webapk/shell_apk/res_app_icon"
   destination_dir = "${upload_dir}/res"
 }
 
@@ -74,7 +69,6 @@ group("prepare_webapk_shell_upload_dir") {
     ":copy_components_libs_common_res_splash_to_upload_dir",
     ":copy_extra_files_to_upload_dir",
     ":copy_libs_common_res_splash_to_upload_dir",
-    ":copy_res_app_icon_to_upload_dir",
     ":copy_res_template_to_upload_dir",
     ":copy_res_to_upload_dir",
   ]

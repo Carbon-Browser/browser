@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,8 @@ class TaskManagerControllerLacros : public TaskManagerObserver {
 
   using GetTaskManagerTasksCallback =
       base::OnceCallback<void(std::vector<crosapi::mojom::TaskPtr>,
-                              std::vector<crosapi::mojom::TaskGroupPtr>)>;
+                              std::vector<crosapi::mojom::TaskGroupPtr>,
+                              const std::optional<std::string>&)>;
   // Gets task manager's task data.
   void GetTaskManagerTasks(GetTaskManagerTasksCallback callback);
 

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,74 +6,35 @@
 
 #include <tuple>
 
+#include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/test/scoped_feature_list.h"
+#include "base/test/test_file_util.h"
+#include "base/test/test_future.h"
+#include "chrome/browser/apps/platform_apps/app_browsertest_util.h"
 #include "chrome/browser/file_system_access/file_system_access_permission_request_manager.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
+#include "components/permissions/features.h"
+#include "components/permissions/permission_util.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
+#include "content/public/test/file_system_chooser_test_helpers.h"
 #include "content/public/test/prerender_test_util.h"
+#include "content/public/test/test_utils.h"
+#include "content/public/test/update_user_activation_state_interceptor.h"
+#include "extensions/test/extension_test_message_listener.h"
 #include "net/dns/mock_host_resolver.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/shell_dialogs/select_file_dialog.h"
 #include "ui/shell_dialogs/select_file_dialog_factory.h"
 #include "ui/shell_dialogs/select_file_policy.h"
+#include "url/gurl.h"
 
 namespace {
-
-// Fake ui::SelectFileDialog that selects one or more pre-determined files.
-class FakeSelectFileDialog : public ui::SelectFileDialog {
- public:
-  FakeSelectFileDialog(std::vector<base::FilePath> result,
-                       Listener* listener,
-                       std::unique_ptr<ui::SelectFilePolicy> policy)
-      : ui::SelectFileDialog(listener, std::move(policy)),
-        result_(std::move(result)) {}
-
- protected:
-  void SelectFileImpl(Type type,
-                      const std::u16string& title,
-                      const base::FilePath& default_path,
-                      const FileTypeInfo* file_types,
-                      int file_type_index,
-                      const base::FilePath::StringType& default_extension,
-                      gfx::NativeWindow owning_window,
-                      void* params) override {
-    if (result_.size() == 1)
-      listener_->FileSelected(result_[0], 0, params);
-    else
-      listener_->MultiFilesSelected(result_, params);
-  }
-
-  bool IsRunning(gfx::NativeWindow owning_window) const override {
-    return false;
-  }
-  void ListenerDestroyed() override {}
-  bool HasMultipleFileTypeChoicesImpl() override { return false; }
-
- private:
-  ~FakeSelectFileDialog() override = default;
-  std::vector<base::FilePath> result_;
-};
-
-class FakeSelectFileDialogFactory : public ui::SelectFileDialogFactory {
- public:
-  explicit FakeSelectFileDialogFactory(std::vector<base::FilePath> result)
-      : result_(std::move(result)) {}
-  ~FakeSelectFileDialogFactory() override = default;
-
-  ui::SelectFileDialog* Create(
-      ui::SelectFileDialog::Listener* listener,
-      std::unique_ptr<ui::SelectFilePolicy> policy) override {
-    return new FakeSelectFileDialog(result_, listener, std::move(policy));
-  }
-
- private:
-  std::vector<base::FilePath> result_;
-};
 
 class TestFileSystemAccessPermissionContext
     : public ChromeFileSystemAccessPermissionContext {
@@ -94,15 +55,17 @@ class TestFileSystemAccessPermissionContext
     content::RenderFrameHost* rfh = content::RenderFrameHost::FromID(frame_id);
     EXPECT_TRUE(rfh->IsActive());
     performed_after_write_checks_ = true;
-    if (quit_callback_)
+    if (quit_callback_) {
       std::move(quit_callback_).Run();
+    }
   }
 
   bool performed_after_write_checks() { return performed_after_write_checks_; }
 
   void WaitForPerformAfterWriteChecks() {
-    if (performed_after_write_checks_)
+    if (performed_after_write_checks_) {
       return;
+    }
 
     base::RunLoop run_loop;
     quit_callback_ = run_loop.QuitClosure();
@@ -128,8 +91,15 @@ class ChromeFileSystemAccessPermissionContextPrerenderingBrowserTest
       default;
 
   void SetUp() override {
-    ASSERT_TRUE(temp_dir_.CreateUniqueTempDir());
-    prerender_test_helper_.SetUp(embedded_test_server());
+    // Create a scoped directory under %TEMP% instead of using
+    // `base::ScopedTempDir::CreateUniqueTempDir`.
+    // `base::ScopedTempDir::CreateUniqueTempDir` creates a path under
+    // %ProgramFiles% on Windows when running as Admin, which is a blocked path
+    // (`kBlockedPaths`). This can fail some of the tests.
+    ASSERT_TRUE(
+        temp_dir_.CreateUniqueTempDirUnderPath(base::GetTempDirForTesting()));
+
+    prerender_test_helper_.RegisterServerRequestMonitor(embedded_test_server());
     InProcessBrowserTest::SetUp();
   }
 
@@ -165,6 +135,53 @@ class ChromeFileSystemAccessPermissionContextPrerenderingBrowserTest
   base::ScopedTempDir temp_dir_;
 };
 
+// Tests that subscribers are notified of file creation events originating from
+// `window.showSaveFilePicker()`.
+IN_PROC_BROWSER_TEST_F(
+    ChromeFileSystemAccessPermissionContextPrerenderingBrowserTest,
+    NotifyFileCreatedFromShowSaveFilePicker) {
+  // Install fake file picker factory.
+  const base::FilePath expected_file_path = CreateTestFile("");
+  ui::SelectFileDialog::SetFactory(
+      std::make_unique<content::FakeSelectFileDialogFactory>(
+          std::vector<base::FilePath>{expected_file_path}));
+
+  // Initialize permission context.
+  Profile* const profile = browser()->profile();
+  TestFileSystemAccessPermissionContext permission_context(profile);
+  content::SetFileSystemAccessPermissionContext(profile, &permission_context);
+  FileSystemAccessPermissionRequestManager::FromWebContents(GetWebContents())
+      ->set_auto_response_for_test(permissions::PermissionAction::GRANTED);
+
+  // Subscribe to be notified of file creation events.
+  base::test::TestFuture<const GURL&, const storage::FileSystemURL&>
+      file_created_from_show_save_file_picker_future;
+  base::CallbackListSubscription
+      file_created_from_show_save_file_picker_subscription_ =
+          permission_context.AddFileCreatedFromShowSaveFilePickerCallback(
+              file_created_from_show_save_file_picker_future
+                  .GetRepeatingCallback());
+
+  // Navigate web contents.
+  const GURL expected_url = embedded_test_server()->GetURL("/empty.html");
+  ASSERT_NE(ui_test_utils::NavigateToURL(browser(), expected_url), nullptr);
+
+  // Invoke `window.showSaveFilePicker()` from web contents. Note that because
+  // a fake file picker factory was installed, this should result in the
+  // `expected_file_path` being picked without the need for user interaction.
+  ASSERT_TRUE(content::ExecJs(GetWebContents(),
+                              "(() => { self.showSaveFilePicker({}); })()"));
+
+  // Wait for and verify details of the file creation event.
+  auto [file_picker_binding_context, url] =
+      file_created_from_show_save_file_picker_future.Take();
+  EXPECT_EQ(file_picker_binding_context, expected_url);
+  EXPECT_EQ(url.path(), expected_file_path);
+
+  // Uninstall fake file picker factory.
+  ui::SelectFileDialog::SetFactory(nullptr);
+}
+
 // Tests that PerformAfterWriteChecks() that is called by
 // 'FileSystemWritableFileStream.close()' works with the RenderFrameHost in an
 // active state, not the prerendered RenderFrameHost.
@@ -173,7 +190,8 @@ IN_PROC_BROWSER_TEST_F(
     PerformAfterWriteChecks) {
   const base::FilePath test_file = CreateTestFile("");
   ui::SelectFileDialog::SetFactory(
-      new FakeSelectFileDialogFactory({test_file}));
+      std::make_unique<content::FakeSelectFileDialogFactory>(
+          std::vector<base::FilePath>{test_file}));
 
   TestFileSystemAccessPermissionContext permission_context(
       browser()->profile());
@@ -188,7 +206,8 @@ IN_PROC_BROWSER_TEST_F(
 
   // Add prerendering.
   GURL prerender_url = embedded_test_server()->GetURL("/title1.html");
-  int host_id = prerender_helper().AddPrerender(prerender_url);
+  content::FrameTreeNodeId host_id =
+      prerender_helper().AddPrerender(prerender_url);
   content::RenderFrameHost* prerendered_frame_host =
       prerender_helper().GetPrerenderedMainFrameHost(host_id);
 
@@ -237,4 +256,97 @@ IN_PROC_BROWSER_TEST_F(
   EXPECT_TRUE(permission_context.performed_after_write_checks());
 
   ui::SelectFileDialog::SetFactory(nullptr);
+}
+
+class FileSystemChromeAppTest : public extensions::PlatformAppBrowserTest {
+ public:
+  FileSystemChromeAppTest() {
+    scoped_feature_list_.InitWithFeatures(
+        {features::kFileSystemAccessPersistentPermissions}, {});
+  }
+
+ protected:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+// TODO(b/276433834): Implement an end-to-end test for getDirectoryPicker in
+// Chrome apps.
+IN_PROC_BROWSER_TEST_F(FileSystemChromeAppTest,
+                       FileSystemAccessPermissionRequestManagerExists) {
+  ASSERT_TRUE(embedded_test_server()->Start());
+  ExtensionTestMessageListener launched_listener("Launched");
+
+  // Install Platform App
+  content::CreateAndLoadWebContentsObserver app_loaded_observer;
+  const extensions::Extension* extension =
+      InstallPlatformApp("file_system_test");
+  ASSERT_TRUE(extension);
+
+  // Launch Platform App
+  LaunchPlatformApp(extension);
+  app_loaded_observer.Wait();
+  ASSERT_TRUE(launched_listener.WaitUntilSatisfied());
+
+  content::WebContents* web_contents = GetFirstAppWindowWebContents();
+  EXPECT_TRUE(web_contents);
+  EXPECT_NE(nullptr, FileSystemAccessPermissionRequestManager::FromWebContents(
+                         web_contents));
+}
+
+IN_PROC_BROWSER_TEST_F(FileSystemChromeAppTest,
+                       FileSystemAccessPersistentPermissionsPrompt) {
+  ASSERT_TRUE(embedded_test_server()->Start());
+  ExtensionTestMessageListener launched_listener("Launched");
+
+  // Install Platform App.
+  content::CreateAndLoadWebContentsObserver app_loaded_observer;
+  const extensions::Extension* extension =
+      InstallPlatformApp("file_system_test");
+  ASSERT_TRUE(extension);
+
+  // Launch Platform App.
+  LaunchPlatformApp(extension);
+  app_loaded_observer.Wait();
+  ASSERT_TRUE(launched_listener.WaitUntilSatisfied());
+
+  // Initialize permission context.
+  content::WebContents* web_contents = GetFirstAppWindowWebContents();
+  Profile* const profile = browser()->profile();
+  TestFileSystemAccessPermissionContext permission_context(profile);
+  content::SetFileSystemAccessPermissionContext(profile, &permission_context);
+  FileSystemAccessPermissionRequestManager::FromWebContents(web_contents)
+      ->set_auto_response_for_test(permissions::PermissionAction::GRANTED);
+
+  // Initialize file permission grant.
+  const url::Origin kTestOrigin = extension->origin();
+  const content::PathInfo kTestPathInfo(FILE_PATH_LITERAL("/foo/bar"));
+  auto grant = permission_context.GetReadPermissionGrant(
+      kTestOrigin, kTestPathInfo,
+      ChromeFileSystemAccessPermissionContext::HandleType::kFile,
+      ChromeFileSystemAccessPermissionContext::UserAction::kOpen);
+  EXPECT_EQ(grant->GetStatus(), content::PermissionStatus::GRANTED);
+
+  // Dormant grants exist after tabs are backgrounded for the amount of time
+  // specified by the extended permissions policy.
+  permission_context.OnAllTabsInBackgroundTimerExpired(
+      kTestOrigin,
+      OneTimePermissionsTrackerObserver::BackgroundExpiryType::kLongTimeout);
+  EXPECT_EQ(grant->GetStatus(), content::PermissionStatus::ASK);
+
+  // When `requestPermission()` is called on the handle of an existing
+  // dormant grant, the restore prompt is not triggered because there is a
+  // platform app installed.
+  base::test::TestFuture<
+      content::FileSystemAccessPermissionGrant::PermissionRequestOutcome>
+      future;
+  auto* rfh = web_contents->GetPrimaryMainFrame();
+  grant->RequestPermission(
+      content::GlobalRenderFrameHostId(rfh->GetProcess()->GetDeprecatedID(),
+                                       rfh->GetRoutingID()),
+      content::FileSystemAccessPermissionGrant::UserActivationState::
+          kNotRequired,
+      future.GetCallback());
+  auto result = future.Get();
+  EXPECT_NE(result, content::FileSystemAccessPermissionGrant::
+                        PermissionRequestOutcome::kGrantedByRestorePrompt);
 }

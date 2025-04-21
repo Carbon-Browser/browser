@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define COMPONENTS_POLICY_CORE_BROWSER_CONFIGURATION_POLICY_PREF_STORE_H_
 
 #include <memory>
-#include <string>
+#include <string_view>
 
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
@@ -47,9 +47,9 @@ class POLICY_EXPORT ConfigurationPolicyPrefStore
   void RemoveObserver(PrefStore::Observer* observer) override;
   bool HasObservers() const override;
   bool IsInitializationComplete() const override;
-  bool GetValue(const std::string& key,
+  bool GetValue(std::string_view key,
                 const base::Value** result) const override;
-  std::unique_ptr<base::DictionaryValue> GetValues() const override;
+  base::Value::Dict GetValues() const override;
 
   // PolicyService::Observer methods:
   void OnPolicyUpdated(const PolicyNamespace& ns,
@@ -66,7 +66,7 @@ class POLICY_EXPORT ConfigurationPolicyPrefStore
 
   // Returns a new PrefValueMap containing the preference values that correspond
   // to the policies currently provided by the policy service.
-  PrefValueMap* CreatePreferencesFromPolicies();
+  std::unique_ptr<PrefValueMap> CreatePreferencesFromPolicies();
 
   // May be null in tests.
   raw_ptr<BrowserPolicyConnectorBase> policy_connector_;
@@ -84,7 +84,7 @@ class POLICY_EXPORT ConfigurationPolicyPrefStore
   // Current policy preferences.
   std::unique_ptr<PrefValueMap> prefs_;
 
-  base::ObserverList<PrefStore::Observer, true>::Unchecked observers_;
+  base::ObserverList<PrefStore::Observer, true> observers_;
 };
 
 }  // namespace policy

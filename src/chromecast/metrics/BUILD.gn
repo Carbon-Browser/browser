@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -24,17 +24,21 @@ cast_source_set("metrics") {
     "//components/metrics:net",
     "//components/prefs",
     "//components/variations:variations",
-
-    # TODO(crbug.com/1241702): Clean up version_info when the Variations Safe
-    # Mode experiment is over.
-    "//components/version_info",
     "//services/network/public/cpp",
   ]
 }
 
 cast_source_set("metrics_recorder") {
-  public = [ "metrics_recorder.h" ]
-  sources = [ "metrics_recorder.cc" ]
+  public = [
+    "metrics_recorder.h",
+    "metrics_recorder_base.h",
+  ]
+  sources = [
+    "metrics_recorder.cc",
+    "metrics_recorder_base.cc",
+    "timed_event_recorder.cc",
+    "timed_event_recorder.h",
+  ]
 
   public_deps = [
     ":cast_event_builder_interface",
@@ -90,10 +94,27 @@ cast_source_set("cast_event_builder_impl") {
   ]
 }
 
+cast_source_set("test_support") {
+  testonly = true
+
+  sources = [
+    "mock_cast_event_builder.cc",
+    "mock_cast_event_builder.h",
+  ]
+
+  deps = [
+    ":cast_event_builder_interface",
+    "//base",
+    "//net",
+    "//testing/gmock:gmock",
+  ]
+}
+
 test("cast_metrics_unittest") {
   sources = [
     "cast_event_builder_impl_unittest.cc",
     "cast_metrics_service_client_unittest.cc",
+    "metrics_recorder_base_unittest.cc",
     "mock_cast_sys_info_util.cc",
     "mock_cast_sys_info_util.h",
   ]
@@ -101,6 +122,8 @@ test("cast_metrics_unittest") {
   deps = [
     ":cast_event_builder_impl",
     ":metrics",
+    ":metrics_recorder",
+    ":test_support",
     "//base/test:run_all_unittests",
     "//base/test:test_support",
     "//chromecast/base:dummy_cast_sys_info",

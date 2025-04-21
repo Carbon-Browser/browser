@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,7 @@ class CORE_EXPORT CSSHSL final : public CSSColorValue {
          CSSNumericValue*);
 
   // Getters and setters from the IDL
-  Member<CSSNumericValue> h() const { return h_; }
+  CSSNumericValue* h() const { return h_.Get(); }
   V8CSSNumberish* s() const;
   V8CSSNumberish* l() const;
   V8CSSNumberish* alpha() const;

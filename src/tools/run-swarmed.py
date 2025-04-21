@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -70,36 +70,79 @@ def _DoSpawn(args):
       'tools/luci-go/swarming',
       'trigger',
       '-S',
-      'https://chromium-swarm.appspot.com',
+      f'https://{args.swarming_instance}.appspot.com',
       '-digest',
       cas_digest,
       '-dump-json',
       json_file,
       '-tag=purpose:user-debug-run-swarmed',
+      # 30 is try level. So use the same here.
+      '-priority',
+      '30',
   ]
   if args.target_os == 'fuchsia':
     trigger_args += [
         '-d',
         'kvm=1',
-        '-d',
-        'gpu=none',
     ]
+    if args.gpu is None:
+      trigger_args += [
+          '-d',
+          'gpu=none',
+      ]
   elif args.target_os == 'android':
     if args.arch == 'x86':
       # No x86 Android devices are available in swarming. So assume we want to
       # run on emulators when building for x86 on Android.
       args.swarming_os = 'Linux'
       args.pool = 'chromium.tests.avd'
-      # generic_android28 == Android P emulator. See //tools/android/avd/proto/
-      # for other options.
+      # android_28_google_apis_x86 == Android P emulator.
+      # See //tools/android/avd/proto/ for other options.
       runner_args.append(
-          '--avd-config=../../tools/android/avd/proto/generic_android28.textpb')
+          '--avd-config=../../tools/android/avd/proto/android_28_google_apis_x86.textpb'
+      )
     elif args.device_type is None and args.device_os is None:
       # The aliases for device type are stored here:
       # luci/appengine/swarming/ui2/modules/alias.js
       # for example 'blueline' = 'Pixel 3'
       trigger_args += ['-d', 'device_type=' + DEFAULT_ANDROID_DEVICE_TYPE]
-  elif args.arch != 'detect':
+  elif args.target_os == 'ios':
+    runner_args.append(f'--xcode-build-version={args.ios_xcode_build_version}')
+    runner_args.append('--xctest')
+    runner_args.append('--out-dir=${ISOLATED_OUTDIR}')
+
+    if args.ios_sim_version and args.ios_sim_platform:
+      # simulator test runner and trigger args
+      runner_args.append(f'--version={args.ios_sim_version}')
+      runner_args.extend(['--platform', args.ios_sim_platform])
+
+      version_with_underscore = args.ios_sim_version.replace('.', '_')
+      trigger_args.extend([
+          '-named-cache', f'runtime_ios_{version_with_underscore}'
+          f'=Runtime-ios-{args.ios_sim_version}'
+      ])
+    elif args.ios_device:
+      # device trigger args
+      trigger_args.extend(['-d', f'device={args.ios_device}'])
+      trigger_args.extend(['-d', 'device_status=available'])
+    else:
+      raise Exception('Either both of --ios-sim-version and --ios-sim-platform '
+                      'or --ios-device is required')
+
+    trigger_args.extend(
+        ['-named-cache', f'xcode_ios_{args.ios_xcode_build_version}=Xcode.app'])
+    trigger_args.extend(
+        ['-cipd-package', '.:infra/tools/mac_toolchain/${platform}=latest'])
+
+  if args.service_account:
+    account = args.service_account
+  elif args.swarming_instance == 'chromium-swarm':
+    account = 'chromium-tester@chops-service-accounts.iam.gserviceaccount.com'
+  elif args.swarming_instance == 'chrome-swarming':
+    account = 'chrome-tester@chops-service-accounts.iam.gserviceaccount.com'
+  trigger_args.extend(['-service-account', account])
+
+  if args.arch != 'detect':
     trigger_args += [
         '-d',
         'cpu=' + args.arch,
@@ -110,6 +153,9 @@ def _DoSpawn(args):
 
   if args.device_os:
     trigger_args += ['-d', 'device_os=' + args.device_os]
+
+  if args.gpu:
+    trigger_args += ['-d', 'gpu=' + args.gpu]
 
   if not args.no_test_flags:
     # These flags are recognized by our test runners, but do not work
@@ -157,18 +203,17 @@ def _Collect(spawn_result):
   task_ids = [task['task_id'] for task in task_json['tasks']]
 
   for t in task_ids:
-    print('Task {}: https://chromium-swarm.appspot.com/task?id={}'.format(
-        index, t))
-  p = subprocess.Popen(
-      [
-          'tools/luci-go/swarming',
-          'collect',
-          '-S',
-          'https://chromium-swarm.appspot.com',
-          '--task-output-stdout=console',
-      ] + task_ids,
-      stdout=subprocess.PIPE,
-      stderr=subprocess.STDOUT)
+    print('Task {}: https://{}.appspot.com/task?id={}'.format(
+        index, args.swarming_instance, t))
+  p = subprocess.Popen([
+      'tools/luci-go/swarming',
+      'collect',
+      '-S',
+      f'https://{args.swarming_instance}.appspot.com',
+      '--task-output-stdout=console',
+  ] + task_ids,
+                       stdout=subprocess.PIPE,
+                       stderr=subprocess.STDOUT)
   stdout = p.communicate()[0]
   if p.returncode != 0 and len(stdout) < 2**10 and 'Internal error!' in stdout:
     exit_code = INTERNAL_ERROR_EXIT_CODE
@@ -184,6 +229,11 @@ def _Collect(spawn_result):
 
 def main():
   parser = argparse.ArgumentParser()
+  parser.add_argument(
+      '--swarming-instance',
+      choices=['chromium-swarm', 'chrome-swarming'],
+      default='chromium-swarm',
+      help='The swarming instance where the task(s) will be run.')
   parser.add_argument('--swarming-os', help='OS specifier for Swarming.')
   parser.add_argument('--target-os', default='detect', help='gn target_os')
   parser.add_argument('--arch', '-a', default='detect',
@@ -202,10 +252,12 @@ def main():
                       help='Number of copies to spawn.')
   parser.add_argument(
       '--device-os', help='Run tests on the given version of Android.')
-  parser.add_argument(
-      '--device-type',
-      help='device_type specifier for Swarming'
-      ' from https://chromium-swarm.appspot.com/botlist .')
+  parser.add_argument('--device-type',
+                      help='device_type specifier for Swarming'
+                      ' from https://chromium-swarm.appspot.com/botlist .')
+  parser.add_argument('--gpu',
+                      help='gpu specifier for Swarming'
+                      ' from https://chromium-swarm.appspot.com/botlist .')
   parser.add_argument('--pool',
                       default='chromium.tests',
                       help='Use the given swarming pool.')
@@ -231,6 +283,20 @@ def main():
   parser.add_argument('out_dir', type=str, help='Build directory.')
   parser.add_argument('target_name', type=str, help='Name of target to run.')
   parser.add_argument(
+      '--service-account',
+      help='Optional service account that the swarming task will be run using. '
+      'Default value will be set based on the "--swarming-instance".')
+  # ios only args
+  parser.add_argument('--ios-xcode-build-version',
+                      help='The version of xcode that will be used for all '
+                      'xcodebuild CLI commands')
+  parser.add_argument('--ios-sim-version',
+                      help='iOS simulator version, ex. 17.2')
+  parser.add_argument('--ios-sim-platform',
+                      help='iOS simulator platform, ex. iPhone 14')
+  parser.add_argument('--ios-device',
+                      help='iOS physical device type, ex. iPhone12,1')
+  parser.add_argument(
       'runner_args',
       nargs='*',
       type=str,
@@ -254,11 +320,12 @@ def main():
 
   if args.swarming_os is None:
     args.swarming_os = {
-      'mac': 'Mac',
-      'win': 'Windows',
-      'linux': 'Linux',
-      'android': 'Android',
-      'fuchsia': 'Linux'
+        'mac': 'Mac',
+        'ios': 'Mac',
+        'win': 'Windows',
+        'linux': 'Linux',
+        'android': 'Android',
+        'fuchsia': 'Linux'
     }[args.target_os]
 
   if args.target_os == 'win' and args.target_name.endswith('.exe'):
@@ -267,6 +334,9 @@ def main():
 
   # Determine the CPU architecture of the test binary, if not specified.
   if args.arch == 'detect':
+    if args.target_os == 'ios':
+      print('iOS must specify --arch. Probably arm64 or x86-64.')
+      return 1
     if args.target_os not in ('android', 'mac', 'win'):
       executable_info = subprocess.check_output(
           ['file', os.path.join(args.out_dir, args.target_name)], text=True)
@@ -277,9 +347,7 @@ def main():
     elif args.target_os == 'android':
       args.arch = gn_args.get('target_cpu', 'detect')
 
-  # TODO(crbug.com/1268955): Use sys.executable and remove os-specific logic
-  # once mb.py is in python3
-  mb_cmd = ['tools/mb/mb', 'isolate']
+  mb_cmd = [sys.executable, 'tools/mb/mb.py', 'isolate']
   if not args.build:
     mb_cmd.append('--no-build')
   if args.isolate_map_file:
@@ -296,15 +364,15 @@ def main():
   isolate = os.path.join(args.out_dir, args.target_name + '.isolate')
   archive_json = os.path.join(args.out_dir, args.target_name + '.archive.json')
   subprocess.check_output([
-      'tools/luci-go/isolate', 'archive', '-cas-instance', 'chromium-swarm',
-      '-isolate', isolate, '-dump-json', archive_json
+      'tools/luci-go/isolate', 'archive', '-cas-instance',
+      args.swarming_instance, '-isolate', isolate, '-dump-json', archive_json
   ])
   with open(archive_json) as f:
     cas_digest = json.load(f).get(args.target_name)
 
-  # TODO(crbug.com/1268955): Use sys.executable and remove os-specific logic
-  # once mb.py is in python3
-  mb_cmd = ['tools/mb/mb', 'get-swarming-command', '--as-list']
+  mb_cmd = [
+      sys.executable, 'tools/mb/mb.py', 'get-swarming-command', '--as-list'
+  ]
   if not args.build:
     mb_cmd.append('--no-build')
   if args.isolate_map_file:

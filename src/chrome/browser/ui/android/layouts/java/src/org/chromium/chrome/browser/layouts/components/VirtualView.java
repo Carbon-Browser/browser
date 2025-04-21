@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 package org.chromium.chrome.browser.layouts.components;
@@ -25,7 +25,21 @@ public interface VirtualView {
      * @param y The y offset of the click in dp.
      * @return Whether or not that click occurred inside of the button + slop area.
      */
-    boolean checkClicked(float x, float y);
+    boolean checkClickedOrHovered(float x, float y);
+
+    /**
+     * @return Whether there is a click action associated with this virtual view.
+     */
+    default boolean hasClickAction() {
+        return true;
+    }
+
+    /**
+     * @return Whether there is a long click action associated with this virtual view.
+     */
+    default boolean hasLongClickAction() {
+        return true;
+    }
 
     /**
      * Notifies the view to handle the click action.

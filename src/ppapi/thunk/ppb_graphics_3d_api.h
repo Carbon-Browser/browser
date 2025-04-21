@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "gpu/command_buffer/common/command_buffer.h"
 #include "ppapi/c/dev/ppb_gles_chromium_texture_mapping_dev.h"
 #include "ppapi/c/ppb_graphics_3d.h"
@@ -48,7 +48,7 @@ class PPAPI_THUNK_EXPORT PPB_Graphics3D_API {
   virtual scoped_refptr<gpu::Buffer> CreateTransferBuffer(uint32_t size,
                                                           int32_t* id) = 0;
   virtual PP_Bool DestroyTransferBuffer(int32_t id) = 0;
-  virtual PP_Bool Flush(int32_t put_offset) = 0;
+  virtual PP_Bool Flush(int32_t put_offset, uint64_t release_count) = 0;
   virtual gpu::CommandBuffer::State WaitForTokenInRange(int32_t start,
                                                         int32_t end) = 0;
   virtual gpu::CommandBuffer::State WaitForGetOffsetInRange(
@@ -69,7 +69,7 @@ class PPAPI_THUNK_EXPORT PPB_Graphics3D_API {
   virtual void UnmapTexSubImage2DCHROMIUM(const void* mem) = 0;
 
   virtual void EnsureWorkVisible() = 0;
-  virtual void TakeFrontBuffer() = 0;
+  virtual void ResolveAndDetachFramebuffer() = 0;
 };
 
 }  // namespace thunk

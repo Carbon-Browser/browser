@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/sequence_checker.h"
+#include "base/strings/cstring_view.h"
 #include "base/synchronization/lock.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
@@ -67,7 +68,7 @@ class ActivityDatabase {
 
     // A Delegate is never directly deleted; it should instead delete itself
     // after any final cleanup when OnDatabaseClose() is invoked.
-    virtual ~Delegate() {}
+    virtual ~Delegate() = default;
 
     // Initializes the database schema; this gives a policy a chance to create
     // or update database tables as needed.  Should return true on success.
@@ -132,7 +133,7 @@ class ActivityDatabase {
   // columns (e.g., INTEGER or LONGVARCHAR). There should be the same number of
   // field_types as content_fields, since the two arrays should correspond.
   static bool InitializeTable(sql::Database* db,
-                              const char* table_name,
+                              base::cstring_view table_name,
                               const char* const content_fields[],
                               const char* const field_types[],
                               const int num_content_fields);
@@ -180,7 +181,7 @@ class ActivityDatabase {
 
   // A reference a Delegate for policy-specific database behavior.  See the
   // top-level comment for ActivityDatabase for comments on cleanup.
-  raw_ptr<Delegate> delegate_;
+  raw_ptr<Delegate, DanglingUntriaged> delegate_;
 
   sql::Database db_;
   bool valid_db_;

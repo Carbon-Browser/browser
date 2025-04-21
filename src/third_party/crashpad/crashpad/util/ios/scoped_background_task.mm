@@ -1,4 +1,4 @@
-// Copyright 2022 The Crashpad Authors. All rights reserved.
+// Copyright 2022 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,10 +15,6 @@
 #include "util/ios/scoped_background_task.h"
 
 #import <Foundation/Foundation.h>
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace crashpad {
 namespace internal {

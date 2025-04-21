@@ -1,12 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/performance_manager/v8_memory/v8_context_tracker.h"
 
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
@@ -38,7 +39,7 @@ using V8ContextData = internal::V8ContextData;
 
 // A function that can be bound to as a mojo::ReportBadMessage
 // callback. Only used in testing.
-void FakeReportBadMessageForTesting(base::StringPiece error) {
+void FakeReportBadMessageForTesting(std::string_view error) {
   // This is used in DCHECK death tests, so must use a DCHECK.
   DCHECK(false) << "Bad mojo message: " << error;
 }
@@ -105,7 +106,7 @@ void V8ContextTracker::OnV8ContextCreated(
 
   // Validate the |iframe_attribution_data|.
   {
-    absl::optional<bool> result =
+    std::optional<bool> result =
         ExpectIframeAttributionDataForV8ContextDescription(
             description, process_node->graph());
     if (result) {
@@ -245,7 +246,7 @@ void V8ContextTracker::OnRemoteIframeAttached(
     // OnRemoteIframeAttached, but the parent frame disappears shortly
     // afterward.
     //
-    // TODO(crbug.com/1085129): Write an end-to-end browsertest that covers
+    // TODO(crbug.com/40132061): Write an end-to-end browsertest that covers
     // this case once all parts of the measure memory API are hooked up.
     if (data->frame_node && data->parent_frame_node) {
       auto* frame_node = FrameNodeImpl::FromNode(data->frame_node.get());
@@ -277,9 +278,7 @@ void V8ContextTracker::OnRemoteIframeAttached(
   });
 
   // Posts |on_ui_thread| to the UI sequence.
-  auto rph_id = parent_frame_node->process_node()
-                    ->render_process_host_proxy()
-                    .render_process_host_id();
+  auto rph_id = parent_frame_node->process_node()->GetRenderProcessHostId();
   content::GetUIThreadTaskRunner({})->PostTask(
       FROM_HERE, base::BindOnce(std::move(on_ui_thread), std::move(on_pm_seq),
                                 std::move(data), rph_id));
@@ -366,48 +365,32 @@ void V8ContextTracker::OnBeforeExecutionContextRemoved(
     data_store_->MarkDestroyed(ec_data);
 }
 
-void V8ContextTracker::OnBeforeGraphDestroyed(Graph* graph) {
-  DCHECK_ON_GRAPH_SEQUENCE(graph);
-  // Remove ourselves from the execution context registry observer list here as
-  // it may get torn down before our OnTakenFromGraph is called. This is also
-  // called from "OnTakenFromGraph", so it is resistant to the
-  // ExecutionContextRegistry no longer existing.
-  auto* registry =
-      execution_context::ExecutionContextRegistry::GetFromGraph(graph);
-  if (registry && registry->HasObserver(this))
-    registry->RemoveObserver(this);
-}
-
 void V8ContextTracker::OnPassedToGraph(Graph* graph) {
   DCHECK_ON_GRAPH_SEQUENCE(graph);
 
-  graph->AddGraphObserver(this);
   graph->AddProcessNodeObserver(this);
-  graph->RegisterObject(this);
   graph->GetNodeDataDescriberRegistry()->RegisterDescriber(this,
                                                            "V8ContextTracker");
   auto* registry =
       execution_context::ExecutionContextRegistry::GetFromGraph(graph);
   // We expect the registry to exist before we are passed to the graph.
-  DCHECK(registry);
+  CHECK(registry);
   registry->AddObserver(this);
 }
 
 void V8ContextTracker::OnTakenFromGraph(Graph* graph) {
   DCHECK_ON_GRAPH_SEQUENCE(graph);
 
-  // Call OnBeforeGraphDestroyed as well. This unregisters us from the
-  // ExecutionContextRegistry in case we're being removed from the graph
-  // prior to its destruction.
-  OnBeforeGraphDestroyed(graph);
+  auto* registry =
+      execution_context::ExecutionContextRegistry::GetFromGraph(graph);
+  CHECK(registry);
+  registry->RemoveObserver(this);
 
   graph->GetNodeDataDescriberRegistry()->UnregisterDescriber(this);
-  graph->UnregisterObject(this);
   graph->RemoveProcessNodeObserver(this);
-  graph->RemoveGraphObserver(this);
 }
 
-base::Value V8ContextTracker::DescribeFrameNodeData(
+base::Value::Dict V8ContextTracker::DescribeFrameNodeData(
     const FrameNode* node) const {
   DCHECK_ON_GRAPH_SEQUENCE(node->GetGraph());
 
@@ -417,12 +400,12 @@ base::Value V8ContextTracker::DescribeFrameNodeData(
   if (ec_data)
     v8_context_count = ec_data->v8_context_count();
 
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetIntKey("v8_context_count", v8_context_count);
+  base::Value::Dict dict;
+  dict.Set("v8_context_count", static_cast<int>(v8_context_count));
   return dict;
 }
 
-base::Value V8ContextTracker::DescribeProcessNodeData(
+base::Value::Dict V8ContextTracker::DescribeProcessNodeData(
     const ProcessNode* node) const {
   DCHECK_ON_GRAPH_SEQUENCE(node->GetGraph());
 
@@ -439,26 +422,28 @@ base::Value V8ContextTracker::DescribeProcessNodeData(
         process_data->GetDestroyedExecutionContextDataCount();
   }
 
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetIntKey("v8_context_count", v8_context_count);
-  dict.SetIntKey("detached_v8_context_count", detached_v8_context_count);
-  dict.SetIntKey("execution_context_count", execution_context_count);
-  dict.SetIntKey("destroyed_execution_context_count",
-                 destroyed_execution_context_count);
+  base::Value::Dict dict;
+  dict.Set("v8_context_count", static_cast<int>(v8_context_count));
+  dict.Set("detached_v8_context_count",
+           static_cast<int>(detached_v8_context_count));
+  dict.Set("execution_context_count",
+           static_cast<int>(execution_context_count));
+  dict.Set("destroyed_execution_context_count",
+           static_cast<int>(destroyed_execution_context_count));
   return dict;
 }
 
-base::Value V8ContextTracker::DescribeWorkerNodeData(
+base::Value::Dict V8ContextTracker::DescribeWorkerNodeData(
     const WorkerNode* node) const {
   DCHECK_ON_GRAPH_SEQUENCE(node->GetGraph());
   size_t v8_context_count = 0;
   const auto* ec_data =
-      data_store_->Get(ToExecutionContextToken(node->GetWorkerToken()));
+      data_store_->Get(blink::ExecutionContextToken(node->GetWorkerToken()));
   if (ec_data)
     v8_context_count = ec_data->v8_context_count();
 
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetIntKey("v8_context_count", v8_context_count);
+  base::Value::Dict dict;
+  dict.Set("v8_context_count", static_cast<int>(v8_context_count));
   return dict;
 }
 
@@ -499,7 +484,7 @@ void V8ContextTracker::OnRemoteIframeAttachedImpl(
   // committed below it will safely tear itself down.
   auto* process_data = ProcessData::GetOrCreate(frame_node->process_node());
   std::unique_ptr<ExecutionContextData> ec_data;
-  blink::ExecutionContextToken ec_token(frame_node->frame_token());
+  blink::ExecutionContextToken ec_token(frame_node->GetFrameToken());
   auto* raw_ec_data = data_store_->Get(ec_token);
   if (!raw_ec_data) {
     ec_data =

@@ -1,14 +1,13 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/midi/midi_manager.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 
@@ -31,9 +30,7 @@ enum class Usage {
   INPUT_PORT_ADDED,
   OUTPUT_PORT_ADDED,
   ERROR_OBSERVED,
-
-  // New items should be inserted here, and |MAX| should point the last item.
-  MAX = ERROR_OBSERVED,
+  kMaxValue = ERROR_OBSERVED,
 };
 
 // Used to count events for transaction usage histogram. The item order should
@@ -43,14 +40,11 @@ enum class SendReceiveUsage {
   SENT,
   RECEIVED,
   SENT_AND_RECEIVED,
-
-  // New items should be inserted here, and |MAX| should point the last item.
-  MAX = SENT_AND_RECEIVED,
+  kMaxValue = SENT_AND_RECEIVED,
 };
 
 void ReportUsage(Usage usage) {
-  UMA_HISTOGRAM_ENUMERATION("Media.Midi.Usage", usage,
-                            static_cast<Sample>(Usage::MAX) + 1);
+  UMA_HISTOGRAM_ENUMERATION("Media.Midi.Usage", usage);
 }
 
 }  // namespace
@@ -76,11 +70,10 @@ MidiManager::~MidiManager() {
       data_sent_ ? (data_received_ ? SendReceiveUsage::SENT_AND_RECEIVED
                                    : SendReceiveUsage::SENT)
                  : (data_received_ ? SendReceiveUsage::RECEIVED
-                                   : SendReceiveUsage::NO_USE),
-      static_cast<Sample>(SendReceiveUsage::MAX) + 1);
+                                   : SendReceiveUsage::NO_USE));
 }
 
-#if !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_WIN) && \
+#if !BUILDFLAG(IS_APPLE) && !BUILDFLAG(IS_WIN) && \
     !(defined(USE_ALSA) && defined(USE_UDEV)) && !BUILDFLAG(IS_ANDROID)
 MidiManager* MidiManager::Create(MidiService* service) {
   ReportUsage(Usage::CREATED_ON_UNSUPPORTED_PLATFORMS);
@@ -96,12 +89,8 @@ void MidiManager::StartSession(MidiManagerClient* client) {
   {
     base::AutoLock auto_lock(lock_);
 
-    if (clients_.find(client) != clients_.end() ||
-        pending_clients_.find(client) != pending_clients_.end()) {
-      // Should not happen. But just in case the renderer is compromised.
-      NOTREACHED();
-      return;
-    }
+    CHECK(clients_.find(client) == clients_.end());
+    CHECK(pending_clients_.find(client) == pending_clients_.end());
 
     if (initialization_state_ == InitializationState::COMPLETED) {
       // Platform dependent initialization was already finished for previously
@@ -130,7 +119,8 @@ void MidiManager::StartSession(MidiManagerClient* client) {
       // Set fields protected by |lock_| here and call StartInitialization()
       // later.
       needs_initialization = true;
-      session_thread_runner_ = base::ThreadTaskRunnerHandle::Get();
+      session_thread_runner_ =
+          base::SingleThreadTaskRunner::GetCurrentDefault();
       initialization_state_ = InitializationState::STARTED;
     }
 
@@ -177,10 +167,12 @@ void MidiManager::DispatchSendMidiData(MidiManagerClient* client,
 
 void MidiManager::EndAllSessions() {
   base::AutoLock lock(lock_);
-  for (auto* client : pending_clients_)
+  for (MidiManagerClient* client : pending_clients_) {
     client->Detach();
-  for (auto* client : clients_)
+  }
+  for (MidiManagerClient* client : clients_) {
     client->Detach();
+  }
   pending_clients_.clear();
   clients_.clear();
 }
@@ -204,7 +196,7 @@ void MidiManager::CompleteInitialization(Result result) {
   initialization_state_ = InitializationState::COMPLETED;
   result_ = result;
 
-  for (auto* client : pending_clients_) {
+  for (MidiManagerClient* client : pending_clients_) {
     if (result_ == Result::OK) {
       for (const auto& info : input_ports_)
         client->AddInputPort(info);
@@ -222,32 +214,36 @@ void MidiManager::AddInputPort(const mojom::PortInfo& info) {
   ReportUsage(Usage::INPUT_PORT_ADDED);
   base::AutoLock auto_lock(lock_);
   input_ports_.push_back(info);
-  for (auto* client : clients_)
+  for (MidiManagerClient* client : clients_) {
     client->AddInputPort(info);
+  }
 }
 
 void MidiManager::AddOutputPort(const mojom::PortInfo& info) {
   ReportUsage(Usage::OUTPUT_PORT_ADDED);
   base::AutoLock auto_lock(lock_);
   output_ports_.push_back(info);
-  for (auto* client : clients_)
+  for (MidiManagerClient* client : clients_) {
     client->AddOutputPort(info);
+  }
 }
 
 void MidiManager::SetInputPortState(uint32_t port_index, PortState state) {
   base::AutoLock auto_lock(lock_);
   DCHECK_LT(port_index, input_ports_.size());
   input_ports_[port_index].state = state;
-  for (auto* client : clients_)
+  for (MidiManagerClient* client : clients_) {
     client->SetInputPortState(port_index, state);
+  }
 }
 
 void MidiManager::SetOutputPortState(uint32_t port_index, PortState state) {
   base::AutoLock auto_lock(lock_);
   DCHECK_LT(port_index, output_ports_.size());
   output_ports_[port_index].state = state;
-  for (auto* client : clients_)
+  for (MidiManagerClient* client : clients_) {
     client->SetOutputPortState(port_index, state);
+  }
 }
 
 mojom::PortState MidiManager::GetOutputPortState(uint32_t port_index) {
@@ -274,8 +270,9 @@ void MidiManager::ReceiveMidiData(uint32_t port_index,
   base::AutoLock auto_lock(lock_);
   data_received_ = true;
 
-  for (auto* client : clients_)
+  for (MidiManagerClient* client : clients_) {
     client->ReceiveMidiData(port_index, data, length, timestamp);
+  }
 }
 
 size_t MidiManager::GetClientCountForTesting() {

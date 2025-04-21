@@ -1,10 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/background_fetch/storage/image_helpers.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
@@ -21,18 +21,13 @@ namespace {
 constexpr int kMaxIconResolution = 256 * 256;
 
 std::string ConvertAndSerializeIcon(const SkBitmap& icon) {
-  std::string serialized_icon;
   auto icon_bytes = gfx::Image::CreateFrom1xBitmap(icon).As1xPNGBytes();
-  serialized_icon.assign(icon_bytes->front_as<char>(),
-                         icon_bytes->front_as<char>() + icon_bytes->size());
-  return serialized_icon;
+  return std::string(base::as_string_view(*icon_bytes));
 }
 
 SkBitmap DeserializeAndConvertIcon(
     std::unique_ptr<std::string> serialized_icon) {
-  return gfx::Image::CreateFrom1xPNGBytes(
-             reinterpret_cast<const unsigned char*>(serialized_icon->c_str()),
-             serialized_icon->size())
+  return gfx::Image::CreateFrom1xPNGBytes(base::as_byte_span(*serialized_icon))
       .AsBitmap();
 }
 

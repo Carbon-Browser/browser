@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,7 @@
 #include "ui/gl/gl_surface.h"
 #include "ui/gl/gl_surface_stub.h"
 #include "ui/gl/init/ozone_util.h"
+#include "ui/gl/presenter.h"
 
 namespace gl {
 namespace init {
@@ -41,28 +42,34 @@ scoped_refptr<GLContext> CreateGLContext(GLShareGroup* share_group,
                                          attribs);
   }
 
+  scoped_refptr<GLContextStub> context;
   switch (GetGLImplementation()) {
     case kGLImplementationMockGL:
-      return scoped_refptr<GLContext>(new GLContextStub(share_group));
     case kGLImplementationStubGL: {
       scoped_refptr<GLContextStub> stub_context =
-          new GLContextStub(share_group);
-      stub_context->SetUseStubApi(true);
+          base::MakeRefCounted<GLContextStub>(share_group);
+      if (GetGLImplementation() == kGLImplementationStubGL) {
+        stub_context->SetUseStubApi(true);
+      }
+      // The stub ctx needs to be initialized so that the gl::GLContext can
+      // store the |compatible_surface|.
+      stub_context->Initialize(compatible_surface, attribs);
       return stub_context;
     }
     case kGLImplementationDisabled:
-      return nullptr;
+      break;
     default:
       NOTREACHED() << "Expected Mock or Stub, actual:" << GetGLImplementation();
   }
   return nullptr;
 }
 
-scoped_refptr<GLSurface> CreateViewGLSurface(gfx::AcceleratedWidget window) {
+scoped_refptr<GLSurface> CreateViewGLSurface(GLDisplay* display,
+                                             gfx::AcceleratedWidget window) {
   TRACE_EVENT0("gpu", "gl::init::CreateViewGLSurface");
 
   if (HasGLOzone())
-    return GetGLOzone()->CreateViewGLSurface(window);
+    return GetGLOzone()->CreateViewGLSurface(display, window);
 
   switch (GetGLImplementation()) {
     case kGLImplementationMockGL:
@@ -71,29 +78,23 @@ scoped_refptr<GLSurface> CreateViewGLSurface(gfx::AcceleratedWidget window) {
     default:
       NOTREACHED() << "Expected Mock or Stub, actual:" << GetGLImplementation();
   }
-
-  return nullptr;
 }
 
-scoped_refptr<GLSurface> CreateSurfacelessViewGLSurface(
+scoped_refptr<Presenter> CreateSurfacelessViewGLSurface(
+    GLDisplay* display,
     gfx::AcceleratedWidget window) {
   TRACE_EVENT0("gpu", "gl::init::CreateSurfacelessViewGLSurface");
-  return HasGLOzone() ? GetGLOzone()->CreateSurfacelessViewGLSurface(window)
-                      : nullptr;
+  return HasGLOzone()
+             ? GetGLOzone()->CreateSurfacelessViewGLSurface(display, window)
+             : nullptr;
 }
 
-scoped_refptr<GLSurface> CreateOffscreenGLSurfaceWithFormat(
-    const gfx::Size& size,
-    GLSurfaceFormat format) {
+scoped_refptr<GLSurface> CreateOffscreenGLSurface(GLDisplay* display,
+                                                  const gfx::Size& size) {
   TRACE_EVENT0("gpu", "gl::init::CreateOffscreenGLSurface");
 
-  if (!format.IsCompatible(GLSurfaceFormat())) {
-    NOTREACHED() << "FATAL: Ozone only supports default-format surfaces.";
-    return nullptr;
-  }
-
   if (HasGLOzone())
-    return GetGLOzone()->CreateOffscreenGLSurface(size);
+    return GetGLOzone()->CreateOffscreenGLSurface(display, size);
 
   switch (GetGLImplementation()) {
     case kGLImplementationMockGL:
@@ -102,7 +103,6 @@ scoped_refptr<GLSurface> CreateOffscreenGLSurfaceWithFormat(
     default:
       NOTREACHED() << "Expected Mock or Stub, actual:" << GetGLImplementation();
   }
-  return nullptr;
 }
 
 void SetDisabledExtensionsPlatform(const std::string& disabled_extensions) {
@@ -130,7 +130,6 @@ bool InitializeExtensionSettingsOneOffPlatform(GLDisplay* display) {
       return true;
     default:
       NOTREACHED() << "Expected Mock or Stub, actual:" << GetGLImplementation();
-      return false;
   }
 }
 

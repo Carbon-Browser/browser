@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/system/data_pipe.h"
@@ -41,15 +42,16 @@ class NavigationPreloadRequest final : public WebNavigationPreloadRequest,
 
   // network::mojom::URLLoaderClient:
   void OnReceiveEarlyHints(network::mojom::EarlyHintsPtr early_hints) override;
-  void OnReceiveResponse(network::mojom::URLResponseHeadPtr response_head,
-                         mojo::ScopedDataPipeConsumerHandle body) override;
+  void OnReceiveResponse(
+      network::mojom::URLResponseHeadPtr response_head,
+      mojo::ScopedDataPipeConsumerHandle body,
+      std::optional<mojo_base::BigBuffer> cached_metadata) override;
   void OnReceiveRedirect(
       const net::RedirectInfo& redirect_info,
       network::mojom::URLResponseHeadPtr response_head) override;
   void OnUploadProgress(int64_t current_position,
                         int64_t total_size,
                         OnUploadProgressCallback ack_callback) override;
-  void OnReceiveCachedMetadata(mojo_base::BigBuffer data) override;
   void OnTransferSizeUpdated(int32_t transfer_size_diff) override;
   void OnComplete(const network::URLLoaderCompletionStatus& status) override;
 
@@ -58,7 +60,7 @@ class NavigationPreloadRequest final : public WebNavigationPreloadRequest,
   void ReportErrorToOwner(const WebString& message,
                           WebServiceWorkerError::Mode error_mode);
 
-  WebServiceWorkerContextClient* owner_ = nullptr;
+  raw_ptr<WebServiceWorkerContextClient> owner_ = nullptr;
 
   const int fetch_event_id_ = -1;
   const WebURL url_;

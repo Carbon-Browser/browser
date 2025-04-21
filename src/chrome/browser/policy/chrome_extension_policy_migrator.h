@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@ namespace policy {
 // PolicyMigrator with chrome-specific helper functions.
 class ChromeExtensionPolicyMigrator : public PolicyMigrator {
  public:
-  ~ChromeExtensionPolicyMigrator() override {}
+  ~ChromeExtensionPolicyMigrator() override = default;
 
  protected:
   // Helper function intended for implementers who want to rename policies and

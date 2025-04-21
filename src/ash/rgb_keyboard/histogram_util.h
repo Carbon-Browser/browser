@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,14 +26,15 @@ enum class RgbKeyboardCapabilityType {
   kIndividualKey = 1,
   kFourZoneFortyLed = 2,
   kFourZoneTwelveLed = 3,
-  kFourZoneFifteenLed = 4,
-  kMaxValue = kFourZoneFifteenLed,
+  kFourZoneFourLed = 4,
+  kMaxValue = kFourZoneFourLed,
 };
 
 enum class RgbKeyboardBacklightChangeType {
   kStaticBackgroundColorChanged = 0,
   kRainbowModeSelected = 1,
-  kMaxValue = kRainbowModeSelected,
+  kStaticZoneColorChanged = 2,
+  kMaxValue = kStaticZoneColorChanged,
 };
 
 ASH_EXPORT std::string GetCapabilityTypeStr(

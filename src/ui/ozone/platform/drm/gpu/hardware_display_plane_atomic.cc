@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,16 @@
 
 #include <drm_fourcc.h>
 
-#include "base/command_line.h"
+#include "base/files/platform_file.h"
 #include "base/logging.h"
-#include "build/chromeos_buildflags.h"
 #include "media/media_buildflags.h"
+#include "ui/gfx/geometry/rect.h"
+#include "ui/ozone/platform/drm/common/scoped_drm_types.h"
 #include "ui/ozone/platform/drm/gpu/drm_device.h"
 #include "ui/ozone/platform/drm/gpu/drm_gpu_util.h"
 
 namespace ui {
+
 namespace {
 
 uint32_t OverlayTransformToDrmRotationPropertyValue(
@@ -28,48 +30,37 @@ uint32_t OverlayTransformToDrmRotationPropertyValue(
     // Driver code swaps 90 and 270 to be compliant with how xrandr uses these
     // values, so we need to invert them here as well to get them back to the
     // proper value.
-    case gfx::OVERLAY_TRANSFORM_ROTATE_90:
+    case gfx::OVERLAY_TRANSFORM_ROTATE_CLOCKWISE_90:
       return DRM_MODE_ROTATE_270;
-    case gfx::OVERLAY_TRANSFORM_ROTATE_180:
+    case gfx::OVERLAY_TRANSFORM_ROTATE_CLOCKWISE_180:
       return DRM_MODE_ROTATE_180;
-    case gfx::OVERLAY_TRANSFORM_ROTATE_270:
+    case gfx::OVERLAY_TRANSFORM_ROTATE_CLOCKWISE_270:
       return DRM_MODE_ROTATE_90;
+    case gfx::OVERLAY_TRANSFORM_FLIP_VERTICAL_CLOCKWISE_90:
+    case gfx::OVERLAY_TRANSFORM_FLIP_VERTICAL_CLOCKWISE_270:
     default:
       NOTREACHED();
   }
-  return 0;
 }
 
 // Rotations are dependent on modifiers. Tiled formats can be rotated,
 // linear formats cannot. Atomic tests currently ignore modifiers, so there
 // isn't a way of determining if the rotation is supported.
 // TODO(https://b/172210707): Atomic tests should work if we are using
-// kUseRealBuffersForPageFlipTest, so this should be revisited and tested more
-// broadly with a condition on that.
-// NOTE: This is enabled for TGL+ and NV12/P010 formats for 90/270 rotation
-// currently since we always allocate those formats as Y-tiled and 90/270
-// rotation is supported by the HW in that case. This is needed for protected
-// content that requires overlays.
+// the original buffers as they have the correct modifiers. See
+// kUseRealBuffersForPageFlipTest and the 'GetBufferForPageFlipTest' function.
+// Intel driver reference on rotated and flipped buffers with modifiers:
+// https://code.woboq.org/linux/linux/drivers/gpu/drm/i915/intel_sprite.c.html#1471
 bool IsRotationTransformSupported(gfx::OverlayTransform transform,
-                                  uint32_t format_fourcc) {
-#if BUILDFLAG(USE_CHROMEOS_PROTECTED_MEDIA)
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  const bool enable_more_rotations =
-      base::CommandLine::ForCurrentProcess()->HasSwitch(
-          switches::kLacrosUseChromeosProtectedMedia);
-#else
-  const bool enable_more_rotations = true;
-#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
-  if (enable_more_rotations &&
-      (format_fourcc == DRM_FORMAT_NV12 || format_fourcc == DRM_FORMAT_P010) &&
-      (transform == gfx::OVERLAY_TRANSFORM_ROTATE_90 ||
-       transform == gfx::OVERLAY_TRANSFORM_ROTATE_270)) {
-    return true;
-  }
-#endif
-  if ((transform == gfx::OVERLAY_TRANSFORM_ROTATE_90) ||
-      (transform == gfx::OVERLAY_TRANSFORM_ROTATE_270) ||
+                                  uint32_t format_fourcc,
+                                  bool is_original_buffer) {
+  if ((transform == gfx::OVERLAY_TRANSFORM_ROTATE_CLOCKWISE_90) ||
+      (transform == gfx::OVERLAY_TRANSFORM_ROTATE_CLOCKWISE_270) ||
       (transform == gfx::OVERLAY_TRANSFORM_FLIP_HORIZONTAL)) {
+    if (is_original_buffer && (format_fourcc == DRM_FORMAT_NV12 ||
+                               format_fourcc == DRM_FORMAT_P010)) {
+      return true;
+    }
     return false;
   }
 
@@ -105,17 +96,22 @@ bool HardwareDisplayPlaneAtomic::Initialize(DrmDevice* drm) {
 }
 
 bool HardwareDisplayPlaneAtomic::AssignPlaneProps(
+    DrmDevice* drm,
     uint32_t crtc_id,
     uint32_t framebuffer,
     const gfx::Rect& crtc_rect,
     const gfx::Rect& src_rect,
+    const gfx::Rect& damage_rect,
     const gfx::OverlayTransform transform,
+    const gfx::ColorSpace& color_space,
     int in_fence_fd,
-    uint32_t format_fourcc) {
+    uint32_t format_fourcc,
+    bool is_original_buffer) {
   if (transform != gfx::OVERLAY_TRANSFORM_NONE && !properties_.rotation.id)
     return false;
 
-  if (!IsRotationTransformSupported(transform, format_fourcc))
+  if (!IsRotationTransformSupported(transform, format_fourcc,
+                                    is_original_buffer))
     return false;
 
   // Make a copy of properties to get the props IDs for the new intermediate
@@ -136,6 +132,29 @@ bool HardwareDisplayPlaneAtomic::AssignPlaneProps(
   if (assigned_props_.rotation.id) {
     assigned_props_.rotation.value =
         OverlayTransformToDrmRotationPropertyValue(transform);
+  }
+
+  // Log an error if the clip is not in bounds. Restrict logging to when PSR2 is
+  // enabled. (plane_fb_damage_clips has non-zero ID).
+  const bool clip_in_bounds = crtc_rect.Contains(damage_rect);
+  if (!clip_in_bounds && assigned_props_.plane_fb_damage_clips.id) {
+    LOG(ERROR) << "Damage clip dmg: " << damage_rect.ToString()
+               << " not contained inside display bounds"
+               << " crtc: " << crtc_rect.ToString();
+  }
+  if (drm && assigned_props_.plane_fb_damage_clips.id) {
+    ScopedDrmModeRectPtr dmg_clip_blob_data = CreateDCBlob(damage_rect);
+    // dmg_clip_blob needs to live long enough to be committed.
+    static ScopedDrmPropertyBlob dmg_clip_blob = drm->CreatePropertyBlob(
+        dmg_clip_blob_data.get(), sizeof(drm_mode_rect));
+    assigned_props_.plane_fb_damage_clips.value = dmg_clip_blob->id();
+  }
+
+  if (assigned_props_.plane_color_encoding.id) {
+    assigned_props_.plane_color_encoding.value =
+        color_space.GetMatrixID() == gfx::ColorSpace::MatrixID::BT709
+            ? color_encoding_bt709_
+            : color_encoding_bt601_;
   }
 
   if (assigned_props_.in_fence_fd.id)
@@ -162,16 +181,20 @@ bool HardwareDisplayPlaneAtomic::SetPlaneProps(drmModeAtomicReq* property_set) {
         AddPropertyIfValid(property_set, id_, assigned_props_.rotation);
   }
 
+  if (assigned_props_.plane_fb_damage_clips.id) {
+    plane_set_succeeded &= AddPropertyIfValid(
+        property_set, id_, assigned_props_.plane_fb_damage_clips);
+  }
+
   if (assigned_props_.in_fence_fd.id) {
     plane_set_succeeded &=
         AddPropertyIfValid(property_set, id_, assigned_props_.in_fence_fd);
   }
 
   if (assigned_props_.plane_color_encoding.id) {
-    // TODO(markyacoub): |color_encoding_bt601_| and |color_range_limited_| are
-    // only set in Initialize(). The properties could be set once in there and
-    // these member variables could be removed.
-    assigned_props_.plane_color_encoding.value = color_encoding_bt601_;
+    // TODO(markyacoub): |color_range_limited_| is only set in Initialize(). The
+    // properties could be set once in there and these member variables could be
+    // removed.
     assigned_props_.plane_color_range.value = color_range_limited_;
     plane_set_succeeded &= AddPropertyIfValid(
         property_set, id_, assigned_props_.plane_color_encoding);
@@ -189,13 +212,12 @@ bool HardwareDisplayPlaneAtomic::SetPlaneProps(drmModeAtomicReq* property_set) {
   return true;
 }
 
-bool HardwareDisplayPlaneAtomic::SetPlaneCtm(drmModeAtomicReq* property_set,
-                                             uint32_t ctm_blob_id) {
-  if (!properties_.plane_ctm.id)
-    return false;
-
-  properties_.plane_ctm.value = ctm_blob_id;
-  return AddPropertyIfValid(property_set, id_, properties_.plane_ctm);
+void HardwareDisplayPlaneAtomic::AssignDisableProps() {
+  set_in_use(false);
+  set_owning_crtc(0);
+  AssignPlaneProps(nullptr, 0, 0, gfx::Rect(), gfx::Rect(), gfx::Rect(),
+                   gfx::OVERLAY_TRANSFORM_NONE, gfx::ColorSpace(),
+                   base::kInvalidPlatformFile, DRM_FORMAT_INVALID, false);
 }
 
 uint32_t HardwareDisplayPlaneAtomic::AssignedCrtcId() const {

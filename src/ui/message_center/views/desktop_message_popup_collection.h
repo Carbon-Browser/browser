@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,7 +45,7 @@ class MESSAGE_CENTER_EXPORT DesktopMessagePopupCollection
 
  protected:
   // Overridden from MessagePopupCollection:
-  int GetToastOriginX(const gfx::Rect& toast_bounds) const override;
+  int GetPopupOriginX(const gfx::Rect& popup_bounds) const override;
   int GetBaseline() const override;
   gfx::Rect GetWorkArea() const override;
   bool IsTopDown() const override;
@@ -67,14 +67,14 @@ class MESSAGE_CENTER_EXPORT DesktopMessagePopupCollection
 
   // Overridden from display::DisplayObserver:
   void OnDisplayAdded(const display::Display& new_display) override;
-  void OnDisplayRemoved(const display::Display& old_display) override;
+  void OnDisplaysRemoved(const display::Displays& removed_displays) override;
   void OnDisplayMetricsChanged(const display::Display& display,
                                uint32_t metrics) override;
 
   int32_t alignment_ = POPUP_ALIGNMENT_BOTTOM | POPUP_ALIGNMENT_RIGHT;
   int64_t primary_display_id_ = display::kInvalidDisplayId;
   raw_ptr<display::Screen> screen_ = nullptr;
-  absl::optional<display::ScopedDisplayObserver> display_observer_;
+  std::optional<display::ScopedDisplayObserver> display_observer_;
   gfx::Rect work_area_;
 };
 

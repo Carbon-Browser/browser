@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_GRAPHICS_GPU_IMAGE_LAYER_BRIDGE_H_
 
 #include "cc/layers/texture_layer_client.h"
-#include "cc/resources/shared_bitmap_id_registrar.h"
-#include "components/viz/common/resources/resource_format.h"
+#include "components/viz/common/resources/shared_image_format.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_types.h"
 #include "third_party/blink/renderer/platform/graphics/static_bitmap_image.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -25,6 +24,7 @@ class Size;
 }
 
 namespace blink {
+class WebGraphicsSharedImageInterfaceProvider;
 
 class PLATFORM_EXPORT ImageLayerBridge
     : public GarbageCollected<ImageLayerBridge>,
@@ -40,7 +40,6 @@ class PLATFORM_EXPORT ImageLayerBridge
 
   // cc::TextureLayerClient implementation.
   bool PrepareTransferableResource(
-      cc::SharedBitmapIdRegistrar* bitmap_registrar,
       viz::TransferableResource* out_resource,
       viz::ReleaseCallback* out_release_callback) override;
 
@@ -48,9 +47,6 @@ class PLATFORM_EXPORT ImageLayerBridge
 
   cc::Layer* CcLayer() const;
 
-  void SetFilterQuality(cc::PaintFlags::FilterQuality filter_quality) {
-    filter_quality_ = filter_quality;
-  }
   void SetUV(const gfx::PointF& left_top, const gfx::PointF& right_bottom);
 
   bool IsAccelerated() { return image_ && image_->IsTextureBacked(); }
@@ -66,16 +62,16 @@ class PLATFORM_EXPORT ImageLayerBridge
     RegisteredBitmap& operator=(RegisteredBitmap&& other);
 
     scoped_refptr<cc::CrossThreadSharedBitmap> bitmap;
-    cc::SharedBitmapIdRegistration registration;
+    scoped_refptr<gpu::ClientSharedImage> shared_image;
+    gpu::SyncToken sync_token;
+    base::WeakPtr<blink::WebGraphicsSharedImageInterfaceProvider> sii_provider;
   };
 
   // Returns a SharedMemory bitmap of |size|. Tries to recycle returned bitmaps
   // first and allocates a new bitmap if necessary. Note this will delete
   // recycled bitmaps that are the wrong size.
-  RegisteredBitmap CreateOrRecycleBitmap(
-      const gfx::Size& size,
-      viz::ResourceFormat format,
-      cc::SharedBitmapIdRegistrar* bitmap_registrar);
+  RegisteredBitmap CreateOrRecycleBitmap(const gfx::Size& size,
+                                         viz::SharedImageFormat format);
 
   void ResourceReleasedGpu(scoped_refptr<StaticBitmapImage>,
                            const gpu::SyncToken&,
@@ -87,8 +83,6 @@ class PLATFORM_EXPORT ImageLayerBridge
 
   scoped_refptr<StaticBitmapImage> image_;
   scoped_refptr<cc::TextureLayer> layer_;
-  cc::PaintFlags::FilterQuality filter_quality_ =
-      cc::PaintFlags::FilterQuality::kLow;
 
   // SharedMemory bitmaps that can be recycled.
   Vector<RegisteredBitmap> recycled_bitmaps_;

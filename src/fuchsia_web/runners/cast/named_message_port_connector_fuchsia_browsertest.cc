@@ -1,21 +1,24 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "fuchsia_web/runners/cast/named_message_port_connector_fuchsia.h"
+
+#include <string_view>
+
 #include "base/barrier_closure.h"
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
-#include "base/strings/string_piece.h"
+#include "base/run_loop.h"
 #include "components/cast/message_port/fuchsia/create_web_message.h"
 #include "components/cast/message_port/fuchsia/message_port_fuchsia.h"
 #include "components/cast/message_port/test_message_port_receiver.h"
 #include "content/public/test/browser_test.h"
 #include "fuchsia_web/common/test/fit_adapter.h"
+#include "fuchsia_web/common/test/frame_for_test.h"
 #include "fuchsia_web/common/test/frame_test_util.h"
 #include "fuchsia_web/common/test/test_navigation_listener.h"
-#include "fuchsia_web/runners/cast/named_message_port_connector_fuchsia.h"
-#include "fuchsia_web/webengine/test/frame_for_test.h"
 #include "fuchsia_web/webengine/test/web_engine_browser_test.h"
 #include "testing/gmock/include/gmock/gmock-matchers.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -49,6 +52,16 @@ class NamedMessagePortConnectorFuchsiaTest : public WebEngineBrowserTest {
         base::Unretained(this)));
     connector_ =
         std::make_unique<NamedMessagePortConnectorFuchsia>(frame_.get());
+  }
+
+  void TearDownOnMainThread() override {
+    // Destroy the NamedMessagePortConnector before the Frame.
+    connector_ = nullptr;
+
+    // Destroy the Frame before the test terminates
+    frame_ = {};
+
+    WebEngineBrowserTest::TearDownOnMainThread();
   }
 
   // Intercepts the page load event to trigger the injection of |connector_|'s
@@ -91,7 +104,7 @@ IN_PROC_BROWSER_TEST_F(NamedMessagePortConnectorFuchsiaTest, EndToEnd) {
   base::RunLoop receive_port_run_loop;
   connector_->RegisterPortHandler(base::BindRepeating(
       [](std::string* received_port_name, CastMessagePort* received_port,
-         base::RunLoop* receive_port_run_loop, base::StringPiece port_name,
+         base::RunLoop* receive_port_run_loop, std::string_view port_name,
          CastMessagePort port) -> bool {
         *received_port_name = std::string(port_name);
         *received_port = std::move(port);
@@ -144,7 +157,7 @@ IN_PROC_BROWSER_TEST_F(NamedMessagePortConnectorFuchsiaTest, MultiplePorts) {
   base::RunLoop receive_port_run_loop;
   connector_->RegisterPortHandler(base::BindRepeating(
       [](std::vector<CastMessagePort>* received_ports,
-         base::RunLoop* receive_port_run_loop, base::StringPiece port_name,
+         base::RunLoop* receive_port_run_loop, std::string_view port_name,
          CastMessagePort port) -> bool {
         received_ports->push_back(std::move(port));
 

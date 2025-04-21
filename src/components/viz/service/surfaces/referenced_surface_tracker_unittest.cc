@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,13 +37,13 @@ SurfaceId MakeSurfaceId(const FrameSinkId& frame_sink_id, uint32_t parent_id) {
 
 class ReferencedSurfaceTrackerTest : public testing::Test {
  public:
-  ReferencedSurfaceTrackerTest() {}
+  ReferencedSurfaceTrackerTest() = default;
 
   ReferencedSurfaceTrackerTest(const ReferencedSurfaceTrackerTest&) = delete;
   ReferencedSurfaceTrackerTest& operator=(const ReferencedSurfaceTrackerTest&) =
       delete;
 
-  ~ReferencedSurfaceTrackerTest() override {}
+  ~ReferencedSurfaceTrackerTest() override = default;
 
   const std::vector<SurfaceReference>& references_to_remove() const {
     return references_to_remove_;

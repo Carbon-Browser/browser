@@ -1,30 +1,23 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.content_public.browser;
 
-import androidx.annotation.IntDef;
-import androidx.annotation.Nullable;
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
+import java.util.Objects;
 
 /**
  * Represents a JavaScript message payload.
- * Currently only STRING is supported.
+ * Currently only String and ArrayBuffer is supported.
  */
+@NullMarked
 public final class MessagePayload {
-    @Retention(RetentionPolicy.SOURCE)
-    @IntDef(value = {MessagePayloadType.TYPE_STRING})
-    @interface MessagePayloadType {
-        int TYPE_STRING = 0;
-    }
-
-    @MessagePayloadType
-    private final int mType;
-    @Nullable
-    private final String mString;
+    @MessagePayloadType private final int mType;
+    private final @Nullable String mString;
+    private final byte @Nullable [] mArrayBuffer;
 
     /**
      * Create a MessagePayload String type.
@@ -32,8 +25,17 @@ public final class MessagePayload {
      * JNI.
      */
     public MessagePayload(@Nullable String string) {
-        mType = MessagePayloadType.TYPE_STRING;
+        mType = MessagePayloadType.STRING;
         mString = string;
+        mArrayBuffer = null;
+    }
+
+    /** Create a MessagePayload ArrayBuffer type. */
+    public MessagePayload(byte[] arrayBuffer) {
+        Objects.requireNonNull(arrayBuffer, "arrayBuffer cannot be null.");
+        mType = MessagePayloadType.ARRAY_BUFFER;
+        mArrayBuffer = arrayBuffer;
+        mString = null;
     }
 
     @MessagePayloadType
@@ -41,11 +43,36 @@ public final class MessagePayload {
         return mType;
     }
 
-    @Nullable
-    public String getAsString() {
-        if (mType != MessagePayloadType.TYPE_STRING) {
-            throw new ClassCastException("String expected, but type is " + mType);
-        }
+    public @Nullable String getAsString() {
+        checkType(MessagePayloadType.STRING);
         return mString;
+    }
+
+    public byte[] getAsArrayBuffer() {
+        checkType(MessagePayloadType.ARRAY_BUFFER);
+        Objects.requireNonNull(mArrayBuffer, "mArrayBuffer cannot be null.");
+        return mArrayBuffer;
+    }
+
+    private void checkType(@MessagePayloadType int expectedType) {
+        if (mType != expectedType) {
+            throw new IllegalStateException(
+                    "Expected "
+                            + typeToString(expectedType)
+                            + ", but type is "
+                            + typeToString(mType));
+        }
+    }
+
+    public static String typeToString(@MessagePayloadType int type) {
+        switch (type) {
+            case MessagePayloadType.STRING:
+                return "String";
+            case MessagePayloadType.ARRAY_BUFFER:
+                return "ArrayBuffer";
+            case MessagePayloadType.INVALID:
+                return "Invalid";
+        }
+        throw new IllegalArgumentException("Unknown type: " + type);
     }
 }

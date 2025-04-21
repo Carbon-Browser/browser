@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/values.h"
-#include "chrome/browser/ui/ash/arc_custom_tab_modal_dialog_host.h"
+#include "chrome/browser/ui/ash/arc/arc_custom_tab_modal_dialog_host.h"
 #include "chrome/services/printing/public/mojom/pdf_flattener.mojom.h"
 #include "components/printing/common/print.mojom.h"
 #include "content/public/browser/web_contents_user_data.h"
@@ -81,9 +81,8 @@ class PrintSessionImpl : public mojom::PrintSessionHost,
       CreatePreviewDocumentCallback callback,
       base::ReadOnlySharedMemoryRegion preview_document_region);
 
-  void OnPdfFlattened(
-      int request_id,
-      base::ReadOnlySharedMemoryRegion flattened_document_region);
+  void OnPdfFlattened(int request_id,
+                      printing::mojom::FlattenPdfResultPtr result);
 
   void OnPdfFlattenerDisconnected();
 

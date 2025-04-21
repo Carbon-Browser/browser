@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,8 @@
 #include <stddef.h>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/task/task_runner_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "content/browser/renderer_host/pepper/browser_ppapi_host_impl.h"
 #include "content/browser/renderer_host/pepper/pepper_socket_utils.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -40,9 +39,9 @@ bool CanUseNetworkMonitor(bool external_plugin,
 
 void OnGetNetworkList(
     base::OnceCallback<void(const net::NetworkInterfaceList&)> callback,
-    const absl::optional<net::NetworkInterfaceList>& networks) {
+    const std::optional<net::NetworkInterfaceList>& networks) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  content::GetUIThreadTaskRunner({})->PostTask(
+  GetUIThreadTaskRunner({})->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), networks.has_value()
                                               ? *networks

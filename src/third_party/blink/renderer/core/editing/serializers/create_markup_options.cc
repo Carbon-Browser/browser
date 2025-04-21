@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,6 +37,13 @@ CreateMarkupOptions::Builder&
 CreateMarkupOptions::Builder::SetIsForMarkupSanitization(
     bool is_for_sanitization) {
   data_.is_for_markup_sanitization_ = is_for_sanitization;
+  return *this;
+}
+
+CreateMarkupOptions::Builder&
+CreateMarkupOptions::Builder::SetIgnoresCSSTextTransformsForRenderedText(
+    bool ignores_text_transforms) {
+  data_.ignores_css_text_transforms_for_rendered_text = ignores_text_transforms;
   return *this;
 }
 

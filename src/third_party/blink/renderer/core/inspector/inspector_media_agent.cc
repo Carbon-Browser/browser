@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -108,7 +108,7 @@ InspectorMediaAgent::~InspectorMediaAgent() = default;
 
 ExecutionContext* InspectorMediaAgent::GetTargetExecutionContext() const {
   if (worker_global_scope_)
-    return worker_global_scope_;
+    return worker_global_scope_.Get();
   DCHECK(inspected_frames_);
   return inspected_frames_->Root()->DomWindow()->GetExecutionContext();
 }
@@ -123,6 +123,10 @@ void InspectorMediaAgent::RegisterAgent() {
   instrumenting_agents_->AddInspectorMediaAgent(this);
   auto* cache = MediaInspectorContextImpl::From(*GetTargetExecutionContext());
   Vector<WebString> players = cache->AllPlayerIdsAndMarkSent();
+  if (players.empty()) {
+    return;
+  }
+
   PlayersCreated(players);
   for (const auto& player_id : players) {
     const auto& media_player = cache->MediaPlayerFromId(player_id);

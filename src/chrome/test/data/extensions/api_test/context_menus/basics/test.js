@@ -1,4 +1,4 @@
-// Copyright (c) 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ var tests = [
 
   function no_properties() {
     chrome.contextMenus.create({}, function(id) {
-      chrome.test.assertTrue(chrome.runtime.lastError != null);
+      chrome.test.assertNe(null, chrome.runtime.lastError);
       chrome.test.succeed();
     });
   },

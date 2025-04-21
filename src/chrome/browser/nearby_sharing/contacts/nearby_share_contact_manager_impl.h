@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,20 +8,23 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/nearby_sharing/contacts/nearby_share_contact_manager.h"
-#include "chrome/browser/nearby_sharing/proto/rpc_resources.pb.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote_set.h"
+#include "third_party/nearby/sharing/proto/rpc_resources.pb.h"
 
 class NearbyShareClientFactory;
 class NearbyShareContactDownloader;
 class NearbyShareLocalDeviceDataManager;
-class NearbyShareProfileInfoProvider;
-class NearbyShareScheduler;
 class PrefService;
+
+namespace ash::nearby {
+class NearbyScheduler;
+}  // namespace ash::nearby
 
 // Implementation of NearbyShareContactManager that persists the set of allowed
 // contact IDs--for selected-contacts visiblity mode--in prefs. All other
@@ -46,19 +49,19 @@ class NearbyShareContactManagerImpl : public NearbyShareContactManager {
   class Factory {
    public:
     static std::unique_ptr<NearbyShareContactManager> Create(
+        std::string user_email,
         PrefService* pref_service,
         NearbyShareClientFactory* http_client_factory,
-        NearbyShareLocalDeviceDataManager* local_device_data_manager,
-        NearbyShareProfileInfoProvider* profile_info_provider);
+        NearbyShareLocalDeviceDataManager* local_device_data_manager);
     static void SetFactoryForTesting(Factory* test_factory);
 
    protected:
     virtual ~Factory();
     virtual std::unique_ptr<NearbyShareContactManager> CreateInstance(
+        std::string user_email,
         PrefService* pref_service,
         NearbyShareClientFactory* http_client_factory,
-        NearbyShareLocalDeviceDataManager* local_device_data_manager,
-        NearbyShareProfileInfoProvider* profile_info_provider) = 0;
+        NearbyShareLocalDeviceDataManager* local_device_data_manager) = 0;
 
    private:
     static Factory* test_factory_;
@@ -68,15 +71,17 @@ class NearbyShareContactManagerImpl : public NearbyShareContactManager {
 
  private:
   NearbyShareContactManagerImpl(
+      std::string user_email,
       PrefService* pref_service,
       NearbyShareClientFactory* http_client_factory,
-      NearbyShareLocalDeviceDataManager* local_device_data_manager,
-      NearbyShareProfileInfoProvider* profile_info_provider);
+      NearbyShareLocalDeviceDataManager* local_device_data_manager);
 
   // NearbyShareContactsManager:
   void DownloadContacts() override;
   void SetAllowedContacts(
       const std::set<std::string>& allowed_contact_ids) override;
+  std::set<std::string> GetAllowedContacts() const override;
+
   void OnStart() override;
   void OnStop() override;
   void Bind(mojo::PendingReceiver<nearby_share::mojom::ContactManager> receiver)
@@ -87,11 +92,10 @@ class NearbyShareContactManagerImpl : public NearbyShareContactManager {
       ::mojo::PendingRemote<nearby_share::mojom::DownloadContactsObserver>
           observer) override;
 
-  std::set<std::string> GetAllowedContacts() const;
   void OnPeriodicContactsUploadRequested();
   void OnContactsDownloadRequested();
   void OnContactsDownloadSuccess(
-      std::vector<nearbyshare::proto::ContactRecord> contacts,
+      std::vector<nearby::sharing::proto::ContactRecord> contacts,
       uint32_t num_unreachable_contacts_filtered_out);
   void OnContactsDownloadFailure();
   void OnContactsUploadFinished(bool did_contacts_change_since_last_upload,
@@ -102,15 +106,18 @@ class NearbyShareContactManagerImpl : public NearbyShareContactManager {
   // Notify the base-class and mojo observers that contacts were downloaded.
   void NotifyAllObserversContactsDownloaded(
       const std::set<std::string>& allowed_contact_ids,
-      const std::vector<nearbyshare::proto::ContactRecord>& contacts,
+      const std::vector<nearby::sharing::proto::ContactRecord>& contacts,
       uint32_t num_unreachable_contacts_filtered_out);
 
-  PrefService* pref_service_ = nullptr;
-  NearbyShareClientFactory* http_client_factory_ = nullptr;
-  NearbyShareLocalDeviceDataManager* local_device_data_manager_ = nullptr;
-  NearbyShareProfileInfoProvider* profile_info_provider_ = nullptr;
-  std::unique_ptr<NearbyShareScheduler> periodic_contact_upload_scheduler_;
-  std::unique_ptr<NearbyShareScheduler> contact_download_and_upload_scheduler_;
+  std::string user_email_;
+  raw_ptr<PrefService> pref_service_ = nullptr;
+  raw_ptr<NearbyShareClientFactory> http_client_factory_ = nullptr;
+  raw_ptr<NearbyShareLocalDeviceDataManager> local_device_data_manager_ =
+      nullptr;
+  std::unique_ptr<ash::nearby::NearbyScheduler>
+      periodic_contact_upload_scheduler_;
+  std::unique_ptr<ash::nearby::NearbyScheduler>
+      contact_download_and_upload_scheduler_;
   std::unique_ptr<NearbyShareContactDownloader> contact_downloader_;
   mojo::RemoteSet<nearby_share::mojom::DownloadContactsObserver> observers_set_;
   mojo::ReceiverSet<nearby_share::mojom::ContactManager> receiver_set_;

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -125,6 +125,23 @@ extern const char kPaymentManifestCrossSiteRedirectNotAllowed[];
 // be used with base::ReplaceStringPlaceholders(fmt, {A}, nullptr).
 extern const char kPaymentManifestDownloadFailed[];
 
+// Used when downloading payment manifest URL A has failed because of network
+// error B. This format should be used with
+// base::ReplaceStringPlaceholders(
+//     fmt, {A, net::ErrorToShortString(B), base::NumberToString(B)}, nullptr).
+extern const char kPaymentManifestDownloadFailedWithNetworkError[];
+
+// Used when downloading payment manifest URL A has failed because of HTTP
+// status code B. This format should be used with
+// base::ReplaceStringPlaceholders(
+//     fmt, {A, base::NumberToString(B), net::GetHttpReasonPhrase(B)}, nullptr).
+extern const char kPaymentManifestDownloadFailedWithHttpStatusCode[];
+
+// Used when Content Security Policy (CSP) denied downloading payment manifest
+// URL A. This format should be used with base::ReplaceStringPlaceholders(fmt,
+// {A}, nullptr).
+extern const char kPaymentManifestCSPDenied[];
+
 // Payment handler passed a non-object field "details" in response to the
 // "paymentrequest" event.
 extern const char kPaymentDetailsNotObject[];
@@ -211,6 +228,10 @@ extern const char kGenericPaymentMethodNotSupportedMessage[];
 
 // Used for errors downloading the payment method manifest. This format should
 // be used with base::ReplaceStringPlaceholders(fmt, {A}, nullptr).
+extern const char kNoLinkHeader[];
+
+// Used for errors downloading the payment method manifest. This format should
+// be used with base::ReplaceStringPlaceholders(fmt, {A}, nullptr).
 extern const char kNoContentAndNoLinkHeader[];
 
 // Used when the downloaded payment manifest A is empty. This format should be
@@ -255,6 +276,34 @@ extern const char kValidInstrumentIconRequired[];
 // Used when the icon that was either downloaded or read from user profile is
 // not valid.
 extern const char kInvalidIcon[];
+
+// Used when the rpId field was not specified for the
+// "secure-payment-confirmation" method.
+extern const char kRpIdRequired[];
+
+// Used when neither of the payeeOrigin or payeeName fields were specified for
+// the "secure-payment-confirmation" method.
+extern const char kPayeeOriginOrPayeeNameRequired[];
+
+// Used when the payeeOrigin field was specified but was non-https for the
+// "secure-payment-confirmation" method.
+extern const char kPayeeOriginMustBeHttps[];
+
+// Used when the networkInfo field was specified but the networkInfo.name field
+// was empty for the "secure-payment-confirmation" method.
+extern const char kNetworkNameRequired[];
+
+// Used when the networkInfo field was specified but the networkInfo.icon field
+// was not a valid URL in the "secure-payment-confirmation" method.
+extern const char kValidNetworkIconRequired[];
+
+// Used when the issuerInfo field was specified but the issuerInfo.name field
+// was empty for the "secure-payment-confirmation" method.
+extern const char kIssuerNameRequired[];
+
+// Used when the issuerInfo field was specified but the issuerInfo.icon field
+// was not a valid URL in the "secure-payment-confirmation" method.
+extern const char kValidIssuerIconRequired[];
 
 }  // namespace errors
 }  // namespace payments

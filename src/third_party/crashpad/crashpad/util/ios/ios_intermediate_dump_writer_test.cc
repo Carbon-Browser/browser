@@ -1,4 +1,4 @@
-// Copyright 2021 The Crashpad Authors. All rights reserved.
+// Copyright 2021 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,8 +17,8 @@
 #include <fcntl.h>
 #include <mach/mach.h>
 
+#include "base/apple/scoped_mach_vm.h"
 #include "base/files/scoped_file.h"
-#include "base/mac/scoped_mach_vm.h"
 #include "base/posix/eintr_wrapper.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -141,8 +141,8 @@ TEST_F(IOSIntermediateDumpWriterTest, MissingPropertyString) {
                         region_size,
                         VM_FLAGS_ANYWHERE),
             0);
-  base::mac::ScopedMachVM vm_owner(reinterpret_cast<vm_address_t>(region),
-                                   region_size);
+  base::apple::ScopedMachVM vm_owner(reinterpret_cast<vm_address_t>(region),
+                                     region_size);
 
   // Fill first page with 'A' and second with 'B'.
   memset(region, 'A', page_size);

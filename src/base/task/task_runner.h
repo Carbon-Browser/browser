@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,10 @@
 #include <stddef.h>
 
 #include "base/base_export.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/ref_counted.h"
 #include "base/task/post_task_and_reply_with_result_internal.h"
@@ -94,20 +94,22 @@ class BASE_EXPORT TaskRunner
   // };
   //
   //
-  // class DataLoader : public SupportsWeakPtr<DataLoader> {
+  // class DataLoader {
   //  public:
   //    void GetData() {
   //      scoped_refptr<DataBuffer> buffer = new DataBuffer();
   //      target_thread_.task_runner()->PostTaskAndReply(
   //          FROM_HERE,
   //          base::BindOnce(&DataBuffer::AddData, buffer),
-  //          base::BindOnce(&DataLoader::OnDataReceived, AsWeakPtr(), buffer));
+  //          base::BindOnce(&DataLoader::OnDataReceived,
+  //                             weak_ptr_factory_.GetWeakPtr(), buffer));
   //    }
   //
   //  private:
   //    void OnDataReceived(scoped_refptr<DataBuffer> buffer) {
   //      // Do something with buffer.
   //    }
+  //    base::WeakPtrFactory<DataLoader> weak_ptr_factory_{this};
   // };
   //
   //
@@ -144,9 +146,9 @@ class BASE_EXPORT TaskRunner
             template <typename>
             class TaskCallbackType,
             template <typename>
-            class ReplyCallbackType,
-            typename = EnableIfIsBaseCallback<TaskCallbackType>,
-            typename = EnableIfIsBaseCallback<ReplyCallbackType>>
+            class ReplyCallbackType>
+    requires(IsBaseCallback<TaskCallbackType<void()>> &&
+             IsBaseCallback<ReplyCallbackType<void()>>)
   bool PostTaskAndReplyWithResult(const Location& from_here,
                                   TaskCallbackType<TaskReturnType()> task,
                                   ReplyCallbackType<void(ReplyArgType)> reply) {

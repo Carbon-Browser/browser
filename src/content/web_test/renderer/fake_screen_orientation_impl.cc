@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,24 +6,26 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "content/public/renderer/render_frame.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
 #include "third_party/blink/public/web/web_local_frame.h"
 #include "third_party/blink/public/web/web_view.h"
 
+using blink::WebView;
+
 namespace content {
 
-FakeScreenOrientationImpl::FakeScreenOrientationImpl() = default;
+FakeScreenOrientationImpl::FakeScreenOrientationImpl()
+    : WebViewObserver(nullptr) {}
 
 FakeScreenOrientationImpl::~FakeScreenOrientationImpl() = default;
 
 void FakeScreenOrientationImpl::ResetData() {
-  web_view_ = nullptr;
+  Observe(nullptr);
   current_lock_ = device::mojom::ScreenOrientationLockType::DEFAULT;
   device_orientation_ = display::mojom::ScreenOrientation::kPortraitPrimary;
   current_orientation_ = display::mojom::ScreenOrientation::kPortraitPrimary;
@@ -32,9 +34,9 @@ void FakeScreenOrientationImpl::ResetData() {
 }
 
 bool FakeScreenOrientationImpl::UpdateDeviceOrientation(
-    blink::WebView* web_view,
+    WebView* web_view,
     display::mojom::ScreenOrientation orientation) {
-  web_view_ = web_view;
+  Observe(web_view);
 
   if (device_orientation_ == orientation)
     return false;
@@ -49,28 +51,27 @@ bool FakeScreenOrientationImpl::UpdateScreenOrientation(
   if (current_orientation_ == orientation)
     return false;
   current_orientation_ = orientation;
-  if (web_view_) {
-    web_view_->SetScreenOrientationOverrideForTesting(CurrentOrientationType());
+  if (WebView* web_view = GetWebView()) {
+    web_view->SetScreenOrientationOverrideForTesting(CurrentOrientationType());
     return true;
   }
   return false;
 }
 
-absl::optional<display::mojom::ScreenOrientation>
+std::optional<display::mojom::ScreenOrientation>
 FakeScreenOrientationImpl::CurrentOrientationType() const {
   if (is_disabled_)
-    return absl::nullopt;
+    return std::nullopt;
   return current_orientation_;
 }
 
-void FakeScreenOrientationImpl::SetDisabled(blink::WebView* web_view,
-                                            bool disabled) {
+void FakeScreenOrientationImpl::SetDisabled(WebView* web_view, bool disabled) {
   if (is_disabled_ == disabled)
     return;
   is_disabled_ = disabled;
-  web_view_ = web_view;
-  if (web_view_) {
-    web_view_->SetScreenOrientationOverrideForTesting(CurrentOrientationType());
+  Observe(web_view);
+  if (web_view) {
+    web_view->SetScreenOrientationOverrideForTesting(CurrentOrientationType());
   }
 }
 
@@ -133,14 +134,14 @@ void FakeScreenOrientationImpl::OverrideAssociatedInterfaceProviderForFrame(
 void FakeScreenOrientationImpl::LockOrientation(
     device::mojom::ScreenOrientationLockType orientation,
     LockOrientationCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&FakeScreenOrientationImpl::UpdateLockSync,
                      base::Unretained(this), orientation, std::move(callback)));
 }
 
 void FakeScreenOrientationImpl::UnlockOrientation() {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&FakeScreenOrientationImpl::ResetLockSync,
                                 base::Unretained(this)));
 }

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,9 @@
 #include "components/permissions/features.h"
 #include "components/permissions/permission_manager.h"
 #include "components/permissions/permission_request_manager.h"
-#include "components/permissions/permission_result.h"
 #include "components/permissions/test/mock_permission_prompt_factory.h"
+#include "content/public/browser/permission_request_description.h"
+#include "content/public/browser/permission_result.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/permissions/permission_utils.h"
 
@@ -50,15 +51,17 @@ class GeolocationPermissionContextDelegateTests
     permissions::PermissionRequestManager::CreateForWebContents(web_contents());
     content_settings::PageSpecificContentSettings::CreateForWebContents(
         web_contents(),
-        std::make_unique<chrome::PageSpecificContentSettingsDelegate>(
-            web_contents()));
+        std::make_unique<PageSpecificContentSettingsDelegate>(web_contents()));
 #if BUILDFLAG(IS_ANDROID)
     static_cast<permissions::GeolocationPermissionContextAndroid*>(
         PermissionManagerFactory::GetForProfile(profile())
             ->GetPermissionContextForTesting(ContentSettingsType::GEOLOCATION))
         ->SetLocationSettingsForTesting(
             std::make_unique<MockLocationSettings>());
-    MockLocationSettings::SetLocationStatus(true, true);
+    MockLocationSettings::SetLocationStatus(
+        /*has_android_coarse_location_permission=*/true,
+        /*has_android_fine_location_permission=*/true,
+        /*is_system_location_setting_enabled=*/true);
     MockLocationSettings::SetCanPromptForAndroidPermission(true);
     MockLocationSettings::SetLocationSettingsDialogStatus(false /* enabled */,
                                                           GRANTED);
@@ -73,7 +76,8 @@ class GeolocationPermissionContextDelegateTests
       base::OnceCallback<void(blink::mojom::PermissionStatus)> callback) {
     PermissionManagerFactory::GetForProfile(profile())
         ->RequestPermissionsFromCurrentDocument(
-            {permission}, render_frame_host, user_gesture,
+            render_frame_host,
+            content::PermissionRequestDescription(permission, user_gesture),
             base::BindOnce(
                 [](base::OnceCallback<void(blink::mojom::PermissionStatus)>
                        callback,
@@ -84,12 +88,13 @@ class GeolocationPermissionContextDelegateTests
                 std::move(callback)));
   }
 
-  permissions::PermissionResult GetPermissionStatusForDisplayOnSettingsUI(
+  content::PermissionResult GetPermissionResultForOriginWithoutContext(
       Profile* profile,
-      ContentSettingsType permission,
-      const GURL& origin) {
+      blink::PermissionType permission,
+      const url::Origin& origin) {
     return PermissionManagerFactory::GetForProfile(profile)
-        ->GetPermissionStatusForDisplayOnSettingsUI(permission, origin);
+        ->GetPermissionResultForOriginWithoutContext(permission, origin,
+                                                     origin);
   }
 };
 
@@ -122,10 +127,10 @@ TEST_F(GeolocationPermissionContextDelegateTests, TabContentSettingIsUpdated) {
 }
 
 #if BUILDFLAG(IS_ANDROID)
-// TODO(https://crbug.com/1318240): Flaky.
+// TODO(crbug.com/40835241): Flaky.
 TEST_F(GeolocationPermissionContextDelegateTests,
        DISABLED_SearchGeolocationInIncognito) {
-  GURL requesting_frame_url(kDSETestUrl);
+  url::Origin requesting_frame_url = url::Origin::Create(GURL(kDSETestUrl));
 
   SearchPermissionsService* service =
       SearchPermissionsService::Factory::GetForBrowserContext(profile());
@@ -136,19 +141,19 @@ TEST_F(GeolocationPermissionContextDelegateTests,
 
   // The DSE geolocation should not be auto-granted even in a non-OTR profile.
   ASSERT_EQ(
-      CONTENT_SETTING_ASK,
-      GetPermissionStatusForDisplayOnSettingsUI(
-          profile(), ContentSettingsType::GEOLOCATION, requesting_frame_url)
-          .content_setting);
+      blink::mojom::PermissionStatus::ASK,
+      GetPermissionResultForOriginWithoutContext(
+          profile(), blink::PermissionType::GEOLOCATION, requesting_frame_url)
+          .status);
 
   Profile* otr_profile =
       profile()->GetPrimaryOTRProfile(/*create_if_needed=*/true);
 
   // The DSE geolocation should not be auto-granted in an OTR profile.
   ASSERT_EQ(
-      CONTENT_SETTING_ASK,
-      GetPermissionStatusForDisplayOnSettingsUI(
-          otr_profile, ContentSettingsType::GEOLOCATION, requesting_frame_url)
-          .content_setting);
+      blink::mojom::PermissionStatus::ASK,
+      GetPermissionResultForOriginWithoutContext(
+          otr_profile, blink::PermissionType::GEOLOCATION, requesting_frame_url)
+          .status);
 }
 #endif

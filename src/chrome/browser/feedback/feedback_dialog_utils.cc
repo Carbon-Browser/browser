@@ -1,22 +1,22 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/feedback/feedback_dialog_utils.h"
 
-#include "ash/public/cpp/multi_user_window_manager.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/devtools/devtools_window.h"
+#include "chrome/browser/feedback/show_feedback_page.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
-#include "chrome/browser/ui/chrome_pages.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "content/public/browser/web_contents.h"
 #include "url/gurl.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ash/public/cpp/multi_user_window_manager.h"
 #include "chrome/browser/ui/ash/multi_user/multi_user_util.h"
 #include "chrome/browser/ui/ash/multi_user/multi_user_window_manager_helper.h"
 #include "chrome/browser/ui/browser_window.h"
@@ -75,17 +75,18 @@ Profile* GetFeedbackProfile(const Browser* browser) {
 
 void ShowFeedbackDialogForWebUI(WebUIFeedbackSource webui_source,
                                 const std::string& extra_diagnostics) {
-  FeedbackSource source;
+  feedback::FeedbackSource source;
   std::string category;
   switch (webui_source) {
     case WebUIFeedbackSource::kConnectivityDiagnostics:
-      source = FeedbackSource::kFeedbackSourceConnectivityDiagnostics;
+      source = feedback::FeedbackSource::kFeedbackSourceConnectivityDiagnostics;
       category = "connectivity-diagnostics";
       break;
   }
 
-  ShowFeedbackPage(nullptr, source, /*description_template=*/std::string(),
-                   /*description_template_placeholder=*/std::string(), category,
+  ShowFeedbackPage(nullptr, source,
+                   /*description_template=*/std::string(),
+                   /*description_placeholder_text=*/std::string(), category,
                    extra_diagnostics);
 }
 

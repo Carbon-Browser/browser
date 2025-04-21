@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,22 +39,22 @@ Accelerometer::Accelerometer(
              sensor_type,
              features) {}
 
-absl::optional<double> Accelerometer::x() const {
+std::optional<double> Accelerometer::x() const {
   if (hasReading())
     return GetReading().accel.x;
-  return absl::nullopt;
+  return std::nullopt;
 }
 
-absl::optional<double> Accelerometer::y() const {
+std::optional<double> Accelerometer::y() const {
   if (hasReading())
     return GetReading().accel.y;
-  return absl::nullopt;
+  return std::nullopt;
 }
 
-absl::optional<double> Accelerometer::z() const {
+std::optional<double> Accelerometer::z() const {
   if (hasReading())
     return GetReading().accel.z;
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 void Accelerometer::Trace(Visitor* visitor) const {

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,17 +30,13 @@ class SequenceManagerForTest : public internal::SequenceManagerImpl {
       // Since most test calls are in Blink, randomised sampling is enabled
       // by default in the test SequenceManager, as opposed to production code.
       SequenceManager::Settings settings =
-          SequenceManager::Settings::Builder()
-              .SetRandomisedSamplingEnabled(true)
-              .Build());
+          SequenceManager::Settings::Builder().Build());
 
   // Creates SequenceManagerForTest using the provided ThreadController.
   static std::unique_ptr<SequenceManagerForTest> Create(
       std::unique_ptr<internal::ThreadController> thread_controller,
       SequenceManager::Settings settings =
-          SequenceManager::Settings::Builder()
-              .SetRandomisedSamplingEnabled(true)
-              .Build());
+          SequenceManager::Settings::Builder().Build());
 
   static std::unique_ptr<SequenceManagerForTest> CreateOnCurrentThread(
       SequenceManager::Settings);

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,35 +6,42 @@
 
 #include <stddef.h>
 
+#include <array>
 #include <memory>
 #include <utility>
 #include <vector>
 
-#include "base/strings/utf_string_conversions.h"
+#include "base/memory/raw_ptr.h"
+#include "base/scoped_observation.h"
+#include "base/test/metrics/histogram_tester.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "components/bookmarks/browser/base_bookmark_model_observer.h"
+#include "components/bookmarks/browser/bookmark_client.h"
 #include "components/bookmarks/browser/bookmark_model.h"
+#include "components/bookmarks/browser/bookmark_model_observer.h"
 #include "components/bookmarks/browser/bookmark_node_data.h"
+#include "components/bookmarks/common/bookmark_metrics.h"
 #include "components/bookmarks/test/test_bookmark_client.h"
+#include "components/sync/base/features.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/clipboard/clipboard.h"
 #include "ui/base/clipboard/scoped_clipboard_writer.h"
 
-using base::ASCIIToUTF16;
-using std::string;
-
 namespace bookmarks {
 namespace {
+
+using base::ASCIIToUTF16;
+using std::string;
+using testing::UnorderedElementsAre;
 
 class BookmarkUtilsTest : public testing::Test,
                           public BaseBookmarkModelObserver {
  public:
   BookmarkUtilsTest()
-      : task_environment_(base::test::TaskEnvironment::MainThreadType::UI),
-        grouped_changes_beginning_count_(0),
-        grouped_changes_ended_count_(0) {}
+      : task_environment_(base::test::TaskEnvironment::MainThreadType::UI) {}
 
   BookmarkUtilsTest(const BookmarkUtilsTest&) = delete;
   BookmarkUtilsTest& operator=(const BookmarkUtilsTest&) = delete;
@@ -63,23 +70,50 @@ class BookmarkUtilsTest : public testing::Test,
 #endif
   }
 
+  base::HistogramTester* histogram() { return &histogram_; }
+
  private:
   // BaseBookmarkModelObserver:
   void BookmarkModelChanged() override {}
 
-  void GroupedBookmarkChangesBeginning(BookmarkModel* model) override {
+  void GroupedBookmarkChangesBeginning() override {
     ++grouped_changes_beginning_count_;
   }
 
-  void GroupedBookmarkChangesEnded(BookmarkModel* model) override {
+  void GroupedBookmarkChangesEnded() override {
     ++grouped_changes_ended_count_;
   }
+
+  // Some of these tests exercise account bookmarks.
+  base::test::ScopedFeatureList features_override_{
+      syncer::kSyncEnableBookmarksInTransportMode};
 
   // Clipboard requires a full TaskEnvironment.
   base::test::TaskEnvironment task_environment_;
 
-  int grouped_changes_beginning_count_;
-  int grouped_changes_ended_count_;
+  int grouped_changes_beginning_count_{0};
+  int grouped_changes_ended_count_{0};
+  base::HistogramTester histogram_;
+};
+
+// A bookmark client that suggests a save location for new nodes.
+class SuggestFolderClient : public TestBookmarkClient {
+ public:
+  SuggestFolderClient() = default;
+  SuggestFolderClient(const SuggestFolderClient&) = delete;
+  SuggestFolderClient& operator=(const SuggestFolderClient&) = delete;
+  ~SuggestFolderClient() override = default;
+
+  const BookmarkNode* GetSuggestedSaveLocation(const GURL& url) override {
+    return suggested_save_location_.get();
+  }
+
+  void SetSuggestedSaveLocation(const BookmarkNode* node) {
+    suggested_save_location_ = node;
+  }
+
+ private:
+  raw_ptr<const BookmarkNode> suggested_save_location_;
 };
 
 TEST_F(BookmarkUtilsTest, GetBookmarksMatchingPropertiesWordPhraseQuery) {
@@ -90,48 +124,34 @@ TEST_F(BookmarkUtilsTest, GetBookmarksMatchingPropertiesWordPhraseQuery) {
                                             GURL("http://www.cnn.com"));
   const BookmarkNode* folder1 =
       model->AddFolder(model->other_node(), 0, u"foo");
-  std::vector<const BookmarkNode*> nodes;
   QueryFields query;
   query.word_phrase_query = std::make_unique<std::u16string>();
   // No nodes are returned for empty string.
   *query.word_phrase_query = u"";
-  GetBookmarksMatchingProperties(model.get(), query, 100, &nodes);
-  EXPECT_TRUE(nodes.empty());
-  nodes.clear();
+  EXPECT_TRUE(GetBookmarksMatchingProperties(model.get(), query, 100).empty());
 
   // No nodes are returned for space-only string.
   *query.word_phrase_query = u"   ";
-  GetBookmarksMatchingProperties(model.get(), query, 100, &nodes);
-  EXPECT_TRUE(nodes.empty());
-  nodes.clear();
+  EXPECT_TRUE(GetBookmarksMatchingProperties(model.get(), query, 100).empty());
 
   // Node "foo bar" and folder "foo" are returned in search results.
   *query.word_phrase_query = u"foo";
-  GetBookmarksMatchingProperties(model.get(), query, 100, &nodes);
-  ASSERT_EQ(2U, nodes.size());
-  EXPECT_TRUE(nodes[0] == folder1);
-  EXPECT_TRUE(nodes[1] == node1);
-  nodes.clear();
+  EXPECT_THAT(GetBookmarksMatchingProperties(model.get(), query, 100),
+              UnorderedElementsAre(folder1, node1));
 
   // Ensure url matches return in search results.
   *query.word_phrase_query = u"cnn";
-  GetBookmarksMatchingProperties(model.get(), query, 100, &nodes);
-  ASSERT_EQ(1U, nodes.size());
-  EXPECT_TRUE(nodes[0] == node2);
-  nodes.clear();
+  EXPECT_THAT(GetBookmarksMatchingProperties(model.get(), query, 100),
+              UnorderedElementsAre(node2));
 
   // Ensure folder "foo" is not returned in more specific search.
   *query.word_phrase_query = u"foo bar";
-  GetBookmarksMatchingProperties(model.get(), query, 100, &nodes);
-  ASSERT_EQ(1U, nodes.size());
-  EXPECT_TRUE(nodes[0] == node1);
-  nodes.clear();
+  EXPECT_THAT(GetBookmarksMatchingProperties(model.get(), query, 100),
+              UnorderedElementsAre(node1));
 
   // Bookmark Bar and Other Bookmarks are not returned in search results.
   *query.word_phrase_query = u"Bookmark";
-  GetBookmarksMatchingProperties(model.get(), query, 100, &nodes);
-  ASSERT_EQ(0U, nodes.size());
-  nodes.clear();
+  EXPECT_TRUE(GetBookmarksMatchingProperties(model.get(), query, 100).empty());
 }
 
 // Check exact matching against a URL query.
@@ -144,25 +164,18 @@ TEST_F(BookmarkUtilsTest, GetBookmarksMatchingPropertiesUrl) {
 
   model->AddFolder(model->other_node(), 0, u"Folder");
 
-  std::vector<const BookmarkNode*> nodes;
   QueryFields query;
   query.url = std::make_unique<std::u16string>();
   *query.url = u"https://www.google.com/";
-  GetBookmarksMatchingProperties(model.get(), query, 100, &nodes);
-  ASSERT_EQ(1U, nodes.size());
-  EXPECT_TRUE(nodes[0] == node1);
-  nodes.clear();
+  EXPECT_THAT(GetBookmarksMatchingProperties(model.get(), query, 100),
+              UnorderedElementsAre(node1));
 
   *query.url = u"calendar";
-  GetBookmarksMatchingProperties(model.get(), query, 100, &nodes);
-  ASSERT_EQ(0U, nodes.size());
-  nodes.clear();
+  EXPECT_TRUE(GetBookmarksMatchingProperties(model.get(), query, 100).empty());
 
   // Empty URL should not match folders.
   *query.url = u"";
-  GetBookmarksMatchingProperties(model.get(), query, 100, &nodes);
-  ASSERT_EQ(0U, nodes.size());
-  nodes.clear();
+  EXPECT_TRUE(GetBookmarksMatchingProperties(model.get(), query, 100).empty());
 }
 
 // Check exact matching against a title query.
@@ -176,26 +189,19 @@ TEST_F(BookmarkUtilsTest, GetBookmarksMatchingPropertiesTitle) {
   const BookmarkNode* folder1 =
       model->AddFolder(model->other_node(), 0, u"Folder");
 
-  std::vector<const BookmarkNode*> nodes;
   QueryFields query;
   query.title = std::make_unique<std::u16string>();
   *query.title = u"Google";
-  GetBookmarksMatchingProperties(model.get(), query, 100, &nodes);
-  ASSERT_EQ(1U, nodes.size());
-  EXPECT_TRUE(nodes[0] == node1);
-  nodes.clear();
+  EXPECT_THAT(GetBookmarksMatchingProperties(model.get(), query, 100),
+              UnorderedElementsAre(node1));
 
   *query.title = u"Calendar";
-  GetBookmarksMatchingProperties(model.get(), query, 100, &nodes);
-  ASSERT_EQ(0U, nodes.size());
-  nodes.clear();
+  EXPECT_TRUE(GetBookmarksMatchingProperties(model.get(), query, 100).empty());
 
   // Title should match folders.
   *query.title = u"Folder";
-  GetBookmarksMatchingProperties(model.get(), query, 100, &nodes);
-  ASSERT_EQ(1U, nodes.size());
-  EXPECT_TRUE(nodes[0] == folder1);
-  nodes.clear();
+  EXPECT_THAT(GetBookmarksMatchingProperties(model.get(), query, 100),
+              UnorderedElementsAre(folder1));
 }
 
 // Check matching against a query with multiple predicates.
@@ -208,28 +214,26 @@ TEST_F(BookmarkUtilsTest, GetBookmarksMatchingPropertiesConjunction) {
 
   model->AddFolder(model->other_node(), 0, u"Folder");
 
-  std::vector<const BookmarkNode*> nodes;
   QueryFields query;
 
   // Test all fields matching.
   query.word_phrase_query = std::make_unique<std::u16string>(u"www");
   query.url = std::make_unique<std::u16string>(u"https://www.google.com/");
   query.title = std::make_unique<std::u16string>(u"Google");
-  GetBookmarksMatchingProperties(model.get(), query, 100, &nodes);
-  ASSERT_EQ(1U, nodes.size());
-  EXPECT_TRUE(nodes[0] == node1);
-  nodes.clear();
+  EXPECT_THAT(GetBookmarksMatchingProperties(model.get(), query, 100),
+              UnorderedElementsAre(node1));
 
-  std::unique_ptr<std::u16string>* fields[] = {&query.word_phrase_query,
-                                               &query.url, &query.title};
+  auto fields = std::to_array<std::unique_ptr<std::u16string>*>({
+      &query.word_phrase_query,
+      &query.url,
+      &query.title,
+  });
 
   // Test two fields matching.
   for (size_t i = 0; i < std::size(fields); i++) {
     std::unique_ptr<std::u16string> original_value(fields[i]->release());
-    GetBookmarksMatchingProperties(model.get(), query, 100, &nodes);
-    ASSERT_EQ(1U, nodes.size());
-    EXPECT_TRUE(nodes[0] == node1);
-    nodes.clear();
+    EXPECT_THAT(GetBookmarksMatchingProperties(model.get(), query, 100),
+                UnorderedElementsAre(node1));
     *fields[i] = std::move(original_value);
   }
 
@@ -237,240 +241,32 @@ TEST_F(BookmarkUtilsTest, GetBookmarksMatchingPropertiesConjunction) {
   for (size_t i = 0; i < std::size(fields); i++) {
     std::unique_ptr<std::u16string> original_value(fields[i]->release());
     *fields[i] = std::make_unique<std::u16string>(u"fjdkslafjkldsa");
-    GetBookmarksMatchingProperties(model.get(), query, 100, &nodes);
-    ASSERT_EQ(0U, nodes.size());
-    nodes.clear();
+    EXPECT_TRUE(
+        GetBookmarksMatchingProperties(model.get(), query, 100).empty());
     *fields[i] = std::move(original_value);
   }
 }
 
-// Copy and paste is not yet supported on iOS. http://crbug.com/228147
-#if !BUILDFLAG(IS_IOS)
-TEST_F(BookmarkUtilsTest, DISABLED_PasteBookmarkFromURL) {
-  std::unique_ptr<BookmarkModel> model(TestBookmarkClient::CreateModel());
-  const std::u16string url_text = u"http://www.google.com/";
-  const BookmarkNode* new_folder =
-      model->AddFolder(model->bookmark_bar_node(), 0, u"New_Folder");
-
-  // Write blank text to clipboard.
-  {
-    ui::ScopedClipboardWriter clipboard_writer(ui::ClipboardBuffer::kCopyPaste);
-    clipboard_writer.WriteText(std::u16string());
-  }
-  // Now we shouldn't be able to paste from the clipboard.
-  EXPECT_FALSE(CanPasteFromClipboard(model.get(), new_folder));
-
-  // Write some valid url to the clipboard.
-  {
-    ui::ScopedClipboardWriter clipboard_writer(ui::ClipboardBuffer::kCopyPaste);
-    clipboard_writer.WriteText(url_text);
-  }
-  // Now we should be able to paste from the clipboard.
-  EXPECT_TRUE(CanPasteFromClipboard(model.get(), new_folder));
-
-  PasteFromClipboard(model.get(), new_folder, 0);
-  ASSERT_EQ(1u, new_folder->children().size());
-
-  // Url for added node should be same as url_text.
-  EXPECT_EQ(url_text,
-            ASCIIToUTF16(new_folder->children().front()->url().spec()));
-}
-
-// TODO(https://crbug.com/1010182): Fix flakes and re-enable this test.
-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
-#define MAYBE_CopyPaste DISABLED_CopyPaste
-#else
-#define MAYBE_CopyPaste CopyPaste
-#endif
-TEST_F(BookmarkUtilsTest, MAYBE_CopyPaste) {
-  std::unique_ptr<BookmarkModel> model(TestBookmarkClient::CreateModel());
-  const BookmarkNode* node = model->AddURL(model->other_node(), 0, u"foo bar",
-                                           GURL("http://www.google.com"));
-
-  // Copy a node to the clipboard.
-  std::vector<const BookmarkNode*> nodes;
-  nodes.push_back(node);
-  CopyToClipboard(model.get(), nodes, false);
-
-  // And make sure we can paste a bookmark from the clipboard.
-  EXPECT_TRUE(CanPasteFromClipboard(model.get(), model->bookmark_bar_node()));
-
-  // Write some text to the clipboard.
-  {
-    ui::ScopedClipboardWriter clipboard_writer(ui::ClipboardBuffer::kCopyPaste);
-    clipboard_writer.WriteText(u"foo");
-  }
-
-  // Now we shouldn't be able to paste from the clipboard.
-  EXPECT_FALSE(CanPasteFromClipboard(model.get(), model->bookmark_bar_node()));
-}
-
-// Test for updating title such that url and title pair are unique among the
-// children of parent.
-TEST_F(BookmarkUtilsTest, DISABLED_MakeTitleUnique) {
-  std::unique_ptr<BookmarkModel> model(TestBookmarkClient::CreateModel());
-  const std::u16string url_text = u"http://www.google.com/";
-  const std::u16string title_text = u"foobar";
-  const BookmarkNode* bookmark_bar_node = model->bookmark_bar_node();
-
-  const BookmarkNode* node =
-      model->AddURL(bookmark_bar_node, 0, title_text, GURL(url_text));
-
-  EXPECT_EQ(url_text,
-            ASCIIToUTF16(bookmark_bar_node->children()[0]->url().spec()));
-  EXPECT_EQ(title_text, bookmark_bar_node->children()[0]->GetTitle());
-
-  // Copy a node to the clipboard.
-  std::vector<const BookmarkNode*> nodes;
-  nodes.push_back(node);
-  CopyToClipboard(model.get(), nodes, false);
-
-  // Now we should be able to paste from the clipboard.
-  EXPECT_TRUE(CanPasteFromClipboard(model.get(), bookmark_bar_node));
-
-  PasteFromClipboard(model.get(), bookmark_bar_node, 1);
-  ASSERT_EQ(2u, bookmark_bar_node->children().size());
-
-  // Url for added node should be same as url_text.
-  EXPECT_EQ(url_text,
-            ASCIIToUTF16(bookmark_bar_node->children()[1]->url().spec()));
-  // Title for added node should be numeric subscript suffix with copied node
-  // title.
-  EXPECT_EQ(u"foobar (1)", bookmark_bar_node->children()[1]->GetTitle());
-}
-
-TEST_F(BookmarkUtilsTest, DISABLED_CopyPasteMetaInfo) {
-  std::unique_ptr<BookmarkModel> model(TestBookmarkClient::CreateModel());
-  const BookmarkNode* node = model->AddURL(model->other_node(), 0, u"foo bar",
-                                           GURL("http://www.google.com"));
-  model->SetNodeMetaInfo(node, "somekey", "somevalue");
-  model->SetNodeMetaInfo(node, "someotherkey", "someothervalue");
-
-  // Copy a node to the clipboard.
-  std::vector<const BookmarkNode*> nodes;
-  nodes.push_back(node);
-  CopyToClipboard(model.get(), nodes, false);
-
-  // Paste node to a different folder.
-  const BookmarkNode* folder =
-      model->AddFolder(model->bookmark_bar_node(), 0, u"Folder");
-  EXPECT_EQ(0u, folder->children().size());
-
-  // And make sure we can paste a bookmark from the clipboard.
-  EXPECT_TRUE(CanPasteFromClipboard(model.get(), folder));
-
-  PasteFromClipboard(model.get(), folder, 0);
-  ASSERT_EQ(1u, folder->children().size());
-
-  // Verify that the pasted node contains the same meta info.
-  const BookmarkNode* pasted = folder->children().front().get();
-  ASSERT_TRUE(pasted->GetMetaInfoMap());
-  EXPECT_EQ(2u, pasted->GetMetaInfoMap()->size());
-  std::string value;
-  EXPECT_TRUE(pasted->GetMetaInfo("somekey", &value));
-  EXPECT_EQ("somevalue", value);
-  EXPECT_TRUE(pasted->GetMetaInfo("someotherkey", &value));
-  EXPECT_EQ("someothervalue", value);
-}
-
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_MAC)
-// http://crbug.com/396472
-#define MAYBE_CutToClipboard DISABLED_CutToClipboard
-#else
-#define MAYBE_CutToClipboard CutToClipboard
-#endif
-TEST_F(BookmarkUtilsTest, MAYBE_CutToClipboard) {
-  std::unique_ptr<BookmarkModel> model(TestBookmarkClient::CreateModel());
-  model->AddObserver(this);
-
-  std::u16string title(u"foo");
-  GURL url("http://foo.com");
-  const BookmarkNode* n1 = model->AddURL(model->other_node(), 0, title, url);
-  const BookmarkNode* n2 = model->AddURL(model->other_node(), 1, title, url);
-
-  // Cut the nodes to the clipboard.
-  std::vector<const BookmarkNode*> nodes;
-  nodes.push_back(n1);
-  nodes.push_back(n2);
-  CopyToClipboard(model.get(), nodes, true);
-
-  // Make sure the nodes were removed.
-  EXPECT_EQ(0u, model->other_node()->children().size());
-
-  // Make sure observers were notified the set of changes should be grouped.
-  ExpectGroupedChangeCount(1, 1);
-
-  // And make sure we can paste from the clipboard.
-  EXPECT_TRUE(CanPasteFromClipboard(model.get(), model->other_node()));
-}
-
-// Test is flaky on Mac and LaCros: crbug.com/1236362
-#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_CHROMEOS_LACROS)
-#define MAYBE_PasteNonEditableNodes DISABLED_PasteNonEditableNodes
-#else
-#define MAYBE_PasteNonEditableNodes PasteNonEditableNodes
-#endif
-TEST_F(BookmarkUtilsTest, MAYBE_PasteNonEditableNodes) {
-  // Load a model with an managed node that is not editable.
-  auto client = std::make_unique<TestBookmarkClient>();
-  BookmarkNode* managed_node = client->EnableManagedNode();
-
+// Ensures the BookmarkClient has the power to suggest the parent for new nodes.
+TEST_F(BookmarkUtilsTest, GetParentForNewNodes_ClientOverride) {
+  std::unique_ptr<SuggestFolderClient> client =
+      std::make_unique<SuggestFolderClient>();
+  SuggestFolderClient* client_ptr = client.get();
   std::unique_ptr<BookmarkModel> model(
       TestBookmarkClient::CreateModelWithClient(std::move(client)));
-  const BookmarkNode* node = model->AddURL(model->other_node(), 0, u"foo bar",
-                                           GURL("http://www.google.com"));
 
-  // Copy a node to the clipboard.
-  std::vector<const BookmarkNode*> nodes;
-  nodes.push_back(node);
-  CopyToClipboard(model.get(), nodes, false);
-
-  // And make sure we can paste a bookmark from the clipboard.
-  EXPECT_TRUE(CanPasteFromClipboard(model.get(), model->bookmark_bar_node()));
-
-  // But it can't be pasted into a non-editable folder.
-  BookmarkClient* upcast = model->client();
-  EXPECT_FALSE(upcast->CanBeEditedByUser(managed_node));
-  EXPECT_FALSE(CanPasteFromClipboard(model.get(), managed_node));
-}
-#endif  // !BUILDFLAG(IS_IOS)
-
-TEST_F(BookmarkUtilsTest, GetParentForNewNodes) {
-  std::unique_ptr<BookmarkModel> model(TestBookmarkClient::CreateModel());
-  // This tests the case where selection contains one item and that item is a
-  // folder.
-  std::vector<const BookmarkNode*> nodes;
-  nodes.push_back(model->bookmark_bar_node());
-  size_t index = static_cast<size_t>(-1);
-  const BookmarkNode* real_parent =
-      GetParentForNewNodes(model->bookmark_bar_node(), nodes, &index);
-  EXPECT_EQ(real_parent, model->bookmark_bar_node());
-  EXPECT_EQ(0u, index);
-
-  nodes.clear();
-
-  // This tests the case where selection contains one item and that item is an
-  // url.
-  const BookmarkNode* page1 = model->AddURL(
-      model->bookmark_bar_node(), 0, u"Google", GURL("http://google.com"));
-  nodes.push_back(page1);
-  real_parent = GetParentForNewNodes(model->bookmark_bar_node(), nodes, &index);
-  EXPECT_EQ(real_parent, model->bookmark_bar_node());
-  EXPECT_EQ(1u, index);
-
-  // This tests the case where selection has more than one item.
+  const BookmarkNode* folder_to_suggest =
+      model->AddFolder(model->bookmark_bar_node(), 0, u"Suggested");
   const BookmarkNode* folder1 =
       model->AddFolder(model->bookmark_bar_node(), 1, u"Folder 1");
-  nodes.push_back(folder1);
-  real_parent = GetParentForNewNodes(model->bookmark_bar_node(), nodes, &index);
-  EXPECT_EQ(real_parent, model->bookmark_bar_node());
-  EXPECT_EQ(2u, index);
 
-  // This tests the case where selection doesn't contain any items.
-  nodes.clear();
-  real_parent = GetParentForNewNodes(model->bookmark_bar_node(), nodes, &index);
-  EXPECT_EQ(real_parent, model->bookmark_bar_node());
-  EXPECT_EQ(2u, index);
+  ASSERT_EQ(folder1, GetParentForNewNodes(model.get(), GURL()));
+
+  client_ptr->SetSuggestedSaveLocation(folder_to_suggest);
+
+  ASSERT_EQ(folder_to_suggest, GetParentForNewNodes(model.get(), GURL()));
+
+  client_ptr = nullptr;
 }
 
 // Verifies that meta info is copied when nodes are cloned.
@@ -501,55 +297,8 @@ TEST_F(BookmarkUtilsTest, CloneMetaInfo) {
   EXPECT_EQ("somevalue", value);
   EXPECT_TRUE(clone->GetMetaInfo("someotherkey", &value));
   EXPECT_EQ("someothervalue", value);
-}
-
-// Verifies that meta info fields in the non cloned set are not copied when
-// cloning a bookmark.
-TEST_F(BookmarkUtilsTest, CloneBookmarkResetsNonClonedKey) {
-  std::unique_ptr<BookmarkModel> model(TestBookmarkClient::CreateModel());
-  model->AddNonClonedKey("foo");
-  const BookmarkNode* parent = model->other_node();
-  const BookmarkNode* node =
-      model->AddURL(parent, 0, u"title", GURL("http://www.google.com"));
-  model->SetNodeMetaInfo(node, "foo", "ignored value");
-  model->SetNodeMetaInfo(node, "bar", "kept value");
-  std::vector<BookmarkNodeData::Element> elements;
-  BookmarkNodeData::Element node_data(node);
-  elements.push_back(node_data);
-
-  // Cloning a bookmark should clear the non cloned key.
-  CloneBookmarkNode(model.get(), elements, parent, 0, true);
-  ASSERT_EQ(2u, parent->children().size());
-  std::string value;
-  EXPECT_FALSE(parent->children().front()->GetMetaInfo("foo", &value));
-
-  // Other keys should still be cloned.
-  EXPECT_TRUE(parent->children().front()->GetMetaInfo("bar", &value));
-  EXPECT_EQ("kept value", value);
-}
-
-// Verifies that meta info fields in the non cloned set are not copied when
-// cloning a folder.
-TEST_F(BookmarkUtilsTest, CloneFolderResetsNonClonedKey) {
-  std::unique_ptr<BookmarkModel> model(TestBookmarkClient::CreateModel());
-  model->AddNonClonedKey("foo");
-  const BookmarkNode* parent = model->other_node();
-  const BookmarkNode* node = model->AddFolder(parent, 0, u"title");
-  model->SetNodeMetaInfo(node, "foo", "ignored value");
-  model->SetNodeMetaInfo(node, "bar", "kept value");
-  std::vector<BookmarkNodeData::Element> elements;
-  BookmarkNodeData::Element node_data(node);
-  elements.push_back(node_data);
-
-  // Cloning a folder should clear the non cloned key.
-  CloneBookmarkNode(model.get(), elements, parent, 0, true);
-  ASSERT_EQ(2u, parent->children().size());
-  std::string value;
-  EXPECT_FALSE(parent->children().front()->GetMetaInfo("foo", &value));
-
-  // Other keys should still be cloned.
-  EXPECT_TRUE(parent->children().front()->GetMetaInfo("bar", &value));
-  EXPECT_EQ("kept value", value);
+  histogram()->ExpectTotalCount("Bookmarks.Clone.NumCloned", 1);
+  histogram()->ExpectBucketCount("Bookmarks.Clone.NumCloned", 1, 1);
 }
 
 TEST_F(BookmarkUtilsTest, RemoveAllBookmarks) {
@@ -571,20 +320,175 @@ TEST_F(BookmarkUtilsTest, RemoveAllBookmarks) {
   model->AddURL(model->mobile_node(), 0, title, url);
   model->AddURL(managed_node, 0, title, url);
 
-  std::vector<const BookmarkNode*> nodes;
-  model->GetNodesByURL(url, &nodes);
+  std::vector<raw_ptr<const BookmarkNode, VectorExperimental>> nodes =
+      model->GetNodesByURL(url);
   ASSERT_EQ(4u, nodes.size());
 
-  RemoveAllBookmarks(model.get(), url);
+  RemoveAllBookmarks(model.get(), url, FROM_HERE);
 
-  nodes.clear();
-  model->GetNodesByURL(url, &nodes);
+  nodes = model->GetNodesByURL(url);
   ASSERT_EQ(1u, nodes.size());
   EXPECT_TRUE(model->bookmark_bar_node()->children().empty());
   EXPECT_TRUE(model->other_node()->children().empty());
   EXPECT_TRUE(model->mobile_node()->children().empty());
   EXPECT_EQ(1u, managed_node->children().size());
 }
+
+TEST_F(BookmarkUtilsTest, CleanUpUrlForMatching) {
+  EXPECT_EQ(u"http://foo.com/", CleanUpUrlForMatching(GURL("http://foo.com"),
+                                                      /*adjustments=*/nullptr));
+  EXPECT_EQ(u"http://foo.com/", CleanUpUrlForMatching(GURL("http://Foo.com"),
+                                                      /*adjustments=*/nullptr));
+}
+
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
+// TODO(crbug.com/380820764): Break this up into smaller parts that:
+// * Add more than 5 custom folders and make sure that permanent nodes still
+//   show.
+// * Add 6 custom folders, make sure that only 5 show and that the folder past
+//   the cutoff starts showing if it's the parent of the currently showing
+//   bookmark.
+// * Permanent nodes don't show up first even if they are the parents of the
+//   currently displaying bookmarks.
+TEST_F(BookmarkUtilsTest, GetRecentlyUsedFoldersWithOnlyLocalBookmarks) {
+  std::unique_ptr<BookmarkModel> model(TestBookmarkClient::CreateModel());
+
+  const std::u16string title = u"Title";
+  const GURL url("http://google.com");
+  // Note that because `other_bookmark` is a child of a permanent node its use
+  // in GetMostRecentlyUsedFoldersForDisplay will not cause other_node() to be
+  // displayed before more recently modified folders.
+  const BookmarkNode* const other_bookmark =
+      model->AddURL(model->other_node(), 0, title, url);
+
+  const bookmarks::RecentlyUsedFolders mru_bookmarks =
+      bookmarks::GetMostRecentlyUsedFoldersForDisplay(model.get(),
+                                                      other_bookmark);
+
+  EXPECT_TRUE(mru_bookmarks.account_nodes.empty());
+  ASSERT_EQ(mru_bookmarks.local_nodes.size(), 2u);
+  // Permanent nodes display in a fixed order even if a bookmark in other_node()
+  // is currently displayed.
+  EXPECT_EQ(mru_bookmarks.local_nodes[0], model->bookmark_bar_node());
+  EXPECT_EQ(mru_bookmarks.local_nodes[1], model->other_node());
+
+  const BookmarkNode* const folder1 =
+      model->AddFolder(model->other_node(), 0, u"Folder");
+  const BookmarkNode* const folder2 =
+      model->AddFolder(model->other_node(), 0, u"Folder2");
+
+  model->SetDateFolderModified(folder1,
+                               base::Time::FromMillisecondsSinceUnixEpoch(1));
+  model->SetDateFolderModified(folder2,
+                               base::Time::FromMillisecondsSinceUnixEpoch(2));
+
+  // folder2 is most recent
+  EXPECT_EQ(folder2, bookmarks::GetMostRecentlyUsedFoldersForDisplay(
+                         model.get(), other_bookmark)
+                         .local_nodes[0]);
+
+  model->SetDateFolderModified(folder1,
+                               base::Time::FromMillisecondsSinceUnixEpoch(3));
+  // folder1 is most recent
+  EXPECT_EQ(folder1, bookmarks::GetMostRecentlyUsedFoldersForDisplay(
+                         model.get(), other_bookmark)
+                         .local_nodes[0]);
+
+  const BookmarkNode* const bookmark = model->AddURL(folder2, 0, title, url);
+
+  // folder2 as a parent to `bookmark` displays first even though not most
+  // recent.
+  EXPECT_EQ(folder2, bookmarks::GetMostRecentlyUsedFoldersForDisplay(
+                         model.get(), bookmark)
+                         .local_nodes[0]);
+}
+
+// TODO(crbug.com/380820764): Break this up into smaller parts and make sure we
+// have full coverage for:
+// * Add more than 5 custom folders and make sure that account permanent nodes
+//   still show.
+// * Add 6 custom folders, make sure that the oldest one is cut off (regardless
+//   of local or account). Make sure that the oldest one starts showing if it's
+//   the parent of a currently-showing bookmarl (and the second-oldest one is
+//   gone instead).
+// * Make sure that local permanent nodes show up if most recently used and if
+//   the displayed bookmark is a child of that local node it's only added once
+//   (no duplicates).
+// * Make sure local permanent nodes show up even if the displayed bookmark is
+//   another permanent node (both local permanent nodes can show).
+// * Make sure that local permanent nodes show up last among local nodes even if
+//   they are the most recent ones or parents of the current currently-displayed
+//   bookmark.
+// * Make sure local nodes are empty if there's >5 more recently used folders
+//   under account bookmarks.
+TEST_F(BookmarkUtilsTest, GetRecentlyUsedFoldersWithAccountBookmarks) {
+  std::unique_ptr<BookmarkModel> model(TestBookmarkClient::CreateModel());
+  model->CreateAccountPermanentFolders();
+
+  const std::u16string title = u"Title";
+  const GURL url("http://google.com");
+  // Note that because `bookmark_in_account_other_node` is a child of a
+  // permanent node its use in GetMostRecentlyUsedFoldersForDisplay will not
+  // cause account_other_node() to be displayed before more recently modified
+  // folders.
+  const BookmarkNode* const bookmark_in_account_other_node =
+      model->AddURL(model->account_other_node(), 0, title, url);
+
+  bookmarks::RecentlyUsedFolders mru_bookmarks =
+      bookmarks::GetMostRecentlyUsedFoldersForDisplay(
+          model.get(), bookmark_in_account_other_node);
+
+  // Permanent nodes are only added to account nodes by default.
+  ASSERT_EQ(mru_bookmarks.account_nodes.size(), 2u);
+  // No local nodes display by default.
+  EXPECT_TRUE(mru_bookmarks.local_nodes.empty());
+
+  // Permanent nodes display in a fixed order even if a bookmark in
+  // account_other_node() is currently displayed.
+  EXPECT_EQ(mru_bookmarks.account_nodes[0], model->account_bookmark_bar_node());
+  EXPECT_EQ(mru_bookmarks.account_nodes[1], model->account_other_node());
+
+  const BookmarkNode* const local_other_bookmark =
+      model->AddURL(model->other_node(), 0, title, url);
+
+  // Make sure local permanent nodes are not the most recently modified ones.
+  model->SetDateFolderModified(model->other_node(),
+                               base::Time::FromMillisecondsSinceUnixEpoch(1));
+  model->SetDateFolderModified(model->account_other_node(),
+                               base::Time::FromMillisecondsSinceUnixEpoch(2));
+
+  mru_bookmarks = bookmarks::GetMostRecentlyUsedFoldersForDisplay(
+      model.get(), local_other_bookmark);
+
+  // Local permanent node included when its children are being displayed.
+  ASSERT_EQ(mru_bookmarks.local_nodes.size(), 1u);
+  EXPECT_EQ(model->other_node(), mru_bookmarks.local_nodes[0]);
+
+  // But not otherwise.
+  EXPECT_TRUE(bookmarks::GetMostRecentlyUsedFoldersForDisplay(
+                  model.get(), bookmark_in_account_other_node)
+                  .local_nodes.empty());
+
+  // The most recent folders under account and local are split up as the topmost
+  // entries.
+  const BookmarkNode* const account_folder =
+      model->AddFolder(model->account_other_node(), 0, u"Folder");
+  const BookmarkNode* const local_folder =
+      model->AddFolder(model->other_node(), 0, u"Folder2");
+
+  model->SetDateFolderModified(account_folder,
+                               base::Time::FromMillisecondsSinceUnixEpoch(20));
+  // Older than `account_folder` but not filtered out (not permanent node).
+  model->SetDateFolderModified(local_folder,
+                               base::Time::FromMillisecondsSinceUnixEpoch(10));
+
+  mru_bookmarks = bookmarks::GetMostRecentlyUsedFoldersForDisplay(
+      model.get(), bookmark_in_account_other_node);
+  EXPECT_EQ(account_folder, mru_bookmarks.account_nodes[0]);
+  EXPECT_EQ(local_folder, mru_bookmarks.local_nodes[0]);
+}
+
+#endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
 
 }  // namespace
 }  // namespace bookmarks

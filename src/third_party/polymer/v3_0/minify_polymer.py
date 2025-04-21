@@ -1,4 +1,4 @@
-# Copyrigh 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -57,6 +57,13 @@ def main():
         # meantime exclude such comments to reduce file size.
         '--comments', 'false',
         #'--comments', '/Copyright|license|LICENSE/',
+
+        # Declare global variables as false, to prune out unnecessary code.
+        '--define', 'window.HTMLImports=false',
+        '--define', 'window.ShadyCSS=false',
+        '--define', 'window.ShadyDOM=false',
+        '--define', 'window.Polymer.legacyOptimizations=false',
+
         '--output', minified_js])
 
     # Copy generated JS bundle back to the original location.

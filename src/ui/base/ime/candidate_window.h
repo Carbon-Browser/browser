@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,6 +41,11 @@ class COMPONENT_EXPORT(UI_BASE_IME_TYPES) CandidateWindow {
     // The index of the current chosen candidate out of total candidates
     int current_candidate_index;
     int total_candidates;
+
+    // If the user is selecting from candidates.
+    // If this is false, candidate window is not shown or is showing
+    // suggestions.
+    bool is_user_selecting;
   };
 
   // Represents a candidate entry.
@@ -134,6 +139,11 @@ class COMPONENT_EXPORT(UI_BASE_IME_TYPES) CandidateWindow {
   }
   void set_show_window_at_composition(bool show_window_at_composition) {
     property_->show_window_at_composition = show_window_at_composition;
+  }
+
+  bool is_user_selecting() const { return property_->is_user_selecting; }
+  void set_is_user_selecting(bool is_user_selecting) {
+    property_->is_user_selecting = is_user_selecting;
   }
 
  private:

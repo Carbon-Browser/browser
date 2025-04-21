@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,21 +8,22 @@
 #import <Foundation/Foundation.h>
 
 @class ASCredentialServiceIdentifier;
-@class ASCredentialProviderExtensionContext;
 @protocol CredentialListConsumer;
 @protocol CredentialListUIHandler;
+@protocol CredentialResponseHandler;
 @protocol CredentialStore;
 
 // This mediator fetches and organizes the credentials for its consumer.
 @interface CredentialListMediator : NSObject
 
-// |serviceIdentifiers| will be used to prioritize data, can be nil.
+// `serviceIdentifiers` will be used to prioritize data, can be nil.
 - (instancetype)initWithConsumer:(id<CredentialListConsumer>)consumer
                        UIHandler:(id<CredentialListUIHandler>)UIHandler
                  credentialStore:(id<CredentialStore>)credentialStore
-                         context:(ASCredentialProviderExtensionContext*)context
               serviceIdentifiers:
                   (NSArray<ASCredentialServiceIdentifier*>*)serviceIdentifiers
+       credentialResponseHandler:
+           (id<CredentialResponseHandler>)credentialResponseHandler
     NS_DESIGNATED_INITIALIZER;
 
 - (instancetype)init NS_UNAVAILABLE;

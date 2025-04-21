@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,21 +7,8 @@
 
 #include <string>
 
-#include "chrome/browser/ash/notifications/echo_dialog_listener.h"
+#include "base/types/expected.h"
 #include "extensions/browser/extension_function.h"
-
-class PrefRegistrySimple;
-
-namespace chromeos {
-
-// Namespace to register the EchoCheckedOffers field in Local State.
-namespace echo_offer {
-
-void RegisterPrefs(PrefRegistrySimple* registry);
-
-}  // namespace echo_offer
-
-}  // namespace chromeos
 
 class EchoPrivateGetRegistrationCodeFunction : public ExtensionFunction {
  public:
@@ -46,7 +33,7 @@ class EchoPrivateGetOobeTimestampFunction : public ExtensionFunction {
   ResponseAction Run() override;
 
  private:
-  void RespondWithResult(const std::string& timestamp);
+  void RespondWithResult(std::optional<base::Time> timestamp);
 
   DECLARE_EXTENSION_FUNCTION("echoPrivate.getOobeTimestamp",
                              ECHOPRIVATE_GETOOBETIMESTAMP)

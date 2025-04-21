@@ -23,6 +23,11 @@
  * DAMAGE.
  */
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "third_party/blink/renderer/platform/audio/hrtf_panner.h"
 
 #include "base/memory/scoped_refptr.h"
@@ -274,10 +279,10 @@ void HRTFPanner::Pan(double desired_azimuth,
     // First run through delay lines for inter-aural time difference.
     delay_line_l_.SetDelayFrames(frame_delay_l);
     delay_line_r_.SetDelayFrames(frame_delay_r);
-    delay_line_l_.Process(segment_source_l, segment_destination_l,
-                          kFramesPerSegment);
-    delay_line_r_.Process(segment_source_r, segment_destination_r,
-                          kFramesPerSegment);
+    delay_line_l_.ProcessKRate(segment_source_l, segment_destination_l,
+                               kFramesPerSegment);
+    delay_line_r_.ProcessKRate(segment_source_r, segment_destination_r,
+                               kFramesPerSegment);
 
     const bool needs_crossfading = crossfade_incr_;
 

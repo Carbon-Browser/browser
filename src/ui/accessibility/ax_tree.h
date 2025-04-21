@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,32 +9,37 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
-#include "base/containers/flat_map.h"
+#include "base/debug/crash_logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/observer_list.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/accessibility/ax_common.h"
 #include "ui/accessibility/ax_enums.mojom-forward.h"
 #include "ui/accessibility/ax_export.h"
-#include "ui/accessibility/ax_node.h"
-#include "ui/accessibility/ax_node_data.h"
 #include "ui/accessibility/ax_tree_data.h"
 #include "ui/accessibility/ax_tree_update.h"
 
 namespace ui {
 
 struct AXEvent;
+class AXLanguageDetectionManager;
+class AXNode;
+struct AXNodeData;
 class AXTableInfo;
 class AXTreeObserver;
 struct AXTreeUpdateState;
-class AXLanguageDetectionManager;
+class AXSelection;
 
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused.
+//
+// LINT.IfChange(AXTreeUnserializeError)
 enum class AXTreeUnserializeError {
   // Tree has no root.
   kNoRoot = 0,
@@ -56,6 +61,7 @@ enum class AXTreeUnserializeError {
   // increase, but none of the other enum values may change.
   kMaxValue = kPendingChanges
 };
+// LINT.ThenChange(/tools/metrics/histograms/metadata/accessibility/enums.xml:AccessibilityTreeUnserializeError)
 
 #define ACCESSIBILITY_TREE_UNSERIALIZE_ERROR_HISTOGRAM(enum_value) \
   base::UmaHistogramEnumeration(                                   \
@@ -66,7 +72,7 @@ enum class AXTreeUnserializeError {
 // used as a source for sending updates to another client tree.
 // It's designed to be subclassed to implement support for native
 // accessibility APIs on a specific platform.
-class AX_EXPORT AXTree : public AXNode::OwnerTree {
+class AX_EXPORT AXTree {
  public:
   using IntReverseRelationMap =
       std::map<ax::mojom::IntAttribute, std::map<AXNodeID, std::set<AXNodeID>>>;
@@ -114,18 +120,26 @@ class AX_EXPORT AXTree : public AXNode::OwnerTree {
 
   AXNode* root() const { return root_; }
 
-  const AXTreeData& data() const override;
+  const AXTreeData& data() const;
 
   // Destroys the tree and notifies all observers.
   void Destroy();
 
-  // AXNode::OwnerTree override.
   // Returns the globally unique ID of this accessibility tree.
-  const AXTreeID& GetAXTreeID() const override;
+  const AXTreeID& GetAXTreeID() const;
 
-  // AXNode::OwnerTree override.
+  // Given a node in this accessibility tree that corresponds to a table
+  // or grid, return an object containing information about the
+  // table structure. This object is computed lazily on-demand and
+  // cached until the next time the tree is updated. Clients should
+  // not retain this pointer, they should just request it every time
+  // it's needed.
+  //
+  // Returns nullptr if the node is not a valid table.
+  AXTableInfo* GetTableInfo(const AXNode* table_node) const;
+
   // Returns the AXNode with the given |id| if it is part of this AXTree.
-  AXNode* GetFromId(AXNodeID id) const override;
+  AXNode* GetFromId(AXNodeID id) const;
 
   // Returns true on success. If it returns false, it's a fatal error
   // and this tree should be destroyed, and the source of the tree update
@@ -146,7 +160,8 @@ class AX_EXPORT AXTree : public AXNode::OwnerTree {
   gfx::RectF RelativeToTreeBounds(const AXNode* node,
                                   gfx::RectF node_bounds,
                                   bool* offscreen = nullptr,
-                                  bool clip_bounds = true) const;
+                                  bool clip_bounds = true,
+                                  bool skip_container_offset = false) const;
 
   // Get the bounds of a node in the coordinate space of the tree.
   // If set, updates |offscreen| boolean to be true if the node is offscreen
@@ -191,7 +206,7 @@ class AX_EXPORT AXTree : public AXNode::OwnerTree {
   }
 
   // Return a multi-line indented string representation, for logging.
-  std::string ToString() const;
+  std::string ToString(bool verbose = true) const;
 
   // A string describing the error from an unsuccessful Unserialize,
   // for testing and debugging.
@@ -207,19 +222,27 @@ class AX_EXPORT AXTree : public AXNode::OwnerTree {
   // Returns the PosInSet of |node|. Looks in node_set_size_pos_in_set_info_map_
   // for cached value. Calls |ComputeSetSizePosInSetAndCache|if no value is
   // present in the cache.
-  absl::optional<int> GetPosInSet(const AXNode& node) override;
+  std::optional<int> GetPosInSet(const AXNode& node);
+
   // Returns the SetSize of |node|. Looks in node_set_size_pos_in_set_info_map_
   // for cached value. Calls |ComputeSetSizePosInSetAndCache|if no value is
   // present in the cache.
-  absl::optional<int> GetSetSize(const AXNode& node) override;
+  std::optional<int> GetSetSize(const AXNode& node);
 
-  Selection GetUnignoredSelection() const override;
+  // Returns the part of the current selection that falls within this
+  // accessibility tree, if any.
+  AXSelection GetSelection() const;
 
-  bool GetTreeUpdateInProgressState() const override;
+  // Returns the part of the current selection that falls within this
+  // accessibility tree, if any, adjusting its endpoints to be within unignored
+  // nodes. (An "ignored" node is a node that is not exposed to platform APIs:
+  // See `AXNode::IsIgnored`.)
+  AXSelection GetUnignoredSelection() const;
 
-  // AXNode::OwnerTree override.
+  bool GetTreeUpdateInProgressState() const;
+
   // Returns true if the tree represents a paginated document
-  bool HasPaginationSupport() const override;
+  bool HasPaginationSupport() const;
 
   // Language detection manager, entry point to language detection features.
   // TODO(chrishall): Should this be stored by pointer or value?
@@ -236,6 +259,8 @@ class AX_EXPORT AXTree : public AXNode::OwnerTree {
   // same tree.
   void NotifyTreeManagerWillBeRemoved(AXTreeID previous_tree_id);
 
+  void NotifyChildTreeConnectionChanged(AXNode* node, AXTree* child_tree);
+
  private:
   friend class ScopedTreeUpdateInProgressStateSetter;
   friend class AXTableInfoTest;
@@ -244,21 +269,16 @@ class AX_EXPORT AXTree : public AXNode::OwnerTree {
   // `SetFocusedNodeShouldNeverBeIgnored` above).
   static bool is_focused_node_always_unignored_;
 
-  // Accumulate errors as there can be more than one before Chrome is crashed
-  // via AccessibilityFatalError();
-  void RecordError(std::string new_error);
+#if AX_FAIL_FAST_BUILD()
+  void CheckTreeConsistency(const AXTreeUpdate& update);
+#endif
 
-  // AXNode::OwnerTree override.
-  //
-  // Given a node in this accessibility tree that corresponds to a table
-  // or grid, return an object containing information about the
-  // table structure. This object is computed lazily on-demand and
-  // cached until the next time the tree is updated. Clients should
-  // not retain this pointer, they should just request it every time
-  // it's needed.
-  //
-  // Returns nullptr if the node is not a valid table.
-  AXTableInfo* GetTableInfo(const AXNode* table_node) const override;
+  // Accumulate errors as there can be more than one before Chrome is crashed
+  // via UnrecoverableAccessibilityError();
+  // In an AX_FAIL_FAST_BUILD or if |is_fatal|, will assert/crash immediately.
+  void RecordError(const AXTreeUpdateState& update_state,
+                   std::string new_error,
+                   bool is_fatal = false);
 
   AXNode* CreateNode(AXNode* parent,
                      AXNodeID id,
@@ -292,12 +312,14 @@ class AX_EXPORT AXTree : public AXNode::OwnerTree {
 
   // Notify the delegate that |node| will be destroyed or reparented.
   void NotifyNodeWillBeReparentedOrDeleted(
-      AXNode* node,
-      const AXTreeUpdateState* update_state);
+      AXNode& node,
+      const AXTreeUpdateState& update_state);
 
   // Notify the delegate that |node| and all of its descendants will be
   // destroyed. This function is called during AXTree teardown.
-  void RecursivelyNotifyNodeDeletedForTreeTeardown(AXNode* node);
+  void RecursivelyNotifyNodeWillBeDeletedForTreeTeardown(
+      AXNode& node,
+      std::set<AXNodeID>& deleted_nodes);
 
   // Notify the delegate that the node marked by |node_id| has been deleted.
   // We are passing the node id instead of ax node is because by the time this
@@ -313,21 +335,34 @@ class AX_EXPORT AXTree : public AXNode::OwnerTree {
   // Notify the delegate that `node` will change its data attributes, including
   // its ignored state.
   void NotifyNodeAttributesWillChange(AXNode* node,
+                                      AXTreeUpdateState& update_state,
                                       const AXTreeData* optional_old_tree_data,
                                       const AXNodeData& old_data,
                                       const AXTreeData* new_tree_data,
                                       const AXNodeData& new_data);
 
-  // Notify the delegate that `node` has changed its data attributes, including
-  // its ignored state.
-  void NotifyNodeAttributesHaveBeenChanged(
+  // Notify the delegate that `node` will change its its ignored state.
+  void NotifyNodeIgnoredStateWillChange(
       AXNode* node,
       const AXTreeData* optional_old_tree_data,
       const AXNodeData& old_data,
       const AXTreeData* new_tree_data,
       const AXNodeData& new_data);
 
-  void UpdateReverseRelations(AXNode* node, const AXNodeData& new_data);
+  // Notify the delegate that `node` has changed its data attributes, including
+  // its ignored state.
+  void NotifyNodeAttributesHaveBeenChanged(
+      AXNode* node,
+      AXTreeUpdateState& update_state,
+      const AXTreeData* optional_old_tree_data,
+      const AXNodeData& old_data,
+      const AXTreeData* new_tree_data,
+      const AXNodeData& new_data);
+
+  // Update maps that track which relations are pointing to |node|.
+  void UpdateReverseRelations(AXNode* node,
+                              const AXNodeData& new_data,
+                              bool is_new_node = false);
 
   // Sets a flag indicating whether the tree is currently being updated or not.
   // If the tree is being updated, then its internal pointers might be invalid
@@ -369,10 +404,11 @@ class AX_EXPORT AXTree : public AXNode::OwnerTree {
   // if they exist, and creating otherwise. Reparenting is disallowed, so
   // if the id already exists as the child of another node, that's an
   // error. Returns true on success, false on fatal error.
-  bool CreateNewChildVector(AXNode* node,
-                            const std::vector<AXNodeID>& new_child_ids,
-                            std::vector<AXNode*>* new_children,
-                            AXTreeUpdateState* update_state);
+  bool CreateNewChildVector(
+      AXNode* node,
+      const std::vector<AXNodeID>& new_child_ids,
+      std::vector<raw_ptr<AXNode, VectorExperimental>>* new_children,
+      AXTreeUpdateState* update_state);
 
   // Returns the lowest unignored ancestor of the node with the given ID. If the
   // node is not ignored, it returns the node.
@@ -384,13 +420,14 @@ class AX_EXPORT AXTree : public AXNode::OwnerTree {
                                           gfx::RectF node_bounds,
                                           bool* offscreen,
                                           bool clip_bounds,
+                                          bool skip_container_offset,
                                           bool allow_recursion) const;
 
   base::ObserverList<AXTreeObserver> observers_;
-  raw_ptr<AXNode, DanglingUntriaged> root_ = nullptr;
+  raw_ptr<AXNode> root_ = nullptr;
+  std::unordered_map<AXNodeID, std::unique_ptr<AXNode>> id_map_;
   std::string error_;
   AXTreeData data_;
-  base::flat_map<AXNodeID, std::unique_ptr<AXNode>> id_map_;
 
   // Map from an int attribute (if IsNodeIdIntAttribute is true) to
   // a reverse mapping from target nodes to source nodes.
@@ -403,7 +440,7 @@ class AX_EXPORT AXTree : public AXNode::OwnerTree {
 
   // Map from node ID to cached table info, if the given node is a table.
   // Invalidated every time the tree is updated.
-  mutable base::flat_map<AXNodeID, std::unique_ptr<AXTableInfo>>
+  mutable std::unordered_map<AXNodeID, std::unique_ptr<AXTableInfo>>
       table_info_map_;
 
   // The next negative node ID to use for internal nodes.
@@ -414,9 +451,9 @@ class AX_EXPORT AXTree : public AXNode::OwnerTree {
     NodeSetSizePosInSetInfo();
     ~NodeSetSizePosInSetInfo();
 
-    absl::optional<int> pos_in_set;
-    absl::optional<int> set_size;
-    absl::optional<int> lowest_hierarchical_level;
+    std::optional<int> pos_in_set;
+    std::optional<int> set_size;
+    std::optional<int> lowest_hierarchical_level;
   };
 
   // Represents the content of an ordered set which includes the ordered set
@@ -443,8 +480,8 @@ class AX_EXPORT AXTree : public AXNode::OwnerTree {
       const AXNode& original_node,
       const AXNode* ordered_set,
       const AXNode* local_parent,
-      absl::optional<int> ordered_set_min_level,
-      absl::optional<int> prev_level,
+      std::optional<int> ordered_set_min_level,
+      std::optional<int> prev_level,
       OrderedSetItemsMap* items_map_to_be_populated) const;
 
   // Computes the pos_in_set and set_size values of all items in ordered_set and
@@ -462,7 +499,7 @@ class AX_EXPORT AXTree : public AXNode::OwnerTree {
   // objects.
   // All other objects will map to default-constructed OrderedSetInfo objects.
   // Invalidated every time the tree is updated.
-  mutable base::flat_map<AXNodeID, NodeSetSizePosInSetInfo>
+  mutable std::unordered_map<AXNodeID, NodeSetSizePosInSetInfo>
       node_set_size_pos_in_set_info_map_;
 
   // Indicates if the tree is updating.

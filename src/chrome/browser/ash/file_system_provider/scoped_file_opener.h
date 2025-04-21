@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,7 @@ namespace base {
 class FilePath;
 }  // namespace base
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 
 // Opens files and guarantees that they will be closed when the object gets out
 // of scope. Use instead of manually calling OpenFile and CloseFile, as aborting
@@ -32,7 +31,6 @@ class ScopedFileOpener {
   scoped_refptr<Runner> runner_;
 };
 
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider
 
 #endif  // CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_SCOPED_FILE_OPENER_H_

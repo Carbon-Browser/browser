@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,8 @@ void MockDMTokenRetriever::ExpectRetrieveDMTokenAndReturnResult(
     const StatusOr<std::string> dm_token_result) {
   EXPECT_CALL(*this, RetrieveDMToken(_))
       .Times(times)
-      .WillRepeatedly(RunOnceCallback<0>(std::move(dm_token_result)))
+      .WillRepeatedly(
+          base::test::RunOnceCallbackRepeatedly<0>(std::move(dm_token_result)))
       .RetiresOnSaturation();
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/task/sequenced_task_runner.h"
@@ -38,7 +38,7 @@ class FakeTask : public Task {
 
   int GetChildProcessUniqueID() const override { return 0; }
 
-  const Task* GetParentTask() const override { return nullptr; }
+  base::WeakPtr<Task> GetParentTask() const override { return nullptr; }
 
   SessionID GetTabId() const override { return SessionID::InvalidValue(); }
 

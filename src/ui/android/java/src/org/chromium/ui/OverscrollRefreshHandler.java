@@ -1,32 +1,34 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.ui;
 
-import org.chromium.base.annotations.CalledByNative;
+import org.jni_zero.CalledByNative;
 
-/**
- * Simple interface allowing customized response to an overscrolling pull input.
- */
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.ui.base.BackGestureEventSwipeEdge;
+
+/** Simple interface allowing customized response to an overscrolling pull input. */
+@NullMarked
 public interface OverscrollRefreshHandler {
     /**
      * Signals the start of an overscrolling pull.
+     *
      * @param type Type of the overscroll action.
-     * @param startX X position of touch event at the beginning of overscroll.
-     * @param startY Y position of touch event at the beginning of overscroll.
-     * @param navigateForward {@code true} for forward navigation, {@code false} for back.
-     *        Used only for {@link OverscrollAction.HISTORY_NAVIGATION}.
+     * @param initiatingEdge Whether the history gesture is being initiated from the LEFT or RIGHT
+     *     edge of the screen. Only used with the HISTORY_NAVIGATION `type`. TODO(bokan): Can we
+     *     make the initiatingEdge param nullable in JNI?
      * @return Whether the handler will consume the overscroll sequence.
      */
     @CalledByNative
-    public boolean start(
-            @OverscrollAction int type, float startX, float startY, boolean navigateForward);
+    public boolean start(@OverscrollAction int type, @BackGestureEventSwipeEdge int initiatingEdge);
 
     /**
      * Signals a pull update.
+     *
      * @param xDelta The change in horizontal pull distance (positive if pulling down, negative if
-     *         up).
+     *     up).
      * @param yDelta The change in vertical pull distance.
      */
     @CalledByNative
@@ -39,9 +41,7 @@ public interface OverscrollRefreshHandler {
     @CalledByNative
     public void release(boolean allowRefresh);
 
-    /**
-     * Reset the active pull state.
-     */
+    /** Reset the active pull state. */
     @CalledByNative
     public void reset();
 

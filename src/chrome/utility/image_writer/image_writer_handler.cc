@@ -1,17 +1,17 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/utility/image_writer/image_writer_handler.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "chrome/services/removable_storage_writer/public/mojom/removable_storage_writer.mojom.h"
 #include "chrome/utility/image_writer/error_message_strings.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace {
 
@@ -106,7 +106,7 @@ void ImageWriterHandler::SendProgress(int64_t progress) {
 }
 
 void ImageWriterHandler::SendSucceeded() {
-  client_->Complete(absl::nullopt);
+  client_->Complete(std::nullopt);
   client_.reset();
 }
 

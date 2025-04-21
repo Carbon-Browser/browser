@@ -1,9 +1,10 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/metrics/histogram_delta_serialization.h"
 
+#include "base/containers/span.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_base.h"
 #include "base/metrics/histogram_snapshot_manager.h"
@@ -20,10 +21,11 @@ namespace {
 // Silently returns when seeing any data problem in the pickle.
 void DeserializeHistogramAndAddSamples(PickleIterator* iter) {
   HistogramBase* histogram = DeserializeHistogramInfo(iter);
-  if (!histogram)
+  if (!histogram) {
     return;
+  }
 
-  if (histogram->flags() & HistogramBase::kIPCSerializationSourceFlag) {
+  if (histogram->HasFlags(HistogramBase::kIPCSerializationSourceFlag)) {
     DVLOG(1) << "Single process mode, histogram observed and not copied: "
              << histogram->histogram_name();
     return;
@@ -57,9 +59,8 @@ void HistogramDeltaSerialization::PrepareAndSerializeDeltas(
 // static
 void HistogramDeltaSerialization::DeserializeAndAddSamples(
     const std::vector<std::string>& serialized_deltas) {
-  for (auto it = serialized_deltas.begin(); it != serialized_deltas.end();
-       ++it) {
-    Pickle pickle(it->data(), it->size());
+  for (const std::string& serialized_delta : serialized_deltas) {
+    Pickle pickle = Pickle::WithUnownedBuffer(as_byte_span(serialized_delta));
     PickleIterator iter(pickle);
     DeserializeHistogramAndAddSamples(&iter);
   }
@@ -74,8 +75,7 @@ void HistogramDeltaSerialization::RecordDelta(
   Pickle pickle;
   histogram.SerializeInfo(&pickle);
   snapshot.Serialize(&pickle);
-  serialized_deltas_->push_back(
-      std::string(static_cast<const char*>(pickle.data()), pickle.size()));
+  serialized_deltas_->emplace_back(pickle.data_as_char(), pickle.size());
 }
 
 }  // namespace base

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,25 +8,24 @@
 #include <memory>
 
 #include "ash/accessibility/ui/focus_ring_layer.h"
+#include "ash/accessibility/ui/native_focus_watcher.h"
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/views/focus/focus_manager.h"
 #include "ui/views/focus/widget_focus_manager.h"
 #include "ui/views/widget/widget_observer.h"
 
-namespace views {
-class View;
-class Widget;
-}  // namespace views
-
 namespace ash {
 
-// FocusRingController manages the focus ring around the focused view. It
-// follows widget focus change and update the focus ring layer when the focused
-// view of the widget changes.
+// FocusRingController manages the focus ring around the focused view in
+// OOBE when ForceKeyboardDrivenUINavigation is enabled. FocusRingController
+// watches native focus changes and updates the focus ring layer when the
+// focused widget or view within a widget changes.
+//
+// For managing general focus rings around the focus view, instead use the
+// focus highlight provided by ash::A11yFeatureType::kFocusHighlight.
 class ASH_EXPORT FocusRingController : public AccessibilityLayerDelegate,
-                                       public views::WidgetObserver,
-                                       public views::WidgetFocusChangeListener,
-                                       public views::FocusChangeListener {
+                                       public NativeFocusObserver {
  public:
   FocusRingController();
 
@@ -38,34 +37,21 @@ class ASH_EXPORT FocusRingController : public AccessibilityLayerDelegate,
   // Turns on/off the focus ring.
   void SetVisible(bool visible);
 
+  // NativeFocusObserver:
+  void OnNativeFocusChanged(const gfx::Rect& bounds_in_screen) override;
+  void OnNativeFocusCleared() override;
+
  private:
   // AccessibilityLayerDelegate.
   void OnDeviceScaleFactorChanged() override;
 
-  // Sets the focused |widget|.
-  void SetWidget(views::Widget* widget);
-
-  // Updates the focus ring to the focused view of |widget_|. If |widget_| is
-  // NULL or has no focused view, removes the focus ring. Otherwise, draws it.
   void UpdateFocusRing();
+  void ClearFocusRing();
 
-  // views::WidgetObserver overrides:
-  void OnWidgetDestroying(views::Widget* widget) override;
-  void OnWidgetBoundsChanged(views::Widget* widget,
-                             const gfx::Rect& new_bounds) override;
+  bool visible_ = false;
 
-  // views::WidgetFocusChangeListener overrides:
-  void OnNativeFocusChanged(gfx::NativeView focused_now) override;
-
-  // views::FocusChangeListener overrides:
-  void OnWillChangeFocus(views::View* focused_before,
-                         views::View* focused_now) override;
-  void OnDidChangeFocus(views::View* focused_before,
-                        views::View* focused_now) override;
-
-  bool visible_;
-
-  views::Widget* widget_;
+  std::unique_ptr<NativeFocusWatcher> native_focus_watcher_;
+  gfx::Rect bounds_in_screen_;
   std::unique_ptr<FocusRingLayer> focus_ring_layer_;
 };
 

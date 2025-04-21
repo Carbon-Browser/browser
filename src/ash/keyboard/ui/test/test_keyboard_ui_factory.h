@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "ash/keyboard/ui/keyboard_ui.h"
 #include "ash/keyboard/ui/keyboard_ui_factory.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/test/test_window_delegate.h"
 
 namespace aura {
@@ -38,7 +39,7 @@ class TestKeyboardUIFactory : public KeyboardUIFactory {
    private:
     std::unique_ptr<aura::Window> window_;
     aura::test::TestWindowDelegate delegate_;
-    ui::InputMethod* input_method_;
+    raw_ptr<ui::InputMethod> input_method_;
   };
 
   explicit TestKeyboardUIFactory(ui::InputMethod* input_method);
@@ -52,7 +53,7 @@ class TestKeyboardUIFactory : public KeyboardUIFactory {
   std::unique_ptr<KeyboardUI> CreateKeyboardUI() override;
 
  private:
-  ui::InputMethod* input_method_;
+  raw_ptr<ui::InputMethod, DanglingUntriaged> input_method_;
 };
 
 }  // namespace keyboard

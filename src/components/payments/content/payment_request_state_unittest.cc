@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,19 +7,22 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/utf_string_conversions.h"
-#include "components/autofill/core/browser/autofill_test_utils.h"
+#include "base/uuid.h"
+#include "components/autofill/core/browser/country_type.h"
+#include "components/autofill/core/browser/data_manager/addresses/address_data_manager.h"
+#include "components/autofill/core/browser/data_manager/test_personal_data_manager.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
-#include "components/autofill/core/browser/test_personal_data_manager.h"
+#include "components/autofill/core/browser/test_utils/autofill_test_utils.h"
 #include "components/payments/content/payment_app_factory.h"
 #include "components/payments/content/payment_app_service.h"
-#include "components/payments/content/payment_app_service_factory.h"
 #include "components/payments/content/payment_request_spec.h"
 #include "components/payments/content/test_content_payment_request_delegate.h"
+#include "components/payments/content/test_payment_app.h"
+#include "components/payments/core/const_csp_checker.h"
 #include "components/payments/core/journey_logger.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_task_environment.h"
@@ -31,49 +34,6 @@
 
 namespace payments {
 namespace {
-
-class TestApp : public PaymentApp {
- public:
-  explicit TestApp(const std::string& method)
-      : PaymentApp(/*icon_resource_id=*/0,
-                   PaymentApp::Type::SERVICE_WORKER_APP),
-        method_(method) {}
-
-  TestApp(const TestApp& other) = delete;
-  TestApp& operator=(const TestApp& other) = delete;
-
-  // PaymentApp:
-  void InvokePaymentApp(base::WeakPtr<Delegate> delegate) override {}
-  bool IsCompleteForPayment() const override { return true; }
-  uint32_t GetCompletenessScore() const override { return 0; }
-  bool CanPreselect() const override { return true; }
-  std::u16string GetMissingInfoLabel() const override {
-    return std::u16string();
-  }
-  bool HasEnrolledInstrument() const override { return true; }
-  void RecordUse() override {}
-  bool NeedsInstallation() const override { return false; }
-  std::string GetId() const override { return method_; }
-  std::u16string GetLabel() const override { return std::u16string(); }
-  std::u16string GetSublabel() const override { return std::u16string(); }
-  bool IsValidForModifier(
-      const std::string& method,
-      bool supported_networks_specified,
-      const std::set<std::string>& supported_networks) const override {
-    return false;
-  }
-  base::WeakPtr<PaymentApp> AsWeakPtr() override {
-    return weak_ptr_factory_.GetWeakPtr();
-  }
-  bool HandlesShippingAddress() const override { return false; }
-  bool HandlesPayerName() const override { return false; }
-  bool HandlesPayerEmail() const override { return false; }
-  bool HandlesPayerPhone() const override { return false; }
-
- private:
-  const std::string method_;
-  base::WeakPtrFactory<TestApp> weak_ptr_factory_{this};
-};
 
 class TestAppFactory : public PaymentAppFactory {
  public:
@@ -88,7 +48,7 @@ class TestAppFactory : public PaymentAppFactory {
     auto requested_methods =
         delegate->GetSpec()->payment_method_identifiers_set();
     if (requested_methods.find(method_) != requested_methods.end())
-      delegate->OnPaymentAppCreated(std::make_unique<TestApp>(method_));
+      delegate->OnPaymentAppCreated(std::make_unique<TestPaymentApp>(method_));
     delegate->OnDoneCreatingPaymentApps();
   }
 
@@ -106,14 +66,15 @@ class PaymentRequestStateTest : public testing::Test,
       : num_on_selected_information_changed_called_(0),
         test_payment_request_delegate_(/*task_executor=*/nullptr,
                                        &test_personal_data_manager_),
-        journey_logger_(test_payment_request_delegate_.IsOffTheRecord(),
-                        ukm::UkmRecorder::GetNewSourceID()),
+        journey_logger_(ukm::UkmRecorder::GetNewSourceID()),
         address_(autofill::test::GetFullProfile()) {
     web_contents_ = web_contents_factory_.CreateWebContents(&context_);
 
-    test_personal_data_manager_.SetAutofillProfileEnabled(true);
-    test_personal_data_manager_.SetAutofillWalletImportEnabled(true);
-    test_personal_data_manager_.AddProfile(address_);
+    test_personal_data_manager_.test_address_data_manager()
+        .SetAutofillProfileEnabled(true);
+    test_personal_data_manager_.test_payments_data_manager()
+        .SetAutofillWalletImportEnabled(true);
+    test_personal_data_manager_.address_data_manager().AddProfile(address_);
   }
   ~PaymentRequestStateTest() override = default;
 
@@ -145,14 +106,13 @@ class PaymentRequestStateTest : public testing::Test,
     spec_ = std::make_unique<PaymentRequestSpec>(
         std::move(options), std::move(details), std::move(method_data),
         /*observer=*/nullptr, "en-US");
-    PaymentAppServiceFactory::SetForTesting(std::move(app_service));
     state_ = std::make_unique<PaymentRequestState>(
-        web_contents_->GetPrimaryMainFrame(), GURL("https://example.com"),
-        GURL("https://example.com/pay"),
-        url::Origin::Create(GURL("https://example.com")), spec_->AsWeakPtr(),
+        std::move(app_service), web_contents_->GetPrimaryMainFrame(),
+        GURL("https://example.test"), GURL("https://example.test/pay"),
+        url::Origin::Create(GURL("https://example.test")), spec_->AsWeakPtr(),
         weak_ptr_factory_.GetWeakPtr(), "en-US", &test_personal_data_manager_,
         test_payment_request_delegate_.GetContentWeakPtr(),
-        journey_logger_.GetWeakPtr());
+        journey_logger_.GetWeakPtr(), const_csp_checker_.GetWeakPtr());
     state_->AddObserver(this);
   }
 
@@ -234,6 +194,7 @@ class PaymentRequestStateTest : public testing::Test,
   autofill::TestPersonalDataManager test_personal_data_manager_;
   TestContentPaymentRequestDelegate test_payment_request_delegate_;
   JourneyLogger journey_logger_;
+  ConstCSPChecker const_csp_checker_{/*allow=*/true};
 
   // Test data.
   autofill::AutofillProfile address_;
@@ -515,8 +476,7 @@ TEST_F(PaymentRequestStateTest, JaLatnShippingAddress) {
 
   // Select an address, nothing should happen until the normalization is
   // completed and the merchant has validated the address.
-  autofill::AutofillProfile profile(base::GenerateGUID(),
-                                    "https://example.com");
+  autofill::AutofillProfile profile(AddressCountryCode("JP"));
   autofill::test::SetProfileInfo(&profile, "Jon", "V.", "Doe",
                                  "jon.doe@exampl.com", "Example Inc",
                                  "Roppongi", "6 Chrome-10-1", "Tokyo", "",

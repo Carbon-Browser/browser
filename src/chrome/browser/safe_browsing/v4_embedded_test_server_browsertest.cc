@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "base/test/scoped_feature_list.h"
 #include "base/time/time.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/interstitials/security_interstitial_page_test_utils.h"
 #include "chrome/browser/net/system_network_context_manager.h"
 #include "chrome/browser/safe_browsing/safe_browsing_service.h"
 #include "chrome/browser/ui/browser.h"
@@ -34,15 +35,6 @@
 #include "url/gurl.h"
 
 namespace {
-
-bool IsShowingInterstitial(content::WebContents* contents) {
-  security_interstitials::SecurityInterstitialTabHelper* helper =
-      security_interstitials::SecurityInterstitialTabHelper::FromWebContents(
-          contents);
-  return helper &&
-         (helper->GetBlockingPageForCurrentlyCommittedNavigationForTesting() !=
-          nullptr);
-}
 
 std::vector<net::CanonicalCookie> GetCookies(
     network::mojom::NetworkContext* network_context) {
@@ -72,14 +64,14 @@ namespace safe_browsing {
 // thing.
 class V4EmbeddedTestServerBrowserTest : public InProcessBrowserTest {
  public:
-  V4EmbeddedTestServerBrowserTest() {}
+  V4EmbeddedTestServerBrowserTest() = default;
 
   V4EmbeddedTestServerBrowserTest(const V4EmbeddedTestServerBrowserTest&) =
       delete;
   V4EmbeddedTestServerBrowserTest& operator=(
       const V4EmbeddedTestServerBrowserTest&) = delete;
 
-  ~V4EmbeddedTestServerBrowserTest() override {}
+  ~V4EmbeddedTestServerBrowserTest() override = default;
 
   void SetUp() override {
     // We only need to mock a local database. The tests will use a true real V4
@@ -106,7 +98,10 @@ class V4EmbeddedTestServerBrowserTest : public InProcessBrowserTest {
   // Only marks the prefix as bad in the local database. The server will respond
   // with the source of truth.
   void LocallyMarkPrefixAsBad(const GURL& url, const ListIdentifier& list_id) {
-    FullHash full_hash = V4ProtocolManagerUtil::GetFullHash(url);
+    FullHashStr full_hash = V4ProtocolManagerUtil::GetFullHash(url);
+    while (!v4_db_factory_->IsReady()) {
+      content::RunAllTasksUntilIdle();
+    }
     v4_db_factory_->MarkPrefixAsBad(list_id, full_hash);
   }
 
@@ -117,7 +112,8 @@ class V4EmbeddedTestServerBrowserTest : public InProcessBrowserTest {
   std::unique_ptr<net::MappedHostResolver> mapped_host_resolver_;
 
   // Owned by the V4Database.
-  raw_ptr<TestV4DatabaseFactory> v4_db_factory_ = nullptr;
+  raw_ptr<TestV4DatabaseFactory, AcrossTasksDanglingUntriaged> v4_db_factory_ =
+      nullptr;
 };
 
 IN_PROC_BROWSER_TEST_F(V4EmbeddedTestServerBrowserTest, SimpleTest) {
@@ -127,7 +123,7 @@ IN_PROC_BROWSER_TEST_F(V4EmbeddedTestServerBrowserTest, SimpleTest) {
   const GURL bad_url = embedded_test_server()->GetURL(kMalwarePage);
 
   ThreatMatch match;
-  FullHash full_hash = V4ProtocolManagerUtil::GetFullHash(bad_url);
+  FullHashStr full_hash = V4ProtocolManagerUtil::GetFullHash(bad_url);
   LocallyMarkPrefixAsBad(bad_url, GetUrlMalwareId());
   match.set_platform_type(GetUrlMalwareId().platform_type());
   match.set_threat_entry_type(ThreatEntryType::URL);
@@ -142,7 +138,7 @@ IN_PROC_BROWSER_TEST_F(V4EmbeddedTestServerBrowserTest, SimpleTest) {
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), bad_url));
   content::WebContents* contents =
       browser()->tab_strip_model()->GetActiveWebContents();
-  EXPECT_TRUE(IsShowingInterstitial(contents));
+  EXPECT_TRUE(chrome_browser_interstitials::IsShowingInterstitial(contents));
 }
 
 IN_PROC_BROWSER_TEST_F(V4EmbeddedTestServerBrowserTest,
@@ -155,7 +151,7 @@ IN_PROC_BROWSER_TEST_F(V4EmbeddedTestServerBrowserTest,
   // Return a different full hash, so there will be no match and no
   // interstitial.
   ThreatMatch match;
-  FullHash full_hash =
+  FullHashStr full_hash =
       V4ProtocolManagerUtil::GetFullHash(GURL("https://example.test/"));
   LocallyMarkPrefixAsBad(bad_url, GetUrlMalwareId());
   match.set_platform_type(GetUrlMalwareId().platform_type());
@@ -171,7 +167,7 @@ IN_PROC_BROWSER_TEST_F(V4EmbeddedTestServerBrowserTest,
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), bad_url));
   content::WebContents* contents =
       browser()->tab_strip_model()->GetActiveWebContents();
-  EXPECT_FALSE(IsShowingInterstitial(contents));
+  EXPECT_FALSE(chrome_browser_interstitials::IsShowingInterstitial(contents));
 }
 
 IN_PROC_BROWSER_TEST_F(V4EmbeddedTestServerBrowserTest, DoesNotSaveCookies) {
@@ -180,7 +176,7 @@ IN_PROC_BROWSER_TEST_F(V4EmbeddedTestServerBrowserTest, DoesNotSaveCookies) {
   const GURL bad_url = secure_embedded_test_server_->GetURL(kMalwarePage);
 
   ThreatMatch match;
-  FullHash full_hash = V4ProtocolManagerUtil::GetFullHash(bad_url);
+  FullHashStr full_hash = V4ProtocolManagerUtil::GetFullHash(bad_url);
   LocallyMarkPrefixAsBad(bad_url, GetUrlMalwareId());
   match.set_platform_type(GetUrlMalwareId().platform_type());
   match.set_threat_entry_type(ThreatEntryType::URL);

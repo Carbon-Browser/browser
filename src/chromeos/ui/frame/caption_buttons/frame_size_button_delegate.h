@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,7 @@ class FrameCaptionButton;
 
 namespace chromeos {
 
+class MultitaskMenuNudgeController;
 enum class SnapDirection;
 
 // Delegate interface for FrameSizeButton.
@@ -54,6 +55,8 @@ class COMPONENT_EXPORT(CHROMEOS_UI_FRAME) FrameSizeButtonDelegate {
   virtual void ShowSnapPreview(SnapDirection snap,
                                bool allow_haptic_feedback) = 0;
   virtual void CommitSnap(SnapDirection snap) = 0;
+
+  virtual MultitaskMenuNudgeController* GetMultitaskMenuNudgeController() = 0;
 
  protected:
   virtual ~FrameSizeButtonDelegate() {}

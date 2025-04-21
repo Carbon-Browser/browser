@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,7 @@
 #include "extensions/browser/extension_registry_observer.h"
 #include "extensions/browser/preload_check.h"
 #include "extensions/browser/supervised_user_extensions_delegate.h"
+#include "extensions/common/extension_id.h"
 #include "services/data_decoder/public/cpp/data_decoder.h"
 
 namespace extensions {
@@ -112,22 +113,52 @@ class ManagementSetEnabledFunction : public ExtensionFunction {
   ResponseAction Run() override;
 
  private:
-  void OnInstallPromptDone(bool did_accept);
+  // Called when supervised extension approval flow is completed.
+  void OnSupervisedExtensionApprovalDone(
+      SupervisedUserExtensionsDelegate::ExtensionApprovalResult result);
 
-  bool HasUnsupportedRequirements(const std::string& extension_id);
-
+  // Verifies if `extension` has supported requirements. When requirements are
+  // checked, finishes the enable checks if there are any errors. Otherwise,
+  // continues with the enable checks.
+  // This is only needed when enabling an extension.
+  void CheckRequirements(const Extension& extension);
   void OnRequirementsChecked(const PreloadCheck::Errors& errors);
 
-  // Called when the user dismisses the Parent Permission Dialog.
-  void OnParentPermissionDialogDone(
-      SupervisedUserExtensionsDelegate::ParentPermissionDialogResult result);
+  // Verifies if extension has a permissions increase. When permissions are
+  // checked, finishes the enable checks if there are any errors. Otherwise,
+  // continues with the enable checks.
+  // This is only needed when enabling an extension.
+  void CheckPermissionsIncrease();
+  void OnPermissionsIncreaseChecked(bool permissions_allowed);
 
-  // Called when the user dismisses the Extension Install Blocked By Parent
-  // Dialog.
-  void OnBlockedByParentDialogDone();
+  // Verifies if extension was disabled due to the MV2 deprecation. When this is
+  // checked, finishes the enable checks returning an error if `enable_allowed`
+  // is false.
+  // This is only needed when enabling an extension.
+  void CheckManifestV2Deprecation();
+  void OnManifestV2DeprecationChecked(bool enable_allowed);
 
-  std::string extension_id_;
+  // Returns `response_value`. This should be called when enable checks are
+  // finished.
+  void FinishEnable(ResponseValue response_value);
 
+  // Returns whether `extension_id` has any unsupported requirements.
+  bool HasUnsupportedRequirements(const ExtensionId& extension_id) const;
+
+  // Returns whether `target_extension` needs supervised approval.
+  bool IsSupervisedExtensionApprovalFlowRequired(
+      const Extension* target_extension) const;
+
+  // Returns the extension corresponding to `extension_id_`. This could be null
+  // if extension was uninstalled.
+  const Extension* GetExtension();
+
+  // Extension to be enabled or disabled.
+  ExtensionId extension_id_;
+
+  // Permissions increase delegate, which uses an install prompt to show the
+  // dialog (crbug.com/352038135: permissions increase should have its own
+  // separate dialog).
   std::unique_ptr<InstallPromptDelegate> install_prompt_;
 
   std::unique_ptr<RequirementsChecker> requirements_checker_;
@@ -141,8 +172,11 @@ class ManagementUninstallFunctionBase : public ExtensionFunction {
                                         const std::u16string& error);
 
  protected:
+  // ExtensionFunction:
   ~ManagementUninstallFunctionBase() override;
-  ResponseAction Uninstall(const std::string& extension_id,
+  bool ShouldKeepWorkerAliveIndefinitely() override;
+
+  ResponseAction Uninstall(const ExtensionId& extension_id,
                            bool show_confirm_dialog);
 
  private:
@@ -222,40 +256,6 @@ class ManagementGenerateAppForLinkFunction : public ExtensionFunction {
 
  private:
   std::unique_ptr<AppForLinkDelegate> app_for_link_delegate_;
-};
-
-class ManagementCanInstallReplacementAndroidAppFunction
-    : public ExtensionFunction {
- public:
-  DECLARE_EXTENSION_FUNCTION("management.canInstallReplacementAndroidApp",
-                             MANAGEMENT_CANINSTALLREPLACEMENTANDROIDAPP)
-
-  ManagementCanInstallReplacementAndroidAppFunction();
-
- protected:
-  ~ManagementCanInstallReplacementAndroidAppFunction() override;
-
-  ResponseAction Run() override;
-
- private:
-  void OnFinishedAndroidAppCheck(bool result);
-};
-
-class ManagementInstallReplacementAndroidAppFunction
-    : public ExtensionFunction {
- public:
-  DECLARE_EXTENSION_FUNCTION("management.installReplacementAndroidApp",
-                             MANAGEMENT_INSTALLREPLACEMENTANDROIDAPP)
-
-  ManagementInstallReplacementAndroidAppFunction();
-
- protected:
-  ~ManagementInstallReplacementAndroidAppFunction() override;
-
-  ResponseAction Run() override;
-
- private:
-  void OnAppInstallInitiated(bool installable);
 };
 
 class ManagementInstallReplacementWebAppFunction : public ExtensionFunction {

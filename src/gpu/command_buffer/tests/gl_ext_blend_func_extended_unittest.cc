@@ -1,6 +1,11 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
@@ -8,7 +13,11 @@
 #include <GLES3/gl3.h>
 #include <stdint.h>
 
-#include "base/cxx17_backports.h"
+#include <algorithm>
+
+#include "base/command_line.h"
+#include "build/build_config.h"
+#include "gpu/command_buffer/service/service_utils.h"
 #include "gpu/command_buffer/tests/gl_manager.h"
 #include "gpu/command_buffer/tests/gl_test_utils.h"
 #include "gpu/config/gpu_test_config.h"
@@ -54,8 +63,8 @@ void BlendEquationFuncAdd(float dst[4],
   r[3] = src[3] * Weight<As, 3>(dst, src, src1) +
          dst[3] * Weight<Ad, 3>(dst, src, src1);
   for (int i = 0; i < 4; ++i) {
-    result[i] = static_cast<uint8_t>(
-        std::floor(base::clamp(r[i], 0.0f, 1.0f) * 255.0f));
+    result[i] =
+        static_cast<uint8_t>(std::floor(std::clamp(r[i], 0.0f, 1.0f) * 255.0f));
   }
 }
 
@@ -100,7 +109,15 @@ class EXTBlendFuncExtendedDrawTest : public testing::TestWithParam<bool> {
   }
 
   bool IsApplicable() const {
+#if BUILDFLAG(IS_ANDROID)
+    // Skip on Android due to Qualcomm driver bugs with implicitly assigned
+    // output locations and multiple render buffers. This extension is still
+    // used by Skia but Skia works around these bugs.
+    // http://anglebug.com/42267082
+    return false;
+#else
     return GLTestHelper::HasExtension("GL_EXT_blend_func_extended");
+#endif
   }
 
   virtual const char* GetVertexShader() {
@@ -255,6 +272,14 @@ TEST_P(EXTBlendFuncExtendedDrawTest, ESSL1FragData) {
 class EXTBlendFuncExtendedES3DrawTest : public EXTBlendFuncExtendedDrawTest {
  protected:
   void SetUp() override {
+#if BUILDFLAG(IS_ANDROID)
+    auto* command_line = base::CommandLine::ForCurrentProcess();
+    if (!gles2::UsePassthroughCommandDecoder(command_line)) {
+      // TODO(crbug.com/40160681): remove suppression when passthrough ships.
+      GTEST_SKIP();
+    }
+#endif
+
     GLManager::Options options;
     options.size = gfx::Size(kWidth, kHeight);
     options.context_type = CONTEXT_TYPE_OPENGLES3;

@@ -1,18 +1,22 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "sql/sqlite_result_code.h"
 
-#include <ostream>  // Needed to compile NOTREACHED() with operator <<.
+#include <cstddef>
+#include <ostream>  // Needed to compile CHECK() with operator <<.
+#include <ranges>
 #include <set>
-#include <utility>
+#include <string>
+#include <string_view>
 
+#include "base/check.h"
 #include "base/check_op.h"
+#include "base/dcheck_is_on.h"
+#include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/notreached.h"
 #include "base/ranges/algorithm.h"
-#include "base/strings/string_piece.h"
 #include "sql/sqlite_result_code_values.h"
 #include "third_party/sqlite/sqlite3.h"
 
@@ -161,7 +165,9 @@ constexpr SqliteResultCodeMappingEntry kResultCodeMapping[] = {
     {SQLITE_BUSY_TIMEOUT,
      static_cast<int>(SqliteLoggedResultCode::kUnusedChrome)},
 #ifdef SQLITE_ENABLE_SETLK_TIMEOUT
-#error "This code assumes that Chrome does not use
+#error \
+    "This code assumes that Chrome does not use blocking Posix advisory \
+file lock requests"
 #endif
 
     {SQLITE_READONLY_ROLLBACK,
@@ -302,14 +308,10 @@ constexpr SqliteResultCodeMappingEntry kResultCodeMapping[] = {
      static_cast<int>(SqliteLoggedResultCode::kIoCorruptFileSystem)},
 };
 
-// Describes the handling of unknown SQLite error codes.
-constexpr SqliteResultCodeMappingEntry kUnknownResultCodeMappingEntry = {
-    0, static_cast<int>(SqliteLoggedResultCode::kUnusedChrome)};
-
 // Looks up a `sqlite_result_code` in the mapping tables.
 //
 // Returns an entry in kResultCodeMapping or kUnknownResultCodeMappingEntry.
-// DCHECKs if the `sqlite_result_code` is not in the mapping table.
+// CHECKs if the `sqlite_result_code` is not in the mapping table.
 SqliteResultCodeMappingEntry FindResultCode(int sqlite_result_code) {
   const auto* mapping_it = base::ranges::find_if(
       kResultCodeMapping,
@@ -317,10 +319,8 @@ SqliteResultCodeMappingEntry FindResultCode(int sqlite_result_code) {
         return sqlite_result_code == rhs.result_code;
       });
 
-  if (mapping_it == base::ranges::end(kResultCodeMapping)) {
-    NOTREACHED() << "Unsupported SQLite result code: " << sqlite_result_code;
-    return kUnknownResultCodeMappingEntry;
-  }
+  CHECK(mapping_it != std::ranges::end(kResultCodeMapping))
+      << "Unsupported SQLite result code: " << sqlite_result_code;
   return *mapping_it;
 }
 
@@ -334,8 +334,9 @@ SqliteResultCode ToSqliteResultCode(int sqlite_result_code) {
 
   DCHECK_NE(logged_code, SqliteLoggedResultCode::kUnusedSqlite)
       << "SQLite reported code marked for internal use: " << sqlite_result_code;
-  DCHECK_NE(logged_code, SqliteLoggedResultCode::kUnusedChrome)
-      << "SQLite reported code that should never show up in Chrome: "
+  DVLOG_IF(1, logged_code == SqliteLoggedResultCode::kUnusedChrome)
+      << "SQLite reported code that should never show up in Chrome unless a "
+         "sql database has been corrupted: "
       << sqlite_result_code;
 
   return static_cast<SqliteResultCode>(sqlite_result_code);
@@ -347,8 +348,9 @@ SqliteErrorCode ToSqliteErrorCode(SqliteResultCode sqlite_error_code) {
 
   DCHECK_NE(logged_code, SqliteLoggedResultCode::kUnusedSqlite)
       << "SQLite reported code marked for internal use: " << sqlite_error_code;
-  DCHECK_NE(logged_code, SqliteLoggedResultCode::kUnusedChrome)
-      << "SQLite reported code that should never show up in Chrome: "
+  DVLOG_IF(1, logged_code == SqliteLoggedResultCode::kUnusedChrome)
+      << "SQLite reported code that should never show up in Chrome unless a "
+         "sql database has been corrupted: "
       << sqlite_error_code;
   DCHECK_NE(logged_code, SqliteLoggedResultCode::kNoError)
       << __func__
@@ -396,7 +398,7 @@ SqliteLoggedResultCode ToSqliteLoggedResultCode(int sqlite_result_code) {
   return logged_code;
 }
 
-void UmaHistogramSqliteResult(const char* histogram_name,
+void UmaHistogramSqliteResult(const std::string& histogram_name,
                               int sqlite_result_code) {
   auto logged_code = ToSqliteLoggedResultCode(sqlite_result_code);
   base::UmaHistogramEnumeration(histogram_name, logged_code);
@@ -418,13 +420,14 @@ void CheckSqliteLoggedResultCodeForTesting() {
       [](SqliteResultCodeMappingEntry lhs, SqliteResultCodeMappingEntry rhs) {
         return lhs.result_code >= rhs.result_code;
       });
-  DCHECK_EQ(unordered_it, base::ranges::end(kResultCodeMapping))
+  DCHECK_EQ(unordered_it, std::ranges::end(kResultCodeMapping))
       << "Mapping ordering broken at {" << unordered_it->result_code << ", "
       << static_cast<int>(unordered_it->logged_code) << "}";
 
   std::set<int> sqlite_result_codes;
-  for (auto& mapping_entry : kResultCodeMapping)
+  for (auto& mapping_entry : kResultCodeMapping) {
     sqlite_result_codes.insert(mapping_entry.result_code);
+  }
 
   // SQLite doesn't have special messages for extended errors.
   // At the time of this writing, sqlite3_errstr() has a string table for
@@ -433,12 +436,13 @@ void CheckSqliteLoggedResultCodeForTesting() {
   // So, we can only use sqlite3_errstr() to check for holes in the primary
   // message table.
   for (int result_code = 0; result_code <= 256; ++result_code) {
-    if (sqlite_result_codes.count(result_code) != 0)
+    if (sqlite_result_codes.count(result_code) != 0) {
       continue;
+    }
 
     const char* error_message = sqlite3_errstr(result_code);
 
-    static constexpr base::StringPiece kUnknownErrorMessage("unknown error");
+    static constexpr std::string_view kUnknownErrorMessage("unknown error");
     DCHECK_EQ(kUnknownErrorMessage.compare(error_message), 0)
         << "Unmapped SQLite result code: " << result_code
         << " SQLite message: " << error_message;

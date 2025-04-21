@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "ui/gfx/gpu_fence.h"
 #include "ui/gfx/presentation_feedback.h"
 #include "ui/ozone/platform/drm/gpu/drm_device.h"
@@ -24,7 +24,7 @@ DrmWindowProxy::DrmWindowProxy(gfx::AcceleratedWidget widget,
                                DrmThread* drm_thread)
     : widget_(widget), drm_thread_(drm_thread) {}
 
-DrmWindowProxy::~DrmWindowProxy() {}
+DrmWindowProxy::~DrmWindowProxy() = default;
 
 void DrmWindowProxy::SchedulePageFlip(
     std::vector<DrmOverlayPlane> planes,
@@ -50,13 +50,6 @@ bool DrmWindowProxy::SupportsGpuFences() const {
                               base::Unretained(drm_thread_), std::move(task)));
   return is_atomic && !base::CommandLine::ForCurrentProcess()->HasSwitch(
                           switches::kDisableExplicitDmaFences);
-}
-
-void DrmWindowProxy::SetColorSpace(const gfx::ColorSpace& color_space) const {
-  drm_thread_->task_runner()->PostTask(
-      FROM_HERE,
-      base::BindOnce(&DrmThread::SetColorSpace, base::Unretained(drm_thread_),
-                     widget_, color_space));
 }
 
 }  // namespace ui

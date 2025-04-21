@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -13,7 +13,7 @@ Prerequisites:
 1. quic_server and cronet_native_perf_test have been built for the host machine,
    e.g. via:
      gn gen out/Release --args="is_debug=false"
-     ninja -C out/Release quic_server cronet_native_perf_test
+     autoninja -C out/Release quic_server cronet_native_perf_test
 2. sudo apt-get install lighttpd
 
 Invocation:

@@ -1,13 +1,15 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/screens/update_screen.h"
 
 #include <memory>
+#include <optional>
 
 #include "ash/constants/ash_switches.h"
 #include "base/command_line.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_mock_time_message_loop_task_runner.h"
 #include "chrome/browser/ash/login/screens/mock_error_screen.h"
 #include "chrome/browser/ash/login/screens/mock_update_screen.h"
@@ -20,11 +22,9 @@
 #include "chromeos/ash/components/network/network_handler_test_helper.h"
 #include "chromeos/ash/components/network/portal_detector/mock_network_portal_detector.h"
 #include "chromeos/ash/components/network/portal_detector/network_portal_detector.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
 #include "chromeos/dbus/power/fake_power_manager_client.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 
@@ -69,14 +69,9 @@ class UpdateScreenUnitTest : public testing::Test {
 
   // testing::Test:
   void SetUp() override {
-    // Configure the browser to use Hands-Off Enrollment.
-    base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
-        switches::kEnterpriseEnableZeroTouchEnrollment, "hands-off");
-
     // Initialize objects needed by UpdateScreen.
     wizard_context_ = std::make_unique<WizardContext>();
-    PowerManagerClient::InitializeFake();
-    DBusThreadManager::Initialize();
+    chromeos::PowerManagerClient::InitializeFake();
     fake_update_engine_client_ = UpdateEngineClient::InitializeFakeForTest();
     network_handler_test_helper_ = std::make_unique<NetworkHandlerTestHelper>();
     mock_network_portal_detector_ = new MockNetworkPortalDetector();
@@ -102,9 +97,13 @@ class UpdateScreenUnitTest : public testing::Test {
     mock_error_screen_.reset();
     network_portal_detector::Shutdown();
     network_handler_test_helper_.reset();
-    PowerManagerClient::Shutdown();
+    chromeos::PowerManagerClient::Shutdown();
     UpdateEngineClient::Shutdown();
-    DBusThreadManager::Shutdown();
+  }
+
+  // Fast forwards time by the specified amount.
+  void FastForwardTime(base::TimeDelta time) {
+    task_environment_.FastForwardBy(time);
   }
 
  protected:
@@ -115,11 +114,12 @@ class UpdateScreenUnitTest : public testing::Test {
   MockUpdateView mock_view_;
   MockErrorScreenView mock_error_view_;
   std::unique_ptr<MockErrorScreen> mock_error_screen_;
-  MockNetworkPortalDetector* mock_network_portal_detector_;
-  FakeUpdateEngineClient* fake_update_engine_client_;
+  raw_ptr<MockNetworkPortalDetector, DanglingUntriaged>
+      mock_network_portal_detector_;
+  raw_ptr<FakeUpdateEngineClient, DanglingUntriaged> fake_update_engine_client_;
   std::unique_ptr<WizardContext> wizard_context_;
 
-  absl::optional<UpdateScreen::Result> last_screen_result_;
+  std::optional<UpdateScreen::Result> last_screen_result_;
 
  private:
   void HandleScreenExit(UpdateScreen::Result result) {
@@ -128,7 +128,8 @@ class UpdateScreenUnitTest : public testing::Test {
   }
 
   // Test versions of core browser infrastructure.
-  content::BrowserTaskEnvironment task_environment_;
+  base::test::SingleThreadTaskEnvironment task_environment_{
+      base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   ScopedTestingLocalState local_state_;
   std::unique_ptr<NetworkHandlerTestHelper> network_handler_test_helper_;
 };
@@ -202,6 +203,20 @@ TEST_F(UpdateScreenUnitTest, HandleCriticalUpdateError) {
 
   ASSERT_TRUE(last_screen_result_.has_value());
   EXPECT_EQ(UpdateScreen::Result::UPDATE_ERROR, last_screen_result_.value());
+}
+
+TEST_F(UpdateScreenUnitTest, RetryCheckforUpdateElapsed) {
+  // DUT reaches UpdateScreen.
+  update_screen_->Show(wizard_context_.get());
+
+  // Verify that the DUT checks for an update.
+  EXPECT_EQ(fake_update_engine_client_->request_update_check_call_count(), 1);
+
+  FastForwardTime(base::Seconds(185));
+
+  ASSERT_TRUE(last_screen_result_.has_value());
+  EXPECT_EQ(UpdateScreen::Result::UPDATE_CHECK_TIMEOUT,
+            last_screen_result_.value());
 }
 
 }  // namespace ash

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,9 +51,6 @@ void ApplyAshFontStyles(int context,
   }
 
   switch (style) {
-    case STYLE_EMPHASIZED:
-      details.weight = gfx::Font::Weight::MEDIUM;
-      break;
     case STYLE_HIGHLIGHT:
       details.weight = gfx::Font::Weight::BOLD;
       break;
@@ -64,10 +61,7 @@ void ApplyAshFontStyles(int context,
              context == CONTEXT_SHARESHEET_BUBBLE_SMALL);
       details.weight = gfx::Font::Weight::MEDIUM;
       break;
-    case STYLE_CLASSIC_LAUNCHER:
-      // Classic launcher uses default font styling.
-      break;
-    case STYLE_PRODUCTIVITY_LAUNCHER:
+    case STYLE_LAUNCHER:
       // TODO(https://crbug.com/1197600): Use font "Google Sans Text" when it is
       // available on Chrome OS. For now, use the default font for consistency.
       break;

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 
 #include <string>
 
+#include "base/containers/span.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/platform_thread.h"
 #include "dbus/bus.h"
@@ -76,8 +77,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothAdvertisementMonitorServiceProviderImpl
   void WritePattern(dbus::MessageWriter* pattern_array_writer,
                     uint8_t start_pos,
                     uint8_t ad_data_type,
-                    const uint8_t* content_of_pattern,
-                    size_t pattern_length);
+                    base::span<const uint8_t> pattern);
 
   const dbus::ObjectPath& object_path() const override;
 

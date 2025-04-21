@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,6 @@ EnumTraits<test::EnumWithTraits, test::EnumWithTraitsImpl>::ToMojom(
   };
 
   NOTREACHED();
-  return test::EnumWithTraits::VALUE_0;
 }
 
 bool EnumTraits<test::EnumWithTraits, test::EnumWithTraitsImpl>::FromMojom(
@@ -64,7 +63,7 @@ bool StructTraits<test::StructWithTraitsDataView, test::StructWithTraitsImpl>::
   out->set_uint32(data.f_uint32());
   out->set_uint64(data.f_uint64());
 
-  base::StringPiece f_string;
+  std::string_view f_string;
   std::string f_string2;
   if (!data.ReadFString(&f_string) || !data.ReadFString2(&f_string2) ||
       f_string != f_string2) {

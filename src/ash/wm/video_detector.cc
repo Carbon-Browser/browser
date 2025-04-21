@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/shell.h"
 #include "ash/wm/window_state.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/viz/host/host_frame_sink_manager.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "ui/aura/env.h"
@@ -128,7 +129,7 @@ void VideoDetector::EstablishConnectionToViz() {
 void VideoDetector::OnConnectionError() {
   if (video_is_playing_)
     OnVideoActivityEnded();
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE,
       base::BindOnce(&VideoDetector::EstablishConnectionToViz,
                      weak_factory_.GetWeakPtr()),

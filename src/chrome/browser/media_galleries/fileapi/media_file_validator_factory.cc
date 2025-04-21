@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@ class InvalidFileValidator : public storage::CopyOrMoveFileValidator {
   InvalidFileValidator(const InvalidFileValidator&) = delete;
   InvalidFileValidator& operator=(const InvalidFileValidator&) = delete;
 
-  ~InvalidFileValidator() override {}
+  ~InvalidFileValidator() override = default;
   void StartPreWriteValidation(storage::CopyOrMoveFileValidator::ResultCallback
                                    result_callback) override {
     std::move(result_callback).Run(base::File::FILE_ERROR_SECURITY);
@@ -33,7 +33,7 @@ class InvalidFileValidator : public storage::CopyOrMoveFileValidator {
  private:
   friend class ::MediaFileValidatorFactory;
 
-  InvalidFileValidator() {}
+  InvalidFileValidator() = default;
 };
 
 }  // namespace

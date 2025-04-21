@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 
 #include <stdint.h>
 
-#include <map>
 #include <string>
 #include <vector>
 
@@ -60,7 +59,7 @@ struct AX_BASE_EXPORT AXTreeData {
   // (selection end). If the offset could correspond to a position on two
   // different lines, sel_upstream_affinity means the cursor is on the first
   // line, otherwise it's on the second line.
-  // Most use cases will want to use ui::OwnerTree::GetUnignoredSelection.
+  // Most use cases will want to use OwnerTree::GetUnignoredSelection.
   bool sel_is_backward = false;
   AXNodeID sel_anchor_object_id = kInvalidAXNodeID;
   int32_t sel_anchor_offset = -1;
@@ -82,6 +81,8 @@ struct AX_BASE_EXPORT AXTreeData {
 
 AX_BASE_EXPORT bool operator==(const AXTreeData& lhs, const AXTreeData& rhs);
 AX_BASE_EXPORT bool operator!=(const AXTreeData& lhs, const AXTreeData& rhs);
+
+AX_BASE_EXPORT const AXTreeData& AXTreeDataUnknown();
 
 }  // namespace ui
 

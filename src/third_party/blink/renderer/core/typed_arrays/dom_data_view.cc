@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,6 +27,8 @@ const WrapperTypeInfo DOMDataView::wrapper_type_info_body_{
     nullptr,
     "DataView",
     nullptr,
+    kDOMWrappersTag,
+    kDOMWrappersTag,
     WrapperTypeInfo::kWrapperTypeObjectPrototype,
     WrapperTypeInfo::kObjectClassId,
     WrapperTypeInfo::kNotInheritFromActiveScriptWrappable,
@@ -49,15 +51,12 @@ DOMDataView* DOMDataView::Create(DOMArrayBufferBase* buffer,
   return MakeGarbageCollected<DOMDataView>(buffer, byte_offset, byte_length);
 }
 
-v8::MaybeLocal<v8::Value> DOMDataView::Wrap(ScriptState* script_state) {
-  DCHECK(!DOMDataStore::ContainsWrapper(this, script_state->GetIsolate()));
+v8::Local<v8::Value> DOMDataView::Wrap(ScriptState* script_state) {
+  DCHECK(!DOMDataStore::ContainsWrapper(script_state->GetIsolate(), this));
 
   const WrapperTypeInfo* wrapper_type_info = GetWrapperTypeInfo();
-  v8::Local<v8::Value> v8_buffer;
-  if (!ToV8Traits<DOMArrayBuffer>::ToV8(script_state, buffer())
-           .ToLocal(&v8_buffer)) {
-    return v8::MaybeLocal<v8::Value>();
-  }
+  v8::Local<v8::Value> v8_buffer =
+      ToV8Traits<DOMArrayBuffer>::ToV8(script_state, buffer());
   DCHECK(v8_buffer->IsArrayBuffer());
 
   v8::Local<v8::Object> wrapper;

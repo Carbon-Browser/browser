@@ -35,6 +35,8 @@
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_midi_port_connection_state.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_midi_port_type.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
 #include "third_party/blink/renderer/modules/event_target_modules.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -42,37 +44,32 @@
 namespace blink {
 
 class MIDIAccess;
+class V8MIDIPortDeviceState;
+using MIDIPortConnectionState = V8MIDIPortConnectionState::Enum;
+using MIDIPortType = V8MIDIPortType::Enum;
 
-class MIDIPort : public EventTargetWithInlineData,
+class MIDIPort : public EventTarget,
                  public ActiveScriptWrappable<MIDIPort>,
                  public ExecutionContextLifecycleObserver {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
-  enum ConnectionState {
-    kConnectionStateOpen,
-    kConnectionStateClosed,
-    kConnectionStatePending
-  };
-
-  enum TypeCode { kTypeInput, kTypeOutput };
-
   ~MIDIPort() override = default;
 
-  String connection() const;
+  V8MIDIPortConnectionState connection() const;
   String id() const { return id_; }
   String manufacturer() const { return manufacturer_; }
   String name() const { return name_; }
-  String state() const;
-  String type() const;
+  V8MIDIPortDeviceState state() const;
+  V8MIDIPortType type() const;
   String version() const { return version_; }
 
-  ScriptPromise open(ScriptState*);
-  ScriptPromise close(ScriptState*);
+  ScriptPromise<MIDIPort> open(ScriptState*);
+  ScriptPromise<MIDIPort> close(ScriptState*);
 
   midi::mojom::PortState GetState() const { return state_; }
   void SetState(midi::mojom::PortState);
-  ConnectionState GetConnection() const { return connection_; }
+  MIDIPortConnectionState GetConnection() const { return connection_; }
 
   void Trace(Visitor*) const override;
 
@@ -95,31 +92,31 @@ class MIDIPort : public EventTargetWithInlineData,
            const String& id,
            const String& manufacturer,
            const String& name,
-           TypeCode,
+           MIDIPortType,
            const String& version,
            midi::mojom::PortState);
 
   void open();
   bool IsOpening() { return running_open_count_; }
-  MIDIAccess* midiAccess() const { return access_; }
+  MIDIAccess* midiAccess() const { return access_.Get(); }
 
  private:
-  void OpenAsynchronously(ScriptPromiseResolver*);
+  void OpenAsynchronously(ScriptPromiseResolver<MIDIPort>*);
   virtual void DidOpen(bool opened) {}
-  void CloseAsynchronously(ScriptPromiseResolver*);
+  void CloseAsynchronously(ScriptPromiseResolver<MIDIPort>*);
 
-  ScriptPromise Accept(ScriptState*);
+  ScriptPromise<MIDIPort> Accept(ScriptState*);
 
-  void SetStates(midi::mojom::PortState, ConnectionState);
+  void SetStates(midi::mojom::PortState, MIDIPortConnectionState);
 
   String id_;
   String manufacturer_;
   String name_;
-  TypeCode type_;
+  MIDIPortType type_;
   String version_;
   Member<MIDIAccess> access_;
   midi::mojom::PortState state_;
-  ConnectionState connection_;
+  MIDIPortConnectionState connection_;
   unsigned running_open_count_ = 0;
 };
 

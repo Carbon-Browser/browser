@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,27 +6,31 @@
 
 #include "ash/components/arc/test/arc_util_test_support.h"
 #include "ash/constants/ash_switches.h"
+#include "ash/shell.h"
+#include "ash/shell_observer.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/ash/app_restore/app_restore_arc_task_handler.h"
+#include "chrome/browser/ash/app_restore/app_restore_arc_task_handler_factory.h"
 #include "chrome/browser/ash/app_restore/full_restore_prefs.h"
 #include "chrome/browser/ash/app_restore/full_restore_service.h"
+#include "chrome/browser/ash/app_restore/full_restore_service_factory.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
 #include "chrome/browser/policy/policy_test_utils.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "components/app_restore/features.h"
-#include "components/exo/wm_helper_chromeos.h"
+#include "components/exo/wm_helper.h"
 #include "components/policy/policy_constants.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/test/browser_test.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace ash {
-namespace full_restore {
+namespace ash::full_restore {
 
 class FullRestorePolicyBrowserTest
     : public policy::PolicyTest,
+      public ash::ShellObserver,
       public testing::WithParamInterface<std::tuple<bool, bool>> {
  public:
   // policy::PolicyTest:
@@ -38,7 +42,7 @@ class FullRestorePolicyBrowserTest
   void SetUpInProcessBrowserTestFixture() override {
     PolicyTest::SetUpInProcessBrowserTestFixture();
     arc::ArcSessionManager::SetUiEnabledForTesting(false);
-    wm_helper_ = std::make_unique<exo::WMHelperChromeOS>();
+    wm_helper_ = std::make_unique<exo::WMHelper>();
 
     policy::PolicyMap policies;
     policies.Set(policy::key::kFullRestoreEnabled,
@@ -52,11 +56,18 @@ class FullRestorePolicyBrowserTest
     provider_.UpdateChromePolicy(policies);
   }
 
-  void SetUpOnMainThread() override { PolicyTest::SetUpOnMainThread(); }
+  void SetUpOnMainThread() override {
+    PolicyTest::SetUpOnMainThread();
+    ash::Shell::Get()->AddShellObserver(this);
+  }
 
-  void TearDownOnMainThread() override {
-    PolicyTest::TearDownOnMainThread();
+  void TearDownOnMainThread() override { PolicyTest::TearDownOnMainThread(); }
+
+  // ash::ShellObserver:
+  void OnShellDestroying() override {
+    // `wm_helper_` needs to be released before `ash::Shell`.
     wm_helper_.reset();
+    ash::Shell::Get()->RemoveShellObserver(this);
   }
 
   bool full_restore_enabled() const { return std::get<0>(GetParam()); }
@@ -70,17 +81,19 @@ class FullRestorePolicyBrowserTest
 
 IN_PROC_BROWSER_TEST_P(FullRestorePolicyBrowserTest,
                        DefaultEnableFullRestoreAndGhostWindow) {
-  if (full_restore_enabled())
-    ASSERT_TRUE(FullRestoreService::GetForProfile(browser()->profile()));
-  else
-    ASSERT_FALSE(FullRestoreService::GetForProfile(browser()->profile()));
+  if (full_restore_enabled()) {
+    ASSERT_TRUE(FullRestoreServiceFactory::GetForProfile(browser()->profile()));
+  } else {
+    ASSERT_FALSE(
+        FullRestoreServiceFactory::GetForProfile(browser()->profile()));
+  }
 
   if (ghost_window_enabled()) {
-    ASSERT_TRUE(app_restore::AppRestoreArcTaskHandler::GetForProfile(
+    ASSERT_TRUE(app_restore::AppRestoreArcTaskHandlerFactory::GetForProfile(
                     browser()->profile())
                     ->window_handler());
   } else {
-    ASSERT_FALSE(app_restore::AppRestoreArcTaskHandler::GetForProfile(
+    ASSERT_FALSE(app_restore::AppRestoreArcTaskHandlerFactory::GetForProfile(
                      browser()->profile())
                      ->window_handler());
   }
@@ -90,5 +103,4 @@ INSTANTIATE_TEST_SUITE_P(All,
                          FullRestorePolicyBrowserTest,
                          testing::Combine(testing::Bool(), testing::Bool()));
 
-}  // namespace full_restore
-}  // namespace ash
+}  // namespace ash::full_restore

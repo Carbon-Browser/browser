@@ -22,13 +22,15 @@ Some SVGs are already pretty minimal, like the ones at [the Material Design Icon
 
 + **My colors are inverted!** There is probably a surplus square path encompassing your icon. For example, `<path d="M0 0h16v16H0z"/>`. Delete this and try again.
 
++ **Nothing is rendering!** Lately, [Google repo icons](https://fonts.google.com/icons) have tended to include an odd viewbox directive: `viewBox="0 -960 960 960"`. Address this by entering 960 as the y offset in Skiafy (see "Translate" `<input>`). Bonus points for [patching Skiafy](https://github.com/evanstade/skiafy/issues/46) to do this automatically.
+
 ## Using .icon files
 
 ### Adding new icons
 
 Once you have created an `.icon` file, place it in an appropriate `vector_icon` subdirectory and add the filename to the corresponding `BUILD.gn`. A constant is automatically generated so that the icon can be referenced at runtime. The icon file `foo_bar.icon` is mapped to the constant name of `kFooBarIcon` ('k' + camel-cased filename + 'Icon'), which you can use to reference that icon in code. The icon's name should match its identifier on [the MD icons site](https://material.io/icons/) if that's where it came from. For example, `ic_accessibility` would become `accessibility.icon`.
 
-Make sure not to add [trademarked resources](../../docs/google_chrome_branded_builds.md) such as Google product logos to the Chromium repo.
+**Make sure not to add [trademarked resources](../../docs/google_chrome_branded_builds.md) such as Google product logos to the Chromium repo**. The handful of vector icons that are trademarked live in `//components/vector_icons/google_chrome` with open-source counterparts in `//components/vector_icons/chromium`.
 
 ### Icons with multiple definitions
 
@@ -46,6 +48,16 @@ If the size argument is unspecified, the size will be taken from the smallest ic
 
 `CreateVectorIcon()` will use the icon definition that best matches the final pixel size required, which is the product of DIP and the device scale factor (DSF). For example, for a DIP size of 32 and DSF of 100%, a rep with `CANVAS_DIMENSIONS, 32,` would be used, whereas a configuration with DSF of 150% would prefer a rep with `CANVAS_DIMENSIONS, 48`.
 
+### Preparing for review
+
+1. Prefer to add new icons in the same commit that introduces the code which uses the icons, rather than as a standalone change. This will:
+    1. give reviewers a chance to verify that the icon is being used correctly and is added to the appropriate directory.
+    1. create an easily discoverable two-way connection between icon and code in git history.
+    1. ensure the icon is removed if the code change ends up being reverted for any reason.
+1. In the commit description,
+    1. reference the source SVG.
+    1. link to a screenshot, preferably hosted on a publicly visible site such as the Chromium issue tracker.
+
 ## FAQ
 
 ### Where can I use vector icons?
@@ -55,6 +67,8 @@ Chrome's native UI on desktop platforms. Currently the vector icons are in exten
 ### How can I preview vector icons?
 
 Use [this extension](https://github.com/sadrulhc/vector-icons) to preview icons in [codesearch](http://cs.chromium.org/).
+
+You can also use the [Vector Icon Viewer](https://marketplace.visualstudio.com/items?itemName=adolfdaniel.vscode-chromium-vector-icons) extension for VS Code to preview icons in Visual Studio. This is especially helpful when adding new icons.
 
 You can also build and run the `views_examples_exe` (or `views_examples_with_content_exe`) target and select "Vector Icons" from the dropdown menu. This loads a simple interface which allows you view a provided vector icon file at a specified size and color. Contributions to improve this interface are welcome ([bug](https://bugs.chromium.org/p/chromium/issues/detail?id=630295)).
 

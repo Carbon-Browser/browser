@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,8 +28,15 @@ enum class HistoryClustersInitialState {
   // The HistoryClusters UI was opened via a same-document navigation, which
   // means the user likely clicked the tab over from History to Journeys.
   kSameDocument = 3,
+  // The Side Panel HistoryClusters UI was opened from the omnibox. Technically
+  // this COULD be logged as kIndirectNavigation, but we want to be able to
+  // distinguish between Side Panel and History WebUI initializations.
+  kSidePanelFromOmnibox = 4,
+  // The Side Panel HistoryClusters UI was opened from side panel toolbar
+  // button.
+  kSidePanelFromToolbarButton = 5,
   // Add new values above this line.
-  kMaxValue = kSameDocument,
+  kMaxValue = kSidePanelFromToolbarButton,
 };
 
 // HistoryClustersMetricsLogger contains all the metrics/events associated with
@@ -43,7 +50,7 @@ class HistoryClustersMetricsLogger
   ~HistoryClustersMetricsLogger() override;
   PAGE_USER_DATA_KEY_DECL();
 
-  absl::optional<HistoryClustersInitialState> initial_state() const {
+  std::optional<HistoryClustersInitialState> initial_state() const {
     return initial_state_;
   }
 
@@ -77,6 +84,9 @@ class HistoryClustersMetricsLogger
   void RecordClusterAction(ClusterAction cluster_action,
                            uint32_t cluster_index);
 
+  // Called when the UI becomes visible.
+  void WasShown();
+
  private:
   // Whether the journeys interaction captured by |this| is considered a
   // successful outcome.
@@ -84,11 +94,15 @@ class HistoryClustersMetricsLogger
 
   // The navigation ID of the navigation handle that this data is associated
   // with, used for recording the metrics to UKM.
-  absl::optional<int64_t> navigation_id_;
+  std::optional<int64_t> navigation_id_;
 
   // The initial state of how this interaction with the HistoryClusters UI was
   // started.
-  absl::optional<HistoryClustersInitialState> initial_state_;
+  std::optional<HistoryClustersInitialState> initial_state_;
+
+  // True if the the HistoryClusters UI is ever shown. This can be false for the
+  // entire lifetime of HistoryClusters UI if it is preloaded but never shown.
+  bool is_ever_shown_ = false;
 
   // The number of queries made on the tracker history clusters event. Only
   // queries containing a string should be counted.

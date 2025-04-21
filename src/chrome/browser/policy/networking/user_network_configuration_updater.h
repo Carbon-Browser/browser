@@ -1,5 +1,4 @@
-
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,8 +30,8 @@ class UserNetworkConfigurationUpdater : public NetworkConfigurationUpdater,
   // NetworkConfigurationUpdater
   void ImportClientCertificates() override {}
   void ApplyNetworkPolicy(
-      base::ListValue* network_configs_onc,
-      base::DictionaryValue* global_network_config) override {}
+      const base::Value::List& network_configs_onc,
+      const base::Value::Dict& global_network_config) override {}
 };
 
 }  // namespace policy

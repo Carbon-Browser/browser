@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 #include "ui/accessibility/ax_constants.mojom.h"
 #include "ui/accessibility/platform/ax_platform_node_base.h"
 #include "ui/accessibility/platform/test_ax_node_wrapper.h"
-#include "ui/accessibility/platform/test_ax_tree_update.h"
+#include "ui/accessibility/test_ax_tree_update.h"
+#include "ui/accessibility/test_single_ax_tree_manager.h"
 
 namespace ui {
 
@@ -16,69 +17,15 @@ AXPlatformNodeTest::AXPlatformNodeTest() = default;
 AXPlatformNodeTest::~AXPlatformNodeTest() = default;
 
 void AXPlatformNodeTest::TearDown() {
+#if BUILDFLAG(HAS_NATIVE_ACCESSIBILITY)
+  TestAXNodeWrapper::SetGlobalIsWebContent(false);
+  TestAXNodeWrapper::ResetGlobalState();
+#endif  // BUILDFLAG(HAS_NATIVE_ACCESSIBILITY)
+
   // Destroy the tree and make sure we're not leaking any objects.
   DestroyTree();
 
-#if BUILDFLAG_INTERNAL_HAS_NATIVE_ACCESSIBILITY()
-  TestAXNodeWrapper::SetGlobalIsWebContent(false);
-  TestAXNodeWrapper::ResetGlobalState();
-#endif  // BUILDFLAG_INTERNAL_HAS_NATIVE_ACCESSIBILITY()
-
   ASSERT_EQ(0U, AXPlatformNodeBase::GetInstanceCountForTesting());
-}
-
-void AXPlatformNodeTest::Init(const AXTreeUpdate& initial_state) {
-  SetTree(std::make_unique<AXTree>(initial_state));
-}
-
-void AXPlatformNodeTest::Init(
-    const ui::AXNodeData& node1,
-    const ui::AXNodeData& node2 /* = ui::AXNodeData() */,
-    const ui::AXNodeData& node3 /* = ui::AXNodeData() */,
-    const ui::AXNodeData& node4 /* = ui::AXNodeData() */,
-    const ui::AXNodeData& node5 /* = ui::AXNodeData() */,
-    const ui::AXNodeData& node6 /* = ui::AXNodeData() */,
-    const ui::AXNodeData& node7 /* = ui::AXNodeData() */,
-    const ui::AXNodeData& node8 /* = ui::AXNodeData() */,
-    const ui::AXNodeData& node9 /* = AXNodeData() */,
-    const ui::AXNodeData& node10 /* = AXNodeData() */,
-    const ui::AXNodeData& node11 /* = AXNodeData() */,
-    const ui::AXNodeData& node12 /* = AXNodeData() */) {
-  AXTreeUpdate update;
-  update.root_id = node1.id;
-  update.has_tree_data = true;
-  update.tree_data.tree_id = AXTreeID::CreateNewAXTreeID();
-  update.tree_data.title = "Dialog title";
-  update.nodes.push_back(node1);
-  if (node2.id != kInvalidAXNodeID)
-    update.nodes.push_back(node2);
-  if (node3.id != kInvalidAXNodeID)
-    update.nodes.push_back(node3);
-  if (node4.id != kInvalidAXNodeID)
-    update.nodes.push_back(node4);
-  if (node5.id != kInvalidAXNodeID)
-    update.nodes.push_back(node5);
-  if (node6.id != kInvalidAXNodeID)
-    update.nodes.push_back(node6);
-  if (node7.id != kInvalidAXNodeID)
-    update.nodes.push_back(node7);
-  if (node8.id != kInvalidAXNodeID)
-    update.nodes.push_back(node8);
-  if (node9.id != kInvalidAXNodeID)
-    update.nodes.push_back(node9);
-  if (node10.id != kInvalidAXNodeID)
-    update.nodes.push_back(node10);
-  if (node11.id != kInvalidAXNodeID)
-    update.nodes.push_back(node11);
-  if (node12.id != kInvalidAXNodeID)
-    update.nodes.push_back(node12);
-  Init(update);
-}
-
-AXTree* AXPlatformNodeTest::Init(const TestAXTreeUpdateNode& root) {
-  TestAXTreeUpdate update(root);
-  Init(update);
-  return GetTree();
 }
 
 AXTreeUpdate AXPlatformNodeTest::BuildTextField() {
@@ -95,6 +42,9 @@ AXTreeUpdate AXPlatformNodeTest::BuildTextField() {
   AXTreeUpdate update;
   update.root_id = text_field_node.id;
   update.nodes.push_back(text_field_node);
+  update.has_tree_data = true;
+  // An AXPosition will be created, and requires an AXTreeID.
+  update.tree_data.tree_id = AXTreeID::CreateNewAXTreeID();
   return update;
 }
 
@@ -118,6 +68,8 @@ AXTreeUpdate AXPlatformNodeTest::BuildTextFieldWithSelectionRange(
   AXTreeUpdate update;
   update.root_id = text_field_node.id;
   update.nodes.push_back(text_field_node);
+  update.has_tree_data = true;
+  update.tree_data.tree_id = AXTreeID::CreateNewAXTreeID();
   return update;
 }
 
@@ -134,6 +86,8 @@ AXTreeUpdate AXPlatformNodeTest::BuildContentEditable() {
   AXTreeUpdate update;
   update.root_id = content_editable_node.id;
   update.nodes.push_back(content_editable_node);
+  update.has_tree_data = true;
+  update.tree_data.tree_id = AXTreeID::CreateNewAXTreeID();
   return update;
 }
 
@@ -156,6 +110,7 @@ AXTreeUpdate AXPlatformNodeTest::BuildContentEditableWithSelectionRange(
   update.nodes.push_back(content_editable_node);
 
   update.has_tree_data = true;
+  update.tree_data.tree_id = AXTreeID::CreateNewAXTreeID();
   update.tree_data.sel_anchor_object_id = content_editable_node.id;
   update.tree_data.sel_focus_object_id = content_editable_node.id;
   update.tree_data.sel_anchor_offset = start;
@@ -317,6 +272,8 @@ AXTreeUpdate AXPlatformNodeTest::AXPlatformNodeTest::Build3X3Table() {
   update.nodes.push_back(table_cell_3);        // 11
   update.nodes.push_back(table_cell_4);        // 12
 
+  update.has_tree_data = true;
+  update.tree_data.tree_id = AXTreeID::CreateNewAXTreeID();
   return update;
 }
 
@@ -380,6 +337,9 @@ AXTreeUpdate AXPlatformNodeTest::BuildAriaColumnAndRowCountGrids() {
   update.nodes.push_back(rowcolindex_cell);
   update.nodes.push_back(rowcolcount_grid);
   update.nodes.push_back(unknown_grid);
+
+  update.has_tree_data = true;
+  update.tree_data.tree_id = AXTreeID::CreateNewAXTreeID();
   return update;
 }
 
@@ -425,7 +385,21 @@ AXTreeUpdate AXPlatformNodeTest::BuildListBox(
   update.nodes.push_back(option_1);
   update.nodes.push_back(option_2);
   update.nodes.push_back(option_3);
+
+  update.has_tree_data = true;
+  update.tree_data.tree_id = AXTreeID::CreateNewAXTreeID();
   return update;
+}
+
+void AXPlatformNodeTest::SetTree(std::unique_ptr<AXTree> tree) {
+#if BUILDFLAG_INTERNAL_HAS_NATIVE_ACCESSIBILITY()
+  if (ax_tree_) {
+    // Make sure to reset the observers, as this tree is about to be destroyed.
+    TestAXNodeWrapper::ResetGlobalState();
+  }
+#endif  // BUILDFLAG_INTERNAL_HAS_NATIVE_ACCESSIBILITY()
+
+  TestSingleAXTreeManager::SetTree(std::move(tree));
 }
 
 }  // namespace ui

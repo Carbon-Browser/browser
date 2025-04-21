@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -117,8 +117,9 @@ class ResourceCreationProxy : public InterfaceProxy,
   PP_Resource CreateGraphics3DRaw(
       PP_Instance instance,
       PP_Resource share_context,
-      const gpu::ContextCreationAttribs& attrib_helper,
+      const Graphics3DContextAttribs& context_attribs,
       gpu::Capabilities* capabilities,
+      gpu::GLCapabilities* gl_capabilities,
       const base::UnsafeSharedMemoryRegion** shared_state,
       gpu::CommandBufferId* command_buffer_id) override;
   PP_Resource CreateHostResolver(PP_Instance instance) override;

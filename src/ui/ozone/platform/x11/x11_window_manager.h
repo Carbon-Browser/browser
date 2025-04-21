@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,7 +52,8 @@ class X11WindowManager {
   raw_ptr<X11Window> located_events_grabber_ = nullptr;
   raw_ptr<X11Window> window_mouse_currently_on_ = nullptr;
 
-  base::flat_map<gfx::AcceleratedWidget, X11Window*> windows_;
+  base::flat_map<gfx::AcceleratedWidget, raw_ptr<X11Window, CtnExperimental>>
+      windows_;
 };
 
 }  // namespace ui

@@ -1,25 +1,29 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/scheduler/main_thread/frame_task_queue_controller.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/run_loop.h"
 #include "base/task/sequence_manager/task_queue.h"
 #include "base/task/sequence_manager/test/sequence_manager_for_test.h"
 #include "base/test/task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/platform/task_type.h"
+#include "third_party/blink/renderer/platform/scheduler/common/task_priority.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/frame_scheduler_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_scheduler_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_task_queue.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/page_scheduler_impl.h"
+#include "third_party/blink/renderer/platform/scheduler/public/web_scheduling_priority.h"
+#include "third_party/blink/renderer/platform/scheduler/public/web_scheduling_queue_type.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
 
@@ -45,16 +49,17 @@ class FrameTaskQueueControllerTest : public testing::Test,
   ~FrameTaskQueueControllerTest() override = default;
 
   void SetUp() override {
+    auto settings = base::sequence_manager::SequenceManager::Settings::Builder()
+                        .SetPrioritySettings(CreatePrioritySettings())
+                        .Build();
     scheduler_ = std::make_unique<MainThreadSchedulerImpl>(
         base::sequence_manager::SequenceManagerForTest::Create(
             nullptr, task_environment_.GetMainThreadTaskRunner(),
-            task_environment_.GetMockTickClock()));
+            task_environment_.GetMockTickClock(), std::move(settings)));
     agent_group_scheduler_ = scheduler_->CreateAgentGroupScheduler();
-    page_scheduler_ =
-        agent_group_scheduler_->AsAgentGroupScheduler().CreatePageScheduler(
-            nullptr);
+    page_scheduler_ = agent_group_scheduler_->CreatePageScheduler(nullptr);
     frame_scheduler_ = page_scheduler_->CreateFrameScheduler(
-        nullptr, nullptr, /*is_in_embedded_frame_tree=*/false,
+        nullptr, /*is_in_embedded_frame_tree=*/false,
         FrameScheduler::FrameType::kSubframe);
     frame_task_queue_controller_ = std::make_unique<FrameTaskQueueController>(
         scheduler_.get(),
@@ -65,7 +70,7 @@ class FrameTaskQueueControllerTest : public testing::Test,
     frame_task_queue_controller_.reset();
     frame_scheduler_.reset();
     page_scheduler_.reset();
-    agent_group_scheduler_.reset();
+    agent_group_scheduler_ = nullptr;
     scheduler_->Shutdown();
     scheduler_.reset();
   }
@@ -110,16 +115,12 @@ class FrameTaskQueueControllerTest : public testing::Test,
     return frame_task_queue_controller_->GetTaskQueue(queue_traits);
   }
 
-  scoped_refptr<MainThreadTaskQueue> NewResourceLoadingTaskQueue() const {
-    return frame_task_queue_controller_->NewResourceLoadingTaskQueue();
-  }
-
   size_t task_queue_created_count() const { return task_queue_created_count_; }
 
  protected:
   base::test::TaskEnvironment task_environment_;
   std::unique_ptr<MainThreadSchedulerImpl> scheduler_;
-  std::unique_ptr<WebAgentGroupScheduler> agent_group_scheduler_;
+  Persistent<AgentGroupScheduler> agent_group_scheduler_;
   std::unique_ptr<PageScheduler> page_scheduler_;
   std::unique_ptr<FrameScheduler> frame_scheduler_;
   std::unique_ptr<FrameTaskQueueController> frame_task_queue_controller_;
@@ -175,17 +176,6 @@ TEST_F(FrameTaskQueueControllerTest, CreateAllTaskQueues) {
   all_task_queues.insert(task_queue.get(), QueueCheckResult::kDidNotSeeQueue);
   EXPECT_EQ(all_task_queues.size(), task_queue_created_count());
 
-  // Add a couple resource loading task queues.
-  task_queue = NewResourceLoadingTaskQueue();
-  EXPECT_FALSE(all_task_queues.Contains(task_queue));
-  all_task_queues.insert(task_queue.get(), QueueCheckResult::kDidNotSeeQueue);
-  EXPECT_EQ(all_task_queues.size(), task_queue_created_count());
-
-  task_queue = NewResourceLoadingTaskQueue();
-  EXPECT_FALSE(all_task_queues.Contains(task_queue));
-  all_task_queues.insert(task_queue.get(), QueueCheckResult::kDidNotSeeQueue);
-  EXPECT_EQ(all_task_queues.size(), task_queue_created_count());
-
   // Verify that we get all of the queues that we added, and only those queues.
   EXPECT_EQ(all_task_queues.size(),
             frame_task_queue_controller_->GetAllTaskQueuesAndVoters().size());
@@ -194,7 +184,7 @@ TEST_F(FrameTaskQueueControllerTest, CreateAllTaskQueues) {
     auto [task_queue_ptr, voter] = task_queue_and_voter;
 
     EXPECT_NE(task_queue_ptr, nullptr);
-    EXPECT_TRUE(all_task_queues.find(task_queue_ptr) != all_task_queues.end());
+    EXPECT_TRUE(base::Contains(all_task_queues, task_queue_ptr));
     // Make sure we don't get the same queue twice.
     auto it = all_task_queues.find(task_queue_ptr);
     EXPECT_FALSE(it == all_task_queues.end());
@@ -204,102 +194,59 @@ TEST_F(FrameTaskQueueControllerTest, CreateAllTaskQueues) {
   }
 }
 
-TEST_F(FrameTaskQueueControllerTest, RemoveResourceLoadingTaskQueues) {
-  scoped_refptr<MainThreadTaskQueue> resource_loading_queue1 =
-      NewResourceLoadingTaskQueue();
-  EXPECT_EQ(1u,
-            frame_task_queue_controller_->GetAllTaskQueuesAndVoters().size());
-  scoped_refptr<MainThreadTaskQueue> resource_loading_queue2 =
-      NewResourceLoadingTaskQueue();
-  EXPECT_EQ(2u,
-            frame_task_queue_controller_->GetAllTaskQueuesAndVoters().size());
-
-  // Check that we can remove the resource loading queues.
-  bool was_removed =
-      frame_task_queue_controller_->RemoveResourceLoadingTaskQueue(
-          resource_loading_queue1);
-  EXPECT_TRUE(was_removed);
-  EXPECT_EQ(1u,
-            frame_task_queue_controller_->GetAllTaskQueuesAndVoters().size());
-  // Can't delete twice.
-  was_removed = frame_task_queue_controller_->RemoveResourceLoadingTaskQueue(
-      resource_loading_queue1);
-  EXPECT_FALSE(was_removed);
-  EXPECT_EQ(1u,
-            frame_task_queue_controller_->GetAllTaskQueuesAndVoters().size());
-
-  was_removed = frame_task_queue_controller_->RemoveResourceLoadingTaskQueue(
-      resource_loading_queue2);
-  EXPECT_TRUE(was_removed);
-  EXPECT_EQ(0u,
-            frame_task_queue_controller_->GetAllTaskQueuesAndVoters().size());
-  // Can't delete twice.
-  was_removed = frame_task_queue_controller_->RemoveResourceLoadingTaskQueue(
-      resource_loading_queue2);
-  EXPECT_FALSE(was_removed);
-  EXPECT_EQ(0u,
-            frame_task_queue_controller_->GetAllTaskQueuesAndVoters().size());
-}
-
-TEST_F(FrameTaskQueueControllerTest, CannotRemoveNonResourceLoadingTaskQueues) {
-  scoped_refptr<MainThreadTaskQueue> task_queue = LoadingTaskQueue();
-  EXPECT_EQ(1u,
-            frame_task_queue_controller_->GetAllTaskQueuesAndVoters().size());
-  bool was_removed =
-      frame_task_queue_controller_->RemoveResourceLoadingTaskQueue(task_queue);
-  EXPECT_FALSE(was_removed);
-  EXPECT_EQ(1u,
-            frame_task_queue_controller_->GetAllTaskQueuesAndVoters().size());
-}
-
 TEST_F(FrameTaskQueueControllerTest,
        NonWebSchedulingTaskQueueWebSchedulingPriorityNullopt) {
   scoped_refptr<MainThreadTaskQueue> task_queue =
       frame_task_queue_controller_->GetTaskQueue(
           MainThreadTaskQueue::QueueTraits());
-  EXPECT_EQ(absl::nullopt, task_queue->web_scheduling_priority());
+  EXPECT_EQ(std::nullopt, task_queue->GetWebSchedulingPriority());
 }
 
 TEST_F(FrameTaskQueueControllerTest, AddWebSchedulingTaskQueues) {
   scoped_refptr<MainThreadTaskQueue> task_queue =
       frame_task_queue_controller_->NewWebSchedulingTaskQueue(
-          QueueTraits(), WebSchedulingPriority::kUserBlockingPriority);
+          QueueTraits(), WebSchedulingQueueType::kTaskQueue,
+          WebSchedulingPriority::kUserBlockingPriority);
   EXPECT_EQ(1u,
             frame_task_queue_controller_->GetAllTaskQueuesAndVoters().size());
   EXPECT_EQ(WebSchedulingPriority::kUserBlockingPriority,
-            task_queue->web_scheduling_priority().value());
+            task_queue->GetWebSchedulingPriority().value());
 
   task_queue = frame_task_queue_controller_->NewWebSchedulingTaskQueue(
-      QueueTraits(), WebSchedulingPriority::kUserVisiblePriority);
+      QueueTraits(), WebSchedulingQueueType::kTaskQueue,
+      WebSchedulingPriority::kUserVisiblePriority);
   EXPECT_EQ(2u,
             frame_task_queue_controller_->GetAllTaskQueuesAndVoters().size());
   EXPECT_EQ(WebSchedulingPriority::kUserVisiblePriority,
-            task_queue->web_scheduling_priority().value());
+            task_queue->GetWebSchedulingPriority().value());
 
   task_queue = frame_task_queue_controller_->NewWebSchedulingTaskQueue(
-      QueueTraits(), WebSchedulingPriority::kBackgroundPriority);
+      QueueTraits(), WebSchedulingQueueType::kTaskQueue,
+      WebSchedulingPriority::kBackgroundPriority);
   EXPECT_EQ(3u,
             frame_task_queue_controller_->GetAllTaskQueuesAndVoters().size());
   EXPECT_EQ(WebSchedulingPriority::kBackgroundPriority,
-            task_queue->web_scheduling_priority().value());
+            task_queue->GetWebSchedulingPriority().value());
 }
 
 TEST_F(FrameTaskQueueControllerTest, RemoveWebSchedulingTaskQueues) {
   scoped_refptr<MainThreadTaskQueue> task_queue =
       frame_task_queue_controller_->NewWebSchedulingTaskQueue(
-          QueueTraits(), WebSchedulingPriority::kUserBlockingPriority);
+          QueueTraits(), WebSchedulingQueueType::kTaskQueue,
+          WebSchedulingPriority::kUserBlockingPriority);
   EXPECT_EQ(1u,
             frame_task_queue_controller_->GetAllTaskQueuesAndVoters().size());
   EXPECT_EQ(WebSchedulingPriority::kUserBlockingPriority,
-            task_queue->web_scheduling_priority().value());
+            task_queue->GetWebSchedulingPriority().value());
 
   scoped_refptr<MainThreadTaskQueue> task_queue2 =
       frame_task_queue_controller_->NewWebSchedulingTaskQueue(
-          QueueTraits(), WebSchedulingPriority::kUserVisiblePriority);
+          QueueTraits(), WebSchedulingQueueType::kTaskQueue,
+          WebSchedulingPriority::kUserVisiblePriority);
   EXPECT_EQ(2u,
             frame_task_queue_controller_->GetAllTaskQueuesAndVoters().size());
   EXPECT_EQ(WebSchedulingPriority::kUserVisiblePriority,
-            task_queue2->web_scheduling_priority().value());
+            task_queue2->GetWebSchedulingPriority().value());
 
   frame_task_queue_controller_->RemoveWebSchedulingTaskQueue(task_queue.get());
   EXPECT_EQ(1u,
@@ -313,19 +260,21 @@ TEST_F(FrameTaskQueueControllerTest,
        AddMultipleSamePriorityWebSchedulingTaskQueues) {
   scoped_refptr<MainThreadTaskQueue> task_queue1 =
       frame_task_queue_controller_->NewWebSchedulingTaskQueue(
-          QueueTraits(), WebSchedulingPriority::kUserBlockingPriority);
+          QueueTraits(), WebSchedulingQueueType::kTaskQueue,
+          WebSchedulingPriority::kUserBlockingPriority);
   EXPECT_EQ(1u,
             frame_task_queue_controller_->GetAllTaskQueuesAndVoters().size());
   EXPECT_EQ(WebSchedulingPriority::kUserBlockingPriority,
-            task_queue1->web_scheduling_priority().value());
+            task_queue1->GetWebSchedulingPriority().value());
 
   scoped_refptr<MainThreadTaskQueue> task_queue2 =
       frame_task_queue_controller_->NewWebSchedulingTaskQueue(
-          QueueTraits(), WebSchedulingPriority::kUserBlockingPriority);
+          QueueTraits(), WebSchedulingQueueType::kTaskQueue,
+          WebSchedulingPriority::kUserBlockingPriority);
   EXPECT_EQ(2u,
             frame_task_queue_controller_->GetAllTaskQueuesAndVoters().size());
   EXPECT_EQ(WebSchedulingPriority::kUserBlockingPriority,
-            task_queue2->web_scheduling_priority().value());
+            task_queue2->GetWebSchedulingPriority().value());
 
   EXPECT_NE(task_queue1.get(), task_queue2.get());
 }

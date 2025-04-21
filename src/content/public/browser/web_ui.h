@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,20 +7,22 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/strings/string_piece.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/values.h"
 #include "content/common/content_export.h"
+#include "content/public/common/bindings_policy.h"
 #include "ui/base/page_transition_types.h"
 
 class GURL;
 
 namespace content {
 
+class RenderFrameHost;
 class WebContents;
 class WebUIController;
 class WebUIMessageHandler;
@@ -40,8 +42,10 @@ class CONTENT_EXPORT WebUI {
   // Returns JavaScript code that, when executed, calls the function specified
   // by |function_name| with the arguments specified in |arg_list|.
   static std::u16string GetJavascriptCall(
-      const std::string& function_name,
-      const std::vector<const base::Value*>& arg_list);
+      std::string_view function_name,
+      base::span<const base::ValueView> arg_list);
+  static std::u16string GetJavascriptCall(std::string_view function_name,
+                                          const base::Value::List& arg_list);
 
   virtual ~WebUI() {}
 
@@ -49,6 +53,14 @@ class CONTENT_EXPORT WebUI {
 
   virtual WebUIController* GetController() = 0;
   virtual void SetController(std::unique_ptr<WebUIController> controller) = 0;
+
+  // This might return nullptr
+  //  1. During construction, until the WebUI is associated with
+  //     a RenderFrameHost.
+  //  2. During destruction, if the WebUI's destruction causes the
+  //     RenderFrameHost to be destroyed (crbug.com/1308391).
+  //  3. In unittests where the WebUI is mocked, notably by TestWebUI.
+  virtual RenderFrameHost* GetRenderFrameHost() = 0;
 
   // Returns the device scale factor of the monitor that the renderer is on.
   // Whenever possible, WebUI should push resources with this scale factor to
@@ -63,8 +75,8 @@ class CONTENT_EXPORT WebUI {
 
   // Allows a controller to override the BindingsPolicy that should be enabled
   // for this page.
-  virtual int GetBindings() = 0;
-  virtual void SetBindings(int bindings) = 0;
+  virtual BindingsPolicySet GetBindings() = 0;
+  virtual void SetBindings(BindingsPolicySet bindings) = 0;
 
   // Allows a scheme to be requested which is provided by the WebUIController.
   virtual const std::vector<std::string>& GetRequestableSchemes() = 0;
@@ -77,25 +89,14 @@ class CONTENT_EXPORT WebUI {
   // the call has no effect.
   using MessageCallback =
       base::RepeatingCallback<void(const base::Value::List&)>;
-  virtual void RegisterMessageCallback(base::StringPiece message,
+  virtual void RegisterMessageCallback(std::string_view message,
                                        MessageCallback callback) = 0;
-
-  // TODO(crbug.com/1243386): Instances of RegisterDeprecatedMessageCallback()
-  // should be migrated to RegisterMessageCallback() above if possible.
-  //
-  // Used by WebUIMessageHandlers. If the given message is already registered,
-  // the call has no effect. Use RegisterMessageCallback() above in new code.
-  using DeprecatedMessageCallback =
-      base::RepeatingCallback<void(const base::ListValue*)>;
-  virtual void RegisterDeprecatedMessageCallback(
-      base::StringPiece message,
-      const DeprecatedMessageCallback& callback) = 0;
 
   template <typename... Args>
   void RegisterHandlerCallback(
-      base::StringPiece message,
+      std::string_view message,
       base::RepeatingCallback<void(Args...)> callback) {
-    RegisterDeprecatedMessageCallback(
+    RegisterMessageCallback(
         message, base::BindRepeating(
                      &Call<std::index_sequence_for<Args...>, Args...>::Impl,
                      callback, message));
@@ -121,25 +122,21 @@ class CONTENT_EXPORT WebUI {
   //
   // All function names in WebUI must consist of only ASCII characters.
   // There are variants for calls with more arguments.
+  void CallJavascriptFunctionUnsafe(std::string_view function_name) {
+    CallJavascriptFunctionUnsafe(function_name, {});
+  }
+
   virtual void CallJavascriptFunctionUnsafe(
-      const std::string& function_name) = 0;
-  virtual void CallJavascriptFunctionUnsafe(const std::string& function_name,
-                                            const base::Value& arg) = 0;
-  virtual void CallJavascriptFunctionUnsafe(const std::string& function_name,
-                                            const base::Value& arg1,
-                                            const base::Value& arg2) = 0;
-  virtual void CallJavascriptFunctionUnsafe(const std::string& function_name,
-                                            const base::Value& arg1,
-                                            const base::Value& arg2,
-                                            const base::Value& arg3) = 0;
-  virtual void CallJavascriptFunctionUnsafe(const std::string& function_name,
-                                            const base::Value& arg1,
-                                            const base::Value& arg2,
-                                            const base::Value& arg3,
-                                            const base::Value& arg4) = 0;
-  virtual void CallJavascriptFunctionUnsafe(
-      const std::string& function_name,
-      const std::vector<const base::Value*>& args) = 0;
+      std::string_view function_name,
+      base::span<const base::ValueView> args) = 0;
+
+  template <typename... Args>
+  void CallJavascriptFunctionUnsafe(std::string_view function_name,
+                                    const base::ValueView arg1,
+                                    const Args&... arg) {
+    base::ValueView args[] = {arg1, arg...};
+    CallJavascriptFunctionUnsafe(function_name, args);
+  }
 
   // Allows mutable access to this WebUI's message handlers for testing.
   virtual std::vector<std::unique_ptr<WebUIMessageHandler>>*
@@ -152,14 +149,18 @@ class CONTENT_EXPORT WebUI {
   template <typename Is, typename... Args>
   struct Call;
 
+  // Helper to unpack a  base::Value::List  and invoke a callback, passing
+  // list[0] as the first argument, list[1] as the second argument, et cetera.
+  // Each value in the list will be coerced to the type of the corresponding
+  // function parameter, CHECK()ing if the conversion is not possible or if the
+  // number of arguments is wrong.
   template <size_t... Is, typename... Args>
   struct Call<std::index_sequence<Is...>, Args...> {
     static void Impl(base::RepeatingCallback<void(Args...)> callback,
-                     base::StringPiece message,
-                     const base::ListValue* list) {
-      base::span<const base::Value> args = list->GetListDeprecated();
-      CHECK_EQ(args.size(), sizeof...(Args)) << message;
-      callback.Run(GetValue<Args>(args[Is])...);
+                     std::string_view message,
+                     const base::Value::List& list) {
+      CHECK_EQ(list.size(), sizeof...(Args)) << message;
+      callback.Run(GetValue<Args>(list[Is])...);
     }
   };
 };

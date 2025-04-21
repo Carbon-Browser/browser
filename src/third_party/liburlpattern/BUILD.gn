@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by an MIT-style license that can be
 # found in the LICENSE file or at https://opensource.org/licenses/MIT.
 
@@ -21,6 +21,8 @@ component("liburlpattern") {
 
   # Note, also update the local modifications in README.chromium.
   sources = [
+    "constructor_string_parser.cc",
+    "constructor_string_parser.h",
     "options.h",
     "parse.cc",
     "parse.h",

@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -104,8 +104,11 @@ class BufferedDwarfReader {
 
   bool BufferedRead(void* buf, const size_t count);
 
-  // The buffer and counters
-  char buf_[256];
+  // The buffer and counters. In local testing, buffer sizes larger than 4096
+  // bytes provides negligible benefit, while buffer sizes less than 4096 bytes
+  // incur a significant performance penalty: compared to the original buffer
+  // size of 256 bytes, 4096 bytes is 2x faster.
+  char buf_[4096];
   size_t unconsumed_amount_ = 0;
   size_t cursor_in_buffer_ = 0;
 

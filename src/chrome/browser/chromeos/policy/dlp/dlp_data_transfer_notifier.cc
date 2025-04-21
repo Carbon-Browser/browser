@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/chromeos/policy/dlp/dlp_data_transfer_notifier.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/chromeos/policy/dlp/clipboard_bubble.h"
 #include "chrome/browser/chromeos/policy/dlp/dlp_clipboard_bubble_constants.h"
@@ -97,65 +98,126 @@ void CalculateAndSetWidgetBounds(views::Widget* widget,
   widget->SetBounds(widget_bounds);
 }
 
-views::Widget::InitParams GetWidgetInitParams() {
+views::Widget::InitParams GetWidgetInitParams(views::WidgetDelegate* delegate) {
   views::Widget::InitParams params(
+      views::Widget::InitParams::CLIENT_OWNS_WIDGET,
       views::Widget::InitParams::TYPE_WINDOW_FRAMELESS);
   params.z_order = ui::ZOrderLevel::kNormal;
   params.activatable = views::Widget::InitParams::Activatable::kYes;
-  params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
   params.name = kBubbleName;
   params.layer_type = ui::LAYER_NOT_DRAWN;
-  params.parent = nullptr;
   params.shadow_type = views::Widget::InitParams::ShadowType::kDrop;
+  params.delegate = delegate;
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
+  // Explicitly setting the parent window is required in Lacros for popup
+  // dismissal to work correctly.
+  params.parent = dlp::GetActiveAuraWindow();
   // WaylandPopups in Lacros need a context window to allow custom positioning.
   // Here, we pass the active Lacros window as context for the bubble widget.
-  params.context = dlp::GetActiveAuraWindow();
+  params.context = params.parent;
+#else
+  params.parent = nullptr;
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
   return params;
 }
 
+// This delegate is used to track when it is "safe" to delete the Widget. It is
+// "owned" by the DlpDataTransferNotifier and will be created/recreated each
+// time that a Widget is created.
+class DlpWidgetDelegate : public views::WidgetDelegate {
+ public:
+  explicit DlpWidgetDelegate(DlpDataTransferNotifier* notifier)
+      : notifier_(notifier) {
+    SetOwnedByWidget(false);
+    SetFocusTraversesOut(true);
+  }
+
+  ~DlpWidgetDelegate() override = default;
+
+  DlpWidgetDelegate(const DlpWidgetDelegate&) = delete;
+  DlpWidgetDelegate& operator=(const DlpWidgetDelegate&) = delete;
+
+  // views::WidgetDelegate:
+  void WidgetIsZombie(views::Widget* widget) override {
+    notifier_->DeleteWidget(widget);
+  }
+
+ private:
+  // The notifier_ will always outlive this delegate, so this is always safe to
+  // access.
+  raw_ptr<DlpDataTransferNotifier> notifier_;
+};
+
 }  // namespace
 
 DlpDataTransferNotifier::DlpDataTransferNotifier() = default;
+
 DlpDataTransferNotifier::~DlpDataTransferNotifier() {
   if (widget_) {
     widget_->RemoveObserver(this);
-    CloseWidget(widget_.get(), views::Widget::ClosedReason::kUnspecified);
+    widget_->Close();
   }
+}
+
+void DlpDataTransferNotifier::DeleteWidget(views::Widget* widget) {
+  if (widget != widget_.get()) {
+    return;
+  }
+  widget_.reset();
 }
 
 void DlpDataTransferNotifier::ShowBlockBubble(const std::u16string& text) {
   InitWidget();
   ClipboardBlockBubble* bubble =
       widget_->SetContentsView(std::make_unique<ClipboardBlockBubble>(text));
-  bubble->SetDismissCallback(base::BindRepeating(
+  bubble->SetDismissCallback(base::BindOnce(
       &DlpDataTransferNotifier::CloseWidget, base::Unretained(this),
-      widget_.get(), views::Widget::ClosedReason::kCancelButtonClicked));
+      // This is safe. CloseWidget() has sufficient checks to test its validity.
+      base::UnsafeDangling(widget_.get()),
+      views::Widget::ClosedReason::kCancelButtonClicked));
   ResizeAndShowWidget(bubble->GetBubbleSize(), kClipboardDlpBlockDurationMs);
 }
 
 void DlpDataTransferNotifier::ShowWarningBubble(
     const std::u16string& text,
-    base::RepeatingCallback<void(views::Widget*)> proceed_cb,
-    base::RepeatingCallback<void(views::Widget*)> cancel_cb) {
+    base::OnceCallback<void(views::Widget*)> proceed_cb,
+    base::OnceCallback<void(views::Widget*)> cancel_cb) {
   InitWidget();
   ClipboardWarnBubble* bubble =
       widget_->SetContentsView(std::make_unique<ClipboardWarnBubble>(text));
   bubble->SetProceedCallback(
-      base::BindRepeating(std::move(proceed_cb), widget_.get()));
+      base::BindOnce(std::move(proceed_cb), widget_.get()));
   bubble->SetDismissCallback(
-      base::BindRepeating(std::move(cancel_cb), widget_.get()));
+      base::BindOnce(std::move(cancel_cb), widget_.get()));
   ResizeAndShowWidget(bubble->GetBubbleSize(), kClipboardDlpWarnDurationMs);
 }
 
-void DlpDataTransferNotifier::CloseWidget(views::Widget* widget,
+void DlpDataTransferNotifier::CloseWidget(MayBeDangling<views::Widget> widget,
                                           views::Widget::ClosedReason reason) {
-  if (widget_) {
-    DCHECK_EQ(widget, widget_.get());
-    widget_closing_timer_.Stop();
-    widget_->CloseWithReason(reason);
-  }
+  if (!widget || widget != widget_.get())
+    return;
+
+  widget_->CloseWithReason(reason);
+}
+
+void DlpDataTransferNotifier::SetPasteCallback(
+    base::OnceCallback<void(bool)> paste_cb) {
+  DCHECK(widget_);
+
+  ClipboardWarnBubble* clp_warn_bubble =
+      static_cast<ClipboardWarnBubble*>(widget_->GetContentsView());
+  clp_warn_bubble->set_paste_cb(std::move(paste_cb));
+}
+
+void DlpDataTransferNotifier::RunPasteCallback() {
+  DCHECK(widget_);
+
+  ClipboardWarnBubble* clp_warn_bubble =
+      static_cast<ClipboardWarnBubble*>(widget_->GetContentsView());
+
+  auto paste_cb = clp_warn_bubble->get_paste_cb();
+  DCHECK(paste_cb);
+  std::move(paste_cb).Run(true);
 }
 
 void DlpDataTransferNotifier::OnWidgetDestroying(views::Widget* widget) {
@@ -168,14 +230,15 @@ void DlpDataTransferNotifier::OnWidgetDestroying(views::Widget* widget) {
 void DlpDataTransferNotifier::OnWidgetActivationChanged(views::Widget* widget,
                                                         bool active) {
   if (!active && widget->IsVisible())
-    CloseWidget(widget, views::Widget::ClosedReason::kLostFocus);
+    CloseWidget(
+        // This is safe, CloseWidget() has sufficient checks to test validity.
+        widget, views::Widget::ClosedReason::kLostFocus);
 }
 
 void DlpDataTransferNotifier::InitWidget() {
-  if (widget_)
-    widget_->RemoveObserver(this);
   widget_ = std::make_unique<views::Widget>();
-  widget_->Init(GetWidgetInitParams());
+  widget_delegate_ = std::make_unique<DlpWidgetDelegate>(this);
+  widget_->Init(GetWidgetInitParams(widget_delegate_.get()));
   widget_->AddObserver(this);
 }
 
@@ -189,11 +252,19 @@ void DlpDataTransferNotifier::ResizeAndShowWidget(const gfx::Size& bubble_size,
 
   widget_closing_timer_.Start(
       FROM_HERE, base::Milliseconds(timeout_duration_ms),
-      base::BindOnce(&DlpDataTransferNotifier::CloseWidget,
-                     base::Unretained(this),
-                     widget_.get(),  // Safe as DlpClipboardNotificationHelper
-                                     // owns `widget_` and outlives it.
-                     views::Widget::ClosedReason::kUnspecified));
+      base::BindOnce(
+          &DlpDataTransferNotifier::CloseWidget, base::Unretained(this),
+          // This is safe given that `widget_` is owned by the class itself and
+          // the resource is destroyed only if InitWidget() is called again, for
+          // which case there's an additional check in CloseWidget() to compare
+          // the passed parameter against `widget_`.
+          base::UnsafeDangling(
+              widget_.get()),  // TODO(crbug.com/40245183): Remove the following
+                               // comment if outdated.
+                               //
+                               // Safe as DlpClipboardNotificationHelper
+                               // owns `widget_` and outlives it.
+          views::Widget::ClosedReason::kUnspecified));
 }
 
 }  // namespace policy

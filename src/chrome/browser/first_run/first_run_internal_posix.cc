@@ -1,10 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/first_run/first_run_internal.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/no_destructor.h"
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
@@ -62,12 +62,10 @@ bool ShouldShowFirstRunDialog() {
     return false;
 
   // For real first runs, Mac and Desktop Linux initialize the default metrics
-  // reporting state when the first run dialog is shown.
-  bool is_opt_in = first_run::IsMetricsReportingOptIn();
+  // reporting state when the first run dialog is shown. These days, metrics are
+  // always enabled by default (opt-out).
   metrics::RecordMetricsReportingDefaultState(
-      g_browser_process->local_state(),
-      is_opt_in ? metrics::EnableMetricsDefault::OPT_IN
-                : metrics::EnableMetricsDefault::OPT_OUT);
+      g_browser_process->local_state(), metrics::EnableMetricsDefault::OPT_OUT);
   return true;
 #endif
 }
@@ -81,15 +79,15 @@ void ForceFirstRunDialogShownForTesting(bool shown) {
     g_forced_show_dialog_state = ForcedShowDialogState::kForceSuppressed;
 }
 
-void DoPostImportPlatformSpecificTasks(Profile* profile) {
+void DoPostImportPlatformSpecificTasks() {
   if (!ShouldShowFirstRunDialog())
     return;
 
   if (GetBeforeShowFirstRunDialogHookForTesting())
     std::move(GetBeforeShowFirstRunDialogHookForTesting()).Run();
 
-  ShowFirstRunDialog(profile);
-  startup_metric_utils::SetNonBrowserUIDisplayed();
+  ShowFirstRunDialog();
+  startup_metric_utils::GetBrowser().SetNonBrowserUIDisplayed();
 }
 
 bool ShowPostInstallEULAIfNeeded(installer::InitialPreferences* install_prefs) {

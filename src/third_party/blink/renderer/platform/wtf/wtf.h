@@ -49,7 +49,7 @@ WTF_EXPORT void Initialize();
 #if BUILDFLAG(IS_ANDROID) || (defined(COMPONENT_BUILD) && BUILDFLAG(IS_WIN))
 WTF_EXPORT bool IsMainThread();
 #else
-WTF_EXPORT extern thread_local bool g_is_main_thread;
+WTF_EXPORT constinit extern thread_local bool g_is_main_thread;
 inline bool IsMainThread() {
   return g_is_main_thread;
 }

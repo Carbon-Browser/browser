@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "ash/components/arc/session/arc_bridge_service.h"
 #include "ash/components/arc/session/arc_service_manager.h"
 #include "ash/components/arc/test/fake_arc_session.h"
+#include "base/memory/raw_ptr.h"
 #include "base/threading/platform_thread.h"
 #include "chrome/browser/speech/tts_chromeos.h"
 #include "chrome/test/base/testing_profile.h"
@@ -50,6 +51,26 @@ class TestableTtsController : public content::TtsController {
   void Stop(const GURL& source_url) override {}
   void Pause() override {}
   void Resume() override {}
+  void UpdateLanguageStatus(const std::string& lang,
+                            content::LanguageInstallStatus install_status,
+                            const std::string& error) override {}
+  void AddUpdateLanguageStatusDelegate(
+      content::UpdateLanguageStatusDelegate* delegate) override {}
+  void RemoveUpdateLanguageStatusDelegate(
+      content::UpdateLanguageStatusDelegate* delegate) override {}
+  void UninstallLanguageRequest(content::BrowserContext* browser_context,
+                                const std::string& lang,
+                                const std::string& client_id,
+                                int source,
+                                bool uninstall_immediately) override {}
+  void InstallLanguageRequest(content::BrowserContext* browser_context,
+                              const std::string& lang,
+                              const std::string& client_id,
+                              int source) override {}
+  void LanguageStatusRequest(content::BrowserContext* browser_context,
+                             const std::string& lang,
+                             const std::string& client_id,
+                             int source) override {}
   void GetVoices(content::BrowserContext* browser_context,
                  const GURL& source_url,
                  std::vector<content::VoiceData>* out_voices) override {}
@@ -65,13 +86,12 @@ class TestableTtsController : public content::TtsController {
     return nullptr;
   }
   void RefreshVoices() override {}
-  void SetRemoteTtsEngineDelegate(
-      content::RemoteTtsEngineDelegate* delegate) override {}
   void SetTtsPlatform(content::TtsPlatform* tts_platform) override {}
   int QueueSize() override { return 0; }
   void StripSSML(
       const std::string& utterance,
       base::OnceCallback<void(const std::string&)> callback) override {}
+  void OnTtsUtteranceBecameInvalid(int utterance_id) override {}
 
   int last_utterance_id_;
   content::TtsEventType last_event_type_;
@@ -107,7 +127,7 @@ class ArcTtsServiceTest : public testing::Test {
   std::unique_ptr<ArcServiceManager> arc_service_manager_;
   std::unique_ptr<TestingProfile> testing_profile_;
   std::unique_ptr<TestableTtsController> tts_controller_;
-  ArcTtsService* const tts_service_;
+  const raw_ptr<ArcTtsService> tts_service_;
 };
 
 // Tests that ArcTtsService can be constructed and destructed.

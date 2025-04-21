@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,6 @@ std::unique_ptr<views::ImageView> CreatePrimaryIconView() {
   return icon_view;
 }
 
-// TODO(b/202529859): Change text to match final UX design
 std::u16string CreateText() {
   return l10n_util::GetStringUTF16(IDS_ACCESS_CODE_CAST_CONNECT);
 }
@@ -49,19 +48,21 @@ CastDialogAccessCodeCastButton::~CastDialogAccessCodeCastButton() = default;
 
 bool CastDialogAccessCodeCastButton::OnMousePressed(
     const ui::MouseEvent& event) {
-  if (event.IsRightMouseButton())
+  if (event.IsRightMouseButton()) {
     return true;
+  }
   return HoverButton::OnMousePressed(event);
 }
 
 void CastDialogAccessCodeCastButton::OnMouseReleased(
     const ui::MouseEvent& event) {
-  if (event.IsRightMouseButton())
+  if (event.IsRightMouseButton()) {
     return;
+  }
   return HoverButton::OnMouseReleased(event);
 }
 
-BEGIN_METADATA(CastDialogAccessCodeCastButton, HoverButton)
+BEGIN_METADATA(CastDialogAccessCodeCastButton)
 END_METADATA
 
 }  // namespace media_router

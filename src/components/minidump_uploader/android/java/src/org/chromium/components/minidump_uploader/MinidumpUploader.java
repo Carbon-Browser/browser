@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -132,14 +132,16 @@ public class MinidumpUploader {
                             new GZIPOutputStream(connection.getOutputStream())) {
                 streamCopy(minidumpInputStream, requestBodyStream);
                 int responseCode = connection.getResponseCode();
+                // The crash server returns the crash ID in the response body.
+                String responseContent = getResponseContentAsString(connection);
+                String uploadId = responseContent != null ? responseContent : "unknown";
                 if (isSuccessful(responseCode)) {
-                    // The crash server returns the crash ID in the response body.
-                    String responseContent = getResponseContentAsString(connection);
-                    String uploadId = responseContent != null ? responseContent : "unknown";
                     return Result.success(uploadId);
                 } else {
                     // Return the remote error code and message.
-                    return Result.uploadError(responseCode, connection.getResponseMessage());
+                    return Result.uploadError(
+                            responseCode,
+                            connection.getResponseMessage() + " uploadId: " + uploadId);
                 }
             } finally {
                 connection.disconnect();
@@ -208,7 +210,6 @@ public class MinidumpUploader {
      *
      * @param connection the connection to read the response from.
      * @return the content of the response.
-     * @throws IOException
      */
     private String getResponseContentAsString(HttpURLConnection connection) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -220,12 +221,10 @@ public class MinidumpUploader {
     }
 
     /**
-     * Copies all available data from |inStream| to |outStream|. Closes both
-     * streams when done.
+     * Copies all available data from |inStream| to |outStream|. Closes both streams when done.
      *
      * @param inStream the stream to read
      * @param outStream the stream to write to
-     * @throws IOException
      */
     private void streamCopy(InputStream inStream, OutputStream outStream) throws IOException {
         byte[] temp = new byte[4096];

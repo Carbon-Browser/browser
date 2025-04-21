@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,16 @@
 #include <stdint.h>
 
 #include <memory>
+#include <string>
 
 #include "base/memory/raw_ptr.h"
+#include "ui/base/mojom/menu_source_type.mojom-shared.h"
 #include "ui/views/controls/menu/menu_runner_impl_interface.h"
 #include "ui/views/views_export.h"
+
+namespace gfx {
+class RoundedCornersF;
+}  // namespace gfx
 
 namespace views {
 
@@ -33,12 +39,16 @@ class VIEWS_EXPORT MenuRunnerImplAdapter : public MenuRunnerImplInterface {
   // MenuRunnerImplInterface:
   bool IsRunning() const override;
   void Release() override;
-  void RunMenuAt(Widget* parent,
-                 MenuButtonController* button_controller,
-                 const gfx::Rect& bounds,
-                 MenuAnchorPosition anchor,
-                 int32_t types,
-                 gfx::NativeView native_view_for_gestures) override;
+  void RunMenuAt(
+      Widget* parent,
+      MenuButtonController* button_controller,
+      const gfx::Rect& bounds,
+      MenuAnchorPosition anchor,
+      ui::mojom::MenuSourceType source_type,
+      int32_t run_types,
+      gfx::NativeView native_view_for_gestures,
+      std::optional<gfx::RoundedCornersF> corners,
+      std::optional<std::string> show_menu_host_duration_histogram) override;
   void Cancel() override;
   base::TimeTicks GetClosingEventTime() const override;
 

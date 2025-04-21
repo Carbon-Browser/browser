@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,16 +7,18 @@
 #include <memory>
 #include <string>
 
-#include "ash/components/account_manager/account_manager_factory.h"
 #include "ash/constants/ash_pref_names.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
+#include "base/test/test_future.h"
 #include "base/values.h"
 #include "chrome/browser/ash/child_accounts/edu_coexistence_tos_store_utils.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/webui/chromeos/edu_coexistence/edu_coexistence_login_handler_chromeos.h"
+#include "chrome/browser/ui/webui/ash/edu_coexistence/edu_coexistence_login_handler.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
+#include "chromeos/ash/components/account_manager/account_manager_factory.h"
 #include "components/account_id/account_id.h"
 #include "components/account_manager_core/account.h"
 #include "components/account_manager_core/account_manager_facade.h"
@@ -24,6 +26,7 @@
 #include "components/account_manager_core/chromeos/account_manager_facade_factory.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/test/browser_task_environment.h"
+#include "google_apis/gaia/gaia_id.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/test/test_url_loader_factory.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -50,21 +53,22 @@ constexpr char kSecondaryAccount4[] = "secondaryAccount4@gmail.com";
 constexpr char kSecondaryAccount4GaiaId[] = "secondary-account-4";
 
 const AccountId kDeviceAccount =
-    AccountId::FromUserEmailGaiaId(kPrimaryAccount, kPrimaryAccountGaiaId);
+    AccountId::FromUserEmailGaiaId(kPrimaryAccount,
+                                   GaiaId(kPrimaryAccountGaiaId));
 
 ::account_manager::Account GetAccountFor(const std::string& email,
-                                         const std::string& gaia_id) {
-  ::account_manager::AccountKey key(gaia_id,
-                                    ::account_manager::AccountType::kGaia);
+                                         const GaiaId& gaia_id) {
+  ::account_manager::AccountKey key =
+      ::account_manager::AccountKey::FromGaiaId(gaia_id);
   return {key, email};
 }
 
 void AddAccount(account_manager::AccountManager* account_manager,
                 const std::string& email,
-                const std::string& gaia_id) {
-  ::account_manager::AccountKey account_key(
-      gaia_id, ::account_manager::AccountType::kGaia);
-  account_manager->UpsertAccount(account_key, email, kValidToken);
+                const GaiaId& gaia_id) {
+  ::account_manager::AccountKey key =
+      ::account_manager::AccountKey::FromGaiaId(gaia_id);
+  account_manager->UpsertAccount(key, email, kValidToken);
 }
 
 }  // namespace
@@ -80,7 +84,7 @@ class AccountManagerEducoexistenceControllerTest : public testing::Test {
 
   void SetUp() override;
 
-  void UpdatEduCoexistenceToSAcceptedVersion(const std::string& email,
+  void UpdatEduCoexistenceToSAcceptedVersion(const GaiaId& gaia_id,
                                              const std::string& tosVersion);
 
   void UpdateEduCoexistenceToSVersion(const std::string& new_version);
@@ -100,8 +104,9 @@ class AccountManagerEducoexistenceControllerTest : public testing::Test {
  private:
   // To support context of browser threads.
   content::BrowserTaskEnvironment task_environment_;
-  account_manager::AccountManager* account_manager_ = nullptr;
-  account_manager::AccountManagerFacade* account_manager_facade_ = nullptr;
+  raw_ptr<account_manager::AccountManager> account_manager_ = nullptr;
+  raw_ptr<account_manager::AccountManagerFacade> account_manager_facade_ =
+      nullptr;
   network::TestURLLoaderFactory test_url_loader_factory_;
   TestingProfile testing_profile_;
 };
@@ -114,11 +119,11 @@ void AccountManagerEducoexistenceControllerTest::SetUp() {
   account_manager_facade_ =
       ::GetAccountManagerFacade(profile()->GetPath().value());
 
-  AddAccount(account_manager(), kPrimaryAccount, kPrimaryAccountGaiaId);
+  AddAccount(account_manager(), kPrimaryAccount, GaiaId(kPrimaryAccountGaiaId));
 }
 
 void AccountManagerEducoexistenceControllerTest::
-    UpdatEduCoexistenceToSAcceptedVersion(const std::string& gaia_id,
+    UpdatEduCoexistenceToSAcceptedVersion(const GaiaId& gaia_id,
                                           const std::string& tosVersion) {
   edu_coexistence::UpdateAcceptedToSVersionPref(
       profile(), edu_coexistence::UserConsentInfo(gaia_id, tosVersion));
@@ -126,47 +131,39 @@ void AccountManagerEducoexistenceControllerTest::
 
 void AccountManagerEducoexistenceControllerTest::UpdateEduCoexistenceToSVersion(
     const std::string& new_version) {
-  profile()->GetPrefs()->SetString(chromeos::prefs::kEduCoexistenceToSVersion,
+  profile()->GetPrefs()->SetString(prefs::kEduCoexistenceToSVersion,
                                    new_version);
 }
 
 bool AccountManagerEducoexistenceControllerTest::HasInvalidGaiaToken(
     const ::account_manager::Account& account) {
-  base::RunLoop run_loop;
-  bool is_dummy_return = false;
-  account_manager()->HasDummyGaiaToken(
-      account.key, base::BindOnce(
-                       [](const base::RepeatingClosure& run_loop_callback,
-                          bool* out, bool is_invalid) {
-                         *out = is_invalid;
-                         run_loop_callback.Run();
-                       },
-                       run_loop.QuitClosure(), &is_dummy_return));
-  run_loop.Run();
-
-  return is_dummy_return;
+  base::test::TestFuture<bool> future;
+  account_manager()->HasDummyGaiaToken(account.key, future.GetCallback());
+  return future.Get();
 }
 
 TEST_F(AccountManagerEducoexistenceControllerTest,
        AccountsInPrefWithInvalidTokenShouldBeInvalidated) {
   // Account will be invalidated.
-  UpdatEduCoexistenceToSAcceptedVersion(kSecondaryAccount1GaiaId, "0");
+  UpdatEduCoexistenceToSAcceptedVersion(GaiaId(kSecondaryAccount1GaiaId), "0");
   EXPECT_EQ(edu_coexistence::GetAcceptedToSVersion(profile(),
                                                    kSecondaryAccount1GaiaId),
             "0");
 
   // Account will not be invalidated fine.
-  UpdatEduCoexistenceToSAcceptedVersion(kSecondaryAccount2GaiaId, "5");
+  UpdatEduCoexistenceToSAcceptedVersion(GaiaId(kSecondaryAccount2GaiaId), "5");
   EXPECT_EQ(edu_coexistence::GetAcceptedToSVersion(profile(),
                                                    kSecondaryAccount2GaiaId),
             "5");
 
-  AddAccount(account_manager(), kSecondaryAccount1, kSecondaryAccount1GaiaId);
-  AddAccount(account_manager(), kSecondaryAccount2, kSecondaryAccount2GaiaId);
+  AddAccount(account_manager(), kSecondaryAccount1,
+             GaiaId(kSecondaryAccount1GaiaId));
+  AddAccount(account_manager(), kSecondaryAccount2,
+             GaiaId(kSecondaryAccount2GaiaId));
   EXPECT_FALSE(HasInvalidGaiaToken(
-      GetAccountFor(kSecondaryAccount1, kSecondaryAccount1GaiaId)));
+      GetAccountFor(kSecondaryAccount1, GaiaId(kSecondaryAccount1GaiaId))));
   EXPECT_FALSE(HasInvalidGaiaToken(
-      GetAccountFor(kSecondaryAccount2, kSecondaryAccount2GaiaId)));
+      GetAccountFor(kSecondaryAccount2, GaiaId(kSecondaryAccount2GaiaId))));
 
   UpdateEduCoexistenceToSVersion("5");
 
@@ -179,23 +176,27 @@ TEST_F(AccountManagerEducoexistenceControllerTest,
   base::RunLoop().RunUntilIdle();
 
   EXPECT_TRUE(HasInvalidGaiaToken(
-      GetAccountFor(kSecondaryAccount1, kSecondaryAccount1GaiaId)));
+      GetAccountFor(kSecondaryAccount1, GaiaId(kSecondaryAccount1GaiaId))));
   EXPECT_FALSE(HasInvalidGaiaToken(
-      GetAccountFor(kSecondaryAccount2, kSecondaryAccount2GaiaId)));
+      GetAccountFor(kSecondaryAccount2, GaiaId(kSecondaryAccount2GaiaId))));
 }
 
 TEST_F(AccountManagerEducoexistenceControllerTest,
        AccountsNotInPrefShouldBeAddedToUserPref) {
-  UpdatEduCoexistenceToSAcceptedVersion(kSecondaryAccount1GaiaId, "5");
-  UpdatEduCoexistenceToSAcceptedVersion(kSecondaryAccount2GaiaId, "6");
-  UpdatEduCoexistenceToSAcceptedVersion(kSecondaryAccount3GaiaId, "7");
+  UpdatEduCoexistenceToSAcceptedVersion(GaiaId(kSecondaryAccount1GaiaId), "5");
+  UpdatEduCoexistenceToSAcceptedVersion(GaiaId(kSecondaryAccount2GaiaId), "6");
+  UpdatEduCoexistenceToSAcceptedVersion(GaiaId(kSecondaryAccount3GaiaId), "7");
 
-  AddAccount(account_manager(), kSecondaryAccount1, kSecondaryAccount1GaiaId);
-  AddAccount(account_manager(), kSecondaryAccount2, kSecondaryAccount2GaiaId);
-  AddAccount(account_manager(), kSecondaryAccount3, kSecondaryAccount3GaiaId);
+  AddAccount(account_manager(), kSecondaryAccount1,
+             GaiaId(kSecondaryAccount1GaiaId));
+  AddAccount(account_manager(), kSecondaryAccount2,
+             GaiaId(kSecondaryAccount2GaiaId));
+  AddAccount(account_manager(), kSecondaryAccount3,
+             GaiaId(kSecondaryAccount3GaiaId));
 
   // Note: kSecondaryAccount4 is not present in pref.
-  AddAccount(account_manager(), kSecondaryAccount4, kSecondaryAccount4GaiaId);
+  AddAccount(account_manager(), kSecondaryAccount4,
+             GaiaId(kSecondaryAccount4GaiaId));
 
   EduCoexistenceConsentInvalidationController
       edu_coexistence_invalidation_controller(profile(), account_manager(),
@@ -213,9 +214,9 @@ TEST_F(AccountManagerEducoexistenceControllerTest,
 
 TEST_F(AccountManagerEducoexistenceControllerTest,
        AccountsNotInAccountManagerShouldBeRemovedFromUserPref) {
-  UpdatEduCoexistenceToSAcceptedVersion(kSecondaryAccount1GaiaId, "5");
-  UpdatEduCoexistenceToSAcceptedVersion(kSecondaryAccount2GaiaId, "6");
-  UpdatEduCoexistenceToSAcceptedVersion(kSecondaryAccount3GaiaId, "7");
+  UpdatEduCoexistenceToSAcceptedVersion(GaiaId(kSecondaryAccount1GaiaId), "5");
+  UpdatEduCoexistenceToSAcceptedVersion(GaiaId(kSecondaryAccount2GaiaId), "6");
+  UpdatEduCoexistenceToSAcceptedVersion(GaiaId(kSecondaryAccount3GaiaId), "7");
 
   EXPECT_EQ(edu_coexistence::GetAcceptedToSVersion(profile(),
                                                    kSecondaryAccount1GaiaId),
@@ -229,8 +230,10 @@ TEST_F(AccountManagerEducoexistenceControllerTest,
 
   // kSecondaryAccount1 was unfortunately removed and is not present in account
   // manager.
-  AddAccount(account_manager(), kSecondaryAccount2, kSecondaryAccount2GaiaId);
-  AddAccount(account_manager(), kSecondaryAccount3, kSecondaryAccount3GaiaId);
+  AddAccount(account_manager(), kSecondaryAccount2,
+             GaiaId(kSecondaryAccount2GaiaId));
+  AddAccount(account_manager(), kSecondaryAccount3,
+             GaiaId(kSecondaryAccount3GaiaId));
 
   EduCoexistenceConsentInvalidationController
       edu_coexistence_invalidation_controller(profile(), account_manager(),

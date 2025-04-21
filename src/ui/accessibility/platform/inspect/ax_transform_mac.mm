@@ -1,9 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "ui/accessibility/platform/inspect/ax_transform_mac.h"
 
+#include "base/apple/foundation_util.h"
 #include "base/strings/sys_string_conversions.h"
 #include "ui/accessibility/ax_range.h"
 #include "ui/accessibility/platform/ax_platform_node.h"
@@ -11,6 +17,7 @@
 #include "ui/accessibility/platform/ax_platform_node_delegate.h"
 #include "ui/accessibility/platform/ax_platform_tree_manager.h"
 #include "ui/accessibility/platform/ax_utils_mac.h"
+#include "ui/accessibility/platform/inspect/ax_element_wrapper_mac.h"
 #include "ui/accessibility/platform/inspect/ax_inspect_utils.h"
 
 namespace ui {
@@ -29,56 +36,74 @@ base::Value AXNSObjectToBaseValue(id value, const AXTreeIndexerMac* indexer) {
   }
 
   // NSArray
-  if ([value isKindOfClass:[NSArray class]]) {
-    return AXNSArrayToBaseValue((NSArray*)value, indexer);
+  if (base::apple::ObjCCast<NSArray>(value)) {
+    return base::Value(AXNSArrayToBaseValue(value, indexer));
+  }
+
+  // AXCustomContent
+  if (AXCustomContent* custom_content =
+          base::apple::ObjCCast<AXCustomContent>(value)) {
+    return base::Value(AXCustomContentToBaseValue(custom_content));
   }
 
   // NSDictionary
-  if ([value isKindOfClass:[NSDictionary class]]) {
-    return AXNSDictionaryToBaseValue((NSDictionary*)value, indexer);
+  if (NSDictionary* dictionary = base::apple::ObjCCast<NSDictionary>(value)) {
+    return base::Value(AXNSDictionaryToBaseValue(dictionary, indexer));
   }
 
   // NSNumber
-  if ([value isKindOfClass:[NSNumber class]]) {
-    return base::Value([value intValue]);
+  if (NSNumber* number = base::apple::ObjCCast<NSNumber>(value)) {
+    return base::Value(number.intValue);
   }
 
   // NSRange, NSSize
-  if ([value isKindOfClass:[NSValue class]]) {
-    if (0 == strcmp([value objCType], @encode(NSRange))) {
-      return AXNSRangeToBaseValue([value rangeValue]);
+  if (NSValue* ns_value = base::apple::ObjCCast<NSValue>(value)) {
+    if (0 == strcmp(ns_value.objCType, @encode(NSRange))) {
+      return base::Value(AXNSRangeToBaseValue(ns_value.rangeValue));
     }
-    if (0 == strcmp([value objCType], @encode(NSSize))) {
-      return AXNSSizeToBaseValue([value sizeValue]);
+    if (0 == strcmp(ns_value.objCType, @encode(NSSize))) {
+      return base::Value(AXNSSizeToBaseValue(ns_value.sizeValue));
     }
   }
 
+  // NSAttributedString
+  if (NSAttributedString* attr_string =
+          base::apple::ObjCCast<NSAttributedString>(value)) {
+    return NSAttributedStringToBaseValue(attr_string, indexer);
+  }
+
+  // CGColorRef
+  if (CFGetTypeID((__bridge CFTypeRef)value) == CGColorGetTypeID()) {
+    return base::Value(CGColorRefToBaseValue((__bridge CGColorRef)value));
+  }
+
   // AXValue
-  if (CFGetTypeID(value) == AXValueGetTypeID()) {
-    AXValueType type = AXValueGetType(static_cast<AXValueRef>(value));
+  if (CFGetTypeID((__bridge CFTypeRef)value) == AXValueGetTypeID()) {
+    AXValueRef ax_value = (__bridge AXValueRef)value;
+    AXValueType type = AXValueGetType(ax_value);
     switch (type) {
       case kAXValueCGPointType: {
         NSPoint point;
-        if (AXValueGetValue(static_cast<AXValueRef>(value), type, &point)) {
-          return AXNSPointToBaseValue(point);
+        if (AXValueGetValue(ax_value, type, &point)) {
+          return base::Value(AXNSPointToBaseValue(point));
         }
       } break;
       case kAXValueCGSizeType: {
         NSSize size;
-        if (AXValueGetValue(static_cast<AXValueRef>(value), type, &size)) {
-          return AXNSSizeToBaseValue(size);
+        if (AXValueGetValue(ax_value, type, &size)) {
+          return base::Value(AXNSSizeToBaseValue(size));
         }
       } break;
       case kAXValueCGRectType: {
         NSRect rect;
-        if (AXValueGetValue(static_cast<AXValueRef>(value), type, &rect)) {
-          return AXNSRectToBaseValue(rect);
+        if (AXValueGetValue(ax_value, type, &rect)) {
+          return base::Value(AXNSRectToBaseValue(rect));
         }
       } break;
       case kAXValueCFRangeType: {
         NSRange range;
-        if (AXValueGetValue(static_cast<AXValueRef>(value), type, &range)) {
-          return AXNSRangeToBaseValue(range);
+        if (AXValueGetValue(ax_value, type, &range)) {
+          return base::Value(AXNSRangeToBaseValue(range));
         }
       } break;
       default:
@@ -92,11 +117,12 @@ base::Value AXNSObjectToBaseValue(id value, const AXTreeIndexerMac* indexer) {
   }
 
   // AXTextMarkerRange
-  if (IsAXTextMarkerRange(value))
+  if (IsAXTextMarkerRange(value)) {
     return AXTextMarkerRangeToBaseValue(value, indexer);
+  }
 
   // Accessible object
-  if (IsNSAccessibilityElement(value) || IsAXUIElement(value)) {
+  if (AXElementWrapper::IsValidElement(value)) {
     return AXElementToBaseValue(value, indexer);
   }
 
@@ -112,23 +138,27 @@ base::Value AXElementToBaseValue(id node, const AXTreeIndexerMac* indexer) {
 base::Value AXPositionToBaseValue(
     const AXPlatformNodeDelegate::AXPosition& position,
     const AXTreeIndexerMac* indexer) {
-  if (position->IsNullPosition())
+  if (position->IsNullPosition()) {
     return AXNilToBaseValue();
+  }
 
   const AXPlatformTreeManager* manager =
       static_cast<AXPlatformTreeManager*>(position->GetManager());
-  if (!manager)
+  if (!manager) {
     return AXNilToBaseValue();
+  }
 
   AXPlatformNode* platform_node_anchor =
       manager->GetPlatformNodeFromTree(position->anchor_id());
-  if (!platform_node_anchor)
+  if (!platform_node_anchor) {
     return AXNilToBaseValue();
+  }
 
   AXPlatformNodeCocoa* cocoa_anchor = static_cast<AXPlatformNodeCocoa*>(
       platform_node_anchor->GetNativeViewAccessible());
-  if (!cocoa_anchor)
+  if (!cocoa_anchor) {
     return AXNilToBaseValue();
+  }
 
   std::string affinity;
   switch (position->affinity()) {
@@ -143,14 +173,15 @@ base::Value AXPositionToBaseValue(
       break;
   }
 
-  base::Value value(base::Value::Type::DICTIONARY);
-  value.SetPath(AXMakeSetKey(AXMakeOrderedKey("anchor", 0)),
-                AXElementToBaseValue(static_cast<id>(cocoa_anchor), indexer));
-  value.SetIntPath(AXMakeSetKey(AXMakeOrderedKey("offset", 1)),
-                   position->text_offset());
-  value.SetStringPath(AXMakeSetKey(AXMakeOrderedKey("affinity", 2)),
-                      AXMakeConst(affinity));
-  return value;
+  base::Value::Dict value =
+      base::Value::Dict()
+          .Set(AXMakeSetKey(AXMakeOrderedKey("anchor", 0)),
+               AXElementToBaseValue(static_cast<id>(cocoa_anchor), indexer))
+          .Set(AXMakeSetKey(AXMakeOrderedKey("offset", 1)),
+               position->text_offset())
+          .Set(AXMakeSetKey(AXMakeOrderedKey("affinity", 2)),
+               AXMakeConst(affinity));
+  return base::Value(std::move(value));
 }
 
 base::Value AXTextMarkerToBaseValue(id text_marker,
@@ -162,74 +193,121 @@ base::Value AXTextMarkerRangeToBaseValue(id text_marker_range,
                                          const AXTreeIndexerMac* indexer) {
   AXPlatformNodeDelegate::AXRange ax_range =
       AXTextMarkerRangeToAXRange(text_marker_range);
-  if (ax_range.IsNull())
+  if (ax_range.IsNull()) {
     return AXNilToBaseValue();
+  }
 
-  base::Value value(base::Value::Type::DICTIONARY);
-  value.SetPath("anchor",
-                AXPositionToBaseValue(ax_range.anchor()->Clone(), indexer));
-  value.SetPath("focus",
-                AXPositionToBaseValue(ax_range.focus()->Clone(), indexer));
-  return value;
+  base::Value::Dict value =
+      base::Value::Dict()
+          .Set("anchor",
+               AXPositionToBaseValue(ax_range.anchor()->Clone(), indexer))
+          .Set("focus",
+               AXPositionToBaseValue(ax_range.focus()->Clone(), indexer));
+  return base::Value(std::move(value));
+}
+
+base::Value NSAttributedStringToBaseValue(NSAttributedString* attr_string,
+                                          const AXTreeIndexerMac* indexer) {
+  __block base::Value::Dict result;
+
+  [attr_string
+      enumerateAttributesInRange:NSMakeRange(0, attr_string.length)
+                         options:
+                             NSAttributedStringEnumerationLongestEffectiveRangeNotRequired
+                      usingBlock:^(NSDictionary* attrs, NSRange nsRange,
+                                   BOOL* stop) {
+                        __block base::Value::Dict base_attrs;
+                        [attrs enumerateKeysAndObjectsUsingBlock:^(
+                                   NSString* key, id attr, BOOL* dict_stop) {
+                          base_attrs.Set(
+                              std::string(base::SysNSStringToUTF8(key)),
+                              AXNSObjectToBaseValue(attr, indexer));
+                        }];
+
+                        result.Set(std::string(base::SysNSStringToUTF8(
+                                       [attr_string.string
+                                           substringWithRange:nsRange])),
+                                   std::move(base_attrs));
+                      }];
+  return base::Value(std::move(result));
+}
+
+base::Value CGColorRefToBaseValue(CGColorRef color) {
+  const CGFloat* color_components = CGColorGetComponents(color);
+  return base::Value(base::SysNSStringToUTF16(
+      [NSString stringWithFormat:@"CGColor(%1.2f, %1.2f, %1.2f, %1.2f)",
+                                 color_components[0], color_components[1],
+                                 color_components[2], color_components[3]]));
 }
 
 base::Value AXNilToBaseValue() {
   return base::Value(kNilValue);
 }
 
-base::Value AXNSArrayToBaseValue(NSArray* node_array,
-                                 const AXTreeIndexerMac* indexer) {
-  base::Value list(base::Value::Type::LIST);
-  for (NSUInteger i = 0; i < [node_array count]; i++)
-    list.Append(AXNSObjectToBaseValue([node_array objectAtIndex:i], indexer));
+base::Value::List AXNSArrayToBaseValue(NSArray* node_array,
+                                       const AXTreeIndexerMac* indexer) {
+  base::Value::List list;
+  for (id item in node_array) {
+    list.Append(AXNSObjectToBaseValue(item, indexer));
+  }
   return list;
 }
 
-base::Value AXNSDictionaryToBaseValue(NSDictionary* dictionary_value,
-                                      const AXTreeIndexerMac* indexer) {
-  base::Value dictionary(base::Value::Type::DICTIONARY);
+base::Value::Dict AXCustomContentToBaseValue(AXCustomContent* content) {
+  base::Value::Dict value =
+      base::Value::Dict()
+          .Set("label", base::SysNSStringToUTF16(content.label))
+          .Set("value", base::SysNSStringToUTF16(content.value));
+  return value;
+}
+
+base::Value::Dict AXNSDictionaryToBaseValue(NSDictionary* dictionary_value,
+                                            const AXTreeIndexerMac* indexer) {
+  base::Value::Dict dictionary;
   for (NSString* key in dictionary_value) {
-    dictionary.SetPath(base::SysNSStringToUTF8(key),
-                       AXNSObjectToBaseValue(dictionary_value[key], indexer));
+    dictionary.SetByDottedPath(
+        base::SysNSStringToUTF8(key),
+        AXNSObjectToBaseValue(dictionary_value[key], indexer));
   }
   return dictionary;
 }
 
-base::Value AXNSPointToBaseValue(NSPoint point_value) {
-  base::Value point(base::Value::Type::DICTIONARY);
-  point.SetIntPath(kXCoordDictKey, static_cast<int>(point_value.x));
-  point.SetIntPath(kYCoordDictKey, static_cast<int>(point_value.y));
+base::Value::Dict AXNSPointToBaseValue(NSPoint point_value) {
+  base::Value::Dict point =
+      base::Value::Dict()
+          .Set(kXCoordDictKey, static_cast<int>(point_value.x))
+          .Set(kYCoordDictKey, static_cast<int>(point_value.y));
   return point;
 }
 
-base::Value AXNSSizeToBaseValue(NSSize size_value) {
-  base::Value size(base::Value::Type::DICTIONARY);
-  size.SetIntPath(AXMakeOrderedKey(kWidthDictKey, 0),
-                  static_cast<int>(size_value.width));
-  size.SetIntPath(AXMakeOrderedKey(kHeightDictKey, 1),
-                  static_cast<int>(size_value.height));
+base::Value::Dict AXNSSizeToBaseValue(NSSize size_value) {
+  base::Value::Dict size = base::Value::Dict()
+                               .Set(AXMakeOrderedKey(kWidthDictKey, 0),
+                                    static_cast<int>(size_value.width))
+                               .Set(AXMakeOrderedKey(kHeightDictKey, 1),
+                                    static_cast<int>(size_value.height));
   return size;
 }
 
-base::Value AXNSRectToBaseValue(NSRect rect_value) {
-  base::Value rect(base::Value::Type::DICTIONARY);
-  rect.SetIntPath(AXMakeOrderedKey(kXCoordDictKey, 0),
-                  static_cast<int>(rect_value.origin.x));
-  rect.SetIntPath(AXMakeOrderedKey(kYCoordDictKey, 1),
-                  static_cast<int>(rect_value.origin.y));
-  rect.SetIntPath(AXMakeOrderedKey(kWidthDictKey, 2),
-                  static_cast<int>(rect_value.size.width));
-  rect.SetIntPath(AXMakeOrderedKey(kHeightDictKey, 3),
-                  static_cast<int>(rect_value.size.height));
+base::Value::Dict AXNSRectToBaseValue(NSRect rect_value) {
+  base::Value::Dict rect = base::Value::Dict()
+                               .Set(AXMakeOrderedKey(kXCoordDictKey, 0),
+                                    static_cast<int>(rect_value.origin.x))
+                               .Set(AXMakeOrderedKey(kYCoordDictKey, 1),
+                                    static_cast<int>(rect_value.origin.y))
+                               .Set(AXMakeOrderedKey(kWidthDictKey, 2),
+                                    static_cast<int>(rect_value.size.width))
+                               .Set(AXMakeOrderedKey(kHeightDictKey, 3),
+                                    static_cast<int>(rect_value.size.height));
   return rect;
 }
 
-base::Value AXNSRangeToBaseValue(NSRange node_range) {
-  base::Value range(base::Value::Type::DICTIONARY);
-  range.SetIntPath(AXMakeOrderedKey(kRangeLocDictKey, 0),
-                   static_cast<int>(node_range.location));
-  range.SetIntPath(AXMakeOrderedKey(kRangeLenDictKey, 1),
-                   static_cast<int>(node_range.length));
+base::Value::Dict AXNSRangeToBaseValue(NSRange node_range) {
+  base::Value::Dict range = base::Value::Dict()
+                                .Set(AXMakeOrderedKey(kRangeLocDictKey, 0),
+                                     static_cast<int>(node_range.location))
+                                .Set(AXMakeOrderedKey(kRangeLenDictKey, 1),
+                                     static_cast<int>(node_range.length));
   return range;
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,16 @@
 
 #include <stdint.h>
 
+#include <memory>
+#include <optional>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
+#include "components/drive/drive_export.h"
 #include "components/drive/service/drive_service_interface.h"
 #include "google_apis/common/api_error_codes.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -43,7 +46,7 @@ using UploadCompletionCallback = base::OnceCallback<void(
     const GURL& upload_location,
     std::unique_ptr<google_apis::FileResource> resource_entry)>;
 
-class DriveUploaderInterface {
+class COMPONENTS_DRIVE_EXPORT DriveUploaderInterface {
  public:
   virtual ~DriveUploaderInterface() = default;
 
@@ -121,7 +124,7 @@ class DriveUploaderInterface {
       google_apis::ProgressCallback progress_callback) = 0;
 };
 
-class DriveUploader : public DriveUploaderInterface {
+class COMPONENTS_DRIVE_EXPORT DriveUploader : public DriveUploaderInterface {
  public:
   // In unittest, the |wake_lock_provider| is set as nullptr.
   DriveUploader(
@@ -173,7 +176,7 @@ class DriveUploader : public DriveUploaderInterface {
   void StartUploadFileAfterGetFileSize(
       std::unique_ptr<UploadFileInfo> upload_file_info,
       StartInitiateUploadCallback start_initiate_upload_callback,
-      bool get_file_size_result);
+      std::optional<int64_t> maybe_file_size);
 
   // Checks file size and call InitiateUploadNewFile or MultipartUploadNewFile
   // API.  Upon completion, OnUploadLocationReceived (for InitiateUploadNewFile)
@@ -240,7 +243,8 @@ class DriveUploader : public DriveUploaderInterface {
 
   // The lifetime of this object should be guaranteed to exceed that of the
   // DriveUploader instance.
-  raw_ptr<DriveServiceInterface> drive_service_;  // Not owned by this class.
+  raw_ptr<DriveServiceInterface, DanglingUntriaged>
+      drive_service_;  // Not owned by this class.
 
   scoped_refptr<base::TaskRunner> blocking_task_runner_;
   scoped_refptr<RefCountedBatchRequest> current_batch_request_;

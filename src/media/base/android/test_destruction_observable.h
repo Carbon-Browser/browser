@@ -1,13 +1,14 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_BASE_ANDROID_TEST_DESTRUCTION_OBSERVABLE_H_
 #define MEDIA_BASE_ANDROID_TEST_DESTRUCTION_OBSERVABLE_H_
 
-#include "base/callback_helpers.h"
+#include <optional>
+
+#include "base/functional/callback_helpers.h"
 #include "base/memory/weak_ptr.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace media {
 
@@ -62,7 +63,7 @@ class DestructionObserver {
   bool destructed_;
 
   // Whether to expect destruction. Unset if there is no expectation.
-  absl::optional<bool> expect_destruction_;
+  std::optional<bool> expect_destruction_;
 
   base::WeakPtrFactory<DestructionObserver> weak_factory_{this};
 };

@@ -1,13 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_BASE_INTERACTION_ELEMENT_TRACKER_H_
 #define UI_BASE_INTERACTION_ELEMENT_TRACKER_H_
 
+#include <concepts>
 #include <list>
 #include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/callback_list.h"
@@ -15,10 +17,9 @@
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
-#include "base/notreached.h"
-#include "base/observer_list_types.h"
 #include "ui/base/interaction/element_identifier.h"
 #include "ui/base/interaction/framework_specific_implementation.h"
+#include "ui/gfx/geometry/rect.h"
 
 namespace ui {
 
@@ -50,6 +51,20 @@ class COMPONENT_EXPORT(UI_BASE) TrackedElement
 
   ElementIdentifier identifier() const { return identifier_; }
   ElementContext context() const { return context_; }
+
+  // Returns the bounds of the element on the screen, or an empty rect if it
+  // cannot be determined.
+  //
+  // Note: it is not yet necessary to set up a general method for listening to
+  // bounds changes, as they are (a) somewhat difficult to track and (b) tend to
+  // be handled correctly by most frameworks in terms of element positioning
+  // (e.g. anchoring logic for User Education help bubbles). Specific
+  // implementations that need to do additional tracking can implement their own
+  // methods.
+  virtual gfx::Rect GetScreenBounds() const;
+
+  // FrameworkSpecificImplementation:
+  std::string ToString() const override;
 
  protected:
   TrackedElement(ElementIdentifier identifier, ElementContext context);
@@ -95,6 +110,7 @@ class COMPONENT_EXPORT(UI_BASE) ElementTracker
   using Callback = base::RepeatingCallback<void(TrackedElement*)>;
   using Subscription = base::CallbackListSubscription;
   using ElementList = std::vector<TrackedElement*>;
+  using Contexts = std::set<ElementContext>;
 
   // Identifier that should be used by each framework to create a
   // TrackedElement from an element that does not alreayd have an identifier.
@@ -163,6 +179,11 @@ class COMPONENT_EXPORT(UI_BASE) ElementTracker
                                            Callback callback);
 
   // Adds a callback that will be called whenever an element with identifier
+  // `id` is activated in any context.
+  Subscription AddElementActivatedInAnyContextCallback(ElementIdentifier id,
+                                                       Callback callback);
+
+  // Adds a callback that will be called whenever an element with identifier
   // `id` in `context` is hidden.
   //
   // Note: the TrackedElement* passed to the callback may not remain
@@ -172,11 +193,41 @@ class COMPONENT_EXPORT(UI_BASE) ElementTracker
                                         ElementContext context,
                                         Callback callback);
 
+  // Adds a callback that will be called whenever an element with identifier
+  // `id` is hidden in any context.
+  //
+  // Note: the TrackedElement* passed to the callback may not remain
+  // valid after the call, even if the same element object in its UI framework
+  // is re-shown (a new TrackedElement may be generated).
+  Subscription AddElementHiddenInAnyContextCallback(ElementIdentifier id,
+                                                    Callback callback);
+
   // Adds a callback that will be called whenever an event of `event_type` is
   // generated within `context` by any element.
   Subscription AddCustomEventCallback(CustomElementEventType event_type,
                                       ElementContext context,
                                       Callback callback);
+
+  // Adds a callback that will be called whenever an event of `event_type` is
+  // generated within any context.
+  Subscription AddCustomEventInAnyContextCallback(
+      CustomElementEventType event_type,
+      Callback callback);
+
+  // Returns all known contexts.
+  Contexts GetAllContextsForTesting() const;
+
+  // Returns a list of all elements. Should only be used in a meta-testing
+  // context, e.g. for testing the tracker itself, or for getting lists of
+  // candidate elements for fuzzing input.
+  //
+  // If `in_context` is specified, only elements in that context will be
+  // returned.
+  ElementList GetAllElementsForTesting(
+      std::optional<ElementContext> in_context = std::nullopt);
+
+  // Adds a callback when any element is shown.
+  Subscription AddAnyElementShownCallbackForTesting(Callback callback);
 
  private:
   friend class base::NoDestructor<ElementTracker>;
@@ -206,8 +257,10 @@ class COMPONENT_EXPORT(UI_BASE) ElementTracker
   // notifications for; this allows us to zero out the reference in realtime if
   // the element is deleted. We use a list because the individual elements need
   // to be memory-stable.
-  std::list<TrackedElement*> notification_elements_;
+  std::list<raw_ptr<TrackedElement, CtnExperimental>> notification_elements_;
   std::map<LookupKey, ElementData> element_data_;
+  base::RepeatingCallbackList<void(TrackedElement*)>
+      any_element_shown_callbacks_;
   std::unique_ptr<GarbageCollector> gc_;
 };
 
@@ -219,13 +272,33 @@ class COMPONENT_EXPORT(UI_BASE) SafeElementReference {
   explicit SafeElementReference(TrackedElement* element);
   SafeElementReference(SafeElementReference&& other);
   SafeElementReference(const SafeElementReference& other);
+  SafeElementReference& operator=(TrackedElement* element);
   SafeElementReference& operator=(SafeElementReference&& other);
   SafeElementReference& operator=(const SafeElementReference& other);
   ~SafeElementReference();
 
-  TrackedElement* get() { return element_; }
+  TrackedElement* get() const { return element_; }
   explicit operator bool() const { return element_; }
   bool operator!() const { return !element_; }
+  bool operator==(const SafeElementReference& other) const {
+    return element_ == other.element_;
+  }
+  bool operator!=(const SafeElementReference& other) const {
+    return element_ != other.element_;
+  }
+  bool operator==(const TrackedElement* other) const {
+    return element_ == other;
+  }
+  bool operator!=(const TrackedElement* other) const {
+    return element_ != other;
+  }
+
+  // Gets the held element as type T if present, null if not present or not a T.
+  template <typename T>
+    requires std::derived_from<T, TrackedElement>
+  T* get_as() const {
+    return element_ ? element_->AsA<T>() : nullptr;
+  }
 
  private:
   void Subscribe();
@@ -241,15 +314,41 @@ class COMPONENT_EXPORT(UI_BASE) SafeElementReference {
 // your public header file and the DEFINE in corresponding .cc file. For local
 // values to be used in tests, use DEFINE_LOCAL_CUSTOM_ELEMENT_EVENT_TYPE()
 // defined below instead.
+//
+// Note: if you need to use the identifier outside the current component, use
+// DECLARE/DEFINE_EXPORTED_... below.
 #define DECLARE_CUSTOM_ELEMENT_EVENT_TYPE(EventName) \
   DECLARE_ELEMENT_IDENTIFIER_VALUE(EventName)
 #define DEFINE_CUSTOM_ELEMENT_EVENT_TYPE(EventName) \
   DEFINE_ELEMENT_IDENTIFIER_VALUE(EventName)
 
+// Macros for declaring custom element event types that can be accessed in other
+// components. Put the DECLARE call in your public header file and the DEFINE
+// call in the corresponding .cc file.
+#define DECLARE_EXPORTED_CUSTOM_ELEMENT_EVENT_TYPE(ExportName, EventName) \
+  DECLARE_EXPORTED_ELEMENT_IDENTIFIER_VALUE(ExportName, EventName)
+#define DEFINE_EXPORTED_CUSTOM_ELEMENT_EVENT_TYPE(EventName) \
+  DEFINE_EXPORTED_ELEMENT_IDENTIFIER_VALUE(EventName)
+
+// Macros for declaring custom class element event type. Put the DECLARE call in
+// your .h file in your class declaration, and the DEFINE in the corresponding
+// .cc file.
+#define DECLARE_CLASS_CUSTOM_ELEMENT_EVENT_TYPE(EventName) \
+  DECLARE_CLASS_ELEMENT_IDENTIFIER_VALUE(EventName)
+#define DEFINE_CLASS_CUSTOM_ELEMENT_EVENT_TYPE(ClassName, EventName) \
+  DEFINE_CLASS_ELEMENT_IDENTIFIER_VALUE(ClassName, EventName)
+
+// This produces a unique, mangled name that can safely be used in macros called
+// by tests without having to worry about global name collisions. For production
+// code, use DECLARE/DEFINE above instead. You should pass __FILE__ and __LINE__
+// for `File`, and `Line`, respectively.
+#define DEFINE_MACRO_CUSTOM_ELEMENT_EVENT_TYPE(File, Line, EventName) \
+  DEFINE_MACRO_ELEMENT_IDENTIFIER_VALUE(File, Line, EventName)
+
 // This produces a unique, mangled name that can safely be used in tests
 // without having to worry about global name collisions. For production code,
 // use DECLARE/DEFINE above instead.
 #define DEFINE_LOCAL_CUSTOM_ELEMENT_EVENT_TYPE(EventName) \
-  DEFINE_LOCAL_ELEMENT_IDENTIFIER_VALUE(EventName)
+  DEFINE_MACRO_ELEMENT_IDENTIFIER_VALUE(__FILE__, __LINE__, EventName)
 
 #endif  // UI_BASE_INTERACTION_ELEMENT_TRACKER_H_

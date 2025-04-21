@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,35 +6,39 @@
  * @fileoverview
  * 'settings-menu' shows a menu with a hardcoded set of pages and subpages.
  */
-import 'chrome://resources/cr_elements/cr_icons_css.m.js';
+import 'chrome://resources/cr_elements/cr_icons.css.js';
 import 'chrome://resources/cr_elements/cr_menu_selector/cr_menu_selector.js';
+import 'chrome://resources/cr_elements/cr_hidden_style.css.js';
 import 'chrome://resources/cr_elements/cr_nav_menu_item_style.css.js';
-import 'chrome://resources/cr_elements/icons.m.js';
-import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
-import 'chrome://resources/polymer/v3_0/iron-selector/iron-selector.js';
-import 'chrome://resources/polymer/v3_0/paper-ripple/paper-ripple.js';
+import 'chrome://resources/cr_elements/cr_ripple/cr_ripple.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
+import 'chrome://resources/cr_elements/icons.html.js';
+import 'chrome://resources/cr_elements/cr_icon/cr_icon.js';
+import '../settings_vars.css.js';
 import '../icons.html.js';
-import '../settings_shared.css.js';
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {IronSelectorElement} from 'chrome://resources/polymer/v3_0/iron-selector/iron-selector.js';
+import type {CrMenuSelector} from 'chrome://resources/cr_elements/cr_menu_selector/cr_menu_selector.js';
+import {assert} from 'chrome://resources/js/assert.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {PageVisibility} from '../page_visibility.js';
-import {Route, RouteObserverMixin, RouteObserverMixinInterface, Router} from '../router.js';
+import {loadTimeData} from '../i18n_setup.js';
+import type {MetricsBrowserProxy} from '../metrics_browser_proxy.js';
+import {MetricsBrowserProxyImpl} from '../metrics_browser_proxy.js';
+import type {PageVisibility} from '../page_visibility.js';
+import type {Route, SettingsRoutes} from '../router.js';
+import {RouteObserverMixin, Router} from '../router.js';
 
 import {getTemplate} from './settings_menu.html.js';
 
 export interface SettingsMenuElement {
   $: {
     autofill: HTMLLinkElement,
-    menu: IronSelectorElement,
+    menu: CrMenuSelector,
     people: HTMLLinkElement,
   };
 }
 
-const SettingsMenuElementBase = RouteObserverMixin(PolymerElement) as
-    {new (): PolymerElement & RouteObserverMixinInterface};
+const SettingsMenuElementBase = RouteObserverMixin(PolymerElement);
 
 export class SettingsMenuElement extends SettingsMenuElementBase {
   static get is() {
@@ -51,24 +55,90 @@ export class SettingsMenuElement extends SettingsMenuElementBase {
        * Dictionary defining page visibility.
        */
       pageVisibility: Object,
+
+      enableAiSettingsPageRefresh_: {
+        type: Boolean,
+        value: () => loadTimeData.getBoolean('enableAiSettingsPageRefresh'),
+      },
+
+      showAdvancedFeaturesMainControl_: {
+        type: Boolean,
+        value: () => loadTimeData.getBoolean('showAdvancedFeaturesMainControl'),
+      },
+
+      aiPageIcon_: {
+        type: String,
+        computed: 'computeAiPageIcon_(enableAiSettingsPageRefresh_)',
+      },
+
+      aiPageTitle_: {
+        type: String,
+        computed: 'computeAiPageTitle_(enableAiSettingsPageRefresh_)',
+      },
+
+      // <if expr="enable_glic">
+      glicEnabled_: {
+        type: Boolean,
+        value: () => loadTimeData.getBoolean('showGlicSettings'),
+      },
+      // </if>
     };
   }
 
-  pageVisibility: PageVisibility;
+  pageVisibility?: PageVisibility;
+  private enableAiSettingsPageRefresh_: boolean;
+  private showAdvancedFeaturesMainControl_: boolean;
+  private routes_: SettingsRoutes;
+  private aiPageIcon_: string;
+  private aiPageTitle_: string;
+  private metricsBrowserProxy_: MetricsBrowserProxy =
+      MetricsBrowserProxyImpl.getInstance();
+  // <if expr="enable_glic">
+  private glicEnabled_: boolean;
+  // </if>
+
+  override ready() {
+    super.ready();
+    this.routes_ = Router.getInstance().getRoutes();
+  }
+
+  private showExperimentalMenuItem_(): boolean {
+    return this.showAdvancedFeaturesMainControl_ &&
+        (!this.pageVisibility || this.pageVisibility.ai !== false);
+  }
+
+  // <if expr="enable_glic">
+  private showGlicMenuItem_(): boolean {
+    return this.glicEnabled_ &&
+        (!this.pageVisibility || this.pageVisibility.glic !== false);
+  }
+  // </if>
+
+  private computeAiPageIcon_(): string {
+    return this.enableAiSettingsPageRefresh_ ? 'settings20:magic' :
+                                               'settings20:ai';
+  }
+
+  private computeAiPageTitle_(): string {
+    return loadTimeData.getString(
+        this.enableAiSettingsPageRefresh_ ? 'aiInnovationsPageTitle' :
+                                            'aiPageTitle');
+  }
 
   override currentRouteChanged(newRoute: Route) {
     // Focus the initially selected path.
     const anchors = this.shadowRoot!.querySelectorAll('a');
     for (let i = 0; i < anchors.length; ++i) {
-      const anchorRoute = Router.getInstance().getRouteForPath(
-          anchors[i].getAttribute('href')!);
+      // Purposefully grabbing the 'href' attribute and not the property.
+      const pathname = anchors[i].getAttribute('href')!;
+      const anchorRoute = Router.getInstance().getRouteForPath(pathname);
       if (anchorRoute && anchorRoute.contains(newRoute)) {
-        this.setSelectedUrl_(anchors[i].href);
+        this.setSelectedPath_(pathname);
         return;
       }
     }
 
-    this.setSelectedUrl_('');  // Nothing is selected.
+    this.setSelectedPath_('');  // Nothing is selected.
   }
 
   focusFirstItem() {
@@ -81,7 +151,7 @@ export class SettingsMenuElement extends SettingsMenuElementBase {
 
   /**
    * Prevent clicks on sidebar items from navigating. These are only links for
-   * accessibility purposes, taps are handled separately by <iron-selector>.
+   * accessibility purposes, taps are handled separately.
    */
   private onLinkClick_(event: Event) {
     if ((event.target as HTMLElement).matches('a:not(#extensionsLink)')) {
@@ -90,17 +160,18 @@ export class SettingsMenuElement extends SettingsMenuElementBase {
   }
 
   /**
-   * Keeps both menus in sync. |url| needs to come from |element.href| because
-   * |iron-list| uses the entire url. Using |getAttribute| will not work.
+   * Keeps both menus in sync. `path` needs to come from
+   * `element.getAttribute('href')`. Using `element.href` will not work as it
+   * would pass the entire URL instead of just the path.
    */
-  private setSelectedUrl_(url: string) {
-    this.$.menu.selected = url;
+  private setSelectedPath_(path: string) {
+    this.$.menu.selected = path;
   }
 
   private onSelectorActivate_(event: CustomEvent<{selected: string}>) {
-    this.setSelectedUrl_(event.detail.selected);
+    const path = event.detail.selected;
+    this.setSelectedPath_(path);
 
-    const path = new URL(event.detail.selected).pathname;
     const route = Router.getInstance().getRouteForPath(path);
     assert(route, 'settings-menu has an entry with an invalid route.');
     Router.getInstance().navigateTo(
@@ -110,6 +181,13 @@ export class SettingsMenuElement extends SettingsMenuElementBase {
   private onExtensionsLinkClick_() {
     chrome.metricsPrivate.recordUserAction(
         'SettingsMenu_ExtensionsLinkClicked');
+  }
+
+  private onAiPageClick_() {
+    if (this.enableAiSettingsPageRefresh_) {
+      this.metricsBrowserProxy_.recordAction(
+          'SettingsMenu_AiPageEntryPointClicked');
+    }
   }
 }
 

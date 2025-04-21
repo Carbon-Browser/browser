@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -15,6 +15,7 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 
 #include "base/compiler_specific.h"
 #include "base/memory/raw_ptr.h"
@@ -53,6 +54,13 @@ class TemplateURLService;
 // "<enter term(s)>" as the substituted input, and does nothing when selected.
 class KeywordProvider : public AutocompleteProvider {
  public:
+  // Returned by `AdjustInputForStarterPackEngines` to represent the stripped
+  // input and starter pack. See its comment.
+  struct AdjustedInputAndStarterPackEngine {
+    AutocompleteInput adjusted_input;
+    raw_ptr<const TemplateURL> starter_pack_engine;
+  };
+
   KeywordProvider(AutocompleteProviderClient* client,
                   AutocompleteProviderListener* listener);
   KeywordProvider(const KeywordProvider&) = delete;
@@ -84,10 +92,11 @@ class KeywordProvider : public AutocompleteProvider {
       TemplateURLService* model,
       AutocompleteInput* input);
 
-  // Returns an AutocompleteInput with the keyword stripped if we're in keyword
-  // mode for a starter pack engine. i.e. for "@History text", input is adjusted
-  // to just be "text".  Otherwise, input is untouched and returned as is.
-  static AutocompleteInput AdjustInputForStarterPackEngines(
+  // If the keyword mode for a starter pack engine, returns `input` with the
+  // keyword stripped and the starter pack's `TemplateURL`. E.g. for "@History
+  // text", the input 'text' and the history `TemplateURL` are
+  // returned. Otherwise, returns `input` untouched and `nullptr`.
+  static AdjustedInputAndStarterPackEngine AdjustInputForStarterPackEngines(
       const AutocompleteInput& input,
       TemplateURLService* model);
 
@@ -104,8 +113,7 @@ class KeywordProvider : public AutocompleteProvider {
   // AutocompleteProvider:
   void DeleteMatch(const AutocompleteMatch& match) override;
   void Start(const AutocompleteInput& input, bool minimal_changes) override;
-  void Stop(bool clear_cached_results,
-            bool due_to_user_inactivity) override;
+  void Stop(bool clear_cached_results, bool due_to_user_inactivity) override;
 
  private:
   friend class KeywordExtensionsDelegateImpl;
@@ -128,13 +136,12 @@ class KeywordProvider : public AutocompleteProvider {
       std::u16string* remaining_input);
 
   // Determines the relevance for some input, given its type, whether the user
-  // typed the complete keyword (or close to it), and whether the user is in
+  // typed the complete keyword, and whether the user is in
   // "prefer keyword matches" mode, and whether the keyword supports
   // replacement. If |allow_exact_keyword_match| is false, the relevance for
-  // complete keywords that support replacements is degraded.
+  // keywords that support replacements is degraded.
   static int CalculateRelevance(metrics::OmniboxInputType type,
                                 bool complete,
-                                bool sufficiently_complete,
                                 bool support_replacement,
                                 bool prefer_keyword,
                                 bool allow_exact_keyword_match);
@@ -143,7 +150,6 @@ class KeywordProvider : public AutocompleteProvider {
   // If |relevance| is negative, calculate a relevance based on heuristics.
   AutocompleteMatch CreateAutocompleteMatch(
       const TemplateURL* template_url,
-      const size_t meaningful_keyword_length,
       const AutocompleteInput& input,
       size_t prefix_length,
       const std::u16string& remaining_input,
@@ -175,11 +181,13 @@ class KeywordProvider : public AutocompleteProvider {
   AutocompleteInput keyword_input_;
 
   // Model for the keywords.
-  raw_ptr<TemplateURLService> model_;
+  raw_ptr<TemplateURLService, DanglingUntriaged> model_;
 
   // Delegate to handle the extensions-only logic for KeywordProvider.
   // NULL when extensions are not enabled. May be NULL for tests.
   std::unique_ptr<KeywordExtensionsDelegate> extensions_delegate_;
+
+  raw_ptr<AutocompleteProviderClient, DanglingUntriaged> client_;
 };
 
 #endif  // COMPONENTS_OMNIBOX_BROWSER_KEYWORD_PROVIDER_H_

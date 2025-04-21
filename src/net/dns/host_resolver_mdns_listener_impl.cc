@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -73,29 +73,23 @@ void HostResolverMdnsListenerImpl::OnRecordUpdate(
 
   switch (query_type_) {
     case DnsQueryType::UNSPECIFIED:
-    case DnsQueryType::INTEGRITY:
     case DnsQueryType::HTTPS:
-    case DnsQueryType::HTTPS_EXPERIMENTAL:
       NOTREACHED();
-      break;
     case DnsQueryType::A:
     case DnsQueryType::AAAA:
-      DCHECK(parsed_entry.legacy_addresses());
-      DCHECK_EQ(1u, parsed_entry.legacy_addresses().value().size());
-      delegate_->OnAddressResult(
-          ConvertUpdateType(update), query_type_,
-          parsed_entry.legacy_addresses().value().front());
+      DCHECK_EQ(1u, parsed_entry.ip_endpoints().size());
+      delegate_->OnAddressResult(ConvertUpdateType(update), query_type_,
+                                 parsed_entry.ip_endpoints().front());
       break;
     case DnsQueryType::TXT:
-      DCHECK(parsed_entry.text_records());
       delegate_->OnTextResult(ConvertUpdateType(update), query_type_,
-                              parsed_entry.text_records().value());
+                              parsed_entry.text_records());
       break;
     case DnsQueryType::PTR:
     case DnsQueryType::SRV:
-      DCHECK(parsed_entry.hostnames());
+      DCHECK(!parsed_entry.hostnames().empty());
       delegate_->OnHostnameResult(ConvertUpdateType(update), query_type_,
-                                  parsed_entry.hostnames().value().front());
+                                  parsed_entry.hostnames().front());
       break;
   }
 }

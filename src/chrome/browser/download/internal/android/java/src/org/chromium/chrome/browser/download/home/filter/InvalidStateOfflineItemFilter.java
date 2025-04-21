@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@ package org.chromium.chrome.browser.download.home.filter;
 import android.os.Environment;
 
 import org.chromium.base.ContentUriUtils;
-import org.chromium.base.StrictModeContext;
 import org.chromium.components.offline_items_collection.OfflineItem;
 import org.chromium.components.offline_items_collection.OfflineItemState;
 
@@ -31,8 +30,6 @@ public class InvalidStateOfflineItemFilter extends OfflineItemFilter {
                 InvalidStateOfflineItemFilter.isInPrimaryStorageDownloadDirectory(item.filePath);
         if ((item.externallyRemoved && inPrimaryDirectory) || item.isTransient) return true;
 
-        if (item.schedule != null) return false;
-
         switch (item.state) {
             case OfflineItemState.CANCELLED:
             case OfflineItemState.FAILED:
@@ -53,10 +50,7 @@ public class InvalidStateOfflineItemFilter extends OfflineItemFilter {
         if (ContentUriUtils.isContentUri(path)) return true;
 
         // Check if the file path contains the external public directory.
-        File primaryDir = null;
-        try (StrictModeContext ignored = StrictModeContext.allowDiskReads()) {
-            primaryDir = Environment.getExternalStorageDirectory();
-        }
+        File primaryDir = Environment.getExternalStorageDirectory();
         if (primaryDir == null || path == null) return false;
         String primaryPath = primaryDir.getAbsolutePath();
         return primaryPath == null ? false : path.contains(primaryPath);

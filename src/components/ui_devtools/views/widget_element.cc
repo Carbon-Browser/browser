@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -97,7 +97,7 @@ int UIElement::FindUIElementIdForBackendElement<views::Widget>(
           element) {
     return node_id_;
   }
-  for (auto* child : children_) {
+  for (ui_devtools::UIElement* child : children_) {
     int ui_element_id = child->FindUIElementIdForBackendElement(element);
     if (ui_element_id)
       return ui_element_id;

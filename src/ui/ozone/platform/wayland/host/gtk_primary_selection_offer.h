@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,9 +35,9 @@ class GtkPrimarySelectionOffer : public WaylandDataOfferBase {
   base::ScopedFD Receive(const std::string& mime_type) override;
 
  private:
-  // gtk_primary_selection_offer_listener callbacks.
+  // gtk_primary_selection_offer_listener callbacks:
   static void OnOffer(void* data,
-                      gtk_primary_selection_offer* data_offer,
+                      gtk_primary_selection_offer* selection_offer,
                       const char* mime_type);
 
   // The Wayland object wrapped by this instance.

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 // This observer is Android-specific and intercepts each navigation on the main
 // frame. For sites configured so, it overrides the user agent to request the
 // desktop version of the site.
+// TODO(crbug.com/40856033): Add tests for this class.
 class RequestDesktopSiteWebContentsObserverAndroid
     : public content::WebContentsObserver,
       public content::WebContentsUserData<
@@ -35,6 +36,7 @@ class RequestDesktopSiteWebContentsObserverAndroid
       RequestDesktopSiteWebContentsObserverAndroid>;
 
   scoped_refptr<HostContentSettingsMap> host_content_settings_map_;
+  raw_ptr<PrefService> pref_service_ = nullptr;
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 };

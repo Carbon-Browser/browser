@@ -1,6 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ash/assistant/ui/main_stage/assistant_onboarding_suggestion_view.h"
 
@@ -8,14 +13,14 @@
 #include "ash/assistant/ui/assistant_view_delegate.h"
 #include "ash/assistant/ui/assistant_view_ids.h"
 #include "ash/assistant/util/resource_util.h"
-#include "ash/constants/ash_features.h"
 #include "ash/style/dark_light_mode_controller_impl.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
-#include "chromeos/services/libassistant/public/cpp/assistant_suggestion.h"
+#include "chromeos/ash/services/libassistant/public/cpp/assistant_suggestion.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/color/color_id.h"
 #include "ui/gfx/color_palette.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/animation/ink_drop.h"
 #include "ui/views/background.h"
 #include "ui/views/controls/focus_ring.h"
@@ -71,12 +76,9 @@ SkColor GetBackgroundColor(int index) {
   DCHECK_GE(index, 0);
   DCHECK_LT(index, static_cast<int>(std::size(kBackgroundColors)));
 
-  if (features::IsDarkLightModeEnabled()) {
-    return DarkLightModeControllerImpl::Get()->IsDarkModeEnabled()
-               ? kBackgroundColors[index].dark
-               : kBackgroundColors[index].light;
-  }
-  return kBackgroundColors[index].flag_off;
+  return DarkLightModeControllerImpl::Get()->IsDarkModeEnabled()
+             ? kBackgroundColors[index].dark
+             : kBackgroundColors[index].light;
 }
 
 SkColor GetForegroundColor(int index) {
@@ -93,12 +95,9 @@ SkColor GetForegroundColor(int index) {
   DCHECK_GE(index, 0);
   DCHECK_LT(index, static_cast<int>(std::size(kForegroundColors)));
 
-  if (features::IsDarkLightModeEnabled()) {
-    return DarkLightModeControllerImpl::Get()->IsDarkModeEnabled()
-               ? kForegroundColors[index].dark
-               : kForegroundColors[index].light;
-  }
-  return kForegroundColors[index].flag_off;
+  return DarkLightModeControllerImpl::Get()->IsDarkModeEnabled()
+             ? kForegroundColors[index].dark
+             : kForegroundColors[index].light;
 }
 
 }  // namespace
@@ -107,7 +106,7 @@ SkColor GetForegroundColor(int index) {
 
 AssistantOnboardingSuggestionView::AssistantOnboardingSuggestionView(
     AssistantViewDelegate* delegate,
-    const chromeos::assistant::AssistantSuggestion& suggestion,
+    const assistant::AssistantSuggestion& suggestion,
     int index)
     : views::Button(base::BindRepeating(
           &AssistantOnboardingSuggestionView::OnButtonPressed,
@@ -120,13 +119,16 @@ AssistantOnboardingSuggestionView::AssistantOnboardingSuggestionView(
 
 AssistantOnboardingSuggestionView::~AssistantOnboardingSuggestionView() {
   // TODO(pbos): Revisit explicit removal of InkDrop for classes that override
-  // Add/RemoveLayerBeneathView(). This is done so that the InkDrop doesn't
-  // access the non-override versions in ~View.
+  // AddLayerToRegion/RemoveLayerFromRegions(). This is done so that the InkDrop
+  // doesn't access the non-override versions in ~View.
   views::InkDrop::Remove(this);
 }
 
-int AssistantOnboardingSuggestionView::GetHeightForWidth(int width) const {
-  return kPreferredHeightDip;
+gfx::Size AssistantOnboardingSuggestionView::CalculatePreferredSize(
+    const views::SizeBounds& available_size) const {
+  const int preferred_width =
+      views::Button::CalculatePreferredSize(available_size).width();
+  return gfx::Size(preferred_width, kPreferredHeightDip);
 }
 
 void AssistantOnboardingSuggestionView::ChildPreferredSizeChanged(
@@ -134,17 +136,19 @@ void AssistantOnboardingSuggestionView::ChildPreferredSizeChanged(
   PreferredSizeChanged();
 }
 
-void AssistantOnboardingSuggestionView::AddLayerBeneathView(ui::Layer* layer) {
+void AssistantOnboardingSuggestionView::AddLayerToRegion(
+    ui::Layer* layer,
+    views::LayerRegion region) {
   // This routes background layers to `ink_drop_container_` instead of `this` to
   // avoid painting effects underneath our background.
-  ink_drop_container_->AddLayerBeneathView(layer);
+  ink_drop_container_->AddLayerToRegion(layer, region);
 }
 
-void AssistantOnboardingSuggestionView::RemoveLayerBeneathView(
+void AssistantOnboardingSuggestionView::RemoveLayerFromRegions(
     ui::Layer* layer) {
   // This routes background layers to `ink_drop_container_` instead of `this` to
   // avoid painting effects underneath our background.
-  ink_drop_container_->RemoveLayerBeneathView(layer);
+  ink_drop_container_->RemoveLayerFromRegions(layer);
 }
 
 void AssistantOnboardingSuggestionView::OnThemeChanged() {
@@ -174,9 +178,9 @@ const std::u16string& AssistantOnboardingSuggestionView::GetText() const {
 }
 
 void AssistantOnboardingSuggestionView::InitLayout(
-    const chromeos::assistant::AssistantSuggestion& suggestion) {
+    const assistant::AssistantSuggestion& suggestion) {
   // A11y.
-  SetAccessibleName(base::UTF8ToUTF16(suggestion.text));
+  GetViewAccessibility().SetName(base::UTF8ToUTF16(suggestion.text));
 
   // Background.
   SetBackground(views::CreateRoundedRectBackground(GetBackgroundColor(index_),
@@ -204,22 +208,21 @@ void AssistantOnboardingSuggestionView::InitLayout(
       AddChildView(std::make_unique<views::InkDropContainerView>());
 
   // Layout.
-  auto& layout =
-      SetLayoutManager(std::make_unique<views::FlexLayout>())
-          ->SetCollapseMargins(true)
-          .SetCrossAxisAlignment(views::LayoutAlignment::kCenter)
-          .SetDefault(views::kFlexBehaviorKey, views::FlexSpecification())
-          .SetDefault(views::kMarginsKey, gfx::Insets::VH(0, 2 * kSpacingDip))
-          .SetInteriorMargin(gfx::Insets::VH(0, 2 * kMarginDip))
-          .SetOrientation(views::LayoutOrientation::kHorizontal);
+  SetLayoutManager(std::make_unique<views::FlexLayout>())
+      ->SetCollapseMargins(true)
+      .SetCrossAxisAlignment(views::LayoutAlignment::kCenter)
+      .SetDefault(views::kFlexBehaviorKey, views::FlexSpecification())
+      .SetDefault(views::kMarginsKey, gfx::Insets::VH(0, 2 * kSpacingDip))
+      .SetInteriorMargin(gfx::Insets::VH(0, 2 * kMarginDip))
+      .SetOrientation(views::LayoutOrientation::kHorizontal);
 
-  // NOTE: Our |layout| ignores the view for drawing focus as it is a special
-  // view which lays out itself. Removing this would cause it *not* to paint.
-  layout.SetChildViewIgnoredByLayout(views::FocusRing::Get(this), true);
+  // Ignore the focus ring, which lays out itself.
+  views::FocusRing::Get(this)->SetProperty(views::kViewIgnoredByLayoutKey,
+                                           true);
 
-  // NOTE: Our |ink_drop_container_| serves only to hold reference to ink drop
-  // layers for painting purposes. It can be completely ignored by our |layout|.
-  layout.SetChildViewIgnoredByLayout(ink_drop_container_, true);
+  // Ignore the `ink_drop_container_`, which serves only to hold reference to
+  // ink drop layers for painting purposes.
+  ink_drop_container_->SetProperty(views::kViewIgnoredByLayoutKey, true);
 
   // Icon.
   icon_ = AddChildView(std::make_unique<views::ImageView>());
@@ -267,7 +270,7 @@ void AssistantOnboardingSuggestionView::OnButtonPressed() {
   delegate_->OnSuggestionPressed(suggestion_id_);
 }
 
-BEGIN_METADATA(AssistantOnboardingSuggestionView, views::Button)
+BEGIN_METADATA(AssistantOnboardingSuggestionView)
 END_METADATA
 
 }  // namespace ash

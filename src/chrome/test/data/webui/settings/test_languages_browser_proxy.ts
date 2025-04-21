@@ -1,9 +1,9 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // clang-format off
-import {LanguagesBrowserProxy} from 'chrome://settings/lazy_load.js';
+import type {LanguagesBrowserProxy} from 'chrome://settings/lazy_load.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 
 import {FakeLanguageSettingsPrivate} from './fake_language_settings_private.js';
@@ -19,8 +19,8 @@ export class TestLanguagesBrowserProxy extends TestBrowserProxy implements
   // <if expr="is_win">
   constructor() {
     super([
-      'getProspectiveUILanguage',
-      'setProspectiveUILanguage',
+      'getProspectiveUiLanguage',
+      'setProspectiveUiLanguage',
     ]);
   }
   // </if>
@@ -35,13 +35,13 @@ export class TestLanguagesBrowserProxy extends TestBrowserProxy implements
   }
 
   // <if expr="is_win">
-  getProspectiveUILanguage() {
-    this.methodCalled('getProspectiveUILanguage');
+  getProspectiveUiLanguage() {
+    this.methodCalled('getProspectiveUiLanguage');
     return Promise.resolve('en-US');
   }
 
-  setProspectiveUILanguage(language: string) {
-    this.methodCalled('setProspectiveUILanguage', language);
+  setProspectiveUiLanguage(language: string) {
+    this.methodCalled('setProspectiveUiLanguage', language);
   }
   // </if>
 }

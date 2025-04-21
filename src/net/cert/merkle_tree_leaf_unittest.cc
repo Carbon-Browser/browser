@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,8 +46,8 @@ class MerkleTreeLeafTest : public ::testing::Test {
  public:
   void SetUp() override {
     std::string der_test_cert(ct::GetDerEncodedX509Cert());
-    test_cert_ = X509Certificate::CreateFromBytes(
-        base::as_bytes(base::make_span(der_test_cert)));
+    test_cert_ =
+        X509Certificate::CreateFromBytes(base::as_byte_span(der_test_cert));
     ASSERT_TRUE(test_cert_);
 
     GetX509CertSCT(&x509_sct_);

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,10 +16,12 @@
 #include "third_party/blink/public/mojom/input/input_handler.mojom.h"
 #include "third_party/blink/public/mojom/widget/platform_widget.mojom.h"
 #include "third_party/blink/public/mojom/widget/record_content_to_visible_time_request.mojom.h"
+#include "ui/base/mojom/menu_source_type.mojom-forward.h"
 
 namespace content {
 
-class MockWidget : public blink::mojom::Widget {
+class MockWidget : public blink::mojom::Widget,
+                   public blink::mojom::RenderInputRouterClient {
  public:
   MockWidget();
 
@@ -38,14 +40,20 @@ class MockWidget : public blink::mojom::Widget {
     shown_hidden_callback_ = std::move(callback);
   }
 
-  void ClearHidden() { is_hidden_ = absl::nullopt; }
-  const absl::optional<bool>& IsHidden() const { return is_hidden_; }
+  void ClearHidden() { is_hidden_ = std::nullopt; }
+  const std::optional<bool>& IsHidden() const { return is_hidden_; }
 
-  // blink::mojom::Widget overrides.
-  void ForceRedraw(ForceRedrawCallback callback) override;
+  // blink::mojom::RenderInputRouterClient overrides;
   void GetWidgetInputHandler(
       mojo::PendingReceiver<blink::mojom::WidgetInputHandler> request,
       mojo::PendingRemote<blink::mojom::WidgetInputHandlerHost> host) override;
+  void ShowContextMenu(ui::mojom::MenuSourceType source_type,
+                       const gfx::Point& location) override {}
+  void BindInputTargetClient(
+      mojo::PendingReceiver<viz::mojom::InputTargetClient> receiver) override {}
+
+  // blink::mojom::Widget overrides.
+  void ForceRedraw(ForceRedrawCallback callback) override;
   void UpdateVisualProperties(
       const blink::VisualProperties& visual_properties) override;
 
@@ -56,17 +64,23 @@ class MockWidget : public blink::mojom::Widget {
   void WasShown(bool was_evicted,
                 blink::mojom::RecordContentToVisibleTimeRequestPtr
                     record_tab_switch_time_request) override;
-  void RequestPresentationTimeForNextFrame(
+  void RequestSuccessfulPresentationTimeForNextFrame(
       blink::mojom::RecordContentToVisibleTimeRequestPtr visible_time_request)
       override;
-  void CancelPresentationTimeRequest() override;
+  void CancelSuccessfulPresentationTimeRequest() override;
+  void SetupRenderInputRouterConnections(
+      mojo::PendingReceiver<blink::mojom::RenderInputRouterClient>
+          browser_request,
+      mojo::PendingReceiver<blink::mojom::RenderInputRouterClient> viz_request)
+      override;
 
  private:
-  absl::optional<bool> is_hidden_;
+  std::optional<bool> is_hidden_;
   base::RepeatingClosure shown_hidden_callback_;
   std::vector<blink::VisualProperties> visual_properties_;
   std::vector<std::pair<gfx::Rect, gfx::Rect>> screen_rects_;
   std::vector<UpdateScreenRectsCallback> screen_rects_callbacks_;
+  mojo::Receiver<blink::mojom::RenderInputRouterClient> input_receiver_{this};
   mojo::Remote<blink::mojom::WidgetInputHandlerHost> input_handler_host_;
   mojo::AssociatedReceiver<blink::mojom::Widget> blink_widget_{this};
 };

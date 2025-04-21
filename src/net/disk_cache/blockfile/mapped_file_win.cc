@@ -1,16 +1,16 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/disk_cache/blockfile/mapped_file.h"
+
+#include <windows.h>
 
 #include <memory>
 
 #include "base/check.h"
 #include "base/files/file_path.h"
 #include "net/disk_cache/disk_cache.h"
-
-#include <windows.h>
 
 namespace disk_cache {
 

@@ -1,13 +1,14 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SERVICES_STORAGE_PUBLIC_CPP_BUCKETS_BUCKET_INIT_PARAMS_H_
 #define COMPONENTS_SERVICES_STORAGE_PUBLIC_CPP_BUCKETS_BUCKET_INIT_PARAMS_H_
 
+#include <optional>
+
 #include "base/time/time.h"
 #include "components/services/storage/public/cpp/buckets/bucket_id.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/mojom/buckets/bucket_manager_host.mojom.h"
 
@@ -41,8 +42,8 @@ struct COMPONENT_EXPORT(STORAGE_SERVICE_BUCKETS_SUPPORT) BucketInitParams {
   int64_t quota = 0;
 
   // nullopt when not specified.
-  absl::optional<bool> persistent;
-  absl::optional<blink::mojom::BucketDurability> durability;
+  std::optional<bool> persistent;
+  std::optional<blink::mojom::BucketDurability> durability;
 };
 
 }  // namespace storage

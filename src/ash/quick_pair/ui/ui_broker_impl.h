@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@ namespace ash {
 namespace quick_pair {
 
 class FastPairPresenter;
-struct Device;
+class Device;
 
 class UIBrokerImpl final : public UIBroker {
  public:
@@ -32,8 +32,11 @@ class UIBrokerImpl final : public UIBroker {
   void ShowPairing(scoped_refptr<Device> device) override;
   void ShowPairingFailed(scoped_refptr<Device> device) override;
   void ShowAssociateAccount(scoped_refptr<Device> device) override;
-  void ShowCompanionApp(scoped_refptr<Device> device) override;
+  void ShowInstallCompanionApp(scoped_refptr<Device> device) override;
+  void ShowLaunchCompanionApp(scoped_refptr<Device> device) override;
+  void ShowPasskey(std::u16string device_name, uint32_t passkey) override;
   void RemoveNotifications() override;
+  void ExtendNotification() override;
 
  private:
   void NotifyDiscoveryAction(scoped_refptr<Device> device,

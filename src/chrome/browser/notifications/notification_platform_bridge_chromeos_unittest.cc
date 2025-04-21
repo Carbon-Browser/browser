@@ -1,10 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/notifications/notification_platform_bridge_chromeos.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/notifications/notification_handler.h"
 #include "chrome/test/base/testing_profile.h"
 #include "content/public/test/browser_task_environment.h"
@@ -27,7 +27,7 @@ TEST(NotificationPlatformBridgeChromeOsTest, Update) {
   auto initial_delegate =
       base::MakeRefCounted<message_center::HandleNotificationClickDelegate>(
           base::BindRepeating(
-              [](int* clicks, absl::optional<int> button_index) { ++*clicks; },
+              [](int* clicks, std::optional<int> button_index) { ++*clicks; },
               &initial_delegate_clicks));
   message_center::Notification initial_notification(
       message_center::NOTIFICATION_TYPE_SIMPLE, id, std::u16string(),
@@ -46,7 +46,7 @@ TEST(NotificationPlatformBridgeChromeOsTest, Update) {
   auto updated_delegate =
       base::MakeRefCounted<message_center::HandleNotificationClickDelegate>(
           base::BindRepeating(
-              [](int* clicks, absl::optional<int> button_index) { ++*clicks; },
+              [](int* clicks, std::optional<int> button_index) { ++*clicks; },
               &updated_delegate_clicks));
   message_center::Notification updated_notification(
       message_center::NOTIFICATION_TYPE_SIMPLE, id, std::u16string(),

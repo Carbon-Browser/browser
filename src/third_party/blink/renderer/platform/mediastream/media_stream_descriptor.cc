@@ -29,6 +29,11 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "third_party/blink/renderer/platform/mediastream/media_stream_descriptor.h"
 
 #include "third_party/blink/public/platform/modules/mediastream/web_media_stream.h"
@@ -51,7 +56,7 @@ int MediaStreamDescriptor::GenerateUniqueId() {
 }
 
 void MediaStreamDescriptor::AddComponent(MediaStreamComponent* component) {
-  switch (component->Source()->GetType()) {
+  switch (component->GetSourceType()) {
     case MediaStreamSource::kTypeAudio:
       if (audio_components_.Find(component) == kNotFound)
         audio_components_.push_back(component);
@@ -70,7 +75,7 @@ void MediaStreamDescriptor::AddComponent(MediaStreamComponent* component) {
 
 void MediaStreamDescriptor::RemoveComponent(MediaStreamComponent* component) {
   wtf_size_t pos = kNotFound;
-  switch (component->Source()->GetType()) {
+  switch (component->GetSourceType()) {
     case MediaStreamSource::kTypeAudio:
       pos = audio_components_.Find(component);
       if (pos != kNotFound)
@@ -129,30 +134,6 @@ void MediaStreamDescriptor::RemoveObserver(WebMediaStreamObserver* observer) {
   wtf_size_t index = observers_.Find(observer);
   DCHECK(index != kNotFound);
   observers_.EraseAt(index);
-}
-
-MediaStreamDescriptor::MediaStreamDescriptor(
-    const MediaStreamSourceVector& audio_sources,
-    const MediaStreamSourceVector& video_sources)
-    : MediaStreamDescriptor(WTF::CreateCanonicalUUIDString(),
-                            audio_sources,
-                            video_sources) {}
-
-MediaStreamDescriptor::MediaStreamDescriptor(
-    const String& id,
-    const MediaStreamSourceVector& audio_sources,
-    const MediaStreamSourceVector& video_sources)
-    : client_(nullptr), id_(id), unique_id_(GenerateUniqueId()), active_(true) {
-  DCHECK(id_.length());
-  for (MediaStreamSource* source : audio_sources) {
-    audio_components_.push_back(
-        MakeGarbageCollected<MediaStreamComponentImpl>(source));
-  }
-
-  for (MediaStreamSource* source : video_sources) {
-    video_components_.push_back(
-        MakeGarbageCollected<MediaStreamComponentImpl>(source));
-  }
 }
 
 MediaStreamDescriptor::MediaStreamDescriptor(

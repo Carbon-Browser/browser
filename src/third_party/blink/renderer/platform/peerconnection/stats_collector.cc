@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@ namespace {
 // Histogram parameters.
 constexpr float kProcessingTimeHistogramMinValue_ms = 1.0;
 constexpr float kProcessingTimeHistogramMaxValue_ms = 35;
-constexpr size_t kProcessingTimeHistogramBuckets = 80;
+constexpr wtf_size_t kProcessingTimeHistogramBuckets = 80;
 constexpr float kProcessingTimePercentileToReport = 0.99;
 
 // Report intermediate results every 15 seconds.

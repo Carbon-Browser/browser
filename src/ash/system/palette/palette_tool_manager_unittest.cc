@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include "ash/system/palette/palette_tool.h"
 #include "ash/system/palette/palette_tool_manager.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/notreached.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -33,10 +33,7 @@ class TestTool : public PaletteTool {
 
  private:
   // PaletteTool:
-  views::View* CreateView() override {
-    NOTREACHED();
-    return nullptr;
-  }
+  views::View* CreateView() override { NOTREACHED(); }
   void OnViewDestroyed() override { FAIL(); }
 
   PaletteGroup group_;
@@ -61,13 +58,7 @@ class PaletteToolManagerTest : public ::testing::Test,
   void HidePalette() override {}
   void HidePaletteImmediately() override {}
   void OnActiveToolChanged() override { ++tool_changed_count_; }
-  aura::Window* GetWindow() override {
-    NOTREACHED();
-    return nullptr;
-  }
-  void RecordPaletteOptionsUsage(PaletteTrayOptions option,
-                                 PaletteInvocationMethod method) override {}
-  void RecordPaletteModeCancellation(PaletteModeCancelType type) override {}
+  aura::Window* GetWindow() override { NOTREACHED(); }
 
   // PaletteTool::Delegate:
   void EnableTool(PaletteToolId tool_id) override {}

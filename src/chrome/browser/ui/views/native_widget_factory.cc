@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,8 +20,9 @@ views::NativeWidget* CreateNativeWidget(
   gfx::NativeWindow parent_or_context =
       params->parent ? params->parent : params->context;
   Profile* profile = nullptr;
-  if (parent_or_context)
+  if (parent_or_context) {
     profile = GetThemeProfileForWindow(parent_or_context);
+  }
   views::NativeWidget* native_widget = nullptr;
   aura::Window* window = nullptr;
   if (type == NativeWidgetType::DESKTOP_NATIVE_WIDGET_AURA ||

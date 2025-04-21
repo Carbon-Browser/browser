@@ -1,37 +1,47 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/app_list/views/apps_container_view.h"
 
 #include "ash/app_list/app_list_controller_impl.h"
+#include "ash/app_list/model/app_list_test_model.h"
 #include "ash/app_list/test/app_list_test_helper.h"
+#include "ash/app_list/views/apps_grid_view_test_api.h"
 #include "ash/app_list/views/continue_section_view.h"
+#include "ash/app_list/views/page_switcher.h"
+#include "ash/app_list/views/pagination_model_transition_waiter.h"
 #include "ash/app_list/views/recent_apps_view.h"
 #include "ash/app_list/views/search_box_view.h"
-#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/tablet_mode.h"
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
-#include "ash/test/layer_animation_stopped_waiter.h"
-#include "base/test/scoped_feature_list.h"
+#include "ash/wm/overview/overview_controller.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animator.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
+#include "ui/compositor/test/layer_animation_stopped_waiter.h"
 #include "ui/events/test/event_generator.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/controls/textfield/textfield.h"
 
 namespace ash {
 
 class AppsContainerViewTest : public AshTestBase {
  public:
-  AppsContainerViewTest() {
-    // These tests primarily exercise the "hide continue section" behavior.
-    features_.InitWithFeatures({features::kProductivityLauncher,
-                                features::kLauncherHideContinueSection},
-                               {});
-  }
+  AppsContainerViewTest() = default;
   ~AppsContainerViewTest() override = default;
+
+  void AddFolderWithApps(int count) {
+    GetAppListTestHelper()->model()->CreateAndPopulateFolderWithApps(count);
+  }
+
+  AppListToastContainerView* GetToastContainerView() {
+    return GetAppListTestHelper()
+        ->GetAppsContainerView()
+        ->GetToastContainerView();
+  }
 
   void PressDown() {
     ui::test::EventGenerator generator(Shell::GetPrimaryRootWindow());
@@ -45,8 +55,21 @@ class AppsContainerViewTest : public AshTestBase {
         ->selected_page();
   }
 
- private:
-  base::test::ScopedFeatureList features_;
+  int GetTotalPages() {
+    return GetAppListTestHelper()
+        ->GetRootPagedAppsGridView()
+        ->pagination_model()
+        ->total_pages();
+  }
+
+  bool HasGradientMask() {
+    return !GetAppListTestHelper()
+                ->GetAppsContainerView()
+                ->scrollable_container_for_test()
+                ->layer()
+                ->gradient_mask()
+                .IsEmpty();
+  }
 };
 
 TEST_F(AppsContainerViewTest, ContinueSectionVisibleByDefault) {
@@ -117,7 +140,7 @@ TEST_F(AppsContainerViewTest, HideContinueSectionPlaysAnimation) {
 
   // Wait for the last item's animation to complete.
   AppListItemView* last_item = apps_grid_view->GetItemViewAt(item_count - 1);
-  LayerAnimationStoppedWaiter().Wait(last_item->layer());
+  ui::LayerAnimationStoppedWaiter().Wait(last_item->layer());
 
   // Animation status is updated.
   EXPECT_EQ(apps_grid_view->grid_animation_status_for_test(),
@@ -205,6 +228,52 @@ TEST_F(AppsContainerViewTest, ShowContinueSectionPlaysAnimation) {
       ui::LayerAnimationElement::TRANSFORM));
 }
 
+TEST_F(AppsContainerViewTest, OpeningFolderRemovesOtherViewsFromAccessibility) {
+  auto* helper = GetAppListTestHelper();
+  helper->AddContinueSuggestionResults(4);
+  helper->AddRecentApps(5);
+  AddFolderWithApps(5);
+  TabletMode::Get()->SetEnabledForTest(true);
+
+  // Force the sorting toast to show.
+  AppListController::Get()->UpdateAppListWithNewTemporarySortOrder(
+      AppListSortOrder::kColor,
+      /*animate=*/false, /*update_position_closure=*/base::OnceClosure());
+  ASSERT_TRUE(GetToastContainerView()->GetToastButton());
+
+  // Open the folder.
+  AppListItemView* folder_item =
+      helper->GetRootPagedAppsGridView()->GetItemViewAt(0);
+  LeftClickOn(folder_item);
+
+  // Note: For fullscreen app list, the search box is part of the focus cycle
+  // when a folder is open.
+  auto* continue_section = helper->GetFullscreenContinueSectionView();
+  EXPECT_TRUE(continue_section->GetViewAccessibility().GetIsIgnored());
+  EXPECT_TRUE(continue_section->GetViewAccessibility().IsLeaf());
+  auto* recent_apps = helper->GetFullscreenRecentAppsView();
+  EXPECT_TRUE(recent_apps->GetViewAccessibility().GetIsIgnored());
+  EXPECT_TRUE(recent_apps->GetViewAccessibility().IsLeaf());
+  auto* toast_container = GetToastContainerView();
+  EXPECT_TRUE(toast_container->GetViewAccessibility().GetIsIgnored());
+  EXPECT_TRUE(toast_container->GetViewAccessibility().IsLeaf());
+  auto* apps_grid_view = helper->GetRootPagedAppsGridView();
+  EXPECT_TRUE(apps_grid_view->GetViewAccessibility().GetIsIgnored());
+  EXPECT_TRUE(apps_grid_view->GetViewAccessibility().IsLeaf());
+
+  // Close the folder.
+  PressAndReleaseKey(ui::VKEY_ESCAPE);
+
+  EXPECT_FALSE(continue_section->GetViewAccessibility().GetIsIgnored());
+  EXPECT_FALSE(continue_section->GetViewAccessibility().IsLeaf());
+  EXPECT_FALSE(recent_apps->GetViewAccessibility().GetIsIgnored());
+  EXPECT_FALSE(recent_apps->GetViewAccessibility().IsLeaf());
+  EXPECT_FALSE(toast_container->GetViewAccessibility().GetIsIgnored());
+  EXPECT_FALSE(toast_container->GetViewAccessibility().IsLeaf());
+  EXPECT_FALSE(apps_grid_view->GetViewAccessibility().GetIsIgnored());
+  EXPECT_FALSE(apps_grid_view->GetViewAccessibility().IsLeaf());
+}
+
 TEST_F(AppsContainerViewTest, UpdatesSelectedPageAfterFocusTraversal) {
   auto* helper = GetAppListTestHelper();
   helper->AddRecentApps(5);
@@ -256,6 +325,111 @@ TEST_F(AppsContainerViewTest, UpdatesSelectedPageAfterFocusTraversal) {
   PressDown();
   EXPECT_TRUE(recent_apps_view->GetItemViewAt(0)->HasFocus());
   EXPECT_EQ(GetSelectedPage(), 0);
+}
+
+// Test that the gradient mask is created when the page drag begins, and
+// destroyed once the page drag has been released and completes.
+TEST_F(AppsContainerViewTest, StartPageDragThenRelease) {
+  GetAppListTestHelper()->AddAppItems(23);
+  TabletMode::Get()->SetEnabledForTest(true);
+  auto* apps_grid_view = GetAppListTestHelper()->GetRootPagedAppsGridView();
+  test::AppsGridViewTestApi test_api(apps_grid_view);
+
+  EXPECT_FALSE(HasGradientMask());
+  EXPECT_EQ(0, GetSelectedPage());
+  EXPECT_EQ(2, GetTotalPages());
+
+  PaginationModelTransitionWaiter transition_waiter(
+      apps_grid_view->pagination_model());
+  gfx::Point start_page_drag = test_api.GetViewAtIndex(GridIndex(0, 0))
+                                   ->GetIconBoundsInScreen()
+                                   .bottom_right();
+  start_page_drag.Offset(10, 0);
+
+  // Begin a touch and drag the page upward.
+  auto* generator = GetEventGenerator();
+  generator->set_current_screen_location(start_page_drag);
+  generator->PressTouch();
+  generator->MoveTouchBy(0, -20);
+
+  // Move the touch down a bit so it does not register as a fling to the next
+  // page.
+  generator->MoveTouchBy(0, 1);
+
+  // Gradient mask should exist during the page drag.
+  EXPECT_TRUE(HasGradientMask());
+
+  // End the page drag and wait for the page to animate back to the correct
+  // position.
+  generator->ReleaseTouch();
+  transition_waiter.Wait();
+
+  // The gradient mask should be removed after the end of the page animation.
+  EXPECT_FALSE(HasGradientMask());
+  EXPECT_EQ(0, GetSelectedPage());
+}
+
+TEST_F(AppsContainerViewTest,
+       PageSwitcherBoundsShouldNotChangeAfterOverviewMode) {
+  TabletMode::Get()->SetEnabledForTest(true);
+
+  auto* helper = GetAppListTestHelper();
+  auto* overview_controller = Shell::Get()->overview_controller();
+
+  const auto initial_bounds =
+      helper->GetAppsContainerView()->page_switcher()->bounds();
+
+  EnterOverview();
+  EXPECT_TRUE(overview_controller->InOverviewSession());
+  ExitOverview();
+  EXPECT_FALSE(overview_controller->InOverviewSession());
+
+  EXPECT_EQ(initial_bounds,
+            helper->GetAppsContainerView()->page_switcher()->bounds());
+}
+
+// Verify that metrics are recorded when the grid changes page into the last
+// page of the app list.
+TEST_F(AppsContainerViewTest, NavigateToBottomPageLogsAction) {
+  auto* helper = GetAppListTestHelper();
+  helper->AddContinueSuggestionResults(4);
+  helper->AddRecentApps(5);
+  helper->AddAppItems(35);
+  TabletMode::Get()->SetEnabledForTest(true);
+
+  auto* apps_grid_view = helper->GetRootPagedAppsGridView();
+  base::HistogramTester histograms;
+
+  histograms.ExpectUniqueSample("Apps.AppList.UserAction.TabletMode",
+                                AppListUserAction::kNavigatedToBottomOfAppList,
+                                0);
+
+  PaginationModel* pagination_model = apps_grid_view->pagination_model();
+  int last_page = pagination_model->total_pages() - 1;
+
+  // Select the second to last page. The metric should not be recorded.
+  pagination_model->SelectPage(last_page - 1, /*animate=*/false);
+  histograms.ExpectUniqueSample("Apps.AppList.UserAction.TabletMode",
+                                AppListUserAction::kNavigatedToBottomOfAppList,
+                                0);
+
+  // Select the last page. The metric should be recorded.
+  pagination_model->SelectPage(last_page, /*animate=*/false);
+  histograms.ExpectUniqueSample("Apps.AppList.UserAction.TabletMode",
+                                AppListUserAction::kNavigatedToBottomOfAppList,
+                                1);
+
+  // Select the second to last page again. The metric should not be recorded.
+  pagination_model->SelectPage(last_page - 1, /*animate=*/false);
+  histograms.ExpectUniqueSample("Apps.AppList.UserAction.TabletMode",
+                                AppListUserAction::kNavigatedToBottomOfAppList,
+                                1);
+
+  // Select the last page again. The metric should be recorded one more time.
+  pagination_model->SelectPage(last_page, /*animate=*/false);
+  histograms.ExpectUniqueSample("Apps.AppList.UserAction.TabletMode",
+                                AppListUserAction::kNavigatedToBottomOfAppList,
+                                2);
 }
 
 }  // namespace ash

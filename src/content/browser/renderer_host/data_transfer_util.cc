@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,12 +11,11 @@
 #include "base/check.h"
 #include "base/containers/span.h"
 #include "base/files/file_path.h"
-#include "base/guid.h"
 #include "base/strings/utf_string_conversions.h"
-#include "build/chromeos_buildflags.h"
+#include "base/uuid.h"
 #include "content/browser/blob_storage/chrome_blob_storage_context.h"
 #include "content/browser/file_system_access/file_system_access_manager_impl.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "net/base/mime_util.h"
 #include "services/network/public/mojom/referrer_policy.mojom-shared.h"
@@ -39,18 +38,17 @@ namespace {
 // the correct file system backend. This method checks if this is the case, and
 // updates `entry_path` to the path that should be used by the File System
 // Access implementation.
-content::FileSystemAccessEntryFactory::PathType MaybeRemapPath(
-    base::FilePath* entry_path) {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+content::PathType MaybeRemapPath(base::FilePath* entry_path) {
+#if BUILDFLAG(IS_CHROMEOS)
   base::FilePath virtual_path;
   auto* external_mount_points =
       storage::ExternalMountPoints::GetSystemInstance();
   if (external_mount_points->GetVirtualPath(*entry_path, &virtual_path)) {
     *entry_path = std::move(virtual_path);
-    return content::FileSystemAccessEntryFactory::PathType::kExternal;
+    return content::PathType::kExternal;
   }
 #endif
-  return content::FileSystemAccessEntryFactory::PathType::kLocal;
+  return content::PathType::kLocal;
 }
 
 }  // namespace
@@ -68,11 +66,13 @@ std::vector<blink::mojom::DataTransferFilePtr> FileInfosToDataTransferFiles(
     mojo::PendingRemote<blink::mojom::FileSystemAccessDataTransferToken>
         pending_token;
     base::FilePath entry_path = file_info.path;
-    FileSystemAccessManagerImpl::PathType path_type =
-        MaybeRemapPath(&entry_path);
+    content::PathType path_type = MaybeRemapPath(&entry_path);
+    base::FilePath display_name = !file_info.display_name.empty()
+                                      ? file_info.display_name
+                                      : entry_path.BaseName();
     file_system_access_manager->CreateFileSystemAccessDataTransferToken(
-        path_type, entry_path, child_id,
-        pending_token.InitWithNewPipeAndPassReceiver());
+        content::PathInfo(path_type, entry_path, display_name.AsUTF8Unsafe()),
+        child_id, pending_token.InitWithNewPipeAndPassReceiver());
     file->file_system_access_token = std::move(pending_token);
     result.push_back(std::move(file));
   }
@@ -99,14 +99,14 @@ FileSystemFileInfosToDragItemFileSystemFilePtr(
     DCHECK(file_system_url.type() != storage::kFileSystemTypePersistent);
     DCHECK(file_system_url.type() != storage::kFileSystemTypeTemporary);
 
-    std::string uuid = base::GenerateGUID();
+    std::string uuid = base::Uuid::GenerateRandomV4().AsLowercaseString();
 
     std::string content_type;
 
     base::FilePath::StringType extension = file_system_url.path().Extension();
     if (!extension.empty()) {
       std::string mime_type;
-      // TODO(https://crbug.com/155455): Historically for blobs created from
+      // TODO(crbug.com/40291155): Historically for blobs created from
       // file system URLs we've only considered well known content types to
       // avoid leaking the presence of locally installed applications when
       // creating blobs from files in the sandboxed file system. However, since
@@ -119,7 +119,7 @@ FileSystemFileInfosToDragItemFileSystemFilePtr(
                                                  &mime_type))
         content_type = std::move(mime_type);
     }
-    // TODO(https://crbug.com/962306): Consider some kind of fallback type when
+    // TODO(crbug.com/41458368): Consider some kind of fallback type when
     // the above mime type detection fails.
 
     mojo::PendingRemote<blink::mojom::Blob> blob_remote;
@@ -190,8 +190,8 @@ blink::mojom::DragDataPtr DropDataToDragData(
   }
   if (drop_data.file_contents_source_url.is_valid()) {
     blink::mojom::DragItemBinaryPtr item = blink::mojom::DragItemBinary::New();
-    item->data = mojo_base::BigBuffer(
-        base::as_bytes(base::make_span(drop_data.file_contents)));
+    item->data =
+        mojo_base::BigBuffer(base::as_byte_span(drop_data.file_contents));
     item->is_image_accessible = drop_data.file_contents_image_accessible;
     item->source_url = drop_data.file_contents_source_url;
     item->filename_extension =
@@ -214,9 +214,10 @@ blink::mojom::DragDataPtr DropDataToDragData(
       // browser messages, in which case the field is unused and this will hit
       // a DCHECK.
       drop_data.filesystem_id.empty()
-          ? absl::nullopt
-          : absl::optional<std::string>(
+          ? std::nullopt
+          : std::optional<std::string>(
                 base::UTF16ToUTF8(drop_data.filesystem_id)),
+      /*force_default_action=*/!drop_data.document_is_handling_drag,
       drop_data.referrer_policy);
 }
 
@@ -270,7 +271,8 @@ blink::mojom::DragDataPtr DropMetaDataToDragData(
       continue;
     }
   }
-  return blink::mojom::DragData::New(std::move(items), absl::nullopt,
+  return blink::mojom::DragData::New(std::move(items), std::nullopt,
+                                     /*force_default_action=*/false,
                                      network::mojom::ReferrerPolicy::kDefault);
 }
 
@@ -308,7 +310,7 @@ DropData DragDataToDropData(const blink::mojom::DragData& drag_data) {
         DCHECK(result.file_contents.empty());
 
         const blink::mojom::DragItemBinaryPtr& binary_item = item->get_binary();
-        base::span<const uint8_t> contents = base::make_span(binary_item->data);
+        base::span<const uint8_t> contents(binary_item->data);
         result.file_contents.assign(contents.begin(), contents.end());
         result.file_contents_image_accessible =
             binary_item->is_image_accessible;

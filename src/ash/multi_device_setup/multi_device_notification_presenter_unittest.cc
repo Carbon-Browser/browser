@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,19 +9,20 @@
 #include <utility>
 
 #include "ash/public/cpp/test/test_system_tray_client.h"
-#include "ash/services/multidevice_setup/public/cpp/fake_multidevice_setup.h"
-#include "ash/services/multidevice_setup/public/mojom/multidevice_setup.mojom.h"
 #include "ash/session/test_session_controller_client.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/test/ash_test_base.h"
 #include "ash/test/ash_test_helper.h"
 #include "ash/test_shell_delegate.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/token.h"
+#include "chromeos/ash/services/multidevice_setup/public/cpp/fake_multidevice_setup.h"
+#include "chromeos/ash/services/multidevice_setup/public/mojom/multidevice_setup.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/message_center/fake_message_center.h"
@@ -83,7 +84,7 @@ class TestMessageCenter : public message_center::FakeMessageCenter {
     EXPECT_TRUE(notification_);
     EXPECT_EQ(id, notification_->id());
     for (auto& observer : observer_list())
-      observer.OnNotificationClicked(id, absl::nullopt, absl::nullopt);
+      observer.OnNotificationClicked(id, std::nullopt, std::nullopt);
   }
 
   void ClickOnNotificationButton(const std::string& id,
@@ -91,7 +92,7 @@ class TestMessageCenter : public message_center::FakeMessageCenter {
     EXPECT_TRUE(notification_);
     EXPECT_EQ(id, notification_->id());
     for (auto& observer : observer_list())
-      observer.OnNotificationClicked(id, button_index, absl::nullopt);
+      observer.OnNotificationClicked(id, button_index, std::nullopt);
   }
 
  private:
@@ -136,7 +137,7 @@ class MultiDeviceNotificationPresenterTest : public NoSessionAshTestBase {
     TestSessionControllerClient* test_session_client =
         GetSessionControllerClient();
     test_session_client->AddUserSession(
-        kTestUserEmail, user_manager::USER_TYPE_REGULAR,
+        kTestUserEmail, user_manager::UserType::kRegular,
         true /* provide_pref_service */, false /* is_new_profile */);
     test_session_client->SetSessionState(session_manager::SessionState::ACTIVE);
     test_session_client->SwitchActiveUser(
@@ -243,6 +244,17 @@ class MultiDeviceNotificationPresenterTest : public NoSessionAshTestBase {
         MultiDeviceNotificationPresenter::kWifiSyncNotificationId));
   }
 
+  void AssertPotentialHostNotificationInterationHost(int count) {
+    if (histogram_tester_
+            .GetAllSamples("MultiDeviceSetup.NotificationInteracted")
+            .empty()) {
+      EXPECT_EQ(count, 0);
+      return;
+    }
+    histogram_tester_.ExpectTotalCount(
+        "MultiDeviceSetup.NotificationInteracted", count);
+  }
+
   void AssertPotentialHostBucketCount(std::string histogram, int count) {
     if (histogram_tester_.GetAllSamples(histogram).empty()) {
       EXPECT_EQ(count, 0);
@@ -292,7 +304,7 @@ class MultiDeviceNotificationPresenterTest : public NoSessionAshTestBase {
   }
 
   base::HistogramTester histogram_tester_;
-  TestSystemTrayClient* test_system_tray_client_;
+  raw_ptr<TestSystemTrayClient, DanglingUntriaged> test_system_tray_client_;
   TestMessageCenter test_message_center_;
   std::unique_ptr<multidevice_setup::FakeMultiDeviceSetup>
       fake_multidevice_setup_;
@@ -388,6 +400,27 @@ TEST_F(MultiDeviceNotificationPresenterTest,
   VerifyNoNotificationIsVisible();
 
   EXPECT_EQ(test_system_tray_client_->show_multi_device_setup_count(), 1);
+  AssertPotentialHostNotificationInterationHost(1);
+  AssertPotentialHostBucketCount("MultiDeviceSetup_NotificationClicked", 1);
+  AssertPotentialHostBucketCount("MultiDeviceSetup_NotificationShown", 1);
+}
+
+TEST_F(
+    MultiDeviceNotificationPresenterTest,
+    TestHostNewUserPotentialHostExistsNotification_InteractedThenClickNotification) {
+  SignIntoAccount();
+
+  ShowNewUserNotification();
+  VerifyNewUserPotentialHostExistsNotificationIsVisible();
+  // Simulate that Phone Hub icon is clicked when notification is visible.
+  notification_presenter_->UpdateIsSetupNotificationInteracted(true);
+
+  ClickNotification();
+  VerifyNoNotificationIsVisible();
+
+  EXPECT_EQ(test_system_tray_client_->show_multi_device_setup_count(), 1);
+
+  AssertPotentialHostNotificationInterationHost(0);
   AssertPotentialHostBucketCount("MultiDeviceSetup_NotificationClicked", 1);
   AssertPotentialHostBucketCount("MultiDeviceSetup_NotificationShown", 1);
 }
@@ -457,6 +490,9 @@ TEST_F(MultiDeviceNotificationPresenterTest,
 
   EXPECT_EQ(test_system_tray_client_->show_connected_devices_settings_count(),
             1);
+  // Should not log data into this histogram when the notification is not for
+  // new user.
+  AssertPotentialHostNotificationInterationHost(0);
   AssertHostSwitchedBucketCount("MultiDeviceSetup_NotificationClicked", 1);
   AssertHostSwitchedBucketCount("MultiDeviceSetup_NotificationShown", 1);
 }

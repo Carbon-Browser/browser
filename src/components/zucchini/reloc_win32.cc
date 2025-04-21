@@ -1,6 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "components/zucchini/reloc_win32.h"
 
@@ -84,6 +89,7 @@ RelocRvaReaderWin32::RelocRvaReaderWin32(
   if (lo > cur_reloc_units_offset) {
     offset_t delta =
         AlignCeil<offset_t>(lo - cur_reloc_units_offset, kRelocUnitSize);
+    // Okay if this empties |cur_reloc_units_|.
     cur_reloc_units_.Skip(delta);
   }
 }
@@ -93,21 +99,23 @@ RelocRvaReaderWin32::RelocRvaReaderWin32(RelocRvaReaderWin32&&) = default;
 RelocRvaReaderWin32::~RelocRvaReaderWin32() = default;
 
 // Unrolls a nested loop: outer = reloc blocks and inner = reloc entries.
-absl::optional<RelocUnitWin32> RelocRvaReaderWin32::GetNext() {
+std::optional<RelocUnitWin32> RelocRvaReaderWin32::GetNext() {
   // "Outer loop" to find non-empty reloc block.
   while (cur_reloc_units_.Remaining() < kRelocUnitSize) {
     if (!LoadRelocBlock(cur_reloc_units_.end()))
-      return absl::nullopt;
+      return std::nullopt;
   }
   if (end_it_ - cur_reloc_units_.begin() < kRelocUnitSize)
-    return absl::nullopt;
+    return std::nullopt;
   // "Inner loop" to extract single reloc unit.
   offset_t location =
       base::checked_cast<offset_t>(cur_reloc_units_.begin() - image_.begin());
   uint16_t entry = cur_reloc_units_.read<uint16_t>(0);
   uint8_t type = static_cast<uint8_t>(entry >> 12);
   rva_t rva = rva_hi_bits_ + (entry & 0xFFF);
-  cur_reloc_units_.Skip(kRelocUnitSize);
+  if (!cur_reloc_units_.Skip(kRelocUnitSize)) {
+    return std::nullopt;
+  }
   return RelocUnitWin32{type, location, rva};
 }
 
@@ -126,7 +134,7 @@ bool RelocRvaReaderWin32::LoadRelocBlock(
   if ((block_size - sizeof(pe::RelocHeader)) % kRelocUnitSize != 0)
     return false;
   cur_reloc_units_ = BufferSource(block_begin, block_size);
-  cur_reloc_units_.Skip(sizeof(pe::RelocHeader));
+  cur_reloc_units_.Skip(sizeof(pe::RelocHeader));  // Always succeeds.
   return true;
 }
 
@@ -144,8 +152,8 @@ RelocReaderWin32::RelocReaderWin32(RelocRvaReaderWin32&& reloc_rva_reader,
 RelocReaderWin32::~RelocReaderWin32() = default;
 
 // ReferenceReader:
-absl::optional<Reference> RelocReaderWin32::GetNext() {
-  for (absl::optional<RelocUnitWin32> unit = reloc_rva_reader_.GetNext();
+std::optional<Reference> RelocReaderWin32::GetNext() {
+  for (std::optional<RelocUnitWin32> unit = reloc_rva_reader_.GetNext();
        unit.has_value(); unit = reloc_rva_reader_.GetNext()) {
     if (unit->type != reloc_type_)
       continue;
@@ -158,7 +166,7 @@ absl::optional<Reference> RelocReaderWin32::GetNext() {
     offset_t location = unit->location;
     return Reference{location, target};
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 /******** RelocWriterWin32 ********/
@@ -180,8 +188,8 @@ RelocWriterWin32::~RelocWriterWin32() = default;
 void RelocWriterWin32::PutNext(Reference ref) {
   DCHECK_GE(ref.location, reloc_region_.lo());
   DCHECK_LT(ref.location, reloc_region_.hi());
-  auto block_it = std::upper_bound(reloc_block_offsets_.begin(),
-                                   reloc_block_offsets_.end(), ref.location);
+  auto block_it = std::upper_bound(reloc_block_offsets_->begin(),
+                                   reloc_block_offsets_->end(), ref.location);
   --block_it;
   rva_t rva_hi_bits = image_.read<pe::RelocHeader>(*block_it).rva_hi;
   rva_t target_rva = target_offset_to_rva_.Convert(ref.target);

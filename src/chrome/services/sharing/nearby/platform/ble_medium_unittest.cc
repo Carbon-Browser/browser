@@ -1,12 +1,14 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/services/sharing/nearby/platform/ble_medium.h"
 
 #include <memory>
+#include <optional>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
@@ -16,11 +18,8 @@
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "mojo/public/cpp/bindings/shared_remote.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace location {
-namespace nearby {
-namespace chrome {
+namespace nearby::chrome {
 
 namespace {
 
@@ -82,9 +81,19 @@ class BleMediumTest : public testing::Test {
     EXPECT_EQ(!scanning_service_ids_set_.empty(),
               fake_adapter_->IsDiscoverySessionActive());
     scanning_service_ids_set_.insert(service_id);
-    EXPECT_TRUE(ble_medium_->StartScanning(service_id,
-                                           fast_advertisement_service_uuid,
-                                           discovered_peripheral_callback_));
+    EXPECT_TRUE(ble_medium_->StartScanning(
+        service_id, fast_advertisement_service_uuid,
+        {.peripheral_discovered_cb =
+             [this](api::BlePeripheral& peripheral,
+                    const std::string& service_id, bool fast_advertisement) {
+               EXPECT_TRUE(fast_advertisement);
+               OnPeripheralDiscovered(peripheral, service_id);
+             },
+         .peripheral_lost_cb =
+             [this](api::BlePeripheral& peripheral,
+                    const std::string& service_id) {
+               OnPeripheralLost(peripheral, service_id);
+             }}));
     EXPECT_TRUE(fake_adapter_->IsDiscoverySessionActive());
   }
 
@@ -148,7 +157,7 @@ class BleMediumTest : public testing::Test {
               std::string(byte_array.data(), byte_array.size()));
   }
 
-  bluetooth::FakeAdapter* fake_adapter_;
+  raw_ptr<bluetooth::FakeAdapter> fake_adapter_;
   mojo::SharedRemote<bluetooth::mojom::Adapter> remote_adapter_;
   std::unique_ptr<BleMedium> ble_medium_;
 
@@ -363,6 +372,4 @@ TEST_F(BleMediumTest, TestConnect) {
   EXPECT_FALSE(ble_medium_->Connect(ble_peripheral, kServiceId1, nullptr));
 }
 
-}  // namespace chrome
-}  // namespace nearby
-}  // namespace location
+}  // namespace nearby::chrome

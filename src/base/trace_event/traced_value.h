@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,16 +10,16 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/base_export.h"
 #include "base/memory/raw_ptr.h"
-#include "base/strings/string_piece.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/trace_event/trace_arguments.h"
 
 namespace base {
 
-class TraceEventMemoryOverhead;
 class Value;
 
 namespace trace_event {
@@ -40,35 +40,33 @@ class BASE_EXPORT TracedValue : public ConvertableToTraceFormat {
   void SetInteger(const char* name, int value);
   void SetDouble(const char* name, double value);
   void SetBoolean(const char* name, bool value);
-  void SetString(const char* name, base::StringPiece value);
+  void SetString(const char* name, std::string_view value);
   void SetValue(const char* name, TracedValue* value);
-  void SetPointer(const char* name, void* value);
+  void SetPointer(const char* name, const void* value);
   void BeginDictionary(const char* name);
   void BeginArray(const char* name);
 
   // These, instead, can be safely passed a temporary string.
-  void SetIntegerWithCopiedName(base::StringPiece name, int value);
-  void SetDoubleWithCopiedName(base::StringPiece name, double value);
-  void SetBooleanWithCopiedName(base::StringPiece name, bool value);
-  void SetStringWithCopiedName(base::StringPiece name, base::StringPiece value);
-  void SetValueWithCopiedName(base::StringPiece name, TracedValue* value);
-  void SetPointerWithCopiedName(base::StringPiece name, void* value);
-  void BeginDictionaryWithCopiedName(base::StringPiece name);
-  void BeginArrayWithCopiedName(base::StringPiece name);
+  void SetIntegerWithCopiedName(std::string_view name, int value);
+  void SetDoubleWithCopiedName(std::string_view name, double value);
+  void SetBooleanWithCopiedName(std::string_view name, bool value);
+  void SetStringWithCopiedName(std::string_view name, std::string_view value);
+  void SetValueWithCopiedName(std::string_view name, TracedValue* value);
+  void SetPointerWithCopiedName(std::string_view name, const void* value);
+  void BeginDictionaryWithCopiedName(std::string_view name);
+  void BeginArrayWithCopiedName(std::string_view name);
 
   void AppendInteger(int);
   void AppendDouble(double);
   void AppendBoolean(bool);
-  void AppendString(base::StringPiece);
-  void AppendPointer(void*);
+  void AppendString(std::string_view);
+  void AppendPointer(const void*);
   void BeginArray();
   void BeginDictionary();
 
   // ConvertableToTraceFormat implementation.
   void AppendAsTraceFormat(std::string* out) const override;
-  bool AppendToProto(ProtoAppender* appender) override;
-
-  void EstimateTraceMemoryOverhead(TraceEventMemoryOverhead* overhead) override;
+  bool AppendToProto(ProtoAppender* appender) const override;
 
   // Helper to auto-close an array. The call to |ArrayScope::~ArrayScope| closes
   // the array.
@@ -111,7 +109,7 @@ class BASE_EXPORT TracedValue : public ConvertableToTraceFormat {
   [[nodiscard]] ArrayScope AppendArrayScoped();
   [[nodiscard]] ArrayScope BeginArrayScoped(const char* name);
   [[nodiscard]] ArrayScope BeginArrayScopedWithCopiedName(
-      base::StringPiece name);
+      std::string_view name);
 
   // Helper to auto-close a dictionary. The call to
   // |DictionaryScope::~DictionaryScope| closes the dictionary.
@@ -154,7 +152,7 @@ class BASE_EXPORT TracedValue : public ConvertableToTraceFormat {
   [[nodiscard]] DictionaryScope AppendDictionaryScoped();
   [[nodiscard]] DictionaryScope BeginDictionaryScoped(const char* name);
   [[nodiscard]] DictionaryScope BeginDictionaryScopedWithCopiedName(
-      base::StringPiece name);
+      std::string_view name);
 
   class BASE_EXPORT Array;
   class BASE_EXPORT Dictionary;
@@ -168,7 +166,7 @@ class BASE_EXPORT TracedValue : public ConvertableToTraceFormat {
   // the value is also a |std::initializer_list|). Generally the helper types
   // |TracedValue::Dictionary|, |TracedValue::Array|,
   // |TracedValue::DictionaryItem|, |TracedValue::ArrayItem| must be valid as
-  // well as their internals (e.g., |base::StringPiece| data should be valid
+  // well as their internals (e.g., |std::string_view| data should be valid
   // when |TracedValue::Build| is called; |TracedValue::Array| or
   // |TracedValue::Dictionary| holds a |std::initializer_list| whose underlying
   // array needs to be valid when calling |TracedValue::Build|).
@@ -233,10 +231,10 @@ class BASE_EXPORT TracedValue : public ConvertableToTraceFormat {
     ValueHolder(double value);  // NOLINT(google-explicit-constructor)
     ValueHolder(bool value);    // NOLINT(google-explicit-constructor)
     ValueHolder(void* value);   // NOLINT(google-explicit-constructor)
-    // StringPiece's backing storage / const char* pointer needs to remain valid
-    // until TracedValue::Build is called.
+    // std::string_view's backing storage / const char* pointer needs to remain
+    // valid until TracedValue::Build is called.
     // NOLINTNEXTLINE(google-explicit-constructor)
-    ValueHolder(base::StringPiece value);
+    ValueHolder(std::string_view value);
     // Create a copy to avoid holding a reference to a non-existing string:
     //
     // Example:
@@ -247,13 +245,13 @@ class BASE_EXPORT TracedValue : public ConvertableToTraceFormat {
     //   3. |Build| iterates initializer_list of |DictionaryItems|.
     //
     //   If the original |ValueHolder| kept just a reference to the string (or
-    //   a |base::StringPiece|) then |Build| is undefined behaviour, as it is
+    //   a |std::string_view|) then |Build| is undefined behaviour, as it is
     //   passing a reference to an out-of-scope temporary to
     //   |TracedValue::SetString|.
     // NOLINTNEXTLINE(google-explicit-constructor)
     ValueHolder(std::string value);
     // Define an explicit overload for const char* to resolve the ambiguity
-    // between the base::StringPiece, void*, and bool constructors for string
+    // between the std::string_view, void*, and bool constructors for string
     // literals.
     ValueHolder(const char* value);  // NOLINT(google-explicit-constructor)
     ValueHolder(Array& value);       // NOLINT(google-explicit-constructor)
@@ -271,9 +269,11 @@ class BASE_EXPORT TracedValue : public ConvertableToTraceFormat {
       int int_value;
       double double_value;
       bool bool_value;
-      base::StringPiece string_piece_value;
+      std::string_view string_piece_value;
       std::string std_string_value;
-      void* void_ptr_value;
+      // This field is not a raw_ptr<> because it was filtered by the rewriter
+      // for: #union
+      RAW_PTR_EXCLUSION void* void_ptr_value;
       Array array_value;
       Dictionary dictionary_value;
 
@@ -346,36 +346,32 @@ class BASE_EXPORT TracedValue : public ConvertableToTraceFormat {
     virtual void SetInteger(const char* name, int value) = 0;
     virtual void SetDouble(const char* name, double value) = 0;
     virtual void SetBoolean(const char* name, bool value) = 0;
-    virtual void SetString(const char* name, base::StringPiece value) = 0;
+    virtual void SetString(const char* name, std::string_view value) = 0;
     virtual void SetValue(const char* name, Writer* value) = 0;
     virtual void BeginDictionary(const char* name) = 0;
     virtual void BeginArray(const char* name) = 0;
 
     // These, instead, can be safely passed a temporary string.
-    virtual void SetIntegerWithCopiedName(base::StringPiece name,
-                                          int value) = 0;
-    virtual void SetDoubleWithCopiedName(base::StringPiece name,
+    virtual void SetIntegerWithCopiedName(std::string_view name, int value) = 0;
+    virtual void SetDoubleWithCopiedName(std::string_view name,
                                          double value) = 0;
-    virtual void SetBooleanWithCopiedName(base::StringPiece name,
+    virtual void SetBooleanWithCopiedName(std::string_view name,
                                           bool value) = 0;
-    virtual void SetStringWithCopiedName(base::StringPiece name,
-                                         base::StringPiece value) = 0;
-    virtual void SetValueWithCopiedName(base::StringPiece name,
+    virtual void SetStringWithCopiedName(std::string_view name,
+                                         std::string_view value) = 0;
+    virtual void SetValueWithCopiedName(std::string_view name,
                                         Writer* value) = 0;
-    virtual void BeginDictionaryWithCopiedName(base::StringPiece name) = 0;
-    virtual void BeginArrayWithCopiedName(base::StringPiece name) = 0;
+    virtual void BeginDictionaryWithCopiedName(std::string_view name) = 0;
+    virtual void BeginArrayWithCopiedName(std::string_view name) = 0;
 
     virtual void AppendInteger(int) = 0;
     virtual void AppendDouble(double) = 0;
     virtual void AppendBoolean(bool) = 0;
-    virtual void AppendString(base::StringPiece) = 0;
+    virtual void AppendString(std::string_view) = 0;
 
     virtual void AppendAsTraceFormat(std::string* out) const = 0;
 
     virtual bool AppendToProto(ProtoAppender* appender);
-
-    virtual void EstimateTraceMemoryOverhead(
-        TraceEventMemoryOverhead* overhead) = 0;
 
     virtual bool IsPickleWriter() const = 0;
     virtual bool IsProtoWriter() const = 0;
@@ -390,7 +386,7 @@ class BASE_EXPORT TracedValue : public ConvertableToTraceFormat {
   std::unique_ptr<base::Value> ToBaseValue() const;
 
  private:
-  std::unique_ptr<Writer> writer_;
+  mutable std::unique_ptr<Writer> writer_;
 
 #ifndef NDEBUG
   // In debug builds checks the pairings of {Start,End}{Dictionary,Array}

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,11 +17,6 @@ CreditCardCloudTokenData::~CreditCardCloudTokenData() = default;
 bool CreditCardCloudTokenData::operator==(
     const CreditCardCloudTokenData& other_data) const {
   return Compare(other_data) == 0;
-}
-
-bool CreditCardCloudTokenData::operator!=(
-    const CreditCardCloudTokenData& other_data) const {
-  return Compare(other_data) != 0;
 }
 
 std::u16string CreditCardCloudTokenData::ExpirationMonthAsString() const {

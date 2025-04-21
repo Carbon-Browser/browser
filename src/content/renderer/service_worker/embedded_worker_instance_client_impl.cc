@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,18 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/debug/crash_logging.h"
+#include "base/debug/dump_without_crashing.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "content/child/child_thread_impl.h"
 #include "content/child/scoped_child_process_reference.h"
+#include "content/common/features.h"
 #include "content/public/common/content_client.h"
+#include "content/renderer/policy_container_util.h"
 #include "content/renderer/service_worker/service_worker_context_client.h"
 #include "content/renderer/worker/fetch_client_settings_object_helpers.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -27,6 +32,13 @@
 #include "third_party/blink/public/web/web_embedded_worker_start_data.h"
 
 namespace content {
+
+// A kill switch for the DumpWithoutCrashing code in the ServiceWorker startup.
+// This is introduced to investigate if `cors_exempt_header_list` is
+// successfully initialized.
+BASE_FEATURE(kServiceWorkerDebugCorsExemptHeaderList,
+             "ServiceWorkerDebugCorsExemptHeaderList",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 // static
 void EmbeddedWorkerInstanceClientImpl::Create(
@@ -60,6 +72,39 @@ void EmbeddedWorkerInstanceClientImpl::StartWorker(
   auto start_timing = blink::mojom::EmbeddedWorkerStartTiming::New();
   start_timing->start_worker_received_time = base::TimeTicks::Now();
 
+  if (base::FeatureList::IsEnabled(
+          features::kServiceWorkerAvoidMainThreadForInitialization)) {
+    // If ServiceWorkerAvoidMainThreadForInitialization feature is enabled, the
+    // fake empty list is set to `cors_exempt_header_list_` here, so override it
+    // with the actual list which is from mojom::EmbeddedWorkerStartParams.
+    cors_exempt_header_list_ = std::move(params->cors_exempt_header_list);
+  } else {
+    // When the feature is not enabled, `cors_exempt_header_list_` and
+    // `params->cors_exempt_header_list` should have same list of headers.
+    //
+    // TODO(crbug.com/40753993): The length of `cors_exempt_header_list_` is
+    // often zero. We expect the header list is successfully passed from the
+    // storage partition. After investigating when the empty list is passed and
+    // what the intended behavior is, add CHECK(cors_exempt_header_list_ ==
+    // params->cors_exempt_header_list) here if it's suitable.
+    //
+    // In other words, if the header length is different but
+    // `cors_exempt_header_list_` is not empty, that is an unexpected case.
+    if (cors_exempt_header_list_ != params->cors_exempt_header_list &&
+        cors_exempt_header_list_.size() > 0 &&
+        base::FeatureList::IsEnabled(kServiceWorkerDebugCorsExemptHeaderList)) {
+      static bool has_dumped_without_crashing = false;
+      if (!has_dumped_without_crashing) {
+        has_dumped_without_crashing = true;
+        SCOPED_CRASH_KEY_NUMBER("SWInit", "header_list_size",
+                                cors_exempt_header_list_.size());
+        SCOPED_CRASH_KEY_NUMBER("SWInit", "header_list_size_via_mojo",
+                                params->cors_exempt_header_list.size());
+        base::debug::DumpWithoutCrashing();
+      }
+    }
+  }
+
   std::unique_ptr<blink::WebEmbeddedWorkerStartData> start_data =
       BuildStartData(*params);
   if (params->main_script_load_params) {
@@ -78,14 +123,15 @@ void EmbeddedWorkerInstanceClientImpl::StartWorker(
     start_data->main_script_load_params->url_loader_client_endpoints =
         std::move(params->main_script_load_params->url_loader_client_endpoints);
   }
+  start_data->policy_container =
+      ToWebPolicyContainer(std::move(params->policy_container));
 
   for (const auto& feature : params->forced_enabled_runtime_features) {
     blink::WebRuntimeFeatures::EnableFeatureFromString(feature, true);
   }
 
-  DCHECK(!params->provider_info->cache_storage ||
-         base::FeatureList::IsEnabled(
-             blink::features::kEagerCacheStorageSetupForServiceWorkers));
+  // `cache_storage` may be null if COEP is not enabled, we cannot bind
+  // eagerly in that case.
   mojo::PendingRemote<blink::mojom::CacheStorage> cache_storage =
       std::move(params->provider_info->cache_storage);
   mojo::PendingRemote<blink::mojom::BrowserInterfaceBroker>
@@ -104,14 +150,8 @@ void EmbeddedWorkerInstanceClientImpl::StartWorker(
       std::move(params->subresource_loader_factories),
       std::move(params->subresource_loader_updater),
       params->script_url_to_skip_throttling, initiator_thread_task_runner_,
-      params->service_worker_route_id, cors_exempt_header_list_);
-  // Record UMA to indicate StartWorker is received on renderer.
-  StartWorkerHistogramEnum metric =
-      params->is_installed ? StartWorkerHistogramEnum::RECEIVED_ON_INSTALLED
-                           : StartWorkerHistogramEnum::RECEIVED_ON_UNINSTALLED;
-  UMA_HISTOGRAM_ENUMERATION(
-      "ServiceWorker.EmbeddedWorkerInstanceClient.StartWorker", metric,
-      StartWorkerHistogramEnum::NUM_TYPES);
+      params->service_worker_route_id, cors_exempt_header_list_,
+      params->storage_key, params->service_worker_token);
 
   std::unique_ptr<blink::WebServiceWorkerInstalledScriptsManagerParams>
       installed_scripts_manager_params;

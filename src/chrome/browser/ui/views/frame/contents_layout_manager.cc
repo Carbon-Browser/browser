@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,49 +7,59 @@
 #include "ui/views/view.h"
 
 ContentsLayoutManager::ContentsLayoutManager(views::View* devtools_view,
-                                             views::View* contents_view)
+                                             views::View* contents_view,
+                                             views::View* watermark_view)
     : devtools_view_(devtools_view),
       contents_view_(contents_view),
-      host_(nullptr) {}
+      watermark_view_(watermark_view) {}
 
-ContentsLayoutManager::~ContentsLayoutManager() {
-}
+ContentsLayoutManager::~ContentsLayoutManager() = default;
 
 void ContentsLayoutManager::SetContentsResizingStrategy(
     const DevToolsContentsResizingStrategy& strategy) {
-  if (strategy_.Equals(strategy))
+  if (strategy_.Equals(strategy)) {
     return;
+  }
 
   strategy_.CopyFrom(strategy);
-  if (host_)
-    host_->InvalidateLayout();
+  InvalidateHost(true);
 }
 
-void ContentsLayoutManager::Layout(views::View* contents_container) {
-  DCHECK(host_ == contents_container);
+views::ProposedLayout ContentsLayoutManager::CalculateProposedLayout(
+    const views::SizeBounds& size_bounds) const {
+  views::ProposedLayout layouts;
 
-  int height = contents_container->height();
-  int width = contents_container->width();
+  // If the |size_bounds| isn't bounded, the preferred size is being requested.
+  if (!size_bounds.is_fully_bounded()) {
+    return layouts;
+  }
+  int height = size_bounds.height().value();
+  int width = size_bounds.width().value();
 
   gfx::Size container_size(width, height);
   gfx::Rect new_devtools_bounds;
   gfx::Rect new_contents_bounds;
 
-  ApplyDevToolsContentsResizingStrategy(strategy_, container_size,
-      &new_devtools_bounds, &new_contents_bounds);
+  ApplyDevToolsContentsResizingStrategy(
+      strategy_, container_size, &new_devtools_bounds, &new_contents_bounds);
 
   // DevTools cares about the specific position, so we have to compensate RTL
   // layout here.
-  devtools_view_->SetBoundsRect(host_->GetMirroredRect(new_devtools_bounds));
-  contents_view_->SetBoundsRect(host_->GetMirroredRect(new_contents_bounds));
-}
+  layouts.child_layouts.emplace_back(
+      devtools_view_.get(), devtools_view_->GetVisible(),
+      host_view()->GetMirroredRect(new_devtools_bounds),
+      views::SizeBounds(container_size));
+  layouts.child_layouts.emplace_back(
+      contents_view_.get(), contents_view_->GetVisible(),
+      host_view()->GetMirroredRect(new_contents_bounds),
+      views::SizeBounds(container_size));
 
-gfx::Size ContentsLayoutManager::GetPreferredSize(
-    const views::View* host) const {
-  return gfx::Size();
-}
-
-void ContentsLayoutManager::Installed(views::View* host) {
-  DCHECK(!host_);
-  host_ = host;
+  // Enterprise watermark view is always overlaid, even when empty.
+  if (watermark_view_) {
+    layouts.child_layouts.emplace_back(
+        watermark_view_.get(), watermark_view_->GetVisible(),
+        gfx::Rect(0, 0, width, height), views::SizeBounds(container_size));
+  }
+  layouts.host_size = gfx::Size(width, height);
+  return layouts;
 }

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,6 +31,7 @@ class CastDecoderBufferImpl : public DecoderBufferBase {
   size_t data_size() const override;
   const CastDecryptConfig* decrypt_config() const override;
   bool end_of_stream() const override;
+  bool is_key_frame() const override;
 
  private:
   // This constructor is used by CreateEOSBuffer.

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
  * and/or have non-trivial logic.
  */
 
-import {ROOT_NODE_ID, selectFolder, selectItem, SelectItemsAction} from 'chrome://bookmarks/bookmarks.js';
+import type {SelectItemsAction} from 'chrome://bookmarks/bookmarks.js';
+import {ROOT_NODE_ID, selectFolder, selectItem} from 'chrome://bookmarks/bookmarks.js';
 import {assertDeepEquals, assertEquals} from 'chrome://webui-test/chai_assert.js';
 
 import {TestStore} from './test_store.js';
@@ -61,7 +62,7 @@ suite('selectItem', function() {
   });
 
   test('can shift-select in search results', function() {
-    store.data.selectedFolder = null;
+    store.data.selectedFolder = '';
     store.data.search = {
       term: 'test',
       results: ['1', '4', '8'],

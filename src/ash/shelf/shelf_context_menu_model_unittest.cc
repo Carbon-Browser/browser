@@ -1,23 +1,17 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/shelf/shelf_context_menu_model.h"
 
-#include <tuple>
-
-#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/app_menu_constants.h"
 #include "ash/public/cpp/shelf_item_delegate.h"
 #include "ash/public/cpp/test/test_new_window_delegate.h"
-#include "ash/public/cpp/wallpaper/wallpaper_controller_client.h"
 #include "ash/session/test_session_controller_client.h"
 #include "ash/shelf/shelf.h"
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
 #include "ash/test_shell_delegate.h"
-#include "ash/wallpaper/test_wallpaper_controller_client.h"
-#include "ash/wallpaper/wallpaper_controller_impl.h"
 #include "ash/wm/tablet_mode/tablet_mode_controller.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
@@ -41,13 +35,9 @@ class MockNewWindowDelegate
 
 class ShelfContextMenuModelTest
     : public AshTestBase,
-      public ::testing::WithParamInterface<
-          std::tuple<user_manager::UserType, bool>> {
+      public ::testing::WithParamInterface<user_manager::UserType> {
  public:
-  ShelfContextMenuModelTest() {
-    feature_list_.InitWithFeatureState(ash::features::kPersonalizationHub,
-                                       IsPersonalizationHubParamEnabled());
-  }
+  ShelfContextMenuModelTest() = default;
 
   ShelfContextMenuModelTest(const ShelfContextMenuModelTest&) = delete;
   ShelfContextMenuModelTest& operator=(const ShelfContextMenuModelTest&) =
@@ -56,8 +46,6 @@ class ShelfContextMenuModelTest
   ~ShelfContextMenuModelTest() override = default;
 
   void SetUp() override {
-    delegate_provider_ = std::make_unique<TestNewWindowDelegateProvider>(
-        std::make_unique<MockNewWindowDelegate>());
     AshTestBase::SetUp();
     TestSessionControllerClient* session = GetSessionControllerClient();
     session->AddUserSession("user1@test.com", GetUserType());
@@ -65,20 +53,14 @@ class ShelfContextMenuModelTest
     session->SwitchActiveUser(AccountId::FromUserEmail("user1@test.com"));
   }
 
-  user_manager::UserType GetUserType() const { return std::get<0>(GetParam()); }
+  user_manager::UserType GetUserType() const { return GetParam(); }
 
-  bool IsPersonalizationHubParamEnabled() const {
-    return std::get<1>(GetParam());
-  }
-
-  MockNewWindowDelegate* GetMockNewWindowDelegate() {
-    return static_cast<MockNewWindowDelegate*>(
-        delegate_provider_->GetPrimary());
+  MockNewWindowDelegate& GetMockNewWindowDelegate() {
+    return new_window_delegate_;
   }
 
  private:
-  base::test::ScopedFeatureList feature_list_;
-  std::unique_ptr<TestNewWindowDelegateProvider> delegate_provider_;
+  MockNewWindowDelegate new_window_delegate_;
 };
 
 // A test shelf item delegate that records the commands sent for execution.
@@ -112,25 +94,20 @@ class TestShelfItemDelegate : public ShelfItemDelegate {
   int last_executed_command_ = 0;
 };
 
-INSTANTIATE_TEST_SUITE_P(
-    ,
-    ShelfContextMenuModelTest,
-    ::testing::Combine(::testing::Values(user_manager::USER_TYPE_REGULAR,
-                                         user_manager::USER_TYPE_CHILD),
-                       ::testing::Bool()));
+INSTANTIATE_TEST_SUITE_P(,
+                         ShelfContextMenuModelTest,
+                         ::testing::Values(user_manager::UserType::kRegular,
+                                           user_manager::UserType::kChild));
 
 // Tests the default items in a shelf context menu.
 TEST_P(ShelfContextMenuModelTest, Basic) {
-  ShelfContextMenuModel menu(nullptr, GetPrimaryDisplay().id());
+  ShelfContextMenuModel menu(nullptr, GetPrimaryDisplay().id(),
+                             /*menu_in_shelf=*/false);
 
   ASSERT_EQ(3u, menu.GetItemCount());
   EXPECT_EQ(CommandId::MENU_AUTO_HIDE, menu.GetCommandIdAt(0));
   EXPECT_EQ(CommandId::MENU_ALIGNMENT_MENU, menu.GetCommandIdAt(1));
-  if (IsPersonalizationHubParamEnabled()) {
-    EXPECT_EQ(CommandId::MENU_PERSONALIZATION_HUB, menu.GetCommandIdAt(2));
-  } else {
-    EXPECT_EQ(CommandId::MENU_CHANGE_WALLPAPER, menu.GetCommandIdAt(2));
-  }
+  EXPECT_EQ(CommandId::MENU_PERSONALIZATION_HUB, menu.GetCommandIdAt(2));
   for (size_t i = 0; i < menu.GetItemCount(); ++i) {
     EXPECT_TRUE(menu.IsEnabledAt(i));
     EXPECT_TRUE(menu.IsVisibleAt(i));
@@ -152,13 +129,13 @@ TEST_P(ShelfContextMenuModelTest, Invocation) {
   Shelf* shelf = GetPrimaryShelf();
 
   // Check the shelf auto-hide behavior and menu interaction.
-  ShelfContextMenuModel menu1(nullptr, primary_id);
+  ShelfContextMenuModel menu1(nullptr, primary_id, /*menu_in_shelf=*/false);
   EXPECT_EQ(ShelfAutoHideBehavior::kNever, shelf->auto_hide_behavior());
   menu1.ActivatedAt(0);
   EXPECT_EQ(ShelfAutoHideBehavior::kAlways, shelf->auto_hide_behavior());
 
   // Recreate the menu, auto-hide should still be enabled.
-  ShelfContextMenuModel menu2(nullptr, primary_id);
+  ShelfContextMenuModel menu2(nullptr, primary_id, /*menu_in_shelf=*/false);
   EXPECT_EQ(ShelfAutoHideBehavior::kAlways, shelf->auto_hide_behavior());
 
   // By default the shelf should be on bottom, shelf alignment options in order:
@@ -172,7 +149,7 @@ TEST_P(ShelfContextMenuModelTest, Invocation) {
   EXPECT_EQ(ShelfAlignment::kLeft, shelf->alignment());
 
   // Recreate the menu, it should show left alignment checked.
-  ShelfContextMenuModel menu3(nullptr, primary_id);
+  ShelfContextMenuModel menu3(nullptr, primary_id, /*menu_in_shelf=*/false);
   submenu = menu3.GetSubmenuModelAt(1);
   EXPECT_TRUE(submenu->IsItemCheckedAt(0));
 }
@@ -180,28 +157,18 @@ TEST_P(ShelfContextMenuModelTest, Invocation) {
 TEST_P(ShelfContextMenuModelTest, OpensPersonalizationHubOrWallpaper) {
   int64_t display_id = GetPrimaryDisplay().id();
 
-  ShelfContextMenuModel menu(nullptr, display_id);
+  ShelfContextMenuModel menu(nullptr, display_id, /*menu_in_shelf=*/false);
 
-  if (IsPersonalizationHubParamEnabled()) {
-    // Personalization hub feature enabled should open hub.
-    EXPECT_CALL(*GetMockNewWindowDelegate(), OpenPersonalizationHub).Times(1);
-    menu.ActivatedAt(2);
-  } else {
-    TestWallpaperControllerClient client;
-    Shell::Get()->wallpaper_controller()->SetClient(&client);
-    EXPECT_EQ(0u, client.open_count());
-
-    // Click the third option, wallpaper picker. It should open.
-    menu.ActivatedAt(2);
-    EXPECT_EQ(1u, client.open_count());
-  }
+  EXPECT_CALL(GetMockNewWindowDelegate(), OpenPersonalizationHub).Times(1);
+  menu.ActivatedAt(2);
 }
 
 // Tests custom items in a shelf context menu for an application.
 TEST_P(ShelfContextMenuModelTest, CustomItems) {
   // Pass a valid delegate to indicate the menu is for an application.
   TestShelfItemDelegate delegate;
-  ShelfContextMenuModel menu(&delegate, GetPrimaryDisplay().id());
+  ShelfContextMenuModel menu(&delegate, GetPrimaryDisplay().id(),
+                             /*menu_in_shelf=*/false);
 
   // Because the delegate is valid, the context menu will not have the desktop
   // menu options (autohide, shelf position, and wallpaper picker).
@@ -233,12 +200,15 @@ TEST_P(ShelfContextMenuModelTest, AutohideShelfOptionOnExternalDisplay) {
   int64_t secondary_id = GetSecondaryDisplay().id();
 
   // Create a normal window on the primary display.
-  std::unique_ptr<views::Widget> widget = CreateTestWidget();
+  std::unique_ptr<views::Widget> widget =
+      CreateTestWidget(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET);
   widget->Show();
   widget->SetFullscreen(true);
 
-  ShelfContextMenuModel primary_menu(nullptr, primary_id);
-  ShelfContextMenuModel secondary_menu(nullptr, secondary_id);
+  ShelfContextMenuModel primary_menu(nullptr, primary_id,
+                                     /*menu_in_shelf=*/false);
+  ShelfContextMenuModel secondary_menu(nullptr, secondary_id,
+                                       /*menu_in_shelf=*/false);
   EXPECT_FALSE(
       primary_menu.GetIndexOfCommandId(CommandId::MENU_AUTO_HIDE).has_value());
   EXPECT_TRUE(secondary_menu.GetIndexOfCommandId(CommandId::MENU_AUTO_HIDE)
@@ -255,21 +225,16 @@ TEST_P(ShelfContextMenuModelTest, ExcludeClamshellOptionsOnTabletMode) {
   // In tablet mode, the wallpaper picker and auto-hide should be the only two
   // options because other options are disabled.
   tablet_mode_controller->SetEnabledForTest(true);
-  ShelfContextMenuModel menu1(nullptr, primary_id);
+  ShelfContextMenuModel menu1(nullptr, primary_id, /*menu_in_shelf=*/false);
   EXPECT_EQ(2u, menu1.GetItemCount());
   EXPECT_EQ(ShelfContextMenuModel::MENU_AUTO_HIDE, menu1.GetCommandIdAt(0));
-  if (IsPersonalizationHubParamEnabled()) {
-    EXPECT_EQ(ShelfContextMenuModel::MENU_PERSONALIZATION_HUB,
-              menu1.GetCommandIdAt(1));
-  } else {
-    EXPECT_EQ(ShelfContextMenuModel::MENU_CHANGE_WALLPAPER,
-              menu1.GetCommandIdAt(1));
-  }
+  EXPECT_EQ(ShelfContextMenuModel::MENU_PERSONALIZATION_HUB,
+            menu1.GetCommandIdAt(1));
 
   // Test that a menu shown out of tablet mode includes all three options:
-  // MENU_AUTO_HIDE, MENU_ALIGNMENT_MENU, and MENU_CHANGE_WALLPAPER.
+  // MENU_AUTO_HIDE, MENU_ALIGNMENT_MENU.
   tablet_mode_controller->SetEnabledForTest(false);
-  ShelfContextMenuModel menu2(nullptr, primary_id);
+  ShelfContextMenuModel menu2(nullptr, primary_id, /*menu_in_shelf=*/false);
   EXPECT_EQ(3u, menu2.GetItemCount());
 
   // Test the auto hide option.
@@ -295,14 +260,9 @@ TEST_P(ShelfContextMenuModelTest, ExcludeClamshellOptionsOnTabletMode) {
             submenu->GetCommandIdAt(2));
   EXPECT_TRUE(submenu->IsEnabledAt(2));
 
-  // Test the wallpaper picker option.
-  if (IsPersonalizationHubParamEnabled()) {
-    EXPECT_EQ(ShelfContextMenuModel::MENU_PERSONALIZATION_HUB,
-              menu2.GetCommandIdAt(2));
-  } else {
-    EXPECT_EQ(ShelfContextMenuModel::MENU_CHANGE_WALLPAPER,
-              menu2.GetCommandIdAt(2));
-  }
+  // Test the personalization hub option.
+  EXPECT_EQ(ShelfContextMenuModel::MENU_PERSONALIZATION_HUB,
+            menu2.GetCommandIdAt(2));
   EXPECT_TRUE(menu2.IsEnabledAt(2));
 }
 
@@ -314,25 +274,105 @@ TEST_P(ShelfContextMenuModelTest, CommandIdsMatchEnumsForHistograms) {
   EXPECT_EQ(502, ShelfContextMenuModel::MENU_ALIGNMENT_LEFT);
   EXPECT_EQ(503, ShelfContextMenuModel::MENU_ALIGNMENT_RIGHT);
   EXPECT_EQ(504, ShelfContextMenuModel::MENU_ALIGNMENT_BOTTOM);
-  EXPECT_EQ(505, ShelfContextMenuModel::MENU_CHANGE_WALLPAPER);
+  EXPECT_EQ(506, ShelfContextMenuModel::MENU_PERSONALIZATION_HUB);
 }
 
 TEST_P(ShelfContextMenuModelTest, ShelfContextMenuOptions) {
   // Tests that there are exactly 3 shelf context menu options. If you're adding
   // a context menu option ensure that you have added the enum to
-  // tools/metrics/enums.xml and that you haven't modified the order of the
-  // existing enums.
-  ShelfContextMenuModel menu(nullptr, GetPrimaryDisplay().id());
+  // tools/metrics/histograms/enums.xml and that you haven't modified the order
+  // of the existing enums.
+  ShelfContextMenuModel menu(nullptr, GetPrimaryDisplay().id(),
+                             /*menu_in_shelf=*/false);
   EXPECT_EQ(3u, menu.GetItemCount());
 }
 
 TEST_P(ShelfContextMenuModelTest, NotificationContainerEnabled) {
   // Tests that NOTIFICATION_CONTAINER is enabled. This ensures that the
   // container is able to handle gesture events.
-  ShelfContextMenuModel menu(nullptr, GetPrimaryDisplay().id());
+  ShelfContextMenuModel menu(nullptr, GetPrimaryDisplay().id(),
+                             /*menu_in_shelf=*/false);
   menu.AddItem(NOTIFICATION_CONTAINER, std::u16string());
 
   EXPECT_TRUE(menu.IsCommandIdEnabled(NOTIFICATION_CONTAINER));
+}
+
+class DeskButtonContextMenuModelTest : public ShelfContextMenuModelTest {
+ public:
+  DeskButtonContextMenuModelTest() {
+    scoped_feature_list_.InitAndEnableFeature(features::kDeskButton);
+  }
+
+  DeskButtonContextMenuModelTest(const DeskButtonContextMenuModelTest&) =
+      delete;
+  DeskButtonContextMenuModelTest& operator=(
+      const DeskButtonContextMenuModelTest&) = delete;
+
+  ~DeskButtonContextMenuModelTest() override = default;
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+INSTANTIATE_TEST_SUITE_P(,
+                         DeskButtonContextMenuModelTest,
+                         ::testing::Values(user_manager::UserType::kRegular,
+                                           user_manager::UserType::kChild));
+
+// Tests that the default items are in the shelf context menu when it is created
+// outside of the shelf, and that the desk button menu item also appears when
+// the menu is created in the shelf.
+TEST_P(DeskButtonContextMenuModelTest, Basic) {
+  // Not on the shelf, the context menu should have the default items.
+  ShelfContextMenuModel shelf_menu(nullptr, GetPrimaryDisplay().id(),
+                                   /*menu_in_shelf=*/false);
+  ASSERT_EQ(3u, shelf_menu.GetItemCount());
+  EXPECT_EQ(CommandId::MENU_AUTO_HIDE, shelf_menu.GetCommandIdAt(0));
+  EXPECT_EQ(CommandId::MENU_ALIGNMENT_MENU, shelf_menu.GetCommandIdAt(1));
+  EXPECT_EQ(CommandId::MENU_PERSONALIZATION_HUB, shelf_menu.GetCommandIdAt(2));
+  for (size_t i = 0; i < shelf_menu.GetItemCount(); ++i) {
+    EXPECT_TRUE(shelf_menu.IsEnabledAt(i));
+    EXPECT_TRUE(shelf_menu.IsVisibleAt(i));
+  }
+
+  // On the shelf, the context menu should also have the desk button visibility
+  // option.
+  ShelfContextMenuModel non_shelf_menu(nullptr, GetPrimaryDisplay().id(),
+                                       /*menu_in_shelf=*/true);
+  ASSERT_EQ(4u, non_shelf_menu.GetItemCount());
+  EXPECT_EQ(CommandId::MENU_AUTO_HIDE, non_shelf_menu.GetCommandIdAt(0));
+  EXPECT_EQ(CommandId::MENU_ALIGNMENT_MENU, non_shelf_menu.GetCommandIdAt(1));
+  EXPECT_EQ(CommandId::MENU_PERSONALIZATION_HUB,
+            non_shelf_menu.GetCommandIdAt(2));
+  EXPECT_EQ(CommandId::MENU_SHOW_DESK_NAME, non_shelf_menu.GetCommandIdAt(3));
+  for (size_t i = 0; i < non_shelf_menu.GetItemCount(); ++i) {
+    EXPECT_TRUE(non_shelf_menu.IsEnabledAt(i));
+    EXPECT_TRUE(non_shelf_menu.IsVisibleAt(i));
+  }
+}
+
+// Tests that if the hide option is activated, the show option is shown next,
+// and vice versa.
+TEST_P(DeskButtonContextMenuModelTest, ShowHide) {
+  ShelfContextMenuModel menu_when_button_hidden(
+      nullptr, GetPrimaryDisplay().id(), /*menu_in_shelf=*/true);
+  ASSERT_EQ(4u, menu_when_button_hidden.GetItemCount());
+  EXPECT_EQ(CommandId::MENU_SHOW_DESK_NAME,
+            menu_when_button_hidden.GetCommandIdAt(3));
+  EXPECT_TRUE(menu_when_button_hidden.IsEnabledAt(3));
+  EXPECT_TRUE(menu_when_button_hidden.IsVisibleAt(3));
+
+  // Show the desk button.
+  menu_when_button_hidden.ActivatedAt(3);
+
+  // Ensure the new context menu shows the option to hide the desk button.
+  ShelfContextMenuModel menu_when_button_shown(
+      nullptr, GetPrimaryDisplay().id(), /*menu_in_shelf=*/true);
+  ASSERT_EQ(4u, menu_when_button_shown.GetItemCount());
+  EXPECT_EQ(CommandId::MENU_HIDE_DESK_NAME,
+            menu_when_button_shown.GetCommandIdAt(3));
+  EXPECT_TRUE(menu_when_button_shown.IsEnabledAt(3));
+  EXPECT_TRUE(menu_when_button_shown.IsVisibleAt(3));
 }
 
 }  // namespace

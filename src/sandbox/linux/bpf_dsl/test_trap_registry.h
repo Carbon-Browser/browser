@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,13 +24,11 @@ class TestTrapRegistry : public TrapRegistry {
 
   virtual ~TestTrapRegistry();
 
-  uint16_t Add(TrapFnc fnc, const void* aux, bool safe) override;
+  uint16_t Add(const Handler& handler) override;
   bool EnableUnsafeTraps() override;
 
  private:
-  using Key = std::pair<TrapFnc, const void*>;
-
-  std::map<Key, uint16_t> map_;
+  std::map<Handler, uint16_t> map_;
 };
 
 }  // namespace bpf_dsl

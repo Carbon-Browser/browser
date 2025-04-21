@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,7 @@
 #include "ui/views/controls/label.h"
 #include "ui/views/layout/box_layout.h"
 
-ExtensionPermissionsView::ExtensionPermissionsView(int available_width)
-    : available_width_(available_width) {
+ExtensionPermissionsView::ExtensionPermissionsView() {
   SetLayoutManager(std::make_unique<views::BoxLayout>(
       views::BoxLayout::Orientation::kVertical, gfx::Insets(),
       ChromeLayoutProvider::Get()->GetDistanceMetric(
@@ -28,14 +27,12 @@ void ExtensionPermissionsView::AddItem(
       views::style::STYLE_SECONDARY);
   permission_label->SetMultiLine(true);
   permission_label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
-  permission_label->SizeToFit(available_width_);
   AddChildView(std::move(permission_label));
   if (!permission_details.empty()) {
     // If we have more details to provide, show them in collapsed form.
     std::vector<std::u16string> details_container;
     details_container.push_back(permission_details);
-    AddChildView(std::make_unique<ExpandableContainerView>(details_container,
-                                                           available_width_));
+    AddChildView(std::make_unique<ExpandableContainerView>(details_container));
   }
 }
 
@@ -50,5 +47,5 @@ void ExtensionPermissionsView::ChildPreferredSizeChanged(views::View* child) {
   PreferredSizeChanged();
 }
 
-BEGIN_METADATA(ExtensionPermissionsView, views::View)
+BEGIN_METADATA(ExtensionPermissionsView)
 END_METADATA

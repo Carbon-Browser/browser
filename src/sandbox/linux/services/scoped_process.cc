@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "sandbox/linux/services/scoped_process.h"
 
@@ -14,8 +19,8 @@
 
 #include <ostream>
 
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/functional/callback.h"
 #include "base/notreached.h"
 #include "base/posix/eintr_wrapper.h"
 #include "build/build_config.h"
@@ -54,7 +59,6 @@ ScopedProcess::ScopedProcess(base::OnceClosure child_callback)
     CHECK_EQ(1, HANDLE_EINTR(write(pipe_fds_[1], kSynchronisationChar, 1)));
     WaitForever();
     NOTREACHED();
-    _exit(1);
   }
 
   PCHECK(0 == IGNORE_EINTR(close(pipe_fds_[1])));
@@ -93,7 +97,7 @@ int ScopedProcess::WaitForExit(bool* got_signaled) {
              process_info.si_code == CLD_DUMPED) {
     *got_signaled = true;
   } else {
-    CHECK(false) << "ScopedProcess needs to be extended for si_code "
+    NOTREACHED() << "ScopedProcess needs to be extended for si_code "
                  << process_info.si_code;
   }
   return process_info.si_status;

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <vector>
 
 #include "base/notreached.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "gpu/command_buffer/service/scheduler.h"
-#include "gpu/ipc/scheduler_sequence.h"
+#include "gpu/command_buffer/service/scheduler_sequence.h"
 
 namespace gpu {
 
@@ -24,7 +24,6 @@ GpuInProcessThreadService::GpuInProcessThreadService(
     scoped_refptr<base::SingleThreadTaskRunner> task_runner,
     Scheduler* scheduler,
     SyncPointManager* sync_point_manager,
-    MailboxManager* mailbox_manager,
     gl::GLSurfaceFormat share_group_surface_format,
     const GpuFeatureInfo& gpu_feature_info,
     const GpuPreferences& gpu_preferences,
@@ -33,7 +32,6 @@ GpuInProcessThreadService::GpuInProcessThreadService(
     : CommandBufferTaskExecutor(gpu_preferences,
                                 gpu_feature_info,
                                 sync_point_manager,
-                                mailbox_manager,
                                 share_group_surface_format,
                                 shared_image_manager,
                                 program_cache),

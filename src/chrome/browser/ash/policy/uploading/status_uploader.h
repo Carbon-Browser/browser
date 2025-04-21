@@ -1,4 +1,4 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,15 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/callback_list.h"
 #include "base/cancelable_callback.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
+#include "components/policy/core/common/cloud/cloud_policy_client.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 
@@ -23,8 +25,6 @@ class SequencedTaskRunner;
 
 namespace policy {
 
-class CloudPolicyClient;
-class ManagedSessionService;
 class StatusCollector;
 struct StatusCollectorParams;
 
@@ -49,10 +49,11 @@ class StatusUploader : public MediaCaptureDevicesDispatcher::Observer {
   // has ever happened.
   base::Time last_upload() const { return last_upload_; }
 
-  // Returns true if session data upload (screenshots, logs, etc) is allowed.
-  // This checks to ensure that the current session is a kiosk session, and
-  // that no user input (keyboard, mouse, touch, audio/video) has been received.
-  bool IsSessionDataUploadAllowed();
+  // Returns true if screenshot upload is allowed. This checks to ensure that
+  // the current session is a kiosk session and that no user input (keyboard,
+  // mouse, touch) has been received in the last 5 minutes. If there has been
+  // audio/video captured in this session it will be blocked till reboot.
+  bool IsScreenshotAllowed();
 
   // MediaCaptureDevicesDispatcher::Observer implementation
   void OnRequestUpdate(int render_process_id,
@@ -75,7 +76,7 @@ class StatusUploader : public MediaCaptureDevicesDispatcher::Observer {
   void OnStatusReceived(StatusCollectorParams callback_params);
 
   // Invoked once a status upload has completed.
-  void OnUploadCompleted(bool success);
+  void OnUploadCompleted(CloudPolicyClient::Result result);
 
   // Helper method that figures out when the next status upload should
   // be scheduled. Returns true if the next status upload has been scheduled
@@ -86,16 +87,8 @@ class StatusUploader : public MediaCaptureDevicesDispatcher::Observer {
   // if appropriate.
   void RefreshUploadFrequency();
 
-  // Updates the status collector being used.
-  void UpdateStatusCollector();
-
   // CloudPolicyClient used to issue requests to the server.
-  CloudPolicyClient* client_;
-
-  // Used to initialize a |ManagedSessionService| instance and pass the
-  // underlying raw ptr to |DeviceStatusCollector| whenever constructed in
-  // |UpdateStatusCollector|.
-  std::unique_ptr<ManagedSessionService> managed_session_service_;
+  raw_ptr<CloudPolicyClient> client_;
 
   // StatusCollector that provides status for uploading.
   std::unique_ptr<StatusCollector> collector_;
@@ -111,9 +104,6 @@ class StatusUploader : public MediaCaptureDevicesDispatcher::Observer {
 
   // The time the last upload was performed.
   base::Time last_upload_;
-
-  // Subscription for whether or not to user granular reporting.
-  base::CallbackListSubscription granular_reporting_subscription_;
 
   // Callback invoked via a delay to upload device status.
   base::CancelableOnceClosure upload_callback_;

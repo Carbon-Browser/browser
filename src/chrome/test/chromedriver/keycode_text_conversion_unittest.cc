@@ -1,9 +1,10 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <string>
 
+#include "base/logging.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -23,8 +24,10 @@ void CheckCharToKeyCode16(char16_t character,
   std::string error_msg;
   EXPECT_TRUE(ConvertCharToKeyCode(
       character, &actual_key_code, &actual_modifiers, &error_msg));
-  EXPECT_EQ(key_code, actual_key_code) << "Char: " << character;
-  EXPECT_EQ(modifiers, actual_modifiers) << "Char: " << character;
+  EXPECT_EQ(key_code, actual_key_code)
+      << "Char: " << std::u16string(1, character);
+  EXPECT_EQ(modifiers, actual_modifiers)
+      << "Char: " << std::u16string(1, character);
 }
 
 void CheckCharToKeyCode(char character, ui::KeyboardCode key_code,
@@ -62,7 +65,7 @@ std::string ConvertKeyCodeToTextNoError(ui::KeyboardCode key_code,
 
 }  // namespace
 
-// TODO(crbug.com/1052397): Revisit the macro expression once build flag switch
+// TODO(crbug.com/40118868): Revisit the macro expression once build flag switch
 // of lacros-chrome is complete.
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
 // Fails on bots: crbug.com/174962
@@ -99,7 +102,7 @@ TEST(KeycodeTextConversionTest, MAYBE_KeyCodeToText) {
       ConvertKeyCodeToTextNoError(ui::VKEY_SHIFT, kShiftKeyModifierMask));
 }
 
-// TODO(crbug.com/1052397): Revisit the macro expression once build flag switch
+// TODO(crbug.com/40118868): Revisit the macro expression once build flag switch
 // of lacros-chrome is complete.
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
 // Fails on bots: crbug.com/174962

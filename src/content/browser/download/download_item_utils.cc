@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,7 +41,7 @@ class DownloadItemData : public base::SupportsUserData::Data,
   void WebContentsDestroyed() override;
 
   static const char kKey[];
-  raw_ptr<BrowserContext> browser_context_;
+  raw_ptr<BrowserContext, DanglingUntriaged> browser_context_;
   GlobalRenderFrameHostId id_;
 };
 
@@ -77,9 +77,9 @@ void DownloadItemData::Detach(download::DownloadItem* download_item) {
 }
 
 void DownloadItemData::PrimaryPageChanged(Page& page) {
-  // To prevent reuse of a render in a different primary page, we will reset
-  // web_contents when the primary page changed.
-  Observe(nullptr);
+  // To prevent reuse of a render in a different primary page,
+  // DownloadItemUtils::GetWebContents() will return null after the primary page
+  // changed.
   id_ = GlobalRenderFrameHostId();
 }
 
@@ -103,8 +103,9 @@ BrowserContext* DownloadItemUtils::GetBrowserContext(
 WebContents* DownloadItemUtils::GetWebContents(
     const download::DownloadItem* download_item) {
   DownloadItemData* data = DownloadItemData::Get(download_item);
-  if (!data)
+  if (!data || !data->id()) {
     return nullptr;
+  }
   return data->web_contents();
 }
 
@@ -115,6 +116,16 @@ RenderFrameHost* DownloadItemUtils::GetRenderFrameHost(
   if (!data)
     return nullptr;
   return RenderFrameHost::FromID(data->id());
+}
+
+// static
+WebContents* DownloadItemUtils::GetOriginalWebContents(
+    const download::DownloadItem* download_item) {
+  DownloadItemData* data = DownloadItemData::Get(download_item);
+  if (!data) {
+    return nullptr;
+  }
+  return data->web_contents();
 }
 
 // static

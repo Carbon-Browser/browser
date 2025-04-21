@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "device/bluetooth/bluetooth_export.h"
 #include "device/bluetooth/bluetooth_remote_gatt_characteristic.h"
@@ -52,12 +52,12 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothRemoteGattCharacteristicWinrt
   const std::vector<uint8_t>& GetValue() const override;
   BluetoothRemoteGattService* GetService() const override;
   void ReadRemoteCharacteristic(ValueCallback callback) override;
-  void WriteRemoteCharacteristic(const std::vector<uint8_t>& value,
+  void WriteRemoteCharacteristic(base::span<const uint8_t> value,
                                  WriteType write_type,
                                  base::OnceClosure callback,
                                  ErrorCallback error_callback) override;
   void DeprecatedWriteRemoteCharacteristic(
-      const std::vector<uint8_t>& value,
+      base::span<const uint8_t> value,
       base::OnceClosure callback,
       ErrorCallback error_callback) override;
 
@@ -144,7 +144,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothRemoteGattCharacteristicWinrt
   ValueCallback pending_read_callback_;
   std::unique_ptr<PendingWriteCallbacks> pending_write_callbacks_;
   std::unique_ptr<PendingNotificationCallbacks> pending_notification_callbacks_;
-  absl::optional<EventRegistrationToken> value_changed_token_;
+  std::optional<EventRegistrationToken> value_changed_token_;
   // The destructor runs callbacks. Methods can use |destructor_called_| to
   // protect against reentrant calls to a partially deleted instance.
   bool destructor_called_ = false;

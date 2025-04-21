@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,8 @@
 #include "base/time/time.h"
 #include "components/segmentation_platform/internal/database/signal_database.h"
 #include "components/segmentation_platform/internal/execution/processing/feature_aggregator.h"
-#include "components/segmentation_platform/internal/proto/aggregation.pb.h"
-#include "components/segmentation_platform/internal/proto/model_metadata.pb.h"
-#include "components/segmentation_platform/internal/proto/types.pb.h"
+#include "components/segmentation_platform/public/proto/aggregation.pb.h"
+#include "components/segmentation_platform/public/proto/types.pb.h"
 
 namespace segmentation_platform::processing {
 
@@ -28,16 +27,16 @@ class FeatureAggregatorImpl : public FeatureAggregator {
   FeatureAggregatorImpl& operator=(const FeatureAggregatorImpl&) = delete;
 
   // FeatureAggregator overrides.
-  std::vector<float> Process(
+  std::optional<std::vector<float>> Process(
       proto::SignalType signal_type,
+      uint64_t name_hash,
       proto::Aggregation aggregation,
       uint64_t bucket_count,
+      const base::Time& start_time,
       const base::Time& end_time,
       const base::TimeDelta& bucket_duration,
-      const std::vector<SignalDatabase::Sample>& samples) const override;
-  void FilterEnumSamples(
       const std::vector<int32_t>& accepted_enum_ids,
-      std::vector<SignalDatabase::Sample>& samples) const override;
+      const std::vector<SignalDatabase::DbEntry>& all_samples) const override;
 };
 
 }  // namespace segmentation_platform::processing

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,6 +43,10 @@ void ShowDialog(gfx::NativeWindow parent,
 // is anchored to `container`.
 void ShowDialog(ExtensionsToolbarContainer* container,
                 const std::vector<extensions::ExtensionId>& extension_ids,
+                std::unique_ptr<ui::DialogModel> dialog_model);
+
+// Shows the dialog constructed from `dialog_model` in `browser`.
+void ShowDialog(Browser* browser,
                 std::unique_ptr<ui::DialogModel> dialog_model);
 
 #endif  // CHROME_BROWSER_UI_VIEWS_EXTENSIONS_EXTENSIONS_DIALOGS_UTILS_H_

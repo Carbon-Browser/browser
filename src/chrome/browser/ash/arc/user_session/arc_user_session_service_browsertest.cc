@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,11 +10,11 @@
 #include "ash/components/arc/session/arc_service_manager.h"
 #include "ash/components/arc/test/arc_util_test_support.h"
 #include "ash/components/arc/test/connection_holder_util.h"
+#include "ash/components/arc/test/fake_intent_helper_instance.h"
 #include "base/run_loop.h"
 #include "base/task/current_thread.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_prefs.h"
 #include "chrome/test/base/in_process_browser_test.h"
-#include "components/arc/test/fake_intent_helper_instance.h"
 #include "components/session_manager/core/session_manager.h"
 #include "content/public/test/browser_test.h"
 
@@ -46,12 +46,7 @@ void RunUntilIdle() {
 
 class ArcUserSessionServiceTest : public InProcessBrowserTest {
  public:
-  ArcUserSessionServiceTest() {
-    // SyncSettingsCategorization makes an untitled Play Store icon appear in
-    // the shelf due to app pin syncing code. Sync isn't relevant to this test,
-    // so skip pinned app sync. https://crbug.com/1085597
-    ChromeShelfPrefs::SkipPinnedAppsFromSyncForTest();
-  }
+  ArcUserSessionServiceTest() = default;
 
   ArcUserSessionServiceTest(const ArcUserSessionServiceTest&) = delete;
   ArcUserSessionServiceTest& operator=(const ArcUserSessionServiceTest&) =

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,7 @@ class InstantServiceObserver {
   virtual void MostVisitedInfoChanged(const InstantMostVisitedInfo&);
 
  protected:
-  virtual ~InstantServiceObserver() {}
+  virtual ~InstantServiceObserver() = default;
 };
 
 #endif  // CHROME_BROWSER_SEARCH_INSTANT_SERVICE_OBSERVER_H_

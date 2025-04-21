@@ -1,13 +1,13 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/keyboard/ui/container_full_width_behavior.h"
 
-#include "ash/public/cpp/tablet_mode.h"
 #include "ui/aura/window.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
+#include "ui/display/screen.h"
 #include "ui/gfx/geometry/transform.h"
 #include "ui/wm/core/window_animations.h"
 
@@ -102,10 +102,11 @@ bool ContainerFullWidthBehavior::HandlePointerEvent(
 bool ContainerFullWidthBehavior::HandleGestureEvent(
     const ui::GestureEvent& event,
     const gfx::Rect& bounds_in_screen) {
-  if (!ash::TabletMode::Get()->InTabletMode())
+  if (!display::Screen::GetScreen()->InTabletMode()) {
     return false;
+  }
 
-  if (event.type() == ui::ET_GESTURE_SCROLL_BEGIN) {
+  if (event.type() == ui::EventType::kGestureScrollBegin) {
     // Check that the user is swiping upwards near the bottom of the keyboard.
     // The coordinates of the |event| is relative to the window.
     const auto details = event.details();

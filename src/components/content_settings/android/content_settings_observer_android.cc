@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,11 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
-#include "components/content_settings/android/content_settings_jni_headers/ContentSettingsObserver_jni.h"
 #include "components/permissions/permissions_client.h"
 #include "content/public/browser/android/browser_context_handle.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "components/content_settings/android/content_settings_jni_headers/ContentSettingsObserver_jni.h"
 
 namespace content_settings {
 

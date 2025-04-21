@@ -1,29 +1,31 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/media/webrtc/webrtc_event_log_manager_remote.h"
 
-#include <algorithm>
 #include <iterator>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/not_fatal_until.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/common/chrome_switches.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 
 namespace webrtc_event_logging {
 
-// TODO(crbug.com/775415): Change max back to (1u << 29) after resolving the
+// TODO(crbug.com/40545136): Change max back to (1u << 29) after resolving the
 // issue where we read the entire file into memory.
 const size_t kMaxRemoteLogFileSizeBytes = 50000000u;
 
@@ -213,7 +215,7 @@ WebRtcRemoteEventLogManager::WebRtcRemoteEventLogManager(
 
 WebRtcRemoteEventLogManager::~WebRtcRemoteEventLogManager() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  // TODO(crbug.com/775415): Purge from disk files which were being uploaded
+  // TODO(crbug.com/40545136): Purge from disk files which were being uploaded
   // while destruction took place, thereby avoiding endless attempts to upload
   // the same file.
 
@@ -328,10 +330,10 @@ void WebRtcRemoteEventLogManager::DisableForBrowserContext(
   //    In that case, some peer connections associated with this BrowserContext
   //    might still be active, or become active at a later time, but all
   //    logs must have already been stopped.
-  auto pred = [browser_context_id](decltype(active_logs_)::value_type& log) {
-    return log.first.browser_context_id == browser_context_id;
-  };
-  DCHECK(std::count_if(active_logs_.begin(), active_logs_.end(), pred) == 0u);
+  DCHECK(!base::Contains(active_logs_, browser_context_id,
+                         [](const decltype(active_logs_)::value_type& log) {
+                           return log.first.browser_context_id;
+                         }));
 #endif
 
   // Pending logs for this BrowserContext are no longer eligible for upload.
@@ -651,8 +653,8 @@ void WebRtcRemoteEventLogManager::OnConnectionChanged(
 
   ManageUploadSchedule();
 
-  // TODO(crbug.com/775415): Support pausing uploads when connection goes down,
-  // or switches to an unsupported connection type.
+  // TODO(crbug.com/40545136): Support pausing uploads when connection goes
+  // down, or switches to an unsupported connection type.
 }
 
 void WebRtcRemoteEventLogManager::SetWebRtcEventLogUploaderFactoryForTesting(
@@ -778,7 +780,7 @@ bool WebRtcRemoteEventLogManager::MaybeCreateLogsDirectory(
     return false;
   }
 
-  // TODO(crbug.com/775415): Test for appropriate permissions.
+  // TODO(crbug.com/40545136): Test for appropriate permissions.
 
   return true;
 }
@@ -965,7 +967,7 @@ WebRtcRemoteEventLogManager::PruneAndLoadHistoryFilesForBrowserContext(
   for (auto it = history_files.begin();
        num_history_files > kMaxWebRtcEventLogHistoryFiles;
        --num_history_files) {
-    DCHECK(it != history_files.end());
+    CHECK(it != history_files.end(), base::NotFatalUntil::M130);
     files_to_delete.insert(it->path());
     it = history_files.erase(it);
   }
@@ -996,7 +998,7 @@ bool WebRtcRemoteEventLogManager::StartWritingLog(
   // this filename is already taken, or that an earlier log with the same name
   // existed and left a history file behind, it will be treated the same way as
   // any other failure to start the log file.
-  // TODO(crbug.com/775415): Add a unit test for above comment.
+  // TODO(crbug.com/40545136): Add a unit test for above comment.
   const base::FilePath remote_logs_dir =
       GetRemoteBoundWebRtcEventLogsDir(browser_context_dir);
   const base::FilePath log_path =
@@ -1059,7 +1061,7 @@ void WebRtcRemoteEventLogManager::MaybeStopRemoteLogging(
 }
 
 void WebRtcRemoteEventLogManager::PrunePendingLogs(
-    absl::optional<BrowserContextId> browser_context_id) {
+    std::optional<BrowserContextId> browser_context_id) {
   DCHECK(task_runner_->RunsTasksInCurrentSequence());
   MaybeRemovePendingLogs(
       base::Time::Min(),
@@ -1126,7 +1128,7 @@ void WebRtcRemoteEventLogManager::MaybeCancelActiveLogs(
 void WebRtcRemoteEventLogManager::MaybeRemovePendingLogs(
     const base::Time& delete_begin,
     const base::Time& delete_end,
-    absl::optional<BrowserContextId> browser_context_id,
+    std::optional<BrowserContextId> browser_context_id,
     bool is_cache_clear) {
   DCHECK(task_runner_->RunsTasksInCurrentSequence());
 
@@ -1193,7 +1195,7 @@ void WebRtcRemoteEventLogManager::MaybeCancelUpload(
 bool WebRtcRemoteEventLogManager::MatchesFilter(
     BrowserContextId log_browser_context_id,
     const base::Time& log_last_modification,
-    absl::optional<BrowserContextId> filter_browser_context_id,
+    std::optional<BrowserContextId> filter_browser_context_id,
     const base::Time& filter_range_begin,
     const base::Time& filter_range_end) const {
   DCHECK(task_runner_->RunsTasksInCurrentSequence());
@@ -1216,16 +1218,16 @@ bool WebRtcRemoteEventLogManager::AdditionalActiveLogAllowed(
 
   // Limit over the number of pending logs (per BrowserContext). We count active
   // logs too, since they become pending logs once completed.
-  const size_t active_count = std::count_if(
-      active_logs_.begin(), active_logs_.end(),
-      [browser_context_id](const decltype(active_logs_)::value_type& log) {
-        return log.first.browser_context_id == browser_context_id;
-      });
-  const size_t pending_count = std::count_if(
-      pending_logs_.begin(), pending_logs_.end(),
-      [browser_context_id](const decltype(pending_logs_)::value_type& log) {
-        return log.browser_context_id == browser_context_id;
-      });
+  const size_t active_count =
+      base::ranges::count(active_logs_, browser_context_id,
+                          [](const decltype(active_logs_)::value_type& log) {
+                            return log.first.browser_context_id;
+                          });
+  const size_t pending_count =
+      base::ranges::count(pending_logs_, browser_context_id,
+                          [](const decltype(pending_logs_)::value_type& log) {
+                            return log.browser_context_id;
+                          });
   return active_count + pending_count < kMaxPendingRemoteBoundWebRtcEventLogs;
 }
 
@@ -1300,11 +1302,11 @@ void WebRtcRemoteEventLogManager::MaybeStartUploading() {
 
     // The uploader takes ownership of the file; it's no longer considered to be
     // pending. (If the upload fails, the log will be deleted.)
-    // TODO(crbug.com/775415): Add more refined retry behavior, so that we would
-    // not delete the log permanently if the network is just down, on the one
-    // hand, but also would not be uploading unlimited data on endless retries
-    // on the other hand.
-    // TODO(crbug.com/775415): Rename the file before uploading, so that we
+    // TODO(crbug.com/40545136): Add more refined retry behavior, so that we
+    // would not delete the log permanently if the network is just down, on the
+    // one hand, but also would not be uploading unlimited data on endless
+    // retries on the other hand.
+    // TODO(crbug.com/40545136): Rename the file before uploading, so that we
     // would not retry the upload after restarting Chrome, if the upload is
     // interrupted.
     currently_uploaded_file_ = pending_logs_.begin()->path;

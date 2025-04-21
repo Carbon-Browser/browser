@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,15 @@
 #include "chrome/browser/browser_process.h"
 #include "chromeos/ash/components/dbus/update_engine/update_engine_client.h"
 #include "chromeos/ash/components/network/network_handler.h"
+#include "chromeos/ash/components/network/network_state_handler.h"
 #include "components/device_event_log/device_event_log.h"
 #include "components/policy/core/common/policy_service.h"
+#include "components/policy/core/common/policy_types.h"
 
 namespace policy {
 
 OsAndPoliciesUpdateChecker::OsAndPoliciesUpdateChecker(
-    chromeos::NetworkStateHandler* network_state_handler)
+    ash::NetworkStateHandler* network_state_handler)
     : network_state_handler_(network_state_handler),
       update_check_task_executor_(
           update_checker_internal::
@@ -54,7 +56,7 @@ void OsAndPoliciesUpdateChecker::Start(UpdateCheckCompletionCallback cb,
         FROM_HERE, update_checker_internal::kWaitForNetworkTimeout,
         base::BindOnce(&OsAndPoliciesUpdateChecker::OnNetworkWaitTimeout,
                        base::Unretained(this)));
-    network_state_handler_observer_.Observe(network_state_handler_);
+    network_state_handler_observer_.Observe(network_state_handler_.get());
     return;
   }
 
@@ -70,7 +72,7 @@ bool OsAndPoliciesUpdateChecker::IsRunning() const {
 }
 
 void OsAndPoliciesUpdateChecker::DefaultNetworkChanged(
-    const chromeos::NetworkState* network) {
+    const ash::NetworkState* network) {
   // If a network is found, it's okay to start an update check. Stop observing
   // for more network changes, any network flakiness will now be handled by
   // timeouts and retries.
@@ -182,6 +184,8 @@ void OsAndPoliciesUpdateChecker::UpdateStatusChanged(
     case update_engine::Operation::UPDATE_AVAILABLE:
     case update_engine::Operation::CHECKING_FOR_UPDATE:
     case update_engine::Operation::ATTEMPTING_ROLLBACK:
+    case update_engine::Operation::CLEANUP_PREVIOUS_UPDATE:
+    case update_engine::Operation::UPDATED_BUT_DEFERRED:
       // Do nothing on intermediate states.
       break;
 
@@ -213,7 +217,8 @@ void OsAndPoliciesUpdateChecker::OnUpdateCheckStarted(
 void OsAndPoliciesUpdateChecker::RefreshPolicies(bool update_check_result) {
   g_browser_process->policy_service()->RefreshPolicies(
       base::BindOnce(&OsAndPoliciesUpdateChecker::OnRefreshPoliciesCompletion,
-                     weak_factory_.GetWeakPtr(), update_check_result));
+                     weak_factory_.GetWeakPtr(), update_check_result),
+      PolicyFetchReason::kScheduled);
 }
 
 void OsAndPoliciesUpdateChecker::OnRefreshPoliciesCompletion(

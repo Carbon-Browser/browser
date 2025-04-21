@@ -1,10 +1,17 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "chrome/installer/setup/setup_install_details.h"
 
+#include <optional>
 #include <string>
+#include <string_view>
 
 #include "base/command_line.h"
 #include "base/win/registry.h"
@@ -16,7 +23,6 @@
 #include "chrome/installer/util/initial_preferences.h"
 #include "chrome/installer/util/initial_preferences_constants.h"
 #include "chrome/installer/util/util_constants.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace {
 
@@ -35,10 +41,10 @@ const install_static::InstallConstants* FindInstallMode(
 
 // Returns the value of `switch_name` from `command_line` if it is present, or
 // nullopt otherwise.
-absl::optional<std::wstring> GetSwitchValue(
+std::optional<std::wstring> GetSwitchValue(
     const base::CommandLine& command_line,
-    base::StringPiece switch_name) {
-  absl::optional<std::wstring> result;
+    std::string_view switch_name) {
+  std::optional<std::wstring> result;
   if (command_line.HasSwitch(switch_name))
     result = command_line.GetSwitchValueNative(switch_name);
   return result;
@@ -88,7 +94,7 @@ std::unique_ptr<install_static::PrimaryInstallDetails> MakeInstallDetails(
   std::wstring update_ap;
   std::wstring update_cohort_name;
 
-  absl::optional<std::wstring> channel_from_cmd_line =
+  std::optional<std::wstring> channel_from_cmd_line =
       GetSwitchValue(command_line, installer::switches::kChannel);
 
   auto channel = install_static::DetermineChannel(

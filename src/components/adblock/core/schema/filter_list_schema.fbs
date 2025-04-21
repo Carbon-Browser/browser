@@ -15,7 +15,7 @@
  * along with eyeo Chromium SDK.  If not, see <http://www.gnu.org/licenses/>.
  */
 namespace adblock.flat;
-file_identifier "ABP1";
+file_identifier "ABP2";
 
 // Filter types
 // ============
@@ -60,14 +60,15 @@ enum ResourceType: uint32 {
   Ping = 1024,
   XmlHttpRequest = 2048,
   Media = 16384,
-  Font = 32768
+  Font = 32768,
+  WebBundle = 65536
 }
 
 // usage note: you figure out if this is blocking or allowing based on if
 // it's stored in a 'block' or 'allow' list.
 table UrlFilter {
   filter_text: string;
-  pattern: string (required); // this pattern has been pre-processed into regexp notation
+  pattern: string (required);
   match_case: bool;
   resource_type: uint32; // this is a bitset mask of ResourceTypes
   third_party: ThirdParty = Ignore;
@@ -87,7 +88,19 @@ table UrlFilter {
 table ElemHideFilter {
   filter_text: string;
   selector: string (required);
-  include_domains: [string];
+  exclude_domains: [string];
+}
+
+table RemoveFilter {
+  filter_text: string;
+  selector: string (required);
+  exclude_domains: [string];
+}
+
+table InlineCssFilter {
+  filter_text: string;
+  selector: string (required);
+  css: string (required);
   exclude_domains: [string];
 }
 
@@ -98,7 +111,6 @@ table SnippetFunctionCall {
 
 table SnippetFilter {
   filter_text: string;
-  include_domains: [string];
   exclude_domains: [string];
   script: [SnippetFunctionCall];
 }
@@ -118,6 +130,16 @@ table UrlFiltersByKeyword {
 table ElemHideFiltersByDomain {
   domain: string (key);
   filter: [ElemHideFilter];
+}
+
+table RemoveFiltersByDomain {
+  domain: string (key);
+  filter: [RemoveFilter];
+}
+
+table InlineCssFiltersByDomain {
+  domain: string (key);
+  filter: [InlineCssFilter];
 }
 
 // encoder note: the same SnippetFilter may appear in multiple
@@ -160,6 +182,8 @@ table Subscription {
   elemhide: [ElemHideFiltersByDomain];
   elemhide_emulation: [ElemHideFiltersByDomain];
   elemhide_exception: [ElemHideFiltersByDomain];
+  remove: [RemoveFiltersByDomain];
+  inline_css: [InlineCssFiltersByDomain];
   snippet: [SnippetFiltersByDomain];
 }
 

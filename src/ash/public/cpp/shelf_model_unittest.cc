@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,7 +56,7 @@ class TestShelfModelObserver : public ShelfModelObserver {
       return;
     if (!result->empty())
       *result += " ";
-    *result += base::StringPrintf(format.c_str(), count);
+    *result += base::StringPrintfNonConstexpr(format.c_str(), count);
   }
 
   int added_count_ = 0;

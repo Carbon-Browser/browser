@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,13 @@
 #include <set>
 #include <utility>
 
+#include "base/feature_list.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/supports_user_data.h"
 #include "chrome/browser/extensions/extension_service.h"
+#include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/extensions/extensions_overrides/simple_overrides.h"
+#include "chrome/browser/ui/ui_features.h"
 #include "extensions/browser/disable_reason.h"
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_registry.h"
@@ -83,14 +87,17 @@ ExtensionSettingsOverriddenDialog::~ExtensionSettingsOverriddenDialog() =
     default;
 
 bool ExtensionSettingsOverriddenDialog::ShouldShow() {
-  if (params_.controlling_extension_id.empty())
+  if (params_.controlling_extension_id.empty()) {
     return false;
+  }
 
-  if (HasShownFor(profile_, params_.controlling_extension_id))
+  if (HasShownFor(profile_, params_.controlling_extension_id)) {
     return false;
+  }
 
-  if (HasAcknowledgedExtension(params_.controlling_extension_id))
+  if (HasAcknowledgedExtension(params_.controlling_extension_id)) {
     return false;
+  }
 
   const extensions::Extension* extension =
       extensions::ExtensionRegistry::Get(profile_)
@@ -103,6 +110,13 @@ bool ExtensionSettingsOverriddenDialog::ShouldShow() {
   if (extensions::ExtensionSystem::Get(profile_)
           ->management_policy()
           ->MustRemainEnabled(extension, nullptr)) {
+    return false;
+  }
+
+  // Don't show the extension if it's considered a "simple override" extension.
+  if (base::FeatureList::IsEnabled(
+          features::kLightweightExtensionOverrideConfirmations) &&
+      simple_overrides::IsSimpleOverrideExtension(*extension)) {
     return false;
   }
 
@@ -169,8 +183,7 @@ void ExtensionSettingsOverriddenDialog::DisableControllingExtension() {
 void ExtensionSettingsOverriddenDialog::AcknowledgeControllingExtension() {
   extensions::ExtensionPrefs::Get(profile_)->UpdateExtensionPref(
       params_.controlling_extension_id,
-      params_.extension_acknowledged_preference_name,
-      std::make_unique<base::Value>(true));
+      params_.extension_acknowledged_preference_name, base::Value(true));
 }
 
 bool ExtensionSettingsOverriddenDialog::HasAcknowledgedExtension(

@@ -17,8 +17,10 @@
 
 #include "components/adblock/core/subscription/subscription_persistent_metadata_impl.h"
 
+#include <string_view>
+
+#include "absl/types/optional.h"
 #include "base/json/values_util.h"
-#include "base/strings/string_piece_forward.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "components/adblock/core/common/adblock_prefs.h"
@@ -26,11 +28,13 @@
 
 namespace adblock {
 namespace {
-constexpr base::StringPiece kExpirationTimeKey = "expiration_time";
-constexpr base::StringPiece kLastInstallationTimeKey = "last_installation_time";
-constexpr base::StringPiece kVersionKey = "version";
-constexpr base::StringPiece kDownloadCountKey = "download_count";
-constexpr base::StringPiece kErrorCountKey = "error_count";
+constexpr std::string_view kExpirationTimeKey = "expiration_time";
+constexpr std::string_view kLastInstallationTimeKey = "last_installation_time";
+constexpr std::string_view kVersionKey = "version";
+constexpr std::string_view kDownloadCountKey = "download_count";
+constexpr std::string_view kErrorCountKey = "error_count";
+constexpr std::string_view kAutoInstalledExpirationTimeKey =
+    "auto_installed_expiration_time";
 }  // namespace
 
 struct SubscriptionPersistentMetadataImpl::Metadata {
@@ -39,6 +43,7 @@ struct SubscriptionPersistentMetadataImpl::Metadata {
   std::string version{"0"};
   int download_count{0};
   int error_count{0};
+  absl::optional<base::Time> auto_installed_expiration_time{};
 };
 
 SubscriptionPersistentMetadataImpl::SubscriptionPersistentMetadataImpl(
@@ -54,8 +59,13 @@ void SubscriptionPersistentMetadataImpl::SetExpirationInterval(
     const GURL& subscription_url,
     base::TimeDelta expires_in) {
   const auto now = base::Time::Now();
-  metadata_map_[subscription_url].last_installation_time = now;
   metadata_map_[subscription_url].expiration_time = now + expires_in;
+  UpdatePrefs();
+}
+
+void SubscriptionPersistentMetadataImpl::SetLastInstallationTime(
+    const GURL& subscription_url) {
+  metadata_map_[subscription_url].last_installation_time = base::Time::Now();
   UpdatePrefs();
 }
 
@@ -82,41 +92,78 @@ void SubscriptionPersistentMetadataImpl::IncrementDownloadErrorCount(
 bool SubscriptionPersistentMetadataImpl::IsExpired(
     const GURL& subscription_url) const {
   auto it = metadata_map_.find(subscription_url);
-  if (it == metadata_map_.end())
+  if (it == metadata_map_.end()) {
     return true;
+  }
   return it->second.expiration_time <= base::Time::Now();
 }
 
 base::Time SubscriptionPersistentMetadataImpl::GetLastInstallationTime(
     const GURL& subscription_url) const {
   auto it = metadata_map_.find(subscription_url);
-  if (it == metadata_map_.end())
+  if (it == metadata_map_.end()) {
     return base::Time();
+  }
   return it->second.last_installation_time;
 }
 
 std::string SubscriptionPersistentMetadataImpl::GetVersion(
     const GURL& subscription_url) const {
   auto it = metadata_map_.find(subscription_url);
-  if (it == metadata_map_.end())
+  if (it == metadata_map_.end()) {
     return "0";
+  }
   return it->second.version;
 }
 
 int SubscriptionPersistentMetadataImpl::GetDownloadSuccessCount(
     const GURL& subscription_url) const {
   auto it = metadata_map_.find(subscription_url);
-  if (it == metadata_map_.end())
+  if (it == metadata_map_.end()) {
     return 0;
+  }
   return it->second.download_count;
 }
 
 int SubscriptionPersistentMetadataImpl::GetDownloadErrorCount(
     const GURL& subscription_url) const {
   auto it = metadata_map_.find(subscription_url);
-  if (it == metadata_map_.end())
+  if (it == metadata_map_.end()) {
     return 0;
+  }
   return it->second.error_count;
+}
+
+void SubscriptionPersistentMetadataImpl::SetAutoInstalledExpirationInterval(
+    const GURL& subscription_url,
+    base::TimeDelta expires_in) {
+  const auto now = base::Time::Now();
+  metadata_map_[subscription_url].auto_installed_expiration_time =
+      now + expires_in;
+  UpdatePrefs();
+}
+
+bool SubscriptionPersistentMetadataImpl::IsAutoInstalled(
+    const GURL& subscription_url) const {
+  if (!metadata_map_.count(subscription_url)) {
+    return false;
+  }
+
+  return metadata_map_.at(subscription_url)
+      .auto_installed_expiration_time.has_value();
+}
+
+bool SubscriptionPersistentMetadataImpl::IsAutoInstalledExpired(
+    const GURL& subscription_url) const {
+  auto it = metadata_map_.find(subscription_url);
+  if (it == metadata_map_.end()) {
+    return false;
+  }
+  if (it->second.auto_installed_expiration_time.has_value()) {
+    return it->second.auto_installed_expiration_time.value() <=
+           base::Time::Now();
+  }
+  return false;
 }
 
 void SubscriptionPersistentMetadataImpl::RemoveMetadata(
@@ -126,40 +173,50 @@ void SubscriptionPersistentMetadataImpl::RemoveMetadata(
 }
 
 void SubscriptionPersistentMetadataImpl::UpdatePrefs() {
-  base::Value dict(base::Value::Type::DICTIONARY);
+  base::Value::Dict dict;
   for (const auto& pair : metadata_map_) {
-    base::Value subscription(base::Value::Type::DICTIONARY);
-    subscription.SetKey(kExpirationTimeKey,
-                        TimeToValue(pair.second.expiration_time));
-    subscription.SetKey(kLastInstallationTimeKey,
-                        TimeToValue(pair.second.last_installation_time));
-    subscription.SetStringKey(kVersionKey, pair.second.version);
-    subscription.SetIntKey(kDownloadCountKey, pair.second.download_count);
-    subscription.SetIntKey(kErrorCountKey, pair.second.error_count);
-    dict.SetKey(pair.first.spec(), std::move(subscription));
+    base::Value::Dict subscription;
+    subscription.Set(kExpirationTimeKey,
+                     TimeToValue(pair.second.expiration_time));
+    subscription.Set(kLastInstallationTimeKey,
+                     TimeToValue(pair.second.last_installation_time));
+    subscription.Set(kVersionKey, pair.second.version);
+    subscription.Set(kDownloadCountKey, pair.second.download_count);
+    subscription.Set(kErrorCountKey, pair.second.error_count);
+    if (pair.second.auto_installed_expiration_time.has_value()) {
+      subscription.Set(
+          kAutoInstalledExpirationTimeKey,
+          TimeToValue(pair.second.auto_installed_expiration_time.value()));
+    }
+    dict.Set(pair.first.spec(), std::move(subscription));
   }
-  prefs_->Set(prefs::kSubscriptionMetadata, std::move(dict));
+  prefs_->SetDict(common::prefs::kSubscriptionMetadata, std::move(dict));
 }
 
 void SubscriptionPersistentMetadataImpl::LoadFromPrefs() {
-  const base::Value* dict = prefs_->Get(prefs::kSubscriptionMetadata);
-  DCHECK(dict);
-  DCHECK(dict->is_dict());
-  for (const auto dict_item : dict->DictItems()) {
+  const base::Value& dict =
+      prefs_->GetValue(common::prefs::kSubscriptionMetadata);
+  DCHECK(dict.is_dict());
+  for (const auto dict_item : dict.GetDict()) {
     Metadata subscription;
+    DCHECK(dict_item.second.is_dict());
+    const auto* d = dict_item.second.GetIfDict();
     subscription.expiration_time =
-        ValueToTime(dict_item.second.FindKey(kExpirationTimeKey))
-            .value_or(base::Time());
+        ValueToTime(d->Find(kExpirationTimeKey)).value_or(base::Time());
     subscription.last_installation_time =
-        ValueToTime(dict_item.second.FindKey(kLastInstallationTimeKey))
-            .value_or(base::Time());
-    const auto* version = dict_item.second.FindStringKey(kVersionKey);
-    if (version)
+        ValueToTime(d->Find(kLastInstallationTimeKey)).value_or(base::Time());
+    const auto* version = d->FindString(kVersionKey);
+    if (version) {
       subscription.version = *version;
-    subscription.error_count =
-        dict_item.second.FindIntKey(kErrorCountKey).value_or(0);
-    subscription.download_count =
-        dict_item.second.FindIntKey(kDownloadCountKey).value_or(0);
+    }
+    subscription.error_count = d->FindInt(kErrorCountKey).value_or(0);
+    subscription.download_count = d->FindInt(kDownloadCountKey).value_or(0);
+    const auto* auto_installed_expiration_time =
+        d->Find(kAutoInstalledExpirationTimeKey);
+    if (auto_installed_expiration_time) {
+      subscription.auto_installed_expiration_time =
+          ValueToTime(auto_installed_expiration_time);
+    }
     metadata_map_.emplace(dict_item.first, std::move(subscription));
   }
 }

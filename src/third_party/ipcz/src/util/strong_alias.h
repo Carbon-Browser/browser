@@ -1,11 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IPCZ_SRC_UTIL_STRONG_ALIAS_H_
 #define IPCZ_SRC_UTIL_STRONG_ALIAS_H_
 
-#include <ostream>
 #include <utility>
 
 namespace ipcz {
@@ -56,12 +55,6 @@ class StrongAlias {
  protected:
   UnderlyingType value_;
 };
-
-template <typename TagType, typename UnderlyingType>
-std::ostream& operator<<(std::ostream& stream,
-                         const StrongAlias<TagType, UnderlyingType>& alias) {
-  return stream << alias.value();
-}
 
 }  // namespace ipcz
 

@@ -34,13 +34,17 @@
 #include <utility>
 
 #include "base/memory/ptr_util.h"
+#include "base/metrics/histogram_functions.h"
+#include "base/strings/strcat.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
+#include "services/network/public/mojom/url_loader.mojom-blink.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_client.mojom-blink.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_event_status.mojom-blink.h"
 #include "third_party/blink/public/platform/modules/service_worker/web_service_worker_error.h"
 #include "third_party/blink/public/web/modules/service_worker/web_service_worker_context_client.h"
 #include "third_party/blink/public/web/web_serialized_script_value.h"
-#include "third_party/blink/renderer/bindings/core/v8/source_location.h"
 #include "third_party/blink/renderer/bindings/core/v8/worker_or_worklet_script_controller.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/fetch/headers.h"
@@ -51,6 +55,7 @@
 #include "third_party/blink/renderer/modules/exported/web_embedded_worker_impl.h"
 #include "third_party/blink/renderer/modules/service_worker/service_worker_global_scope.h"
 #include "third_party/blink/renderer/modules/service_worker/wait_until_observer.h"
+#include "third_party/blink/renderer/platform/bindings/source_location.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_response.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
@@ -177,10 +182,15 @@ void ServiceWorkerGlobalScopeProxy::WillEvaluateScript() {
       WorkerGlobalScope()->ScriptController()->GetScriptState());
   Client().WillEvaluateScript(
       WorkerGlobalScope()->ScriptController()->GetContext());
+  top_level_script_evaluation_start_time_ = base::TimeTicks::Now();
 }
 
 void ServiceWorkerGlobalScopeProxy::DidEvaluateTopLevelScript(bool success) {
   DCHECK_CALLED_ON_VALID_THREAD(worker_thread_checker_);
+  base::UmaHistogramTimes(
+      base::StrCat({"ServiceWorker.EvaluateTopLevelScript.",
+                    success ? "Succeeded" : "Failed", ".Time"}),
+      base::TimeTicks::Now() - top_level_script_evaluation_start_time_);
   WorkerGlobalScope()->DidEvaluateScript();
   Client().DidEvaluateScript(success);
   TRACE_EVENT_NESTABLE_ASYNC_END1(
@@ -202,7 +212,7 @@ void ServiceWorkerGlobalScopeProxy::DidCloseWorkerGlobalScope() {
   PostCrossThreadTask(
       *parent_thread_default_task_runner_, FROM_HERE,
       CrossThreadBindOnce(&WebEmbeddedWorkerImpl::TerminateWorkerContext,
-                          CrossThreadUnretained(embedded_worker_)));
+                          CrossThreadUnretained(embedded_worker_.get())));
 
   // NOTE: WorkerThread calls WillDestroyWorkerGlobalScope() synchronously after
   // this function returns, since it calls DidCloseWorkerGlobalScope() then
@@ -244,6 +254,12 @@ void ServiceWorkerGlobalScopeProxy::RequestTermination(
   Client().RequestTermination(ConvertToBaseOnceCallback(std::move(callback)));
 }
 
+bool ServiceWorkerGlobalScopeProxy::
+    ShouldNotifyServiceWorkerOnWebSocketActivity(
+        v8::Local<v8::Context> context) {
+  return Client().ShouldNotifyServiceWorkerOnWebSocketActivity(context);
+}
+
 ServiceWorkerGlobalScopeProxy::ServiceWorkerGlobalScopeProxy(
     WebEmbeddedWorkerImpl& embedded_worker,
     WebServiceWorkerContextClient& client,
@@ -281,8 +297,28 @@ void ServiceWorkerGlobalScopeProxy::ResumeEvaluation() {
   WorkerGlobalScope()->ResumeEvaluation();
 }
 
-bool ServiceWorkerGlobalScopeProxy::HasFetchHandler() {
-  return WorkerGlobalScope()->HasEventListeners(event_type_names::kFetch);
+mojom::blink::ServiceWorkerFetchHandlerType
+ServiceWorkerGlobalScopeProxy::FetchHandlerType() {
+  return WorkerGlobalScope()->FetchHandlerType();
+}
+
+bool ServiceWorkerGlobalScopeProxy::HasHidEventHandlers() {
+  return WorkerGlobalScope()->HasHidEventHandlers();
+}
+
+bool ServiceWorkerGlobalScopeProxy::HasUsbEventHandlers() {
+  return WorkerGlobalScope()->HasUsbEventHandlers();
+}
+
+void ServiceWorkerGlobalScopeProxy::GetRemoteAssociatedInterface(
+    const WebString& name,
+    mojo::ScopedInterfaceEndpointHandle handle) {
+  WorkerGlobalScope()->GetRemoteAssociatedInterface(name, std::move(handle));
+}
+
+blink::AssociatedInterfaceRegistry&
+ServiceWorkerGlobalScopeProxy::GetAssociatedInterfaceRegistry() {
+  return WorkerGlobalScope()->GetAssociatedInterfaceRegistry();
 }
 
 WebServiceWorkerContextClient& ServiceWorkerGlobalScopeProxy::Client() const {

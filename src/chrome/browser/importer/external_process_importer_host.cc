@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/bookmarks/bookmark_model_factory.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/importer/external_process_importer_client.h"
 #include "chrome/browser/importer/firefox_profile_lock.h"
 #include "chrome/browser/importer/importer_lock_dialog.h"
@@ -28,8 +27,6 @@ ExternalProcessImporterHost::ExternalProcessImporterHost()
       parent_window_(nullptr),
       observer_(nullptr),
       profile_(nullptr),
-      waiting_for_bookmarkbar_model_(false),
-      installed_bookmark_observer_(false),
       is_source_readable_(true),
       client_(nullptr),
       items_(0),
@@ -92,17 +89,13 @@ void ExternalProcessImporterHost::NotifyImportEnded() {
   delete this;
 }
 
-ExternalProcessImporterHost::~ExternalProcessImporterHost() {
-  if (installed_bookmark_observer_) {
-    DCHECK(profile_);
-    BookmarkModelFactory::GetForBrowserContext(profile_)->RemoveObserver(this);
-  }
-}
+ExternalProcessImporterHost::~ExternalProcessImporterHost() = default;
 
 void ExternalProcessImporterHost::LaunchImportIfReady() {
-  if (waiting_for_bookmarkbar_model_ || template_service_subscription_ ||
-      !is_source_readable_ || cancelled_)
+  if (bookmark_model_observation_for_loading_.IsObserving() ||
+      template_service_subscription_ || !is_source_readable_ || cancelled_) {
     return;
+  }
 
   // This is the in-process half of the bridge, which catches data from the IPC
   // pipe and feeds it to the ProfileWriter. The external process half of the
@@ -117,19 +110,14 @@ void ExternalProcessImporterHost::LaunchImportIfReady() {
   client_->Start();
 }
 
-void ExternalProcessImporterHost::BookmarkModelLoaded(BookmarkModel* model,
-                                                      bool ids_reassigned) {
-  DCHECK(model->loaded());
-  model->RemoveObserver(this);
-  waiting_for_bookmarkbar_model_ = false;
-  installed_bookmark_observer_ = false;
+void ExternalProcessImporterHost::BookmarkModelLoaded(bool ids_reassigned) {
+  bookmark_model_observation_for_loading_.Reset();
 
   LaunchImportIfReady();
 }
 
-void ExternalProcessImporterHost::BookmarkModelBeingDeleted(
-    BookmarkModel* model) {
-  installed_bookmark_observer_ = false;
+void ExternalProcessImporterHost::BookmarkModelBeingDeleted() {
+  bookmark_model_observation_for_loading_.Reset();
 }
 
 void ExternalProcessImporterHost::BookmarkModelChanged() {
@@ -194,9 +182,8 @@ void ExternalProcessImporterHost::CheckForLoadedModels(uint16_t items) {
   // BookmarkModel should be loaded before adding IE favorites. So we observe
   // the BookmarkModel if needed, and start the task after it has been loaded.
   if ((items & importer::FAVORITES) && !writer_->BookmarkModelIsLoaded()) {
-    BookmarkModelFactory::GetForBrowserContext(profile_)->AddObserver(this);
-    waiting_for_bookmarkbar_model_ = true;
-    installed_bookmark_observer_ = true;
+    bookmark_model_observation_for_loading_.Observe(
+        BookmarkModelFactory::GetForBrowserContext(profile_));
   }
 
   // Observes the TemplateURLService if needed to import search engines from the

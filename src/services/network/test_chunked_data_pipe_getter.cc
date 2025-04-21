@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,11 @@ namespace network {
 
 TestChunkedDataPipeGetter::TestChunkedDataPipeGetter() = default;
 
-TestChunkedDataPipeGetter::~TestChunkedDataPipeGetter() = default;
+TestChunkedDataPipeGetter::~TestChunkedDataPipeGetter() {
+  if (get_size_callback_) {
+    std::move(get_size_callback_).Run(0, 0);
+  }
+}
 
 mojo::PendingRemote<mojom::ChunkedDataPipeGetter>
 TestChunkedDataPipeGetter::GetDataPipeGetterRemote() {

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,10 @@
 
 #include <stddef.h>
 
+#include <algorithm>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "base/strings/string_split.h"
 #include "chrome/browser/browser_process.h"
@@ -46,8 +46,7 @@ NaClBrowserDelegateImpl::NaClBrowserDelegateImpl(
   DCHECK(profile_manager_);
 }
 
-NaClBrowserDelegateImpl::~NaClBrowserDelegateImpl() {
-}
+NaClBrowserDelegateImpl::~NaClBrowserDelegateImpl() = default;
 
 void NaClBrowserDelegateImpl::ShowMissingArchInfobar(int render_process_id,
                                                      int render_frame_id) {

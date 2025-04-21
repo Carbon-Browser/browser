@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@ import android.os.Handler;
 import android.os.SystemClock;
 
 import org.chromium.base.ObserverList;
-import org.chromium.base.supplier.ObservableSupplier;
+import org.chromium.base.supplier.Supplier;
 import org.chromium.ui.modaldialog.DialogDismissalCause;
 import org.chromium.ui.modaldialog.ModalDialogManager;
 import org.chromium.ui.modaldialog.ModalDialogManager.ModalDialogManagerObserver;
@@ -30,7 +30,7 @@ class LoadingModalDialogMediator
     private static final long LOAD_TIMEOUT_MS = 4500L;
 
     private final Handler mHandler;
-    private final ObservableSupplier<ModalDialogManager> mDialogManagerSupplier;
+    private final Supplier<ModalDialogManager> mDialogManagerSupplier;
     private final ObserverList<LoadingModalDialogCoordinator.Observer> mObservers =
             new ObserverList<>();
 
@@ -42,6 +42,8 @@ class LoadingModalDialogMediator
     private @LoadingModalDialogCoordinator.State int mState;
     private boolean mSkipDelay;
     private boolean mDisableTimeout;
+
+    private Runnable mShowingTask = this::onShowDelayPassed;
 
     /** ModalDialogProperties.Controller implementation */
     @Override
@@ -83,7 +85,7 @@ class LoadingModalDialogMediator
     }
 
     LoadingModalDialogMediator(
-            ObservableSupplier<ModalDialogManager> dialogManagerSupplier, Handler handler) {
+            Supplier<ModalDialogManager> dialogManagerSupplier, Handler handler) {
         assert dialogManagerSupplier != null;
         assert handler != null;
         mDialogManagerSupplier = dialogManagerSupplier;
@@ -117,7 +119,7 @@ class LoadingModalDialogMediator
         mDialogManager = dialogManager;
         mModel = model;
         mState = LoadingModalDialogCoordinator.State.PENDING;
-        postDelayed(this::onShowDelayPassed, SHOW_DELAY_TIME_MS);
+        postDelayed(mShowingTask, SHOW_DELAY_TIME_MS);
     }
 
     /**
@@ -128,7 +130,7 @@ class LoadingModalDialogMediator
      */
     void dismiss() {
         if (mState == LoadingModalDialogCoordinator.State.PENDING) {
-            mHandler.removeCallbacks(this::onShowDelayPassed);
+            mHandler.removeCallbacks(mShowingTask);
         }
 
         mState = LoadingModalDialogCoordinator.State.FINISHED;
@@ -137,9 +139,7 @@ class LoadingModalDialogMediator
         }
     }
 
-    /**
-     * Indicates the current dialog state.
-     */
+    /** Indicates the current dialog state. */
     @LoadingModalDialogCoordinator.State
     int getState() {
         return mState;
@@ -153,9 +153,7 @@ class LoadingModalDialogMediator
         mDisableTimeout = true;
     }
 
-    /**
-     * Indicates if the dailog could be immediately dismissed.
-     */
+    /** Indicates if the dailog could be immediately dismissed. */
     boolean isImmediatelyDismissable() {
         switch (mState) {
             case LoadingModalDialogCoordinator.State.PENDING:

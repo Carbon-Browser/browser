@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,9 @@ class ContextMenuItemWithIconButtonProperties extends ContextMenuItemProperties 
             new WritableObjectPropertyKey<>();
 
     public static final PropertyKey[] ALL_KEYS =
-            PropertyModel.concatKeys(ContextMenuItemProperties.ALL_KEYS,
-                    new PropertyKey[] {BUTTON_IMAGE, BUTTON_CONTENT_DESC, BUTTON_MENU_ID,
-                            BUTTON_CLICK_LISTENER});
+            PropertyModel.concatKeys(
+                    ContextMenuItemProperties.ALL_KEYS,
+                    new PropertyKey[] {
+                        BUTTON_IMAGE, BUTTON_CONTENT_DESC, BUTTON_MENU_ID, BUTTON_CLICK_LISTENER
+                    });
 }

@@ -1,10 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/accessibility/chromevox/spoken_feedback_enabler.h"
 
-#include "ash/accessibility/accessibility_controller_impl.h"
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/shell.h"
 #include "base/numerics/safe_conversions.h"
 #include "ui/events/base_event_utils.h"
@@ -35,7 +35,7 @@ void SpokenFeedbackEnabler::OnTimer() {
   base::TimeTicks now = ui::EventTimeForNow();
   int tick_count = base::ClampRound((now - start_time_) / kTimerDelay);
 
-  AccessibilityControllerImpl* controller =
+  AccessibilityController* controller =
       Shell::Get()->accessibility_controller();
   CHECK(controller);
   if (tick_count >= kTimerTicksOfFirstSoundFeedback &&

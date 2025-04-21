@@ -1,10 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/task/sequence_manager/wake_up_queue.h"
 
 #include <memory>
+#include <optional>
 
 #include "base/memory/ptr_util.h"
 #include "base/message_loop/message_pump.h"
@@ -15,7 +16,6 @@
 #include "base/test/mock_callback.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "testing/gmock/include/gmock/gmock.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 using testing::_;
 using testing::AnyNumber;
@@ -31,7 +31,7 @@ class TaskQueueImplForTest : public internal::TaskQueueImpl {
                        WakeUpQueue* wake_up_queue,
                        const TaskQueue::Spec& spec)
       : TaskQueueImpl(sequence_manager, wake_up_queue, spec) {}
-  ~TaskQueueImplForTest() = default;
+  ~TaskQueueImplForTest() override = default;
 
   using TaskQueueImpl::SetNextWakeUp;
 };
@@ -50,24 +50,26 @@ class MockWakeUpQueue : public WakeUpQueue {
   using WakeUpQueue::UnregisterQueue;
 
   void OnNextWakeUpChanged(LazyNow* lazy_now,
-                           absl::optional<WakeUp> wake_up) override {
+                           std::optional<WakeUp> wake_up) override {
     TimeTicks time = wake_up ? wake_up->time : TimeTicks::Max();
     OnNextWakeUpChanged_TimeTicks(time);
   }
   const char* GetName() const override { return "Test"; }
   void UnregisterQueue(internal::TaskQueueImpl* queue) override {
-    SetNextWakeUpForQueue(queue, nullptr, absl::nullopt);
+    SetNextWakeUpForQueue(queue, nullptr, std::nullopt);
   }
 
   internal::TaskQueueImpl* NextScheduledTaskQueue() const {
-    if (wake_up_queue_.empty())
+    if (wake_up_queue_.empty()) {
       return nullptr;
+    }
     return wake_up_queue_.top().queue;
   }
 
   TimeTicks NextScheduledRunTime() const {
-    if (wake_up_queue_.empty())
+    if (wake_up_queue_.empty()) {
       return TimeTicks::Max();
+    }
     return wake_up_queue_.top().wake_up.time;
   }
 
@@ -77,14 +79,17 @@ class MockWakeUpQueue : public WakeUpQueue {
 class WakeUpQueueTest : public testing::Test {
  public:
   void SetUp() final {
+    // A null clock triggers some assertions.
+    tick_clock_.Advance(Milliseconds(1));
     wake_up_queue_ = std::make_unique<MockWakeUpQueue>();
     task_queue_ = std::make_unique<TaskQueueImplForTest>(
-        nullptr, wake_up_queue_.get(), TaskQueue::Spec("test"));
+        nullptr, wake_up_queue_.get(), TaskQueue::Spec(QueueName::TEST_TQ));
   }
 
   void TearDown() final {
-    if (task_queue_)
+    if (task_queue_) {
       task_queue_->UnregisterTaskQueue();
+    }
   }
 
   std::unique_ptr<MockWakeUpQueue> wake_up_queue_;
@@ -223,16 +228,16 @@ TEST_F(WakeUpQueueTest,
 
 TEST_F(WakeUpQueueTest, SetNextDelayedDoWork_OnlyCalledForEarlierTasks) {
   std::unique_ptr<TaskQueueImplForTest> task_queue2 =
-      std::make_unique<TaskQueueImplForTest>(nullptr, wake_up_queue_.get(),
-                                             TaskQueue::Spec("test"));
+      std::make_unique<TaskQueueImplForTest>(
+          nullptr, wake_up_queue_.get(), TaskQueue::Spec(QueueName::TEST_TQ));
 
   std::unique_ptr<TaskQueueImplForTest> task_queue3 =
-      std::make_unique<TaskQueueImplForTest>(nullptr, wake_up_queue_.get(),
-                                             TaskQueue::Spec("test"));
+      std::make_unique<TaskQueueImplForTest>(
+          nullptr, wake_up_queue_.get(), TaskQueue::Spec(QueueName::TEST_TQ));
 
   std::unique_ptr<TaskQueueImplForTest> task_queue4 =
-      std::make_unique<TaskQueueImplForTest>(nullptr, wake_up_queue_.get(),
-                                             TaskQueue::Spec("test"));
+      std::make_unique<TaskQueueImplForTest>(
+          nullptr, wake_up_queue_.get(), TaskQueue::Spec(QueueName::TEST_TQ));
 
   TimeDelta delay1 = Milliseconds(10);
   TimeDelta delay2 = Milliseconds(20);
@@ -270,8 +275,8 @@ TEST_F(WakeUpQueueTest, SetNextDelayedDoWork_OnlyCalledForEarlierTasks) {
 
 TEST_F(WakeUpQueueTest, UnregisterQueue) {
   std::unique_ptr<TaskQueueImplForTest> task_queue2 =
-      std::make_unique<TaskQueueImplForTest>(nullptr, wake_up_queue_.get(),
-                                             TaskQueue::Spec("test"));
+      std::make_unique<TaskQueueImplForTest>(
+          nullptr, wake_up_queue_.get(), TaskQueue::Spec(QueueName::TEST_TQ));
   EXPECT_TRUE(wake_up_queue_->empty());
 
   TimeTicks now = tick_clock_.NowTicks();
@@ -338,8 +343,8 @@ TEST_F(WakeUpQueueTest, MoveReadyDelayedTasksToWorkQueues) {
 
 TEST_F(WakeUpQueueTest, MoveReadyDelayedTasksToWorkQueuesWithLeeway) {
   std::unique_ptr<TaskQueueImplForTest> task_queue2 =
-      std::make_unique<TaskQueueImplForTest>(nullptr, wake_up_queue_.get(),
-                                             TaskQueue::Spec("test"));
+      std::make_unique<TaskQueueImplForTest>(
+          nullptr, wake_up_queue_.get(), TaskQueue::Spec(QueueName::TEST_TQ));
 
   TimeTicks now = tick_clock_.NowTicks();
   LazyNow lazy_now_1(now);
@@ -384,14 +389,14 @@ TEST_F(WakeUpQueueTest, CancelDelayedWork) {
 
   EXPECT_CALL(*wake_up_queue_.get(),
               OnNextWakeUpChanged_TimeTicks(TimeTicks::Max()));
-  task_queue_->SetNextWakeUp(&lazy_now, absl::nullopt);
+  task_queue_->SetNextWakeUp(&lazy_now, std::nullopt);
   EXPECT_FALSE(wake_up_queue_->NextScheduledTaskQueue());
 }
 
 TEST_F(WakeUpQueueTest, CancelDelayedWork_TwoQueues) {
   std::unique_ptr<TaskQueueImplForTest> task_queue2 =
-      std::make_unique<TaskQueueImplForTest>(nullptr, wake_up_queue_.get(),
-                                             TaskQueue::Spec("test"));
+      std::make_unique<TaskQueueImplForTest>(
+          nullptr, wake_up_queue_.get(), TaskQueue::Spec(QueueName::TEST_TQ));
 
   TimeTicks now = tick_clock_.NowTicks();
   LazyNow lazy_now(now);
@@ -410,7 +415,7 @@ TEST_F(WakeUpQueueTest, CancelDelayedWork_TwoQueues) {
   EXPECT_EQ(run_time1, wake_up_queue_->NextScheduledRunTime());
 
   EXPECT_CALL(*wake_up_queue_.get(), OnNextWakeUpChanged_TimeTicks(run_time2));
-  task_queue_->SetNextWakeUp(&lazy_now, absl::nullopt);
+  task_queue_->SetNextWakeUp(&lazy_now, std::nullopt);
   EXPECT_EQ(task_queue2.get(), wake_up_queue_->NextScheduledTaskQueue());
 
   EXPECT_EQ(run_time2, wake_up_queue_->NextScheduledRunTime());
@@ -429,9 +434,9 @@ TEST_F(WakeUpQueueTest, HighResolutionWakeUps) {
   TimeTicks run_time1 = now + Milliseconds(20);
   TimeTicks run_time2 = now + Milliseconds(40);
   TaskQueueImplForTest q1(nullptr, wake_up_queue_.get(),
-                          TaskQueue::Spec("test"));
+                          TaskQueue::Spec(QueueName::TEST_TQ));
   TaskQueueImplForTest q2(nullptr, wake_up_queue_.get(),
-                          TaskQueue::Spec("test"));
+                          TaskQueue::Spec(QueueName::TEST_TQ));
 
   // Add two high resolution wake-ups.
   EXPECT_FALSE(wake_up_queue_->has_pending_high_resolution_tasks());
@@ -443,11 +448,11 @@ TEST_F(WakeUpQueueTest, HighResolutionWakeUps) {
   EXPECT_TRUE(wake_up_queue_->has_pending_high_resolution_tasks());
 
   // Remove one of the wake-ups.
-  wake_up_queue_->SetNextWakeUpForQueue(&q1, &lazy_now, absl::nullopt);
+  wake_up_queue_->SetNextWakeUpForQueue(&q1, &lazy_now, std::nullopt);
   EXPECT_TRUE(wake_up_queue_->has_pending_high_resolution_tasks());
 
   // Remove the second one too.
-  wake_up_queue_->SetNextWakeUpForQueue(&q2, &lazy_now, absl::nullopt);
+  wake_up_queue_->SetNextWakeUpForQueue(&q2, &lazy_now, std::nullopt);
   EXPECT_FALSE(wake_up_queue_->has_pending_high_resolution_tasks());
 
   // Change a low resolution wake-up to a high resolution one.
@@ -464,8 +469,8 @@ TEST_F(WakeUpQueueTest, HighResolutionWakeUps) {
   EXPECT_TRUE(wake_up_queue_->has_pending_high_resolution_tasks());
 
   // Cancel the wake-up twice.
-  wake_up_queue_->SetNextWakeUpForQueue(&q1, &lazy_now, absl::nullopt);
-  wake_up_queue_->SetNextWakeUpForQueue(&q1, &lazy_now, absl::nullopt);
+  wake_up_queue_->SetNextWakeUpForQueue(&q1, &lazy_now, std::nullopt);
+  wake_up_queue_->SetNextWakeUpForQueue(&q1, &lazy_now, std::nullopt);
   EXPECT_FALSE(wake_up_queue_->has_pending_high_resolution_tasks());
 
   // Tidy up.
@@ -476,19 +481,25 @@ TEST_F(WakeUpQueueTest, HighResolutionWakeUps) {
 TEST_F(WakeUpQueueTest, SetNextWakeUpForQueueInThePast) {
   constexpr auto kType = MessagePumpType::DEFAULT;
   constexpr auto kDelay = Milliseconds(20);
+  constexpr TaskQueue::QueuePriority kHighestPriority = 0;
+  constexpr TaskQueue::QueuePriority kDefaultPriority = 1;
+  constexpr TaskQueue::QueuePriority kLowestPriority = 2;
+  constexpr TaskQueue::QueuePriority kPriorityCount = 3;
   auto sequence_manager = sequence_manager::CreateUnboundSequenceManager(
       SequenceManager::Settings::Builder()
           .SetMessagePumpType(kType)
           .SetTickClock(&tick_clock_)
+          .SetPrioritySettings(SequenceManager::PrioritySettings(
+              kPriorityCount, kDefaultPriority))
           .Build());
   sequence_manager->BindToMessagePump(MessagePump::Create(kType));
   auto high_prio_queue =
-      sequence_manager->CreateTaskQueue(TaskQueue::Spec("high_prio_queue"));
-  high_prio_queue->SetQueuePriority(TaskQueue::kHighestPriority);
+      sequence_manager->CreateTaskQueue(TaskQueue::Spec(QueueName::TEST_TQ));
+  high_prio_queue->SetQueuePriority(kHighestPriority);
   auto high_prio_runner = high_prio_queue->CreateTaskRunner(kTaskTypeNone);
   auto low_prio_queue =
-      sequence_manager->CreateTaskQueue(TaskQueue::Spec("low_prio_queue"));
-  low_prio_queue->SetQueuePriority(TaskQueue::kBestEffortPriority);
+      sequence_manager->CreateTaskQueue(TaskQueue::Spec(QueueName::TEST2_TQ));
+  low_prio_queue->SetQueuePriority(kLowestPriority);
   auto low_prio_runner = low_prio_queue->CreateTaskRunner(kTaskTypeNone);
   sequence_manager->SetDefaultTaskRunner(high_prio_runner);
   base::MockCallback<base::OnceCallback<void()>> task_1, task_2;

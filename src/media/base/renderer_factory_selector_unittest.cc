@@ -1,10 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/base/overlay_info.h"
 #include "media/base/renderer_factory_selector.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -18,7 +19,7 @@ class RendererFactorySelectorTest : public testing::Test {
     explicit FakeFactory(RendererType type) : type_(type) {}
 
     std::unique_ptr<Renderer> CreateRenderer(
-        const scoped_refptr<base::SingleThreadTaskRunner>& media_task_runner,
+        const scoped_refptr<base::SequencedTaskRunner>& media_task_runner,
         const scoped_refptr<base::TaskRunner>& worker_task_runner,
         AudioRendererSink* audio_renderer_sink,
         VideoRendererSink* video_renderer_sink,
@@ -71,26 +72,26 @@ class RendererFactorySelectorTest : public testing::Test {
 };
 
 TEST_F(RendererFactorySelectorTest, SingleFactory) {
-  AddBaseFactory(RendererType::kDefault);
-  EXPECT_EQ(RendererType::kDefault, GetCurrentlySelectedRendererType());
+  AddBaseFactory(RendererType::kRendererImpl);
+  EXPECT_EQ(RendererType::kRendererImpl, GetCurrentlySelectedRendererType());
 }
 
 TEST_F(RendererFactorySelectorTest, MultipleFactory) {
-  AddBaseFactory(RendererType::kDefault);
+  AddBaseFactory(RendererType::kRendererImpl);
   AddFactory(RendererType::kMojo);
 
-  EXPECT_EQ(RendererType::kDefault, GetCurrentlySelectedRendererType());
+  EXPECT_EQ(RendererType::kRendererImpl, GetCurrentlySelectedRendererType());
 
   selector_.SetBaseRendererType(RendererType::kMojo);
   EXPECT_EQ(RendererType::kMojo, GetCurrentlySelectedRendererType());
 }
 
 TEST_F(RendererFactorySelectorTest, ConditionalFactory) {
-  AddBaseFactory(RendererType::kDefault);
+  AddBaseFactory(RendererType::kRendererImpl);
   AddFactory(RendererType::kMojo);
   AddConditionalFactory(RendererType::kCourier);
 
-  EXPECT_EQ(RendererType::kDefault, GetCurrentlySelectedRendererType());
+  EXPECT_EQ(RendererType::kRendererImpl, GetCurrentlySelectedRendererType());
 
   condition_met_map_[RendererType::kCourier] = true;
   EXPECT_EQ(RendererType::kCourier, GetCurrentlySelectedRendererType());
@@ -103,11 +104,11 @@ TEST_F(RendererFactorySelectorTest, ConditionalFactory) {
 }
 
 TEST_F(RendererFactorySelectorTest, MultipleConditionalFactories) {
-  AddBaseFactory(RendererType::kDefault);
+  AddBaseFactory(RendererType::kRendererImpl);
   AddConditionalFactory(RendererType::kFlinging);
   AddConditionalFactory(RendererType::kCourier);
 
-  EXPECT_EQ(RendererType::kDefault, GetCurrentlySelectedRendererType());
+  EXPECT_EQ(RendererType::kRendererImpl, GetCurrentlySelectedRendererType());
 
   condition_met_map_[RendererType::kFlinging] = false;
   condition_met_map_[RendererType::kCourier] = true;

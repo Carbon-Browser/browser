@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,6 +53,10 @@ class ASH_EXPORT AccessibilityFocusRingGroup {
   const std::vector<std::unique_ptr<AccessibilityFocusRingLayer>>&
   focus_layers_for_testing() const {
     return focus_layers_;
+  }
+
+  AccessibilityFocusRingInfo* focus_ring_info_for_testing() const {
+    return focus_ring_info_.get();
   }
 
  protected:

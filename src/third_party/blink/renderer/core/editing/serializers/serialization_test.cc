@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/editing/serializers/serialization.h"
 
 #include "testing/gmock/include/gmock/gmock-matchers.h"
-#include "third_party/blink/renderer/core/dom/node_computed_style.h"
+#include "third_party/blink/renderer/core/css/properties/longhands.h"
 #include "third_party/blink/renderer/core/editing/position.h"
 #include "third_party/blink/renderer/core/editing/testing/editing_test_base.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
@@ -33,8 +33,8 @@ class SerializationTest : public EditingTestBase {
 // Regression test for https://crbug.com/1032673
 TEST_F(SerializationTest, CantCreateFragmentCrash) {
   // CreateFragmentFromMarkupWithContext() fails to create a fragment for the
-  // following markup. Should return nullptr as the sanitized fragment instead
-  // of crashing.
+  // following markup. Should return nullptr as the strictly processed fragment
+  // instead of crashing.
   const String html =
       "<article><dcell></dcell>A<td><dcol></"
       "dcol>A0<td>&percnt;&lbrack;<command></"
@@ -44,9 +44,28 @@ TEST_F(SerializationTest, CantCreateFragmentCrash) {
       "animateColor>A000AA0AA000A0<plaintext></"
       "plaintext><title>0A0AA00A0A0AA000A<switch><img "
       "src=\"../resources/abe.png\"> zz";
-  DocumentFragment* sanitized = CreateSanitizedFragmentFromMarkupWithContext(
-      GetDocument(), html, 0, html.length(), KURL());
-  EXPECT_FALSE(sanitized);
+  DocumentFragment* strictly_processed_fragment =
+      CreateStrictlyProcessedFragmentFromMarkupWithContext(
+          GetDocument(), html, 0, html.length(), KURL());
+  EXPECT_FALSE(strictly_processed_fragment);
+}
+
+// Regression test for https://crbug.com/1310535
+TEST_F(SerializationTest, CreateFragmentWithDataUrlCrash) {
+  // When same data: URL is set for filter and style image with a style element
+  // CreateStrictlyProcessedFragmentFromMarkupWithContext() triggers
+  // ResourceLoader::Start(), and EmptyLocalFrameClientWithFailingLoaderFactory
+  // ::CreateURLLoaderFactory() will be called.
+  // Note: Ideally ResourceLoader::Start() don't need to call
+  // EmptyLocalFrameClientWithFailingLoaderFactory::CreateURLLoaderFactory() for
+  // data: URL.
+  const String html =
+      "<div style=\"filter: url(data:image/gif;base64,xx);\">"
+      "<style>body {background: url(data:image/gif;base64,xx);}</style>";
+  DocumentFragment* strictly_processed_fragment =
+      CreateStrictlyProcessedFragmentFromMarkupWithContext(
+          GetDocument(), html, 0, html.length(), KURL());
+  EXPECT_TRUE(strictly_processed_fragment);
 }
 
 // http://crbug.com/938590
@@ -70,7 +89,7 @@ TEST_F(SerializationTest, Link) {
   // a1
   ASSERT_THAT(style1.InsideLink(), EInsideLink::kNotInsideLink);
   ASSERT_THAT(style1.VisitedDependentColor(GetCSSPropertyColor()),
-              MakeRGB(1, 1, 1))
+              Color::FromRGB(1, 1, 1))
       << "should not be :visited/:link color";
   EXPECT_THAT(
       SerailizeToHTMLText(a1),
@@ -83,7 +102,7 @@ TEST_F(SerializationTest, Link) {
   // visited/unvisited state of link for privacy reason.
   ASSERT_THAT(style2.InsideLink(), EInsideLink::kInsideVisitedLink);
   ASSERT_THAT(style2.VisitedDependentColor(GetCSSPropertyColor()),
-              MakeRGB(3, 3, 3))
+              Color::FromRGB(3, 3, 3))
       << "should be :visited color";
   EXPECT_THAT(
       SerailizeToHTMLText(a2),
@@ -93,7 +112,7 @@ TEST_F(SerializationTest, Link) {
   // a3
   ASSERT_THAT(style3.InsideLink(), EInsideLink::kInsideUnvisitedLink);
   ASSERT_THAT(style3.VisitedDependentColor(GetCSSPropertyColor()),
-              MakeRGB(2, 2, 2))
+              Color::FromRGB(2, 2, 2))
       << "should be :link color";
   EXPECT_THAT(
       SerailizeToHTMLText(a3),
@@ -111,11 +130,12 @@ TEST_F(SerializationTest, SVGForeignObjectCrash) {
       "  </foreignObject>"
       "</svg>"
       "<span>\u00A0</span>";
-  DocumentFragment* sanitized = CreateSanitizedFragmentFromMarkupWithContext(
-      GetDocument(), markup, 0, markup.length(), KURL());
-  // This is a crash test. We don't verify the content of the sanitized markup
-  // as it's too verbose and not interesting.
-  EXPECT_TRUE(sanitized);
+  DocumentFragment* strictly_processed_fragment =
+      CreateStrictlyProcessedFragmentFromMarkupWithContext(
+          GetDocument(), markup, 0, markup.length(), KURL());
+  // This is a crash test. We don't verify the content of the strictly processed
+  // markup as it's too verbose and not interesting.
+  EXPECT_TRUE(strictly_processed_fragment);
 }
 
 }  // namespace blink

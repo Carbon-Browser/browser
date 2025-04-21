@@ -1,9 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "services/network/websocket_interceptor.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "net/base/net_errors.h"
 #include "services/network/throttling/throttling_controller.h"
 #include "services/network/throttling/throttling_network_interceptor.h"
@@ -12,7 +17,7 @@ namespace network {
 
 WebSocketInterceptor::WebSocketInterceptor(
     uint32_t net_log_source_id,
-    const absl::optional<base::UnguessableToken>& throttling_profile_id)
+    const std::optional<base::UnguessableToken>& throttling_profile_id)
     : net_log_source_id_(net_log_source_id),
       throttling_token_(
           network::ScopedThrottlingToken::MaybeCreate(net_log_source_id_,

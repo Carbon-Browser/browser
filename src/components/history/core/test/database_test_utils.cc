@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,9 @@
 namespace history {
 
 [[nodiscard]] bool GetTestDataHistoryDir(base::FilePath* dir) {
-  if (!base::PathService::Get(base::DIR_SOURCE_ROOT, dir))
+  if (!base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, dir)) {
     return false;
+  }
   *dir = dir->AppendASCII("components");
   *dir = dir->AppendASCII("test");
   *dir = dir->AppendASCII("data");

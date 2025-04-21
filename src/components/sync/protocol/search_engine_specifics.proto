@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -50,20 +50,15 @@ message SearchEngineSpecifics {
   // Do not write to this field in the future.  We preserve this for now so we
   // can read the field in order to migrate existing data that sets this bit.
   optional bool autogenerate_keyword = 12 [deprecated = true];
-  // ID 13 reserved - previously used by |logo_id|, now deprecated.
-  // Obsolete field. This used to represent whether or not this search engine
-  // entry was created automatically by an administrator via group policy. This
-  // notion no longer exists amongst synced search engines as we do not want to
-  // sync managed search engines.
-  // optional bool deprecated_created_by_policy = 14;
+  // ID 13 reserved - previously used by `logo_id`, now deprecated.
   optional string instant_url = 15 [deprecated = true];
-  // ID 16 reserved - previously used by |id|, now deprecated.
+  // ID 16 reserved - previously used by `id`, now deprecated.
   // The last time this entry was modified by a user. A UTC timestamp with units
   // in microseconds.
   optional int64 last_modified = 17;
   // The primary identifier of this search engine entry for Sync.
   optional string sync_guid = 18;
-  // A list of URL patterns that can be used, in addition to |url|, to extract
+  // A list of URL patterns that can be used, in addition to `url`, to extract
   // search terms from a URL.
   repeated string alternate_urls = 19;
   optional string search_terms_replacement_key = 20 [deprecated = true];
@@ -95,4 +90,7 @@ message SearchEngineSpecifics {
   // The ID associated with the starter pack engine.  This is set to 0 if not a
   // starter pack engine.
   optional int32 starter_pack_id = 28;
+
+  reserved 14;
+  reserved "created_by_policy";
 }

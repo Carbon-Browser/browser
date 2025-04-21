@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@
 
 namespace credential_provider {
 
-// TODO(crbug.com/1111561): Change it back to emdedded/reauth/windows
+// TODO(crbug.com/40142636): Change it back to emdedded/reauth/windows
 // once reauth flow latency issue is resolved.
 constexpr char kGaiaReauthPath[] = "embedded/setup/windows";
 

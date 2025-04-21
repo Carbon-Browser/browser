@@ -1,8 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.base;
+
+import static org.chromium.chrome.browser.base.SplitCompatApplication.CHROME_SPLIT_NAME;
 
 import android.content.ContentProvider;
 import android.content.ContentValues;
@@ -33,8 +35,10 @@ public class SplitCompatContentProvider extends ContentProvider {
         // when it is created.
         synchronized (mImplLock) {
             if (mImpl == null) {
-                Context context = SplitCompatApplication.createChromeContext(getContext());
-                mImpl = (Impl) BundleUtils.newInstance(context, mContentProviderClassName);
+                mImpl =
+                        (Impl)
+                                BundleUtils.newInstance(
+                                        mContentProviderClassName, CHROME_SPLIT_NAME);
                 mImpl.setContentProvider(this);
             }
             return mImpl;
@@ -47,7 +51,11 @@ public class SplitCompatContentProvider extends ContentProvider {
     }
 
     @Override
-    public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
+    public Cursor query(
+            Uri uri,
+            String[] projection,
+            String selection,
+            String[] selectionArgs,
             String sortOrder) {
         return getImpl().query(uri, projection, selection, selectionArgs, sortOrder);
     }
@@ -96,13 +104,22 @@ public class SplitCompatContentProvider extends ContentProvider {
             return mContentProvider.getCallingPackage();
         }
 
-        public abstract Cursor query(Uri uri, String[] projection, String selection,
-                String[] selectionArgs, String sortOrder);
+        public abstract Cursor query(
+                Uri uri,
+                String[] projection,
+                String selection,
+                String[] selectionArgs,
+                String sortOrder);
+
         public abstract Uri insert(Uri uri, ContentValues values);
+
         public abstract int delete(Uri uri, String selection, String[] selectionArgs);
+
         public abstract int update(
                 Uri uri, ContentValues values, String selection, String[] selectionArgs);
+
         public abstract String getType(Uri uri);
+
         public void dump(FileDescriptor fd, PrintWriter writer, String[] args) {}
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,14 +11,15 @@
 #include <string>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/containers/queue.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
+#include "base/memory/scoped_refptr.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "content/public/browser/browser_thread.h"
 #include "extensions/browser/api/api_resource.h"
 #include "extensions/browser/api/api_resource_manager.h"
+#include "extensions/browser/api/socket/write_quota_checker.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/io_buffer.h"
@@ -28,15 +29,15 @@
 #include "services/network/public/mojom/tcp_socket.mojom.h"
 #include "services/network/public/mojom/tls_socket.mojom.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 #include "extensions/browser/api/socket/app_firewall_hole_manager.h"
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 namespace net {
 class AddressList;
 class IPEndPoint;
 class Socket;
-}
+}  // namespace net
 
 namespace extensions {
 
@@ -56,7 +57,7 @@ using ListenCallback =
 using AcceptCompletionCallback = base::OnceCallback<void(
     int,
     mojo::PendingRemote<network::mojom::TCPConnectedSocket>,
-    const absl::optional<net::IPEndPoint>&,
+    const std::optional<net::IPEndPoint>&,
     mojo::ScopedDataPipeConsumerHandle,
     mojo::ScopedDataPipeProducerHandle)>;
 
@@ -82,11 +83,11 @@ class Socket : public ApiResource {
   // unbracketed.
   void set_hostname(const std::string& hostname) { hostname_ = hostname; }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   void set_firewall_hole(std::unique_ptr<AppFirewallHole> firewall_hole) {
     firewall_hole_ = std::move(firewall_hole);
   }
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
   // Note: |address| contains the resolved IP address, not the hostname of
   // the remote endpoint. In order to upgrade this socket to TLS, callers
@@ -107,7 +108,7 @@ class Socket : public ApiResource {
   // The |callback| will be called with |byte_count| or a negative number if an
   // error occurred.
   void Write(scoped_refptr<net::IOBuffer> io_buffer,
-             int byte_count,
+             size_t byte_count,
              net::CompletionOnceCallback callback);
 
   virtual void RecvFrom(int count, RecvFromCompletionCallback callback) = 0;
@@ -151,7 +152,7 @@ class Socket : public ApiResource {
                         net::CompletionOnceCallback callback) = 0;
 
   std::string hostname_;
-  bool is_connected_;
+  bool is_connected_ = false;
 
  private:
   friend class ApiResourceManager<Socket>;
@@ -159,14 +160,14 @@ class Socket : public ApiResource {
 
   struct WriteRequest {
     WriteRequest(scoped_refptr<net::IOBuffer> io_buffer,
-                 int byte_count,
+                 size_t byte_count,
                  net::CompletionOnceCallback callback);
     WriteRequest(WriteRequest&& other);
     ~WriteRequest();
     scoped_refptr<net::IOBuffer> io_buffer;
-    int byte_count;
+    size_t byte_count;
     net::CompletionOnceCallback callback;
-    int bytes_written;
+    size_t bytes_written = 0;
   };
 
   void OnWriteComplete(int result);
@@ -174,10 +175,25 @@ class Socket : public ApiResource {
   base::queue<WriteRequest> write_queue_;
   scoped_refptr<net::IOBuffer> io_buffer_write_;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   // Represents a hole punched in the system firewall for this socket.
   std::unique_ptr<AppFirewallHole> firewall_hole_;
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
+};
+
+template <>
+struct BrowserContextFactoryDependencies<ApiResourceManager<Socket>> {
+  static void DeclareFactoryDependencies(
+      BrowserContextKeyedAPIFactory<ApiResourceManager<Socket>>* factory) {
+    // Base deps from BrowserContextFactoryDependencies<ApiResourceManager<T>.
+    factory->DependsOn(
+        ExtensionsBrowserClient::Get()->GetExtensionSystemFactory());
+    factory->DependsOn(ExtensionRegistryFactory::GetInstance());
+    factory->DependsOn(ProcessManagerFactory::GetInstance());
+
+    // Extra deps for ApiResourceManager<Socket> service.
+    factory->DependsOn(WriteQuotaChecker::GetFactoryInstance());
+  }
 };
 
 }  //  namespace extensions

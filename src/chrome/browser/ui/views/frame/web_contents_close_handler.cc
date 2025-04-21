@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,27 +8,25 @@
 
 WebContentsCloseHandler::WebContentsCloseHandler(
     WebContentsCloseHandlerDelegate* delegate)
-    : delegate_(delegate),
-      in_close_(false),
-      tab_changed_after_clone_(false) {
-}
+    : delegate_(delegate), in_close_(false), tab_changed_after_clone_(false) {}
 
-WebContentsCloseHandler::~WebContentsCloseHandler() {
-}
+WebContentsCloseHandler::~WebContentsCloseHandler() = default;
 
 void WebContentsCloseHandler::TabInserted() {
   // Tests may end up reviving a TabStrip that is empty.
-  if (!in_close_)
+  if (!in_close_) {
     return;
+  }
   in_close_ = false;
   delegate_->DestroyClonedLayer();
 }
 
 void WebContentsCloseHandler::ActiveTabChanged() {
-  if (in_close_)
+  if (in_close_) {
     tab_changed_after_clone_ = true;
-  else
+  } else {
     delegate_->DestroyClonedLayer();
+  }
 }
 
 void WebContentsCloseHandler::WillCloseAllTabs() {

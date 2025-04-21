@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef EXTENSIONS_BROWSER_API_SOCKET_MOJO_DATA_PUMP_H_
 #define EXTENSIONS_BROWSER_API_SOCKET_MOJO_DATA_PUMP_H_
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "extensions/browser/api/socket/socket.h"
 #include "mojo/public/cpp/system/data_pipe.h"
 #include "mojo/public/cpp/system/simple_watcher.h"
@@ -63,7 +63,7 @@ class MojoDataPump {
   net::CompletionOnceCallback write_callback_;
   scoped_refptr<net::IOBuffer> pending_write_buffer_;
   int pending_write_buffer_size_ = 0;
-  uint32_t read_size_ = 0;
+  size_t read_size_ = 0;
 };
 
 }  //  namespace extensions

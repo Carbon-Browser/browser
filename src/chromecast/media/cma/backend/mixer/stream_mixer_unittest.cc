@@ -1,6 +1,8 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "chromecast/media/cma/backend/mixer/stream_mixer.h"
 
 #include <algorithm>
 #include <cmath>
@@ -8,13 +10,13 @@
 #include <memory>
 #include <utility>
 
-#include "base/cxx17_backports.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
+#include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "chromecast/media/audio/mixer_service/loopback_connection.h"
@@ -28,7 +30,8 @@
 #include "chromecast/media/cma/backend/mixer/mock_mixer_source.h"
 #include "chromecast/media/cma/backend/mixer/mock_post_processor_factory.h"
 #include "chromecast/media/cma/backend/mixer/mock_redirected_audio_output.h"
-#include "chromecast/media/cma/backend/mixer/stream_mixer.h"
+#include "chromecast/media/cma/base/decoder_config_adapter.h"
+#include "chromecast/public/media/decoder_config.h"
 #include "chromecast/public/media/mixer_output_stream.h"
 #include "chromecast/public/volume_control.h"
 #include "media/audio/audio_device_description.h"
@@ -298,7 +301,7 @@ std::unique_ptr<::media::AudioBus> GetMixedAudioData(
         }
       }
 
-      *result = base::clamp(*result, -1.0f, 1.0f);
+      *result = std::clamp(*result, -1.0f, 1.0f);
     }
   }
   return mixed;
@@ -338,7 +341,7 @@ void CompareAudioData(const ::media::AudioBus& expected,
     const float* expected_data = expected.channel(c);
     const float* actual_data = actual.channel(c);
     for (int f = 0; f < expected.frames(); ++f) {
-      EXPECT_FLOAT_EQ(*expected_data++, *actual_data++)
+      EXPECT_NEAR(*expected_data++, *actual_data++, 0.0000001f)
           << c << " " << f << " " << token;
     }
   }
@@ -365,7 +368,7 @@ int64_t FramesToDelayUs(int64_t frames) {
 
 std::string DeathRegex(const std::string& regex) {
 // String arguments aren't passed to CHECK() in official builds.
-#if defined(OFFICIAL_BUILD) && defined(NDEBUG)
+#if BUILDFLAG(IS_ANDROID) || (defined(OFFICIAL_BUILD) && defined(NDEBUG))
   return "";
 #else
   return regex;
@@ -386,7 +389,8 @@ class StreamMixerTest : public testing::Test {
     auto output = std::make_unique<NiceMock<MockMixerOutput>>();
     mock_output_ = output.get();
     mixer_ = std::make_unique<StreamMixer>(
-        std::move(output), base::ThreadTaskRunnerHandle::Get(), "{}");
+        std::move(output), base::SingleThreadTaskRunner::GetCurrentDefault(),
+        "{}");
     mixer_->SetVolume(AudioContentType::kMedia, 1.0f);
     mixer_->SetVolume(AudioContentType::kAlarm, 1.0f);
     std::string test_pipeline_json = base::StringPrintf(
@@ -403,8 +407,8 @@ class StreamMixerTest : public testing::Test {
 
   void WaitForMixer() {
     base::RunLoop run_loop1;
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  run_loop1.QuitClosure());
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, run_loop1.QuitClosure());
     run_loop1.Run();
   }
 
@@ -416,8 +420,8 @@ class StreamMixerTest : public testing::Test {
                                      _))
         .Times(1);
     base::RunLoop run_loop;
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  run_loop.QuitClosure());
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, run_loop.QuitClosure());
     run_loop.Run();
     testing::Mock::VerifyAndClearExpectations(mock_output_);
   }
@@ -527,7 +531,6 @@ TEST_F(StreamMixerTest, RemoveInput) {
   }
 
   EXPECT_CALL(*mock_output_, Start(kTestSamplesPerSecond, _)).Times(1);
-  EXPECT_CALL(*mock_output_, Stop()).Times(0);
 
   for (size_t i = 0; i < inputs.size(); ++i) {
     EXPECT_CALL(*inputs[i], InitializeAudioPlayback(_, _)).Times(1);
@@ -542,6 +545,7 @@ TEST_F(StreamMixerTest, RemoveInput) {
   }
 
   WaitForMixer();
+  task_environment_.RunUntilIdle();
 }
 
 TEST_F(StreamMixerTest, WriteFrames) {
@@ -626,9 +630,13 @@ TEST_F(StreamMixerTest, OneStreamStereoInput6ChannelOutput) {
   auto expected = GetMixedAudioData(&input);
 
   // Upmix stereo input to 5.1 before comparing.
+  ::media::ChannelLayout input_layout =
+      DecoderConfigAdapter::ToMediaChannelLayout(ChannelLayout::STEREO);
+  ::media::ChannelLayout output_layout =
+      DecoderConfigAdapter::ToMediaChannelLayout(ChannelLayout::SURROUND_5_1);
   ::media::ChannelMixer channel_mixer(
-      ::media::ChannelLayout::CHANNEL_LAYOUT_STEREO,
-      ::media::ChannelLayout::CHANNEL_LAYOUT_5_1);
+      input_layout, ::media::ChannelLayoutToChannelCount(input_layout),
+      output_layout, ::media::ChannelLayoutToChannelCount(output_layout));
   auto expected_5_1 = ::media::AudioBus::Create(6, expected->frames());
   channel_mixer.Transform(expected.get(), expected_5_1.get());
   CompareAudioData(*expected_5_1, *actual);
@@ -680,9 +688,13 @@ TEST_F(StreamMixerTest, OneStreamStereoInput6ChannelFilters) {
   auto expected = GetMixedAudioData(&input);
 
   // Upmix stereo input to 5.1 before comparing.
+  ::media::ChannelLayout input_layout =
+      DecoderConfigAdapter::ToMediaChannelLayout(ChannelLayout::STEREO);
+  ::media::ChannelLayout output_layout =
+      DecoderConfigAdapter::ToMediaChannelLayout(ChannelLayout::SURROUND_5_1);
   ::media::ChannelMixer channel_mixer(
-      ::media::ChannelLayout::CHANNEL_LAYOUT_STEREO,
-      ::media::ChannelLayout::CHANNEL_LAYOUT_5_1);
+      input_layout, ::media::ChannelLayoutToChannelCount(input_layout),
+      output_layout, ::media::ChannelLayoutToChannelCount(output_layout));
   auto expected_5_1 = ::media::AudioBus::Create(6, expected->frames());
   channel_mixer.Transform(expected.get(), expected_5_1.get());
   CompareAudioData(*expected_5_1, *actual);
@@ -1079,8 +1091,7 @@ TEST_F(StreamMixerTest, PostProcessorDelayListedDeviceId) {
   delays.push_back(common_delay + kTtsProcessorDelay);
 
   // Convert delay from frames to microseconds.
-  std::transform(delays.begin(), delays.end(), delays.begin(),
-                 &FramesToDelayUs);
+  base::ranges::transform(delays, delays.begin(), &FramesToDelayUs);
 
   for (size_t i = 0; i < inputs.size(); ++i) {
     EXPECT_CALL(*inputs[i], InitializeAudioPlayback(_, _)).Times(1);
@@ -1656,7 +1667,7 @@ TEST_F(StreamMixerDeathTest, InvalidStreamTypeCrashes) {
 }
 )json";
 
-  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
   EXPECT_DEATH(mixer_->ResetPostProcessorsForTest(
                    std::make_unique<MockPostProcessorFactory>(), json),
                DeathRegex("foobar is not a stream type"));
@@ -1664,7 +1675,7 @@ TEST_F(StreamMixerDeathTest, InvalidStreamTypeCrashes) {
 
 TEST_F(StreamMixerDeathTest, BadJsonCrashes) {
   const std::string json("{{");
-  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
   EXPECT_DEATH(mixer_->ResetPostProcessorsForTest(
                    std::make_unique<MockPostProcessorFactory>(), json),
                DeathRegex("Invalid JSON"));

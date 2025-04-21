@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include "components/content_settings/core/common/content_settings.h"
 
 // ScopedBlockPopupsPref modifies the block popups preference for the original
-// browser state and resets the preference to its original value when this
+// profile and resets the preference to its original value when this
 // object goes out of scope.
 class ScopedBlockPopupsPref {
  public:

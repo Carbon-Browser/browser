@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 
 #include <stddef.h>
 
-#include <algorithm>
 #include <string>
 
 #include "base/strings/strcat.h"
@@ -16,15 +15,9 @@
 #include "components/omnibox/browser/autocomplete_match.h"
 #include "components/omnibox/browser/autocomplete_match_classification.h"
 #include "components/omnibox/browser/autocomplete_provider_client.h"
-#include "components/omnibox/browser/history_provider.h"
-#include "components/omnibox/browser/omnibox_field_trial.h"
-#include "components/search_engines/omnibox_focus_type.h"
-#include "components/search_engines/template_url_data.h"
-#include "components/search_engines/template_url_service.h"
-#include "components/search_engines/template_url_starter_pack_data.h"
 #include "components/url_formatter/url_fixer.h"
+#include "third_party/metrics_proto/omnibox_focus_type.pb.h"
 #include "third_party/metrics_proto/omnibox_input_type.pb.h"
-#include "ui/base/page_transition_types.h"
 #include "url/url_constants.h"
 
 const int BuiltinProvider::kRelevance = 860;
@@ -39,44 +32,18 @@ BuiltinProvider::BuiltinProvider(AutocompleteProviderClient* client)
 void BuiltinProvider::Start(const AutocompleteInput& input,
                             bool minimal_changes) {
   matches_.clear();
-  if (input.focus_type() != OmniboxFocusType::DEFAULT ||
+  if (input.IsZeroSuggest() ||
       (input.type() == metrics::OmniboxInputType::EMPTY)) {
     return;
   }
 
-  const std::u16string text = input.text();
-  DoStarterPackAutocompletion(text);
-
   if (input.type() != metrics::OmniboxInputType::QUERY) {
-    DoBuiltinAutocompletion(text);
+    DoBuiltinAutocompletion(input.text());
+    UpdateRelevanceScores(input);
   }
-
-  UpdateRelevanceScores(input);
 }
 
 BuiltinProvider::~BuiltinProvider() = default;
-
-void BuiltinProvider::DoStarterPackAutocompletion(const std::u16string& text) {
-  if (!OmniboxFieldTrial::IsSiteSearchStarterPackEnabled()) {
-    return;
-  }
-
-  // When the user's input begins with '@', we want to prioritize providing
-  // suggestions for all active starter pack search engines.
-  bool starts_with_starter_pack_symbol =
-      base::StartsWith(text, u"@", base::CompareCase::INSENSITIVE_ASCII);
-
-  if (starts_with_starter_pack_symbol) {
-    TemplateURLService::TURLsAndMeaningfulLengths matches;
-    template_url_service_->AddMatchingKeywords(text, false, &matches);
-    for (auto match : matches) {
-      if (match.first->starter_pack_id() > 0 &&
-          match.first->is_active() == TemplateURLData::ActiveStatus::kTrue) {
-        AddStarterPackMatch(*match.first);
-      }
-    }
-  }
-}
 
 void BuiltinProvider::DoBuiltinAutocompletion(const std::u16string& text) {
   const size_t kAboutSchemeLength = strlen(url::kAboutScheme);
@@ -104,9 +71,10 @@ void BuiltinProvider::DoBuiltinAutocompletion(const std::u16string& text) {
     ACMatchClassifications styles =
         ClassifyTermMatches(style_matches, std::string::npos, kMatch, kUrl);
     // Include some common builtin URLs as the user types the scheme.
-    for (std::u16string url : client_->GetBuiltinsToProvideAsUserTypes())
+    for (const std::u16string& url :
+         client_->GetBuiltinsToProvideAsUserTypes()) {
       AddBuiltinMatch(url, std::u16string(), styles);
-
+    }
   } else {
     // Match input about: or |embedderAbout| URL input against builtin URLs.
     GURL url = url_formatter::FixupURL(base::UTF16ToUTF8(text), std::string());
@@ -192,27 +160,12 @@ void BuiltinProvider::AddBuiltinMatch(const std::u16string& match_string,
                                       const ACMatchClassifications& styles) {
   AutocompleteMatch match(this, kRelevance, false,
                           AutocompleteMatchType::NAVSUGGEST);
+  match.suggest_type = omnibox::TYPE_NAVIGATION;
   match.fill_into_edit = match_string;
   match.inline_autocompletion = inline_completion;
   match.destination_url = GURL(match_string);
   match.contents = match_string;
   match.contents_class = styles;
-  matches_.push_back(match);
-}
-
-void BuiltinProvider::AddStarterPackMatch(const TemplateURL& template_url) {
-  AutocompleteMatch match(
-      this, OmniboxFieldTrial::kSiteSearchStarterPackRelevanceScore.Get(),
-      false, AutocompleteMatchType::SEARCH_OTHER_ENGINE);
-
-  match.fill_into_edit = template_url.keyword();
-  match.destination_url =
-      GURL(TemplateURLStarterPackData::GetDestinationUrlForStarterPackID(
-          template_url.starter_pack_id()));
-  match.contents = template_url.short_name();
-  match.contents_class.emplace_back(0, ACMatchClassification::NONE);
-  match.transition = ui::PAGE_TRANSITION_GENERATED;
-  match.keyword = template_url.keyword();
   matches_.push_back(match);
 }
 

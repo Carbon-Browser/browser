@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 
 namespace content {
 class BrowserContext;
-class RenderViewHost;
+class RenderFrameHost;
 class WebContents;
 }
 
@@ -52,9 +52,9 @@ class MenuModel;
 //       fetcher_->SetRequestContext(context);
 //       content::AssociateURLFetcherWithRenderView(
 //           fetcher_.get(),
-//           proxy_->GetRenderViewHost()->GetSiteInstance()->GetSite(),
-//           proxy_->GetRenderViewHost()->GetProcess()->GetID(),
-//           proxy_->GetRenderViewHost()->GetRoutingID());
+//           proxy_->GetRenderFrameHost()->GetSiteInstance()->GetSite(),
+//           proxy_->GetRenderFrameHost()->GetProcess()->GetDeprecatedID(),
+//           proxy_->GetRenderFrameHost()->GetRoutingID());
 //       fetcher_->Start();
 //     }
 //
@@ -118,7 +118,7 @@ class RenderViewContextMenuProxy {
   virtual void AddAccessibilityLabelsServiceItem(bool is_checked) = 0;
 
   // Retrieve the given associated objects with a context menu.
-  virtual content::RenderViewHost* GetRenderViewHost() const = 0;
+  virtual content::RenderFrameHost* GetRenderFrameHost() const = 0;
   virtual content::WebContents* GetWebContents() const = 0;
   virtual content::BrowserContext* GetBrowserContext() const = 0;
 };

@@ -1,11 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef SERVICES_DEVICE_SERIAL_SERIAL_PORT_IMPL_H_
 #define SERVICES_DEVICE_SERIAL_SERIAL_PORT_IMPL_H_
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -74,8 +74,7 @@ class SerialPortImpl : public mojom::SerialPort {
                 OpenCallback callback);
   void PortOpened(OpenCallback callback, bool success);
   void WriteToPort(MojoResult result, const mojo::HandleSignalsState& state);
-  void OnWriteToPortCompleted(uint32_t bytes_expected,
-                              uint32_t bytes_sent,
+  void OnWriteToPortCompleted(uint32_t bytes_sent,
                               mojom::SerialSendError error);
   void ReadFromPortAndWriteOut(MojoResult result,
                                const mojo::HandleSignalsState& state);

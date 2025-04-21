@@ -1,6 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "net/dns/dns_config_service_linux.h"
 
@@ -12,19 +17,21 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
 #include "base/files/file_path.h"
 #include "base/files/file_path_watcher.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/sequence_checker.h"
 #include "base/threading/scoped_blocking_call.h"
@@ -34,7 +41,6 @@
 #include "net/dns/nsswitch_reader.h"
 #include "net/dns/public/resolv_reader.h"
 #include "net/dns/serial_worker.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace net {
 
@@ -57,15 +63,14 @@ constexpr base::FilePath::CharType kFilePathResolv[] = _PATH_RESCONF;
 
 constexpr base::FilePath::CharType kFilePathNsswitch[] = _PATH_NSSWITCH_CONF;
 
-absl::optional<DnsConfig> ConvertResStateToDnsConfig(
+std::optional<DnsConfig> ConvertResStateToDnsConfig(
     const struct __res_state& res) {
-  absl::optional<std::vector<net::IPEndPoint>> nameservers =
-      GetNameservers(res);
+  std::optional<std::vector<net::IPEndPoint>> nameservers = GetNameservers(res);
   DnsConfig dns_config;
   dns_config.unhandled_options = false;
 
   if (!nameservers.has_value())
-    return absl::nullopt;
+    return std::nullopt;
 
   // Expected to be validated by GetNameservers()
   DCHECK(res.options & RES_INIT);
@@ -103,12 +108,12 @@ absl::optional<DnsConfig> ConvertResStateToDnsConfig(
   }
 
   if (dns_config.nameservers.empty())
-    return absl::nullopt;
+    return std::nullopt;
 
   // If any name server is 0.0.0.0, assume the configuration is invalid.
   for (const IPEndPoint& nameserver : dns_config.nameservers) {
     if (nameserver.address().IsZero())
-      return absl::nullopt;
+      return std::nullopt;
   }
   return dns_config;
 }
@@ -203,12 +208,11 @@ enum class IncompatibleNsswitchReason {
 
 void RecordIncompatibleNsswitchReason(
     IncompatibleNsswitchReason reason,
-    absl::optional<NsswitchReader::Service> service_token) {
-  UMA_HISTOGRAM_ENUMERATION("Net.DNS.DnsConfig.Nsswitch.IncompatibleReason",
-                            reason);
+    std::optional<NsswitchReader::Service> service_token) {
   if (service_token) {
-    UMA_HISTOGRAM_ENUMERATION("Net.DNS.DnsConfig.Nsswitch.IncompatibleService",
-                              service_token.value());
+    base::UmaHistogramEnumeration(
+        "Net.DNS.DnsConfig.Nsswitch.IncompatibleService",
+        service_token.value());
   }
 }
 
@@ -253,7 +257,7 @@ bool IsNsswitchConfigCompatible(
         if (!files_found) {
           RecordIncompatibleNsswitchReason(
               IncompatibleNsswitchReason::kFilesMissing,
-              /*service_token=*/absl::nullopt);
+              /*service_token=*/std::nullopt);
           return false;
         }
         // Chrome will always stop if DNS finds a result or will otherwise
@@ -277,6 +281,7 @@ bool IsNsswitchConfigCompatible(
       case NsswitchReader::Service::kMdns4:
       case NsswitchReader::Service::kMdns6:
       case NsswitchReader::Service::kResolve:
+      case NsswitchReader::Service::kNis:
         RecordIncompatibleNsswitchReason(
             IncompatibleNsswitchReason::kIncompatibleService,
             specification.service);
@@ -300,7 +305,6 @@ bool IsNsswitchConfigCompatible(
         break;
 
       case NsswitchReader::Service::kMyHostname:
-      case NsswitchReader::Service::kNis:
         // Similar enough to Chrome behavior (or unlikely to matter for Chrome
         // resolutions) to be considered compatible unless the actions do
         // something very weird to skip remaining services without a result.
@@ -321,7 +325,7 @@ bool IsNsswitchConfigCompatible(
   }
 
   RecordIncompatibleNsswitchReason(IncompatibleNsswitchReason::kDnsMissing,
-                                   /*service_token=*/absl::nullopt);
+                                   /*service_token=*/std::nullopt);
   return false;
 }
 
@@ -371,12 +375,10 @@ class DnsConfigServiceLinux::Watcher : public DnsConfigService::Watcher {
 
  private:
   void OnResolvFilePathWatcherChange(const base::FilePath& path, bool error) {
-    UMA_HISTOGRAM_BOOLEAN("Net.DNS.DnsConfig.Resolv.FileChange", true);
     OnConfigChanged(!error);
   }
 
   void OnNsswitchFilePathWatcherChange(const base::FilePath& path, bool error) {
-    UMA_HISTOGRAM_BOOLEAN("Net.DNS.DnsConfig.Nsswitch.FileChange", true);
     OnConfigChanged(!error);
   }
 
@@ -453,14 +455,10 @@ class DnsConfigServiceLinux::ConfigReader : public SerialWorker {
         }
       }
 
-      UMA_HISTOGRAM_BOOLEAN("Net.DNS.DnsConfig.Resolv.Read",
-                            dns_config_.has_value());
       if (!dns_config_.has_value())
         return;
-      UMA_HISTOGRAM_BOOLEAN("Net.DNS.DnsConfig.Resolv.Valid",
-                            dns_config_->IsValid());
-      UMA_HISTOGRAM_BOOLEAN("Net.DNS.DnsConfig.Resolv.Compatible",
-                            !dns_config_->unhandled_options);
+      base::UmaHistogramBoolean("Net.DNS.DnsConfig.Resolv.Compatible",
+                                !dns_config_->unhandled_options);
 
       // Override `fallback_period` value to match default setting on
       // Windows.
@@ -469,18 +467,16 @@ class DnsConfigServiceLinux::ConfigReader : public SerialWorker {
       if (dns_config_ && !dns_config_->unhandled_options) {
         std::vector<NsswitchReader::ServiceSpecification> nsswitch_hosts =
             nsswitch_reader_->ReadAndParseHosts();
-        UMA_HISTOGRAM_COUNTS_100("Net.DNS.DnsConfig.Nsswitch.NumServices",
-                                 nsswitch_hosts.size());
         dns_config_->unhandled_options =
             !IsNsswitchConfigCompatible(nsswitch_hosts);
-        UMA_HISTOGRAM_BOOLEAN("Net.DNS.DnsConfig.Nsswitch.Compatible",
-                              !dns_config_->unhandled_options);
+        base::UmaHistogramBoolean("Net.DNS.DnsConfig.Nsswitch.Compatible",
+                                  !dns_config_->unhandled_options);
       }
     }
 
    private:
     friend class ConfigReader;
-    absl::optional<DnsConfig> dns_config_;
+    std::optional<DnsConfig> dns_config_;
     std::unique_ptr<ResolvReader> resolv_reader_;
     std::unique_ptr<NsswitchReader> nsswitch_reader_;
   };

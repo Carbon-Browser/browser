@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@ namespace {
 
 TEST(FileEnumerationEntryMojomTraitsTest, SuccessCase) {
   base::FilePath path;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &path);
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &path);
   constexpr int64_t size = 19;
   constexpr base::Time last_accessed =
       base::Time::UnixEpoch() + base::Seconds(99);

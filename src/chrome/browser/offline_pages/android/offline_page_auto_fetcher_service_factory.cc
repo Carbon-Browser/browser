@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,11 @@
 
 #include <string>
 
-#include "base/memory/singleton.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/offline_pages/android/auto_fetch_notifier.h"
 #include "chrome/browser/offline_pages/android/offline_page_auto_fetcher_service.h"
 #include "chrome/browser/offline_pages/offline_page_model_factory.h"
 #include "chrome/browser/offline_pages/request_coordinator_factory.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 namespace offline_pages {
 
@@ -30,7 +29,8 @@ class OfflinePageAutoFetcherServiceFactory::ServiceDelegate final
 // static
 OfflinePageAutoFetcherServiceFactory*
 OfflinePageAutoFetcherServiceFactory::GetInstance() {
-  return base::Singleton<OfflinePageAutoFetcherServiceFactory>::get();
+  static base::NoDestructor<OfflinePageAutoFetcherServiceFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -45,9 +45,14 @@ OfflinePageAutoFetcherServiceFactory::GetForBrowserContext(
 }
 
 OfflinePageAutoFetcherServiceFactory::OfflinePageAutoFetcherServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "OfflinePageAutoFetcherService",
-          BrowserContextDependencyManager::GetInstance()),
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/40257657): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              .Build()),
       service_delegate_(
           std::make_unique<
               OfflinePageAutoFetcherServiceFactory::ServiceDelegate>()) {
@@ -55,16 +60,18 @@ OfflinePageAutoFetcherServiceFactory::OfflinePageAutoFetcherServiceFactory()
   // Depends on OfflinePageModelFactory in SimpleDependencyManager.
 }
 
-OfflinePageAutoFetcherServiceFactory::~OfflinePageAutoFetcherServiceFactory() {}
+OfflinePageAutoFetcherServiceFactory::~OfflinePageAutoFetcherServiceFactory() =
+    default;
 
-KeyedService* OfflinePageAutoFetcherServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+OfflinePageAutoFetcherServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   RequestCoordinator* coordinator =
       RequestCoordinatorFactory::GetForBrowserContext(context);
   OfflinePageModel* model =
       OfflinePageModelFactory::GetForBrowserContext(context);
-  return new OfflinePageAutoFetcherService(coordinator, model,
-                                           service_delegate_.get());
+  return std::make_unique<OfflinePageAutoFetcherService>(
+      coordinator, model, service_delegate_.get());
 }
 
 }  // namespace offline_pages

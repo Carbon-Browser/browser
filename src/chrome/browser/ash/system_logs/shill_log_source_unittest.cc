@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
-#include "chromeos/dbus/shill/shill_clients.h"
+#include "chromeos/ash/components/dbus/shill/shill_clients.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -21,13 +21,13 @@ constexpr char kNetworkServices[] = "network_services";
 
 class ShillLogSourceTest : public ::testing::Test {
  public:
-  ShillLogSourceTest() {}
+  ShillLogSourceTest() = default;
   ~ShillLogSourceTest() override = default;
   ShillLogSourceTest(const ShillLogSourceTest&) = delete;
   ShillLogSourceTest*& operator=(const ShillLogSourceTest&) = delete;
 
-  void SetUp() override { chromeos::shill_clients::InitializeFakes(); }
-  void TearDown() override { chromeos::shill_clients::Shutdown(); }
+  void SetUp() override { ash::shill_clients::InitializeFakes(); }
+  void TearDown() override { ash::shill_clients::Shutdown(); }
 
   std::unique_ptr<SystemLogsResponse> Fetch(bool scrub) {
     std::unique_ptr<SystemLogsResponse> result;
@@ -115,7 +115,7 @@ TEST_F(ShillLogSourceTest, NotScrubbed) {
 
 constexpr char kScrubbedDeviceStart[] = R"("/device/wifi1")";
 constexpr char kScrubbedDeviceExpected[] = R"("/device/wifi1": {
-      "Address": "23456789abcd",
+      "Address": "*** MASKED ***",
       "DBus.Object": "/device/wifi1",
       "DBus.Service": "org.freedesktop.ModemManager1",
       "IPConfigs": {

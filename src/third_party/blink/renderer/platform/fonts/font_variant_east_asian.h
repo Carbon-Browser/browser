@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,10 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_FONTS_FONT_VARIANT_EAST_ASIAN_H_
 
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
-#include "third_party/blink/renderer/platform/wtf/forward.h"
+
+namespace WTF {
+class String;
+}  // namespace WTF
 
 namespace blink {
 
@@ -24,7 +27,7 @@ class FontVariantEastAsian {
     kTraditional
     // Ensure |BitFields| has enough bits when adding values.
   };
-  static String ToString(EastAsianForm);
+  static WTF::String ToString(EastAsianForm);
 
   enum EastAsianWidth {
     kNormalWidth,
@@ -32,7 +35,7 @@ class FontVariantEastAsian {
     kProportionalWidth
     // Ensure |BitFields| has enough bits when adding values.
   };
-  static String ToString(EastAsianWidth);
+  static WTF::String ToString(EastAsianWidth);
 
   FontVariantEastAsian() : fields_as_unsigned_(0) {}
 
@@ -58,7 +61,7 @@ class FontVariantEastAsian {
     return fields_as_unsigned_ == other.fields_as_unsigned_;
   }
 
-  String ToString() const;
+  WTF::String ToString() const;
 
  private:
   FontVariantEastAsian(unsigned init_value) : fields_as_unsigned_(init_value) {}

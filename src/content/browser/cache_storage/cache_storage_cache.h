@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,19 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/id_map.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
+#include "components/services/storage/public/cpp/buckets/bucket_locator.h"
+#include "components/services/storage/public/cpp/quota_error_or.h"
 #include "components/services/storage/public/mojom/cache_storage_control.mojom.h"
 #include "content/browser/cache_storage/blob_storage_context_wrapper.h"
 #include "content/browser/cache_storage/cache_storage_cache_handle.h"
@@ -27,8 +31,6 @@
 #include "net/base/completion_once_callback.h"
 #include "net/base/io_buffer.h"
 #include "net/disk_cache/disk_cache.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-#include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/mojom/cache_storage/cache_storage.mojom.h"
 #include "third_party/blink/public/mojom/quota/quota_types.mojom.h"
 
@@ -58,10 +60,9 @@ class CacheStorageCacheTest;
 //  https://w3c.github.io/ServiceWorker/#cache-interface
 //
 // The asynchronous methods are executed serially. Callbacks to the public
-// functions will be called so long as the cache object lives. It is important
-// to for client code hold a |CacheStorageCacheHandle| to the cache for the
-// duration of any operations. Otherwise it is possible the operation may
-// get cancelled in some circumstances.
+// functions will be called so long as the cache object lives. Client code must
+// hold a `CacheStorageCacheHandle` for the duration of operations, otherwise
+// the operation may be cancelled in some circumstances.
 class CONTENT_EXPORT CacheStorageCache {
  public:
   using CacheEntriesCallback =
@@ -97,7 +98,7 @@ class CONTENT_EXPORT CacheStorageCache {
   };
 
   static std::unique_ptr<CacheStorageCache> CreateMemoryCache(
-      const blink::StorageKey& storage_key,
+      const storage::BucketLocator& bucket_locator,
       storage::mojom::CacheStorageOwner owner,
       const std::string& cache_name,
       CacheStorage* cache_storage,
@@ -105,7 +106,7 @@ class CONTENT_EXPORT CacheStorageCache {
       scoped_refptr<storage::QuotaManagerProxy> quota_manager_proxy,
       scoped_refptr<BlobStorageContextWrapper> blob_storage_context);
   static std::unique_ptr<CacheStorageCache> CreatePersistentCache(
-      const blink::StorageKey& storage_key,
+      const storage::BucketLocator& bucket_locator,
       storage::mojom::CacheStorageOwner owner,
       const std::string& cache_name,
       CacheStorage* cache_storage,
@@ -162,17 +163,15 @@ class CONTENT_EXPORT CacheStorageCache {
                       int64_t trace_id,
                       VerboseErrorCallback callback,
                       BadMessageCallback bad_message_callback);
-  void BatchDidGetUsageAndQuota(
+  void BatchDidGetBucketSpaceRemaining(
       std::vector<blink::mojom::BatchOperationPtr> operations,
       int64_t trace_id,
       VerboseErrorCallback callback,
       BadMessageCallback bad_message_callback,
-      absl::optional<std::string> message,
+      std::optional<std::string> message,
       uint64_t space_required,
       uint64_t side_data_size,
-      blink::mojom::QuotaStatusCode status_code,
-      int64_t usage,
-      int64_t quota);
+      storage::QuotaErrorOr<int64_t> space_remaining);
 
   // Returns blink::mojom::CacheStorageError::kSuccess and a vector of
   // requests if there are no errors.
@@ -300,7 +299,7 @@ class CONTENT_EXPORT CacheStorageCache {
       base::IDMap<std::unique_ptr<CacheStorageBlobToDiskCache>>;
 
   CacheStorageCache(
-      const blink::StorageKey& storage_key,
+      const storage::BucketLocator& bucket_locator,
       storage::mojom::CacheStorageOwner owner,
       const std::string& cache_name,
       const base::FilePath& path,
@@ -380,15 +379,14 @@ class CONTENT_EXPORT CacheStorageCache {
                      WriteMetadataCallback callback);
 
   // WriteSideData callbacks
-  void WriteSideDataDidGetQuota(ErrorCallback callback,
-                                const GURL& url,
-                                base::Time expected_response_time,
-                                int64_t trace_id,
-                                scoped_refptr<net::IOBuffer> buffer,
-                                int buf_len,
-                                blink::mojom::QuotaStatusCode status_code,
-                                int64_t usage,
-                                int64_t quota);
+  void WriteSideDataDidGetBucketSpaceRemaining(
+      ErrorCallback callback,
+      const GURL& url,
+      base::Time expected_response_time,
+      int64_t trace_id,
+      scoped_refptr<net::IOBuffer> buffer,
+      int buf_len,
+      storage::QuotaErrorOr<int64_t> space_remaining);
 
   void WriteSideDataImpl(ErrorCallback callback,
                          const GURL& url,
@@ -590,21 +588,21 @@ class CONTENT_EXPORT CacheStorageCache {
   // Be sure to check |backend_state_| before use.
   std::unique_ptr<disk_cache::Backend> backend_;
 
-  blink::StorageKey storage_key_;
-  storage::mojom::CacheStorageOwner owner_;
+  const storage::BucketLocator bucket_locator_;
+  const storage::mojom::CacheStorageOwner owner_;
   const std::string cache_name_;
-  base::FilePath path_;
+  const base::FilePath path_;
 
   // Raw pointer is safe because the CacheStorage instance owns this
   // CacheStorageCache object.
-  raw_ptr<CacheStorage> cache_storage_;
+  const raw_ptr<CacheStorage> cache_storage_;
 
   // A handle that is used to keep the owning CacheStorage instance referenced
   // as long this cache object is also referenced.
   CacheStorageHandle cache_storage_handle_;
 
   const scoped_refptr<base::SequencedTaskRunner> scheduler_task_runner_;
-  scoped_refptr<storage::QuotaManagerProxy> quota_manager_proxy_;
+  const scoped_refptr<storage::QuotaManagerProxy> quota_manager_proxy_;
   BackendState backend_state_ = BACKEND_UNINITIALIZED;
   std::unique_ptr<CacheStorageScheduler> scheduler_;
   bool initializing_ = false;
@@ -622,7 +620,7 @@ class CONTENT_EXPORT CacheStorageCache {
   BlobToDiskCacheIDMap active_blob_to_disk_cache_writers_;
 
   // Whether or not to store data in disk or memory.
-  bool memory_only_;
+  const bool memory_only_;
 
   // Active while waiting for the backend to finish its closing up, and contains
   // the callback passed to CloseImpl.

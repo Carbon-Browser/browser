@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@
 namespace metrics {
 
 std::string GetVersionString() {
-  std::string version = version_info::GetVersionNumber();
+  std::string version(version_info::GetVersionNumber());
 #if defined(ARCH_CPU_64_BITS)
   version += "-64";
 #endif  // defined(ARCH_CPU_64_BITS)
@@ -45,7 +45,6 @@ SystemProfileProto::Channel AsProtobufChannel(version_info::Channel channel) {
       return SystemProfileProto::CHANNEL_STABLE;
   }
   NOTREACHED();
-  return SystemProfileProto::CHANNEL_UNKNOWN;
 }
 
 std::string GetAppPackageName() {

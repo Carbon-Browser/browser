@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -139,6 +139,10 @@ class ExtendedAttribute(object):
             return self._arguments
         raise ValueError('[{}] does not have an argument.'.format(
             self.syntactic_form))
+
+    @property
+    def has_name(self):
+        return self._format == self._FORM_NAMED_ARG_LIST
 
     @property
     def name(self):

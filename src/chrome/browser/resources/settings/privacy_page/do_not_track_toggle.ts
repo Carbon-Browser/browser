@@ -1,16 +1,16 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
 import '../settings_shared.css.js';
 import '../controls/settings_toggle_button.js';
 
-import {focusWithoutInk} from 'chrome://resources/js/cr/ui/focus_without_ink.m.js';
+import {focusWithoutInk} from 'chrome://resources/js/focus_without_ink.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {SettingsToggleButtonElement} from '../controls/settings_toggle_button.js';
+import type {SettingsToggleButtonElement} from '../controls/settings_toggle_button.js';
 import {MetricsBrowserProxyImpl, PrivacyElementInteractions} from '../metrics_browser_proxy.js';
 
 import {getTemplate} from './do_not_track_toggle.html.js';
@@ -79,14 +79,14 @@ export class SettingsDoNotTrackToggleElement extends PolymerElement {
   }
 
   private onDialogClosed_() {
-    focusWithoutInk(this.$.toggle);
+    focusWithoutInk(this.toggle_);
   }
 
   /**
    * Handles the shared proxy confirmation dialog 'Confirm' button.
    */
   private onDialogConfirm_() {
-    this.$.toggle.sendPrefChange();
+    this.toggle_.sendPrefChange();
     this.closeDialog_();
   }
 
@@ -95,8 +95,13 @@ export class SettingsDoNotTrackToggleElement extends PolymerElement {
    * event.
    */
   private onDialogCancel_() {
-    this.$.toggle.resetToPrefValue();
+    this.toggle_.resetToPrefValue();
     this.closeDialog_();
+  }
+
+  private get toggle_(): SettingsToggleButtonElement {
+    return this.shadowRoot!.querySelector<SettingsToggleButtonElement>(
+        '#toggle')!;
   }
 }
 

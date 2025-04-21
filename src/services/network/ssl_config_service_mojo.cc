@@ -1,10 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/network/ssl_config_service_mojo.h"
 
-#include "base/strings/string_piece.h"
+#include <string_view>
+
 #include "base/strings/string_util.h"
 #include "mojo/public/cpp/bindings/type_converter.h"
 #include "services/network/ssl_config_type_converter.h"
@@ -15,8 +16,7 @@ namespace {
 
 // Returns true if |hostname| is a subdomain of |pattern| (including if they are
 // equal).
-bool IsSubdomain(const base::StringPiece hostname,
-                 const base::StringPiece pattern) {
+bool IsSubdomain(std::string_view hostname, std::string_view pattern) {
   if (hostname == pattern) {
     return true;
   }
@@ -33,10 +33,8 @@ bool IsSubdomain(const base::StringPiece hostname,
 
 SSLConfigServiceMojo::SSLConfigServiceMojo(
     mojom::SSLConfigPtr initial_config,
-    mojo::PendingReceiver<mojom::SSLConfigClient> ssl_config_client_receiver,
-    CRLSetDistributor* crl_set_distributor)
-    : crl_set_distributor_(crl_set_distributor),
-      client_cert_pooling_policy_(
+    mojo::PendingReceiver<mojom::SSLConfigClient> ssl_config_client_receiver)
+    : client_cert_pooling_policy_(
           initial_config ? initial_config->client_cert_pooling_policy
                          : std::vector<std::string>()) {
   if (initial_config) {
@@ -46,14 +44,9 @@ SSLConfigServiceMojo::SSLConfigServiceMojo(
 
   if (ssl_config_client_receiver)
     receiver_.Bind(std::move(ssl_config_client_receiver));
-
-  crl_set_distributor_->AddObserver(this);
-  cert_verifier_config_.crl_set = crl_set_distributor_->crl_set();
 }
 
-SSLConfigServiceMojo::~SSLConfigServiceMojo() {
-  crl_set_distributor_->RemoveObserver(this);
-}
+SSLConfigServiceMojo::~SSLConfigServiceMojo() = default;
 
 void SSLConfigServiceMojo::SetCertVerifierForConfiguring(
     net::CertVerifier* cert_verifier) {
@@ -74,7 +67,6 @@ void SSLConfigServiceMojo::OnSSLConfigUpdated(mojom::SSLConfigPtr ssl_config) {
 
   net::CertVerifier::Config old_cert_verifier_config = cert_verifier_config_;
   cert_verifier_config_ = MojoSSLConfigToCertVerifierConfig(ssl_config);
-  cert_verifier_config_.crl_set = old_cert_verifier_config.crl_set;
   if (cert_verifier_ && (old_cert_verifier_config != cert_verifier_config_)) {
     cert_verifier_->SetConfig(cert_verifier_config_);
   }
@@ -85,7 +77,7 @@ net::SSLContextConfig SSLConfigServiceMojo::GetSSLContextConfig() {
 }
 
 bool SSLConfigServiceMojo::CanShareConnectionWithClientCerts(
-    const std::string& hostname) const {
+    std::string_view hostname) const {
   // Hostnames (and the patterns configured for this class) must be
   // canonicalized before comparison, or the comparison will fail.
   for (const std::string& pattern : client_cert_pooling_policy_) {
@@ -109,12 +101,6 @@ bool SSLConfigServiceMojo::CanShareConnectionWithClientCerts(
     }
   }
   return false;
-}
-
-void SSLConfigServiceMojo::OnNewCRLSet(scoped_refptr<net::CRLSet> crl_set) {
-  cert_verifier_config_.crl_set = crl_set;
-  if (cert_verifier_)
-    cert_verifier_->SetConfig(cert_verifier_config_);
 }
 
 }  // namespace network

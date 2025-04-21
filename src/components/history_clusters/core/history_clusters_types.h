@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,77 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
 #include "components/history/core/browser/history_types.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace history_clusters {
+
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class ClusteringRequestSource {
+  kAllKeywordCacheRefresh = 0,
+  kShortKeywordCacheRefresh = 1,
+  kJourneysPage = 2,
+  kNewTabPage = 3,
+
+  // New values go above here.
+  kMaxValue = kNewTabPage,
+};
+
+struct QueryClustersFilterParams {
+  QueryClustersFilterParams();
+  QueryClustersFilterParams(const QueryClustersFilterParams&);
+  QueryClustersFilterParams(QueryClustersFilterParams&&);
+  QueryClustersFilterParams& operator=(const QueryClustersFilterParams&);
+  QueryClustersFilterParams& operator=(QueryClustersFilterParams&&);
+  ~QueryClustersFilterParams();
+
+  // Parameters related to the minimum requirements for returned clusters.
+
+  // The minimum number of non-hidden visits that are required for returned
+  // clusters. Note that this also implicitly works as a visit filter such that
+  // if fewer than `min_total_visits` are in a cluster, it will be filtered out.
+  int min_visits = 0;
+
+  // The minimum number of visits within a cluster that have associated images.
+  // Note that this also implicitly works as a visit filter such that if fewer
+  // than `min_visits_with_images` are in a cluster, it will be filtered out.
+  int min_visits_with_images = 0;
+
+  // The category IDs that a cluster must be a part of for it to be included.
+  // If both `categories_allowlist` and `categories_blocklist` are empty, the
+  // returned clusters will not be filtered.
+  base::flat_set<std::string> categories_allowlist;
+
+  // The category IDs that a cluster must not contain for it to be included.
+  // If both `categories_allowlist` and `categories_blocklist` are empty, the
+  // returned clusters will not be filtered.
+  base::flat_set<std::string> categories_blocklist;
+
+  // Whether all clusters returned are search-initiated.
+  bool is_search_initiated = false;
+
+  // Whether all clusters returned must have associated related searches.
+  bool has_related_searches = false;
+
+  // Whether the returned clusters will be shown on prominent UI surfaces.
+  bool is_shown_on_prominent_ui_surfaces = false;
+
+  // Whether to exclude clusters that have interaction state equal to done.
+  bool filter_done_clusters = false;
+
+  // Whether to exclude visits that have interaction state equal to hidden.
+  bool filter_hidden_visits = false;
+
+  // Whether to include synced visits. Defaults to true because Full History
+  // Sync launched in early 2024. But NTP quests is still flag guarding this,
+  // so this boolean needs to still exist.
+  bool include_synced_visits = true;
+
+  // Whether to return merged clusters that are similar based on content.
+  bool group_clusters_by_content = false;
+};
 
 struct QueryClustersContinuationParams {
   QueryClustersContinuationParams() = default;
@@ -80,6 +146,10 @@ struct RecordingStatus {
 // A partially built VisitContextAnnotations with its state of completeness and
 // associated `URLRow` and `VisitRow` which are necessary to build it.
 struct IncompleteVisitContextAnnotations {
+  IncompleteVisitContextAnnotations();
+  IncompleteVisitContextAnnotations(const IncompleteVisitContextAnnotations&);
+  ~IncompleteVisitContextAnnotations();
+
   RecordingStatus status;
   history::URLRow url_row;
   history::VisitRow visit_row;

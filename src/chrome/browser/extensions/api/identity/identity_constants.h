@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,12 +17,16 @@ extern const char kUserNotSignedIn[];
 extern const char kUserNonPrimary[];
 extern const char kBrowserSigninNotAllowed[];
 extern const char kInteractionRequired[];
+extern const char kGetAuthTokenInteractivityDeniedError[];
 extern const char kInvalidRedirect[];
 extern const char kOffTheRecord[];
 extern const char kPageLoadFailure[];
-extern const char kSetAccountsInCookieFailure[];
+extern const char kPageLoadTimedOut[];
 extern const char kInvalidConsentResult[];
-extern const char kCanceled[];
+extern const char kCannotSetRemoteConsentResolutionCookies[];
+extern const char kCannotCreateWindow[];
+extern const char kInvalidURLScheme[];
+extern const char kBrowserContextShutDown[];
 
 extern const int kCachedRemoteConsentTTLSeconds;
 }  // namespace identity_constants

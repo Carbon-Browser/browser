@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,13 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/time/default_clock.h"
 #include "base/time/default_tick_clock.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/lifetime/application_lifetime.h"
+#include "chrome/browser/lifetime/application_lifetime_desktop.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 
@@ -94,8 +94,9 @@ RelaunchNotificationController::RelaunchNotificationController(
 }
 
 void RelaunchNotificationController::OnUpgradeRecommended() {
-  if (last_notification_style_ == NotificationStyle::kNone)
+  if (last_notification_style_ == NotificationStyle::kNone) {
     return;
+  }
 
   UpgradeDetector::UpgradeNotificationAnnoyanceLevel current_level =
       upgrade_detector_->upgrade_notification_stage();
@@ -140,8 +141,9 @@ void RelaunchNotificationController::OnUpgradeRecommended() {
 
 void RelaunchNotificationController::OnRelaunchOverriddenToRequired(
     bool overridden) {
-  if (notification_type_required_overridden_ == overridden)
+  if (notification_type_required_overridden_ == overridden) {
     return;
+  }
   notification_type_required_overridden_ = overridden;
   HandleCurrentStyle();
 }
@@ -166,12 +168,14 @@ void RelaunchNotificationController::HandleCurrentStyle() {
   }
 
   // Nothing to do if there has been no change in the notification style.
-  if (notification_style == last_notification_style_)
+  if (notification_style == last_notification_style_) {
     return;
+  }
 
   // Close the bubble or dialog if either is open.
-  if (last_notification_style_ != NotificationStyle::kNone)
+  if (last_notification_style_ != NotificationStyle::kNone) {
     CloseRelaunchNotification();
+  }
 
   // Reset state so that a notifications is shown anew in a new style if needed.
   last_level_ = UpgradeDetector::UPGRADE_ANNOYANCE_NONE;
@@ -256,8 +260,10 @@ void RelaunchNotificationController::HandleRelaunchRequiredState(
   if (level == last_level_ && timer_.IsRunning()) {
     const base::Time& desired_run_time = timer_.desired_run_time();
     DCHECK(!desired_run_time.is_null());
-    if (high_deadline <= now && desired_run_time - now <= kRelaunchGracePeriod)
+    if (high_deadline <= now &&
+        desired_run_time - now <= kRelaunchGracePeriod) {
       return;
+    }
   }
 
   base::Time deadline = high_deadline;
@@ -269,20 +275,20 @@ void RelaunchNotificationController::HandleRelaunchRequiredState(
     // a) The device goes to sleep before the first notification and wakes up
     // after the deadline.
     // b) A change in policy value moves the deadline in the past.
-    if (high_deadline <= now)
+    if (high_deadline <= now) {
       deadline = now + kRelaunchGracePeriod;
+    }
     // (re)Start the timer to perform the relaunch when the deadline is reached.
     timer_.Start(FROM_HERE, deadline, this,
                  &RelaunchNotificationController::OnRelaunchDeadlineExpired);
   }
 
-  if (platform_impl_.IsRequiredNotificationShown()) {
-    platform_impl_.SetDeadline(deadline);
-  } else {
-    // Otherwise, show the dialog if there has been a level change or if the
-    // deadline is in the past.
-    if (level != last_level_ || high_deadline <= now)
-      NotifyRelaunchRequired();
+  platform_impl_.SetDeadline(deadline);
+  // Show the dialog if there has been a level change or if the deadline is in
+  // the past.
+  if (!platform_impl_.IsRequiredNotificationShown() &&
+      (level != last_level_ || high_deadline <= now)) {
+    NotifyRelaunchRequired();
   }
 }
 
@@ -357,10 +363,6 @@ void RelaunchNotificationController::DoNotifyRelaunchRequired(
 
 void RelaunchNotificationController::Close() {
   platform_impl_.CloseRelaunchNotification();
-}
-
-void RelaunchNotificationController::SetDeadline(base::Time deadline) {
-  platform_impl_.SetDeadline(deadline);
 }
 
 void RelaunchNotificationController::OnRelaunchDeadlineExpired() {

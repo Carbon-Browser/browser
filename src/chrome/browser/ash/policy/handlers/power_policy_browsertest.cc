@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,20 +7,18 @@
 #include <string>
 #include <vector>
 
-#include "ash/components/cryptohome/cryptohome_parameters.h"
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/ash/login/test/login_or_lock_screen_visible_waiter.h"
 #include "chrome/browser/ash/policy/core/device_policy_cros_browser_test.h"
 #include "chrome/browser/ash/policy/core/user_cloud_policy_manager_ash.h"
@@ -28,13 +26,13 @@
 #include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/browser/policy/profile_policy_connector.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/test/base/testing_profile.h"
+#include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
+#include "chromeos/ash/components/dbus/dbus_thread_manager.h"
 #include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
 #include "chromeos/ash/components/dbus/userdataauth/userdataauth_client.h"
 #include "chromeos/dbus/constants/dbus_paths.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
 #include "chromeos/dbus/power/fake_power_manager_client.h"
 #include "chromeos/dbus/power/power_policy_controller.h"
 #include "chromeos/dbus/power_manager/policy.pb.h"
@@ -52,6 +50,7 @@
 #include "content/public/test/test_utils.h"
 #include "extensions/browser/api/power/power_api.h"
 #include "extensions/common/api/power.h"
+#include "google_apis/gaia/gaia_id.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -194,7 +193,7 @@ void PowerPolicyBrowserTestBase::SetUpOnMainThread() {
   user_policy_.policy_data().set_username(
       user_manager::StubAccountId().GetUserEmail());
   user_policy_.policy_data().set_gaia_id(
-      user_manager::StubAccountId().GetGaiaId());
+      user_manager::StubAccountId().GetGaiaId().ToString());
 }
 
 void PowerPolicyBrowserTestBase::InstallUserKey() {
@@ -272,7 +271,8 @@ void PowerPolicyBrowserTestBase::ReloadUserPolicy(Profile* profile) {
   policy_manager->core()->store()->Load();
 }
 
-PowerPolicyLoginScreenBrowserTest::PowerPolicyLoginScreenBrowserTest() {}
+PowerPolicyLoginScreenBrowserTest::PowerPolicyLoginScreenBrowserTest() =
+    default;
 
 void PowerPolicyLoginScreenBrowserTest::SetUpCommandLine(
     base::CommandLine* command_line) {
@@ -289,13 +289,13 @@ void PowerPolicyLoginScreenBrowserTest::SetUpOnMainThread() {
 }
 
 void PowerPolicyLoginScreenBrowserTest::TearDownOnMainThread() {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&chrome::AttemptExit));
   base::RunLoop().RunUntilIdle();
   PowerPolicyBrowserTestBase::TearDownOnMainThread();
 }
 
-PowerPolicyInSessionBrowserTest::PowerPolicyInSessionBrowserTest() {}
+PowerPolicyInSessionBrowserTest::PowerPolicyInSessionBrowserTest() = default;
 
 void PowerPolicyInSessionBrowserTest::SetUpOnMainThread() {
   PowerPolicyBrowserTestBase::SetUpOnMainThread();
@@ -552,7 +552,7 @@ IN_PROC_BROWSER_TEST_F(PowerPolicyInSessionBrowserTest, AllowScreenWakeLocks) {
   // Pretend an extension grabs a screen wake lock.
   const char kExtensionId[] = "abcdefghijklmnopabcdefghijlkmnop";
   extensions::PowerAPI::Get(browser()->profile())
-      ->AddRequest(kExtensionId, extensions::api::power::LEVEL_DISPLAY);
+      ->AddRequest(kExtensionId, extensions::api::power::Level::kDisplay);
 
   // The PowerAPI requests system wake lock asynchronously.
   base::RunLoop run_loop;

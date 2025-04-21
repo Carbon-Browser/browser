@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,13 +34,14 @@ class AppWindowDesktopNativeWidgetAuraWin
   void InitNativeWidget(views::Widget::InitParams params) override;
   void Maximize() override;
   void Minimize() override;
+  void OnHostClosed() override;
 
  private:
   // Ownership managed by the views system.
-  raw_ptr<ChromeNativeAppWindowViewsWin> app_window_;
+  raw_ptr<ChromeNativeAppWindowViewsWin, DanglingUntriaged> app_window_;
 
   // Owned by superclass DesktopNativeWidgetAura.
-  raw_ptr<views::DesktopWindowTreeHost> tree_host_;
+  raw_ptr<views::DesktopWindowTreeHost> tree_host_ = nullptr;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_APPS_APP_WINDOW_DESKTOP_NATIVE_WIDGET_AURA_WIN_H_

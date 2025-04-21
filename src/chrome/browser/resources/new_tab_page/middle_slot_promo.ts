@@ -1,28 +1,51 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
+import './mobile_promo.js';
 
 import {CrAutoImgElement} from 'chrome://resources/cr_elements/cr_auto_img/cr_auto_img.js';
-import {Command} from 'chrome://resources/js/browser_command/browser_command.mojom-webui.js';
+import type {CrToastElement} from 'chrome://resources/cr_elements/cr_toast/cr_toast.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {Command} from 'chrome://resources/js/browser_command.mojom-webui.js';
 import {BrowserCommandProxy} from 'chrome://resources/js/browser_command/browser_command_proxy.js';
-import {Url} from 'chrome://resources/mojo/url/mojom/url.mojom-webui.js';
-import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {getTemplate} from './middle_slot_promo.html.js';
+import {EventTracker} from 'chrome://resources/js/event_tracker.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+import {CrLitElement} from 'chrome://resources/lit/v3_0/lit.rollup.js';
+import type {PropertyValues} from 'chrome://resources/lit/v3_0/lit.rollup.js';
+import type {Url} from 'chrome://resources/mojo/url/mojom/url.mojom-webui.js';
 
+import {getCss} from './middle_slot_promo.css.js';
+import {getHtml} from './middle_slot_promo.html.js';
+import type {PageHandlerRemote, Promo} from './new_tab_page.mojom-webui.js';
 import {NewTabPageProxy} from './new_tab_page_proxy.js';
 import {WindowProxy} from './window_proxy.js';
 
 /**
+ * List of possible Promo Dismiss actions. This enum must match with the
+ * numbering for NtpPromoDismissAction in histogram/enums.xml. These values are
+ * persisted to logs. Entries should not be renumbered, removed or reused.
+ */
+export enum PromoDismissAction {
+  DISMISS = 0,
+  RESTORE = 1,
+}
+
+export function recordPromoDismissAction(action: PromoDismissAction) {
+  chrome.metricsPrivate.recordEnumerationValue(
+      'NewTabPage.Promos.DismissAction', action,
+      Object.keys(PromoDismissAction).length);
+}
+
+/**
  * If a promo exists with content and can be shown, an element containing
- * the rendered promo is returned with an id #container. Otherwise, null is
+ * the rendered promo is returned with an id #promoContainer. Otherwise, null is
  * returned.
  */
-export async function renderPromo(): Promise<Element|null> {
+export async function renderPromo(promo: Promo):
+    Promise<{container: Element, id: string | null}|null> {
   const browserHandler = NewTabPageProxy.getInstance().handler;
   const promoBrowserCommandHandler = BrowserCommandProxy.getInstance().handler;
-  const {promo} = await browserHandler.getPromo();
   if (!promo) {
     return null;
   }
@@ -68,13 +91,14 @@ export async function renderPromo(): Promise<Element|null> {
   }
 
   let hasContent = false;
-  const container = document.createElement('div');
-  container.id = 'container';
+  const promoContainer = document.createElement('div');
+  promoContainer.id = 'promoContainer';
   promo.middleSlotParts.forEach(({image, link, text}) => {
     let el;
     if (image) {
       el = new CrAutoImgElement();
       el.autoSrc = image.imageUrl.url;
+      el.staticEncode = true;
       if (image.target) {
         const anchor = createAnchor(image.target);
         if (anchor) {
@@ -91,13 +115,10 @@ export async function renderPromo(): Promise<Element|null> {
     const linkOrText = link || text;
     if (el && linkOrText) {
       el.innerText = linkOrText.text;
-      if (linkOrText.color) {
-        el.style.color = linkOrText.color;
-      }
     }
     if (el) {
       hasContent = true;
-      container.appendChild(el);
+      promoContainer.appendChild(el);
     }
   });
 
@@ -109,32 +130,198 @@ export async function renderPromo(): Promise<Element|null> {
   if (hasContent && canShow) {
     browserHandler.onPromoRendered(
         WindowProxy.getInstance().now(), promo.logUrl || null);
-    return container;
+    return {container: promoContainer, id: promo.id};
   }
   return null;
+}
+
+export interface MiddleSlotPromoElement {
+  $: {
+    promoAndDismissContainer: HTMLElement,
+    dismissPromoButtonToast: CrToastElement,
+    dismissPromoButtonToastMessage: HTMLElement,
+    mobilePromo: HTMLElement,
+    undoDismissPromoButton: HTMLElement,
+  };
 }
 
 // Element that requests and renders the middle-slot promo. The element is
 // hidden until the promo is rendered, If no promo exists or the promo is empty,
 // the element remains hidden.
-export class MiddleSlotPromoElement extends PolymerElement {
+export class MiddleSlotPromoElement extends CrLitElement {
   static get is() {
     return 'ntp-middle-slot-promo';
   }
 
-  static get template() {
-    return getTemplate();
+  static override get styles() {
+    return getCss();
   }
 
-  override ready() {
-    super.ready();
-    renderPromo().then(container => {
-      if (container) {
-        this.shadowRoot!.appendChild(container);
+  override render() {
+    return getHtml.bind(this)();
+  }
+
+  static override get properties() {
+    return {
+      mobilePromoEnabled_: {type: Boolean},
+
+      shownMiddleSlotPromoId_: {
+        type: String,
+        reflect: true,
+      },
+
+      hasDefaultPromo_: {type: Boolean},
+      hasMobilePromoContent_: {type: Boolean},
+      promo_: {type: Object},
+    };
+  }
+
+  protected mobilePromoEnabled_: boolean =
+      loadTimeData.getBoolean('mobilePromoEnabled');
+  protected shownMiddleSlotPromoId_: string;
+  private hasDefaultPromo_: boolean|null = null;
+  private hasMobilePromoContent_: boolean|null = null;
+  private promo_: Promo;
+
+  private blocklistedMiddleSlotPromoId_: string;
+  private eventTracker_: EventTracker = new EventTracker();
+  private pageHandler_: PageHandlerRemote;
+  private setPromoListenerId_: number|null = null;
+
+  constructor() {
+    super();
+    this.pageHandler_ = NewTabPageProxy.getInstance().handler;
+  }
+
+  override connectedCallback() {
+    super.connectedCallback();
+    this.setPromoListenerId_ =
+        NewTabPageProxy.getInstance().callbackRouter.setPromo.addListener(
+            (promo: Promo) => {
+              this.promo_ = promo;
+            });
+    this.eventTracker_.add(window, 'keydown', this.onWindowKeydown_.bind(this));
+    this.pageHandler_.updatePromoData();
+  }
+
+  override disconnectedCallback() {
+    super.disconnectedCallback();
+    this.eventTracker_.removeAll();
+    NewTabPageProxy.getInstance().callbackRouter.removeListener(
+        this.setPromoListenerId_!);
+  }
+
+  override updated(changedProperties: PropertyValues<this>) {
+    super.updated(changedProperties);
+
+    const changedPrivateProperties =
+        changedProperties as Map<PropertyKey, unknown>;
+
+    if (changedPrivateProperties.has('promo_')) {
+      this.onPromoChange_();
+    }
+
+    if (changedPrivateProperties.has('hasDefaultPromo_') ||
+        changedPrivateProperties.has('hasMobilePromoContent_')) {
+      this.updatePromoVisibility_();
+    }
+  }
+
+  private updatePromoVisibility_() {
+    // `renderPromo()` must be called first to initialize promo data.
+    if (this.hasDefaultPromo_ === null) {
+      return;
+    }
+
+    // Up to one promo type can show at any given time.
+    // Note: This logic doesn't apply when handling promo dismissal to avoid
+    // immediately showing a new promo after one is dismissed.
+    this.$.promoAndDismissContainer.hidden = !this.hasDefaultPromo_;
+    if (this.mobilePromoEnabled_) {
+      const showMobilePromo =
+          !this.hasDefaultPromo_ && this.hasMobilePromoContent_;
+      this.$.mobilePromo.hidden = !showMobilePromo;
+      if (showMobilePromo) {
+        this.pageHandler_.onMobilePromoShown();
       }
-      this.dispatchEvent(new Event(
-          'ntp-middle-slot-promo-loaded', {bubbles: true, composed: true}));
+    }
+
+    // Don't fire a load event until we've verified that one or neither of the
+    // promo types (default or mobile) can show. `this.mobilePromoEnabled_`
+    // becomes false in `renderPromo()` whenever a default promo is about to
+    // render.
+    if (!this.mobilePromoEnabled_ || this.hasMobilePromoContent_ !== null) {
+      this.fire('ntp-middle-slot-promo-loaded');
+    }
+  }
+
+  protected onMobilePromoQrCodeChanged_(e: CustomEvent<{value: string}>) {
+    this.hasMobilePromoContent_ = !!e.detail.value;
+  }
+
+  private onPromoChange_() {
+    if (this.mobilePromoEnabled_) {
+      if (this.hasMobilePromoContent_ && this.hasDefaultPromo_ !== null) {
+        // Skip calling `renderPromo()` if we already attempted to render a
+        // promo before AND there is mobile promo content to display. This
+        // prevents the default promo from showing if the mobile promo has
+        // already been displayed, and vice versa.
+        return;
+      }
+    }
+
+    renderPromo(this.promo_).then(promo => {
+      if (!promo) {
+        this.hasDefaultPromo_ = false;
+      } else {
+        const promoContainer =
+            this.shadowRoot!.getElementById('promoContainer');
+        if (promoContainer) {
+          promoContainer.remove();
+        }
+        if (loadTimeData.getBoolean('middleSlotPromoDismissalEnabled')) {
+          this.shownMiddleSlotPromoId_ = promo.id ?? '';
+        }
+        const renderedPromoContainer = promo.container;
+        assert(renderedPromoContainer);
+        this.$.promoAndDismissContainer.prepend(renderedPromoContainer);
+        // Disable the mobile promo since a default promo is going to render.
+        this.mobilePromoEnabled_ = false;
+        this.hasDefaultPromo_ = true;
+      }
     });
+  }
+
+  // Allow users to undo the dismissal of the default promo using Ctrl+Z (or
+  // Cmd+Z on macOS). Mobile promo dismissal is handled by `mobile_promo.ts`.
+  private onWindowKeydown_(e: KeyboardEvent) {
+    if (!this.blocklistedMiddleSlotPromoId_) {
+      return;
+    }
+    let ctrlKeyPressed = e.ctrlKey;
+    // <if expr="is_macosx">
+    ctrlKeyPressed = ctrlKeyPressed || e.metaKey;
+    // </if>
+    if (ctrlKeyPressed && e.key === 'z') {
+      this.onUndoDismissPromoButtonClick_();
+    }
+  }
+
+  protected onDismissPromoButtonClick_() {
+    assert(this.$.promoAndDismissContainer);
+    this.$.promoAndDismissContainer.hidden = true;
+    this.pageHandler_.blocklistPromo(this.shownMiddleSlotPromoId_);
+    this.blocklistedMiddleSlotPromoId_ = this.shownMiddleSlotPromoId_;
+    this.$.dismissPromoButtonToast.show();
+    recordPromoDismissAction(PromoDismissAction.DISMISS);
+  }
+
+  protected onUndoDismissPromoButtonClick_() {
+    assert(this.$.promoAndDismissContainer);
+    this.pageHandler_.undoBlocklistPromo(this.blocklistedMiddleSlotPromoId_);
+    this.$.promoAndDismissContainer.hidden = false;
+    this.$.dismissPromoButtonToast.hide();
+    recordPromoDismissAction(PromoDismissAction.RESTORE);
   }
 }
 

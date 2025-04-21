@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@ namespace {
 
 constexpr float kMinValue = 0.0f;
 constexpr float kMaxValue = 10.0f;
-constexpr size_t kNumBuckets = 10;
+constexpr wtf_size_t kNumBuckets = 10;
 
 class LinearHistogramTest : public ::testing::Test {
  protected:

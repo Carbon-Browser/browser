@@ -1,6 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
 
@@ -8,12 +13,13 @@
 #include <vector>
 
 #include "ash/constants/ash_paths.h"
-#include "base/callback.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback.h"
 #include "base/json/json_writer.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/path_service.h"
 #include "chrome/browser/ash/login/login_pref_names.h"
+#include "chrome/browser/ash/login/test/scoped_policy_update.h"
 #include "chrome/browser/ash/policy/core/device_policy_builder.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/common/chrome_paths.h"
@@ -64,8 +70,7 @@ cryptohome::SerializedInstallAttributes BuildInstallAttributes(
 }
 
 void WriteFile(const base::FilePath& path, const std::string& blob) {
-  CHECK_EQ(base::checked_cast<int>(blob.length()),
-           base::WriteFile(path, blob.data(), blob.length()));
+  CHECK(base::WriteFile(path, blob));
 }
 
 }  // namespace
@@ -116,6 +121,7 @@ void DeviceStateMixin::SetUpLocalState() {
       local_state->SetBoolean(::prefs::kEnrollmentRecoveryRequired, false);
       break;
     case DeviceStateMixin::State::OOBE_COMPLETED_UNOWNED:
+    case DeviceStateMixin::State::OOBE_COMPLETED_PERMANENTLY_UNOWNED:
       local_state->SetBoolean(prefs::kOobeComplete, true);
       local_state->SetInteger(::prefs::kDeviceRegistered, 0);
       local_state->SetBoolean(::prefs::kEnrollmentRecoveryRequired, false);
@@ -160,25 +166,30 @@ void DeviceStateMixin::SetDeviceState() {
   DCHECK(domain_.empty() || state_ == State::OOBE_COMPLETED_CLOUD_ENROLLED);
   is_setup_ = true;
 
-  WriteInstallAttrFile();
+  WriteInstallAttrFile(state_);
   WriteOwnerKey();
 }
 
-void DeviceStateMixin::WriteInstallAttrFile() {
+void DeviceStateMixin::WriteInstallAttrFile(State state) {
   base::FilePath user_data_dir;
   CHECK(base::PathService::Get(chrome::DIR_USER_DATA, &user_data_dir));
   base::FilePath install_attrs_file =
       user_data_dir.Append("stub_install_attributes.pb");
+
+  base::ScopedAllowBlockingForTesting allow_blocking;
   if (base::PathExists(install_attrs_file)) {
     return;
   }
 
   std::string device_mode, domain, realm, device_id;
-  switch (state_) {
+  switch (state) {
     case DeviceStateMixin::State::BEFORE_OOBE:
     case DeviceStateMixin::State::OOBE_COMPLETED_UNOWNED:
       // No file at all.
       return;
+    case DeviceStateMixin::State::OOBE_COMPLETED_PERMANENTLY_UNOWNED:
+      // File with version only. This will prevent Chrome from attempting to
+      // take consumer ownership and automatically advancing to the next state.
     case DeviceStateMixin::State::OOBE_COMPLETED_CONSUMER_OWNED:
       // File with version only.
       break;
@@ -209,6 +220,7 @@ void DeviceStateMixin::WriteOwnerKey() {
   switch (state_) {
     case DeviceStateMixin::State::BEFORE_OOBE:
     case DeviceStateMixin::State::OOBE_COMPLETED_UNOWNED:
+    case DeviceStateMixin::State::OOBE_COMPLETED_PERMANENTLY_UNOWNED:
     case DeviceStateMixin::State::OOBE_COMPLETED_ACTIVE_DIRECTORY_ENROLLED:
       return;
     case DeviceStateMixin::State::OOBE_COMPLETED_CLOUD_ENROLLED:
@@ -230,6 +242,7 @@ bool DeviceStateMixin::IsEnrolledState() const {
   switch (state_) {
     case DeviceStateMixin::State::BEFORE_OOBE:
     case DeviceStateMixin::State::OOBE_COMPLETED_UNOWNED:
+    case DeviceStateMixin::State::OOBE_COMPLETED_PERMANENTLY_UNOWNED:
     case DeviceStateMixin::State::OOBE_COMPLETED_CONSUMER_OWNED:
       return false;
     case DeviceStateMixin::State::OOBE_COMPLETED_ACTIVE_DIRECTORY_ENROLLED:

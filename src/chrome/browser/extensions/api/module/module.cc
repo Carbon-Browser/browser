@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include <string>
 
 #include "base/values.h"
-#include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/extension_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "extensions/browser/extension_prefs.h"
@@ -17,6 +16,10 @@
 #include "extensions/common/constants.h"
 #include "extensions/common/manifest_url_handlers.h"
 
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+#include "chrome/browser/extensions/extension_management.h"
+#endif
+
 namespace extensions {
 
 ExtensionFunction::ResponseAction ExtensionSetUpdateUrlDataFunction::Run() {
@@ -24,28 +27,30 @@ ExtensionFunction::ResponseAction ExtensionSetUpdateUrlDataFunction::Run() {
   EXTENSION_FUNCTION_VALIDATE(args()[0].is_string());
   const std::string& data = args()[0].GetString();
 
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+  // TODO(crbug.com/356905053): Support ExtensionManagement on desktop android.
   ExtensionManagement* extension_management =
       ExtensionManagementFactory::GetForBrowserContext(browser_context());
   if (extension_management->UpdatesFromWebstore(*extension())) {
     return RespondNow(Error(kUnknownErrorDoNotUse));
   }
+#endif
 
   ExtensionPrefs::Get(browser_context())
-      ->UpdateExtensionPref(extension_id(), kUpdateURLData,
-                            std::make_unique<base::Value>(data));
+      ->UpdateExtensionPref(extension_id(), kUpdateURLData, base::Value(data));
   return RespondNow(NoArguments());
 }
 
 ExtensionFunction::ResponseAction
 ExtensionIsAllowedIncognitoAccessFunction::Run() {
-  return RespondNow(OneArgument(base::Value(
-      util::IsIncognitoEnabled(extension_id(), browser_context()))));
+  return RespondNow(WithArguments(
+      util::IsIncognitoEnabled(extension_id(), browser_context())));
 }
 
 ExtensionFunction::ResponseAction
 ExtensionIsAllowedFileSchemeAccessFunction::Run() {
-  return RespondNow(OneArgument(
-      base::Value(util::AllowFileAccess(extension_id(), browser_context()))));
+  return RespondNow(
+      WithArguments(util::AllowFileAccess(extension_id(), browser_context())));
 }
 
 }  // namespace extensions

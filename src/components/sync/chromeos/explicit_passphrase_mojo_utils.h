@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,11 +13,11 @@ namespace syncer {
 
 class Nigori;
 
-// Converts |nigori| into its mojo representation.
+// Converts `nigori` into its mojo representation.
 crosapi::mojom::NigoriKeyPtr NigoriToMojo(const Nigori& nigori);
 
 // Creates Nigori from its mojo representation. Returns nullptr if
-// |mojo_nigori_key| doesn't represent a valid Nigori.
+// `mojo_nigori_key` doesn't represent a valid Nigori.
 std::unique_ptr<Nigori> NigoriFromMojo(
     const crosapi::mojom::NigoriKey& mojo_nigori_key);
 

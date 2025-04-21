@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,23 +9,16 @@
 #include <queue>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/queue.h"
-#include "base/memory/raw_ptr.h"
-#include "chrome/browser/web_applications/web_app_url_loader.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
+#include "components/webapps/browser/web_contents/web_app_url_loader.h"
 #include "url/gurl.h"
 
 namespace web_app {
 
-class TestWebAppUrlLoader : public WebAppUrlLoader {
+class TestWebAppUrlLoader : public webapps::WebAppUrlLoader {
  public:
-  struct LoadUrlCall {
-    GURL url;
-    base::raw_ptr<content::WebContents> web_contents;
-    UrlComparison url_comparison;
-  };
-
   TestWebAppUrlLoader();
   TestWebAppUrlLoader(const TestWebAppUrlLoader&) = delete;
   TestWebAppUrlLoader& operator=(const TestWebAppUrlLoader&) = delete;
@@ -47,18 +40,19 @@ class TestWebAppUrlLoader : public WebAppUrlLoader {
   void AddNextLoadUrlResults(const GURL& url,
                              const std::vector<Result>& results);
 
-  // WebAppUrlLoader
-  void LoadUrl(const GURL& url,
+  // `WebAppUrlLoader`:
+  void LoadUrl(content::NavigationController::LoadURLParams load_url_params,
                content::WebContents* web_contents,
                UrlComparison url_comparison,
                ResultCallback callback) override;
 
-  // Sets the result for PrepareForLoad() to be ok.
-  void SetPrepareForLoadResultLoaded();
-  void AddPrepareForLoadResults(const std::vector<Result>& results);
+  void TrackLoadUrlCalls(
+      base::RepeatingCallback<void(const GURL& url,
+                                   content::WebContents* web_contents,
+                                   UrlComparison url_comparison)>
 
-  absl::optional<LoadUrlCall> last_load_url_call() const {
-    return last_load_url_call_;
+          load_url_tracker) {
+    load_url_tracker_ = std::move(load_url_tracker);
   }
 
  private:
@@ -76,7 +70,10 @@ class TestWebAppUrlLoader : public WebAppUrlLoader {
 
   std::queue<std::pair<GURL, ResultCallback>> pending_requests_;
 
-  absl::optional<LoadUrlCall> last_load_url_call_ = absl::nullopt;
+  base::RepeatingCallback<void(const GURL& url,
+                               content::WebContents* web_contents,
+                               UrlComparison url_comparison)>
+      load_url_tracker_ = base::DoNothing();
 };
 
 }  // namespace web_app

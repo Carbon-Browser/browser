@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,7 @@ struct TouchscreenDevice;
 }  // namespace ui
 
 namespace display {
+
 class ManagedDisplayInfo;
 
 namespace test {
@@ -155,6 +156,12 @@ class DISPLAY_MANAGER_EXPORT TouchDeviceManager {
                                int64_t display_id,
                                const TouchCalibrationData& data);
 
+  // Adds/updates the touch assosiciation between the given touchscreen |device|
+  // and the given display with id |display_id|. This updates the mapping for
+  // |active_touch_associations_|.
+  void AddTouchAssociation(const ui::TouchscreenDevice& device,
+                           int64_t display_id);
+
   // Clears any touch calibration data associated with the pair, touch device
   // identified by |device| and display identified by |display_id|.
   // NOTE: This does not disassociate the pair, it only resets the calibration
@@ -236,6 +243,10 @@ class DISPLAY_MANAGER_EXPORT TouchDeviceManager {
   void Associate(ManagedDisplayInfo* display,
                  const ui::TouchscreenDevice& device);
 
+  void AddTouchCalibrationDataImpl(const ui::TouchscreenDevice& device,
+                                   int64_t display_id,
+                                   const TouchCalibrationData* data);
+
   // A mapping of touch device identifiers to a map of TouchAssociationInfo
   // data. This may contain devices and displays that are not currently
   // connected to the system. This is a history of all calibration and
@@ -261,6 +272,7 @@ DISPLAY_MANAGER_EXPORT std::ostream& operator<<(
 
 // Returns true if the device has any external touch devices attached.
 DISPLAY_MANAGER_EXPORT bool HasExternalTouchscreenDevice();
+
 }  // namespace display
 
 #endif  // UI_DISPLAY_MANAGER_TOUCH_DEVICE_MANAGER_H_

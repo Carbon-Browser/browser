@@ -1,6 +1,11 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
@@ -69,7 +74,8 @@ class GLEXTWindowRectanglesTest : public testing::Test {
     EXPECT_NEAR((a), pixel[3], 2);                                  \
   } while (0)
 
-TEST_F(GLEXTWindowRectanglesTest, Defaults) {
+// TODO(crbug.com/40246425): Re-enable this test
+TEST_F(GLEXTWindowRectanglesTest, DISABLED_Defaults) {
   if (!IsApplicable()) {
     return;
   }
@@ -184,6 +190,8 @@ TEST_F(GLEXTWindowRectanglesTest, DefaultFramebuffer) {
   if (!IsApplicable()) {
     return;
   }
+
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
   GLint box[4] = {0, 0, 1, 1};
 

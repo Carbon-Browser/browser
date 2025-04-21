@@ -1,4 +1,4 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -14,6 +14,8 @@ source_set("virtual_keyboard") {
     "virtual_keyboard_api.h",
   ]
 
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
+
   deps = [
     "//build:chromeos_buildflags",
     "//extensions/browser/api/virtual_keyboard_private",
@@ -21,7 +23,7 @@ source_set("virtual_keyboard") {
     "//extensions/common/api",
   ]
 
-  if (is_chromeos_ash) {
+  if (is_chromeos) {
     deps += [ "//ui/base/ime/ash" ]
   }
 

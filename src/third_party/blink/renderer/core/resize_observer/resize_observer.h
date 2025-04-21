@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_RESIZE_OBSERVER_RESIZE_OBSERVER_H_
 
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_resize_observer_box_options.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
 #include "third_party/blink/renderer/core/resize_observer/resize_observer_box_options.h"
@@ -34,6 +35,11 @@ class CORE_EXPORT ResizeObserver final
   DEFINE_WRAPPERTYPEINFO();
 
  public:
+  enum class DeliveryTime {
+    kInsertionOrder,
+    kBeforeOthers,
+  };
+
   // This delegate is an internal (non-web-exposed) version of ResizeCallback.
   class Delegate : public GarbageCollected<Delegate> {
    public:
@@ -41,6 +47,10 @@ class CORE_EXPORT ResizeObserver final
     virtual void OnResize(
         const HeapVector<Member<ResizeObserverEntry>>& entries) = 0;
     virtual void Trace(Visitor* visitor) const {}
+    virtual DeliveryTime Delivery() const {
+      return DeliveryTime::kInsertionOrder;
+    }
+    virtual bool SkipNonAtomicInlineObservations() const { return false; }
   };
 
   static ResizeObserver* Create(ScriptState*, V8ResizeObserverCallback*);
@@ -62,12 +72,20 @@ class CORE_EXPORT ResizeObserver final
   void DeliverObservations();
   void ClearObservations();
 
-  ResizeObserverBoxOptions ParseBoxOptions(const String& box_options);
+  ResizeObserverBoxOptions V8EnumToBoxOptions(
+      V8ResizeObserverBoxOptions::Enum box_options);
 
   // ScriptWrappable override:
   bool HasPendingActivity() const override;
 
   void Trace(Visitor*) const override;
+
+  DeliveryTime Delivery() const {
+    return delegate_ ? delegate_->Delivery() : DeliveryTime::kInsertionOrder;
+  }
+  bool SkipNonAtomicInlineObservations() const {
+    return delegate_ && delegate_->SkipNonAtomicInlineObservations();
+  }
 
  private:
   void observeInternal(Element* target, ResizeObserverBoxOptions box_option);

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,28 +6,14 @@
 
 #include <stddef.h>
 
-#include "build/build_config.h"
-#include "chrome/browser/bookmarks/bookmark_model_factory.h"
-#include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/bookmarks/bookmark_stats.h"
-#include "chrome/browser/undo/bookmark_undo_service_factory.h"
-#include "components/bookmarks/browser/bookmark_client.h"
-#include "components/bookmarks/browser/bookmark_model.h"
-#include "components/bookmarks/browser/bookmark_node_data.h"
-#include "components/bookmarks/browser/bookmark_utils.h"
-#include "components/bookmarks/browser/scoped_group_bookmark_actions.h"
-#include "components/undo/bookmark_undo_service.h"
-#include "ui/base/dragdrop/mojom/drag_drop_types.mojom.h"
+#include "base/memory/raw_ptr.h"
+#include "components/bookmarks/browser/bookmark_node.h"
 
 namespace chrome {
 
-using ::bookmarks::BookmarkModel;
-using ::bookmarks::BookmarkNode;
-using ::bookmarks::BookmarkNodeData;
-using ::ui::mojom::DragOperation;
-
 BookmarkDragParams::BookmarkDragParams(
-    std::vector<const bookmarks::BookmarkNode*> nodes,
+    std::vector<raw_ptr<const bookmarks::BookmarkNode, VectorExperimental>>
+        nodes,
     int drag_node_index,
     content::WebContents* web_contents,
     ui::mojom::DragEventSource source,
@@ -38,42 +24,5 @@ BookmarkDragParams::BookmarkDragParams(
       source(source),
       start_point(start_point) {}
 BookmarkDragParams::~BookmarkDragParams() = default;
-
-DragOperation DropBookmarks(Profile* profile,
-                            const BookmarkNodeData& data,
-                            const BookmarkNode* parent_node,
-                            size_t index,
-                            bool copy) {
-  DCHECK(profile);
-  BookmarkModel* model = BookmarkModelFactory::GetForBrowserContext(profile);
-#if !BUILDFLAG(IS_ANDROID)
-  bookmarks::ScopedGroupBookmarkActions group_drops(model);
-#endif
-  if (data.IsFromProfilePath(profile->GetPath())) {
-    const std::vector<const BookmarkNode*> dragged_nodes =
-        data.GetNodes(model, profile->GetPath());
-    DCHECK(model->client()->CanBeEditedByUser(parent_node));
-    DCHECK(copy ||
-           bookmarks::CanAllBeEditedByUser(model->client(), dragged_nodes));
-    if (!dragged_nodes.empty()) {
-      // Drag from same profile. Copy or move nodes.
-      for (size_t i = 0; i < dragged_nodes.size(); ++i) {
-        if (copy) {
-          model->Copy(dragged_nodes[i], parent_node, index);
-        } else {
-          model->Move(dragged_nodes[i], parent_node, index);
-        }
-        index =
-            static_cast<size_t>(parent_node->GetIndexOf(dragged_nodes[i]) + 1);
-      }
-      return copy ? DragOperation::kCopy : DragOperation::kMove;
-    }
-    return DragOperation::kNone;
-  }
-  RecordBookmarksAdded(profile);
-  // Dropping a folder from different profile. Always accept.
-  bookmarks::CloneBookmarkNode(model, data.elements, parent_node, index, true);
-  return DragOperation::kCopy;
-}
 
 }  // namespace chrome

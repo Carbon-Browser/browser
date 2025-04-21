@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,9 @@
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_provider.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "chromeos/strings/grit/chromeos_strings.h"
 #include "components/prefs/pref_service.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -55,10 +56,9 @@ void KeyboardBacklightColorNudgeController::HandleWallpaperColorNudgeShown() {
 
 void KeyboardBacklightColorNudgeController::MaybeShowEducationNudge(
     views::View* keyboard_brightness_slider_view) {
-  if (!keyboard_brightness_slider_view)
+  if (!keyboard_brightness_slider_view || education_nudge_) {
     return;
-  if (education_nudge_)
-    return;
+  }
   if (!contextual_tooltip::ShouldShowNudge(
           GetActivePrefService(),
           contextual_tooltip::TooltipType::kKeyboardBacklightColor,
@@ -78,8 +78,6 @@ void KeyboardBacklightColorNudgeController::MaybeShowEducationNudge(
           IDS_ASH_KEYBOARD_BACKLIGHT_COLOR_EDUCATION_NUDGE_TEXT,
           l10n_util::GetStringUTF16(
               IDS_PERSONALIZATION_APP_PERSONALIZATION_HUB_TITLE)),
-      AshColorProvider::Get()->GetContentLayerColor(
-          AshColorProvider::ContentLayerType::kTextColorPrimary),
       base::BindRepeating(
           &KeyboardBacklightColorNudgeController::CloseEducationNudge,
           weak_factory_.GetWeakPtr()));
@@ -91,10 +89,17 @@ void KeyboardBacklightColorNudgeController::MaybeShowEducationNudge(
   education_nudge_->SetPaintToLayer(ui::LAYER_SOLID_COLOR);
 
   ui::Layer* layer = education_nudge_->layer();
-  layer->SetColor(ShelfConfig::Get()->GetDefaultShelfColor());
+
+  // TODO(b:375253816): Figure out an opaque color id.
+  layer->SetColor(
+      ShelfConfig::Get()->GetDefaultShelfColor(education_nudge_->GetWidget()));
   layer->SetRoundedCornerRadius(
       gfx::RoundedCornersF{static_cast<float>(kBubbleCornerRadius)});
-  layer->SetBackgroundBlur(ColorProvider::kBackgroundBlurSigma);
+
+  if (chromeos::features::IsSystemBlurEnabled()) {
+    layer->SetBackgroundBlur(ColorProvider::kBackgroundBlurSigma);
+    layer->SetBackdropFilterQuality(ColorProvider::kBackgroundBlurQuality);
+  }
 
   gfx::Rect anchor_rect =
       keyboard_brightness_slider_view->GetAnchorBoundsInScreen();

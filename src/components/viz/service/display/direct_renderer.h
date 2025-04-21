@@ -1,17 +1,19 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_VIZ_SERVICE_DISPLAY_DIRECT_RENDERER_H_
 #define COMPONENTS_VIZ_SERVICE_DISPLAY_DIRECT_RENDERER_H_
 
+#include <cstdint>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/circular_deque.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -22,11 +24,12 @@
 #include "components/viz/service/display/display_resource_provider.h"
 #include "components/viz/service/display/overlay_candidate.h"
 #include "components/viz/service/display/overlay_processor_interface.h"
+#include "components/viz/service/display/render_pass_alpha_type.h"
 #include "components/viz/service/viz_service_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/ca_layer_result.h"
 #include "ui/gfx/delegated_ink_metadata.h"
 #include "ui/gfx/display_color_spaces.h"
+#include "ui/gfx/geometry/axis_transform2d.h"
 #include "ui/gfx/geometry/quad_f.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/gpu_fence_handle.h"
@@ -40,6 +43,10 @@ namespace gfx {
 class ColorSpace;
 class RRectF;
 }  // namespace gfx
+
+namespace gpu {
+struct SwapBuffersCompleteParams;
+}
 
 namespace viz {
 class BspWalkActionDrawPolygon;
@@ -73,6 +80,7 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
 
   bool use_partial_swap() const { return use_partial_swap_; }
 
+  void SetOutputSurfaceClipRect(const gfx::Rect& clip_rect);
   void SetVisible(bool visible);
   void ReallocatedFrameBuffers();
   void DecideRenderPassAllocationsForFrame(
@@ -89,7 +97,7 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
   gfx::Rect GetTargetDamageBoundingRect() const;
 
   // Public interface implemented by subclasses.
-  struct SwapFrameData {
+  struct VIZ_SERVICE_EXPORT SwapFrameData {
     SwapFrameData();
     ~SwapFrameData();
 
@@ -100,15 +108,25 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
     SwapFrameData& operator=(const SwapFrameData&) = delete;
 
     std::vector<ui::LatencyInfo> latency_info;
-    bool top_controls_visible_height_changed = false;
-#if BUILDFLAG(IS_MAC)
+    int64_t seq = -1;
+
+    // The HDR headroom of the display that this frame is being swapped to.
+    // Propagated to the gl::Presenter via gfx::FrameData.
+    float display_hdr_headroom = 1.f;
+
+#if BUILDFLAG(IS_APPLE)
+    // The result of CoreAnimation delegated compositing from the overlay
+    // processor. Propagated to the gl::Presenter via gfx::FrameData for
+    // integration testing.
     gfx::CALayerResult ca_layer_error_code = gfx::kCALayerSuccess;
 #endif
-    absl::optional<int64_t> choreographer_vsync_id;
+    std::optional<int64_t> choreographer_vsync_id;
+    int64_t swap_trace_id = -1;
   };
   virtual void SwapBuffers(SwapFrameData swap_frame_data) = 0;
   virtual void SwapBuffersSkipped() {}
-  virtual void SwapBuffersComplete(gfx::GpuFenceHandle release_fence) {}
+  virtual void SwapBuffersComplete(const gpu::SwapBuffersCompleteParams& params,
+                                   gfx::GpuFenceHandle release_fence) {}
   virtual void BuffersPresented() {}
   virtual void DidReceiveReleasedOverlays(
       const std::vector<gpu::Mailbox>& released_overlays) {}
@@ -118,25 +136,23 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
     DrawingFrame();
     ~DrawingFrame();
 
-    raw_ptr<const AggregatedRenderPassList, DanglingUntriaged>
-        render_passes_in_draw_order = nullptr;
-    raw_ptr<const AggregatedRenderPass, DanglingUntriaged> root_render_pass =
+    raw_ptr<const AggregatedRenderPassList> render_passes_in_draw_order =
         nullptr;
-    const AggregatedRenderPass* current_render_pass = nullptr;
+    raw_ptr<const AggregatedRenderPass> root_render_pass = nullptr;
+    raw_ptr<const AggregatedRenderPass> current_render_pass = nullptr;
 
     gfx::Rect root_damage_rect;
     std::vector<gfx::Rect> root_content_bounds;
     gfx::Size device_viewport_size;
     gfx::DisplayColorSpaces display_color_spaces;
 
-    gfx::Transform projection_matrix;
-    gfx::Transform window_matrix;
+    gfx::AxisTransform2d target_to_device_transform;
 
     OverlayProcessorInterface::CandidateList overlay_list;
     // When we have a buffer queue, the output surface could be treated as an
     // overlay plane, and the struct to store that information is in
     // |output_surface_plane|.
-    absl::optional<OverlayProcessorInterface::OutputSurfaceOverlayPlane>
+    std::optional<OverlayProcessorInterface::OutputSurfaceOverlayPlane>
         output_surface_plane;
   };
 
@@ -153,6 +169,11 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
     return last_root_render_pass_scissor_rect_;
   }
 
+  base::flat_set<AggregatedRenderPassId>*
+  GetLastSkippedRenderPassIdsForTesting() {
+    return &skipped_render_pass_ids_;
+  }
+
   virtual DelegatedInkPointRendererBase* GetDelegatedInkPointRenderer(
       bool create_if_necessary);
   virtual void SetDelegatedInkMetadata(
@@ -165,6 +186,21 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
   // Puts the draw time wall in trace file relative to the |ready_timestamp|.
   virtual void AddCompositeTimeTraces(base::TimeTicks ready_timestamp);
 
+  // Returns the current frame buffer damage.
+  virtual gfx::Rect GetCurrentFramebufferDamage() const;
+
+  // Reshapes the output surface.
+  virtual void Reshape(const OutputSurface::ReshapeParams& reshape_params);
+
+  // Set the number of frame buffers to use when
+  // `supports_dynamic_frame_buffer_allocation` is true. `n` must satisfy
+  // 0 < n <= capabilities_.number_of_buffers.
+  virtual void EnsureMinNumberOfBuffers(int n) {}
+
+  // Gets a mailbox that can be used for overlay testing the primary plane. This
+  // does not need to be the next mailbox that will be swapped.
+  virtual gpu::Mailbox GetPrimaryPlaneOverlayTestingMailbox();
+
   // Return the bounding rect of previously drawn delegated ink trail.
   gfx::Rect GetDelegatedInkTrailDamageRect();
 
@@ -174,27 +210,28 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
   friend class DelegatedInkPointPixelTestHelper;
   friend class DelegatedInkDisplayTest;
 
-  enum SurfaceInitializationMode {
-    SURFACE_INITIALIZATION_MODE_PRESERVE,
-    SURFACE_INITIALIZATION_MODE_SCISSORED_CLEAR,
-    SURFACE_INITIALIZATION_MODE_FULL_SURFACE_CLEAR,
-  };
-
   struct RenderPassRequirements {
     gfx::Size size;
     bool generate_mipmap = false;
+    SharedImageFormat format;
+    gfx::ColorSpace color_space;
+    RenderPassAlphaType alpha_type = RenderPassAlphaType::kPremul;
+    // Render pass wants scanout
+    bool is_scanout = false;
+    // Render pass wants to synchronize updates with other overlays, on Windows
+    // this means a DComp surface.
+    bool scanout_dcomp_surface = false;
   };
 
   static gfx::RectF QuadVertexRect();
   static void QuadRectTransform(gfx::Transform* quad_rect_transform,
                                 const gfx::Transform& quad_transform,
                                 const gfx::RectF& quad_rect);
-  // This function takes DrawingFrame as an argument because RenderPass drawing
-  // code uses its computations for buffer sizing.
-  void InitializeViewport(DrawingFrame* frame,
-                          const gfx::Rect& draw_rect,
-                          const gfx::Rect& viewport_rect,
-                          const gfx::Size& surface_size);
+  // Returns a transform that maps the the draw rect (i.e. the render pass
+  // output rect) to the device space (i.e. buffer space).
+  gfx::AxisTransform2d CalculateTargetToDeviceTransform(
+      const gfx::Rect& draw_rect,
+      const gfx::Size& viewport_size);
   gfx::Rect MoveFromDrawToWindowSpace(const gfx::Rect& draw_rect) const;
 
   gfx::Rect DeviceViewportRectInDrawSpace() const;
@@ -207,9 +244,11 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
   void SetScissorTestRectInDrawSpace(const gfx::Rect& draw_space_rect);
 
   gfx::Size CalculateTextureSizeForRenderPass(
-      const AggregatedRenderPass* render_pass);
+      const AggregatedRenderPass* render_pass) const;
   gfx::Size CalculateSizeForOutputSurface(
       const gfx::Size& device_viewport_size);
+  RenderPassRequirements CalculateRenderPassRequirements(
+      const AggregatedRenderPass* render_pass) const;
 
   void FlushPolygons(
       base::circular_deque<std::unique_ptr<DrawPolygon>>* poly_list,
@@ -221,7 +260,7 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
   // This may be because the RenderPass is already cached, or because it is
   // entirely clipped out, for instance.
   bool CanSkipRenderPass(const AggregatedRenderPass* render_pass) const;
-  void UseRenderPass(const AggregatedRenderPass* render_pass);
+  void EnsureRenderPassAllocated(const AggregatedRenderPass* render_pass);
   gfx::Rect ComputeScissorRectForRenderPass(
       const AggregatedRenderPass* render_pass) const;
 
@@ -233,8 +272,15 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
       AggregatedRenderPassId render_pass_id) const;
   const cc::FilterOperations* BackdropFiltersForPass(
       AggregatedRenderPassId render_pass_id) const;
-  const absl::optional<gfx::RRectF> BackdropFilterBoundsForPass(
+  const std::optional<gfx::RRectF> BackdropFilterBoundsForPass(
       AggregatedRenderPassId render_pass_id) const;
+
+  virtual void SetRenderPassBackingDrawnRect(
+      const AggregatedRenderPassId& render_pass_id,
+      const gfx::Rect& drawn_rect) = 0;
+
+  virtual gfx::Rect GetRenderPassBackingDrawnRect(
+      const AggregatedRenderPassId& render_pass_id) const = 0;
 
   // Private interface implemented by subclasses for use by DirectRenderer.
   virtual bool CanPartialSwap() = 0;
@@ -249,34 +295,33 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
       const AggregatedRenderPassId& render_pass_id) const = 0;
   virtual gfx::Size GetRenderPassBackingPixelSize(
       const AggregatedRenderPassId& render_pass_id) = 0;
-  virtual void BindFramebufferToOutputSurface() = 0;
-  virtual void BindFramebufferToTexture(
-      const AggregatedRenderPassId render_pass_id) = 0;
+
   virtual void SetScissorTestRect(const gfx::Rect& scissor_rect) = 0;
-  virtual void PrepareSurfaceForPass(
-      SurfaceInitializationMode initialization_mode,
-      const gfx::Rect& render_pass_scissor) = 0;
+  // |render_pass_update_rect| is in render pass backing buffer space.
+  virtual void BeginDrawingRenderPass(const AggregatedRenderPass* render_pass,
+                                      bool needs_clear,
+                                      const gfx::Rect& render_pass_update_rect,
+                                      const gfx::Size& viewport_size) = 0;
   // |clip_region| is a (possibly null) pointer to a quad in the same
   // space as the quad. When non-null only the area of the quad that overlaps
   // with clip_region will be drawn.
   virtual void DoDrawQuad(const DrawQuad* quad,
                           const gfx::QuadF* clip_region) = 0;
+  virtual void FinishDrawingRenderPass() {}
   virtual void BeginDrawingFrame() = 0;
   virtual void FinishDrawingFrame() = 0;
   // If a pass contains a single tile draw quad and can be drawn without
   // a render pass (e.g. applying a filter directly to the tile quad)
   // return that quad, otherwise return null.
   virtual const DrawQuad* CanPassBeDrawnDirectly(
-      const AggregatedRenderPass* pass);
-  virtual void FinishDrawingQuadList() {}
-  virtual bool FlippedFramebuffer() const = 0;
-  virtual void EnsureScissorTestEnabled() = 0;
+      const AggregatedRenderPass* pass,
+      const RenderPassRequirements& requirements);
   virtual void EnsureScissorTestDisabled() = 0;
   virtual void DidChangeVisibility() = 0;
   virtual void CopyDrawnRenderPass(
       const copy_output::RenderPassGeometry& geometry,
       std::unique_ptr<CopyOutputRequest> request) = 0;
-  virtual void GenerateMipmap() = 0;
+  virtual bool SupportsBGRA() const;
 
   gfx::Size surface_size_for_swap_buffers() const {
     return reshape_params_ ? reshape_params_->size : gfx::Size();
@@ -289,61 +334,70 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
   bool ShouldApplyGradientMask(const DrawQuad* quad) const;
 
   float CurrentFrameSDRWhiteLevel() const;
-  gfx::ColorSpace RootRenderPassColorSpace() const;
-  gfx::ColorSpace CurrentRenderPassColorSpace() const;
+  SharedImageFormat GetColorSpaceSharedImageFormat(
+      gfx::ColorSpace color_space) const;
   // Return the SkColorSpace for rendering to the current render pass. Unlike
   // CurrentRenderPassColorSpace, this color space has the value of
   // CurrentFrameSDRWhiteLevel incorporated into it.
   sk_sp<SkColorSpace> CurrentRenderPassSkColorSpace() const {
-    return CurrentRenderPassColorSpace().ToSkColorSpace(
-        CurrentFrameSDRWhiteLevel());
+    return RenderPassColorSpace(current_frame()->current_render_pass)
+        .ToSkColorSpace(CurrentFrameSDRWhiteLevel());
   }
+
+  gfx::ColorSpace RenderPassColorSpace(
+      const AggregatedRenderPass* render_pass) const;
 
   const raw_ptr<const RendererSettings> settings_;
   // Points to the viz-global singleton.
   const raw_ptr<const DebugRendererSettings> debug_settings_;
   const raw_ptr<OutputSurface> output_surface_;
-  const raw_ptr<DisplayResourceProvider, DanglingUntriaged> resource_provider_;
+  const raw_ptr<DisplayResourceProvider> resource_provider_;
   // This can be replaced by test implementations.
   // TODO(weiliangc): For SoftwareRenderer and tests where overlay is not used,
   // use OverlayProcessorStub so this pointer is never null.
-  raw_ptr<OverlayProcessorInterface, DanglingUntriaged> overlay_processor_;
+  raw_ptr<OverlayProcessorInterface> overlay_processor_;
 
-  // Whether it's valid to SwapBuffers with an empty rect. Trivially true when
-  // using partial swap.
-  bool allow_empty_swap_ = false;
+  // If the non-root render pass and its embedded child render passes are not
+  // damaged, skip the rendering.
+  const bool allow_undamaged_nonroot_render_pass_to_skip_;
+
   // Whether partial swap can be used.
   bool use_partial_swap_ = false;
+
+  // Whether render pass drawn rect functionality can be used. This means we
+  // will be tracking the drawn area of a render pass to determine what needs to
+  // be redrawn every frame.
+  bool use_render_pass_drawn_rect_ = false;
 
   // A map from RenderPass id to the single quad present in and replacing the
   // RenderPass. The DrawQuads are owned by their RenderPasses, which outlive
   // the drawn frame, so it is safe to store these pointers until the end of
   // DrawFrame().
-  base::flat_map<AggregatedRenderPassId, const DrawQuad*>
+  base::flat_map<AggregatedRenderPassId,
+                 raw_ptr<const DrawQuad, CtnExperimental>>
       render_pass_bypass_quads_;
 
   // A map from RenderPass id to the filters used when drawing the RenderPass.
-  base::flat_map<AggregatedRenderPassId, cc::FilterOperations*>
+  base::flat_map<AggregatedRenderPassId,
+                 raw_ptr<cc::FilterOperations, CtnExperimental>>
       render_pass_filters_;
-  base::flat_map<AggregatedRenderPassId, cc::FilterOperations*>
+  base::flat_map<AggregatedRenderPassId,
+                 raw_ptr<cc::FilterOperations, CtnExperimental>>
       render_pass_backdrop_filters_;
-  base::flat_map<AggregatedRenderPassId, absl::optional<gfx::RRectF>>
+  base::flat_map<AggregatedRenderPassId, std::optional<gfx::RRectF>>
       render_pass_backdrop_filter_bounds_;
   base::flat_map<AggregatedRenderPassId, gfx::Rect>
       backdrop_filter_output_rects_;
 
+  // Whether a render pass with foreground filters that move pixels is found in
+  // this frame.
+  bool has_pixel_moving_foreground_filters_ = false;
+
+  // Track skipped non-root render passes in DrawRenderPass.
+  base::flat_set<AggregatedRenderPassId> skipped_render_pass_ids_;
+
   bool visible_ = false;
   bool disable_color_checks_for_testing_ = false;
-
-  // For use in coordinate conversion, this stores the output rect, viewport
-  // rect (= unflipped version of glViewport rect), the size of target
-  // framebuffer, and the current window space viewport. During a draw, this
-  // stores the values for the current render pass; in between draws, they
-  // retain the values for the root render pass of the last draw.
-  gfx::Rect current_draw_rect_;
-  gfx::Rect current_viewport_rect_;
-  gfx::Size current_surface_size_;
-  gfx::Rect current_window_space_viewport_;
 
   DrawingFrame* current_frame() {
     DCHECK(current_frame_valid_);
@@ -353,13 +407,17 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
     DCHECK(current_frame_valid_);
     return &current_frame_;
   }
-  gfx::BufferFormat reshape_buffer_format() const {
+  SharedImageFormat reshape_si_format() const {
     DCHECK(reshape_params_);
     return reshape_params_->format;
   }
   gfx::ColorSpace reshape_color_space() const {
     DCHECK(reshape_params_);
     return reshape_params_->color_space;
+  }
+  RenderPassAlphaType reshape_alpha_type() const {
+    DCHECK(reshape_params_);
+    return reshape_params_->alpha_type;
   }
 
   // Sets a DelegatedInkPointRendererSkiaForTest to be used for testing only, in
@@ -368,9 +426,17 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
       std::unique_ptr<DelegatedInkPointRendererSkia> renderer) {}
 
  private:
-  virtual void DrawDelegatedInkTrail();
+  // Update the damage rect of the render pass that will contain the drawn ink
+  // trail, or had drawn the ink trail in the previous frame.
+  void AddInkDamageToRenderPass(const AggregatedRenderPass* render_pass,
+                                gfx::Rect& output_damage_rect);
 
   bool initialized_ = false;
+
+  // Track the id of the render pass that received delegated ink in the latest
+  // frame. This will be used when the the ink trail is cleared and damage
+  // needs to be applied to the correct render pass.
+  std::optional<AggregatedRenderPassId> last_pass_with_delegated_ink_;
 
   gfx::Rect last_root_render_pass_scissor_rect_;
   gfx::Size enlarge_pass_texture_amount_;
@@ -390,10 +456,15 @@ class VIZ_SERVICE_EXPORT DirectRenderer {
   // Cached values given to Reshape(). The `reshape_params_` is optional
   // to prevent use of uninitialized values. The size in these parameters
   // may be larger than the `device_viewport_size_` that users see.
-  absl::optional<OutputSurface::ReshapeParams> reshape_params_;
+  std::optional<OutputSurface::ReshapeParams> reshape_params_;
+
+  // If present additionally restricts drawing to the OutputSurface. WebView
+  // gets this rect from the HWUI.
+  std::optional<gfx::Rect> output_surface_clip_rect_;
   gfx::Size device_viewport_size_;
   gfx::OverlayTransform reshape_display_transform_ =
       gfx::OVERLAY_TRANSFORM_INVALID;
+  uint64_t total_pixels_rendered_this_frame_ = 0;
 };
 
 }  // namespace viz

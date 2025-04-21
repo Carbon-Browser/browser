@@ -1,14 +1,15 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/tools/quic/synchronous_host_resolver.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/weak_ptr.h"
 #include "base/message_loop/message_pump_type.h"
@@ -16,14 +17,12 @@
 #include "base/task/single_thread_task_executor.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/simple_thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/base/host_port_pair.h"
 #include "net/base/net_errors.h"
 #include "net/base/network_isolation_key.h"
 #include "net/dns/host_resolver.h"
 #include "net/log/net_log.h"
 #include "net/log/net_log_with_source.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/scheme_host_port.h"
 
 namespace net {
@@ -67,11 +66,11 @@ void ResolverThread::Run() {
   std::unique_ptr<net::HostResolver> resolver =
       net::HostResolver::CreateStandaloneResolver(NetLog::Get(), options);
 
-  // No need to use a NetworkIsolationKey here, since this is an external tool
-  // not used by net/ consumers.
+  // No need to use a NetworkAnonymizationKey here, since this is an external
+  // tool not used by net/ consumers.
   std::unique_ptr<net::HostResolver::ResolveHostRequest> request =
-      resolver->CreateRequest(scheme_host_port_, NetworkIsolationKey(),
-                              NetLogWithSource(), absl::nullopt);
+      resolver->CreateRequest(scheme_host_port_, NetworkAnonymizationKey(),
+                              NetLogWithSource(), std::nullopt);
 
   base::RunLoop run_loop;
   rv_ = request->Start(base::BindOnce(&ResolverThread::OnResolutionComplete,

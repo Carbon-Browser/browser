@@ -62,7 +62,7 @@ function checkAddedKey()
 {
     debug("checkAddedKey():");
     shouldBe("key", "data.key");
-    objectStore = evalAndLog("objectStore = db.transaction('foo').objectStore('foo');");
+    objectStore = evalAndLog("objectStore = db.transaction('foo', 'readonly').objectStore('foo');");
     request = evalAndLog("request = objectStore.get(data.key);");
     request.onsuccess = getSuccess;
     request.onerror = unexpectedErrorCallback;

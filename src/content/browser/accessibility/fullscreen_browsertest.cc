@@ -1,10 +1,9 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "content/browser/accessibility/browser_accessibility.h"
-#include "content/browser/accessibility/browser_accessibility_manager.h"
 #include "content/browser/web_contents/web_contents_impl.h"
+#include "content/common/features.h"
 #include "content/public/test/accessibility_notification_waiter.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
@@ -12,6 +11,8 @@
 #include "content/public/test/content_browser_test_utils.h"
 #include "content/shell/browser/shell.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/accessibility/platform/browser_accessibility.h"
+#include "ui/accessibility/platform/browser_accessibility_manager.h"
 
 namespace content {
 
@@ -21,19 +22,23 @@ class AccessibilityFullscreenBrowserTest : public ContentBrowserTest {
   ~AccessibilityFullscreenBrowserTest() override = default;
 
  protected:
-  BrowserAccessibility* FindButton(BrowserAccessibility* node) {
-    if (node->GetRole() == ax::mojom::Role::kButton)
+  ui::BrowserAccessibility* FindButton(ui::BrowserAccessibility* node) {
+    if (node->GetRole() == ax::mojom::Role::kButton) {
       return node;
+    }
     for (unsigned i = 0; i < node->PlatformChildCount(); i++) {
-      if (BrowserAccessibility* button = FindButton(node->PlatformGetChild(i)))
+      if (ui::BrowserAccessibility* button =
+              FindButton(node->PlatformGetChild(i))) {
         return button;
+      }
     }
     return nullptr;
   }
 
-  int CountLinks(BrowserAccessibility* node) {
-    if (node->GetRole() == ax::mojom::Role::kLink)
+  int CountLinks(ui::BrowserAccessibility* node) {
+    if (node->GetRole() == ax::mojom::Role::kLink) {
       return 1;
+    }
     int links_in_children = 0;
     for (unsigned i = 0; i < node->PlatformChildCount(); i++) {
       links_in_children += CountLinks(node->PlatformGetChild(i));
@@ -92,15 +97,16 @@ IN_PROC_BROWSER_TEST_F(AccessibilityFullscreenBrowserTest,
 
   WebContentsImpl* web_contents =
       static_cast<WebContentsImpl*>(shell()->web_contents());
-  BrowserAccessibilityManager* manager =
+  ui::BrowserAccessibilityManager* manager =
       web_contents->GetRootBrowserAccessibilityManager();
 
   // Initially there are 3 links in the accessibility tree.
-  EXPECT_EQ(3, CountLinks(manager->GetRoot()));
+  EXPECT_EQ(3, CountLinks(manager->GetBrowserAccessibilityRoot()));
 
   // Enter fullscreen by finding the button and performing the default action,
   // which is to click it.
-  BrowserAccessibility* button = FindButton(manager->GetRoot());
+  ui::BrowserAccessibility* button =
+      FindButton(manager->GetBrowserAccessibilityRoot());
   ASSERT_NE(nullptr, button);
   manager->DoDefaultAction(*button);
 
@@ -108,7 +114,7 @@ IN_PROC_BROWSER_TEST_F(AccessibilityFullscreenBrowserTest,
   WaitForAccessibilityTreeToContainNodeWithName(web_contents, "Done");
 
   // Now, the two links outside of the fullscreen element are gone.
-  EXPECT_EQ(1, CountLinks(manager->GetRoot()));
+  EXPECT_EQ(1, CountLinks(manager->GetBrowserAccessibilityRoot()));
 }
 
 // Fails flakily on all platforms: crbug.com/825735
@@ -129,15 +135,16 @@ IN_PROC_BROWSER_TEST_F(AccessibilityFullscreenBrowserTest,
 
   WebContentsImpl* web_contents =
       static_cast<WebContentsImpl*>(shell()->web_contents());
-  BrowserAccessibilityManager* manager =
+  ui::BrowserAccessibilityManager* manager =
       web_contents->GetRootBrowserAccessibilityManager();
 
   // Initially there's just one link, in the top frame.
-  EXPECT_EQ(1, CountLinks(manager->GetRoot()));
+  EXPECT_EQ(1, CountLinks(manager->GetBrowserAccessibilityRoot()));
 
   // Enter fullscreen by finding the button and performing the default action,
   // which is to click it.
-  BrowserAccessibility* button = FindButton(manager->GetRoot());
+  ui::BrowserAccessibility* button =
+      FindButton(manager->GetBrowserAccessibilityRoot());
   ASSERT_NE(nullptr, button);
   manager->DoDefaultAction(*button);
 
@@ -145,7 +152,7 @@ IN_PROC_BROWSER_TEST_F(AccessibilityFullscreenBrowserTest,
   // in the inert part of the page, then exit fullscreen and change the button
   // text to "Done". Then the link inside the iframe should also be exposed.
   WaitForAccessibilityTreeToContainNodeWithName(web_contents, "Done");
-  EXPECT_EQ(2, CountLinks(manager->GetRoot()));
+  EXPECT_EQ(2, CountLinks(manager->GetBrowserAccessibilityRoot()));
 }
 
 }  // namespace content

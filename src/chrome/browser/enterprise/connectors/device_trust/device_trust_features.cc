@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,29 @@
 
 namespace enterprise_connectors {
 
-const base::Feature kDeviceTrustConnectorEnabled{
-    "DeviceTrustConnectorEnabled", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kDTCKeyRotationEnabled,
+             "DTCKeyRotationEnabled",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-bool IsDeviceTrustConnectorFeatureEnabled() {
-  return base::FeatureList::IsEnabled(kDeviceTrustConnectorEnabled);
+bool IsKeyRotationEnabled() {
+  return base::FeatureList::IsEnabled(kDTCKeyRotationEnabled);
+}
+
+BASE_FEATURE(kDTCKeyUploadedBySharedAPIEnabled,
+             "DTCKeyUploadedBySharedAPIEnabled",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+bool IsDTCKeyUploadedBySharedAPI() {
+  return base::FeatureList::IsEnabled(kDTCKeyUploadedBySharedAPIEnabled);
+}
+
+BASE_FEATURE(kDTCKeyRotationUploadedBySharedAPIEnabled,
+             "DTCKeyRotationUploadedBySharedAPIEnabled",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+bool IsDTCKeyRotationUploadedBySharedAPI() {
+  return base::FeatureList::IsEnabled(
+      kDTCKeyRotationUploadedBySharedAPIEnabled);
 }
 
 }  // namespace enterprise_connectors

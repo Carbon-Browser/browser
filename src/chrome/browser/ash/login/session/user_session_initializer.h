@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,12 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "components/session_manager/core/session_manager_observer.h"
 #include "components/user_manager/user.h"
 
-class ClipboardImageModelFactoryImpl;
 class Profile;
 
 namespace user_manager {
@@ -20,6 +20,8 @@ class User;
 }
 
 namespace ash {
+
+class CrosSafetyService;
 
 class UserSessionInitializer : public session_manager::SessionManagerObserver {
  public:
@@ -46,6 +48,7 @@ class UserSessionInitializer : public session_manager::SessionManagerObserver {
   // session_manager::SessionManagerObserver:
   void OnUserProfileLoaded(const AccountId& account_id) override;
   void OnUserSessionStarted(bool is_primary_user) override;
+  void OnUserSessionStartUpTaskCompleted() override;
 
   // Called before a session begins loading.
   void PreStartSession(bool is_primary_session);
@@ -74,17 +77,18 @@ class UserSessionInitializer : public session_manager::SessionManagerObserver {
   void InitializePrimaryProfileServices(Profile* profile,
                                         const user_manager::User* user);
 
+  // Initialize a `ScalableIph` service for a profile.
+  void InitializeScalableIph(Profile* profile);
+
   // Initializes RLZ. If `disabled` is true, RLZ pings are disabled.
   void InitRlzImpl(Profile* profile, const RlzInitParams& params);
 
-  Profile* primary_profile_ = nullptr;
+  raw_ptr<Profile, DanglingUntriaged> primary_profile_ = nullptr;
+
+  std::unique_ptr<CrosSafetyService> cros_safety_service_;
 
   bool inited_for_testing_ = false;
   base::OnceClosure init_rlz_impl_closure_for_testing_;
-
-  // Clipboard html image generator for the primary user.
-  std::unique_ptr<ClipboardImageModelFactoryImpl>
-      clipboard_image_model_factory_impl_;
 
   base::WeakPtrFactory<UserSessionInitializer> weak_factory_{this};
 };

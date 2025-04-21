@@ -1,10 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "components/permissions/bluetooth_chooser_controller.h"
 #include "components/permissions/mock_chooser_controller_view.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -56,10 +56,10 @@ class BluetoothChooserControllerTest : public testing::Test {
     last_device_id_ = device_id;
   }
 
+  std::string last_device_id_;
   TestBluetoothChooserController bluetooth_chooser_controller_;
   NiceMock<MockChooserControllerView> mock_bluetooth_chooser_view_;
   content::BluetoothChooserEvent last_event_;
-  std::string last_device_id_;
 };
 
 class BluetoothChooserControllerWithDevicesAddedTest

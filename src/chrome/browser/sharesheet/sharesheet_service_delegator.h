@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/sharesheet/sharesheet_types.h"
@@ -50,7 +50,7 @@ class SharesheetServiceDelegator {
   gfx::NativeWindow GetNativeWindow();
   SharesheetController* GetSharesheetController();
 
-  // TODO(crbug.com/1233830) : Remove after business logic is moved
+  // TODO(crbug.com/40191717) : Remove after business logic is moved
   // out of SharesheetHeaderView.
   Profile* GetProfile();
 
@@ -84,14 +84,16 @@ class SharesheetServiceDelegator {
   // ======================== UI TO SHARESHEET SERVICE ========================
   // ==========================================================================
   // The following are called by the UI to communicate with the ShareService.
-  void OnBubbleClosed(const std::u16string& active_action);
-  void OnTargetSelected(const std::u16string& target_name,
-                        const TargetType type,
+  void OnBubbleClosed(const std::optional<ShareActionType>& share_action_type);
+  void OnTargetSelected(const TargetType type,
+                        const std::optional<ShareActionType>& share_action_type,
+                        const std::optional<std::u16string>& app_name,
                         apps::IntentPtr intent,
                         views::View* share_action_view);
   bool OnAcceleratorPressed(const ui::Accelerator& accelerator,
-                            const std::u16string& active_action);
-  const gfx::VectorIcon* GetVectorIcon(const std::u16string& display_name);
+                            const ShareActionType share_action_type);
+  const gfx::VectorIcon* GetVectorIcon(
+      const std::optional<ShareActionType>& share_action_type);
 
  private:
   // Only used for ID purposes. NativeWindow will always outlive the

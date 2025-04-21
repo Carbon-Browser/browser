@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "remoting/base/constants.h"
 #include "remoting/protocol/channel_authenticator.h"
 #include "third_party/libjingle_xmpp/xmllite/xmlelement.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 PairingHostAuthenticator::PairingHostAuthenticator(
     scoped_refptr<PairingRegistry> pairing_registry,
@@ -58,10 +57,10 @@ Authenticator::State PairingHostAuthenticator::state() const {
   return PairingAuthenticatorBase::state();
 }
 
-Authenticator::RejectionReason
-PairingHostAuthenticator::rejection_reason() const {
+Authenticator::RejectionReason PairingHostAuthenticator::rejection_reason()
+    const {
   if (protocol_error_) {
-    return PROTOCOL_ERROR;
+    return RejectionReason::PROTOCOL_ERROR;
   }
   return PairingAuthenticatorBase::rejection_reason();
 }
@@ -96,5 +95,4 @@ void PairingHostAuthenticator::InitializeWithPairing(
   std::move(resume_callback).Run();
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

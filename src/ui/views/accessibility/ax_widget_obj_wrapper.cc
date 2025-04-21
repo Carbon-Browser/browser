@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/strings/utf_string_conversions.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
@@ -20,7 +21,6 @@ AXWidgetObjWrapper::AXWidgetObjWrapper(AXAuraObjCache* aura_obj_cache,
     : AXAuraObjWrapper(aura_obj_cache), widget_(widget) {
   DCHECK(widget->GetNativeView());
   widget_observation_.Observe(widget);
-  widget_removals_observation_.Observe(widget);
 }
 
 AXWidgetObjWrapper::~AXWidgetObjWrapper() = default;
@@ -30,7 +30,7 @@ AXAuraObjWrapper* AXWidgetObjWrapper::GetParent() {
 }
 
 void AXWidgetObjWrapper::GetChildren(
-    std::vector<AXAuraObjWrapper*>* out_children) {
+    std::vector<raw_ptr<AXAuraObjWrapper, VectorExperimental>>* out_children) {
   if (!widget_->IsVisible() || !widget_->GetRootView() ||
       !widget_->GetRootView()->GetVisible()) {
     return;
@@ -72,16 +72,6 @@ void AXWidgetObjWrapper::OnWidgetDestroyed(Widget* widget) {
   // situation and ensures the destroyed widget is removed from cache.
   // See https://crbug.com/1091545
   aura_obj_cache_->Remove(widget);
-}
-
-void AXWidgetObjWrapper::OnWidgetVisibilityChanged(Widget*, bool) {
-  // If a widget changes visibility it may affect what's focused, in particular
-  // when a widget that contains the focused view gets hidden.
-  aura_obj_cache_->OnFocusedViewChanged();
-}
-
-void AXWidgetObjWrapper::OnWillRemoveView(Widget* widget, View* view) {
-  aura_obj_cache_->RemoveViewSubtree(view);
 }
 
 }  // namespace views

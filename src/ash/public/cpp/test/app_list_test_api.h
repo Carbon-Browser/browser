@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,10 @@ namespace views {
 class View;
 }  // namespace views
 
+namespace ui {
+class Layer;
+}  // namespace ui
+
 namespace ui::test {
 class EventGenerator;
 }  // namespace ui::test
@@ -26,8 +30,10 @@ class EventGenerator;
 namespace ash {
 class AppsGridView;
 class AppListModel;
+class ContinueTaskView;
 class PaginationModel;
 class AppListItemView;
+class SearchResultListView;
 
 // Accesses ash data for app list view testing.
 class ASH_EXPORT AppListTestApi {
@@ -48,8 +54,10 @@ class ASH_EXPORT AppListTestApi {
   // `wait_for_opening_animation` indicates whether to wait for the bubble
   // launcher show animations (including the app list window animation, the
   // bubble apps page animation, the bubble view animation and apps grid
-  // animation). Only used with productivity launcher in clamshell mode.
+  // animation).
   void WaitForBubbleWindow(bool wait_for_opening_animation);
+  void WaitForBubbleWindowInRootWindow(aura::Window* root_window,
+                                       bool wait_for_opening_animation);
 
   // Waits until all the animations to show the app list become idle. No
   // operations if the app list is already idle.
@@ -60,6 +68,9 @@ class ASH_EXPORT AppListTestApi {
 
   // Returns the name displayed in the launcher for the provided app list item.
   std::u16string GetAppListItemViewName(const std::string& item_id);
+
+  // Returns the top level item view specified by `item_id`.
+  AppListItemView* GetTopLevelItemViewFromId(const std::string& item_id);
 
   // Returns ids of the items in top level app list view.
   std::vector<std::string> GetTopLevelViewIdList();
@@ -92,9 +103,6 @@ class ASH_EXPORT AppListTestApi {
 
   // Returns the pagination model.
   PaginationModel* GetPaginationModel();
-
-  // Updates the paged view structure.
-  void UpdatePagedViewStructure();
 
   // Returns the top level apps grid view. Could be ScrollableAppsGridView if
   // bubble launcher is enabled or PagedAppsGridView otherwise.
@@ -167,8 +175,17 @@ class ASH_EXPORT AppListTestApi {
   // Returns the recent app item item specified by `index`.
   views::View* GetRecentAppAt(int index);
 
+  std::vector<ContinueTaskView*> GetContinueTaskViews();
+
+  // Returns the list of app IDs shown in recent apps view, in order they appear
+  // in the  UI.
+  std::vector<std::string> GetRecentAppIds();
+
   // Updates launcher search box content, and triggers search.
   void SimulateSearch(const std::u16string& query);
+
+  // Returns the top visible search result list view.
+  SearchResultListView* GetTopVisibleSearchResultListView();
 
   // App list sort related methods ---------------------------------------------
 
@@ -230,13 +247,17 @@ class ASH_EXPORT AppListTestApi {
   void ClickOnCloseButtonAndWaitForToastAnimation(
       ui::test::EventGenerator* event_generator);
 
+  // Returns `AppListView`'s layer.
+  ui::Layer* GetAppListViewLayer();
+
  private:
   // Adds a callback that runs at the end of the reorder animation.
   void RegisterReorderAnimationDoneCallback(
       ReorderAnimationEndState* actual_state);
 
   // Called at the end of the reorder animation.
-  void OnReorderAnimationDone(ReorderAnimationEndState* result,
+  void OnReorderAnimationDone(bool for_bubble_app_list,
+                              ReorderAnimationEndState* result,
                               bool abort,
                               AppListGridAnimationStatus status);
 

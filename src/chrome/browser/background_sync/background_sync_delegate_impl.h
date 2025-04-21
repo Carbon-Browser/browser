@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 #include "components/background_sync/background_sync_delegate.h"
 #include "components/keep_alive_registry/scoped_keep_alive.h"
 #include "components/site_engagement/content/site_engagement_observer.h"
+#include "components/webapps/common/web_app_id.h"
 #include "content/public/browser/background_sync_controller.h"
 #include "content/public/browser/browser_thread.h"
 #include "url/origin.h"
@@ -60,9 +61,9 @@ class BackgroundSyncDelegateImpl
   CreateBackgroundSyncEventKeepAlive() override;
 #endif
 
-  void GetUkmSourceId(const url::Origin& origin,
-                      base::OnceCallback<void(absl::optional<ukm::SourceId>)>
-                          callback) override;
+  void GetUkmSourceId(
+      const url::Origin& origin,
+      base::OnceCallback<void(std::optional<ukm::SourceId>)> callback) override;
   void Shutdown() override;
   HostContentSettingsMap* GetHostContentSettingsMap() override;
   bool IsProfileOffTheRecord() override;
@@ -79,18 +80,21 @@ class BackgroundSyncDelegateImpl
 #endif  // BUILDFLAG(IS_ANDROID)
 
   // SiteEngagementObserver overrides.
-  void OnEngagementEvent(
-      content::WebContents* web_contents,
-      const GURL& url,
-      double score,
-      site_engagement::EngagementType engagement_type) override;
+  void OnEngagementEvent(content::WebContents* web_contents,
+                         const GURL& url,
+                         double score,
+                         double old_score,
+                         site_engagement::EngagementType engagement_type,
+                         const std::optional<webapps::AppId>& app_id) override;
 
  private:
-  raw_ptr<Profile> profile_;
+  raw_ptr<Profile, DanglingUntriaged> profile_;
   bool off_the_record_;
-  raw_ptr<ukm::UkmBackgroundRecorderService> ukm_background_service_;
+  raw_ptr<ukm::UkmBackgroundRecorderService, DanglingUntriaged>
+      ukm_background_service_;
   // Same lifetime as |profile_|.
-  raw_ptr<site_engagement::SiteEngagementService> site_engagement_service_;
+  raw_ptr<site_engagement::SiteEngagementService, DanglingUntriaged>
+      site_engagement_service_;
   std::set<url::Origin> suspended_periodic_sync_origins_;
 };
 

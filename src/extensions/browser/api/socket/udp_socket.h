@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -15,9 +16,7 @@
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "services/network/public/mojom/network_service.mojom.h"
 #include "services/network/public/mojom/udp_socket.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace extensions {
 
@@ -63,6 +62,8 @@ class UDPSocket : public Socket, public network::mojom::UDPSocketListener {
 
   const std::vector<std::string>& GetJoinedGroups() const;
 
+  bool IsConnectedOrBound() const;
+
  protected:
   int WriteImpl(net::IOBuffer* io_buffer,
                 int io_buffer_size,
@@ -70,22 +71,20 @@ class UDPSocket : public Socket, public network::mojom::UDPSocketListener {
 
  private:
   // Make net::IPEndPoint can be refcounted
-  typedef base::RefCountedData<net::IPEndPoint> IPEndPoint;
-
-  bool IsConnectedOrBound() const;
+  using IPEndPoint = base::RefCountedData<net::IPEndPoint>;
 
   // network::mojom::UDPSocketListener implementation.
   void OnReceived(int32_t result,
-                  const absl::optional<net::IPEndPoint>& src_addr,
-                  absl::optional<base::span<const uint8_t>> data) override;
+                  const std::optional<net::IPEndPoint>& src_addr,
+                  std::optional<base::span<const uint8_t>> data) override;
 
   void OnConnectCompleted(net::CompletionOnceCallback user_callback,
                           const net::IPEndPoint& remote_addr,
                           int result,
-                          const absl::optional<net::IPEndPoint>& local_addr);
+                          const std::optional<net::IPEndPoint>& local_addr);
   void OnBindCompleted(net::CompletionOnceCallback user_callback,
                        int result,
-                       const absl::optional<net::IPEndPoint>& local_addr);
+                       const std::optional<net::IPEndPoint>& local_addr);
   void OnSendToCompleted(net::CompletionOnceCallback user_callback,
                          size_t byte_count,
                          int result);
@@ -104,8 +103,8 @@ class UDPSocket : public Socket, public network::mojom::UDPSocketListener {
 
   bool is_bound_;
   mojo::Receiver<network::mojom::UDPSocketListener> listener_receiver_{this};
-  absl::optional<net::IPEndPoint> local_addr_;
-  absl::optional<net::IPEndPoint> peer_addr_;
+  std::optional<net::IPEndPoint> local_addr_;
+  std::optional<net::IPEndPoint> peer_addr_;
 
   ReadCompletionCallback read_callback_;
 

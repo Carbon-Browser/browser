@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,8 +38,9 @@ gfx::Rect NativeFrameView::GetWindowBoundsForClientBounds(
   // Enforce minimum size (1, 1) in case that |client_bounds| is passed with
   // empty size.
   gfx::Rect window_bounds = client_bounds;
-  if (window_bounds.IsEmpty())
+  if (window_bounds.IsEmpty()) {
     window_bounds.set_size(gfx::Size(1, 1));
+  }
   return window_bounds;
 #endif
 }
@@ -69,8 +70,10 @@ void NativeFrameView::SizeConstraintsChanged() {
   // Nothing to do.
 }
 
-gfx::Size NativeFrameView::CalculatePreferredSize() const {
-  gfx::Size client_preferred_size = frame_->client_view()->GetPreferredSize();
+gfx::Size NativeFrameView::CalculatePreferredSize(
+    const SizeBounds& available_size) const {
+  gfx::Size client_preferred_size =
+      frame_->client_view()->GetPreferredSize(available_size);
 #if BUILDFLAG(IS_WIN)
   // Returns the client size. On Windows, this is the expected behavior for
   // native frames (see |NativeWidgetWin::WidgetSizeIsClientSize()|), while
@@ -92,7 +95,7 @@ gfx::Size NativeFrameView::GetMaximumSize() const {
   return frame_->client_view()->GetMaximumSize();
 }
 
-BEGIN_METADATA(NativeFrameView, NonClientFrameView)
+BEGIN_METADATA(NativeFrameView)
 END_METADATA
 
 }  // namespace views

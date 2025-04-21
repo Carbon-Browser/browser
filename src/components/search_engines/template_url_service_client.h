@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@ class TemplateURLService;
 // TODO(hashimoto): Get rid of this once HistoryService gets componentized.
 class TemplateURLServiceClient {
  public:
-  virtual ~TemplateURLServiceClient() {}
+  virtual ~TemplateURLServiceClient() = default;
 
   // Called by TemplateURLService::Shutdown as part of the two phase shutdown
   // of the KeyedService.

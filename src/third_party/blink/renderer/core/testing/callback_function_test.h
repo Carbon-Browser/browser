@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@ namespace blink {
 
 class ExceptionState;
 class HTMLDivElement;
+class V8InternalEnum;
 class V8TestCallback;
 class V8TestEnumCallback;
 class V8TestInterfaceCallback;
@@ -40,7 +41,7 @@ class CallbackFunctionTest final : public ScriptWrappable {
                                       const Vector<int>& numbers,
                                       ExceptionState&);
   void testEnumCallback(V8TestEnumCallback*,
-                        const String& enum_value,
+                        const V8InternalEnum& enum_value,
                         ExceptionState&);
 };
 

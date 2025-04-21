@@ -1,14 +1,14 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/common/features/feature.h"
 
 #include <map>
+#include <string_view>
 
 #include "base/command_line.h"
 #include "base/lazy_instance.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -19,12 +19,7 @@ namespace extensions {
 
 // static
 Feature::Platform Feature::GetCurrentPlatform() {
-// TODO(https://crbug.com/1052397): For readability, this should become
-// BUILDFLAG(IS_CHROMEOS) && BUILDFLAG(IS_CHROMEOS_LACROS). The second
-// conditional should be BUILDFLAG(IS_CHROMEOS) && BUILDFLAG(IS_CHROMEOS_ASH).
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  return LACROS_PLATFORM;
-#elif BUILDFLAG(IS_CHROMEOS_ASH) && !BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_CHROMEOS)
   return CHROMEOS_PLATFORM;
 #elif BUILDFLAG(IS_LINUX)
   return LINUX_PLATFORM;
@@ -48,18 +43,22 @@ Feature::Availability Feature::IsAvailableToExtension(
 
 Feature::Feature() : no_parent_(false) {}
 
-Feature::~Feature() {}
+Feature::~Feature() = default;
 
-void Feature::set_name(base::StringPiece name) {
+void Feature::set_name(std::string_view name) {
   name_ = std::string(name);
 }
 
-void Feature::set_alias(base::StringPiece alias) {
+void Feature::set_alias(std::string_view alias) {
   alias_ = std::string(alias);
 }
 
-void Feature::set_source(base::StringPiece source) {
+void Feature::set_source(std::string_view source) {
   source_ = std::string(source);
+}
+
+bool Feature::HasDelegatedAvailabilityCheckHandlerForTesting() const {
+  return HasDelegatedAvailabilityCheckHandler();
 }
 
 }  // namespace extensions

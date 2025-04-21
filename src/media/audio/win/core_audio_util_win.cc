@@ -1,21 +1,24 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/audio/win/core_audio_util_win.h"
 
+#include <objbase.h>
+
 #include <comdef.h>
 #include <devicetopology.h>
 #include <functiondiscoverykeys_devpkey.h>
-#include <objbase.h>
 #include <stddef.h>
+#include <stdint.h>
+
 #include <bitset>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
-#include "base/metrics/histogram_functions.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/win/scoped_co_mem.h"
@@ -25,6 +28,8 @@
 #include "base/win/windows_version.h"
 #include "media/audio/audio_device_description.h"
 #include "media/audio/audio_features.h"
+#include "media/base/audio_timestamp_helper.h"
+#include "media/base/channel_layout.h"
 #include "media/base/media_switches.h"
 #include "media/base/win/mf_helpers.h"
 
@@ -44,62 +49,22 @@ namespace {
 
 constexpr uint32_t KSAUDIO_SPEAKER_UNSUPPORTED = 0xFFFFFFFF;
 
-// Used for mapping UMA histograms with corresponding source of logging.
-enum class UmaLogStep {
-  CREATE_DEVICE_ENUMERATOR,
-  CREATE_DEVICE,
-  CREATE_CLIENT,
-  GET_MIX_FORMAT,
-  GET_DEVICE_PERIOD,
-  GET_SHARED_MODE_ENGINE_PERIOD,
-};
+REFERENCE_TIME BufferSizeInFramesToTimeDelta(uint32_t frames,
+                                             DWORD bytes_per_sec,
+                                             WORD bytes_per_frame) {
+  constexpr double ref_time_ns = 10000000;  // 10ms
+  return (REFERENCE_TIME)((double)(frames)*ref_time_ns /
+                              ((double)(bytes_per_sec / bytes_per_frame)) +
+                          0.5f);
+}
 
-using UMALogCallback = base::RepeatingCallback<void(UmaLogStep, HRESULT)>;
-
-// Empty UMA logging callback to be passed to functions that don't need to log
-// any UMA stats
-void LogUMAEmptyCb(UmaLogStep step, HRESULT hr) {}
-
-// UMA logging callback used for tracking return values of
-// GetPreferredAudioParameters for output stream proxy parameter creation, in
-// order to get a clearer picture of the different failure reasons and their
-// distribution. https://crbug.com/774998
-void LogUMAPreferredOutputParams(UmaLogStep step, HRESULT hr) {
-  switch (step) {
-    case UmaLogStep::CREATE_DEVICE_ENUMERATOR:
-      base::UmaHistogramSparse(
-          "Media.AudioOutputStreamProxy."
-          "GetPreferredOutputStreamParametersWin.CreateDeviceEnumeratorResult",
-          hr);
-      break;
-    case UmaLogStep::CREATE_DEVICE:
-      base::UmaHistogramSparse(
-          "Media.AudioOutputStreamProxy."
-          "GetPreferredOutputStreamParametersWin.CreateDeviceResult",
-          hr);
-      break;
-    case UmaLogStep::CREATE_CLIENT:
-      base::UmaHistogramSparse(
-          "Media.AudioOutputStreamProxy."
-          "GetPreferredOutputStreamParametersWin.CreateClientResult",
-          hr);
-      break;
-    case UmaLogStep::GET_MIX_FORMAT:
-      base::UmaHistogramSparse(
-          "Media.AudioOutputStreamProxy."
-          "GetPreferredOutputStreamParametersWin.GetMixFormatResult",
-          hr);
-      break;
-    case UmaLogStep::GET_DEVICE_PERIOD:
-      base::UmaHistogramSparse(
-          "Media.AudioOutputStreamProxy."
-          "GetPreferredOutputStreamParametersWin.GetDevicePeriodResult",
-          hr);
-      break;
-    case UmaLogStep::GET_SHARED_MODE_ENGINE_PERIOD:
-      // TODO(crbug.com/892044): add histogram logging.
-      break;
+// Return the requested offload buffer time in 100ns units.
+double GetOffloadBufferTimeIn100Ns() {
+  if (base::FeatureList::IsEnabled(kAudioOffload)) {
+    return media::kAudioOffloadBufferTimeMs.Get() * 10000;
   }
+
+  return 500000;  // 50ms
 }
 
 // TODO(henrika): add mapping for all types in the ChannelLayout enumerator.
@@ -114,20 +79,35 @@ ChannelConfig ChannelLayoutToChannelConfig(ChannelLayout layout) {
     case CHANNEL_LAYOUT_STEREO:
       DVLOG(2) << "CHANNEL_LAYOUT_STEREO=>KSAUDIO_SPEAKER_STEREO";
       return KSAUDIO_SPEAKER_STEREO;
+    case CHANNEL_LAYOUT_2POINT1:
+      DVLOG(2) << "CHANNEL_LAYOUT_2POINT1=>KSAUDIO_SPEAKER_2POINT1";
+      return KSAUDIO_SPEAKER_2POINT1;
+    case CHANNEL_LAYOUT_SURROUND:
+      DVLOG(2) << "CHANNEL_LAYOUT_SURROUND=>KSAUDIO_SPEAKER_3POINT0";
+      return KSAUDIO_SPEAKER_3POINT0;
+    case CHANNEL_LAYOUT_3_1:
+      DVLOG(2) << "CHANNEL_LAYOUT_3_1=>KSAUDIO_SPEAKER_3POINT1";
+      return KSAUDIO_SPEAKER_3POINT1;
     case CHANNEL_LAYOUT_QUAD:
       DVLOG(2) << "CHANNEL_LAYOUT_QUAD=>KSAUDIO_SPEAKER_QUAD";
       return KSAUDIO_SPEAKER_QUAD;
     case CHANNEL_LAYOUT_4_0:
       DVLOG(2) << "CHANNEL_LAYOUT_4_0=>KSAUDIO_SPEAKER_SURROUND";
       return KSAUDIO_SPEAKER_SURROUND;
+    case CHANNEL_LAYOUT_5_0:
+      DVLOG(2) << "CHANNEL_LAYOUT_5_0=>KSAUDIO_SPEAKER_5POINT0";
+      return KSAUDIO_SPEAKER_5POINT0;
     case CHANNEL_LAYOUT_5_1_BACK:
       DVLOG(2) << "CHANNEL_LAYOUT_5_1_BACK=>KSAUDIO_SPEAKER_5POINT1";
       return KSAUDIO_SPEAKER_5POINT1;
     case CHANNEL_LAYOUT_5_1:
       DVLOG(2) << "CHANNEL_LAYOUT_5_1=>KSAUDIO_SPEAKER_5POINT1_SURROUND";
       return KSAUDIO_SPEAKER_5POINT1_SURROUND;
-    case CHANNEL_LAYOUT_7_1_WIDE:
-      DVLOG(2) << "CHANNEL_LAYOUT_7_1_WIDE=>KSAUDIO_SPEAKER_7POINT1";
+    case CHANNEL_LAYOUT_7_0:
+      DVLOG(2) << "CHANNEL_LAYOUT_7_0=>KSAUDIO_SPEAKER_7POINT0";
+      return KSAUDIO_SPEAKER_7POINT0;
+    case CHANNEL_LAYOUT_7_1_WIDE_BACK:
+      DVLOG(2) << "CHANNEL_LAYOUT_7_1_WIDE_BACK=>KSAUDIO_SPEAKER_7POINT1";
       return KSAUDIO_SPEAKER_7POINT1;
     case CHANNEL_LAYOUT_7_1:
       DVLOG(2) << "CHANNEL_LAYOUT_7_1=>KSAUDIO_SPEAKER_7POINT1_SURROUND";
@@ -223,7 +203,7 @@ std::string ChannelMaskToString(DWORD channel_mask) {
   if (channel_mask != KSAUDIO_SPEAKER_DIRECTOUT) {
     std::bitset<8 * sizeof(DWORD)> mask(channel_mask);
     ss += " (";
-    ss += std::to_string(mask.count());
+    ss += base::NumberToString(mask.count());
     ss += ")";
   }
   return ss;
@@ -266,8 +246,7 @@ ChannelConfig GuessChannelConfig(WORD channels) {
 }
 
 bool IAudioClient3IsSupported() {
-  return base::FeatureList::IsEnabled(features::kAllowIAudioClient3) &&
-         CoreAudioUtil::GetIAudioClientVersion() >= 3;
+  return base::FeatureList::IsEnabled(features::kAllowIAudioClient3);
 }
 
 std::string GetDeviceID(IMMDevice* device) {
@@ -308,8 +287,7 @@ HRESULT GetDeviceFriendlyNameInternal(IMMDevice* device,
 }
 
 ComPtr<IMMDeviceEnumerator> CreateDeviceEnumeratorInternal(
-    bool allow_reinitialize,
-    const UMALogCallback& uma_log_cb) {
+    bool allow_reinitialize) {
   ComPtr<IMMDeviceEnumerator> device_enumerator;
   HRESULT hr = ::CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr,
                                   CLSCTX_INPROC_SERVER,
@@ -319,9 +297,8 @@ ComPtr<IMMDeviceEnumerator> CreateDeviceEnumeratorInternal(
     // Buggy third-party DLLs can uninitialize COM out from under us.  Attempt
     // to re-initialize it.  See http://crbug.com/378465 for more details.
     CoInitializeEx(nullptr, COINIT_MULTITHREADED | COINIT_DISABLE_OLE1DDE);
-    return CreateDeviceEnumeratorInternal(false, uma_log_cb);
+    return CreateDeviceEnumeratorInternal(false);
   }
-  uma_log_cb.Run(UmaLogStep::CREATE_DEVICE_ENUMERATOR, hr);
   return device_enumerator;
 }
 
@@ -372,8 +349,7 @@ bool IsSupportedInternal() {
 
   // Verify that it is possible to a create the IMMDeviceEnumerator interface.
   ComPtr<IMMDeviceEnumerator> device_enumerator =
-      CreateDeviceEnumeratorInternal(false,
-                                     base::BindRepeating(&LogUMAEmptyCb));
+      CreateDeviceEnumeratorInternal(false);
   if (!device_enumerator) {
     LOG(ERROR)
         << "Failed to create Core Audio device enumerator on thread with ID "
@@ -388,8 +364,7 @@ bool IsSupportedInternal() {
 // specified by data-flow direction and role if |device_id| is default.
 ComPtr<IMMDevice> CreateDeviceInternal(const std::string& device_id,
                                        EDataFlow data_flow,
-                                       ERole role,
-                                       const UMALogCallback& uma_log_cb) {
+                                       ERole role) {
   ComPtr<IMMDevice> endpoint_device;
   // In loopback mode, a client of WASAPI can capture the audio stream that
   // is being played by a rendering endpoint device.
@@ -414,8 +389,7 @@ ComPtr<IMMDevice> CreateDeviceInternal(const std::string& device_id,
   }
 
   // Create the IMMDeviceEnumerator interface.
-  ComPtr<IMMDeviceEnumerator> device_enum(
-      CreateDeviceEnumeratorInternal(true, uma_log_cb));
+  ComPtr<IMMDeviceEnumerator> device_enum(CreateDeviceEnumeratorInternal(true));
   if (!device_enum.Get())
     return endpoint_device;
 
@@ -441,35 +415,32 @@ ComPtr<IMMDevice> CreateDeviceInternal(const std::string& device_id,
     hr = E_FAIL;
   }
 
-  uma_log_cb.Run(UmaLogStep::CREATE_DEVICE, hr);
   return endpoint_device;
 }
 
 // Decide on data_flow and role based on |device_id|, and return the
 // corresponding audio device.
 ComPtr<IMMDevice> CreateDeviceByID(const std::string& device_id,
-                                   bool is_output_device,
-                                   const UMALogCallback& uma_log_cb) {
+                                   bool is_output_device) {
   if (AudioDeviceDescription::IsLoopbackDevice(device_id)) {
     DCHECK(!is_output_device);
     return CreateDeviceInternal(AudioDeviceDescription::kDefaultDeviceId,
-                                eRender, eConsole, uma_log_cb);
+                                eRender, eConsole);
   }
 
   EDataFlow data_flow = is_output_device ? eRender : eCapture;
   if (device_id == AudioDeviceDescription::kCommunicationsDeviceId)
     return CreateDeviceInternal(AudioDeviceDescription::kDefaultDeviceId,
-                                data_flow, eCommunications, uma_log_cb);
+                                data_flow, eCommunications);
 
   // If AudioDeviceDescription::IsDefaultDevice(device_id), a default device
   // will be created
-  return CreateDeviceInternal(device_id, data_flow, eConsole, uma_log_cb);
+  return CreateDeviceInternal(device_id, data_flow, eConsole);
 }
 
 // Creates and activates an IAudioClient COM object given the selected
 // endpoint device.
-ComPtr<IAudioClient> CreateClientInternal(IMMDevice* audio_device,
-                                          const UMALogCallback& uma_log_cb) {
+ComPtr<IAudioClient> CreateClientInternal(IMMDevice* audio_device) {
   if (!audio_device)
     return ComPtr<IAudioClient>();
 
@@ -477,14 +448,12 @@ ComPtr<IAudioClient> CreateClientInternal(IMMDevice* audio_device,
   HRESULT hr = audio_device->Activate(
       __uuidof(IAudioClient), CLSCTX_INPROC_SERVER, NULL, &audio_client);
   DVLOG_IF(1, FAILED(hr)) << "IMMDevice::Activate: " << std::hex << hr;
-  uma_log_cb.Run(UmaLogStep::CREATE_CLIENT, hr);
   return audio_client;
 }
 
 // Creates and activates an IAudioClient3 COM object given the selected
 // endpoint device.
-ComPtr<IAudioClient3> CreateClientInternal3(IMMDevice* audio_device,
-                                            const UMALogCallback& uma_log_cb) {
+ComPtr<IAudioClient3> CreateClientInternal3(IMMDevice* audio_device) {
   if (!audio_device)
     return ComPtr<IAudioClient3>();
 
@@ -492,86 +461,100 @@ ComPtr<IAudioClient3> CreateClientInternal3(IMMDevice* audio_device,
   HRESULT hr = audio_device->Activate(
       __uuidof(IAudioClient3), CLSCTX_INPROC_SERVER, NULL, &audio_client);
   DVLOG_IF(1, FAILED(hr)) << "IMMDevice::Activate: " << std::hex << hr;
-  uma_log_cb.Run(UmaLogStep::CREATE_CLIENT, hr);
   return audio_client;
 }
 
 HRESULT GetPreferredAudioParametersInternal(IAudioClient* client,
                                             bool is_output_device,
                                             AudioParameters* params,
-                                            const UMALogCallback& uma_log_cb) {
+                                            bool is_offload_stream) {
   WAVEFORMATEXTENSIBLE mix_format;
   HRESULT hr = CoreAudioUtil::GetSharedModeMixFormat(client, &mix_format);
-  uma_log_cb.Run(UmaLogStep::GET_MIX_FORMAT, hr);
   if (FAILED(hr))
     return hr;
   CoreAudioUtil::WaveFormatWrapper format(&mix_format);
 
   int min_frames_per_buffer = 0;
   int max_frames_per_buffer = 0;
+  int default_frames_per_buffer = 0;
   int frames_per_buffer = 0;
 
   const bool supports_iac3 = IAudioClient3IsSupported();
 
-  if (supports_iac3) {
-    // Try to obtain an IAudioClient3 interface from the IAudioClient object.
-    // Use ComPtr::As for doing QueryInterface calls on COM objects.
-    ComPtr<IAudioClient> audio_client(client);
-    ComPtr<IAudioClient3> audio_client_3;
-    hr = audio_client.As(&audio_client_3);
-    if (SUCCEEDED(hr)) {
-      UINT32 default_period_frames = 0;
-      UINT32 fundamental_period_frames = 0;
-      UINT32 min_period_frames = 0;
-      UINT32 max_period_frames = 0;
-      hr = audio_client_3->GetSharedModeEnginePeriod(
-          format.get(), &default_period_frames, &fundamental_period_frames,
-          &min_period_frames, &max_period_frames);
-
-      uma_log_cb.Run(UmaLogStep::GET_SHARED_MODE_ENGINE_PERIOD, hr);
-      if (SUCCEEDED(hr)) {
-        min_frames_per_buffer = min_period_frames;
-        max_frames_per_buffer = max_period_frames;
-        frames_per_buffer = default_period_frames;
-      }
-      DVLOG(1) << "IAudioClient3 => min_period_frames: " << min_period_frames;
-      DVLOG(1) << "IAudioClient3 => frames_per_buffer: " << frames_per_buffer;
-    }
-  }
-
-  // Preferred sample rate.
   const int sample_rate = format->nSamplesPerSec;
+  if (is_offload_stream) {
+    frames_per_buffer = AudioTimestampHelper::TimeToFrames(
+        CoreAudioUtil::ReferenceTimeToTimeDelta(GetOffloadBufferTimeIn100Ns()),
+        sample_rate);
+    ComPtr<IAudioClient> audio_client(client);
+    ComPtr<IAudioClient2> audio_client_2;
+    hr = audio_client.As(&audio_client_2);
+    if (SUCCEEDED(hr)) {
+      REFERENCE_TIME min_buffer_duration = 0;
+      REFERENCE_TIME max_buffer_duration = 0;
+      audio_client_2->GetBufferSizeLimits(
+          &mix_format.Format, true, &min_buffer_duration, &max_buffer_duration);
 
-  // If we don't have access to IAudioClient3 or if the call to
-  // GetSharedModeEnginePeriod() fails we fall back to GetDevicePeriod().
-  if (!supports_iac3 || FAILED(hr)) {
-    REFERENCE_TIME default_period = 0;
-    hr = CoreAudioUtil::GetDevicePeriod(client, AUDCLNT_SHAREMODE_SHARED,
-                                        &default_period);
-    uma_log_cb.Run(UmaLogStep::GET_DEVICE_PERIOD, hr);
-    if (FAILED(hr))
-      return hr;
+      min_frames_per_buffer = AudioTimestampHelper::TimeToFrames(
+          CoreAudioUtil::ReferenceTimeToTimeDelta(min_buffer_duration),
+          sample_rate);
+      max_frames_per_buffer = AudioTimestampHelper::TimeToFrames(
+          CoreAudioUtil::ReferenceTimeToTimeDelta(max_buffer_duration),
+          sample_rate);
+    }
+  } else {
+    if (supports_iac3) {
+      // Try to obtain an IAudioClient3 interface from the IAudioClient object.
+      // Use ComPtr::As for doing QueryInterface calls on COM objects.
+      ComPtr<IAudioClient> audio_client(client);
+      ComPtr<IAudioClient3> audio_client_3;
+      hr = audio_client.As(&audio_client_3);
+      if (SUCCEEDED(hr)) {
+        UINT32 default_period_frames = 0;
+        UINT32 fundamental_period_frames = 0;
+        UINT32 min_period_frames = 0;
+        UINT32 max_period_frames = 0;
+        hr = audio_client_3->GetSharedModeEnginePeriod(
+            format.get(), &default_period_frames, &fundamental_period_frames,
+            &min_period_frames, &max_period_frames);
 
-    // We are using the native device period to derive the smallest possible
-    // buffer size in shared mode. Note that the actual endpoint buffer will be
-    // larger than this size but it will be possible to fill it up in two calls.
-    frames_per_buffer = static_cast<int>(
-        sample_rate * CoreAudioUtil::ReferenceTimeToTimeDelta(default_period)
-                          .InSecondsF() +
-        0.5);
-    DVLOG(1) << "IAudioClient => frames_per_buffer: " << frames_per_buffer;
+        if (SUCCEEDED(hr)) {
+          min_frames_per_buffer = min_period_frames;
+          max_frames_per_buffer = max_period_frames;
+          default_frames_per_buffer = default_period_frames;
+          frames_per_buffer = default_period_frames;
+        }
+        DVLOG(1) << "IAudioClient3 => min_period_frames: " << min_period_frames;
+        DVLOG(1) << "IAudioClient3 => frames_per_buffer: " << frames_per_buffer;
+      }
+    }
+
+    // If we don't have access to IAudioClient3 or if the call to
+    // GetSharedModeEnginePeriod() fails we fall back to GetDevicePeriod().
+    if (!supports_iac3 || FAILED(hr)) {
+      REFERENCE_TIME default_period = 0;
+      hr = CoreAudioUtil::GetDevicePeriod(client, AUDCLNT_SHAREMODE_SHARED,
+                                          &default_period);
+      if (FAILED(hr)) {
+        return hr;
+      }
+
+      // We are using the native device period to derive the smallest possible
+      // buffer size in shared mode. Note that the actual endpoint buffer will
+      // be larger than this size but it will be possible to fill it up in two
+      // calls.
+      frames_per_buffer = static_cast<int>(
+          sample_rate * CoreAudioUtil::ReferenceTimeToTimeDelta(default_period)
+                            .InSecondsF() +
+          0.5);
+      DVLOG(1) << "IAudioClient => frames_per_buffer: " << frames_per_buffer;
+    }
   }
 
   // Retrieve the current channel configuration (e.g. CHANNEL_LAYOUT_STEREO).
   ChannelLayout channel_layout = GetChannelLayout(format);
-
-  AudioParameters audio_params(
-      AudioParameters::AUDIO_PCM_LOW_LATENCY, channel_layout, sample_rate,
-      frames_per_buffer,
-      AudioParameters::HardwareCapabilities(min_frames_per_buffer,
-                                            max_frames_per_buffer));
-
-  if (audio_params.channel_layout() == CHANNEL_LAYOUT_DISCRETE) {
+  int channels = ChannelLayoutToChannelCount(channel_layout);
+  if (channel_layout == CHANNEL_LAYOUT_DISCRETE) {
     if (!is_output_device) {
       // Set the number of channels explicitly to two for input devices if
       // the channel layout is discrete to ensure that the parameters are valid
@@ -580,7 +563,7 @@ HRESULT GetPreferredAudioParametersInternal(IAudioClient* client,
       // input stream implementation instead.
       // See crbug.com/868026 for examples where this approach is needed.
       DVLOG(1) << "Forcing number of channels to 2 for CHANNEL_LAYOUT_DISCRETE";
-      audio_params.set_channels_for_discrete(2);
+      channels = 2;
     } else {
       // Some output devices return CHANNEL_LAYOUT_DISCRETE. Keep this channel
       // format but update the number of channels with the correct value. The
@@ -588,9 +571,17 @@ HRESULT GetPreferredAudioParametersInternal(IAudioClient* client,
       // See crbug.com/957886 for more details.
       DVLOG(1) << "Setting number of channels to " << format->nChannels
                << " for CHANNEL_LAYOUT_DISCRETE";
-      audio_params.set_channels_for_discrete(format->nChannels);
+      channels = format->nChannels;
     }
   }
+
+  AudioParameters audio_params(
+      AudioParameters::AUDIO_PCM_LOW_LATENCY, {channel_layout, channels},
+      sample_rate, frames_per_buffer,
+      AudioParameters::HardwareCapabilities(
+          min_frames_per_buffer, max_frames_per_buffer,
+          default_frames_per_buffer, is_offload_stream));
+
   DVLOG(1) << audio_params.AsHumanReadableString();
   DCHECK(audio_params.IsValid());
   *params = audio_params;
@@ -603,7 +594,7 @@ HRESULT GetPreferredAudioParametersInternal(IAudioClient* client,
 // CoreAudioUtil::WaveFormatWrapper implementation.
 WAVEFORMATEXTENSIBLE* CoreAudioUtil::WaveFormatWrapper::GetExtensible() const {
   CHECK(IsExtensible());
-  return reinterpret_cast<WAVEFORMATEXTENSIBLE*>(ptr_);
+  return reinterpret_cast<WAVEFORMATEXTENSIBLE*>(ptr_.get());
 }
 
 bool CoreAudioUtil::WaveFormatWrapper::IsExtensible() const {
@@ -672,19 +663,6 @@ base::TimeDelta CoreAudioUtil::ReferenceTimeToTimeDelta(REFERENCE_TIME time) {
   return base::Microseconds(0.1 * time + 0.5);
 }
 
-uint32_t CoreAudioUtil::GetIAudioClientVersion() {
-  if (base::win::GetVersion() >= base::win::Version::WIN10) {
-    // Minimum supported client: Windows 10.
-    // Minimum supported server: Windows Server 2016
-    return 3;
-  } else if (base::win::GetVersion() >= base::win::Version::WIN8) {
-    // Minimum supported client: Windows 8.
-    // Minimum supported server: Windows Server 2012.
-    return 2;
-  }
-  return 1;
-}
-
 AUDCLNT_SHAREMODE CoreAudioUtil::GetShareMode() {
   const base::CommandLine* cmd_line = base::CommandLine::ForCurrentProcess();
   if (cmd_line->HasSwitch(switches::kEnableExclusiveAudio))
@@ -718,8 +696,7 @@ int CoreAudioUtil::NumberOfActiveDevices(EDataFlow data_flow) {
 }
 
 ComPtr<IMMDeviceEnumerator> CoreAudioUtil::CreateDeviceEnumerator() {
-  return CreateDeviceEnumeratorInternal(true,
-                                        base::BindRepeating(&LogUMAEmptyCb));
+  return CreateDeviceEnumeratorInternal(true);
 }
 
 std::string CoreAudioUtil::GetDefaultInputDeviceID() {
@@ -893,24 +870,21 @@ EDataFlow CoreAudioUtil::GetDataFlow(IMMDevice* device) {
 ComPtr<IMMDevice> CoreAudioUtil::CreateDevice(const std::string& device_id,
                                               EDataFlow data_flow,
                                               ERole role) {
-  return CreateDeviceInternal(device_id, data_flow, role,
-                              base::BindRepeating(&LogUMAEmptyCb));
+  return CreateDeviceInternal(device_id, data_flow, role);
 }
 
 ComPtr<IAudioClient> CoreAudioUtil::CreateClient(const std::string& device_id,
                                                  EDataFlow data_flow,
                                                  ERole role) {
   ComPtr<IMMDevice> device(CreateDevice(device_id, data_flow, role));
-  return CreateClientInternal(device.Get(),
-                              base::BindRepeating(&LogUMAEmptyCb));
+  return CreateClientInternal(device.Get());
 }
 
 ComPtr<IAudioClient3> CoreAudioUtil::CreateClient3(const std::string& device_id,
                                                    EDataFlow data_flow,
                                                    ERole role) {
   ComPtr<IMMDevice> device(CreateDevice(device_id, data_flow, role));
-  return CreateClientInternal3(device.Get(),
-                               base::BindRepeating(&LogUMAEmptyCb));
+  return CreateClientInternal3(device.Get());
 }
 
 HRESULT CoreAudioUtil::GetSharedModeMixFormat(IAudioClient* client,
@@ -1049,11 +1023,8 @@ HRESULT CoreAudioUtil::GetDevicePeriod(IAudioClient* client,
 
 HRESULT CoreAudioUtil::GetPreferredAudioParameters(const std::string& device_id,
                                                    bool is_output_device,
-                                                   AudioParameters* params) {
-  UMALogCallback uma_log_cb(
-      is_output_device ? base::BindRepeating(&LogUMAPreferredOutputParams)
-                       : base::BindRepeating(&LogUMAEmptyCb));
-
+                                                   AudioParameters* params,
+                                                   bool is_offload_stream) {
   // Loopback audio streams must be input streams.
   DCHECK(!(AudioDeviceDescription::IsLoopbackDevice(device_id) &&
            is_output_device));
@@ -1062,17 +1033,19 @@ HRESULT CoreAudioUtil::GetPreferredAudioParameters(const std::string& device_id,
     return E_FAIL;
   }
 
-  ComPtr<IMMDevice> device(
-      CreateDeviceByID(device_id, is_output_device, uma_log_cb));
+  ComPtr<IMMDevice> device(CreateDeviceByID(device_id, is_output_device));
   if (!device.Get())
     return E_FAIL;
 
-  ComPtr<IAudioClient> client(CreateClientInternal(device.Get(), uma_log_cb));
+  ComPtr<IAudioClient> client(CreateClientInternal(device.Get()));
   if (!client.Get())
     return E_FAIL;
 
+  bool attempt_audio_offload =
+      is_offload_stream && EnableOffloadForClient(client.Get());
+
   HRESULT hr = GetPreferredAudioParametersInternal(
-      client.Get(), is_output_device, params, uma_log_cb);
+      client.Get(), is_output_device, params, attempt_audio_offload);
   if (FAILED(hr) || is_output_device || !params->IsValid()) {
     return hr;
   }
@@ -1086,7 +1059,7 @@ HRESULT CoreAudioUtil::GetPreferredAudioParameters(const std::string& device_id,
       params->channel_layout() != CHANNEL_LAYOUT_DISCRETE) {
     DLOG(WARNING)
         << "Replacing existing audio parameter with predefined version";
-    params->Reset(params->format(), CHANNEL_LAYOUT_STEREO,
+    params->Reset(params->format(), media::ChannelLayoutConfig::Stereo(),
                   params->sample_rate(), params->frames_per_buffer());
   }
 
@@ -1122,7 +1095,8 @@ HRESULT CoreAudioUtil::SharedModeInitialize(IAudioClient* client,
                                             HANDLE event_handle,
                                             uint32_t requested_buffer_size,
                                             uint32_t* endpoint_buffer_size,
-                                            const GUID* session_guid) {
+                                            const GUID* session_guid,
+                                            bool is_offload_stream) {
   // Use default flags (i.e, dont set AUDCLNT_STREAMFLAGS_NOPERSIST) to
   // ensure that the volume level and muting state for a rendering session
   // are persistent across system restarts. The volume level and muting
@@ -1144,7 +1118,26 @@ HRESULT CoreAudioUtil::SharedModeInitialize(IAudioClient* client,
   const bool supports_iac3 = IAudioClient3IsSupported();
 
   HRESULT hr;
-  if (supports_iac3 && requested_buffer_size > 0) {
+
+  if (is_offload_stream) {
+    hr = client->Initialize(AUDCLNT_SHAREMODE_SHARED, stream_flags,
+                            GetOffloadBufferTimeIn100Ns(), 0, format,
+                            session_guid);
+    // Typically GetBufferSize() must be called after successfully
+    // initialization. AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED is the only case we
+    // allow with an initialization failure.
+    if (hr == AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED) {
+      uint32_t buffer_size_in_frames = 0;
+      hr = client->GetBufferSize(&buffer_size_in_frames);
+      if (SUCCEEDED(hr)) {
+        REFERENCE_TIME buffer_duration_in_ns = BufferSizeInFramesToTimeDelta(
+            buffer_size_in_frames, format->nAvgBytesPerSec,
+            format->nBlockAlign);
+        hr = client->Initialize(AUDCLNT_SHAREMODE_SHARED, stream_flags,
+                                buffer_duration_in_ns, 0, format, session_guid);
+      }
+    }
+  } else if (supports_iac3 && requested_buffer_size > 0) {
     // Try to obtain an IAudioClient3 interface from the IAudioClient object.
     // Use ComPtr::As for doing QueryInterface calls on COM objects.
     ComPtr<IAudioClient> audio_client(client);
@@ -1256,6 +1249,55 @@ bool CoreAudioUtil::FillRenderEndpointBufferWithSilence(
   }
 
   return true;
+}
+
+// static
+bool CoreAudioUtil::EnableOffloadForClient(IAudioClient* client) {
+  ComPtr<IAudioClient> audio_client(client);
+  ComPtr<IAudioClient2> audio_client2;
+
+  if (!CoreAudioUtil::IsAudioOffloadSupported(audio_client.Get())) {
+    return false;
+  }
+  HRESULT hr = audio_client.As(&audio_client2);
+  if (SUCCEEDED(hr)) {
+    AudioClientProperties client_properties = {0};
+    client_properties.cbSize = sizeof(AudioClientProperties);
+    client_properties.bIsOffload = true;
+    client_properties.eCategory = AudioCategory_Media;
+
+    hr = audio_client2->SetClientProperties(&client_properties);
+    if (SUCCEEDED(hr)) {
+      DVLOG(1) << "Enabled audio offload on the client.";
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// static
+bool CoreAudioUtil::IsAudioOffloadSupported(IAudioClient* client) {
+  if (!base::FeatureList::IsEnabled(kAudioOffload)) {
+    return false;
+  } else if (!client) {
+    // If no client is specified, we can't determine if offload is supported,
+    // thus allow audio offload to be attempted, the real capability will be
+    // checked when the audio client is created.
+    return true;
+  }
+
+  ComPtr<IAudioClient> audio_client(client);
+  ComPtr<IAudioClient2> audio_client2;
+  BOOL is_offloadable = FALSE;
+
+  HRESULT hr = audio_client.As(&audio_client2);
+  if (SUCCEEDED(hr)) {
+    hr = audio_client2->IsOffloadCapable(AudioCategory_Media, &is_offloadable);
+    return (hr == S_OK && (is_offloadable == TRUE));
+  }
+
+  return false;
 }
 
 }  // namespace media

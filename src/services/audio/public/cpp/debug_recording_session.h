@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/component_export.h"
 #include "media/audio/audio_debug_recording_helper.h"
 #include "media/audio/audio_debug_recording_session.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -21,16 +22,16 @@ class FilePath;
 
 namespace audio {
 
-class DebugRecordingFileProvider;
-
 // Client class for using mojom::DebugRecording interface. This class owns
 // mojom::DebugRecordingFileProvider implementation, therefore owners of this
 // class' instances need permission to create files in |file_name_base| path
 // passed in constructor in order to start debug recording. If file creation
 // fails, debug recording will silently not start.
-class DebugRecordingSession : public media::AudioDebugRecordingSession {
+class COMPONENT_EXPORT(AUDIO_PUBLIC_CPP) DebugRecordingSession
+    : public media::AudioDebugRecordingSession {
  public:
-  class DebugRecordingFileProvider : public mojom::DebugRecordingFileProvider {
+  class COMPONENT_EXPORT(AUDIO_PUBLIC_CPP) DebugRecordingFileProvider
+      : public mojom::DebugRecordingFileProvider {
    public:
     DebugRecordingFileProvider(
         mojo::PendingReceiver<mojom::DebugRecordingFileProvider> receiver,

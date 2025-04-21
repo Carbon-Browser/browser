@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,8 +46,8 @@ class CORE_EXPORT InspectorContrast {
 
  private:
   void SortElementsByPaintOrder(HeapVector<Member<Node>>&, Document*);
-  std::vector<Node*> ElementsFromRect(const PhysicalRect& rect,
-                                      Document& document);
+  HeapVector<Member<Node>> ElementsFromRect(const PhysicalRect& rect,
+                                            Document& document);
   bool GetColorsFromRect(PhysicalRect rect,
                          Document& document,
                          Element* top_element,

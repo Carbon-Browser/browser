@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,11 @@ constexpr int kNonBlurredWallpaperBackgroundRadiusDp = 4;
 // example, this includes the user switch animation as well as the PIN keyboard
 // show/hide animation.
 constexpr int kChangeUserAnimationDurationMs = 300;
+
+// Minimum height of the Big user views. This should be a lower bound for
+// LoginPublicAccountUserView and LoginAuthUserView, and their values should be
+// the same.
+constexpr int kMinimiumBigUserViewHeightDp = 346;
 
 }  // namespace login
 }  // namespace ash

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,18 +7,21 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/containers/flat_map.h"
+#include "base/containers/to_vector.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/memory/weak_ptr.h"
 #include "base/notreached.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/performance_manager/public/user_tuning/performance_detection_manager.h"
+#include "chrome/browser/performance_manager/public/user_tuning/user_tuning_utils.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/resource_coordinator/lifecycle_unit.h"
 #include "chrome/browser/resource_coordinator/lifecycle_unit_state.mojom.h"
-#include "chrome/browser/resource_coordinator/tab_activity_watcher.h"
 #include "chrome/browser/resource_coordinator/tab_lifecycle_unit_external.h"
 #include "chrome/browser/resource_coordinator/tab_manager.h"
 #include "chrome/browser/resource_coordinator/time.h"
@@ -27,12 +30,14 @@
 #include "chrome/browser/ui/webui/discards/site_data.mojom-forward.h"
 #include "chrome/browser/ui/webui/discards/site_data_provider_impl.h"
 #include "chrome/browser/ui/webui/favicon_source.h"
-#include "chrome/browser/ui/webui/webui_util.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/discards_resources.h"
 #include "chrome/grit/discards_resources_map.h"
 #include "components/favicon_base/favicon_url_parser.h"
 #include "components/performance_manager/public/features.h"
+#include "components/performance_manager/public/freezing/freezing.h"
+#include "components/performance_manager/public/graph/graph.h"
+#include "components/performance_manager/public/graph/page_node.h"
 #include "components/performance_manager/public/performance_manager.h"
 #include "components/performance_manager/public/user_tuning/prefs.h"
 #include "components/prefs/pref_service.h"
@@ -49,6 +54,7 @@
 #include "services/network/public/mojom/content_security_policy.mojom.h"
 #include "ui/resources/grit/ui_resources.h"
 #include "ui/resources/grit/ui_resources_map.h"
+#include "ui/webui/webui_util.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
@@ -66,15 +72,15 @@ discards::mojom::LifecycleUnitVisibility GetLifecycleUnitVisibility(
   }
 #if defined(COMPILER_MSVC)
   NOTREACHED();
-  return discards::mojom::LifecycleUnitVisibility::VISIBLE;
 #endif
 }
 
 resource_coordinator::LifecycleUnit* GetLifecycleUnitById(int32_t id) {
   for (resource_coordinator::LifecycleUnit* lifecycle_unit :
        g_browser_process->GetTabManager()->GetSortedLifecycleUnits()) {
-    if (lifecycle_unit->GetID() == id)
+    if (lifecycle_unit->GetID() == id) {
       return lifecycle_unit;
+    }
   }
   return nullptr;
 }
@@ -85,8 +91,9 @@ double GetSiteEngagementScore(content::WebContents* contents) {
   const int current_entry_index = controller.GetCurrentEntryIndex();
 
   // A WebContents which hasn't navigated yet does not have a NavigationEntry.
-  if (current_entry_index == -1)
+  if (current_entry_index == -1) {
     return 0;
+  }
 
   auto* nav_entry = controller.GetEntryAtIndex(current_entry_index);
   DCHECK(nav_entry);
@@ -107,7 +114,7 @@ class DiscardsDetailsProviderImpl : public discards::mojom::DetailsProvider {
   DiscardsDetailsProviderImpl& operator=(const DiscardsDetailsProviderImpl&) =
       delete;
 
-  ~DiscardsDetailsProviderImpl() override {}
+  ~DiscardsDetailsProviderImpl() override = default;
 
   // discards::mojom::DetailsProvider overrides:
   void GetTabDiscardsInfo(GetTabDiscardsInfoCallback callback) override {
@@ -123,7 +130,8 @@ class DiscardsDetailsProviderImpl : public discards::mojom::DetailsProvider {
 
     // Convert the LifecycleUnits to a vector of TabDiscardsInfos.
     size_t rank = 1;
-    for (auto* lifecycle_unit : lifecycle_units) {
+    for (resource_coordinator::LifecycleUnit* lifecycle_unit :
+         lifecycle_units) {
       discards::mojom::TabDiscardsInfoPtr info(
           discards::mojom::TabDiscardsInfo::New());
 
@@ -140,12 +148,38 @@ class DiscardsDetailsProviderImpl : public discards::mojom::DetailsProvider {
       info->loading_state = lifecycle_unit->GetLoadingState();
       info->state = lifecycle_unit->GetState();
       resource_coordinator::DecisionDetails discard_details;
+      info->can_discard = lifecycle_unit->CanDiscard(
+          ::mojom::LifecycleUnitDiscardReason::PROACTIVE, &discard_details);
       info->cannot_discard_reasons = discard_details.GetFailureReasonStrings();
+
+      // When the "RunPerformanceManagerOnMainThreadSync" feature is enabled,
+      // the Performance Manager runs on the main thread and it is valid to call
+      // `performance_manager::freezing::GetCannotFreezeReasonsForPageNode`
+      // synchronously from here to get freezing info.
+      //
+      // Since the "RunPerformanceManagerOnMainThreadSync" feature will be
+      // enabled everywhere in the near term, no effort is made to provide
+      // freezing info when the feature is disabled.
+      base::WeakPtr<performance_manager::PageNode> page_node;
+      if (base::FeatureList::IsEnabled(
+              performance_manager::features::kRunOnMainThreadSync) &&
+          (page_node = performance_manager::PerformanceManager::
+               GetPrimaryPageNodeForWebContents(contents))) {
+        info->cannot_freeze_reasons = base::ToVector(
+            performance_manager::freezing::GetCannotFreezeReasonsForPageNode(
+                page_node.get()));
+        info->can_freeze = info->cannot_freeze_reasons.empty()
+                               ? discards::mojom::CanFreeze::YES
+                               : discards::mojom::CanFreeze::NO;
+      } else {
+        info->can_freeze = discards::mojom::CanFreeze::UNKNOWN;
+      }
+
       info->discard_reason = lifecycle_unit->GetDiscardReason();
       info->discard_count = lifecycle_unit->GetDiscardCount();
       info->utility_rank = rank++;
       const base::TimeTicks last_focused_time =
-          lifecycle_unit->GetLastFocusedTime();
+          lifecycle_unit->GetLastFocusedTimeTicks();
       const base::TimeDelta elapsed =
           (last_focused_time == base::TimeTicks::Max())
               ? base::TimeDelta()
@@ -154,20 +188,14 @@ class DiscardsDetailsProviderImpl : public discards::mojom::DetailsProvider {
       info->is_auto_discardable =
           tab_lifecycle_unit_external->IsAutoDiscardable();
       info->id = lifecycle_unit->GetID();
-      absl::optional<float> reactivation_score =
-          resource_coordinator::TabActivityWatcher::GetInstance()
-              ->CalculateReactivationScore(contents);
-      info->has_reactivation_score = reactivation_score.has_value();
-      if (info->has_reactivation_score)
-        info->reactivation_score = reactivation_score.value();
       info->site_engagement_score = GetSiteEngagementScore(contents);
       info->state_change_time =
           lifecycle_unit->GetStateChangeTime() - base::TimeTicks::UnixEpoch();
-      // TODO(crbug.com/876340): The focus is used to compute the page lifecycle
-      // state. This should be replaced with the actual page lifecycle state
-      // information from Blink, but this depends on implementing the passive
-      // state and plumbing it to the browser.
-      info->has_focus = lifecycle_unit->GetLastFocusedTime().is_max();
+      // TODO(crbug.com/41409267): The focus is used to compute the page
+      // lifecycle state. This should be replaced with the actual page lifecycle
+      // state information from Blink, but this depends on implementing the
+      // passive state and plumbing it to the browser.
+      info->has_focus = lifecycle_unit->GetLastFocusedTimeTicks().is_max();
 
       infos.push_back(std::move(info));
     }
@@ -182,24 +210,55 @@ class DiscardsDetailsProviderImpl : public discards::mojom::DetailsProvider {
     if (lifecycle_unit) {
       auto* tab_lifecycle_unit_external =
           lifecycle_unit->AsTabLifecycleUnitExternal();
-      if (tab_lifecycle_unit_external)
+      if (tab_lifecycle_unit_external) {
         tab_lifecycle_unit_external->SetAutoDiscardable(is_auto_discardable);
+      }
     }
     std::move(callback).Run();
   }
 
   void DiscardById(int32_t id,
+                   mojom::LifecycleUnitDiscardReason reason,
                    DiscardByIdCallback callback) override {
     auto* lifecycle_unit = GetLifecycleUnitById(id);
-    if (lifecycle_unit)
-      lifecycle_unit->Discard(mojom::LifecycleUnitDiscardReason::URGENT);
-    std::move(callback).Run();
+    if (lifecycle_unit) {
+      // Callback to do the discard with the memory estimate.
+      auto discard_callback = base::BindOnce(
+          [](int32_t id, mojom::LifecycleUnitDiscardReason reason,
+             DiscardByIdCallback post_discard_callback,
+             uint64_t memory_estimate) {
+            // Look up lifecycle_unit by id again, in case it's deleted while
+            // waiting.
+            auto* lifecycle_unit = GetLifecycleUnitById(id);
+            if (lifecycle_unit) {
+              lifecycle_unit->Discard(reason, memory_estimate);
+            }
+            std::move(post_discard_callback).Run();
+          },
+          id, reason, std::move(callback));
+
+      performance_manager::user_tuning::
+          GetDiscardedMemoryEstimateForWebContents(
+              lifecycle_unit->AsTabLifecycleUnitExternal()->GetWebContents(),
+              std::move(discard_callback));
+    }
+  }
+
+  void FreezeById(int32_t id) override {
+    auto* lifecycle_unit = GetLifecycleUnitById(id);
+    if (!lifecycle_unit) {
+      return;
+    }
+    auto* tab_lifecycle_unit = lifecycle_unit->AsTabLifecycleUnitExternal();
+    CHECK(tab_lifecycle_unit);
+    tab_lifecycle_unit->GetWebContents()->SetPageFrozen(true);
   }
 
   void LoadById(int32_t id) override {
     auto* lifecycle_unit = GetLifecycleUnitById(id);
-    if (lifecycle_unit)
+    if (lifecycle_unit) {
       lifecycle_unit->Load();
+    }
   }
 
   void Discard(DiscardCallback callback) override {
@@ -209,25 +268,23 @@ class DiscardsDetailsProviderImpl : public discards::mojom::DetailsProvider {
     std::move(callback).Run();
   }
 
-  void ToggleLocalStatePref(const std::string& pref_name) {
-    bool val = g_browser_process->local_state()->GetBoolean(pref_name);
-    g_browser_process->local_state()->SetBoolean(pref_name, !val);
-  }
-
-  void ToggleHighEfficiencyMode() override {
-    if (base::FeatureList::IsEnabled(
-            performance_manager::features::kHighEfficiencyModeAvailable)) {
-      ToggleLocalStatePref(
-          performance_manager::user_tuning::prefs::kHighEfficiencyModeEnabled);
-    }
-  }
-
   void ToggleBatterySaverMode() override {
-    if (base::FeatureList::IsEnabled(
-            performance_manager::features::kBatterySaverModeAvailable)) {
-      ToggleLocalStatePref(
-          performance_manager::user_tuning::prefs::kBatterySaverModeEnabled);
-    }
+    performance_manager::user_tuning::prefs::BatterySaverModeState state =
+        performance_manager::user_tuning::prefs::
+            GetCurrentBatterySaverModeState(g_browser_process->local_state());
+    g_browser_process->local_state()->SetInteger(
+        performance_manager::user_tuning::prefs::kBatterySaverModeState,
+        static_cast<int>(state == performance_manager::user_tuning::prefs::
+                                      BatterySaverModeState::kDisabled
+                             ? performance_manager::user_tuning::prefs::
+                                   BatterySaverModeState::kEnabled
+                             : performance_manager::user_tuning::prefs::
+                                   BatterySaverModeState::kDisabled));
+  }
+
+  void RefreshPerformanceTabCpuMeasurements() override {
+    performance_manager::user_tuning::PerformanceDetectionManager::GetInstance()
+        ->ForceTabCpuDataRefresh();
   }
 
  private:
@@ -238,19 +295,17 @@ class DiscardsDetailsProviderImpl : public discards::mojom::DetailsProvider {
 
 DiscardsUI::DiscardsUI(content::WebUI* web_ui)
     : ui::MojoWebUIController(web_ui) {
-  std::unique_ptr<content::WebUIDataSource> source(
-      content::WebUIDataSource::Create(chrome::kChromeUIDiscardsHost));
-
-  source->OverrideContentSecurityPolicy(
-      network::mojom::CSPDirectiveName::ScriptSrc,
-      "script-src chrome://resources chrome://test 'self';");
-
-  webui::SetupWebUIDataSource(
-      source.get(), base::make_span(kDiscardsResources, kDiscardsResourcesSize),
-      IDR_DISCARDS_DISCARDS_HTML);
-
   Profile* profile = Profile::FromWebUI(web_ui);
-  content::WebUIDataSource::Add(profile, source.release());
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      profile, chrome::kChromeUIDiscardsHost);
+
+  source->AddBoolean(
+      "isPerformanceInterventionDemoModeEnabled",
+      base::FeatureList::IsEnabled(
+          performance_manager::features::kPerformanceInterventionDemoMode));
+
+  webui::SetupWebUIDataSource(source, kDiscardsResources,
+                              IDR_DISCARDS_DISCARDS_HTML);
 
   content::URLDataSource::Add(
       profile, std::make_unique<FaviconSource>(
@@ -261,7 +316,7 @@ DiscardsUI::DiscardsUI(content::WebUI* web_ui)
 
 WEB_UI_CONTROLLER_TYPE_IMPL(DiscardsUI)
 
-DiscardsUI::~DiscardsUI() {}
+DiscardsUI::~DiscardsUI() = default;
 
 void DiscardsUI::BindInterface(
     mojo::PendingReceiver<discards::mojom::DetailsProvider> receiver) {

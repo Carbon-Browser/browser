@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "base/time/time.h"
 #include "media/base/media_export.h"
 #include "media/base/video_encoder.h"
+#include "media/base/video_frame_converter.h"
 #include "media/base/video_frame_pool.h"
 #include "third_party/libaom/source/libaom/aom/aom_encoder.h"
 #include "third_party/libaom/source/libaom/aom/aomcx.h"
@@ -27,10 +28,11 @@ class MEDIA_EXPORT Av1VideoEncoder : public VideoEncoder {
   // VideoDecoder implementation.
   void Initialize(VideoCodecProfile profile,
                   const Options& options,
+                  EncoderInfoCB info_cb,
                   OutputCB output_cb,
                   EncoderStatusCB done_cb) override;
   void Encode(scoped_refptr<VideoFrame> frame,
-              bool key_frame,
+              const EncodeOptions& encode_options,
               EncoderStatusCB done_cb) override;
   void ChangeOptions(const Options& options,
                      OutputCB output_cb,
@@ -39,10 +41,11 @@ class MEDIA_EXPORT Av1VideoEncoder : public VideoEncoder {
 
  private:
   base::TimeDelta GetFrameDuration(const VideoFrame& frame);
-  void DrainOutputs(int temporal_id,
-                    base::TimeDelta ts,
-                    gfx::ColorSpace color_space);
+  VideoEncoderOutput GetEncoderOutput(int temporal_id,
+                                      base::TimeDelta timestamp,
+                                      gfx::ColorSpace color_space) const;
   EncoderStatus::Or<int> AssignNextTemporalId(bool key_frame);
+  void UpdateEncoderColorSpace();
 
   using aom_codec_unique_ptr =
       std::unique_ptr<aom_codec_ctx_t, void (*)(aom_codec_ctx_t*)>;
@@ -60,11 +63,11 @@ class MEDIA_EXPORT Av1VideoEncoder : public VideoEncoder {
   gfx::Size originally_configured_size_;
   base::TimeDelta last_frame_timestamp_;
   gfx::ColorSpace last_frame_color_space_;
-  int temporal_svc_frame_index_ = 0;
+  unsigned int temporal_svc_frame_index_ = 0;
 
   VideoCodecProfile profile_ = VIDEO_CODEC_PROFILE_UNKNOWN;
   VideoFramePool frame_pool_;
-  std::vector<uint8_t> resize_buf_;
+  VideoFrameConverter frame_converter_;
   Options options_;
   OutputCB output_cb_;
 };

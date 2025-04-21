@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,11 @@
 #define REMOTING_PROTOCOL_JINGLE_SESSION_H_
 
 #include <string>
+#include <string_view>
 #include <vector>
 
+#include "base/location.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/rand_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/threading/thread_checker.h"
@@ -22,17 +23,19 @@
 #include "remoting/protocol/session_config.h"
 #include "remoting/signaling/iq_sender.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 class JingleSessionManager;
 class Transport;
 
-// JingleSessionManager and JingleSession implement the subset of the
-// Jingle protocol used in Chromoting. Instances of this class are
-// created by the JingleSessionManager.
+// JingleSessionManager and JingleSession implement the subset of the Jingle
+// protocol used in Chromoting. Instances of this class are created by the
+// JingleSessionManager.
 class JingleSession : public Session {
  public:
+  // The Close() override hides all the Close() overloads in the base class, so
+  // they need to be unhidden with a using statement.
+  using Session::Close;
   JingleSession(const JingleSession&) = delete;
   JingleSession& operator=(const JingleSession&) = delete;
 
@@ -40,11 +43,14 @@ class JingleSession : public Session {
 
   // Session interface.
   void SetEventHandler(Session::EventHandler* event_handler) override;
-  ErrorCode error() override;
+  ErrorCode error() const override;
   const std::string& jid() override;
   const SessionConfig& config() override;
+  const Authenticator& authenticator() const override;
   void SetTransport(Transport* transport) override;
-  void Close(protocol::ErrorCode error) override;
+  void Close(protocol::ErrorCode error,
+             std::string_view error_details,
+             const base::Location& error_location) override;
   void AddPlugin(SessionPlugin* plugin) override;
 
  private:
@@ -66,7 +72,8 @@ class JingleSession : public Session {
   void AcceptIncomingConnection(const JingleMessage& initiate_message);
 
   // Callback for Transport interface to send transport-info messages.
-  void SendTransportInfo(std::unique_ptr<jingle_xmpp::XmlElement> transport_info);
+  void SendTransportInfo(
+      std::unique_ptr<jingle_xmpp::XmlElement> transport_info);
 
   // Sends |message| to the peer. The session is closed if the send fails or no
   // response is received within a reasonable time. All other responses are
@@ -104,9 +111,13 @@ class JingleSession : public Session {
                        ReplyCallback reply_callback);
   void OnTerminate(std::unique_ptr<JingleMessage> message,
                    ReplyCallback reply_callback);
+  void OnAuthenticatorStateChangeAfterAccepted();
 
-  // Called from OnAccept() to initialize session config.
-  bool InitializeConfigFromDescription(const ContentDescription* description);
+  // Called from OnAccept() to initialize session config. If initialization
+  // fails, |error_details| will be updated.
+  bool InitializeConfigFromDescription(const ContentDescription* description,
+                                       std::string& error_details,
+                                       base::Location& error_location);
 
   // Called after the initial incoming authenticator message is processed.
   void ContinueAcceptIncomingConnection();
@@ -135,8 +146,6 @@ class JingleSession : public Session {
   // Returns the value of the ID attribute of the next outgoing set IQ with the
   // sequence ID encoded.
   std::string GetNextOutgoingId();
-
-  base::ThreadChecker thread_checker_;
 
   raw_ptr<JingleSessionManager> session_manager_;
   SignalingAddress peer_address_;
@@ -183,12 +192,13 @@ class JingleSession : public Session {
   std::vector<PendingMessage> pending_transport_info_;
 
   // The SessionPlugins attached to this session.
-  std::vector<SessionPlugin*> plugins_;
+  std::vector<raw_ptr<SessionPlugin>> plugins_;
+
+  THREAD_CHECKER(thread_checker_);
 
   base::WeakPtrFactory<JingleSession> weak_factory_{this};
 };
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol
 
 #endif  // REMOTING_PROTOCOL_JINGLE_SESSION_H_

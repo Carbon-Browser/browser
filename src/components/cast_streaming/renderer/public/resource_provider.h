@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,18 +7,15 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
-#include "components/cast_streaming/public/mojom/demuxer_connector.mojom.h"
-#include "components/cast_streaming/public/mojom/renderer_controller.mojom.h"
+#include "base/task/sequenced_task_runner.h"
+#include "components/cast_streaming/common/public/mojom/demuxer_connector.mojom.h"
+#include "components/cast_streaming/common/public/mojom/renderer_controller.mojom.h"
 #include "media/mojo/mojom/renderer.mojom.h"
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "url/gurl.h"
-
-namespace base {
-class SingleThreadTaskRunner;
-}  // namespace base
 
 namespace media {
 class Demuxer;
@@ -58,7 +55,7 @@ class ResourceProvider {
   // CastStreamingDemuxer instance in the case of a match.
   virtual std::unique_ptr<media::Demuxer> MaybeGetDemuxerOverride(
       const GURL& url,
-      scoped_refptr<base::SingleThreadTaskRunner> media_task_runner) = 0;
+      scoped_refptr<base::SequencedTaskRunner> media_task_runner) = 0;
 
   // Gets the receiver for this instance. To be used by the renderer-process
   // PlaybackCommandForwardingRenderer to receive playback commands from the

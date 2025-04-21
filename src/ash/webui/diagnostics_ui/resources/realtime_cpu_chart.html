@@ -1,4 +1,17 @@
 <style include="diagnostics-shared">
+  :host-context(body.jelly-enabled) #chart-legend {
+    font: var(--cros-annotation-1-font);
+  }
+
+  :host-context(body.jelly-enabled) g.tick text {
+    font: var(--cros-annotation-1-font);
+  }
+
+  :host-context(body.jelly-enabled) #legend-bar {
+    border-radius: 4px;
+    height: 4px;
+  }
+
   g.tick line {
     shape-rendering: crispEdges;
     stroke: var(--cros-separator-color);
@@ -29,23 +42,23 @@
   .user-area {
     fill: url(#user-gradient);
     shape-render: optimizeSpeed;
-    stroke: var(--cros-color-prominent);
+    stroke: var(--chart-user-line-color);
     stroke-width: 1.5px;
   }
 
   .system-area {
     fill: url(#system-gradient);
     shape-render: optimizeSpeed;
-    stroke: var(--cros-color-warning);
+    stroke: var(--chart-system-line-color);
     stroke-width: 1.5px;
   }
 
   .gradient-blue {
-    stop-color: var(--google-blue-50);
+    stop-color: var(--chart-user-gradient-color);
   }
 
   .gradient-yellow {
-    stop-color: var(--google-yellow-50);
+    stop-color: var(--chart-system-gradient-color);
   }
 
   .gradient-opacity {
@@ -78,6 +91,7 @@
     display: inline-block;
     padding-inline-start: 8px;
     text-align: end;
+    white-space: nowrap;
     width: 25px;
   }
 
@@ -90,29 +104,19 @@
   }
 
   #legend-bar.user {
-    background-color: var(--cros-color-prominent);
+    background-color: var(--chart-user-line-color);
   }
 
   #legend-bar.system {
-    background-color: var(--cros-color-warning);
-  }
-
-  @media (prefers-color-scheme: dark) {
-    .gradient-blue {
-      stop-color: rgba(var(--google-blue-300-rgb), 0.2);
-    }
-
-    .gradient-yellow {
-      stop-color: rgba(var(--google-yellow-300-rgb), 0.2);
-    }
+    background-color: var(--chart-system-line-color);
   }
 </style>
-<svg id="chart" width$="[[width_]]" height$="[[height_]]" aria-hidden="true">
+<svg id="chart" width$="[[width]]" height$="[[height]]" aria-hidden="true">
   <g id="chartGroup">
     <defs>
       <!-- Define chart area and boundaries -->
       <clipPath id="defClip">
-        <rect width$="[[graphWidth_]]" height$="[[graphHeight_]]"></rect>
+        <rect width$="[[graphWidth]]" height$="[[graphHeight]]"></rect>
       </clipPath>
       <!-- Chart area gradient -->
       <linearGradient id="user-gradient" gradientTransform="rotate(90)">
@@ -136,16 +140,16 @@
   <div id="legend-user" class="legend-group">
     <div id="legend-bar" class="user"></div>
     <label id="userLabel">[[i18n('cpuUsageUser')]]</label>
-    <span id="userData" aria-labelledby="userLabel">
-      [[getPercentageLabel_(user)]]
+    <span id="userData" aria-describedby="userLabel">
+      [[getPercentageLabel(user)]]
     </span>
   </div>
   <div class="divider"></div>
   <div id="legend-system" class="legend-group">
     <div id="legend-bar" class="system"></div>
     <label id="systemLabel">[[i18n('cpuUsageSystem')]]</label>
-    <span id="systemData" aria-labelledby="systemLabel">
-      [[getPercentageLabel_(system)]]
+    <span id="systemData" aria-describedby="systemLabel">
+      [[getPercentageLabel(system)]]
     </span>
   </div>
 </div>

@@ -1,11 +1,12 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_VIEWS_CONTROLS_PREFIX_DELEGATE_H_
 #define UI_VIEWS_CONTROLS_PREFIX_DELEGATE_H_
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
+
 #include "ui/views/view.h"
 #include "ui/views/views_export.h"
 
@@ -19,10 +20,10 @@ class VIEWS_EXPORT PrefixDelegate {
 
   // Returns the row of the currently selected item, or -1 if no item is
   // selected.
-  virtual absl::optional<size_t> GetSelectedRow() = 0;
+  virtual std::optional<size_t> GetSelectedRow() = 0;
 
   // Sets the selection to the specified row.
-  virtual void SetSelectedRow(absl::optional<size_t> row) = 0;
+  virtual void SetSelectedRow(std::optional<size_t> row) = 0;
 
   // Returns the item at the specified row.
   virtual std::u16string GetTextForRow(size_t row) = 0;

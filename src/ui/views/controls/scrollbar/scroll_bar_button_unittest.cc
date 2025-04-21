@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include "base/test/task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "ui/display/test/scoped_screen_override.h"
 #include "ui/display/test/test_screen.h"
 #include "ui/events/base_event_utils.h"
 #include "ui/events/event.h"
@@ -41,11 +40,15 @@ class ScrollBarButtonTest : public testing::Test {
             base::BindRepeating(&MockButtonCallback::ButtonPressed,
                                 base::Unretained(&callback_)),
             ScrollBarButton::Type::kLeft,
-            task_environment_.GetMockTickClock())) {}
+            task_environment_.GetMockTickClock())) {
+    display::Screen::SetScreenInstance(&test_screen_);
+  }
 
   ScrollBarButtonTest(const ScrollBarButtonTest&) = delete;
   ScrollBarButtonTest& operator=(const ScrollBarButtonTest&) = delete;
-  ~ScrollBarButtonTest() override = default;
+  ~ScrollBarButtonTest() override {
+    display::Screen::SetScreenInstance(nullptr);
+  }
 
  protected:
   testing::StrictMock<MockButtonCallback>& callback() { return callback_; }
@@ -59,7 +62,6 @@ class ScrollBarButtonTest : public testing::Test {
   base::test::TaskEnvironment task_environment_{
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   display::test::TestScreen test_screen_;
-  display::test::ScopedScreenOverride screen_override{&test_screen_};
 
   testing::StrictMock<MockButtonCallback> callback_;
   const std::unique_ptr<Button> button_;
@@ -79,18 +81,20 @@ TEST_F(ScrollBarButtonTest, CallbackFiresOnMouseDown) {
   EXPECT_CALL(callback(), ButtonPressed());
 
   // By default the button should notify its callback on mouse release.
-  button()->OnMousePressed(ui::MouseEvent(
-      ui::ET_MOUSE_PRESSED, gfx::Point(), gfx::Point(), ui::EventTimeForNow(),
-      ui::EF_LEFT_MOUSE_BUTTON, ui::EF_LEFT_MOUSE_BUTTON));
+  button()->OnMousePressed(
+      ui::MouseEvent(ui::EventType::kMousePressed, gfx::Point(), gfx::Point(),
+                     ui::EventTimeForNow(), ui::EF_LEFT_MOUSE_BUTTON,
+                     ui::EF_LEFT_MOUSE_BUTTON));
 }
 
 TEST_F(ScrollBarButtonTest, CallbackFiresMultipleTimesMouseHeldDown) {
   EXPECT_CALL(callback(), ButtonPressed()).Times(AtLeast(2));
 
   // By default the button should notify its callback on mouse release.
-  button()->OnMousePressed(ui::MouseEvent(
-      ui::ET_MOUSE_PRESSED, gfx::Point(), gfx::Point(), ui::EventTimeForNow(),
-      ui::EF_LEFT_MOUSE_BUTTON, ui::EF_LEFT_MOUSE_BUTTON));
+  button()->OnMousePressed(
+      ui::MouseEvent(ui::EventType::kMousePressed, gfx::Point(), gfx::Point(),
+                     ui::EventTimeForNow(), ui::EF_LEFT_MOUSE_BUTTON,
+                     ui::EF_LEFT_MOUSE_BUTTON));
 
   AdvanceTime(RepeatController::GetInitialWaitForTesting() * 10);
 }
@@ -99,17 +103,19 @@ TEST_F(ScrollBarButtonTest, CallbackStopsFiringAfterMouseReleased) {
   EXPECT_CALL(callback(), ButtonPressed()).Times(AtLeast(2));
 
   // By default the button should notify its callback on mouse release.
-  button()->OnMousePressed(ui::MouseEvent(
-      ui::ET_MOUSE_PRESSED, gfx::Point(), gfx::Point(), ui::EventTimeForNow(),
-      ui::EF_LEFT_MOUSE_BUTTON, ui::EF_LEFT_MOUSE_BUTTON));
+  button()->OnMousePressed(
+      ui::MouseEvent(ui::EventType::kMousePressed, gfx::Point(), gfx::Point(),
+                     ui::EventTimeForNow(), ui::EF_LEFT_MOUSE_BUTTON,
+                     ui::EF_LEFT_MOUSE_BUTTON));
 
   AdvanceTime(RepeatController::GetInitialWaitForTesting() * 10);
 
   testing::Mock::VerifyAndClearExpectations(&callback());
 
-  button()->OnMouseReleased(ui::MouseEvent(
-      ui::ET_MOUSE_RELEASED, gfx::Point(), gfx::Point(), ui::EventTimeForNow(),
-      ui::EF_LEFT_MOUSE_BUTTON, ui::EF_LEFT_MOUSE_BUTTON));
+  button()->OnMouseReleased(
+      ui::MouseEvent(ui::EventType::kMouseReleased, gfx::Point(), gfx::Point(),
+                     ui::EventTimeForNow(), ui::EF_LEFT_MOUSE_BUTTON,
+                     ui::EF_LEFT_MOUSE_BUTTON));
 
   AdvanceTime(RepeatController::GetInitialWaitForTesting() * 10);
 
@@ -120,9 +126,10 @@ TEST_F(ScrollBarButtonTest, CallbackStopsFiringAfterMouseCaptureReleased) {
   EXPECT_CALL(callback(), ButtonPressed()).Times(AtLeast(2));
 
   // By default the button should notify its callback on mouse release.
-  button()->OnMousePressed(ui::MouseEvent(
-      ui::ET_MOUSE_PRESSED, gfx::Point(), gfx::Point(), ui::EventTimeForNow(),
-      ui::EF_LEFT_MOUSE_BUTTON, ui::EF_LEFT_MOUSE_BUTTON));
+  button()->OnMousePressed(
+      ui::MouseEvent(ui::EventType::kMousePressed, gfx::Point(), gfx::Point(),
+                     ui::EventTimeForNow(), ui::EF_LEFT_MOUSE_BUTTON,
+                     ui::EF_LEFT_MOUSE_BUTTON));
 
   AdvanceTime(RepeatController::GetInitialWaitForTesting() * 10);
 

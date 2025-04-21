@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,15 +11,14 @@
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "gpu/command_buffer/common/constants.h"
-#include "gpu/command_buffer/common/gpu_memory_buffer_support.h"
 #include "gpu/command_buffer/common/mailbox.h"
+#include "gpu/command_buffer/service/dawn_caching_interface.h"
 #include "gpu/command_buffer/service/gl_context_virtual.h"
 #include "gpu/command_buffer/service/gl_state_restorer_impl.h"
 #include "gpu/command_buffer/service/logger.h"
-#include "gpu/command_buffer/service/mailbox_manager.h"
 #include "gpu/command_buffer/service/memory_tracking.h"
+#include "gpu/command_buffer/service/scheduler.h"
 #include "gpu/command_buffer/service/service_utils.h"
-#include "gpu/command_buffer/service/sync_point_manager.h"
 #include "gpu/command_buffer/service/transfer_buffer_manager.h"
 #include "gpu/command_buffer/service/webgpu_decoder.h"
 #include "gpu/config/gpu_crash_keys.h"
@@ -32,7 +31,6 @@
 #include "ui/gl/gl_context.h"
 #include "ui/gl/gl_implementation.h"
 #include "ui/gl/gl_switches.h"
-#include "ui/gl/gl_workarounds.h"
 #include "ui/gl/init/gl_factory.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -71,7 +69,7 @@ gpu::ContextResult WebGPUCommandBufferStub::Initialize(
     const mojom::CreateCommandBufferParams& init_params,
     base::UnsafeSharedMemoryRegion shared_state_shm) {
 #if BUILDFLAG(IS_FUCHSIA)
-  // TODO(crbug.com/707031): Implement this.
+  // TODO(crbug.com/40513405): Implement this.
   NOTIMPLEMENTED();
   LOG(ERROR) << "ContextResult::kFatalFailure: no fuchsia support";
   return gpu::ContextResult::kFatalFailure;
@@ -84,12 +82,6 @@ gpu::ContextResult WebGPUCommandBufferStub::Initialize(
 
   if (share_command_buffer_stub) {
     LOG(ERROR) << "Using a share group is not supported with WebGPUDecoder";
-    return ContextResult::kFatalFailure;
-  }
-
-  if (surface_handle_ != kNullSurfaceHandle) {
-    LOG(ERROR) << "ContextResult::kFatalFailure: "
-                  "WebGPUInterface clients must render offscreen.";
     return ContextResult::kFatalFailure;
   }
 
@@ -114,16 +106,20 @@ gpu::ContextResult WebGPUCommandBufferStub::Initialize(
 
   memory_tracker_ = CreateMemoryTracker();
 
+  webgpu::DawnCacheOptions dawn_cache_options = {
+      manager->dawn_caching_interface_factory(),
+      channel_->GetCacheHandleForType(gpu::GpuDiskCacheType::kDawnWebGPU)};
+
   command_buffer_ =
       std::make_unique<CommandBufferService>(this, memory_tracker_.get());
   std::unique_ptr<webgpu::WebGPUDecoder> decoder(webgpu::WebGPUDecoder::Create(
       this, command_buffer_.get(), manager->shared_image_manager(),
       memory_tracker_.get(), manager->outputter(), manager->gpu_preferences(),
-      std::move(shared_context_state)));
+      std::move(shared_context_state), dawn_cache_options, channel_));
 
-  sync_point_client_state_ =
-      channel_->sync_point_manager()->CreateSyncPointClientState(
-          CommandBufferNamespace::GPU_IO, command_buffer_id_, sequence_id_);
+  scoped_sync_point_client_state_ =
+      channel_->scheduler()->CreateSyncPointClientState(
+          sequence_id_, CommandBufferNamespace::GPU_IO, command_buffer_id_);
 
   result = decoder->Initialize(manager->gpu_feature_info());
   if (result != gpu::ContextResult::kSuccess) {
@@ -160,6 +156,8 @@ MemoryTracker* WebGPUCommandBufferStub::GetContextGroupMemoryTracker() const {
   return nullptr;
 }
 
-void WebGPUCommandBufferStub::OnSwapBuffers(uint64_t swap_id, uint32_t flags) {}
+base::WeakPtr<CommandBufferStub> WebGPUCommandBufferStub::AsWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
+}
 
 }  // namespace gpu

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,8 @@ class EnrollmentRequisitionManager {
   static const char kNoRequisition[];
   static const char kRemoraRequisition[];
   static const char kSharkRequisition[];
-  static const char kRialtoRequisition[];
+  static const char kDemoRequisition[];
+  static const char kCuttlefishRequisition[];
 
   // Initializes requisition settings at OOBE with values from VPD.
   static void Initialize();
@@ -35,6 +36,12 @@ class EnrollmentRequisitionManager {
   static void SetDeviceRequisition(const std::string& requisition);
   static bool IsRemoraRequisition();
   static bool IsSharkRequisition();
+
+  // If the current device extends the CFM Overlay or has Remora bit set
+  static bool IsMeetDevice();
+
+  // If the current device is a Cuttlefish device.
+  static bool IsCuttlefishDevice();
 
   // Gets/Sets the sub organization.
   static std::string GetSubOrganization();

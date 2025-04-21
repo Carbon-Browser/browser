@@ -1,30 +1,44 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // https://gpuweb.github.io/gpuweb/
 
 [
-    Exposed(Window WebGPU, DedicatedWorker WebGPU),
+    Exposed=(Window, Worker),
     SecureContext
 ] interface GPURenderPassEncoder {
-    void setViewport(float x, float y,
-                     float width, float height,
-                     float minDepth, float maxDepth);
+    [NoAllocDirectCall] void setViewport(float x, float y,
+                                         float width, float height,
+                                         float minDepth, float maxDepth);
 
-    void setScissorRect(GPUIntegerCoordinate x, GPUIntegerCoordinate y,
-                        GPUIntegerCoordinate width, GPUIntegerCoordinate height);
+    [NoAllocDirectCall] void setScissorRect(GPUIntegerCoordinate x,
+                                            GPUIntegerCoordinate y,
+                                            GPUIntegerCoordinate width,
+                                            GPUIntegerCoordinate height);
 
     [RaisesException] void setBlendConstant(GPUColor color);
-    void setStencilReference(GPUStencilValue reference);
+    [NoAllocDirectCall] void setStencilReference(GPUStencilValue reference);
 
     void executeBundles(sequence<GPURenderBundle> bundles);
-    void beginOcclusionQuery(GPUSize32 queryIndex);
-    void endOcclusionQuery();
-    void writeTimestamp(GPUQuerySet querySet, GPUSize32 queryIndex);
+    [NoAllocDirectCall] void beginOcclusionQuery(GPUSize32 queryIndex);
+    [NoAllocDirectCall] void endOcclusionQuery();
+    [RaisesException, NoAllocDirectCall] void writeTimestamp(GPUQuerySet querySet, GPUSize32 queryIndex);
 
-    void end();
-    void endPass(); // TODO(dawn:1286): Remove after deprecation period.
+    [RuntimeEnabled=WebGPUExperimentalFeatures, NoAllocDirectCall, RaisesException]
+    void multiDrawIndirect(GPUBuffer indirectBuffer,
+                           GPUSize64 indirectOffset,
+                           GPUSize32 maxDrawCount,
+                           optional GPUBuffer drawCountBuffer,
+                           optional GPUSize64 drawCountBufferOffset = 0);
+    [RuntimeEnabled=WebGPUExperimentalFeatures, NoAllocDirectCall, RaisesException]
+    void multiDrawIndexedIndirect(GPUBuffer indirectBuffer,
+                                  GPUSize64 indirectOffset,
+                                  GPUSize32 maxDrawCount,
+                                  optional GPUBuffer drawCountBuffer,
+                                  optional GPUSize64 drawCountBufferOffset = 0);
+
+    [NoAllocDirectCall] void end();
 };
 GPURenderPassEncoder includes GPUObjectBase;
 GPURenderPassEncoder includes GPUProgrammablePassEncoder;

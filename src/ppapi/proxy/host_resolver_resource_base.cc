@@ -1,10 +1,10 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ppapi/proxy/host_resolver_resource_base.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "ppapi/c/pp_errors.h"
 #include "ppapi/proxy/error_conversion.h"
 #include "ppapi/proxy/net_address_resource.h"

@@ -31,9 +31,9 @@
 
 namespace blink {
 
-UnicodeRangeSet::UnicodeRangeSet(const Vector<UnicodeRange>& ranges)
-    : ranges_(ranges) {
-  if (ranges_.IsEmpty())
+UnicodeRangeSet::UnicodeRangeSet(HeapVector<UnicodeRange>&& ranges)
+    : ranges_(std::move(ranges)) {
+  if (ranges_.empty())
     return;
 
   std::sort(ranges_.begin(), ranges_.end());
@@ -58,13 +58,13 @@ UnicodeRangeSet::UnicodeRangeSet(const Vector<UnicodeRange>& ranges)
 bool UnicodeRangeSet::Contains(UChar32 c) const {
   if (IsEntireRange())
     return true;
-  Vector<UnicodeRange>::const_iterator it =
+  HeapVector<UnicodeRange>::const_iterator it =
       std::lower_bound(ranges_.begin(), ranges_.end(), c);
   return it != ranges_.end() && it->Contains(c);
 }
 
 bool UnicodeRangeSet::IntersectsWith(const String& text) const {
-  if (text.IsEmpty())
+  if (text.empty())
     return false;
   if (IsEntireRange())
     return true;

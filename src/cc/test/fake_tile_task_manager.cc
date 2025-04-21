@@ -1,9 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "cc/test/fake_tile_task_manager.h"
 
+#include <utility>
 
 namespace cc {
 
@@ -28,10 +29,16 @@ void FakeTileTaskManagerImpl::CheckForCompletedTasks() {
     TileTask* tile_task = static_cast<TileTask*>(task.get());
     tile_task->OnTaskCompleted();
     tile_task->DidComplete();
+    if (auto& dependent = tile_task->external_dependent()) {
+      std::move(dependent)->ExternalDependencyCompleted();
+    }
   }
 
   completed_tasks_.clear();
 }
+
+void FakeTileTaskManagerImpl::ExternalDependencyCompletedForTask(
+    scoped_refptr<TileTask>) {}
 
 void FakeTileTaskManagerImpl::Shutdown() {}
 

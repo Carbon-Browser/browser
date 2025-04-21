@@ -18,10 +18,14 @@
 #include "components/adblock/content/browser/content_security_policy_injector_impl.h"
 
 #include <memory>
+#include <set>
+#include <string_view>
 
 #include "base/memory/scoped_refptr.h"
 #include "base/test/mock_callback.h"
+#include "components/adblock/content/browser/request_initiator.h"
 #include "components/adblock/content/browser/test/mock_frame_hierarchy_builder.h"
+#include "components/adblock/core/subscription/subscription_service.h"
 #include "components/adblock/core/subscription/test/mock_subscription_collection.h"
 #include "components/adblock/core/subscription/test/mock_subscription_service.h"
 #include "content/public/browser/render_process_host.h"
@@ -32,13 +36,47 @@
 #include "services/network/public/mojom/content_security_policy.mojom-forward.h"
 #include "services/network/public/mojom/parsed_headers.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "url/gurl.h"
 
 namespace adblock {
 
 using testing::_;
+using testing::Ref;
 using testing::Return;
 using MockResponseCallback =
     base::MockCallback<InsertContentSecurityPolicyHeadersCallback>;
+
+class FakeSubscriptionCollection : public MockSubscriptionCollection {
+ public:
+  explicit FakeSubscriptionCollection(
+      std::set<std::string> injections,
+      GURL expected_request_url,
+      std::vector<GURL> expected_frame_hierarchy)
+      : injections_(std::move(injections)),
+        expected_request_url_(std::move(expected_request_url)),
+        expected_frame_hierarchy_(std::move(expected_frame_hierarchy)) {}
+
+  std::set<std::string_view> GetCspInjections(
+      const GURL& request_url,
+      const std::vector<GURL>& frame_hierarchy) const override {
+    EXPECT_EQ(request_url, expected_request_url_);
+    EXPECT_EQ(frame_hierarchy, expected_frame_hierarchy_);
+    // The data |injection_views| points to will be alive for the lifetime of
+    // this object but will then go out of scope. This simulates the underlying
+    // Subscriptions being updated or removed during the test, as Subscriptions
+    // are only guaranteed to be kept alive during the lifetime of current
+    // Snapshot.
+    std::set<std::string_view> injection_views;
+    for (const auto& injection : injections_) {
+      injection_views.insert(injection);
+    }
+    return injection_views;
+  }
+
+  std::set<std::string> injections_;
+  GURL expected_request_url_;
+  std::vector<GURL> expected_frame_hierarchy_;
+};
 
 class AdblockContentSecurityPolicyInjectorImplTest
     : public content::RenderViewHostTestHarness {
@@ -53,24 +91,31 @@ class AdblockContentSecurityPolicyInjectorImplTest
         &subscription_service_, std::move(frame_hierarchy_builder));
   }
 
+  void TearDown() override {
+    // Avoid dangling pointers during destruction.
+    frame_hierarchy_builder_ = nullptr;
+    content::RenderViewHostTestHarness::TearDown();
+  }
+
   void FrameHierarchyWillBeBuilt() {
     EXPECT_CALL(*frame_hierarchy_builder_,
-                FindRenderFrameHost(main_rfh()->GetProcess()->GetID(),
-                                    main_rfh()->GetRoutingID()))
-        .WillOnce(testing::Return(main_rfh()));
-    EXPECT_CALL(*frame_hierarchy_builder_, BuildFrameHierarchy(main_rfh()))
+                BuildFrameHierarchy(RequestInitiator(main_rfh())))
         .WillOnce(Return(kFrameHierarchy));
   }
 
-  void SnapshotWillContainInjection(std::string injection) {
+  void SnapshotWillContainInjections(std::set<std::string> injections) {
     FrameHierarchyWillBeBuilt();
     // SubscriptionService will be asked for the current snapshot...
     EXPECT_CALL(subscription_service_, GetCurrentSnapshot())
-        .WillOnce([this, injection]() {
-          // ... and testee will query the snapshot for CSP injection:
-          auto snapshot = std::make_unique<MockSubscriptionCollection>();
-          EXPECT_CALL(*snapshot, GetCspInjection(kRequestUrl, kFrameHierarchy))
-              .WillOnce(Return(injection));
+        .WillOnce([this, injections]() {
+          // |injections| are captured by copy, they will be alive for the
+          // duration of the lifetime of |subscription_collection| but not
+          // longer.
+          auto subscription_collection =
+              std::make_unique<FakeSubscriptionCollection>(
+                  std::move(injections), kRequestUrl, kFrameHierarchy);
+          SubscriptionService::Snapshot snapshot;
+          snapshot.push_back(std::move(subscription_collection));
           return snapshot;
         });
   }
@@ -86,17 +131,14 @@ class AdblockContentSecurityPolicyInjectorImplTest
   const GURL kRequestUrl{"https://request.com/resource.txt"};
   const std::vector<GURL> kFrameHierarchy{GURL{"https://test.com/"}};
   MockSubscriptionService subscription_service_;
-  MockFrameHierarchyBuilder* frame_hierarchy_builder_;
+  raw_ptr<MockFrameHierarchyBuilder> frame_hierarchy_builder_;
   std::unique_ptr<ContentSecurityPolicyInjectorImpl> csp_injector_;
 };
 
 TEST_F(AdblockContentSecurityPolicyInjectorImplTest,
        NoHeaderAddedWhenNoCspInjectionFound) {
-  // SubscriptionService is ready.
-  EXPECT_CALL(subscription_service_, IsInitialized()).WillOnce(Return(true));
-
-  // An empty injection string means no CSP filter found.
-  SnapshotWillContainInjection("");
+  // An empty injection set means no CSP filter found.
+  SnapshotWillContainInjections({});
 
   MockResponseCallback callback;
 
@@ -104,7 +146,7 @@ TEST_F(AdblockContentSecurityPolicyInjectorImplTest,
   auto headers = net::HttpResponseHeaders::TryToCreate("");
   CHECK(headers);
   csp_injector_->InsertContentSecurityPolicyHeadersIfApplicable(
-      kRequestUrl, main_rfh()->GetGlobalId(), headers, callback.Get());
+      kRequestUrl, RequestInitiator(main_rfh()), headers, callback.Get());
 
   // Callback is ran via posted task, with no parsed headers because headers
   // were not modified.
@@ -115,14 +157,9 @@ TEST_F(AdblockContentSecurityPolicyInjectorImplTest,
   EXPECT_FALSE(headers->HasHeader("Content-Security-Policy"));
 }
 
-// TODO: Enable CSP injection back after DPD-1263 done
-/*
 TEST_F(AdblockContentSecurityPolicyInjectorImplTest,
        HeaderAddedWhenCspInjectionFound) {
-  // SubscriptionService is ready.
-  EXPECT_CALL(subscription_service_, IsInitialized()).WillOnce(Return(true));
-
-  SnapshotWillContainInjection("script-src 'none'");
+  SnapshotWillContainInjections({"script-src 'none'"});
 
   MockResponseCallback callback;
 
@@ -130,7 +167,7 @@ TEST_F(AdblockContentSecurityPolicyInjectorImplTest,
   auto headers = net::HttpResponseHeaders::TryToCreate("");
   CHECK(headers);
   csp_injector_->InsertContentSecurityPolicyHeadersIfApplicable(
-      kRequestUrl, main_rfh()->GetGlobalId(), headers, callback.Get());
+      kRequestUrl, RequestInitiator(main_rfh()), headers, callback.Get());
 
   // Callback is ran via posted task with correctly parsed headers.
   EXPECT_CALL(callback, Run(_))
@@ -145,92 +182,37 @@ TEST_F(AdblockContentSecurityPolicyInjectorImplTest,
 }
 
 TEST_F(AdblockContentSecurityPolicyInjectorImplTest,
-       JobDeferredWhenSubscriptionServiceNotInitialized) {
-  // SubscriptionService is not ready yet.
-  EXPECT_CALL(subscription_service_, IsInitialized()).WillOnce(Return(false));
-  // A job will be deferred, we save it for later.
-  base::OnceClosure deferred_task;
-  EXPECT_CALL(subscription_service_, RunWhenInitialized(_))
-      .WillOnce([&](auto task) { deferred_task = std::move(task); });
+       HeadersAddedWhenMultipleCspInjectionFound) {
+  SnapshotWillContainInjections({"script-src 'first'", "script-src 'second'"});
 
-  // Callback will not be called right away, since the job is deferred.
   MockResponseCallback callback;
-  EXPECT_CALL(callback, Run(_)).Times(0);
 
   // Call testee:
   auto headers = net::HttpResponseHeaders::TryToCreate("");
   CHECK(headers);
   csp_injector_->InsertContentSecurityPolicyHeadersIfApplicable(
-      kRequestUrl, main_rfh()->GetGlobalId(), headers, callback.Get());
-
-  // Despite running the task queue, there's no progress yet.
-  task_environment()->RunUntilIdle();
-
-  // Once initialized, the following will happen:
-  SnapshotWillContainInjection("script-src 'none'");
-
-  // SubscriptionService becomes initialized and runs the deferred task.
-  EXPECT_CALL(subscription_service_, IsInitialized()).WillOnce(Return(true));
-  std::move(deferred_task).Run();
+      kRequestUrl, RequestInitiator(main_rfh()), headers, callback.Get());
 
   // Callback is ran via posted task with correctly parsed headers.
   EXPECT_CALL(callback, Run(_))
       .WillOnce([&](network::mojom::ParsedHeadersPtr parsed_headers) {
-        AssertParsedHeadersContainScriptSrcNone(parsed_headers);
+        ASSERT_EQ(parsed_headers->content_security_policy.size(), 2u);
+        EXPECT_EQ(
+            parsed_headers->content_security_policy[0]
+                ->raw_directives[network::mojom::CSPDirectiveName::ScriptSrc],
+            "'first'");
+        EXPECT_EQ(
+            parsed_headers->content_security_policy[1]
+                ->raw_directives[network::mojom::CSPDirectiveName::ScriptSrc],
+            "'second'");
       });
   task_environment()->RunUntilIdle();
 
   // The header was injected.
   EXPECT_TRUE(
-      headers->HasHeaderValue("Content-Security-Policy", "script-src 'none'"));
-}
-*/
-TEST_F(AdblockContentSecurityPolicyInjectorImplTest,
-       NoOperationWhenRenderFrameHostDied) {
-  // SubscriptionService is not ready yet.
-  EXPECT_CALL(subscription_service_, IsInitialized()).WillOnce(Return(false));
-  // A job will be deferred, we save it for later.
-  base::OnceClosure deferred_task;
-  EXPECT_CALL(subscription_service_, RunWhenInitialized(_))
-      .WillOnce([&](auto task) { deferred_task = std::move(task); });
-
-  // Callback will not be called right away, since the job is deferred.
-  MockResponseCallback callback;
-  EXPECT_CALL(callback, Run(_)).Times(0);
-
-  // Call testee:
-  auto headers = net::HttpResponseHeaders::TryToCreate("");
-  CHECK(headers);
-  csp_injector_->InsertContentSecurityPolicyHeadersIfApplicable(
-      kRequestUrl, main_rfh()->GetGlobalId(), headers, callback.Get());
-
-  // Despite running the task queue, there's no progress yet.
-  task_environment()->RunUntilIdle();
-
-  // It will be impossible to build a frame hierarchy once RenderFrameHost dies.
-  EXPECT_CALL(*frame_hierarchy_builder_,
-              FindRenderFrameHost(main_rfh()->GetProcess()->GetID(),
-                                  main_rfh()->GetRoutingID()))
-      .WillOnce(Return(nullptr));
-  EXPECT_CALL(*frame_hierarchy_builder_, BuildFrameHierarchy(_)).Times(0);
-
-  // RenderFrameHost dies.
-  DeleteContents();
-
-  // Without a frame hierarchy, no point in querying subscriptions.
-  EXPECT_CALL(subscription_service_, GetCurrentSnapshot()).Times(0);
-
-  // SubscriptionService becomes initialized and runs the deferred task.
-  EXPECT_CALL(subscription_service_, IsInitialized()).WillOnce(Return(true));
-
-  // Callback is ran via posted task, with no parsed headers because headers
-  // were not modified.
-  EXPECT_CALL(callback, Run(testing::IsFalse())).Times(1);
-  std::move(deferred_task).Run();
-  task_environment()->RunUntilIdle();
-
-  // No header was injected.
-  EXPECT_FALSE(headers->HasHeader("Content-Security-Policy"));
+      headers->HasHeaderValue("Content-Security-Policy", "script-src 'first'"));
+  EXPECT_TRUE(headers->HasHeaderValue("Content-Security-Policy",
+                                      "script-src 'second'"));
 }
 
 }  // namespace adblock

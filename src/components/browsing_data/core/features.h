@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2024 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,17 +7,13 @@
 
 #include "base/feature_list.h"
 
-namespace browsing_data {
-namespace features {
+namespace browsing_data::features {
 
-// Enable removal of all third-party cookies and site data.
-extern const base::Feature kEnableRemovingAllThirdPartyCookies;
+// Pipes down the BrowsingDataModel to power site settings on Android.
+#if BUILDFLAG(IS_ANDROID)
+BASE_DECLARE_FEATURE(kBrowsingDataModel);
+#endif  // BUILDFLAG(IS_ANDROID)
 
-// Enable BrowsingDataLifetimeManager that periodically delete browsing data as
-// defined by the BrowsingDataLifetime policy.
-extern const base::Feature kEnableBrowsingDataLifetimeManager;
-
-}  // namespace features
-}  // namespace browsing_data
+}  // namespace browsing_data::features
 
 #endif  // COMPONENTS_BROWSING_DATA_CORE_FEATURES_H_

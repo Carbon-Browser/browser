@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,19 @@
 #include <string>
 
 namespace language {
+
+enum class OverrideLanguageModel {
+  DEFAULT,
+  GEO,
+};
+
+// Returns whether Translate triggering should be overridden on English pages in
+// India.
+bool OverrideTranslateTriggerInIndia();
+
+// Returns which language model to use depending on the state of all Language
+// experiments.
+OverrideLanguageModel GetOverrideLanguageModel();
 
 // Some languages like Norwegian and Filipino use different codes within Chrome
 // and the Translate service (ie "nb" vs "no" and "fil" vs "tl").

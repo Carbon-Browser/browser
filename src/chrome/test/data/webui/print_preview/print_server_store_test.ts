@@ -1,37 +1,25 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import {PrintServerStore, PrintServerStoreEventType} from 'chrome://print/print_preview.js';
-import {assert} from 'chrome://resources/js/assert.m.js';
-import {addWebUIListener, removeWebUIListener, WebUIListener, webUIListenerCallback} from 'chrome://resources/js/cr.m.js';
-
+import type {WebUiListener} from 'chrome://resources/js/cr.js';
+import {addWebUiListener, removeWebUiListener, webUIListenerCallback} from 'chrome://resources/js/cr.js';
 import {assertDeepEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {eventToPromise} from 'chrome://webui-test/test_util.js';
 
-import {NativeLayerCrosStub, setNativeLayerCrosInstance} from './native_layer_cros_stub.js';
+import type {NativeLayerCrosStub} from './native_layer_cros_stub.js';
+import {setNativeLayerCrosInstance} from './native_layer_cros_stub.js';
 
-const print_server_store_test = {
-  suiteName: 'PrintServerStoreTest',
-  TestNames: {
-    PrintServersChanged: 'print servers changed',
-    GetPrintServersConfig: 'get print servers config',
-    ServerPrintersLoading: 'server printers loading',
-    ChoosePrintServers: 'choose print servers',
-  },
-};
-
-Object.assign(window, {print_server_store_test: print_server_store_test});
-
-suite(print_server_store_test.suiteName, function() {
+suite('PrintServerStoreTest', function() {
   let printServerStore: PrintServerStore;
 
   let nativeLayerCros: NativeLayerCrosStub;
 
-  let listeners: WebUIListener[];
+  let listeners: WebUiListener[];
 
   function addListener(eventName: string, callback: (p: any) => void) {
-    listeners.push(addWebUIListener(eventName, callback));
+    listeners.push(addWebUiListener(eventName, callback));
   }
 
   setup(function() {
@@ -41,14 +29,13 @@ suite(print_server_store_test.suiteName, function() {
   });
 
   teardown(function() {
-    listeners.forEach(removeWebUIListener);
+    listeners.forEach(removeWebUiListener);
   });
 
   // Tests that print servers with the selected name are selected by ID is the
   // native layer choosePrintServers is called.
   test(
-      assert(print_server_store_test.TestNames.ChoosePrintServers),
-      async () => {
+      'ChoosePrintServers', async () => {
         const printServers = [
           {id: 'user-server1', name: 'Print Server 1'},
           {id: 'device-server2', name: 'Print Server 2'},
@@ -73,8 +60,7 @@ suite(print_server_store_test.suiteName, function() {
   // Tests that print servers and fetching mode are updated when
   // PRINT_SERVERS_CHANGED occurs.
   test(
-      assert(print_server_store_test.TestNames.PrintServersChanged),
-      async () => {
+      'PrintServersChanged', async () => {
         const printServers = [
           {id: 'server1', name: 'Print Server 1'},
           {id: 'server2', name: 'Print Server 2'},
@@ -100,8 +86,7 @@ suite(print_server_store_test.suiteName, function() {
   // getPrintServersConfig is called and an update to the print servers config
   // occurs.
   test(
-      assert(print_server_store_test.TestNames.GetPrintServersConfig),
-      async () => {
+      'GetPrintServersConfig', async () => {
         const printServers = [
           {id: 'server1', name: 'Print Server 1'},
           {id: 'server2', name: 'Print Server 2'},
@@ -125,16 +110,13 @@ suite(print_server_store_test.suiteName, function() {
 
   // Tests that an event is dispatched are updated when SERVER_PRINTERS_LOADING
   // is called.
-  test(
-      assert(print_server_store_test.TestNames.ServerPrintersLoading),
-      async () => {
-        const whenServerPrintersLoadedEvent = eventToPromise(
-            PrintServerStoreEventType.SERVER_PRINTERS_LOADING,
-            printServerStore);
+  test('ServerPrintersLoading', async () => {
+    const whenServerPrintersLoadedEvent = eventToPromise(
+        PrintServerStoreEventType.SERVER_PRINTERS_LOADING, printServerStore);
 
-        webUIListenerCallback('server-printers-loading', true);
+    webUIListenerCallback('server-printers-loading', true);
 
-        const serverPrintersLoadedEvent = await whenServerPrintersLoadedEvent;
-        assertTrue(serverPrintersLoadedEvent.detail);
-      });
+    const serverPrintersLoadedEvent = await whenServerPrintersLoadedEvent;
+    assertTrue(serverPrintersLoadedEvent.detail);
+  });
 });

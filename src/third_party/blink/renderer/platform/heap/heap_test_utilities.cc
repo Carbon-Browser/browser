@@ -1,8 +1,6 @@
-/*
- * Copyright 2021 The Chromium Authors. All rights reserved.
- * Use of this source code is governed by a BSD-style license that can be
- * found in the LICENSE file.
- */
+// Copyright 2021 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/heap/heap_test_utilities.h"
 #include <memory>
@@ -75,10 +73,16 @@ void IncrementalMarkingTestDriver::StartGC() {
   heap_.StartGarbageCollection();
 }
 
-void IncrementalMarkingTestDriver::TriggerMarkingSteps(
-    ThreadState::StackState stack_state) {
+void IncrementalMarkingTestDriver::TriggerMarkingSteps() {
   CHECK(ThreadState::Current()->IsIncrementalMarking());
-  while (!heap_.PerformMarkingStep(stack_state)) {
+  while (!heap_.PerformMarkingStep(ThreadState::StackState::kNoHeapPointers)) {
+  }
+}
+
+void IncrementalMarkingTestDriver::TriggerMarkingStepsWithStack() {
+  CHECK(ThreadState::Current()->IsIncrementalMarking());
+  while (!heap_.PerformMarkingStep(
+      ThreadState::StackState::kMayContainHeapPointers)) {
   }
 }
 
@@ -97,10 +101,9 @@ void ConcurrentMarkingTestDriver::StartGC() {
   heap_.ToggleMainThreadMarking(false);
 }
 
-void ConcurrentMarkingTestDriver::TriggerMarkingSteps(
-    ThreadState::StackState stack_state) {
+void ConcurrentMarkingTestDriver::TriggerMarkingSteps() {
   CHECK(ThreadState::Current()->IsIncrementalMarking());
-  heap_.PerformMarkingStep(stack_state);
+  heap_.PerformMarkingStep(ThreadState::StackState::kNoHeapPointers);
 }
 
 void ConcurrentMarkingTestDriver::FinishGC() {

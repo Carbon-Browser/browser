@@ -1,4 +1,4 @@
-// Copyright (c) 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,26 +19,18 @@ namespace base::mac {
 template <typename AEDescType = AEDesc>
 class ScopedAEDesc {
  public:
-  ScopedAEDesc() {
-    AECreateDesc(typeNull, NULL, 0, &desc_);
-  }
+  ScopedAEDesc() { AECreateDesc(typeNull, NULL, 0, &desc_); }
 
   ScopedAEDesc(const ScopedAEDesc&) = delete;
   ScopedAEDesc& operator=(const ScopedAEDesc&) = delete;
 
-  ~ScopedAEDesc() {
-    AEDisposeDesc(&desc_);
-  }
+  ~ScopedAEDesc() { AEDisposeDesc(&desc_); }
 
   // Used for in parameters.
-  operator const AEDescType*() {
-    return &desc_;
-  }
+  operator const AEDescType*() { return &desc_; }
 
   // Used for out parameters.
-  AEDescType* OutPointer() {
-    return &desc_;
-  }
+  AEDescType* OutPointer() { return &desc_; }
 
  private:
   AEDescType desc_;

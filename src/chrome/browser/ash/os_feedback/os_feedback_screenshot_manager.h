@@ -1,18 +1,17 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_OS_FEEDBACK_OS_FEEDBACK_SCREENSHOT_MANAGER_H_
 #define CHROME_BROWSER_ASH_OS_FEEDBACK_OS_FEEDBACK_SCREENSHOT_MANAGER_H_
 
-#include "base/callback.h"
+#include <vector>
+
+#include "base/functional/callback.h"
+#include "base/memory/ref_counted_memory.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/singleton.h"
 #include "base/memory/weak_ptr.h"
-
-namespace base {
-class RefCountedMemory;
-}  // namespace base
 
 namespace ash {
 
@@ -62,8 +61,9 @@ class OsFeedbackScreenshotManager {
   ~OsFeedbackScreenshotManager();
   friend struct base::DefaultSingletonTraits<OsFeedbackScreenshotManager>;
 
-  void OnScreenshotTaken(ScreenshotCallback callback,
-                         scoped_refptr<base::RefCountedMemory> data);
+  void OnAllScreenshotsTaken(
+      ScreenshotCallback callback,
+      std::vector<scoped_refptr<base::RefCountedMemory>> all_data);
 
   scoped_refptr<base::RefCountedMemory> screenshot_png_data_;
   base::WeakPtrFactory<OsFeedbackScreenshotManager> weak_ptr_factory_{this};

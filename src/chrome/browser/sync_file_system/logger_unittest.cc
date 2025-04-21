@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,9 +13,9 @@ namespace {
 
 // Logs one event at each supported LogSeverity level.
 void LogSampleEvents() {
-  util::Log(logging::LOG_INFO, FROM_HERE, "Info test message");
-  util::Log(logging::LOG_WARNING, FROM_HERE, "Warning test message");
-  util::Log(logging::LOG_ERROR, FROM_HERE, "Error test message");
+  util::Log(logging::LOGGING_INFO, FROM_HERE, "Info test message");
+  util::Log(logging::LOGGING_WARNING, FROM_HERE, "Warning test message");
+  util::Log(logging::LOGGING_ERROR, FROM_HERE, "Error test message");
 }
 
 bool ContainsString(const std::string& contains_string,
@@ -27,7 +27,7 @@ bool ContainsString(const std::string& contains_string,
 
 class LoggerTest : public testing::Test {
  public:
-  LoggerTest() {}
+  LoggerTest() = default;
 
   LoggerTest(const LoggerTest&) = delete;
   LoggerTest& operator=(const LoggerTest&) = delete;

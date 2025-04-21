@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,10 @@
 
 #include "ash/ash_export.h"
 #include "ash/display/window_tree_host_manager.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "ui/display/display.h"
+#include "ui/display/manager/display_manager_observer.h"
 #include "ui/display/unified_desktop_utils.h"
 
 namespace display {
@@ -29,7 +31,7 @@ class ScreenRotationAnimator;
 // * Provides a single interface for UI and API classes.
 // * TODO: Forwards display configuration changed events to UI and API classes.
 class ASH_EXPORT DisplayConfigurationController
-    : public WindowTreeHostManager::Observer {
+    : public display::DisplayManagerObserver {
  public:
   // Use SYNC if it is important to rotate immediately after the
   // |SetDisplayRotation()|. As a side effect, the animation is less smooth.
@@ -90,8 +92,8 @@ class ASH_EXPORT DisplayConfigurationController
   // This should only be called when Unified Desktop mode is active.
   display::Display GetPrimaryMirroringDisplayForUnifiedDesktop() const;
 
-  // WindowTreeHostManager::Observer
-  void OnDisplayConfigurationChanged() override;
+  // display::DisplayManagerObserver
+  void OnDidApplyDisplayChanges() override;
 
   static void DisableAnimatorForTest();
 
@@ -121,8 +123,8 @@ class ASH_EXPORT DisplayConfigurationController
   ScreenRotationAnimator* GetScreenRotationAnimatorForDisplay(
       int64_t display_id);
 
-  display::DisplayManager* display_manager_;         // weak ptr
-  WindowTreeHostManager* window_tree_host_manager_;  // weak ptr
+  raw_ptr<display::DisplayManager> display_manager_;         // weak ptr
+  raw_ptr<WindowTreeHostManager> window_tree_host_manager_;  // weak ptr
   std::unique_ptr<DisplayAnimator> display_animator_;
   std::unique_ptr<DisplayChangeLimiter> limiter_;
 

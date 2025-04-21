@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,7 @@ class TestPopupNavigationDelegate : public PopupNavigationDelegate {
 
     bool did_navigate = false;
     blink::mojom::WindowFeatures navigation_window_features;
-    absl::optional<WindowOpenDisposition> navigation_disposition;
+    std::optional<WindowOpenDisposition> navigation_disposition;
     int total_popups_blocked_on_page = 0;
   };
 
@@ -32,10 +32,10 @@ class TestPopupNavigationDelegate : public PopupNavigationDelegate {
   // PopupNavigationDelegate:
   content::RenderFrameHost* GetOpener() override;
   bool GetOriginalUserGesture() override;
-  const GURL& GetURL() override;
+  GURL GetURL() override;
   NavigateResult NavigateWithGesture(
       const blink::mojom::WindowFeatures& window_features,
-      absl::optional<WindowOpenDisposition> updated_disposition) override;
+      std::optional<WindowOpenDisposition> updated_disposition) override;
   void OnPopupBlocked(content::WebContents* web_contents,
                       int total_popups_blocked_on_page) override;
 

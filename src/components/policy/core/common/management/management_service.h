@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,15 @@
 #define COMPONENTS_POLICY_CORE_COMMON_MANAGEMENT_MANAGEMENT_SERVICE_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/sequence_checker.h"
 #include "components/policy/policy_export.h"
 #include "components/prefs/persistent_pref_store.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
 
 // For more imformation about this file please read
@@ -22,6 +22,10 @@
 
 class PrefService;
 class PrefRegistrySimple;
+
+namespace ui {
+class ImageModel;
+}
 
 namespace policy {
 
@@ -107,6 +111,8 @@ class POLICY_EXPORT ManagementService {
   // until `callback` is called.
   virtual void RefreshCache(CacheRefreshCallback callback);
 
+  virtual ui::ImageModel* GetManagementIconForProfile();
+
   // Returns true if `authority` is are actively managed.
   bool HasManagementAuthority(EnterpriseManagementAuthority authority);
 
@@ -116,7 +122,15 @@ class POLICY_EXPORT ManagementService {
   // Returns whether there is any management authority at all.
   bool IsManaged();
 
-  const absl::optional<int>& management_authorities_for_testing() {
+  // Returns whether the profile is managed because the signed in account is a
+  // managed account.
+  bool IsAccountManaged();
+
+  // Returns whether the profile is managed because the whole browser is
+  // managed.
+  bool IsBrowserManaged();
+
+  const std::optional<int>& management_authorities_for_testing() {
     return management_authorities_for_testing_;
   }
 
@@ -145,7 +159,7 @@ class POLICY_EXPORT ManagementService {
   // managed entity.
   int GetManagementAuthorities();
 
-  absl::optional<int> management_authorities_for_testing_;
+  std::optional<int> management_authorities_for_testing_;
   std::vector<std::unique_ptr<ManagementStatusProvider>>
       management_status_providers_;
 

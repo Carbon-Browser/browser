@@ -1,4 +1,4 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,12 +12,12 @@
 
 #if BUILDFLAG(USE_XKBCOMMON)
 
+#include <xkbcommon/xkbcommon-keysyms.h>  // IWYU pragma: export
 #include <xkbcommon/xkbcommon.h>
-#include <xkbcommon/xkbcommon-keysyms.h>
 
 #else  // !BUILDFLAG(USE_XKBCOMMON)
 
-#include "ui/gfx/x/keysyms/keysyms.h"
+#include "ui/gfx/x/keysyms/keysyms.h"  // IWYU pragma: export
 
 using xkb_keysym_t = uint32_t;
 

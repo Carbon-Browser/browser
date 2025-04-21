@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,14 @@
 
 #include <grpcpp/grpcpp.h>
 
-#include "base/callback.h"
-#include "base/strings/stringprintf.h"
+#include "base/functional/callback.h"
+#include "base/logging.h"
 #include "chromecast/cast_core/grpc/cancellable_reactor.h"
 #include "chromecast/cast_core/grpc/grpc_handler.h"
 #include "chromecast/cast_core/grpc/grpc_server_reactor.h"
 #include "chromecast/cast_core/grpc/grpc_status_or.h"
 #include "chromecast/cast_core/grpc/server_reactor_tracker.h"
 #include "chromecast/cast_core/grpc/trackable_reactor.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace cast {
 namespace utils {
@@ -78,14 +77,17 @@ class GrpcUnaryHandler final : public GrpcHandler {
       }
     }
 
-    void OnResponseDone(const grpc::Status& /*status*/) override {
-      LOG(FATAL)
-          << "Unary handler writes must finish the reactor at the same time";
+    void OnResponseDone(const grpc::Status& status) override {
+      // This method may be called from the cancelled_reactor as a generic way
+      // to signal reactor is done via OnResponseDone API. For unary reactor it
+      // is a no-op.
+      CHECK(status.error_code() == grpc::StatusCode::ABORTED)
+          << "Unexpected status: " << GrpcStatusToString(status);
     }
 
     void OnRequestDone(GrpcStatusOr<TRequest> request) override {
       if (!request.ok()) {
-        Finish(request.status());
+        FinishWriting(nullptr, request.status());
         return;
       }
       on_request_callback_.Run(std::move(request).value(), this);

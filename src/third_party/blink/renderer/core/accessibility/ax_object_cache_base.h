@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,6 @@
 
 namespace blink {
 
-class LayoutObject;
 class AXObject;
 
 // AXObjectCacheBase is a temporary class that sits between AXObjectCache and
@@ -26,8 +25,9 @@ class CORE_EXPORT AXObjectCacheBase : public AXObjectCache {
   AXObjectCacheBase& operator=(const AXObjectCacheBase&) = delete;
   ~AXObjectCacheBase() override = default;
 
-  virtual AXObject* GetOrCreate(LayoutObject*,
-                                AXObject* parent_if_known = nullptr) = 0;
+  virtual AXObject* GetOrCreate(const Node*, AXObject* parent) = 0;
+
+  virtual AXObject* Get(const Node*) const = 0;
 
  protected:
   AXObjectCacheBase() = default;

@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -17,7 +17,6 @@ static_library("calendar") {
 
   deps = [
     "//base",
-    "//base/third_party/dynamic_annotations",
     "//components/signin/public/identity_manager",
     "//crypto",
     "//google_apis:google_apis",
@@ -25,6 +24,8 @@ static_library("calendar") {
     "//net",
     "//services/network/public/cpp",
   ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 }
 
 source_set("test_support") {

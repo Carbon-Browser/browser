@@ -1,16 +1,17 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/viz/service/display/overlay_combination_cache.h"
 
 #include <algorithm>
+#include <map>
 #include <memory>
 #include <set>
 #include <utility>
 
 #include "base/check_op.h"
-#include "base/containers/cxx20_erase_map.h"
+#include "base/containers/span.h"
 #include "base/metrics/histogram_macros.h"
 #include "components/viz/common/display/overlay_strategy.h"
 #include "components/viz/service/display/overlay_candidate.h"
@@ -22,9 +23,9 @@ namespace viz {
 
 OverlayCacheKey::OverlayCacheKey(
     const OverlayProposedCandidate& proposed_candidate) {
-  // Rounding the display_rect here matches the behaviour of Ozone when testing
+  // Rounding the display_rect here matches the behaviour of DRM when testing
   // OverlayCandidates.
-  display_rect = gfx::ToNearestRect(proposed_candidate.candidate.display_rect);
+  display_rect = gfx::ToRoundedRect(proposed_candidate.candidate.display_rect);
   strategy = proposed_candidate.strategy->GetUMAEnum();
 }
 
@@ -63,7 +64,7 @@ void CombinationIdMapper::RemoveStaleIds(
   if (stale_candidates.none()) {
     return;
   }
-  base::EraseIf(candidate_ids_, [&stale_candidates](auto& entry) {
+  std::erase_if(candidate_ids_, [&stale_candidates](auto& entry) {
     return stale_candidates[entry.second];
   });
   claimed_ids_ &= ~stale_candidates;
@@ -82,7 +83,7 @@ OverlayCombinationCache::OverlayCombinationCache()
 OverlayCombinationCache::~OverlayCombinationCache() = default;
 
 OverlayCombinationToTest OverlayCombinationCache::GetOverlayCombinationToTest(
-    const std::vector<OverlayProposedCandidate>& sorted_candidates,
+    base::span<OverlayProposedCandidate const> sorted_candidates,
     int max_overlays_considered) {
   DCHECK_LE(max_overlays_considered, static_cast<int>(kMaxTrackedCandidates));
 
@@ -137,7 +138,7 @@ void OverlayCombinationCache::ClearCache() {
 
 std::vector<OverlayProposedCandidate>
 OverlayCombinationCache::GetConsideredCandidates(
-    const std::vector<OverlayProposedCandidate>& sorted_candidates,
+    base::span<OverlayProposedCandidate const> sorted_candidates,
     size_t max_overlays_possible) {
   std::vector<OverlayProposedCandidate> considered_candidates;
 
@@ -174,9 +175,6 @@ OverlayCombinationCache::GetIds(
       stale_candidates.reset(id);
     }
   }
-  UMA_HISTOGRAM_COUNTS_100(
-      "Compositing.Display.OverlayCombinationCache.NumIdsEvicted",
-      stale_candidates.count());
   // Remove all cached combinations that contained these candidates.
   RemoveStaleCombinations(stale_candidates);
   // Remove stale candidates from the id mapper.
@@ -228,7 +226,7 @@ OverlayCombinationCache::GetPowerSortedCombinations(
 }
 
 void OverlayCombinationCache::DeclarePromotedCandidates(
-    const std::vector<OverlayProposedCandidate>& attempted_candidates) {
+    base::span<OverlayProposedCandidate const> attempted_candidates) {
   if (attempted_candidates.empty()) {
     return;
   }

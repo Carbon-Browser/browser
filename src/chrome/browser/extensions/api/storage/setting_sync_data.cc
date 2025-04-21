@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 #include "components/sync/protocol/app_setting_specifics.pb.h"
 #include "components/sync/protocol/entity_specifics.pb.h"
 #include "components/sync/protocol/extension_setting_specifics.pb.h"
+#include "extensions/common/extension_id.h"
 
 namespace extensions {
 
@@ -23,24 +24,26 @@ SettingSyncData::SettingSyncData(const syncer::SyncChange& sync_change)
 }
 
 SettingSyncData::SettingSyncData(const syncer::SyncData& sync_data)
-    : change_type_(absl::nullopt) {
+    : change_type_(std::nullopt) {
   ExtractSyncData(sync_data);
 }
 
 SettingSyncData::SettingSyncData(syncer::SyncChange::SyncChangeType change_type,
-                                 const std::string& extension_id,
+                                 const ExtensionId& extension_id,
                                  const std::string& key,
-                                 std::unique_ptr<base::Value> value)
+                                 base::Value value)
     : change_type_(change_type),
       extension_id_(extension_id),
       key_(key),
       value_(std::move(value)) {}
 
-SettingSyncData::~SettingSyncData() {}
+SettingSyncData::~SettingSyncData() = default;
 
-std::unique_ptr<base::Value> SettingSyncData::PassValue() {
-  DCHECK(value_) << "value has already been Pass()ed";
-  return std::move(value_);
+base::Value SettingSyncData::ExtractValue() {
+  DCHECK(value_) << "value has already been Extract()ed";
+  base::Value ret_value = std::move(*value_);
+  value_.reset();
+  return ret_value;
 }
 
 void SettingSyncData::ExtractSyncData(const syncer::SyncData& sync_data) {
@@ -54,12 +57,12 @@ void SettingSyncData::ExtractSyncData(const syncer::SyncData& sync_data) {
 
   extension_id_ = extension_specifics.extension_id();
   key_ = extension_specifics.key();
-  value_ = base::JSONReader::ReadDeprecated(extension_specifics.value());
+  value_ = base::JSONReader::Read(extension_specifics.value());
 
   if (!value_) {
     LOG(WARNING) << "Specifics for " << extension_id_ << "/" << key_
                  << " had bad JSON for value: " << extension_specifics.value();
-    value_ = std::make_unique<base::DictionaryValue>();
+    value_ = base::Value(base::Value::Dict());
   }
 }
 

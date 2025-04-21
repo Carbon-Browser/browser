@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/compositor/layer.h"
@@ -27,79 +27,6 @@ namespace {
 // were causing visual anomalies.
 constexpr float kMinRadius = 1.f;
 
-// All the sub animations that are used to animate each of the InkDropStates.
-// These are used to get time durations with
-// GetAnimationDuration(InkDropSubAnimations). Note that in general a sub
-// animation defines the duration for either a transformation animation or an
-// opacity animation but there are some exceptions where an entire InkDropState
-// animation consists of only 1 sub animation and it defines the duration for
-// both the transformation and opacity animations.
-enum InkDropSubAnimations {
-  // HIDDEN sub animations.
-
-  // The HIDDEN sub animation that is fading out to a hidden opacity.
-  HIDDEN_FADE_OUT,
-
-  // The HIDDEN sub animation that transform the circle to a small one.
-  HIDDEN_TRANSFORM,
-
-  // ACTION_PENDING sub animations.
-
-  // The ACTION_PENDING sub animation that fades in to the visible opacity.
-  ACTION_PENDING_FADE_IN,
-
-  // The ACTION_PENDING sub animation that transforms the circle to fill the
-  // bounds.
-  ACTION_PENDING_TRANSFORM,
-
-  // ACTION_TRIGGERED sub animations.
-
-  // The ACTION_TRIGGERED sub animation that is fading out to a hidden opacity.
-  ACTION_TRIGGERED_FADE_OUT,
-
-  // ALTERNATE_ACTION_PENDING sub animations.
-
-  // The ALTERNATE_ACTION_PENDING animation has only one sub animation which
-  // animates
-  // the circleto fill the bounds at visible opacity.
-  ALTERNATE_ACTION_PENDING,
-
-  // ALTERNATE_ACTION_TRIGGERED sub animations.
-
-  // The ALTERNATE_ACTION_TRIGGERED sub animation that is fading out to a hidden
-  // opacity.
-  ALTERNATE_ACTION_TRIGGERED_FADE_OUT,
-
-  // ACTIVATED sub animations.
-
-  // The ACTIVATED sub animation that is fading in to the visible opacity.
-  ACTIVATED_FADE_IN,
-
-  // The ACTIVATED sub animation that transforms the circle to fill the entire
-  // bounds.
-  ACTIVATED_TRANSFORM,
-
-  // DEACTIVATED sub animations.
-
-  // The DEACTIVATED sub animation that is fading out to a hidden opacity.
-  DEACTIVATED_FADE_OUT,
-};
-
-// Duration constants for InkDropStateSubAnimations. See the
-// InkDropStateSubAnimations enum documentation for more info.
-int kAnimationDurationInMs[] = {
-    200,  // HIDDEN_FADE_OUT
-    300,  // HIDDEN_TRANSFORM
-    0,    // ACTION_PENDING_FADE_IN
-    240,  // ACTION_PENDING_TRANSFORM
-    300,  // ACTION_TRIGGERED_FADE_OUT
-    200,  // ALTERNATE_ACTION_PENDING
-    300,  // ALTERNATE_ACTION_TRIGGERED_FADE_OUT
-    150,  // ACTIVATED_FADE_IN
-    200,  // ACTIVATED_TRANSFORM
-    300,  // DEACTIVATED_FADE_OUT
-};
-
 gfx::Rect CalculateClipBounds(const gfx::Size& host_size,
                               const gfx::Insets& clip_insets) {
   gfx::Rect clip_bounds(host_size);
@@ -115,12 +42,14 @@ float CalculateCircleLayerRadius(const gfx::Rect& clip_bounds) {
 
 namespace views {
 
-FloodFillInkDropRipple::FloodFillInkDropRipple(const gfx::Size& host_size,
+FloodFillInkDropRipple::FloodFillInkDropRipple(InkDropHost* ink_drop_host,
+                                               const gfx::Size& host_size,
                                                const gfx::Insets& clip_insets,
                                                const gfx::Point& center_point,
                                                SkColor color,
                                                float visible_opacity)
-    : clip_insets_(clip_insets),
+    : InkDropRipple(ink_drop_host),
+      clip_insets_(clip_insets),
       center_point_(center_point),
       visible_opacity_(visible_opacity),
       use_hide_transform_duration_for_hide_fade_out_(false),
@@ -160,11 +89,13 @@ FloodFillInkDropRipple::FloodFillInkDropRipple(const gfx::Size& host_size,
   SetStateToHidden();
 }
 
-FloodFillInkDropRipple::FloodFillInkDropRipple(const gfx::Size& host_size,
+FloodFillInkDropRipple::FloodFillInkDropRipple(InkDropHost* ink_drop_host,
+                                               const gfx::Size& host_size,
                                                const gfx::Point& center_point,
                                                SkColor color,
                                                float visible_opacity)
-    : FloodFillInkDropRipple(host_size,
+    : FloodFillInkDropRipple(ink_drop_host,
+                             host_size,
                              gfx::Insets(),
                              center_point,
                              color,
@@ -174,12 +105,6 @@ FloodFillInkDropRipple::~FloodFillInkDropRipple() {
   // Explicitly aborting all the animations ensures all callbacks are invoked
   // while this instance still exists.
   AbortAllAnimations();
-}
-
-void FloodFillInkDropRipple::SnapToActivated() {
-  InkDropRipple::SnapToActivated();
-  SetOpacity(visible_opacity_);
-  painted_layer_.SetTransform(GetMaxSizeTargetTransform());
 }
 
 ui::Layer* FloodFillInkDropRipple::GetRootLayer() {
@@ -295,6 +220,12 @@ void FloodFillInkDropRipple::AnimateStateChange(
   }
 }
 
+void FloodFillInkDropRipple::SetStateToActivated() {
+  root_layer_.SetVisible(true);
+  SetOpacity(visible_opacity_);
+  painted_layer_.SetTransform(GetMaxSizeTargetTransform());
+}
+
 void FloodFillInkDropRipple::SetStateToHidden() {
   painted_layer_.SetTransform(CalculateTransform(kMinRadius));
   root_layer_.SetOpacity(kHiddenOpacity);
@@ -324,7 +255,7 @@ gfx::Transform FloodFillInkDropRipple::CalculateTransform(
   transform.Translate(-drawn_center_offset.x(), -drawn_center_offset.y());
 
   // Add subpixel correction to the transform.
-  transform.ConcatTransform(GetTransformSubpixelCorrection(
+  transform.PostConcat(GetTransformSubpixelCorrection(
       transform, painted_layer_.device_scale_factor()));
 
   return transform;
@@ -351,21 +282,40 @@ float FloodFillInkDropRipple::MaxDistanceToCorners(
 }
 
 // Returns the InkDropState sub animation duration for the given |state|.
-base::TimeDelta FloodFillInkDropRipple::GetAnimationDuration(int state) {
-  if (!PlatformStyle::kUseRipples ||
-      !gfx::Animation::ShouldRenderRichAnimation()) {
+base::TimeDelta FloodFillInkDropRipple::GetAnimationDuration(
+    AnimationSubState state) {
+  if constexpr (!PlatformStyle::kUseRipples) {
+    return base::TimeDelta();
+  }
+  if (!gfx::Animation::ShouldRenderRichAnimation() ||
+             (GetInkDropHost() &&
+              GetInkDropHost()->GetMode() ==
+                  InkDropHost::InkDropMode::ON_NO_ANIMATE)) {
     return base::TimeDelta();
   }
 
-  int state_override = state;
   // Override the requested state if needed.
   if (use_hide_transform_duration_for_hide_fade_out_ &&
       state == HIDDEN_FADE_OUT) {
-    state_override = HIDDEN_TRANSFORM;
+    state = HIDDEN_TRANSFORM;
   }
 
-  return base::Milliseconds(kAnimationDurationInMs[state_override] *
-                            duration_factor_);
+  // Duration constants for InkDropSubAnimations. See the
+  // InkDropStateSubAnimations enum documentation for more info.
+  constexpr auto kAnimationDurationInMs = std::to_array<int>({
+      200,  // HIDDEN_FADE_OUT
+      300,  // HIDDEN_TRANSFORM
+      0,    // ACTION_PENDING_FADE_IN
+      240,  // ACTION_PENDING_TRANSFORM
+      300,  // ACTION_TRIGGERED_FADE_OUT
+      200,  // ALTERNATE_ACTION_PENDING
+      300,  // ALTERNATE_ACTION_TRIGGERED_FADE_OUT
+      150,  // ACTIVATED_FADE_IN
+      200,  // ACTIVATED_TRANSFORM
+      300,  // DEACTIVATED_FADE_OUT
+  });
+
+  return base::Milliseconds(kAnimationDurationInMs[state] * duration_factor_);
 }
 
 void FloodFillInkDropRipple::OnLayerAnimationSequenceScheduled(

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,20 +8,21 @@
 
 #include "build/build_config.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
+#include "components/autofill/core/browser/payments/credit_card_risk_based_authenticator.h"
 
 namespace autofill {
 
-TestAuthenticationRequester::TestAuthenticationRequester() {}
+TestAuthenticationRequester::TestAuthenticationRequester() = default;
 
-TestAuthenticationRequester::~TestAuthenticationRequester() {}
+TestAuthenticationRequester::~TestAuthenticationRequester() = default;
 
 base::WeakPtr<TestAuthenticationRequester>
 TestAuthenticationRequester::GetWeakPtr() {
   return weak_ptr_factory_.GetWeakPtr();
 }
 
-void TestAuthenticationRequester::OnCVCAuthenticationComplete(
-    const CreditCardCVCAuthenticator::CVCAuthenticationResponse& response) {
+void TestAuthenticationRequester::OnCvcAuthenticationComplete(
+    const CreditCardCvcAuthenticator::CvcAuthenticationResponse& response) {
   did_succeed_ = response.did_succeed;
   if (*did_succeed_) {
     DCHECK(response.card);
@@ -42,7 +43,7 @@ bool TestAuthenticationRequester::UserOptedInToFidoFromSettingsPageOnMobile()
 
 #if !BUILDFLAG(IS_IOS)
 void TestAuthenticationRequester::OnFIDOAuthenticationComplete(
-    const CreditCardFIDOAuthenticator::FidoAuthenticationResponse& response) {
+    const CreditCardFidoAuthenticator::FidoAuthenticationResponse& response) {
   did_succeed_ = response.did_succeed;
   if (*did_succeed_) {
     DCHECK(response.card);
@@ -71,6 +72,19 @@ void TestAuthenticationRequester::OnOtpAuthenticationComplete(
     DCHECK(response.card);
     number_ = response.card->number();
   }
+}
+
+void TestAuthenticationRequester::OnRiskBasedAuthenticationResponseReceived(
+    const CreditCardRiskBasedAuthenticator::RiskBasedAuthenticationResponse&
+        response) {
+  did_succeed_ =
+      (response.result ==
+       CreditCardRiskBasedAuthenticator::RiskBasedAuthenticationResponse::
+           Result::kNoAuthenticationRequired) ||
+      (response.result ==
+       CreditCardRiskBasedAuthenticator::RiskBasedAuthenticationResponse::
+           Result::kAuthenticationRequired);
+  risk_based_authentication_response_ = response;
 }
 
 }  // namespace autofill

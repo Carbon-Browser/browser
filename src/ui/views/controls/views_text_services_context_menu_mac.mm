@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,12 @@
 
 #import <Cocoa/Cocoa.h>
 
-#include "ui/base/cocoa/text_services_context_menu.h"
 #include "ui/base/l10n/l10n_util.h"
-#include "ui/base/models/simple_menu_model.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/gfx/decorated_text.h"
 #import "ui/gfx/decorated_text_mac.h"
+#include "ui/menus/cocoa/text_services_context_menu.h"
+#include "ui/menus/simple_menu_model.h"
 #include "ui/resources/grit/ui_resources.h"
 #include "ui/strings/grit/ui_strings.h"
 #include "ui/views/controls/textfield/textfield.h"
@@ -82,20 +82,22 @@ bool ViewsTextServicesContextMenuMac::IsCommandIdChecked(int command_id) const {
 }
 
 bool ViewsTextServicesContextMenuMac::IsCommandIdEnabled(int command_id) const {
-  if (text_services_menu_.SupportsCommand(command_id))
+  if (text_services_menu_.SupportsCommand(command_id)) {
     return text_services_menu_.IsCommandIdEnabled(command_id);
+  }
   return (command_id == IDS_CONTENT_CONTEXT_LOOK_UP) ||
          ViewsTextServicesContextMenuBase::IsCommandIdEnabled(command_id);
 }
 
 void ViewsTextServicesContextMenuMac::ExecuteCommand(int command_id,
                                                      int event_flags) {
-  if (text_services_menu_.SupportsCommand(command_id))
+  if (text_services_menu_.SupportsCommand(command_id)) {
     text_services_menu_.ExecuteCommand(command_id, event_flags);
-  else if (command_id == IDS_CONTENT_CONTEXT_LOOK_UP)
+  } else if (command_id == IDS_CONTENT_CONTEXT_LOOK_UP) {
     LookUpInDictionary();
-  else
+  } else {
     ViewsTextServicesContextMenuBase::ExecuteCommand(command_id, event_flags);
+  }
 }
 
 bool ViewsTextServicesContextMenuMac::SupportsCommand(int command_id) const {
@@ -112,15 +114,17 @@ std::u16string ViewsTextServicesContextMenuMac::GetSelectedText() const {
 
 bool ViewsTextServicesContextMenuMac::IsTextDirectionEnabled(
     base::i18n::TextDirection direction) const {
-  if (client()->force_text_directionality())
+  if (client()->force_text_directionality()) {
     return false;
+  }
   return direction != base::i18n::UNKNOWN_DIRECTION;
 }
 
 bool ViewsTextServicesContextMenuMac::IsTextDirectionChecked(
     base::i18n::TextDirection direction) const {
-  if (client()->force_text_directionality())
+  if (client()->force_text_directionality()) {
     return direction == base::i18n::UNKNOWN_DIRECTION;
+  }
   return IsTextDirectionEnabled(direction) &&
          client()->GetTextDirection() == direction;
 }
@@ -133,9 +137,12 @@ void ViewsTextServicesContextMenuMac::UpdateTextDirection(
 
 void ViewsTextServicesContextMenuMac::LookUpInDictionary() {
   gfx::DecoratedText text;
-  gfx::Point baseline_point;
-  if (client()->GetWordLookupDataFromSelection(&text, &baseline_point)) {
+  gfx::Rect rect;
+  if (client()->GetWordLookupDataFromSelection(&text, &rect)) {
     Widget* widget = client()->GetWidget();
+
+    // We only care about the baseline of the glyph, not the space it occupies.
+    gfx::Point baseline_point = rect.origin();
     views::View::ConvertPointToTarget(client(), widget->GetRootView(),
                                       &baseline_point);
     NSView* view = widget->GetNativeView().GetNativeNSView();

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,14 @@
 #define REMOTING_HOST_WIN_HOST_SERVICE_H_
 
 #include <windows.h>
+
 #include <stdint.h>
 
 #include <list>
 #include <memory>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/singleton.h"
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/waitable_event.h"
@@ -44,9 +45,8 @@ class HostService : public WtsTerminalMonitor {
 
   // WtsTerminalMonitor implementation
   bool AddWtsTerminalObserver(const std::string& terminal_id,
-                                      WtsTerminalObserver* observer) override;
-  void RemoveWtsTerminalObserver(
-      WtsTerminalObserver* observer) override;
+                              WtsTerminalObserver* observer) override;
+  void RemoveWtsTerminalObserver(WtsTerminalObserver* observer) override;
 
  private:
   HostService();

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define UI_BASE_IME_ASH_IME_KEYBOARD_IMPL_H_
 
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/ime/ash/ime_keyboard.h"
 
 namespace ui {
@@ -26,18 +27,20 @@ class COMPONENT_EXPORT(UI_BASE_IME_ASH) ImeKeyboardImpl : public ImeKeyboard {
   ~ImeKeyboardImpl() override;
 
   // ImeKeyboard:
-  bool SetCurrentKeyboardLayoutByName(const std::string& layout_name) override;
+  void SetCurrentKeyboardLayoutByName(
+      const std::string& layout_name,
+      base::OnceCallback<void(bool)> callback) override;
   bool SetAutoRepeatRate(const AutoRepeatRate& rate) override;
-  bool SetAutoRepeatEnabled(bool enabled) override;
+  void SetAutoRepeatEnabled(bool enabled) override;
   bool GetAutoRepeatEnabled() override;
-  bool ReapplyCurrentKeyboardLayout() override;
-  void ReapplyCurrentModifierLockStatus() override;
-  void DisableNumLock() override;
+  void SetSlowKeysEnabled(bool enabled) override;
+  bool IsSlowKeysEnabled() const override;
+  void SetSlowKeysDelay(base::TimeDelta delay) override;
   void SetCapsLockEnabled(bool enable_caps_lock) override;
-  bool CapsLockIsEnabled() override;
+  bool IsCapsLockEnabled() override;
 
  private:
-  ui::InputController* const input_controller_;
+  const raw_ptr<ui::InputController> input_controller_;
 };
 
 }  // namespace input_method

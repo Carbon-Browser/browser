@@ -1,17 +1,17 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_OZONE_PLATFORM_WAYLAND_HOST_WAYLAND_OUTPUT_MANAGER_H_
 #define UI_OZONE_PLATFORM_WAYLAND_HOST_WAYLAND_OUTPUT_MANAGER_H_
 
-#include "base/memory/raw_ptr.h"
-#include "ui/ozone/platform/wayland/common/wayland_object.h"
-
 #include <memory>
+#include <ostream>
 
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "ui/ozone/platform/wayland/common/wayland_object.h"
 #include "ui/ozone/platform/wayland/host/wayland_output.h"
 #include "ui/ozone/platform/wayland/host/wayland_screen.h"
 
@@ -24,6 +24,9 @@ class WaylandOutput;
 
 class WaylandOutputManager : public WaylandOutput::Delegate {
  public:
+  using OutputList =
+      base::flat_map<WaylandOutput::Id, std::unique_ptr<WaylandOutput>>;
+
   explicit WaylandOutputManager(WaylandConnection* connection);
 
   WaylandOutputManager(const WaylandOutputManager&) = delete;
@@ -35,11 +38,10 @@ class WaylandOutputManager : public WaylandOutput::Delegate {
   // compositor.
   bool IsOutputReady() const;
 
-  void AddWaylandOutput(const uint32_t output_id, wl_output* output);
-  void RemoveWaylandOutput(const uint32_t output_id);
+  void AddWaylandOutput(WaylandOutput::Id output_id, wl_output* output);
+  void RemoveWaylandOutput(WaylandOutput::Id output_id);
 
   void InitializeAllXdgOutputs();
-  void InitializeAllZAuraOutputs();
   void InitializeAllColorManagementOutputs();
 
   // Creates a platform screen.
@@ -48,24 +50,19 @@ class WaylandOutputManager : public WaylandOutput::Delegate {
   // Feeds a new platform screen with existing outputs.
   void InitWaylandScreen(WaylandScreen* screen);
 
-  WaylandOutput* GetOutput(uint32_t id) const;
+  // Returns the output_id (i.e. the output's assigned global name).
+  WaylandOutput::Id GetOutputId(wl_output* output_resource) const;
+  WaylandOutput* GetOutput(WaylandOutput::Id id) const;
   WaylandOutput* GetPrimaryOutput() const;
+  const OutputList& GetAllOutputs() const;
 
   WaylandScreen* wayland_screen() const { return wayland_screen_.get(); }
 
+  void DumpState(std::ostream& out) const;
+
  private:
   // WaylandOutput::Delegate:
-  void OnOutputHandleMetrics(uint32_t output_id,
-                             const gfx::Point& origin,
-                             const gfx::Size& logical_size,
-                             const gfx::Size& physical_size,
-                             const gfx::Insets& insets,
-                             float scale_factor,
-                             int32_t panel_transform,
-                             int32_t logical_transform,
-                             const std::string& label) override;
-
-  using OutputList = base::flat_map<uint32_t, std::unique_ptr<WaylandOutput>>;
+  void OnOutputHandleMetrics(const WaylandOutput::Metrics& metrics) override;
 
   OutputList output_list_;
 

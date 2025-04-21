@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
@@ -35,8 +35,7 @@ ExtensionEventObserver::TestApi::TestApi(
     : parent_(parent) {
 }
 
-ExtensionEventObserver::TestApi::~TestApi() {
-}
+ExtensionEventObserver::TestApi::~TestApi() = default;
 
 bool ExtensionEventObserver::TestApi::MaybeRunSuspendReadinessCallback() {
   if (!parent_ || parent_->suspend_readiness_callback_.callback().is_null())
@@ -62,7 +61,7 @@ struct ExtensionEventObserver::KeepaliveSources {
 };
 
 ExtensionEventObserver::ExtensionEventObserver() {
-  PowerManagerClient::Get()->AddObserver(this);
+  chromeos::PowerManagerClient::Get()->AddObserver(this);
   g_browser_process->profile_manager()->AddObserver(this);
 }
 
@@ -74,7 +73,7 @@ ExtensionEventObserver::~ExtensionEventObserver() {
   }
 
   g_browser_process->profile_manager()->RemoveObserver(this);
-  PowerManagerClient::Get()->RemoveObserver(this);
+  chromeos::PowerManagerClient::Get()->RemoveObserver(this);
 }
 
 std::unique_ptr<ExtensionEventObserver::TestApi>
@@ -88,7 +87,7 @@ void ExtensionEventObserver::SetShouldDelaySuspend(bool should_delay) {
   if (!should_delay_suspend_ && block_suspend_token_) {
     // There is a suspend attempt pending but this class should no longer be
     // delaying it.  Immediately report readiness.
-    PowerManagerClient::Get()->UnblockSuspend(block_suspend_token_);
+    chromeos::PowerManagerClient::Get()->UnblockSuspend(block_suspend_token_);
     block_suspend_token_ = {};
     suspend_readiness_callback_.Cancel();
   }
@@ -211,8 +210,8 @@ void ExtensionEventObserver::OnSuspendImminent(bool dark_suspend) {
       << "is still pending.";
 
   block_suspend_token_ = base::UnguessableToken::Create();
-  PowerManagerClient::Get()->BlockSuspend(block_suspend_token_,
-                                          "ExtensionEventObserver");
+  chromeos::PowerManagerClient::Get()->BlockSuspend(block_suspend_token_,
+                                                    "ExtensionEventObserver");
 
   suspend_readiness_callback_.Reset(
       base::BindOnce(&ExtensionEventObserver::MaybeReportSuspendReadiness,
@@ -225,7 +224,7 @@ void ExtensionEventObserver::OnSuspendImminent(bool dark_suspend) {
   // to report suspend readiness.  If there is a push message pending, we should
   // receive it within that time and increment |suspend_keepalive_count_| to
   // prevent this callback from reporting ready.
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, suspend_readiness_callback_.callback(),
       dark_suspend ? base::Milliseconds(kDarkSuspendDelayMs)
                    : base::TimeDelta());
@@ -235,7 +234,7 @@ void ExtensionEventObserver::MaybeReportSuspendReadiness() {
   if (suspend_keepalive_count_ > 0 || block_suspend_token_.is_empty())
     return;
 
-  PowerManagerClient::Get()->UnblockSuspend(block_suspend_token_);
+  chromeos::PowerManagerClient::Get()->UnblockSuspend(block_suspend_token_);
   block_suspend_token_ = {};
 }
 

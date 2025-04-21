@@ -1,4 +1,4 @@
-// Copyright 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@
 #include "base/format_macros.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "cc/animation/animation_host.h"
 #include "cc/layers/layer.h"
 #include "cc/layers/layer_impl.h"
@@ -26,6 +26,7 @@
 #include "cc/test/fake_impl_task_runner_provider.h"
 #include "cc/test/fake_layer_tree_host.h"
 #include "cc/test/fake_rendering_stats_instrumentation.h"
+#include "cc/test/layer_test_common.h"
 #include "cc/test/stub_layer_tree_host_single_thread_client.h"
 #include "cc/test/test_task_graph_runner.h"
 #include "cc/trees/compositor_commit_data.h"
@@ -79,10 +80,13 @@ class MockLayer : public Layer {
     return MockLayerImpl::Create(tree_impl, id());
   }
 
-  void PushPropertiesTo(LayerImpl* layer_impl,
-                        const CommitState& commit_state,
-                        const ThreadUnsafeCommitState& unsafe_state) override {
-    Layer::PushPropertiesTo(layer_impl, commit_state, unsafe_state);
+  void PushDirtyPropertiesTo(
+      LayerImpl* layer_impl,
+      uint8_t dirty_flag,
+      const CommitState& commit_state,
+      const ThreadUnsafeCommitState& unsafe_state) override {
+    Layer::PushDirtyPropertiesTo(layer_impl, dirty_flag, commit_state,
+                                 unsafe_state);
 
     MockLayerImpl* mock_layer_impl = static_cast<MockLayerImpl*>(layer_impl);
     mock_layer_impl->SetLayerImplDestructionList(layer_impl_destruction_list_);
@@ -111,8 +115,8 @@ void ExpectTreesAreIdentical(Layer* root_layer,
     EXPECT_EQ(layer->id(), layer_impl->id());
     EXPECT_EQ(layer_impl->layer_tree_impl(), tree_impl);
 
-    EXPECT_EQ(layer->non_fast_scrollable_region(),
-              layer_impl->non_fast_scrollable_region());
+    EXPECT_EQ(layer->main_thread_scroll_hit_test_region(),
+              layer_impl->main_thread_scroll_hit_test_region());
   }
 }
 
@@ -125,8 +129,9 @@ class TreeSynchronizerTest : public testing::Test {
     host_.reset();
     host_ = FakeLayerTreeHost::Create(&client_, &task_graph_runner_,
                                       animation_host_.get(), settings);
-    host_->InitializeSingleThreaded(&single_thread_client_,
-                                    base::ThreadTaskRunnerHandle::Get());
+    host_->InitializeSingleThreaded(
+        &single_thread_client_,
+        base::SingleThreadTaskRunner::GetCurrentDefault());
     host_->host_impl()->CreatePendingTree();
   }
 
@@ -146,7 +151,7 @@ class TreeSynchronizerTest : public testing::Test {
 
     host_->SetRootLayer(layer_tree_root);
     host_->BuildPropertyTreesForTesting();
-    host_->CommitAndCreatePendingTree();
+    host_->CommitToPendingTree();
     host_impl->ActivateSyncTree();
 
     ExpectTreesAreIdentical(layer_tree_root.get(),
@@ -158,8 +163,10 @@ class TreeSynchronizerTest : public testing::Test {
 
  protected:
   TreeSynchronizerTest()
-      : animation_host_(AnimationHost::CreateForTesting(ThreadInstance::MAIN)) {
+      : animation_host_(
+            AnimationHost::CreateForTesting(ThreadInstance::kMain)) {
     LayerTreeSettings settings;
+    settings.commit_to_active_tree = false;
     ResetLayerTreeHost(settings);
   }
 
@@ -556,7 +563,8 @@ TEST_F(TreeSynchronizerTest, SyncMaskLayer) {
 
   host_->SetRootLayer(layer_tree_root);
   host_->BuildPropertyTreesForTesting();
-  host_->CommitAndCreateLayerImplTree();
+  host_->CommitToPendingTree();
+  host_->host_impl()->ActivateSyncTree();
 
   LayerImpl* layer_impl_tree_root = host_->active_tree()->root_layer();
   ExpectTreesAreIdentical(layer_tree_root.get(), layer_impl_tree_root,
@@ -565,7 +573,9 @@ TEST_F(TreeSynchronizerTest, SyncMaskLayer) {
   // Remove the mask layer.
   layer_tree_root->children()[0]->SetMaskLayer(nullptr);
   host_->BuildPropertyTreesForTesting();
-  host_->CommitAndCreateLayerImplTree();
+  host_->host_impl()->CreatePendingTree();
+  host_->CommitToPendingTree();
+  host_->host_impl()->ActivateSyncTree();
 
   layer_impl_tree_root = host_->active_tree()->root_layer();
   ExpectTreesAreIdentical(layer_tree_root.get(), layer_impl_tree_root,
@@ -604,7 +614,7 @@ TEST_F(TreeSynchronizerTest, SynchronizeCurrentlyScrollingNode) {
   scroll_layer->SetScrollable(gfx::Size(1, 1));
   host_->SetRootLayer(layer_tree_root);
   host_->BuildPropertyTreesForTesting();
-  host_->CommitAndCreatePendingTree();
+  host_->CommitToPendingTree();
   host_impl->ActivateSyncTree();
 
   ExpectTreesAreIdentical(layer_tree_root.get(),
@@ -619,7 +629,7 @@ TEST_F(TreeSynchronizerTest, SynchronizeCurrentlyScrollingNode) {
   host_->BuildPropertyTreesForTesting();
 
   host_impl->CreatePendingTree();
-  host_->CommitAndCreatePendingTree();
+  host_->CommitToPendingTree();
   host_impl->ActivateSyncTree();
 
   EXPECT_EQ(scroll_layer->scroll_tree_index(),
@@ -654,7 +664,7 @@ TEST_F(TreeSynchronizerTest, SynchronizeScrollTreeScrollOffsetMap) {
 
   host_->SetRootLayer(layer_tree_root);
   host_->BuildPropertyTreesForTesting();
-  host_->CommitAndCreatePendingTree();
+  host_->CommitToPendingTree();
   host_impl->ActivateSyncTree();
 
   ExpectTreesAreIdentical(layer_tree_root.get(),
@@ -699,7 +709,8 @@ TEST_F(TreeSynchronizerTest, SynchronizeScrollTreeScrollOffsetMap) {
   std::unique_ptr<CompositorCommitData> commit_data(new CompositorCommitData());
   scroll_tree.CollectScrollDeltas(
       commit_data.get(), ElementId(), settings.commit_fractional_scroll_deltas,
-      base::flat_map<ElementId, TargetSnapAreaElementIds>());
+      base::flat_map<ElementId, TargetSnapAreaElementIds>(),
+      /* main_thread_mutator_host */ nullptr);
   host_->proxy()->SetNeedsCommit();
   host_->ApplyCompositorChanges(commit_data.get());
   EXPECT_EQ(gfx::PointF(20, 30), scroll_layer->scroll_offset());
@@ -717,13 +728,13 @@ TEST_F(TreeSynchronizerTest, SynchronizeScrollTreeScrollOffsetMap) {
   host_->BuildPropertyTreesForTesting();
 
   host_impl->CreatePendingTree();
-  host_->CommitAndCreatePendingTree();
+  host_->CommitToPendingTree();
   host_impl->ActivateSyncTree();
 
   EXPECT_EQ(scroll_layer->scroll_tree_index(),
             host_impl->active_tree()->CurrentlyScrollingNode()->id);
   scroll_layer_offset->SetCurrent(gfx::PointF(20, 30));
-  scroll_layer_offset->PullDeltaForMainThread();
+  scroll_layer_offset->PullDeltaForMainThread(/* next_bmf */ false);
   scroll_layer_offset->SetCurrent(gfx::PointF(40, 50));
   scroll_layer_offset->PushMainToPending(gfx::PointF(100, 100));
   scroll_layer_offset->PushPendingToActive();
@@ -760,7 +771,7 @@ TEST_F(TreeSynchronizerTest, RefreshPropertyTreesCachedData) {
 
   host_->SetRootLayer(layer_tree_root);
   host_->BuildPropertyTreesForTesting();
-  host_->CommitAndCreatePendingTree();
+  host_->CommitToPendingTree();
   host_impl->ActivateSyncTree();
 
   // This arbitrarily set the animation scale for transform_layer and see if it
@@ -782,7 +793,7 @@ TEST_F(TreeSynchronizerTest, RefreshPropertyTreesCachedData) {
                       transform_layer->transform_tree_index()));
 
   host_impl->CreatePendingTree();
-  host_->CommitAndCreatePendingTree();
+  host_->CommitToPendingTree();
   host_impl->ActivateSyncTree();
   EXPECT_EQ(
       2.0f,
@@ -795,7 +806,7 @@ TEST_F(TreeSynchronizerTest, RefreshPropertyTreesCachedData) {
 }
 
 TEST_F(TreeSynchronizerTest, RoundedScrollDeltasOnCommit) {
-  LayerTreeSettings settings;
+  LayerTreeSettings settings = CommitToPendingTreeLayerTreeSettings();
   settings.commit_fractional_scroll_deltas = false;
   ResetLayerTreeHost(settings);
   FakeLayerTreeHostImpl* host_impl = host_->host_impl();
@@ -815,13 +826,14 @@ TEST_F(TreeSynchronizerTest, RoundedScrollDeltasOnCommit) {
   // When we collect the scroll deltas, we should have truncated the fractional
   // part because the commit_fractional_scroll_deltas setting is enabled.
   std::unique_ptr<CompositorCommitData> commit_data =
-      host_impl->ProcessCompositorDeltas();
+      host_impl->ProcessCompositorDeltas(
+          /* main_thread_mutator_host */ nullptr);
   ASSERT_EQ(1u, commit_data->scrolls.size());
   EXPECT_EQ(2.f, commit_data->scrolls[0].scroll_delta.y());
 }
 
 TEST_F(TreeSynchronizerTest, PreserveFractionalScrollDeltasOnCommit) {
-  LayerTreeSettings settings;
+  LayerTreeSettings settings = CommitToPendingTreeLayerTreeSettings();
   settings.commit_fractional_scroll_deltas = true;
   ResetLayerTreeHost(settings);
   FakeLayerTreeHostImpl* host_impl = host_->host_impl();
@@ -841,7 +853,8 @@ TEST_F(TreeSynchronizerTest, PreserveFractionalScrollDeltasOnCommit) {
   // When we collect the scroll deltas, we should keep the fractional part
   // because the commit_fractional_scroll_deltas setting is disabled.
   std::unique_ptr<CompositorCommitData> commit_data =
-      host_impl->ProcessCompositorDeltas();
+      host_impl->ProcessCompositorDeltas(
+          /* main_thread_mutator_host */ nullptr);
   ASSERT_EQ(1u, commit_data->scrolls.size());
   EXPECT_EQ(1.75f, commit_data->scrolls[0].scroll_delta.y());
 }

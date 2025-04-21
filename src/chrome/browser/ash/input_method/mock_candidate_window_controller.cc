@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,7 @@ namespace ash {
 namespace input_method {
 
 MockCandidateWindowController::MockCandidateWindowController()
-    : add_observer_count_(0),
-      remove_observer_count_(0),
-      hide_count_(0) {
-}
+    : add_observer_count_(0), remove_observer_count_(0), hide_count_(0) {}
 
 MockCandidateWindowController::~MockCandidateWindowController() = default;
 
@@ -32,13 +29,15 @@ void MockCandidateWindowController::Hide() {
 }
 
 void MockCandidateWindowController::NotifyCandidateWindowOpened() {
-  for (auto& observer : observers_)
+  for (auto& observer : observers_) {
     observer.CandidateWindowOpened();
+  }
 }
 
 void MockCandidateWindowController::NotifyCandidateWindowClosed() {
-  for (auto& observer : observers_)
+  for (auto& observer : observers_) {
     observer.CandidateWindowClosed();
+  }
 }
 
 }  // namespace input_method

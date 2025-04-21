@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,20 +6,21 @@
 #define CHROME_SERVICES_SHARING_WEBRTC_P2P_ASYNC_ADDRESS_RESOLVER_H_
 
 #include <stdint.h>
+
+#include <optional>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/threading/thread_checker.h"
 #include "mojo/public/cpp/bindings/shared_remote.h"
 #include "net/base/ip_address.h"
 #include "services/network/public/mojom/p2p.mojom.h"
-#include "third_party/webrtc/rtc_base/async_resolver_interface.h"
 
 namespace sharing {
 
 // P2PAsyncAddressResolver performs DNS hostname resolution. It's used
 // to resolve addresses of STUN and relay servers.
-// TODO(crbug.com/1044522): reuse code from blink instead.
+// TODO(crbug.com/40115622): reuse code from blink instead.
 class P2PAsyncAddressResolver {
  public:
   using DoneCallback =
@@ -33,7 +34,9 @@ class P2PAsyncAddressResolver {
   ~P2PAsyncAddressResolver();
 
   // Start address resolve process.
-  void Start(const rtc::SocketAddress& addr, DoneCallback done_callback);
+  void Start(const rtc::SocketAddress& addr,
+             std::optional<int> address_family,
+             DoneCallback done_callback);
   // Clients must unregister before exiting for cleanup.
   void Cancel();
 

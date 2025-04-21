@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,11 @@
 #define UI_GTK_INPUT_METHOD_CONTEXT_IMPL_GTK_H_
 
 #include <string>
+#include <vector>
 
 #include "base/memory/raw_ptr.h"
 #include "ui/base/glib/glib_integers.h"
-#include "ui/base/glib/glib_signal.h"
+#include "ui/base/glib/scoped_gsignal.h"
 #include "ui/base/ime/linux/linux_input_method_context.h"
 #include "ui/gfx/geometry/rect.h"
 
@@ -38,39 +39,21 @@ class InputMethodContextImplGtk : public ui::LinuxInputMethodContext {
   void Reset() override;
   void UpdateFocus(bool has_client,
                    ui::TextInputType old_type,
-                   ui::TextInputType new_type) override;
+                   const TextInputClientAttributes& new_client_attributes,
+                   ui::TextInputClient::FocusReason reason) override;
   void SetSurroundingText(const std::u16string& text,
+                          const gfx::Range& text_range,
+                          const gfx::Range& composition_range,
                           const gfx::Range& selection_range) override;
-  void SetContentType(ui::TextInputType type,
-                      ui::TextInputMode mode,
-                      uint32_t flags,
-                      bool should_do_learning) override;
-  void SetGrammarFragmentAtCursor(
-      const ui::GrammarFragment& fragment) override {}
-  void SetAutocorrectInfo(const gfx::Range& autocorrect_range,
-                          const gfx::Rect& autocorrect_bounds) override {}
   ui::VirtualKeyboardController* GetVirtualKeyboardController() override;
 
  private:
   // GtkIMContext event handlers.  They are shared among |gtk_context_simple_|
   // and |gtk_multicontext_|.
-  CHROMEG_CALLBACK_1(InputMethodContextImplGtk,
-                     void,
-                     OnCommit,
-                     GtkIMContext*,
-                     gchar*);
-  CHROMEG_CALLBACK_0(InputMethodContextImplGtk,
-                     void,
-                     OnPreeditChanged,
-                     GtkIMContext*);
-  CHROMEG_CALLBACK_0(InputMethodContextImplGtk,
-                     void,
-                     OnPreeditEnd,
-                     GtkIMContext*);
-  CHROMEG_CALLBACK_0(InputMethodContextImplGtk,
-                     void,
-                     OnPreeditStart,
-                     GtkIMContext*);
+  void OnCommit(GtkIMContext* context, gchar* text);
+  void OnPreeditChanged(GtkIMContext* context);
+  void OnPreeditEnd(GtkIMContext* context);
+  void OnPreeditStart(GtkIMContext* context);
 
   // Only used on GTK3.
   void SetContextClientWindow(GdkWindow* window, GtkIMContext* gtk_context);
@@ -96,6 +79,8 @@ class InputMethodContextImplGtk : public ui::LinuxInputMethodContext {
   // Last known caret bounds relative to the screen coordinates, in DIPs.
   // Effective only on non-simple context.
   gfx::Rect last_caret_bounds_;
+
+  std::vector<ScopedGSignal> signals_;
 };
 
 }  // namespace gtk

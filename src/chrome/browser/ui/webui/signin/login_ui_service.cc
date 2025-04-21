@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@
 #include "chrome/common/url_constants.h"
 
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ui/profile_picker.h"
+#include "chrome/browser/ui/profiles/profile_picker.h"
 #endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
 
 LoginUIService::LoginUIService(Profile* profile)
@@ -49,24 +49,23 @@ void LoginUIService::LoginUIClosed(LoginUI* ui) {
 
 void LoginUIService::SyncConfirmationUIClosed(
     SyncConfirmationUIClosedResult result) {
-  for (Observer& observer : observer_list_)
+  for (Observer& observer : observer_list_) {
     observer.OnSyncConfirmationUIClosed(result);
+  }
 }
 
 void LoginUIService::DisplayLoginResult(Browser* browser,
-                                        const SigninUIError& error) {
+                                        const SigninUIError& error,
+                                        bool from_profile_picker) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // ChromeOS doesn't have the avatar bubble so it never calls this function.
   NOTREACHED();
 #else
   last_login_error_ = error;
-  // TODO(crbug.com/1326904): Check if the condition should be `!error.IsOk()`
+  // TODO(crbug.com/40225985): Check if the condition should be `!error.IsOk()`
   if (!error.message().empty()) {
     if (browser) {
       browser->signin_view_controller()->ShowModalSigninErrorDialog();
-    } else if (profile_->GetPath() ==
-               ProfilePicker::GetForceSigninProfilePath()) {
-      ProfilePickerForceSigninDialog::DisplayErrorMessage();
     } else {
       LOG(ERROR) << "Unable to show Login error message: " << error.message();
     }

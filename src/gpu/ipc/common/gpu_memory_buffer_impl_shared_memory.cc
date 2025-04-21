@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "gpu/ipc/common/gpu_memory_buffer_impl_shared_memory.h"
 
@@ -8,9 +13,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/numerics/safe_math.h"
 #include "base/process/memory.h"
@@ -30,7 +35,7 @@ GpuMemoryBufferImplSharedMemory::GpuMemoryBufferImplSharedMemory(
     base::UnsafeSharedMemoryRegion shared_memory_region,
     base::WritableSharedMemoryMapping shared_memory_mapping,
     size_t offset,
-    int stride)
+    uint32_t stride)
     : GpuMemoryBufferImpl(id, size, format, std::move(callback)),
       shared_memory_region_(std::move(shared_memory_region)),
       shared_memory_mapping_(std::move(shared_memory_mapping)),
@@ -89,7 +94,7 @@ GpuMemoryBufferImplSharedMemory::CreateGpuMemoryBuffer(
   handle.type = gfx::SHARED_MEMORY_BUFFER;
   handle.id = id;
   handle.offset = 0;
-  handle.stride = static_cast<int32_t>(
+  handle.stride = static_cast<uint32_t>(
       gfx::RowSizeForBufferFormat(size.width(), format, 0));
   handle.region = std::move(shared_memory_region);
   return handle;
@@ -114,19 +119,18 @@ GpuMemoryBufferImplSharedMemory::CreateFromHandle(
   size_t min_buffer_size = 0;
 
   if (gfx::NumberOfPlanesForLinearBufferFormat(format) == 1) {
-    if (static_cast<size_t>(handle.stride) < minimum_stride)
+    if (handle.stride < minimum_stride)
       return nullptr;
 
-    base::CheckedNumeric<size_t> checked_min_buffer_size =
-        base::MakeCheckedNum(handle.stride) *
-            (base::MakeCheckedNum(size.height()) - 1) +
-        minimum_stride;
+    base::CheckedNumeric<size_t> checked_min_buffer_size = handle.stride;
+    checked_min_buffer_size *= size.height() - 1;
+    checked_min_buffer_size += minimum_stride;
     if (!checked_min_buffer_size.AssignIfValid(&min_buffer_size))
       return nullptr;
   } else {
     // Custom layout (i.e. non-standard stride) is not allowed for multi-plane
     // formats.
-    if (static_cast<size_t>(handle.stride) != minimum_stride)
+    if (handle.stride != minimum_stride)
       return nullptr;
 
     if (!gfx::BufferSizeForBufferFormatChecked(size, format,
@@ -163,13 +167,13 @@ bool GpuMemoryBufferImplSharedMemory::IsUsageSupported(gfx::BufferUsage usage) {
     case gfx::BufferUsage::SCANOUT_CAMERA_READ_WRITE:
     case gfx::BufferUsage::CAMERA_AND_CPU_READ_WRITE:
     case gfx::BufferUsage::SCANOUT_VDA_WRITE:
+    case gfx::BufferUsage::PROTECTED_SCANOUT:
     case gfx::BufferUsage::PROTECTED_SCANOUT_VDA_WRITE:
     case gfx::BufferUsage::SCANOUT_VEA_CPU_READ:
     case gfx::BufferUsage::VEA_READ_CAMERA_AND_CPU_READ_WRITE:
       return false;
   }
   NOTREACHED();
-  return false;
 }
 
 // static
@@ -200,6 +204,7 @@ bool GpuMemoryBufferImplSharedMemory::IsSizeValidForFormat(
       return true;
     case gfx::BufferFormat::YVU_420:
     case gfx::BufferFormat::YUV_420_BIPLANAR:
+    case gfx::BufferFormat::YUVA_420_TRIPLANAR:
     case gfx::BufferFormat::P010: {
       size_t num_planes = gfx::NumberOfPlanesForLinearBufferFormat(format);
       for (size_t i = 0; i < num_planes; ++i) {
@@ -212,7 +217,6 @@ bool GpuMemoryBufferImplSharedMemory::IsSizeValidForFormat(
   }
 
   NOTREACHED();
-  return false;
 }
 
 // static

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -63,6 +63,11 @@ class CastSessionIdMap : public media::CastAudioManagerHelper::Delegate {
   // session id. Defaults to false if the mapping is not found.
   // Must be called on the sequence for |task_runner_|.
   bool IsGroup(const std::string& session_id) override;
+
+  // Async version of IsAudioOnlySession. It can be called from any thread.
+  using IsAudioOnlySessionAsyncCallback = base::OnceCallback<void(bool)>;
+  void IsAudioOnlySessionAsync(const std::string& session_id,
+                               IsAudioOnlySessionAsyncCallback callback);
 
  private:
   class GroupObserver;

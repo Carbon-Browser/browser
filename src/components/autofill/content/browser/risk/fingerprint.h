@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -17,8 +17,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
-#include "components/autofill/core/browser/autofill_client.h"
+#include "base/functional/callback_forward.h"
+#include "components/autofill/core/browser/foundations/autofill_client.h"
 
 namespace base {
 class Time;
@@ -52,7 +52,7 @@ void GetFingerprint(
     const std::string& version,
     const std::string& charset,
     const std::string& accept_languages,
-    const base::Time& install_time,
+    base::Time install_time,
     const std::string& app_locale,
     const std::string& user_agent,
     const base::OnceCallback<void(std::unique_ptr<Fingerprint>)> callback);

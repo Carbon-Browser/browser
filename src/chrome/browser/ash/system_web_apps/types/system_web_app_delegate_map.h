@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 
 #include <memory>
 
+#include "ash/webui/system_apps/public/system_web_app_type.h"
 #include "base/containers/flat_map.h"
 #include "chrome/browser/ash/system_web_apps/types/system_web_app_delegate.h"
-#include "chrome/browser/ash/system_web_apps/types/system_web_app_type.h"
 
 namespace ash {
 

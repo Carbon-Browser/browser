@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,21 +9,28 @@
 #include <memory>
 #include <utility>
 
+#include "ash/public/cpp/shell_window_ids.h"
+#include "ash/wm/desks/desks_util.h"
 #include "base/command_line.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/traced_value.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "components/exo/buffer.h"
+#include "components/exo/client_controlled_shell_surface.h"
 #include "components/exo/data_device.h"
 #include "components/exo/data_exchange_delegate.h"
+#include "components/exo/input_method_surface.h"
 #include "components/exo/input_method_surface_manager.h"
 #include "components/exo/notification_surface.h"
 #include "components/exo/notification_surface_manager.h"
 #include "components/exo/shared_memory.h"
+#include "components/exo/shell_surface.h"
 #include "components/exo/shell_surface_util.h"
 #include "components/exo/sub_surface.h"
 #include "components/exo/surface.h"
+#include "components/exo/toast_surface.h"
+#include "components/exo/toast_surface_manager.h"
+#include "components/exo/xdg_shell_surface.h"
 #include "gpu/command_buffer/common/gpu_memory_buffer_support.h"
 #include "gpu/ipc/common/gpu_memory_buffer_impl_native_pixmap.h"
 #include "third_party/khronos/GLES2/gl2.h"
@@ -33,28 +40,18 @@
 #include "ui/views/widget/widget.h"
 #include "ui/wm/core/coordinate_conversion.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ash/public/cpp/shell_window_ids.h"
-#include "ash/wm/desks/desks_util.h"
-#include "components/exo/client_controlled_shell_surface.h"
-#include "components/exo/input_method_surface.h"
-#include "components/exo/shell_surface.h"
-#include "components/exo/toast_surface.h"
-#include "components/exo/toast_surface_manager.h"
-#include "components/exo/xdg_shell_surface.h"
-#endif
-
 namespace exo {
 
 ////////////////////////////////////////////////////////////////////////////////
 // Display, public:
 
-Display::Display()
-    : seat_(nullptr),
+Display::Display(std::unique_ptr<DataExchangeDelegate> data_exchange_delegate)
+    : seat_(std::move(data_exchange_delegate)),
       client_native_pixmap_factory_(
           gfx::CreateClientNativePixmapFactoryDmabuf()) {}
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+Display::Display() : Display(std::unique_ptr<DataExchangeDelegate>(nullptr)) {}
+
 Display::Display(
     std::unique_ptr<NotificationSurfaceManager> notification_surface_manager,
     std::unique_ptr<InputMethodSurfaceManager> input_method_surface_manager,
@@ -66,7 +63,6 @@ Display::Display(
       seat_(std::move(data_exchange_delegate)),
       client_native_pixmap_factory_(
           gfx::CreateClientNativePixmapFactoryDmabuf()) {}
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 Display::~Display() {
   Shutdown();
@@ -81,7 +77,6 @@ void Display::Shutdown() {
 
 std::unique_ptr<Surface> Display::CreateSurface() {
   TRACE_EVENT0("exo", "Display::CreateSurface");
-
   return std::make_unique<Surface>();
 }
 
@@ -107,30 +102,21 @@ std::unique_ptr<Buffer> Display::CreateLinuxDMABufBuffer(
   gfx::GpuMemoryBufferHandle gmb_handle;
   gmb_handle.type = gfx::NATIVE_PIXMAP;
   gmb_handle.native_pixmap_handle = std::move(handle);
-  std::unique_ptr<gfx::GpuMemoryBuffer> gpu_memory_buffer =
-      gpu::GpuMemoryBufferImplNativePixmap::CreateFromHandle(
-          client_native_pixmap_factory_.get(), std::move(gmb_handle), size,
-          format, gfx::BufferUsage::GPU_READ,
-          gpu::GpuMemoryBufferImpl::DestructionCallback());
-  if (!gpu_memory_buffer) {
-    LOG(ERROR) << "Failed to create GpuMemoryBuffer from handle";
-    return nullptr;
-  }
+
+  const gfx::BufferUsage buffer_usage = gfx::BufferUsage::GPU_READ;
+
+  // COMMANDS_COMPLETED queries are required by native pixmaps.
+  const unsigned query_type = GL_COMMANDS_COMPLETED_CHROMIUM;
 
   // Using zero-copy for optimal performance.
-  bool use_zero_copy = true;
+  const bool use_zero_copy = true;
+  const bool is_overlay_candidate = true;
 
-  return std::make_unique<Buffer>(
-      std::move(gpu_memory_buffer),
-      gpu::NativeBufferNeedsPlatformSpecificTextureTarget(format)
-          ? gpu::GetPlatformSpecificTextureTarget()
-          : GL_TEXTURE_2D,
-      // COMMANDS_COMPLETED queries are required by native pixmaps.
-      GL_COMMANDS_COMPLETED_CHROMIUM, use_zero_copy,
-      /*is_overlay_candidate=*/true, y_invert);
+  return Buffer::CreateBufferFromGMBHandle(
+      std::move(gmb_handle), size, format, buffer_usage, query_type,
+      use_zero_copy, is_overlay_candidate, y_invert);
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
 std::unique_ptr<ShellSurface> Display::CreateShellSurface(Surface* surface) {
   TRACE_EVENT1("exo", "Display::CreateShellSurface", "surface",
                surface->AsTracedValue());
@@ -162,8 +148,8 @@ std::unique_ptr<ClientControlledShellSurface>
 Display::CreateOrGetClientControlledShellSurface(
     Surface* surface,
     int container,
-    double default_device_scale_factor,
-    bool default_scale_cancellation) {
+    bool default_scale_cancellation,
+    bool supports_floated_state) {
   TRACE_EVENT2("exo", "Display::CreateRemoteShellSurface", "surface",
                surface->AsTracedValue(), "container", container);
 
@@ -191,15 +177,12 @@ Display::CreateOrGetClientControlledShellSurface(
 
   if (shell_surface) {
     shell_surface->RebindRootSurface(surface, can_minimize, container,
-                                     default_scale_cancellation);
+                                     default_scale_cancellation,
+                                     supports_floated_state);
   } else {
     shell_surface = std::make_unique<ClientControlledShellSurface>(
-        surface, can_minimize, container, default_scale_cancellation);
-  }
-
-  if (default_scale_cancellation) {
-    shell_surface->SetScale(default_device_scale_factor);
-    shell_surface->CommitPendingScale();
+        surface, can_minimize, container, default_scale_cancellation,
+        supports_floated_state);
   }
   return shell_surface;
 }
@@ -222,7 +205,6 @@ std::unique_ptr<NotificationSurface> Display::CreateNotificationSurface(
 
 std::unique_ptr<InputMethodSurface> Display::CreateInputMethodSurface(
     Surface* surface,
-    double default_device_scale_factor,
     bool default_scale_cancellation) {
   TRACE_EVENT1("exo", "Display::CreateInputMethodSurface", "surface",
                surface->AsTracedValue());
@@ -241,16 +223,11 @@ std::unique_ptr<InputMethodSurface> Display::CreateInputMethodSurface(
       std::make_unique<InputMethodSurface>(input_method_surface_manager_.get(),
                                            surface,
                                            default_scale_cancellation));
-  if (default_scale_cancellation) {
-    input_method_surface->SetScale(default_device_scale_factor);
-    input_method_surface->CommitPendingScale();
-  }
   return input_method_surface;
 }
 
 std::unique_ptr<ToastSurface> Display::CreateToastSurface(
     Surface* surface,
-    double default_device_scale_factor,
     bool default_scale_cancellation) {
   TRACE_EVENT1("exo", "Display::CreateToastSurface", "surface",
                surface->AsTracedValue());
@@ -267,13 +244,8 @@ std::unique_ptr<ToastSurface> Display::CreateToastSurface(
 
   std::unique_ptr<ToastSurface> toast_surface(std::make_unique<ToastSurface>(
       toast_surface_manager_.get(), surface, default_scale_cancellation));
-  if (default_scale_cancellation) {
-    toast_surface->SetScale(default_device_scale_factor);
-    toast_surface->CommitPendingScale();
-  }
   return toast_surface;
 }
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 std::unique_ptr<SubSurface> Display::CreateSubSurface(Surface* surface,
                                                       Surface* parent) {

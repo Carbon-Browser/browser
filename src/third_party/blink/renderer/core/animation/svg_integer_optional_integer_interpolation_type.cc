@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "third_party/blink/renderer/core/animation/interpolation_environment.h"
+#include "third_party/blink/renderer/core/css/css_to_length_conversion_data.h"
 #include "third_party/blink/renderer/core/svg/svg_integer_optional_integer.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 
@@ -17,31 +18,37 @@ InterpolationValue
 SVGIntegerOptionalIntegerInterpolationType::MaybeConvertNeutral(
     const InterpolationValue&,
     ConversionCheckers&) const {
-  auto result = std::make_unique<InterpolableList>(2);
-  result->Set(0, std::make_unique<InterpolableNumber>(0));
-  result->Set(1, std::make_unique<InterpolableNumber>(0));
-  return InterpolationValue(std::move(result));
+  auto* result = MakeGarbageCollected<InterpolableList>(2);
+  result->Set(0, MakeGarbageCollected<InterpolableNumber>(0));
+  result->Set(1, MakeGarbageCollected<InterpolableNumber>(0));
+  return InterpolationValue(result);
 }
 
 InterpolationValue
 SVGIntegerOptionalIntegerInterpolationType::MaybeConvertSVGValue(
     const SVGPropertyBase& svg_value) const {
-  if (svg_value.GetType() != kAnimatedIntegerOptionalInteger)
+  if (svg_value.GetType() != kAnimatedIntegerOptionalInteger) {
     return nullptr;
+  }
 
   const auto& integer_optional_integer =
       To<SVGIntegerOptionalInteger>(svg_value);
-  auto result = std::make_unique<InterpolableList>(2);
-  result->Set(0, std::make_unique<InterpolableNumber>(
+  auto* result = MakeGarbageCollected<InterpolableList>(2);
+  result->Set(0, MakeGarbageCollected<InterpolableNumber>(
                      integer_optional_integer.FirstInteger()->Value()));
-  result->Set(1, std::make_unique<InterpolableNumber>(
+  result->Set(1, MakeGarbageCollected<InterpolableNumber>(
                      integer_optional_integer.SecondInteger()->Value()));
-  return InterpolationValue(std::move(result));
+  return InterpolationValue(result);
 }
 
 static SVGInteger* ToPositiveInteger(const InterpolableValue* number) {
+  // Note: using default CSSToLengthConversionData here as it's
+  // guaranteed to be a double.
+  // TODO(crbug.com/325821290): Avoid InterpolableNumber here.
   return MakeGarbageCollected<SVGInteger>(
-      ClampTo<int>(round(To<InterpolableNumber>(number)->Value()), 1));
+      ClampTo<int>(round(To<InterpolableNumber>(number)->Value(
+                       CSSToLengthConversionData(/*element=*/nullptr))),
+                   1));
 }
 
 SVGPropertyBase* SVGIntegerOptionalIntegerInterpolationType::AppliedSVGValue(

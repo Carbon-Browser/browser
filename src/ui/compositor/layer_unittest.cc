@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,11 +10,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/compiler_specific.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/json/json_reader.h"
 #include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
@@ -35,6 +35,7 @@
 #include "cc/animation/keyframe_effect.h"
 #include "cc/layers/layer.h"
 #include "cc/layers/mirror_layer.h"
+#include "cc/paint/filter_operation.h"
 #include "cc/test/pixel_comparator.h"
 #include "cc/test/pixel_test_utils.h"
 #include "components/viz/common/frame_sinks/copy_output_request.h"
@@ -123,7 +124,8 @@ class LayerWithRealCompositorTest : public testing::Test {
 
   // Overridden from testing::Test:
   void SetUp() override {
-    ASSERT_TRUE(base::PathService::Get(base::DIR_SOURCE_ROOT, &test_data_dir_));
+    ASSERT_TRUE(
+        base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &test_data_dir_));
     test_data_dir_ = test_data_dir_.Append(FILE_PATH_LITERAL("ui"))
                          .Append(FILE_PATH_LITERAL("gfx"))
                          .Append(FILE_PATH_LITERAL("test"))
@@ -147,6 +149,9 @@ class LayerWithRealCompositorTest : public testing::Test {
   }
 
   Compositor* GetCompositor() { return compositor_host_->GetCompositor(); }
+  cc::LayerTreeHost* GetLayerTreeHost() {
+    return compositor_host_->GetLayerTreeHost();
+  }
 
   void ResetCompositor() {
     compositor_host_.reset();
@@ -399,7 +404,9 @@ class TestCompositorObserver : public CompositorObserver {
     started_ = true;
   }
 
-  void OnCompositingEnded(Compositor* compositor) override { ended_ = true; }
+  void OnCompositingAckDeprecated(Compositor* compositor) override {
+    ended_ = true;
+  }
 
   bool committed_ = false;
   bool started_ = false;
@@ -583,9 +590,9 @@ TEST(LayerStandaloneTest, ReleaseMailboxOnDestruction) {
   bool callback_run = false;
 
   constexpr gfx::Size size(64, 64);
-  auto resource = viz::TransferableResource::MakeGL(
-      gpu::Mailbox::Generate(), GL_LINEAR, GL_TEXTURE_2D, gpu::SyncToken(),
-      size, false /* is_overlay_candidate */);
+  auto resource = viz::TransferableResource::MakeGpu(
+      gpu::Mailbox::Generate(), GL_TEXTURE_2D, gpu::SyncToken(), size,
+      viz::SinglePlaneFormat::kRGBA_8888, false /* is_overlay_candidate */);
   layer->SetTransferableResource(resource,
                                  base::BindOnce(ReturnMailbox, &callback_run),
                                  gfx::Size(10, 10));
@@ -773,18 +780,28 @@ TEST_F(LayerWithDelegateTest, Cloning) {
   gfx::Rect clip_rect(1, 1, 2, 2);
 
   gfx::LinearGradient gradient_mask(45);
-  gradient_mask.AddStep(50, 50);
+  gradient_mask.AddStep(.5, 50);
+
+  cc::FilterOperation::Matrix color_matrix({
+      0, 0, 1, 2, 2, 0, 1, 9, 7, 3, 0, 7, 0, 2, 0, 0, 0, 0, 1, 4,
+  });
+
+  constexpr float initial_sepia_amount = 0.1973f;
+  constexpr float initial_hue_amount = 180.0f;
 
   layer->SetTransform(transform);
   layer->SetColor(SK_ColorRED);
   layer->SetLayerInverted(true);
+  layer->SetLayerSepia(initial_sepia_amount);
+  layer->SetLayerHueRotation(initial_hue_amount);
+  layer->SetLayerCustomColorMatrix(color_matrix);
   layer->AddCacheRenderSurfaceRequest();
   layer->AddTrilinearFilteringRequest();
   layer->SetClipRect(clip_rect);
   layer->SetRoundedCornerRadius({1, 2, 4, 5});
   layer->SetGradientMask(gradient_mask);
   layer->SetIsFastRoundedCorner(true);
-  layer->SetSubtreeCaptureId(viz::SubtreeCaptureId(1));
+  layer->SetSubtreeCaptureId(viz::SubtreeCaptureId(base::Token(0u, 1u)));
 
   auto clone = layer->Clone();
 
@@ -793,6 +810,10 @@ TEST_F(LayerWithDelegateTest, Cloning) {
   EXPECT_EQ(SK_ColorRED, clone->background_color());
   EXPECT_EQ(SK_ColorRED, clone->GetTargetColor());
   EXPECT_TRUE(clone->layer_inverted());
+  EXPECT_FLOAT_EQ(initial_sepia_amount, clone->layer_sepia());
+  EXPECT_FLOAT_EQ(initial_hue_amount, clone->layer_hue_rotation());
+  EXPECT_TRUE(clone->LayerHasCustomColorMatrix());
+  EXPECT_EQ(*(clone->GetLayerCustomColorMatrix()), color_matrix);
   // Cloning should not preserve cache_render_surface flag.
   EXPECT_NE(layer->cc_layer_for_testing()->cache_render_surface(),
             clone->cc_layer_for_testing()->cache_render_surface());
@@ -808,15 +829,21 @@ TEST_F(LayerWithDelegateTest, Cloning) {
   EXPECT_TRUE(layer->GetSubtreeCaptureId().is_valid());
   EXPECT_FALSE(clone->GetSubtreeCaptureId().is_valid());
 
+  constexpr float new_layer_sepia = 0.1965f;
+  constexpr float new_layer_hue_rotation = 42.0f;
+
   layer->SetTransform(gfx::Transform());
   layer->SetColor(SK_ColorGREEN);
   layer->SetLayerInverted(false);
+  layer->SetLayerSepia(new_layer_sepia);
+  layer->SetLayerHueRotation(new_layer_hue_rotation);
+  layer->ClearLayerCustomColorMatrix();
   layer->SetClipRect(gfx::Rect(10, 10, 10, 10));
   layer->SetIsFastRoundedCorner(false);
   layer->SetRoundedCornerRadius({3, 6, 9, 12});
 
   gradient_mask.set_angle(90);
-  gradient_mask.AddStep(90, 30);
+  gradient_mask.AddStep(.9, 30);
   layer->SetGradientMask(gradient_mask);
 
   // The clone is an independent copy, so state changes do not propagate.
@@ -824,6 +851,10 @@ TEST_F(LayerWithDelegateTest, Cloning) {
   EXPECT_EQ(SK_ColorRED, clone->background_color());
   EXPECT_EQ(SK_ColorRED, clone->GetTargetColor());
   EXPECT_TRUE(clone->layer_inverted());
+  EXPECT_FLOAT_EQ(initial_sepia_amount, clone->layer_sepia());
+  EXPECT_FLOAT_EQ(initial_hue_amount, clone->layer_hue_rotation());
+  EXPECT_TRUE(clone->LayerHasCustomColorMatrix());
+  EXPECT_EQ(*(clone->GetLayerCustomColorMatrix()), color_matrix);
   EXPECT_EQ(clip_rect, clone->clip_rect());
   EXPECT_FALSE(layer->is_fast_rounded_corner());
   EXPECT_TRUE(clone->is_fast_rounded_corner());
@@ -844,6 +875,9 @@ TEST_F(LayerWithDelegateTest, Cloning) {
   EXPECT_EQ(kTransparent, clone->background_color());
   EXPECT_EQ(kTransparent, clone->GetTargetColor());
   EXPECT_FALSE(clone->layer_inverted());
+  EXPECT_FLOAT_EQ(new_layer_sepia, clone->layer_sepia());
+  EXPECT_FLOAT_EQ(new_layer_hue_rotation, clone->layer_hue_rotation());
+  EXPECT_FALSE(clone->LayerHasCustomColorMatrix());
   EXPECT_FALSE(clone->fills_bounds_opaquely());
 
   // A solid color layer with transparent color can be marked as opaque. The
@@ -857,6 +891,10 @@ TEST_F(LayerWithDelegateTest, Cloning) {
   EXPECT_EQ(kTransparent, clone->background_color());
   EXPECT_EQ(kTransparent, clone->GetTargetColor());
   EXPECT_FALSE(clone->layer_inverted());
+  // Sepia and hue rotation should be off by default.
+  EXPECT_FLOAT_EQ(0, layer->layer_sepia());
+  EXPECT_FLOAT_EQ(0, clone->layer_hue_rotation());
+  EXPECT_FALSE(clone->LayerHasCustomColorMatrix());
   EXPECT_TRUE(clone->fills_bounds_opaquely());
 
   layer = CreateLayer(LAYER_SOLID_COLOR);
@@ -1061,10 +1099,10 @@ TEST_F(LayerWithNullDelegateTest, SwitchLayerPreservesCCLayerState) {
   constexpr gfx::RoundedCornersF kCornerRadii(1, 2, 3, 4);
   l1->SetRoundedCornerRadius(kCornerRadii);
   l1->SetIsFastRoundedCorner(true);
-  constexpr viz::SubtreeCaptureId kSubtreeCaptureId(22);
+  constexpr viz::SubtreeCaptureId kSubtreeCaptureId(base::Token(0u, 22u));
   l1->SetSubtreeCaptureId(kSubtreeCaptureId);
   gfx::LinearGradient gradient_mask(45);
-  gradient_mask.AddStep(50, 50);
+  gradient_mask.AddStep(.5, 50);
   l1->SetGradientMask(gradient_mask);
 
   EXPECT_EQ(gfx::Point3F(), l1->cc_layer_for_testing()->transform_origin());
@@ -1085,9 +1123,9 @@ TEST_F(LayerWithNullDelegateTest, SwitchLayerPreservesCCLayerState) {
 
   bool callback1_run = false;
   constexpr gfx::Size size(64, 64);
-  auto resource = viz::TransferableResource::MakeGL(
-      gpu::Mailbox::Generate(), GL_LINEAR, GL_TEXTURE_2D, gpu::SyncToken(),
-      size, false /* is_overlay_candidate */);
+  auto resource = viz::TransferableResource::MakeGpu(
+      gpu::Mailbox::Generate(), GL_TEXTURE_2D, gpu::SyncToken(), size,
+      viz::SinglePlaneFormat::kRGBA_8888, false /* is_overlay_candidate */);
   l1->SetTransferableResource(resource,
                               base::BindOnce(ReturnMailbox, &callback1_run),
                               gfx::Size(10, 10));
@@ -1110,9 +1148,9 @@ TEST_F(LayerWithNullDelegateTest, SwitchLayerPreservesCCLayerState) {
   EXPECT_FALSE(callback1_run);
 
   bool callback2_run = false;
-  resource = viz::TransferableResource::MakeGL(
-      gpu::Mailbox::Generate(), GL_LINEAR, GL_TEXTURE_2D, gpu::SyncToken(),
-      size, false /* is_overlay_candidate */);
+  resource = viz::TransferableResource::MakeGpu(
+      gpu::Mailbox::Generate(), GL_TEXTURE_2D, gpu::SyncToken(), size,
+      viz::SinglePlaneFormat::kRGBA_8888, false /* is_overlay_candidate */);
   l1->SetTransferableResource(resource,
                               base::BindOnce(ReturnMailbox, &callback2_run),
                               gfx::Size(10, 10));
@@ -1136,9 +1174,9 @@ TEST_F(LayerWithNullDelegateTest, SwitchLayerPreservesCCLayerState) {
 
   // Back to a texture, without changing the bounds of the layer or the texture.
   bool callback3_run = false;
-  resource = viz::TransferableResource::MakeGL(
-      gpu::Mailbox::Generate(), GL_LINEAR, GL_TEXTURE_2D, gpu::SyncToken(),
-      size, false /* is_overlay_candidate */);
+  resource = viz::TransferableResource::MakeGpu(
+      gpu::Mailbox::Generate(), GL_TEXTURE_2D, gpu::SyncToken(), size,
+      viz::SinglePlaneFormat::kRGBA_8888, false /* is_overlay_candidate */);
   l1->SetTransferableResource(resource,
                               base::BindOnce(ReturnMailbox, &callback3_run),
                               gfx::Size(10, 10));
@@ -1174,9 +1212,9 @@ TEST_F(LayerWithNullDelegateTest, Visibility) {
   l3->set_delegate(&delegate);
 
   // Layers should initially be drawn.
-  EXPECT_TRUE(l1->IsDrawn());
-  EXPECT_TRUE(l2->IsDrawn());
-  EXPECT_TRUE(l3->IsDrawn());
+  EXPECT_TRUE(l1->IsVisible());
+  EXPECT_TRUE(l2->IsVisible());
+  EXPECT_TRUE(l3->IsVisible());
   EXPECT_FALSE(l1->cc_layer_for_testing()->hide_layer_and_subtree());
   EXPECT_FALSE(l2->cc_layer_for_testing()->hide_layer_and_subtree());
   EXPECT_FALSE(l3->cc_layer_for_testing()->hide_layer_and_subtree());
@@ -1186,25 +1224,25 @@ TEST_F(LayerWithNullDelegateTest, Visibility) {
   Draw();
 
   l1->SetVisible(false);
-  EXPECT_FALSE(l1->IsDrawn());
-  EXPECT_FALSE(l2->IsDrawn());
-  EXPECT_FALSE(l3->IsDrawn());
+  EXPECT_FALSE(l1->IsVisible());
+  EXPECT_FALSE(l2->IsVisible());
+  EXPECT_FALSE(l3->IsVisible());
   EXPECT_TRUE(l1->cc_layer_for_testing()->hide_layer_and_subtree());
   EXPECT_FALSE(l2->cc_layer_for_testing()->hide_layer_and_subtree());
   EXPECT_FALSE(l3->cc_layer_for_testing()->hide_layer_and_subtree());
 
   l3->SetVisible(false);
-  EXPECT_FALSE(l1->IsDrawn());
-  EXPECT_FALSE(l2->IsDrawn());
-  EXPECT_FALSE(l3->IsDrawn());
+  EXPECT_FALSE(l1->IsVisible());
+  EXPECT_FALSE(l2->IsVisible());
+  EXPECT_FALSE(l3->IsVisible());
   EXPECT_TRUE(l1->cc_layer_for_testing()->hide_layer_and_subtree());
   EXPECT_FALSE(l2->cc_layer_for_testing()->hide_layer_and_subtree());
   EXPECT_TRUE(l3->cc_layer_for_testing()->hide_layer_and_subtree());
 
   l1->SetVisible(true);
-  EXPECT_TRUE(l1->IsDrawn());
-  EXPECT_TRUE(l2->IsDrawn());
-  EXPECT_FALSE(l3->IsDrawn());
+  EXPECT_TRUE(l1->IsVisible());
+  EXPECT_TRUE(l2->IsVisible());
+  EXPECT_FALSE(l3->IsVisible());
   EXPECT_FALSE(l1->cc_layer_for_testing()->hide_layer_and_subtree());
   EXPECT_FALSE(l2->cc_layer_for_testing()->hide_layer_and_subtree());
   EXPECT_TRUE(l3->cc_layer_for_testing()->hide_layer_and_subtree());
@@ -1224,9 +1262,9 @@ TEST_F(LayerWithNullDelegateTest, MirroringVisibility) {
   l2_mirror->set_delegate(&delegate);
 
   // Layers should initially be drawn.
-  EXPECT_TRUE(l1->IsDrawn());
-  EXPECT_TRUE(l2->IsDrawn());
-  EXPECT_TRUE(l2_mirror->IsDrawn());
+  EXPECT_TRUE(l1->IsVisible());
+  EXPECT_TRUE(l2->IsVisible());
+  EXPECT_TRUE(l2_mirror->IsVisible());
   EXPECT_FALSE(l1->cc_layer_for_testing()->hide_layer_and_subtree());
   EXPECT_FALSE(l2->cc_layer_for_testing()->hide_layer_and_subtree());
   EXPECT_FALSE(l2_mirror->cc_layer_for_testing()->hide_layer_and_subtree());
@@ -1239,9 +1277,9 @@ TEST_F(LayerWithNullDelegateTest, MirroringVisibility) {
   l1->SetVisible(false);
 
   // Since the entire subtree is hidden, no layer should be drawn.
-  EXPECT_FALSE(l1->IsDrawn());
-  EXPECT_FALSE(l2->IsDrawn());
-  EXPECT_FALSE(l2_mirror->IsDrawn());
+  EXPECT_FALSE(l1->IsVisible());
+  EXPECT_FALSE(l2->IsVisible());
+  EXPECT_FALSE(l2_mirror->IsVisible());
 
   // The visibitily property for the subtree is rooted at |l1|.
   EXPECT_TRUE(l1->cc_layer_for_testing()->hide_layer_and_subtree());
@@ -1253,9 +1291,9 @@ TEST_F(LayerWithNullDelegateTest, MirroringVisibility) {
   l2->SetVisible(false);
 
   // None of the layers are drawn since the visibility is false at every node.
-  EXPECT_FALSE(l1->IsDrawn());
-  EXPECT_FALSE(l2->IsDrawn());
-  EXPECT_FALSE(l2_mirror->IsDrawn());
+  EXPECT_FALSE(l1->IsVisible());
+  EXPECT_FALSE(l2->IsVisible());
+  EXPECT_FALSE(l2_mirror->IsVisible());
 
   // Visibility property is set on every node and hence their subtree is also
   // hidden.
@@ -1266,9 +1304,9 @@ TEST_F(LayerWithNullDelegateTest, MirroringVisibility) {
   // Setting visibility on the root layer should make that layer visible and its
   // subtree ready for visibility.
   l1->SetVisible(true);
-  EXPECT_TRUE(l1->IsDrawn());
-  EXPECT_FALSE(l2->IsDrawn());
-  EXPECT_FALSE(l2_mirror->IsDrawn());
+  EXPECT_TRUE(l1->IsVisible());
+  EXPECT_FALSE(l2->IsVisible());
+  EXPECT_FALSE(l2_mirror->IsVisible());
   EXPECT_FALSE(l1->cc_layer_for_testing()->hide_layer_and_subtree());
   EXPECT_TRUE(l2->cc_layer_for_testing()->hide_layer_and_subtree());
   EXPECT_TRUE(l2_mirror->cc_layer_for_testing()->hide_layer_and_subtree());
@@ -1276,9 +1314,9 @@ TEST_F(LayerWithNullDelegateTest, MirroringVisibility) {
   // Setting visibility on the mirrored layer should not effect its source
   // layer.
   l2_mirror->SetVisible(true);
-  EXPECT_TRUE(l1->IsDrawn());
-  EXPECT_FALSE(l2->IsDrawn());
-  EXPECT_TRUE(l2_mirror->IsDrawn());
+  EXPECT_TRUE(l1->IsVisible());
+  EXPECT_FALSE(l2->IsVisible());
+  EXPECT_TRUE(l2_mirror->IsVisible());
   EXPECT_FALSE(l1->cc_layer_for_testing()->hide_layer_and_subtree());
   EXPECT_TRUE(l2->cc_layer_for_testing()->hide_layer_and_subtree());
   EXPECT_FALSE(l2_mirror->cc_layer_for_testing()->hide_layer_and_subtree());
@@ -1286,9 +1324,9 @@ TEST_F(LayerWithNullDelegateTest, MirroringVisibility) {
   // Setting visibility on the source layer should keep the mirror layer in
   // sync and not cause any invalid state.
   l2->SetVisible(true);
-  EXPECT_TRUE(l1->IsDrawn());
-  EXPECT_TRUE(l2->IsDrawn());
-  EXPECT_TRUE(l2_mirror->IsDrawn());
+  EXPECT_TRUE(l1->IsVisible());
+  EXPECT_TRUE(l2->IsVisible());
+  EXPECT_TRUE(l2_mirror->IsVisible());
   EXPECT_FALSE(l1->cc_layer_for_testing()->hide_layer_and_subtree());
   EXPECT_FALSE(l2->cc_layer_for_testing()->hide_layer_and_subtree());
   EXPECT_FALSE(l2_mirror->cc_layer_for_testing()->hide_layer_and_subtree());
@@ -1296,9 +1334,9 @@ TEST_F(LayerWithNullDelegateTest, MirroringVisibility) {
   // Setting visibility on the mirrored layer should not effect its source
   // layer.
   l2_mirror->SetVisible(false);
-  EXPECT_TRUE(l1->IsDrawn());
-  EXPECT_TRUE(l2->IsDrawn());
-  EXPECT_FALSE(l2_mirror->IsDrawn());
+  EXPECT_TRUE(l1->IsVisible());
+  EXPECT_TRUE(l2->IsVisible());
+  EXPECT_FALSE(l2_mirror->IsVisible());
   EXPECT_FALSE(l1->cc_layer_for_testing()->hide_layer_and_subtree());
   EXPECT_FALSE(l2->cc_layer_for_testing()->hide_layer_and_subtree());
   EXPECT_TRUE(l2_mirror->cc_layer_for_testing()->hide_layer_and_subtree());
@@ -1306,9 +1344,9 @@ TEST_F(LayerWithNullDelegateTest, MirroringVisibility) {
   // Setting source layer's visibility to true should update the mirror layer
   // even if the source layer did not change in the process.
   l2->SetVisible(true);
-  EXPECT_TRUE(l1->IsDrawn());
-  EXPECT_TRUE(l2->IsDrawn());
-  EXPECT_TRUE(l2_mirror->IsDrawn());
+  EXPECT_TRUE(l1->IsVisible());
+  EXPECT_TRUE(l2->IsVisible());
+  EXPECT_TRUE(l2_mirror->IsVisible());
   EXPECT_FALSE(l1->cc_layer_for_testing()->hide_layer_and_subtree());
   EXPECT_FALSE(l2->cc_layer_for_testing()->hide_layer_and_subtree());
   EXPECT_FALSE(l2_mirror->cc_layer_for_testing()->hide_layer_and_subtree());
@@ -1317,9 +1355,9 @@ TEST_F(LayerWithNullDelegateTest, MirroringVisibility) {
   // shouldn't affect the visibility of |l2_mirror|.
   l2_mirror->set_sync_visibility_with_source(false);
   l2->SetVisible(false);
-  EXPECT_FALSE(l2->IsDrawn());
+  EXPECT_FALSE(l2->IsVisible());
   EXPECT_TRUE(l2->cc_layer_for_testing()->hide_layer_and_subtree());
-  EXPECT_TRUE(l2_mirror->IsDrawn());
+  EXPECT_TRUE(l2_mirror->IsVisible());
   EXPECT_FALSE(l2_mirror->cc_layer_for_testing()->hide_layer_and_subtree());
 }
 
@@ -1348,7 +1386,7 @@ TEST_F(LayerWithDelegateTest, RoundedCorner) {
 TEST_F(LayerWithDelegateTest, GradientMask) {
   gfx::Rect layer_bounds(10, 20, 100, 100);
   gfx::LinearGradient gradient_mask;
-  gradient_mask.AddStep(50, 50);
+  gradient_mask.AddStep(.5, 50);
 
   auto layer = std::make_unique<Layer>(LAYER_TEXTURED);
 
@@ -1483,9 +1521,9 @@ TEST_F(LayerWithNullDelegateTest, EmptyDamagedRect) {
 
   std::unique_ptr<Layer> root = CreateLayer(LAYER_SOLID_COLOR);
   constexpr gfx::Size size(64, 64);
-  auto resource = viz::TransferableResource::MakeGL(
-      gpu::Mailbox::Generate(), GL_LINEAR, GL_TEXTURE_2D, gpu::SyncToken(),
-      size, false /* is_overlay_candidate */);
+  auto resource = viz::TransferableResource::MakeGpu(
+      gpu::Mailbox::Generate(), GL_TEXTURE_2D, gpu::SyncToken(), size,
+      viz::SinglePlaneFormat::kRGBA_8888, false /* is_overlay_candidate */);
   root->SetTransferableResource(resource, std::move(callback),
                                 gfx::Size(10, 10));
   compositor()->SetRootLayer(root.get());
@@ -1573,6 +1611,44 @@ TEST_F(LayerWithNullDelegateTest, AlwaysSendsMaskDamagedRects) {
   EXPECT_EQ(mask->damaged_region_for_testing().bounds(), gfx::Rect());
 }
 
+// Tests that mask layer could be set to different layers and released
+// without leaving dangling references.
+TEST_F(LayerWithNullDelegateTest, ReusedMaskLayer) {
+  gfx::Rect bound(gfx::Rect(2, 2));
+  std::unique_ptr<Layer> root = CreateTextureRootLayer(bound);
+
+  std::unique_ptr<Layer> l1 = CreateTextureLayer(bound);
+  root->Add(l1.get());
+  std::unique_ptr<Layer> l2 = CreateTextureLayer(bound);
+  root->Add(l2.get());
+
+  {
+    std::unique_ptr<Layer> mask = CreateTextureLayer(bound);
+    // Set `mask` to `l1`, then `l2`.
+    l1->SetMaskLayer(mask.get());
+    EXPECT_EQ(mask.get(), l1->layer_mask_layer());
+    EXPECT_EQ(l1.get(), mask->layer_mask_back_link());
+
+    l2->SetMaskLayer(mask.get());
+    EXPECT_EQ(mask.get(), l2->layer_mask_layer());
+    EXPECT_EQ(l2.get(), mask->layer_mask_back_link());
+
+    // After setting `mask` to `l2`, `l1` should no longer reference it.
+    ASSERT_EQ(nullptr, l1->layer_mask_layer());
+
+    // Release `mask`.
+    mask.reset();
+  }
+
+  // `l2' should no longer references `mask` either.
+  ASSERT_EQ(nullptr, l2->layer_mask_layer());
+
+  // There should be no use-after-free crashes.
+  root->SendDamagedRects();
+  l1->SendDamagedRects();
+  l2->SendDamagedRects();
+}
+
 // Verifies that when a layer is reflecting other layers, mirror counts of
 // reflected layers are updated properly.
 TEST_F(LayerWithNullDelegateTest, SetShowReflectedLayerSubtree) {
@@ -1645,6 +1721,12 @@ TEST_F(LayerWithNullDelegateTest, SetShowReflectedLayerSubtreeBounds) {
   reflecting_layer = nullptr;
   reflected_layer->SetBounds(reflected_bounds);
   EXPECT_EQ(reflected_bounds, reflected_layer->bounds());
+}
+
+TEST_F(LayerWithNullDelegateTest, NOTDRAWNShouldHaveNoDamage) {
+  auto layer = CreateNoTextureLayer({100, 100});
+  layer->SchedulePaint({100, 100});
+  EXPECT_TRUE(layer->damaged_region_for_testing().IsEmpty());
 }
 
 void ExpectRgba(int x, int y, SkColor expected_color, SkColor actual_color) {
@@ -1727,7 +1809,7 @@ TEST_F(LayerWithRealCompositorTest, DrawAlphaBlendedPixels) {
   original_bitmap.allocPixels(bitmap.info());
   original_bitmap.eraseColor(blend_color);
 
-  cc::FuzzyPixelOffByOneComparator comparator(false);
+  cc::FuzzyPixelOffByOneComparator comparator;
   EXPECT_TRUE(comparator.Compare(bitmap, original_bitmap));
 }
 
@@ -1835,6 +1917,7 @@ TEST_F(LayerWithRealCompositorTest, MAYBE_CompositorObservers) {
   // Moving, but not resizing, a layer should alert the observers.
   observer.Reset();
   l2->SetBounds(gfx::Rect(0, 0, 350, 350));
+  WaitForDraw();
   WaitForSwap();
   EXPECT_TRUE(observer.notified());
 
@@ -1907,46 +1990,58 @@ TEST_F(LayerWithRealCompositorTest, ModifyHierarchy) {
   ReadPixels(&bitmap);
   ASSERT_FALSE(bitmap.empty());
   // WritePNGFile(bitmap, ref_img1);
-  EXPECT_TRUE(MatchesPNGFile(bitmap, ref_img1, cc::ExactPixelComparator(true)));
+  EXPECT_TRUE(MatchesPNGFile(bitmap, ref_img1,
+                             cc::AlphaDiscardingExactPixelComparator()));
 
   l0->StackAtTop(l11.get());
   DrawTree(l0.get());
   ReadPixels(&bitmap);
   ASSERT_FALSE(bitmap.empty());
   // WritePNGFile(bitmap, ref_img2);
-  EXPECT_TRUE(MatchesPNGFile(bitmap, ref_img2, cc::ExactPixelComparator(true)));
+  EXPECT_TRUE(MatchesPNGFile(bitmap, ref_img2,
+                             cc::AlphaDiscardingExactPixelComparator()));
 
   // should restore to original configuration
   l0->StackAbove(l12.get(), l11.get());
   DrawTree(l0.get());
   ReadPixels(&bitmap);
   ASSERT_FALSE(bitmap.empty());
-  EXPECT_TRUE(MatchesPNGFile(bitmap, ref_img1, cc::ExactPixelComparator(true)));
+  EXPECT_TRUE(MatchesPNGFile(bitmap, ref_img1,
+                             cc::AlphaDiscardingExactPixelComparator()));
 
   // l11 back to front
   l0->StackAtTop(l11.get());
   DrawTree(l0.get());
   ReadPixels(&bitmap);
   ASSERT_FALSE(bitmap.empty());
-  EXPECT_TRUE(MatchesPNGFile(bitmap, ref_img2, cc::ExactPixelComparator(true)));
+  EXPECT_TRUE(MatchesPNGFile(bitmap, ref_img2,
+                             cc::AlphaDiscardingExactPixelComparator()));
 
   // should restore to original configuration
   l0->StackAbove(l12.get(), l11.get());
   DrawTree(l0.get());
   ReadPixels(&bitmap);
   ASSERT_FALSE(bitmap.empty());
-  EXPECT_TRUE(MatchesPNGFile(bitmap, ref_img1, cc::ExactPixelComparator(true)));
+  EXPECT_TRUE(MatchesPNGFile(bitmap, ref_img1,
+                             cc::AlphaDiscardingExactPixelComparator()));
 
   // l11 back to front
   l0->StackAbove(l11.get(), l12.get());
   DrawTree(l0.get());
   ReadPixels(&bitmap);
   ASSERT_FALSE(bitmap.empty());
-  EXPECT_TRUE(MatchesPNGFile(bitmap, ref_img2, cc::ExactPixelComparator(true)));
+  EXPECT_TRUE(MatchesPNGFile(bitmap, ref_img2,
+                             cc::AlphaDiscardingExactPixelComparator()));
 }
 
+// TODO(crbug.com/40280155): Flaky on fuchsia-arm64 builds. Re-enable this test.
+#if BUILDFLAG(IS_FUCHSIA) && defined(ARCH_CPU_ARM64)
+#define MAYBE_BackgroundBlur DISABLED_BackgroundBlur
+#else
+#define MAYBE_BackgroundBlur BackgroundBlur
+#endif
 // Checks that basic background blur is working.
-TEST_F(LayerWithRealCompositorTest, BackgroundBlur) {
+TEST_F(LayerWithRealCompositorTest, MAYBE_BackgroundBlur) {
 #if defined(THREAD_SANITIZER)
   const base::test::ScopedRunLoopTimeout increased_run_timeout(
       FROM_HERE, TestTimeouts::action_max_timeout());
@@ -1974,7 +2069,10 @@ TEST_F(LayerWithRealCompositorTest, BackgroundBlur) {
   SkBitmap bitmap;
 
   // 25% of image can have up to a difference of 3.
-  cc::FuzzyPixelComparator fuzzy_comparator(true, 25.f, 0.0f, 3.f, 3, 0);
+  auto fuzzy_comparator = cc::FuzzyPixelComparator()
+                              .DiscardAlpha()
+                              .SetErrorPixelsPercentageLimit(25.f)
+                              .SetAbsErrorLimit(3);
 
   l0->Add(l1.get());
   l0->Add(l2.get());
@@ -1992,9 +2090,16 @@ TEST_F(LayerWithRealCompositorTest, BackgroundBlur) {
   EXPECT_TRUE(MatchesPNGFile(bitmap, ref_img2, fuzzy_comparator));
 }
 
+// TODO(crbug.com/40280155): Flaky on fuchsia-arm64 builds. Re-enable this test.
+#if BUILDFLAG(IS_FUCHSIA) && defined(ARCH_CPU_ARM64)
+#define MAYBE_BackgroundBlurChangeDeviceScale \
+  DISABLED_BackgroundBlurChangeDeviceScale
+#else
+#define MAYBE_BackgroundBlurChangeDeviceScale BackgroundBlurChangeDeviceScale
+#endif
 // Checks that background blur bounds rect gets properly updated when device
 // scale changes.
-TEST_F(LayerWithRealCompositorTest, BackgroundBlurChangeDeviceScale) {
+TEST_F(LayerWithRealCompositorTest, MAYBE_BackgroundBlurChangeDeviceScale) {
   viz::ParentLocalSurfaceIdAllocator allocator;
   allocator.GenerateId();
   GetCompositor()->SetScaleAndSize(1.0f, gfx::Size(200, 200),
@@ -2018,7 +2123,10 @@ TEST_F(LayerWithRealCompositorTest, BackgroundBlurChangeDeviceScale) {
   SkBitmap bitmap;
 
   // 25% of image can have up to a difference of 3.
-  cc::FuzzyPixelComparator fuzzy_comparator(true, 25.f, 0.0f, 3.f, 3, 0);
+  auto fuzzy_comparator = cc::FuzzyPixelComparator()
+                              .DiscardAlpha()
+                              .SetErrorPixelsPercentageLimit(25.f)
+                              .SetAbsErrorLimit(3);
 
   l0->Add(l1.get());
   l0->Add(l2.get());
@@ -2064,7 +2172,8 @@ TEST_F(LayerWithRealCompositorTest, Opacity) {
   ReadPixels(&bitmap);
   ASSERT_FALSE(bitmap.empty());
   // WritePNGFile(bitmap, ref_img);
-  EXPECT_TRUE(MatchesPNGFile(bitmap, ref_img, cc::ExactPixelComparator(true)));
+  EXPECT_TRUE(MatchesPNGFile(bitmap, ref_img,
+                             cc::AlphaDiscardingExactPixelComparator()));
 }
 
 namespace {
@@ -2111,7 +2220,7 @@ class SchedulePaintLayerDelegate : public LayerDelegate {
                                   float new_device_scale_factor) override {}
 
   int paint_count_;
-  raw_ptr<Layer> layer_;
+  raw_ptr<Layer, DanglingUntriaged> layer_;
   gfx::Rect schedule_paint_rect_;
   gfx::Rect last_clip_rect_;
 };
@@ -2338,7 +2447,7 @@ TEST_F(LayerWithDelegateTest, ExternalContent) {
   const auto* surface = static_cast<cc::SurfaceLayer*>(after.get());
   EXPECT_TRUE(after.get());
   EXPECT_NE(before.get(), after.get());
-  EXPECT_EQ(absl::nullopt, surface->deadline_in_frames());
+  EXPECT_EQ(std::nullopt, surface->deadline_in_frames());
 
   allocator.GenerateId();
   child->SetShowSurface(
@@ -2383,9 +2492,9 @@ TEST_F(LayerWithDelegateTest, TransferableResourceMirroring) {
   std::unique_ptr<Layer> layer = CreateLayer(LAYER_SOLID_COLOR);
 
   constexpr gfx::Size size(64, 64);
-  auto resource = viz::TransferableResource::MakeGL(
-      gpu::Mailbox::Generate(), GL_LINEAR, GL_TEXTURE_2D, gpu::SyncToken(),
-      size, false /* is_overlay_candidate */);
+  auto resource = viz::TransferableResource::MakeGpu(
+      gpu::Mailbox::Generate(), GL_TEXTURE_2D, gpu::SyncToken(), size,
+      viz::SinglePlaneFormat::kRGBA_8888, false /* is_overlay_candidate */);
   bool release_callback_run = false;
 
   layer->SetTransferableResource(
@@ -2412,9 +2521,9 @@ TEST_F(LayerWithDelegateTest, TransferableResourceMirroring) {
   EXPECT_FALSE(layer->has_external_content());
   EXPECT_FALSE(mirror->has_external_content());
 
-  resource = viz::TransferableResource::MakeGL(
-      gpu::Mailbox::Generate(), GL_LINEAR, GL_TEXTURE_2D, gpu::SyncToken(),
-      size, false /* is_overlay_candidate */);
+  resource = viz::TransferableResource::MakeGpu(
+      gpu::Mailbox::Generate(), GL_TEXTURE_2D, gpu::SyncToken(), size,
+      viz::SinglePlaneFormat::kRGBA_8888, false /* is_overlay_candidate */);
   release_callback_run = false;
 
   // Setting a transferable resource on the source layer should set it on the
@@ -3324,6 +3433,18 @@ TEST_F(LayerWithRealCompositorTest, CompositorAnimationObserverTest) {
   EXPECT_FALSE(animation_observer.shutdown());
   ResetCompositor();
   EXPECT_TRUE(animation_observer.shutdown());
+}
+
+TEST_F(LayerWithRealCompositorTest, NoContentNoDraw) {
+  std::unique_ptr<Layer> root =
+      CreateNoTextureLayer(gfx::Rect(0, 0, 1000, 1000));
+  WaitForDraw();
+  ASSERT_FALSE(GetLayerTreeHost()->CommitRequested());
+  TestCompositorAnimationObserver animation_observer(GetCompositor());
+  root->SetBounds({10, 10, 1000, 1000});
+  EXPECT_FALSE(GetLayerTreeHost()->CommitRequested());
+  root->SetBounds({100, 100});
+  EXPECT_FALSE(GetLayerTreeHost()->CommitRequested());
 }
 
 }  // namespace ui

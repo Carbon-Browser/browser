@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Chromium Authors. All rights reserved.
+ * Copyright 2020 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -11,7 +11,7 @@
  * iframe.
  * @return {Promise<string>} - The string "success".
  */
-async function loadAndRemoveIframe(url, timeout) { // eslint-disable-line no-unused-vars, max-len
+async function loadAndRemoveIframe(url, timeout) {
   const frame = document.getElementById('ifrm');
   frame.src = url;
   return new Promise((resolve) => {

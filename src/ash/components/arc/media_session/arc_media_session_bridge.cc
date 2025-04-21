@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,8 +42,7 @@ class ArcMediaSessionBridgeFactory
 
 bool IsArcUnifiedAudioFocusEnabled() {
   return base::FeatureList::IsEnabled(
-             media_session::features::kMediaSessionService) &&
-         base::FeatureList::IsEnabled(kEnableUnifiedAudioFocusFeature);
+      media_session::features::kMediaSessionService);
 }
 
 }  // namespace
@@ -101,6 +100,11 @@ void ArcMediaSessionBridge::SetupAudioFocus() {
 
   DVLOG(2) << "ArcMediaSessionBridge will enable audio focus";
   ms_instance->EnableAudioFocus(audio_focus.Unbind());
+}
+
+// static
+void ArcMediaSessionBridge::EnsureFactoryBuilt() {
+  ArcMediaSessionBridgeFactory::GetInstance();
 }
 
 }  // namespace arc

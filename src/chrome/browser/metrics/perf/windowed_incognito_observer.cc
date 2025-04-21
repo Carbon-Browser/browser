@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -66,9 +66,10 @@ void WindowedIncognitoMonitor::RegisterInstance() {
     return;
   BrowserList::AddObserver(this);
 
-  for (auto* window : *BrowserList::GetInstance())
+  for (Browser* window : *BrowserList::GetInstance()) {
     if (window->profile()->IsOffTheRecord())
       num_active_incognito_windows_++;
+  }
 }
 
 void WindowedIncognitoMonitor::UnregisterInstance() {

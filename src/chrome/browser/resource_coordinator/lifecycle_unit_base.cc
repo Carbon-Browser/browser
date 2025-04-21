@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -66,10 +66,6 @@ void LifecycleUnitBase::AddObserver(LifecycleUnitObserver* observer) {
 
 void LifecycleUnitBase::RemoveObserver(LifecycleUnitObserver* observer) {
   observers_.RemoveObserver(observer);
-}
-
-ukm::SourceId LifecycleUnitBase::GetUkmSourceId() const {
-  return ukm::kInvalidSourceId;
 }
 
 void LifecycleUnitBase::SetDiscardCountForTesting(size_t discard_count) {

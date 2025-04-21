@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,12 @@
 
 namespace local_discovery {
 
-ServiceDescription::ServiceDescription() {
-}
+ServiceDescription::ServiceDescription() = default;
 
 ServiceDescription::ServiceDescription(const ServiceDescription& other) =
     default;
 
-ServiceDescription::~ServiceDescription() {
-}
+ServiceDescription::~ServiceDescription() = default;
 
 std::string ServiceDescription::instance_name() const {
   // TODO(noamsml): Once we have escaping working, get this to

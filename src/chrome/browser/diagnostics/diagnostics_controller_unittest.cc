@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,7 @@ class DiagnosticsControllerTest : public testing::Test {
  protected:
   DiagnosticsControllerTest() : cmdline_(base::CommandLine::NO_PROGRAM) {}
 
-  ~DiagnosticsControllerTest() override {}
+  ~DiagnosticsControllerTest() override = default;
 
   void SetUp() override {
     ASSERT_TRUE(temp_dir_.CreateUniqueTempDir());
@@ -77,7 +77,7 @@ class DiagnosticsControllerTest : public testing::Test {
     // Just write some random characters into the file tInvaludUsero "corrupt"
     // it.
     const char bogus_data[] = "wwZ2uNYNuyUVzFbDm3DL";
-    base::WriteFile(path, bogus_data, std::size(bogus_data));
+    base::WriteFile(path, bogus_data);
   }
 
   std::unique_ptr<DiagnosticsModel> model_;
@@ -132,11 +132,11 @@ TEST_F(DiagnosticsControllerTest, RecoverFromNssCertDbFailure) {
   EXPECT_EQ(results.GetTestRunCount(), results.GetTestAvailableCount());
   EXPECT_EQ(DiagnosticsModel::kDiagnosticsTestCount, results.GetTestRunCount());
 
-  const DiagnosticsModel::TestInfo* info = NULL;
+  const DiagnosticsModel::TestInfo* info = nullptr;
   EXPECT_TRUE(
       results.GetTestInfo(DIAGNOSTICS_SQLITE_INTEGRITY_NSS_CERT_TEST, &info));
   EXPECT_EQ(DiagnosticsModel::TEST_FAIL_CONTINUE, info->GetResult());
-  EXPECT_EQ(DIAG_SQLITE_ERROR_HANDLER_CALLED, info->GetOutcomeCode());
+  EXPECT_EQ(DIAG_SQLITE_CANNOT_OPEN_DB, info->GetOutcomeCode());
 
   DiagnosticsController::GetInstance()->RunRecovery(cmdline_, writer_.get());
   EXPECT_EQ(DiagnosticsModel::RECOVERY_OK, info->GetResult());
@@ -154,11 +154,11 @@ TEST_F(DiagnosticsControllerTest, RecoverFromNssKeyDbFailure) {
   EXPECT_EQ(results.GetTestRunCount(), results.GetTestAvailableCount());
   EXPECT_EQ(DiagnosticsModel::kDiagnosticsTestCount, results.GetTestRunCount());
 
-  const DiagnosticsModel::TestInfo* info = NULL;
+  const DiagnosticsModel::TestInfo* info = nullptr;
   EXPECT_TRUE(
       results.GetTestInfo(DIAGNOSTICS_SQLITE_INTEGRITY_NSS_KEY_TEST, &info));
   EXPECT_EQ(DiagnosticsModel::TEST_FAIL_CONTINUE, info->GetResult());
-  EXPECT_EQ(DIAG_SQLITE_ERROR_HANDLER_CALLED, info->GetOutcomeCode());
+  EXPECT_EQ(DIAG_SQLITE_CANNOT_OPEN_DB, info->GetOutcomeCode());
 
   DiagnosticsController::GetInstance()->RunRecovery(cmdline_, writer_.get());
   EXPECT_EQ(DiagnosticsModel::RECOVERY_OK, info->GetResult());

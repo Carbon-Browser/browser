@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "components/offline_pages/core/background/request_queue_store.h"
 #include "components/offline_pages/core/background/request_queue_task_test_base.h"
 #include "components/offline_pages/core/background/test_request_queue_store.h"
@@ -25,8 +25,8 @@ const ClientId kClientId1("download", "1234");
 
 class MarkAttemptCompletedTaskTest : public RequestQueueTaskTestBase {
  public:
-  MarkAttemptCompletedTaskTest() {}
-  ~MarkAttemptCompletedTaskTest() override {}
+  MarkAttemptCompletedTaskTest() = default;
+  ~MarkAttemptCompletedTaskTest() override = default;
 
   void AddStartedItemToStore();
   void ChangeRequestsStateCallback(UpdateRequestsResult result);

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,8 @@
 #include <vector>
 
 #include "base/base64.h"
-#include "base/bind.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
@@ -94,8 +94,8 @@ class MessageReceivedListener : public WebSocketListener {
 
 class WebSocketTest : public testing::Test {
  public:
-  WebSocketTest() {}
-  ~WebSocketTest() override {}
+  WebSocketTest() = default;
+  ~WebSocketTest() override = default;
 
   void SetUp() override { ASSERT_TRUE(server_.Start()); }
 
@@ -242,8 +242,7 @@ TEST_F(WebSocketTest, VerifyTextFramelsProcessed) {
       static_cast<char>(net::WebSocketFrameHeader::kOpCodeText | kFinalBit),
       static_cast<char>(kOriginalMessage.length())};
   frame += kOriginalMessage;
-  std::string encoded_frame;
-  base::Base64Encode(frame, &encoded_frame);
+  std::string encoded_frame = base::Base64Encode(frame);
 
   server_.SetMessageAction(TestHttpServer::kEchoRawMessage);
   base::RunLoop run_loop;
@@ -267,8 +266,7 @@ TEST_F(WebSocketTest, VerifyBinaryFramelsNotProcessed) {
       static_cast<char>(net::WebSocketFrameHeader::kOpCodeBinary | kFinalBit),
       static_cast<char>(kOriginalMessage.length())};
   frame += kOriginalMessage;
-  std::string encoded_frame;
-  base::Base64Encode(frame, &encoded_frame);
+  std::string encoded_frame = base::Base64Encode(frame);
 
   server_.SetMessageAction(TestHttpServer::kEchoRawMessage);
   base::RunLoop run_loop;
@@ -290,8 +288,7 @@ TEST_F(WebSocketTest, VerifyCloseFramelsNotProcessed) {
   std::string frame = {
       static_cast<char>(net::WebSocketFrameHeader::kOpCodeClose | kFinalBit),
       0};
-  std::string encoded_frame;
-  base::Base64Encode(frame, &encoded_frame);
+  std::string encoded_frame = base::Base64Encode(frame);
 
   server_.SetMessageAction(TestHttpServer::kEchoRawMessage);
   base::RunLoop run_loop;

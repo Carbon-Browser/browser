@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,14 +21,14 @@ class MigratableCreditCard;
 // dialog views.
 class LocalCardMigrationDialogController {
  public:
-  LocalCardMigrationDialogController() {}
+  LocalCardMigrationDialogController() = default;
 
   LocalCardMigrationDialogController(
       const LocalCardMigrationDialogController&) = delete;
   LocalCardMigrationDialogController& operator=(
       const LocalCardMigrationDialogController&) = delete;
 
-  virtual ~LocalCardMigrationDialogController() {}
+  virtual ~LocalCardMigrationDialogController() = default;
 
   virtual LocalCardMigrationDialogState GetViewState() const = 0;
   virtual const std::vector<MigratableCreditCard>& GetCardList() const = 0;

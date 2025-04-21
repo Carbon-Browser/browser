@@ -47,13 +47,13 @@ class SVGPolyElement : public SVGGeometryElement {
  private:
   void SvgAttributeChanged(const SvgAttributeChangedParams&) final;
 
+  SVGAnimatedPropertyBase* PropertyFromAttribute(
+      const QualifiedName& attribute_name) const override;
+  void SynchronizeAllSVGAttributes() const override;
+
   Member<SVGAnimatedPointList> points_;
 };
 
-template <>
-inline bool IsElementOfType<const SVGPolyElement>(const Node& node) {
-  return IsA<SVGPolyElement>(node);
-}
 template <>
 struct DowncastTraits<SVGPolyElement> {
   static bool AllowFrom(const Node& node) {

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,7 @@
 #include "third_party/blink/renderer/modules/storage/testing/fake_area_source.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
 #include "third_party/blink/renderer/platform/testing/scoped_mocked_url.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/uuid.h"
@@ -40,6 +41,7 @@ TEST(StorageNamespaceTest, BasicStorageAreas) {
   const std::string kPageString3 = "http://dom_storage3/";
   const KURL kPageUrl3 = KURL(kPageString3.c_str());
 
+  test::TaskEnvironment task_environment;
   test::ScopedMockedURLLoad scoped_mocked_url_load_root(
       kRootUrl, test::CoreTestDataPath("foo.html"));
   frame_test_helpers::WebViewHelper web_view_helper_root;
@@ -53,14 +55,13 @@ TEST(StorageNamespaceTest, BasicStorageAreas) {
 
   StorageController::DomStorageConnection connection;
   std::ignore = connection.dom_storage_remote.BindNewPipeAndPassReceiver();
-  StorageController controller(std::move(connection),
-                               scheduler::GetSingleThreadTaskRunnerForTesting(),
-                               kTestCacheLimit);
+  StorageController controller(std::move(connection), kTestCacheLimit);
 
   StorageNamespace* localStorage =
       MakeGarbageCollected<StorageNamespace>(&controller);
   StorageNamespace* sessionStorage = MakeGarbageCollected<StorageNamespace>(
-      &controller, kSessionStorageNamespace);
+      *local_dom_window_root->GetFrame()->GetPage(), &controller,
+      kSessionStorageNamespace);
 
   EXPECT_FALSE(localStorage->IsSessionStorage());
   EXPECT_TRUE(sessionStorage->IsSessionStorage());

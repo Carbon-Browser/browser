@@ -1,9 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_LOGIN_QUICK_UNLOCK_QUICK_UNLOCK_UTILS_H_
 #define CHROME_BROWSER_ASH_LOGIN_QUICK_UNLOCK_QUICK_UNLOCK_UTILS_H_
+
+#include "base/memory/raw_ptr.h"
 
 namespace base {
 class TimeDelta;
@@ -49,7 +51,15 @@ enum class FingerprintLocation {
   KEYBOARD_TOP_RIGHT = 3,
   RIGHT_SIDE = 4,
   LEFT_SIDE = 5,
-  UNKNOWN = 6,
+  LEFT_OF_POWER_BUTTON_TOP_RIGHT = 6,
+  UNKNOWN = 7,
+};
+
+// Struct that holds the description string IDs shown during the fingerprint
+// setup.
+struct FingerprintDescriptionStrings {
+  int description_id = 0;
+  int description_child_id = 0;
 };
 
 // Override quick unlock checks for testing.
@@ -90,7 +100,7 @@ class TestApi {
   static constexpr int kNumOfPurposes =
       static_cast<int>(Purpose::kNumOfPurposes);
 
-  TestApi* old_instance_;
+  raw_ptr<TestApi> old_instance_;
   bool overridden_;
   bool pin_purposes_enabled_by_policy_[kNumOfPurposes];
   bool fingerprint_purposes_enabled_by_policy_[kNumOfPurposes];
@@ -108,7 +118,8 @@ void RegisterProfilePrefs(PrefRegistrySimple* registry);
 bool IsPinDisabledByPolicy(PrefService* pref_service, Purpose purpose);
 
 // Returns true if the quick unlock feature flag is present.
-// TODO(crbug/1111541): Remove this function because it always returns true.
+// TODO(crbug.com/40709232): Remove this function because it always returns
+// true.
 bool IsPinEnabled();
 
 // Returns true if the fingerprint is supported by the device.
@@ -131,22 +142,11 @@ FingerprintLocation GetFingerprintLocation();
 // screen and the settings.
 void AddFingerprintResources(content::WebUIDataSource* html_source);
 
+// Returns the resource IDs for the fingerprint setup description strings.
+FingerprintDescriptionStrings GetFingerprintDescriptionStrings(
+    FingerprintLocation location);
+
 }  // namespace quick_unlock
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-namespace quick_unlock {
-using ::ash::quick_unlock::AddFingerprintResources;
-using ::ash::quick_unlock::FingerprintLocation;
-using ::ash::quick_unlock::GetFingerprintLocation;
-using ::ash::quick_unlock::IsFingerprintEnabled;
-using ::ash::quick_unlock::IsPinDisabledByPolicy;
-using ::ash::quick_unlock::IsPinEnabled;
-using ::ash::quick_unlock::Purpose;
-using ::ash::quick_unlock::TestApi;
-}  // namespace quick_unlock
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_QUICK_UNLOCK_QUICK_UNLOCK_UTILS_H_

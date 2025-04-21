@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/feed/web_feed_util.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/navigation_handle.h"
@@ -32,24 +32,6 @@ class WebFeedInfoFinderImpl : public WebFeedTabHelper::WebFeedInfoFinder {
 };
 
 }  // namespace
-
-// static
-TabWebFeedFollowState WebFeedTabHelper::GetFollowState(
-    content::WebContents* web_contents) {
-  feed::WebFeedTabHelper* tab_helper =
-      feed::WebFeedTabHelper::FromWebContents(web_contents);
-  if (!tab_helper)
-    return TabWebFeedFollowState::kUnknown;
-
-  // Make sure that the URL used to fetch the follow state matches the latest
-  // committed URL. There may be a chance that the contents have navigated to
-  // a different URL and the next asynchronous follow state fetch has not
-  // completed.
-  if (tab_helper->url() != web_contents->GetLastCommittedURL())
-    return TabWebFeedFollowState::kUnknown;
-
-  return tab_helper->follow_state();
-}
 
 WebFeedTabHelper::WebFeedTabHelper(content::WebContents* web_contents)
     : content::WebContentsObserver(web_contents),

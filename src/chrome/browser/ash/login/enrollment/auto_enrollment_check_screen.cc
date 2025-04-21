@@ -1,33 +1,31 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/enrollment/auto_enrollment_check_screen.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/command_line.h"
+#include <optional>
+
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/overloaded.h"
 #include "base/location.h"
 #include "base/notreached.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/ash/login/error_screens_histogram_helper.h"
 #include "chrome/browser/ash/login/screen_manager.h"
 #include "chrome/browser/ash/login/screens/error_screen.h"
 #include "chrome/browser/ash/login/screens/network_error.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
+#include "chrome/browser/ash/policy/enrollment/auto_enrollment_controller.h"
+#include "chrome/browser/ash/policy/enrollment/auto_enrollment_state.h"
 #include "chrome/browser/ash/policy/enrollment/auto_enrollment_type_checker.h"
+#include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
+#include "third_party/abseil-cpp/absl/types/variant.h"
 
 namespace ash {
-namespace {
-
-NetworkPortalDetector::CaptivePortalStatus GetCaptivePortalStatus() {
-  return network_portal_detector::GetInstance()->GetCaptivePortalStatus();
-}
-
-}  // namespace
 
 // static
 std::string AutoEnrollmentCheckScreen::GetResultString(Result result) {
@@ -48,23 +46,20 @@ AutoEnrollmentCheckScreen::AutoEnrollmentCheckScreen(
       view_(std::move(view)),
       error_screen_(error_screen),
       exit_callback_(exit_callback),
-      auto_enrollment_controller_(nullptr),
-      captive_portal_status_(
-          NetworkPortalDetector::CAPTIVE_PORTAL_STATUS_UNKNOWN),
-      auto_enrollment_state_(policy::AUTO_ENROLLMENT_STATE_IDLE),
-      histogram_helper_(new ErrorScreensHistogramHelper("Enrollment")) {}
+      histogram_helper_(new ErrorScreensHistogramHelper(
+          ErrorScreensHistogramHelper::ErrorParentScreen::kEnrollment)) {}
 
 AutoEnrollmentCheckScreen::~AutoEnrollmentCheckScreen() {
-  network_portal_detector::GetInstance()->RemoveObserver(this);
+  if (NetworkHandler::IsInitialized())
+    NetworkHandler::Get()->network_state_handler()->RemoveObserver(this);
 }
 
 void AutoEnrollmentCheckScreen::ClearState() {
   auto_enrollment_progress_subscription_ = {};
   connect_request_subscription_ = {};
-  network_portal_detector::GetInstance()->RemoveObserver(this);
+  NetworkHandler::Get()->network_state_handler()->RemoveObserver(this);
 
-  auto_enrollment_state_ = policy::AUTO_ENROLLMENT_STATE_IDLE;
-  captive_portal_status_ = NetworkPortalDetector::CAPTIVE_PORTAL_STATUS_UNKNOWN;
+  captive_portal_state_ = NetworkState::PortalState::kUnknown;
 }
 
 void AutoEnrollmentCheckScreen::ShowImpl() {
@@ -83,44 +78,46 @@ void AutoEnrollmentCheckScreen::ShowImpl() {
       auto_enrollment_controller_->RegisterProgressCallback(base::BindRepeating(
           &AutoEnrollmentCheckScreen::OnAutoEnrollmentCheckProgressed,
           base::Unretained(this)));
-  network_portal_detector::GetInstance()->AddObserver(this);
+
+  NetworkStateHandler* network_state_handler =
+      NetworkHandler::Get()->network_state_handler();
+  network_state_handler->AddObserver(this);
+  const NetworkState* default_network = network_state_handler->DefaultNetwork();
+  const NetworkState::PortalState new_captive_portal_state =
+      default_network ? default_network->portal_state()
+                      : NetworkState::PortalState::kUnknown;
 
   // Perform an initial UI update.
-  NetworkPortalDetector::CaptivePortalStatus new_captive_portal_status =
-      GetCaptivePortalStatus();
-  policy::AutoEnrollmentState new_auto_enrollment_state =
-      auto_enrollment_controller_->state();
+  if (!ShowCaptivePortalState(new_captive_portal_state) &&
+      auto_enrollment_controller_->state().has_value()) {
+    ShowAutoEnrollmentState(auto_enrollment_controller_->state().value());
+  }
 
-  if (!UpdateCaptivePortalStatus(new_captive_portal_status))
-    UpdateAutoEnrollmentState(new_auto_enrollment_state);
-
-  captive_portal_status_ = new_captive_portal_status;
-  auto_enrollment_state_ = new_auto_enrollment_state;
+  captive_portal_state_ = new_captive_portal_state;
 
   // Make sure gears are in motion in the background.
   // Note that if a previous auto-enrollment check ended with a failure,
   // IsCompleted() would still return false, and Show would not report result
   // early. In that case auto-enrollment check should be retried.
-  if (auto_enrollment_controller_->state() ==
-          policy::AUTO_ENROLLMENT_STATE_CONNECTION_ERROR ||
-      auto_enrollment_controller_->state() ==
-          policy::AUTO_ENROLLMENT_STATE_SERVER_ERROR) {
-    // TODO(crbug.com/1271134): Logging as "WARNING" to make sure it's preserved
-    // in the logs.
+  const bool has_controller_failed =
+      auto_enrollment_controller_->state().has_value() &&
+      !auto_enrollment_controller_->state().value().has_value();
+  if (has_controller_failed) {
+    // TODO(crbug.com/40805389): Logging as "WARNING" to make sure it's
+    // preserved in the logs.
     LOG(WARNING) << "AutoEnrollmentCheckScreen::ShowImpl() retrying enrollment"
                  << " check due to failure.";
     auto_enrollment_controller_->Retry();
   } else {
     auto_enrollment_controller_->Start();
   }
-  network_portal_detector::GetInstance()->StartPortalDetection();
 }
 
 void AutoEnrollmentCheckScreen::HideImpl() {
-  network_portal_detector::GetInstance()->RemoveObserver(this);
+  ClearState();
 }
 
-bool AutoEnrollmentCheckScreen::MaybeSkip(WizardContext* context) {
+bool AutoEnrollmentCheckScreen::MaybeSkip(WizardContext& context) {
   // If the decision got made already, don't show the screen at all.
   if (!policy::AutoEnrollmentTypeChecker::IsEnabled() || IsCompleted()) {
     RunExitCallback(Result::NOT_APPLICABLE);
@@ -129,10 +126,14 @@ bool AutoEnrollmentCheckScreen::MaybeSkip(WizardContext* context) {
   return false;
 }
 
-void AutoEnrollmentCheckScreen::OnPortalDetectionCompleted(
-    const NetworkState* /* network */,
-    const NetworkPortalDetector::CaptivePortalStatus /* status */) {
-  UpdateState();
+void AutoEnrollmentCheckScreen::PortalStateChanged(
+    const NetworkState* /*default_network*/,
+    const NetworkState::PortalState portal_state) {
+  UpdateState(portal_state);
+}
+
+void AutoEnrollmentCheckScreen::OnShuttingDown() {
+  NetworkHandler::Get()->network_state_handler()->RemoveObserver(this);
 }
 
 void AutoEnrollmentCheckScreen::OnAutoEnrollmentCheckProgressed(
@@ -141,96 +142,76 @@ void AutoEnrollmentCheckScreen::OnAutoEnrollmentCheckProgressed(
     SignalCompletion();
     return;
   }
-
-  UpdateState();
+  UpdateState(captive_portal_state_);
 }
 
-void AutoEnrollmentCheckScreen::UpdateState() {
-  NetworkPortalDetector::CaptivePortalStatus new_captive_portal_status =
-      GetCaptivePortalStatus();
-  policy::AutoEnrollmentState new_auto_enrollment_state =
+void AutoEnrollmentCheckScreen::UpdateState(
+    NetworkState::PortalState new_captive_portal_state) {
+  const std::optional<policy::AutoEnrollmentState>& new_auto_enrollment_state =
       auto_enrollment_controller_->state();
 
   // Configure the error screen to show the appropriate error message.
-  if (!UpdateCaptivePortalStatus(new_captive_portal_status))
-    UpdateAutoEnrollmentState(new_auto_enrollment_state);
-
-  // Update the connecting indicator.
-  error_screen_->ShowConnectingIndicator(new_auto_enrollment_state ==
-                                         policy::AUTO_ENROLLMENT_STATE_PENDING);
+  if (!ShowCaptivePortalState(new_captive_portal_state) &&
+      new_auto_enrollment_state.has_value()) {
+    ShowAutoEnrollmentState(new_auto_enrollment_state.value());
+  }
 
   // Determine whether a retry is in order.
-  bool retry = (new_captive_portal_status ==
-                NetworkPortalDetector::CAPTIVE_PORTAL_STATUS_ONLINE) &&
-               (captive_portal_status_ !=
-                NetworkPortalDetector::CAPTIVE_PORTAL_STATUS_ONLINE);
+  const bool retry =
+      (new_captive_portal_state == NetworkState::PortalState::kOnline) &&
+      (captive_portal_state_ != NetworkState::PortalState::kOnline);
+
+  // Update the connecting indicator if state determination attempt will be in
+  // progress.
+  error_screen_->ShowConnectingIndicator(/*show=*/retry);
 
   // Save the new state.
-  captive_portal_status_ = new_captive_portal_status;
-  auto_enrollment_state_ = new_auto_enrollment_state;
+  captive_portal_state_ = new_captive_portal_state;
+
+  // TODO(crbug.com/40805389): Logging as "WARNING" to make sure it's preserved
+  // in the logs.
+  LOG(WARNING) << "AutoEnrollmentCheckScreen::UpdateState() retry = " << retry;
 
   // Retry if applicable. This is last so eventual callbacks find consistent
   // state.
-  if (retry)
+  if (retry) {
     auto_enrollment_controller_->Retry();
-
-  // TODO(crbug.com/1271134): Logging as "WARNING" to make sure it's preserved
-  // in the logs.
-  LOG(WARNING) << "AutoEnrollmentCheckScreen::UpdateState() retry = " << retry;
+  }
 }
 
-bool AutoEnrollmentCheckScreen::UpdateCaptivePortalStatus(
-    NetworkPortalDetector::CaptivePortalStatus new_captive_portal_status) {
-  switch (new_captive_portal_status) {
-    case NetworkPortalDetector::CAPTIVE_PORTAL_STATUS_UNKNOWN:
-    case NetworkPortalDetector::CAPTIVE_PORTAL_STATUS_ONLINE:
+bool AutoEnrollmentCheckScreen::ShowCaptivePortalState(
+    NetworkState::PortalState new_captive_portal_state) {
+  switch (new_captive_portal_state) {
+    case NetworkState::PortalState::kUnknown:
+      [[fallthrough]];
+    case NetworkState::PortalState::kOnline:
       return false;
-    case NetworkPortalDetector::CAPTIVE_PORTAL_STATUS_OFFLINE:
+    case NetworkState::PortalState::kNoInternet:
       ShowErrorScreen(NetworkError::ERROR_STATE_OFFLINE);
       return true;
-    case NetworkPortalDetector::CAPTIVE_PORTAL_STATUS_PORTAL:
+    case NetworkState::PortalState::kPortal:
+      [[fallthrough]];
+    case NetworkState::PortalState::kPortalSuspected:
       ShowErrorScreen(NetworkError::ERROR_STATE_PORTAL);
-      if (captive_portal_status_ != new_captive_portal_status)
+      if (captive_portal_state_ != new_captive_portal_state)
         error_screen_->FixCaptivePortal();
       return true;
-    case NetworkPortalDetector::CAPTIVE_PORTAL_STATUS_PROXY_AUTH_REQUIRED:
-      ShowErrorScreen(NetworkError::ERROR_STATE_PROXY);
-      return true;
-    case NetworkPortalDetector::CAPTIVE_PORTAL_STATUS_COUNT:
-      NOTREACHED() << "Bad status: CAPTIVE_PORTAL_STATUS_COUNT";
-      return false;
   }
-
-  // Return is required to avoid compiler warning.
-  NOTREACHED() << "Bad status " << new_captive_portal_status;
-  return false;
 }
 
-bool AutoEnrollmentCheckScreen::UpdateAutoEnrollmentState(
+bool AutoEnrollmentCheckScreen::ShowAutoEnrollmentState(
     policy::AutoEnrollmentState new_auto_enrollment_state) {
-  switch (new_auto_enrollment_state) {
-    case policy::AUTO_ENROLLMENT_STATE_IDLE:
-    case policy::AUTO_ENROLLMENT_STATE_PENDING:
-    case policy::AUTO_ENROLLMENT_STATE_TRIGGER_ENROLLMENT:
-    case policy::AUTO_ENROLLMENT_STATE_TRIGGER_ZERO_TOUCH:
-    case policy::AUTO_ENROLLMENT_STATE_NO_ENROLLMENT:
-    case policy::AUTO_ENROLLMENT_STATE_DISABLED:
-      return false;
-    case policy::AUTO_ENROLLMENT_STATE_SERVER_ERROR:
-      if (!ShouldBlockOnServerError())
-        return false;
-
-      // Fall to the same behavior like any connection error if the device is
-      // enrolled.
-      [[fallthrough]];
-    case policy::AUTO_ENROLLMENT_STATE_CONNECTION_ERROR:
-      ShowErrorScreen(NetworkError::ERROR_STATE_OFFLINE);
-      return true;
+  if (new_auto_enrollment_state.has_value()) {
+    return false;
   }
 
-  // Return is required to avoid compiler warning.
-  NOTREACHED() << "bad state " << new_auto_enrollment_state;
-  return false;
+  // Do not  show connection error screen if the error is not blocking.
+  if (!IsBlockingError(new_auto_enrollment_state.error())) {
+    return false;
+  }
+
+  ShowErrorScreen(NetworkError::ERROR_STATE_OFFLINE);
+  return true;
 }
 
 void AutoEnrollmentCheckScreen::ShowErrorScreen(
@@ -242,6 +223,7 @@ void AutoEnrollmentCheckScreen::ShowErrorScreen(
       auto_enrollment_controller_->auto_enrollment_check_type() !=
       policy::AutoEnrollmentTypeChecker::CheckType::
           kForcedReEnrollmentExplicitlyRequired);
+
   error_screen_->SetErrorState(error_state,
                                network ? network->name() : std::string());
   connect_request_subscription_ = error_screen_->RegisterConnectRequestCallback(
@@ -256,48 +238,71 @@ void AutoEnrollmentCheckScreen::ShowErrorScreen(
 }
 
 void AutoEnrollmentCheckScreen::OnErrorScreenHidden() {
-  error_screen_->SetParentScreen(ash::OOBE_SCREEN_UNKNOWN);
+  error_screen_->SetParentScreen(OOBE_SCREEN_UNKNOWN);
   Show(context());
 }
 
 void AutoEnrollmentCheckScreen::SignalCompletion() {
   VLOG(1) << "AutoEnrollmentCheckScreen::SignalCompletion()";
 
-  network_portal_detector::GetInstance()->RemoveObserver(this);
+  if (NetworkHandler::IsInitialized())
+    NetworkHandler::Get()->network_state_handler()->RemoveObserver(this);
   error_screen_->SetHideCallback(base::OnceClosure());
-  error_screen_->SetParentScreen(ash::OOBE_SCREEN_UNKNOWN);
+  error_screen_->SetParentScreen(OOBE_SCREEN_UNKNOWN);
   auto_enrollment_progress_subscription_ = {};
   connect_request_subscription_ = {};
 
   // Running exit callback can cause `this` destruction, so let other methods
   // finish their work before.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&AutoEnrollmentCheckScreen::RunExitCallback,
                                 weak_ptr_factory_.GetWeakPtr(), Result::NEXT));
 }
 
 bool AutoEnrollmentCheckScreen::IsCompleted() const {
-  switch (auto_enrollment_controller_->state()) {
-    case policy::AUTO_ENROLLMENT_STATE_IDLE:
-    case policy::AUTO_ENROLLMENT_STATE_PENDING:
-    case policy::AUTO_ENROLLMENT_STATE_CONNECTION_ERROR:
-      return false;
-    case policy::AUTO_ENROLLMENT_STATE_SERVER_ERROR:
-      // Server errors should block OOBE for enrolled devices.
-      return !ShouldBlockOnServerError();
-    case policy::AUTO_ENROLLMENT_STATE_TRIGGER_ENROLLMENT:
-    case policy::AUTO_ENROLLMENT_STATE_TRIGGER_ZERO_TOUCH:
-    case policy::AUTO_ENROLLMENT_STATE_NO_ENROLLMENT:
-    case policy::AUTO_ENROLLMENT_STATE_DISABLED:
-      // Decision made, ready to proceed.
-      return true;
+  if (!auto_enrollment_controller_->state().has_value()) {
+    return false;
   }
-  NOTREACHED();
-  return false;
+
+  const policy::AutoEnrollmentState state =
+      auto_enrollment_controller_->state().value();
+  if (state.has_value()) {
+    // Decision made, ready to proceed.
+    return true;
+  }
+
+  // Error is considered compliting if it is not blocking.
+  return !IsBlockingError(state.error());
 }
 
 void AutoEnrollmentCheckScreen::OnConnectRequested() {
   auto_enrollment_controller_->Retry();
+}
+
+bool AutoEnrollmentCheckScreen::IsBlockingError(
+    const policy::AutoEnrollmentError& error) const {
+  // Connection errors are always blocking. Server errors are blocking for FRE
+  // devices.
+  return absl::visit(
+      base::Overloaded{
+          [](policy::AutoEnrollmentSafeguardTimeoutError) { return true; },
+          [](policy::AutoEnrollmentSystemClockSyncError) { return true; },
+          [](policy::AutoEnrollmentStateKeysRetrievalError) { return true; },
+          [this](const policy::AutoEnrollmentDMServerError& error) {
+            return error.network_error.has_value() ? true
+                                                   : ShouldBlockOnServerError();
+          },
+          [this](policy::AutoEnrollmentStateAvailabilityResponseError error) {
+            return ShouldBlockOnServerError();
+          },
+          [this](policy::AutoEnrollmentPsmError) {
+            return ShouldBlockOnServerError();
+          },
+          [this](policy::AutoEnrollmentStateRetrievalResponseError) {
+            return ShouldBlockOnServerError();
+          },
+      },
+      error);
 }
 
 bool AutoEnrollmentCheckScreen::ShouldBlockOnServerError() const {
@@ -314,7 +319,6 @@ bool AutoEnrollmentCheckScreen::ShouldBlockOnServerError() const {
     case CheckType::kUnknownDueToMissingSystemClockSync:
     case CheckType::kNone:
       NOTREACHED();
-      return false;
   }
 }
 

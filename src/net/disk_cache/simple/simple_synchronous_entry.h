@@ -1,6 +1,11 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #ifndef NET_DISK_CACHE_SIMPLE_SIMPLE_SYNCHRONOUS_ENTRY_H_
 #define NET_DISK_CACHE_SIMPLE_SIMPLE_SYNCHRONOUS_ENTRY_H_
@@ -10,6 +15,7 @@
 #include <algorithm>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -19,8 +25,7 @@
 #include "base/files/file_path.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/time/time.h"
 #include "net/base/cache_type.h"
 #include "net/base/net_errors.h"
@@ -41,7 +46,7 @@ namespace disk_cache {
 class BackendFileOperations;
 class UnboundBackendFileOperations;
 
-NET_EXPORT_PRIVATE extern const base::Feature kSimpleCachePrefetchExperiment;
+NET_EXPORT_PRIVATE BASE_DECLARE_FEATURE(kSimpleCachePrefetchExperiment);
 NET_EXPORT_PRIVATE extern const char kSimpleCacheFullPrefetchBytesParam[];
 NET_EXPORT_PRIVATE extern const char
     kSimpleCacheTrailerPrefetchSpeculativeBytesParam[];
@@ -104,7 +109,7 @@ struct SimpleEntryCreationResults {
   explicit SimpleEntryCreationResults(SimpleEntryStat entry_stat);
   ~SimpleEntryCreationResults();
 
-  raw_ptr<SimpleSynchronousEntry, DanglingUntriaged> sync_entry;
+  raw_ptr<SimpleSynchronousEntry> sync_entry;
   // This is set when `sync_entry` is null.
   std::unique_ptr<UnboundBackendFileOperations> unbound_file_operations;
 
@@ -190,7 +195,7 @@ class SimpleSynchronousEntry {
   NET_EXPORT_PRIVATE SimpleSynchronousEntry(
       net::CacheType cache_type,
       const base::FilePath& path,
-      const std::string& key,
+      const std::optional<std::string>& key,
       uint64_t entry_hash,
       SimpleFileTracker* simple_file_tracker,
       std::unique_ptr<UnboundBackendFileOperations> file_operations,
@@ -205,7 +210,7 @@ class SimpleSynchronousEntry {
   static void OpenEntry(
       net::CacheType cache_type,
       const base::FilePath& path,
-      const std::string& key,
+      const std::optional<std::string>& key,
       uint64_t entry_hash,
       SimpleFileTracker* file_tracker,
       std::unique_ptr<UnboundBackendFileOperations> file_operations,
@@ -304,7 +309,7 @@ class SimpleSynchronousEntry {
              SimpleEntryCloseResults* out_results);
 
   const base::FilePath& path() const { return path_; }
-  std::string key() const { return key_; }
+  std::optional<std::string> key() const { return key_; }
   const SimpleFileTracker::EntryFileKey& entry_file_key() const {
     return entry_file_key_;
   }
@@ -496,7 +501,7 @@ class SimpleSynchronousEntry {
   const net::CacheType cache_type_;
   const base::FilePath path_;
   SimpleFileTracker::EntryFileKey entry_file_key_;
-  std::string key_;
+  std::optional<std::string> key_;
 
   bool have_open_files_ = false;
   bool initialized_ = false;

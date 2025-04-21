@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/screen_layout_observer.h"
 #include "ash/test/ash_test_base.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
@@ -50,7 +50,7 @@ class ResolutionNotificationControllerTest
         base::Seconds(timeout_count));
     if (::display::features::IsListAllDisplayModesEnabled()) {
       return l10n_util::GetStringFUTF16(
-          IDS_ASH_RESOLUTION_REFRESH_CHANGE_DIALOG_CHANGED, display_name,
+          IDS_ASH_RESOLUTION_REFRESH_CHANGE_DIALOG_CHANGED_NEW, display_name,
           base::UTF8ToUTF16(new_resolution.ToString()),
           ConvertRefreshRateToString16(new_refresh_rate), countdown);
     }
@@ -73,11 +73,11 @@ class ResolutionNotificationControllerTest
         base::Seconds(timeout_count));
     if (::display::features::IsListAllDisplayModesEnabled()) {
       return l10n_util::GetStringFUTF16(
-          IDS_ASH_RESOLUTION_REFRESH_CHANGE_DIALOG_FALLBACK,
-          {display_name, base::UTF8ToUTF16(specified_resolution.ToString()),
-           ConvertRefreshRateToString16(specified_refresh_rate),
-           base::UTF8ToUTF16(fallback_resolution.ToString()),
-           ConvertRefreshRateToString16(fallback_refresh_rate), countdown},
+          IDS_ASH_RESOLUTION_REFRESH_CHANGE_DIALOG_FALLBACK_NEW,
+          {display_name, base::UTF8ToUTF16(fallback_resolution.ToString()),
+           ConvertRefreshRateToString16(fallback_refresh_rate),
+           base::UTF8ToUTF16(specified_resolution.ToString()),
+           ConvertRefreshRateToString16(specified_refresh_rate), countdown},
           /*offsets=*/nullptr);
     }
     return l10n_util::GetStringFUTF16(
@@ -105,20 +105,23 @@ class ResolutionNotificationControllerTest
       float new_refresh_rate,
       bool old_is_native,
       bool new_is_native,
-      mojom::DisplayConfigSource source = mojom::DisplayConfigSource::kUser) {
-    const display::ManagedDisplayInfo& info =
-        display_manager()->GetDisplayInfo(display.id());
-    display::ManagedDisplayMode old_mode(info.size_in_pixel(),
-                                         info.refresh_rate(),
-                                         false /* interlaced */, old_is_native);
-    display::ManagedDisplayMode new_mode(
-        new_resolution, new_refresh_rate, old_mode.is_interlaced(),
-        new_is_native, old_mode.device_scale_factor());
+      crosapi::mojom::DisplayConfigSource source =
+          crosapi::mojom::DisplayConfigSource::kUser) {
+    {
+      const display::ManagedDisplayInfo& info =
+          display_manager()->GetDisplayInfo(display.id());
+      display::ManagedDisplayMode old_mode(
+          info.size_in_pixel(), info.refresh_rate(), false /* interlaced */,
+          old_is_native);
+      display::ManagedDisplayMode new_mode(
+          new_resolution, new_refresh_rate, old_mode.is_interlaced(),
+          new_is_native, old_mode.device_scale_factor());
 
-    EXPECT_TRUE(controller()->PrepareNotificationAndSetDisplayMode(
-        display.id(), old_mode, new_mode, source,
-        base::BindOnce(&ResolutionNotificationControllerTest::OnAccepted,
-                       base::Unretained(this))));
+      EXPECT_TRUE(controller()->PrepareNotificationAndSetDisplayMode(
+          display.id(), old_mode, new_mode, source,
+          base::BindOnce(&ResolutionNotificationControllerTest::OnAccepted,
+                         base::Unretained(this))));
+    }
 
     // OnConfigurationChanged event won't be emitted in the test environment,
     // so invoke UpdateDisplay() to emit that event explicitly.
@@ -145,7 +148,8 @@ class ResolutionNotificationControllerTest
       float refresh_rate,
       bool old_is_native,
       bool new_is_native,
-      mojom::DisplayConfigSource source = mojom::DisplayConfigSource::kUser) {
+      crosapi::mojom::DisplayConfigSource source =
+          crosapi::mojom::DisplayConfigSource::kUser) {
     SetDisplayResolutionAndNotifyWithResolution(
         display, new_resolution, new_resolution, refresh_rate, old_is_native,
         new_is_native, source);
@@ -238,7 +242,7 @@ TEST_P(ResolutionNotificationControllerTest, ForcedByPolicy) {
   SetDisplayResolutionAndNotify(display_manager_test.GetSecondaryDisplay(),
                                 gfx::Size(300, 200), 60, /*old_is_native=*/true,
                                 /*new_is_native=*/false,
-                                mojom::DisplayConfigSource::kPolicy);
+                                crosapi::mojom::DisplayConfigSource::kPolicy);
   EXPECT_FALSE(IsNotificationVisible());
   display::ManagedDisplayMode mode;
   EXPECT_TRUE(display_manager()->GetSelectedModeForDisplayId(id2, &mode));
@@ -455,15 +459,24 @@ TEST_P(ResolutionNotificationControllerTest, Fallback) {
   EXPECT_EQ(60.0f, mode.refresh_rate());
 }
 
-TEST_P(ResolutionNotificationControllerTest, NoTimeoutInKioskMode) {
+namespace {
+class NoSessionResolutionNotificationControllerTest
+    : public ResolutionNotificationControllerTest {
+ public:
+  NoSessionResolutionNotificationControllerTest() { set_start_session(false); }
+  NoSessionResolutionNotificationControllerTest(
+      const NoSessionResolutionNotificationControllerTest&) = delete;
+  NoSessionResolutionNotificationControllerTest& operator=(
+      const NoSessionResolutionNotificationControllerTest&) = delete;
+  ~NoSessionResolutionNotificationControllerTest() override = default;
+};
+
+}  // namespace
+
+TEST_P(NoSessionResolutionNotificationControllerTest, NoTimeoutInKioskMode) {
   // Login in as kiosk app.
-  UserSession session;
-  session.session_id = 1u;
-  session.user_info.type = user_manager::USER_TYPE_KIOSK_APP;
-  session.user_info.account_id = AccountId::FromUserEmail("user1@test.com");
-  session.user_info.display_name = "User 1";
-  session.user_info.display_email = "user1@test.com";
-  Shell::Get()->session_controller()->UpdateUserSession(std::move(session));
+  SimulateKioskMode(user_manager::UserType::kKioskApp);
+
   EXPECT_EQ(LoginStatus::KIOSK_APP,
             Shell::Get()->session_controller()->login_status());
 
@@ -475,15 +488,10 @@ TEST_P(ResolutionNotificationControllerTest, NoTimeoutInKioskMode) {
                                 /*new_is_native=*/false);
 }
 
-TEST_P(ResolutionNotificationControllerTest, NoDialogInKioskMode) {
+TEST_P(NoSessionResolutionNotificationControllerTest, NoDialogInKioskMode) {
   // Login in as kiosk app.
-  UserSession session;
-  session.session_id = 1u;
-  session.user_info.type = user_manager::USER_TYPE_KIOSK_APP;
-  session.user_info.account_id = AccountId::FromUserEmail("user1@test.com");
-  session.user_info.display_name = "User 1";
-  session.user_info.display_email = "user1@test.com";
-  Shell::Get()->session_controller()->UpdateUserSession(std::move(session));
+  SimulateKioskMode(user_manager::UserType::kKioskApp);
+
   EXPECT_EQ(LoginStatus::KIOSK_APP,
             Shell::Get()->session_controller()->login_status());
 
@@ -508,6 +516,9 @@ TEST_P(ResolutionNotificationControllerTest, NoDialogInKioskMode) {
 // enabled and disabled.
 INSTANTIATE_TEST_SUITE_P(All,
                          ResolutionNotificationControllerTest,
+                         ::testing::Bool());
+INSTANTIATE_TEST_SUITE_P(All,
+                         NoSessionResolutionNotificationControllerTest,
                          ::testing::Bool());
 
 }  // namespace ash

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,10 @@ class NetworkChangeNotifierFactoryFuchsia
   ~NetworkChangeNotifierFactoryFuchsia() override;
 
   // net::NetworkChangeNotifierFactory implementation:
-  std::unique_ptr<net::NetworkChangeNotifier> CreateInstance() override;
+  std::unique_ptr<net::NetworkChangeNotifier> CreateInstanceWithInitialTypes(
+      net::NetworkChangeNotifier::ConnectionType /*initial_type*/,
+      net::NetworkChangeNotifier::ConnectionSubtype /*initial_subtype*/)
+      override;
 };
 
 }  // namespace chromecast

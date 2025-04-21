@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,10 @@
 
 namespace content {
 class WebContents;
+}
+
+namespace sync_sessions {
+class SyncedTabDelegate;
 }
 
 // A BrowserSyncedTabDelegate is the desktop implementation for
@@ -28,6 +32,8 @@ class BrowserSyncedTabDelegate
   SessionID GetWindowId() const override;
   SessionID GetSessionId() const override;
   bool IsPlaceholderTab() const override;
+  std::unique_ptr<SyncedTabDelegate> ReadPlaceholderTabSnapshotIfItShouldSync(
+      sync_sessions::SyncSessionsClient* sessions_client) override;
 
  private:
   explicit BrowserSyncedTabDelegate(content::WebContents* web_contents);

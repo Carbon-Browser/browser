@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -98,13 +98,17 @@ class CC_DEBUG_EXPORT DebugColors {
   static int ScrollEventHandlerRectBorderWidth();
   static SkColor4f ScrollEventHandlerRectFillColor();
 
-  static SkColor4f NonFastScrollableRectBorderColor();
-  static int NonFastScrollableRectBorderWidth();
-  static SkColor4f NonFastScrollableRectFillColor();
+  static SkColor4f MainThreadScrollHitTestRectBorderColor();
+  static int MainThreadScrollHitTestRectBorderWidth();
+  static SkColor4f MainThreadScrollHitTestRectFillColor();
 
-  static SkColor4f MainThreadScrollingReasonRectBorderColor();
-  static int MainThreadScrollingReasonRectBorderWidth();
-  static SkColor4f MainThreadScrollingReasonRectFillColor();
+  static SkColor4f MainThreadScrollRepaintRectBorderColor();
+  static int MainThreadScrollRepaintRectBorderWidth();
+  static SkColor4f MainThreadScrollRepaintRectFillColor();
+
+  static SkColor4f RasterInducingScrollRectBorderColor();
+  static int RasterInducingScrollRectBorderWidth();
+  static SkColor4f RasterInducingScrollRectFillColor();
 
   static SkColor4f LayerAnimationBoundsBorderColor();
   static int LayerAnimationBoundsBorderWidth();

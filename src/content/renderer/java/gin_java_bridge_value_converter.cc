@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/342213636): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "content/renderer/java/gin_java_bridge_value_converter.h"
 
@@ -8,6 +13,8 @@
 #include <stdint.h>
 
 #include <cmath>
+#include <memory>
+#include <utility>
 
 #include "base/check.h"
 #include "base/memory/ptr_util.h"
@@ -64,7 +71,8 @@ class TypedArraySerializer {
       v8::Local<v8::TypedArray> typed_array);
   virtual void serializeTo(char* data,
                            size_t data_length,
-                           base::ListValue* out) = 0;
+                           base::Value::List* out) = 0;
+
  protected:
   TypedArraySerializer() {}
 };
@@ -83,7 +91,7 @@ class TypedArraySerializerImpl : public TypedArraySerializer {
 
   void serializeTo(char* data,
                    size_t data_length,
-                   base::ListValue* out) override {
+                   base::Value::List* out) override {
     DCHECK_EQ(data_length, typed_array_->Length() * sizeof(ElementType));
     for (ElementType *element = reinterpret_cast<ElementType*>(data),
                      *end = element + typed_array_->Length();
@@ -130,7 +138,6 @@ std::unique_ptr<TypedArraySerializer> TypedArraySerializer::Create(
     return TypedArraySerializerImpl<double, double>::Create(typed_array);
   }
   NOTREACHED();
-  return nullptr;
 }
 
 }  // namespace
@@ -144,7 +151,7 @@ bool GinJavaBridgeValueConverter::FromV8ArrayBuffer(
     return true;
   }
 
-  char* data = NULL;
+  char* data = nullptr;
   size_t data_length = 0;
   gin::ArrayBufferView view;
   if (ConvertFromV8(isolate, value.As<v8::ArrayBufferView>(), &view)) {
@@ -156,11 +163,11 @@ bool GinJavaBridgeValueConverter::FromV8ArrayBuffer(
     return true;
   }
 
-  std::unique_ptr<base::ListValue> result(new base::ListValue);
+  base::Value::List result;
   std::unique_ptr<TypedArraySerializer> serializer(
       TypedArraySerializer::Create(value.As<v8::TypedArray>()));
-  serializer->serializeTo(data, data_length, result.get());
-  *out = std::move(result);
+  serializer->serializeTo(data, data_length, &result);
+  *out = std::make_unique<base::Value>(std::move(result));
   return true;
 }
 

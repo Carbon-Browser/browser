@@ -1,13 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromecast/metrics/cast_event_builder_impl.h"
 
-#include <algorithm>
-
 #include "base/logging.h"
 #include "base/metrics/metrics_hashes.h"
+#include "base/ranges/algorithm.h"
 #include "base/time/time.h"
 #include "chromecast/base/hash_util.h"
 #include "chromecast/metrics/cast_event_builder.h"
@@ -138,6 +137,12 @@ CastEventBuilder& CastEventBuilderImpl::SetAoghAgentId(
   return *this;
 }
 
+CastEventBuilder& CastEventBuilderImpl::SetAoghStandardAgentId(
+    const std::string& standard_agent_id) {
+  event_proto_->set_aogh_standard_agent_id(standard_agent_id);
+  return *this;
+}
+
 CastEventBuilder& CastEventBuilderImpl::SetUiVersion(const std::string& value) {
   event_proto_->set_ui_version(value);
   return *this;
@@ -217,7 +222,7 @@ CastEventBuilder& CastEventBuilderImpl::SetFeatureVector(
     const std::vector<float>& features) {
   event_proto_->mutable_feature_vector()->Resize(features.size(), 0);
   float* mutable_data = event_proto_->mutable_feature_vector()->mutable_data();
-  std::copy(features.data(), features.data() + features.size(), mutable_data);
+  base::ranges::copy(features, mutable_data);
   return *this;
 }
 

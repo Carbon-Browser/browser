@@ -1,12 +1,12 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -15,8 +15,8 @@
 #include "mojo/public/cpp/bindings/tests/pickled_types_blink.h"
 #include "mojo/public/cpp/bindings/tests/pickled_types_chromium.h"
 #include "mojo/public/cpp/bindings/tests/variant_test_util.h"
-#include "mojo/public/interfaces/bindings/tests/test_native_types.mojom-blink.h"
-#include "mojo/public/interfaces/bindings/tests/test_native_types.mojom.h"
+#include "mojo/public/interfaces/bindings/tests/test_native_types.test-mojom-blink.h"
+#include "mojo/public/interfaces/bindings/tests/test_native_types.test-mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace mojo {

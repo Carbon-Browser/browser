@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -73,6 +73,18 @@
 #define CAMERA_LOG(level)                         \
   DEVICE_LOG(::device_event_log::LOG_TYPE_CAMERA, \
              ::device_event_log::LOG_LEVEL_##level)
+#define GEOLOCATION_LOG(level)                         \
+  DEVICE_LOG(::device_event_log::LOG_TYPE_GEOLOCATION, \
+             ::device_event_log::LOG_LEVEL_##level)
+#define EXTENSIONS_LOG(level)                         \
+  DEVICE_LOG(::device_event_log::LOG_TYPE_EXTENSIONS, \
+             ::device_event_log::LOG_LEVEL_##level)
+#define DISPLAY_LOG(level)                         \
+  DEVICE_LOG(::device_event_log::LOG_TYPE_DISPLAY, \
+             ::device_event_log::LOG_LEVEL_##level)
+#define FIRMWARE_LOG(level)                         \
+  DEVICE_LOG(::device_event_log::LOG_TYPE_FIRMWARE, \
+             ::device_event_log::LOG_LEVEL_##level)
 
 #if BUILDFLAG(IS_ANDROID) && defined(OFFICIAL_BUILD)
 // FIDO_LOG is discarded for release Android builds in order to reduce binary
@@ -133,8 +145,16 @@ enum LogType {
   LOG_TYPE_SERIAL = 9,
   // Camera related events.
   LOG_TYPE_CAMERA = 10,
+  // Geolocation related events (i.e. services/device/geolocation).
+  LOG_TYPE_GEOLOCATION = 11,
+  // Logs from extensions
+  LOG_TYPE_EXTENSIONS = 12,
+  // Display related ecents.
+  LOG_TYPE_DISPLAY = 13,
+  // Display related ecents.
+  LOG_TYPE_FIRMWARE = 14,
   // Used internally, must be the last type (may be changed).
-  LOG_TYPE_UNKNOWN = 11
+  LOG_TYPE_UNKNOWN = 15
 };
 
 // Used to specify the detail level for logging. In GetAsString, used to

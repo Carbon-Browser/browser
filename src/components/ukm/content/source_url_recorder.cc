@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -116,7 +116,8 @@ SourceUrlRecorderWebContentsObserver::SourceUrlRecorderWebContentsObserver(
       num_same_document_sources_for_full_navigation_source_(0) {}
 
 bool SourceUrlRecorderWebContentsObserver::ShouldRecordURLs() const {
-  // TODO(crbug/1078349): ensure we only record URLs for tabs in a tab strip.
+  // TODO(crbug.com/40689292): ensure we only record URLs for tabs in a tab
+  // strip.
 
   // If there is an outer WebContents, then this WebContents is embedded into
   // another one (e.g it is a portal or a Chrome App <webview>).
@@ -189,7 +190,7 @@ void SourceUrlRecorderWebContentsObserver::HandleSameDocumentNavigation(
         GetLastCommittedFullNavigationOrSameDocumentSourceId());
   }
 
-  MaybeRecordUrl(navigation_handle, GURL::EmptyGURL());
+  MaybeRecordUrl(navigation_handle, GURL());
 
   last_committed_full_navigation_or_same_document_source_id_ =
       ukm::ConvertToSourceId(navigation_handle->GetNavigationId(),
@@ -240,11 +241,12 @@ void SourceUrlRecorderWebContentsObserver::DidOpenRequestedURL(
     ui::PageTransition transition,
     bool started_from_context_menu,
     bool renderer_initiated) {
-  auto* new_recorder =
-      SourceUrlRecorderWebContentsObserver::FromWebContents(new_contents);
-  if (!new_recorder)
-    return;
-  new_recorder->opener_source_id_ = GetLastCommittedSourceId();
+  // Ensure that a source recorder exists at this point, since it is possible
+  // that this is called before tab helpers are added in //chrome, especially on
+  // Android. See crbug.com/1024952 for more details.
+  InitializeSourceUrlRecorderForWebContents(new_contents);
+  SourceUrlRecorderWebContentsObserver::FromWebContents(new_contents)
+      ->opener_source_id_ = GetLastCommittedSourceId();
 }
 
 void SourceUrlRecorderWebContentsObserver::WebContentsDestroyed() {
@@ -275,8 +277,8 @@ void SourceUrlRecorderWebContentsObserver::MaybeRecordUrl(
     const GURL& initial_url) {
   DCHECK(navigation_handle->IsInPrimaryMainFrame());
 
-  // TODO(crbug/1078355): If ShouldRecordURLs is false, we should still create a
-  // UKM source, but not add any URLs to it.
+  // TODO(crbug.com/40689295): If ShouldRecordURLs is false, we should still
+  // create a UKM source, but not add any URLs to it.
   if (!ShouldRecordURLs())
     return;
 
@@ -286,10 +288,10 @@ void SourceUrlRecorderWebContentsObserver::MaybeRecordUrl(
 
   UkmSource::NavigationData navigation_data;
   const GURL& final_url = navigation_handle->GetURL();
-  // TODO(crbug.com/869123): This check isn't quite correct, as self redirecting
-  // is possible. This may also be changed to include the entire redirect chain.
-  // Additionally, since same-document navigations don't have initial URLs,
-  // ignore empty initial URLs.
+  // TODO(crbug.com/40587196): This check isn't quite correct, as self
+  // redirecting is possible. This may also be changed to include the entire
+  // redirect chain. Additionally, since same-document navigations don't have
+  // initial URLs, ignore empty initial URLs.
   if (!initial_url.is_empty() && final_url != initial_url)
     navigation_data.urls = {initial_url};
   navigation_data.urls.push_back(final_url);
@@ -297,16 +299,18 @@ void SourceUrlRecorderWebContentsObserver::MaybeRecordUrl(
   navigation_data.is_same_document_navigation =
       navigation_handle->IsSameDocument();
 
-  navigation_data.same_origin_status =
-      UkmSource::NavigationData::SameOriginStatus::UNSET;
+  navigation_data.same_origin_status = UkmSource::NavigationData::
+      SourceSameOriginStatus::SOURCE_SAME_ORIGIN_STATUS_UNSET;
   // Only set the same origin flag for committed non-error,
   // non-same-document navigations.
   if (navigation_handle->HasCommitted() && !navigation_handle->IsErrorPage() &&
       !navigation_handle->IsSameDocument()) {
     navigation_data.same_origin_status =
         navigation_handle->IsSameOrigin()
-            ? UkmSource::NavigationData::SameOriginStatus::SAME_ORIGIN
-            : UkmSource::NavigationData::SameOriginStatus::CROSS_ORIGIN;
+            ? UkmSource::NavigationData::SourceSameOriginStatus::
+                  SOURCE_SAME_ORIGIN
+            : UkmSource::NavigationData::SourceSameOriginStatus::
+                  SOURCE_CROSS_ORIGIN;
   }
   navigation_data.is_renderer_initiated =
       navigation_handle->IsRendererInitiated();

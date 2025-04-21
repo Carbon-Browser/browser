@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,10 @@
 
 #include <algorithm>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/rand_util.h"
 #include "base/run_loop.h"
 #include "base/task/thread_pool.h"
@@ -84,7 +84,6 @@ class BlobBuilderFromStreamTestWithDelayedLimits
         return actual_size / 2;
     }
     NOTREACHED();
-    return 0;
   }
 
   std::unique_ptr<BlobDataHandle> BuildFromString(
@@ -157,7 +156,7 @@ class BlobBuilderFromStreamTestWithDelayedLimits
         std::string file_contents;
         EXPECT_TRUE(base::ReadFileToString(item->path(), &file_contents));
         EXPECT_EQ(item->length(), file_contents.size());
-        auto file_bytes = base::as_bytes(base::make_span(file_contents));
+        auto file_bytes = base::as_byte_span(file_contents);
         EXPECT_TRUE(
             std::equal(on_disk_data.begin() + next_file_offset,
                        on_disk_data.begin() + next_file_offset + item->length(),
@@ -255,8 +254,8 @@ TEST_P(BlobBuilderFromStreamTest, SmallStream) {
   EXPECT_EQ(0u, context_->memory_controller().disk_usage());
 
   // Verify blob contents.
-  VerifyBlobContents(base::as_bytes(base::make_span(kData)),
-                     base::span<const uint8_t>(), *result->CreateSnapshot());
+  VerifyBlobContents(base::as_byte_span(kData), base::span<const uint8_t>(),
+                     *result->CreateSnapshot());
 }
 
 TEST_P(BlobBuilderFromStreamTest, MediumStream) {
@@ -281,10 +280,10 @@ TEST_P(BlobBuilderFromStreamTest, MediumStream) {
   }
 
   // Verify blob contents.
-  auto data_span = base::as_bytes(base::make_span(kData));
+  auto data_span = base::as_byte_span(kData);
   if (GetParam() == LengthHintTestType::kUnknownSize) {
     VerifyBlobContents(
-        data_span.subspan(0, 2 * kTestBlobStorageMaxBytesDataItemSize),
+        data_span.first(2 * kTestBlobStorageMaxBytesDataItemSize),
         data_span.subspan(2 * kTestBlobStorageMaxBytesDataItemSize),
         *result->CreateSnapshot());
   } else {
@@ -323,15 +322,14 @@ TEST_P(BlobBuilderFromStreamTest, LargeStream) {
   }
 
   // Verify blob contents.
-  auto data_span = base::as_bytes(base::make_span(kData));
+  auto data_span = base::as_byte_span(kData);
   if (GetParam() == LengthHintTestType::kUnknownSize) {
     VerifyBlobContents(
-        data_span.subspan(0, 2 * kTestBlobStorageMaxBytesDataItemSize),
+        data_span.first(2 * kTestBlobStorageMaxBytesDataItemSize),
         data_span.subspan(2 * kTestBlobStorageMaxBytesDataItemSize),
         *result->CreateSnapshot());
   } else {
-    VerifyBlobContents(base::span<const uint8_t>(),
-                       base::as_bytes(base::make_span(kData)),
+    VerifyBlobContents(base::span<const uint8_t>(), base::as_byte_span(kData),
                        *result->CreateSnapshot());
   }
 }

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,8 +39,9 @@ Profile* GetProfileFromWindow(aura::Window* window) {
   MultiUserWindowManagerHelper* helper =
       MultiUserWindowManagerHelper::GetInstance();
   // We might come here before the helper got created - or in a unit test.
-  if (!helper)
+  if (!helper) {
     return nullptr;
+  }
   const AccountId account_id =
       MultiUserWindowManagerHelper::GetWindowManager()->GetUserPresentingWindow(
           window);
@@ -51,8 +52,9 @@ bool IsProfileFromActiveUser(Profile* profile) {
   // There may be no active user in tests.
   const user_manager::User* active_user =
       user_manager::UserManager::Get()->GetActiveUser();
-  if (!active_user)
+  if (!active_user) {
     return true;
+  }
   return GetAccountIdFromProfile(profile) == active_user->GetAccountId();
 }
 

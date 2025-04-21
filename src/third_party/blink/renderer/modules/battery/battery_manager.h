@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ namespace blink {
 
 class Navigator;
 
-class BatteryManager final : public EventTargetWithInlineData,
+class BatteryManager final : public EventTarget,
                              public ActiveScriptWrappable<BatteryManager>,
                              public Supplement<Navigator>,
                              public ExecutionContextLifecycleStateObserver,
@@ -29,12 +29,12 @@ class BatteryManager final : public EventTargetWithInlineData,
 
  public:
   static const char kSupplementName[];
-  static ScriptPromise getBattery(ScriptState*, Navigator&);
+  static ScriptPromise<BatteryManager> getBattery(ScriptState*, Navigator&);
   explicit BatteryManager(Navigator&);
   ~BatteryManager() override;
 
   // Returns a promise object that will be resolved with this BatteryManager.
-  ScriptPromise StartRequest(ScriptState*);
+  ScriptPromise<BatteryManager> StartRequest(ScriptState*);
 
   // EventTarget implementation.
   const WTF::AtomicString& InterfaceName() const override {
@@ -70,8 +70,7 @@ class BatteryManager final : public EventTargetWithInlineData,
   void Trace(Visitor*) const override;
 
  private:
-  using BatteryProperty =
-      ScriptPromiseProperty<Member<BatteryManager>, Member<DOMException>>;
+  using BatteryProperty = ScriptPromiseProperty<BatteryManager, DOMException>;
   Member<BatteryProperty> battery_property_;
   BatteryStatus battery_status_;
   Member<BatteryDispatcher> battery_dispatcher_;

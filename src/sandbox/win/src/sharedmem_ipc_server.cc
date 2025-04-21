@@ -1,14 +1,19 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "sandbox/win/src/sharedmem_ipc_server.h"
 
 #include <stddef.h>
 #include <stdint.h>
 
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/callback.h"
 #include "base/memory/ptr_util.h"
 #include "base/notreached.h"
 #include "sandbox/win/src/crosscall_params.h"
@@ -128,7 +133,7 @@ bool SharedMemIPCServer::Init(void* shared_mem,
     // Advance to the next channel.
     base_start += channel_size;
     // Register the ping event with the threadpool.
-    thread_pool_->RegisterWait(this, service_context->ping_event.Get(),
+    thread_pool_->RegisterWait(this, service_context->ping_event.get(),
                                ThreadPingEventReady, service_context);
   }
   if (!::DuplicateHandle(::GetCurrentProcess(), g_alive_mutex, target_process_,
@@ -263,7 +268,6 @@ bool SharedMemIPCServer::InvokeCallback(const ServerControl* service_context,
       }
       default: {
         NOTREACHED();
-        break;
       }
     }
   }
@@ -317,7 +321,7 @@ void __stdcall SharedMemIPCServer::ThreadPingEventReady(void* context,
   CrossCallParams* call_params = reinterpret_cast<CrossCallParams*>(buffer);
   memcpy(call_params->GetCallReturn(), &call_result, sizeof(call_result));
   ::InterlockedExchange(&service_context->channel->state, kAckChannel);
-  ::SetEvent(service_context->pong_event.Get());
+  ::SetEvent(service_context->pong_event.get());
 }
 
 bool SharedMemIPCServer::MakeEvents(base::win::ScopedHandle* server_ping,
@@ -330,14 +334,14 @@ bool SharedMemIPCServer::MakeEvents(base::win::ScopedHandle* server_ping,
 
   // The events are auto reset, and start not signaled.
   server_ping->Set(::CreateEventW(nullptr, false, false, nullptr));
-  if (!::DuplicateHandle(::GetCurrentProcess(), server_ping->Get(),
+  if (!::DuplicateHandle(::GetCurrentProcess(), server_ping->get(),
                          target_process_, client_ping, kDesiredAccess, false,
                          0)) {
     return false;
   }
 
   server_pong->Set(::CreateEventW(nullptr, false, false, nullptr));
-  if (!::DuplicateHandle(::GetCurrentProcess(), server_pong->Get(),
+  if (!::DuplicateHandle(::GetCurrentProcess(), server_pong->get(),
                          target_process_, client_pong, kDesiredAccess, false,
                          0)) {
     return false;

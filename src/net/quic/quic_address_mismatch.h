@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,8 +33,6 @@ enum QuicAddressMismatch {
 // Returns a value of the QuicAddressMismatch enum type that indicates how
 // |first_address| differs from |second_address|. Returns -1 if either address
 // is empty.
-//
-// Only used by the Net.quic::QuicSession.PublicResetAddressMismatch histogram.
 NET_EXPORT_PRIVATE int GetAddressMismatch(const IPEndPoint& first_address,
                                           const IPEndPoint& second_address);
 

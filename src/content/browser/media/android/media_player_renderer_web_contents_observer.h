@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CONTENT_BROWSER_MEDIA_ANDROID_MEDIA_PLAYER_RENDERER_WEB_CONTENTS_OBSERVER_H_
 
 #include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/browser/web_contents_user_data.h"
 
@@ -40,7 +41,7 @@ class MediaPlayerRendererWebContentsObserver
   explicit MediaPlayerRendererWebContentsObserver(WebContents* web_contents);
   friend class WebContentsUserData<MediaPlayerRendererWebContentsObserver>;
 
-  base::flat_set<MediaPlayerRenderer*> players_;
+  base::flat_set<raw_ptr<MediaPlayerRenderer, CtnExperimental>> players_;
 
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 };

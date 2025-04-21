@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/cookies/cookie_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -18,7 +17,7 @@ CookieCallback::CookieCallback(base::Thread* run_in_thread)
 
 CookieCallback::CookieCallback()
     : run_in_thread_(nullptr),
-      run_in_task_runner_(base::ThreadTaskRunnerHandle::Get()) {}
+      run_in_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()) {}
 
 CookieCallback::~CookieCallback() = default;
 

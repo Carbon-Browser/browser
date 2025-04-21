@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -17,17 +17,20 @@ if (is_win) {
   assert(current_cpu == "x64" && (is_linux || is_chromeos),
          "Only Linux X64 MSAN is supported")
   platform_config_root = "config/linux-noasm/$current_cpu"
-} else if (current_cpu == "riscv64") {
-  platform_config_root = "config/linux-noasm/$current_cpu"
+} else if (current_cpu == "riscv64" || current_cpu == "loong64" ||
+           current_cpu == "mipsel" || current_cpu == "mips64el" ||
+           current_cpu == "ppc64") {
+  platform_config_root = "config/linux-noasm/generic"
+} else if (is_apple) {
+  platform_config_root = "config/apple/$current_cpu"
 } else {
-  # Linux configuration files seem to work on Mac, so just reuse them.
   platform_config_root = "config/linux/$current_cpu"
 }
 
 # Clang LTO doesn't respect stack alignment and clang-cl doesn't support setting
 # the stack alignment, so we must use the platform's default alignment in those
 # cases; https://crbug.com/928743.
-if (current_cpu == "x86" || current_cpu == "x64") {
+if (enable_nasm) {
   if (use_thin_lto || is_win) {
     needs_stack_alignment = false
     # The defaults are stack_alignment=4 for x86 and stack_alignment=16 for x64.
@@ -36,35 +39,12 @@ if (current_cpu == "x86" || current_cpu == "x64") {
     # upstream's meson.build setup:
     # https://chromium.googlesource.com/external/github.com/videolan/dav1d/+/master/meson.build
     needs_stack_alignment = true
-    if (current_cpu == "x86") {
+    if (current_cpu == "x64" || is_linux || is_apple) {
       stack_alignment = 16
-
-      if (!is_clang) {
-        # Values used by GCC.
-        preferred_stack_boundary = 4
-        incoming_stack_boundary = 2
-      }
-    } else if (current_cpu == "x64") {
-      stack_alignment = 32
-
-      if (!is_clang) {
-        # Values used by GCC.
-        preferred_stack_boundary = 5
-        incoming_stack_boundary = 4
-      }
-    }
-
-    if (is_clang) {
-      stackalign_flag = "-mstack-alignment=$stack_alignment"
-      stackrealign_flag = "-mstackrealign"
     } else {
-      # Assume GCC for now.
-      stackalign_flag = "-mpreferred-stack-boundary=$preferred_stack_boundary"
-      stackrealign_flag = "-mincoming-stack-boundary=$incoming_stack_boundary"
+      stack_alignment = 4
     }
   }
-} else {
-  needs_stack_alignment = false
 }
 
 config("public_dav1d_config") {
@@ -77,12 +57,11 @@ config("public_dav1d_config") {
     defines = [ "CONFIG_LOG=1" ]
   }
 
-  if (needs_stack_alignment) {
-    defines += [ "STACK_ALIGNMENT=$stack_alignment" ]
-  }
-
-  if (!is_android && !is_win) {
-    defines += [ "HAVE_PTHREAD_GETAFFINITY_NP=1" ]
+  if (!is_android && !is_apple && !is_win) {
+    defines += [
+      "HAVE_PTHREAD_GETAFFINITY_NP=1",
+      "HAVE_PTHREAD_SETAFFINITY_NP=1",
+    ]
   }
 
   # Don't let dav1d export any symbols. Otherwise the verify_order step on macOS
@@ -114,10 +93,7 @@ if (is_win) {
   }
 } else {
   dav1d_copts += [ "-std=c99" ]
-  if (needs_stack_alignment) {
-    dav1d_copts += [ stackalign_flag ]
-  }
-  if (is_mac || is_ios) {
+  if (is_apple) {
     dav1d_copts += [ "-D_DARWIN_C_SOURCE" ]
   }
   if (is_linux || is_chromeos || is_android || current_os == "aix") {
@@ -127,13 +103,26 @@ if (is_win) {
   }
 }
 
+if (is_clang && (current_cpu == "arm" || current_cpu == "arm64")) {
+  if (is_win) {
+    dav1d_copts += [ "/clang:-fno-align-functions" ]
+  } else {
+    dav1d_copts += [ "-fno-align-functions" ]
+  }
+}
+
 if (enable_nasm) {
   nasm_assemble("dav1d_asm") {
     sources = x86_asm_sources
 
     inputs = [
-      "libdav1d/src/ext/x86/x86inc.asm",
       "$platform_config_root/config.asm",
+      "libdav1d/src/ext/x86/x86inc.asm",
+
+      # This is added here in addition to sources as it is included from some
+      # other files. And in such case, we need to use inputs to teach GN that
+      # some actions depend on this file indirectly.
+      "libdav1d/src/x86/filmgrain_common.asm",
     ]
 
     include_dirs = [
@@ -152,7 +141,7 @@ if (enable_nasm) {
     }
 
     # Necessary to ensure macOS symbols end up with a _ prefix.
-    if (is_mac || is_ios) {
+    if (is_apple) {
       defines += [ "PREFIX" ]
     }
   }
@@ -166,26 +155,6 @@ source_set("dav1d_headers") {
   ]
 
   sources = c_headers
-}
-
-static_library("dav1d_entrypoints") {
-  configs -= [ "//build/config/compiler:chromium_code" ]
-  configs += [
-    "//build/config/compiler:no_chromium_code",
-    ":dav1d_config",
-  ]
-
-  sources = entry_point_sources
-  cflags = dav1d_copts
-  if (is_win) {
-    sources += [ "libdav1d/src/win32/thread.c" ]
-  }
-
-  if (needs_stack_alignment) {
-    cflags += [ stackrealign_flag ]
-  }
-
-  deps = [ ":dav1d_headers" ]
 }
 
 static_library("dav1d_8bit") {
@@ -202,8 +171,6 @@ static_library("dav1d_8bit") {
     sources += arm_template_sources
   } else if (current_cpu == "arm64") {
     sources += arm_template_sources
-  } else if (current_cpu == "ppc64") {
-    sources += ppc64_template_sources
   }
 
   cflags = dav1d_copts
@@ -234,8 +201,6 @@ static_library("dav1d_10bit") {
     sources += arm_template_sources
   } else if (current_cpu == "arm64") {
     sources += arm_template_sources
-  } else if (current_cpu == "ppc64") {
-    sources += ppc64_template_sources
   }
 
   cflags = dav1d_copts
@@ -249,15 +214,8 @@ if (current_cpu == "x86" || current_cpu == "x64") {
     sources = [
       "libdav1d/src/x86/cpu.c",
       "libdav1d/src/x86/cpu.h",
-      "libdav1d/src/x86/refmvs_init.c",
     ]
 
-    # x86/msac.h redefines macros in msac.h if x86/msac.h is included and
-    # HAVE_ASM is 0, so we must exclude msac_init.c if !enable_nasm. Also, it
-    # is only used for x64.
-    if (enable_nasm && current_cpu == "x64") {
-      sources += [ "libdav1d/src/x86/msac_init.c" ]
-    }
     configs -= [ "//build/config/compiler:chromium_code" ]
     configs += [
       "//build/config/compiler:no_chromium_code",
@@ -273,7 +231,6 @@ if (current_cpu == "x86" || current_cpu == "x64") {
     sources = [
       "libdav1d/src/arm/cpu.c",
       "libdav1d/src/arm/cpu.h",
-      "libdav1d/src/arm/refmvs_init.c",
     ]
 
     # These are not template based so should only be built once.
@@ -290,27 +247,10 @@ if (current_cpu == "x86" || current_cpu == "x64") {
     ]
 
     # Necessary to ensure macOS symbols end up with a _ prefix.
-    if (is_mac || is_ios) {
+    if (is_apple) {
       defines = [ "PREFIX" ]
     }
 
-    cflags = dav1d_copts
-
-    deps = [ ":dav1d_headers" ]
-    allow_circular_includes_from = [ ":dav1d_headers" ]
-  }
-} else if (current_cpu == "ppc64") {
-  static_library("dav1d_ppc64") {
-    sources = [
-      "libdav1d/src/ppc/cpu.c",
-      "libdav1d/src/ppc/cpu.h",
-    ]
-
-    configs -= [ "//build/config/compiler:chromium_code" ]
-    configs += [
-      "//build/config/compiler:no_chromium_code",
-      ":dav1d_config",
-    ]
     cflags = dav1d_copts
 
     deps = [ ":dav1d_headers" ]
@@ -320,6 +260,9 @@ if (current_cpu == "x86" || current_cpu == "x64") {
 
 static_library("dav1d") {
   sources = c_sources
+  if (is_win) {
+    sources += [ "libdav1d/src/win32/thread.c" ]
+  }
 
   configs -= [ "//build/config/compiler:chromium_code" ]
   configs += [
@@ -331,7 +274,6 @@ static_library("dav1d") {
   deps = [
     ":dav1d_10bit",
     ":dav1d_8bit",
-    ":dav1d_entrypoints",
     ":dav1d_headers",
   ]
 
@@ -344,7 +286,5 @@ static_library("dav1d") {
     }
   } else if (current_cpu == "arm" || current_cpu == "arm64") {
     deps += [ ":dav1d_arm" ]
-  } else if (current_cpu == "ppc64") {
-    deps += [ ":dav1d_ppc64" ]
   }
 }

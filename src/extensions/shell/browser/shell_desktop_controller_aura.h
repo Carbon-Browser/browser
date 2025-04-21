@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <map>
 #include <memory>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -17,10 +17,10 @@
 #include "extensions/shell/browser/desktop_controller.h"
 #include "extensions/shell/browser/root_window_controller.h"
 #include "ui/aura/window.h"
-#include "ui/base/ime/input_method_delegate.h"
+#include "ui/base/ime/ime_key_event_dispatcher.h"
 #include "ui/display/display.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "ui/display/manager/display_configurator.h"
 #endif
@@ -43,8 +43,7 @@ class Size;
 
 namespace ui {
 class InputMethod;
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-class UserActivityDetector;
+#if BUILDFLAG(IS_CHROMEOS)
 class UserActivityPowerManagerNotifier;
 #endif
 }  // namespace ui
@@ -64,11 +63,11 @@ class AppWindowClient;
 class ShellDesktopControllerAura
     : public DesktopController,
       public RootWindowController::DesktopDelegate,
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
       public chromeos::PowerManagerClient::Observer,
       public display::DisplayConfigurator::Observer,
 #endif
-      public ui::internal::InputMethodDelegate,
+      public ui::ImeKeyEventDispatcher,
       public KeepAliveStateObserver {
  public:
   explicit ShellDesktopControllerAura(content::BrowserContext* browser_context);
@@ -91,16 +90,16 @@ class ShellDesktopControllerAura
   void CloseRootWindowController(
       RootWindowController* root_window_controller) override;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   // chromeos::PowerManagerClient::Observer:
   void PowerButtonEventReceived(bool down, base::TimeTicks timestamp) override;
 
   // display::DisplayConfigurator::Observer:
-  void OnDisplayModeChanged(
+  void OnDisplayConfigurationChanged(
       const display::DisplayConfigurator::DisplayStateList& displays) override;
 #endif
 
-  // ui::internal::InputMethodDelegate:
+  // ui::ImeKeyEventDispatcher:
   ui::EventDispatchDetails DispatchKeyEventPostIME(
       ui::KeyEvent* key_event) override;
 
@@ -138,7 +137,7 @@ class ShellDesktopControllerAura
   // relaunch.
   void MaybeQuit();
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   // Returns the desired dimensions of the RootWindowController from the command
   // line, or falls back to a default size.
   gfx::Size GetStartingWindowSize();
@@ -150,7 +149,7 @@ class ShellDesktopControllerAura
 
   const raw_ptr<content::BrowserContext> browser_context_;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   std::unique_ptr<display::DisplayConfigurator> display_configurator_;
 #endif
 
@@ -169,15 +168,14 @@ class ShellDesktopControllerAura
 
   std::unique_ptr<wm::CursorManager> cursor_manager_;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  std::unique_ptr<ui::UserActivityDetector> user_activity_detector_;
+#if BUILDFLAG(IS_CHROMEOS)
   std::unique_ptr<ui::UserActivityPowerManagerNotifier> user_activity_notifier_;
 #endif
 
   std::unique_ptr<AppWindowClient> app_window_client_;
 
   // NativeAppWindow::Close() deletes the AppWindow.
-  std::list<AppWindow*> app_windows_;
+  std::list<raw_ptr<AppWindow, CtnExperimental>> app_windows_;
 
   // Non-null between WillRunMainMessageLoop() and MaybeQuit().
   base::OnceClosure quit_when_idle_closure_;

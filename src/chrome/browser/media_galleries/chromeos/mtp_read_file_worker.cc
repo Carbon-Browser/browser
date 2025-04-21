@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
@@ -42,8 +42,7 @@ MTPReadFileWorker::MTPReadFileWorker(const std::string& device_handle)
   DCHECK(!device_handle_.empty());
 }
 
-MTPReadFileWorker::~MTPReadFileWorker() {
-}
+MTPReadFileWorker::~MTPReadFileWorker() = default;
 
 void MTPReadFileWorker::WriteDataIntoSnapshotFile(
     SnapshotRequestInfo request_info,

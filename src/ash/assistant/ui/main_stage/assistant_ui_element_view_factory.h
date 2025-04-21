@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 
@@ -30,7 +31,7 @@ class COMPONENT_EXPORT(ASSISTANT_UI) AssistantUiElementViewFactory {
 
  private:
   // Owned by AssistantController.
-  AssistantViewDelegate* const delegate_;
+  const raw_ptr<AssistantViewDelegate> delegate_;
 };
 
 }  // namespace ash

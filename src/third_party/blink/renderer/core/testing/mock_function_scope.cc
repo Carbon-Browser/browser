@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,40 +14,36 @@ MockFunctionScope::MockFunctionScope(ScriptState* script_state)
     : script_state_(script_state) {}
 
 MockFunctionScope::~MockFunctionScope() {
-  v8::MicrotasksScope::PerformCheckpoint(script_state_->GetIsolate());
+  script_state_->GetContext()->GetMicrotaskQueue()->PerformCheckpoint(
+      script_state_->GetIsolate());
   for (MockFunction* mock_function : mock_functions_) {
     testing::Mock::VerifyAndClearExpectations(mock_function);
   }
 }
 
-v8::Local<v8::Function> MockFunctionScope::ExpectCall(String* captor) {
+ScriptFunction* MockFunctionScope::ExpectCall(String* captor) {
   mock_functions_.push_back(
       MakeGarbageCollected<MockFunction>(script_state_, captor));
   EXPECT_CALL(*mock_functions_.back(), Call(script_state_, testing::_));
-  return MakeGarbageCollected<ScriptFunction>(script_state_,
-                                              mock_functions_.back())
-      ->V8Function();
+  return mock_functions_.back();
 }
 
-v8::Local<v8::Function> MockFunctionScope::ExpectCall() {
+ScriptFunction* MockFunctionScope::ExpectCall() {
   mock_functions_.push_back(MakeGarbageCollected<MockFunction>());
   EXPECT_CALL(*mock_functions_.back(), Call(script_state_, testing::_));
-  return MakeGarbageCollected<ScriptFunction>(script_state_,
-                                              mock_functions_.back())
-      ->V8Function();
+  return mock_functions_.back();
 }
 
-v8::Local<v8::Function> MockFunctionScope::ExpectNoCall() {
+ScriptFunction* MockFunctionScope::ExpectNoCall() {
   mock_functions_.push_back(MakeGarbageCollected<MockFunction>());
   EXPECT_CALL(*mock_functions_.back(), Call(script_state_, testing::_))
       .Times(0);
-  return MakeGarbageCollected<ScriptFunction>(script_state_,
-                                              mock_functions_.back())
-      ->V8Function();
+  return mock_functions_.back();
 }
 
 ACTION_P2(SaveValueIn, script_state, captor) {
   *captor = ToCoreString(
+      script_state->GetIsolate(),
       arg1.V8Value()->ToString(script_state->GetContext()).ToLocalChecked());
 }
 

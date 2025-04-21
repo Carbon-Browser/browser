@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,13 @@
 #define UI_ACCESSIBILITY_PLATFORM_INSPECT_AX_API_TYPE_H_
 
 #include <string>
+#include <string_view>
 
-#include "ui/accessibility/ax_export.h"
+#include "base/component_export.h"
 
 namespace ui {
 
-class AX_EXPORT AXApiType {
+class COMPONENT_EXPORT(AX_PLATFORM) AXApiType {
  public:
   // Inspect types for all platforms.
   enum TypeConstant {
@@ -27,7 +28,7 @@ class AX_EXPORT AXApiType {
   };
 
   // Type represents a platform-specific accessibility API.
-  class AX_EXPORT Type final {
+  class COMPONENT_EXPORT(AX_PLATFORM) Type final {
    public:
     Type(TypeConstant type) : type_(type) {}
 
@@ -36,6 +37,7 @@ class AX_EXPORT AXApiType {
     Type(const Type&) = default;
     Type& operator=(const Type&) = default;
 
+    explicit operator std::string_view() const;
     explicit operator std::string() const;
     operator TypeConstant() const { return type_; }
 
@@ -44,7 +46,7 @@ class AX_EXPORT AXApiType {
   };
 
   // Conversion from string to AXApiType::Type.
-  static Type From(std::string& type_str);
+  static Type From(const std::string& type_str);
 };
 
 }  // namespace ui

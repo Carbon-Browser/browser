@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/process/process_handle.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "sandbox/policy/mojom/sandbox.mojom.h"
@@ -19,7 +19,7 @@ namespace service_manager {
 // Interface which can be implemented to control launch and lifetime of service
 // processes.
 //
-// TODO(https://crbug.com/781334): This should be the singular implementation of
+// TODO(crbug.com/41353434): This should be the singular implementation of
 // a service process host. More stuff needs to move out of Content first, so
 // until then this exists so Service Manager can delegate.
 class ServiceProcessHost {

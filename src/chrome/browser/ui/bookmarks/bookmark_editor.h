@@ -1,18 +1,18 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_BOOKMARKS_BOOKMARK_EDITOR_H_
 #define CHROME_BROWSER_UI_BOOKMARKS_BOOKMARK_EDITOR_H_
 
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "components/bookmarks/browser/bookmark_node.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/native_widget_types.h"
 
 class GURL;
@@ -48,7 +48,7 @@ class BookmarkEditor {
       std::u16string title;
 
       // Exactly one of the following should be non-empty.
-      absl::optional<GURL> url;
+      std::optional<GURL> url;
       std::vector<BookmarkData> children;
     };
 
@@ -105,7 +105,7 @@ class BookmarkEditor {
 
     // If type == NEW_URL or type == NEW_FOLDER this gives the index to insert
     // the new node at.
-    absl::optional<size_t> index;
+    std::optional<size_t> index;
 
     // If type == NEW_URL this contains the URL/title. If type == NEW_FOLDER,
     // this contains the folder title and any urls/title pairs or nested
@@ -125,22 +125,10 @@ class BookmarkEditor {
                    Configuration configuration,
                    OnSaveCallback on_save_callback = base::DoNothing());
 
-  // Modifies a bookmark node (assuming that there's no magic that needs to be
-  // done regarding moving from one folder to another).  If a new node is
-  // explicitly being added, returns a pointer to the new node that was created.
-  // Otherwise the return value is identically |node|.
-  static const bookmarks::BookmarkNode* ApplyEditsWithNoFolderChange(
-      bookmarks::BookmarkModel* model,
-      const bookmarks::BookmarkNode* parent,
-      const EditDetails& details,
-      const std::u16string& new_title,
-      const GURL& new_url);
-
-  // Modifies a bookmark node assuming that the parent of the node may have
-  // changed and the node will need to be removed and reinserted.  If a new node
-  // is explicitly being added, returns a pointer to the new node that was
-  // created.  Otherwise the return value is identically |node|.
-  static const bookmarks::BookmarkNode* ApplyEditsWithPossibleFolderChange(
+  // Modifies a bookmark node. If a new node is explicitly being added, returns
+  // a pointer to the new node that was created. Otherwise the return value is
+  // identically |node|.
+  static const bookmarks::BookmarkNode* ApplyEdits(
       bookmarks::BookmarkModel* model,
       const bookmarks::BookmarkNode* new_parent,
       const EditDetails& details,

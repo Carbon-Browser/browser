@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "gpu/command_buffer/client/raster_implementation.h"
-#include "gpu/ipc/command_buffer_task_executor.h"
+#include "gpu/command_buffer/service/command_buffer_task_executor.h"
 #include "gpu/ipc/in_process_command_buffer.h"
 
 namespace gpu {
@@ -36,9 +36,8 @@ class RasterInProcessContext {
   ContextResult Initialize(CommandBufferTaskExecutor* task_executor,
                            const ContextCreationAttribs& attribs,
                            const SharedMemoryLimits& memory_limits,
-                           ImageFactory* image_factory,
                            gpu::raster::GrShaderCache* gr_shader_cache,
-                           GpuProcessActivityFlags* activity_flags);
+                           GpuProcessShmCount* use_shader_cache_shm_count);
 
   const Capabilities& GetCapabilities() const;
   const GpuFeatureInfo& GetGpuFeatureInfo() const;

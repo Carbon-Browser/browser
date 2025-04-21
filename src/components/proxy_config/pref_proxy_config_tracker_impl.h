@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,7 @@ class SingleThreadTaskRunner;
 // settings (pushed from PrefProxyConfigTrackerImpl) as overrides to the proxy
 // configuration determined by a baseline delegate ProxyConfigService on
 // non-ChromeOS platforms. ChromeOS has its own implementation of overrides in
-// chromeos::ProxyConfigServiceImpl.
+// ash::ProxyConfigServiceImpl.
 class ProxyConfigServiceImpl : public net::ProxyConfigService,
                                public net::ProxyConfigService::Observer {
  public:
@@ -47,6 +47,7 @@ class ProxyConfigServiceImpl : public net::ProxyConfigService,
   ConfigAvailability GetLatestProxyConfig(
       net::ProxyConfigWithAnnotation* config) override;
   void OnLazyPoll() override;
+  bool UsesPolling() override;
 
   // Method on IO thread that receives the preference proxy settings pushed from
   // PrefProxyConfigTrackerImpl.

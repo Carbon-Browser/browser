@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,7 @@ bool AndroidURLsDatabase::CreateAndroidURLsTable() {
                "raw_url LONGVARCHAR,"              // Passed in raw url.
                "url_id INTEGER NOT NULL"           // url id in urls table.
                ")");
-    if (!GetDB().Execute(sql.c_str())) {
+    if (!GetDB().Execute(sql)) {
       LOG(ERROR) << GetDB().GetErrorMessage();
       return false;
     }
@@ -109,7 +109,7 @@ bool AndroidURLsDatabase::DeleteAndroidURLRows(
     sql.append(" )");
   }
 
-  if (!GetDB().Execute(sql.c_str())) {
+  if (!GetDB().Execute(sql)) {
     LOG(ERROR) << GetDB().GetErrorMessage();
     return false;
   }

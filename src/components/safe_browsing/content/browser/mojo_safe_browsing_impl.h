@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
+#include "base/supports_user_data.h"
 #include "components/safe_browsing/content/common/safe_browsing.mojom.h"
 #include "components/safe_browsing/core/browser/url_checker_delegate.h"
 #include "components/safe_browsing/core/common/safe_browsing_url_checker.mojom.h"
@@ -15,17 +16,14 @@
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "services/network/public/mojom/fetch_api.mojom.h"
 
-namespace content {
-class ResourceContext;
-}
-
 namespace safe_browsing {
 
 // This class implements the Mojo interface for renderers to perform
 // SafeBrowsing URL checks.
 // A MojoSafeBrowsingImpl instance is destructed when the Mojo message pipe is
 // disconnected or |resource_context_| is destructed.
-class MojoSafeBrowsingImpl : public mojom::SafeBrowsing {
+class MojoSafeBrowsingImpl : public mojom::SafeBrowsing,
+                             public base::SupportsUserData::Data {
  public:
   MojoSafeBrowsingImpl(const MojoSafeBrowsingImpl&) = delete;
   MojoSafeBrowsingImpl& operator=(const MojoSafeBrowsingImpl&) = delete;
@@ -34,25 +32,26 @@ class MojoSafeBrowsingImpl : public mojom::SafeBrowsing {
 
   static void MaybeCreate(
       int render_process_id,
-      content::ResourceContext* resource_context,
       const base::RepeatingCallback<scoped_refptr<UrlCheckerDelegate>()>&
           delegate_getter,
       mojo::PendingReceiver<mojom::SafeBrowsing> receiver);
 
  private:
+  // Needed since there's a Clone method in two parent classes.
+  using base::SupportsUserData::Data::Clone;
+
   MojoSafeBrowsingImpl(scoped_refptr<UrlCheckerDelegate> delegate,
                        int render_process_id,
-                       content::ResourceContext* resource_context);
+                       base::SupportsUserData* user_data);
 
   // mojom::SafeBrowsing implementation.
   void CreateCheckerAndCheck(
-      int32_t render_frame_id,
+      const std::optional<blink::LocalFrameToken>& frame_token,
       mojo::PendingReceiver<mojom::SafeBrowsingUrlChecker> receiver,
       const GURL& url,
       const std::string& method,
       const net::HttpRequestHeaders& headers,
       int32_t load_flags,
-      network::mojom::RequestDestination request_destination,
       bool has_user_gesture,
       bool originated_from_service_worker,
       CreateCheckerAndCheckCallback callback) override;
@@ -61,16 +60,15 @@ class MojoSafeBrowsingImpl : public mojom::SafeBrowsing {
   void OnMojoDisconnect();
 
   // This is an instance of SafeBrowserUserData that is set as user-data on
-  // |resource_context_|. SafeBrowserUserData owns |this|.
+  // |user_data_|. SafeBrowserUserData owns |this|.
   raw_ptr<const void> user_data_key_ = nullptr;
 
   mojo::ReceiverSet<mojom::SafeBrowsing> receivers_;
   scoped_refptr<UrlCheckerDelegate> delegate_;
   int render_process_id_ = MSG_ROUTING_NONE;
 
-  // Not owned by this object. It is always valid during the lifetime of this
-  // object.
-  raw_ptr<content::ResourceContext> resource_context_;
+  // Guaranteed to outlive this object as it owns it.
+  raw_ptr<base::SupportsUserData> user_data_;
 };
 
 }  // namespace safe_browsing

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 #define IPC_IPC_SYNC_MESSAGE_H_
 
 #include <stdint.h>
+
+#include <memory>
 
 #include "build/build_config.h"
 
@@ -33,13 +35,13 @@ class IPC_MESSAGE_SUPPORT_EXPORT SyncMessage : public Message {
   SyncMessage(int32_t routing_id,
               uint32_t type,
               PriorityValue priority,
-              MessageReplyDeserializer* deserializer);
+              std::unique_ptr<MessageReplyDeserializer> deserializer);
   ~SyncMessage() override;
 
   // Call this to get a deserializer for the output parameters.
-  // Note that this can only be called once, and the caller is responsible
-  // for deleting the deserializer when they're done.
-  MessageReplyDeserializer* GetReplyDeserializer();
+  // Note that this can only be called once, and the caller is takes
+  // ownership of the deserializer..
+  std::unique_ptr<MessageReplyDeserializer> TakeReplyDeserializer();
 
   // Returns true if the message is a reply to the given request id.
   static bool IsMessageReplyTo(const Message& msg, int request_id);
@@ -80,14 +82,17 @@ class IPC_MESSAGE_SUPPORT_EXPORT MessageReplyDeserializer {
 
 // When sending a synchronous message, this structure contains an object
 // that knows how to deserialize the response.
-struct PendingSyncMsg {
-  PendingSyncMsg(int id, MessageReplyDeserializer* d, base::WaitableEvent* e)
-      : id(id), deserializer(d), done_event(e), send_result(false) {}
+struct IPC_MESSAGE_SUPPORT_EXPORT PendingSyncMsg {
+  PendingSyncMsg(int id,
+                 std::unique_ptr<MessageReplyDeserializer> d,
+                 std::unique_ptr<base::WaitableEvent> e);
+  PendingSyncMsg(PendingSyncMsg&& that);
+  ~PendingSyncMsg();
 
   int id;
-  MessageReplyDeserializer* deserializer;
-  base::WaitableEvent* done_event;
-  bool send_result;
+  bool send_result = false;
+  std::unique_ptr<MessageReplyDeserializer> deserializer;
+  std::unique_ptr<base::WaitableEvent> done_event;
 };
 
 }  // namespace IPC

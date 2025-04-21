@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -108,8 +108,7 @@ bool FakeSingleThreadTaskRunner::PostNonNestableDelayedTask(
     const base::Location& from_here,
     base::OnceClosure task,
     base::TimeDelta delay) {
-  NOTIMPLEMENTED();
-  return false;
+  return PostDelayedTask(from_here, std::move(task), delay);
 }
 
 }  // namespace media

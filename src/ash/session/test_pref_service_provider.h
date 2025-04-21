@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,8 @@
 
 #include <map>
 #include <memory>
+
+#include "base/memory/raw_ptr.h"
 
 class AccountId;
 class PrefService;
@@ -35,11 +37,16 @@ class TestPrefServiceProvider {
   void CreateUserPrefs(const AccountId& account_id);
   void SetUserPrefs(const AccountId& account_id,
                     std::unique_ptr<PrefService> pref_service);
+  void SetUnownedUserPrefs(const AccountId& account_id,
+                           raw_ptr<PrefService> unowned_pref_service);
   PrefService* GetUserPrefs(const AccountId& account_id);
+
+  void ClearUnownedUserPrefs(const AccountId& account_id);
 
  private:
   std::unique_ptr<PrefService> signin_prefs_;
   std::map<AccountId, std::unique_ptr<PrefService>> user_prefs_map_;
+  std::map<AccountId, raw_ptr<PrefService>> unowned_user_prefs_map_;
 };
 
 }  // namespace ash

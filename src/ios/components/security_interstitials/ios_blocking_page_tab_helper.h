@@ -1,10 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_COMPONENTS_SECURITY_INTERSTITIALS_IOS_BLOCKING_PAGE_TAB_HELPER_H_
 #define IOS_COMPONENTS_SECURITY_INTERSTITIALS_IOS_BLOCKING_PAGE_TAB_HELPER_H_
 
+#import "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "ios/components/security_interstitials/ios_security_interstitial_page.h"
 #include "ios/web/public/web_state_observer.h"
@@ -28,9 +29,9 @@ class IOSBlockingPageTabHelper
 
   ~IOSBlockingPageTabHelper() override;
 
-  // Associates |blocking_page| with |navigation_id|.  When the last committed
-  // navigation ID matches |navigation_id|, JavaScript commands are handled by
-  // |blocking_page|.
+  // Associates `blocking_page` with `navigation_id`.  When the last committed
+  // navigation ID matches `navigation_id`, JavaScript commands are handled by
+  // `blocking_page`.
   void AssociateBlockingPage(
       int64_t navigation_id,
       std::unique_ptr<IOSSecurityInterstitialPage> blocking_page);
@@ -41,19 +42,21 @@ class IOSBlockingPageTabHelper
   // Returns the blocking page for the currently-visible interstitial, if any.
   IOSSecurityInterstitialPage* GetCurrentBlockingPage() const;
 
+  // Handler for `BlockingPageMessage` JavaScript command. Dispatch to more
+  // specific handler.
+  //  void OnBlockingPageMessageReceived(const base::Value& message);
+  void OnBlockingPageCommandReceived(SecurityInterstitialCommand command);
+
+  // Sends updates to `blocking_page_for_currently_committed_navigation_` when
+  // dismissed.
+  void UpdateForBlockingPageDismissed();
+
  private:
   WEB_STATE_USER_DATA_KEY_DECL();
   explicit IOSBlockingPageTabHelper(web::WebState* web_state);
   friend class web::WebStateUserData<IOSBlockingPageTabHelper>;
 
-  // Handler for "blockingPage.*" JavaScript command. Dispatch to more specific
-  // handler.
-  void OnBlockingPageCommand(const base::Value& message,
-                             const GURL& url,
-                             bool user_is_interacting,
-                             web::WebFrame* sender_frame);
-
-  // Updates the tab helper state for a finished navigation with |navigation_id|
+  // Updates the tab helper state for a finished navigation with `navigation_id`
   // that was optionally committed.
   void UpdateForFinishedNavigation(int64_t navigation_id, bool committed);
 
@@ -61,7 +64,7 @@ class IOSBlockingPageTabHelper
   // item.
   class CommittedNavigationIDListener : public web::WebStateObserver {
    public:
-    // Constructor for a listener that notifies |tab_helper| of committed
+    // Constructor for a listener that notifies `tab_helper` of committed
     // navigation ID updates.
     explicit CommittedNavigationIDListener(
         web::WebState* web_state,
@@ -70,12 +73,15 @@ class IOSBlockingPageTabHelper
 
    private:
     // web::WebStateObserver:
+    void DidStartNavigation(
+        web::WebState* web_state,
+        web::NavigationContext* navigation_context) override;
     void DidFinishNavigation(
         web::WebState* web_state,
         web::NavigationContext* navigation_context) override;
     void WebStateDestroyed(web::WebState* web_state) override;
 
-    IOSBlockingPageTabHelper* tab_helper_ = nullptr;
+    raw_ptr<IOSBlockingPageTabHelper> tab_helper_ = nullptr;
     base::ScopedObservation<web::WebState, web::WebStateObserver>
         scoped_observation_{this};
   };
@@ -87,7 +93,7 @@ class IOSBlockingPageTabHelper
   // Keeps track of blocking pages for navigations that have encountered
   // certificate errors in this WebState. When a navigation commits, the
   // corresponding blocking page is moved out and stored in
-  // |blocking_page_for_currently_committed_navigation_|.
+  // `blocking_page_for_currently_committed_navigation_`.
   std::map<int64_t, std::unique_ptr<IOSSecurityInterstitialPage>>
       blocking_pages_for_navigations_;
   // Keeps track of the blocking page for the currently committed navigation, if
@@ -95,9 +101,6 @@ class IOSBlockingPageTabHelper
   // blocking page) or reset on every committed navigation.
   std::unique_ptr<IOSSecurityInterstitialPage>
       blocking_page_for_currently_committed_navigation_;
-
-  // Subscription for JS messages.
-  base::CallbackListSubscription subscription_;
 
   // Helper object that notifies the tab helper of committed navigation IDs.
   CommittedNavigationIDListener navigation_id_listener_;

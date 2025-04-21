@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,9 @@ PerfTimeLogger::PerfTimeLogger(const char* test_name)
     : logged_(false), test_name_(test_name) {}
 
 PerfTimeLogger::~PerfTimeLogger() {
-  if (!logged_)
+  if (!logged_) {
     Done();
+  }
 }
 
 void PerfTimeLogger::Done() {

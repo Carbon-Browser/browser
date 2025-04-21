@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,11 +18,9 @@ static void TestBitmapGlyphsBlockListed(AtomicString windows_family_name,
                                         bool block_listed_expected) {
   FontCache& font_cache = FontCache::Get();
   FontDescription font_description;
-  FontFamily font_family;
-  font_family.SetFamily(windows_family_name,
-                        FontFamily::InferredTypeFor(windows_family_name));
-  font_description.SetFamily(font_family);
-  scoped_refptr<SimpleFontData> simple_font_data =
+  font_description.SetFamily(FontFamily(
+      windows_family_name, FontFamily::InferredTypeFor(windows_family_name)));
+  const SimpleFontData* simple_font_data =
       font_cache.GetFontData(font_description, windows_family_name);
   ASSERT_TRUE(simple_font_data);
   const FontPlatformData& font_platform_data = simple_font_data->PlatformData();
@@ -33,15 +31,15 @@ static void TestBitmapGlyphsBlockListed(AtomicString windows_family_name,
 }
 
 TEST_F(BlockListBitmapGlyphsTest, Simsun) {
-  TestBitmapGlyphsBlockListed("Simsun", false);
+  TestBitmapGlyphsBlockListed(AtomicString("Simsun"), false);
 }
 
 TEST_F(BlockListBitmapGlyphsTest, Arial) {
-  TestBitmapGlyphsBlockListed("Arial", false);
+  TestBitmapGlyphsBlockListed(AtomicString("Arial"), false);
 }
 
 TEST_F(BlockListBitmapGlyphsTest, Calibri) {
-  TestBitmapGlyphsBlockListed("Calibri", true);
+  TestBitmapGlyphsBlockListed(AtomicString("Calibri"), true);
 }
 
 #endif

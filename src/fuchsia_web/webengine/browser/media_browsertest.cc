@@ -1,23 +1,23 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "fuchsia_web/webengine/test/web_engine_browser_test.h"
-
 #include <fuchsia/mediacodec/cpp/fidl_test_base.h>
+
+#include <optional>
 
 #include "base/files/file_path.h"
 #include "base/fuchsia/scoped_service_binding.h"
 #include "base/fuchsia/test_component_context_for_process.h"
 #include "base/test/scoped_feature_list.h"
 #include "content/public/test/browser_test.h"
+#include "fuchsia_web/common/test/frame_for_test.h"
 #include "fuchsia_web/common/test/frame_test_util.h"
 #include "fuchsia_web/common/test/test_navigation_listener.h"
 #include "fuchsia_web/webengine/features.h"
-#include "fuchsia_web/webengine/test/frame_for_test.h"
 #include "fuchsia_web/webengine/test/test_data.h"
+#include "fuchsia_web/webengine/test/web_engine_browser_test.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace {
 
@@ -84,7 +84,7 @@ class SoftwareOnlyDecodersDisabledAndHardwareDecoderFailureTest
   }
 
   // Used to disconnect fuchsia.mediacodec.CodecFactory.
-  absl::optional<base::TestComponentContextForProcess> component_context_;
+  std::optional<base::TestComponentContextForProcess> component_context_;
 };
 
 // Verify that a codec only supported by a software decoder is reported as
@@ -93,7 +93,7 @@ IN_PROC_BROWSER_TEST_F(SoftwareOnlyDecodersEnabledTest,
                        CanPlayTypeSoftwareOnlyCodecIsTrue) {
   const GURL kUrl(embedded_test_server()->GetURL(kCanPlaySoftwareOnlyCodecUrl));
 
-  // TODO(crbug.com/1200314): Refactor these tests to use FrameForTest and
+  // TODO(crbug.com/40761737): Refactor these tests to use FrameForTest and
   // possibly to simplify the calls below since some of the details are not
   // interesting to the individual tests. In particular, has_user_activation is
   // more relevant than specific LoadUrlParams.

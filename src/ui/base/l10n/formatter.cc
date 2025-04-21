@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ui/base/l10n/formatter.h"
 
@@ -12,6 +17,7 @@
 
 #include "base/check.h"
 #include "base/component_export.h"
+#include "base/numerics/safe_conversions.h"
 #include "third_party/icu/source/common/unicode/unistr.h"
 #include "third_party/icu/source/i18n/unicode/msgfmt.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -59,6 +65,31 @@ static const Pluralities IDS_ELAPSED_MONTH = {
     IDS_TIME_ELAPSED_MONTHS, "one{# month ago}", " other{# months ago}"};
 static const Pluralities IDS_ELAPSED_YEAR = {
     IDS_TIME_ELAPSED_YEARS, "one{# year ago}", " other{# years ago}"};
+
+#if BUILDFLAG(IS_IOS)
+static const Pluralities IDS_TITLE_CASE_ELAPSED_LONG_SEC = {
+    IDS_TIME_TITLE_CASE_ELAPSED_LONG_SECS, "one{# Second Ago}",
+    " other{# Seconds Ago}"};
+
+static const Pluralities IDS_TITLE_CASE_ELAPSED_LONG_MIN = {
+    IDS_TIME_TITLE_CASE_ELAPSED_LONG_MINS, "one{# Minute Ago}",
+    " other{# Minutes Ago}"};
+
+static const Pluralities IDS_TITLE_CASE_ELAPSED_HOUR = {
+    IDS_TIME_TITLE_CASE_ELAPSED_HOURS, "one{# Hour Ago}",
+    " other{# Hours Ago}"};
+
+static const Pluralities IDS_TITLE_CASE_ELAPSED_DAY = {
+    IDS_TIME_TITLE_CASE_ELAPSED_DAYS, "one{# Day Ago}", " other{# Days Ago}"};
+
+static const Pluralities IDS_TITLE_CASE_ELAPSED_MONTH = {
+    IDS_TIME_TITLE_CASE_ELAPSED_MONTHS, "one{# Month Ago}",
+    " other{# Months Ago}"};
+
+static const Pluralities IDS_TITLE_CASE_ELAPSED_YEAR = {
+    IDS_TIME_TITLE_CASE_ELAPSED_YEARS, "one{# Year Ago}",
+    " other{# Years Ago}"};
+#endif
 
 static const Pluralities IDS_REMAINING_SHORT_SEC = {
   IDS_TIME_REMAINING_SECS,
@@ -283,7 +314,9 @@ std::unique_ptr<icu::MessageFormat> Formatter::InitFormat(
     std::u16string pattern = l10n_util::GetStringUTF16(pluralities.id);
     UErrorCode error = U_ZERO_ERROR;
     std::unique_ptr<icu::MessageFormat> format(new icu::MessageFormat(
-        icu::UnicodeString(false, pattern.data(), pattern.length()), error));
+        icu::UnicodeString(false, pattern.data(),
+                           base::checked_cast<int32_t>(pattern.length())),
+        error));
     DCHECK(U_SUCCESS(error));
     if (format.get())
       return format;
@@ -314,6 +347,13 @@ void FormatterContainer::Initialize() {
       std::make_unique<Formatter>(IDS_ELAPSED_LONG_SEC, IDS_ELAPSED_LONG_MIN,
                                   IDS_ELAPSED_HOUR, IDS_ELAPSED_DAY,
                                   IDS_ELAPSED_MONTH, IDS_ELAPSED_YEAR);
+#if BUILDFLAG(IS_IOS)
+  formatter_[TimeFormat::FORMAT_TITLE_CASE_ELAPSED][TimeFormat::LENGTH_LONG] =
+      std::make_unique<Formatter>(
+          IDS_TITLE_CASE_ELAPSED_LONG_SEC, IDS_TITLE_CASE_ELAPSED_LONG_MIN,
+          IDS_TITLE_CASE_ELAPSED_HOUR, IDS_TITLE_CASE_ELAPSED_DAY,
+          IDS_TITLE_CASE_ELAPSED_MONTH, IDS_TITLE_CASE_ELAPSED_YEAR);
+#endif
   formatter_[TimeFormat::FORMAT_REMAINING][TimeFormat::LENGTH_SHORT] =
       std::make_unique<Formatter>(
           IDS_REMAINING_SHORT_SEC, IDS_REMAINING_SHORT_MIN, IDS_REMAINING_HOUR,

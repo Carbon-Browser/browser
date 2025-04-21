@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "components/exo/surface_observer.h"
 #include "components/exo/surface_tree_host.h"
 #include "ui/gfx/geometry/size.h"
@@ -53,7 +54,7 @@ class NotificationSurface : public SurfaceTreeHost,
                                       aura::Window* new_root) override;
 
  private:
-  NotificationSurfaceManager* const manager_;  // Not owned.
+  const raw_ptr<NotificationSurfaceManager> manager_;  // Not owned.
   const std::string notification_key_;
 
   bool added_to_manager_ = false;

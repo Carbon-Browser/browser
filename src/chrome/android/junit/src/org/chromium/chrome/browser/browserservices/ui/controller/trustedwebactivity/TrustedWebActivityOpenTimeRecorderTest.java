@@ -1,16 +1,15 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.browserservices.ui.controller.trustedwebactivity;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.argThat;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import org.junit.Before;
@@ -24,55 +23,65 @@ import org.robolectric.Robolectric;
 import org.robolectric.annotation.Config;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.base.test.util.HistogramWatcher;
 import org.chromium.chrome.browser.ActivityTabProvider;
-import org.chromium.chrome.browser.browserservices.metrics.TrustedWebActivityUmaRecorder;
 import org.chromium.chrome.browser.browserservices.ui.controller.CurrentPageVerifier;
 import org.chromium.chrome.browser.browserservices.ui.controller.CurrentPageVerifier.VerificationState;
 import org.chromium.chrome.browser.browserservices.ui.controller.CurrentPageVerifier.VerificationStatus;
 import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
 import org.chromium.chrome.browser.tab.Tab;
+import org.chromium.components.ukm.UkmRecorder;
+import org.chromium.components.ukm.UkmRecorderJni;
 import org.chromium.content_public.browser.WebContents;
 
 import java.util.concurrent.TimeUnit;
 
-/**
- * Tests for {@link TrustedWebActivityOpenTimeRecorder}.
- */
+/** Tests for {@link TrustedWebActivityOpenTimeRecorder}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class TrustedWebActivityOpenTimeRecorderTest {
-    @Mock
-    ActivityLifecycleDispatcher mLifecycleDispatcher;
-    @Mock
-    CurrentPageVerifier mCurrentPageVerifier;
-    @Mock
-    TrustedWebActivityUmaRecorder mUmaRecorder;
-    @Mock
-    ActivityTabProvider mTabProvider;
-    @Captor
-    ArgumentCaptor<Runnable> mVerificationObserverCaptor;
+    @Mock ActivityLifecycleDispatcher mLifecycleDispatcher;
+    @Mock CurrentPageVerifier mCurrentPageVerifier;
+    @Mock ActivityTabProvider mTabProvider;
+    @Captor ArgumentCaptor<Runnable> mVerificationObserverCaptor;
+    @Mock UkmRecorder.Natives mUkmRecorderJniMock;
+    @Mock WebContents mWebContents;
+    @Mock Tab mTab;
 
     private TrustedWebActivityOpenTimeRecorder mRecorder;
 
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
+        UkmRecorderJni.setInstanceForTesting(mUkmRecorderJniMock);
+
         doNothing()
                 .when(mCurrentPageVerifier)
                 .addVerificationObserver(mVerificationObserverCaptor.capture());
-        mRecorder = new TrustedWebActivityOpenTimeRecorder(
-                mLifecycleDispatcher, mCurrentPageVerifier, mUmaRecorder, mTabProvider);
+        mRecorder =
+                new TrustedWebActivityOpenTimeRecorder(
+                        mCurrentPageVerifier, mTabProvider, mLifecycleDispatcher);
 
-        Tab tab = mock(Tab.class);
-        WebContents webContents = mock(WebContents.class);
-        when(mTabProvider.get()).thenReturn(tab);
-        when(tab.getWebContents()).thenReturn(webContents);
+        when(mTabProvider.get()).thenReturn(mTab);
+        when(mTab.getWebContents()).thenReturn(mWebContents);
+    }
+
+    private void verifyUkm(String event) {
+        verify(mUkmRecorderJniMock)
+                .recordEventWithMultipleMetrics(
+                        eq(mWebContents),
+                        eq(event),
+                        argThat(
+                                metricsList ->
+                                        metricsList.length == 1
+                                                && metricsList[0].mName.equals("HasOccurred")
+                                                && metricsList[0].mValue == 1));
     }
 
     @Test
     public void recordsTwaOpened() {
         launchTwa();
-        verify(mUmaRecorder).recordTwaOpened(any());
+        verifyUkm("TrustedWebActivity.Open");
     }
 
     @Test
@@ -80,18 +89,22 @@ public class TrustedWebActivityOpenTimeRecorderTest {
         launchTwa();
         leaveVerifiedOrigin();
 
-        clearInvocations(mUmaRecorder);
+        clearInvocations(mUkmRecorderJniMock);
         returnToVerifiedOrigin();
-        verify(mUmaRecorder, never()).recordTwaOpened(any());
+        verifyNoMoreInteractions(mUkmRecorderJniMock);
     }
 
     @Test
     public void recordsTwaOpenTime_OnFirstActivityPause() {
+        var histogramWatcher =
+                HistogramWatcher.newBuilder()
+                        .expectIntRecord("BrowserServices.TwaOpenTime.V2", 3000)
+                        .build();
         launchTwa();
         advanceTime(3000);
 
         mRecorder.onPauseWithNative();
-        verify(mUmaRecorder).recordTwaOpenTime(3000);
+        histogramWatcher.assertExpected();
     }
 
     @Test
@@ -103,29 +116,40 @@ public class TrustedWebActivityOpenTimeRecorderTest {
         mRecorder.onResumeWithNative();
         advanceTime(4000);
 
-        clearInvocations(mUmaRecorder);
+        var histogramWatcher =
+                HistogramWatcher.newBuilder()
+                        .expectIntRecord("BrowserServices.TwaOpenTime.V2", 4000)
+                        .build();
         mRecorder.onPauseWithNative();
-        verify(mUmaRecorder).recordTwaOpenTime(4000);
+        histogramWatcher.assertExpected();
     }
 
     @Test
     public void recordsTimeInVerified_WhenLeftVerified() {
+        var histogramWatcher =
+                HistogramWatcher.newBuilder()
+                        .expectIntRecord("TrustedWebActivity.TimeInVerifiedOrigin.V2", 2000)
+                        .build();
         launchTwa();
         advanceTime(2000);
 
         leaveVerifiedOrigin();
-        verify(mUmaRecorder).recordTimeInVerifiedOrigin(2000);
+        histogramWatcher.assertExpected();
     }
 
     @Test
     public void recordsTimeOutOfVerified_WhenReturnedToVerified() {
+        var histogramWatcher =
+                HistogramWatcher.newBuilder()
+                        .expectIntRecord("TrustedWebActivity.TimeOutOfVerifiedOrigin.V2", 3000)
+                        .build();
         launchTwa();
         advanceTime(2000);
         leaveVerifiedOrigin();
         advanceTime(3000);
 
         returnToVerifiedOrigin();
-        verify(mUmaRecorder).recordTimeOutOfVerifiedOrigin(3000);
+        histogramWatcher.assertExpected();
     }
 
     @Test
@@ -137,9 +161,12 @@ public class TrustedWebActivityOpenTimeRecorderTest {
         returnToVerifiedOrigin();
         advanceTime(4000);
 
-        clearInvocations(mUmaRecorder);
+        var histogramWatcher =
+                HistogramWatcher.newBuilder()
+                        .expectIntRecord("TrustedWebActivity.TimeInVerifiedOrigin.V2", 4000)
+                        .build();
         leaveVerifiedOrigin();
-        verify(mUmaRecorder).recordTimeInVerifiedOrigin(4000);
+        histogramWatcher.assertExpected();
     }
 
     @Test
@@ -153,22 +180,30 @@ public class TrustedWebActivityOpenTimeRecorderTest {
         leaveVerifiedOrigin();
         advanceTime(5000);
 
-        clearInvocations(mUmaRecorder);
+        var histogramWatcher =
+                HistogramWatcher.newBuilder()
+                        .expectIntRecord("TrustedWebActivity.TimeOutOfVerifiedOrigin.V2", 5000)
+                        .build();
         returnToVerifiedOrigin();
-        verify(mUmaRecorder).recordTimeOutOfVerifiedOrigin(5000);
+        histogramWatcher.assertExpected();
     }
 
     @Test
     public void recordsTimeInVerified_WhenPausedWhileInVerified() {
+        var histogramWatcher =
+                HistogramWatcher.newBuilder()
+                        .expectIntRecord("TrustedWebActivity.TimeInVerifiedOrigin.V2", 2000)
+                        .build();
         launchTwa();
         advanceTime(2000);
 
         mRecorder.onPauseWithNative();
-        verify(mUmaRecorder).recordTimeInVerifiedOrigin(2000);
+        histogramWatcher.assertExpected();
     }
 
     @Test
     public void recordsTimeInVerified_AfterResumedInVerified_AndLeftVerified() {
+
         launchTwa();
         advanceTime(2000);
         mRecorder.onPauseWithNative();
@@ -176,28 +211,39 @@ public class TrustedWebActivityOpenTimeRecorderTest {
         mRecorder.onResumeWithNative();
         advanceTime(4000);
 
-        clearInvocations(mUmaRecorder);
+        var histogramWatcher =
+                HistogramWatcher.newBuilder()
+                        .expectIntRecord("TrustedWebActivity.TimeInVerifiedOrigin.V2", 4000)
+                        .build();
         leaveVerifiedOrigin();
-        verify(mUmaRecorder).recordTimeInVerifiedOrigin(4000);
+        histogramWatcher.assertExpected();
     }
 
     @Test
     public void recordsTimeOutOfVerified_WhenPausedWhileOutOfVerified() {
+        var histogramWatcher =
+                HistogramWatcher.newBuilder()
+                        .expectIntRecord("TrustedWebActivity.TimeOutOfVerifiedOrigin.V2", 3000)
+                        .build();
         launchTwa();
         advanceTime(2000);
         leaveVerifiedOrigin();
         advanceTime(3000);
 
         mRecorder.onPauseWithNative();
-        verify(mUmaRecorder).recordTimeOutOfVerifiedOrigin(3000);
+        histogramWatcher.assertExpected();
     }
 
     @Test
     public void doesntRecordAnyTime_WhenVerifiedForFirstTime() {
+        var histogramWatcher =
+                HistogramWatcher.newBuilder()
+                        .expectNoRecords("TrustedWebActivity.TimeOutOfVerifiedOrigin.V2")
+                        .expectNoRecords("TrustedWebActivity.TimeInVerifiedOrigin.V2")
+                        .expectNoRecords("BrowserServices.TwaOpenTime.V2")
+                        .build();
         launchTwa();
-        verify(mUmaRecorder, never()).recordTimeInVerifiedOrigin(anyLong());
-        verify(mUmaRecorder, never()).recordTimeOutOfVerifiedOrigin(anyLong());
-        verify(mUmaRecorder, never()).recordTwaOpenTime(anyLong());
+        histogramWatcher.assertExpected();
     }
 
     private void launchTwa() {
@@ -216,7 +262,8 @@ public class TrustedWebActivityOpenTimeRecorderTest {
     }
 
     private void setVerificationStatus(@VerificationStatus int status) {
-        VerificationState newState = new VerificationState("www.example.com", status);
+        VerificationState newState =
+                new VerificationState("www.example.com", "www.example.com", status);
         when(mCurrentPageVerifier.getState()).thenReturn(newState);
         for (Runnable observer : mVerificationObserverCaptor.getAllValues()) {
             observer.run();

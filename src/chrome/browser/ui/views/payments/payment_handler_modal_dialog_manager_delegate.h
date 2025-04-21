@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,7 +56,7 @@ class PaymentHandlerModalDialogManagerDelegate
   base::WeakPtr<content::WebContents> host_web_contents_;
 
   // A not-owned pointer to the WebContents behind the modal dialogs.
-  raw_ptr<content::WebContents> web_contents_ = nullptr;
+  raw_ptr<content::WebContents, DanglingUntriaged> web_contents_ = nullptr;
 };
 
 }  // namespace payments

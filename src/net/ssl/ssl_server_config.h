@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,16 +7,16 @@
 
 #include <stdint.h>
 
+#include <optional>
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "net/base/net_export.h"
 #include "net/socket/next_proto.h"
 #include "net/ssl/ssl_config.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/boringssl/src/include/openssl/base.h"
 
 namespace net {
@@ -47,21 +47,8 @@ struct NET_EXPORT SSLServerConfig {
   // to reject early data that is non-safe to be replayed.
   bool early_data_enabled = false;
 
-  // Presorted list of cipher suites which should be explicitly prevented from
-  // being used in addition to those disabled by the net built-in policy.
-  //
-  // By default, all cipher suites supported by the underlying SSL
-  // implementation will be enabled except for:
-  // - Null encryption cipher suites.
-  // - Weak cipher suites: < 80 bits of security strength.
-  // - FORTEZZA cipher suites (obsolete).
-  // - IDEA cipher suites (RFC 5469 explains why).
-  // - Anonymous cipher suites.
-  // - ECDSA cipher suites on platforms that do not support ECDSA signed
-  //   certificates, as servers may use the presence of such ciphersuites as a
-  //   hint to send an ECDSA certificate.
-  // The ciphers listed in |disabled_cipher_suites| will be removed in addition
-  // to the above list.
+  // A list of cipher suites which should be explicitly prevented from being
+  // used in addition to those disabled by the net built-in policy.
   //
   // Though cipher suites are sent in TLS as "uint8_t CipherSuite[2]", in
   // big-endian form, they should be declared in host byte order, with the
@@ -76,12 +63,12 @@ struct NET_EXPORT SSLServerConfig {
   // cipher_suite_for_testing, if set, causes the server to only support the
   // specified cipher suite in TLS 1.2 and below. This should only be used in
   // unit tests.
-  absl::optional<uint16_t> cipher_suite_for_testing;
+  std::optional<uint16_t> cipher_suite_for_testing;
 
   // signature_algorithm_for_testing, if set, causes the server to only support
   // the specified signature algorithm in TLS 1.2 and below. This should only be
   // used in unit tests.
-  absl::optional<uint16_t> signature_algorithm_for_testing;
+  std::optional<uint16_t> signature_algorithm_for_testing;
 
   // curves_for_testing, if not empty, specifies the list of NID values (e.g.
   // NID_X25519) to configure as supported curves for the TLS connection.
@@ -102,6 +89,10 @@ struct NET_EXPORT SSLServerConfig {
   // This field is meaningful only if client certificates are requested.
   // If a verifier is not provided then all certificates are accepted.
   raw_ptr<ClientCertVerifier> client_cert_verifier = nullptr;
+
+  // If set, causes the server to support the specified client certificate
+  // signature algorithms.
+  std::vector<uint16_t> client_cert_signature_algorithms;
 
   // The list of application level protocols supported with ALPN (Application
   // Layer Protocol Negotiation), in decreasing order of preference.  Protocols
@@ -127,7 +118,7 @@ struct NET_EXPORT SSLServerConfig {
 
   // If specified, causes the specified alert to be sent immediately after the
   // handshake.
-  absl::optional<uint8_t> alert_after_handshake_for_testing;
+  std::optional<uint8_t> alert_after_handshake_for_testing;
 
   // This is a workaround for BoringSSL's scopers not being copyable. See
   // https://crbug.com/boringssl/431.

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,20 +8,20 @@
 #include <memory>
 
 #include "base/memory/raw_ptr.h"
+#include "components/password_manager/core/browser/well_known_change_password/well_known_change_password_state.h"
+#include "components/password_manager/core/browser/well_known_change_password/well_known_change_password_util.h"
 #include "content/public/browser/navigation_throttle.h"
-
-#include "components/password_manager/core/browser/well_known_change_password_state.h"
-#include "components/password_manager/core/browser/well_known_change_password_util.h"
 #include "services/metrics/public/cpp/ukm_source_id.h"
 
 class GURL;
+
+namespace affiliations {
+class AffiliationService;
+}  // namespace affiliations
+
 namespace content {
 class NavigationHandle;
 }  // namespace content
-
-namespace password_manager {
-class AffiliationService;
-}  // namespace password_manager
 
 // This NavigationThrottle checks whether a site supports the
 // .well-known/change-password url. To check whether a site supports the
@@ -65,7 +65,9 @@ class WellKnownChangePasswordNavigationThrottle
   password_manager::WellKnownChangePasswordState
       well_known_change_password_state_{this};
   ukm::SourceId source_id_ = ukm::kInvalidSourceId;
-  raw_ptr<password_manager::AffiliationService> affiliation_service_ = nullptr;
+  raw_ptr<affiliations::AffiliationService> affiliation_service_ = nullptr;
+  base::WeakPtrFactory<password_manager::WellKnownChangePasswordState>
+      weak_ptr_factory_{&well_known_change_password_state_};
 };
 
 #endif  // CHROME_BROWSER_UI_PASSWORDS_WELL_KNOWN_CHANGE_PASSWORD_NAVIGATION_THROTTLE_H_

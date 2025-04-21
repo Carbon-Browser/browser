@@ -1,13 +1,16 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_BROWSER_MEDIA_SESSION_MEDIA_SESSION_CONTROLLER_H_
 #define CONTENT_BROWSER_MEDIA_SESSION_MEDIA_SESSION_CONTROLLER_H_
 
+#include <optional>
+
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
+#include "content/browser/media/media_devices_util.h"
 #include "content/browser/media/session/media_session_player_observer.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/media_player_id.h"
@@ -15,7 +18,7 @@
 #include "media/audio/audio_device_description.h"
 #include "media/base/media_content_type.h"
 #include "services/media_session/public/cpp/media_position.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "services/media_session/public/mojom/media_session.mojom.h"
 
 namespace content {
 
@@ -61,16 +64,21 @@ class CONTENT_EXPORT MediaSessionController
   void OnSeekTo(int player_id, base::TimeDelta seek_time) override;
   void OnSetVolumeMultiplier(int player_id, double volume_multiplier) override;
   void OnEnterPictureInPicture(int player_id) override;
-  void OnExitPictureInPicture(int player_id) override;
   void OnSetAudioSinkId(int player_id,
                         const std::string& raw_device_id) override;
   void OnSetMute(int player_id, bool mute) override;
+  void OnRequestMediaRemoting(int player_id) override;
+  void OnRequestVisibility(
+      int player_id,
+      RequestVisibilityCallback request_visibility_callback) override;
   RenderFrameHost* render_frame_host() const override;
-  absl::optional<media_session::MediaPosition> GetPosition(
+  std::optional<media_session::MediaPosition> GetPosition(
       int player_id) const override;
   bool IsPictureInPictureAvailable(int player_id) const override;
+  bool HasSufficientlyVisibleVideo(int player_id) const override;
   bool HasAudio(int player_id) const override;
   bool HasVideo(int player_id) const override;
+  bool IsPaused(int player_id) const override;
   std::string GetAudioOutputSinkId(int player_id) const override;
   bool SupportsAudioOutputDeviceSwitching(int player_id) const override;
   media::MediaContentType GetMediaContentType() const override;
@@ -100,12 +108,21 @@ class CONTENT_EXPORT MediaSessionController
   // Called when the ability to switch audio output devices has been disabled.
   void OnAudioOutputSinkChangingDisabled();
 
+  // Called when the RemotePlayback metadata has changed.
+  void OnRemotePlaybackMetadataChanged(
+      media_session::mojom::RemotePlaybackMetadataPtr metadata);
+
+  // Called when video visibility changes for the given media player.
+  void OnVideoVisibilityChanged(bool meets_visibility_threshold);
+
  private:
   bool IsMediaSessionNeeded() const;
 
   // Determines whether a session is needed and adds or removes the player
   // accordingly.
   bool AddOrRemovePlayer();
+
+  void OnHashedSinkIdReceived(const std::string& hashed_sink_id);
 
   const MediaPlayerId id_;
 
@@ -115,7 +132,7 @@ class CONTENT_EXPORT MediaSessionController
   // Outlives |this|.
   const raw_ptr<MediaSessionImpl> media_session_;
 
-  absl::optional<media_session::MediaPosition> position_;
+  std::optional<media_session::MediaPosition> position_;
 
   // These objects are only created on the UI thread, so this is safe.
   static int player_count_;
@@ -127,11 +144,14 @@ class CONTENT_EXPORT MediaSessionController
   bool has_audio_ = false;
   bool has_video_ = false;
   bool is_picture_in_picture_available_ = false;
+  bool has_sufficiently_visible_video_ = false;
   std::string audio_output_sink_id_ =
       media::AudioDeviceDescription::kDefaultDeviceId;
   bool supports_audio_output_device_switching_ = true;
   media::MediaContentType media_content_type_ =
-      media::MediaContentType::Persistent;
+      media::MediaContentType::kPersistent;
+
+  base::WeakPtrFactory<MediaSessionController> weak_factory_{this};
 };
 
 }  // namespace content

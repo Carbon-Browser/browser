@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/allocator/partition_alloc_support.h"
+#include "base/features.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "base/system/sys_info.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
-#include "cc/raster/single_thread_task_graph_runner.h"
 #include "components/viz/client/frame_eviction_manager.h"
 #include "content/browser/browser_main_loop.h"
 #include "content/browser/gpu/browser_gpu_channel_host_factory.h"
@@ -40,9 +41,12 @@ void BrowserGpuChannelHostFactorySetApplicationVisible(bool is_visible) {
 
 // These functions are called based on application visibility status.
 void SendOnBackgroundedToGpuService() {
-  content::GpuProcessHost::CallOnIO(
-      content::GPU_PROCESS_KIND_SANDBOXED, false /* force_create */,
+  content::GpuProcessHost::CallOnUI(
+      FROM_HERE, content::GPU_PROCESS_KIND_SANDBOXED, false /* force_create */,
       base::BindOnce([](content::GpuProcessHost* host) {
+        // This is not necessarily the most logical place to notify the
+        // allocator, but it matches the call made on the GPU process side.
+        base::allocator::PartitionAllocSupport::Get()->OnBackgrounded();
         if (host) {
           host->gpu_service()->OnBackgrounded();
         }
@@ -50,23 +54,15 @@ void SendOnBackgroundedToGpuService() {
 }
 
 void SendOnForegroundedToGpuService() {
-  content::GpuProcessHost::CallOnIO(
-      content::GPU_PROCESS_KIND_SANDBOXED, false /* force_create */,
+  content::GpuProcessHost::CallOnUI(
+      FROM_HERE, content::GPU_PROCESS_KIND_SANDBOXED, false /* force_create */,
       base::BindOnce([](content::GpuProcessHost* host) {
+        base::allocator::PartitionAllocSupport::Get()->OnForegrounded();
         if (host) {
           host->gpu_service()->OnForegrounded();
         }
       }));
 }
-
-class SingleThreadTaskGraphRunner : public cc::SingleThreadTaskGraphRunner {
- public:
-  SingleThreadTaskGraphRunner() {
-    Start("CompositorTileWorker1", base::SimpleThread::Options());
-  }
-
-  ~SingleThreadTaskGraphRunner() override { Shutdown(); }
-};
 
 }  // namespace
 
@@ -105,7 +101,8 @@ void CompositorDependenciesAndroid::CreateVizFrameSinkManager() {
   // Setup HostFrameSinkManager with interface endpoints.
   host_frame_sink_manager_.BindAndSetManager(
       std::move(frame_sink_manager_client_receiver),
-      base::ThreadTaskRunnerHandle::Get(), std::move(frame_sink_manager));
+      base::SingleThreadTaskRunner::GetCurrentDefault(),
+      std::move(frame_sink_manager));
 
   // Set up a pending request which will be run once we've successfully
   // connected to the GPU process.
@@ -114,12 +111,6 @@ void CompositorDependenciesAndroid::CreateVizFrameSinkManager() {
       std::move(frame_sink_manager_receiver),
       std::move(frame_sink_manager_client),
       host_frame_sink_manager_.debug_renderer_settings());
-}
-
-cc::TaskGraphRunner* CompositorDependenciesAndroid::GetTaskGraphRunner() {
-  if (!task_graph_runner_)
-    task_graph_runner_ = std::make_unique<SingleThreadTaskGraphRunner>();
-  return task_graph_runner_.get();
 }
 
 viz::FrameSinkId CompositorDependenciesAndroid::AllocateFrameSinkId() {
@@ -154,7 +145,7 @@ void CompositorDependenciesAndroid::EnqueueLowEndBackgroundCleanup() {
     low_end_background_cleanup_task_.Reset(base::BindOnce(
         &CompositorDependenciesAndroid::DoLowEndBackgroundCleanup,
         base::Unretained(this)));
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, low_end_background_cleanup_task_.callback(),
         base::Seconds(5));
   }
@@ -168,17 +159,15 @@ void CompositorDependenciesAndroid::DoLowEndBackgroundCleanup() {
 
   // Next, notify the GPU process to do background processing, which will
   // lose all renderer contexts.
-  content::GpuProcessHost::CallOnIO(
-      content::GPU_PROCESS_KIND_SANDBOXED, false /* force_create */,
-      base::BindOnce([](content::GpuProcessHost* host) {
-        if (host) {
-          host->gpu_service()->OnBackgroundCleanup();
-        }
-      }));
+  auto* host = GpuProcessHost::Get();
+  if (host) {
+    host->gpu_service()->OnBackgroundCleanup();
+  }
 }
 
 void CompositorDependenciesAndroid::OnCompositorVisible(
     CompositorImpl* compositor) {
+  CHECK(!visible_synchronous_compositors_);
   bool element_inserted = visible_compositors_.insert(compositor).second;
   DCHECK(element_inserted);
   if (visible_compositors_.size() == 1)
@@ -187,16 +176,35 @@ void CompositorDependenciesAndroid::OnCompositorVisible(
 
 void CompositorDependenciesAndroid::OnCompositorHidden(
     CompositorImpl* compositor) {
+  CHECK(!visible_synchronous_compositors_);
   size_t elements_removed = visible_compositors_.erase(compositor);
   DCHECK_EQ(1u, elements_removed);
   if (visible_compositors_.size() == 0)
     OnVisibilityChanged();
 }
 
+void CompositorDependenciesAndroid::OnSynchronousCompositorVisible() {
+  CHECK(visible_compositors_.empty());
+  visible_synchronous_compositors_++;
+  if (visible_synchronous_compositors_ == 1u) {
+    OnVisibilityChanged();
+  }
+}
+
+void CompositorDependenciesAndroid::OnSynchronousCompositorHidden() {
+  CHECK(visible_compositors_.empty());
+  CHECK_GT(visible_synchronous_compositors_, 0u);
+  visible_synchronous_compositors_--;
+  if (visible_synchronous_compositors_ == 0u) {
+    OnVisibilityChanged();
+  }
+}
+
 // This function runs when our first CompositorImpl becomes visible or when
 // our last Compositormpl is hidden.
 void CompositorDependenciesAndroid::OnVisibilityChanged() {
-  if (visible_compositors_.size() > 0) {
+  if (visible_compositors_.size() > 0 ||
+      visible_synchronous_compositors_ > 0u) {
     GpuDataManagerImpl::GetInstance()->SetApplicationVisible(true);
     BrowserGpuChannelHostFactorySetApplicationVisible(true);
     SendOnForegroundedToGpuService();

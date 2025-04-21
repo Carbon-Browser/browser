@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/function_ref.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/observer_list.h"
@@ -47,7 +48,7 @@ class MediaStreamUI {
 
   // Called when Region Capture starts/stops, or when the cropped area changes.
   virtual void OnRegionCaptureRectChanged(
-      const absl::optional<gfx::Rect>& region_capture_rect) {}
+      const std::optional<gfx::Rect>& region_capture_rect) {}
 };
 
 // Keeps track of which WebContents are capturing media streams. Used to display
@@ -59,6 +60,16 @@ class MediaStreamCaptureIndicator
     : public base::RefCountedThreadSafe<MediaStreamCaptureIndicator>,
       public StatusIconMenuModel::Delegate {
  public:
+  enum MediaType {
+    kUnknown = 0,
+    kUserMedia = 1,
+    kDisplayMedia = 2,
+    kAllScreensMedia = 4,
+  };
+
+  // Maps blink::mojom::MediaStreamType to MediaType.
+  static MediaType GetMediaType(blink::mojom::MediaStreamType type);
+
   class Observer : public base::CheckedObserver {
    public:
     virtual void OnIsCapturingVideoChanged(content::WebContents* web_contents,
@@ -114,8 +125,10 @@ class MediaStreamCaptureIndicator
   // Returns true if |web_contents| is capturing a display.
   bool IsCapturingDisplay(content::WebContents* web_contents) const;
 
-  // Called when STOP button in media capture notification is clicked.
-  void NotifyStopped(content::WebContents* web_contents) const;
+  // Called to stop media capturing of the |media_type|.
+  // |media_type| is underlying_type of MediaType.
+  void StopMediaCapturing(content::WebContents* web_contents,
+                          int media_type) const;
 
   // Adds/Removes observers. Observers needs to be removed during the lifetime
   // of this object.
@@ -151,16 +164,16 @@ class MediaStreamCaptureIndicator
                              gfx::ImageSkia* image,
                              std::u16string* tool_tip);
 
-  // Checks if |web_contents| or any portal WebContents in its tree is using
+  // Checks if |web_contents| or any inner WebContents in its tree is using
   // a device for capture. The type of capture is specified using |pred|.
   using WebContentsDeviceUsagePredicate =
-      base::RepeatingCallback<bool(const WebContentsDeviceUsage*)>;
+      base::FunctionRef<bool(const WebContentsDeviceUsage*)>;
   bool CheckUsage(content::WebContents* web_contents,
                   const WebContentsDeviceUsagePredicate& pred) const;
 
   // Reference to our status icon - owned by the StatusTray. If null,
   // the platform doesn't support status icons.
-  raw_ptr<StatusIcon> status_icon_ = nullptr;
+  raw_ptr<StatusIcon, DanglingUntriaged> status_icon_ = nullptr;
 
   // A map that contains the usage counts of the opened capture devices for each
   // WebContents instance.
@@ -168,10 +181,16 @@ class MediaStreamCaptureIndicator
                      std::unique_ptr<WebContentsDeviceUsage>>
       usage_map_;
 
+  // g_stop_callback_id_ is used to identify each stop_callbacks when
+  // AddDevices or RemoveDevices is called. We need this because the device_id
+  // are not unique.
+  static int g_stop_callback_id_;
+
   // A vector which maps command IDs to their associated WebContents
   // instance. This is rebuilt each time the status tray icon context menu is
   // updated.
-  typedef std::vector<content::WebContents*> CommandTargets;
+  typedef std::vector<raw_ptr<content::WebContents, VectorExperimental>>
+      CommandTargets;
   CommandTargets command_targets_;
 
   base::ObserverList<Observer, /* check_empty =*/true> observers_;

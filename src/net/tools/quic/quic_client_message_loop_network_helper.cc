@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 #include "base/logging.h"
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "net/base/net_errors.h"
 #include "net/http/http_request_info.h"
 #include "net/http/http_response_info.h"
@@ -28,7 +28,6 @@
 #include "net/third_party/quiche/src/quiche/quic/core/quic_packets.h"
 #include "net/third_party/quiche/src/quiche/quic/core/quic_server_id.h"
 #include "net/third_party/quiche/src/quiche/quic/platform/api/quic_flags.h"
-#include "net/third_party/quiche/src/quiche/spdy/core/spdy_header_block.h"
 
 using std::string;
 
@@ -53,7 +52,7 @@ bool QuicClientMessageLooplNetworkHelper::CreateUDPSocketAndBind(
     client_address_ =
         quic::QuicSocketAddress(bind_to_address, client_->local_port());
   } else if (server_address.host().address_family() ==
-             quic::IpAddressFamily::IP_V4) {
+             quiche::IpAddressFamily::IP_V4) {
     client_address_ =
         quic::QuicSocketAddress(quic::QuicIpAddress::Any4(), bind_to_port);
   } else {
@@ -89,10 +88,10 @@ bool QuicClientMessageLooplNetworkHelper::CreateUDPSocketAndBind(
 
   socket_.swap(socket);
   packet_reader_ = std::make_unique<QuicChromiumPacketReader>(
-      socket_.get(), clock_, this, kQuicYieldAfterPacketsRead,
+      std::move(socket_), clock_, this, kQuicYieldAfterPacketsRead,
       quic::QuicTime::Delta::FromMilliseconds(
           kQuicYieldAfterDurationMilliseconds),
-      NetLogWithSource());
+      /*report_ecn=*/true, NetLogWithSource());
 
   if (socket != nullptr) {
     socket->Close();
@@ -128,7 +127,8 @@ QuicClientMessageLooplNetworkHelper::CreateQuicPacketWriter() {
   packet_reader_started_ = false;
 
   return new QuicChromiumPacketWriter(
-      socket_.get(), base::ThreadTaskRunnerHandle::Get().get());
+      packet_reader_->socket(),
+      base::SingleThreadTaskRunner::GetCurrentDefault().get());
 }
 
 bool QuicClientMessageLooplNetworkHelper::OnReadError(

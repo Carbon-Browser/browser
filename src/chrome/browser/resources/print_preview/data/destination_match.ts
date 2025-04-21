@@ -1,8 +1,15 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {Destination, PrinterType} from './destination.js';
+// <if expr="not is_chromeos">
+import type {Destination} from './destination.js';
+import {PrinterType} from './destination.js';
+// </if>
+// <if expr="is_chromeos">
+import type {Destination} from './destination_cros.js';
+import {PrinterType} from './destination_cros.js';
+// </if>
 
 export class DestinationMatch {
   private idRegExp_: RegExp|null;

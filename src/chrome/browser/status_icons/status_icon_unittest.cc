@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@ class MockStatusIconObserver : public StatusIconObserver {
 // Define pure virtual functions so we can test base class functionality.
 class TestStatusIcon : public StatusIcon {
  public:
-  TestStatusIcon() {}
+  TestStatusIcon() = default;
   void SetImage(const gfx::ImageSkia& image) override {}
   void SetToolTip(const std::u16string& tool_tip) override {}
   void UpdatePlatformContextMenu(StatusIconMenuModel* menu) override {}

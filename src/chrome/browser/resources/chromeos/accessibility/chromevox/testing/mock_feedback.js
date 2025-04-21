@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,56 +51,48 @@ MockFeedback = class {
    */
   constructor(opt_finishedCallback) {
     /**
-     * @type {function}
-     * @private
+     * @private {function(): undefined}
      */
     this.finishedCallback_ = opt_finishedCallback || null;
     /**
      * True when |replay| has been called and actions are being replayed.
-     * @type {boolean}
-     * @private
+     * @private {boolean}
      */
     this.replaying_ = false;
     /**
      * True when inside the |process| function to prevent nested calls.
-     * @type {boolean}
-     * @private
+     * @private {boolean}
      */
     this.inProcess_ = false;
     /**
      * Pending expectations and callbacks.
-     * @type {Array<{perform(): boolean, toString(): string}>}
-     * @private
+     * @private {Array<{
+     *     perform: (function(): boolean),
+     *     toString: (function(): string)
+     * }>}
      */
     this.pendingActions_ = [];
     /**
      * Pending speech utterances.
-     * @type {Array<{text: string, callback: (function|undefined)}>}
-     * @private
+     * @private {Array<{text: string, callback: (function()|undefined)}>}
      */
     this.pendingUtterances_ = [];
     /**
      * Pending braille output.
-     * @type {Array<{text: string, callback: (function|undefined)}>}
-     * @private
+     * @private {Array<{text: string, callback: (function()|undefined)}>}
      */
     this.pendingBraille_ = [];
     /**
      * Pending earcons.
-     * @type {Array<{text: string, callback: (function|undefined)}>}
-     * @private
+     * @private {Array<{text: string, callback: (function()|undefined)}>}
      */
     this.pendingEarcons_ = [];
     /**
      * Handle for the timeout set for debug logging.
-     * @type {number}
-     * @private
+     * @private {number}
      */
     this.logTimeoutId_ = 0;
-    /**
-     * @type {NavBraille}
-     * @private
-     */
+    /** @private {NavBraille} */
     this.lastMatchedBraille_ = null;
   }
 
@@ -111,18 +103,21 @@ MockFeedback = class {
   install() {
     assertFalse(this.replaying_, 'install: Should not already be replaying.');
 
-    const MockTts = function() {};
-    MockTts.prototype = {
-      __proto__: TtsInterface.prototype,
-      speak: this.addUtterance_.bind(this),
-    };
+    const addUtterance = this.addUtterance_.bind(this);
+    class MockTts extends PrimaryTts {
+      /** @override */
+      speak(...args) {
+        addUtterance(...args);
+      }
+    }
 
     ChromeVox.tts = new MockTts();
 
     const MockBraille = function() {};
     MockBraille.prototype = {
-      __proto__: BrailleInterface.prototype,
-      write: this.addBraille_.bind(this),
+      __proto__: BrailleBackground.prototype,
+      write: (...args) => this.addBraille_(...args),
+      thaw: () => {},
     };
 
     ChromeVox.braille = new MockBraille();
@@ -130,7 +125,7 @@ MockFeedback = class {
     const MockEarcons = function() {};
     MockEarcons.prototype = {
       __proto__: AbstractEarcons.prototype,
-      playEarcon: this.addEarcon_.bind(this),
+      playEarcon: (...args) => this.addEarcon_(...args),
     };
 
     // ChromeVox.earcons is a getter that switches between Classic and
@@ -162,17 +157,15 @@ MockFeedback = class {
   expectSpeech() {
     assertFalse(
         this.replaying_, 'expectSpeech: Should not already be replaying.');
-    Array.prototype.forEach.call(arguments, function(text) {
+    Array.prototype.forEach.call(arguments, text => {
       this.pendingActions_.push({
-        perform: function() {
-          return Boolean(
-              MockFeedback.matchAndConsume_(text, {}, this.pendingUtterances_));
-        }.bind(this),
+        perform: () => Boolean(
+            MockFeedback.matchAndConsume_(text, {}, this.pendingUtterances_)),
         toString() {
           return 'Speak \'' + text + '\'';
         },
       });
-    }.bind(this));
+    });
     return this;
   }
 
@@ -236,18 +229,16 @@ MockFeedback = class {
     assertFalse(
         this.replaying_,
         'expectSpeechWithProperties: Should not already be replaying.');
-    Array.prototype.forEach.call(rest, function(text) {
+    Array.prototype.forEach.call(rest, text => {
       this.pendingActions_.push({
-        perform: function() {
-          return Boolean(MockFeedback.matchAndConsume_(
-              text, expectedProps, this.pendingUtterances_));
-        }.bind(this),
+        perform: () => Boolean(MockFeedback.matchAndConsume_(
+            text, expectedProps, this.pendingUtterances_)),
         toString() {
           return 'Speak \'' + text + '\' with props ' +
               JSON.stringify(expectedProps);
         },
       });
-    }.bind(this));
+    });
     return this;
   }
 
@@ -267,9 +258,9 @@ MockFeedback = class {
     assertFalse(
         this.replaying_,
         'expectNextSpeechUtteranceIsNot: Should not already be replaying.');
-    Array.prototype.forEach.call(arguments, function(text) {
+    Array.prototype.forEach.call(arguments, text => {
       this.pendingActions_.push({
-        perform: function() {
+        perform: () => {
           if (this.pendingUtterances_.length === 0) {
             return false;
           }
@@ -278,12 +269,12 @@ MockFeedback = class {
             assertFalse(true, 'Got denied utterance "' + text + '".');
           }
           return true;
-        }.bind(this),
+        },
         toString() {
           return 'Do not speak \'' + text + '\'';
         },
       });
-    }.bind(this));
+    });
     return this;
   }
 
@@ -299,14 +290,14 @@ MockFeedback = class {
         this.replaying_, 'expectBraille: Should not already be replaying.');
     const props = opt_props || {};
     this.pendingActions_.push({
-      perform: function() {
+      perform: () => {
         const match =
             MockFeedback.matchAndConsume_(text, props, this.pendingBraille_);
         if (match) {
           this.lastMatchedBraille_ = match;
         }
         return Boolean(match);
-      }.bind(this),
+      },
       toString() {
         return 'Braille \'' + text + '\' ' + JSON.stringify(props);
       },
@@ -323,11 +314,11 @@ MockFeedback = class {
     assertFalse(
         this.replaying_, 'expectEarcon: Should not already be replaying.');
     this.pendingActions_.push({
-      perform: function() {
+      perform: () => {
         const match =
             MockFeedback.matchAndConsume_(earconName, {}, this.pendingEarcons_);
         return Boolean(match);
-      }.bind(this),
+      },
       toString() {
         return 'Earcon \'' + earconName + '\'';
       },
@@ -362,11 +353,11 @@ MockFeedback = class {
    * @return {MockFeedback} |this| for chaining
    */
   clearPendingOutput() {
-    this.call(function() {
+    this.call(() => {
       this.pendingUtterances_.length = 0;
       this.pendingBraille_.length = 0;
       this.pendingEarcons_.length = 0;
-    }.bind(this));
+    });
 
     return this;
   }
@@ -441,44 +432,69 @@ MockFeedback = class {
     this.process_();
   }
 
-  /*** @private */
+  /** @private */
   process_() {
     if (!this.replaying_ || this.inProcess_) {
       return;
     }
     try {
       this.inProcess_ = true;
-      while (this.pendingActions_.length > 0) {
-        const action = this.pendingActions_[0];
-        if (action.perform()) {
-          this.pendingActions_.shift();
-          if (this.logTimeoutId_) {
-            window.clearTimeout(this.logTimeoutId_);
-            this.logTimeoutId_ = 0;
-          }
-        } else {
-          break;
-        }
-      }
-      if (this.pendingActions_.length === 0) {
-        if (this.finishedCallback_) {
-          this.finishedCallback_();
-          this.finishedCallback_ = null;
-        }
-        this.resolve_();
-      } else {
-        // If there are pending actions and no matching feedback for a few
-        // seconds, log the pending state to ease debugging.
-        if (!this.logTimeoutId_) {
-          this.logTimeoutId_ =
-              window.setTimeout(this.logPendingState_.bind(this), 2000);
-        }
-      }
+      this.performActionsUntilBlocked_();
     } catch (e) {
       this.reject_(e);
       throw e;
     } finally {
       this.inProcess_ = false;
+    }
+  }
+
+  /** @private */
+  performActionsUntilBlocked_() {
+    while (this.pendingActions_.length > 0) {
+      if (!this.performNextAction_()) {
+        break;
+      }
+    }
+    if (this.pendingActions_.length === 0) {
+      this.finished_();
+    } else {
+      this.blocked_();
+    }
+  }
+
+  /**
+   * @return {boolean}
+   * @private
+   */
+  performNextAction_() {
+    const action = this.pendingActions_[0];
+    if (action.perform()) {
+      this.pendingActions_.shift();
+      if (this.logTimeoutId_) {
+        clearTimeout(this.logTimeoutId_);
+        this.logTimeoutId_ = 0;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /** @private */
+  finished_() {
+    if (this.finishedCallback_) {
+      this.finishedCallback_();
+      this.finishedCallback_ = null;
+    }
+    this.resolve_();
+  }
+
+  /** @private */
+  blocked_() {
+    // If there are pending actions and no matching feedback for a few
+    // seconds, log the pending state to ease debugging.
+    if (!this.logTimeoutId_) {
+      this.logTimeoutId_ =
+          setTimeout((...args) => this.logPendingState_(...args), 2000);
     }
   }
 
@@ -491,16 +507,16 @@ MockFeedback = class {
       if (list.length > 0) {
         console.log(
             'Pending ' + desc + ':\n  ' +
-            list.map(function(i) {
-                  let ret = '\'' + i.text + '\'';
-                  if ('properties' in i) {
-                    ret += ' properties=' + JSON.stringify(i.properties);
+            list.map(pending => {
+                  let ret = '\'' + pending.text + '\'';
+                  if ('properties' in pending) {
+                    ret += ' properties=' + JSON.stringify(pending.properties);
                   }
-                  if ('startIndex' in i) {
-                    ret += ' startIndex=' + i.startIndex;
+                  if ('startIndex' in pending) {
+                    ret += ' startIndex=' + pending.startIndex;
                   }
-                  if ('endIndex' in i) {
-                    ret += ' endIndex=' + i.endIndex;
+                  if ('endIndex' in pending) {
+                    ret += ' endIndex=' + pending.endIndex;
                   }
                   return ret;
                 })
@@ -550,7 +566,7 @@ MockFeedback = class {
       }
       if (candidate) {
         const consumed = pending.splice(0, i + 1);
-        consumed.forEach(function(item) {
+        consumed.forEach(item => {
           if (item.callback) {
             item.callback();
           }

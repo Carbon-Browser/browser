@@ -1,12 +1,12 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//build/config/chromeos/ui_mode.gni")
 import("//extensions/buildflags/buildflags.gni")
 
-assert(enable_extensions,
-       "Cannot depend on extensions because enable_extensions=false.")
+assert(enable_extensions_core,
+       "Cannot depend on extensions because enable_extensions_core=false.")
 
 source_set("system_cpu") {
   sources = [
@@ -15,6 +15,8 @@ source_set("system_cpu") {
     "system_cpu_api.cc",
     "system_cpu_api.h",
   ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
   deps = [
     "//build:chromeos_buildflags",
@@ -30,7 +32,7 @@ source_set("system_cpu") {
     sources += [ "cpu_info_provider_mac.cc" ]
   }
 
-  if (is_linux || is_chromeos) {
+  if (is_linux || is_chromeos || enable_desktop_android_extensions) {
     sources += [ "cpu_info_provider_linux.cc" ]
   }
 

@@ -1,23 +1,27 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_VIEWS_TABS_TAB_STRIP_CONTROLLER_H_
 #define CHROME_BROWSER_UI_VIEWS_TABS_TAB_STRIP_CONTROLLER_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/views/frame/browser_non_client_frame_view.h"
 #include "chrome/browser/ui/views/tabs/tab_strip_types.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "components/tab_groups/tab_group_id.h"
 #include "third_party/skia/include/core/SkColor.h"
-#include "ui/base/ui_base_types.h"
+#include "ui/base/mojom/menu_source_type.mojom-forward.h"
 #include "ui/gfx/range/range.h"
 
 class Browser;
+class BrowserWindowInterface;
+class ScopedTabStripModalUI;
 class Tab;
+class TabGroup;
 class TabStrip;
 
 namespace gfx {
@@ -33,19 +37,26 @@ class TabGroupVisualData;
 namespace ui {
 class Event;
 class ListSelectionModel;
-}
+}  // namespace ui
 
 // Model/Controller for the TabStrip.
 // NOTE: All indices used by this class are in model coordinates.
 class TabStripController {
  public:
-  virtual ~TabStripController() {}
+  virtual ~TabStripController() = default;
 
   // Returns the selection model of the tabstrip.
   virtual const ui::ListSelectionModel& GetSelectionModel() const = 0;
 
   // Returns the number of tabs in the model.
   virtual int GetCount() const = 0;
+
+  // Features that want to show tabstrip-modal UI are mutually exclusive.
+  // Before showing a modal UI first check `CanShowModalUI`. Then call
+  // ShowModalUI() and keep `ScopedTabStripModal` alive to prevent other
+  // features from showing tabstrip-modal UI.
+  virtual bool CanShowModalUI() const = 0;
+  virtual std::unique_ptr<ScopedTabStripModalUI> ShowModalUI() = 0;
 
   // Returns true if |index| is a valid model index.
   virtual bool IsValidIndex(int index) const = 0;
@@ -54,8 +65,8 @@ class TabStripController {
   // one whose content is shown.
   virtual bool IsActiveTab(int index) const = 0;
 
-  // Returns the index of the active tab.
-  virtual int GetActiveIndex() const = 0;
+  // Returns the index of the active tab, or nullopt if no tab is active.
+  virtual std::optional<int> GetActiveIndex() const = 0;
 
   // Returns true if the selected index is selected.
   virtual bool IsTabSelected(int index) const = 0;
@@ -77,10 +88,11 @@ class TabStripController {
   virtual void AddSelectionFromAnchorTo(int index) = 0;
 
   // Prepares to close a tab. If closing the tab might require (for example) a
-  // user prompt, triggers that prompt and returns false, indicating that the
-  // current close operation should not proceed. If this method returns true,
-  // closing can proceed.
-  virtual bool BeforeCloseTab(int index, CloseTabSource source) = 0;
+  // user prompt, triggers that prompt passing in the callback ownership to it.
+  // Otherwise it runs the callback.
+  virtual void OnCloseTab(int index,
+                          CloseTabSource source,
+                          base::OnceCallback<void()> callback) = 0;
 
   // Closes the tab at the specified index in the model.
   virtual void CloseTab(int index) = 0;
@@ -104,17 +116,23 @@ class TabStripController {
   virtual void MoveGroup(const tab_groups::TabGroupId& group,
                          int final_index) = 0;
 
-  // Switches the collapsed state of a tab group. Returns false if the state was
-  // not successfully switched.
-  virtual bool ToggleTabGroupCollapsedState(
-      const tab_groups::TabGroupId group,
-      ToggleTabGroupCollapsedStateOrigin origin =
-          ToggleTabGroupCollapsedStateOrigin::kImplicitAction) = 0;
+  // Toggles the collapsed state of `group`. Collapsed becomes expanded.
+  // Expanded becomes collapsed. `origin` should be used to denote the way in
+  // which the tab group was toggled (Ex: From a context menu, mouse press,
+  // touch/gesture control, etc). Tests will default to `kMenuAction` unless
+  // specified otherwise.
+  virtual void ToggleTabGroupCollapsedState(
+      tab_groups::TabGroupId group,
+      ToggleTabGroupCollapsedStateOrigin origin) = 0;
+  void ToggleTabGroupCollapsedState(tab_groups::TabGroupId group) {
+    ToggleTabGroupCollapsedState(
+        group, ToggleTabGroupCollapsedStateOrigin::kMenuAction);
+  }
 
   // Shows a context menu for the tab at the specified point in screen coords.
   virtual void ShowContextMenuForTab(Tab* tab,
                                      const gfx::Point& p,
-                                     ui::MenuSourceType source_type) = 0;
+                                     ui::mojom::MenuSourceType source_type) = 0;
 
   // Returns true if the associated TabStrip's delegate supports tab moving or
   // detaching. Used by the Frame to determine if dragging on the Tab
@@ -123,7 +141,8 @@ class TabStripController {
   virtual int HasAvailableDragActions() const = 0;
 
   // Notifies controller of a drop index update.
-  virtual void OnDropIndexUpdate(int index, bool drop_before) = 0;
+  virtual void OnDropIndexUpdate(std::optional<int> index,
+                                 bool drop_before) = 0;
 
   // Creates the new tab.
   virtual void CreateNewTab() = 0;
@@ -145,7 +164,7 @@ class TabStripController {
 
   // Notifies controller that the index of the tab with keyboard focus changed
   // to |index|.
-  virtual void OnKeyboardFocusedTabChanged(absl::optional<int> index) = 0;
+  virtual void OnKeyboardFocusedTabChanged(std::optional<int> index) = 0;
 
   // Returns the title of the given |group|.
   virtual std::u16string GetGroupTitle(
@@ -159,6 +178,8 @@ class TabStripController {
   virtual tab_groups::TabGroupColorId GetGroupColorId(
       const tab_groups::TabGroupId& group) const = 0;
 
+  virtual TabGroup* GetTabGroup(const tab_groups::TabGroupId& group) const = 0;
+
   // Returns the |group| collapsed state. Returns false if the group does not
   // exist or is not collapsed.
   virtual bool IsGroupCollapsed(const tab_groups::TabGroupId& group) const = 0;
@@ -171,7 +192,7 @@ class TabStripController {
   // Gets the first tab index in |group|, or nullopt if the group is
   // currently empty. This is always safe to call unlike
   // ListTabsInGroup().
-  virtual absl::optional<int> GetFirstTabInGroup(
+  virtual std::optional<int> GetFirstTabInGroup(
       const tab_groups::TabGroupId& group) const = 0;
 
   // Returns the range of tabs in the given |group|. This must not be
@@ -195,13 +216,11 @@ class TabStripController {
   // frame for either active or inactive windows.
   virtual bool EverHasVisibleBackgroundTabShapes() const = 0;
 
-  // Returnes whether the window frame is being painted as active. This
-  // determines which colors are used in the tab strip.
-  virtual bool ShouldPaintAsActiveFrame() const = 0;
-
   // Returns whether tab strokes can ever be drawn. If true, strokes will only
   // be drawn if necessary.
   virtual bool CanDrawStrokes() const = 0;
+
+  virtual bool IsFrameButtonsRightAligned() const = 0;
 
   // Returns the color of the browser frame for the given window activation
   // state.
@@ -209,7 +228,7 @@ class TabStripController {
 
   // For non-transparent windows, returns the background tab image resource ID
   // if the image has been customized, directly or indirectly, by the theme.
-  virtual absl::optional<int> GetCustomBackgroundId(
+  virtual std::optional<int> GetCustomBackgroundId(
       BrowserFrameActiveState active_state) const = 0;
 
   // Returns the accessible tab name.
@@ -218,7 +237,18 @@ class TabStripController {
   // Returns the profile associated with the Tabstrip.
   virtual Profile* GetProfile() const = 0;
 
+  // Returns the interface for the browser hosting the tab strip.
+  virtual BrowserWindowInterface* GetBrowserWindowInterface() = 0;
+
+  // TODO(tluk): Migrate use of Browser to BrowserWindowInterface and remove
+  // this method.
   virtual const Browser* GetBrowser() const = 0;
+
+#if BUILDFLAG(IS_CHROMEOS)
+  // Returns whether the current app instance is locked for OnTask. Only
+  // relevant for non-web browser scenarios.
+  virtual bool IsLockedForOnTask() = 0;
+#endif
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_TABS_TAB_STRIP_CONTROLLER_H_

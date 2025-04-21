@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@ namespace media {
 
 enum class VideoCaptureWinBackend { kDirectShow, kMediaFoundation };
 
-// These values are presisted to logs.
+// These values are persisted to logs.
 enum class VideoCaptureWinBackendUsed : int {
   kUsingDirectShowAsDefault = 0,
   kUsingMediaFoundationAsDefault = 1,
@@ -19,7 +19,7 @@ enum class VideoCaptureWinBackendUsed : int {
   kCount
 };
 
-// These values are presisted to logs.
+// These values are persisted to logs.
 enum class ImageCaptureOutcome : int {
   kSucceededUsingVideoStream = 0,
   kSucceededUsingPhotoStream = 1,
@@ -34,12 +34,6 @@ enum class MediaFoundationFunctionRequiringRetry {
   kGetAvailableDeviceMediaType
 };
 
-bool IsHighResolution(const VideoCaptureFormat& format);
-
-void LogVideoCaptureWinBackendUsed(VideoCaptureWinBackendUsed value);
-void LogWindowsImageCaptureOutcome(VideoCaptureWinBackend backend_type,
-                                   ImageCaptureOutcome value,
-                                   bool is_high_res);
 void LogNumberOfRetriesNeededToWorkAroundMFInvalidRequest(
     MediaFoundationFunctionRequiringRetry function,
     int retry_count);

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 
 #include <map>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "device/bluetooth/bluetooth_adapter.h"
@@ -20,6 +20,7 @@
 #include "extensions/browser/extension_registry_observer.h"
 #include "extensions/common/api/bluetooth.h"
 #include "extensions/common/api/bluetooth_private.h"
+#include "extensions/common/extension_id.h"
 
 namespace content {
 class BrowserContext;
@@ -58,7 +59,7 @@ class BluetoothEventRouter : public device::BluetoothAdapter::Observer,
   // initiated. |error_callback| is called, if the adapter failed to initiate
   // the session or if an active session already exists for the extension.
   void StartDiscoverySession(device::BluetoothAdapter* adapter,
-                             const std::string& extension_id,
+                             const ExtensionId& extension_id,
                              base::OnceClosure callback,
                              base::OnceClosure error_callback);
 
@@ -68,7 +69,7 @@ class BluetoothEventRouter : public device::BluetoothAdapter::Observer,
   // terminate the session or if no active discovery session exists for the
   // extension.
   void StopDiscoverySession(device::BluetoothAdapter* adapter,
-                            const std::string& extension_id,
+                            const ExtensionId& extension_id,
                             base::OnceClosure callback,
                             base::OnceClosure error_callback);
 
@@ -79,7 +80,7 @@ class BluetoothEventRouter : public device::BluetoothAdapter::Observer,
   void SetDiscoveryFilter(
       std::unique_ptr<device::BluetoothDiscoveryFilter> discovery_filter,
       device::BluetoothAdapter* adapter,
-      const std::string& extension_id,
+      const ExtensionId& extension_id,
       base::OnceClosure callback,
       base::OnceClosure error_callback);
 
@@ -90,15 +91,15 @@ class BluetoothEventRouter : public device::BluetoothAdapter::Observer,
   void OnListenerRemoved(const EventListenerInfo& details);
 
   // Adds a pairing delegate for an extension.
-  void AddPairingDelegate(const std::string& extension_id);
+  void AddPairingDelegate(const ExtensionId& extension_id);
 
   // Removes the pairing delegate for an extension.
-  void RemovePairingDelegate(const std::string& extension_id);
+  void RemovePairingDelegate(const ExtensionId& extension_id);
 
   // Returns the pairing delegate for an extension or NULL if it doesn't have a
   // pairing delegate.
   BluetoothApiPairingDelegate* GetPairingDelegate(
-      const std::string& extension_id);
+      const ExtensionId& extension_id);
 
   // Exposed for testing.
   void SetAdapterForTest(device::BluetoothAdapter* adapter) {
@@ -134,10 +135,10 @@ class BluetoothEventRouter : public device::BluetoothAdapter::Observer,
 
  private:
   void StartDiscoverySessionImpl(device::BluetoothAdapter* adapter,
-                                 const std::string& extension_id,
+                                 const ExtensionId& extension_id,
                                  base::OnceClosure callback,
                                  base::OnceClosure error_callback);
-  void AddPairingDelegateImpl(const std::string& extension_id);
+  void AddPairingDelegateImpl(const ExtensionId& extension_id);
 
   void OnAdapterInitialized(
       device::BluetoothAdapterFactory::AdapterCallback callback,
@@ -147,10 +148,10 @@ class BluetoothEventRouter : public device::BluetoothAdapter::Observer,
   void DispatchDeviceEvent(events::HistogramValue histogram_value,
                            const std::string& event_name,
                            device::BluetoothDevice* device);
-  void CleanUpForExtension(const std::string& extension_id);
+  void CleanUpForExtension(const ExtensionId& extension_id);
   void CleanUpAllExtensions();
   void OnStartDiscoverySession(
-      const std::string& extension_id,
+      const ExtensionId& extension_id,
       base::OnceClosure callback,
       std::unique_ptr<device::BluetoothDiscoverySession> discovery_session);
 
@@ -165,18 +166,21 @@ class BluetoothEventRouter : public device::BluetoothAdapter::Observer,
   std::map<std::string, int> event_listener_count_;
 
   // A map that maps extension ids to BluetoothDiscoverySession pointers.
-  typedef std::map<std::string, device::BluetoothDiscoverySession*>
+  typedef std::map<std::string,
+                   raw_ptr<device::BluetoothDiscoverySession, CtnExperimental>>
       DiscoverySessionMap;
   DiscoverySessionMap discovery_session_map_;
 
-  typedef std::map<std::string, device::BluetoothDiscoveryFilter*>
+  typedef std::map<std::string,
+                   raw_ptr<device::BluetoothDiscoveryFilter, CtnExperimental>>
       PreSetFilterMap;
 
   // Maps an extension id to it's pre-set discovery filter.
   PreSetFilterMap pre_set_filter_map_;
 
   // Maps an extension id to its pairing delegate.
-  typedef std::map<std::string, BluetoothApiPairingDelegate*>
+  typedef std::map<std::string,
+                   raw_ptr<BluetoothApiPairingDelegate, CtnExperimental>>
       PairingDelegateMap;
   PairingDelegateMap pairing_delegate_map_;
 

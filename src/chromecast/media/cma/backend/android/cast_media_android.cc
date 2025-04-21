@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,12 +68,10 @@ MediaPipelineBackend* CastMediaShlib::CreateMediaPipelineBackend(
 
 double CastMediaShlib::GetMediaClockRate() {
   NOTREACHED();
-  return 0.0;
 }
 
 double CastMediaShlib::MediaClockRatePrecision() {
   NOTREACHED();
-  return 0.0;
 }
 
 void CastMediaShlib::MediaClockRateRange(double* minimum_rate,
@@ -83,7 +81,6 @@ void CastMediaShlib::MediaClockRateRange(double* minimum_rate,
 
 bool CastMediaShlib::SetMediaClockRate(double new_rate) {
   NOTREACHED();
-  return false;
 }
 
 bool CastMediaShlib::SupportsMediaClockRateChange() {

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,7 +40,7 @@ class COMPONENT_EXPORT(TRACING_CPP) ChromeBaseSharedMemory
 
   // perfetto::SharedMemory implementation. Called internally by Perfetto
   // classes.
-  void* start() const override;
+  const void* start() const override;
   size_t size() const override;
 
  private:

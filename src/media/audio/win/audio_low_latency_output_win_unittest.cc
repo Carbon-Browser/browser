@@ -1,13 +1,19 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "media/audio/win/audio_low_latency_output_win.h"
+
+#include <windows.h>
 
 #include <mmsystem.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <windows.h>
 
 #include <memory>
 
@@ -16,12 +22,13 @@
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
+#include "base/test/gmock_callback_support.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_timeouts.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/win/scoped_com_initializer.h"
 #include "media/audio/audio_device_description.h"
@@ -38,7 +45,6 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-using ::base::ThreadTaskRunnerHandle;
 using ::testing::_;
 using ::testing::DoAll;
 using ::testing::NotNull;
@@ -55,13 +61,6 @@ MATCHER_P(HasValidDelay, value, "") {
   // estimation. For now, verify that the produced output delay is always
   // larger than the selected buffer size.
   return arg >= value;
-}
-
-// Used to terminate a loop from a different thread than the loop belongs to.
-// |task_runner| should be a SingleThreadTaskRunner.
-ACTION_P(QuitLoop, task_runner) {
-  task_runner->PostTask(FROM_HERE,
-                        base::RunLoop::QuitCurrentWhenIdleClosureDeprecated());
 }
 
 // This audio source implementation should be used for manual tests only since
@@ -107,7 +106,7 @@ class ReadFromFileAudioSource : public AudioOutputStream::AudioSourceCallback {
   // AudioOutputStream::AudioSourceCallback implementation.
   int OnMoreData(base::TimeDelta /* delay */,
                  base::TimeTicks /* delay_timestamp */,
-                 int /* prior_frames_skipped */,
+                 const AudioGlitchInfo& /* glitch_info */,
                  AudioBus* dest) override {
     // Store time difference between two successive callbacks in an array.
     // These values will be written to a file in the destructor.
@@ -137,7 +136,7 @@ class ReadFromFileAudioSource : public AudioOutputStream::AudioSourceCallback {
 
   void OnError(ErrorType type) override {}
 
-  int file_size() { return file_->data_size(); }
+  int file_size() { return base::checked_cast<int>(file_->size()); }
 
  private:
   scoped_refptr<DecoderBuffer> file_;
@@ -197,6 +196,20 @@ class AudioOutputStreamWrapper {
     return CreateOutputStream();
   }
 
+  // Creates AudioOutputStream object using non-default parameters where the
+  // sample rate, frame size and audio offload are modified.
+  AudioOutputStream* Create(int sample_rate,
+                            int samples_per_packet,
+                            bool audio_offload) {
+    sample_rate_ = sample_rate;
+    samples_per_packet_ = samples_per_packet;
+    AudioParameters::HardwareCapabilities hardware_cap(0, true);
+    hardware_cap.require_audio_offload = true;
+    hardware_capabilities_ = hardware_cap;
+
+    return CreateOutputStream();
+  }
+
   AudioParameters::Format format() const { return format_; }
   int channels() const { return channels_; }
   int sample_rate() const { return sample_rate_; }
@@ -204,10 +217,10 @@ class AudioOutputStreamWrapper {
 
  private:
   AudioOutputStream* CreateOutputStream() {
-    AudioParameters params(format_, channel_layout_, sample_rate_,
+    AudioParameters params(format_, {channel_layout_, channels_}, sample_rate_,
                            samples_per_packet_);
-    if (channel_layout_ == CHANNEL_LAYOUT_DISCRETE) {
-      params.set_channels_for_discrete(channels_);
+    if (hardware_capabilities_) {
+      params.set_hardware_capabilities(hardware_capabilities_.value());
     }
     DVLOG(1) << params.AsHumanReadableString();
     AudioOutputStream* aos = audio_man_->MakeAudioOutputStream(
@@ -222,6 +235,7 @@ class AudioOutputStreamWrapper {
   ChannelLayout channel_layout_;
   int sample_rate_;
   int samples_per_packet_;
+  std::optional<AudioParameters::HardwareCapabilities> hardware_capabilities_;
 };
 
 // Convenience method which creates a default AudioOutputStream object.
@@ -369,24 +383,41 @@ TEST_F(WASAPIAudioOutputStreamTest, ValidPacketSize) {
   AudioOutputStream* aos = aosw.Create();
   EXPECT_TRUE(aos->Open());
 
+  base::RunLoop loop;
   // Derive the expected duration of each packet.
   base::TimeDelta packet_duration = base::Seconds(
       static_cast<double>(aosw.samples_per_packet()) / aosw.sample_rate());
 
   // Wait for the first callback and verify its parameters.  Ignore any
   // subsequent callbacks that might arrive.
-  EXPECT_CALL(source,
-              OnMoreData(HasValidDelay(packet_duration), _, 0, NotNull()))
-      .WillOnce(DoAll(QuitLoop(ThreadTaskRunnerHandle::Get()),
+  EXPECT_CALL(source, OnMoreData(HasValidDelay(packet_duration), _,
+                                 AudioGlitchInfo(), NotNull()))
+      .WillOnce(DoAll(base::test::RunClosure(loop.QuitWhenIdleClosure()),
                       Return(aosw.samples_per_packet())))
       .WillRepeatedly(Return(0));
 
   aos->Start(&source);
-  ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-      FROM_HERE, base::RunLoop::QuitCurrentWhenIdleClosureDeprecated(),
-      TestTimeouts::action_timeout());
-  base::RunLoop().Run();
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE, loop.QuitWhenIdleClosure(), TestTimeouts::action_timeout());
+  loop.Run();
   aos->Stop();
+  aos->Close();
+}
+
+// Verify that we are not allowed to open the output stream with audio offload
+// enabled in exclusive mode.
+TEST_F(WASAPIAudioOutputStreamTest, ExclusiveModeWithAudioOffload) {
+  ABORT_AUDIO_TEST_IF_NOT(HasCoreAudioAndOutputDevices(audio_manager_.get()) &&
+                          ExclusiveModeIsEnabled());
+
+  // Create exclusive-mode WASAPI output stream which plays out in stereo
+  // using the minimum buffer size at 48kHz sample rate.
+  AudioOutputStreamWrapper aosw(audio_manager_.get());
+
+  // Open should fail with offload stream in exclusive mode.
+  AudioOutputStream* aos = aosw.Create(48000, 160, true);
+  EXPECT_FALSE(aos->Open());
+
   aos->Close();
 }
 
@@ -510,22 +541,22 @@ TEST_F(WASAPIAudioOutputStreamTest,
   AudioOutputStream* aos = aosw.Create(48000, 160);
   EXPECT_TRUE(aos->Open());
 
+  base::RunLoop loop;
   // Derive the expected size in bytes of each packet.
   base::TimeDelta packet_duration = base::Seconds(
       static_cast<double>(aosw.samples_per_packet()) / aosw.sample_rate());
 
   // Wait for the first callback and verify its parameters.
-  EXPECT_CALL(source,
-              OnMoreData(HasValidDelay(packet_duration), _, 0, NotNull()))
-      .WillOnce(DoAll(QuitLoop(ThreadTaskRunnerHandle::Get()),
+  EXPECT_CALL(source, OnMoreData(HasValidDelay(packet_duration), _,
+                                 AudioGlitchInfo(), NotNull()))
+      .WillOnce(DoAll(base::test::RunClosure(loop.QuitWhenIdleClosure()),
                       Return(aosw.samples_per_packet())))
       .WillRepeatedly(Return(aosw.samples_per_packet()));
 
   aos->Start(&source);
-  ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-      FROM_HERE, base::RunLoop::QuitCurrentWhenIdleClosureDeprecated(),
-      TestTimeouts::action_timeout());
-  base::RunLoop().Run();
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE, loop.QuitWhenIdleClosure(), TestTimeouts::action_timeout());
+  loop.Run();
   aos->Stop();
   aos->Close();
 }
@@ -544,22 +575,22 @@ TEST_F(WASAPIAudioOutputStreamTest,
   AudioOutputStream* aos = aosw.Create(44100, 160);
   EXPECT_TRUE(aos->Open());
 
+  base::RunLoop loop;
   // Derive the expected size in bytes of each packet.
   base::TimeDelta packet_duration = base::Seconds(
       static_cast<double>(aosw.samples_per_packet()) / aosw.sample_rate());
 
   // Wait for the first callback and verify its parameters.
-  EXPECT_CALL(source,
-              OnMoreData(HasValidDelay(packet_duration), _, 0, NotNull()))
-      .WillOnce(DoAll(QuitLoop(ThreadTaskRunnerHandle::Get()),
+  EXPECT_CALL(source, OnMoreData(HasValidDelay(packet_duration), _,
+                                 AudioGlitchInfo(), NotNull()))
+      .WillOnce(DoAll(base::test::RunClosure(loop.QuitWhenIdleClosure()),
                       Return(aosw.samples_per_packet())))
       .WillRepeatedly(Return(aosw.samples_per_packet()));
 
   aos->Start(&source);
-  ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-      FROM_HERE, base::RunLoop::QuitCurrentWhenIdleClosureDeprecated(),
-      TestTimeouts::action_timeout());
-  base::RunLoop().Run();
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
+      FROM_HERE, loop.QuitWhenIdleClosure(), TestTimeouts::action_timeout());
+  loop.Run();
   aos->Stop();
   aos->Close();
 }

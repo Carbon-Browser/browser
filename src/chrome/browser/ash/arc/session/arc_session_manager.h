@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,26 +6,37 @@
 #define CHROME_BROWSER_ASH_ARC_SESSION_ARC_SESSION_MANAGER_H_
 
 #include <memory>
+#include <optional>
 #include <ostream>
 #include <string>
 #include <utility>
 
+#include "ash/components/arc/arc_dlc_install_notification/arc_dlc_install_notification_manager.h"
+#include "ash/components/arc/arc_util.h"
 #include "ash/components/arc/session/arc_session_runner.h"
 #include "ash/components/arc/session/arc_stop_reason.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/time/time.h"
+#include "base/timer/elapsed_timer.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/arc/arc_support_host.h"
+#include "chrome/browser/ash/arc/policy/arc_android_management_checker.h"
 #include "chrome/browser/ash/arc/session/adb_sideloading_availability_delegate_impl.h"
+#include "chrome/browser/ash/arc/session/arc_activation_necessity_checker.h"
 #include "chrome/browser/ash/arc/session/arc_app_id_provider_impl.h"
+#include "chrome/browser/ash/arc/session/arc_requirement_checker.h"
+#include "chrome/browser/ash/arc/session/arc_reven_hardware_checker.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager_observer.h"
+#include "chrome/browser/ash/arc/session/arc_vm_data_migration_necessity_checker.h"
 #include "chrome/browser/ash/guest_os/public/guest_os_mount_provider_registry.h"
 #include "chrome/browser/ash/policy/arc/android_management_client.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
+#include "chromeos/ash/components/dbus/dlcservice/dlcservice_client.h"
 #include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
-#include "components/policy/core/common/policy_service.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "components/session_manager/core/session_manager.h"
+#include "components/session_manager/core/session_manager_observer.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
 
 class ArcAppLauncher;
@@ -41,14 +52,18 @@ constexpr const char kGeneratedBuildPropertyFilePath[] =
 constexpr const char kGeneratedCombinedPropertyFilePathVm[] =
     "/run/arcvm/host_generated/combined.prop";
 
-class ArcAndroidManagementChecker;
+// Maximum number of auto-resumes for ARCVM /data migration. When this number of
+// auto-resumes have been already attempted but the migration has not finished,
+// ARC is blocked and the user needs to manually trigger the resume by clicking
+// a notification.
+constexpr int kArcVmDataMigrationMaxAutoResumeCount = 3;
+
 class ArcDataRemover;
-class ArcDlcInstaller;
 class ArcFastAppReinstallStarter;
 class ArcPaiStarter;
 class ArcProvisioningResult;
-class ArcTermsOfServiceNegotiator;
 class ArcUiAvailabilityReporter;
+class ArcRevenHardwareChecker;
 
 enum class ProvisioningStatus;
 enum class ArcStopReason;
@@ -58,28 +73,34 @@ class ArcSessionManager : public ArcSessionRunner::Observer,
                           public ArcSupportHost::ErrorDelegate,
                           public ash::SessionManagerClient::Observer,
                           public ash::ConciergeClient::VmObserver,
-                          public policy::PolicyService::Observer {
+                          public ArcRequirementChecker::Observer,
+                          public session_manager::SessionManagerObserver {
  public:
   // Represents each State of ARC session.
   // NOT_INITIALIZED: represents the state that the Profile is not yet ready
   //   so that this service is not yet initialized, or Chrome is being shut
   //   down so that this is destroyed.
   // STOPPED: ARC session is not running, or being terminated.
-  // NEGOTIATING_TERMS_OF_SERVICE: Negotiating Google Play Store "Terms of
-  //   Service" with a user. There are several ways for the negotiation,
-  //   including opt-in flow, which shows "Terms of Service" page on ARC
-  //   support app, and OOBE flow, which shows "Terms of Service" page as a
-  //   part of Chrome OOBE flow.
-  //   If user does not accept the Terms of Service, disables Google Play
-  //   Store, which triggers RequestDisable() and the state will be set to
-  //   STOPPED, then.
-  // CHECKING_ANDROID_MANAGEMENT: Checking Android management status. Note that
-  //   the status is checked for each ARC session starting, but this is the
-  //   state only for the first boot case (= opt-in case). The second time and
-  //   later the management check is running in parallel with ARC session
-  //   starting, and in such a case, State is ACTIVE, instead.
+  // CHECKING_REQUIREMENTS: Checking requirements before starting ARC.
+  //   First, negotiates Google Play Store "Terms of Service" with a user. There
+  //   are several ways for the negotiation, including opt-in flow, which shows
+  //   "Terms of Service" page on ARC support app, and OOBE flow, which shows
+  //   "Terms of Service" page as a part of Chrome OOBE flow. If user does not
+  //   accept the Terms of Service, disables Google Play Store, which triggers
+  //   RequestDisable() and the state will be set to STOPPED, then.
+  //   Second, checks Android management status. Note that the status is checked
+  //   for each ARC session starting, but this is the state only for the first
+  //   boot case (= opt-in case). The second time and later the management check
+  //   is running in parallel with ARC session starting, and in such a case,
+  //   State is ACTIVE, instead.
   // REMOVING_DATA_DIR: When ARC is disabled, the data directory is removed.
   //   While removing is processed, ARC cannot be started. This is the state.
+  // CHECKING_DATA_MIGRATION_NECESSITY: When ARC /data migration is enabled but
+  //   not started yet, we need to check whether the migration is necessary by
+  //   inspecting the content of /data. ARC cannot be started while the check is
+  //   being performed, which is indicated by this state.
+  // READY: ARC is ready to run, but not running yet. This state is skipped on
+  //   the first boot case.
   // ACTIVE: ARC is running.
   // STOPPING: ARC is being shut down.
   //
@@ -90,33 +111,35 @@ class ArcSessionManager : public ArcSessionRunner::Observer,
   // ...(any)... -> STOPPED: on error.
   //
   // In the first boot case:
-  //   STOPPED -> NEGOTIATING_TERMS_OF_SERVICE: On request to enable.
-  //   NEGOTIATING_TERMS_OF_SERVICE -> CHECKING_ANDROID_MANAGEMENT: when a user
-  //     accepts "Terms Of Service"
-  //   CHECKING_ANDROID_MANAGEMENT -> ACTIVE: when the auth token is
-  //     successfully fetched.
+  //   STOPPED -> CHECKING_REQUIREMENTS: On request to enable.
+  //   CHECKING_REQUIREMENTS -> ACTIVE: when a user accepts "Terms Of Service"
+  //     and the auth token is successfully fetched.
   //
   // In the second (or later) boot case:
-  //   STOPPED -> ACTIVE: when arc.enabled preference is checked that it is
-  //     true. Practically, this is when the primary Profile gets ready.
+  //   STOPPED -> READY: when arc.enabled preference is checked that it is true.
+  //     Practically, this is when the primary Profile gets ready.
+  //   READY -> ACTIVE: when activation is allowed.
   //
   // In the disabling case:
-  //   NEGOTIATING_TERMS_OF_SERVICE -> STOPPED
-  //   CHECKING_ANDROID_MANAGEMENT -> STOPPED
+  //   CHECKING_REQUIREMENTS -> STOPPED
+  //   READY -> STOPPED
   //   ACTIVE -> STOPPING -> (maybe REMOVING_DATA_DIR ->) STOPPED
   //   STOPPING: Eventually change the state to STOPPED. Do nothing
   //     immediately.
   //   REMOVING_DATA_DIR: Eventually state will become STOPPED. Do nothing
   //     immediately.
+  //   CHECKING_DATA_MIGRATION_NECESSITY: Eventually state will become STOPPED.
+  //     Do nothing immediately.
   //
   // TODO(hidehiko): Fix the state machine, and update the comment including
   // relationship with |enable_requested_|.
   enum class State {
     NOT_INITIALIZED,
     STOPPED,
-    NEGOTIATING_TERMS_OF_SERVICE,
-    CHECKING_ANDROID_MANAGEMENT,
+    CHECKING_REQUIREMENTS,
     REMOVING_DATA_DIR,
+    CHECKING_DATA_MIGRATION_NECESSITY,
+    READY,
     ACTIVE,
     STOPPING,
   };
@@ -189,6 +212,36 @@ class ArcSessionManager : public ArcSessionRunner::Observer,
   // SetArcPlayStoreEnabledForProfile().
   void RequestEnable();
 
+  enum class AllowActivationReason {
+    // Activated when ARCVM is ready to be launched.
+    kImmediateActivation = 0,
+
+    // User session start up tasks are completed, so deferred ARC activation
+    // is done.
+    kUserSessionStartUpTaskCompleted = 1,
+
+    // AlwaysStart option is set, so forced to launch ARC.
+    kAlwaysStartIsEnabled = 2,
+
+    // Policy enforces to start ARC.
+    kForcedByPolicy = 3,
+
+    // User has taken an action to launch ARC app.
+    kUserLaunchAction = 4,
+
+    // User flipped the flag to enable ARC in the system.
+    kUserEnableAction = 5,
+
+    // ARC app is being restored.
+    kRestoreApps = 6,
+
+    kMaxValue = kRestoreApps,
+  };
+
+  // Allows changing the state from READY to ACTIVE. If the state is already
+  // READY, calling this method changes the state to ACTIVE.
+  void AllowActivation(AllowActivationReason reason);
+
   // Requests to disable ARC session. This stops ARC instance, or quits Terms
   // Of Service negotiation if it is the middle of the process (e.g. closing
   // UI for manual negotiation if it is shown). This does not remove user ARC
@@ -222,6 +275,7 @@ class ArcSessionManager : public ArcSessionRunner::Observer,
   void OnRetryClicked() override;
   void OnSendFeedbackClicked() override;
   void OnRunNetworkTestsClicked() override;
+  void OnErrorPageShown(bool network_tests_shown) override;
 
   // StopArc(), then restart. Between them data clear may happens.
   // This is a special method to support enterprise device lost case.
@@ -277,9 +331,13 @@ class ArcSessionManager : public ArcSessionRunner::Observer,
   // negotiation, because the user had accepted already or policy does not
   // require ToS acceptance. Returns false in other cases, including one when
   // ARC is not currently running.
-  bool is_directly_started() const { return directly_started_; }
-  void set_directly_started_for_testing(bool directly_started) {
-    directly_started_ = directly_started;
+  bool skipped_terms_of_service_negotiation() const {
+    return skipped_terms_of_service_negotiation_;
+  }
+  void set_skipped_terms_of_service_negotiation_for_testing(
+      bool skipped_terms_of_service_negotiation) {
+    skipped_terms_of_service_negotiation_ =
+        skipped_terms_of_service_negotiation;
   }
 
   // Injectors for testing.
@@ -288,6 +346,13 @@ class ArcSessionManager : public ArcSessionRunner::Observer,
   ArcSessionRunner* GetArcSessionRunnerForTesting();
   void SetAttemptUserExitCallbackForTesting(
       const base::RepeatingClosure& callback);
+  void SetAttemptRestartCallbackForTesting(
+      const base::RepeatingClosure& callback);
+  void SetAndroidManagementCheckerFactoryForTesting(
+      ArcRequirementChecker::AndroidManagementCheckerFactory
+          android_management_checker_factory) {
+    android_management_checker_factory_ = android_management_checker_factory;
+  }
 
   // Returns whether the Play Store app is requested to be launched by this
   // class. Should be used only for tests.
@@ -297,19 +362,16 @@ class ArcSessionManager : public ArcSessionRunner::Observer,
   // Service then passing Android management check successfully.
   void StartArcForTesting();
 
-  // Invokes OnTermsOfServiceNegotiated as if negotiation is done for testing.
-  void OnTermsOfServiceNegotiatedForTesting(bool accepted) {
-    OnTermsOfServiceNegotiated(accepted);
+  // Invokes functions as if requirement checks are completed for testing.
+  void EmulateRequirementCheckCompletionForTesting() {
+    DCHECK(requirement_checker_);
+    requirement_checker_->EmulateRequirementCheckCompletionForTesting();
   }
 
   // Invokes OnExpandPropertyFilesAndReadSalt as if the expansion is done.
   void OnExpandPropertyFilesAndReadSaltForTesting(bool result) {
     OnExpandPropertyFilesAndReadSalt(ExpansionResult{{}, result});
   }
-
-  // Invokes OnBackgroundAndroidManagementChecked as if the check is done.
-  void OnBackgroundAndroidManagementCheckedForTesting(
-      policy::AndroidManagementClient::Result result);
 
   void reset_property_files_expansion_result() {
     property_files_expansion_result_.reset();
@@ -321,22 +383,44 @@ class ArcSessionManager : public ArcSessionRunner::Observer,
   void OnVmStopped(
       const vm_tools::concierge::VmStoppedSignal& vm_signal) override;
 
-  // policy::PolicyServer::Observer override.
-  void OnFirstPoliciesLoaded(policy::PolicyDomain domain) override;
-
-  // Getter for |vm_info_|.
-  // If ARCVM is not running, return absl::nullopt.
-  const absl::optional<vm_tools::concierge::VmInfo>& GetVmInfo() const;
+  // session_manager::SessionManagerObserver overrides.
+  void OnUserSessionStartUpTaskCompleted() override;
 
   // Getter for |serialno|.
   std::string GetSerialNumber() const;
 
+  // Helper to Get Serial number for Attestation and KeyMint.
+  // Calls GetSerialNumber() internally.
+  std::string GetSerialNumberForKeyMint();
+
   // Stops mini-ARC instance. This should only be called before login.
   void StopMiniArcIfNecessary();
+
+  // Returns whether ARC activation is delayed by ARC on Demand
+  bool IsActivationDelayed() const {
+    return is_activation_delayed_.value_or(false);
+  }
+
+  // The unit test will use a mock hardware checker for testing.
+  void SetHardwareCheckerForTesting(
+      std::unique_ptr<ArcRevenHardwareChecker> hardware_checker) {
+    hardware_checker_ = std::move(hardware_checker);
+  }
 
  private:
   // Reports statuses of OptIn flow to UMA.
   class ScopedOptInFlowTracker;
+
+  // Handles the completion of the hardware compatibility check for ARC on a
+  // reven device. If the device is compatible with ARC, the DLC service client
+  // starts to install the Android DLC image.
+  void OnEnableArcOnReven(std::deque<JobDesc> jobs, bool is_compatible);
+
+  // Handles the completion of the arcvm DLC installation. If the installation
+  // succeeds, adds a job to mount the DLC directory to the arc root directory.
+  void OnDlcInstalled(
+      std::deque<JobDesc> jobs,
+      const ash::DlcserviceClient::InstallResult& install_result);
 
   // Requests to disable ARC session and allows to optionally remove ARC data.
   // If ARC is already disabled, no-op.
@@ -344,45 +428,45 @@ class ArcSessionManager : public ArcSessionRunner::Observer,
 
   // RequestEnable() has a check in order not to trigger starting procedure
   // twice. This method can be called to bypass that check when restarting.
-  // Returns true if ARC is started directly.
-  bool RequestEnableImpl();
+  void RequestEnableImpl();
+
+  // Called when activation necessity check is done.
+  void OnActivationNecessityChecked(bool result);
 
   // Negotiates the terms of service to user, if necessary.
   // Otherwise, move to StartAndroidManagementCheck().
   void MaybeStartTermsOfServiceNegotiation();
-  void OnTermsOfServiceNegotiated(bool accepted);
+
+  // ArcRequirementChecker::Observer override:
+  void OnArcOptInManagementCheckStarted() override;
+
+  // Called when requirement checks are done.
+  void OnRequirementChecksDone(
+      ArcRequirementChecker::RequirementCheckResult result);
 
   void ShutdownSession();
   void ResetArcState();
   void OnArcSignInTimeout();
 
-  // Starts Android management check. This is for first boot case (= Opt-in
-  // or OOBE flow case). In secondary or later ARC enabling, the check should
-  // run in background.
-  void StartAndroidManagementCheck();
-
-  // Called when the Android management check is done in opt-in flow or
-  // OOBE flow.
-  void OnAndroidManagementChecked(
-      policy::AndroidManagementClient::Result result);
-
-  // Starts Android management check in background (in parallel with starting
+  // Starts requirement checks in background (in parallel with starting
   // ARC). This is for secondary or later ARC enabling.
   // The reason running them in parallel is for performance. The secondary or
   // later ARC enabling is typically on "logging into Chrome" for the user who
   // already opted in to use Google Play Store. In such a case, network is
   // typically not yet ready. Thus, if we block ARC boot, it delays several
   // seconds, which is not very user friendly.
-  void StartBackgroundAndroidManagementCheck();
+  void StartBackgroundRequirementChecks();
 
-  // Called when the background Android management check is done. It is
-  // triggered when the second or later ARC boot timing.
-  void OnBackgroundAndroidManagementChecked(
-      policy::AndroidManagementClient::Result result);
+  // Called when the background requirement checks are done.
+  void OnBackgroundRequirementChecksDone(
+      ArcRequirementChecker::BackgroundCheckResult result);
 
   // Requests to start ARC instance. Also, updates the internal state to
   // ACTIVE.
   void StartArc();
+
+  // Calls StartArc() and starts background requirement checks.
+  void StartArcForRegularBoot();
 
   // Requests to stop ARC instance. This resets two persistent flags:
   // kArcSignedIn and kArcTermsAccepted, so that, in next enabling,
@@ -398,9 +482,17 @@ class ArcSessionManager : public ArcSessionRunner::Observer,
   // Starts to remove ARC data, if it is requested via RequestArcDataRemoval().
   // On completion, OnArcDataRemoved() is called.
   // If not requested, just skipping the data removal, and moves to
-  // MaybeReenableArc() directly.
+  // MaybeReenableArc() or CheckArcVmDataMigrationNecessity() directly.
   void MaybeStartArcDataRemoval();
-  void OnArcDataRemoved(absl::optional<bool> success);
+  void OnArcDataRemoved(std::optional<bool> success);
+
+  // Checks whether /data migration is needed for enabling virtio-blk /data.
+  // On completion, OnArcVmDataMigrationNecessityChecked() is called.
+  // ArcSessionRunner::set_use_virtio_blk_data() should be called after the
+  // check is finished but before ARC is enabled in MaybeReenableArc().
+  void CheckArcVmDataMigrationNecessity(base::OnceClosure callback);
+  void OnArcVmDataMigrationNecessityChecked(base::OnceClosure callback,
+                                            std::optional<bool> result);
 
   // On ARC session stopped and/or data removal completion, this is called
   // so that, if necessary, ARC session is restarted.
@@ -431,19 +523,21 @@ class ArcSessionManager : public ArcSessionRunner::Observer,
   // Called when ExpandPropertyFilesAndReadSalt is done.
   void OnExpandPropertyFilesAndReadSalt(ExpansionResult result);
 
-  // Sets up a timer to wait for policies load, or immediately calls
-  // OnFirstPoliciesLoadedOrTimeout.
-  void WaitForPoliciesLoad();
-  // Called when first policies are loaded or when wait_for_policy_timer_
-  // expires.
-  void OnFirstPoliciesLoadedOrTimeout();
+  // Records whether the first activation is triggered during
+  // the user session start up.
+  // Only the first invocation records it, and following calls
+  // will be no-op.
+  void MaybeRecordFirstActivationDuringUserSessionStartUp(bool value);
 
   std::unique_ptr<ArcSessionRunner> arc_session_runner_;
   std::unique_ptr<AdbSideloadingAvailabilityDelegateImpl>
       adb_sideloading_availability_delegate_;
 
   // Unowned pointer. Keeps current profile.
-  Profile* profile_ = nullptr;
+  raw_ptr<Profile> profile_ = nullptr;
+
+  std::unique_ptr<ArcDlcInstallNotificationManager>
+      arc_dlc_install_notification_manager_;
 
   // Whether ArcSessionManager is requested to enable (starting to run ARC
   // instance) or not.
@@ -452,24 +546,40 @@ class ArcSessionManager : public ArcSessionRunner::Observer,
   // Internal state machine. See also State enum class.
   State state_ = State::NOT_INITIALIZED;
 
-  base::ObserverList<ArcSessionManagerObserver>::Unchecked observer_list_;
+  base::ObserverList<ArcSessionManagerObserver>::UncheckedAndDanglingUntriaged
+      observer_list_;
   std::unique_ptr<ArcAppLauncher> playstore_launcher_;
   bool reenable_arc_ = false;
   bool provisioning_reported_ = false;
-  bool directly_started_ = false;
+  bool skipped_terms_of_service_negotiation_ = false;
+  bool activation_is_allowed_ = false;
+  // Tri-state of if Activation is delayed. 1) std::nullopt means it is yet
+  // unknown, 2) true means Activation is delayed by ARC-on-demand, and 3)
+  // false means Activation is not delayed by ARC-on-demand.
+  // TODO(hidehiko): Consider to rename to make it more explicit that this is
+  // for ARC-On-Demand only.
+  std::optional<bool> is_activation_delayed_ = false;
+  bool is_first_activation_during_user_session_start_up_recorded_ = false;
   base::OneShotTimer arc_sign_in_timer_;
 
   std::unique_ptr<ArcSupportHost> support_host_;
   std::unique_ptr<ArcDataRemover> data_remover_;
 
-  std::unique_ptr<ArcTermsOfServiceNegotiator> terms_of_service_negotiator_;
+  std::unique_ptr<ArcVmDataMigrationNecessityChecker>
+      arc_vm_data_migration_necessity_checker_;
 
-  std::unique_ptr<ArcAndroidManagementChecker> android_management_checker_;
+  ArcRequirementChecker::AndroidManagementCheckerFactory
+      android_management_checker_factory_;
+  std::unique_ptr<ArcRequirementChecker> requirement_checker_;
+
+  std::unique_ptr<ArcActivationNecessityChecker> activation_necessity_checker_;
 
   std::unique_ptr<ScopedOptInFlowTracker> scoped_opt_in_tracker_;
   std::unique_ptr<ArcPaiStarter> pai_starter_;
   std::unique_ptr<ArcFastAppReinstallStarter> fast_app_reinstall_starter_;
   std::unique_ptr<ArcUiAvailabilityReporter> arc_ui_availability_reporter_;
+  std::unique_ptr<ArcRevenHardwareChecker> hardware_checker_ =
+      std::make_unique<arc::ArcRevenHardwareChecker>();
 
   // The time when the sign in process started.
   base::TimeTicks sign_in_start_time_;
@@ -478,25 +588,33 @@ class ArcSessionManager : public ArcSessionRunner::Observer,
   // The time when ARC was about to start.
   base::TimeTicks start_time_;
 
+  // Timer set up when ARC necessity check is completed
+  // but user session start up task are not yet completed.
+  // Used to measure the elapsed time between it and the user session
+  // start up task completion.
+  struct UserSessionStartUpTaskTimer {
+    base::ElapsedTimer timer;
+    bool deferred;
+  };
+  std::optional<UserSessionStartUpTaskTimer> user_session_start_up_task_timer_;
+
   base::RepeatingClosure attempt_user_exit_callback_;
+
+  base::RepeatingClosure attempt_restart_callback_;
 
   ArcAppIdProviderImpl app_id_provider_;
 
   // The content of /var/lib/misc/arc_salt. Empty if the file doesn't exist.
-  absl::optional<std::string> arc_salt_on_disk_;
+  std::optional<std::string> arc_salt_on_disk_;
 
-  absl::optional<bool> property_files_expansion_result_;
+  std::optional<bool> property_files_expansion_result_;
 
-  absl::optional<vm_tools::concierge::VmInfo> vm_info_;
-
-  // Timer to wait for policiesin case we are suspecting the user might be
-  // transitioning to the managed state.
-  base::OneShotTimer wait_for_policy_timer_;
-
-  std::unique_ptr<ArcDlcInstaller> arc_dlc_installer_;
-
-  absl::optional<guest_os::GuestOsMountProviderRegistry::Id>
+  std::optional<guest_os::GuestOsMountProviderRegistry::Id>
       arcvm_mount_provider_id_;
+
+  base::ScopedObservation<session_manager::SessionManager,
+                          session_manager::SessionManagerObserver>
+      session_manager_observation_{this};
 
   // Must be the last member.
   base::WeakPtrFactory<ArcSessionManager> weak_ptr_factory_{this};

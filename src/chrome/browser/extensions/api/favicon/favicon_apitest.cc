@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,7 @@ class FaviconApiTest : public ExtensionApiTest {
   }
 };
 
-// TODO(crbug.com/1319934): Test is flaky on Mac.
+// TODO(crbug.com/40836446): Test is flaky on Mac.
 #if BUILDFLAG(IS_MAC)
 #define MAYBE_Extension DISABLED_Extension
 #else

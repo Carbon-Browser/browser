@@ -1,6 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "base/android/library_loader/library_prefetcher.h"
 
@@ -9,7 +14,7 @@
 #include <sys/resource.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include <algorithm>
+
 #include <atomic>
 #include <cstdlib>
 #include <memory>
@@ -19,11 +24,13 @@
 #include "base/android/library_loader/anchor_functions.h"
 #include "base/android/orderfile/orderfile_buildflags.h"
 #include "base/bits.h"
+#include "base/containers/span.h"
 #include "base/files/file.h"
 #include "base/format_macros.h"
 #include "base/logging.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/process/process_metrics.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "build/build_config.h"
@@ -46,12 +53,14 @@ constexpr size_t kPageSize = 4096;
 // successful, |residency| has the size of |end| - |start| in pages.
 // Returns true for success.
 bool Mincore(size_t start, size_t end, std::vector<unsigned char>* residency) {
-  if (start % kPageSize || end % kPageSize)
+  if (start % kPageSize || end % kPageSize) {
     return false;
+  }
   size_t size = end - start;
   size_t size_in_pages = size / kPageSize;
-  if (residency->size() != size_in_pages)
+  if (residency->size() != size_in_pages) {
     residency->resize(size_in_pages);
+  }
   int err = HANDLE_EINTR(
       mincore(reinterpret_cast<void*>(start), size, &(*residency)[0]));
   PLOG_IF(ERROR, err) << "mincore() failed";
@@ -67,7 +76,7 @@ std::pair<size_t, size_t> GetTextRange() {
   // Set the end to the page on which the beginning of the last symbol is. The
   // actual symbol may spill into the next page by a few bytes, but this is
   // outside of the executable code range anyway.
-  size_t end_page = base::bits::AlignUp(kEndOfText, kPageSize);
+  size_t end_page = bits::AlignUp(kEndOfText, kPageSize);
   return {start_page, end_page};
 }
 
@@ -77,7 +86,7 @@ std::pair<size_t, size_t> GetOrderedTextRange() {
   size_t start_page = kStartOfOrderedText - kStartOfOrderedText % kPageSize;
   // kEndOfUnorderedText is not considered ordered, but the byte immediately
   // before is considered ordered and so can not be contained in the start page.
-  size_t end_page = base::bits::AlignUp(kEndOfOrderedText, kPageSize);
+  size_t end_page = bits::AlignUp(kEndOfOrderedText, kPageSize);
   return {start_page, end_page};
 }
 
@@ -108,8 +117,8 @@ struct TimestampAndResidency {
 bool CollectResidency(size_t start,
                       size_t end,
                       std::vector<TimestampAndResidency>* data) {
-  // Not using base::TimeTicks() to not call too many base:: symbol that would
-  // pollute the reached symbols dumps.
+  // Not using TimeTicks() to not call too many base:: symbol that would pollute
+  // the reached symbols dumps.
   struct timespec ts;
   if (HANDLE_EINTR(clock_gettime(CLOCK_MONOTONIC, &ts))) {
     PLOG(ERROR) << "Cannot get the time.";
@@ -118,8 +127,9 @@ bool CollectResidency(size_t start,
   uint64_t now = static_cast<uint64_t>(ts.tv_sec) * 1000 * 1000 * 1000 +
                  static_cast<uint64_t>(ts.tv_nsec);
   std::vector<unsigned char> residency;
-  if (!Mincore(start, end, &residency))
+  if (!Mincore(start, end, &residency)) {
     return false;
+  }
 
   data->emplace_back(now, std::move(residency));
   return true;
@@ -129,10 +139,9 @@ void DumpResidency(size_t start,
                    size_t end,
                    std::unique_ptr<std::vector<TimestampAndResidency>> data) {
   LOG(WARNING) << "Dumping native library residency";
-  auto path = base::FilePath(
-      base::StringPrintf("/data/local/tmp/chrome/residency-%d.txt", getpid()));
-  auto file =
-      base::File(path, base::File::FLAG_CREATE_ALWAYS | base::File::FLAG_WRITE);
+  auto path = FilePath(
+      StringPrintf("/data/local/tmp/chrome/residency-%d.txt", getpid()));
+  auto file = File(path, File::FLAG_CREATE_ALWAYS | File::FLAG_WRITE);
   if (!file.IsValid()) {
     PLOG(ERROR) << "Cannot open file to dump the residency data "
                 << path.value();
@@ -143,22 +152,20 @@ void DumpResidency(size_t start,
   CHECK(AreAnchorsSane());
   CHECK_LE(start, kStartOfText);
   CHECK_LE(kEndOfText, end);
-  auto start_end = base::StringPrintf("%" PRIuS " %" PRIuS "\n",
-                                      kStartOfText - start, kEndOfText - start);
-  file.WriteAtCurrentPos(start_end.c_str(), static_cast<int>(start_end.size()));
+  auto start_end = StringPrintf("%" PRIuS " %" PRIuS "\n", kStartOfText - start,
+                                kEndOfText - start);
+  file.WriteAtCurrentPos(base::as_byte_span(start_end));
 
   for (const auto& data_point : *data) {
-    auto timestamp =
-        base::StringPrintf("%" PRIu64 " ", data_point.timestamp_nanos);
-    file.WriteAtCurrentPos(timestamp.c_str(),
-                           static_cast<int>(timestamp.size()));
+    auto timestamp = StringPrintf("%" PRIu64 " ", data_point.timestamp_nanos);
+    file.WriteAtCurrentPos(base::as_byte_span(timestamp));
 
     std::vector<char> dump;
-    dump.reserve(data_point.residency.size() + 1);
-    for (auto c : data_point.residency)
+    dump.reserve(data_point.residency.size());
+    for (auto c : data_point.residency) {
       dump.push_back(c ? '1' : '0');
-    dump[dump.size() - 1] = '\n';
-    file.WriteAtCurrentPos(&dump[0], checked_cast<int>(dump.size()));
+    }
+    file.WriteAtCurrentPos(base::as_byte_span(dump));
   }
 }
 
@@ -212,8 +219,9 @@ PrefetchStatus ForkAndPrefetch(bool ordered_only) {
   // Always prefetch the ordered section first, as it's reached early during
   // startup, and not necessarily located at the beginning of .text.
   std::vector<std::pair<size_t, size_t>> ranges = {GetOrderedTextRange()};
-  if (!ordered_only)
+  if (!ordered_only) {
     ranges.push_back(GetTextRange());
+  }
 
   pid_t pid = fork();
   if (pid == 0) {
@@ -233,8 +241,9 @@ PrefetchStatus ForkAndPrefetch(bool ordered_only) {
     int status;
     const pid_t result = HANDLE_EINTR(waitpid(pid, &status, 0));
     if (result == pid) {
-      if (WIFEXITED(status))
+      if (WIFEXITED(status)) {
         return PrefetchStatus::kSuccess;
+      }
       if (WIFSIGNALED(status)) {
         int signal = WTERMSIG(status);
         switch (signal) {
@@ -282,14 +291,15 @@ int NativeLibraryPrefetcher::PercentageOfResidentCode(size_t start,
 
   std::vector<unsigned char> residency;
   bool ok = Mincore(start, end, &residency);
-  if (!ok)
+  if (!ok) {
     return -1;
+  }
   total_pages += residency.size();
-  resident_pages +=
-      static_cast<size_t>(std::count_if(residency.begin(), residency.end(),
-                                        [](unsigned char x) { return x & 1; }));
-  if (total_pages == 0)
+  resident_pages += static_cast<size_t>(
+      ranges::count_if(residency, [](unsigned char x) { return x & 1; }));
+  if (total_pages == 0) {
     return -1;
+  }
   return static_cast<int>((100 * resident_pages) / total_pages);
 }
 
@@ -313,8 +323,9 @@ void NativeLibraryPrefetcher::PeriodicallyCollectResidency() {
   // Collect residency for about minute (the actual time spent collecting
   // residency can vary, so this is only approximate).
   for (int i = 0; i < 120; ++i) {
-    if (!CollectResidency(range.first, range.second, data.get()))
+    if (!CollectResidency(range.first, range.second, data.get())) {
       return;
+    }
     usleep(5e5);
   }
   DumpResidency(range.first, range.second, std::move(data));

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
 #include "components/guest_view/common/guest_view_constants.h"
@@ -30,7 +30,6 @@ std::string JavaScriptDialogTypeToString(
       return "prompt";
     default:
       NOTREACHED() << "Unknown JavaScript Message Type.";
-      return "unknown";
   }
 }
 
@@ -51,18 +50,18 @@ void JavaScriptDialogHelper::RunJavaScriptDialog(
     const std::u16string& default_prompt_text,
     DialogClosedCallback callback,
     bool* did_suppress_message) {
-  base::DictionaryValue request_info;
-  request_info.SetStringKey(webview::kDefaultPromptText, default_prompt_text);
-  request_info.SetStringKey(webview::kMessageText, message_text);
-  request_info.SetStringKey(webview::kMessageType,
-                            JavaScriptDialogTypeToString(dialog_type));
-  request_info.SetStringKey(guest_view::kUrl,
-                            render_frame_host->GetLastCommittedURL().spec());
+  base::Value::Dict request_info;
+  request_info.Set(webview::kDefaultPromptText, default_prompt_text);
+  request_info.Set(webview::kMessageText, message_text);
+  request_info.Set(webview::kMessageType,
+                   JavaScriptDialogTypeToString(dialog_type));
+  request_info.Set(guest_view::kUrl,
+                   render_frame_host->GetLastCommittedURL().spec());
 
   WebViewPermissionHelper* web_view_permission_helper =
       web_view_guest_->web_view_permission_helper();
   web_view_permission_helper->RequestPermission(
-      WEB_VIEW_PERMISSION_TYPE_JAVASCRIPT_DIALOG, request_info,
+      WEB_VIEW_PERMISSION_TYPE_JAVASCRIPT_DIALOG, std::move(request_info),
       base::BindOnce(&JavaScriptDialogHelper::OnPermissionResponse,
                      weak_factory_.GetWeakPtr(), std::move(callback)),
       false /* allowed_by_default */);

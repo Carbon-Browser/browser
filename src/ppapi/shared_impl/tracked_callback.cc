@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,13 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/notreached.h"
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "ppapi/c/pp_completion_callback.h"
 #include "ppapi/c/pp_errors.h"
 #include "ppapi/c/ppb_message_loop.h"
@@ -243,10 +242,7 @@ void TrackedCallback::MarkAsCompletedWithLock() {
 
 void TrackedCallback::PostRunWithLock(int32_t result) {
   lock_.AssertAcquired();
-  if (completed_) {
-    NOTREACHED();
-    return;
-  }
+  CHECK(!completed_);
   if (result == PP_ERROR_ABORTED)
     aborted_ = true;
   // We might abort when there's already a scheduled callback, but callers
@@ -267,7 +263,7 @@ void TrackedCallback::PostRunWithLock(int32_t result) {
       // classes protect against having a null target_loop_ otherwise).
       DCHECK(IsMainThread());
       DCHECK(PpapiGlobals::Get()->IsHostGlobals());
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, std::move(callback_closure));
     }
   }
@@ -284,7 +280,6 @@ void TrackedCallback::SignalBlockingCallback(int32_t result) {
     // well before this. Otherwise, this callback was not created as a
     // blocking callback. Either way, there's some internal error.
     NOTREACHED();
-    return;
   }
   result_for_blocked_callback_ = result;
   // Retain ourselves, since MarkAsCompleted will remove us from the

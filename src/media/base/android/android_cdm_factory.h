@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,7 +42,7 @@ class MEDIA_EXPORT AndroidCdmFactory final : public CdmFactory {
   // Callback for MediaDrmBridgeFactory::Create().
   void OnCdmCreated(uint32_t creation_id,
                     const scoped_refptr<ContentDecryptionModule>& cdm,
-                    const std::string& error_message);
+                    CreateCdmStatus status);
 
   CreateFetcherCB create_fetcher_cb_;
   CreateStorageCB create_storage_cb_;

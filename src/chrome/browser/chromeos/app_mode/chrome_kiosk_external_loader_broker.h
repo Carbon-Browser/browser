@@ -1,20 +1,19 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_CHROMEOS_APP_MODE_CHROME_KIOSK_EXTERNAL_LOADER_BROKER_H_
 #define CHROME_BROWSER_CHROMEOS_APP_MODE_CHROME_KIOSK_EXTERNAL_LOADER_BROKER_H_
 
-#include <memory>
+#include <optional>
 #include <string>
+#include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback_forward.h"
 #include "base/values.h"
-#include "chrome/browser/chromeos/app_mode/chrome_kiosk_app_installer.h"
 #include "chromeos/crosapi/mojom/chrome_app_kiosk_service.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace ash {
+namespace chromeos {
 
 // Singleton broker that stands in the middle between the
 // ChromeKioskAppInstaller and the KioskAppExternalLoader. The external
@@ -23,7 +22,7 @@ namespace ash {
 class ChromeKioskExternalLoaderBroker {
  public:
   using InstallDataChangeCallback =
-      base::RepeatingCallback<void(base::DictionaryValue)>;
+      base::RepeatingCallback<void(base::Value::Dict)>;
 
   static ChromeKioskExternalLoaderBroker* Get();
 
@@ -43,22 +42,23 @@ class ChromeKioskExternalLoaderBroker {
 
   void TriggerPrimaryAppInstall(
       const crosapi::mojom::AppInstallParams& install_data);
-  void TriggerSecondaryAppInstall(std::vector<std::string> secondary_app_ids);
+  void TriggerSecondaryAppInstall(
+      const std::vector<std::string>& secondary_app_ids);
 
  private:
-  base::DictionaryValue CreatePrimaryAppLoaderPrefs() const;
-  base::DictionaryValue CreateSecondaryAppLoaderPrefs() const;
+  void CallPrimaryAppObserver();
+  void CallSecondaryAppObserver();
 
-  absl::optional<crosapi::mojom::AppInstallParams> primary_app_install_data_;
-  absl::optional<std::vector<std::string>> secondary_app_ids_;
+  std::optional<crosapi::mojom::AppInstallParams> primary_app_data_;
+  std::optional<std::vector<std::string>> secondary_app_ids_;
 
   // Handle to the primary app external loader.
-  InstallDataChangeCallback primary_app_changed_handler_;
+  InstallDataChangeCallback primary_app_observer_;
 
   // Handle to the secondary app external loader.
-  InstallDataChangeCallback secondary_apps_changed_handler_;
+  InstallDataChangeCallback secondary_apps_observer_;
 };
 
-}  // namespace ash
+}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_CHROMEOS_APP_MODE_CHROME_KIOSK_EXTERNAL_LOADER_BROKER_H_

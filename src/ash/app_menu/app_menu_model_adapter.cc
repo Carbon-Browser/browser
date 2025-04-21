@@ -1,16 +1,19 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/app_menu/app_menu_model_adapter.h"
 
+#include <memory>
+#include <utility>
+
 #include "ash/app_menu/notification_menu_controller.h"
 #include "ash/constants/ash_features.h"
-#include "ash/public/cpp/shelf_model.h"
+#include "ash/public/cpp/app_menu_constants.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/metrics/histogram_macros.h"
 #include "ui/accessibility/ax_enums.mojom.h"
-#include "ui/base/models/simple_menu_model.h"
+#include "ui/base/mojom/menu_source_type.mojom-forward.h"
+#include "ui/menus/simple_menu_model.h"
 #include "ui/views/controls/menu/menu_item_view.h"
 #include "ui/views/controls/menu/menu_model_adapter.h"
 #include "ui/views/controls/menu/menu_runner.h"
@@ -45,7 +48,7 @@ AppMenuModelAdapter::AppMenuModelAdapter(
     const std::string& app_id,
     std::unique_ptr<ui::SimpleMenuModel> model,
     views::Widget* widget_owner,
-    ui::MenuSourceType source_type,
+    ui::mojom::MenuSourceType source_type,
     base::OnceClosure on_menu_closed_callback,
     bool is_tablet_mode)
     : views::MenuModelAdapter(model.get()),
@@ -65,12 +68,14 @@ void AppMenuModelAdapter::Run(const gfx::Rect& menu_anchor_rect,
   DCHECK(model_);
 
   menu_open_time_ = base::TimeTicks::Now();
-  root_ = CreateMenu();
+  std::unique_ptr<views::MenuItemView> root = CreateMenu();
+  root_ = root.get();
   if (ash::features::IsNotificationsInContextMenuEnabled()) {
     notification_menu_controller_ =
         std::make_unique<NotificationMenuController>(app_id_, root_, this);
   }
-  menu_runner_ = std::make_unique<views::MenuRunner>(root_, run_types);
+  menu_runner_ =
+      std::make_unique<views::MenuRunner>(std::move(root), run_types);
   menu_runner_->RunMenuAt(widget_owner_, nullptr /* MenuButtonController */,
                           menu_anchor_rect, menu_anchor_position, source_type_);
 }
@@ -105,8 +110,20 @@ void AppMenuModelAdapter::ExecuteCommand(int id, int mouse_event_flags) {
   // example, for search result menus, the command could open an app window
   // causing the app list search to get cleared, destroying non-zero state
   // search results.
+  auto weak_self = weak_ptr_factory_.GetWeakPtr();
   RecordExecuteCommandHistogram(GetCommandIdForHistograms(id));
   views::MenuModelAdapter::ExecuteCommand(id, mouse_event_flags);
+
+  if (!weak_self)
+    return;
+
+  if (id >= USE_LAUNCH_TYPE_COMMAND_START &&
+      id <= USE_LAUNCH_TYPE_COMMAND_END) {
+    // Rebuild the menu to ensure that the `LAUNCH_NEW` menu item is refreshed
+    // after changing the app launch type. Note: this closes the submenu with
+    // `USE_LAUNCH_TYPE_*` commands.
+    BuildMenu(root_);
+  }
 }
 
 void AppMenuModelAdapter::OnMenuClosed(views::MenuItemView* menu) {
@@ -119,9 +136,15 @@ void AppMenuModelAdapter::OnMenuClosed(views::MenuItemView* menu) {
         ax::mojom::Event::kMenuEnd,
         /*send_native_event=*/true);
   }
-
   if (on_menu_closed_callback_)
     std::move(on_menu_closed_callback_).Run();
+}
+
+bool AppMenuModelAdapter::ShouldExecuteCommandWithoutClosingMenu(
+    int id,
+    const ui::Event& event) {
+  return id >= USE_LAUNCH_TYPE_COMMAND_START &&
+         id <= USE_LAUNCH_TYPE_COMMAND_END;
 }
 
 void AppMenuModelAdapter::RecordExecuteCommandHistogram(int command_id) {

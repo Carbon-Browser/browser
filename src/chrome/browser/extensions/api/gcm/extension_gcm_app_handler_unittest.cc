@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
@@ -26,8 +26,8 @@
 #include "base/values.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/extensions/api/gcm/gcm_api.h"
+#include "chrome/browser/extensions/crx_installer.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/test_extension_service.h"
 #include "chrome/browser/extensions/test_extension_system.h"
@@ -66,10 +66,14 @@
 #include "services/network/test/test_network_connection_tracker.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ash/login/users/scoped_test_user_manager.h"
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chrome/browser/ash/login/users/user_manager_delegate_impl.h"
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
+#include "chrome/browser/browser_process.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
+#include "chromeos/ash/components/settings/cros_settings.h"
+#include "components/user_manager/scoped_user_manager.h"
+#include "components/user_manager/user_manager_impl.h"
 #endif
 
 namespace extensions {
@@ -105,12 +109,12 @@ void RequestProxyResolvingSocketFactory(
 // Helper class for asynchronous waiting.
 class Waiter {
  public:
-  Waiter() {}
+  Waiter() = default;
 
   Waiter(const Waiter&) = delete;
   Waiter& operator=(const Waiter&) = delete;
 
-  ~Waiter() {}
+  ~Waiter() = default;
 
   // Waits until the asynchronous operation finishes.
   void WaitUntilCompleted() {
@@ -176,7 +180,7 @@ class FakeExtensionGCMAppHandler : public ExtensionGCMAppHandler {
   FakeExtensionGCMAppHandler& operator=(const FakeExtensionGCMAppHandler&) =
       delete;
 
-  ~FakeExtensionGCMAppHandler() override {}
+  ~FakeExtensionGCMAppHandler() override = default;
 
   void OnMessage(const std::string& app_id,
                  const gcm::IncomingMessage& message) override {}
@@ -258,7 +262,7 @@ class ExtensionGCMAppHandlerTest : public testing::Test {
   ExtensionGCMAppHandlerTest& operator=(const ExtensionGCMAppHandlerTest&) =
       delete;
 
-  ~ExtensionGCMAppHandlerTest() override {}
+  ~ExtensionGCMAppHandlerTest() override = default;
 
   // Overridden from test::Test:
   void SetUp() override {
@@ -269,8 +273,10 @@ class ExtensionGCMAppHandlerTest : public testing::Test {
         std::make_unique<content::InProcessUtilityThreadHelper>();
 
     // This is needed to create extension service under CrOS.
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-    test_user_manager_ = std::make_unique<ash::ScopedTestUserManager>();
+#if BUILDFLAG(IS_CHROMEOS)
+    user_manager_.Reset(std::make_unique<user_manager::UserManagerImpl>(
+        std::make_unique<ash::UserManagerDelegateImpl>(),
+        g_browser_process->local_state(), ash::CrosSettings::Get()));
     ash::ConciergeClient::InitializeFake(/*fake_cicerone_client=*/nullptr);
 #endif
 
@@ -298,8 +304,8 @@ class ExtensionGCMAppHandlerTest : public testing::Test {
   }
 
   void TearDown() override {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-    test_user_manager_.reset();
+#if BUILDFLAG(IS_CHROMEOS)
+    user_manager_.Reset();
 #endif
 
     waiter_.PumpUILoop();
@@ -308,7 +314,7 @@ class ExtensionGCMAppHandlerTest : public testing::Test {
     if (partition)
       partition->WaitForDeletionTasksForTesting();
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
     gcm_app_handler_.reset();
     profile_.reset();
     ash::ConciergeClient::Shutdown();
@@ -319,7 +325,7 @@ class ExtensionGCMAppHandlerTest : public testing::Test {
   scoped_refptr<const Extension> CreateExtension() {
     scoped_refptr<const Extension> extension =
         ExtensionBuilder(kTestExtensionName)
-            .AddPermission("gcm")
+            .AddAPIPermission("gcm")
             .SetPath(temp_dir_.GetPath())
             .SetID("ldnnhddmnhbkjipkidpdiheffobcpfmf")
             .Build();
@@ -333,11 +339,9 @@ class ExtensionGCMAppHandlerTest : public testing::Test {
     extension_service_->AddExtension(extension);
   }
 
-  static bool IsCrxInstallerDone(extensions::CrxInstaller** installer,
-                                 const content::NotificationSource& source,
-                                 const content::NotificationDetails& details) {
-    return content::Source<extensions::CrxInstaller>(source).ptr() ==
-           *installer;
+  void InstallerDone(const std::optional<CrxInstallError>& error) {
+    ASSERT_FALSE(error);
+    waiter_.SignalCompleted();
   }
 
   void UpdateExtension(const Extension* extension,
@@ -354,16 +358,15 @@ class ExtensionGCMAppHandlerTest : public testing::Test {
     path = path.Append(data_dir.BaseName());
     ASSERT_TRUE(base::CopyFile(data_dir, path));
 
-    extensions::CrxInstaller* installer = NULL;
-    content::WindowedNotificationObserver observer(
-        extensions::NOTIFICATION_CRX_INSTALLER_DONE,
-        base::BindRepeating(&IsCrxInstallerDone, &installer));
     extensions::CRXFileInfo crx_info(path, extensions::GetTestVerifierFormat());
     crx_info.extension_id = extension->id();
-    extension_service_->UpdateExtension(crx_info, true, &installer);
 
-    if (installer)
-      observer.Wait();
+    auto installer = extension_service_->CreateUpdateInstaller(crx_info, true);
+    installer->AddInstallerCallback(base::BindOnce(
+        &ExtensionGCMAppHandlerTest::InstallerDone, base::Unretained(this)));
+    installer->InstallCrxFile(crx_info);
+
+    waiter_.WaitUntilCompleted();
   }
 
   void DisableExtension(const Extension* extension) {
@@ -377,9 +380,7 @@ class ExtensionGCMAppHandlerTest : public testing::Test {
 
   void UninstallExtension(const Extension* extension) {
     extension_service_->UninstallExtension(
-        extension->id(),
-        extensions::UNINSTALL_REASON_FOR_TESTING,
-        NULL);
+        extension->id(), extensions::UNINSTALL_REASON_FOR_TESTING, nullptr);
   }
 
   void Register(const std::string& app_id,
@@ -421,13 +422,14 @@ class ExtensionGCMAppHandlerTest : public testing::Test {
   std::unique_ptr<content::InProcessUtilityThreadHelper>
       in_process_utility_thread_helper_;
   std::unique_ptr<TestingProfile> profile_;
-  raw_ptr<ExtensionService> extension_service_;  // Not owned.
+  raw_ptr<ExtensionService, DanglingUntriaged>
+      extension_service_;  // Not owned.
   base::ScopedTempDir temp_dir_;
 
   // This is needed to create extension service under CrOS.
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   ash::ScopedCrosSettingsTestHelper cros_settings_test_helper_;
-  std::unique_ptr<ash::ScopedTestUserManager> test_user_manager_;
+  user_manager::ScopedUserManager user_manager_;
 #endif
 
   Waiter waiter_;

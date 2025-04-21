@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,14 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_TIMING_PROFILER_GROUP_H_
 
 #include "base/time/time.h"
+#include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/execution_context/security_context.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
+#include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "v8/include/v8-profiler.h"
 #include "v8/include/v8.h"
 
@@ -22,13 +24,12 @@ class ExecutionContext;
 class LocalDOMWindow;
 class Profiler;
 class ProfilerInitOptions;
-class ScriptPromiseResolver;
+class ProfilerTrace;
 class ScriptState;
 
 // A ProfilerGroup represents a set of profilers sharing an underlying
 // v8::CpuProfiler attached to a common isolate.
-class CORE_EXPORT ProfilerGroup
-    : public V8PerIsolateData::GarbageCollectedData {
+class CORE_EXPORT ProfilerGroup : public V8PerIsolateData::UserData {
  public:
   // Determines whether or not the given frame can profile. Logs an exception
   // in the given ExceptionState (if non-null) if profiling is not permitted,
@@ -72,7 +73,9 @@ class CORE_EXPORT ProfilerGroup
   void InitV8Profiler();
   void TeardownV8Profiler();
 
-  void StopProfiler(ScriptState*, Profiler*, ScriptPromiseResolver*);
+  void StopProfiler(ScriptState*,
+                    Profiler*,
+                    ScriptPromiseResolver<ProfilerTrace>*);
 
   // Cancels a profiler, discarding its associated trace.
   void CancelProfiler(Profiler*);

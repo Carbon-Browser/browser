@@ -221,9 +221,6 @@ A quiet UI prompt can be triggered if any of these conditions are met:
     bad reputation.
 
 The
-[AdaptiveQuietNotificationPermissionUiEnabler](https://cs.chromium.org/chromium/src/chrome/browser/permissions/adaptive_quiet_notification_permission_ui_enabler.h)
-is responsible for recording the permission prompts outcomes and, if needed,
-enabling the quiet UI in settings. The
 [ContextualNotificationPermissionUiSelector](https://cs.chromium.org/chromium/src/chrome/browser/permissions/contextual_notification_permission_ui_selector.h)
 checks if the quiet UI is enabled in settings (among other things) when choosing
 the appropriate UI flavor.
@@ -263,3 +260,7 @@ Steps to follow:
 > The [PortalActivation] test verifies that permissions are disabled in Portals.
 > [VerifyPermissionsDeniedForPortal](https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/permissions/permissions_security_model_interactive_uitest.cc;drc=c662f11e160976c04682f41941aaeccad92ace48;l=429) incapsulates all logic
 > needed for a particular permission verification.
+
+## Add new permission
+
+See [add_new_permission.md](https://source.chromium.org/chromium/chromium/src/+/main:components/permissions/add_new_permission.md)

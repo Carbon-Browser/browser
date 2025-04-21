@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,21 +7,28 @@
 #include <memory>
 #include <string>
 
-#include "ash/public/cpp/system/toast_manager.h"
+#include "ash/bubble/bubble_constants.h"
+#include "ash/keyboard/ui/keyboard_ui_controller.h"
+#include "ash/keyboard/ui/test/keyboard_test_util.h"
+#include "ash/public/cpp/keyboard/keyboard_switches.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/phonehub/phone_hub_tray.h"
 #include "ash/system/status_area_widget_test_helper.h"
-#include "ash/system/toast/toast_manager_impl.h"
+#include "ash/system/tray/tray_bubble_view.h"
 #include "ash/system/tray/tray_bubble_wrapper.h"
+#include "ash/system/tray/tray_utils.h"
 #include "ash/test/ash_test_base.h"
 #include "ash/test/test_ash_web_view_factory.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/display/test/display_manager_test_api.h"
 #include "ui/events/event_constants.h"
 #include "ui/events/keycodes/keyboard_codes_posix.h"
 #include "ui/gfx/image/image.h"
+#include "ui/gfx/image/image_unittest_util.h"
+#include "ui/views/accessibility/view_accessibility.h"
 
 namespace ash {
 
@@ -46,19 +53,45 @@ void ResetWebContentGoBack() {
   num_web_content_go_back_calls_ = 0;
 }
 
-SkBitmap TestBitmap() {
-  SkBitmap bitmap;
-  bitmap.allocN32Pixels(30, 30);
-  return bitmap;
-}
-
 gfx::Image CreateTestImage() {
-  gfx::ImageSkia image_skia = gfx::ImageSkia::CreateFrom1xBitmap(TestBitmap());
+  gfx::ImageSkia image_skia = gfx::test::CreateImageSkia(/*size=*/30);
   image_skia.MakeThreadSafe();
   return gfx::Image(image_skia);
 }
 
 }  // namespace
+
+using ConnectionStatus = eche_app::mojom::ConnectionStatus;
+
+class FakeConnectionStatusObserver
+    : public eche_app::EcheConnectionStatusHandler::Observer {
+ public:
+  FakeConnectionStatusObserver() = default;
+  ~FakeConnectionStatusObserver() override = default;
+
+  size_t num_connection_status_for_ui_changed_calls() const {
+    return num_connection_status_for_ui_changed_calls_;
+  }
+
+  ConnectionStatus last_connection_changed_for_ui_status() const {
+    return last_connection_changed_for_ui_status_;
+  }
+
+  // eche_app::EcheConnectionStatusObserver::Observer:
+  void OnConnectionStatusForUiChanged(
+      ConnectionStatus connection_status) override {
+    if (last_connection_changed_for_ui_status_ == connection_status) {
+      return;
+    }
+    ++num_connection_status_for_ui_changed_calls_;
+    last_connection_changed_for_ui_status_ = connection_status;
+  }
+
+ private:
+  size_t num_connection_status_for_ui_changed_calls_ = 0;
+  ConnectionStatus last_connection_changed_for_ui_status_ =
+      ConnectionStatus::kConnectionStatusDisconnected;
+};
 
 class EcheTrayTest : public AshTestBase {
  public:
@@ -72,21 +105,29 @@ class EcheTrayTest : public AshTestBase {
   // AshTestBase:
   void SetUp() override {
     feature_list_.InitWithFeatures(
-        /*enabled_features=*/{chromeos::features::kEcheSWA},
+        /*enabled_features=*/{features::kEcheSWA,
+                              features::kEcheNetworkConnectionState},
         /*disabled_features=*/{});
 
     DCHECK(test_web_view_factory_.get());
 
+    base::CommandLine::ForCurrentProcess()->AppendSwitch(
+        keyboard::switches::kEnableVirtualKeyboard);
+
     AshTestBase::SetUp();
 
+    eche_connection_status_handler_ =
+        std::make_unique<eche_app::EcheConnectionStatusHandler>();
+    eche_connection_status_handler_->AddObserver(
+        &fake_connection_status_observer_);
     eche_tray_ = StatusAreaWidgetTestHelper::GetStatusAreaWidget()->eche_tray();
+    eche_tray_->SetEcheConnectionStatusHandler(
+        eche_connection_status_handler_.get());
     phone_hub_tray_ =
         StatusAreaWidgetTestHelper::GetStatusAreaWidget()->phone_hub_tray();
 
     display::test::DisplayManagerTestApi(display_manager())
         .SetFirstDisplayAsInternalDisplay();
-
-    toast_manager_ = Shell::Get()->toast_manager();
   }
 
   // Performs a tap on the eche tray button.
@@ -100,19 +141,32 @@ class EcheTrayTest : public AshTestBase {
         button->GetBoundsInScreen().CenterPoint());
   }
 
+  size_t GetNumConnectionStatusForUiChangedCalls() {
+    return fake_connection_status_observer_
+        .num_connection_status_for_ui_changed_calls();
+  }
+
+  ConnectionStatus GetLastConnectionChangedForUiStatus() {
+    return fake_connection_status_observer_
+        .last_connection_changed_for_ui_status();
+  }
+
   EcheTray* eche_tray() { return eche_tray_; }
   PhoneHubTray* phone_hub_tray() { return phone_hub_tray_; }
-  ToastManagerImpl* toast_manager() { return toast_manager_; }
+
+  base::test::ScopedFeatureList feature_list_;
 
  private:
-  EcheTray* eche_tray_ = nullptr;  // Not owned
-  PhoneHubTray* phone_hub_tray_ = nullptr;  // Not owned
-  base::test::ScopedFeatureList feature_list_;
-  ToastManagerImpl* toast_manager_ = nullptr;
+  FakeConnectionStatusObserver fake_connection_status_observer_;
+  raw_ptr<EcheTray, DanglingUntriaged> eche_tray_ = nullptr;  // Not owned
+  raw_ptr<PhoneHubTray, DanglingUntriaged> phone_hub_tray_ =
+      nullptr;  // Not owned
 
   // Calling the factory constructor is enough to set it up.
   std::unique_ptr<TestAshWebViewFactory> test_web_view_factory_ =
       std::make_unique<TestAshWebViewFactory>();
+  std::unique_ptr<eche_app::EcheConnectionStatusHandler>
+      eche_connection_status_handler_;
 };
 
 // Verify the Eche tray button exists and but is not visible initially.
@@ -131,8 +185,10 @@ TEST_F(EcheTrayTest, EcheTrayShowBubbleAndTapTwice) {
   EXPECT_FALSE(eche_tray()->GetVisible());
 
   eche_tray()->SetVisiblePreferred(true);
-  eche_tray()->LoadBubble(GURL("http://google.com"), CreateTestImage(),
-                          u"app 1");
+  eche_tray()->LoadBubble(
+      GURL("http://google.com"), CreateTestImage(), u"app 1", u"your phone",
+      eche_app::mojom::ConnectionStatus::kConnectionStatusDisconnected,
+      eche_app::mojom::AppStreamLaunchEntryPoint::APPS_LIST);
   eche_tray()->ShowBubble();
 
   EXPECT_TRUE(eche_tray()->is_active());
@@ -168,8 +224,10 @@ TEST_F(EcheTrayTest, EcheTrayShowBubbleAndTapTwice) {
 
 TEST_F(EcheTrayTest, EcheTrayIconResize) {
   eche_tray()->SetVisiblePreferred(true);
-  eche_tray()->LoadBubble(GURL("http://google.com"), CreateTestImage(),
-                          u"app 1");
+  eche_tray()->LoadBubble(
+      GURL("http://google.com"), CreateTestImage(), u"app 1", u"your phone",
+      eche_app::mojom::ConnectionStatus::kConnectionStatusDisconnected,
+      eche_app::mojom::AppStreamLaunchEntryPoint::APPS_LIST);
   eche_tray()->ShowBubble();
 
   int image_width = phone_hub_tray()
@@ -187,55 +245,64 @@ TEST_F(EcheTrayTest, EcheTrayIconResize) {
   EXPECT_EQ(image_width, new_image_width + 2);
 }
 
-TEST_F(EcheTrayTest, OnAnyBubbleVisibilityChanged) {
-  eche_tray()->LoadBubble(GURL("http://google.com"), CreateTestImage(),
-                          u"app 1");
+TEST_F(EcheTrayTest, OnStatusAreaAnchoredBubbleVisibilityChanged) {
+  eche_tray()->LoadBubble(
+      GURL("http://google.com"), CreateTestImage(), u"app 1", u"your phone",
+      eche_app::mojom::ConnectionStatus::kConnectionStatusDisconnected,
+      eche_app::mojom::AppStreamLaunchEntryPoint::APPS_LIST);
   eche_tray()->ShowBubble();
 
-  EXPECT_TRUE(
-      eche_tray()->get_bubble_wrapper_for_test()->bubble_view()->GetVisible());
+  auto* bubble_view = eche_tray()->get_bubble_wrapper_for_test()->bubble_view();
+
+  EXPECT_TRUE(bubble_view->GetVisible());
 
   // When any other bubble is shown we need to hide Eche.
-  eche_tray()->OnAnyBubbleVisibilityChanged(
-      reinterpret_cast<views::Widget*>(12345L), true);
+  auto test_bubble_widget = std::make_unique<TrayBubbleView>(
+      CreateInitParamsForTrayBubble(phone_hub_tray()));
+  eche_tray()->OnStatusAreaAnchoredBubbleVisibilityChanged(
+      test_bubble_widget.get(), true);
 
-  EXPECT_FALSE(
-      eche_tray()->get_bubble_wrapper_for_test()->bubble_view()->GetVisible());
+  EXPECT_FALSE(bubble_view->GetVisible());
   EXPECT_FALSE(is_web_content_unloaded_);
 }
 
-// OnAnyBubbleVisibilityChanged() is called on the current bubble and hence
-// should be ignored.
-TEST_F(EcheTrayTest, OnAnyBubbleVisibilityChanged_SameWidget) {
-  eche_tray()->LoadBubble(GURL("http://google.com"), CreateTestImage(),
-                          u"app 1");
+// OnStatusAreaAnchoredBubbleVisibilityChanged() is called on the current bubble
+// and hence should be ignored.
+TEST_F(EcheTrayTest, OnStatusAreaAnchoredBubbleVisibilityChanged_SameWidget) {
+  eche_tray()->LoadBubble(
+      GURL("http://google.com"), CreateTestImage(), u"app 1", u"your phone",
+      eche_app::mojom::ConnectionStatus::kConnectionStatusDisconnected,
+      eche_app::mojom::AppStreamLaunchEntryPoint::APPS_LIST);
   eche_tray()->ShowBubble();
 
-  EXPECT_TRUE(
-      eche_tray()->get_bubble_wrapper_for_test()->bubble_view()->GetVisible());
+  auto* bubble_view = eche_tray()->get_bubble_wrapper_for_test()->bubble_view();
 
-  eche_tray()->OnAnyBubbleVisibilityChanged(eche_tray()->GetBubbleWidget(),
-                                            true);
+  EXPECT_TRUE(bubble_view->GetVisible());
 
-  EXPECT_TRUE(
-      eche_tray()->get_bubble_wrapper_for_test()->bubble_view()->GetVisible());
+  eche_tray()->OnStatusAreaAnchoredBubbleVisibilityChanged(bubble_view, true);
+
+  EXPECT_TRUE(bubble_view->GetVisible());
 }
 
-// OnAnyBubbleVisibilityChanged() is called on some other bubble but the
-// visible parameter is false, hence we should not do anything.
-TEST_F(EcheTrayTest, OnAnyBubbleVisibilityChanged_NonVisible) {
-  eche_tray()->LoadBubble(GURL("http://google.com"), CreateTestImage(),
-                          u"app 1");
+// OnStatusAreaAnchoredBubbleVisibilityChanged() is called on some other bubble
+// but the visible parameter is false, hence we should not do anything.
+TEST_F(EcheTrayTest, OnStatusAreaAnchoredBubbleVisibilityChanged_NonVisible) {
+  eche_tray()->LoadBubble(
+      GURL("http://google.com"), CreateTestImage(), u"app 1", u"your phone",
+      eche_app::mojom::ConnectionStatus::kConnectionStatusDisconnected,
+      eche_app::mojom::AppStreamLaunchEntryPoint::APPS_LIST);
   eche_tray()->ShowBubble();
 
-  EXPECT_TRUE(
-      eche_tray()->get_bubble_wrapper_for_test()->bubble_view()->GetVisible());
+  auto* bubble_view = eche_tray()->get_bubble_wrapper_for_test()->bubble_view();
 
-  eche_tray()->OnAnyBubbleVisibilityChanged(
-      reinterpret_cast<views::Widget*>(12345L), false);
+  EXPECT_TRUE(bubble_view->GetVisible());
 
-  EXPECT_TRUE(
-      eche_tray()->get_bubble_wrapper_for_test()->bubble_view()->GetVisible());
+  auto test_bubble_widget = std::make_unique<TrayBubbleView>(
+      CreateInitParamsForTrayBubble(phone_hub_tray()));
+  eche_tray()->OnStatusAreaAnchoredBubbleVisibilityChanged(
+      test_bubble_widget.get(), false);
+
+  EXPECT_TRUE(bubble_view->GetVisible());
 }
 
 TEST_F(EcheTrayTest, EcheTrayCreatesBubbleButHideFirst) {
@@ -246,8 +313,10 @@ TEST_F(EcheTrayTest, EcheTrayCreatesBubbleButHideFirst) {
 
   // Allow us to create the bubble but it is not visible until we need this
   // bubble to show up.
-  eche_tray()->LoadBubble(GURL("http://google.com"), CreateTestImage(),
-                          u"app 1");
+  eche_tray()->LoadBubble(
+      GURL("http://google.com"), CreateTestImage(), u"app 1", u"your phone",
+      eche_app::mojom::ConnectionStatus::kConnectionStatusDisconnected,
+      eche_app::mojom::AppStreamLaunchEntryPoint::APPS_LIST);
 
   EXPECT_FALSE(eche_tray()->is_active());
   EXPECT_TRUE(eche_tray()->get_bubble_wrapper_for_test());
@@ -274,8 +343,10 @@ TEST_F(EcheTrayTest, EcheTrayCreatesBubbleButStreamStatusChanged) {
 
   // Allow us to create the bubble but it is not visible until we need this
   // bubble to show up.
-  eche_tray()->LoadBubble(GURL("http://google.com"), CreateTestImage(),
-                          u"app 1");
+  eche_tray()->LoadBubble(
+      GURL("http://google.com"), CreateTestImage(), u"app 1", u"your phone",
+      eche_app::mojom::ConnectionStatus::kConnectionStatusDisconnected,
+      eche_app::mojom::AppStreamLaunchEntryPoint::APPS_LIST);
 
   EXPECT_FALSE(eche_tray()->is_active());
   EXPECT_TRUE(eche_tray()->get_bubble_wrapper_for_test());
@@ -302,8 +373,10 @@ TEST_F(EcheTrayTest, EcheTrayCreatesBubbleButStreamStatusChanged) {
 }
 
 TEST_F(EcheTrayTest, EcheTrayMinimizeButtonClicked) {
-  eche_tray()->LoadBubble(GURL("http://google.com"), CreateTestImage(),
-                          u"app 1");
+  eche_tray()->LoadBubble(
+      GURL("http://google.com"), CreateTestImage(), u"app 1", u"your phone",
+      eche_app::mojom::ConnectionStatus::kConnectionStatusDisconnected,
+      eche_app::mojom::AppStreamLaunchEntryPoint::APPS_LIST);
   eche_tray()->ShowBubble();
 
   EXPECT_TRUE(
@@ -319,8 +392,10 @@ TEST_F(EcheTrayTest, EcheTrayMinimizeButtonClicked) {
 TEST_F(EcheTrayTest, EcheTrayCloseButtonClicked) {
   ResetUnloadWebContent();
   eche_tray()->SetGracefulCloseCallback(base::BindOnce(&UnloadWebContent));
-  eche_tray()->LoadBubble(GURL("http://google.com"), CreateTestImage(),
-                          u"app 1");
+  eche_tray()->LoadBubble(
+      GURL("http://google.com"), CreateTestImage(), u"app 1", u"your phone",
+      eche_app::mojom::ConnectionStatus::kConnectionStatusDisconnected,
+      eche_app::mojom::AppStreamLaunchEntryPoint::APPS_LIST);
   eche_tray()->ShowBubble();
 
   ClickButton(eche_tray()->GetCloseButtonForTesting());
@@ -332,8 +407,10 @@ TEST_F(EcheTrayTest, EcheTrayBackButtonClicked) {
   ResetWebContentGoBack();
   eche_tray()->SetGracefulGoBackCallback(
       base::BindRepeating(&WebContentGoBack));
-  eche_tray()->LoadBubble(GURL("http://google.com"), CreateTestImage(),
-                          u"app 1");
+  eche_tray()->LoadBubble(
+      GURL("http://google.com"), CreateTestImage(), u"app 1", u"your phone",
+      eche_app::mojom::ConnectionStatus::kConnectionStatusDisconnected,
+      eche_app::mojom::AppStreamLaunchEntryPoint::APPS_LIST);
   eche_tray()->ShowBubble();
 
   ClickButton(eche_tray()->GetArrowBackButtonForTesting());
@@ -346,8 +423,10 @@ TEST_F(EcheTrayTest, EcheTrayBackButtonClicked) {
 }
 
 TEST_F(EcheTrayTest, AcceleratorKeyHandled_Minimize) {
-  eche_tray()->LoadBubble(GURL("http://google.com"), CreateTestImage(),
-                          u"app 1");
+  eche_tray()->LoadBubble(
+      GURL("http://google.com"), CreateTestImage(), u"app 1", u"your phone",
+      eche_app::mojom::ConnectionStatus::kConnectionStatusDisconnected,
+      eche_app::mojom::AppStreamLaunchEntryPoint::APPS_LIST);
   eche_tray()->ShowBubble();
 
   EXPECT_TRUE(
@@ -373,8 +452,10 @@ TEST_F(EcheTrayTest, AcceleratorKeyHandled_Minimize) {
 TEST_F(EcheTrayTest, AcceleratorKeyHandled_Ctrl_W) {
   ResetUnloadWebContent();
   eche_tray()->SetGracefulCloseCallback(base::BindOnce(&UnloadWebContent));
-  eche_tray()->LoadBubble(GURL("http://google.com"), CreateTestImage(),
-                          u"app 1");
+  eche_tray()->LoadBubble(
+      GURL("http://google.com"), CreateTestImage(), u"app 1", u"your phone",
+      eche_app::mojom::ConnectionStatus::kConnectionStatusDisconnected,
+      eche_app::mojom::AppStreamLaunchEntryPoint::APPS_LIST);
   eche_tray()->ShowBubble();
 
   EXPECT_TRUE(
@@ -387,71 +468,211 @@ TEST_F(EcheTrayTest, AcceleratorKeyHandled_Ctrl_W) {
   EXPECT_TRUE(is_web_content_unloaded_);
 }
 
-TEST_F(EcheTrayTest, AcceleratorKeyHandled_Ctrl_C) {
-  eche_tray()->LoadBubble(GURL("http://google.com"), CreateTestImage(),
-                          u"app 1");
-  eche_tray()->ShowBubble();
-
-  EXPECT_TRUE(
-      eche_tray()->get_bubble_wrapper_for_test()->bubble_view()->GetVisible());
-  EXPECT_FALSE(toast_manager()->IsRunning(
-      "eche_tray_toast_ids.copy_paste_not_implemented"));
-
-  // Now press the ctrl+w that closes the bubble.
-  GetEventGenerator()->PressKey(ui::KeyboardCode::VKEY_C, ui::EF_CONTROL_DOWN);
-
-  // Check to see if a toast is shown
-  EXPECT_TRUE(toast_manager()->IsRunning(
-      "eche_tray_toast_ids.copy_paste_not_implemented"));
-}
-
-TEST_F(EcheTrayTest, AcceleratorKeyHandled_Ctrl_V) {
-  eche_tray()->LoadBubble(GURL("http://google.com"), CreateTestImage(),
-                          u"app 1");
-  eche_tray()->ShowBubble();
-
-  EXPECT_TRUE(
-      eche_tray()->get_bubble_wrapper_for_test()->bubble_view()->GetVisible());
-  EXPECT_FALSE(toast_manager()->IsRunning(
-      "eche_tray_toast_ids.copy_paste_not_implemented"));
-
-  // Now press the ctrl+w that closes the bubble.
-  GetEventGenerator()->PressKey(ui::KeyboardCode::VKEY_V, ui::EF_CONTROL_DOWN);
-
-  // Check to see if a toast is shown
-  EXPECT_TRUE(toast_manager()->IsRunning(
-      "eche_tray_toast_ids.copy_paste_not_implemented"));
-}
-
-TEST_F(EcheTrayTest, AcceleratorKeyHandled_Ctrl_X) {
-  eche_tray()->LoadBubble(GURL("http://google.com"), CreateTestImage(),
-                          u"app 1");
-  eche_tray()->ShowBubble();
-
-  EXPECT_TRUE(
-      eche_tray()->get_bubble_wrapper_for_test()->bubble_view()->GetVisible());
-  EXPECT_FALSE(toast_manager()->IsRunning(
-      "eche_tray_toast_ids.copy_paste_not_implemented"));
-
-  // Now press the ctrl+w that closes the bubble.
-  GetEventGenerator()->PressKey(ui::KeyboardCode::VKEY_X, ui::EF_CONTROL_DOWN);
-
-  // Check to see if a toast is shown
-  EXPECT_TRUE(toast_manager()->IsRunning(
-      "eche_tray_toast_ids.copy_paste_not_implemented"));
-}
-
 TEST_F(EcheTrayTest, AcceleratorKeyHandled_BROWSER_BACK_KEY) {
   ResetWebContentGoBack();
   eche_tray()->SetGracefulGoBackCallback(
       base::BindRepeating(&WebContentGoBack));
-  eche_tray()->LoadBubble(GURL("http://google.com"), CreateTestImage(),
-                          u"app 1");
+  eche_tray()->LoadBubble(
+      GURL("http://google.com"), CreateTestImage(), u"app 1", u"your phone",
+      eche_app::mojom::ConnectionStatus::kConnectionStatusDisconnected,
+      eche_app::mojom::AppStreamLaunchEntryPoint::APPS_LIST);
   eche_tray()->ShowBubble();
 
   GetEventGenerator()->PressKey(ui::KeyboardCode::VKEY_BROWSER_BACK, 0);
 
   EXPECT_EQ(1u, num_web_content_go_back_calls_);
+}
+
+TEST_F(EcheTrayTest, AcceleratorKeyHandled_Esc) {
+  ResetUnloadWebContent();
+  eche_tray()->SetGracefulCloseCallback(base::BindOnce(&UnloadWebContent));
+  eche_tray()->LoadBubble(
+      GURL("http://google.com"), CreateTestImage(), u"app 1", u"your phone",
+      eche_app::mojom::ConnectionStatus::kConnectionStatusDisconnected,
+      eche_app::mojom::AppStreamLaunchEntryPoint::APPS_LIST);
+  eche_tray()->ShowBubble();
+
+  EXPECT_TRUE(
+      eche_tray()->get_bubble_wrapper_for_test()->bubble_view()->GetVisible());
+
+  // Now press the Esc that closes the bubble.
+  GetEventGenerator()->PressKey(ui::KeyboardCode::VKEY_ESCAPE, ui::EF_NONE);
+
+  // Check to see if the bubble is closed and purged.
+  EXPECT_TRUE(is_web_content_unloaded_);
+}
+
+TEST_F(EcheTrayTest, EcheTrayOnDisplayConfigurationChanged) {
+  UpdateDisplay("800x600");
+  gfx::Size expected_eche_size = eche_tray()->CalculateSizeForEche();
+  eche_tray()->LoadBubble(
+      GURL("http://google.com"), CreateTestImage(), u"app 1", u"your phone",
+      eche_app::mojom::ConnectionStatus::kConnectionStatusDisconnected,
+      eche_app::mojom::AppStreamLaunchEntryPoint::APPS_LIST);
+  eche_tray()->ShowBubble();
+
+  EXPECT_EQ(expected_eche_size.width(),
+            eche_tray()->get_bubble_wrapper_for_test()->bubble_view()->width());
+  EXPECT_EQ(
+      expected_eche_size.height(),
+      eche_tray()->get_web_view_for_test()->height() + kBubbleMenuPadding * 2);
+
+  UpdateDisplay("1024x786");
+  expected_eche_size = eche_tray()->CalculateSizeForEche();
+
+  eche_tray()->OnDidApplyDisplayChanges();
+
+  EXPECT_EQ(expected_eche_size.width(),
+            eche_tray()->get_bubble_wrapper_for_test()->bubble_view()->width());
+  EXPECT_EQ(
+      expected_eche_size.height(),
+      eche_tray()->get_web_view_for_test()->height() + kBubbleMenuPadding * 2);
+}
+
+TEST_F(EcheTrayTest, EcheTrayKeyboardShowHideUpdateBubbleBounds) {
+  gfx::Size expected_eche_size = eche_tray()->CalculateSizeForEche();
+  eche_tray()->LoadBubble(
+      GURL("http://google.com"), CreateTestImage(), u"app 1", u"your phone",
+      eche_app::mojom::ConnectionStatus::kConnectionStatusDisconnected,
+      eche_app::mojom::AppStreamLaunchEntryPoint::APPS_LIST);
+  eche_tray()->ShowBubble();
+
+  EXPECT_EQ(expected_eche_size.width(),
+            eche_tray()->get_bubble_wrapper_for_test()->bubble_view()->width());
+  EXPECT_EQ(
+      expected_eche_size.height(),
+      eche_tray()->get_web_view_for_test()->height() + kBubbleMenuPadding * 2);
+
+  // Place a keyboard window.
+  auto* keyboard_controller = keyboard::KeyboardUIController::Get();
+  keyboard_controller->ShowKeyboard(/*lock=*/true);
+  ASSERT_TRUE(keyboard::test::WaitUntilShown());
+
+  EXPECT_EQ(expected_eche_size.width(),
+            eche_tray()->get_bubble_wrapper_for_test()->bubble_view()->width());
+
+  // Hide the keyboard
+  keyboard_controller->HideKeyboardByUser();
+
+  EXPECT_EQ(expected_eche_size.width(),
+            eche_tray()->get_bubble_wrapper_for_test()->bubble_view()->width());
+  EXPECT_EQ(
+      expected_eche_size.height(),
+      eche_tray()->get_web_view_for_test()->height() + kBubbleMenuPadding * 2);
+}
+
+TEST_F(EcheTrayTest, EcheTrayOnStreamOrientationChanged) {
+  gfx::Size expected_eche_size = eche_tray()->CalculateSizeForEche();
+  eche_tray()->LoadBubble(
+      GURL("http://google.com"), CreateTestImage(), u"app 1", u"your phone",
+      eche_app::mojom::ConnectionStatus::kConnectionStatusDisconnected,
+      eche_app::mojom::AppStreamLaunchEntryPoint::APPS_LIST);
+  eche_tray()->ShowBubble();
+
+  EXPECT_EQ(eche_tray()->get_is_landscape_for_test(), false);
+  EXPECT_EQ(expected_eche_size.width(),
+            eche_tray()->get_bubble_wrapper_for_test()->bubble_view()->width());
+  EXPECT_EQ(
+      expected_eche_size.height(),
+      eche_tray()->get_web_view_for_test()->height() + kBubbleMenuPadding * 2);
+
+  // Orientation should stay the same
+  eche_tray()->OnStreamOrientationChanged(false);
+  EXPECT_EQ(eche_tray()->get_is_landscape_for_test(), false);
+
+  expected_eche_size = eche_tray()->CalculateSizeForEche();
+
+  EXPECT_EQ(expected_eche_size.width(),
+            eche_tray()->get_bubble_wrapper_for_test()->bubble_view()->width());
+  EXPECT_EQ(
+      expected_eche_size.height(),
+      eche_tray()->get_web_view_for_test()->height() + kBubbleMenuPadding * 2);
+
+  // Change orientation
+  eche_tray()->OnStreamOrientationChanged(true);
+  EXPECT_EQ(eche_tray()->get_is_landscape_for_test(), true);
+
+  expected_eche_size = eche_tray()->CalculateSizeForEche();
+  EXPECT_EQ(
+      expected_eche_size.width(),
+      eche_tray()->get_web_view_for_test()->width() + kBubbleMenuPadding * 2);
+  EXPECT_EQ(
+      expected_eche_size.height(),
+      eche_tray()->get_web_view_for_test()->height() + kBubbleMenuPadding * 2);
+}
+
+TEST_F(EcheTrayTest, OnRequestBackgroundConnectionAttempt) {
+  ResetUnloadWebContent();
+
+  EXPECT_FALSE(eche_tray()->is_active());
+  EXPECT_FALSE(eche_tray()->get_initializer_webview_for_test());
+
+  eche_tray()->OnRequestBackgroundConnectionAttempt();
+
+  EXPECT_TRUE(eche_tray()->get_initializer_webview_for_test());
+  EXPECT_FALSE(eche_tray()->is_active());
+}
+
+TEST_F(EcheTrayTest, OnRequestBackgroundConnectionAttemptFlagDisabled) {
+  feature_list_.Reset();
+  feature_list_.InitWithFeatures(
+      /*enabled_features=*/{features::kEcheSWA},
+      /*disabled_features=*/{features::kEcheNetworkConnectionState});
+
+  ResetUnloadWebContent();
+
+  EXPECT_FALSE(eche_tray()->is_active());
+  EXPECT_FALSE(eche_tray()->get_initializer_webview_for_test());
+
+  eche_tray()->OnRequestBackgroundConnectionAttempt();
+
+  EXPECT_FALSE(eche_tray()->get_initializer_webview_for_test());
+  EXPECT_FALSE(eche_tray()->is_active());
+}
+
+TEST_F(EcheTrayTest, OnConnectionStatusChanged) {
+  EXPECT_EQ(GetLastConnectionChangedForUiStatus(),
+            ConnectionStatus::kConnectionStatusDisconnected);
+  EXPECT_EQ(GetNumConnectionStatusForUiChangedCalls(), 0u);
+
+  eche_tray()->OnRequestBackgroundConnectionAttempt();
+
+  eche_tray()->OnConnectionStatusChanged(
+      ConnectionStatus::kConnectionStatusConnecting);
+
+  EXPECT_EQ(GetNumConnectionStatusForUiChangedCalls(), 0u);
+  EXPECT_TRUE(eche_tray()->get_initializer_webview_for_test());
+
+  eche_tray()->OnConnectionStatusChanged(
+      ConnectionStatus::kConnectionStatusConnected);
+  EXPECT_EQ(GetNumConnectionStatusForUiChangedCalls(), 1u);
+  EXPECT_TRUE(eche_tray()->get_initializer_webview_for_test());
+}
+
+TEST_F(EcheTrayTest, AccessibleNames) {
+  ASSERT_TRUE(eche_tray());
+
+  {
+    ui::AXNodeData node_data;
+    eche_tray()->GetViewAccessibility().GetAccessibleNodeData(&node_data);
+    EXPECT_EQ(node_data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+              eche_tray()->GetAccessibleName());
+  }
+
+  eche_tray()->LoadBubble(
+      GURL("http://google.com"), CreateTestImage(), u"app 1", u"your phone",
+      eche_app::mojom::ConnectionStatus::kConnectionStatusDisconnected,
+      eche_app::mojom::AppStreamLaunchEntryPoint::APPS_LIST);
+  eche_tray()->ShowBubble();
+  auto* bubble_view = eche_tray()->get_bubble_wrapper_for_test()->bubble_view();
+  EXPECT_TRUE(bubble_view->GetVisible());
+
+  {
+    ui::AXNodeData node_data;
+    bubble_view->GetViewAccessibility().GetAccessibleNodeData(&node_data);
+    EXPECT_EQ(node_data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+              eche_tray()->GetAccessibleNameForBubble());
+  }
 }
 
 }  // namespace ash

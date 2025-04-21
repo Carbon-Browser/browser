@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -112,6 +112,7 @@ void RemoteAudioTrackAdapter::InitializeWebAudioTrack(
   capabilities.echo_cancellation = Vector<bool>({false});
   capabilities.auto_gain_control = Vector<bool>({false});
   capabilities.noise_suppression = Vector<bool>({false});
+  capabilities.voice_isolation = Vector<bool>({false});
   capabilities.sample_size = {
       media::SampleFormatToBitsPerChannel(media::kSampleFormatS16),  // min
       media::SampleFormatToBitsPerChannel(media::kSampleFormatS16)   // max
@@ -146,7 +147,6 @@ void RemoteAudioTrackAdapter::OnChangedOnMainThread(
       break;
     default:
       NOTREACHED();
-      break;
   }
 }
 

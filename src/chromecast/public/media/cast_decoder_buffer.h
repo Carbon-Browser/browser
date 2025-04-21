@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,6 +52,10 @@ class CastDecoderBuffer {
   // Indicates if this is a special frame that indicates the end of the stream.
   // If true, functions to access the frame content cannot be called.
   virtual bool end_of_stream() const = 0;
+
+  // Indicates if this is a key frame. Only relevant to buffers containing video
+  // data.
+  virtual bool is_key_frame() const = 0;
 };
 
 }  // namespace media

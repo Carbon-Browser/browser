@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,17 +7,18 @@
 
 #include <stddef.h>
 
+#include <optional>
 #include <vector>
 
+#include "base/containers/span.h"
 
 namespace importer {
 
 // Given raw image data, decodes the icon, re-sampling to the correct size as
-// necessary, and re-encodes as PNG data in the given output vector. Returns
-// true on success.
-bool ReencodeFavicon(const unsigned char* src_data,
-                     size_t src_len,
-                     std::vector<unsigned char>* png_data);
+// necessary, and re-encodes as PNG data. Returns the PNG data if successful,
+// nullopt if not.
+std::optional<std::vector<uint8_t>> ReencodeFavicon(
+    base::span<const uint8_t> src);
 
 }  // namespace importer
 

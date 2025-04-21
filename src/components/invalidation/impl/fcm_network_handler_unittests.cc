@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/mock_callback.h"
@@ -247,8 +247,7 @@ class FCMNetworkHandlerTestWithTTL : public FCMNetworkHandlerTest {
         {"time_to_live_seconds", base::NumberToString(kTimeToLiveInSeconds)}};
     override_features_.InitWithFeaturesAndParameters(
         /*enabled_features=*/
-        {{switches::kSyncInstanceIDTokenTTL, feature_params},
-         {switches::kPolicyInstanceIDTokenTTL, feature_params}},
+        {{switches::kPolicyInstanceIDTokenTTL, feature_params}},
         /*disabled_features=*/{});
   }
 
@@ -258,7 +257,7 @@ class FCMNetworkHandlerTestWithTTL : public FCMNetworkHandlerTest {
   base::test::ScopedFeatureList override_features_;
 };
 
-TEST_F(FCMNetworkHandlerTest, ShouldPassTheTokenOnceRecieved) {
+TEST_F(FCMNetworkHandlerTest, ShouldPassTheTokenOnceReceived) {
   std::unique_ptr<FCMNetworkHandler> handler = MakeHandler();
 
   MockOnTokenCallback mock_on_token_callback;
@@ -483,12 +482,6 @@ TEST_F(FCMNetworkHandlerTest,
       })));
   EXPECT_CALL(mock_on_token_callback, Run).Times(0);
   task_runner->FastForwardBy(base::Seconds(1));
-}
-
-TEST_F(FCMNetworkHandlerTestWithTTL, ShouldProvideTTLWithSyncSenderID) {
-  EXPECT_CALL(*mock_instance_id(),
-              GetToken(_, _, Eq(base::Seconds(kTimeToLiveInSeconds)), _, _));
-  MakeHandler(/*sender_id=*/"8181035976")->StartListening();
 }
 
 TEST_F(FCMNetworkHandlerTestWithTTL, ShouldProvideTTLWithPolicySenderID) {

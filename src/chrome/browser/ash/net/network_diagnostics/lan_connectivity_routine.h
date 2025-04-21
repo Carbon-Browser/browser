@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/ash/net/network_diagnostics/network_diagnostics_routine.h"
 #include "chromeos/services/network_config/public/mojom/cros_network_config.mojom.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -21,7 +21,8 @@ namespace network_diagnostics {
 // this routine.
 class LanConnectivityRoutine : public NetworkDiagnosticsRoutine {
  public:
-  LanConnectivityRoutine();
+  explicit LanConnectivityRoutine(
+      chromeos::network_diagnostics::mojom::RoutineCallSource source);
   LanConnectivityRoutine(const LanConnectivityRoutine&) = delete;
   LanConnectivityRoutine& operator=(const LanConnectivityRoutine&) = delete;
   ~LanConnectivityRoutine() override;

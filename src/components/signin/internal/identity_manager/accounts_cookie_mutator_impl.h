@@ -1,13 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SIGNIN_INTERNAL_IDENTITY_MANAGER_ACCOUNTS_COOKIE_MUTATOR_IMPL_H_
 #define COMPONENTS_SIGNIN_INTERNAL_IDENTITY_MANAGER_ACCOUNTS_COOKIE_MUTATOR_IMPL_H_
 
+#include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "components/signin/internal/identity_manager/oauth_multilogin_helper.h"
@@ -39,17 +40,6 @@ class AccountsCookieMutatorImpl : public AccountsCookieMutator {
 
   ~AccountsCookieMutatorImpl() override;
 
-  void AddAccountToCookie(
-      const CoreAccountId& account_id,
-      gaia::GaiaSource source,
-      AddAccountToCookieCompletedCallback completion_callback) override;
-
-  void AddAccountToCookieWithToken(
-      const CoreAccountId& account_id,
-      const std::string& access_token,
-      gaia::GaiaSource source,
-      AddAccountToCookieCompletedCallback completion_callback) override;
-
   void SetAccountsInCookie(
       const MultiloginParameters& parameters,
       gaia::GaiaSource source,
@@ -73,12 +63,13 @@ class AccountsCookieMutatorImpl : public AccountsCookieMutator {
       gaia::GaiaSource source,
       LogOutFromCookieCompletedCallback completion_callback) override;
 
-  void RemoveLoggedOutAccountByGaiaId(const std::string& gaia_id) override;
+  void RemoveLoggedOutAccountByGaiaId(const GaiaId& gaia_id) override;
 
  private:
   class MultiloginHelperWrapper : public SetAccountsInCookieTask {
    public:
-    MultiloginHelperWrapper(std::unique_ptr<OAuthMultiloginHelper> helper);
+    explicit MultiloginHelperWrapper(
+        std::unique_ptr<OAuthMultiloginHelper> helper);
     ~MultiloginHelperWrapper() override;
 
    private:

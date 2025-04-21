@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,8 @@ public class AwPolicyProvider extends AppRestrictionsProvider {
             for (String key : newAppRestrictions.keySet()) {
                 if (!key.startsWith(POLICY_PREFIX)) continue;
 
-                filteredRestrictions.putSerializable(key.substring(POLICY_PREFIX.length()),
+                filteredRestrictions.putSerializable(
+                        key.substring(POLICY_PREFIX.length()),
                         newAppRestrictions.getSerializable(key));
             }
         }

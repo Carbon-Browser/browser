@@ -1,12 +1,12 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/media/midi_host.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/process/process.h"
 #include "base/trace_event/trace_event.h"
@@ -15,11 +15,11 @@
 #include "content/browser/child_process_security_policy_impl.h"
 #include "content/public/browser/content_browser_client.h"
 #include "content/public/browser/render_process_host.h"
-#include "content/public/common/content_features.h"
 #include "media/midi/message_util.h"
 #include "media/midi/midi_message_queue.h"
 #include "media/midi/midi_service.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
+#include "third_party/blink/public/common/features.h"
 
 namespace content {
 namespace {
@@ -46,7 +46,8 @@ using midi::mojom::Result;
 
 MidiHost::MidiHost(int renderer_process_id, midi::MidiService* midi_service)
     : renderer_process_id_(renderer_process_id),
-      has_sys_ex_permission_(false),
+      has_midi_permission_(false),
+      has_midi_sysex_permission_(false),
       midi_service_(midi_service),
       sent_bytes_in_flight_(0),
       bytes_sent_since_last_acknowledgement_(0),
@@ -124,18 +125,34 @@ void MidiHost::ReceiveMidiData(uint32_t port,
     if (message.empty())
       break;
 
+    if (base::FeatureList::IsEnabled(blink::features::kBlockMidiByDefault)) {
+      // MIDI devices may send messages even if the renderer doesn't have
+      // permission to receive them. Don't kill the renderer as SendData() does.
+      if (!has_midi_permission_) {
+        // TODO(crbug.com/40637524): This should check permission with the Frame
+        // and not the Process.
+        has_midi_permission_ =
+            ChildProcessSecurityPolicyImpl::GetInstance()->CanSendMidiMessage(
+                renderer_process_id_);
+        if (!has_midi_permission_) {
+          continue;
+        }
+      }
+    }
+
     // MIDI devices may send a system exclusive messages even if the renderer
     // doesn't have a permission to receive it. Don't kill the renderer as
     // SendData() does.
     if (message[0] == kSysExByte) {
-      if (!has_sys_ex_permission_) {
-        // TODO(987505): This should check permission with the Frame and not the
-        // Process.
-        has_sys_ex_permission_ =
+      if (!has_midi_sysex_permission_) {
+        // TODO(crbug.com/40637524): This should check permission with the Frame
+        // and not the Process.
+        has_midi_sysex_permission_ =
             ChildProcessSecurityPolicyImpl::GetInstance()
                 ->CanSendMidiSysExMessage(renderer_process_id_);
-        if (!has_sys_ex_permission_)
+        if (!has_midi_sysex_permission_) {
           continue;
+        }
       }
     }
 
@@ -170,25 +187,15 @@ void MidiHost::Detach() {
 
 void MidiHost::StartSession(
     mojo::PendingReceiver<midi::mojom::MidiSession> session_receiver,
-    mojo::PendingRemote<midi::mojom::MidiSessionClient> pending_client) {
+    mojo::PendingRemote<midi::mojom::MidiSessionClient> client) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
-
-  // When the feature is disabled return early and use a temporary remote to
-  // send a "not supported" response before closing the pipes.
-  if (!base::FeatureList::IsEnabled(features::kWebMidi)) {
-    mojo::Remote<midi::mojom::MidiSessionClient> client(
-        std::move(pending_client));
-    client->SessionStarted(Result::NOT_SUPPORTED);
-    return;
-  }
-
   DCHECK(!pending_session_receiver_);
   // Checks to see if |midi_session_| isn't already bound to another
   // MidiSessionRequest.
   pending_session_receiver_ = std::move(session_receiver);
 
   DCHECK(!midi_client_);
-  midi_client_.Bind(std::move(pending_client));
+  midi_client_.Bind(std::move(client));
   midi_client_.set_disconnect_handler(
       base::BindOnce(&MidiHost::EndSession, base::Unretained(this)));
 
@@ -215,15 +222,28 @@ void MidiHost::SendData(uint32_t port,
   // Blink running in a renderer checks permission to raise a SecurityError
   // in JavaScript. The actual permission check for security purposes
   // happens here in the browser process.
-  // Check |has_sys_ex_permission_| first to avoid searching kSysExByte in large
-  // bulk data transfers for correct uses.
-  if (!has_sys_ex_permission_ && base::Contains(data, kSysExByte)) {
-    has_sys_ex_permission_ =
+  if (base::FeatureList::IsEnabled(blink::features::kBlockMidiByDefault)) {
+    if (!has_midi_permission_ && !base::Contains(data, kSysExByte)) {
+      has_midi_permission_ =
+          ChildProcessSecurityPolicyImpl::GetInstance()->CanSendMidiMessage(
+              renderer_process_id_);
+      if (!has_midi_permission_) {
+        bad_message::ReceivedBadMessage(renderer_process_id_,
+                                        bad_message::MH_MIDI_PERMISSION);
+        return;
+      }
+    }
+  }
+
+  // Check `has_midi_sysex_permission_` here to avoid searching kSysExByte in
+  // large bulk data transfers for correct uses.
+  if (!has_midi_sysex_permission_ && base::Contains(data, kSysExByte)) {
+    has_midi_sysex_permission_ =
         ChildProcessSecurityPolicyImpl::GetInstance()->CanSendMidiSysExMessage(
             renderer_process_id_);
-    if (!has_sys_ex_permission_) {
+    if (!has_midi_sysex_permission_) {
       bad_message::ReceivedBadMessage(renderer_process_id_,
-                                      bad_message::MH_SYS_EX_PERMISSION);
+                                      bad_message::MH_MIDI_SYSEX_PERMISSION);
       return;
     }
   }
@@ -249,7 +269,8 @@ void MidiHost::CallClient(Method method, Params... params) {
   if (!BrowserThread::CurrentlyOn(BrowserThread::IO)) {
     GetIOThreadTaskRunner({})->PostTask(
         FROM_HERE, base::BindOnce(&MidiHost::CallClient<Method, Params...>,
-                                  AsWeakPtr(), method, std::move(params)...));
+                                  weak_ptr_factory_.GetWeakPtr(), method,
+                                  std::move(params)...));
     return;
   }
   (midi_client_.get()->*method)(std::move(params)...);

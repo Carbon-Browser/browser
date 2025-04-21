@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,10 +14,12 @@
 @protocol BrowserCommands;
 @protocol BrowserCoordinatorCommands;
 @protocol FindInPageCommands;
+@protocol HelpCommands;
 @protocol LoadQueryCommands;
 @protocol PageInfoCommands;
 @protocol PopupMenuActionHandlerDelegate;
 @protocol PopupMenuCommands;
+@protocol PriceNotificationsCommands;
 @protocol QRScannerCommands;
 @protocol TextZoomCommands;
 class WebNavigationBrowserAgent;
@@ -35,16 +37,19 @@ class WebNavigationBrowserAgent;
 // Dispatcher.
 @property(nonatomic, weak) id<ApplicationCommands,
                               BrowserCommands,
-                              BrowserCoordinatorCommands,
                               FindInPageCommands,
                               LoadQueryCommands,
+                              PriceNotificationsCommands,
                               TextZoomCommands>
     dispatcher;
 
 @property(nonatomic, weak) id<BookmarksCommands> bookmarksCommandsHandler;
+@property(nonatomic, weak) id<BrowserCoordinatorCommands>
+    browserCoordinatorCommandsHandler;
 @property(nonatomic, weak) id<PageInfoCommands> pageInfoCommandsHandler;
 @property(nonatomic, weak) id<PopupMenuCommands> popupMenuCommandsHandler;
 @property(nonatomic, weak) id<QRScannerCommands> qrScannerCommandsHandler;
+@property(nonatomic, weak) id<HelpCommands> helpHandler;
 @property(nonatomic, assign) WebNavigationBrowserAgent* navigationAgent;
 
 @end

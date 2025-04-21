@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,6 @@ import org.robolectric.annotation.Config;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.chrome.browser.browserservices.ui.TrustedWebActivityModel;
-import org.chromium.chrome.browser.browserservices.ui.trustedwebactivity.FilledLazy;
 import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
 import org.chromium.chrome.browser.ui.messages.snackbar.SnackbarManager;
 
@@ -33,12 +32,9 @@ import org.chromium.chrome.browser.ui.messages.snackbar.SnackbarManager;
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class DisclosureSnackbarTest {
-    @Mock
-    public ActivityLifecycleDispatcher mLifecycleDispatcher;
-    @Mock
-    public SnackbarManager mSnackbarManager;
-    @Mock
-    public TrustedWebActivityModel.DisclosureEventsCallback mCallback;
+    @Mock public ActivityLifecycleDispatcher mLifecycleDispatcher;
+    @Mock public SnackbarManager mSnackbarManager;
+    @Mock public TrustedWebActivityModel.DisclosureEventsCallback mCallback;
 
     private TrustedWebActivityModel mModel = new TrustedWebActivityModel();
 
@@ -47,8 +43,11 @@ public class DisclosureSnackbarTest {
         MockitoAnnotations.initMocks(this);
 
         mModel.set(DISCLOSURE_EVENTS_CALLBACK, mCallback);
-        new DisclosureSnackbar(RuntimeEnvironment.application.getResources(),
-                new FilledLazy<>(mSnackbarManager), mModel, mLifecycleDispatcher);
+        new DisclosureSnackbar(
+                RuntimeEnvironment.application.getResources(),
+                () -> mSnackbarManager,
+                mModel,
+                mLifecycleDispatcher);
     }
 
     @Test

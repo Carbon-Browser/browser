@@ -1,6 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/ash/arc/file_system_watcher/file_system_scanner.h"
 
@@ -124,7 +129,7 @@ class ArcFileSystemScannerTest : public ::testing::Test {
     base::FilePath parent = path.DirName();
     ModifyFile(path, ctime);
     ModifyDirectory(parent, ctime);
-    return WriteFile(path, "42", sizeof("42")) == sizeof("42");
+    return WriteFile(path, "42");
   }
 
   bool CreateDirectory(const base::FilePath& path, base::Time ctime) {

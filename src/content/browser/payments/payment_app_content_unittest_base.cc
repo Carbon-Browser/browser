@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,9 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "content/browser/payments/payment_app_context_impl.h"
 #include "content/browser/service_worker/embedded_worker_test_helper.h"
@@ -193,7 +193,8 @@ BrowserContext* PaymentAppContentUnitTestBase::browser_context() {
   return worker_helper_->browser_context();
 }
 
-PaymentManager* PaymentAppContentUnitTestBase::CreatePaymentManager(
+PaymentManager*
+PaymentAppContentUnitTestBase::CreateUninitializedPaymentManager(
     const GURL& scope_url,
     const GURL& sw_script_url) {
   // Register service worker for payment manager.
@@ -201,12 +202,14 @@ PaymentManager* PaymentAppContentUnitTestBase::CreatePaymentManager(
   int64_t registration_id;
   blink::mojom::ServiceWorkerRegistrationOptions registration_opt;
   registration_opt.scope = scope_url;
-  blink::StorageKey key(url::Origin::Create(scope_url));
+  const blink::StorageKey key =
+      blink::StorageKey::CreateFirstParty(url::Origin::Create(scope_url));
   worker_helper_->context()->RegisterServiceWorker(
       sw_script_url, key, registration_opt,
       blink::mojom::FetchClientSettingsObject::New(),
       base::BindOnce(&RegisterServiceWorkerCallback, &called, &registration_id),
-      /*requesting_frame_id=*/GlobalRenderFrameHostId());
+      /*requesting_frame_id=*/GlobalRenderFrameHostId(),
+      PolicyContainerPolicies());
 
   base::RunLoop().RunUntilIdle();
   EXPECT_TRUE(called);
@@ -246,14 +249,22 @@ PaymentManager* PaymentAppContentUnitTestBase::CreatePaymentManager(
   for (const auto& candidate_manager :
        payment_app_context()->payment_managers_) {
     if (!base::Contains(existing_managers, candidate_manager.first)) {
-      candidate_manager.first->Init(sw_script_url, scope_url.spec());
-      base::RunLoop().RunUntilIdle();
       return candidate_manager.first;
     }
   }
 
   NOTREACHED();
-  return nullptr;
+}
+
+PaymentManager* PaymentAppContentUnitTestBase::CreatePaymentManager(
+    const GURL& scope_url,
+    const GURL& sw_script_url) {
+  PaymentManager* manager =
+      CreateUninitializedPaymentManager(scope_url, sw_script_url);
+  manager->Init(sw_script_url, scope_url.spec());
+  base::RunLoop().RunUntilIdle();
+
+  return manager;
 }
 
 void PaymentAppContentUnitTestBase::UnregisterServiceWorker(

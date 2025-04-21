@@ -1,10 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // clang-format off
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {DefaultBrowserBrowserProxy, DefaultBrowserBrowserProxyImpl, DefaultBrowserInfo, SettingsDefaultBrowserPageElement} from 'chrome://settings/settings.js';
+import type {DefaultBrowserBrowserProxy, DefaultBrowserInfo, SettingsDefaultBrowserPageElement} from 'chrome://settings/settings.js';
+import {DefaultBrowserBrowserProxyImpl} from 'chrome://settings/settings.js';
 import {assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 // clang-format on
@@ -54,25 +55,25 @@ suite('DefaultBrowserPageTest', function() {
   let page: SettingsDefaultBrowserPageElement;
   let browserProxy: TestDefaultBrowserBrowserProxy;
 
-  setup(function() {
+  setup(async function() {
     browserProxy = new TestDefaultBrowserBrowserProxy();
     DefaultBrowserBrowserProxyImpl.setInstance(browserProxy);
-    return initPage();
+    await initPage();
   });
 
   teardown(function() {
     page.remove();
   });
 
-  function initPage() {
+  async function initPage() {
     browserProxy.reset();
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     page = document.createElement('settings-default-browser-page');
     document.body.appendChild(page);
-    return browserProxy.whenCalled('requestDefaultBrowserState');
+    await browserProxy.whenCalled('requestDefaultBrowserState');
   }
 
-  test('default-browser-test-can-be-default', function() {
+  test('default-browser-test-can-be-default', async function() {
     browserProxy.setDefaultBrowserInfo({
       canBeDefault: true,
       isDefault: false,
@@ -80,19 +81,17 @@ suite('DefaultBrowserPageTest', function() {
       isUnknownError: false,
     });
 
-    return initPage().then(function() {
-      flush();
-      assertTrue(!!page.shadowRoot!.querySelector<HTMLElement>(
-          '#canBeDefaultBrowser'));
-      assertTrue(!page.shadowRoot!.querySelector<HTMLElement>('#isDefault'));
-      assertTrue(
-          !page.shadowRoot!.querySelector<HTMLElement>('#isSecondaryInstall'));
-      assertTrue(
-          !page.shadowRoot!.querySelector<HTMLElement>('#isUnknownError'));
-    });
+    await initPage();
+    flush();
+    assertTrue(
+        !!page.shadowRoot!.querySelector<HTMLElement>('#canBeDefaultBrowser'));
+    assertTrue(!page.shadowRoot!.querySelector<HTMLElement>('#isDefault'));
+    assertTrue(
+        !page.shadowRoot!.querySelector<HTMLElement>('#isSecondaryInstall'));
+    assertTrue(!page.shadowRoot!.querySelector<HTMLElement>('#isUnknownError'));
   });
 
-  test('default-browser-test-is-default', function() {
+  test('default-browser-test-is-default', async function() {
     assertTrue(!!page);
     browserProxy.setDefaultBrowserInfo({
       canBeDefault: true,
@@ -101,21 +100,20 @@ suite('DefaultBrowserPageTest', function() {
       isUnknownError: false,
     });
 
-    return initPage().then(function() {
-      flush();
-      assertFalse(!!page.shadowRoot!.querySelector<HTMLElement>(
-          '#canBeDefaultBrowser'));
-      assertFalse(
-          page.shadowRoot!.querySelector<HTMLElement>('#isDefault')!.hidden);
-      assertTrue(
-          page.shadowRoot!.querySelector<HTMLElement>(
-                              '#isSecondaryInstall')!.hidden);
-      assertTrue(page.shadowRoot!.querySelector<HTMLElement>(
-                                     '#isUnknownError')!.hidden);
-    });
+    await initPage();
+    flush();
+    assertFalse(
+        !!page.shadowRoot!.querySelector<HTMLElement>('#canBeDefaultBrowser'));
+    assertFalse(
+        page.shadowRoot!.querySelector<HTMLElement>('#isDefault')!.hidden);
+    assertTrue(
+        page.shadowRoot!.querySelector<HTMLElement>(
+                            '#isSecondaryInstall')!.hidden);
+    assertTrue(
+        page.shadowRoot!.querySelector<HTMLElement>('#isUnknownError')!.hidden);
   });
 
-  test('default-browser-test-is-secondary-install', function() {
+  test('default-browser-test-is-secondary-install', async function() {
     browserProxy.setDefaultBrowserInfo({
       canBeDefault: false,
       isDefault: false,
@@ -123,21 +121,20 @@ suite('DefaultBrowserPageTest', function() {
       isUnknownError: false,
     });
 
-    return initPage().then(function() {
-      flush();
-      assertFalse(!!page.shadowRoot!.querySelector<HTMLElement>(
-          '#canBeDefaultBrowser'));
-      assertTrue(
-          page.shadowRoot!.querySelector<HTMLElement>('#isDefault')!.hidden);
-      assertFalse(
-          page.shadowRoot!.querySelector<HTMLElement>(
-                              '#isSecondaryInstall')!.hidden);
-      assertTrue(page.shadowRoot!.querySelector<HTMLElement>(
-                                     '#isUnknownError')!.hidden);
-    });
+    await initPage();
+    flush();
+    assertFalse(
+        !!page.shadowRoot!.querySelector<HTMLElement>('#canBeDefaultBrowser'));
+    assertTrue(
+        page.shadowRoot!.querySelector<HTMLElement>('#isDefault')!.hidden);
+    assertFalse(
+        page.shadowRoot!.querySelector<HTMLElement>(
+                            '#isSecondaryInstall')!.hidden);
+    assertTrue(
+        page.shadowRoot!.querySelector<HTMLElement>('#isUnknownError')!.hidden);
   });
 
-  test('default-browser-test-is-disabled-by-policy', function() {
+  test('default-browser-test-is-disabled-by-policy', async function() {
     browserProxy.setDefaultBrowserInfo({
       canBeDefault: true,
       isDefault: false,
@@ -145,22 +142,20 @@ suite('DefaultBrowserPageTest', function() {
       isUnknownError: false,
     });
 
-    return initPage().then(function() {
-      flush();
-      assertFalse(!!page.shadowRoot!.querySelector<HTMLElement>(
-          '#canBeDefaultBrowser'));
-      assertTrue(
-          page.shadowRoot!.querySelector<HTMLElement>('#isDefault')!.hidden);
-      assertTrue(
-          page.shadowRoot!.querySelector<HTMLElement>(
-                              '#isSecondaryInstall')!.hidden);
-      assertFalse(
-          page.shadowRoot!.querySelector<HTMLElement>(
-                              '#isUnknownError')!.hidden);
-    });
+    await initPage();
+    flush();
+    assertFalse(
+        !!page.shadowRoot!.querySelector<HTMLElement>('#canBeDefaultBrowser'));
+    assertTrue(
+        page.shadowRoot!.querySelector<HTMLElement>('#isDefault')!.hidden);
+    assertTrue(
+        page.shadowRoot!.querySelector<HTMLElement>(
+                            '#isSecondaryInstall')!.hidden);
+    assertFalse(
+        page.shadowRoot!.querySelector<HTMLElement>('#isUnknownError')!.hidden);
   });
 
-  test('default-browser-test-is-unknown-error', function() {
+  test('default-browser-test-is-unknown-error', async function() {
     browserProxy.setDefaultBrowserInfo({
       canBeDefault: true,
       isDefault: false,
@@ -168,18 +163,16 @@ suite('DefaultBrowserPageTest', function() {
       isUnknownError: true,
     });
 
-    return initPage().then(function() {
-      flush();
-      assertFalse(!!page.shadowRoot!.querySelector<HTMLElement>(
-          '#canBeDefaultBrowser'));
-      assertTrue(
-          page.shadowRoot!.querySelector<HTMLElement>('#isDefault')!.hidden);
-      assertTrue(
-          page.shadowRoot!.querySelector<HTMLElement>(
-                              '#isSecondaryInstall')!.hidden);
-      assertFalse(
-          page.shadowRoot!.querySelector<HTMLElement>(
-                              '#isUnknownError')!.hidden);
-    });
+    await initPage();
+    flush();
+    assertFalse(
+        !!page.shadowRoot!.querySelector<HTMLElement>('#canBeDefaultBrowser'));
+    assertTrue(
+        page.shadowRoot!.querySelector<HTMLElement>('#isDefault')!.hidden);
+    assertTrue(
+        page.shadowRoot!.querySelector<HTMLElement>(
+                            '#isSecondaryInstall')!.hidden);
+    assertFalse(
+        page.shadowRoot!.querySelector<HTMLElement>('#isUnknownError')!.hidden);
   });
 });

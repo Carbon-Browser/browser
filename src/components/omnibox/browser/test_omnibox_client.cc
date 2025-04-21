@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/omnibox/browser/autocomplete_controller.h"
 #include "components/omnibox/browser/autocomplete_scheme_classifier.h"
 #include "components/omnibox/browser/mock_autocomplete_provider_client.h"
-#include "components/search_engines/search_terms_data.h"
-#include "components/search_engines/template_url_service.h"
-#include "components/search_engines/template_url_service_client.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/skia/include/core/SkBitmap.h"
@@ -23,12 +20,12 @@
 
 TestOmniboxClient::TestOmniboxClient()
     : session_id_(SessionID::FromSerializedValue(1)),
-      bookmark_model_(nullptr),
       autocomplete_classifier_(
           std::make_unique<AutocompleteController>(
               CreateAutocompleteProviderClient(),
               AutocompleteClassifier::DefaultOmniboxProviders()),
-          std::make_unique<TestSchemeClassifier>()) {}
+          std::make_unique<TestSchemeClassifier>()),
+      last_log_disposition_(WindowOpenDisposition::UNKNOWN) {}
 
 TestOmniboxClient::~TestOmniboxClient() {
   autocomplete_classifier_.Shutdown();
@@ -41,17 +38,11 @@ TestOmniboxClient::CreateAutocompleteProviderClient() {
       .WillRepeatedly(testing::Return(std::vector<std::u16string>()));
   EXPECT_CALL(*provider_client, GetSchemeClassifier())
       .WillRepeatedly(testing::ReturnRef(scheme_classifier_));
+  EXPECT_CALL(*provider_client, GetApplicationLocale())
+      .WillRepeatedly(testing::Return("en-US"));
 
-  auto template_url_service = std::make_unique<TemplateURLService>(
-      nullptr /* PrefService */, std::make_unique<SearchTermsData>(),
-      nullptr /* KeywordWebDataService */,
-      std::unique_ptr<TemplateURLServiceClient>(), base::RepeatingClosure());
-
-  // Save a reference to the created TemplateURLService for test use.
-  template_url_service_ = template_url_service.get();
-
-  provider_client->set_template_url_service(std::move(template_url_service));
-
+  provider_client->set_template_url_service(
+      search_engines_test_environment_.template_url_service());
   return std::move(provider_client);
 }
 
@@ -59,22 +50,18 @@ bool TestOmniboxClient::IsPasteAndGoEnabled() const {
   return true;
 }
 
-const SessionID& TestOmniboxClient::GetSessionID() const {
+SessionID TestOmniboxClient::GetSessionID() const {
   return session_id_;
 }
 
-void TestOmniboxClient::SetBookmarkModel(
-    bookmarks::BookmarkModel* bookmark_model) {
-  bookmark_model_ = bookmark_model;
-}
-
-bookmarks::BookmarkModel* TestOmniboxClient::GetBookmarkModel() {
-  return bookmark_model_;
+AutocompleteControllerEmitter*
+TestOmniboxClient::GetAutocompleteControllerEmitter() {
+  return nullptr;
 }
 
 TemplateURLService* TestOmniboxClient::GetTemplateURLService() {
-  DCHECK(template_url_service_);
-  return template_url_service_;
+  CHECK(search_engines_test_environment_.template_url_service());
+  return search_engines_test_environment_.template_url_service();
 }
 
 const AutocompleteSchemeClassifier& TestOmniboxClient::GetSchemeClassifier()
@@ -106,13 +93,39 @@ gfx::Image TestOmniboxClient::GetSizedIcon(
   return gfx::Image(gfx::ImageSkia::CreateFrom1xBitmap(bitmap));
 }
 
-gfx::Image TestOmniboxClient::GetFaviconForPageUrl(
-    const GURL& page_url,
-    FaviconFetchedCallback on_favicon_fetched) {
-  page_url_for_last_favicon_request_ = page_url;
-  return gfx::Image();
+std::u16string TestOmniboxClient::GetFormattedFullURL() const {
+  return location_bar_model_.GetFormattedFullURL();
 }
 
-GURL TestOmniboxClient::GetPageUrlForLastFaviconRequest() const {
-  return page_url_for_last_favicon_request_;
+std::u16string TestOmniboxClient::GetURLForDisplay() const {
+  return location_bar_model_.GetURLForDisplay();
+}
+
+GURL TestOmniboxClient::GetNavigationEntryURL() const {
+  return location_bar_model_.GetURL();
+}
+
+metrics::OmniboxEventProto::PageClassification
+TestOmniboxClient::GetPageClassification(bool is_prefetch) const {
+  return location_bar_model_.GetPageClassification(is_prefetch);
+}
+
+security_state::SecurityLevel TestOmniboxClient::GetSecurityLevel() const {
+  return location_bar_model_.GetSecurityLevel();
+}
+
+net::CertStatus TestOmniboxClient::GetCertStatus() const {
+  return location_bar_model_.GetCertStatus();
+}
+
+const gfx::VectorIcon& TestOmniboxClient::GetVectorIcon() const {
+  return location_bar_model_.GetVectorIcon();
+}
+
+void TestOmniboxClient::OnURLOpenedFromOmnibox(OmniboxLog* log) {
+  last_log_disposition_ = log->disposition;
+}
+
+base::WeakPtr<OmniboxClient> TestOmniboxClient::AsWeakPtr() {
+  return weak_factory_.GetWeakPtr();
 }

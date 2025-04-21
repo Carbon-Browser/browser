@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,11 @@
 #include <vector>
 
 #include "ui/accessibility/ax_base_export.h"
+#include "ui/accessibility/ax_enums.mojom-shared.h"
 
 namespace ui {
+
+struct AXNodeData;
 
 // A compact representation of text attributes, such as spelling markers and
 // style information, on an `AXNode`. This data represents a snapshot at a given
@@ -24,6 +27,8 @@ struct AX_BASE_EXPORT AXTextAttributes final {
   AXTextAttributes();
   ~AXTextAttributes();
 
+  explicit AXTextAttributes(const AXNodeData& node_data);
+
   AXTextAttributes(const AXTextAttributes& other) = delete;
   AXTextAttributes& operator=(const AXTextAttributes&) = delete;
 
@@ -35,6 +40,8 @@ struct AX_BASE_EXPORT AXTextAttributes final {
   bool operator!=(const AXTextAttributes& other) const;
 
   bool IsUnset() const;
+
+  bool HasTextStyle(const ax::mojom::TextStyle text_style_enum) const;
 
   int32_t background_color = kUnsetValue;
   int32_t color = kUnsetValue;

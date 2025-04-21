@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,10 +14,6 @@ const char kEnableNaClDebug[]               = "enable-nacl-debug";
 
 // Force use of the Subzero as the PNaCl translator instead of LLC.
 const char kForcePNaClSubzero[] = "force-pnacl-subzero";
-
-// Value for --type that causes the process to run as a NativeClient broker
-// (used for launching NaCl loader processes on 64-bit Windows).
-const char kNaClBrokerProcess[]             = "nacl-broker";
 
 // Uses NaCl manifest URL to choose whether NaCl program will be debugged by
 // debug stub.

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -96,6 +96,8 @@ class COMPONENT_EXPORT(UI_BASE) AcceleratorMap {
     return map_.erase(accelerator) > 0;
   }
 
+  void Clear() { map_.clear(); }
+
   // Inserts a new accelerator and value into the map. DCHECKs if the
   // accelerator was already in the map.
   void InsertNew(const std::pair<const Accelerator, V>& value) {
@@ -160,7 +162,7 @@ class COMPONENT_EXPORT(UI_BASE) AcceleratorMap {
       // If there's a valid remapping, use that |KeyboardCode| instead.
       KeyboardCode remapped_key_code =
           KeycodeConverter::MapPositionalDomCodeToUSShortcutKey(
-              accelerator.code());
+              accelerator.code(), accelerator.key_code());
       lookup_key_code = remapped_key_code != VKEY_UNKNOWN ? remapped_key_code
                                                           : lookup_key_code;
     }

@@ -1,10 +1,12 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/user_manager/user.h"
 
+#include "base/memory/raw_ptr.h"
 #include "components/account_id/account_id.h"
+#include "google_apis/gaia/gaia_id.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace user_manager {
@@ -31,10 +33,11 @@ TEST(UserTest, DeviceLocalAccountAffiliation) {
     bool IsAffiliated() const { return user_ && user_->IsAffiliated(); }
 
    private:
-    const User* const user_;
+    const raw_ptr<const User, DanglingUntriaged> user_;
   };
 
-  const AccountId account_id = AccountId::FromUserEmailGaiaId(kEmail, kGaiaId);
+  const AccountId account_id =
+      AccountId::FromUserEmailGaiaId(kEmail, GaiaId(kGaiaId));
 
   ScopedUser kiosk_user(User::CreateKioskAppUser(account_id));
   EXPECT_TRUE(kiosk_user.IsAffiliated());
@@ -42,8 +45,8 @@ TEST(UserTest, DeviceLocalAccountAffiliation) {
   ScopedUser public_session_user(User::CreatePublicAccountUser(account_id));
   EXPECT_TRUE(public_session_user.IsAffiliated());
 
-  ScopedUser arc_kiosk_user(User::CreateArcKioskAppUser(account_id));
-  EXPECT_TRUE(arc_kiosk_user.IsAffiliated());
+  ScopedUser web_kiosk_user(User::CreateWebKioskAppUser(account_id));
+  EXPECT_TRUE(web_kiosk_user.IsAffiliated());
 }
 
 }  // namespace user_manager

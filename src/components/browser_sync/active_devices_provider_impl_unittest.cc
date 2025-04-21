@@ -1,31 +1,30 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/browser_sync/active_devices_provider_impl.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
-#include "base/guid.h"
+#include "base/functional/callback.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/mock_callback.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/test/simple_test_clock.h"
 #include "base/time/time.h"
-#include "components/browser_sync/browser_sync_switches.h"
-#include "components/sync/base/model_type.h"
+#include "base/uuid.h"
+#include "components/sync/base/data_type.h"
 #include "components/sync/engine/active_devices_invalidation_info.h"
 #include "components/sync/protocol/sync_enums.pb.h"
 #include "components/sync_device_info/fake_device_info_tracker.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 using syncer::ActiveDevicesInvalidationInfo;
+using syncer::DataTypeSet;
 using syncer::DeviceInfo;
 using syncer::FakeDeviceInfoTracker;
-using syncer::ModelTypeSet;
 using testing::Contains;
 using testing::IsEmpty;
 using testing::SizeIs;
@@ -39,19 +38,27 @@ constexpr int kPulseIntervalMinutes = 60;
 std::unique_ptr<DeviceInfo> CreateFakeDeviceInfo(
     const std::string& name,
     const std::string& fcm_registration_token,
-    const ModelTypeSet& interested_data_types,
-    base::Time last_updated_timestamp) {
+    const DataTypeSet& interested_data_types,
+    base::Time last_updated_timestamp,
+    const std::string& chrome_version) {
   return std::make_unique<syncer::DeviceInfo>(
-      base::GUID::GenerateRandomV4().AsLowercaseString(), name,
-      "chrome_version", "user_agent", sync_pb::SyncEnums::TYPE_UNSET,
-      "device_id", "manufacturer_name", "model_name", "full_hardware_class",
+      base::Uuid::GenerateRandomV4().AsLowercaseString(), name, chrome_version,
+      "user_agent", sync_pb::SyncEnums::TYPE_UNSET,
+      syncer::DeviceInfo::OsType::kUnknown,
+      syncer::DeviceInfo::FormFactor::kUnknown, "device_id",
+      "manufacturer_name", "model_name", "full_hardware_class",
       last_updated_timestamp, base::Minutes(kPulseIntervalMinutes),
-      /*send_tab_to_self_receiving_enabled=*/false,
-      /*sharing_info=*/absl::nullopt, /*paask_info=*/absl::nullopt,
-      fcm_registration_token, interested_data_types);
+      /*send_tab_to_self_receiving_enabled=*/
+      false,
+      /*send_tab_to_self_receiving_type=*/
+      sync_pb::
+          SyncEnums_SendTabReceivingType_SEND_TAB_RECEIVING_TYPE_CHROME_OR_UNSPECIFIED,
+      /*sharing_info=*/std::nullopt, /*paask_info=*/std::nullopt,
+      fcm_registration_token, interested_data_types,
+      /*floating_workspace_last_signin_timestamp=*/std::nullopt);
 }
 
-ModelTypeSet DefaultInterestedDataTypes() {
+DataTypeSet DefaultInterestedDataTypes() {
   return Difference(syncer::ProtocolTypes(), syncer::CommitOnlyTypes());
 }
 
@@ -64,11 +71,21 @@ class ActiveDevicesProviderImplTest : public testing::Test {
 
   void AddDevice(const std::string& name,
                  const std::string& fcm_registration_token,
-                 const ModelTypeSet& interested_data_types,
+                 const DataTypeSet& interested_data_types,
                  base::Time last_updated_timestamp) {
-    device_list_.push_back(CreateFakeDeviceInfo(name, fcm_registration_token,
-                                                interested_data_types,
-                                                last_updated_timestamp));
+    device_list_.push_back(CreateFakeDeviceInfo(
+        name, fcm_registration_token, interested_data_types,
+        last_updated_timestamp, "chrome_version"));
+    fake_device_info_tracker_.Add(device_list_.back().get());
+  }
+
+  void AddDeviceWithoutChromeVersion(const std::string& name,
+                                     const std::string& fcm_registration_token,
+                                     const DataTypeSet& interested_data_types,
+                                     base::Time last_updated_timestamp) {
+    device_list_.push_back(CreateFakeDeviceInfo(
+        name, fcm_registration_token, interested_data_types,
+        last_updated_timestamp, /*chrome_version=*/""));
     fake_device_info_tracker_.Add(device_list_.back().get());
   }
 
@@ -80,8 +97,6 @@ class ActiveDevicesProviderImplTest : public testing::Test {
 };
 
 TEST_F(ActiveDevicesProviderImplTest, ShouldFilterInactiveDevices) {
-  base::test::ScopedFeatureList feature_override(
-      switches::kSyncFilterOutInactiveDevicesForSingleClient);
   AddDevice("local_device_pulse_interval",
             /*fcm_registration_token=*/"token_1", DefaultInterestedDataTypes(),
             clock_.Now() - base::Minutes(kPulseIntervalMinutes + 1));
@@ -116,6 +131,33 @@ TEST_F(ActiveDevicesProviderImplTest, ShouldFilterInactiveDevices) {
   EXPECT_TRUE(
       result_local_guid.IsSingleClientWithStandaloneInvalidationsForTypes(
           {syncer::BOOKMARKS}));
+}
+
+TEST_F(ActiveDevicesProviderImplTest, ShouldKeepDevicesWithoutChromeVersion) {
+  // Add two old devices, one with chrome version and one without.
+  AddDeviceWithoutChromeVersion("device_without_chrome_version",
+                                /*fcm_registration_token=*/"token_1",
+                                DefaultInterestedDataTypes(),
+                                clock_.Now() - base::Days(100));
+  AddDevice("device_inactive", /*fcm_registration_token=*/"token_2",
+            DefaultInterestedDataTypes(), clock_.Now() - base::Days(100));
+
+  // The device without chrome version should be considered always active even
+  // though the device is outside the pulse interval.
+  const ActiveDevicesInvalidationInfo active_devices_invalidation_info =
+      active_devices_provider_.CalculateInvalidationInfo(
+          /*local_cache_guid=*/std::string());
+  EXPECT_FALSE(active_devices_invalidation_info.IsSingleClientForTypes(
+      {syncer::BOOKMARKS}));
+  EXPECT_THAT(active_devices_invalidation_info.all_fcm_registration_tokens(),
+              Contains("token_1"));
+  EXPECT_FALSE(active_devices_invalidation_info
+                   .IsSingleClientWithStandaloneInvalidationsForTypes(
+                       {syncer::BOOKMARKS}));
+  EXPECT_THAT(
+      active_devices_invalidation_info
+          .GetFcmRegistrationTokensForInterestedClients({syncer::BOOKMARKS}),
+      Contains("token_1"));
 }
 
 TEST_F(ActiveDevicesProviderImplTest, ShouldReturnIfSingleDeviceByDataType) {
@@ -184,6 +226,62 @@ TEST_F(ActiveDevicesProviderImplTest,
       {syncer::BOOKMARKS}));
 }
 
+TEST_F(ActiveDevicesProviderImplTest,
+       ShouldReturnSingleClientForOldInvalidations) {
+  // Add only devices with standalone invalidations.
+  AddDevice("local_device", /*fcm_registration_token=*/"token_1",
+            DefaultInterestedDataTypes(), clock_.Now());
+  AddDevice("remote_device", /*fcm_registration_token=*/"token_2",
+            DefaultInterestedDataTypes(), clock_.Now());
+
+  EXPECT_TRUE(
+      active_devices_provider_
+          .CalculateInvalidationInfo(device_list_.front()->guid())
+          .IsSingleClientWithOldInvalidationsForTypes({syncer::BOOKMARKS}));
+
+  // Add a remote device subscribed to old invalidatoins.
+  AddDevice("remote_deivce_2", /*fcm_registration_token=*/"",
+            DefaultInterestedDataTypes(), clock_.Now());
+
+  EXPECT_FALSE(
+      active_devices_provider_
+          .CalculateInvalidationInfo(device_list_.front()->guid())
+          .IsSingleClientWithOldInvalidationsForTypes({syncer::BOOKMARKS}));
+}
+
+TEST_F(ActiveDevicesProviderImplTest,
+       ShouldReturnSingleClientForOldInvalidationsForInterestedDataTypes) {
+  AddDevice("local_device", /*fcm_registration_token=*/"token_1",
+            DefaultInterestedDataTypes(), clock_.Now());
+
+  // Add a remote device which is not interested in SESSIONS.
+  AddDevice("remote_device", /*fcm_registration_token=*/"",
+            Difference(DefaultInterestedDataTypes(), {syncer::SESSIONS}),
+            clock_.Now());
+
+  EXPECT_FALSE(
+      active_devices_provider_
+          .CalculateInvalidationInfo(device_list_.front()->guid())
+          .IsSingleClientWithOldInvalidationsForTypes({syncer::BOOKMARKS}));
+  EXPECT_TRUE(
+      active_devices_provider_
+          .CalculateInvalidationInfo(device_list_.front()->guid())
+          .IsSingleClientWithOldInvalidationsForTypes({syncer::SESSIONS}));
+
+  // Add a remote device which does not support interested data types.
+  AddDevice("old_remote_device", /*fcm_registration_token=*/"",
+            /*interested_data_types=*/{}, clock_.Now());
+
+  EXPECT_FALSE(
+      active_devices_provider_
+          .CalculateInvalidationInfo(device_list_.front()->guid())
+          .IsSingleClientWithOldInvalidationsForTypes({syncer::BOOKMARKS}));
+  EXPECT_FALSE(
+      active_devices_provider_
+          .CalculateInvalidationInfo(device_list_.front()->guid())
+          .IsSingleClientWithOldInvalidationsForTypes({syncer::SESSIONS}));
+}
+
 TEST_F(ActiveDevicesProviderImplTest, ShouldReturnZeroDevices) {
   const ActiveDevicesInvalidationInfo result =
       active_devices_provider_.CalculateInvalidationInfo(
@@ -196,6 +294,8 @@ TEST_F(ActiveDevicesProviderImplTest, ShouldReturnZeroDevices) {
   EXPECT_FALSE(result.IsSingleClientForTypes({syncer::BOOKMARKS}));
   EXPECT_FALSE(result.IsSingleClientWithStandaloneInvalidationsForTypes(
       {syncer::BOOKMARKS}));
+  EXPECT_FALSE(
+      result.IsSingleClientWithOldInvalidationsForTypes({syncer::BOOKMARKS}));
   EXPECT_THAT(
       result.GetFcmRegistrationTokensForInterestedClients({syncer::BOOKMARKS}),
       IsEmpty());
@@ -213,8 +313,6 @@ TEST_F(ActiveDevicesProviderImplTest, ShouldInvokeCallback) {
 }
 
 TEST_F(ActiveDevicesProviderImplTest, ShouldReturnActiveFCMRegistrationTokens) {
-  base::test::ScopedFeatureList feature_override(
-      switches::kSyncFilterOutInactiveDevicesForSingleClient);
   AddDevice("device_1", "fcm_token_1", DefaultInterestedDataTypes(),
             clock_.Now() - base::Minutes(1));
   AddDevice("device_2", "fcm_token_2", DefaultInterestedDataTypes(),
@@ -243,8 +341,7 @@ TEST_F(ActiveDevicesProviderImplTest, ShouldReturnActiveFCMRegistrationTokens) {
 
 TEST_F(ActiveDevicesProviderImplTest, ShouldReturnEmptyListWhenTooManyDevices) {
   // Create many devices to exceed the limit of the list.
-  const size_t kActiveDevicesNumber =
-      switches::kSyncFCMRegistrationTokensListMaxSize.Get() + 1;
+  const size_t kActiveDevicesNumber = 10;
 
   for (size_t i = 0; i < kActiveDevicesNumber; ++i) {
     const std::string device_name = "device_" + base::NumberToString(i);

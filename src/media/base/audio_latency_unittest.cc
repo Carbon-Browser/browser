@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "media/base/limits.h"
+#include "media/media_buildflags.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace media {
@@ -41,7 +42,7 @@ class AudioLatencyTest : public testing::TestWithParam<AudioLatencyTestData> {
 #endif
 
     const int platform_max_buffer_size =
-        max_buffer_size
+        (max_buffer_size && max_buffer_size < limits::kMaxWebAudioBufferSize)
             ? (limits::kMaxWebAudioBufferSize / max_buffer_size) *
                   max_buffer_size
             : (limits::kMaxWebAudioBufferSize / multiplier) * multiplier;
@@ -74,7 +75,7 @@ class AudioLatencyTest : public testing::TestWithParam<AudioLatencyTestData> {
         media::AudioLatency::GetExactBufferSize(
             base::Seconds(10.0), hardware_sample_rate, hardware_buffer_size,
             min_buffer_size, max_buffer_size, limits::kMaxWebAudioBufferSize));
-    if (max_buffer_size) {
+    if (max_buffer_size && max_buffer_size < limits::kMaxWebAudioBufferSize) {
       EXPECT_EQ(max_buffer_size,
                 media::AudioLatency::GetExactBufferSize(
                     base::Seconds(max_buffer_size /
@@ -122,19 +123,15 @@ class AudioLatencyTest : public testing::TestWithParam<AudioLatencyTestData> {
 // TODO(olka): extend unit tests, use real-world sample rates.
 
 TEST(AudioLatency, HighLatencyBufferSizes) {
+  for (int i = 6400; i <= 204800; i *= 2)
 #if BUILDFLAG(IS_WIN)
-  for (int i = 6400; i <= 204800; i *= 2) {
     EXPECT_EQ(2 * (i / 100),
               AudioLatency::GetHighLatencyBufferSize(i, i / 100));
-  }
-#else
-  for (int i = 6400; i <= 204800; i *= 2)
-#if defined(USE_CRAS)
+#elif BUILDFLAG(USE_CRAS) || BUILDFLAG(IS_FUCHSIA)
     EXPECT_EQ(8 * (i / 100), AudioLatency::GetHighLatencyBufferSize(i, 32));
 #else
     EXPECT_EQ(2 * (i / 100), AudioLatency::GetHighLatencyBufferSize(i, 32));
-#endif  // defined(USE_CRAS)
-#endif  // BUILDFLAG(IS_WIN)
+#endif  // BUILDFLAG(USE_CRAS)
 }
 
 TEST(AudioLatency, InteractiveBufferSizes) {
@@ -199,7 +196,7 @@ INSTANTIATE_TEST_SUITE_P(
                     std::make_tuple(44100, 440, 0, 0),
                     std::make_tuple(44100, 256, 128, 512),
                     std::make_tuple(44100, 256, 0, 0))
-#elif BUILDFLAG(IS_MAC) || defined(USE_CRAS)
+#elif BUILDFLAG(IS_MAC) || BUILDFLAG(USE_CRAS)
     // These values are constant on Mac and ChromeOS, regardless of device.
     testing::Values(std::make_tuple(44100,
                                     256,
@@ -207,7 +204,8 @@ INSTANTIATE_TEST_SUITE_P(
                                     limits::kMaxAudioBufferSize))
 #else
     testing::Values(std::make_tuple(44100, 256, 0, 0),
-                    std::make_tuple(44100, 440, 0, 0))
+                    std::make_tuple(44100, 440, 0, 0),
+                    std::make_tuple(48000, 480, 480, 48000))
 #endif
 );
 }  // namespace media

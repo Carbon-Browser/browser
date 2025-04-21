@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -115,7 +115,7 @@ function maybeSetWebFont() {
   document.head.appendChild(e);
 }
 
-// TODO(https://crbug.com/1027612): Consider making this a custom HTML element.
+// TODO(crbug.com/40108835): Consider making this a custom HTML element.
 class FontSizeSlider {
   constructor() {
     this.element = $('font-size-selection');

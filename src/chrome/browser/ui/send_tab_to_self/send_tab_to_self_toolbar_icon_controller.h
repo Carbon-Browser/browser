@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,8 +39,6 @@ class SendTabToSelfToolbarIconController
   // BrowserListObserver implementation
   void OnBrowserSetLastActive(Browser* browser) override;
 
-  void ShowToolbarButton(const SendTabToSelfEntry& entry);
-
   void AddDelegate(SendTabToSelfToolbarIconControllerDelegate* delegate);
 
   void RemoveDelegate(SendTabToSelfToolbarIconControllerDelegate* delegate);
@@ -51,12 +49,24 @@ class SendTabToSelfToolbarIconController
 
   void LogNotificationDismissed();
 
+  void ClearDelegateListForTesting() { delegate_list_.clear(); }
+
  private:
-  raw_ptr<Profile> profile_;
+  void StorePendingEntry(
+      const SendTabToSelfEntry* new_entry_pending_notification);
 
-  std::unique_ptr<SendTabToSelfEntry> entry_;
+  void ShowToolbarButton(const SendTabToSelfEntry& entry,
+                         Browser* browser = nullptr);
 
-  std::vector<SendTabToSelfToolbarIconControllerDelegate*> delegate_list_;
+  raw_ptr<Profile, DanglingUntriaged> profile_;
+
+  // In the case that we cannot immediately display a new entry
+  // (e.g. the active browser is incognito or a different profile), we store it
+  // here and wait until an appropriate browser becomes active to display it.
+  std::unique_ptr<SendTabToSelfEntry> pending_entry_;
+
+  std::vector<raw_ptr<SendTabToSelfToolbarIconControllerDelegate>>
+      delegate_list_;
 
   SendTabToSelfToolbarIconControllerDelegate* GetActiveDelegate();
 };

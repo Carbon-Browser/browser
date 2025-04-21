@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 FakeUsbChooserController::FakeUsbChooserController(int device_count)
     : ChooserController(u""), device_count_(device_count) {
   set_title_for_testing(l10n_util::GetStringFUTF16(
-      IDS_USB_DEVICE_CHOOSER_PROMPT_ORIGIN, u"example.com"));
+      IDS_USB_DEVICE_CHOOSER_PROMPT, u"example.com"));
 }
 
 std::u16string FakeUsbChooserController::GetNoOptionsText() const {

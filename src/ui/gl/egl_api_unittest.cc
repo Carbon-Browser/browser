@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,12 @@
 #include "ui/gl/gl_egl_api_implementation.h"
 #include "ui/gl/gl_surface_egl.h"
 #include "ui/gl/gl_switches.h"
+#include "ui/gl/init/gl_display_initializer.h"
 #include "ui/gl/init/gl_factory.h"
+
+#if BUILDFLAG(IS_OZONE)
+#include "ui/ozone/public/ozone_platform.h"
+#endif
 
 namespace gl {
 
@@ -36,6 +41,12 @@ class EGLApiTest : public testing::Test {
 #else
     SetGLImplementation(kGLImplementationEGLGLES2);
 #endif
+
+#if BUILDFLAG(IS_OZONE)
+    ui::OzonePlatform::InitParams params;
+    params.single_process = true;
+    ui::OzonePlatform::InitializeForGPU(params);
+#endif
   }
 
   void TearDown() override {
@@ -57,7 +68,7 @@ class EGLApiTest : public testing::Test {
         GLDisplayManagerEGL::GetInstance()->GetDisplay(GpuPreference::kDefault);
     // Clear the display so InitializeDisplay() will re-initialize it.
     display_->SetDisplay(EGL_NO_DISPLAY);
-    display_->InitializeDisplay(EGLDisplayPlatform(EGL_DEFAULT_DISPLAY));
+    init::InitializeDisplay(display_, EGLDisplayPlatform(EGL_DEFAULT_DISPLAY));
   }
 
   void SetFakeExtensionString(const char* fake_string,

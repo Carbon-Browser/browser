@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -76,6 +76,12 @@ chrome.test.runTests([
     chrome.test.succeed();
   },
 
+  async function getKeysFromContentScript() {
+    await testAccessibleStorageAreas('getKeys');
+    await testInaccessibleStorageAreas('getKeys');
+    chrome.test.succeed();
+  },
+
   async function getBytesInUseFromContentScript() {
     await testAccessibleStorageAreas('getBytesInUse', null);
     await testInaccessibleStorageAreas('getBytesInUse', null);
@@ -98,9 +104,9 @@ chrome.test.runTests([
     // `setAccessLevel` is not exposed to `sync` or `local`.
     chrome.test.assertFalse(!!chrome.storage.sync.setAccessLevel);
     chrome.test.assertFalse(!!chrome.storage.local.setAccessLevel);
-    // TODO(crbug.com/1227410): `setAccessLevel` is exposed to `session` but
+    // TODO(crbug.com/40189208): `setAccessLevel` is exposed to `session` but
     // cannot be accessed from a content script. This will change once we only
-    // expose `setAccessLevel` in unblessed contexts.
+    // expose `setAccessLevel` in unprivileged contexts.
     chrome.test.assertTrue(!!chrome.storage.session.setAccessLevel);
     chrome.storage.session.setAccessLevel(
         {accessLevel: 'TRUSTED_CONTEXTS'}, () => {

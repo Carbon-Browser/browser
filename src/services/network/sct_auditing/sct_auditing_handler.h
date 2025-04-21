@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define SERVICES_NETWORK_SCT_AUDITING_SCT_AUDITING_HANDLER_H_
 
 #include <memory>
+#include <optional>
 
 #include "base/containers/lru_cache.h"
 #include "base/files/important_file_writer.h"
@@ -77,7 +78,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) SCTAuditingHandler
   //
   // Each entry in the dictionary includes sufficient information to deserialize
   // and recreate the entries in the SCTAuditingHandler's pending reporters set.
-  bool SerializeData(std::string* output) override;
+  std::optional<std::string> SerializeData() override;
 
   void DeserializeData(const std::string& serialized);
 
@@ -94,7 +95,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) SCTAuditingHandler
   void AddReporter(
       net::HashValue reporter_key,
       std::unique_ptr<sct_auditing::SCTClientReport> report,
-      absl::optional<SCTAuditingReporter::SCTHashdanceMetadata> sct_metadata,
+      std::optional<SCTAuditingReporter::SCTHashdanceMetadata> sct_metadata,
       std::unique_ptr<net::BackoffEntry> backoff_entry = nullptr,
       bool already_counted = false);
 

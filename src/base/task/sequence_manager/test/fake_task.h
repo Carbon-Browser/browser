@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,10 +21,6 @@ class FakeTaskTiming : public TaskQueue::TaskTiming {
  public:
   FakeTaskTiming();
   FakeTaskTiming(TimeTicks start, TimeTicks end);
-  FakeTaskTiming(TimeTicks start,
-                 TimeTicks end,
-                 ThreadTicks thread_start,
-                 ThreadTicks thread_end);
 };
 
 }  // namespace sequence_manager

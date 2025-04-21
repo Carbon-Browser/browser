@@ -1,13 +1,14 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/cast/message_port/cast/message_port_cast.h"
 
+#include <string_view>
 #include <utility>
 
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "third_party/blink/public/common/messaging/message_port_descriptor.h"
 
 namespace cast_api_bindings {
@@ -60,7 +61,7 @@ bool MessagePortCast::OnMessage(blink::WebMessagePort::Message message) {
 MessagePortCast::MessagePortCast(blink::WebMessagePort&& port)
     : receiver_(nullptr), port_(std::move(port)) {}
 
-MessagePortCast::~MessagePortCast() {}
+MessagePortCast::~MessagePortCast() = default;
 
 void MessagePortCast::OnPipeError() {
   DCHECK(receiver_);
@@ -71,12 +72,12 @@ blink::WebMessagePort MessagePortCast::TakePort() {
   return std::move(port_);
 }
 
-bool MessagePortCast::PostMessage(base::StringPiece message) {
+bool MessagePortCast::PostMessage(std::string_view message) {
   return PostMessageWithTransferables(message, {});
 }
 
 bool MessagePortCast::PostMessageWithTransferables(
-    base::StringPiece message,
+    std::string_view message,
     std::vector<std::unique_ptr<MessagePort>> ports) {
   DCHECK(port_.IsValid());
   std::vector<blink::WebMessagePort> transferables;
@@ -96,7 +97,7 @@ void MessagePortCast::SetReceiver(
   DCHECK(receiver);
   DCHECK(!receiver_);
   receiver_ = receiver;
-  port_.SetReceiver(this, base::SequencedTaskRunnerHandle::Get());
+  port_.SetReceiver(this, base::SequencedTaskRunner::GetCurrentDefault());
 }
 
 void MessagePortCast::Close() {

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,8 +20,6 @@ const char kHeapAllocatorName[] = "HeapAllocator";
 const char kTraceIfNeededName[] = "TraceIfNeeded";
 const char kVisitorDispatcherName[] = "VisitorDispatcher";
 const char kVisitorVarName[] = "visitor";
-const char kAdjustAndMarkName[] = "AdjustAndMark";
-const char kIsHeapObjectAliveName[] = "IsHeapObjectAlive";
 const char kConstIteratorName[] = "const_iterator";
 const char kIteratorName[] = "iterator";
 const char kConstReverseIteratorName[] = "const_reverse_iterator";

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include "ui/events/event_constants.h"
 #include "ui/events/gesture_detection/gesture_detector.h"
 #include "ui/events/gesture_detection/gesture_provider_config_helper.h"
-#include "ui/events/gesture_detection/motion_event.h"
+#include "ui/events/velocity_tracker/motion_event.h"
 
 using ui::GestureDetector;
 using ui::MotionEvent;
@@ -99,7 +99,6 @@ bool StylusTextSelector::OnTouchEvent(const MotionEvent& event) {
     case MotionEvent::Action::BUTTON_PRESS:
     case MotionEvent::Action::BUTTON_RELEASE:
       NOTREACHED();
-      break;
   }
 
   if (!gesture_detector_)

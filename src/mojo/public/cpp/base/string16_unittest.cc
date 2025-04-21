@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,7 +47,7 @@ TEST(BigString16Test, Long) {
   constexpr size_t kLargeStringSize = 1024 * 1024;
 
   std::u16string in(kLargeStringSize, 0);
-  base::RandBytes(&in[0], kLargeStringSize);
+  base::RandBytes(base::as_writable_byte_span(in));
 
   std::u16string out;
   ASSERT_TRUE(mojo::test::SerializeAndDeserialize<mojom::BigString16>(in, out));

@@ -1,9 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/renderer/bindings/api_invocation_errors.h"
 
+#include <string_view>
 #include <vector>
 
 #include "base/strings/string_util.h"
@@ -25,8 +26,7 @@ const char kTypeNull[] = "null";
 const char kTypeAny[] = "any";
 
 std::string InvalidEnumValue(const std::set<std::string>& valid_enums) {
-  std::vector<base::StringPiece> options(valid_enums.begin(),
-                                         valid_enums.end());
+  std::vector<std::string_view> options(valid_enums.begin(), valid_enums.end());
   std::string options_str = base::JoinString(options, ", ");
   return base::StringPrintf("Value must be one of %s.", options_str.c_str());
 }
@@ -65,6 +65,10 @@ std::string NumberTooSmall(int minimum) {
 
 std::string NumberTooLarge(int maximum) {
   return base::StringPrintf("Value must be at most %d.", maximum);
+}
+
+std::string NumberIsNaNOrInfinity() {
+  return base::StringPrintf("Value must not be NaN or Infinity.");
 }
 
 std::string InvalidType(const char* expected_type, const char* actual_type) {

@@ -1,19 +1,20 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/system/accessibility/autoclick_menu_bubble_controller.h"
 
-#include "ash/accessibility/accessibility_controller_impl.h"
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/accessibility/autoclick/autoclick_controller.h"
 #include "ash/public/cpp/locale_update_controller.h"
 #include "ash/shelf/shelf.h"
 #include "ash/shell.h"
 #include "ash/system/accessibility/autoclick_scroll_bubble_controller.h"
 #include "ash/test/ash_test_base.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/callback_helpers.h"
 #include "base/i18n/rtl.h"
+#include "ui/views/accessibility/view_accessibility.h"
 
 namespace ash {
 
@@ -34,7 +35,7 @@ const int kScrollViewBoundsRectBuffer = 18;
 
 ui::GestureEvent CreateTapEvent() {
   return ui::GestureEvent(0, 0, 0, base::TimeTicks(),
-                          ui::GestureEventDetails(ui::ET_GESTURE_TAP));
+                          ui::GestureEventDetails(ui::EventType::kGestureTap));
 }
 
 }  // namespace
@@ -63,7 +64,12 @@ class AutoclickMenuBubbleControllerTest : public AshTestBase {
   }
 
   AutoclickMenuView* GetMenuView() {
-    return GetBubbleController() ? GetBubbleController()->menu_view_ : nullptr;
+    return GetBubbleController() ? GetBubbleController()->menu_view_.get()
+                                 : nullptr;
+  }
+
+  TrayBubbleView* GetBubbleView() {
+    return GetBubbleController()->bubble_view_.get();
   }
 
   views::View* GetMenuButton(AutoclickMenuView::ButtonId view_id) {
@@ -81,7 +87,8 @@ class AutoclickMenuBubbleControllerTest : public AshTestBase {
 
   AutoclickScrollView* GetScrollView() {
     return GetBubbleController()->scroll_bubble_controller_
-               ? GetBubbleController()->scroll_bubble_controller_->scroll_view_
+               ? GetBubbleController()
+                     ->scroll_bubble_controller_->scroll_view_.get()
                : nullptr;
   }
 
@@ -115,7 +122,7 @@ TEST_F(AutoclickMenuBubbleControllerTest, ExistsOnlyWhenAutoclickIsRunning) {
 }
 
 TEST_F(AutoclickMenuBubbleControllerTest, CanSelectAutoclickTypeFromBubble) {
-  AccessibilityControllerImpl* controller =
+  AccessibilityController* controller =
       Shell::Get()->accessibility_controller();
   // Set to a different event type than the first event in kTestCases.
   controller->SetAutoclickEventType(AutoclickEventType::kRightClick);
@@ -150,7 +157,7 @@ TEST_F(AutoclickMenuBubbleControllerTest, CanSelectAutoclickTypeFromBubble) {
 }
 
 TEST_F(AutoclickMenuBubbleControllerTest, UnpausesWhenPauseAlreadySelected) {
-  AccessibilityControllerImpl* controller =
+  AccessibilityController* controller =
       Shell::Get()->accessibility_controller();
   views::View* pause_button =
       GetMenuButton(AutoclickMenuView::ButtonId::kPause);
@@ -179,7 +186,7 @@ TEST_F(AutoclickMenuBubbleControllerTest, UnpausesWhenPauseAlreadySelected) {
 }
 
 TEST_F(AutoclickMenuBubbleControllerTest, CanChangePosition) {
-  AccessibilityControllerImpl* controller =
+  AccessibilityController* controller =
       Shell::Get()->accessibility_controller();
 
   // Set to a known position for than the first event in kTestCases.
@@ -245,7 +252,7 @@ TEST_F(AutoclickMenuBubbleControllerTest, DefaultChangesWithTextDirection) {
 }
 
 TEST_F(AutoclickMenuBubbleControllerTest, ScrollBubbleShowsAndCloses) {
-  AccessibilityControllerImpl* controller =
+  AccessibilityController* controller =
       Shell::Get()->accessibility_controller();
   controller->SetAutoclickEventType(AutoclickEventType::kLeftClick);
   // No scroll view yet.
@@ -266,7 +273,7 @@ TEST_F(AutoclickMenuBubbleControllerTest, ScrollBubbleShowsAndCloses) {
 }
 
 TEST_F(AutoclickMenuBubbleControllerTest, ScrollBubbleDefaultPositioning) {
-  AccessibilityControllerImpl* controller =
+  AccessibilityController* controller =
       Shell::Get()->accessibility_controller();
   controller->SetAutoclickEventType(AutoclickEventType::kScroll);
 
@@ -312,7 +319,7 @@ TEST_F(AutoclickMenuBubbleControllerTest, ScrollBubbleDefaultPositioning) {
 
 TEST_F(AutoclickMenuBubbleControllerTest,
        ScrollBubbleManualPositioningLargeScrollBounds) {
-  AccessibilityControllerImpl* controller =
+  AccessibilityController* controller =
       Shell::Get()->accessibility_controller();
   controller->SetAutoclickEventType(AutoclickEventType::kScroll);
 
@@ -386,7 +393,7 @@ TEST_F(AutoclickMenuBubbleControllerTest,
 TEST_F(AutoclickMenuBubbleControllerTest,
        ScrollBubbleManualPositioningSmallScrollBounds) {
   UpdateDisplay("1200x1000");
-  AccessibilityControllerImpl* controller =
+  AccessibilityController* controller =
       Shell::Get()->accessibility_controller();
   controller->SetAutoclickEventType(AutoclickEventType::kScroll);
 
@@ -509,6 +516,14 @@ TEST_F(AutoclickMenuBubbleControllerTest,
       EXPECT_GT(GetScrollViewBounds().y() - scroll_bounds.bottom(), -1);
     }
   }
+}
+
+TEST_F(AutoclickMenuBubbleControllerTest, BubbleViewAccessibleName) {
+  TrayBubbleView* bubble_view = GetBubbleView();
+  ui::AXNodeData node_data;
+  bubble_view->GetViewAccessibility().GetAccessibleNodeData(&node_data);
+  EXPECT_EQ(node_data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+            GetBubbleController()->GetAccessibleNameForBubble());
 }
 
 }  // namespace ash

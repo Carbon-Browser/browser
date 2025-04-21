@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,11 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
+#include "base/types/optional_ref.h"
+#include "cc/input/browser_controls_offset_tags_info.h"
+#include "cc/input/browser_controls_state.h"
 #include "cc/input/input_handler.h"
 #include "cc/input/snap_fling_controller.h"
 #include "cc/paint/element_id.h"
@@ -50,7 +54,6 @@ class CompositorThreadEventQueue;
 class EventWithCallback;
 class InputHandlerProxyClient;
 class ScrollPredictor;
-class MomentumScrollJankTracker;
 class CursorControlHandler;
 
 class SynchronousInputHandler {
@@ -165,7 +168,7 @@ class PLATFORM_EXPORT InputHandlerProxy : public cc::InputHandlerClient,
       std::unique_ptr<blink::WebCoalescedInputEvent> event,
       std::unique_ptr<cc::EventMetrics> metrics,
       EventDispositionCallback callback,
-      cc::ElementIdType hit_tests_result);
+      cc::ElementId hit_tests_result);
 
   // Handles creating synthetic gesture events. It is currently used for
   // creating gesture event equivalents for mouse events on a composited
@@ -207,6 +210,8 @@ class PLATFORM_EXPORT InputHandlerProxy : public cc::InputHandlerClient,
   // compositor thread has had a chance to update the scroll offset.
   void SetDeferBeginMainFrame(bool defer_begin_main_frame) const;
 
+  void RequestCallbackAfterEventQueueFlushed(base::OnceClosure callback);
+
   // cc::InputHandlerClient implementation.
   void WillShutdown() override;
   void Animate(base::TimeTicks time) override;
@@ -221,15 +226,29 @@ class PLATFORM_EXPORT InputHandlerProxy : public cc::InputHandlerClient,
       float max_page_scale_factor) override;
   void DeliverInputForBeginFrame(const viz::BeginFrameArgs& args) override;
   void DeliverInputForHighLatencyMode() override;
+  void DeliverInputForDeadline() override;
+  void DidFinishImplFrame() override;
+  bool HasQueuedInput() const override;
+  void SetScrollEventDispatchMode(
+      cc::InputHandlerClient::ScrollEventDispatchMode mode,
+      double scroll_deadline_ratio) override;
 
   // SnapFlingClient implementation.
   bool GetSnapFlingInfoAndSetAnimatingSnapTarget(
+      const gfx::Vector2dF& current_delta,
       const gfx::Vector2dF& natural_displacement,
       gfx::PointF* initial_offset,
       gfx::PointF* target_offset) const override;
   gfx::PointF ScrollByForSnapFling(const gfx::Vector2dF& delta) override;
   void ScrollEndForSnapFling(bool did_finish) override;
   void RequestAnimationForSnapFling() override;
+
+  void UpdateBrowserControlsState(
+      cc::BrowserControlsState constraints,
+      cc::BrowserControlsState current,
+      bool animate,
+      base::optional_ref<const cc::BrowserControlsOffsetTagsInfo>
+          offset_tags_info);
 
   bool gesture_scroll_on_impl_thread_for_testing() const {
     return handling_gesture_on_impl_thread_;
@@ -239,6 +258,9 @@ class PLATFORM_EXPORT InputHandlerProxy : public cc::InputHandlerClient,
     return currently_active_gesture_device_.value();
   }
 
+  // Immediately dispatches all queued events.
+  void FlushQueuedEventsForTesting();
+
  private:
   friend class test::TestInputHandlerProxy;
   friend class test::InputHandlerProxyTest;
@@ -247,9 +269,8 @@ class PLATFORM_EXPORT InputHandlerProxy : public cc::InputHandlerClient,
   friend class test::InputHandlerProxyMomentumScrollJankTest;
   friend class test::InputHandlerProxyForceHandlingOnMainThread;
 
-  void DispatchSingleInputEvent(std::unique_ptr<EventWithCallback>,
-                                const base::TimeTicks);
-  void DispatchQueuedInputEvents();
+  void DispatchSingleInputEvent(std::unique_ptr<EventWithCallback>);
+  void DispatchQueuedInputEvents(bool frame_aligned);
   void UpdateElasticOverscroll();
 
   // Helper functions for handling more complicated input events.
@@ -258,8 +279,8 @@ class PLATFORM_EXPORT InputHandlerProxy : public cc::InputHandlerClient,
       const blink::WebGestureEvent& event);
   EventDisposition HandleGestureScrollUpdate(
       const blink::WebGestureEvent& event,
-      const blink::WebInputEventAttribution& original_attribution,
-      cc::EventMetrics* metrics);
+      cc::EventMetrics* metrics,
+      int64_t trace_id);
   EventDisposition HandleGestureScrollEnd(const blink::WebGestureEvent& event);
   EventDisposition HandleTouchStart(EventWithCallback* event_with_callback);
   EventDisposition HandleTouchMove(EventWithCallback* event_with_callback);
@@ -305,28 +326,34 @@ class PLATFORM_EXPORT InputHandlerProxy : public cc::InputHandlerClient,
                                      cc::TouchAction* allowed_touch_action);
 
   EventDisposition RouteToTypeSpecificHandler(
-      EventWithCallback* event_with_callback,
-      const blink::WebInputEventAttribution& original_attribution);
+      EventWithCallback* event_with_callback);
 
   void set_event_attribution_enabled(bool enabled) {
     event_attribution_enabled_ = enabled;
   }
 
-  void RecordMainThreadScrollingReasons(blink::WebGestureDevice device,
-                                        uint32_t reasons_from_scroll_begin,
-                                        bool was_main_thread_hit_tested,
-                                        bool needs_main_thread_repaint);
+  void RecordScrollBegin(blink::WebGestureDevice device,
+                         uint32_t main_thread_hit_tested_reasons,
+                         uint32_t main_thread_repaint_reasons,
+                         bool raster_inducing = false);
 
-  bool HasQueuedEventsReadyForDispatch();
+  bool HasQueuedEventsReadyForDispatch(bool frame_aligned) const;
 
-  InputHandlerProxyClient* client_;
+  // If `scroll_predictor_` can generate a new prediction, this will generate
+  // a synthetic GestureScrollUpdate using previous input events. This will then
+  // be dispatched. We only do this while scrolling and after main-thread hit
+  // testing has completed.
+  void GenerateAndDispatchSytheticScrollPrediction(
+      const viz::BeginFrameArgs& args);
+
+  raw_ptr<InputHandlerProxyClient> client_;
 
   // The input handler object is owned by the compositor delegate. The input
   // handler must call WillShutdown() on this class before it is deleted at
   // which point this pointer will be cleared.
-  cc::InputHandler* input_handler_;
+  raw_ptr<cc::InputHandler> input_handler_;
 
-  SynchronousInputHandler* synchronous_input_handler_;
+  raw_ptr<SynchronousInputHandler> synchronous_input_handler_;
 
   // This should be true when a pinch is in progress. The sequence of events is
   // as follows: GSB GPB GSU GPU ... GPE GSE.
@@ -335,6 +362,7 @@ class PLATFORM_EXPORT InputHandlerProxy : public cc::InputHandlerClient,
   bool gesture_pinch_in_progress_ = false;
   bool in_inertial_scrolling_ = false;
   bool scroll_sequence_ignored_;
+  std::optional<EventDisposition> main_thread_touch_sequence_start_disposition_;
 
   // Used to animate rubber-band/bounce over-scroll effect.
   std::unique_ptr<ElasticOverscrollController> elastic_overscroll_controller_;
@@ -343,12 +371,12 @@ class PLATFORM_EXPORT InputHandlerProxy : public cc::InputHandlerClient,
   // within a single touch sequence. This value will get returned for
   // subsequent TouchMove events to allow passive events not to block
   // scrolling.
-  absl::optional<EventDisposition> touch_result_;
+  std::optional<EventDisposition> touch_result_;
 
   // The result of the last mouse wheel event in a wheel phase sequence. This
   // value is used to determine whether the next wheel scroll is blocked on the
   // Main thread or not.
-  absl::optional<EventDisposition> mouse_wheel_result_;
+  std::optional<EventDisposition> mouse_wheel_result_;
 
   // Used to record overscroll notifications while an event is being
   // dispatched.  If the event causes overscroll, the overscroll metadata is
@@ -359,7 +387,13 @@ class PLATFORM_EXPORT InputHandlerProxy : public cc::InputHandlerClient,
 
   // Set only when the compositor input handler is handling a gesture. Tells
   // which source device is currently performing a gesture based scroll.
-  absl::optional<blink::WebGestureDevice> currently_active_gesture_device_;
+  std::optional<blink::WebGestureDevice> currently_active_gesture_device_;
+  // Set only when the compositor input handler is handling a gesture. Denotes
+  // which modifiers were present on the `WebInputEvent` so they can be applied
+  // in GenerateAndDispatchSytheticScrollPrediction.
+  std::optional<int> currently_active_gesture_scroll_modifiers_;
+
+  base::OnceClosure queue_flushed_callback_;
 
   // Tracks whether the first scroll update gesture event has been seen after a
   // scroll begin. This is set/reset when scroll gestures are processed in
@@ -374,7 +408,7 @@ class PLATFORM_EXPORT InputHandlerProxy : public cc::InputHandlerClient,
   // latency component should be added for injected GestureScrollUpdates.
   bool last_injected_gesture_was_begin_;
 
-  const base::TickClock* tick_clock_;
+  raw_ptr<const base::TickClock> tick_clock_;
 
   std::unique_ptr<cc::SnapFlingController> snap_fling_controller_;
 
@@ -386,13 +420,14 @@ class PLATFORM_EXPORT InputHandlerProxy : public cc::InputHandlerClient,
   bool skip_touch_filter_discrete_ = false;
   bool skip_touch_filter_all_ = false;
 
-  // This bit is set when the input handler proxy has requested that the client
+  // This is set when the input handler proxy has requested that the client
   // perform a hit test for a scroll begin on the main thread. During that
   // time, scroll updates need to be queued. The reply from the main thread
   // will come by calling ContinueScrollBeginAfterMainThreadHitTest where the
   // queue will be flushed and this bit cleared. Used only in scroll
   // unification.
-  bool hit_testing_scroll_begin_on_main_thread_ = false;
+  uint32_t scroll_begin_main_thread_hit_test_reasons_ =
+      cc::MainThreadScrollingReason::kNotScrollingOnMain;
 
   // This bit can be used to disable event attribution in cases where the
   // hit test information is unnecessary (e.g. tests).
@@ -401,11 +436,42 @@ class PLATFORM_EXPORT InputHandlerProxy : public cc::InputHandlerClient,
   // This tracks whether the user has set prefers reduced motion.
   bool prefers_reduced_motion_ = false;
 
-  // Helpers for the momentum scroll jank UMAs.
-  std::unique_ptr<MomentumScrollJankTracker> momentum_scroll_jank_tracker_;
-
   // Swipe to move cursor feature.
   std::unique_ptr<CursorControlHandler> cursor_control_handler_;
+
+  // The most recent viz::BeginFrameArgs that was received in
+  // DeliverInputForBeginFrame. Which will be the active frame for all
+  // subsequent events arriving in HandleInputEventWithLatencyInfo. If frame
+  // production stops this will be outdated.
+  viz::BeginFrameArgs current_begin_frame_args_;
+
+  // When true, scroll events arriving in HandleInputEventWithLatencyInfo
+  // will be enqueued to be dispatched during the next
+  // DeliverInputForBeginFrame. When false, the scroll events will be dispatched
+  // immediately. This will occur if DeliverInputForBeginFrame was called while
+  // scrolling, with an empty `compositor_event_queue_`, until frame production
+  // has started, or completed.
+  bool enqueue_scroll_events_ = true;
+
+  // `cc::InputHandlerClient::ScrollEventDispatchMode::kEnqueueScrollEvents`:
+  // Scroll events arriving in `HandleInputEventWithLatencyInfo` will be
+  // enqueued to be dispatched during the next `DeliverInputForBeginFrame`.
+  //
+  // `cc::InputHandlerClient::ScrollEventDispatchMode::kDispatchScrollEventsImmediately`:
+  // Scroll events arriving in HandleInputEventWithLatencyInfo will be
+  // dispatched immediately, if `DeliverInputForBeginFrame` was called while
+  // scrolling, with no input events in the queue. This will occur until frame
+  // production has started, or completed.
+  //
+  // `cc::InputHandlerClient::ScrollEventDispatchMode::kUseScrollPredictorForEmptyQueue`:
+  // If `compositor_event_queue_` is empty when `DeliverInputForBeginFrame` is
+  // called, while we are scrolling. We will use `scroll_predictor_` to
+  // generate a new prediction. We will then dispatch a synthetic
+  // `GestureScrollUpdate` using the prediction.
+  cc::InputHandlerClient::ScrollEventDispatchMode scroll_event_dispatch_mode_ =
+      cc::InputHandlerClient::ScrollEventDispatchMode::kEnqueueScrollEvents;
+
+  double scroll_deadline_ratio_ = 0.333;
 };
 
 }  // namespace blink

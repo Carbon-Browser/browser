@@ -1,30 +1,28 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ios/web/common/user_agent.h"
+#import "ios/web/common/user_agent.h"
 
 #import <UIKit/UIKit.h>
 
-#include <stddef.h>
-#include <stdint.h>
-#include <sys/sysctl.h>
-#include <string>
+#import <stddef.h>
+#import <stdint.h>
+#import <sys/sysctl.h>
+#import <string>
 
-#include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
-#include "base/strings/sys_string_conversions.h"
-#include "base/system/sys_info.h"
-#include "ios/web/common/features.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/strings/string_util.h"
+#import "base/strings/stringprintf.h"
+#import "base/strings/sys_string_conversions.h"
+#import "base/system/sys_info.h"
+#import "ios/web/common/features.h"
 
 namespace {
 
+// The Desktop OS version should always remain 10_15_7, to be consisent with
+// Chrome, Firefox, and Safari: https://crbug.com/40167872
 const char kDesktopUserAgentProductPlaceholder[] =
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_5) "
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/605.1.15 (KHTML, like Gecko) %s"
     "Version/11.1.1 "
     "Safari/605.1.15";
@@ -39,11 +37,20 @@ std::string OSVersion() {
   int32_t os_major_version = 0;
   int32_t os_minor_version = 0;
   int32_t os_bugfix_version = 0;
+
   base::SysInfo::OperatingSystemVersionNumbers(
       &os_major_version, &os_minor_version, &os_bugfix_version);
 
   std::string os_version;
-  base::StringAppendF(&os_version, "%d_%d", os_major_version, os_minor_version);
+
+  if (base::FeatureList::IsEnabled(web::features::kUserAgentBugFixVersion)) {
+    base::StringAppendF(&os_version, "%d_%d_%d", os_major_version,
+                        os_minor_version, os_bugfix_version);
+  } else {
+    base::StringAppendF(&os_version, "%d_%d", os_major_version,
+                        os_minor_version);
+  }
+
   return os_version;
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,17 +8,18 @@
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/shelf/shelf.h"
 #include "ash/shell.h"
+#include "ash/strings/grit/ash_strings.h"
 #include "ash/system/accessibility/autoclick_scroll_bubble_controller.h"
 #include "ash/system/accessibility/floating_menu_utils.h"
 #include "ash/system/tray/tray_background_view.h"
 #include "ash/system/tray/tray_bubble_view.h"
 #include "ash/system/tray/tray_constants.h"
-#include "ash/system/unified/unified_system_tray_view.h"
 #include "ash/wm/collision_detection/collision_detection_utils.h"
 #include "ash/wm/work_area_insets.h"
 #include "ash/wm/workspace/workspace_layout_manager.h"
 #include "ash/wm/workspace_controller.h"
 #include "ui/aura/window_tree_host.h"
+#include "ui/base/l10n/l10n_util.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
 #include "ui/events/event_utils.h"
@@ -105,12 +106,14 @@ void AutoclickMenuBubbleController::SetPosition(
   if (bubble_widget_->GetWindowBoundsInScreen() == resting_bounds)
     return;
 
-  ui::ScopedLayerAnimationSettings settings(
-      bubble_widget_->GetLayer()->GetAnimator());
-  settings.SetPreemptionStrategy(
-      ui::LayerAnimator::IMMEDIATELY_ANIMATE_TO_NEW_TARGET);
-  settings.SetTransitionDuration(base::Milliseconds(kAnimationDurationMs));
-  settings.SetTweenType(gfx::Tween::EASE_OUT);
+  if (animate_) {
+    ui::ScopedLayerAnimationSettings settings(
+        bubble_widget_->GetLayer()->GetAnimator());
+    settings.SetPreemptionStrategy(
+        ui::LayerAnimator::IMMEDIATELY_ANIMATE_TO_NEW_TARGET);
+    settings.SetTransitionDuration(base::Milliseconds(kAnimationDurationMs));
+    settings.SetTweenType(gfx::Tween::EASE_OUT);
+  }
   bubble_widget_->SetBounds(resting_bounds);
 
   if (!scroll_bubble_controller_)
@@ -146,6 +149,7 @@ void AutoclickMenuBubbleController::ShowBubble(AutoclickEventType type,
                           kShellWindowId_AccessibilityBubbleContainer);
   init_params.anchor_mode = TrayBubbleView::AnchorMode::kRect;
   init_params.is_anchored_to_status_area = false;
+  init_params.close_on_deactivate = false;
   // The widget's shadow is drawn below and on the sides of the view, with a
   // width of kCollisionWindowWorkAreaInsetsDp. Set the top inset to 0 to ensure
   // the scroll view is drawn at kCollisionWindowWorkAreaInsetsDp above the
@@ -156,15 +160,13 @@ void AutoclickMenuBubbleController::ShowBubble(AutoclickEventType type,
                                          kCollisionWindowWorkAreaInsetsDp);
   init_params.preferred_width = kAutoclickMenuWidth;
   init_params.translucent = true;
+  init_params.type = TrayBubbleView::TrayBubbleType::kAccessibilityBubble;
   bubble_view_ = new TrayBubbleView(init_params);
 
   menu_view_ = new AutoclickMenuView(type, position);
   menu_view_->SetBorder(views::CreateEmptyBorder(
       gfx::Insets::TLBR(kUnifiedTopShortcutSpacing, 0, 0, 0)));
-  bubble_view_->AddChildView(menu_view_);
-
-  menu_view_->SetPaintToLayer();
-  menu_view_->layer()->SetFillsBoundsOpaquely(false);
+  bubble_view_->AddChildView(menu_view_.get());
 
   bubble_widget_ = views::BubbleDialogDelegateView::CreateBubble(bubble_view_);
   TrayBackgroundView::InitializeBubbleAnimations(bubble_widget_);
@@ -205,12 +207,12 @@ void AutoclickMenuBubbleController::ClickOnBubble(gfx::Point location_in_dips,
   location_in_dips -= bubble_view_->GetBoundsInScreen().OffsetFromOrigin();
 
   // Generate synthesized mouse events for the click.
-  const ui::MouseEvent press_event(ui::ET_MOUSE_PRESSED, location_in_dips,
-                                   location_in_dips, ui::EventTimeForNow(),
-                                   mouse_event_flags | ui::EF_LEFT_MOUSE_BUTTON,
-                                   ui::EF_LEFT_MOUSE_BUTTON);
+  const ui::MouseEvent press_event(
+      ui::EventType::kMousePressed, location_in_dips, location_in_dips,
+      ui::EventTimeForNow(), mouse_event_flags | ui::EF_LEFT_MOUSE_BUTTON,
+      ui::EF_LEFT_MOUSE_BUTTON);
   const ui::MouseEvent release_event(
-      ui::ET_MOUSE_RELEASED, location_in_dips, location_in_dips,
+      ui::EventType::kMouseReleased, location_in_dips, location_in_dips,
       ui::EventTimeForNow(), mouse_event_flags | ui::EF_LEFT_MOUSE_BUTTON,
       ui::EF_LEFT_MOUSE_BUTTON);
 
@@ -243,6 +245,16 @@ void AutoclickMenuBubbleController::BubbleViewDestroyed() {
   bubble_view_ = nullptr;
   bubble_widget_ = nullptr;
   menu_view_ = nullptr;
+}
+
+std::u16string AutoclickMenuBubbleController::GetAccessibleNameForBubble() {
+  return l10n_util::GetStringUTF16(IDS_ASH_AUTOCLICK_MENU);
+}
+
+void AutoclickMenuBubbleController::HideBubble(
+    const TrayBubbleView* bubble_view) {
+  // This function is currently not unused for bubbles of type
+  // `kAccessibilityBubble`, so can leave this empty.
 }
 
 void AutoclickMenuBubbleController::OnLocaleChanged() {

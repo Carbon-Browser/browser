@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,11 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/observer_list.h"
 #include "base/task/single_thread_task_runner.h"
@@ -31,8 +32,8 @@ namespace device {
 BluetoothAdapter::ServiceOptions::ServiceOptions() = default;
 BluetoothAdapter::ServiceOptions::~ServiceOptions() = default;
 
-#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_CHROMEOS) && !BUILDFLAG(IS_MAC) && \
-    !BUILDFLAG(IS_WIN) && !BUILDFLAG(IS_LINUX)
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_CHROMEOS) && \
+    !BUILDFLAG(IS_APPLE) && !BUILDFLAG(IS_WIN) && !BUILDFLAG(IS_LINUX)
 // static
 scoped_refptr<BluetoothAdapter> BluetoothAdapter::CreateAdapter() {
   return nullptr;
@@ -81,6 +82,12 @@ BluetoothAdapter::PermissionStatus BluetoothAdapter::GetOsPermissionStatus()
   return PermissionStatus::kAllowed;
 }
 
+void BluetoothAdapter::RequestSystemPermission(
+    BluetoothAdapter::RequestSystemPermissionCallback callback) {
+  ui_task_runner_->PostTask(
+      FROM_HERE, base::BindOnce(std::move(callback), GetOsPermissionStatus()));
+}
+
 void BluetoothAdapter::SetPowered(bool powered,
                                   base::OnceClosure callback,
                                   ErrorCallback error_callback) {
@@ -108,7 +115,7 @@ void BluetoothAdapter::SetPowered(bool powered,
 }
 
 bool BluetoothAdapter::IsPeripheralRoleSupported() const {
-  // TODO(crbug/1071595): Implement this for more platforms.
+  // TODO(crbug.com/40685201): Implement this for more platforms.
   return true;
 }
 
@@ -200,7 +207,7 @@ BluetoothAdapter::GetMergedDiscoveryFilter() const {
       std::make_unique<BluetoothDiscoveryFilter>(BLUETOOTH_TRANSPORT_DUAL);
   bool first_merge = true;
 
-  for (auto* iter : discovery_sessions_) {
+  for (BluetoothDiscoverySession* iter : discovery_sessions_) {
     if (!iter->IsActive())
       continue;
 
@@ -225,7 +232,7 @@ BluetoothAdapter::DeviceList BluetoothAdapter::GetDevices() {
   DeviceList devices;
   for (ConstDeviceList::const_iterator i = const_devices.begin();
        i != const_devices.end(); ++i)
-    devices.push_back(const_cast<BluetoothDevice*>(*i));
+    devices.push_back(const_cast<BluetoothDevice*>(i->get()));
 
   return devices;
 }
@@ -290,17 +297,32 @@ BluetoothDevice::PairingDelegate* BluetoothAdapter::DefaultPairingDelegate() {
   return pairing_delegates_.front().first;
 }
 
+// Default to assume the controller doesn't supports ext adv.
+bool BluetoothAdapter::IsExtendedAdvertisementsAvailable() const {
+  return false;
+}
+
 std::vector<BluetoothAdvertisement*>
 BluetoothAdapter::GetPendingAdvertisementsForTesting() const {
   return {};
 }
 
+base::WeakPtr<BluetoothLocalGattService>
+BluetoothAdapter::CreateLocalGattService(
+    const BluetoothUUID& uuid,
+    bool is_primary,
+    BluetoothLocalGattService::Delegate* delegate) {
+  return nullptr;
+}
+
 void BluetoothAdapter::NotifyAdapterPresentChanged(bool present) {
+  BLUETOOTH_LOG(EVENT) << "Adapter " << (present ? "present" : "not present");
   for (auto& observer : observers_)
     observer.AdapterPresentChanged(this, present);
 }
 
 void BluetoothAdapter::NotifyAdapterPoweredChanged(bool powered) {
+  BLUETOOTH_LOG(EVENT) << "Adapter powered " << (powered ? "on" : "off");
   for (auto& observer : observers_)
     observer.AdapterPoweredChanged(this, powered);
 }
@@ -347,6 +369,12 @@ void BluetoothAdapter::NotifyDeviceBatteryChanged(
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS)
+void BluetoothAdapter::NotifyDeviceBondedChanged(BluetoothDevice* device,
+                                                 bool new_bonded_status) {
+  for (auto& observer : observers_)
+    observer.DeviceBondedChanged(this, device, new_bonded_status);
+}
+
 void BluetoothAdapter::NotifyDeviceIsBlockedByPolicyChanged(
     BluetoothDevice* device,
     bool new_blocked_status) {
@@ -354,6 +382,12 @@ void BluetoothAdapter::NotifyDeviceIsBlockedByPolicyChanged(
 
   for (auto& observer : observers_)
     observer.DeviceBlockedByPolicyChanged(this, device, new_blocked_status);
+}
+
+void BluetoothAdapter::NotifyGattNeedsDiscovery(BluetoothDevice* device) {
+  for (auto& observer : observers_) {
+    observer.GattNeedsDiscovery(device);
+  }
 }
 #endif
 
@@ -387,7 +421,7 @@ int BluetoothAdapter::NumDiscoverySessions() const {
 
 int BluetoothAdapter::NumScanningDiscoverySessions() const {
   int count = 0;
-  for (auto* session : discovery_sessions_) {
+  for (BluetoothDiscoverySession* session : discovery_sessions_) {
     if (session->status() ==
         BluetoothDiscoverySession::SessionStatus::SCANNING) {
       ++count;
@@ -395,6 +429,19 @@ int BluetoothAdapter::NumScanningDiscoverySessions() const {
   }
 
   return count;
+}
+
+void BluetoothAdapter::ClearAllDevices() {
+  // Move all elements of the original devices list to a new list here,
+  // leaving the original list empty so that when we send DeviceRemoved(),
+  // GetDevices() returns no devices.
+  DevicesMap devices_swapped;
+  devices_swapped.swap(devices_);
+  for (auto& iter : devices_swapped) {
+    for (auto& observer : observers_) {
+      observer.DeviceRemoved(this, iter.second.get());
+    }
+  }
 }
 
 void BluetoothAdapter::NotifyGattServicesDiscovered(BluetoothDevice* device) {
@@ -543,8 +590,9 @@ void BluetoothAdapter::OnDiscoveryChangeComplete(
 
   // Inform BluetoothDiscoverySession that updates being processed have
   // completed.
-  for (auto* session : discovery_sessions_)
+  for (BluetoothDiscoverySession* session : discovery_sessions_) {
     session->StartingSessionsScanning();
+  }
 
   current_discovery_filter_.CopyFrom(filter_being_set_);
 
@@ -606,8 +654,9 @@ void BluetoothAdapter::ProcessDiscoveryQueue() {
 
   // Inform BluetoothDiscoverySession that any updates they have made are being
   // processed.
-  for (auto* session : discovery_sessions_)
+  for (BluetoothDiscoverySession* session : discovery_sessions_) {
     session->PendingSessionsStarting();
+  }
 
   auto result_callback = base::BindOnce(
       &BluetoothAdapter::OnDiscoveryChangeComplete, GetWeakPtr());
@@ -646,7 +695,8 @@ void BluetoothAdapter::MarkDiscoverySessionsAsInactive() {
   // have become inactive, upon which the adapter will remove them from
   // |discovery_sessions_|. To avoid invalidating the iterator, make a copy
   // here.
-  std::set<BluetoothDiscoverySession*> temp(discovery_sessions_);
+  std::set<raw_ptr<BluetoothDiscoverySession, SetExperimental>> temp(
+      discovery_sessions_);
   for (auto iter = temp.begin(); iter != temp.end(); ++iter) {
     (*iter)->MarkAsInactive();
     RemoveDiscoverySession(*iter, base::DoNothing(), base::DoNothing());
@@ -680,6 +730,12 @@ void BluetoothAdapter::RemoveTimedOutDevices() {
     }
 
     DVLOG(1) << "Removing device: " << device->GetAddress();
+#if BUILDFLAG(IS_MAC)
+    if (!device->IsLowEnergyDevice()) {
+      BLUETOOTH_LOG(EVENT) << "Classic device removed: "
+                           << device->GetAddress();
+    }
+#endif  // BUILDFLAG(IS_MAC)
     auto next = it;
     next++;
     std::unique_ptr<BluetoothDevice> removed_device = std::move(it->second);

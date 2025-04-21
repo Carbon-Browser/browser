@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <unordered_map>
 
+#include "base/gtest_prod_util.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/ash/crosapi/task_manager_ash.h"
 #include "chrome/browser/task_manager/providers/task_provider.h"
@@ -59,7 +60,8 @@ class CrosapiTaskProviderAsh : public TaskProvider,
   void GetCrosapiTaskManagerTasks();
   void OnGetTaskManagerTasks(
       std::vector<crosapi::mojom::TaskPtr> task_results,
-      std::vector<crosapi::mojom::TaskGroupPtr> task_group_results);
+      std::vector<crosapi::mojom::TaskGroupPtr> task_group_results,
+      const std::optional<std::string>& active_task_uuid);
 
   // Cleans up cached tasks and refresh arguments.
   void CleanupCachedData();

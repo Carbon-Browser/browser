@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,7 @@
 
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "media/audio/audio_device_name.h"
 #include "media/base/audio_parameters.h"
@@ -52,7 +53,7 @@ class MEDIA_EXPORT CoreAudioUtil {
     size_t size() const;
 
    private:
-    WAVEFORMATEX* ptr_;
+    raw_ptr<WAVEFORMATEX> ptr_;
   };
 
   CoreAudioUtil() = delete;
@@ -77,10 +78,6 @@ class MEDIA_EXPORT CoreAudioUtil {
   // One reference-time unit is 100 nanoseconds.
   // Example: double s = RefererenceTimeToTimeDelta(t).InMillisecondsF();
   static base::TimeDelta ReferenceTimeToTimeDelta(REFERENCE_TIME time);
-
-  // Returns 1, 2, or 3 corresponding to the highest version of IAudioClient
-  // the platform supports.
-  static uint32_t GetIAudioClientVersion();
 
   // Returns AUDCLNT_SHAREMODE_EXCLUSIVE if --enable-exclusive-mode is used
   // as command-line flag and AUDCLNT_SHAREMODE_SHARED otherwise (default).
@@ -198,7 +195,8 @@ class MEDIA_EXPORT CoreAudioUtil {
   // preferred settings for an exclusive mode stream.
   static HRESULT GetPreferredAudioParameters(const std::string& device_id,
                                              bool is_output_device,
-                                             AudioParameters* params);
+                                             AudioParameters* params,
+                                             bool is_offload_stream = false);
 
   // Retrieves an integer mask which corresponds to the channel layout the
   // audio engine uses for its internal processing/mixing of shared-mode
@@ -219,6 +217,8 @@ class MEDIA_EXPORT CoreAudioUtil {
   // If a valid event is provided in |event_handle|, the client will be
   // initialized for event-driven buffer handling. If |event_handle| is set to
   // NULL, event-driven buffer handling is not utilized.
+  // If |enable_audio_offload| is true, the buffer will be set to a larger one
+  // as required by audio offloading feature.
   // This function will initialize the audio client as part of the default
   // audio session if NULL is passed for |session_guid|, otherwise the client
   // will be associated with the specified session.
@@ -227,7 +227,8 @@ class MEDIA_EXPORT CoreAudioUtil {
                                       HANDLE event_handle,
                                       uint32_t requested_buffer_size,
                                       uint32_t* endpoint_buffer_size,
-                                      const GUID* session_guid);
+                                      const GUID* session_guid,
+                                      bool enable_audio_offload = false);
 
   // Create an IAudioRenderClient client for an existing IAudioClient given by
   // |client|. The IAudioRenderClient interface enables a client to write
@@ -247,6 +248,16 @@ class MEDIA_EXPORT CoreAudioUtil {
   static bool FillRenderEndpointBufferWithSilence(
       IAudioClient* client,
       IAudioRenderClient* render_client);
+
+  // Enable audio offload on the client if supported. Returning true only when
+  // the client supports audio offload, and at the same time the offload pin
+  // for client's output is selected. For more details of audio offload, refer
+  // to:
+  // https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/hardware-offloaded-audio-processing
+  static bool EnableOffloadForClient(IAudioClient* client);
+
+  // Check if audio offload can be enabled for client.
+  static bool IsAudioOffloadSupported(IAudioClient* client);
 };
 
 // The special audio session identifier we use when opening up the default

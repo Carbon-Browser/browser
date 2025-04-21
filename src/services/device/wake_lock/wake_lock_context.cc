@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 
 #include <string>
 #include <utility>
+#include <vector>
 
-#include "base/containers/cxx20_erase.h"
+#include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "services/device/wake_lock/wake_lock.h"
 
@@ -23,7 +24,7 @@ WakeLockContext::WakeLockContext(
       context_id_(context_id),
       native_view_getter_(native_view_getter) {}
 
-WakeLockContext::~WakeLockContext() {}
+WakeLockContext::~WakeLockContext() = default;
 
 void WakeLockContext::GetWakeLock(
     mojom::WakeLockType type,
@@ -44,7 +45,7 @@ void WakeLockContext::OnWakeLockChanged(mojom::WakeLockType old_type,
 
 void WakeLockContext::OnConnectionError(mojom::WakeLockType type,
                                         WakeLock* wake_lock) {
-  base::EraseIf(wake_locks_,
+  std::erase_if(wake_locks_,
                 [wake_lock](auto& entry) { return entry.get() == wake_lock; });
 }
 

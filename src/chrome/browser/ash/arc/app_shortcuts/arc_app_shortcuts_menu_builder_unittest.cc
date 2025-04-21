@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,13 +11,13 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
-#include "chrome/browser/chromeos/arc/icon_decode_request.h"
-#include "chrome/browser/ui/app_list/arc/arc_app_test.h"
+#include "chrome/browser/ash/app_list/arc/arc_app_test.h"
+#include "chrome/browser/ash/arc/icon_decode_request.h"
 #include "chrome/test/base/testing_profile.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "ui/base/models/simple_menu_model.h"
 #include "ui/display/types/display_constants.h"
+#include "ui/menus/simple_menu_model.h"
 
 namespace arc {
 
@@ -81,7 +81,7 @@ TEST_F(ArcAppShortcutsMenuBuilderTest, Basic) {
   run_loop.Run();
 
   DCHECK(menu);
-  int i = 0;
+  size_t i = 0;
   EXPECT_EQ(first_item_label, menu->GetLabelAt(i++));
   EXPECT_EQ(ui::DOUBLE_SEPARATOR, menu->GetSeparatorTypeAt(i++));
   // There is a separator between each app shortcut.

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 
 #include "base/check.h"
 #include "base/check_op.h"
-#include "base/cxx17_backports.h"
 #include "base/numerics/checked_math.h"
 #include "base/values.h"
 #include "ui/gfx/geometry/size.h"
@@ -26,7 +25,7 @@ constexpr float kMaxDevicePixelRatio = 2;
 
 constexpr int kImageColorChannels = 4;
 
-// TODO(crbug.com/702993): Reevaluate the thumbnail size cap when the PDF
+// TODO(crbug.com/40511452): Reevaluate the thumbnail size cap when the PDF
 // component migrates off of PPAPI.
 // The maximum thumbnail area is essentially arbitrary, but the value was chosen
 // considering the fact that when sending array buffers through PPAPI, if the
@@ -109,18 +108,18 @@ size_t CalculateImageDataSize(int stride, int height) {
 }  // namespace
 
 Thumbnail::Thumbnail(const gfx::Size& page_size, float device_pixel_ratio)
-    : device_pixel_ratio_(base::clamp(device_pixel_ratio,
-                                      kMinDevicePixelRatio,
-                                      kMaxDevicePixelRatio)),
+    : device_pixel_ratio_(std::clamp(device_pixel_ratio,
+                                     kMinDevicePixelRatio,
+                                     kMaxDevicePixelRatio)),
       image_size_(CalculateBestFitSize(page_size, device_pixel_ratio_)),
       stride_(CalculateStride(image_size_.width())),
       image_data_(CalculateImageDataSize(stride(), image_size().height())) {
   DCHECK(!image_data_.empty());
 }
 
-Thumbnail::Thumbnail(Thumbnail&& other) = default;
+Thumbnail::Thumbnail(Thumbnail&& other) noexcept = default;
 
-Thumbnail& Thumbnail::operator=(Thumbnail&& other) = default;
+Thumbnail& Thumbnail::operator=(Thumbnail&& other) noexcept = default;
 
 Thumbnail::~Thumbnail() = default;
 

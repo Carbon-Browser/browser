@@ -1,26 +1,28 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import './searched_label.js';
 import './shared_style.css.js';
-import './strings.m.js';
-import 'chrome://resources/cr_elements/cr_icons_css.m.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
+import '/strings.m.js';
+import 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
+import 'chrome://resources/cr_elements/cr_icon/cr_icon.js';
+import 'chrome://resources/cr_elements/cr_icons.css.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
 import 'chrome://resources/js/icon.js';
-import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
 
-import {CrCheckboxElement} from 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.m.js';
-import {CrIconButtonElement} from 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
-import {FocusRowBehavior} from 'chrome://resources/js/cr/ui/focus_row_behavior.m.js';
-import {focusWithoutInk} from 'chrome://resources/js/cr/ui/focus_without_ink.m.js';
-import {EventTracker} from 'chrome://resources/js/event_tracker.m.js';
+import {HistoryResultType} from 'chrome://resources/cr_components/history/constants.js';
+import type {CrCheckboxElement} from 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
+import type {CrIconButtonElement} from 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
+import {FocusRowMixin} from 'chrome://resources/cr_elements/focus_row_mixin.js';
+import {EventTracker} from 'chrome://resources/js/event_tracker.js';
+import {focusWithoutInk} from 'chrome://resources/js/focus_without_ink.js';
 import {getFaviconForPageURL} from 'chrome://resources/js/icon.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {afterNextRender, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+import {afterNextRender, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {BrowserServiceImpl} from './browser_service.js';
-import {HistoryEntry} from './externs.js';
+import type {HistoryEntry} from './externs.js';
 import {getTemplate} from './history_item.html.js';
 
 export interface HistoryItemElement {
@@ -33,9 +35,7 @@ export interface HistoryItemElement {
   };
 }
 
-const HistoryItemElementBase =
-    mixinBehaviors([FocusRowBehavior], PolymerElement) as
-    {new (): PolymerElement & FocusRowBehavior};
+const HistoryItemElementBase = FocusRowMixin(PolymerElement);
 
 export class HistoryItemElement extends HistoryItemElementBase {
   static get is() {
@@ -105,6 +105,11 @@ export class HistoryItemElement extends HistoryItemElementBase {
         type: String,
         computed: 'getAriaDescribedByForHeading_(isCardStart, isCardEnd)',
       },
+
+      ariaDescribedByForActions_: {
+        type: String,
+        computed: 'getAriaDescribedByForActions_(isCardStart, isCardEnd)',
+      },
     };
   }
 
@@ -130,7 +135,7 @@ export class HistoryItemElement extends HistoryItemElementBase {
       // history items are items in a potentially long list.
       this.eventTracker_.add(
           this.$.checkbox, 'keydown',
-          e => this.onCheckboxKeydown_(e as KeyboardEvent));
+          (e: Event) => this.onCheckboxKeydown_(e as KeyboardEvent));
     });
   }
 
@@ -235,6 +240,16 @@ export class HistoryItemElement extends HistoryItemElementBase {
     return this.isCardStart || this.isCardEnd ? 'date-accessed' : '';
   }
 
+  /**
+   * Actions menu is described by the title and domain of the row and may
+   * include the date to make sure users know if they have jumped between dates.
+   */
+  private getAriaDescribedByForActions_(): string {
+    return this.isCardStart || this.isCardEnd ?
+        'title-and-domain date-accessed' :
+        'title-and-domain';
+  }
+
   private getAriaChecked_(selected: boolean): string {
     return selected ? 'true' : 'false';
   }
@@ -242,7 +257,7 @@ export class HistoryItemElement extends HistoryItemElementBase {
   /**
    * Remove bookmark of current item when bookmark-star is clicked.
    */
-  private onRemoveBookmarkTap_() {
+  private onRemoveBookmarkClick_() {
     if (!this.item.starred) {
       return;
     }
@@ -263,7 +278,7 @@ export class HistoryItemElement extends HistoryItemElementBase {
    * Fires a custom event when the menu button is clicked. Sends the details
    * of the history item and where the menu should appear.
    */
-  private onMenuButtonTap_(e: Event) {
+  private onMenuButtonClick_(e: Event) {
     this.fire_('open-menu', {
       target: e.target,
       index: this.index,
@@ -295,6 +310,11 @@ export class HistoryItemElement extends HistoryItemElementBase {
     if (this.searchTerm) {
       browserService.recordAction('SearchResultClick');
     }
+
+    this.fire_('record-history-link-click', {
+      resultType: HistoryResultType.TRADITIONAL,
+      index: this.index,
+    });
   }
 
   private onLinkRightClick_() {
@@ -339,7 +359,7 @@ export class HistoryItemElement extends HistoryItemElementBase {
    * @return An equivalent element to focus, or null to use the
    *     default element.
    */
-  getCustomEquivalent(sampleElement: Element): Element|null {
+  override getCustomEquivalent(sampleElement: HTMLElement): HTMLElement|null {
     return sampleElement.getAttribute('focus-type') === 'star' ? this.$.link :
                                                                  null;
   }

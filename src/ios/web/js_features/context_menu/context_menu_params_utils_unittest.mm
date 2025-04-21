@@ -1,23 +1,19 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/web/js_features/context_menu/context_menu_params_utils.h"
 
-#include "base/strings/sys_string_conversions.h"
-#include "base/values.h"
-#include "components/url_formatter/url_formatter.h"
-#include "ios/web/common/referrer_util.h"
-#include "ios/web/js_features/context_menu/context_menu_constants.h"
+#import "base/strings/sys_string_conversions.h"
+#import "base/values.h"
+#import "components/url_formatter/url_formatter.h"
+#import "ios/web/common/referrer_util.h"
+#import "ios/web/js_features/context_menu/context_menu_constants.h"
 #import "ios/web/public/ui/context_menu_params.h"
-#import "net/base/mac/url_conversions.h"
-#include "testing/gtest/include/gtest/gtest.h"
+#import "net/base/apple/url_conversions.h"
+#import "testing/gtest/include/gtest/gtest.h"
 #import "testing/gtest_mac.h"
-#include "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "testing/platform_test.h"
 
 namespace {
 // Text values for the tapped element triggering the context menu.
@@ -28,7 +24,7 @@ const char kReferrerPolicy[] = "always";
 const char kLinkText[] = "link text";
 const char kAlt[] = "alt text";
 
-// Returns true if the |params| contain enough information to present a context
+// Returns true if the `params` contain enough information to present a context
 // menu. (A valid url for either link_url or src_url must exist in the params.)
 bool CanShowContextMenuForParams(const web::ContextMenuParams& params) {
   if (params.link_url.is_valid()) {
@@ -62,15 +58,16 @@ TEST_F(ContextMenuParamsUtilsTest, EmptyParams) {
 
 // Tests the parsing of the element NSDictionary.
 TEST_F(ContextMenuParamsUtilsTest, DictionaryConstructorTest) {
-  base::Value element_dict(base::Value::Type::DICTIONARY);
-  element_dict.SetStringKey(kContextMenuElementHyperlink, kLinkUrl);
-  element_dict.SetStringKey(kContextMenuElementSource, kSrcUrl);
-  element_dict.SetStringKey(kContextMenuElementTitle, kTitle);
-  element_dict.SetStringKey(kContextMenuElementReferrerPolicy, kReferrerPolicy);
-  element_dict.SetStringKey(kContextMenuElementInnerText, kLinkText);
-  element_dict.SetStringKey(kContextMenuElementAlt, kAlt);
+  auto element_dict =
+      base::Value::Dict()
+          .Set(kContextMenuElementHyperlink, kLinkUrl)
+          .Set(kContextMenuElementSource, kSrcUrl)
+          .Set(kContextMenuElementTitle, kTitle)
+          .Set(kContextMenuElementReferrerPolicy, kReferrerPolicy)
+          .Set(kContextMenuElementInnerText, kLinkText)
+          .Set(kContextMenuElementAlt, kAlt);
   ContextMenuParams params =
-      ContextMenuParamsFromElementDictionary(&element_dict);
+      ContextMenuParamsFromElementDictionary(element_dict);
 
   EXPECT_TRUE(params.is_main_frame);
   EXPECT_EQ(params.link_url, GURL(kLinkUrl));

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,14 @@ import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup.LayoutParams;
-import android.widget.FrameLayout;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.chrome.R;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent;
+import org.chromium.components.payments.ui.InputProtector;
 import org.chromium.content_public.browser.RenderCoordinates;
 import org.chromium.content_public.browser.WebContents;
 
@@ -26,7 +27,7 @@ import org.chromium.content_public.browser.WebContents;
  */
 /* package */ class PaymentHandlerView implements BottomSheetContent {
     private final View mToolbarView;
-    private final FrameLayout mContentView;
+    private final PaymentHandlerContentFrameLayout mContentView;
     private final View mThinWebView;
     private final WebContents mWebContents;
     private final int mToolbarHeightPx;
@@ -43,17 +44,24 @@ import org.chromium.content_public.browser.WebContents;
      * @param thinWebView The view that shows the WebContents of the payment app.
      */
     /* package */ PaymentHandlerView(
-            Context context, WebContents webContents, View toolbarView, View thinWebView) {
+            Context context,
+            WebContents webContents,
+            View toolbarView,
+            View thinWebView,
+            InputProtector inputProtector) {
         mWebContents = webContents;
         mToolbarView = toolbarView;
         mThinWebView = thinWebView;
         mToolbarHeightPx =
                 context.getResources().getDimensionPixelSize(R.dimen.sheet_tab_toolbar_height);
-        mContentView = (FrameLayout) LayoutInflater.from(context).inflate(
-                R.layout.payment_handler_content, null);
+        mContentView =
+                (PaymentHandlerContentFrameLayout)
+                        LayoutInflater.from(context)
+                                .inflate(R.layout.payment_handler_content, null);
+        mContentView.setInputProtector(inputProtector);
         mContentView.setPadding(
-                /*left=*/0, /*top=*/mToolbarHeightPx, /*right=*/0, /*bottom=*/0);
-        mContentView.addView(thinWebView, /*index=*/0);
+                /* left= */ 0, /* top= */ mToolbarHeightPx, /* right= */ 0, /* bottom= */ 0);
+        mContentView.addView(thinWebView, /* index= */ 0);
         mBackPressStateChangedSupplier.set(true);
     }
 
@@ -87,8 +95,7 @@ import org.chromium.content_public.browser.WebContents;
     }
 
     @Override
-    @Nullable
-    public View getToolbarView() {
+    public @Nullable View getToolbarView() {
         return mToolbarView;
     }
 
@@ -118,8 +125,7 @@ import org.chromium.content_public.browser.WebContents;
     public void destroy() {}
 
     @Override
-    @ContentPriority
-    public int getPriority() {
+    public @ContentPriority int getPriority() {
         // If multiple bottom sheets are queued up to be shown, prioritize payment-handler, because
         // it's triggered by a user gesture, such as a click on <button>Buy this article</button>.
         return BottomSheetContent.ContentPriority.HIGH;
@@ -147,8 +153,8 @@ import org.chromium.content_public.browser.WebContents;
     }
 
     @Override
-    public int getSheetContentDescriptionStringId() {
-        return R.string.payment_handler_sheet_description;
+    public @NonNull String getSheetContentDescription(Context context) {
+        return context.getString(R.string.payment_handler_sheet_description);
     }
 
     @Override

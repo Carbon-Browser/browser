@@ -1,26 +1,28 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "build/build_config.h"
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
-// Native headless is currently available only on Linux platform. More
-// platforms will be added soon, so avoid function level clutter by
-// ifdefing the entire file.
-#if BUILDFLAG(IS_LINUX)
-
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/base64.h"
-#include "base/bind.h"
 #include "base/containers/span.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_span.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/test/values_test_util.h"
 #include "base/values.h"
 #include "chrome/browser/devtools/protocol/devtools_protocol_test_support.h"
 #include "chrome/test/base/ui_test_utils.h"
+#include "components/headless/test/pdf_utils.h"
+#include "components/printing/browser/print_manager_utils.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
@@ -28,26 +30,27 @@
 #include "pdf/pdf.h"
 #include "printing/pdf_render_settings.h"
 #include "printing/units.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
+#include "ui/gfx/geometry/size_conversions.h"
 
 using DevToolsProtocolTest = DevToolsProtocolTestBase;
 
 namespace {
 
-class PrintToPdfProtocolTest : public DevToolsProtocolTest {
+class PrintToPdfProtocolTest : public DevToolsProtocolTest,
+                               public testing::WithParamInterface<bool> {
  protected:
   static constexpr double kPaperWidth = 10;
   static constexpr double kPaperHeight = 15;
-  static constexpr int kColorChannels = 4;
-  static constexpr int kDpi = 300;
+  static constexpr int kDpi = headless::PDFPageBitmap::kDpi;
+
+  bool headless() const { return GetParam(); }
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
-    // TODO(crbug.com/1240796): Page.printToPdf is currently available only when
-    // Chrome is running in headless mode.
     DevToolsProtocolTest::SetUpCommandLine(command_line);
-    command_line->AppendSwitchASCII("headless", "chrome");
+    if (headless())
+      command_line->AppendSwitchASCII("headless", "chrome");
   }
 
   void PreRunTestOnMainThread() override {
@@ -68,7 +71,7 @@ class PrintToPdfProtocolTest : public DevToolsProtocolTest {
     const std::string& data = *result()->FindString("data");
     ASSERT_TRUE(base::Base64Decode(data, &pdf_data_));
 
-    pdf_span_ = base::as_bytes(base::make_span(pdf_data_));
+    pdf_span_ = base::as_byte_span(pdf_data_);
 
     ASSERT_TRUE(chrome_pdf::GetPDFDocInfo(pdf_span_, &pdf_num_pages_, nullptr));
     ASSERT_GE(pdf_num_pages_, 1);
@@ -80,9 +83,9 @@ class PrintToPdfProtocolTest : public DevToolsProtocolTest {
 
     pdf_data_.clear();
     for (;;) {
-      base::Value params(base::Value::Type::DICTIONARY);
-      params.SetStringPath("handle", stream);
-      params.SetIntPath("offset", pdf_data_.size());
+      base::Value::Dict params;
+      params.Set("handle", stream);
+      params.Set("offset", static_cast<int>(pdf_data_.size()));
       const base::Value::Dict* result =
           SendCommandSync("IO.read", std::move(params));
       std::string data = *result->FindString("data");
@@ -100,89 +103,60 @@ class PrintToPdfProtocolTest : public DevToolsProtocolTest {
     ASSERT_GE(pdf_num_pages_, 1);
   }
 
-  void PrintToPdf(base::Value params) {
+  void PrintToPdf(base::Value::Dict params) {
     SendCommandSync("Page.printToPDF", std::move(params));
     CreatePdfSpanFromResultData();
   }
 
-  void PrintToPdfAsStream(base::Value params) {
+  void PrintToPdfAsStream(base::Value::Dict params) {
     SendCommandSync("Page.printToPDF", std::move(params));
     CreatePdfSpanFromResultStream();
   }
 
-  void PrintToPdfAndRenderPage(base::Value params, int page_index) {
+  void PrintToPdfAndRenderPage(base::Value::Dict params, int page_index) {
     SendCommandSync("Page.printToPDF", std::move(params));
     CreatePdfSpanFromResultData();
-    RendePdfPage(page_index);
+    ASSERT_TRUE(page_bitmap.Render(pdf_span_, page_index));
   }
 
-  void PrintToPdfAsStreamAndRenderPage(base::Value params, int page_index) {
+  void PrintToPdfAsStreamAndRenderPage(base::Value::Dict params,
+                                       int page_index) {
     SendCommandSync("Page.printToPDF", std::move(params));
     CreatePdfSpanFromResultStream();
-    RendePdfPage(page_index);
+    ASSERT_TRUE(page_bitmap.Render(pdf_span_, page_index));
   }
 
-  void RendePdfPage(int page_index) {
-    constexpr chrome_pdf::RenderOptions options = {
-        .stretch_to_bounds = false,
-        .keep_aspect_ratio = true,
-        .autorotate = true,
-        .use_color = true,
-        .render_device_type = chrome_pdf::RenderDeviceType::kPrinter,
-    };
+  uint32_t GetPixelRGB(int x, int y) { return page_bitmap.GetPixelRGB(x, y); }
 
-    absl::optional<gfx::SizeF> page_size =
-        chrome_pdf::GetPDFPageSizeByIndex(pdf_span_, page_index);
-    ASSERT_TRUE(page_size.has_value());
-
-    gfx::Rect rect(kPaperWidth * kDpi, kPaperHeight * kDpi);
-    printing::PdfRenderSettings settings(
-        rect, gfx::Point(), gfx::Size(kDpi, kDpi), options.autorotate,
-        options.use_color, printing::PdfRenderSettings::Mode::NORMAL);
-    std::vector<uint8_t> bitmap_data(kColorChannels *
-                                     settings.area.size().GetArea());
-    ASSERT_TRUE(chrome_pdf::RenderPDFPageToBitmap(
-        pdf_span_, page_index, bitmap_data.data(), settings.area.size(),
-        settings.dpi, options));
-
-    bitmap_data_.swap(bitmap_data);
-    bitmap_size_ = settings.area.size();
-  }
-
-  uint32_t GetPixelRGB(int x, int y) {
-    int pixel_index =
-        bitmap_size_.width() * y * kColorChannels + x * kColorChannels;
-    return bitmap_data_[pixel_index + 0]           // B
-           | bitmap_data_[pixel_index + 1] << 8    // G
-           | bitmap_data_[pixel_index + 2] << 16;  // R
-  }
-
-  int bitmap_width() { return bitmap_size_.width(); }
-  int bitmap_height() { return bitmap_size_.height(); }
+  int bitmap_width() { return page_bitmap.width(); }
+  int bitmap_height() { return page_bitmap.height(); }
 
   net::EmbeddedTestServer https_server_;
 
   std::string pdf_data_;
-  base::span<const uint8_t> pdf_span_;
+  base::raw_span<const uint8_t, DanglingUntriaged> pdf_span_;
   int pdf_num_pages_ = 0;
 
-  std::vector<uint8_t> bitmap_data_;
-  gfx::Size bitmap_size_;
+  headless::PDFPageBitmap page_bitmap;
 };
 
-IN_PROC_BROWSER_TEST_F(PrintToPdfProtocolTest, PrintToPdfBackground) {
+INSTANTIATE_TEST_SUITE_P(HeadfulOrHeadless,
+                         PrintToPdfProtocolTest,
+                         testing::Bool());
+
+IN_PROC_BROWSER_TEST_P(PrintToPdfProtocolTest, PrintToPdfBackground) {
   NavigateToURLBlockUntilNavigationsComplete("/print_to_pdf/basic.html");
 
   Attach();
 
-  base::Value params(base::Value::Type::DICTIONARY);
-  params.SetBoolPath("printBackground", true);
-  params.SetDoublePath("paperWidth", kPaperWidth);
-  params.SetDoublePath("paperHeight", kPaperHeight);
-  params.SetDoublePath("marginTop", 0);
-  params.SetDoublePath("marginLeft", 0);
-  params.SetDoublePath("marginBottom", 0);
-  params.SetDoublePath("marginRight", 0);
+  base::Value::Dict params;
+  params.Set("printBackground", true);
+  params.Set("paperWidth", kPaperWidth);
+  params.Set("paperHeight", kPaperHeight);
+  params.Set("marginTop", 0);
+  params.Set("marginLeft", 0);
+  params.Set("marginBottom", 0);
+  params.Set("marginRight", 0);
 
   PrintToPdfAndRenderPage(std::move(params), 0);
 
@@ -193,19 +167,19 @@ IN_PROC_BROWSER_TEST_F(PrintToPdfProtocolTest, PrintToPdfBackground) {
   EXPECT_EQ(GetPixelRGB(bitmap_width() / 2, bitmap_height() / 2), 0xff0000u);
 }
 
-IN_PROC_BROWSER_TEST_F(PrintToPdfProtocolTest, PrintToPdfMargins) {
+IN_PROC_BROWSER_TEST_P(PrintToPdfProtocolTest, PrintToPdfMargins) {
   NavigateToURLBlockUntilNavigationsComplete("/print_to_pdf/basic.html");
 
   Attach();
 
-  base::Value params(base::Value::Type::DICTIONARY);
-  params.SetBoolPath("printBackground", true);
-  params.SetDoublePath("paperWidth", kPaperWidth);
-  params.SetDoublePath("paperHeight", kPaperHeight);
-  params.SetDoublePath("marginTop", 1.0);
-  params.SetDoublePath("marginLeft", 1.0);
-  params.SetDoublePath("marginBottom", 0);
-  params.SetDoublePath("marginRight", 0);
+  base::Value::Dict params;
+  params.Set("printBackground", true);
+  params.Set("paperWidth", kPaperWidth);
+  params.Set("paperHeight", kPaperHeight);
+  params.Set("marginTop", 1.0);
+  params.Set("marginLeft", 1.0);
+  params.Set("marginBottom", 0);
+  params.Set("marginRight", 0);
 
   PrintToPdfAndRenderPage(std::move(params), 0);
 
@@ -219,7 +193,7 @@ IN_PROC_BROWSER_TEST_F(PrintToPdfProtocolTest, PrintToPdfMargins) {
   EXPECT_EQ(GetPixelRGB(bitmap_width() / 2, bitmap_height() / 2), 0xff0000u);
 }
 
-IN_PROC_BROWSER_TEST_F(PrintToPdfProtocolTest, PrintToPdfHeaderFooter) {
+IN_PROC_BROWSER_TEST_P(PrintToPdfProtocolTest, PrintToPdfHeaderFooter) {
   NavigateToURLBlockUntilNavigationsComplete("/print_to_pdf/basic.html");
 
   Attach();
@@ -227,21 +201,21 @@ IN_PROC_BROWSER_TEST_F(PrintToPdfProtocolTest, PrintToPdfHeaderFooter) {
   constexpr double kHeaderMargin = 1.0;
   constexpr double kFooterMargin = 1.0;
 
-  base::Value params(base::Value::Type::DICTIONARY);
-  params.SetBoolPath("printBackground", true);
-  params.SetDoublePath("paperWidth", kPaperWidth);
-  params.SetDoublePath("paperHeight", kPaperHeight);
-  params.SetDoublePath("marginTop", kHeaderMargin);
-  params.SetDoublePath("marginLeft", 0);
-  params.SetDoublePath("marginBottom", kFooterMargin);
-  params.SetDoublePath("marginRight", 0);
-  params.SetBoolPath("displayHeaderFooter", true);
-  params.SetStringPath("headerTemplate",
-                       "<div style='height: 1cm; width: 1cm; background: "
-                       "#00ff00; -webkit-print-color-adjust: exact;'>");
-  params.SetStringPath("footerTemplate",
-                       "<div style='height: 1cm; width: 1cm; background: "
-                       "#0000ff; -webkit-print-color-adjust: exact;'>");
+  base::Value::Dict params;
+  params.Set("printBackground", true);
+  params.Set("paperWidth", kPaperWidth);
+  params.Set("paperHeight", kPaperHeight);
+  params.Set("marginTop", kHeaderMargin);
+  params.Set("marginLeft", 0);
+  params.Set("marginBottom", kFooterMargin);
+  params.Set("marginRight", 0);
+  params.Set("displayHeaderFooter", true);
+  params.Set("headerTemplate",
+             "<div style='height: 1cm; width: 1cm; background: "
+             "#00ff00; -webkit-print-color-adjust: exact;'>");
+  params.Set("footerTemplate",
+             "<div style='height: 1cm; width: 1cm; background: "
+             "#0000ff; -webkit-print-color-adjust: exact;'>");
 
   PrintToPdfAndRenderPage(std::move(params), 0);
 
@@ -265,21 +239,20 @@ IN_PROC_BROWSER_TEST_F(PrintToPdfProtocolTest, PrintToPdfHeaderFooter) {
 class PrintToPdfScaleTest : public PrintToPdfProtocolTest {
  protected:
   int RenderAndReturnRedSquareWidth(double scale) {
-    base::Value params(base::Value::Type::DICTIONARY);
-    params.SetBoolPath("printBackground", true);
-    params.SetDoublePath("paperWidth", kPaperWidth);
-    params.SetDoublePath("paperHeight", kPaperHeight);
-    params.SetDoublePath("marginTop", 0);
-    params.SetDoublePath("marginLeft", 0);
-    params.SetDoublePath("marginBottom", 0);
-    params.SetDoublePath("marginRight", 0);
-    params.SetDoublePath("scale", scale);
+    base::Value::Dict params;
+    params.Set("printBackground", true);
+    params.Set("paperWidth", kPaperWidth);
+    params.Set("paperHeight", kPaperHeight);
+    params.Set("marginTop", 0);
+    params.Set("marginLeft", 0);
+    params.Set("marginBottom", 0);
+    params.Set("marginRight", 0);
+    params.Set("scale", scale);
 
     PrintToPdfAndRenderPage(std::move(params), 0);
 
-    int x = 0;
     int y = bitmap_height() / 2;
-    uint32_t start_clr = GetPixelRGB(x, y);
+    uint32_t start_clr = GetPixelRGB(0, y);
     EXPECT_EQ(start_clr, 0x123456u);
 
     int red_square_width = 0;
@@ -295,7 +268,11 @@ class PrintToPdfScaleTest : public PrintToPdfProtocolTest {
   }
 };
 
-IN_PROC_BROWSER_TEST_F(PrintToPdfScaleTest, PrintToPdfScaleArea) {
+INSTANTIATE_TEST_SUITE_P(HeadfulOrHeadless,
+                         PrintToPdfScaleTest,
+                         testing::Bool());
+
+IN_PROC_BROWSER_TEST_P(PrintToPdfScaleTest, PrintToPdfScaleArea) {
   NavigateToURLBlockUntilNavigationsComplete("/print_to_pdf/basic.html");
 
   Attach();
@@ -311,12 +288,12 @@ IN_PROC_BROWSER_TEST_F(PrintToPdfScaleTest, PrintToPdfScaleArea) {
 
 class PrintToPdfPaperOrientationTest : public PrintToPdfProtocolTest {
  protected:
-  absl::optional<gfx::SizeF> PrintToPdfAndReturnPageSize(
+  std::optional<gfx::SizeF> PrintToPdfAndReturnPageSize(
       bool landscape = false) {
-    base::Value params(base::Value::Type::DICTIONARY);
-    params.SetDoublePath("paperWidth", kPaperWidth);
-    params.SetDoublePath("paperHeight", kPaperHeight);
-    params.SetBoolPath("landscape", landscape);
+    base::Value::Dict params;
+    params.Set("paperWidth", kPaperWidth);
+    params.Set("paperHeight", kPaperHeight);
+    params.Set("landscape", landscape);
 
     PrintToPdf(std::move(params));
 
@@ -324,17 +301,21 @@ class PrintToPdfPaperOrientationTest : public PrintToPdfProtocolTest {
   }
 };
 
-IN_PROC_BROWSER_TEST_F(PrintToPdfPaperOrientationTest,
+INSTANTIATE_TEST_SUITE_P(HeadfulOrHeadless,
+                         PrintToPdfPaperOrientationTest,
+                         testing::Bool());
+
+IN_PROC_BROWSER_TEST_P(PrintToPdfPaperOrientationTest,
                        PrintToPdfPaperOrientation) {
   NavigateToURLBlockUntilNavigationsComplete("/print_to_pdf/basic.html");
 
   Attach();
 
-  absl::optional<gfx::SizeF> portrait_page_size = PrintToPdfAndReturnPageSize();
+  std::optional<gfx::SizeF> portrait_page_size = PrintToPdfAndReturnPageSize();
   ASSERT_TRUE(portrait_page_size.has_value());
   EXPECT_GT(portrait_page_size->height(), portrait_page_size->width());
 
-  absl::optional<gfx::SizeF> landscape_page_size =
+  std::optional<gfx::SizeF> landscape_page_size =
       PrintToPdfAndReturnPageSize(/*landscape=*/true);
   ASSERT_TRUE(landscape_page_size.has_value());
   EXPECT_GT(landscape_page_size->width(), landscape_page_size->height());
@@ -347,21 +328,21 @@ class PrintToPdfPagesTest : public PrintToPdfProtocolTest {
   void SetDocHeight() {
     std::string height_expression = "document.body.style.height = '" +
                                     base::NumberToString(kDocHeight) + "in'";
-    base::Value params(base::Value::Type::DICTIONARY);
-    params.SetStringPath("expression", height_expression);
+    base::Value::Dict params;
+    params.Set("expression", height_expression);
 
     SendCommandSync("Runtime.evaluate", std::move(params));
   }
 
-  base::Value BuildPrintParams(const std::string& page_ranges) {
-    base::Value params(base::Value::Type::DICTIONARY);
-    params.SetDoublePath("paperWidth", kPaperWidth);
-    params.SetDoublePath("paperHeight", kPaperHeight);
-    params.SetDoublePath("marginTop", 0);
-    params.SetDoublePath("marginLeft", 0);
-    params.SetDoublePath("marginBottom", 0);
-    params.SetDoublePath("marginRight", 0);
-    params.SetStringPath("pageRanges", page_ranges);
+  base::Value::Dict BuildPrintParams(const std::string& page_ranges) {
+    base::Value::Dict params;
+    params.Set("paperWidth", kPaperWidth);
+    params.Set("paperHeight", kPaperHeight);
+    params.Set("marginTop", 0);
+    params.Set("marginLeft", 0);
+    params.Set("marginBottom", 0);
+    params.Set("marginRight", 0);
+    params.Set("pageRanges", page_ranges);
     return params;
   }
 
@@ -370,7 +351,11 @@ class PrintToPdfPagesTest : public PrintToPdfProtocolTest {
   }
 };
 
-IN_PROC_BROWSER_TEST_F(PrintToPdfPagesTest, PrintToPdfPageRanges) {
+INSTANTIATE_TEST_SUITE_P(HeadfulOrHeadless,
+                         PrintToPdfPagesTest,
+                         testing::Bool());
+
+IN_PROC_BROWSER_TEST_P(PrintToPdfPagesTest, PrintToPdfPageRanges) {
   NavigateToURLBlockUntilNavigationsComplete("/print_to_pdf/basic.html");
 
   Attach();
@@ -403,24 +388,23 @@ IN_PROC_BROWSER_TEST_F(PrintToPdfPagesTest, PrintToPdfPageRanges) {
   EXPECT_EQ(pdf_num_pages_, kExpectedTotalPages - 1);
 
   // Expect specific error for ranges beyond end of the document.
-  SendCommand("Page.printToPDF",
-              std::move(BuildPrintParams("998-999").GetDict()));
+  SendCommand("Page.printToPDF", BuildPrintParams("998-999"));
 
   EXPECT_THAT(*error()->FindString("message"),
               testing::Eq("Page range exceeds page count"));
 }
 
-IN_PROC_BROWSER_TEST_F(PrintToPdfPagesTest, PrintToPdfCssPageSize) {
+IN_PROC_BROWSER_TEST_P(PrintToPdfPagesTest, PrintToPdfCssPageSize) {
   NavigateToURLBlockUntilNavigationsComplete(
       "/print_to_pdf/css_page_size.html");
 
   Attach();
   SetDocHeight();
 
-  base::Value params(base::Value::Type::DICTIONARY);
-  params.SetDoublePath("paperWidth", kPaperWidth);
-  params.SetDoublePath("paperHeight", kPaperHeight);
-  params.SetBoolPath("preferCSSPageSize", true);
+  base::Value::Dict params;
+  params.Set("paperWidth", kPaperWidth);
+  params.Set("paperHeight", kPaperHeight);
+  params.Set("preferCSSPageSize", true);
 
   PrintToPdf(std::move(params));
 
@@ -430,20 +414,20 @@ IN_PROC_BROWSER_TEST_F(PrintToPdfPagesTest, PrintToPdfCssPageSize) {
   EXPECT_GT(pdf_num_pages_, kExpectedTotalPages);
 }
 
-IN_PROC_BROWSER_TEST_F(PrintToPdfProtocolTest, PrintToPdfAsStream) {
+IN_PROC_BROWSER_TEST_P(PrintToPdfProtocolTest, PrintToPdfAsStream) {
   NavigateToURLBlockUntilNavigationsComplete("/print_to_pdf/basic.html");
 
   Attach();
 
-  base::Value params(base::Value::Type::DICTIONARY);
-  params.SetBoolPath("printBackground", true);
-  params.SetDoublePath("paperWidth", kPaperWidth);
-  params.SetDoublePath("paperHeight", kPaperHeight);
-  params.SetDoublePath("marginTop", 0);
-  params.SetDoublePath("marginLeft", 0);
-  params.SetDoublePath("marginBottom", 0);
-  params.SetDoublePath("marginRight", 0);
-  params.SetStringPath("transferMode", "ReturnAsStream");
+  base::Value::Dict params;
+  params.Set("printBackground", true);
+  params.Set("paperWidth", kPaperWidth);
+  params.Set("paperHeight", kPaperHeight);
+  params.Set("marginTop", 0);
+  params.Set("marginLeft", 0);
+  params.Set("marginBottom", 0);
+  params.Set("marginRight", 0);
+  params.Set("transferMode", "ReturnAsStream");
 
   PrintToPdfAsStreamAndRenderPage(std::move(params), 0);
 
@@ -454,6 +438,130 @@ IN_PROC_BROWSER_TEST_F(PrintToPdfProtocolTest, PrintToPdfAsStream) {
   EXPECT_EQ(GetPixelRGB(bitmap_width() / 2, bitmap_height() / 2), 0xff0000u);
 }
 
-}  // namespace
+IN_PROC_BROWSER_TEST_P(PrintToPdfProtocolTest, HasDocumentOutline) {
+  NavigateToURLBlockUntilNavigationsComplete(
+      "/print_to_pdf/structured_doc.html");
 
-#endif  // BUILDFLAG(IS_LINUX)
+  Attach();
+
+  base::Value::Dict params;
+  // generating a document outline at the moment requires a tagged pdf
+  params.Set("generateTaggedPDF", true);
+  params.Set("generateDocumentOutline", true);
+  params.Set("printBackground", true);
+  params.Set("paperWidth", kPaperWidth);
+  params.Set("paperHeight", kPaperHeight);
+  params.Set("marginTop", 0);
+  params.Set("marginLeft", 0);
+  params.Set("marginBottom", 0);
+  params.Set("marginRight", 0);
+  params.Set("transferMode", "ReturnAsStream");
+
+  PrintToPdfAsStream(std::move(params));
+
+  std::optional<bool> has_outline = chrome_pdf::PDFDocHasOutline(pdf_span_);
+  EXPECT_THAT(has_outline, testing::Optional(true));
+}
+
+IN_PROC_BROWSER_TEST_P(PrintToPdfProtocolTest, Title) {
+  NavigateToURLBlockUntilNavigationsComplete("/print_to_pdf/basic.html");
+
+  Attach();
+
+  base::Value::Dict params;
+  params.Set("printBackground", true);
+  params.Set("paperWidth", kPaperWidth);
+  params.Set("paperHeight", kPaperHeight);
+  params.Set("marginTop", 0);
+  params.Set("marginLeft", 0);
+  params.Set("marginBottom", 0);
+  params.Set("marginRight", 0);
+  params.Set("transferMode", "ReturnAsStream");
+
+  PrintToPdfAsStream(std::move(params));
+
+  std::optional<chrome_pdf::DocumentMetadata> metadata =
+      chrome_pdf::GetPDFDocMetadata(pdf_span_);
+  ASSERT_TRUE(metadata);
+  EXPECT_EQ(metadata->title, "PrintToPdf Basic Test");
+}
+
+IN_PROC_BROWSER_TEST_P(PrintToPdfProtocolTest, PrintToPdfOOPIF) {
+  NavigateToURLBlockUntilNavigationsComplete("/print_to_pdf/oopif.html");
+
+  Attach();
+
+  base::Value::Dict params;
+  params.Set("printBackground", true);
+  params.Set("paperWidth", kPaperWidth);
+  params.Set("paperHeight", kPaperHeight);
+  params.Set("marginTop", 0);
+  params.Set("marginLeft", 0);
+  params.Set("marginBottom", 0);
+  params.Set("marginRight", 0);
+  PrintToPdfAndRenderPage(std::move(params), 0);
+
+  ASSERT_TRUE(printing::IsOopifEnabled());
+
+  // Expect red iframe pixel at 1 inch into the page.
+  EXPECT_EQ(GetPixelRGB(1 * kDpi, 1 * kDpi), 0xff0000u);
+}
+
+IN_PROC_BROWSER_TEST_P(PrintToPdfProtocolTest, JpegCmykIccPrintToPdf) {
+  NavigateToURLBlockUntilNavigationsComplete(
+      "/print_to_pdf/red-cmyk-turned-green-via-icc_profile.html");
+
+  Attach();
+
+  base::Value::Dict params;
+  params.Set("printBackground", true);
+  params.Set("paperWidth", kPaperWidth);
+  params.Set("paperHeight", kPaperHeight);
+  params.Set("marginTop", 0);
+  params.Set("marginLeft", 0);
+  params.Set("marginBottom", 0);
+  params.Set("marginRight", 0);
+  PrintToPdfAndRenderPage(std::move(params), 0);
+
+  ASSERT_TRUE(printing::IsOopifEnabled());
+
+  // These color values have been transformed from CMYK+icc to XYZ to sRGB+icc
+  // to displayRGB using several different color managers. Many approximations
+  // and rounding have been applied along the way. So carefully test for a
+  // green-ish rectangle.
+  constexpr SkColor background = SkColorSetARGB(0xff, 0xff, 0xff, 0xff);
+
+  // Find the first non-background color pixel.
+  int x = 0;
+  int y = 0;
+  auto find_box = [&x, &y, this]() -> bool {
+    const int width = bitmap_width();
+    const int height = bitmap_height();
+    for (x = 0; x < width; ++x) {
+      for (y = 0; y < height; ++y) {
+        SkColor c = SkColorSetA(GetPixelRGB(x, y), 0xFF);
+        if (c != background) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+  ASSERT_TRUE(find_box());
+
+  // Sample a pixel color in the expected rectangle.
+  SkColor c = SkColorSetA(GetPixelRGB(x + 10, y + 10), 0xFF);
+  uint32_t r = SkColorGetR(c);
+  uint32_t g = SkColorGetG(c);
+  uint32_t b = SkColorGetB(c);
+
+  // Expect that it is green-ish.
+  EXPECT_LT(r, 0x10u);
+  EXPECT_GT(g, 0xF0u);
+  EXPECT_LT(b, 0x10u);
+
+  // Expect green rectangle on white background.
+  EXPECT_TRUE(page_bitmap.CheckColoredRect(c, background));
+}
+
+}  // namespace

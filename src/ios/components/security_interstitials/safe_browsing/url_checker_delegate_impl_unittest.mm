@@ -1,30 +1,26 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/components/security_interstitials/safe_browsing/url_checker_delegate_impl.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
-#include "base/run_loop.h"
+#import "base/functional/bind.h"
+#import "base/functional/callback.h"
+#import "base/memory/ref_counted.h"
+#import "base/run_loop.h"
 #import "base/test/ios/wait_util.h"
-#include "components/safe_browsing/core/browser/db/database_manager.h"
+#import "components/safe_browsing/core/browser/db/database_manager.h"
 #import "components/safe_browsing/ios/browser/safe_browsing_url_allow_list.h"
 #import "ios/components/security_interstitials/safe_browsing/fake_safe_browsing_client.h"
 #import "ios/components/security_interstitials/safe_browsing/safe_browsing_query_manager.h"
 #import "ios/components/security_interstitials/safe_browsing/safe_browsing_unsafe_resource_container.h"
 #import "ios/web/public/navigation/navigation_item.h"
-#include "ios/web/public/test/fakes/fake_browser_state.h"
+#import "ios/web/public/test/fakes/fake_browser_state.h"
 #import "ios/web/public/test/fakes/fake_navigation_manager.h"
 #import "ios/web/public/test/fakes/fake_web_state.h"
-#include "ios/web/public/test/web_task_environment.h"
-#include "net/http/http_request_headers.h"
-#include "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/web/public/test/web_task_environment.h"
+#import "net/http/http_request_headers.h"
+#import "testing/platform_test.h"
 
 using base::test::ios::kWaitForFileOperationTimeout;
 using base::test::ios::WaitUntilConditionOrTimeout;
@@ -39,11 +35,10 @@ struct UnsafeResourceCallbackState {
 };
 // Function used as the callback for UnsafeResources.
 void PopulateCallbackState(UnsafeResourceCallbackState* state,
-                           bool proceed,
-                           bool show_interstitial) {
+                           UnsafeResource::UrlCheckResult result) {
   state->executed = true;
-  state->proceed = proceed;
-  state->show_interstitial = show_interstitial;
+  state->proceed = result.proceed;
+  state->show_interstitial = result.showed_interstitial;
 }
 }  // namespace
 
@@ -52,6 +47,7 @@ class UrlCheckerDelegateImplTest : public PlatformTest {
  public:
   UrlCheckerDelegateImplTest()
       : browser_state_(std::make_unique<web::FakeBrowserState>()),
+        client_(/*pref_service=*/nullptr),
         delegate_(
             base::MakeRefCounted<UrlCheckerDelegateImpl>(nullptr,
                                                          client_.AsWeakPtr())),
@@ -69,7 +65,7 @@ class UrlCheckerDelegateImplTest : public PlatformTest {
   }
   ~UrlCheckerDelegateImplTest() override = default;
 
-  // Creates an UnsafeResource whose callback populates |callback_state|.
+  // Creates an UnsafeResource whose callback populates `callback_state`.
   UnsafeResource CreateUnsafeResource(
       UnsafeResourceCallbackState* callback_state) {
     UnsafeResource resource;
@@ -81,7 +77,7 @@ class UrlCheckerDelegateImplTest : public PlatformTest {
     return resource;
   }
 
-  // Waits for |state.executed| to be reset to true.  Returns whether the state
+  // Waits for `state.executed` to be reset to true.  Returns whether the state
   // populated before a timeout.
   bool WaitForUnsafeResourceCallbackExecution(
       UnsafeResourceCallbackState* state) {
@@ -104,7 +100,7 @@ class UrlCheckerDelegateImplTest : public PlatformTest {
 
  protected:
   web::WebTaskEnvironment task_environment_{
-      web::WebTaskEnvironment::IO_MAINLOOP};
+      web::WebTaskEnvironment::MainThreadType::IO};
   std::unique_ptr<web::FakeBrowserState> browser_state_;
   FakeSafeBrowsingClient client_;
   scoped_refptr<safe_browsing::UrlCheckerDelegate> delegate_;
@@ -125,7 +121,6 @@ TEST_F(UrlCheckerDelegateImplTest, DontProceedForDestroyedWebState) {
   // Instruct the delegate to display the blocking page.
   delegate_->StartDisplayingBlockingPageHelper(resource, /*method=*/"",
                                                net::HttpRequestHeaders(),
-                                               /*is_main_frame*/ true,
                                                /*has_user_gesture=*/true);
   EXPECT_TRUE(WaitForUnsafeResourceCallbackExecution(&callback_state));
 
@@ -147,7 +142,6 @@ TEST_F(UrlCheckerDelegateImplTest, DontProceedIfBlockedByClient) {
   // Instruct the delegate to display the blocking page.
   delegate_->StartDisplayingBlockingPageHelper(resource, /*method=*/"",
                                                net::HttpRequestHeaders(),
-                                               /*is_main_frame*/ true,
                                                /*has_user_gesture=*/true);
   EXPECT_TRUE(WaitForUnsafeResourceCallbackExecution(&callback_state));
 
@@ -161,11 +155,9 @@ TEST_F(UrlCheckerDelegateImplTest, DontProceedIfBlockedByClient) {
 TEST_F(UrlCheckerDelegateImplTest, ProceedForAllowedUnsafeNavigation) {
   // Construct the UnsafeResource.
   safe_browsing::SBThreatType threat_type =
-      safe_browsing::SB_THREAT_TYPE_URL_PHISHING;
+      safe_browsing::SBThreatType::SB_THREAT_TYPE_URL_PHISHING;
   UnsafeResourceCallbackState callback_state;
   UnsafeResource resource = CreateUnsafeResource(&callback_state);
-  resource.is_subresource = false;
-  resource.is_subframe = false;
   resource.threat_type = threat_type;
 
   // Add the resource to the allow list.
@@ -174,7 +166,6 @@ TEST_F(UrlCheckerDelegateImplTest, ProceedForAllowedUnsafeNavigation) {
   // Instruct the delegate to display the blocking page.
   delegate_->StartDisplayingBlockingPageHelper(resource, /*method=*/"",
                                                net::HttpRequestHeaders(),
-                                               /*is_main_frame*/ true,
                                                /*has_user_gesture=*/true);
   EXPECT_TRUE(WaitForUnsafeResourceCallbackExecution(&callback_state));
 

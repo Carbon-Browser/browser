@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,21 +8,20 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
-#include "base/containers/cxx20_erase.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/task_runner_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
+#include "components/autofill/core/browser/data_manager/addresses/address_data_manager.h"
 #include "components/autofill/core/browser/geo/country_data.h"
-#include "components/autofill/core/browser/personal_data_manager.h"
 #include "components/autofill/core/common/autofill_features.h"
 #include "components/autofill/core/common/autofill_l10n_util.h"
 #include "components/autofill/core/common/autofill_prefs.h"
@@ -54,9 +53,10 @@ std::string LoadDataFromFile(const base::FilePath& file) {
 
 AlternativeStateNameMapUpdater::AlternativeStateNameMapUpdater(
     PrefService* local_state,
-    PersonalDataManager* personal_data_manager)
-    : personal_data_manager_(personal_data_manager),
-      local_state_(local_state) {}
+    AddressDataManager* address_data_manager)
+    : address_data_manager_(address_data_manager), local_state_(local_state) {
+  adm_observer_.Observe(address_data_manager_);
+}
 
 AlternativeStateNameMapUpdater::~AlternativeStateNameMapUpdater() = default;
 
@@ -69,7 +69,7 @@ bool AlternativeStateNameMapUpdater::ContainsState(
   l10n::CaseInsensitiveCompare compare;
 
   // Returns true if |str1| is same as |str2| in a case-insensitive comparison.
-  return base::ranges::any_of(
+  return std::ranges::any_of(
       stripped_alternative_state_names,
       [&](const AlternativeStateNameMap::StateName& text) {
         return compare.StringsEqual(text.value(),
@@ -77,30 +77,24 @@ bool AlternativeStateNameMapUpdater::ContainsState(
       });
 }
 
-void AlternativeStateNameMapUpdater::OnPersonalDataFinishedProfileTasks() {
-  if (base::FeatureList::IsEnabled(
-          features::kAutofillUseAlternativeStateNameMap)) {
-    PopulateAlternativeStateNameMap();
-  }
+void AlternativeStateNameMapUpdater::OnAddressDataChanged() {
+  PopulateAlternativeStateNameMap();
 }
 
 void AlternativeStateNameMapUpdater::PopulateAlternativeStateNameMap(
     base::OnceClosure callback) {
-  DCHECK(personal_data_manager_);
-  std::vector<AutofillProfile*> profiles =
-      personal_data_manager_->GetProfiles();
+  DCHECK(address_data_manager_);
+  std::vector<const AutofillProfile*> profiles =
+      address_data_manager_->GetProfiles();
 
   CountryToStateNamesListMapping country_to_state_names_map;
-  for (AutofillProfile* profile : profiles) {
-    const AutofillType country_code_type(HTML_TYPE_COUNTRY_CODE,
-                                         HTML_MODE_NONE);
-    const AlternativeStateNameMap::CountryCode country(
-        base::UTF16ToUTF8(profile->GetInfo(
-            country_code_type, personal_data_manager_->app_locale())));
+  for (const AutofillProfile* profile : profiles) {
+    const AlternativeStateNameMap::CountryCode country(base::UTF16ToUTF8(
+        profile->GetInfo(AutofillType(HtmlFieldType::kCountryCode),
+                         address_data_manager_->app_locale())));
 
-    const AlternativeStateNameMap::StateName state_name(
-        profile->GetInfo(AutofillType(ADDRESS_HOME_STATE),
-                         personal_data_manager_->app_locale()));
+    const AlternativeStateNameMap::StateName state_name(profile->GetInfo(
+        ADDRESS_HOME_STATE, address_data_manager_->app_locale()));
     const AlternativeStateNameMap::StateName normalized_state =
         AlternativeStateNameMap::NormalizeStateName(state_name);
 
@@ -141,7 +135,7 @@ void AlternativeStateNameMapUpdater::LoadStatesData(
       CountryDataMap::GetInstance()->country_codes();
 
   // Remove all invalid country names.
-  base::EraseIf(country_to_state_names_map,
+  std::erase_if(country_to_state_names_map,
                 [&country_codes](
                     const CountryToStateNamesListMapping::value_type& entry) {
                   return !base::Contains(country_codes, entry.first.value());
@@ -169,8 +163,8 @@ void AlternativeStateNameMapUpdater::LoadStatesData(
 
     // |country_code| is used as the filename.
     // Example -> File "DE" contains the geographical states data of Germany.
-    base::PostTaskAndReplyWithResult(
-        GetTaskRunner().get(), FROM_HERE,
+    GetTaskRunner()->PostTaskAndReplyWithResult(
+        FROM_HERE,
         base::BindOnce(&LoadDataFromFile,
                        data_download_path.AppendASCII(country_code.value())),
         base::BindOnce(

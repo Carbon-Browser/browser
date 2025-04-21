@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,7 @@ class CredentialEditViewBinder {
         } else if (propertyKey == URL_OR_APP) {
             fragmentView.setUrlOrApp(model.get(URL_OR_APP));
         } else if (propertyKey == FEDERATION_ORIGIN) {
-            // TODO(crbug.com/1180252): Treat this case when the federated credentials
+            // TODO(crbug.com/40169863): Treat this case when the federated credentials
             // layout is in place.
         } else if (propertyKey == USERNAME) {
             fragmentView.setUsername(model.get(USERNAME));
@@ -38,7 +38,7 @@ class CredentialEditViewBinder {
         } else if (propertyKey == PASSWORD_VISIBLE) {
             fragmentView.changePasswordVisibility(model.get(PASSWORD_VISIBLE));
         } else if (propertyKey == PASSWORD) {
-                fragmentView.setPassword(model.get(PASSWORD));
+            fragmentView.setPassword(model.get(PASSWORD));
         } else if (propertyKey == EMPTY_PASSWORD_ERROR) {
             fragmentView.changePasswordError(model.get(EMPTY_PASSWORD_ERROR));
         } else if (propertyKey == UI_DISMISSED_BY_NATIVE) {

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,6 @@
 #include "base/notreached.h"
 #include "base/strings/stringprintf.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/test_fonts/fontconfig/fontconfig_util_linux.h"
 #include "ui/gfx/font.h"
@@ -49,16 +48,7 @@ class TestFontDelegate : public ui::FakeLinuxUi {
 
   void set_params(const FontRenderParams& params) { params_ = params; }
 
-  FontRenderParams GetDefaultFontRenderParams() const override {
-    return params_;
-  }
-  void GetDefaultFontDescription(std::string* family_out,
-                                 int* size_pixels_out,
-                                 int* style_out,
-                                 int* weight_out,
-                                 FontRenderParams* params_out) const override {
-    NOTIMPLEMENTED();
-  }
+  FontRenderParams GetDefaultFontRenderParams() override { return params_; }
 
  private:
   FontRenderParams params_;
@@ -111,9 +101,7 @@ std::string CreateFontconfigAliasStanza(const std::string& original_family,
 class FontRenderParamsTest : public testing::Test {
  public:
   FontRenderParamsTest() {
-    auto test_font_delegate = std::make_unique<TestFontDelegate>();
-    test_font_delegate_ = test_font_delegate.get();
-    ui::LinuxUi::SetInstance(std::move(test_font_delegate));
+    ui::LinuxUi::SetInstance(&test_font_delegate_);
     ClearFontRenderParamsCacheForTest();
 
     // Create a new fontconfig configuration and load the default fonts
@@ -136,15 +124,13 @@ class FontRenderParamsTest : public testing::Test {
 
   ~FontRenderParamsTest() override {
     OverrideGlobalFontConfigForTesting(original_config_);
-    FcConfigDestroy(override_config_);
-
-    ui::LinuxUi::SetInstance(nullptr);
-    test_font_delegate_ = nullptr;
+    FcConfigDestroy(override_config_.ExtractAsDangling());
+    ui::LinuxUi::SetInstance(old_linux_ui_);
   }
 
  protected:
-  raw_ptr<TestFontDelegate> test_font_delegate_;
-
+  TestFontDelegate test_font_delegate_;
+  raw_ptr<ui::LinuxUi> old_linux_ui_ = nullptr;
   raw_ptr<FcConfig> override_config_ = nullptr;
   raw_ptr<FcConfig> original_config_ = nullptr;
 };
@@ -364,12 +350,12 @@ TEST_F(FontRenderParamsTest, ForceSubpixelPositioning) {
     FontRenderParams params =
         GetFontRenderParams(FontRenderParamsQuery(), nullptr);
     EXPECT_TRUE(params.antialiasing);
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
+#if !BUILDFLAG(IS_CHROMEOS)
     EXPECT_TRUE(params.subpixel_positioning);
 #else
     // Integral scale factor does not require subpixel positioning.
     EXPECT_FALSE(params.subpixel_positioning);
-#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // !BUILDFLAG(IS_CHROMEOS)
     SetFontRenderParamsDeviceScaleFactor(1.0f);
   }
 }
@@ -378,7 +364,7 @@ TEST_F(FontRenderParamsTest, OnlySetConfiguredValues) {
   // Configure the LinuxUi to request subpixel rendering.
   FontRenderParams system_params;
   system_params.subpixel_rendering = FontRenderParams::SUBPIXEL_RENDERING_RGB;
-  test_font_delegate_->set_params(system_params);
+  test_font_delegate_.set_params(system_params);
 
   // Load a Fontconfig config that enables antialiasing but doesn't say anything
   // about subpixel rendering.
@@ -402,7 +388,7 @@ TEST_F(FontRenderParamsTest, NoFontconfigMatch) {
   system_params.antialiasing = true;
   system_params.hinting = FontRenderParams::HINTING_MEDIUM;
   system_params.subpixel_rendering = FontRenderParams::SUBPIXEL_RENDERING_RGB;
-  test_font_delegate_->set_params(system_params);
+  test_font_delegate_.set_params(system_params);
 
   FontRenderParamsQuery query;
   query.families.push_back("Arimo");

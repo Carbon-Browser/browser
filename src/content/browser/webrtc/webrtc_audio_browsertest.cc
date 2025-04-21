@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -104,19 +104,29 @@ IN_PROC_BROWSER_TEST_F(WebRtcAudioBrowserTest,
 }
 
 IN_PROC_BROWSER_TEST_F(WebRtcAudioBrowserTest,
-                       EstablishIsac16KCallAndEnsureAudioIsPlaying) {
-  std::string constraints =
-      BuildConstraints(kAudioConstraints, kVideoConstraints);
-  MakeAudioDetectingPeerConnectionCall(
-      "callWithIsac16KAndEnsureAudioIsPlaying(" + constraints + ");");
-}
-
-IN_PROC_BROWSER_TEST_F(WebRtcAudioBrowserTest,
                        EstablishAudioVideoCallAndVerifyRemoteMutingWorks) {
   std::string constraints =
       BuildConstraints(kAudioConstraints, kVideoConstraints);
   MakeAudioDetectingPeerConnectionCall(
       "callAndEnsureRemoteAudioTrackMutingWorks(" + constraints + ");");
+}
+
+IN_PROC_BROWSER_TEST_F(WebRtcAudioBrowserTest,
+                       EnsureRemoteAudioTrackStopCloneNotStopOriginalTrack) {
+  std::string constraints =
+      BuildConstraints(kAudioConstraints, kVideoConstraints);
+  MakeAudioDetectingPeerConnectionCall(
+      "callAndEnsureRemoteClonedAudioTrackStopNotStopOriginalTrack(" +
+      constraints + ");");
+}
+
+IN_PROC_BROWSER_TEST_F(WebRtcAudioBrowserTest,
+                       EnsureRemoteAudioTrackDisableNotDisableClonedTrack) {
+  std::string constraints =
+      BuildConstraints(kAudioConstraints, kVideoConstraints);
+  MakeAudioDetectingPeerConnectionCall(
+      "callAndEnsureRemoteAudioTrackDisableNotDisableClonedTrack(" +
+      constraints + ");");
 }
 
 IN_PROC_BROWSER_TEST_F(WebRtcAudioBrowserTest,
@@ -151,7 +161,7 @@ IN_PROC_BROWSER_TEST_F(WebRtcAudioBrowserTest,
                                        constraints + ");");
 }
 
-// TODO(crbug.com/988432): This test is a temporary replacement for:
+// TODO(crbug.com/40637961): This test is a temporary replacement for:
 // external/wpt/webrtc/RTCRtpReceiver-getSynchronizationSources.https.html
 IN_PROC_BROWSER_TEST_F(
     WebRtcAudioBrowserTest,

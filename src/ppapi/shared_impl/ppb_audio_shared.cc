@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/trace_event/trace_event.h"
 #include "media/base/audio_parameters.h"
@@ -220,7 +220,7 @@ void PPB_Audio_Shared::CallRun(void* self) {
 void PPB_Audio_Shared::Run() {
   int control_signal = 0;
   while (sizeof(control_signal) ==
-         socket_->Receive(&control_signal, sizeof(control_signal))) {
+         socket_->Receive(base::byte_span_from_ref(control_signal))) {
     // |buffer_index_| must track the number of Receive() calls.  See the Send()
     // call below for why this is important.
     ++buffer_index_;
@@ -246,7 +246,7 @@ void PPB_Audio_Shared::Run() {
     // Let the other end know which buffer we just filled.  The buffer index is
     // used to ensure the other end is getting the buffer it expects.  For more
     // details on how this works see AudioSyncReader::WaitUntilDataIsReady().
-    size_t bytes_sent = socket_->Send(&buffer_index_, sizeof(buffer_index_));
+    size_t bytes_sent = socket_->Send(base::byte_span_from_ref(buffer_index_));
     if (bytes_sent != sizeof(buffer_index_))
       break;
   }

@@ -1,16 +1,17 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_PEERCONNECTION_MOCK_PEER_CONNECTION_DEPENDENCY_FACTORY_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_PEERCONNECTION_MOCK_PEER_CONNECTION_DEPENDENCY_FACTORY_H_
 
-#include <set>
 #include <string>
-#include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "third_party/blink/renderer/modules/peerconnection/peer_connection_dependency_factory.h"
+#include "third_party/blink/renderer/platform/wtf/hash_set.h"
 #include "third_party/webrtc/api/media_stream_interface.h"
+#include "third_party/webrtc/api/metronome/metronome.h"
 #include "third_party/webrtc/rtc_base/ref_counted_object.h"
 
 namespace base {
@@ -19,7 +20,7 @@ class SingleThreadTaskRunner;
 
 namespace blink {
 
-typedef std::set<webrtc::ObserverInterface*> ObserverSet;
+using ObserverSet = HashSet<webrtc::ObserverInterface*>;
 
 class MockWebRtcAudioSource : public webrtc::AudioSourceInterface {
  public:
@@ -79,7 +80,7 @@ class MockWebRtcVideoTrackSource
                        const rtc::VideoSinkWants& wants) override;
   void RemoveSink(rtc::VideoSinkInterface<webrtc::VideoFrame>* sink) override;
   bool is_screencast() const override;
-  absl::optional<bool> needs_denoising() const override;
+  std::optional<bool> needs_denoising() const override;
   bool GetStats(Stats* stats) override;
   bool SupportsEncodedOutput() const override;
   void GenerateKeyFrame() override;
@@ -125,17 +126,19 @@ class MockWebRtcVideoTrack
   bool enabled_;
   TrackState state_;
   ObserverSet observers_;
-  rtc::VideoSinkInterface<webrtc::VideoFrame>* sink_;
+  raw_ptr<rtc::VideoSinkInterface<webrtc::VideoFrame>> sink_;
 };
 
 class MockMediaStream : public webrtc::MediaStreamInterface {
  public:
   explicit MockMediaStream(const std::string& id);
 
-  bool AddTrack(webrtc::AudioTrackInterface* track) override;
-  bool AddTrack(webrtc::VideoTrackInterface* track) override;
-  bool RemoveTrack(webrtc::AudioTrackInterface* track) override;
-  bool RemoveTrack(webrtc::VideoTrackInterface* track) override;
+  bool AddTrack(rtc::scoped_refptr<webrtc::AudioTrackInterface> track) override;
+  bool AddTrack(rtc::scoped_refptr<webrtc::VideoTrackInterface> track) override;
+  bool RemoveTrack(
+      rtc::scoped_refptr<webrtc::AudioTrackInterface> track) override;
+  bool RemoveTrack(
+      rtc::scoped_refptr<webrtc::VideoTrackInterface> track) override;
   std::string id() const override;
   webrtc::AudioTrackVector GetAudioTracks() override;
   webrtc::VideoTrackVector GetVideoTracks() override;
@@ -173,11 +176,12 @@ class MockPeerConnectionDependencyFactory
 
   ~MockPeerConnectionDependencyFactory() override;
 
-  scoped_refptr<webrtc::PeerConnectionInterface> CreatePeerConnection(
+  rtc::scoped_refptr<webrtc::PeerConnectionInterface> CreatePeerConnection(
       const webrtc::PeerConnectionInterface::RTCConfiguration& config,
       blink::WebLocalFrame* frame,
       webrtc::PeerConnectionObserver* observer,
-      ExceptionState& exception_state) override;
+      ExceptionState& exception_state,
+      RTCRtpTransport* rtp_transport) override;
   scoped_refptr<webrtc::VideoTrackSourceInterface> CreateVideoTrackSourceProxy(
       webrtc::VideoTrackSourceInterface* source) override;
   scoped_refptr<webrtc::MediaStreamInterface> CreateLocalMediaStream(
@@ -193,6 +197,8 @@ class MockPeerConnectionDependencyFactory
       override;
   scoped_refptr<base::SingleThreadTaskRunner> GetWebRtcSignalingTaskRunner()
       override;
+
+  std::unique_ptr<webrtc::Metronome> CreateDecodeMetronome() override;
 
   // If |fail| is true, subsequent calls to CreateSessionDescription will
   // return nullptr. This can be used to fake a blob of SDP that fails to be

@@ -1,8 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.base.lifetime;
+
+import org.chromium.build.annotations.NullMarked;
 
 /**
  * Utility class that help ensure destruction of objects happens only once.
@@ -20,6 +22,7 @@ package org.chromium.base.lifetime;
  *      It is therefore not necessary to call {@link #checkNotDestroyed()} in that case. It is also
  *      not allowed to call {@link #destroy()} more than once.
  */
+@NullMarked
 public class DestroyChecker implements Destroyable {
     private boolean mIsDestroyed;
 

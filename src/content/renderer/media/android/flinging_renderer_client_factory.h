@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,8 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "content/common/content_export.h"
 #include "media/base/media_status.h"
 #include "media/base/renderer_factory.h"
@@ -27,8 +29,7 @@ class CONTENT_EXPORT FlingingRendererClientFactory
  public:
   FlingingRendererClientFactory(
       std::unique_ptr<media::MojoRendererFactory> mojo_renderer_factory,
-      std::unique_ptr<media::RemotePlaybackClientWrapper>
-          remote_playback_client);
+      media::RemotePlaybackClientWrapper* remote_playback_client);
 
   FlingingRendererClientFactory(const FlingingRendererClientFactory&) = delete;
   FlingingRendererClientFactory& operator=(
@@ -42,7 +43,7 @@ class CONTENT_EXPORT FlingingRendererClientFactory
   void SetRemotePlayStateChangeCB(media::RemotePlayStateChangeCB callback);
 
   std::unique_ptr<media::Renderer> CreateRenderer(
-      const scoped_refptr<base::SingleThreadTaskRunner>& media_task_runner,
+      const scoped_refptr<base::SequencedTaskRunner>& media_task_runner,
       const scoped_refptr<base::TaskRunner>& worker_task_runner,
       media::AudioRendererSink* audio_renderer_sink,
       media::VideoRendererSink* video_renderer_sink,
@@ -58,7 +59,7 @@ class CONTENT_EXPORT FlingingRendererClientFactory
   std::string GetActivePresentationId();
 
   std::unique_ptr<media::MojoRendererFactory> mojo_flinging_factory_;
-  std::unique_ptr<media::RemotePlaybackClientWrapper> remote_playback_client_;
+  raw_ptr<media::RemotePlaybackClientWrapper> remote_playback_client_;
 
   media::RemotePlayStateChangeCB remote_play_state_change_cb_;
 };

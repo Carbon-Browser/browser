@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <set>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/extensions/api/declarative_content/content_predicate_evaluator.h"
 #include "components/url_matcher/url_matcher.h"
@@ -54,7 +54,7 @@ class DeclarativeContentPageUrlPredicate : public ContentPredicate {
           url_matcher_condition_set);
 
   // Weak.
-  const raw_ptr<ContentPredicateEvaluator> evaluator_;
+  const raw_ptr<ContentPredicateEvaluator, DanglingUntriaged> evaluator_;
 
   scoped_refptr<url_matcher::URLMatcherConditionSet> url_matcher_condition_set_;
 };
@@ -144,7 +144,9 @@ class DeclarativeContentPageUrlConditionTracker
   url_matcher::URLMatcher url_matcher_;
 
   // Grouped predicates tracked by this object.
-  std::map<const void*, std::vector<const DeclarativeContentPageUrlPredicate*>>
+  std::map<const void*,
+           std::vector<raw_ptr<const DeclarativeContentPageUrlPredicate,
+                               VectorExperimental>>>
       tracked_predicates_;
 
   // Maps WebContents to the tracker for that WebContents state.

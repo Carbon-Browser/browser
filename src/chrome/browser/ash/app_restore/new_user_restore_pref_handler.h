@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,9 @@
 #define CHROME_BROWSER_ASH_APP_RESTORE_NEW_USER_RESTORE_PREF_HANDLER_H_
 
 #include <memory>
+#include <string_view>
 
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "components/prefs/pref_member.h"
 #include "components/sync_preferences/pref_service_syncable.h"
@@ -14,8 +16,7 @@
 
 class Profile;
 
-namespace ash {
-namespace full_restore {
+namespace ash::full_restore {
 
 // This class handles the new user's OS restore pref "restore_apps_and_pages".
 //
@@ -46,7 +47,7 @@ class NewUserRestorePrefHandler
       delete;
 
   // sync_preferences::SyncedPrefObserver overrides:
-  void OnStartedSyncing(const std::string& path) override;
+  void OnStartedSyncing(std::string_view path) override;
 
   // sync_preferences::PrefServiceSyncableObserver overrides:
   void OnIsSyncingChanged() override;
@@ -55,7 +56,7 @@ class NewUserRestorePrefHandler
   // Callback method for preference changes.
   void OnPreferenceChanged(const std::string& pref_name);
 
-  Profile* profile_ = nullptr;
+  raw_ptr<Profile> profile_ = nullptr;
 
   bool is_restore_pref_changed_ = false;
   bool is_restore_pref_synced_ = false;
@@ -69,7 +70,6 @@ class NewUserRestorePrefHandler
       syncable_pref_observer_{this};
 };
 
-}  // namespace full_restore
-}  // namespace ash
+}  // namespace ash::full_restore
 
 #endif  // CHROME_BROWSER_ASH_APP_RESTORE_NEW_USER_RESTORE_PREF_HANDLER_H_

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,6 @@ namespace content {
 // Set NSHighResolutionCapable to false when running layout tests, so we match
 // the expected pixel results on retina capable displays.
 void EnsureCorrectResolutionSettings();
-
-// Sets up base::mac::BaseBundleID.
-void OverrideBundleID();
 
 // Initializes NSApplication.
 void RegisterShellCrApp();

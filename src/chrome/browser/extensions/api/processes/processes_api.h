@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -124,7 +124,7 @@ class ProcessesGetProcessIdForTabFunction : public ExtensionFunction {
                              PROCESSES_GETPROCESSIDFORTAB)
 
  private:
-  ~ProcessesGetProcessIdForTabFunction() override {}
+  ~ProcessesGetProcessIdForTabFunction() override = default;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -141,7 +141,7 @@ class ProcessesTerminateFunction : public ExtensionFunction {
   DECLARE_EXTENSION_FUNCTION("processes.terminate", PROCESSES_TERMINATE)
 
  private:
-  ~ProcessesTerminateFunction() override {}
+  ~ProcessesTerminateFunction() override = default;
 
   // Functions to get the process handle on the IO thread and post it back to
   // the UI thread from processing.

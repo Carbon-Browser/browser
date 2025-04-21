@@ -1,12 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/policy/test_support/test_server_helpers.h"
 
+#include <ranges>
 #include <utility>
+
 #include "base/ranges/algorithm.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
+#include "components/policy/proto/device_management_backend.pb.h"
 #include "net/base/url_util.h"
 #include "net/http/http_status_code.h"
 #include "net/test/embedded_test_server/http_request.h"
@@ -19,16 +22,29 @@ using ::net::test_server::BasicHttpResponse;
 using ::net::test_server::HttpRequest;
 using ::net::test_server::HttpResponse;
 
+namespace em = enterprise_management;
+
 namespace {
 
 // C++ does not offer a mechanism to check if a given status code is present in
 // net::HttpStatusCode enum. To allow distinguishing standard HTTP status code
 // from custom ones, we define this array that will contain all standard codes.
 constexpr net::HttpStatusCode kStandardHttpStatusCodes[] = {
-#define HTTP_STATUS(label, code, reason) net::HttpStatusCode(code),
+#define HTTP_STATUS_ENUM_VALUE(label, code, reason) net::HttpStatusCode(code),
 #include "net/http/http_status_code_list.h"
-#undef HTTP_STATUS
+#undef HTTP_STATUS_ENUM_VALUE
 };
+
+std::unique_ptr<HttpResponse> CreateHttpResponse(
+    net::HttpStatusCode code,
+    const std::string& content,
+    const std::string& content_type) {
+  auto response = std::make_unique<CustomHttpResponse>();
+  response->set_content_type(content_type);
+  response->set_code(code);
+  response->set_content(content);
+  return response;
+}
 
 }  // namespace
 
@@ -39,9 +55,10 @@ void CustomHttpResponse::SendResponse(
   // net::GetHttpReasonPhrase, which requires status code to be a standard HTTP
   // status code and crashes otherwise. Hence we avoid calling it if a custom
   // HTTP code is used.
-  // TODO(crbug/1280752): Make GetHttpReasonPhrase support custom codes instead.
+  // TODO(crbug.com/40209048): Make GetHttpReasonPhrase support custom codes
+  // instead.
   if (base::ranges::lower_bound(kStandardHttpStatusCodes, code()) !=
-      base::ranges::end(kStandardHttpStatusCodes)) {
+      std::ranges::end(kStandardHttpStatusCodes)) {
     reason = BasicHttpResponse::reason();
   }
   delegate->SendHeadersContentAndFinish(code(), reason, BuildHeaders(),
@@ -86,16 +103,22 @@ bool GetGoogleLoginFromRequest(const net::test_server::HttpRequest& request,
                                std::string* out) {
   return net::GetValueForKeyInQuery(request.GetURL(), "oauth_token", out) ||
          GetTokenFromAuthorization(
-             request, dm_protocol::kServiceTokenAuthHeaderPrefix, out);
+             request, dm_protocol::kServiceTokenAuthHeaderPrefix, out) ||
+         GetTokenFromAuthorization(request,
+                                   dm_protocol::kOAuthTokenHeaderPrefix, out);
 }
 
-std::unique_ptr<HttpResponse> CreateHttpResponse(net::HttpStatusCode code,
-                                                 const std::string& content) {
-  auto response = std::make_unique<CustomHttpResponse>();
-  response->set_content_type("text/plain");
-  response->set_code(code);
-  response->set_content(content);
-  return response;
+std::unique_ptr<HttpResponse> CreateHttpResponse(
+    net::HttpStatusCode code,
+    const em::DeviceManagementResponse& proto_content) {
+  return CreateHttpResponse(code, proto_content.SerializeAsString(),
+                            "application/x-protobuffer");
+}
+
+std::unique_ptr<HttpResponse> CreateHttpResponse(
+    net::HttpStatusCode code,
+    const std::string& text_content) {
+  return CreateHttpResponse(code, text_content, "text/plain");
 }
 
 }  // namespace policy

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,9 +17,10 @@
 #include "chrome/test/base/testing_profile.h"
 #include "components/services/storage/public/mojom/local_storage_control.mojom.h"
 #include "content/public/browser/browser_context.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/test/browser_task_environment.h"
+#include "mojo/public/cpp/bindings/remote.h"
 #include "net/cookies/cookie_access_result.h"
 #include "services/network/public/mojom/cookie_manager.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -35,6 +36,7 @@ class SiteDataCountingHelperTest : public testing::Test {
   }
 
   void TearDown() override {
+    base::RunLoop().RunUntilIdle();
     profile_.reset();
     base::RunLoop().RunUntilIdle();
   }
@@ -56,7 +58,7 @@ class SiteDataCountingHelperTest : public testing::Test {
               url, "name", "A=1", url.host(), url.path(), creation_time,
               base::Time(), creation_time, url.SchemeIsCryptographic(), false,
               net::CookieSameSite::NO_RESTRICTION, net::COOKIE_PRIORITY_DEFAULT,
-              false, absl::nullopt);
+              std::nullopt, /*status=*/nullptr);
       net::CookieOptions options;
       options.set_include_httponly();
       cookie_manager->SetCanonicalCookie(
@@ -87,19 +89,13 @@ class SiteDataCountingHelperTest : public testing::Test {
 
       bool success = false;
       base::RunLoop put_run_loop;
-      area->Put({'k', 'e', 'y'}, {'v', 'a', 'l', 'u', 'e'}, absl::nullopt,
+      area->Put({'k', 'e', 'y'}, {'v', 'a', 'l', 'u', 'e'}, std::nullopt,
                 "source", base::BindLambdaForTesting([&](bool success_in) {
                   success = success_in;
                   put_run_loop.Quit();
                 }));
       put_run_loop.Run();
       ASSERT_TRUE(success);
-
-      // Flushing causes metadata to be written, so that the last-modified time
-      // is recorded now.
-      base::RunLoop flush_run_loop;
-      local_storage_control->Flush(flush_run_loop.QuitClosure());
-      flush_run_loop.Run();
     }
   }
 
@@ -154,6 +150,11 @@ TEST_F(SiteDataCountingHelperTest, CountCookies) {
 TEST_F(SiteDataCountingHelperTest, LocalStorage) {
   // Set data "one day ago".
   CreateLocalStorage({"https://example.com"});
+
+  // Advance time and spin the task queue so that local storage commits data.
+  // Until the data is committed to disk, it will count as "now".
+  task_environment_.AdvanceClock(base::Days(1));
+  base::RunLoop().RunUntilIdle();
 
   // Advance time and set more data "now".
   task_environment_.AdvanceClock(base::Days(1));

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,7 @@ namespace navigation_metrics {
 // Names of the metrics logged by RecordPrimaryMainFrameNavigation() function.
 extern const char kMainFrameScheme[];
 extern const char kMainFrameSchemeDifferentPage[];
+extern const char kMainFrameSchemeDifferentPageNonUniqueHostname[];
 extern const char kMainFrameSchemeOTR[];
 extern const char kMainFrameSchemeDifferentPageOTR[];
 extern const char kMainFrameHasRTLDomain[];
@@ -47,6 +48,7 @@ enum class Scheme {
   CHROME_EXTENSION = 15,
   VIEW_SOURCE = 16,
   EXTERNALFILE = 17,
+  ISOLATED_APP = 18,
   COUNT,
 };
 

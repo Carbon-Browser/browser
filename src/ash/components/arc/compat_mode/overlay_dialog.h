@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
 #include "ui/views/layout/flex_layout_view.h"
 
 namespace aura {
@@ -22,9 +22,9 @@ class View;
 namespace arc {
 
 class OverlayDialog : public views::FlexLayoutView {
- public:
-  METADATA_HEADER(OverlayDialog);
+  METADATA_HEADER(OverlayDialog, views::FlexLayoutView)
 
+ public:
   OverlayDialog(const OverlayDialog&) = delete;
   OverlayDialog& operator=(const OverlayDialog&) = delete;
   ~OverlayDialog() override;
@@ -45,6 +45,7 @@ class OverlayDialog : public views::FlexLayoutView {
 
   // views::View:
   void AddedToWidget() override;
+  void OnThemeChanged() override;
 
  private:
   friend class OverlayDialogTest;

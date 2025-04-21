@@ -1,12 +1,8 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/app/application_delegate/url_opener_params.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @implementation URLOpenerParams
 
@@ -23,22 +19,6 @@
 - (instancetype)initWithUIOpenURLContext:(UIOpenURLContext*)context {
   return [self initWithURL:context.URL
          sourceApplication:context.options.sourceApplication];
-}
-
-- (instancetype)initWithLaunchOptions:(NSDictionary*)options {
-  return [self initWithURL:options[UIApplicationLaunchOptionsURLKey]
-         sourceApplication:
-             options[UIApplicationLaunchOptionsSourceApplicationKey]];
-}
-
-- (NSDictionary*)toLaunchOptions {
-  NSMutableDictionary* dict = [[NSMutableDictionary alloc] init];
-  dict[UIApplicationLaunchOptionsURLKey] = self.URL;
-  if (self.sourceApplication) {
-    dict[UIApplicationLaunchOptionsSourceApplicationKey] =
-        self.sourceApplication;
-  }
-  return dict;
 }
 
 @end

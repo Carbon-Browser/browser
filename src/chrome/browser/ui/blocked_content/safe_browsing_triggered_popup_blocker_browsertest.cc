@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "base/containers/contains.h"
-#include "base/lazy_instance.h"
 #include "base/path_service.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -23,7 +22,6 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
-#include "chrome/common/chrome_paths.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
@@ -69,7 +67,7 @@ void RoundTripAndVerifyLogMessages(
     std::set<std::string> messages_expected,
     std::set<std::string> messages_not_expected) {
   // Round trip to the renderer to ensure the message would have gotten sent.
-  EXPECT_TRUE(content::ExecuteScript(web_contents, "var a = 1;"));
+  EXPECT_TRUE(content::ExecJs(web_contents, "var a = 1;"));
 
   for (size_t i = 0u; i < observer.messages().size(); ++i) {
     std::string message = observer.GetMessageAt(i);
@@ -77,8 +75,9 @@ void RoundTripAndVerifyLogMessages(
       messages_expected.erase(message);
       continue;
     }
-    if (base::Contains(messages_not_expected, message))
+    if (base::Contains(messages_not_expected, message)) {
       ADD_FAILURE() << "Saw anti-expected message: " << message;
+    }
   }
   EXPECT_THAT(messages_expected, ::testing::IsEmpty())
       << "Missing expected messages.";
@@ -105,7 +104,7 @@ class SafeBrowsingTriggeredPopupBlockerBrowserTest
   SafeBrowsingTriggeredPopupBlockerBrowserTest& operator=(
       const SafeBrowsingTriggeredPopupBlockerBrowserTest&) = delete;
 
-  ~SafeBrowsingTriggeredPopupBlockerBrowserTest() override {}
+  ~SafeBrowsingTriggeredPopupBlockerBrowserTest() override = default;
 
   void SetUp() override {
     FinalizeFeatures();
@@ -201,7 +200,7 @@ class SafeBrowsingTriggeredInterceptingBrowserTest
   SafeBrowsingTriggeredInterceptingBrowserTest& operator=(
       const SafeBrowsingTriggeredInterceptingBrowserTest&) = delete;
 
-  ~SafeBrowsingTriggeredInterceptingBrowserTest() override {}
+  ~SafeBrowsingTriggeredInterceptingBrowserTest() override = default;
 
   // SafeBrowsingTriggeredPopupBlockerBrowserTest:
   void SetUp() override {
@@ -230,7 +229,7 @@ class SafeBrowsingTriggeredInterceptingBrowserTest
         safe_browsing::GetUrlSubresourceFilterId().platform_type());
     threat_match.set_threat_entry_type(safe_browsing::URL);
 
-    safe_browsing::FullHash enforce_full_hash =
+    safe_browsing::FullHashStr enforce_full_hash =
         safe_browsing::V4ProtocolManagerUtil::GetFullHash(url);
     threat_match.mutable_threat()->set_hash(enforce_full_hash);
     threat_match.mutable_cache_duration()->set_seconds(300);
@@ -254,12 +253,9 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingTriggeredPopupBlockerDisabledTest,
 
   // Navigate to a_url, should not trigger the popup blocker.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), a_url));
-  bool opened_window = false;
   content::WebContents* web_contents =
       browser()->tab_strip_model()->GetActiveWebContents();
-  EXPECT_TRUE(content::ExecuteScriptAndExtractBool(web_contents, "openWindow()",
-                                                   &opened_window));
-  EXPECT_TRUE(opened_window);
+  EXPECT_EQ(true, content::EvalJs(web_contents, "openWindow()"));
   EXPECT_FALSE(PageSpecificContentSettings::GetForFrame(
                    web_contents->GetPrimaryMainFrame())
                    ->IsContentBlocked(ContentSettingsType::POPUPS));
@@ -274,12 +270,9 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingTriggeredPopupBlockerDisabledTest,
 
   // Navigate to a_url, should not log any warning messages.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), a_url));
-  bool opened_window = false;
   content::WebContents* web_contents =
       browser()->tab_strip_model()->GetActiveWebContents();
-  EXPECT_TRUE(content::ExecuteScriptAndExtractBool(web_contents, "openWindow()",
-                                                   &opened_window));
-  EXPECT_TRUE(opened_window);
+  EXPECT_EQ(true, content::EvalJs(web_contents, "openWindow()"));
   EXPECT_FALSE(PageSpecificContentSettings::GetForFrame(
                    web_contents->GetPrimaryMainFrame())
                    ->IsContentBlocked(ContentSettingsType::POPUPS));
@@ -305,12 +298,9 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingTriggeredPopupBlockerBrowserTest,
 
   // Navigate to a_url, should not trigger the popup blocker.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), a_url));
-  bool opened_window = false;
   content::WebContents* web_contents =
       browser()->tab_strip_model()->GetActiveWebContents();
-  EXPECT_TRUE(content::ExecuteScriptAndExtractBool(web_contents, "openWindow()",
-                                                   &opened_window));
-  EXPECT_TRUE(opened_window);
+  EXPECT_EQ(true, content::EvalJs(web_contents, "openWindow()"));
   EXPECT_FALSE(PageSpecificContentSettings::GetForFrame(
                    web_contents->GetPrimaryMainFrame())
                    ->IsContentBlocked(ContentSettingsType::POPUPS));
@@ -330,12 +320,9 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingTriggeredPopupBlockerBrowserTest,
 
   // Navigate to a_url, should trigger the popup blocker.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), a_url));
-  opened_window = false;
   content::WebContents* web_contents1 =
       browser()->tab_strip_model()->GetActiveWebContents();
-  EXPECT_TRUE(content::ExecuteScriptAndExtractBool(
-      web_contents1, "openWindow()", &opened_window));
-  EXPECT_FALSE(opened_window);
+  EXPECT_EQ(false, content::EvalJs(web_contents1, "openWindow()"));
   // Make sure the popup UI was shown.
   EXPECT_TRUE(PageSpecificContentSettings::GetForFrame(
                   web_contents1->GetPrimaryMainFrame())
@@ -354,12 +341,9 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingTriggeredPopupBlockerBrowserTest,
 
   // Navigate to a_url, should not trigger the popup blocker.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), a_url));
-  bool opened_window = false;
   content::WebContents* web_contents =
       browser()->tab_strip_model()->GetActiveWebContents();
-  EXPECT_TRUE(content::ExecuteScriptAndExtractBool(web_contents, "openWindow()",
-                                                   &opened_window));
-  EXPECT_TRUE(opened_window);
+  EXPECT_EQ(true, content::EvalJs(web_contents, "openWindow()"));
   EXPECT_FALSE(PageSpecificContentSettings::GetForFrame(
                    web_contents->GetPrimaryMainFrame())
                    ->IsContentBlocked(ContentSettingsType::POPUPS));
@@ -372,12 +356,9 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingTriggeredPopupBlockerBrowserTest,
 
   // Navigate to a_url, should not trigger the popup blocker.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), a_url));
-  bool opened_window = false;
   content::WebContents* web_contents =
       browser()->tab_strip_model()->GetActiveWebContents();
-  EXPECT_TRUE(content::ExecuteScriptAndExtractBool(web_contents, "openWindow()",
-                                                   &opened_window));
-  EXPECT_TRUE(opened_window);
+  EXPECT_EQ(true, content::EvalJs(web_contents, "openWindow()"));
   EXPECT_FALSE(PageSpecificContentSettings::GetForFrame(
                    web_contents->GetPrimaryMainFrame())
                    ->IsContentBlocked(ContentSettingsType::POPUPS));
@@ -392,28 +373,20 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingTriggeredPopupBlockerBrowserTest,
 
   // Navigate to a_url, should trigger the popup blocker.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), a_url));
-  bool opened_window = false;
   content::WebContents* web_contents =
       browser()->tab_strip_model()->GetActiveWebContents();
-  EXPECT_TRUE(content::ExecuteScriptAndExtractBool(web_contents, "openWindow()",
-                                                   &opened_window));
-  EXPECT_FALSE(opened_window);
+  EXPECT_EQ(false, content::EvalJs(web_contents, "openWindow()"));
   // Make sure the popup UI was shown.
   EXPECT_TRUE(PageSpecificContentSettings::GetForFrame(
                   web_contents->GetPrimaryMainFrame())
                   ->IsContentBlocked(ContentSettingsType::POPUPS));
 
   // Block again.
-  EXPECT_TRUE(content::ExecuteScriptAndExtractBool(web_contents, "openWindow()",
-                                                   &opened_window));
-  EXPECT_FALSE(opened_window);
+  EXPECT_EQ(false, content::EvalJs(web_contents, "openWindow()"));
 
   // Navigate to |b_url|, which should successfully open the popup.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), b_url));
-  opened_window = false;
-  EXPECT_TRUE(content::ExecuteScriptAndExtractBool(web_contents, "openWindow()",
-                                                   &opened_window));
-  EXPECT_TRUE(opened_window);
+  EXPECT_EQ(true, content::EvalJs(web_contents, "openWindow()"));
   // Popup UI should not be shown.
   EXPECT_FALSE(PageSpecificContentSettings::GetForFrame(
                    web_contents->GetPrimaryMainFrame())
@@ -430,12 +403,9 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingTriggeredPopupBlockerBrowserTest,
 
   // Navigate to a_url, should trigger the popup blocker.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), a_url));
-  bool opened_window = false;
   content::WebContents* web_contents =
       browser()->tab_strip_model()->GetActiveWebContents();
-  EXPECT_TRUE(content::ExecuteScriptAndExtractBool(web_contents, "openWindow()",
-                                                   &opened_window));
-  EXPECT_FALSE(opened_window);
+  EXPECT_EQ(false, content::EvalJs(web_contents, "openWindow()"));
 
   // Make sure the popup UI was shown.
   EXPECT_TRUE(PageSpecificContentSettings::GetForFrame(
@@ -472,11 +442,8 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingTriggeredPopupBlockerBrowserTest,
 
   // Navigate to a_url, should trigger the popup blocker.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), a_url));
-  bool opened_window = false;
-  EXPECT_TRUE(content::ExecuteScriptAndExtractBool(
-      web_contents(), "openWindow()", &opened_window));
-  EXPECT_FALSE(opened_window);
-  console_observer.Wait();
+  EXPECT_EQ(false, content::EvalJs(web_contents(), "openWindow()"));
+  ASSERT_TRUE(console_observer.Wait());
   EXPECT_EQ(blocked_content::kAbusiveEnforceMessage,
             console_observer.GetMessageAt(0u));
 }
@@ -498,10 +465,7 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingTriggeredPopupBlockerBrowserTest,
 
   // Navigate to a_url, should not trigger the popup blocker.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), a_url));
-  bool opened_window = false;
-  EXPECT_TRUE(content::ExecuteScriptAndExtractBool(
-      web_contents(), "openWindow()", &opened_window));
-  EXPECT_TRUE(opened_window);
+  EXPECT_EQ(true, content::EvalJs(web_contents(), "openWindow()"));
   RoundTripAndVerifyLogMessages(console_observer, web_contents(), {},
                                 {blocked_content::kAbusiveEnforceMessage,
                                  blocked_content::kAbusiveWarnMessage});
@@ -520,7 +484,7 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingTriggeredPopupBlockerBrowserTest,
 
   content::WebContents* web_contents =
       browser()->tab_strip_model()->GetActiveWebContents();
-  EXPECT_TRUE(content::ExecuteScript(web_contents, "openWindow()"));
+  EXPECT_EQ(true, content::EvalJs(web_contents, "openWindow()"));
 
   EXPECT_TRUE(PageSpecificContentSettings::GetForFrame(
                   web_contents->GetPrimaryMainFrame())
@@ -532,7 +496,7 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingTriggeredPopupBlockerBrowserTest,
 
   content::TestNavigationObserver navigation_observer(nullptr, 1);
   navigation_observer.StartWatchingNewWebContents();
-  EXPECT_TRUE(content::ExecuteScript(web_contents, "openWindow()"));
+  EXPECT_EQ(true, content::EvalJs(web_contents, "openWindow()"));
   navigation_observer.Wait();
 
   // Popup UI should not be shown.
@@ -549,12 +513,9 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingTriggeredPopupBlockerBrowserTest,
 
   // Navigate to a_url, should not trigger the popup blocker.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), a_url));
-  bool sent_open = false;
   content::WebContents* web_contents =
       browser()->tab_strip_model()->GetActiveWebContents();
-  EXPECT_TRUE(content::ExecuteScriptAndExtractBool(web_contents, "openWindow()",
-                                                   &sent_open));
-  EXPECT_TRUE(sent_open);
+  EXPECT_EQ(true, content::EvalJs(web_contents, "openWindow()"));
   EXPECT_TRUE(PageSpecificContentSettings::GetForFrame(
                   web_contents->GetPrimaryMainFrame())
                   ->IsContentBlocked(ContentSettingsType::POPUPS));
@@ -568,12 +529,9 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingTriggeredPopupBlockerBrowserTest,
   ConfigureAsAbusive(url1);
 
   auto open_popup_and_expect_block = [&](bool expect_block) {
-    bool opened_window = false;
     content::WebContents* web_contents =
         browser()->tab_strip_model()->GetActiveWebContents();
-    EXPECT_TRUE(content::ExecuteScriptAndExtractBool(
-        web_contents, "openWindow()", &opened_window));
-    EXPECT_EQ(expect_block, !opened_window);
+    EXPECT_NE(expect_block, content::EvalJs(web_contents, "openWindow()"));
     EXPECT_EQ(expect_block,
               PageSpecificContentSettings::GetForFrame(
                   web_contents->GetPrimaryMainFrame())
@@ -608,10 +566,7 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingTriggeredPopupBlockerBrowserTest,
                                 {blocked_content::kAbusiveWarnMessage},
                                 {blocked_content::kAbusiveEnforceMessage});
 
-  bool opened_window = false;
-  EXPECT_TRUE(content::ExecuteScriptAndExtractBool(
-      web_contents(), "openWindow()", &opened_window));
-  EXPECT_TRUE(opened_window);
+  EXPECT_EQ(true, content::EvalJs(web_contents(), "openWindow()"));
 }
 
 // If the site activates in warning mode, make sure warning messages are logged
@@ -633,10 +588,7 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingTriggeredPopupBlockerBrowserTest,
 
   // Navigate to a_url, should not trigger the popup blocker.
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), a_url));
-  bool opened_window = false;
-  EXPECT_TRUE(content::ExecuteScriptAndExtractBool(
-      web_contents(), "openWindow()", &opened_window));
-  EXPECT_TRUE(opened_window);
+  EXPECT_EQ(true, content::EvalJs(web_contents(), "openWindow()"));
 
   RoundTripAndVerifyLogMessages(console_observer, web_contents(),
                                 {blocked_content::kAbusiveWarnMessage},
@@ -677,10 +629,7 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingTriggeredInterceptingBrowserTest,
   {
     content::WebContentsConsoleObserver console_observer(web_contents());
     ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), no_match_url));
-    bool opened_window = false;
-    EXPECT_TRUE(content::ExecuteScriptAndExtractBool(
-        web_contents(), "openWindow()", &opened_window));
-    EXPECT_TRUE(opened_window);
+    EXPECT_EQ(true, content::EvalJs(web_contents(), "openWindow()"));
     RoundTripAndVerifyLogMessages(console_observer, web_contents(), {},
                                   {blocked_content::kAbusiveEnforceMessage,
                                    blocked_content::kAbusiveWarnMessage});
@@ -688,10 +637,7 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingTriggeredInterceptingBrowserTest,
   {
     content::WebContentsConsoleObserver console_observer(web_contents());
     ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), enforce_url));
-    bool opened_window = false;
-    EXPECT_TRUE(content::ExecuteScriptAndExtractBool(
-        web_contents(), "openWindow()", &opened_window));
-    EXPECT_FALSE(opened_window);
+    EXPECT_EQ(false, content::EvalJs(web_contents(), "openWindow()"));
     RoundTripAndVerifyLogMessages(console_observer, web_contents(),
                                   {blocked_content::kAbusiveEnforceMessage},
                                   {blocked_content::kAbusiveWarnMessage});
@@ -699,10 +645,7 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingTriggeredInterceptingBrowserTest,
   {
     content::WebContentsConsoleObserver console_observer(web_contents());
     ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), warn_url));
-    bool opened_window = false;
-    EXPECT_TRUE(content::ExecuteScriptAndExtractBool(
-        web_contents(), "openWindow()", &opened_window));
-    EXPECT_TRUE(opened_window);
+    EXPECT_EQ(true, content::EvalJs(web_contents(), "openWindow()"));
     RoundTripAndVerifyLogMessages(console_observer, web_contents(),
                                   {blocked_content::kAbusiveWarnMessage},
                                   {blocked_content::kAbusiveEnforceMessage});
@@ -723,7 +666,7 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingTriggeredPopupBlockerBrowserTest,
                                              ->tab_strip_model()
                                              ->GetActiveWebContents()
                                              ->GetPrimaryMainFrame();
-  int main_frame_process_id = main_frame->GetProcess()->GetID();
+  int main_frame_process_id = main_frame->GetProcess()->GetDeprecatedID();
   int main_frame_routing_id = main_frame->GetRoutingID();
 
   // Navigate away from the abusive page. This should block bfcache.
@@ -781,8 +724,9 @@ class SafeBrowsingTriggeredPopupBlockerPrerenderingBrowserTest
 
 // Tests that the console logs for SafeBrowsingTriggeredPopupBlocker are from
 // correct source frames.
+// TODO: crbug.com/329145811 - The test is flaky on all platforms.
 IN_PROC_BROWSER_TEST_F(SafeBrowsingTriggeredPopupBlockerPrerenderingBrowserTest,
-                       ConsoleLogWithSourceFrame) {
+                       DISABLED_ConsoleLogWithSourceFrame) {
   // Load a primary page.
   {
     GURL initial_url(embedded_test_server()->GetURL("/empty.html"));
@@ -796,8 +740,9 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingTriggeredPopupBlockerPrerenderingBrowserTest,
                                   {blocked_content::kAbusiveWarnMessage},
                                   {blocked_content::kAbusiveEnforceMessage});
     EXPECT_GE(console_observer.messages().size(), 1u);
-    for (auto& message : console_observer.messages())
+    for (auto& message : console_observer.messages()) {
       EXPECT_EQ(message.source_frame, web_contents()->GetPrimaryMainFrame());
+    }
   }
 
   // Load prerendering and ensure that the source frame for console logs in
@@ -806,7 +751,8 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingTriggeredPopupBlockerPrerenderingBrowserTest,
   {
     ConfigureAsAbusiveWarn(prerendering_url);
     content::WebContentsConsoleObserver console_observer(web_contents());
-    int host_id = prerender_helper_.AddPrerender(prerendering_url);
+    content::FrameTreeNodeId host_id =
+        prerender_helper_.AddPrerender(prerendering_url);
     content::test::PrerenderHostObserver host_observer(*web_contents(),
                                                        host_id);
     auto* prerendered_frame_host =
@@ -815,8 +761,9 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingTriggeredPopupBlockerPrerenderingBrowserTest,
                                   {blocked_content::kAbusiveWarnMessage},
                                   {blocked_content::kAbusiveEnforceMessage});
     EXPECT_GE(console_observer.messages().size(), 1u);
-    for (auto& message : console_observer.messages())
+    for (auto& message : console_observer.messages()) {
       EXPECT_EQ(message.source_frame, prerendered_frame_host);
+    }
   }
   // When prerendering activation, OnSafeBrowsingChecksComplete() is not called.
   // So SubresourceFilterLevel is not set on DidFinishNavigation() and the
@@ -840,13 +787,13 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingTriggeredPopupBlockerPrerenderingBrowserTest,
   ConfigureAsAbusive(prerendering_url);
 
   // Loads a page in the prerender.
-  int host_id = prerender_helper_.AddPrerender(prerendering_url);
+  content::FrameTreeNodeId host_id =
+      prerender_helper_.AddPrerender(prerendering_url);
   auto* prerendered_frame_host =
       prerender_helper_.GetPrerenderedMainFrameHost(host_id);
   // openWindow() is ignored in prerendering and the popup UI is not shown since
   // RenderFrameHostImpl::CreateNewWindow() works only in an active document.
-  EXPECT_EQ(false, content::EvalJs(prerendered_frame_host, "openWindow()",
-                                   content::EXECUTE_SCRIPT_USE_MANUAL_REPLY));
+  EXPECT_EQ(false, content::EvalJs(prerendered_frame_host, "openWindow()"));
   // Make sure the popup UI was not shown in prerendering.
   EXPECT_FALSE(PageSpecificContentSettings::GetForFrame(prerendered_frame_host)
                    ->IsContentBlocked(ContentSettingsType::POPUPS));
@@ -854,8 +801,7 @@ IN_PROC_BROWSER_TEST_F(SafeBrowsingTriggeredPopupBlockerPrerenderingBrowserTest,
   // Activate prerendering, should trigger the popup blocker.
   prerender_helper_.NavigatePrimaryPage(prerendering_url);
   EXPECT_EQ(false, content::EvalJs(web_contents()->GetPrimaryMainFrame(),
-                                   "openWindow()",
-                                   content::EXECUTE_SCRIPT_USE_MANUAL_REPLY));
+                                   "openWindow()"));
   // Make sure the popup UI was shown in an activated document.
   EXPECT_TRUE(PageSpecificContentSettings::GetForFrame(
                   web_contents()->GetPrimaryMainFrame())

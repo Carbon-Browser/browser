@@ -1,11 +1,11 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 var numPings = 0;
 var base_url;
 
-chrome.extension.onRequest.addListener(function(data) {
+chrome.runtime.onMessage.addListener(function(data) {
   if (data != "ping")
     chrome.test.fail("Unexpected request: " + JSON.stringify(data));
 

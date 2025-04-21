@@ -1,12 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_PRIVACY_BUDGET_SURFACE_SET_EQUIVALENCE_H_
 #define CHROME_BROWSER_PRIVACY_BUDGET_SURFACE_SET_EQUIVALENCE_H_
 
+#include <string_view>
+
 #include "base/containers/flat_map.h"
-#include "base/strings/string_piece_forward.h"
 #include "chrome/browser/privacy_budget/representative_surface_set.h"
 #include "chrome/common/privacy_budget/types.h"
 #include "third_party/blink/public/common/privacy_budget/identifiable_surface.h"
@@ -48,7 +49,7 @@ class SurfaceSetEquivalence {
       base::flat_map<blink::IdentifiableSurface, RepresentativeSurface>;
 
   static EquivalenceClassIdentifierMap DecodeEquivalenceClassSet(
-      base::StringPiece encoded_class_set);
+      std::string_view encoded_class_set);
 
   // Maps an IdentifiableSurface to its corresponding representative surface.
   //

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,15 +10,15 @@ import android.view.ViewGroup;
 
 import androidx.annotation.LayoutRes;
 
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 import org.chromium.ui.modelutil.MVCListAdapter.ViewBuilder;
 
-/**
- * Helper class that inflates view from XML layout.
- */
+/** Helper class that inflates view from XML layout. */
+@NullMarked
 public class LayoutViewBuilder<T extends View> implements ViewBuilder<T> {
-    @LayoutRes
-    private final int mLayoutResId;
-    private LayoutInflater mInflater;
+    @LayoutRes private final int mLayoutResId;
+    private @Nullable LayoutInflater mInflater;
 
     public LayoutViewBuilder(@LayoutRes int res) {
         mLayoutResId = res;

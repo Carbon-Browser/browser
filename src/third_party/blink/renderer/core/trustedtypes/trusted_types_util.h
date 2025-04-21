@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,10 @@ namespace blink {
 class ExceptionState;
 class ExecutionContext;
 class QualifiedName;
+class ScriptValue;
+class ScriptState;
 class V8UnionStringOrTrustedScript;
-class V8UnionStringTreatNullAsEmptyStringOrTrustedScript;
+class V8UnionStringLegacyNullToEmptyStringOrTrustedScript;
 
 enum class SpecificTrustedType {
   kNone,
@@ -31,14 +33,20 @@ enum class SpecificTrustedType {
 TrustedTypesCheckFor(SpecificTrustedType type,
                      const V8TrustedType* trusted,
                      const ExecutionContext* execution_context,
+                     const char* interface_name,
+                     const char* property_name,
                      ExceptionState& exception_state);
 [[nodiscard]] CORE_EXPORT String
 TrustedTypesCheckForScript(const V8UnionStringOrTrustedScript* value,
                            const ExecutionContext* execution_context,
+                           const char* interface_name,
+                           const char* property_name,
                            ExceptionState& exception_state);
 [[nodiscard]] CORE_EXPORT String TrustedTypesCheckForScript(
-    const V8UnionStringTreatNullAsEmptyStringOrTrustedScript* value,
+    const V8UnionStringLegacyNullToEmptyStringOrTrustedScript* value,
     const ExecutionContext* execution_context,
+    const char* interface_name,
+    const char* property_name,
     ExceptionState& exception_state);
 
 // Perform Trusted Type checks, for a dynamically or statically determined
@@ -48,18 +56,26 @@ TrustedTypesCheckForScript(const V8UnionStringOrTrustedScript* value,
 [[nodiscard]] String TrustedTypesCheckFor(SpecificTrustedType,
                                           String,
                                           const ExecutionContext*,
+                                          const char* interface_name,
+                                          const char* property_name,
                                           ExceptionState&);
 [[nodiscard]] CORE_EXPORT String
 TrustedTypesCheckForHTML(const String&,
                          const ExecutionContext*,
+                         const char* interface_name,
+                         const char* property_name,
                          ExceptionState&);
 [[nodiscard]] CORE_EXPORT String
 TrustedTypesCheckForScript(const String&,
                            const ExecutionContext*,
+                           const char* interface_name,
+                           const char* property_name,
                            ExceptionState&);
 [[nodiscard]] CORE_EXPORT String
 TrustedTypesCheckForScriptURL(const String&,
                               const ExecutionContext*,
+                              const char* interface_name,
+                              const char* property_name,
                               ExceptionState&);
 
 // Functionally equivalent to TrustedTypesCheckForScript(const String&, ...),
@@ -97,6 +113,15 @@ CORE_EXPORT bool RequireTrustedTypesCheck(const ExecutionContext*);
 // user-defined attribute/property, and thus must check against a list of known
 // event handlers.
 bool IsTrustedTypesEventHandlerAttribute(const QualifiedName&);
+
+// Return a string, if the passed-in script value is a literal. With "literal"
+// meaning it passes the checks for TrustedType's fromLiteral definition.
+//
+// If an error occurs, this will return a null-String.
+//
+// Spec:
+// https://w3c.github.io/trusted-types/dist/spec/#check-templatedness-algorithm
+String GetTrustedTypesLiteral(const ScriptValue&, ScriptState*);
 
 }  // namespace blink
 

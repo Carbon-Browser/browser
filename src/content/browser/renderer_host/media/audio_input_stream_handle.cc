@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 
 namespace content {
 
@@ -57,7 +57,7 @@ void AudioInputStreamHandle::SetOutputDeviceForAec(
 }
 
 void AudioInputStreamHandle::OnCreated(
-    media::mojom::ReadOnlyAudioDataPipePtr data_pipe,
+    media::mojom::ReadWriteAudioDataPipePtr data_pipe,
     bool initially_muted) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(client_remote_);

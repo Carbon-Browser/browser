@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,12 +10,12 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/files/file.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_span.h"
 #include "base/memory/ref_counted.h"
 #include "base/sequence_checker.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "services/device/public/mojom/serial.mojom.h"
 
@@ -210,12 +210,12 @@ class SerialIoHandler : public base::RefCountedThreadSafe<SerialIoHandler> {
   // Currently applied connection options.
   mojom::SerialConnectionOptions options_;
 
-  base::span<uint8_t> pending_read_buffer_;
+  base::raw_span<uint8_t> pending_read_buffer_;
   ReadCompleteCallback pending_read_callback_;
   mojom::SerialReceiveError read_cancel_reason_;
   bool read_canceled_;
 
-  base::span<const uint8_t> pending_write_buffer_;
+  base::raw_span<const uint8_t> pending_write_buffer_;
   WriteCompleteCallback pending_write_callback_;
   mojom::SerialSendError write_cancel_reason_;
   bool write_canceled_;

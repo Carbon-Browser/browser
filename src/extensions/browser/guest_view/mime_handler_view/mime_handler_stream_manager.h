@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 #include <string>
 
 #include "base/gtest_prod_util.h"
-#include "base/memory/ref_counted.h"
 #include "components/keyed_service/core/keyed_service.h"
+#include "content/public/browser/frame_tree_node_id.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_registry_observer.h"
 
@@ -45,7 +45,7 @@ class MimeHandlerStreamManager : public KeyedService,
   // (PDF, etc).
   void AddStream(const std::string& stream_id,
                  std::unique_ptr<StreamContainer> stream,
-                 int frame_tree_node_id);
+                 content::FrameTreeNodeId frame_tree_node_id);
 
   std::unique_ptr<StreamContainer> ReleaseStream(const std::string& stream_id);
 
@@ -53,6 +53,8 @@ class MimeHandlerStreamManager : public KeyedService,
   void OnExtensionUnloaded(content::BrowserContext* browser_context,
                            const Extension* extension,
                            UnloadedExtensionReason reason) override;
+
+  static void EnsureFactoryBuilt();
 
  private:
   FRIEND_TEST_ALL_PREFIXES(::ChromeMimeHandlerViewTest, Basic);

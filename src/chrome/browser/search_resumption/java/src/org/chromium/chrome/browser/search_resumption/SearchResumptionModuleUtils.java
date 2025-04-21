@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,26 +13,24 @@ import androidx.annotation.VisibleForTesting;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
-import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
+import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.search_engines.TemplateUrlServiceFactory;
 import org.chromium.chrome.browser.search_resumption.SearchResumptionUserData.SuggestionResult;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
-import org.chromium.chrome.browser.sync.SyncService;
+import org.chromium.chrome.browser.sync.SyncServiceFactory;
 import org.chromium.chrome.browser.tab.Tab;
-import org.chromium.chrome.browser.tab.state.CriticalPersistedTabData;
 import org.chromium.chrome.browser.tabmodel.TabModel;
 import org.chromium.chrome.browser.tabmodel.TabModelUtils;
 import org.chromium.components.signin.identitymanager.ConsentLevel;
+import org.chromium.components.sync.UserSelectableType;
 import org.chromium.url.GURL;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.concurrent.TimeUnit;
 
-/**
- * This is a utility class for search resumption module.
- */
+/** This is a utility class for search resumption module. */
 public class SearchResumptionModuleUtils {
     @IntDef({ModuleShowStatus.EXPANDED, ModuleShowStatus.COLLAPSED, ModuleShowStatus.NUM_ENTRIES})
     @Retention(RetentionPolicy.SOURCE)
@@ -44,11 +42,18 @@ public class SearchResumptionModuleUtils {
         int NUM_ENTRIES = 2;
     }
 
-    @IntDef({ModuleNotShownReason.NOT_ENOUGH_RESULT, ModuleNotShownReason.FEATURE_DISABLED,
-            ModuleNotShownReason.NOT_SIGN_IN, ModuleNotShownReason.NOT_SYNC,
-            ModuleNotShownReason.DEFAULT_ENGINE_NOT_GOOGLE, ModuleNotShownReason.NO_TAB_TO_TRACK,
-            ModuleNotShownReason.TAB_NOT_VALID, ModuleNotShownReason.TAB_EXPIRED,
-            ModuleNotShownReason.TAB_CHANGED, ModuleNotShownReason.NUM_ENTRIES})
+    @IntDef({
+        ModuleNotShownReason.NOT_ENOUGH_RESULT,
+        ModuleNotShownReason.FEATURE_DISABLED,
+        ModuleNotShownReason.NOT_SIGN_IN,
+        ModuleNotShownReason.NOT_SYNC,
+        ModuleNotShownReason.DEFAULT_ENGINE_NOT_GOOGLE,
+        ModuleNotShownReason.NO_TAB_TO_TRACK,
+        ModuleNotShownReason.TAB_NOT_VALID,
+        ModuleNotShownReason.TAB_EXPIRED,
+        ModuleNotShownReason.TAB_CHANGED,
+        ModuleNotShownReason.NUM_ENTRIES
+    })
     // The ModuleNotShownReason should be consistent with
     // SearchResumptionModule.ModuleNotShownReason in enums.xml.
     public @interface ModuleNotShownReason {
@@ -66,6 +71,7 @@ public class SearchResumptionModuleUtils {
 
     @VisibleForTesting
     static final String UMA_MODULE_SHOW = "NewTabPage.SearchResumptionModule.Show";
+
     @VisibleForTesting
     static final String UMA_MODULE_NOT_SHOW = "NewTabPage.SearchResumptionModule.NotShow";
 
@@ -80,13 +86,15 @@ public class SearchResumptionModuleUtils {
     /**
      * Creates a {@link SearchResumptionModuleCoordinator} if we are currently allowed to and
      * dependencies are met:
-     * 1) Feature flags SHOW_SCROLLABLE_MVT_ON_NTP_ANDROID and SEARCH_RESUMPTION_MODULE_ANDROID are
-     *    both enabled;
-     * 2) The default search engine is Google;
-     * 3) The user has signed in;
-     * 4) The current Tab isn't shown due to such as tapping the back button.
-     * 5) The Tab to track is a regular Tab, not a native page, not with an empty URL;
-     * 6) The Tab to track was visited within an expiration time.
+     *
+     * <ol>
+     *   <li>Feature flag SEARCH_RESUMPTION_MODULE_ANDROID is enabled;
+     *   <li>The default search engine is Google;
+     *   <li>The user has signed in;
+     *   <li>The current Tab isn't shown due to such as tapping the back button.
+     *   <li>The Tab to track is a regular Tab, not a native page, not with an empty URL;
+     *   <li>The Tab to track was visited within an expiration time.
+     * </ol>
      *
      * @param parent The parent layout which the search resumption module lives.
      * @param tabModel The TabModel to find the Tab to track.
@@ -95,7 +103,10 @@ public class SearchResumptionModuleUtils {
      * @param moduleContainerStubId The id of the search resumption module on its parent view.
      */
     public static SearchResumptionModuleCoordinator mayCreateSearchResumptionModule(
-            ViewGroup parent, TabModel tabModel, Tab currentTab, Profile profile,
+            ViewGroup parent,
+            TabModel tabModel,
+            Tab currentTab,
+            Profile profile,
             int moduleContainerStubId) {
         if (!shouldShowSearchResumptionModule(profile)) return null;
 
@@ -107,18 +118,25 @@ public class SearchResumptionModuleUtils {
 
         if (!isTabToTrackValid(tabToTrack)) return null;
 
-        return new SearchResumptionModuleCoordinator(parent, tabToTrack, currentTab, profile,
-                moduleContainerStubId, mayGetCachedResults(currentTab, tabToTrack));
+        return new SearchResumptionModuleCoordinator(
+                parent,
+                tabToTrack,
+                currentTab,
+                profile,
+                moduleContainerStubId,
+                mayGetCachedResults(currentTab, tabToTrack));
     }
 
     /**
      * Returns whether to show the search resumption module. Only shows the module if all of the
      * criteria meet:
-     * 1) Feature flags SHOW_SCROLLABLE_MVT_ON_NTP_ANDROID and SEARCH_RESUMPTION_MODULE_ANDROID are
-     *    both enabled;
-     * 2) The default search engine is Google;
-     * 3) The user has signed in;
-     * 4) The user has turned on sync.
+     *
+     * <ol>
+     *   <li>Feature flag SEARCH_RESUMPTION_MODULE_ANDROID is enabled;
+     *   <li>The default search engine is Google;
+     *   <li>The user has signed in;
+     *   <li>The user has turned on sync.
+     * </ol>
      */
     @VisibleForTesting
     static boolean shouldShowSearchResumptionModule(Profile profile) {
@@ -127,18 +145,21 @@ public class SearchResumptionModuleUtils {
             return false;
         }
 
-        if (!TemplateUrlServiceFactory.get().isDefaultSearchEngineGoogle()) {
+        if (!TemplateUrlServiceFactory.getForProfile(profile).isDefaultSearchEngineGoogle()) {
             recordModuleNotShownReason(ModuleNotShownReason.DEFAULT_ENGINE_NOT_GOOGLE);
             return false;
         }
 
-        if (!IdentityServicesProvider.get().getIdentityManager(profile).hasPrimaryAccount(
-                    ConsentLevel.SYNC)) {
+        if (!IdentityServicesProvider.get()
+                .getIdentityManager(profile)
+                .hasPrimaryAccount(ConsentLevel.SIGNIN)) {
             recordModuleNotShownReason(ModuleNotShownReason.NOT_SIGN_IN);
             return false;
         }
 
-        if (!SyncService.get().hasKeepEverythingSynced()) {
+        if (!SyncServiceFactory.getForProfile(profile)
+                .getSelectedTypes()
+                .contains(UserSelectableType.HISTORY)) {
             recordModuleNotShownReason(ModuleNotShownReason.NOT_SYNC);
             return false;
         }
@@ -152,18 +173,20 @@ public class SearchResumptionModuleUtils {
      */
     @VisibleForTesting
     static boolean isTabToTrackValid(Tab tabToTrack) {
-        if (tabToTrack.isNativePage() || tabToTrack.isIncognito()
+        if (tabToTrack.isNativePage()
+                || tabToTrack.isIncognito()
                 || GURL.isEmptyOrInvalid(tabToTrack.getUrl())) {
             recordModuleNotShownReason(ModuleNotShownReason.TAB_NOT_VALID);
             return false;
         }
 
         // Only shows the module if the Tab to track was visited within an expiration time.
-        if (TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis()
-                    - CriticalPersistedTabData.from(tabToTrack).getTimestampMillis())
+        if (TimeUnit.MILLISECONDS.toSeconds(
+                        System.currentTimeMillis() - tabToTrack.getTimestampMillis())
                 < ChromeFeatureList.getFieldTrialParamByFeatureAsInt(
                         ChromeFeatureList.SEARCH_RESUMPTION_MODULE_ANDROID,
-                        TAB_EXPIRATION_TIME_PARAM, LAST_TAB_EXPIRATION_TIME_SECONDS)) {
+                        TAB_EXPIRATION_TIME_PARAM,
+                        LAST_TAB_EXPIRATION_TIME_SECONDS)) {
             return true;
         } else {
             recordModuleNotShownReason(ModuleNotShownReason.TAB_EXPIRED);
@@ -182,7 +205,8 @@ public class SearchResumptionModuleUtils {
             cachedSuggestions =
                     SearchResumptionUserData.getInstance().getCachedSuggestions(currentTab);
             if (cachedSuggestions == null
-                    || !TextUtils.equals(cachedSuggestions.getLastUrlToTrack().getSpec(),
+                    || !TextUtils.equals(
+                            cachedSuggestions.getLastUrlToTrack().getSpec(),
                             tabToTrack.getUrl().getSpec())) {
                 SearchResumptionModuleUtils.recordModuleNotShownReason(
                         ModuleNotShownReason.TAB_CHANGED);
@@ -197,16 +221,18 @@ public class SearchResumptionModuleUtils {
      * @param cached: Whether cached suggestions are shown.
      */
     static void recordModuleShown(boolean cached) {
-        boolean isCollapsed = SharedPreferencesManager.getInstance().readBoolean(
-                ChromePreferenceKeys.SEARCH_RESUMPTION_MODULE_COLLAPSE_ON_NTP, false);
-        RecordHistogram.recordEnumeratedHistogram(cached ? UMA_MODULE_SHOW_CACHED : UMA_MODULE_SHOW,
+        boolean isCollapsed =
+                ChromeSharedPreferences.getInstance()
+                        .readBoolean(
+                                ChromePreferenceKeys.SEARCH_RESUMPTION_MODULE_COLLAPSE_ON_NTP,
+                                false);
+        RecordHistogram.recordEnumeratedHistogram(
+                cached ? UMA_MODULE_SHOW_CACHED : UMA_MODULE_SHOW,
                 isCollapsed ? ModuleShowStatus.COLLAPSED : ModuleShowStatus.EXPANDED,
                 ModuleShowStatus.NUM_ENTRIES);
     }
 
-    /**
-     * Records the reason why the search resumption module is not shown.
-     */
+    /** Records the reason why the search resumption module is not shown. */
     static void recordModuleNotShownReason(@ModuleNotShownReason int reason) {
         RecordHistogram.recordEnumeratedHistogram(
                 UMA_MODULE_NOT_SHOW, reason, ModuleNotShownReason.NUM_ENTRIES);

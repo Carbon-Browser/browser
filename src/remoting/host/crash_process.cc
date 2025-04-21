@@ -1,13 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "remoting/host/crash_process.h"
 
-#include "base/check.h"
 #include "base/debug/alias.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/notreached.h"
 #include "base/strings/string_util.h"
 
 namespace remoting {
@@ -26,7 +26,7 @@ void CrashProcess(const std::string& function_name,
   base::debug::Alias(message);
 
   // Crash the process.
-  CHECK(false) << message;
+  NOTREACHED() << message;
 }
 
 }  // namespace remoting

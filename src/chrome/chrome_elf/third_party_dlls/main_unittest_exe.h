@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@ enum ExitCode {
   kThirdPartyAlreadyInitialized = -2,
   kThirdPartyInitFailure = -3,
   kMissingArgument = -4,
-  kBadBlacklistPath = -5,
+  kBadBlocklistPath = -5,
   kBadArgument = -6,
   kUnsupportedTestId = -7,
   kEmptyLog = -8,

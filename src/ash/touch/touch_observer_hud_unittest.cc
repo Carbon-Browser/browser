@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,6 +53,17 @@ class TouchHudTestBase : public AshTestBase {
 
   display::Display GetPrimaryDisplay() {
     return display::Screen::GetScreen()->GetPrimaryDisplay();
+  }
+
+  display::ManagedDisplayInfo CreateDisplayInfo(int64_t id,
+                                                const gfx::Rect& bounds) {
+    display::ManagedDisplayInfo info = display::CreateDisplayInfo(id, bounds);
+    // Each display should have at least one native mode.
+    display::ManagedDisplayMode mode(bounds.size(), /*refresh_rate=*/60.f,
+                                     /*is_interlaced=*/true,
+                                     /*native=*/true);
+    info.SetManagedDisplayModes({mode});
+    return info;
   }
 
   void SetupSingleDisplay() {
@@ -172,14 +183,6 @@ class TouchHudTestBase : public AshTestBase {
   RootWindowController* GetSecondaryRootController() {
     aura::Window* root = GetSecondaryRootWindow();
     return RootWindowController::ForWindow(root);
-  }
-
-  display::ManagedDisplayInfo CreateDisplayInfo(int64_t id,
-                                                const gfx::Rect& bounds) {
-    display::ManagedDisplayInfo info(id, base::StringPrintf("x-%" PRId64, id),
-                                     false);
-    info.SetBounds(bounds);
-    return info;
   }
 
   aura::Window* GetRootWindowForTouchHud(TouchObserverHud* hud) {
@@ -500,13 +503,16 @@ TEST_F(TouchHudProjectionTest, TouchMoveRelease) {
   EXPECT_NE(nullptr, GetInternalTouchHudProjection());
   EXPECT_EQ(0, GetInternalTouchPointsCount());
 
-  SendTouchEventToInternalHud(ui::ET_TOUCH_PRESSED, gfx::Point(10, 10), 1);
+  SendTouchEventToInternalHud(ui::EventType::kTouchPressed, gfx::Point(10, 10),
+                              1);
   EXPECT_EQ(1, GetInternalTouchPointsCount());
 
-  SendTouchEventToInternalHud(ui::ET_TOUCH_MOVED, gfx::Point(10, 20), 1);
+  SendTouchEventToInternalHud(ui::EventType::kTouchMoved, gfx::Point(10, 20),
+                              1);
   EXPECT_EQ(1, GetInternalTouchPointsCount());
 
-  SendTouchEventToInternalHud(ui::ET_TOUCH_RELEASED, gfx::Point(10, 20), 1);
+  SendTouchEventToInternalHud(ui::EventType::kTouchReleased, gfx::Point(10, 20),
+                              1);
   EXPECT_EQ(0, GetInternalTouchPointsCount());
 }
 
@@ -517,13 +523,16 @@ TEST_F(TouchHudProjectionTest, TouchMoveCancel) {
   EXPECT_NE(nullptr, GetInternalTouchHudProjection());
   EXPECT_EQ(0, GetInternalTouchPointsCount());
 
-  SendTouchEventToInternalHud(ui::ET_TOUCH_PRESSED, gfx::Point(10, 10), 1);
+  SendTouchEventToInternalHud(ui::EventType::kTouchPressed, gfx::Point(10, 10),
+                              1);
   EXPECT_EQ(1, GetInternalTouchPointsCount());
 
-  SendTouchEventToInternalHud(ui::ET_TOUCH_MOVED, gfx::Point(10, 20), 1);
+  SendTouchEventToInternalHud(ui::EventType::kTouchMoved, gfx::Point(10, 20),
+                              1);
   EXPECT_EQ(1, GetInternalTouchPointsCount());
 
-  SendTouchEventToInternalHud(ui::ET_TOUCH_CANCELLED, gfx::Point(10, 20), 1);
+  SendTouchEventToInternalHud(ui::EventType::kTouchCancelled,
+                              gfx::Point(10, 20), 1);
   EXPECT_EQ(0, GetInternalTouchPointsCount());
 }
 
@@ -533,22 +542,28 @@ TEST_F(TouchHudProjectionTest, DoubleTouch) {
   EXPECT_NE(nullptr, GetInternalTouchHudProjection());
   EXPECT_EQ(0, GetInternalTouchPointsCount());
 
-  SendTouchEventToInternalHud(ui::ET_TOUCH_PRESSED, gfx::Point(10, 10), 1);
+  SendTouchEventToInternalHud(ui::EventType::kTouchPressed, gfx::Point(10, 10),
+                              1);
   EXPECT_EQ(1, GetInternalTouchPointsCount());
 
-  SendTouchEventToInternalHud(ui::ET_TOUCH_PRESSED, gfx::Point(20, 10), 2);
+  SendTouchEventToInternalHud(ui::EventType::kTouchPressed, gfx::Point(20, 10),
+                              2);
   EXPECT_EQ(2, GetInternalTouchPointsCount());
 
-  SendTouchEventToInternalHud(ui::ET_TOUCH_MOVED, gfx::Point(10, 20), 1);
+  SendTouchEventToInternalHud(ui::EventType::kTouchMoved, gfx::Point(10, 20),
+                              1);
   EXPECT_EQ(2, GetInternalTouchPointsCount());
 
-  SendTouchEventToInternalHud(ui::ET_TOUCH_MOVED, gfx::Point(20, 20), 2);
+  SendTouchEventToInternalHud(ui::EventType::kTouchMoved, gfx::Point(20, 20),
+                              2);
   EXPECT_EQ(2, GetInternalTouchPointsCount());
 
-  SendTouchEventToInternalHud(ui::ET_TOUCH_RELEASED, gfx::Point(10, 20), 1);
+  SendTouchEventToInternalHud(ui::EventType::kTouchReleased, gfx::Point(10, 20),
+                              1);
   EXPECT_EQ(1, GetInternalTouchPointsCount());
 
-  SendTouchEventToInternalHud(ui::ET_TOUCH_RELEASED, gfx::Point(20, 20), 2);
+  SendTouchEventToInternalHud(ui::EventType::kTouchReleased, gfx::Point(20, 20),
+                              2);
   EXPECT_EQ(0, GetInternalTouchPointsCount());
 }
 

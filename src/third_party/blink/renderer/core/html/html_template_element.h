@@ -32,18 +32,14 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_HTML_HTML_TEMPLATE_ELEMENT_H_
 
 #include "third_party/blink/renderer/core/core_export.h"
+#include "third_party/blink/renderer/core/dom/shadow_root.h"
+#include "third_party/blink/renderer/core/dom/template_content_document_fragment.h"
 #include "third_party/blink/renderer/core/html/html_element.h"
 
 namespace blink {
 
 class DocumentFragment;
 class TemplateContentDocumentFragment;
-
-enum class DeclarativeShadowRootType {
-  kNone,
-  kOpen,
-  kClosed,
-};
 
 class CORE_EXPORT HTMLTemplateElement final : public HTMLElement {
   DEFINE_WRAPPERTYPEINFO();
@@ -58,32 +54,33 @@ class CORE_EXPORT HTMLTemplateElement final : public HTMLElement {
 
   DocumentFragment* content() const;
 
-  // This gives direct access to ContentInternal, and should *only*
-  // be used by HTMLConstructionSite.
-  DocumentFragment* TemplateContentForHTMLConstructionSite() const {
-    return ContentInternal();
+  // This just retrieves existing content, and will not construct a content
+  // DocumentFragment if one does not exist.
+  DocumentFragment* getContent() const {
+    CHECK(!declarative_shadow_root_ || !content_);
+    return content_;
   }
 
-  DocumentFragment* DeclarativeShadowContent() const;
-  void SetDeclarativeShadowRootType(DeclarativeShadowRootType val) {
-    declarative_shadow_root_type_ = val;
+  // This retrieves either a currently-being-parsed declarative shadow root,
+  // or the content fragment for a "regular" template element. This should only
+  // be used by HTMLConstructionSite.
+  DocumentFragment* TemplateContentOrDeclarativeShadowRoot() const {
+    return declarative_shadow_root_ ? declarative_shadow_root_.Get()
+                                    : content();
   }
-  DeclarativeShadowRootType GetDeclarativeShadowRootType() const {
-    return declarative_shadow_root_type_;
-  }
-  bool IsDeclarativeShadowRoot() const {
-    return declarative_shadow_root_type_ != DeclarativeShadowRootType::kNone;
+
+  void SetDeclarativeShadowRoot(ShadowRoot& shadow) {
+    declarative_shadow_root_ = &shadow;
   }
 
  private:
   void CloneNonAttributePropertiesFrom(const Element&,
-                                       CloneChildrenFlag) override;
+                                       NodeCloningData&) override;
   void DidMoveToNewDocument(Document& old_document) override;
 
-  DocumentFragment* ContentInternal() const;
-
   mutable Member<TemplateContentDocumentFragment> content_;
-  DeclarativeShadowRootType declarative_shadow_root_type_;
+
+  Member<ShadowRoot> declarative_shadow_root_;
 };
 
 }  // namespace blink

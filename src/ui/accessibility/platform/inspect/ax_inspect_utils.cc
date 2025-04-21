@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,8 +33,7 @@ std::string AXFormatValue(const base::Value& value) {
     // Special handling for constants which are exposed as is, i.e. with no
     // quotation marks.
     std::string const_prefix = kConstValuePrefix;
-    if (base::StartsWith(value.GetString(), const_prefix,
-                         base::CompareCase::SENSITIVE)) {
+    if (value.GetString().starts_with(const_prefix)) {
       return value.GetString().substr(const_prefix.length());
     }
     // TODO: escape quotation marks if any to make the output unambiguous.
@@ -54,7 +53,7 @@ std::string AXFormatValue(const base::Value& value) {
   // List: exposed as [value1, ..., valueN];
   if (value.is_list()) {
     std::string output;
-    for (const auto& item : value.GetListDeprecated()) {
+    for (const auto& item : value.GetList()) {
       if (!output.empty()) {
         output += ", ";
       }
@@ -70,18 +69,16 @@ std::string AXFormatValue(const base::Value& value) {
     const std::string orderedkey_prefix(kOrderedKeyPrefixDictAttr);
 
     std::string output;
-    for (auto item : value.DictItems()) {
+    for (auto item : value.GetDict()) {
       if (!output.empty()) {
         output += ", ";
       }
-      if (base::StartsWith(item.first, setkey_prefix,
-                           base::CompareCase::SENSITIVE)) {
+      if (item.first.starts_with(setkey_prefix)) {
         // Some of the dictionary's keys should not be appended to the output,
         // so that the dictionary can also be used as a set. Such keys start
         // with the _setkey_ prefix.
         output += AXFormatValue(item.second);
-      } else if (base::StartsWith(item.first, orderedkey_prefix,
-                                  base::CompareCase::SENSITIVE)) {
+      } else if (item.first.starts_with(orderedkey_prefix)) {
         // Process ordered dictionaries. Remove order number from keys before
         // formatting.
         std::string key = item.first;

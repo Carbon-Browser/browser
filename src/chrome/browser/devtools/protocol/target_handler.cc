@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,9 @@
 #include "chrome/browser/ui/browser_navigator.h"
 #include "chrome/common/webui_url_constants.h"
 #include "content/public/browser/devtools_agent_host.h"
+#include "content/public/browser/web_contents.h"
+#include "content/public/common/url_constants.h"
+#include "content/public/common/url_utils.h"
 
 namespace {
 NavigateParams CreateNavigateParams(Profile* profile,
@@ -36,7 +39,9 @@ NavigateParams CreateNavigateParams(Profile* profile,
 }
 }  // namespace
 
-TargetHandler::TargetHandler(protocol::UberDispatcher* dispatcher) {
+TargetHandler::TargetHandler(protocol::UberDispatcher* dispatcher,
+                             bool is_trusted)
+    : is_trusted_(is_trusted) {
   protocol::Target::Dispatcher::wire(dispatcher, this);
 }
 
@@ -68,16 +73,19 @@ protocol::Response TargetHandler::SetRemoteLocations(
 
 protocol::Response TargetHandler::CreateTarget(
     const std::string& url,
-    protocol::Maybe<int> width,
-    protocol::Maybe<int> height,
-    protocol::Maybe<std::string> browser_context_id,
-    protocol::Maybe<bool> enable_begin_frame_control,
-    protocol::Maybe<bool> new_window,
-    protocol::Maybe<bool> background,
+    std::optional<int> left,
+    std::optional<int> top,
+    std::optional<int> width,
+    std::optional<int> height,
+    std::optional<std::string> browser_context_id,
+    std::optional<bool> enable_begin_frame_control,
+    std::optional<bool> new_window,
+    std::optional<bool> background,
+    std::optional<bool> for_tab,
     std::string* out_target_id) {
   Profile* profile = nullptr;
-  if (browser_context_id.isJust()) {
-    std::string profile_id = browser_context_id.fromJust();
+  if (browser_context_id.has_value()) {
+    std::string profile_id = browser_context_id.value();
     profile =
         DevToolsBrowserContextManager::GetInstance().GetProfileById(profile_id);
     if (!profile) {
@@ -89,15 +97,15 @@ protocol::Response TargetHandler::CreateTarget(
     DCHECK(profile);
   }
 
-  bool create_new_window = new_window.fromMaybe(false);
-  bool create_in_background = background.fromMaybe(false);
+  bool create_new_window = new_window.value_or(false);
+  bool create_in_background = background.value_or(false);
   Browser* target_browser = nullptr;
 
   // Must find target_browser if new_window not explicitly true.
   if (!create_new_window) {
     // Find a browser to open a new tab.
     // We shouldn't use browser that is scheduled to close.
-    for (auto* browser : *BrowserList::GetInstance()) {
+    for (Browser* browser : *BrowserList::GetInstance()) {
       if (browser->profile() == profile &&
           !browser->IsAttemptingToCloseBrowser()) {
         target_browser = browser;
@@ -106,7 +114,7 @@ protocol::Response TargetHandler::CreateTarget(
     }
   }
 
-  bool explicit_old_window = !new_window.fromMaybe(true);
+  bool explicit_old_window = !new_window.value_or(true);
   if (explicit_old_window && !target_browser) {
     return protocol::Response::ServerError(
         "Failed to open new tab - "
@@ -118,6 +126,11 @@ protocol::Response TargetHandler::CreateTarget(
     gurl = GURL(url::kAboutBlankURL);
   }
 
+  if (!is_trusted_ && gurl.SchemeIs(content::kChromeUIUntrustedScheme)) {
+    return protocol::Response::ServerError(
+        "Refusing to create a target with the specified URL");
+  }
+
   create_new_window = !target_browser;
   NavigateParams params = CreateNavigateParams(
       profile, gurl, ui::PAGE_TRANSITION_AUTO_TOPLEVEL, create_new_window,
@@ -126,8 +139,18 @@ protocol::Response TargetHandler::CreateTarget(
   if (!params.navigated_or_inserted_contents)
     return protocol::Response::ServerError("Failed to open a new tab");
 
-  *out_target_id = content::DevToolsAgentHost::GetOrCreateFor(
-                       params.navigated_or_inserted_contents)
-                       ->GetId();
+  if (!create_in_background) {
+    params.navigated_or_inserted_contents->Focus();
+  }
+
+  if (for_tab.value_or(false)) {
+    *out_target_id = content::DevToolsAgentHost::GetOrCreateForTab(
+                         params.navigated_or_inserted_contents)
+                         ->GetId();
+  } else {
+    *out_target_id = content::DevToolsAgentHost::GetOrCreateFor(
+                         params.navigated_or_inserted_contents)
+                         ->GetId();
+  }
   return protocol::Response::Success();
 }

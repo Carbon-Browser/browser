@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -177,7 +177,6 @@ class ExtensionImpl : public v8::Extension {
     if (name->StringEquals(v8_helpers::ToV8StringUnsafe(isolate, "Save")))
       return v8::FunctionTemplate::New(isolate, Save);
     NOTREACHED() << *v8::String::Utf8Value(isolate, name);
-    return v8::Local<v8::FunctionTemplate>();
   }
 
   static void Apply(const v8::FunctionCallbackInfo<v8::Value>& info) {
@@ -186,7 +185,9 @@ class ExtensionImpl : public v8::Extension {
           info[2]->IsObject() &&  // args
           info[3]->IsInt32() &&   // first_arg_index
           info[4]->IsInt32());    // args_length
+    v8::Local<v8::Context> context = info.GetIsolate()->GetCurrentContext();
     v8::MicrotasksScope microtasks(info.GetIsolate(),
+                                   context->GetMicrotaskQueue(),
                                    v8::MicrotasksScope::kDoNotRunMicrotasks);
     v8::Local<v8::Function> function = info[0].As<v8::Function>();
     v8::Local<v8::Object> recv;
@@ -207,7 +208,6 @@ class ExtensionImpl : public v8::Extension {
     int first_arg_index = info[3].As<v8::Int32>()->Value();
     int args_length = info[4].As<v8::Int32>()->Value();
 
-    v8::Local<v8::Context> context = info.GetIsolate()->GetCurrentContext();
     int argc = args_length - first_arg_index;
     std::unique_ptr<v8::Local<v8::Value>[]> argv(
         new v8::Local<v8::Value>[argc]);
@@ -240,7 +240,7 @@ std::unique_ptr<v8::Extension> SafeBuiltins::CreateV8Extension() {
 
 SafeBuiltins::SafeBuiltins(ScriptContext* context) : context_(context) {}
 
-SafeBuiltins::~SafeBuiltins() {}
+SafeBuiltins::~SafeBuiltins() = default;
 
 v8::Local<v8::Object> SafeBuiltins::GetArray() const {
   return Load("Array", context_->v8_context());

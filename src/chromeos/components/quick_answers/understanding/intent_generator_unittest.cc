@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/task_environment.h"
 #include "chromeos/components/quick_answers/public/cpp/quick_answers_state.h"
 #include "chromeos/components/quick_answers/quick_answers_model.h"
@@ -90,8 +90,8 @@ class IntentGeneratorTest : public QuickAnswersTestBase {
                        base::Unretained(this)));
 
     fake_quick_answers_state()->set_use_text_annotator_for_testing();
-    fake_quick_answers_state()->set_application_locale("en");
-    fake_quick_answers_state()->set_preferred_languages("en");
+    fake_quick_answers_state()->SetApplicationLocale("en");
+    fake_quick_answers_state()->SetPreferredLanguages("en");
   }
 
   void TearDown() override {
@@ -135,14 +135,12 @@ class IntentGeneratorTest : public QuickAnswersTestBase {
 };
 
 TEST_F(IntentGeneratorTest, TranslationIntent) {
-  std::vector<TextLanguagePtr> languages;
-  languages.push_back(DefaultLanguage());
-  UseFakeServiceConnection({}, languages);
+  UseFakeServiceConnection();
 
   QuickAnswersRequest request;
   request.selected_text = "quick answers";
-  fake_quick_answers_state()->set_application_locale("es");
-  fake_quick_answers_state()->set_preferred_languages("es");
+  fake_quick_answers_state()->SetApplicationLocale("es");
+  fake_quick_answers_state()->SetPreferredLanguages("es");
   intent_generator_->GenerateIntent(request);
 
   FlushForTesting();
@@ -161,8 +159,8 @@ TEST_F(IntentGeneratorTest, TranslationIntentWithSubtag) {
 
   QuickAnswersRequest request;
   request.selected_text = "quick answers";
-  fake_quick_answers_state()->set_application_locale("es");
-  fake_quick_answers_state()->set_preferred_languages("es");
+  fake_quick_answers_state()->SetApplicationLocale("es");
+  fake_quick_answers_state()->SetPreferredLanguages("es");
   intent_generator_->GenerateIntent(request);
 
   FlushForTesting();
@@ -176,14 +174,12 @@ TEST_F(IntentGeneratorTest, TranslationIntentWithSubtag) {
 }
 
 TEST_F(IntentGeneratorTest, TranslationIntentSameLanguage) {
-  std::vector<TextLanguagePtr> languages;
-  languages.push_back(DefaultLanguage());
-  UseFakeServiceConnection({}, languages);
+  UseFakeServiceConnection();
 
   QuickAnswersRequest request;
   request.selected_text = "quick answers";
-  fake_quick_answers_state()->set_application_locale("en");
-  fake_quick_answers_state()->set_preferred_languages("en");
+  fake_quick_answers_state()->SetApplicationLocale("en");
+  fake_quick_answers_state()->SetPreferredLanguages("en");
   intent_generator_->GenerateIntent(request);
 
   FlushForTesting();
@@ -195,14 +191,12 @@ TEST_F(IntentGeneratorTest, TranslationIntentSameLanguage) {
 }
 
 TEST_F(IntentGeneratorTest, TranslationIntentPreferredLocale) {
-  std::vector<TextLanguagePtr> languages;
-  languages.push_back(DefaultLanguage());
-  UseFakeServiceConnection({}, languages);
+  UseFakeServiceConnection();
 
   QuickAnswersRequest request;
   request.selected_text = "quick answers";
-  fake_quick_answers_state()->set_application_locale("es");
-  fake_quick_answers_state()->set_preferred_languages("es,en,zh");
+  fake_quick_answers_state()->SetApplicationLocale("es");
+  fake_quick_answers_state()->SetPreferredLanguages("es,en,zh");
   intent_generator_->GenerateIntent(request);
 
   FlushForTesting();
@@ -214,14 +208,12 @@ TEST_F(IntentGeneratorTest, TranslationIntentPreferredLocale) {
 }
 
 TEST_F(IntentGeneratorTest, TranslationIntentPreferredLanguage) {
-  std::vector<TextLanguagePtr> languages;
-  languages.push_back(DefaultLanguage());
-  UseFakeServiceConnection({}, languages);
+  UseFakeServiceConnection();
 
   QuickAnswersRequest request;
   request.selected_text = "quick answers";
-  fake_quick_answers_state()->set_application_locale("es");
-  fake_quick_answers_state()->set_preferred_languages("es-MX,en-US,zh-CN");
+  fake_quick_answers_state()->SetApplicationLocale("es");
+  fake_quick_answers_state()->SetPreferredLanguages("es-MX,en-US,zh-CN");
   intent_generator_->GenerateIntent(request);
 
   FlushForTesting();
@@ -233,17 +225,15 @@ TEST_F(IntentGeneratorTest, TranslationIntentPreferredLanguage) {
 }
 
 TEST_F(IntentGeneratorTest, TranslationIntentTextLengthAboveThreshold) {
-  std::vector<TextLanguagePtr> languages;
-  languages.push_back(DefaultLanguage());
-  UseFakeServiceConnection({}, languages);
+  UseFakeServiceConnection();
 
   QuickAnswersRequest request;
   request.selected_text =
       "Search the world's information, including webpages, images, videos and "
       "more. Google has many special features to help you find exactly what "
       "you're looking ...";
-  fake_quick_answers_state()->set_application_locale("es");
-  fake_quick_answers_state()->set_preferred_languages("es");
+  fake_quick_answers_state()->SetApplicationLocale("es");
+  fake_quick_answers_state()->SetPreferredLanguages("es");
   intent_generator_->GenerateIntent(request);
 
   FlushForTesting();
@@ -290,9 +280,7 @@ TEST_F(IntentGeneratorTest, TranslationIntentWithAnnotation) {
 }
 
 TEST_F(IntentGeneratorTest, TranslationIntentDeviceLanguageNotSet) {
-  std::vector<TextLanguagePtr> languages;
-  languages.push_back(DefaultLanguage());
-  UseFakeServiceConnection({}, languages);
+  UseFakeServiceConnection();
 
   QuickAnswersRequest request;
   request.selected_text = "quick answers";
@@ -302,6 +290,42 @@ TEST_F(IntentGeneratorTest, TranslationIntentDeviceLanguageNotSet) {
 
   // Should not generate translation intent since the device language is not
   // set.
+  EXPECT_EQ(IntentType::kUnknown, intent_info_.intent_type);
+  EXPECT_EQ("quick answers", intent_info_.intent_text);
+}
+
+TEST_F(IntentGeneratorTest, TranslationIntentUnsupportedDeviceLanguage) {
+  UseFakeServiceConnection();
+
+  QuickAnswersRequest request;
+  request.selected_text = "quick answers";
+  fake_quick_answers_state()->SetApplicationLocale("unk");
+  fake_quick_answers_state()->SetPreferredLanguages("unk");
+  intent_generator_->GenerateIntent(request);
+
+  FlushForTesting();
+
+  // Should not generate translation intent since the device language is
+  // not in the supported languages list.
+  EXPECT_EQ(IntentType::kUnknown, intent_info_.intent_type);
+  EXPECT_EQ("quick answers", intent_info_.intent_text);
+}
+
+TEST_F(IntentGeneratorTest, TranslationIntentUnsupportedSourceLanguage) {
+  std::vector<TextLanguagePtr> languages;
+  languages.push_back(TextLanguage::New("unk", /* confidence */ 1));
+  UseFakeServiceConnection({}, languages);
+
+  QuickAnswersRequest request;
+  request.selected_text = "quick answers";
+  fake_quick_answers_state()->SetApplicationLocale("en");
+  fake_quick_answers_state()->SetPreferredLanguages("en");
+  intent_generator_->GenerateIntent(request);
+
+  FlushForTesting();
+
+  // Should not generate translation intent since the detected source
+  // language is not in the supported languages list.
   EXPECT_EQ(IntentType::kUnknown, intent_info_.intent_type);
   EXPECT_EQ("quick answers", intent_info_.intent_text);
 }
@@ -492,8 +516,8 @@ TEST_F(IntentGeneratorTest, TextAnnotationUnitIntentExtraCharsAboveThreshold) {
 }
 
 TEST_F(IntentGeneratorTest, TextAnnotationNonEnglishLanguage) {
-  fake_quick_answers_state()->set_application_locale("es");
-  fake_quick_answers_state()->set_preferred_languages("es");
+  fake_quick_answers_state()->SetApplicationLocale("es");
+  fake_quick_answers_state()->SetPreferredLanguages("es");
 
   std::unique_ptr<QuickAnswersRequest> quick_answers_request =
       std::make_unique<QuickAnswersRequest>();

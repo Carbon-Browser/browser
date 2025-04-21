@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "ash/constants/ash_features.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace ash {
 
@@ -49,6 +50,7 @@ void FakeSmbProviderClient::Init(dbus::Bus* bus) {}
 
 void FakeSmbProviderClient::GetShares(const base::FilePath& server_url,
                                       ReadDirectoryCallback callback) {
+  CheckDbusMethodsNotCalledAfterStopJob();
   smbprovider::DirectoryEntryListProto entry_list;
 
   smbprovider::ErrorType error = smbprovider::ErrorType::ERROR_OK;
@@ -70,7 +72,8 @@ void FakeSmbProviderClient::GetShares(const base::FilePath& server_url,
 
 void FakeSmbProviderClient::SetupKerberos(const std::string& account_id,
                                           SetupKerberosCallback callback) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  CheckDbusMethodsNotCalledAfterStopJob();
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), true /* success */));
 }
 
@@ -88,6 +91,7 @@ void FakeSmbProviderClient::ParseNetBiosPacket(
     const std::vector<uint8_t>& packet,
     uint16_t transaction_id,
     ParseNetBiosPacketCallback callback) {
+  CheckDbusMethodsNotCalledAfterStopJob();
   std::vector<std::string> result;
 
   // For testing, we map a 1 byte packet to a vector<std::string> to simulate
@@ -99,12 +103,27 @@ void FakeSmbProviderClient::ParseNetBiosPacket(
   std::move(callback).Run(result);
 }
 
+base::WeakPtr<SmbProviderClient> FakeSmbProviderClient::AsWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
+}
+
 void FakeSmbProviderClient::ClearShares() {
   shares_.clear();
 }
 
 void FakeSmbProviderClient::RunStoredReadDirCallback() {
   std::move(stored_readdir_callback_).Run();
+}
+
+void FakeSmbProviderClient::OnStopJobCalled() {
+  stop_job_called_ = true;
+}
+
+void FakeSmbProviderClient::CheckDbusMethodsNotCalledAfterStopJob() {
+  // D-Bus methods are not expected to be called after smbproviderd has stopped.
+  if (base::FeatureList::IsEnabled(features::kSmbproviderdOnDemand)) {
+    CHECK(!stop_job_called_);
+  }
 }
 
 }  // namespace ash

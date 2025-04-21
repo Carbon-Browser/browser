@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,21 @@
 #define COMPONENTS_VIZ_SERVICE_DISPLAY_SKIA_OUTPUT_SURFACE_H_
 
 #include <memory>
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include "build/build_config.h"
 #include "components/viz/common/quads/aggregated_render_pass.h"
-#include "components/viz/common/resources/resource_format.h"
 #include "components/viz/common/resources/resource_id.h"
 #include "components/viz/service/display/external_use_client.h"
 #include "components/viz/service/display/output_surface.h"
 #include "components/viz/service/display/overlay_processor_interface.h"
+#include "components/viz/service/display/render_pass_alpha_type.h"
+#include "gpu/command_buffer/common/shared_image_usage.h"
+#include "gpu/vulkan/buildflags.h"
+#include "media/gpu/buildflags.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
-#include "third_party/skia/include/core/SkYUVAInfo.h"
 #include "ui/gfx/gpu_fence_handle.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -34,10 +38,6 @@ namespace gfx {
 class ColorSpace;
 }  // namespace gfx
 
-namespace gpu {
-class SharedImageInterface;
-}
-
 namespace viz {
 
 class OverlayCandidate;
@@ -48,27 +48,13 @@ namespace copy_output {
 struct RenderPassGeometry;
 }  // namespace copy_output
 
-// This class extends the OutputSurface for SkiaRenderer needs. In future, the
-// SkiaRenderer will be the only renderer. When other renderers are removed,
-// we will replace OutputSurface with SkiaOutputSurface, and remove all
-// OutputSurface's methods which are not useful for SkiaRenderer.
+// This class extends the OutputSurface for SkiaRenderer needs.
 class VIZ_SERVICE_EXPORT SkiaOutputSurface : public OutputSurface,
                                              public ExternalUseClient {
  public:
-#if BUILDFLAG(IS_ANDROID)
   using OverlayList = std::vector<OverlayCandidate>;
-#elif BUILDFLAG(IS_APPLE)
-  using OverlayList = CALayerOverlayList;
-#elif BUILDFLAG(IS_WIN)
-  using OverlayList = DCLayerOverlayList;
-#elif defined(USE_OZONE)
-  using OverlayList = std::vector<OverlayCandidate>;
-#else
-  // Default.
-  using OverlayList = std::vector<OverlayCandidate>;
-#endif
 
-  explicit SkiaOutputSurface(OutputSurface::Type type);
+  SkiaOutputSurface();
 
   SkiaOutputSurface(const SkiaOutputSurface&) = delete;
   SkiaOutputSurface& operator=(const SkiaOutputSurface&) = delete;
@@ -78,7 +64,7 @@ class VIZ_SERVICE_EXPORT SkiaOutputSurface : public OutputSurface,
   SkiaOutputSurface* AsSkiaOutputSurface() override;
 
   // Begin painting the current frame. This method will create a
-  // SkDeferredDisplayListRecorder and return a SkCanvas of it.
+  // GrDeferredDisplayListRecorder and return a SkCanvas of it.
   // The SkiaRenderer will use this SkCanvas to paint the current
   // frame.
   // And this SkCanvas may become invalid, when FinishPaintCurrentFrame is
@@ -90,37 +76,27 @@ class VIZ_SERVICE_EXPORT SkiaOutputSurface : public OutputSurface,
   // Skia will not read the content of the resource until the |sync_token| in
   // the |image_context| is satisfied. The SwapBuffers should take care of this
   // by scheduling a GPU task with all resource sync tokens recorded by
-  // MakePromiseSkImage for the current frame.
+  // MakePromiseSkImage for the current frame. The |yuv_color_space| is the
+  // original color space needed for yuv to rgb conversion.
   virtual void MakePromiseSkImage(
-      ExternalUseClient::ImageContext* image_context) = 0;
-
-  // Make a promise SkImage from the given |contexts| and |image_color_space|.
-  // The number of contexts provided should match the number of planes indicated
-  // by plane_config.
-  virtual sk_sp<SkImage> MakePromiseSkImageFromYUV(
-      const std::vector<ExternalUseClient::ImageContext*>& contexts,
-      sk_sp<SkColorSpace> image_color_space,
-      SkYUVAInfo::PlaneConfig plane_config,
-      SkYUVAInfo::Subsampling subsampling) = 0;
+      ExternalUseClient::ImageContext* image_context,
+      const gfx::ColorSpace& yuv_color_space,
+      bool force_rgbx) = 0;
 
   // Called if SwapBuffers() will be skipped.
   virtual void SwapBuffersSkipped(const gfx::Rect root_pass_damage_rect) = 0;
 
-  // TODO(weiliangc): This API should move to OverlayProcessor.
-  // Schedule |output_surface_plane| as an overlay plane to be displayed.
-  virtual void ScheduleOutputSurfaceAsOverlay(
-      OverlayProcessorInterface::OutputSurfaceOverlayPlane
-          output_surface_plane) = 0;
-
   // Begin painting a render pass. This method will create a
-  // SkDeferredDisplayListRecorder and return a SkCanvas of it. The SkiaRenderer
+  // GrDeferredDisplayListRecorder and return a SkCanvas of it. The SkiaRenderer
   // will use this SkCanvas to paint the render pass.
   // Note: BeginPaintRenderPass cannot be called without finishing the prior
   // paint render pass.
   virtual SkCanvas* BeginPaintRenderPass(const AggregatedRenderPassId& id,
                                          const gfx::Size& size,
-                                         ResourceFormat format,
-                                         bool mipmap,
+                                         SharedImageFormat format,
+                                         RenderPassAlphaType alpha_type,
+                                         skgpu::Mipmapped mipmap,
+                                         bool scanout_dcomp_surface,
                                          sk_sp<SkColorSpace> color_space,
                                          bool is_overlay,
                                          const gpu::Mailbox& mailbox) = 0;
@@ -141,9 +117,16 @@ class VIZ_SERVICE_EXPORT SkiaOutputSurface : public OutputSurface,
   // |return_release_fence_cb| callback to be called after all commands are
   // submitted. The callback will return the release fence which will be
   // signaled once the submitted commands are processed.
-  virtual void EndPaint(base::OnceClosure on_finished,
-                        base::OnceCallback<void(gfx::GpuFenceHandle)>
-                            return_release_fence_cb) = 0;
+  // |update_rect| should be the scissor rect used to clear the render pass
+  // backing and cull its draw quads.
+  // When finishing painting of a render pass that will be presented as an
+  // overlay, |is_overlay| should be true so the GPU thread knows to keep the
+  // ScopedWriteAccess open long enough.
+  virtual void EndPaint(
+      base::OnceClosure on_finished,
+      base::OnceCallback<void(gfx::GpuFenceHandle)> return_release_fence_cb,
+      const gfx::Rect& update_rect,
+      bool is_overlay) = 0;
 
   // Make a promise SkImage from a render pass id. The render pass has been
   // painted with BeginPaintRenderPass and FinishPaintRenderPass. The format
@@ -152,7 +135,7 @@ class VIZ_SERVICE_EXPORT SkiaOutputSurface : public OutputSurface,
   virtual sk_sp<SkImage> MakePromiseSkImageFromRenderPass(
       const AggregatedRenderPassId& id,
       const gfx::Size& size,
-      ResourceFormat format,
+      SharedImageFormat format,
       bool mipmap,
       sk_sp<SkColorSpace> color_space,
       const gpu::Mailbox& mailbox) = 0;
@@ -162,10 +145,9 @@ class VIZ_SERVICE_EXPORT SkiaOutputSurface : public OutputSurface,
   virtual void RemoveRenderPassResource(
       std::vector<AggregatedRenderPassId> ids) = 0;
 
-  // Copy the output of the current frame if the |id| is zero, otherwise copy
-  // the output of a cached SkSurface for the given |id|.
-  virtual void CopyOutput(AggregatedRenderPassId id,
-                          const copy_output::RenderPassGeometry& geometry,
+  // Copy the output of the current frame if the |mailbox| is zero, otherwise
+  // create an SkSurface for the given |mailbox| and copy the output.
+  virtual void CopyOutput(const copy_output::RenderPassGeometry& geometry,
                           const gfx::ColorSpace& color_space,
                           std::unique_ptr<CopyOutputRequest> request,
                           const gpu::Mailbox& mailbox) = 0;
@@ -188,6 +170,9 @@ class VIZ_SERVICE_EXPORT SkiaOutputSurface : public OutputSurface,
   virtual void ScheduleGpuTaskForTesting(
       base::OnceClosure callback,
       std::vector<gpu::SyncToken> sync_tokens) = 0;
+  // TODO(crbug.com/40279197): tests should not need to poll for async work
+  // completion.
+  virtual void CheckAsyncWorkCompletionForTesting() = 0;
 
   // Android specific, asks GLSurfaceEGLSurfaceControl to not detach child
   // surface controls during destruction. This is necessary for cases when we
@@ -199,14 +184,44 @@ class VIZ_SERVICE_EXPORT SkiaOutputSurface : public OutputSurface,
   // the GPU main thread.
   virtual gpu::SyncToken Flush() = 0;
 
-  // Only used for creating and destroying shared images for render passes
-  virtual gpu::SharedImageInterface* GetSharedImageInterface() = 0;
+  // Enqueue a GPU task to create a shared image with the specified params and
+  // returns the mailbox.
+  // Note: |kTopLeft_GrSurfaceOrigin| is used for all images.
+  virtual gpu::Mailbox CreateSharedImage(SharedImageFormat format,
+                                         const gfx::Size& size,
+                                         const gfx::ColorSpace& color_space,
+                                         RenderPassAlphaType alpha_type,
+                                         gpu::SharedImageUsageSet usage,
+                                         std::string_view debug_label,
+                                         gpu::SurfaceHandle surface_handle) = 0;
 
-  // Set the number of frame buffers to use when
-  // `supports_dynamic_frame_buffer_allocation` is true. `n` must satisfy
-  // 0 < n <= capabilities_.number_of_buffers.
-  // Return true if new buffers are allocated.
-  virtual bool EnsureMinNumberOfBuffers(int n) = 0;
+  // Enqueue a GPU task to create a 1x1 shared image of the specified color.
+  virtual gpu::Mailbox CreateSolidColorSharedImage(
+      const SkColor4f& color,
+      const gfx::ColorSpace& color_space) = 0;
+
+  // Enqueue a GPU task to delete the specified shared image.
+  virtual void DestroySharedImage(const gpu::Mailbox& mailbox) = 0;
+
+  // Enqueue a GPU task to set specified shared image as `purgeable`.
+  virtual void SetSharedImagePurgeable(const gpu::Mailbox& mailbox,
+                                       bool purgeable) = 0;
+
+  virtual bool SupportsBGRA() const = 0;
+
+#if BUILDFLAG(ENABLE_VULKAN) && BUILDFLAG(IS_CHROMEOS) && \
+    BUILDFLAG(USE_V4L2_CODEC)
+  virtual void DetileOverlay(gpu::Mailbox input,
+                             const gfx::Size& input_visible_size,
+                             gpu::SyncToken input_sync_token,
+                             gpu::Mailbox output,
+                             const gfx::RectF& display_rect,
+                             const gfx::RectF& crop_rect,
+                             gfx::OverlayTransform transform,
+                             bool is_10bit) = 0;
+
+  virtual void CleanupImageProcessor() = 0;
+#endif
 };
 
 }  // namespace viz

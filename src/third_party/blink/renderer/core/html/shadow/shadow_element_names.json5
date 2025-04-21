@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
     // ID names for UA shadow elements
     //
     {
+      // This name is used both as an ID and as a web-exposed pseudo-element.
       name: "details-content",
       Symbol: "kIdDetailsContent",
     },
@@ -73,14 +74,26 @@
       Symbol: "kIdFileUploadButton",
     },
     {
-      name: "optgroup-label",
-      Symbol: "kIdOptGroupLabel",
+      name: "select-options",
+      Symbol: "kSelectOptions",
+    },
+    {
+      name: "select-button",
+      Symbol: "kSelectButton",
+    },
+    {
+      name: "select-popover-options",
+      Symbol: "kSelectPopoverOptions",
     },
 
     //
     // Pseudo names for UA shadow elements.
     // These are web-exposed as pseudo element selectors.
     //
+    {
+      name: "picker(select)",
+      Symbol: "kPickerSelect",
+    },
     {
       name: "-webkit-details-marker",
       Symbol: "kPseudoWebKitDetailsMarker",
@@ -100,6 +113,18 @@
     {
       name: "-internal-media-controls-segmented-track",
       Symbol: "kPseudoMediaControlsSegmentedTrack",
+    },
+    {
+      name: "-internal-select-autofill-preview",
+      Symbol: "kSelectAutofillPreview",
+    },
+    {
+      name: "-internal-select-autofill-preview-text",
+      Symbol: "kSelectAutofillPreviewText",
+    },
+    {
+      name: "-webkit-calendar-picker-indicator",
+      Symbol: "kPseudoCalendarPickerIndicator",
     },
     {
       name: "-webkit-media-slider-container",
@@ -128,6 +153,18 @@
     {
       name: "-webkit-textfield-decoration-container",
       Symbol: "kPseudoTextFieldDecorationContainer",
+    },
+    {
+      name: "-internal-datetime-container",
+      Symbol: "kPseudoInternalDatetimeContainer",
+    },
+    {
+      name: "-internal-permission-text",
+      Symbol: "kPseudoInternalPermissionTextSpan",
+    },
+    {
+      name: "-internal-optgroup-label",
+      Symbol: "kIdOptGroupLabel",
     },
   ],
 }

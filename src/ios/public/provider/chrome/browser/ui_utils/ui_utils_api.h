@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,9 +19,6 @@ namespace provider {
 
 // Initializes UI global state for the provider.
 void InitializeUI();
-
-// Creates a new styled text field.
-UITextField* CreateStyledTextField();
 
 // Creates a new LogoVendor instance.
 id<LogoVendor> CreateLogoVendor(Browser* browser, web::WebState* web_state);

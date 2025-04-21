@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,24 +6,23 @@
 #define CHROMECAST_MEDIA_CMA_BACKEND_ALSA_ALSA_VOLUME_CONTROL_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/message_loop/message_pump_for_io.h"
 #include "base/timer/timer.h"
 #include "chromecast/media/cma/backend/system_volume_control.h"
 #include "media/audio/alsa/alsa_wrapper.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace chromecast {
 namespace media {
 class ScopedAlsaMixer;
 
 // SystemVolumeControl implementation for ALSA.
-class AlsaVolumeControl : public SystemVolumeControl,
-                          public base::MessagePumpForIO::FdWatcher {
+class AlsaVolumeControl : public SystemVolumeControl {
  public:
-  explicit AlsaVolumeControl(Delegate* delegate);
+  AlsaVolumeControl(Delegate* delegate,
+                    std::unique_ptr<::media::AlsaWrapper> alsa);
 
   AlsaVolumeControl(const AlsaVolumeControl&) = delete;
   AlsaVolumeControl& operator=(const AlsaVolumeControl&) = delete;
@@ -56,15 +55,9 @@ class AlsaVolumeControl : public SystemVolumeControl,
                                         unsigned int mask);
 
   bool SetElementMuted(ScopedAlsaMixer* mixer, bool muted);
-  // Returns true if all channels are muted, returns absl::nullopt if element
+  // Returns true if all channels are muted, returns std::nullopt if element
   // state is not accessible.
-  absl::optional<bool> IsElementAllMuted(ScopedAlsaMixer* mixer);
-
-  void RefreshMixerFds(ScopedAlsaMixer* mixer);
-
-  // base::MessagePumpForIO::FdWatcher implementation:
-  void OnFileCanReadWithoutBlocking(int fd) override;
-  void OnFileCanWriteWithoutBlocking(int fd) override;
+  std::optional<bool> IsElementAllMuted(ScopedAlsaMixer* mixer);
 
   void OnVolumeOrMuteChanged();
 
@@ -90,9 +83,6 @@ class AlsaVolumeControl : public SystemVolumeControl,
 
   bool last_power_save_on_ = false;
   base::OneShotTimer power_save_timer_;
-
-  std::vector<std::unique_ptr<base::MessagePumpForIO::FdWatchController>>
-      file_descriptor_watchers_;
 };
 
 }  // namespace media

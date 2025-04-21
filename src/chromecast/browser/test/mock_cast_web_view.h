@@ -1,8 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #ifndef CHROMECAST_BROWSER_TEST_MOCK_CAST_WEB_VIEW_H_
 #define CHROMECAST_BROWSER_TEST_MOCK_CAST_WEB_VIEW_H_
+
+#include <string_view>
 
 #include "chromecast/browser/cast_web_contents.h"
 #include "chromecast/browser/cast_web_view.h"
@@ -16,18 +18,18 @@ namespace chromecast {
 class MockCastWebContents : public CastWebContents {
  public:
   MockCastWebContents();
-  ~MockCastWebContents();
+  ~MockCastWebContents() override;
 
   // CastWebContents implementation
   MOCK_METHOD(int, tab_id, (), (const, override));
   MOCK_METHOD(int, id, (), (const, override));
   MOCK_METHOD(content::WebContents*, web_contents, (), (const, override));
   MOCK_METHOD(PageState, page_state, (), (const, override));
-  MOCK_METHOD(url_rewrite::UrlRequestRewriteRulesManager*,
-              url_rewrite_rules_manager,
+  MOCK_METHOD(const media_control::MediaBlocker*,
+              media_blocker,
               (),
-              (override));
-  MOCK_METHOD(void, AddRendererFeatures, (base::Value), (override));
+              (const override));
+  MOCK_METHOD(void, AddRendererFeatures, (base::Value::Dict), (override));
   MOCK_METHOD(void,
               SetInterfacesForRenderer,
               (mojo::PendingRemote<mojom::RemoteInterfaces>),
@@ -43,10 +45,6 @@ class MockCastWebContents : public CastWebContents {
                const std::vector<std::string>&),
               (override));
   MOCK_METHOD(void, SetGroupInfo, (const std::string&, bool), (override));
-  MOCK_METHOD(void,
-              SetUrlRewriteRules,
-              (url_rewrite::mojom::UrlRequestRewriteRulesPtr),
-              (override));
   MOCK_METHOD(void, LoadUrl, (const GURL&), (override));
   MOCK_METHOD(void, ClosePage, (), (override));
   MOCK_METHOD(void, Stop, (int), (override));
@@ -56,7 +54,7 @@ class MockCastWebContents : public CastWebContents {
   MOCK_METHOD(void, EnableBackgroundVideoPlayback, (bool), (override));
   MOCK_METHOD(void,
               AddBeforeLoadJavaScript,
-              (uint64_t, base::StringPiece),
+              (uint64_t, std::string_view),
               (override));
   MOCK_METHOD(void,
               PostMessageToMainFrame,

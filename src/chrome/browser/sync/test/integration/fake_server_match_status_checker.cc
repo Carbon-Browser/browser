@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,8 +20,11 @@ FakeServerMatchStatusChecker::~FakeServerMatchStatusChecker() {
 }
 
 void FakeServerMatchStatusChecker::OnCommit(
-    const std::string& committer_invalidator_client_id,
-    syncer::ModelTypeSet committed_model_types) {
+    syncer::DataTypeSet committed_data_types) {
+  CheckExitCondition();
+}
+
+void FakeServerMatchStatusChecker::OnSuccessfulGetUpdates() {
   CheckExitCondition();
 }
 

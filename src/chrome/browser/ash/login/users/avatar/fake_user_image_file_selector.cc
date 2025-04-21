@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@ namespace ash {
 FakeUserImageFileSelector::FakeUserImageFileSelector(content::WebUI* web_ui)
     : UserImageFileSelector(web_ui) {}
 
-FakeUserImageFileSelector::~FakeUserImageFileSelector() {}
+FakeUserImageFileSelector::~FakeUserImageFileSelector() = default;
 
 void FakeUserImageFileSelector::SelectFile(
     base::OnceCallback<void(const base::FilePath&)> selected_cb,

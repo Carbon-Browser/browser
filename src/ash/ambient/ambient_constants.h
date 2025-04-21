@@ -1,10 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_AMBIENT_AMBIENT_CONSTANTS_H_
 #define ASH_AMBIENT_AMBIENT_CONSTANTS_H_
 
+#include "ash/webui/personalization_app/mojom/personalization_app.mojom-shared.h"
 #include "base/time/time.h"
 
 namespace ash {
@@ -58,6 +59,13 @@ constexpr int kMarginLeftOfRelatedImageDip = 8;
 constexpr int kMediaStringMaxWidthDip = 280;
 
 constexpr int kMediaStringGradientWidthDip = 20;
+
+// UMA user action constants.
+constexpr char kScreenSaverPreviewUserAction[] =
+    "AmbientMode.ScreenSaverPreview.Started";
+
+inline constexpr personalization_app::mojom::AmbientTheme kDefaultAmbientTheme =
+    personalization_app::mojom::AmbientTheme::kSlideshow;
 
 }  // namespace ash
 

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,6 +54,10 @@ class URL_MATCHER_EXPORT URLMatcherFactory {
       std::string* error);
 
   static std::unique_ptr<URLMatcherPortFilter> CreateURLMatcherPorts(
+      const base::Value* value,
+      std::string* error);
+
+  static std::unique_ptr<URLMatcherCidrBlockFilter> CreateURLMatcherCidrBlocks(
       const base::Value* value,
       std::string* error);
 };

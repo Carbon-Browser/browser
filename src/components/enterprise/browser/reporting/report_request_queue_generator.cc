@@ -1,14 +1,13 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/enterprise/browser/reporting/report_request_queue_generator.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/metrics/histogram_functions.h"
-#include "build/chromeos_buildflags.h"
 #include "components/enterprise/browser/reporting/report_type.h"
 
 namespace enterprise_reporting {
@@ -37,7 +36,7 @@ ReportRequestQueueGenerator::ReportRequestQueueGenerator(
     ReportingDelegateFactory* delegate_factory)
     : maximum_report_size_(kMaximumReportSize),
       profile_report_generator_(delegate_factory) {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   // For Chrome OS, policy information needn't be uploaded to DM server.
   profile_report_generator_.set_policies_enabled(false);
 #endif

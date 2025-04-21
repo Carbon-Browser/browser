@@ -1,12 +1,15 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/system/toast/toast_overlay.h"
 
+#include "ash/constants/ash_features.h"
 #include "ash/keyboard/ui/keyboard_ui_controller.h"
 #include "ash/public/cpp/ash_typography.h"
+#include "ash/public/cpp/shelf_types.h"
 #include "ash/public/cpp/shell_window_ids.h"
+#include "ash/public/cpp/system/toast_data.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/root_window_controller.h"
 #include "ash/shelf/hotseat_widget.h"
@@ -15,16 +18,19 @@
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_provider.h"
 #include "ash/style/pill_button.h"
-#include "ash/style/system_toast_style.h"
+#include "ash/system/toast/system_toast_view.h"
+#include "ash/wm/window_properties.h"
 #include "ash/wm/work_area_insets.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "ui/accessibility/ax_enums.mojom.h"
+#include "ui/aura/window.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/compositor/layer.h"
 #include "ui/display/display_observer.h"
+#include "ui/events/event_observer.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/font_list.h"
 #include "ui/gfx/geometry/insets.h"
@@ -33,9 +39,10 @@
 #include "ui/views/animation/ink_drop_highlight.h"
 #include "ui/views/background.h"
 #include "ui/views/border.h"
-#include "ui/views/controls/button/label_button.h"
+#include "ui/views/controls/button/button.h"
 #include "ui/views/controls/highlight_path_generator.h"
 #include "ui/views/controls/label.h"
+#include "ui/views/event_monitor.h"
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/view.h"
 #include "ui/views/widget/widget.h"
@@ -59,10 +66,26 @@ gfx::Rect GetUserWorkAreaBounds(aura::Window* window) {
 // the current hotseat state
 void AdjustWorkAreaBoundsForHotseatState(gfx::Rect& bounds,
                                          const HotseatWidget* hotseat_widget) {
-  if (hotseat_widget->state() == HotseatState::kExtended)
-    bounds.set_height(bounds.height() - hotseat_widget->GetHotseatSize());
+  if (hotseat_widget->state() == HotseatState::kExtended) {
+    bounds.set_height(bounds.height() - hotseat_widget->GetHotseatSize() -
+                      ShelfConfig::Get()->hotseat_bottom_padding());
+  }
   if (hotseat_widget->state() == HotseatState::kShownHomeLauncher)
     bounds.set_height(hotseat_widget->GetTargetBounds().y() - bounds.y());
+}
+
+// Gets the `SystemToastView::ButtonType` corresponding to the provided
+// `ToastData::ButtonType`.
+SystemToastView::ButtonType GetToastViewButtonType(
+    ToastData::ButtonType button_type) {
+  switch (button_type) {
+    case ToastData::ButtonType::kNone:
+      return SystemToastView::ButtonType::kNone;
+    case ToastData::ButtonType::kTextButton:
+      return SystemToastView::ButtonType::kTextButton;
+    case ToastData::ButtonType::kIconButton:
+      return SystemToastView::ButtonType::kIconButton;
+  }
 }
 
 }  // namespace
@@ -71,7 +94,7 @@ void AdjustWorkAreaBoundsForHotseatState(gfx::Rect& bounds,
 //  ToastDisplayObserver
 class ToastOverlay::ToastDisplayObserver : public display::DisplayObserver {
  public:
-  ToastDisplayObserver(ToastOverlay* overlay) : overlay_(overlay) {}
+  explicit ToastDisplayObserver(ToastOverlay* overlay) : overlay_(overlay) {}
 
   ToastDisplayObserver(const ToastDisplayObserver&) = delete;
   ToastDisplayObserver& operator=(const ToastDisplayObserver&) = delete;
@@ -84,46 +107,92 @@ class ToastOverlay::ToastDisplayObserver : public display::DisplayObserver {
   }
 
  private:
-  ToastOverlay* const overlay_;
+  const raw_ptr<ToastOverlay> overlay_;
 
   display::ScopedDisplayObserver display_observer_{this};
 };
 
 ///////////////////////////////////////////////////////////////////////////////
+//  ToastHoverObserver
+class ToastOverlay::ToastHoverObserver : public ui::EventObserver {
+ public:
+  using HoverStateChangeCallback =
+      base::RepeatingCallback<void(bool is_hovering)>;
+
+  ToastHoverObserver(aura::Window* widget_window,
+                     HoverStateChangeCallback on_hover_state_changed)
+      : event_monitor_(views::EventMonitor::CreateWindowMonitor(
+            /*event_observer=*/this,
+            widget_window,
+            {ui::EventType::kMouseEntered, ui::EventType::kMouseExited})),
+        on_hover_state_changed_(std::move(on_hover_state_changed)) {}
+
+  ToastHoverObserver(const ToastHoverObserver&) = delete;
+  ToastHoverObserver& operator=(const ToastHoverObserver&) = delete;
+
+  ~ToastHoverObserver() override = default;
+
+  // ui::EventObserver:
+  void OnEvent(const ui::Event& event) override {
+    switch (event.type()) {
+      case ui::EventType::kMouseEntered:
+        on_hover_state_changed_.Run(/*is_hovering=*/true);
+        break;
+      case ui::EventType::kMouseExited:
+        on_hover_state_changed_.Run(/*is_hovering=*/false);
+        break;
+      default:
+        NOTREACHED();
+    }
+  }
+
+ private:
+  // While this `EventMonitor` object exists, this object will only look for
+  // `ui::EventType::kMouseEntered` and `ui::EventType::kMouseExited` events
+  // that occur in the `widget_window` indicated in the constructor.
+  std::unique_ptr<views::EventMonitor> event_monitor_;
+
+  // This is run whenever the mouse enters or exits the observed window with a
+  // parameter to indicate whether the window is being hovered.
+  HoverStateChangeCallback on_hover_state_changed_;
+};
+
+///////////////////////////////////////////////////////////////////////////////
 //  ToastOverlay
 ToastOverlay::ToastOverlay(Delegate* delegate,
-                           const std::u16string& text,
-                           const std::u16string& dismiss_text,
-                           bool show_on_lock_screen,
-                           bool is_managed,
-                           base::RepeatingClosure dismiss_callback,
-                           base::RepeatingClosure expired_callback)
+                           const ToastData& toast_data,
+                           aura::Window* root_window)
     : delegate_(delegate),
-      text_(text),
-      dismiss_text_(dismiss_text),
+      text_(toast_data.text),
       overlay_widget_(new views::Widget),
-      overlay_view_(new SystemToastStyle(
-          base::BindRepeating(&ToastOverlay::OnButtonClicked,
-                              base::Unretained(this)),
-          text,
-          dismiss_text,
-          is_managed)),
       display_observer_(std::make_unique<ToastDisplayObserver>(this)),
-      dismiss_callback_(std::move(dismiss_callback)),
-      expired_callback_(std::move(expired_callback)),
-      widget_size_(overlay_view_->GetPreferredSize()) {
-  views::Widget::InitParams params;
-  params.type = views::Widget::InitParams::TYPE_POPUP;
+      root_window_(root_window),
+      button_callback_(std::move(toast_data.button_callback)) {
+  // The provided callback is stored in the overlay's `button_callback_`.
+  overlay_view_ = std::make_unique<SystemToastView>(
+      toast_data.text, GetToastViewButtonType(toast_data.button_type),
+      toast_data.button_text, toast_data.button_icon, /*button_callback=*/
+      base::BindRepeating(
+          &ToastOverlay::OnButtonClicked,
+          // Unretained is safe because `this` owns `overlay_view_`.
+          base::Unretained(this)),
+      toast_data.leading_icon);
+
+  views::Widget::InitParams params(
+      views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET,
+      views::Widget::InitParams::TYPE_POPUP);
   params.name = "ToastOverlay";
   params.opacity = views::Widget::InitParams::WindowOpacity::kTranslucent;
-  params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
   params.accept_events = true;
   params.z_order = ui::ZOrderLevel::kFloatingUIElement;
   params.bounds = CalculateOverlayBounds();
-  // Show toasts above the app list and below the lock screen.
-  params.parent = Shell::GetRootWindowForNewWindows()->GetChildById(
-      show_on_lock_screen ? kShellWindowId_LockSystemModalContainer
-                          : kShellWindowId_SystemModalContainer);
+  params.parent =
+      root_window_->GetChildById(kShellWindowId_SettingBubbleContainer);
+  params.activatable = toast_data.activatable
+                           ? views::Widget::InitParams::Activatable::kYes
+                           : views::Widget::InitParams::Activatable::kNo;
+  params.init_properties_container.SetProperty(kStayInOverviewOnActivationKey,
+                                               true);
   overlay_widget_->Init(std::move(params));
   overlay_widget_->SetVisibilityChangedAnimationsEnabled(true);
   overlay_widget_->SetContentsView(overlay_view_.get());
@@ -135,14 +204,35 @@ ToastOverlay::ToastOverlay(Delegate* delegate,
   ::wm::SetWindowVisibilityAnimationDuration(
       overlay_window, base::Milliseconds(kSlideAnimationDurationMs));
 
+  // Only toasts that expire should be able to persist on hover (i.e. toasts
+  // with infinite duration persist regardless of hover).
+  if (toast_data.persist_on_hover &&
+      (toast_data.duration != ToastData::kInfiniteDuration)) {
+    hover_observer_ = std::make_unique<ToastHoverObserver>(
+        overlay_window, base::BindRepeating(&ToastOverlay::OnHoverStateChanged,
+                                            base::Unretained(this)));
+  }
+
   keyboard::KeyboardUIController::Get()->AddObserver(this);
+  shelf_observation_.Observe(Shelf::ForWindow(overlay_window));
+
+  if (features::AreSideAlignedToastsEnabled()) {
+    auto* window_controller = RootWindowController::ForWindow(root_window_);
+    if (window_controller->GetStatusAreaWidget()) {
+      // `UnifiedSystemTray` is observed when side aligned toasts are enabled so
+      // we can shift the toast baseline up when slider bubbles are visible.
+      // The observation is safe on external monitor disconnect because
+      // ToastManagerImpl deletes the ToastOverlay before the root window is
+      // destroyed.
+      scoped_unified_system_tray_observer_.Observe(
+          window_controller->GetStatusAreaWidget()->unified_system_tray());
+    }
+  }
 }
 
 ToastOverlay::~ToastOverlay() {
   keyboard::KeyboardUIController::Get()->RemoveObserver(this);
   overlay_widget_->Close();
-  if (expired_callback_)
-    expired_callback_.Run();
 }
 
 void ToastOverlay::Show(bool visible) {
@@ -161,7 +251,7 @@ void ToastOverlay::Show(bool visible) {
   animation_settings.AddObserver(this);
 
   if (visible) {
-    overlay_widget_->Show();
+    overlay_widget_->ShowInactive();
 
     // Notify accessibility about the overlay.
     overlay_view_->NotifyAccessibilityEvent(ax::mojom::Event::kAlert, false);
@@ -174,62 +264,150 @@ void ToastOverlay::UpdateOverlayBounds() {
   overlay_widget_->SetBounds(CalculateOverlayBounds());
 }
 
-const std::u16string ToastOverlay::GetText() {
+const std::u16string ToastOverlay::GetText() const {
   return text_;
 }
 
-bool ToastOverlay::MaybeToggleA11yHighlightOnDismissButton() {
-  return overlay_view_->ToggleA11yFocus();
+bool ToastOverlay::RequestFocusOnActiveToastButton() {
+  if (views::Button* button = overlay_view_->button()) {
+    button->RequestFocus();
+    return button->HasFocus();
+  }
+  return false;
 }
 
-bool ToastOverlay::MaybeActivateHighlightedDismissButton() {
-  if (!overlay_view_->is_dismiss_button_highlighted())
-    return false;
+bool ToastOverlay::IsButtonFocused() const {
+  if (auto* button = overlay_view_->button()) {
+    return button->HasFocus();
+  }
+  return false;
+}
 
-  OnButtonClicked();
-  return true;
+void ToastOverlay::OnSliderBubbleHeightChanged() {
+  // We only update toast baseline if they are aligned to the side.
+  if (features::AreSideAlignedToastsEnabled()) {
+    UpdateOverlayBounds();
+  }
 }
 
 gfx::Rect ToastOverlay::CalculateOverlayBounds() {
   // If the native window has not been initialized, as in the first call, get
-  // the default root window. Otherwise get the window for this overlay_widget
+  // the default root window. Otherwise get the window for this `overlay_widget`
   // to handle multiple monitors properly.
   auto* window = overlay_widget_->IsNativeWidgetInitialized()
                      ? overlay_widget_->GetNativeWindow()
-                     : Shell::GetRootWindowForNewWindows();
+                     : root_window_.get();
+  DCHECK(window);
+
   auto* window_controller = RootWindowController::ForWindow(window);
   auto* hotseat_widget = window_controller->shelf()->hotseat_widget();
+  auto widget_size = overlay_view_->GetPreferredSize();
 
   gfx::Rect bounds = GetUserWorkAreaBounds(window);
 
-  if (hotseat_widget)
+  if (hotseat_widget) {
     AdjustWorkAreaBoundsForHotseatState(bounds, hotseat_widget);
+  }
 
-  int target_y =
-      bounds.bottom() - widget_size_.height() - ToastOverlay::kOffset;
-  bounds.ClampToCenteredSize(widget_size_);
+  if (features::AreSideAlignedToastsEnabled()) {
+    // Toasts should always follow the status area and will usually show on the
+    // bottom-right of the screen. They will show at the bottom-left whenever
+    // the shelf is left-aligned or for RTL when the shelf is not right aligned.
+    auto alignment = window_controller->shelf()->alignment();
+    const int target_x =
+        ((base::i18n::IsRTL() && alignment != ShelfAlignment::kRight) ||
+         alignment == ShelfAlignment::kLeft)
+            ? bounds.x() + ToastOverlay::kOffset
+            : bounds.right() - widget_size.width() - ToastOverlay::kOffset;
+
+    const int target_y = bounds.bottom() - widget_size.height() -
+                         ToastOverlay::kOffset - CalculateSliderBubbleOffset();
+
+    return gfx::Rect(gfx::Point(target_x, target_y), widget_size);
+  }
+
+  const int target_y =
+      bounds.bottom() - widget_size.height() - ToastOverlay::kOffset;
+  bounds.ClampToCenteredSize(widget_size);
   bounds.set_y(target_y);
   return bounds;
 }
 
+// Calculates the y offset used to shift side aligned toasts up whenever case a
+// slider bubble is visible.
+int ToastOverlay::CalculateSliderBubbleOffset() {
+  // Slider bubble offset is only used for side aligned toasts.
+  if (!features::AreSideAlignedToastsEnabled()) {
+    return 0;
+  }
+
+  auto* window_controller = RootWindowController::ForWindow(root_window_);
+  if (!window_controller) {
+    return 0;
+  }
+
+  auto* status_area_widget = window_controller->GetStatusAreaWidget();
+  if (!status_area_widget) {
+    return 0;
+  }
+
+  auto* unified_system_tray = status_area_widget->unified_system_tray();
+  if (!unified_system_tray) {
+    return 0;
+  }
+
+  // If a slider bubble is visible, the toast baseline will be shifted
+  // up by the slider bubble's height + a default spacing offset.
+  if (unified_system_tray->IsSliderBubbleShown()) {
+    auto* slider_view = unified_system_tray->GetSliderView();
+    if (!slider_view) {
+      return 0;
+    }
+
+    return slider_view->height() + ToastOverlay::kOffset;
+  }
+
+  return 0;
+}
+
 void ToastOverlay::OnButtonClicked() {
-  if (dismiss_callback_) {
-    dismiss_callback_.Run();
+  if (button_callback_) {
+    button_callback_.Run();
   }
   Show(/*visible=*/false);
+}
+
+void ToastOverlay::OnHoverStateChanged(bool is_hovering) {
+  DCHECK(hover_observer_);
+
+  if (!overlay_widget_->IsVisible())
+    return;
+
+  // We want to update the `delegate_` here in case this toast is also
+  // displaying on other monitors.
+  delegate_->OnToastHoverStateChanged(is_hovering);
 }
 
 void ToastOverlay::OnImplicitAnimationsScheduled() {}
 
 void ToastOverlay::OnImplicitAnimationsCompleted() {
   if (!overlay_widget_->GetLayer()->GetTargetVisibility())
-    delegate_->OnClosed();
+    delegate_->CloseToast();
 }
 
 void ToastOverlay::OnKeyboardOccludedBoundsChanged(
     const gfx::Rect& new_bounds_in_screen) {
-  // TODO(https://crbug.com/943446): Observe changes in user work area bounds
+  // TODO(crbug.com/40619022): Observe changes in user work area bounds
   // directly instead of listening for keyboard bounds changes.
+  UpdateOverlayBounds();
+}
+
+void ToastOverlay::OnShelfWorkAreaInsetsChanged() {
+  UpdateOverlayBounds();
+}
+
+void ToastOverlay::OnHotseatStateChanged(HotseatState old_state,
+                                         HotseatState new_state) {
   UpdateOverlayBounds();
 }
 
@@ -237,7 +415,7 @@ views::Widget* ToastOverlay::widget_for_testing() {
   return overlay_widget_.get();
 }
 
-views::LabelButton* ToastOverlay::dismiss_button_for_testing() {
+views::Button* ToastOverlay::button_for_testing() {
   return overlay_view_->button();
 }
 

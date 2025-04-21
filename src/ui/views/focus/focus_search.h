@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,7 +51,8 @@ class VIEWS_EXPORT FocusSearch {
   //           view to FindNextFocusableView you will always get a valid view
   //           out, even if it's the same view.
   // - |accessibility_mode| should be true if full keyboard accessibility is
-  //   needed and you want to check IsAccessibilityFocusable(), rather than
+  //   needed and you want to check
+  //   GetViewAccessibility().IsAccessibilityFocusable(), rather than
   //   IsFocusable().
   FocusSearch(View* root, bool cycle, bool accessibility_mode);
 

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include "third_party/blink/renderer/bindings/core/v8/script_function.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
 #include "third_party/blink/renderer/core/core_export.h"
-#include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "v8/include/v8.h"
@@ -16,6 +15,7 @@
 namespace blink {
 
 class Modulator;
+class ScriptState;
 
 // Represents import.meta data structure, which is the return value of
 // https://html.spec.whatwg.org/C/#hostgetimportmetaproperties
@@ -32,7 +32,7 @@ class CORE_EXPORT ModuleImportMeta final {
   const v8::Local<v8::Function> MakeResolveV8Function(Modulator*) const;
 
  private:
-  class Resolve final : public ScriptFunction::Callable {
+  class Resolve final : public ScriptFunction {
    public:
     explicit Resolve(Modulator* modulator, String url)
         : modulator_(modulator), url_(url) {}

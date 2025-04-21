@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,10 @@ using device::mojom::blink::SensorType;
 
 namespace blink {
 
-absl::optional<Vector<double>> OrientationSensor::quaternion() {
+std::optional<Vector<double>> OrientationSensor::quaternion() {
   reading_dirty_ = false;
   if (!hasReading())
-    return absl::nullopt;
+    return std::nullopt;
   const auto& quat = GetReading().orientation_quat;
   return Vector<double>({quat.x, quat.y, quat.z, quat.w});
 }
@@ -26,7 +26,7 @@ void DoPopulateMatrix(T* target_matrix,
                       double y,
                       double z,
                       double w) {
-  auto out = target_matrix->Data();
+  auto out = target_matrix->AsSpan();
   out[0] = 1.0 - 2 * (y * y + z * z);
   out[1] = 2 * (x * y - z * w);
   out[2] = 2 * (x * z + y * w);

@@ -1,6 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "third_party/blink/renderer/core/content_capture/content_capture_manager.h"
 
@@ -19,7 +24,7 @@
 #include "third_party/blink/renderer/core/layout/layout_object.h"
 #include "third_party/blink/renderer/core/layout/layout_text.h"
 #include "third_party/blink/renderer/core/loader/empty_clients.h"
-#include "third_party/blink/renderer/core/testing/page_test_base.h"
+#include "third_party/blink/renderer/core/testing/core_unit_test_helper.h"
 #include "third_party/blink/renderer/core/testing/sim/sim_request.h"
 #include "third_party/blink/renderer/core/testing/sim/sim_test.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -31,7 +36,7 @@ namespace blink {
 namespace {
 
 gfx::Rect GetRect(LayoutObject* layout_object) {
-  return ToEnclosingRect(layout_object->VisualRectInDocument());
+  return ToEnclosingRect(VisualRectInDocument(*layout_object));
 }
 
 void FindNodeVectorsDiff(const Vector<Persistent<Node>>& a,
@@ -123,9 +128,9 @@ class WebContentCaptureClientTestHelper : public WebContentCaptureClient {
 
   void ResetResults() {
     first_data_ = false;
-    data_.Clear();
-    updated_data_.Clear();
-    removed_data_.Clear();
+    data_.clear();
+    updated_data_.clear();
+    removed_data_.clear();
     captured_text_.clear();
   }
 
@@ -152,14 +157,16 @@ class ContentCaptureLocalFrameClientHelper : public EmptyLocalFrameClient {
   WebContentCaptureClient& client_;
 };
 
-class ContentCaptureTest
-    : public PageTestBase,
-      public ::testing::WithParamInterface<std::vector<base::Feature>> {
+class ContentCaptureTest : public PageTestBase,
+                           public ::testing::WithParamInterface<
+                               std::vector<base::test::FeatureRef>> {
  public:
-  ContentCaptureTest() {
+  ContentCaptureTest()
+      : PageTestBase(base::test::TaskEnvironment::TimeSource::MOCK_TIME) {
     EnablePlatform();
     feature_list_.InitWithFeatures(
-        GetParam(), /*disabled_features=*/std::vector<base::Feature>());
+        GetParam(),
+        /*disabled_features=*/std::vector<base::test::FeatureRef>());
   }
 
   void SetUp() override {
@@ -181,7 +188,6 @@ class ContentCaptureTest
         "<p id='p8'>8</p>"
         "<div id='d1'></div>"
         "<p id='invisible'>invisible</p>");
-    platform()->SetAutoAdvanceNowToPendingTasks(false);
     InitNodeHolders();
     // Setup captured content to ContentCaptureTask, it isn't necessary once
     // ContentCaptureManager is created by LocalFrame.
@@ -232,13 +238,12 @@ class ContentCaptureTest
 
   void RunContentCaptureTask() {
     ResetResult();
-    platform()->RunForPeriod(
-        GetWebContentCaptureClient()->GetTaskInitialDelay());
+    FastForwardBy(GetWebContentCaptureClient()->GetTaskInitialDelay());
   }
 
   void RunNextContentCaptureTask() {
     ResetResult();
-    platform()->RunForPeriod(
+    FastForwardBy(
         GetContentCaptureTask()->GetTaskDelayForTesting().GetNextTaskDelay());
   }
 
@@ -302,7 +307,7 @@ class ContentCaptureTest
       nodes.push_back(node);
       GetOrResetContentCaptureManager()->ScheduleTaskIfNeeded(*node);
       node_ids.push_back(
-          cc::NodeInfo(DOMNodeIds::IdForNode(node), GetRect(layout_object)));
+          cc::NodeInfo(node->GetDomNodeId(), GetRect(layout_object)));
     }
   }
 
@@ -341,8 +346,7 @@ class ContentCaptureTest
       HashSet<Persistent<Node>> sent;
       for (int i = 0; i < 4; ++i) {
         Vector<Persistent<Node>> a_diff_b;
-        Vector<Persistent<Node>> b;
-        CopyToVector(sent, b);
+        Vector<Persistent<Node>> b(sent);
         FindNodeVectorsDiff(nodes[i], b, a_diff_b);
         ToNodeTexts(a_diff_b, scrolling_expected_captured_nodes_[i]);
         sent.clear();
@@ -367,8 +371,8 @@ class ContentCaptureTest
 INSTANTIATE_TEST_SUITE_P(
     ,
     ContentCaptureTest,
-    testing::Values(std::vector<base::Feature>{},
-                    std::vector<base::Feature>{
+    testing::Values(std::vector<base::test::FeatureRef>{},
+                    std::vector<base::test::FeatureRef>{
                         features::kContentCaptureConstantStreaming}));
 
 TEST_P(ContentCaptureTest, Basic) {
@@ -576,8 +580,6 @@ TEST_P(ContentCaptureTest, TaskHistogramReporter) {
   histograms.ExpectTotalCount(
       ContentCaptureTaskHistogramReporter::kSendContentTime, 0u);
   histograms.ExpectTotalCount(
-      ContentCaptureTaskHistogramReporter::kCaptureContentDelayTime, 0u);
-  histograms.ExpectTotalCount(
       ContentCaptureTaskHistogramReporter::kSentContentCount, 0u);
   histograms.ExpectTotalCount(
       ContentCaptureTaskHistogramReporter::kTaskRunsPerCapture, 0u);
@@ -594,8 +596,6 @@ TEST_P(ContentCaptureTest, TaskHistogramReporter) {
   histograms.ExpectTotalCount(
       ContentCaptureTaskHistogramReporter::kSendContentTime, 0u);
   histograms.ExpectTotalCount(
-      ContentCaptureTaskHistogramReporter::kCaptureContentDelayTime, 0u);
-  histograms.ExpectTotalCount(
       ContentCaptureTaskHistogramReporter::kSentContentCount, 0u);
 
   // The task stops at kProcessRetryTask because the captured content
@@ -610,8 +610,6 @@ TEST_P(ContentCaptureTest, TaskHistogramReporter) {
   histograms.ExpectTotalCount(
       ContentCaptureTaskHistogramReporter::kSendContentTime, 1u);
   histograms.ExpectTotalCount(
-      ContentCaptureTaskHistogramReporter::kCaptureContentDelayTime, 1u);
-  histograms.ExpectTotalCount(
       ContentCaptureTaskHistogramReporter::kSentContentCount, 0u);
 
   // Run task until it stops, task will not capture content, because there is no
@@ -624,8 +622,6 @@ TEST_P(ContentCaptureTest, TaskHistogramReporter) {
       ContentCaptureTaskHistogramReporter::kCaptureContentTime, 1u);
   histograms.ExpectTotalCount(
       ContentCaptureTaskHistogramReporter::kSendContentTime, 2u);
-  histograms.ExpectTotalCount(
-      ContentCaptureTaskHistogramReporter::kCaptureContentDelayTime, 1u);
   histograms.ExpectTotalCount(
       ContentCaptureTaskHistogramReporter::kSentContentCount, 0u);
 
@@ -650,8 +646,6 @@ TEST_P(ContentCaptureTest, TaskHistogramReporter) {
   histograms.ExpectTotalCount(
       ContentCaptureTaskHistogramReporter::kSendContentTime, 3u);
   histograms.ExpectTotalCount(
-      ContentCaptureTaskHistogramReporter::kCaptureContentDelayTime, 2u);
-  histograms.ExpectTotalCount(
       ContentCaptureTaskHistogramReporter::kSentContentCount, 0u);
 
   histograms.ExpectTotalCount(
@@ -667,8 +661,6 @@ TEST_P(ContentCaptureTest, TaskHistogramReporter) {
       ContentCaptureTaskHistogramReporter::kCaptureContentTime, 2u);
   histograms.ExpectTotalCount(
       ContentCaptureTaskHistogramReporter::kSendContentTime, 3u);
-  histograms.ExpectTotalCount(
-      ContentCaptureTaskHistogramReporter::kCaptureContentDelayTime, 2u);
   histograms.ExpectTotalCount(
       ContentCaptureTaskHistogramReporter::kSentContentCount, 1u);
   // Verify total content has been sent.
@@ -851,8 +843,8 @@ class ContentCaptureSimTest : public SimTest {
 
     static_cast<WebLocalFrame*>(MainFrame().FindFrameByName("frame"))
         ->SetContentCaptureClient(&child_client_);
-    auto* child_frame_element =
-        To<HTMLIFrameElement>(GetDocument().getElementById("frame"));
+    auto* child_frame_element = To<HTMLIFrameElement>(
+        GetDocument().getElementById(AtomicString("frame")));
     child_document_ = child_frame_element->contentDocument();
     child_document_->UpdateStyleAndLayout(DocumentUpdateReason::kTest);
     Compositor().BeginFrame();
@@ -896,7 +888,7 @@ class ContentCaptureSimTest : public SimTest {
     Node* node = doc.createTextNode("New Text");
     auto* element = MakeGarbageCollected<Element>(html_names::kPTag, &doc);
     element->appendChild(node);
-    Element* div_element = doc.getElementById("d1");
+    Element* div_element = doc.getElementById(AtomicString("d1"));
     div_element->appendChild(element);
     Compositor().BeginFrame();
     auto* layout_text = To<LayoutText>(node->GetLayoutObject());

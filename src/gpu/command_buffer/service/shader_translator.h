@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,6 @@
 #include "base/observer_list.h"
 #include "gpu/gpu_gles2_export.h"
 #include "third_party/angle/include/GLSLANG/ShaderLang.h"
-
-namespace gl {
-struct GLVersionInfo;
-}
 
 namespace gpu {
 namespace gles2 {
@@ -45,7 +41,7 @@ class ShaderTranslatorInterface
                     ShShaderSpec shader_spec,
                     const ShBuiltInResources* resources,
                     ShShaderOutput shader_output_language,
-                    ShCompileOptions driver_bug_workarounds,
+                    const ShCompileOptions& driver_bug_workarounds,
                     bool gl_shader_interm_output) = 0;
 
   // Translates the given shader source.
@@ -92,16 +88,12 @@ class GPU_GLES2_EXPORT ShaderTranslator : public ShaderTranslatorInterface {
 
   ShaderTranslator();
 
-  // Return shader output lanaguage type based on the context version.
-  static ShShaderOutput GetShaderOutputLanguageForContext(
-      const gl::GLVersionInfo& context_version);
-
   // Overridden from ShaderTranslatorInterface.
   bool Init(sh::GLenum shader_type,
             ShShaderSpec shader_spec,
             const ShBuiltInResources* resources,
             ShShaderOutput shader_output_language,
-            ShCompileOptions driver_bug_workarounds,
+            const ShCompileOptions& driver_bug_workarounds,
             bool gl_shader_interm_output) override;
 
   // Overridden from ShaderTranslatorInterface.
@@ -124,7 +116,7 @@ class GPU_GLES2_EXPORT ShaderTranslator : public ShaderTranslatorInterface {
  private:
   ~ShaderTranslator() override;
 
-  ShCompileOptions GetCompileOptions() const;
+  const ShCompileOptions& GetCompileOptions() const;
 
   ShHandle compiler_;
   ShCompileOptions compile_options_;

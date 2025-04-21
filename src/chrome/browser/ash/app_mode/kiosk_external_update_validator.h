@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "base/files/file_path.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
+#include "base/values.h"
 #include "extensions/browser/sandboxed_unpacker.h"
 
 namespace extensions {
@@ -31,7 +32,7 @@ class KioskExternalUpdateValidatorDelegate {
   virtual void OnExternalUpdateUnpackFailure(const std::string& app_id) = 0;
 
  protected:
-  virtual ~KioskExternalUpdateValidatorDelegate() {}
+  virtual ~KioskExternalUpdateValidatorDelegate() = default;
 };
 
 // Unpacks the crx file of the kiosk app and validates its signature.
@@ -57,11 +58,10 @@ class KioskExternalUpdateValidator
   void OnUnpackFailure(const extensions::CrxInstallError& error) override;
   void OnUnpackSuccess(const base::FilePath& temp_dir,
                        const base::FilePath& extension_dir,
-                       std::unique_ptr<base::DictionaryValue> original_manifest,
+                       std::unique_ptr<base::Value::Dict> original_manifest,
                        const extensions::Extension* extension,
                        const SkBitmap& install_icon,
-                       extensions::declarative_net_request::RulesetInstallPrefs
-                           ruleset_install_prefs) override;
+                       base::Value::Dict ruleset_install_prefs) override;
 
   // Task runner for executing file I/O tasks.
   const scoped_refptr<base::SequencedTaskRunner> backend_task_runner_;

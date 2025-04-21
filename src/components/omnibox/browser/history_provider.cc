@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,6 @@
 #include "components/omnibox/browser/autocomplete_match.h"
 #include "components/omnibox/browser/autocomplete_match_classification.h"
 #include "components/omnibox/browser/in_memory_url_index_types.h"
-
-using bookmarks::BookmarkModel;
 
 void HistoryProvider::DeleteMatch(const AutocompleteMatch& match) {
   DCHECK(done_);
@@ -49,11 +47,11 @@ HistoryProvider::HistoryProvider(AutocompleteProvider::Type type,
                                  AutocompleteProviderClient* client)
     : AutocompleteProvider(type), client_(client) {}
 
-HistoryProvider::~HistoryProvider() {}
+HistoryProvider::~HistoryProvider() = default;
 
 void HistoryProvider::DeleteMatchFromMatches(const AutocompleteMatch& match) {
   bool found = false;
-  BookmarkModel* bookmark_model = client_->GetBookmarkModel();
+  bookmarks::BookmarkModel* bookmark_model = client_->GetBookmarkModel();
   for (auto i(matches_.begin()); i != matches_.end(); ++i) {
     if (i->destination_url == match.destination_url && i->type == match.type) {
       found = true;

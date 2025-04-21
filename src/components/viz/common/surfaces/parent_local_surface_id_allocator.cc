@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -63,8 +63,12 @@ bool ParentLocalSurfaceIdAllocator::UpdateFromChild(
   return true;
 }
 
-void ParentLocalSurfaceIdAllocator::Invalidate() {
+void ParentLocalSurfaceIdAllocator::Invalidate(
+    bool also_invalidate_allocation_group) {
   is_invalid_ = true;
+  if (also_invalidate_allocation_group) {
+    current_local_surface_id_.embed_token_ = base::UnguessableToken::Create();
+  }
 }
 
 void ParentLocalSurfaceIdAllocator::GenerateId() {

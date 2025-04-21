@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,14 @@
 #include <map>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/simple_test_clock.h"
 #include "base/test/task_environment.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "components/image_fetcher/core/cache/image_data_store_disk.h"
 #include "components/image_fetcher/core/cache/image_metadata_store_leveldb.h"
 #include "components/image_fetcher/core/cache/proto/cached_image_metadata.pb.h"
@@ -44,7 +44,7 @@ const int kOverMaxCacheSize = 65 * 1024 * 1024;
 
 class CachedImageFetcherImageCacheTest : public testing::Test {
  public:
-  CachedImageFetcherImageCacheTest() {}
+  CachedImageFetcherImageCacheTest() = default;
 
   CachedImageFetcherImageCacheTest(const CachedImageFetcherImageCacheTest&) =
       delete;
@@ -63,13 +63,13 @@ class CachedImageFetcherImageCacheTest : public testing::Test {
     metadata_store_ = metadata_store.get();
 
     auto data_store = std::make_unique<ImageDataStoreDisk>(
-        temp_dir_.GetPath(), base::SequencedTaskRunnerHandle::Get());
+        temp_dir_.GetPath(), base::SequencedTaskRunner::GetCurrentDefault());
     data_store_ = data_store.get();
 
     ImageCache::RegisterProfilePrefs(test_prefs_.registry());
     image_cache_ = base::MakeRefCounted<ImageCache>(
         std::move(data_store), std::move(metadata_store), &test_prefs_, &clock_,
-        base::SequencedTaskRunnerHandle::Get());
+        base::SequencedTaskRunner::GetCurrentDefault());
   }
 
   void InitializeImageCache() {
@@ -84,7 +84,7 @@ class CachedImageFetcherImageCacheTest : public testing::Test {
     InitializeImageCache();
 
     image_cache()->SaveImage(kImageUrl, kImageData, needs_transcoding,
-                             absl::nullopt /* expiration_interval */);
+                             std::nullopt /* expiration_interval */);
     RunUntilIdle();
 
     ASSERT_TRUE(IsMetadataPresent(kImageUrlHashed));
@@ -160,7 +160,7 @@ class CachedImageFetcherImageCacheTest : public testing::Test {
 
   void InjectMetadata(std::string key, int data_size, bool needs_transcoding) {
     metadata_store_->SaveImageMetadata(key, data_size, needs_transcoding,
-                                       absl::nullopt /* expiration_interval */);
+                                       std::nullopt /* expiration_interval */);
   }
 
   void InjectData(std::string key, std::string data, bool needs_transcoding) {
@@ -206,7 +206,7 @@ TEST_F(CachedImageFetcherImageCacheTest, SanityTest) {
 
   image_cache()->SaveImage(kImageUrl, kImageData,
                            /* needs_transcoding */ false,
-                           /* expiration_interval */ absl::nullopt);
+                           /* expiration_interval */ std::nullopt);
   RunUntilIdle();
 
   LoadImage(kImageUrl, kImageData);
@@ -228,7 +228,7 @@ TEST_F(CachedImageFetcherImageCacheTest, SaveCallsInitialization) {
   ASSERT_FALSE(IsCacheInitialized());
   image_cache()->SaveImage(kImageUrl, kImageData,
                            /* needs_transcoding */ false,
-                           /* expiration_interval */ absl::nullopt);
+                           /* expiration_interval */ std::nullopt);
   db()->InitStatusCallback(leveldb_proto::Enums::InitStatus::kOK);
   RunUntilIdle();
 
@@ -241,7 +241,7 @@ TEST_F(CachedImageFetcherImageCacheTest, Save) {
 
   image_cache()->SaveImage(kImageUrl, kImageData,
                            /* needs_transcoding */ false,
-                           /* expiration_interval */ absl::nullopt);
+                           /* expiration_interval */ std::nullopt);
   LoadImage(kImageUrl, kImageData);
 }
 

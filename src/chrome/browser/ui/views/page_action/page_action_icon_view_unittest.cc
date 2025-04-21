@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "ui/events/test/event_generator.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/paint_vector_icon.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/controls/button/button.h"
 #include "ui/views/widget/widget_utils.h"
 
@@ -68,16 +69,28 @@ class TestPageActionIconView : public PageActionIconView {
                            command_id,
                            parent_delegate,
                            delegate,
+                           "TestName",
+                           0,
+                           nullptr,
+                           true,
                            font_list) {
     SetUpForInOutAnimation();
+    GetViewAccessibility().SetName(u"TestTooltip");
   }
 
   views::BubbleDialogDelegate* GetBubble() const override { return nullptr; }
-  std::u16string GetTextForTooltipAndAccessibleName() const override {
-    return u"TestTooltip";
+
+  bool IsBubbleShowing() const override {
+    return is_bubble_showing_override_ ? true
+                                       : PageActionIconView::IsBubbleShowing();
   }
 
   bool IsLabelVisible() const { return label()->GetVisible(); }
+
+  void SetIsBubbleShowingOverride(bool is_bubble_showing_override) {
+    is_bubble_showing_override_ = is_bubble_showing_override;
+    Update();
+  }
 
  protected:
   // PageActionIconView:
@@ -86,6 +99,9 @@ class TestPageActionIconView : public PageActionIconView {
     return gfx::kNoneIcon;
   }
   void UpdateImpl() override {}
+
+ private:
+  bool is_bubble_showing_override_ = false;
 };
 
 class TestPageActionIconViewWithIconImage : public TestPageActionIconView {
@@ -119,7 +135,8 @@ class PageActionIconViewTest : public ChromeViewsTestBase {
   void SetUp() override {
     ChromeViewsTestBase::SetUp();
 
-    widget_ = CreateTestWidget();
+    widget_ =
+        CreateTestWidget(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET);
     delegate_ = TestPageActionIconDelegate();
     view_ = widget_->SetContentsView(std::make_unique<TestPageActionIconView>(
         /*command_updater=*/nullptr,
@@ -128,9 +145,12 @@ class PageActionIconViewTest : public ChromeViewsTestBase {
     widget_->Show();
   }
   void TearDown() override {
+    ClearView();
     widget_.reset();
     ChromeViewsTestBase::TearDown();
   }
+
+  void ClearView() { view_ = nullptr; }
 
   TestPageActionIconView* view() { return view_; }
   views::Widget* widget() { return widget_.get(); }
@@ -138,12 +158,12 @@ class PageActionIconViewTest : public ChromeViewsTestBase {
 
  private:
   TestPageActionIconDelegate delegate_;
-  raw_ptr<TestPageActionIconView> view_;
+  raw_ptr<TestPageActionIconView> view_ = nullptr;
   std::unique_ptr<views::Widget> widget_;
 };
 
 TEST_F(PageActionIconViewTest, ShouldResetSlideAnimationWhenHideIcons) {
-  view()->AnimateIn(absl::nullopt);
+  view()->AnimateIn(std::nullopt);
   EXPECT_TRUE(view()->IsLabelVisible());
   EXPECT_TRUE(view()->is_animating_label());
 
@@ -154,9 +174,61 @@ TEST_F(PageActionIconViewTest, ShouldResetSlideAnimationWhenHideIcons) {
   EXPECT_FALSE(view()->IsLabelVisible());
 }
 
+TEST_F(PageActionIconViewTest, TooltipText) {
+  view()->AnimateIn(std::nullopt);
+  EXPECT_FALSE(view()->IsBubbleShowing());
+  EXPECT_EQ(view()->GetTooltipText(gfx::Point()),
+            view()->GetTextForTooltipAndAccessibleName());
+  EXPECT_EQ(view()->GetTooltipText(gfx::Point()), u"TestTooltip");
+
+  view()->GetViewAccessibility().SetName(u"NewTooltip");
+
+  EXPECT_FALSE(view()->IsBubbleShowing());
+  EXPECT_EQ(view()->GetTooltipText(gfx::Point()),
+            view()->GetTextForTooltipAndAccessibleName());
+  EXPECT_EQ(view()->GetTooltipText(gfx::Point()), u"NewTooltip");
+
+  view()->SetIsBubbleShowingOverride(true);
+
+  EXPECT_TRUE(view()->IsBubbleShowing());
+  EXPECT_EQ(view()->GetTooltipText(gfx::Point()), u"");
+}
+
+TEST_F(PageActionIconViewTest, TooltipTextAccessibility) {
+  view()->AnimateIn(std::nullopt);
+
+  ui::AXNodeData data;
+  EXPECT_FALSE(view()->IsBubbleShowing());
+  view()->GetViewAccessibility().GetAccessibleNodeData(&data);
+  EXPECT_EQ(data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+            view()->GetTooltipText());
+  EXPECT_NE(data.GetString16Attribute(ax::mojom::StringAttribute::kDescription),
+            view()->GetTooltipText());
+
+  view()->GetViewAccessibility().SetName(u"NewTooltip");
+
+  data = ui::AXNodeData();
+  EXPECT_FALSE(view()->IsBubbleShowing());
+  view()->GetViewAccessibility().GetAccessibleNodeData(&data);
+  EXPECT_EQ(data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+            view()->GetTooltipText());
+  EXPECT_NE(data.GetString16Attribute(ax::mojom::StringAttribute::kDescription),
+            view()->GetTooltipText());
+
+  view()->SetIsBubbleShowingOverride(true);
+
+  data = ui::AXNodeData();
+  EXPECT_TRUE(view()->IsBubbleShowing());
+  view()->GetViewAccessibility().GetAccessibleNodeData(&data);
+  EXPECT_NE(data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+            view()->GetTooltipText());
+  EXPECT_EQ(data.GetString16Attribute(ax::mojom::StringAttribute::kDescription),
+            view()->GetTooltipText());
+}
+
 TEST_F(PageActionIconViewTest, ShouldNotResetSlideAnimationWhenShowIcons) {
   delegate()->set_should_hide_page_action_icons(true);
-  view()->AnimateIn(absl::nullopt);
+  view()->AnimateIn(std::nullopt);
   EXPECT_TRUE(view()->IsLabelVisible());
   EXPECT_TRUE(view()->is_animating_label());
 
@@ -169,6 +241,11 @@ TEST_F(PageActionIconViewTest, ShouldNotResetSlideAnimationWhenShowIcons) {
 
 TEST_F(PageActionIconViewTest, UsesIconImageIfAvailable) {
   auto delegate = TestPageActionIconDelegate();
+
+  // We're about to reset the 'ContentsView' of the Widget. As such
+  // we need to clear the reference to |view_| beforehand, otherwise
+  // it will become dangling.
+  ClearView();
   auto* icon_view = widget()->SetContentsView(
       std::make_unique<TestPageActionIconViewWithIconImage>(
           /*command_updater=*/nullptr,
@@ -191,4 +268,9 @@ TEST_F(PageActionIconViewTest, UsesIconImageIfAvailable) {
   icon_view->UpdateIconImageForTesting();
   EXPECT_FALSE(image_previous.BackedBySameObjectAs(
       icon_view->GetImage(views::Button::STATE_NORMAL)));
+}
+
+TEST_F(PageActionIconViewTest, IconViewAccessibleName) {
+  EXPECT_EQ(view()->GetViewAccessibility().GetCachedName(),
+            view()->GetTextForTooltipAndAccessibleName());
 }

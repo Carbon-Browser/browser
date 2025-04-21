@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
-#include "chrome/browser/ui/signin_reauth_view_controller.h"
+#include "chrome/browser/ui/signin/signin_reauth_view_controller.h"
 #include "components/sync/protocol/user_consent_types.pb.h"
 #include "content/public/browser/web_ui.h"
 #include "ui/base/webui/web_ui_util.h"
@@ -37,8 +37,9 @@ void SigninReauthHandler::RegisterMessages() {
 }
 
 void SigninReauthHandler::OnJavascriptAllowed() {
-  if (!controller_)
+  if (!controller_) {
     return;
+  }
 
   SigninReauthViewController::GaiaReauthType gaia_reauth_type =
       controller_->gaia_reauth_type();
@@ -55,8 +56,9 @@ void SigninReauthHandler::OnReauthControllerDestroyed() {
 
 void SigninReauthHandler::OnGaiaReauthTypeDetermined(
     SigninReauthViewController::GaiaReauthType reauth_type) {
-  if (!IsJavascriptAllowed())
+  if (!IsJavascriptAllowed()) {
     return;
+  }
 
   FireWebUIListener("reauth-type-determined");
 }
@@ -66,19 +68,21 @@ void SigninReauthHandler::HandleInitialize(const base::Value::List& args) {
 }
 
 void SigninReauthHandler::HandleConfirm(const base::Value::List& args) {
-  if (controller_)
+  if (controller_) {
     controller_->OnReauthConfirmed(BuildConsent(args));
+  }
 }
 
 void SigninReauthHandler::HandleCancel(const base::Value::List& args) {
-  if (controller_)
+  if (controller_) {
     controller_->OnReauthDismissed();
+  }
 }
 
 sync_pb::UserConsentTypes::AccountPasswordsConsent
 SigninReauthHandler::BuildConsent(const base::Value::List& args) const {
   CHECK_EQ(2U, args.size());
-  base::Value::ConstListView consent_description = args[0].GetListDeprecated();
+  const base::Value::List& consent_description = args[0].GetList();
   const std::string& consent_confirmation = args[1].GetString();
 
   // The strings returned by the WebUI are not free-form, they must belong into

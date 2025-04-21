@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -76,7 +76,7 @@ IN_PROC_BROWSER_TEST_F(DevToolsIssueStorageBrowserTest,
   // Report an empty SameSite cookie issue.
   ReportDummyIssue(main_frame_host());
   Attach();
-  SendCommand("Audits.enable", std::make_unique<base::DictionaryValue>());
+  SendCommandSync("Audits.enable");
   // Verify we have received the SameSite issue.
   WaitForDummyIssueNotification();
 }
@@ -85,7 +85,7 @@ IN_PROC_BROWSER_TEST_F(DevToolsIssueStorageBrowserTest,
                        DevToolsReceivesBrowserIssuesWhileAttached) {
   EXPECT_TRUE(NavigateToURL(shell(), GURL("about:blank")));
   Attach();
-  SendCommand("Audits.enable", std::make_unique<base::DictionaryValue>());
+  SendCommandSync("Audits.enable");
   // Report an empty SameSite cookie issue.
   ReportDummyIssue(main_frame_host());
   // Verify we have received the SameSite issue.
@@ -115,7 +115,7 @@ IN_PROC_BROWSER_TEST_F(DevToolsIssueStorageBrowserTest,
 
   // 4) Open DevTools and enable Audits domain.
   Attach();
-  SendCommand("Audits.enable", std::make_unique<base::DictionaryValue>());
+  SendCommandSync("Audits.enable");
 
   // 5) Verify we have received the SameSite issue on the main target.
   WaitForDummyIssueNotification();
@@ -136,7 +136,7 @@ IN_PROC_BROWSER_TEST_F(DevToolsIssueStorageBrowserTest,
 
   // 4) Open DevTools and enable Audits domain.
   Attach();
-  SendCommand("Audits.enable", std::make_unique<base::DictionaryValue>());
+  SendCommandSync("Audits.enable");
 
   // 5) Verify that we haven't received any notifications.
   ASSERT_FALSE(HasExistingNotification());
@@ -148,8 +148,8 @@ class DevToolsIssueStorageWithBackForwardCacheBrowserTest
   void SetUpCommandLine(base::CommandLine* command_line) override {
     // Enable BackForwardCache, omitting this feature results in a crash.
     feature_list_.InitWithFeaturesAndParameters(
-        DefaultEnabledBackForwardCacheParametersForTests(),
-        DefaultDisabledBackForwardCacheParametersForTests());
+        GetDefaultEnabledBackForwardCacheFeaturesForTesting(),
+        GetDefaultDisabledBackForwardCacheFeaturesForTesting());
   }
 
  protected:
@@ -184,7 +184,7 @@ IN_PROC_BROWSER_TEST_F(DevToolsIssueStorageWithBackForwardCacheBrowserTest,
 
   // 5) Open DevTools and enable Audits domain.
   Attach();
-  SendCommand("Audits.enable", std::make_unique<base::DictionaryValue>());
+  SendCommandSync("Audits.enable");
 
   // 6) Verify we have received the SameSite issue on the main target.
   WaitForDummyIssueNotification();
@@ -199,7 +199,8 @@ class DevToolsIssueStorageWithPrerenderBrowserTest
             base::Unretained(this))) {}
 
   void SetUp() override {
-    prerender_test_helper().SetUp(embedded_test_server());
+    prerender_test_helper().RegisterServerRequestMonitor(
+        embedded_test_server());
     DevToolsIssueStorageBrowserTest::SetUp();
   }
 
@@ -222,7 +223,7 @@ IN_PROC_BROWSER_TEST_F(DevToolsIssueStorageWithPrerenderBrowserTest,
   EXPECT_TRUE(NavigateToURL(shell(), main_url));
 
   // 2) Prerender |prerender_url|.
-  int host_id = prerender_test_helper().AddPrerender(prerender_url);
+  FrameTreeNodeId host_id = prerender_test_helper().AddPrerender(prerender_url);
   RenderFrameHostImpl* prerender_rfh = static_cast<RenderFrameHostImpl*>(
       prerender_test_helper().GetPrerenderedMainFrameHost(host_id));
 
@@ -234,7 +235,7 @@ IN_PROC_BROWSER_TEST_F(DevToolsIssueStorageWithPrerenderBrowserTest,
 
   // 5) Open DevTools and enable Audits domain.
   Attach();
-  SendCommand("Audits.enable", std::make_unique<base::DictionaryValue>());
+  SendCommandSync("Audits.enable");
 
   // 6) Verify we have received the SameSite issue on the main target.
   WaitForDummyIssueNotification();
@@ -277,7 +278,7 @@ IN_PROC_BROWSER_TEST_F(DevToolsIssueStorageFencedFrameTest,
 
   // 5) Open DevTools and enable Audits domain.
   Attach();
-  SendCommand("Audits.enable", std::make_unique<base::DictionaryValue>());
+  SendCommandSync("Audits.enable");
 
   // 6) Verify we have received the SameSite issue on the main target.
   WaitForDummyIssueNotification();

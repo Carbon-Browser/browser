@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,12 +36,12 @@ class LocalFileSyncStatus {
 
   class Observer {
    public:
-    Observer() {}
+    Observer() = default;
 
     Observer(const Observer&) = delete;
     Observer& operator=(const Observer&) = delete;
 
-    virtual ~Observer() {}
+    virtual ~Observer() = default;
     virtual void OnSyncEnabled(const storage::FileSystemURL& url) = 0;
     virtual void OnWriteEnabled(const storage::FileSystemURL& url) = 0;
   };
@@ -99,7 +99,7 @@ class LocalFileSyncStatus {
   // If this flag is set sync process is running on the file.
   URLSet syncing_;
 
-  base::ObserverList<Observer>::Unchecked observer_list_;
+  base::ObserverList<Observer>::UncheckedAndDanglingUntriaged observer_list_;
 };
 
 }  // namespace sync_file_system

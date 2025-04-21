@@ -1,13 +1,17 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "android_webview/browser/js_java_interaction/js_reply_proxy.h"
 
-#include "android_webview/browser_jni_headers/JsReplyProxy_jni.h"
+#include <utility>
+
 #include "base/android/jni_string.h"
-#include "components/js_injection/browser/web_message.h"
 #include "components/js_injection/browser/web_message_reply_proxy.h"
+#include "content/public/browser/android/message_payload.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "android_webview/browser_jni_headers/JsReplyProxy_jni.h"
 
 namespace android_webview {
 
@@ -32,11 +36,10 @@ base::android::ScopedJavaLocalRef<jobject> JsReplyProxy::GetJavaPeer() {
 
 void JsReplyProxy::PostMessage(
     JNIEnv* env,
-    const base::android::JavaParamRef<jstring>& message) {
-  std::unique_ptr<js_injection::WebMessage> web_message =
-      std::make_unique<js_injection::WebMessage>();
-  web_message->message = base::android::ConvertJavaStringToUTF16(env, message);
-  reply_proxy_->PostWebMessage(std::move(web_message));
+    const base::android::JavaParamRef<jobject>& payload) {
+  reply_proxy_->PostWebMessage(
+      content::android::ConvertToWebMessagePayloadFromJava(
+          base::android::ScopedJavaLocalRef<jobject>(payload)));
 }
 
 }  // namespace android_webview

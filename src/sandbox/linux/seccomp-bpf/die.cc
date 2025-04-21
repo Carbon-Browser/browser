@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,7 +57,8 @@ void Die::SandboxDie(const char* msg, const char* file, int line) {
   if (simple_exit_) {
     LogToStderr(msg, file, line);
   } else {
-    logging::LogMessage(file, line, logging::LOG_FATAL).stream() << msg;
+    logging::LogMessageFatal(file, line, logging::LOGGING_FATAL).stream()
+        << msg;
   }
   ExitGroup();
 }
@@ -71,7 +72,7 @@ void Die::RawSandboxDie(const char* msg) {
 
 void Die::SandboxInfo(const char* msg, const char* file, int line) {
   if (!suppress_info_) {
-    logging::LogMessage(file, line, logging::LOG_INFO).stream() << msg;
+    logging::LogMessage(file, line, logging::LOGGING_INFO).stream() << msg;
   }
 }
 

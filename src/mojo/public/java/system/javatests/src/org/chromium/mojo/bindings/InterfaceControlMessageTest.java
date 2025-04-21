@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,19 +23,14 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * Tests for interface control messages.
- */
+/** Tests for interface control messages. */
 @RunWith(BaseJUnit4ClassRunner.class)
 public class InterfaceControlMessageTest {
-    @Rule
-    public MojoTestRule mTestRule = new MojoTestRule();
+    @Rule public MojoTestRule mTestRule = new MojoTestRule();
 
     private final List<Closeable> mCloseablesToClose = new ArrayList<Closeable>();
 
-    /**
-     * See mojo/public/interfaces/bindings/tests/sample_interfaces.mojom.
-     */
+    /** See mojo/public/interfaces/bindings/tests/sample_interfaces.mojom. */
     class IntegerAccessorImpl extends SideEffectFreeCloseable implements IntegerAccessor {
         private long mValue;
         private int mEnum;
@@ -91,15 +86,18 @@ public class InterfaceControlMessageTest {
     @Test
     @SmallTest
     public void testQueryVersion() {
-        IntegerAccessor.Proxy p = BindingsTestUtils.newProxyOverPipe(
-                IntegerAccessor.MANAGER, new IntegerAccessorImpl(), mCloseablesToClose);
+        IntegerAccessor.Proxy p =
+                BindingsTestUtils.newProxyOverPipe(
+                        IntegerAccessor.MANAGER, new IntegerAccessorImpl(), mCloseablesToClose);
         Assert.assertEquals(0, p.getProxyHandler().getVersion());
-        p.getProxyHandler().queryVersion(new Callback1<Integer>() {
-            @Override
-            public void call(Integer version) {
-                Assert.assertEquals(3, version.intValue());
-            }
-        });
+        p.getProxyHandler()
+                .queryVersion(
+                        new Callback1<Integer>() {
+                            @Override
+                            public void call(Integer version) {
+                                Assert.assertEquals(3, version.intValue());
+                            }
+                        });
         mTestRule.runLoopUntilIdle();
         Assert.assertEquals(3, p.getProxyHandler().getVersion());
     }
@@ -108,8 +106,9 @@ public class InterfaceControlMessageTest {
     @SmallTest
     public void testRequireVersion() {
         IntegerAccessorImpl impl = new IntegerAccessorImpl();
-        IntegerAccessor.Proxy p = BindingsTestUtils.newProxyOverPipe(
-                IntegerAccessor.MANAGER, impl, mCloseablesToClose);
+        IntegerAccessor.Proxy p =
+                BindingsTestUtils.newProxyOverPipe(
+                        IntegerAccessor.MANAGER, impl, mCloseablesToClose);
 
         Assert.assertEquals(0, p.getProxyHandler().getVersion());
 

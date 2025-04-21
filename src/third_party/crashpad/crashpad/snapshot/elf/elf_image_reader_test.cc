@@ -1,4 +1,4 @@
-// Copyright 2017 The Crashpad Authors. All rights reserved.
+// Copyright 2017 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -209,7 +209,8 @@ void ReadLibcInTarget(ProcessType process,
   ExpectSymbol(&reader, "getpid", getpid_address);
 }
 
-TEST(ElfImageReader, MainExecutableSelf) {
+// This test is flaky: https://crbug.com/331953012
+TEST(ElfImageReader, DISABLED_MainExecutableSelf) {
   ReadThisExecutableInTarget(
       GetSelfProcess(),
       FromPointerCast<VMAddress>(ElfImageReaderTestExportedSymbol));

@@ -1,10 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {highlight} from '../../js/search_highlight_utils.js';
+import {highlight} from '//resources/js/search_highlight_utils.js';
 
-import {MatchPosition} from './history_clusters.mojom-webui.js';
+import type {MatchPosition} from './history_cluster_types.mojom-webui.js';
 
 /**
  * Populates `container` with the highlighted `text` based on the mojom provided

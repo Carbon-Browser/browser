@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,9 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/supports_user_data.h"
+#include "base/uuid.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/network/public/mojom/cookie_manager.mojom.h"
@@ -69,6 +71,9 @@ class BrowserState : public base::SupportsUserData {
   // Returns a CookieManager that is backed by GetRequestContext.
   network::mojom::CookieManager* GetCookieManager();
 
+  // Returns a NetworkContext that is backed by GetRequestContext.
+  network::mojom::NetworkContext* GetNetworkContext();
+
   // Returns an provider to create ProtoDatabase tied to the profile directory.
   leveldb_proto::ProtoDatabaseProvider* GetProtoDatabaseProvider();
 
@@ -82,15 +87,20 @@ class BrowserState : public base::SupportsUserData {
   GetSharedURLLoaderFactory();
 
   // Safely cast a base::SupportsUserData to a BrowserState. Returns nullptr
-  // if |supports_user_data| is not a BrowserState.
+  // if `supports_user_data` is not a BrowserState.
   static BrowserState* FromSupportsUserData(
       base::SupportsUserData* supports_user_data);
 
-  // Updates |cors_exempt_header_list| field of the given |param| to register
+  // Updates `cors_exempt_header_list` field of the given `param` to register
   // headers that are used in content for special purpose and should not be
   // blocked by CORS checks.
   virtual void UpdateCorsExemptHeader(
       network::mojom::NetworkContextParams* params) {}
+
+  // Returns the identifier used to access the WebKit storage for the WebState
+  // attached to this BrowserState. Use the default data store if UUID is not
+  // valid.
+  virtual const base::Uuid& GetWebKitStorageID() const;
 
  protected:
   BrowserState();
@@ -115,14 +125,14 @@ class BrowserState : public base::SupportsUserData {
       shared_url_loader_factory_;
   mojo::Remote<network::mojom::NetworkContext> network_context_;
 
-  // Owns the network::NetworkContext that backs |url_loader_factory_|. Created
+  // Owns the network::NetworkContext that backs `url_loader_factory_`. Created
   // on the UI thread, destroyed on the IO thread.
   std::unique_ptr<NetworkContextOwner> network_context_owner_;
 
   // The URLDataManagerIOSBackend instance associated with this BrowserState.
   // Created and destroyed on the IO thread, and should be accessed only from
   // the IO thread.
-  URLDataManagerIOSBackend* url_data_manager_ios_backend_;
+  raw_ptr<URLDataManagerIOSBackend> url_data_manager_ios_backend_;
 };
 
 }  // namespace web

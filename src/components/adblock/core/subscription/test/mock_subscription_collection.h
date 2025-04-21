@@ -23,12 +23,18 @@
 
 #include "testing/gmock/include/gmock/gmock.h"
 
+using testing::NiceMock;
+
 namespace adblock {
 
-class MockSubscriptionCollection : public SubscriptionCollection {
+class MockSubscriptionCollection : public NiceMock<SubscriptionCollection> {
  public:
   MockSubscriptionCollection();
   ~MockSubscriptionCollection() override;
+  MOCK_METHOD(const std::string&,
+              GetFilteringConfigurationName,
+              (),
+              (const, override));
   MOCK_METHOD(absl::optional<GURL>,
               FindBySubresourceFilter,
               (const GURL& frame_url,
@@ -40,7 +46,7 @@ class MockSubscriptionCollection : public SubscriptionCollection {
   MOCK_METHOD(absl::optional<GURL>,
               FindByPopupFilter,
               (const GURL& popup_url,
-               const GURL& opener_url,
+               const std::vector<GURL>& frame_hierarchy,
                const SiteKey& sitekey,
                FilterCategory category),
               (const, override));
@@ -58,27 +64,29 @@ class MockSubscriptionCollection : public SubscriptionCollection {
                const std::vector<GURL>& frame_hierarchy,
                const SiteKey& sitekey),
               (const, override));
-  MOCK_METHOD(std::vector<base::StringPiece>,
-              GetElementHideSelectors,
+  MOCK_METHOD(InstalledSubscription::ContentFiltersData,
+              GetElementHideData,
               (const GURL& frame_url,
                const std::vector<GURL>& frame_hierarchy,
                const SiteKey& sitekey),
               (const, override));
-  MOCK_METHOD(std::vector<base::StringPiece>,
-              GetElementHideEmulationSelectors,
+  MOCK_METHOD(InstalledSubscription::ContentFiltersData,
+              GetElementHideEmulationData,
               (const GURL& frame_url),
               (const, override));
-  MOCK_METHOD(std::string,
-              GenerateSnippetsJson,
+  MOCK_METHOD(base::Value::List,
+              GenerateSnippets,
               (const GURL& frame_url, const std::vector<GURL>& frame_hierarchy),
               (const, override));
-  MOCK_METHOD(base::StringPiece,
-              GetCspInjection,
+  MOCK_METHOD(std::set<std::string_view>,
+              GetCspInjections,
               (const GURL& frame_url, const std::vector<GURL>& frame_hierarchy),
               (const, override));
-  MOCK_METHOD(absl::optional<GURL>,
-              GetRewriteUrl,
-              (const GURL& frame_url, const std::vector<GURL>& frame_hierarchy),
+  MOCK_METHOD(std::set<std::string_view>,
+              GetRewriteFilters,
+              (const GURL& frame_url,
+               const std::vector<GURL>& frame_hierarchy,
+               FilterCategory blocking_filter_category),
               (const, override));
   MOCK_METHOD(std::set<HeaderFilterData>,
               GetHeaderFilters,

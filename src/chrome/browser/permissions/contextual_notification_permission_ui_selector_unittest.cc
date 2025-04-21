@@ -1,10 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/permissions/contextual_notification_permission_ui_selector.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -27,7 +28,6 @@
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
@@ -207,14 +207,14 @@ class ContextualNotificationPermissionUiSelectorTest : public testing::Test {
 
   void QueryAndExpectDecisionForUrl(
       const GURL& origin,
-      absl::optional<QuietUiReason> quiet_ui_reason,
-      absl::optional<WarningReason> warning_reason) {
+      std::optional<QuietUiReason> quiet_ui_reason,
+      std::optional<WarningReason> warning_reason) {
     permissions::MockPermissionRequest mock_request(
         origin, permissions::RequestType::kNotifications);
     base::MockCallback<
         ContextualNotificationPermissionUiSelector::DecisionMadeCallback>
         mock_callback;
-    Decision actual_decison(absl::nullopt, absl::nullopt);
+    Decision actual_decison(std::nullopt, std::nullopt);
     EXPECT_CALL(mock_callback, Run)
         .WillRepeatedly(testing::SaveArg<0>(&actual_decison));
     contextual_selector_.SelectUiToUse(&mock_request, mock_callback.Get());
@@ -245,16 +245,17 @@ TEST_F(ContextualNotificationPermissionUiSelectorTest,
        PrefAndSafeBrowsingCombinations) {
   using Config = QuietNotificationPermissionUiConfig;
   base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeatureWithParameters(
-      features::kQuietNotificationPrompts,
-      {{Config::kEnableAdaptiveActivation, "true"},
-       {Config::kEnableCrowdDenyTriggering, "true"},
-       {Config::kEnableAbusiveRequestBlocking, "true"},
-       {Config::kEnableAbusiveRequestWarning, "true"},
-       {Config::kEnableAbusiveContentTriggeredRequestBlocking, "true"},
-       {Config::kEnableAbusiveContentTriggeredRequestWarning, "true"},
-       {Config::kEnableDisruptiveBehaviorRequestBlocking, "true"},
-       {Config::kCrowdDenyHoldBackChance, "0.0"}});
+
+  feature_list.InitWithFeaturesAndParameters(
+      {{features::kQuietNotificationPrompts,
+        {{Config::kEnableAdaptiveActivation, "true"},
+         {Config::kEnableCrowdDenyTriggering, "true"},
+         {Config::kEnableAbusiveRequestBlocking, "true"},
+         {Config::kEnableAbusiveRequestWarning, "true"},
+         {Config::kEnableAbusiveContentTriggeredRequestBlocking, "true"},
+         {Config::kEnableAbusiveContentTriggeredRequestWarning, "true"},
+         {Config::kCrowdDenyHoldBackChance, "0.0"}}}},
+      {});
 
   LoadTestPreloadData();
 
@@ -279,9 +280,8 @@ TEST_F(ContextualNotificationPermissionUiSelectorTest,
 
     const struct {
       const char* origin_string;
-      absl::optional<QuietUiReason> expected_ui_reason =
-          Decision::UseNormalUi();
-      absl::optional<WarningReason> expected_warning_reason =
+      std::optional<QuietUiReason> expected_ui_reason = Decision::UseNormalUi();
+      std::optional<WarningReason> expected_warning_reason =
           Decision::ShowNoWarning();
     } kTestCases[] = {
         {kTestOriginNoData},
@@ -318,7 +318,8 @@ TEST_F(ContextualNotificationPermissionUiSelectorTest,
 
 TEST_F(ContextualNotificationPermissionUiSelectorTest, FeatureDisabled) {
   base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndDisableFeature(features::kQuietNotificationPrompts);
+  feature_list.InitWithFeatures(
+      {}, {features::kQuietNotificationPrompts});
 
   LoadTestPreloadData();
   LoadTestSafeBrowsingBlocklist();
@@ -334,22 +335,26 @@ TEST_F(ContextualNotificationPermissionUiSelectorTest, FeatureDisabled) {
 TEST_F(ContextualNotificationPermissionUiSelectorTest, AllTriggersDisabled) {
   using Config = QuietNotificationPermissionUiConfig;
   base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeatureWithParameters(
-      features::kQuietNotificationPrompts,
-      {{Config::kEnableAdaptiveActivation, "true"},
-       {Config::kEnableCrowdDenyTriggering, "false"},
-       {Config::kEnableAbusiveRequestBlocking, "false"},
-       {Config::kEnableAbusiveRequestWarning, "false"},
-       {Config::kEnableAbusiveContentTriggeredRequestBlocking, "false"},
-       {Config::kEnableAbusiveContentTriggeredRequestWarning, "false"},
-       {Config::kEnableDisruptiveBehaviorRequestBlocking, "false"},
-       {Config::kEnableDisruptiveBehaviorRequestWarning, "false"}});
+
+  feature_list.InitWithFeaturesAndParameters(
+      {{features::kQuietNotificationPrompts,
+        {{Config::kEnableAdaptiveActivation, "true"},
+         {Config::kEnableCrowdDenyTriggering, "false"},
+         {Config::kEnableAbusiveRequestBlocking, "false"},
+         {Config::kEnableAbusiveRequestWarning, "false"},
+         {Config::kEnableAbusiveContentTriggeredRequestBlocking, "false"},
+         {Config::kEnableAbusiveContentTriggeredRequestWarning, "false"}}}},
+      {});
 
   SetQuietUiEnabledInPrefs(true);
   LoadTestPreloadData();
   LoadTestSafeBrowsingBlocklist();
 
   for (const auto* origin_string : kAllTestingOrigins) {
+    // Disruptive behavior is always quieted.
+    if (origin_string == kTestOriginDisruptive){
+      continue;
+    }
     SCOPED_TRACE(origin_string);
     QueryAndExpectDecisionForUrl(GURL(origin_string), Decision::UseNormalUi(),
                                  Decision::ShowNoWarning());
@@ -360,25 +365,25 @@ TEST_F(ContextualNotificationPermissionUiSelectorTest, AllTriggersDisabled) {
 TEST_F(ContextualNotificationPermissionUiSelectorTest, OnlyCrowdDenyEnabled) {
   using Config = QuietNotificationPermissionUiConfig;
   base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeatureWithParameters(
-      features::kQuietNotificationPrompts,
-      {{Config::kEnableAdaptiveActivation, "true"},
-       {Config::kEnableCrowdDenyTriggering, "true"},
-       {Config::kEnableAbusiveRequestBlocking, "false"},
-       {Config::kEnableAbusiveRequestWarning, "false"},
-       {Config::kEnableAbusiveContentTriggeredRequestBlocking, "false"},
-       {Config::kEnableAbusiveContentTriggeredRequestWarning, "false"},
-       {Config::kEnableDisruptiveBehaviorRequestBlocking, "false"},
-       {Config::kEnableDisruptiveBehaviorRequestWarning, "false"},
-       {Config::kCrowdDenyHoldBackChance, "0.0"}});
+
+  feature_list.InitWithFeaturesAndParameters(
+      {{features::kQuietNotificationPrompts,
+        {{Config::kEnableAdaptiveActivation, "true"},
+         {Config::kEnableCrowdDenyTriggering, "true"},
+         {Config::kEnableAbusiveRequestBlocking, "false"},
+         {Config::kEnableAbusiveRequestWarning, "false"},
+         {Config::kEnableAbusiveContentTriggeredRequestBlocking, "false"},
+         {Config::kEnableAbusiveContentTriggeredRequestWarning, "false"},
+         {Config::kCrowdDenyHoldBackChance, "0.0"}}}},
+      {});
 
   LoadTestPreloadData();
   LoadTestSafeBrowsingBlocklist();
 
   const struct {
     const char* origin_string;
-    absl::optional<QuietUiReason> expected_ui_reason = Decision::UseNormalUi();
-    absl::optional<WarningReason> expected_warning_reason =
+    std::optional<QuietUiReason> expected_ui_reason = Decision::UseNormalUi();
+    std::optional<WarningReason> expected_warning_reason =
         Decision::ShowNoWarning();
   } kTestCases[] = {
       {kTestOriginSpammy, QuietUiReason::kTriggeredByCrowdDeny},
@@ -388,7 +393,6 @@ TEST_F(ContextualNotificationPermissionUiSelectorTest, OnlyCrowdDenyEnabled) {
       {kTestOriginAbusivePromptsWarn},
       {kTestOriginAbusiveContent},
       {kTestOriginAbusiveContentWarn},
-      {kTestOriginDisruptive},
   };
 
   for (const auto& test : kTestCases) {
@@ -404,24 +408,24 @@ TEST_F(ContextualNotificationPermissionUiSelectorTest,
        OnlyAbusiveContentBlockingEnabled) {
   using Config = QuietNotificationPermissionUiConfig;
   base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeatureWithParameters(
-      features::kQuietNotificationPrompts,
-      {{Config::kEnableAdaptiveActivation, "true"},
-       {Config::kEnableCrowdDenyTriggering, "false"},
-       {Config::kEnableAbusiveRequestBlocking, "false"},
-       {Config::kEnableAbusiveRequestWarning, "false"},
-       {Config::kEnableAbusiveContentTriggeredRequestBlocking, "true"},
-       {Config::kEnableAbusiveContentTriggeredRequestWarning, "false"},
-       {Config::kEnableDisruptiveBehaviorRequestBlocking, "false"},
-       {Config::kEnableDisruptiveBehaviorRequestWarning, "false"}});
+
+  feature_list.InitWithFeaturesAndParameters(
+      {{features::kQuietNotificationPrompts,
+        {{Config::kEnableAdaptiveActivation, "true"},
+         {Config::kEnableCrowdDenyTriggering, "false"},
+         {Config::kEnableAbusiveRequestBlocking, "false"},
+         {Config::kEnableAbusiveRequestWarning, "false"},
+         {Config::kEnableAbusiveContentTriggeredRequestBlocking, "true"},
+         {Config::kEnableAbusiveContentTriggeredRequestWarning, "false"}}}},
+      {});
 
   LoadTestPreloadData();
   LoadTestSafeBrowsingBlocklist();
 
   const struct {
     const char* origin_string;
-    absl::optional<QuietUiReason> expected_ui_reason = Decision::UseNormalUi();
-    absl::optional<WarningReason> expected_warning_reason =
+    std::optional<QuietUiReason> expected_ui_reason = Decision::UseNormalUi();
+    std::optional<WarningReason> expected_warning_reason =
         Decision::ShowNoWarning();
   } kTestCases[] = {
       {kTestOriginSpammy},
@@ -431,7 +435,6 @@ TEST_F(ContextualNotificationPermissionUiSelectorTest,
       {kTestOriginAbusivePromptsWarn},
       {kTestOriginAbusiveContent, QuietUiReason::kTriggeredDueToAbusiveContent},
       {kTestOriginAbusiveContentWarn},
-      {kTestOriginDisruptive},
   };
 
   for (const auto& test : kTestCases) {
@@ -447,23 +450,23 @@ TEST_F(ContextualNotificationPermissionUiSelectorTest,
        OnlyAbusiveContentWarningsEnabled) {
   using Config = QuietNotificationPermissionUiConfig;
   base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeatureWithParameters(
-      features::kQuietNotificationPrompts,
-      {{Config::kEnableAdaptiveActivation, "true"},
-       {Config::kEnableCrowdDenyTriggering, "false"},
-       {Config::kEnableAbusiveRequestBlocking, "false"},
-       {Config::kEnableAbusiveRequestWarning, "false"},
-       {Config::kEnableAbusiveContentTriggeredRequestBlocking, "false"},
-       {Config::kEnableAbusiveContentTriggeredRequestWarning, "true"},
-       {Config::kEnableDisruptiveBehaviorRequestBlocking, "false"}});
+  feature_list.InitWithFeaturesAndParameters(
+      {{features::kQuietNotificationPrompts,
+        {{Config::kEnableAdaptiveActivation, "true"},
+         {Config::kEnableCrowdDenyTriggering, "false"},
+         {Config::kEnableAbusiveRequestBlocking, "false"},
+         {Config::kEnableAbusiveRequestWarning, "false"},
+         {Config::kEnableAbusiveContentTriggeredRequestBlocking, "false"},
+         {Config::kEnableAbusiveContentTriggeredRequestWarning, "true"}}}},
+      {});
 
   LoadTestPreloadData();
   LoadTestSafeBrowsingBlocklist();
 
   const struct {
     const char* origin_string;
-    absl::optional<QuietUiReason> expected_ui_reason = Decision::UseNormalUi();
-    absl::optional<WarningReason> expected_warning_reason =
+    std::optional<QuietUiReason> expected_ui_reason = Decision::UseNormalUi();
+    std::optional<WarningReason> expected_warning_reason =
         Decision::ShowNoWarning();
   } kTestCases[] = {
       {kTestOriginSpammy},
@@ -474,7 +477,6 @@ TEST_F(ContextualNotificationPermissionUiSelectorTest,
       {kTestOriginAbusiveContent},
       {kTestOriginAbusiveContentWarn, Decision::UseNormalUi(),
        WarningReason::kAbusiveContent},
-      {kTestOriginDisruptive},
   };
 
   for (const auto& test : kTestCases) {
@@ -490,24 +492,23 @@ TEST_F(ContextualNotificationPermissionUiSelectorTest,
        OnlyAbusivePromptBlockingEnabled) {
   using Config = QuietNotificationPermissionUiConfig;
   base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeatureWithParameters(
-      features::kQuietNotificationPrompts,
-      {{Config::kEnableAdaptiveActivation, "true"},
-       {Config::kEnableCrowdDenyTriggering, "false"},
-       {Config::kEnableAbusiveRequestBlocking, "true"},
-       {Config::kEnableAbusiveRequestWarning, "false"},
-       {Config::kEnableAbusiveContentTriggeredRequestBlocking, "false"},
-       {Config::kEnableAbusiveContentTriggeredRequestWarning, "false"},
-       {Config::kEnableDisruptiveBehaviorRequestBlocking, "false"},
-       {Config::kEnableDisruptiveBehaviorRequestWarning, "false"}});
+  feature_list.InitWithFeaturesAndParameters(
+      {{features::kQuietNotificationPrompts,
+        {{Config::kEnableAdaptiveActivation, "true"},
+         {Config::kEnableCrowdDenyTriggering, "false"},
+         {Config::kEnableAbusiveRequestBlocking, "true"},
+         {Config::kEnableAbusiveRequestWarning, "false"},
+         {Config::kEnableAbusiveContentTriggeredRequestBlocking, "false"},
+         {Config::kEnableAbusiveContentTriggeredRequestWarning, "false"}}}},
+      {});
 
   LoadTestPreloadData();
   LoadTestSafeBrowsingBlocklist();
 
   const struct {
     const char* origin_string;
-    absl::optional<QuietUiReason> expected_ui_reason = Decision::UseNormalUi();
-    absl::optional<WarningReason> expected_warning_reason =
+    std::optional<QuietUiReason> expected_ui_reason = Decision::UseNormalUi();
+    std::optional<WarningReason> expected_warning_reason =
         Decision::ShowNoWarning();
   } kTestCases[] = {
       {kTestOriginSpammy},
@@ -519,7 +520,6 @@ TEST_F(ContextualNotificationPermissionUiSelectorTest,
       {kTestOriginAbusivePromptsWarn},
       {kTestOriginAbusiveContent},
       {kTestOriginAbusiveContentWarn},
-      {kTestOriginDisruptive},
   };
 
   for (const auto& test : kTestCases) {
@@ -535,23 +535,23 @@ TEST_F(ContextualNotificationPermissionUiSelectorTest,
        OnlyAbusivePromptWarningsEnabled) {
   using Config = QuietNotificationPermissionUiConfig;
   base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeatureWithParameters(
-      features::kQuietNotificationPrompts,
-      {{Config::kEnableAdaptiveActivation, "true"},
-       {Config::kEnableCrowdDenyTriggering, "false"},
-       {Config::kEnableAbusiveRequestBlocking, "false"},
-       {Config::kEnableAbusiveRequestWarning, "true"},
-       {Config::kEnableAbusiveContentTriggeredRequestBlocking, "false"},
-       {Config::kEnableAbusiveContentTriggeredRequestWarning, "false"},
-       {Config::kEnableDisruptiveBehaviorRequestBlocking, "false"}});
+  feature_list.InitWithFeaturesAndParameters(
+      {{features::kQuietNotificationPrompts,
+        {{Config::kEnableAdaptiveActivation, "true"},
+         {Config::kEnableCrowdDenyTriggering, "false"},
+         {Config::kEnableAbusiveRequestBlocking, "false"},
+         {Config::kEnableAbusiveRequestWarning, "true"},
+         {Config::kEnableAbusiveContentTriggeredRequestBlocking, "false"},
+         {Config::kEnableAbusiveContentTriggeredRequestWarning, "false"}}}},
+      {});
 
   LoadTestPreloadData();
   LoadTestSafeBrowsingBlocklist();
 
   const struct {
     const char* origin_string;
-    absl::optional<QuietUiReason> expected_ui_reason = Decision::UseNormalUi();
-    absl::optional<WarningReason> expected_warning_reason =
+    std::optional<QuietUiReason> expected_ui_reason = Decision::UseNormalUi();
+    std::optional<WarningReason> expected_warning_reason =
         Decision::ShowNoWarning();
   } kTestCases[] = {
       {kTestOriginSpammy},
@@ -562,7 +562,6 @@ TEST_F(ContextualNotificationPermissionUiSelectorTest,
        WarningReason::kAbusiveRequests},
       {kTestOriginAbusiveContent},
       {kTestOriginAbusiveContentWarn},
-      {kTestOriginDisruptive},
   };
 
   for (const auto& test : kTestCases) {
@@ -578,23 +577,23 @@ TEST_F(ContextualNotificationPermissionUiSelectorTest,
        OnlyDisruptiveBehaviorRequestBlockingEnabled) {
   using Config = QuietNotificationPermissionUiConfig;
   base::test::ScopedFeatureList feature_list;
-  feature_list.InitAndEnableFeatureWithParameters(
-      features::kQuietNotificationPrompts,
-      {{Config::kEnableAdaptiveActivation, "true"},
-       {Config::kEnableCrowdDenyTriggering, "false"},
-       {Config::kEnableAbusiveRequestBlocking, "false"},
-       {Config::kEnableAbusiveRequestWarning, "false"},
-       {Config::kEnableAbusiveContentTriggeredRequestBlocking, "false"},
-       {Config::kEnableAbusiveContentTriggeredRequestWarning, "false"},
-       {Config::kEnableDisruptiveBehaviorRequestBlocking, "true"}});
+  feature_list.InitWithFeaturesAndParameters(
+      {{features::kQuietNotificationPrompts,
+        {{Config::kEnableAdaptiveActivation, "true"},
+         {Config::kEnableCrowdDenyTriggering, "false"},
+         {Config::kEnableAbusiveRequestBlocking, "false"},
+         {Config::kEnableAbusiveRequestWarning, "false"},
+         {Config::kEnableAbusiveContentTriggeredRequestBlocking, "false"},
+         {Config::kEnableAbusiveContentTriggeredRequestWarning, "false"}}}},
+      {});
 
   LoadTestPreloadData();
   LoadTestSafeBrowsingBlocklist();
 
   const struct {
     const char* origin_string;
-    absl::optional<QuietUiReason> expected_ui_reason = Decision::UseNormalUi();
-    absl::optional<WarningReason> expected_warning_reason =
+    std::optional<QuietUiReason> expected_ui_reason = Decision::UseNormalUi();
+    std::optional<WarningReason> expected_warning_reason =
         Decision::ShowNoWarning();
   } kTestCases[] = {
       {kTestOriginSpammy},
@@ -619,7 +618,7 @@ TEST_F(ContextualNotificationPermissionUiSelectorTest,
        CrowdDenyHoldbackChance) {
   const struct {
     std::string holdback_chance;
-    absl::optional<QuietUiReason> expected_ui_reason;
+    std::optional<QuietUiReason> expected_ui_reason;
     bool expected_histogram_bucket;
   } kTestCases[] = {
       // 100% chance to holdback, the UI used should be the normal UI.
@@ -636,16 +635,16 @@ TEST_F(ContextualNotificationPermissionUiSelectorTest,
 
     using Config = QuietNotificationPermissionUiConfig;
     base::test::ScopedFeatureList feature_list;
-    feature_list.InitAndEnableFeatureWithParameters(
-        features::kQuietNotificationPrompts,
-        {{Config::kEnableAdaptiveActivation, "true"},
-         {Config::kEnableAbusiveRequestBlocking, "true"},
-         {Config::kEnableAbusiveRequestWarning, "true"},
-         {Config::kEnableAbusiveContentTriggeredRequestBlocking, "true"},
-         {Config::kEnableAbusiveContentTriggeredRequestWarning, "true"},
-         {Config::kEnableCrowdDenyTriggering, "true"},
-         {Config::kEnableDisruptiveBehaviorRequestBlocking, "true"},
-         {Config::kCrowdDenyHoldBackChance, test.holdback_chance}});
+    feature_list.InitWithFeaturesAndParameters(
+        {{features::kQuietNotificationPrompts,
+          {{Config::kEnableAdaptiveActivation, "true"},
+           {Config::kEnableAbusiveRequestBlocking, "true"},
+           {Config::kEnableAbusiveRequestWarning, "true"},
+           {Config::kEnableAbusiveContentTriggeredRequestBlocking, "true"},
+           {Config::kEnableAbusiveContentTriggeredRequestWarning, "true"},
+           {Config::kEnableCrowdDenyTriggering, "true"},
+           {Config::kCrowdDenyHoldBackChance, test.holdback_chance}}}},
+        {});
 
     base::HistogramTester histograms;
     QueryAndExpectDecisionForUrl(GURL(kTestOriginSpammy),

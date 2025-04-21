@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include "services/network/public/mojom/cookie_manager.mojom-blink.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_cookie_change_event_init.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_cookie_list_item.h"
-#include "third_party/blink/renderer/core/dom/dom_time_stamp.h"
+#include "third_party/blink/renderer/core/dom/dom_high_res_time_stamp.h"
 #include "third_party/blink/renderer/modules/event_modules.h"
 #include "third_party/blink/renderer/platform/heap/visitor.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
@@ -90,7 +90,7 @@ CookieListItem* CookieChangeEvent::ToCookieListItem(
   list_item->setName(String::FromUTF8(canonical_cookie.Name()));
   list_item->setPath(String::FromUTF8(canonical_cookie.Path()));
 
-  list_item->setSecure(canonical_cookie.IsSecure());
+  list_item->setSecure(canonical_cookie.SecureAttribute());
   // Use effective same site if available, otherwise use same site.
   auto&& same_site = ToCookieListItemEffectiveSameSite(effective_same_site);
   if (same_site.IsNull())
@@ -109,14 +109,13 @@ CookieListItem* CookieChangeEvent::ToCookieListItem(
   if (!is_deleted) {
     list_item->setValue(String::FromUTF8(canonical_cookie.Value()));
     if (canonical_cookie.ExpiryDate().is_null()) {
-      list_item->setExpires(absl::nullopt);
+      list_item->setExpires(std::nullopt);
     } else {
-      list_item->setExpires(ConvertSecondsToDOMTimeStamp(
-          canonical_cookie.ExpiryDate().ToDoubleT()));
+      list_item->setExpires(
+          ConvertTimeToDOMHighResTimeStamp(canonical_cookie.ExpiryDate()));
     }
   }
 
-  list_item->setSameParty(canonical_cookie.IsSameParty());
   list_item->setPartitioned(canonical_cookie.IsPartitioned());
 
   return list_item;

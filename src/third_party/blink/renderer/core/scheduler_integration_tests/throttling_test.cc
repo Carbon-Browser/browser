@@ -1,5 +1,5 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
-// Use of this source code if governed by a BSD-style license that can be
+// Copyright 2017 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
 // found in LICENSE file.
 
 #include "base/numerics/safe_conversions.h"
@@ -8,7 +8,6 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/platform/platform.h"
-#include "third_party/blink/public/platform/scheduler/web_thread_scheduler.h"
 #include "third_party/blink/renderer/core/testing/sim/sim_request.h"
 #include "third_party/blink/renderer/core/testing/sim/sim_test.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread.h"
@@ -213,48 +212,6 @@ TEST_F(BackgroundPageThrottlingTest, NestedSetTimeoutZero) {
   EXPECT_THAT(FilteredConsoleMessages(), Vector<String>(5, console_message));
 }
 
-TEST_F(BackgroundPageThrottlingTest,
-       NestedSetTimeoutZero_MaxUnthrottledTimeoutNestingLevel) {
-  // Disable this test when setTimeoutWithoutClamp feature is enabled.
-  // TODO(crbug.com/1303275): Investigate the failure reason.
-  if (blink::features::IsSetTimeoutWithoutClampEnabled())
-    GTEST_SKIP() << "Skipping test for setTimeoutWithoutClamp feature enabled";
-
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitWithFeaturesAndParameters(
-      {{features::kMaxUnthrottledTimeoutNestingLevel, {{"nesting", "100"}}}},
-      {});
-
-  SimRequest main_resource("https://example.com/", "text/html");
-  LoadURL("https://example.com/");
-
-  const String console_message = BuildTimerConsoleMessage();
-  main_resource.Complete(
-      String::Format("<script>"
-                     "  function f(repetitions) {"
-                     "    if (repetitions == 0) return;"
-                     "    console.log('%s');"
-                     "    setTimeout(f, 0, repetitions - 1);"
-                     "  }"
-                     "  setTimeout(f, 0, 50);"
-                     "</script>",
-                     console_message.Utf8().c_str()));
-  GetDocument().GetPage()->GetPageScheduler()->SetPageVisible(false);
-
-  platform_->RunForPeriod(base::Milliseconds(1));
-  EXPECT_THAT(FilteredConsoleMessages(), Vector<String>(1, console_message));
-  platform_->RunForPeriod(base::Milliseconds(1));
-  EXPECT_THAT(FilteredConsoleMessages(), Vector<String>(2, console_message));
-  platform_->RunForPeriod(base::Milliseconds(1));
-  EXPECT_THAT(FilteredConsoleMessages(), Vector<String>(3, console_message));
-  platform_->RunForPeriod(base::Milliseconds(1));
-  EXPECT_THAT(FilteredConsoleMessages(), Vector<String>(4, console_message));
-  platform_->RunForPeriod(base::Milliseconds(995));
-  EXPECT_THAT(FilteredConsoleMessages(), Vector<String>(4, console_message));
-  platform_->RunForPeriod(base::Milliseconds(1));
-  EXPECT_THAT(FilteredConsoleMessages(), Vector<String>(5, console_message));
-}
-
 // Verify that in a hidden page, a timer created with setInterval(..., 0) is
 // throttled after 5 nesting levels.
 TEST_F(BackgroundPageThrottlingTest, NestedSetIntervalZero) {
@@ -353,7 +310,6 @@ class IntensiveWakeUpThrottlingTest : public ThrottlingTestBase {
   IntensiveWakeUpThrottlingTest() {
     scoped_feature_list_.InitWithFeaturesAndParameters(
         {{features::kIntensiveWakeUpThrottling, {}},
-         {features::kMaxUnthrottledTimeoutNestingLevel, {{"nesting", "100"}}},
          {features::kSetTimeoutWithoutClamp, {}}},
         // Disable freezing because it hides the effect of intensive throttling.
         {features::kStopInBackground});

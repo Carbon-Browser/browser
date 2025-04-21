@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/observer_list.h"
 #include "base/values.h"
 #include "components/invalidation/impl/channels_states.h"
@@ -22,6 +22,8 @@ class FCMSyncNetworkChannel {
  public:
   class Observer {
    public:
+    virtual ~Observer() = default;
+
     virtual void OnFCMChannelStateChanged(
         FcmChannelState invalidator_state) = 0;
   };
@@ -62,16 +64,9 @@ class FCMSyncNetworkChannel {
   void AddObserver(Observer* observer);
   void RemoveObserver(Observer* observer);
 
-  // Subclass should implement RequestDetailedStatus to provide debugging
-  // information.
-  virtual void RequestDetailedStatus(
-      const base::RepeatingCallback<void(base::Value::Dict)>& callback) = 0;
-
  protected:
   // Subclass should notify about connection state through
-  // NotifyChannelStateChange. If communication doesn't work and it is possible
-  // that invalidations from server will not reach this client then channel
-  // should call this function with TRANSIENT_INVALIDATION_ERROR.
+  // NotifyChannelStateChange.
   void NotifyChannelStateChange(FcmChannelState invalidator_state);
 
   // Subclass should call DeliverIncomingMessage for message to reach

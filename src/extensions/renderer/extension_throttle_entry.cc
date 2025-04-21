@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -161,7 +161,7 @@ const std::string& ExtensionThrottleEntry::GetURLIdForDebugging() const {
   return url_id_;
 }
 
-ExtensionThrottleEntry::~ExtensionThrottleEntry() {}
+ExtensionThrottleEntry::~ExtensionThrottleEntry() = default;
 
 void ExtensionThrottleEntry::Initialize() {
   sliding_window_release_time_ = base::TimeTicks::Now();

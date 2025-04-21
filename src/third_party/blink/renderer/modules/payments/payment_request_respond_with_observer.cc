@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,6 @@
 #include "third_party/blink/renderer/modules/payments/payments_validators.h"
 #include "third_party/blink/renderer/modules/service_worker/service_worker_global_scope.h"
 #include "third_party/blink/renderer/modules/service_worker/wait_until_observer.h"
-#include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "v8/include/v8.h"
 
@@ -49,23 +48,11 @@ void PaymentRequestRespondWithObserver::OnResponseRejected(
 
 void PaymentRequestRespondWithObserver::OnResponseFulfilled(
     ScriptState* script_state,
-    const ScriptValue& value,
-    const ExceptionContext& exception_context) {
+    PaymentHandlerResponse* response) {
   DCHECK(GetExecutionContext());
-  ExceptionState exception_state(script_state->GetIsolate(), exception_context);
-  PaymentHandlerResponse* response =
-      NativeValueTraits<PaymentHandlerResponse>::NativeValue(
-          script_state->GetIsolate(), value.V8Value(), exception_state);
-  if (exception_state.HadException()) {
-    exception_state.ClearException();
-    OnResponseRejected(mojom::ServiceWorkerResponseError::kNoV8Instance);
-    return;
-  }
-
   // Check payment response validity.
-  if (!response->hasMethodName() || response->methodName().IsEmpty() ||
-      !response->hasDetails() || response->details().IsNull() ||
-      !response->details().IsObject()) {
+  if (!response->hasMethodName() || response->methodName().empty() ||
+      !response->hasDetails()) {
     GetExecutionContext()->AddConsoleMessage(
         MakeGarbageCollected<ConsoleMessage>(
             mojom::ConsoleMessageSource::kJavaScript,
@@ -75,7 +62,7 @@ void PaymentRequestRespondWithObserver::OnResponseFulfilled(
             "be empty in payment response."));
   }
 
-  if (!response->hasMethodName() || response->methodName().IsEmpty()) {
+  if (!response->hasMethodName() || response->methodName().empty()) {
     BlankResponseWithError(PaymentEventResponseType::PAYMENT_METHOD_NAME_EMPTY);
     return;
   }
@@ -85,16 +72,9 @@ void PaymentRequestRespondWithObserver::OnResponseFulfilled(
     return;
   }
 
-  if (response->details().IsNull() || !response->details().IsObject() ||
-      response->details().IsEmpty()) {
-    BlankResponseWithError(
-        PaymentEventResponseType::PAYMENT_DETAILS_NOT_OBJECT);
-    return;
-  }
-
   v8::Local<v8::String> details_value;
   if (!v8::JSON::Stringify(script_state->GetContext(),
-                           response->details().V8Value().As<v8::Object>())
+                           response->details().V8Object())
            .ToLocal(&details_value)) {
     GetExecutionContext()->AddConsoleMessage(
         MakeGarbageCollected<ConsoleMessage>(
@@ -107,23 +87,23 @@ void PaymentRequestRespondWithObserver::OnResponseFulfilled(
     return;
   }
 
-  String details = ToCoreString(details_value);
-  DCHECK(!details.IsEmpty());
+  String details = ToCoreString(script_state->GetIsolate(), details_value);
+  DCHECK(!details.empty());
 
   String payer_name = response->hasPayerName() ? response->payerName() : "";
-  if (should_have_payer_name_ && payer_name.IsEmpty()) {
+  if (should_have_payer_name_ && payer_name.empty()) {
     BlankResponseWithError(PaymentEventResponseType::PAYER_NAME_EMPTY);
     return;
   }
 
   String payer_email = response->hasPayerEmail() ? response->payerEmail() : "";
-  if (should_have_payer_email_ && payer_email.IsEmpty()) {
+  if (should_have_payer_email_ && payer_email.empty()) {
     BlankResponseWithError(PaymentEventResponseType::PAYER_EMAIL_EMPTY);
     return;
   }
 
   String payer_phone = response->hasPayerPhone() ? response->payerPhone() : "";
-  if (should_have_payer_phone_ && payer_phone.IsEmpty()) {
+  if (should_have_payer_phone_ && payer_phone.empty()) {
     BlankResponseWithError(PaymentEventResponseType::PAYER_PHONE_EMPTY);
     return;
   }
@@ -139,7 +119,8 @@ void PaymentRequestRespondWithObserver::OnResponseFulfilled(
                                  : nullptr;
   if (should_have_shipping_info_) {
     if (!PaymentsValidators::IsValidShippingAddress(
-            shipping_address_ptr, nullptr /* = optional_error_message */)) {
+            script_state->GetIsolate(), shipping_address_ptr,
+            nullptr /* = optional_error_message */)) {
       BlankResponseWithError(
           PaymentEventResponseType::SHIPPING_ADDRESS_INVALID);
       return;
@@ -148,7 +129,7 @@ void PaymentRequestRespondWithObserver::OnResponseFulfilled(
 
   String selected_shipping_option_id =
       response->hasShippingOption() ? response->shippingOption() : "";
-  if (should_have_shipping_info_ && selected_shipping_option_id.IsEmpty()) {
+  if (should_have_shipping_info_ && selected_shipping_option_id.empty()) {
     BlankResponseWithError(PaymentEventResponseType::SHIPPING_OPTION_EMPTY);
     return;
   }

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -73,7 +73,7 @@ class InMemoryDownloadDriver : public DownloadDriver,
   void Remove(const std::string& guid, bool remove_file) override;
   void Pause(const std::string& guid) override;
   void Resume(const std::string& guid) override;
-  absl::optional<DriverEntry> Find(const std::string& guid) override;
+  std::optional<DriverEntry> Find(const std::string& guid) override;
   std::set<std::string> GetActiveDownloads() override;
   size_t EstimateMemoryUsage() const override;
 

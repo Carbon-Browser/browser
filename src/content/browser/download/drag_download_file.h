@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,6 +40,7 @@ class CONTENT_EXPORT DragDownloadFile : public ui::DownloadFileProvider {
                    const GURL& url,
                    const Referrer& referrer,
                    const std::string& referrer_encoding,
+                   std::optional<url::Origin> initiator_origin,
                    WebContents* web_contents);
 
   DragDownloadFile(const DragDownloadFile&) = delete;

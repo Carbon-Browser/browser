@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@ class COMPONENT_EXPORT(UI_BASE_DRAGDROP_TYPES) DragDropTypes {
  public:
   // These constants match their equivalents in NSDragOperation and
   // should not be renumbered.
-  // TODO(https://crbug.com/1093536): replace this enum with
+  // TODO(crbug.com/40135065): replace this enum with
   // ui::mojom::DragOperation.
   enum DragOperation {
     DRAG_NONE = 0,

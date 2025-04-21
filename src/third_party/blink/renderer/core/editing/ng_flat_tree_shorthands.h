@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 namespace blink {
 
-struct NGCaretPosition;
+struct InlineCaretPosition;
 class LayoutBlockFlow;
 
 // This file contains shorthands that converts FlatTree-variants of editing
@@ -18,7 +18,8 @@ class LayoutBlockFlow;
 
 const LayoutBlockFlow* NGInlineFormattingContextOf(const PositionInFlatTree&);
 
-NGCaretPosition ComputeNGCaretPosition(const PositionInFlatTreeWithAffinity&);
+InlineCaretPosition ComputeInlineCaretPosition(
+    const PositionInFlatTreeWithAffinity&);
 
 bool InSameNGLineBox(const PositionInFlatTreeWithAffinity&,
                      const PositionInFlatTreeWithAffinity&);

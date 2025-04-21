@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,14 @@
 
 #import <AppKit/AppKit.h>
 
+#include "components/remote_cocoa/app_shim/features.h"
 #include "components/remote_cocoa/app_shim/native_widget_ns_window_bridge.h"
 #include "components/remote_cocoa/common/native_widget_ns_window_host.mojom.h"
 
+namespace {
+// Workaround for https://crbug.com/1369643
+const double kThinControllerHeight = 0.5;
+}  // namespace
 @interface NSWindow (PrivateBrowserNativeWidgetAPI)
 + (Class)frameViewClassForStyleMask:(NSUInteger)windowStyle;
 @end
@@ -16,6 +21,7 @@
 @interface NSThemeFrame (PrivateBrowserNativeWidgetAPI)
 - (CGFloat)_titlebarHeight;
 - (void)setStyleMask:(NSUInteger)styleMask;
+- (void)setButtonRevealAmount:(double)amount;
 @end
 
 @interface BrowserWindowFrame : NativeWidgetMacNSWindowTitledFrame
@@ -23,6 +29,7 @@
 
 @implementation BrowserWindowFrame {
   BOOL _inFullScreen;
+  BOOL _alwaysShowTrafficLights;
 }
 
 // NSThemeFrame overrides.
@@ -31,16 +38,26 @@
   bool overrideTitlebarHeight = false;
   float titlebarHeight = 0;
 
-  if (!_inFullScreen) {
-    auto* window = base::mac::ObjCCast<NativeWidgetMacNSWindow>([self window]);
-    remote_cocoa::NativeWidgetNSWindowBridge* bridge = [window bridge];
-    if (bridge) {
-      bridge->host()->GetWindowFrameTitlebarHeight(&overrideTitlebarHeight,
-                                                   &titlebarHeight);
-    }
+  auto* window = base::apple::ObjCCast<NativeWidgetMacNSWindow>([self window]);
+  remote_cocoa::NativeWidgetNSWindowBridge* bridge = [window bridge];
+  if (!bridge) {
+    return [super _titlebarHeight];
   }
-  if (overrideTitlebarHeight)
+
+  // Ignore the overridden titlebar height when in fullscreen unless
+  // kImmersiveFullscreenTabs is enabled and the toolbar is visible. The
+  // toolbar is hidden during content fullscreen.
+  // In short the titlebar will be the same size during non-fullscreen and
+  // kImmersiveFullscreenTabs fullscreen. During content fullscreen the toolbar
+  // is hidden and the titlebar will be smaller default height.
+  if (!_inFullScreen || bridge->ShouldUseCustomTitlebarHeightForFullscreen()) {
+    bridge->host()->GetWindowFrameTitlebarHeight(&overrideTitlebarHeight,
+                                                 &titlebarHeight);
+  }
+
+  if (overrideTitlebarHeight) {
     return titlebarHeight;
+  }
   return [super _titlebarHeight];
 }
 
@@ -53,9 +70,39 @@
   return YES;
 }
 
+- (void)setButtonRevealAmount:(double)amount {
+  // Don't override the reveal amount sent to `super`. `-[NSThemeFrame
+  // setButtonRevealAmount:]` performs layout operations in addition to
+  // adjusting the visibility of the traffic lights. The layout changes are
+  // desired and should be left intact.
+  [super setButtonRevealAmount:amount];
+  if (amount == 1.0) {
+    return;
+  }
+
+  [self maybeShowTrafficLights];
+}
+
+- (void)setAlwaysShowTrafficLights:(BOOL)alwaysShow {
+  _alwaysShowTrafficLights = alwaysShow;
+  [self maybeShowTrafficLights];
+}
+
+- (void)maybeShowTrafficLights {
+  if (!_alwaysShowTrafficLights) {
+    return;
+  }
+  NSWindow* window = [self window];
+  [[window standardWindowButton:NSWindowCloseButton] setAlphaValue:1.0];
+  [[window standardWindowButton:NSWindowMiniaturizeButton] setAlphaValue:1.0];
+  [[window standardWindowButton:NSWindowZoomButton] setAlphaValue:1.0];
+}
+
 @end
 
 @implementation BrowserNativeWidgetWindow
+
+@synthesize thinTitlebarViewController = _thinTitlebarViewController;
 
 // NSWindow (PrivateAPI) overrides.
 
@@ -64,6 +111,51 @@
   if ([BrowserWindowFrame class])
     return [BrowserWindowFrame class];
   return [super frameViewClassForStyleMask:windowStyle];
+}
+
+- (instancetype)initWithContentRect:(NSRect)contentRect
+                          styleMask:(NSUInteger)windowStyle
+                            backing:(NSBackingStoreType)bufferingType
+                              defer:(BOOL)deferCreation {
+  if ((self = [super initWithContentRect:contentRect
+                               styleMask:windowStyle
+                                 backing:bufferingType
+                                   defer:deferCreation])) {
+    [NSNotificationCenter.defaultCenter
+        addObserver:self
+           selector:@selector(windowDidBecomeKey:)
+               name:NSWindowDidBecomeKeyNotification
+             object:nil];
+    if (base::FeatureList::IsEnabled(
+            remote_cocoa::features::kFullscreenPermanentThinController)) {
+      _thinTitlebarViewController =
+          [[NSTitlebarAccessoryViewController alloc] init];
+      NSView* thinView = [[NSView alloc] init];
+      thinView.wantsLayer = YES;
+      thinView.layer.backgroundColor = NSColor.blackColor.CGColor;
+      _thinTitlebarViewController.view = thinView;
+      _thinTitlebarViewController.layoutAttribute = NSLayoutAttributeBottom;
+      _thinTitlebarViewController.fullScreenMinHeight = kThinControllerHeight;
+      _thinTitlebarViewController.hidden = YES;
+      [self addTitlebarAccessoryViewController:_thinTitlebarViewController];
+    }
+  }
+  return self;
+}
+
+- (void)dealloc {
+  [NSNotificationCenter.defaultCenter removeObserver:self];
+}
+
+- (void)windowDidBecomeKey:(NSNotification*)notify {
+  // NSToolbarFullScreenWindow should never become the key window, otherwise
+  // the browser window will appear inactive. Activate the browser window
+  // when this happens.
+  NSWindow* toolbarWindow = notify.object;
+  if (toolbarWindow.parentWindow == self &&
+      remote_cocoa::IsNSToolbarFullScreenWindow(toolbarWindow)) {
+    [self makeKeyAndOrderFront:nil];
+  }
 }
 
 // The base implementation returns YES if the window's frame view is a custom
@@ -80,6 +172,11 @@
   remote_cocoa::NativeWidgetNSWindowBridge* bridge = [self bridge];
   if (bridge)
     bridge->host()->OnFocusWindowToolbar();
+}
+
+- (void)setAlwaysShowTrafficLights:(BOOL)alwaysShow {
+  [base::apple::ObjCCastStrict<BrowserWindowFrame>(self.contentView.superview)
+      setAlwaysShowTrafficLights:alwaysShow];
 }
 
 @end

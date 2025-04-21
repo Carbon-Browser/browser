@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,11 +10,9 @@
 #include "build/build_config.h"
 #include "chrome/browser/status_icons/status_icon_observer.h"
 
-StatusIcon::StatusIcon() {
-}
+StatusIcon::StatusIcon() = default;
 
-StatusIcon::~StatusIcon() {
-}
+StatusIcon::~StatusIcon() = default;
 
 void StatusIcon::AddObserver(StatusIconObserver* observer) {
   observers_.AddObserver(observer);
@@ -41,6 +39,11 @@ void StatusIcon::DispatchBalloonClickEvent() {
 #endif
 
 void StatusIcon::ForceVisible() {}
+
+#if BUILDFLAG(IS_MAC)
+void StatusIcon::SetOpenMenuWithSecondaryClick(
+    bool open_menu_with_secondary_click) {}
+#endif
 
 void StatusIcon::SetContextMenu(std::unique_ptr<StatusIconMenuModel> menu) {
   // The UI may been showing a menu for the current model, don't destroy it

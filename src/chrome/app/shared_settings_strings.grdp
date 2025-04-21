@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Settings-specific strings shared by Browser and Carbon BrowserOS settings -->
+<!-- Settings-specific strings shared by Browser and ChromeOS settings -->
 <grit-part>
   <!-- All subpages -->
-  <message name="IDS_SETTINGS_SUBPAGE_BACK_BUTTON_ARIA_LABEL" desc="Text read by screen readers when focusing on the back button. If the back button is activated, it will navigate to the previous page. This text will only be announced by Carbon BrowserVox and will not be visible in the UI.">
+  <message name="IDS_SETTINGS_SUBPAGE_BACK_BUTTON_ARIA_LABEL" desc="Text read by screen readers when focusing on the back button. If the back button is activated, it will navigate to the previous page. This text will only be announced by ChromeVox and will not be visible in the UI.">
     <ph name="SUBPAGE_TITLE">$1<ex>Bluetooth</ex></ph> subpage back button
   </message>
-  <message name="IDS_SETTINGS_SUBPAGE_BACK_BUTTON_ARIA_ROLE_DESCRIPTION" desc="Description read by screen readers when focusing on the back button. Indicates to the user that activating the back button will cause the settings page to navigate away from the currently displaying subpage to the previous visited page. This text will only be announced by Carbon BrowserVox and will not be visible in the UI.">
+  <message name="IDS_SETTINGS_SUBPAGE_BACK_BUTTON_ARIA_ROLE_DESCRIPTION" desc="Description read by screen readers when focusing on the back button. Indicates to the user that activating the back button will cause the settings page to navigate away from the currently displaying subpage to the previous visited page. This text will only be announced by ChromeVox and will not be visible in the UI.">
     Click to navigate away from <ph name="SUBPAGE_TITLE">$1<ex>Bluetooth</ex> subpage</ph>.
+  </message>
+  <message name="IDS_SETTINGS_SUBPAGE_LEARN_MORE_ARIA_LABEL" desc="Text read by screen readers when focusing the learn more icon button which corresponds to the subpage title. If the icon button is activated, an external page with the corresponding help article is opened. This text will only be announced by screen readers and will not be visible in the UI.">
+    Learn more about: <ph name="SUBPAGE_TITLE">$1<ex>Payment methods</ex></ph>
   </message>
 
   <!-- Caption Subpage (strings used by the <settings-captions> element) -->
@@ -91,10 +94,37 @@
   <message name="IDS_SETTINGS_CAPTIONS_DEFAULT_SETTING" desc="Name of the default setting for the caption text.">
     Default
   </message>
+  <message name="IDS_SETTINGS_CAPTIONS_LANGUAGE" desc="Name of the language setting for the caption text.">
+    Preferred caption language
+  </message>
+  <message name="IDS_SETTINGS_CAPTIONS_MANAGE_LANGUAGES_TITLE" desc="Name of the caption settings section for managing language packs.">
+    Supported Live Caption languages
+  </message>
+  <message name="IDS_SETTINGS_CAPTIONS_MANAGE_LANGUAGES_SUBTITLE" desc="Subtitle for the caption settings section for managing language packs.">
+    Chrome can create and translate captions for the languages shown here
+  </message>
+  <message name="IDS_SETTINGS_CAPTIONS_LIVE_TRANSLATE_TARGET_LANGUAGE" desc="Description of the target language setting for the Live Translate feature.">
+    Translate captions to
+  </message>
+  <message name="IDS_SETTINGS_CAPTIONS_LIVE_TRANSLATE_TARGET_LANGUAGE_SUBTITLE" desc="Description of the target language setting for the Live Translate feature.">
+    Only supported Live Caption languages can be translated
+  </message>
+  <message name="IDS_SETTINGS_CAPTIONS_REMOVE_LANGUAGE_LABEL" desc="Label for the button to remove a language pack.">
+    Remove
+  </message>
+  <message name="IDS_SETTINGS_CAPTIONS_MAKE_DEFAULT_LANGUAGE_LABEL" desc="Label for the button that makes a language pack the default language pack to use with Live Caption.">
+    Make default
+  </message>
+  <message name="IDS_SETTINGS_CAPTIONS_DEFAULT_LANGUAGE_LABEL" desc="Label indicating the default language pack to use with Live Caption.">
+    (default)
+  </message>
 
   <!-- Nearby Share -->
   <message name="IDS_SETTINGS_NEARBY_SHARE_TITLE" desc="Name of the settings page for the Nearby Share feature">
     Nearby Share
+  </message>
+  <message name="IDS_SETTINGS_NEARBY_SHARE_TITLE_PH" desc="Feature name placeholder: Name of the settings page for the sharing feature">
+    <ph name="FEATURE_NAME">$1<ex>Nearby Share</ex></ph>
   </message>
   <message name="IDS_SETTINGS_NEARBY_SHARE_SET_UP_BUTTON_TITLE" desc="Title of the button that lets the user set up and enable the Nearby Share feature for the first time.">
     Set up
@@ -121,7 +151,7 @@
     Show notification when devices are sharing nearby
   </message>
   <message name="IDS_SETTINGS_NEARBY_SHARE_DEVICE_NAME_ARIA_DESCRIPTION" desc="Description for screen readers, not displayed in UI, specifying the current device name which is shown to other devices for the Nearby Share feature." is_accessibility_with_no_ui="true">
-    Current device name is <ph name="DEVICE_NAME">$1<ex>Michael's Carbon Browserbook</ex></ph>
+    Current device name is <ph name="DEVICE_NAME">$1<ex>Michael's Chromebook</ex></ph>
   </message>
   <message name="IDS_SETTINGS_NEARBY_SHARE_CONFIRM_DEVICE_NAME" desc="Label for the button that allows a user to confirm their device name which is shown to other devices for the Nearby Share feature.">
     Rename
@@ -154,7 +184,7 @@
     May incur mobile data charges
   </message>
   <message name="IDS_SETTINGS_NEARBY_SHARE_DATA_USAGE_MOBILE_DATA_TOOLTIP" desc="Explanation of when the mobile data usage setting applies. When selected, Mobile data means that Wi-Fi or cell data may be used for transfers for the Nearby Share feature.">
-    This option applies to Carbon Browserbooks with a data plan or mobile network dongle, or when tethering to a portable hotspot
+    This option applies to Chromebooks with a data plan or mobile network dongle, or when tethering to a portable hotspot
   </message>
   <message name="IDS_SETTINGS_NEARBY_SHARE_DATA_USAGE_OFFLINE_LABEL" desc="Label for the data usage setting where transfers will only take place offline for the Nearby Share feature.">
     Without internet
@@ -184,7 +214,7 @@
     Save
   </message>
   <message name="IDS_SETTINGS_NEARBY_SHARE_DESCRIPTION" desc="A description of nearby share that helps users understand what the feature is used for.">
-    Share files with people around you. <ph name="LINK_BEGIN">&lt;a&gt;</ph>Learn more<ph name="LINK_END">&lt;/a&gt;</ph>
+    Share files and more with nearby devices. <ph name="LINK_BEGIN">&lt;a&gt;</ph>Learn more<ph name="LINK_END">&lt;/a&gt;</ph>
   </message>
   <message name="IDS_SETTINGS_NEARBY_SHARE_HIGH_VISIBILITY_TITLE" desc="Label for the switch that toggles whether the device is visible to all devices around it for the Nearby Share feature.">
     Visible to everyone
@@ -206,29 +236,35 @@
   <message name="IDS_SETTINGS_SPELLING_PREF" desc="The documentation string of the 'Use Spelling' preference">
     Enhanced spell check
   </message>
-  <message name="IDS_SETTINGS_SUGGEST_PREF" desc="The documentation string of the 'Use Suggest' preference">
-    Autocomplete searches and URLs
+  <message name="IDS_SETTINGS_ENABLE_LOGGING_PREF" desc="The label of the checkbox to enable/disable crash and user metrics logging. This string does not need a Chromium counter-part because it will only be visible if Google-branded.">
+    Help improve Chrome's features and performance
   </message>
-  <message name="IDS_SETTINGS_SUGGEST_PREF_DESC" desc="The description of the 'Use Suggest' preference">
-    Sends some cookies and searches from the address bar and search box to your default search engine
-  </message>
-  <message name="IDS_SETTINGS_ENABLE_LOGGING_PREF" desc="The label of the checkbox to enable/disable crash and user metrics logging. This string does not need a Carbon Browser counter-part because it will only be visible if Google-branded.">
-    Help improve Carbon Browser's features and performance
-  </message>
-  <message name="IDS_SETTINGS_ENABLE_LOGGING_PREF_DESC" desc="The description of the checkbox to enable/disable crash and user metrics logging">
-    Automatically sends usage statistics and crash reports to Google
-  </message>
+  <if expr="is_fuchsia">
+    <then>
+      <message name="IDS_SETTINGS_ENABLE_LOGGING_PREF_DESC" desc="The description of the checkbox to enable/disable crash and user metrics logging">
+        Automatically sends usage statistics to Google. You can turn crash reports on or off in your device's settings.
+      </message>
+    </then>
+    <else>
+      <message name="IDS_SETTINGS_ENABLE_LOGGING_PREF_DESC" desc="The description of the checkbox to enable/disable crash and user metrics logging">
+        Automatically sends usage statistics and crash reports to Google
+      </message>
+    </else>
+  </if>
   <message name="IDS_SETTINGS_LINKDOCTOR_PREF" desc="The documentation string of the 'Use Link Doctor' preference to help with navigation errors.">
     Show suggestions for similar pages when a page can't be found
   </message>
   <message name="IDS_SETTINGS_LINKDOCTOR_PREF_DESC" desc="The description of the 'Use Link Doctor' preference to help with navigation errors.">
     Sends the web address of the page you're trying to reach to Google
   </message>
-  <message name="IDS_DRIVE_SUGGEST_PREF" desc="The documentation string of the 'Show Drive Results in Omnibox' preference - short description">
-    Google Drive search suggestions
+  <message name="IDS_SETTINGS_SUGGEST_PREF" desc="The label of the checkbox to enable/disable sending omnibox input to the user's default search engine to get additional suggestions.">
+    Improve search suggestions
   </message>
 
   <!-- Sync Accounts page (used by the <settings-sync-account-control> element) -->
+  <message name="IDS_SETTINGS_PEOPLE_SIGNED_IN_TO_ACCOUNT" desc="The text displayed to the user that the profile is currently signed in to a specific account.">
+    Signed in to <ph name="EMAIL">$1<ex>abcd@google.com</ex></ph>
+  </message>
   <message name="IDS_SETTINGS_PEOPLE_SYNCING_TO_ACCOUNT" desc="The text displayed to the user that the profile is currently syncing to a specific account.">
     Syncing to <ph name="EMAIL">$1<ex>abcd@google.com</ex></ph>
   </message>
@@ -236,7 +272,7 @@
     Sync is paused
   </message>
   <message name="IDS_SETTINGS_PEOPLE_SIGN_IN_PROMPT" desc="The text displayed to prompt users to sign in to chrome.">
-    Get Google smarts in Carbon Browser
+    Get Google smarts in Chrome
   </message>
   <message name="IDS_SETTINGS_PEOPLE_SYNC_TURN_OFF" desc="The label for the button that lets the user turn off profile syncing with their gaia account.">
     Turn off
@@ -259,12 +295,30 @@
   <message name="IDS_SETTINGS_PEOPLE_SYNC_ANOTHER_ACCOUNT" desc="The label for the button that lets the user choose another account to sync with.">
     Use another account
   </message>
+  <message name="IDS_SETTINGS_TURN_ON_SYNC_BUTTON_UPDATE_SETTINGS_UI_ENABLED" desc="Label of the button in the settings page to turn on Sync.">
+    Turn on Sync
+  </message>
+  <message name="IDS_SETTINGS_ACCOUNT_AWARE_SIGNIN_BUTTON_LABEL" desc="Label of the button shown in the settings page to sign in when users are signed in the web only ">
+     Continue as <ph name="EMAIL">$1<ex>johndoe@gmail.com</ex></ph>
+  </message>
+  <message name="IDS_SETTINGS_PEOPLE_ACCOUNT_AWARE_SIGNIN_ACCOUNT_ROW_SUBTITLE" desc="The subtitle of the avatar row shown to users who are signed in only to the web">
+      Sign in to get your passwords and more on all your devices
+  </message>
+  <message name="IDS_SETTINGS_ERROR_PASSWORDS_USER_ERROR_DESCRIPTION" desc="Error description of the sync/signin error header the settings page.">
+  To use and save passwords in your Google Account, verify it's you
+  </message>
+  <message name="IDS_SETTINGS_ERROR_RECOVERABILITY_DEGRADED_FOR_PASSWORDS_USER_ERROR_DESCRIPTION" desc="Error description of a sync error header of desktop settings page that prompts the user to add recovery options.">
+  To make sure you can always use the passwords in your Google Account, verify it's you
+  </message>
+   <message name="IDS_SETTINGS_PEOPLE_ACCOUNT_AWARE_SIGNIN_ACCOUNT_ROW_SUBTITLE_WITH_EMAIL" desc="The subtitle of the avatar row shown to users who are signed in only to the web">
+      To get your passwords and more on all your devices, sign in as <ph name="EMAIL">$1<ex>johndoe@gmail.com</ex></ph>
+  </message>
 
   <!-- Signout Subpage (strings used by the <settings-signout-dialog> element) -->
   <message name="IDS_SETTINGS_SYNC_DISCONNECT_CONFIRM" desc="The text to display on the button to confirm the user wishes to stop syncing.">
-    Clear and Sign Out
+    Delete and Sign Out
   </message>
-  <message name="IDS_SETTINGS_PEOPLE_SIGN_OUT" desc="The label of the button that lets user sign-out of Carbon Browser.">
+  <message name="IDS_SETTINGS_PEOPLE_SIGN_OUT" desc="The label of the button that lets user sign-out of Chrome.">
     Sign out
   </message>
   <!-- Sync Control Subpage (strings used by the <settings-sync-controls> element) -->
@@ -280,6 +334,12 @@
   <message name="IDS_SETTINGS_OPEN_TABS_CHECKBOX_LABEL" desc="Label for the checkbox which enables or disables syncing open tabs between multiple browser instances.">
     Open tabs
   </message>
+  <message name="IDS_SETTINGS_SAVED_TAB_GROUPS_CHECKBOX_LABEL" desc="Label for the checkbox which enables or disables syncing saved tab groups between multiple browser instances.">
+    Saved tab groups
+  </message>
+  <message name="IDS_SETTINGS_PRODUCT_COMPARISONS_CHECKBOX_LABEL" desc="Label for the checkbox which enables or disables syncing comparison tables between multiple browser instances.">
+    Comparison tables
+  </message>
   <message name="IDS_SETTINGS_WIFI_CONFIGURATIONS_CHECKBOX_LABEL" desc="Label for the checkbox which enables syncing of Wi-Fi networks across devices.">
     Wi-Fi networks
   </message>
@@ -288,6 +348,9 @@
   </message>
   <message name="IDS_SETTINGS_APPS_CHECKBOX_LABEL" desc="Label for the checkbox which enables or disables syncing apps between multiple browser instances.">
     Apps
+  </message>
+  <message name="IDS_SETTINGS_APPS_CHECKBOX_SUBLABEL" desc="Sublabel for the checkbox which enables or disables syncing apps between multiple browser instances.">
+    Apps sync is set in device Settings
   </message>
   <message name="IDS_SETTINGS_NON_PERSONALIZED_SERVICES_SECTION_LABEL" desc="Title for a section that shows options for various Google services">
     Other Google services
@@ -300,8 +363,8 @@
   </message>
 
   <!-- Sync page (strings used by the <settings-sync-page> element) -->
-  <message name="IDS_SETTINGS_PASSWORDS_CHECKBOX_LABEL" desc="Label for the checkbox which enables or disables syncing passwords between multiple browser instances.">
-    Passwords
+  <message name="IDS_SETTINGS_PASSWORDS_AND_PASSKEYS_CHECKBOX_LABEL" desc="Label for the checkbox which enables or disables syncing passwords and passkey metadata (i.e. their username and sites) between multiple browser instances. See the glossary for a definition of 'passkey', do not translate 'passkey' as 'password'.">
+    Passwords and passkeys
   </message>
   <message name="IDS_SETTINGS_PASSPHRASE_PLACEHOLDER" desc="Placeholder for the passphrase field.">
     Passphrase
@@ -333,8 +396,20 @@
   <message name="IDS_SETTINGS_INCORRECT_PASSPHRASE_ERROR" desc="Message when the passphrase is incorrect.">
     The passphrase you entered is incorrect
   </message>
-  <message name="IDS_SETTINGS_NEW_MANAGE_SYNCED_DATA_TITLE_UNIFIED_CONSENT" desc="Title for the link to manage Carbon Browser Sync data via Google Dashboard when unified consent is enabled.">
+  <message name="IDS_SETTINGS_NEW_MANAGE_SYNCED_DATA_TITLE_UNIFIED_CONSENT" desc="Title for the link to manage Chrome Sync data via Google Dashboard when unified consent is enabled.">
     Review your synced data
+  </message>
+  <message name="IDS_SETTINGS_NEW_SYNC_ADVANCED_DEVICE_PAGE_TITLE" desc="Name of the settings page which manages device data used by sync when lacros is enabled." >
+    Manage device sync
+  </message>
+  <message name="IDS_SETTINGS_NEW_SYNC_ADVANCED_BROWSER_PAGE_TITLE" desc="Name of the settings page which manages browser data used by sync when lacros is enabled." >
+    Manage browser sync
+  </message>
+  <message name="IDS_SETTINGS_NEW_MANAGE_SYNCED_DATA_SUBTITLE_UNIFIED_CONSENT" desc="Subtitle for the link to manage Chrome Sync data via Google Dashboard when unified consent is enabled.">
+    Across your apps and Chrome browser
+  </message>
+  <message name="IDS_SETTINGS_NEW_MANAGE_BROWSER_SYNCED_DATA_TITLE" desc="Title for the link to manage Chrome Browser Sync data via browser settings.">
+    Manage Chrome browser sync
   </message>
   <message name="IDS_SETTINGS_SYNC_SYNC_AND_NON_PERSONALIZED_SERVICES" desc="The name of the settings page and the label of the button that takes the user to manage their sync and non-personalized services settings.">
     Sync and Google services
@@ -360,29 +435,22 @@
   <message name="IDS_SETTINGS_SYNC_SETUP_CANCEL_DIALOG_BODY" desc="The body text of the dialog to confirm the sync cancellation.">
     You can turn on sync anytime in settings
   </message>
-    <if expr="chromeos_ash">
-    <!-- TODO(crbug.com/1231500): Remove this string after Lacros side-by-side rollout stage. -->
-    <message name="IDS_SYNC_SETTINGS_SIDE_BY_SIDE_WARNING_ASH" desc="The warning message that is shown when lacros side-by-side mode is enabled.">
-      Changes you make here apply only to Carbon Browser Browser. To make changes to your Lacros Carbon Browser Browser settings, open Lacros Carbon Browser Browser and go to settings.
-    </message>
-  </if>
 
-  <if expr="chromeos_lacros">
-    <!-- TODO(crbug.com/1231500): Remove this string after Lacros side-by-side rollout stage. -->
-    <message name="IDS_SYNC_SETTINGS_SIDE_BY_SIDE_WARNING_LACROS" desc="The warning message that is shown when lacros side-by-side mode is enabled.">
-      Changes you make here apply only to Lacros Carbon Browser Browser. To make changes to your Carbon Browser Browser settings, open Carbon Browser Browser and go to settings.
-    </message>
-  </if>
-
-  <if expr="chromeos_ash or chromeos_lacros">
+  <if expr="is_chromeos">
     <message name="IDS_BROWSER_SETTINGS_SYNC_FEATURE_LABEL" desc="Label describing the browser sync feature.">
-      Your data will be synced across all Carbon Browser browsers where you have turned on sync for this account. For Carbon BrowserOS sync options, go to <ph name="LINK_BEGIN">&lt;a&gt;</ph>Carbon BrowserOS settings<ph name="LINK_END">&lt;/a&gt;</ph>.
+      Your data will be synced across all Chrome browsers where you have turned on sync for this account. For ChromeOS sync options, go to <ph name="LINK_BEGIN">&lt;a&gt;</ph>ChromeOS settings<ph name="LINK_END">&lt;/a&gt;</ph>.
+    </message>
+    <message name="IDS_SETTINGS_COOKIES_CHECKBOX_LABEL" desc="Label for the checkbox which enables or disables syncing cookies between multiple browser instances.">
+      Cookies
     </message>
   </if>
 
   <!-- About Subpage-->
   <message name="IDS_SETTINGS_ABOUT_UPGRADE_CHECK_STARTED" desc="Status label: About to start checking for updates">
     Checking for updates
+  </message>
+  <message name="IDS_SETTINGS_UPDATE_TO_ROLLBACK_VERSION_DISALLOWED" desc="Status label: After a consumer rollback, updating to the previously installed version just rolledback from is disallowed (ChromiumOS/ChromeOS)">
+    You reverted to a previous version of ChromeOS. To get updates, wait until the next version is available.
   </message>
 
   <if expr="chromeos_ash">
@@ -395,7 +463,7 @@
   </message>
 
   <!-- Password Prompt Dialog -->
-  <if expr="chromeos_ash or chromeos_lacros">
+  <if expr="is_chromeos">
     <message name="IDS_SETTINGS_PEOPLE_PASSWORD_PROMPT_TITLE" desc="Title of the password prompt dialog popup.">
       Confirm your password
     </message>

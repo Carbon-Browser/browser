@@ -1,15 +1,21 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/base/multi_channel_resampler.h"
 
 #include <algorithm>
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/numerics/safe_conversions.h"
 #include "media/base/audio_bus.h"
 
 namespace media {
@@ -39,7 +45,7 @@ MultiChannelResampler::MultiChannelResampler(int channels,
     resampler_audio_bus_ = AudioBus::Create(channels - 1, request_size);
     for (int i = 0; i < resampler_audio_bus_->channels(); ++i) {
       wrapped_resampler_audio_bus_->SetChannelData(
-          i + 1, resampler_audio_bus_->channel(i));
+          i + 1, resampler_audio_bus_->channel_span(i));
     }
   }
 }
@@ -89,7 +95,8 @@ void MultiChannelResampler::ProvideInput(int channel,
   // for it.  For subsequent channels, we can just dish out the channel data
   // from that (stored in |resampler_audio_bus_|).
   if (channel == 0) {
-    wrapped_resampler_audio_bus_->SetChannelData(0, destination);
+    wrapped_resampler_audio_bus_->SetChannelData(
+        0, base::span(destination, base::checked_cast<size_t>(frames)));
     read_cb_.Run(output_frames_ready_, wrapped_resampler_audio_bus_.get());
   } else {
     // All channels must ask for the same amount.  This should always be the
@@ -132,6 +139,11 @@ void MultiChannelResampler::PrimeWithSilence() {
   DCHECK(!resamplers_.empty());
   for (size_t i = 0; i < resamplers_.size(); ++i)
     resamplers_[i]->PrimeWithSilence();
+}
+
+int MultiChannelResampler::KernelSize() const {
+  DCHECK(!resamplers_.empty());
+  return resamplers_[0]->KernelSize();
 }
 
 }  // namespace media

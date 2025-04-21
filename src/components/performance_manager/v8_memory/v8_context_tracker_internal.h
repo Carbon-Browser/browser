@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,8 +16,8 @@
 #include "base/containers/linked_list.h"
 #include "base/memory/raw_ptr.h"
 #include "base/types/pass_key.h"
-#include "components/performance_manager/graph/node_attached_data_impl.h"
 #include "components/performance_manager/graph/process_node_impl.h"
+#include "components/performance_manager/public/graph/node_attached_data.h"
 #include "components/performance_manager/public/mojom/v8_contexts.mojom.h"
 #include "components/performance_manager/v8_memory/v8_context_tracker.h"
 #include "components/performance_manager/v8_memory/v8_context_tracker_helpers.h"
@@ -118,7 +118,7 @@ class ExecutionContextData : public base::LinkNode<ExecutionContextData>,
  private:
   const raw_ptr<ProcessData> process_data_;
 
-  raw_ptr<RemoteFrameData, DanglingUntriaged> remote_frame_data_ = nullptr;
+  raw_ptr<RemoteFrameData> remote_frame_data_ = nullptr;
 
   // The count of V8ContextDatas keeping this object alive.
   size_t v8_context_count_ = 0;
@@ -166,8 +166,7 @@ class RemoteFrameData : public base::LinkNode<RemoteFrameData> {
  private:
   const raw_ptr<ProcessData> process_data_;
   const blink::RemoteFrameToken token_;
-  const raw_ptr<ExecutionContextData, DanglingUntriaged>
-      execution_context_data_;
+  raw_ptr<ExecutionContextData> execution_context_data_;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -226,10 +225,8 @@ class V8ContextData : public base::LinkNode<V8ContextData>,
 ////////////////////////////////////////////////////////////////////////////////
 // ProcessData declaration:
 
-class ProcessData : public NodeAttachedDataImpl<ProcessData> {
+class ProcessData : public ExternalNodeAttachedDataImpl<ProcessData> {
  public:
-  struct Traits : public NodeAttachedDataInMap<ProcessNodeImpl> {};
-
   using PassKey = base::PassKey<ProcessData>;
 
   explicit ProcessData(const ProcessNodeImpl* process_node);

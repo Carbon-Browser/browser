@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define CHROME_BROWSER_ASH_ARC_INSTANCE_THROTTLE_ARC_PROVISIONING_THROTTLE_OBSERVER_H_
 
 #include "chrome/browser/ash/arc/session/arc_session_manager_observer.h"
-#include "chrome/browser/ash/throttle_observer.h"
+#include "chromeos/ash/components/throttle/throttle_observer.h"
 
 namespace content {
 class BrowserContext;

@@ -1,19 +1,21 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/file_manager/volume_manager_factory.h"
 
-#include "ash/components/disks/disk_mount_manager.h"
-#include "base/bind.h"
-#include "base/memory/singleton.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/ash/drive/drive_integration_service.h"
 #include "chrome/browser/ash/file_manager/volume_manager.h"
 #include "chrome/browser/ash/file_system_provider/service_factory.h"
+#include "chrome/browser/ash/policy/skyvault/local_files_migration_manager.h"
 #include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/common/chrome_features.h"
+#include "chromeos/ash/components/disks/disk_mount_manager.h"
 #include "chromeos/dbus/power/power_manager_client.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/storage_monitor/storage_monitor.h"
 
 namespace file_manager {
@@ -24,13 +26,8 @@ VolumeManager* VolumeManagerFactory::Get(content::BrowserContext* context) {
 }
 
 VolumeManagerFactory* VolumeManagerFactory::GetInstance() {
-  return base::Singleton<VolumeManagerFactory>::get();
-}
-
-content::BrowserContext* VolumeManagerFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  // Explicitly allow this manager in guest login mode.
-  return chrome::GetBrowserContextOwnInstanceInIncognito(context);
+  static base::NoDestructor<VolumeManagerFactory> instance;
+  return instance.get();
 }
 
 bool VolumeManagerFactory::ServiceIsCreatedWithBrowserContext() const {
@@ -41,10 +38,11 @@ bool VolumeManagerFactory::ServiceIsNULLWhileTesting() const {
   return true;
 }
 
-KeyedService* VolumeManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+VolumeManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* const profile = Profile::FromBrowserContext(context);
-  VolumeManager* instance = new VolumeManager(
+  std::unique_ptr<VolumeManager> instance = std::make_unique<VolumeManager>(
       profile, drive::DriveIntegrationServiceFactory::GetForProfile(profile),
       chromeos::PowerManagerClient::Get(),
       ash::disks::DiskMountManager::GetInstance(),
@@ -55,11 +53,21 @@ KeyedService* VolumeManagerFactory::BuildServiceInstanceFor(
 }
 
 VolumeManagerFactory::VolumeManagerFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "VolumeManagerFactory",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              .WithGuest(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/41488885): Check if this service is needed for
+              // Ash Internals.
+              .WithAshInternals(ProfileSelection::kRedirectedToOriginal)
+              .Build()) {
   DependsOn(drive::DriveIntegrationServiceFactory::GetInstance());
   DependsOn(ash::file_system_provider::ServiceFactory::GetInstance());
+  if (base::FeatureList::IsEnabled(features::kSkyVaultV2)) {
+    DependsOn(policy::local_user_files::LocalFilesMigrationManagerFactory::
+                  GetInstance());
+  }
 }
 
 VolumeManagerFactory::~VolumeManagerFactory() = default;

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,8 @@ AppWindowEasyResizeWindowTargeter::AppWindowEasyResizeWindowTargeter(
     : wm::EasyResizeWindowTargeter(insets, insets),
       native_app_window_(native_app_window) {}
 
-AppWindowEasyResizeWindowTargeter::~AppWindowEasyResizeWindowTargeter() {}
+AppWindowEasyResizeWindowTargeter::~AppWindowEasyResizeWindowTargeter() =
+    default;
 
 bool AppWindowEasyResizeWindowTargeter::GetHitTestRects(
     aura::Window* window,
@@ -23,8 +24,9 @@ bool AppWindowEasyResizeWindowTargeter::GetHitTestRects(
   // window. Since maximized and fullscreen windows can't be resized anyway,
   // skip EasyResizeWindowTargeter so that the web contents receive all mouse
   // events.
-  if (native_app_window_->IsMaximized() || native_app_window_->IsFullscreen())
+  if (native_app_window_->IsMaximized() || native_app_window_->IsFullscreen()) {
     return WindowTargeter::GetHitTestRects(window, rect_mouse, rect_touch);
+  }
 
   return EasyResizeWindowTargeter::GetHitTestRects(window, rect_mouse,
                                                    rect_touch);

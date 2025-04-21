@@ -1,11 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/ozone/platform/x11/x11_window.h"
+#include "base/memory/raw_ptr.h"
 
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
@@ -22,9 +24,10 @@
 #include "ui/events/test/events_test_utils_x11.h"
 #include "ui/gfx/geometry/transform.h"
 #include "ui/gfx/native_widget_types.h"
-#include "ui/gfx/x/x11_atom_cache.h"
+#include "ui/gfx/x/atom_cache.h"
+#include "ui/gfx/x/connection.h"
 #include "ui/gfx/x/xproto.h"
-#include "ui/gfx/x/xproto_util.h"
+#include "ui/ozone/test/mock_platform_window_delegate.h"
 #include "ui/platform_window/extensions/x11_extension_delegate.h"
 
 namespace ui {
@@ -32,6 +35,8 @@ namespace ui {
 namespace {
 
 constexpr int kPointerDeviceId = 1;
+
+using BoundsChange = PlatformWindowDelegate::BoundsChange;
 
 class TestPlatformWindowDelegate : public PlatformWindowDelegate {
  public:
@@ -44,10 +49,11 @@ class TestPlatformWindowDelegate : public PlatformWindowDelegate {
   gfx::AcceleratedWidget widget() const { return widget_; }
   PlatformWindowState state() const { return state_; }
 
-  void WaitForBoundsSet(const gfx::Rect& expected_bounds) {
-    if (changed_bounds_ == expected_bounds)
+  void WaitForBoundsChange(
+      const PlatformWindowDelegate::BoundsChange& expected_change) {
+    if (expected_change_ == expected_change)
       return;
-    expected_bounds_ = expected_bounds;
+    expected_change_ = expected_change;
     base::RunLoop run_loop;
     quit_closure_ = run_loop.QuitClosure();
     run_loop.Run();
@@ -56,8 +62,9 @@ class TestPlatformWindowDelegate : public PlatformWindowDelegate {
   // PlatformWindowDelegate:
   void OnBoundsChanged(
       const PlatformWindowDelegate::BoundsChange& change) override {
-    changed_bounds_ = change.bounds;
-    if (!quit_closure_.is_null() && changed_bounds_ == expected_bounds_)
+    changed_ = change;
+    size_px_ = window_->GetBoundsInPixels().size();
+    if (!quit_closure_.is_null() && changed_ == expected_change_)
       std::move(quit_closure_).Run();
   }
   void OnDamageRect(const gfx::Rect& damaged_region) override {}
@@ -80,8 +87,8 @@ class TestPlatformWindowDelegate : public PlatformWindowDelegate {
   void OnMouseEnter() override {}
   SkPath GetWindowMaskForWindowShapeInPixels() override {
     SkPath window_mask;
-    int right = changed_bounds_.width();
-    int bottom = changed_bounds_.height();
+    int right = size_px_.width();
+    int bottom = size_px_.height();
 
     window_mask.moveTo(0, 0);
     window_mask.lineTo(0, bottom);
@@ -93,11 +100,15 @@ class TestPlatformWindowDelegate : public PlatformWindowDelegate {
     return window_mask;
   }
 
+  void set_window(X11Window* window) { window_ = window; }
+
  private:
+  raw_ptr<X11Window> window_ = nullptr;
   gfx::AcceleratedWidget widget_ = gfx::kNullAcceleratedWidget;
   PlatformWindowState state_ = PlatformWindowState::kUnknown;
-  gfx::Rect changed_bounds_;
-  gfx::Rect expected_bounds_;
+  PlatformWindowDelegate::BoundsChange changed_{false};
+  gfx::Size size_px_;
+  PlatformWindowDelegate::BoundsChange expected_change_{false};
 
   // Ends the run loop.
   base::OnceClosure quit_closure_;
@@ -143,8 +154,10 @@ class WMStateWaiter : public X11PropertyChangeWaiter {
   // X11PropertyChangeWaiter:
   bool ShouldKeepOnWaiting() override {
     std::vector<x11::Atom> hints;
-    if (GetArrayProperty(xwindow(), x11::GetAtom("_NET_WM_STATE"), &hints))
+    if (x11::Connection::Get()->GetArrayProperty(
+            xwindow(), x11::GetAtom("_NET_WM_STATE"), &hints)) {
       return base::Contains(hints, x11::GetAtom(hint_)) != wait_till_set_;
+    }
     return true;
   }
 
@@ -191,9 +204,8 @@ bool ShapeRectContainsPoint(const std::vector<gfx::Rect>& shape_rects,
                             int x,
                             int y) {
   gfx::Point point(x, y);
-  return std::any_of(
-      shape_rects.cbegin(), shape_rects.cend(),
-      [&point](const auto& rect) { return rect.Contains(point); });
+  return base::ranges::any_of(
+      shape_rects, [&point](const auto& rect) { return rect.Contains(point); });
 }
 
 }  // namespace
@@ -255,7 +267,7 @@ class X11WindowTest : public testing::Test {
   std::unique_ptr<base::test::TaskEnvironment> task_env_;
   std::unique_ptr<X11EventSource> event_source_;
 
-  absl::optional<TestScreen> test_screen_;
+  std::optional<TestScreen> test_screen_;
 };
 
 // https://crbug.com/898742: Test is flaky.
@@ -270,6 +282,7 @@ TEST_F(X11WindowTest, DISABLED_Shape) {
   ShapedX11ExtensionDelegate x11_extension_delegate;
   constexpr gfx::Rect bounds(100, 100, 100, 100);
   auto window = CreateX11Window(&delegate, bounds, &x11_extension_delegate);
+  delegate.set_window(window.get());
   window->Show(false);
 
   const x11::Window x11_window = window->window();
@@ -311,7 +324,8 @@ TEST_F(X11WindowTest, DISABLED_Shape) {
     EXPECT_FALSE(ShapeRectContainsPoint(shape_rects, 205, 15));
   }
 
-  if (WmSupportsHint(x11::GetAtom("_NET_WM_STATE_MAXIMIZED_VERT"))) {
+  if (connection->WmSupportsHint(
+          x11::GetAtom("_NET_WM_STATE_MAXIMIZED_VERT"))) {
     // The shape should be changed to a rectangle which fills the entire screen
     // when |widget1| is maximized.
     {
@@ -392,16 +406,17 @@ TEST_F(X11WindowTest, DISABLED_Shape) {
 // Test that the widget reacts on changes in fullscreen state initiated by the
 // window manager (e.g. via a window manager accelerator key).
 TEST_F(X11WindowTest, MAYBE_WindowManagerTogglesFullscreen) {
-  if (!WmSupportsHint(x11::GetAtom("_NET_WM_STATE_FULLSCREEN")))
-    return;
-
   auto* connection = x11::Connection::Get();
+  if (!connection->WmSupportsHint(x11::GetAtom("_NET_WM_STATE_FULLSCREEN"))) {
+    return;
+  }
 
   TestPlatformWindowDelegate delegate;
   ShapedX11ExtensionDelegate x11_extension_delegate;
   constexpr gfx::Rect bounds(100, 100, 100, 100);
   x11_extension_delegate.set_guessed_bounds(bounds);
   auto window = CreateX11Window(&delegate, bounds, &x11_extension_delegate);
+  delegate.set_window(window.get());
   x11::Window x11_window = window->window();
   window->Show(false);
 
@@ -412,7 +427,7 @@ TEST_F(X11WindowTest, MAYBE_WindowManagerTogglesFullscreen) {
   gfx::Rect initial_bounds = window->GetBoundsInPixels();
   {
     WMStateWaiter waiter(x11_window, "_NET_WM_STATE_FULLSCREEN", true);
-    window->ToggleFullscreen();
+    window->SetFullscreen(true, display::kInvalidDisplayId);
     waiter.Wait();
   }
   EXPECT_EQ(window->GetPlatformWindowState(), PlatformWindowState::kFullScreen);
@@ -432,7 +447,7 @@ TEST_F(X11WindowTest, MAYBE_WindowManagerTogglesFullscreen) {
   // Ensure it continues in browser fullscreen mode and bounds are restored to
   // |initial_bounds|.
   EXPECT_EQ(window->GetPlatformWindowState(), PlatformWindowState::kFullScreen);
-  delegate.WaitForBoundsSet(initial_bounds);
+  delegate.WaitForBoundsChange({false});
   EXPECT_EQ(initial_bounds, window->GetBoundsInPixels());
 
   // Emulate window resize (through X11 configure events) while in browser
@@ -448,18 +463,18 @@ TEST_F(X11WindowTest, MAYBE_WindowManagerTogglesFullscreen) {
     base::RunLoop().RunUntilIdle();
   }
   EXPECT_EQ(window->GetPlatformWindowState(), PlatformWindowState::kFullScreen);
-  delegate.WaitForBoundsSet(initial_bounds);
+  delegate.WaitForBoundsChange({false});
   EXPECT_EQ(initial_bounds, window->GetBoundsInPixels());
 
   // Calling Widget::SetFullscreen(false) should clear the widget's fullscreen
   // state and clean things up.
-  window->ToggleFullscreen();
+  window->SetFullscreen(false, display::kInvalidDisplayId);
   EXPECT_NE(window->GetPlatformWindowState(), PlatformWindowState::kFullScreen);
-  delegate.WaitForBoundsSet(initial_bounds);
+  delegate.WaitForBoundsChange({false});
   EXPECT_EQ(initial_bounds, window->GetBoundsInPixels());
 }
 
-// TODO(crbug.com/1294066): Flaky on both Linux and ChromeOS.
+// TODO(crbug.com/40820331): Flaky on both Linux and ChromeOS.
 // Tests that the minimization information is propagated to the
 // PlatformWindowDelegate.
 TEST_F(X11WindowTest,
@@ -467,6 +482,7 @@ TEST_F(X11WindowTest,
   TestPlatformWindowDelegate delegate;
   constexpr gfx::Rect bounds(10, 10, 100, 100);
   auto window = CreateX11Window(&delegate, bounds, nullptr);
+  delegate.set_window(window.get());
   window->Show(false);
   window->Activate();
 
@@ -480,7 +496,7 @@ TEST_F(X11WindowTest,
 
     SendClientMessage(x11_window, GetX11RootWindow(),
                       x11::GetAtom("WM_CHANGE_STATE"),
-                      {WM_STATE_ICONIC, 0, 0, 0, 0});
+                      {x11::WM_STATE_ICONIC, 0, 0, 0, 0});
     // Wait till set.
     WMStateWaiter waiter(x11_window, "_NET_WM_STATE_HIDDEN", true);
     waiter.Wait();
@@ -492,7 +508,7 @@ TEST_F(X11WindowTest,
   {
     SendClientMessage(x11_window, GetX11RootWindow(),
                       x11::GetAtom("WM_CHANGE_STATE"),
-                      {WM_STATE_NORMAL, 0, 0, 0, 0});
+                      {x11::WM_STATE_NORMAL, 0, 0, 0, 0});
     // Wait till unset.
     WMStateWaiter waiter(x11_window, "_NET_WM_STATE_HIDDEN", false);
     waiter.Wait();

@@ -28,7 +28,6 @@ Jos <ph name="SERVICE_SCRIPT_NAME" /> on jo valittuna, poista valinta ja valitse
 <translation id="2329392777730037872"><ph name="URL" /> ei avaudu asiakassovelluksessa.</translation>
 <translation id="2359808026110333948">Jatka</translation>
 <translation id="2366718077645204424">Isäntään ei saatu yhteyttä. Tämä johtuu luultavasti käyttämäsi verkon määrityksistä.</translation>
-<translation id="2370754117186920852"><ph name="OPTIONAL_OFFLINE_REASON" />  Havaittiin verkossa viimeksi <ph name="RELATIVE_TIMESTAMP" />.</translation>
 <translation id="2504109125669302160">Myönnä Esteettömyys-käyttölupa: <ph name="PRODUCT_NAME" /></translation>
 <translation id="2509394361235492552">Yhdistetty isäntään <ph name="HOSTNAME" /></translation>
 <translation id="2540992418118313681">Haluatko jakaa tämän tietokoneen niin, että toinen käyttäjä voi käyttää ja valvoa sitä?</translation>
@@ -36,7 +35,6 @@ Jos <ph name="SERVICE_SCRIPT_NAME" /> on jo valittuna, poista valinta ja valitse
 <translation id="2599300881200251572">Tämä palvelu mahdollistaa Chrome-etäkäytön asiakkaiden muodostamat yhteydet.</translation>
 <translation id="2647232381348739934">Chromoting-palvelu</translation>
 <translation id="2676780859508944670">Käsitellään…</translation>
-<translation id="2692522824157224199">Copyright 2022 Google LLC. Kaikki oikeudet pidätetään.</translation>
 <translation id="2699970397166997657">Chromoting</translation>
 <translation id="2758123043070977469">Todennusvirhe – kirjaudu uudelleen sisään.</translation>
 <translation id="2803375539583399270">Lisää PIN-koodi</translation>
@@ -54,7 +52,6 @@ Jos <ph name="SERVICE_SCRIPT_NAME" /> on jo valittuna, poista valinta ja valitse
 <translation id="3423542133075182604">Suojausavaimen etäkäyttöprosessi</translation>
 <translation id="3581045510967524389">Verkkoon yhdistäminen ei onnistu. Varmista, että laitteesi on online-tilassa.</translation>
 <translation id="3596628256176442606">Tämä palvelu mahdollistaa Chromoting-asiakkaiden muodostamat yhteydet.</translation>
-<translation id="369442766917958684">Offline.</translation>
 <translation id="3695446226812920698">Lisätietoja</translation>
 <translation id="3776024066357219166">Chrome-etäkäyttökerta on päättynyt.</translation>
 <translation id="3858860766373142691">Nimi</translation>
@@ -73,7 +70,6 @@ Jos <ph name="SERVICE_SCRIPT_NAME" /> on jo valittuna, poista valinta ja valitse
 <translation id="4257751272692708833">URL-osoitteen välittäjä: <ph name="PRODUCT_NAME" /></translation>
 <translation id="4277736576214464567">Käyttökoodi on virheellinen. Yritä uudelleen.</translation>
 <translation id="4281844954008187215">Käyttöehdot</translation>
-<translation id="4372650392690220936">Copyright 2022 The Chromium Authors. Kaikki oikeudet pidätetään.</translation>
 <translation id="4405930547258349619">Ydinkirjasto</translation>
 <translation id="443560535555262820">Avaa esteettömyysasetukset</translation>
 <translation id="4450893287417543264">Älä näytä uudelleen</translation>
@@ -107,7 +103,6 @@ Jos <ph name="SERVICE_SCRIPT_NAME" /> on jo valittuna, poista valinta ja valitse
 <translation id="5601503069213153581">PIN-koodi</translation>
 <translation id="5690427481109656848">Google LLC</translation>
 <translation id="5708869785009007625">Tietokoneesi on jaettu käyttäjän <ph name="USER" /> kanssa.</translation>
-<translation id="5750083143895808682">Kirjautunut osoitteella <ph name="EMAIL_ADDRESS" /></translation>
 <translation id="579702532610384533">Yhdistä uudelleen</translation>
 <translation id="5810269635982033450">Näyttö toimii ohjauslevynä</translation>
 <translation id="5823554426827907568"><ph name="CLIENT_USERNAME" /> on pyytänyt lupaa nähdä näyttösi ja ohjata näppäimistöäsi ja hiirtäsi. Paina ''<ph name="IDS_SHARE_CONFIRM_DIALOG_DECLINE" />'', jos et odottanut tätä pyyntöä. Muussa tapauksessa voit sallia yhteyden valitsemalla ''<ph name="IDS_SHARE_CONFIRM_DIALOG_CONFIRM" />'', kun olet valmis.</translation>
@@ -154,6 +149,7 @@ Jos <ph name="SERVICE_SCRIPT_NAME" /> on jo valittuna, poista valinta ja valitse
 <translation id="7693372326588366043">Päivitä isäntäluettelo</translation>
 <translation id="7714222945760997814">Tee ilmoitus</translation>
 <translation id="7868137160098754906">Anna etätietokoneen PIN-koodi.</translation>
+<translation id="7881455334687220899">Tekijänoikeudet 2024: The Chromium Authors. Kaikki oikeudet pidätetään.</translation>
 <translation id="7895403300744144251">Etätietokoneen suojauskäytännöt eivät salli tililtäsi saapuvia yhteyksiä.</translation>
 <translation id="7936528439960309876">Kiinnitä oikealle</translation>
 <translation id="7970576581263377361">Todennus epäonnistui. Kirjaudu Chromiumiin uudelleen.</translation>
@@ -185,6 +181,7 @@ Jos <ph name="SERVICE_SCRIPT_NAME" /> on jo valittu, poista valinta ja valitse s
 <translation id="8747048596626351634">Istunto kaatui tai sen käynnistäminen epäonnistui. Jos ~/.chrome-remote-desktop-session on olemassa etätietokoneella, varmista, että se käynnistää pitkäkestoisen etualaprosessin, esim. työpöytäympäristön tai ikkunanhallinnan.</translation>
 <translation id="8804164990146287819">Tietosuojakäytäntö</translation>
 <translation id="8906511416443321782">Audion tallennus ja sen striimaus Chrome-etäkäyttösovellukseen edellyttävät mikrofonin käyttöoikeuksia.</translation>
+<translation id="9042277333359847053">Tekijänoikeudet 2024: Google LLC. Kaikki oikeudet pidätetään.</translation>
 <translation id="9111855907838866522">Olet yhteydessä etälaitteeseesi. Avaa valikko koskettamalla näyttöä neljällä sormella.</translation>
 <translation id="9126115402994542723">Älä kysy PIN-koodia uudelleen yhdistettäessä tähän isäntään tältä laitteelta.</translation>
 <translation id="916856682307586697">Käynnistä XSession-oletuskäyttökerta</translation>

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@
 #define TRACE_RENDERER_EXTENSION_EVENT(event_name, extension_id)              \
   TRACE_EVENT("extensions", event_name,                                       \
               perfetto::protos::pbzero::ChromeTrackEvent::kRenderProcessHost, \
-              *content::RenderThread::Get(),                                  \
+              content::RenderThread::Get(),                                   \
               perfetto::protos::pbzero::ChromeTrackEvent::kChromeExtensionId, \
               ExtensionIdForTracing(extension_id))
 

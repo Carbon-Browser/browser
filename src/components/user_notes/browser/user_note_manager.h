@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,7 +38,7 @@ class UserNoteManager : public content::PageUserData<UserNoteManager> {
 
   mojo::Remote<blink::mojom::AnnotationAgentContainer>& note_agent_container() {
     return note_agent_container_;
-  };
+  }
 
   // Returns the note instance for the given ID, or nullptr if this page does
   // not have an instance of that note.
@@ -81,7 +81,7 @@ class UserNoteManager : public content::PageUserData<UserNoteManager> {
   base::SafeRef<UserNoteService> service_;
 
   // The list of note instances displayed in this page, mapped by their note ID.
-  // TODO(crbug.com/1313967): Holding the instances in an ID -> Instance map
+  // TODO(crbug.com/40832588): Holding the instances in an ID -> Instance map
   // works while only top-level frames are supported, but won't always work if
   // subframes are supported. For example, if website A has notes and website B
   // embeds website A multiple times via iframes, then there will be multiple

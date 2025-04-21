@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -72,7 +72,7 @@ class ActivityLogPrivateGetExtensionActivitiesFunction
                              ACTIVITYLOGPRIVATE_GETEXTENSIONACTIVITIES)
 
  protected:
-  ~ActivityLogPrivateGetExtensionActivitiesFunction() override {}
+  ~ActivityLogPrivateGetExtensionActivitiesFunction() override = default;
 
   // ExtensionFunction:
   ResponseAction Run() override;
@@ -89,7 +89,7 @@ class ActivityLogPrivateDeleteActivitiesFunction : public ExtensionFunction {
                              ACTIVITYLOGPRIVATE_DELETEACTIVITIES)
 
  protected:
-  ~ActivityLogPrivateDeleteActivitiesFunction() override {}
+  ~ActivityLogPrivateDeleteActivitiesFunction() override = default;
 
   // ExtensionFunction:
   ResponseAction Run() override;
@@ -103,7 +103,7 @@ class ActivityLogPrivateDeleteActivitiesByExtensionFunction
                              ACTIVITYLOGPRIVATE_DELETEACTIVITIESBYEXTENSION)
 
  protected:
-  ~ActivityLogPrivateDeleteActivitiesByExtensionFunction() override {}
+  ~ActivityLogPrivateDeleteActivitiesByExtensionFunction() override = default;
 
   // ExtensionFunction:
   ResponseAction Run() override;
@@ -116,7 +116,7 @@ class ActivityLogPrivateDeleteDatabaseFunction : public ExtensionFunction {
                              ACTIVITYLOGPRIVATE_DELETEDATABASE)
 
  protected:
-  ~ActivityLogPrivateDeleteDatabaseFunction() override {}
+  ~ActivityLogPrivateDeleteDatabaseFunction() override = default;
 
   // ExtensionFunction:
   ResponseAction Run() override;
@@ -129,7 +129,7 @@ class ActivityLogPrivateDeleteUrlsFunction : public ExtensionFunction {
                              ACTIVITYLOGPRIVATE_DELETEURLS)
 
  protected:
-  ~ActivityLogPrivateDeleteUrlsFunction() override {}
+  ~ActivityLogPrivateDeleteUrlsFunction() override = default;
 
   // ExtensionFunction:
   ResponseAction Run() override;

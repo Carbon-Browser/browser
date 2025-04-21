@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CC_TILES_TILE_TASK_MANAGER_H_
 
 #include <stddef.h>
+#include <memory>
 
 #include "base/memory/raw_ptr.h"
 #include "cc/raster/raster_buffer_provider.h"
@@ -28,6 +29,9 @@ class CC_EXPORT TileTaskManager {
   // tasks are guaranteed to run.
   virtual void ScheduleTasks(TaskGraph* graph) = 0;
 
+  // Signals that an external dependency of `task` has completed.
+  virtual void ExternalDependencyCompletedForTask(scoped_refptr<TileTask>) = 0;
+
   // Check for completed tasks and call OnTaskCompleted() on them.
   virtual void CheckForCompletedTasks() = 0;
 
@@ -43,17 +47,25 @@ class CC_EXPORT TileTaskManagerImpl : public TileTaskManager {
   TileTaskManagerImpl& operator=(const TileTaskManagerImpl&) = delete;
 
   static std::unique_ptr<TileTaskManagerImpl> Create(
-      TaskGraphRunner* task_graph_runner);
+      TaskGraphRunner* task_graph_runner,
+      base::RepeatingCallback<void(scoped_refptr<TileTask>)>
+          notify_external_dependent);
 
   // Overridden from TileTaskManager:
   void ScheduleTasks(TaskGraph* graph) override;
+  void ExternalDependencyCompletedForTask(scoped_refptr<TileTask>) override;
   void CheckForCompletedTasks() override;
   void Shutdown() override;
 
- protected:
-  explicit TileTaskManagerImpl(TaskGraphRunner* task_graph_runner);
+ private:
+  explicit TileTaskManagerImpl(
+      TaskGraphRunner* task_graph_runner,
+      base::RepeatingCallback<void(scoped_refptr<TileTask>)>
+          notify_external_dependent);
 
   raw_ptr<TaskGraphRunner> task_graph_runner_;
+  base::RepeatingCallback<void(scoped_refptr<TileTask>)>
+      notify_external_dependent_;
   const NamespaceToken namespace_token_;
 };
 

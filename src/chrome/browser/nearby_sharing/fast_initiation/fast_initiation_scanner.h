@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
@@ -63,7 +63,7 @@ class FastInitiationScanner
   // device::BluetoothLowEnergyScanSession::Delegate:
   void OnSessionStarted(
       device::BluetoothLowEnergyScanSession* scan_session,
-      absl::optional<device::BluetoothLowEnergyScanSession::ErrorCode>
+      std::optional<device::BluetoothLowEnergyScanSession::ErrorCode>
           error_code) override;
   void OnDeviceFound(device::BluetoothLowEnergyScanSession* scan_session,
                      device::BluetoothDevice* device) override;

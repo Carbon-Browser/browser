@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 
 #include <map>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "content/common/content_export.h"
 #include "ppapi/c/pp_stdint.h"  // For int64_t on Windows.
 #include "ppapi/shared_impl/file_growth.h"
@@ -85,7 +86,8 @@ class CONTENT_EXPORT QuotaReservation
 
   scoped_refptr<storage::FileSystemContext> file_system_context_;
   scoped_refptr<storage::QuotaReservation> quota_reservation_;
-  typedef std::map<int32_t, storage::OpenFileHandle*> FileMap;
+  typedef std::map<int32_t, raw_ptr<storage::OpenFileHandle, CtnExperimental>>
+      FileMap;
   FileMap files_;
 };
 

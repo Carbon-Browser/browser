@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,7 @@ class ServiceManager;
 // slightly more convenient than simply running your own background thread and
 // instantiating ServiceManager there yourself.
 //
-// TODO(https://crbug.com/904240): Consider deleting this class since it has
+// TODO(crbug.com/40601935): Consider deleting this class since it has
 // such limited use and is trivial to replicate.
 class BackgroundServiceManager {
  public:

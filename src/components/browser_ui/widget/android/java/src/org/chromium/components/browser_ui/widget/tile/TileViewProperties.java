@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 package org.chromium.components.browser_ui.widget.tile;
@@ -64,7 +64,18 @@ public final class TileViewProperties {
             ON_CREATE_CONTEXT_MENU = new WritableObjectPropertyKey<>();
 
     public static final PropertyKey[] ALL_KEYS =
-            new PropertyKey[] {ICON, ICON_TINT, TITLE, TITLE_LINES, BADGE_VISIBLE, SHOW_LARGE_ICON,
-                    SMALL_ICON_ROUNDING_RADIUS, CONTENT_DESCRIPTION, ON_FOCUS_VIA_SELECTION,
-                    ON_CLICK, ON_LONG_CLICK, ON_CREATE_CONTEXT_MENU};
+            new PropertyKey[] {
+                ICON,
+                ICON_TINT,
+                TITLE,
+                TITLE_LINES,
+                BADGE_VISIBLE,
+                SHOW_LARGE_ICON,
+                SMALL_ICON_ROUNDING_RADIUS,
+                CONTENT_DESCRIPTION,
+                ON_FOCUS_VIA_SELECTION,
+                ON_CLICK,
+                ON_LONG_CLICK,
+                ON_CREATE_CONTEXT_MENU
+            };
 }

@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -19,8 +19,6 @@ blink_modules_sources("webdatabase") {
     "database_context.cc",
     "database_context.h",
     "database_error.h",
-    "database_manager.cc",
-    "database_manager.h",
     "database_task.cc",
     "database_task.h",
     "database_thread.cc",

@@ -1,14 +1,15 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UPGRADE_DETECTOR_BUILD_STATE_H_
 #define CHROME_BROWSER_UPGRADE_DETECTOR_BUILD_STATE_H_
 
+#include <optional>
+
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
 #include "base/version.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class BuildStateObserver;
 
@@ -16,6 +17,7 @@ class BuildStateObserver;
 // all access must take place on the UI thread.
 class BuildState {
  public:
+  // Logged as BuildStateUpdateType. Do not reorder or remove entries.
   enum class UpdateType {
     // No new version ready for use.
     kNone = 0,
@@ -29,6 +31,9 @@ class BuildState {
     // Rollback to an older version via a switch to a more stable channel.
     // (Chrome OS only.)
     kChannelSwitchRollback = 3,
+
+    // Needed for UMA - can be removed if BuildStateUpdateType is removed.
+    kMaxValue = kChannelSwitchRollback,
   };
 
   BuildState();
@@ -49,7 +54,7 @@ class BuildState {
   // value may be numerically higher or lower than the currently running build.
   // Note: On Chrome OS, this is the system version number rather than the
   // browser version number.
-  const absl::optional<base::Version>& installed_version() const {
+  const std::optional<base::Version>& installed_version() const {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     return installed_version_;
   }
@@ -57,7 +62,7 @@ class BuildState {
   // If update_type() is not kNone, returns the optional critical version,
   // indicating a minimum version that must be running. A running version lower
   // than this must be updated as soon as possible. (Windows only.)
-  const absl::optional<base::Version>& critical_version() const {
+  const std::optional<base::Version>& critical_version() const {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     return critical_version_;
   }
@@ -66,7 +71,7 @@ class BuildState {
   // differ from the instance's previous properties.
   void SetUpdate(UpdateType update_type,
                  const base::Version& installed_version,
-                 const absl::optional<base::Version>& critical_version);
+                 const std::optional<base::Version>& critical_version);
 
   void AddObserver(BuildStateObserver* observer);
   void RemoveObserver(const BuildStateObserver* observer);
@@ -78,8 +83,8 @@ class BuildState {
   SEQUENCE_CHECKER(sequence_checker_);
   base::ObserverList<BuildStateObserver, /*check_empty=*/true> observers_;
   UpdateType update_type_ = UpdateType::kNone;
-  absl::optional<base::Version> installed_version_;
-  absl::optional<base::Version> critical_version_;
+  std::optional<base::Version> installed_version_;
+  std::optional<base::Version> critical_version_;
 };
 
 #endif  // CHROME_BROWSER_UPGRADE_DETECTOR_BUILD_STATE_H_

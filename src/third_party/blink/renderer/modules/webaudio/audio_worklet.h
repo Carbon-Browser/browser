@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,7 +44,7 @@ class MODULES_EXPORT AudioWorklet final : public Worklet {
   // Returns `nullptr` if there is no active `WorkletGlobalScope()`.
   AudioWorkletMessagingProxy* GetMessagingProxy();
 
-  const Vector<CrossThreadAudioParamInfo> GetParamInfoListForProcessor(
+  Vector<CrossThreadAudioParamInfo> GetParamInfoListForProcessor(
       const String& name);
 
   bool IsProcessorRegistered(const String& name);

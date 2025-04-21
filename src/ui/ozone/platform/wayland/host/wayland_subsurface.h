@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "base/containers/linked_list.h"
 #include "base/memory/raw_ptr.h"
+#include "third_party/abseil-cpp/absl/types/variant.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/ozone/platform/wayland/common/wayland_object.h"
 #include "ui/ozone/platform/wayland/host/wayland_surface.h"
@@ -42,18 +43,23 @@ class WaylandSubsurface : public base::LinkNode<WaylandSubsurface> {
   //   |reference_below| & |reference_above|: this subsurface is taken from the
   //     subsurface stack and inserted back to be immediately below/above the
   //     reference subsurface.
-  void ConfigureAndShowSurface(const gfx::RectF& bounds_px,
-                               const gfx::RectF& parent_bounds_px,
-                               float buffer_scale,
-                               WaylandSubsurface* reference_below,
-                               WaylandSubsurface* reference_above);
+  // Returns whether or not changes require a commit to the wl_surface.
+  bool ConfigureAndShowSurface(
+      const gfx::RectF& bounds_px,
+      const gfx::RectF& parent_bounds_px,
+      float buffer_scale,
+      WaylandSubsurface* reference_below,
+      WaylandSubsurface* reference_above);
 
   // Assigns wl_subsurface role to the wl_surface so it is visible when a
   // wl_buffer is attached.
-  void Show();
-  // Remove wl_subsurface role to make this invisible.
+  // Returns whether or not changes require a commit to the wl_surface.
+  bool Show();
+  // Remove this from the stack to make this invisible.
   void Hide();
   bool IsVisible() const;
+  // Reset the subsurface objects.
+  void ResetSubsurface();
 
  private:
   // Helper of Show(). It does the role-assigning to wl_surface.
@@ -61,13 +67,14 @@ class WaylandSubsurface : public base::LinkNode<WaylandSubsurface> {
 
   WaylandSurface wayland_surface_;
   wl::Object<wl_subsurface> subsurface_;
-  wl::Object<augmented_sub_surface> augmented_subsurface_;
   gfx::PointF position_dip_;
+  std::optional<gfx::RectF> clip_dip_;
 
   const raw_ptr<WaylandConnection> connection_;
   // |parent_| refers to the WaylandWindow whose wl_surface is the parent to
   // this subsurface.
-  const raw_ptr<WaylandWindow> parent_;
+  const raw_ptr<WaylandWindow, AcrossTasksDanglingUntriaged> parent_;
+  bool visible_ = false;
 };
 
 }  // namespace ui

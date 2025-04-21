@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -167,7 +167,8 @@ TEST(ChannelReaderTest, TrimBuffer) {
     EXPECT_GE(reader.input_overflow_buf_.capacity(), message.size());
 
     // Write and process payload
-    reader.AppendData(message.payload(), message.payload_size());
+    reader.AppendData(message.payload_bytes().data(),
+                      message.payload_bytes().size());
     EXPECT_EQ(ChannelReader::DISPATCH_FINISHED,
               reader.ProcessIncomingMessages());
 

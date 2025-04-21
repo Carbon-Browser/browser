@@ -47,21 +47,33 @@ class HTMLDocumentParser;
 
 class HTMLTreeBuilder final : public GarbageCollected<HTMLTreeBuilder> {
  public:
-  // HTMLTreeBuilder can be created for non-HTMLDocument (XHTMLDocument) from
-  // editing code.
-  // TODO(kouhei): Fix editing code to always invoke HTML parser on
-  // HTMLDocument.
+  // This constructor is used for main document parsing.
+  // TODO(kouhei): HTMLTreeBuilder can be created for non-HTMLDocument
+  // (XHTMLDocument) from editing code. Fix editing code to always invoke HTML
+  // parser on HTMLDocument.
   HTMLTreeBuilder(HTMLDocumentParser*,
                   Document&,
                   ParserContentPolicy,
                   const HTMLParserOptions&,
                   bool include_shadow_roots);
+  // This constructor is used for fragment parsing.
   HTMLTreeBuilder(HTMLDocumentParser*,
                   DocumentFragment*,
                   Element* context_element,
                   ParserContentPolicy,
                   const HTMLParserOptions&,
                   bool include_shadow_roots);
+
+ private:
+  HTMLTreeBuilder(HTMLDocumentParser*,
+                  Document&,
+                  ParserContentPolicy,
+                  const HTMLParserOptions&,
+                  bool include_shadow_roots,
+                  DocumentFragment* for_fragment,
+                  Element* fragment_context_element);
+
+ public:
   HTMLTreeBuilder(const HTMLTreeBuilder&) = delete;
   HTMLTreeBuilder& operator=(const HTMLTreeBuilder&) = delete;
   ~HTMLTreeBuilder();
@@ -77,11 +89,18 @@ class HTMLTreeBuilder final : public GarbageCollected<HTMLTreeBuilder> {
     return IsParsingFragment() || IsParsingTemplateContents();
   }
 
+  void SetDOMPartsAllowedState(DOMPartsAllowed state) {
+    DCHECK(RuntimeEnabledFeatures::DOMPartsAPIEnabled());
+    tree_.SetDOMPartsAllowedState(state);
+  }
+
   void Detach();
 
   void ConstructTree(AtomicHTMLToken*);
 
-  bool HasParserBlockingScript() const { return !!script_to_process_; }
+  ALWAYS_INLINE bool HasParserBlockingScript() const {
+    return !!script_to_process_;
+  }
   // Must be called to take the parser-blocking script before calling the parser
   // again.
   Element* TakeScriptToProcess(TextPosition& script_start_position);
@@ -91,7 +110,7 @@ class HTMLTreeBuilder final : public GarbageCollected<HTMLTreeBuilder> {
 
   // Synchronously flush pending text and queued tasks, possibly creating more
   // DOM nodes. Flushing pending text depends on |mode|.
-  void Flush(FlushMode mode) { tree_.Flush(mode); }
+  void Flush() { tree_.Flush(); }
 
   void SetShouldSkipLeadingNewline(bool should_skip) {
     should_skip_leading_newline_ = should_skip;
@@ -126,7 +145,7 @@ class HTMLTreeBuilder final : public GarbageCollected<HTMLTreeBuilder> {
     kAfterAfterBodyMode,
     kAfterAfterFramesetMode,
   };
-#ifndef DEBUG
+#ifndef NDEBUG
   static const char* ToString(InsertionMode);
 #endif
 
@@ -138,6 +157,7 @@ class HTMLTreeBuilder final : public GarbageCollected<HTMLTreeBuilder> {
   void ProcessComment(AtomicHTMLToken*);
   void ProcessCharacter(AtomicHTMLToken*);
   void ProcessEndOfFile(AtomicHTMLToken*);
+  void ProcessDOMPart(AtomicHTMLToken*);
 
   bool ProcessStartTagForInHead(AtomicHTMLToken*);
   void ProcessStartTagForInBody(AtomicHTMLToken*);
@@ -162,10 +182,10 @@ class HTMLTreeBuilder final : public GarbageCollected<HTMLTreeBuilder> {
   inline void ProcessCharacterBufferForInBody(CharacterTokenBuffer&);
 
   void ProcessFakeStartTag(
-      const QualifiedName&,
+      html_names::HTMLTag tag,
       const Vector<Attribute>& attributes = Vector<Attribute>());
-  void ProcessFakeEndTag(const QualifiedName&);
-  void ProcessFakeEndTag(const AtomicString&);
+  void ProcessFakeEndTag(html_names::HTMLTag tag);
+  void ProcessFakeEndTag(const HTMLStackItem& stack_item);
   void ProcessFakePEndTagIfPInButtonScope();
 
   void ProcessGenericRCDATAStartTag(AtomicHTMLToken*);
@@ -212,7 +232,7 @@ class HTMLTreeBuilder final : public GarbageCollected<HTMLTreeBuilder> {
     FragmentParsingContext& operator=(const FragmentParsingContext&) = delete;
     void Init(DocumentFragment*, Element* context_element);
 
-    DocumentFragment* Fragment() const { return fragment_; }
+    DocumentFragment* Fragment() const { return fragment_.Get(); }
     Element* ContextElement() const {
       DCHECK(fragment_);
       return context_element_stack_item_->GetElement();
@@ -230,10 +250,6 @@ class HTMLTreeBuilder final : public GarbageCollected<HTMLTreeBuilder> {
   };
 
   // https://html.spec.whatwg.org/C/#frameset-ok-flag
-  bool frameset_ok_;
-#if DCHECK_IS_ON()
-  bool is_attached_ = true;
-#endif
   FragmentParsingContext fragment_context_;
   HTMLConstructionSite tree_;
 
@@ -251,6 +267,11 @@ class HTMLTreeBuilder final : public GarbageCollected<HTMLTreeBuilder> {
   bool should_skip_leading_newline_;
 
   const bool include_shadow_roots_;
+
+  bool frameset_ok_;
+#if DCHECK_IS_ON()
+  bool is_attached_ = true;
+#endif
 
   // We access parser because HTML5 spec requires that we be able to change the
   // state of the tokenizer from within parser actions. We also need it to track

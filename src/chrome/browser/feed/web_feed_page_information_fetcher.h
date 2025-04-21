@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/metrics/histogram_functions.h"
@@ -46,7 +46,7 @@ class WebFeedPageInformationFetcher
   ~WebFeedPageInformationFetcher();
 
   void CallCallbackIfReady();
-  void OnCanonicalUrlFetched(const absl::optional<::GURL>& url);
+  void OnCanonicalUrlFetched(const std::optional<::GURL>& url);
   void OnRssFetched(std::vector<GURL> rss_urls);
 
   WebFeedPageInformation page_info_;

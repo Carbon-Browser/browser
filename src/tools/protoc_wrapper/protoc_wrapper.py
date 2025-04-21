@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -86,6 +86,9 @@ def main(argv):
                       help="Output directory for standard Python generator.")
   parser.add_argument("--js-out-dir",
                       help="Output directory for standard JS generator.")
+  parser.add_argument("--protoc-gen-js",
+                      help="Relative path to javascript compiler.")
+
   parser.add_argument("--plugin-out-dir",
                       help="Output directory for custom generator plugin.")
 
@@ -94,10 +97,6 @@ def main(argv):
                       'codesearch.')
   parser.add_argument("--plugin",
                       help="Relative path to custom generator plugin.")
-  #   TODO(crbug.com/1237958): Remove allow_optional when proto rolls to 3.15.
-  parser.add_argument("--allow-optional",
-                      action='store_true',
-                      help="Enables experimental_allow_proto3_optional.")
   parser.add_argument("--plugin-options",
                       help="Custom generator plugin options.")
   parser.add_argument("--cc-options",
@@ -138,7 +137,8 @@ def main(argv):
   if options.js_out_dir:
     protoc_cmd += [
         "--js_out",
-        "one_output_file_per_input_file,binary:" + options.js_out_dir
+        "one_output_file_per_input_file,binary:" + options.js_out_dir,
+        "--plugin=protoc-gen-js=" + os.path.realpath(options.protoc_gen_js),
     ]
 
   if options.cc_out_dir:
@@ -155,9 +155,6 @@ def main(argv):
     if options.cc_options:
       cc_options_list.append(options.cc_options)
 
-    if options.allow_optional:
-      protoc_cmd += ["--experimental_allow_proto3_optional"]
-
     cc_options = FormatGeneratorOptions(','.join(cc_options_list))
     protoc_cmd += ["--cpp_out", cc_options + cc_out_dir]
     for filename in protos:
@@ -173,7 +170,11 @@ def main(argv):
 
   protoc_cmd += ["--proto_path", proto_dir]
   for path in options.import_dir:
-    protoc_cmd += ["--proto_path", path]
+    # TODO: crbug.com/1477926 - Do not specify unused `--import-dir`s.
+    # On a remote worker, it shows `warning: directory does not exist` when
+    # there are no dependencies under the directory.
+    if os.path.exists(path):
+      protoc_cmd += ["--proto_path", path]
 
   protoc_cmd += [os.path.join(proto_dir, name) for name in protos]
 
@@ -204,7 +205,6 @@ def main(argv):
 
   if dependency_file_data:
     with open(options.descriptor_set_dependency_file, 'w') as f:
-      f.write(options.descriptor_set_out + ":")
       f.write(dependency_file_data)
 
   if options.include:

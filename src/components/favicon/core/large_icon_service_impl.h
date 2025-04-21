@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 #define COMPONENTS_FAVICON_CORE_LARGE_ICON_SERVICE_IMPL_H_
 
 #include <memory>
+#include <optional>
 
-#include "base/feature_list.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/cancelable_task_tracker.h"
@@ -25,8 +25,6 @@ struct NetworkTrafficAnnotationTag;
 namespace favicon {
 
 class FaviconService;
-
-extern const base::Feature kLargeIconServiceFetchingFeature;
 
 // Implementation class for LargeIconService.
 class LargeIconServiceImpl : public LargeIconService {
@@ -58,6 +56,13 @@ class LargeIconServiceImpl : public LargeIconService {
       int desired_size_in_pixel,
       favicon_base::LargeIconImageCallback callback,
       base::CancelableTaskTracker* tracker) override;
+  base::CancelableTaskTracker::TaskId GetLargeIconRawBitmapForPageUrl(
+      const GURL& page_url,
+      int min_source_size_in_pixel,
+      std::optional<int> size_in_pixel_to_resize_to,
+      NoBigEnoughIconBehavior no_big_enough_icon_behavior,
+      favicon_base::LargeIconCallback callback,
+      base::CancelableTaskTracker* tracker) override;
   base::CancelableTaskTracker::TaskId
   GetLargeIconRawBitmapOrFallbackStyleForIconUrl(
       const GURL& icon_url,
@@ -72,10 +77,18 @@ class LargeIconServiceImpl : public LargeIconService {
       base::CancelableTaskTracker* tracker) override;
   void GetLargeIconOrFallbackStyleFromGoogleServerSkippingLocalCache(
       const GURL& page_url,
-      bool may_page_url_be_private,
       bool should_trim_page_url_path,
       const net::NetworkTrafficAnnotationTag& traffic_annotation,
       favicon_base::GoogleFaviconServerCallback callback) override;
+  void GetLargeIconFromCacheFallbackToGoogleServer(
+      const GURL& page_url,
+      StandardIconSize min_source_size,
+      std::optional<StandardIconSize> size_to_resize_to,
+      NoBigEnoughIconBehavior no_big_enough_icon_behavior,
+      bool should_trim_page_url_path,
+      const net::NetworkTrafficAnnotationTag& traffic_annotation,
+      favicon_base::LargeIconCallback callback,
+      base::CancelableTaskTracker* tracker) override;
   void TouchIconFromGoogleServer(const GURL& icon_url) override;
 
   // Overrides the URL of the Google favicon server to send requests to for
@@ -86,7 +99,8 @@ class LargeIconServiceImpl : public LargeIconService {
   base::CancelableTaskTracker::TaskId GetLargeIconOrFallbackStyleImpl(
       const GURL& page_url,
       int min_source_size_in_pixel,
-      int desired_size_in_pixel,
+      std::optional<int> size_in_pixel_to_resize_to,
+      NoBigEnoughIconBehavior no_big_enough_icon_behavior,
       favicon_base::LargeIconCallback raw_bitmap_callback,
       favicon_base::LargeIconImageCallback image_callback,
       base::CancelableTaskTracker* tracker);
@@ -97,6 +111,34 @@ class LargeIconServiceImpl : public LargeIconService {
       const net::NetworkTrafficAnnotationTag& traffic_annotation,
       favicon_base::GoogleFaviconServerCallback callback,
       bool can_set_on_demand_favicon);
+
+  // Called back when the requested icon is returned from the local favicon
+  // database. The result might be empty if the local database doesn't contain
+  // the requested icon. The request is done by
+  // `GetLargeIconFromCacheFallbackToGoogleServer()`.
+  void OnIconFetchedFromCache(
+      const GURL& page_url,
+      int min_source_size_in_pixel,
+      std::optional<int> size_in_pixel_to_resize_to,
+      NoBigEnoughIconBehavior no_big_enough_icon_behavior,
+      bool should_trim_page_url_path,
+      const net::NetworkTrafficAnnotationTag& traffic_annotation,
+      favicon_base::LargeIconCallback callback,
+      base::CancelableTaskTracker* tracker,
+      const favicon_base::LargeIconResult& icon_result);
+
+  // Called back when the requested icon is returned from the Google favicon
+  // service. The request is done by
+  // `GetLargeIconFromCacheFallbackToGoogleServer()`.
+  void OnIconFetchedFromServer(
+      const GURL& page_url,
+      int min_source_size_in_pixel,
+      std::optional<int> size_in_pixel_to_resize_to,
+      favicon_base::LargeIconCallback callback,
+      base::CancelableTaskTracker::IsCanceledCallback
+          was_task_canceled_callback,
+      MayBeDangling<base::CancelableTaskTracker> tracker,
+      favicon_base::GoogleFaviconServerRequestStatus status);
 
   const raw_ptr<FaviconService> favicon_service_;
 

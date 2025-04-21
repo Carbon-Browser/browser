@@ -1,13 +1,23 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "net/websockets/websocket_frame.h"
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
-#include <algorithm>
+#include <stddef.h>
+
+#include <iterator>
+#include <string>
+#include <string_view>
 #include <vector>
 
+#include "base/ranges/algorithm.h"
+#include "base/time/time.h"
 #include "base/timer/elapsed_timer.h"
+#include "net/websockets/websocket_frame.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/perf/perf_result_reporter.h"
 
@@ -15,9 +25,9 @@ namespace net {
 
 namespace {
 
-const int kIterations = 100000;
-const int kLongPayloadSize = 1 << 16;
-const char kMaskingKey[] = "\xFE\xED\xBE\xEF";
+constexpr int kIterations = 100000;
+constexpr int kLongPayloadSize = 1 << 16;
+constexpr std::string_view kMaskingKey = "\xFE\xED\xBE\xEF";
 
 static constexpr char kMetricPrefixWebSocketFrame[] = "WebSocketFrameMask.";
 static constexpr char kMetricMaskTimeMs[] = "mask_time";
@@ -29,8 +39,7 @@ perf_test::PerfResultReporter SetUpWebSocketFrameMaskReporter(
   return reporter;
 }
 
-static_assert(std::size(kMaskingKey) ==
-                  WebSocketFrameHeader::kMaskingKeyLength + 1,
+static_assert(kMaskingKey.size() == WebSocketFrameHeader::kMaskingKeyLength,
               "incorrect masking key size");
 
 class WebSocketFrameTestMaskBenchmark : public ::testing::Test {
@@ -40,21 +49,20 @@ class WebSocketFrameTestMaskBenchmark : public ::testing::Test {
                  size_t size) {
     std::vector<char> scratch(payload, payload + size);
     WebSocketMaskingKey masking_key;
-    std::copy(kMaskingKey,
-              kMaskingKey + WebSocketFrameHeader::kMaskingKeyLength,
-              masking_key.key);
+    base::as_writable_byte_span(masking_key.key)
+        .copy_from(base::as_byte_span(kMaskingKey));
     auto reporter = SetUpWebSocketFrameMaskReporter(story);
     base::ElapsedTimer timer;
     for (int x = 0; x < kIterations; ++x) {
-      MaskWebSocketFramePayload(masking_key, x % size, scratch.data(),
-                                scratch.size());
+      MaskWebSocketFramePayload(masking_key, x % size,
+                                base::as_writable_byte_span(scratch));
     }
     reporter.AddResult(kMetricMaskTimeMs, timer.Elapsed().InMillisecondsF());
   }
 };
 
 TEST_F(WebSocketFrameTestMaskBenchmark, BenchmarkMaskShortPayload) {
-  static const char kShortPayload[] = "Short Payload";
+  static constexpr char kShortPayload[] = "Short Payload";
   Benchmark("short_payload", kShortPayload, std::size(kShortPayload));
 }
 

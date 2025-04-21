@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,10 @@
 
 namespace blink {
 
-void FontHeight::AddLeading(LayoutUnit line_height) {
+void FontHeight::AddLeading(const FontHeight& start_and_end_leading) {
   DCHECK(!IsEmpty());
-  LayoutUnit half_leading = (line_height - (ascent + descent)) / 2;
-  // TODO(kojii): floor() is to make text dump compatible with legacy test
-  // results. Revisit when we paint.
-  ascent += half_leading.Floor();
-  descent = line_height - ascent;
+  ascent += start_and_end_leading.ascent;
+  descent += start_and_end_leading.descent;
 }
 
 void FontHeight::Move(LayoutUnit delta) {

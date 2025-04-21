@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,12 @@
 #define CHROME_BROWSER_ASH_SYSTEM_TIMEZONE_UTIL_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/values.h"
 
 class Profile;
-
-namespace base {
-class ListValue;
-}
 
 namespace user_manager {
 class User;
@@ -26,14 +23,14 @@ struct TimeZoneResponseData;
 
 namespace system {
 
-absl::optional<std::string> GetCountryCodeFromTimezoneIfAvailable(
+std::optional<std::string> GetCountryCodeFromTimezoneIfAvailable(
     const std::string& timezone);
 
 // Gets the current timezone's display name.
 std::u16string GetCurrentTimezoneName();
 
 // Creates a list of pairs of each timezone's ID and name.
-std::unique_ptr<base::ListValue> GetTimezoneList();
+base::Value::List GetTimezoneList();
 
 // Returns true if device is managed and has SystemTimezonePolicy set.
 bool HasSystemTimezonePolicy();
@@ -43,6 +40,7 @@ void ApplyTimeZone(const TimeZoneResponseData* timezone);
 
 // Returns true if given timezone preference is enterprise-managed.
 // Works for:
+// - kSystemTimezone
 // - prefs::kUserTimezone
 // - prefs::kResolveTimezoneByGeolocationMethod
 bool IsTimezonePrefsManaged(const std::string& pref_name);
@@ -51,6 +49,11 @@ bool IsTimezonePrefsManaged(const std::string& pref_name);
 // This is called from `Preferences` after updating profile
 // preferences to apply new value to system time zone.
 void UpdateSystemTimezone(Profile* profile);
+
+// Returns true if the given user is allowed to set the system timezone - that
+// is, the single timezone at TimezoneSettings::GetInstance()->GetTimezone(),
+// which is also stored in a file at /var/lib/timezone/localtime.
+bool CanSetSystemTimezone(const user_manager::User* user);
 
 // Set system timezone to the given |timezone_id|, as long as the given |user|
 // is allowed to set it (so not a guest or public account).
@@ -77,20 +80,5 @@ bool FineGrainedTimeZoneDetectionEnabled();
 
 }  // namespace system
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when Chrome OS code migration is
-// done.
-namespace chromeos {
-namespace system {
-using ::ash::system::GetCurrentTimezoneName;
-using ::ash::system::GetTimezoneList;
-using ::ash::system::HasSystemTimezonePolicy;
-using ::ash::system::PerUserTimezoneEnabled;
-using ::ash::system::SetSystemAndSigninScreenTimezone;
-using ::ash::system::SetSystemTimezone;
-using ::ash::system::SetTimezoneFromUI;
-using ::ash::system::UpdateSystemTimezone;
-}  // namespace system
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_SYSTEM_TIMEZONE_UTIL_H_

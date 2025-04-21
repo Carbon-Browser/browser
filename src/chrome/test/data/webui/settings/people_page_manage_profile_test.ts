@@ -1,12 +1,16 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // clang-format off
 import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {ManageProfileBrowserProxy, ManageProfileBrowserProxyImpl, ProfileShortcutStatus, SettingsManageProfileElement} from 'chrome://settings/lazy_load.js';
-import {CrToggleElement, loadTimeData, Router, routes, StatusAction} from 'chrome://settings/settings.js';
+import type {ManageProfileBrowserProxy, SettingsManageProfileElement} from 'chrome://settings/lazy_load.js';
+import {ManageProfileBrowserProxyImpl, ProfileShortcutStatus} from 'chrome://settings/lazy_load.js';
+import type {CrToggleElement} from 'chrome://settings/settings.js';
+import {loadTimeData, Router, routes, StatusAction} from 'chrome://settings/settings.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import {waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
+import {isVisible, microtasksFinished} from 'chrome://webui-test/test_util.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 
 // clang-format on
@@ -92,7 +96,7 @@ suite('ManageProfileTests', function() {
   setup(function() {
     browserProxy = new TestManageProfileBrowserProxy();
     ManageProfileBrowserProxyImpl.setInstance(browserProxy);
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     loadTimeData.overrideValues({profileShortcutsEnabled: false});
     manageProfile = createManageProfileElement();
     Router.getInstance().navigateTo(routes.MANAGE_PROFILE);
@@ -107,7 +111,6 @@ suite('ManageProfileTests', function() {
     element.profileName = 'Initial Fake Name';
     element.syncStatus = {
       supervisedUser: false,
-      childUser: false,
       statusAction: StatusAction.NO_ACTION,
     };
     document.body.appendChild(element);
@@ -120,23 +123,25 @@ suite('ManageProfileTests', function() {
   test('ManageProfileChangeIcon', async function() {
     let items = null;
     await browserProxy.whenCalled('getAvailableIcons');
-    flush();
+    await microtasksFinished();
     items =
         manageProfile.shadowRoot!.querySelector(
                                      'cr-profile-avatar-selector')!.shadowRoot!
             .querySelector('#avatar-grid')!.querySelectorAll<HTMLElement>(
-                '.avatar');
+                '.avatar-container > .avatar');
 
     assertEquals(3, items.length);
-    assertFalse(items[0]!.classList.contains('iron-selected'));
-    assertTrue(items[1]!.classList.contains('iron-selected'));
-    assertFalse(items[2]!.classList.contains('iron-selected'));
+    assertFalse(items[0]!.parentElement!.classList.contains('iron-selected'));
+    assertTrue(items[1]!.parentElement!.classList.contains('iron-selected'));
+    assertFalse(items[2]!.parentElement!.classList.contains('iron-selected'));
 
     items[1]!.click();
+    await microtasksFinished();
     const args = await browserProxy.whenCalled('setProfileIconToDefaultAvatar');
     assertEquals(2, args[0]);
 
     items[2]!.click();
+    await microtasksFinished();
     await browserProxy.whenCalled('setProfileIconToGaiaAvatar');
   });
 
@@ -149,24 +154,11 @@ suite('ManageProfileTests', function() {
     assertEquals('Initial Fake Name', nameField.value);
 
     nameField.value = 'New Name';
-    nameField.fire('change');
+    nameField.dispatchEvent(
+        new CustomEvent('change', {bubbles: true, composed: true}));
 
     const args = await browserProxy.whenCalled('setProfileName');
     assertEquals('New Name', args[0]);
-  });
-
-  test('ProfileNameIsDisabledForSupervisedUser', function() {
-    manageProfile.syncStatus = {
-      supervisedUser: true,
-      childUser: false,
-      statusAction: StatusAction.NO_ACTION,
-    };
-
-    const nameField = manageProfile.$.name;
-    assertTrue(!!nameField);
-
-    // Name field should be disabled for legacy supervised users.
-    assertTrue(!!nameField.disabled);
   });
 
   // Tests profile name updates pushed from the browser.
@@ -183,8 +175,11 @@ suite('ManageProfileTests', function() {
   });
 
   // Tests that the theme selector is visible.
-  test('ProfileThemeSelector', function() {
-    assertTrue(!!manageProfile.shadowRoot!.querySelector('#themeSelector'));
+  test('ThemeColorPicker', async function() {
+    manageProfile = createManageProfileElement();
+    await waitAfterNextRender(manageProfile);
+    assertTrue(isVisible(
+        manageProfile.shadowRoot!.querySelector('cr-theme-color-picker')));
   });
 
   // Tests profile shortcut toggle is hidden if profile shortcuts feature is
@@ -198,7 +193,7 @@ suite('ManageProfileTests', function() {
   // Tests profile shortcut toggle is visible and toggling it removes and
   // creates the profile shortcut respectively.
   test('ManageProfileShortcutToggle', async function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     loadTimeData.overrideValues({profileShortcutsEnabled: true});
     manageProfile = createManageProfileElement();
     flush();
@@ -237,7 +232,7 @@ suite('ManageProfileTests', function() {
     browserProxy.setProfileShortcutStatus(
         ProfileShortcutStatus.PROFILE_SHORTCUT_NOT_FOUND);
 
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     loadTimeData.overrideValues({profileShortcutsEnabled: true});
     manageProfile = createManageProfileElement();
     flush();
@@ -262,7 +257,7 @@ suite('ManageProfileTests', function() {
     browserProxy.setProfileShortcutStatus(
         ProfileShortcutStatus.PROFILE_SHORTCUT_SETTING_HIDDEN);
 
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     loadTimeData.overrideValues({profileShortcutsEnabled: true});
     manageProfile = createManageProfileElement();
     flush();

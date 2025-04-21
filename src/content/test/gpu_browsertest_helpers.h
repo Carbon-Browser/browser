@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,8 @@ GpuBrowsertestEstablishGpuChannelSyncRunLoop();
 // Creates a new ContextProviderCommandBuffer using the provided
 // GpuChannelHost.
 scoped_refptr<viz::ContextProviderCommandBuffer> GpuBrowsertestCreateContext(
-    scoped_refptr<gpu::GpuChannelHost> gpu_channel_host);
+    scoped_refptr<gpu::GpuChannelHost> gpu_channel_host,
+    bool wants_raster_interface = true);
 
 }  // namespace content
 

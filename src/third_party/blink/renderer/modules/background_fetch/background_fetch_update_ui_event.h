@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,6 @@ class BackgroundFetchEvent;
 class BackgroundFetchIconLoader;
 class BackgroundFetchUIOptions;
 class ExceptionState;
-class ScriptPromiseResolver;
 class WaitUntilObserver;
 
 // Event for interacting with fetch requests that have completed.
@@ -53,19 +52,21 @@ class MODULES_EXPORT BackgroundFetchUpdateUIEvent final
   ~BackgroundFetchUpdateUIEvent() override;
 
   // Web Exposed method defined in the IDL file.
-  ScriptPromise updateUI(ScriptState* script_state,
-                         const BackgroundFetchUIOptions* ui_options,
-                         ExceptionState&);
+  ScriptPromise<IDLUndefined> updateUI(
+      ScriptState* script_state,
+      const BackgroundFetchUIOptions* ui_options,
+      ExceptionState&);
 
   void Trace(Visitor* visitor) const override;
 
  private:
-  void DidGetIcon(ScriptPromiseResolver* resolver,
-                  const String& title,
+  void DidGetIcon(const String& title,
+                  ScriptPromiseResolver<IDLUndefined>* resolver,
+
                   const SkBitmap& icon,
                   int64_t ideal_to_chosen_icon_size);
 
-  void DidUpdateUI(ScriptPromiseResolver* resolver,
+  void DidUpdateUI(ScriptPromiseResolver<IDLUndefined>* resolver,
                    mojom::blink::BackgroundFetchError error);
 
   bool update_ui_called_ = false;

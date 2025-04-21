@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,12 +10,10 @@
 #include "third_party/blink/public/common/input/web_mouse_event.h"
 #include "third_party/blink/public/platform/web_input_event_result.h"
 #include "third_party/blink/renderer/core/core_export.h"
-#include "third_party/blink/renderer/core/dom/synchronous_mutation_observer.h"
 #include "third_party/blink/renderer/core/events/pointer_event_factory.h"
 #include "third_party/blink/renderer/core/input/boundary_event_dispatcher.h"
 #include "third_party/blink/renderer/core/page/event_with_hit_test_results.h"
-#include "third_party/blink/renderer/platform/timer.h"
-#include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom-blink-forward.h"
 
 namespace blink {
@@ -34,14 +32,12 @@ enum class DragInitiator;
 // This class takes care of dispatching all mouse events and keeps track of
 // positions and states of mouse.
 class CORE_EXPORT MouseEventManager final
-    : public GarbageCollected<MouseEventManager>,
-      public SynchronousMutationObserver {
+    : public GarbageCollected<MouseEventManager> {
  public:
   MouseEventManager(LocalFrame&, ScrollManager&);
   MouseEventManager(const MouseEventManager&) = delete;
   MouseEventManager& operator=(const MouseEventManager&) = delete;
-  virtual ~MouseEventManager();
-  void Trace(Visitor*) const override;
+  void Trace(Visitor*) const;
 
   WebInputEventResult DispatchMouseEvent(
       EventTarget*,
@@ -51,15 +47,16 @@ class CORE_EXPORT MouseEventManager final
       EventTarget* related_target,
       bool check_for_listener = false,
       const PointerId& pointer_id = PointerEventFactory::kInvalidId,
-      const String& pointer_type = "");
+      const String& pointer_type = g_empty_string);
 
-  WebInputEventResult SetMousePositionAndDispatchMouseEvent(
+  WebInputEventResult SetElementUnderMouseAndDispatchMouseEvent(
       Element* target_element,
       const AtomicString& event_type,
       const WebMouseEvent&);
 
   WebInputEventResult DispatchMouseClickIfNeeded(
       Element* mouse_release_target,
+      Element* captured_click_target,
       const WebMouseEvent& mouse_event,
       const PointerId& pointer_id,
       const String& pointer_type);
@@ -75,7 +72,11 @@ class CORE_EXPORT MouseEventManager final
   // Resets the internal state of this object.
   void Clear();
 
+  void NodeChildrenWillBeRemoved(ContainerNode&);
+  void NodeWillBeRemoved(Node& node_to_be_removed);
+
   void SendBoundaryEvents(EventTarget* exited_target,
+                          bool original_exited_target_removed,
                           EventTarget* entered_target,
                           const WebMouseEvent&);
 
@@ -129,19 +130,18 @@ class CORE_EXPORT MouseEventManager final
   bool MousePressed();
   void ReleaseMousePress();
 
-  bool CapturesDragging() const;
-  void SetCapturesDragging(bool);
-
   void SetMouseDownMayStartAutoscroll() {
     mouse_down_may_start_autoscroll_ = true;
   }
 
+  // TODO(crbug.com/40870245): Do we even need `mouse_press_node_` when we have
+  // `mouse_down_element_`?  The "node" version is used only in one place
+  // (`ScrollManager::LogicalScroll`) which could never see a non-element node,
+  // right?
   Node* MousePressNode();
   void SetMousePressNode(Node*);
 
-  Element* MouseDownElement();
-
-  void SetClickElement(Element*);
+  void SetMouseDownElement(Element*);
   void SetClickCount(int);
 
   bool MouseDownMayStartDrag();
@@ -161,23 +161,12 @@ class CORE_EXPORT MouseEventManager final
         const MouseEventBoundaryEventDispatcher&) = delete;
 
    protected:
-    void DispatchOut(EventTarget*, EventTarget* related_target) override;
-    void DispatchOver(EventTarget*, EventTarget* related_target) override;
-    void DispatchLeave(EventTarget*,
-                       EventTarget* related_target,
-                       bool check_for_listener) override;
-    void DispatchEnter(EventTarget*,
-                       EventTarget* related_target,
-                       bool check_for_listener) override;
-    AtomicString GetLeaveEvent() override;
-    AtomicString GetEnterEvent() override;
-
-   private:
     void Dispatch(EventTarget*,
                   EventTarget* related_target,
                   const AtomicString&,
-                  const WebMouseEvent&,
-                  bool check_for_listener);
+                  bool check_for_listener) override;
+
+   private:
     MouseEventManager* mouse_event_manager_;
     const WebMouseEvent* web_mouse_event_;
   };
@@ -196,10 +185,6 @@ class CORE_EXPORT MouseEventManager final
   void ResetDragSource();
   bool HoverStateDirty();
 
-  // Implementations of |SynchronousMutationObserver|
-  void NodeChildrenWillBeRemoved(ContainerNode&) final;
-  void NodeWillBeRemoved(Node& node_to_be_removed) final;
-
   // NOTE: If adding a new field to this class please ensure that it is
   // cleared in |MouseEventManager::clear()|.
 
@@ -210,6 +195,9 @@ class CORE_EXPORT MouseEventManager final
   // See
   // https://w3c.github.io/pointerevents/#dfn-tracking-the-effective-position-of-the-legacy-mouse-pointer.
   Member<Element> element_under_mouse_;
+
+  // See `PointerEventManager::original_element_under_pointer_removed_`.
+  bool original_element_under_mouse_removed_ = false;
 
   // The last mouse movement position this frame has seen in viewport
   // coordinates.
@@ -224,21 +212,16 @@ class CORE_EXPORT MouseEventManager final
 
   unsigned mouse_down_may_start_autoscroll_ : 1;
   unsigned svg_pan_ : 1;
-  unsigned captures_dragging_ : 1;
   unsigned mouse_down_may_start_drag_ : 1;
 
-  // TODO(crbug.com/1220669): Do we need both |mouse_press_node_| and
-  // |mouse_down_element_|?
+  // Tracks the element that received the last mousedown event.  This is cleared
+  // on mouseup.
+  Member<Element> mousedown_element_;
   Member<Node> mouse_press_node_;
 
-  int click_count_;
-  Member<Element> click_element_;
-  // This element should be mostly the same as click_element_. Only when
-  // click_element_ is set to null due to DOM manipulation mouse_down_element_
-  // remains unchanged.
-  Member<Element> mouse_down_element_;
+  int click_count_ = 0;
 
-  gfx::Point mouse_down_pos_;  // In our view's coords.
+  gfx::Point mouse_down_pos_;
   base::TimeTicks mouse_down_timestamp_;
   WebMouseEvent mouse_down_;
 

@@ -30,11 +30,78 @@
 
 #include "third_party/blink/renderer/platform/bindings/exception_messages.h"
 
+#include "base/notreached.h"
+#include "third_party/blink/renderer/platform/bindings/exception_context.h"
+#include "third_party/blink/renderer/platform/bindings/v8_binding.h"
 #include "third_party/blink/renderer/platform/wtf/decimal.h"
 #include "third_party/blink/renderer/platform/wtf/math_extras.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
 namespace blink {
+
+namespace {
+
+String optionalNameProperty(const String& property) {
+  if (property.empty()) {
+    return String();
+  }
+  return " '" + property + "'";
+}
+
+String optionalIndexProperty(const String& property) {
+  if (!property) {
+    return String();
+  }
+  return " [" + property + "]";
+}
+
+}  //  namespace
+
+String ExceptionMessages::AddContextToMessage(v8::ExceptionContext type,
+                                              const char* class_name,
+                                              const String& property_name,
+                                              const String& message) {
+  switch (type) {
+    case v8::ExceptionContext::kConstructor:
+      return ExceptionMessages::FailedToConstruct(class_name, message);
+    case v8::ExceptionContext::kOperation:
+      return ExceptionMessages::FailedToExecute(property_name, class_name,
+                                                message);
+    case v8::ExceptionContext::kAttributeGet:
+      return ExceptionMessages::FailedToGet(property_name, class_name, message);
+    case v8::ExceptionContext::kAttributeSet:
+      return ExceptionMessages::FailedToSet(property_name, class_name, message);
+    case v8::ExceptionContext::kNamedEnumerator:
+      return ExceptionMessages::FailedToEnumerate(class_name, message);
+    case v8::ExceptionContext::kIndexedGetter:
+    case v8::ExceptionContext::kIndexedDescriptor:
+    case v8::ExceptionContext::kIndexedQuery:
+      return ExceptionMessages::FailedToGetIndexed(property_name, class_name,
+                                                   message);
+    case v8::ExceptionContext::kIndexedSetter:
+    case v8::ExceptionContext::kIndexedDefiner:
+      return ExceptionMessages::FailedToSetIndexed(property_name, class_name,
+                                                   message);
+    case v8::ExceptionContext::kIndexedDeleter:
+      return ExceptionMessages::FailedToDeleteIndexed(property_name, class_name,
+                                                      message);
+    case v8::ExceptionContext::kNamedGetter:
+    case v8::ExceptionContext::kNamedDescriptor:
+    case v8::ExceptionContext::kNamedQuery:
+      return ExceptionMessages::FailedToGetNamed(property_name, class_name,
+                                                 message);
+    case v8::ExceptionContext::kNamedSetter:
+    case v8::ExceptionContext::kNamedDefiner:
+      return ExceptionMessages::FailedToSetNamed(property_name, class_name,
+                                                 message);
+    case v8::ExceptionContext::kNamedDeleter:
+      return ExceptionMessages::FailedToDeleteNamed(property_name, class_name,
+                                                    message);
+    case v8::ExceptionContext::kUnknown:
+      return message;
+  }
+  NOTREACHED();
+}
 
 String ExceptionMessages::FailedToConvertJSValue(const char* type) {
   return String::Format("Failed to convert value to '%s'.", type);
@@ -42,77 +109,90 @@ String ExceptionMessages::FailedToConvertJSValue(const char* type) {
 
 String ExceptionMessages::FailedToConstruct(const char* type,
                                             const String& detail) {
-  return "Failed to construct '" + String(type) +
-         (!detail.IsEmpty() ? String("': " + detail) : String("'"));
+  String type_string = String(type);
+  if (type_string.empty()) {
+    return detail;
+  }
+  return "Failed to construct '" + type_string +
+         (!detail.empty() ? String("': " + detail) : String("'"));
 }
 
 String ExceptionMessages::FailedToEnumerate(const char* type,
                                             const String& detail) {
   return "Failed to enumerate the properties of '" + String(type) +
-         (!detail.IsEmpty() ? String("': " + detail) : String("'"));
+         (!detail.empty() ? String("': " + detail) : String("'"));
 }
 
-String ExceptionMessages::FailedToExecute(const char* method,
+String ExceptionMessages::FailedToExecute(const String& method,
                                           const char* type,
                                           const String& detail) {
-  return "Failed to execute '" + String(method) + "' on '" + String(type) +
-         (!detail.IsEmpty() ? String("': " + detail) : String("'"));
+  return "Failed to execute '" + method + "' on '" + String(type) +
+         (!detail.empty() ? String("': " + detail) : String("'"));
 }
 
-String ExceptionMessages::FailedToGet(const char* property,
+String ExceptionMessages::FailedToGet(const String& property,
                                       const char* type,
                                       const String& detail) {
-  return "Failed to read the '" + String(property) + "' property from '" +
+  return "Failed to read the '" + property + "' property from '" +
          String(type) + "': " + detail;
 }
 
-String ExceptionMessages::FailedToSet(const char* property,
+String ExceptionMessages::FailedToSet(const String& property,
                                       const char* type,
                                       const String& detail) {
-  return "Failed to set the '" + String(property) + "' property on '" +
-         String(type) + "': " + detail;
+  return "Failed to set the '" + property + "' property on '" + String(type) +
+         "': " + detail;
 }
 
-String ExceptionMessages::FailedToDelete(const char* property,
+String ExceptionMessages::FailedToDelete(const String& property,
                                          const char* type,
                                          const String& detail) {
-  return "Failed to delete the '" + String(property) + "' property from '" +
+  return "Failed to delete the '" + property + "' property from '" +
          String(type) + "': " + detail;
 }
 
-String ExceptionMessages::FailedToGetIndexed(const char* type,
+String ExceptionMessages::FailedToGetIndexed(const String& property,
+                                             const char* type,
                                              const String& detail) {
-  return "Failed to read an indexed property from '" + String(type) +
+  return "Failed to read an indexed property" +
+         optionalIndexProperty(property) + " from '" + String(type) +
          "': " + detail;
 }
 
-String ExceptionMessages::FailedToSetIndexed(const char* type,
+String ExceptionMessages::FailedToSetIndexed(const String& property,
+                                             const char* type,
                                              const String& detail) {
-  return "Failed to set an indexed property on '" + String(type) +
-         "': " + detail;
+  return "Failed to set an indexed property" + optionalIndexProperty(property) +
+         " on '" + String(type) + "': " + detail;
 }
 
-String ExceptionMessages::FailedToDeleteIndexed(const char* type,
+String ExceptionMessages::FailedToDeleteIndexed(const String& property,
+                                                const char* type,
                                                 const String& detail) {
-  return "Failed to delete an indexed property from '" + String(type) +
+  return "Failed to delete an indexed property" +
+         optionalIndexProperty(property) + " from '" + String(type) +
          "': " + detail;
 }
 
-String ExceptionMessages::FailedToGetNamed(const char* type,
+String ExceptionMessages::FailedToGetNamed(const String& property,
+                                           const char* type,
                                            const String& detail) {
-  return "Failed to read a named property from '" + String(type) +
-         "': " + detail;
+  return "Failed to read a named property" + optionalNameProperty(property) +
+         " from '" + String(type) + "': " + detail;
 }
 
-String ExceptionMessages::FailedToSetNamed(const char* type,
+String ExceptionMessages::FailedToSetNamed(const String& property,
+                                           const char* type,
                                            const String& detail) {
-  return "Failed to set a named property on '" + String(type) + "': " + detail;
+  return "Failed to set a named property" + optionalNameProperty(property) +
+         " on '" + String(type) + "': " + detail;
 }
 
-String ExceptionMessages::FailedToDeleteNamed(const char* type,
+String ExceptionMessages::FailedToDeleteNamed(const String& property,
+                                              const char* type,
                                               const String& detail) {
-  return "Failed to delete a named property from '" + String(type) +
-         "': " + detail;
+  return "Failed to delete a named property" + optionalNameProperty(property) +
+         " from '" + String(type) + "': " + detail;
 }
 
 String ExceptionMessages::ConstructorNotCallableAsFunction(const char* type) {
@@ -175,13 +255,6 @@ String ExceptionMessages::NotAFiniteNumber(const Decimal& value,
   DCHECK(!value.IsFinite());
   return String::Format("The %s is %s.", name,
                         value.IsInfinity() ? "infinite" : "not a number");
-}
-
-String ExceptionMessages::InputArrayTooLong(unsigned int expected_size,
-                                            unsigned int actual_size) {
-  return "Input array's length should be less than " +
-         String::Number(expected_size) + ". Actual length is " +
-         String::Number(actual_size) + ".";
 }
 
 String ExceptionMessages::OrdinalNumber(int number) {
@@ -268,6 +341,12 @@ String ExceptionMessages::ReadOnly(const char* detail) {
 String ExceptionMessages::SharedArrayBufferNotAllowed(
     const char* expected_type) {
   return String::Format("The provided %s value must not be shared.",
+                        expected_type);
+}
+
+String ExceptionMessages::ResizableArrayBufferNotAllowed(
+    const char* expected_type) {
+  return String::Format("The provided %s value must not be resizable.",
                         expected_type);
 }
 

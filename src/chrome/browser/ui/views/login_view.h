@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,8 +25,9 @@ class HttpAuthManager;
 // for HTTP/FTP authentication.
 class LoginView : public views::View,
                   public password_manager::HttpAuthObserver {
+  METADATA_HEADER(LoginView, views::View)
+
  public:
-  METADATA_HEADER(LoginView);
   // |login_model_data->model| is observed for the entire lifetime of the
   // LoginView. Therefore |login_model_data->model| should not be destroyed
   // before the LoginView object. |login_model_data| may be null.

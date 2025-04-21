@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,9 +32,7 @@ public class ChromeUiAutomatorTestRule extends TestWatcher {
         utils.printWindowHierarchy("UI hierarchy when " + description.toString() + " failed");
     }
 
-    /**
-     * Creates a Bitmap from the UiAutomatorUtils (use this for RenderTest).
-     */
+    /** Creates a Bitmap from the UiAutomatorUtils (use this for RenderTest). */
     public Bitmap takeScreenshot(Context context) throws IOException {
         UiAutomatorUtils utils = UiAutomatorUtils.getInstance();
 

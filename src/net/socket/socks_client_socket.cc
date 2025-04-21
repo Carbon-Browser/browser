@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/sys_byteorder.h"
+#include "net/base/address_list.h"
 #include "net/base/io_buffer.h"
 #include "net/dns/public/dns_query_type.h"
 #include "net/dns/public/secure_dns_policy.h"
@@ -62,7 +63,7 @@ static_assert(sizeof(SOCKS4ServerResponse) == kReadHeaderSize,
 SOCKSClientSocket::SOCKSClientSocket(
     std::unique_ptr<StreamSocket> transport_socket,
     const HostPortPair& destination,
-    const NetworkIsolationKey& network_isolation_key,
+    const NetworkAnonymizationKey& network_anonymization_key,
     RequestPriority priority,
     HostResolver* host_resolver,
     SecureDnsPolicy secure_dns_policy,
@@ -71,7 +72,7 @@ SOCKSClientSocket::SOCKSClientSocket(
       host_resolver_(host_resolver),
       secure_dns_policy_(secure_dns_policy),
       destination_(destination),
-      network_isolation_key_(network_isolation_key),
+      network_anonymization_key_(network_anonymization_key),
       priority_(priority),
       net_log_(transport_socket_->NetLog()),
       traffic_annotation_(traffic_annotation) {}
@@ -129,25 +130,16 @@ bool SOCKSClientSocket::WasEverUsed() const {
   return was_ever_used_;
 }
 
-bool SOCKSClientSocket::WasAlpnNegotiated() const {
-  if (transport_socket_)
-    return transport_socket_->WasAlpnNegotiated();
-  NOTREACHED();
-  return false;
-}
-
 NextProto SOCKSClientSocket::GetNegotiatedProtocol() const {
   if (transport_socket_)
     return transport_socket_->GetNegotiatedProtocol();
   NOTREACHED();
-  return kProtoUnknown;
 }
 
 bool SOCKSClientSocket::GetSSLInfo(SSLInfo* ssl_info) {
   if (transport_socket_)
     return transport_socket_->GetSSLInfo(ssl_info);
   NOTREACHED();
-  return false;
 }
 
 int64_t SOCKSClientSocket::GetTotalReceivedBytes() const {
@@ -286,8 +278,6 @@ int SOCKSClientSocket::DoLoop(int last_io_result) {
         break;
       default:
         NOTREACHED() << "bad state";
-        rv = ERR_UNEXPECTED;
-        break;
     }
   } while (rv != ERR_IO_PENDING && next_state_ != STATE_NONE);
   return rv;
@@ -302,7 +292,7 @@ int SOCKSClientSocket::DoResolveHost() {
   parameters.initial_priority = priority_;
   parameters.secure_dns_policy = secure_dns_policy_;
   resolve_host_request_ = host_resolver_->CreateRequest(
-      destination_, network_isolation_key_, net_log_, parameters);
+      destination_, network_anonymization_key_, net_log_, parameters);
 
   return resolve_host_request_->Start(
       base::BindOnce(&SOCKSClientSocket::OnIOComplete, base::Unretained(this)));
@@ -363,7 +353,7 @@ int SOCKSClientSocket::DoHandshakeWrite() {
 
   int handshake_buf_len = buffer_.size() - bytes_sent_;
   DCHECK_GT(handshake_buf_len, 0);
-  handshake_buf_ = base::MakeRefCounted<IOBuffer>(handshake_buf_len);
+  handshake_buf_ = base::MakeRefCounted<IOBufferWithSize>(handshake_buf_len);
   memcpy(handshake_buf_->data(), &buffer_[bytes_sent_],
          handshake_buf_len);
   return transport_socket_->Write(
@@ -400,7 +390,7 @@ int SOCKSClientSocket::DoHandshakeRead() {
   }
 
   int handshake_buf_len = kReadHeaderSize - bytes_received_;
-  handshake_buf_ = base::MakeRefCounted<IOBuffer>(handshake_buf_len);
+  handshake_buf_ = base::MakeRefCounted<IOBufferWithSize>(handshake_buf_len);
   return transport_socket_->Read(
       handshake_buf_.get(), handshake_buf_len,
       base::BindOnce(&SOCKSClientSocket::OnIOComplete, base::Unretained(this)));

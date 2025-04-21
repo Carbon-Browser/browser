@@ -1,4 +1,4 @@
-<style include="cr-shared-style settings-shared iron-flex">
+<style include="cr-shared-style settings-shared">
   cr-input {
     --cr-input-error-display: none;
   }
@@ -29,33 +29,32 @@
     overflow-y: hidden;
   }
 
-  cr-customize-themes,
+  cr-theme-color-picker,
   cr-profile-avatar-selector {
     margin-bottom: 10px;
   }
 
-  #themeSelector {
+  cr-theme-color-picker {
     --selected-border: 9px; /* Selected border per side: 4.5px*/
-    --cr-customize-themes-grid-gap: calc(var(--icon-grid-gap) -
+    --cr-theme-color-picker-column-width: calc(var(--icon-size) +
         var(--selected-border));
-    --cr-customize-themes-icon-size: calc(var(--icon-size) +
+    --cr-theme-color-picker-grid-gap: calc(var(--icon-grid-gap) -
         var(--selected-border));
+    --cr-theme-color-picker-grid-padding: 0;
+    /* With display: block, the bottom margin collapses. */
+    display: inline-block;
   }
 
   #profileAvatarSelector {
     --avatar-size: var(--icon-size);
     --avatar-spacing: var(--icon-grid-gap);
-    --avatar-grid-columns: 6;
     padding: 4px;
-    width: calc(var(--avatar-size) * var(--avatar-grid-columns) +
-        var(--avatar-spacing) * (var(--avatar-grid-columns) - 1));
-
   }
 
   #outerRow {
     align-items: center;
     display: flex;
-    min-height: var(--settings-row-two-line-min-height);
+    min-height: var(--cr-section-two-line-min-height);
     padding: 0 var(--cr-section-padding);
   }
 
@@ -70,7 +69,7 @@
     <cr-input id="name" value="[[profileName]]" pattern="[[pattern_]]"
         on-change="onProfileNameChanged_"
         on-keydown="onProfileNameKeydown_"
-        disabled="[[isProfileNameDisabled_(syncStatus)]]" maxlength="500"
+        maxlength="500"
         aria-label="$i18n{nameInputLabel}" auto-validate required
         spellcheck="false">
     </cr-input>
@@ -79,8 +78,7 @@
 <div class="cr-row manage-profile-section">
   <h1 class="cr-title-text">$i18n{pickThemeColor}</h1>
   <div class="content grid-container">
-    <cr-customize-themes id="themeSelector" auto-confirm-theme-changes>
-    </cr-customize-themes>
+    <cr-theme-color-picker columns="6"></cr-theme-color-picker>
  </div>
 </div>
 <div class="cr-row manage-profile-section">

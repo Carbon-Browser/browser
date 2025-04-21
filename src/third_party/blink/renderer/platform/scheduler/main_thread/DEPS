@@ -1,14 +1,10 @@
 include_rules = [
   "+base/cpu_reduction_experiment.h",
-  "+base/metrics/single_sample_metrics.h",
   "+cc",
   "+components/viz/common",
 ]
 
 specific_include_rules = {
-  "auto_advancing_virtual_time_domain.h": [
-    "+base/task/task_observer.h",
-  ],
   "idle_time_estimator.h": [
     "+base/task/task_observer.h",
   ],
@@ -18,6 +14,9 @@ specific_include_rules = {
   ],
   "agent_interference_recorder.h": [
     "+base/task/sequence_manager/enqueue_order.h"
+  ],
+  "memory_purge_manager.cc": [
+    "+base/android/pre_freeze_background_memory_trimmer.h"
   ],
   "frame_scheduler_impl.h": [
     "+net/base/request_priority.h"

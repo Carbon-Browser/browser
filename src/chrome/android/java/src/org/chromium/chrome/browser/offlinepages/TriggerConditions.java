@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,9 @@ public class TriggerConditions {
      * @param minimumBatteryPercentage minimum percentage (0-100) of remaining battery power
      * @param requireUnmeteredNetwork whether to require connection to unmetered network
      */
-    public TriggerConditions(boolean requirePowerConnected, int minimumBatteryPercentage,
+    public TriggerConditions(
+            boolean requirePowerConnected,
+            int minimumBatteryPercentage,
             boolean requireUnmeteredNetwork) {
         mRequirePowerConnected = requirePowerConnected;
         mMinimumBatteryPercentage = minimumBatteryPercentage;

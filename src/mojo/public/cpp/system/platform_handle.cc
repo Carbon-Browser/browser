@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,7 +52,6 @@ ScopedSharedBufferHandle WrapPlatformSharedMemoryRegion(
       break;
     default:
       NOTREACHED();
-      return ScopedSharedBufferHandle();
   }
 
   base::subtle::ScopedPlatformSharedMemoryHandle handle =
@@ -173,12 +172,21 @@ base::subtle::PlatformSharedMemoryRegion UnwrapPlatformSharedMemoryRegion(
       return base::subtle::PlatformSharedMemoryRegion();
   }
 
+  std::optional<base::UnguessableToken> guid =
+      internal::PlatformHandleInternal::UnmarshalUnguessableToken(&mojo_guid);
+  if (!guid.has_value()) {
+    return base::subtle::PlatformSharedMemoryRegion();
+  }
+
   return base::subtle::PlatformSharedMemoryRegion::Take(
-      std::move(region_handle), mode, size,
-      internal::PlatformHandleInternal::UnmarshalUnguessableToken(&mojo_guid));
+      std::move(region_handle), mode, size, guid.value());
 }
 
 ScopedHandle WrapPlatformHandle(PlatformHandle handle) {
+  if (!handle.is_valid()) {
+    return ScopedHandle();
+  }
+
   MojoPlatformHandle platform_handle;
   PlatformHandle::ToMojoPlatformHandle(std::move(handle), &platform_handle);
 
@@ -191,6 +199,10 @@ ScopedHandle WrapPlatformHandle(PlatformHandle handle) {
 }
 
 PlatformHandle UnwrapPlatformHandle(ScopedHandle handle) {
+  if (!handle.is_valid()) {
+    return PlatformHandle();
+  }
+
   MojoPlatformHandle platform_handle;
   platform_handle.struct_size = sizeof(platform_handle);
   MojoResult result = MojoUnwrapPlatformHandle(handle.release().value(),

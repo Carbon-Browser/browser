@@ -1,71 +1,81 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
-import 'chrome://resources/cr_elements/cr_icons_css.m.js';
-import 'chrome://resources/cr_elements/icons.m.js';
-import 'chrome://resources/cr_elements/mwb_element_shared_style.css.js';
-import 'chrome://resources/cr_elements/mwb_shared_vars.css.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
+import 'chrome://resources/cr_elements/cr_url_list_item/cr_url_list_item.js';
+import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
+import 'chrome://resources/cr_elements/icons.html.js';
 import './icons.html.js';
 
-import {MouseHoverableMixin} from 'chrome://resources/cr_elements/mouse_hoverable_mixin.js';
-import {assertNotReached} from 'chrome://resources/js/assert_ts.js';
-import {getFaviconForPageURL} from 'chrome://resources/js/icon.js';
-import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import type {CrIconButtonElement} from 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
+import type {CrUrlListItemElement} from 'chrome://resources/cr_elements/cr_url_list_item/cr_url_list_item.js';
+import {MouseHoverableMixinLit} from 'chrome://resources/cr_elements/mouse_hoverable_mixin_lit.js';
+import {assertNotReached} from 'chrome://resources/js/assert.js';
+import {CrLitElement} from 'chrome://resources/lit/v3_0/lit.rollup.js';
 
-import {ReadLaterEntry} from './reading_list.mojom-webui.js';
-import {ReadingListApiProxy, ReadingListApiProxyImpl} from './reading_list_api_proxy.js';
-import {getTemplate} from './reading_list_item.html.js';
+import type {ReadLaterEntry} from './reading_list.mojom-webui.js';
+import type {ReadingListApiProxy} from './reading_list_api_proxy.js';
+import {ReadingListApiProxyImpl} from './reading_list_api_proxy.js';
+import {getCss} from './reading_list_item.css.js';
+import {getHtml} from './reading_list_item.html.js';
+
+export const MARKED_AS_READ_UI_EVENT = 'reading-list-marked-as-read';
 
 const navigationKeys: Set<string> =
     new Set([' ', 'Enter', 'ArrowRight', 'ArrowLeft']);
 
 export interface ReadingListItemElement {
   $: {
-    updateStatusButton: HTMLElement,
+    crUrlListItem: CrUrlListItemElement,
+    updateStatusButton: CrIconButtonElement,
     deleteButton: HTMLElement,
   };
 }
 
-const ReadingListItemElementBase = MouseHoverableMixin(PolymerElement);
+const ReadingListItemElementBase = MouseHoverableMixinLit(CrLitElement);
 
 export class ReadingListItemElement extends ReadingListItemElementBase {
   static get is() {
     return 'reading-list-item';
   }
 
-  static get template() {
-    return getTemplate();
+  static override get styles() {
+    return getCss();
   }
 
-  static get properties() {
+  override render() {
+    return getHtml.bind(this)();
+  }
+
+  static override get properties() {
     return {
-      data: Object,
-      buttonRipples: Boolean,
-      title: {
-        computed: 'computeTitle_(data.title)',
-        reflectToAttribute: true,
-      },
+      data: {type: Object},
+      buttonRipples: {type: Boolean},
     };
   }
 
-  data: ReadLaterEntry;
-  buttonRipples: boolean;
+  data: ReadLaterEntry = {
+    title: '',
+    url: {url: ''},
+    displayUrl: '',
+    updateTime: 0n,
+    read: false,
+    displayTimeSinceUpdate: '',
+  };
+
+  buttonRipples: boolean = false;
   private apiProxy_: ReadingListApiProxy =
       ReadingListApiProxyImpl.getInstance();
 
-  override ready() {
-    super.ready();
+  override firstUpdated() {
     this.addEventListener('click', this.onClick_);
     this.addEventListener('auxclick', this.onAuxClick_.bind(this));
     this.addEventListener('contextmenu', this.onContextMenu_.bind(this));
     this.addEventListener('keydown', this.onKeyDown_.bind(this));
   }
 
-  private computeTitle_(): string {
-    return this.data.title;
+  override focus() {
+    this.$.crUrlListItem.focus();
   }
 
   private onAuxClick_(e: MouseEvent) {
@@ -74,7 +84,7 @@ export class ReadingListItemElement extends ReadingListItemElementBase {
       return;
     }
 
-    this.apiProxy_.openURL(this.data.url, true, {
+    this.apiProxy_.openUrl(this.data.url, true, {
       middleButton: true,
       altKey: e.altKey,
       ctrlKey: e.ctrlKey,
@@ -84,7 +94,7 @@ export class ReadingListItemElement extends ReadingListItemElementBase {
   }
 
   private onClick_(e: MouseEvent|KeyboardEvent) {
-    this.apiProxy_.openURL(this.data.url, true, {
+    this.apiProxy_.openUrl(this.data.url, true, {
       middleButton: false,
       altKey: e.altKey,
       ctrlKey: e.ctrlKey,
@@ -94,39 +104,39 @@ export class ReadingListItemElement extends ReadingListItemElementBase {
   }
 
   private onContextMenu_(e: MouseEvent) {
-    this.apiProxy_.showContextMenuForURL(this.data.url, e.clientX, e.clientY);
+    this.apiProxy_.showContextMenuForUrl(this.data.url, e.clientX, e.clientY);
   }
 
   private onKeyDown_(e: KeyboardEvent) {
     if (e.shiftKey || !navigationKeys.has(e.key)) {
       return;
     }
+
+    const focusableElements: HTMLElement[] = [
+      this.$.crUrlListItem,
+      this.$.updateStatusButton,
+      this.$.deleteButton,
+    ];
+    const focusedIndex = focusableElements.indexOf(
+        this.shadowRoot!.activeElement as HTMLElement);
+
     switch (e.key) {
       case ' ':
       case 'Enter':
         this.onClick_(e);
         break;
-      case 'ArrowRight':
-        if (!this.shadowRoot!.activeElement) {
-          this.$.updateStatusButton.focus();
-        } else if (this.shadowRoot!.activeElement.nextElementSibling) {
-          (this.shadowRoot!.activeElement.nextElementSibling as HTMLElement)
-              .focus();
-        } else {
-          this.focus();
-        }
+      case 'ArrowRight': {
+        const index =
+            focusedIndex >= focusableElements.length - 1 ? 0 : focusedIndex + 1;
+        focusableElements[index]!.focus();
         break;
-      case 'ArrowLeft':
-        if (!this.shadowRoot!.activeElement) {
-          this.$.deleteButton.focus();
-        } else if (this.shadowRoot!.activeElement.nextElementSibling) {
-        } else if (this.shadowRoot!.activeElement.previousElementSibling) {
-          (this.shadowRoot!.activeElement.previousElementSibling as HTMLElement)
-              .focus();
-        } else {
-          this.focus();
-        }
+      }
+      case 'ArrowLeft': {
+        const index =
+            focusedIndex <= 0 ? focusableElements.length - 1 : focusedIndex - 1;
+        focusableElements[index]!.focus();
         break;
+      }
       default:
         assertNotReached();
     }
@@ -134,32 +144,32 @@ export class ReadingListItemElement extends ReadingListItemElementBase {
     e.stopPropagation();
   }
 
-  private onUpdateStatusClick_(e: Event) {
+  protected onUpdateStatusClick_(e: Event) {
     e.stopPropagation();
     this.apiProxy_.updateReadStatus(this.data.url, !this.data.read);
+    if (!this.data.read) {
+      this.dispatchEvent(new CustomEvent(
+          MARKED_AS_READ_UI_EVENT, {bubbles: true, composed: true}));
+    }
   }
 
-  private onItemDeleteClick_(e: Event) {
+  protected onItemDeleteClick_(e: Event) {
     e.stopPropagation();
     this.apiProxy_.removeEntry(this.data.url);
-  }
-
-  private getFaviconUrl_(url: string): string {
-    return getFaviconForPageURL(url, false);
   }
 
   /**
    * @return The appropriate icon for the current state
    */
-  private getUpdateStatusButtonIcon_(
-      markAsUnreadIcon: string, markAsReadIcon: string): string {
-    return this.data.read ? markAsUnreadIcon : markAsReadIcon;
+  protected getUpdateStatusButtonIcon_(): string {
+    return this.data.read ? 'read-later:check-circle-reverse' :
+                            'cr:check-circle';
   }
 
   /**
    * @return The appropriate tooltip for the current state
    */
-  private getUpdateStatusButtonTooltip_(
+  protected getUpdateStatusButtonTooltip_(
       markAsUnreadTooltip: string, markAsReadTooltip: string): string {
     return this.data.read ? markAsUnreadTooltip : markAsReadTooltip;
   }
@@ -168,6 +178,9 @@ export class ReadingListItemElement extends ReadingListItemElementBase {
 declare global {
   interface HTMLElementTagNameMap {
     'reading-list-item': ReadingListItemElement;
+  }
+  interface HTMLElementEventMap {
+    [MARKED_AS_READ_UI_EVENT]: CustomEvent;
   }
 }
 

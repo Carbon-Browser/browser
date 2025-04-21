@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,14 +10,17 @@
 #include "ash/components/arc/metrics/stability_metrics_manager.h"
 #include "ash/components/arc/mojom/app.mojom.h"
 #include "ash/components/arc/mojom/auth.mojom.h"
+#include "ash/shell.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/metrics/histogram_macros_local.h"
 #include "chrome/browser/ash/arc/arc_util.h"
 #include "chrome/browser/ash/arc/policy/arc_policy_util.h"
 #include "chrome/browser/ash/arc/session/arc_provisioning_result.h"
 #include "chrome/browser/ash/login/demo_mode/demo_session.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_manager.h"
+#include "chromeos/ash/components/browser_context_helper/browser_context_helper.h"
+#include "components/user_manager/user_manager.h"
 
 // Enable VLOG level 1.
 #undef ENABLED_VLOG_LEVEL
@@ -57,14 +60,25 @@ ArcEnabledState ComputeEnabledState(bool enabled, const Profile* profile) {
 }  // namespace
 
 void UpdateEnabledStateByUserTypeUMA() {
-  const Profile* profile = ProfileManager::GetPrimaryUserProfile();
-
-  // Don't record UMA if current primary user profile should be ignored in the
-  // first place, or we're currently in guest session.
-  if (!IsRealUserProfile(profile) || profile->IsGuestSession())
+  auto* primary_user = user_manager::UserManager::Get()->GetPrimaryUser();
+  // Don't record UMA if there is no primary user.
+  if (!primary_user) {
     return;
+  }
 
-  absl::optional<bool> enabled_state;
+  const Profile* profile = Profile::FromBrowserContext(
+      ash::BrowserContextHelper::Get()->GetBrowserContextByUser(primary_user));
+  // Don't record UMA if the primary user profile is not loaded.
+  if (!profile) {
+    return;
+  }
+
+  // Don't record UMA if we're currently in guest session.
+  if (profile->IsGuestSession()) {
+    return;
+  }
+
+  std::optional<bool> enabled_state;
   if (auto* stability_metrics_manager = StabilityMetricsManager::Get())
     enabled_state = stability_metrics_manager->GetArcEnabledState();
 
@@ -85,8 +99,8 @@ void UpdateOptInFlowResultUMA(OptInFlowResult result) {
   LogStabilityUmaEnum("Arc.OptInResult", result);
 }
 
-void UpdateOptInNetworkErrorActionUMA(OptInNetworkErrorActionType type) {
-  base::UmaHistogramEnumeration("Arc.OptInNetworkErrorAction", type);
+void UpdateOptinTosLoadResultUMA(bool success) {
+  base::UmaHistogramBoolean("Arc.OptinTosLoadResult", success);
 }
 
 void UpdateProvisioningStatusUMA(ProvisioningStatus status,
@@ -96,25 +110,25 @@ void UpdateProvisioningStatusUMA(ProvisioningStatus status,
       GetHistogramNameByUserType("Arc.Provisioning.Status", profile), status);
 }
 
-void UpdateCloudProvisionFlowErrorUMA(mojom::CloudProvisionFlowError error,
-                                      const Profile* profile) {
+void UpdateProvisioningDpcResultUMA(ArcProvisioningDpcResult result,
+                                    const Profile* profile) {
   LogStabilityUmaEnum(
-      GetHistogramNameByUserType("Arc.Provisioning.CloudFlowError", profile),
-      error);
+      GetHistogramNameByUserType("Arc.Provisioning.DpcResult", profile),
+      result);
 }
 
-void UpdateGMSSignInErrorUMA(mojom::GMSSignInError error,
-                             const Profile* profile) {
+void UpdateProvisioningSigninResultUMA(ArcProvisioningSigninResult result,
+                                       const Profile* profile) {
   LogStabilityUmaEnum(
-      GetHistogramNameByUserType("Arc.Provisioning.SignInError", profile),
-      error);
+      GetHistogramNameByUserType("Arc.Provisioning.SigninResult", profile),
+      result);
 }
 
-void UpdateGMSCheckInErrorUMA(mojom::GMSCheckInError error,
-                              const Profile* profile) {
+void UpdateProvisioningCheckinResultUMA(ArcProvisioningCheckinResult result,
+                                        const Profile* profile) {
   LogStabilityUmaEnum(
-      GetHistogramNameByUserType("Arc.Provisioning.CheckInError", profile),
-      error);
+      GetHistogramNameByUserType("Arc.Provisioning.CheckinResult", profile),
+      result);
 }
 
 void UpdateSecondarySigninResultUMA(ProvisioningStatus status) {
@@ -159,10 +173,19 @@ void UpdatePlayAutoInstallRequestTime(const base::TimeDelta& elapsed_time,
 void UpdateArcUiAvailableTime(const base::TimeDelta& elapsed_time,
                               const std::string& mode,
                               const Profile* profile) {
+  if (ash::Shell::HasInstance()) {
+    ash::Shell::Get()
+        ->login_unlock_throughput_recorder()
+        ->ArcUiAvailableAfterLogin();
+  }
   base::UmaHistogramCustomTimes(
       GetHistogramNameByUserType("Arc.UiAvailable." + mode + ".TimeDelta",
                                  profile),
       elapsed_time, base::Seconds(1), base::Minutes(5), 50);
+
+  // This is local test-only histogram.
+  LOCAL_HISTOGRAM_CUSTOM_TIMES("Arc.Tast.UiAvailable.TimeDelta", elapsed_time,
+                               base::Seconds(1), base::Minutes(5), 50);
 }
 
 void UpdatePlayStoreLaunchTime(const base::TimeDelta& elapsed_time) {
@@ -199,13 +222,6 @@ void UpdateAuthAccountCheckStatus(mojom::AccountCheckStatus status,
       status);
 }
 
-void UpdateAuthCodeFetcherProxyBypassUMA(bool proxy_bypassed,
-                                         const Profile* profile) {
-  base::UmaHistogramBoolean(
-      GetHistogramNameByUserType("Arc.Auth.CodeFetcher.ProxyBypass", profile),
-      proxy_bypassed);
-}
-
 void UpdateAccountReauthReason(mojom::ReauthReason reason,
                                const Profile* profile) {
   LogStabilityUmaEnum(
@@ -237,6 +253,85 @@ void UpdateReauthorizationSilentAuthCodeUMA(OptInSilentAuthCode state) {
 
 void UpdateSecondaryAccountSilentAuthCodeUMA(OptInSilentAuthCode state) {
   LogStabilityUmaEnum("Arc.OptInSilentAuthCode.SecondaryAccount", state);
+}
+
+ArcProvisioningDpcResult GetDpcErrorResult(
+    mojom::CloudProvisionFlowError error) {
+  switch (error) {
+    case mojom::CloudProvisionFlowError::ERROR_ENROLLMENT_TOKEN_INVALID:
+      return ArcProvisioningDpcResult::kInvalidToken;
+    case mojom::CloudProvisionFlowError::ERROR_ADD_ACCOUNT_FAILED:
+      return ArcProvisioningDpcResult::kAccountAddFail;
+    case mojom::CloudProvisionFlowError::ERROR_TIMEOUT:
+      return ArcProvisioningDpcResult::kTimeout;
+    case mojom::CloudProvisionFlowError::ERROR_NETWORK_UNAVAILABLE:
+      return ArcProvisioningDpcResult::kNetworkError;
+    case mojom::CloudProvisionFlowError::
+        ERROR_OAUTH_TOKEN_AUTHENTICATOR_EXCEPTION:
+      return ArcProvisioningDpcResult::kOAuthAuthException;
+    case mojom::CloudProvisionFlowError::ERROR_OAUTH_TOKEN_IO_EXCEPTION:
+      return ArcProvisioningDpcResult::kOAuthIOException;
+    case mojom::CloudProvisionFlowError::ERROR_OTHER:
+    case mojom::CloudProvisionFlowError::ERROR_ENTERPRISE_INVALID:
+    case mojom::CloudProvisionFlowError::ERROR_USER_CANCEL:
+    case mojom::CloudProvisionFlowError::ERROR_NO_ACCOUNT_IN_WORK_PROFILE:
+    case mojom::CloudProvisionFlowError::ERROR_INVALID_POLICY_STATE:
+    case mojom::CloudProvisionFlowError::ERROR_DPC_SUPPORT:
+    case mojom::CloudProvisionFlowError::ERROR_ACCOUNT_NOT_READY:
+    case mojom::CloudProvisionFlowError::ERROR_CHECKIN_FAILED:
+    case mojom::CloudProvisionFlowError::ERROR_ACCOUNT_NOT_ALLOWLISTED:
+    case mojom::CloudProvisionFlowError::ERROR_JSON:
+    case mojom::CloudProvisionFlowError::ERROR_MANAGED_PROVISIONING_FAILED:
+    case mojom::CloudProvisionFlowError::ERROR_INVALID_SETUP_ACTION:
+    case mojom::CloudProvisionFlowError::ERROR_SERVER:
+    case mojom::CloudProvisionFlowError::ERROR_REMOVE_ACCOUNT_FAILED:
+    case mojom::CloudProvisionFlowError::ERROR_OAUTH_TOKEN:
+    case mojom::CloudProvisionFlowError::ERROR_ACCOUNT_OTHER:
+    case mojom::CloudProvisionFlowError::ERROR_QUARANTINE:
+    case mojom::CloudProvisionFlowError::ERROR_DEVICE_QUOTA_EXCEEDED:
+    case mojom::CloudProvisionFlowError::ERROR_SERVER_TRANSIENT_ERROR:
+    case mojom::CloudProvisionFlowError::
+        ERROR_OAUTH_TOKEN_OPERATION_CANCELED_EXCEPTION:
+    case mojom::CloudProvisionFlowError::ERROR_REQUEST_ANDROID_ID_FAILED:
+      VLOG(1) << "ArcProvisioningDpcResult[kUnknownError]="
+              << static_cast<
+                     std::underlying_type_t<mojom::CloudProvisionFlowError>>(
+                     error);
+      return ArcProvisioningDpcResult::kUnknownError;
+  }
+}
+
+ArcProvisioningSigninResult GetSigninErrorResult(mojom::GMSSignInError error) {
+  switch (error) {
+    case mojom::GMSSignInError::GMS_SIGN_IN_NETWORK_ERROR:
+      return ArcProvisioningSigninResult::kNetworkError;
+    case mojom::GMSSignInError::GMS_SIGN_IN_SERVICE_UNAVAILABLE:
+      return ArcProvisioningSigninResult::kServiceUnavailable;
+    case mojom::GMSSignInError::GMS_SIGN_IN_BAD_AUTHENTICATION:
+      return ArcProvisioningSigninResult::kAuthFailure;
+    case mojom::GMSSignInError::GMS_SIGN_IN_TIMEOUT:
+      return ArcProvisioningSigninResult::kTimeout;
+    case mojom::GMSSignInError::GMS_SIGN_IN_FAILED:
+    case mojom::GMSSignInError::GMS_SIGN_IN_INTERNAL_ERROR:
+      VLOG(1) << "ArcProvisioningSigninResult[kUnknownError]="
+              << static_cast<std::underlying_type_t<mojom::GMSSignInError>>(
+                     error);
+      return ArcProvisioningSigninResult::kUnknownError;
+  }
+}
+
+ArcProvisioningCheckinResult GetCheckinErrorResult(
+    mojom::GMSCheckInError error) {
+  switch (error) {
+    case mojom::GMSCheckInError::GMS_CHECK_IN_TIMEOUT:
+      return ArcProvisioningCheckinResult::kTimeout;
+    case mojom::GMSCheckInError::GMS_CHECK_IN_FAILED:
+    case mojom::GMSCheckInError::GMS_CHECK_IN_INTERNAL_ERROR:
+      VLOG(1) << "ArcProvisioningCheckinResult[kUnknownError]="
+              << static_cast<std::underlying_type_t<mojom::GMSCheckInError>>(
+                     error);
+      return ArcProvisioningCheckinResult::kUnknownError;
+  }
 }
 
 ProvisioningStatus GetProvisioningStatus(
@@ -278,7 +373,6 @@ ProvisioningStatus GetProvisioningStatus(
   }
 
   NOTREACHED() << "unexpected provisioning result";
-  return ProvisioningStatus::UNKNOWN_ERROR;
 }
 
 std::ostream& operator<<(std::ostream& os, const ProvisioningStatus& status) {
@@ -305,10 +399,7 @@ std::ostream& operator<<(std::ostream& os, const ProvisioningStatus& status) {
 
 #undef MAP_PROVISIONING_RESULT
 
-  // Some compilers report an error even if all values of an enum-class are
-  // covered exhaustively in a switch statement.
   NOTREACHED() << "Invalid value " << static_cast<int>(status);
-  return os;
 }
 
 }  // namespace arc

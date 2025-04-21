@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,68 +8,49 @@
  * settings.
  */
 
-import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
+import '/shared/settings/prefs/prefs.js';
+import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
 import 'chrome://resources/cr_elements/cr_link_row/cr_link_row.js';
 import 'chrome://resources/cr_elements/cr_toast/cr_toast.js';
 import '../controls/settings_toggle_button.js';
 import '../icons.html.js';
-import '../prefs/prefs.js';
+import '../privacy_icons.html.js';
 import '../settings_shared.css.js';
 import '../site_settings/site_list.js';
 import './collapse_radio_button.js';
 import './do_not_track_toggle.js';
 import '../controls/settings_radio_group.js';
 
-import {CrToastElement} from 'chrome://resources/cr_elements/cr_toast/cr_toast.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {focusWithoutInk} from 'chrome://resources/js/cr/ui/focus_without_ink.m.js';
-import {I18nMixin, I18nMixinInterface} from 'chrome://resources/js/i18n_mixin.js';
-import {WebUIListenerMixin, WebUIListenerMixinInterface} from 'chrome://resources/js/web_ui_listener_mixin.js';
+import {PrefsMixin} from '/shared/settings/prefs/prefs_mixin.js';
+import type {CrToastElement} from 'chrome://resources/cr_elements/cr_toast/cr_toast.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {focusWithoutInk} from 'chrome://resources/js/focus_without_ink.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {SettingsRadioGroupElement} from '../controls/settings_radio_group.js';
-import {FocusConfig} from '../focus_config.js';
+import type {SettingsRadioGroupElement} from '../controls/settings_radio_group.js';
+import type {SettingsToggleButtonElement} from '../controls/settings_toggle_button.js';
+import type {FocusConfig} from '../focus_config.js';
 import {loadTimeData} from '../i18n_setup.js';
-import {MetricsBrowserProxy, MetricsBrowserProxyImpl, PrivacyElementInteractions} from '../metrics_browser_proxy.js';
-import {PrefsMixin, PrefsMixinInterface} from '../prefs/prefs_mixin.js';
+import type {MetricsBrowserProxy} from '../metrics_browser_proxy.js';
+import {MetricsBrowserProxyImpl, PrivacyElementInteractions} from '../metrics_browser_proxy.js';
 import {routes} from '../route.js';
-import {Route, RouteObserverMixin, RouteObserverMixinInterface, Router} from '../router.js';
-import {ContentSetting, ContentSettingsTypes} from '../site_settings/constants.js';
-import {CookiePrimarySetting} from '../site_settings/site_settings_prefs_browser_proxy.js';
+import type {Route} from '../router.js';
+import {RouteObserverMixin, Router} from '../router.js';
+import {ContentSetting, ContentSettingsTypes, CookieControlsMode} from '../site_settings/constants.js';
+import {ThirdPartyCookieBlockingSetting} from '../site_settings/site_settings_prefs_browser_proxy.js';
 
-import {SettingsCollapseRadioButtonElement} from './collapse_radio_button.js';
 import {getTemplate} from './cookies_page.html.js';
-
-/**
- * Must be kept in sync with the C++ enum of the same name (see
- * chrome/browser/prefetch/prefetch_prefs.h).
- */
-enum NetworkPredictionOptions {
-  STANDARD = 0,
-  WIFI_ONLY_DEPRECATED = 1,
-  DISABLED = 2,
-  EXTENDED = 3,
-  DEFAULT = 1,
-}
 
 export interface SettingsCookiesPageElement {
   $: {
-    allowAll: SettingsCollapseRadioButtonElement,
-    blockAll: SettingsCollapseRadioButtonElement,
-    blockThirdPartyIncognito: SettingsCollapseRadioButtonElement,
-    blockThirdParty: SettingsCollapseRadioButtonElement,
-    primarySettingGroup: SettingsRadioGroupElement,
     toast: CrToastElement,
   };
 }
 
-const SettingsCookiesPageElementBase =
-    RouteObserverMixin(
-        WebUIListenerMixin(I18nMixin(PrefsMixin(PolymerElement)))) as {
-      new (): PolymerElement & I18nMixinInterface &
-          WebUIListenerMixinInterface & PrefsMixinInterface &
-          RouteObserverMixinInterface,
-    };
+const SettingsCookiesPageElementBase = RouteObserverMixin(
+    WebUiListenerMixin(I18nMixin(PrefsMixin(PolymerElement))));
 
 export class SettingsCookiesPageElement extends SettingsCookiesPageElementBase {
   static get is() {
@@ -99,23 +80,15 @@ export class SettingsCookiesPageElement extends SettingsCookiesPageElementBase {
         value: '',
       },
 
-      /**
-       * Primary cookie control states for use in bindings.
-       */
-      cookiePrimarySettingEnum_: {
+      /** Cookie control modes for use in bindings. */
+      cookieControlsModeEnum_: {
         type: Object,
-        value: CookiePrimarySetting,
+        value: CookieControlsMode,
       },
 
-      /**
-       * Used for HTML bindings. This is defined as a property rather than
-       * within the ready callback, because the value needs to be available
-       * before local DOM initialization - otherwise, the toggle has unexpected
-       * behavior.
-       */
-      networkPredictionUncheckedValue_: {
-        type: Number,
-        value: NetworkPredictionOptions.DISABLED,
+      thirdPartyCookieBlockingSettingEnum_: {
+        type: Object,
+        value: ThirdPartyCookieBlockingSetting,
       },
 
       contentSetting_: {
@@ -128,11 +101,6 @@ export class SettingsCookiesPageElement extends SettingsCookiesPageElementBase {
         value: ContentSettingsTypes.COOKIES,
       },
 
-      exceptionListsReadOnly_: {
-        type: Boolean,
-        value: false,
-      },
-
       blockAllPref_: {
         type: Object,
         value() {
@@ -140,53 +108,64 @@ export class SettingsCookiesPageElement extends SettingsCookiesPageElementBase {
         },
       },
 
-      enableConsolidatedSiteStorageControls_: {
-        type: Boolean,
-        value: () =>
-            loadTimeData.getBoolean('consolidatedSiteStorageControlsEnabled'),
-      },
-
       focusConfig: {
         type: Object,
         observer: 'focusConfigChanged_',
       },
-    };
-  }
 
-  static get observers() {
-    return [`onGeneratedPrefsUpdated_(prefs.generated.cookie_session_only,
-        prefs.generated.cookie_primary_setting)`];
+      enableFirstPartySetsUI_: {
+        type: Boolean,
+        value: () => loadTimeData.getBoolean('firstPartySetsUIEnabled'),
+      },
+
+      is3pcdRedesignEnabled_: {
+        type: Boolean,
+        value: () =>
+            loadTimeData.getBoolean('is3pcdCookieSettingsRedesignEnabled'),
+      },
+
+      isIpProtectionAvailable_: {
+        type: Boolean,
+        value: () => loadTimeData.getBoolean('isIpProtectionUxEnabled'),
+      },
+
+      isFingerprintingProtectionAvailable_: {
+        type: Boolean,
+        value: () =>
+            loadTimeData.getBoolean('isFingerprintingProtectionUxEnabled'),
+      },
+
+      isAlwaysBlock3pcsIncognitoEnabled_: {
+        type: Boolean,
+        value: () =>
+            loadTimeData.getBoolean('isAlwaysBlock3pcsIncognitoEnabled'),
+      },
+    };
   }
 
   searchTerm: string;
   private cookiesContentSettingType_: ContentSettingsTypes;
-  private exceptionListsReadOnly_: boolean;
   private blockAllPref_: chrome.settingsPrivate.PrefObject;
-  private enableConsolidatedSiteStorageControls_: boolean;
   focusConfig: FocusConfig;
+  private enableFirstPartySetsUI_: boolean;
+  private is3pcdRedesignEnabled_: boolean;
+  private isIpProtectionAvailable_: boolean;
+  private isFingerprintingProtectionAvailable_: boolean;
 
   private metricsBrowserProxy_: MetricsBrowserProxy =
       MetricsBrowserProxyImpl.getInstance();
 
   private focusConfigChanged_(_newConfig: FocusConfig, oldConfig: FocusConfig) {
     assert(!oldConfig);
-    assert(
-        this.enableConsolidatedSiteStorageControls_ ?
-            routes.SITE_SETTINGS_ALL :
-            routes.SITE_SETTINGS_SITE_DATA);
     const selectSiteDataLinkRow = () => {
-      const toFocus = this.shadowRoot!.querySelector('#site-data-trigger');
+      const toFocus =
+          this.shadowRoot!.querySelector<HTMLElement>('#site-data-trigger');
       assert(toFocus);
       focusWithoutInk(toFocus);
     };
-    if (this.enableConsolidatedSiteStorageControls_) {
-      this.focusConfig.set(
-          `${routes.SITE_SETTINGS_ALL.path}_${routes.COOKIES.path}`,
-          selectSiteDataLinkRow);
-    } else {
-      this.focusConfig.set(
-          routes.SITE_SETTINGS_SITE_DATA.path, selectSiteDataLinkRow);
-    }
+    this.focusConfig.set(
+        `${routes.SITE_SETTINGS_ALL.path}_${routes.COOKIES.path}`,
+        selectSiteDataLinkRow);
   }
 
   override currentRouteChanged(route: Route) {
@@ -195,126 +174,127 @@ export class SettingsCookiesPageElement extends SettingsCookiesPageElementBase {
     }
   }
 
-  // <if expr="not chromeos_ash">
-  private getClearOnExitSubLabel_(): string {
-    // <if expr="chromeos_lacros">
-    if (loadTimeData.getBoolean('isSecondaryUser')) {
-      return '';
-    }
-    // </if>
-
-    return this.i18n('cookiePageClearOnExitDesc');
-  }
-  // </if>
-
-  private getSiteDataLabel_(): string {
-    return this.enableConsolidatedSiteStorageControls_ ?
-        this.i18n('cookiePageAllSitesLink') :
-        this.i18n('siteSettingsCookieLink');
-  }
-
   private onSiteDataClick_() {
-    if (this.enableConsolidatedSiteStorageControls_) {
-      Router.getInstance().navigateTo(routes.SITE_SETTINGS_ALL);
-    } else {
-      Router.getInstance().navigateTo(routes.SITE_SETTINGS_SITE_DATA);
+    Router.getInstance().navigateTo(routes.SITE_SETTINGS_ALL);
+  }
+
+  private onBlockAll3pcToggleChanged_(event: Event) {
+    this.metricsBrowserProxy_.recordSettingsPageHistogram(
+        PrivacyElementInteractions.BLOCK_ALL_THIRD_PARTY_COOKIES);
+    const target = event.target as SettingsToggleButtonElement;
+    if (target.checked) {
+      this.metricsBrowserProxy_.recordAction(
+          'Settings.PrivacySandbox.Block3PCookies');
     }
   }
 
-  private onGeneratedPrefsUpdated_() {
-    const sessionOnlyPref = this.getPref('generated.cookie_session_only');
-
-    // If the clear on exit toggle is managed this implies a content setting
-    // policy is present and the exception lists should be disabled.
-    this.exceptionListsReadOnly_ = sessionOnlyPref.enforcement ===
-        chrome.settingsPrivate.Enforcement.ENFORCED;
-
-    // It is not currently possible to represent multiple management
-    // sources for a single a preference. In all management scenarios,
-    // the blockAll setting shares the same controlledBy as the
-    // cookie_session_only pref. To support this, the controlledBy
-    // fields for the |cookie_primary_setting| pref provided to the
-    // blockAll control are overwritten with values from the session_only
-    // preference.
-    this.set(
-        'blockAllPref_',
-        Object.assign(this.getPref('generated.cookie_primary_setting'), {
-          controlledBy: sessionOnlyPref.controlledBy,
-          controlledByName: sessionOnlyPref.controlledByName,
-        }));
+  private onFpProtectionChanged_() {
+    this.metricsBrowserProxy_.recordSettingsPageHistogram(
+        PrivacyElementInteractions.FINGERPRINTING_PROTECTION);
   }
 
-  /**
-   * Record interaction metrics for the primary cookie radio setting.
-   */
-  private onCookiePrimarySettingChanged_() {
-    const selection = Number(this.$.primarySettingGroup.selected);
-    if (selection === CookiePrimarySetting.ALLOW_ALL) {
-      this.metricsBrowserProxy_.recordSettingsPageHistogram(
-          PrivacyElementInteractions.COOKIES_ALL);
-    } else if (selection === CookiePrimarySetting.BLOCK_THIRD_PARTY_INCOGNITO) {
-      this.metricsBrowserProxy_.recordSettingsPageHistogram(
-          PrivacyElementInteractions.COOKIES_INCOGNITO);
-    } else if (selection === CookiePrimarySetting.BLOCK_THIRD_PARTY) {
-      this.metricsBrowserProxy_.recordSettingsPageHistogram(
-          PrivacyElementInteractions.COOKIES_THIRD);
-    } else {  // CookiePrimarySetting.BLOCK_ALL
-      this.metricsBrowserProxy_.recordSettingsPageHistogram(
-          PrivacyElementInteractions.COOKIES_BLOCK);
-    }
+  private onIpProtectionChanged_() {
+    this.metricsBrowserProxy_.recordSettingsPageHistogram(
+        PrivacyElementInteractions.IP_PROTECTION);
+  }
 
+  private showOrHideToast(switchedToBlock3pcs: boolean) {
     // If this change resulted in the user now blocking 3P cookies where they
-    // previously were not, and privacy sandbox APIs are enabled,
+    // previously were not, and any of privacy sandbox APIs are enabled,
     // the privacy sandbox toast should be shown.
-    const currentCookieSetting =
-        this.getPref('generated.cookie_primary_setting').value;
-    const privacySandboxEnabled =
-        loadTimeData.getBoolean('privacySandboxSettings3Enabled') ?
-        this.getPref('privacy_sandbox.apis_enabled_v2').value :
-        this.getPref('privacy_sandbox.apis_enabled').value;
+    const areAnyPrivacySandboxApisEnabled =
+        this.getPref('privacy_sandbox.m1.topics_enabled').value ||
+        this.getPref('privacy_sandbox.m1.fledge_enabled').value ||
+        this.getPref('privacy_sandbox.m1.ad_measurement_enabled').value;
 
-    if (privacySandboxEnabled &&
-        (currentCookieSetting === CookiePrimarySetting.ALLOW_ALL ||
-         currentCookieSetting ===
-             CookiePrimarySetting.BLOCK_THIRD_PARTY_INCOGNITO) &&
-        (selection === CookiePrimarySetting.BLOCK_THIRD_PARTY ||
-         selection === CookiePrimarySetting.BLOCK_ALL)) {
+    if (areAnyPrivacySandboxApisEnabled && switchedToBlock3pcs) {
       if (!loadTimeData.getBoolean('isPrivacySandboxRestricted')) {
         this.$.toast.show();
       }
       this.metricsBrowserProxy_.recordAction(
           'Settings.PrivacySandbox.Block3PCookies');
-    } else if (
-        selection === CookiePrimarySetting.ALLOW_ALL ||
-        selection === CookiePrimarySetting.BLOCK_THIRD_PARTY_INCOGNITO) {
+    } else {
       this.$.toast.hide();
     }
-
-    this.$.primarySettingGroup.sendPrefChange();
   }
 
-  private onClearOnExitChange_() {
-    this.metricsBrowserProxy_.recordSettingsPageHistogram(
-        PrivacyElementInteractions.COOKIES_SESSION);
+  private onCookieControlsModeChanged_() {
+    // TODO(crbug.com/40244046): Use this.$.primarySettingGroup after the feature
+    // is launched and element isn't in dom-if anymore.
+    const primarySettingGroup: SettingsRadioGroupElement =
+        this.shadowRoot!.querySelector('#primarySettingGroup')!;
+    const selection = Number(primarySettingGroup.selected);
+    if (selection === CookieControlsMode.OFF) {
+      this.metricsBrowserProxy_.recordSettingsPageHistogram(
+          PrivacyElementInteractions.THIRD_PARTY_COOKIES_ALLOW);
+    } else if (selection === CookieControlsMode.INCOGNITO_ONLY) {
+      this.metricsBrowserProxy_.recordSettingsPageHistogram(
+          PrivacyElementInteractions.THIRD_PARTY_COOKIES_BLOCK_IN_INCOGNITO);
+    } else {
+      assert(selection === CookieControlsMode.BLOCK_THIRD_PARTY);
+      this.metricsBrowserProxy_.recordSettingsPageHistogram(
+          PrivacyElementInteractions.THIRD_PARTY_COOKIES_BLOCK);
+    }
+
+    const currentCookieControlsMode =
+        this.getPref('profile.cookie_controls_mode').value;
+    this.showOrHideToast(
+        (currentCookieControlsMode === CookieControlsMode.OFF ||
+         currentCookieControlsMode === CookieControlsMode.INCOGNITO_ONLY) &&
+        selection === CookieControlsMode.BLOCK_THIRD_PARTY);
+
+    primarySettingGroup.sendPrefChange();
   }
 
-  /**
-   * Records changes made to the network prediction setting for logging, the
-   * logic of actually changing the setting is taken care of by the
-   * net.network_prediction_options pref.
-   */
-  private onNetworkPredictionChange_() {
-    this.metricsBrowserProxy_.recordSettingsPageHistogram(
-        PrivacyElementInteractions.NETWORK_PREDICTION);
+  private onThirdPartyCookieBlockingSettingChanged_() {
+    const thirdPartyCookieBlockingSettingGroup: SettingsRadioGroupElement =
+        this.shadowRoot!.querySelector('#thirdPartyCookieBlockingSettingGroup')!
+        ;
+    const selection = Number(thirdPartyCookieBlockingSettingGroup.selected);
+    if (selection === ThirdPartyCookieBlockingSetting.INCOGNITO_ONLY) {
+      this.metricsBrowserProxy_.recordSettingsPageHistogram(
+          PrivacyElementInteractions.THIRD_PARTY_COOKIES_BLOCK_IN_INCOGNITO);
+    } else {
+      assert(selection === ThirdPartyCookieBlockingSetting.BLOCK_THIRD_PARTY);
+      this.metricsBrowserProxy_.recordSettingsPageHistogram(
+          PrivacyElementInteractions.THIRD_PARTY_COOKIES_BLOCK);
+    }
+
+    const currentThirdPartyCookieBlockingSetting =
+        this.getPref('generated.third_party_cookie_blocking_setting').value;
+    this.showOrHideToast(
+        currentThirdPartyCookieBlockingSetting ===
+            ThirdPartyCookieBlockingSetting.INCOGNITO_ONLY &&
+        selection === ThirdPartyCookieBlockingSetting.BLOCK_THIRD_PARTY);
+
+    thirdPartyCookieBlockingSettingGroup.sendPrefChange();
   }
 
   private onPrivacySandboxClick_() {
     this.metricsBrowserProxy_.recordAction(
         'Settings.PrivacySandbox.OpenedFromCookiesPageToast');
     this.$.toast.hide();
-    // TODO(crbug/1159942): Replace this with an ordinary OpenWindowProxy call.
+    // TODO(crbug.com/40162029): Replace this with an ordinary OpenWindowProxy call.
     this.shadowRoot!.querySelector<HTMLAnchorElement>(
                         '#privacySandboxLink')!.click();
+  }
+
+  private relatedWebsiteSetsToggleDisabled_() {
+    return this.getPref('profile.cookie_controls_mode').value !==
+        CookieControlsMode.BLOCK_THIRD_PARTY;
+  }
+
+  private relatedWebsiteSetsToggle3pcSettingDisabled_() {
+    return this.getPref('generated.third_party_cookie_blocking_setting')
+               .value !== ThirdPartyCookieBlockingSetting.BLOCK_THIRD_PARTY;
+  }
+
+  private getThirdPartyCookiesPageBlockThirdPartyIncognitoBulTwoLabel_():
+      string {
+    return this.i18n(
+        this.enableFirstPartySetsUI_ ?
+            'cookiePageBlockThirdIncognitoBulTwoRws' :
+            'thirdPartyCookiesPageBlockIncognitoBulTwo');
   }
 }
 

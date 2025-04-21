@@ -1,11 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_METRICS_METRICS_PROVIDER_H_
 #define COMPONENTS_METRICS_METRICS_PROVIDER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 
 namespace base {
@@ -34,12 +34,22 @@ class MetricsProvider {
   // Called during service initialization to allow the provider to start any
   // async initialization tasks.  The service will wait for the provider to
   // call |done_callback| before generating logs for the current session.
+  // |done_callback| must be run on the same thread that calls |AsyncInit|.
   virtual void AsyncInit(base::OnceClosure done_callback);
 
+  // Called by OnDidCreateMetricsLog() to provide histograms. If histograms
+  // are not emitted successfully, it will be called in
+  // ProvideCurrentSessionData().
+  // Returns whether or not histograms are emitted successfully.
+  // Only override this function if:
+  // 1. You want your histograms to be included in every record uploaded to the
+  // server.
+  // 2. You will not override ProvideCurrentSessionData(),
+  // OnDidCreateMetricsLog(), or ProvideStabilityMetrics().
+  // TODO(crbug.com/40899764): Refactor the code to remove requirement 2.
+  virtual bool ProvideHistograms();
+
   // Called when a new MetricsLog is created.
-  // This can be used to log a histogram that will appear in the log. Not safe
-  // for some other uses, like user actions.
-  // TODO(crbug.com/1171830): Improve this.
   virtual void OnDidCreateMetricsLog();
 
   // Called when metrics recording has been enabled.
@@ -63,6 +73,9 @@ class MetricsProvider {
   // further notification after this callback.
   virtual void OnAppEnterBackground();
 
+  // Called when a document first starts loading.
+  virtual void OnPageLoadStarted();
+
   // Returns whether there are "independent" metrics that can be retrieved
   // with a call to ProvideIndependentMetrics().
   virtual bool HasIndependentMetrics();
@@ -72,9 +85,17 @@ class MetricsProvider {
   // |uma_proto| is by default filled with current session id and core system
   // profile information. This function is called on main thread, but the
   // provider can do async work to fill in |uma_proto| and run |done_callback|
-  // on calling thread when complete. Ownership of the passed objects remains
-  // with the caller and those objects will live until the callback is executed.
+  // on calling thread when complete. Calling |serialize_log_callback| will
+  // serialize |uma_proto| so that it is primed to be sent. As an optimization,
+  // the provider should call this on a background thread before posting back
+  // |done_callback| on the calling thread. However, it is fine not to call this
+  // if the thread hopping could introduce data loss (e.g., since the user may
+  // shut down the browser before |done_callback| is called). In this case,
+  // |done_callback| will "manually" call it synchronously. Ownership of the
+  // passed objects remains with the caller and those objects will live until
+  // the callback is executed.
   virtual void ProvideIndependentMetrics(
+      base::OnceClosure serialize_log_callback,
       base::OnceCallback<void(bool)> done_callback,
       ChromeUserMetricsExtension* uma_proto,
       base::HistogramSnapshotManager* snapshot_manager);
@@ -82,12 +103,16 @@ class MetricsProvider {
   // Provides additional metrics into the system profile. This is a convenience
   // method over ProvideSystemProfileMetricsWithLogCreationTime() without the
   // |log_creation_time| param. Should not be called directly by services.
+  // Do not log histograms within this function; they will not necessarily be
+  // added to the UMA record that this system profile is part of.
   virtual void ProvideSystemProfileMetrics(
       SystemProfileProto* system_profile_proto);
 
   // Provides additional metrics into the system profile. The log creation
   // time param provides a timestamp of when the log was opened, which is needed
   // for some metrics providers.
+  // Do not log histograms within this function; they will not necessarily be
+  // added to the UMA record that this system profile is part of.
   virtual void ProvideSystemProfileMetricsWithLogCreationTime(
       base::TimeTicks log_creation_time,
       SystemProfileProto* system_profile_proto);
@@ -126,18 +151,21 @@ class MetricsProvider {
   virtual void ClearSavedStabilityMetrics();
 
   // Called during regular collection to explicitly load histogram snapshots
-  // using a snapshot manager. PrepareDeltas() will have already been called
-  // and FinishDeltas() will be called later; calls to only PrepareDelta(),
-  // not PrepareDeltas (plural), should be made.
+  // using a snapshot manager. Calls to only PrepareDelta(), not PrepareDeltas()
+  // (plural), should be made.
   virtual void RecordHistogramSnapshots(
       base::HistogramSnapshotManager* snapshot_manager);
 
   // Called during collection of initial metrics to explicitly load histogram
-  // snapshots using a snapshot manager. PrepareDeltas() will have already
-  // been called and FinishDeltas() will be called later; calls to only
-  // PrepareDelta(), not PrepareDeltas (plural), should be made.
+  // snapshots using a snapshot manager. Calls to only PrepareDelta(), not
+  // PrepareDeltas() (plural), should be made.
   virtual void RecordInitialHistogramSnapshots(
       base::HistogramSnapshotManager* snapshot_manager);
+
+ protected:
+  // Used to indicate whether ProvideHistograms() successfully emits histograms
+  // when called in OnDidCreateMetricsLog().
+  bool emitted_ = false;
 };
 
 }  // namespace metrics

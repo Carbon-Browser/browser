@@ -1,10 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_VIEWS_EXAMPLES_TEXT_EXAMPLE_H_
 #define UI_VIEWS_EXAMPLES_TEXT_EXAMPLE_H_
 
+#include "base/containers/span.h"
 #include "base/memory/raw_ptr.h"
 #include "ui/views/examples/example_base.h"
 
@@ -37,8 +38,7 @@ class VIEWS_EXAMPLES_EXPORT TextExample : public ExampleBase {
   // |combobox_callback| as the callback for the created combobox.
   Combobox* AddCombobox(View* parent,
                         std::u16string name,
-                        const char* const* strings,
-                        int count,
+                        base::span<const char* const> items,
                         void (TextExample::*combobox_callback)());
 
   void AlignComboboxChanged();
@@ -78,6 +78,9 @@ class VIEWS_EXAMPLES_EXPORT TextExample : public ExampleBase {
 
   // Check box to enable/disable underline style.
   raw_ptr<Checkbox> underline_checkbox_;
+
+  // Check box to enable/disable underline style.
+  raw_ptr<Checkbox> strike_checkbox_;
 };
 
 }  // namespace examples

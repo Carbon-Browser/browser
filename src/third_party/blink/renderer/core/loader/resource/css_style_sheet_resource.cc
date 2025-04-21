@@ -26,22 +26,33 @@
 
 #include "third_party/blink/renderer/core/loader/resource/css_style_sheet_resource.h"
 
+#include "base/metrics/histogram_functions.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/trace_event/trace_event.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
 #include "third_party/blink/public/mojom/loader/request_context_frame_type.mojom-blink.h"
 #include "third_party/blink/renderer/core/css/style_sheet_contents.h"
 #include "third_party/blink/renderer/core/frame/web_feature.h"
+#include "third_party/blink/renderer/platform/heap/cross_thread_persistent.h"
 #include "third_party/blink/renderer/platform/loader/fetch/fetch_parameters.h"
 #include "third_party/blink/renderer/platform/loader/fetch/memory_cache.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_fetcher.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_loader_options.h"
+#include "third_party/blink/renderer/platform/loader/fetch/response_body_loader.h"
 #include "third_party/blink/renderer/platform/loader/fetch/text_resource_decoder_options.h"
 #include "third_party/blink/renderer/platform/network/http_names.h"
 #include "third_party/blink/renderer/platform/network/mime/mime_type_registry.h"
+#include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
+#include "third_party/blink/renderer/platform/scheduler/public/worker_pool.h"
 #include "third_party/blink/renderer/platform/weborigin/security_policy.h"
+#include "third_party/blink/renderer/platform/wtf/cross_thread_copier_base.h"
+#include "third_party/blink/renderer/platform/wtf/cross_thread_copier_mojo.h"
+#include "third_party/blink/renderer/platform/wtf/cross_thread_copier_std.h"
+#include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_encoding.h"
 
 namespace blink {
-
 CSSStyleSheetResource* CSSStyleSheetResource::Fetch(FetchParameters& params,
                                                     ResourceFetcher* fetcher,
                                                     ResourceClient* client) {
@@ -132,7 +143,7 @@ const String CSSStyleSheetResource::SheetText(
     return decoded_sheet_text_;
   }
 
-  if (!Data() || Data()->IsEmpty())
+  if (!Data() || Data()->empty())
     return String();
 
   return DecodedText();
@@ -140,11 +151,11 @@ const String CSSStyleSheetResource::SheetText(
 
 void CSSStyleSheetResource::NotifyFinished() {
   // Decode the data to find out the encoding and cache the decoded sheet text.
-  if (Data())
+  if (Data()) {
     SetDecodedSheetText(DecodedText());
+  }
 
   Resource::NotifyFinished();
-
   // Clear raw bytes as now we have the full decoded sheet text.
   // We wait for all LinkStyle::setCSSStyleSheet to run (at least once)
   // as SubresourceIntegrity checks require raw bytes.
@@ -182,9 +193,11 @@ bool CSSStyleSheetResource::CanUseSheet(const CSSParserContext* parser_context,
     // Grab |sheet_url|'s filename's extension (if present), and check whether
     // or not it maps to a `text/css` MIME type:
     String extension;
-    int last_dot = sheet_url.LastPathComponent().ReverseFind('.');
-    if (last_dot != -1)
-      extension = sheet_url.LastPathComponent().Substring(last_dot + 1);
+    String last_path_component = sheet_url.LastPathComponent().ToString();
+    int last_dot = last_path_component.ReverseFind('.');
+    if (last_dot != -1) {
+      extension = last_path_component.Substring(last_dot + 1);
+    }
     if (!EqualIgnoringASCIICase(
             MIMETypeRegistry::GetMIMETypeForExtension(extension), "text/css")) {
       if (parser_context) {
@@ -205,7 +218,7 @@ bool CSSStyleSheetResource::CanUseSheet(const CSSParserContext* parser_context,
   if (mime_type_check == MIMETypeCheck::kLax)
     return true;
   AtomicString content_type = HttpContentType();
-  return content_type.IsEmpty() ||
+  return content_type.empty() ||
          EqualIgnoringASCIICase(content_type, "text/css") ||
          EqualIgnoringASCIICase(content_type,
                                 "application/x-unknown-content-type");
@@ -213,8 +226,9 @@ bool CSSStyleSheetResource::CanUseSheet(const CSSParserContext* parser_context,
 
 StyleSheetContents* CSSStyleSheetResource::CreateParsedStyleSheetFromCache(
     const CSSParserContext* context) {
-  if (!parsed_style_sheet_cache_)
+  if (!parsed_style_sheet_cache_) {
     return nullptr;
+  }
   if (parsed_style_sheet_cache_->HasFailedOrCanceledSubresources()) {
     SetParsedStyleSheetCache(nullptr);
     return nullptr;
@@ -225,24 +239,30 @@ StyleSheetContents* CSSStyleSheetResource::CreateParsedStyleSheetFromCache(
 
   // Contexts must be identical so we know we would get the same exact result if
   // we parsed again.
-  if (*parsed_style_sheet_cache_->ParserContext() != *context)
+  if (*parsed_style_sheet_cache_->ParserContext() != *context) {
     return nullptr;
+  }
+
+  // StyleSheetContents with @media queries are shared between different
+  // documents, in the same rendering process, which may evaluate these media
+  // queries differently. For instance, two documents rendered in different tabs
+  // or iframes with different sizes. In that case, an active stylesheet update
+  // in one document may clear the cached RuleSet in StyleSheetContents, that
+  // would otherwise be a valid cache for the other document.
+  //
+  // This should not be problematic as the case of continuously modifying,
+  // adding, or removing stylesheets, while at the same time have different
+  // media query evaluations in the different documents should be quite rare.
 
   DCHECK(!parsed_style_sheet_cache_->IsLoading());
-
-  // If the stylesheet has a media query, we need to clone the cached sheet
-  // due to potential differences in the rule set.
-  if (parsed_style_sheet_cache_->HasMediaQueries())
-    return parsed_style_sheet_cache_->Copy();
-
-  return parsed_style_sheet_cache_;
+  return parsed_style_sheet_cache_.Get();
 }
 
 void CSSStyleSheetResource::SaveParsedStyleSheet(StyleSheetContents* sheet) {
   DCHECK(sheet);
   DCHECK(sheet->IsCacheableForResource());
 
-  if (!GetMemoryCache()->Contains(this)) {
+  if (!MemoryCache::Get()->Contains(this)) {
     // This stylesheet resource did conflict with another resource and was not
     // added to the cache.
     SetParsedStyleSheetCache(nullptr);

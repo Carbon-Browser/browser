@@ -1,32 +1,32 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {sendWithPromise} from 'chrome://resources/js/cr.m.js';
-import {$} from 'chrome://resources/js/util.m.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {sendWithPromise} from 'chrome://resources/js/cr.js';
+import {getRequiredElement} from 'chrome://resources/js/util.js';
 
-type ModuleData = {
-  code_id: string,
-  description: string,
-  digital_signer: string,
-  location: string,
-  name: string,
-  process_types: string,
-  type_description: string,
-  version: string,
-  third_party_module_status: string,
-};
+interface ModuleData {
+  code_id: string;
+  description: string;
+  digital_signer: string;
+  location: string;
+  name: string;
+  process_types: string;
+  type_description: string;
+  version: string;
+  third_party_module_status: string;
+}
 
-type ModuleListData = {
-  moduleCount: number,
-  moduleList: ModuleData[],
-  thirdPartyFeatureStatus: string,
-  thirdPartyFeatureEnabled: boolean,
-  hasModules: boolean,
-};
+interface ModuleListData {
+  moduleCount: number;
+  moduleList: ModuleData[];
+  thirdPartyFeatureStatus: string;
+  thirdPartyFeatureEnabled: boolean;
+  hasModules: boolean;
+}
 
 type DomBindElement = HTMLElement&{data: ModuleListData};
 
@@ -68,8 +68,8 @@ function returnModuleList(moduleListData: ModuleListData) {
   if (window.location.hash.length > 1) {
     filterModuleListData();
   }
-  $('loading-message').style.visibility = 'hidden';
-  $('body-container').style.visibility = 'visible';
+  getRequiredElement('loading-message').style.visibility = 'hidden';
+  getRequiredElement('body-container').style.visibility = 'visible';
 }
 
 // Get data and have it displayed upon loading.

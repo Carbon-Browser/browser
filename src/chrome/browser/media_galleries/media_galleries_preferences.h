@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
@@ -360,7 +360,8 @@ class MediaGalleriesPreferences
   // The ExtensionPrefs used in a testing environment, where KeyedServices
   // aren't used. This will be nullptr unless it is set with
   // SetExtensionPrefsForTesting().
-  raw_ptr<extensions::ExtensionPrefs> extension_prefs_for_testing_;
+  raw_ptr<extensions::ExtensionPrefs, DanglingUntriaged>
+      extension_prefs_for_testing_;
 
   // An in-memory cache of known galleries.
   MediaGalleriesPrefInfoMap known_galleries_;
@@ -369,7 +370,7 @@ class MediaGalleriesPreferences
   // All pref ids in |device_map_| are also in |known_galleries_|.
   DeviceIdPrefIdsMap device_map_;
 
-  base::ObserverList<GalleryChangeObserver>::Unchecked
+  base::ObserverList<GalleryChangeObserver>::UncheckedAndDanglingUntriaged
       gallery_change_observers_;
 
   base::WeakPtrFactory<MediaGalleriesPreferences> weak_factory_{this};

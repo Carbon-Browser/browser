@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,11 +10,13 @@
 #include "ash/shelf/shelf_button_pressed_metric_tracker_test_api.h"
 #include "ash/shelf/shelf_view_test_api.h"
 #include "ash/test/ash_test_base.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/metrics/user_action_tester.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/events/event.h"
+#include "ui/events/test/test_event.h"
 #include "ui/views/controls/button/button.h"
 
 namespace ash {
@@ -30,30 +32,6 @@ class DummyButton : public views::Button {
 };
 
 DummyButton::DummyButton() : views::Button(views::Button::PressedCallback()) {}
-
-// A simple light weight test double dummy for a ui::Event.
-class DummyEvent : public ui::Event {
- public:
-  DummyEvent();
-
-  DummyEvent(const DummyEvent&) = delete;
-  DummyEvent& operator=(const DummyEvent&) = delete;
-
-  ~DummyEvent() override;
-  int unique_id() const { return unique_id_; }
-
- private:
-  static int next_unique_id_;
-  int unique_id_;
-};
-
-int DummyEvent::next_unique_id_ = 0;
-
-DummyEvent::DummyEvent()
-    : Event(ui::ET_GESTURE_TAP, base::TimeTicks(), 0),
-      unique_id_(next_unique_id_++) {}
-
-DummyEvent::~DummyEvent() = default;
 
 // Test fixture for the ShelfButtonPressedMetricTracker class. Relies on
 // AshTestBase to initilize the UserMetricsRecorder and it's dependencies.
@@ -89,7 +67,7 @@ class ShelfButtonPressedMetricTrackerTest : public AshTestBase {
 
  protected:
   // The test target. Not owned.
-  ShelfButtonPressedMetricTracker* metric_tracker_;
+  raw_ptr<ShelfButtonPressedMetricTracker, DanglingUntriaged> metric_tracker_;
 
   // The TickClock injected in to the test target.
   base::SimpleTestTickClock tick_clock_;
@@ -135,7 +113,7 @@ void ShelfButtonPressedMetricTrackerTest::ButtonPressed(
 
 void ShelfButtonPressedMetricTrackerTest::ButtonPressed(
     ShelfAction performed_action) {
-  const DummyEvent kDummyEvent;
+  const ui::test::TestEvent kDummyEvent(ui::EventType::kGestureTap);
   const DummyButton kDummyButton;
   metric_tracker_->ButtonPressed(kDummyEvent, &kDummyButton, performed_action);
 }
@@ -143,7 +121,7 @@ void ShelfButtonPressedMetricTrackerTest::ButtonPressed(
 void ShelfButtonPressedMetricTrackerTest::ButtonPressed(
     const views::Button* sender,
     ShelfAction performed_action) {
-  const DummyEvent kDummyEvent;
+  const ui::test::TestEvent kDummyEvent(ui::EventType::kGestureTap);
   metric_tracker_->ButtonPressed(kDummyEvent, sender, performed_action);
 }
 
@@ -153,7 +131,7 @@ void ShelfButtonPressedMetricTrackerTest::ButtonPressed(
 // a button is pressed by a mouse event.
 TEST_F(ShelfButtonPressedMetricTrackerTest,
        Launcher_ButtonPressed_MouseIsRecordedWhenIconActivatedByMouse) {
-  const ui::MouseEvent mouse_event(ui::ET_MOUSE_PRESSED, gfx::Point(),
+  const ui::MouseEvent mouse_event(ui::EventType::kMousePressed, gfx::Point(),
                                    gfx::Point(), base::TimeTicks(), 0, 0);
 
   base::UserActionTester user_action_tester;
@@ -167,7 +145,7 @@ TEST_F(ShelfButtonPressedMetricTrackerTest,
 TEST_F(ShelfButtonPressedMetricTrackerTest,
        Launcher_ButtonPressed_MouseIsRecordedWhenIconActivatedByTouch) {
   const ui::TouchEvent touch_event(
-      ui::ET_GESTURE_TAP, gfx::Point(), base::TimeTicks(),
+      ui::EventType::kGestureTap, gfx::Point(), base::TimeTicks(),
       ui::PointerDetails(ui::EventPointerType::kTouch, 0));
 
   base::UserActionTester user_action_tester;

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,27 +7,33 @@
 
 #include <stdint.h>
 
-#include <vector>
-
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "media/base/encoder_status.h"
 #include "media/base/media_export.h"
 #include "media/base/video_types.h"
 #include "third_party/skia/include/core/SkImage.h"
+#include "third_party/skia/include/core/SkYUVAInfo.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 
-class GrDirectContext;
-
 namespace base {
 class TimeDelta;
-}
+}  // namespace base
 
 namespace gpu {
+struct Capabilities;
 namespace raster {
 class RasterInterface;
 }  // namespace raster
 }  // namespace gpu
+
+namespace libyuv {
+struct YuvConstants;
+}  // namespace libyuv
+
+namespace viz {
+class SharedImageFormat;
+}  // namespace viz
 
 namespace media {
 
@@ -148,38 +154,51 @@ MEDIA_EXPORT gfx::Size PadToMatchAspectRatio(const gfx::Size& size,
 MEDIA_EXPORT scoped_refptr<VideoFrame> ConvertToMemoryMappedFrame(
     scoped_refptr<VideoFrame> frame);
 
+// A helper function to map GpuMemoryBuffer-based VideoFrame. This function
+// maps the given GpuMemoryBuffer of |frame| as-is without converting pixel
+// format, unless the video frame is backed by DXGI GMB.
+// The returned VideoFrame owns the |frame|.
+// If the underlying buffer is DXGI, then it will be copied to shared memory
+// in GPU process.
+// If the GPU process is involved, the callback will be called in the
+// GpuMemoryThread. Otherwise it will be involved immediately in the current
+// sequence.
+MEDIA_EXPORT void ConvertToMemoryMappedFrameAsync(
+    scoped_refptr<VideoFrame> frame,
+    base::OnceCallback<void(scoped_refptr<VideoFrame>)> result_cb);
+
 // This function synchronously reads pixel data from textures associated with
 // |txt_frame| and creates a new CPU memory backed frame. It's needed because
 // existing video encoders can't handle texture backed frames.
 //
-// TODO(crbug.com/1162530): Combine this function with
+// TODO(crbug.com/40162806): Combine this function with
 // media::ConvertAndScaleFrame and put it into a new class
 // media:FrameSizeAndFormatConverter.
 MEDIA_EXPORT scoped_refptr<VideoFrame> ReadbackTextureBackedFrameToMemorySync(
-    const VideoFrame& txt_frame,
+    VideoFrame& txt_frame,
     gpu::raster::RasterInterface* ri,
-    GrDirectContext* gr_context,
+    const gpu::Capabilities& caps,
     VideoFramePool* pool = nullptr);
 
 // Synchronously reads a single plane. |src_rect| is relative to the plane,
 // which may be smaller than |frame| due to subsampling.
 MEDIA_EXPORT bool ReadbackTexturePlaneToMemorySync(
-    const VideoFrame& src_frame,
+    VideoFrame& src_frame,
     size_t src_plane,
     gfx::Rect& src_rect,
     uint8_t* dest_pixels,
     size_t dest_stride,
     gpu::raster::RasterInterface* ri,
-    GrDirectContext* gr_context);
+    const gpu::Capabilities& caps);
 
 // Converts a frame with I420A format into I420 by dropping alpha channel.
 MEDIA_EXPORT scoped_refptr<VideoFrame> WrapAsI420VideoFrame(
     scoped_refptr<VideoFrame> frame);
 
 // Copy I420 video frame to match the required coded size and pad the region
-// outside the visible rect repeatly with the last column / row up to the coded
-// size of |dst_frame|. Return false when |dst_frame| is empty or visible rect
-// is empty.
+// outside the visible rect repeatedly with the last column / row up to the
+// coded size of |dst_frame|. Return false when |dst_frame| is empty or visible
+// rect is empty.
 // One application is content mirroring using HW encoder. As the required coded
 // size for encoder is unknown before capturing, memory copy is needed when the
 // coded size does not match the requirement. Padding can improve the encoding
@@ -195,18 +214,14 @@ MEDIA_EXPORT scoped_refptr<VideoFrame> WrapAsI420VideoFrame(
 [[nodiscard]] MEDIA_EXPORT bool I420CopyWithPadding(const VideoFrame& src_frame,
                                                     VideoFrame* dst_frame);
 
-// Copy pixel data from |src_frame| to |dst_frame| applying scaling and pixel
-// format conversion as needed. Both frames need to be mappabale and have either
-// I420 or NV12 pixel format.
-[[nodiscard]] MEDIA_EXPORT EncoderStatus
-ConvertAndScaleFrame(const VideoFrame& src_frame,
-                     VideoFrame& dst_frame,
-                     std::vector<uint8_t>& tmp_buf);
-
 // Converts kRGBA_8888_SkColorType and kBGRA_8888_SkColorType to the appropriate
 // ARGB, XRGB, ABGR, or XBGR format.
 MEDIA_EXPORT VideoPixelFormat
 VideoPixelFormatFromSkColorType(SkColorType sk_color_type, bool is_opaque);
+
+// Get SkColor suitable type for various formats and planes.
+MEDIA_EXPORT SkColorType SkColorTypeForPlane(VideoPixelFormat format,
+                                             size_t plane);
 
 // Backs a VideoFrame with a SkImage. The created frame takes a ref on the
 // provided SkImage to make this operation zero copy. Only works with CPU
@@ -217,6 +232,20 @@ MEDIA_EXPORT scoped_refptr<VideoFrame> CreateFromSkImage(
     const gfx::Size& natural_size,
     base::TimeDelta timestamp,
     bool force_opaque = false);
+
+// Utility to convert a SharedImageFormat to SkYUVAInfo.
+SkYUVAInfo::PlaneConfig ToSkYUVAPlaneConfig(viz::SharedImageFormat format);
+SkYUVAInfo::Subsampling ToSkYUVASubsampling(viz::SharedImageFormat format);
+
+// Returns the libyuv RGB conversion matrix for a given skia YUV color space.
+// If `output_argb_matrix` is true a ARGB matrix will be provided, if false a
+// ABGR matrix will be provided.
+//
+// NOTE: When using the ABGR matrix, you must also swap the V,U parameters to
+// whichever libyuv function you're using.
+MEDIA_EXPORT const libyuv::YuvConstants* GetYuvContantsForColorSpace(
+    SkYUVColorSpace cs,
+    bool output_argb_matrix);
 
 }  // namespace media
 

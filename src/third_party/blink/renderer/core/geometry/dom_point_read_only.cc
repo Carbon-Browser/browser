@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,14 +21,14 @@ DOMPointReadOnly* DOMPointReadOnly::Create(double x,
   return MakeGarbageCollected<DOMPointReadOnly>(x, y, z, w);
 }
 
-ScriptValue DOMPointReadOnly::toJSONForBinding(
+ScriptObject DOMPointReadOnly::toJSONForBinding(
     ScriptState* script_state) const {
   V8ObjectBuilder result(script_state);
   result.AddNumber("x", x());
   result.AddNumber("y", y());
   result.AddNumber("z", z());
   result.AddNumber("w", w());
-  return result.GetScriptValue();
+  return result.ToScriptObject();
 }
 
 DOMPointReadOnly* DOMPointReadOnly::fromPoint(const DOMPointInit* other) {

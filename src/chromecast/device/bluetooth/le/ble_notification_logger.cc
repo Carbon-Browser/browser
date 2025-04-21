@@ -1,10 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromecast/device/bluetooth/le/ble_notification_logger.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "chromecast/device/bluetooth/bluetooth_util.h"
 #include "chromecast/device/bluetooth/le/remote_characteristic.h"

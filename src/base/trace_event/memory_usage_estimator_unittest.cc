@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,26 +26,17 @@ namespace {
 // Test class with predictable memory usage.
 class Data {
  public:
-  explicit Data(size_t size = 17): size_(size) {
-  }
+  explicit Data(size_t size = 17) : size_(size) {}
 
   size_t size() const { return size_; }
 
-  size_t EstimateMemoryUsage() const {
-    return size_;
-  }
+  size_t EstimateMemoryUsage() const { return size_; }
 
-  bool operator < (const Data& other) const {
-    return size_ < other.size_;
-  }
-  bool operator == (const Data& other) const {
-    return size_ == other.size_;
-  }
+  bool operator<(const Data& other) const { return size_ < other.size_; }
+  bool operator==(const Data& other) const { return size_ == other.size_; }
 
   struct Hasher {
-    size_t operator () (const Data& data) const {
-      return data.size();
-    }
+    size_t operator()(const Data& data) const { return data.size(); }
   };
 
  private:
@@ -92,14 +83,22 @@ TEST(EstimateMemoryUsageTest, Arrays) {
     EXPECT_EQ(170u, EstimateMemoryUsage(array));
   }
 
-  // C array
+  // HeapArray
   {
     struct Item {
       char payload[10];
     };
-    Item* array = new Item[7];
-    EXPECT_EQ(70u, EstimateMemoryUsage(array, 7));
-    delete[] array;
+    auto array = base::HeapArray<Item>::WithSize(7u);
+    EXPECT_EQ(70u, EstimateMemoryUsage(array));
+  }
+
+  // Owning span
+  {
+    struct Item {
+      char payload[10];
+    };
+    auto array = base::HeapArray<Item>::WithSize(7u);
+    EXPECT_EQ(70u, EstimateMemoryUsage(array.as_span()));
   }
 }
 
@@ -121,15 +120,6 @@ TEST(EstimateMemoryUsageTest, UniquePtr) {
     std::unique_ptr<Data*> ptr(new Data*());
     EXPECT_EQ(sizeof(void*), EstimateMemoryUsage(ptr));
   }
-
-  // With an array
-  {
-    struct Item {
-      uint32_t payload[10];
-    };
-    std::unique_ptr<Item[]> ptr(new Item[7]);
-    EXPECT_EQ(280u, EstimateMemoryUsage(ptr, 7));
-  }
 }
 
 TEST(EstimateMemoryUsageTest, Vector) {
@@ -148,6 +138,30 @@ TEST(EstimateMemoryUsageTest, Vector) {
     expected_size += EstimateMemoryUsage(vector.back());
   }
   EXPECT_EQ(expected_size, EstimateMemoryUsage(vector));
+}
+
+TEST(EstimateMemoryUsageTest, Vector_of_Pointers) {
+  {
+    std::unique_ptr<Data> u_ptr = std::make_unique<Data>(11);
+    std::vector<Data*> vector;
+    vector.reserve(1000);
+    vector.push_back(u_ptr.get());
+
+    size_t capacity = vector.capacity();
+    size_t expected_size = capacity * sizeof(Data*);
+    EXPECT_EQ(expected_size, EstimateMemoryUsage(vector));
+  }
+
+  {
+    std::unique_ptr<Data> u_ptr = std::make_unique<Data>(11);
+    std::vector<raw_ptr<Data>> vector;
+    vector.reserve(1000);
+    vector.push_back(u_ptr.get());
+
+    size_t capacity = vector.capacity();
+    size_t expected_size = capacity * sizeof(raw_ptr<Data>);
+    EXPECT_EQ(expected_size, EstimateMemoryUsage(vector));
+  }
 }
 
 TEST(EstimateMemoryUsageTest, List) {
@@ -247,19 +261,18 @@ TEST(EstimateMemoryUsageTest, IsStandardContainerComplexIteratorTest) {
   };
 
   static_assert(
-      internal::IsStandardContainerComplexIterator<std::list<int>::iterator>(),
+      internal::IsIteratorOfStandardContainer<std::list<int>::iterator>, "");
+  static_assert(
+      internal::IsIteratorOfStandardContainer<std::list<int>::const_iterator>,
       "");
-  static_assert(internal::IsStandardContainerComplexIterator<
-                    std::list<int>::const_iterator>(),
+  static_assert(
+      internal::IsIteratorOfStandardContainer<std::list<int>::reverse_iterator>,
+      "");
+  static_assert(internal::IsIteratorOfStandardContainer<
+                    std::list<int>::const_reverse_iterator>,
                 "");
-  static_assert(internal::IsStandardContainerComplexIterator<
-                    std::list<int>::reverse_iterator>(),
-                "");
-  static_assert(internal::IsStandardContainerComplexIterator<
-                    std::list<int>::const_reverse_iterator>(),
-                "");
-  static_assert(!internal::IsStandardContainerComplexIterator<int>(), "");
-  static_assert(!internal::IsStandardContainerComplexIterator<abstract*>(), "");
+  static_assert(!internal::IsIteratorOfStandardContainer<int>, "");
+  static_assert(!internal::IsIteratorOfStandardContainer<abstract*>, "");
 }
 
 }  // namespace trace_event

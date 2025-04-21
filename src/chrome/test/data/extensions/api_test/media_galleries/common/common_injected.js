@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -164,7 +164,7 @@ function runReadGalleriesTest(expectedGalleryCount, expectSucceed,
 }
 
 function checkMetadata(metadata) {
-  chrome.test.assertTrue(metadata != null);
+  chrome.test.assertNe(null, metadata);
   chrome.test.assertTrue(metadata.name.length > 0);
   chrome.test.assertTrue(metadata.galleryId.length > 0);
   chrome.test.assertTrue("isAvailable" in metadata);

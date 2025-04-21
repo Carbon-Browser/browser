@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 
 #include <type_traits>
 
-#include "base/memory/raw_ptr.h"
+#include "base/compiler_specific.h"
+#include "base/containers/checked_iterators.h"
 #include "base/memory/raw_ptr_exclusion.h"
 #include "mojo/public/cpp/bindings/lib/array_internal.h"
 #include "mojo/public/cpp/bindings/lib/bindings_internal.h"
@@ -38,12 +39,12 @@ class ArrayDataViewImpl<
   const T* data() const { return data_->storage(); }
 
  protected:
-  // `data_` is not a raw_ptr<...> for performance reasons (based on analysis of
-  // sampling profiler data).
-  RAW_PTR_EXCLUSION raw_ptr<Data_> data_;
-  // `message_` is not a raw_ptr<...> for performance reasons (based on analysis
-  // of sampling profiler data).
-  RAW_PTR_EXCLUSION raw_ptr<Message> message_;
+  // RAW_PTR_EXCLUSION: Performance reasons: based on analysis of sampling
+  // profiler data.
+  RAW_PTR_EXCLUSION Data_* data_;
+  // RAW_PTR_EXCLUSION: Performance reasons: based on analysis of sampling
+  // profiler data.
+  RAW_PTR_EXCLUSION Message* message_;
 };
 
 template <typename T>
@@ -60,15 +61,16 @@ class ArrayDataViewImpl<
   bool operator[](size_t index) const { return data_->at(index); }
 
  protected:
-  // `data_` is not a raw_ptr<...> for performance reasons (based on analysis of
-  // sampling profiler data).
-  RAW_PTR_EXCLUSION raw_ptr<Data_> data_;
-  // `message_` is not a raw_ptr<...> for performance reasons (based on analysis
-  // of sampling profiler data).
-  RAW_PTR_EXCLUSION raw_ptr<Message> message_;
+  // RAW_PTR_EXCLUSION: Performance reasons: based on analysis of sampling
+  // profiler data.
+  RAW_PTR_EXCLUSION Data_* data_;
+  // RAW_PTR_EXCLUSION: Performance reasons: based on analysis of sampling
+  // profiler data.
+  RAW_PTR_EXCLUSION Message* message_;
 };
 
 template <typename T>
+  requires(!base::is_instantiation<std::optional, T>)
 class ArrayDataViewImpl<
     T,
     typename std::enable_if<
@@ -92,12 +94,52 @@ class ArrayDataViewImpl<
   }
 
  protected:
-  // `data_` is not a raw_ptr<...> for performance reasons (based on analysis of
-  // sampling profiler data).
-  RAW_PTR_EXCLUSION raw_ptr<Data_> data_;
-  // `message_` is not a raw_ptr<...> for performance reasons (based on analysis
-  // of sampling profiler data).
-  RAW_PTR_EXCLUSION raw_ptr<Message> message_;
+  // RAW_PTR_EXCLUSION: Performance reasons: based on analysis of sampling
+  // profiler data.
+  RAW_PTR_EXCLUSION Data_* data_;
+  // RAW_PTR_EXCLUSION: Performance reasons: based on analysis of sampling
+  // profiler data.
+  RAW_PTR_EXCLUSION Message* message_;
+};
+
+template <typename T>
+  requires(base::is_instantiation<std::optional, T>)
+class ArrayDataViewImpl<
+    T,
+    typename std::enable_if<
+        BelongsTo<T, MojomTypeCategory::kEnum>::value>::type> {
+ public:
+  static_assert(std::is_same<std::underlying_type_t<typename T::value_type>,
+                             int32_t>::value,
+                "Unexpected enum type");
+
+  using Data_ = typename MojomTypeTraits<ArrayDataView<T>>::Data;
+
+  ArrayDataViewImpl(Data_* data, Message* message)
+      : data_(data), message_(message) {}
+
+  T operator[](size_t index) const {
+    auto value = static_cast<std::optional<int32_t>>(data_->at(index));
+    if (!value) {
+      return std::nullopt;
+    } else {
+      return ToKnownEnumValueHelper(
+          static_cast<typename T::value_type>(*value));
+    }
+  }
+
+  template <typename U>
+  bool Read(size_t index, U* output) {
+    return Deserialize<T>(data_->at(index), output);
+  }
+
+ protected:
+  // RAW_PTR_EXCLUSION: Performance reasons: based on analysis of sampling
+  // profiler data.
+  RAW_PTR_EXCLUSION Data_* data_;
+  // RAW_PTR_EXCLUSION: Performance reasons: based on analysis of sampling
+  // profiler data.
+  RAW_PTR_EXCLUSION Message* message_;
 };
 
 template <typename T>
@@ -124,12 +166,12 @@ class ArrayDataViewImpl<
   }
 
  protected:
-  // `data_` is not a raw_ptr<...> for performance reasons (based on analysis of
-  // sampling profiler data).
-  RAW_PTR_EXCLUSION raw_ptr<Data_> data_;
-  // `message_` is not a raw_ptr<...> for performance reasons (based on analysis
-  // of sampling profiler data).
-  RAW_PTR_EXCLUSION raw_ptr<Message> message_;
+  // RAW_PTR_EXCLUSION: Performance reasons: based on analysis of sampling
+  // profiler data.
+  RAW_PTR_EXCLUSION Data_* data_;
+  // RAW_PTR_EXCLUSION: Performance reasons: based on analysis of sampling
+  // profiler data.
+  RAW_PTR_EXCLUSION Message* message_;
 };
 
 template <typename T>
@@ -151,12 +193,12 @@ class ArrayDataViewImpl<
   }
 
  protected:
-  // `data_` is not a raw_ptr<...> for performance reasons (based on analysis of
-  // sampling profiler data).
-  RAW_PTR_EXCLUSION raw_ptr<Data_> data_;
-  // `message_` is not a raw_ptr<...> for performance reasons (based on analysis
-  // of sampling profiler data).
-  RAW_PTR_EXCLUSION raw_ptr<Message> message_;
+  // RAW_PTR_EXCLUSION: Performance reasons: based on analysis of sampling
+  // profiler data.
+  RAW_PTR_EXCLUSION Data_* data_;
+  // RAW_PTR_EXCLUSION: Performance reasons: based on analysis of sampling
+  // profiler data.
+  RAW_PTR_EXCLUSION Message* message_;
 };
 
 template <typename T>
@@ -183,12 +225,12 @@ class ArrayDataViewImpl<
   }
 
  protected:
-  // `data_` is not a raw_ptr<...> for performance reasons (based on analysis of
-  // sampling profiler data).
-  RAW_PTR_EXCLUSION raw_ptr<Data_> data_;
-  // `message_` is not a raw_ptr<...> for performance reasons (based on analysis
-  // of sampling profiler data).
-  RAW_PTR_EXCLUSION raw_ptr<Message> message_;
+  // RAW_PTR_EXCLUSION: Performance reasons: based on analysis of sampling
+  // profiler data.
+  RAW_PTR_EXCLUSION Data_* data_;
+  // RAW_PTR_EXCLUSION: Performance reasons: based on analysis of sampling
+  // profiler data.
+  RAW_PTR_EXCLUSION Message* message_;
 };
 
 template <typename T>
@@ -212,12 +254,12 @@ class ArrayDataViewImpl<
   }
 
  protected:
-  // `data_` is not a raw_ptr<...> for performance reasons (based on analysis of
-  // sampling profiler data).
-  RAW_PTR_EXCLUSION raw_ptr<Data_> data_;
-  // `message_` is not a raw_ptr<...> for performance reasons (based on analysis
-  // of sampling profiler data).
-  RAW_PTR_EXCLUSION raw_ptr<Message> message_;
+  // RAW_PTR_EXCLUSION: Performance reasons: based on analysis of sampling
+  // profiler data.
+  RAW_PTR_EXCLUSION Data_* data_;
+  // RAW_PTR_EXCLUSION: Performance reasons: based on analysis of sampling
+  // profiler data.
+  RAW_PTR_EXCLUSION Message* message_;
 };
 
 }  // namespace internal
@@ -229,6 +271,7 @@ template <typename T>
 class ArrayDataView : public internal::ArrayDataViewImpl<T> {
  public:
   using Element = T;
+  using const_iterator = base::CheckedContiguousIterator<const T>;
   using Data_ = typename internal::ArrayDataViewImpl<T>::Data_;
 
   ArrayDataView() : internal::ArrayDataViewImpl<T>(nullptr, nullptr) {}
@@ -240,12 +283,33 @@ class ArrayDataView : public internal::ArrayDataViewImpl<T> {
 
   size_t size() const { return this->data_->size(); }
 
+  // For specializations that expose `data()`, also supply `begin()` and `end()`
+  // to satisfy `std::ranges::contiguous_range`. This allows implicit conversion
+  // to `base::span`.
+  const_iterator begin() const
+    requires requires { this->data(); }
+  {
+    // SAFETY: `data()` must point to at least `size()` elements, so the
+    // computed value here must be no further than just-past-the-end of the
+    // allocation.
+    return UNSAFE_BUFFERS(const_iterator(this->data(), this->data() + size()));
+  }
+  const_iterator end() const
+    requires requires { this->data(); }
+  {
+    // SAFETY: As in `begin()` above.
+    return UNSAFE_BUFFERS(const_iterator(this->data(), this->data() + size(),
+                                         this->data() + size()));
+  }
+
   // Methods to access elements are different for different element types. They
   // are inherited from internal::ArrayDataViewImpl:
 
   // POD types except boolean and enums:
   //   T operator[](size_t index) const;
   //   const T* data() const;
+  //   const_iterator begin() const;
+  //   const_iterator end() const;
 
   // Boolean:
   //   bool operator[](size_t index) const;

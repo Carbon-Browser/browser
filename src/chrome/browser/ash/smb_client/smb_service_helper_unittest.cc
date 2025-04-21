@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,7 @@
 
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace ash {
-namespace smb_client {
+namespace ash::smb_client {
 
 class SmbServiceHelperTest : public ::testing::Test {
  public:
@@ -146,5 +145,4 @@ TEST_F(SmbServiceHelperTest, ParseUserName) {
   EXPECT_EQ(realm_, "");
 }
 
-}  // namespace smb_client
-}  // namespace ash
+}  // namespace ash::smb_client

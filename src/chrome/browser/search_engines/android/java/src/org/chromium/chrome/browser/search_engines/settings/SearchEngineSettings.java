@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,33 +8,38 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.ListView;
 
-import androidx.annotation.VisibleForTesting;
 import androidx.fragment.app.ListFragment;
 
+import org.chromium.base.supplier.ObservableSupplier;
+import org.chromium.base.supplier.ObservableSupplierImpl;
+import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.search_engines.R;
-import org.chromium.components.browser_ui.settings.SettingsLauncher;
+import org.chromium.chrome.browser.search_engines.TemplateUrlServiceFactory;
+import org.chromium.chrome.browser.settings.ProfileDependentSetting;
+import org.chromium.components.browser_ui.settings.EmbeddableSettingsPage;
+import org.chromium.components.search_engines.TemplateUrlService;
 
 /**
- * A preference fragment for selecting a default search engine.
- * ATTENTION: User can't change search engine if it is controlled by an enterprise policy. Check
+ * A preference fragment for selecting a default search engine. ATTENTION: User can't change search
+ * engine if it is controlled by an enterprise policy. Check
  * TemplateUrlServiceFactory.get().isDefaultSearchManaged() before launching this fragment.
  *
- * TODO(crbug.com/988877): Add on scroll shadow to action bar.
+ * <p>TODO(crbug.com/41473490): Add on scroll shadow to action bar.
  */
-public class SearchEngineSettings extends ListFragment {
+public class SearchEngineSettings extends ListFragment
+        implements EmbeddableSettingsPage, ProfileDependentSetting {
     private SearchEngineAdapter mSearchEngineAdapter;
+    private Profile mProfile;
+    private final ObservableSupplierImpl<String> mPageTitle = new ObservableSupplierImpl<>();
 
-    @VisibleForTesting
     String getValueForTesting() {
         return mSearchEngineAdapter.getValueForTesting();
     }
 
-    @VisibleForTesting
     String setValueForTesting(String value) {
         return mSearchEngineAdapter.setValueForTesting(value);
     }
 
-    @VisibleForTesting
     String getKeywordFromIndexForTesting(int index) {
         return mSearchEngineAdapter.getKeywordForTesting(index);
     }
@@ -42,9 +47,14 @@ public class SearchEngineSettings extends ListFragment {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        getActivity().setTitle(R.string.search_engine_settings);
+        mPageTitle.set(getString(R.string.search_engine_settings));
         createAdapterIfNecessary();
         setListAdapter(mSearchEngineAdapter);
+    }
+
+    @Override
+    public ObservableSupplier<String> getPageTitle() {
+        return mPageTitle;
     }
 
     @Override
@@ -53,6 +63,14 @@ public class SearchEngineSettings extends ListFragment {
         ListView listView = getListView();
         listView.setDivider(null);
         listView.setItemsCanFocus(true);
+
+        TemplateUrlService templateUrlService = TemplateUrlServiceFactory.getForProfile(mProfile);
+        if (templateUrlService.isEeaChoiceCountry()) {
+            View headerView =
+                    getLayoutInflater()
+                            .inflate(R.layout.search_engine_choice_header, listView, false);
+            listView.addHeaderView(headerView);
+        }
     }
 
     @Override
@@ -76,18 +94,18 @@ public class SearchEngineSettings extends ListFragment {
         mSearchEngineAdapter.setDisableAutoSwitchRunnable(runnable);
     }
 
-    /**
-     * Sets an instance of SettingsLauncher in a fragment.
-     *
-     * @param settingsLauncher The SettingsLauncher that is injected.
-     */
-    public void setSettingsLauncher(SettingsLauncher settingsLauncher) {
-        createAdapterIfNecessary();
-        mSearchEngineAdapter.setSettingsLauncher(settingsLauncher);
-    }
-
     private void createAdapterIfNecessary() {
         if (mSearchEngineAdapter != null) return;
-        mSearchEngineAdapter = new SearchEngineAdapter(getActivity());
+        assert mProfile != null;
+        mSearchEngineAdapter = new SearchEngineAdapter(getActivity(), mProfile);
+    }
+
+    @Override
+    public void setProfile(Profile profile) {
+        mProfile = profile;
+    }
+
+    public void overrideSearchEngineAdapterForTesting(SearchEngineAdapter searchEngineAdapter) {
+        mSearchEngineAdapter = searchEngineAdapter;
     }
 }

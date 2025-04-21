@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,10 @@
 
 namespace exo {
 
-SurfaceObserverForTest::SurfaceObserverForTest() = default;
+SurfaceObserverForTest::SurfaceObserverForTest(
+    aura::Window::OcclusionState last_occlusion_state)
+    : last_occlusion_state_(last_occlusion_state) {}
+
 SurfaceObserverForTest::~SurfaceObserverForTest() = default;
 
 }  // namespace exo

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
@@ -24,8 +24,7 @@ using ::testing::AnyNumber;
 using ::testing::AtMost;
 using ::testing::InvokeWithoutArgs;
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 static const int64_t kTestOverrideDelayMilliseconds = 1;
 
@@ -89,13 +88,12 @@ TEST_F(MonitoredVideoStubTest, OnChannelStayDisconnected) {
   EXPECT_CALL(*this, OnVideoChannelStatus(false)).Times(1);
 
   monitor_->ProcessVideoPacket(std::move(packet_), {});
-
+  base::RunLoop run_loop;
   task_environment_.GetMainThreadTaskRunner()->PostDelayedTask(
-      FROM_HERE, base::RunLoop::QuitCurrentWhenIdleClosureDeprecated(),
+      FROM_HERE, run_loop.QuitWhenIdleClosure(),
       // The delay should be much greater than |kTestOverrideDelayMilliseconds|.
       TestTimeouts::tiny_timeout());
-  base::RunLoop().Run();
+  run_loop.Run();
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

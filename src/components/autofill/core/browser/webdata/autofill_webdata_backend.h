@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define COMPONENTS_AUTOFILL_CORE_BROWSER_WEBDATA_AUTOFILL_WEBDATA_BACKEND_H_
 
 #include "components/autofill/core/browser/webdata/autofill_change.h"
-#include "components/sync/base/model_type.h"
+#include "components/sync/base/data_type.h"
 
 class WebDatabase;
 
@@ -18,7 +18,7 @@ class AutofillWebDataServiceObserverOnDBSequence;
 // Sync, mostly), without fully exposing the AutofillWebDataBackend to clients.
 class AutofillWebDataBackend {
  public:
-  virtual ~AutofillWebDataBackend() {}
+  virtual ~AutofillWebDataBackend() = default;
 
   // Get a raw pointer to the WebDatabase.
   virtual WebDatabase* GetDatabase() = 0;
@@ -50,23 +50,21 @@ class AutofillWebDataBackend {
   // sequence notifications are asynchronous.
   virtual void NotifyOfCreditCardChanged(const CreditCardChange& change) = 0;
 
-  // Notifies listeners on both DB and UI sequences that multiple changes have
-  // been made to to Autofill records of the database.
+  // Notifies listeners on the DB sequence that an IBAN has been
+  // added/removed/updated in the WebDatabase.
   // NOTE: This method is intended to be called from the DB sequence. The UI
   // sequence notifications are asynchronous.
-  virtual void NotifyOfMultipleAutofillChanges() = 0;
+  virtual void NotifyOfIbanChanged(const IbanChange& change) = 0;
 
-  // Notifies listeners on the UI sequence that conversion of server profiles
-  // into local profiles is completed.
-  // NOTE: This method is intended to be called from the DB sequence. The UI
-  // sequence notifications are asynchronous.
-  virtual void NotifyOfAddressConversionCompleted() = 0;
+  // Notifies listeners on UI sequences that changes have been made to
+  // Autofill records of the database by the sync.
+  // NOTE: The UI sequence notifications are asynchronous.
+  virtual void NotifyOnAutofillChangedBySync(syncer::DataType data_type) = 0;
 
-  // Notifies listeners on the UI sequence that sync has started for
-  // |model_type|.
-  // NOTE: This method is intended to be called from the DB sequence. The UI
-  // sequence notifications are asynchronous.
-  virtual void NotifyThatSyncHasStarted(syncer::ModelType model_type) = 0;
+  // Notifies listeners on the DB sequence that a server cvc has been
+  // added/removed/updated in the WebDatabase.
+  // NOTE: This method is intended to be called from the DB sequence.
+  virtual void NotifyOnServerCvcChanged(const ServerCvcChange& change) = 0;
 };
 
 } // namespace autofill

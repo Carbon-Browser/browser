@@ -1,12 +1,14 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_GPU_IPC_COMMON_MEDIA_PARAM_TRAITS_H_
 #define MEDIA_GPU_IPC_COMMON_MEDIA_PARAM_TRAITS_H_
 
+#include "ipc/ipc_message_macros.h"
 #include "media/base/bitstream_buffer.h"
-#include "media/gpu/ipc/common/media_param_traits_macros.h"
+#include "media/base/ipc/media_param_traits.h"
+#include "media/video/video_decode_accelerator.h"
 
 namespace IPC {
 

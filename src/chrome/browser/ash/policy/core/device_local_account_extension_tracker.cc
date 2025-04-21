@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,18 +23,23 @@ DeviceLocalAccountExtensionTracker::DeviceLocalAccountExtensionTracker(
     CloudPolicyStore* store,
     SchemaRegistry* schema_registry)
     : store_(store), schema_registry_(schema_registry) {
-  if (account.type == DeviceLocalAccount::TYPE_KIOSK_APP) {
-    // This is easy: Just add a component for the app id.
-    PolicyNamespace ns(POLICY_DOMAIN_EXTENSIONS, account.kiosk_app_id);
-    schema_registry_->RegisterComponent(ns, Schema());
-  } else if (account.type == DeviceLocalAccount::TYPE_PUBLIC_SESSION ||
-             account.type == DeviceLocalAccount::TYPE_SAML_PUBLIC_SESSION) {
-    // For public sessions, track the value of the ExtensionInstallForcelist
-    // policy.
-    store_->AddObserver(this);
-    UpdateFromStore();
-  } else {
-    NOTREACHED();
+  switch (account.type) {
+    case DeviceLocalAccountType::kKioskApp: {
+      // This is easy: Just add a component for the app id.
+      PolicyNamespace ns(POLICY_DOMAIN_EXTENSIONS, account.kiosk_app_id);
+      schema_registry_->RegisterComponent(ns, Schema());
+      break;
+    }
+    case DeviceLocalAccountType::kPublicSession:
+    case DeviceLocalAccountType::kSamlPublicSession:
+      // For public sessions, track the value of the ExtensionInstallForcelist
+      // policy.
+      store_->AddObserver(this);
+      UpdateFromStore();
+      break;
+    case DeviceLocalAccountType::kWebKioskApp:
+    case DeviceLocalAccountType::kKioskIsolatedWebApp:
+      NOTREACHED();
   }
 }
 
@@ -57,22 +62,21 @@ void DeviceLocalAccountExtensionTracker::UpdateFromStore() {
   // TODO(binjin): Use two policy handlers here after
   // ExtensionManagementPolicyHandler is introduced.
   extensions::ExtensionInstallForceListPolicyHandler policy_handler;
-  if (!policy_handler.CheckPolicySettings(policy_map, NULL))
+  if (!policy_handler.CheckPolicySettings(policy_map, nullptr))
     return;
 
   PrefValueMap pref_value_map;
   policy_handler.ApplyPolicySettings(policy_map, &pref_value_map);
 
-  const base::Value* value = NULL;
-  const base::DictionaryValue* dict = NULL;
+  const base::Value* value = nullptr;
   if (!pref_value_map.GetValue(extensions::pref_names::kInstallForceList,
                                &value) ||
-      !value->GetAsDictionary(&dict)) {
+      !value->is_dict()) {
     return;
   }
 
-  for (base::DictionaryValue::Iterator it(*dict); !it.IsAtEnd(); it.Advance()) {
-    PolicyNamespace ns(POLICY_DOMAIN_EXTENSIONS, it.key());
+  for (const auto item : value->GetDict()) {
+    PolicyNamespace ns(POLICY_DOMAIN_EXTENSIONS, item.first);
     if (schema_registry_->schema_map()->GetSchema(ns)) {
       // Important detail: Don't register the component again if it already
       // has a schema! If the session already started for this public session

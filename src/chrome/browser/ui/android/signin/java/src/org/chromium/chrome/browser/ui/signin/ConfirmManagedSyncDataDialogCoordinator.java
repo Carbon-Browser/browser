@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,10 +22,10 @@ import org.chromium.ui.modelutil.PropertyModel;
  */
 public class ConfirmManagedSyncDataDialogCoordinator {
     /**
-     * A listener to allow the Dialog to report on the action taken. Either
-     * {@link Listener#onConfirm} or {@link Listener#onCancel} will be called once.
+     * A listener to allow the Dialog to report on the action taken. Either {@link
+     * Listener#onConfirm} or {@link Listener#onCancel} will be called once.
      */
-    interface Listener {
+    public interface Listener {
         /** The user has accepted the dialog. */
         void onConfirm();
 
@@ -42,36 +42,47 @@ public class ConfirmManagedSyncDataDialogCoordinator {
     /**
      * Creates {@link ConfirmManagedSyncDataDialogCoordinator} when signing in to a managed account
      * (either through sign in or when switching accounts) and shows the dialog.
-     * @param context         Context to create the view.
-     * @param dialogManager   ModalDialogManager to show the dialog.
-     * @param listener        Callback for result.
-     * @param managedDomain   The domain of the managed account.
+     *
+     * @param context Context to create the view.
+     * @param dialogManager ModalDialogManager to show the dialog.
+     * @param listener Callback for result.
+     * @param managedDomain The domain of the managed account.
      */
     @MainThread
-    public ConfirmManagedSyncDataDialogCoordinator(Context context,
-            ModalDialogManager dialogManager, Listener listener, String managedDomain) {
+    public ConfirmManagedSyncDataDialogCoordinator(
+            Context context,
+            ModalDialogManager dialogManager,
+            Listener listener,
+            String managedDomain) {
         mListener = listener;
-        mModel = new PropertyModel.Builder(ModalDialogProperties.ALL_KEYS)
-                         .with(ModalDialogProperties.TITLE,
-                                 context.getString(R.string.sign_in_managed_account))
-                         .with(ModalDialogProperties.MESSAGE_PARAGRAPH_1,
-                                 context.getString(R.string.sign_in_managed_account_description,
-                                         managedDomain))
-                         .with(ModalDialogProperties.CANCEL_ON_TOUCH_OUTSIDE, true)
-                         .with(ModalDialogProperties.POSITIVE_BUTTON_TEXT,
-                                 context.getString(R.string.policy_dialog_proceed))
-                         .with(ModalDialogProperties.NEGATIVE_BUTTON_TEXT,
-                                 context.getString(R.string.cancel))
-                         .with(ModalDialogProperties.CONTROLLER, createController())
-                         .build();
+        mModel =
+                new PropertyModel.Builder(ModalDialogProperties.ALL_KEYS)
+                        .with(
+                                ModalDialogProperties.TITLE,
+                                context.getString(R.string.sign_in_managed_account))
+                        .with(
+                                ModalDialogProperties.MESSAGE_PARAGRAPH_1,
+                                context.getString(
+                                        R.string.managed_signin_with_user_policy_subtitle,
+                                        managedDomain))
+                        .with(ModalDialogProperties.CANCEL_ON_TOUCH_OUTSIDE, true)
+                        .with(
+                                ModalDialogProperties.BUTTON_STYLES,
+                                ModalDialogProperties.ButtonStyles.PRIMARY_FILLED_NEGATIVE_OUTLINE)
+                        .with(
+                                ModalDialogProperties.POSITIVE_BUTTON_TEXT,
+                                context.getString(R.string.continue_button))
+                        .with(
+                                ModalDialogProperties.NEGATIVE_BUTTON_TEXT,
+                                context.getString(R.string.cancel))
+                        .with(ModalDialogProperties.CONTROLLER, createController())
+                        .build();
         mDialogManager = dialogManager;
 
         mDialogManager.showDialog(mModel, ModalDialogType.APP);
     }
 
-    /**
-     * Dismisses confirm managed sync data dialog.
-     */
+    /** Dismisses confirm managed sync data dialog. */
     @MainThread
     public void dismissDialog() {
         mDialogManager.dismissDialog(mModel, DialogDismissalCause.UNKNOWN);

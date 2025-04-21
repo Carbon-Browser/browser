@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,12 @@
 #include <memory>
 
 #include "ash/public/cpp/capture_mode/capture_mode_delegate.h"
-#include "base/callback.h"
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
 #include "components/viz/common/surfaces/frame_sink_id.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/image/image_skia.h"
 
@@ -32,6 +33,8 @@ class TestCaptureModeDelegate : public CaptureModeDelegate {
   TestCaptureModeDelegate& operator=(const TestCaptureModeDelegate&) = delete;
   ~TestCaptureModeDelegate() override;
 
+  bool is_session_active() const { return is_session_active_; }
+
   recording::RecordingServiceTestApi* recording_service() const {
     return recording_service_.get();
   }
@@ -41,9 +44,6 @@ class TestCaptureModeDelegate : public CaptureModeDelegate {
   void set_on_session_state_changed_callback(base::OnceClosure callback) {
     on_session_state_changed_callback_ = std::move(callback);
   }
-  void set_on_recording_started_callback(base::OnceClosure callback) {
-    on_recording_started_callback_ = std::move(callback);
-  }
   void set_is_allowed_by_dlp(bool value) { is_allowed_by_dlp_ = value; }
   void set_is_allowed_by_policy(bool value) { is_allowed_by_policy_ = value; }
   void set_should_save_after_dlp_check(bool value) {
@@ -52,8 +52,18 @@ class TestCaptureModeDelegate : public CaptureModeDelegate {
   void set_is_camera_disabled_by_policy(bool value) {
     is_camera_disabled_by_policy_ = value;
   }
+  void set_is_audio_capture_disabled_by_policy(bool value) {
+    is_audio_capture_disabled_by_policy_ = value;
+  }
   void set_fake_drive_fs_free_bytes(int64_t bytes) {
     fake_drive_fs_free_bytes_ = bytes;
+  }
+  void set_policy_capture_path(PolicyCapturePath policy_capture_path) {
+    policy_capture_path_ = policy_capture_path;
+  }
+  int num_capture_image_attempts() const { return num_capture_image_attempts_; }
+  int num_multimodal_search_requests() const {
+    return num_multimodal_search_requests_;
   }
 
   // Resets |is_allowed_by_policy_| and |is_allowed_by_dlp_| back to true.
@@ -76,9 +86,16 @@ class TestCaptureModeDelegate : public CaptureModeDelegate {
   // delivered to the service.
   void RequestAndWaitForVideoFrame();
 
+  // Returns true if there is an ongoing recording and the recording service is
+  // currently recording audio.
+  bool IsDoingAudioRecording() const;
+
+  // Returns the number of audio capturers owned by the recording service.
+  int GetNumberOfAudioCapturers() const;
+
   // CaptureModeDelegate:
   base::FilePath GetUserDefaultDownloadsFolder() const override;
-  void ShowScreenCaptureItemInFolder(const base::FilePath& file_path) override;
+  void OpenScreenCaptureItem(const base::FilePath& file_path) override;
   void OpenScreenshotInImageEditor(const base::FilePath& file_path) override;
   bool Uses24HourFormat() const override;
   void CheckCaptureModeInitRestrictionByDlp(
@@ -105,28 +122,67 @@ class TestCaptureModeDelegate : public CaptureModeDelegate {
   bool GetDriveFsMountPointPath(base::FilePath* result) const override;
   base::FilePath GetAndroidFilesPath() const override;
   base::FilePath GetLinuxFilesPath() const override;
-  std::unique_ptr<RecordingOverlayView> CreateRecordingOverlayView()
-      const override;
+  base::FilePath GetOneDriveMountPointPath() const override;
+  base::FilePath GetOneDriveVirtualPath() const override;
+  PolicyCapturePath GetPolicyCapturePath() const override;
   void ConnectToVideoSourceProvider(
       mojo::PendingReceiver<video_capture::mojom::VideoSourceProvider> receiver)
       override;
   void GetDriveFsFreeSpaceBytes(OnGotDriveFsFreeSpace callback) override;
   bool IsCameraDisabledByPolicy() const override;
+  bool IsAudioCaptureDisabledByPolicy() const override;
+  void RegisterVideoConferenceManagerClient(
+      crosapi::mojom::VideoConferenceManagerClient* client,
+      const base::UnguessableToken& client_id) override;
+  void UnregisterVideoConferenceManagerClient(
+      const base::UnguessableToken& client_id) override;
+  void UpdateVideoConferenceManager(
+      crosapi::mojom::VideoConferenceMediaUsageStatusPtr status) override;
+  void NotifyDeviceUsedWhileDisabled(
+      crosapi::mojom::VideoConferenceMediaDevice device) override;
+  void FinalizeSavedFile(
+      base::OnceCallback<void(bool, const base::FilePath&)> callback,
+      const base::FilePath& path,
+      const gfx::Image& thumbnail,
+      bool for_video) override;
+  base::FilePath RedirectFilePath(const base::FilePath& path) override;
+  std::unique_ptr<AshWebView> CreateSearchResultsView() const override;
+  MOCK_METHOD(void,
+              DetectTextInImage,
+              (const SkBitmap& image, OnTextDetectionComplete callback),
+              (override));
+  void SendRegionSearch(const SkBitmap& image,
+                        const gfx::Rect& region,
+                        OnSearchUrlFetchedCallback callback) override;
+  void SendMultimodalSearch(const SkBitmap& image,
+                            const gfx::Rect& region,
+                            const std::string& text,
+                            ash::OnSearchUrlFetchedCallback callback) override;
+  void DeleteRemoteFile(const base::FilePath& path,
+                        base::OnceCallback<void(bool)> callback) override;
 
  private:
   std::unique_ptr<recording::RecordingServiceTestApi> recording_service_;
   std::unique_ptr<FakeVideoSourceProvider> video_source_provider_;
   base::ScopedTempDir fake_downloads_dir_;
   base::OnceClosure on_session_state_changed_callback_;
-  base::OnceClosure on_recording_started_callback_;
+  bool is_session_active_ = false;
   bool is_allowed_by_dlp_ = true;
   bool is_allowed_by_policy_ = true;
   bool should_save_after_dlp_check_ = true;
   bool is_camera_disabled_by_policy_ = false;
+  bool is_audio_capture_disabled_by_policy_ = false;
+  // Counter to track number of times `OnCaptureImageAttempted()` is called, for
+  // testing purposes.
+  int num_capture_image_attempts_ = 0;
+  int num_multimodal_search_requests_ = 0;
   base::ScopedTempDir fake_drive_fs_mount_path_;
   base::ScopedTempDir fake_android_files_path_;
   base::ScopedTempDir fake_linux_files_path_;
+  base::ScopedTempDir fake_one_drive_mount_path_;
   int64_t fake_drive_fs_free_bytes_ = std::numeric_limits<int64_t>::max();
+  PolicyCapturePath policy_capture_path_ = {base::FilePath(),
+                                            CapturePathEnforcement::kNone};
 };
 
 }  // namespace ash

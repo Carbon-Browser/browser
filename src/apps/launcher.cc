@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,10 @@
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
@@ -45,16 +45,19 @@
 #include "extensions/browser/process_manager.h"
 #include "extensions/common/api/app_runtime.h"
 #include "extensions/common/extension.h"
+#include "extensions/common/extension_id.h"
 #include "extensions/common/manifest_handlers/kiosk_mode_info.h"
 #include "extensions/common/permissions/api_permission.h"
 #include "extensions/common/permissions/permissions_data.h"
 #include "net/base/filename_util.h"
 #include "url/gurl.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
+#include "base/feature_list.h"
 #include "components/app_restore/app_launch_info.h"
 #include "components/app_restore/full_restore_utils.h"
 #include "components/user_manager/user_manager.h"
+#include "extensions/common/extension_features.h"
 #endif
 
 namespace app_runtime = extensions::api::app_runtime;
@@ -127,8 +130,13 @@ class PlatformAppPathLauncher
   PlatformAppPathLauncher(const PlatformAppPathLauncher&) = delete;
   PlatformAppPathLauncher& operator=(const PlatformAppPathLauncher&) = delete;
 
-  void set_action_data(std::unique_ptr<app_runtime::ActionData> action_data) {
-    action_data_ = std::move(action_data);
+  void set_action_data(std::optional<app_runtime::ActionData> action_data) {
+#if BUILDFLAG(IS_CHROMEOS)
+    if (base::FeatureList::IsEnabled(
+            extensions_features::kApiRuntimeActionData)) {
+      action_data_ = std::move(action_data);
+    }
+#endif
   }
 
   void set_launch_source(extensions::AppLaunchSource launch_source) {
@@ -213,11 +221,17 @@ class PlatformAppPathLauncher
     if (!app)
       return;
 
-    std::unique_ptr<app_runtime::LaunchData> launch_data =
-        std::make_unique<app_runtime::LaunchData>();
-    launch_data->action_data = std::move(action_data_);
+    app_runtime::LaunchData launch_data;
+
+    // TODO(crbug.com/40235429): This conditional block is being added here
+    // temporarily, and should be removed once the underlying type of
+    // |launch_data.action_data| is wrapped with std::optional<T>.
+    if (action_data_) {
+      launch_data.action_data = std::move(*action_data_);
+      action_data_.reset();
+    }
     if (!handler_id_.empty())
-      launch_data->id = std::make_unique<std::string>(handler_id_);
+      launch_data.id = handler_id_;
 
     AppRuntimeEventRouter::DispatchOnLaunchedEvent(
         context_, app, launch_source_, std::move(launch_data));
@@ -289,7 +303,9 @@ class PlatformAppPathLauncher
     // available, or it might be in the process of being unloaded, in which case
     // the lazy background task queue is used to load the extension and then
     // call back to us.
-    const extensions::LazyContextId context_id(context_, extension_id);
+    const auto context_id =
+        extensions::LazyContextId::ForExtension(context_, app);
+    CHECK(context_id.IsForBackgroundPage());
     extensions::LazyContextTaskQueue* const queue = context_id.GetTaskQueue();
     if (queue->ShouldEnqueueTask(context_, app)) {
       queue->AddPendingTask(
@@ -324,7 +340,7 @@ class PlatformAppPathLauncher
     std::vector<GrantedFileEntry> granted_entries;
     for (size_t i = 0; i < entry_paths_.size(); ++i) {
       granted_entries.push_back(CreateFileEntry(
-          context_, app, context_info->render_process_host->GetID(),
+          context_, app, context_info->render_process_host->GetDeprecatedID(),
           entries_[i].path, entries_[i].is_directory));
     }
 
@@ -343,10 +359,10 @@ class PlatformAppPathLauncher
   // The id of the extension providing the app. A pointer to the extension is
   // not kept as the extension may be unloaded and deleted during the course of
   // the launch.
-  const std::string extension_id;
+  const extensions::ExtensionId extension_id;
   extensions::AppLaunchSource launch_source_ =
       extensions::AppLaunchSource::kSourceFileHandler;
-  std::unique_ptr<app_runtime::ActionData> action_data_;
+  std::optional<app_runtime::ActionData> action_data_;
   // A list of files and directories to be passed through to the app.
   std::vector<base::FilePath> entry_paths_;
   // A corresponding list with EntryInfo for every base::FilePath in
@@ -387,10 +403,8 @@ void LaunchPlatformAppWithCommandLineAndLaunchId(
     in_kiosk_mode = user_manager && user_manager->IsLoggedInAsKioskApp();
 #endif
     if (!in_kiosk_mode) {
-      LOG(ERROR) << "App with 'kiosk_only' attribute must be run in "
-                 << " ChromeOS kiosk mode.";
-      NOTREACHED();
-      return;
+      NOTREACHED() << "App with 'kiosk_only' attribute must be run in "
+                   << " ChromeOS kiosk mode.";
     }
   }
 
@@ -407,10 +421,9 @@ void LaunchPlatformAppWithCommandLineAndLaunchId(
   // causes problems on the bots.
   if (args.empty() || (command_line.HasSwitch(switches::kTestType) &&
                        args[0] == about_blank_url)) {
-    std::unique_ptr<app_runtime::LaunchData> launch_data =
-        std::make_unique<app_runtime::LaunchData>();
+    app_runtime::LaunchData launch_data;
     if (!launch_id.empty())
-      launch_data->id = std::make_unique<std::string>(launch_id);
+      launch_data.id = launch_id;
     AppRuntimeEventRouter::DispatchOnLaunchedEvent(context, app, source,
                                                    std::move(launch_data));
     return;
@@ -439,16 +452,9 @@ void LaunchPlatformAppWithFilePaths(
   launcher->Launch();
 }
 
-void LaunchPlatformAppWithAction(
-    content::BrowserContext* context,
-    const extensions::Extension* app,
-    std::unique_ptr<app_runtime::ActionData> action_data) {
-  CHECK(!action_data || !action_data->is_lock_screen_action ||
-        !*action_data->is_lock_screen_action ||
-        app->permissions_data()->HasAPIPermission(
-            extensions::mojom::APIPermissionID::kLockScreen))
-      << "Launching lock screen action handler requires lockScreen permission.";
-
+void LaunchPlatformAppWithAction(content::BrowserContext* context,
+                                 const extensions::Extension* app,
+                                 app_runtime::ActionData action_data) {
   scoped_refptr<PlatformAppPathLauncher> launcher =
       new PlatformAppPathLauncher(context, app, base::FilePath());
   launcher->set_action_data(std::move(action_data));
@@ -500,7 +506,8 @@ void RestartPlatformApp(content::BrowserContext* context,
 
   if (listening_to_launch && had_windows) {
     AppRuntimeEventRouter::DispatchOnLaunchedEvent(
-        context, app, extensions::AppLaunchSource::kSourceRestart, nullptr);
+        context, app, extensions::AppLaunchSource::kSourceRestart,
+        std::nullopt);
   }
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,10 @@
 namespace blink {
 
 GPUCommandBuffer::GPUCommandBuffer(GPUDevice* device,
-                                   WGPUCommandBuffer command_buffer)
-    : DawnObject<WGPUCommandBuffer>(device, command_buffer) {}
+                                   wgpu::CommandBuffer command_buffer,
+                                   const String& label)
+    : DawnObject<wgpu::CommandBuffer>(device,
+                                      std::move(command_buffer),
+                                      label) {}
 
 }  // namespace blink

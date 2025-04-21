@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,7 +47,7 @@ class VIEWS_EXPORT AccessibilityAlertWindow : public aura::EnvObserver {
   std::unique_ptr<aura::Window> alert_window_;
 
   // The accessibility cache associated with |alert_window_|.
-  raw_ptr<views::AXAuraObjCache> cache_;
+  const raw_ptr<views::AXAuraObjCache> cache_;
 
   base::ScopedObservation<aura::Env, aura::EnvObserver> observation_{this};
 };

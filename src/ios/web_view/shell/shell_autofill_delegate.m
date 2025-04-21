@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,6 @@
 #import <UIKit/UIKit.h>
 
 #import "ios/web_view/shell/shell_risk_data_loader.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 @interface ShellAutofillDelegate ()
 
@@ -21,7 +17,8 @@
 @property(nonatomic, strong) ShellRiskDataLoader* riskDataLoader;
 
 // Returns an action for a suggestion.
-- (UIAlertAction*)actionForSuggestion:(CWVAutofillSuggestion*)suggestion;
+- (UIAlertAction*)actionForSuggestion:(CWVAutofillSuggestion*)suggestion
+                              atIndex:(NSInteger)index;
 
 @end
 
@@ -70,8 +67,10 @@
                                  style:UIAlertActionStyleCancel
                                handler:nil];
     [alertController addAction:cancelAction];
-    for (CWVAutofillSuggestion* suggestion in suggestions) {
-      [alertController addAction:[self actionForSuggestion:suggestion]];
+    for (NSUInteger i = 0; i < suggestions.count; ++i) {
+      CWVAutofillSuggestion* suggestion = suggestions[i];
+      [alertController addAction:[self actionForSuggestion:suggestion
+                                                   atIndex:i]];
     }
 
     [[self anyKeyWindow].rootViewController
@@ -93,7 +92,7 @@
                           frameID:(NSString*)frameID
                             value:(NSString*)value
                     userInitiated:(BOOL)userInitiated {
-  // TODO(crbug.com/1323932): Fetching suggestions has an important side effect
+  // TODO(crbug.com/40224850): Fetching suggestions has an important side effect
   // of calling PasswordFormManager::UpdateStateOnUserInput. This will ensure
   // that the typed information can be remembered during the save dialogue.
   // Make this method a no-op once the bug is fixed.
@@ -365,7 +364,8 @@
 
 #pragma mark - Private Methods
 
-- (UIAlertAction*)actionForSuggestion:(CWVAutofillSuggestion*)suggestion {
+- (UIAlertAction*)actionForSuggestion:(CWVAutofillSuggestion*)suggestion
+                              atIndex:(NSInteger)index {
   NSString* title =
       [NSString stringWithFormat:@"%@ %@", suggestion.value,
                                  suggestion.displayDescription ?: @""];
@@ -379,6 +379,7 @@
                   return;
                 }
                 [strongSelf.autofillController acceptSuggestion:suggestion
+                                                        atIndex:index
                                               completionHandler:nil];
                 [[self anyKeyWindow] endEditing:YES];
               }];
@@ -387,11 +388,17 @@
 #pragma mark - Private
 
 - (UIWindow*)anyKeyWindow {
-  NSArray<UIWindow*>* windows = [UIApplication sharedApplication].windows;
-  for (UIWindow* window in windows) {
-    if (window.isKeyWindow)
-      return window;
+  for (UIWindowScene* windowScene in UIApplication.sharedApplication
+           .connectedScenes) {
+    NSAssert([windowScene isKindOfClass:[UIWindowScene class]],
+             @"UIScene is not a UIWindowScene: %@", windowScene);
+    for (UIWindow* window in windowScene.windows) {
+      if (window.isKeyWindow) {
+        return window;
+      }
+    }
   }
+
   return nil;
 }
 

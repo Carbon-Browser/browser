@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,10 @@
 #include <memory>
 #include <utility>
 
-#include "ash/components/account_manager/account_manager_factory.h"
 #include "base/no_destructor.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part_ash.h"
+#include "chromeos/ash/components/account_manager/account_manager_factory.h"
 #include "components/account_manager_core/account_manager_facade_impl.h"
 #include "components/account_manager_core/chromeos/account_manager.h"
 #include "components/account_manager_core/chromeos/account_manager_mojo_service.h"
@@ -52,13 +52,14 @@ account_manager::AccountManagerFacade* GetAccountManagerFacade(
     // Calls within Ash are in the same process and don't need to check version
     // compatibility with itself.
     constexpr uint32_t remote_version = std::numeric_limits<uint32_t>::max();
-    // TODO(https://crbug.com/1264818): to avoid incorrect usage, pass a nullptr
+    // TODO(crbug.com/40800999): to avoid incorrect usage, pass a nullptr
     // `AccountManager` when this is not running in a test.
     account_manager::AccountManager* account_manager_for_tests =
         GetAccountManagerFactory()->GetAccountManager(profile_path);
     auto account_manager_facade =
         std::make_unique<account_manager::AccountManagerFacadeImpl>(
-            std::move(remote), remote_version, account_manager_for_tests);
+            std::move(remote), remote_version,
+            account_manager_for_tests->GetWeakPtr());
     it = account_manager_facade_map
              ->emplace(profile_path, std::move(account_manager_facade))
              .first;

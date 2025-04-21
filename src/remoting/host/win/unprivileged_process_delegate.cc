@@ -1,5 +1,4 @@
-
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -8,16 +7,20 @@
 
 #include "remoting/host/win/unprivileged_process_delegate.h"
 
+// clang-format off
 #include <windows.h>  // Must be in front of other Windows header files.
+// clang-format on
 
 #include <sddl.h>
 
+#include <optional>
 #include <string>
 #include <utility>
 
 #include "base/command_line.h"
 #include "base/files/file.h"
 #include "base/logging.h"
+#include "base/notreached.h"
 #include "base/rand_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
@@ -31,12 +34,13 @@
 #include "ipc/ipc_message.h"
 #include "mojo/public/cpp/platform/platform_channel.h"
 #include "mojo/public/cpp/system/invitation.h"
+#include "remoting/base/crash/breakpad_utils.h"
 #include "remoting/base/typed_buffer.h"
 #include "remoting/host/base/switches.h"
+#include "remoting/host/usage_stats_consent.h"
 #include "remoting/host/win/launch_process_with_token.h"
 #include "remoting/host/win/security_descriptor.h"
 #include "remoting/host/win/window_station_and_desktop.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 using base::win::ScopedHandle;
 using base::win::Sid;
@@ -64,7 +68,8 @@ const char kLowIntegrityMandatoryLabel[] = "S:(ML;CIOI;NW;;;LW)";
 // gives SYSTEM and the logon SID full access the window station. The child
 // containers and objects inherit ACE giving SYSTEM and the logon SID full
 // access to them as well.
-const char kWindowStationSdFormat[] = "O:SYG:SYD:(A;CIOIIO;GA;;;SY)"
+const char kWindowStationSdFormat[] =
+    "O:SYG:SYD:(A;CIOIIO;GA;;;SY)"
     "(A;CIOIIO;GA;;;%s)(A;NP;0xf037f;;;SY)(A;NP;0xf037f;;;%s)";
 
 // Security descriptor of the worker process. It gives access SYSTEM full access
@@ -106,7 +111,7 @@ bool CreateRestrictedToken(ScopedHandle* token_out) {
   }
 
   ScopedHandle restricted_token(temp_handle);
-  absl::optional<Sid> sid = Sid::FromIntegrityLevel(SECURITY_MANDATORY_LOW_RID);
+  std::optional<Sid> sid = Sid::FromIntegrityLevel(SECURITY_MANDATORY_LOW_RID);
   if (!sid) {
     LOG(ERROR) << "Failed to get integrity level SID";
     return false;
@@ -192,10 +197,11 @@ bool CreateWindowStationAndDesktop(ScopedSid logon_sid,
     return false;
   }
 
-  desired_access = DESKTOP_READOBJECTS | DESKTOP_CREATEWINDOW |
-      DESKTOP_CREATEMENU | DESKTOP_HOOKCONTROL | DESKTOP_JOURNALRECORD |
-      DESKTOP_JOURNALPLAYBACK | DESKTOP_ENUMERATE | DESKTOP_WRITEOBJECTS |
-      DESKTOP_SWITCHDESKTOP | DELETE | READ_CONTROL | WRITE_DAC | WRITE_OWNER;
+  desired_access =
+      DESKTOP_READOBJECTS | DESKTOP_CREATEWINDOW | DESKTOP_CREATEMENU |
+      DESKTOP_HOOKCONTROL | DESKTOP_JOURNALRECORD | DESKTOP_JOURNALPLAYBACK |
+      DESKTOP_ENUMERATE | DESKTOP_WRITEOBJECTS | DESKTOP_SWITCHDESKTOP |
+      DELETE | READ_CONTROL | WRITE_DAC | WRITE_OWNER;
 
   security_attributes.nLength = sizeof(security_attributes);
   security_attributes.lpSecurityDescriptor = desktop_sd.get();
@@ -293,18 +299,40 @@ void UnprivilegedProcessDelegate::LaunchProcess(
   std::unique_ptr<IPC::ChannelProxy> server = IPC::ChannelProxy::Create(
       invitation.AttachMessagePipe(message_pipe_token).release(),
       IPC::Channel::MODE_SERVER, this, io_task_runner_,
-      base::ThreadTaskRunnerHandle::Get());
+      base::SingleThreadTaskRunner::GetCurrentDefault());
   base::CommandLine command_line(target_command_->argv());
   command_line.AppendSwitchASCII(kMojoPipeToken, message_pipe_token);
 
   base::HandlesToInheritVector handles_to_inherit = {
-      handles.desktop(), handles.window_station(),
+      handles.desktop(),
+      handles.window_station(),
   };
+
+  // Create a handle for crash server pipe and provide it to the child process.
+  // A named pipe will not exist if the user has not opted into crash reporting.
+  ScopedHandle crash_server_pipe;
+  if (IsUsageStatsAllowed()) {
+    crash_server_pipe = GetClientHandleForCrashServerPipe();
+    if (crash_server_pipe.get()) {
+      // In order to pass the handle on the command line we need to convert it
+      // to a string. The handle is a pointer and the conversion utilities don't
+      // provide helpers for pointer -> string conversions so we cast to a
+      // 64-bit value to make this conversion insensitive to the bitness of the
+      // binary. Since the client and server will be the same bitness, the
+      // child process will cast this value back to the correct bitness.
+      command_line.AppendSwitchASCII(
+          kCrashServerPipeHandle,
+          base::NumberToString(
+              reinterpret_cast<uint64_t>(crash_server_pipe.get())));
+      handles_to_inherit.push_back(crash_server_pipe.get());
+    }
+  }
+
   mojo::PlatformChannel channel;
   channel.PrepareToPassRemoteEndpoint(&handles_to_inherit, &command_line);
 
   // Try to launch the worker process. The launched process inherits
-  // the window station, desktop and pipe handles, created above.
+  // the window station, desktop, and pipe handles, created above.
   ScopedHandle worker_process;
   ScopedHandle worker_thread;
   if (!LaunchProcessWithToken(
@@ -324,16 +352,6 @@ void UnprivilegedProcessDelegate::LaunchProcess(
   ReportProcessLaunched(std::move(worker_process));
 }
 
-void UnprivilegedProcessDelegate::Send(IPC::Message* message) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  if (channel_) {
-    channel_->Send(message);
-  } else {
-    delete message;
-  }
-}
-
 void UnprivilegedProcessDelegate::GetRemoteAssociatedInterface(
     mojo::GenericPendingAssociatedReceiver receiver) {
   channel_->GetRemoteAssociatedInterface(std::move(receiver));
@@ -341,7 +359,16 @@ void UnprivilegedProcessDelegate::GetRemoteAssociatedInterface(
 
 void UnprivilegedProcessDelegate::CloseChannel() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  worker_process_control_.reset();
   channel_.reset();
+}
+
+void UnprivilegedProcessDelegate::CrashProcess(const base::Location& location) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (worker_process_control_) {
+    worker_process_control_->CrashProcess(
+        location.function_name(), location.file_name(), location.line_number());
+  }
 }
 
 void UnprivilegedProcessDelegate::KillProcess() {
@@ -359,8 +386,7 @@ void UnprivilegedProcessDelegate::KillProcess() {
 bool UnprivilegedProcessDelegate::OnMessageReceived(
     const IPC::Message& message) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  return event_handler_->OnMessageReceived(message);
+  NOTREACHED() << "Received unexpected IPC type: " << message.type();
 }
 
 void UnprivilegedProcessDelegate::OnChannelConnected(int32_t peer_pid) {
@@ -374,6 +400,8 @@ void UnprivilegedProcessDelegate::OnChannelConnected(int32_t peer_pid) {
     ReportFatalError();
     return;
   }
+
+  channel_->GetRemoteAssociatedInterface(&worker_process_control_);
 
   event_handler_->OnChannelConnected(peer_pid);
 }

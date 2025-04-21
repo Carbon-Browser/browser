@@ -1,6 +1,11 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "gpu/command_buffer/service/gles2_cmd_copy_tex_image.h"
 
@@ -197,14 +202,10 @@ void CopyTexImageResourceManager::DoCopyTexSubImageToLUMACompatibilityTexture(
       (luma_format == GL_LUMINANCE_ALPHA) ? GL_ALPHA : GL_ZERO, GL_ZERO,
       GL_ZERO,
   };
-  if (feature_info_->gl_version_info().is_es) {
-    // ES doesn't support GL_TEXTURE_SWIZZLE_RGBA. We must set each swizzle
-    // separately.
-    for (int i = 0; i < 4; i++) {
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R + i, swizzle[i]);
-    }
-  } else {
-    glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzle);
+  // ES doesn't support GL_TEXTURE_SWIZZLE_RGBA. We must set each swizzle
+  // separately.
+  for (int i = 0; i < 4; i++) {
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R + i, swizzle[i]);
   }
 
   // Make a temporary framebuffer using the second scratch texture to render the

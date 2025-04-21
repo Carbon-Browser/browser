@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,14 +16,17 @@
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
 #include "base/values.h"
-#include "components/content_settings/core/browser/content_settings_provider.h"
 #include "components/content_settings/core/common/content_settings.h"
-#include "components/content_settings/core/common/content_settings_pattern.h"
-#include "extensions/browser/extension_prefs_scope.h"
+#include "extensions/common/api/types.h"
+#include "extensions/common/extension_id.h"
+
+class GURL;
+class ContentSettingsPattern;
 
 namespace content_settings {
-class OriginIdentifierValueMap;
+class OriginValueMap;
 class RuleIterator;
+struct Rule;
 }
 
 namespace extensions {
@@ -35,15 +38,16 @@ namespace extensions {
 class ContentSettingsStore
     : public base::RefCountedThreadSafe<ContentSettingsStore> {
  public:
+  using ChromeSettingScope = extensions::api::types::ChromeSettingScope;
+
   class Observer {
    public:
     virtual ~Observer() = default;
 
     // Called when a content setting changes in the
     // ContentSettingsStore.
-    virtual void OnContentSettingChanged(
-        const std::string& extension_id,
-        bool incognito) = 0;
+    virtual void OnContentSettingChanged(const ExtensionId& extension_id,
+                                         bool incognito) = 0;
   };
 
   static constexpr char kContentSettingKey[] = "setting";
@@ -58,44 +62,54 @@ class ContentSettingsStore
 
   // //////////////////////////////////////////////////////////////////////////
 
+  // See GetRuleIterator::GetRuleIterator().
   std::unique_ptr<content_settings::RuleIterator> GetRuleIterator(
       ContentSettingsType type,
       bool incognito) const;
+
+  // See GetRuleIterator::GetRule().
+  std::unique_ptr<content_settings::Rule> GetRule(
+      const GURL& primary_url,
+      const GURL& secondary_url,
+      ContentSettingsType content_type,
+      bool off_the_record) const;
 
   // Sets the content |setting| for |pattern| of extension |ext_id|. The
   // |incognito| flag allow to set whether the provided setting is for
   // incognito mode only.
   // Precondition: the extension must be registered.
   // This method should only be called on the UI thread.
+  // This method is called on startup to load from extension prefs. This method
+  // is called each time an extension changes content settings.
   void SetExtensionContentSetting(
       const std::string& ext_id,
       const ContentSettingsPattern& embedded_pattern,
       const ContentSettingsPattern& top_level_pattern,
       ContentSettingsType type,
       ContentSetting setting,
-      ExtensionPrefsScope scope);
+      ChromeSettingScope scope);
 
   // Clears all contents settings set by the extension |ext_id|.
   void ClearContentSettingsForExtension(const std::string& ext_id,
-                                        ExtensionPrefsScope scope);
+                                        ChromeSettingScope scope);
 
   // Clears all contents settings set by the extension |ext_id| for the
   // content type |content_type|.
   void ClearContentSettingsForExtensionAndContentType(
       const std::string& ext_id,
-      ExtensionPrefsScope scope,
+      ChromeSettingScope scope,
       ContentSettingsType content_type);
 
   // Serializes all content settings set by the extension with ID |extension_id|
   // and returns them as a list of Values.
-  base::Value::List GetSettingsForExtension(const std::string& extension_id,
-                                            ExtensionPrefsScope scope) const;
+  base::Value::List GetSettingsForExtension(const ExtensionId& extension_id,
+                                            ChromeSettingScope scope) const;
 
   // Deserializes content settings rules from |list| and applies them as set by
   // the extension with ID |extension_id|.
-  void SetExtensionContentSettingFromList(const std::string& extension_id,
+  void SetExtensionContentSettingFromList(const ExtensionId& extension_id,
                                           const base::Value::List& list,
-                                          ExtensionPrefsScope scope);
+                                          ChromeSettingScope scope);
 
   // //////////////////////////////////////////////////////////////////////////
 
@@ -128,24 +142,30 @@ class ContentSettingsStore
 
   virtual ~ContentSettingsStore();
 
-  content_settings::OriginIdentifierValueMap* GetValueMap(
-      const std::string& ext_id,
-      ExtensionPrefsScope scope);
+  content_settings::OriginValueMap* GetValueMap(const std::string& ext_id,
+                                                ChromeSettingScope scope)
+      EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
-  const content_settings::OriginIdentifierValueMap* GetValueMap(
+  const content_settings::OriginValueMap* GetValueMap(
       const std::string& ext_id,
-      ExtensionPrefsScope scope) const;
+      ChromeSettingScope scope) const EXCLUSIVE_LOCKS_REQUIRED(lock_);
 
-  void NotifyOfContentSettingChanged(const std::string& extension_id,
+  void NotifyOfContentSettingChanged(const ExtensionId& extension_id,
                                      bool incognito);
 
   bool OnCorrectThread();
 
-  ExtensionEntry* FindEntry(const std::string& ext_id) const;
-  ExtensionEntries::iterator FindIterator(const std::string& ext_id);
+  ExtensionEntry* FindEntry(const std::string& ext_id) const
+      EXCLUSIVE_LOCKS_REQUIRED(lock_);
+  ExtensionEntries::iterator FindIterator(const std::string& ext_id)
+      EXCLUSIVE_LOCKS_REQUIRED(lock_);
+
+  void ShouldNotifyForEntry(const ExtensionEntry& entry,
+                            bool* notify,
+                            bool* notify_incognito);
 
   // The entries.
-  ExtensionEntries entries_;
+  ExtensionEntries entries_ GUARDED_BY(lock_);
 
   base::ObserverList<Observer, false>::Unchecked observers_;
 

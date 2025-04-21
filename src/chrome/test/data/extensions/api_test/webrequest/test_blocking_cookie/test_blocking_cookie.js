@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -102,11 +102,11 @@ loadScript.then(async function() {
       {urls: ['<all_urls>']}, ['blocking', 'responseHeaders', 'extraHeaders']);
     // Check that the cookie was really removed.
     navigateAndWait(getURLSetCookie(), function() {
-      chrome.test.listenOnce(chrome.extension.onRequest, function(request) {
+      chrome.test.listenOnce(chrome.runtime.onMessage, function(request) {
         chrome.test.assertTrue(request.pass, 'Cookie was not removed.');
       });
       chrome.tabs.executeScript(tabId,
-      { code: 'chrome.extension.sendRequest(' +
+      { code: 'chrome.runtime.sendMessage(' +
             '{pass: document.cookie.indexOf("Foo") == -1});'
         });
     });
@@ -206,11 +206,11 @@ loadScript.then(async function() {
       {urls: ['<all_urls>']}, ['blocking', 'responseHeaders', 'extraHeaders']);
     // Check that the cookie was really removed.
     navigateAndWait(getURLNonUTF8SetCookie(), function() {
-      chrome.test.listenOnce(chrome.extension.onRequest, function(request) {
+      chrome.test.listenOnce(chrome.runtime.onMessage, function(request) {
         chrome.test.assertTrue(request.pass, 'Cookie was not removed.');
       });
       chrome.tabs.executeScript(tabId,
-      { code: 'chrome.extension.sendRequest(' +
+      { code: 'chrome.runtime.sendMessage(' +
             '{pass: document.cookie.indexOf("Foo") == -1});'
         });
     });

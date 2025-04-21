@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define SERVICES_DEVICE_GEOLOCATION_WIFI_DATA_PROVIDER_COMMON_WIN_H_
 
 #include <windows.h>
+
 #include <ntddndis.h>
 
 #include "services/device/geolocation/wifi_data_provider.h"

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,15 @@
 
 #include <memory>
 
+#include "base/strings/strcat.h"
 #include "dbus/message.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
-
-const char kMountLabel[] = "/tmp/cros-disks-test";
 
 // Appends a boolean entry to a dictionary of type "a{sv}"
 void AppendBoolDictEntry(dbus::MessageWriter* array_writer,
@@ -50,7 +50,7 @@ TEST(CrosDisksClientTest, DiskInfo) {
   const bool kDeviceIsOnBootDevice = true;
   const bool kDeviceIsOnRemovableDevice = true;
   const bool kDeviceIsReadOnly = true;
-  const uint32_t kDeviceMediaType = cros_disks::DEVICE_MEDIA_SD;
+  const uint32_t kDeviceMediaType = static_cast<uint32_t>(ash::DeviceType::kSD);
   const std::string kMountPath = "/media/removable/UNTITLED";
   const bool kDevicePresentationHide = false;
   const uint64_t kDeviceSize = 16005464064;
@@ -154,49 +154,41 @@ TEST(CrosDisksClientTest, DiskInfo) {
   EXPECT_EQ(kIdLabel, result.label());
   EXPECT_EQ(kIdUuid, result.uuid());
   EXPECT_EQ(kDeviceSize, result.total_size_in_bytes());
-  EXPECT_EQ(DEVICE_TYPE_SD, result.device_type());
+  EXPECT_EQ(DeviceType::kSD, result.device_type());
   EXPECT_EQ(kMountPath, result.mount_path());
   EXPECT_EQ(kFileSystemType, result.file_system_type());
   EXPECT_EQ(kIsAutoMountable, result.is_auto_mountable());
 }
 
 TEST(CrosDisksClientTest, ComposeMountOptions) {
-  std::string kExpectedMountLabelOption =
-      std::string("mountlabel=") + kMountLabel;
-  std::vector<std::string> rw_mount_options =
-      CrosDisksClient::ComposeMountOptions({}, kMountLabel,
-                                           MOUNT_ACCESS_MODE_READ_WRITE,
-                                           REMOUNT_OPTION_MOUNT_NEW_DEVICE);
-  ASSERT_EQ(2U, rw_mount_options.size());
-  EXPECT_EQ("rw", rw_mount_options[0]);
-  EXPECT_EQ(kExpectedMountLabelOption, rw_mount_options[1]);
+  using testing::UnorderedElementsAre;
+  const std::string label = "/tmp/cros-disks-test";
+  const std::string label_option = base::StrCat({"mountlabel=", label});
 
-  std::vector<std::string> ro_mount_options =
-      CrosDisksClient::ComposeMountOptions({}, kMountLabel,
-                                           MOUNT_ACCESS_MODE_READ_ONLY,
-                                           REMOUNT_OPTION_MOUNT_NEW_DEVICE);
-  ASSERT_EQ(2U, ro_mount_options.size());
-  EXPECT_EQ("ro", ro_mount_options[0]);
-  EXPECT_EQ(kExpectedMountLabelOption, ro_mount_options[1]);
+  // TODO(b/364409158) Remove with files-kernel-drivers feature flag.
+  const std::string driver_option = "prefer-driver=kernel";
 
-  std::vector<std::string> remount_mount_options =
+  EXPECT_THAT(CrosDisksClient::ComposeMountOptions(
+                  {}, label, MountAccessMode::kReadWrite,
+                  RemountOption::kMountNewDevice),
+              UnorderedElementsAre("rw", label_option, driver_option));
+
+  EXPECT_THAT(CrosDisksClient::ComposeMountOptions(
+                  {}, label, MountAccessMode::kReadOnly,
+                  RemountOption::kMountNewDevice),
+              UnorderedElementsAre("ro", label_option, driver_option));
+
+  EXPECT_THAT(
       CrosDisksClient::ComposeMountOptions(
-          {}, kMountLabel, MOUNT_ACCESS_MODE_READ_WRITE,
-          REMOUNT_OPTION_REMOUNT_EXISTING_DEVICE);
-  ASSERT_EQ(3U, remount_mount_options.size());
-  EXPECT_EQ("rw", remount_mount_options[0]);
-  EXPECT_EQ("remount", remount_mount_options[1]);
-  EXPECT_EQ(kExpectedMountLabelOption, remount_mount_options[2]);
+          {}, label, MountAccessMode::kReadWrite,
+          RemountOption::kRemountExistingDevice),
+      UnorderedElementsAre("rw", "remount", label_option, driver_option));
 
-  std::vector<std::string> custom_mount_options =
-      CrosDisksClient::ComposeMountOptions({"foo", "bar=baz"}, kMountLabel,
-                                           MOUNT_ACCESS_MODE_READ_WRITE,
-                                           REMOUNT_OPTION_MOUNT_NEW_DEVICE);
-  ASSERT_EQ(4U, custom_mount_options.size());
-  EXPECT_EQ("foo", custom_mount_options[0]);
-  EXPECT_EQ("bar=baz", custom_mount_options[1]);
-  EXPECT_EQ("rw", custom_mount_options[2]);
-  EXPECT_EQ(kExpectedMountLabelOption, custom_mount_options[3]);
+  EXPECT_THAT(CrosDisksClient::ComposeMountOptions(
+                  {"foo", "bar=baz"}, label, MountAccessMode::kReadWrite,
+                  RemountOption::kMountNewDevice),
+              UnorderedElementsAre("foo", "bar=baz", "rw", label_option,
+                                   driver_option));
 }
 
-}  // namespace chromeos
+}  // namespace ash

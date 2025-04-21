@@ -1,9 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/bookmarks/common/android/bookmark_id.h"
 
+// Must come after all headers that specialize FromJniType() / ToJniType().
 #include "components/bookmarks/common/android/bookmarks_jni_headers/BookmarkId_jni.h"
 
 namespace bookmarks {

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,17 +8,19 @@
 #include <cstddef>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/check_is_test.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/scoped_refptr.h"
@@ -26,12 +28,11 @@
 #include "base/task/bind_post_task.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/support_tool/data_collector.h"
 #include "chrome/browser/support_tool/support_packet_metadata.h"
-#include "components/feedback/pii_types.h"
-#include "components/feedback/redaction_tool.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "components/feedback/redaction_tool/pii_types.h"
+#include "components/feedback/redaction_tool/redaction_tool.h"
+#include "data_collector_utils.h"
 #include "third_party/zlib/google/zip.h"
 
 // Zip archieves the contents of `src_path` into `target_path`. Adds ".zip"
@@ -61,18 +62,20 @@ base::FilePath CreateTempDirForOutput() {
 SupportToolHandler::SupportToolHandler()
     : SupportToolHandler(/*case_id=*/std::string(),
                          /*email_address=*/std::string(),
-                         /*issue_description=*/std::string()) {}
+                         /*issue_description=*/std::string(),
+                         std::nullopt) {}
 
 SupportToolHandler::SupportToolHandler(std::string case_id,
                                        std::string email_address,
-                                       std::string issue_description)
-    : metadata_(case_id, email_address, issue_description),
+                                       std::string issue_description,
+                                       std::optional<std::string> upload_id)
+    : metadata_(case_id, email_address, issue_description, upload_id),
       task_runner_for_redaction_tool_(
           base::ThreadPool::CreateSequencedTaskRunner(
               {base::TaskPriority::USER_VISIBLE,
                base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN})),
       redaction_tool_container_(
-          base::MakeRefCounted<feedback::RedactionToolContainer>(
+          base::MakeRefCounted<redaction::RedactionToolContainer>(
               task_runner_for_redaction_tool_,
               nullptr)) {}
 
@@ -109,6 +112,12 @@ void SupportToolHandler::AddDataCollector(
   data_collectors_.emplace_back(std::move(collector));
 }
 
+const std::vector<std::unique_ptr<DataCollector>>&
+SupportToolHandler::GetDataCollectorsForTesting() {
+  CHECK_IS_TEST();
+  return data_collectors_;
+}
+
 void SupportToolHandler::CollectSupportData(
     SupportToolDataCollectedCallback on_data_collection_done_callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -142,7 +151,7 @@ void SupportToolHandler::CollectSupportData(
 
 void SupportToolHandler::OnDataCollected(
     base::RepeatingClosure barrier_closure,
-    absl::optional<SupportToolError> error) {
+    std::optional<SupportToolError> error) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (error) {
     collected_errors_.insert(error.value());
@@ -151,10 +160,7 @@ void SupportToolHandler::OnDataCollected(
 }
 
 void SupportToolHandler::AddDetectedPII(const PIIMap& pii_map) {
-  for (auto& pii_data : pii_map) {
-    detected_pii_[pii_data.first].insert(pii_data.second.begin(),
-                                         pii_data.second.end());
-  }
+  MergePIIMaps(detected_pii_, pii_map);
 }
 
 void SupportToolHandler::OnAllDataCollected() {
@@ -178,7 +184,7 @@ void SupportToolHandler::OnMetadataContentsPopulated() {
 }
 
 void SupportToolHandler::ExportCollectedData(
-    std::set<feedback::PIIType> pii_types_to_keep,
+    std::set<redaction::PIIType> pii_types_to_keep,
     base::FilePath target_path,
     SupportToolDataExportedCallback on_data_exported_callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -196,7 +202,7 @@ void SupportToolHandler::ExportCollectedData(
 }
 
 void SupportToolHandler::ExportIntoTempDir(
-    std::set<feedback::PIIType> pii_types_to_keep,
+    std::set<redaction::PIIType> pii_types_to_keep,
     base::FilePath target_path,
     base::FilePath tmp_path) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -230,7 +236,7 @@ void SupportToolHandler::ExportIntoTempDir(
 
 void SupportToolHandler::OnDataCollectorDoneExporting(
     base::RepeatingClosure barrier_closure,
-    absl::optional<SupportToolError> error) {
+    std::optional<SupportToolError> error) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (error) {
     collected_errors_.insert(error.value());
@@ -241,7 +247,7 @@ void SupportToolHandler::OnDataCollectorDoneExporting(
 void SupportToolHandler::OnAllDataCollectorsDoneExporting(
     base::FilePath tmp_path,
     base::FilePath target_path,
-    std::set<feedback::PIIType> pii_types_to_keep) {
+    std::set<redaction::PIIType> pii_types_to_keep) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   metadata_.InsertErrors(collected_errors_);
   metadata_.WriteMetadataFile(

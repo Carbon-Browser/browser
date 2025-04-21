@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 #define UI_ACCESSIBILITY_AX_TREE_MANAGER_BASE_H_
 
 #include <memory>
+#include <optional>
+#include <unordered_map>
 
-#include "base/containers/flat_map.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/accessibility/ax_export.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/accessibility/ax_tree.h"
@@ -109,10 +109,10 @@ class AX_EXPORT AXTreeManagerBase final {
 
   // Creates a child tree based on `initial_state` and attaches it to the given
   // host node. Returns the child tree's manager if successful.
-  absl::optional<AXTreeManagerBase> AttachChildTree(
+  std::optional<AXTreeManagerBase> AttachChildTree(
       const AXNodeID& host_node_id,
       const AXTreeUpdate& initial_state);
-  absl::optional<AXTreeManagerBase> AttachChildTree(
+  std::optional<AXTreeManagerBase> AttachChildTree(
       AXNode& host_node,
       const AXTreeUpdate& initial_state);
 
@@ -122,7 +122,7 @@ class AX_EXPORT AXTreeManagerBase final {
   AXTreeManagerBase* DetachChildTree(AXNode& host_node);
 
  private:
-  static base::flat_map<AXTreeID, AXTreeManagerBase*>&
+  static std::unordered_map<AXTreeID, AXTreeManagerBase*, AXTreeIDHash>&
   GetTreeManagerMapInstance();
 
   std::unique_ptr<AXTree> tree_;

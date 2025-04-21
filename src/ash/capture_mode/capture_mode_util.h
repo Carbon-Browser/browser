@@ -1,36 +1,50 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_CAPTURE_MODE_CAPTURE_MODE_UTIL_H_
 #define ASH_CAPTURE_MODE_CAPTURE_MODE_UTIL_H_
 
+#include <optional>
 #include <string>
 
 #include "ash/ash_export.h"
+#include "ash/capture_mode/capture_mode_constants.h"
 #include "ash/capture_mode/capture_mode_types.h"
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/animation/tween.h"
+#include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/size.h"
+#include "ui/views/controls/button/button.h"
+#include "ui/views/highlight_border.h"
+
+class PrefService;
 
 namespace aura {
 class Window;
 }  // namespace aura
 
+namespace chromeos {
+class FrameHeader;
+}  // namespace chromeos
+
 namespace gfx {
-class Point;
+class PointF;
 class Rect;
 class Transform;
 }  // namespace gfx
 
 namespace ui {
+class ColorProvider;
 class Layer;
+class LocatedEvent;
 }  // namespace ui
 
 namespace views {
 class View;
 class Widget;
+class Label;
+class BoxLayout;
 }  // namespace views
 
 namespace ash {
@@ -39,10 +53,15 @@ class StopRecordingButtonTray;
 
 namespace capture_mode_util {
 
+ASH_EXPORT PrefService* GetActiveUserPrefService();
+
 // Returns true if the capture mode feature is enabled and capture mode is
 // active. This method allows callers to avoid including the full header for
 // CaptureModeController, which has many transitive includes.
-bool IsCaptureModeActive();
+ASH_EXPORT bool IsCaptureModeActive();
+
+// Retrieves the screen location for the `event`.
+gfx::PointF GetEventScreenLocation(const ui::LocatedEvent& event);
 
 // Retrieves the point on the |rect| associated with |position|.
 ASH_EXPORT gfx::Point GetLocationForFineTunePosition(const gfx::Rect& rect,
@@ -70,6 +89,11 @@ void TriggerAccessibilityAlert(int message_id);
 void TriggerAccessibilityAlertSoon(const std::string& message);
 void TriggerAccessibilityAlertSoon(int message_id);
 
+// Adjusts the bounds if needed so that the `out_bounds` is always within the
+// `confined_bounds`.
+void AdjustBoundsWithinConfinedBounds(const gfx::Rect& confined_bounds,
+                                      gfx::Rect& out_bounds);
+
 // Returns the next horizontal or vertical snap position based on the current
 // camera preview snap position `current` and the movement. Returns `current` if
 // the movement is not doable based on current snap position.
@@ -81,6 +105,10 @@ CameraPreviewSnapPosition GetCameraNextVerticalSnapPosition(
     bool going_up);
 
 // Notification Utils //
+// The notification ID prefix used for notifications corresponding to captured
+// images and videos.
+constexpr char kScreenCaptureNotificationId[] = "capture_mode_notification";
+
 // Constants related to the banner view on the image capture notifications.
 constexpr int kBannerHeightDip = 36;
 constexpr int kBannerHorizontalInsetDip = 12;
@@ -100,6 +128,9 @@ std::unique_ptr<views::View> CreateBannerView();
 // Creates the play icon view which shows on top of the video thumbnail in the
 // notification.
 std::unique_ptr<views::View> CreatePlayIconView();
+
+// Returns the local center point of the given `layer`.
+gfx::Point GetLocalCenterPoint(ui::Layer* layer);
 
 // Returns a transform that scales the given `layer` by the given `scale` factor
 // in both X and Y around its local center point.
@@ -160,7 +191,71 @@ struct AnimationParams {
 // `target_visibility` is different than the current.
 bool SetWidgetVisibility(views::Widget* widget,
                          bool target_visibility,
-                         absl::optional<AnimationParams> animation_params);
+                         std::optional<AnimationParams> animation_params);
+
+// Gets the root window associated with `location_in_screen` if given, otherwise
+// gets the root window associated with the `CursorManager`.
+aura::Window* GetPreferredRootWindow(
+    std::optional<gfx::Point> location_in_screen = std::nullopt);
+
+// Configures style for the `label_view` in the settings menu.
+void ConfigLabelView(views::Label* label_view);
+
+// Initializes the box layout for the `view` in the settings menu.
+views::BoxLayout* CreateAndInitBoxLayoutForView(views::View* view);
+
+// If the privacy indicators feature is enabled, the below function update the
+// camera and microphone capture mode indicators according to the current state.
+void MaybeUpdateCaptureModePrivacyIndicators();
+
+ui::ColorProvider* GetColorProviderForNativeTheme();
+
+// Returns true if the given located `event` is targeted on a window that is a
+// descendant of the given `widget`. Note that `widget` can be provided as null
+// if it no longer exists, in this case this function returns false.
+bool IsEventTargetedOnWidget(const ui::LocatedEvent& event,
+                             views::Widget* widget);
+
+// Calculates the highlight layer bounds based on `center_point` which is in the
+// coordinates of the window being recorded.
+ASH_EXPORT gfx::Rect CalculateHighlightLayerBounds(
+    const gfx::PointF& center_point,
+    int highlight_layer_radius);
+
+// Sets a highlight border to the `view` with given rounded corner radius and
+// type.
+void SetHighlightBorder(views::View* view,
+                        int corner_radius,
+                        views::HighlightBorder::Type type);
+
+// Returns the frame header of the given `window` if any, nullptr otherwise.
+ASH_EXPORT chromeos::FrameHeader* GetWindowFrameHeader(aura::Window* window);
+
+// Returns the bounds within which the on-capture-surface UI elements (e.g. the
+// selfie camera, or the demo tools key combo widgets) will be confined, when
+// the given non-root `window` is being captured.
+ASH_EXPORT gfx::Rect GetCaptureWindowConfineBounds(aura::Window* window);
+
+// Returns the `partial_region_bounds` clamped to the bounds of the the
+// `root_window`. It should only be called if in region video recording mode.
+gfx::Rect GetEffectivePartialRegionBounds(
+    const gfx::Rect& partial_region_bounds,
+    aura::Window* root_window);
+
+// TODO(http://b/368674223): Add some type of ordering mechanism to the API.
+// Adds a new action button to a sunfish capture session if the session is
+// active.
+ASH_EXPORT void AddActionButton(views::Button::PressedCallback callback,
+                                std::u16string text,
+                                const gfx::VectorIcon* icon,
+                                const ActionButtonRank rank,
+                                ActionButtonViewID id);
+
+ASH_EXPORT void AnimateToOpacity(
+    views::Widget* widget,
+    const float opacity,
+    const base::TimeDelta duration =
+        capture_mode::kCaptureUIOpacityChangeDuration);
 
 }  // namespace capture_mode_util
 

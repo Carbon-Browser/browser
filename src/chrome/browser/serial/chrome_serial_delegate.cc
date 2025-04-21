@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,12 @@
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/serial/serial_chooser.h"
 #include "chrome/browser/ui/serial/serial_chooser_controller.h"
+#include "components/guest_view/buildflags/buildflags.h"
 #include "content/public/browser/render_frame_host.h"
+
+#if BUILDFLAG(ENABLE_GUEST_VIEW)
+#include "extensions/browser/guest_view/web_view/web_view_guest.h"
+#endif  // BUILDFLAG(ENABLE_GUEST_VIEW)
 
 namespace {
 
@@ -31,14 +36,24 @@ ChromeSerialDelegate::~ChromeSerialDelegate() = default;
 std::unique_ptr<content::SerialChooser> ChromeSerialDelegate::RunChooser(
     content::RenderFrameHost* frame,
     std::vector<blink::mojom::SerialPortFilterPtr> filters,
+    std::vector<device::BluetoothUUID> allowed_bluetooth_service_class_ids,
     content::SerialChooser::Callback callback) {
   return std::make_unique<SerialChooser>(chrome::ShowDeviceChooserDialog(
       frame, std::make_unique<SerialChooserController>(
-                 frame, std::move(filters), std::move(callback))));
+                 frame, std::move(filters),
+                 std::move(allowed_bluetooth_service_class_ids),
+                 std::move(callback))));
 }
 
 bool ChromeSerialDelegate::CanRequestPortPermission(
     content::RenderFrameHost* frame) {
+#if BUILDFLAG(ENABLE_GUEST_VIEW)
+  // <webview> and <controlledframe> can not isolate origin-based permissions
+  // from the rest of profile, therefore serial is disabled inside.
+  if (extensions::WebViewGuest::FromRenderFrameHost(frame)) {
+    return false;
+  }
+#endif  // BUILDFLAG(ENABLE_GUEST_VIEW)
   return GetChooserContext(frame)->CanRequestObjectPermission(
       frame->GetMainFrame()->GetLastCommittedOrigin());
 }
@@ -46,6 +61,13 @@ bool ChromeSerialDelegate::CanRequestPortPermission(
 bool ChromeSerialDelegate::HasPortPermission(
     content::RenderFrameHost* frame,
     const device::mojom::SerialPortInfo& port) {
+#if BUILDFLAG(ENABLE_GUEST_VIEW)
+  // <webview> and <controlledframe> can not isolate origin-based permissions
+  // from the rest of profile, therefore serial is disabled inside.
+  if (extensions::WebViewGuest::FromRenderFrameHost(frame)) {
+    return false;
+  }
+#endif  // BUILDFLAG(ENABLE_GUEST_VIEW)
   return GetChooserContext(frame)->HasPortPermission(
       frame->GetMainFrame()->GetLastCommittedOrigin(), port);
 }

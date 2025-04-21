@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/page_size.h"
 #include "base/posix/safe_strerror.h"
 #include "base/threading/scoped_blocking_call.h"
@@ -17,14 +17,11 @@
 #include "chromeos/ash/components/memory/userspace_swap/userfaultfd.h"
 #include "chromeos/ash/components/memory/userspace_swap/userspace_swap.h"
 #include "chromeos/ash/components/memory/userspace_swap/userspace_swap.mojom.h"
-#include "components/performance_manager/graph/node_attached_data.h"
-#include "components/performance_manager/graph/process_node_impl.h"
-#include "components/performance_manager/performance_manager_impl.h"
-#include "components/performance_manager/process_node_source.h"
+#include "components/performance_manager/public/graph/graph.h"
+#include "components/performance_manager/public/graph/node_attached_data.h"
 #include "components/performance_manager/public/graph/process_node.h"
 #include "components/performance_manager/public/performance_manager.h"
 #include "components/performance_manager/public/render_process_host_proxy.h"
-#include "components/performance_manager/render_process_user_data.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/render_process_host.h"
@@ -89,6 +86,7 @@ void InitializeProcessNodeOnGraph(int render_process_host_id,
     if (proc->GetRenderProcessHostId().GetUnsafeValue() ==
         render_process_host_id) {
       process_node = proc;
+      break;
     }
   }
 

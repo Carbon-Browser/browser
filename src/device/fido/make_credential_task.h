@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,11 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "device/fido/authenticator_get_assertion_response.h"
 #include "device/fido/authenticator_make_credential_response.h"
@@ -20,7 +21,6 @@
 #include "device/fido/device_operation.h"
 #include "device/fido/fido_constants.h"
 #include "device/fido/fido_task.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace device {
 
@@ -30,7 +30,7 @@ class COMPONENT_EXPORT(DEVICE_FIDO) MakeCredentialTask : public FidoTask {
  public:
   using MakeCredentialTaskCallback = base::OnceCallback<void(
       CtapDeviceResponseCode,
-      absl::optional<AuthenticatorMakeCredentialResponse>)>;
+      std::optional<AuthenticatorMakeCredentialResponse>)>;
   using SignOperation = DeviceOperation<CtapGetAssertionRequest,
                                         AuthenticatorGetAssertionResponse>;
   using RegisterOperation =
@@ -68,15 +68,15 @@ class COMPONENT_EXPORT(DEVICE_FIDO) MakeCredentialTask : public FidoTask {
   CtapGetAssertionRequest NextSilentRequest();
   void HandleResponseToSilentSignRequest(
       CtapDeviceResponseCode response_code,
-      absl::optional<AuthenticatorGetAssertionResponse> response_data);
+      std::optional<AuthenticatorGetAssertionResponse> response_data);
   void HandleResponseToDummyTouch(
       CtapDeviceResponseCode response_code,
-      absl::optional<AuthenticatorMakeCredentialResponse> response_data);
+      std::optional<AuthenticatorMakeCredentialResponse> response_data);
 
   void U2fRegister();
   void MaybeRevertU2fFallback(
       CtapDeviceResponseCode status,
-      absl::optional<AuthenticatorMakeCredentialResponse> response);
+      std::optional<AuthenticatorMakeCredentialResponse> response);
 
   CtapMakeCredentialRequest request_;
   MakeCredentialOptions options_;

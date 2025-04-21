@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -266,6 +266,25 @@ class PausedInDebuggerTool : public InspectTool {
   String GetOverlayName() override;
   v8_inspector::V8InspectorSession* v8_session_;
   String message_;
+};
+
+// -----------------------------------------------------------------------------
+
+class WindowControlsOverlayTool : public InspectTool {
+ public:
+  WindowControlsOverlayTool(
+      InspectorOverlayAgent* overlay,
+      OverlayFrontend* frontend,
+      std::unique_ptr<protocol::DictionaryValue> wco_config);
+  WindowControlsOverlayTool(const WindowControlsOverlayTool&) = delete;
+  WindowControlsOverlayTool& operator=(const WindowControlsOverlayTool&) =
+      delete;
+
+ private:
+  void Draw(float scale) override;
+  String GetOverlayName() override;
+
+  std::unique_ptr<protocol::DictionaryValue> wco_config_;
 };
 
 }  // namespace blink

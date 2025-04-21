@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,9 +53,7 @@ class NaClListener : public IPC::Listener {
   }
 #endif
 
-  void* crash_info_shmem_memory() const {
-    return crash_info_shmem_mapping_.memory();
-  }
+  void* crash_info_shmem_memory() { return crash_info_shmem_mapping_.memory(); }
 
   NaClTrustedListener* trusted_listener() const {
     return trusted_listener_.get();

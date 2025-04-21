@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,12 @@
 #include <memory>
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
+#include "base/not_fatal_until.h"
+#include "base/task/sequenced_task_runner.h"
 #include "storage/browser/blob/blob_builder_from_stream.h"
 #include "storage/browser/blob/blob_data_builder.h"
 #include "storage/browser/blob/blob_impl.h"
@@ -25,8 +28,6 @@ namespace storage {
 namespace {
 
 using MemoryStrategy = BlobMemoryController::Strategy;
-
-BlobRegistryImpl::URLStoreCreationHook* g_url_store_creation_hook = nullptr;
 
 }  // namespace
 
@@ -280,7 +281,7 @@ void BlobRegistryImpl::BlobUnderConstruction::StartTransportation(
     // requested asynchronously later again anyway.
     for (auto& entry : elements_) {
       if (entry.element->is_bytes())
-        entry.element->get_bytes()->embedded_data = absl::nullopt;
+        entry.element->get_bytes()->embedded_data = std::nullopt;
     }
   }
 
@@ -348,7 +349,7 @@ void BlobRegistryImpl::BlobUnderConstruction::DependentBlobReady(
     // Asynchronously call ResolvedAllBlobDependencies, as otherwise |this|
     // might end up getting deleted while ResolvedAllBlobUUIDs is still
     // iterating over |referenced_blob_uuids_|.
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&BlobUnderConstruction::ResolvedAllBlobDependencies,
                        weak_ptr_factory_.GetWeakPtr()));
@@ -381,11 +382,12 @@ void BlobRegistryImpl::BlobUnderConstruction::ResolvedAllBlobDependencies() {
       }
     } else if (element->is_file()) {
       const auto& f = element->get_file();
-      builder_->AppendFile(
-          f->path, f->offset, f->length,
-          f->expected_modification_time.value_or(base::Time()));
+      builder_->AppendFile(f->path, f->offset, f->length,
+                           f->expected_modification_time.value_or(base::Time()),
+                           base::NullCallback());
     } else if (element->is_blob()) {
-      DCHECK(blob_uuid_it != referenced_blob_uuids_.end());
+      CHECK(blob_uuid_it != referenced_blob_uuids_.end(),
+            base::NotFatalUntil::M130);
       const std::string& blob_uuid = *blob_uuid_it++;
       builder_->AppendBlob(blob_uuid, element->get_blob()->offset,
                            element->get_blob()->length, context()->registry());
@@ -490,13 +492,8 @@ bool BlobRegistryImpl::BlobUnderConstruction::ContainsCycles(
 }
 #endif
 
-BlobRegistryImpl::BlobRegistryImpl(
-    base::WeakPtr<BlobStorageContext> context,
-    base::WeakPtr<BlobUrlRegistry> url_registry,
-    scoped_refptr<base::TaskRunner> url_registry_runner)
-    : context_(std::move(context)),
-      url_registry_(std::move(url_registry)),
-      url_registry_runner_(std::move(url_registry_runner)) {}
+BlobRegistryImpl::BlobRegistryImpl(base::WeakPtr<BlobStorageContext> context)
+    : context_(std::move(context)) {}
 
 BlobRegistryImpl::~BlobRegistryImpl() {
   // BlobBuilderFromStream needs to be aborted before it can be destroyed, but
@@ -588,64 +585,6 @@ void BlobRegistryImpl::RegisterFromStream(
   blobs_being_streamed_.insert(std::move(blob_builder));
   blob_builder_ptr->Start(expected_length, std::move(data),
                           std::move(progress_client));
-}
-
-void BlobRegistryImpl::GetBlobFromUUID(
-    mojo::PendingReceiver<blink::mojom::Blob> blob,
-    const std::string& uuid,
-    GetBlobFromUUIDCallback callback) {
-  if (!context_) {
-    std::move(callback).Run();
-    return;
-  }
-
-  if (uuid.empty()) {
-    receivers_.ReportBadMessage(
-        "Invalid UUID passed to BlobRegistry::GetBlobFromUUID");
-    return;
-  }
-  if (!context_->registry().HasEntry(uuid)) {
-    LOG(ERROR) << "Invalid UUID: " << uuid;
-    std::move(callback).Run();
-    return;
-  }
-  BlobImpl::Create(context_->GetBlobDataFromUUID(uuid), std::move(blob));
-  std::move(callback).Run();
-}
-
-void BlobRegistryImpl::URLStoreForOrigin(
-    const url::Origin& origin,
-    mojo::PendingAssociatedReceiver<blink::mojom::BlobURLStore> receiver) {
-  Delegate* delegate = receivers_.current_context().get();
-  DCHECK(delegate);
-  if (!origin.opaque() && !delegate->CanAccessDataForOrigin(origin)) {
-    mojo::ReportBadMessage(
-        "Cannot access data for origin passed to "
-        "BlobRegistryImpl::URLStoreForOrigin");
-    return;
-  }
-  url_registry_runner_->PostTask(
-      FROM_HERE,
-      base::BindOnce(
-          [](const url::Origin& origin,
-             mojo::PendingAssociatedReceiver<blink::mojom::BlobURLStore>
-                 receiver,
-             base::WeakPtr<BlobUrlRegistry> url_registry) {
-            auto self_owned_associated_receiver =
-                mojo::MakeSelfOwnedAssociatedReceiver(
-                    std::make_unique<BlobURLStoreImpl>(origin,
-                                                       std::move(url_registry)),
-                    std::move(receiver));
-            if (g_url_store_creation_hook)
-              g_url_store_creation_hook->Run(self_owned_associated_receiver);
-          },
-          origin, std::move(receiver), url_registry_));
-}
-
-// static
-void BlobRegistryImpl::SetURLStoreCreationHookForTesting(
-    URLStoreCreationHook* hook) {
-  g_url_store_creation_hook = hook;
 }
 
 void BlobRegistryImpl::BlobBuildAborted(const std::string& uuid) {

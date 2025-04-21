@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,10 @@ enum ChromeInsetsMetric {
   INSETS_OMNIBOX_PILL_BUTTON,
   // Padding used in an page info hover button.
   INSETS_PAGE_INFO_HOVER_BUTTON,
+  // Margins for the avatars in the Recent Activity dialog.
+  INSETS_RECENT_ACTIVITY_IMAGE_MARGIN,
+  // Margins for rows within the Recent Activity dialog.
+  INSETS_RECENT_ACTIVITY_ROW_MARGIN,
 };
 
 enum ChromeDistanceMetric {
@@ -34,11 +38,21 @@ enum ChromeDistanceMetric {
   DISTANCE_CONTENT_LIST_VERTICAL_MULTI,
   // Vertical spacing between a list of multiple controls in one column.
   DISTANCE_CONTROL_LIST_VERTICAL,
-  // Width of the space in a dropdown button between its label and down arrow.
-  DISTANCE_DROPDOWN_BUTTON_LABEL_ARROW_SPACING,
-  // Width of the horizontal padding in a dropdown button between the down arrow
-  // and the button's border.
-  DISTANCE_DROPDOWN_BUTTON_RIGHT_MARGIN,
+  // Width of the extensions menu.
+  DISTANCE_EXTENSIONS_MENU_WIDTH,
+  // Width and height of a button's icon in the extensions menu.
+  DISTANCE_EXTENSIONS_MENU_BUTTON_ICON_SIZE,
+  // Width and height of a small button's icon in the extensions menu.
+  DISTANCE_EXTENSIONS_MENU_BUTTON_ICON_SMALL_SIZE,
+  // Width and height of an extension's icon in the extensions menu. This are
+  // larger than menu button's icons because it contains internal padding to
+  // provide space for badging.
+  DISTANCE_EXTENSIONS_MENU_EXTENSION_ICON_SIZE,
+  // Size difference between the two types of icons in the menu. This is used as
+  // horizontal and vertical margins to align extensions menu rows.
+  DISTANCE_EXTENSIONS_MENU_ICON_SPACING,
+  // Vertical and horizontal margin for menu buttons.
+  DISTANCE_EXTENSIONS_MENU_BUTTON_MARGIN,
   // Smaller horizontal spacing between other controls that are logically
   // related.
   DISTANCE_RELATED_CONTROL_HORIZONTAL_SMALL,
@@ -54,8 +68,6 @@ enum ChromeDistanceMetric {
   DISTANCE_TOAST_CONTROL_VERTICAL,
   // Vertical margin for labels in a toast.
   DISTANCE_TOAST_LABEL_VERTICAL,
-  // Horizontal spacing between controls that are logically unrelated.
-  DISTANCE_UNRELATED_CONTROL_HORIZONTAL,
   // Larger horizontal spacing between unrelated controls.
   DISTANCE_UNRELATED_CONTROL_HORIZONTAL_LARGE,
   // Larger vertical spacing between unrelated controls.
@@ -77,9 +89,68 @@ enum ChromeDistanceMetric {
   DISTANCE_OMNIBOX_TWO_LINE_CELL_VERTICAL_PADDING,
   // Width and Height of a vector icon in the side panel header.
   DISTANCE_SIDE_PANEL_HEADER_VECTOR_ICON_SIZE,
-  // Horizontal right margin for separating side panel header border from close
-  // button.
-  DISTANCE_SIDE_PANEL_HEADER_RIGHT_MARGIN
+  // Minimum size of the header vector icon buttons to get the proper ripple.
+  DISTANCE_SIDE_PANEL_HEADER_BUTTON_MINIMUM_SIZE,
+  // Horizontal spacing for separating side panel header border from controls.
+  DISTANCE_SIDE_PANEL_HEADER_INTERIOR_MARGIN_HORIZONTAL,
+  // Horizontal padding between separator in the page info view.
+  DISTANCE_HORIZONTAL_SEPARATOR_PADDING_PAGE_INFO_VIEW,
+  // Horizontal padding applied between the icon and label in the infobar.
+  DISTANCE_INFOBAR_HORIZONTAL_ICON_LABEL_PADDING,
+  // Height of info bars.
+  DISTANCE_INFOBAR_HEIGHT,
+  // Horizontal padding applied between the icon and label in the permission
+  // prompt.
+  DISTANCE_PERMISSION_PROMPT_HORIZONTAL_ICON_LABEL_PADDING,
+  // Horizontal spacing between icon and label in the rich hover button.
+  DISTANCE_RICH_HOVER_BUTTON_ICON_HORIZONTAL,
+  // Horizontal spacing between the search bar and end task button.
+  DISTANCE_TASK_MANAGER_HEADER_HORIZONTAL_SPACING,
+  // Vertical spacing between the header components and the header separator.
+  DISTANCE_TASK_MANAGER_HEADER_VERTICAL_SPACING,
+  // Width and height of the vector icons shown in the search bar of the task
+  // manager.
+  DISTANCE_TASK_MANAGER_SEARCH_ICON_SIZE,
+  // Horizontal spacing between each category tab (e.g. Tabs, System, ...)
+  DISTANCE_TASK_MANAGER_TAB_SPACING,
+  // Distance between most child elements inside the toast.
+  DISTANCE_TOAST_BUBBLE_BETWEEN_CHILD_SPACING,
+  // Distance between the toast label and action button.
+  DISTANCE_TOAST_BUBBLE_BETWEEN_LABEL_ACTION_BUTTON_SPACING,
+  // Distance between the toast label and the menu button.
+  DISTANCE_TOAST_BUBBLE_BETWEEN_LABEL_MENU_BUTTON_SPACING,
+  // Height of the toast.
+  DISTANCE_TOAST_BUBBLE_HEIGHT,
+  // Height of toast action buttons.
+  DISTANCE_TOAST_BUBBLE_HEIGHT_ACTION_BUTTON,
+  // Height of the toast text and close button icon.
+  DISTANCE_TOAST_BUBBLE_HEIGHT_CONTENT,
+  // Width and height of the vector icons shown in the toast bubble.
+  DISTANCE_TOAST_BUBBLE_ICON_SIZE,
+  // Width and height of the icon that shows the "further options" menu.
+  DISTANCE_TOAST_BUBBLE_MENU_ICON_SIZE,
+  // Left and right margins of the leading vector icon shown in the toast
+  // bubble.
+  DISTANCE_TOAST_BUBBLE_LEADING_ICON_SIDE_MARGINS,
+  // Distance between left border of the toast and the icon.
+  DISTANCE_TOAST_BUBBLE_MARGIN_LEFT,
+  // Distance between the right border of the toast and the action button, if
+  // the action button is the rightmost element.
+  DISTANCE_TOAST_BUBBLE_MARGIN_RIGHT_ACTION_BUTTON,
+  // Distance between the right border of the toast and the close button, if the
+  // close button is the rightmost element.
+  DISTANCE_TOAST_BUBBLE_MARGIN_RIGHT_CLOSE_BUTTON,
+  // Distance between the right border of the toast and the menu button, if the
+  // menu button is the rightmost element.
+  DISTANCE_TOAST_BUBBLE_MARGIN_RIGHT_MENU_BUTTON,
+  // Distance between the right border of the toast and the label, if the label
+  // is the rightmost element.
+  DISTANCE_TOAST_BUBBLE_MARGIN_RIGHT_LABEL,
+  // Minimum distance between the horizontal edges of the toast and the browser
+  // window. Relevant if the toast is wide relative to the browser.
+  DISTANCE_TOAST_BUBBLE_BROWSER_WINDOW_MARGIN,
+  // Size to use for avatars in the Recent Activity dialog.
+  DISTANCE_RECENT_ACTIVITY_AVATAR_SIZE,
 };
 
 class ChromeLayoutProvider : public views::LayoutProvider {

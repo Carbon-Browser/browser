@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,6 +68,14 @@ public class CustomD8 {
                 return path.substring(mFileTmpPrefix.length());
             }
             return path;
+        }
+
+        @Override
+        public void acceptProgramNode(Origin node) {
+            String potentialDependent = formatOrigin(node);
+            // Removing all nodes that D8 already knows about so that only those that are still
+            // relevant (added via calls to accept) are kept. Deletes stale nodes.
+            mDeps.remove(potentialDependent);
         }
 
         @Override

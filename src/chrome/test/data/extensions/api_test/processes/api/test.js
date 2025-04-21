@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,7 @@ function createTab(index, url) {
 var getProcessId = chrome.processes.getProcessIdForTab;
 
 function pageUrl(letter) {
-  return chrome.extension.getURL(letter + ".html");
+  return chrome.runtime.getURL(letter + ".html");
 }
 
 function dumpProcess(process) {

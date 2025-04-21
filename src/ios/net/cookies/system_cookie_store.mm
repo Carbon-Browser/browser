@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,6 @@
 #include "base/logging.h"
 #import "ios/net/cookies/cookie_creation_time_manager.h"
 #include "ios/net/ios_net_buildflags.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace net {
 
@@ -37,10 +33,10 @@ base::WeakPtr<SystemCookieStore> SystemCookieStore::GetWeakPtr() {
 }
 
 // protected static
-NSInteger SystemCookieStore::CompareCookies(id a, id b, void* context) {
+NSInteger SystemCookieStore::CompareCookies(NSHTTPCookie* cookie_a,
+                                            NSHTTPCookie* cookie_b,
+                                            void* context) {
   DCHECK(context);
-  NSHTTPCookie* cookie_a = static_cast<NSHTTPCookie*>(a);
-  NSHTTPCookie* cookie_b = static_cast<NSHTTPCookie*>(b);
   // Compare path lengths first.
   NSUInteger path_length_a = cookie_a.path.length;
   NSUInteger path_length_b = cookie_b.path.length;
@@ -54,13 +50,8 @@ NSInteger SystemCookieStore::CompareCookies(id a, id b, void* context) {
       static_cast<CookieCreationTimeManager*>(context);
   base::Time created_a = manager->GetCreationTime(cookie_a);
   base::Time created_b = manager->GetCreationTime(cookie_b);
-#if !BUILDFLAG(CRONET_BUILD)
-  // CookieCreationTimeManager is returning creation times that are null.
-  // Since in Cronet, the cookie store is recreated on startup, let's suppress
-  // this warning for now.
   DLOG_IF(ERROR, created_a.is_null() || created_b.is_null())
       << "Cookie without creation date";
-#endif
   if (created_a < created_b)
     return NSOrderedAscending;
   if (created_a > created_b)

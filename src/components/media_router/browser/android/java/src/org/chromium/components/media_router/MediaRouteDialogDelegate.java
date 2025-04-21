@@ -1,12 +1,10 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.components.media_router;
 
-/**
- * An interface providing callbacks for {@link BaseMediaRouteDialogManager}.
- */
+/** An interface providing callbacks for {@link BaseMediaRouteDialogManager}. */
 public interface MediaRouteDialogDelegate {
     /**
      * Notifies the delegate if the user has chosen a {@link MediaSink} to connect to.
@@ -22,8 +20,6 @@ public interface MediaRouteDialogDelegate {
      */
     void onRouteClosed(String mediaRouteId);
 
-    /**
-     * Notifies the delegate if the dialog was dismissed without any user action.
-     */
+    /** Notifies the delegate if the dialog was dismissed without any user action. */
     void onDialogCancelled();
 }

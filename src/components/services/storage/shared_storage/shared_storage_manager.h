@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,21 +9,26 @@
 #include <queue>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/memory_pressure_listener.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/timer/timer.h"
 #include "components/services/storage/public/mojom/storage_usage_info.mojom-forward.h"
 #include "components/services/storage/shared_storage/async_shared_storage_database.h"
-#include "components/services/storage/shared_storage/public/mojom/shared_storage.mojom.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
+#include "third_party/blink/public/mojom/shared_storage/shared_storage_worklet_service.mojom.h"
 #include "url/origin.h"
 
 namespace base {
 class Time;
 }  // namespace base
+
+namespace net {
+class SchemefulSite;
+}  // namespace net
 
 namespace storage {
 class AsyncSharedStorageDatabase;
@@ -42,6 +47,8 @@ class SharedStorageManager {
   using GetResult = SharedStorageDatabase::GetResult;
   using BudgetResult = SharedStorageDatabase::BudgetResult;
   using TimeResult = SharedStorageDatabase::TimeResult;
+  using MetadataResult = SharedStorageDatabase::MetadataResult;
+  using EntriesResult = SharedStorageDatabase::EntriesResult;
 
   // A callback type to check if a given StorageKey matches a storage policy.
   // Can be passed empty/null where used, which means the StorageKey will always
@@ -87,9 +94,6 @@ class SharedStorageManager {
     return weak_ptr_factory_.GetWeakPtr();
   }
 
-  // Resets the `database_` pointer.
-  void Shutdown();
-
   // Called when the system is under memory pressure.
   void OnMemoryPressure(
       base::OnceCallback<void()> callback,
@@ -101,11 +105,13 @@ class SharedStorageManager {
   void OnOperationResult(OperationResult result);
 
   // Retrieves the `value` for `context_origin` and `key`. `callback` is called
-  // with a string `value` if one is found, absl::nullopt otherwise.
+  // with a struct bundling a string `value` in its data field if one is found,
+  // `std::nullopt` otherwise, and a OperationResult to indicate whether the
+  // transaction was free of database errors.
   //
   // `key` must be of length at most
-  // `SharedStorageDatabaseOptions::max_string_length`, with the burden on the
-  // caller to handle errors for strings that exceed this length.
+  // `SharedStorageDatabase::max_string_length_`, with the burden on the caller
+  // to handle errors for strings that exceed this length.
   void Get(url::Origin context_origin,
            std::u16string key,
            base::OnceCallback<void(GetResult)> callback);
@@ -113,34 +119,37 @@ class SharedStorageManager {
   // Sets an entry for `context_origin` and `key` to have `value`.
   // If `behavior` is `kIgnoreIfPresent` and an entry already exists for
   // `context_origin` and `key`, then the database table is not modified.
-  // The parameter of `callback` reports whether or not any entry is added.
+  // The parameter of `callback` reports whether or not any entry is added, the
+  // request is ignored, or if there is an error.
   //
-  // `key` and `value` must be each of length at most
-  // `SharedStorageDatabaseOptions::max_string_length`, with the burden on the
-  // caller to handle errors for strings that exceed this length. Moreover, if
-  // the length retrieved by `Length(context_origin, callback)` equals
-  // `SharedStorageDatabaseOptions::max_entries_per_origin_`, `Set()` will fail
+  // `key` and `value` must each be of length at most
+  // `SharedStorageDatabase::max_string_length_`, with the burden on the caller
+  // to handle errors for strings that exceed these lengths. Moreover, if the
+  // bytes used retrieved by `BytesUsed(context_origin, callback)` plus any
+  // additional bytes to be stored by this call would exceed
+  // `SharedStorageDatabaseOptions::max_bytes_per_origin_`, `Set()` will fail
   // and the table will not be modified.
   void Set(url::Origin context_origin,
            std::u16string key,
            std::u16string value,
            base::OnceCallback<void(OperationResult)> callback,
-           SetBehavior behavior = SetBehavior::kDefault);
+           SetBehavior behavior);
 
   // Appends `value` to the end of the current `value` for `context_origin` and
   // `key`, if `key` exists. If `key` does not exist, creates an entry for `key`
   // with value `value`. The parameter of `callback` reports whether or not any
-  // entry is added or modified.
+  // entry is added or modified or if there is an error.
   //
-  // `key` and `value` must be each of length at most
-  // `SharedStorageDatabaseOptions::max_string_length`, with the burden on the
-  // caller to handle errors for strings that exceed this length. Moreover, if
-  // the length of the string obtained by concatening the current `script_value`
-  // (if one exists) and `value` exceeds
-  // `SharedStorageDatabaseOptions::max_string_length`, or if the length
-  // retrieved by `Length(context_origin, callback)` equals
-  // `SharedStorageDatabaseOptions::max_entries_per_origin_`, `Append()` will
-  // fail and the database table will not be modified.
+  // `key` and `value` must each be of length at most
+  // `SharedStorageDatabase::max_string_length_`, with the burden on the caller
+  // to handle errors for strings that exceed these lengths. Moreover, if the
+  // length of the string obtained by concatening the current `script_value` (if
+  // one exists) and `value` exceeds
+  // `SharedStorageDatabase::max_string_length_`, or if the bytes used retrieved
+  // by `ByresUsed(context_origin, callback)` plus any additional bytes to be
+  // stored by this call would exceed
+  // `SharedStorageDatabaseOptions::max_bytes_per_origin_`, `Append()` will fail
+  // and the database table will not be modified.
   void Append(url::Origin context_origin,
               std::u16string key,
               std::u16string value,
@@ -150,8 +159,8 @@ class SharedStorageManager {
   // `callback` reports whether the deletion is successful.
   //
   // `key` must be of length at most
-  // `SharedStorageDatabaseOptions::max_string_length`, with the burden on the
-  // caller to handle errors for strings that exceed this length.
+  // `SharedStorageDatabase::max_string_length_`, with the burden on the caller
+  // to handle errors for strings that exceed this length.
   void Delete(url::Origin context_origin,
               std::u16string key,
               base::OnceCallback<void(OperationResult)> callback);
@@ -166,8 +175,7 @@ class SharedStorageManager {
   // via a remote that consumes `pending_listener`. Calls `callback` with an
   // OperationResult to indicate whether the transaction was successful.
   void Keys(url::Origin context_origin,
-            mojo::PendingRemote<
-                shared_storage_worklet::mojom::SharedStorageEntriesListener>
+            mojo::PendingRemote<blink::mojom::SharedStorageEntriesListener>
                 pending_listener,
             base::OnceCallback<void(OperationResult)> callback);
 
@@ -177,8 +185,7 @@ class SharedStorageManager {
   // Calls `callback` with an OperationResult to indicate whether the
   // transaction was successful.
   void Entries(url::Origin context_origin,
-               mojo::PendingRemote<
-                   shared_storage_worklet::mojom::SharedStorageEntriesListener>
+               mojo::PendingRemote<blink::mojom::SharedStorageEntriesListener>
                    pending_listener,
                base::OnceCallback<void(OperationResult)> callback);
 
@@ -187,11 +194,14 @@ class SharedStorageManager {
   // of the Shared Storage API, or else by
   // `browsing_data::SharedStorageHelper::DeleteOrigin()` in order to clear
   // browsing data via the Settings UI.
-  //
-  // TODO(cammie): Add `browsing_data::SharedStorageHelper` and the rest of the
-  // clear browsing data integration.
   void Clear(url::Origin context_origin,
              base::OnceCallback<void(OperationResult)> callback);
+
+  // The parameter of `callback` reports the number of bytes used by
+  // `context_origin` in unexpired entries, 0 if the origin has no unexpired
+  // entries, or -1 on operation failure.
+  void BytesUsed(url::Origin context_origin,
+                 base::OnceCallback<void(int)> callback);
 
   // Clears all StorageKeys that match `storage_key_matcher` run on the owning
   // StoragePartition's `SpecialStoragePolicy` and have `last_used_time` between
@@ -209,27 +219,25 @@ class SharedStorageManager {
                             bool perform_storage_cleanup = false);
 
   // Fetches a vector of `mojom::StorageUsageInfoPtr`, with one
-  // `mojom::StorageUsageInfoPtr` for each origin currently using shared storage
-  // in this profile. Called by
-  // `browsing_data::SharedStorageHelper::StartFetching`. If
-  // `exclude_empty_origins` is true, then only those with positive `length` are
-  // included in the vector.
-  void FetchOrigins(base::OnceCallback<
-                        void(std::vector<mojom::StorageUsageInfoPtr>)> callback,
-                    bool exclude_empty_origins = true);
+  // `mojom::StorageUsageInfoPtr` for each origin currently using shared
+  // storage in this profile. Called by
+  // `browsing_data::SharedStorageHelper::StartFetching`.
+  void FetchOrigins(
+      base::OnceCallback<void(std::vector<mojom::StorageUsageInfoPtr>)>
+          callback);
 
   // Makes a withdrawal of `bits_debit` stamped with the current time from the
-  // privacy budget of `context_origin`.
-  void MakeBudgetWithdrawal(url::Origin context_origin,
+  // privacy budget of `context_site`.
+  void MakeBudgetWithdrawal(net::SchemefulSite context_site,
                             double bits_debit,
                             base::OnceCallback<void(OperationResult)> callback);
 
   // Determines the number of bits remaining in the privacy budget of
-  // `context_origin`, where only withdrawals within the most recent
+  // `context_site`, where only withdrawals within the most recent
   // `budget_interval_` are counted as still valid, and calls `callback` with
   // this information bundled with an `OperationResult` value to indicate
   // whether the database retrieval was successful.
-  void GetRemainingBudget(url::Origin context_origin,
+  void GetRemainingBudget(net::SchemefulSite context_site,
                           base::OnceCallback<void(BudgetResult)> callback);
 
   // Calls `callback` with the most recent creation time (currently in the
@@ -237,6 +245,31 @@ class SharedStorageManager {
   // to indicate whether or not there were errors.
   void GetCreationTime(url::Origin context_origin,
                        base::OnceCallback<void(TimeResult)> callback);
+
+  // Calls `SharedStorageDatabase::Length()`,
+  // `SharedStorageDatabase::GetRemainingBudget()`, and
+  // `SharedStorageDatabase::GetCreationTime()`, then bundles this info along
+  // with the accompanying `OperationResult`s into a struct to send to the
+  // DevTools `StorageHandler` via `callback`. Because DevTools displays
+  // shared storage data by origin, we continue to pass a `url::Origin` in as
+  // parameter `context_origin` and compute the site on the fly to use as
+  // parameter for `GetRemainingBudget()`.
+  void GetMetadata(url::Origin context_origin,
+                   base::OnceCallback<void(MetadataResult)> callback);
+
+  // Calls `callback` with an origin's entries in a vector bundled with an
+  // `OperationResult`. To only be used by DevTools.
+  void GetEntriesForDevTools(url::Origin context_origin,
+                             base::OnceCallback<void(EntriesResult)> callback);
+
+  // Removes all budget withdrawals for `context_origin`'s site. Calls
+  // `callback` to indicate whether the transaction succeeded. Intended as a
+  // convenience for the DevTools UX. Because DevTools displays shared storage
+  // data by origin, we continue to pass a `url::Origin` in as parameter
+  // `context_origin` and compute the site on the fly.
+  void ResetBudgetForDevTools(
+      url::Origin context_origin,
+      base::OnceCallback<void(OperationResult)> callback);
 
   void SetOnDBDestroyedCallbackForTesting(
       base::OnceCallback<void(bool)> callback);
@@ -248,13 +281,15 @@ class SharedStorageManager {
   void OverrideSpecialStoragePolicyForTesting(
       scoped_refptr<storage::SpecialStoragePolicy> special_storage_policy);
 
+  void OverrideClockForTesting(base::Clock* clock, base::OnceClosure callback);
+
   void OverrideDatabaseForTesting(
       std::unique_ptr<AsyncSharedStorageDatabase> override_async_database);
 
   // Calls `callback` with the number of entries (including stale entries) in
-  // the table `budget_mapping` for `context_origin`, or with -1 in case of
+  // the table `budget_mapping` for `context_site`, or with -1 in case of
   // database initialization failure or SQL error.
-  void GetNumBudgetEntriesForTesting(url::Origin context_origin,
+  void GetNumBudgetEntriesForTesting(net::SchemefulSite context_site,
                                      base::OnceCallback<void(int)> callback);
 
   // Calls `callback` with the total number of entries in the table for all
@@ -271,18 +306,16 @@ class SharedStorageManager {
   base::OnceCallback<void(OperationResult)> GetOperationResultCallback(
       base::OnceCallback<void(OperationResult)> callback);
 
-  // Purges the data for any origins that haven't been written to or read from
-  // for more than the `origin_staleness_threshold_`. Also purges, for all
-  // origins, all privacy budget withdrawals that have `time_stamps` older than
-  // the current time minus `SharedStorageDatabase::budget_interval_`.
-  void PurgeStaleOrigins();
+  // Clear all entries whose `last_used_time` (currently the last write access)
+  // falls before `SharedStorageDatabase::clock_->Now() -
+  // options_->staleness_threshold_`. Also purges, for all origins, all privacy
+  // budget withdrawals that have `time_stamps` older than
+  // `SharedStorageDatabase::clock_->Now() - options_->budget_interval_`. The
+  // parameter of `callback` reports whether the transaction was successful.
+  void PurgeStale();
 
-  // Processes the result of purging stale origins, then purges all privacy
-  // budget withdrawals that have `time_stamps` older than the current time
-  // minus `SharedStorageDatabase::budget_interval_`
-
-  // Starts the `timer_` for the next call to `PurgeStaleOrigins()`.
-  void OnStaleOriginsPurged(OperationResult result);
+  // Starts the `timer_` for the next call to `PurgeStale()`.
+  void OnStalePurged(OperationResult result);
 
   // Records metrics, including how many SQL errors were seen, when destructor
   // is called.

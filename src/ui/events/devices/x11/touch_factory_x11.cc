@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,17 @@
 
 #include <stddef.h>
 
+#include <string_view>
+
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
 #include "base/logging.h"
 #include "base/memory/singleton.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/system/sys_info.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "ui/events/base_event_utils.h"
 #include "ui/events/devices/x11/device_data_manager_x11.h"
 #include "ui/events/devices/x11/device_list_cache_x11.h"
@@ -31,7 +32,7 @@ void AddPointerDevicesFromString(
     const std::string& pointer_devices,
     EventPointerType type,
     std::vector<std::pair<int, EventPointerType>>* devices) {
-  for (const base::StringPiece& dev : base::SplitStringPiece(
+  for (std::string_view dev : base::SplitStringPiece(
            pointer_devices, ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL)) {
     int devid;
     if (base::StringToInt(dev, &devid))
@@ -224,7 +225,7 @@ void TouchFactory::SetupXI2ForXWindow(x11::Window window) {
   // these events.
   SetXinputMask(mask_data, x11::Input::HierarchyEvent::opcode);
   SetXinputMask(mask_data, x11::Input::DeviceChangedEvent::opcode);
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   if (base::SysInfo::IsRunningOnChromeOS()) {
     SetXinputMask(mask_data, x11::Input::DeviceEvent::KeyPress);
     SetXinputMask(mask_data, x11::Input::DeviceEvent::KeyRelease);
@@ -335,11 +336,8 @@ void TouchFactory::CacheTouchscreenIds(x11::Input::DeviceId device_id) {
     return;
   std::vector<TouchscreenDevice> touchscreens =
       DeviceDataManager::GetInstance()->GetTouchscreenDevices();
-  const auto it =
-      std::find_if(touchscreens.begin(), touchscreens.end(),
-                   [device_id](const TouchscreenDevice& touchscreen) {
-                     return touchscreen.id == static_cast<int>(device_id);
-                   });
+  const auto it = base::ranges::find(touchscreens, static_cast<int>(device_id),
+                                     &TouchscreenDevice::id);
   // Internal displays will have a vid and pid of 0. Ignore them.
   if (it != touchscreens.end() && it->vendor_id && it->product_id)
     touchscreen_ids_.emplace(it->vendor_id, it->product_id);

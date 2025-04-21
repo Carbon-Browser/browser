@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include <string>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "content/public/browser/site_instance.h"
 #include "content/public/browser/web_contents_delegate.h"
 #include "content/public/browser/web_contents_observer.h"
@@ -45,7 +46,7 @@ class BackgroundContents : public extensions::DeferredStartRenderHost,
         std::unique_ptr<content::WebContents> new_contents,
         const GURL& target_url,
         WindowOpenDisposition disposition,
-        const gfx::Rect& initial_rect,
+        const blink::mojom::WindowFeatures& window_features,
         bool* was_blocked) = 0;
 
     // Informs the delegate of lifetime events.
@@ -56,7 +57,7 @@ class BackgroundContents : public extensions::DeferredStartRenderHost,
     virtual void OnBackgroundContentsClosed(BackgroundContents* contents) = 0;
 
    protected:
-    virtual ~Delegate() {}
+    virtual ~Delegate() = default;
   };
 
   BackgroundContents(
@@ -82,20 +83,20 @@ class BackgroundContents : public extensions::DeferredStartRenderHost,
   // content::WebContentsDelegate implementation:
   void CloseContents(content::WebContents* source) override;
   bool ShouldSuppressDialogs(content::WebContents* source) override;
-  void DidNavigatePrimaryMainFramePostCommit(
-      content::WebContents* tab) override;
-  void AddNewContents(content::WebContents* source,
-                      std::unique_ptr<content::WebContents> new_contents,
-                      const GURL& target_url,
-                      WindowOpenDisposition disposition,
-                      const gfx::Rect& initial_rect,
-                      bool user_gesture,
-                      bool* was_blocked) override;
+  content::WebContents* AddNewContents(
+      content::WebContents* source,
+      std::unique_ptr<content::WebContents> new_contents,
+      const GURL& target_url,
+      WindowOpenDisposition disposition,
+      const blink::mojom::WindowFeatures& window_features,
+      bool user_gesture,
+      bool* was_blocked) override;
   bool IsNeverComposited(content::WebContents* web_contents) override;
 
   // content::WebContentsObserver implementation:
   void PrimaryMainFrameRenderProcessGone(
       base::TerminationStatus status) override;
+  void PrimaryPageChanged(content::Page& page) override;
 
  protected:
   // Exposed for testing.
@@ -121,13 +122,13 @@ class BackgroundContents : public extensions::DeferredStartRenderHost,
 // This is the data sent out as the details with BACKGROUND_CONTENTS_OPENED.
 struct BackgroundContentsOpenedDetails {
   // The BackgroundContents object that has just been opened.
-  raw_ptr<BackgroundContents> contents;
+  raw_ptr<BackgroundContents, DanglingUntriaged> contents;
 
   // The name of the parent frame for these contents.
-  const std::string& frame_name;
+  const raw_ref<const std::string> frame_name;
 
   // The ID of the parent application (if any).
-  const std::string& application_id;
+  const raw_ref<const std::string> application_id;
 };
 
 #endif  // CHROME_BROWSER_BACKGROUND_BACKGROUND_CONTENTS_H_

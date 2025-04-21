@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,11 @@
 #include <fuchsia/accessibility/semantics/cpp/fidl.h>
 #include <fuchsia/accessibility/semantics/cpp/fidl_test_base.h>
 #include <lib/fidl/cpp/binding.h>
+
+#include <string_view>
 #include <unordered_map>
 
-#include "base/callback.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/functional/callback.h"
 
 class FakeSemanticTree
     : public fuchsia::accessibility::semantics::testing::SemanticTree_TestBase {
@@ -37,17 +38,19 @@ class FakeSemanticTree
   void Disconnect();
 
   void RunUntilNodeCountAtLeast(size_t count);
-  void RunUntilNodeWithLabelIsInTree(base::StringPiece label);
+  void RunUntilNodeWithLabelIsInTree(std::string_view label);
   void RunUntilCommitCountIs(size_t count);
   void RunUntilConditionIsTrue(base::RepeatingCallback<bool()> condition);
   void SetNodeUpdatedCallback(uint32_t node_id,
                               base::OnceClosure node_updated_callback);
   fuchsia::accessibility::semantics::Node* GetNodeWithId(uint32_t id);
 
-  // For both functions below, it is possible there are multiple nodes with the
+  // For the functions below, it is possible there are multiple nodes with the
   // same identifier.
+  // Get the the first node in the document matching |label|, using a
+  // depth-first search.
   fuchsia::accessibility::semantics::Node* GetNodeFromLabel(
-      base::StringPiece label);
+      std::string_view label);
   fuchsia::accessibility::semantics::Node* GetNodeFromRole(
       fuchsia::accessibility::semantics::Role role);
 
@@ -67,6 +70,12 @@ class FakeSemanticTree
   void NotImplemented_(const std::string& name) final;
 
  private:
+  // Get the first node matching |label|, in the subtree rooted at |node|, using
+  // a depth first search.
+  fuchsia::accessibility::semantics::Node* GetNodeFromLabelRecursive(
+      fuchsia::accessibility::semantics::Node& node,
+      std::string_view label);
+
   fidl::Binding<fuchsia::accessibility::semantics::SemanticTree>
       semantic_tree_binding_;
   std::unordered_map<uint32_t, fuchsia::accessibility::semantics::Node> nodes_;

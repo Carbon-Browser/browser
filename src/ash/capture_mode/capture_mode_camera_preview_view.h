@@ -1,16 +1,17 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_CAPTURE_MODE_CAPTURE_MODE_CAMERA_PREVIEW_VIEW_H_
 #define ASH_CAPTURE_MODE_CAPTURE_MODE_CAMERA_PREVIEW_VIEW_H_
 
-#include "ash/accessibility/accessibility_controller_impl.h"
+#include "ash/accessibility/accessibility_controller.h"
 #include "ash/accessibility/accessibility_observer.h"
 #include "ash/capture_mode/camera_video_frame_renderer.h"
-#include "ash/capture_mode/capture_mode_button.h"
 #include "ash/capture_mode/capture_mode_camera_controller.h"
 #include "ash/capture_mode/capture_mode_session_focus_cycler.h"
+#include "ash/style/icon_button.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -36,10 +37,12 @@ class CaptureModeCameraController;
 class ScopedA11yOverrideWindowSetter;
 
 // Resize button inside the camera preview view.
-class CameraPreviewResizeButton : public CaptureModeButton {
- public:
-  METADATA_HEADER(CameraPreviewResizeButton);
+class CameraPreviewResizeButton
+    : public IconButton,
+      public CaptureModeSessionFocusCycler::HighlightableView {
+  METADATA_HEADER(CameraPreviewResizeButton, IconButton)
 
+ public:
   CameraPreviewResizeButton(CameraPreviewView* camera_preview_view,
                             views::Button::PressedCallback callback,
                             const gfx::VectorIcon& icon);
@@ -49,11 +52,12 @@ class CameraPreviewResizeButton : public CaptureModeButton {
   ~CameraPreviewResizeButton() override;
 
   // CaptureModeSessionFocusCycler::HighlightableView:
+  views::View* GetView() override;
   void PseudoFocus() override;
   void PseudoBlur() override;
 
  private:
-  CameraPreviewView* const camera_preview_view_;  // not owned.
+  const raw_ptr<CameraPreviewView> camera_preview_view_;  // not owned.
 };
 
 // A view that acts as the contents view of the camera preview widget. It will
@@ -62,9 +66,9 @@ class CameraPreviewView
     : public views::View,
       public CaptureModeSessionFocusCycler::HighlightableView,
       public AccessibilityObserver {
- public:
-  METADATA_HEADER(CameraPreviewView);
+  METADATA_HEADER(CameraPreviewView, views::View)
 
+ public:
   CameraPreviewView(
       CaptureModeCameraController* camera_controller,
       const CameraId& camera_id,
@@ -81,6 +85,11 @@ class CameraPreviewView
   bool should_flip_frames_horizontally() const {
     return camera_video_renderer_.should_flip_frames_horizontally();
   }
+
+  // Initializes this view to start showing the camera video frames from the
+  // associated camera device. Note that this should only be called after this
+  // view has been added to a widget (see `AddedToWidget()` below).
+  void Initialize();
 
   // Sets this camera preview collapsability to the given `value`, which will
   // update the resize button visibility.
@@ -113,8 +122,7 @@ class CameraPreviewView
   void OnGestureEvent(ui::GestureEvent* event) override;
   void OnMouseEntered(const ui::MouseEvent& event) override;
   void OnMouseExited(const ui::MouseEvent& event) override;
-  void Layout() override;
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
+  void Layout(PassKey) override;
 
   // CaptureModeSessionFocusCycler::HighlightableView:
   views::View* GetView() override;
@@ -167,7 +175,7 @@ class CameraPreviewView
   // window.
   void BlurA11yFocus();
 
-  CaptureModeCameraController* const camera_controller_;
+  const raw_ptr<CaptureModeCameraController> camera_controller_;
 
   // The ID of the camera for which this preview was created.
   const CameraId camera_id_;
@@ -177,9 +185,9 @@ class CameraPreviewView
 
   // The view that hosts the native window `host_window()` of the
   // `camera_video_renderer_` into this view's hierarchy.
-  views::NativeViewHost* const camera_video_host_view_;
+  const raw_ptr<views::NativeViewHost> camera_video_host_view_;
 
-  CameraPreviewResizeButton* const resize_button_;
+  const raw_ptr<CameraPreviewResizeButton> resize_button_;
 
   // Started when the mouse exits the camera preview or after the latest tap
   // inside the camera preview. Runs RefreshResizeButtonVisibility() to fade out
@@ -193,7 +201,7 @@ class CameraPreviewView
   // True only while handling a gesture tap event on this view.
   bool has_been_tapped_ = false;
 
-  base::ScopedObservation<AccessibilityControllerImpl, AccessibilityObserver>
+  base::ScopedObservation<AccessibilityController, AccessibilityObserver>
       accessibility_observation_{this};
 
   // Helps to update the current a11y override window. It will be the native

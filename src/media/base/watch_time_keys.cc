@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -87,6 +87,12 @@ static const char kWatchTimeAudioVideoMutedEme[] =
 static const char kWatchTimeAudioVideoMutedSrc[] =
     "Media.WatchTime.AudioVideo.Muted.SRC";
 
+// Media Foundation AudioVideo watch time metric.
+static const char kWatchTimeAudioVideoMediaFoundationAll[] =
+    "Media.WatchTime.AudioVideo.MediaFoundation.All";
+static const char kWatchTimeAudioVideoMediaFoundationEme[] =
+    "Media.WatchTime.AudioVideo.MediaFoundation.Eme";
+
 const char kWatchTimeUnderflowCount[] = "UnderflowCount";
 
 const char kMeanTimeBetweenRebuffersAudioSrc[] =
@@ -125,7 +131,7 @@ const char kDiscardedWatchTimeAudioVideoMse[] =
 const char kDiscardedWatchTimeAudioVideoEme[] =
     "Media.WatchTime.AudioVideo.Discarded.EME";
 
-base::StringPiece ConvertWatchTimeKeyToStringForUma(WatchTimeKey key) {
+std::string_view ConvertWatchTimeKeyToStringForUma(WatchTimeKey key) {
   // WARNING: Returning a non-empty value will log the key to UMA.
   switch (key) {
     case WatchTimeKey::kAudioAll:
@@ -206,6 +212,10 @@ base::StringPiece ConvertWatchTimeKeyToStringForUma(WatchTimeKey key) {
       return kWatchTimeAudioVideoMutedEme;
     case WatchTimeKey::kAudioVideoMutedSrc:
       return kWatchTimeAudioVideoMutedSrc;
+    case WatchTimeKey::kAudioVideoMediaFoundationAll:
+      return kWatchTimeAudioVideoMediaFoundationAll;
+    case WatchTimeKey::kAudioVideoMediaFoundationEme:
+      return kWatchTimeAudioVideoMediaFoundationEme;
     // WARNING: Returning a non-empty value will log the key to UMA.
 
     // The following keys are not reported to UMA and thus have no conversion.
@@ -238,11 +248,10 @@ base::StringPiece ConvertWatchTimeKeyToStringForUma(WatchTimeKey key) {
     case WatchTimeKey::kVideoBackgroundBattery:
     case WatchTimeKey::kVideoBackgroundAc:
     case WatchTimeKey::kVideoBackgroundEmbeddedExperience:
-      return base::StringPiece();
+      return std::string_view();
   };
 
   NOTREACHED();
-  return base::StringPiece();
 }
 
 }  // namespace media

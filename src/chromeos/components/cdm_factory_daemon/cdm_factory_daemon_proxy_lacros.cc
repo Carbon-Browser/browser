@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -86,6 +86,33 @@ void CdmFactoryDaemonProxyLacros::GetAndroidHwKeyData(
   NOTREACHED();
 }
 
+void CdmFactoryDaemonProxyLacros::AllocateSecureBuffer(
+    uint32_t size,
+    AllocateSecureBufferCallback callback) {
+  if (ash_remote_) {
+    // This should always be bound unless it became disconnected in the middle
+    // of setting things up.
+    ash_remote_->AllocateSecureBuffer(size, std::move(callback));
+  } else {
+    std::move(callback).Run(mojo::PlatformHandle());
+  }
+}
+
+void CdmFactoryDaemonProxyLacros::ParseEncryptedSliceHeader(
+    uint64_t secure_handle,
+    uint32_t offset,
+    const std::vector<uint8_t>& stream_data,
+    ParseEncryptedSliceHeaderCallback callback) {
+  if (ash_remote_) {
+    // This should always be bound unless it became disconnected in the middle
+    // of setting things up.
+    ash_remote_->ParseEncryptedSliceHeader(secure_handle, offset, stream_data,
+                                           std::move(callback));
+  } else {
+    std::move(callback).Run(false, {});
+  }
+}
+
 void CdmFactoryDaemonProxyLacros::EstablishAshConnection(
     base::OnceClosure callback) {
   // This may have happened already.
@@ -94,13 +121,14 @@ void CdmFactoryDaemonProxyLacros::EstablishAshConnection(
     return;
   }
 
-  if (!LacrosService::Get()->IsBrowserCdmFactoryAvailable()) {
+  auto* service = LacrosService::Get();
+  if (!service || !service->IsSupported<cdm::mojom::BrowserCdmFactory>()) {
     std::move(callback).Run();
     return;
   }
   // For Lacros, we connect to the ash-chrome browser process which will proxy
   // the connection to the daemon.
-  LacrosService::Get()->BindBrowserCdmFactory(
+  service->BindBrowserCdmFactory(
       mojo::GenericPendingReceiver(ash_remote_.BindNewPipeAndPassReceiver()));
   std::move(callback).Run();
   return;

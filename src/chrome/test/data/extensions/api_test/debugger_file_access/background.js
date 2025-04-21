@@ -1,14 +1,6 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-
-function checkUrlsEqual(expected, actual) {
-  // Note: Use new URL(...).href to compare in order to normalize the URL,
-  // which is important if the path referenced a parent (as happens in the
-  // file urls).
-  chrome.test.assertEq(new URL(expected).href,
-                       new URL(actual).href);
-}
 
 let openTab;
 
@@ -42,27 +34,18 @@ async function runNotAllowedTest(method, params, expectAllowed) {
   const config = await new Promise((resolve) => {
                    chrome.test.getConfig(resolve)
                  });
-  const fileUrl = config.testDataDirectory + '/../body1.html';
+  const fileUrl = new URL(config.testDataDirectory + '/../body1.html').href;
+  const mhtmlFileUrl = new URL(config.testDataDirectory +
+      '/../mhtml-with-subframes.mht').href;
   const expectFileAccess = !!config.customArg;
 
   ({ openTab } = await import('/_test_resources/test_util/tabs_util.js'));
 
-  console.log(fileUrl);
-
-  chrome.test.runTests([
-    function verifyInitialState() {
-      if (config.customArg)
-        chrome.test.assertEq('enabled', config.customArg);
-      chrome.extension.isAllowedFileSchemeAccess((allowed) => {
-        chrome.test.assertEq(expectFileAccess, allowed);
-        chrome.test.succeed();
-      });
-    },
-
-    function testAttach() {
-      openTab(fileUrl).then((tab) => {
-        checkUrlsEqual(fileUrl, tab.url);
-        const tabId = tab.id;
+  function testAttachWithFileUrl(url) {
+    chrome.tabs.onUpdated.addListener(function listener(
+      tabId, changeInfo, tab) {
+      if (tab.status == 'complete' && tab.url == url) {
+        chrome.tabs.onUpdated.removeListener(listener);
         chrome.debugger.attach({tabId: tabId}, '1.1', function() {
           if (expectFileAccess) {
             chrome.test.assertNoLastError();
@@ -75,13 +58,32 @@ async function runNotAllowedTest(method, params, expectAllowed) {
             chrome.test.succeed();
           }
         });
+      }
+    });
+    chrome.test.openFileUrl(url);
+  };
+
+  chrome.test.runTests([
+    function verifyInitialState() {
+      if (config.customArg)
+        chrome.test.assertEq('enabled', config.customArg);
+      chrome.extension.isAllowedFileSchemeAccess((allowed) => {
+        chrome.test.assertEq(expectFileAccess, allowed);
+        chrome.test.succeed();
       });
+    },
+    function testAttach() {
+      testAttachWithFileUrl(fileUrl);
+    },
+
+    function testAttachMhtml() {
+      testAttachWithFileUrl(mhtmlFileUrl);
     },
 
     function testAttachAndNavigate() {
       const url = chrome.runtime.getURL('dummy.html');
       openTab(url).then((tab) => {
-        checkUrlsEqual(url, tab.url);
+        chrome.test.assertEq(url, tab.url);
         const tabId = tab.id;
         chrome.debugger.attach({tabId: tabId}, '1.1', function() {
           chrome.test.assertNoLastError();

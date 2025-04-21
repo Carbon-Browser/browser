@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,8 @@
 
 #include <string>
 
+#include "base/compiler_specific.h"
+#include "base/containers/span.h"
 #include "base/files/file.h"
 #include "base/logging.h"
 #include "base/posix/eintr_wrapper.h"
@@ -45,7 +47,7 @@ class SafeDMG {
 
   ~SafeDMG();
 
-  int Main(int argc, const char* argv[]);
+  int Main(base::span<const char*> args);
 
  private:
   // Prepares for an unpack operation, setting up |unpack_dir_| for the given
@@ -67,27 +69,28 @@ class SafeDMG {
 
 SafeDMG::SafeDMG() : dmg_file_(), unpack_dir_() {}
 
-SafeDMG::~SafeDMG() {}
+SafeDMG::~SafeDMG() = default;
 
-int SafeDMG::Main(int argc, const char* argv[]) {
-  if (argc != 2 && argc != 3) {
-    fprintf(stderr, "Usage: %s file.dmg [unpack-directory]\n", argv[0]);
+int SafeDMG::Main(base::span<const char*> args) {
+  if (args.size() != 2 && args.size() != 3) {
+    fprintf(stderr, "Usage: %s file.dmg [unpack-directory]\n", args[0]);
     fprintf(stderr,
             "If no unpack-directory is specified, the tool will\n"
             "list the contents of the DMG.\n");
     return EXIT_FAILURE;
   }
 
-  dmg_file_.Initialize(base::FilePath(argv[1]),
+  dmg_file_.Initialize(base::FilePath(args[1]),
                        base::File::FLAG_OPEN | base::File::FLAG_READ);
   if (!dmg_file_.IsValid()) {
-    LOG(ERROR) << "Failed to open " << argv[1] << ": "
+    LOG(ERROR) << "Failed to open " << args[1] << ": "
                << dmg_file_.error_details();
     return EXIT_FAILURE;
   }
 
-  if (argc == 3 && !PrepareUnpack(argv[2]))
+  if (args.size() == 3 && !PrepareUnpack(args[2])) {
     return EXIT_FAILURE;
+  }
 
   if (!EnableSandbox())
     return EXIT_FAILURE;
@@ -149,10 +152,9 @@ bool SafeDMG::EnableSandbox() {
         " (allow file-write* (subpath \"%s\"))", unpack_path);
   }
 
-  char* sbox_error;
-  if (sandbox::Seatbelt::Init(sbox_profile.c_str(), 0, &sbox_error) != 0) {
+  std::string sbox_error;
+  if (!sandbox::Seatbelt::Init(sbox_profile.c_str(), 0, &sbox_error)) {
     LOG(ERROR) << "Failed to initialize sandbox: " << sbox_error;
-    sandbox::Seatbelt::FreeError(sbox_error);
     return false;
   }
 
@@ -172,15 +174,11 @@ bool SafeDMG::ParseDMG() {
     printf("=== Partition #%zu: %s ===\n", i,
            udif_parser.GetPartitionName(i).c_str());
 
-    std::string partition_type = udif_parser.GetPartitionType(i);
-    if (partition_type != "Apple_HFS" && partition_type != "Apple_HFSX")
-      continue;
-
     std::unique_ptr<safe_browsing::dmg::ReadStream> partition_stream(
         udif_parser.GetPartitionReadStream(i));
     safe_browsing::dmg::HFSIterator iterator(partition_stream.get());
     if (!iterator.Open()) {
-      LOG(ERROR) << "Failed to open HFS partition";
+      VLOG(1) << "Skipped since this is not an HFS partition";
       continue;
     }
 
@@ -225,7 +223,7 @@ bool SafeDMG::ParseDMG() {
         size_t read_this_pass = 0;
         do {
           uint8_t buf[4096];
-          if (!stream->Read(buf, sizeof(buf), &read_this_pass)) {
+          if (!stream->Read(buf, &read_this_pass)) {
             LOG(ERROR) << "Failed to read stream: " << path;
             unlinkat(unpack_dir_.get(), path.c_str(), 0);
             break;
@@ -252,5 +250,7 @@ bool SafeDMG::ParseDMG() {
 
 int main(int argc, const char* argv[]) {
   SafeDMG safe_dmg;
-  return safe_dmg.Main(argc, argv);
+  // SAFETY: argc and argv come from the OS and must be trusted.
+  return safe_dmg.Main(
+      UNSAFE_BUFFERS(base::span(argv, base::saturated_cast<size_t>(argc))));
 }

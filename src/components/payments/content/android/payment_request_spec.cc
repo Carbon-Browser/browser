@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,10 @@
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
 #include "components/payments/content/android/byte_buffer_helper.h"
-#include "components/payments/content/android/jni_headers/PaymentRequestSpec_jni.h"
 #include "third_party/blink/public/mojom/payments/payment_request.mojom.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "components/payments/content/android/minimal_jni/PaymentRequestSpec_jni.h"
 
 namespace payments {
 namespace android {

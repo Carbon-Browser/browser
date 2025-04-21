@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/notreached.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/test/test_simple_task_runner.h"
 #include "components/leveldb_proto/internal/proto_database_impl.h"
 #include "components/leveldb_proto/public/proto_database.h"
@@ -217,7 +219,7 @@ void FakeDB<P, T>::UpdateEntries(
   update_callback_ = std::move(callback);
 
   if (!queued_update_results_.empty()) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&FakeDB<P, T>::UpdateCallback, base::Unretained(this),
                        queued_update_results_.front()));
@@ -244,7 +246,7 @@ void FakeDB<P, T>::UpdateEntriesWithRemoveFilter(
   update_callback_ = std::move(callback);
 
   if (!queued_update_results_.empty()) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&FakeDB<P, T>::UpdateCallback, base::Unretained(this),
                        queued_update_results_.front()));
@@ -380,7 +382,7 @@ void FakeDB<P, T>::GetEntry(
       base::BindOnce(RunGetCallback, std::move(callback), std::move(entry));
 
   if (!queued_get_results_.empty()) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(&FakeDB<P, T>::GetCallback, base::Unretained(this),
                        queued_get_results_.front()));
@@ -466,7 +468,7 @@ void FakeDB<P, T>::InvokingInvalidCallback(const std::string& callback_name) {
   if (destroy_callback_)
     present_callbacks += " DestroyCallback";
 
-  CHECK(false) << "Test tried to invoke FakeDB " << callback_name
+  NOTREACHED() << "Test tried to invoke FakeDB " << callback_name
                << ", but this callback is not present. Did you mean to invoke "
                   "one of the present callbacks: ("
                << present_callbacks << ")?";

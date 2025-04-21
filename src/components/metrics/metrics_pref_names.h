@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,9 @@ extern const char kMetricsFileMetricsMetadata[];
 extern const char kMetricsDefaultOptIn[];
 extern const char kMetricsInitialLogs[];
 extern const char kMetricsInitialLogsMetadata[];
+extern const char kMetricsLimitedEntropyRandomizationSource[];
+extern const char kMetricsLogFinalizedRecordId[];
+extern const char kMetricsLogRecordId[];
 extern const char kMetricsLowEntropySource[];
 extern const char kMetricsOldLowEntropySource[];
 extern const char kMetricsProvisionalClientID[];
@@ -48,7 +51,7 @@ extern const char kMetricsLastSeenPrefix[];
 // Preferences for recording stability logs.
 extern const char kStabilityBrowserLastLiveTimeStamp[];
 extern const char kStabilityCrashCountDueToGmsCoreUpdate[];
-// TODO(crbug/1241702): Remove this Local State pref once the new behavior
+// TODO(crbug.com/40194783): Remove this Local State pref once the new behavior
 // launches on Android Chrome.
 extern const char kStabilityExitedCleanly[];
 extern const char kStabilityFileMetricsUnsentSamplesCount[];

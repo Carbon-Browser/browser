@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,6 +24,10 @@ const std::string ErrorToString(SignalCollectionError error) {
       return errors::kInvalidUser;
     case SignalCollectionError::kMissingParameters:
       return errors::kMissingParameters;
+    case SignalCollectionError::kParsingFailed:
+      return errors::kParsingFailed;
+    case SignalCollectionError::kUnexpectedValue:
+      return errors::kUnexpectedValue;
   }
 }
 
@@ -49,6 +53,57 @@ HotfixSignalResponse& HotfixSignalResponse::operator=(
 HotfixSignalResponse::~HotfixSignalResponse() = default;
 #endif  // BUILDFLAG(IS_WIN)
 
+GetSettingsOptions::GetSettingsOptions() = default;
+GetSettingsOptions::GetSettingsOptions(const GetSettingsOptions&) = default;
+
+GetSettingsOptions& GetSettingsOptions::operator=(const GetSettingsOptions&) =
+    default;
+
+GetSettingsOptions::~GetSettingsOptions() = default;
+
+bool GetSettingsOptions::operator==(const GetSettingsOptions& other) const {
+  return path == other.path && key == other.key &&
+         get_value == other.get_value && hive == other.hive;
+}
+
+SettingsItem::SettingsItem() = default;
+
+SettingsItem::SettingsItem(const SettingsItem& other) {
+  path = other.path;
+  key = other.key;
+  hive = other.hive;
+  presence = other.presence;
+  if (other.setting_json_value) {
+    setting_json_value = other.setting_json_value;
+  }
+}
+
+SettingsItem& SettingsItem::operator=(const SettingsItem& other) {
+  path = other.path;
+  key = other.key;
+  hive = other.hive;
+  presence = other.presence;
+  if (other.setting_json_value) {
+    setting_json_value = other.setting_json_value;
+  }
+  return *this;
+}
+
+SettingsItem::~SettingsItem() = default;
+
+bool SettingsItem::operator==(const SettingsItem& other) const {
+  return path == other.path && presence == other.presence && key == other.key &&
+         hive == other.hive && setting_json_value == other.setting_json_value;
+}
+
+SettingsResponse::SettingsResponse() = default;
+SettingsResponse::SettingsResponse(const SettingsResponse&) = default;
+
+SettingsResponse& SettingsResponse::operator=(const SettingsResponse&) =
+    default;
+
+SettingsResponse::~SettingsResponse() = default;
+
 FileSystemInfoResponse::FileSystemInfoResponse() = default;
 FileSystemInfoResponse::FileSystemInfoResponse(const FileSystemInfoResponse&) =
     default;
@@ -58,27 +113,48 @@ FileSystemInfoResponse& FileSystemInfoResponse::operator=(
 
 FileSystemInfoResponse::~FileSystemInfoResponse() = default;
 
+AgentSignalsResponse::AgentSignalsResponse() = default;
+AgentSignalsResponse::AgentSignalsResponse(const AgentSignalsResponse&) =
+    default;
+
+AgentSignalsResponse& AgentSignalsResponse::operator=(
+    const AgentSignalsResponse&) = default;
+
+AgentSignalsResponse::~AgentSignalsResponse() = default;
+
 SignalsAggregationRequest::SignalsAggregationRequest() = default;
+
 SignalsAggregationRequest::SignalsAggregationRequest(
     const SignalsAggregationRequest&) = default;
 
+SignalsAggregationRequest::SignalsAggregationRequest(
+    SignalsAggregationRequest&&) = default;
+
 SignalsAggregationRequest& SignalsAggregationRequest::operator=(
-    const SignalsAggregationRequest&) = default;
+    SignalsAggregationRequest&&) = default;
 
 SignalsAggregationRequest::~SignalsAggregationRequest() = default;
 
 bool SignalsAggregationRequest::operator==(
     const SignalsAggregationRequest& other) const {
-  return user_context == other.user_context &&
-         signal_names == other.signal_names;
+  return signal_names == other.signal_names &&
+         file_system_signal_parameters == other.file_system_signal_parameters &&
+         settings_signal_parameters == other.settings_signal_parameters;
 }
 
 SignalsAggregationResponse::SignalsAggregationResponse() = default;
+
 SignalsAggregationResponse::SignalsAggregationResponse(
     const SignalsAggregationResponse&) = default;
 
+SignalsAggregationResponse::SignalsAggregationResponse(
+    SignalsAggregationResponse&&) = default;
+
 SignalsAggregationResponse& SignalsAggregationResponse::operator=(
     const SignalsAggregationResponse&) = default;
+
+SignalsAggregationResponse& SignalsAggregationResponse::operator=(
+    SignalsAggregationResponse&&) = default;
 
 SignalsAggregationResponse::~SignalsAggregationResponse() = default;
 

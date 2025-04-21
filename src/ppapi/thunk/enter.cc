@@ -1,10 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ppapi/thunk/enter.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/strings/stringprintf.h"
 #include "base/synchronization/lock.h"
@@ -70,8 +70,6 @@ int32_t EnterBase::SetResult(int32_t result) {
   if (!callback_) {
     // It doesn't make sense to call SetResult if there is no callback.
     NOTREACHED();
-    retval_ = result;
-    return result;
   }
   if (result == PP_OK_COMPLETIONPENDING) {
     retval_ = result;

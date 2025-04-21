@@ -1,15 +1,18 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/policy/core/common/cloud/external_policy_data_fetcher.h"
 
 #include <stdint.h>
+
+#include <array>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/test/task_environment.h"
@@ -24,10 +27,8 @@ namespace policy {
 
 namespace {
 
-const char* kExternalPolicyDataURLs[] = {
-    "http://localhost/data_1",
-    "http://localhost/data_2"
-};
+auto kExternalPolicyDataURLs = std::to_array<const char*>(
+    {"http://localhost/data_1", "http://localhost/data_2"});
 
 const int64_t kExternalPolicyDataMaxSize = 20;
 
@@ -62,7 +63,8 @@ class ExternalPolicyDataFetcherTest : public testing::Test {
   network::TestURLLoaderFactory test_url_loader_factory_;
   std::unique_ptr<ExternalPolicyDataFetcher> fetcher_;
 
-  std::map<int, ExternalPolicyDataFetcher::Job*> jobs_;  // Not owned.
+  std::map<int, raw_ptr<ExternalPolicyDataFetcher::Job, CtnExperimental>>
+      jobs_;  // Not owned.
 
   int callback_count_;
   int callback_job_index_;

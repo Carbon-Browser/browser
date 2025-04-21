@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 #include <set>
 
+#include "base/memory/raw_ptr.h"
 #include "ui/views/views_export.h"
 #include "ui/wm/core/cursor_loader.h"
 #include "ui/wm/core/native_cursor_manager.h"
@@ -41,9 +42,12 @@ class VIEWS_EXPORT DesktopNativeCursorManager : public wm::NativeCursorManager {
   // Removes |host| from the set |hosts_|.
   void RemoveHost(aura::WindowTreeHost* host);
 
-  // Initialize the observer that will report system cursor size.
-  virtual void InitCursorSizeObserver(
+#if BUILDFLAG(IS_WIN)
+  // Initialize the observer that will report system cursor size and visibility
+  // state.
+  virtual void InitSystemCursorObservers(
       wm::NativeCursorManagerDelegate* delegate);
+#endif
 
  private:
   // Overridden from wm::NativeCursorManager:
@@ -60,7 +64,7 @@ class VIEWS_EXPORT DesktopNativeCursorManager : public wm::NativeCursorManager {
       wm::NativeCursorManagerDelegate* delegate) override;
 
   // The set of hosts to notify of changes in cursor state.
-  using Hosts = std::set<aura::WindowTreeHost*>;
+  using Hosts = std::set<raw_ptr<aura::WindowTreeHost, SetExperimental>>;
   Hosts hosts_;
 
   wm::CursorLoader cursor_loader_;

@@ -1,25 +1,25 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/secure_channel/nearby_endpoint_finder_impl.h"
 
-#include "ash/components/multidevice/logging/logging.h"
-#include "ash/services/secure_channel/public/mojom/nearby_connector.mojom.h"
 #include "base/base64.h"
 #include "base/memory/ptr_util.h"
 #include "base/rand_util.h"
 #include "chrome/browser/ash/secure_channel/util/histogram_util.h"
+#include "chromeos/ash/components/multidevice/logging/logging.h"
+#include "chromeos/ash/services/secure_channel/public/mojom/nearby_connector.mojom.h"
 
 namespace ash {
 namespace secure_channel {
 namespace {
 
-using ::location::nearby::connections::mojom::DiscoveredEndpointInfoPtr;
-using ::location::nearby::connections::mojom::DiscoveryOptions;
-using ::location::nearby::connections::mojom::MediumSelection;
-using ::location::nearby::connections::mojom::Status;
-using ::location::nearby::connections::mojom::Strategy;
+using ::nearby::connections::mojom::DiscoveredEndpointInfoPtr;
+using ::nearby::connections::mojom::DiscoveryOptions;
+using ::nearby::connections::mojom::MediumSelection;
+using ::nearby::connections::mojom::Status;
+using ::nearby::connections::mojom::Strategy;
 
 NearbyEndpointFinderImpl::Factory* g_test_factory = nullptr;
 
@@ -33,17 +33,12 @@ void OnStopDiscoveryDestructorResult(Status status) {
     PA_LOG(WARNING) << "Failed to stop discovery as part of destructor";
 }
 
-std::vector<uint8_t> GenerateRandomByteArray(size_t length) {
-  std::string endpoint_info = base::RandBytesAsString(length);
-  return std::vector<uint8_t>(endpoint_info.begin(), endpoint_info.end());
-}
-
 std::string GenerateEndpointId() {
   // Generate a random array of bytes; as long as it is of size of at least
   // 3/4 kEndpointInfoLength, the final substring of the Base64-encoded array
   // will be of size kEndpointInfoLength.
   std::vector<uint8_t> raw_endpoint_info =
-      GenerateRandomByteArray(kEndpointIdLength);
+      base::RandBytesAsVector(kEndpointIdLength);
 
   // Return the first kEndpointIdLength characters of the Base64-encoded string.
   return base::Base64Encode(raw_endpoint_info).substr(0, kEndpointIdLength);
@@ -51,7 +46,7 @@ std::string GenerateEndpointId() {
 
 std::vector<uint8_t> GenerateEndpointInfo(const std::vector<uint8_t>& eid) {
   if (eid.size() < 2) {
-    return GenerateRandomByteArray(kEndpointInfoLength);
+    return base::RandBytesAsVector(kEndpointInfoLength);
   }
 
   std::vector<uint8_t> endpoint_info = {
@@ -69,8 +64,7 @@ std::vector<uint8_t> GenerateEndpointInfo(const std::vector<uint8_t>& eid) {
 
 // static
 std::unique_ptr<NearbyEndpointFinder> NearbyEndpointFinderImpl::Factory::Create(
-    const mojo::SharedRemote<
-        location::nearby::connections::mojom::NearbyConnections>&
+    const mojo::SharedRemote<::nearby::connections::mojom::NearbyConnections>&
         nearby_connections) {
   if (g_test_factory)
     return g_test_factory->CreateInstance(nearby_connections);
@@ -85,8 +79,7 @@ void NearbyEndpointFinderImpl::Factory::SetFactoryForTesting(
 }
 
 NearbyEndpointFinderImpl::NearbyEndpointFinderImpl(
-    const mojo::SharedRemote<
-        location::nearby::connections::mojom::NearbyConnections>&
+    const mojo::SharedRemote<::nearby::connections::mojom::NearbyConnections>&
         nearby_connections)
     : nearby_connections_(nearby_connections),
       endpoint_id_(GenerateEndpointId()) {}
@@ -107,8 +100,9 @@ void NearbyEndpointFinderImpl::PerformFindEndpoint() {
                             MediumSelection::New(/*bluetooth=*/true,
                                                  /*ble=*/false,
                                                  /*webrtc=*/false,
-                                                 /*wifi_lan=*/false),
-                            /*fast_advertisement_service_uuid=*/absl::nullopt,
+                                                 /*wifi_lan=*/false,
+                                                 /*wifi_direct=*/false),
+                            /*fast_advertisement_service_uuid=*/std::nullopt,
                             /*is_out_of_band_connection=*/true),
       endpoint_discovery_listener_receiver_.BindNewPipeAndPassRemote(),
       base::BindOnce(&NearbyEndpointFinderImpl::OnStartDiscoveryResult,
@@ -136,7 +130,7 @@ void NearbyEndpointFinderImpl::OnStartDiscoveryResult(Status status) {
   if (status != Status::kSuccess) {
     PA_LOG(WARNING) << "Failed to start Nearby discovery: " << status;
     is_discovery_active_ = false;
-    NotifyEndpointDiscoveryFailure();
+    NotifyEndpointDiscoveryFailure(status);
     return;
   }
 
@@ -154,7 +148,7 @@ void NearbyEndpointFinderImpl::OnInjectBluetoothEndpointResult(Status status) {
 
   if (status != Status::kSuccess) {
     PA_LOG(WARNING) << "Failed to inject Bluetooth endpoint: " << status;
-    NotifyEndpointDiscoveryFailure();
+    NotifyEndpointDiscoveryFailure(status);
     return;
   }
 
@@ -162,7 +156,7 @@ void NearbyEndpointFinderImpl::OnInjectBluetoothEndpointResult(Status status) {
 }
 
 void NearbyEndpointFinderImpl::OnStopDiscoveryResult(
-    location::nearby::connections::mojom::DiscoveredEndpointInfoPtr info,
+    ::nearby::connections::mojom::DiscoveredEndpointInfoPtr info,
     Status status) {
   util::RecordStopDiscoveryResult(status);
 
@@ -170,7 +164,7 @@ void NearbyEndpointFinderImpl::OnStopDiscoveryResult(
 
   if (status != Status::kSuccess) {
     PA_LOG(WARNING) << "Failed to stop Nearby discovery: " << status;
-    NotifyEndpointDiscoveryFailure();
+    NotifyEndpointDiscoveryFailure(status);
     return;
   }
 

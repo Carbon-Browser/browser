@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,7 @@ class VertexArrayManager;
 // glDrawXXX time.
 class GPU_GLES2_EXPORT VertexAttrib {
  public:
-  typedef std::list<VertexAttrib*> VertexAttribList;
+  typedef std::list<raw_ptr<VertexAttrib, CtnExperimental>> VertexAttribList;
 
   VertexAttrib();
   VertexAttrib(const VertexAttrib& other);
@@ -192,11 +192,11 @@ class GPU_GLES2_EXPORT VertexAttrib {
 class GPU_GLES2_EXPORT VertexAttribManager
     : public base::RefCounted<VertexAttribManager> {
  public:
-  typedef std::list<VertexAttrib*> VertexAttribList;
+  typedef std::list<raw_ptr<VertexAttrib, CtnExperimental>> VertexAttribList;
 
   explicit VertexAttribManager(bool do_buffer_refcounting);
 
-  void Initialize(uint32_t num_vertex_attribs, bool init_attribs);
+  void Initialize(uint32_t num_vertex_attribs);
 
   bool Enable(GLuint index, bool enable);
 

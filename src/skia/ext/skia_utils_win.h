@@ -1,21 +1,21 @@
-// Copyright (c) 2006-2008 The Chromium Authors. All rights reserved.
+// Copyright 2006-2008 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef SKIA_EXT_SKIA_UTILS_WIN_H_
 #define SKIA_EXT_SKIA_UTILS_WIN_H_
 
+#include <windows.h>
+
 #include <vector>
 
 #include "base/win/scoped_gdi_object.h"
+#include "build/build_config.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "third_party/skia/include/core/SkImageInfo.h"
 #include "third_party/skia/include/core/SkMatrix.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
-
-#include "build/build_config.h"
-#include <windows.h>
 
 struct SkIRect;
 struct SkPoint;

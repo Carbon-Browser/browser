@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@ class AudioListener;
 class AudioNode;
 class AudioParam;
 class BaseAudioContext;
-class Document;
+class LocalDOMWindow;
 class InspectorWebAudioAgent;
 class Page;
 
@@ -30,7 +30,7 @@ class MODULES_EXPORT AudioGraphTracer final
 
   static void ProvideAudioGraphTracerTo(Page&);
 
-  AudioGraphTracer();
+  AudioGraphTracer(Page& page);
 
   void Trace(Visitor*) const override;
 
@@ -71,7 +71,7 @@ class MODULES_EXPORT AudioGraphTracer final
   BaseAudioContext* GetContextById(const String contextId);
 
   static AudioGraphTracer* FromPage(Page*);
-  static AudioGraphTracer* FromDocument(const Document&);
+  static AudioGraphTracer* FromWindow(const LocalDOMWindow&);
 
  private:
   Member<InspectorWebAudioAgent> inspector_agent_;

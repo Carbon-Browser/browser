@@ -1,6 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+import {TestRunner} from 'test_runner';
+
+import * as SDK from 'devtools/core/sdk/sdk.js';
 
 (async function() {
   TestRunner.addResult(`Tests that a used font-face is reported and an unused font-face is not reported.\n`);

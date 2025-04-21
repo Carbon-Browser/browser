@@ -1,4 +1,11 @@
-<style include="settings-shared cr-radio-button-style">
+<style
+<if expr="not chromeos_ash">
+  include="cr-radio-button-style"
+</if>
+<if expr="chromeos_ash">
+  include="cr-radio-button-style cros-color-overrides"
+</if>
+>
   :host([disabled]) {
     opacity: 1;
   }
@@ -10,9 +17,9 @@
   }
 
   cr-policy-pref-indicator {
-    margin-inline-start: var(--settings-controlled-by-spacing);
+    margin-inline-start: var(--cr-controlled-by-spacing);
     /* Enable pointer events for the indicator so :hover works. Disable
-     * clicks/taps via onIndicatorTap_ so outer on-tap doesn't trigger. */
+     * clicks/taps via onIndicatorClick_ so outer on-tap doesn't trigger. */
     pointer-events: all;
   }
 </style>
@@ -29,9 +36,10 @@
     on-keydown="onInputKeydown_">
   <div class="disc-border"></div>
   <div class="disc"></div>
+  <div id="overlay"></div>
 </div>
 
-<div id="labelWrapper">
+<div id="labelWrapper" part="labelWrapper">
   <span id="label" hidden$="[[!label]]">[[label]]</span>
   <span id="slotted-content">
     <slot></slot>
@@ -39,7 +47,7 @@
 </div>
 
 <template is="dom-if" if="[[showIndicator_(disabled, name, pref.*)]]">
-  <cr-policy-pref-indicator pref="[[pref]]" on-click="onIndicatorTap_"
+  <cr-policy-pref-indicator pref="[[pref]]" on-click="onIndicatorClick_"
       icon-aria-label="[[label]]">
   </cr-policy-pref-indicator>
 </template>

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,11 @@
 #include "third_party/blink/public/mojom/digital_goods/digital_goods.mojom-blink.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/platform/heap/visitor.h"
+#include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
 #include "third_party/blink/renderer/platform/supplementable.h"
 
 namespace blink {
-
+class DigitalGoodsService;
 class LocalDOMWindow;
 class ScriptState;
 
@@ -22,22 +23,24 @@ class DOMWindowDigitalGoods final
  public:
   static const char kSupplementName[];
 
-  DOMWindowDigitalGoods();
+  DOMWindowDigitalGoods(LocalDOMWindow& window);
 
   // IDL Interface:
-  static ScriptPromise getDigitalGoodsService(ScriptState*,
-                                              LocalDOMWindow&,
-                                              const String& payment_method,
-                                              ExceptionState&);
+  static ScriptPromise<DigitalGoodsService> getDigitalGoodsService(
+      ScriptState*,
+      LocalDOMWindow&,
+      const String& payment_method,
+      ExceptionState&);
 
-  ScriptPromise GetDigitalGoodsService(ScriptState*,
-                                       LocalDOMWindow&,
-                                       const String& payment_method,
-                                       ExceptionState&);
+  ScriptPromise<DigitalGoodsService> GetDigitalGoodsService(
+      ScriptState*,
+      LocalDOMWindow&,
+      const String& payment_method,
+      ExceptionState&);
   void Trace(Visitor* visitor) const override;
 
  private:
-  mojo::Remote<payments::mojom::blink::DigitalGoodsFactory> mojo_service_;
+  HeapMojoRemote<payments::mojom::blink::DigitalGoodsFactory> mojo_service_;
 
   static DOMWindowDigitalGoods* FromState(LocalDOMWindow*);
 };

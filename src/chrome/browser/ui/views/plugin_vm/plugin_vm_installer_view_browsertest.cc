@@ -1,43 +1,44 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/plugin_vm/plugin_vm_installer_view.h"
 
-#include "ash/components/tpm/stub_install_attributes.h"
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/threading/thread_restrictions.h"
-#include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_installer_factory.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_pref_names.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_test_helper.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_util.h"
-#include "chrome/browser/ash/profiles/profile_helper.h"
-#include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/ash/settings/scoped_testing_cros_settings.h"
+#include "chrome/browser/ash/settings/stub_cros_settings_provider.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/test/test_browser_dialog.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/grit/generated_resources.h"
 #include "chromeos/ash/components/dbus/concierge/fake_concierge_client.h"
+#include "chromeos/ash/components/dbus/debug_daemon/fake_debug_daemon_client.h"
 #include "chromeos/ash/components/dbus/vm_plugin_dispatcher/fake_vm_plugin_dispatcher_client.h"
-#include "chromeos/dbus/debug_daemon/fake_debug_daemon_client.h"
-#include "components/account_id/account_id.h"
+#include "chromeos/ash/components/install_attributes/stub_install_attributes.h"
+#include "chromeos/ash/components/settings/cros_settings.h"
 #include "components/download/public/background_service/download_metadata.h"
 #include "components/download/public/background_service/features.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
-#include "components/user_manager/scoped_user_manager.h"
 #include "content/public/browser/network_service_instance.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_utils.h"
 #include "services/network/test/test_network_connection_tracker.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
 #include "ui/strings/grit/ui_strings.h"
+#include "ui/views/test/ax_event_counter.h"
 
 namespace {
 
@@ -82,8 +83,6 @@ class PluginVmInstallerViewBrowserTest : public DialogBrowserTest {
         network::mojom::ConnectionType::CONNECTION_WIFI);
   }
 
-  void TearDownOnMainThread() override { scoped_user_manager_.reset(); }
-
   // DialogBrowserTest:
   void ShowUi(const std::string& name) override {
     plugin_vm::ShowPluginVmInstallerView(browser()->profile());
@@ -97,7 +96,6 @@ class PluginVmInstallerViewBrowserTest : public DialogBrowserTest {
 
   void AllowPluginVm() {
     EnterpriseEnrollDevice();
-    SetUserWithAffiliation();
     SetPluginVmPolicies();
     // Set correct PluginVmImage preference value.
     SetPluginVmImagePref(embedded_test_server()->GetURL(kZipFile).spec(),
@@ -109,11 +107,11 @@ class PluginVmInstallerViewBrowserTest : public DialogBrowserTest {
   }
 
   void SetPluginVmImagePref(std::string url, std::string hash) {
-    DictionaryPrefUpdate update(browser()->profile()->GetPrefs(),
+    ScopedDictPrefUpdate update(browser()->profile()->GetPrefs(),
                                 plugin_vm::prefs::kPluginVmImage);
-    base::Value* plugin_vm_image = update.Get();
-    plugin_vm_image->SetStringKey("url", url);
-    plugin_vm_image->SetStringKey("hash", hash);
+    base::Value::Dict& plugin_vm_image = update.Get();
+    plugin_vm_image.Set("url", url);
+    plugin_vm_image.Set("hash", hash);
   }
 
   void WaitForSetupToFinish() {
@@ -129,7 +127,7 @@ class PluginVmInstallerViewBrowserTest : public DialogBrowserTest {
   void CheckSetupFailed() {
     EXPECT_TRUE(HasAcceptButton());
     EXPECT_TRUE(HasCancelButton());
-    EXPECT_EQ(view_->GetDialogButtonLabel(ui::DIALOG_BUTTON_OK),
+    EXPECT_EQ(view_->GetDialogButtonLabel(ui::mojom::DialogButton::kOk),
               l10n_util::GetStringUTF16(IDS_PLUGIN_VM_INSTALLER_RETRY_BUTTON));
     EXPECT_EQ(view_->GetTitle(),
               l10n_util::GetStringUTF16(IDS_PLUGIN_VM_INSTALLER_ERROR_TITLE));
@@ -138,9 +136,9 @@ class PluginVmInstallerViewBrowserTest : public DialogBrowserTest {
   void CheckSetupIsFinishedSuccessfully() {
     EXPECT_TRUE(HasAcceptButton());
     EXPECT_TRUE(HasCancelButton());
-    EXPECT_EQ(view_->GetDialogButtonLabel(ui::DIALOG_BUTTON_CANCEL),
+    EXPECT_EQ(view_->GetDialogButtonLabel(ui::mojom::DialogButton::kCancel),
               l10n_util::GetStringUTF16(IDS_APP_CLOSE));
-    EXPECT_EQ(view_->GetDialogButtonLabel(ui::DIALOG_BUTTON_OK),
+    EXPECT_EQ(view_->GetDialogButtonLabel(ui::mojom::DialogButton::kOk),
               l10n_util::GetStringUTF16(IDS_PLUGIN_VM_INSTALLER_LAUNCH_BUTTON));
     EXPECT_EQ(view_->GetTitle(), l10n_util::GetStringUTF16(
                                      IDS_PLUGIN_VM_INSTALLER_FINISHED_TITLE));
@@ -151,10 +149,10 @@ class PluginVmInstallerViewBrowserTest : public DialogBrowserTest {
 
   std::unique_ptr<network::TestNetworkConnectionTracker>
       network_connection_tracker_;
-  std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
-  PluginVmInstallerView* view_;
-  ash::FakeConciergeClient* fake_concierge_client_;
-  ash::FakeVmPluginDispatcherClient* fake_vm_plugin_dispatcher_client_;
+  raw_ptr<PluginVmInstallerView, DanglingUntriaged> view_;
+  raw_ptr<ash::FakeConciergeClient, DanglingUntriaged> fake_concierge_client_;
+  raw_ptr<ash::FakeVmPluginDispatcherClient, DanglingUntriaged>
+      fake_vm_plugin_dispatcher_client_;
 
  private:
   void EnterpriseEnrollDevice() {
@@ -171,21 +169,9 @@ class PluginVmInstallerViewBrowserTest : public DialogBrowserTest {
                                                          base::Value(true));
   }
 
-  void SetUserWithAffiliation() {
-    const AccountId account_id(AccountId::FromUserEmailGaiaId(
-        browser()->profile()->GetProfileUserName(), "id"));
-    auto user_manager = std::make_unique<ash::FakeChromeUserManager>();
-    user_manager->AddUserWithAffiliation(account_id, true);
-    user_manager->LoginUser(account_id);
-    ash::ProfileHelper::Get()->SetProfileToUserMappingForTesting(
-        user_manager->GetActiveUser());
-    scoped_user_manager_ = std::make_unique<user_manager::ScopedUserManager>(
-        std::move(user_manager));
-  }
-
   static void OnSetupFinished(base::OnceClosure quit_closure, bool success) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  std::move(quit_closure));
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, std::move(quit_closure));
   }
 };
 
@@ -218,6 +204,66 @@ IN_PROC_BROWSER_TEST_F(PluginVmInstallerViewBrowserTestWithFeatureEnabled,
 
   view_->AcceptDialog();
   WaitForSetupToFinish();
+
+  CheckSetupIsFinishedSuccessfully();
+}
+
+IN_PROC_BROWSER_TEST_F(PluginVmInstallerViewBrowserTestWithFeatureEnabled,
+                       SetupShouldFireAccessibilityEvents) {
+  views::test::AXEventCounter counter(views::AXEventManager::Get());
+
+  AllowPluginVm();
+  plugin_vm::SetupConciergeForSuccessfulDiskImageImport(fake_concierge_client_);
+  ShowUi("default");
+  EXPECT_NE(nullptr, view_);
+
+  auto* title_view = view_->GetTitleViewForTesting();
+  EXPECT_NE(nullptr, title_view);
+
+  auto* message_view = view_->GetMessageViewForTesting();
+  EXPECT_NE(nullptr, message_view);
+
+  auto* progress_view = view_->GetDownloadProgressMessageViewForTesting();
+  EXPECT_NE(nullptr, progress_view);
+
+  // Views should only fire property-change events when the property changes;
+  // not when a value is initialized. As a result, there should not be any
+  // text-changed accessibility fired as a result of the introductory/set-up
+  // text being displayed.
+  EXPECT_EQ(0, counter.GetCount(ax::mojom::Event::kTextChanged, title_view));
+  EXPECT_EQ(0, counter.GetCount(ax::mojom::Event::kTextChanged, message_view));
+  EXPECT_EQ(0, counter.GetCount(ax::mojom::Event::kTextChanged, progress_view));
+
+  counter.ResetAllCounts();
+  view_->AcceptDialog();
+
+  // Once the installation has been accepted, the message and title labels are
+  // changed to indicate the installation has begun. Each label should have
+  // fired an accessibility event for this change. Because the download has not
+  // started, there should be no event from the download progress label.
+  EXPECT_EQ(1, counter.GetCount(ax::mojom::Event::kTextChanged, title_view));
+  EXPECT_EQ(1, counter.GetCount(ax::mojom::Event::kTextChanged, message_view));
+  EXPECT_EQ(0, counter.GetCount(ax::mojom::Event::kTextChanged, progress_view));
+
+  counter.ResetAllCounts();
+  WaitForSetupToFinish();
+
+  // During the installation process, the title remains the same until the
+  // installation is complete. There should be an accessibility event for the
+  // title changing to the setup-complete text.
+  EXPECT_EQ(1, counter.GetCount(ax::mojom::Event::kTextChanged, title_view));
+
+  // During the installation process, the message changes three times:
+  // downloading, configuring, ready to use. Each time there should be an
+  // accessibility event for the change.
+  EXPECT_EQ(3, counter.GetCount(ax::mojom::Event::kTextChanged, message_view));
+
+  // During the download process, there are periodic updates showing the
+  // amount downloaded thus far. There are six such updates in this test:
+  // the first "0 GB" and the next five "0.0 GB". Each time the text changes,
+  // there should be an accessibility event for the change. Since the text
+  // changed twice, there should be two updates.
+  EXPECT_EQ(2, counter.GetCount(ax::mojom::Event::kTextChanged, progress_view));
 
   CheckSetupIsFinishedSuccessfully();
 }
@@ -311,7 +357,9 @@ IN_PROC_BROWSER_TEST_F(PluginVmInstallerViewBrowserTestWithFeatureEnabled,
   // Setup concierge and the dispatcher for VM already imported.
   vm_tools::concierge::ListVmDisksResponse list_vm_disks_response;
   list_vm_disks_response.set_success(true);
-  list_vm_disks_response.add_images();
+  auto* image = list_vm_disks_response.add_images();
+  image->set_name(plugin_vm::kPluginVmName);
+  image->set_storage_location(vm_tools::concierge::STORAGE_CRYPTOHOME_PLUGINVM);
   fake_concierge_client_->set_list_vm_disks_response(list_vm_disks_response);
 
   vm_tools::plugin_dispatcher::ListVmResponse list_vms_response;

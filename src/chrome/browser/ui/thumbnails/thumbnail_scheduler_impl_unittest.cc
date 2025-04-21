@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,19 +43,22 @@ class ThumbnailSchedulerImplTest : public ::testing::Test {
 
  protected:
   void AddTabsToScheduler() {
-    for (FakeTabCapturer& tab : tabs_)
+    for (FakeTabCapturer& tab : tabs_) {
       scheduler_.AddTab(&tab);
+    }
   }
 
   void RemoveTabsFromScheduler() {
-    for (FakeTabCapturer& tab : tabs_)
+    for (FakeTabCapturer& tab : tabs_) {
       scheduler_.RemoveTab(&tab);
+    }
   }
 
   std::vector<bool> TabScheduledStates() {
     std::vector<bool> states;
-    for (const auto& tab : tabs_)
+    for (const auto& tab : tabs_) {
       states.push_back(tab.capture_permitted());
+    }
     return states;
   }
 

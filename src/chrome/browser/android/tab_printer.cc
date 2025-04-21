@@ -1,14 +1,16 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/android/tab_printer.h"
 
-#include "chrome/android/chrome_jni_headers/TabPrinter_jni.h"
 #include "chrome/browser/printing/print_view_manager_basic.h"
 #include "chrome/browser/printing/print_view_manager_common.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/render_frame_host.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "chrome/android/chrome_jni_headers/TabPrinter_jni.h"
 
 using base::android::ScopedJavaLocalRef;
 

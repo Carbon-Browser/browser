@@ -1,8 +1,10 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/socket/stream_socket.h"
+
+#include <string_view>
 
 #include "base/notreached.h"
 
@@ -13,9 +15,9 @@ void StreamSocket::SetBeforeConnectCallback(
   NOTREACHED();
 }
 
-absl::optional<base::StringPiece> StreamSocket::GetPeerApplicationSettings()
+std::optional<std::string_view> StreamSocket::GetPeerApplicationSettings()
     const {
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 void StreamSocket::GetSSLCertRequestInfo(

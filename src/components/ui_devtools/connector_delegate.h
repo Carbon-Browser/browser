@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,12 +13,12 @@ namespace ui_devtools {
 // interfaces that you need to acquire.
 class ConnectorDelegate {
  public:
-  ConnectorDelegate() {}
+  ConnectorDelegate() = default;
 
   ConnectorDelegate(const ConnectorDelegate&) = delete;
   ConnectorDelegate& operator=(const ConnectorDelegate&) = delete;
 
-  virtual ~ConnectorDelegate() {}
+  virtual ~ConnectorDelegate() = default;
 
   virtual void BindTracingConsumerHost(
       mojo::PendingReceiver<tracing::mojom::ConsumerHost> receiver) = 0;

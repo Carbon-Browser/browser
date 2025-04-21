@@ -132,7 +132,7 @@ public class WalletPreferencesAddCustomToken extends Fragment {
                         mAddressEditText.setText(jsonObj.getString("id"));
                         mTokenSymbolEditText.setText(jsonObj.getString("symbol"));
 
-                        mTokenObj = new TokenObj(true, "https://hydrisapps.com/carbon/android-resources/wallet/blockchains/" + chain + "/assets/" + jsonObj.getString("id") + "/logo.png",
+                        mTokenObj = new TokenObj(true, "https://carbon.website/carbon/android-resources/wallet/blockchains/" + chain + "/assets/" + jsonObj.getString("id") + "/logo.png",
                               jsonObj.getString("name"), "0.00", "0", jsonObj.getString("symbol"), jsonObj.getString("id"), tokenNetwork, jsonObj.getString("decimals"));
                     } catch (Exception ignore) { }
                 }
@@ -220,7 +220,7 @@ public class WalletPreferencesAddCustomToken extends Fragment {
                     mVerifyContinueButton.setEnabled(false);
                     mLoadingSpinner.setVisibility(View.VISIBLE);
                     String chain = tokenNetwork.equals("BEP20") ? "smartchain" : "ethereum";
-                    sendAPIRequest("https://hydrisapps.com/carbon/android-resources/wallet/blockchains/" + chain + "/assets/" + mAddressEditText.getText().toString() + "/info.json");
+                    sendAPIRequest("https://carbon.website/carbon/android-resources/wallet/blockchains/" + chain + "/assets/" + mAddressEditText.getText().toString() + "/info.json");
                 } else {
                     if (mTokenObj == null) return;
 

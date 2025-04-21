@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,8 @@ ToastSurface::ToastSurface(ToastSurfaceManager* manager,
     : ClientControlledShellSurface(surface,
                                    false /* can_minimize */,
                                    ash::kShellWindowId_OverlayContainer,
-                                   default_scale_cancellation),
+                                   default_scale_cancellation,
+                                   /*supports_floated_state=*/false),
       manager_(manager) {
   SetActivatable(false);
   DisableMovement();

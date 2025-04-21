@@ -1,19 +1,21 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/crostini/crostini_uninstaller_view.h"
 
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_base.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "chrome/browser/ash/app_list/app_list_client_impl.h"
+#include "chrome/browser/ash/app_list/test/chrome_app_list_test_support.h"
 #include "chrome/browser/ash/crostini/crostini_manager.h"
 #include "chrome/browser/ash/crostini/crostini_pref_names.h"
 #include "chrome/browser/ash/crostini/crostini_util.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ui/app_list/app_list_client_impl.h"
-#include "chrome/browser/ui/app_list/test/chrome_app_list_test_support.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/views/crostini/crostini_dialogue_browser_test_util.h"
 #include "chrome/test/base/in_process_browser_test.h"
@@ -23,6 +25,7 @@
 #include "components/prefs/pref_service.h"
 #include "content/public/test/browser_test.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
 
 class CrostiniUninstallerViewBrowserTest : public CrostiniDialogBrowserTest {
  public:
@@ -33,12 +36,12 @@ class CrostiniUninstallerViewBrowserTest : public CrostiniDialogBrowserTest {
 
     void StopVm(
         const vm_tools::concierge::StopVmRequest& request,
-        chromeos::DBusMethodCallback<vm_tools::concierge::StopVmResponse>
-            callback) override {
+        chromeos::DBusMethodCallback<
+            vm_tools::concierge::SuccessFailureResponse> callback) override {
       ash::FakeConciergeClient::StopVm(request, std::move(callback));
       if (closure_) {
-        base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                      std::move(closure_));
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+            FROM_HERE, std::move(closure_));
       }
     }
 
@@ -90,7 +93,8 @@ class CrostiniUninstallerViewBrowserTest : public CrostiniDialogBrowserTest {
   }
 
  protected:
-  WaitingFakeConciergeClient* waiting_fake_concierge_client_;
+  raw_ptr<WaitingFakeConciergeClient, DanglingUntriaged>
+      waiting_fake_concierge_client_;
 };
 
 class CrostiniUninstalledUninstallerViewBrowserTest
@@ -115,8 +119,9 @@ IN_PROC_BROWSER_TEST_F(CrostiniUninstallerViewBrowserTest, UninstallFlow) {
 
   ShowUi("default");
   EXPECT_NE(nullptr, ActiveView());
-  EXPECT_EQ(ui::DIALOG_BUTTON_OK | ui::DIALOG_BUTTON_CANCEL,
-            ActiveView()->GetDialogButtons());
+  EXPECT_EQ(static_cast<int>(ui::mojom::DialogButton::kOk) |
+                static_cast<int>(ui::mojom::DialogButton::kCancel),
+            ActiveView()->buttons());
 
   EXPECT_TRUE(HasAcceptButton());
   EXPECT_TRUE(HasCancelButton());
@@ -144,8 +149,9 @@ IN_PROC_BROWSER_TEST_F(CrostiniUninstalledUninstallerViewBrowserTest,
   ShowUi("default");
   EXPECT_NE(nullptr, ActiveView());
   EXPECT_FALSE(ActiveView()->GetWidget()->IsClosed());
-  EXPECT_EQ(ui::DIALOG_BUTTON_OK | ui::DIALOG_BUTTON_CANCEL,
-            ActiveView()->GetDialogButtons());
+  EXPECT_EQ(static_cast<int>(ui::mojom::DialogButton::kOk) |
+                static_cast<int>(ui::mojom::DialogButton::kCancel),
+            ActiveView()->buttons());
 
   EXPECT_TRUE(HasAcceptButton());
   EXPECT_TRUE(HasCancelButton());
@@ -181,7 +187,7 @@ IN_PROC_BROWSER_TEST_F(CrostiniUninstallerViewBrowserTest, ErrorThenCancel) {
   base::HistogramTester histogram_tester;
   ShowUi("default");
   EXPECT_NE(nullptr, ActiveView());
-  vm_tools::concierge::StopVmResponse response;
+  vm_tools::concierge::SuccessFailureResponse response;
   response.set_success(false);
   waiting_fake_concierge_client_->set_stop_vm_response(std::move(response));
 

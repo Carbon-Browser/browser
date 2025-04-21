@@ -1,21 +1,21 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/resource_coordinator/public/cpp/memory_instrumentation/client_process_impl.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/flat_map.h"
-#include "base/strings/string_piece.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/not_fatal_until.h"
+#include "base/process/process.h"
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/memory_dump_request_args.h"
 #include "build/build_config.h"
 #include "services/resource_coordinator/public/cpp/memory_instrumentation/memory_instrumentation.h"
 #include "services/resource_coordinator/public/cpp/memory_instrumentation/os_metrics.h"
-#include "services/resource_coordinator/public/cpp/memory_instrumentation/tracing_observer.h"
+#include "services/resource_coordinator/public/cpp/memory_instrumentation/tracing_observer_proto.h"
 #include "services/resource_coordinator/public/mojom/memory_instrumentation/memory_instrumentation.mojom.h"
 
 namespace memory_instrumentation {
@@ -55,7 +55,7 @@ ClientProcessImpl::ClientProcessImpl(
     coordinator_.Bind(std::move(coordinator));
   }
 
-  task_runner_ = base::ThreadTaskRunnerHandle::Get();
+  task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
 
   // TODO(primiano): this is a temporary workaround to tell the
   // base::MemoryDumpManager that it is special and should coordinate periodic
@@ -67,9 +67,8 @@ ClientProcessImpl::ClientProcessImpl(
           base::Unretained(this)),
       is_browser_process);
 
-  tracing_observer_ = std::make_unique<TracingObserver>(
-      base::trace_event::TraceLog::GetInstance(),
-      base::trace_event::MemoryDumpManager::GetInstance());
+  // Register the memory_instrumentation datasource.
+  TracingObserverProto::GetInstance();
 }
 
 ClientProcessImpl::~ClientProcessImpl() = default;
@@ -94,7 +93,8 @@ void ClientProcessImpl::OnChromeMemoryDumpDone(
   DCHECK(success || !process_memory_dump);
 
   auto callback_it = pending_chrome_callbacks_.find(dump_guid);
-  DCHECK(callback_it != pending_chrome_callbacks_.end());
+  CHECK(callback_it != pending_chrome_callbacks_.end(),
+        base::NotFatalUntil::M130);
 
   auto callback = std::move(callback_it->second);
   pending_chrome_callbacks_.erase(callback_it);
@@ -138,7 +138,7 @@ void ClientProcessImpl::RequestGlobalMemoryDump_NoCallback(
     coordinator = MemoryInstrumentation::GetInstance()->GetCoordinator();
   coordinator->RequestGlobalMemoryDumpAndAppendToTrace(
       dump_type, level_of_detail,
-      base::trace_event::MemoryDumpDeterminism::NONE,
+      base::trace_event::MemoryDumpDeterminism::kNone,
       mojom::Coordinator::RequestGlobalMemoryDumpAndAppendToTraceCallback());
 }
 
@@ -170,12 +170,13 @@ void ClientProcessImpl::PerformOSMemoryDump(OSMemoryDumpArgs args) {
   bool global_success = true;
   base::flat_map<base::ProcessId, mojom::RawOSMemDumpPtr> results;
   for (const base::ProcessId& pid : args.pids) {
+    auto handle = base::Process::Open(pid).Handle();
     mojom::RawOSMemDumpPtr result = mojom::RawOSMemDump::New();
     result->platform_private_footprint = mojom::PlatformPrivateFootprint::New();
-    bool success = OSMetrics::FillOSMemoryDump(pid, result.get());
+    bool success = OSMetrics::FillOSMemoryDump(handle, result.get());
     if (args.mmap_option != mojom::MemoryMapOption::NONE) {
       success = success && OSMetrics::FillProcessMemoryMaps(
-                               pid, args.mmap_option, result.get());
+                               handle, args.mmap_option, result.get());
     }
     if (success) {
       results[pid] = std::move(result);

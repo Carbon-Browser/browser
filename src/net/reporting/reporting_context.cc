@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/observer_list.h"
 #include "base/rand_util.h"
 #include "base/time/clock.h"
@@ -32,16 +32,19 @@ namespace {
 
 class ReportingContextImpl : public ReportingContext {
  public:
-  ReportingContextImpl(const ReportingPolicy& policy,
-                       URLRequestContext* request_context,
-                       ReportingCache::PersistentReportingStore* store)
+  ReportingContextImpl(
+      const ReportingPolicy& policy,
+      URLRequestContext* request_context,
+      ReportingCache::PersistentReportingStore* store,
+      const base::flat_map<std::string, GURL>& enterprise_reporting_endpoints)
       : ReportingContext(policy,
                          base::DefaultClock::GetInstance(),
                          base::DefaultTickClock::GetInstance(),
                          base::BindRepeating(&base::RandInt),
                          ReportingUploader::Create(request_context),
                          ReportingDelegate::Create(request_context),
-                         store) {}
+                         store,
+                         enterprise_reporting_endpoints) {}
 };
 
 }  // namespace
@@ -50,8 +53,10 @@ class ReportingContextImpl : public ReportingContext {
 std::unique_ptr<ReportingContext> ReportingContext::Create(
     const ReportingPolicy& policy,
     URLRequestContext* request_context,
-    ReportingCache::PersistentReportingStore* store) {
-  return std::make_unique<ReportingContextImpl>(policy, request_context, store);
+    ReportingCache::PersistentReportingStore* store,
+    const base::flat_map<std::string, GURL>& enterprise_reporting_endpoints) {
+  return std::make_unique<ReportingContextImpl>(policy, request_context, store,
+                                                enterprise_reporting_endpoints);
 }
 
 ReportingContext::~ReportingContext() = default;
@@ -111,13 +116,14 @@ ReportingContext::ReportingContext(
     const RandIntCallback& rand_callback,
     std::unique_ptr<ReportingUploader> uploader,
     std::unique_ptr<ReportingDelegate> delegate,
-    ReportingCache::PersistentReportingStore* store)
+    ReportingCache::PersistentReportingStore* store,
+    const base::flat_map<std::string, GURL>& enterprise_reporting_endpoints)
     : policy_(policy),
       clock_(clock),
       tick_clock_(tick_clock),
       uploader_(std::move(uploader)),
       delegate_(std::move(delegate)),
-      cache_(ReportingCache::Create(this)),
+      cache_(ReportingCache::Create(this, enterprise_reporting_endpoints)),
       store_(store),
       delivery_agent_(ReportingDeliveryAgent::Create(this, rand_callback)),
       garbage_collector_(ReportingGarbageCollector::Create(this)),

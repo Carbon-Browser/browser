@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/numerics/safe_conversions.h"
 #include "ipc/ipc_platform_file.h"
 #include "media/base/audio_bus.h"
@@ -238,7 +238,8 @@ void AudioOutputResource::Run() {
 
   while (true) {
     int pending_data = 0;
-    size_t bytes_read = socket_->Receive(&pending_data, sizeof(pending_data));
+    size_t bytes_read =
+        socket_->Receive(base::byte_span_from_ref(pending_data));
     if (bytes_read != sizeof(pending_data)) {
       DCHECK_EQ(bytes_read, 0U);
       break;
@@ -264,7 +265,7 @@ void AudioOutputResource::Run() {
     // used to ensure the other end is getting the buffer it expects.  For more
     // details on how this works see AudioSyncReader::WaitUntilDataIsReady().
     ++buffer_index;
-    size_t bytes_sent = socket_->Send(&buffer_index, sizeof(buffer_index));
+    size_t bytes_sent = socket_->Send(base::byte_span_from_ref(buffer_index));
     if (bytes_sent != sizeof(buffer_index)) {
       DCHECK_EQ(bytes_sent, 0U);
       break;

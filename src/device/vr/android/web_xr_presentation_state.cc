@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,12 @@
 
 #include <iomanip>
 #include <sstream>
+#include <vector>
 
-#include "base/containers/cxx20_erase.h"
 #include "base/logging.h"
 #include "base/trace_event/trace_event.h"
 #include "components/viz/common/frame_sinks/begin_frame_args.h"
-#include "gpu/ipc/common/gpu_memory_buffer_impl_android_hardware_buffer.h"
 #include "ui/gl/gl_fence.h"
-#include "ui/gl/gl_image_egl.h"
 
 namespace device {
 
@@ -102,7 +100,7 @@ std::string WebXrPresentationState::DebugState() const {
     case StateMachineType::kVizComposited: {
       if (rendering_frames_.size() > 0) {
         for (size_t i = 0; i < rendering_frames_.size(); i++) {
-          auto* frame = rendering_frames_[i];
+          auto* frame = rendering_frames_[i].get();
           ss << std::setw(3) << frame->index;
           ss << "(" << frame->shared_buffer->id << ", "
              << frame->camera_image_shared_buffer->id << ")";
@@ -126,7 +124,7 @@ WebXrPresentationState::FrameIndexType
 WebXrPresentationState::StartFrameAnimating() {
   DCHECK(!HaveAnimatingFrame());
   DCHECK(!idle_frames_.empty());
-  animating_frame_ = idle_frames_.front();
+  animating_frame_ = idle_frames_.front().get();
   idle_frames_.pop();
 
   animating_frame_->index = next_frame_index_++;
@@ -149,7 +147,7 @@ void WebXrPresentationState::TransitionFrameAnimatingToProcessing() {
 void WebXrPresentationState::RecycleUnusedAnimatingFrame() {
   DCHECK(HaveAnimatingFrame());
   animating_frame_->Recycle();
-  idle_frames_.push(animating_frame_);
+  idle_frames_.push(animating_frame_.get());
   animating_frame_ = nullptr;
   DVLOG(3) << DebugState() << __func__;
 }
@@ -173,7 +171,7 @@ void WebXrPresentationState::TransitionFrameProcessingToRendering() {
     // compositor. We need to wait until the viz compositor is done with a frame
     // before it can be recycled.
     case StateMachineType::kVizComposited: {
-      rendering_frames_.push_back(processing_frame_);
+      rendering_frames_.push_back(processing_frame_.get());
       break;
     }
   }
@@ -201,7 +199,7 @@ void WebXrPresentationState::EndFrameRendering(WebXrFrame* frame) {
   // Remove it from the list, and then recycle the frame.
   DVLOG(3) << DebugState() << __func__;
   DCHECK_EQ(state_machine_type_, StateMachineType::kVizComposited);
-  auto erased = base::EraseIf(rendering_frames_,
+  auto erased = std::erase_if(rendering_frames_,
                               [frame](const WebXrFrame* rendering_frame) {
                                 return frame == rendering_frame;
                               });
@@ -219,7 +217,7 @@ void WebXrPresentationState::EndFrameRendering() {
   DCHECK(HaveRenderingFrame());
   DCHECK(rendering_frame_->IsValid());
   rendering_frame_->Recycle();
-  idle_frames_.push(rendering_frame_);
+  idle_frames_.push(rendering_frame_.get());
   rendering_frame_ = nullptr;
   DVLOG(3) << DebugState() << __func__;
 }
@@ -229,7 +227,7 @@ bool WebXrPresentationState::RecycleProcessingFrameIfPossible() {
   bool can_cancel = !processing_frame_->state_locked;
   if (can_cancel) {
     processing_frame_->Recycle();
-    idle_frames_.push(processing_frame_);
+    idle_frames_.push(processing_frame_.get());
     processing_frame_ = nullptr;
   } else {
     processing_frame_->recycle_once_unlocked = true;
@@ -255,10 +253,10 @@ void WebXrPresentationState::EndPresentation() {
 
   if (HaveRenderingFrame()) {
     rendering_frame_->Recycle();
-    idle_frames_.push(rendering_frame_);
+    idle_frames_.push(rendering_frame_.get());
     rendering_frame_ = nullptr;
   }
-  for (auto* frame : rendering_frames_) {
+  for (device::WebXrFrame* frame : rendering_frames_) {
     frame->Recycle();
     idle_frames_.push(frame);
   }

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include <memory>
 
 #include "base/feature_list.h"
-#include "base/memory/weak_ptr.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "url/gurl.h"
 
@@ -21,7 +20,7 @@ class PrefService;
 class Profile;
 
 // Whether to enable announcement notification system.
-extern const base::Feature kAnnouncementNotification;
+BASE_DECLARE_FEATURE(kAnnouncementNotification);
 
 // The Finch parameter name for a boolean value that whether to show
 // notification on first run.
@@ -83,7 +82,7 @@ class AnnouncementNotificationService : public KeyedService {
   };
 
   static void RegisterProfilePrefs(PrefRegistrySimple* registry);
-  static AnnouncementNotificationService* Create(
+  static std::unique_ptr<AnnouncementNotificationService> Create(
       Profile* profile,
       PrefService* pref_service,
       std::unique_ptr<Delegate> delegate,

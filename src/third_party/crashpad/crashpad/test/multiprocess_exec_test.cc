@@ -1,4 +1,4 @@
-// Copyright 2014 The Crashpad Authors. All rights reserved.
+// Copyright 2014 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,11 +14,11 @@
 
 #include "test/multiprocess_exec.h"
 
-#include "base/allocator/buildflags.h"
 #include "base/logging.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "gtest/gtest.h"
+#include "partition_alloc/buildflags.h"
 #include "test/test_paths.h"
 #include "util/file/file_io.h"
 
@@ -55,10 +55,10 @@ class TestMultiprocessExec final : public MultiprocessExec {
 // keep /dev/urandom open.
 // PartitionAllocator opens /dev/urandom because of address randomization.
 // (c.f. //base/rand_util_posix.cc and
-// //base/allocator/partition_allocator/random.cc) So when making
-// PartitionAllocator default, multiprocess_exec_test_child will crash because
-// of LOG(FATAL) << "close". https://crbug.com/1153544
-#if defined(OS_POSIX) && BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) || \
+// //base/allocator/partition_allocator/src/partition_alloc/random.cc) So when
+// making PartitionAllocator default, multiprocess_exec_test_child will crash
+// because of LOG(FATAL) << "close". https://crbug.com/1153544
+#if defined(OS_POSIX) && PA_BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) || \
     defined(OS_MAC)
 #define MAYBE_MultiprocessExec DISABLED_MultiprocessExec
 #else

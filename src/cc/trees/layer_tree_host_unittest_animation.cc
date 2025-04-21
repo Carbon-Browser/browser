@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <stdint.h>
 #include <climits>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/statistics_recorder.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -21,6 +21,7 @@
 #include "cc/animation/scroll_offset_animation_curve_factory.h"
 #include "cc/animation/scroll_offset_animations.h"
 #include "cc/base/completion_event.h"
+#include "cc/base/features.h"
 #include "cc/layers/layer.h"
 #include "cc/layers/layer_impl.h"
 #include "cc/test/animation_test_common.h"
@@ -39,6 +40,12 @@
 
 namespace cc {
 namespace {
+
+#define SAMPLE(curve, time)                                                  \
+  curve->GetTransformedValue(time,                                           \
+                             time < base::TimeDelta()                        \
+                                 ? gfx::TimingFunction::LimitDirection::LEFT \
+                                 : gfx::TimingFunction::LimitDirection::RIGHT)
 
 class LayerTreeHostAnimationTest : public LayerTreeTest {
  public:
@@ -297,7 +304,7 @@ class LayerTreeHostAnimationTestCheckerboardDoesNotStarveDraws
   DrawResult PrepareToDrawOnThread(LayerTreeHostImpl* host_impl,
                                    LayerTreeHostImpl::FrameData* frame,
                                    DrawResult draw_result) override {
-    return DRAW_ABORTED_CHECKERBOARD_ANIMATIONS;
+    return DrawResult::kAbortedCheckerboardAnimations;
   }
 
  private:
@@ -387,9 +394,9 @@ class LayerTreeHostAnimationTestAddKeyframeModelWithTimingFunction
       return;
     first_animation_frame_ = false;
 
-    scoped_refptr<const AnimationTimeline> timeline_impl =
+    scoped_refptr<AnimationTimeline> timeline_impl =
         GetImplAnimationHost(host_impl)->GetTimelineById(timeline_id_);
-    scoped_refptr<const Animation> animation_child_impl =
+    scoped_refptr<Animation> animation_child_impl =
         timeline_impl->GetAnimationById(animation_child_id_);
 
     KeyframeModel* keyframe_model =
@@ -398,15 +405,15 @@ class LayerTreeHostAnimationTestAddKeyframeModelWithTimingFunction
     const gfx::FloatAnimationCurve* curve =
         gfx::FloatAnimationCurve::ToFloatAnimationCurve(
             keyframe_model->curve());
-    float start_opacity = curve->GetValue(base::TimeDelta());
-    float end_opacity = curve->GetValue(curve->Duration());
+    float start_opacity = SAMPLE(curve, base::TimeDelta());
+    float end_opacity = SAMPLE(curve, curve->Duration());
     float linearly_interpolated_opacity =
         0.25f * end_opacity + 0.75f * start_opacity;
     base::TimeDelta time = curve->Duration() * 0.25f;
     // If the linear timing function associated with this animation was not
     // picked up, then the linearly interpolated opacity would be different
     // because of the default ease timing function.
-    EXPECT_FLOAT_EQ(linearly_interpolated_opacity, curve->GetValue(time));
+    EXPECT_FLOAT_EQ(linearly_interpolated_opacity, SAMPLE(curve, time));
 
     EndTest();
   }
@@ -743,7 +750,7 @@ class LayerTreeHostAnimationTestCheckerboardDoesntStartAnimations
     ++prevented_draw_;
     if (prevented_draw_ > 2)
       EndTest();
-    return DRAW_ABORTED_CHECKERBOARD_ANIMATIONS;
+    return DrawResult::kAbortedCheckerboardAnimations;
   }
 
   void DidCommitAndDrawFrame() override {
@@ -893,7 +900,7 @@ class LayerTreeHostAnimationTestScrollOffsetAnimationTakeover
   scoped_refptr<FakePictureLayer> scroll_layer_;
 };
 
-// TODO(crbug.com/1018213):  [BlinkGenPropertyTrees] Scroll Animation should be
+// TODO(crbug.com/40655283):  [BlinkGenPropertyTrees] Scroll Animation should be
 // taken over from cc when scroll is unpromoted.
 // MULTI_THREAD_TEST_F(LayerTreeHostAnimationTestScrollOffsetAnimationTakeover);
 
@@ -918,13 +925,14 @@ class LayerTreeHostAnimationTestScrollOffsetAnimationAdjusted
     scroll_layer_element_id_ = scroll_layer_->element_id();
   }
 
-  KeyframeEffect& ScrollOffsetKeyframeEffect(const LayerTreeHostImpl& host_impl,
-                                             ElementId element_id) const {
-    scoped_refptr<ElementAnimations> element_animations =
+  const KeyframeEffect& ScrollOffsetKeyframeEffect(
+      const LayerTreeHostImpl& host_impl,
+      ElementId element_id) const {
+    scoped_refptr<const ElementAnimations> element_animations =
         GetImplAnimationHost(&host_impl)
-            ->GetElementAnimationsForElementId(element_id);
+            ->GetElementAnimationsForElementIdForTesting(element_id);
     DCHECK(element_animations);
-    KeyframeEffect* keyframe_effect =
+    const KeyframeEffect* keyframe_effect =
         &*element_animations->FirstKeyframeEffectForTesting();
     DCHECK(keyframe_effect);
     return *keyframe_effect;
@@ -1042,9 +1050,10 @@ class LayerTreeHostPresentationDuringAnimation
     if (const_cast<const LayerTreeHost*>(layer_tree_host())
             ->pending_commit_state()
             ->source_frame_number == 2) {
-      layer_tree_host()->RequestPresentationTimeForNextFrame(base::BindOnce(
-          &LayerTreeHostPresentationDuringAnimation::OnPresentation,
-          base::Unretained(this)));
+      layer_tree_host()->RequestSuccessfulPresentationTimeForNextFrame(
+          base::BindOnce(
+              &LayerTreeHostPresentationDuringAnimation::OnPresentation,
+              base::Unretained(this)));
     }
   }
 
@@ -1078,7 +1087,10 @@ class LayerTreeHostPresentationDuringAnimation
   }
 
  private:
-  void OnPresentation(const gfx::PresentationFeedback& feedback) { EndTest(); }
+  void OnPresentation(const viz::FrameTimingDetails& details) { EndTest(); }
+
+  // Disable sub-sampling to deterministically record histograms under test.
+  base::MetricsSubSampler::ScopedAlwaysSampleForTesting no_subsampling_;
 
   FakeContentLayerClient client_;
   scoped_refptr<FakePictureLayer> scroll_layer_;
@@ -1724,7 +1736,14 @@ class LayerTreeHostAnimationTestIsAnimating
   FakeContentLayerClient client_;
 };
 
+// TODO(https://issues.chromium.org/41490442): Flaky on Linux/ASAN/debug.
+// TODO(crbug.com/364634743): Flaky on Android.
+#if BUILDFLAG(IS_LINUX) || defined(ADDRESS_SANITIZER) || !defined(NDEBUG) || \
+    BUILDFLAG(IS_ANDROID)
+SINGLE_THREAD_TEST_F(LayerTreeHostAnimationTestIsAnimating);
+#else
 SINGLE_AND_MULTI_THREAD_TEST_F(LayerTreeHostAnimationTestIsAnimating);
+#endif
 
 class LayerTreeHostAnimationTestAnimationFinishesDuringCommit
     : public LayerTreeHostAnimationTest {
@@ -1747,8 +1766,14 @@ class LayerTreeHostAnimationTestAnimationFinishesDuringCommit
   void BeginTest() override { PostSetNeedsCommitToMainThread(); }
 
   void DidCommit() override {
-    if (layer_tree_host()->SourceFrameNumber() == 1)
+    if (layer_tree_host()->SourceFrameNumber() == 1) {
       AddAnimatedTransformToAnimation(animation_child_.get(), 0.04, 5, 5);
+      // Blink animations will implicitly fill to ensure they remain active
+      // until a subsequent commit.
+      KeyframeModel* keyframe_model =
+          animation_child_->GetKeyframeModel(TargetProperty::TRANSFORM);
+      keyframe_model->set_fill_mode(KeyframeModel::FillMode::FORWARDS);
+    }
   }
 
   void WillCommit(const CommitState& commit_state) override {
@@ -1817,8 +1842,12 @@ class LayerTreeHostAnimationTestImplSideInvalidation
   void BeginTest() override { PostSetNeedsCommitToMainThread(); }
 
   void DidCommit() override {
-    if (layer_tree_host()->SourceFrameNumber() == 1)
+    if (layer_tree_host()->SourceFrameNumber() == 1) {
       AddAnimatedTransformToAnimation(animation_child_.get(), 0.04, 5, 5);
+      KeyframeModel* keyframe_model =
+          animation_child_->GetKeyframeModel(TargetProperty::TRANSFORM);
+      keyframe_model->set_fill_mode(KeyframeModel::FillMode::BOTH);
+    }
   }
 
   void WillCommit(const CommitState& commit_state) override {
@@ -2118,75 +2147,6 @@ class LayerTreeHostAnimationTestNotifyAnimationFinished
 SINGLE_AND_MULTI_THREAD_TEST_F(
     LayerTreeHostAnimationTestNotifyAnimationFinished);
 
-// Check that transform sync happens correctly at commit when we remove and add
-// a different animation animation to an element.
-class LayerTreeHostAnimationTestChangeAnimation
-    : public LayerTreeHostAnimationTest {
- public:
-  void SetupTree() override {
-    LayerTreeHostAnimationTest::SetupTree();
-    layer_ = Layer::Create();
-    layer_->SetBounds(gfx::Size(4, 4));
-    layer_tree_host()->root_layer()->AddChild(layer_);
-
-    AttachAnimationsToTimeline();
-    layer_element_id_ = layer_->element_id();
-
-    timeline_->DetachAnimation(animation_child_.get());
-    animation_->AttachElement(layer_element_id_);
-
-    gfx::TransformOperations start;
-    start.AppendTranslate(5.f, 5.f, 0.f);
-    gfx::TransformOperations end;
-    end.AppendTranslate(5.f, 5.f, 0.f);
-    AddAnimatedTransformToAnimation(animation_.get(), 1.0, start, end);
-  }
-
-  void BeginTest() override { PostSetNeedsCommitToMainThread(); }
-
-  void CommitCompleteOnThread(LayerTreeHostImpl* host_impl) override {
-    PropertyTrees* property_trees = host_impl->sync_tree()->property_trees();
-    const TransformNode* node =
-        property_trees->transform_tree().Node(host_impl->sync_tree()
-                                                  ->LayerById(layer_->id())
-                                                  ->transform_tree_index());
-    gfx::Transform translate;
-    translate.Translate(5, 5);
-    switch (host_impl->sync_tree()->source_frame_number()) {
-      case 2:
-        EXPECT_TRANSFORM_EQ(node->local, translate);
-        EndTest();
-        break;
-      default:
-        break;
-    }
-  }
-
-  void DidCommit() override { PostSetNeedsCommitToMainThread(); }
-
-  void WillBeginMainFrame() override {
-    if (layer_tree_host()->SourceFrameNumber() == 2) {
-      // Destroy animation.
-      timeline_->DetachAnimation(animation_.get());
-      animation_ = nullptr;
-      timeline_->AttachAnimation(animation_child_.get());
-      animation_child_->AttachElement(layer_element_id_);
-      AddAnimatedTransformToAnimation(animation_child_.get(), 1.0, 10, 10);
-      KeyframeModel* keyframe_model =
-          animation_child_->GetKeyframeModel(TargetProperty::TRANSFORM);
-      keyframe_model->set_start_time(base::TimeTicks::Now() +
-                                     base::Seconds(1000));
-      keyframe_model->set_fill_mode(KeyframeModel::FillMode::NONE);
-    }
-  }
-
- private:
-  scoped_refptr<Layer> layer_;
-  ElementId layer_element_id_;
-};
-
-SINGLE_AND_MULTI_THREAD_TEST_F(LayerTreeHostAnimationTestChangeAnimation);
-
 // Check that SetTransformIsPotentiallyAnimatingChanged is called
 // if we destroy ElementAnimations.
 class LayerTreeHostAnimationTestSetPotentiallyAnimatingOnLacDestruction
@@ -2312,6 +2272,94 @@ class LayerTreeHostAnimationTestRebuildPropertyTreesOnAnimationSetNeedsCommit
 
 MULTI_THREAD_TEST_F(
     LayerTreeHostAnimationTestRebuildPropertyTreesOnAnimationSetNeedsCommit);
+
+class LayerTreeHostTestPauseRendering : public LayerTreeHostAnimationTest {
+ public:
+  void SetupTree() override {
+    LayerTreeHostAnimationTest::SetupTree();
+    layer_ = Layer::Create();
+    layer_->SetBounds(gfx::Size(4, 4));
+    layer_tree_host()->root_layer()->AddChild(layer_);
+    layer_tree_host()->SetElementIdsForTesting();
+  }
+
+  void BeginTest() override {
+    AttachAnimationsToTimeline();
+
+    // Set up an animation which is committed to the impl thread in the first
+    // frame.
+    animation_->AttachElement(layer_->element_id());
+    AddAnimatedTransformToAnimation(animation_.get(), 4, 1, 1);
+
+    PostSetNeedsCommitToMainThread();
+  }
+
+  void WillCommit(const CommitState& state) override {
+    // First frame pauses rendering.
+    if (layer_tree_host()->SourceFrameNumber() == 0) {
+      EXPECT_FALSE(rendering_paused_);
+      rendering_paused_ = layer_tree_host()->PauseRendering();
+    }
+  }
+
+  void DidCommitAndDrawFrame() override {
+    if (layer_tree_host()->SourceFrameNumber() == 1) {
+      rendering_paused_.reset();
+    }
+  }
+
+  void WillCommitCompleteOnThread(LayerTreeHostImpl* host_impl) override {
+    // If this is the pending tree which resumes rendering, delay its
+    // activation so we can ensure draws don't resume until this is activated.
+    if (host_impl->pending_tree()->source_frame_number() == 1) {
+      host_impl->BlockNotifyReadyToActivateForTesting(true, true);
+      has_pending_tree_which_resumes_draws_ = true;
+    }
+  }
+
+  void WillActivateTreeOnThread(LayerTreeHostImpl* host_impl) override {
+    EXPECT_FALSE(has_pending_tree_which_resumes_draws_);
+  }
+
+  void WillBeginImplFrameOnThread(LayerTreeHostImpl* host_impl,
+                                  const viz::BeginFrameArgs& args,
+                                  bool has_damage) override {
+    if (!has_pending_tree_which_resumes_draws_) {
+      return;
+    }
+
+    EXPECT_EQ(host_impl->pending_tree()->source_frame_number(), 1);
+
+    constexpr size_t kNumOfFramesToDelayActivation = 5;
+    if (++impl_frames_while_activation_delayed_ ==
+        kNumOfFramesToDelayActivation) {
+      has_pending_tree_which_resumes_draws_ = false;
+      waiting_for_draw_after_rendering_resumes_ = true;
+      host_impl->BlockNotifyReadyToActivateForTesting(false, true);
+    }
+  }
+
+  void WillPrepareToDrawOnThread(LayerTreeHostImpl* host_impl) override {
+    EXPECT_FALSE(has_pending_tree_which_resumes_draws_);
+
+    if (waiting_for_draw_after_rendering_resumes_) {
+      EXPECT_EQ(host_impl->active_tree()->source_frame_number(), 1);
+      EndTest();
+    }
+  }
+
+ private:
+  // State accessed only on main thread.
+  scoped_refptr<Layer> layer_;
+  std::unique_ptr<ScopedPauseRendering> rendering_paused_;
+
+  // State accessed only on impl thread.
+  bool has_pending_tree_which_resumes_draws_ = false;
+  bool waiting_for_draw_after_rendering_resumes_ = false;
+  size_t impl_frames_while_activation_delayed_ = 0;
+};
+
+MULTI_THREAD_TEST_F(LayerTreeHostTestPauseRendering);
 
 }  // namespace
 }  // namespace cc

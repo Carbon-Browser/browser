@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,18 @@ import "components/services/storage/public/mojom/partition.mojom";
 import "mojo/public/mojom/base/file_path.mojom";
 import "sandbox/policy/mojom/sandbox.mojom";
 
-[EnableIf=is_not_android]
+[EnableIfNot=is_android]
 import "components/services/storage/public/mojom/filesystem/directory.mojom";
+
+[EnableIf=is_chromeos|is_linux]
+const sandbox.mojom.Sandbox kStorageSandbox = sandbox.mojom.Sandbox.kUtility;
+
+[EnableIfNot=is_chromeos|is_linux]
+const sandbox.mojom.Sandbox kStorageSandbox = sandbox.mojom.Sandbox.kService;
 
 // The main interface into the Storage Service. The browser maintains a single
 // global connection to this interface.
-[ServiceSandbox=sandbox.mojom.Sandbox.kUtility]
+[ServiceSandbox=kStorageSandbox]
 interface StorageService {
   // Enables more aggressive flushing of DOM Storage data to disk in order to
   // minimize chance of data loss.
@@ -30,9 +36,9 @@ interface StorageService {
   //
   // Once called, the service will use begin using |directory| for all
   // privileged filesystem operations.
-  [EnableIf=is_not_android]
-  SetDataDirectory(mojo_base.mojom.FilePath path,
-                   pending_remote<Directory> directory);
+  [EnableIfNot=is_android]
+  SetDataDirectory(
+      mojo_base.mojom.FilePath path, pending_remote<Directory> directory);
 
   // Binds a new Partition endpoint.
   //
@@ -43,8 +49,8 @@ interface StorageService {
   // If |path| is null, the bound partition exists only in-memory and is
   // uniquely owned by a single client. Disconnecting the Partition client
   // effectively destroys the partition and its contents.
-  BindPartition(mojo_base.mojom.FilePath? path,
-                pending_receiver<Partition> receiver);
+  BindPartition(
+      mojo_base.mojom.FilePath? path, pending_receiver<Partition> receiver);
 
   // Binds a receiving endpoint for the TestApi interface defined in
   // test_api.mojom. Note that this message is not strongly typed in order to

@@ -32,6 +32,7 @@
 
 #include <utility>
 
+#include "third_party/blink/renderer/bindings/core/v8/to_v8_traits.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_dev_tools_host.h"
 #include "third_party/blink/renderer/core/exported/web_view_impl.h"
@@ -78,7 +79,7 @@ DevToolsFrontendImpl::~DevToolsFrontendImpl() = default;
 
 void DevToolsFrontendImpl::DidClearWindowObject() {
   if (host_.is_bound()) {
-    v8::Isolate* isolate = v8::Isolate::GetCurrent();
+    v8::Isolate* isolate = GetSupplementable()->DomWindow()->GetIsolate();
     // Use higher limit for DevTools isolate so that it does not OOM when
     // profiling large heaps.
     isolate->IncreaseHeapLimitForDebugging();
@@ -86,22 +87,23 @@ void DevToolsFrontendImpl::DidClearWindowObject() {
     DCHECK(script_state);
     ScriptState::Scope scope(script_state);
     v8::MicrotasksScope microtasks_scope(
-        isolate, v8::MicrotasksScope::kDoNotRunMicrotasks);
+        isolate, ToMicrotaskQueue(script_state),
+        v8::MicrotasksScope::kDoNotRunMicrotasks);
     if (devtools_host_)
       devtools_host_->DisconnectClient();
     devtools_host_ =
         MakeGarbageCollected<DevToolsHost>(this, GetSupplementable());
-    v8::Local<v8::Object> global = script_state->GetContext()->Global();
     v8::Local<v8::Value> devtools_host_obj =
-        ToV8(devtools_host_.Get(), global, script_state->GetIsolate());
+        ToV8Traits<DevToolsHost>::ToV8(script_state, devtools_host_.Get());
     DCHECK(!devtools_host_obj.IsEmpty());
-    global
+    script_state->GetContext()
+        ->Global()
         ->Set(script_state->GetContext(),
               V8AtomicString(isolate, "DevToolsHost"), devtools_host_obj)
         .Check();
   }
 
-  if (!api_script_.IsEmpty()) {
+  if (!api_script_.empty()) {
     ClassicScript::CreateUnspecifiedScript(api_script_)
         ->RunScript(GetSupplementable()->DomWindow());
   }
@@ -112,15 +114,24 @@ void DevToolsFrontendImpl::SetupDevToolsFrontend(
     mojo::PendingAssociatedRemote<mojom::blink::DevToolsFrontendHost> host) {
   LocalFrame* frame = GetSupplementable();
   DCHECK(frame->IsMainFrame());
-  frame->GetWidgetForLocalRoot()->SetLayerTreeDebugState(
-      cc::LayerTreeDebugState());
+  if (frame->GetWidgetForLocalRoot()) {
+    frame->GetWidgetForLocalRoot()->SetLayerTreeDebugState(
+        cc::LayerTreeDebugState());
+  } else {
+    frame->AddWidgetCreationObserver(this);
+  }
   frame->GetPage()->GetSettings().SetForceDarkModeEnabled(false);
   api_script_ = api_script;
   host_.Bind(std::move(host),
              GetSupplementable()->GetTaskRunner(TaskType::kMiscPlatformAPI));
-  host_.set_disconnect_handler(WTF::Bind(
+  host_.set_disconnect_handler(WTF::BindOnce(
       &DevToolsFrontendImpl::DestroyOnHostGone, WrapWeakPersistent(this)));
   GetSupplementable()->GetPage()->SetDefaultPageScaleLimits(1.f, 1.f);
+}
+
+void DevToolsFrontendImpl::OnLocalRootWidgetCreated() {
+  GetSupplementable()->GetWidgetForLocalRoot()->SetLayerTreeDebugState(
+      cc::LayerTreeDebugState());
 }
 
 void DevToolsFrontendImpl::SetupDevToolsExtensionAPI(

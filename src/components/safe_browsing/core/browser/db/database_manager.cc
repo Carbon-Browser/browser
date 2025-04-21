@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,45 +7,58 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/safe_browsing/core/browser/db/v4_get_hash_protocol_manager.h"
 #include "components/safe_browsing/core/browser/db/v4_protocol_manager_util.h"
+#include "components/safe_browsing/core/common/features.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "url/gurl.h"
-
 namespace safe_browsing {
+SafeBrowsingDatabaseManager::Client::Client(base::PassKey<Client> pass_key) {}
+SafeBrowsingDatabaseManager::Client::~Client() = default;
+
+base::WeakPtr<SafeBrowsingDatabaseManager::Client>
+SafeBrowsingDatabaseManager::Client::GetWeakPtr() {
+  return weak_factory_.GetWeakPtr();
+}
+
+base::PassKey<SafeBrowsingDatabaseManager::Client>
+SafeBrowsingDatabaseManager::Client::GetPassKeyForTesting() {
+  return base::PassKey<Client>();
+}
+
+base::PassKey<SafeBrowsingDatabaseManager::Client>
+SafeBrowsingDatabaseManager::Client::GetPassKey() {
+  return base::PassKey<Client>();
+}
 
 SafeBrowsingDatabaseManager::SafeBrowsingDatabaseManager(
-    scoped_refptr<base::SequencedTaskRunner> ui_task_runner,
-    scoped_refptr<base::SequencedTaskRunner> io_task_runner)
+    scoped_refptr<base::SequencedTaskRunner> ui_task_runner)
     : base::RefCountedDeleteOnSequence<SafeBrowsingDatabaseManager>(
-          std::move(io_task_runner)),
-      ui_task_runner_(std::move(ui_task_runner)),
-      enabled_(false) {}
+          std::move(ui_task_runner)) {}
 
 SafeBrowsingDatabaseManager::~SafeBrowsingDatabaseManager() {
   DCHECK(!v4_get_hash_protocol_manager_);
 }
 
 bool SafeBrowsingDatabaseManager::CancelApiCheck(Client* client) {
-  DCHECK(io_task_runner()->RunsTasksInCurrentSequence());
+  DCHECK(ui_task_runner()->RunsTasksInCurrentSequence());
   auto it = FindClientApiCheck(client);
   if (it != api_checks_.end()) {
     api_checks_.erase(it);
     return true;
   }
   NOTREACHED();
-  return false;
 }
 
 bool SafeBrowsingDatabaseManager::CheckApiBlocklistUrl(const GURL& url,
                                                        Client* client) {
-  DCHECK(io_task_runner()->RunsTasksInCurrentSequence());
-  DCHECK(v4_get_hash_protocol_manager_);
+  DCHECK(ui_task_runner()->RunsTasksInCurrentSequence());
 
   // Make sure we can check this url and that the service is enabled.
-  if (!enabled_ ||
+  if (!IsDatabaseReady() ||
       !(url.SchemeIs(url::kHttpScheme) || url.SchemeIs(url::kHttpsScheme))) {
     return true;
   }
@@ -71,7 +84,7 @@ bool SafeBrowsingDatabaseManager::CheckApiBlocklistUrl(const GURL& url,
 
 SafeBrowsingDatabaseManager::ApiCheckSet::iterator
 SafeBrowsingDatabaseManager::FindClientApiCheck(Client* client) {
-  DCHECK(io_task_runner()->RunsTasksInCurrentSequence());
+  DCHECK(ui_task_runner()->RunsTasksInCurrentSequence());
   for (auto it = api_checks_.begin(); it != api_checks_.end(); ++it) {
     if ((*it)->client() == client) {
       return it;
@@ -99,7 +112,7 @@ std::unique_ptr<StoreStateMap> SafeBrowsingDatabaseManager::GetStoreStateMap() {
 void SafeBrowsingDatabaseManager::OnThreatMetadataResponse(
     std::unique_ptr<SafeBrowsingApiCheck> check,
     const ThreatMetadata& md) {
-  DCHECK(io_task_runner()->RunsTasksInCurrentSequence());
+  DCHECK(ui_task_runner()->RunsTasksInCurrentSequence());
   DCHECK(check);
 
   // If the check is not in |api_checks_| then the request was cancelled by the
@@ -112,10 +125,10 @@ void SafeBrowsingDatabaseManager::OnThreatMetadataResponse(
   api_checks_.erase(it);
 }
 
-void SafeBrowsingDatabaseManager::StartOnIOThread(
+void SafeBrowsingDatabaseManager::StartOnUIThread(
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     const V4ProtocolConfig& config) {
-  DCHECK(io_task_runner()->RunsTasksInCurrentSequence());
+  DCHECK(ui_task_runner()->RunsTasksInCurrentSequence());
 
   v4_get_hash_protocol_manager_ = V4GetHashProtocolManager::Create(
       url_loader_factory, GetStoresForFullHashRequests(), config);
@@ -123,9 +136,8 @@ void SafeBrowsingDatabaseManager::StartOnIOThread(
 
 // |shutdown| not used. Destroys the v4 protocol managers. This may be called
 // multiple times during the life of the DatabaseManager.
-// Must be called on IO thread.
-void SafeBrowsingDatabaseManager::StopOnIOThread(bool shutdown) {
-  DCHECK(io_task_runner()->RunsTasksInCurrentSequence());
+void SafeBrowsingDatabaseManager::StopOnUIThread(bool shutdown) {
+  DCHECK(ui_task_runner()->RunsTasksInCurrentSequence());
 
   // Delete pending checks, calling back any clients with empty metadata.
   for (const SafeBrowsingApiCheck* check : api_checks_) {
@@ -148,11 +160,6 @@ SafeBrowsingDatabaseManager::RegisterDatabaseUpdatedCallback(
 void SafeBrowsingDatabaseManager::NotifyDatabaseUpdateFinished() {
   DCHECK(ui_task_runner()->RunsTasksInCurrentSequence());
   update_complete_callback_list_.Notify();
-}
-
-bool SafeBrowsingDatabaseManager::IsDatabaseReady() {
-  DCHECK(io_task_runner()->RunsTasksInCurrentSequence());
-  return enabled_;
 }
 
 SafeBrowsingDatabaseManager::SafeBrowsingApiCheck::SafeBrowsingApiCheck(

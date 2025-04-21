@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,14 +41,16 @@ class ContentUiEventHandler {
 
   void SendMouseWheelEvent(JNIEnv* env,
                            const base::android::JavaParamRef<jobject>& obj,
-                           jlong time_ms,
+                           jlong time_ns,
                            jfloat x,
                            jfloat y,
                            jfloat ticks_x,
-                           jfloat ticks_y);
+                           jfloat ticks_y,
+                           jint meta_state,
+                           jint source);
   void SendMouseEvent(JNIEnv* env,
                       const base::android::JavaParamRef<jobject>& obj,
-                      jlong time_ms,
+                      jlong time_ns,
                       jint android_action,
                       jfloat x,
                       jfloat y,

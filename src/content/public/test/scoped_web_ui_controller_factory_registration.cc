@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,12 @@
 namespace content {
 
 namespace {
+
+GURL GetUrlFromConfig(WebUIConfig& webui_config) {
+  return GURL(
+      base::StrCat({webui_config.scheme(), url::kStandardSchemeSeparator,
+                    webui_config.host()}));
+}
 
 void AddWebUIConfig(std::unique_ptr<WebUIConfig> webui_config) {
   auto& config_map = WebUIConfigMap::GetInstance();
@@ -57,30 +63,23 @@ ScopedWebUIControllerFactoryRegistration::
 
 ScopedWebUIConfigRegistration::ScopedWebUIConfigRegistration(
     std::unique_ptr<WebUIConfig> webui_config)
-    : ScopedWebUIConfigRegistration(
-          GURL(base::StrCat({webui_config->scheme(),
-                             url::kStandardSchemeSeparator,
-                             webui_config->host()})),
-          std::move(webui_config)) {}
+    : webui_config_url_(GetUrlFromConfig(*webui_config)) {
+  auto& config_map = WebUIConfigMap::GetInstance();
+  replaced_webui_config_ = config_map.RemoveConfig(webui_config_url_);
+
+  DCHECK(webui_config.get() != nullptr);
+  AddWebUIConfig(std::move(webui_config));
+}
 
 ScopedWebUIConfigRegistration::ScopedWebUIConfigRegistration(
     const GURL& webui_origin)
-    : ScopedWebUIConfigRegistration(webui_origin,
-                                    /*webui_config=*/nullptr) {}
-
-ScopedWebUIConfigRegistration::ScopedWebUIConfigRegistration(
-    const GURL& webui_origin,
-    std::unique_ptr<WebUIConfig> webui_config)
-    : webui_config_origin_(url::Origin::Create(webui_origin)) {
+    : webui_config_url_(webui_origin) {
   auto& config_map = WebUIConfigMap::GetInstance();
-  replaced_webui_config_ = config_map.RemoveForTesting(webui_config_origin_);
-
-  if (webui_config != nullptr)
-    AddWebUIConfig(std::move(webui_config));
+  replaced_webui_config_ = config_map.RemoveConfig(webui_config_url_);
 }
 
 ScopedWebUIConfigRegistration::~ScopedWebUIConfigRegistration() {
-  WebUIConfigMap::GetInstance().RemoveForTesting(webui_config_origin_);
+  WebUIConfigMap::GetInstance().RemoveConfig(webui_config_url_);
 
   // If we replaced a WebUIConfig, re-register it to keep the global state
   // clean for future tests.
@@ -93,7 +92,7 @@ void CheckForLeakedWebUIRegistrations::OnTestStart(
   // Call GetInstance() to ensure WebUIConfig registers its
   // WebUIControllerFactory before we get the number of registered factories.
   initial_size_of_webui_config_map_ =
-      WebUIConfigMap::GetInstance().GetSizeForTesting();
+      WebUIConfigMap::GetInstance().GetWebUIConfigList(nullptr).size();
   initial_num_factories_registered_ =
       content::WebUIControllerFactory::GetNumRegisteredFactoriesForTesting();
 }
@@ -101,7 +100,7 @@ void CheckForLeakedWebUIRegistrations::OnTestStart(
 void CheckForLeakedWebUIRegistrations::OnTestEnd(
     const testing::TestInfo& test_info) {
   EXPECT_EQ(initial_size_of_webui_config_map_,
-            WebUIConfigMap::GetInstance().GetSizeForTesting())
+            WebUIConfigMap::GetInstance().GetWebUIConfigList(nullptr).size())
       << "A WebUIConfig was registered by a test but never unregistered. This "
          "can cause flakiness in later tests. Please use "
          "ScopedWebUIConfigRegistration to ensure that registered configs are "

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -142,9 +142,9 @@ TEST(PageTextDumpResultTest, WhitespaceTrimmed) {
 TEST(PageTextDumpResultTest, Empty) {
   PageTextDumpResult page_result;
   EXPECT_TRUE(page_result.empty());
-  EXPECT_EQ(absl::nullopt, page_result.GetAMPTextContent());
-  EXPECT_EQ(absl::nullopt, page_result.GetMainFrameTextContent());
-  EXPECT_EQ(absl::nullopt, page_result.GetAllFramesTextContent());
+  EXPECT_EQ(std::nullopt, page_result.GetAMPTextContent());
+  EXPECT_EQ(std::nullopt, page_result.GetMainFrameTextContent());
+  EXPECT_EQ(std::nullopt, page_result.GetAllFramesTextContent());
 }
 
 TEST(PageTextDumpResultTest, OneAMP) {

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,6 +45,48 @@ class SidePanelSetOptionsFunction : public SidePanelApiFunction {
 
  private:
   ~SidePanelSetOptionsFunction() override = default;
+  ResponseAction RunFunction() override;
+};
+
+class SidePanelSetPanelBehaviorFunction : public SidePanelApiFunction {
+ public:
+  DECLARE_EXTENSION_FUNCTION("sidePanel.setPanelBehavior",
+                             SIDEPANEL_SETPANELBEHAVIOR)
+  SidePanelSetPanelBehaviorFunction() = default;
+  SidePanelSetPanelBehaviorFunction(const SidePanelSetPanelBehaviorFunction&) =
+      delete;
+  SidePanelSetPanelBehaviorFunction& operator=(
+      const SidePanelSetPanelBehaviorFunction&) = delete;
+
+ private:
+  ~SidePanelSetPanelBehaviorFunction() override = default;
+  ResponseAction RunFunction() override;
+};
+
+class SidePanelGetPanelBehaviorFunction : public SidePanelApiFunction {
+ public:
+  DECLARE_EXTENSION_FUNCTION("sidePanel.getPanelBehavior",
+                             SIDEPANEL_GETPANELBEHAVIOR)
+  SidePanelGetPanelBehaviorFunction() = default;
+  SidePanelGetPanelBehaviorFunction(const SidePanelGetPanelBehaviorFunction&) =
+      delete;
+  SidePanelGetPanelBehaviorFunction& operator=(
+      const SidePanelGetPanelBehaviorFunction&) = delete;
+
+ private:
+  ~SidePanelGetPanelBehaviorFunction() override = default;
+  ResponseAction RunFunction() override;
+};
+
+class SidePanelOpenFunction : public SidePanelApiFunction {
+ public:
+  DECLARE_EXTENSION_FUNCTION("sidePanel.open", SIDEPANEL_OPEN)
+  SidePanelOpenFunction() = default;
+  SidePanelOpenFunction(const SidePanelOpenFunction&) = delete;
+  SidePanelOpenFunction& operator=(const SidePanelOpenFunction&) = delete;
+
+ private:
+  ~SidePanelOpenFunction() override = default;
   ResponseAction RunFunction() override;
 };
 

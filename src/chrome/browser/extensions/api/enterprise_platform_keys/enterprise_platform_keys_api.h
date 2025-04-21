@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,30 +9,19 @@
 #ifndef CHROME_BROWSER_EXTENSIONS_API_ENTERPRISE_PLATFORM_KEYS_ENTERPRISE_PLATFORM_KEYS_API_H_
 #define CHROME_BROWSER_EXTENSIONS_API_ENTERPRISE_PLATFORM_KEYS_ENTERPRISE_PLATFORM_KEYS_API_H_
 
+#include <stdint.h>
+
+#include <optional>
 #include <string>
+#include <vector>
 
 #include "build/chromeos_buildflags.h"
 #include "chromeos/crosapi/mojom/keystore_error.mojom.h"
 #include "chromeos/crosapi/mojom/keystore_service.mojom.h"
 #include "extensions/browser/extension_function.h"
 #include "extensions/browser/extension_function_histogram_value.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-
-class Extension;
-class Profile;
-
-namespace user_prefs {
-class PrefRegistrySyncable;
-}  // namespace user_prefs
 
 namespace extensions {
-
-namespace platform_keys {
-
-void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry);
-bool IsExtensionAllowed(Profile* profile, const Extension* extension);
-
-}  // namespace platform_keys
 
 class EnterprisePlatformKeysInternalGenerateKeyFunction
     : public ExtensionFunction {
@@ -42,8 +31,8 @@ class EnterprisePlatformKeysInternalGenerateKeyFunction
 
   // Called when the key was generated. If an error occurred, |public_key_der|
   // will be empty.
-  void OnGeneratedKey(const std::string& public_key_der,
-                      absl::optional<crosapi::mojom::KeystoreError> error);
+  void OnGeneratedKey(std::vector<uint8_t> public_key_der,
+                      std::optional<crosapi::mojom::KeystoreError> error);
 
   DECLARE_EXTENSION_FUNCTION("enterprise.platformKeysInternal.generateKey",
                              ENTERPRISE_PLATFORMKEYSINTERNAL_GENERATEKEY)
@@ -54,8 +43,7 @@ class EnterprisePlatformKeysGetCertificatesFunction : public ExtensionFunction {
   ~EnterprisePlatformKeysGetCertificatesFunction() override = default;
   ResponseAction Run() override;
 
-  void OnGetCertificates(
-      crosapi::mojom::DEPRECATED_GetCertificatesResultPtr result);
+  void OnGetCertificates(crosapi::mojom::GetCertificatesResultPtr result);
   DECLARE_EXTENSION_FUNCTION("enterprise.platformKeys.getCertificates",
                              ENTERPRISE_PLATFORMKEYS_GETCERTIFICATES)
 };
@@ -66,7 +54,8 @@ class EnterprisePlatformKeysImportCertificateFunction
   ~EnterprisePlatformKeysImportCertificateFunction() override = default;
   ResponseAction Run() override;
 
-  void OnAddCertificate(const std::string& error);
+  void OnAddCertificate(bool is_error,
+                        crosapi::mojom::KeystoreError error_code);
   DECLARE_EXTENSION_FUNCTION("enterprise.platformKeys.importCertificate",
                              ENTERPRISE_PLATFORMKEYS_IMPORTCERTIFICATE)
 };
@@ -77,7 +66,7 @@ class EnterprisePlatformKeysRemoveCertificateFunction
   ~EnterprisePlatformKeysRemoveCertificateFunction() override = default;
   ResponseAction Run() override;
 
-  void OnRemoveCertificate(const std::string& error);
+  void OnRemoveCertificate(bool is_error, crosapi::mojom::KeystoreError error);
   DECLARE_EXTENSION_FUNCTION("enterprise.platformKeys.removeCertificate",
                              ENTERPRISE_PLATFORMKEYS_REMOVECERTIFICATE)
 };
@@ -88,7 +77,7 @@ class EnterprisePlatformKeysInternalGetTokensFunction
   ~EnterprisePlatformKeysInternalGetTokensFunction() override = default;
   ResponseAction Run() override;
 
-  void OnGetKeyStores(crosapi::mojom::DEPRECATED_GetKeyStoresResultPtr result);
+  void OnGetKeyStores(crosapi::mojom::GetKeyStoresResultPtr result);
   DECLARE_EXTENSION_FUNCTION("enterprise.platformKeysInternal.getTokens",
                              ENTERPRISE_PLATFORMKEYSINTERNAL_GETTOKENS)
 };
@@ -100,7 +89,7 @@ class EnterprisePlatformKeysChallengeMachineKeyFunction
   ResponseAction Run() override;
 
   void OnChallengeAttestationOnlyKeystore(
-      crosapi::mojom::DEPRECATED_KeystoreStringResultPtr result);
+      crosapi::mojom::ChallengeAttestationOnlyKeystoreResultPtr result);
   DECLARE_EXTENSION_FUNCTION("enterprise.platformKeys.challengeMachineKey",
                              ENTERPRISE_PLATFORMKEYS_CHALLENGEMACHINEKEY)
 };
@@ -112,9 +101,20 @@ class EnterprisePlatformKeysChallengeUserKeyFunction
   ResponseAction Run() override;
 
   void OnChallengeAttestationOnlyKeystore(
-      crosapi::mojom::DEPRECATED_KeystoreStringResultPtr result);
+      crosapi::mojom::ChallengeAttestationOnlyKeystoreResultPtr result);
   DECLARE_EXTENSION_FUNCTION("enterprise.platformKeys.challengeUserKey",
                              ENTERPRISE_PLATFORMKEYS_CHALLENGEUSERKEY)
+};
+
+class EnterprisePlatformKeysChallengeKeyFunction : public ExtensionFunction {
+ private:
+  ~EnterprisePlatformKeysChallengeKeyFunction() override = default;
+  ResponseAction Run() override;
+
+  void OnChallengeAttestationOnlyKeystore(
+      crosapi::mojom::ChallengeAttestationOnlyKeystoreResultPtr result);
+  DECLARE_EXTENSION_FUNCTION("enterprise.platformKeys.challengeKey",
+                             ENTERPRISE_PLATFORMKEYS_CHALLENGEKEY)
 };
 
 }  // namespace extensions

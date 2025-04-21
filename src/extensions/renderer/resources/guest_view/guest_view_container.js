@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,6 +27,7 @@ function GuestViewContainer(element, viewType) {
   this.setupGuestProperty();
   this.guest = new GuestView(viewType);
   this.setupAttributes();
+  this.setupEvents();
 
   this.internalElement = this.createInternalElement();
   this.shadowRoot = $Element.attachShadow(this.element, {mode: 'closed'});
@@ -97,7 +98,6 @@ GuestViewContainer.prototype.attachWindow = function() {
   var generatedId = IdGenerator.GetNextId();
   // Generate an instance id for the container.
   this.onInternalInstanceId(generatedId);
-  return true;
 };
 
 GuestViewContainer.prototype.makeGCOwnContainer = function(internalInstanceId) {
@@ -111,22 +111,12 @@ GuestViewContainer.prototype.onInternalInstanceId = function(
   this.internalInstanceId = internalInstanceId;
   this.makeGCOwnContainer(this.internalInstanceId);
 
-  // Track when the element resizes using the element resize callback.
-  GuestViewInternalNatives.RegisterElementResizeCallback(
-      this.internalInstanceId, this.weakWrapper(this.onElementResize));
-
   if (!this.guest.getId()) {
     return;
   }
   this.guest.attach(this.internalInstanceId,
                     this.viewInstanceId,
                     this.buildParams());
-};
-
-GuestViewContainer.prototype.onElementResize = function(newWidth, newHeight) {
-  if (!this.guest.getId())
-    return;
-  this.guest.setSize({normal: {width: newWidth, height: newHeight}});
 };
 
 GuestViewContainer.prototype.buildParams = function() {
@@ -175,6 +165,7 @@ GuestViewContainer.prototype.buildContainerParams = function() {
 GuestViewContainer.prototype.onElementAttached = function() {};
 GuestViewContainer.prototype.onElementDetached = function() {};
 GuestViewContainer.prototype.setupAttributes = function() {};
+GuestViewContainer.prototype.setupEvents = function() {};
 
 // Exports.
 exports.$set('GuestViewContainer', GuestViewContainer);

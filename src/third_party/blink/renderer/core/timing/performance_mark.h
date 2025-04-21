@@ -57,18 +57,16 @@ class CORE_EXPORT PerformanceMark final : public PerformanceEntry {
                                  ExceptionState&);
 
   // This constructor is only public so that MakeGarbageCollected can call it.
-  PerformanceMark(
-      const AtomicString& name,
-      double start_time,
-      base::TimeTicks unsafe_time_for_traces,
-      scoped_refptr<SerializedScriptValue>,
-      ExceptionState& exception_state,
-      uint32_t navigation_count = 0); /* TODO(1273925): Remove the default value
-                                      when all callers have been updated. */
+  PerformanceMark(const AtomicString& name,
+                  double start_time,
+                  base::TimeTicks unsafe_time_for_traces,
+                  scoped_refptr<SerializedScriptValue>,
+                  ExceptionState& exception_state,
+                  DOMWindow* source);
 
   ~PerformanceMark() override = default;
 
-  AtomicString entryType() const override;
+  const AtomicString& entryType() const override;
   PerformanceEntryType EntryTypeEnum() const override;
   mojom::blink::PerformanceMarkOrMeasurePtr ToMojoPerformanceMarkOrMeasure()
       override;
@@ -81,12 +79,22 @@ class CORE_EXPORT PerformanceMark final : public PerformanceEntry {
     return unsafe_time_for_traces_;
   }
 
+  using UserFeatureNameToWebFeatureMap =
+      HashMap<String, mojom::blink::WebFeature>;
+  static const UserFeatureNameToWebFeatureMap&
+  GetUseCounterMappingForTesting() {
+    return GetUseCounterMapping();
+  }
+  static std::optional<mojom::blink::WebFeature>
+  GetWebFeatureForUserFeatureName(const String& feature_name);
+
  private:
   scoped_refptr<SerializedScriptValue> serialized_detail_;
   // In order to prevent cross-world reference leak, we create a copy of the
   // detail for each world.
   HeapHashMap<WeakMember<ScriptState>, TraceWrapperV8Reference<v8::Value>>
       deserialized_detail_map_;
+  static const UserFeatureNameToWebFeatureMap& GetUseCounterMapping();
   base::TimeTicks unsafe_time_for_traces_;
 };
 

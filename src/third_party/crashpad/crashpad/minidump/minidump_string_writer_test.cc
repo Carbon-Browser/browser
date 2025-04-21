@@ -1,4 +1,4 @@
-// Copyright 2014 The Crashpad Authors. All rights reserved.
+// Copyright 2014 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,14 +36,8 @@ class TestTypeNames {
  public:
   template <typename T>
   static std::string GetName(int) {
-    if (std::is_same<T, RVA>()) {
-      return "RVA";
-    }
-    if (std::is_same<T, RVA64>()) {
-      return "RVA64";
-    }
-    NOTREACHED();
-    return "";
+    static_assert(std::is_same<T, RVA>() || std::is_same<T, RVA64>());
+    return std::is_same<T, RVA>() ? "RVA" : "RVA64";
   }
 };
 

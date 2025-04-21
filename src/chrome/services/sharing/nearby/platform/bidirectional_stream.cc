@@ -1,18 +1,16 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/services/sharing/nearby/platform/bidirectional_stream.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task/sequenced_task_runner.h"
 #include "chrome/services/sharing/nearby/platform/input_stream_impl.h"
 #include "chrome/services/sharing/nearby/platform/output_stream_impl.h"
 
-namespace location {
-namespace nearby {
-namespace chrome {
+namespace nearby::chrome {
 
 BidirectionalStream::BidirectionalStream(
     connections::mojom::Medium medium,
@@ -57,7 +55,6 @@ Exception BidirectionalStream::Close() {
   if (!output_exception.Ok())
     return output_exception;
   NOTREACHED();
-  return {Exception::kFailed};
 }
 
 void BidirectionalStream::CreateStreams(
@@ -80,6 +77,4 @@ void BidirectionalStream::DestroyStreams(
   task_run_waitable_event->Signal();
 }
 
-}  // namespace chrome
-}  // namespace nearby
-}  // namespace location
+}  // namespace nearby::chrome

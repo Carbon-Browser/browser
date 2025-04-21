@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/extensions/api/declarative_content/content_action.h"
 #include "chrome/browser/extensions/api/declarative_content/content_condition.h"
@@ -75,12 +75,12 @@ class ChromeContentRulesRegistry
       const std::vector<std::string>& css_selectors) override;
   // RulesRegistry:
   std::string AddRulesImpl(
-      const std::string& extension_id,
+      const ExtensionId& extension_id,
       const std::vector<const api::events::Rule*>& rules) override;
   std::string RemoveRulesImpl(
-      const std::string& extension_id,
+      const ExtensionId& extension_id,
       const std::vector<std::string>& rule_identifiers) override;
-  std::string RemoveAllRulesImpl(const std::string& extension_id) override;
+  std::string RemoveAllRulesImpl(const ExtensionId& extension_id) override;
 
   // DeclarativeContentConditionTrackerDelegate:
   void RequestEvaluation(content::WebContents* contents) override;
@@ -144,7 +144,7 @@ class ChromeContentRulesRegistry
   static bool EvaluateConditionForTab(const ContentCondition* condition,
                                       content::WebContents* tab);
 
-  std::set<const ContentRule*> GetMatchingRules(
+  std::set<raw_ptr<const ContentRule, SetExperimental>> GetMatchingRules(
       content::WebContents* tab) const;
 
   // Evaluates the conditions for |tab| based on the tab state and matching CSS
@@ -166,7 +166,9 @@ class ChromeContentRulesRegistry
   // This lets us call Revert as appropriate. Note that this is expected to have
   // a key-value pair for every WebContents the registry is tracking, even if
   // the value is the empty set.
-  std::map<content::WebContents*, std::set<const ContentRule*>> active_rules_;
+  std::map<content::WebContents*,
+           std::set<raw_ptr<const ContentRule, SetExperimental>>>
+      active_rules_;
 
   // The evaluators responsible for creating predicates and tracking
   // predicate-related state.
@@ -177,7 +179,7 @@ class ChromeContentRulesRegistry
 
   // Contains WebContents which require rule evaluation. Only used while
   // |evaluation_disposition_| is DEFER.
-  std::set<content::WebContents*> evaluation_pending_;
+  std::set<raw_ptr<content::WebContents, SetExperimental>> evaluation_pending_;
 };
 
 }  // namespace extensions

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,17 @@
 #define UI_GFX_ICON_UTIL_H_
 
 #include <windows.h>
+
 #include <stddef.h>
 #include <stdint.h>
+
 #include <memory>
 #include <vector>
 
+#include "base/component_export.h"
 #include "base/win/scoped_gdi_object.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/size.h"
-#include "ui/gfx/gfx_export.h"
 
 namespace base {
 class FilePath;
@@ -54,7 +56,7 @@ class SkBitmap;
 //                 reinterpret_cast<LPARAM>(icon.get()));
 //
 ///////////////////////////////////////////////////////////////////////////////
-class GFX_EXPORT IconUtil {
+class COMPONENT_EXPORT(GFX) IconUtil {
  public:
   // ATOMIC_WRITE ensures that a partially written icon won't be created even if
   // Chrome crashes part way through, but ATOMIC_WRITE is more expensive than

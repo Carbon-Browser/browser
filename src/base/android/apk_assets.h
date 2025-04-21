@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,9 +26,8 @@ namespace android {
 BASE_EXPORT int OpenApkAsset(const std::string& file_path,
                              const std::string& split_name,
                              base::MemoryMappedFile::Region* region);
-BASE_EXPORT int OpenApkAsset(
-    const std::string& file_path,
-    base::MemoryMappedFile::Region* region);
+BASE_EXPORT int OpenApkAsset(const std::string& file_path,
+                             base::MemoryMappedFile::Region* region);
 
 // Registers an uncompressed asset from within the apk in the
 // FileDescriptorStore.
@@ -36,6 +35,10 @@ BASE_EXPORT int OpenApkAsset(
 BASE_EXPORT bool RegisterApkAssetWithFileDescriptorStore(
     const std::string& key,
     const base::FilePath& file_path);
+
+// If one of the above methods failed, call this to perform a
+// `DumpWithoutCrashing` containing errors relevant to the failure.
+BASE_EXPORT void DumpLastOpenApkAssetFailure();
 
 }  // namespace android
 }  // namespace base

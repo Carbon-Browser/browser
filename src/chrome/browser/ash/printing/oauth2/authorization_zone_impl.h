@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,6 +27,7 @@ namespace printing {
 namespace oauth2 {
 
 class AuthorizationServerSession;
+class ClientIdsDatabase;
 class IppEndpointTokenFetcher;
 
 // The class AuthorizationZoneImpl implements functionality described in
@@ -34,32 +35,28 @@ class IppEndpointTokenFetcher;
 //
 class AuthorizationZoneImpl : public AuthorizationZone {
  public:
-  // Constructor. If `client_id` is empty a Registration Request will be used
-  // to register a new client (inside InitAuthorization() method).
+  // `client_ids_database` cannot be nullptr and must outlive this object.
   AuthorizationZoneImpl(
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
       const GURL& authorization_server_uri,
-      const std::string& client_id);
-  // Not copyable.
+      ClientIdsDatabase* client_ids_database);
+
   AuthorizationZoneImpl(const AuthorizationZoneImpl&) = delete;
   AuthorizationZoneImpl& operator=(const AuthorizationZoneImpl&) = delete;
-  // Destructor.
   ~AuthorizationZoneImpl() override;
 
   // AuthorizationZone interface.
   void InitAuthorization(const std::string& scope,
                          StatusCallback callback) override;
-  // AuthorizationZone interface.
   void FinishAuthorization(const GURL& redirect_url,
                            StatusCallback callback) override;
-  // AuthorizationZone interface.
   void GetEndpointAccessToken(const chromeos::Uri& ipp_endpoint,
                               const std::string& scope,
                               StatusCallback callback) override;
-  // AuthorizationZone interface.
   void MarkEndpointAccessTokenAsExpired(
       const chromeos::Uri& ipp_endpoint,
       const std::string& endpoint_access_token) override;
+  void MarkAuthorizationZoneAsUntrusted() override;
 
  private:
   // This method processes (and removes) all elements from
@@ -67,30 +64,30 @@ class AuthorizationZoneImpl : public AuthorizationZone {
   void AuthorizationProcedure();
 
   // Callback for AuthorizationServerData::Initialize().
-  void OnInitializeCallback(StatusCode status, const std::string& data);
+  void OnInitializeCallback(StatusCode status, std::string data);
 
   // Callback for AuthorizationServerSession::SendFirstTokenRequest() and
   // AuthorizationServerSession::SendNextTokenRequest().
   void OnSendTokenRequestCallback(AuthorizationServerSession* session,
                                   StatusCode status,
-                                  const std::string& data);
+                                  std::string data);
 
   // Callback for IppEndpointTokenFetcher::SendTokenExchangeRequest(...).
   void OnTokenExchangeRequestCallback(const chromeos::Uri& ipp_endpoint,
                                       StatusCode status,
-                                      const std::string& data);
+                                      std::string data);
 
   // Executes all callbacks from the waitlist of `ipp_endpoint`. Also, removes
   // `ipp_endpoint` when `status` != StatusCode::kOK.
   void ResultForIppEndpoint(const chromeos::Uri& ipp_endpoint,
                             StatusCode status,
-                            const std::string& data);
+                            std::string data);
 
   // This callback is added to the waitlist of AuthorizationSession when
   // `ipp_endpoint` must wait for the access token from it.
   void OnAccessTokenForEndpointCallback(const chromeos::Uri& ipp_endpoint,
                                         StatusCode status,
-                                        const std::string& data);
+                                        std::string data);
 
   // Tries to find OAuth session for given IPP Endpoint and send Token Exchange
   // request to obtain an endpoint access token.
@@ -102,9 +99,6 @@ class AuthorizationZoneImpl : public AuthorizationZone {
   bool FindAndRemovePendingAuthorization(const std::string& state,
                                          base::flat_set<std::string>& scopes,
                                          std::string& code_verifier);
-
-  // Adds context info to error messages returned with `callback`.
-  void AddContextToErrorMessage(StatusCallback& callback);
 
   // Represents started authorization procedure waiting for opening
   // communication with the server. This object is created when

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,6 +25,7 @@ class ScreenshotShareSheetViewProperties {
 
     public static final WritableObjectPropertyKey<Bitmap> SCREENSHOT_BITMAP =
             new WritableObjectPropertyKey<>();
+
     /**
      * Set of operations that don't require additional arguments. If a callback requires an
      * argument, it should defined separately.
@@ -36,7 +37,6 @@ class ScreenshotShareSheetViewProperties {
         int SHARE = 1;
         int SAVE = 2;
         int DELETE = 3;
-        int INSTALL = 4;
     }
 
     public static final PropertyKey[] ALL_KEYS =

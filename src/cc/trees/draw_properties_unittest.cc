@@ -1,4 +1,4 @@
-// Copyright 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "base/containers/contains.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/test/scoped_feature_list.h"
 #include "cc/animation/animation.h"
 #include "cc/animation/animation_host.h"
 #include "cc/animation/animation_id_provider.h"
@@ -32,6 +33,7 @@
 #include "cc/trees/effect_node.h"
 #include "cc/trees/scroll_node.h"
 #include "cc/trees/transform_node.h"
+#include "components/viz/common/features.h"
 #include "components/viz/common/frame_sinks/copy_output_request.h"
 #include "components/viz/common/frame_sinks/copy_output_result.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -55,8 +57,8 @@ bool LayerSubtreeHasCopyRequest(Layer* layer) {
 
 class DrawPropertiesTestBase : public LayerTreeImplTestBase {
  public:
-  DrawPropertiesTestBase() = default;
-  explicit DrawPropertiesTestBase(const LayerTreeSettings& settings)
+  explicit DrawPropertiesTestBase(const LayerTreeSettings& settings =
+                                      CommitToPendingTreeLayerListSettings())
       : LayerTreeImplTestBase(settings) {}
 
   static void SetScrollOffsetDelta(LayerImpl* layer_impl,
@@ -66,7 +68,7 @@ class DrawPropertiesTestBase : public LayerTreeImplTestBase {
             ->scroll_tree_mutable()
             .SetScrollOffsetDeltaForTesting(layer_impl->element_id(), delta))
       layer_impl->layer_tree_impl()->DidUpdateScrollOffset(
-          layer_impl->element_id());
+          layer_impl->element_id(), /*pushed_from_main_or_pending_tree=*/false);
   }
 
   static float MaximumAnimationToScreenScale(LayerImpl* layer_impl) {
@@ -102,8 +104,8 @@ class DrawPropertiesTestBase : public LayerTreeImplTestBase {
     UpdateMainDrawProperties(device_scale_factor);
     if (!host_impl()->pending_tree())
       host_impl()->CreatePendingTree();
-    host()->CommitAndCreatePendingTree();
-    // TODO(https://crbug.com/939968) This call should be handled by
+    host()->CommitToPendingTree();
+    // TODO(crbug.com/40617417) This call should be handled by
     // FakeLayerTreeHost instead of manually pushing the properties from the
     // layer tree host to the pending tree.
     host_impl()->pending_tree()->PullLayerTreePropertiesFrom(
@@ -152,7 +154,7 @@ class DrawPropertiesTestWithLayerTree : public DrawPropertiesTestBase,
                                         public testing::Test {
  public:
   DrawPropertiesTestWithLayerTree()
-      : DrawPropertiesTestBase(LayerTreeSettings()) {}
+      : DrawPropertiesTestBase(CommitToPendingTreeLayerTreeSettings()) {}
 };
 
 class DrawPropertiesDrawRectsTest : public DrawPropertiesTest {
@@ -170,8 +172,8 @@ class DrawPropertiesDrawRectsTest : public DrawPropertiesTest {
       const gfx::Transform& layer_transform,
       const gfx::Rect& layer_rect) {
     LayerImpl* root = root_layer();
-    LayerImpl* target = AddLayer<LayerImpl>();
-    LayerImpl* drawing_layer = AddLayer<LayerImpl>();
+    LayerImpl* target = AddLayerInActiveTree<LayerImpl>();
+    LayerImpl* drawing_layer = AddLayerInActiveTree<LayerImpl>();
 
     target->SetDrawsContent(true);
     drawing_layer->SetDrawsContent(true);
@@ -203,8 +205,8 @@ class DrawPropertiesDrawRectsTest : public DrawPropertiesTest {
 // layers should also be identity transforms.
 TEST_F(DrawPropertiesTest, TransformsForNoOpLayer) {
   LayerImpl* parent = root_layer();
-  LayerImpl* child = AddLayer<LayerImpl>();
-  LayerImpl* grand_child = AddLayer<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child = AddLayerInActiveTree<LayerImpl>();
 
   parent->SetBounds(gfx::Size(100, 100));
 
@@ -221,7 +223,7 @@ TEST_F(DrawPropertiesTest, TransformsForNoOpLayer) {
 
 TEST_F(DrawPropertiesTest, TransformsForSingleLayer) {
   LayerImpl* root = root_layer();
-  LayerImpl* layer = AddLayer<LayerImpl>();
+  LayerImpl* layer = AddLayerInActiveTree<LayerImpl>();
 
   TransformTree& transform_tree =
       host_impl()->active_tree()->property_trees()->transform_tree_mutable();
@@ -286,7 +288,7 @@ TEST_F(DrawPropertiesTest, TransformsForSingleLayer) {
   gfx::Transform translation_to_anchor;
   translation_to_anchor.Translate(5.0, 0.0);
   gfx::Transform expected_result = translation_to_anchor * layer_transform *
-                                   gfx::InvertAndCheck(translation_to_anchor);
+                                   translation_to_anchor.GetCheckedInverse();
   SetTransformOrigin(layer, gfx::Point3F(5.f, 0.f, 0.f));
   UpdateActiveTreeDrawProperties();
   EXPECT_TRANSFORM_EQ(expected_result, draw_property_utils::DrawTransform(
@@ -299,8 +301,7 @@ TEST_F(DrawPropertiesTest, TransformsForSingleLayer) {
   // current implementation of CalculateDrawProperties does this implicitly, but
   // it is still worth testing to detect accidental regressions.
   expected_result = position_transform * translation_to_anchor *
-                    layer_transform *
-                    gfx::InvertAndCheck(translation_to_anchor);
+                    layer_transform * translation_to_anchor.GetCheckedInverse();
   SetPostTranslation(layer, gfx::Vector2dF(0.f, 1.2f));
   UpdateActiveTreeDrawProperties();
   EXPECT_TRANSFORM_EQ(expected_result, draw_property_utils::DrawTransform(
@@ -319,11 +320,11 @@ TEST_F(DrawPropertiesTest, TransformsAboutScrollOffset) {
   float page_scale = 0.888f;
   const float kDeviceScale = 1.666f;
 
-  LayerImpl* sublayer = AddLayer<LayerImpl>();
+  LayerImpl* sublayer = AddLayerInActiveTree<LayerImpl>();
   sublayer->SetDrawsContent(true);
   sublayer->SetBounds(gfx::Size(500, 500));
 
-  LayerImpl* scroll_layer = AddLayer<LayerImpl>();
+  LayerImpl* scroll_layer = AddLayerInActiveTree<LayerImpl>();
   scroll_layer->SetBounds(sublayer->bounds());
   scroll_layer->SetElementId(LayerIdToElementIdForTesting(scroll_layer->id()));
 
@@ -392,9 +393,9 @@ TEST_F(DrawPropertiesTest, TransformsAboutScrollOffset) {
 
 TEST_F(DrawPropertiesTest, TransformsForSimpleHierarchy) {
   LayerImpl* root = root_layer();
-  LayerImpl* parent = AddLayer<LayerImpl>();
-  LayerImpl* child = AddLayer<LayerImpl>();
-  LayerImpl* grand_child = AddLayer<LayerImpl>();
+  LayerImpl* parent = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child = AddLayerInActiveTree<LayerImpl>();
 
   // One-time setup of root layer
   root->SetBounds(gfx::Size(1, 2));
@@ -454,7 +455,7 @@ TEST_F(DrawPropertiesTest, TransformsForSimpleHierarchy) {
   parent_translation_to_anchor.Translate(2.5, 3.0);
   gfx::Transform parent_composite_transform =
       parent_translation_to_anchor * parent_layer_transform *
-      gfx::InvertAndCheck(parent_translation_to_anchor);
+      parent_translation_to_anchor.GetCheckedInverse();
   SetTransform(parent, parent_layer_transform);
   SetPostTranslation(parent, gfx::Vector2dF());
   UpdateActiveTreeDrawProperties();
@@ -474,9 +475,9 @@ TEST_F(DrawPropertiesTest, TransformsForSimpleHierarchy) {
 
 TEST_F(DrawPropertiesTest, TransformsForSingleRenderSurface) {
   LayerImpl* root = root_layer();
-  LayerImpl* parent = AddLayer<LayerImpl>();
-  LayerImpl* child = AddLayer<LayerImpl>();
-  LayerImpl* grand_child = AddLayer<LayerImpl>();
+  LayerImpl* parent = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child = AddLayerInActiveTree<LayerImpl>();
 
   gfx::Transform parent_layer_transform;
   parent_layer_transform.Scale3d(1.f, 0.9f, 1.f);
@@ -485,7 +486,7 @@ TEST_F(DrawPropertiesTest, TransformsForSingleRenderSurface) {
 
   gfx::Transform parent_composite_transform =
       parent_translation_to_anchor * parent_layer_transform *
-      gfx::InvertAndCheck(parent_translation_to_anchor);
+      parent_translation_to_anchor.GetCheckedInverse();
   gfx::Vector2dF parent_composite_scale =
       gfx::ComputeTransform2dScaleComponents(parent_composite_transform, 1.f);
   gfx::Transform surface_sublayer_transform;
@@ -493,7 +494,7 @@ TEST_F(DrawPropertiesTest, TransformsForSingleRenderSurface) {
                                    parent_composite_scale.y());
   gfx::Transform surface_sublayer_composite_transform =
       parent_composite_transform *
-      gfx::InvertAndCheck(surface_sublayer_transform);
+      surface_sublayer_transform.GetCheckedInverse();
 
   root->SetBounds(gfx::Size(1, 2));
   parent->SetBounds(gfx::Size(100, 120));
@@ -546,23 +547,23 @@ TEST_F(DrawPropertiesTest, TransformsForRenderSurfaceHierarchy) {
   //   and render target values.
 
   LayerImpl* root = root_layer();
-  LayerImpl* parent = AddLayer<LayerImpl>();
+  LayerImpl* parent = AddLayerInActiveTree<LayerImpl>();
   parent->SetDrawsContent(true);
-  LayerImpl* render_surface1 = AddLayer<LayerImpl>();
+  LayerImpl* render_surface1 = AddLayerInActiveTree<LayerImpl>();
   render_surface1->SetDrawsContent(true);
-  LayerImpl* render_surface2 = AddLayer<LayerImpl>();
+  LayerImpl* render_surface2 = AddLayerInActiveTree<LayerImpl>();
   render_surface2->SetDrawsContent(true);
-  LayerImpl* child_of_root = AddLayer<LayerImpl>();
+  LayerImpl* child_of_root = AddLayerInActiveTree<LayerImpl>();
   child_of_root->SetDrawsContent(true);
-  LayerImpl* child_of_rs1 = AddLayer<LayerImpl>();
+  LayerImpl* child_of_rs1 = AddLayerInActiveTree<LayerImpl>();
   child_of_rs1->SetDrawsContent(true);
-  LayerImpl* child_of_rs2 = AddLayer<LayerImpl>();
+  LayerImpl* child_of_rs2 = AddLayerInActiveTree<LayerImpl>();
   child_of_rs2->SetDrawsContent(true);
-  LayerImpl* grand_child_of_root = AddLayer<LayerImpl>();
+  LayerImpl* grand_child_of_root = AddLayerInActiveTree<LayerImpl>();
   grand_child_of_root->SetDrawsContent(true);
-  LayerImpl* grand_child_of_rs1 = AddLayer<LayerImpl>();
+  LayerImpl* grand_child_of_rs1 = AddLayerInActiveTree<LayerImpl>();
   grand_child_of_rs1->SetDrawsContent(true);
-  LayerImpl* grand_child_of_rs2 = AddLayer<LayerImpl>();
+  LayerImpl* grand_child_of_rs2 = AddLayerInActiveTree<LayerImpl>();
   grand_child_of_rs2->SetDrawsContent(true);
 
   // All layers in the tree are initialized with an anchor at .25 and a size of
@@ -573,7 +574,7 @@ TEST_F(DrawPropertiesTest, TransformsForRenderSurfaceHierarchy) {
   layer_transform.Translate(1.0, 1.0);
 
   gfx::Transform A = translation_to_anchor * layer_transform *
-                     gfx::InvertAndCheck(translation_to_anchor);
+                     translation_to_anchor.GetCheckedInverse();
 
   gfx::Vector2dF surface1_parent_transform_scale =
       gfx::ComputeTransform2dScaleComponents(A, 1.f);
@@ -585,7 +586,7 @@ TEST_F(DrawPropertiesTest, TransformsForRenderSurfaceHierarchy) {
   gfx::Transform SS1 = surface1_sublayer_transform;
   // S1 = transform to move from render_surface1 pixels to the layer space of
   // the owning layer
-  gfx::Transform S1 = gfx::InvertAndCheck(surface1_sublayer_transform);
+  gfx::Transform S1 = surface1_sublayer_transform.GetCheckedInverse();
 
   gfx::Vector2dF surface2_parent_transform_scale =
       gfx::ComputeTransform2dScaleComponents(SS1 * A, 1.f);
@@ -597,7 +598,7 @@ TEST_F(DrawPropertiesTest, TransformsForRenderSurfaceHierarchy) {
   gfx::Transform SS2 = surface2_sublayer_transform;
   // S2 = transform to move from render_surface2 pixels to the layer space of
   // the owning layer
-  gfx::Transform S2 = gfx::InvertAndCheck(surface2_sublayer_transform);
+  gfx::Transform S2 = surface2_sublayer_transform.GetCheckedInverse();
 
   root->SetBounds(gfx::Size(1, 2));
   parent->SetBounds(gfx::Size(10, 10));
@@ -744,28 +745,23 @@ TEST_F(DrawPropertiesTest, TransformsForRenderSurfaceHierarchy) {
   // Sanity check. If these fail there is probably a bug in the test itself.  It
   // is expected that we correctly set up transforms so that the y-component of
   // the screen-space transform encodes the "depth" of the layer in the tree.
-  EXPECT_FLOAT_EQ(1.0, parent->ScreenSpaceTransform().matrix().rc(1, 3));
-  EXPECT_FLOAT_EQ(2.0, child_of_root->ScreenSpaceTransform().matrix().rc(1, 3));
-  EXPECT_FLOAT_EQ(
-      3.0, grand_child_of_root->ScreenSpaceTransform().matrix().rc(1, 3));
+  EXPECT_FLOAT_EQ(1.0, parent->ScreenSpaceTransform().rc(1, 3));
+  EXPECT_FLOAT_EQ(2.0, child_of_root->ScreenSpaceTransform().rc(1, 3));
+  EXPECT_FLOAT_EQ(3.0, grand_child_of_root->ScreenSpaceTransform().rc(1, 3));
 
-  EXPECT_FLOAT_EQ(2.0,
-                  render_surface1->ScreenSpaceTransform().matrix().rc(1, 3));
-  EXPECT_FLOAT_EQ(3.0, child_of_rs1->ScreenSpaceTransform().matrix().rc(1, 3));
-  EXPECT_FLOAT_EQ(4.0,
-                  grand_child_of_rs1->ScreenSpaceTransform().matrix().rc(1, 3));
+  EXPECT_FLOAT_EQ(2.0, render_surface1->ScreenSpaceTransform().rc(1, 3));
+  EXPECT_FLOAT_EQ(3.0, child_of_rs1->ScreenSpaceTransform().rc(1, 3));
+  EXPECT_FLOAT_EQ(4.0, grand_child_of_rs1->ScreenSpaceTransform().rc(1, 3));
 
-  EXPECT_FLOAT_EQ(3.0,
-                  render_surface2->ScreenSpaceTransform().matrix().rc(1, 3));
-  EXPECT_FLOAT_EQ(4.0, child_of_rs2->ScreenSpaceTransform().matrix().rc(1, 3));
-  EXPECT_FLOAT_EQ(5.0,
-                  grand_child_of_rs2->ScreenSpaceTransform().matrix().rc(1, 3));
+  EXPECT_FLOAT_EQ(3.0, render_surface2->ScreenSpaceTransform().rc(1, 3));
+  EXPECT_FLOAT_EQ(4.0, child_of_rs2->ScreenSpaceTransform().rc(1, 3));
+  EXPECT_FLOAT_EQ(5.0, grand_child_of_rs2->ScreenSpaceTransform().rc(1, 3));
 }
 
 TEST_F(DrawPropertiesTest, LayerFullyContainedWithinClipInTargetSpace) {
   LayerImpl* root = root_layer();
-  LayerImpl* child = AddLayer<LayerImpl>();
-  LayerImpl* grand_child = AddLayer<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child = AddLayerInActiveTree<LayerImpl>();
 
   gfx::Transform child_transform;
   child_transform.Translate(50.0, 50.0);
@@ -788,14 +784,9 @@ TEST_F(DrawPropertiesTest, LayerFullyContainedWithinClipInTargetSpace) {
 
   UpdateActiveTreeDrawProperties();
 
-  // Mapping grand_child's bounds to screen space produces an empty rect, but
-  // only because it is turned sideways.  The entire rect is contained inside
-  // the clip, and is only empty so long as the numerical precision of the
-  // transform is effectively perfect.  Currently we do the calculation the
-  // other way around, and the Projection of the screen space clip into layer
-  // space includes the entire bounds.
-  EXPECT_EQ(gfx::Rect(grand_child->bounds()),
-            grand_child->visible_layer_rect());
+  // Mapping grand_child's bounds to screen space produces an empty rect
+  // because it is turned sideways.
+  EXPECT_EQ(gfx::Rect(), grand_child->visible_layer_rect());
 }
 
 TEST_F(DrawPropertiesTest, TransformsForDegenerateIntermediateLayer) {
@@ -809,8 +800,8 @@ TEST_F(DrawPropertiesTest, TransformsForDegenerateIntermediateLayer) {
   // incorrectly as a result.
 
   LayerImpl* root = root_layer();
-  LayerImpl* child = AddLayer<LayerImpl>();
-  LayerImpl* grand_child = AddLayer<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child = AddLayerInActiveTree<LayerImpl>();
   grand_child->SetDrawsContent(true);
 
   root->SetBounds(gfx::Size(100, 100));
@@ -835,9 +826,9 @@ TEST_F(DrawPropertiesTest, TransformsForDegenerateIntermediateLayer) {
 
 TEST_F(DrawPropertiesTest, RenderSurfaceWithSublayerScale) {
   LayerImpl* root = root_layer();
-  LayerImpl* render_surface = AddLayer<LayerImpl>();
-  LayerImpl* child = AddLayer<LayerImpl>();
-  LayerImpl* grand_child = AddLayer<LayerImpl>();
+  LayerImpl* render_surface = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child = AddLayerInActiveTree<LayerImpl>();
 
   gfx::Transform translate;
   translate.Translate3d(5, 5, 5);
@@ -872,7 +863,7 @@ TEST_F(DrawPropertiesTest, TransformAboveRootLayer) {
   // Transformations applied at the root of the tree should be forwarded
   // to child layers instead of applied to the root RenderSurface.
   LayerImpl* root = root_layer();
-  LayerImpl* child = AddLayer<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
 
   root->SetDrawsContent(true);
   root->SetBounds(gfx::Size(100, 100));
@@ -926,9 +917,9 @@ TEST_F(DrawPropertiesTest, TransformAboveRootLayer) {
   }
 
   gfx::Transform composite;
-  composite.ConcatTransform(translate);
-  composite.ConcatTransform(scale);
-  composite.ConcatTransform(rotate);
+  composite.PostConcat(translate);
+  composite.PostConcat(scale);
+  composite.PostConcat(rotate);
   {
     SetDeviceTransform(composite);
     UpdateActiveTreeDrawProperties(device_scale_factor);
@@ -963,7 +954,7 @@ TEST_F(DrawPropertiesTest, TransformAboveRootLayer) {
 
 TEST_F(DrawPropertiesTest, DrawableContentRectForReferenceFilter) {
   LayerImpl* root = root_layer();
-  LayerImpl* child = AddLayer<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(100, 100));
   child->SetBounds(gfx::Size(25, 25));
@@ -993,7 +984,7 @@ TEST_F(DrawPropertiesTest, DrawableContentRectForReferenceFilterHighDpi) {
   const float device_scale_factor = 2.0f;
 
   LayerImpl* root = root_layer();
-  LayerImpl* child = AddLayer<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(100, 100));
   child->SetBounds(gfx::Size(25, 25));
@@ -1023,7 +1014,7 @@ TEST_F(DrawPropertiesTest, DrawableContentRectForReferenceFilterHighDpi) {
 
 TEST_F(DrawPropertiesTest, VisibleLayerRectForBlurFilterUnderClip) {
   LayerImpl* root = root_layer();
-  LayerImpl* child = AddLayer<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(100, 100));
   child->SetBounds(gfx::Size(300, 300));
@@ -1046,7 +1037,7 @@ TEST_F(DrawPropertiesTest, VisibleLayerRectForBlurFilterUnderClip) {
 
 TEST_F(DrawPropertiesTest, VisibleLayerRectForReferenceFilterUnderClip) {
   LayerImpl* root = root_layer();
-  LayerImpl* child = AddLayer<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(100, 100));
   child->SetBounds(gfx::Size(300, 300));
@@ -1070,7 +1061,7 @@ TEST_F(DrawPropertiesTest, VisibleLayerRectForReferenceFilterUnderClip) {
 
 TEST_F(DrawPropertiesTest, RenderSurfaceForBlendMode) {
   LayerImpl* root = root_layer();
-  LayerImpl* child = AddLayer<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(10, 10));
   child->SetBounds(gfx::Size(10, 10));
@@ -1094,9 +1085,9 @@ TEST_F(DrawPropertiesTest, RenderSurfaceForBlendMode) {
 
 TEST_F(DrawPropertiesTest, RenderSurfaceDrawOpacity) {
   LayerImpl* root = root_layer();
-  LayerImpl* surface1 = AddLayer<LayerImpl>();
-  LayerImpl* not_surface = AddLayer<LayerImpl>();
-  LayerImpl* surface2 = AddLayer<LayerImpl>();
+  LayerImpl* surface1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* not_surface = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* surface2 = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(10, 10));
   surface1->SetBounds(gfx::Size(10, 10));
@@ -1144,15 +1135,17 @@ TEST_F(DrawPropertiesTest, ClipRectCullsRenderSurfaces) {
   // render surfaces.
 
   LayerImpl* root = root_layer();
-  LayerImpl* child = AddLayer<LayerImpl>();
-  LayerImpl* grand_child = AddLayer<LayerImpl>();
-  LayerImpl* great_grand_child = AddLayer<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* great_grand_child = AddLayerInActiveTree<LayerImpl>();
 
   // leaf_node1 ensures that root and child are kept on the
   // GetRenderSurfaceList, even though grand_child and great_grand_child should
   // be clipped.
-  LayerImpl* leaf_node1 = AddLayer<LayerImpl>();
-  LayerImpl* leaf_node2 = AddLayer<LayerImpl>();
+  LayerImpl* leaf_node1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* leaf_node2 = AddLayerInActiveTree<LayerImpl>();
+
+  SetElementIdsForTesting();
 
   root->SetBounds(gfx::Size(500, 500));
   child->SetBounds(gfx::Size(20, 20));
@@ -1179,10 +1172,8 @@ TEST_F(DrawPropertiesTest, ClipRectCullsRenderSurfaces) {
   UpdateActiveTreeDrawProperties();
 
   ASSERT_EQ(2U, GetRenderSurfaceList().size());
-  EXPECT_EQ(static_cast<uint64_t>(root->id()),
-            GetRenderSurfaceList().at(0)->id());
-  EXPECT_EQ(static_cast<uint64_t>(child->id()),
-            GetRenderSurfaceList().at(1)->id());
+  EXPECT_EQ(root->element_id(), GetRenderSurfaceList().at(0)->id());
+  EXPECT_EQ(child->element_id(), GetRenderSurfaceList().at(1)->id());
 }
 
 TEST_F(DrawPropertiesTest, ClipRectCullsSurfaceWithoutVisibleContent) {
@@ -1201,9 +1192,9 @@ TEST_F(DrawPropertiesTest, ClipRectCullsSurfaceWithoutVisibleContent) {
   // GetRenderSurfaceList.
 
   LayerImpl* root = root_layer();
-  LayerImpl* child = AddLayer<LayerImpl>();
-  LayerImpl* grand_child = AddLayer<LayerImpl>();
-  LayerImpl* leaf_node = AddLayer<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* leaf_node = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(100, 100));
   child->SetBounds(gfx::Size(20, 20));
@@ -1226,8 +1217,7 @@ TEST_F(DrawPropertiesTest, ClipRectCullsSurfaceWithoutVisibleContent) {
 
   // We should cull child and grand_child from the GetRenderSurfaceList.
   ASSERT_EQ(1U, GetRenderSurfaceList().size());
-  EXPECT_EQ(static_cast<uint64_t>(root->id()),
-            GetRenderSurfaceList().at(0)->id());
+  EXPECT_EQ(root->element_id(), GetRenderSurfaceList().at(0)->id());
 }
 
 TEST_F(DrawPropertiesTest, IsClippedIsSetCorrectlyLayerImpl) {
@@ -1245,12 +1235,12 @@ TEST_F(DrawPropertiesTest, IsClippedIsSetCorrectlyLayerImpl) {
   //    and propagates the clip to the subtree.
 
   LayerImpl* root = root_layer();
-  LayerImpl* parent = AddLayer<LayerImpl>();
-  LayerImpl* child1 = AddLayer<LayerImpl>();
-  LayerImpl* child2 = AddLayer<LayerImpl>();
-  LayerImpl* grand_child = AddLayer<LayerImpl>();
-  LayerImpl* leaf_node1 = AddLayer<LayerImpl>();
-  LayerImpl* leaf_node2 = AddLayer<LayerImpl>();
+  LayerImpl* parent = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child2 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* leaf_node1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* leaf_node2 = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(100, 100));
   parent->SetBounds(gfx::Size(100, 100));
@@ -1353,8 +1343,8 @@ TEST_F(DrawPropertiesTest, UpdateClipRectCorrectly) {
   // Tests that when as long as layer is clipped, it's clip rect is set to
   // correct value.
   LayerImpl* root = root_layer();
-  LayerImpl* parent = AddLayer<LayerImpl>();
-  LayerImpl* child = AddLayer<LayerImpl>();
+  LayerImpl* parent = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(100, 100));
   root->SetDrawsContent(true);
@@ -1403,11 +1393,11 @@ TEST_F(DrawPropertiesTest, DrawableContentRectForLayers) {
   //   be empty.
 
   LayerImpl* parent = root_layer();
-  LayerImpl* child = AddLayer<LayerImpl>();
-  LayerImpl* grand_child1 = AddLayer<LayerImpl>();
-  LayerImpl* grand_child2 = AddLayer<LayerImpl>();
-  LayerImpl* grand_child3 = AddLayer<LayerImpl>();
-  LayerImpl* grand_child4 = AddLayer<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child2 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child3 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child4 = AddLayerInActiveTree<LayerImpl>();
 
   parent->SetBounds(gfx::Size(500, 500));
   child->SetBounds(gfx::Size(20, 20));
@@ -1454,17 +1444,17 @@ TEST_F(DrawPropertiesTest, ClipRectIsPropagatedCorrectlyToSurfaces) {
   // They may still have a clip rect of their own layer bounds, however, if
   // MasksToBounds was true.
   LayerImpl* parent = root_layer();
-  LayerImpl* child = AddLayer<LayerImpl>();
-  LayerImpl* grand_child1 = AddLayer<LayerImpl>();
-  LayerImpl* grand_child2 = AddLayer<LayerImpl>();
-  LayerImpl* grand_child3 = AddLayer<LayerImpl>();
-  LayerImpl* grand_child4 = AddLayer<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child2 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child3 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child4 = AddLayerInActiveTree<LayerImpl>();
   // The leaf nodes ensure that these grand_children become render surfaces for
   // this test.
-  LayerImpl* leaf_node1 = AddLayer<LayerImpl>();
-  LayerImpl* leaf_node2 = AddLayer<LayerImpl>();
-  LayerImpl* leaf_node3 = AddLayer<LayerImpl>();
-  LayerImpl* leaf_node4 = AddLayer<LayerImpl>();
+  LayerImpl* leaf_node1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* leaf_node2 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* leaf_node3 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* leaf_node4 = AddLayerInActiveTree<LayerImpl>();
 
   parent->SetBounds(gfx::Size(500, 500));
   child->SetBounds(gfx::Size(20, 20));
@@ -1528,15 +1518,15 @@ TEST_F(DrawPropertiesTest, ClipRectIsPropagatedCorrectlyToSurfaces) {
 
 TEST_F(DrawPropertiesTest, AnimationsForRenderSurfaceHierarchy) {
   LayerImpl* root = root_layer();
-  LayerImpl* top = AddLayer<LayerImpl>();
-  LayerImpl* render_surface1 = AddLayer<LayerImpl>();
-  LayerImpl* child_of_rs1 = AddLayer<LayerImpl>();
-  LayerImpl* grand_child_of_rs1 = AddLayer<LayerImpl>();
-  LayerImpl* render_surface2 = AddLayer<LayerImpl>();
-  LayerImpl* child_of_rs2 = AddLayer<LayerImpl>();
-  LayerImpl* grand_child_of_rs2 = AddLayer<LayerImpl>();
-  LayerImpl* child_of_top = AddLayer<LayerImpl>();
-  LayerImpl* grand_child_of_top = AddLayer<LayerImpl>();
+  LayerImpl* top = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* render_surface1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child_of_rs1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child_of_rs1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* render_surface2 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child_of_rs2 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child_of_rs2 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child_of_top = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child_of_top = AddLayerInActiveTree<LayerImpl>();
   SetElementIdsForTesting();
 
   top->SetDrawsContent(true);
@@ -1688,28 +1678,23 @@ TEST_F(DrawPropertiesTest, AnimationsForRenderSurfaceHierarchy) {
   // Sanity check. If these fail there is probably a bug in the test itself.
   // It is expected that we correctly set up transforms so that the y-component
   // of the screen-space transform encodes the "depth" of the layer in the tree.
-  EXPECT_FLOAT_EQ(1.0, top->ScreenSpaceTransform().matrix().rc(1, 3));
-  EXPECT_FLOAT_EQ(2.0, child_of_top->ScreenSpaceTransform().matrix().rc(1, 3));
-  EXPECT_FLOAT_EQ(3.0,
-                  grand_child_of_top->ScreenSpaceTransform().matrix().rc(1, 3));
+  EXPECT_FLOAT_EQ(1.0, top->ScreenSpaceTransform().rc(1, 3));
+  EXPECT_FLOAT_EQ(2.0, child_of_top->ScreenSpaceTransform().rc(1, 3));
+  EXPECT_FLOAT_EQ(3.0, grand_child_of_top->ScreenSpaceTransform().rc(1, 3));
 
-  EXPECT_FLOAT_EQ(2.0,
-                  render_surface1->ScreenSpaceTransform().matrix().rc(1, 3));
-  EXPECT_FLOAT_EQ(3.0, child_of_rs1->ScreenSpaceTransform().matrix().rc(1, 3));
-  EXPECT_FLOAT_EQ(4.0,
-                  grand_child_of_rs1->ScreenSpaceTransform().matrix().rc(1, 3));
+  EXPECT_FLOAT_EQ(2.0, render_surface1->ScreenSpaceTransform().rc(1, 3));
+  EXPECT_FLOAT_EQ(3.0, child_of_rs1->ScreenSpaceTransform().rc(1, 3));
+  EXPECT_FLOAT_EQ(4.0, grand_child_of_rs1->ScreenSpaceTransform().rc(1, 3));
 
-  EXPECT_FLOAT_EQ(3.0,
-                  render_surface2->ScreenSpaceTransform().matrix().rc(1, 3));
-  EXPECT_FLOAT_EQ(4.0, child_of_rs2->ScreenSpaceTransform().matrix().rc(1, 3));
-  EXPECT_FLOAT_EQ(5.0,
-                  grand_child_of_rs2->ScreenSpaceTransform().matrix().rc(1, 3));
+  EXPECT_FLOAT_EQ(3.0, render_surface2->ScreenSpaceTransform().rc(1, 3));
+  EXPECT_FLOAT_EQ(4.0, child_of_rs2->ScreenSpaceTransform().rc(1, 3));
+  EXPECT_FLOAT_EQ(5.0, grand_child_of_rs2->ScreenSpaceTransform().rc(1, 3));
 }
 
 TEST_F(DrawPropertiesTest, LargeTransforms) {
   LayerImpl* root = root_layer();
-  LayerImpl* child = AddLayer<LayerImpl>();
-  LayerImpl* grand_child = AddLayer<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child = AddLayerInActiveTree<LayerImpl>();
 
   gfx::Transform large_transform;
   large_transform.Scale(SkDoubleToScalar(1e37), SkDoubleToScalar(1e37));
@@ -1746,9 +1731,9 @@ static bool HasPotentiallyRunningTransformAnimation(LayerImpl* layer) {
 TEST_F(DrawPropertiesTest,
        ScreenSpaceTransformIsAnimatingWithDelayedAnimation) {
   LayerImpl* root = root_layer();
-  LayerImpl* child = AddLayer<LayerImpl>();
-  LayerImpl* grand_child = AddLayer<LayerImpl>();
-  LayerImpl* great_grand_child = AddLayer<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* great_grand_child = AddLayerInActiveTree<LayerImpl>();
 
   root->SetDrawsContent(true);
   child->SetDrawsContent(true);
@@ -2049,7 +2034,7 @@ TEST_F(DrawPropertiesDrawRectsTest, DrawRectsFor3dPerspectiveWhenClippedByW) {
 
 static bool ProjectionClips(const gfx::Transform& map_transform,
                             const gfx::RectF& mapped_rect) {
-  gfx::Transform inverse(gfx::InvertAndCheck(map_transform));
+  gfx::Transform inverse = map_transform.GetCheckedInverse();
   bool clipped = false;
   if (!clipped)
     MathUtil::ProjectPoint(inverse, mapped_rect.top_right(), &clipped);
@@ -2101,9 +2086,9 @@ TEST_F(DrawPropertiesDrawRectsTest, DrawRectsForPerspectiveUnprojection) {
 
 TEST_F(DrawPropertiesTest, DrawableAndVisibleContentRectsForSimpleLayers) {
   LayerImpl* root = root_layer();
-  LayerImpl* child1_layer = AddLayer<LayerImpl>();
-  LayerImpl* child2_layer = AddLayer<LayerImpl>();
-  LayerImpl* child3_layer = AddLayer<LayerImpl>();
+  LayerImpl* child1_layer = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child2_layer = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child3_layer = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(100, 100));
   child1_layer->SetBounds(gfx::Size(50, 50));
@@ -2145,10 +2130,10 @@ TEST_F(DrawPropertiesTest, DrawableAndVisibleContentRectsForSimpleLayers) {
 TEST_F(DrawPropertiesTest,
        DrawableAndVisibleContentRectsForLayersClippedByLayer) {
   LayerImpl* root = root_layer();
-  LayerImpl* child = AddLayer<LayerImpl>();
-  LayerImpl* grand_child1 = AddLayer<LayerImpl>();
-  LayerImpl* grand_child2 = AddLayer<LayerImpl>();
-  LayerImpl* grand_child3 = AddLayer<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child2 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child3 = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(100, 100));
   child->SetBounds(gfx::Size(100, 100));
@@ -2192,8 +2177,8 @@ TEST_F(DrawPropertiesTest,
 
 TEST_F(DrawPropertiesTest, VisibleContentRectWithClippingAndScaling) {
   LayerImpl* root = root_layer();
-  LayerImpl* child = AddLayer<LayerImpl>();
-  LayerImpl* grand_child = AddLayer<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child = AddLayerInActiveTree<LayerImpl>();
 
   gfx::Transform child_scale_matrix;
   child_scale_matrix.Scale(0.25f, 0.25f);
@@ -2219,9 +2204,9 @@ TEST_F(DrawPropertiesTest, VisibleContentRectWithClippingAndScaling) {
 
 TEST_F(DrawPropertiesTest, ClipRectWithClipParent) {
   LayerImpl* root = root_layer();
-  LayerImpl* clip = AddLayer<LayerImpl>();
-  LayerImpl* child1 = AddLayer<LayerImpl>();
-  LayerImpl* child2 = AddLayer<LayerImpl>();
+  LayerImpl* clip = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child2 = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(100, 100));
   CreateClipNode(root);
@@ -2249,9 +2234,9 @@ TEST_F(DrawPropertiesTest, ClipRectWithClipParent) {
 
 TEST_F(DrawPropertiesTest, ClipRectWithClippedDescendantOfFilter) {
   LayerImpl* root = root_layer();
-  LayerImpl* filter = AddLayer<LayerImpl>();
-  LayerImpl* clip = AddLayer<LayerImpl>();
-  LayerImpl* filter_grand_child = AddLayer<LayerImpl>();
+  LayerImpl* filter = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* filter_grand_child = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(100, 100));
   clip->SetBounds(gfx::Size(10, 10));
@@ -2281,10 +2266,10 @@ TEST_F(DrawPropertiesTest, ClipRectWithClippedDescendantOfFilter) {
 TEST_F(DrawPropertiesTest,
        DrawableAndVisibleContentRectsForLayersInUnclippedRenderSurface) {
   LayerImpl* root = root_layer();
-  LayerImpl* render_surface = AddLayer<LayerImpl>();
-  LayerImpl* child1 = AddLayer<LayerImpl>();
-  LayerImpl* child2 = AddLayer<LayerImpl>();
-  LayerImpl* child3 = AddLayer<LayerImpl>();
+  LayerImpl* render_surface = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child2 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child3 = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(100, 100));
   render_surface->SetBounds(gfx::Size(3, 4));
@@ -2334,9 +2319,9 @@ TEST_F(DrawPropertiesTest,
 
 TEST_F(DrawPropertiesTest, VisibleContentRectsForClippedSurfaceWithEmptyClip) {
   LayerImpl* root = root_layer();
-  LayerImpl* child1 = AddLayer<LayerImpl>();
-  LayerImpl* child2 = AddLayer<LayerImpl>();
-  LayerImpl* child3 = AddLayer<LayerImpl>();
+  LayerImpl* child1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child2 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child3 = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(100, 100));
   child1->SetBounds(gfx::Size(50, 50));
@@ -2377,14 +2362,14 @@ TEST_F(DrawPropertiesTest, VisibleContentRectsForClippedSurfaceWithEmptyClip) {
 TEST_F(DrawPropertiesTest,
        DrawableAndVisibleContentRectsForLayersWithUninvertibleTransform) {
   LayerImpl* root = root_layer();
-  LayerImpl* child = AddLayer<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(100, 100));
   child->SetBounds(gfx::Size(50, 50));
   child->SetDrawsContent(true);
 
   // Case 1: a truly degenerate matrix
-  gfx::Transform uninvertible_matrix(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+  auto uninvertible_matrix = gfx::Transform::MakeScale(0.0);
   ASSERT_FALSE(uninvertible_matrix.IsInvertible());
 
   CopyProperties(root, child);
@@ -2398,7 +2383,7 @@ TEST_F(DrawPropertiesTest,
   // Case 2: a matrix with flattened z, uninvertible and not visible according
   // to the CSS spec.
   uninvertible_matrix.MakeIdentity();
-  uninvertible_matrix.matrix().setRC(2, 2, 0.0);
+  uninvertible_matrix.set_rc(2, 2, 0.0);
   ASSERT_FALSE(uninvertible_matrix.IsInvertible());
 
   SetTransform(child, uninvertible_matrix);
@@ -2410,7 +2395,7 @@ TEST_F(DrawPropertiesTest,
   // Case 3: a matrix with flattened z, also uninvertible and not visible.
   uninvertible_matrix.MakeIdentity();
   uninvertible_matrix.Translate(500.0, 0.0);
-  uninvertible_matrix.matrix().setRC(2, 2, 0.0);
+  uninvertible_matrix.set_rc(2, 2, 0.0);
   ASSERT_FALSE(uninvertible_matrix.IsInvertible());
 
   SetTransform(child, uninvertible_matrix);
@@ -2423,14 +2408,12 @@ TEST_F(DrawPropertiesTest,
 TEST_F(DrawPropertiesTest,
        VisibleContentRectForLayerWithUninvertibleDrawTransform) {
   LayerImpl* root = root_layer();
-  LayerImpl* child = AddLayer<LayerImpl>();
-  LayerImpl* grand_child = AddLayer<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child = AddLayerInActiveTree<LayerImpl>();
 
-  gfx::Transform perspective;
-  perspective.ApplyPerspectiveDepth(SkDoubleToScalar(1e-12));
-
-  gfx::Transform rotation;
-  rotation.RotateAboutYAxis(45.0);
+  gfx::Transform scale = gfx::Transform::MakeScale(1e-15);
+  EXPECT_TRUE(scale.IsInvertible());
+  EXPECT_FALSE((scale * scale).IsInvertible());
 
   root->SetBounds(gfx::Size(100, 100));
   child->SetBounds(gfx::Size(100, 100));
@@ -2443,12 +2426,12 @@ TEST_F(DrawPropertiesTest,
   child_transform_node.flattens_inherited_transform = false;
   child_transform_node.post_translation = gfx::Vector2dF(10.f, 10.f);
   child_transform_node.sorting_context_id = 1;
-  child_transform_node.local = perspective;
+  child_transform_node.local = scale;
   CopyProperties(child, grand_child);
   auto& grand_child_transform_node = CreateTransformNode(grand_child);
   grand_child_transform_node.flattens_inherited_transform = false;
   grand_child_transform_node.sorting_context_id = 1;
-  grand_child_transform_node.local = rotation;
+  grand_child_transform_node.local = scale;
 
   UpdateActiveTreeDrawProperties();
 
@@ -2461,8 +2444,38 @@ TEST_F(DrawPropertiesTest,
   EXPECT_EQ(gfx::Rect(), grand_child->visible_layer_rect());
 }
 
+TEST_F(DrawPropertiesTest, ClipExpanderWithUninvertibleTransform) {
+  LayerImpl* root = root_layer();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
+
+  root->SetBounds(gfx::Size(100, 100));
+  child->SetBounds(gfx::Size(50, 50));
+  child->SetDrawsContent(true);
+
+  auto uninvertible_matrix = gfx::Transform::MakeScale(0.0);
+  ASSERT_FALSE(uninvertible_matrix.IsInvertible());
+
+  CopyProperties(root, child);
+  CreateTransformNode(child).local = uninvertible_matrix;
+  FilterOperations filters;
+  auto& filter_node = CreateEffectNode(child);
+  filter_node.render_surface_reason = RenderSurfaceReason::kFilter;
+  filter_node.filters.Append(FilterOperation::CreateBlurFilter(10));
+  auto& clip_node = CreateClipNode(child);
+  clip_node.pixel_moving_filter_id = filter_node.id;
+
+  UpdateActiveTreeDrawProperties();
+
+  EXPECT_TRUE(child->visible_layer_rect().IsEmpty());
+  EXPECT_TRUE(child->visible_drawable_content_rect().IsEmpty());
+}
+
 // Needs layer tree mode: mask layer.
 TEST_F(DrawPropertiesTestWithLayerTree, OcclusionBySiblingOfTarget) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndDisableFeature(
+      features::kAllowUndamagedNonrootRenderPassToSkip);
+
   auto root = Layer::Create();
   auto child = Layer::Create();
   FakeContentLayerClient client;
@@ -2522,17 +2535,81 @@ TEST_F(DrawPropertiesTestWithLayerTree, OcclusionBySiblingOfTarget) {
   EXPECT_TRUE(expected_occlusion.IsEqual(actual_occlusion));
 }
 
+// Occlusion immune with kAllowUndamagedNonrootRenderPassToSkip enabled.
+TEST_F(DrawPropertiesTestWithLayerTree, OcclusionImmuneForSiblingOfTarget) {
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(
+      features::kAllowUndamagedNonrootRenderPassToSkip);
+
+  auto root = Layer::Create();
+  auto child = Layer::Create();
+  FakeContentLayerClient client;
+  auto surface = PictureLayer::Create(&client);
+  auto surface_child = PictureLayer::Create(&client);
+  auto surface_sibling = PictureLayer::Create(&client);
+  auto surface_child_mask = PictureLayer::Create(&client);
+
+  surface->SetIsDrawable(true);
+  surface_child->SetIsDrawable(true);
+  surface_sibling->SetIsDrawable(true);
+  surface_child_mask->SetIsDrawable(true);
+  surface->SetContentsOpaque(true);
+  surface_child->SetContentsOpaque(true);
+  surface_sibling->SetContentsOpaque(true);
+  surface_child_mask->SetContentsOpaque(true);
+
+  gfx::Transform translate;
+  translate.Translate(20.f, 20.f);
+
+  root->SetBounds(gfx::Size(1000, 1000));
+  child->SetBounds(gfx::Size(300, 300));
+  surface->SetTransform(translate);
+  surface->SetBounds(gfx::Size(300, 300));
+  surface->SetForceRenderSurfaceForTesting(true);
+  surface_child->SetBounds(gfx::Size(300, 300));
+  surface_child->SetForceRenderSurfaceForTesting(true);
+  surface_sibling->SetBounds(gfx::Size(200, 200));
+  surface_child_mask->SetBounds(gfx::Size(300, 300));
+
+  surface_child->SetMaskLayer(surface_child_mask);
+  surface->AddChild(surface_child);
+  child->AddChild(surface);
+  child->AddChild(surface_sibling);
+  root->AddChild(child);
+  host()->SetRootLayer(root);
+
+  CommitAndActivate();
+
+  EXPECT_TRANSFORM_EQ(GetRenderSurfaceImpl(surface)->draw_transform(),
+                      translate);
+  // surface_sibling draws into the root render surface
+  Occlusion actual_occlusion =
+      GetRenderSurfaceImpl(surface_child)->occlusion_in_content_space();
+  Occlusion expected_occlusion(translate, SimpleEnclosedRegion(),
+                               SimpleEnclosedRegion(gfx::Rect(200, 200)));
+  // With occlusion immune, it will not occlude surface_child's contents.
+  EXPECT_FALSE(expected_occlusion.IsEqual(actual_occlusion));
+
+  // Mask layer's occlusion is different because we create transform and render
+  // surface for it in layer tree mode.
+  actual_occlusion =
+      ImplOf(surface_child_mask)->draw_properties().occlusion_in_content_space;
+  expected_occlusion = Occlusion(
+      gfx::Transform(), SimpleEnclosedRegion(gfx::Rect(-20, -20, 200, 200)),
+      SimpleEnclosedRegion());
+  // With occlusion immune, it will not occlude surface_child's contents.
+  EXPECT_FALSE(expected_occlusion.IsEqual(actual_occlusion));
+}
+
 TEST_F(DrawPropertiesTest, OcclusionForLayerWithUninvertibleDrawTransform) {
   LayerImpl* root = root_layer();
-  LayerImpl* child = AddLayer<LayerImpl>();
-  LayerImpl* grand_child = AddLayer<LayerImpl>();
-  LayerImpl* occluding_child = AddLayer<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* occluding_child = AddLayerInActiveTree<LayerImpl>();
 
-  gfx::Transform perspective;
-  perspective.ApplyPerspectiveDepth(SkDoubleToScalar(1e-12));
-
-  gfx::Transform rotation;
-  rotation.RotateAboutYAxis(45.0);
+  gfx::Transform scale = gfx::Transform::MakeScale(1e-15);
+  EXPECT_TRUE(scale.IsInvertible());
+  EXPECT_FALSE((scale * scale).IsInvertible());
 
   root->SetBounds(gfx::Size(1000, 1000));
   child->SetBounds(gfx::Size(300, 300));
@@ -2549,12 +2626,12 @@ TEST_F(DrawPropertiesTest, OcclusionForLayerWithUninvertibleDrawTransform) {
   child_transform_node.flattens_inherited_transform = false;
   child_transform_node.post_translation = gfx::Vector2dF(10.f, 10.f);
   child_transform_node.sorting_context_id = 1;
-  child_transform_node.local = perspective;
+  child_transform_node.local = scale;
   CopyProperties(child, grand_child);
   auto& grand_child_transform_node = CreateTransformNode(grand_child);
   grand_child_transform_node.flattens_inherited_transform = false;
   grand_child_transform_node.sorting_context_id = 1;
-  grand_child_transform_node.local = rotation;
+  grand_child_transform_node.local = scale;
   CopyProperties(root, occluding_child);
   CreateTransformNode(occluding_child).flattens_inherited_transform = false;
 
@@ -2577,10 +2654,10 @@ TEST_F(DrawPropertiesTest, OcclusionForLayerWithUninvertibleDrawTransform) {
 TEST_F(DrawPropertiesTest,
        DrawableAndVisibleContentRectsForLayersInClippedRenderSurface) {
   LayerImpl* root = root_layer();
-  LayerImpl* render_surface = AddLayer<LayerImpl>();
-  LayerImpl* child1 = AddLayer<LayerImpl>();
-  LayerImpl* child2 = AddLayer<LayerImpl>();
-  LayerImpl* child3 = AddLayer<LayerImpl>();
+  LayerImpl* render_surface = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child2 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child3 = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(100, 100));
   render_surface->SetBounds(gfx::Size(3, 4));
@@ -2634,11 +2711,11 @@ TEST_F(DrawPropertiesTest,
 // Check that clipping does not propagate down surfaces.
 TEST_F(DrawPropertiesTest, DrawableAndVisibleContentRectsForSurfaceHierarchy) {
   LayerImpl* root = root_layer();
-  LayerImpl* render_surface1 = AddLayer<LayerImpl>();
-  LayerImpl* render_surface2 = AddLayer<LayerImpl>();
-  LayerImpl* child1 = AddLayer<LayerImpl>();
-  LayerImpl* child2 = AddLayer<LayerImpl>();
-  LayerImpl* child3 = AddLayer<LayerImpl>();
+  LayerImpl* render_surface1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* render_surface2 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child2 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child3 = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(100, 100));
   render_surface1->SetBounds(gfx::Size(3, 4));
@@ -2704,10 +2781,10 @@ TEST_F(DrawPropertiesTest, DrawableAndVisibleContentRectsForSurfaceHierarchy) {
 TEST_F(DrawPropertiesTest,
        VisibleRectsForClippedDescendantsOfUnclippedSurfaces) {
   LayerImpl* root = root_layer();
-  LayerImpl* render_surface1 = AddLayer<LayerImpl>();
-  LayerImpl* child1 = AddLayer<LayerImpl>();
-  LayerImpl* child2 = AddLayer<LayerImpl>();
-  LayerImpl* render_surface2 = AddLayer<LayerImpl>();
+  LayerImpl* render_surface1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child2 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* render_surface2 = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(100, 100));
   render_surface1->SetBounds(gfx::Size(100, 100));
@@ -2737,10 +2814,10 @@ TEST_F(DrawPropertiesTest,
 TEST_F(DrawPropertiesTest,
        VisibleRectsWhenClipChildIsBetweenTwoRenderSurfaces) {
   LayerImpl* root = root_layer();
-  LayerImpl* clip_parent = AddLayer<LayerImpl>();
-  LayerImpl* render_surface1 = AddLayer<LayerImpl>();
-  LayerImpl* clip_child = AddLayer<LayerImpl>();
-  LayerImpl* render_surface2 = AddLayer<LayerImpl>();
+  LayerImpl* clip_parent = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* render_surface1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* render_surface2 = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(100, 100));
 
@@ -2774,11 +2851,11 @@ TEST_F(DrawPropertiesTest,
 
 TEST_F(DrawPropertiesTest, ClipRectOfSurfaceWhoseParentIsAClipChild) {
   LayerImpl* root = root_layer();
-  LayerImpl* clip_parent = AddLayer<LayerImpl>();
-  LayerImpl* clip_layer = AddLayer<LayerImpl>();
-  LayerImpl* render_surface1 = AddLayer<LayerImpl>();
-  LayerImpl* clip_child = AddLayer<LayerImpl>();
-  LayerImpl* render_surface2 = AddLayer<LayerImpl>();
+  LayerImpl* clip_parent = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_layer = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* render_surface_layer1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* render_surface_layer2 = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(100, 100));
 
@@ -2792,42 +2869,112 @@ TEST_F(DrawPropertiesTest, ClipRectOfSurfaceWhoseParentIsAClipChild) {
   CopyProperties(clip_parent, clip_layer);
   CreateClipNode(clip_layer);
 
-  render_surface1->SetBounds(gfx::Size(20, 20));
-  render_surface1->SetDrawsContent(true);
-  CopyProperties(clip_layer, render_surface1);
-  CreateTransformNode(render_surface1).post_translation = gfx::Vector2dF(2, 2);
-  CreateEffectNode(render_surface1).render_surface_reason =
+  render_surface_layer1->SetBounds(gfx::Size(20, 20));
+  render_surface_layer1->SetDrawsContent(true);
+  CopyProperties(clip_layer, render_surface_layer1);
+  CreateTransformNode(render_surface_layer1).post_translation =
+      gfx::Vector2dF(2, 2);
+  CreateEffectNode(render_surface_layer1).render_surface_reason =
       RenderSurfaceReason::kTest;
-  CreateClipNode(render_surface1);
+  CreateClipNode(render_surface_layer1);
 
   clip_child->SetBounds(gfx::Size(60, 60));
   clip_child->SetDrawsContent(true);
-  CopyProperties(render_surface1, clip_child);
+  CopyProperties(render_surface_layer1, clip_child);
   clip_child->SetClipTreeIndex(clip_parent->clip_tree_index());
 
-  render_surface2->SetBounds(gfx::Size(60, 60));
-  render_surface2->SetDrawsContent(true);
-  CopyProperties(clip_child, render_surface2);
-  CreateTransformNode(render_surface2);
-  CreateEffectNode(render_surface2).render_surface_reason =
+  render_surface_layer2->SetBounds(gfx::Size(60, 60));
+  render_surface_layer2->SetDrawsContent(true);
+  CopyProperties(clip_child, render_surface_layer2);
+  CreateTransformNode(render_surface_layer2);
+  CreateEffectNode(render_surface_layer2).render_surface_reason =
       RenderSurfaceReason::kTest;
 
   float device_scale_factor = 1.f;
   UpdateActiveTreeDrawProperties(device_scale_factor);
-  EXPECT_EQ(gfx::Rect(50, 50), GetRenderSurface(render_surface2)->clip_rect());
+  auto* render_surface1 = GetRenderSurface(render_surface_layer1);
+  EXPECT_TRUE(render_surface1->has_contributing_layer_that_escapes_clip());
+  EXPECT_EQ(clip_layer->clip_tree_index(), render_surface1->ClipTreeIndex());
+  EXPECT_EQ(clip_parent->clip_tree_index(),
+            render_surface1->common_ancestor_clip_id());
+  EXPECT_TRUE(render_surface1->is_clipped());
+  EXPECT_EQ(gfx::Rect(2, 2, 50, 50), render_surface1->clip_rect());
+
+  auto* render_surface2 = GetRenderSurface(render_surface_layer2);
+  EXPECT_FALSE(render_surface2->has_contributing_layer_that_escapes_clip());
+  EXPECT_EQ(clip_parent->clip_tree_index(), render_surface2->ClipTreeIndex());
+  EXPECT_EQ(clip_parent->clip_tree_index(),
+            render_surface2->common_ancestor_clip_id());
+  // render_surface2 has the same clip as render_surface1, so it doesn't need
+  // to clip.
+  EXPECT_FALSE(render_surface2->is_clipped());
 
   device_scale_factor = 2.f;
   UpdateActiveTreeDrawProperties(device_scale_factor);
+  EXPECT_TRUE(render_surface1->is_clipped());
+  EXPECT_EQ(gfx::Rect(4, 4, 100, 100), render_surface1->clip_rect());
+  EXPECT_FALSE(render_surface2->is_clipped());
+}
 
-  EXPECT_EQ(gfx::Rect(100, 100),
-            GetRenderSurface(render_surface2)->clip_rect());
+TEST_F(DrawPropertiesTest,
+       RenderSurfaceCommonAncestorClipOnChangeOfChildLayerClip) {
+  LayerImpl* root = root_layer();
+  LayerImpl* clip_parent = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_layer = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* render_surface_layer = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_child = AddLayerInActiveTree<LayerImpl>();
+
+  root->SetBounds(gfx::Size(100, 100));
+
+  clip_parent->SetBounds(gfx::Size(50, 50));
+  clip_parent->SetOffsetToTransformParent(gfx::Vector2dF(2, 2));
+  CopyProperties(root, clip_parent);
+  CreateClipNode(clip_parent);
+
+  clip_layer->SetBounds(gfx::Size(50, 50));
+  clip_layer->SetOffsetToTransformParent(gfx::Vector2dF(3, 3));
+  CopyProperties(clip_parent, clip_layer);
+  CreateClipNode(clip_layer);
+
+  render_surface_layer->SetBounds(gfx::Size(20, 20));
+  render_surface_layer->SetDrawsContent(true);
+  CopyProperties(clip_layer, render_surface_layer);
+  CreateTransformNode(render_surface_layer).post_translation =
+      gfx::Vector2dF(5, 5);
+  CreateEffectNode(render_surface_layer).render_surface_reason =
+      RenderSurfaceReason::kTest;
+
+  clip_child->SetBounds(gfx::Size(60, 60));
+  clip_child->SetDrawsContent(true);
+  CopyProperties(render_surface_layer, clip_child);
+  clip_child->SetClipTreeIndex(clip_parent->clip_tree_index());
+
+  UpdateActiveTreeDrawProperties();
+  auto* render_surface = GetRenderSurface(render_surface_layer);
+  EXPECT_TRUE(render_surface->has_contributing_layer_that_escapes_clip());
+  EXPECT_EQ(clip_layer->clip_tree_index(), render_surface->ClipTreeIndex());
+  EXPECT_EQ(clip_parent->clip_tree_index(),
+            render_surface->common_ancestor_clip_id());
+  EXPECT_TRUE(render_surface->is_clipped());
+  EXPECT_EQ(gfx::Rect(2, 2, 50, 50), render_surface->clip_rect());
+
+  // Now clip_child no longer escapes the clip of render surface.
+  clip_child->SetClipTreeIndex(clip_layer->clip_tree_index());
+  host_impl()->active_tree()->set_needs_update_draw_properties();
+  UpdateActiveTreeDrawProperties();
+  EXPECT_FALSE(render_surface->has_contributing_layer_that_escapes_clip());
+  EXPECT_EQ(clip_layer->clip_tree_index(), render_surface->ClipTreeIndex());
+  EXPECT_EQ(clip_layer->clip_tree_index(),
+            render_surface->common_ancestor_clip_id());
+  EXPECT_TRUE(render_surface->is_clipped());
+  EXPECT_EQ(gfx::Rect(3, 3, 49, 49), render_surface->clip_rect());
 }
 
 // Test that only drawn layers contribute to render surface content rect.
 TEST_F(DrawPropertiesTest, RenderSurfaceContentRectWhenLayerNotDrawn) {
   LayerImpl* root = root_layer();
-  LayerImpl* surface = AddLayer<LayerImpl>();
-  LayerImpl* test_layer = AddLayer<LayerImpl>();
+  LayerImpl* surface = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* test_layer = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(200, 200));
   surface->SetBounds(gfx::Size(100, 100));
@@ -2852,11 +2999,11 @@ TEST_F(DrawPropertiesTest, RenderSurfaceContentRectWhenLayerNotDrawn) {
 // clipped_surface below it.
 TEST_F(DrawPropertiesTest, VisibleRectsMultipleSurfaces) {
   LayerImpl* root = root_layer();
-  LayerImpl* unclipped_surface = AddLayer<LayerImpl>();
-  LayerImpl* clip_parent = AddLayer<LayerImpl>();
-  LayerImpl* unclipped_desc_surface = AddLayer<LayerImpl>();
-  LayerImpl* clip_child = AddLayer<LayerImpl>();
-  LayerImpl* clipped_surface = AddLayer<LayerImpl>();
+  LayerImpl* unclipped_surface = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_parent = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* unclipped_desc_surface = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clipped_surface = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(100, 100));
   unclipped_surface->SetBounds(gfx::Size(30, 30));
@@ -2893,11 +3040,11 @@ TEST_F(DrawPropertiesTest, VisibleRectsMultipleSurfaces) {
 // of root propagate to the clipped_surface.
 TEST_F(DrawPropertiesTest, RootClipPropagationToClippedSurface) {
   LayerImpl* root = root_layer();
-  LayerImpl* unclipped_surface = AddLayer<LayerImpl>();
-  LayerImpl* clip_parent = AddLayer<LayerImpl>();
-  LayerImpl* unclipped_desc_surface = AddLayer<LayerImpl>();
-  LayerImpl* clip_child = AddLayer<LayerImpl>();
-  LayerImpl* clipped_surface = AddLayer<LayerImpl>();
+  LayerImpl* unclipped_surface = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_parent = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* unclipped_desc_surface = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clipped_surface = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(10, 10));
   unclipped_surface->SetBounds(gfx::Size(50, 50));
@@ -2935,8 +3082,8 @@ TEST_F(DrawPropertiesTest, RootClipPropagationToClippedSurface) {
 TEST_F(DrawPropertiesTest,
        DrawableAndVisibleContentRectsWithTransformOnUnclippedSurface) {
   LayerImpl* root = root_layer();
-  LayerImpl* render_surface = AddLayer<LayerImpl>();
-  LayerImpl* child1 = AddLayer<LayerImpl>();
+  LayerImpl* render_surface = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child1 = AddLayerInActiveTree<LayerImpl>();
 
   gfx::Transform child_rotation;
   child_rotation.Rotate(45.0);
@@ -2986,8 +3133,8 @@ TEST_F(DrawPropertiesTest,
 TEST_F(DrawPropertiesTest,
        DrawableAndVisibleContentRectsWithTransformOnClippedSurface) {
   LayerImpl* root = root_layer();
-  LayerImpl* render_surface = AddLayer<LayerImpl>();
-  LayerImpl* child1 = AddLayer<LayerImpl>();
+  LayerImpl* render_surface = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child1 = AddLayerInActiveTree<LayerImpl>();
 
   gfx::Transform child_rotation;
   child_rotation.Rotate(45.0);
@@ -3042,11 +3189,13 @@ TEST_F(DrawPropertiesTest,
 
 TEST_F(DrawPropertiesTest, DrawableAndVisibleContentRectsInHighDPI) {
   LayerImpl* root = root_layer();
-  FakePictureLayerImpl* render_surface1 = AddLayer<FakePictureLayerImpl>();
-  FakePictureLayerImpl* render_surface2 = AddLayer<FakePictureLayerImpl>();
-  FakePictureLayerImpl* child1 = AddLayer<FakePictureLayerImpl>();
-  FakePictureLayerImpl* child2 = AddLayer<FakePictureLayerImpl>();
-  FakePictureLayerImpl* child3 = AddLayer<FakePictureLayerImpl>();
+  FakePictureLayerImpl* render_surface1 =
+      AddLayerInActiveTree<FakePictureLayerImpl>();
+  FakePictureLayerImpl* render_surface2 =
+      AddLayerInActiveTree<FakePictureLayerImpl>();
+  FakePictureLayerImpl* child1 = AddLayerInActiveTree<FakePictureLayerImpl>();
+  FakePictureLayerImpl* child2 = AddLayerInActiveTree<FakePictureLayerImpl>();
+  FakePictureLayerImpl* child3 = AddLayerInActiveTree<FakePictureLayerImpl>();
 
   root->SetBounds(gfx::Size(100, 100));
   render_surface1->SetBounds(gfx::Size(3, 4));
@@ -3123,11 +3272,11 @@ TEST_F(DrawPropertiesScalingTest, LayerTransformsInHighDPI) {
   root->SetBounds(gfx::Size(100, 100));
   root->SetDrawsContent(true);
 
-  LayerImpl* child = AddLayer<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
   child->SetBounds(gfx::Size(10, 10));
   child->SetDrawsContent(true);
 
-  LayerImpl* child2 = AddLayer<LayerImpl>();
+  LayerImpl* child2 = AddLayerInActiveTree<LayerImpl>();
   child2->SetBounds(gfx::Size(5, 5));
   child2->SetDrawsContent(true);
 
@@ -3215,15 +3364,15 @@ TEST_F(DrawPropertiesScalingTest, SurfaceLayerTransformsInHighDPI) {
   root->SetBounds(gfx::Size(100, 100));
   SetupViewport(root, gfx::Size(100, 100), gfx::Size(100, 100));
 
-  LayerImpl* parent = AddLayer<LayerImpl>();
+  LayerImpl* parent = AddLayerInActiveTree<LayerImpl>();
   parent->SetBounds(gfx::Size(100, 100));
   parent->SetDrawsContent(true);
 
-  LayerImpl* perspective_surface = AddLayer<LayerImpl>();
+  LayerImpl* perspective_surface = AddLayerInActiveTree<LayerImpl>();
   perspective_surface->SetBounds(gfx::Size(10, 10));
   perspective_surface->SetDrawsContent(true);
 
-  LayerImpl* scale_surface = AddLayer<LayerImpl>();
+  LayerImpl* scale_surface = AddLayerInActiveTree<LayerImpl>();
   scale_surface->SetBounds(gfx::Size(10, 10));
   scale_surface->SetDrawsContent(true);
 
@@ -3283,10 +3432,8 @@ TEST_F(DrawPropertiesScalingTest, SurfaceLayerTransformsInHighDPI) {
                                                     contents_scale_factor);
   expected_perspective_surface_draw_transform.Translate(
       perspective_surface_offset);
-  expected_perspective_surface_draw_transform.PreconcatTransform(
-      perspective_matrix);
-  expected_perspective_surface_draw_transform.PreconcatTransform(
-      scale_small_matrix);
+  expected_perspective_surface_draw_transform.PreConcat(perspective_matrix);
+  expected_perspective_surface_draw_transform.PreConcat(scale_small_matrix);
   expected_perspective_surface_draw_transform.Scale(
       1.0f / contents_scale_factor, 1.0f / contents_scale_factor);
   gfx::Transform expected_perspective_surface_layer_draw_transform;
@@ -3310,14 +3457,14 @@ TEST_F(DrawPropertiesScalingTest, SmallIdealScale) {
   LayerImpl* root = root_layer();
   root->SetBounds(gfx::Size(100, 100));
 
-  LayerImpl* page_scale = AddLayer<LayerImpl>();
+  LayerImpl* page_scale = AddLayerInActiveTree<LayerImpl>();
   page_scale->SetBounds(gfx::Size(100, 100));
 
-  LayerImpl* parent = AddLayer<LayerImpl>();
+  LayerImpl* parent = AddLayerInActiveTree<LayerImpl>();
   parent->SetBounds(gfx::Size(100, 100));
   parent->SetDrawsContent(true);
 
-  LayerImpl* child_scale = AddLayer<LayerImpl>();
+  LayerImpl* child_scale = AddLayerInActiveTree<LayerImpl>();
   child_scale->SetBounds(gfx::Size(10, 10));
   child_scale->SetDrawsContent(true);
 
@@ -3343,14 +3490,16 @@ TEST_F(DrawPropertiesScalingTest, SmallIdealScale) {
   float expected_ideal_scale =
       device_scale_factor * page_scale_factor * initial_parent_scale;
   EXPECT_LT(expected_ideal_scale, 1.f);
-  EXPECT_EQ(gfx::Vector2dF(expected_ideal_scale, expected_ideal_scale),
-            parent->GetIdealContentsScale());
+  EXPECT_VECTOR2DF_EQ(
+      gfx::Vector2dF(expected_ideal_scale, expected_ideal_scale),
+      parent->GetIdealContentsScale());
 
   expected_ideal_scale = device_scale_factor * page_scale_factor *
                          initial_parent_scale * initial_child_scale;
   EXPECT_LT(expected_ideal_scale, 1.f);
-  EXPECT_EQ(gfx::Vector2dF(expected_ideal_scale, expected_ideal_scale),
-            child_scale->GetIdealContentsScale());
+  EXPECT_VECTOR2DF_EQ(
+      gfx::Vector2dF(expected_ideal_scale, expected_ideal_scale),
+      child_scale->GetIdealContentsScale());
 }
 
 TEST_F(DrawPropertiesScalingTest, IdealScaleForAnimatingLayer) {
@@ -3365,11 +3514,11 @@ TEST_F(DrawPropertiesScalingTest, IdealScaleForAnimatingLayer) {
   LayerImpl* root = root_layer();
   root->SetBounds(gfx::Size(100, 100));
 
-  LayerImpl* parent = AddLayer<LayerImpl>();
+  LayerImpl* parent = AddLayerInActiveTree<LayerImpl>();
   parent->SetBounds(gfx::Size(100, 100));
   parent->SetDrawsContent(true);
 
-  LayerImpl* child_scale = AddLayer<LayerImpl>();
+  LayerImpl* child_scale = AddLayerInActiveTree<LayerImpl>();
   child_scale->SetBounds(gfx::Size(10, 10));
   child_scale->SetDrawsContent(true);
 
@@ -3394,13 +3543,13 @@ TEST_F(DrawPropertiesTest, RenderSurfaceTransformsInHighDPI) {
   parent->SetBounds(gfx::Size(30, 30));
   parent->SetDrawsContent(true);
 
-  LayerImpl* child = AddLayer<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
   child->SetBounds(gfx::Size(10, 10));
   child->SetDrawsContent(true);
 
   // This layer should end up in the same surface as child, with the same draw
   // and screen space transforms.
-  LayerImpl* duplicate_child_non_owner = AddLayer<LayerImpl>();
+  LayerImpl* duplicate_child_non_owner = AddLayerInActiveTree<LayerImpl>();
   duplicate_child_non_owner->SetBounds(gfx::Size(10, 10));
   duplicate_child_non_owner->SetDrawsContent(true);
 
@@ -3473,7 +3622,7 @@ TEST_F(DrawPropertiesTest,
   parent->SetBounds(gfx::Size(33, 31));
   parent->SetDrawsContent(true);
 
-  LayerImpl* child = AddLayer<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
   child->SetBounds(gfx::Size(13, 11));
   child->SetDrawsContent(true);
 
@@ -3520,8 +3669,8 @@ TEST_F(DrawPropertiesTestWithLayerTree, LayerSearch) {
 
 TEST_F(DrawPropertiesTest, TransparentChildRenderSurfaceCreation) {
   LayerImpl* root = root_layer();
-  LayerImpl* child = AddLayer<LayerImpl>();
-  LayerImpl* grand_child = AddLayer<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(100, 100));
   child->SetBounds(gfx::Size(10, 10));
@@ -3603,8 +3752,7 @@ class BackfaceVisibilityInteropTest : public DrawPropertiesTestBase,
 
  protected:
   LayerTreeSettings BackfaceVisibilityInteropSettings() {
-    LayerListSettings settings;
-
+    LayerTreeSettings settings = CommitToPendingTreeLayerListSettings();
     settings.enable_backface_visibility_interop = true;
     return settings;
   }
@@ -3613,9 +3761,9 @@ class BackfaceVisibilityInteropTest : public DrawPropertiesTestBase,
 TEST_F(BackfaceVisibilityInteropTest, BackfaceInvisibleTransform) {
   LayerImpl* root = root_layer();
   root->SetDrawsContent(true);
-  LayerImpl* back_facing = AddLayer<LayerImpl>();
-  LayerImpl* back_facing_double_sided = AddLayer<LayerImpl>();
-  LayerImpl* front_facing = AddLayer<LayerImpl>();
+  LayerImpl* back_facing = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* back_facing_double_sided = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* front_facing = AddLayerInActiveTree<LayerImpl>();
   back_facing->SetDrawsContent(true);
   back_facing_double_sided->SetDrawsContent(true);
   front_facing->SetDrawsContent(true);
@@ -3643,15 +3791,12 @@ TEST_F(BackfaceVisibilityInteropTest, BackfaceInvisibleTransform) {
 
   UpdateActiveTreeDrawProperties();
 
-  EXPECT_TRUE(draw_property_utils::IsLayerBackFaceVisible(
-      back_facing, back_facing->transform_tree_index(),
-      host_impl()->active_tree()->property_trees()));
-  EXPECT_TRUE(draw_property_utils::IsLayerBackFaceVisible(
-      back_facing, back_facing_double_sided->transform_tree_index(),
-      host_impl()->active_tree()->property_trees()));
-  EXPECT_FALSE(draw_property_utils::IsLayerBackFaceVisible(
-      front_facing, front_facing->transform_tree_index(),
-      host_impl()->active_tree()->property_trees()));
+  EXPECT_TRUE(draw_property_utils::IsLayerBackFaceVisibleForTesting(
+      back_facing, host_impl()->active_tree()->property_trees()));
+  EXPECT_TRUE(draw_property_utils::IsLayerBackFaceVisibleForTesting(
+      back_facing_double_sided, host_impl()->active_tree()->property_trees()));
+  EXPECT_FALSE(draw_property_utils::IsLayerBackFaceVisibleForTesting(
+      front_facing, host_impl()->active_tree()->property_trees()));
 
   EXPECT_TRUE(back_facing->raster_even_if_not_drawn());
   EXPECT_TRUE(
@@ -3784,6 +3929,7 @@ TEST_F(DrawPropertiesTestWithLayerTree, SubtreeHiddenWithCopyRequest) {
   copy_layer->RequestCopyOfOutput(
       viz::CopyOutputRequest::CreateStubForTesting());
 
+  host()->SetElementIdsForTesting();
   CommitAndActivate();
 
   EXPECT_TRUE(GetEffectNode(ImplOf(root))->subtree_has_copy_request);
@@ -3796,14 +3942,11 @@ TEST_F(DrawPropertiesTestWithLayerTree, SubtreeHiddenWithCopyRequest) {
   // parent since it has opacity and two drawing descendants, one for the parent
   // since it owns a surface, and one for the copy_layer.
   ASSERT_EQ(4u, GetRenderSurfaceList().size());
-  EXPECT_EQ(static_cast<uint64_t>(root->id()),
-            GetRenderSurfaceList().at(0)->id());
-  EXPECT_EQ(static_cast<uint64_t>(copy_grand_parent->id()),
+  EXPECT_EQ(root->element_id(), GetRenderSurfaceList().at(0)->id());
+  EXPECT_EQ(copy_grand_parent->element_id(),
             GetRenderSurfaceList().at(1)->id());
-  EXPECT_EQ(static_cast<uint64_t>(copy_parent->id()),
-            GetRenderSurfaceList().at(2)->id());
-  EXPECT_EQ(static_cast<uint64_t>(copy_layer->id()),
-            GetRenderSurfaceList().at(3)->id());
+  EXPECT_EQ(copy_parent->element_id(), GetRenderSurfaceList().at(2)->id());
+  EXPECT_EQ(copy_layer->element_id(), GetRenderSurfaceList().at(3)->id());
 
   // The root render surface should have 2 contributing layers.
   EXPECT_EQ(2, GetRenderSurfaceImpl(root)->num_contributors());
@@ -3869,13 +4012,13 @@ TEST_F(DrawPropertiesTestWithLayerTree, ClippedOutCopyRequest) {
   root->AddChild(copy_parent);
 
   host()->SetRootLayer(root);
+  host()->SetElementIdsForTesting();
 
   CommitAndActivate();
 
   // We should have two render surface, as the others are clipped out.
   ASSERT_EQ(2u, GetRenderSurfaceList().size());
-  EXPECT_EQ(static_cast<uint64_t>(root->id()),
-            GetRenderSurfaceList().at(0)->id());
+  EXPECT_EQ(root->element_id(), GetRenderSurfaceList().at(0)->id());
 
   // The root render surface should have only 2 contributing layer, since the
   // other layers are clipped away.
@@ -4031,13 +4174,13 @@ TEST_F(DrawPropertiesTest, TransformedClipParent) {
   LayerImpl* root = root_layer();
   root->SetBounds(gfx::Size(50, 50));
 
-  LayerImpl* render_surface = AddLayer<LayerImpl>();
+  LayerImpl* render_surface = AddLayerInActiveTree<LayerImpl>();
   render_surface->SetBounds(gfx::Size(10, 10));
   CopyProperties(root, render_surface);
   CreateEffectNode(render_surface).render_surface_reason =
       RenderSurfaceReason::kTest;
 
-  LayerImpl* clip_parent = AddLayer<LayerImpl>();
+  LayerImpl* clip_parent = AddLayerInActiveTree<LayerImpl>();
   clip_parent->SetDrawsContent(true);
   clip_parent->SetBounds(gfx::Size(10, 10));
   CopyProperties(render_surface, clip_parent);
@@ -4046,14 +4189,14 @@ TEST_F(DrawPropertiesTest, TransformedClipParent) {
   clip_parent_transform.post_translation = gfx::Vector2dF(1, 1);
   CreateClipNode(clip_parent);
 
-  LayerImpl* intervening = AddLayer<LayerImpl>();
+  LayerImpl* intervening = AddLayerInActiveTree<LayerImpl>();
   intervening->SetDrawsContent(true);
   intervening->SetBounds(gfx::Size(5, 5));
   intervening->SetOffsetToTransformParent(gfx::Vector2dF(1, 1));
   CopyProperties(clip_parent, intervening);
   CreateClipNode(intervening);
 
-  LayerImpl* clip_child = AddLayer<LayerImpl>();
+  LayerImpl* clip_child = AddLayerInActiveTree<LayerImpl>();
   clip_child->SetDrawsContent(true);
   clip_child->SetBounds(gfx::Size(10, 10));
   clip_child->SetOffsetToTransformParent(gfx::Vector2dF(2, 2));
@@ -4098,11 +4241,11 @@ TEST_F(DrawPropertiesTest, ClipParentWithInterveningRenderSurface) {
   //            + clip_child (clipped by clip_parent)
   //
   LayerImpl* root = root_layer();
-  LayerImpl* clip_parent = AddLayer<LayerImpl>();
-  LayerImpl* render_surface1 = AddLayer<LayerImpl>();
-  LayerImpl* intervening = AddLayer<LayerImpl>();
-  LayerImpl* render_surface2 = AddLayer<LayerImpl>();
-  LayerImpl* clip_child = AddLayer<LayerImpl>();
+  LayerImpl* clip_parent = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* render_surface1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* intervening = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* render_surface2 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_child = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(50, 50));
 
@@ -4192,11 +4335,11 @@ TEST_F(DrawPropertiesTest, ClipParentScrolledInterveningLayer) {
   //            + clip_child (clipped by clip_parent)
   //
   LayerImpl* root = root_layer();
-  LayerImpl* clip_parent = AddLayer<LayerImpl>();
-  LayerImpl* render_surface1 = AddLayer<LayerImpl>();
-  LayerImpl* intervening = AddLayer<LayerImpl>();
-  LayerImpl* render_surface2 = AddLayer<LayerImpl>();
-  LayerImpl* clip_child = AddLayer<LayerImpl>();
+  LayerImpl* clip_parent = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* render_surface1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* intervening = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* render_surface2 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_child = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(50, 50));
 
@@ -4286,10 +4429,10 @@ TEST_F(DrawPropertiesTest, DescendantsOfClipChildren) {
   //          + child
   //
   LayerImpl* root = root_layer();
-  LayerImpl* clip_parent = AddLayer<LayerImpl>();
-  LayerImpl* intervening = AddLayer<LayerImpl>();
-  LayerImpl* clip_child = AddLayer<LayerImpl>();
-  LayerImpl* child = AddLayer<LayerImpl>();
+  LayerImpl* clip_parent = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* intervening = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(50, 50));
 
@@ -4337,20 +4480,20 @@ TEST_F(DrawPropertiesTest,
   //
   // In this example render_surface2 should be unaffected by clip_child.
   LayerImpl* root = root_layer();
-  LayerImpl* clip_parent = AddLayer<LayerImpl>();
-  LayerImpl* clip_layer = AddLayer<LayerImpl>();
-  LayerImpl* render_surface1 = AddLayer<LayerImpl>();
-  LayerImpl* clip_child = AddLayer<LayerImpl>();
-  LayerImpl* render_surface2 = AddLayer<LayerImpl>();
-  LayerImpl* non_clip_child = AddLayer<LayerImpl>();
+  LayerImpl* clip_parent = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_layer = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* render_surface_layer1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* render_surface_layer2 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* non_clip_child = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(15, 15));
   clip_parent->SetBounds(gfx::Size(10, 10));
   clip_layer->SetBounds(gfx::Size(10, 10));
-  render_surface1->SetDrawsContent(true);
-  render_surface1->SetBounds(gfx::Size(5, 5));
-  render_surface2->SetDrawsContent(true);
-  render_surface2->SetBounds(gfx::Size(5, 5));
+  render_surface_layer1->SetDrawsContent(true);
+  render_surface_layer1->SetBounds(gfx::Size(5, 5));
+  render_surface_layer2->SetDrawsContent(true);
+  render_surface_layer2->SetBounds(gfx::Size(5, 5));
   clip_child->SetDrawsContent(true);
   clip_child->SetOffsetToTransformParent(gfx::Vector2dF(-1, 1));
   clip_child->SetBounds(gfx::Size(10, 10));
@@ -4361,57 +4504,65 @@ TEST_F(DrawPropertiesTest,
   CreateClipNode(clip_parent);
   CopyProperties(clip_parent, clip_layer);
   CreateClipNode(clip_layer);
-  CopyProperties(clip_layer, render_surface1);
-  CreateTransformNode(render_surface1).post_translation = gfx::Vector2dF(5, 5);
-  CreateEffectNode(render_surface1).render_surface_reason =
+  CopyProperties(clip_layer, render_surface_layer1);
+  CreateTransformNode(render_surface_layer1).post_translation =
+      gfx::Vector2dF(5, 5);
+  CreateEffectNode(render_surface_layer1).render_surface_reason =
       RenderSurfaceReason::kTest;
-  CopyProperties(clip_layer, render_surface2);
-  CreateTransformNode(render_surface2).post_translation = gfx::Vector2dF(5, 5);
-  CreateEffectNode(render_surface2).render_surface_reason =
+  CopyProperties(clip_layer, render_surface_layer2);
+  CreateTransformNode(render_surface_layer2).post_translation =
+      gfx::Vector2dF(5, 5);
+  CreateEffectNode(render_surface_layer2).render_surface_reason =
       RenderSurfaceReason::kTest;
-  CopyProperties(render_surface1, clip_child);
+  CopyProperties(render_surface_layer1, clip_child);
   clip_child->SetClipTreeIndex(clip_parent->clip_tree_index());
-  CopyProperties(render_surface2, non_clip_child);
+  CopyProperties(render_surface_layer2, non_clip_child);
 
   UpdateActiveTreeDrawProperties();
 
   EXPECT_TRUE(GetRenderSurface(root));
-  EXPECT_TRUE(GetRenderSurface(render_surface1));
-  EXPECT_TRUE(GetRenderSurface(render_surface2));
+  auto* render_surface1 = GetRenderSurface(render_surface_layer1);
+  ASSERT_TRUE(render_surface1);
+  auto* render_surface2 = GetRenderSurface(render_surface_layer2);
+  ASSERT_TRUE(render_surface2);
 
-  EXPECT_EQ(gfx::Rect(-5, -5, 10, 10), render_surface1->clip_rect());
+  EXPECT_EQ(gfx::Rect(-5, -5, 10, 10), render_surface_layer1->clip_rect());
+  EXPECT_TRUE(render_surface_layer1->is_clipped());
+
+  // The render should clip to clip_layer (it has unclipped descendants),
+  // instead it should rely on layer clipping.
+  EXPECT_TRUE(render_surface1->has_contributing_layer_that_escapes_clip());
+  EXPECT_EQ(clip_layer->clip_tree_index(), render_surface1->ClipTreeIndex());
+  EXPECT_EQ(clip_parent->clip_tree_index(),
+            render_surface1->common_ancestor_clip_id());
   EXPECT_TRUE(render_surface1->is_clipped());
+  EXPECT_EQ(gfx::Rect(0, 0, 10, 10), render_surface1->clip_rect());
 
-  // The render surface should not clip (it has unclipped descendants), instead
-  // it should rely on layer clipping.
-  EXPECT_EQ(gfx::Rect(0, 0, 0, 0),
-            GetRenderSurface(render_surface1)->clip_rect());
-  EXPECT_FALSE(GetRenderSurface(render_surface1)->is_clipped());
-
-  // That said, it should have grown to accomodate the unclipped descendant and
-  // its own size.
-  EXPECT_EQ(gfx::Rect(-1, 0, 6, 5),
-            GetRenderSurface(render_surface1)->content_rect());
+  // That said, it should have grown to accommodate the unclipped descendant
+  // and its own size.
+  EXPECT_EQ(gfx::Rect(-1, 0, 6, 5), render_surface1->content_rect());
 
   // This render surface should clip. It has no unclipped descendants.
-  EXPECT_EQ(gfx::Rect(0, 0, 10, 10),
-            GetRenderSurface(render_surface2)->clip_rect());
-  EXPECT_TRUE(GetRenderSurface(render_surface2)->is_clipped());
-  EXPECT_FALSE(render_surface2->is_clipped());
+  EXPECT_FALSE(render_surface2->has_contributing_layer_that_escapes_clip());
+  EXPECT_EQ(clip_layer->clip_tree_index(), render_surface2->ClipTreeIndex());
+  EXPECT_EQ(clip_layer->clip_tree_index(),
+            render_surface2->common_ancestor_clip_id());
+  EXPECT_TRUE(render_surface2->is_clipped());
+  EXPECT_EQ(gfx::Rect(0, 0, 10, 10), render_surface2->clip_rect());
+  EXPECT_FALSE(render_surface_layer2->is_clipped());
 
-  // It also shouldn't have grown to accomodate the clip child.
-  EXPECT_EQ(gfx::Rect(0, 0, 5, 5),
-            GetRenderSurface(render_surface2)->content_rect());
+  // It also shouldn't have grown to accommodate the clip child.
+  EXPECT_EQ(gfx::Rect(0, 0, 5, 5), render_surface2->content_rect());
 }
 
 TEST_F(DrawPropertiesTest, TransformAnimationUpdatesBackfaceVisibility) {
   LayerImpl* root = root_layer();
   root->SetDrawsContent(true);
-  LayerImpl* back_facing = AddLayer<LayerImpl>();
+  LayerImpl* back_facing = AddLayerInActiveTree<LayerImpl>();
   back_facing->SetDrawsContent(true);
-  LayerImpl* render_surface1 = AddLayer<LayerImpl>();
+  LayerImpl* render_surface1 = AddLayerInActiveTree<LayerImpl>();
   render_surface1->SetDrawsContent(true);
-  LayerImpl* render_surface2 = AddLayer<LayerImpl>();
+  LayerImpl* render_surface2 = AddLayerInActiveTree<LayerImpl>();
   render_surface2->SetDrawsContent(true);
   gfx::Transform rotate_about_y;
   rotate_about_y.RotateAboutYAxis(180.0);
@@ -4483,10 +4634,10 @@ TEST_F(DrawPropertiesTest, ScrollChildAndScrollParentDifferentTargets) {
   // Tests the computation of draw transform for the scroll child when its
   // render surface is different from its scroll parent's render surface.
   LayerImpl* root = root_layer();
-  LayerImpl* scroll_child_target = AddLayer<LayerImpl>();
-  LayerImpl* scroll_child = AddLayer<LayerImpl>();
-  LayerImpl* scroll_parent_target = AddLayer<LayerImpl>();
-  LayerImpl* scroll_parent = AddLayer<LayerImpl>();
+  LayerImpl* scroll_child_target = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* scroll_child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* scroll_parent_target = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* scroll_parent = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(50, 50));
   scroll_child_target->SetBounds(gfx::Size(50, 50));
@@ -4526,8 +4677,8 @@ TEST_F(DrawPropertiesTest, ScrollChildAndScrollParentDifferentTargets) {
 
 TEST_F(DrawPropertiesTest, SingularTransformSubtreesDoNotDraw) {
   LayerImpl* root = root_layer();
-  LayerImpl* parent = AddLayer<LayerImpl>();
-  LayerImpl* child = AddLayer<LayerImpl>();
+  LayerImpl* parent = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(50, 50));
   root->SetDrawsContent(true);
@@ -4575,8 +4726,8 @@ TEST_F(DrawPropertiesTest, ScrollSnapping) {
   //     + scroller
   //
   LayerImpl* root = root_layer();
-  LayerImpl* container = AddLayer<LayerImpl>();
-  LayerImpl* scroller = AddLayer<LayerImpl>();
+  LayerImpl* container = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* scroller = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(50, 50));
 
@@ -4629,10 +4780,10 @@ TEST_F(DrawPropertiesTest, ScrollSnappingWithAnimatedScreenSpaceTransform) {
   //         + scroller
   //
   LayerImpl* root = root_layer();
-  LayerImpl* animated_layer = AddLayer<FakePictureLayerImpl>();
-  LayerImpl* surface = AddLayer<LayerImpl>();
-  LayerImpl* container = AddLayer<LayerImpl>();
-  LayerImpl* scroller = AddLayer<LayerImpl>();
+  LayerImpl* animated_layer = AddLayerInActiveTree<FakePictureLayerImpl>();
+  LayerImpl* surface = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* container = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* scroller = AddLayerInActiveTree<LayerImpl>();
   SetElementIdsForTesting();
 
   root->SetBounds(gfx::Size(50, 50));
@@ -4689,9 +4840,9 @@ TEST_F(DrawPropertiesTest, ScrollSnappingWithScrollChild) {
   //   + scroll_child (transform parent is scroller)
   //
   LayerImpl* root = root_layer();
-  LayerImpl* container = AddLayer<LayerImpl>();
-  LayerImpl* scroller = AddLayer<LayerImpl>();
-  LayerImpl* scroll_child = AddLayer<LayerImpl>();
+  LayerImpl* container = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* scroller = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* scroll_child = AddLayerInActiveTree<LayerImpl>();
   SetElementIdsForTesting();
 
   root->SetBounds(gfx::Size(50, 50));
@@ -4775,7 +4926,7 @@ class DrawPropertiesStickyPositionTest : public DrawPropertiesTest {
   void CommitAndUpdateImplPointers() {
     UpdateMainDrawProperties();
     host_impl()->CreatePendingTree();
-    host()->CommitAndCreatePendingTree();
+    host()->CommitToPendingTree();
     host_impl()->ActivateSyncTree();
     LayerTreeImpl* layer_tree_impl = host_impl()->active_tree();
     root_impl_ = layer_tree_impl->LayerById(root_->id());
@@ -5462,6 +5613,165 @@ TEST_F(DrawPropertiesStickyPositionTest, StickyPositionNested) {
       inner_sticky_impl->ScreenSpaceTransform().To2dTranslation());
 }
 
+class DrawPropertiesAnchorPositionScrollTest : public DrawPropertiesTest {
+ protected:
+  void CreateRoot() {
+    root_ = Layer::Create();
+    root_->SetBounds(gfx::Size(100, 100));
+    host()->SetRootLayer(root_);
+    SetupRootProperties(root_.get());
+  }
+
+  std::pair<scoped_refptr<Layer>, scoped_refptr<Layer>> CreateScroller(
+      Layer* parent) {
+    scoped_refptr<Layer> container = Layer::Create();
+    scoped_refptr<Layer> scroller = Layer::Create();
+    scroller->SetElementId(LayerIdToElementIdForTesting(scroller->id()));
+
+    container->SetBounds(gfx::Size(100, 100));
+    CopyProperties(parent, container.get());
+    root_->AddChild(container);
+
+    scroller->SetBounds(gfx::Size(1000, 1000));
+    CopyProperties(container.get(), scroller.get());
+    CreateTransformNode(scroller.get());
+    CreateScrollNode(scroller.get(), container->bounds());
+    root_->AddChild(scroller);
+
+    return std::make_pair(std::move(container), std::move(scroller));
+  }
+
+  scoped_refptr<Layer> CreateAnchored(
+      Layer* parent,
+      std::vector<ElementId> adjustment_container_ids) {
+    scoped_refptr<Layer> anchored = Layer::Create();
+    anchored->SetElementId(LayerIdToElementIdForTesting(anchored->id()));
+    anchored->SetBounds(gfx::Size(10, 10));
+    CopyProperties(parent, anchored.get());
+    CreateTransformNode(anchored.get());
+    auto& data =
+        GetPropertyTrees(anchored.get())
+            ->transform_tree_mutable()
+            .EnsureAnchorPositionScrollData(anchored->transform_tree_index());
+    data.needs_scroll_adjustment_in_x = true;
+    data.needs_scroll_adjustment_in_y = true;
+    data.adjustment_container_ids = std::move(adjustment_container_ids);
+    root_->AddChild(anchored);
+    return anchored;
+  }
+
+  void Commit() {
+    UpdateMainDrawProperties();
+    host_impl()->CreatePendingTree();
+    host()->CommitToPendingTree();
+    host_impl()->ActivateSyncTree();
+  }
+
+  LayerImpl* GetImpl(Layer* layer) {
+    LayerTreeImpl* layer_tree_impl = host_impl()->active_tree();
+    return layer_tree_impl->LayerById(layer->id());
+  }
+
+  scoped_refptr<Layer> root_;
+};
+
+TEST_F(DrawPropertiesAnchorPositionScrollTest, Basics) {
+  // Virtual layer hierarchy:
+  // + root
+  //   + container
+  //     + scroller <-- anchor
+  //   + anchored
+  CreateRoot();
+
+  scoped_refptr<Layer> container;
+  scoped_refptr<Layer> scroller;
+  std::tie(container, scroller) = CreateScroller(root_.get());
+
+  scoped_refptr<Layer> anchored =
+      CreateAnchored(root_.get(), {scroller->element_id()});
+
+  SetPostTranslation(anchored.get(), gfx::Vector2dF(10, 20));
+  Commit();
+
+  EXPECT_VECTOR2DF_EQ(
+      gfx::Vector2dF(10, 20),
+      GetImpl(anchored.get())->ScreenSpaceTransform().To2dTranslation());
+
+  // Scroll the scroller. Anchored element should always move with it.
+
+  SetScrollOffsetDelta(GetImpl(scroller.get()), gfx::Vector2dF(5, 5));
+
+  UpdateActiveTreeDrawProperties();
+  EXPECT_VECTOR2DF_EQ(
+      gfx::Vector2dF(5, 15),
+      GetImpl(anchored.get())->ScreenSpaceTransform().To2dTranslation());
+
+  SetScrollOffsetDelta(GetImpl(scroller.get()), gfx::Vector2dF(15, 25));
+
+  UpdateActiveTreeDrawProperties();
+  EXPECT_VECTOR2DF_EQ(
+      gfx::Vector2dF(-5, -5),
+      GetImpl(anchored.get())->ScreenSpaceTransform().To2dTranslation());
+}
+
+TEST_F(DrawPropertiesAnchorPositionScrollTest, NestedScrollers) {
+  // Virtual layer hierarchy:
+  // + root
+  //   + container1
+  //     + scroller1
+  //       + container2
+  //         + scroller2
+  //           + container3
+  //             + scroller3 <-- anchor
+  //       + anchored
+  CreateRoot();
+
+  scoped_refptr<Layer> container1;
+  scoped_refptr<Layer> scroller1;
+  std::tie(container1, scroller1) = CreateScroller(root_.get());
+
+  scoped_refptr<Layer> container2;
+  scoped_refptr<Layer> scroller2;
+  std::tie(container2, scroller2) = CreateScroller(scroller1.get());
+
+  scoped_refptr<Layer> container3;
+  scoped_refptr<Layer> scroller3;
+  std::tie(container3, scroller3) = CreateScroller(scroller2.get());
+
+  scoped_refptr<Layer> anchored = CreateAnchored(
+      scroller1.get(), {scroller3->element_id(), scroller2->element_id()});
+
+  SetPostTranslation(anchored.get(), gfx::Vector2dF(10, 20));
+  Commit();
+
+  EXPECT_VECTOR2DF_EQ(
+      gfx::Vector2dF(10, 20),
+      GetImpl(anchored.get())->ScreenSpaceTransform().To2dTranslation());
+
+  // Scrolling scroller3 will apply the same translation offset to the anchored
+  // element even if it's not a descendant of scroller 3.
+  SetScrollOffsetDelta(GetImpl(scroller3.get()), gfx::Vector2dF(5, 5));
+  UpdateActiveTreeDrawProperties();
+  EXPECT_VECTOR2DF_EQ(
+      gfx::Vector2dF(5, 15),
+      GetImpl(anchored.get())->ScreenSpaceTransform().To2dTranslation());
+
+  // Same to scroller 2.
+  SetScrollOffsetDelta(GetImpl(scroller2.get()), gfx::Vector2dF(10, 15));
+  UpdateActiveTreeDrawProperties();
+  EXPECT_VECTOR2DF_EQ(
+      gfx::Vector2dF(-5, 0),
+      GetImpl(anchored.get())->ScreenSpaceTransform().To2dTranslation());
+
+  // Scrolling scroller1 natually moves the anchored element because it's
+  // already a descendant. Note that we should not apply a double translation
+  // offset to it.
+  SetScrollOffsetDelta(GetImpl(scroller1.get()), gfx::Vector2dF(15, 20));
+  UpdateActiveTreeDrawProperties();
+  EXPECT_VECTOR2DF_EQ(
+      gfx::Vector2dF(-20, -20),
+      GetImpl(anchored.get())->ScreenSpaceTransform().To2dTranslation());
+}
 class AnimationScaleFactorTrackingLayerImpl : public LayerImpl {
  public:
   static std::unique_ptr<AnimationScaleFactorTrackingLayerImpl> Create(
@@ -5483,10 +5793,12 @@ class AnimationScaleFactorTrackingLayerImpl : public LayerImpl {
 
 TEST_F(DrawPropertiesTest, MaximumAnimationScaleFactor) {
   LayerImpl* root = root_layer();
-  auto* grand_parent = AddLayer<AnimationScaleFactorTrackingLayerImpl>();
-  auto* parent = AddLayer<AnimationScaleFactorTrackingLayerImpl>();
-  auto* child = AddLayer<AnimationScaleFactorTrackingLayerImpl>();
-  auto* grand_child = AddLayer<AnimationScaleFactorTrackingLayerImpl>();
+  auto* grand_parent =
+      AddLayerInActiveTree<AnimationScaleFactorTrackingLayerImpl>();
+  auto* parent = AddLayerInActiveTree<AnimationScaleFactorTrackingLayerImpl>();
+  auto* child = AddLayerInActiveTree<AnimationScaleFactorTrackingLayerImpl>();
+  auto* grand_child =
+      AddLayerInActiveTree<AnimationScaleFactorTrackingLayerImpl>();
   SetElementIdsForTesting();
 
   root->SetBounds(gfx::Size(1, 2));
@@ -5732,12 +6044,15 @@ TEST_F(DrawPropertiesTest, MaximumAnimationScaleFactor) {
 static void GatherDrawnLayers(LayerTreeImpl* tree_impl,
                               std::set<LayerImpl*>* drawn_layers) {
   for (EffectTreeLayerListIterator it(tree_impl);
-       it.state() != EffectTreeLayerListIterator::State::END; ++it) {
-    if (it.state() == EffectTreeLayerListIterator::State::LAYER)
+       it.state() != EffectTreeLayerListIterator::State::kEnd; ++it) {
+    if (it.state() == EffectTreeLayerListIterator::State::kLayer) {
       drawn_layers->insert(it.current_layer());
+    }
 
-    if (it.state() != EffectTreeLayerListIterator::State::CONTRIBUTING_SURFACE)
+    if (it.state() !=
+        EffectTreeLayerListIterator::State::kContributingSurface) {
       continue;
+    }
   }
 }
 
@@ -6103,8 +6418,8 @@ TEST_F(DrawPropertiesTest, DrawPropertyScales) {
 
 TEST_F(DrawPropertiesTest, AnimationScales) {
   LayerImpl* root = root_layer();
-  auto* child1 = AddLayer<LayerImpl>();
-  auto* child2 = AddLayer<LayerImpl>();
+  auto* child1 = AddLayerInActiveTree<LayerImpl>();
+  auto* child2 = AddLayerInActiveTree<LayerImpl>();
   SetElementIdsForTesting();
 
   gfx::Transform scale_transform_child1, scale_transform_child2;
@@ -6156,11 +6471,11 @@ TEST_F(DrawPropertiesTest, AnimationScales) {
 TEST_F(DrawPropertiesTest, AnimationScaleFromSmallToOne) {
   LayerImpl* root = root_layer();
   root->SetBounds(gfx::Size(1, 1));
-  auto* parent = AddLayer<LayerImpl>();
+  auto* parent = AddLayerInActiveTree<LayerImpl>();
   parent->SetBounds(gfx::Size(1, 1));
-  auto* child = AddLayer<LayerImpl>();
+  auto* child = AddLayerInActiveTree<LayerImpl>();
   child->SetBounds(gfx::Size(1, 1));
-  auto* grandchild = AddLayer<LayerImpl>();
+  auto* grandchild = AddLayerInActiveTree<LayerImpl>();
   grandchild->SetBounds(gfx::Size(1, 1));
   SetElementIdsForTesting();
 
@@ -6201,8 +6516,8 @@ TEST_F(DrawPropertiesTest, AnimationScaleFromSmallToOne) {
 
 TEST_F(DrawPropertiesTest, VisibleContentRectInChildRenderSurface) {
   LayerImpl* root = root_layer();
-  LayerImpl* clip = AddLayer<LayerImpl>();
-  LayerImpl* content = AddLayer<LayerImpl>();
+  LayerImpl* clip = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* content = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(768 / 2, 3000));
   root->SetDrawsContent(true);
@@ -6379,7 +6694,7 @@ TEST_F(DrawPropertiesTest,
 
 TEST_F(DrawPropertiesTest, ChangeTransformOrigin) {
   LayerImpl* root = root_layer();
-  LayerImpl* child = AddLayer<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
 
   gfx::Transform scale_matrix;
   scale_matrix.Scale(2.f, 2.f);
@@ -6403,8 +6718,8 @@ TEST_F(DrawPropertiesTest, ChangeTransformOrigin) {
 
 TEST_F(DrawPropertiesTest, UpdateScrollChildPosition) {
   LayerImpl* root = root_layer();
-  LayerImpl* scroll_parent = AddLayer<LayerImpl>();
-  LayerImpl* scroll_child = AddLayer<LayerImpl>();
+  LayerImpl* scroll_parent = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* scroll_child = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(50, 50));
 
@@ -6496,7 +6811,7 @@ TEST_F(DrawPropertiesTestWithLayerTree, SkippingSubtreeMain) {
   // to be skipped. The visible content rect for |grandchild| should, therefore,
   // remain empty.
   gfx::Transform singular;
-  singular.matrix().setRC(0, 0, 0);
+  singular.set_rc(0, 0, 0);
 
   child->SetTransform(singular);
   UpdateMainDrawProperties();
@@ -6591,10 +6906,10 @@ TEST_F(DrawPropertiesTestWithLayerTree, SkippingLayerImpl) {
   ImplOf(grandchild)->set_visible_layer_rect(gfx::Rect());
 
   gfx::Transform singular;
-  singular.matrix().setRC(0, 0, 0);
+  singular.set_rc(0, 0, 0);
   // This line is used to make the results of skipping and not skipping layers
   // different.
-  singular.matrix().setRC(0, 1, 1);
+  singular.set_rc(0, 1, 1);
 
   gfx::Transform rotate;
   rotate.Rotate(90);
@@ -6708,8 +7023,8 @@ TEST_F(DrawPropertiesTest, LayerSkippingInSubtreeOfSingularTransform) {
 
   // Set up some layers to have a tree.
   LayerImpl* root = root_layer();
-  LayerImpl* child = AddLayer<LayerImpl>();
-  LayerImpl* grand_child = AddLayer<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* grand_child = AddLayerInActiveTree<LayerImpl>();
 
   SetElementIdsForTesting();
 
@@ -6719,8 +7034,8 @@ TEST_F(DrawPropertiesTest, LayerSkippingInSubtreeOfSingularTransform) {
 
   // A non-invertible matrix for use later.
   gfx::Transform singular;
-  singular.matrix().setRC(0, 0, 0);
-  singular.matrix().setRC(0, 1, 1);
+  singular.set_rc(0, 0, 0);
+  singular.set_rc(0, 1, 1);
 
   root->SetBounds(gfx::Size(10, 10));
   child->SetBounds(gfx::Size(10, 10));
@@ -6868,9 +7183,9 @@ TEST_F(DrawPropertiesTest, TransformOfParentClipNodeAncestorOfTarget) {
   // clip node's target, clip is 'projected' from parent space to current
   // target space and visible rects are calculated correctly.
   LayerImpl* root = root_layer();
-  LayerImpl* clip_layer = AddLayer<LayerImpl>();
-  LayerImpl* target_layer = AddLayer<LayerImpl>();
-  LayerImpl* test_layer = AddLayer<LayerImpl>();
+  LayerImpl* clip_layer = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* target_layer = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* test_layer = AddLayerInActiveTree<LayerImpl>();
 
   gfx::Transform transform;
   transform.RotateAboutYAxis(45);
@@ -6898,15 +7213,15 @@ TEST_F(DrawPropertiesTest, RenderSurfaceWithUnclippedDescendantsClipsSubtree) {
   // Ensure clip rect is calculated correctly when render surface has unclipped
   // descendants.
   LayerImpl* root = root_layer();
-  LayerImpl* clip_parent = AddLayer<LayerImpl>();
-  LayerImpl* between_clip_parent_and_child = AddLayer<LayerImpl>();
-  LayerImpl* render_surface = AddLayer<LayerImpl>();
-  LayerImpl* test_layer = AddLayer<LayerImpl>();
+  LayerImpl* clip_parent = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* between_clip_parent_and_child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* render_surface_layer = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* test_layer = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(30, 30));
   clip_parent->SetBounds(gfx::Size(30, 30));
   between_clip_parent_and_child->SetBounds(gfx::Size(30, 30));
-  render_surface->SetBounds(gfx::Size(30, 30));
+  render_surface_layer->SetBounds(gfx::Size(30, 30));
   test_layer->SetBounds(gfx::Size(30, 30));
   test_layer->SetDrawsContent(true);
 
@@ -6917,19 +7232,28 @@ TEST_F(DrawPropertiesTest, RenderSurfaceWithUnclippedDescendantsClipsSubtree) {
   CreateClipNode(between_clip_parent_and_child);
   CreateTransformNode(between_clip_parent_and_child).local.Translate(2, 2);
   CreateClipNode(between_clip_parent_and_child);
-  CopyProperties(between_clip_parent_and_child, render_surface);
-  CreateEffectNode(render_surface).render_surface_reason =
+  CopyProperties(between_clip_parent_and_child, render_surface_layer);
+  CreateEffectNode(render_surface_layer).render_surface_reason =
       RenderSurfaceReason::kTest;
-  CopyProperties(render_surface, test_layer);
+  CopyProperties(render_surface_layer, test_layer);
   test_layer->SetClipTreeIndex(clip_parent->clip_tree_index());
 
   UpdateActiveTreeDrawProperties();
 
   EXPECT_TRUE(test_layer->is_clipped());
-  EXPECT_FALSE(test_layer->render_target()->is_clipped());
   EXPECT_EQ(gfx::Rect(-2, -2, 30, 30), test_layer->clip_rect());
   EXPECT_EQ(gfx::Rect(26, 26), test_layer->visible_layer_rect());
   EXPECT_EQ(gfx::Rect(26, 26), test_layer->visible_drawable_content_rect());
+
+  auto* render_surface = test_layer->render_target();
+  EXPECT_TRUE(render_surface->has_contributing_layer_that_escapes_clip());
+  EXPECT_EQ(between_clip_parent_and_child->clip_tree_index(),
+            render_surface->ClipTreeIndex());
+  EXPECT_EQ(clip_parent->clip_tree_index(),
+            render_surface->common_ancestor_clip_id());
+  EXPECT_TRUE(render_surface->is_clipped());
+  EXPECT_EQ(gfx::Rect(2, 2, 30, 30), render_surface->clip_rect());
+  EXPECT_EQ(gfx::Rect(26, 26), render_surface->content_rect());
 }
 
 TEST_F(DrawPropertiesTest,
@@ -6938,10 +7262,10 @@ TEST_F(DrawPropertiesTest,
   // unclipped descendants is computed correctly, when the surface doesn't apply
   // a clip.
   LayerImpl* root = root_layer();
-  LayerImpl* clip_parent = AddLayer<LayerImpl>();
-  LayerImpl* render_surface = AddLayer<LayerImpl>();
-  LayerImpl* clip_child = AddLayer<LayerImpl>();
-  LayerImpl* child = AddLayer<LayerImpl>();
+  LayerImpl* clip_parent = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* render_surface = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(30, 10));
   clip_parent->SetBounds(gfx::Size(30, 30));
@@ -6966,11 +7290,11 @@ TEST_F(DrawPropertiesTest,
 TEST_F(DrawPropertiesTest,
        RenderSurfaceClipsSubtreeAndHasUnclippedDescendants) {
   LayerImpl* root = root_layer();
-  LayerImpl* clip_parent = AddLayer<LayerImpl>();
-  LayerImpl* render_surface = AddLayer<LayerImpl>();
-  LayerImpl* test_layer1 = AddLayer<LayerImpl>();
-  LayerImpl* clip_child = AddLayer<LayerImpl>();
-  LayerImpl* test_layer2 = AddLayer<LayerImpl>();
+  LayerImpl* clip_parent = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* render_surface = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* test_layer1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* test_layer2 = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(30, 30));
   clip_parent->SetBounds(gfx::Size(30, 30));
@@ -7003,9 +7327,9 @@ TEST_F(DrawPropertiesTest,
 
 TEST_F(DrawPropertiesTest, UnclippedClipParent) {
   LayerImpl* root = root_layer();
-  LayerImpl* clip_parent = AddLayer<LayerImpl>();
-  LayerImpl* render_surface = AddLayer<LayerImpl>();
-  LayerImpl* clip_child = AddLayer<LayerImpl>();
+  LayerImpl* clip_parent = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* render_surface = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_child = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(50, 50));
   clip_parent->SetBounds(gfx::Size(50, 50));
@@ -7037,13 +7361,13 @@ TEST_F(DrawPropertiesTest, RenderSurfaceContentRectWithMultipleSurfaces) {
   // of surfaces : unclipped surfaces, surfaces with unclipped surfaces and
   // clipped surfaces.
   LayerImpl* root = root_layer();
-  LayerImpl* unclipped_surface = AddLayer<LayerImpl>();
-  LayerImpl* clip_parent = AddLayer<LayerImpl>();
-  LayerImpl* clip_layer = AddLayer<LayerImpl>();
-  LayerImpl* unclipped_desc_surface = AddLayer<LayerImpl>();
-  LayerImpl* unclipped_desc_surface2 = AddLayer<LayerImpl>();
-  LayerImpl* clip_child = AddLayer<LayerImpl>();
-  LayerImpl* clipped_surface = AddLayer<LayerImpl>();
+  LayerImpl* unclipped_surface = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_parent = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_layer = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* unclipped_desc_surface = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* unclipped_desc_surface2 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clipped_surface = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(80, 80));
 
@@ -7094,11 +7418,11 @@ TEST_F(DrawPropertiesTest, ClipBetweenClipChildTargetAndClipParentTarget) {
   // Tests the value of render surface content rect when we have a layer that
   // clips between the clip parent's target and clip child's target.
   LayerImpl* root = root_layer();
-  LayerImpl* surface = AddLayer<LayerImpl>();
-  LayerImpl* clip_layer = AddLayer<LayerImpl>();
-  LayerImpl* clip_parent = AddLayer<LayerImpl>();
-  LayerImpl* unclipped_desc_surface = AddLayer<LayerImpl>();
-  LayerImpl* clip_child = AddLayer<LayerImpl>();
+  LayerImpl* surface = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_layer = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_parent = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* unclipped_desc_surface = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_child = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(100, 100));
   surface->SetBounds(gfx::Size(100, 100));
@@ -7131,11 +7455,11 @@ TEST_F(DrawPropertiesTest, ClipBetweenClipChildTargetAndClipParentTarget) {
 
 TEST_F(DrawPropertiesTest, VisibleRectForDescendantOfScaledSurface) {
   LayerImpl* root = root_layer();
-  LayerImpl* surface = AddLayer<LayerImpl>();
-  LayerImpl* clip_layer = AddLayer<LayerImpl>();
-  LayerImpl* clip_parent = AddLayer<LayerImpl>();
-  LayerImpl* unclipped_desc_surface = AddLayer<LayerImpl>();
-  LayerImpl* clip_child = AddLayer<LayerImpl>();
+  LayerImpl* surface = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_layer = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_parent = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* unclipped_desc_surface = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_child = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(100, 100));
   surface->SetBounds(gfx::Size(100, 100));
@@ -7166,8 +7490,8 @@ TEST_F(DrawPropertiesTest, VisibleRectForDescendantOfScaledSurface) {
 
 TEST_F(DrawPropertiesTest, LayerWithInputHandlerAndZeroOpacity) {
   LayerImpl* root = root_layer();
-  LayerImpl* render_surface = AddLayer<LayerImpl>();
-  LayerImpl* test_layer = AddLayer<LayerImpl>();
+  LayerImpl* render_surface = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* test_layer = AddLayerInActiveTree<LayerImpl>();
 
   gfx::Transform translation;
   translation.Translate(10, 10);
@@ -7195,11 +7519,11 @@ TEST_F(DrawPropertiesTest, LayerWithInputHandlerAndZeroOpacity) {
 
 TEST_F(DrawPropertiesTest, ClipParentDrawsIntoScaledRootSurface) {
   LayerImpl* root = root_layer();
-  LayerImpl* clip_layer = AddLayer<LayerImpl>();
-  LayerImpl* clip_parent = AddLayer<LayerImpl>();
-  LayerImpl* clip_parent_child = AddLayer<LayerImpl>();
-  LayerImpl* unclipped_desc_surface = AddLayer<LayerImpl>();
-  LayerImpl* clip_child = AddLayer<LayerImpl>();
+  LayerImpl* clip_layer = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_parent = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_parent_child = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* unclipped_desc_surface = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_child = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(100, 100));
   clip_layer->SetBounds(gfx::Size(20, 20));
@@ -7235,9 +7559,9 @@ TEST_F(DrawPropertiesTest, ClipParentDrawsIntoScaledRootSurface) {
 
 TEST_F(DrawPropertiesTest, ClipChildVisibleRect) {
   LayerImpl* root = root_layer();
-  LayerImpl* clip_parent = AddLayer<LayerImpl>();
-  LayerImpl* render_surface = AddLayer<LayerImpl>();
-  LayerImpl* clip_child = AddLayer<LayerImpl>();
+  LayerImpl* clip_parent = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* render_surface = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_child = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(30, 30));
   clip_parent->SetBounds(gfx::Size(40, 40));
@@ -7261,8 +7585,8 @@ TEST_F(DrawPropertiesTest, ClipChildVisibleRect) {
 
 TEST_F(DrawPropertiesTest, LayerClipRectLargerThanClippingRenderSurfaceRect) {
   LayerImpl* root = root_layer();
-  LayerImpl* render_surface = AddLayer<LayerImpl>();
-  LayerImpl* test_layer = AddLayer<LayerImpl>();
+  LayerImpl* render_surface = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* test_layer = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(30, 30));
   root->SetDrawsContent(true);
@@ -7320,10 +7644,10 @@ TEST_F(DrawPropertiesTestWithLayerTree, SubtreeIsHiddenTest) {
 
 TEST_F(DrawPropertiesTest, TwoUnclippedRenderSurfaces) {
   LayerImpl* root = root_layer();
-  LayerImpl* clip_layer = AddLayer<LayerImpl>();
-  LayerImpl* render_surface1 = AddLayer<LayerImpl>();
-  LayerImpl* render_surface2 = AddLayer<LayerImpl>();
-  LayerImpl* clip_child = AddLayer<LayerImpl>();
+  LayerImpl* clip_layer = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* render_surface1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* render_surface2 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* clip_child = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(30, 30));
   clip_layer->SetBounds(gfx::Size(30, 30));
@@ -7413,10 +7737,10 @@ TEST_F(DrawPropertiesTestWithLayerTree, MaskLayerDrawProperties) {
 
 TEST_F(DrawPropertiesTest, SublayerScaleWithTransformNodeBetweenTwoTargets) {
   LayerImpl* root = root_layer();
-  LayerImpl* render_surface1 = AddLayer<LayerImpl>();
-  LayerImpl* between_targets = AddLayer<LayerImpl>();
-  LayerImpl* render_surface2 = AddLayer<LayerImpl>();
-  LayerImpl* test_layer = AddLayer<LayerImpl>();
+  LayerImpl* render_surface1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* between_targets = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* render_surface2 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* test_layer = AddLayerInActiveTree<LayerImpl>();
 
   gfx::Transform scale;
   scale.Scale(2.f, 2.f);
@@ -7456,9 +7780,9 @@ TEST_F(DrawPropertiesTest, SublayerScaleWithTransformNodeBetweenTwoTargets) {
 
 TEST_F(DrawPropertiesTest, NoisyTransform) {
   LayerImpl* root = root_layer();
-  LayerImpl* render_surface = AddLayer<LayerImpl>();
-  LayerImpl* parent = AddLayer<LayerImpl>();
-  LayerImpl* child = AddLayer<LayerImpl>();
+  LayerImpl* render_surface = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* parent = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
 
   root->SetBounds(gfx::Size(30, 30));
   parent->SetBounds(gfx::Size(30, 30));
@@ -7468,10 +7792,10 @@ TEST_F(DrawPropertiesTest, NoisyTransform) {
 
   // A noisy transform that's invertible.
   gfx::Transform transform;
-  transform.matrix().setRC(0, 0, 6.12323e-17);
-  transform.matrix().setRC(0, 2, 1);
-  transform.matrix().setRC(2, 2, 6.12323e-17);
-  transform.matrix().setRC(2, 0, -1);
+  transform.set_rc(0, 0, 6.12323e-17);
+  transform.set_rc(0, 2, 1);
+  transform.set_rc(2, 2, 6.12323e-17);
+  transform.set_rc(2, 0, -1);
 
   CopyProperties(root, render_surface);
   CreateTransformNode(render_surface).local = transform;
@@ -7484,25 +7808,25 @@ TEST_F(DrawPropertiesTest, NoisyTransform) {
   UpdateActiveTreeDrawProperties();
 
   gfx::Transform expected;
-  expected.matrix().setRC(0, 0, 3.749395e-33);
-  expected.matrix().setRC(0, 2, 6.12323e-17);
-  expected.matrix().setRC(2, 0, -1);
-  expected.matrix().setRC(2, 2, 6.12323e-17);
+  expected.set_rc(0, 0, 3.749395e-33);
+  expected.set_rc(0, 2, 6.12323e-17);
+  expected.set_rc(2, 0, -1);
+  expected.set_rc(2, 2, 6.12323e-17);
   EXPECT_TRANSFORM_EQ(expected, child->ScreenSpaceTransform());
 }
 
 TEST_F(DrawPropertiesTest, LargeTransformTest) {
   LayerImpl* root = root_layer();
-  LayerImpl* render_surface1 = AddLayer<LayerImpl>();
-  LayerImpl* child = AddLayer<LayerImpl>();
+  LayerImpl* render_surface1 = AddLayerInActiveTree<LayerImpl>();
+  LayerImpl* child = AddLayerInActiveTree<LayerImpl>();
 
   child->SetDrawsContent(true);
 
   gfx::Transform large_transform;
   large_transform.Scale(99999999999999999999.f, 99999999999999999999.f);
   large_transform.Scale(9999999999999999999.f, 9999999999999999999.f);
-  EXPECT_TRUE(std::isinf(large_transform.matrix().rc(0, 0)));
-  EXPECT_TRUE(std::isinf(large_transform.matrix().rc(1, 1)));
+  EXPECT_TRUE(std::isinf(large_transform.rc(0, 0)));
+  EXPECT_TRUE(std::isinf(large_transform.rc(1, 1)));
 
   root->SetBounds(gfx::Size(30, 30));
   render_surface1->SetBounds(gfx::Size(30, 30));
@@ -7526,12 +7850,12 @@ TEST_F(DrawPropertiesTest, LargeTransformTest) {
   EXPECT_EQ(gfx::RectF(),
             GetRenderSurface(render_surface1)->DrawableContentRect());
 
-  bool is_inf_or_nan = std::isinf(child->DrawTransform().matrix().rc(0, 0)) ||
-                       std::isnan(child->DrawTransform().matrix().rc(0, 0));
+  bool is_inf_or_nan = std::isinf(child->DrawTransform().rc(0, 0)) ||
+                       std::isnan(child->DrawTransform().rc(0, 0));
   EXPECT_TRUE(is_inf_or_nan);
 
-  is_inf_or_nan = std::isinf(child->DrawTransform().matrix().rc(1, 1)) ||
-                  std::isnan(child->DrawTransform().matrix().rc(1, 1));
+  is_inf_or_nan = std::isinf(child->DrawTransform().rc(1, 1)) ||
+                  std::isnan(child->DrawTransform().rc(1, 1));
   EXPECT_TRUE(is_inf_or_nan);
 
   // The root layer should be in the RenderSurfaceList.
@@ -7547,7 +7871,7 @@ class DrawPropertiesTestDoubleBlurCheck : public DrawPropertiesTestBase,
 
  private:
   static LayerTreeSettings GetTestLayerTreeSettings() {
-    LayerTreeSettings s;
+    LayerTreeSettings s = CommitToPendingTreeLayerTreeSettings();
     s.log_on_ui_double_background_blur = true;
     return s;
   }
@@ -7808,19 +8132,18 @@ TEST_F(DrawPropertiesTestWithLayerTree, SubtreeHiddenWithCacheRenderSurface) {
   cache_grand_parent_sibling_after->SetHideLayerAndSubtree(true);
   cache_grand_child->SetHideLayerAndSubtree(true);
 
+  host()->SetElementIdsForTesting();
   CommitAndActivate();
 
   // We should have four render surfaces, one for the root, one for the grand
   // parent since it has opacity and two drawing descendants, one for the parent
   // since it owns a surface, and one for the cache.
   ASSERT_EQ(4u, GetRenderSurfaceList().size());
-  EXPECT_EQ(static_cast<uint64_t>(root->id()),
-            GetRenderSurfaceList().at(0)->id());
-  EXPECT_EQ(static_cast<uint64_t>(cache_grand_parent->id()),
+  EXPECT_EQ(root->element_id(), GetRenderSurfaceList().at(0)->id());
+  EXPECT_EQ(cache_grand_parent->element_id(),
             GetRenderSurfaceList().at(1)->id());
-  EXPECT_EQ(static_cast<uint64_t>(cache_parent->id()),
-            GetRenderSurfaceList().at(2)->id());
-  EXPECT_EQ(static_cast<uint64_t>(cache_render_surface->id()),
+  EXPECT_EQ(cache_parent->element_id(), GetRenderSurfaceList().at(2)->id());
+  EXPECT_EQ(cache_render_surface->element_id(),
             GetRenderSurfaceList().at(3)->id());
 
   // The root render surface should have 2 contributing layers.

@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,7 @@ namespace sharing {
 
 // IpcNetworkManager is a NetworkManager for libjingle that gets a
 // list of network interfaces from the browser.
-// TODO(crbug.com/1044522): reuse code from blink instead.
+// TODO(crbug.com/40115622): reuse code from blink instead.
 class IpcNetworkManager : public rtc::NetworkManagerBase,
                           public network::mojom::P2PNetworkNotificationClient {
  public:

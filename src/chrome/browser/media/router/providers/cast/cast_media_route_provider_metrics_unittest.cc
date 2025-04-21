@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,20 +32,6 @@ TEST(CastMediaRouteProviderMetricsTest, RecordAppAvailabilityResult) {
                               base::Milliseconds(333));
   tester.ExpectTimeBucketCount(kHistogramAppAvailabilityFailure,
                                base::Milliseconds(333), 1);
-}
-
-TEST(CastMediaRouteProviderMetricsTest, RecordSupportedAppTypesValue) {
-  base::HistogramTester tester;
-
-  RecordLaunchSessionRequestSupportedAppTypes(
-      {ReceiverAppType::kAndroidTv, ReceiverAppType::kWeb});
-  RecordLaunchSessionRequestSupportedAppTypes(
-      {ReceiverAppType::kAndroidTv, ReceiverAppType::kWeb});
-  RecordLaunchSessionRequestSupportedAppTypes({ReceiverAppType::kWeb});
-  tester.ExpectBucketCount(kHistogramCastSupportedAppTypes,
-                           ReceiverAppTypeSet::kWeb, 1);
-  tester.ExpectBucketCount(kHistogramCastSupportedAppTypes,
-                           ReceiverAppTypeSet::kAndroidTvAndWeb, 2);
 }
 
 TEST(CastMediaRouteProviderMetricsTest, RecordLaunchSessionResponseAppType) {

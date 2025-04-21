@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,10 +29,11 @@ class PLATFORM_EXPORT CompositorThreadEventQueue {
   ~CompositorThreadEventQueue();
 
   // Adds an event to the queue. The event may be coalesced with the last event.
-  void Queue(std::unique_ptr<EventWithCallback> event,
-             base::TimeTicks timestamp_now);
+  void Queue(std::unique_ptr<EventWithCallback> event);
 
   std::unique_ptr<EventWithCallback> Pop();
+
+  WebInputEvent::Type PeekType() const;
 
   bool empty() const { return queue_.empty(); }
 

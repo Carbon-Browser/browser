@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "base/notreached.h"
 #include "gin/converter.h"
 #include "gin/per_context_data.h"
 #include "gin/public/context_holder.h"
@@ -42,7 +43,7 @@ void ShellRunnerDelegate::DidRunScript(ShellRunner* runner) {
 
 void ShellRunnerDelegate::UnhandledException(ShellRunner* runner,
                                                TryCatch& try_catch) {
-  CHECK(false) << try_catch.GetStackTrace();
+  NOTREACHED() << try_catch.GetStackTrace();
 }
 
 ShellRunner::ShellRunner(ShellRunnerDelegate* delegate, Isolate* isolate)
@@ -66,7 +67,7 @@ v8::MaybeLocal<v8::Value> ShellRunner::Run(const std::string& source,
                                            const std::string& resource_name) {
   v8::Isolate* isolate = GetContextHolder()->isolate();
   TryCatch try_catch(isolate);
-  v8::ScriptOrigin origin(isolate, StringToV8(isolate, resource_name));
+  v8::ScriptOrigin origin(StringToV8(isolate, resource_name));
   auto maybe_script = Script::Compile(GetContextHolder()->context(),
                                       StringToV8(isolate, source), &origin);
   v8::Local<Script> script;

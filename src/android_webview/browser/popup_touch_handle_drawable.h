@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@ namespace android_webview {
 class PopupTouchHandleDrawable : public ui::TouchHandleDrawable {
  public:
   PopupTouchHandleDrawable(JNIEnv* env,
-                           jobject obj,
+                           const jni_zero::JavaRef<jobject>& obj,
                            float horizontal_padding_ratio);
 
   PopupTouchHandleDrawable(const PopupTouchHandleDrawable&) = delete;

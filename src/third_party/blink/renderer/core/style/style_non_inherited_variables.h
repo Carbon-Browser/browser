@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,13 +20,10 @@
 
 namespace blink {
 
-class CORE_EXPORT StyleNonInheritedVariables {
-  USING_FAST_MALLOC(StyleNonInheritedVariables);
-
+class CORE_EXPORT StyleNonInheritedVariables
+    : public GarbageCollected<StyleNonInheritedVariables> {
  public:
-  std::unique_ptr<StyleNonInheritedVariables> Clone() {
-    return base::WrapUnique(new StyleNonInheritedVariables(*this));
-  }
+  void Trace(Visitor* visitor) const { visitor->Trace(variables_); }
 
   bool operator==(const StyleNonInheritedVariables& other) const {
     return variables_ == other.variables_;
@@ -36,9 +33,9 @@ class CORE_EXPORT StyleNonInheritedVariables {
     return !(*this == other);
   }
 
-  void SetData(const AtomicString& name, scoped_refptr<CSSVariableData> value) {
+  void SetData(const AtomicString& name, CSSVariableData* value) {
     DCHECK(!value || !value->NeedsVariableResolution());
-    variables_.SetData(name, std::move(value));
+    variables_.SetData(name, value);
   }
   StyleVariables::OptionalData GetData(const AtomicString& name) const {
     return variables_.GetData(name);
@@ -58,9 +55,19 @@ class CORE_EXPORT StyleNonInheritedVariables {
   const StyleVariables::DataMap& Data() const { return variables_.Data(); }
   const StyleVariables::ValueMap& Values() const { return variables_.Values(); }
 
+  friend CORE_EXPORT std::ostream& operator<<(
+      std::ostream& stream,
+      const StyleNonInheritedVariables& variables);
+
  private:
   StyleVariables variables_;
 };
+
+inline CORE_EXPORT std::ostream& operator<<(
+    std::ostream& stream,
+    const StyleNonInheritedVariables& variables) {
+  return stream << variables.variables_;
+}
 
 }  // namespace blink
 

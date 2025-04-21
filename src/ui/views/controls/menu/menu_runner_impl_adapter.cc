@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@
 
 #include <utility>
 
+#include "ui/views/controls/menu/menu_item_view.h"
 #include "ui/views/controls/menu/menu_model_adapter.h"
 #include "ui/views/controls/menu/menu_runner_impl.h"
 
-namespace views {
-namespace internal {
+namespace views::internal {
 
 MenuRunnerImplAdapter::MenuRunnerImplAdapter(
     ui::MenuModel* menu_model,
@@ -24,7 +24,8 @@ bool MenuRunnerImplAdapter::IsRunning() const {
 }
 
 void MenuRunnerImplAdapter::Release() {
-  impl_->Release();
+  // Release will cause `impl_` to delete itself.
+  impl_.ExtractAsDangling()->Release();
   delete this;
 }
 
@@ -33,10 +34,13 @@ void MenuRunnerImplAdapter::RunMenuAt(
     MenuButtonController* button_controller,
     const gfx::Rect& bounds,
     MenuAnchorPosition anchor,
+    ui::mojom::MenuSourceType source_type,
     int32_t types,
-    gfx::NativeView native_view_for_gestures) {
-  impl_->RunMenuAt(parent, button_controller, bounds, anchor, types,
-                   native_view_for_gestures);
+    gfx::NativeView native_view_for_gestures,
+    std::optional<gfx::RoundedCornersF> corners,
+    std::optional<std::string> show_menu_host_duration_histogram) {
+  impl_->RunMenuAt(parent, button_controller, bounds, anchor, source_type,
+                   types, native_view_for_gestures);
 }
 
 void MenuRunnerImplAdapter::Cancel() {
@@ -49,5 +53,4 @@ base::TimeTicks MenuRunnerImplAdapter::GetClosingEventTime() const {
 
 MenuRunnerImplAdapter::~MenuRunnerImplAdapter() = default;
 
-}  // namespace internal
-}  // namespace views
+}  // namespace views::internal

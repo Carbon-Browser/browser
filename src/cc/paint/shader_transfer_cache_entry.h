@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,6 +30,7 @@ class CC_PAINT_EXPORT ServiceShaderTransferCacheEntry final
   ~ServiceShaderTransferCacheEntry() final;
   size_t CachedSize() const final;
   bool Deserialize(GrDirectContext* context,
+                   skgpu::graphite::Recorder* graphite_recorder,
                    base::span<const uint8_t> data) final;
 
   sk_sp<PaintShader> shader() const { return shader_; }

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,9 +18,7 @@ import org.chromium.components.payments.ErrorStrings;
 
 import java.lang.reflect.Field;
 
-/**
- * Tests for generated {@link ErrorStrings.java}.
- **/
+/** Tests for generated {@link ErrorStrings.java}. */
 @RunWith(ChromeJUnit4ClassRunner.class)
 public class PaymentErrorStringsTest {
     // Tests that error strings are generated successfully and have non-empty values.

@@ -1,31 +1,31 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.password_check;
 
 import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
 
-import org.chromium.components.browser_ui.settings.SettingsLauncher;
+import org.chromium.base.ResettersForTesting;
 
 /**
- * Use {@link #getOrCreate()} to instantiate a {@link PasswordCheckImpl}
- * and {@link #destroy()} when the instance is no longer needed.
+ * Use {@link #getOrCreate()} to instantiate a {@link PasswordCheckImpl} and {@link #destroy()} when
+ * the instance is no longer needed.
  */
 public class PasswordCheckFactory {
     private static PasswordCheck sPasswordCheck;
+
     private PasswordCheckFactory() {}
 
     /**
      * Creates a {@link PasswordCheckImpl} if none exists. Otherwise it returns the existing
      * instance.
-     * @param settingsLauncher The {@link SettingsLauncher} to open the check page.
+     *
      * @return A {@link PasswordCheckImpl} or null if the feature is disabled.
      */
-    public static @Nullable PasswordCheck getOrCreate(SettingsLauncher settingsLauncher) {
+    public static @Nullable PasswordCheck getOrCreate() {
         if (sPasswordCheck == null) {
-            sPasswordCheck = new PasswordCheckImpl(settingsLauncher);
+            sPasswordCheck = new PasswordCheckImpl();
         }
         return sPasswordCheck;
     }
@@ -43,9 +43,10 @@ public class PasswordCheckFactory {
         sPasswordCheck = null;
     }
 
-    @VisibleForTesting
     public static void setPasswordCheckForTesting(PasswordCheck passwordCheck) {
+        var oldValue = sPasswordCheck;
         sPasswordCheck = passwordCheck;
+        ResettersForTesting.register(() -> sPasswordCheck = oldValue);
     }
 
     /**

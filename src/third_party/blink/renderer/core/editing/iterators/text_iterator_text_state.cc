@@ -75,7 +75,7 @@ UChar TextIteratorTextState::CharacterAt(unsigned index) const {
 
 String TextIteratorTextState::GetTextForTesting() const {
   if (single_character_buffer_)
-    return String(&single_character_buffer_, 1u);
+    return String(base::span_from_ref(single_character_buffer_));
   return text_.Substring(text_start_offset_, length());
 }
 
@@ -109,8 +109,8 @@ void TextIteratorTextState::ResetPositionContainerNode(
   position_node_type_ = node_type;
   position_container_node_ = nullptr;
   position_node_ = &node;
-  position_start_offset_ = absl::nullopt;
-  position_end_offset_ = absl::nullopt;
+  position_start_offset_ = std::nullopt;
+  position_end_offset_ = std::nullopt;
 }
 
 void TextIteratorTextState::UpdatePositionOffsets(
@@ -141,7 +141,6 @@ void TextIteratorTextState::UpdatePositionOffsets(
     case PositionNodeType::kInText:
     case PositionNodeType::kNone:
       NOTREACHED();
-      return;
   }
   NOTREACHED() << static_cast<int>(position_node_type_);
 }
@@ -227,7 +226,7 @@ void TextIteratorTextState::EmitText(const Text& text_node,
           ? RepeatString("x", string.length())
           : string;
 
-  DCHECK(!text.IsEmpty());
+  DCHECK(!text.empty());
   DCHECK_LT(text_start_offset, text.length());
   DCHECK_LE(text_end_offset, text.length());
   DCHECK_LE(text_start_offset, text_end_offset);

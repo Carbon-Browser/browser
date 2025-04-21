@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,17 +7,17 @@
 #include "base/time/clock.h"
 #include "chrome/browser/ash/login/signin/offline_signin_limiter.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "content/public/browser/browser_context.h"
 
 namespace ash {
 
-base::Clock* OfflineSigninLimiterFactory::clock_for_testing_ = NULL;
+base::Clock* OfflineSigninLimiterFactory::clock_for_testing_ = nullptr;
 
 // static
 OfflineSigninLimiterFactory* OfflineSigninLimiterFactory::GetInstance() {
-  return base::Singleton<OfflineSigninLimiterFactory>::get();
+  static base::NoDestructor<OfflineSigninLimiterFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -33,16 +33,25 @@ void OfflineSigninLimiterFactory::SetClockForTesting(base::Clock* clock) {
 }
 
 OfflineSigninLimiterFactory::OfflineSigninLimiterFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "OfflineSigninLimiter",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/40257657): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/41488885): Check if this service is needed for
+              // Ash Internals.
+              .WithAshInternals(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
-OfflineSigninLimiterFactory::~OfflineSigninLimiterFactory() {}
+OfflineSigninLimiterFactory::~OfflineSigninLimiterFactory() = default;
 
-KeyedService* OfflineSigninLimiterFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+OfflineSigninLimiterFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new OfflineSigninLimiter(static_cast<Profile*>(context),
-                                  clock_for_testing_);
+  return std::make_unique<OfflineSigninLimiter>(static_cast<Profile*>(context),
+                                                clock_for_testing_);
 }
 
 }  // namespace ash

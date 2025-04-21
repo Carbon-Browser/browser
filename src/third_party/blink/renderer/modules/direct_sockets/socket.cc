@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,11 @@
 
 #include "net/base/net_errors.h"
 #include "third_party/blink/public/mojom/frame/lifecycle.mojom-shared.h"
-#include "third_party/blink/public/mojom/permissions_policy/permissions_policy_feature.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy_feature.mojom-shared.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
-#include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
-#include "third_party/blink/renderer/core/streams/readable_stream.h"
-#include "third_party/blink/renderer/core/streams/writable_stream.h"
 #include "third_party/blink/renderer/platform/bindings/exception_code.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/scheduler/public/scheduling_policy.h"
@@ -38,11 +34,12 @@ CreateDOMExceptionCodeAndMessageFromNetErrorCode(int32_t net_error) {
       return {DOMExceptionCode::kUnknownError, "Unexpected error occured."};
     case net::ERR_ACCESS_DENIED:
       return {DOMExceptionCode::kInvalidAccessError,
-              "Access to the requested host is blocked."};
-    case net::ERR_BLOCKED_BY_RESPONSE:
-      return {
-          DOMExceptionCode::kInvalidAccessError,
-          "Access to the requested host is blocked by cross-origin policy."};
+              "Access to the requested host or port is blocked."};
+    case net::ERR_NETWORK_ACCESS_DENIED:
+      return {DOMExceptionCode::kInvalidAccessError, "Firewall error."};
+    case net::ERR_BLOCKED_BY_PRIVATE_NETWORK_ACCESS_CHECKS:
+      return {DOMExceptionCode::kInvalidAccessError,
+              "Access to private network is blocked."};
     default:
       return {DOMExceptionCode::kNetworkError, "Network Error."};
   }
@@ -50,70 +47,33 @@ CreateDOMExceptionCodeAndMessageFromNetErrorCode(int32_t net_error) {
 
 }  // namespace
 
-ScriptPromise Socket::opened(ScriptState* script_state) const {
-  return ScriptPromise(script_state, opened_.Get(script_state->GetIsolate()));
-}
-
-ScriptPromise Socket::closed(ScriptState* script_state) const {
-  return ScriptPromise(script_state, closed_.Get(script_state->GetIsolate()));
-}
-
-ScriptPromise Socket::close(ScriptState*, ExceptionState& exception_state) {
-  if (!Initialized()) {
-    exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
-                                      "Socket is not properly initialized.");
-    return ScriptPromise();
-  }
-
-  if (Closed()) {
-    return closed(script_state_);
-  }
-
-  if (readable_stream_wrapper_->Locked() ||
-      writable_stream_wrapper_->Locked()) {
-    exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
-                                      "Close called on locked streams.");
-    return ScriptPromise();
-  }
-
-  auto* reason = MakeGarbageCollected<DOMException>(
-      DOMExceptionCode::kAbortError, "Stream closed.");
-
-  auto readable_cancel = readable_stream_wrapper_->Readable()->cancel(
-      script_state_, ScriptValue::From(script_state_, reason), exception_state);
-  DCHECK(!exception_state.HadException()) << exception_state.Message();
-  readable_cancel.MarkAsHandled();
-
-  auto writable_abort = writable_stream_wrapper_->Writable()->abort(
-      script_state_, ScriptValue::From(script_state_, reason), exception_state);
-  DCHECK(!exception_state.HadException()) << exception_state.Message();
-  writable_abort.MarkAsHandled();
-
-  return closed(script_state_);
+ScriptPromise<IDLUndefined> Socket::closed(ScriptState* script_state) const {
+  return closed_->Promise(script_state->World());
 }
 
 Socket::Socket(ScriptState* script_state)
     : ExecutionContextLifecycleStateObserver(
           ExecutionContext::From(script_state)),
       script_state_(script_state),
+      service_(GetExecutionContext()),
       feature_handle_for_scheduler_(
           GetExecutionContext()->GetScheduler()->RegisterFeature(
               SchedulingPolicy::Feature::kOutstandingNetworkRequestDirectSocket,
               {SchedulingPolicy::DisableBackForwardCache()})),
-      opened_resolver_(
-          MakeGarbageCollected<ScriptPromiseResolver>(script_state)),
-      opened_(script_state->GetIsolate(),
-              opened_resolver_->Promise().V8Promise()),
-      closed_resolver_(
-          MakeGarbageCollected<ScriptPromiseResolver>(script_state)),
-      closed_(script_state->GetIsolate(),
-              closed_resolver_->Promise().V8Promise()) {
+      closed_(MakeGarbageCollected<ScriptPromiseProperty<IDLUndefined, IDLAny>>(
+          GetExecutionContext())) {
   UpdateStateIfNeeded();
+
+  GetExecutionContext()->GetBrowserInterfaceBroker().GetInterface(
+      service_.BindNewPipeAndPassReceiver(
+          GetExecutionContext()->GetTaskRunner(TaskType::kNetworking)));
+  service_.set_disconnect_handler(
+      WTF::BindOnce(&Socket::OnServiceConnectionError, WrapPersistent(this)));
 
   // |closed| promise is just one of the ways to learn that the socket state has
   // changed. Therefore it's not necessary to force developers to handle
   // rejections.
-  closed_resolver_->Promise().MarkAsHandled();
+  closed_->MarkAsHandled();
 }
 
 Socket::~Socket() = default;
@@ -127,9 +87,18 @@ bool Socket::CheckContextAndPermissions(ScriptState* script_state,
     return false;
   }
 
-  if (!ExecutionContext::From(script_state)
-           ->IsFeatureEnabled(
-               mojom::blink::PermissionsPolicyFeature::kDirectSockets)) {
+  ExecutionContext* execution_context = ExecutionContext::From(script_state);
+  if (!execution_context->IsIsolatedContext() ||
+      !execution_context->IsFeatureEnabled(
+          mojom::blink::PermissionsPolicyFeature::kCrossOriginIsolated)) {
+    exception_state.ThrowDOMException(
+        DOMExceptionCode::kNotAllowedError,
+        "Frame is not sufficiently isolated to use Direct Sockets.");
+    return false;
+  }
+
+  if (!execution_context->IsFeatureEnabled(
+          mojom::blink::PermissionsPolicyFeature::kDirectSockets)) {
     exception_state.ThrowDOMException(
         DOMExceptionCode::kNotAllowedError,
         "Permissions-Policy: direct-sockets are disabled.");
@@ -146,65 +115,16 @@ DOMException* Socket::CreateDOMExceptionFromNetErrorCode(int32_t net_error) {
   return MakeGarbageCollected<DOMException>(code, std::move(message));
 }
 
-void Socket::ContextDestroyed() {}
-
-void Socket::ContextLifecycleStateChanged(
-    mojom::blink::FrameLifecycleState state) {
-  if (state == mojom::blink::FrameLifecycleState::kFrozen) {
-    // Clear service_remote_ and fail pending connection.
-    OnServiceConnectionError();
-  }
-}
-
-void Socket::ConnectService() {
-  service_ = DirectSocketsServiceMojoRemote::Create(
-      GetExecutionContext(),
-      WTF::Bind(&Socket::OnServiceConnectionError, WrapPersistent(this)));
-}
-
-bool Socket::Closed() const {
-  return !closed_resolver_;
-}
-
-bool Socket::Initialized() const {
-  return readable_stream_wrapper_ && writable_stream_wrapper_;
-}
-
-bool Socket::HasPendingActivity() const {
-  return writable_stream_wrapper_ &&
-         writable_stream_wrapper_->HasPendingWrite();
-}
-
-void Socket::ResolveOrRejectClosed(bool error) {
-  if (error) {
-    closed_resolver_->Reject();
-  } else {
-    closed_resolver_->Resolve();
-  }
-  closed_resolver_ = nullptr;
-}
-
-void Socket::CloseServiceAndResetFeatureHandle() {
-  if (service_) {
-    service_->Close();
-  }
-  feature_handle_for_scheduler_.reset();
-}
-
 void Socket::Trace(Visitor* visitor) const {
   visitor->Trace(script_state_);
   visitor->Trace(service_);
-
-  visitor->Trace(opened_resolver_);
-  visitor->Trace(opened_);
-
-  visitor->Trace(closed_resolver_);
   visitor->Trace(closed_);
-
-  visitor->Trace(readable_stream_wrapper_);
-  visitor->Trace(writable_stream_wrapper_);
-
   ExecutionContextLifecycleStateObserver::Trace(visitor);
+}
+
+void Socket::ResetServiceAndFeatureHandle() {
+  feature_handle_for_scheduler_.reset();
+  service_.reset();
 }
 
 }  // namespace blink

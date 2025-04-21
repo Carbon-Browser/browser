@@ -1,31 +1,44 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/app_mode/web_app/web_kiosk_app_data.h"
 
+#include <memory>
+#include <optional>
+#include <string>
+#include <utility>
+
+#include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
+#include "base/location.h"
+#include "base/logging.h"
+#include "base/memory/weak_ptr.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/values.h"
+#include "chrome/browser/ash/app_mode/kiosk_app_data_base.h"
 #include "chrome/browser/ash/app_mode/kiosk_app_data_delegate.h"
 #include "chrome/browser/ash/app_mode/web_app/web_kiosk_app_manager.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/image_decoder/image_decoder.h"
 #include "chrome/browser/net/system_network_context_manager.h"
 #include "chrome/browser/web_applications/web_app_install_info.h"
+#include "components/account_id/account_id.h"
 #include "components/prefs/pref_service.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "components/prefs/scoped_user_pref_update.h"
 #include "content/public/browser/browser_thread.h"
+#include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/simple_url_loader.h"
 #include "skia/ext/image_operations.h"
+#include "ui/gfx/image/image_skia.h"
 
 namespace ash {
 
 namespace {
-constexpr int kIconSize = 128;  // size of the icon in px.
-// Maximum image size is 256x256..
-constexpr int kMaxIconFileSize = (2 * kIconSize) * (2 * kIconSize) * 4 + 1000;
 
 const char kKeyLaunchUrl[] = "launch_url";
 const char kKeyLastIconUrl[] = "last_icon_url";
@@ -84,13 +97,19 @@ class WebKioskAppData::IconFetcher : public ImageDecoder::ImageRequest {
     network::mojom::URLLoaderFactory* loader_factory =
         system_network_context_manager->GetURLLoaderFactory();
 
+    // Assuming maximum image size is 256x256.
+    constexpr int kMaxIconFileSize = (2 * WebKioskAppData::kIconSize) *
+                                         (2 * WebKioskAppData::kIconSize) * 4 +
+                                     1000;
+
     simple_loader_->DownloadToString(
         loader_factory,
         base::BindOnce(
             [](base::WeakPtr<WebKioskAppData> client,
                std::unique_ptr<std::string> response_body) {
-              if (!client)
+              if (!client) {
                 return;
+              }
               client->icon_fetcher_->OnSimpleLoaderComplete(
                   std::move(response_body));
             },
@@ -111,8 +130,9 @@ class WebKioskAppData::IconFetcher : public ImageDecoder::ImageRequest {
  private:
   // ImageDecoder::ImageRequest:
   void OnImageDecoded(const SkBitmap& decoded_image) override {
-    if (!client_)
+    if (!client_) {
       return;
+    }
 
     // Icons have to be square shaped.
     if (decoded_image.width() != decoded_image.height()) {
@@ -121,7 +141,7 @@ class WebKioskAppData::IconFetcher : public ImageDecoder::ImageRequest {
     }
 
     int size = decoded_image.width();
-    if (size == kIconSize) {
+    if (size == WebKioskAppData::kIconSize) {
       client_->OnDidDownloadIcon(decoded_image);
       return;
     }
@@ -130,7 +150,8 @@ class WebKioskAppData::IconFetcher : public ImageDecoder::ImageRequest {
         FROM_HERE,
         {base::TaskPriority::USER_VISIBLE,
          base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
-        base::BindOnce(ResizeImageBlocking, decoded_image, kIconSize),
+        base::BindOnce(ResizeImageBlocking, decoded_image,
+                       WebKioskAppData::kIconSize),
         base::BindOnce(&WebKioskAppData::OnDidDownloadIcon, client_));
   }
 
@@ -144,7 +165,7 @@ class WebKioskAppData::IconFetcher : public ImageDecoder::ImageRequest {
   std::unique_ptr<network::SimpleURLLoader> simple_loader_;
 };
 
-WebKioskAppData::WebKioskAppData(KioskAppDataDelegate* delegate,
+WebKioskAppData::WebKioskAppData(KioskAppDataDelegate& delegate,
                                  const std::string& app_id,
                                  const AccountId& account_id,
                                  const GURL url,
@@ -164,39 +185,45 @@ WebKioskAppData::~WebKioskAppData() = default;
 
 bool WebKioskAppData::LoadFromCache() {
   PrefService* local_state = g_browser_process->local_state();
-  const base::Value* dict = local_state->GetDictionary(dictionary_name());
+  const base::Value::Dict& dict = local_state->GetDict(dictionary_name());
 
-  if (!LoadFromDictionary(*dict, /* lazy_icon_load= */ true))
+  if (!LoadFromDictionary(dict)) {
     return false;
+  }
 
-  if (LoadLaunchUrlFromDictionary(*dict)) {
+  if (LoadLaunchUrlFromDictionary(dict)) {
     SetStatus(Status::kInstalled);
     return true;
   }
 
   // If the icon was previously downloaded using a different url and the app has
   // not been installed earlier, do not use that icon.
-  if (GetLastIconUrl(*dict) != icon_url_)
+  if (GetLastIconUrl(dict) != icon_url_) {
     return false;
+  }
 
   // Wait while icon is loaded.
-  if (status_ == Status::kInit)
+  if (status_ == Status::kInit) {
     SetStatus(Status::kLoading);
+  }
   return true;
 }
 
 void WebKioskAppData::LoadIcon() {
-  if (!icon_.isNull())
-    return;
-
-  // Decode the icon if one is already cached.
-  if (status_ != Status::kInit) {
-    DecodeIcon();
+  if (!icon_.isNull()) {
     return;
   }
 
-  if (!icon_url_.is_valid())
+  // Decode the icon if one is already cached.
+  if (status_ != Status::kInit) {
+    DecodeIcon(base::BindOnce(&WebKioskAppData::OnIconLoadDone,
+                              weak_ptr_factory_.GetWeakPtr()));
     return;
+  }
+
+  if (!icon_url_.is_valid()) {
+    return;
+  }
 
   DCHECK(!icon_fetcher_);
 
@@ -212,28 +239,33 @@ GURL WebKioskAppData::GetLaunchableUrl() const {
                                                          : install_url();
 }
 
-void WebKioskAppData::UpdateFromWebAppInfo(const WebAppInstallInfo& app_info) {
-  name_ = base::UTF16ToUTF8(app_info.title);
-  base::FilePath cache_dir;
-  if (delegate_)
-    delegate_->GetKioskAppIconCacheDir(&cache_dir);
+void WebKioskAppData::UpdateFromWebAppInfo(
+    const web_app::WebAppInstallInfo& app_info) {
+  UpdateAppInfo(base::UTF16ToUTF8(app_info.title), app_info.start_url(),
+                app_info.icon_bitmaps);
+}
 
-  auto it = app_info.icon_bitmaps.any.find(kIconSize);
-  if (it != app_info.icon_bitmaps.any.end()) {
+void WebKioskAppData::UpdateAppInfo(const std::string& title,
+                                    const GURL& start_url,
+                                    const web_app::IconBitmaps& icon_bitmaps) {
+  name_ = title;
+
+  auto it = icon_bitmaps.any.find(kIconSize);
+  if (it != icon_bitmaps.any.end()) {
     const SkBitmap& bitmap = it->second;
     icon_ = gfx::ImageSkia::CreateFrom1xBitmap(bitmap);
     icon_.MakeThreadSafe();
-    SaveIcon(bitmap, cache_dir);
+    SaveIcon(bitmap, delegate_->GetKioskAppIconCacheDir());
   }
 
   PrefService* local_state = g_browser_process->local_state();
-  DictionaryPrefUpdate dict_update(local_state, dictionary_name());
+  ScopedDictPrefUpdate dict_update(local_state, dictionary_name());
   SaveToDictionary(dict_update);
 
-  launch_url_ = GURL(app_info.start_url);
-  dict_update->FindDictKey(KioskAppDataBase::kKeyApps)
-      ->FindDictKey(app_id())
-      ->SetStringKey(kKeyLaunchUrl, launch_url_.spec());
+  launch_url_ = start_url;
+  dict_update->FindDict(KioskAppDataBase::kKeyApps)
+      ->FindDict(app_id())
+      ->Set(kKeyLaunchUrl, launch_url_.spec());
 
   SetStatus(Status::kInstalled);
 }
@@ -250,32 +282,34 @@ void WebKioskAppData::SetStatus(Status status, bool notify) {
     std::move(on_loaded_closure_for_testing_).Run();
   }
 
-  if (delegate_ && notify)
+  if (notify) {
     delegate_->OnKioskAppDataChanged(app_id());
+  }
 }
 
-bool WebKioskAppData::LoadLaunchUrlFromDictionary(const base::Value& dict) {
+bool WebKioskAppData::LoadLaunchUrlFromDictionary(
+    const base::Value::Dict& dict) {
   // All the previous keys should be present since this function is executed
   // after LoadFromDictionary().
   const std::string* launch_url_string =
-      dict.FindDictKey(KioskAppDataBase::kKeyApps)
-          ->FindDictKey(app_id())
-          ->FindStringKey(kKeyLaunchUrl);
+      dict.FindDict(KioskAppDataBase::kKeyApps)
+          ->FindDict(app_id())
+          ->FindString(kKeyLaunchUrl);
 
-  if (!launch_url_string)
+  if (!launch_url_string) {
     return false;
+  }
 
   launch_url_ = GURL(*launch_url_string);
   return true;
 }
 
-GURL WebKioskAppData::GetLastIconUrl(const base::Value& dict) const {
+GURL WebKioskAppData::GetLastIconUrl(const base::Value::Dict& dict) const {
   // All the previous keys should be present since this function is executed
   // after LoadFromDictionary().
-  const std::string* icon_url_string =
-      dict.FindDictKey(KioskAppDataBase::kKeyApps)
-          ->FindDictKey(app_id())
-          ->FindStringKey(kKeyLastIconUrl);
+  const std::string* icon_url_string = dict.FindDict(KioskAppDataBase::kKeyApps)
+                                           ->FindDict(app_id())
+                                           ->FindString(kKeyLastIconUrl);
 
   return icon_url_string ? GURL(*icon_url_string) : GURL();
 }
@@ -289,37 +323,35 @@ void WebKioskAppData::OnDidDownloadIcon(const SkBitmap& icon) {
     return;
   }
 
-  base::FilePath cache_dir;
-  if (delegate_)
-    delegate_->GetKioskAppIconCacheDir(&cache_dir);
-
-  SaveIcon(icon, cache_dir);
+  SaveIcon(icon, delegate_->GetKioskAppIconCacheDir());
 
   PrefService* local_state = g_browser_process->local_state();
-  DictionaryPrefUpdate dict_update(local_state, dictionary_name());
+  ScopedDictPrefUpdate dict_update(local_state, dictionary_name());
   SaveIconToDictionary(dict_update);
 
-  dict_update->FindDictKey(KioskAppDataBase::kKeyApps)
-      ->FindDictKey(app_id())
-      ->SetStringKey(kKeyLastIconUrl, icon_url_.spec());
+  dict_update->FindDict(KioskAppDataBase::kKeyApps)
+      ->FindDict(app_id())
+      ->Set(kKeyLastIconUrl, icon_url_.spec());
 
   SetStatus(Status::kLoaded);
 }
 
-void WebKioskAppData::OnIconLoadSuccess(const gfx::ImageSkia& icon) {
+void WebKioskAppData::OnIconLoadDone(std::optional<gfx::ImageSkia> icon) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   kiosk_app_icon_loader_.reset();
-  icon_ = icon;
-  if (status_ != Status::kInstalled)
-    SetStatus(Status::kLoaded);
-  else
-    SetStatus(Status::kInstalled);  // To notify menu controller.
-}
 
-void WebKioskAppData::OnIconLoadFailure() {
-  kiosk_app_icon_loader_.reset();
-  LOG(ERROR) << "Icon Load Failure";
-  SetStatus(Status::kLoaded, /*notify=*/false);
+  if (!icon.has_value()) {
+    LOG(ERROR) << "Icon Load Failure";
+    SetStatus(Status::kLoaded, /*notify=*/false);
+    return;
+  }
+
+  icon_ = icon.value();
+  if (status_ != Status::kInstalled) {
+    SetStatus(Status::kLoaded);
+  } else {
+    SetStatus(Status::kInstalled);  // To notify menu controller.
+  }
 }
 
 }  // namespace ash

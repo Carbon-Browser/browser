@@ -1,16 +1,20 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/viz/service/frame_sinks/video_detector.h"
 
+#include <array>
 #include <memory>
 #include <utility>
 #include <vector>
 
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "components/viz/common/features.h"
 #include "components/viz/common/quads/compositor_frame.h"
+#include "components/viz/common/quads/draw_quad.h"
+#include "components/viz/common/quads/texture_draw_quad.h"
 #include "components/viz/service/surfaces/surface.h"
 #include "components/viz/service/surfaces/surface_manager.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -19,16 +23,15 @@
 
 namespace viz {
 
-constexpr base::TimeDelta VideoDetector::kVideoTimeout;
+constexpr base::TimeDelta VideoDetector::kMaxVideoTimeout;
+constexpr base::TimeDelta VideoDetector::kMinVideoTimeout;
 constexpr base::TimeDelta VideoDetector::kMinVideoDuration;
 
 // Stores information about updates to a client and determines whether it's
 // likely that a video is playing in it.
 class VideoDetector::ClientInfo {
  public:
-  ClientInfo()
-      : should_ignore_non_video_frames_(
-            features::ShouldVideoDetectorIgnoreNonVideoFrames()) {}
+  ClientInfo() = default;
 
   ClientInfo(const ClientInfo&) = delete;
   ClientInfo& operator=(const ClientInfo&) = delete;
@@ -47,13 +50,26 @@ class VideoDetector::ClientInfo {
 
     const CompositorFrame& frame = surface->GetActiveFrame();
 
-    if (should_ignore_non_video_frames_ && !frame.metadata.may_contain_video) {
+    if (!frame.metadata.may_contain_video) {
       return false;
     }
 
-    gfx::Rect damage =
-        gfx::ScaleToEnclosingRect(frame.render_pass_list.back()->damage_rect,
-                                  1.f / frame.device_scale_factor());
+    gfx::Rect damage = frame.render_pass_list.back()->damage_rect;
+    if (frame.render_pass_list.back()->has_per_quad_damage) {
+      for (auto* quad : frame.render_pass_list.back()->quad_list) {
+        if (quad->material != DrawQuad::Material::kTextureContent)
+          continue;
+
+        auto* texture_quad = TextureDrawQuad::MaterialCast(quad);
+        if (!texture_quad->damage_rect)
+          continue;
+
+        damage.Union(*texture_quad->damage_rect);
+      }
+    }
+
+    damage =
+        gfx::ScaleToEnclosingRect(damage, 1.f / frame.device_scale_factor());
 
     if (damage.width() < kMinDamageWidth || damage.height() < kMinDamageHeight)
       return false;
@@ -81,13 +97,9 @@ class VideoDetector::ClientInfo {
   }
 
  private:
-  // If true, we'll only process frames that may contain videos, as determined
-  // by the frame's may_contain_video metadata.
-  bool should_ignore_non_video_frames_;
-
   // Circular buffer containing update times of the last (up to
   // |kMinFramesPerSecond|) video-sized updates to this client.
-  base::TimeTicks update_times_[kMinFramesPerSecond];
+  std::array<base::TimeTicks, kMinFramesPerSecond> update_times_;
 
   // Time at which the current sequence of updates that looks like video
   // started. Empty if video isn't currently playing.
@@ -151,7 +163,8 @@ void VideoDetector::OnFrameSinkIdInvalidated(const FrameSinkId& frame_sink_id) {
 }
 
 bool VideoDetector::OnSurfaceDamaged(const SurfaceId& surface_id,
-                                     const BeginFrameAck& ack) {
+                                     const BeginFrameAck& ack,
+                                     HandleInteraction handle_interaction) {
   return false;
 }
 
@@ -175,8 +188,13 @@ void VideoDetector::OnSurfaceWillBeDrawn(Surface* surface) {
   base::TimeTicks now = tick_clock_->NowTicks();
 
   if (it->second->ReportDrawnAndCheckForVideo(surface, now)) {
-    video_inactive_timer_.Start(FROM_HERE, kVideoTimeout, this,
-                                &VideoDetector::OnVideoActivityEnded);
+    // Avoid (re)starting the timer every frame since it has considerable
+    // overhead.
+    if (!video_inactive_timer_.IsRunning() ||
+        (video_inactive_timer_.desired_run_time() - now) < kMinVideoTimeout) {
+      video_inactive_timer_.Start(FROM_HERE, kMaxVideoTimeout, this,
+                                  &VideoDetector::OnVideoActivityEnded);
+    }
     if (!video_is_playing_) {
       video_is_playing_ = true;
       for (auto& observer : observers_) {

@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,11 @@
 
 TEST(PageZoomTest, ZoomValuesEqual) {
   // Test two identical values.
-  EXPECT_TRUE(blink::PageZoomValuesEqual(1.5, 1.5));
+  EXPECT_TRUE(blink::ZoomValuesEqual(1.5, 1.5));
 
   // Test two values that are close enough to be considered equal.
-  EXPECT_TRUE(blink::PageZoomValuesEqual(1.5, 1.49999999));
+  EXPECT_TRUE(blink::ZoomValuesEqual(1.5, 1.49999999));
 
   // Test two values that are close, but should not be considered equal.
-  EXPECT_FALSE(blink::PageZoomValuesEqual(1.5, 1.4));
+  EXPECT_FALSE(blink::ZoomValuesEqual(1.5, 1.4));
 }

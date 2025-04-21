@@ -1,23 +1,28 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "chromeos/printing/ppd_cache.h"
 
+#include <string_view>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/synchronization/lock.h"
-#include "base/task/task_runner_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "chromeos/printing/printing_constants.h"
@@ -31,8 +36,7 @@ namespace {
 // Return the (full) path to the file we expect to find the given key at.
 base::FilePath FilePathForKey(const base::FilePath& base_dir,
                               const std::string& key) {
-  std::string hashed_key = crypto::SHA256HashString(key);
-  return base_dir.Append(base::HexEncode(hashed_key.data(), hashed_key.size()));
+  return base_dir.Append(base::HexEncode(crypto::SHA256HashString(key)));
 }
 
 // If the cache doesn't already exist, create it.
@@ -73,9 +77,9 @@ PpdCache::FindResult FindImpl(const base::FilePath& cache_dir,
   if (file.ReadAtCurrentPos(buf.data(), info.size) != info.size)
     return result;
 
-  base::StringPiece contents(buf.data(), info.size - crypto::kSHA256Length);
-  base::StringPiece checksum(buf.data() + info.size - crypto::kSHA256Length,
-                             crypto::kSHA256Length);
+  std::string_view contents(buf.data(), info.size - crypto::kSHA256Length);
+  std::string_view checksum(buf.data() + info.size - crypto::kSHA256Length,
+                            crypto::kSHA256Length);
   if (crypto::SHA256HashString(contents) != checksum) {
     LOG(ERROR) << "Bad checksum for cache key " << key;
     return result;
@@ -99,28 +103,28 @@ void StoreImpl(const base::FilePath& cache_dir,
   MaybeCreateCache(cache_dir);
   if (contents.size() > kMaxPpdSizeBytes) {
     LOG(ERROR) << "Ignoring attempt to cache large object";
-  } else {
-    auto path = FilePathForKey(cache_dir, key);
-    base::File file(path,
-                    base::File::FLAG_CREATE_ALWAYS | base::File::FLAG_WRITE);
-    std::string checksum = crypto::SHA256HashString(contents);
-    if (!file.IsValid() ||
-        file.WriteAtCurrentPos(contents.data(), contents.size()) !=
-            static_cast<int>(contents.size()) ||
-        file.WriteAtCurrentPos(checksum.data(), checksum.size()) !=
-            static_cast<int>(checksum.size())) {
-      LOG(ERROR) << "Failed to create ppd cache file";
-      file.Close();
-      if (!base::DeleteFile(path)) {
-        LOG(ERROR) << "Failed to cleanup failed creation.";
-      }
-    } else {
-      // Successfully wrote the file, adjust the age if requested.
-      if (!age.is_zero()) {
-        base::Time mod_time = base::Time::Now() - age;
-        file.SetTimes(mod_time, mod_time);
-      }
+    return;
+  }
+
+  auto path = FilePathForKey(cache_dir, key);
+  base::File file(path,
+                  base::File::FLAG_CREATE_ALWAYS | base::File::FLAG_WRITE);
+  std::string checksum = crypto::SHA256HashString(contents);
+  if (!file.IsValid() ||
+      !file.WriteAtCurrentPosAndCheck(base::as_byte_span(contents)) ||
+      !file.WriteAtCurrentPosAndCheck(base::as_byte_span(checksum))) {
+    LOG(ERROR) << "Failed to create ppd cache file";
+    file.Close();
+    if (!base::DeleteFile(path)) {
+      LOG(ERROR) << "Failed to cleanup failed creation.";
     }
+    return;
+  }
+
+  // Successfully wrote the file, adjust the age if requested.
+  if (!age.is_zero()) {
+    base::Time mod_time = base::Time::Now() - age;
+    file.SetTimes(mod_time, mod_time);
   }
 }
 
@@ -144,9 +148,9 @@ class PpdCacheImpl : public PpdCache {
 
   // Public API functions.
   void Find(const std::string& key, FindCallback cb) override {
-    base::PostTaskAndReplyWithResult(
-        fetch_task_runner_.get(), FROM_HERE,
-        base::BindOnce(&FindImpl, cache_base_dir_, key), std::move(cb));
+    fetch_task_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE, base::BindOnce(&FindImpl, cache_base_dir_, key),
+        std::move(cb));
   }
 
   // Store the given contents at the given key.  If cb is non-null, it will

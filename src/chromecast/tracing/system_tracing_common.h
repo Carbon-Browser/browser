@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,14 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
+#include "base/trace_event/common/trace_event_common.h"
+
 namespace chromecast {
 namespace tracing {
 
-extern const char* const kCategories[];
-
-extern const size_t kCategoryCount;
+inline constexpr std::array<const char*, 6> kCategories = {
+    "gfx",   "input", TRACE_DISABLED_BY_DEFAULT("irq"),
+    "power", "sched", "workq"};
 
 sockaddr_un GetSystemTracingSocketAddress();
 

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,6 @@ bool StructTraits<blink::mojom::SHA256HashValueDataView, net::SHA256HashValue>::
 
   if (data.size() != sizeof(out->data)) {
     NOTREACHED();
-    return false;
   }
 
   memcpy(out->data, data.c_str(), sizeof(out->data));

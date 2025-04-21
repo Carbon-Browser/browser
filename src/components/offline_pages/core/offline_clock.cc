@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,9 @@ const base::Clock* custom_clock_ = nullptr;
 }
 
 const base::Clock* OfflineClock() {
-  if (custom_clock_)
+  if (custom_clock_) {
     return custom_clock_;
+  }
   return base::DefaultClock::GetInstance();
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,18 +12,20 @@
 #ifndef GPU_COMMAND_BUFFER_CLIENT_WEBGPU_INTERFACE_STUB_IMPL_AUTOGEN_H_
 #define GPU_COMMAND_BUFFER_CLIENT_WEBGPU_INTERFACE_STUB_IMPL_AUTOGEN_H_
 
-void WebGPUInterfaceStub::AssociateMailbox(GLuint /* device_id */,
-                                           GLuint /* device_generation */,
-                                           GLuint /* id */,
-                                           GLuint /* generation */,
-                                           GLuint /* usage */,
-                                           MailboxFlags /* flags */,
-                                           const GLbyte* /* mailbox */) {}
 void WebGPUInterfaceStub::DissociateMailbox(GLuint /* texture_id */,
                                             GLuint /* texture_generation */) {}
+void WebGPUInterfaceStub::DissociateMailboxForBuffer(
+    GLuint /* buffer_id */,
+    GLuint /* buffer_generation */) {}
 void WebGPUInterfaceStub::DissociateMailboxForPresent(
     GLuint /* device_id */,
     GLuint /* device_generation */,
     GLuint /* texture_id */,
     GLuint /* texture_generation */) {}
+void WebGPUInterfaceStub::SetWebGPUExecutionContextToken(
+    uint32_t /* type */,
+    uint32_t /* high_high */,
+    uint32_t /* high_low */,
+    uint32_t /* low_high */,
+    uint32_t /* low_low */) {}
 #endif  // GPU_COMMAND_BUFFER_CLIENT_WEBGPU_INTERFACE_STUB_IMPL_AUTOGEN_H_

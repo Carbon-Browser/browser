@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,18 +62,18 @@ class NET_EXPORT TCPClientSocket : public TransportClientSocket,
       NetworkQualityEstimator* network_quality_estimator,
       net::NetLog* net_log,
       const net::NetLogSource& source,
-      NetworkChangeNotifier::NetworkHandle network =
-          NetworkChangeNotifier::kInvalidNetworkHandle);
+      handles::NetworkHandle network = handles::kInvalidNetworkHandle);
 
   // Adopts the given, connected socket and then acts as if Connect() had been
   // called. This function is used by TCPServerSocket and for testing.
   TCPClientSocket(std::unique_ptr<TCPSocket> connected_socket,
                   const IPEndPoint& peer_address);
 
-  // Adopts an unconnected TCPSocket. This function is used by
-  // TCPClientSocketBrokered.
+  // Adopts an unconnected TCPSocket. TCPSocket may be bound or unbound. This
+  // function is used by BrokeredTcpClientSocket.
   TCPClientSocket(std::unique_ptr<TCPSocket> unconnected_socket,
                   const AddressList& addresses,
+                  std::unique_ptr<IPEndPoint> bound_address,
                   NetworkQualityEstimator* network_quality_estimator);
 
   // Creates a TCPClientSocket from a bound-but-not-connected socket.
@@ -104,7 +104,6 @@ class NET_EXPORT TCPClientSocket : public TransportClientSocket,
   int GetLocalAddress(IPEndPoint* address) const override;
   const NetLogWithSource& NetLog() const override;
   bool WasEverUsed() const override;
-  bool WasAlpnNegotiated() const override;
   NextProto GetNegotiatedProtocol() const override;
   bool GetSSLInfo(SSLInfo* ssl_info) override;
   int64_t GetTotalReceivedBytes() const override;
@@ -146,13 +145,13 @@ class NET_EXPORT TCPClientSocket : public TransportClientSocket,
   // address index in `addresses` of the server `socket` is connected to, or -1
   // if not connected. `bind_address`, if present, is the address `socket` is
   // bound to. `network` is the network the socket is required to be bound to,
-  // or NetworkChangeNotifier::kInvalidNetworkHandle if no binding is required.
+  // or handles::kInvalidNetworkHandle if no binding is required.
   TCPClientSocket(std::unique_ptr<TCPSocket> socket,
                   const AddressList& addresses,
                   int current_address_index,
                   std::unique_ptr<IPEndPoint> bind_address,
                   NetworkQualityEstimator* network_quality_estimator,
-                  NetworkChangeNotifier::NetworkHandle network);
+                  handles::NetworkHandle network);
 
   // A helper method shared by Read() and ReadIfReady(). If |read_if_ready| is
   // set to true, ReadIfReady() will be used instead of Read().
@@ -234,7 +233,7 @@ class NET_EXPORT TCPClientSocket : public TransportClientSocket,
   bool was_disconnected_on_suspend_ = false;
 
   // The time when the latest connect attempt was started.
-  absl::optional<base::TimeTicks> start_connect_attempt_;
+  std::optional<base::TimeTicks> start_connect_attempt_;
 
   // The NetworkQualityEstimator for the context this socket is associated with.
   // Can be nullptr.
@@ -242,7 +241,7 @@ class NET_EXPORT TCPClientSocket : public TransportClientSocket,
 
   base::OneShotTimer connect_attempt_timer_;
 
-  NetworkChangeNotifier::NetworkHandle network_;
+  handles::NetworkHandle network_;
 
   base::WeakPtrFactory<TCPClientSocket> weak_ptr_factory_{this};
 };

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,6 @@ namespace media_router {
 
 static constexpr char kHistogramDialCreateRouteResult[] =
     "MediaRouter.Dial.CreateRoute";
-static constexpr char kHistogramDialTerminateRouteResult[] =
-    "MediaRouter.Dial.TerminateRoute";
-static constexpr char kHistogramDialParseMessageResult[] =
-    "MediaRouter.Dial.ParseMessage";
 
 // Note on enums defined in this file:
 // These values are persisted to logs. Entries should not be renumbered and
@@ -29,27 +25,9 @@ enum class DialCreateRouteResult {
   kCount
 };
 
-enum class DialTerminateRouteResult {
-  kSuccess = 0,
-  kRouteNotFound = 1,
-  kSinkNotFound = 2,
-  kStopAppFailed = 3,
-  kRouteAlreadyTerminated = 4,
-  kCount
-};
-
-enum class DialParseMessageResult {
-  kSuccess = 0,
-  kParseError = 1,
-  kInvalidMessage = 2,
-  kCount
-};
-
 class DialMediaRouteProviderMetrics {
  public:
   static void RecordCreateRouteResult(DialCreateRouteResult result);
-  static void RecordTerminateRouteResult(DialTerminateRouteResult result);
-  static void RecordParseMessageResult(DialParseMessageResult result);
 };
 
 }  // namespace media_router

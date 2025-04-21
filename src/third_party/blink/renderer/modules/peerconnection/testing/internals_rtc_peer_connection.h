@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ class InternalsRTCPeerConnection {
   static int peerConnectionCount(Internals&);
   static int peerConnectionCountLimit(Internals&);
 
-  static ScriptPromise waitForPeerConnectionDispatchEventsTaskCreated(
+  static ScriptPromise<IDLAny> waitForPeerConnectionDispatchEventsTaskCreated(
       ScriptState*,
       Internals&,
       RTCPeerConnection*);

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,6 @@ struct EnumTraits<paint_preview::mojom::RecordingPersistence,
         return paint_preview::mojom::RecordingPersistence::kMemoryBuffer;
     }
     NOTREACHED() << "Unknown persistence " << static_cast<int>(persistence);
-    return paint_preview::mojom::RecordingPersistence::kFileSystem;
   }
 
   static bool FromMojom(paint_preview::mojom::RecordingPersistence input,

@@ -1,10 +1,9 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_VIEWS_WIDGET_TOOLTIP_MANAGER_H_
 #define UI_VIEWS_WIDGET_TOOLTIP_MANAGER_H_
-
 
 #include "ui/views/views_export.h"
 
@@ -43,6 +42,7 @@ class VIEWS_EXPORT TooltipManager {
 
   // Notification that the view hierarchy has changed in some way.
   virtual void UpdateTooltip() = 0;
+  virtual void UpdateTooltipForFocus(View* view) = 0;
 
   // Invoked when the tooltip text changes for the specified views.
   virtual void TooltipTextChanged(View* view) = 0;

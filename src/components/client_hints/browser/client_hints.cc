@@ -1,6 +1,8 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "components/client_hints/browser/client_hints.h"
 
 #include <cmath>
 #include <functional>
@@ -9,9 +11,6 @@
 #include "base/command_line.h"
 #include "base/feature_list.h"
 #include "base/json/json_reader.h"
-#include "base/metrics/histogram_functions.h"
-#include "base/time/time.h"
-#include "components/client_hints/browser/client_hints.h"
 #include "components/client_hints/common/client_hints.h"
 #include "components/client_hints/common/switches.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
@@ -23,6 +22,7 @@
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "services/network/public/cpp/client_hints.h"
+#include "services/network/public/cpp/features.h"
 #include "services/network/public/cpp/is_potentially_trustworthy.h"
 #include "third_party/blink/public/common/client_hints/enabled_client_hints.h"
 #include "third_party/blink/public/common/features.h"
@@ -40,7 +40,7 @@ ParseInitializeClientHintsStroage() {
       base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
           switches::kInitializeClientHintsStorage);
 
-  absl::optional<base::Value> maybe_value =
+  std::optional<base::Value> maybe_value =
       base::JSONReader::Read(raw_client_hint_json);
 
   if (!maybe_value || !maybe_value->is_dict()) {
@@ -50,7 +50,7 @@ ParseInitializeClientHintsStroage() {
     return {};
   }
 
-  for (auto entry : maybe_value->DictItems()) {
+  for (auto entry : maybe_value->GetDict()) {
     url::Origin origin = url::Origin::Create(GURL(entry.first));
     if (origin.opaque() || origin.scheme() != url::kHttpsScheme) {
       LOG(WARNING)
@@ -66,7 +66,7 @@ ParseInitializeClientHintsStroage() {
       continue;
     }
 
-    absl::optional<std::vector<network::mojom::WebClientHintsType>>
+    std::optional<std::vector<network::mojom::WebClientHintsType>>
         maybe_parsed_accept_ch =
             network::ParseClientHintsHeader(entry.second.GetString());
 
@@ -121,13 +121,22 @@ network::NetworkQualityTracker* ClientHints::GetNetworkQualityTracker() {
 void ClientHints::GetAllowedClientHintsFromSource(
     const url::Origin& origin,
     blink::EnabledClientHints* client_hints) {
-  ContentSettingsForOneType client_hints_rules;
-  settings_map_->GetSettingsForOneType(ContentSettingsType::CLIENT_HINTS,
-                                       &client_hints_rules);
-  client_hints::GetAllowedClientHintsFromSource(origin, client_hints_rules,
-                                                client_hints);
-  for (auto hint : additional_hints_)
+  if (network::features::ShouldBlockAcceptClientHintsFor(origin)) {
+    return;
+  }
+  const GURL& url = origin.GetURL();
+  if (!network::IsUrlPotentiallyTrustworthy(url)) {
+    return;
+  }
+
+  client_hints::GetAllowedClientHints(
+      settings_map_->GetWebsiteSetting(
+          url, GURL(), ContentSettingsType::CLIENT_HINTS, nullptr),
+      client_hints);
+
+  for (auto hint : additional_hints_) {
     client_hints->SetIsEnabled(hint, true);
+  }
 }
 
 bool ClientHints::IsJavaScriptAllowed(const GURL& url,
@@ -138,12 +147,6 @@ bool ClientHints::IsJavaScriptAllowed(const GURL& url,
                               .GetURL()
                         : url,
              url, ContentSettingsType::JAVASCRIPT) != CONTENT_SETTING_BLOCK;
-}
-
-bool ClientHints::AreThirdPartyCookiesBlocked(const GURL& url) {
-  return settings_map_->GetContentSetting(
-             url, url, ContentSettingsType::COOKIES) == CONTENT_SETTING_BLOCK ||
-         cookie_settings_->ShouldBlockThirdPartyCookies();
 }
 
 blink::UserAgentMetadata ClientHints::GetUserAgentMetadata() {
@@ -161,11 +164,13 @@ void ClientHints::PersistClientHints(
   // TODO(tbansal): crbug.com/735518. Consider killing the renderer that sent
   // the malformed IPC.
   if (!primary_url.is_valid() ||
-      !network::IsUrlPotentiallyTrustworthy(primary_url))
+      !network::IsUrlPotentiallyTrustworthy(primary_url)) {
     return;
+  }
 
-  if (!IsJavaScriptAllowed(primary_url, parent_rfh))
+  if (!IsJavaScriptAllowed(primary_url, parent_rfh)) {
     return;
+  }
 
   DCHECK_LE(
       client_hints.size(),
@@ -180,7 +185,7 @@ void ClientHints::PersistClientHints(
     return;
   }
 
-  const base::TimeTicks start_time = base::TimeTicks::Now();
+  const auto& persistence_started = base::TimeTicks::Now();
   base::Value::List client_hints_list;
   client_hints_list.reserve(client_hints.size());
 
@@ -192,23 +197,15 @@ void ClientHints::PersistClientHints(
   client_hints_dictionary.Set(kClientHintsSettingKey,
                               std::move(client_hints_list));
 
-  const auto session_model =
-      base::FeatureList::IsEnabled(blink::features::kDurableClientHintsCache)
-          ? content_settings::SessionModel::Durable
-          : content_settings::SessionModel::UserSession;
-
   // TODO(tbansal): crbug.com/735518. Disable updates to client hints settings
   // when cookies are disabled for |primary_origin|.
+  content_settings::ContentSettingConstraints constraints;
+  constraints.set_session_model(content_settings::mojom::SessionModel::DURABLE);
   settings_map_->SetWebsiteSettingDefaultScope(
       primary_url, GURL(), ContentSettingsType::CLIENT_HINTS,
-      base::Value(std::move(client_hints_dictionary)),
-      {base::Time(), session_model});
-
-  // Record the time spent getting the client hints.
-  base::TimeDelta duration = base::TimeTicks::Now() - start_time;
-  base::UmaHistogramTimes("ClientHints.StoreLatency", duration);
-  base::UmaHistogramExactLinear("ClientHints.UpdateEventCount", 1, 2);
-  base::UmaHistogramCounts100("ClientHints.UpdateSize", client_hints.size());
+      base::Value(std::move(client_hints_dictionary)), constraints);
+  network::LogClientHintsPersistenceMetrics(persistence_started,
+                                            client_hints.size());
 }
 
 void ClientHints::SetAdditionalClientHints(
@@ -218,6 +215,24 @@ void ClientHints::SetAdditionalClientHints(
 
 void ClientHints::ClearAdditionalClientHints() {
   additional_hints_.clear();
+}
+
+void ClientHints::SetMostRecentMainFrameViewportSize(
+    const gfx::Size& viewport_size) {
+  viewport_size_ = viewport_size;
+}
+
+gfx::Size ClientHints::GetMostRecentMainFrameViewportSize() {
+  return viewport_size_;
+}
+
+void ClientHints::ForceEmptyViewportSizeForTesting(
+    bool should_force_empty_viewport_size) {
+  should_force_empty_viewport_size_ = should_force_empty_viewport_size;
+}
+
+bool ClientHints::ShouldForceEmptyViewportSize() {
+  return should_force_empty_viewport_size_;
 }
 
 }  // namespace client_hints

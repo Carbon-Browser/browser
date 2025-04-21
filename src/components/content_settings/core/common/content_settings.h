@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,16 @@
 
 #include <stddef.h>
 
+#include <map>
 #include <string>
 #include <vector>
 
 #include "base/time/time.h"
 #include "base/values.h"
 #include "components/content_settings/core/common/content_settings_constraints.h"
+#include "components/content_settings/core/common/content_settings_metadata.h"
 #include "components/content_settings/core/common/content_settings_pattern.h"
+#include "components/content_settings/core/common/content_settings_rules.h"
 #include "components/content_settings/core/common/content_settings_types.h"
 
 // Different settings that can be assigned for a particular content type.  We
@@ -38,18 +41,14 @@ enum ContentSetting {
 // prefs off disk.
 ContentSetting IntToContentSetting(int content_setting);
 
-// Converts a given content setting to its histogram value, for use when saving
-// content settings types to a histogram.
-int ContentSettingTypeToHistogramValue(ContentSettingsType content_setting,
-                                       size_t* num_values);
-
 struct ContentSettingPatternSource {
   ContentSettingPatternSource(const ContentSettingsPattern& primary_pattern,
                               const ContentSettingsPattern& secondary_patttern,
                               base::Value setting_value,
-                              const std::string& source,
+                              content_settings::mojom::ProviderType provider,
                               bool incognito,
-                              base::Time expiration = base::Time());
+                              content_settings::RuleMetaData metadata =
+                                  content_settings::RuleMetaData());
   ContentSettingPatternSource(const ContentSettingPatternSource& other);
   ContentSettingPatternSource();
   ContentSettingPatternSource& operator=(
@@ -58,13 +57,20 @@ struct ContentSettingPatternSource {
   ContentSetting GetContentSetting() const;
   bool IsExpired() const;
 
+  bool operator==(const ContentSettingPatternSource& other) const;
+
   ContentSettingsPattern primary_pattern;
   ContentSettingsPattern secondary_pattern;
   base::Value setting_value;
-  base::Time expiration;
-  std::string source;
+  content_settings::RuleMetaData metadata;
+  content_settings::mojom::ProviderType source =
+      content_settings::mojom::ProviderType::kNone;
   bool incognito;
 };
+
+// Formatter method for Google Test.
+std::ostream& operator<<(std::ostream& os,
+                         const ContentSettingPatternSource& source);
 
 typedef std::vector<ContentSettingPatternSource> ContentSettingsForOneType;
 
@@ -87,39 +93,76 @@ struct RendererContentSettingRules {
       const RendererContentSettingRules& rules);
   RendererContentSettingRules& operator=(RendererContentSettingRules&& rules);
 
-  ContentSettingsForOneType image_rules;
-  ContentSettingsForOneType script_rules;
-  ContentSettingsForOneType popup_redirect_rules;
+  bool operator==(const RendererContentSettingRules& other) const;
+
   ContentSettingsForOneType mixed_content_rules;
-  ContentSettingsForOneType auto_dark_content_rules;
 };
 
 namespace content_settings {
 
+using ProviderType = mojom::ProviderType;
+
 // Enum containing the various source for content settings. Settings can be
 // set by policy, extension, the user or by the custodian of a supervised user.
 // Certain (internal) origins are allowlisted. For these origins the source is
-// |SETTING_SOURCE_ALLOWLIST|.
-enum SettingSource {
-  SETTING_SOURCE_NONE,
-  SETTING_SOURCE_POLICY,
-  SETTING_SOURCE_EXTENSION,
-  SETTING_SOURCE_USER,
-  SETTING_SOURCE_ALLOWLIST,
-  SETTING_SOURCE_SUPERVISED,
-  SETTING_SOURCE_INSTALLED_WEBAPP,
+// |SettingSource::kAllowList|.
+enum class SettingSource {
+  kNone,
+  kPolicy,
+  kExtension,
+  kUser,
+  kAllowList,
+  kSupervised,
+  kInstalledWebApp,
+  kTpcdGrant,
 };
 
 // |SettingInfo| provides meta data for content setting values. |source|
 // contains the source of a value. |primary_pattern| and |secondary_pattern|
 // contains the patterns of the appling rule.
 struct SettingInfo {
-  SettingSource source;
+  SettingSource source = SettingSource::kNone;
   ContentSettingsPattern primary_pattern;
   ContentSettingsPattern secondary_pattern;
-  SessionModel session_model;
+  RuleMetaData metadata;
+
+  void SetAttributes(const content_settings::RuleEntry& rule_entry) {
+    primary_pattern = rule_entry.first.primary_pattern;
+    secondary_pattern = rule_entry.first.secondary_pattern;
+    metadata = rule_entry.second.metadata;
+  }
+  void SetAttributes(const ContentSettingPatternSource& content_setting) {
+    primary_pattern = content_setting.primary_pattern;
+    secondary_pattern = content_setting.secondary_pattern;
+    metadata = content_setting.metadata;
+  }
 };
 
+// Returns the SettingSource associated with the given ProviderType.
+constexpr SettingSource GetSettingSourceFromProviderType(
+    ProviderType provider_type) {
+  switch (provider_type) {
+    case ProviderType::kWebuiAllowlistProvider:
+      return SettingSource::kAllowList;
+    case ProviderType::kPolicyProvider:
+      return SettingSource::kPolicy;
+    case ProviderType::kSupervisedProvider:
+      return SettingSource::kSupervised;
+    case ProviderType::kCustomExtensionProvider:
+      return SettingSource::kExtension;
+    case ProviderType::kInstalledWebappProvider:
+      return SettingSource::kInstalledWebApp;
+    case ProviderType::kNotificationAndroidProvider:
+    case ProviderType::kOneTimePermissionProvider:
+    case ProviderType::kPrefProvider:
+    case ProviderType::kDefaultProvider:
+    case ProviderType::kProviderForTests:
+    case ProviderType::kOtherProviderForTests:
+      return SettingSource::kUser;
+    case content_settings::ProviderType::kNone:
+      return SettingSource::kNone;
+  }
+}
 }  // namespace content_settings
 
 #endif  // COMPONENTS_CONTENT_SETTINGS_CORE_COMMON_CONTENT_SETTINGS_H_

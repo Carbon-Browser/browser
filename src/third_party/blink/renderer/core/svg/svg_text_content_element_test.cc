@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,8 @@ class SVGTextContentElementTest : public EditingTestBase {};
 
 TEST_F(SVGTextContentElementTest, selectSubStringNotCrash) {
   SetBodyContent("<svg><text style='visibility:hidden;'>Text</text></svg>");
-  auto* elem = To<SVGTextContentElement>(GetDocument().QuerySelector("text"));
+  auto* elem = To<SVGTextContentElement>(
+      GetDocument().QuerySelector(AtomicString("text")));
   VisiblePosition start = VisiblePosition::FirstPositionInNode(
       *const_cast<SVGTextContentElement*>(elem));
   EXPECT_TRUE(start.IsNull());

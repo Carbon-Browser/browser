@@ -1,10 +1,11 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UPGRADE_DETECTOR_UPGRADE_DETECTOR_H_
 #define CHROME_BROWSER_UPGRADE_DETECTOR_UPGRADE_DETECTOR_H_
 
+#include <optional>
 #include <string>
 
 #include "base/gtest_prod_util.h"
@@ -17,7 +18,6 @@
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/upgrade_detector/upgrade_observer.h"
 #include "components/prefs/pref_change_registrar.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class PrefRegistrySimple;
 class UpgradeObserver;
@@ -185,6 +185,13 @@ class UpgradeDetector {
   // disabled. No details are expected.
   void NotifyOutdatedInstallNoAutoUpdate();
 
+  void set_upgrade_notification_stage_for_testing(
+      UpgradeNotificationAnnoyanceLevel stage) {
+    set_upgrade_notification_stage(stage);
+  }
+
+  void NotifyUpgradeForTesting();
+
  protected:
   enum UpgradeAvailable {
     // If no update is available and current install is recent enough.
@@ -222,7 +229,7 @@ class UpgradeDetector {
 
   // Returns the relaunch window specified via the RelaunchWindow policy
   // setting, or nullopt if unset or set incorrectly.
-  static absl::optional<RelaunchWindow> GetRelaunchWindowPolicyValue();
+  static std::optional<RelaunchWindow> GetRelaunchWindowPolicyValue();
 
   // Returns the default relaunch window within which the relaunch should take
   // place. It is 2am to 4am from Chrome OS and the whole day for others.
@@ -253,6 +260,10 @@ class UpgradeDetector {
   // Notifies that a critical update has been installed. No details are
   // expected.
   void NotifyCriticalUpgradeInstalled();
+
+  // Notifies that an update is downloaded but deferred. Set `use_notification`
+  // to true to enable system tray notification.
+  void NotifyUpdateDeferred(bool use_notification);
 
   // The function that sends out a notification that lets the rest of the UI
   // know we should notify the user that a new update is available to download
@@ -323,7 +334,10 @@ class UpgradeDetector {
 
  private:
   FRIEND_TEST_ALL_PREFIXES(AppMenuModelTest, Basics);
+  FRIEND_TEST_ALL_PREFIXES(RelaunchNotificationControllerUiTest,
+                           ReactivateAfterDeadline);
   FRIEND_TEST_ALL_PREFIXES(SystemTrayClientTest, UpdateTrayIcon);
+  friend class RelaunchNotificationControllerUiTest;
   friend class UpgradeMetricsProviderTest;
 
   // Called on the UI thread after one or more monitored prefs have changed. If

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,9 +24,11 @@ void DesktopMediaPickerManager::RemoveObserver(DialogObserver* observer) {
   observers_.RemoveObserver(observer);
 }
 
-void DesktopMediaPickerManager::OnShowDialog() {
-  for (auto& observer : observers_)
-    observer.OnDialogOpened();
+void DesktopMediaPickerManager::OnShowDialog(
+    const DesktopMediaPicker::Params& params) {
+  for (auto& observer : observers_) {
+    observer.OnDialogOpened(params);
+  }
 }
 
 void DesktopMediaPickerManager::OnHideDialog() {

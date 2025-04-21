@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,11 @@
 
 #include <stdint.h>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "components/download/public/common/download_item.h"
+#include "components/download/public/common/download_target_info.h"
 #include "content/public/browser/download_manager_delegate.h"
 
 namespace content {
@@ -29,8 +31,9 @@ class ShellDownloadManagerDelegate : public DownloadManagerDelegate {
   void SetDownloadManager(DownloadManager* manager);
 
   void Shutdown() override;
-  bool DetermineDownloadTarget(download::DownloadItem* download,
-                               DownloadTargetCallback* callback) override;
+  bool DetermineDownloadTarget(
+      download::DownloadItem* download,
+      download::DownloadTargetCallback* callback) override;
   bool ShouldOpenDownload(download::DownloadItem* item,
                           DownloadOpenDelayedCallback callback) override;
   void GetNextId(DownloadIdCallback callback) override;
@@ -52,10 +55,10 @@ class ShellDownloadManagerDelegate : public DownloadManagerDelegate {
                                const base::FilePath& suggested_directory,
                                FilenameDeterminedCallback callback);
   void OnDownloadPathGenerated(uint32_t download_id,
-                               DownloadTargetCallback callback,
+                               download::DownloadTargetCallback callback,
                                const base::FilePath& suggested_path);
   void ChooseDownloadPath(uint32_t download_id,
-                          DownloadTargetCallback callback,
+                          download::DownloadTargetCallback callback,
                           const base::FilePath& suggested_path);
 
   raw_ptr<DownloadManager> download_manager_;

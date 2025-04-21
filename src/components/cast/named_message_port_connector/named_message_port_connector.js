@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -74,11 +74,11 @@ cast.__platform__.PortConnector = new class {
    */
   onMessageEvent(messageEvent) {
     // Only process window.onmessage events which are intended for this class.
-    if (messageEvent.data != 'cast.master.connect') {
+    if (messageEvent.data !== 'cast.master.connect') {
       return;
     }
 
-    if (messageEvent.ports.length != 1) {
+    if (messageEvent.ports.length !== 1) {
       console.error(
           'Expected only one MessagePort, got ' + messageEvent.ports.length +
           ' instead.');

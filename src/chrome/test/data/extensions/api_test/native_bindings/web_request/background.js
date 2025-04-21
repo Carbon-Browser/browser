@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,7 @@ chrome.webRequest.onBeforeRequest.addListener(function(details) {
     return {};
 
   chrome.test.assertEq('/native_bindings/simple.html', url.pathname);
-  chrome.test.assertTrue(url.port != '');
+  chrome.test.assertNe('', url.port);
   chrome.test.assertEq('example.com:' + url.port, url.host);
   var newUrl = url.origin + '/native_bindings/simple2.html';
   return {redirectUrl: newUrl};

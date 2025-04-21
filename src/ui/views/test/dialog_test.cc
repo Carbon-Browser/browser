@@ -1,14 +1,14 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/views/test/dialog_test.h"
+
 #include "ui/views/test/widget_test.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/window/dialog_delegate.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 namespace {
 
@@ -31,5 +31,4 @@ void CancelDialog(Widget* widget) {
   waiter.Wait();
 }
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

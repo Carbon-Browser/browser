@@ -1,10 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.android_webview.test.devui.util;
 
-import static org.chromium.android_webview.test.OnlyRunIn.ProcessMode.SINGLE_PROCESS;
+import static org.chromium.android_webview.test.OnlyRunIn.ProcessMode.EITHER_PROCESS;
 
 import androidx.test.filters.SmallTest;
 
@@ -15,9 +15,9 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 
-import org.chromium.android_webview.common.crash.CrashInfo;
-import org.chromium.android_webview.common.crash.CrashInfo.UploadState;
 import org.chromium.android_webview.devui.util.UnuploadedFilesStateLoader;
+import org.chromium.android_webview.nonembedded.crash.CrashInfo;
+import org.chromium.android_webview.nonembedded.crash.CrashInfo.UploadState;
 import org.chromium.android_webview.test.AwJUnit4ClassRunner;
 import org.chromium.android_webview.test.OnlyRunIn;
 import org.chromium.base.test.util.Batch;
@@ -27,18 +27,15 @@ import java.io.File;
 import java.io.IOException;
 import java.util.List;
 
-/**
- * Unit tests for UnuploadedFilesStateLoader.
- */
+/** Unit tests for UnuploadedFilesStateLoader. */
 @RunWith(AwJUnit4ClassRunner.class)
-@OnlyRunIn(SINGLE_PROCESS) // These are unit tests
+@OnlyRunIn(EITHER_PROCESS) // These are unit tests
 @Batch(Batch.UNIT_TESTS)
 public class UnuploadedFilesStateLoaderTest {
     private static final String LOCAL_ID = "localId1234";
     private static final String TEST_FILE_NAME = "test_file-" + LOCAL_ID;
 
-    @Rule
-    public TemporaryFolder mTestCacheDir = new TemporaryFolder();
+    @Rule public TemporaryFolder mTestCacheDir = new TemporaryFolder();
 
     private File mTestCrashDir;
     private CrashFileManager mCrashFileManager;

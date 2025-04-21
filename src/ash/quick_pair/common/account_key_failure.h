@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,14 +13,30 @@ namespace quick_pair {
 
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused. This enum should be kept in sync with
-// the FastPairAccountKeyFailure enum in src/tools/metrics/histograms/enums.xml.
+// the FastPairAccountKeyFailure enum in
+// //tools/metrics/histograms/metadata/bluetooth/enums.xml.
+//
+// LINT.IfChange(FastPairAccountKeyFailure)
 enum class AccountKeyFailure {
   // Failed to find the Account Key GATT characteristic.
   kAccountKeyCharacteristicDiscovery = 0,
-  // Failed to write to the Account Key GATT characteristic.
-  kAccountKeyCharacteristicWrite = 1,
-  kMaxValue = kAccountKeyCharacteristicWrite,
+  // Deprecated
+  kDeprecated_AccountKeyCharacteristicWrite = 1,
+  // Timed out while writing to the Account Key GATT characteristic.
+  kAccountKeyCharacteristicWriteTimeout = 2,
+  // The remaining error codes correspond to the GATT errors in
+  // device/bluetooth/bluetooth_gatt_service.h
+  kGattErrorUnknown = 3,
+  kGattErrorFailed = 4,
+  kGattInProgress = 5,
+  kGattErrorInvalidLength = 6,
+  kGattErrorNotPermitted = 7,
+  kGattErrorNotAuthorized = 8,
+  kGattErrorNotPaired = 9,
+  kGattErrorNotSupported = 10,
+  kMaxValue = kGattErrorNotSupported,
 };
+// LINT.ThenChange(//tools/metrics/histograms/metadata/bluetooth/enums.xml:FastPairAccountKeyFailure)
 
 COMPONENT_EXPORT(QUICK_PAIR_COMMON)
 std::ostream& operator<<(std::ostream& stream, AccountKeyFailure protocol);

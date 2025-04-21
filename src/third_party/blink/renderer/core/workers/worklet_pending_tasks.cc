@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,9 @@
 
 namespace blink {
 
-WorkletPendingTasks::WorkletPendingTasks(Worklet* worklet,
-                                         ScriptPromiseResolver* resolver)
+WorkletPendingTasks::WorkletPendingTasks(
+    Worklet* worklet,
+    ScriptPromiseResolver<IDLUndefined>* resolver)
     : resolver_(resolver), worklet_(worklet) {
   DCHECK(IsMainThread());
 }
@@ -50,8 +51,8 @@ void WorkletPendingTasks::Abort(
       resolver_->Reject(error_to_rethrow->Deserialize(
           resolver_->GetScriptState()->GetIsolate()));
     } else {
-      resolver_->Reject(
-          MakeGarbageCollected<DOMException>(DOMExceptionCode::kAbortError));
+      resolver_->Reject(MakeGarbageCollected<DOMException>(
+          DOMExceptionCode::kAbortError, "Unable to load a worklet's module."));
     }
   }
 }

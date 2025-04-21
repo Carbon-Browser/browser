@@ -1,21 +1,25 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/display/display_layout.h"
 
-#include <algorithm>
 #include <map>
 #include <set>
 #include <sstream>
+#include <string_view>
 #include <unordered_map>
+#include <vector>
 
 #include "base/check.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
 #include "base/logging.h"
+#include "base/not_fatal_until.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/values.h"
+#include "components/device_event_log/device_event_log.h"
 #include "ui/display/display.h"
 #include "ui/display/util/display_util.h"
 #include "ui/gfx/geometry/insets.h"
@@ -36,13 +40,6 @@ const char kUnknown[] = "unknown";
 // to change this value in case to support even larger displays.
 const int kMaxValidOffset = 10000;
 
-bool IsIdInList(int64_t id, const DisplayIdList& list) {
-  const auto iter =
-      std::find_if(list.begin(), list.end(),
-                   [id](int64_t display_id) { return display_id == id; });
-  return iter != list.end();
-}
-
 bool ComparePlacements(const DisplayPlacement& d1, const DisplayPlacement& d2) {
   return CompareDisplayIds(d1.display_id, d2.display_id);
 }
@@ -56,11 +53,9 @@ DisplayIdList DisplayListToDisplayIdList(const Displays& displays) {
   return list;
 }
 
-// Ruturns nullptr if display with |id| is not found.
+// Returns nullptr if display with |id| is not found.
 Display* FindDisplayById(Displays* display_list, int64_t id) {
-  auto iter =
-      std::find_if(display_list->begin(), display_list->end(),
-                   [id](const Display& display) { return display.id() == id; });
+  auto iter = base::ranges::find(*display_list, id, &Display::id);
   return iter == display_list->end() ? nullptr : &(*iter);
 }
 
@@ -77,7 +72,7 @@ int GetDisplayTreeDepth(
     ++depth;
     auto iter = display_to_parent_ids_map.find(current_id);
     if (iter == display_to_parent_ids_map.end())
-      return kMaxDepth;  // Let detached diplays go to the end.
+      return kMaxDepth;  // Let detached displays go to the end.
 
     current_id = iter->second;
   }
@@ -163,12 +158,10 @@ void MaybeReparentTargetDisplay(
     Display* parent_display = FindDisplayById(display_list, parent_display_id);
     DCHECK(parent_display);
 
-    auto target_display_placement_itr =
-        std::find_if(placement_list->begin(), placement_list->end(),
-                     [&target_display](const DisplayPlacement& p) {
-                       return p.display_id == target_display->id();
-                     });
-    DCHECK(target_display_placement_itr != placement_list->end());
+    auto target_display_placement_itr = base::ranges::find(
+        *placement_list, target_display->id(), &DisplayPlacement::display_id);
+    CHECK(target_display_placement_itr != placement_list->end(),
+          base::NotFatalUntil::M130);
     target_display_placement = &(*target_display_placement_itr);
     if (AreDisplaysTouching(*target_display, *parent_display,
                             target_display_placement->position)) {
@@ -254,7 +247,7 @@ void DeIntersectDisplays(int64_t primary_id,
   // Sort the displays first by their depth in the display hierarchy tree, and
   // then by distance of their top left points from the origin. This way we
   // process the displays starting at the root (the primary display), in the
-  // order of their decendence spanning out from the primary display.
+  // order of their descendence spanning out from the primary display.
   std::sort(sorted_displays.begin(), sorted_displays.end(), [&](Display* d1,
                                                                 Display* d2) {
     const int d1_depth =
@@ -463,7 +456,7 @@ std::string DisplayPlacement::PositionToString(Position position) {
 }
 
 // static
-bool DisplayPlacement::StringToPosition(const base::StringPiece& string,
+bool DisplayPlacement::StringToPosition(std::string_view string,
                                         Position* position) {
   if (string == kTop) {
     *position = TOP;
@@ -543,9 +536,9 @@ void DisplayLayout::ApplyToDisplayList(Displays* display_list,
 bool DisplayLayout::Validate(const DisplayIdList& list,
                              const DisplayLayout& layout) {
   // The primary display should be in the list.
-  if (!IsIdInList(layout.primary_id, list)) {
-    LOG(ERROR) << "The primary id: " << layout.primary_id
-               << " is not in the id list.";
+  if (!base::Contains(list, layout.primary_id)) {
+    DISPLAY_LOG(ERROR) << "The primary id: " << layout.primary_id
+                       << " is not in the id list.";
     return false;
   }
 
@@ -560,37 +553,39 @@ bool DisplayLayout::Validate(const DisplayIdList& list,
   for (const auto& placement : layout.placement_list) {
     // Placements are sorted by display_id.
     if (prev_id >= (placement.display_id & 0xFF)) {
-      LOG(ERROR) << "PlacementList must be sorted by first 8 bits of"
-                 << " display_id ";
+      DISPLAY_LOG(ERROR) << "PlacementList must be sorted by first 8 bits of"
+                         << " display_id ";
       return false;
     }
     prev_id = (placement.display_id & 0xFF);
     if (placement.display_id == kInvalidDisplayId) {
-      LOG(ERROR) << "display_id is not initialized";
+      DISPLAY_LOG(ERROR) << "display_id is not initialized";
       return false;
     }
     if (placement.parent_display_id == kInvalidDisplayId) {
-      LOG(ERROR) << "display_parent_id is not initialized";
+      DISPLAY_LOG(ERROR) << "display_parent_id is not initialized";
       return false;
     }
     if (placement.display_id == placement.parent_display_id) {
-      LOG(ERROR) << "display_id must not be same as parent_display_id";
+      DISPLAY_LOG(ERROR) << "display_id must not be same as parent_display_id";
       return false;
     }
-    if (!IsIdInList(placement.display_id, list)) {
-      LOG(ERROR) << "display_id is not in the id list:" << placement.ToString();
+    if (!base::Contains(list, placement.display_id)) {
+      DISPLAY_LOG(ERROR) << "display_id is not in the id list:"
+                         << placement.ToString();
       return false;
     }
 
-    if (!IsIdInList(placement.parent_display_id, list)) {
-      LOG(ERROR) << "parent_display_id is not in the id list:"
-                 << placement.ToString();
+    if (!base::Contains(list, placement.parent_display_id)) {
+      DISPLAY_LOG(ERROR) << "parent_display_id is not in the id list:"
+                         << placement.ToString();
       return false;
     }
     has_primary_as_parent |= layout.primary_id == placement.parent_display_id;
   }
   if (!has_primary_as_parent)
-    LOG(ERROR) << "At least, one placement must have the primary as a parent.";
+    DISPLAY_LOG(ERROR)
+        << "At least, one placement must have the primary as a parent.";
   return has_primary_as_parent;
 }
 
@@ -629,12 +624,9 @@ bool DisplayLayout::HasSamePlacementList(const DisplayLayout& layout) const {
 }
 
 void DisplayLayout::RemoveDisplayPlacements(const DisplayIdList& list) {
-  placement_list.erase(
-      std::remove_if(placement_list.begin(), placement_list.end(),
-                     [list](const DisplayPlacement& placement) {
-                       return base::Contains(list, placement.display_id);
-                     }),
-      placement_list.end());
+  std::erase_if(placement_list, [&list](const DisplayPlacement& placement) {
+    return base::Contains(list, placement.display_id);
+  });
   for (DisplayPlacement& placement : placement_list) {
     if (base::Contains(list, placement.parent_display_id))
       placement.parent_display_id = primary_id;
@@ -658,11 +650,8 @@ std::string DisplayLayout::ToString() const {
 }
 
 DisplayPlacement DisplayLayout::FindPlacementById(int64_t display_id) const {
-  const auto iter =
-      std::find_if(placement_list.begin(), placement_list.end(),
-                   [display_id](const DisplayPlacement& placement) {
-                     return placement.display_id == display_id;
-                   });
+  const auto iter = base::ranges::find(placement_list, display_id,
+                                       &DisplayPlacement::display_id);
   return (iter == placement_list.end()) ? DisplayPlacement()
                                         : DisplayPlacement(*iter);
 }
@@ -695,7 +684,7 @@ DisplayPlacement DisplayLayout::FindPlacementById(int64_t display_id) const {
 //                 | RECTANGLE               x                       |
 //                 +-------------------------------------------------+
 //
-// The rectangle shares an egde with the reference's bottom edge, but it's
+// The rectangle shares an edge with the reference's bottom edge, but its
 // center point is in the left area.
 
 // static

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "components/dom_distiller/core/distiller_page.h"
 
 namespace web {
@@ -34,7 +35,7 @@ class DistillerPageFactoryIOS : public DistillerPageFactory {
       std::unique_ptr<SourcePageHandle> handle) const override;
 
  private:
-  web::BrowserState* browser_state_;
+  raw_ptr<web::BrowserState> browser_state_;
 };
 
 }  // namespace dom_distiller

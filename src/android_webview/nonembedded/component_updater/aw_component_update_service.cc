@@ -1,29 +1,54 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "android_webview/nonembedded/component_updater/aw_component_update_service.h"
 
 #include <memory>
+#include <string>
+#include <string_view>
+#include <vector>
 
 #include "android_webview/common/aw_paths.h"
+#include "android_webview/nonembedded/component_updater/aw_component_update_service.h"
 #include "android_webview/nonembedded/component_updater/aw_component_updater_configurator.h"
 #include "android_webview/nonembedded/component_updater/registration.h"
-#include "android_webview/nonembedded/nonembedded_jni_headers/AwComponentUpdateService_jni.h"
 #include "android_webview/nonembedded/webview_apk_process.h"
 #include "base/android/callback_android.h"
+#include "base/android/jni_string.h"
+#include "base/android/path_utils.h"
 #include "base/android/scoped_java_ref.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
 #include "base/command_line.h"
+#include "base/containers/contains.h"
+#include "base/files/file_enumerator.h"
+#include "base/files/file_path.h"
+#include "base/files/file_util.h"
+#include "base/files/important_file_writer.h"
+#include "base/files/scoped_temp_dir.h"
+#include "base/functional/callback_helpers.h"
+#include "base/json/json_string_value_serializer.h"
+#include "base/json/values_util.h"
+#include "base/logging.h"
 #include "base/no_destructor.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/notreached.h"
+#include "base/path_service.h"
+#include "base/strings/string_number_conversions.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
+#include "base/values.h"
+#include "base/version.h"
+#include "components/component_updater/android/component_loader_policy.h"
 #include "components/component_updater/component_installer.h"
 #include "components/component_updater/component_updater_service.h"
 #include "components/component_updater/component_updater_utils.h"
 #include "components/update_client/crx_update_item.h"
 #include "components/update_client/update_client.h"
+#include "components/update_client/utils.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "android_webview/nonembedded/nonembedded_jni_headers/AwComponentUpdateService_jni.h"
+#include "android_webview/nonembedded/nonembedded_jni_headers/ComponentsProviderPathUtil_jni.h"
 
 namespace android_webview {
 
@@ -52,7 +77,8 @@ AwComponentUpdateService::AwComponentUpdateService()
 
 AwComponentUpdateService::AwComponentUpdateService(
     scoped_refptr<update_client::Configurator> configurator)
-    : update_client_(update_client::UpdateClientFactory(configurator)) {}
+    : update_client_(update_client::UpdateClientFactory(configurator)),
+      configurator_(configurator) {}
 
 AwComponentUpdateService::~AwComponentUpdateService() = default;
 
@@ -67,7 +93,10 @@ void AwComponentUpdateService::StartComponentUpdateService(
                           base::Unretained(this)),
       base::BindOnce(
           &AwComponentUpdateService::ScheduleUpdatesOfRegisteredComponents,
-          weak_ptr_factory_.GetWeakPtr(), std::move(finished_callback),
+          weak_ptr_factory_.GetWeakPtr(),
+          base::BindOnce(&AwComponentUpdateService::UpdateMetadataFiles,
+                         weak_ptr_factory_.GetWeakPtr(),
+                         std::move(finished_callback)),
           on_demand_update));
 }
 
@@ -75,7 +104,7 @@ bool AwComponentUpdateService::RegisterComponent(
     const component_updater::ComponentRegistration& component) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  // TODO(crbug.com/1180595): Add the histograms being logged in
+  // TODO(crbug.com/40750393): Add the histograms being logged in
   // CrxUpdateService once we support logging metrics from nonembedded WebView.
 
   if (component.app_id.empty() || !component.version.IsValid() ||
@@ -99,13 +128,13 @@ void AwComponentUpdateService::CheckForUpdates(UpdateCallback on_finished,
                                                bool on_demand_update) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  // TODO(crbug.com/1180595): Add the histograms being logged in
+  // TODO(crbug.com/40750393): Add the histograms being logged in
   // CrxUpdateService once we support logging metrics from nonembedded WebView.
 
   std::vector<std::string> secure_ids;    // Require HTTPS for update checks.
   std::vector<std::string> unsecure_ids;  // Can fallback to HTTP.
   for (const auto& id : components_order_) {
-    DCHECK(components_.find(id) != components_.end());
+    DCHECK(base::Contains(components_, id));
 
     const auto component = component_updater::GetComponent(components_, id);
     if (!component || component->requires_network_encryption)
@@ -115,7 +144,7 @@ void AwComponentUpdateService::CheckForUpdates(UpdateCallback on_finished,
   }
 
   if (unsecure_ids.empty() && secure_ids.empty()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(on_finished), 0));
     return;
   }
@@ -160,11 +189,11 @@ void AwComponentUpdateService::OnUpdateComplete(
     const base::TimeTicks& start_time,
     update_client::Error error) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  // TODO(crbug.com/1180595): Add the histograms being logged in
+  // TODO(crbug.com/40750393): Add the histograms being logged in
   // CrxUpdateService once we support logging metrics from nonembedded WebView.
 
   if (!callback.is_null()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), error));
   }
 }
@@ -188,25 +217,26 @@ update_client::CrxComponent AwComponentUpdateService::ToCrxComponent(
   return crx;
 }
 
-absl::optional<component_updater::ComponentRegistration>
+std::optional<component_updater::ComponentRegistration>
 AwComponentUpdateService::GetComponent(const std::string& id) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   return component_updater::GetComponent(components_, id);
 }
 
-std::vector<absl::optional<update_client::CrxComponent>>
-AwComponentUpdateService::GetCrxComponents(
-    const std::vector<std::string>& ids) {
+void AwComponentUpdateService::GetCrxComponents(
+    const std::vector<std::string>& ids,
+    base::OnceCallback<
+        void(const std::vector<std::optional<update_client::CrxComponent>>&)>
+        callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  std::vector<absl::optional<update_client::CrxComponent>> crxs;
-  for (absl::optional<component_updater::ComponentRegistration> item :
+  std::vector<std::optional<update_client::CrxComponent>> crxs;
+  for (std::optional<component_updater::ComponentRegistration> item :
        component_updater::GetCrxComponents(components_, ids)) {
     crxs.push_back(
-        item
-            ? absl::optional<update_client::CrxComponent>{ToCrxComponent(*item)}
-            : absl::nullopt);
+        item ? std::optional<update_client::CrxComponent>{ToCrxComponent(*item)}
+             : std::nullopt);
   }
-  return crxs;
+  std::move(callback).Run(crxs);
 }
 
 void AwComponentUpdateService::ScheduleUpdatesOfRegisteredComponents(
@@ -230,6 +260,84 @@ void AwComponentUpdateService::RecordComponentsUpdated(
     UpdateCallback on_finished,
     update_client::Error error) {
   std::move(on_finished).Run(components_updated_count_);
+}
+
+std::string AwComponentUpdateService::GetCohortId(
+    const std::string& component_id) {
+  return configurator_->GetPersistedData()->GetCohort(component_id);
+}
+
+void AwComponentUpdateService::UpdateMetadataFiles(
+    UpdateCallback on_finished,
+    int32_t components_updated_count) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  for (const auto& component_entry : components_) {
+    const std::string& component_id = component_entry.first;
+    const auto& component = component_entry.second;
+
+    base::FilePath cps_component_base_path =
+        GetComponentsProviderServiceDirectory(component.public_key_hash);
+    std::string highest_sequence_number_dir =
+        GetHighestSequenceNumberDirectory(cps_component_base_path);
+
+    // If no directory was found, continue to the next component.
+    if (highest_sequence_number_dir.empty()) {
+      LOG(ERROR) << "No directory found for component " << component_id;
+      continue;
+    }
+
+    base::FilePath dest_path =
+        cps_component_base_path.AppendASCII(highest_sequence_number_dir);
+
+    base::Value::Dict metadata_file_contents;
+    metadata_file_contents.Set(component_updater::kMetadataFileCohortIdKey,
+                               GetCohortId(component_id));
+    std::string metadata_file_contents_json;
+    JSONStringValueSerializer serializer(&metadata_file_contents_json);
+    if (!serializer.Serialize(metadata_file_contents)) {
+      LOG(ERROR) << "Failed to serialize metadata for component "
+                 << component_id;
+      continue;
+    }
+
+    // Write the metadata JSON to the destination path.
+    base::FilePath metadata_file_path =
+        dest_path.Append("aw_extra_component_metadata.json");
+    if (!base::ImportantFileWriter::WriteFileAtomically(
+            metadata_file_path, metadata_file_contents_json)) {
+      LOG(ERROR) << "Failed to write metadata file for component "
+                 << component_id << " at " << metadata_file_path;
+    }
+  }
+
+  std::move(on_finished).Run(components_updated_count);
+}
+
+std::string AwComponentUpdateService::GetHighestSequenceNumberDirectory(
+    base::FilePath cps_component_base_path) {
+  JNIEnv* env = jni_zero::AttachCurrentThread();
+  return Java_ComponentsProviderPathUtil_getTheHighestSequenceNumberDirectory(
+      env, cps_component_base_path.MaybeAsASCII());
+}
+
+int AwComponentUpdateService::GetHighestSequenceNumber(
+    base::FilePath cps_component_base_path) {
+  JNIEnv* env = jni_zero::AttachCurrentThread();
+  return Java_ComponentsProviderPathUtil_getTheHighestSequenceNumber(
+      env, cps_component_base_path.MaybeAsASCII());
+}
+
+base::FilePath AwComponentUpdateService::GetComponentsProviderServiceDirectory(
+    const std::vector<uint8_t>& public_key_hash) {
+  std::string component_id =
+      update_client::GetCrxIdFromPublicKeyHash(public_key_hash);
+
+  JNIEnv* env = jni_zero::AttachCurrentThread();
+  return base::FilePath(
+
+             Java_ComponentsProviderPathUtil_getComponentsServingDirectoryPath(
+                 env))
+      .AppendASCII(component_id);
 }
 
 }  // namespace android_webview

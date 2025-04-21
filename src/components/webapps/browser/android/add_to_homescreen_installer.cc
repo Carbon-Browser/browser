@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,12 @@
 
 #include <utility>
 
-#include "base/callback.h"
-#include "components/webapps/browser/android/webapps_jni_headers/AddToHomescreenInstaller_jni.h"
+#include "base/functional/callback.h"
 #include "components/webapps/browser/webapps_client.h"
 #include "content/public/browser/web_contents.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "components/webapps/browser/android/webapps_jni_headers/AddToHomescreenInstaller_jni.h"
 
 namespace webapps {
 
@@ -30,6 +32,7 @@ void AddToHomescreenInstaller::Install(
       InstallOrOpenNativeApp(web_contents, params, event_callback);
       break;
     case AddToHomescreenParams::AppType::WEBAPK:
+    case AddToHomescreenParams::AppType::WEBAPK_DIY:
       WebappsClient::Get()->InstallWebApk(web_contents, params);
       break;
     case AddToHomescreenParams::AppType::SHORTCUT:

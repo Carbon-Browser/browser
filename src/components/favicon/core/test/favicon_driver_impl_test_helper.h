@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ class FaviconDriverImplTestHelper {
       delete;
   FaviconDriverImplTestHelper() = delete;
 
-  // Resets |driver->handler_| to a FaviconHandler of type |type|. This should
+  // Resets `driver->handler_` to a FaviconHandler of type `type`. This should
   // be called at a time when there are no outstanding requests.
   static void RecreateHandlerForType(
       FaviconDriverImpl* driver,

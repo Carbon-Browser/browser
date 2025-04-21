@@ -1,6 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+//
+// This source code is a part of eyeo Chromium SDK.
+// Use of this source code is governed by the GPLv3 that can be found in the
+// components/adblock/LICENSE file.
 
 #include "content/shell/app/shell_main_delegate.h"
 
@@ -17,16 +21,20 @@
 #include "base/lazy_instance.h"
 #include "base/logging.h"
 #include "base/path_service.h"
+#include "base/process/current_process.h"
 #include "base/trace_event/trace_log.h"
 #include "build/build_config.h"
 #include "components/crash/core/common/crash_key.h"
+#include "components/memory_system/initializer.h"
+#include "components/memory_system/parameters.h"
 #include "content/common/content_constants_internal.h"
+#include "content/public/app/initialize_mojo_core.h"
 #include "content/public/browser/browser_main_runner.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/common/main_function_params.h"
 #include "content/public/common/url_constants.h"
 #include "content/shell/app/shell_crash_reporter_client.h"
-#include "content/shell/browser/shell_content_browser_client.h"
+#include "content/shell/browser/adblock/adblock_shell_content_browser_client.h"
 #include "content/shell/browser/shell_paths.h"
 #include "content/shell/common/shell_content_client.h"
 #include "content/shell/common/shell_switches.h"
@@ -62,16 +70,21 @@
 #include "components/crash/core/app/crashpad.h"  // nogncheck
 #endif
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
 #include "content/shell/app/paths_mac.h"
+#endif
+
+#if BUILDFLAG(IS_MAC)
 #include "content/shell/app/shell_main_delegate_mac.h"
 #endif  // BUILDFLAG(IS_MAC)
 
 #if BUILDFLAG(IS_WIN)
+#include <initguid.h>
 #include <windows.h>
 
-#include <initguid.h>
 #include "base/logging_win.h"
+#include "base/win/scoped_handle.h"
+#include "base/win/win_util.h"
 #include "content/shell/common/v8_crashpad_support_win.h"
 #endif
 
@@ -79,7 +92,19 @@
 #include "v8/include/v8-wasm-trap-handler-posix.h"
 #endif
 
+#if BUILDFLAG(IS_IOS)
+#include "content/shell/app/ios/shell_application_ios.h"
+#endif
+
 namespace {
+
+enum class LoggingDest {
+  kFile,
+  kStderr,
+#if BUILDFLAG(IS_WIN)
+  kHandle,
+#endif
+};
 
 #if !BUILDFLAG(IS_FUCHSIA)
 base::LazyInstance<content::ShellCrashReporterClient>::Leaky
@@ -104,20 +129,68 @@ const GUID kContentShellProviderName = {
 #endif
 
 void InitLogging(const base::CommandLine& command_line) {
-  base::FilePath log_filename =
-      command_line.GetSwitchValuePath(switches::kLogFile);
-  if (log_filename.empty()) {
-#if BUILDFLAG(IS_FUCHSIA)
-    base::PathService::Get(base::DIR_TEMP, &log_filename);
+  LoggingDest dest = LoggingDest::kFile;
+
+  if (command_line.GetSwitchValueASCII(switches::kEnableLogging) == "stderr") {
+    dest = LoggingDest::kStderr;
+  }
+
+#if BUILDFLAG(IS_WIN)
+  // On Windows child process may be given a handle in the --log-file switch.
+  base::win::ScopedHandle log_handle;
+  if (command_line.GetSwitchValueASCII(switches::kEnableLogging) == "handle") {
+    auto handle_str = command_line.GetSwitchValueNative(switches::kLogFile);
+    uint32_t handle_value = 0;
+    if (base::StringToUint(handle_str, &handle_value)) {
+      // This handle is owned by the logging framework and is closed when the
+      // process exits.
+      HANDLE duplicate = nullptr;
+      if (::DuplicateHandle(GetCurrentProcess(),
+                            base::win::Uint32ToHandle(handle_value),
+                            GetCurrentProcess(), &duplicate, 0, FALSE,
+                            DUPLICATE_SAME_ACCESS)) {
+        log_handle.Set(duplicate);
+        dest = LoggingDest::kHandle;
+      }
+    }
+  }
+#endif  // BUILDFLAG(IS_WIN)
+
+  base::FilePath log_filename;
+  if (dest == LoggingDest::kFile) {
+    log_filename = command_line.GetSwitchValuePath(switches::kLogFile);
+    if (log_filename.empty()) {
+#if BUILDFLAG(IS_FUCHSIA) || BUILDFLAG(IS_IOS)
+      base::PathService::Get(base::DIR_TEMP, &log_filename);
 #else
-    base::PathService::Get(base::DIR_EXE, &log_filename);
+      base::PathService::Get(base::DIR_EXE, &log_filename);
 #endif
-    log_filename = log_filename.AppendASCII("content_shell.log");
+      log_filename = log_filename.AppendASCII("content_shell.log");
+    }
   }
 
   logging::LoggingSettings settings;
-  settings.logging_dest = logging::LOG_TO_ALL;
-  settings.log_file_path = log_filename.value().c_str();
+#if BUILDFLAG(IS_WIN)
+  if (dest == LoggingDest::kHandle) {
+    // TODO(crbug.com/328285906) Use a ScopedHandle in logging settings.
+    settings.log_file = log_handle.release();
+  } else {
+    settings.log_file = nullptr;
+  }
+#endif  // BUILDFLAG(IS_WIN)
+
+  if (dest == LoggingDest::kFile) {
+    settings.log_file_path = log_filename.value();
+  }
+
+  if (dest == LoggingDest::kStderr) {
+    settings.logging_dest =
+        logging::LOG_TO_STDERR | logging::LOG_TO_SYSTEM_DEBUG_LOG;
+  } else {
+    // Includes both handle or provided filename on Windows.
+    settings.logging_dest = logging::LOG_TO_ALL;
+  }
+
   settings.delete_old = logging::DELETE_OLD_LOG_FILE;
   logging::InitLogging(settings);
   logging::SetLogItems(true /* Process ID */, true /* Thread ID */,
@@ -134,7 +207,7 @@ ShellMainDelegate::ShellMainDelegate(bool is_content_browsertests)
 ShellMainDelegate::~ShellMainDelegate() {
 }
 
-absl::optional<int> ShellMainDelegate::BasicStartupComplete() {
+std::optional<int> ShellMainDelegate::BasicStartupComplete() {
   base::CommandLine& command_line = *base::CommandLine::ForCurrentProcess();
   if (command_line.HasSwitch("run-layout-test")) {
     std::cerr << std::string(79, '*') << "\n"
@@ -157,12 +230,7 @@ absl::optional<int> ShellMainDelegate::BasicStartupComplete() {
 
 #if BUILDFLAG(IS_MAC)
   // Needs to happen before InitializeResourceBundle().
-  OverrideFrameworkBundlePath();
-  OverrideOuterBundlePath();
-  OverrideChildProcessPath();
-  OverrideSourceRootPath();
   EnsureCorrectResolutionSettings();
-  OverrideBundleID();
 #endif  // BUILDFLAG(IS_MAC)
 
   InitLogging(command_line);
@@ -180,24 +248,21 @@ absl::optional<int> ShellMainDelegate::BasicStartupComplete() {
 
   RegisterShellPathProvider();
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 bool ShellMainDelegate::ShouldCreateFeatureList(InvokedIn invoked_in) {
   return absl::holds_alternative<InvokedInChildProcess>(invoked_in);
 }
 
-void ShellMainDelegate::PreSandboxStartup() {
-#if defined(ARCH_CPU_ARM_FAMILY) && \
-    (BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS))
-  // Create an instance of the CPU class to parse /proc/cpuinfo and cache
-  // cpu_brand info.
-  base::CPU cpu_info;
-#endif
+bool ShellMainDelegate::ShouldInitializeMojo(InvokedIn invoked_in) {
+  return ShouldCreateFeatureList(invoked_in);
+}
 
+void ShellMainDelegate::PreSandboxStartup() {
 // Disable platform crash handling and initialize the crash reporter, if
 // requested.
-// TODO(crbug.com/1226159): Implement crash reporter integration for Fuchsia.
+// TODO(crbug.com/40188745): Implement crash reporter integration for Fuchsia.
 #if !BUILDFLAG(IS_FUCHSIA)
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
           switches::kEnableCrashReporter)) {
@@ -228,7 +293,8 @@ absl::variant<int, MainFunctionParams> ShellMainDelegate::RunProcess(
   if (!process_type.empty())
     return std::move(main_function_params);
 
-  base::trace_event::TraceLog::GetInstance()->set_process_name("Browser");
+  base::CurrentProcess::GetInstance().SetProcessType(
+      base::CurrentProcessType::PROCESS_BROWSER);
   base::trace_event::TraceLog::GetInstance()->SetProcessSortIndex(
       kTraceEventBrowserProcessSortIndex);
 
@@ -242,15 +308,13 @@ absl::variant<int, MainFunctionParams> ShellMainDelegate::RunProcess(
     // return an error.
     return 0;
   }
+#endif
 
-  // On non-Android, we can return the |main_function_params| back and have the
-  // caller run BrowserMain() normally.
-  return std::move(main_function_params);
-#else
-  // On Android, we defer to the system message loop when the stack unwinds.
-  // So here we only create (and leak) a BrowserMainRunner. The shutdown
-  // of BrowserMainRunner doesn't happen in Chrome Android and doesn't work
-  // properly on Android at all.
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
+  // On Android and iOS, we defer to the system message loop when the stack
+  // unwinds. So here we only create (and leak) a BrowserMainRunner. The
+  // shutdown of BrowserMainRunner doesn't happen in Chrome Android/iOS and
+  // doesn't work properly on Android/iOS at all.
   std::unique_ptr<BrowserMainRunner> main_runner = BrowserMainRunner::Create();
   // In browser tests, the |main_function_params| contains a |ui_task| which
   // will execute the testing. The task will be executed synchronously inside
@@ -264,6 +328,10 @@ absl::variant<int, MainFunctionParams> ShellMainDelegate::RunProcess(
   // the system message loop for ContentShell, and we're already done thanks
   // to the |ui_task| for browser tests.
   return 0;
+#else
+  // On non-Android, we can return the |main_function_params| back and have the
+  // caller run BrowserMain() normally.
+  return std::move(main_function_params);
 #endif
 }
 
@@ -307,7 +375,7 @@ void ShellMainDelegate::InitializeResourceBundle() {
     global_descriptors->Set(kShellPakDescriptor, pak_fd, pak_region);
   }
   DCHECK_GE(pak_fd, 0);
-  // TODO(crbug.com/330930): A better way to prevent fdsan error from a double
+  // TODO(crbug.com/40346051): A better way to prevent fdsan error from a double
   // close is to refactor GlobalDescriptors.{Get,MaybeGet} to return
   // "const base::File&" rather than fd itself.
   base::File android_pak_file(pak_fd);
@@ -315,7 +383,7 @@ void ShellMainDelegate::InitializeResourceBundle() {
       android_pak_file.Duplicate(), pak_region);
   ui::ResourceBundle::GetSharedInstance().AddDataPackFromFileRegion(
       std::move(android_pak_file), pak_region, ui::k100Percent);
-#elif BUILDFLAG(IS_MAC)
+#elif BUILDFLAG(IS_APPLE)
   ui::ResourceBundle::InitSharedInstanceWithPakPath(GetResourcesPakFilePath());
 #else
   base::FilePath pak_file;
@@ -326,20 +394,50 @@ void ShellMainDelegate::InitializeResourceBundle() {
 #endif
 }
 
-absl::optional<int> ShellMainDelegate::PreBrowserMain() {
+std::optional<int> ShellMainDelegate::PreBrowserMain() {
+  std::optional<int> exit_code = content::ContentMainDelegate::PreBrowserMain();
+  if (exit_code.has_value())
+    return exit_code;
+
 #if BUILDFLAG(IS_MAC)
   RegisterShellCrApp();
 #endif
-  return absl::nullopt;
+  return std::nullopt;
 }
 
-absl::optional<int> ShellMainDelegate::PostEarlyInitialization(
+std::optional<int> ShellMainDelegate::PostEarlyInitialization(
     InvokedIn invoked_in) {
   if (!ShouldCreateFeatureList(invoked_in)) {
     // Apply field trial testing configuration since content did not.
     browser_client_->CreateFeatureListAndFieldTrials();
   }
-  return absl::nullopt;
+  if (!ShouldInitializeMojo(invoked_in)) {
+    InitializeMojoCore();
+  }
+
+  const std::string process_type =
+      base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
+          switches::kProcessType);
+
+  // ShellMainDelegate has GWP-ASan as well as Profiling Client disabled.
+  // Consequently, we provide no parameters for these two. The memory_system
+  // includes the PoissonAllocationSampler dynamically only if the Profiling
+  // Client is enabled. However, we are not sure if this is the only user of
+  // PoissonAllocationSampler in the ContentShell. Therefore, enforce inclusion
+  // at the moment.
+  //
+  // TODO(crbug.com/40062835): Clarify which users of
+  // PoissonAllocationSampler we have in the ContentShell. Do we really need to
+  // enforce it?
+  memory_system::Initializer()
+      .SetDispatcherParameters(memory_system::DispatcherParameters::
+                                   PoissonAllocationSamplerInclusion::kEnforce,
+                               memory_system::DispatcherParameters::
+                                   AllocationTraceRecorderInclusion::kIgnore,
+                               process_type)
+      .Initialize(memory_system_);
+
+  return std::nullopt;
 }
 
 ContentClient* ShellMainDelegate::CreateContentClient() {
@@ -354,7 +452,7 @@ ContentBrowserClient* ShellMainDelegate::CreateContentBrowserClient() {
     return browser_client_.get();
   }
 #endif
-  browser_client_ = std::make_unique<ShellContentBrowserClient>();
+  browser_client_ = std::make_unique<AdblockShellContentBrowserClient>();
   return browser_client_.get();
 }
 

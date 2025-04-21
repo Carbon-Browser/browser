@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -68,6 +68,9 @@ class CC_ANIMATION_EXPORT KeyframedFilterAnimationCurve
 
   // FilterAnimationCurve implementation
   FilterOperations GetValue(base::TimeDelta t) const override;
+  FilterOperations GetTransformedValue(
+      base::TimeDelta t,
+      gfx::TimingFunction::LimitDirection limit_direction) const override;
 
  private:
   KeyframedFilterAnimationCurve();

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,12 @@
 
 #include "base/check.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
+#include "third_party/blink/renderer/bindings/core/v8/iterable.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_tester.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_testing.h"
-#include "third_party/blink/renderer/bindings/core/v8/v8_iterator_result_value.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_readable_stream_read_result.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_web_transport_options.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/streams/readable_stream.h"
@@ -45,7 +46,7 @@ v8::Local<v8::Value> ReadValueFromStream(const V8TestingScope& scope,
   auto* reader =
       stream->GetDefaultReaderForTesting(script_state, ASSERT_NO_EXCEPTION);
 
-  ScriptPromise read_promise = reader->read(script_state, ASSERT_NO_EXCEPTION);
+  auto read_promise = reader->read(script_state, ASSERT_NO_EXCEPTION);
 
   ScriptPromiseTester read_tester(script_state, read_promise);
   read_tester.WaitUntilSettled();
@@ -55,9 +56,8 @@ v8::Local<v8::Value> ReadValueFromStream(const V8TestingScope& scope,
   DCHECK(result->IsObject());
   v8::Local<v8::Value> v8value;
   bool done = false;
-  EXPECT_TRUE(
-      V8UnpackIteratorResult(script_state, result.As<v8::Object>(), &done)
-          .ToLocal(&v8value));
+  EXPECT_TRUE(V8UnpackIterationResult(script_state, result.As<v8::Object>(),
+                                      &v8value, &done));
   EXPECT_FALSE(done);
   return v8value;
 }
@@ -103,7 +103,8 @@ void TestWebTransportCreator::Connect(
   handshake_client->OnConnectionEstablished(
       std::move(web_transport_to_pass),
       client_remote.InitWithNewPipeAndPassReceiver(),
-      network::mojom::blink::HttpResponseHeaders::New());
+      network::mojom::blink::HttpResponseHeaders::New(),
+      network::mojom::blink::WebTransportStats::New());
   client_remote_.Bind(std::move(client_remote));
 }
 

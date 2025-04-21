@@ -1,6 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+import {TestRunner} from 'test_runner';
+
+import * as Platform from 'devtools/core/platform/platform.js';
+import * as SDK from 'devtools/core/sdk/sdk.js';
 
 (async function() {
   TestRunner.addResult(`Tests that WebSocketFrames are being sent and received by Web Inspector.\n`);
@@ -27,7 +32,7 @@
     var websocketFrames = request.frames();
     for (var i = 0; i < websocketFrames.length; i++) {
       var frame = websocketFrames[i];
-      frames[i] = String.sprintf('%d-%s: %s', (i + 1), frame.type, frame.text);
+      frames[i] = Platform.StringUtilities.sprintf('%d-%s: %s', (i + 1), frame.type, frame.text);
       if (frame.type !== SDK.NetworkRequest.WebSocketFrameType.Send && frame.text === 'exit')
         done = true;
     }

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 
 #include <memory>
 
-#include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 
@@ -28,12 +27,6 @@ class NotificationTriggerScheduler {
   NotificationTriggerScheduler& operator=(const NotificationTriggerScheduler&) =
       delete;
   virtual ~NotificationTriggerScheduler();
-
-  // Schedules a trigger at |timestamp| that calls TriggerNotifications on each
-  // StoragePartition of profiles that have pending notifications at that time.
-  // If there is an existing earlier trigger set, this is a nop. Otherwise this
-  // overwrites the existing trigger so only the earliest is set at any time.
-  virtual void ScheduleTrigger(base::Time timestamp);
 
  protected:
   // Use NotificationTriggerScheduler::Create() to get an instance of this.

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,22 +15,23 @@ import android.widget.LinearLayout;
 import android.widget.NumberPicker;
 import android.widget.NumberPicker.OnValueChangeListener;
 
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 import org.chromium.content.R;
 
 import java.util.Calendar;
 import java.util.Locale;
 import java.util.TimeZone;
 
-/**
- * This class is heavily based on android.widget.DatePicker.
- */
+/** This class is heavily based on android.widget.DatePicker. */
+@NullMarked
 public abstract class TwoFieldDatePicker extends FrameLayout {
 
     private final NumberPicker mPositionInYearSpinner;
 
     private final NumberPicker mYearSpinner;
 
-    private OnMonthOrWeekChangedListener mMonthOrWeekChangedListener;
+    private @Nullable OnMonthOrWeekChangedListener mMonthOrWeekChangedListener;
 
     // It'd be nice to use android.text.Time like in other Dialogs but
     // it suffers from the 2038 effect so it would prevent us from
@@ -41,9 +42,7 @@ public abstract class TwoFieldDatePicker extends FrameLayout {
 
     private Calendar mCurrentDate;
 
-    /**
-     * The callback used to indicate the user changes\d the date.
-     */
+    /** The callback used to indicate the user changes\d the date. */
     public interface OnMonthOrWeekChangedListener {
 
         /**
@@ -59,37 +58,39 @@ public abstract class TwoFieldDatePicker extends FrameLayout {
     public TwoFieldDatePicker(Context context, double minValue, double maxValue) {
         super(context, null, android.R.attr.datePickerStyle);
 
-        LayoutInflater inflater = (LayoutInflater) context
-                .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+        LayoutInflater inflater =
+                (LayoutInflater) context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
         inflater.inflate(R.layout.two_field_date_picker, this, true);
 
-        OnValueChangeListener onChangeListener = new OnValueChangeListener() {
-            @Override
-            public void onValueChange(NumberPicker picker, int oldVal, int newVal) {
-                int year = getYear();
-                int positionInYear = getPositionInYear();
-                // take care of wrapping of days and months to update greater fields
-                if (picker == mPositionInYearSpinner) {
-                    positionInYear = newVal;
-                    if (oldVal == picker.getMaxValue() && newVal == picker.getMinValue()) {
-                        year += 1;
-                        positionInYear = getMinPositionInYear(year);
-                    } else if (oldVal == picker.getMinValue() && newVal == picker.getMaxValue()) {
-                        year -= 1;
-                        positionInYear = getMaxPositionInYear(year);
-                    }
-                } else if (picker == mYearSpinner) {
-                    year = newVal;
-                } else {
-                    throw new IllegalArgumentException();
-                }
+        OnValueChangeListener onChangeListener =
+                new OnValueChangeListener() {
+                    @Override
+                    public void onValueChange(NumberPicker picker, int oldVal, int newVal) {
+                        int year = getYear();
+                        int positionInYear = getPositionInYear();
+                        // take care of wrapping of days and months to update greater fields
+                        if (picker == mPositionInYearSpinner) {
+                            positionInYear = newVal;
+                            if (oldVal == picker.getMaxValue() && newVal == picker.getMinValue()) {
+                                year += 1;
+                                positionInYear = getMinPositionInYear(year);
+                            } else if (oldVal == picker.getMinValue()
+                                    && newVal == picker.getMaxValue()) {
+                                year -= 1;
+                                positionInYear = getMaxPositionInYear(year);
+                            }
+                        } else if (picker == mYearSpinner) {
+                            year = newVal;
+                        } else {
+                            throw new IllegalArgumentException();
+                        }
 
-                // now set the date to the adjusted one
-                setCurrentDate(year, positionInYear);
-                updateSpinners();
-                notifyDateChanged();
-            }
-        };
+                        // now set the date to the adjusted one
+                        setCurrentDate(year, positionInYear);
+                        updateSpinners();
+                        notifyDateChanged();
+                    }
+                };
 
         mCurrentDate = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
         if (minValue >= maxValue) {
@@ -150,8 +151,7 @@ public abstract class TwoFieldDatePicker extends FrameLayout {
             }
         } else {
             // This method was used to order android.widget.DatePicker
-            // fields in JB prior to the availability of
-            // getBestDateTimePattern.
+            // fields in JB prior to the availability of getBestDateTimePattern.
             char[] order = DateFormat.getDateFormatOrder(getContext());
             for (int i = 0; i < order.length; ++i) {
                 if (order[i] == 'M') {
@@ -177,8 +177,10 @@ public abstract class TwoFieldDatePicker extends FrameLayout {
      * @param onMonthOrWeekChangedListener How user is notified date is changed by
      *            user, can be null.
      */
-    public void init(int year, int positionInYear,
-            OnMonthOrWeekChangedListener onMonthOrWeekChangedListener) {
+    public void init(
+            int year,
+            int positionInYear,
+            @Nullable OnMonthOrWeekChangedListener onMonthOrWeekChangedListener) {
         setCurrentDate(year, positionInYear);
         updateSpinners();
         mMonthOrWeekChangedListener = onMonthOrWeekChangedListener;
@@ -230,8 +232,8 @@ public abstract class TwoFieldDatePicker extends FrameLayout {
         super.onPopulateAccessibilityEvent(event);
 
         final int flags = DateUtils.FORMAT_SHOW_DATE | DateUtils.FORMAT_SHOW_YEAR;
-        String selectedDateUtterance = DateUtils.formatDateTime(getContext(),
-                mCurrentDate.getTimeInMillis(), flags);
+        String selectedDateUtterance =
+                DateUtils.formatDateTime(getContext(), mCurrentDate.getTimeInMillis(), flags);
         event.getText().add(selectedDateUtterance);
     }
 
@@ -275,9 +277,7 @@ public abstract class TwoFieldDatePicker extends FrameLayout {
         return mYearSpinner;
     }
 
-    /**
-     * This method should be subclassed to update the spinners based on mCurrentDate.
-     */
+    /** This method should be subclassed to update the spinners based on mCurrentDate. */
     protected void updateSpinners() {
         mPositionInYearSpinner.setDisplayedValues(null);
 
@@ -297,9 +297,7 @@ public abstract class TwoFieldDatePicker extends FrameLayout {
         mPositionInYearSpinner.setValue(getPositionInYear());
     }
 
-    /**
-     * Notifies the listener, if such, for a change in the selected date.
-     */
+    /** Notifies the listener, if such, for a change in the selected date. */
     protected void notifyDateChanged() {
         sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_SELECTED);
         if (mMonthOrWeekChangedListener != null) {

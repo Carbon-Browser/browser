@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,7 +38,7 @@ StereoPannerHandler::StereoPannerHandler(AudioNode& node,
   // The node-specific default mixing rules declare that StereoPannerNode
   // can handle mono to stereo and stereo to stereo conversion.
   channel_count_ = kMaximumOutputChannels;
-  SetInternalChannelCountMode(kClampedMax);
+  SetInternalChannelCountMode(V8ChannelCountMode::Enum::kClampedMax);
   SetInternalChannelInterpretation(AudioBus::kSpeakers);
 
   Initialize();
@@ -91,8 +91,15 @@ void StereoPannerHandler::Process(uint32_t frames_to_process) {
 }
 
 void StereoPannerHandler::ProcessOnlyAudioParams(uint32_t frames_to_process) {
-  float values[GetDeferredTaskHandler().RenderQuantumFrames()];
-  DCHECK_LE(frames_to_process, GetDeferredTaskHandler().RenderQuantumFrames());
+  // TODO(crbug.com/40637820): Eventually, the render quantum size will no
+  // longer be hardcoded as 128. At that point, we'll need to switch from
+  // stack allocation to heap allocation.
+  constexpr unsigned render_quantum_frames_expected = 128;
+  CHECK_EQ(GetDeferredTaskHandler().RenderQuantumFrames(),
+           render_quantum_frames_expected);
+
+  float values[render_quantum_frames_expected];
+  DCHECK_LE(frames_to_process, render_quantum_frames_expected);
 
   pan_->CalculateSampleAccurateValues(values, frames_to_process);
 }
@@ -110,13 +117,13 @@ void StereoPannerHandler::Initialize() {
 void StereoPannerHandler::SetChannelCount(unsigned channel_count,
                                           ExceptionState& exception_state) {
   DCHECK(IsMainThread());
-  BaseAudioContext::GraphAutoLocker locker(Context());
+  DeferredTaskHandler::GraphAutoLocker locker(Context());
 
   if (channel_count >= kMinimumOutputChannels &&
       channel_count <= kMaximumOutputChannels) {
     if (channel_count_ != channel_count) {
       channel_count_ = channel_count;
-      if (InternalChannelCountMode() != kMax) {
+      if (InternalChannelCountMode() != V8ChannelCountMode::Enum::kMax) {
         UpdateChannelsForInputs();
       }
     }
@@ -130,18 +137,17 @@ void StereoPannerHandler::SetChannelCount(unsigned channel_count,
   }
 }
 
-void StereoPannerHandler::SetChannelCountMode(const String& mode,
+void StereoPannerHandler::SetChannelCountMode(V8ChannelCountMode::Enum mode,
                                               ExceptionState& exception_state) {
   DCHECK(IsMainThread());
-  BaseAudioContext::GraphAutoLocker locker(Context());
+  DeferredTaskHandler::GraphAutoLocker locker(Context());
 
-  ChannelCountMode old_mode = InternalChannelCountMode();
+  V8ChannelCountMode::Enum old_mode = InternalChannelCountMode();
 
-  if (mode == "clamped-max") {
-    new_channel_count_mode_ = kClampedMax;
-  } else if (mode == "explicit") {
-    new_channel_count_mode_ = kExplicit;
-  } else if (mode == "max") {
+  if (mode == V8ChannelCountMode::Enum::kClampedMax ||
+      mode == V8ChannelCountMode::Enum::kExplicit) {
+    new_channel_count_mode_ = mode;
+  } else if (mode == V8ChannelCountMode::Enum::kMax) {
     // This is not supported for a StereoPannerNode, which can only handle
     // 1 or 2 channels.
     exception_state.ThrowDOMException(DOMExceptionCode::kNotSupportedError,

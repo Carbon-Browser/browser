@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "media/base/byte_queue.h"
 #include "media/formats/mp2t/ts_section.h"
 
@@ -29,8 +29,7 @@ class TsSectionCetsPssh : public TsSection {
 
   // TsSection implementation.
   bool Parse(bool payload_unit_start_indicator,
-             const uint8_t* buf,
-             int size) override;
+             base::span<const uint8_t> buf) override;
   void Flush() override;
   void Reset() override;
 

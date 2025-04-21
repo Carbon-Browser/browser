@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define COMPONENTS_METRICS_STRUCTURED_MOJOM_EVENT_MOJOM_TRAITS_H_
 
 #include <memory>
+#include <optional>
 
 #include "base/strings/string_number_conversions.h"
 #include "components/metrics/structured/event.h"
@@ -77,6 +78,13 @@ class StructTraits<metrics::structured::mojom::EventDataView,
   static const std::map<std::string, metrics::structured::Event::MetricValue>&
   metrics(const metrics::structured::Event& event) {
     return event.metric_values();
+  }
+
+  static std::optional<base::TimeDelta> system_uptime(
+      const metrics::structured::Event& event);
+
+  static bool is_event_sequence(const metrics::structured::Event& event) {
+    return event.IsEventSequenceType();
   }
 
   static bool Read(metrics::structured::mojom::EventDataView event,

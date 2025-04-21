@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "base/time/time.h"
 #include "components/sync/protocol/session_specifics.pb.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
@@ -18,10 +19,21 @@ struct SyncedSession;
 
 testing::Matcher<const sync_pb::SessionSpecifics&> MatchesHeader(
     testing::Matcher<std::string> session_tag,
+    testing::Matcher<base::Time> session_start_time,
     testing::Matcher<std::vector<int>> window_ids,
     testing::Matcher<std::vector<int>> tab_ids);
 
-// Convenience overload.
+testing::Matcher<const sync_pb::SessionSpecifics&> MatchesHeader(
+    testing::Matcher<std::string> session_tag,
+    testing::Matcher<std::vector<int>> window_ids,
+    testing::Matcher<std::vector<int>> tab_ids);
+
+// Convenience overloads.
+testing::Matcher<const sync_pb::SessionSpecifics&> MatchesHeader(
+    testing::Matcher<std::string> session_tag,
+    base::Time session_start_time,
+    const std::vector<int>& window_ids,
+    const std::vector<int>& tab_ids);
 testing::Matcher<const sync_pb::SessionSpecifics&> MatchesHeader(
     testing::Matcher<std::string> session_tag,
     const std::vector<int>& window_ids,

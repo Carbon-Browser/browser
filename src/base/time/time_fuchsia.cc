@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,6 +37,10 @@ TimeTicks TimeTicksNowIgnoringOverride() {
   const zx_time_t nanos_since_boot = zx_clock_get_monotonic();
   CHECK_NE(0, nanos_since_boot);
   return TimeTicks::FromZxTime(nanos_since_boot);
+}
+
+TimeTicks TimeTicksLowResolutionNowIgnoringOverride() {
+  return TimeTicksNowIgnoringOverride();
 }
 }  // namespace subtle
 

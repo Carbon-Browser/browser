@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,19 +25,21 @@ class MockDeviceTrustKeyManager : public DeviceTrustKeyManager {
 
   MOCK_METHOD(void,
               ExportPublicKeyAsync,
-              (base::OnceCallback<void(absl::optional<std::string>)>),
+              (base::OnceCallback<void(std::optional<std::string>)>),
               (override));
 
   MOCK_METHOD(void,
               SignStringAsync,
               (const std::string&,
-               base::OnceCallback<void(absl::optional<std::vector<uint8_t>>)>),
+               base::OnceCallback<void(std::optional<std::vector<uint8_t>>)>),
               (override));
 
-  MOCK_METHOD(absl::optional<MockDeviceTrustKeyManager::KeyMetadata>,
+  MOCK_METHOD(std::optional<MockDeviceTrustKeyManager::KeyMetadata>,
               GetLoadedKeyMetadata,
               (),
               (const, override));
+
+  MOCK_METHOD(bool, HasPermanentFailure, (), (const, override));
 };
 
 }  // namespace test

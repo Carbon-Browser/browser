@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ DocumentMarker::MarkerType TextMatchMarkerListImpl::MarkerType() const {
 }
 
 bool TextMatchMarkerListImpl::IsEmpty() const {
-  return markers_.IsEmpty();
+  return markers_.empty();
 }
 
 void TextMatchMarkerListImpl::Add(DocumentMarker* marker) {
@@ -128,18 +128,22 @@ bool TextMatchMarkerListImpl::SetTextMatchMarkersActive(unsigned start_offset,
                                                         unsigned end_offset,
                                                         bool active) {
   bool doc_dirty = false;
-  auto* const start = std::upper_bound(
+  auto const start = std::upper_bound(
       markers_.begin(), markers_.end(), start_offset,
       [](size_t start_offset, const Member<DocumentMarker>& marker) {
         return start_offset < marker->EndOffset();
       });
-  for (auto* it = start; it != markers_.end(); ++it) {
-    DocumentMarker& marker = **it;
+  auto start_position =
+      base::checked_cast<wtf_size_t>(start - markers_.begin());
+  auto num_to_adjust = markers_.size() - start_position;
+  auto sub_span = base::span(markers_).subspan(start_position, num_to_adjust);
+  for (DocumentMarker* marker : sub_span) {
     // Markers are returned in order, so stop if we are now past the specified
     // range.
-    if (marker.StartOffset() >= end_offset)
+    if (marker->StartOffset() >= end_offset) {
       break;
-    To<TextMatchMarker>(marker).SetIsActiveMatch(active);
+    }
+    To<TextMatchMarker>(marker)->SetIsActiveMatch(active);
     doc_dirty = true;
   }
   return doc_dirty;

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,30 +7,32 @@
 #include <memory>
 
 #include "ash/capture_mode/capture_mode_controller.h"
-#include "ash/constants/ash_features.h"
 #include "ash/display/screen_orientation_controller.h"
 #include "ash/login/login_screen_controller.h"
 #include "ash/public/cpp/new_window_delegate.h"
-#include "ash/public/cpp/style/scoped_light_mode_as_default.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "ash/style/ash_color_provider.h"
+#include "ash/style/ash_color_id.h"
 #include "ash/style/system_shadow.h"
 #include "ash/system/power/power_button_menu_item_view.h"
 #include "ash/system/power/power_button_menu_metrics_type.h"
+#include "ash/system/power/power_button_menu_view_util.h"
 #include "ash/system/user/login_status.h"
 #include "ash/wm/lock_state_controller.h"
-#include "ash/wm/tablet_mode/tablet_mode_controller.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animator.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
 #include "ui/compositor_extra/shadow.h"
+#include "ui/display/screen.h"
 #include "ui/gfx/vector_icon_types.h"
 #include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/background.h"
@@ -44,41 +46,12 @@ namespace {
 constexpr int kMenuItemHorizontalPadding = 16;
 constexpr int kMenuItemVerticalPadding = 16;
 
-// The rounded corner radius of menu.
-constexpr int kMenuCornerRadius = 16;
-
 // Horizontal padding between two menu items.
 constexpr int kPaddingBetweenMenuItems = 8;
-
-// Set show/hide animation for layer.
-void SetLayerAnimation(ui::Layer* layer,
-                       ui::ImplicitAnimationObserver* observer,
-                       bool show,
-                       const gfx::Transform& transform) {
-  DCHECK(layer);
-
-  auto* animator = layer->GetAnimator();
-  animator->AbortAllAnimations();
-
-  ui::ScopedLayerAnimationSettings animation_settings(animator);
-  animation_settings.SetTweenType(show ? gfx::Tween::EASE_IN
-                                       : gfx::Tween::FAST_OUT_LINEAR_IN);
-  animation_settings.SetTransitionDuration(
-      PowerButtonMenuView::kMenuAnimationDuration);
-  animation_settings.SetPreemptionStrategy(
-      ui::LayerAnimator::IMMEDIATELY_ANIMATE_TO_NEW_TARGET);
-  if (observer)
-    animation_settings.AddObserver(observer);
-
-  layer->SetOpacity(show ? 1.0f : 0.f);
-  layer->SetTransform(transform);
-}
 
 }  // namespace
 
 using PowerButtonPosition = PowerButtonController::PowerButtonPosition;
-
-constexpr base::TimeDelta PowerButtonMenuView::kMenuAnimationDuration;
 
 PowerButtonMenuView::PowerButtonMenuView(
     ShutdownReason shutdown_reason,
@@ -87,23 +60,30 @@ PowerButtonMenuView::PowerButtonMenuView(
       power_button_position_(power_button_position) {
   SetFocusBehavior(FocusBehavior::ALWAYS);
   SetPaintToLayer();
-  if (features::IsDarkLightModeEnabled()) {
-    SetBorder(std::make_unique<views::HighlightBorder>(
-        kMenuCornerRadius, views::HighlightBorder::Type::kHighlightBorder1,
-        /*use_light_colors=*/false));
+  SetBorder(std::make_unique<views::HighlightBorder>(
+      kPowerButtonMenuCornerRadius,
+      views::HighlightBorder::Type::kHighlightBorderOnShadow));
+  SetBackground(
+      views::CreateThemedSolidBackground(kPowerButtonMenuBackgroundColorId));
+
+  layer()->SetRoundedCornerRadius(
+      gfx::RoundedCornersF(kPowerButtonMenuCornerRadius));
+  if (features::IsBackgroundBlurEnabled() &&
+      chromeos::features::IsSystemBlurEnabled()) {
+    layer()->SetFillsBoundsOpaquely(false);
+    layer()->SetBackgroundBlur(ColorProvider::kBackgroundBlurSigma);
+    layer()->SetBackdropFilterQuality(ColorProvider::kBackgroundBlurQuality);
   }
-  layer()->SetFillsBoundsOpaquely(false);
-  layer()->SetRoundedCornerRadius(gfx::RoundedCornersF(kMenuCornerRadius));
-  layer()->SetBackgroundBlur(ColorProvider::kBackgroundBlurSigma);
-  GetViewAccessibility().OverrideRole(ax::mojom::Role::kMenu);
-  GetViewAccessibility().OverrideName(
-      l10n_util::GetStringUTF16(IDS_ASH_POWER_BUTTON_MENU_ACCESSIBLE));
+  GetViewAccessibility().SetRole(ax::mojom::Role::kMenu);
+  GetViewAccessibility().SetName(
+      l10n_util::GetStringUTF16(IDS_ASH_POWER_BUTTON_MENU_ACCESSIBLE),
+      ax::mojom::NameFrom::kAttribute);
   RecreateItems();
 
   // Create a system shadow for current view.
   shadow_ = SystemShadow::CreateShadowOnNinePatchLayerForView(
       this, SystemShadow::Type::kElevation12);
-  shadow_->SetRoundedCornerRadius(kMenuCornerRadius);
+  shadow_->SetRoundedCornerRadius(kPowerButtonMenuCornerRadius);
 }
 
 PowerButtonMenuView::~PowerButtonMenuView() = default;
@@ -120,10 +100,11 @@ void PowerButtonMenuView::ScheduleShowHideAnimation(bool show) {
   gfx::Transform transform;
   if (show) {
     TransformDisplacement transform_displacement = GetTransformDisplacement();
-    if (transform_displacement.direction == TransformDirection::X)
+    if (transform_displacement.direction == TransformDirection::X) {
       transform.Translate(transform_displacement.distance, 0);
-    else if (transform_displacement.direction == TransformDirection::Y)
+    } else if (transform_displacement.direction == TransformDirection::Y) {
       transform.Translate(0, transform_displacement.distance);
+    }
   }
 
   SetLayerAnimation(layer(), this, show, transform);
@@ -134,9 +115,9 @@ PowerButtonMenuView::TransformDisplacement
 PowerButtonMenuView::GetTransformDisplacement() const {
   TransformDisplacement transform_displacement;
   if (power_button_position_ == PowerButtonPosition::NONE ||
-      !Shell::Get()->tablet_mode_controller()->InTabletMode()) {
+      !display::Screen::GetScreen()->InTabletMode()) {
     transform_displacement.direction = TransformDirection::Y;
-    transform_displacement.distance = kMenuViewTransformDistanceDp;
+    transform_displacement.distance = kPowerButtonMenuTransformDistanceDp;
     return transform_displacement;
   }
 
@@ -169,8 +150,8 @@ PowerButtonMenuView::GetTransformDisplacement() const {
                              : !is_landscape_primary_or_portrait_secondary;
   }
   transform_displacement.distance = positive_transform
-                                        ? kMenuViewTransformDistanceDp
-                                        : -kMenuViewTransformDistanceDp;
+                                        ? kPowerButtonMenuTransformDistanceDp
+                                        : -kPowerButtonMenuTransformDistanceDp;
   return transform_displacement;
 }
 
@@ -181,13 +162,15 @@ void PowerButtonMenuView::RecreateItems() {
       [this](bool create, PowerButtonMenuActionType action,
              base::RepeatingClosure callback, const gfx::VectorIcon& icon,
              const std::u16string& string,
-             PowerButtonMenuItemView** out_item_ptr) -> void {
+             raw_ptr<PowerButtonMenuItemView>* out_item_ptr) -> void {
     // If an item needs to be created and exists, or needs to be destroyed but
     // does not exist, there is nothing to be done.
-    if (create && *out_item_ptr)
+    if (create && *out_item_ptr) {
       return;
-    if (!create && !*out_item_ptr)
+    }
+    if (!create && !*out_item_ptr) {
       return;
+    }
 
     if (create) {
       *out_item_ptr = AddChildView(std::make_unique<PowerButtonMenuItemView>(
@@ -209,27 +192,28 @@ void PowerButtonMenuView::RecreateItems() {
   const bool create_lock_screen = login_status != LoginStatus::LOCKED &&
                                   session_controller->CanLockScreen();
   const bool create_capture_mode =
-      Shell::Get()->tablet_mode_controller()->InTabletMode() &&
-      !session_controller->IsUserSessionBlocked();
+      display::Screen::GetScreen()->InTabletMode() &&
+      !session_controller->IsUserSessionBlocked() &&
+      login_status != LoginStatus::KIOSK_APP;
   const bool create_feedback = login_status != LoginStatus::LOCKED &&
                                login_status != LoginStatus::KIOSK_APP;
 
   add_remove_item(
       true, PowerButtonMenuActionType::kPowerOff,
       base::BindRepeating(
-          &LockStateController::StartShutdownAnimation,
+          &LockStateController::RequestShutdown,
           base::Unretained(Shell::Get()->lock_state_controller()),
           shutdown_reason_),
       kSystemPowerButtonMenuPowerOffIcon,
       l10n_util::GetStringUTF16(IDS_ASH_POWER_BUTTON_MENU_POWER_OFF_BUTTON),
       &power_off_item_);
-  add_remove_item(
-      create_sign_out, PowerButtonMenuActionType::kSignOut,
-      base::BindRepeating(&SessionControllerImpl::RequestSignOut,
-                          base::Unretained(Shell::Get()->session_controller())),
-      kSystemPowerButtonMenuSignOutIcon,
-      user::GetLocalizedSignOutStringForStatus(login_status, false),
-      &sign_out_item_);
+  add_remove_item(create_sign_out, PowerButtonMenuActionType::kSignOut,
+                  base::BindRepeating(
+                      &LockStateController::RequestSignOut,
+                      base::Unretained(Shell::Get()->lock_state_controller())),
+                  kSystemPowerButtonMenuSignOutIcon,
+                  user::GetLocalizedSignOutStringForStatus(login_status, false),
+                  &sign_out_item_);
   add_remove_item(
       create_lock_screen, PowerButtonMenuActionType::kLockScreen,
       base::BindRepeating(&SessionControllerImpl::LockScreen,
@@ -241,7 +225,7 @@ void PowerButtonMenuView::RecreateItems() {
       create_capture_mode, PowerButtonMenuActionType::kCaptureMode,
       base::BindRepeating(&CaptureModeController::Start,
                           base::Unretained(CaptureModeController::Get()),
-                          CaptureModeEntryType::kPowerMenu),
+                          CaptureModeEntryType::kPowerMenu, base::DoNothing()),
       kCaptureModeIcon,
       l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_CAPTURE_MODE_BUTTON_LABEL),
       &capture_mode_item_);
@@ -267,11 +251,7 @@ void PowerButtonMenuView::RecreateItems() {
       &feedback_item_);
 }
 
-const char* PowerButtonMenuView::GetClassName() const {
-  return "PowerButtonMenuView";
-}
-
-void PowerButtonMenuView::Layout() {
+void PowerButtonMenuView::Layout(PassKey) {
   gfx::Rect rect(GetContentsBounds().origin(),
                  power_off_item_->GetPreferredSize());
   const int y_offset =
@@ -305,7 +285,8 @@ void PowerButtonMenuView::Layout() {
   }
 }
 
-gfx::Size PowerButtonMenuView::CalculatePreferredSize() const {
+gfx::Size PowerButtonMenuView::CalculatePreferredSize(
+    const views::SizeBounds& available_size) const {
   gfx::Size menu_size;
   DCHECK(power_off_item_);
   menu_size = gfx::Size(0, PowerButtonMenuItemView::kMenuItemHeight +
@@ -316,32 +297,29 @@ gfx::Size PowerButtonMenuView::CalculatePreferredSize() const {
   const int one_item_x_offset =
       PowerButtonMenuItemView::kMenuItemWidth + kPaddingBetweenMenuItems;
   if (sign_out_item_) {
+    width += one_item_x_offset;
+    if (lock_screen_item_) {
       width += one_item_x_offset;
-      if (lock_screen_item_)
-        width += one_item_x_offset;
+    }
   }
-  if (capture_mode_item_)
+  if (capture_mode_item_) {
     width += one_item_x_offset;
-  if (feedback_item_)
+  }
+  if (feedback_item_) {
     width += one_item_x_offset;
+  }
   menu_size.set_width(width);
   return menu_size;
 }
 
-void PowerButtonMenuView::OnThemeChanged() {
-  views::View::OnThemeChanged();
-  ScopedLightModeAsDefault scoped_light_mode_as_default;
-  SetBackground(
-      views::CreateSolidBackground(AshColorProvider::Get()->GetBaseLayerColor(
-          AshColorProvider::BaseLayerType::kTransparent80)));
-}
-
 void PowerButtonMenuView::OnImplicitAnimationsCompleted() {
-  if (layer()->opacity() == 0.f)
+  if (layer()->opacity() == 0.f) {
     SetVisible(false);
+  }
 
-  if (layer()->opacity() == 1.0f)
+  if (layer()->opacity() == 1.0f) {
     RequestFocus();
+  }
 }
 
 void PowerButtonMenuView::ButtonPressed(PowerButtonMenuActionType action,
@@ -350,5 +328,8 @@ void PowerButtonMenuView::ButtonPressed(PowerButtonMenuActionType action,
   std::move(callback).Run();
   Shell::Get()->power_button_controller()->DismissMenu();
 }
+
+BEGIN_METADATA(PowerButtonMenuView)
+END_METADATA
 
 }  // namespace ash

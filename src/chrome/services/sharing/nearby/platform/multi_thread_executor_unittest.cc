@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,9 +20,7 @@
 #include "base/unguessable_token.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace location {
-namespace nearby {
-namespace chrome {
+namespace nearby::chrome {
 
 // To test Execute(), which has no return value, each task is assigned a unique
 // ID. This ID is added to |executed_tasks_| when the task is Run(). Thus, the
@@ -197,6 +195,4 @@ TEST_F(MultiThreadExecutorTest, ManyParallelTasks) {
   multi_thread_executor_.reset();
 }
 
-}  // namespace chrome
-}  // namespace nearby
-}  // namespace location
+}  // namespace nearby::chrome

@@ -1,6 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "third_party/blink/renderer/platform/audio/push_pull_fifo.h"
 
@@ -25,13 +30,9 @@ namespace {
 TEST(PushPullFIFOBasicTest, BasicTests) {
   // This suppresses the multi-thread warning for GTest. Potently it increases
   // the test execution time, but this specific test is very short and simple.
-  testing::FLAGS_gtest_death_test_style = "threadsafe";
+  GTEST_FLAG_SET(death_test_style, "threadsafe");
 
   const unsigned kRenderQuantumFrames = 128;
-
-  // FIFO length exceeding the maximum length allowed will cause crash.
-  // i.e.) fifo_length_ <= kMaxFIFOLength
-  EXPECT_DEATH(new PushPullFIFO(2, PushPullFIFO::kMaxFIFOLength + 1), "");
 
   std::unique_ptr<PushPullFIFO> test_fifo =
       std::make_unique<PushPullFIFO>(2, 1024);
@@ -40,20 +41,22 @@ TEST(PushPullFIFOBasicTest, BasicTests) {
   // i.e.) input_bus->length() == kRenderQuantumFrames
   scoped_refptr<AudioBus> input_bus_129_frames =
       AudioBus::Create(2, kRenderQuantumFrames + 1);
-  EXPECT_DEATH(test_fifo->Push(input_bus_129_frames.get()), "");
+  EXPECT_DEATH_IF_SUPPORTED(test_fifo->Push(input_bus_129_frames.get()), "");
   scoped_refptr<AudioBus> input_bus_127_frames =
       AudioBus::Create(2, kRenderQuantumFrames - 1);
-  EXPECT_DEATH(test_fifo->Push(input_bus_127_frames.get()), "");
+  EXPECT_DEATH_IF_SUPPORTED(test_fifo->Push(input_bus_127_frames.get()), "");
 
   // Pull request frames cannot exceed the length of output bus.
   // i.e.) frames_requested <= output_bus->length()
   scoped_refptr<AudioBus> output_bus_512_frames = AudioBus::Create(2, 512);
-  EXPECT_DEATH(test_fifo->Pull(output_bus_512_frames.get(), 513), "");
+  EXPECT_DEATH_IF_SUPPORTED(test_fifo->Pull(output_bus_512_frames.get(), 513),
+                            "");
 
   // Pull request frames cannot exceed the length of FIFO.
   // i.e.) frames_requested <= fifo_length_
   scoped_refptr<AudioBus> output_bus_1025_frames = AudioBus::Create(2, 1025);
-  EXPECT_DEATH(test_fifo->Pull(output_bus_1025_frames.get(), 1025), "");
+  EXPECT_DEATH_IF_SUPPORTED(test_fifo->Pull(output_bus_1025_frames.get(), 1025),
+                            "");
 }
 
 // Fills each AudioChannel in an AudioBus with a series of linearly increasing

@@ -22,19 +22,19 @@ UNKNOWN focusable has_input_focus
 ++++++BUTTON focusable label='Outer inner' actions='{DEFAULT}'
 ++++++++STATIC_TEXT label='Outer'
 ++++++++++UNKNOWN label='Outer'
-++++++++UNKNOWN actions='{DEFAULT}'
+++++++++UNKNOWN
 ++++++++++STATIC_TEXT label='inner'
 ++++++++++++UNKNOWN label='inner'
 ++++++BUTTON focusable label='Outer inner1' actions='{DEFAULT}'
 ++++++++STATIC_TEXT label='Outer'
 ++++++++++UNKNOWN label='Outer'
-++++++++UNKNOWN label='inner1' actions='{DEFAULT}'
+++++++++UNKNOWN label='inner1'
 ++++++++++STATIC_TEXT label='inner2'
 ++++++++++++UNKNOWN label='inner2'
 ++++++BUTTON focusable label='Outer grandchild' actions='{DEFAULT}'
 ++++++++STATIC_TEXT label='Outer'
 ++++++++++UNKNOWN label='Outer'
-++++++++UNKNOWN actions='{DEFAULT}'
-++++++++++UNKNOWN actions='{DEFAULT}'
+++++++++UNKNOWN
+++++++++++UNKNOWN
 ++++++++++++STATIC_TEXT label='grandchild'
 ++++++++++++++UNKNOWN label='grandchild'

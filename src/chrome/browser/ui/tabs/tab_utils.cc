@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,84 +8,119 @@
 
 #include "base/feature_list.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
-#include "chrome/browser/feed/web_feed_tab_helper.h"
 #include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
 #include "chrome/browser/media/webrtc/media_stream_capture_indicator.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/recently_audible_helper.h"
 #include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
-#include "chrome/browser/usb/usb_tab_helper.h"
 #include "chrome/browser/vr/vr_tab_helper.h"
+#include "chrome/common/buildflags.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "content/public/common/content_features.h"
 #include "content/public/common/url_constants.h"
 #include "ui/base/l10n/l10n_util.h"
 
-namespace chrome {
+#if BUILDFLAG(ENABLE_GLIC)
+#include "chrome/browser/glic/glic_enabling.h"
+#include "chrome/browser/glic/glic_keyed_service.h"
+#include "chrome/browser/glic/glic_keyed_service_factory.h"
+#endif
 
 std::vector<TabAlertState> GetTabAlertStatesForContents(
     content::WebContents* contents) {
   std::vector<TabAlertState> states;
-  if (!contents)
+  if (!contents) {
     return states;
+  }
 
   scoped_refptr<MediaStreamCaptureIndicator> indicator =
-      MediaCaptureDevicesDispatcher::GetInstance()->
-          GetMediaStreamCaptureIndicator();
+      MediaCaptureDevicesDispatcher::GetInstance()
+          ->GetMediaStreamCaptureIndicator();
   if (indicator.get()) {
     // Currently we only show the icon and tooltip of the highest-priority
     // alert on a tab.
-    // TODO(crbug.com/861961): To show the icon of the highest-priority alert
+    // TODO(crbug.com/40584226): To show the icon of the highest-priority alert
     // with tooltip that notes all the states in play.
     if (indicator->IsCapturingWindow(contents) ||
         indicator->IsCapturingDisplay(contents)) {
       states.push_back(TabAlertState::DESKTOP_CAPTURING);
     }
-    if (indicator->IsBeingMirrored(contents))
+    if (indicator->IsBeingMirrored(contents)) {
       states.push_back(TabAlertState::TAB_CAPTURING);
-    if (indicator->IsCapturingUserMedia(contents))
+    }
+
+    if (indicator->IsCapturingAudio(contents) &&
+        indicator->IsCapturingVideo(contents)) {
       states.push_back(TabAlertState::MEDIA_RECORDING);
+    } else if (indicator->IsCapturingAudio(contents)) {
+      states.push_back(TabAlertState::AUDIO_RECORDING);
+    } else if (indicator->IsCapturingVideo(contents)) {
+      states.push_back(TabAlertState::VIDEO_RECORDING);
+    }
   }
 
-  if (contents->IsConnectedToBluetoothDevice())
+  if (contents->IsCapabilityActive(
+          content::WebContents::CapabilityType::kBluetoothConnected)) {
     states.push_back(TabAlertState::BLUETOOTH_CONNECTED);
+  }
 
-  if (contents->IsScanningForBluetoothDevices())
+  if (contents->IsCapabilityActive(
+          content::WebContents::CapabilityType::kBluetoothScanning)) {
     states.push_back(TabAlertState::BLUETOOTH_SCAN_ACTIVE);
+  }
 
-  UsbTabHelper* usb_tab_helper = UsbTabHelper::FromWebContents(contents);
-  if (usb_tab_helper && usb_tab_helper->IsDeviceConnected())
+  if (contents->IsCapabilityActive(
+          content::WebContents::CapabilityType::kUSB)) {
     states.push_back(TabAlertState::USB_CONNECTED);
+  }
 
-  if (contents->IsConnectedToHidDevice())
+  if (contents->IsCapabilityActive(
+          content::WebContents::CapabilityType::kHID)) {
     states.push_back(TabAlertState::HID_CONNECTED);
+  }
 
-  if (contents->IsConnectedToSerialPort())
+  if (contents->IsCapabilityActive(
+          content::WebContents::CapabilityType::kSerial)) {
     states.push_back(TabAlertState::SERIAL_CONNECTED);
+  }
+
+#if BUILDFLAG(ENABLE_GLIC)
+  if (GlicEnabling::IsEnabledForProfile(
+          Profile::FromBrowserContext(contents->GetBrowserContext())) &&
+      glic::GlicKeyedServiceFactory::GetGlicKeyedService(
+          contents->GetBrowserContext())
+              ->GetFocusedTab() == contents) {
+    states.push_back(TabAlertState::GLIC_ACCESSING);
+  }
+#endif
 
   // Check if VR content is being presented in a headset.
   // NOTE: This icon must take priority over the audio alert ones
   // because most VR content has audio and its usage is implied by the VR
   // icon.
-  if (vr::VrTabHelper::IsContentDisplayedInHeadset(contents))
+  if (vr::VrTabHelper::IsContentDisplayedInHeadset(contents)) {
     states.push_back(TabAlertState::VR_PRESENTING_IN_HEADSET);
+  }
 
   if (contents->HasPictureInPictureVideo() ||
-      contents->HasPictureInPictureDocument())
+      contents->HasPictureInPictureDocument()) {
     states.push_back(TabAlertState::PIP_PLAYING);
+  }
 
   // Only tabs have a RecentlyAudibleHelper, but this function is abused for
   // some non-tab WebContents. In that case fall back to using the realtime
   // notion of audibility.
   bool audible = contents->IsCurrentlyAudible();
   auto* audible_helper = RecentlyAudibleHelper::FromWebContents(contents);
-  if (audible_helper)
+  if (audible_helper) {
     audible = audible_helper->WasRecentlyAudible();
+  }
   if (audible) {
-    if (contents->IsAudioMuted())
+    if (contents->IsAudioMuted()) {
       states.push_back(TabAlertState::AUDIO_MUTING);
+    }
     states.push_back(TabAlertState::AUDIO_PLAYING);
   }
 
@@ -103,6 +138,12 @@ std::u16string GetTabAlertStateText(const TabAlertState alert_state) {
     case TabAlertState::MEDIA_RECORDING:
       return l10n_util::GetStringUTF16(
           IDS_TOOLTIP_TAB_ALERT_STATE_MEDIA_RECORDING);
+    case TabAlertState::AUDIO_RECORDING:
+      return l10n_util::GetStringUTF16(
+          IDS_TOOLTIP_TAB_ALERT_STATE_AUDIO_RECORDING);
+    case TabAlertState::VIDEO_RECORDING:
+      return l10n_util::GetStringUTF16(
+          IDS_TOOLTIP_TAB_ALERT_STATE_VIDEO_RECORDING);
     case TabAlertState::TAB_CAPTURING:
       return l10n_util::GetStringUTF16(
           IDS_TOOLTIP_TAB_ALERT_STATE_TAB_CAPTURING);
@@ -129,9 +170,11 @@ std::u16string GetTabAlertStateText(const TabAlertState alert_state) {
     case TabAlertState::VR_PRESENTING_IN_HEADSET:
       return l10n_util::GetStringUTF16(
           IDS_TOOLTIP_TAB_ALERT_STATE_VR_PRESENTING);
+    case TabAlertState::GLIC_ACCESSING:
+      return l10n_util::GetStringUTF16(
+          IDS_TOOLTIP_TAB_ALERT_STATE_GLIC_ACCESSING);
   }
   NOTREACHED();
-  return std::u16string();
 }
 
 TabMutedReason GetTabAudioMutedReason(content::WebContents* contents) {
@@ -168,8 +211,9 @@ bool IsSiteMuted(const TabStripModel& tab_strip, const int index) {
   content::WebContents* web_contents = tab_strip.GetWebContentsAt(index);
 
   // Prevent crashes with null WebContents (https://crbug.com/797647).
-  if (!web_contents)
+  if (!web_contents) {
     return false;
+  }
 
   GURL url = web_contents->GetLastCommittedURL();
 
@@ -192,39 +236,12 @@ bool IsSiteMuted(const TabStripModel& tab_strip, const int index) {
 bool AreAllSitesMuted(const TabStripModel& tab_strip,
                       const std::vector<int>& indices) {
   for (int tab_index : indices) {
-    if (!IsSiteMuted(tab_strip, tab_index))
+    if (!IsSiteMuted(tab_strip, tab_index)) {
       return false;
+    }
   }
   return true;
 }
-
-TabWebFeedFollowState GetSiteFollowState(const TabStripModel& tab_strip,
-                                         const int index) {
-  content::WebContents* web_contents = tab_strip.GetWebContentsAt(index);
-  DCHECK(web_contents);
-
-  return feed::WebFeedTabHelper::GetFollowState(web_contents);
-}
-
-TabWebFeedFollowState GetAggregatedFollowStateOfAllSites(
-    const TabStripModel& tab_strip,
-    const std::vector<int>& indices) {
-  bool all_followed = true;
-  for (int tab_index : indices) {
-    TabWebFeedFollowState state = GetSiteFollowState(tab_strip, tab_index);
-    if (state == TabWebFeedFollowState::kUnknown)
-      return TabWebFeedFollowState::kUnknown;
-    // Don't return kNotFollowed immediately since kUnknown should be returned
-    // when a later tab is found with kUnknown.
-    else if (state == TabWebFeedFollowState::kNotFollowed)
-      all_followed = false;
-  }
-
-  return all_followed ? TabWebFeedFollowState::kFollowed
-                      : TabWebFeedFollowState::kNotFollowed;
-}
-
-}  // namespace chrome
 
 LastMuteMetadata::LastMuteMetadata(content::WebContents* contents)
     : content::WebContentsUserData<LastMuteMetadata>(*contents) {}

@@ -3,6 +3,7 @@
 
 ash/accelerators/accelerator_table.h
 ash/ash_export.h
+ash/ash_util.h
 ash/constants/ash_switches.h
 ash/metrics/task_switch_metrics_recorder.h
 ash/metrics/task_switch_source.h
@@ -16,16 +17,12 @@ cc/cc_export.h
 cc/input/browser_controls_state.h
 cc/input/event_listener_properties.h
 cc/input/scrollbar.h
-cc/input/scroller_size_metrics.h
-cc/layers/performance_properties.h
 chrome/browser/android/android_theme_resources.h
 chrome/browser/android/resource_id.h
 chrome/browser/ash/login/signin/oauth2_login_manager.h
-chrome/browser/ash/login/signin/oauth2_login_verifier.h
 chrome/browser/ash/login/signin/oauth2_token_fetcher.h
 chrome/browser/ash/profiles/profile_helper.h
 chrome/browser/ash/settings/cros_settings.h
-chrome/browser/certificate_provider/certificate_info.h
 chrome/browser/certificate_provider/certificate_provider.h
 chrome/browser/certificate_provider/certificate_provider_service.h
 chrome/browser/certificate_provider/certificate_provider_service_factory.h
@@ -44,8 +41,7 @@ chrome/browser/media/webrtc/rtp_dump_type.h
 chrome/browser/media_galleries/media_file_system_context.h
 chrome/browser/notifications/displayed_notifications_dispatch_callback.h
 chrome/browser/ui/app_icon_loader_delegate.h
-chrome/browser/ui/app_list/app_list_syncable_service_factory.h
-chrome/browser/ui/ash/ash_util.h
+chrome/browser/ash/app_list/app_list_syncable_service_factory.h
 chrome/browser/ui/ash/multi_user/multi_user_util.h
 chrome/browser/ui/network_profile_bubble.h
 chrome/browser/ui/views/frame/browser_frame_header_ash.h
@@ -56,12 +52,9 @@ chrome/install_static/install_modes.h
 chrome/install_static/install_util.h
 chrome/install_static/test/scoped_install_details.h
 chrome/installer/util/google_update_settings.h
-components/browser_watcher/features.h
-components/browser_watcher/stability_paths.h
-components/cast_certificate/cast_crl_root_ca_cert_der-inc.h
-components/cdm/browser/cdm_message_filter_android.h
 components/device_event_log/device_event_log_export.h
 components/login/login_export.h
+components/media_router/common/providers/cast/certificate/cast_crl_root_ca_cert_der-inc.h
 components/nacl/browser/nacl_browser_delegate.h
 components/nacl/renderer/ppb_nacl_private.h
 components/policy/core/browser/configuration_policy_handler_parameters.h
@@ -115,8 +108,6 @@ gpu/gpu_export.h
 ipc/ipc_channel_proxy_unittest_messages.h
 ipc/ipc_message_null_macros.h
 media/audio/audio_logging.h
-media/base/routing_token_callback.h
-media/base/video_renderer_sink.h
 media/cast/common/mod_util.h
 media/cast/net/rtcp/rtcp_session.h
 media/filters/ffmpeg_aac_bitstream_converter.h
@@ -192,8 +183,6 @@ third_party/khronos/KHR/khrplatform.h
 third_party/leveldatabase/chromium_logger.h
 third_party/libaddressinput/chromium/addressinput_util.h
 third_party/libphonenumber/phonenumber_api.h
-third_party/libudev/libudev0.h
-third_party/libudev/libudev1.h
 third_party/libvpx/source/config/linux/x64/vp8_rtcd.h
 third_party/libvpx/source/config/linux/x64/vp9_rtcd.h
 third_party/libvpx/source/config/linux/x64/vpx_config.h
@@ -208,9 +197,6 @@ third_party/libvpx/source/config/vpx_version.h
 third_party/opus/src/src/opus_private.h
 third_party/opus/src/tests/test_opus_common.h
 third_party/protobuf/src/google/protobuf/compiler/csharp/csharp_names.h
-third_party/qcms/src/halffloat.h
-third_party/qcms/src/tests/qcms_test_util.h
-third_party/qcms/src/tests/timing.h
 third_party/snappy/linux/config.h
 third_party/speech-dispatcher/libspeechd.h
 third_party/sqlite/sqlite3.h

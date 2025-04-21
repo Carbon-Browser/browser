@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,11 @@
 
 #include <memory>
 
-#include "base/callback.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/strings/string_piece.h"
 #include "net/base/completion_once_callback.h"
 #include "net/base/io_buffer.h"
 #include "net/test/embedded_test_server/embedded_test_server_connection_listener.h"
@@ -81,7 +80,8 @@ class Http1Connection : public HttpConnection, public HttpResponseDelegate {
                           int rv);
 
   std::unique_ptr<StreamSocket> socket_;
-  raw_ptr<EmbeddedTestServerConnectionListener> connection_listener_;
+  raw_ptr<EmbeddedTestServerConnectionListener, AcrossTasksDanglingUntriaged>
+      connection_listener_;
   raw_ptr<EmbeddedTestServer> server_delegate_;
   HttpRequestParser request_parser_;
   scoped_refptr<IOBufferWithSize> read_buf_;
@@ -93,4 +93,4 @@ class Http1Connection : public HttpConnection, public HttpResponseDelegate {
 }  // namespace test_server
 }  // namespace net
 
-#endif  // NET_TEST_EMBEDDED_TEST_SERVER_HTTP_1_CONNECTION_H_
+#endif  // NET_TEST_EMBEDDED_TEST_SERVER_HTTP1_CONNECTION_H_

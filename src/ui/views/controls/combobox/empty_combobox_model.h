@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,7 @@
 
 #include "ui/base/models/combobox_model.h"
 
-namespace views {
-namespace internal {
+namespace views::internal {
 
 // An empty model for a combo box.
 class EmptyComboboxModel final : public ui::ComboboxModel {
@@ -21,10 +20,9 @@ class EmptyComboboxModel final : public ui::ComboboxModel {
   // ui::ComboboxModel:
   size_t GetItemCount() const override;
   std::u16string GetItemAt(size_t index) const override;
-  absl::optional<size_t> GetDefaultIndex() const override;
+  std::optional<size_t> GetDefaultIndex() const override;
 };
 
-}  // namespace internal
-}  // namespace views
+}  // namespace views::internal
 
 #endif  // UI_VIEWS_CONTROLS_COMBOBOX_EMPTY_COMBOBOX_MODEL_H_

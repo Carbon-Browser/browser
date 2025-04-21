@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,12 @@
 
 #include <algorithm>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/files/file_path.h"
 #include "base/i18n/time_formatting.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
@@ -20,9 +20,10 @@
 #include "chrome/browser/notifications/win/notification_launch_id.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/notifications/notification_image_retainer.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/url_formatter/elide_url.h"
+#include "third_party/icu/source/i18n/unicode/timezone.h"
 #include "third_party/libxml/chromium/xml_writer.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/message_center/public/cpp/notification.h"
@@ -50,14 +51,17 @@ const char kBindingElement[] = "binding";
 const char kBindingElementTemplateAttribute[] = "template";
 const char kContent[] = "content";
 const char kContextMenu[] = "contextMenu";
+const char kCritical[] = "Critical";
 const char kDuration[] = "duration";
 const char kDurationLong[] = "long";
 const char kForeground[] = "foreground";
 const char kHero[] = "hero";
+const char kHintButtonStyle[] = "hint-buttonStyle";
 const char kHintCrop[] = "hint-crop";
 const char kHintCropNone[] = "none";
 const char kImageElement[] = "image";
 const char kImageUri[] = "imageUri";
+const char kIncomingCall[] = "incomingCall";
 const char kIndeterminate[] = "indeterminate";
 const char kInputElement[] = "input";
 const char kInputId[] = "id";
@@ -71,10 +75,12 @@ const char kReminder[] = "reminder";
 const char kScenario[] = "scenario";
 const char kSilent[] = "silent";
 const char kSrc[] = "src";
+const char kSuccess[] = "Success";
 const char kText[] = "text";
 const char kTextElement[] = "text";
 const char kToastElementDisplayTimestamp[] = "displayTimestamp";
 const char kTrue[] = "true";
+const char kUseButtonStyle[] = "useButtonStyle";
 const char kUserResponse[] = "userResponse";
 const char kValue[] = "value";
 const char kVisualElement[] = "visual";
@@ -103,7 +109,13 @@ void StartToastElement(XmlWriter* xml_writer,
   xml_writer->StartElement(kNotificationToastElement);
   xml_writer->AddAttribute(kNotificationLaunchAttribute, launch_id.Serialize());
 
-  if (notification.never_timeout()) {
+  // Only notifications created by an installed web app should be allowed to
+  // have increased priority, colored buttons, and a ringtone.
+  if (notification.scenario() ==
+      message_center::NotificationScenario::INCOMING_CALL) {
+    xml_writer->AddAttribute(kScenario, kIncomingCall);
+    xml_writer->AddAttribute(kUseButtonStyle, kTrue);
+  } else if (notification.never_timeout()) {
     if (base::FeatureList::IsEnabled(
             features::kNotificationDurationLongForRequireInteraction)) {
       xml_writer->AddAttribute(kDuration, kDurationLong);
@@ -117,13 +129,11 @@ void StartToastElement(XmlWriter* xml_writer,
   if (notification.timestamp().is_null())
     return;
 
-  base::Time::Exploded exploded;
-  notification.timestamp().UTCExplode(&exploded);
   xml_writer->AddAttribute(
       kToastElementDisplayTimestamp,
-      base::StringPrintf("%04d-%02d-%02dT%02d:%02d:%02dZ", exploded.year,
-                         exploded.month, exploded.day_of_month, exploded.hour,
-                         exploded.minute, exploded.second));
+      base::UnlocalizedTimeFormatWithPattern(notification.timestamp(),
+                                             "yyyy-MM-dd'T'HH:mm:ssX",
+                                             icu::TimeZone::getGMT()));
 }
 
 void EndToastElement(XmlWriter* xml_writer) {
@@ -177,8 +187,8 @@ void WriteItems(XmlWriter* xml_writer,
   std::string item_list;
   for (size_t i = 0; i < entries; ++i) {
     const auto& item = items[i];
-    item_list += base::UTF16ToUTF8(item.title) + " - " +
-                 base::UTF16ToUTF8(item.message) + "\n";
+    item_list += base::UTF16ToUTF8(item.title()) + " - " +
+                 base::UTF16ToUTF8(item.message()) + "\n";
   }
   WriteTextElement(xml_writer, item_list, TextType::NORMAL);
 }
@@ -256,9 +266,25 @@ void WriteActionElement(XmlWriter* xml_writer,
                         int index,
                         NotificationLaunchId copied_launch_id) {
   xml_writer->StartElement(kActionElement);
-  xml_writer->AddAttribute(kActivationType, kForeground);
+
+  // All notifications buttons in the incoming-call scenario should be green,
+  // except for the default dismiss button added by Chromium (not by the Action
+  // Center), which should be red. This attribute will take effect only if the
+  // 'useButtonStyle' attribute has been added to the toast XML element - i.e.,
+  // when the notification scenario is INCOMING_CALL.
+  if (button.type == message_center::ButtonType::DISMISS) {
+    xml_writer->AddAttribute(kActivationType, kBackground);
+    copied_launch_id.set_is_for_dismiss_button();
+    xml_writer->AddAttribute(kHintButtonStyle, kCritical);
+  } else {
+    xml_writer->AddAttribute(kActivationType, kForeground);
+    copied_launch_id.set_button_index(index);
+    if (button.type == message_center::ButtonType::ACKNOWLEDGE) {
+      xml_writer->AddAttribute(kHintButtonStyle, kSuccess);
+    }
+  }
+
   xml_writer->AddAttribute(kContent, base::UTF16ToUTF8(button.title));
-  copied_launch_id.set_button_index(index);
   xml_writer->AddAttribute(kArguments, copied_launch_id.Serialize());
 
   if (!button.icon.IsEmpty()) {
@@ -296,8 +322,9 @@ void AddActions(XmlWriter* xml_writer,
     xml_writer->EndElement();
   }
 
-  for (size_t i = 0; i < buttons.size(); ++i)
+  for (size_t i = 0; i < buttons.size(); ++i) {
     WriteActionElement(xml_writer, image_retainer, buttons[i], i, launch_id);
+  }
 }
 
 // Writes the <audio silent="true"> element.
@@ -438,7 +465,7 @@ std::wstring BuildNotificationTemplate(
   // The |kXmlVersionHeader| is automatically appended by libxml, but the toast
   // system in the Windows Action Center expects it to be absent.
   return base::UTF8ToWide(
-      base::StringPiece(template_xml).substr(sizeof(kXmlVersionHeader) - 1));
+      std::string_view(template_xml).substr(sizeof(kXmlVersionHeader) - 1));
 }
 
 void SetContextMenuLabelForTesting(const char* label) {

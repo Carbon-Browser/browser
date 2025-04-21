@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,8 +26,8 @@ struct MathMLOperatorDictionaryProperties {
   unsigned trailing_space_in_math_unit : 3;
   unsigned flags : 4;
 };
-static const MathMLOperatorDictionaryProperties
-    MathMLOperatorDictionaryCategories[] = {
+static const auto MathMLOperatorDictionaryCategories =
+    std::to_array<MathMLOperatorDictionaryProperties>({
         {5, 5, kOperatorPropertyFlagsNone},        // None (default values)
         {5, 5, kOperatorPropertyFlagsNone},        // ForceDefault
         {5, 5, MathMLOperatorElement::kStretchy},  // Category A
@@ -46,7 +46,7 @@ static const MathMLOperatorDictionaryProperties
              MathMLOperatorElement::kMovableLimits},  // Category J
         {3, 0, kOperatorPropertyFlagsNone},           // Category L
         {0, 3, kOperatorPropertyFlagsNone},           // Category M
-};
+    });
 
 static const QualifiedName& OperatorPropertyFlagToAttributeName(
     MathMLOperatorElement::OperatorPropertyFlag flag) {
@@ -61,7 +61,6 @@ static const QualifiedName& OperatorPropertyFlagToAttributeName(
       return mathml_names::kSymmetricAttr;
   }
   NOTREACHED();
-  return g_null_name;
 }
 
 }  // namespace
@@ -115,10 +114,7 @@ void MathMLOperatorElement::ParseAttribute(
              param.name == mathml_names::kRspaceAttr ||
              param.name == mathml_names::kMinsizeAttr ||
              param.name == mathml_names::kMaxsizeAttr) {
-    needs_layout = param.new_value != param.old_value;
-    if (needs_layout && GetLayoutObject()) {
-      // TODO(crbug.com/1121113): Isn't it enough to set needs style recalc and
-      // let the style system perform proper layout and paint invalidation?
+    if (param.new_value != param.old_value) {
       SetNeedsStyleRecalc(
           kLocalStyleChange,
           StyleChangeReasonForTracing::Create(style_change_reason::kAttribute));
@@ -137,7 +133,7 @@ void MathMLOperatorElement::ComputeDictionaryCategory() {
   if (properties_.dictionary_category !=
       MathMLOperatorDictionaryCategory::kUndefined)
     return;
-  if (GetTokenContent().characters.IsEmpty()) {
+  if (GetTokenContent().characters.empty()) {
     properties_.dictionary_category = MathMLOperatorDictionaryCategory::kNone;
     return;
   }
@@ -179,9 +175,10 @@ void MathMLOperatorElement::ComputeDictionaryCategory() {
   } else {
     if (!explicit_form) {
       // Step 3.
-      for (uint8_t fallback_form = MathMLOperatorDictionaryForm::kInfix;
-           fallback_form <= MathMLOperatorDictionaryForm::kPostfix;
-           fallback_form++) {
+      for (const auto& fallback_form :
+           {MathMLOperatorDictionaryForm::kInfix,
+            MathMLOperatorDictionaryForm::kPostfix,
+            MathMLOperatorDictionaryForm::kPrefix}) {
         if (fallback_form == form)
           continue;
         category = FindCategory(
@@ -201,7 +198,7 @@ void MathMLOperatorElement::ComputeDictionaryCategory() {
 void MathMLOperatorElement::ComputeOperatorProperty(OperatorPropertyFlag flag) {
   DCHECK(properties_.dirty_flags & flag);
   const auto& name = OperatorPropertyFlagToAttributeName(flag);
-  if (absl::optional<bool> value = BooleanAttribute(name)) {
+  if (std::optional<bool> value = BooleanAttribute(name)) {
     // https://w3c.github.io/mathml-core/#dfn-algorithm-for-determining-the-properties-of-an-embellished-operator
     // Step 1.
     if (*value) {
@@ -255,38 +252,38 @@ void MathMLOperatorElement::SetOperatorFormDirty() {
 }
 
 void MathMLOperatorElement::AddMathLSpaceIfNeeded(
-    ComputedStyle& style,
+    ComputedStyleBuilder& builder,
     const CSSToLengthConversionData& conversion_data) {
   if (auto length_or_percentage_value = AddMathLengthToComputedStyle(
           conversion_data, mathml_names::kLspaceAttr)) {
-    style.SetMathLSpace(std::move(*length_or_percentage_value));
+    builder.SetMathLSpace(std::move(*length_or_percentage_value));
   }
 }
 
 void MathMLOperatorElement::AddMathRSpaceIfNeeded(
-    ComputedStyle& style,
+    ComputedStyleBuilder& builder,
     const CSSToLengthConversionData& conversion_data) {
   if (auto length_or_percentage_value = AddMathLengthToComputedStyle(
           conversion_data, mathml_names::kRspaceAttr)) {
-    style.SetMathRSpace(std::move(*length_or_percentage_value));
+    builder.SetMathRSpace(std::move(*length_or_percentage_value));
   }
 }
 
 void MathMLOperatorElement::AddMathMinSizeIfNeeded(
-    ComputedStyle& style,
+    ComputedStyleBuilder& builder,
     const CSSToLengthConversionData& conversion_data) {
   if (auto length_or_percentage_value = AddMathLengthToComputedStyle(
           conversion_data, mathml_names::kMinsizeAttr)) {
-    style.SetMathMinSize(std::move(*length_or_percentage_value));
+    builder.SetMathMinSize(std::move(*length_or_percentage_value));
   }
 }
 
 void MathMLOperatorElement::AddMathMaxSizeIfNeeded(
-    ComputedStyle& style,
+    ComputedStyleBuilder& builder,
     const CSSToLengthConversionData& conversion_data) {
   if (auto length_or_percentage_value = AddMathLengthToComputedStyle(
           conversion_data, mathml_names::kMaxsizeAttr)) {
-    style.SetMathMaxSize(std::move(*length_or_percentage_value));
+    builder.SetMathMaxSize(std::move(*length_or_percentage_value));
   }
 }
 

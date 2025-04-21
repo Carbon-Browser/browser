@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/installer/setup/install.h"
 
@@ -16,7 +21,7 @@
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/path_service.h"
-#include "base/strings/stringprintf.h"
+#include "base/strings/strcat_win.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_path_override.h"
 #include "base/test/test_shortcut_win.h"
@@ -36,6 +41,7 @@
 #include "chrome/installer/util/installer_util_strings.h"
 #include "chrome/installer/util/l10n_string_util.h"
 #include "chrome/installer/util/shell_util.h"
+#include "chrome/installer/util/taskbar_util.h"
 #include "chrome/installer/util/util_constants.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -86,17 +92,17 @@ class CreateVisualElementsManifestTest
   // Creates a dummy test file at |path|.
   void CreateTestFile(const base::FilePath& path) {
     static constexpr char kBlah[] = "blah";
-    ASSERT_EQ(static_cast<int>(std::size(kBlah) - 1),
-              base::WriteFile(path, &kBlah[0], std::size(kBlah) - 1));
+    ASSERT_TRUE(base::WriteFile(path, kBlah));
   }
 
   // Creates the VisualElements directory and a light asset, if testing such.
   void PrepareTestVisualElementsDirectory() {
     base::FilePath visual_elements_dir =
-        version_dir_.Append(installer::kVisualElements);
+        version_dir_.AppendASCII(installer::kVisualElements);
     ASSERT_TRUE(base::CreateDirectory(visual_elements_dir));
-    std::wstring light_logo_file_name = base::StringPrintf(
-        L"Logo%ls.png", install_static::InstallDetails::Get().logo_suffix());
+    std::wstring light_logo_file_name = base::StrCat(
+        {L"Logo", install_static::InstallDetails::Get().logo_suffix(),
+         L".png"});
     ASSERT_NO_FATAL_FAILURE(
         CreateTestFile(visual_elements_dir.Append(light_logo_file_name)));
   }
@@ -196,6 +202,13 @@ INSTANTIATE_TEST_SUITE_P(
     CreateVisualElementsManifestTest,
     testing::Combine(testing::Values(install_static::CANARY_INDEX),
                      testing::Values(kExpectedCanaryManifest)));
+#elif BUILDFLAG(GOOGLE_CHROME_FOR_TESTING_BRANDING)
+INSTANTIATE_TEST_SUITE_P(
+    ChromeForTesting,
+    CreateVisualElementsManifestTest,
+    testing::Combine(
+        testing::Values(install_static::GOOGLE_CHROME_FOR_TESTING_INDEX),
+        testing::Values(kExpectedPrimaryManifest)));
 #else
 INSTANTIATE_TEST_SUITE_P(
     Chromium,
@@ -210,7 +223,7 @@ class InstallShortcutTest : public testing::Test {
     ASSERT_TRUE(com_initializer_.Succeeded());
     ASSERT_TRUE(temp_dir_.CreateUniqueTempDir());
     chrome_exe_ = temp_dir_.GetPath().Append(installer::kChromeExe);
-    EXPECT_EQ(0, base::WriteFile(chrome_exe_, "", 0));
+    EXPECT_TRUE(base::WriteFile(chrome_exe_, ""));
 
     ShellUtil::ShortcutProperties chrome_properties(ShellUtil::CURRENT_USER);
     ShellUtil::AddDefaultShortcutProperties(chrome_exe_, &chrome_properties);
@@ -224,7 +237,7 @@ class InstallShortcutTest : public testing::Test {
     expected_start_menu_properties_ = expected_properties_;
     expected_start_menu_properties_.set_dual_mode(false);
 
-    prefs_.reset(GetFakeMasterPrefs(false, false));
+    prefs_.reset(GetFakeInitialPrefs(false, false));
 
     ASSERT_TRUE(fake_user_desktop_.CreateUniqueTempDir());
     ASSERT_TRUE(fake_common_desktop_.CreateUniqueTempDir());
@@ -267,13 +280,13 @@ class InstallShortcutTest : public testing::Test {
   void TearDown() override {
     // Try to unpin potentially pinned shortcuts (although pinning isn't tested,
     // the call itself might still have pinned the Start Menu shortcuts).
-    base::win::UnpinShortcutFromTaskbar(user_start_menu_shortcut_);
-    base::win::UnpinShortcutFromTaskbar(user_start_menu_subdir_shortcut_);
-    base::win::UnpinShortcutFromTaskbar(system_start_menu_shortcut_);
-    base::win::UnpinShortcutFromTaskbar(system_start_menu_subdir_shortcut_);
+    UnpinShortcutFromTaskbar(user_start_menu_shortcut_);
+    UnpinShortcutFromTaskbar(user_start_menu_subdir_shortcut_);
+    UnpinShortcutFromTaskbar(system_start_menu_shortcut_);
+    UnpinShortcutFromTaskbar(system_start_menu_subdir_shortcut_);
   }
 
-  installer::InitialPreferences* GetFakeMasterPrefs(
+  installer::InitialPreferences* GetFakeInitialPrefs(
       bool do_not_create_desktop_shortcut,
       bool do_not_create_quick_launch_shortcut) {
     const struct {
@@ -351,6 +364,45 @@ TEST_P(CreateVisualElementsManifestTest, VisualElementsManifestCreated) {
   ASSERT_STREQ(expected_manifest_, read_manifest.c_str());
 }
 
+#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+TEST(OsUpdateHandlerCmdTest, OsUpdated) {
+  constexpr wchar_t kInstalledVersion[] = L"128.0.0.0";
+  constexpr wchar_t kLastWindowsVersion[] = L"1.1.1.1";
+  constexpr wchar_t kCurWindowsVersion[] = L"1.1.1.2";
+  base::CommandLine setup_command_line(base::CommandLine::NO_PROGRAM);
+  base::FilePath path(L"c:\\tmp");
+  installer::InstallerState system_level_installer_state(
+      installer::InstallerState::SYSTEM_LEVEL);
+  system_level_installer_state.set_target_path_for_testing(path);
+  setup_command_line.ParseFromString(base::StrCat(
+      {L"c:\\tmp\\setup.exe ", kLastWindowsVersion, L"-", kCurWindowsVersion}));
+
+  // Test system-level install command line.
+  auto cmd_line = installer::GetOsUpdateHandlerCommand(
+      system_level_installer_state, kInstalledVersion, setup_command_line);
+  EXPECT_TRUE(cmd_line.has_value());
+  std::wstring expected_cmd_line =
+      base::StrCat({L"\"", path.value(), L"\\", kInstalledVersion, L"\\",
+                    installer::kOsUpdateHandlerExe, L"\" --",
+                    base::ASCIIToWide(installer::switches::kSystemLevel), L" ",
+                    kLastWindowsVersion, L"-", kCurWindowsVersion});
+  EXPECT_EQ(expected_cmd_line, cmd_line->GetCommandLineString());
+
+  // Test user-level install command line.
+  installer::InstallerState user_level_installer_state(
+      installer::InstallerState::USER_LEVEL);
+  user_level_installer_state.set_target_path_for_testing(path);
+  cmd_line = installer::GetOsUpdateHandlerCommand(
+      user_level_installer_state, kInstalledVersion, setup_command_line);
+  EXPECT_TRUE(cmd_line.has_value());
+  expected_cmd_line =
+      base::StrCat({L"\"", path.value(), L"\\", kInstalledVersion, L"\\",
+                    installer::kOsUpdateHandlerExe, L"\" ", kLastWindowsVersion,
+                    L"-", kCurWindowsVersion});
+  EXPECT_EQ(expected_cmd_line, cmd_line->GetCommandLineString());
+}
+#endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
+
 TEST_F(InstallShortcutTest, CreateAllShortcuts) {
   installer::CreateOrUpdateShortcuts(chrome_exe_, *prefs_,
                                      installer::CURRENT_USER,
@@ -376,7 +428,7 @@ TEST_F(InstallShortcutTest, CreateAllShortcutsSystemLevel) {
 
 TEST_F(InstallShortcutTest, CreateAllShortcutsButDesktopShortcut) {
   std::unique_ptr<installer::InitialPreferences> prefs_no_desktop(
-      GetFakeMasterPrefs(true, false));
+      GetFakeInitialPrefs(true, false));
   installer::CreateOrUpdateShortcuts(chrome_exe_, *prefs_no_desktop,
                                      installer::CURRENT_USER,
                                      installer::INSTALL_SHORTCUT_CREATE_ALL);
@@ -389,7 +441,7 @@ TEST_F(InstallShortcutTest, CreateAllShortcutsButDesktopShortcut) {
 
 TEST_F(InstallShortcutTest, CreateAllShortcutsButQuickLaunchShortcut) {
   std::unique_ptr<installer::InitialPreferences> prefs_no_ql(
-      GetFakeMasterPrefs(false, true));
+      GetFakeInitialPrefs(false, true));
   installer::CreateOrUpdateShortcuts(chrome_exe_, *prefs_no_ql,
                                      installer::CURRENT_USER,
                                      installer::INSTALL_SHORTCUT_CREATE_ALL);

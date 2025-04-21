@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,12 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
-#include "chrome/browser/ash/settings/cros_settings.h"
+#include "chromeos/ash/components/policy/restriction_schedule/device_restriction_schedule_controller.h"
+#include "chromeos/ash/components/settings/cros_settings.h"
 
 namespace policy {
 class BrowserPolicyConnectorAsh;
@@ -45,10 +47,11 @@ namespace system {
 //   2) If a session is in progress, the session is terminated. After Chrome has
 //      restarted on the login screen, the disabled screen is shown per 1).
 //   This ensures that when a device is disabled, there is never any user
-//   session running in the backround.
+//   session running in the background.
 //   When the device is re-enabled, Chrome is restarted once more to resume the
 //   regular login screen flows from a known-good point.
-class DeviceDisablingManager {
+class DeviceDisablingManager
+    : public policy::DeviceRestrictionScheduleController::Observer {
  public:
   using DeviceDisabledCheckCallback = base::OnceCallback<void(bool)>;
 
@@ -60,6 +63,8 @@ class DeviceDisablingManager {
 
     virtual void OnDisabledMessageChanged(
         const std::string& disabled_message) = 0;
+
+    virtual void OnRestrictionScheduleMessageChanged() = 0;
   };
 
   class Delegate {
@@ -84,7 +89,7 @@ class DeviceDisablingManager {
   DeviceDisablingManager(const DeviceDisablingManager&) = delete;
   DeviceDisablingManager& operator=(const DeviceDisablingManager&) = delete;
 
-  ~DeviceDisablingManager();
+  ~DeviceDisablingManager() override;
 
   // Must be called after construction.
   void Init();
@@ -122,14 +127,18 @@ class DeviceDisablingManager {
   // Cache the disabled message and inform observers if it changed.
   void CacheDisabledMessageAndNotify(const std::string& disabled_message);
 
-  void UpdateFromCrosSettings();
+  // DeviceRestrictionScheduleController::Observer:
+  void OnRestrictionScheduleStateChanged(bool enabled) override;
+  void OnRestrictionScheduleMessageChanged() override;
 
-  Delegate* delegate_;
-  policy::BrowserPolicyConnectorAsh* browser_policy_connector_;
-  CrosSettings* cros_settings_;
-  user_manager::UserManager* user_manager_;
+  void Update();
 
-  base::ObserverList<Observer>::Unchecked observers_;
+  raw_ptr<Delegate> delegate_;
+  raw_ptr<policy::BrowserPolicyConnectorAsh> browser_policy_connector_;
+  raw_ptr<CrosSettings> cros_settings_;
+  raw_ptr<user_manager::UserManager> user_manager_;
+
+  base::ObserverList<Observer>::UncheckedAndDanglingUntriaged observers_;
 
   base::CallbackListSubscription device_disabled_subscription_;
   base::CallbackListSubscription disabled_message_subscription_;
@@ -152,13 +161,5 @@ class DeviceDisablingManager {
 
 }  // namespace system
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when Chrome OS code migration is
-// done.
-namespace chromeos {
-namespace system {
-using ::ash::system::DeviceDisablingManager;
-}  // namespace system
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_SYSTEM_DEVICE_DISABLING_MANAGER_H_

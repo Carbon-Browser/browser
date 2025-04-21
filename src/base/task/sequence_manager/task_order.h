@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,7 +56,7 @@ class BASE_EXPORT TaskOrder {
 
   int sequence_num() const { return sequence_num_; }
 
-  // TODO(1153139): Rename to latest_delayed_run_time() for clarity.
+  // TODO(crbug.com/40158967): Rename to latest_delayed_run_time() for clarity.
   TimeTicks delayed_run_time() const { return delayed_run_time_; }
 
   static TaskOrder CreateForTesting(EnqueueOrder enqueue_order,

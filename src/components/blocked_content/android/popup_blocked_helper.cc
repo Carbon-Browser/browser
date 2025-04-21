@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,6 @@ bool PopupSettingManagedByPolicy(HostContentSettingsMap* map, const GURL& url) {
   content_settings::SettingInfo setting_info;
   const base::Value setting = map->GetWebsiteSetting(
       url, url, ContentSettingsType::POPUPS, &setting_info);
-  return setting_info.source == content_settings::SETTING_SOURCE_POLICY;
+  return setting_info.source == content_settings::SettingSource::kPolicy;
 }
 }  // namespace blocked_content

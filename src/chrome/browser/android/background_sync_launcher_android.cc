@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,8 @@
 
 #include "base/android/callback_android.h"
 #include "base/barrier_closure.h"
-#include "base/bind.h"
 #include "base/feature_list.h"
-#include "chrome/android/chrome_jni_headers/BackgroundSyncBackgroundTaskScheduler_jni.h"
-#include "chrome/android/chrome_jni_headers/BackgroundSyncBackgroundTask_jni.h"
-#include "chrome/android/chrome_jni_headers/GooglePlayServicesChecker_jni.h"
-#include "chrome/android/chrome_jni_headers/PeriodicBackgroundSyncChromeWakeUpTask_jni.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/flags/android/chrome_feature_list.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "content/public/browser/background_sync_context.h"
@@ -21,6 +17,12 @@
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/storage_partition.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "chrome/android/chrome_jni_headers/BackgroundSyncBackgroundTaskScheduler_jni.h"
+#include "chrome/android/chrome_jni_headers/BackgroundSyncBackgroundTask_jni.h"
+#include "chrome/android/chrome_jni_headers/GooglePlayServicesChecker_jni.h"
+#include "chrome/android/chrome_jni_headers/PeriodicBackgroundSyncChromeWakeUpTask_jni.h"
 
 using content::BrowserThread;
 

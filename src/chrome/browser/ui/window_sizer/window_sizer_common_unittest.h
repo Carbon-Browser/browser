@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "chrome/browser/ui/window_sizer/window_sizer.h"
 #include "chrome/test/base/test_browser_window.h"
+#include "ui/base/mojom/window_show_state.mojom-forward.h"
 #include "ui/gfx/geometry/rect.h"
 
 // Some standard primary monitor sizes (no task bar).
@@ -51,59 +52,66 @@ class TestStateProvider : public WindowSizer::StateProvider {
   TestStateProvider(const TestStateProvider&) = delete;
   TestStateProvider& operator=(const TestStateProvider&) = delete;
 
-  ~TestStateProvider() override {}
+  ~TestStateProvider() override = default;
 
   void SetPersistentState(const gfx::Rect& bounds,
                           const gfx::Rect& work_area,
-                          ui::WindowShowState show_state);
+                          ui::mojom::WindowShowState show_state);
   void SetLastActiveState(const gfx::Rect& bounds,
-                          ui::WindowShowState show_state);
+                          ui::mojom::WindowShowState show_state);
 
   // Overridden from WindowSizer::StateProvider:
-  bool GetPersistentState(gfx::Rect* bounds,
-                          gfx::Rect* saved_work_area,
-                          ui::WindowShowState* show_state) const override;
-  bool GetLastActiveWindowState(gfx::Rect* bounds,
-                                ui::WindowShowState* show_state) const override;
+  bool GetPersistentState(
+      gfx::Rect* bounds,
+      gfx::Rect* saved_work_area,
+      ui::mojom::WindowShowState* show_state) const override;
+  bool GetLastActiveWindowState(
+      gfx::Rect* bounds,
+      ui::mojom::WindowShowState* show_state) const override;
 
  private:
   gfx::Rect persistent_bounds_;
   gfx::Rect persistent_work_area_;
   bool has_persistent_data_;
-  ui::WindowShowState persistent_show_state_;
+  ui::mojom::WindowShowState persistent_show_state_;
 
   gfx::Rect last_active_bounds_;
   bool has_last_active_data_;
-  ui::WindowShowState last_active_show_state_;
+  ui::mojom::WindowShowState last_active_show_state_;
 };
 
-// Several convenience functions which allow to set up a state for
-// window sizer test operations with a single call.
-
-enum Source { DEFAULT, LAST_ACTIVE, PERSISTED, BOTH };
-
+// Builder class for setting up window sizer test state with a single statement.
 class WindowSizerTestUtil {
  public:
-  WindowSizerTestUtil() = delete;
+  WindowSizerTestUtil() = default;
   WindowSizerTestUtil(const WindowSizerTestUtil&) = delete;
   WindowSizerTestUtil& operator=(const WindowSizerTestUtil&) = delete;
 
-  // Sets up the window bounds, monitor bounds, and work area to get the
-  // resulting |out_bounds| from the WindowSizer.
-  // |source| specifies which type of data gets set for the test: Either the
-  // last active window, the persisted value which was stored earlier, both or
-  // none. For all these states the |bounds| and |work_area| get used, for the
-  // show states either |show_state_persisted| or |show_state_last| will be
-  // used.
-  static void GetWindowBounds(const gfx::Rect& monitor1_bounds,
-                              const gfx::Rect& monitor1_work_area,
-                              const gfx::Rect& monitor2_bounds,
-                              const gfx::Rect& bounds,
-                              const gfx::Rect& work_area,
-                              Source source,
-                              const Browser* browser,
-                              const gfx::Rect& passed_in,
-                              gfx::Rect* out_bounds);
+  // Set up monitor bounds. Tests have to always call this method with bounds
+  // for at least one monitor.
+  WindowSizerTestUtil& WithMonitorBounds(const gfx::Rect& monitor1_bounds,
+                                         const gfx::Rect& monitor2_bounds = {});
+
+  // Override the monitor work area. By default work area will be equal to the
+  // monitor bounds.
+  WindowSizerTestUtil& WithMonitorWorkArea(const gfx::Rect& monitor1_work_area);
+
+  WindowSizerTestUtil& WithLastActiveBounds(const gfx::Rect& bounds);
+  WindowSizerTestUtil& WithPersistedBounds(const gfx::Rect& bounds);
+  WindowSizerTestUtil& WithPersistedWorkArea(const gfx::Rect& work_area);
+
+  WindowSizerTestUtil& WithSpecifiedBounds(const gfx::Rect& bounds);
+
+  gfx::Rect GetWindowBounds();
+
+ private:
+  gfx::Rect monitor1_bounds_;
+  gfx::Rect monitor1_work_area_;
+  gfx::Rect monitor2_bounds_;
+  gfx::Rect last_active_bounds_;
+  gfx::Rect persisted_bounds_;
+  gfx::Rect persisted_work_area_;
+  gfx::Rect specified_bounds_;
 };
 
 #endif  // CHROME_BROWSER_UI_WINDOW_SIZER_WINDOW_SIZER_COMMON_UNITTEST_H_

@@ -1,11 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/metrics/antivirus_metrics_provider_win.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "chrome/browser/win/util_win_service.h"
 #include "chrome/common/channel_info.h"
 #include "components/version_info/channel.h"
@@ -17,8 +17,7 @@ bool ShouldReportFullNames() {
   // but this allows a small group to be enabled on other channels if there are
   // a large percentage of hashes collected on these channels that are not
   // resolved to names previously collected on Canary channel.
-  bool enabled = base::FeatureList::IsEnabled(
-      AntiVirusMetricsProvider::kReportNamesFeature);
+  bool enabled = base::FeatureList::IsEnabled(kReportFullAVProductDetails);
 
   if (chrome::GetChannel() == version_info::Channel::CANARY)
     return true;
@@ -28,7 +27,9 @@ bool ShouldReportFullNames() {
 
 }  // namespace
 
-constexpr base::Feature AntiVirusMetricsProvider::kReportNamesFeature;
+BASE_FEATURE(kReportFullAVProductDetails,
+             "ReportFullAVProductDetails",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 AntiVirusMetricsProvider::AntiVirusMetricsProvider() = default;
 

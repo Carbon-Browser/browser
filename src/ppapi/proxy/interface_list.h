@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,7 +48,7 @@ class PPAPI_PROXY_EXPORT InterfaceList {
   // Returns the interface pointer for the given browser or plugin interface,
   // or NULL if it's not supported.
   const void* GetInterfaceForPPB(const std::string& name);
-  const void* GetInterfaceForPPP(const std::string& name) const;
+  const void* GetInterfaceForPPP(const std::string& name);
 
  private:
   friend class InterfaceListTest;

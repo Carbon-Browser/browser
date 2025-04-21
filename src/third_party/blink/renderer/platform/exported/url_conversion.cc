@@ -1,8 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/public/platform/url_conversion.h"
+
+#include <string_view>
 
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_utf8_adaptor.h"
@@ -19,11 +21,11 @@ GURL WebStringToGURL(const WebString& web_string) {
   if (str.Is8Bit()) {
     // Ensure the (possibly Latin-1) 8-bit string is UTF-8 for GURL.
     StringUTF8Adaptor utf8(str);
-    return GURL(utf8.AsStringPiece());
+    return GURL(utf8.AsStringView());
   }
 
   // GURL can consume UTF-16 directly.
-  return GURL(base::StringPiece16(str.Characters16(), str.length()));
+  return GURL(std::u16string_view(str.Characters16(), str.length()));
 }
 
 }  // namespace blink

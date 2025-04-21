@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,11 +14,13 @@
 #include "device/bluetooth/bluetooth_local_gatt_characteristic.h"
 #include "device/bluetooth/bluez/bluetooth_gatt_characteristic_bluez.h"
 #include "device/bluetooth/bluez/bluetooth_local_gatt_descriptor_bluez.h"
+#include "device/bluetooth/bluez/bluetooth_local_gatt_service_bluez.h"
 #include "device/bluetooth/public/cpp/bluetooth_uuid.h"
 
 namespace bluez {
 
 class BluetoothLocalGattServiceBlueZ;
+class BluetoothLocalGattDescriptorBlueZ;
 
 // The BluetoothLocalGattCharacteristicBlueZ class implements
 // BluetoothLocalGattCharacteristic for local GATT characteristics for
@@ -27,7 +29,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothLocalGattCharacteristicBlueZ
     : public BluetoothGattCharacteristicBlueZ,
       public device::BluetoothLocalGattCharacteristic {
  public:
-  BluetoothLocalGattCharacteristicBlueZ(
+  static base::WeakPtr<BluetoothLocalGattCharacteristicBlueZ> Create(
       const device::BluetoothUUID& uuid,
       Properties properties,
       Permissions permissions,
@@ -50,14 +52,17 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothLocalGattCharacteristicBlueZ
                                         const std::vector<uint8_t>& new_value,
                                         bool indicate) override;
   device::BluetoothLocalGattService* GetService() const override;
-
-  const std::vector<std::unique_ptr<BluetoothLocalGattDescriptorBlueZ>>&
-  GetDescriptors() const;
+  std::vector<device::BluetoothLocalGattDescriptor*> GetDescriptors()
+      const override;
 
  private:
   friend class BluetoothLocalGattDescriptorBlueZ;
-  // Needs access to weak_ptr_factory_.
-  friend device::BluetoothLocalGattCharacteristic;
+
+BluetoothLocalGattCharacteristicBlueZ(
+      const device::BluetoothUUID& uuid,
+      Properties properties,
+      Permissions permissions,
+      BluetoothLocalGattServiceBlueZ* service);
 
   // Adds a descriptor to this characteristic.
   void AddDescriptor(

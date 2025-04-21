@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,8 +57,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     // because Reset() is expected to ensure that the current DecoderBuffer
     // won't be needed after that.
     scoped_refptr<media::DecoderBuffer> decoder_buffer =
-        media::DecoderBuffer::CopyFrom(decoder_buffer_data.data(),
-                                       decoder_buffer_data.size());
+        media::DecoderBuffer::CopyFrom(decoder_buffer_data);
     decoder.SetStream(i, *decoder_buffer);
 
     // Decode should consume all the data unless it returns kConfigChange, and

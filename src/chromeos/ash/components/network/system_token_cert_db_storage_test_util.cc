@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,15 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
 #include "chromeos/ash/components/network/system_token_cert_db_storage.h"
 #include "net/cert/nss_cert_database.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace chromeos {
+namespace ash {
 
 GetSystemTokenCertDbCallbackWrapper::GetSystemTokenCertDbCallbackWrapper() =
     default;
@@ -61,4 +61,4 @@ void FakeSystemTokenCertDbStorageObserver::OnSystemTokenCertDbDestroyed() {
   has_been_notified_ = true;
 }
 
-}  // namespace chromeos
+}  // namespace ash

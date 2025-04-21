@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,6 @@
 #include "chrome/browser/optimization_guide/chrome_hints_manager.h"
 #include "chrome/browser/optimization_guide/optimization_guide_keyed_service.h"
 #include "chrome/browser/optimization_guide/optimization_guide_keyed_service_factory.h"
-#include "chrome/browser/sharing/proto/optimization_guide_push_notification.pb.h"
-#include "chrome/browser/sharing/proto/sharing_message.pb.h"
 #include "components/optimization_guide/core/hints_processing_util.h"
 #include "components/optimization_guide/core/optimization_guide_features.h"
 #include "components/optimization_guide/core/optimization_guide_logger.h"
@@ -20,8 +18,10 @@
 #include "components/optimization_guide/core/optimization_guide_util.h"
 #include "components/optimization_guide/core/push_notification_manager.h"
 #include "components/optimization_guide/proto/push_notification.pb.h"
+#include "components/sharing_message/proto/optimization_guide_push_notification.pb.h"
+#include "components/sharing_message/proto/sharing_message.pb.h"
 
-using chrome_browser_sharing::OptimizationGuidePushNotification;
+using components_sharing_message::OptimizationGuidePushNotification;
 
 // static
 std::unique_ptr<OptimizationGuideMessageHandler>
@@ -54,7 +54,7 @@ OptimizationGuideMessageHandler::OptimizationGuideMessageHandler(
 OptimizationGuideMessageHandler::~OptimizationGuideMessageHandler() = default;
 
 void OptimizationGuideMessageHandler::OnMessage(
-    chrome_browser_sharing::SharingMessage message,
+    components_sharing_message::SharingMessage message,
     SharingMessageHandler::DoneCallback done_callback) {
   DCHECK(message.has_optimization_guide_push_notification());
 
@@ -64,15 +64,18 @@ void OptimizationGuideMessageHandler::OnMessage(
   optimization_guide::proto::HintNotificationPayload hint_notification_payload;
   if (!hint_notification_payload.ParseFromString(
           notification_proto.hint_notification_payload_bytes())) {
-    OPTIMIZATION_GUIDE_LOG(optimization_guide_logger_,
-                           "Can't parse the HintNotificationPayload proto from "
-                           "OptimizationGuidePushNotification.");
+    OPTIMIZATION_GUIDE_LOG(
+        optimization_guide_common::mojom::LogSource::HINTS_NOTIFICATIONS,
+        optimization_guide_logger_,
+        "Can't parse the HintNotificationPayload proto from "
+        "OptimizationGuidePushNotification.");
     std::move(done_callback).Run(/*response=*/nullptr);
     return;
   }
   OPTIMIZATION_GUIDE_LOG(
+      optimization_guide_common::mojom::LogSource::HINTS_NOTIFICATIONS,
       optimization_guide_logger_,
-      base::StrCat({"Received push notifation for type:",
+      base::StrCat({"Received push notification for type:",
                     optimization_guide::GetStringNameForOptimizationType(
                         hint_notification_payload.optimization_type()),
                     " hint_key:", hint_notification_payload.hint_key()}));

@@ -26,6 +26,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_LOADER_FETCH_FETCH_PARAMETERS_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_LOADER_FETCH_FETCH_PARAMETERS_H_
 
+#include "base/memory/stack_allocated.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/script/script_type.mojom-blink-forward.h"
 #include "third_party/blink/public/mojom/script/script_type.mojom-shared.h"
@@ -42,7 +43,6 @@
 
 namespace blink {
 
-class DOMWrapperWorld;
 class SecurityOrigin;
 
 // A FetchParameters is a "parameter object" for
@@ -69,18 +69,9 @@ class PLATFORM_EXPORT FetchParameters {
                        // ResourceFetcher::non_blocking_loaders_.
   };
 
-  struct ResourceWidth {
-    DISALLOW_NEW();
-    float width;
-    bool is_set;
-
-    ResourceWidth() : width(0), is_set(false) {}
-  };
-
   static FetchParameters CreateForTest(ResourceRequest);
 
-  FetchParameters(ResourceRequest, scoped_refptr<const DOMWrapperWorld> world);
-  FetchParameters(ResourceRequest, const ResourceLoaderOptions&);
+  FetchParameters(ResourceRequest, ResourceLoaderOptions);
   FetchParameters(const FetchParameters&) = delete;
   FetchParameters& operator=(const FetchParameters&) = delete;
   FetchParameters(FetchParameters&&);
@@ -126,8 +117,11 @@ class PLATFORM_EXPORT FetchParameters {
   DeferOption Defer() const { return defer_; }
   void SetDefer(DeferOption defer) { defer_ = defer; }
 
-  ResourceWidth GetResourceWidth() const { return resource_width_; }
-  void SetResourceWidth(ResourceWidth);
+  std::optional<float> GetResourceWidth() const { return resource_width_; }
+  void SetResourceWidth(const std::optional<float> resource_width);
+
+  std::optional<float> GetResourceHeight() const { return resource_height_; }
+  void SetResourceHeight(const std::optional<float> resource_height);
 
   bool IsSpeculativePreload() const {
     return speculative_preload_type_ != SpeculativePreloadType::kNotSpeculative;
@@ -204,10 +198,6 @@ class PLATFORM_EXPORT FetchParameters {
     is_from_origin_dirty_style_sheet_ = dirty;
   }
 
-  void SetSignedExchangePrefetchCacheEnabled(bool enabled) {
-    resource_request_.SetSignedExchangePrefetchCacheEnabled(enabled);
-  }
-
   RenderBlockingBehavior GetRenderBlockingBehavior() const {
     return render_blocking_behavior_;
   }
@@ -217,6 +207,22 @@ class PLATFORM_EXPORT FetchParameters {
     render_blocking_behavior_ = render_blocking_behavior;
   }
 
+  void SetIsPotentiallyLCPElement(bool flag) {
+    is_potentially_lcp_element_ = flag;
+  }
+
+  void SetIsPotentiallyLCPInfluencer(bool flag) {
+    is_potentially_lcp_influencer_ = flag;
+  }
+
+  bool IsPotentiallyLCPElement() const { return is_potentially_lcp_element_; }
+
+  bool IsPotentiallyLCPInfluencer() const {
+    return is_potentially_lcp_influencer_;
+  }
+
+  void Trace(Visitor* visitor) const { visitor->Trace(options_); }
+
  private:
   ResourceRequest resource_request_;
   // |decoder_options_|'s ContentType is set to |kPlainTextContent| in
@@ -224,15 +230,19 @@ class PLATFORM_EXPORT FetchParameters {
   // in ResourceFetcher::PrepareRequest() before actual use.
   TextResourceDecoderOptions decoder_options_;
   ResourceLoaderOptions options_;
-  SpeculativePreloadType speculative_preload_type_;
-  DeferOption defer_;
-  ResourceWidth resource_width_;
-  ImageRequestBehavior image_request_behavior_;
+  SpeculativePreloadType speculative_preload_type_ =
+      SpeculativePreloadType::kNotSpeculative;
+  DeferOption defer_ = DeferOption::kNoDefer;
+  std::optional<float> resource_width_;
+  std::optional<float> resource_height_;
+  ImageRequestBehavior image_request_behavior_ = ImageRequestBehavior::kNone;
   mojom::blink::ScriptType script_type_ = mojom::blink::ScriptType::kClassic;
   bool is_stale_revalidation_ = false;
   bool is_from_origin_dirty_style_sheet_ = false;
   RenderBlockingBehavior render_blocking_behavior_ =
       RenderBlockingBehavior::kUnset;
+  bool is_potentially_lcp_element_ = false;
+  bool is_potentially_lcp_influencer_ = false;
 };
 
 }  // namespace blink

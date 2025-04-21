@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@
 #include "components/password_manager/core/browser/mock_password_feature_manager.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/signin/public/identity_manager/identity_test_utils.h"
-#include "components/sync/driver/test_sync_service.h"
+#include "components/sync/test/test_sync_service.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_renderer_host.h"
@@ -29,7 +29,7 @@ namespace {
 
 using testing::Return;
 
-static std::unique_ptr<KeyedService> BuildTestSyncService(
+std::unique_ptr<KeyedService> BuildTestSyncService(
     content::BrowserContext* context) {
   return std::make_unique<syncer::TestSyncService>();
 }
@@ -41,11 +41,10 @@ class MoveToAccountStoreBubbleControllerTest : public ::testing::Test {
     profile_builder.AddTestingFactories(
         IdentityTestEnvironmentProfileAdaptor::
             GetIdentityTestEnvironmentFactories());
+    profile_builder.AddTestingFactory(
+        SyncServiceFactory::GetInstance(),
+        base::BindRepeating(&BuildTestSyncService));
     profile_ = profile_builder.Build();
-    // Make sure no real SyncService gets created (it's not needed for these
-    // tests, and it'd require more setup).
-    SyncServiceFactory::GetInstance()->SetTestingFactory(
-        profile(), base::BindRepeating(&BuildTestSyncService));
 
     web_contents_ =
         content::WebContentsTester::CreateTestWebContents(profile(), nullptr);
@@ -89,26 +88,34 @@ TEST_F(MoveToAccountStoreBubbleControllerTest, CloseExplicitly) {
 TEST_F(MoveToAccountStoreBubbleControllerTest, AcceptMoveIfOptedIn) {
   ON_CALL(*password_feature_manager(), IsOptedInForAccountStorage)
       .WillByDefault(Return(true));
+  ON_CALL(*delegate(), GetState)
+      .WillByDefault(
+          Return(password_manager::ui::MOVE_CREDENTIAL_AFTER_LOG_IN_STATE));
   EXPECT_CALL(*delegate(), MovePasswordToAccountStore);
   controller()->AcceptMove();
 }
 
-TEST_F(MoveToAccountStoreBubbleControllerTest, AuthenticateMoveIfOptedOut) {
-  ON_CALL(*password_feature_manager(), IsOptedInForAccountStorage)
-      .WillByDefault(Return(false));
-  EXPECT_CALL(*delegate(), AuthenticateUserForAccountStoreOptInAndMovePassword);
-  controller()->AcceptMove();
+TEST_F(MoveToAccountStoreBubbleControllerTest, RejectMove) {
+  ON_CALL(*delegate(), GetState)
+      .WillByDefault(
+          Return(password_manager::ui::MOVE_CREDENTIAL_AFTER_LOG_IN_STATE));
+  EXPECT_CALL(*delegate(), BlockMovingPasswordToAccountStore);
+  controller()->RejectMove();
 }
 
-TEST_F(MoveToAccountStoreBubbleControllerTest, RejectMove) {
-  EXPECT_CALL(*delegate(), BlockMovingPasswordToAccountStore);
+TEST_F(MoveToAccountStoreBubbleControllerTest, RejectMoveForSelectedPassword) {
+  ON_CALL(*delegate(), GetState)
+      .WillByDefault(Return(
+          password_manager::ui::MOVE_CREDENTIAL_FROM_MANAGE_BUBBLE_STATE));
+  EXPECT_CALL(*delegate(), BlockMovingPasswordToAccountStore).Times(0);
   controller()->RejectMove();
 }
 
 TEST_F(MoveToAccountStoreBubbleControllerTest, ProvidesTitle) {
   PasswordBubbleControllerBase* controller_ptr = controller();
   EXPECT_EQ(controller_ptr->GetTitle(),
-            l10n_util::GetStringUTF16(IDS_PASSWORD_MANAGER_MOVE_TITLE));
+            l10n_util::GetStringUTF16(
+                IDS_PASSWORD_MANAGER_SAVE_IN_ACCOUNT_BUBBLE_TITLE));
 }
 
 TEST_F(MoveToAccountStoreBubbleControllerTest, ProvidesProfileIcon) {

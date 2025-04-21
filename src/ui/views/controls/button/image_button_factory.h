@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -6,9 +6,10 @@
 #define UI_VIEWS_CONTROLS_BUTTON_IMAGE_BUTTON_FACTORY_H_
 
 #include <memory>
+#include <optional>
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "ui/color/color_id.h"
 #include "ui/views/controls/button/button.h"
 #include "ui/views/views_export.h"
 
@@ -27,7 +28,9 @@ VIEWS_EXPORT std::unique_ptr<ImageButton>
 CreateVectorImageButtonWithNativeTheme(
     Button::PressedCallback callback,
     const gfx::VectorIcon& icon,
-    absl::optional<int> dip_size = absl::nullopt);
+    std::optional<int> dip_size = std::nullopt,
+    ui::ColorId icon_color_id = ui::kColorIcon,
+    ui::ColorId icon_disabled_color_id = ui::kColorIconDisabled);
 
 // Creates an ImageButton with an ink drop and a centered image in preparation
 // for applying a vector icon with SetImageFromVectorIcon below.
@@ -65,6 +68,24 @@ VIEWS_EXPORT void SetToggledImageFromVectorIconWithColor(
     int dip_size,
     SkColor icon_color,
     SkColor disabled_color);
+
+// Sets images on |button| for STATE_NORMAL and STATE_DISABLED with the default
+// size from the given vector icon and colors,
+VIEWS_EXPORT void SetImageFromVectorIconWithColorId(
+    ImageButton* button,
+    const gfx::VectorIcon& icon,
+    ui::ColorId icon_color_id,
+    ui::ColorId icon_disabled_color_id,
+    std::optional<int> icon_size = std::nullopt);
+
+// Sets images on a `ToggleImageButton` |button| for STATE_NORMAL and
+// STATE_DISABLED with the default size from the given vector icon and colors.
+VIEWS_EXPORT void SetToggledImageFromVectorIconWithColorId(
+    ToggleImageButton* button,
+    const gfx::VectorIcon& icon,
+    ui::ColorId icon_color_id,
+    ui::ColorId icon_disabled_color_id,
+    std::optional<int> icon_size = std::nullopt);
 
 }  // namespace views
 

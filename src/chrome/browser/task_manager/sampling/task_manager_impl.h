@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <map>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "base/containers/flat_map.h"
 #include "base/lazy_instance.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
@@ -74,6 +75,7 @@ class TaskManagerImpl : public TaskManagerInterface,
   const base::ProcessHandle& GetProcessHandle(TaskId task_id) const override;
   const base::ProcessId& GetProcessId(TaskId task_id) const override;
   Task::Type GetType(TaskId task_id) const override;
+  Task::SubType GetSubType(TaskId task_id) const override;
   SessionID GetTabId(TaskId task_id) const override;
   int GetChildProcessUniqueId(TaskId task_id) const override;
   void GetTerminationStatus(TaskId task_id,
@@ -101,6 +103,7 @@ class TaskManagerImpl : public TaskManagerInterface,
   void TaskAdded(Task* task) override;
   void TaskRemoved(Task* task) override;
   void TaskUnresponsive(Task* task) override;
+  void ActiveTaskFetched(TaskId active_task_id) override;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   void TaskIdsListToBeInvalidated() override;
 #endif
@@ -110,9 +113,11 @@ class TaskManagerImpl : public TaskManagerInterface,
       int64_t recv_bytes,
       int64_t sent_bytes);
 
+  bool is_running() const { return is_running_; }
+
  private:
   using PidToTaskGroupMap =
-      std::map<base::ProcessId, std::unique_ptr<TaskGroup>>;
+      base::flat_map<base::ProcessId, std::unique_ptr<TaskGroup>>;
 
   friend struct base::LazyInstanceTraitsBase<TaskManagerImpl>;
 
@@ -129,7 +134,7 @@ class TaskManagerImpl : public TaskManagerInterface,
   void StartUpdating() override;
   void StopUpdating() override;
 
-  // Lookup a task by the global render frame host id. The empty
+  // Lookup a task by the global RenderFrameHost id. The empty
   // GlobalRenderFrameHostId works as well, which would lead to the task
   // being attributed to the browser process.
   Task* GetTaskByRoute(
@@ -160,7 +165,8 @@ class TaskManagerImpl : public TaskManagerInterface,
   // Map each task by its ID to the TaskGroup on which it resides.
   // Keys are unique but values will have duplicates (i.e. multiple tasks
   // running on the same process represented by a single TaskGroup).
-  std::map<TaskId, TaskGroup*> task_groups_by_task_id_;
+  base::flat_map<TaskId, raw_ptr<TaskGroup, CtnExperimental>>
+      task_groups_by_task_id_;
 
   // A cached sorted list of the task IDs.
   mutable std::vector<TaskId> sorted_task_ids_;
@@ -189,7 +195,7 @@ class TaskManagerImpl : public TaskManagerInterface,
   // Task provider handling crosapi task data.
   // Once CrosapiTaskProvider is created and added to the task_providers_, it
   // should never be removed from task_providers_ unless in the destructor.
-  CrosapiTaskProviderAsh* crosapi_task_provider_ = nullptr;
+  raw_ptr<CrosapiTaskProviderAsh> crosapi_task_provider_ = nullptr;
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   // This will be set to true while there are observers and the task manager is

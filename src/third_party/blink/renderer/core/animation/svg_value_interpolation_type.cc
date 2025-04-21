@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,7 +46,7 @@ InterpolationValue SVGValueInterpolationType::MaybeConvertSVGValue(
   SVGPropertyBase* referenced_value =
       const_cast<SVGPropertyBase*>(&value);  // Take ref.
   return InterpolationValue(
-      std::make_unique<InterpolableList>(0),
+      MakeGarbageCollected<InterpolableList>(0),
       SVGValueNonInterpolableValue::Create(referenced_value));
 }
 

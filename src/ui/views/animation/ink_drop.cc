@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,16 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/observer_list.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/compositor/layer.h"
-#include "ui/views/animation/ink_drop_host_view.h"
+#include "ui/views/animation/ink_drop_host.h"
 #include "ui/views/animation/ink_drop_impl.h"
 #include "ui/views/animation/ink_drop_observer.h"
+#include "ui/views/view.h"
+#include "ui/views/view_class_properties.h"
 
 DEFINE_UI_CLASS_PROPERTY_TYPE(views::InkDropHost*)
 
@@ -22,7 +24,7 @@ namespace views {
 
 namespace {
 
-DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(InkDropHost, kInkDropKey, nullptr)
+DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(InkDropHost, kInkDropKey)
 
 // TODO(pbos): Remove this by changing the constructor parameters to
 // InkDropImpl.
@@ -42,8 +44,9 @@ std::unique_ptr<InkDrop> CreateInkDropImpl(
 
 InkDrop::~InkDrop() = default;
 
-void InkDrop::Install(View* host, std::unique_ptr<InkDropHost> ink_drop) {
-  host->SetProperty(kInkDropKey, std::move(ink_drop));
+InkDropHost* InkDrop::Install(View* host,
+                              std::unique_ptr<InkDropHost> ink_drop) {
+  return host->SetProperty(kInkDropKey, std::move(ink_drop));
 }
 
 void InkDrop::Remove(View* host) {
@@ -57,33 +60,43 @@ const InkDropHost* InkDrop::Get(const View* host) {
 std::unique_ptr<InkDrop> InkDrop::CreateInkDropForSquareRipple(
     InkDropHost* host,
     bool highlight_on_hover,
-    bool highlight_on_focus) {
-  return CreateInkDropImpl(host, InkDropImpl::AutoHighlightMode::HIDE_ON_RIPPLE,
+    bool highlight_on_focus,
+    bool show_highlight_on_ripple) {
+  return CreateInkDropImpl(host,
+                           show_highlight_on_ripple
+                               ? InkDropImpl::AutoHighlightMode::SHOW_ON_RIPPLE
+                               : InkDropImpl::AutoHighlightMode::HIDE_ON_RIPPLE,
                            highlight_on_hover, highlight_on_focus);
 }
 
 void InkDrop::UseInkDropForSquareRipple(InkDropHost* host,
                                         bool highlight_on_hover,
-                                        bool highlight_on_focus) {
-  host->SetCreateInkDropCallback(
-      base::BindRepeating(&InkDrop::CreateInkDropForSquareRipple, host,
-                          highlight_on_hover, highlight_on_focus));
+                                        bool highlight_on_focus,
+                                        bool show_highlight_on_ripple) {
+  host->SetCreateInkDropCallback(base::BindRepeating(
+      &InkDrop::CreateInkDropForSquareRipple, host, highlight_on_hover,
+      highlight_on_focus, show_highlight_on_ripple));
 }
 
 std::unique_ptr<InkDrop> InkDrop::CreateInkDropForFloodFillRipple(
     InkDropHost* host,
     bool highlight_on_hover,
-    bool highlight_on_focus) {
-  return CreateInkDropImpl(host, InkDropImpl::AutoHighlightMode::SHOW_ON_RIPPLE,
+    bool highlight_on_focus,
+    bool show_highlight_on_ripple) {
+  return CreateInkDropImpl(host,
+                           show_highlight_on_ripple
+                               ? InkDropImpl::AutoHighlightMode::SHOW_ON_RIPPLE
+                               : InkDropImpl::AutoHighlightMode::HIDE_ON_RIPPLE,
                            highlight_on_hover, highlight_on_focus);
 }
 
 void InkDrop::UseInkDropForFloodFillRipple(InkDropHost* host,
                                            bool highlight_on_hover,
-                                           bool highlight_on_focus) {
-  host->SetCreateInkDropCallback(
-      base::BindRepeating(&InkDrop::CreateInkDropForFloodFillRipple, host,
-                          highlight_on_hover, highlight_on_focus));
+                                           bool highlight_on_focus,
+                                           bool show_highlight_on_ripple) {
+  host->SetCreateInkDropCallback(base::BindRepeating(
+      &InkDrop::CreateInkDropForFloodFillRipple, host, highlight_on_hover,
+      highlight_on_focus, show_highlight_on_ripple));
 }
 
 std::unique_ptr<InkDrop> InkDrop::CreateInkDropWithoutAutoHighlight(
@@ -115,21 +128,60 @@ void InkDrop::RemoveObserver(InkDropObserver* observer) {
 InkDrop::InkDrop() = default;
 
 void InkDrop::NotifyInkDropAnimationStarted() {
-  for (InkDropObserver& observer : observers_)
-    observer.InkDropAnimationStarted();
+  observers_.Notify(&InkDropObserver::InkDropAnimationStarted);
 }
 
 void InkDrop::NotifyInkDropRippleAnimationEnded(InkDropState ink_drop_state) {
-  for (InkDropObserver& observer : observers_)
-    observer.InkDropRippleAnimationEnded(ink_drop_state);
+  observers_.Notify(&InkDropObserver::InkDropRippleAnimationEnded,
+                    ink_drop_state);
 }
 
 InkDropContainerView::InkDropContainerView() {
   // Ensure the container View is found as the EventTarget instead of this.
   SetCanProcessEventsWithinSubtree(false);
+  SetProperty(kViewIgnoredByLayoutKey, true);
 }
 
-BEGIN_METADATA(InkDropContainerView, views::View)
+InkDropContainerView::~InkDropContainerView() = default;
+
+bool InkDropContainerView::GetAutoMatchParentBounds() const {
+  return auto_match_parent_bounds_;
+}
+
+void InkDropContainerView::SetAutoMatchParentBounds(
+    bool auto_match_parent_bounds) {
+  if (auto_match_parent_bounds_ == auto_match_parent_bounds) {
+    return;
+  }
+  auto_match_parent_bounds_ = auto_match_parent_bounds;
+  OnPropertyChanged(&auto_match_parent_bounds_,
+                    PropertyEffects::kPropertyEffectsNone);
+  if (parent()) {
+    OnViewBoundsChanged(parent());
+  }
+}
+
+void InkDropContainerView::ViewHierarchyChanged(
+    const ViewHierarchyChangedDetails& details) {
+  if (details.child == this) {
+    if (details.is_add) {
+      observer_.Observe(details.parent);
+    } else {
+      observer_.Reset();
+    }
+  }
+}
+
+void InkDropContainerView::OnViewBoundsChanged(View* observed_view) {
+  if (!auto_match_parent_bounds_) {
+    return;
+  }
+  gfx::Rect bounds = observed_view->GetLocalBounds();
+  SetBoundsRect(bounds);
+}
+
+BEGIN_METADATA(InkDropContainerView)
+ADD_PROPERTY_METADATA(bool, AutoMatchParentBounds)
 END_METADATA
 
 }  // namespace views

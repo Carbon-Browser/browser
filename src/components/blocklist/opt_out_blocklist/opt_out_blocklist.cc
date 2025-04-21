@@ -1,17 +1,16 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/blocklist/opt_out_blocklist/opt_out_blocklist.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/metrics/histogram.h"
 #include "base/time/clock.h"
 #include "components/blocklist/opt_out_blocklist/opt_out_blocklist_delegate.h"
 #include "components/blocklist/opt_out_blocklist/opt_out_blocklist_item.h"
 #include "components/blocklist/opt_out_blocklist/opt_out_store.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace blocklist {
 
@@ -120,8 +119,9 @@ void OptOutBlocklist::AddEntrySync(const std::string& host_name,
         blocklist_data_->IsUserOptedOutInGeneral(time));
   }
 
-  if (!opt_out_store_)
+  if (!opt_out_store_) {
     return;
+  }
   opt_out_store_->AddEntry(opt_out, host_name, type, time);
 }
 
@@ -132,8 +132,9 @@ BlocklistReason OptOutBlocklist::IsLoadedAndAllowed(
     std::vector<BlocklistReason>* passed_reasons) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (!loaded_)
+  if (!loaded_) {
     return BlocklistReason::kBlocklistNotLoaded;
+  }
   passed_reasons->push_back(BlocklistReason::kBlocklistNotLoaded);
 
   return blocklist_data_->IsAllowed(host_name, type,

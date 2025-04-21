@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,47 +30,65 @@ class SingleThreadTaskRunner;
 
 namespace blink {
 
-class ApplyConstraintsProcessor;
 class LocalFrame;
 
 // UserMediaClient handles requests coming from the Blink MediaDevices
 // object. This includes getUserMedia and enumerateDevices. It must be created,
 // called and destroyed on the render thread.
 class MODULES_EXPORT UserMediaClient
-    : public GarbageCollected<UserMediaClient> {
+    : public GarbageCollected<UserMediaClient>,
+      public Supplement<LocalDOMWindow>,
+      public ExecutionContextLifecycleObserver {
  public:
+  static const char kSupplementName[];
+
   // TODO(guidou): Make all constructors private and replace with Create methods
   // that return a std::unique_ptr. This class is intended for instantiation on
   // the free store. https://crbug.com/764293
   // |frame| and its respective RenderFrame must outlive this instance.
   UserMediaClient(LocalFrame* frame,
                   scoped_refptr<base::SingleThreadTaskRunner> task_runner);
-  UserMediaClient(LocalFrame* frame,
-                  UserMediaProcessor* user_media_processor,
-                  scoped_refptr<base::SingleThreadTaskRunner> task_runner);
 
   UserMediaClient(const UserMediaClient&) = delete;
   UserMediaClient& operator=(const UserMediaClient&) = delete;
-
-  virtual ~UserMediaClient();
 
   void RequestUserMedia(UserMediaRequest* user_media_request);
   void CancelUserMediaRequest(UserMediaRequest* user_media_request);
   void ApplyConstraints(blink::ApplyConstraintsRequest* user_media_request);
   void StopTrack(MediaStreamComponent* track);
-  void ContextDestroyed();
+
+  // ExecutionContextLifecycleObserver implementation.
+  void ContextDestroyed() override;
 
   bool IsCapturing();
 
-#if !BUILDFLAG(IS_ANDROID)
+  static UserMediaClient* From(LocalDOMWindow*);
+
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
   void FocusCapturedSurface(const String& label, bool focus);
 #endif
 
-  void Trace(Visitor*) const;
+  void Trace(Visitor*) const override;
 
   void SetMediaDevicesDispatcherForTesting(
       mojo::PendingRemote<blink::mojom::blink::MediaDevicesDispatcherHost>
           media_devices_dispatcher);
+
+  // Ensure the MediaStreamDevice underlying a source is not closed even if
+  // there are no remaining usages from this frame, as it's in the process of
+  // being transferred.
+  void KeepDeviceAliveForTransfer(
+      base::UnguessableToken session_id,
+      base::UnguessableToken transfer_id,
+      UserMediaProcessor::KeepDeviceAliveForTransferCallback keep_alive_cb);
+
+ protected:
+  // Production code forwards the main ctor to this one.
+  // Tests use this ctor directly.
+  UserMediaClient(LocalFrame* frame,
+                  UserMediaProcessor* user_media_processor,
+                  UserMediaProcessor* display_user_media_processor,
+                  scoped_refptr<base::SingleThreadTaskRunner> task_runner);
 
  private:
   class Request final : public GarbageCollected<Request> {
@@ -86,11 +104,13 @@ class MODULES_EXPORT UserMediaClient
 
     UserMediaRequest* MoveUserMediaRequest();
 
-    UserMediaRequest* user_media_request() const { return user_media_request_; }
-    blink::ApplyConstraintsRequest* apply_constraints_request() const {
-      return apply_constraints_request_;
+    UserMediaRequest* user_media_request() const {
+      return user_media_request_.Get();
     }
-    MediaStreamComponent* track_to_stop() const { return track_to_stop_; }
+    blink::ApplyConstraintsRequest* apply_constraints_request() const {
+      return apply_constraints_request_.Get();
+    }
+    MediaStreamComponent* track_to_stop() const { return track_to_stop_.Get(); }
 
     bool IsUserMedia() const { return !!user_media_request_; }
     bool IsApplyConstraints() const { return !!apply_constraints_request_; }
@@ -108,33 +128,22 @@ class MODULES_EXPORT UserMediaClient
     Member<MediaStreamComponent> track_to_stop_;
   };
 
-  void MaybeProcessNextRequestInfo();
-  void CurrentRequestCompleted();
+  class RequestQueue;
 
   void DeleteAllUserMediaRequests();
 
   blink::mojom::blink::MediaDevicesDispatcherHost* GetMediaDevicesDispatcher();
+  RequestQueue* GetRequestQueue(
+      mojom::blink::MediaStreamType user_media_request);
 
-  // LocalFrame instance associated with the UserMediaController that
-  // own this UserMediaClient.
+  // LocalFrame instance that own this UserMediaClient.
   WeakMember<LocalFrame> frame_;
-
-  // |user_media_processor_| is a unique_ptr for testing purposes.
-  Member<UserMediaProcessor> user_media_processor_;
-
-  // |user_media_processor_| is a unique_ptr in order to avoid compilation
-  // problems in builds that do not include WebRTC.
-  Member<ApplyConstraintsProcessor> apply_constraints_processor_;
 
   HeapMojoRemote<blink::mojom::blink::MediaDevicesDispatcherHost>
       media_devices_dispatcher_;
 
-  // UserMedia requests are processed sequentially. |is_processing_request_|
-  // is a flag that indicates if a request is being processed at a given time,
-  // and |pending_request_infos_| is a list of queued requests.
-  bool is_processing_request_ = false;
-
-  HeapDeque<Member<Request>> pending_request_infos_;
+  Member<RequestQueue> pending_device_requests_;
+  Member<RequestQueue> pending_display_requests_;
 
   THREAD_CHECKER(thread_checker_);
 };

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <set>
 
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/scoped_multi_source_observation.h"
 #include "ui/aura/env_observer.h"
@@ -52,17 +53,11 @@ class DialogWindowWaiter : public aura::EnvObserver,
 
   base::RunLoop run_loop_;
 
-  std::set<aura::Window*> dialog_windows_;
+  std::set<raw_ptr<aura::Window, SetExperimental>> dialog_windows_;
   base::ScopedMultiSourceObservation<aura::Window, aura::WindowObserver>
       window_observations_{this};
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::DialogWindowWaiter;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_TEST_DIALOG_WINDOW_WAITER_H_

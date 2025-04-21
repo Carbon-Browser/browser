@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,19 @@
 
 #include "chrome/browser/ui/webui/discards/discards.mojom-forward.h"
 #include "chrome/browser/ui/webui/discards/site_data.mojom-forward.h"
+#include "chrome/common/webui_url_constants.h"
+#include "content/public/browser/internal_webui_config.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "ui/webui/mojo_web_ui_controller.h"
+
+class DiscardsUI;
+
+class DiscardsUIConfig
+    : public content::DefaultInternalWebUIConfig<DiscardsUI> {
+ public:
+  DiscardsUIConfig()
+      : DefaultInternalWebUIConfig(chrome::kChromeUIDiscardsHost) {}
+};
 
 // Controller for chrome://discards. Corresponding resources are in
 // file://chrome/browser/resources/discards.

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/no_destructor.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chromecast/device/bluetooth/bluetooth_util.h"
 #include "chromecast/device/bluetooth/le/gatt_client_manager.h"
 #include "chromecast/device/bluetooth/le/le_scan_manager.h"
@@ -176,11 +176,11 @@ void BluetoothAdapterCast::SetAdvertisingInterval(
 
 void BluetoothAdapterCast::ConnectDevice(
     const std::string& address,
-    const absl::optional<BluetoothDevice::AddressType>& address_type,
+    const std::optional<BluetoothDevice::AddressType>& address_type,
     ConnectDeviceCallback callback,
-    ErrorCallback error_callback) {
+    ConnectDeviceErrorCallback error_callback) {
   NOTIMPLEMENTED() << __func__ << " GATT server mode not supported";
-  std::move(error_callback).Run();
+  std::move(error_callback).Run(/*error_message=*/std::string());
 }
 
 void BluetoothAdapterCast::ResetAdvertising(
@@ -209,7 +209,6 @@ base::WeakPtr<BluetoothAdapterCast> BluetoothAdapterCast::GetCastWeakPtr() {
 
 bool BluetoothAdapterCast::SetPoweredImpl(bool powered) {
   NOTREACHED() << "This method is not invoked when SetPowered() is overridden.";
-  return true;
 }
 
 void BluetoothAdapterCast::StartScanWithFilter(
@@ -285,8 +284,9 @@ void BluetoothAdapterCast::OnConnectChanged(
 
   // This method could be called before this device is detected in a scan and
   // GetDevice() is called. Add it if needed.
-  if (devices_.find(address) == devices_.end())
+  if (!base::Contains(devices_, address)) {
     AddDevice(std::move(device));
+  }
 
   BluetoothDeviceCast* cast_device = GetCastDevice(address);
   cast_device->SetConnected(connected);
@@ -329,9 +329,8 @@ void BluetoothAdapterCast::OnNewScanResult(
   // If we haven't created a BluetoothDeviceCast for this address yet, we need
   // to send an async request to |gatt_client_manager_| for a handle to the
   // device.
-  if (devices_.find(address) == devices_.end()) {
-    bool first_time_seen =
-        pending_scan_results_.find(address) == pending_scan_results_.end();
+  if (!base::Contains(devices_, address)) {
+    bool first_time_seen = !base::Contains(pending_scan_results_, address);
     // These results will be used to construct the BluetoothDeviceCast.
     pending_scan_results_[address].push_back(result);
 
@@ -377,7 +376,7 @@ void BluetoothAdapterCast::AddDevice(
   // This method should not be called if we already have a BluetoothDeviceCast
   // registered for this device.
   std::string address = GetCanonicalBluetoothAddress(remote_device->addr());
-  DCHECK(devices_.find(address) == devices_.end());
+  DCHECK(!base::Contains(devices_, address));
 
   devices_[address] =
       std::make_unique<BluetoothDeviceCast>(this, remote_device);
@@ -441,14 +440,14 @@ void BluetoothAdapterCast::OnGetDevice(
   // OnConnectChanged() is called for a particular device. If that happened,
   // |remote_device| already has a handle. In this case, there should be no
   // |pending_scan_results_| and we should fast-return.
-  if (devices_.find(address) != devices_.end()) {
-    DCHECK(pending_scan_results_.find(address) == pending_scan_results_.end());
+  if (base::Contains(devices_, address)) {
+    DCHECK(!base::Contains(pending_scan_results_, address));
     return;
   }
 
   // If there is not a device already, there should be at least one ScanResult
   // which triggered the GetDevice() call.
-  DCHECK(pending_scan_results_.find(address) != pending_scan_results_.end());
+  DCHECK(!base::Contains(pending_scan_results_, address));
   AddDevice(std::move(remote_device));
 }
 

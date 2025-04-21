@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,23 +9,22 @@
 #include <utility>
 
 #include "base/check_op.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
-#include "chrome/browser/ui/views/chrome_typography.h"
 #include "chrome/browser/ui/views/web_apps/web_app_info_image_source.h"
+#include "chrome/browser/ui/views/web_apps/web_app_views_utils.h"
 #include "chrome/browser/web_applications/web_app_icon_manager.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
-#include "components/url_formatter/elide_url.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/mojom/ui_base_types.mojom-shared.h"
 #include "ui/views/controls/button/checkbox.h"
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/widget/widget.h"
@@ -33,34 +32,6 @@
 namespace {
 
 bool g_default_remember_selection = false;
-
-// TODO(https://crbug.com/1248757): Reconcile the code here, and the
-// code in the PWA install dialog, and URL Handler picker.
-// Returns a label containing the app name.
-std::unique_ptr<views::Label> CreateNameLabel(const std::u16string& name) {
-  auto name_label = std::make_unique<views::Label>(
-      name, views::style::CONTEXT_DIALOG_BODY_TEXT,
-      views::style::TextStyle::STYLE_PRIMARY);
-  name_label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
-  name_label->SetElideBehavior(gfx::ELIDE_TAIL);
-  return name_label;
-}
-
-std::unique_ptr<views::Label> CreateOriginLabel(const url::Origin& origin) {
-  auto origin_label = std::make_unique<views::Label>(
-      FormatOriginForSecurityDisplay(
-          origin, url_formatter::SchemeDisplay::OMIT_HTTP_AND_HTTPS),
-      CONTEXT_DIALOG_BODY_TEXT_SMALL, views::style::STYLE_PRIMARY);
-  origin_label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
-
-  // Elide from head to prevent origin spoofing.
-  origin_label->SetElideBehavior(gfx::ELIDE_HEAD);
-
-  // Multiline breaks elision, so explicitly disable multiline.
-  origin_label->SetMultiLine(false);
-
-  return origin_label;
-}
 
 }  // namespace
 
@@ -73,8 +44,8 @@ void LaunchAppUserChoiceDialogView::SetDefaultRememberSelectionForTesting(
 
 LaunchAppUserChoiceDialogView::LaunchAppUserChoiceDialogView(
     Profile* profile,
-    const web_app::AppId& app_id,
-    chrome::WebAppLaunchAcceptanceCallback close_callback)
+    const webapps::AppId& app_id,
+    WebAppLaunchAcceptanceCallback close_callback)
     : profile_(profile),
       app_id_(app_id),
       close_callback_(std::move(close_callback)) {}
@@ -82,7 +53,7 @@ LaunchAppUserChoiceDialogView::LaunchAppUserChoiceDialogView(
 LaunchAppUserChoiceDialogView::~LaunchAppUserChoiceDialogView() = default;
 
 void LaunchAppUserChoiceDialogView::Init() {
-  SetModalType(ui::MODAL_TYPE_NONE);
+  SetModalType(ui::mojom::ModalType::kNone);
 #if !BUILDFLAG(IS_CHROMEOS)
   SetTitle(l10n_util::GetStringUTF16(IDS_PRODUCT_NAME));
 #endif
@@ -136,8 +107,9 @@ void LaunchAppUserChoiceDialogView::InitChildViews() {
       vertical_single_distance));
 
   auto above_app_info_view = CreateAboveAppInfoView();
-  if (above_app_info_view)
+  if (above_app_info_view) {
     AddChildView(std::move(above_app_info_view));
+  }
 
   // Add the app info, which will look like:
   // +-------------------------------------------------------------------+
@@ -148,7 +120,7 @@ void LaunchAppUserChoiceDialogView::InitChildViews() {
   {
     web_app::WebAppProvider* provider =
         web_app::WebAppProvider::GetForWebApps(profile_);
-    web_app::WebAppRegistrar& registrar = provider->registrar();
+    web_app::WebAppRegistrar& registrar = provider->registrar_unsafe();
     auto app_info_view = std::make_unique<views::View>();
     int icon_label_spacing = layout_provider->GetDistanceMetric(
         views::DISTANCE_RELATED_CONTROL_HORIZONTAL);
@@ -158,7 +130,7 @@ void LaunchAppUserChoiceDialogView::InitChildViews() {
 
     provider->icon_manager().ReadIcons(
         app_id_, IconPurpose::ANY,
-        provider->registrar().GetAppDownloadedIconSizesAny(app_id_),
+        provider->registrar_unsafe().GetAppDownloadedIconSizesAny(app_id_),
         base::BindOnce(&LaunchAppUserChoiceDialogView::OnIconsRead,
                        weak_ptr_factory_.GetWeakPtr()));
     icon_image_view_ =
@@ -175,8 +147,7 @@ void LaunchAppUserChoiceDialogView::InitChildViews() {
         CreateNameLabel(base::UTF8ToUTF16(registrar.GetAppShortName(app_id_)))
             .release());
     app_name_publisher_view->AddChildView(
-        CreateOriginLabel(
-            url::Origin::Create(registrar.GetAppStartUrl(app_id_)))
+        CreateOriginLabelFromStartUrl(registrar.GetAppStartUrl(app_id_), true)
             .release());
     app_info_view->AddChildView(std::move(app_name_publisher_view));
 
@@ -184,8 +155,9 @@ void LaunchAppUserChoiceDialogView::InitChildViews() {
   }
 
   auto below_app_info_view = CreateBelowAppInfoView();
-  if (below_app_info_view)
+  if (below_app_info_view) {
     AddChildView(std::move(below_app_info_view));
+  }
 
   remember_selection_checkbox_ = AddChildView(
       std::make_unique<views::Checkbox>(GetRememberChoiceString()));
@@ -199,7 +171,7 @@ void LaunchAppUserChoiceDialogView::RunCloseCallback(
   if (close_callback_) {
     // Give the stack a chance to unwind in case `close_callback_` deletes
     // `this`.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(close_callback_), allowed,
                                   remember_user_choice));
   }
@@ -207,18 +179,19 @@ void LaunchAppUserChoiceDialogView::RunCloseCallback(
 
 void LaunchAppUserChoiceDialogView::OnIconsRead(
     std::map<SquareSizePx, SkBitmap> icon_bitmaps) {
-  if (icon_bitmaps.empty() || !icon_image_view_)
+  if (icon_bitmaps.empty() || !icon_image_view_) {
     return;
+  }
 
   gfx::Size image_size{web_app::kWebAppIconSmall, web_app::kWebAppIconSmall};
-  auto imageSkia =
+  auto image_skia =
       gfx::ImageSkia(std::make_unique<WebAppInfoImageSource>(
                          web_app::kWebAppIconSmall, std::move(icon_bitmaps)),
                      image_size);
-  icon_image_view_->SetImage(imageSkia);
+  icon_image_view_->SetImage(ui::ImageModel::FromImageSkia(image_skia));
 }
 
-BEGIN_METADATA(LaunchAppUserChoiceDialogView, views::DialogDelegateView)
+BEGIN_METADATA(LaunchAppUserChoiceDialogView)
 END_METADATA
 
 }  // namespace web_app

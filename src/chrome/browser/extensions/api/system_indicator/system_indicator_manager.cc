@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,7 @@
 #include "extensions/browser/extension_action.h"
 #include "extensions/browser/extension_icon_image.h"
 #include "extensions/common/extension.h"
-#include "extensions/common/extension_icon_set.h"
+#include "extensions/common/icons/extension_icon_set.h"
 
 namespace extensions {
 
@@ -62,7 +62,7 @@ class ExtensionIndicatorIcon : public StatusIconObserver,
 
   raw_ptr<const Extension> extension_;
   raw_ptr<StatusTray> status_tray_;
-  raw_ptr<StatusIcon> status_icon_;
+  raw_ptr<StatusIcon, DanglingUntriaged> status_icon_;
   raw_ptr<Profile> profile_;
   IconImage manifest_icon_;
   gfx::Image dynamic_icon_;
@@ -138,7 +138,7 @@ ExtensionIndicatorIcon::ExtensionIndicatorIcon(
     status_icon_->AddObserver(this);
 }
 
-SystemIndicatorManager::SystemIndicator::SystemIndicator() {}
+SystemIndicatorManager::SystemIndicator::SystemIndicator() = default;
 SystemIndicatorManager::SystemIndicator::~SystemIndicator() = default;
 
 SystemIndicatorManager::SystemIndicatorManager(Profile* profile,

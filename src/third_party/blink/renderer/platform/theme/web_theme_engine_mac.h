@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,9 @@ class WebThemeEngineMac : public WebThemeEngineDefault {
              const gfx::Rect& rect,
              const WebThemeEngine::ExtraParams* extra_params,
              mojom::ColorScheme color_scheme,
-             const absl::optional<SkColor>& accent_color) override;
+             bool in_forced_colors,
+             const ui::ColorProvider* color_provider,
+             const std::optional<SkColor>& accent_color) override;
 
   static bool IsScrollbarPart(WebThemeEngine::Part part);
   static void PaintMacScrollBarParts(

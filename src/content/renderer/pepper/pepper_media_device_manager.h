@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,12 +29,11 @@ using blink::mojom::MediaDeviceType;
 
 namespace content {
 
-class PepperMediaDeviceManager
+class PepperMediaDeviceManager final
     : public PepperDeviceEnumerationHostHelper::Delegate,
       public blink::mojom::MediaDevicesListener,
       public RenderFrameObserver,
-      public RenderFrameObserverTracker<PepperMediaDeviceManager>,
-      public base::SupportsWeakPtr<PepperMediaDeviceManager> {
+      public RenderFrameObserverTracker<PepperMediaDeviceManager> {
  public:
   static base::WeakPtr<PepperMediaDeviceManager> GetForRenderFrame(
       RenderFrame* render_frame);
@@ -118,13 +117,15 @@ class PepperMediaDeviceManager
   using Subscription = std::pair<size_t, DevicesCallback>;
   using SubscriptionList = std::vector<Subscription>;
   SubscriptionList device_change_subscriptions_[static_cast<size_t>(
-      MediaDeviceType::NUM_MEDIA_DEVICE_TYPES)];
+      MediaDeviceType::kNumMediaDeviceTypes)];
 
   mojo::Remote<blink::mojom::MediaStreamDispatcherHost> dispatcher_host_;
   mojo::Remote<blink::mojom::MediaDevicesDispatcherHost>
       media_devices_dispatcher_;
 
   mojo::ReceiverSet<blink::mojom::MediaDevicesListener> receivers_;
+
+  base::WeakPtrFactory<PepperMediaDeviceManager> weak_ptr_factory_{this};
 };
 
 }  // namespace content

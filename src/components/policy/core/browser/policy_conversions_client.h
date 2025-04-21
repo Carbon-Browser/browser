@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_POLICY_CORE_BROWSER_POLICY_CONVERSIONS_CLIENT_H_
 #define COMPONENTS_POLICY_CORE_BROWSER_POLICY_CONVERSIONS_CLIENT_H_
 
+#include <optional>
 #include <set>
 #include <string>
 
@@ -12,11 +13,9 @@
 #include "base/values.h"
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "components/policy/core/browser/policy_conversions.h"
 #include "components/policy/core/common/schema.h"
 #include "components/policy/policy_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace policy {
 
@@ -61,18 +60,17 @@ class POLICY_EXPORT PolicyConversionsClient {
   // Set to drop the policies of which value is a default one set by the policy
   // provider. Disabled by default.
   void SetDropDefaultValues(bool enabled);
+  // Set to show policy values set by machine scope sources including CBCM or
+  // GPO. When set to false, policies are still included, but values and errors
+  // will be hidden. Used when caller don't have permission to view those
+  // values. Enabled by default.
+  void EnableShowMachineValues(bool enabled);
 
 #if BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
-  // Sets the updater policies.
-  void SetUpdaterPolicies(std::unique_ptr<PolicyMap> policies);
-
-  // Returns true if this client is able to return information on the updater's
-  // policies.
-  bool HasUpdaterPolicies() const;
-  base::Value::Dict GetUpdaterPolicies();
-
-  // Sets the updater policy schemas.
-  void SetUpdaterPolicySchemas(PolicyConversions::PolicyToSchemaMap schemas);
+  base::Value::Dict ConvertUpdaterPolicies(
+      PolicyMap updater_policies,
+      std::optional<PolicyConversions::PolicyToSchemaMap>
+          updater_policy_schemas);
 #endif  // BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
 
   // Converts the given |value| to JSON, respecting the configuration
@@ -98,7 +96,7 @@ class POLICY_EXPORT PolicyConversionsClient {
   virtual base::Value::List GetExtensionPolicies(
       PolicyDomain policy_domain) = 0;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   // Returns policies for ChromeOS device.
   virtual base::Value::List GetDeviceLocalAccountPolicies() = 0;
   // Returns device specific information if this device is enterprise managed.
@@ -114,12 +112,22 @@ class POLICY_EXPORT PolicyConversionsClient {
   // Returns the embedder's ConfigurationPolicyHandlerList.
   virtual const ConfigurationPolicyHandlerList* GetHandlerList() const = 0;
 
+  // Returns whether this client was configured to get device local account
+  // policies on ChromeOS.
+  bool GetDeviceLocalAccountPoliciesEnabled() const;
+  // Returns whether this client was configured to get device basic information
+  // on ChromeOS.
+  bool GetDeviceInfoEnabled() const;
+  // Returns whether this client was configured to get all user scope policies.
+  bool GetUserPoliciesEnabled() const;
+
  protected:
   // Returns a copy of |value|. If necessary (which is specified by
   // |convert_values_enabled_|), converts some values to a representation that
   // i18n_template.js will display.
   base::Value CopyAndMaybeConvert(const base::Value& value,
-                                  const absl::optional<Schema>& schema) const;
+                                  const std::optional<Schema>& schema,
+                                  PolicyScope scope) const;
 
   // Creates a description of the policy |policy_name| using |policy| and the
   // optional errors in |errors| to determine the status of each policy.
@@ -133,7 +141,7 @@ class POLICY_EXPORT PolicyConversionsClient {
       const PoliciesSet& deprecated_policies,
       const PoliciesSet& future_policies,
       PolicyErrorMap* errors,
-      const absl::optional<PolicyConversions::PolicyToSchemaMap>&
+      const std::optional<PolicyConversions::PolicyToSchemaMap>&
           known_policy_schemas) const;
 
   // Returns a description of each policy in |map| as Value, using the
@@ -147,35 +155,35 @@ class POLICY_EXPORT PolicyConversionsClient {
       PolicyErrorMap* errors,
       const PoliciesSet& deprecated_policies,
       const PoliciesSet& future_policies,
-      const absl::optional<PolicyConversions::PolicyToSchemaMap>&
+      const std::optional<PolicyConversions::PolicyToSchemaMap>&
           known_policy_schemas) const;
 
   // Returns the Schema for |policy_name| if that policy is known. If the policy
-  // is unknown, returns |absl::nullopt|.
-  absl::optional<Schema> GetKnownPolicySchema(
-      const absl::optional<PolicyConversions::PolicyToSchemaMap>&
+  // is unknown, returns |std::nullopt|.
+  std::optional<Schema> GetKnownPolicySchema(
+      const std::optional<PolicyConversions::PolicyToSchemaMap>&
           known_policy_schemas,
       const std::string& policy_name) const;
 
-  absl::optional<PolicyConversions::PolicyToSchemaMap> GetKnownPolicies(
+  std::optional<PolicyConversions::PolicyToSchemaMap> GetKnownPolicies(
       const scoped_refptr<SchemaMap> schema_map,
       const PolicyNamespace& policy_namespace) const;
 
-  // Returns whether this client was configured to get device local account
-  // policies on ChromeOS.
-  bool GetDeviceLocalAccountPoliciesEnabled() const;
-  // Returns whether this client was configured to get device basic information
-  // on ChromeOS.
-  bool GetDeviceInfoEnabled() const;
-  // Returns whether this client was configured to get all user scope policies.
-  bool GetUserPoliciesEnabled() const;
-
  private:
   friend class PolicyConversionsClientTest;
-#if BUILDFLAG(IS_WIN) && BUILDFLAG(GOOGLE_CHROME_BRANDING)
-  std::unique_ptr<PolicyMap> updater_policies_;
-  absl::optional<PolicyConversions::PolicyToSchemaMap> updater_policy_schemas_;
-#endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING) && BUILDFLAG(IS_WIN)
+
+  // Returns the policy scope to be used for UI. The |policy_scope| from the
+  // input is the generic scope: device or user policy. But in Lacros case we
+  // need to filter the user policies based on per_profile flag.
+  std::string GetPolicyScope(const std::string& policy_name,
+                             const PolicyScope& policy_scope) const;
+
+  std::u16string GetPolicyMessage(
+      const std::string& policy_name,
+      const PolicyMap::Entry& policy,
+      PolicyMap::MessageType message_type,
+      PolicyErrorMap* errors,
+      std::optional<Schema> known_policy_schema) const;
 
   bool convert_types_enabled_ = true;
   bool convert_values_enabled_ = false;
@@ -184,6 +192,7 @@ class POLICY_EXPORT PolicyConversionsClient {
   bool pretty_print_enabled_ = true;
   bool user_policies_enabled_ = true;
   bool drop_default_values_enabled_ = false;
+  bool show_machine_values_ = true;
 };
 
 }  // namespace policy

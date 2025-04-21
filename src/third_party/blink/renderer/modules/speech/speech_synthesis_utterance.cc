@@ -51,7 +51,7 @@ SpeechSynthesisUtterance::SpeechSynthesisUtterance(ExecutionContext* context,
       mojom_utterance_(mojom::blink::SpeechSynthesisUtterance::New()) {
   // Set default values. |voice| intentionally left null.
   mojom_utterance_->text = text;
-  mojom_utterance_->lang = String("");
+  mojom_utterance_->lang = g_empty_string;
   mojom_utterance_->volume = mojom::blink::kSpeechSynthesisDoublePrefNotSet;
   mojom_utterance_->rate = mojom::blink::kSpeechSynthesisDoublePrefNotSet;
   mojom_utterance_->pitch = mojom::blink::kSpeechSynthesisDoublePrefNotSet;
@@ -64,7 +64,7 @@ const AtomicString& SpeechSynthesisUtterance::InterfaceName() const {
 }
 
 SpeechSynthesisVoice* SpeechSynthesisUtterance::voice() const {
-  return voice_;
+  return voice_.Get();
 }
 
 void SpeechSynthesisUtterance::setVoice(SpeechSynthesisVoice* voice) {
@@ -76,12 +76,33 @@ void SpeechSynthesisUtterance::setVoice(SpeechSynthesisVoice* voice) {
   mojom_utterance_->voice = voice_ ? voice_->name() : String();
 }
 
+float SpeechSynthesisUtterance::volume() const {
+  return mojom_utterance_->volume ==
+                 mojom::blink::kSpeechSynthesisDoublePrefNotSet
+             ? mojom::blink::kSpeechSynthesisDefaultVolume
+             : mojom_utterance_->volume;
+}
+
+float SpeechSynthesisUtterance::rate() const {
+  return mojom_utterance_->rate ==
+                 mojom::blink::kSpeechSynthesisDoublePrefNotSet
+             ? mojom::blink::kSpeechSynthesisDefaultRate
+             : mojom_utterance_->rate;
+}
+
+float SpeechSynthesisUtterance::pitch() const {
+  return mojom_utterance_->pitch ==
+                 mojom::blink::kSpeechSynthesisDoublePrefNotSet
+             ? mojom::blink::kSpeechSynthesisDefaultPitch
+             : mojom_utterance_->pitch;
+}
+
 void SpeechSynthesisUtterance::Trace(Visitor* visitor) const {
   visitor->Trace(receiver_);
   visitor->Trace(synthesis_);
   visitor->Trace(voice_);
   ExecutionContextClient::Trace(visitor);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
 }
 
 void SpeechSynthesisUtterance::OnStartedSpeaking() {
@@ -89,10 +110,11 @@ void SpeechSynthesisUtterance::OnStartedSpeaking() {
   synthesis_->DidStartSpeaking(this);
 }
 
-void SpeechSynthesisUtterance::OnFinishedSpeaking() {
+void SpeechSynthesisUtterance::OnFinishedSpeaking(
+    mojom::blink::SpeechSynthesisErrorCode error_code) {
   DCHECK(synthesis_);
   finished_ = true;
-  synthesis_->DidFinishSpeaking(this);
+  synthesis_->DidFinishSpeaking(this, error_code);
 }
 
 void SpeechSynthesisUtterance::OnPausedSpeaking() {
@@ -134,9 +156,9 @@ void SpeechSynthesisUtterance::Start(SpeechSynthesis* synthesis) {
   mojom::blink::SpeechSynthesisUtterancePtr mojom_utterance_to_send =
       mojom_utterance_->Clone();
   if (mojom_utterance_to_send->voice.IsNull())
-    mojom_utterance_to_send->voice = String("");
+    mojom_utterance_to_send->voice = g_empty_string;
   if (mojom_utterance_to_send->text.IsNull())
-    mojom_utterance_to_send->text = String("");
+    mojom_utterance_to_send->text = g_empty_string;
 
   receiver_.reset();
 
@@ -147,14 +169,14 @@ void SpeechSynthesisUtterance::Start(SpeechSynthesis* synthesis) {
           context->GetTaskRunner(TaskType::kMiscPlatformAPI)));
 
   // Add a disconnect handler so we can cleanup appropriately.
-  receiver_.set_disconnect_handler(WTF::Bind(
+  receiver_.set_disconnect_handler(WTF::BindOnce(
       &SpeechSynthesisUtterance::OnDisconnected, WrapWeakPersistent(this)));
 }
 
 void SpeechSynthesisUtterance::OnDisconnected() {
   // If the remote end disconnects, just simulate that we finished normally.
   if (!finished_)
-    OnFinishedSpeaking();
+    OnFinishedSpeaking(mojom::blink::SpeechSynthesisErrorCode::kNoError);
 }
 
 }  // namespace blink

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,22 +18,22 @@ namespace payments {
 
 class ValidatingTextfieldTest : public ChromeViewsTestBase {
  public:
-  ValidatingTextfieldTest() {}
+  ValidatingTextfieldTest() = default;
 
   ValidatingTextfieldTest(const ValidatingTextfieldTest&) = delete;
   ValidatingTextfieldTest& operator=(const ValidatingTextfieldTest&) = delete;
 
-  ~ValidatingTextfieldTest() override {}
+  ~ValidatingTextfieldTest() override = default;
 
  protected:
   class TestValidationDelegate : public ValidationDelegate {
    public:
-    TestValidationDelegate() {}
+    TestValidationDelegate() = default;
 
     TestValidationDelegate(const TestValidationDelegate&) = delete;
     TestValidationDelegate& operator=(const TestValidationDelegate&) = delete;
 
-    ~TestValidationDelegate() override {}
+    ~TestValidationDelegate() override = default;
 
     // ValidationDelegate:
     bool TextfieldValueChanged(views::Textfield* textfield,

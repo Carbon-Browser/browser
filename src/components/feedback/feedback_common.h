@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,7 @@
 
 #include "base/memory/ref_counted.h"
 #include "base/synchronization/lock.h"
+#include "components/feedback/redaction_tool/redaction_tool.h"
 
 namespace base {
 class FilePath;
@@ -53,25 +54,47 @@ class FeedbackCommon : public base::RefCountedThreadSafe<FeedbackCommon> {
   // CompressLogs() must have already been called.
   void PrepareReport(userfeedback::ExtensionSubmit* feedback_data) const;
 
+  void RedactDescription(redaction::RedactionTool& redactor);
+
   // Return true if we want to include the feedback item with a key of |key| in
   // the feedback report's system logs.
   static bool IncludeInSystemLogs(const std::string& key, bool is_google_email);
 
+  static int GetChromeBrowserProductId();
+
+  // Mahi feature has the dedicated product id.
+  static int GetMahiProductId();
+
+#if BUILDFLAG(IS_CHROMEOS)
+  static int GetChromeOSProductId();
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
   // Getters
+  const std::optional<std::string>& mac_address() const { return mac_address_; }
   const std::string& category_tag() const { return category_tag_; }
   const std::string& page_url() const { return page_url_; }
   const std::string& description() const { return description_; }
   const std::string& user_email() const { return user_email_; }
   const std::string& image() const { return image_; }
+  const std::string& image_mime_type() const { return image_mime_type_; }
   const SystemLogsMap* sys_info() const { return &logs_; }
   int32_t product_id() const { return product_id_; }
   std::string user_agent() const { return user_agent_; }
   std::string locale() const { return locale_; }
+  std::string& autofill_metadata() { return autofill_metadata_; }
+  bool include_chrome_platform() const { return include_chrome_platform_; }
+  const std::optional<bool>& is_offensive_or_unsafe() {
+    return is_offensive_or_unsafe_;
+  }
+  std::string& ai_metadata() { return ai_metadata_; }
 
   const AttachedFile* attachment(size_t i) const { return &attachments_[i]; }
   size_t attachments() const { return attachments_.size(); }
 
   // Setters
+  void set_mac_address(const std::optional<std::string>& mac_address) {
+    mac_address_ = mac_address;
+  }
   void set_category_tag(const std::string& category_tag) {
     category_tag_ = category_tag;
   }
@@ -83,11 +106,26 @@ class FeedbackCommon : public base::RefCountedThreadSafe<FeedbackCommon> {
     user_email_ = user_email;
   }
   void set_image(std::string image) { image_ = std::move(image); }
+  void set_image_mime_type(std::string image_mime_type) {
+    image_mime_type_ = std::move(image_mime_type);
+  }
   void set_product_id(int32_t product_id) { product_id_ = product_id; }
   void set_user_agent(const std::string& user_agent) {
     user_agent_ = user_agent;
   }
   void set_locale(const std::string& locale) { locale_ = locale; }
+  void set_autofill_metadata(const std::string& autofill_metadata) {
+    autofill_metadata_ = autofill_metadata;
+  }
+  // If true, includes whether the report is from ChromeOS or Chrome on another
+  // platform.
+  void set_include_chrome_platform(bool include_chrome_platform) {
+    include_chrome_platform_ = include_chrome_platform;
+  }
+  void set_is_offensive_or_unsafe(const std::optional<bool>& value) {
+    is_offensive_or_unsafe_ = value;
+  }
+  void set_ai_metadata(const std::string& value) { ai_metadata_ = value; }
 
  protected:
   virtual ~FeedbackCommon();
@@ -111,6 +149,7 @@ class FeedbackCommon : public base::RefCountedThreadSafe<FeedbackCommon> {
   // Returns true if a product ID was set in the feedback report.
   bool HasProductId() const { return product_id_ != -1; }
 
+  std::optional<std::string> mac_address_;
   std::string category_tag_;
   std::string page_url_;
   std::string description_;
@@ -118,8 +157,14 @@ class FeedbackCommon : public base::RefCountedThreadSafe<FeedbackCommon> {
   int32_t product_id_;
   std::string user_agent_;
   std::string locale_;
+  std::string autofill_metadata_;
+  bool include_chrome_platform_ = true;
+  std::optional<bool> is_offensive_or_unsafe_;
+  std::string ai_metadata_;
 
   std::string image_;
+  // If empty, assumed to be PNG.
+  std::string image_mime_type_;
 
   // It is possible that multiple attachment add calls are running in
   // parallel, so synchronize access.

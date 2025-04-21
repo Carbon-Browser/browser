@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <keyboard-shortcuts-inhibit-unstable-v1-server-protocol.h>
 
+#include "base/memory/raw_ptr.h"
 #include "components/exo/surface.h"
 #include "components/exo/surface_observer.h"
 #include "components/exo/wayland/server_util.h"
@@ -36,7 +37,7 @@ class KeyboardShortcutsInhibitor : public SurfaceObserver {
   }
 
  private:
-  Surface* surface_;
+  raw_ptr<Surface> surface_;
 };
 
 void keyboard_shortcuts_inhibitor_destroy(wl_client* client,

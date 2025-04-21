@@ -1,41 +1,46 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/webui/shimless_rma/backend/shimless_rma_service.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "ash/constants/ash_features.h"
 #include "ash/public/cpp/network_config_service.h"
+#include "ash/system/diagnostics/diagnostics_log_controller.h"
+#include "ash/webui/shimless_rma/backend/external_app_dialog.h"
 #include "ash/webui/shimless_rma/backend/shimless_rma_delegate.h"
 #include "ash/webui/shimless_rma/backend/version_updater.h"
 #include "ash/webui/shimless_rma/mojom/shimless_rma.mojom.h"
 #include "ash/webui/shimless_rma/mojom/shimless_rma_mojom_traits.h"
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/containers/contains.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/task/task_traits.h"
+#include "base/task/thread_pool.h"
 #include "chromeos/ash/components/dbus/rmad/rmad.pb.h"
 #include "chromeos/ash/components/dbus/rmad/rmad_client.h"
 #include "chromeos/ash/components/network/network_state.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
+#include "chromeos/ash/components/network/network_type_pattern.h"
+#include "chromeos/ash/components/network/technology_state_controller.h"
+#include "chromeos/ash/services/cros_healthd/public/cpp/service_connection.h"
+#include "chromeos/ash/services/cros_healthd/public/mojom/cros_healthd.mojom.h"
+#include "chromeos/ash/services/cros_healthd/public/mojom/cros_healthd_probe.mojom.h"
+#include "chromeos/ash/services/network_config/in_process_instance.h"
 #include "chromeos/dbus/power/power_manager_client.h"
-#include "chromeos/dbus/util/version_loader.h"
-#include "chromeos/services/network_config/in_process_instance.h"
 #include "chromeos/services/network_config/public/mojom/cros_network_config.mojom.h"
-#include "components/qr_code_generator/qr_code_generator.h"
-
-using chromeos::network_config::mojom::ConnectionStateType;
-using chromeos::network_config::mojom::FilterType;
-using chromeos::network_config::mojom::NetworkFilter;
-using chromeos::network_config::mojom::NetworkStatePropertiesPtr;
-using chromeos::network_config::mojom::NetworkType;
+#include "chromeos/version/version_loader.h"
+#include "components/web_package/signed_web_bundles/signed_web_bundle_id.h"
+#include "third_party/skia/include/core/SkBitmap.h"
 
 namespace ash {
 namespace shimless_rma {
@@ -53,10 +58,9 @@ mojom::State RmadStateToMojo(rmad::RmadState::StateCase rmadState) {
 // Metered networks are excluded for RMA to avoid any cost to the owner who
 // does not have control of the device during RMA.
 bool HaveAllowedNetworkConnection() {
-  chromeos::NetworkStateHandler* network_state_handler =
-      chromeos::NetworkHandler::Get()->network_state_handler();
-  const chromeos::NetworkState* network =
-      network_state_handler->DefaultNetwork();
+  NetworkStateHandler* network_state_handler =
+      NetworkHandler::Get()->network_state_handler();
+  const NetworkState* network = network_state_handler->DefaultNetwork();
   // TODO(gavindodd): Confirm that metered networks should be excluded. This
   // should only be true for cellular networks which are already blocked.
   const bool metered = network_state_handler->default_network_is_metered();
@@ -64,32 +68,7 @@ bool HaveAllowedNetworkConnection() {
   return network && network->IsConnectedState() && !metered;
 }
 
-mojom::QrCodePtr GenerateQRCode(const std::string& input) {
-  QRCodeGenerator qr_generator;
-  absl::optional<QRCodeGenerator::GeneratedCode> qr_data =
-      qr_generator.Generate(
-          base::as_bytes(base::make_span(input.data(), input.size())));
-  if (!qr_data || qr_data->data.data() == nullptr ||
-      qr_data->data.size() == 0) {
-    return nullptr;
-  }
-
-  // Data returned from QRCodeGenerator consist of bytes that represents
-  // tiles. Least significant bit of each byte is set if the tile should be
-  // filled. Other bit positions indicate QR Code structure and are not required
-  // for rendering. Convert this data to 0 or 1 values for simpler UI side
-  // rendering.
-  for (uint8_t& qr_data_byte : qr_data->data) {
-    qr_data_byte &= 1;
-  }
-
-  mojom::QrCodePtr qr_code = mojom::QrCode::New();
-  qr_code->size = qr_data->qr_size;
-  qr_code->data.assign(qr_data->data.begin(), qr_data->data.end());
-  return qr_code;
-}
-
-chromeos::network_config::mojom::NetworkFilterPtr GetConfiguredWiFiFilter() {
+network_mojom::NetworkFilterPtr GetConfiguredWiFiFilter() {
   return network_mojom::NetworkFilter::New(
       network_mojom::FilterType::kConfigured, network_mojom::NetworkType::kWiFi,
       network_mojom::kNoLimit);
@@ -99,7 +78,9 @@ chromeos::network_config::mojom::NetworkFilterPtr GetConfiguredWiFiFilter() {
 
 ShimlessRmaService::ShimlessRmaService(
     std::unique_ptr<ShimlessRmaDelegate> shimless_rma_delegate)
-    : shimless_rma_delegate_(std::move(shimless_rma_delegate)) {
+    : shimless_rma_delegate_(std::move(shimless_rma_delegate)),
+      task_runner_(base::ThreadPool::CreateSequencedTaskRunner(
+          {base::MayBlock(), base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN})) {
   RmadClient::Get()->AddObserver(this);
 
   // Enable accessibility features.
@@ -193,6 +174,19 @@ void ShimlessRmaService::CriticalErrorReboot(
       std::move(callback), /*reboot=*/true));
 }
 
+void ShimlessRmaService::ShutDownAfterHardwareError() {
+  if (state_proto_.state_case() != rmad::RmadState::kProvisionDevice &&
+      state_proto_.state_case() != rmad::RmadState::kFinalize) {
+    LOG(ERROR) << "ShutDownAfterHardwareError called from incorrect state "
+               << state_proto_.state_case() << " / " << mojo_state_;
+    return;
+  }
+
+  chromeos::PowerManagerClient::Get()->RequestShutdown(
+      power_manager::REQUEST_SHUTDOWN_FOR_USER,
+      "Shutting down after encountering a hardware error.");
+}
+
 void ShimlessRmaService::BeginFinalization(BeginFinalizationCallback callback) {
   if (state_proto_.state_case() != rmad::RmadState::kWelcome ||
       mojo_state_ != mojom::State::kWelcomeScreen) {
@@ -204,24 +198,38 @@ void ShimlessRmaService::BeginFinalization(BeginFinalizationCallback callback) {
   state_proto_.mutable_welcome()->set_choice(
       rmad::WelcomeState::RMAD_CHOICE_FINALIZE_REPAIR);
 
-  if (!HaveAllowedNetworkConnection()) {
-    user_has_seen_network_page_ = true;
-    mojo_state_ = mojom::State::kConfigureNetwork;
-    std::move(callback).Run(
-        CreateStateResult(mojom::State::kConfigureNetwork,
-                          /*can_exit=*/true, /*can_go_back=*/true,
-                          rmad::RmadErrorCode::RMAD_ERROR_OK));
-  } else {
-    if (features::IsShimlessRMAOsUpdateEnabled()) {
+  // Only when the `ShimlessRMAOsUpdate` flag is enabled should the network
+  // connection and OS update status be checked.
+  if (features::IsShimlessRMAOsUpdateEnabled()) {
+    if (!HaveAllowedNetworkConnection()) {
+      // Enable WiFi on the device.
+      NetworkStateHandler* network_state_handler =
+          NetworkHandler::Get()->network_state_handler();
+      TechnologyStateController* technology_state_controller =
+          NetworkHandler::Get()->technology_state_controller();
+      if (!network_state_handler->IsTechnologyEnabled(
+              NetworkTypePattern::WiFi())) {
+        technology_state_controller->SetTechnologiesEnabled(
+            NetworkTypePattern::WiFi(), /*enabled=*/true,
+            network_handler::ErrorCallback());
+      }
+
+      user_has_seen_network_page_ = true;
+      mojo_state_ = mojom::State::kConfigureNetwork;
+      std::move(callback).Run(
+          CreateStateResult(mojom::State::kConfigureNetwork,
+                            /*can_exit=*/true, /*can_go_back=*/true,
+                            rmad::RmadErrorCode::RMAD_ERROR_OK));
+    } else {
       // This callback is invoked once VersionUpdated determines if an OS Update
       // is available.
       check_os_callback_ =
           base::BindOnce(&ShimlessRmaService::OsUpdateOrNextRmadStateCallback,
                          weak_ptr_factory_.GetWeakPtr(), std::move(callback));
       version_updater_.CheckOsUpdateAvailable();
-    } else {
-      TransitionNextStateGeneric(std::move(callback));
     }
+  } else {
+    TransitionNextStateGeneric(std::move(callback));
   }
 }
 
@@ -273,8 +281,7 @@ void ShimlessRmaService::ForgetNewNetworkConnections(
 }
 
 void ShimlessRmaService::OnForgetNewNetworkConnections(
-    std::vector<chromeos::network_config::mojom::NetworkStatePropertiesPtr>
-        networks) {
+    std::vector<network_mojom::NetworkStatePropertiesPtr> networks) {
   DCHECK(existing_saved_network_guids_.has_value());
   DCHECK(pending_network_guids_to_forget_.empty());
 
@@ -340,8 +347,9 @@ void ShimlessRmaService::GetCurrentOsVersion(
     GetCurrentOsVersionCallback callback) {
   DCHECK(features::IsShimlessRMAOsUpdateEnabled());
   // TODO(gavindodd): Decide whether to use full or short Chrome version.
-  std::move(callback).Run(chromeos::version_loader::GetVersion(
-      chromeos::version_loader::VERSION_FULL));
+  std::optional<std::string> version = chromeos::version_loader::GetVersion(
+      chromeos::version_loader::VERSION_FULL);
+  std::move(callback).Run(version);
 }
 
 void ShimlessRmaService::CheckForOsUpdates(CheckForOsUpdatesCallback callback) {
@@ -439,12 +447,11 @@ void ShimlessRmaService::SetWipeDevice(bool should_wipe_device,
   TransitionNextStateGeneric(std::move(callback));
 }
 
-void ShimlessRmaService::ChooseManuallyDisableWriteProtect(
-    ChooseManuallyDisableWriteProtectCallback callback) {
+void ShimlessRmaService::SetManuallyDisableWriteProtect(
+    SetManuallyDisableWriteProtectCallback callback) {
   if (state_proto_.state_case() != rmad::RmadState::kWpDisableMethod) {
-    LOG(ERROR)
-        << "ChooseManuallyDisableWriteProtect called from incorrect state "
-        << state_proto_.state_case();
+    LOG(ERROR) << "SetManuallyDisableWriteProtect called from incorrect state "
+               << state_proto_.state_case();
     std::move(callback).Run(CreateStateResultForInvalidRequest());
     return;
   }
@@ -453,10 +460,10 @@ void ShimlessRmaService::ChooseManuallyDisableWriteProtect(
   TransitionNextStateGeneric(std::move(callback));
 }
 
-void ShimlessRmaService::ChooseRsuDisableWriteProtect(
-    ChooseRsuDisableWriteProtectCallback callback) {
+void ShimlessRmaService::SetRsuDisableWriteProtect(
+    SetRsuDisableWriteProtectCallback callback) {
   if (state_proto_.state_case() != rmad::RmadState::kWpDisableMethod) {
-    LOG(ERROR) << "ChooseRsuDisableWriteProtect called from incorrect state "
+    LOG(ERROR) << "SetRsuDisableWriteProtect called from incorrect state "
                << state_proto_.state_case();
     std::move(callback).Run(CreateStateResultForInvalidRequest());
     return;
@@ -495,13 +502,21 @@ void ShimlessRmaService::GetRsuDisableWriteProtectChallengeQrCode(
     LOG(ERROR) << "GetRsuDisableWriteProtectChallengeQrCode called from "
                   "incorrect state "
                << state_proto_.state_case();
-    std::move(callback).Run(nullptr);
+    std::move(callback).Run(std::vector<uint8_t>{});
     return;
   }
 
-  mojom::QrCodePtr qr_code =
-      GenerateQRCode(state_proto_.wp_disable_rsu().challenge_url());
-  std::move(callback).Run(std::move(qr_code));
+  shimless_rma_delegate_->GenerateQrCode(
+      state_proto_.wp_disable_rsu().challenge_url(),
+      base::BindOnce(&ShimlessRmaService::OnQrCodeGenerated,
+                     weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+}
+
+void ShimlessRmaService::OnQrCodeGenerated(
+    GetRsuDisableWriteProtectChallengeQrCodeCallback callback,
+    const std::string& qr_code_image) {
+  std::move(callback).Run(
+      std::vector<uint8_t>(qr_code_image.begin(), qr_code_image.end()));
 }
 
 void ShimlessRmaService::SetRsuDisableWriteProtectCode(
@@ -526,14 +541,6 @@ void ShimlessRmaService::WriteProtectManuallyDisabled(
     return;
   }
   TransitionNextStateGeneric(std::move(callback));
-}
-
-void ShimlessRmaService::GetWriteProtectManuallyDisabledInstructions(
-    GetWriteProtectManuallyDisabledInstructionsCallback callback) {
-  // TODO (crbug/1268612): Replace with manufacturer specific help site.
-  const std::string url = "g.co/chromebook/";
-  mojom::QrCodePtr qr_code = GenerateQRCode(url);
-  std::move(callback).Run(url, std::move(qr_code));
 }
 
 void ShimlessRmaService::GetWriteProtectDisableCompleteAction(
@@ -672,19 +679,36 @@ void ShimlessRmaService::GetSkuList(GetSkuListCallback callback) {
   std::move(callback).Run(std::move(skus));
 }
 
-void ShimlessRmaService::GetWhiteLabelList(GetWhiteLabelListCallback callback) {
-  std::vector<std::string> whiteLabels;
+void ShimlessRmaService::GetCustomLabelList(
+    GetCustomLabelListCallback callback) {
+  std::vector<std::string> custom_labels;
   if (state_proto_.state_case() != rmad::RmadState::kUpdateDeviceInfo) {
-    LOG(ERROR) << "GetSkuList called from incorrect state "
+    LOG(ERROR) << "GetCustomLabelList called from incorrect state "
                << state_proto_.state_case();
   } else {
-    whiteLabels.reserve(
-        state_proto_.update_device_info().whitelabel_list_size());
-    whiteLabels.assign(
-        state_proto_.update_device_info().whitelabel_list().begin(),
-        state_proto_.update_device_info().whitelabel_list().end());
+    custom_labels.reserve(
+        state_proto_.update_device_info().custom_label_list_size());
+    custom_labels.assign(
+        state_proto_.update_device_info().custom_label_list().begin(),
+        state_proto_.update_device_info().custom_label_list().end());
   }
-  std::move(callback).Run(std::move(whiteLabels));
+  std::move(callback).Run(std::move(custom_labels));
+}
+
+void ShimlessRmaService::GetSkuDescriptionList(
+    GetSkuDescriptionListCallback callback) {
+  std::vector<std::string> sku_descriptions;
+  if (state_proto_.state_case() != rmad::RmadState::kUpdateDeviceInfo) {
+    LOG(ERROR) << "GetSkuDescriptionList called from incorrect state "
+               << state_proto_.state_case();
+  } else {
+    sku_descriptions.reserve(
+        state_proto_.update_device_info().sku_description_list_size());
+    sku_descriptions.assign(
+        state_proto_.update_device_info().sku_description_list().begin(),
+        state_proto_.update_device_info().sku_description_list().end());
+  }
+  std::move(callback).Run(std::move(sku_descriptions));
 }
 
 void ShimlessRmaService::GetOriginalSerialNumber(
@@ -721,18 +745,18 @@ void ShimlessRmaService::GetOriginalSku(GetOriginalSkuCallback callback) {
       state_proto_.update_device_info().original_sku_index());
 }
 
-void ShimlessRmaService::GetOriginalWhiteLabel(
-    GetOriginalWhiteLabelCallback callback) {
+void ShimlessRmaService::GetOriginalCustomLabel(
+    GetOriginalCustomLabelCallback callback) {
   if (state_proto_.state_case() != rmad::RmadState::kUpdateDeviceInfo) {
     // TODO(gavindodd): Consider replacing all invalid call handling with
     // mojo::ReportBadMessage("error message");
-    LOG(ERROR) << "GetOriginalWhiteLabel called from incorrect state "
+    LOG(ERROR) << "GetOriginalCustomLabel called from incorrect state "
                << state_proto_.state_case();
     std::move(callback).Run(0);
     return;
   }
   std::move(callback).Run(
-      state_proto_.update_device_info().original_whitelabel_index());
+      state_proto_.update_device_info().original_custom_label_index());
 }
 
 void ShimlessRmaService::GetOriginalDramPartNumber(
@@ -749,12 +773,27 @@ void ShimlessRmaService::GetOriginalDramPartNumber(
       state_proto_.update_device_info().original_dram_part_number());
 }
 
+void ShimlessRmaService::GetOriginalFeatureLevel(
+    GetOriginalFeatureLevelCallback callback) {
+  if (state_proto_.state_case() != rmad::RmadState::kUpdateDeviceInfo) {
+    LOG(ERROR) << "GetOriginalFeatureLevel called from incorrect state "
+               << state_proto_.state_case();
+    std::move(callback).Run(
+        rmad::UpdateDeviceInfoState::RMAD_FEATURE_LEVEL_UNSUPPORTED);
+    return;
+  }
+  std::move(callback).Run(
+      state_proto_.update_device_info().original_feature_level());
+}
+
 void ShimlessRmaService::SetDeviceInformation(
     const std::string& serial_number,
     int32_t region_index,
     int32_t sku_index,
-    int32_t white_label_index,
+    int32_t custom_label_index,
     const std::string& dram_part_number,
+    bool is_chassis_branded,
+    int32_t hw_compliance_version,
     SetDeviceInformationCallback callback) {
   if (state_proto_.state_case() != rmad::RmadState::kUpdateDeviceInfo) {
     LOG(ERROR) << "SetDeviceInformation called from incorrect state "
@@ -765,10 +804,14 @@ void ShimlessRmaService::SetDeviceInformation(
   state_proto_.mutable_update_device_info()->set_serial_number(serial_number);
   state_proto_.mutable_update_device_info()->set_region_index(region_index);
   state_proto_.mutable_update_device_info()->set_sku_index(sku_index);
-  state_proto_.mutable_update_device_info()->set_whitelabel_index(
-      white_label_index);
+  state_proto_.mutable_update_device_info()->set_custom_label_index(
+      custom_label_index);
   state_proto_.mutable_update_device_info()->set_dram_part_number(
       dram_part_number);
+  state_proto_.mutable_update_device_info()->set_is_chassis_branded(
+      is_chassis_branded);
+  state_proto_.mutable_update_device_info()->set_hw_compliance_version(
+      hw_compliance_version);
   TransitionNextStateGeneric(std::move(callback));
 }
 
@@ -834,8 +877,8 @@ void ShimlessRmaService::RunCalibrationStep(
   }
 
   // Clear the previous calibration progress.
-  last_calibration_progress_ = absl::nullopt;
-  last_calibration_overall_progress_ = absl::nullopt;
+  last_calibration_progress_ = std::nullopt;
+  last_calibration_overall_progress_ = std::nullopt;
 
   TransitionNextStateGeneric(std::move(callback));
 }
@@ -924,33 +967,41 @@ void ShimlessRmaService::WriteProtectManuallyEnabled(
 }
 
 void ShimlessRmaService::GetLog(GetLogCallback callback) {
-  if (state_proto_.state_case() != rmad::RmadState::kRepairComplete) {
-    LOG(ERROR) << "GetLog called from incorrect state "
-               << state_proto_.state_case();
-    std::move(callback).Run("",
-                            rmad::RmadErrorCode::RMAD_ERROR_REQUEST_INVALID);
-    return;
-  }
   RmadClient::Get()->GetLog(base::BindOnce(&ShimlessRmaService::OnGetLog,
                                            weak_ptr_factory_.GetWeakPtr(),
                                            std::move(callback)));
 }
 
 void ShimlessRmaService::SaveLog(SaveLogCallback callback) {
-  if (state_proto_.state_case() != rmad::RmadState::kRepairComplete) {
-    LOG(ERROR) << "SaveLog called from incorrect state "
-               << state_proto_.state_case();
-    std::move(callback).Run(base::FilePath(""),
-                            rmad::RmadErrorCode::RMAD_ERROR_REQUEST_INVALID);
+  if (diagnostics::DiagnosticsLogController::IsInitialized()) {
+    task_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE,
+        base::BindOnce(
+            &diagnostics::DiagnosticsLogController::
+                GenerateSessionStringOnBlockingPool,
+            // base::Unretained safe here because ~DiagnosticsLogController is
+            // called during shutdown of ash::Shell and will out-live
+            // ShimlessRmaService.
+            base::Unretained(diagnostics::DiagnosticsLogController::Get())),
+        base::BindOnce(&ShimlessRmaService::OnDiagnosticsLogReady,
+                       weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
     return;
   }
-  RmadClient::Get()->SaveLog(base::BindOnce(&ShimlessRmaService::OnSaveLog,
-                                            weak_ptr_factory_.GetWeakPtr(),
-                                            std::move(callback)));
+
+  OnDiagnosticsLogReady(std::move(callback), "");
+}
+
+void ShimlessRmaService::OnDiagnosticsLogReady(
+    SaveLogCallback callback,
+    const std::string& diagnostics_log_text) {
+  RmadClient::Get()->SaveLog(
+      diagnostics_log_text,
+      base::BindOnce(&ShimlessRmaService::OnSaveLog,
+                     weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }
 
 void ShimlessRmaService::OnGetLog(GetLogCallback callback,
-                                  absl::optional<rmad::GetLogReply> response) {
+                                  std::optional<rmad::GetLogReply> response) {
   if (!response) {
     LOG(ERROR) << "Failed to call rmad::GetLog";
     std::move(callback).Run("",
@@ -961,9 +1012,8 @@ void ShimlessRmaService::OnGetLog(GetLogCallback callback,
   std::move(callback).Run(response->log(), response->error());
 }
 
-void ShimlessRmaService::OnSaveLog(
-    SaveLogCallback callback,
-    absl::optional<rmad::SaveLogReply> response) {
+void ShimlessRmaService::OnSaveLog(SaveLogCallback callback,
+                                   std::optional<rmad::SaveLogReply> response) {
   if (!response) {
     LOG(ERROR) << "Failed to call rmad::SaveLog";
     std::move(callback).Run(base::FilePath(""),
@@ -1045,7 +1095,7 @@ void ShimlessRmaService::SendMetricOnUpdateOs() {
 }
 
 void ShimlessRmaService::OnMetricsReply(
-    absl::optional<rmad::RecordBrowserActionMetricReply> response) {
+    std::optional<rmad::RecordBrowserActionMetricReply> response) {
   if (!response) {
     LOG(ERROR) << "Failed to call rmad::RecordBrowserActionMetric";
     return;
@@ -1092,6 +1142,13 @@ void ShimlessRmaService::CalibrationOverallProgress(
 
 void ShimlessRmaService::ProvisioningProgress(
     const rmad::ProvisionStatus& status) {
+  if (status.status() ==
+          rmad::ProvisionStatus::RMAD_PROVISION_STATUS_FAILED_BLOCKING ||
+      status.status() ==
+          rmad::ProvisionStatus::RMAD_PROVISION_STATUS_FAILED_NON_BLOCKING) {
+    LOG(ERROR) << "Provisioning failed with error " << status.error();
+  }
+
   last_provisioning_progress_ = status;
   if (provisioning_observer_.is_bound()) {
     provisioning_observer_->OnProvisioningUpdated(
@@ -1113,6 +1170,14 @@ void ShimlessRmaService::PowerCableState(bool plugged_in) {
   }
 }
 
+void ShimlessRmaService::ExternalDiskState(bool detected) {
+  last_external_disk_state_ = detected;
+  for (auto& external_disk_state_observer : external_disk_state_observers_) {
+    external_disk_state_observer->OnExternalDiskStateChanged(
+        *last_external_disk_state_);
+  }
+}
+
 void ShimlessRmaService::HardwareVerificationResult(
     const rmad::HardwareVerificationResult& result) {
   last_hardware_verification_result_ = result;
@@ -1124,6 +1189,13 @@ void ShimlessRmaService::HardwareVerificationResult(
 
 void ShimlessRmaService::FinalizationProgress(
     const rmad::FinalizeStatus& status) {
+  if (status.status() ==
+          rmad::FinalizeStatus::RMAD_FINALIZE_STATUS_FAILED_BLOCKING ||
+      status.status() ==
+          rmad::FinalizeStatus::RMAD_FINALIZE_STATUS_FAILED_NON_BLOCKING) {
+    LOG(ERROR) << "Finalization failed with error " << status.error();
+  }
+
   last_finalization_progress_ = status;
   if (finalization_observer_.is_bound()) {
     finalization_observer_->OnFinalizationUpdated(
@@ -1195,12 +1267,24 @@ void ShimlessRmaService::ObservePowerCableState(
   }
 }
 
+void ShimlessRmaService::ObserveExternalDiskState(
+    ::mojo::PendingRemote<mojom::ExternalDiskStateObserver> observer) {
+  external_disk_state_observers_.Add(std::move(observer));
+  if (last_external_disk_state_) {
+    for (auto& external_disk_state_observer : external_disk_state_observers_) {
+      external_disk_state_observer->OnExternalDiskStateChanged(
+          *last_external_disk_state_);
+    }
+  }
+}
+
 void ShimlessRmaService::ObserveHardwareVerificationStatus(
     ::mojo::PendingRemote<mojom::HardwareVerificationStatusObserver> observer) {
   hardware_verification_observers_.Add(std::move(observer));
   if (last_hardware_verification_result_) {
-    for (auto& observer : hardware_verification_observers_) {
-      observer->OnHardwareVerificationResult(
+    for (auto& hardware_verification_observer :
+         hardware_verification_observers_) {
+      hardware_verification_observer->OnHardwareVerificationResult(
           last_hardware_verification_result_->is_compliant(),
           last_hardware_verification_result_->error_str());
     }
@@ -1249,7 +1333,7 @@ template <class Callback>
 void ShimlessRmaService::OnGetStateResponse(
     Callback callback,
     StateResponseCalledFrom called_from,
-    absl::optional<rmad::GetStateReply> response) {
+    std::optional<rmad::GetStateReply> response) {
   if (!response) {
     LOG(ERROR) << "Failed to call rmadClient";
     critical_error_occurred_ = true;
@@ -1287,6 +1371,9 @@ void ShimlessRmaService::OnGetStateResponse(
       state_proto_.state_case() == rmad::RmadState::kWelcome &&
       mojo_state_ == mojom::State::kWelcomeScreen) {
     user_has_seen_network_page_ = false;
+    state_proto_.mutable_welcome()->set_choice(
+        rmad::WelcomeState::RMAD_CHOICE_FINALIZE_REPAIR);
+
     mojo_state_ = mojom::State::kConfigureNetwork;
     std::move(callback).Run(
         CreateStateResult(mojom::State::kConfigureNetwork,
@@ -1303,7 +1390,7 @@ void ShimlessRmaService::OnGetStateResponse(
 void ShimlessRmaService::OnAbortRmaResponse(
     AbortRmaCallback callback,
     bool reboot,
-    absl::optional<rmad::AbortRmaReply> response) {
+    std::optional<rmad::AbortRmaReply> response) {
   const rmad::RmadErrorCode error_code =
       response ? response->error()
                : rmad::RmadErrorCode::RMAD_ERROR_REQUEST_INVALID;
@@ -1325,7 +1412,7 @@ void ShimlessRmaService::OnAbortRmaResponse(
 void ShimlessRmaService::AbortRmaForgetNetworkResponse(
     AbortRmaCallback callback,
     bool reboot,
-    absl::optional<rmad::AbortRmaReply> response) {
+    std::optional<rmad::AbortRmaReply> response) {
   // Send status before shutting down or restarting Chrome session.
   std::move(callback).Run(rmad::RMAD_ERROR_OK);
 
@@ -1372,12 +1459,13 @@ void ShimlessRmaService::OnOsUpdateStatusCallback(
       case update_engine::Operation::NEED_PERMISSION_TO_UPDATE:
       case update_engine::Operation::UPDATED_NEED_REBOOT:
       case update_engine::Operation::VERIFYING:
+      case update_engine::Operation::CLEANUP_PREVIOUS_UPDATE:
+      case update_engine::Operation::UPDATED_BUT_DEFERRED:
         break;
       // Added to avoid lint error
       case update_engine::Operation::Operation_INT_MIN_SENTINEL_DO_NOT_USE_:
       case update_engine::Operation::Operation_INT_MAX_SENTINEL_DO_NOT_USE_:
         NOTREACHED();
-        break;
     }
   }
   OsUpdateProgress(operation, progress, error_code);
@@ -1400,6 +1488,202 @@ void ShimlessRmaService::OsUpdateOrNextRmadStateCallback(
 void ShimlessRmaService::SetCriticalErrorOccurredForTest(
     bool critical_error_occurred) {
   critical_error_occurred_ = critical_error_occurred;
+}
+
+////////////////////////////////
+// Methods related to 3p diagnostics.
+void ShimlessRmaService::Get3pDiagnosticsProvider(
+    Get3pDiagnosticsProviderCallback callback) {
+  ash::cros_healthd::ServiceConnection::GetInstance()
+      ->GetProbeService()
+      ->ProbeTelemetryInfo(
+          {ash::cros_healthd::mojom::ProbeCategoryEnum::kSystem},
+          base::BindOnce(&ShimlessRmaService::OnGetSystemInfoFor3pDiag,
+                         weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+}
+
+void ShimlessRmaService::OnGetSystemInfoFor3pDiag(
+    Get3pDiagnosticsProviderCallback callback,
+    ash::cros_healthd::mojom::TelemetryInfoPtr telemetry_info) {
+  if (!telemetry_info->system_result ||
+      !telemetry_info->system_result->is_system_info() ||
+      !telemetry_info->system_result->get_system_info()->os_info->oem_name) {
+    LOG(ERROR) << "Failed to get oem name from cros_healthd";
+    std::move(callback).Run(std::nullopt);
+    return;
+  }
+
+  const std::string& oem_name = telemetry_info->system_result->get_system_info()
+                                    ->os_info->oem_name.value();
+  if (shimless_rma_delegate_->IsChromeOSSystemExtensionProvider(oem_name)) {
+    std::move(callback).Run(oem_name);
+    return;
+  }
+
+  std::move(callback).Run(std::nullopt);
+}
+
+void ShimlessRmaService::GetInstallable3pDiagnosticsAppPath(
+    GetInstallable3pDiagnosticsAppPathCallback callback) {
+  RmadClient::Get()->ExtractExternalDiagnosticsApp(
+      base::BindOnce(&ShimlessRmaService::OnExtractExternalDiagnosticsApp,
+                     weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+}
+
+void ShimlessRmaService::OnExtractExternalDiagnosticsApp(
+    GetInstallable3pDiagnosticsAppPathCallback callback,
+    std::optional<rmad::ExtractExternalDiagnosticsAppReply> response) {
+  if (!response || response->error() != rmad::RmadErrorCode::RMAD_ERROR_OK) {
+    LOG_IF(ERROR, !response)
+        << "Failed to call rmad::ExtractExternalDiagnosticsApp";
+    LOG_IF(ERROR,
+           response &&
+               response->error() !=
+                   rmad::RmadErrorCode::RMAD_ERROR_DIAGNOSTICS_APP_NOT_FOUND)
+        << "Unexpected result from rmad::ExtractExternalDiagnosticsApp: "
+        << response->error();
+    extracted_3p_diag_swbn_path_ = base::FilePath{};
+    extracted_3p_diag_crx_path_ = base::FilePath{};
+    std::move(callback).Run(std::nullopt);
+    return;
+  }
+
+  extracted_3p_diag_swbn_path_ =
+      base::FilePath{response->diagnostics_app_swbn_path()};
+  extracted_3p_diag_crx_path_ =
+      base::FilePath{response->diagnostics_app_crx_path()};
+  std::move(callback).Run(
+      base::FilePath{response->diagnostics_app_swbn_path()});
+}
+
+void ShimlessRmaService::InstallLastFound3pDiagnosticsApp(
+    InstallLastFound3pDiagnosticsAppCallback callback) {
+  if (extracted_3p_diag_swbn_path_.empty() ||
+      extracted_3p_diag_swbn_path_.empty()) {
+    LOG(ERROR) << "Should call GetInstallable3pDiagnosticsAppPath first";
+    std::move(callback).Run(nullptr);
+    return;
+  }
+
+  shimless_rma_delegate_->PrepareDiagnosticsAppBrowserContext(
+      extracted_3p_diag_crx_path_, extracted_3p_diag_swbn_path_,
+      base::BindOnce(&ShimlessRmaService::On3pDiagnosticsAppLoadForInstallation,
+                     weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+}
+
+void ShimlessRmaService::On3pDiagnosticsAppLoadForInstallation(
+    InstallLastFound3pDiagnosticsAppCallback callback,
+    base::expected<
+        ShimlessRmaDelegate::PrepareDiagnosticsAppBrowserContextResult,
+        std::string> result) {
+  if (!result.has_value()) {
+    LOG(ERROR) << "Failed to load 3p diag app: " << result.error();
+    std::move(callback).Run(nullptr);
+    return;
+  }
+
+  shimless_app_browser_context_ = result.value().context;
+  shimless_3p_diag_iwa_id_ = result.value().iwa_id;
+  shimless_3p_diag_app_name_ = result.value().name;
+
+  auto app_info = ash::shimless_rma::mojom::Shimless3pDiagnosticsAppInfo::New();
+  app_info->name = result.value().name;
+  app_info->permission_message = result.value().permission_message;
+  std::move(callback).Run(std::move(app_info));
+}
+
+void ShimlessRmaService::CompleteLast3pDiagnosticsInstallation(
+    bool is_approved,
+    CompleteLast3pDiagnosticsInstallationCallback callback) {
+  if (!is_approved) {
+    // Clean the cached app so it will be reloaded next time calling
+    // `Show3pDiagnosticsApp`.
+    shimless_app_browser_context_ = nullptr;
+    shimless_3p_diag_iwa_id_ = std::nullopt;
+    shimless_3p_diag_app_name_ = "";
+    std::move(callback).Run();
+    return;
+  }
+
+  RmadClient::Get()->InstallExtractedDiagnosticsApp(base::BindOnce(
+      [](CompleteLast3pDiagnosticsInstallationCallback callback,
+         std::optional<rmad::InstallExtractedDiagnosticsAppReply> response) {
+        LOG_IF(ERROR, !response)
+            << "Failed to call rmad::InstallExtractedDiagnosticsApp";
+        LOG_IF(ERROR, response->error() != rmad::RmadErrorCode::RMAD_ERROR_OK)
+            << "rmad::InstallExtractedDiagnosticsApp returned "
+            << response->error();
+        std::move(callback).Run();
+      },
+      std::move(callback)));
+}
+
+void ShimlessRmaService::Show3pDiagnosticsApp(
+    Show3pDiagnosticsAppCallback callback) {
+  if (!shimless_app_browser_context_) {
+    RmadClient::Get()->GetInstalledDiagnosticsApp(
+        base::BindOnce(&ShimlessRmaService::GetInstalledDiagnosticsApp,
+                       weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+    return;
+  }
+
+  ExternalAppDialog::InitParams params;
+  params.context = shimless_app_browser_context_;
+  params.app_name = shimless_3p_diag_app_name_;
+  params.content_url = GURL("isolated-app://" + shimless_3p_diag_iwa_id_->id());
+  params.shimless_rma_delegate = shimless_rma_delegate_->GetWeakPtr();
+  ExternalAppDialog::Show(params);
+  std::move(callback).Run(
+      ash::shimless_rma::mojom::Show3pDiagnosticsAppResult::kOk);
+}
+
+void ShimlessRmaService::GetInstalledDiagnosticsApp(
+    Show3pDiagnosticsAppCallback callback,
+    std::optional<rmad::GetInstalledDiagnosticsAppReply> response) {
+  if (!response) {
+    LOG(ERROR) << "Failed to call rmad::GetInstalledDiagnosticsApp";
+    std::move(callback).Run(
+        ash::shimless_rma::mojom::Show3pDiagnosticsAppResult::kFailedToLoad);
+    return;
+  }
+
+  switch (response->error()) {
+    case rmad::RmadErrorCode::RMAD_ERROR_DIAGNOSTICS_APP_NOT_FOUND:
+      std::move(callback).Run(ash::shimless_rma::mojom::
+                                  Show3pDiagnosticsAppResult::kAppNotInstalled);
+      return;
+    case rmad::RmadErrorCode::RMAD_ERROR_OK:
+      shimless_rma_delegate_->PrepareDiagnosticsAppBrowserContext(
+          base::FilePath{response->diagnostics_app_crx_path()},
+          base::FilePath{response->diagnostics_app_swbn_path()},
+          base::BindOnce(&ShimlessRmaService::On3pDiagnosticsAppLoadForShow,
+                         weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+      return;
+    default:
+      LOG(ERROR) << "rmad::GetInstalledDiagnosticsApp returned "
+                 << response->error();
+      std::move(callback).Run(
+          ash::shimless_rma::mojom::Show3pDiagnosticsAppResult::kFailedToLoad);
+      return;
+  }
+}
+
+void ShimlessRmaService::On3pDiagnosticsAppLoadForShow(
+    Show3pDiagnosticsAppCallback callback,
+    base::expected<
+        ShimlessRmaDelegate::PrepareDiagnosticsAppBrowserContextResult,
+        std::string> result) {
+  if (!result.has_value()) {
+    LOG(ERROR) << "Failed to load 3p diag app: " << result.error();
+    std::move(callback).Run(
+        ash::shimless_rma::mojom::Show3pDiagnosticsAppResult::kFailedToLoad);
+    return;
+  }
+
+  shimless_app_browser_context_ = result.value().context;
+  shimless_3p_diag_iwa_id_ = result.value().iwa_id;
+  shimless_3p_diag_app_name_ = result.value().name;
+  Show3pDiagnosticsApp(std::move(callback));
 }
 
 }  // namespace shimless_rma

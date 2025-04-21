@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@ DEFINE_EXPORTED_UI_CLASS_PROPERTY_TYPE(AX_EXPORT, ax::mojom::Role)
 
 namespace ui {
 
-DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(std::string, kChildAXTreeID, nullptr)
+DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(std::string, kChildAXTreeID)
 
 DEFINE_UI_CLASS_PROPERTY_KEY(ax::mojom::Role,
                              kAXRoleOverride,

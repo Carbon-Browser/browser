@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CHROME_TEST_PAYMENTS_PAYMENT_REQUEST_TEST_CONTROLLER_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -102,9 +103,6 @@ class PaymentRequestTestController {
   // link was available, false if not.
   bool ClickOptOut();
 
-  // Returns true when running on Android M or L.
-  bool IsAndroidMarshmallowOrLollipop();
-
   // Sets the list of apps available for the current payment request.
   void set_app_descriptions(
       const std::vector<AppDescription>& app_descriptions) {
@@ -114,6 +112,24 @@ class PaymentRequestTestController {
   // Returns the list of apps available for the current payment request.
   const std::vector<AppDescription>& app_descriptions() const {
     return app_descriptions_;
+  }
+
+  // Whether the browser payment sheet is displaying a section for selecting a
+  // shipping address.
+  std::optional<bool> is_shipping_section_visible() const {
+    return is_shipping_section_visible_;
+  }
+  void set_shipping_section_visible(bool is_shipping_section_visible) {
+    is_shipping_section_visible_ = is_shipping_section_visible;
+  }
+
+  // Whether the browser payment sheet is displaying a section for selecting
+  // contact info.
+  std::optional<bool> is_contact_section_visible() const {
+    return is_contact_section_visible_;
+  }
+  void set_contact_section_visible(bool is_contact_section_visible) {
+    is_contact_section_visible_ = is_contact_section_visible;
   }
 
  private:
@@ -140,6 +156,8 @@ class PaymentRequestTestController {
   std::string twa_payment_app_method_name_;
   std::string twa_payment_app_response_;
   std::vector<AppDescription> app_descriptions_;
+  std::optional<bool> is_shipping_section_visible_;
+  std::optional<bool> is_contact_section_visible_;
 
 #if !BUILDFLAG(IS_ANDROID)
   void UpdateDelegateFactory();
@@ -151,6 +169,8 @@ class PaymentRequestTestController {
 
   base::WeakPtr<ContentPaymentRequestDelegate> delegate_;
 #endif
+
+  base::WeakPtrFactory<PaymentRequestTestController> weak_ptr_factory_{this};
 };
 
 }  // namespace payments

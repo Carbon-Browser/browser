@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,14 +12,14 @@
 // place we insert items into the system menu.
 class SystemMenuInsertionDelegateWin : public views::MenuInsertionDelegateWin {
  public:
-  SystemMenuInsertionDelegateWin() {}
+  SystemMenuInsertionDelegateWin() = default;
 
   SystemMenuInsertionDelegateWin(const SystemMenuInsertionDelegateWin&) =
       delete;
   SystemMenuInsertionDelegateWin& operator=(
       const SystemMenuInsertionDelegateWin&) = delete;
 
-  ~SystemMenuInsertionDelegateWin() override {}
+  ~SystemMenuInsertionDelegateWin() override = default;
 
   // Overridden from views::MenuInsertionDelegateWin:
   size_t GetInsertionIndex(HMENU native_menu) override;

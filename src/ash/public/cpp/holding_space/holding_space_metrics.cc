@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,18 @@
 #include <map>
 #include <string>
 
+#include "ash/public/cpp/holding_space/holding_space_util.h"
+#include "base/check_is_test.h"
+#include "base/check_op.h"
+#include "base/containers/fixed_flat_set.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
+#include "base/ranges/algorithm.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
 #include "base/time/time.h"
 
-namespace ash {
-namespace holding_space_metrics {
+namespace ash::holding_space_metrics {
 
 namespace {
 
@@ -41,9 +46,19 @@ constexpr size_t kExtensionsSize =
 
 // Helpers ---------------------------------------------------------------------
 
+// Returns the `FilePickerBindingContext` representation of the specified
+// `file_picker_binding_context`. Note that these values are persisted to
+// histograms so should remain unchanged.
+FilePickerBindingContext ToFilePickerBindingContext(
+    const GURL& file_picker_binding_context) {
+  return file_picker_binding_context.DomainIs("photoshop.adobe.com")
+             ? FilePickerBindingContext::kPhotoshopWeb
+             : FilePickerBindingContext::kUnknown;
+}
+
 // Returns the string representation of the specified `action`. Note that these
 // values are persisted to histograms so should remain unchanged.
-std::string ItemActionToString(ItemAction action) {
+std::string ToString(ItemAction action) {
   switch (action) {
     case ItemAction::kCancel:
       return "Cancel";
@@ -67,38 +82,74 @@ std::string ItemActionToString(ItemAction action) {
       return "Unpin";
   }
   NOTREACHED();
-  return std::string();
 }
 
-// Returns the string representation of the specified `type`. Note that these
-// values are persisted to histograms so should remain unchanged.
-std::string ItemTypeToString(HoldingSpaceItem::Type type) {
-  switch (type) {
-    case HoldingSpaceItem::Type::kArcDownload:
-      return "ArcDownload";
-    case HoldingSpaceItem::Type::kDiagnosticsLog:
-      return "DiagnosticsLog";
-    case HoldingSpaceItem::Type::kDownload:
-      return "Download";
-    case HoldingSpaceItem::Type::kLacrosDownload:
-      return "LacrosDownload";
-    case HoldingSpaceItem::Type::kNearbyShare:
-      return "NearbyShare";
-    case HoldingSpaceItem::Type::kPinnedFile:
-      return "PinnedFile";
-    case HoldingSpaceItem::Type::kPrintedPdf:
-      return "PrintedPdf";
-    case HoldingSpaceItem::Type::kScan:
-      return "Scan";
-    case HoldingSpaceItem::Type::kScreenRecording:
-      return "ScreenRecording";
-    case HoldingSpaceItem::Type::kScreenshot:
-      return "Screenshot";
-    case HoldingSpaceItem::Type::kPhoneHubCameraRoll:
-      return "PhoneHubCameraRoll";
+// Records the counts of the specified holding space `items` to the item count
+// histograms associated with the specified `prefix`.
+void RecordItemCounts(const std::string& prefix,
+                      const std::vector<const HoldingSpaceItem*>& items) {
+  // Aliases.
+  using FileSystemType = HoldingSpaceFile::FileSystemType;
+  using Type = HoldingSpaceItem::Type;
+
+  // Struct to hold partitioned counts.
+  struct Counts {
+    std::map<FileSystemType, size_t> by_fs_type;
+    std::map<Type, size_t> by_type;
+    std::map<Type, std::map<FileSystemType, size_t>> by_type_and_fs_type;
+  };
+
+  // Iterate over all `items` and partition counts.
+  Counts counts;
+  for (const HoldingSpaceItem* item : items) {
+    const FileSystemType fs_type = item->file().file_system_type;
+    const Type type = item->type();
+
+    ++counts.by_fs_type[fs_type];
+    ++counts.by_type[type];
+    ++counts.by_type_and_fs_type[type][fs_type];
   }
-  NOTREACHED();
-  return std::string();
+
+  // It is discouraged to use exact linear histograms with max values greater
+  // than 100. Though it's possible for holding space users to have item counts
+  // in excess of 100, that is exceedingly rare and we can lump them together.
+  constexpr size_t kExclusiveMax = 101;
+
+  // Record "{prefix}.All".
+  base::UmaHistogramExactLinear(base::StrCat({prefix, ".All"}), items.size(),
+                                kExclusiveMax);
+
+  // File system types are allowlisted based on need to limit the number of
+  // recorded histograms arising from combinations with holding space item type.
+  constexpr auto kAllowlistedFsTypes = base::MakeFixedFlatSet<FileSystemType>(
+      {FileSystemType::kDriveFs, FileSystemType::kLocal});
+
+  std::map<FileSystemType, std::string> fs_type_strings;
+  for (const FileSystemType fs_type : kAllowlistedFsTypes) {
+    const std::string& fs_type_string =
+        fs_type_strings.emplace(fs_type, holding_space_util::ToString(fs_type))
+            .first->second;
+
+    // Record "{prefix}.All.FileSystemType.{fs_type}".
+    base::UmaHistogramExactLinear(
+        base::StrCat({prefix, ".All.FileSystemType.", fs_type_string}),
+        counts.by_fs_type[fs_type], kExclusiveMax);
+  }
+
+  for (const Type type : holding_space_util::GetAllItemTypes()) {
+    // Record "{prefix}.{type}";
+    const std::string type_string = holding_space_util::ToString(type);
+    base::UmaHistogramExactLinear(base::StrCat({prefix, ".", type_string}),
+                                  counts.by_type[type], kExclusiveMax);
+
+    // Record "{prefix}.{type}.FileSystemType.{fs_type}".
+    for (const FileSystemType fs_type : kAllowlistedFsTypes) {
+      base::UmaHistogramExactLinear(
+          base::StrCat({prefix, ".", type_string, ".FileSystemType.",
+                        fs_type_strings.at(fs_type)}),
+          counts.by_type_and_fs_type[type][fs_type], kExclusiveMax);
+    }
+  }
 }
 
 }  // namespace
@@ -107,29 +158,45 @@ std::string ItemTypeToString(HoldingSpaceItem::Type type) {
 
 // Note that these values are persisted to histograms so must remain unchanged.
 size_t FilePathToExtension(const base::FilePath& file_path) {
-  if (file_path.empty())
+  if (file_path.empty()) {
     return kEmptyExtension;
+  }
 
   const std::string extension = base::ToLowerASCII(file_path.Extension());
-  if (extension.empty())
+  if (extension.empty()) {
     return kEmptyExtension;
+  }
 
-  auto* const* it =
-      std::find(kKnownExtensions.begin(), kKnownExtensions.end(), extension);
-  if (it == kKnownExtensions.end())
+  const auto it = base::ranges::find(kKnownExtensions, extension);
+  if (it == kKnownExtensions.end()) {
     return kOtherExtension;
+  }
 
   return kFirstKnownExtension + std::distance(kKnownExtensions.begin(), it);
 }
 
 // Metrics ---------------------------------------------------------------------
 
-void RecordPodAction(PodAction action) {
-  base::UmaHistogramEnumeration("HoldingSpace.Pod.Action.All", action);
+void RecordBubbleResizeAnimationSmoothness(int smoothness) {
+  CHECK_GE(smoothness, 0);
+  CHECK_LE(smoothness, 100);
+  base::UmaHistogramPercentage("HoldingSpace.Animation.BubbleResize.Smoothness",
+                               smoothness);
 }
 
 void RecordDownloadsAction(DownloadsAction action) {
   base::UmaHistogramEnumeration("HoldingSpace.Downloads.Action.All", action);
+}
+
+void RecordFileCreatedFromShowSaveFilePicker(
+    const GURL& file_picker_binding_context,
+    const base::FilePath& file_path) {
+  base::UmaHistogramExactLinear(
+      "HoldingSpace.FileCreatedFromShowSaveFilePicker.Extension",
+      FilePathToExtension(file_path), kExtensionsSize + 1);
+  base::UmaHistogramEnumeration(
+      "HoldingSpace.FileCreatedFromShowSaveFilePicker.FilePickerBindingContext",
+      ToFilePickerBindingContext(file_picker_binding_context));
 }
 
 void RecordFilesAppChipAction(FilesAppChipAction action) {
@@ -138,43 +205,64 @@ void RecordFilesAppChipAction(FilesAppChipAction action) {
 
 void RecordItemAction(const std::vector<const HoldingSpaceItem*>& items,
                       ItemAction action) {
-  const std::string action_string = ItemActionToString(action);
+  const std::string action_string = ToString(action);
 
   for (const HoldingSpaceItem* item : items) {
+    // Record "HoldingSpace.Item.Action.All".
     base::UmaHistogramEnumeration("HoldingSpace.Item.Action.All", action);
-    base::UmaHistogramEnumeration("HoldingSpace.Item.Action." + action_string,
-                                  item->type());
-    base::UmaHistogramExactLinear(
-        "HoldingSpace.Item.Action." + action_string + ".Extension",
-        FilePathToExtension(item->file_path()), kExtensionsSize);
+
+    // Record "HoldingSpace.Item.Action.{action}".
+    base::UmaHistogramEnumeration(
+        base::StrCat({"HoldingSpace.Item.Action.", action_string}),
+        item->type());
+
+    // Record "HoldingSpace.Item.Action.{action}.Extension".
+    base::UmaHistogramExactLinear(base::StrCat({"HoldingSpace.Item.Action.",
+                                                action_string, ".Extension"}),
+                                  FilePathToExtension(item->file().file_path),
+                                  kExtensionsSize + 1);
+
+    // Record "HoldingSpace.Item.Action.{action}.FileSystemType".
+    base::UmaHistogramEnumeration(
+        base::StrCat(
+            {"HoldingSpace.Item.Action.", action_string, ".FileSystemType"}),
+        item->file().file_system_type);
   }
 }
 
-void RecordItemCounts(const std::vector<const HoldingSpaceItem*>& items) {
-  base::UmaHistogramCounts1000("HoldingSpace.Item.Count.All", items.size());
-
-  std::map<HoldingSpaceItem::Type, int> counts_by_type;
-  for (const HoldingSpaceItem* item : items)
-    ++counts_by_type[item->type()];
-
-  for (int i = 0; i <= static_cast<int>(HoldingSpaceItem::Type::kMaxValue);
-       ++i) {
-    const auto type = static_cast<HoldingSpaceItem::Type>(i);
-    base::UmaHistogramCounts1000(
-        "HoldingSpace.Item.Count." + ItemTypeToString(type),
-        counts_by_type[type]);
-  }
+void RecordItemLaunchEmpty(HoldingSpaceItem::Type type,
+                           const base::FilePath& file_path) {
+  base::UmaHistogramEnumeration("HoldingSpace.Item.Action.Launch.Empty", type);
+  base::UmaHistogramExactLinear(
+      "HoldingSpace.Item.Action.Launch.Empty.Extension",
+      FilePathToExtension(file_path), kExtensionsSize + 1);
 }
 
-void RecordItemFailureToLaunch(HoldingSpaceItem::Type type,
-                               const base::FilePath& file_path,
-                               ItemFailureToLaunchReason reason) {
-  base::UmaHistogramEnumeration("HoldingSpace.Item.FailureToLaunch", type);
-  base::UmaHistogramExactLinear("HoldingSpace.Item.FailureToLaunch.Extension",
-                                FilePathToExtension(file_path),
-                                kExtensionsSize);
-  base::UmaHistogramEnumeration("HoldingSpace.Item.FailureToLaunch.Reason",
-                                reason);
+void RecordItemLaunchFailure(HoldingSpaceItem::Type type,
+                             const base::FilePath& file_path,
+                             ItemLaunchFailureReason reason) {
+  base::UmaHistogramEnumeration("HoldingSpace.Item.Action.Launch.Failure",
+                                type);
+  base::UmaHistogramExactLinear(
+      "HoldingSpace.Item.Action.Launch.Failure.Extension",
+      FilePathToExtension(file_path), kExtensionsSize + 1);
+  base::UmaHistogramEnumeration(
+      "HoldingSpace.Item.Action.Launch.Failure.Reason", reason);
+}
+
+void RecordPodAction(PodAction action) {
+  base::UmaHistogramEnumeration("HoldingSpace.Pod.Action.All", action);
+}
+
+void RecordPodResizeAnimationSmoothness(int smoothness) {
+  CHECK_GE(smoothness, 0);
+  CHECK_LE(smoothness, 100);
+  base::UmaHistogramPercentage("HoldingSpace.Animation.PodResize.Smoothness",
+                               smoothness);
+}
+
+void RecordSuggestionsAction(SuggestionsAction action) {
+  base::UmaHistogramEnumeration("HoldingSpace.Suggestions.Action.All", action);
 }
 
 void RecordTimeFromFirstAvailabilityToFirstAdd(base::TimeDelta time_delta) {
@@ -203,19 +291,20 @@ void RecordTimeFromFirstEntryToFirstPin(base::TimeDelta time_delta) {
                                 /*buckets=*/50);
 }
 
-void RecordBubbleResizeAnimationSmoothness(int smoothness) {
-  DCHECK_GE(smoothness, 0);
-  DCHECK_LE(smoothness, 100);
-  base::UmaHistogramPercentage("HoldingSpace.Animation.BubbleResize.Smoothness",
-                               smoothness);
+void RecordTotalItemCounts(const std::vector<const HoldingSpaceItem*>& items) {
+  RecordItemCounts("HoldingSpace.Item.TotalCountV2", items);
 }
 
-void RecordPodResizeAnimationSmoothness(int smoothness) {
-  DCHECK_GE(smoothness, 0);
-  DCHECK_LE(smoothness, 100);
-  base::UmaHistogramPercentage("HoldingSpace.Animation.PodResize.Smoothness",
-                               smoothness);
+void RecordUserPreferences(UserPreferences preferences) {
+  base::UmaHistogramBoolean("HoldingSpace.UserPreferences.PreviewsEnabled",
+                            preferences.previews_enabled);
+  base::UmaHistogramBoolean("HoldingSpace.UserPreferences.SuggestionsExpanded",
+                            preferences.suggestions_expanded);
 }
 
-}  // namespace holding_space_metrics
-}  // namespace ash
+void RecordVisibleItemCounts(
+    const std::vector<const HoldingSpaceItem*>& items) {
+  RecordItemCounts("HoldingSpace.Item.VisibleCount", items);
+}
+
+}  // namespace ash::holding_space_metrics

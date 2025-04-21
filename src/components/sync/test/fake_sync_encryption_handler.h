@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@
 #include "base/time/time.h"
 #include "components/sync/engine/nigori/keystore_keys_handler.h"
 #include "components/sync/engine/sync_encryption_handler.h"
-#include "components/sync/test/engine/fake_cryptographer.h"
+#include "components/sync/test/fake_cryptographer.h"
 
 namespace syncer {
 
@@ -34,7 +34,7 @@ class FakeSyncEncryptionHandler : public KeystoreKeysHandler,
   void AddObserver(Observer* observer) override;
   void RemoveObserver(Observer* observer) override;
   void NotifyInitialStateToObservers() override;
-  ModelTypeSet GetEncryptedTypes() override;
+  DataTypeSet GetEncryptedTypes() override;
   Cryptographer* GetCryptographer() override;
   PassphraseType GetPassphraseType() override;
   void SetEncryptionPassphrase(
@@ -45,7 +45,7 @@ class FakeSyncEncryptionHandler : public KeystoreKeysHandler,
       const std::vector<std::vector<uint8_t>>& keys) override;
   base::Time GetKeystoreMigrationTime() override;
   KeystoreKeysHandler* GetKeystoreKeysHandler() override;
-  const sync_pb::NigoriSpecifics::TrustedVaultDebugInfo&
+  const sync_pb::NigoriSpecifics_TrustedVaultDebugInfo&
   GetTrustedVaultDebugInfo() override;
 
   // KeystoreKeysHandler implementation.
@@ -53,7 +53,7 @@ class FakeSyncEncryptionHandler : public KeystoreKeysHandler,
   bool SetKeystoreKeys(const std::vector<std::vector<uint8_t>>& keys) override;
 
  private:
-  base::ObserverList<SyncEncryptionHandler::Observer>::Unchecked observers_;
+  base::ObserverList<SyncEncryptionHandler::Observer> observers_;
   std::vector<uint8_t> keystore_key_;
   FakeCryptographer fake_cryptographer_;
 };

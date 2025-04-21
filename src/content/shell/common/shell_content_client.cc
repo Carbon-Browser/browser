@@ -1,11 +1,12 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/shell/common/shell_content_client.h"
 
+#include <string_view>
+
 #include "base/command_line.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
 #include "build/build_config.h"
@@ -44,7 +45,7 @@ std::u16string ShellContentClient::GetLocalizedString(int message_id) {
   return l10n_util::GetStringUTF16(message_id);
 }
 
-base::StringPiece ShellContentClient::GetDataResource(
+std::string_view ShellContentClient::GetDataResource(
     int resource_id,
     ui::ResourceScaleFactor scale_factor) {
   return ui::ResourceBundle::GetSharedInstance().GetRawDataResourceForScale(
@@ -75,6 +76,12 @@ void ShellContentClient::AddAdditionalSchemes(Schemes* schemes) {
 #if BUILDFLAG(IS_ANDROID)
   schemes->local_schemes.push_back(url::kContentScheme);
 #endif
+  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
+  if (command_line->HasSwitch(switches::kTestRegisterStandardScheme)) {
+    std::string scheme = command_line->GetSwitchValueASCII(
+        switches::kTestRegisterStandardScheme);
+    schemes->standard_schemes.emplace_back(std::move(scheme));
+  }
 }
 
 }  // namespace content

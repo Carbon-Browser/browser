@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,13 @@
 
 #include <utility>
 
+#include "base/notreached.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "services/device/public/mojom/usb_device.mojom-blink.h"
 #include "services/device/public/mojom/usb_enumeration_options.mojom-blink.h"
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy.mojom-blink.h"
+#include "third_party/blink/public/mojom/service_worker/service_worker.mojom-blink.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_usb_device_filter.h"
@@ -20,12 +22,13 @@
 #include "third_party/blink/renderer/core/execution_context/navigator_base.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
+#include "third_party/blink/renderer/core/workers/worker_global_scope.h"
 #include "third_party/blink/renderer/modules/event_target_modules.h"
+#include "third_party/blink/renderer/modules/service_worker/service_worker_global_scope.h"
 #include "third_party/blink/renderer/modules/webusb/usb_connection_event.h"
 #include "third_party/blink/renderer/modules/webusb/usb_device.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
-#include "third_party/blink/renderer/platform/mojo/mojo_helper.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
 using device::mojom::blink::UsbDevice;
@@ -40,14 +43,14 @@ const char kFeaturePolicyBlocked[] =
 const char kNoDeviceSelected[] = "No device selected.";
 
 void RejectWithTypeError(const String& error_details,
-                         ScriptPromiseResolver* resolver) {
+                         ScriptPromiseResolverBase* resolver) {
   ScriptState::Scope scope(resolver->GetScriptState());
   v8::Isolate* isolate = resolver->GetScriptState()->GetIsolate();
   resolver->Reject(V8ThrowException::CreateTypeError(isolate, error_details));
 }
 
 UsbDeviceFilterPtr ConvertDeviceFilter(const USBDeviceFilter* filter,
-                                       ScriptPromiseResolver* resolver) {
+                                       ScriptPromiseResolverBase* resolver) {
   auto mojo_filter = device::mojom::blink::UsbDeviceFilter::New();
   mojo_filter->has_vendor_id = filter->hasVendorId();
   if (mojo_filter->has_vendor_id)
@@ -91,6 +94,76 @@ UsbDeviceFilterPtr ConvertDeviceFilter(const USBDeviceFilter* filter,
   return mojo_filter;
 }
 
+bool IsContextSupported(ExecutionContext* context) {
+  // Since WebUSB on Web Workers is in the process of being implemented, we
+  // check here if the runtime flag for the appropriate worker is enabled.
+  // TODO(https://crbug.com/837406): Remove this check once the feature has
+  // shipped.
+  if (!context) {
+    return false;
+  }
+
+  DCHECK(context->IsWindow() || context->IsDedicatedWorkerGlobalScope() ||
+         context->IsServiceWorkerGlobalScope());
+  DCHECK(!context->IsDedicatedWorkerGlobalScope() ||
+         RuntimeEnabledFeatures::WebUSBOnDedicatedWorkersEnabled());
+  DCHECK(!context->IsServiceWorkerGlobalScope() ||
+         RuntimeEnabledFeatures::WebUSBOnServiceWorkersEnabled());
+
+  return true;
+}
+
+// Carries out basic checks for the web-exposed APIs, to make sure the minimum
+// requirements for them to be served are met. Returns true if any conditions
+// fail to be met, generating an appropriate exception as well. Otherwise,
+// returns false to indicate the call should be allowed.
+bool ShouldBlockUsbServiceCall(LocalDOMWindow* window,
+                               ExecutionContext* context,
+                               ExceptionState* exception_state) {
+  if (!IsContextSupported(context)) {
+    if (exception_state) {
+      exception_state->ThrowDOMException(
+          DOMExceptionCode::kNotSupportedError,
+          "The implementation did not support the requested type of object or "
+          "operation.");
+    }
+    return true;
+  }
+  // For window and dedicated workers, reject the request if the top-level frame
+  // has an opaque origin. For Service Workers, we use their security origin
+  // directly as they do not use delegated permissions.
+  const SecurityOrigin* security_origin = nullptr;
+  if (context->IsWindow()) {
+    security_origin =
+        window->GetFrame()->Top()->GetSecurityContext()->GetSecurityOrigin();
+  } else if (context->IsDedicatedWorkerGlobalScope()) {
+    security_origin = static_cast<WorkerGlobalScope*>(context)
+                          ->top_level_frame_security_origin();
+  } else if (context->IsServiceWorkerGlobalScope()) {
+    security_origin = context->GetSecurityOrigin();
+  } else {
+    NOTREACHED();
+  }
+  if (security_origin->IsOpaque()) {
+    if (exception_state) {
+      exception_state->ThrowSecurityError(
+          "Access to the WebUSB API is denied from contexts where the "
+          "top-level document has an opaque origin.");
+    }
+    return true;
+  }
+
+  if (!context->IsFeatureEnabled(mojom::blink::PermissionsPolicyFeature::kUsb,
+                                 ReportOptions::kReportOnFailure)) {
+    if (exception_state) {
+      exception_state->ThrowSecurityError(kFeaturePolicyBlocked);
+    }
+    return true;
+  }
+
+  return false;
+}
+
 }  // namespace
 
 const char USB::kSupplementName[] = "USB";
@@ -113,47 +186,43 @@ USB::USB(NavigatorBase& navigator)
 USB::~USB() {
   // |service_| may still be valid but there should be no more outstanding
   // requests to them because each holds a persistent handle to this object.
-  DCHECK(get_devices_requests_.IsEmpty());
-  DCHECK(get_permission_requests_.IsEmpty());
+  DCHECK(get_devices_requests_.empty());
+  DCHECK(get_permission_requests_.empty());
 }
 
-ScriptPromise USB::getDevices(ScriptState* script_state,
-                              ExceptionState& exception_state) {
-  if (!IsContextSupported()) {
-    exception_state.ThrowDOMException(
-        DOMExceptionCode::kNotSupportedError,
-        "The implementation did not support the requested type of object or "
-        "operation.");
-    return ScriptPromise();
-  }
-
-  if (!IsFeatureEnabled(ReportOptions::kReportOnFailure)) {
-    exception_state.ThrowSecurityError(kFeaturePolicyBlocked);
-    return ScriptPromise();
+ScriptPromise<IDLSequence<USBDevice>> USB::getDevices(
+    ScriptState* script_state,
+    ExceptionState& exception_state) {
+  if (ShouldBlockUsbServiceCall(GetSupplementable()->DomWindow(),
+                                GetExecutionContext(), &exception_state)) {
+    return ScriptPromise<IDLSequence<USBDevice>>();
   }
 
   EnsureServiceConnection();
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
+  auto* resolver =
+      MakeGarbageCollected<ScriptPromiseResolver<IDLSequence<USBDevice>>>(
+          script_state, exception_state.GetContext());
   get_devices_requests_.insert(resolver);
-  service_->GetDevices(WTF::Bind(&USB::OnGetDevices, WrapPersistent(this),
-                                 WrapPersistent(resolver)));
+  service_->GetDevices(WTF::BindOnce(&USB::OnGetDevices, WrapPersistent(this),
+                                     WrapPersistent(resolver)));
   return resolver->Promise();
 }
 
-ScriptPromise USB::requestDevice(ScriptState* script_state,
-                                 const USBDeviceRequestOptions* options,
-                                 ExceptionState& exception_state) {
+ScriptPromise<USBDevice> USB::requestDevice(
+    ScriptState* script_state,
+    const USBDeviceRequestOptions* options,
+    ExceptionState& exception_state) {
   if (!DomWindow()) {
     exception_state.ThrowDOMException(
         DOMExceptionCode::kNotSupportedError,
         "The implementation did not support the requested type of object or "
         "operation.");
-    return ScriptPromise();
+    return EmptyPromise();
   }
 
-  if (!IsFeatureEnabled(ReportOptions::kReportOnFailure)) {
-    exception_state.ThrowSecurityError(kFeaturePolicyBlocked);
-    return ScriptPromise();
+  if (ShouldBlockUsbServiceCall(GetSupplementable()->DomWindow(),
+                                GetExecutionContext(), &exception_state)) {
+    return EmptyPromise();
   }
 
   EnsureServiceConnection();
@@ -161,28 +230,39 @@ ScriptPromise USB::requestDevice(ScriptState* script_state,
   if (!LocalFrame::HasTransientUserActivation(DomWindow()->GetFrame())) {
     exception_state.ThrowSecurityError(
         "Must be handling a user gesture to show a permission request.");
-    return ScriptPromise();
+    return EmptyPromise();
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
-  ScriptPromise promise = resolver->Promise();
-  Vector<UsbDeviceFilterPtr> filters;
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver<USBDevice>>(
+      script_state, exception_state.GetContext());
+  auto promise = resolver->Promise();
+  auto mojo_options = mojom::blink::WebUsbRequestDeviceOptions::New();
   if (options->hasFilters()) {
-    filters.ReserveCapacity(options->filters().size());
+    mojo_options->filters.reserve(options->filters().size());
     for (const auto& filter : options->filters()) {
       UsbDeviceFilterPtr converted_filter =
           ConvertDeviceFilter(filter, resolver);
       if (!converted_filter)
         return promise;
-      filters.push_back(std::move(converted_filter));
+      mojo_options->filters.push_back(std::move(converted_filter));
     }
   }
+  mojo_options->exclusion_filters.reserve(options->exclusionFilters().size());
+  for (const auto& filter : options->exclusionFilters()) {
+    UsbDeviceFilterPtr converted_filter = ConvertDeviceFilter(filter, resolver);
+    if (!converted_filter) {
+      return promise;
+    }
+    mojo_options->exclusion_filters.push_back(std::move(converted_filter));
+  }
 
-  DCHECK(options->filters().size() == filters.size());
+  DCHECK(options->filters().size() == mojo_options->filters.size());
+  DCHECK(options->exclusionFilters().size() ==
+         mojo_options->exclusion_filters.size());
   get_permission_requests_.insert(resolver);
-  service_->GetPermission(std::move(filters),
-                          WTF::Bind(&USB::OnGetPermission, WrapPersistent(this),
-                                    WrapPersistent(resolver)));
+  service_->GetPermission(std::move(mojo_options),
+                          resolver->WrapCallbackInScriptScope(WTF::BindOnce(
+                              &USB::OnGetPermission, WrapPersistent(this))));
   return promise;
 }
 
@@ -202,7 +282,7 @@ void USB::ContextDestroyed() {
 USBDevice* USB::GetOrCreateDevice(UsbDeviceInfoPtr device_info) {
   auto it = device_cache_.find(device_info->guid);
   if (it != device_cache_.end()) {
-    return it->value;
+    return it->value.Get();
   }
 
   String guid = device_info->guid;
@@ -221,7 +301,7 @@ void USB::ForgetDevice(
   service_->ForgetDevice(device_guid, std::move(callback));
 }
 
-void USB::OnGetDevices(ScriptPromiseResolver* resolver,
+void USB::OnGetDevices(ScriptPromiseResolver<IDLSequence<USBDevice>>* resolver,
                        Vector<UsbDeviceInfoPtr> device_infos) {
   DCHECK(get_devices_requests_.Contains(resolver));
 
@@ -232,7 +312,7 @@ void USB::OnGetDevices(ScriptPromiseResolver* resolver,
   get_devices_requests_.erase(resolver);
 }
 
-void USB::OnGetPermission(ScriptPromiseResolver* resolver,
+void USB::OnGetPermission(ScriptPromiseResolver<USBDevice>* resolver,
                           UsbDeviceInfoPtr device_info) {
   DCHECK(get_permission_requests_.Contains(resolver));
 
@@ -241,8 +321,8 @@ void USB::OnGetPermission(ScriptPromiseResolver* resolver,
   if (service_.is_bound() && device_info) {
     resolver->Resolve(GetOrCreateDevice(std::move(device_info)));
   } else {
-    resolver->Reject(MakeGarbageCollected<DOMException>(
-        DOMExceptionCode::kNotFoundError, kNoDeviceSelected));
+    resolver->RejectWithDOMException(DOMExceptionCode::kNotFoundError,
+                                     kNoDeviceSelected);
   }
   get_permission_requests_.erase(resolver);
 }
@@ -279,28 +359,54 @@ void USB::OnServiceConnectionError() {
   // script to be executed in the process of determining if the value is a
   // thenable. Move the set to a local variable to prevent such execution from
   // invalidating the iterator used by the loop.
-  HeapHashSet<Member<ScriptPromiseResolver>> get_devices_requests;
+  HeapHashSet<Member<ScriptPromiseResolver<IDLSequence<USBDevice>>>>
+      get_devices_requests;
   get_devices_requests.swap(get_devices_requests_);
   for (auto& resolver : get_devices_requests)
     resolver->Resolve(HeapVector<Member<USBDevice>>(0));
 
   // Similar protection is unnecessary when rejecting a promise.
   for (auto& resolver : get_permission_requests_) {
-    resolver->Reject(MakeGarbageCollected<DOMException>(
-        DOMExceptionCode::kNotFoundError, kNoDeviceSelected));
+    ScriptState* resolver_script_state = resolver->GetScriptState();
+    if (!IsInParallelAlgorithmRunnable(resolver->GetExecutionContext(),
+                                       resolver_script_state)) {
+      continue;
+    }
+    ScriptState::Scope script_state_scope(resolver_script_state);
+    resolver->RejectWithDOMException(DOMExceptionCode::kNotFoundError,
+                                     kNoDeviceSelected);
   }
 }
 
 void USB::AddedEventListener(const AtomicString& event_type,
                              RegisteredEventListener& listener) {
-  EventTargetWithInlineData::AddedEventListener(event_type, listener);
+  EventTarget::AddedEventListener(event_type, listener);
   if (event_type != event_type_names::kConnect &&
       event_type != event_type_names::kDisconnect) {
     return;
   }
 
-  if (!IsContextSupported() || !IsFeatureEnabled(ReportOptions::kDoNotReport))
+  auto* context = GetExecutionContext();
+  if (ShouldBlockUsbServiceCall(GetSupplementable()->DomWindow(), context,
+                                nullptr)) {
     return;
+  }
+
+  if (context->IsServiceWorkerGlobalScope()) {
+    auto* service_worker_global_scope =
+        static_cast<ServiceWorkerGlobalScope*>(context);
+    if (service_worker_global_scope->did_evaluate_script()) {
+      String message = String::Format(
+          "Event handler of '%s' event must be added on the initial evaluation "
+          "of worker script. More info: "
+          "https://developer.chrome.com/docs/extensions/mv3/service_workers/"
+          "events/",
+          event_type.Utf8().c_str());
+      GetExecutionContext()->AddConsoleMessage(
+          mojom::blink::ConsoleMessageSource::kJavaScript,
+          mojom::blink::ConsoleMessageLevel::kWarning, message);
+    }
+  }
 
   EnsureServiceConnection();
 }
@@ -309,7 +415,7 @@ void USB::EnsureServiceConnection() {
   if (service_.is_bound())
     return;
 
-  DCHECK(IsContextSupported());
+  DCHECK(IsContextSupported(GetExecutionContext()));
   DCHECK(IsFeatureEnabled(ReportOptions::kDoNotReport));
   // See https://bit.ly/2S0zRAS for task types.
   auto task_runner =
@@ -317,28 +423,12 @@ void USB::EnsureServiceConnection() {
   GetExecutionContext()->GetBrowserInterfaceBroker().GetInterface(
       service_.BindNewPipeAndPassReceiver(task_runner));
   service_.set_disconnect_handler(
-      WTF::Bind(&USB::OnServiceConnectionError, WrapWeakPersistent(this)));
+      WTF::BindOnce(&USB::OnServiceConnectionError, WrapWeakPersistent(this)));
 
   DCHECK(!client_receiver_.is_bound());
 
   service_->SetClient(
       client_receiver_.BindNewEndpointAndPassRemote(task_runner));
-}
-
-bool USB::IsContextSupported() const {
-  // Since WebUSB on Web Workers is in the process of being implemented, we
-  // check here if the runtime flag for the appropriate worker is enabled..
-  // TODO(https://crbug.com/837406): Remove this check once the feature has
-  // shipped.
-  ExecutionContext* context = GetExecutionContext();
-  if (!context)
-    return false;
-
-  DCHECK(context->IsWindow() || context->IsDedicatedWorkerGlobalScope());
-  DCHECK(!context->IsDedicatedWorkerGlobalScope() ||
-         RuntimeEnabledFeatures::WebUSBOnDedicatedWorkersEnabled());
-
-  return true;
 }
 
 bool USB::IsFeatureEnabled(ReportOptions report_options) const {
@@ -352,7 +442,7 @@ void USB::Trace(Visitor* visitor) const {
   visitor->Trace(get_permission_requests_);
   visitor->Trace(client_receiver_);
   visitor->Trace(device_cache_);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   Supplement<NavigatorBase>::Trace(visitor);
   ExecutionContextLifecycleObserver::Trace(visitor);
 }

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,18 +7,28 @@
 
 #include <stdint.h>
 
+#include <optional>
 #include <ostream>
+#include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/containers/span.h"
+#include "base/functional/callback.h"
+#include "base/observer_list.h"
 #include "base/threading/sequence_bound.h"
+#include "base/types/expected.h"
 #include "content/browser/aggregation_service/aggregatable_report.h"
+#include "content/browser/aggregation_service/aggregation_service.h"
+#include "content/browser/aggregation_service/aggregation_service_observer.h"
+#include "content/browser/aggregation_service/aggregation_service_storage.h"
 #include "content/browser/aggregation_service/aggregation_service_storage_context.h"
 #include "content/browser/aggregation_service/public_key.h"
-#include "content/common/aggregatable_report.mojom.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/public/mojom/aggregation_service/aggregatable_report.mojom.h"
+#include "third_party/boringssl/src/include/openssl/base.h"
 #include "third_party/boringssl/src/include/openssl/hpke.h"
 
 namespace base {
@@ -27,21 +37,39 @@ class FilePath;
 class Time;
 }  // namespace base
 
+namespace url {
+class Origin;
+}  // namespace url
+
 namespace content {
 
 class AggregationServiceStorage;
 
 namespace aggregation_service {
 
-struct TestHpkeKey {
-  // Public-private key pair.
-  EVP_HPKE_KEY full_hpke_key;
+class TestHpkeKey {
+ public:
+  // Generates a new HPKE key. Note that `key_id` is just a label.
+  explicit TestHpkeKey(std::string key_id = "example_id");
+  ~TestHpkeKey();
 
-  // Contains a copy of the public key of `full_hpke_key`.
-  PublicKey public_key;
+  // This class is move-only.
+  TestHpkeKey(TestHpkeKey&&);
+  TestHpkeKey& operator=(TestHpkeKey&&);
+  TestHpkeKey(TestHpkeKey&) = delete;
+  TestHpkeKey& operator=(TestHpkeKey&) = delete;
 
-  // Contains a base64-encoded copy of `public_key.key`
-  std::string base64_encoded_public_key;
+  std::string_view key_id() const { return key_id_; }
+  const EVP_HPKE_KEY& full_hpke_key() const { return *full_hpke_key_.get(); }
+
+  // Returns the HPKE key's corresponding public key.
+  PublicKey GetPublicKey() const;
+  // Returns the HPKE key's corresponding public key encoded in base64.
+  std::string GetPublicKeyBase64() const;
+
+ private:
+  std::string key_id_;
+  bssl::ScopedEVP_HPKE_KEY full_hpke_key_;
 };
 
 testing::AssertionResult PublicKeysEqual(const std::vector<PublicKey>& expected,
@@ -61,27 +89,37 @@ testing::AssertionResult SharedInfoEqual(
 
 // Returns an example report request, using the given parameters.
 AggregatableReportRequest CreateExampleRequest(
-    mojom::AggregationServiceMode aggregation_mode =
-        mojom::AggregationServiceMode::kDefault);
+    blink::mojom::AggregationServiceMode aggregation_mode =
+        blink::mojom::AggregationServiceMode::kDefault,
+    int failed_send_attempts = 0,
+    std::optional<url::Origin> aggregation_coordinator_origin = std::nullopt,
+    std::optional<AggregatableReportRequest::DelayType> = std::nullopt);
+
+AggregatableReportRequest CreateExampleRequestWithReportTime(
+    base::Time report_time,
+    blink::mojom::AggregationServiceMode aggregation_mode =
+        blink::mojom::AggregationServiceMode::kDefault,
+    int failed_send_attempts = 0,
+    std::optional<url::Origin> aggregation_coordinator_origin = std::nullopt,
+    std::optional<AggregatableReportRequest::DelayType> = std::nullopt);
 
 AggregatableReportRequest CloneReportRequest(
     const AggregatableReportRequest& request);
 AggregatableReport CloneAggregatableReport(const AggregatableReport& report);
 
-// Generates a public-private key pair for HPKE and also constructs a PublicKey
-// object for use in assembler methods.
-TestHpkeKey GenerateKey(std::string key_id = "example_id");
-
-absl::optional<PublicKeyset> ReadAndParsePublicKeys(
+base::expected<PublicKeyset, std::string> ReadAndParsePublicKeys(
     const base::FilePath& file,
-    base::Time now,
-    std::string* error_msg = nullptr);
+    base::Time now);
 
 // Returns empty vector in the case of an error.
 std::vector<uint8_t> DecryptPayloadWithHpke(
     base::span<const uint8_t> payload,
     const EVP_HPKE_KEY& key,
-    const std::string& expected_serialized_shared_info);
+    std::string_view expected_serialized_shared_info);
+
+MATCHER_P(RequestIdIs, matcher, "") {
+  return ExplainMatchResult(matcher, arg.id, result_listener);
+}
 
 }  // namespace aggregation_service
 
@@ -108,12 +146,110 @@ class TestAggregationServiceStorageContext
   base::SequenceBound<content::AggregationServiceStorage> storage_;
 };
 
+class MockAggregationService : public AggregationService {
+ public:
+  MockAggregationService();
+  ~MockAggregationService() override;
+
+  // AggregationService:
+  MOCK_METHOD(void,
+              AssembleReport,
+              (AggregatableReportRequest request,
+               AggregationService::AssemblyCallback callback),
+              (override));
+
+  MOCK_METHOD(void,
+              SendReport,
+              (const GURL& url,
+               const AggregatableReport& report,
+               std::optional<AggregatableReportRequest::DelayType> delay_type,
+               AggregationService::SendCallback callback),
+              (override));
+
+  MOCK_METHOD(void,
+              SendReport,
+              (const GURL& url,
+               const base::Value& value,
+               std::optional<AggregatableReportRequest::DelayType> delay_type,
+               AggregationService::SendCallback callback),
+              (override));
+
+  MOCK_METHOD(void,
+              ClearData,
+              (base::Time delete_begin,
+               base::Time delete_end,
+               StoragePartition::StorageKeyMatcherFunction filter,
+               base::OnceClosure done),
+              (override));
+
+  MOCK_METHOD(void,
+              ScheduleReport,
+              (AggregatableReportRequest report_request),
+              (override));
+
+  MOCK_METHOD(void,
+              AssembleAndSendReport,
+              (AggregatableReportRequest report_request),
+              (override));
+
+  MOCK_METHOD(
+      void,
+      GetPendingReportRequestsForWebUI,
+      (base::OnceCallback<
+          void(std::vector<AggregationServiceStorage::RequestAndId>)> callback),
+      (override));
+
+  MOCK_METHOD(void,
+              SendReportsForWebUI,
+              (const std::vector<AggregationServiceStorage::RequestId>& ids,
+               base::OnceClosure reports_sent_callback),
+              (override));
+
+  MOCK_METHOD(void,
+              GetPendingReportReportingOrigins,
+              (base::OnceCallback<void(std::set<url::Origin>)> callback),
+              (override));
+
+  void AddObserver(AggregationServiceObserver* observer) override;
+
+  void RemoveObserver(AggregationServiceObserver* observer) override;
+
+  void NotifyRequestStorageModified();
+
+  // `report_handled_time` indicates when the report has been handled.
+  void NotifyReportHandled(
+      const AggregatableReportRequest& request,
+      std::optional<AggregationServiceStorage::RequestId> id,
+      std::optional<AggregatableReport> report,
+      base::Time report_handled_time,
+      AggregationServiceObserver::ReportStatus status);
+
+ private:
+  base::ObserverList<AggregationServiceObserver, /*check_empty=*/true>
+      observers_;
+};
+
+class AggregatableReportRequestsAndIdsBuilder {
+ public:
+  AggregatableReportRequestsAndIdsBuilder();
+  ~AggregatableReportRequestsAndIdsBuilder();
+
+  AggregatableReportRequestsAndIdsBuilder&& AddRequestWithID(
+      AggregatableReportRequest request,
+      AggregationServiceStorage::RequestId id) &&;
+
+  std::vector<AggregationServiceStorage::RequestAndId> Build() &&;
+
+ private:
+  std::vector<AggregationServiceStorage::RequestAndId> requests_;
+};
+
 // Only used for logging in tests.
 std::ostream& operator<<(
     std::ostream& out,
     AggregationServicePayloadContents::Operation operation);
 std::ostream& operator<<(std::ostream& out,
-                         mojom::AggregationServiceMode aggregation_mode);
+                         blink::mojom::AggregationServiceMode aggregation_mode);
 std::ostream& operator<<(std::ostream& out,
                          AggregatableReportSharedInfo::DebugMode debug_mode);
 

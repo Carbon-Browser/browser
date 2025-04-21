@@ -1,9 +1,8 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <linux/input.h>
-#include <stylus-unstable-v2-server-protocol.h>
 #include <wayland-server.h>
 #include <cstdint>
 #include <memory>
@@ -14,14 +13,22 @@
 #include "ui/events/devices/device_data_manager.h"
 #include "ui/events/event.h"
 #include "ui/events/event_constants.h"
+#include "ui/ozone/platform/wayland/host/wayland_seat.h"
 #include "ui/ozone/platform/wayland/host/wayland_window.h"
 #include "ui/ozone/platform/wayland/test/mock_surface.h"
-#include "ui/ozone/platform/wayland/test/mock_zcr_touch_stylus.h"
 #include "ui/ozone/platform/wayland/test/test_keyboard.h"
 #include "ui/ozone/platform/wayland/test/test_touch.h"
 #include "ui/ozone/platform/wayland/test/test_wayland_server_thread.h"
 #include "ui/ozone/platform/wayland/test/wayland_test.h"
 #include "ui/ozone/test/mock_platform_window_delegate.h"
+
+#if BUILDFLAG(USE_XKBCOMMON)
+#include "base/memory/free_deleter.h"
+#include "base/memory/platform_shared_memory_region.h"
+#include "base/memory/shared_memory_mapping.h"
+#include "base/memory/unsafe_shared_memory_region.h"
+#include "ui/events/keycodes/scoped_xkb.h"  // nogncheck
+#endif
 
 using ::testing::_;
 using ::testing::SaveArg;
@@ -32,37 +39,29 @@ namespace ui {
 namespace {
 
 ACTION_P(CloneEvent, ptr) {
-  *ptr = Event::Clone(*arg0);
-}
-
-bool CompareFloat(float a, float b) {
-  constexpr float kEpsilon = std::numeric_limits<float>::epsilon();
-  return std::isnan(a) ? std::isnan(b) : fabs(a - b) < kEpsilon;
+  *ptr = arg0->Clone();
 }
 
 }  // namespace
 
-class WaylandTouchTest : public WaylandTest {
+class WaylandTouchTest : public WaylandTestSimple {
  public:
-  WaylandTouchTest() {}
-
-  WaylandTouchTest(const WaylandTouchTest&) = delete;
-  WaylandTouchTest& operator=(const WaylandTouchTest&) = delete;
-
   void SetUp() override {
-    WaylandTest::SetUp();
+    WaylandTestSimple::SetUp();
 
-    wl_seat_send_capabilities(
-        server_.seat()->resource(),
-        WL_SEAT_CAPABILITY_TOUCH | WL_SEAT_CAPABILITY_KEYBOARD);
+    PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+      wl_seat_send_capabilities(
+          server->seat()->resource(),
+          WL_SEAT_CAPABILITY_TOUCH | WL_SEAT_CAPABILITY_KEYBOARD);
+    });
 
-    Sync();
-
-    touch_ = server_.seat()->touch();
-    ASSERT_TRUE(touch_);
+    ASSERT_TRUE(connection_->seat()->touch());
+    ASSERT_TRUE(connection_->seat()->keyboard());
 
     EXPECT_EQ(1u,
               DeviceDataManager::GetInstance()->GetKeyboardDevices().size());
+    EXPECT_EQ(1u,
+              DeviceDataManager::GetInstance()->GetTouchscreenDevices().size());
   }
 
  protected:
@@ -78,270 +77,277 @@ class WaylandTouchTest : public WaylandTest {
 
     auto* touch_event = event->AsTouchEvent();
     EXPECT_EQ(event_type, touch_event->type());
-    EXPECT_EQ(pointer_type, touch_event->pointer_details().pointer_type);
-    EXPECT_TRUE(CompareFloat(force, touch_event->pointer_details().force));
-    EXPECT_TRUE(CompareFloat(tilt_x, touch_event->pointer_details().tilt_x));
-    EXPECT_TRUE(CompareFloat(tilt_y, touch_event->pointer_details().tilt_y));
   }
-
-  raw_ptr<wl::TestTouch> touch_;
 };
 
-TEST_P(WaylandTouchTest, TouchPressAndMotion) {
+TEST_F(WaylandTouchTest, TouchPressAndMotion) {
   std::unique_ptr<Event> event;
   EXPECT_CALL(delegate_, DispatchEvent(_)).WillRepeatedly(CloneEvent(&event));
 
-  wl_touch_send_down(touch_->resource(), 1, 0, surface_->resource(), 0 /* id */,
-                     wl_fixed_from_int(50), wl_fixed_from_int(100));
-  wl_touch_send_frame(touch_->resource());
+  PostToServerAndWait([surface_id = window_->root_surface()->get_surface_id()](
+                          wl::TestWaylandServerThread* server) {
+    auto* const touch = server->seat()->touch()->resource();
+    auto* const surface =
+        server->GetObject<wl::MockSurface>(surface_id)->resource();
 
-  Sync();
-  CheckEventType(ui::ET_TOUCH_PRESSED, event.get());
+    wl_touch_send_down(touch, server->GetNextSerial(), server->GetNextTime(),
+                       surface, 0 /* id */, wl_fixed_from_int(50),
+                       wl_fixed_from_int(100));
+    wl_touch_send_frame(touch);
+  });
 
-  wl_touch_send_motion(touch_->resource(), 500, 0 /* id */,
-                       wl_fixed_from_int(100), wl_fixed_from_int(100));
-  wl_touch_send_frame(touch_->resource());
+  CheckEventType(ui::EventType::kTouchPressed, event.get());
 
-  Sync();
-  CheckEventType(ui::ET_TOUCH_MOVED, event.get());
+  PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+    auto* const touch = server->seat()->touch()->resource();
 
-  wl_touch_send_up(touch_->resource(), 1, 1000, 0 /* id */);
-  wl_touch_send_frame(touch_->resource());
+    wl_touch_send_motion(touch, server->GetNextTime(), 0 /* id */,
+                         wl_fixed_from_int(100), wl_fixed_from_int(100));
+    wl_touch_send_frame(touch);
+  });
 
-  Sync();
-  CheckEventType(ui::ET_TOUCH_RELEASED, event.get());
-}
+  CheckEventType(ui::EventType::kTouchMoved, event.get());
 
-// Tests that touch events with stylus pen work.
-TEST_P(WaylandTouchTest, TouchPressAndMotionWithStylus) {
-  std::unique_ptr<Event> event;
-  EXPECT_CALL(delegate_, DispatchEvent(_)).WillRepeatedly(CloneEvent(&event));
+  PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+    auto* const touch = server->seat()->touch()->resource();
 
-  zcr_touch_stylus_v2_send_tool(touch_->touch_stylus()->resource(), 0 /* id */,
-                                ZCR_TOUCH_STYLUS_V2_TOOL_TYPE_PEN);
-  Sync();
+    wl_touch_send_up(touch, server->GetNextSerial(), server->GetNextTime(),
+                     0 /* id */);
+    wl_touch_send_frame(touch);
+  });
 
-  wl_touch_send_down(touch_->resource(), 1, 0, surface_->resource(), 0 /* id */,
-                     wl_fixed_from_int(50), wl_fixed_from_int(100));
-  wl_touch_send_frame(touch_->resource());
-
-  Sync();
-  CheckEventType(ui::ET_TOUCH_PRESSED, event.get(), ui::EventPointerType::kPen);
-
-  wl_touch_send_motion(touch_->resource(), 500, 0 /* id */,
-                       wl_fixed_from_int(100), wl_fixed_from_int(100));
-  wl_touch_send_frame(touch_->resource());
-
-  Sync();
-  CheckEventType(ui::ET_TOUCH_MOVED, event.get(), ui::EventPointerType::kPen);
-
-  wl_touch_send_up(touch_->resource(), 1, 1000, 0 /* id */);
-  wl_touch_send_frame(touch_->resource());
-
-  Sync();
-  CheckEventType(ui::ET_TOUCH_RELEASED, event.get(),
-                 ui::EventPointerType::kPen);
-}
-
-// Tests that touch events with stylus pen work. This variant of the test sends
-// the tool information after the touch down event, and ensures that
-// wl_touch::frame event handles it correctly.
-TEST_P(WaylandTouchTest, TouchPressAndMotionWithStylus2) {
-  std::unique_ptr<Event> event;
-  EXPECT_CALL(delegate_, DispatchEvent(_)).WillRepeatedly(CloneEvent(&event));
-
-  uint32_t time = 0;
-  wl_touch_send_down(touch_->resource(), 1, 0, surface_->resource(), 0 /* id */,
-                     wl_fixed_from_int(50), wl_fixed_from_int(100));
-  zcr_touch_stylus_v2_send_tool(touch_->touch_stylus()->resource(), 0 /* id */,
-                                ZCR_TOUCH_STYLUS_V2_TOOL_TYPE_PEN);
-  zcr_touch_stylus_v2_send_force(touch_->touch_stylus()->resource(), ++time,
-                                 0 /* id */, wl_fixed_from_double(1.0f));
-  zcr_touch_stylus_v2_send_tilt(touch_->touch_stylus()->resource(), ++time,
-                                0 /* id */, wl_fixed_from_double(-45),
-                                wl_fixed_from_double(45));
-  wl_touch_send_frame(touch_->resource());
-
-  Sync();
-  CheckEventType(ui::ET_TOUCH_PRESSED, event.get(), ui::EventPointerType::kPen,
-                 1.0f /* force */, -45.0f /* tilt_x */, 45.0f /* tilt_y */);
-
-  wl_touch_send_motion(touch_->resource(), 500, 0 /* id */,
-                       wl_fixed_from_int(100), wl_fixed_from_int(100));
-  wl_touch_send_frame(touch_->resource());
-
-  Sync();
-  CheckEventType(ui::ET_TOUCH_MOVED, event.get(), ui::EventPointerType::kPen,
-                 1.0f /* force */, -45.0f /* tilt_x */, 45.0f /* tilt_y */);
-
-  wl_touch_send_up(touch_->resource(), 1, 1000, 0 /* id */);
-  wl_touch_send_frame(touch_->resource());
-
-  Sync();
-  CheckEventType(ui::ET_TOUCH_RELEASED, event.get(), ui::EventPointerType::kPen,
-                 1.0f /* force */, -45.0f /* tilt_x */, 45.0f /* tilt_y */);
+  CheckEventType(ui::EventType::kTouchReleased, event.get());
 }
 
 // Tests that touch focus is correctly set and released.
-TEST_P(WaylandTouchTest, CheckTouchFocus) {
-  uint32_t serial = 0;
-  uint32_t time = 0;
+TEST_F(WaylandTouchTest, CheckTouchFocus) {
   constexpr uint32_t touch_id1 = 1;
   constexpr uint32_t touch_id2 = 2;
   constexpr uint32_t touch_id3 = 3;
 
-  wl_touch_send_down(touch_->resource(), ++serial, ++time, surface_->resource(),
-                     touch_id1, wl_fixed_from_int(50), wl_fixed_from_int(100));
-  wl_touch_send_frame(touch_->resource());
+  PostToServerAndWait([surface_id = window_->root_surface()->get_surface_id()](
+                          wl::TestWaylandServerThread* server) {
+    auto* const touch = server->seat()->touch()->resource();
+    auto* const surface =
+        server->GetObject<wl::MockSurface>(surface_id)->resource();
 
-  Sync();
+    wl_touch_send_down(touch, server->GetNextSerial(), server->GetNextTime(),
+                       surface, touch_id1, wl_fixed_from_int(50),
+                       wl_fixed_from_int(100));
+    wl_touch_send_frame(touch);
+  });
 
   EXPECT_TRUE(window_->has_touch_focus());
 
-  wl_touch_send_up(touch_->resource(), ++serial, ++time, touch_id1);
-  wl_touch_send_frame(touch_->resource());
+  PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+    auto* const touch = server->seat()->touch()->resource();
 
-  Sync();
+    wl_touch_send_up(touch, server->GetNextSerial(), server->GetNextTime(),
+                     touch_id1);
+    wl_touch_send_frame(touch);
+  });
 
   EXPECT_FALSE(window_->has_touch_focus());
 
-  wl_touch_send_down(touch_->resource(), ++serial, ++time, surface_->resource(),
-                     touch_id1, wl_fixed_from_int(30), wl_fixed_from_int(40));
-  wl_touch_send_frame(touch_->resource());
+  PostToServerAndWait([surface_id = window_->root_surface()->get_surface_id()](
+                          wl::TestWaylandServerThread* server) {
+    auto* const touch = server->seat()->touch()->resource();
+    auto* const surface =
+        server->GetObject<wl::MockSurface>(surface_id)->resource();
 
-  Sync();
-
-  EXPECT_TRUE(window_->has_touch_focus());
-
-  wl_touch_send_down(touch_->resource(), ++serial, ++time, surface_->resource(),
-                     touch_id2, wl_fixed_from_int(30), wl_fixed_from_int(40));
-  wl_touch_send_frame(touch_->resource());
-  wl_touch_send_down(touch_->resource(), ++serial, ++time, surface_->resource(),
-                     touch_id3, wl_fixed_from_int(30), wl_fixed_from_int(40));
-  wl_touch_send_frame(touch_->resource());
-
-  Sync();
+    wl_touch_send_down(touch, server->GetNextSerial(), server->GetNextTime(),
+                       surface, touch_id1, wl_fixed_from_int(30),
+                       wl_fixed_from_int(40));
+    wl_touch_send_frame(touch);
+  });
 
   EXPECT_TRUE(window_->has_touch_focus());
 
-  wl_touch_send_up(touch_->resource(), ++serial, ++time, touch_id2);
-  wl_touch_send_frame(touch_->resource());
+  PostToServerAndWait([surface_id = window_->root_surface()->get_surface_id()](
+                          wl::TestWaylandServerThread* server) {
+    auto* const touch = server->seat()->touch()->resource();
+    auto* const surface =
+        server->GetObject<wl::MockSurface>(surface_id)->resource();
 
-  Sync();
+    wl_touch_send_down(touch, server->GetNextSerial(), server->GetNextTime(),
+                       surface, touch_id2, wl_fixed_from_int(30),
+                       wl_fixed_from_int(40));
+    wl_touch_send_frame(touch);
+    wl_touch_send_down(touch, server->GetNextSerial(), server->GetNextTime(),
+                       surface, touch_id3, wl_fixed_from_int(30),
+                       wl_fixed_from_int(40));
+    wl_touch_send_frame(touch);
+  });
 
   EXPECT_TRUE(window_->has_touch_focus());
 
-  wl_touch_send_up(touch_->resource(), ++serial, ++time, touch_id1);
-  wl_touch_send_frame(touch_->resource());
+  PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+    auto* const touch = server->seat()->touch()->resource();
 
-  Sync();
+    wl_touch_send_up(touch, server->GetNextSerial(), server->GetNextTime(),
+                     touch_id2);
+    wl_touch_send_frame(touch);
+  });
 
   EXPECT_TRUE(window_->has_touch_focus());
 
-  wl_touch_send_up(touch_->resource(), ++serial, ++time, touch_id3);
-  wl_touch_send_frame(touch_->resource());
+  PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+    auto* const touch = server->seat()->touch()->resource();
 
-  Sync();
+    wl_touch_send_up(touch, server->GetNextSerial(), server->GetNextTime(),
+                     touch_id1);
+    wl_touch_send_frame(touch);
+  });
+
+  EXPECT_TRUE(window_->has_touch_focus());
+
+  PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+    auto* const touch = server->seat()->touch()->resource();
+
+    wl_touch_send_up(touch, server->GetNextSerial(), server->GetNextTime(),
+                     touch_id3);
+    wl_touch_send_frame(touch);
+  });
 
   EXPECT_FALSE(window_->has_touch_focus());
 
   // Now send many touches and cancel them.
-  wl_touch_send_down(touch_->resource(), ++serial, ++time, surface_->resource(),
-                     touch_id1, wl_fixed_from_int(30), wl_fixed_from_int(40));
-  wl_touch_send_frame(touch_->resource());
+  PostToServerAndWait([surface_id = window_->root_surface()->get_surface_id()](
+                          wl::TestWaylandServerThread* server) {
+    auto* const touch = server->seat()->touch()->resource();
+    auto* const surface =
+        server->GetObject<wl::MockSurface>(surface_id)->resource();
 
-  wl_touch_send_down(touch_->resource(), ++serial, ++time, surface_->resource(),
-                     touch_id2, wl_fixed_from_int(30), wl_fixed_from_int(40));
-  wl_touch_send_frame(touch_->resource());
+    wl_touch_send_down(touch, server->GetNextSerial(), server->GetNextTime(),
+                       surface, touch_id1, wl_fixed_from_int(30),
+                       wl_fixed_from_int(40));
+    wl_touch_send_frame(touch);
 
-  wl_touch_send_down(touch_->resource(), ++serial, ++time, surface_->resource(),
-                     touch_id3, wl_fixed_from_int(30), wl_fixed_from_int(40));
-  wl_touch_send_frame(touch_->resource());
+    wl_touch_send_down(touch, server->GetNextSerial(), server->GetNextTime(),
+                       surface, touch_id2, wl_fixed_from_int(30),
+                       wl_fixed_from_int(40));
+    wl_touch_send_frame(touch);
 
-  Sync();
+    wl_touch_send_down(touch, server->GetNextSerial(), server->GetNextTime(),
+                       surface, touch_id3, wl_fixed_from_int(30),
+                       wl_fixed_from_int(40));
+    wl_touch_send_frame(touch);
+  });
 
   EXPECT_TRUE(window_->has_touch_focus());
 
-  wl_touch_send_cancel(touch_->resource());
+  PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+    auto* const touch = server->seat()->touch()->resource();
 
-  Sync();
+    wl_touch_send_cancel(touch);
+  });
 
   EXPECT_FALSE(window_->has_touch_focus());
 }
 
 // Verifies keyboard modifier flags are set in touch events while modifier keys
 // are pressed. Regression test for https://crbug.com/1298604.
-TEST_P(WaylandTouchTest, KeyboardFlagsSet) {
-  uint32_t serial = 0;
-  uint32_t timestamp = 0;
+TEST_F(WaylandTouchTest, KeyboardFlagsSet) {
   std::unique_ptr<Event> event;
 
-  wl::TestKeyboard* keyboard = server_.seat()->keyboard();
-  ASSERT_TRUE(keyboard);
+  MaybeSetUpXkb();
 
   // Press 'control' key.
-  wl_keyboard_send_key(keyboard->resource(), ++serial, ++timestamp,
-                       29 /* Control */, WL_KEYBOARD_KEY_STATE_PRESSED);
-  Sync();
+  PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+    auto* const keyboard = server->seat()->keyboard()->resource();
+
+    wl_keyboard_send_modifiers(keyboard, server->GetNextSerial(),
+                               4 /* mods_depressed*/, 0 /* mods_latched */,
+                               0 /* mods_locked */, 0 /* group */);
+    wl_keyboard_send_key(keyboard, server->GetNextSerial(),
+                         server->GetNextTime(), 29 /* Control */,
+                         WL_KEYBOARD_KEY_STATE_PRESSED);
+  });
 
   EXPECT_CALL(delegate_, DispatchEvent(_)).WillRepeatedly(CloneEvent(&event));
 
-  wl_touch_send_down(touch_->resource(), ++serial, ++timestamp,
-                     surface_->resource(), 0 /* id */, wl_fixed_from_int(50),
-                     wl_fixed_from_int(100));
-  wl_touch_send_frame(touch_->resource());
-  Sync();
-  CheckEventType(ui::ET_TOUCH_PRESSED, event.get());
+  PostToServerAndWait([surface_id = window_->root_surface()->get_surface_id()](
+                          wl::TestWaylandServerThread* server) {
+    auto* const touch = server->seat()->touch()->resource();
+    auto* const surface =
+        server->GetObject<wl::MockSurface>(surface_id)->resource();
+
+    wl_touch_send_down(touch, server->GetNextSerial(), server->GetNextTime(),
+                       surface, 0 /* id */, wl_fixed_from_int(50),
+                       wl_fixed_from_int(100));
+    wl_touch_send_frame(touch);
+  });
+
+  CheckEventType(ui::EventType::kTouchPressed, event.get());
   EXPECT_TRUE(event->flags() & ui::EF_CONTROL_DOWN);
 
-  wl_touch_send_motion(touch_->resource(), ++timestamp, 0 /* id */,
-                       wl_fixed_from_int(100), wl_fixed_from_int(100));
-  wl_touch_send_frame(touch_->resource());
-  Sync();
-  CheckEventType(ui::ET_TOUCH_MOVED, event.get());
+  PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+    auto* const touch = server->seat()->touch()->resource();
+
+    wl_touch_send_motion(touch, server->GetNextTime(), 0 /* id */,
+                         wl_fixed_from_int(100), wl_fixed_from_int(100));
+    wl_touch_send_frame(touch);
+  });
+
+  CheckEventType(ui::EventType::kTouchMoved, event.get());
   EXPECT_TRUE(event->flags() & ui::EF_CONTROL_DOWN);
 
-  wl_touch_send_up(touch_->resource(), ++serial, ++timestamp, 0 /* id */);
-  wl_touch_send_frame(touch_->resource());
-  Sync();
+  PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+    auto* const touch = server->seat()->touch()->resource();
 
-  CheckEventType(ui::ET_TOUCH_RELEASED, event.get());
+    wl_touch_send_up(touch, server->GetNextSerial(), server->GetNextTime(),
+                     0 /* id */);
+    wl_touch_send_frame(touch);
+  });
+
+  CheckEventType(ui::EventType::kTouchReleased, event.get());
   EXPECT_TRUE(event->flags() & ui::EF_CONTROL_DOWN);
 
   // Release 'control' key.
-  wl_keyboard_send_key(keyboard->resource(), ++serial, ++timestamp,
-                       29 /* Control */, WL_KEYBOARD_KEY_STATE_RELEASED);
-  Sync();
+  PostToServerAndWait([surface_id = window_->root_surface()->get_surface_id()](
+                          wl::TestWaylandServerThread* server) {
+    auto* const keyboard = server->seat()->keyboard()->resource();
+    auto* const touch = server->seat()->touch()->resource();
+    auto* const surface =
+        server->GetObject<wl::MockSurface>(surface_id)->resource();
 
-  wl_touch_send_down(touch_->resource(), ++serial, ++timestamp,
-                     surface_->resource(), 0 /* id */, wl_fixed_from_int(50),
-                     wl_fixed_from_int(100));
-  wl_touch_send_frame(touch_->resource());
-  Sync();
-  CheckEventType(ui::ET_TOUCH_PRESSED, event.get());
+    wl_keyboard_send_modifiers(keyboard, server->GetNextSerial(),
+                               0 /* mods_depressed*/, 0 /* mods_latched */,
+                               0 /* mods_locked */, 0 /* group */);
+    wl_keyboard_send_key(keyboard, server->GetNextSerial(),
+                         server->GetNextTime(), 29 /* Control */,
+                         WL_KEYBOARD_KEY_STATE_RELEASED);
+
+    wl_touch_send_down(touch, server->GetNextSerial(), server->GetNextTime(),
+                       surface, 0 /* id */, wl_fixed_from_int(50),
+                       wl_fixed_from_int(100));
+    wl_touch_send_frame(touch);
+  });
+
+  CheckEventType(ui::EventType::kTouchPressed, event.get());
   EXPECT_FALSE(event->flags() & ui::EF_CONTROL_DOWN);
 
-  wl_touch_send_motion(touch_->resource(), ++timestamp, 0 /* id */,
-                       wl_fixed_from_int(100), wl_fixed_from_int(100));
-  wl_touch_send_frame(touch_->resource());
-  Sync();
-  CheckEventType(ui::ET_TOUCH_MOVED, event.get());
+  PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+    auto* const touch = server->seat()->touch()->resource();
+
+    wl_touch_send_motion(touch, server->GetNextTime(), 0 /* id */,
+                         wl_fixed_from_int(100), wl_fixed_from_int(100));
+    wl_touch_send_frame(touch);
+  });
+
+  CheckEventType(ui::EventType::kTouchMoved, event.get());
   EXPECT_FALSE(event->flags() & ui::EF_CONTROL_DOWN);
 
-  wl_touch_send_up(touch_->resource(), ++serial, ++timestamp, 0 /* id */);
-  wl_touch_send_frame(touch_->resource());
-  Sync();
-  CheckEventType(ui::ET_TOUCH_RELEASED, event.get());
+  PostToServerAndWait([](wl::TestWaylandServerThread* server) {
+    auto* const touch = server->seat()->touch()->resource();
+
+    wl_touch_send_up(touch, server->GetNextSerial(), server->GetNextTime(),
+                     0 /* id */);
+    wl_touch_send_frame(touch);
+  });
+
+  CheckEventType(ui::EventType::kTouchReleased, event.get());
   EXPECT_FALSE(event->flags() & ui::EF_CONTROL_DOWN);
 }
-
-INSTANTIATE_TEST_SUITE_P(XdgVersionStableTest,
-                         WaylandTouchTest,
-                         Values(wl::ServerConfig{
-                             .shell_version = wl::ShellVersion::kStable}));
-INSTANTIATE_TEST_SUITE_P(XdgVersionV6Test,
-                         WaylandTouchTest,
-                         Values(wl::ServerConfig{
-                             .shell_version = wl::ShellVersion::kV6}));
 
 }  // namespace ui

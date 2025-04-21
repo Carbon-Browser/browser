@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,6 @@
 using testing::_;
 
 namespace autofill {
-
 namespace {
 
 const char kTestText[] = "abcd1234";
@@ -25,7 +24,7 @@ class MockLogReceiver : public LogReceiver {
   MockLogReceiver(const MockLogReceiver&) = delete;
   MockLogReceiver& operator=(const MockLogReceiver&) = delete;
 
-  MOCK_METHOD(void, LogEntry, (const base::Value&), (override));
+  MOCK_METHOD(void, LogEntry, (const base::Value::Dict&), (override));
 };
 
 class MockLogManager : public StubLogManager {
@@ -38,8 +37,6 @@ class MockLogManager : public StubLogManager {
   MOCK_METHOD(void, OnLogRouterAvailabilityChanged, (bool), (override));
 };
 
-}  // namespace
-
 class LogRouterTest : public testing::Test {
  protected:
   testing::StrictMock<MockLogReceiver> receiver_;
@@ -50,7 +47,7 @@ class LogRouterTest : public testing::Test {
 TEST_F(LogRouterTest, ProcessLog_OneReceiver) {
   LogRouter router;
   router.RegisterReceiver(&receiver_);
-  base::Value log_entry = LogRouter::CreateEntryForText(kTestText);
+  base::Value::Dict log_entry = LogRouter::CreateEntryForText(kTestText);
   EXPECT_CALL(receiver_, LogEntry(testing::Eq(testing::ByRef(log_entry))))
       .Times(1);
   router.ProcessLog(kTestText);
@@ -63,7 +60,7 @@ TEST_F(LogRouterTest, ProcessLog_TwoReceiversBothUpdated) {
   router.RegisterReceiver(&receiver2_);
 
   // Check that both receivers get log updates.
-  base::Value log_entry = LogRouter::CreateEntryForText(kTestText);
+  base::Value::Dict log_entry = LogRouter::CreateEntryForText(kTestText);
   EXPECT_CALL(receiver_, LogEntry(testing::Eq(testing::ByRef(log_entry))))
       .Times(1);
   EXPECT_CALL(receiver2_, LogEntry(testing::Eq(testing::ByRef(log_entry))))
@@ -81,7 +78,7 @@ TEST_F(LogRouterTest, ProcessLog_TwoReceiversNoUpdateAfterUnregistering) {
   // Check that no logs are passed to an unregistered receiver.
   router.UnregisterReceiver(&receiver_);
   EXPECT_CALL(receiver_, LogEntry(_)).Times(0);
-  base::Value log_entry = LogRouter::CreateEntryForText(kTestText);
+  base::Value::Dict log_entry = LogRouter::CreateEntryForText(kTestText);
   EXPECT_CALL(receiver2_, LogEntry(testing::Eq(testing::ByRef(log_entry))))
       .Times(1);
   router.ProcessLog(kTestText);
@@ -143,4 +140,5 @@ TEST_F(LogRouterTest, RegisterManager_OneManagerTwoReceivers) {
   router.UnregisterManager(&manager_);
 }
 
+}  // namespace
 }  // namespace autofill

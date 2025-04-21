@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,9 +28,10 @@ class WebContentsCollection {
     virtual void WebContentsDestroyed(content::WebContents* web_contents) {}
     virtual void RenderProcessGone(content::WebContents* web_contents,
                                    base::TerminationStatus status) {}
-    virtual void NavigationEntryCommitted(
+    virtual void DidFinishNavigation(
         content::WebContents* web_contents,
-        const content::LoadCommittedDetails& load_details) {}
+        content::NavigationHandle* navigation_handle) {}
+    virtual void DidStartLoading(content::WebContents* web_contents) {}
 
    protected:
     virtual ~Observer() = default;

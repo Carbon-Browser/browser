@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -60,6 +60,10 @@ saveMethods(Document, SafeMethods.$Document, [
   'webkitCancelFullScreen',
 ]);
 
+saveAccessors(Document, SafeMethods.$Document, [
+  'defaultView',
+]);
+
 saveMethods(Element, SafeMethods.$Element, [
   'attachShadow',
   'getAttribute',
@@ -101,6 +105,7 @@ saveMethods(Node, SafeMethods.$Node, [
 
 saveAccessors(Node, SafeMethods.$Node, [
   'parentNode',
+  'ownerDocument',
 ]);
 
 exports.$set('SafeMethods', SafeMethods);

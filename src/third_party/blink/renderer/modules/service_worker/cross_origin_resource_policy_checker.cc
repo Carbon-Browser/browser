@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,12 +25,12 @@ bool CrossOriginResourcePolicyChecker::IsBlocked(
     network::mojom::RequestMode request_mode,
     network::mojom::RequestDestination request_destination,
     const blink::Response& response) {
-  if (response.InternalURLList().IsEmpty()) {
+  if (response.InternalURLList().empty()) {
     // The response is synthesized in the service worker, so it's considered as
     // the same origin.
     return false;
   }
-  absl::optional<std::string> corp_header_value;
+  std::optional<std::string> corp_header_value;
   String wtf_corp_header_value;
   if (response.InternalHeaderList()->Get(
           network::CrossOriginResourcePolicy::kHeaderName,
@@ -43,7 +43,8 @@ bool CrossOriginResourcePolicyChecker::IsBlocked(
              GURL(response.InternalURLList().front()), initiator_origin,
              corp_header_value, request_mode, request_destination,
              response.GetResponse()->RequestIncludeCredentials(), policy_,
-             reporter_ ? reporter_.get() : nullptr)
+             reporter_ ? reporter_.get() : nullptr,
+             network::DocumentIsolationPolicy())
       .has_value();
 }
 

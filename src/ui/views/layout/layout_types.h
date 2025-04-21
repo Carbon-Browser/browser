@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,15 @@
 #define UI_VIEWS_LAYOUT_LAYOUT_TYPES_H_
 
 #include <algorithm>
+#include <optional>
 #include <ostream>
 #include <string>
 #include <tuple>
 #include <utility>
 
 #include "base/check.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/base/metadata/base_type_conversion.h"
+#include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/views/views_export.h"
 
@@ -37,9 +39,9 @@ class VIEWS_EXPORT SizeBound {
   // explicitly inline because Clang currently doesn't realize that "constexpr"
   // explicitly means "inline" and thus should count as "intentionally inlined
   // and thus shouldn't be warned about".
-  // TODO(crbug.com/1045568): Remove "inline" if Clang's isInlineSpecified()
+  // TODO(crbug.com/40116092): Remove "inline" if Clang's isInlineSpecified()
   // learns about constexpr.
-  // TODO(crbug.com/1045570): Put method bodies here if complex constructor
+  // TODO(crbug.com/40116093): Put method bodies here if complex constructor
   // heuristic learns to peer into types to discover that e.g. Optional is not
   // complex.
   inline constexpr SizeBound();
@@ -62,6 +64,10 @@ class VIEWS_EXPORT SizeBound {
     return is_bounded() ? std::min(this->value(), value) : value;
   }
 
+  constexpr int value_or(int defaule_value) const {
+    return is_bounded() ? value() : defaule_value;
+  }
+
   void operator+=(const SizeBound& rhs);
   void operator-=(const SizeBound& rhs);
 
@@ -72,7 +78,7 @@ class VIEWS_EXPORT SizeBound {
   friend constexpr bool operator!=(const SizeBound& lhs, const SizeBound& rhs);
 
   // nullopt represents "unbounded".
-  absl::optional<int> bound_;
+  std::optional<int> bound_;
 };
 constexpr SizeBound::SizeBound() = default;
 constexpr SizeBound::SizeBound(int bound) : bound_(bound) {}
@@ -134,6 +140,9 @@ class VIEWS_EXPORT SizeBounds {
   // specified amounts.
   void Enlarge(int width, int height);
 
+  // Shrink the SizeBounds by the given `insets`.
+  SizeBounds Inset(const gfx::Insets& inset) const;
+
   std::string ToString() const;
 
  private:
@@ -172,5 +181,8 @@ void PrintTo(const SizeBounds& size_bounds, ::std::ostream* os);
 void PrintTo(LayoutOrientation layout_orientation, ::std::ostream* os);
 
 }  // namespace views
+
+EXPORT_ENUM_CONVERTERS(views::LayoutAlignment, VIEWS_EXPORT)
+EXPORT_ENUM_CONVERTERS(views::LayoutOrientation, VIEWS_EXPORT)
 
 #endif  // UI_VIEWS_LAYOUT_LAYOUT_TYPES_H_

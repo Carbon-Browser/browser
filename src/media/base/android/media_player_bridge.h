@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,8 @@
 #include <string>
 
 #include "base/android/scoped_java_ref.h"
-#include "base/callback.h"
+#include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
@@ -22,6 +23,7 @@
 #include "media/base/media_export.h"
 #include "media/base/simple_watch_timer.h"
 #include "net/cookies/site_for_cookies.h"
+#include "net/storage_access_api/status.h"
 #include "ui/gl/android/scoped_java_surface.h"
 #include "url/gurl.h"
 #include "url/origin.h"
@@ -80,11 +82,13 @@ class MEDIA_EXPORT MediaPlayerBridge {
   MediaPlayerBridge(const GURL& url,
                     const net::SiteForCookies& site_for_cookies,
                     const url::Origin& top_frame_origin,
+                    net::StorageAccessApiStatus storage_access_api_status,
                     const std::string& user_agent,
                     bool hide_url_log,
                     Client* client,
                     bool allow_credentials,
-                    bool is_hls);
+                    bool is_hls,
+                    const base::flat_map<std::string, std::string> headers);
 
   MediaPlayerBridge(const MediaPlayerBridge&) = delete;
   MediaPlayerBridge& operator=(const MediaPlayerBridge&) = delete;
@@ -226,6 +230,10 @@ class MEDIA_EXPORT MediaPlayerBridge {
   // Used to check for cookie content settings.
   url::Origin top_frame_origin_;
 
+  // Used when determining if first-party cookies may be accessible in a
+  // third-party context.
+  net::StorageAccessApiStatus storage_access_api_status_;
+
   // Waiting to retrieve cookies for `url_`.
   bool pending_retrieve_cookies_;
 
@@ -276,6 +284,9 @@ class MEDIA_EXPORT MediaPlayerBridge {
   bool is_hls_;
   SimpleWatchTimer watch_timer_;
 
+  // HTTP Request Headers
+  base::flat_map<std::string, std::string> headers_;
+
   // A reference to the owner of `this`.
   raw_ptr<Client> client_;
 
@@ -283,7 +294,7 @@ class MEDIA_EXPORT MediaPlayerBridge {
   std::unique_ptr<MediaPlayerListener> listener_;
 
   // Pending playback rate while player is preparing.
-  absl::optional<double> pending_playback_rate_;
+  std::optional<double> pending_playback_rate_;
 
   // Weak pointer passed to `listener_` for callbacks.
   // NOTE: Weak pointers must be invalidated before all other member variables.

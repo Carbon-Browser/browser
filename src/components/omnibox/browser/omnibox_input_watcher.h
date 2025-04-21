@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,6 @@
 #include "base/observer_list_types.h"
 #include "build/build_config.h"
 #include "components/keyed_service/core/keyed_service.h"
-
-#if !BUILDFLAG(IS_IOS)
-#include "content/public/browser/browser_context.h"
-#endif  // !BUILDFLAG(IS_IOS)
 
 // This KeyedService is meant to observe omnibox input and provide
 // notifications.
@@ -25,11 +21,6 @@ class OmniboxInputWatcher : public KeyedService {
     // Notifies listeners that omnibox input has been entered.
     virtual void OnOmniboxInputEntered() {}
   };
-
-#if !BUILDFLAG(IS_IOS)
-  static OmniboxInputWatcher* GetForBrowserContext(
-      content::BrowserContext* browser_context);
-#endif  // !BUILDFLAG(IS_IOS)
 
   OmniboxInputWatcher();
   ~OmniboxInputWatcher() override;

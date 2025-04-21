@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -19,6 +20,7 @@
 #include "base/scoped_observation.h"
 #include "base/task/cancelable_task_tracker.h"
 #include "base/time/time.h"
+#include "chrome/browser/predictors/lcp_critical_path_predictor/lcp_critical_path_predictor_util.h"
 #include "chrome/browser/predictors/loading_predictor_config.h"
 #include "chrome/browser/predictors/resource_prefetch_predictor_tables.h"
 #include "components/history/core/browser/history_db_task.h"
@@ -26,11 +28,10 @@
 #include "components/history/core/browser/history_service_observer.h"
 #include "components/history/core/browser/history_types.h"
 #include "components/keyed_service/core/keyed_service.h"
-#include "components/optimization_guide/content/browser/optimization_guide_decider.h"
+#include "components/optimization_guide/core/optimization_guide_decision.h"
 #include "components/sqlite_proto/key_value_data.h"
-#include "net/base/network_isolation_key.h"
+#include "net/base/network_anonymization_key.h"
 #include "services/network/public/mojom/fetch_api.mojom-forward.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
@@ -41,6 +42,7 @@ namespace predictors {
 
 struct OriginRequestSummary;
 struct PageRequestSummary;
+struct LcppDataInputs;
 
 namespace internal {
 struct LastVisitTimeCompare {
@@ -58,13 +60,14 @@ class ResourcePrefetcherManager;
 // Stores all values needed to trigger a preconnect/preresolve job to a single
 // origin.
 struct PreconnectRequest {
-  // |network_isolation_key| specifies the key that network requests for the
+  // |network_anonymization_key| specifies the key that network requests for the
   // preconnected URL are expected to use. If a request is issued with a
   // different key, it may not use the preconnected socket. It has no effect
   // when |num_sockets| == 0.
-  PreconnectRequest(const url::Origin& origin,
-                    int num_sockets,
-                    const net::NetworkIsolationKey& network_isolation_key);
+  PreconnectRequest(
+      const url::Origin& origin,
+      int num_sockets,
+      const net::NetworkAnonymizationKey& network_anonymization_key);
   PreconnectRequest(const PreconnectRequest&) = default;
   PreconnectRequest(PreconnectRequest&&) = default;
   PreconnectRequest& operator=(const PreconnectRequest&) = default;
@@ -74,12 +77,12 @@ struct PreconnectRequest {
   // A zero-value means that we need to preresolve a host only.
   int num_sockets = 0;
   bool allow_credentials = true;
-  net::NetworkIsolationKey network_isolation_key;
+  net::NetworkAnonymizationKey network_anonymization_key;
 };
 
 struct PrefetchRequest {
   PrefetchRequest(const GURL& url,
-                  const net::NetworkIsolationKey& network_isolation_key,
+                  const net::NetworkAnonymizationKey& network_anonymization_key,
                   network::mojom::RequestDestination destination);
 
   PrefetchRequest(const PrefetchRequest&) = default;
@@ -88,7 +91,7 @@ struct PrefetchRequest {
   PrefetchRequest& operator=(PrefetchRequest&&) = default;
 
   GURL url;
-  net::NetworkIsolationKey network_isolation_key;
+  net::NetworkAnonymizationKey network_anonymization_key;
   network::mojom::RequestDestination destination;
 };
 
@@ -119,7 +122,7 @@ struct OptimizationGuidePrediction {
   optimization_guide::OptimizationGuideDecision decision;
   PreconnectPrediction preconnect_prediction;
   std::vector<GURL> predicted_subresources;
-  absl::optional<base::TimeTicks> optimization_guide_prediction_arrived;
+  std::optional<base::TimeTicks> optimization_guide_prediction_arrived;
 };
 
 // Contains logic for learning what can be prefetched and for kicking off
@@ -194,11 +197,26 @@ class ResourcePrefetchPredictor : public history::HistoryServiceObserver {
 
   // Called by the collector after a page has finished loading resources and
   // assembled a PageRequestSummary.
-  virtual void RecordPageRequestSummary(
-      std::unique_ptr<PageRequestSummary> summary);
+  virtual void RecordPageRequestSummary(const PageRequestSummary& summary);
+
+  // Record LCP element locators after a page has finished loading and LCP has
+  // been determined.
+  void LearnLcpp(const std::optional<url::Origin>& initiator_origin,
+                 const GURL& url,
+                 const LcppDataInputs& inputs);
 
   // Deletes all URLs from the predictor database and caches.
   void DeleteAllUrls();
+
+  // Returns LcppStat for the `url`, or std::nullopt on failure.
+  std::optional<LcppStat> GetLcppStat(
+      const std::optional<url::Origin>& initiator_origin,
+      const GURL& url) const;
+
+  void GetPreconnectAndPrefetchRequest(
+      const std::optional<url::Origin>& initiator_origin,
+      const GURL& url,
+      PreconnectPrediction& prediction);
 
  private:
   friend class LoadingPredictor;
@@ -244,6 +262,11 @@ class ResourcePrefetchPredictor : public history::HistoryServiceObserver {
                            TestPrefetchingDurationHistogram);
   FRIEND_TEST_ALL_PREFIXES(ResourcePrefetchPredictorTest,
                            TestRecordFirstContentfulPaint);
+  FRIEND_TEST_ALL_PREFIXES(ResourcePrefetchPredictorTest, LearnLcpp);
+  FRIEND_TEST_ALL_PREFIXES(ResourcePrefetchPredictorTest, LearnFontUrls);
+  FRIEND_TEST_ALL_PREFIXES(ResourcePrefetchPredictorTest, LearnSubresourceUrls);
+  FRIEND_TEST_ALL_PREFIXES(ResourcePrefetchPredictorTest,
+                           WhenLcppDataIsCorrupted_ResetData);
 
   enum InitializationState {
     NOT_INITIALIZED = 0,
@@ -271,7 +294,8 @@ class ResourcePrefetchPredictor : public history::HistoryServiceObserver {
   // Callback for the task to read the predictor database. Takes ownership of
   // all arguments.
   void CreateCaches(std::unique_ptr<RedirectDataMap> host_redirect_data,
-                    std::unique_ptr<OriginDataMap> origin_data);
+                    std::unique_ptr<OriginDataMap> origin_data,
+                    std::unique_ptr<LcppDataMap> lcpp_data);
 
   // Called during initialization when history is read and the predictor
   // database has been read.
@@ -281,11 +305,13 @@ class ResourcePrefetchPredictor : public history::HistoryServiceObserver {
   // predictor database and caches.
   void DeleteUrls(const history::URLRows& urls);
 
+  // Try to ensure that DataMaps are available, and returns true iff they are
+  // available now.
+  bool TryEnsureRecordingPrecondition();
+
   // Updates information about final redirect destination for the |key| in
-  // |redirect_data| and correspondingly updates the predictor database.
-  void LearnRedirect(const std::string& key,
-                     const GURL& final_redirect,
-                     RedirectDataMap* redirect_data);
+  // |host_redirect_data_| and correspondingly updates the predictor database.
+  void LearnRedirect(const std::string& key, const GURL& final_redirect);
 
   void LearnOrigins(
       const std::string& host,
@@ -293,8 +319,8 @@ class ResourcePrefetchPredictor : public history::HistoryServiceObserver {
       const std::map<url::Origin, OriginRequestSummary>& summaries);
 
   // history::HistoryServiceObserver:
-  void OnURLsDeleted(history::HistoryService* history_service,
-                     const history::DeletionInfo& deletion_info) override;
+  void OnHistoryDeletions(history::HistoryService* history_service,
+                          const history::DeletionInfo& deletion_info) override;
   void OnHistoryServiceLoaded(
       history::HistoryService* history_service) override;
 
@@ -303,11 +329,13 @@ class ResourcePrefetchPredictor : public history::HistoryServiceObserver {
   void ConnectToHistoryService();
 
   // Used for testing to inject mock tables.
-  void set_mock_tables(scoped_refptr<ResourcePrefetchPredictorTables> tables) {
+  void set_mock_tables_for_testing(
+      scoped_refptr<ResourcePrefetchPredictorTables> tables) {
     tables_ = tables;
+    use_lcpp_mock_table_for_testing_ = true;
   }
 
-  const raw_ptr<Profile> profile_;
+  const raw_ptr<Profile, DanglingUntriaged> profile_;
   raw_ptr<TestObserver> observer_;
   const LoadingPredictorConfig config_;
   InitializationState initialization_state_;
@@ -316,6 +344,8 @@ class ResourcePrefetchPredictor : public history::HistoryServiceObserver {
 
   std::unique_ptr<RedirectDataMap> host_redirect_data_;
   std::unique_ptr<OriginDataMap> origin_data_;
+  std::unique_ptr<LcppDataMap> lcpp_data_;
+  bool use_lcpp_mock_table_for_testing_ = false;
 
   base::ScopedObservation<history::HistoryService,
                           history::HistoryServiceObserver>
@@ -341,6 +371,8 @@ class TestObserver {
   virtual void OnPredictorInitialized() {}
 
   virtual void OnNavigationLearned(const PageRequestSummary& summary) {}
+
+  virtual void OnLcppLearned() {}
 
  protected:
   // |predictor| must be non-NULL and has to outlive the TestObserver.

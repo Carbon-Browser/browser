@@ -1,13 +1,16 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/fuchsia/test_component_context_for_process.h"
 
+#include <fidl/fuchsia.io/cpp/hlcpp_conversion.h>
 #include <fuchsia/io/cpp/fidl.h>
 #include <lib/fdio/directory.h>
 #include <lib/fidl/cpp/interface_handle.h>
 #include <lib/sys/cpp/component_context.h>
+
+#include <string_view>
 
 #include "base/files/file_enumerator.h"
 #include "base/fuchsia/filtered_service_directory.h"
@@ -19,7 +22,7 @@ namespace base {
 
 TestComponentContextForProcess::TestComponentContextForProcess(
     InitialState initial_state) {
-  // TODO(https://crbug.com/1038786): Migrate to sys::ComponentContextProvider
+  // TODO(crbug.com/42050058): Migrate to sys::ComponentContextProvider
   // once it provides access to an sys::OutgoingDirectory or PseudoDir through
   // which to publish additional_services().
 
@@ -30,8 +33,11 @@ TestComponentContextForProcess::TestComponentContextForProcess(
 
   // Push all services from /svc to the test context if requested.
   if (initial_state == InitialState::kCloneAll) {
-    base::FileEnumerator file_enum(base::FilePath("/svc"), false,
-                                   base::FileEnumerator::FILES);
+    // Calling stat() in /svc is problematic; see https://fxbug.dev/100207. Tell
+    // the enumerator not to recurse, to return both files and directories, and
+    // to report only the names of entries.
+    base::FileEnumerator file_enum(base::FilePath("/svc"), /*recursive=*/false,
+                                   base::FileEnumerator::NAMES_ONLY);
     for (auto file = file_enum.Next(); !file.empty(); file = file_enum.Next()) {
       AddService(file.BaseName().value());
     }
@@ -51,8 +57,7 @@ TestComponentContextForProcess::TestComponentContextForProcess(
   fidl::InterfaceHandle<::fuchsia::io::Directory> published_root_directory;
   old_context_ = ReplaceComponentContextForProcessForTest(
       std::make_unique<sys::ComponentContext>(
-          std::move(incoming_services),
-          published_root_directory.NewRequest().TakeChannel()));
+          std::move(incoming_services), published_root_directory.NewRequest()));
 
   // Connect to the "/svc" directory of the |published_root_directory| and wrap
   // that into a ServiceDirectory.
@@ -62,7 +67,9 @@ TestComponentContextForProcess::TestComponentContextForProcess(
       published_services.NewRequest().TakeChannel().release());
   ZX_CHECK(status == ZX_OK, status) << "fdio_service_connect_at() to /svc";
   published_services_ =
-      std::make_unique<sys::ServiceDirectory>(std::move(published_services));
+      std::make_shared<sys::ServiceDirectory>(std::move(published_services));
+  published_services_natural_ =
+      fidl::HLCPPToNatural(published_services_->CloneChannel());
 }
 
 TestComponentContextForProcess::~TestComponentContextForProcess() {
@@ -73,16 +80,21 @@ sys::OutgoingDirectory* TestComponentContextForProcess::additional_services() {
   return context_services_->outgoing_directory();
 }
 
-void TestComponentContextForProcess::AddService(
-    const base::StringPiece service) {
+void TestComponentContextForProcess::AddService(std::string_view service) {
   zx_status_t status = context_services_->AddService(service);
   ZX_CHECK(status == ZX_OK, status) << "AddService(" << service << ") failed";
 }
 
 void TestComponentContextForProcess::AddServices(
-    base::span<const base::StringPiece> services) {
-  for (auto service : services)
+    base::span<const std::string_view> services) {
+  for (auto service : services) {
     AddService(service);
+  }
+}
+
+fidl::UnownedClientEnd<fuchsia_io::Directory>
+TestComponentContextForProcess::published_services_natural() {
+  return published_services_natural_.borrow();
 }
 
 }  // namespace base

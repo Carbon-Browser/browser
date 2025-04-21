@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,6 @@ std::string Offliner::RequestStatusToString(RequestStatus request_status) {
       return "REQUEST_COORDINATOR_TIMED_OUT";
     case Offliner::RequestStatus::DEPRECATED_LOADING_NOT_STARTED:
       NOTREACHED();
-      return "DEPRECATED_LOADING_NOT_STARTED";
     case Offliner::RequestStatus::LOADING_FAILED_NO_RETRY:
       return "LOADING_FAILED_NO_RETRY";
     case Offliner::RequestStatus::LOADING_FAILED_NO_NEXT:

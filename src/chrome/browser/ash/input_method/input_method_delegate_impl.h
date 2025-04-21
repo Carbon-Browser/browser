@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,8 +26,6 @@ class InputMethodDelegateImpl : public InputMethodDelegate {
   // InputMethodDelegate implementation.
   std::string GetHardwareKeyboardLayouts() const override;
   std::u16string GetLocalizedString(int resource_id) const override;
-  std::u16string GetDisplayLanguageName(
-      const std::string& language_code) const override;
   void SetHardwareKeyboardLayoutForTesting(const std::string& layout) override;
 };
 

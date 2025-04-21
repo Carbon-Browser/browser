@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,8 +20,7 @@
 #include "ui/views/animation/test/square_ink_drop_ripple_test_api.h"
 #include "ui/views/animation/test/test_ink_drop_ripple_observer.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 const float kVisibleOpacity = 0.175f;
 
@@ -50,6 +49,12 @@ class InkDropRippleTest
 
   ~InkDropRippleTest() override;
 
+  void ResetInkDropRipple() {
+    observer_.set_ink_drop_ripple(nullptr);
+    test_api_.reset();
+    ink_drop_ripple_.reset();
+  }
+
  protected:
   TestInkDropRippleObserver observer_;
 
@@ -57,8 +62,7 @@ class InkDropRippleTest
 
   std::unique_ptr<InkDropRippleTestApi> test_api_;
 
-  std::unique_ptr<base::AutoReset<gfx::Animation::RichAnimationRenderMode>>
-      animation_mode_reset_;
+  gfx::AnimationTestApi::RenderModeResetter animation_mode_reset_;
 };
 
 InkDropRippleTest::InkDropRippleTest()
@@ -66,9 +70,9 @@ InkDropRippleTest::InkDropRippleTest()
           gfx::Animation::RichAnimationRenderMode::FORCE_DISABLED)) {
   switch (GetParam()) {
     case SQUARE_INK_DROP_RIPPLE: {
-      SquareInkDropRipple* square_ink_drop_ripple =
-          new SquareInkDropRipple(gfx::Size(10, 10), 2, gfx::Size(8, 8), 1,
-                                  gfx::Point(), SK_ColorBLACK, kVisibleOpacity);
+      SquareInkDropRipple* square_ink_drop_ripple = new SquareInkDropRipple(
+          nullptr, gfx::Size(10, 10), 2, gfx::Size(8, 8), 1, gfx::Point(),
+          SK_ColorBLACK, kVisibleOpacity);
       ink_drop_ripple_.reset(square_ink_drop_ripple);
       test_api_ =
           std::make_unique<SquareInkDropRippleTestApi>(square_ink_drop_ripple);
@@ -76,7 +80,7 @@ InkDropRippleTest::InkDropRippleTest()
     }
     case FLOOD_FILL_INK_DROP_RIPPLE: {
       FloodFillInkDropRipple* flood_fill_ink_drop_ripple =
-          new FloodFillInkDropRipple(gfx::Size(10, 10), gfx::Point(),
+          new FloodFillInkDropRipple(nullptr, gfx::Size(10, 10), gfx::Point(),
                                      SK_ColorBLACK, kVisibleOpacity);
       ink_drop_ripple_.reset(flood_fill_ink_drop_ripple);
       test_api_ = std::make_unique<FloodFillInkDropRippleTestApi>(
@@ -89,7 +93,9 @@ InkDropRippleTest::InkDropRippleTest()
   test_api_->SetDisableAnimationTimers(true);
 }
 
-InkDropRippleTest::~InkDropRippleTest() = default;
+InkDropRippleTest::~InkDropRippleTest() {
+  ResetInkDropRipple();
+}
 
 // Note: First argument is optional and intentionally left blank.
 // (it's a prefix for the generated test cases)
@@ -185,11 +191,12 @@ TEST_P(InkDropRippleTest, DeactivatedOpacity) {
 TEST_P(InkDropRippleTest, AnimationsAbortedDuringDeletion) {
   // TODO(bruthig): Re-enable! For some reason these tests fail on some win
   // trunk builds. See crbug.com/731811.
-  if (!gfx::Animation::ShouldRenderRichAnimation())
+  if (!gfx::Animation::ShouldRenderRichAnimation()) {
     return;
+  }
 
   ink_drop_ripple_->AnimateToState(views::InkDropState::ACTION_PENDING);
-  ink_drop_ripple_.reset();
+  ResetInkDropRipple();
   EXPECT_EQ(1, observer_.last_animation_started_ordinal());
   EXPECT_EQ(2, observer_.last_animation_ended_ordinal());
   EXPECT_EQ(views::InkDropState::ACTION_PENDING,
@@ -201,8 +208,9 @@ TEST_P(InkDropRippleTest, AnimationsAbortedDuringDeletion) {
 TEST_P(InkDropRippleTest, VerifyObserversAreNotified) {
   // TODO(bruthig): Re-enable! For some reason these tests fail on some win
   // trunk builds. See crbug.com/731811.
-  if (!gfx::Animation::ShouldRenderRichAnimation())
+  if (!gfx::Animation::ShouldRenderRichAnimation()) {
     return;
+  }
 
   ink_drop_ripple_->AnimateToState(InkDropState::ACTION_PENDING);
 
@@ -233,8 +241,9 @@ TEST_P(InkDropRippleTest, VerifyObserversAreNotifiedOfSuccessfulAnimations) {
 TEST_P(InkDropRippleTest, VerifyObserversAreNotifiedOfPreemptedAnimations) {
   // TODO(bruthig): Re-enable! For some reason these tests fail on some win
   // trunk builds. See crbug.com/731811.
-  if (!gfx::Animation::ShouldRenderRichAnimation())
+  if (!gfx::Animation::ShouldRenderRichAnimation()) {
     return;
+  }
 
   ink_drop_ripple_->AnimateToState(InkDropState::ACTION_PENDING);
   ink_drop_ripple_->AnimateToState(InkDropState::ALTERNATE_ACTION_PENDING);
@@ -277,8 +286,9 @@ TEST_P(InkDropRippleTest, SnapToHiddenWithoutActiveAnimations) {
 TEST_P(InkDropRippleTest, SnapToHiddenWithActiveAnimations) {
   // TODO(bruthig): Re-enable! For some reason these tests fail on some win
   // trunk builds. See crbug.com/731811.
-  if (!gfx::Animation::ShouldRenderRichAnimation())
+  if (!gfx::Animation::ShouldRenderRichAnimation()) {
     return;
+  }
 
   ink_drop_ripple_->AnimateToState(views::InkDropState::ACTION_PENDING);
   EXPECT_TRUE(test_api_->HasActiveAnimations());
@@ -327,8 +337,9 @@ TEST_P(InkDropRippleTest, SnapToActivatedWithoutActiveAnimations) {
 TEST_P(InkDropRippleTest, SnapToActivatedWithActiveAnimations) {
   // TODO(bruthig): Re-enable! For some reason these tests fail on some win
   // trunk builds. See crbug.com/731811.
-  if (!gfx::Animation::ShouldRenderRichAnimation())
+  if (!gfx::Animation::ShouldRenderRichAnimation()) {
     return;
+  }
 
   ink_drop_ripple_->AnimateToState(views::InkDropState::ACTION_PENDING);
   EXPECT_TRUE(test_api_->HasActiveAnimations());
@@ -366,8 +377,9 @@ TEST_P(InkDropRippleTest, TargetInkDropStateOnAnimationStarted) {
   EXPECT_EQ(views::InkDropState::ACTION_PENDING,
             observer_.target_state_at_last_animation_started());
   // Animation would end if rich_animation_rendering_mode is disabled.
-  if (gfx::Animation::ShouldRenderRichAnimation())
+  if (gfx::Animation::ShouldRenderRichAnimation()) {
     EXPECT_FALSE(observer_.AnimationHasEnded());
+  }
 
   ink_drop_ripple_->AnimateToState(views::InkDropState::HIDDEN);
 
@@ -383,8 +395,9 @@ TEST_P(InkDropRippleTest, TargetInkDropStateOnAnimationEnded) {
   ink_drop_ripple_->AnimateToState(views::InkDropState::ACTION_PENDING);
 
   // Animation would end if rich_animation_rendering_mode is disabled.
-  if (gfx::Animation::ShouldRenderRichAnimation())
+  if (gfx::Animation::ShouldRenderRichAnimation()) {
     EXPECT_FALSE(observer_.AnimationHasEnded());
+  }
 
   ink_drop_ripple_->AnimateToState(views::InkDropState::HIDDEN);
 
@@ -408,5 +421,4 @@ TEST_P(InkDropRippleTest, RipplePendingToActivatedObserverOrder) {
       {InkDropState::ACTION_PENDING, InkDropState::ACTIVATED}));
 }
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

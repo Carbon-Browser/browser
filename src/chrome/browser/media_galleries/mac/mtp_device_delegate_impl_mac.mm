@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include <algorithm>
 #include <memory>
 
-#include "base/bind.h"
-#include "base/mac/scoped_nsobject.h"
+#include "base/files/safe_base_name.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "components/services/filesystem/public/mojom/types.mojom.h"
 #include "components/storage_monitor/image_capture_device.h"
@@ -38,9 +38,8 @@ typedef MTPDeviceAsyncDelegate::ReadDirectorySuccessCallback
 // its delegate on the task runner with which it is created. All
 // interactions with it are done on the UI thread, but it may be
 // created/destroyed on another thread.
-class MTPDeviceDelegateImplMac::DeviceListener
-    : public storage_monitor::ImageCaptureDeviceListener,
-      public base::SupportsWeakPtr<DeviceListener> {
+class MTPDeviceDelegateImplMac::DeviceListener final
+    : public storage_monitor::ImageCaptureDeviceListener {
  public:
   DeviceListener(MTPDeviceDelegateImplMac* delegate)
       : delegate_(delegate) {}
@@ -67,18 +66,23 @@ class MTPDeviceDelegateImplMac::DeviceListener
   // to the delegate by the listener.
   virtual void ResetDelegate();
 
+  base::WeakPtr<storage_monitor::ImageCaptureDeviceListener> AsWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
  private:
-  base::scoped_nsobject<ImageCaptureDevice> camera_device_;
+  ImageCaptureDevice* __strong camera_device_;
 
   // Weak pointer
   raw_ptr<MTPDeviceDelegateImplMac> delegate_;
+  base::WeakPtrFactory<storage_monitor::ImageCaptureDeviceListener>
+      weak_ptr_factory_{this};
 };
 
 void MTPDeviceDelegateImplMac::DeviceListener::OpenCameraSession(
     const std::string& device_id) {
-  camera_device_.reset(
-      [storage_monitor::ImageCaptureDeviceManager::deviceForUUID(device_id)
-          retain]);
+  camera_device_ =
+      storage_monitor::ImageCaptureDeviceManager::deviceForUUID(device_id);
   [camera_device_ setListener:AsWeakPtr()];
   [camera_device_ open];
 }
@@ -117,7 +121,7 @@ void MTPDeviceDelegateImplMac::DeviceListener::DownloadedFile(
 
 void MTPDeviceDelegateImplMac::DeviceListener::DeviceRemoved() {
   [camera_device_ close];
-  camera_device_.reset();
+  camera_device_ = nil;
   if (delegate_)
     delegate_->NoMoreItems();
 }
@@ -147,8 +151,7 @@ MTPDeviceDelegateImplMac::MTPDeviceDelegateImplMac(
                      base::Unretained(camera_interface_.get()), device_id_));
 }
 
-MTPDeviceDelegateImplMac::~MTPDeviceDelegateImplMac() {
-}
+MTPDeviceDelegateImplMac::~MTPDeviceDelegateImplMac() = default;
 
 namespace {
 
@@ -460,9 +463,11 @@ void MTPDeviceDelegateImplMac::NotifyReadDir() {
 
       base::FilePath relative_path;
       read_path.AppendRelativePath(file_paths_[i], &relative_path);
+      auto name = base::SafeBaseName::Create(relative_path);
+      CHECK(name) << relative_path;
       base::File::Info info = file_info_[file_paths_[i].value()];
       entry_list.emplace_back(
-          std::move(relative_path),
+          *name, std::string(),
           info.is_directory ? filesystem::mojom::FsFileType::DIRECTORY
                             : filesystem::mojom::FsFileType::REGULAR_FILE);
     }

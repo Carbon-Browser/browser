@@ -28,9 +28,17 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 
 #include <stdint.h>
+
+#include <array>
+#include <string_view>
 
 #include "base/test/scoped_command_line.h"
 #include "base/unguessable_token.h"
@@ -44,7 +52,7 @@
 #include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/weborigin/scheme_registry.h"
-#include "third_party/blink/renderer/platform/weborigin/security_origin_hash.h"
+#include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 #include "third_party/blink/renderer/platform/weborigin/security_policy.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_operators.h"
@@ -61,7 +69,7 @@ class SecurityOriginTest : public testing::Test {
  protected:
   void TearDown() override { SecurityPolicy::ClearOriginAccessList(); }
 
-  const absl::optional<url::Origin::Nonce>& GetNonceForOrigin(
+  const std::optional<url::Origin::Nonce>& GetNonceForOrigin(
       const SecurityOrigin& origin) {
     return origin.nonce_if_opaque_;
   }
@@ -73,7 +81,7 @@ class SecurityOriginTest : public testing::Test {
 };
 
 TEST_F(SecurityOriginTest, ValidPortsCreateTupleOrigins) {
-  uint16_t ports[] = {0, 80, 443, 5000, kMaxAllowedPort};
+  auto ports = std::to_array<uint16_t>({0, 80, 443, 5000, kMaxAllowedPort});
 
   for (size_t i = 0; i < std::size(ports); ++i) {
     scoped_refptr<const SecurityOrigin> origin =
@@ -120,12 +128,12 @@ TEST_F(SecurityOriginTest, CanAccess) {
     const char* origin2;
   };
 
-  TestCase tests[] = {
+  auto tests = std::to_array<TestCase>({
       {true, "https://foobar.com", "https://foobar.com"},
       {false, "https://foobar.com", "https://bazbar.com"},
       {true, "file://localhost/", "file://localhost/"},
       {false, "file:///", "file://localhost/"},
-  };
+  });
 
   for (size_t i = 0; i < std::size(tests); ++i) {
     scoped_refptr<const SecurityOrigin> origin1 =
@@ -229,10 +237,10 @@ TEST_F(SecurityOriginTest, CanRequest) {
     const char* url;
   };
 
-  TestCase tests[] = {
+  auto tests = std::to_array<TestCase>({
       {true, "https://foobar.com", "https://foobar.com"},
       {false, "https://foobar.com", "https://bazbar.com"},
-  };
+  });
 
   for (size_t i = 0; i < std::size(tests); ++i) {
     scoped_refptr<const SecurityOrigin> origin =
@@ -478,7 +486,7 @@ TEST_F(SecurityOriginTest, CanonicalizeHost) {
       {"example.test", "example.test", true},
       {"EXAMPLE.TEST", "example.test", true},
       {"eXaMpLe.TeSt/path", "example.test%2Fpath", false},
-      {",", "%2C", true},
+      {",", ",", true},
       {"💩", "xn--ls8h", true},
       {"[]", "[]", false},
       {"%yo", "%25yo", false},
@@ -488,7 +496,8 @@ TEST_F(SecurityOriginTest, CanonicalizeHost) {
     SCOPED_TRACE(testing::Message() << "raw host: '" << test.host << "'");
     String host = String::FromUTF8(test.host);
     bool success = false;
-    String canonical_host = SecurityOrigin::CanonicalizeHost(host, &success);
+    String canonical_host =
+        SecurityOrigin::CanonicalizeSpecialHost(host, &success);
     EXPECT_EQ(test.canonical_output, canonical_host);
     EXPECT_EQ(test.expected_success, success);
   }
@@ -657,7 +666,7 @@ TEST_F(SecurityOriginTest, EffectiveDomain) {
     if (test.expected_effective_domain) {
       EXPECT_EQ(test.expected_effective_domain, origin->Domain());
     } else {
-      EXPECT_TRUE(origin->Domain().IsEmpty());
+      EXPECT_TRUE(origin->Domain().empty());
     }
   }
 }
@@ -719,9 +728,9 @@ TEST_F(SecurityOriginTest, OpaqueIsolatedCopy) {
   scoped_refptr<const SecurityOrigin> copied = origin->IsolatedCopy();
   EXPECT_TRUE(origin->CanAccess(copied.get()));
   EXPECT_TRUE(origin->IsSameOriginWith(copied.get()));
-  EXPECT_EQ(SecurityOriginHash::GetHash(origin),
-            SecurityOriginHash::GetHash(copied));
-  EXPECT_TRUE(SecurityOriginHash::Equal(origin, copied));
+  EXPECT_EQ(WTF::GetHash(origin), WTF::GetHash(copied));
+  EXPECT_TRUE(
+      HashTraits<scoped_refptr<const SecurityOrigin>>::Equal(origin, copied));
 }
 
 TEST_F(SecurityOriginTest, EdgeCases) {
@@ -1099,11 +1108,11 @@ TEST_F(SecurityOriginTest, IsSameSiteWithWithLocalScheme) {
 TEST_F(SecurityOriginTest, PercentEncodesHost) {
   EXPECT_EQ(
       SecurityOrigin::CreateFromString("http://foo,.example.test/")->Host(),
-      "foo%2C.example.test");
+      "foo,.example.test");
 
   EXPECT_EQ(
       SecurityOrigin::CreateFromString("http://foo%2C.example.test/")->Host(),
-      "foo%2C.example.test");
+      "foo,.example.test");
 }
 
 TEST_F(SecurityOriginTest, NewOpaqueOriginLazyInitsNonce) {
@@ -1157,7 +1166,7 @@ class BlinkSecurityOriginTestTraits {
  public:
   using OriginType = scoped_refptr<blink::SecurityOrigin>;
 
-  static OriginType CreateOriginFromString(base::StringPiece s) {
+  static OriginType CreateOriginFromString(std::string_view s) {
     return blink::SecurityOrigin::CreateFromString(String::FromUTF8(s));
   }
 
@@ -1166,7 +1175,7 @@ class BlinkSecurityOriginTestTraits {
   }
 
   static OriginType CreateWithReferenceOrigin(
-      base::StringPiece url,
+      std::string_view url,
       const OriginType& reference_origin) {
     return blink::SecurityOrigin::CreateWithReferenceOrigin(
         blink::KURL(String::FromUTF8(url)), reference_origin.get());
@@ -1206,7 +1215,7 @@ class BlinkSecurityOriginTestTraits {
     return origin->ToString().Utf8();
   }
 
-  static bool IsValidUrl(base::StringPiece str) {
+  static bool IsValidUrl(std::string_view str) {
     return blink::KURL(String::FromUTF8(str)).IsValid();
   }
 
@@ -1214,7 +1223,7 @@ class BlinkSecurityOriginTestTraits {
     return origin->IsPotentiallyTrustworthy();
   }
 
-  static bool IsUrlPotentiallyTrustworthy(base::StringPiece str) {
+  static bool IsUrlPotentiallyTrustworthy(std::string_view str) {
     // Note: intentionally avoid constructing GURL() directly from `str`, since
     // this is a test harness intended to exercise the behavior of `KURL` and
     // `SecurityOrigin`.

@@ -1,12 +1,12 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMECAST_CRASH_LINUX_MINIDUMP_WRITER_H_
 #define CHROMECAST_CRASH_LINUX_MINIDUMP_WRITER_H_
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "chromecast/crash/linux/minidump_params.h"
 #include "chromecast/crash/linux/synchronized_minidump_manager.h"
 

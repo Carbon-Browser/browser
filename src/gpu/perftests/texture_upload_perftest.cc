@@ -1,6 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <stddef.h>
 #include <stdint.h>
@@ -10,6 +15,7 @@
 #include <vector>
 
 #include "base/containers/flat_map.h"
+#include "base/containers/heap_array.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/stringprintf.h"
@@ -23,6 +29,7 @@
 #include "ui/gl/gl_context.h"
 #include "ui/gl/gl_enums.h"
 #include "ui/gl/gl_surface.h"
+#include "ui/gl/gl_utils.h"
 #include "ui/gl/gl_version_info.h"
 #include "ui/gl/gpu_timing.h"
 #include "ui/gl/init/gl_factory.h"
@@ -83,9 +90,9 @@ GLuint LoadShader(const GLenum type, const char* const src) {
     GLint len = 0;
     glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &len);
     if (len > 1) {
-      std::unique_ptr<char[]> error_log(new char[len]);
-      glGetShaderInfoLog(shader, len, nullptr, error_log.get());
-      LOG(ERROR) << "Error compiling shader: " << error_log.get();
+      auto error_log = base::HeapArray<char>::WithSize(len);
+      glGetShaderInfoLog(shader, len, nullptr, error_log.data());
+      LOG(ERROR) << "Error compiling shader: " << error_log.data();
     }
   }
   CHECK_NE(0, compiled);
@@ -112,7 +119,6 @@ GLenum GLFormatToStorageFormat(GLenum format) {
     default:
       NOTREACHED();
   }
-  return 0;
 }
 
 void GenerateTextureData(const gfx::Size& size,
@@ -146,7 +152,7 @@ bool CompareBufferToRGBABuffer(GLenum format,
     for (int x = 0; x < size.width(); ++x) {
       int rgba_index = y * rgba_stride + x * GLFormatBytePerPixel(GL_RGBA);
       int pixels_index = y * pixels_stride + x * bytes_per_pixel;
-      uint8_t expected[4] = {0};
+      uint8_t expected[4] = {0, 0, 0, 0};
       switch (format) {
         case GL_LUMINANCE:  // (L_t, L_t, L_t, 1)
           expected[1] = pixels[pixels_index];
@@ -179,7 +185,8 @@ class TextureUploadPerfTest : public testing::Test {
   // Overridden from testing::Test
   void SetUp() override {
     // Initialize an offscreen surface and a gl context.
-    surface_ = gl::init::CreateOffscreenGLSurface(gfx::Size());
+    surface_ = gl::init::CreateOffscreenGLSurface(gl::GetDefaultDisplay(),
+                                                  gfx::Size());
     gl_context_ =
         gl::init::CreateGLContext(nullptr,  // share_group
                                   surface_.get(), gl::GLContextAttribs());
@@ -214,11 +221,11 @@ class TextureUploadPerfTest : public testing::Test {
     // used to draw a quad on the offscreen surface.
     vertex_shader_ = LoadShader(GL_VERTEX_SHADER, kVertexShader);
 
-    bool is_gles = gl_context_->GetVersionInfo()->is_es;
-    fragment_shader_ = LoadShader(
-        GL_FRAGMENT_SHADER,
-        base::StringPrintf("%s%s", is_gles ? kShaderDefaultFloatPrecision : "",
-                           kFragmentShader).c_str());
+    fragment_shader_ =
+        LoadShader(GL_FRAGMENT_SHADER,
+                   base::StringPrintf("%s%s", kShaderDefaultFloatPrecision,
+                                      kFragmentShader)
+                       .c_str());
     program_object_ = glCreateProgram();
     CHECK_NE(0u, program_object_);
 
@@ -454,7 +461,7 @@ TEST_F(TextureUploadPerfTest, upload) {
   formats.push_back(GL_RGBA);
 
   if (!gl_context_->GetVersionInfo()->is_es3) {
-    // Used by default for ResourceProvider::yuv_resource_format_.
+    // Used by default.
     formats.push_back(GL_LUMINANCE);
   }
 
@@ -464,8 +471,7 @@ TEST_F(TextureUploadPerfTest, upload) {
                               gl_context_->HasExtension("GL_ARB_texture_rg");
 
   if (has_texture_rg) {
-    // Used as ResourceProvider::yuv_resource_format_ if
-    // {ARB,EXT}_texture_rg are available.
+    // Used if {ARB,EXT}_texture_rg are available.
     formats.push_back(GL_RED);
   }
 

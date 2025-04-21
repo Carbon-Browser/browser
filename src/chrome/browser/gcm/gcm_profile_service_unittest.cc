@@ -1,13 +1,13 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/task/sequenced_task_runner.h"
@@ -138,7 +138,7 @@ class GCMProfileServiceTest : public testing::Test {
  private:
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<TestingProfile> profile_;
-  raw_ptr<GCMProfileService> gcm_profile_service_;
+  raw_ptr<GCMProfileService, DanglingUntriaged> gcm_profile_service_;
   std::unique_ptr<FakeGCMAppHandler> gcm_app_handler_;
 
   std::string registration_id_;
@@ -154,8 +154,7 @@ GCMProfileServiceTest::GCMProfileServiceTest()
       registration_result_(GCMClient::UNKNOWN_ERROR),
       send_result_(GCMClient::UNKNOWN_ERROR) {}
 
-GCMProfileServiceTest::~GCMProfileServiceTest() {
-}
+GCMProfileServiceTest::~GCMProfileServiceTest() = default;
 
 FakeGCMClient* GCMProfileServiceTest::GetGCMClient() const {
   return static_cast<FakeGCMClient*>(

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -67,7 +67,7 @@ class MyXRMock : public MockXRDeviceHookBase {
 // feature when requesting a session and verifies that secondary views are
 // exposed. Secondary views are currently only supported in the OpenXR backend.
 IN_PROC_BROWSER_TEST_F(WebXrVrOpenXrBrowserTest, TestSecondaryViews) {
-  UiUtils::DisableFrameTimeoutForTesting();
+  UiUtils::DisableOverlayForTesting();
   MyXRMock mock;
 
   LoadFileAndAwaitInitialization("test_openxr_secondary_views");

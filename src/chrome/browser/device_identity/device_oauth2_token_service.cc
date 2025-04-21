@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,13 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/device_identity/device_oauth2_token_store.h"
 #include "components/policy/proto/device_management_backend.pb.h"
@@ -24,6 +25,10 @@
 #include "google_apis/gaia/oauth2_access_token_consumer.h"
 #include "google_apis/gaia/oauth2_access_token_fetcher.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
+
+namespace {
+const char kRefreshTokenInitMetric[] = "Enterprise.RefreshTokenLoadResult";
+}  // namespace
 
 struct DeviceOAuth2TokenService::PendingRequest {
   PendingRequest(
@@ -120,7 +125,6 @@ bool DeviceOAuth2TokenService::RefreshTokenIsAvailable() const {
   }
 
   NOTREACHED() << "Unhandled state " << state_;
-  return false;
 }
 
 OAuth2AccessTokenManager* DeviceOAuth2TokenService::GetAccessTokenManager() {
@@ -142,16 +146,15 @@ void DeviceOAuth2TokenService::OnRefreshTokenResponse(
 }
 
 void DeviceOAuth2TokenService::OnGetTokenInfoResponse(
-    std::unique_ptr<base::DictionaryValue> token_info) {
-  std::string robot_email;
+    const base::Value::Dict& token_info) {
   // For robot accounts email id is the account id.
-  token_info->GetString("email", &robot_email);
+  const std::string* robot_email = token_info.FindString("email");
   gaia_oauth_client_.reset();
 
   store_->PrepareTrustedAccountId(base::BindRepeating(
       &DeviceOAuth2TokenService::OnPrepareTrustedAccountIdFinished,
       weak_ptr_factory_.GetWeakPtr(),
-      CoreAccountId::FromRobotEmail(robot_email)));
+      CoreAccountId::FromRobotEmail(robot_email ? *robot_email : "")));
 }
 
 void DeviceOAuth2TokenService::OnOAuthError() {
@@ -171,6 +174,7 @@ void DeviceOAuth2TokenService::OnNetworkError(int response_code) {
 
 void DeviceOAuth2TokenService::OnInitComplete(bool init_result,
                                               bool validation_required) {
+  base::UmaHistogramBoolean(kRefreshTokenInitMetric, init_result);
   if (!init_result) {
     state_ = STATE_NO_TOKEN;
     return;
@@ -226,7 +230,8 @@ std::unique_ptr<OAuth2AccessTokenFetcher>
 DeviceOAuth2TokenService::CreateAccessTokenFetcher(
     const CoreAccountId& account_id,
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-    OAuth2AccessTokenConsumer* consumer) {
+    OAuth2AccessTokenConsumer* consumer,
+    const std::string& token_binding_challenge) {
   std::string refresh_token = GetRefreshToken();
   DCHECK(!refresh_token.empty());
   return GaiaAccessTokenFetcher::
@@ -294,15 +299,15 @@ bool DeviceOAuth2TokenService::HandleAccessTokenFetch(
   }
 
   NOTREACHED() << "Unexpected state " << state_;
-  return false;
 }
 
 void DeviceOAuth2TokenService::FlushPendingRequests(
     bool token_is_valid,
     GoogleServiceAuthError::State error) {
-  std::vector<PendingRequest*> requests;
+  std::vector<raw_ptr<PendingRequest, VectorExperimental>> requests;
   requests.swap(pending_requests_);
-  for (std::vector<PendingRequest*>::iterator request(requests.begin());
+  for (std::vector<raw_ptr<PendingRequest, VectorExperimental>>::iterator
+           request(requests.begin());
        request != requests.end(); ++request) {
     std::unique_ptr<PendingRequest> scoped_request(*request);
     if (!scoped_request->request)
@@ -329,7 +334,7 @@ void DeviceOAuth2TokenService::FailRequest(
                 GoogleServiceAuthError::InvalidGaiaCredentialsReason::
                     CREDENTIALS_REJECTED_BY_SERVER)
           : GoogleServiceAuthError(error);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&OAuth2AccessTokenManager::RequestImpl::InformConsumer,
                      request->AsWeakPtr(), auth_error,
@@ -347,7 +352,6 @@ std::string DeviceOAuth2TokenService::GetRefreshToken() const {
       // minting via OAuth2AccessTokenManager::FetchOAuth2Token should be
       // triggered.
       NOTREACHED();
-      return std::string();
     case STATE_VALIDATION_PENDING:
     case STATE_VALIDATION_STARTED:
     case STATE_TOKEN_VALID:
@@ -355,7 +359,6 @@ std::string DeviceOAuth2TokenService::GetRefreshToken() const {
   }
 
   NOTREACHED() << "Unhandled state " << state_;
-  return std::string();
 }
 
 void DeviceOAuth2TokenService::StartValidation() {

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -215,8 +215,8 @@ TEST(WebRequestConditionTest, NoUrlAttributes) {
 TEST(WebRequestConditionTest, CreateConditionSet) {
   URLMatcher matcher;
 
-  WebRequestConditionSet::Values conditions;
-  conditions.push_back(base::test::ParseJsonDeprecated(
+  base::Value::List conditions;
+  conditions.Append(base::test::ParseJson(
       "{ \n"
       "  \"instanceType\": \"declarativeWebRequest.RequestMatcher\", \n"
       "  \"url\": { \n"
@@ -224,7 +224,7 @@ TEST(WebRequestConditionTest, CreateConditionSet) {
       "    \"schemes\": [\"http\"], \n"
       "  }, \n"
       "}"));
-  conditions.push_back(base::test::ParseJsonDeprecated(
+  conditions.Append(base::test::ParseJson(
       "{ \n"
       "  \"instanceType\": \"declarativeWebRequest.RequestMatcher\", \n"
       "  \"url\": { \n"
@@ -285,8 +285,8 @@ TEST(WebRequestConditionTest, CreateConditionSet) {
 TEST(WebRequestConditionTest, TestPortFilter) {
   URLMatcher matcher;
 
-  WebRequestConditionSet::Values conditions;
-  conditions.push_back(base::test::ParseJsonDeprecated(
+  base::Value::List conditions;
+  conditions.Append(base::test::ParseJson(
       "{ \n"
       "  \"instanceType\": \"declarativeWebRequest.RequestMatcher\", \n"
       "  \"url\": { \n"

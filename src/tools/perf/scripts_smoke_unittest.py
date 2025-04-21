@@ -1,4 +1,4 @@
-# Copyright 2015 The Chromium Authors. All rights reserved.
+# Copyright 2015 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -29,7 +29,7 @@ class ScriptsSmokeTest(unittest.TestCase):
     self.options = options_for_unittests.GetCopy()
 
   def RunPerfScript(self, args, env=None):
-    # TODO(crbug.com/985712): Switch all clients to pass a list of args rather
+    # TODO(crbug.com/40636798): Switch all clients to pass a list of args rather
     # than a string which we may not be parsing correctly.
     if not isinstance(args, list):
       args = args.split(' ')
@@ -59,6 +59,9 @@ class ScriptsSmokeTest(unittest.TestCase):
       if not os.path.isabs(self.options.browser_executable):
         return
       cmdline.extend(['--browser-executable', self.options.browser_executable])
+    if self.options.chromium_output_dir:
+      cmdline.extend(
+          ['--chromium-output-dir', self.options.chromium_output_dir])
     return_code, stdout = self.RunPerfScript(cmdline)
     if sys.version_info.major == 3:
       self.assertRegex(stdout, r'Available benchmarks .*? are:')
@@ -91,7 +94,6 @@ class ScriptsSmokeTest(unittest.TestCase):
     if 'ImportError: cannot import name small_profile_extender' in stdout:
       self.skipTest('small_profile_extender is missing')
     self.assertEqual(return_code, 0, stdout)
-    self.assertIn('kraken', stdout)
 
   @decorators.Disabled('chromeos')  # crbug.com/754913
   def testRunPerformanceTestsTelemetry_end2end(self):
@@ -115,6 +117,8 @@ class ScriptsSmokeTest(unittest.TestCase):
       if not os.path.isabs(self.options.browser_executable):
         return
       cmdline += ' --browser-executable=%s' % self.options.browser_executable
+    if self.options.chromium_output_dir:
+      cmdline += ' --chromium-output-dir=%s' % self.options.chromium_output_dir
     return_code, stdout = self.RunPerfScript(cmdline)
     self.assertEqual(return_code, 0, stdout)
     try:
@@ -394,7 +398,7 @@ class ScriptsSmokeTest(unittest.TestCase):
     class FakeCommandGenerator(object):
       def __init__(self):
         self.executable_name = 'binary_that_doesnt_exist'
-        self._ignore_shard_env_vars = False
+        self.ignore_shard_env_vars = False
 
       def generate(self, unused_path):
         return [self.executable_name]

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,14 @@
 #define CHROME_BROWSER_ASH_POLICY_HANDLERS_CONFIGURATION_POLICY_HANDLER_ASH_H_
 
 #include <string>
+#include <string_view>
 
 #include "base/values.h"
 #include "chrome/browser/extensions/policy_handlers.h"
 #include "chromeos/ash/components/network/network_ui_data.h"
 #include "components/onc/onc_constants.h"
 #include "components/policy/core/browser/configuration_policy_handler.h"
+#include "components/policy/core/common/policy_map.h"
 
 namespace policy {
 
@@ -27,6 +29,10 @@ class ExternalDataPolicyHandler : public TypeCheckingPolicyHandler {
       delete;
 
   ~ExternalDataPolicyHandler() override;
+
+  static bool CheckPolicySettings(const char* policy,
+                                  const PolicyMap::Entry* entry,
+                                  PolicyErrorMap* errors);
 
   // TypeCheckingPolicyHandler:
   bool CheckPolicySettings(const PolicyMap& policies,
@@ -67,7 +73,7 @@ class NetworkConfigurationPolicyHandler : public TypeCheckingPolicyHandler {
   // that contains a pretty-printed and sanitized version. In particular, we
   // remove any Passphrases that may be contained in the JSON. Ownership of the
   // return value is transferred to the caller.
-  static absl::optional<base::Value> SanitizeNetworkConfig(
+  static std::optional<base::Value> SanitizeNetworkConfig(
       const base::Value* config);
 
   // The kind of ONC source that this handler represents. ONCSource
@@ -100,7 +106,22 @@ class PinnedLauncherAppsPolicyHandler : public ListPolicyHandler {
 
   // Converts the list of strings |filtered_list| to a list of dictionaries and
   // sets the pref.
-  void ApplyList(base::Value filtered_list, PrefValueMap* prefs) override;
+  void ApplyList(base::Value::List filtered_list, PrefValueMap* prefs) override;
+};
+
+// Maps the DefaultHandlersForFileExtensions policy to the corresponding pref.
+class DefaultHandlersForFileExtensionsPolicyHandler
+    : public SchemaValidatingPolicyHandler {
+ public:
+  explicit DefaultHandlersForFileExtensionsPolicyHandler(const policy::Schema&);
+
+  // SchemaValidatingPolicyHandler:
+  bool CheckPolicySettings(const PolicyMap& policies,
+                           PolicyErrorMap* errors) override;
+  void ApplyPolicySettings(const PolicyMap& policies,
+                           PrefValueMap* prefs) override;
+
+  bool IsValidPolicyId(std::string_view policy_id) const;
 };
 
 class ScreenMagnifierPolicyHandler : public IntRangePolicyHandlerBase {
@@ -230,6 +251,45 @@ class ArcServicePolicyHandler : public IntRangePolicyHandlerBase {
 
  private:
   const std::string pref_;
+};
+
+// Instantiated for the `ArcGoogleLocationServicesEnabled` policy. This
+// overrides the old handling of the `ArcGoogleLocationServicesEnabled` policy
+// when the Privacy Hub location is rolled out.
+class ArcLocationServicePolicyHandler : public ArcServicePolicyHandler {
+ public:
+  explicit ArcLocationServicePolicyHandler(const char* policy,
+                                           const char* pref);
+
+  ArcLocationServicePolicyHandler(const ArcLocationServicePolicyHandler&) =
+      delete;
+  ArcLocationServicePolicyHandler& operator=(
+      const ArcLocationServicePolicyHandler&) = delete;
+
+  // IntRangePolicyHandlerBase:
+  void ApplyPolicySettings(const PolicyMap& policies,
+                           PrefValueMap* prefs) override;
+};
+
+// Maps Chrome Compose policy into ChromeOS Orca settings
+class HelpMeWritePolicyHandler : public IntRangePolicyHandlerBase {
+ public:
+  enum class HelpMeWritePolicyValue {
+    kEnabledWithModelImprovement = 0,
+    kEnabledWithoutModelImprovement = 1,
+    kDisabled = 2,
+  };
+
+  HelpMeWritePolicyHandler();
+
+  HelpMeWritePolicyHandler(const HelpMeWritePolicyHandler&) = delete;
+  HelpMeWritePolicyHandler& operator=(const HelpMeWritePolicyHandler&) = delete;
+
+  ~HelpMeWritePolicyHandler() override = default;
+
+  // IntRangePolicyHandlerBase:
+  void ApplyPolicySettings(const PolicyMap& policies,
+                           PrefValueMap* prefs) override;
 };
 
 }  // namespace policy

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,11 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "gpu/command_buffer/client/gpu_memory_buffer_manager.h"
 #include "media/gpu/media_gpu_export.h"
 #include "ui/gfx/buffer_types.h"
-
-struct gbm_device;
+#include "ui/gfx/linux/scoped_gbm_device.h"
 
 namespace gfx {
 class GpuMemoryBuffer;
@@ -42,15 +42,11 @@ class MEDIA_GPU_EXPORT LocalGpuMemoryBufferManager
       gfx::BufferUsage usage,
       gpu::SurfaceHandle surface_handle,
       base::WaitableEvent* shutdown_event) override;
-  void SetDestructionSyncToken(gfx::GpuMemoryBuffer* buffer,
-                               const gpu::SyncToken& sync_token) override;
   void CopyGpuMemoryBufferAsync(
       gfx::GpuMemoryBufferHandle buffer_handle,
       base::UnsafeSharedMemoryRegion memory_region,
       base::OnceCallback<void(bool)> callback) override;
-  bool CopyGpuMemoryBufferSync(
-      gfx::GpuMemoryBufferHandle buffer_handle,
-      base::UnsafeSharedMemoryRegion memory_region) override;
+  bool IsConnected() override;
 
   // Imports a DmaBuf as a GpuMemoryBuffer to be able to map it. The
   // GBM_BO_USE_SW_READ_OFTEN usage is specified so that the user of the
@@ -67,7 +63,7 @@ class MEDIA_GPU_EXPORT LocalGpuMemoryBufferManager
                                  gfx::BufferUsage usage);
 
  private:
-  gbm_device* gbm_device_;
+  ui::ScopedGbmDevice gbm_device_;
 };
 
 }  // namespace media

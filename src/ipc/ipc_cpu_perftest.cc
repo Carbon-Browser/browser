@@ -1,25 +1,28 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
+#include <string_view>
 #include <tuple>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/process/process_metrics.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/perf_log.h"
 #include "base/test/task_environment.h"
 #include "base/timer/timer.h"
+#include "base/types/expected.h"
 #include "ipc/ipc_channel_proxy.h"
 #include "ipc/ipc_perftest_messages.h"
 #include "ipc/ipc_perftest_util.h"
 #include "ipc/ipc_sync_channel.h"
-#include "ipc/ipc_test.mojom.h"
+#include "ipc/ipc_test.test-mojom.h"
 #include "ipc/ipc_test_base.h"
 #include "mojo/core/test/mojo_test_base.h"
 #include "mojo/core/test/multiprocess_test_helper.h"
@@ -66,12 +69,12 @@ base::TimeDelta GetFrameTime(size_t frames_per_second) {
 
 class PerfCpuLogger {
  public:
-  explicit PerfCpuLogger(base::StringPiece test_name)
+  explicit PerfCpuLogger(std::string_view test_name)
       : test_name_(test_name),
         process_metrics_(base::ProcessMetrics::CreateCurrentProcessMetrics()) {
     // Query the CPU usage once to start the recording interval.
     const double inital_cpu_usage =
-        process_metrics_->GetPlatformIndependentCPUUsage();
+        process_metrics_->GetPlatformIndependentCPUUsage().value_or(-1.0);
     // This should have been the first call so the reported cpu usage should be
     // exactly zero.
     DCHECK_EQ(inital_cpu_usage, 0.0);
@@ -81,7 +84,8 @@ class PerfCpuLogger {
   PerfCpuLogger& operator=(const PerfCpuLogger&) = delete;
 
   ~PerfCpuLogger() {
-    double result = process_metrics_->GetPlatformIndependentCPUUsage();
+    const double result =
+        process_metrics_->GetPlatformIndependentCPUUsage().value_or(-1.0);
     base::LogPerfResult(test_name_.c_str(), result, "%");
   }
 
@@ -178,7 +182,7 @@ class ChannelSteadyPingPongListener : public Listener {
 
   void StopPingPong() {
     cpu_logger_.reset();
-    timer_.AbandonAndStop();
+    timer_.Stop();
     std::move(quit_closure_).Run();
   }
 
@@ -236,12 +240,14 @@ class ChannelSteadyPingPongTest : public IPCChannelMojoTestBase {
           base::WaitableEvent::InitialState::NOT_SIGNALED);
       channel_proxy = IPC::SyncChannel::Create(
           TakeHandle().release(), IPC::Channel::MODE_SERVER, &listener,
-          GetIOThreadTaskRunner(), base::ThreadTaskRunnerHandle::Get(), false,
+          GetIOThreadTaskRunner(),
+          base::SingleThreadTaskRunner::GetCurrentDefault(), false,
           shutdown_event.get());
     } else {
       channel_proxy = IPC::ChannelProxy::Create(
           TakeHandle().release(), IPC::Channel::MODE_SERVER, &listener,
-          GetIOThreadTaskRunner(), base::ThreadTaskRunnerHandle::Get());
+          GetIOThreadTaskRunner(),
+          base::SingleThreadTaskRunner::GetCurrentDefault());
     }
     listener.Init(channel_proxy.get());
 
@@ -353,7 +359,7 @@ class MojoSteadyPingPongTest : public mojo::core::test::MojoTestBase {
 
   void StopPingPong() {
     cpu_logger_.reset();
-    timer_.AbandonAndStop();
+    timer_.Stop();
     std::move(quit_closure_).Run();
   }
 

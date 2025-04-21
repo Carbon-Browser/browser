@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,14 +22,18 @@ SelectToSpeakMouseSelectionTest = class extends SelectToSpeakE2ETest {
     window.EventType = chrome.automation.EventType;
     window.SelectToSpeakState = chrome.accessibilityPrivate.SelectToSpeakState;
 
-      await importModule(
-          'selectToSpeak', '/select_to_speak/select_to_speak_main.js');
-      await importModule(
-          'SELECT_TO_SPEAK_TRAY_CLASS_NAME', '/select_to_speak/ui_manager.js');
-      await importModule(
-          'SelectToSpeakConstants',
-          '/select_to_speak/select_to_speak_constants.js');
+    await new Promise(resolve => {
+      chrome.settingsPrivate.setPref(
+          PrefsManager.ENHANCED_VOICES_DIALOG_SHOWN_KEY, true,
+          '' /* unused, see crbug.com/866161 */, () => resolve());
+    });
+    if (!selectToSpeak.prefsManager_.enhancedVoicesDialogShown()) {
+      // TODO(b/267705784): This shouldn't happen, but sometimes the
+      // setPref call above does not cause PrefsManager.updateSettingsPrefs_ to
+      // be called (test: listen to updateSettingsPrefsCallbackForTest_, never
+      // called).
       selectToSpeak.prefsManager_.enhancedVoicesDialogShown_ = true;
+    }
   }
 
   tapTrayButton(desktop, callback) {
@@ -150,16 +154,18 @@ AX_TEST_F(
       })]);
 
       const textNode = this.findTextNode(root, 'This is some text');
-      const event = {
-        screenX: textNode.location.left + 1,
-        screenY: textNode.location.top + 1,
-      };
+      const mouseX = textNode.location.left + 1;
+      const mouseY = textNode.location.top + 1;
       // A state change request should shift us into 'selecting' state
       // from 'inactive'.
       const desktop = root.parent.root;
       this.tapTrayButton(desktop, () => {
-        selectToSpeak.fireMockMouseDownEvent(event);
-        selectToSpeak.fireMockMouseUpEvent(event);
+        selectToSpeak.fireMockMouseEvent(
+            chrome.accessibilityPrivate.SyntheticMouseEventType.PRESS, mouseX,
+            mouseY);
+        selectToSpeak.fireMockMouseEvent(
+            chrome.accessibilityPrivate.SyntheticMouseEventType.RELEASE, mouseX,
+            mouseY);
       });
     });
 
@@ -170,15 +176,13 @@ AX_TEST_F(
           'data:text/html;charset=utf-8,' +
           '<p>This is some text</p>');
       const textNode = this.findTextNode(root, 'This is some text');
-      const event = {
-        screenX: textNode.location.left + 1,
-        screenY: textNode.location.top + 1,
-      };
       // A state change request should shift us into 'selecting' state
       // from 'inactive'.
       const desktop = root.parent.root;
       this.tapTrayButton(desktop, () => {
-        selectToSpeak.fireMockMouseDownEvent(event);
+        selectToSpeak.fireMockMouseEvent(
+            chrome.accessibilityPrivate.SyntheticMouseEventType.PRESS,
+            textNode.location.left + 1, textNode.location.top + 1);
         assertEquals(SelectToSpeakState.SELECTING, selectToSpeak.state_);
 
         // Another state change puts us back in 'inactive'.
@@ -219,7 +223,7 @@ AX_TEST_F(
       this.triggerReadMouseSelectedText(event, event);
     });
 
-// TODO(crbug.com/1177140) Re-enable test
+// TODO(crbug.com/40748296) Re-enable test
 TEST_F(
     'SelectToSpeakMouseSelectionTest', 'DISABLED_DoesNotSpeakOnlyTheTrayButton',
     function() {
@@ -250,12 +254,104 @@ TEST_F(
               }),
               true);
 
-          const event = {
-            screenX: button.location.left + 1,
-            screenY: button.location.top + 1,
-          };
-          selectToSpeak.fireMockMouseDownEvent(event);
-          selectToSpeak.fireMockMouseUpEvent(event);
+          const mouseX = button.location.left + 1;
+          const mouseY = button.location.top + 1;
+          selectToSpeak.fireMockMouseEvent(
+              chrome.accessibilityPrivate.SyntheticMouseEventType.PRESS, mouseX,
+              mouseY);
+          selectToSpeak.fireMockMouseEvent(
+              chrome.accessibilityPrivate.SyntheticMouseEventType.RELEASE,
+              mouseX, mouseY);
         });
       });
     });
+
+AX_TEST_F(
+    'SelectToSpeakMouseSelectionTest', 'VoiceSwitching', async function() {
+      selectToSpeak.shouldUseVoiceSwitching_ = () => true;
+      const root = await this.runWithLoadedTree(
+          'data:text/html;charset=utf-8,<div>' +
+          '<span lang="fr-FR">The first paragraph</span>' +
+          '<span lang="en-US">The second paragraph</span></div>');
+
+      assertFalse(this.mockTts.currentlySpeaking());
+      assertEquals(this.mockTts.pendingUtterances().length, 0);
+      this.mockTts.setOnSpeechCallbacks([
+        this.newCallback(function(utterance) {
+          const options = this.mockTts.getOptions();
+          assertEquals('fr-FR', options.lang);
+          assertEquals(undefined, options.voiceName);
+          this.assertEqualsCollapseWhitespace(
+              this.mockTts.pendingUtterances()[0], 'The first paragraph');
+          this.mockTts.finishPendingUtterance();
+        }),
+        this.newCallback(function(utterance) {
+          const options = this.mockTts.getOptions();
+          assertEquals('en-US', options.lang);
+          assertEquals(undefined, options.voiceName);
+          this.assertEqualsCollapseWhitespace(
+              this.mockTts.pendingUtterances()[0], 'The second paragraph');
+        }),
+      ]);
+
+      const firstNode = this.findTextNode(root, 'The first paragraph');
+      assertNotNullNorUndefined(firstNode);
+      const downEvent = {
+        screenX: firstNode.location.left + 1,
+        screenY: firstNode.location.top + 1,
+      };
+      const lastNode = this.findTextNode(root, 'The second paragraph');
+      assertNotNullNorUndefined(lastNode);
+      const upEvent = {
+        screenX: lastNode.location.left + lastNode.location.width,
+        screenY: lastNode.location.top + lastNode.location.height,
+      };
+      this.triggerReadMouseSelectedText(downEvent, upEvent);
+    });
+
+AX_TEST_F('SelectToSpeakMouseSelectionTest', 'SystemUI', async function() {
+  this.runWithLoadedDesktop(async desktop => {
+    // Select STS tray and system tray to ensure STS tray is spoken.
+    // We can test against the STS tray text because we own it, the
+    // rest of the system tray may change.
+    const systemTray = desktop.find({
+      attributes: {className: 'UnifiedSystemTray'},
+    });
+    const stsTray = desktop.find({
+      attributes: {className: SELECT_TO_SPEAK_TRAY_CLASS_NAME},
+    });
+    const start = {
+      screenX: stsTray.location.left + 1,
+      screenY: stsTray.location.top + 1,
+    };
+    const end = {
+      screenX: systemTray.location.left + systemTray.location.width - 1,
+      screenY: systemTray.location.top + 10,
+    };
+    this.mockTts.setOnSpeechCallbacks([this.newCallback(function(utterance) {
+      assertTrue(this.mockTts.currentlySpeaking());
+      // Sometimes we get "Select-to-speak button" and sometimes
+      // "Select-to-speak" and sometimes "Highlight text on your screen". Any
+      // are acceptable.
+      const trimmedUtterance =
+          utterance.replace(/button/, '').toLowerCase().trim();
+      assertTrue(['select-to-speak', 'highlight text on your screen'].includes(
+          trimmedUtterance));
+    })]);
+
+    focusRingsCallback = this.newCallback((focusRings) => {
+      // Check focus rings are reasonably sized.
+      assertTrue(focusRings[0].rects[0].width < 200);
+      assertTrue(focusRings[0].rects[0].height < 100);
+    });
+    // Override focus rings method for this test.
+    chrome.accessibilityPrivate.setFocusRings = rings => {
+      if (focusRingsCallback && rings.length > 0 && rings[0].rects.length > 0) {
+        focusRingsCallback(rings);
+        focusRingsCallback = null;
+      }
+    };
+
+    this.triggerReadMouseSelectedText(start, end);
+  });
+});

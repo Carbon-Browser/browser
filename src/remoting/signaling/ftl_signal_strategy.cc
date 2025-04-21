@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/weak_ptr.h"
@@ -14,7 +14,7 @@
 #include "base/rand_util.h"
 #include "base/sequence_checker.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "remoting/base/logging.h"
 #include "remoting/base/oauth_token_getter.h"
 #include "remoting/base/protobuf_http_status.h"
@@ -54,8 +54,7 @@ class FtlSignalStrategy::Core {
  private:
   // Methods are called in the order below when Connect() is called.
   void OnGetOAuthTokenResponse(OAuthTokenGetter::Status status,
-                               const std::string& user_email,
-                               const std::string& access_token);
+                               const OAuthTokenInfo& token_info);
   void OnSignInGaiaResponse(const ProtobufHttpStatus& status);
   void StartReceivingMessages();
   void OnReceiveMessagesStreamStarted();
@@ -112,6 +111,9 @@ FtlSignalStrategy::Core::Core(
 
 FtlSignalStrategy::Core::~Core() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (registration_manager_) {
+    registration_manager_->SignOut();
+  }
   Disconnect();
 }
 
@@ -130,8 +132,9 @@ void FtlSignalStrategy::Core::Connect() {
       messaging_client_->RegisterMessageCallback(base::BindRepeating(
           &Core::OnMessageReceived, weak_factory_.GetWeakPtr()));
 
-  for (auto& observer : listeners_)
+  for (auto& observer : listeners_) {
     observer.OnSignalStrategyStateChange(CONNECTING);
+  }
 
   StartReceivingMessages();
 }
@@ -139,17 +142,14 @@ void FtlSignalStrategy::Core::Connect() {
 void FtlSignalStrategy::Core::Disconnect() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (registration_manager_->IsSignedIn()) {
-    registration_manager_->SignOut();
-  }
-
   if (receive_message_subscription_) {
     local_address_ = SignalingAddress();
     receive_message_subscription_ = {};
     messaging_client_->StopReceivingMessages();
 
-    for (auto& observer : listeners_)
+    for (auto& observer : listeners_) {
       observer.OnSignalStrategyStateChange(DISCONNECTED);
+    }
   }
 }
 
@@ -240,8 +240,7 @@ bool FtlSignalStrategy::Core::IsSignInError() const {
 
 void FtlSignalStrategy::Core::OnGetOAuthTokenResponse(
     OAuthTokenGetter::Status status,
-    const std::string& user_email,
-    const std::string& access_token) {
+    const OAuthTokenInfo& token_info) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (status != OAuthTokenGetter::Status::SUCCESS) {
     switch (status) {
@@ -253,14 +252,13 @@ void FtlSignalStrategy::Core::OnGetOAuthTokenResponse(
         break;
       default:
         NOTREACHED();
-        break;
     }
     is_sign_in_error_ = true;
     Disconnect();
     return;
   }
 
-  user_email_ = user_email;
+  user_email_ = token_info.user_email();
   StartReceivingMessages();
 }
 
@@ -304,8 +302,9 @@ void FtlSignalStrategy::Core::OnReceiveMessagesStreamStarted() {
   local_address_ = SignalingAddress::CreateFtlSignalingAddress(
       user_email_, registration_manager_->GetRegistrationId());
 
-  for (auto& observer : listeners_)
+  for (auto& observer : listeners_) {
     observer.OnSignalStrategyStateChange(CONNECTED);
+  }
 }
 
 void FtlSignalStrategy::Core::OnReceiveMessagesStreamClosed(
@@ -431,6 +430,7 @@ void FtlSignalStrategy::Core::HandleProtobufHttpStatusError(
   if (status.error_code() == ProtobufHttpStatus::Code::UNAUTHENTICATED ||
       status.error_code() == ProtobufHttpStatus::Code::PERMISSION_DENIED) {
     oauth_token_getter_->InvalidateCache();
+    registration_manager_->SignOut();
   }
   Disconnect();
 }
@@ -461,8 +461,9 @@ void FtlSignalStrategy::Core::OnStanza(
            << "\n=========================================================";
 
   for (auto& listener : listeners_) {
-    if (listener.OnSignalStrategyIncomingStanza(stanza.get()))
+    if (listener.OnSignalStrategyIncomingStanza(stanza.get())) {
       return;
+    }
   }
 }
 
@@ -494,8 +495,8 @@ FtlSignalStrategy::FtlSignalStrategy(
 FtlSignalStrategy::~FtlSignalStrategy() {
   // All listeners should be removed at this point, so it's safe to detach
   // |core_|.
-  base::SequencedTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE,
-                                                     core_.release());
+  base::SequencedTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE,
+                                                             core_.release());
 }
 
 void FtlSignalStrategy::Connect() {

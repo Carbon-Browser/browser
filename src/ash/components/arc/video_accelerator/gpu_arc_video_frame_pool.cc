@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,19 @@
 
 #include "ash/components/arc/video_accelerator/arc_video_accelerator_util.h"
 #include "ash/components/arc/video_accelerator/protected_buffer_manager.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/posix/eintr_wrapper.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "gpu/ipc/common/gpu_memory_buffer_support.h"
 #include "media/base/decoder_status.h"
 #include "media/base/format_utils.h"
 #include "media/base/video_types.h"
 #include "media/gpu/buffer_validation.h"
+#include "media/gpu/chromeos/native_pixmap_frame_resource.h"
 #include "media/gpu/macros.h"
+#include "media/media_buildflags.h"
 #include "ui/gfx/buffer_format_util.h"
 
 #if BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
@@ -30,13 +34,13 @@ namespace {
 // Helper thunk called when all references to a video frame have been dropped.
 // The thunk reschedules the OnFrameReleased callback on the correct task runner
 // as frames can be destroyed on any thread. Note that the WeakPtr is wrapped in
-// an absl::optional, as a WeakPtr should only be dereferenced on the thread it
+// an std::optional, as a WeakPtr should only be dereferenced on the thread it
 // was created on. If we don't wrap the WeakPtr the task runner will dereference
 // the WeakPtr before calling this function causing an assert.
 void OnFrameReleasedThunk(
-    absl::optional<base::WeakPtr<GpuArcVideoFramePool>> weak_this,
+    std::optional<base::WeakPtr<GpuArcVideoFramePool>> weak_this,
     base::SequencedTaskRunner* task_runner,
-    scoped_refptr<media::VideoFrame> origin_frame) {
+    scoped_refptr<media::FrameResource> origin_frame) {
   DCHECK(weak_this);
   task_runner->PostTask(FROM_HERE,
                         base::BindOnce(&GpuArcVideoFramePool::OnFrameReleased,
@@ -59,10 +63,11 @@ media::VideoPixelFormat GetPixelFormat(mojom::HalPixelFormat format) {
 
 GpuArcVideoFramePool::GpuArcVideoFramePool(
     mojo::PendingAssociatedReceiver<mojom::VideoFramePool> video_frame_pool,
-    base::RepeatingClosure request_frames_cb,
+    base::RepeatingClosure release_client_video_frames_cb,
     scoped_refptr<ProtectedBufferManager> protected_buffer_manager)
     : video_frame_pool_receiver_(this),
-      request_frames_cb_(std::move(request_frames_cb)),
+      release_client_video_frames_cb_(
+          std::move(release_client_video_frames_cb)),
       protected_buffer_manager_(std::move(protected_buffer_manager)) {
   VLOGF(2);
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -71,9 +76,10 @@ GpuArcVideoFramePool::GpuArcVideoFramePool(
 
   weak_this_ = weak_this_factory_.GetWeakPtr();
 
-  client_task_runner_ = base::ThreadTaskRunnerHandle::Get();
-  vda_video_frame_pool_ = std::make_unique<media::VdaVideoFramePool>(
-      weak_this_, client_task_runner_);
+  video_frame_pool_receiver_.set_disconnect_handler(
+      base::BindOnce(&GpuArcVideoFramePool::Stop, weak_this_));
+
+  client_task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
 }
 
 GpuArcVideoFramePool::~GpuArcVideoFramePool() {
@@ -95,15 +101,69 @@ void GpuArcVideoFramePool::Initialize(
     mojo::PendingAssociatedRemote<mojom::VideoFramePoolClient> client) {
   VLOGF(2);
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(!pool_client_);
+
+  if (has_error_) {
+    return;
+  }
+
+  if (pool_client_) {
+    DVLOGF(3) << "Attempting to call GpuArcVideoFramePool::Initialize() when "
+                 "it is already initialized";
+    return;
+  }
+
+  pool_client_version_ = client.version();
 
   pool_client_.Bind(std::move(client));
+
+  pool_client_.set_disconnect_handler(
+      base::BindOnce(&GpuArcVideoFramePool::Stop, weak_this_));
 }
 
 void GpuArcVideoFramePool::AddVideoFrame(mojom::VideoFramePtr video_frame,
                                          AddVideoFrameCallback callback) {
   DVLOGF(3) << "id: " << video_frame->id;
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  if (has_error_) {
+    std::move(callback).Run(false);
+    return;
+  }
+
+  if (!pool_client_version_) {
+    DVLOGF(3) << "Unknown pool client version. Discarding video frame.";
+    std::move(callback).Run(false);
+    return;
+  }
+
+  if (!import_frame_cb_) {
+    // This can happen if the remote end calls AddVideoFrame() before we call
+    // RequestFrames() on it (a badly behaved remote end) or if due to
+    // unfortunate timing, AddVideoFrame() is received after having interrupted
+    // a request for frames because of a Reset(). In either case, we should
+    // ignore the frame.
+    //
+    // Note that we call |callback| with true. This is to prevent
+    // GpuVdContext::OnAddVideoFrameDone() on the libvda side from dispatching
+    // an error. This is consistent with how the legacy VDA stack handles the
+    // absence of an import callback: see
+    // VdVideoDecodeAccelerator::ImportBufferForPicture() which simply returns
+    // early without reporting an error to the client.
+    DVLOGF(3) << "Can't import the frame because there's no import callback";
+    std::move(callback).Run(true);
+    return;
+  }
+
+  // Discard frame because ACK from the client for the last RequestVideoFrames()
+  // has not been received yet.
+  if (awaiting_request_frames_ack_) {
+    CHECK_GE(pool_client_version_.value(), kMinVersionForRequestFramesAck);
+    DVLOGF(3) << "ACK from client not received after calling "
+                 "Client::RequestVideoFrames(). "
+              << "Discarding video frame.";
+    std::move(callback).Run(true);
+    return;
+  }
 
   // Frames with the old coded size can still be added after resolution changes.
   if (video_frame->coded_size != coded_size_) {
@@ -135,7 +195,7 @@ void GpuArcVideoFramePool::AddVideoFrame(mojom::VideoFramePtr video_frame,
   }
 
   // If this is the first video frame added after requesting new video frames we
-  // need to update the video frame layout.
+  // may need to notify the VdaVideoFramePool that the layout changed.
   if (notify_layout_changed_cb_) {
     const uint64_t layout_modifier =
         (gmb_handle.type == gfx::NATIVE_PIXMAP)
@@ -145,16 +205,6 @@ void GpuArcVideoFramePool::AddVideoFrame(mojom::VideoFramePtr video_frame,
     for (const auto& plane : gmb_handle.native_pixmap_handle.planes) {
       color_planes.emplace_back(plane.stride, plane.offset, plane.size);
     }
-    video_frame_layout_ = media::VideoFrameLayout::CreateWithPlanes(
-        pixel_format, coded_size_, color_planes,
-        media::VideoFrameLayout::kBufferAddressAlignment, layout_modifier);
-    if (!video_frame_layout_) {
-      VLOGF(1) << "Failed to create VideoFrameLayout";
-      std::move(callback).Run(false);
-      return;
-    }
-
-    // Notify the VdaVideoFramePool that the layout changed.
     auto fourcc = media::Fourcc::FromVideoPixelFormat(pixel_format);
     if (!fourcc) {
       VLOGF(1) << "Failed to convert to fourcc";
@@ -174,34 +224,72 @@ void GpuArcVideoFramePool::AddVideoFrame(mojom::VideoFramePtr video_frame,
     std::move(notify_layout_changed_cb_).Run(*gb_layout);
   }
 
-  scoped_refptr<media::VideoFrame> origin_frame =
-      CreateVideoFrame(std::move(gmb_handle), pixel_format);
+  scoped_refptr<media::FrameResource> origin_frame =
+      CreateFrame(std::move(gmb_handle), pixel_format);
+
   if (!origin_frame) {
-    VLOGF(1) << "Failed to create video frame from fd";
+    VLOGF(1) << "Failed to create frame from fd";
     std::move(callback).Run(false);
     return;
   }
 
-  const gfx::GpuMemoryBufferId buffer_id =
-      origin_frame->GetGpuMemoryBuffer()->GetId();
-  auto it = buffer_id_to_video_frame_id_.emplace(buffer_id, video_frame->id);
-  DCHECK(it.second);
+  // This passes because GetFrameStorageType() is hard coded to match
+  // the storage type of frames produced by CreateFrame().
+  CHECK_EQ(origin_frame->storage_type(), GetFrameStorageType());
+
+  auto res = frame_token_to_video_frame_id_.emplace(
+      origin_frame->tracking_token(), video_frame->id);
+  CHECK(res.second);
 
   // Wrap the video frame and attach a destruction observer so we're notified
-  // when all references to the video frame have been dropped.
-  scoped_refptr<media::VideoFrame> wrapped_frame =
-      media::VideoFrame::WrapVideoFrame(origin_frame, origin_frame->format(),
-                                        origin_frame->visible_rect(),
-                                        origin_frame->natural_size());
+  // when all references to the frame have been dropped.
+  scoped_refptr<media::FrameResource> wrapped_frame =
+      origin_frame->CreateWrappingFrame();
+
   wrapped_frame->AddDestructionObserver(base::BindOnce(
       &OnFrameReleasedThunk, weak_this_, base::RetainedRef(client_task_runner_),
       std::move(origin_frame)));
 
-  // Add the frame to the underlying video frame pool.
-  DCHECK(import_frame_cb_);
+  // Add the frame to the underlying frame pool.
   import_frame_cb_.Run(std::move(wrapped_frame));
 
   std::move(callback).Run(true);
+}
+
+void GpuArcVideoFramePool::WillResetDecoder() {
+  DVLOGF(4);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  if (has_error_) {
+    return;
+  }
+
+  // GpuArcVideoDecoder should ensure WillResetDecoder() is not called while a
+  // reset is in progress.
+  CHECK(!decoder_is_resetting_);
+  decoder_is_resetting_ = true;
+
+  if (notify_layout_changed_cb_) {
+    // If we're here, a Reset() has occurred in the the middle of a request for
+    // frames. That means that the VdaVideoFramePool is blocked waiting for a
+    // call to |notify_layout_changed_cb_|. Here, we unblock it by calling
+    // |notify_layout_changed_cb_| with kResetRequired thus aborting the request
+    // for frames.
+    std::move(notify_layout_changed_cb_)
+        .Run(media::CroStatus::Codes::kResetRequired);
+    import_frame_cb_.Reset();
+  }
+}
+
+void GpuArcVideoFramePool::OnDecoderResetDone() {
+  DVLOGF(4);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  if (has_error_) {
+    return;
+  }
+
+  decoder_is_resetting_ = false;
 }
 
 void GpuArcVideoFramePool::RequestFrames(
@@ -215,39 +303,143 @@ void GpuArcVideoFramePool::RequestFrames(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!notify_layout_changed_cb_);
 
-  coded_size_ = coded_size;
+  // Notify the GpuArcVideoDecoder that we're no longer tracking frames
+  // previously added to the pool.
+  release_client_video_frames_cb_.Run();
+
+  if (has_error_ || !pool_client_version_) {
+    std::move(notify_layout_changed_cb)
+        .Run(media::CroStatus::Codes::kFailedToGetFrameLayout);
+    return;
+  }
 
   notify_layout_changed_cb_ = std::move(notify_layout_changed_cb);
   import_frame_cb_ = std::move(import_frame_cb);
 
-  // Send a request for new video frames to our mojo client.
-  media::VideoPixelFormat format = fourcc.ToVideoPixelFormat();
-  pool_client_->RequestVideoFrames(format, coded_size, visible_rect,
-                                   max_num_frames);
+  if (decoder_is_resetting_) {
+    // If we're here, it means that due to unfortunate timing, a Reset() request
+    // was received before this RequestFrames(). The VdaVideoFramePool is
+    // blocked waiting on a call to |notify_layout_changed_cb_|. Therefore, we
+    // call it here with kResetRequired thus aborting the request for frames.
+    std::move(notify_layout_changed_cb_)
+        .Run(media::CroStatus::Codes::kResetRequired);
+    import_frame_cb_.Reset();
+    return;
+  }
 
-  // Let the owner of the video frame pool know new frames were requested.
-  request_frames_cb_.Run();
+  pending_frame_requests_.push(
+      base::BindOnce(&GpuArcVideoFramePool::HandleRequestFrames, weak_this_,
+                     fourcc, coded_size, visible_rect, max_num_frames));
+  CallPendingRequestFrames();
 }
 
-absl::optional<int32_t> GpuArcVideoFramePool::GetVideoFrameId(
-    const media::VideoFrame* video_frame) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  auto it = buffer_id_to_video_frame_id_.find(
-      video_frame->GetGpuMemoryBuffer()->GetId());
-  return it != buffer_id_to_video_frame_id_.end()
-             ? absl::optional<int32_t>(it->second)
-             : absl::nullopt;
-}
-
-void GpuArcVideoFramePool::OnFrameReleased(
-    scoped_refptr<media::VideoFrame> origin_frame) {
+void GpuArcVideoFramePool::HandleRequestFrames(const media::Fourcc& fourcc,
+                                               const gfx::Size& coded_size,
+                                               const gfx::Rect& visible_rect,
+                                               size_t max_num_frames) {
   DVLOGF(4);
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  auto it = buffer_id_to_video_frame_id_.find(
-      origin_frame->GetGpuMemoryBuffer()->GetId());
-  DCHECK(it != buffer_id_to_video_frame_id_.end());
-  buffer_id_to_video_frame_id_.erase(it);
+  // Pending calls to HandleRequestFrames() are cleared when an error is
+  // detected (see logic in Stop()) and new ones are not scheduled after that
+  // (see logic in RequestFrames()).
+  CHECK(!has_error_);
+
+  // Calls to HandleRequestFrames() are scheduled only if the client version is
+  // known (see the logic in RequestFrames()). If the |pool_client_version_|
+  // becomes nullopt (see Stop()), pending calls are dropped.
+  CHECK(pool_client_version_);
+
+  // HandleRequestFrames() should only be called if we're not waiting for an ACK
+  // for a previous request for frames.
+  CHECK_GE(pool_client_version_.value(), kMinVersionForRequestFramesAck);
+  CHECK(!awaiting_request_frames_ack_);
+  awaiting_request_frames_ack_ = true;
+
+  coded_size_ = coded_size;
+
+  pool_client_->RequestVideoFrames(
+      /*format=*/fourcc.ToVideoPixelFormat(), coded_size, visible_rect,
+      max_num_frames,
+      base::BindOnce(&GpuArcVideoFramePool::OnRequestVideoFramesDone,
+                     weak_this_));
+}
+
+void GpuArcVideoFramePool::CallPendingRequestFrames() {
+  DVLOGF(4);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  CHECK(!has_error_);
+
+  if (awaiting_request_frames_ack_ || pending_frame_requests_.empty()) {
+    // Either we're still waiting for an ACK for a previous call to
+    // |pool_client_|->RequestVideoFrames() or there are no more RequestFrames()
+    // to be submitted to the remote end.
+    return;
+  }
+
+  std::move(pending_frame_requests_.front()).Run();
+  pending_frame_requests_.pop();
+}
+
+void GpuArcVideoFramePool::OnRequestVideoFramesDone() {
+  DVLOGF(4);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  if (has_error_) {
+    return;
+  }
+
+  CHECK(pool_client_version_.has_value());
+  CHECK_GE(pool_client_version_.value(), kMinVersionForRequestFramesAck);
+
+  CHECK(awaiting_request_frames_ack_);
+  awaiting_request_frames_ack_ = false;
+
+  // Continue any queued requests for video frames that were made while waiting
+  // for the current request for video frames to complete.
+  CallPendingRequestFrames();
+}
+
+media::VideoFrame::StorageType GpuArcVideoFramePool::GetFrameStorageType()
+    const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  // This is validated at runtime to be in sync with the frame storage type.
+  return media::VideoFrame::STORAGE_DMABUFS;
+}
+
+std::optional<int32_t> GpuArcVideoFramePool::GetVideoFrameId(
+    const media::VideoFrame* video_frame) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  CHECK(video_frame);
+
+  if (has_error_) {
+    return std::nullopt;
+  }
+
+  CHECK(video_frame->metadata().tracking_token.has_value());
+  CHECK(!video_frame->metadata().tracking_token->is_empty());
+
+  auto it = frame_token_to_video_frame_id_.find(
+      *video_frame->metadata().tracking_token);
+  return it != frame_token_to_video_frame_id_.end()
+             ? std::optional<int32_t>(it->second)
+             : std::nullopt;
+}
+
+void GpuArcVideoFramePool::OnFrameReleased(
+    scoped_refptr<media::FrameResource> origin_frame) {
+  DVLOGF(4);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  if (has_error_) {
+    return;
+  }
+
+  auto it = frame_token_to_video_frame_id_.find(origin_frame->tracking_token());
+  DCHECK(it != frame_token_to_video_frame_id_.end());
+  frame_token_to_video_frame_id_.erase(it);
+
+  frame_tracking_token_helper_.ClearToken(origin_frame->tracking_token());
 }
 
 gfx::GpuMemoryBufferHandle GpuArcVideoFramePool::CreateGpuMemoryHandle(
@@ -255,10 +447,15 @@ gfx::GpuMemoryBufferHandle GpuArcVideoFramePool::CreateGpuMemoryHandle(
     const std::vector<VideoFramePlane>& planes,
     media::VideoPixelFormat pixel_format,
     uint64_t modifier) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  CHECK(!has_error_);
+
   // Check whether we need to use protected buffers.
   if (!secure_mode_.has_value()) {
+    base::ScopedFD dup_fd(HANDLE_EINTR(dup(fd.get())));
     secure_mode_ = protected_buffer_manager_ &&
-                   IsBufferSecure(protected_buffer_manager_.get(), fd);
+                   protected_buffer_manager_->IsProtectedNativePixmapHandle(
+                       std::move(dup_fd));
   }
 
   gfx::GpuMemoryBufferHandle gmb_handle;
@@ -304,29 +501,50 @@ gfx::GpuMemoryBufferHandle GpuArcVideoFramePool::CreateGpuMemoryHandle(
   return gmb_handle;
 }
 
-scoped_refptr<media::VideoFrame> GpuArcVideoFramePool::CreateVideoFrame(
+scoped_refptr<media::FrameResource> GpuArcVideoFramePool::CreateFrame(
     gfx::GpuMemoryBufferHandle gmb_handle,
-    media::VideoPixelFormat pixel_format) const {
+    media::VideoPixelFormat pixel_format) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  CHECK(!has_error_);
+
   auto buffer_format = media::VideoPixelFormatToGfxBufferFormat(pixel_format);
   CHECK(buffer_format);
-  // Usage is SCANOUT_VDA_WRITE because we are just wrapping the dmabuf in a
-  // GpuMemoryBuffer. This buffer is just for decoding purposes, so having
-  // the dmabufs mmapped is not necessary.
-  std::unique_ptr<gfx::GpuMemoryBuffer> gpu_memory_buffer =
-      gpu::GpuMemoryBufferSupport().CreateGpuMemoryBufferImplFromHandle(
-          std::move(gmb_handle), coded_size_, *buffer_format,
-          gfx::BufferUsage::SCANOUT_VDA_WRITE, base::NullCallback());
-  if (!gpu_memory_buffer) {
-    VLOGF(1) << "Failed to create GpuMemoryBuffer. format: "
-             << gfx::BufferFormatToString(*buffer_format)
-             << ", coded_size: " << coded_size_.ToString();
-    return nullptr;
+  // Usage is SCANOUT_CPU_READ_WRITE because we may need to map the buffer in
+  // order to use the LibYUVImageProcessorBackend.
+  scoped_refptr<media::FrameResource> frame =
+      media::NativePixmapFrameResource::Create(
+          gfx::Rect(coded_size_), coded_size_, base::TimeDelta(),
+          gfx::BufferUsage::SCANOUT_CPU_READ_WRITE,
+          base::MakeRefCounted<gfx::NativePixmapDmaBuf>(
+              coded_size_, *buffer_format,
+              std::move(gmb_handle.native_pixmap_handle)));
+
+  // Ensures that the tracking token is unique for frames in the frame pool.
+  frame_tracking_token_helper_.SetUniqueTrackingToken(frame->metadata());
+
+  return frame;
+}
+
+void GpuArcVideoFramePool::Stop() {
+  VLOGF(2);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  if (has_error_) {
+    return;
   }
 
-  const gpu::MailboxHolder mailbox_holder[media::VideoFrame::kMaxPlanes] = {};
-  return media::VideoFrame::WrapExternalGpuMemoryBuffer(
-      gfx::Rect(coded_size_), coded_size_, std::move(gpu_memory_buffer),
-      mailbox_holder, base::NullCallback(), base::TimeDelta());
+  has_error_ = true;
+
+  weak_this_factory_.InvalidateWeakPtrs();
+
+  pool_client_version_.reset();
+
+  pending_frame_requests_ = {};
+
+  if (notify_layout_changed_cb_) {
+    std::move(notify_layout_changed_cb_)
+        .Run(media::CroStatus::Codes::kFailedToGetFrameLayout);
+  }
 }
 
 }  // namespace arc

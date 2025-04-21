@@ -1,18 +1,17 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/policy/core/common/cloud/resource_cache.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_simple_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -56,8 +55,9 @@ class ResourceCacheTest : public testing::Test {
 };
 
 TEST_F(ResourceCacheTest, StoreAndLoad) {
-  ResourceCache cache(temp_dir_.GetPath(), base::ThreadTaskRunnerHandle::Get(),
-                      /* max_cache_size */ absl::nullopt);
+  ResourceCache cache(temp_dir_.GetPath(),
+                      base::SingleThreadTaskRunner::GetCurrentDefault(),
+                      /* max_cache_size */ std::nullopt);
 
   // No data initially.
   std::string data;
@@ -145,8 +145,9 @@ TEST_F(ResourceCacheTest, StoreAndLoad) {
 }
 
 TEST_F(ResourceCacheTest, FilterSubkeys) {
-  ResourceCache cache(temp_dir_.GetPath(), base::ThreadTaskRunnerHandle::Get(),
-                      /* max_cache_size */ absl::nullopt);
+  ResourceCache cache(temp_dir_.GetPath(),
+                      base::SingleThreadTaskRunner::GetCurrentDefault(),
+                      /* max_cache_size */ std::nullopt);
 
   // Store some data.
   EXPECT_FALSE(cache.Store(kKey1, kSubA, kData0).empty());
@@ -182,7 +183,8 @@ TEST_F(ResourceCacheTest, FilterSubkeys) {
 }
 
 TEST_F(ResourceCacheTest, StoreWithEnabledCacheLimit) {
-  ResourceCache cache(temp_dir_.GetPath(), base::ThreadTaskRunnerHandle::Get(),
+  ResourceCache cache(temp_dir_.GetPath(),
+                      base::SingleThreadTaskRunner::GetCurrentDefault(),
                       kMaxCacheSize);
   task_environment_.RunUntilIdle();
 
@@ -227,7 +229,8 @@ TEST_F(ResourceCacheTest, StoreInDirectoryWithCycleSymlinks) {
   base::FilePath symlink_to_parent = inner_dir.AppendASCII("symlink");
   ASSERT_TRUE(base::CreateSymbolicLink(temp_dir_.GetPath(), symlink_to_parent));
 
-  ResourceCache cache(temp_dir_.GetPath(), base::ThreadTaskRunnerHandle::Get(),
+  ResourceCache cache(temp_dir_.GetPath(),
+                      base::SingleThreadTaskRunner::GetCurrentDefault(),
                       kMaxCacheSize);
   task_environment_.RunUntilIdle();
 
@@ -242,7 +245,8 @@ TEST_F(ResourceCacheTest, StoreInDirectoryWithSymlinkToRoot) {
   base::FilePath symlink_to_root = temp_dir_.GetPath().AppendASCII("symlink");
   ASSERT_TRUE(base::CreateSymbolicLink(root_path, symlink_to_root));
 
-  ResourceCache cache(temp_dir_.GetPath(), base::ThreadTaskRunnerHandle::Get(),
+  ResourceCache cache(temp_dir_.GetPath(),
+                      base::SingleThreadTaskRunner::GetCurrentDefault(),
                       kMaxCacheSize);
   task_environment_.RunUntilIdle();
 

@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright 2021 The Chromium Authors. All rights reserved.
-     Use of this source code is governed by a BSD-style license that can be
-     found in the LICENSE file. -->
+<!--
+Copyright 2021 The Chromium Authors
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
+-->
 
 <resources>
     <style name="QuickActionSearchWidgetXSmallButton">
@@ -33,5 +35,13 @@
 
     <style name="TextAppearance.QuickActionSearchWidgetXSmallHintText" parent="TextAppearance.SearchBoxText.Widget">
         <item name="android:textSize">@dimen/quick_action_search_widget_xsmall_search_bar_text_size</item>
+    </style>
+
+    <style name="QuickActionSearchWidget.SmallLensButton" parent="QuickActionSearchWidgetSmallButton">
+      <item name="android:visibility">visible</item>
+    </style>
+
+    <style name="QuickActionSearchWidget.SmallDinoButton" parent="QuickActionSearchWidgetSmallButton">
+      <item name="android:visibility">visible</item>
     </style>
 </resources>

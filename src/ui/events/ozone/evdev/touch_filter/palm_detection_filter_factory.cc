@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,12 +14,10 @@
 #include "base/strings/string_split.h"
 #include "base/system/sys_info.h"
 #include "base/time/time.h"
-#include "build/chromeos_buildflags.h"
 #include "ui/events/ozone/evdev/event_device_info.h"
 #include "ui/events/ozone/evdev/touch_filter/heuristic_stylus_palm_detection_filter.h"
 #include "ui/events/ozone/evdev/touch_filter/neural_stylus_palm_detection_filter.h"
 #include "ui/events/ozone/evdev/touch_filter/neural_stylus_palm_detection_filter_model.h"
-#include "ui/events/ozone/evdev/touch_filter/neural_stylus_palm_report_filter.h"
 #include "ui/events/ozone/evdev/touch_filter/open_palm_detection_filter.h"
 #include "ui/events/ozone/evdev/touch_filter/palm_detection_filter.h"
 #include "ui/events/ozone/evdev/touch_filter/palm_model/onedevice_train_palm_detection_filter_model.h"
@@ -51,19 +49,19 @@ std::string FetchNeuralPalmRadiusPolynomial(const EventDeviceInfo& devinfo,
   }
 
   // look at the command line.
-  absl::optional<base::Value> ozone_switch_value = base::JSONReader::Read(
+  std::optional<base::Value> ozone_switch_value = base::JSONReader::Read(
       base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
           kOzoneNNPalmSwitchName));
-  if (ozone_switch_value != absl::nullopt && ozone_switch_value->is_dict()) {
-    std::string* switch_string_value =
-        ozone_switch_value->FindStringKey(kOzoneNNPalmRadiusPolynomialProperty);
+  if (ozone_switch_value.has_value() && ozone_switch_value->is_dict()) {
+    std::string* switch_string_value = ozone_switch_value->GetDict().FindString(
+        kOzoneNNPalmRadiusPolynomialProperty);
     if (switch_string_value != nullptr) {
       return *switch_string_value;
     }
   }
 
   // TODO(robsc): Remove this when comfortable.
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   // We should really only be running in chromeos anyway; We do a check here
   // temporarily for hatch and reef.  These numbers should live in config on
   // chromeos side but for now during experiment are hard-coded here.
@@ -92,12 +90,12 @@ std::string FetchNeuralPalmModelVersion(const EventDeviceInfo& devinfo,
   }
 
   // look at the command line.
-  absl::optional<base::Value> ozone_switch_value = base::JSONReader::Read(
+  std::optional<base::Value> ozone_switch_value = base::JSONReader::Read(
       base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
           kOzoneNNPalmSwitchName));
-  if (ozone_switch_value != absl::nullopt && ozone_switch_value->is_dict()) {
-    std::string* switch_string_value =
-        ozone_switch_value->FindStringKey(kOzoneNNPalmModelVersionProperty);
+  if (ozone_switch_value.has_value() && ozone_switch_value->is_dict()) {
+    std::string* switch_string_value = ozone_switch_value->GetDict().FindString(
+        kOzoneNNPalmModelVersionProperty);
     if (switch_string_value != nullptr) {
       return *switch_string_value;
     }
@@ -141,13 +139,7 @@ std::unique_ptr<PalmDetectionFilter> CreatePalmDetectionFilter(
         shared_palm_state, stroke_count, hold_time, cancel_time);
   }
 
-  if (base::FeatureList::IsEnabled(kEnableNeuralStylusReportFilter) &&
-      NeuralStylusReportFilter::CompatibleWithNeuralStylusReportFilter(
-          devinfo)) {
-    return std::make_unique<NeuralStylusReportFilter>(shared_palm_state);
-  } else {
-    return std::make_unique<OpenPalmDetectionFilter>(shared_palm_state);
-  }
+  return std::make_unique<OpenPalmDetectionFilter>(shared_palm_state);
 }
 
 }  // namespace ui

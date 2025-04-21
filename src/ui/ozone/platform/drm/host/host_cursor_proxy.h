@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,7 +35,7 @@ class HostCursorProxy : public DrmCursorProxy {
   // DrmCursorProxy.
   void CursorSet(gfx::AcceleratedWidget window,
                  const std::vector<SkBitmap>& bitmaps,
-                 const gfx::Point& point,
+                 const std::optional<gfx::Point>& point,
                  base::TimeDelta frame_delay) override;
   void Move(gfx::AcceleratedWidget window, const gfx::Point& point) override;
   void InitializeOnEvdevIfNecessary() override;

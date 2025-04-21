@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <memory>
 #include <string>
 
-#include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/policy/login/signin_profile_extensions_policy_test_base.h"
-#include "components/version_info/version_info.h"
+#include "components/version_info/channel.h"
+#include "extensions/common/extension_id.h"
 
 class ExtensionTestMessageListener;
 
@@ -21,8 +21,8 @@ class ResultCatcher;
 namespace chromeos {
 
 // This browser test uses a test extension to test certain API calls on the
-// login screen. The extension is whitelisted to run as a force-installed "login
-// screen extension" and is also whitelisted for the following APIs:
+// login screen. The extension is allowlisted to run as a force-installed "login
+// screen extension" and is also allowlisted for the following APIs:
 // * loginScreenUi
 // * storage
 // * login
@@ -50,12 +50,12 @@ class LoginScreenApitestBase
   void SetUpLoginScreenExtensionAndRunTest(const std::string& test_name,
                                            bool assert_test_succeed);
 
-  std::string extension_id() { return extension_id_; }
+  extensions::ExtensionId extension_id() { return extension_id_; }
 
   std::string listener_message() { return listener_message_; }
 
  protected:
-  const std::string extension_id_;
+  const extensions::ExtensionId extension_id_;
   const std::string extension_update_manifest_path_;
   // The message |listener_| is listening for.
   const std::string listener_message_;

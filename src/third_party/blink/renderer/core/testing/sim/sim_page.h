@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 namespace blink {
 
 class Page;
+class VisualViewport;
 
 class SimPage final {
  public:
@@ -24,6 +25,8 @@ class SimPage final {
 
   void SetActive(bool);
   bool IsActive() const;
+
+  const VisualViewport& GetVisualViewport() const;
 
  private:
   Persistent<Page> page_;

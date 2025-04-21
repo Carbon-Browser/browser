@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/sequenced_task_runner.h"
@@ -100,10 +100,9 @@ plugin_vm::PluginVmInstaller::FailureReason ConvertToFailureReason(
     case google_apis::NO_CONNECTION:
       return FailureReason::DOWNLOAD_FAILED_NETWORK;
     default:
-      NOTREACHED();
       // This is only used to avoid compiler warnings, it is
       // not actually reachable.
-      return FailureReason::DOWNLOAD_FAILED_UNKNOWN;
+      NOTREACHED();
   }
 }
 }  // namespace
@@ -118,8 +117,7 @@ PluginVmDriveImageDownloadService::PluginVmDriveImageDownloadService(
     PluginVmInstaller* plugin_vm_installer,
     Profile* profile)
     : plugin_vm_installer_(plugin_vm_installer),
-      secure_hash_service_(
-          crypto::SecureHash::Create(crypto::SecureHash::SHA256)) {
+      hasher_(crypto::SecureHash::Create(crypto::SecureHash::SHA256)) {
   signin::IdentityManager* identity_manager =
       IdentityManagerFactory::GetForProfile(profile);
 
@@ -187,7 +185,7 @@ void PluginVmDriveImageDownloadService::CancelDownload() {
 }
 
 void PluginVmDriveImageDownloadService::ResetState() {
-  secure_hash_service_ = crypto::SecureHash::Create(crypto::SecureHash::SHA256);
+  hasher_ = crypto::SecureHash::Create(crypto::SecureHash::SHA256);
   total_bytes_downloaded_ = 0;
 }
 
@@ -225,9 +223,8 @@ void PluginVmDriveImageDownloadService::DownloadActionCallback(
   completion_info.path = download_file_path_;
   completion_info.bytes_downloaded = total_bytes_downloaded_;
   std::array<uint8_t, 32> sha256_hash;
-  secure_hash_service_->Finish(sha256_hash.data(), sha256_hash.size());
-  completion_info.hash256 =
-      base::HexEncode(sha256_hash.data(), sha256_hash.size());
+  hasher_->Finish(sha256_hash);
+  completion_info.hash256 = base::HexEncode(sha256_hash);
   plugin_vm_installer_->OnDownloadCompleted(completion_info);
 }
 
@@ -244,7 +241,7 @@ void PluginVmDriveImageDownloadService::GetContentCallback(
   if (first_chunk)
     ResetState();
 
-  secure_hash_service_->Update(content->c_str(), content->length());
+  hasher_->Update(base::as_byte_span(*content));
   total_bytes_downloaded_ += content->length();
 }
 

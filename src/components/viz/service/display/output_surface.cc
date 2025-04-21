@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/trace_event.h"
 #include "components/viz/service/display/output_surface_client.h"
 #include "components/viz/service/display/output_surface_frame.h"
@@ -21,12 +20,13 @@
 namespace viz {
 
 OutputSurface::Capabilities::Capabilities() = default;
+OutputSurface::Capabilities::~Capabilities() = default;
 OutputSurface::Capabilities::Capabilities(const Capabilities& capabilities) =
     default;
 OutputSurface::Capabilities& OutputSurface::Capabilities::operator=(
     const Capabilities& capabilities) = default;
 
-OutputSurface::OutputSurface(Type type) : type_(type) {}
+OutputSurface::OutputSurface() : type_(Type::kSkia) {}
 
 OutputSurface::OutputSurface(
     std::unique_ptr<SoftwareOutputDevice> software_device)
@@ -35,14 +35,6 @@ OutputSurface::OutputSurface(
 }
 
 OutputSurface::~OutputSurface() = default;
-
-void OutputSurface::SetDrawRectangle(const gfx::Rect& rect) {
-  NOTREACHED();
-}
-
-void OutputSurface::SetEnableDCLayers(bool enabled) {
-  NOTREACHED();
-}
 
 gfx::Rect OutputSurface::GetCurrentFramebufferDamage() const {
   return gfx::Rect();
@@ -73,26 +65,21 @@ void OutputSurface::SetNeedsSwapSizeNotifications(
   DCHECK(!needs_swap_size_notifications);
 }
 
+#if BUILDFLAG(IS_ANDROID)
 base::ScopedClosureRunner OutputSurface::GetCacheBackBufferCb() {
   return base::ScopedClosureRunner();
 }
-
-void OutputSurface::SetGpuVSyncCallback(GpuVSyncCallback callback) {
-  NOTREACHED();
-}
-
-void OutputSurface::SetGpuVSyncEnabled(bool enabled) {
-  NOTREACHED();
-}
-
-gpu::Mailbox OutputSurface::GetOverlayMailbox() const {
-  return gpu::Mailbox();
-}
+#endif
 
 void OutputSurface::InitDelegatedInkPointRendererReceiver(
     mojo::PendingReceiver<gfx::mojom::DelegatedInkPointRenderer>
         pending_receiver) {
   NOTREACHED();
+}
+
+void OutputSurface::ReadbackForTesting(
+    CopyOutputRequest::CopyOutputRequestCallback result_callback) {
+  NOTIMPLEMENTED();
 }
 
 }  // namespace viz

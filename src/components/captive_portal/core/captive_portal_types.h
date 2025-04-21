@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,17 @@ enum CaptivePortalResult {
   // a valid HTTP response with a 2xx other than 204, 3xx, or 511 status code.
   RESULT_BEHIND_CAPTIVE_PORTAL,
   RESULT_COUNT
+};
+
+// Captive portal type of a given WebContents.
+enum class CaptivePortalWindowType {
+  // This browser is not used for captive portal resolution, i.e. it's not a
+  // captive portal login window.
+  kNone,
+  // This browser is a popup for captive portal resolution.
+  kPopup,
+  // This browser is a tab for captive portal resolution.
+  kTab,
 };
 
 CAPTIVE_PORTAL_EXPORT extern std::string CaptivePortalResultToString(

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,8 @@ ClipboardReadWritePermissionContext::ClipboardReadWritePermissionContext(
           ContentSettingsType::CLIPBOARD_READ_WRITE,
           blink::mojom::PermissionsPolicyFeature::kClipboardRead) {}
 
-ClipboardReadWritePermissionContext::~ClipboardReadWritePermissionContext() {}
+ClipboardReadWritePermissionContext::~ClipboardReadWritePermissionContext() =
+    default;
 
 void ClipboardReadWritePermissionContext::UpdateTabContext(
     const PermissionRequestID& id,
@@ -26,7 +27,7 @@ void ClipboardReadWritePermissionContext::UpdateTabContext(
     bool allowed) {
   content_settings::PageSpecificContentSettings* content_settings =
       content_settings::PageSpecificContentSettings::GetForFrame(
-          id.render_process_id(), id.render_frame_id());
+          id.global_render_frame_host_id());
   if (!content_settings)
     return;
 
@@ -37,10 +38,6 @@ void ClipboardReadWritePermissionContext::UpdateTabContext(
     content_settings->OnContentBlocked(
         ContentSettingsType::CLIPBOARD_READ_WRITE);
   }
-}
-
-bool ClipboardReadWritePermissionContext::IsRestrictedToSecureOrigins() const {
-  return true;
 }
 
 }  // namespace permissions

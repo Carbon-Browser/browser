@@ -1,11 +1,10 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.content.browser;
 
-import android.support.test.InstrumentationRegistry;
-
+import androidx.test.InstrumentationRegistry;
 import androidx.test.filters.SmallTest;
 
 import org.junit.Assert;
@@ -38,8 +37,7 @@ public class ImportantFileWriterAndroidTest {
         Assert.assertTrue(testFile.exists());
         try {
             byte[] fileData = new byte[(int) testFile.length()];
-            DataInputStream dis =
-                    new DataInputStream(new FileInputStream(testFile));
+            DataInputStream dis = new DataInputStream(new FileInputStream(testFile));
             dis.readFully(fileData);
             dis.close();
             Assert.assertEquals("Data length wrong", data.length, fileData.length);
@@ -47,9 +45,8 @@ public class ImportantFileWriterAndroidTest {
                 Assert.assertEquals("Data byte wrong", data[i], fileData[i]);
             }
         } catch (IOException e) {
-            Assert.fail("Failed to read file");
+            throw new AssertionError("Failed to read file", e);
         }
-
     }
 
     @Test
@@ -58,7 +55,8 @@ public class ImportantFileWriterAndroidTest {
     public void testAtomicWrite() {
         // Try writing a file that can't be created.
         byte[] data1 = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-        Assert.assertFalse("Writing bad file succeeded",
+        Assert.assertFalse(
+                "Writing bad file succeeded",
                 ImportantFileWriterAndroid.writeFileAtomically("/junk/junk", data1));
         File dir = InstrumentationRegistry.getTargetContext().getFilesDir();
         File testFile = new File(dir, "ImportantFileTest");
@@ -69,13 +67,15 @@ public class ImportantFileWriterAndroidTest {
         }
 
         // Write a new file
-        Assert.assertTrue("Writing new file failed",
+        Assert.assertTrue(
+                "Writing new file failed",
                 ImportantFileWriterAndroid.writeFileAtomically(testFile.getAbsolutePath(), data1));
         checkFile(testFile, data1);
         byte[] data2 = {10, 20, 30, 40, 50, 60, 70, 80};
 
         // Overwrite an existing file
-        Assert.assertTrue("Writing exiting file failed",
+        Assert.assertTrue(
+                "Writing exiting file failed",
                 ImportantFileWriterAndroid.writeFileAtomically(testFile.getAbsolutePath(), data2));
         checkFile(testFile, data2);
 

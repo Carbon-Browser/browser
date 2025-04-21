@@ -33,12 +33,17 @@ class Subscription : public base::RefCountedThreadSafe<Subscription> {
   enum class InstallationState {
     // Subscription is installed and in use.
     Installed,
+    // Subscription comes from geolocation recommendation and may be
+    // auto-removed on recommendation change. It's installed and in use.
+    AutoInstalled,
     // A preloaded version of this subscription is in use, a full version is
     // likely being downloaded from the Internet.
     Preloaded,
     // Subscription is being downloaded and not yet in use. No preloaded
     // substitute is available.
     Installing,
+    // State is unknown when FilteringConfiguration is disabled.
+    Unknown,
   };
   // Returns the URL of the text version of the subscription, ex.
   // https://easylist-downloads.adblockplus.org/easylist.txt.

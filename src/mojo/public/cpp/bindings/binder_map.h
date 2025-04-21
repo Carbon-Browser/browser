@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,11 @@
 #include <map>
 #include <string>
 #include <type_traits>
+#include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/containers/contains.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "mojo/public/cpp/bindings/generic_pending_receiver.h"
@@ -69,6 +71,12 @@ class BinderMapWithContext {
         Traits::MakeGenericBinder(std::move(binder)), std::move(task_runner));
   }
 
+  // Returns true if this map contains a binder for `Interface` receivers.
+  template <typename Interface>
+  bool Contains() {
+    return base::Contains(binders_, Interface::Name_);
+  }
+
   // Attempts to bind the |receiver| using one of the registered binders in
   // this map. If a matching binder is found, ownership of the |receiver|'s
   // MessagePipe will be transferred and this will return |true|. If the binder
@@ -116,6 +124,12 @@ class BinderMapWithContext {
                                    mojo::GenericPendingReceiver&)>;
   void SetDefaultBinderDeprecated(DefaultBinder binder) {
     default_binder_ = std::move(binder);
+  }
+
+  void GetInterfacesForTesting(std::vector<std::string>& out) {
+    for (const auto& [key, _] : binders_) {
+      out.push_back(key);
+    }
   }
 
  private:

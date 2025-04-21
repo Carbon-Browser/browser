@@ -1,19 +1,16 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_WM_FLOAT_TABLET_MODE_FLOAT_WINDOW_RESIZER_H_
 #define ASH_WM_FLOAT_TABLET_MODE_FLOAT_WINDOW_RESIZER_H_
 
+#include "ash/wm/splitview/split_view_controller.h"
 #include "ash/wm/window_resizer.h"
 
 namespace ash {
 
-class WindowState;
-
 // WindowResizer implementation for floated windows in tablet mode.
-// TODO(crbug.com/1338715): This resizer adds the most basic dragging. It needs
-// to stick to edges and magnetize to corners on release.
 class TabletModeFloatWindowResizer : public WindowResizer {
  public:
   explicit TabletModeFloatWindowResizer(WindowState* window_state);

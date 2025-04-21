@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,7 @@
 #include "chrome/browser/extensions/extension_action_runner.h"
 #include "chrome/browser/extensions/extension_browsertest.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/common/url_constants.h"
@@ -45,7 +46,7 @@ const char* const kBackgroundPageName =
     extensions::kGeneratedBackgroundPageFilename;
 
 const StackTrace& GetStackTraceFromError(const ExtensionError* error) {
-  CHECK(error->type() == ExtensionError::RUNTIME_ERROR);
+  CHECK(error->type() == ExtensionError::Type::kRuntimeError);
   return (static_cast<const RuntimeError*>(error))->stack_trace();
 }
 
@@ -94,12 +95,8 @@ void CheckRuntimeError(const ExtensionError* error,
                        logging::LogSeverity level,
                        const GURL& context,
                        size_t expected_stack_size) {
-  CheckError(error,
-             ExtensionError::RUNTIME_ERROR,
-             id,
-             source,
-             from_incognito,
-             message);
+  CheckError(error, ExtensionError::Type::kRuntimeError, id, source,
+             from_incognito, message);
 
   const RuntimeError* runtime_error = static_cast<const RuntimeError*>(error);
   EXPECT_EQ(level, runtime_error->level());
@@ -112,9 +109,7 @@ void CheckManifestError(const ExtensionError* error,
                         const std::string& message,
                         const std::string& manifest_key,
                         const std::string& manifest_specific) {
-  CheckError(error,
-             ExtensionError::MANIFEST_ERROR,
-             id,
+  CheckError(error, ExtensionError::Type::kManifestError, id,
              // source is always the manifest for ManifestErrors.
              base::FilePath(kManifestFilename).AsUTF8Unsafe(),
              false,  // manifest errors are never from incognito.
@@ -122,7 +117,7 @@ void CheckManifestError(const ExtensionError* error,
 
   const ManifestError* manifest_error =
       static_cast<const ManifestError*>(error);
-  EXPECT_EQ(base::UTF8ToUTF16(manifest_key), manifest_error->manifest_key());
+  EXPECT_EQ(manifest_key, manifest_error->manifest_key());
   EXPECT_EQ(base::UTF8ToUTF16(manifest_specific),
             manifest_error->manifest_specific());
 }
@@ -141,7 +136,7 @@ void CheckDeprecatedManifestVersionError(const ExtensionError* error,
 class ErrorConsoleBrowserTest : public ExtensionBrowserTest {
  public:
   ErrorConsoleBrowserTest() : error_console_(nullptr) {}
-  ~ErrorConsoleBrowserTest() override {}
+  ~ErrorConsoleBrowserTest() override = default;
 
  protected:
   // A helper class in order to wait for the proper number of errors to be
@@ -167,8 +162,9 @@ class ErrorConsoleBrowserTest : public ExtensionBrowserTest {
     ErrorObserver& operator=(const ErrorObserver&) = delete;
 
     virtual ~ErrorObserver() {
-      if (error_console_)
+      if (error_console_) {
         error_console_->RemoveObserver(this);
+      }
     }
 
     // ErrorConsole::Observer implementation.
@@ -176,7 +172,7 @@ class ErrorConsoleBrowserTest : public ExtensionBrowserTest {
       ++errors_observed_;
       if (errors_observed_ >= errors_expected_) {
         if (waiting_)
-          base::RunLoop::QuitCurrentWhenIdleDeprecated();
+          loop_.QuitWhenIdle();
       }
     }
 
@@ -186,7 +182,7 @@ class ErrorConsoleBrowserTest : public ExtensionBrowserTest {
     void WaitForErrors() {
       if (errors_observed_ < errors_expected_) {
         waiting_ = true;
-        content::RunMessageLoop();
+        loop_.Run();
         waiting_ = false;
       }
     }
@@ -195,6 +191,8 @@ class ErrorConsoleBrowserTest : public ExtensionBrowserTest {
     size_t errors_observed_;
     size_t errors_expected_;
     bool waiting_;
+
+    base::RunLoop loop_;
 
     raw_ptr<ErrorConsole> error_console_;
   };
@@ -285,7 +283,7 @@ class ErrorConsoleBrowserTest : public ExtensionBrowserTest {
   GURL test_url_;
 
   // Weak reference to the ErrorConsole.
-  raw_ptr<ErrorConsole> error_console_;
+  raw_ptr<ErrorConsole, DanglingUntriaged> error_console_;
 };
 
 // Test to ensure that we are successfully reporting manifest errors as an
@@ -309,25 +307,23 @@ IN_PROC_BROWSER_TEST_F(ErrorConsoleBrowserTest, ReportManifestErrors) {
   const ExtensionError* unknown_key_error = nullptr;
   const char kFakeKey[] = "not_a_real_key";
   for (const auto& error : errors) {
-    ASSERT_EQ(ExtensionError::MANIFEST_ERROR, error->type());
-    std::string utf8_key = base::UTF16ToUTF8(
-        (static_cast<const ManifestError*>(error.get()))->manifest_key());
-    if (utf8_key == manifest_keys::kPermissions)
+    ASSERT_EQ(ExtensionError::Type::kManifestError, error->type());
+    const std::string& key =
+        (static_cast<const ManifestError*>(error.get()))->manifest_key();
+    if (key == manifest_keys::kPermissions) {
       permissions_error = error.get();
-    else if (utf8_key == kFakeKey)
+    } else if (key == kFakeKey) {
       unknown_key_error = error.get();
+    }
   }
   ASSERT_TRUE(permissions_error);
   ASSERT_TRUE(unknown_key_error);
 
   const char kFakePermission[] = "not_a_real_permission";
-  CheckManifestError(permissions_error,
-                     extension->id(),
+  CheckManifestError(permissions_error, extension->id(),
                      ErrorUtils::FormatErrorMessage(
-                         manifest_errors::kPermissionUnknownOrMalformed,
-                         kFakePermission),
-                     manifest_keys::kPermissions,
-                     kFakePermission);
+                         manifest_errors::kPermissionUnknown, kFakePermission),
+                     manifest_keys::kPermissions, kFakePermission);
 
   CheckManifestError(unknown_key_error,
                      extension->id(),
@@ -391,7 +387,7 @@ IN_PROC_BROWSER_TEST_F(ErrorConsoleBrowserTest,
                     script_url,  // The source should be the content script url.
                     false,       // Not from incognito.
                     "warned message",  // The error message is the log.
-                    logging::LOG_WARNING,
+                    logging::LOGGING_WARNING,
                     GetTestURL(),  // Content scripts run in the web page.
                     2u);
 
@@ -404,12 +400,13 @@ IN_PROC_BROWSER_TEST_F(ErrorConsoleBrowserTest,
   CheckStackFrame(stack_trace1[1], script_url, kAnonymousFunction, 14u, 1u);
 
   // The second error should be a runtime error.
-  CheckRuntimeError(errors[1].get(), extension->id(), script_url,
-                    false,  // not from incognito
-                    "Uncaught TypeError: "
-                    "Cannot set properties of undefined (setting 'foo')",
-                    logging::LOG_ERROR,  // JS errors are always ERROR level.
-                    GetTestURL(), 1u);
+  CheckRuntimeError(
+      errors[1].get(), extension->id(), script_url,
+      false,  // not from incognito
+      "Uncaught TypeError: "
+      "Cannot set properties of undefined (setting 'foo')",
+      logging::LOGGING_ERROR,  // JS errors are always ERROR level.
+      GetTestURL(), 1u);
 
   const StackTrace& stack_trace2 = GetStackTraceFromError(errors[1].get());
   CheckStackFrame(stack_trace2[0], script_url, kAnonymousFunction, 17u, 1u);
@@ -441,7 +438,7 @@ IN_PROC_BROWSER_TEST_F(ErrorConsoleBrowserTest, BrowserActionRuntimeError) {
 
   CheckRuntimeError(errors[1].get(), extension->id(), script_url,
                     false,  // not incognito
-                    message, logging::LOG_ERROR,
+                    message, logging::LOGGING_ERROR,
                     extension->GetResourceURL(kBackgroundPageName), 1u);
 
   const StackTrace& stack_trace = GetStackTraceFromError(errors[1].get());
@@ -473,7 +470,7 @@ IN_PROC_BROWSER_TEST_F(ErrorConsoleBrowserTest, BadAPIArgumentsRuntimeError) {
 
   CheckRuntimeError(errors[1].get(), extension->id(), source,
                     false,  // not incognito
-                    message, logging::LOG_ERROR,
+                    message, logging::LOGGING_ERROR,
                     extension->GetResourceURL(kBackgroundPageName), 1u);
 
   const StackTrace& stack_trace = GetStackTraceFromError(errors[1].get());
@@ -503,7 +500,7 @@ IN_PROC_BROWSER_TEST_F(ErrorConsoleBrowserTest, BadAPIPermissionsRuntimeError) {
                     false,  // not incognito
                     "Uncaught TypeError: Cannot read properties of undefined "
                     "(reading 'addUrl')",
-                    logging::LOG_ERROR,
+                    logging::LOGGING_ERROR,
                     extension->GetResourceURL(kBackgroundPageName), 1u);
 
   const StackTrace& stack_trace = GetStackTraceFromError(errors[1].get());
@@ -526,7 +523,7 @@ IN_PROC_BROWSER_TEST_F(ErrorConsoleBrowserTest, BadExtensionPage) {
 
 // Test that extension errors that go to chrome.runtime.lastError are caught
 // and reported by the ErrorConsole.
-// TODO(crbug.com/1181558) Flaky on many builders.
+// TODO(crbug.com/40750922) Flaky on many builders.
 IN_PROC_BROWSER_TEST_F(ErrorConsoleBrowserTest, DISABLED_CatchesLastError) {
   const Extension* extension = nullptr;
   LoadExtensionAndCheckErrors(
@@ -555,7 +552,7 @@ IN_PROC_BROWSER_TEST_F(ErrorConsoleBrowserTest, DISABLED_CatchesLastError) {
 
   CheckRuntimeError(errors[0].get(), extension->id(), source,
                     false,  // not incognito
-                    message, logging::LOG_ERROR,
+                    message, logging::LOGGING_ERROR,
                     extension->GetResourceURL(kBackgroundPageName), 1u);
 
   const StackTrace& stack_trace = GetStackTraceFromError(errors[0].get());

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/memory/ref_counted.h"
+#include "base/component_export.h"
 #include "base/task/sequenced_task_runner.h"
 #include "components/download/public/background_service/clients.h"
 #include "components/download/public/task/download_task_types.h"
@@ -25,6 +25,12 @@ struct SchedulingParams;
 
 using TaskFinishedCallback = base::OnceCallback<void(bool)>;
 
+#if BUILDFLAG(IS_IOS)
+// Identifier for background download service.
+inline constexpr char kBackgroundDownloadIdentifierPrefix[] =
+    "background_download";
+#endif  // BUILDFLAG(IS_IOS)
+
 // A service responsible for helping facilitate the scheduling and downloading
 // of file content from the web.  See |DownloadParams| for more details on the
 // types of scheduling that can be achieved and the required input parameters
@@ -34,7 +40,8 @@ using TaskFinishedCallback = base::OnceCallback<void(bool)>;
 // interface so this class knows who to contact when a download completes after
 // a process restart.
 // See the embedder specific factories for creation options.
-class BackgroundDownloadService : public KeyedService {
+class COMPONENT_EXPORT(COMPONENTS_DOWNLOAD_PUBLIC_BACKGROUND_SERVICE)
+    BackgroundDownloadService : public KeyedService {
  public:
   // The current status of the Service.
   enum class ServiceStatus {
@@ -97,6 +104,12 @@ class BackgroundDownloadService : public KeyedService {
   // Returns a Logger instance that is meant to be used by logging and debug UI
   // components in the larger system.
   virtual Logger* GetLogger() = 0;
+
+#if BUILDFLAG(IS_IOS)
+  // Called by the  system to handle events for background URL session. Once
+  // done, the passed function should be called.
+  virtual void HandleEventsForBackgroundURLSession(base::OnceClosure) {}
+#endif  // BUILDFLAG(IS_IOS)
 
   BackgroundDownloadService(const BackgroundDownloadService&) = delete;
   BackgroundDownloadService& operator=(const BackgroundDownloadService&) =

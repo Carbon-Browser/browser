@@ -1,19 +1,15 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/policy/core/common/management/platform_management_service.h"
 
-#include "base/feature_list.h"
 #include "base/memory/singleton.h"
-#include "base/metrics/histogram_functions.h"
 #include "base/no_destructor.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/threading/thread_restrictions.h"
 #include "build/build_config.h"
-#include "components/policy/core/common/features.h"
 #if BUILDFLAG(IS_MAC)
 #include "components/policy/core/common/management/platform_management_status_provider_mac.h"
 #elif BUILDFLAG(IS_WIN)
@@ -51,7 +47,13 @@ PlatformManagementService::PlatformManagementService()
 
 PlatformManagementService::~PlatformManagementService() = default;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+void PlatformManagementService::AddLocalBrowserManagementStatusProvider(
+    std::unique_ptr<ManagementStatusProvider> provider) {
+  AddManagementStatusProvider(std::move(provider));
+  has_local_browser_managment_status_provider_ = true;
+}
+
+#if BUILDFLAG(IS_CHROMEOS)
 void PlatformManagementService::AddChromeOsStatusProvider(
     std::unique_ptr<ManagementStatusProvider> provider) {
   AddManagementStatusProvider(std::move(provider));
@@ -60,9 +62,6 @@ void PlatformManagementService::AddChromeOsStatusProvider(
 #endif
 
 void PlatformManagementService::RefreshCache(CacheRefreshCallback callback) {
-  if (!base::FeatureList::IsEnabled(features::kEnableCachedManagementStatus))
-    return;
-
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE, {base::MayBlock()},
       // Unretained here since this class should never be destroyed.
@@ -94,9 +93,6 @@ void PlatformManagementService::UpdateCache(
   }
   ManagementAuthorityTrustworthiness next =
       GetManagementAuthorityTrustworthiness();
-  base::UmaHistogramBoolean(
-      "Enterprise.ManagementAuthorityTrustworthiness.Cache.ValueChange",
-      previous != next);
   if (callback)
     std::move(callback).Run(previous, next);
 }

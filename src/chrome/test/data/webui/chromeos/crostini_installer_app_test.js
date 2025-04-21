@@ -1,12 +1,13 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://crostini-installer/app.js';
 
 import {BrowserProxy} from 'chrome://crostini-installer/browser_proxy.js';
-import {TestBrowserProxy} from 'chrome://test/test_browser_proxy.js';
-import {flushTasks} from 'chrome://test/test_util.js';
+import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import {flushTasks} from 'chrome://webui-test/polymer_test_util.js';
+import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 
 const InstallerState = crostini.mojom.InstallerState;
 const InstallerError = crostini.mojom.InstallerError;
@@ -66,8 +67,7 @@ class FakePageHandler extends TestBrowserProxy {
 class FakeBrowserProxy {
   constructor() {
     this.handler = new FakePageHandler();
-    this.callbackRouter =
-        new chromeos.crostiniInstaller.mojom.PageCallbackRouter();
+    this.callbackRouter = new ash.crostiniInstaller.mojom.PageCallbackRouter();
     /** @type {appManagement.mojom.PageRemote} */
     this.page = this.callbackRouter.$.bindNewPipeAndPassRemote();
   }
@@ -79,7 +79,7 @@ suite('<crostini-installer-app>', () => {
 
   setup(async () => {
     fakeBrowserProxy = new FakeBrowserProxy();
-    BrowserProxy.instance_ = fakeBrowserProxy;
+    BrowserProxy.setInstance(fakeBrowserProxy);
 
     app = document.createElement('crostini-installer-app');
     PolymerTest.clearBody();
@@ -159,11 +159,9 @@ suite('<crostini-installer-app>', () => {
     await flushTasks();
     assertFalse(app.$$('#configure-message').hidden);
     await clickInstall();
-    await fakeBrowserProxy.handler.whenCalled('install').then(
-        ([diskSize, username]) => {
-          assertEquals(
-              username, loadTimeData.getString('defaultContainerUsername'));
-        });
+    const [diskSize, username] =
+        await fakeBrowserProxy.handler.whenCalled('install');
+    assertEquals(username, loadTimeData.getString('defaultContainerUsername'));
     assertFalse(app.$$('#installing-message').hidden);
     assertEquals(fakeBrowserProxy.handler.getCallCount('install'), 1);
     assertTrue(getInstallButton().hidden);
@@ -255,10 +253,9 @@ suite('<crostini-installer-app>', () => {
       assertTrue(isHidden(app.$$('#diskSlider')));
 
       await clickInstall();
-      await fakeBrowserProxy.handler.whenCalled('install').then(
-          ([diskSize, username]) => {
-            assertEquals(Number(diskSize), diskTicks[defaultIndex].value);
-          });
+      const [diskSize, username] =
+          await fakeBrowserProxy.handler.whenCalled('install');
+      assertEquals(Number(diskSize), diskTicks[defaultIndex].value);
       assertEquals(fakeBrowserProxy.handler.getCallCount('install'), 1);
     });
   });
@@ -281,10 +278,9 @@ suite('<crostini-installer-app>', () => {
     app.$$('#diskSlider').value = 1;
 
     await clickInstall();
-    await fakeBrowserProxy.handler.whenCalled('install').then(
-        ([diskSize, username]) => {
-          assertEquals(Number(diskSize), diskTicks[1].value);
-        });
+    const [diskSize, username] =
+        await fakeBrowserProxy.handler.whenCalled('install');
+    assertEquals(Number(diskSize), diskTicks[1].value);
     assertEquals(fakeBrowserProxy.handler.getCallCount('install'), 1);
   });
 
@@ -337,10 +333,9 @@ suite('<crostini-installer-app>', () => {
     await flushTasks();
     assertFalse(app.$.username.invalid);
     clickInstall();
-    await fakeBrowserProxy.handler.whenCalled('install').then(
-        ([diskSize, username]) => {
-          assertEquals(username, validUsername);
-        });
+    const [diskSize, username] =
+        await fakeBrowserProxy.handler.whenCalled('install');
+    assertEquals(username, validUsername);
     assertEquals(fakeBrowserProxy.handler.getCallCount('install'), 1);
   });
 

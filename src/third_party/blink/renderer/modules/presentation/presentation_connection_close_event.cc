@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@ namespace blink {
 
 PresentationConnectionCloseEvent::PresentationConnectionCloseEvent(
     const AtomicString& event_type,
-    const String& reason,
+    const V8PresentationConnectionCloseReason& reason,
     const String& message)
     : Event(event_type, Bubbles::kNo, Cancelable::kNo),
       reason_(reason),

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,12 +11,11 @@
 #include "chromeos/ash/components/local_search_service/oop_local_search_service_provider.h"
 #include "components/prefs/pref_service.h"
 
-namespace chromeos {
-namespace local_search_service {
+namespace ash::local_search_service {
 
 namespace {
 
-void OnBindIndexDone(const absl::optional<std::string>& error) {
+void OnBindIndexDone(const std::optional<std::string>& error) {
   base::UmaHistogramBoolean("LocalSearchService.BindIndexHasError",
                             error.has_value());
   if (error)
@@ -71,7 +70,6 @@ mojom::LocalSearchService* LocalSearchServiceProxy::GetService() {
     } else {
       LOG(FATAL) << "LocalSearchServiceProvider::Set() must be called "
                  << "before any instances of LocalSearchService can be used.";
-      return nullptr;
     }
     service_.reset_on_disconnect();
   }
@@ -79,5 +77,4 @@ mojom::LocalSearchService* LocalSearchServiceProxy::GetService() {
   return service_.get();
 }
 
-}  // namespace local_search_service
-}  // namespace chromeos
+}  // namespace ash::local_search_service

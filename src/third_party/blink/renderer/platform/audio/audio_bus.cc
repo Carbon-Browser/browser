@@ -26,6 +26,11 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "third_party/blink/renderer/platform/audio/audio_bus.h"
 
 #include <assert.h>
@@ -37,12 +42,10 @@
 #include "base/ranges/algorithm.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/web_audio_bus.h"
-#include "third_party/blink/renderer/platform/audio/audio_file_reader.h"
 #include "third_party/blink/renderer/platform/audio/denormal_disabler.h"
 #include "third_party/blink/renderer/platform/audio/sinc_resampler.h"
 #include "third_party/blink/renderer/platform/audio/vector_math.h"
 #include "third_party/blink/renderer/platform/wtf/shared_buffer.h"
-#include "ui/base/resource/resource_scale_factor.h"
 
 namespace blink {
 
@@ -177,7 +180,6 @@ AudioChannel* AudioBus::ChannelByType(unsigned channel_type) {
   }
 
   NOTREACHED();
-  return nullptr;
 }
 
 const AudioChannel* AudioBus::ChannelByType(unsigned type) const {
@@ -504,8 +506,6 @@ void AudioBus::SumFromByDownMixing(const AudioBus& source_bus) {
 void AudioBus::CopyWithGainFrom(const AudioBus& source_bus, float gain) {
   if (!TopologyMatches(source_bus)) {
     NOTREACHED();
-    Zero();
-    return;
   }
 
   if (source_bus.IsSilent()) {
@@ -564,12 +564,10 @@ void AudioBus::CopyWithSampleAccurateGainValuesFrom(
   // We *are* able to process from mono -> stereo
   if (source_bus.NumberOfChannels() != 1 && !TopologyMatches(source_bus)) {
     NOTREACHED();
-    return;
   }
 
   if (!gain_values || number_of_gain_values > source_bus.length()) {
     NOTREACHED();
-    return;
   }
 
   if (source_bus.length() == number_of_gain_values &&
@@ -694,7 +692,6 @@ scoped_refptr<AudioBus> AudioBus::CreateByMixingToMono(
   }
 
   NOTREACHED();
-  return nullptr;
 }
 
 bool AudioBus::IsSilent() const {
@@ -726,10 +723,10 @@ scoped_refptr<AudioBus> AudioBus::GetDataResource(int resource_id,
   // it's reasonable to (potentially) pay a one-time flat access cost.
   // If this becomes problematic, we'll have the refactor DecodeAudioFileData
   // to take WebData and use segmented access.
-  SharedBuffer::DeprecatedFlatData flat_data(
-      resource.operator scoped_refptr<SharedBuffer>());
+  SegmentedBuffer::DeprecatedFlatData flat_data(
+      resource.operator scoped_refptr<SharedBuffer>().get());
   scoped_refptr<AudioBus> audio_bus =
-      DecodeAudioFileData(flat_data.Data(), flat_data.size());
+      DecodeAudioFileData(flat_data.data(), flat_data.size());
 
   if (!audio_bus.get()) {
     return nullptr;
@@ -744,10 +741,11 @@ scoped_refptr<AudioBus> AudioBus::GetDataResource(int resource_id,
                                                 sample_rate);
 }
 
-scoped_refptr<AudioBus> CreateBusFromInMemoryAudioFile(const void* data,
-                                                       size_t data_size,
-                                                       bool mix_to_mono,
-                                                       float sample_rate) {
+scoped_refptr<AudioBus> AudioBus::CreateBusFromInMemoryAudioFile(
+    const void* data,
+    size_t data_size,
+    bool mix_to_mono,
+    float sample_rate) {
   scoped_refptr<AudioBus> audio_bus =
       DecodeAudioFileData(static_cast<const char*>(data), data_size);
   if (!audio_bus.get()) {

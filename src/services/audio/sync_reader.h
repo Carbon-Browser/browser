@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback.h"
 #include "base/memory/unsafe_shared_memory_region.h"
 #include "base/process/process.h"
 #include "base/sync_socket.h"
@@ -20,6 +20,7 @@
 #include "media/base/audio_bus.h"
 #include "media/base/audio_latency.h"
 #include "services/audio/output_controller.h"
+#include "services/audio/output_glitch_counter.h"
 
 namespace audio {
 
@@ -36,6 +37,12 @@ class SyncReader : public OutputController::SyncReader {
              const media::AudioParameters& params,
              base::CancelableSyncSocket* foreign_socket);
 
+  // Allows us to set a custom OutputGlitchCounter for testing.
+  SyncReader(base::RepeatingCallback<void(const std::string&)> log_callback,
+             const media::AudioParameters& params,
+             base::CancelableSyncSocket* foreign_socket,
+             std::unique_ptr<OutputGlitchCounter> glitch_counter);
+
   SyncReader(const SyncReader&) = delete;
   SyncReader& operator=(const SyncReader&) = delete;
 
@@ -51,27 +58,26 @@ class SyncReader : public OutputController::SyncReader {
 
   void set_max_wait_timeout_for_test(base::TimeDelta time) {
     maximum_wait_time_ = time;
-    maximum_wait_time_for_mixing_ = time;
   }
 
   // OutputController::SyncReader implementation.
   void RequestMoreData(base::TimeDelta delay,
                        base::TimeTicks delay_timestamp,
-                       int prior_frames_skipped) override;
-  void Read(media::AudioBus* dest, bool is_mixing) override;
+                       const media::AudioGlitchInfo& glitch_info) override;
+  bool Read(media::AudioBus* dest, bool is_mixing) override;
   void Close() override;
 
  private:
   // Blocks until data is ready for reading or a timeout expires.  Returns false
   // if an error or timeout occurs.
-  bool WaitUntilDataIsReady(bool is_mixing);
+  bool WaitUntilDataIsReady();
 
   const base::RepeatingCallback<void(const std::string&)> log_callback_;
 
   base::UnsafeSharedMemoryRegion shared_memory_region_;
   base::WritableSharedMemoryMapping shared_memory_mapping_;
 
-  const media::AudioLatency::LatencyType latency_tag_;
+  const media::AudioLatency::Type latency_tag_;
 
   // Mutes all incoming samples. This is used to prevent audible sound
   // during automated testing.
@@ -89,23 +95,26 @@ class SyncReader : public OutputController::SyncReader {
   // Shared memory wrapper used for transferring audio data to Read() callers.
   std::unique_ptr<media::AudioBus> output_bus_;
 
-  // Track the number of times the renderer missed its real-time deadline and
-  // report a UMA stat during destruction.
-  size_t renderer_callback_count_{0};
-  size_t renderer_missed_callback_count_{0};
-  size_t trailing_renderer_missed_callback_count_{0};
-  size_t mixing_renderer_callback_count_{0};
-  size_t mixing_renderer_missed_callback_count_{0};
-  size_t mixing_trailing_renderer_missed_callback_count_{0};
+  // Used for logging.
+  size_t renderer_missed_callback_count_ = 0;
 
   // The maximum amount of time to wait for data from the renderer.  Calculated
   // from the parameters given at construction.
   base::TimeDelta maximum_wait_time_;
-  base::TimeDelta maximum_wait_time_for_mixing_;
 
   // The index of the audio buffer we're expecting to be sent from the renderer;
   // used to block with timeout for audio data.
   uint32_t buffer_index_{0};
+
+  // Tracks the glitch info that we should send over IPC. This is only reset
+  // once we have confirmation that the info has been received by the other
+  // side.
+  media::AudioGlitchInfo pending_glitch_info_;
+
+  // The glitch information of a single read timeout glitch.
+  const media::AudioGlitchInfo read_timeout_glitch_;
+
+  std::unique_ptr<OutputGlitchCounter> glitch_counter_;
 };
 
 }  // namespace audio

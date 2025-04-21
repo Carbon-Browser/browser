@@ -1,18 +1,16 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/file_system_provider/queue.h"
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/notreached.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 
 Queue::Task::Task() : token(0) {
 }
@@ -23,16 +21,14 @@ Queue::Task::Task(size_t token, AbortableCallback callback)
 Queue::Task::Task(Task&& other) = default;
 Queue::Task& Queue::Task::operator=(Task&& other) = default;
 
-Queue::Task::~Task() {
-}
+Queue::Task::~Task() = default;
 
 Queue::Queue(size_t max_in_parallel)
     : max_in_parallel_(max_in_parallel), next_token_(1) {
   CHECK_LT(0u, max_in_parallel);
 }
 
-Queue::~Queue() {
-}
+Queue::~Queue() = default;
 
 size_t Queue::NewToken() {
   return next_token_++;
@@ -46,7 +42,7 @@ void Queue::Enqueue(size_t token, AbortableCallback callback) {
   }
 #endif
   pending_.push_back(Task(token, std::move(callback)));
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&Queue::MaybeRun, weak_ptr_factory_.GetWeakPtr()));
 }
@@ -55,7 +51,7 @@ void Queue::Complete(size_t token) {
   const auto it = executed_.find(token);
   DCHECK(it != executed_.end());
   executed_.erase(it);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&Queue::MaybeRun, weak_ptr_factory_.GetWeakPtr()));
 }
@@ -82,8 +78,7 @@ void Queue::MaybeRun() {
 
 void Queue::Abort(size_t token) {
   // Check if it's running. If so, then abort and expect a Complete() call soon.
-  const auto it = executed_.find(token);
-  if (it != executed_.end()) {
+  if (const auto it = executed_.find(token); it != executed_.end()) {
     Task& task = it->second;
     AbortCallback abort_callback = std::move(task.abort_callback);
     DCHECK(!abort_callback.is_null());
@@ -95,7 +90,7 @@ void Queue::Abort(size_t token) {
   for (auto it = pending_.begin(); it != pending_.end(); ++it) {
     if (token == it->token) {
       pending_.erase(it);
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE,
           base::BindOnce(&Queue::MaybeRun, weak_ptr_factory_.GetWeakPtr()));
       return;
@@ -106,5 +101,4 @@ void Queue::Abort(size_t token) {
   NOTREACHED();
 }
 
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider

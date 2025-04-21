@@ -60,8 +60,6 @@ playback.
 
 * test/ - Code and data for testing the media playback pipeline.
 
-* tools/ - Standalone media test tools.
-
 * video/ - Abstract hardware video decoder interfaces and tooling.
 
 
@@ -191,3 +189,16 @@ MediaLog messages should be concise and free of implementation details. Error
 messages should provide clues as to how to fix them, usually by precisely
 describing the circumstances that led to the error. Use properties, rather
 than messages, to record metadata and state changes.
+
+## Logging Format
+
+When adding logs, it's often helpful to log the function name, e.g.
+```
+DVLOG(?) << __func__;
+```
+
+When adding logs with values, prefer the following format for consistency and
+readability:
+```
+DVLOG(?) << __func__ << ": param1=" << param1 << ", param2=" << param2;
+```

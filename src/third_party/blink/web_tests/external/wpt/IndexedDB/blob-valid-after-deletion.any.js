@@ -20,7 +20,7 @@ indexeddb_test(
     store.put(value, key);
     value = null;
 
-    const trans = db.transaction('store');
+    const trans = db.transaction('store', 'readonly');
     store = trans.objectStore('store');
     const request = store.get(key);
 

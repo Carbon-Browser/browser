@@ -1,10 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_UI_DEVTOOLS_VIEWS_WINDOW_ELEMENT_H_
 #define COMPONENTS_UI_DEVTOOLS_VIEWS_WINDOW_ELEMENT_H_
 
+#include "base/memory/raw_ptr.h"
 #include "components/ui_devtools/views/ui_element_with_metadata.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_observer.h"
@@ -54,7 +55,7 @@ class WindowElement : public aura::WindowObserver,
   ui::Layer* GetLayer() const override;
 
  private:
-  aura::Window* window_;
+  raw_ptr<aura::Window> window_;
 };
 
 }  // namespace ui_devtools

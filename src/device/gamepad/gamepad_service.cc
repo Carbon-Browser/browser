@@ -1,17 +1,21 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "device/gamepad/gamepad_service.h"
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/singleton.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "device/gamepad/gamepad_consumer.h"
 #include "device/gamepad/gamepad_data_fetcher.h"
 #include "device/gamepad/gamepad_data_fetcher_manager.h"
@@ -162,15 +166,6 @@ void GamepadService::OnGamepadConnectionChange(bool connected,
     OnGamepadConnected(index, pad);
   } else {
     OnGamepadDisconnected(index, pad);
-  }
-}
-
-void GamepadService::OnGamepadChange(mojom::GamepadChangesPtr changes) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  for (auto& it : consumers_) {
-    if (it.did_observe_user_gesture && it.is_active)
-      it.consumer->OnGamepadChanged(*changes);
   }
 }
 

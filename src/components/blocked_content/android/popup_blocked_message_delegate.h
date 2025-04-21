@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "components/messages/android/message_enums.h"
 #include "components/messages/android/message_wrapper.h"
@@ -45,7 +45,7 @@ class PopupBlockedMessageDelegate
 
   raw_ptr<HostContentSettingsMap> map_ = nullptr;
 
-  // TODO(crbug.com/1179462): considering grouping the following members into a
+  // TODO(crbug.com/40749729): considering grouping the following members into a
   // struct because they all logically match the lifetime of a single Message.
   GURL url_;
   bool allow_settings_changes_ = false;

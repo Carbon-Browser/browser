@@ -1,9 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.content.browser.input;
 
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.when;
 
@@ -32,9 +33,7 @@ import org.chromium.ui.base.WindowAndroid;
 
 import java.lang.ref.WeakReference;
 
-/**
- * A robolectric test for {@link InputMethodManagerWrapperImpl} class.
- */
+/** A robolectric test for {@link InputMethodManagerWrapperImpl} class. */
 @RunWith(BaseRobolectricTestRunner.class)
 // Any VERSION_CODE >= O is fine.
 @Config(manifest = Config.NONE, sdk = Build.VERSION_CODES.O)
@@ -62,24 +61,15 @@ public class InputMethodManagerWrapperImplTest {
         }
     }
 
-    @Mock
-    private Context mContext;
-    @Mock
-    private Activity mActivity;
-    @Mock
-    private Window mWindow;
-    @Mock
-    private WindowAndroid mWindowAndroid;
-    @Mock
-    private InputMethodManagerWrapper.Delegate mDelegate;
-    @Mock
-    private View mView;
-    @Mock
-    private InputMethodManager mInputMethodManager;
-    @Mock
-    private WindowManager mContextWindowManager;
-    @Mock
-    private WindowManager mActivityWindowManager;
+    @Mock private Context mContext;
+    @Mock private Activity mActivity;
+    @Mock private Window mWindow;
+    @Mock private WindowAndroid mWindowAndroid;
+    @Mock private InputMethodManagerWrapper.Delegate mDelegate;
+    @Mock private View mView;
+    @Mock private InputMethodManager mInputMethodManager;
+    @Mock private WindowManager mContextWindowManager;
+    @Mock private WindowManager mActivityWindowManager;
 
     private int mContextDisplayId = -1; // uninitialized
     private int mActivityDisplayId = -1; // uninitialized
@@ -181,6 +171,7 @@ public class InputMethodManagerWrapperImplTest {
         setDisplayIds(0, 1); // context and activity have different display Ids
         when(mDelegate.hasInputConnection()).thenReturn(false);
         when(mInputMethodManager.isActive(mView)).thenReturn(true);
+        doReturn(true).when(mInputMethodManager).isAcceptingText();
 
         mImmw.showSoftInput(mView, 0, null);
 

@@ -1,13 +1,15 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_PROFILES_REPORTING_UTIL_H_
 #define CHROME_BROWSER_PROFILES_REPORTING_UTIL_H_
 
+#include <optional>
+
 #include "base/values.h"
+#include "build/chromeos_buildflags.h"
 #include "components/enterprise/common/proto/connectors.pb.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class Profile;
 
@@ -29,8 +31,16 @@ enterprise_connectors::ClientMetadata GetContextAsClientMetadata(
 // * user corresponding to a `profile` is managed.
 // Otherwise returns empty optional. More about DMToken:
 // go/dmserver-domain-model#dmtoken.
-absl::optional<std::string> GetUserDmToken(Profile* profile);
-absl::optional<std::string> GetUserClientId(Profile* profile);
+std::optional<std::string> GetUserDmToken(Profile* profile);
+std::optional<std::string> GetUserClientId(Profile* profile);
+
+#if BUILDFLAG(IS_CHROMEOS)
+// Returns the client id if the current session is a managed guest session. Must
+// not be called from other sessions.
+// Returns an empty optional if the device is managed by Active Directory or if
+// policies could not be retrieved from the policy store.
+std::optional<std::string> GetMGSUserClientId();
+#endif
 
 }  // namespace reporting
 

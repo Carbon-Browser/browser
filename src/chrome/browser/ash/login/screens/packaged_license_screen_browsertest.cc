@@ -1,11 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/screens/packaged_license_screen.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/metrics/histogram_base.h"
 #include "base/run_loop.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "chrome/browser/ash/login/screen_manager.h"
 #include "chrome/browser/ash/login/test/js_checker.h"
 #include "chrome/browser/ash/login/test/oobe_base_test.h"
@@ -14,7 +16,7 @@
 #include "chrome/browser/ash/policy/enrollment/enrollment_config.h"
 #include "chrome/browser/ash/policy/server_backed_state/server_backed_device_state.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/ui/webui/chromeos/login/packaged_license_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/packaged_license_screen_handler.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
@@ -27,7 +29,7 @@ using ::testing::ElementsAre;
 
 class PackagedLicenseScreenTest : public OobeBaseTest {
  public:
-  PackagedLicenseScreenTest() {}
+  PackagedLicenseScreenTest() = default;
   ~PackagedLicenseScreenTest() override = default;
 
   void SetUpOnMainThread() override {
@@ -41,11 +43,11 @@ class PackagedLicenseScreenTest : public OobeBaseTest {
   }
 
   void SetUpLicense(bool value) {
-    DictionaryPrefUpdate dict(local_state(), prefs::kServerBackedDeviceState);
+    ScopedDictPrefUpdate dict(local_state(), prefs::kServerBackedDeviceState);
     if (value) {
-      dict.Get()->SetBoolKey(policy::kDeviceStatePackagedLicense, true);
+      dict->Set(policy::kDeviceStatePackagedLicense, true);
     } else {
-      dict.Get()->RemoveKey(policy::kDeviceStatePackagedLicense);
+      dict->Remove(policy::kDeviceStatePackagedLicense);
     }
   }
 
@@ -105,7 +107,7 @@ IN_PROC_BROWSER_TEST_F(PackagedLicenseScreenTest, DontEnroll) {
   EXPECT_THAT(
       histogram_tester_.GetAllSamples("OOBE.StepShownStatus.Packaged-license"),
       ElementsAre(base::Bucket(
-          static_cast<int>(WizardController::ScreenShownStatus::kShown), 1)));
+          static_cast<int>(OobeMetricsHelper::ScreenShownStatus::kShown), 1)));
 }
 
 IN_PROC_BROWSER_TEST_F(PackagedLicenseScreenTest, Enroll) {
@@ -126,7 +128,7 @@ IN_PROC_BROWSER_TEST_F(PackagedLicenseScreenTest, Enroll) {
   EXPECT_THAT(
       histogram_tester_.GetAllSamples("OOBE.StepShownStatus.Packaged-license"),
       ElementsAre(base::Bucket(
-          static_cast<int>(WizardController::ScreenShownStatus::kShown), 1)));
+          static_cast<int>(OobeMetricsHelper::ScreenShownStatus::kShown), 1)));
 }
 
 IN_PROC_BROWSER_TEST_F(PackagedLicenseScreenTest, NoLicense) {
@@ -144,7 +146,8 @@ IN_PROC_BROWSER_TEST_F(PackagedLicenseScreenTest, NoLicense) {
   EXPECT_THAT(
       histogram_tester_.GetAllSamples("OOBE.StepShownStatus.Packaged-license"),
       ElementsAre(base::Bucket(
-          static_cast<int>(WizardController::ScreenShownStatus::kSkipped), 1)));
+          static_cast<int>(OobeMetricsHelper::ScreenShownStatus::kSkipped),
+          1)));
 }
 
 }  // namespace ash

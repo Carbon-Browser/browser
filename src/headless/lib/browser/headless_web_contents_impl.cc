@@ -1,33 +1,32 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "headless/lib/browser/headless_web_contents_impl.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/check_deref.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/observer_list.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/child_process_termination_info.h"
-#include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/render_frame_host.h"
-#include "content/public/browser/render_process_host.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/render_widget_host.h"
 #include "content/public/browser/render_widget_host_view.h"
@@ -37,17 +36,20 @@
 #include "content/public/common/bindings_policy.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/common/origin_util.h"
+#include "headless/lib/browser/directory_enumerator.h"
 #include "headless/lib/browser/headless_browser_context_impl.h"
 #include "headless/lib/browser/headless_browser_impl.h"
 #include "headless/lib/browser/headless_browser_main_parts.h"
-#include "headless/lib/browser/headless_devtools_agent_host_client.h"
-#include "headless/lib/browser/protocol/headless_handler.h"
+#include "headless/public/switches.h"
 #include "printing/buildflags/buildflags.h"
+#include "third_party/blink/public/common/peerconnection/webrtc_ip_handling_policy.h"
 #include "third_party/blink/public/common/renderer_preferences/renderer_preferences.h"
+#include "third_party/blink/public/mojom/window_features/window_features.mojom.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/ui_base_features.h"
 #include "ui/compositor/compositor.h"
+#include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/switches.h"
 
 #if BUILDFLAG(ENABLE_PRINTING)
@@ -55,6 +57,16 @@
 #endif
 
 namespace headless {
+
+namespace features {
+
+// Enables prerendering (Speculation Rules API) in the headless mode. This is
+// enabled by default but kept as a kill-switch.
+BASE_FEATURE(kPrerender2InHeadlessMode,
+             "Prerender2InHeadlessMode",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+}  // namespace features
 
 namespace {
 
@@ -83,11 +95,13 @@ HeadlessWebContentsImpl* HeadlessWebContentsImpl::From(
 
 // static
 HeadlessWebContentsImpl* HeadlessWebContentsImpl::From(
-    HeadlessBrowser* browser,
     content::WebContents* contents) {
-  return HeadlessWebContentsImpl::From(
-      browser->GetWebContentsForDevToolsAgentHostId(
-          content::DevToolsAgentHost::GetOrCreateFor(contents)->GetId()));
+  if (!contents) {
+    return nullptr;
+  }
+  auto& browser_context = CHECK_DEREF(
+      HeadlessBrowserContextImpl::From(contents->GetBrowserContext()));
+  return browser_context.GetHeadlessWebContents(contents);
 }
 
 class HeadlessWebContentsImpl::Delegate : public content::WebContentsDelegate {
@@ -109,19 +123,19 @@ class HeadlessWebContentsImpl::Delegate : public content::WebContentsDelegate {
   }
 
   void CloseContents(content::WebContents* source) override {
-    auto* const headless_contents =
-        HeadlessWebContentsImpl::From(browser(), source);
-    DCHECK(headless_contents);
-    headless_contents->Close();
+    auto& headless_contents =
+        CHECK_DEREF(HeadlessWebContentsImpl::From(source));
+    headless_contents.Close();
   }
 
-  void AddNewContents(content::WebContents* source,
-                      std::unique_ptr<content::WebContents> new_contents,
-                      const GURL& target_url,
-                      WindowOpenDisposition disposition,
-                      const gfx::Rect& initial_rect,
-                      bool user_gesture,
-                      bool* was_blocked) override {
+  content::WebContents* AddNewContents(
+      content::WebContents* source,
+      std::unique_ptr<content::WebContents> new_contents,
+      const GURL& target_url,
+      WindowOpenDisposition disposition,
+      const blink::mojom::WindowFeatures& window_features,
+      bool user_gesture,
+      bool* was_blocked) override {
     DCHECK(new_contents->GetBrowserContext() ==
            headless_web_contents_->browser_context());
 
@@ -132,15 +146,20 @@ class HeadlessWebContentsImpl::Delegate : public content::WebContentsDelegate {
     headless_web_contents_->browser_context()->RegisterWebContents(
         std::move(child_contents));
 
-    const gfx::Rect default_rect(
+    const gfx::Rect default_bounds(
         headless_web_contents_->browser()->options()->window_size);
-    const gfx::Rect rect = initial_rect.IsEmpty() ? default_rect : initial_rect;
-    raw_child_contents->SetBounds(rect);
+    const gfx::Rect bounds = window_features.bounds.IsEmpty()
+                                 ? default_bounds
+                                 : window_features.bounds;
+    raw_child_contents->SetBounds(bounds);
+    return nullptr;
   }
 
   content::WebContents* OpenURLFromTab(
       content::WebContents* source,
-      const content::OpenURLParams& params) override {
+      const content::OpenURLParams& params,
+      base::OnceCallback<void(content::NavigationHandle&)>
+          navigation_handle_callback) override {
     DCHECK_EQ(source, headless_web_contents_->web_contents());
     content::WebContents* target = nullptr;
     switch (params.disposition) {
@@ -155,7 +174,7 @@ class HeadlessWebContentsImpl::Delegate : public content::WebContentsDelegate {
         HeadlessWebContentsImpl* child_contents = HeadlessWebContentsImpl::From(
             headless_web_contents_->browser_context()
                 ->CreateWebContentsBuilder()
-                .SetWindowSize(source->GetContainerBounds().size())
+                .SetWindowBounds(source->GetContainerBounds())
                 .Build());
         target = child_contents->web_contents();
         break;
@@ -170,8 +189,17 @@ class HeadlessWebContentsImpl::Delegate : public content::WebContentsDelegate {
         return nullptr;
     }
 
-    target->GetController().LoadURLWithParams(
-        content::NavigationController::LoadURLParams(params));
+    content::NavigationController::LoadURLParams load_url_params(params);
+    load_url_params.force_new_browsing_instance =
+        headless_web_contents_->browser()
+            ->options()
+            ->force_new_browsing_instance;
+
+    base::WeakPtr<content::NavigationHandle> navigation =
+        target->GetController().LoadURLWithParams(load_url_params);
+    if (navigation_handle_callback && navigation) {
+      std::move(navigation_handle_callback).Run(*navigation);
+    }
     return target;
   }
 
@@ -186,26 +214,105 @@ class HeadlessWebContentsImpl::Delegate : public content::WebContentsDelegate {
         ->block_new_web_contents();
   }
 
-  void RequestToLockMouse(content::WebContents* web_contents,
+  void EnumerateDirectory(content::WebContents* web_contents,
+                          scoped_refptr<content::FileSelectListener> listener,
+                          const base::FilePath& path) override {
+    DirectoryEnumerator::Start(path, std::move(listener));
+  }
+
+  content::PictureInPictureResult EnterPictureInPicture(
+      content::WebContents* web_contents) override {
+    return content::PictureInPictureResult::kSuccess;
+  }
+
+  bool IsBackForwardCacheSupported(
+      content::WebContents& web_contents) override {
+    base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
+    return command_line->HasSwitch(switches::kEnableBackForwardCache);
+  }
+
+  content::PreloadingEligibility IsPrerender2Supported(
+      content::WebContents& web_contents,
+      content::PreloadingTriggerType trigger_type) override {
+    return base::FeatureList::IsEnabled(features::kPrerender2InHeadlessMode)
+               ? content::PreloadingEligibility::kEligible
+               : content::PreloadingEligibility::
+                     kPreloadingUnsupportedByWebContents;
+  }
+
+  void RequestPointerLock(content::WebContents* web_contents,
                           bool user_gesture,
                           bool last_unlocked_by_target) override {
-    web_contents->GotResponseToLockMouseRequest(
+    web_contents->GotResponseToPointerLockRequest(
         blink::mojom::PointerLockResult::kSuccess);
+  }
+
+  void EnterFullscreenModeForTab(
+      content::RenderFrameHost* requesting_frame,
+      const blink::mojom::FullscreenOptions& options) override {
+    SetFullscreenModeForTab(
+        content::WebContents::FromRenderFrameHost(requesting_frame),
+        /*fullscreen=*/true);
+  }
+
+  void ExitFullscreenModeForTab(content::WebContents* web_contents) override {
+    SetFullscreenModeForTab(web_contents, /*fullscreen=*/false);
+  }
+
+  bool IsFullscreenForTabOrPending(
+      const content::WebContents* web_contents) override {
+    return is_fullscreen_;
+  }
+
+  blink::mojom::DisplayMode GetDisplayMode(
+      const content::WebContents* web_contents) override {
+    return IsFullscreenForTabOrPending(web_contents)
+               ? blink::mojom::DisplayMode::kFullscreen
+               : blink::mojom::DisplayMode::kBrowser;
   }
 
  private:
   HeadlessBrowserImpl* browser() { return headless_web_contents_->browser(); }
 
+  void SetFullscreenModeForTab(content::WebContents* web_contents,
+                               bool fullscreen) {
+    if (is_fullscreen_ == fullscreen) {
+      return;
+    }
+
+    is_fullscreen_ = fullscreen;
+
+    content::RenderWidgetHost* rwh =
+        web_contents->GetPrimaryMainFrame()->GetRenderViewHost()->GetWidget();
+    CHECK(rwh);
+
+    if (content::RenderWidgetHostView* view = rwh->GetView()) {
+      if (fullscreen) {
+        before_fullscreen_bounds_ = view->GetViewBounds();
+        gfx::Rect bounds = rwh->GetScreenInfo().rect;
+        view->SetBounds(bounds);
+      } else {
+        CHECK(before_fullscreen_bounds_);
+        view->SetBounds(before_fullscreen_bounds_.value());
+        before_fullscreen_bounds_.reset();
+      }
+    }
+
+    rwh->SynchronizeVisualProperties();
+  }
+
   raw_ptr<HeadlessWebContentsImpl> headless_web_contents_;  // Not owned.
+
+  bool is_fullscreen_ = false;
+  std::optional<gfx::Rect> before_fullscreen_bounds_;
 };
 
 namespace {
 constexpr uint64_t kBeginFrameSourceId = viz::BeginFrameArgs::kManualSourceId;
 }
 
-class HeadlessWebContentsImpl::PendingFrame
-    : public base::RefCounted<HeadlessWebContentsImpl::PendingFrame>,
-      public base::SupportsWeakPtr<HeadlessWebContentsImpl::PendingFrame> {
+class HeadlessWebContentsImpl::PendingFrame final
+    : public base::RefCounted<HeadlessWebContentsImpl::PendingFrame> {
  public:
   PendingFrame(uint64_t sequence_number, FrameFinishedCallback callback)
       : sequence_number_(sequence_number), callback_(std::move(callback)) {}
@@ -230,6 +337,10 @@ class HeadlessWebContentsImpl::PendingFrame
     bitmap_ = std::make_unique<SkBitmap>(bitmap);
   }
 
+  base::WeakPtr<PendingFrame> AsWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
+
  private:
   friend class base::RefCounted<PendingFrame>;
 
@@ -242,19 +353,20 @@ class HeadlessWebContentsImpl::PendingFrame
   FrameFinishedCallback callback_;
   bool has_damage_ = false;
   std::unique_ptr<SkBitmap> bitmap_;
+  base::WeakPtrFactory<PendingFrame> weak_ptr_factory_{this};
 };
 
 // static
 std::unique_ptr<HeadlessWebContentsImpl> HeadlessWebContentsImpl::Create(
     HeadlessWebContents::Builder* builder) {
   content::WebContents::CreateParams create_params(builder->browser_context_);
-  auto headless_web_contents = base::WrapUnique(new HeadlessWebContentsImpl(
-      content::WebContents::Create(create_params), builder->browser_context_));
+  auto headless_web_contents = base::WrapUnique(
+      new HeadlessWebContentsImpl(content::WebContents::Create(create_params)));
 
   headless_web_contents->begin_frame_control_enabled_ =
       builder->enable_begin_frame_control_ ||
       headless_web_contents->browser()->options()->enable_begin_frame_control;
-  headless_web_contents->InitializeWindow(gfx::Rect(builder->window_size_));
+  headless_web_contents->InitializeWindow(builder->window_bounds_);
   if (!headless_web_contents->OpenURL(builder->initial_url_))
     return nullptr;
   return headless_web_contents;
@@ -265,26 +377,13 @@ std::unique_ptr<HeadlessWebContentsImpl>
 HeadlessWebContentsImpl::CreateForChildContents(
     HeadlessWebContentsImpl* parent,
     std::unique_ptr<content::WebContents> child_contents) {
-  auto child = base::WrapUnique(new HeadlessWebContentsImpl(
-      std::move(child_contents), parent->browser_context()));
+  auto child =
+      base::WrapUnique(new HeadlessWebContentsImpl(std::move(child_contents)));
 
   // Child contents have their own root window and inherit the BeginFrameControl
   // setting.
   child->begin_frame_control_enabled_ = parent->begin_frame_control_enabled_;
   child->InitializeWindow(child->web_contents_->GetContainerBounds());
-
-  // There may already be frames and we may have missed the RenderFrameCreated
-  // callback so make sure they also have our services.
-  // We want to iterate all frame trees because RenderFrameCreated gets called
-  // for any RenderFrame created. base::Unretained is safe here because
-  // ForEachRenderFrameHost is synchronous.
-  child->web_contents_->ForEachRenderFrameHost(base::BindRepeating(
-      [](HeadlessWebContentsImpl* child,
-         content::RenderFrameHost* render_frame_host) {
-        if (render_frame_host->IsRenderFrameLive())
-          child->RenderFrameCreated(render_frame_host);
-      },
-      child.get()));
 
   return child;
 }
@@ -304,96 +403,33 @@ void HeadlessWebContentsImpl::SetBounds(const gfx::Rect& bounds) {
 }
 
 HeadlessWebContentsImpl::HeadlessWebContentsImpl(
-    std::unique_ptr<content::WebContents> web_contents,
-    HeadlessBrowserContextImpl* browser_context)
-    : content::WebContentsObserver(web_contents.get()),
-      browser_context_(browser_context),
-      render_process_host_(web_contents->GetPrimaryMainFrame()->GetProcess()),
-      web_contents_delegate_(new HeadlessWebContentsImpl::Delegate(this)),
-      web_contents_(std::move(web_contents)),
-      agent_host_(
-          content::DevToolsAgentHost::GetOrCreateFor(web_contents_.get())) {
+    std::unique_ptr<content::WebContents> web_contents)
+    : web_contents_delegate_(new HeadlessWebContentsImpl::Delegate(this)),
+      web_contents_(std::move(web_contents)) {
 #if BUILDFLAG(ENABLE_PRINTING)
   HeadlessPrintManager::CreateForWebContents(web_contents_.get());
 #endif
   UpdatePrefsFromSystemSettings(web_contents_->GetMutableRendererPrefs());
   web_contents_->GetMutableRendererPrefs()->accept_languages =
-      browser_context->options()->accept_language();
+      browser_context()->options()->accept_language();
   web_contents_->GetMutableRendererPrefs()->hinting =
-      browser_context->options()->font_render_hinting();
+      browser_context()->options()->font_render_hinting();
 
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
-  if (command_line->HasSwitch(switches::kForceWebRtcIPHandlingPolicy)) {
+  if (command_line->HasSwitch(::switches::kForceWebRtcIPHandlingPolicy)) {
     web_contents_->GetMutableRendererPrefs()->webrtc_ip_handling_policy =
-        command_line->GetSwitchValueASCII(
-            switches::kForceWebRtcIPHandlingPolicy);
+        blink::ToWebRTCIPHandlingPolicy(command_line->GetSwitchValueASCII(
+            ::switches::kForceWebRtcIPHandlingPolicy));
   }
 
   web_contents_->SetDelegate(web_contents_delegate_.get());
-  render_process_host_->AddObserver(this);
-  agent_host_->AddObserver(this);
 }
 
 HeadlessWebContentsImpl::~HeadlessWebContentsImpl() {
-  for (auto& observer : observers_)
-    observer.HeadlessWebContentsDestroyed();
-  agent_host_->RemoveObserver(this);
-  if (render_process_host_)
-    render_process_host_->RemoveObserver(this);
   // Defer destruction of WindowTreeHost, as it does sync mojo calls
   // in the destructor of ui::Compositor.
-  base::SequencedTaskRunnerHandle::Get()->DeleteSoon(
+  base::SequencedTaskRunner::GetCurrentDefault()->DeleteSoon(
       FROM_HERE, std::move(window_tree_host_));
-}
-
-void HeadlessWebContentsImpl::RenderFrameCreated(
-    content::RenderFrameHost* render_frame_host) {
-  browser_context_->SetDevToolsFrameToken(
-      render_frame_host->GetProcess()->GetID(),
-      render_frame_host->GetRoutingID(),
-      render_frame_host->GetDevToolsFrameToken(),
-      render_frame_host->GetFrameTreeNodeId());
-}
-
-void HeadlessWebContentsImpl::RenderFrameDeleted(
-    content::RenderFrameHost* render_frame_host) {
-  browser_context_->RemoveDevToolsFrameToken(
-      render_frame_host->GetProcess()->GetID(),
-      render_frame_host->GetRoutingID(),
-      render_frame_host->GetFrameTreeNodeId());
-}
-
-void HeadlessWebContentsImpl::RenderViewReady() {
-  DCHECK(web_contents()->GetPrimaryMainFrame()->IsRenderFrameLive());
-
-  if (devtools_target_ready_notification_sent_)
-    return;
-
-  for (auto& observer : observers_)
-    observer.DevToolsTargetReady();
-
-  devtools_target_ready_notification_sent_ = true;
-}
-
-int HeadlessWebContentsImpl::GetMainFrameRenderProcessId() const {
-  if (!web_contents() || !web_contents()->GetPrimaryMainFrame())
-    return -1;
-  return web_contents()->GetPrimaryMainFrame()->GetProcess()->GetID();
-}
-
-int HeadlessWebContentsImpl::GetMainFrameTreeNodeId() const {
-  if (!web_contents() || !web_contents()->GetPrimaryMainFrame())
-    return -1;
-  return web_contents()->GetPrimaryMainFrame()->GetFrameTreeNodeId();
-}
-
-std::string HeadlessWebContentsImpl::GetMainFrameDevToolsId() const {
-  if (!web_contents() || !web_contents()->GetPrimaryMainFrame())
-    return "";
-  return web_contents()
-      ->GetPrimaryMainFrame()
-      ->GetDevToolsFrameToken()
-      .ToString();
 }
 
 bool HeadlessWebContentsImpl::OpenURL(const GURL& url) {
@@ -402,6 +438,9 @@ bool HeadlessWebContentsImpl::OpenURL(const GURL& url) {
   content::NavigationController::LoadURLParams params(url);
   params.transition_type = ui::PageTransitionFromInt(
       ui::PAGE_TRANSITION_TYPED | ui::PAGE_TRANSITION_FROM_ADDRESS_BAR);
+  params.force_new_browsing_instance =
+      browser()->options()->force_new_browsing_instance;
+
   web_contents_->GetController().LoadURLWithParams(params);
   web_contents_delegate_->ActivateContents(web_contents_.get());
   web_contents_->Focus();
@@ -413,80 +452,16 @@ void HeadlessWebContentsImpl::Close() {
   browser_context()->DestroyWebContents(this);
 }
 
-std::string HeadlessWebContentsImpl::GetDevToolsAgentHostId() {
-  return agent_host_->GetId();
-}
-
-void HeadlessWebContentsImpl::AddObserver(Observer* observer) {
-  observers_.AddObserver(observer);
-}
-
-void HeadlessWebContentsImpl::RemoveObserver(Observer* observer) {
-  observers_.RemoveObserver(observer);
-}
-
-void HeadlessWebContentsImpl::DevToolsAgentHostAttached(
-    content::DevToolsAgentHost* agent_host) {
-  for (auto& observer : observers_)
-    observer.DevToolsClientAttached();
-}
-
-void HeadlessWebContentsImpl::DevToolsAgentHostDetached(
-    content::DevToolsAgentHost* agent_host) {
-  for (auto& observer : observers_)
-    observer.DevToolsClientDetached();
-}
-
-void HeadlessWebContentsImpl::RenderProcessExited(
-    content::RenderProcessHost* host,
-    const content::ChildProcessTerminationInfo& info) {
-  DCHECK_EQ(render_process_host_, host);
-  render_process_exited_ = true;
-  for (auto& observer : observers_)
-    observer.RenderProcessExited(info.status, info.exit_code);
-}
-
-void HeadlessWebContentsImpl::RenderProcessHostDestroyed(
-    content::RenderProcessHost* host) {
-  DCHECK_EQ(render_process_host_, host);
-  render_process_host_->RemoveObserver(this);
-  render_process_host_ = nullptr;
-}
-
-HeadlessDevToolsTarget* HeadlessWebContentsImpl::GetDevToolsTarget() {
-  return web_contents()->GetPrimaryMainFrame()->IsRenderFrameLive() ? this
-                                                                    : nullptr;
-}
-
-std::unique_ptr<HeadlessDevToolsChannel>
-HeadlessWebContentsImpl::CreateDevToolsChannel() {
-  DCHECK(agent_host_);
-  return std::make_unique<HeadlessDevToolsAgentHostClient>(agent_host_);
-}
-
-void HeadlessWebContentsImpl::AttachClient(HeadlessDevToolsClient* client) {
-  client->AttachToChannel(CreateDevToolsChannel());
-}
-
-void HeadlessWebContentsImpl::DetachClient(HeadlessDevToolsClient* client) {
-  client->DetachFromChannel();
-}
-
-bool HeadlessWebContentsImpl::IsAttached() {
-  DCHECK(agent_host_);
-  return agent_host_->IsAttached();
-}
-
 content::WebContents* HeadlessWebContentsImpl::web_contents() const {
   return web_contents_.get();
 }
 
 HeadlessBrowserImpl* HeadlessWebContentsImpl::browser() const {
-  return browser_context_->browser();
+  return browser_context()->browser();
 }
 
 HeadlessBrowserContextImpl* HeadlessWebContentsImpl::browser_context() const {
-  return browser_context_;
+  return HeadlessBrowserContextImpl::From(web_contents()->GetBrowserContext());
 }
 
 void HeadlessWebContentsImpl::BeginFrame(
@@ -536,7 +511,7 @@ void HeadlessWebContentsImpl::BeginFrame(
 HeadlessWebContents::Builder::Builder(
     HeadlessBrowserContextImpl* browser_context)
     : browser_context_(browser_context),
-      window_size_(browser_context->options()->window_size()) {}
+      window_bounds_(browser_context->options()->window_size()) {}
 
 HeadlessWebContents::Builder::~Builder() = default;
 
@@ -548,9 +523,9 @@ HeadlessWebContents::Builder& HeadlessWebContents::Builder::SetInitialURL(
   return *this;
 }
 
-HeadlessWebContents::Builder& HeadlessWebContents::Builder::SetWindowSize(
-    const gfx::Size& size) {
-  window_size_ = size;
+HeadlessWebContents::Builder& HeadlessWebContents::Builder::SetWindowBounds(
+    const gfx::Rect& bounds) {
+  window_bounds_ = bounds;
   return *this;
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,21 +7,22 @@
 #include <drm.h>
 #include <string.h>
 #include <xf86drm.h>
+
 #include <ios>
 #include <memory>
 #include <type_traits>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
-#include "base/strings/stringprintf.h"
-#include "base/syslog_logging.h"
-#include "base/trace_event/trace_conversion_helper.h"
-#include "base/trace_event/trace_event.h"
-#include "base/trace_event/traced_value.h"
+#include "base/metrics/histogram_macros.h"
+#include "base/ranges/algorithm.h"
+#include "base/trace_event/typed_macros.h"
 #include "third_party/libdrm/src/include/drm/drm_fourcc.h"
+#include "third_party/perfetto/include/perfetto/tracing/traced_value.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkImage.h"
+#include "ui/gfx/buffer_format_util.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gfx/gpu_fence_handle.h"
@@ -29,18 +30,15 @@
 #include "ui/gfx/native_pixmap.h"
 #include "ui/gfx/presentation_feedback.h"
 #include "ui/gfx/swap_result.h"
+#include "ui/ozone/common/features.h"
 #include "ui/ozone/platform/drm/common/drm_util.h"
+#include "ui/ozone/platform/drm/common/tile_property.h"
 #include "ui/ozone/platform/drm/gpu/crtc_controller.h"
 #include "ui/ozone/platform/drm/gpu/drm_device.h"
 #include "ui/ozone/platform/drm/gpu/drm_dumb_buffer.h"
 #include "ui/ozone/platform/drm/gpu/hardware_display_plane.h"
 #include "ui/ozone/platform/drm/gpu/page_flip_request.h"
-
-// Vendor ID for downstream, interim ChromeOS specific modifiers.
-#define DRM_FORMAT_MOD_VENDOR_CHROMEOS 0xf0
-// TODO(b/231167263) Remove once DRM_FORMAT_MOD_ARM_AFBC is used by all kernels
-// and allocators.
-#define DRM_FORMAT_MOD_CHROMEOS_ROCKCHIP_AFBC fourcc_mod_code(CHROMEOS, 1)
+#include "ui/ozone/platform/drm/gpu/page_flip_watchdog.h"
 
 namespace ui {
 
@@ -80,24 +78,37 @@ std::string NumberToHexString(const T value) {
 }
 
 bool IsRockchipAfbc(uint64_t modifier) {
-  // TODO(b/231167263): Drop when kernel 4.4 is gone for RK3399.
-  if (modifier == DRM_FORMAT_MOD_CHROMEOS_ROCKCHIP_AFBC) {
-    return true;
-  }
-
-  // Newer (and upstream) kernels use DRM_FORMAT_MOD_ARM_AFBC.
   return modifier ==
          DRM_FORMAT_MOD_ARM_AFBC(AFBC_FORMAT_MOD_BLOCK_SIZE_16x16 |
                                  AFBC_FORMAT_MOD_SPARSE | AFBC_FORMAT_MOD_YTR);
+}
+
+std::unique_ptr<DrmDumbBuffer> MakeCursorDrmBuffer(
+    gfx::Size size,
+    scoped_refptr<DrmDevice> drm_device) {
+  SkImageInfo info = SkImageInfo::MakeN32Premul(size.width(), size.height());
+  auto buffer = std::make_unique<DrmDumbBuffer>(drm_device);
+
+  // Don't register a framebuffer for cursors since they are special (they
+  // aren't modesetting buffers and drivers may fail to register them due to
+  // their small sizes).
+  if (!buffer->Initialize(info)) {
+    LOG(FATAL) << "Failed to initialize cursor buffer";
+  }
+  return buffer;
 }
 
 }  // namespace
 
 HardwareDisplayController::HardwareDisplayController(
     std::unique_ptr<CrtcController> controller,
-    const gfx::Point& origin)
-    : origin_(origin) {
+    const gfx::Point& origin,
+    raw_ptr<DrmModifiersFilter> drm_modifiers_filter)
+    : origin_(origin),
+      drm_modifiers_filter_(drm_modifiers_filter),
+      tile_property_(controller->tile_property()) {
   AddCrtc(std::move(controller));
+  InitSupportedCursorSizes();
   AllocateCursorBuffers();
 }
 
@@ -106,9 +117,10 @@ HardwareDisplayController::~HardwareDisplayController() = default;
 void HardwareDisplayController::GetModesetProps(
     CommitRequest* commit_request,
     const DrmOverlayPlaneList& modeset_planes,
-    const drmModeModeInfo& mode) {
+    const drmModeModeInfo& mode,
+    bool enable_vrr) {
   GetModesetPropsForCrtcs(commit_request, modeset_planes,
-                          /*use_current_crtc_mode=*/false, mode);
+                          /*use_current_crtc_mode=*/false, mode, enable_vrr);
 }
 
 void HardwareDisplayController::GetEnableProps(
@@ -117,14 +129,16 @@ void HardwareDisplayController::GetEnableProps(
   // TODO(markyacoub): Simplify and remove the use of empty_mode.
   drmModeModeInfo empty_mode = {};
   GetModesetPropsForCrtcs(commit_request, modeset_planes,
-                          /*use_current_crtc_mode=*/true, empty_mode);
+                          /*use_current_crtc_mode=*/true, empty_mode,
+                          /*enable_vrr=*/std::nullopt);
 }
 
 void HardwareDisplayController::GetModesetPropsForCrtcs(
     CommitRequest* commit_request,
     const DrmOverlayPlaneList& modeset_planes,
     bool use_current_crtc_mode,
-    const drmModeModeInfo& mode) {
+    const drmModeModeInfo& mode,
+    std::optional<bool> enable_vrr) {
   DCHECK(commit_request);
 
   GetDrmDevice()->plane_manager()->BeginFrame(&owned_hardware_planes_);
@@ -133,13 +147,50 @@ void HardwareDisplayController::GetModesetPropsForCrtcs(
     drmModeModeInfo modeset_mode =
         use_current_crtc_mode ? controller->mode() : mode;
 
-    DrmOverlayPlaneList overlays = DrmOverlayPlane::Clone(modeset_planes);
+    if (ShouldDisableNonprimaryTileController(*controller, modeset_mode,
+                                              use_current_crtc_mode)) {
+      if (controller->is_enabled()) {
+        CrtcCommitRequest request = CrtcCommitRequest::DisableCrtcRequest(
+            controller->crtc(), controller->connector());
+        commit_request->push_back(std::move(request));
+      }
 
+      continue;
+    }
+
+    DrmOverlayPlaneList overlays = DrmOverlayPlane::Clone(modeset_planes);
     CrtcCommitRequest request = CrtcCommitRequest::EnableCrtcRequest(
         controller->crtc(), controller->connector(), modeset_mode, origin_,
-        &owned_hardware_planes_, std::move(overlays));
+        &owned_hardware_planes_, std::move(overlays),
+        enable_vrr.value_or(controller->vrr_enabled()));
     commit_request->push_back(std::move(request));
   }
+}
+
+bool HardwareDisplayController::ShouldDisableNonprimaryTileController(
+    const CrtcController& controller,
+    const drmModeModeInfo& mode,
+    const bool use_current_crtc_mode) const {
+  const bool is_nonprimary_tile =
+      IsTiled() &&
+      // The |controller| is a non-primary tile.
+      controller.tile_property()->location != tile_property_->location;
+  if (!is_nonprimary_tile) {
+    return false;
+  }
+
+  // For tiled displays, all non-primary tiles should be disabled if the
+  // requested mode is not a tile mode.
+  bool should_disable = !IsTileMode(ModeSize(mode), *tile_property_);
+
+  // Handles disconnect - the primary tile mode is not the same as the
+  // current mode of the nonprimary |controller|.
+  const bool is_same_mode_as_primary_controller =
+      SameMode(crtc_controllers_[0]->mode(), controller.mode());
+  should_disable = should_disable || (use_current_crtc_mode &&
+                                      !is_same_mode_as_primary_controller);
+
+  return should_disable;
 }
 
 void HardwareDisplayController::GetDisableProps(CommitRequest* commit_request) {
@@ -152,18 +203,10 @@ void HardwareDisplayController::GetDisableProps(CommitRequest* commit_request) {
 
 void HardwareDisplayController::UpdateState(
     const CrtcCommitRequest& crtc_request) {
-  if (crash_gpu_timer_.IsRunning()) {
-    crash_gpu_timer_.AbandonAndStop();
-    SYSLOG(INFO)
-        << "Detected a modeset attempt after " << failed_page_flip_counter_
-        << " failed page flips. Aborting GPU process self-destruct with "
-        << crash_gpu_timer_.desired_run_time() - base::TimeTicks::Now()
-        << " to spare.";
-    failed_page_flip_counter_ = 0;
-  }
+  watchdog_.Disarm();
 
   // Verify that the current state matches the requested state.
-  if (crtc_request.should_enable() && IsEnabled()) {
+  if (crtc_request.should_enable_crtc() && IsEnabled()) {
     DCHECK(!crtc_request.overlays().empty());
     // TODO(markyacoub): This should be absorbed in the commit request.
     ResetCursor();
@@ -176,13 +219,29 @@ void HardwareDisplayController::SchedulePageFlip(
     SwapCompletionOnceCallback submission_callback,
     PresentationOnceCallback presentation_callback) {
   DCHECK(!page_flip_request_);
+  TRACE_EVENT0("drm", "HDC::SchedulePageFlip");
   scoped_refptr<PageFlipRequest> page_flip_request =
       base::MakeRefCounted<PageFlipRequest>(GetRefreshInterval());
   gfx::GpuFenceHandle release_fence;
 
-  bool status =
+  PageFlipResult result =
       ScheduleOrTestPageFlip(plane_list, page_flip_request, &release_fence);
-  if (!status) {
+  UMA_HISTOGRAM_ENUMERATION(
+      "Compositing.Display.HardwareDisplayController.SchedulePageFlipResult",
+      result);
+
+  if (PageFlipResult::kFailedPlaneAssignment == result) {
+    watchdog_.CrashOnFailedPlaneAssignment();
+
+    // Plane assignment is usually an intermittent problem that recovers itself
+    // within a few frames. Send back a NAK and hope for the best--the
+    // watchdog will handle things if this problem is persistent.
+    std::move(submission_callback)
+        .Run(gfx::SwapResult::SWAP_NAK_RECREATE_BUFFERS,
+             /*release_fence=*/gfx::GpuFenceHandle());
+    std::move(presentation_callback).Run(gfx::PresentationFeedback::Failure());
+    return;
+  } else if (PageFlipResult::kFailedCommit == result) {
     for (const auto& plane : plane_list) {
       // If the page flip failed and we see that the buffer has been allocated
       // before the latest modeset, it could mean it was an in-flight buffer
@@ -201,21 +260,8 @@ void HardwareDisplayController::SchedulePageFlip(
     }
 
     // No outdated buffers detected which makes this a true page flip failure.
-    // Start the GPU self-destruct timer if needed and report the failure.
-    failed_page_flip_counter_++;
-    if (!crash_gpu_timer_.IsRunning()) {
-      DCHECK_EQ(1, failed_page_flip_counter_);
-      LOG(WARNING) << "Initiating GPU process self-destruct in "
-                   << kWaitForModesetTimeout
-                   << " unless a modeset attempt is detected.";
-
-      crash_gpu_timer_.Start(
-          FROM_HERE, kWaitForModesetTimeout, base::BindOnce([] {
-            LOG(FATAL) << "Failed to modeset within " << kWaitForModesetTimeout
-                       << " of the first page flip failure. Crashing GPU "
-                          "process. Goodbye.";
-          }));
-    }
+    // Alert the watchdog.
+    watchdog_.ArmForFailedCommit();
 
     std::move(submission_callback)
         .Run(gfx::SwapResult::SWAP_FAILED,
@@ -238,6 +284,7 @@ void HardwareDisplayController::SchedulePageFlip(
   std::move(submission_callback)
       .Run(gfx::SwapResult::SWAP_ACK, std::move(release_fence));
 
+  watchdog_.OnSuccessfulPageFlip();
   // Everything was submitted successfully, wait for asynchronous completion.
   page_flip_request->TakeCallback(
       base::BindOnce(&CompletePageFlip, weak_ptr_factory_.GetWeakPtr(),
@@ -248,19 +295,22 @@ void HardwareDisplayController::SchedulePageFlip(
 
 bool HardwareDisplayController::TestPageFlip(
     const DrmOverlayPlaneList& plane_list) {
-  return ScheduleOrTestPageFlip(plane_list, nullptr, nullptr);
+  TRACE_EVENT0("drm", "HDC::TestPageFlip");
+  return PageFlipResult::kSuccess ==
+         ScheduleOrTestPageFlip(plane_list, nullptr, nullptr);
 }
 
-bool HardwareDisplayController::ScheduleOrTestPageFlip(
+HardwareDisplayController::PageFlipResult
+HardwareDisplayController::ScheduleOrTestPageFlip(
     const DrmOverlayPlaneList& plane_list,
     scoped_refptr<PageFlipRequest> page_flip_request,
     gfx::GpuFenceHandle* release_fence) {
-  TRACE_EVENT0("drm", "HDC::SchedulePageFlip");
+  TRACE_EVENT0("drm", "HDC::ScheduleOrTestPageFlip");
   DCHECK(IsEnabled());
 
   // Ignore requests with no planes to schedule.
   if (plane_list.empty())
-    return true;
+    return PageFlipResult::kSuccess;
 
   DrmOverlayPlaneList pending_planes = DrmOverlayPlane::Clone(plane_list);
   std::sort(pending_planes.begin(), pending_planes.end(),
@@ -269,16 +319,26 @@ bool HardwareDisplayController::ScheduleOrTestPageFlip(
             });
   GetDrmDevice()->plane_manager()->BeginFrame(&owned_hardware_planes_);
 
-  bool status = true;
   for (const auto& controller : crtc_controllers_) {
-    status &= controller->AssignOverlayPlanes(
-        &owned_hardware_planes_, pending_planes, /*is_modesetting=*/false);
+    if (!controller->is_enabled()) {
+      continue;
+    }
+
+    if (!controller->AssignOverlayPlanes(
+            &owned_hardware_planes_, pending_planes, /*is_modesetting=*/false))
+      return PageFlipResult::kFailedPlaneAssignment;
   }
 
-  status &= GetDrmDevice()->plane_manager()->Commit(
+  bool commit_success = GetDrmDevice()->plane_manager()->Commit(
       &owned_hardware_planes_, page_flip_request, release_fence);
 
-  return status;
+  return commit_success ? PageFlipResult::kSuccess
+                        : PageFlipResult::kFailedCommit;
+}
+
+bool HardwareDisplayController::TestSeamlessMode(int32_t crtc_id,
+                                                 const drmModeModeInfo& mode) {
+  return GetDrmDevice()->plane_manager()->TestSeamlessMode(crtc_id, mode);
 }
 
 std::vector<uint64_t> HardwareDisplayController::GetFormatModifiers(
@@ -288,6 +348,12 @@ std::vector<uint64_t> HardwareDisplayController::GetFormatModifiers(
 
   std::vector<uint64_t> modifiers =
       crtc_controllers_[0]->GetFormatModifiers(fourcc_format);
+
+  if (drm_modifiers_filter_) {
+    gfx::BufferFormat buffer_format =
+        GetBufferFormatFromFourCCFormat(fourcc_format);
+    modifiers = drm_modifiers_filter_->Filter(buffer_format, modifiers);
+  }
 
   for (size_t i = 1; i < crtc_controllers_.size(); ++i) {
     std::vector<uint64_t> other =
@@ -331,7 +397,7 @@ HardwareDisplayController::GetFormatModifiersForTestModeset(
   return GetFormatModifiers(fourcc_format);
 }
 
-void HardwareDisplayController::UpdatePreferredModiferForFormat(
+void HardwareDisplayController::UpdatePreferredModifierForFormat(
     gfx::BufferFormat buffer_format,
     uint64_t modifier) {
   uint32_t fourcc_format = GetFourCCFormatFromBufferFormat(buffer_format);
@@ -351,7 +417,7 @@ void HardwareDisplayController::SetCursor(SkBitmap bitmap) {
   if (bitmap.drawsNothing()) {
     current_cursor_ = nullptr;
   } else {
-    current_cursor_ = NextCursorBuffer();
+    current_cursor_ = NextCursorBuffer(bitmap);
     DrawCursor(current_cursor_, bitmap);
   }
 
@@ -378,8 +444,8 @@ void HardwareDisplayController::AddCrtc(
 std::unique_ptr<CrtcController> HardwareDisplayController::RemoveCrtc(
     const scoped_refptr<DrmDevice>& drm,
     uint32_t crtc) {
-  auto controller_it = std::find_if(
-      crtc_controllers_.begin(), crtc_controllers_.end(),
+  auto controller_it = base::ranges::find_if(
+      crtc_controllers_,
       [drm, crtc](const std::unique_ptr<CrtcController>& crtc_controller) {
         return crtc_controller->drm() == drm && crtc_controller->crtc() == crtc;
       });
@@ -424,27 +490,39 @@ bool HardwareDisplayController::HasCrtc(const scoped_refptr<DrmDevice>& drm,
 }
 
 bool HardwareDisplayController::IsMirrored() const {
-  return crtc_controllers_.size() > 1;
+  return crtc_controllers_.size() > 1 && !IsTiled();
 }
 
 bool HardwareDisplayController::IsEnabled() const {
-  bool is_enabled = true;
+  bool is_enabled = false;
 
   for (const auto& controller : crtc_controllers_)
-    is_enabled &= controller->is_enabled();
+    is_enabled |= controller->is_enabled();
 
   return is_enabled;
 }
 
+bool HardwareDisplayController::IsTiled() const {
+  return tile_property_.has_value();
+}
+
 gfx::Size HardwareDisplayController::GetModeSize() const {
   // If there are multiple CRTCs they should all have the same size.
-  return gfx::Size(crtc_controllers_[0]->mode().hdisplay,
-                   crtc_controllers_[0]->mode().vdisplay);
+  const gfx::Size mode_size = ModeSize(crtc_controllers_[0]->mode());
+  if (tile_property_.has_value() && mode_size == tile_property_->tile_size) {
+    return GetTotalTileDisplaySize(*tile_property_);
+  }
+  return mode_size;
+}
+
+float HardwareDisplayController::GetRefreshRate() const {
+  // If there are multiple CRTCs they should all have the same refresh rate.
+  return ModeRefreshRate(crtc_controllers_[0]->mode());
 }
 
 base::TimeDelta HardwareDisplayController::GetRefreshInterval() const {
   // If there are multiple CRTCs they should all have the same refresh rate.
-  float vrefresh = ModeRefreshRate(crtc_controllers_[0]->mode());
+  float vrefresh = GetRefreshRate();
   return vrefresh ? base::Seconds(1) / vrefresh : base::TimeDelta();
 }
 
@@ -464,7 +542,7 @@ void HardwareDisplayController::OnPageFlipComplete(
     DrmOverlayPlaneList pending_planes,
     const gfx::PresentationFeedback& presentation_feedback) {
   if (!page_flip_request_)
-    return;  // Modeset occured during this page flip.
+    return;  // Modeset occurred during this page flip.
 
   time_of_last_flip_ = presentation_feedback.timestamp;
   current_planes_ = std::move(pending_planes);
@@ -480,35 +558,34 @@ void HardwareDisplayController::OnPageFlipComplete(
   page_flip_request_ = nullptr;
 }
 
-void HardwareDisplayController::AsValueInto(
-    base::trace_event::TracedValue* value) const {
-  using base::trace_event::ValueToString;
+void HardwareDisplayController::WriteIntoTrace(
+    perfetto::TracedValue context) const {
+  auto dict = std::move(context).WriteDictionary();
 
-  value->SetString("origin", ValueToString(origin_));
-  value->SetString("cursor_location", ValueToString(cursor_location_));
-  value->SetInteger("failed_page_flip_counter", failed_page_flip_counter_);
-  value->SetBoolean("is_crash_timer_running", crash_gpu_timer_.IsRunning());
-  value->SetBoolean("has_page_flip_request", page_flip_request_ != nullptr);
+  dict.Add("origin", origin_.ToString());
+  dict.Add("cursor_location", cursor_location_.ToString());
+  dict.Add("has_page_flip_request", page_flip_request_ != nullptr);
+
+  dict.Add("owned_hardware_planes", owned_hardware_planes_);
+  dict.Add("crtc_controllers", crtc_controllers_);
 
   {
-    auto scoped_dict = value->BeginDictionaryScoped("owned_hardware_planes");
-    owned_hardware_planes_.AsValueInto(value);
-  }
-  {
-    auto scoped_array = value->BeginArrayScoped("crtc_controllers");
-    for (const auto& crtc : crtc_controllers_) {
-      auto scoped_dict = value->AppendDictionaryScoped();
-      crtc->AsValueInto(value);
-    }
-  }
-  {
-    auto scoped_array = value->BeginArrayScoped("preferred_format_modifiers");
+    auto array = dict.AddArray("preferred_format_modifiers");
     for (const auto& format_modifier : preferred_format_modifier_) {
-      auto scoped_dict = value->AppendDictionaryScoped();
-      value->SetString("format", NumberToHexString(format_modifier.first));
-      value->SetString("modifier", NumberToHexString(format_modifier.second));
+      auto format_dict = array.AppendDictionary();
+
+      format_dict.Add("format", NumberToHexString(format_modifier.first));
+      format_dict.Add("modifier", NumberToHexString(format_modifier.second));
     }
   }
+}
+
+size_t HardwareDisplayController::NumOfSupportedCursorSizesForTesting() const {
+  return supported_cursor_sizes_.size();
+}
+
+gfx::Size HardwareDisplayController::CurrentCursorSizeForTesting() const {
+  return current_cursor_ ? current_cursor_->GetSize() : gfx::Size();
 }
 
 void HardwareDisplayController::OnModesetComplete(
@@ -525,25 +602,36 @@ void HardwareDisplayController::OnModesetComplete(
 
 void HardwareDisplayController::AllocateCursorBuffers() {
   TRACE_EVENT0("drm", "HDC::AllocateCursorBuffers");
-  gfx::Size max_cursor_size = GetMaximumCursorSize(GetDrmDevice()->get_fd());
-  SkImageInfo info = SkImageInfo::MakeN32Premul(max_cursor_size.width(),
-                                                max_cursor_size.height());
-  for (size_t i = 0; i < std::size(cursor_buffers_); ++i) {
-    cursor_buffers_[i] = std::make_unique<DrmDumbBuffer>(GetDrmDevice());
-    // Don't register a framebuffer for cursors since they are special (they
-    // aren't modesetting buffers and drivers may fail to register them due to
-    // their small sizes).
-    if (!cursor_buffers_[i]->Initialize(info)) {
-      LOG(FATAL) << "Failed to initialize cursor buffer";
-      return;
+  constexpr int kActiveBufferCount = 2;
+
+  for (auto& size : supported_cursor_sizes_) {
+    for (int i = 0; i < kActiveBufferCount; i++) {
+      cursor_buffer_map_[size].push_back(
+          MakeCursorDrmBuffer(size, GetDrmDevice()));
     }
   }
 }
 
-DrmDumbBuffer* HardwareDisplayController::NextCursorBuffer() {
-  ++cursor_frontbuffer_;
-  cursor_frontbuffer_ %= std::size(cursor_buffers_);
-  return cursor_buffers_[cursor_frontbuffer_].get();
+DrmDumbBuffer* HardwareDisplayController::NextCursorBuffer(
+    const SkBitmap& image) {
+  // Use the largest buffer as default.
+  gfx::Size buffer_size = supported_cursor_sizes_.back();
+
+  // Find the smallest buffer size that fits the |image| size.
+  for (auto size : supported_cursor_sizes_) {
+    if (image.width() <= size.width() && image.height() <= size.width()) {
+      buffer_size = size;
+      break;
+    }
+  }
+
+  // Return the not in-use buffer with the |buffer_size|.
+  auto& active_buffers = cursor_buffer_map_[buffer_size];
+  DrmDumbBuffer* next_buffer = active_buffers.front().get();
+  if (next_buffer == current_cursor_) {
+    return active_buffers.back().get();
+  }
+  return next_buffer;
 }
 
 void HardwareDisplayController::UpdateCursorImage() {
@@ -555,8 +643,9 @@ void HardwareDisplayController::UpdateCursorImage() {
     size = current_cursor_->GetSize();
   }
 
-  for (const auto& controller : crtc_controllers_)
+  for (const auto& controller : crtc_controllers_) {
     controller->SetCursor(handle, size);
+  }
 }
 
 void HardwareDisplayController::UpdateCursorLocation() {
@@ -567,6 +656,46 @@ void HardwareDisplayController::UpdateCursorLocation() {
 void HardwareDisplayController::ResetCursor() {
   UpdateCursorLocation();
   UpdateCursorImage();
+}
+
+void HardwareDisplayController::InitSupportedCursorSizes() {
+  // Only use dynamic cursor size on Intel GPUs.
+  std::optional<std::string> driver = GetDrmDevice()->GetDriverName();
+  bool use_dynamic_cursor_size = IsUseDynamicCursorSizeEnabled() &&
+                                 driver.has_value() && *driver == "i915";
+  if (use_dynamic_cursor_size) {
+    const std::vector<std::unique_ptr<HardwareDisplayPlane>>& planes =
+        GetDrmDevice()->plane_manager()->planes();
+    for (const auto& plane : planes) {
+      // Currently on Intel, if there are multiple CRTCs they should all have
+      // the same supported cursor sizes.
+      if (plane->type() == DRM_PLANE_TYPE_CURSOR) {
+        const std::vector<gfx::Size>& supported_cursor_sizes =
+            plane->supported_cursor_sizes();
+        supported_cursor_sizes_.assign(supported_cursor_sizes.begin(),
+                                       supported_cursor_sizes.end());
+        break;
+      }
+    }
+  }
+
+  if (supported_cursor_sizes_.empty()) {
+    // Get the maximum cursor size supported by the GPU.
+    const gfx::Size max_cursor_size_supported =
+        GetMaximumCursorSize(*GetDrmDevice());
+    // max_cursor_size_supported can be as large as 4096 depending on platform
+    // and driver capabilities, but we don't need huge buffer like that for the
+    // cursor.
+    supported_cursor_sizes_.push_back(gfx::Size(
+        std::min(max_cursor_size_supported.width(), kMaxCursorBufferSize),
+        std::min(max_cursor_size_supported.height(), kMaxCursorBufferSize)));
+  }
+
+  // Sort the supported cursor sizes in ascending order so that we can use the
+  // smallest buffer.
+  DCHECK(!supported_cursor_sizes_.empty());
+  std::sort(supported_cursor_sizes_.begin(), supported_cursor_sizes_.end(),
+            CursorSizeComparator());
 }
 
 }  // namespace ui

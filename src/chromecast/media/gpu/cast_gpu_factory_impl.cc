@@ -1,18 +1,18 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromecast/media/gpu/cast_gpu_factory_impl.h"
 
 #include "base/check.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chromecast/mojo/remote_interfaces.h"
 #include "gpu/command_buffer/client/gles2_interface.h"
 #include "gpu/config/gpu_info.h"
 #include "media/base/media_util.h"
 #include "media/gpu/gpu_video_accelerator_util.h"
-#include "media/gpu/ipc/client/gpu_video_decode_accelerator_host.h"
+#include "media/gpu/gpu_video_decode_accelerator_helpers.h"
 #include "media/mojo/clients/mojo_video_decoder.h"
 #include "media/mojo/clients/mojo_video_encode_accelerator.h"
 #include "services/viz/public/cpp/gpu/context_provider_command_buffer.h"
@@ -154,8 +154,8 @@ bool CastGpuFactoryImpl::IsDecoderSupportKnown() {
 }
 
 void CastGpuFactoryImpl::NotifyDecoderSupportKnown(base::OnceClosure callback) {
-  base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                   std::move(callback));
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE,
+                                                           std::move(callback));
 }
 
 std::unique_ptr<::media::VideoDecoder> CastGpuFactoryImpl::CreateVideoDecoder(
@@ -176,7 +176,7 @@ std::unique_ptr<::media::VideoDecoder> CastGpuFactoryImpl::CreateVideoDecoder(
       request_overlay_info_cb, gfx::ColorSpace::CreateSRGB());
 }
 
-absl::optional<::media::VideoEncodeAccelerator::SupportedProfiles>
+std::optional<::media::VideoEncodeAccelerator::SupportedProfiles>
 CastGpuFactoryImpl::GetVideoEncodeAcceleratorSupportedProfiles() {
   return ::media::VideoEncodeAccelerator::SupportedProfiles();
 }
@@ -186,8 +186,20 @@ bool CastGpuFactoryImpl::IsEncoderSupportKnown() {
 }
 
 void CastGpuFactoryImpl::NotifyEncoderSupportKnown(base::OnceClosure callback) {
-  base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                   std::move(callback));
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(FROM_HERE,
+                                                           std::move(callback));
+}
+
+std::optional<media::SupportedVideoDecoderConfigs>
+CastGpuFactoryImpl::GetSupportedVideoDecoderConfigs() {
+  if (CheckContextLost()) {
+    return std::nullopt;
+  }
+
+  return ::media::ConvertFromSupportedProfiles(
+      ::media::GpuVideoAcceleratorUtil::ConvertGpuToMediaDecodeProfiles(
+          gpu_channel_host_->gpu_info()
+              .video_decode_accelerator_supported_profiles));
 }
 
 std::unique_ptr<::media::VideoEncodeAccelerator>
@@ -286,12 +298,11 @@ void CastGpuFactoryImpl::SetupContext() {
       gpu::SchedulingPriority::kHigh, gpu::kNullSurfaceHandle,
       GURL("chrome://gpu/CastVideoAcceleratorFactory"),
       false /* automatic_flushes */, false /* support_locking */,
-      false /* support_grcontext */,
       gpu::SharedMemoryLimits::ForMailboxContext(), attributes,
       viz::command_buffer_metrics::ContextType::MEDIA);
   DCHECK(context_provider_);
 
-  if (context_provider_->BindToCurrentThread() !=
+  if (context_provider_->BindToCurrentSequence() !=
       gpu::ContextResult::kSuccess) {
     LOG(ERROR) << "Failed to bind ContextProvider to current thread";
     context_provider_ = nullptr;

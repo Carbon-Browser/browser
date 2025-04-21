@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,8 +35,7 @@ class CONTENT_EXPORT PeerConnectionTrackerHostObserver
       int lid,
       base::ProcessId pid,
       const std::string& url,
-      const std::string& rtc_configuration,
-      const std::string& constraints) {}
+      const std::string& rtc_configuration) {}
 
   // This method is called when a peer connection is destroyed.
   // - |render_frame_host_id| identifies the RenderFrameHost.
@@ -82,17 +81,14 @@ class CONTENT_EXPORT PeerConnectionTrackerHostObserver
       int lid,
       const std::string& message) {}
 
-  // These methods are called when results from
-  // PeerConnectionInterface::GetStats() (legacy or standard API) are available.
+  // This methods is called when results from
+  // PeerConnectionInterface::GetStats() (standard API) are available.
   // - |render_frame_host_id| identifies the RenderFrameHost.
   // - |lid| identifies a peer connection.
   // - |value| is the list of stats reports.
   virtual void OnAddStandardStats(GlobalRenderFrameHostId render_frame_host_id,
                                   int lid,
                                   base::Value::List value) {}
-  virtual void OnAddLegacyStats(GlobalRenderFrameHostId render_frame_host_id,
-                                int lid,
-                                base::Value::List value) {}
 
   // This method is called when getUserMedia is called.
   // - |render_frame_host_id| identifies the RenderFrameHost.
@@ -133,6 +129,51 @@ class CONTENT_EXPORT PeerConnectionTrackerHostObserver
   // - |error| is the (DOM) error.
   // - |error_message| is the error message.
   virtual void OnGetUserMediaFailure(
+      GlobalRenderFrameHostId render_frame_host_id,
+      base::ProcessId pid,
+      int request_id,
+      const std::string& error,
+      const std::string& error_message) {}
+
+  // This method is called when getDisplayMedia is called.
+  // - |render_frame_host_id| identifies the RenderFrameHost.
+  // - |pid| is the OS process ID.
+  // - |request_id| is an id assigned to the getDisplayMedia call and its
+  //     callback/error
+  // - |audio| is true if the audio stream is requested.
+  // - |video| is true if the video stream is requested.
+  // - |audio_constraints| is the constraints for the audio.
+  // - |video_constraints| is the constraints for the video.
+  virtual void OnGetDisplayMedia(GlobalRenderFrameHostId render_frame_host_id,
+                                 base::ProcessId pid,
+                                 int request_id,
+                                 bool audio,
+                                 bool video,
+                                 const std::string& audio_constraints,
+                                 const std::string& video_constraints) {}
+
+  // This method is called when getDisplayMedia resolves with a stream.
+  // - |render_frame_host_id| identifies the RenderFrameHost.
+  // - |pid| is the OS process ID.
+  // - |request_id| is the internal getDisplayMedia request id.
+  // - |stream_id| is the id of the stream containing the tracks.
+  // - |audio_track_info| describes the streams audio track (if any).
+  // - |video_track_info| describes the streams video track (if any).
+  virtual void OnGetDisplayMediaSuccess(
+      GlobalRenderFrameHostId render_frame_host_id,
+      base::ProcessId pid,
+      int request_id,
+      const std::string& stream_id,
+      const std::string& audio_track_info,
+      const std::string& video_track_info) {}
+
+  // This method is called when getDisplayMedia rejects with an error.
+  // - |render_frame_host_id| identifies the RenderFrameHost.
+  // - |pid| is the OS process ID.
+  // - |request_id| is the internal getDisplayMedia request id.
+  // - |error| is the (DOM) error.
+  // - |error_message| is the error message.
+  virtual void OnGetDisplayMediaFailure(
       GlobalRenderFrameHostId render_frame_host_id,
       base::ProcessId pid,
       int request_id,

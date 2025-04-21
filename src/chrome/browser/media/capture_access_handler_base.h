@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "chrome/browser/media/webrtc/desktop_media_picker.h"
 #include "content/public/browser/desktop_media_id.h"
 #include "content/public/browser/media_request_state.h"
+#include "extensions/buildflags/buildflags.h"
 #include "third_party/blink/public/common/mediastream/media_stream_request.h"
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom.h"
 
@@ -79,8 +80,10 @@ class CaptureAccessHandlerBase : public MediaAccessHandler {
 
   using RequestsQueues = base::flat_map<content::WebContents*, RequestsQueue>;
 
+#if BUILDFLAG(ENABLE_EXTENSIONS)
   static bool IsExtensionAllowedForScreenCapture(
       const extensions::Extension* extension);
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
   static bool IsBuiltInFeedbackUI(const GURL& origin);
 

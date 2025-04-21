@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -103,7 +103,6 @@ export class Intent {
   /**
    * @param url URL passed along with app launch event.
    * @param mode Mode for the intent.
-   * @return Created intent object.
    */
   static create(url: URL, mode: Mode): Intent {
     const params = url.searchParams;

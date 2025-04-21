@@ -1,6 +1,11 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #ifndef STORAGE_BROWSER_BLOB_BLOB_DATA_BUILDER_H_
 #define STORAGE_BROWSER_BLOB_BLOB_DATA_BUILDER_H_
@@ -13,8 +18,10 @@
 
 #include "base/component_export.h"
 #include "base/files/file_path.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/numerics/checked_math.h"
+#include "components/file_access/scoped_file_access_delegate.h"
 #include "components/services/storage/public/mojom/blob_storage_context.mojom.h"
 #include "storage/browser/blob/blob_data_item.h"
 #include "storage/browser/blob/blob_data_snapshot.h"
@@ -50,7 +57,7 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) BlobDataBuilder {
 
   // Copies the given data into the blob.
   void AppendData(const std::string& data) {
-    AppendData(base::as_bytes(base::make_span(data.c_str(), data.size())));
+    AppendData(base::as_byte_span(data));
   }
 
   // Copies the given data into the blob.
@@ -132,11 +139,17 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) BlobDataBuilder {
 
   // You must know the length of the file, you cannot use kuint64max to specify
   // the whole file.  This method creates a ShareableFileReference to the given
-  // file, which is stored in this builder.
-  void AppendFile(const base::FilePath& file_path,
-                  uint64_t offset,
-                  uint64_t length,
-                  const base::Time& expected_modification_time);
+  // file, which is stored in this builder. The callback `file_access` is used
+  // to grant or deny access to files under dlp restrictions. Passing a
+  // NullCallback will lead to default behaviour of
+  // ScopedFileAccessDelegate::RequestDefaultFilesAccessIO.
+  void AppendFile(
+      const base::FilePath& file_path,
+      uint64_t offset,
+      uint64_t length,
+      const base::Time& expected_modification_time,
+      file_access::ScopedFileAccessDelegate::RequestFilesAccessIOCallback
+          file_access = base::NullCallback());
 
   void AppendBlob(const std::string& uuid,
                   uint64_t offset,
@@ -150,7 +163,9 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) BlobDataBuilder {
       uint64_t offset,
       uint64_t length,
       const base::Time& expected_modification_time,
-      scoped_refptr<FileSystemContext> file_system_context);
+      scoped_refptr<FileSystemContext> file_system_context,
+      file_access::ScopedFileAccessDelegate::RequestFilesAccessIOCallback
+          file_access = base::NullCallback());
 
   void AppendReadableDataHandle(scoped_refptr<DataHandle> data_handle) {
     auto length = data_handle->GetSize();

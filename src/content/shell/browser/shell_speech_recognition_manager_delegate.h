@@ -1,11 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_SHELL_BROWSER_SHELL_SPEECH_RECOGNITION_MANAGER_DELEGATE_H_
 #define CONTENT_SHELL_BROWSER_SHELL_SPEECH_RECOGNITION_MANAGER_DELEGATE_H_
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "content/public/browser/speech_recognition_event_listener.h"
 #include "content/public/browser/speech_recognition_manager_delegate.h"
 
@@ -32,7 +32,12 @@ class ShellSpeechRecognitionManagerDelegate
       base::OnceCallback<void(bool ask_user, bool is_allowed)> callback)
       override;
   SpeechRecognitionEventListener* GetEventListener() override;
-  bool FilterProfanities(int render_process_id) override;
+#if !BUILDFLAG(IS_FUCHSIA) && !BUILDFLAG(IS_ANDROID)
+  // It is empty in this delegate.
+  void BindSpeechRecognitionContext(
+      mojo::PendingReceiver<media::mojom::SpeechRecognitionContext> receiver)
+      override;
+#endif  //! BUILDFLAG(IS_FUCHSIA) && !BUILDFLAG(IS_ANDROID)
 };
 
 }  // namespace content

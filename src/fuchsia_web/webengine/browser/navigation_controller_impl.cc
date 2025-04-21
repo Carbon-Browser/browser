@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,21 +7,27 @@
 #include <fuchsia/mem/cpp/fidl.h>
 #include <lib/fpromise/result.h>
 
+#include <string_view>
+
 #include "base/bits.h"
 #include "base/fuchsia/fuchsia_logging.h"
 #include "base/memory/page_size.h"
 #include "base/strings/strcat.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/trace_event/trace_event.h"
+#include "base/trace_event/typed_macros.h"
 #include "components/favicon/content/content_favicon_driver.h"
 #include "content/public/browser/favicon_status.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/web_contents.h"
 #include "fuchsia_web/common/string_util.h"
+#include "fuchsia_web/webengine/browser/trace_event.h"
 #include "net/base/net_errors.h"
 #include "net/http/http_util.h"
 #include "third_party/blink/public/mojom/navigation/was_activated_option.mojom.h"
+#include "third_party/perfetto/include/perfetto/tracing/track_event_args.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/base/page_transition_types.h"
 #include "ui/gfx/image/image.h"
@@ -32,8 +38,9 @@ namespace {
 fuchsia::web::Favicon GfxImageToFidlFavicon(gfx::Image gfx_image) {
   fuchsia::web::Favicon favicon;
 
-  if (gfx_image.IsEmpty())
+  if (gfx_image.IsEmpty()) {
     return favicon;
+  }
 
   int height = gfx_image.AsBitmap().pixmap().height();
   int width = gfx_image.AsBitmap().pixmap().width();
@@ -76,18 +83,19 @@ fuchsia::web::Favicon GfxImageToFidlFavicon(gfx::Image gfx_image) {
 namespace {
 
 // For each field that differs between |old_entry| and |new_entry|, the field
-// is set to its new value in |difference|. |new_entry| is assumed to have been
-// fully-populated with fields.
+// is set to its new value in |difference|. All other fields in |difference| are
+// left unchanged, such that a series of DiffNavigationEntries() calls may be
+// used to accumulate differences across a progression of NavigationStates.
 void DiffNavigationEntries(const fuchsia::web::NavigationState& old_entry,
                            const fuchsia::web::NavigationState& new_entry,
                            fuchsia::web::NavigationState* difference) {
   DCHECK(difference);
 
-  // |new_entry| should not be empty when the difference is between states
-  // pre- and post-navigation. It is possible for non-navigation events (e.g.
-  // Renderer-process teardown) to trigger notifications, in which case both
-  // states may be empty (i.e. both come from the "initial" NavigationEntry).
-  if (new_entry.IsEmpty() && old_entry.IsEmpty()) {
+  // NavigationStates will only be empty for "initial" navigation entries, so
+  // if |new_entry| is empty then |old_entry| must necessarily also be empty,
+  // and there is no difference to report.
+  if (new_entry.IsEmpty()) {
+    CHECK(old_entry.IsEmpty());
     return;
   }
 
@@ -105,6 +113,14 @@ void DiffNavigationEntries(const fuchsia::web::NavigationState& old_entry,
   if (!old_entry.has_page_type() ||
       (new_entry.page_type() != old_entry.page_type())) {
     difference->set_page_type(new_entry.page_type());
+  }
+
+  if (new_entry.page_type() == fuchsia::web::PageType::ERROR) {
+    DCHECK(new_entry.has_error_detail());
+    if (!old_entry.has_error_detail() ||
+        (new_entry.error_detail() != old_entry.error_detail())) {
+      difference->set_error_detail(new_entry.error_detail());
+    }
   }
 
   DCHECK(new_entry.has_can_go_back());
@@ -131,8 +147,13 @@ void DiffNavigationEntries(const fuchsia::web::NavigationState& old_entry,
 }  // namespace
 
 NavigationControllerImpl::NavigationControllerImpl(
-    content::WebContents* web_contents)
-    : web_contents_(web_contents), weak_factory_(this) {
+    content::WebContents* web_contents,
+    void* parent_for_trace_flow)
+    : parent_for_trace_flow_(parent_for_trace_flow),
+      web_contents_(web_contents),
+      weak_factory_(this) {
+  DCHECK(parent_for_trace_flow_);
+
   Observe(web_contents_);
 }
 
@@ -173,8 +194,9 @@ void NavigationControllerImpl::SetEventListener(
     }
     favicon_driver->AddObserver(this);
   } else {
-    if (favicon_driver)
+    if (favicon_driver) {
       favicon_driver->RemoveObserver(this);
+    }
   }
 
   navigation_listener_.Bind(std::move(listener));
@@ -183,8 +205,11 @@ void NavigationControllerImpl::SetEventListener(
 
   // Send the current navigation state to the listener immediately.
   waiting_for_navigation_event_ack_ = true;
+  previous_navigation_state_ = GetVisibleNavigationState();
+  fuchsia::web::NavigationState initial_state;
+  DiffNavigationEntries({}, previous_navigation_state_, &initial_state);
   navigation_listener_->OnNavigationStateChanged(
-      GetVisibleNavigationState(), [this]() {
+      std::move(initial_state), [this]() {
         waiting_for_navigation_event_ack_ = false;
         MaybeSendNavigationEvent();
       });
@@ -194,8 +219,9 @@ fuchsia::web::NavigationState
 NavigationControllerImpl::GetVisibleNavigationState() const {
   content::NavigationEntry* const entry =
       web_contents_->GetController().GetVisibleEntry();
-  if (!entry || entry->IsInitialEntry())
+  if (entry->IsInitialEntry()) {
     return fuchsia::web::NavigationState();
+  }
 
   fuchsia::web::NavigationState state;
 
@@ -207,10 +233,12 @@ NavigationControllerImpl::GetVisibleNavigationState() const {
     // TODO(https:://crbug.com/1092506): Add an explicit crashed indicator to
     // NavigationState, separate from PageType::ERROR.
     state.set_page_type(fuchsia::web::PageType::ERROR);
+    state.set_error_detail(fuchsia::web::ErrorDetail::CRASH);
   } else if (uncommitted_load_error_) {
     // If there was a loading error which prevented the navigation entry from
     // being committed, then report PageType::ERROR.
     state.set_page_type(fuchsia::web::PageType::ERROR);
+    state.set_error_detail(fuchsia::web::ErrorDetail::LOAD_FAILED);
   } else {
     switch (entry->GetPageType()) {
       case content::PageType::PAGE_TYPE_NORMAL:
@@ -218,6 +246,15 @@ NavigationControllerImpl::GetVisibleNavigationState() const {
         break;
       case content::PageType::PAGE_TYPE_ERROR:
         state.set_page_type(fuchsia::web::PageType::ERROR);
+        switch (last_error_code_) {
+          case net::ERR_BLOCKED_BY_ADMINISTRATOR:
+            state.set_error_detail(
+                fuchsia::web::ErrorDetail::EXPLICIT_CONTENT_BLOCKED);
+            break;
+          default:
+            state.set_error_detail(fuchsia::web::ErrorDetail::LOAD_FAILED);
+            break;
+        }
         break;
     }
   }
@@ -235,15 +272,16 @@ void NavigationControllerImpl::OnNavigationEntryChanged() {
                         &pending_navigation_event_);
   previous_navigation_state_ = std::move(new_state);
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&NavigationControllerImpl::MaybeSendNavigationEvent,
                      weak_factory_.GetWeakPtr()));
 }
 
 void NavigationControllerImpl::MaybeSendNavigationEvent() {
-  if (!navigation_listener_)
+  if (!navigation_listener_) {
     return;
+  }
 
   if (pending_navigation_event_.IsEmpty() ||
       waiting_for_navigation_event_ack_) {
@@ -251,6 +289,14 @@ void NavigationControllerImpl::MaybeSendNavigationEvent() {
   }
 
   waiting_for_navigation_event_ack_ = true;
+
+  // Note that the events is logged to the parent Frame's flow.
+  TRACE_EVENT(kWebEngineFidlCategory,
+              "fuchsia.web/NavigationEventListener.OnNavigationStateChanged",
+              perfetto::Flow::FromPointer(parent_for_trace_flow_), "url",
+              previous_navigation_state_.url(), "title",
+              previous_navigation_state_.title().data(), "is_loaded",
+              is_main_document_loaded_);
 
   // Send the event to the observer and, upon acknowledgement, revisit this
   // function to send another update.
@@ -266,6 +312,11 @@ void NavigationControllerImpl::MaybeSendNavigationEvent() {
 void NavigationControllerImpl::LoadUrl(std::string url,
                                        fuchsia::web::LoadUrlParams params,
                                        LoadUrlCallback callback) {
+  // Note that the event is logged to the parent Frame's flow.
+  TRACE_EVENT(kWebEngineFidlCategory,
+              "fuchsia.web/NavigationController.LoadUrl",
+              perfetto::Flow::FromPointer(parent_for_trace_flow_), "url", url);
+
   GURL validated_url(url);
   if (!validated_url.is_valid()) {
     callback(
@@ -278,8 +329,8 @@ void NavigationControllerImpl::LoadUrl(std::string url,
     std::vector<std::string> extra_headers;
     extra_headers.reserve(params.headers().size());
     for (const auto& header : params.headers()) {
-      base::StringPiece header_name = BytesAsString(header.name);
-      base::StringPiece header_value = BytesAsString(header.value);
+      std::string_view header_name = BytesAsString(header.name);
+      std::string_view header_value = BytesAsString(header.value);
       if (!net::HttpUtil::IsValidHeaderName(header_name) ||
           !net::HttpUtil::IsValidHeaderValue(header_value)) {
         callback(fpromise::error(
@@ -293,8 +344,9 @@ void NavigationControllerImpl::LoadUrl(std::string url,
     params_converted.extra_headers = base::JoinString(extra_headers, "\n");
   }
 
-  if (validated_url.scheme() == url::kDataScheme)
+  if (validated_url.scheme() == url::kDataScheme) {
     params_converted.load_type = content::NavigationController::LOAD_TYPE_DATA;
+  }
 
   params_converted.transition_type = ui::PageTransitionFromInt(
       ui::PAGE_TRANSITION_TYPED | ui::PAGE_TRANSITION_FROM_ADDRESS_BAR);
@@ -309,20 +361,35 @@ void NavigationControllerImpl::LoadUrl(std::string url,
 }
 
 void NavigationControllerImpl::GoBack() {
-  if (web_contents_->GetController().CanGoBack())
+  TRACE_EVENT(kWebEngineFidlCategory, "fuchsia.web/NavigationController.GoBack",
+              perfetto::Flow::FromPointer(parent_for_trace_flow_));
+
+  if (web_contents_->GetController().CanGoBack()) {
     web_contents_->GetController().GoBack();
+  }
 }
 
 void NavigationControllerImpl::GoForward() {
-  if (web_contents_->GetController().CanGoForward())
+  TRACE_EVENT(kWebEngineFidlCategory,
+              "fuchsia.web/NavigationController.GoForward",
+              perfetto::Flow::FromPointer(parent_for_trace_flow_));
+
+  if (web_contents_->GetController().CanGoForward()) {
     web_contents_->GetController().GoForward();
+  }
 }
 
 void NavigationControllerImpl::Stop() {
+  TRACE_EVENT(kWebEngineFidlCategory, "fuchsia.web/NavigationController.Stop",
+              perfetto::Flow::FromPointer(parent_for_trace_flow_));
+
   web_contents_->Stop();
 }
 
 void NavigationControllerImpl::Reload(fuchsia::web::ReloadType type) {
+  TRACE_EVENT(kWebEngineFidlCategory, "fuchsia.web/NavigationController.Reload",
+              perfetto::Flow::FromPointer(parent_for_trace_flow_));
+
   content::ReloadType internal_reload_type;
   switch (type) {
     case fuchsia::web::ReloadType::PARTIAL_CACHE:
@@ -333,11 +400,6 @@ void NavigationControllerImpl::Reload(fuchsia::web::ReloadType type) {
       break;
   }
   web_contents_->GetController().Reload(internal_reload_type, false);
-}
-
-void NavigationControllerImpl::GetVisibleEntry(
-    fuchsia::web::NavigationController::GetVisibleEntryCallback callback) {
-  callback(GetVisibleNavigationState());
 }
 
 void NavigationControllerImpl::TitleWasSet(content::NavigationEntry* entry) {
@@ -359,12 +421,14 @@ void NavigationControllerImpl::DidFinishLoad(
 
   // Don't process load completion on the current document if the WebContents
   // is already in the process of navigating to a different page.
-  if (active_navigation_)
+  if (active_navigation_) {
     return;
+  }
 
   // Only allow the primary main frame to transition this state.
-  if (!render_frame_host->IsInPrimaryMainFrame())
+  if (!render_frame_host->IsInPrimaryMainFrame()) {
     return;
+  }
 
   is_main_document_loaded_ = true;
   OnNavigationEntryChanged();
@@ -386,10 +450,12 @@ void NavigationControllerImpl::DidStartNavigation(
   }
 
   // If favicons are enabled then reset favicon in the pending navigation.
-  if (send_favicon_)
+  if (send_favicon_) {
     pending_navigation_event_.set_favicon({});
+  }
 
   uncommitted_load_error_ = false;
+
   active_navigation_ = navigation_handle;
   is_main_document_loaded_ = false;
   OnNavigationEntryChanged();
@@ -397,12 +463,14 @@ void NavigationControllerImpl::DidStartNavigation(
 
 void NavigationControllerImpl::DidFinishNavigation(
     content::NavigationHandle* navigation_handle) {
-  if (navigation_handle != active_navigation_)
+  if (navigation_handle != active_navigation_) {
     return;
+  }
 
   active_navigation_ = nullptr;
   uncommitted_load_error_ = !navigation_handle->HasCommitted() &&
                             navigation_handle->GetNetErrorCode() != net::OK;
+  last_error_code_ = navigation_handle->GetNetErrorCode();
 
   OnNavigationEntryChanged();
 }

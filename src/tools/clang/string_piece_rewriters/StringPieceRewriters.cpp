@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -239,7 +239,6 @@ int main(int argc, const char* argv[]) {
       RewriteImplicitToExplicitStringConstructionRule(),
       ReplaceAsStringWithExplicitStringConversionRule(),
   });
-  addInclude(as_string_rule, "base/strings/string_piece.h");
 
   AtomicChanges changes;
   Transformer transformer(as_string_rule, GetConsumer(changes));

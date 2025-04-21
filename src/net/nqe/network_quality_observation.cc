@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,13 +13,13 @@ Observation::Observation(int32_t value,
                          base::TimeTicks timestamp,
                          int32_t signal_strength,
                          NetworkQualityObservationSource source)
-    : Observation(value, timestamp, signal_strength, source, absl::nullopt) {}
+    : Observation(value, timestamp, signal_strength, source, std::nullopt) {}
 
 Observation::Observation(int32_t value,
                          base::TimeTicks timestamp,
                          int32_t signal_strength,
                          NetworkQualityObservationSource source,
-                         const absl::optional<IPHash>& host)
+                         const std::optional<IPHash>& host)
     : value_(value),
       timestamp_(timestamp),
       signal_strength_(signal_strength),
@@ -61,10 +61,8 @@ std::vector<ObservationCategory> Observation::GetObservationCategories() const {
       return observation_categories;
     case NETWORK_QUALITY_OBSERVATION_SOURCE_MAX:
       NOTREACHED();
-      return observation_categories;
   }
   NOTREACHED();
-  return observation_categories;
 }
 
 }  // namespace net::nqe::internal

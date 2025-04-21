@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,13 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "net/base/net_errors.h"
 #include "net/log/net_log_source_type.h"
 #include "net/log/net_log_with_source.h"
 #include "net/socket/client_socket_factory.h"
 #include "net/socket/client_socket_handle.h"
+#include "net/socket/connect_job_params.h"
 #include "net/socket/socks5_client_socket.h"
 #include "net/socket/socks_client_socket.h"
 #include "net/socket/transport_connect_job.h"
@@ -23,15 +24,15 @@ namespace net {
 static constexpr base::TimeDelta kSOCKSConnectJobTimeout = base::Seconds(30);
 
 SOCKSSocketParams::SOCKSSocketParams(
-    scoped_refptr<TransportSocketParams> proxy_server_params,
+    ConnectJobParams nested_params,
     bool socks_v5,
     const HostPortPair& host_port_pair,
-    const NetworkIsolationKey& network_isolation_key,
+    const NetworkAnonymizationKey& network_anonymization_key,
     const NetworkTrafficAnnotationTag& traffic_annotation)
-    : transport_params_(std::move(proxy_server_params)),
+    : transport_params_(nested_params.take_transport()),
       destination_(host_port_pair),
       socks_v5_(socks_v5),
-      network_isolation_key_(network_isolation_key),
+      network_anonymization_key_(network_anonymization_key),
       traffic_annotation_(traffic_annotation) {}
 
 SOCKSSocketParams::~SOCKSSocketParams() = default;
@@ -82,7 +83,6 @@ LoadState SOCKSConnectJob::GetLoadState() const {
       return LOAD_STATE_CONNECTING;
     default:
       NOTREACHED();
-      return LOAD_STATE_IDLE;
   }
 }
 
@@ -144,8 +144,6 @@ int SOCKSConnectJob::DoLoop(int result) {
         break;
       default:
         NOTREACHED() << "bad state";
-        rv = ERR_FAILED;
-        break;
     }
   } while (rv != ERR_IO_PENDING && next_state_ != STATE_NONE);
 
@@ -184,7 +182,7 @@ int SOCKSConnectJob::DoSOCKSConnect() {
   } else {
     auto socks_socket = std::make_unique<SOCKSClientSocket>(
         transport_connect_job_->PassSocket(), socks_params_->destination(),
-        socks_params_->network_isolation_key(), priority(), host_resolver(),
+        socks_params_->network_anonymization_key(), priority(), host_resolver(),
         socks_params_->transport_params()->secure_dns_policy(),
         socks_params_->traffic_annotation());
     socks_socket_ptr_ = socks_socket.get();
@@ -203,7 +201,7 @@ int SOCKSConnectJob::DoSOCKSConnectComplete(int result) {
     return result;
   }
 
-  SetSocket(std::move(socket_), absl::nullopt /* dns_aliases */);
+  SetSocket(std::move(socket_), std::nullopt /* dns_aliases */);
   return result;
 }
 

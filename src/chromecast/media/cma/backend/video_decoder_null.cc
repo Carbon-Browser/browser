@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,10 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chromecast/public/media/cast_decoder_buffer.h"
 
 namespace chromecast {
@@ -39,7 +39,7 @@ MediaPipelineBackend::BufferStatus VideoDecoderNull::PushBuffer(
   DCHECK(delegate_);
   DCHECK(buffer);
   if (buffer->end_of_stream()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&VideoDecoderNull::OnEndOfStream,
                                   weak_factory_.GetWeakPtr()));
   }

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 
 #include "base/memory/ptr_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "media/base/audio_parameters.h"
 #include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/platform/web_vector.h"
@@ -32,13 +33,13 @@ class MockCDQualityAudioSource : public MediaStreamAudioSource {
                                true) {
     SetFormat(media::AudioParameters(
         media::AudioParameters::AUDIO_PCM_LOW_LATENCY,
-        media::CHANNEL_LAYOUT_STEREO,
+        media::ChannelLayoutConfig::Stereo(),
         media::AudioParameters::kAudioCDSampleRate,
         media::AudioParameters::kAudioCDSampleRate / 100));
     SetDevice(MediaStreamDevice(
         mojom::MediaStreamType::DEVICE_AUDIO_CAPTURE, "mock_audio_device_id",
         "Mock audio device", media::AudioParameters::kAudioCDSampleRate,
-        media::CHANNEL_LAYOUT_STEREO,
+        media::ChannelLayoutConfig::Stereo(),
         media::AudioParameters::kAudioCDSampleRate / 100));
   }
 
@@ -60,7 +61,7 @@ void MockMediaStreamRegistry::Init() {
 MockMediaStreamVideoSource* MockMediaStreamRegistry::AddVideoTrack(
     const String& track_id,
     const VideoTrackAdapterSettings& adapter_settings,
-    const absl::optional<bool>& noise_reduction,
+    const std::optional<bool>& noise_reduction,
     bool is_screencast,
     double min_frame_rate) {
   auto native_source = std::make_unique<MockMediaStreamVideoSource>();
@@ -73,8 +74,8 @@ MockMediaStreamVideoSource* MockMediaStreamRegistry::AddVideoTrack(
       track_id, source,
       std::make_unique<MediaStreamVideoTrack>(
           native_source_ptr, adapter_settings, noise_reduction, is_screencast,
-          min_frame_rate, absl::nullopt /* pan */, absl::nullopt /* tilt */,
-          absl::nullopt /* zoom */, false /* pan_tilt_zoom_allowed */,
+          min_frame_rate, nullptr /* device_settings */,
+          false /* pan_tilt_zoom_allowed */,
           MediaStreamVideoSource::ConstraintsOnceCallback(),
           true /* enabled */));
   descriptor_->AddRemoteTrack(component);
@@ -84,7 +85,7 @@ MockMediaStreamVideoSource* MockMediaStreamRegistry::AddVideoTrack(
 MockMediaStreamVideoSource* MockMediaStreamRegistry::AddVideoTrack(
     const String& track_id) {
   return AddVideoTrack(track_id, VideoTrackAdapterSettings(),
-                       absl::optional<bool>(), false /* is_screncast */,
+                       std::optional<bool>(), false /* is_screncast */,
                        0.0 /* min_frame_rate */);
 }
 

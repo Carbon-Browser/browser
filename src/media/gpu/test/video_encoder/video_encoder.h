@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/synchronization/condition_variable.h"
@@ -25,7 +25,7 @@ class VideoBitrateAllocation;
 namespace test {
 
 class BitstreamProcessor;
-class Video;
+class RawVideo;
 class VideoEncoderClient;
 struct VideoEncoderClientConfig;
 class VideoEncoderStats;
@@ -36,7 +36,7 @@ class VideoEncoderStats;
 class VideoEncoder {
  public:
   // Different video encoder states.
-  enum class EncoderState { kUninitialized = 0, kIdle, kEncoding };
+  enum class EncoderState { kUninitialized = 0, kIdle, kEncoding, kError };
 
   // The list of events that can be thrown by the video encoder.
   enum EncoderEvent {
@@ -46,6 +46,7 @@ class VideoEncoder {
     kFlushing,
     kFlushDone,
     kKeyFrame,
+    kError,
     kNumEvents,
   };
 
@@ -79,7 +80,7 @@ class VideoEncoder {
   // Initialize the video encoder for the specified |video|. The |video| will
   // not be owned by the video encoder, the caller should guarantee it outlives
   // the video encoder.
-  bool Initialize(const Video* video);
+  bool Initialize(const RawVideo* video);
   // Start encoding the video asynchronously.
   void Encode();
   // Encode the video asynchronously. Automatically pause encoding when the
@@ -126,7 +127,7 @@ class VideoEncoder {
   bool NotifyEvent(EncoderEvent event);
 
   // The video currently being encoded.
-  raw_ptr<const Video> video_ = nullptr;
+  raw_ptr<const RawVideo> video_ = nullptr;
   // The state of the video encoder.
   std::atomic<EncoderState> video_encoder_state_{EncoderState::kUninitialized};
   // The video encoder client communicating between this class and the hardware

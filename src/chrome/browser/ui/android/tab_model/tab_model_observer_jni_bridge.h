@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,17 +38,18 @@ class TabModelObserverJniBridge {
 
   void WillCloseTab(JNIEnv* env,
                     const base::android::JavaParamRef<jobject>& jobj,
-                    const base::android::JavaParamRef<jobject>& jtab,
-                    bool animate);
+                    const base::android::JavaParamRef<jobject>& jtab);
 
-  void DidCloseTab(JNIEnv* env,
-                   const base::android::JavaParamRef<jobject>& jobj,
-                   int tab_id,
-                   bool incognito);
+  void OnFinishingTabClosure(JNIEnv* env,
+                             const base::android::JavaParamRef<jobject>& jobj,
+                             int tab_id,
+                             bool incognito);
 
-  void DidCloseTabs(JNIEnv* env,
-                    const base::android::JavaParamRef<jobject>& jobj,
-                    const base::android::JavaParamRef<jobjectArray>& jtabs);
+  void OnFinishingMultipleTabClosure(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jobject>& jobj,
+      const base::android::JavaParamRef<jobjectArray>& jtabs,
+      bool canRestore);
 
   void WillAddTab(JNIEnv* env,
                   const base::android::JavaParamRef<jobject>& jobj,

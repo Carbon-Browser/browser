@@ -24,10 +24,10 @@
 
 #include "third_party/blink/renderer/platform/graphics/filters/fe_morphology.h"
 
-#include "base/stl_util.h"
+#include "base/types/optional_util.h"
 #include "third_party/blink/renderer/platform/graphics/filters/filter.h"
 #include "third_party/blink/renderer/platform/graphics/filters/paint_filter_builder.h"
-#include "third_party/blink/renderer/platform/wtf/text/text_stream.h"
+#include "third_party/blink/renderer/platform/wtf/text/string_builder_stream.h"
 
 namespace blink {
 
@@ -88,18 +88,18 @@ sk_sp<PaintFilter> FEMorphology::CreateImageFilter() {
       InputEffect(0), OperatingInterpolationSpace()));
   float radius_x = GetFilter()->ApplyHorizontalScale(radius_x_);
   float radius_y = GetFilter()->ApplyVerticalScale(radius_y_);
-  absl::optional<PaintFilter::CropRect> crop_rect = GetCropRect();
+  std::optional<PaintFilter::CropRect> crop_rect = GetCropRect();
   MorphologyPaintFilter::MorphType morph_type =
       type_ == FEMORPHOLOGY_OPERATOR_DILATE
           ? MorphologyPaintFilter::MorphType::kDilate
           : MorphologyPaintFilter::MorphType::kErode;
   return sk_make_sp<MorphologyPaintFilter>(morph_type, radius_x, radius_y,
                                            std::move(input),
-                                           base::OptionalOrNullptr(crop_rect));
+                                           base::OptionalToPtr(crop_rect));
 }
 
-static WTF::TextStream& operator<<(WTF::TextStream& ts,
-                                   const MorphologyOperatorType& type) {
+static StringBuilder& operator<<(StringBuilder& ts,
+                                 const MorphologyOperatorType& type) {
   switch (type) {
     case FEMORPHOLOGY_OPERATOR_UNKNOWN:
       ts << "UNKNOWN";
@@ -114,8 +114,8 @@ static WTF::TextStream& operator<<(WTF::TextStream& ts,
   return ts;
 }
 
-WTF::TextStream& FEMorphology::ExternalRepresentation(WTF::TextStream& ts,
-                                                      int indent) const {
+StringBuilder& FEMorphology::ExternalRepresentation(StringBuilder& ts,
+                                                    wtf_size_t indent) const {
   WriteIndent(ts, indent);
   ts << "[feMorphology";
   FilterEffect::ExternalRepresentation(ts);

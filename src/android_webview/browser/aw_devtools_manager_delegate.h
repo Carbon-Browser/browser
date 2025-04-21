@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,6 +30,9 @@ class AwDevToolsManagerDelegate : public content::DevToolsManagerDelegate {
   std::string GetTargetDescription(content::WebContents* web_contents) override;
   std::string GetDiscoveryPageHTML() override;
   bool IsBrowserTargetDiscoverable() override;
+  // Returns all targets embedder would like to report as debuggable remotely.
+  content::DevToolsAgentHost::List RemoteDebuggingTargets(
+      TargetType target_type) override;
 };
 
 } //  namespace android_webview

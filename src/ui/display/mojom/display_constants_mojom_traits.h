@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,6 +50,26 @@ struct EnumTraits<display::mojom::PrivacyScreenState,
       display::PrivacyScreenState type);
   static bool FromMojom(display::mojom::PrivacyScreenState type,
                         display::PrivacyScreenState* out);
+};
+
+template <>
+struct EnumTraits<display::mojom::VariableRefreshRateState,
+                  display::VariableRefreshRateState> {
+  static display::mojom::VariableRefreshRateState ToMojom(
+      display::VariableRefreshRateState type);
+  static bool FromMojom(display::mojom::VariableRefreshRateState type,
+                        display::VariableRefreshRateState* out);
+};
+
+template <>
+struct StructTraits<display::mojom::ModesetFlagsDataView,
+                    display::ModesetFlags> {
+  static uint64_t bitmask(const display::ModesetFlags& flags) {
+    return flags.ToEnumBitmask();
+  }
+
+  static bool Read(display::mojom::ModesetFlagsDataView data,
+                   display::ModesetFlags* out_range);
 };
 
 }  // namespace mojo

@@ -1,14 +1,20 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "base/files/scoped_temp_dir.h"
 
 #include <string>
 
 #include "base/files/file.h"
 #include "base/files/file_util.h"
-#include "base/files/scoped_temp_dir.h"
+#include "base/path_service.h"
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
+
+#if BUILDFLAG(IS_WIN)
+#include <shlobj.h>
+#endif
 
 namespace base {
 
@@ -54,9 +60,19 @@ TEST(ScopedTempDir, TempDir) {
     EXPECT_TRUE(dir.CreateUniqueTempDir());
     test_path = dir.GetPath();
     EXPECT_TRUE(DirectoryExists(test_path));
+
+#if BUILDFLAG(IS_WIN)
+    FilePath expected_parent_dir;
+    if (!::IsUserAnAdmin() ||
+        !PathService::Get(DIR_SYSTEM_TEMP, &expected_parent_dir)) {
+      EXPECT_TRUE(PathService::Get(DIR_TEMP, &expected_parent_dir));
+    }
+    EXPECT_TRUE(expected_parent_dir.IsParent(test_path));
+#else   // BUILDFLAG(IS_WIN)
     FilePath tmp_dir;
     EXPECT_TRUE(GetTempDir(&tmp_dir));
     EXPECT_TRUE(test_path.value().find(tmp_dir.value()) != std::string::npos);
+#endif  // BUILDFLAG(IS_WIN)
   }
   EXPECT_FALSE(DirectoryExists(test_path));
 }
@@ -116,7 +132,7 @@ TEST(ScopedTempDir, LockedTempDir) {
             File::FLAG_CREATE_ALWAYS | File::FLAG_WRITE);
   EXPECT_TRUE(file.IsValid());
   EXPECT_EQ(File::FILE_OK, file.error_details());
-  EXPECT_FALSE(dir.Delete());  // We should not be able to delete.
+  EXPECT_FALSE(dir.Delete());           // We should not be able to delete.
   EXPECT_FALSE(dir.GetPath().empty());  // We should still have a valid path.
   file.Close();
   // Now, we should be able to delete.

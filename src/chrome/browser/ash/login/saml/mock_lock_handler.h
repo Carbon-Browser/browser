@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,9 @@
 
 #include <string>
 
-#include "ash/components/proximity_auth/screenlock_bridge.h"
+#include "chromeos/ash/components/proximity_auth/public/mojom/auth_type.mojom-shared.h"
+#include "chromeos/ash/components/proximity_auth/screenlock_bridge.h"
+#include "components/account_id/account_id.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
 namespace ash {
@@ -23,14 +25,8 @@ class MockLockHandler : public proximity_auth::ScreenlockBridge::LockHandler {
               ShowBannerMessage,
               (const std::u16string& message, bool is_warning));
   MOCK_METHOD(void,
-              ShowUserPodCustomIcon,
-              (const AccountId& account_id,
-               const proximity_auth::ScreenlockBridge::UserPodCustomIconInfo&
-                   icon_info));
-  MOCK_METHOD(void, HideUserPodCustomIcon, (const AccountId& account_id));
-  MOCK_METHOD(void,
               SetSmartLockState,
-              (const AccountId& account_id, ash::SmartLockState statel));
+              (const AccountId& account_id, SmartLockState statel));
   MOCK_METHOD(void,
               NotifySmartLockAuthResult,
               (const AccountId& account_id, bool successful));

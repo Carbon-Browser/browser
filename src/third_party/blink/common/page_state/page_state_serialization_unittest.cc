@@ -1,6 +1,8 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "third_party/blink/public/common/page_state/page_state_serialization.h"
 
 #include <stddef.h>
 
@@ -13,17 +15,17 @@
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/loader/http_body_element_type.h"
-#include "third_party/blink/public/common/page_state/page_state_serialization.h"
 
 namespace blink {
 namespace {
 
 base::FilePath GetFilePath() {
   base::FilePath path;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &path);
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &path);
   return base::MakeAbsoluteFilePath(path.Append(
       FILE_PATH_LITERAL("third_party/blink/common/page_state/test_data")));
 }
@@ -89,6 +91,8 @@ void ExpectEquality(const ExplodedFrameState& expected,
   EXPECT_EQ(expected.referrer, actual.referrer);
   EXPECT_EQ(expected.referrer_policy, actual.referrer_policy);
   EXPECT_EQ(expected.initiator_origin, actual.initiator_origin);
+  EXPECT_EQ(expected.initiator_base_url_string,
+            actual.initiator_base_url_string);
   EXPECT_EQ(expected.target, actual.target);
   EXPECT_EQ(expected.state_object, actual.state_object);
   ExpectEquality(expected.document_state, actual.document_state);
@@ -127,7 +131,7 @@ class PageStateSerializationTest : public testing::Test {
     frame_state->referrer = u"https://www.google.com/search?q=dev.chromium.org";
     frame_state->referrer_policy = network::mojom::ReferrerPolicy::kAlways;
     frame_state->target = u"foo";
-    frame_state->state_object = absl::nullopt;
+    frame_state->state_object = std::nullopt;
     frame_state->document_state.push_back(u"1");
     frame_state->document_state.push_back(u"q");
     frame_state->document_state.push_back(u"text");
@@ -142,26 +146,31 @@ class PageStateSerializationTest : public testing::Test {
     frame_state->scroll_anchor_selector = u"#selector";
     frame_state->scroll_anchor_offset = gfx::PointF(2.5, 3.5);
     frame_state->scroll_anchor_simhash = 12345;
+    frame_state->initiator_origin =
+        url::Origin::Create(GURL("https://initiator.example.com"));
     frame_state->navigation_api_key = u"abcd";
     frame_state->navigation_api_id = u"wxyz";
-    frame_state->navigation_api_state = absl::nullopt;
+    frame_state->navigation_api_state = std::nullopt;
     frame_state->protect_url_in_navigation_api = false;
+    frame_state->initiator_base_url_string =
+        base::UTF8ToUTF16(frame_state->initiator_origin->GetURL().spec());
   }
 
   void PopulateHttpBody(
       ExplodedHttpBody* http_body,
-      std::vector<absl::optional<std::u16string>>* referenced_files) {
+      std::vector<std::optional<std::u16string>>* referenced_files) {
     http_body->request_body = new network::ResourceRequestBody();
     http_body->request_body->set_identifier(12345);
     http_body->contains_passwords = false;
     http_body->http_content_type = u"text/foo";
 
     std::string test_body("foo");
-    http_body->request_body->AppendBytes(test_body.data(), test_body.size());
+    http_body->request_body->AppendCopyOfBytes(base::as_byte_span(test_body));
 
     base::FilePath path(FILE_PATH_LITERAL("file.txt"));
-    http_body->request_body->AppendFileRange(base::FilePath(path), 100, 1024,
-                                             base::Time::FromDoubleT(9999.0));
+    http_body->request_body->AppendFileRange(
+        base::FilePath(path), 100, 1024,
+        base::Time::FromSecondsSinceUnixEpoch(9999.0));
 
     referenced_files->emplace_back(path.AsUTF16Unsafe());
   }
@@ -170,10 +179,19 @@ class PageStateSerializationTest : public testing::Test {
                                                 bool is_child,
                                                 int version) {
     if (version < 28) {
-      // Older versions didn't cover |initiator_origin| -  we expect that
+      // Older versions didn't cover `initiator_origin` -  we expect that
       // deserialization will set it to the default, null value.
-      frame_state->initiator_origin = absl::nullopt;
+      frame_state->initiator_origin = std::nullopt;
+    } else if (version < 32) {
+      // Here we only give the parent an initiator origin value, and not the
+      // child. This is required to match the existing baseline files for
+      // versions 28 through 31 inclusive (see https://crbug.com/1405812).
+      if (!is_child) {
+        frame_state->initiator_origin =
+            url::Origin::Create(GURL("https://initiator.example.com"));
+      }
     } else {
+      // As of version 32, all frames can have an initiator origin.
       frame_state->initiator_origin =
           url::Origin::Create(GURL("https://initiator.example.com"));
     }
@@ -222,22 +240,28 @@ class PageStateSerializationTest : public testing::Test {
     if (version >= 31)
       frame_state->protect_url_in_navigation_api = true;
 
+    if (version >= 33) {
+      frame_state->initiator_base_url_string =
+          base::UTF8ToUTF16(GURL("https://initiator.example.com").spec());
+    }
+
     if (!is_child) {
       frame_state->http_body.http_content_type = u"foo/bar";
       frame_state->http_body.request_body = new network::ResourceRequestBody();
       frame_state->http_body.request_body->set_identifier(789);
 
       std::string test_body("first data block");
-      frame_state->http_body.request_body->AppendBytes(test_body.data(),
-                                                       test_body.size());
+      frame_state->http_body.request_body->AppendCopyOfBytes(
+          base::as_byte_span(test_body));
 
       frame_state->http_body.request_body->AppendFileRange(
           base::FilePath(FILE_PATH_LITERAL("file.txt")), 0,
-          std::numeric_limits<uint64_t>::max(), base::Time::FromDoubleT(0.0));
+          std::numeric_limits<uint64_t>::max(),
+          base::Time::FromSecondsSinceUnixEpoch(0.0));
 
       std::string test_body2("data the second");
-      frame_state->http_body.request_body->AppendBytes(test_body2.data(),
-                                                       test_body2.size());
+      frame_state->http_body.request_body->AppendCopyOfBytes(
+          base::as_byte_span(test_body2));
 
       ExplodedFrameState child_state;
       PopulateFrameStateForBackwardsCompatTest(&child_state, true, version);
@@ -249,6 +273,15 @@ class PageStateSerializationTest : public testing::Test {
                                                int version) {
     page_state->referenced_files.push_back(u"file.txt");
     PopulateFrameStateForBackwardsCompatTest(&page_state->top, false, version);
+  }
+
+  int GetCurrentVersion() {
+    // Because the kCurrentVersion is an internal value not accessible to this
+    // test, find it by pulling it out of a newly generated PageState.
+    std::string encoded;
+    ExplodedPageState page_state;
+    EncodePageState(page_state, &encoded);
+    return DecodePageStateForTesting(encoded, &page_state);
   }
 
   void ReadBackwardsCompatPageState(const std::string& suffix,
@@ -302,11 +335,29 @@ class PageStateSerializationTest : public testing::Test {
     ExplodedPageState decoded_state;
     ExplodedPageState expected_state;
     PopulatePageStateForBackwardsCompatTest(&expected_state, version);
+
+    base::HistogramTester histogram_tester;
     ReadBackwardsCompatPageState(suffix, version, &decoded_state);
+    if (version < GetCurrentVersion()) {
+      // Older versions should generate a histogram value when decoded.
+      histogram_tester.ExpectBucketCount("SessionRestore.PageStateOldVersions",
+                                         version, 1);
+    }
 
     ExpectEquality(expected_state, decoded_state);
   }
 };
+
+TEST_F(PageStateSerializationTest, InitiatorOriginAssign) {
+  ExplodedFrameState a, b;
+  a.initiator_origin =
+      url::Origin::Create(GURL("https://initiator.example.com"));
+  b = a;
+  ExpectEquality(a, b);
+
+  ExplodedFrameState c(a);
+  ExpectEquality(a, c);
+}
 
 TEST_F(PageStateSerializationTest, BasicEmpty) {
   ExplodedPageState input;
@@ -356,6 +407,10 @@ TEST_F(PageStateSerializationTest, BasicFrameSet) {
     ExplodedFrameState child_state;
     PopulateFrameState(&child_state);
     input.top.children.push_back(child_state);
+
+    // Ensure `child_state` made it into `input` successfully, to catch any
+    // cases where ExplodedFrameState::assign may have been missed.
+    ExpectEquality(child_state, input.top.children[i]);
   }
 
   std::string encoded;
@@ -402,7 +457,7 @@ TEST_F(PageStateSerializationTest, BadMessagesTest1) {
   // Bad real number.
   p.WriteInt(-1);
 
-  std::string s(static_cast<const char*>(p.data()), p.size());
+  std::string s(p.data_as_char(), p.size());
 
   ExplodedPageState output;
   EXPECT_FALSE(DecodePageState(s, &output));
@@ -428,7 +483,7 @@ TEST_F(PageStateSerializationTest, BadMessagesTest2) {
   p.WriteInt(1);
   p.WriteInt(static_cast<int>(HTTPBodyElementType::kTypeData));
 
-  std::string s(static_cast<const char*>(p.data()), p.size());
+  std::string s(p.data_as_char(), p.size());
 
   ExplodedPageState output;
   EXPECT_FALSE(DecodePageState(s, &output));
@@ -484,10 +539,10 @@ TEST_F(PageStateSerializationTest, ScrollAnchorSelectorLengthLimited) {
 // Change to #if 1 to enable this code. Run this test to generate data, based on
 // the current serialization format, for the BackwardsCompat_vXX tests. This
 // will generate an expected.dat in the temp directory, which should be moved
-// //content/test/data/page_state/serialization_vXX.dat. A corresponding test
-// case for that version should also then be added below. You need to add such
-// a test for any addition/change to the schema of serialized page state.
-// If you're adding a field whose type is defined externally of
+// //third_party/blink/common/page_state/test_data/serialized_vXX.dat. A
+// corresponding test case for that version should also then be added below. You
+// need to add such a test for any addition/change to the schema of serialized
+// page state. If you're adding a field whose type is defined externally of
 // page_state.mojom, add an backwards compat test for that field specifically
 // by dumping a state object with only that field populated. See, e.g.,
 // BackwardsCompat_UrlString as an example.
@@ -506,8 +561,7 @@ TEST_F(PageStateSerializationTest, DumpExpectedPageStateForBackwardsCompat) {
   std::string encoded;
   EncodePageState(state, &encoded);
 
-  std::string base64;
-  base::Base64Encode(encoded, &base64);
+  std::string base64 = base::Base64Encode(encoded);
 
   base::FilePath path;
   base::PathService::Get(base::DIR_TEMP, &path);
@@ -606,6 +660,14 @@ TEST_F(PageStateSerializationTest, BackwardsCompat_v30) {
 
 TEST_F(PageStateSerializationTest, BackwardsCompat_v31) {
   TestBackwardsCompat(31);
+}
+
+TEST_F(PageStateSerializationTest, BackwardsCompat_v32) {
+  TestBackwardsCompat(32);
+}
+
+TEST_F(PageStateSerializationTest, BackwardsCompat_v33) {
+  TestBackwardsCompat(33);
 }
 
 // Add your new backwards compat test for future versions *above* this
@@ -720,11 +782,12 @@ TEST_F(PageStateSerializationTest, BackwardsCompat_HttpBody) {
   http_body.http_content_type = u"text/foo";
 
   std::string test_body("foo");
-  http_body.request_body->AppendBytes(test_body.data(), test_body.size());
+  http_body.request_body->AppendCopyOfBytes(base::as_byte_span(test_body));
 
   base::FilePath path(FILE_PATH_LITERAL("file.txt"));
-  http_body.request_body->AppendFileRange(base::FilePath(path), 100, 1024,
-                                          base::Time::FromDoubleT(9999.0));
+  http_body.request_body->AppendFileRange(
+      base::FilePath(path), 100, 1024,
+      base::Time::FromSecondsSinceUnixEpoch(9999.0));
 
   ExplodedPageState saved_state;
   ReadBackwardsCompatPageState("http_body", 26, &saved_state);

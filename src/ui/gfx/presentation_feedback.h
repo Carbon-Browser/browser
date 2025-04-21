@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 #define UI_GFX_PRESENTATION_FEEDBACK_H_
 
 #include <stdint.h>
+
+#include <optional>
 
 #include "base/time/time.h"
 #include "build/build_config.h"
@@ -89,9 +91,17 @@ struct PresentationFeedback {
   // when rendering on the GPU finished.
   base::TimeTicks writes_done_timestamp;
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
   gfx::CALayerResult ca_layer_error_code = gfx::kCALayerSuccess;
 #endif
+
+  // A unique ID used by the graphics pipeline to trace each individual frame
+  // swap. This value is present only if the feedback is coming from/via
+  // viz::Display. It's set in viz::Display::DidReceivePresentationFeedback().
+  // It should only be used for performance tracing purposes. See also
+  // gpu::SwapBuffersCompleteParams.swap_trace_id and
+  // perfetto::protos::pbzero::ChromeTrackEvent.event_latency.display_trace_id.
+  std::optional<int64_t> display_trace_id;
 };
 
 inline bool operator==(const PresentationFeedback& lhs,
@@ -101,10 +111,11 @@ inline bool operator==(const PresentationFeedback& lhs,
          lhs.available_timestamp == rhs.available_timestamp &&
          lhs.ready_timestamp == rhs.ready_timestamp &&
          lhs.latch_timestamp == rhs.latch_timestamp &&
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
          lhs.ca_layer_error_code == rhs.ca_layer_error_code &&
 #endif
-         lhs.writes_done_timestamp == rhs.writes_done_timestamp;
+         lhs.writes_done_timestamp == rhs.writes_done_timestamp &&
+         lhs.display_trace_id == rhs.display_trace_id;
 }
 
 inline bool operator!=(const PresentationFeedback& lhs,

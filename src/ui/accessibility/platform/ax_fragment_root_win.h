@@ -1,14 +1,16 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_ACCESSIBILITY_PLATFORM_AX_FRAGMENT_ROOT_WIN_H_
 #define UI_ACCESSIBILITY_PLATFORM_AX_FRAGMENT_ROOT_WIN_H_
 
-#include "base/memory/raw_ptr.h"
-#include "ui/accessibility/platform/ax_platform_node_delegate_base.h"
-
 #include <wrl/client.h>
+
+#include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
+#include "ui/accessibility/platform/ax_platform_node_delegate.h"
+#include "ui/accessibility/platform/ax_unique_id.h"
 
 namespace ui {
 
@@ -27,7 +29,8 @@ class AXFragmentRootPlatformNodeWin;
 // Since UIA derives some information from the underlying HWND hierarchy, we
 // expose one fragment root per HWND. The class that owns the HWND is expected
 // to own the corresponding AXFragmentRootWin.
-class AX_EXPORT AXFragmentRootWin : public ui::AXPlatformNodeDelegateBase {
+class COMPONENT_EXPORT(AX_PLATFORM) AXFragmentRootWin
+    : public AXPlatformNodeDelegate {
  public:
   AXFragmentRootWin(gfx::AcceleratedWidget widget,
                     AXFragmentRootDelegateWin* delegate);
@@ -60,14 +63,14 @@ class AX_EXPORT AXFragmentRootWin : public ui::AXPlatformNodeDelegateBase {
   // AXPlatformNodeDelegate overrides.
   gfx::NativeViewAccessible GetParent() const override;
   size_t GetChildCount() const override;
-  gfx::NativeViewAccessible ChildAtIndex(size_t index) override;
-  gfx::NativeViewAccessible GetNextSibling() override;
-  gfx::NativeViewAccessible GetPreviousSibling() override;
+  gfx::NativeViewAccessible ChildAtIndex(size_t index) const override;
+  gfx::NativeViewAccessible GetNextSibling() const override;
+  gfx::NativeViewAccessible GetPreviousSibling() const override;
   gfx::NativeViewAccessible HitTestSync(int x, int y) const override;
   gfx::NativeViewAccessible GetFocus() const override;
-  const ui::AXUniqueId& GetUniqueId() const override;
+  AXPlatformNodeId GetUniqueId() const override;
   gfx::AcceleratedWidget GetTargetForNativeAccessibilityEvent() override;
-  AXPlatformNode* GetFromTreeIDAndNodeID(const ui::AXTreeID& ax_tree_id,
+  AXPlatformNode* GetFromTreeIDAndNodeID(const AXTreeID& ax_tree_id,
                                          int32_t id) override;
 
   // A fragment root does not correspond to any node in the platform neutral
@@ -81,8 +84,8 @@ class AX_EXPORT AXFragmentRootWin : public ui::AXPlatformNodeDelegateBase {
 
   gfx::AcceleratedWidget widget_;
   const raw_ptr<AXFragmentRootDelegateWin> delegate_;
-  Microsoft::WRL::ComPtr<ui::AXFragmentRootPlatformNodeWin> platform_node_;
-  ui::AXUniqueId unique_id_;
+  Microsoft::WRL::ComPtr<AXFragmentRootPlatformNodeWin> platform_node_;
+  const AXUniqueId unique_id_{AXUniqueId::Create()};
 };
 
 }  // namespace ui

@@ -1,11 +1,18 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/formats/mp2t/es_parser_h264.h"
 
 #include <limits>
+#include <optional>
 
+#include "base/containers/adapters.h"
 #include "base/logging.h"
 #include "base/numerics/safe_conversions.h"
 #include "media/base/decrypt_config.h"
@@ -16,15 +23,13 @@
 #include "media/base/video_frame.h"
 #include "media/formats/common/offset_byte_queue.h"
 #include "media/formats/mp2t/mp2t_common.h"
-#include "media/video/h264_parser.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "media/parsers/h264_parser.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/size.h"
 
 namespace media {
 namespace mp2t {
 
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
 namespace {
 
 const int kSampleAESMaxUnprotectedNALULength = 48;
@@ -113,8 +118,8 @@ std::unique_ptr<uint8_t[]> AdjustAUForSampleAES(
     result.reset(new uint8_t[au_end_pos]);
     uint8_t* temp = result.get();
     memcpy(temp, au, au_end_pos);
-    for (auto epb_pos = epbs.rbegin(); epb_pos != epbs.rend(); ++epb_pos) {
-      RemoveByte(temp, *epb_pos, au_end_pos);
+    for (const auto& epb : base::Reversed(epbs)) {
+      RemoveByte(temp, epb, au_end_pos);
       au_end_pos--;
     }
     au = temp;
@@ -171,27 +176,20 @@ std::unique_ptr<uint8_t[]> AdjustAUForSampleAES(
 }
 
 }  // namespace
-#endif  // BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
 
 // An AUD NALU is at least 4 bytes:
 // 3 bytes for the start code + 1 byte for the NALU type.
-const int kMinAUDSize = 4;
+constexpr int kMinAUDSize = 4;
 
 EsParserH264::EsParserH264(NewVideoConfigCB new_video_config_cb,
                            EmitBufferCB emit_buffer_cb)
     : es_adapter_(std::move(new_video_config_cb), std::move(emit_buffer_cb)),
       h264_parser_(new H264Parser()),
       current_access_unit_pos_(0),
-      next_access_unit_pos_(0)
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
-      ,
+      next_access_unit_pos_(0),
       init_encryption_scheme_(EncryptionScheme::kUnencrypted),
-      get_decrypt_config_cb_()
-#endif
-{
-}
+      get_decrypt_config_cb_() {}
 
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
 EsParserH264::EsParserH264(NewVideoConfigCB new_video_config_cb,
                            EmitBufferCB emit_buffer_cb,
                            EncryptionScheme init_encryption_scheme,
@@ -202,10 +200,8 @@ EsParserH264::EsParserH264(NewVideoConfigCB new_video_config_cb,
       next_access_unit_pos_(0),
       init_encryption_scheme_(init_encryption_scheme),
       get_decrypt_config_cb_(get_decrypt_config_cb) {}
-#endif
 
-EsParserH264::~EsParserH264() {
-}
+EsParserH264::~EsParserH264() = default;
 
 void EsParserH264::Flush() {
   DVLOG(1) << __func__;
@@ -215,9 +211,16 @@ void EsParserH264::Flush() {
   // Simulate an additional AUD to force emitting the last access unit
   // which is assumed to be complete at this point.
   uint8_t aud[] = {0x00, 0x00, 0x01, 0x09};
-  es_queue_->Push(aud, sizeof(aud));
-  ParseFromEsQueue();
 
+  // Fail if this AUD's push fails allocation, since otherwise the behavior of
+  // the subsequent parse would vary based on whether or not the system is
+  // near-OOM.
+  // TODO(crbug.com/40204179): Consider plumbing parse failure for this push
+  // failure case, instead of what used to OOM but now instead would fail this
+  // CHECK.
+  CHECK(es_queue_->Push(base::span(aud)));
+
+  ParseFromEsQueue();
   es_adapter_.Flush();
 }
 
@@ -355,7 +358,6 @@ bool EsParserH264::ParseFromEsQueue() {
         } else {
           pps_id_for_access_unit = shdr.pic_parameter_set_id;
         }
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
         // With HLS SampleAES, protected blocks in H.264 consist of IDR and non-
         // IDR slices that are more than 48 bytes in length.
         if (get_decrypt_config_cb_ && get_decrypt_config_cb_.Run() &&
@@ -363,7 +365,6 @@ bool EsParserH264::ParseFromEsQueue() {
           int64_t nal_begin = nalu.data - es;
           protected_blocks_.Add(nal_begin, nal_begin + nalu.size);
         }
-#endif
         break;
       }
       default: {
@@ -416,11 +417,7 @@ bool EsParserH264::EmitFrame(int64_t access_unit_pos,
     const H264SPS* sps = h264_parser_->GetSPS(pps->seq_parameter_set_id);
     if (!sps)
       return false;
-    EncryptionScheme scheme = EncryptionScheme::kUnencrypted;
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
-    scheme = init_encryption_scheme_;
-#endif
-    RCHECK(UpdateVideoDecoderConfig(sps, scheme));
+    RCHECK(UpdateVideoDecoderConfig(sps, init_encryption_scheme_));
   }
 
   // Emit a frame.
@@ -431,7 +428,6 @@ bool EsParserH264::EmitFrame(int64_t access_unit_pos,
   es_queue_->PeekAt(current_access_unit_pos_, &es, &es_size);
   CHECK_GE(es_size, access_unit_size);
 
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
   const DecryptConfig* base_decrypt_config = nullptr;
   if (get_decrypt_config_cb_)
     base_decrypt_config = get_decrypt_config_cb_.Run();
@@ -445,7 +441,6 @@ bool EsParserH264::EmitFrame(int64_t access_unit_pos,
     if (adjusted_au)
       es = adjusted_au.get();
   }
-#endif
 
   // TODO(wolenetz/acolwell): Validate and use a common cross-parser TrackId
   // type and allow multiple video tracks. See https://crbug.com/341581.
@@ -454,14 +449,12 @@ bool EsParserH264::EmitFrame(int64_t access_unit_pos,
                                    DemuxerStream::VIDEO, kMp2tVideoTrackId);
   stream_parser_buffer->SetDecodeTimestamp(current_timing_desc.dts);
   stream_parser_buffer->set_timestamp(current_timing_desc.pts);
-#if BUILDFLAG(ENABLE_HLS_SAMPLE_AES)
   if (base_decrypt_config) {
     switch (base_decrypt_config->encryption_scheme()) {
       case EncryptionScheme::kUnencrypted:
         // As |base_decrypt_config| is specified, the stream is encrypted,
         // so this shouldn't happen.
         NOTREACHED();
-        break;
       case EncryptionScheme::kCenc:
         stream_parser_buffer->set_decrypt_config(
             DecryptConfig::CreateCencConfig(base_decrypt_config->key_id(),
@@ -480,7 +473,6 @@ bool EsParserH264::EmitFrame(int64_t access_unit_pos,
         break;
     }
   }
-#endif
   return es_adapter_.OnNewBuffer(stream_parser_buffer);
 }
 
@@ -490,11 +482,11 @@ bool EsParserH264::UpdateVideoDecoderConfig(const H264SPS* sps,
   int sar_width = (sps->sar_width == 0) ? 1 : sps->sar_width;
   int sar_height = (sps->sar_height == 0) ? 1 : sps->sar_height;
 
-  absl::optional<gfx::Size> coded_size = sps->GetCodedSize();
+  std::optional<gfx::Size> coded_size = sps->GetCodedSize();
   if (!coded_size)
     return false;
 
-  absl::optional<gfx::Rect> visible_rect = sps->GetVisibleRect();
+  std::optional<gfx::Rect> visible_rect = sps->GetVisibleRect();
   if (!visible_rect)
     return false;
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,10 +48,15 @@ class AcceleratorsCocoa {
   // Returns the singleton instance.
   static AcceleratorsCocoa* GetInstance();
 
+  // Informs AcceleratorsCocoa that it's constructing accelerators for a PWA.
+  static void CreateForPWA(bool flag);
+
  private:
   friend struct base::DefaultSingletonTraits<AcceleratorsCocoa>;
   FRIEND_TEST_ALL_PREFIXES(AcceleratorsCocoaBrowserTest,
                            MappingAcceleratorsInMainMenu);
+  FRIEND_TEST_ALL_PREFIXES(AcceleratorsCocoaBrowserTestRTL,
+                           HistoryAcceleratorsReversedForRTL);
 
   AcceleratorsCocoa();
   ~AcceleratorsCocoa();

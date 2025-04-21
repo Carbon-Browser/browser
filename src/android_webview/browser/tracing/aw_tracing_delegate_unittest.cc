@@ -1,8 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "android_webview/browser/tracing/aw_tracing_delegate.h"
+
+#include <memory>
 
 #include "android_webview/browser/aw_browser_process.h"
 #include "android_webview/browser/aw_feature_list_creator.h"
@@ -12,7 +14,6 @@
 #include "components/prefs/testing_pref_service.h"
 #include "components/tracing/common/background_tracing_state_manager.h"
 #include "components/tracing/common/pref_names.h"
-#include "content/public/browser/background_tracing_config.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -31,62 +32,27 @@ class AwTracingDelegateTest : public testing::Test {
         metrics::prefs::kMetricsReportingEnabled, false);
     pref_service_->SetBoolean(metrics::prefs::kMetricsReportingEnabled, true);
     tracing::RegisterPrefs(pref_service_->registry());
-    tracing::BackgroundTracingStateManager::GetInstance()
-        .SetPrefServiceForTesting(pref_service_.get());
+
+    auto state_manager = tracing::BackgroundTracingStateManager::CreateInstance(
+        pref_service_.get());
+    delegate_ = std::make_unique<android_webview::AwTracingDelegate>(
+        std::move(state_manager));
   }
 
   void TearDown() override {
     delete browser_process_;
-    tracing::BackgroundTracingStateManager::GetInstance().Reset();
   }
 
-  android_webview::AwTracingDelegate delegate_;
-
- private:
+ protected:
   content::BrowserTaskEnvironment task_environment_;
   raw_ptr<android_webview::AwBrowserProcess> browser_process_;
   std::unique_ptr<TestingPrefServiceSimple> pref_service_;
+  std::unique_ptr<android_webview::AwTracingDelegate> delegate_;
 };
 
-std::unique_ptr<content::BackgroundTracingConfig> CreateValidConfig() {
-  base::Value dict(base::Value::Type::DICTIONARY);
-  dict.SetStringKey("scenario_name", "TestScenario");
-  dict.SetStringKey("mode", "PREEMPTIVE_TRACING_MODE");
-  dict.SetStringKey("custom_categories", "toplevel");
-  base::Value rules_list(base::Value::Type::LIST);
-
-  {
-    base::Value rules_dict(base::Value::Type::DICTIONARY);
-    rules_dict.SetStringKey("rule", "MONITOR_AND_DUMP_WHEN_TRIGGER_NAMED");
-    rules_dict.SetStringKey("trigger_name", "test");
-    rules_list.Append(std::move(rules_dict));
-  }
-
-  dict.SetKey("configs", std::move(rules_list));
-  return content::BackgroundTracingConfig::FromDict(std::move(dict));
-}
-
-TEST_F(AwTracingDelegateTest, IsAllowedToBegin) {
-  auto config = CreateValidConfig();
-
-  EXPECT_TRUE(delegate_.IsAllowedToBeginBackgroundScenario(
-      *config, /*requires_anonymized_data=*/false));
-  EXPECT_TRUE(delegate_.IsAllowedToEndBackgroundScenario(
-      *config, /*requires_anonymized_data=*/false,
-      /*is_crash_scenario=*/false));
-}
-
-TEST_F(AwTracingDelegateTest, IsAllowedToBeginSessionEndedUnexpectedly) {
-  tracing::BackgroundTracingStateManager::GetInstance().SaveState(
-      {}, tracing::BackgroundTracingState::STARTED);
-
-  base::Value dict(base::Value::Type::DICTIONARY);
-  tracing::BackgroundTracingStateManager::GetInstance().Initialize(nullptr);
-
-  auto config = CreateValidConfig();
-
-  EXPECT_FALSE(delegate_.IsAllowedToBeginBackgroundScenario(
-      *config, /*requires_anonymized_data=*/false));
+TEST_F(AwTracingDelegateTest, IsRecordingAllowed) {
+  EXPECT_TRUE(delegate_->IsRecordingAllowed(
+      /*requires_anonymized_data=*/false));
 }
 
 }  // namespace android_webview

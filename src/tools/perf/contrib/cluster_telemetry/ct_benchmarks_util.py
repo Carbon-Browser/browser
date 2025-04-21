@@ -1,20 +1,15 @@
 #!/usr/bin/env vpython3
-# Copyright 2015 The Chromium Authors. All rights reserved.
+# Copyright 2015 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 def AddBenchmarkCommandLineArgs(parser):
-  parser.add_option('--user-agent',  action='store', type='string',
-                    default=None, help='Options are mobile and desktop.')
-  parser.add_option('--archive-data-file',
-                    action='store',
-                    type='string',
-                    default=None,
-                    help='The location of the WPR JSON archive file.')
-  parser.add_option('--urls-list',  action='store', type='string',
-                    default=None,
-                    help='This is a comma separated list of urls. '
-                    'Eg: http://www.google.com,http://www.gmail.com')
+  parser.add_argument('--user-agent', help='Options are mobile and desktop.')
+  parser.add_argument('--archive-data-file',
+                      help='The location of the WPR JSON archive file.')
+  parser.add_argument('--urls-list',
+                      help=('This is a comma separated list of urls. '
+                            'Eg: http://www.google.com,http://www.gmail.com'))
 
 
 def ValidateCommandLineArgs(parser, args):

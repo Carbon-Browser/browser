@@ -1,9 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef NET_TEST_SCOPED_DISABLE_EXIT_ON_DFATAL_H_
 #define NET_TEST_SCOPED_DISABLE_EXIT_ON_DFATAL_H_
+
+#include <string_view>
 
 #include "base/logging.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -30,8 +32,8 @@ class ScopedDisableExitOnDFatal {
   // Called when there is a check failure.
   static void LogAssertHandler(const char* file,
                                int line,
-                               const base::StringPiece message,
-                               const base::StringPiece stack_trace);
+                               std::string_view message,
+                               std::string_view stack_trace);
 
   logging::ScopedLogAssertHandler assert_handler_;
 };

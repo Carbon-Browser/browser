@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,7 +40,7 @@ var run = function() {
           // Now remove the UA override.
           embedder.webview.setUserAgentOverride('');
         } else if (step == 3) {
-          chrome.test.assertTrue('foobar' != data[1]);
+          chrome.test.assertNe(data[1], 'foobar');
           chrome.test.assertFalse(embedder.webview.isUserAgentOverridden());
           chrome.test.succeed();
         }

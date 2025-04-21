@@ -141,6 +141,12 @@ class RewardsBottomSheetContent implements BottomSheetContent {
     }
 
     @Override
+    public String getSheetContentDescription(Context context) {
+        return context.getString(
+                R.string.prefs_rewards_title);
+    }
+
+    // @Override
     public int getSheetContentDescriptionStringId() {
         return R.string.prefs_rewards_title;
     }

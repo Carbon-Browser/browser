@@ -1,9 +1,10 @@
-// Copyright (c) 2009 The Chromium Authors. All rights reserved.
+// Copyright 2009 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/containers/linked_list.h"
 
+#include "base/containers/span.h"
 #include "base/test/gtest_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -45,32 +46,30 @@ class MovableNode : public LinkNode<MovableNode> {
 };
 
 // Checks that when iterating |list| (either from head to tail, or from
-// tail to head, as determined by |forward|), we get back |node_ids|,
-// which is an array of size |num_nodes|.
+// tail to head, as determined by |forward|), we get back |node_ids|.
 void ExpectListContentsForDirection(const LinkedList<Node>& list,
-  int num_nodes, const int* node_ids, bool forward) {
-  int i = 0;
+                                    base::span<const int> node_ids,
+                                    bool forward) {
+  size_t i = 0;
   for (const LinkNode<Node>* node = (forward ? list.head() : list.tail());
-       node != list.end();
-       node = (forward ? node->next() : node->previous())) {
-    ASSERT_LT(i, num_nodes);
-    int index_of_id = forward ? i : num_nodes - i - 1;
-    EXPECT_EQ(node_ids[index_of_id], node->value()->id());
+       node != list.end(); node = (forward ? node->next() : node->previous())) {
+    ASSERT_LT(i, node_ids.size());
+    EXPECT_EQ(node_ids[forward ? i : node_ids.size() - i - 1],
+              node->value()->id());
     ++i;
   }
-  EXPECT_EQ(num_nodes, i);
+  EXPECT_EQ(node_ids.size(), i);
 }
 
 void ExpectListContents(const LinkedList<Node>& list,
-                        int num_nodes,
-                        const int* node_ids) {
+                        base::span<const int> node_ids) {
   {
     SCOPED_TRACE("Iterating forward (from head to tail)");
-    ExpectListContentsForDirection(list, num_nodes, node_ids, true);
+    ExpectListContentsForDirection(list, node_ids, true);
   }
   {
     SCOPED_TRACE("Iterating backward (from tail to head)");
-    ExpectListContentsForDirection(list, num_nodes, node_ids, false);
+    ExpectListContentsForDirection(list, node_ids, false);
   }
 }
 
@@ -78,12 +77,12 @@ TEST(LinkedList, Empty) {
   LinkedList<Node> list;
   EXPECT_EQ(list.end(), list.head());
   EXPECT_EQ(list.end(), list.tail());
-  ExpectListContents(list, 0, nullptr);
+  ExpectListContents(list, {});
 }
 
 TEST(LinkedList, Append) {
   LinkedList<Node> list;
-  ExpectListContents(list, 0, nullptr);
+  ExpectListContents(list, {});
 
   Node n1(1);
   list.Append(&n1);
@@ -92,7 +91,7 @@ TEST(LinkedList, Append) {
   EXPECT_EQ(&n1, list.tail());
   {
     const int expected[] = {1};
-    ExpectListContents(list, std::size(expected), expected);
+    ExpectListContents(list, expected);
   }
 
   Node n2(2);
@@ -102,7 +101,7 @@ TEST(LinkedList, Append) {
   EXPECT_EQ(&n2, list.tail());
   {
     const int expected[] = {1, 2};
-    ExpectListContents(list, std::size(expected), expected);
+    ExpectListContents(list, expected);
   }
 
   Node n3(3);
@@ -112,7 +111,7 @@ TEST(LinkedList, Append) {
   EXPECT_EQ(&n3, list.tail());
   {
     const int expected[] = {1, 2, 3};
-    ExpectListContents(list, std::size(expected), expected);
+    ExpectListContents(list, expected);
   }
 }
 
@@ -135,7 +134,7 @@ TEST(LinkedList, RemoveFromList) {
   EXPECT_EQ(&n5, list.tail());
   {
     const int expected[] = {1, 2, 3, 4, 5};
-    ExpectListContents(list, std::size(expected), expected);
+    ExpectListContents(list, expected);
   }
 
   // Remove from the middle.
@@ -145,7 +144,7 @@ TEST(LinkedList, RemoveFromList) {
   EXPECT_EQ(&n5, list.tail());
   {
     const int expected[] = {1, 2, 4, 5};
-    ExpectListContents(list, std::size(expected), expected);
+    ExpectListContents(list, expected);
   }
 
   // Remove from the tail.
@@ -155,7 +154,7 @@ TEST(LinkedList, RemoveFromList) {
   EXPECT_EQ(&n4, list.tail());
   {
     const int expected[] = {1, 2, 4};
-    ExpectListContents(list, std::size(expected), expected);
+    ExpectListContents(list, expected);
   }
 
   // Remove from the head.
@@ -165,14 +164,14 @@ TEST(LinkedList, RemoveFromList) {
   EXPECT_EQ(&n4, list.tail());
   {
     const int expected[] = {2, 4};
-    ExpectListContents(list, std::size(expected), expected);
+    ExpectListContents(list, expected);
   }
 
   // Empty the list.
   n2.RemoveFromList();
   n4.RemoveFromList();
 
-  ExpectListContents(list, 0, nullptr);
+  ExpectListContents(list, {});
   EXPECT_EQ(list.end(), list.head());
   EXPECT_EQ(list.end(), list.tail());
 
@@ -187,7 +186,7 @@ TEST(LinkedList, RemoveFromList) {
   EXPECT_EQ(&n5, list.tail());
   {
     const int expected[] = {1, 2, 3, 4, 5};
-    ExpectListContents(list, std::size(expected), expected);
+    ExpectListContents(list, expected);
   }
 }
 
@@ -206,7 +205,7 @@ TEST(LinkedList, InsertBefore) {
   EXPECT_EQ(&n2, list.tail());
   {
     const int expected[] = {1, 2};
-    ExpectListContents(list, std::size(expected), expected);
+    ExpectListContents(list, expected);
   }
 
   n3.InsertBefore(&n2);
@@ -215,7 +214,7 @@ TEST(LinkedList, InsertBefore) {
   EXPECT_EQ(&n2, list.tail());
   {
     const int expected[] = {1, 3, 2};
-    ExpectListContents(list, std::size(expected), expected);
+    ExpectListContents(list, expected);
   }
 
   n4.InsertBefore(&n1);
@@ -224,7 +223,7 @@ TEST(LinkedList, InsertBefore) {
   EXPECT_EQ(&n2, list.tail());
   {
     const int expected[] = {4, 1, 3, 2};
-    ExpectListContents(list, std::size(expected), expected);
+    ExpectListContents(list, expected);
   }
 }
 
@@ -243,7 +242,7 @@ TEST(LinkedList, InsertAfter) {
   EXPECT_EQ(&n2, list.tail());
   {
     const int expected[] = {1, 2};
-    ExpectListContents(list, std::size(expected), expected);
+    ExpectListContents(list, expected);
   }
 
   n3.InsertAfter(&n2);
@@ -252,7 +251,7 @@ TEST(LinkedList, InsertAfter) {
   EXPECT_EQ(&n3, list.tail());
   {
     const int expected[] = {1, 2, 3};
-    ExpectListContents(list, std::size(expected), expected);
+    ExpectListContents(list, expected);
   }
 
   n4.InsertAfter(&n1);
@@ -261,7 +260,7 @@ TEST(LinkedList, InsertAfter) {
   EXPECT_EQ(&n3, list.tail());
   {
     const int expected[] = {1, 4, 2, 3};
-    ExpectListContents(list, std::size(expected), expected);
+    ExpectListContents(list, expected);
   }
 }
 

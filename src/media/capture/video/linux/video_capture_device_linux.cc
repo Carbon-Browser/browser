@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/synchronization/waitable_event.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "build/build_config.h"
@@ -26,9 +27,9 @@ namespace {
 
 int TranslatePowerLineFrequencyToV4L2(PowerLineFrequency frequency) {
   switch (frequency) {
-    case PowerLineFrequency::FREQUENCY_50HZ:
+    case PowerLineFrequency::k50Hz:
       return V4L2_CID_POWER_LINE_FREQUENCY_50HZ;
-    case PowerLineFrequency::FREQUENCY_60HZ:
+    case PowerLineFrequency::k60Hz:
       return V4L2_CID_POWER_LINE_FREQUENCY_60HZ;
     default:
       // If we have no idea of the frequency, at least try and set it to AUTO.
@@ -85,6 +86,7 @@ void VideoCaptureDeviceLinux::AllocateAndStart(
                     FROM_HERE, "Failed to create VideoCaptureDelegate");
     return;
   }
+
   task_runner_->PostTask(
       FROM_HERE,
       base::BindOnce(&V4L2CaptureDelegate::AllocateAndStart,
@@ -99,11 +101,16 @@ void VideoCaptureDeviceLinux::StopAndDeAllocate() {
   if (!capture_impl_)
     return;  // Wrong state.
 
-  task_runner_->PostTask(FROM_HERE,
-                         base::BindOnce(&V4L2CaptureDelegate::StopAndDeAllocate,
-                                        capture_impl_->GetWeakPtr()));
-  task_runner_->DeleteSoon(FROM_HERE, std::move(capture_impl_));
-  capture_impl_ = nullptr;
+  // Shutdown must be synchronous, otherwise the next created capture device
+  // may conflict.
+  base::WaitableEvent waiter(base::WaitableEvent::ResetPolicy::MANUAL,
+                             base::WaitableEvent::InitialState::NOT_SIGNALED);
+  if (task_runner_->PostTask(
+          FROM_HERE,
+          base::BindOnce(&VideoCaptureDeviceLinux::StopAndDeAllocateInternal,
+                         base::Unretained(this), base::Unretained(&waiter)))) {
+    waiter.Wait();
+  }
 }
 
 void VideoCaptureDeviceLinux::TakePhoto(TakePhotoCallback callback) {
@@ -142,6 +149,15 @@ void VideoCaptureDeviceLinux::SetRotation(int rotation) {
   task_runner_->PostTask(FROM_HERE,
                          base::BindOnce(&V4L2CaptureDelegate::SetRotation,
                                         capture_impl_->GetWeakPtr(), rotation));
+}
+
+void VideoCaptureDeviceLinux::StopAndDeAllocateInternal(
+    base::WaitableEvent* waiter) {
+  DCHECK(task_runner_->BelongsToCurrentThread());
+  DCHECK(capture_impl_);
+  capture_impl_->StopAndDeAllocate();
+  capture_impl_.reset();
+  waiter->Signal();
 }
 
 }  // namespace media

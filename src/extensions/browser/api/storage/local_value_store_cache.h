@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,10 @@
 #include <memory>
 
 #include "base/compiler_specific.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "extensions/browser/api/storage/settings_storage_quota_enforcer.h"
 #include "extensions/browser/api/storage/value_store_cache.h"
+#include "extensions/common/extension_id.h"
 
 namespace value_store {
 class ValueStoreFactory;
@@ -34,7 +35,7 @@ class LocalValueStoreCache : public ValueStoreCache {
   void RunWithValueStoreForExtension(
       StorageCallback callback,
       scoped_refptr<const Extension> extension) override;
-  void DeleteStorageSoon(const std::string& extension_id) override;
+  void DeleteStorageSoon(const ExtensionId& extension_id) override;
 
  private:
   using StorageMap =

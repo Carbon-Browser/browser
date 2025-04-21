@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,7 @@
 
 namespace cc {
 
-StickyPositionConstraint::StickyPositionConstraint()
-    : is_anchored_left(false),
-      is_anchored_right(false),
-      is_anchored_top(false),
-      is_anchored_bottom(false),
-      left_offset(0.f),
-      right_offset(0.f),
-      top_offset(0.f),
-      bottom_offset(0.f) {}
-
+StickyPositionConstraint::StickyPositionConstraint() = default;
 StickyPositionConstraint::StickyPositionConstraint(
     const StickyPositionConstraint& other) = default;
 

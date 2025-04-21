@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,15 +24,17 @@ void ToggleCameraButton::SetCameraState(bool is_turned_on) {
 }
 
 void ToggleCameraButton::OnBoundsChanged(const gfx::Rect& previous_bounds) {
-  if (size() == previous_bounds.size())
+  if (size() == previous_bounds.size()) {
     return;
+  }
 
   UpdateImageAndTooltipText();
 }
 
 void ToggleCameraButton::UpdateImageAndTooltipText() {
-  if (bounds().IsEmpty())
+  if (bounds().IsEmpty()) {
     return;
+  }
 
   const auto& icon = is_turned_on_ ? vector_icons::kVideocamIcon
                                    : vector_icons::kVideocamOffIcon;
@@ -46,5 +48,5 @@ void ToggleCameraButton::UpdateImageAndTooltipText() {
   SetTooltipText(l10n_util::GetStringUTF16(text));
 }
 
-BEGIN_METADATA(ToggleCameraButton, OverlayWindowImageButton)
+BEGIN_METADATA(ToggleCameraButton)
 END_METADATA

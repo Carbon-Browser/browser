@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "third_party/blink/renderer/core/loader/threadable_loader.h"
 #include "third_party/blink/renderer/core/loader/threadable_loader_client.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
@@ -50,7 +50,7 @@ class ManifestFetcher final : public GarbageCollected<ManifestFetcher>,
 
   // ThreadableLoaderClient
   void DidReceiveResponse(uint64_t, const ResourceResponse&) override;
-  void DidReceiveData(const char*, unsigned) override;
+  void DidReceiveData(base::span<const char>) override;
   void DidFinishLoading(uint64_t) override;
   void DidFail(uint64_t, const ResourceError&) override;
   void DidFailRedirectCheck(uint64_t) override;

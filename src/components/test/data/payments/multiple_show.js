@@ -1,20 +1,18 @@
 /*
- * Copyright 2017 The Chromium Authors. All rights reserved.
+ * Copyright 2017 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
-/* global PaymentRequest:false */
-
-var request;
-var request2;
+let request;
+let request2;
 
 /**
  * Show a Payment Request.
  */
-function buy() { // eslint-disable-line no-unused-vars
+function buy() {
   buyWithMethods([
-    {supportedMethods: 'https://bobpay.com'},
+    {supportedMethods: 'https://bobpay.test'},
     {
       supportedMethods: 'basic-card',
       data: {supportedNetworks: ['visa']},
@@ -53,7 +51,7 @@ function buyWithMethods(methodData) {
 /**
  * Try to re-show an existing Payment Request.
  */
-function showAgain() { // eslint-disable-line no-unused-vars
+function showAgain() {
   try {
     request.show()
         .then(function(resp) {
@@ -76,9 +74,9 @@ function showAgain() { // eslint-disable-line no-unused-vars
 /**
  * Show a second Payment Request.
  */
-function showSecondRequest() { // eslint-disable-line no-unused-vars
+function showSecondRequest() {
   showSecondRequestWithMethods([
-    {supportedMethods: 'https://bobpay.com'},
+    {supportedMethods: 'https://bobpay.test'},
     {
       supportedMethods: 'basic-card',
       data: {supportedNetworks: ['visa']},

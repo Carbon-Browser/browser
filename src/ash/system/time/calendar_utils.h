@@ -1,15 +1,16 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_SYSTEM_TIME_CALENDAR_UTILS_H_
 #define ASH_SYSTEM_TIME_CALENDAR_UTILS_H_
 
+#include <optional>
 #include <set>
 
 #include "ash/ash_export.h"
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "google_apis/calendar/calendar_api_response_types.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/geometry/insets.h"
 
@@ -31,11 +32,14 @@ constexpr int kMillisecondsPerMinute = 60000;
 
 // The padding in each date cell view.
 constexpr int kDateVerticalPadding = 13;
-constexpr int kDateHorizontalPadding = 14;
+constexpr int kDateHorizontalPadding = 16;
 constexpr int kColumnSetPadding = 5;
 
+// The insets for the event list item view.
+constexpr int kEventListItemViewStartEndMargin = 12;
+
 // The insets within a Date cell.
-constexpr auto kDateCellInsets =
+const auto kDateCellInsets =
     gfx::Insets::VH(kDateVerticalPadding, kDateHorizontalPadding);
 
 // Duration of opacity animation for visibility changes.
@@ -67,8 +71,13 @@ constexpr base::TimeDelta kDurationForAdjustingDST = base::Hours(5);
 // previous day. It is less than 24 hours to consider daylight savings.
 constexpr base::TimeDelta kDurationForGettingPreviousDay = base::Hours(20);
 
-// Event fetch will terminate if we don't receive a response sooner than this.
-constexpr base::TimeDelta kEventFetchTimeout = base::Seconds(10);
+// The fetch of a user's calendar list or event list will terminate if a
+// response is not received sooner than this.
+constexpr base::TimeDelta kCalendarDataFetchTimeout = base::Seconds(10);
+
+// Maximum number of selected calendars for which events should be fetched when
+// Multi-Calendar Support is enabled.
+constexpr int kMultipleCalendarsLimit = 10;
 
 // Number of months, before and after the month currently on-display, that we
 // cache-ahead.
@@ -82,12 +91,24 @@ constexpr int kMaxNumNonPrunableMonths = 2 * kNumSurroundingMonthsCached + 1;
 // kMaxNumNonPrunableMonths is the total maximum number of cached months.
 constexpr int kMaxNumPrunableMonths = 20;
 
+// Between child spacing for `CalendarUpNextView`.
+constexpr int kUpNextBetweenChildSpacing = 8;
+
+// The `CalendarUpNextView` UI has a rounded 'nub' that sticks up in the middle
+// of the view. To ensure that the scroll view animates nicely behind the up
+// next view, we need to forcibly overlap the views slightly for the distance
+// between the bottom and top of the 'nub'.
+constexpr int kUpNextOverlapInPx = 12;
+
+// Returns true if the Multi-Calendar Support feature is enabled.
+bool IsMultiCalendarEnabled();
+
 // Checks if the `selected_date` is local time today.
 bool IsToday(const base::Time selected_date);
 
 // Checks if the two exploded are in the same day.
-bool IsTheSameDay(absl::optional<base::Time> date_a,
-                  absl::optional<base::Time> date_b);
+bool IsTheSameDay(std::optional<base::Time> date_a,
+                  std::optional<base::Time> date_b);
 
 // Returns the set of months that includes |selected_date| and
 // |num_months_out| before and after.
@@ -122,11 +143,11 @@ ASH_EXPORT std::u16string GetDayIntOfMonth(const base::Time local_date);
 // (e.g. March 10)
 ASH_EXPORT std::u16string GetMonthNameAndDayOfMonth(const base::Time date);
 
-// Gets the `date`'s hour in twelve hour clock format.
-// (e.g. 2:31 AM)
+// Gets the `date`'s time in twelve hour clock format.
+// (e.g. 10:31 PM)
 ASH_EXPORT std::u16string GetTwelveHourClockTime(const base::Time date);
 
-// Gets the `date`'s hour in twenty four hour clock format.
+// Gets the `date`'s time in twenty four hour clock format.
 // (e.g. 22:31)
 ASH_EXPORT std::u16string GetTwentyFourHourClockTime(const base::Time date);
 
@@ -145,6 +166,20 @@ ASH_EXPORT std::u16string GetYear(const base::Time date);
 // Gets the `date`'s month name and year.
 // (e.g. March 2022)
 ASH_EXPORT std::u16string GetMonthNameAndYear(const base::Time date);
+
+// Gets the `date`'s hour in twelve hour clock format.
+// (e.g. 9, when given 21:05)
+// Some locales may add zero-padding.
+ASH_EXPORT std::u16string GetTwelveHourClockHours(const base::Time date);
+
+// Gets the `date`'s hour in twenty four hour clock format.
+// (e.g. 21, when given 21:05)
+// Some locales may add zero-padding.
+ASH_EXPORT std::u16string GetTwentyFourHourClockHours(const base::Time date);
+
+// Gets the `date`'s minutes with zero-padding.
+// (e.g. 05, when given 22:05)
+ASH_EXPORT std::u16string GetMinutes(const base::Time date);
 
 // Gets the formatted interval between `start_time` and `end_time` in twelve
 // hour clock format.
@@ -201,8 +236,15 @@ base::Time GetStartOfNextMonthUTC(base::Time date);
 // Returns UTC midnight of `date`'s next day without adjusting time difference.
 ASH_EXPORT base::Time GetNextDayMidnight(base::Time date);
 
+// Returns true if (1) it's a regular user; and (2) the user session is not
+// blocked; and (3) the admin has not disabled Google Calendar integration.
+bool ShouldFetchCalendarData();
+
 // Returns true if it's a regular user or the user session is not blocked.
 bool IsActiveUser();
+
+// Returns true if the admin has disabled Google Calendar integration.
+bool IsDisabledByAdmin();
 
 // Get the time difference to UTC time based on the time passed in and the
 // system timezone. Daylight saving is considered.
@@ -223,6 +265,46 @@ ASH_EXPORT const std::pair<base::Time, base::Time> GetFetchStartEndTimes(
 // different for different languages. If cannot find this local's day in a week,
 // returns its time exploded's `day_of_week`;
 ASH_EXPORT int GetDayOfWeekInt(const base::Time date);
+
+// Checks if the event spans more than one day.
+ASH_EXPORT bool IsMultiDayEvent(
+    const google_apis::calendar::CalendarEvent* event);
+
+// Returns the `start_time` of `event` adjusted by time difference, to ensure
+// that each event is stored by its local time, e.g. an event that starts at
+// 2022-05-31 22:00:00.000 PST (2022-06-01 05:00:00.000 UTC) is stored in the
+// map for 05-2022.
+base::Time GetStartTimeAdjusted(
+    const google_apis::calendar::CalendarEvent* event);
+
+// Returns the `end_time` of `event` adjusted by time difference.
+base::Time GetEndTimeAdjusted(
+    const google_apis::calendar::CalendarEvent* event);
+
+// Returns midnight on the day of the start time of `event`.
+ASH_EXPORT base::Time GetStartTimeMidnightAdjusted(
+    const google_apis::calendar::CalendarEvent* event);
+
+// Returns midnight on the day of the end time of `event`.
+ASH_EXPORT base::Time GetEndTimeMidnightAdjusted(
+    const google_apis::calendar::CalendarEvent* event);
+
+// Gets the event start and end times accounting for timezone.
+const std::tuple<base::Time, base::Time> GetStartAndEndTime(
+    const google_apis::calendar::CalendarEvent* event,
+    const base::Time& selected_date,
+    const base::Time& selected_date_midnight,
+    const base::Time& selected_date_midnight_utc);
+
+// Calculates the UTC and local midnight times for the given `base::Time`,
+// rounding to the correct midnight for the given timezone. This avoids an
+// issue with `base::Time::UTCMidnight()`, which will (in certain ahead
+// timezones) return the previous days midnight.
+// For example, if the current time is 19 Jan 2023 00:10 in GMT+13, then
+// `GetUTCMidnight` will return 19 Jan 2023 00:00 UTC.
+// `base::Time::UTCMidnight()` will round down to 18 Jan 2023 00:00 UTC.
+ASH_EXPORT const std::tuple<base::Time, base::Time> GetMidnight(
+    const base::Time);
 
 }  // namespace calendar_utils
 

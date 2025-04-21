@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,9 +26,7 @@ bool ReadFile(const base::FilePath& file, std::string* content) {
 
 // Write |content| to |file|. Returns true on success.
 bool WriteFile(const base::FilePath& file, const std::string& content) {
-  int write_size = base::WriteFile(file, content.c_str(),
-                                   static_cast<int>(content.length()));
-  return write_size == static_cast<int>(content.length());
+  return base::WriteFile(file, content);
 }
 
 // Removes lines starting with (optional) whitespace and a #.

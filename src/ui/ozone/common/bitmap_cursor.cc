@@ -1,14 +1,13 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/ozone/common/bitmap_cursor.h"
 
-#include <algorithm>
-
 #include "base/check.h"
 #include "base/check_op.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/ranges/algorithm.h"
 
 namespace ui {
 
@@ -19,9 +18,7 @@ scoped_refptr<BitmapCursor> BitmapCursor::FromPlatformCursor(
       static_cast<BitmapCursor*>(platform_cursor.get()));
 }
 
-BitmapCursor::BitmapCursor(mojom::CursorType type,
-                           float cursor_image_scale_factor)
-    : type_(type), cursor_image_scale_factor_(cursor_image_scale_factor) {}
+BitmapCursor::BitmapCursor(mojom::CursorType type) : type_(type) {}
 
 BitmapCursor::BitmapCursor(mojom::CursorType type,
                            const SkBitmap& bitmap,
@@ -48,9 +45,7 @@ BitmapCursor::BitmapCursor(mojom::CursorType type,
   DCHECK_LE(base::TimeDelta(), frame_delay);
   // No null bitmap should be in the list. Blank cursors should just be an empty
   // vector.
-  DCHECK(std::find_if(bitmaps_.begin(), bitmaps_.end(),
-                      [](const SkBitmap& bitmap) { return bitmap.isNull(); }) ==
-         bitmaps_.end());
+  DCHECK(base::ranges::none_of(bitmaps_, &SkBitmap::isNull));
 }
 
 BitmapCursor::BitmapCursor(mojom::CursorType type,

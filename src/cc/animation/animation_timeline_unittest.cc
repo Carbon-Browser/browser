@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,9 +16,9 @@ namespace {
 
 TEST(AnimationTimelineTest, SyncAnimationsAttachDetach) {
   std::unique_ptr<AnimationHost> host(
-      AnimationHost::CreateForTesting(ThreadInstance::MAIN));
+      AnimationHost::CreateForTesting(ThreadInstance::kMain));
   std::unique_ptr<AnimationHost> host_impl(
-      AnimationHost::CreateForTesting(ThreadInstance::IMPL));
+      AnimationHost::CreateForTesting(ThreadInstance::kImpl));
 
   const int timeline_id = AnimationIdProvider::NextTimelineId();
   const int animation_id = AnimationIdProvider::NextAnimationId();
@@ -62,9 +62,9 @@ TEST(AnimationTimelineTest, SyncAnimationsAttachDetach) {
 
 TEST(AnimationTimelineTest, ClearAnimations) {
   std::unique_ptr<AnimationHost> host(
-      AnimationHost::CreateForTesting(ThreadInstance::MAIN));
+      AnimationHost::CreateForTesting(ThreadInstance::kMain));
   std::unique_ptr<AnimationHost> host_impl(
-      AnimationHost::CreateForTesting(ThreadInstance::IMPL));
+      AnimationHost::CreateForTesting(ThreadInstance::kImpl));
 
   const int timeline_id = AnimationIdProvider::NextTimelineId();
   const int animation_id1 = AnimationIdProvider::NextAnimationId();

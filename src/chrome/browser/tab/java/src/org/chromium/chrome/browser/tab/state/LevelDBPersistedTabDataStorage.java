@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@ import androidx.annotation.MainThread;
 import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.Callback;
+import org.chromium.base.lifetime.Destroyable;
 import org.chromium.chrome.browser.profiles.Profile;
 
 import java.nio.ByteBuffer;
@@ -18,7 +19,7 @@ import java.util.Locale;
  * {@link LevelDBPersistedTabDataStorage} provides a level db backed implementation
  * of {@link PersistedTabDataStorage}.
  */
-public class LevelDBPersistedTabDataStorage implements PersistedTabDataStorage {
+public class LevelDBPersistedTabDataStorage implements PersistedTabDataStorage, Destroyable {
     // In a mock environment, the native code will not be running so we should not
     // make assertions about mNativePersistedStateDB
     // LevelDBPersistedTabDataStorage needs to have an empty namespace for backwards compatibility.
@@ -29,27 +30,30 @@ public class LevelDBPersistedTabDataStorage implements PersistedTabDataStorage {
     private LevelDBPersistedDataStorage mPersistedDataStorage;
     // Callback is only used for synchronization of save and delete in testing.
     // Otherwise it is a no-op.
-    // TODO(crbug.com/1146799) Apply tricks like @CheckDiscard or proguard rules to improve
+    // TODO(crbug.com/40156389) Apply tricks like @CheckDiscard or proguard rules to improve
     // performance
     private boolean mIsDestroyed;
 
     LevelDBPersistedTabDataStorage(Profile profile) {
         assert !profile.isOffTheRecord()
-            : "LevelDBPersistedTabDataStorage is not supported for incognito profiles";
+                : "LevelDBPersistedTabDataStorage is not supported for incognito profiles";
         mPersistedDataStorage = new LevelDBPersistedDataStorage(profile, sNamespace);
     }
 
     @MainThread
     @Override
     public void save(int tabId, String dataId, Serializer<ByteBuffer> serializer) {
-        // TODO(crbug.com/1221571) update LevelDB storage in native to use ByteBuffer instead
+        // TODO(crbug.com/40186903) update LevelDB storage in native to use ByteBuffer instead
         // of byte[] to avoid conversion
         serializer.preSerialize();
         mPersistedDataStorage.save(getKey(tabId, dataId), toByteArray(serializer.get()));
     }
 
     @Override
-    public void save(int tabId, String dataId, Serializer<ByteBuffer> serializer,
+    public void save(
+            int tabId,
+            String dataId,
+            Serializer<ByteBuffer> serializer,
             Callback<Integer> callback) {
         assert false : "save with callback unused in LevelDBPersistedTabDataStorage";
     }
@@ -75,8 +79,11 @@ public class LevelDBPersistedTabDataStorage implements PersistedTabDataStorage {
     @MainThread
     @Override
     public void restore(int tabId, String dataId, Callback<ByteBuffer> callback) {
-        mPersistedDataStorage.load(getKey(tabId, dataId),
-                (res) -> { callback.onResult(res == null ? null : ByteBuffer.wrap(res)); });
+        mPersistedDataStorage.load(
+                getKey(tabId, dataId),
+                (res) -> {
+                    callback.onResult(res == null ? null : ByteBuffer.wrap(res));
+                });
     }
 
     /**
@@ -127,7 +134,6 @@ public class LevelDBPersistedTabDataStorage implements PersistedTabDataStorage {
         mPersistedDataStorage.performMaintenance(getKeysToKeep(tabIds, dataId), dataId);
     }
 
-    @VisibleForTesting
     public void performMaintenanceForTesting(
             List<Integer> tabIds, String dataId, Runnable onComplete) {
         mPersistedDataStorage.performMaintenanceForTesting(
@@ -142,16 +148,15 @@ public class LevelDBPersistedTabDataStorage implements PersistedTabDataStorage {
         return keysToKeep;
     }
 
-    // TODO(crbug.com/1145785) Implement URL -> byte[] mapping rather
+    // TODO(crbug.com/40156023) Implement URL -> byte[] mapping rather
     // than tab id -> byte[] mapping so we don't store the same data
     // multiple times when the user has multiple tabs at the same URL.
     private static final String getKey(int tabId, String dataId) {
         return String.format(Locale.US, "%d-%s", tabId, dataId);
     }
 
-    /**
-     * Destroy native instance of persisted_tab_state
-     */
+    /** Destroy native instance of persisted_tab_state */
+    @Override
     public void destroy() {
         mPersistedDataStorage.destroy();
         mIsDestroyed = true;
@@ -161,5 +166,4 @@ public class LevelDBPersistedTabDataStorage implements PersistedTabDataStorage {
     protected boolean isDestroyed() {
         return mIsDestroyed;
     }
-
 }

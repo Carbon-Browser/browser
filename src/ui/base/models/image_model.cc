@@ -1,11 +1,14 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "ui/base/models/image_model.h"
+
 #include <tuple>
 
-#include "base/callback.h"
-#include "ui/base/models/image_model.h"
+#include "base/functional/callback.h"
+#include "base/notreached.h"
+#include "base/trace_event/trace_event.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/color/color_id.h"
 #include "ui/gfx/vector_icon_utils.h"
@@ -166,12 +169,13 @@ bool ImageModel::operator!=(const ImageModel& other) const {
 
 gfx::ImageSkia ImageModel::Rasterize(
     const ui::ColorProvider* color_provider) const {
+  TRACE_EVENT0("ui", "ImageModel::Rasterize");
   if (IsImage())
     return GetImage().AsImageSkia();
 
   if (IsVectorIcon()) {
 #if BUILDFLAG(IS_IOS)
-    CHECK(false);
+    NOTREACHED();
 #else
     DCHECK(color_provider);
     return ThemedVectorIcon(GetVectorIcon()).GetImageSkia(color_provider);

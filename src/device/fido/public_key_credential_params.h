@@ -1,10 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef DEVICE_FIDO_PUBLIC_KEY_CREDENTIAL_PARAMS_H_
 #define DEVICE_FIDO_PUBLIC_KEY_CREDENTIAL_PARAMS_H_
 
+#include <optional>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -13,7 +14,6 @@
 #include "base/numerics/safe_conversions.h"
 #include "components/cbor/values.h"
 #include "device/fido/fido_constants.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace device {
 
@@ -30,7 +30,7 @@ class COMPONENT_EXPORT(DEVICE_FIDO) PublicKeyCredentialParams {
         base::strict_cast<int32_t>(CoseAlgorithmIdentifier::kEs256);
   };
 
-  static absl::optional<PublicKeyCredentialParams> CreateFromCBORValue(
+  static std::optional<PublicKeyCredentialParams> CreateFromCBORValue(
       const cbor::Value& cbor_value);
 
   explicit PublicKeyCredentialParams(

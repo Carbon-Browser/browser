@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,14 @@
 
 #include <stddef.h>
 
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "components/search_engines/omnibox_focus_type.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "components/lens/proto/server/lens_overlay_response.pb.h"
+#include "components/search_engines/search_terms_data.h"
 #include "third_party/metrics_proto/omnibox_event.pb.h"
+#include "third_party/metrics_proto/omnibox_focus_type.pb.h"
 #include "third_party/metrics_proto/omnibox_input_type.pb.h"
 #include "third_party/perfetto/include/perfetto/tracing/traced_value_forward.h"
 #include "url/gurl.h"
@@ -134,6 +136,14 @@ class AutocompleteInput {
   // Returns whether |text| begins with "https:" or "view-source:https:".
   static bool HasHTTPSScheme(const std::u16string& text);
 
+  // Whether the text might be matching featured keyword suggestions.
+  enum class FeaturedKeywordMode {
+    kFalse,   // `text_` doesn't start with '@'.
+    kPrefix,  // `text_` starts with '@'.
+    kExact,   // `text_` is exactly '@'.
+  };
+  static FeaturedKeywordMode GetFeaturedKeywordMode(const std::u16string& text);
+
   // User-provided text to be completed.
   const std::u16string& text() const { return text_; }
 
@@ -170,6 +180,22 @@ class AutocompleteInput {
     return current_page_classification_;
   }
 
+  // The Suggest or Search request source. Determines the client= (for Suggest
+  // request URLs) and source= or sourceid= (for Search request URLs).
+  SearchTermsData::RequestSource request_source() const {
+    switch (current_page_classification()) {
+      // Lens Overlay searchboxes don't rely on TemplateURL replacement and set
+      // `client=` in //components/omnibox/browser/remote_suggestions_service.cc
+      // and `source=` in //c/b/u/lens/lens_overlay_url_builder.cc.
+      case metrics::OmniboxEventProto::CONTEXTUAL_SEARCHBOX:
+      case metrics::OmniboxEventProto::SEARCH_SIDE_PANEL_SEARCHBOX:
+      case metrics::OmniboxEventProto::LENS_SIDE_PANEL_SEARCHBOX:
+        return SearchTermsData::RequestSource::LENS_OVERLAY;
+      default:
+        return SearchTermsData::RequestSource::SEARCHBOX;
+    }
+  }
+
   // The type of input supplied.
   metrics::OmniboxInputType type() const { return type_; }
 
@@ -180,7 +206,7 @@ class AutocompleteInput {
   // URL.
   const std::u16string& scheme() const { return scheme_; }
 
-  // The input as an URL to navigate to, if possible.
+  // The input as a URL to navigate to, if possible.
   const GURL& canonicalized_url() const { return canonicalized_url_; }
 
   // The user's desired TLD.
@@ -246,12 +272,15 @@ class AutocompleteInput {
   }
 
   // Returns the type of UI interaction that started this autocomplete query.
-  OmniboxFocusType focus_type() const { return focus_type_; }
+  metrics::OmniboxFocusType focus_type() const { return focus_type_; }
   // |focus_type| should specify the UI interaction that started autocomplete.
-  // Generally, this should be left alone as DEFAULT. Most providers only
-  // provide results for DEFAULT focus type. Providers (like ZeroSuggest) that
-  // only want to display matches on-focus or on-clobber will look at this flag.
-  void set_focus_type(OmniboxFocusType focus_type) { focus_type_ = focus_type; }
+  // Generally, this should be left alone as INTERACTION_DEFAULT. Most providers
+  // only provide results for the INTERACTION_DEFAULT focus type. Providers like
+  // ZeroSuggestProvider that only want to display matches on-focus or
+  // on-clobber will look at this flag.
+  void set_focus_type(metrics::OmniboxFocusType focus_type) {
+    focus_type_ = focus_type;
+  }
 
   // Returns the terms in |text_| that start with http:// or https:// plus
   // at least one more character, stored without the scheme.  Used in
@@ -262,17 +291,15 @@ class AutocompleteInput {
     return terms_prefixed_by_http_or_https_;
   }
 
-  // Returns the ID of the query tile selected by the user, if any.
-  // If no tile was selected, returns absl::nullopt.
-  const absl::optional<std::string>& query_tile_id() const {
-    return query_tile_id_;
+  const std::optional<lens::proto::LensOverlaySuggestInputs>&
+  lens_overlay_suggest_inputs() const {
+    return lens_overlay_suggest_inputs_;
   }
 
-  // Called to indicate that the query tile represented by |tile_id| was
-  // clicked by the user. In the absence of a |query_tile_id_|, top level tiles
-  // will be displayed.
-  void set_query_tile_id(const std::string& tile_id) {
-    query_tile_id_ = tile_id;
+  void set_lens_overlay_suggest_inputs(
+      const lens::proto::LensOverlaySuggestInputs&
+          lens_overlay_suggest_inputs) {
+    lens_overlay_suggest_inputs_ = lens_overlay_suggest_inputs;
   }
 
   // Resets all internal variables to the null-constructed state.
@@ -291,7 +318,22 @@ class AutocompleteInput {
     return added_default_scheme_to_typed_url_;
   }
 
+  bool typed_url_had_http_scheme() const { return typed_url_had_http_scheme_; }
+
   void WriteIntoTrace(perfetto::TracedValue context) const;
+
+  // Returns true if in zero prefix input state.
+  // Zero-Suggest state is determined from focus type and is used to inform
+  // autocomplete providers, tab matching, and action attachment. Note that the
+  // Zero-Suggest state does NOT mean that `text_` is empty.
+  bool IsZeroSuggest() const;
+
+  // Uses the keyword entry mode to decide if the user is currently in keyword
+  // mode.
+  bool InKeywordMode() const;
+
+  // Whether the input might be matching featured keyword suggestions.
+  FeaturedKeywordMode GetFeaturedKeywordMode() const;
 
  private:
   friend class AutocompleteProviderTest;
@@ -319,17 +361,22 @@ class AutocompleteInput {
   bool allow_exact_keyword_match_;
   metrics::OmniboxEventProto::KeywordModeEntryMethod keyword_mode_entry_method_;
   bool omit_asynchronous_matches_;
-  OmniboxFocusType focus_type_ = OmniboxFocusType::DEFAULT;
+  metrics::OmniboxFocusType focus_type_ =
+      metrics::OmniboxFocusType::INTERACTION_DEFAULT;
   std::vector<std::u16string> terms_prefixed_by_http_or_https_;
-  absl::optional<std::string> query_tile_id_;
+  // The lens overlay suggest inputs to be sent as query parameters in
+  // the suggest requests.
+  std::optional<lens::proto::LensOverlaySuggestInputs>
+      lens_overlay_suggest_inputs_;
 
   // Flags for OmniboxDefaultNavigationsToHttps feature.
   bool should_use_https_as_default_scheme_;
-  bool added_default_scheme_to_typed_url_;
+  bool added_default_scheme_to_typed_url_ = false;
+  bool typed_url_had_http_scheme_ = false;
   // Port used by the embedded https server in tests. This is used to determine
   // the correct port while upgrading URLs to https if the original URL has a
   // non-default port.
-  // TODO(crbug.com/1168371): Remove when URLLoaderInterceptor can simulate
+  // TODO(crbug.com/40743298): Remove when URLLoaderInterceptor can simulate
   // redirects.
   int https_port_for_testing_;
   // If true, indicates that the tests are using a faux-HTTPS server which is

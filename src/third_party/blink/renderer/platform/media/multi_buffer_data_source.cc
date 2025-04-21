@@ -1,22 +1,25 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/media/multi_buffer_data_source.h"
 
+#include <algorithm>
+#include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/cxx17_backports.h"
+#include "base/containers/adapters.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/task/single_thread_task_runner.h"
 #include "media/base/media_log.h"
 #include "net/base/net_errors.h"
 #include "third_party/blink/renderer/platform/media/buffered_data_source_host_impl.h"
 #include "third_party/blink/renderer/platform/media/multi_buffer_reader.h"
-#include "url/gurl.h"
+#include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 
 namespace blink {
 namespace {
@@ -84,7 +87,7 @@ class MultiBufferDataSource::ReadOperation {
  private:
   const int64_t position_;
   const int size_;
-  uint8_t* data_;
+  raw_ptr<uint8_t, DanglingUntriaged> data_;
   media::DataSource::ReadCB callback_;
 };
 
@@ -130,7 +133,7 @@ MultiBufferDataSource::MultiBufferDataSource(
       preload_(AUTO),
       bitrate_(0),
       playback_rate_(0.0),
-      media_log_(media_log),
+      media_log_(media_log->Clone()),
       host_(host),
       downloading_cb_(std::move(downloading_cb)) {
   weak_ptr_ = weak_factory_.GetWeakPtr();
@@ -153,24 +156,25 @@ bool MultiBufferDataSource::media_has_played() const {
 
 bool MultiBufferDataSource::AssumeFullyBuffered() const {
   DCHECK(url_data_);
-  return !url_data_->url().SchemeIsHTTPOrHTTPS();
+  return !url_data_->url().ProtocolIsInHTTPFamily();
 }
 
-void MultiBufferDataSource::SetReader(MultiBufferReader* reader) {
+void MultiBufferDataSource::SetReader(
+    std::unique_ptr<MultiBufferReader> reader) {
   DCHECK(render_task_runner_->BelongsToCurrentThread());
   base::AutoLock auto_lock(lock_);
-  reader_.reset(reader);
+  reader_ = std::move(reader);
 }
 
 void MultiBufferDataSource::CreateResourceLoader(int64_t first_byte_position,
                                                  int64_t last_byte_position) {
   DCHECK(render_task_runner_->BelongsToCurrentThread());
 
-  SetReader(new MultiBufferReader(
+  SetReader(std::make_unique<MultiBufferReader>(
       url_data_->multibuffer(), first_byte_position, last_byte_position,
+      is_client_audio_element_,
       base::BindRepeating(&MultiBufferDataSource::ProgressCallback, weak_ptr_),
       render_task_runner_));
-  reader_->SetIsClientAudioElement(is_client_audio_element_);
   UpdateBufferSizes();
 }
 
@@ -182,6 +186,7 @@ void MultiBufferDataSource::CreateResourceLoader_Locked(
 
   reader_ = std::make_unique<MultiBufferReader>(
       url_data_->multibuffer(), first_byte_position, last_byte_position,
+      is_client_audio_element_,
       base::BindRepeating(&MultiBufferDataSource::ProgressCallback, weak_ptr_),
       render_task_runner_);
   UpdateBufferSizes();
@@ -217,7 +222,7 @@ void MultiBufferDataSource::Initialize(InitializeCB init_cb) {
 
 void MultiBufferDataSource::OnRedirected(
     const scoped_refptr<UrlData>& new_destination) {
-  if (!new_destination) {
+  if (!new_destination || !url_data_) {
     // A failure occurred.
     failed_ = true;
     if (init_cb_) {
@@ -231,8 +236,8 @@ void MultiBufferDataSource::OnRedirected(
     StopLoader();
     return;
   }
-  if (url_data_->url().DeprecatedGetOriginAsURL() !=
-      new_destination->url().DeprecatedGetOriginAsURL()) {
+  if (!SecurityOrigin::AreSameOrigin(url_data_->url(),
+                                     new_destination->url())) {
     single_origin_ = false;
   }
   SetReader(nullptr);
@@ -263,11 +268,16 @@ void MultiBufferDataSource::OnRedirected(
     }
   }
 
+  // The "redirect" may just be `reader_` being merged into an existing UrlData,
+  // in this case we need to ensure we report the buffered byte ranges from the
+  // existing UrlData instance.
+  UpdateProgress();
+
   if (redirect_cb_)
     redirect_cb_.Run();
 }
 
-void MultiBufferDataSource::SetPreload(Preload preload) {
+void MultiBufferDataSource::SetPreload(media::DataSource::Preload preload) {
   DVLOG(1) << __func__ << "(" << preload << ")";
   DCHECK(render_task_runner_->BelongsToCurrentThread());
   preload_ = preload;
@@ -293,11 +303,24 @@ bool MultiBufferDataSource::HasAccessControl() const {
   return url_data_->has_access_control();
 }
 
+bool MultiBufferDataSource::PassedTimingAllowOriginCheck() {
+  return url_data_->passed_timing_allow_origin_check();
+}
+
+bool MultiBufferDataSource::WouldTaintOrigin() {
+  // When the resource is redirected to another origin we think of it as
+  // tainted. This is actually not specified, and is under discussion.
+  // See https://github.com/whatwg/fetch/issues/737.
+  if (!HasSingleOrigin() && cors_mode() == UrlData::CORS_UNSPECIFIED)
+    return true;
+  return IsCorsCrossOrigin();
+}
+
 UrlData::CorsMode MultiBufferDataSource::cors_mode() const {
   return url_data_->cors_mode();
 }
 
-void MultiBufferDataSource::MediaPlaybackRateChanged(double playback_rate) {
+void MultiBufferDataSource::OnMediaPlaybackRateChanged(double playback_rate) {
   DCHECK(render_task_runner_->BelongsToCurrentThread());
   if (playback_rate < 0 || playback_rate == playback_rate_)
     return;
@@ -307,7 +330,7 @@ void MultiBufferDataSource::MediaPlaybackRateChanged(double playback_rate) {
   UpdateBufferSizes();
 }
 
-void MultiBufferDataSource::MediaIsPlaying() {
+void MultiBufferDataSource::OnMediaIsPlaying() {
   DCHECK(render_task_runner_->BelongsToCurrentThread());
 
   // Always clear this since it can be set by OnBufferingHaveEnough() calls at
@@ -387,7 +410,7 @@ int64_t MultiBufferDataSource::GetMemoryUsage() {
 }
 
 GURL MultiBufferDataSource::GetUrlAfterRedirects() const {
-  return url_data_->url();
+  return GURL(url_data_->url());
 }
 
 void MultiBufferDataSource::Read(int64_t position,
@@ -531,8 +554,7 @@ void MultiBufferDataSource::SeekTask_Locked() {
     // Iterate backwards, because if two positions have the same
     // amount of buffered data, we probably want to prefer the latest
     // one in the array.
-    for (auto i = seek_positions_.rbegin(); i != seek_positions_.rend(); ++i) {
-      int64_t new_pos = *i;
+    for (const auto& new_pos : base::Reversed(seek_positions_)) {
       int64_t available_at_new_pos = reader_->AvailableAt(new_pos);
 
       if (total_bytes_ != kPositionNotSpecified) {
@@ -585,8 +607,16 @@ void MultiBufferDataSource::SetBitrateTask(int bitrate) {
 void MultiBufferDataSource::StartCallback() {
   DCHECK(render_task_runner_->BelongsToCurrentThread());
 
+  // TODO(scherkus): we shouldn't have to lock to signal host(), see
+  // http://crbug.com/113712 for details.
+  base::AutoLock auto_lock(lock_);
+  if (stop_signal_received_) {
+    return;
+  }
+
   if (!init_cb_) {
-    SetReader(nullptr);
+    // Can't call SetReader(nullptr) since we are holding the lock.
+    reader_.reset(nullptr);
     return;
   }
 
@@ -597,10 +627,7 @@ void MultiBufferDataSource::StartCallback() {
       (!AssumeFullyBuffered() || url_data_->length() != kPositionNotSpecified);
 
   if (success) {
-    {
-      base::AutoLock auto_lock(lock_);
-      total_bytes_ = url_data_->length();
-    }
+    total_bytes_ = url_data_->length();
     streaming_ =
         !AssumeFullyBuffered() && (total_bytes_ == kPositionNotSpecified ||
                                    !url_data_->range_supported());
@@ -608,14 +635,9 @@ void MultiBufferDataSource::StartCallback() {
     media_log_->SetProperty<media::MediaLogProperty::kTotalBytes>(total_bytes_);
     media_log_->SetProperty<media::MediaLogProperty::kIsStreaming>(streaming_);
   } else {
-    SetReader(nullptr);
+    // Can't call SetReader(nullptr) since we are holding the lock.
+    reader_.reset(nullptr);
   }
-
-  // TODO(scherkus): we shouldn't have to lock to signal host(), see
-  // http://crbug.com/113712 for details.
-  base::AutoLock auto_lock(lock_);
-  if (stop_signal_received_)
-    return;
 
   if (success) {
     if (total_bytes_ != kPositionNotSpecified) {
@@ -707,7 +729,7 @@ void MultiBufferDataSource::UpdateBufferSizes() {
   buffer_size_update_counter_ = kUpdateBufferSizeFrequency;
 
   // Use a default bit rate if unknown and clamp to prevent overflow.
-  int64_t bitrate = base::clamp<int64_t>(bitrate_, 0, kMaxBitrate);
+  int64_t bitrate = std::clamp<int64_t>(bitrate_, 0, kMaxBitrate);
   if (bitrate == 0)
     bitrate = kDefaultBitrate;
 
@@ -721,8 +743,8 @@ void MultiBufferDataSource::UpdateBufferSizes() {
   int64_t bytes_per_second = (bitrate / 8.0) * playback_rate;
 
   // Preload 10 seconds of data, clamped to some min/max value.
-  int64_t preload = base::clamp(preload_seconds_.value() * bytes_per_second,
-                                kMinBufferPreload, kMaxBufferPreload);
+  int64_t preload = std::clamp(preload_seconds_.value() * bytes_per_second,
+                               kMinBufferPreload, kMaxBufferPreload);
 
   // Increase buffering slowly at a rate of 10% of data downloaded so
   // far, maxing out at the preload size.
@@ -737,8 +759,8 @@ void MultiBufferDataSource::UpdateBufferSizes() {
 
   // We pin a few seconds of data behind the current reading position.
   int64_t pin_backward =
-      base::clamp(keep_after_playback_seconds_.value() * bytes_per_second,
-                  kMinBufferPreload, kMaxBufferPreload);
+      std::clamp(keep_after_playback_seconds_.value() * bytes_per_second,
+                 kMinBufferPreload, kMaxBufferPreload);
 
   // We always pin at least kDefaultPinSize ahead of the read position.
   // Normally, the extra space between preload_high and kDefaultPinSize will

@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -13,6 +13,7 @@ component("aura") {
     "client/capture_delegate.h",
     "client/cursor_client.h",
     "client/cursor_client_observer.h",
+    "client/cursor_shape_client.h",
     "client/default_capture_client.h",
     "client/drag_drop_client.h",
     "client/drag_drop_client_observer.h",
@@ -34,6 +35,7 @@ component("aura") {
     "host_frame_rate_throttler.h",
     "input_state_lookup.h",
     "layout_manager.h",
+    "native_window_occlusion_tracker.h",
     "null_window_targeter.h",
     "scoped_enable_unadjusted_mouse_events.h",
     "scoped_keyboard_hook.h",
@@ -60,6 +62,7 @@ component("aura") {
     "client/capture_client.cc",
     "client/cursor_client.cc",
     "client/cursor_client_observer.cc",
+    "client/cursor_shape_client.cc",
     "client/default_capture_client.cc",
     "client/drag_drop_client.cc",
     "client/drag_drop_delegate.cc",
@@ -78,7 +81,6 @@ component("aura") {
     "input_state_lookup.cc",
     "layout_manager.cc",
     "native_window_occlusion_tracker.cc",
-    "native_window_occlusion_tracker.h",
     "null_window_targeter.cc",
     "scoped_keyboard_hook.cc",
     "scoped_simple_keyboard_hook.cc",
@@ -104,8 +106,6 @@ component("aura") {
   deps = [
     "//base",
     "//base:i18n",
-    "//base/third_party/dynamic_annotations",
-    "//build:chromeos_buildflags",
     "//cc",
     "//cc/mojo_embedder",
     "//components/discardable_memory/client",
@@ -141,6 +141,8 @@ component("aura") {
     "//ui/base/dragdrop/mojom:mojom_headers",
     "//ui/base/ime",
     "//ui/base/metadata",
+    "//ui/base/mojom:mojom",
+    "//ui/base/mojom:ui_base_types",
     "//ui/compositor",
   ]
 
@@ -190,6 +192,7 @@ static_library("test_support") {
     "test/env_test_helper.h",
     "test/event_generator_delegate_aura.cc",
     "test/event_generator_delegate_aura.h",
+    "test/find_window.h",
     "test/test_cursor_client.cc",
     "test/test_cursor_client.h",
     "test/test_focus_client.cc",
@@ -204,6 +207,7 @@ static_library("test_support") {
     "test/test_window_targeter.h",
     "test/test_windows.cc",
     "test/test_windows.h",
+    "test/ui_controls_aurawin.h",
     "test/ui_controls_factory_aura.h",
     "test/window_event_dispatcher_test_api.cc",
     "test/window_event_dispatcher_test_api.h",
@@ -222,7 +226,6 @@ static_library("test_support") {
   deps = [
     "//base",
     "//base/test:test_support",
-    "//build:chromeos_buildflags",
     "//cc:test_support",
     "//components/viz/test:test_support",
     "//skia",
@@ -243,13 +246,10 @@ static_library("test_support") {
   ]
 
   if (is_win) {
-    sources += [ "test/ui_controls_factory_aurawin.cc" ]
+    sources += [ "test/ui_controls_aurawin.cc" ]
   }
 
-  if (use_ozone) {
-    if (is_fuchsia) {
-      deps += [ "//ui/ozone" ]
-    }
+  if (use_ozone && (is_chromeos || is_castos)) {
     sources += [
       "test/ui_controls_ozone.cc",
       "test/ui_controls_ozone.h",
@@ -316,7 +316,6 @@ test("aura_unittests") {
   deps = [
     ":test_support",
     "//base/test:test_support",
-    "//build:chromeos_buildflags",
     "//cc/mojo_embedder",
     "//components/viz/client",
     "//mojo/core/embedder",
@@ -344,14 +343,13 @@ test("aura_unittests") {
   }
 
   if (is_fuchsia) {
-    use_cfv2 = false
     additional_manifest_fragments = [
-      "//build/config/fuchsia/test/present_view_capabilities.test-cmx",
-      "//build/config/fuchsia/test/vulkan_capabilities.test-cmx",
+      "//build/config/fuchsia/test/present_view.shard.test-cml",
+      "//third_party/fuchsia-sdk/sdk/pkg/vulkan/client.shard.cml",
     ]
   }
 
-  data_deps = [ "//third_party/mesa_headers" ]
+  data_deps = [ "//third_party/angle:includes" ]
 }
 
 # This target is added as a dependency of browser interactive_ui_tests. It must

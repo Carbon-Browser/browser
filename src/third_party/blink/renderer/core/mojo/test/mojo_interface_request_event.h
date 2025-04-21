@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,7 @@ class MojoInterfaceRequestEvent final : public Event {
   MojoInterfaceRequestEvent(const AtomicString& type,
                             const MojoInterfaceRequestEventInit*);
 
-  MojoHandle* handle() const { return handle_; }
+  MojoHandle* handle() const { return handle_.Get(); }
 
   const AtomicString& InterfaceName() const override {
     return event_interface_names::kMojoInterfaceRequestEvent;

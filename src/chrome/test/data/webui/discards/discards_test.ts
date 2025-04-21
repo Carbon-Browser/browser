@@ -1,10 +1,6 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-
-// We need to import this manually, because test_api.js assumes it will be
-// be loaded for any test of "mojo_webui" type.
-import '../mojo_webui_test_support.js';
 
 import {durationToString, maybeMakePlural} from 'chrome://discards/discards.js';
 import {compareTabDiscardsInfos} from 'chrome://discards/discards_tab.js';

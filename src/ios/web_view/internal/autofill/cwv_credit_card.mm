@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,14 +10,10 @@
 #import "ios/web_view/internal/utils/nsobject_description_utils.h"
 #include "ui/base/resource/resource_bundle.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 @interface CWVCreditCard ()
 
 // Gets |value| for |type| from |_internalCard|.
-- (NSString*)valueForType:(autofill::ServerFieldType)type;
+- (NSString*)valueForType:(autofill::FieldType)type;
 
 @end
 
@@ -83,7 +79,7 @@
 
 #pragma mark - Private Methods
 
-- (NSString*)valueForType:(autofill::ServerFieldType)type {
+- (NSString*)valueForType:(autofill::FieldType)type {
   const std::string& locale =
       ios_web_view::ApplicationContext::GetInstance()->GetApplicationLocale();
   return base::SysUTF16ToNSString(_internalCard.GetInfo(type, locale));

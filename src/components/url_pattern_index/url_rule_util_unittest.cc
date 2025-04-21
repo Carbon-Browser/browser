@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include <utility>
 #include <vector>
 
-#include "base/strings/string_piece.h"
 #include "components/url_pattern_index/flat/url_pattern_index_generated.h"
 #include "components/url_pattern_index/url_pattern.h"
 #include "components/url_pattern_index/url_pattern_index.h"

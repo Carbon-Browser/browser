@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,8 @@ import androidx.annotation.Nullable;
 import java.util.Map;
 
 /**
+ * Implemented in Chromium.
+ *
  * Interface to provide native views to incorporate in an external surface-controlled
  * RecyclerView.
  *
@@ -55,14 +57,17 @@ public interface ListContentManager {
         return position;
     }
 
-    /**
-     * Binds the data at the specified location.
-     */
+    /** Binds the data at the specified location. */
     default void bindNativeView(int index, View v) {}
 
     /** Returns number of items to show. */
     default int getItemCount() {
         return 0;
+    }
+
+    /** Returns whether the item at index should span across all columns. */
+    default boolean isFullSpan(int index) {
+        return false;
     }
 
     /** Adds an observer to be notified when the list content changes. */

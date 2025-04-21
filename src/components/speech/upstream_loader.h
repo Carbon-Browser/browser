@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ namespace speech {
 class UpstreamLoaderClient;
 
 // Maximum amount of data written per Mojo write.
-const uint32_t kMaxUploadWrite = 128 * 1024;
+const size_t kMaxUploadWrite = 128 * 1024;
 
 // Streams sound data up to the server. Buffers entire request body into memory,
 // so it can be replayed in the case of redirects or retries.

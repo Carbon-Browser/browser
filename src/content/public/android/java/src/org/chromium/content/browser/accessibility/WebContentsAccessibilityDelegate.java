@@ -1,19 +1,22 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.content.browser.accessibility;
 
+import static org.chromium.build.NullUtil.assumeNonNull;
+
 import android.view.View;
 import android.view.ViewStructure;
 
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 import org.chromium.content.browser.RenderCoordinatesImpl;
 import org.chromium.content.browser.webcontents.WebContentsImpl;
 import org.chromium.content_public.browser.WebContents;
 
-/**
- * Implementation of {@link AccessibilityDelegate} based on {@link WebContents}.
- */
+/** Implementation of {@link AccessibilityDelegate} based on {@link WebContents}. */
+@NullMarked
 public class WebContentsAccessibilityDelegate implements AccessibilityDelegate {
     private final WebContentsImpl mWebContents;
     private final AccessibilityCoordinatesImpl mAccessibilityCoordinatesImpl;
@@ -25,11 +28,13 @@ public class WebContentsAccessibilityDelegate implements AccessibilityDelegate {
 
     @Override
     public View getContainerView() {
-        return mWebContents.getViewAndroidDelegate().getContainerView();
+        View ret = assumeNonNull(mWebContents.getViewAndroidDelegate()).getContainerView();
+        assert ret != null;
+        return ret;
     }
 
     @Override
-    public String getProductVersion() {
+    public @Nullable String getProductVersion() {
         return mWebContents.getProductVersion();
     }
 
@@ -94,6 +99,11 @@ public class WebContentsAccessibilityDelegate implements AccessibilityDelegate {
         @Override
         public float getScrollY() {
             return getRenderCoordinates().getScrollY();
+        }
+
+        @Override
+        public int getLastFrameViewportWidthPixInt() {
+            return getRenderCoordinates().getLastFrameViewportWidthPixInt();
         }
 
         @Override

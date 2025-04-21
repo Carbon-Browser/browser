@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,6 @@
 #include "base/synchronization/lock.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "ui/gfx/font.h"
 #include "ui/gfx/font_render_params_linux.h"
 #include "ui/gfx/linux/fontconfig_util.h"
@@ -213,8 +212,9 @@ FontRenderParams GetFontRenderParams(const FontRenderParamsQuery& query,
   // Start with the delegate's settings, but let Fontconfig have the final say.
   FontRenderParams params;
 #if BUILDFLAG(IS_LINUX)
-  if (const auto* linux_ui = ui::LinuxUi::instance())
+  if (auto* linux_ui = ui::LinuxUi::instance()) {
     params = linux_ui->GetDefaultFontRenderParams();
+  }
 #endif
   QueryFontconfig(actual_query, &params, family_out);
   if (!params.antialiasing) {
@@ -226,15 +226,15 @@ FontRenderParams GetFontRenderParams(const FontRenderParamsQuery& query,
     params.subpixel_positioning = false;
   } else if (!base::CommandLine::ForCurrentProcess()->HasSwitch(
                  switches::kDisableFontSubpixelPositioning)) {
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
-    params.subpixel_positioning = actual_query.device_scale_factor > 1.0f;
-#else
+#if BUILDFLAG(IS_CHROMEOS)
     // We want to enable subpixel positioning for fractional dsf.
     params.subpixel_positioning =
         std::abs(std::round(actual_query.device_scale_factor) -
                  actual_query.device_scale_factor) >
         std::numeric_limits<float>::epsilon();
-#endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
+#else
+    params.subpixel_positioning = actual_query.device_scale_factor > 1.0f;
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
     // To enable subpixel positioning, we need to disable hinting.
     if (params.subpixel_positioning)

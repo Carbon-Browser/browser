@@ -1,8 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/tab_groups/tab_group_id.h"
+
+#include <ostream>
 
 namespace tab_groups {
 
@@ -19,6 +21,10 @@ TabGroupId TabGroupId::FromRawToken(base::Token token) {
 // static
 TabGroupId TabGroupId::CreateEmpty() {
   return TabGroupId(base::Token());
+}
+
+std::ostream& operator<<(std::ostream& out, const TabGroupId& tab_group_id) {
+  return out << tab_group_id.ToString();
 }
 
 TabGroupId::TabGroupId(const TabGroupId& other) = default;

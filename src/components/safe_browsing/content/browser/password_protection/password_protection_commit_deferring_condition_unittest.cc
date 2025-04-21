@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,8 +43,11 @@ class PasswordProtectionCommitDeferringConditionTest
   void SetUp() override {
     RenderViewHostTestHarness::SetUp();
 
-    std::vector<password_manager::MatchingReusedCredential> credentials = {
-        {"http://example.test"}, {"http://2.example.com"}};
+    std::vector<password_manager::MatchingReusedCredential> credentials;
+    credentials.emplace_back("http://example.test", GURL("http://example.test"),
+                             u"username");
+    credentials.emplace_back("http://2.example.com",
+                             GURL("http://example.test"), u"username2");
 
     request_ = new PasswordProtectionRequestContent(
         RenderViewHostTestHarness::web_contents(), GURL(), GURL(), GURL(),

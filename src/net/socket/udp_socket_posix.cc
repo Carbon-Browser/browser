@@ -1,6 +1,13 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "net/socket/udp_socket_posix.h"
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "build/build_config.h"
 
@@ -10,35 +17,29 @@
 #define __APPLE_USE_RFC_3542
 #endif  // BUILDFLAG(IS_APPLE)
 
-#include "net/socket/udp_socket_posix.h"
-
 #include <errno.h>
 #include <fcntl.h>
 #include <net/if.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <stdint.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
-#include "base/containers/stack_container.h"
 #include "base/debug/alias.h"
-#include "base/feature_list.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
-#include "base/metrics/histogram_functions.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/rand_util.h"
 #include "base/task/current_thread.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
-#include "base/trace_event/typed_macros.h"
 #include "build/chromeos_buildflags.h"
-#include "net/base/features.h"
+#include "net/base/cronet_buildflags.h"
 #include "net/base/io_buffer.h"
 #include "net/base/ip_address.h"
 #include "net/base/ip_endpoint.h"
@@ -46,23 +47,25 @@
 #include "net/base/network_activity_monitor.h"
 #include "net/base/sockaddr_storage.h"
 #include "net/base/trace_constants.h"
+#include "net/base/tracing.h"
 #include "net/log/net_log.h"
 #include "net/log/net_log_event_type.h"
 #include "net/log/net_log_source.h"
 #include "net/log/net_log_source_type.h"
-#include "net/socket/ios_cronet_buildflags.h"
 #include "net/socket/socket_descriptor.h"
 #include "net/socket/socket_options.h"
 #include "net/socket/socket_tag.h"
 #include "net/socket/udp_net_log_parameters.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
-#include "third_party/perfetto/include/perfetto/tracing/string_helpers.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "base/native_library.h"
 #include "net/android/network_library.h"
-#include "net/android/radio_activity_tracker.h"
 #endif  // BUILDFLAG(IS_ANDROID)
+
+#if BUILDFLAG(IS_APPLE)
+#include "net/base/apple/guarded_fd.h"
+#endif  // BUILDFLAG(IS_APPLE)
 
 #if BUILDFLAG(IS_MAC)
 #include "base/mac/mac_util.h"
@@ -72,54 +75,9 @@ namespace net {
 
 namespace {
 
-const int kBindRetries = 10;
-const int kPortStart = 1024;
-const int kPortEnd = 65535;
-const int kActivityMonitorBytesThreshold = 65535;
-const int kActivityMonitorMinimumSamplesForThroughputEstimate = 2;
-const base::TimeDelta kActivityMonitorMsThreshold = base::Milliseconds(100);
-
-#if BUILDFLAG(IS_APPLE) && !BUILDFLAG(CRONET_BUILD)
-
-// On macOS, the file descriptor is guarded to detect the cause of
-// https://crbug.com/640281. The guard mechanism is a private interface, so
-// these functions, types, and constants are not defined in any public header,
-// but with these declarations, it's possible to link against these symbols and
-// directly call into the functions that will be available at run time.
-
-// Declarations from 12.3 xnu-8020.101.4/bsd/sys/guarded.h (not in the SDK).
-extern "C" {
-
-using guardid_t = uint64_t;
-
-const unsigned int GUARD_CLOSE = 1u << 0;
-const unsigned int GUARD_DUP = 1u << 1;
-
-int guarded_close_np(int fd, const guardid_t* guard);
-int change_fdguard_np(int fd,
-                      const guardid_t* guard,
-                      unsigned int guardflags,
-                      const guardid_t* nguard,
-                      unsigned int nguardflags,
-                      int* fdflagsp);
-
-}  // extern "C"
-
-const guardid_t kSocketFdGuard = 0xD712BC0BC9A4EAD4;
-
-// Returns true if `socket` is connected to 0.0.0.0, false otherwise.
-// For detecting slow socket close due to a MacOS bug
-// (https://crbug.com/1194888).
-bool PeerIsZeroIPv4(const UDPSocketPosix& socket) {
-  IPEndPoint peer;
-  // Note this may call `getpeername` if the address is not cached, adding some
-  // overhead.
-  if (socket.GetPeerAddress(&peer) != OK)
-    return false;
-  return peer.address().IsIPv4() && peer.address().IsZero();
-}
-
-#endif  // BUILDFLAG(IS_APPLE) && !BUILDFLAG(CRONET_BUILD)
+constexpr int kBindRetries = 10;
+constexpr int kPortStart = 1024;
+constexpr int kPortEnd = 65535;
 
 int GetSocketFDHash(int fd) {
   return fd ^ 1595649551;
@@ -130,19 +88,29 @@ int GetSocketFDHash(int fd) {
 UDPSocketPosix::UDPSocketPosix(DatagramSocket::BindType bind_type,
                                net::NetLog* net_log,
                                const net::NetLogSource& source)
-    : write_async_watcher_(std::make_unique<WriteAsyncWatcher>(this)),
-      sender_(base::MakeRefCounted<UDPSocketPosixSender>()),
-      socket_(kInvalidSocket),
+    : socket_(kInvalidSocket),
       bind_type_(bind_type),
       read_socket_watcher_(FROM_HERE),
       write_socket_watcher_(FROM_HERE),
       read_watcher_(this),
       write_watcher_(this),
       net_log_(NetLogWithSource::Make(net_log, NetLogSourceType::UDP_SOCKET)),
-      bound_network_(NetworkChangeNotifier::kInvalidNetworkHandle),
-      always_update_bytes_received_(base::FeatureList::IsEnabled(
-          features::kUdpSocketPosixAlwaysUpdateBytesReceived)) {
+      bound_network_(handles::kInvalidNetworkHandle) {
   net_log_.BeginEventReferencingSource(NetLogEventType::SOCKET_ALIVE, source);
+}
+
+UDPSocketPosix::UDPSocketPosix(DatagramSocket::BindType bind_type,
+                               NetLogWithSource source_net_log)
+    : socket_(kInvalidSocket),
+      bind_type_(bind_type),
+      read_socket_watcher_(FROM_HERE),
+      write_socket_watcher_(FROM_HERE),
+      read_watcher_(this),
+      write_watcher_(this),
+      net_log_(source_net_log),
+      bound_network_(handles::kInvalidNetworkHandle) {
+  net_log_.BeginEventReferencingSource(NetLogEventType::SOCKET_ALIVE,
+                                       net_log_.source());
 }
 
 UDPSocketPosix::~UDPSocketPosix() {
@@ -159,12 +127,38 @@ int UDPSocketPosix::Open(AddressFamily address_family) {
   if (owned_socket_count.empty())
     return ERR_INSUFFICIENT_RESOURCES;
 
+  owned_socket_count_ = std::move(owned_socket_count);
   addr_family_ = ConvertAddressFamily(address_family);
   socket_ = CreatePlatformSocket(addr_family_, SOCK_DGRAM, 0);
-  if (socket_ == kInvalidSocket)
+  if (socket_ == kInvalidSocket) {
+    owned_socket_count_.Reset();
     return MapSystemError(errno);
+  }
+
+  return ConfigureOpenedSocket();
+}
+
+int UDPSocketPosix::AdoptOpenedSocket(AddressFamily address_family,
+                                      int socket) {
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  DCHECK_EQ(socket_, kInvalidSocket);
+  auto owned_socket_count = TryAcquireGlobalUDPSocketCount();
+  if (owned_socket_count.empty()) {
+    return ERR_INSUFFICIENT_RESOURCES;
+  }
+
+  owned_socket_count_ = std::move(owned_socket_count);
+  socket_ = socket;
+  addr_family_ = ConvertAddressFamily(address_family);
+  return ConfigureOpenedSocket();
+}
+
+int UDPSocketPosix::ConfigureOpenedSocket() {
 #if BUILDFLAG(IS_APPLE) && !BUILDFLAG(CRONET_BUILD)
-  PCHECK(change_fdguard_np(socket_, nullptr, 0, &kSocketFdGuard,
+  // https://crbug.com/41271555: Guard against a file descriptor being closed
+  // out from underneath the socket.
+  guardid_t guardid = reinterpret_cast<guardid_t>(this);
+  PCHECK(change_fdguard_np(socket_, nullptr, 0, &guardid,
                            GUARD_CLOSE | GUARD_DUP, nullptr) == 0);
 #endif  // BUILDFLAG(IS_APPLE) && !BUILDFLAG(CRONET_BUILD)
   socket_hash_ = GetSocketFDHash(socket_);
@@ -176,53 +170,7 @@ int UDPSocketPosix::Open(AddressFamily address_family) {
   if (tag_ != SocketTag())
     tag_.Apply(socket_);
 
-  owned_socket_count_ = std::move(owned_socket_count);
   return OK;
-}
-
-void UDPSocketPosix::ReceivedActivityMonitor::Increment(uint32_t bytes) {
-  if (!bytes)
-    return;
-  bool timer_running = timer_.IsRunning();
-  bytes_ += bytes;
-  increments_++;
-  // Allow initial updates to make sure throughput estimator has
-  // enough samples to generate a value. (low water mark)
-  // Or once the bytes threshold has be met. (high water mark)
-  if (increments_ < kActivityMonitorMinimumSamplesForThroughputEstimate ||
-      bytes_ > kActivityMonitorBytesThreshold) {
-    Update();
-    if (timer_running)
-      timer_.Reset();
-  }
-  if (!timer_running) {
-    timer_.Start(FROM_HERE, kActivityMonitorMsThreshold, this,
-                 &UDPSocketPosix::ReceivedActivityMonitor::OnTimerFired);
-  }
-}
-
-void UDPSocketPosix::ReceivedActivityMonitor::Update() {
-  if (!bytes_)
-    return;
-  activity_monitor::IncrementBytesReceived(bytes_);
-  bytes_ = 0;
-}
-
-void UDPSocketPosix::ReceivedActivityMonitor::OnClose() {
-  timer_.Stop();
-  Update();
-}
-
-void UDPSocketPosix::ReceivedActivityMonitor::OnTimerFired() {
-  increments_ = 0;
-  if (!bytes_) {
-    // Can happen if the socket has been idle and have had no
-    // increments since the timer previously fired.  Don't bother
-    // keeping the timer running in this case.
-    timer_.Stop();
-    return;
-  }
-  Update();
 }
 
 void UDPSocketPosix::Close() {
@@ -249,31 +197,28 @@ void UDPSocketPosix::Close() {
   DCHECK(ok);
 
   // Verify that |socket_| hasn't been corrupted. Needed to debug
-  // crbug.com/906005.
+  // https://crbug.com/41426706.
   CHECK_EQ(socket_hash_, GetSocketFDHash(socket_));
-#if BUILDFLAG(IS_APPLE) && !BUILDFLAG(CRONET_BUILD)
-  // A MacOS bug can cause sockets to 0.0.0.0 to take 1 second to close. Log a
-  // trace event for this case so that it can be correlated with jank in traces.
-  // Use the "base" category since "net" isn't enabled by default. See
-  // https://crbug.com/1194888.
-  TRACE_EVENT("base", PeerIsZeroIPv4(*this)
-                          ? perfetto::StaticString{"CloseSocketUDP.PeerIsZero"}
-                          : perfetto::StaticString{"CloseSocketUDP"});
+  TRACE_EVENT("base", perfetto::StaticString{"CloseSocketUDP"});
 
+#if BUILDFLAG(IS_APPLE) && !BUILDFLAG(CRONET_BUILD)
   // Attempt to clear errors on the socket so that they are not returned by
   // close(). This seems to be effective at clearing some, but not all,
-  // EPROTOTYPE errors. See https://crbug.com/1151048.
+  // EPROTOTYPE errors. See https://crbug.com/40732798.
   int value = 0;
   socklen_t value_len = sizeof(value);
   HANDLE_EINTR(getsockopt(socket_, SOL_SOCKET, SO_ERROR, &value, &value_len));
 
-  if (IGNORE_EINTR(guarded_close_np(socket_, &kSocketFdGuard)) != 0) {
+  // https://crbug.com/41271555: Guard against a file descriptor being closed
+  // out from underneath the socket.
+  guardid_t guardid = reinterpret_cast<guardid_t>(this);
+  if (IGNORE_EINTR(guarded_close_np(socket_, &guardid)) != 0) {
     // There is a bug in the Mac OS kernel that it can return an ENOTCONN or
     // EPROTOTYPE error. In this case we don't know whether the file descriptor
     // is still allocated or not. We cannot safely close the file descriptor
     // because it may have been reused by another thread in the meantime. We may
     // leak file handles here and cause a crash indirectly later. See
-    // https://crbug.com/1151048.
+    // https://crbug.com/40732798.
     PCHECK(errno == ENOTCONN || errno == EPROTOTYPE);
   }
 #else
@@ -284,9 +229,6 @@ void UDPSocketPosix::Close() {
   addr_family_ = 0;
   is_connected_ = false;
   tag_ = SocketTag();
-
-  write_async_timer_.Stop();
-  received_activity_monitor_.OnClose();
 }
 
 int UDPSocketPosix::GetPeerAddress(IPEndPoint* address) const {
@@ -297,12 +239,14 @@ int UDPSocketPosix::GetPeerAddress(IPEndPoint* address) const {
 
   if (!remote_address_.get()) {
     SockaddrStorage storage;
-    if (getpeername(socket_, storage.addr, &storage.addr_len))
+    if (getpeername(socket_, storage.addr(), &storage.addr_len)) {
       return MapSystemError(errno);
-    auto address = std::make_unique<IPEndPoint>();
-    if (!address->FromSockAddr(storage.addr, storage.addr_len))
+    }
+    auto endpoint = std::make_unique<IPEndPoint>();
+    if (!endpoint->FromSockAddr(storage.addr(), storage.addr_len)) {
       return ERR_ADDRESS_INVALID;
-    remote_address_ = std::move(address);
+    }
+    remote_address_ = std::move(endpoint);
   }
 
   *address = *remote_address_;
@@ -317,12 +261,14 @@ int UDPSocketPosix::GetLocalAddress(IPEndPoint* address) const {
 
   if (!local_address_.get()) {
     SockaddrStorage storage;
-    if (getsockname(socket_, storage.addr, &storage.addr_len))
+    if (getsockname(socket_, storage.addr(), &storage.addr_len)) {
       return MapSystemError(errno);
-    auto address = std::make_unique<IPEndPoint>();
-    if (!address->FromSockAddr(storage.addr, storage.addr_len))
+    }
+    auto endpoint = std::make_unique<IPEndPoint>();
+    if (!endpoint->FromSockAddr(storage.addr(), storage.addr_len)) {
       return ERR_ADDRESS_INVALID;
-    local_address_ = std::move(address);
+    }
+    local_address_ = std::move(endpoint);
     net_log_.AddEvent(NetLogEventType::UDP_LOCAL_ADDRESS, [&] {
       return CreateNetLogUDPConnectParams(*local_address_, bound_network_);
     });
@@ -374,9 +320,6 @@ int UDPSocketPosix::Write(
     int buf_len,
     CompletionOnceCallback callback,
     const NetworkTrafficAnnotationTag& traffic_annotation) {
-#if BUILDFLAG(IS_ANDROID)
-  android::MaybeRecordUDPWriteForWakeupTrigger(traffic_annotation);
-#endif  // BUILDFLAG(IS_ANDROID)
   return SendToOrWrite(buf, buf_len, nullptr, std::move(callback));
 }
 
@@ -397,9 +340,10 @@ int UDPSocketPosix::SendToOrWrite(IOBuffer* buf,
   DCHECK(!callback.is_null());  // Synchronous operation not supported
   DCHECK_GT(buf_len, 0);
 
-  int result = InternalSendTo(buf, buf_len, address);
-  if (result != ERR_IO_PENDING)
+  if (int result = InternalSendTo(buf, buf_len, address);
+      result != ERR_IO_PENDING) {
     return result;
+  }
 
   if (!base::CurrentIOThread::Get()->WatchFileDescriptor(
           socket_, true, base::MessagePumpForIO::WATCH_WRITE,
@@ -453,15 +397,15 @@ int UDPSocketPosix::InternalConnect(const IPEndPoint& address) {
   // else connect() does the DatagramSocket::DEFAULT_BIND
 
   if (rv < 0) {
-    base::UmaHistogramSparse("Net.UdpSocketRandomBindErrorCode", -rv);
     return rv;
   }
 
   SockaddrStorage storage;
-  if (!address.ToSockAddr(storage.addr, &storage.addr_len))
+  if (!address.ToSockAddr(storage.addr(), &storage.addr_len)) {
     return ERR_ADDRESS_INVALID;
+  }
 
-  rv = HANDLE_EINTR(connect(socket_, storage.addr, storage.addr_len));
+  rv = HANDLE_EINTR(connect(socket_, storage.addr(), storage.addr_len));
   if (rv < 0)
     return MapSystemError(errno);
 
@@ -487,8 +431,7 @@ int UDPSocketPosix::Bind(const IPEndPoint& address) {
   return rv;
 }
 
-int UDPSocketPosix::BindToNetwork(
-    NetworkChangeNotifier::NetworkHandle network) {
+int UDPSocketPosix::BindToNetwork(handles::NetworkHandle network) {
   DCHECK_NE(socket_, kInvalidSocket);
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   DCHECK(!is_connected());
@@ -522,11 +465,7 @@ int UDPSocketPosix::SetDoNotFragment() {
 #if !defined(IP_PMTUDISC_DO) && !BUILDFLAG(IS_MAC)
   return ERR_NOT_IMPLEMENTED;
 
-// setsockopt(IP_DONTFRAG) is supported on macOS from Big Sur
 #elif BUILDFLAG(IS_MAC)
-  if (!base::mac::IsAtLeastOS11()) {
-    return ERR_NOT_IMPLEMENTED;
-  }
   int val = 1;
   if (addr_family_ == AF_INET6) {
     int rv =
@@ -560,6 +499,37 @@ int UDPSocketPosix::SetDoNotFragment() {
   int rv = setsockopt(socket_, IPPROTO_IP, IP_MTU_DISCOVER, &val, sizeof(val));
   return rv == 0 ? OK : MapSystemError(errno);
 #endif
+}
+
+int UDPSocketPosix::SetRecvTos() {
+  DCHECK_NE(socket_, kInvalidSocket);
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+
+  uint32_t ecn = 1;
+  if (addr_family_ == AF_INET6) {
+    if (setsockopt(socket_, IPPROTO_IPV6, IPV6_RECVTCLASS, &ecn, sizeof(ecn)) !=
+        0) {
+      return MapSystemError(errno);
+    }
+#if BUILDFLAG(IS_APPLE)
+    // Linux requires dual-stack sockets to have the sockopt set on both levels.
+    // Apple does not, and in fact returns an error if it is.
+    return OK;
+#else
+    int v6_only = false;
+    socklen_t v6_only_len = sizeof(v6_only);
+    if (getsockopt(socket_, IPPROTO_IPV6, IPV6_V6ONLY, &v6_only,
+                   &v6_only_len) != 0) {
+      return MapSystemError(errno);
+    }
+    if (v6_only) {
+      return OK;
+    }
+#endif  // BUILDFLAG(IS_APPLE)
+  }
+
+  int rv = setsockopt(socket_, IPPROTO_IP, IP_RECVTOS, &ecn, sizeof(ecn));
+  return rv == 0 ? OK : MapSystemError(errno);
 }
 
 void UDPSocketPosix::SetMsgConfirm(bool confirm) {
@@ -687,10 +657,7 @@ void UDPSocketPosix::LogRead(int result,
                           bytes, is_address_valid ? &address : nullptr);
   }
 
-  if (always_update_bytes_received_)
-    activity_monitor::IncrementBytesReceived(result);
-  else
-    received_activity_monitor_.Increment(result);
+  activity_monitor::IncrementBytesReceived(result);
 }
 
 void UDPSocketPosix::DidCompleteWrite() {
@@ -720,6 +687,11 @@ void UDPSocketPosix::LogWrite(int result,
   }
 }
 
+// TODO(crbug.com/40285166): Because InternalRecvFromConnectedSocket() uses
+// recvfrom() instead of recvmsg(), it cannot report received ECN marks for
+// QUIC ACK-ECN frames. It might be time to deprecate
+// experimental_recv_optimization_enabled_ if that experiment has run its
+// course.
 int UDPSocketPosix::InternalRecvFrom(IOBuffer* buf,
                                      int buf_len,
                                      IPEndPoint* address) {
@@ -757,9 +729,9 @@ int UDPSocketPosix::InternalRecvFromConnectedSocket(IOBuffer* buf,
 
   SockaddrStorage sock_addr;
   bool success =
-        remote_address_->ToSockAddr(sock_addr.addr, &sock_addr.addr_len);
-    DCHECK(success);
-    LogRead(result, buf->data(), sock_addr.addr_len, sock_addr.addr);
+      remote_address_->ToSockAddr(sock_addr.addr(), &sock_addr.addr_len);
+  DCHECK(success);
+  LogRead(result, buf->data(), sock_addr.addr_len, sock_addr.addr());
   return result;
 }
 
@@ -771,11 +743,17 @@ int UDPSocketPosix::InternalRecvFromNonConnectedSocket(IOBuffer* buf,
       .iov_base = buf->data(),
       .iov_len = static_cast<size_t>(buf_len),
   };
+  // control_buffer needs to be big enough to accommodate the maximum
+  // conceivable number of CMSGs. Other (proprietary) Google QUIC code uses
+  // 512 Bytes, re-used here.
+  char control_buffer[512];
   struct msghdr msg = {
-      .msg_name = storage.addr,
+      .msg_name = storage.addr(),
       .msg_namelen = storage.addr_len,
       .msg_iov = &iov,
       .msg_iovlen = 1,
+      .msg_control = control_buffer,
+      .msg_controllen = ABSL_ARRAYSIZE(control_buffer),
   };
   int result;
   int bytes_transferred = HANDLE_EINTR(recvmsg(socket_, &msg, 0));
@@ -791,14 +769,31 @@ int UDPSocketPosix::InternalRecvFromNonConnectedSocket(IOBuffer* buf,
       // Linux, but isn't supported by POSIX.
       result = ERR_MSG_TOO_BIG;
     } else if (address &&
-               !address->FromSockAddr(storage.addr, storage.addr_len)) {
+               !address->FromSockAddr(storage.addr(), storage.addr_len)) {
       result = ERR_ADDRESS_INVALID;
     } else {
       result = bytes_transferred;
     }
+    last_tos_ = 0;
+    if (bytes_transferred > 0 && msg.msg_controllen > 0) {
+      for (struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg); cmsg != nullptr;
+           cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+#if BUILDFLAG(IS_APPLE)
+        if ((cmsg->cmsg_level == IPPROTO_IP && cmsg->cmsg_type == IP_RECVTOS) ||
+            (cmsg->cmsg_level == IPPROTO_IPV6 &&
+             cmsg->cmsg_type == IPV6_TCLASS)) {
+#else
+        if ((cmsg->cmsg_level == IPPROTO_IP && cmsg->cmsg_type == IP_TOS) ||
+            (cmsg->cmsg_level == IPPROTO_IPV6 &&
+             cmsg->cmsg_type == IPV6_TCLASS)) {
+#endif  // BUILDFLAG(IS_APPLE)
+          last_tos_ = *(reinterpret_cast<uint8_t*>(CMSG_DATA(cmsg)));
+        }
+      }
+    }
   }
 
-  LogRead(result, buf->data(), storage.addr_len, storage.addr);
+  LogRead(result, buf->data(), storage.addr_len, storage.addr());
   return result;
 }
 
@@ -806,12 +801,12 @@ int UDPSocketPosix::InternalSendTo(IOBuffer* buf,
                                    int buf_len,
                                    const IPEndPoint* address) {
   SockaddrStorage storage;
-  struct sockaddr* addr = storage.addr;
+  struct sockaddr* addr = storage.addr();
   if (!address) {
     addr = nullptr;
     storage.addr_len = 0;
   } else {
-    if (!address->ToSockAddr(storage.addr, &storage.addr_len)) {
+    if (!address->ToSockAddr(storage.addr(), &storage.addr_len)) {
       int result = ERR_ADDRESS_INVALID;
       LogWrite(result, nullptr, nullptr);
       return result;
@@ -880,7 +875,6 @@ int UDPSocketPosix::SetMulticastOptions() {
       }
       default:
         NOTREACHED() << "Invalid address family";
-        return ERR_ADDRESS_INVALID;
     }
   }
   return OK;
@@ -888,9 +882,10 @@ int UDPSocketPosix::SetMulticastOptions() {
 
 int UDPSocketPosix::DoBind(const IPEndPoint& address) {
   SockaddrStorage storage;
-  if (!address.ToSockAddr(storage.addr, &storage.addr_len))
+  if (!address.ToSockAddr(storage.addr(), &storage.addr_len)) {
     return ERR_ADDRESS_INVALID;
-  int rv = bind(socket_, storage.addr, storage.addr_len);
+  }
+  int rv = bind(socket_, storage.addr(), storage.addr_len);
   if (rv == 0)
     return OK;
   int last_error = errno;
@@ -951,7 +946,6 @@ int UDPSocketPosix::JoinGroup(const IPAddress& group_address) const {
     }
     default:
       NOTREACHED() << "Invalid address family";
-      return ERR_ADDRESS_INVALID;
   }
 }
 
@@ -995,7 +989,6 @@ int UDPSocketPosix::LeaveGroup(const IPAddress& group_address) const {
     }
     default:
       NOTREACHED() << "Invalid address family";
-      return ERR_ADDRESS_INVALID;
   }
 }
 
@@ -1031,11 +1024,33 @@ int UDPSocketPosix::SetMulticastLoopbackMode(bool loopback) {
 }
 
 int UDPSocketPosix::SetDiffServCodePoint(DiffServCodePoint dscp) {
-  if (dscp == DSCP_NO_CHANGE) {
+  return SetTos(dscp, ECN_NO_CHANGE);
+}
+
+int UDPSocketPosix::SetTos(DiffServCodePoint dscp, EcnCodePoint ecn) {
+  if (dscp == DSCP_NO_CHANGE && ecn == ECN_NO_CHANGE) {
     return OK;
   }
-
-  int dscp_and_ecn = dscp << 2;
+  int dscp_and_ecn = (dscp << 2) | ecn;
+  socklen_t size = sizeof(dscp_and_ecn);
+  if (dscp == DSCP_NO_CHANGE || ecn == ECN_NO_CHANGE) {
+    int rv;
+    if (addr_family_ == AF_INET) {
+      rv = getsockopt(socket_, IPPROTO_IP, IP_TOS, &dscp_and_ecn, &size);
+    } else {
+      rv = getsockopt(socket_, IPPROTO_IPV6, IPV6_TCLASS, &dscp_and_ecn, &size);
+    }
+    if (rv < 0) {
+      return MapSystemError(errno);
+    }
+    if (dscp == DSCP_NO_CHANGE) {
+      dscp_and_ecn &= ~ECN_LAST;
+      dscp_and_ecn |= ecn;
+    } else {
+      dscp_and_ecn &= ECN_LAST;
+      dscp_and_ecn |= (dscp << 2);
+    }
+  }
   // Set the IPv4 option in all cases to support dual-stack sockets.
   int rv = setsockopt(socket_, IPPROTO_IP, IP_TOS, &dscp_and_ecn,
                       sizeof(dscp_and_ecn));
@@ -1047,8 +1062,15 @@ int UDPSocketPosix::SetDiffServCodePoint(DiffServCodePoint dscp) {
   }
   if (rv < 0)
     return MapSystemError(errno);
-
   return OK;
+}
+
+int UDPSocketPosix::SetIPv6Only(bool ipv6_only) {
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  if (is_connected()) {
+    return ERR_SOCKET_IS_CONNECTED;
+  }
+  return net::SetIPv6Only(socket_, ipv6_only);
 }
 
 void UDPSocketPosix::DetachFromThread() {
@@ -1061,340 +1083,6 @@ void UDPSocketPosix::ApplySocketTag(const SocketTag& tag) {
     tag.Apply(socket_);
   }
   tag_ = tag;
-}
-
-UDPSocketPosixSender::UDPSocketPosixSender() = default;
-UDPSocketPosixSender::~UDPSocketPosixSender() = default;
-
-SendResult::SendResult() : rv(0), write_count(0) {}
-SendResult::~SendResult() = default;
-SendResult::SendResult(int _rv, int _write_count, DatagramBuffers _buffers)
-    : rv(_rv), write_count(_write_count), buffers(std::move(_buffers)) {}
-SendResult::SendResult(SendResult&& other) = default;
-
-SendResult UDPSocketPosixSender::InternalSendBuffers(
-    int fd,
-    DatagramBuffers buffers) const {
-  int rv = 0;
-  int write_count = 0;
-  for (auto& buffer : buffers) {
-    int result = HANDLE_EINTR(Send(fd, buffer->data(), buffer->length(), 0));
-    if (result < 0) {
-      rv = MapSystemError(errno);
-      break;
-    }
-    write_count++;
-  }
-  return SendResult(rv, write_count, std::move(buffers));
-}
-
-#if HAVE_SENDMMSG
-SendResult UDPSocketPosixSender::InternalSendmmsgBuffers(
-    int fd,
-    DatagramBuffers buffers) const {
-  base::StackVector<struct iovec, kWriteAsyncMaxBuffersThreshold + 1> msg_iov;
-  base::StackVector<struct mmsghdr, kWriteAsyncMaxBuffersThreshold + 1> msgvec;
-  msg_iov->reserve(buffers.size());
-  for (auto& buffer : buffers)
-    msg_iov->push_back({const_cast<char*>(buffer->data()), buffer->length()});
-  msgvec->reserve(buffers.size());
-  for (size_t j = 0; j < buffers.size(); j++)
-    msgvec->push_back({{nullptr, 0, &msg_iov[j], 1, nullptr, 0, 0}, 0});
-  int result = HANDLE_EINTR(Sendmmsg(fd, &msgvec[0], buffers.size(), 0));
-  SendResult send_result(0, 0, std::move(buffers));
-  if (result < 0) {
-    send_result.rv = MapSystemError(errno);
-  } else {
-    send_result.write_count = result;
-  }
-  return send_result;
-}
-#endif
-
-SendResult UDPSocketPosixSender::SendBuffers(int fd, DatagramBuffers buffers) {
-#if HAVE_SENDMMSG
-  if (sendmmsg_enabled_) {
-    auto result = InternalSendmmsgBuffers(fd, std::move(buffers));
-    if (LIKELY(result.rv != ERR_NOT_IMPLEMENTED)) {
-      return result;
-    }
-    DLOG(WARNING) << "senddmsg() not implemented, falling back to send()";
-    sendmmsg_enabled_ = false;
-    buffers = std::move(result.buffers);
-  }
-#endif
-  return InternalSendBuffers(fd, std::move(buffers));
-}
-
-ssize_t UDPSocketPosixSender::Send(int sockfd,
-                                   const void* buf,
-                                   size_t len,
-                                   int flags) const {
-  return send(sockfd, buf, len, flags);
-}
-
-#if HAVE_SENDMMSG
-int UDPSocketPosixSender::Sendmmsg(int sockfd,
-                                   struct mmsghdr* msgvec,
-                                   unsigned int vlen,
-                                   unsigned int flags) const {
-  return sendmmsg(sockfd, msgvec, vlen, flags);
-}
-#endif
-
-int UDPSocketPosix::WriteAsync(
-    const char* buffer,
-    size_t buf_len,
-    CompletionOnceCallback callback,
-    const NetworkTrafficAnnotationTag& traffic_annotation) {
-  DCHECK(datagram_buffer_pool_ != nullptr);
-  IncreaseWriteAsyncOutstanding(1);
-  datagram_buffer_pool_->Enqueue(buffer, buf_len, &pending_writes_);
-  return InternalWriteAsync(std::move(callback), traffic_annotation);
-}
-
-int UDPSocketPosix::WriteAsync(
-    DatagramBuffers buffers,
-    CompletionOnceCallback callback,
-    const NetworkTrafficAnnotationTag& traffic_annotation) {
-  IncreaseWriteAsyncOutstanding(buffers.size());
-  pending_writes_.splice(pending_writes_.end(), std::move(buffers));
-  return InternalWriteAsync(std::move(callback), traffic_annotation);
-}
-
-int UDPSocketPosix::InternalWriteAsync(
-    CompletionOnceCallback callback,
-    const NetworkTrafficAnnotationTag& traffic_annotation) {
-  CHECK(write_callback_.is_null());
-
-  // Surface error immediately if one is pending.
-  if (last_async_result_ < 0) {
-    return ResetLastAsyncResult();
-  }
-
-  size_t flush_threshold =
-      write_batching_active_ ? kWriteAsyncPostBuffersThreshold : 1;
-  if (pending_writes_.size() >= flush_threshold) {
-    FlushPending();
-    // Surface error immediately if one is pending.
-    if (last_async_result_ < 0) {
-      return ResetLastAsyncResult();
-    }
-  }
-
-  if (!write_async_timer_running_) {
-    write_async_timer_running_ = true;
-    write_async_timer_.Start(FROM_HERE, kWriteAsyncMsThreshold, this,
-                             &UDPSocketPosix::OnWriteAsyncTimerFired);
-  }
-
-  int blocking_threshold =
-      write_batching_active_ ? kWriteAsyncMaxBuffersThreshold : 1;
-  if (write_async_outstanding_ >= blocking_threshold) {
-    write_callback_ = std::move(callback);
-    return ERR_IO_PENDING;
-  }
-
-  DVLOG(2) << __func__ << " pending " << pending_writes_.size()
-           << " outstanding " << write_async_outstanding_;
-  return ResetWrittenBytes();
-}
-
-DatagramBuffers UDPSocketPosix::GetUnwrittenBuffers() {
-  write_async_outstanding_ -= pending_writes_.size();
-  return std::move(pending_writes_);
-}
-
-void UDPSocketPosix::FlushPending() {
-  // Nothing to do if socket is blocked.
-  if (write_async_watcher_->watching())
-    return;
-
-  if (pending_writes_.empty())
-    return;
-
-  if (write_async_timer_running_)
-    write_async_timer_.Reset();
-
-  int num_pending_writes = static_cast<int>(pending_writes_.size());
-  if (!write_multi_core_enabled_ ||
-      // Don't bother with post if not enough buffers
-      (num_pending_writes <= kWriteAsyncMinBuffersThreshold &&
-       // but not if there is a previous post
-       // outstanding, to prevent out of order transmission.
-       (num_pending_writes == write_async_outstanding_))) {
-    LocalSendBuffers();
-  } else {
-    PostSendBuffers();
-  }
-}
-
-// TODO(ckrasic) Sad face.  Do this lazily because many tests exploded
-// otherwise.  |threading_and_tasks.md| advises to instantiate a
-// |base::test::TaskEnvironment| in the test, implementing that
-// for all tests that might exercise QUIC is too daunting.  Also, in
-// some tests it seemed like following the advice just broke in other
-// ways.
-base::SequencedTaskRunner* UDPSocketPosix::GetTaskRunner() {
-  if (task_runner_ == nullptr)
-    task_runner_ = base::ThreadPool::CreateSequencedTaskRunner({});
-  return task_runner_.get();
-}
-
-void UDPSocketPosix::OnWriteAsyncTimerFired() {
-  DVLOG(2) << __func__ << " pending writes " << pending_writes_.size();
-  if (pending_writes_.empty()) {
-    write_async_timer_.Stop();
-    write_async_timer_running_ = false;
-    return;
-  }
-  if (last_async_result_ < 0) {
-    DVLOG(1) << __func__ << " socket not writeable";
-    return;
-  }
-  FlushPending();
-}
-
-void UDPSocketPosix::LocalSendBuffers() {
-  DVLOG(1) << __func__ << " queue " << pending_writes_.size() << " out of "
-           << write_async_outstanding_ << " total";
-  DidSendBuffers(sender_->SendBuffers(socket_, std::move(pending_writes_)));
-}
-
-void UDPSocketPosix::PostSendBuffers() {
-  DVLOG(1) << __func__ << " queue " << pending_writes_.size() << " out of "
-           << write_async_outstanding_ << " total";
-  base::PostTaskAndReplyWithResult(
-      GetTaskRunner(), FROM_HERE,
-      base::BindOnce(&UDPSocketPosixSender::SendBuffers, sender_, socket_,
-                     std::move(pending_writes_)),
-      base::BindOnce(&UDPSocketPosix::DidSendBuffers,
-                     weak_factory_.GetWeakPtr()));
-}
-
-void UDPSocketPosix::DidSendBuffers(SendResult send_result) {
-  DVLOG(3) << __func__;
-  int write_count = send_result.write_count;
-  DatagramBuffers& buffers = send_result.buffers;
-
-  DCHECK(!buffers.empty());
-  int num_buffers = buffers.size();
-
-  // Dequeue buffers that have been written.
-  if (write_count > 0) {
-    write_async_outstanding_ -= write_count;
-
-    DatagramBuffers::const_iterator it;
-    // Generate logs for written buffers
-    it = buffers.cbegin();
-    for (int i = 0; i < write_count; i++, it++) {
-      auto& buffer = *it;
-      LogWrite(buffer->length(), buffer->data(), nullptr);
-      written_bytes_ += buffer->length();
-    }
-    // Return written buffers to pool
-    DatagramBuffers written_buffers;
-    if (write_count == num_buffers) {
-      it = buffers.cend();
-    } else {
-      it = buffers.cbegin();
-      for (int i = 0; i < write_count; i++) {
-        it++;
-      }
-    }
-    written_buffers.splice(written_buffers.cend(), buffers, buffers.cbegin(),
-                           it);
-    DCHECK(datagram_buffer_pool_ != nullptr);
-    datagram_buffer_pool_->Dequeue(&written_buffers);
-  }
-
-  // Requeue left-over (unwritten) buffers.
-  if (!buffers.empty()) {
-    DVLOG(2) << __func__ << " requeue " << buffers.size() << " buffers";
-    pending_writes_.splice(pending_writes_.begin(), std::move(buffers));
-  }
-
-  last_async_result_ = send_result.rv;
-  if (last_async_result_ == ERR_IO_PENDING) {
-    DVLOG(2) << __func__ << " WatchFileDescriptor start";
-    if (!WatchFileDescriptor()) {
-      DVPLOG(1) << "WatchFileDescriptor failed on write";
-      last_async_result_ = MapSystemError(errno);
-      LogWrite(last_async_result_, nullptr, nullptr);
-    } else {
-      last_async_result_ = 0;
-    }
-  } else if (last_async_result_ < 0 || pending_writes_.empty()) {
-    DVLOG(2) << __func__ << " WatchFileDescriptor stop: result "
-             << ErrorToShortString(last_async_result_) << " pending_writes "
-             << pending_writes_.size();
-    StopWatchingFileDescriptor();
-  }
-  DCHECK(last_async_result_ != ERR_IO_PENDING);
-
-  if (write_callback_.is_null())
-    return;
-
-  if (last_async_result_ < 0) {
-    DVLOG(1) << last_async_result_;
-    // Update the writer with the latest result.
-    DoWriteCallback(ResetLastAsyncResult());
-  } else if (write_async_outstanding_ < kWriteAsyncCallbackBuffersThreshold) {
-    DVLOG(1) << write_async_outstanding_ << " < "
-             << kWriteAsyncCallbackBuffersThreshold;
-    DoWriteCallback(ResetWrittenBytes());
-  }
-}
-
-void UDPSocketPosix::WriteAsyncWatcher::OnFileCanWriteWithoutBlocking(int) {
-  DVLOG(1) << __func__ << " queue " << socket_->pending_writes_.size()
-           << " out of " << socket_->write_async_outstanding_ << " total";
-  socket_->StopWatchingFileDescriptor();
-  socket_->FlushPending();
-}
-
-bool UDPSocketPosix::WatchFileDescriptor() {
-  if (write_async_watcher_->watching())
-    return true;
-  bool result = InternalWatchFileDescriptor();
-  if (result) {
-    write_async_watcher_->set_watching(true);
-  }
-  return result;
-}
-
-void UDPSocketPosix::StopWatchingFileDescriptor() {
-  if (!write_async_watcher_->watching())
-    return;
-  InternalStopWatchingFileDescriptor();
-  write_async_watcher_->set_watching(false);
-}
-
-bool UDPSocketPosix::InternalWatchFileDescriptor() {
-  return base::CurrentIOThread::Get()->WatchFileDescriptor(
-      socket_, true, base::MessagePumpForIO::WATCH_WRITE,
-      &write_socket_watcher_, write_async_watcher_.get());
-}
-
-void UDPSocketPosix::InternalStopWatchingFileDescriptor() {
-  bool ok = write_socket_watcher_.StopWatchingFileDescriptor();
-  DCHECK(ok);
-}
-
-void UDPSocketPosix::SetMaxPacketSize(size_t max_packet_size) {
-  datagram_buffer_pool_ = std::make_unique<DatagramBufferPool>(max_packet_size);
-}
-
-int UDPSocketPosix::ResetLastAsyncResult() {
-  int result = last_async_result_;
-  last_async_result_ = 0;
-  return result;
-}
-
-int UDPSocketPosix::ResetWrittenBytes() {
-  int bytes = written_bytes_;
-  written_bytes_ = 0;
-  return bytes;
 }
 
 int UDPSocketPosix::SetIOSNetworkServiceType(int ios_network_service_type) {

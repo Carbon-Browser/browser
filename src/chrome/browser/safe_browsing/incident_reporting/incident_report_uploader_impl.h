@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,7 @@ class ClientIncidentReport;
 class IncidentReportUploaderImpl : public IncidentReportUploader {
  public:
   // The id associated with the URLFetcher, for use by tests.
-  static const int kTestUrlFetcherId;
+  static constexpr int kTestUrlFetcherId = 47;
 
   IncidentReportUploaderImpl(const IncidentReportUploaderImpl&) = delete;
   IncidentReportUploaderImpl& operator=(const IncidentReportUploaderImpl&) =

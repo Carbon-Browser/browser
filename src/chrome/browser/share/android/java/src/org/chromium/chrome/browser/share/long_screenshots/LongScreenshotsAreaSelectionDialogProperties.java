@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,7 @@ import android.view.View.OnClickListener;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModel.WritableObjectPropertyKey;
 
-/**
- * Data properties for the Long Screenshots area selection dialog.
- */
+/** Data properties for the Long Screenshots area selection dialog. */
 final class LongScreenshotsAreaSelectionDialogProperties {
     // Callback handling clicks on the done (check) button.
     public static final WritableObjectPropertyKey<OnClickListener> DONE_BUTTON_CALLBACK =
@@ -32,7 +30,10 @@ final class LongScreenshotsAreaSelectionDialogProperties {
     private LongScreenshotsAreaSelectionDialogProperties() {}
 
     static PropertyModel.Builder defaultModelBuilder() {
-        return new PropertyModel.Builder(DONE_BUTTON_CALLBACK, CLOSE_BUTTON_CALLBACK,
-                DOWN_BUTTON_CALLBACK, UP_BUTTON_CALLBACK);
+        return new PropertyModel.Builder(
+                DONE_BUTTON_CALLBACK,
+                CLOSE_BUTTON_CALLBACK,
+                DOWN_BUTTON_CALLBACK,
+                UP_BUTTON_CALLBACK);
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -59,11 +59,6 @@ void ExternalVkImageOverlayImageRepresentation::EndReadAccess(
   vk_image_backing_->ReturnPendingSemaphoresWithFenceHelper(
       std::move(read_begin_semaphores_));
   read_begin_semaphores_.clear();
-}
-
-gl::GLImage* ExternalVkImageOverlayImageRepresentation::GetGLImage() {
-  NOTREACHED();
-  return nullptr;
 }
 
 void ExternalVkImageOverlayImageRepresentation::GetAcquireFence(

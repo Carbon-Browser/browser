@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,13 +29,6 @@ class InputMethodDelegate {
   // Set hardware layout string for testting purpose.
   virtual void SetHardwareKeyboardLayoutForTesting(
       const std::string& layout) = 0;
-
-  // Converts a language code to a language display name, using the
-  // current application locale.
-  // Examples: "fi"    => "Finnish"
-  //           "en-US" => "English (United States)"
-  virtual std::u16string GetDisplayLanguageName(
-      const std::string& language_code) const = 0;
 };
 
 }  // namespace input_method

@@ -1,21 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/web/navigation/synthesized_session_restore.h"
 
-#include "base/ios/ios_util.h"
-#include "base/strings/stringprintf.h"
-#include "base/strings/utf_string_conversions.h"
-#include "base/test/scoped_feature_list.h"
-#include "ios/web/common/features.h"
-#include "ios/web/public/test/web_test.h"
+#import "base/ios/ios_util.h"
+#import "base/strings/stringprintf.h"
+#import "base/strings/utf_string_conversions.h"
+#import "ios/web/public/test/web_test.h"
 #import "ios/web/web_state/web_state_impl.h"
-#include "testing/gtest/include/gtest/gtest.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "testing/gtest/include/gtest/gtest.h"
 
 namespace web {
 
@@ -44,13 +38,7 @@ void CreateTestNavigationItems(
 
 class SynthesizedSessionRestoreTest : public web::WebTest {
  protected:
-  SynthesizedSessionRestoreTest() {
-    std::vector<base::Feature> enabled;
-    enabled.push_back(features::kSynthesizedRestoreSession);
-
-    std::vector<base::Feature> disabled;
-    scoped_feature_list_.InitWithFeatures(enabled, disabled);
-  }
+  SynthesizedSessionRestoreTest() {}
 
   void SetUp() override {
     web::WebTest::SetUp();
@@ -58,29 +46,20 @@ class SynthesizedSessionRestoreTest : public web::WebTest {
     web_state_ = std::make_unique<web::WebStateImpl>(params);
   }
 
-  base::test::ScopedFeatureList scoped_feature_list_;
   std::unique_ptr<WebStateImpl> web_state_;
-  SynthesizedSessionRestore synthesized_restore_helper_;
 };
 
-TEST_F(SynthesizedSessionRestoreTest, TestLessThaniOS15) {
-  if (base::ios::IsRunningOnIOS15OrLater())
-    return;
-
-  std::vector<std::unique_ptr<NavigationItem>> items;
-  CreateTestNavigationItems(3, items);
-  synthesized_restore_helper_.Init(0, items, false);
-  EXPECT_FALSE(synthesized_restore_helper_.Restore(web_state_.get()));
-}
-
+// Test that the synthetic session data blob can be successfully loaded
+// by WebStateImpl and correctly restores the session.
 TEST_F(SynthesizedSessionRestoreTest, TestRestore) {
-  if (!base::ios::IsRunningOnIOS15OrLater())
-    return;
   std::vector<std::unique_ptr<NavigationItem>> items;
   CreateTestNavigationItems(100, items);
-  synthesized_restore_helper_.Init(0, items, false);
 
-  EXPECT_TRUE(synthesized_restore_helper_.Restore(web_state_.get()));
+  NSData* synthesized_data = SynthesizedSessionRestore(
+      /*last_committed_item_index=*/0, items, /*off_the_record=*/false);
+  EXPECT_GT(synthesized_data.length, 0u);
+
+  EXPECT_TRUE(web_state_->SetSessionStateData(synthesized_data));
   EXPECT_EQ(web_state_->GetNavigationItemCount(), 100);
 }
 

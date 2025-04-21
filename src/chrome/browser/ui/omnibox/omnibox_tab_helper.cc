@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,9 +30,21 @@ void OmniboxTabHelper::OnInputStateChanged() {
   }
 }
 
+void OmniboxTabHelper::OnInputInProgress(bool in_progress) {
+  for (auto& observer : observers_) {
+    observer.OnOmniboxInputInProgress(in_progress);
+  }
+}
+
 void OmniboxTabHelper::OnFocusChanged(OmniboxFocusState state,
                                       OmniboxFocusChangeReason reason) {
   for (auto& observer : observers_) {
     observer.OnOmniboxFocusChanged(state, reason);
+  }
+}
+
+void OmniboxTabHelper::OnPopupVisibilityChanged(bool popup_is_open) {
+  for (auto& observer : observers_) {
+    observer.OnOmniboxPopupVisibilityChanged(popup_is_open);
   }
 }

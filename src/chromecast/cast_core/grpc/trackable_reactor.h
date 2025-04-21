@@ -1,10 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMECAST_CAST_CORE_GRPC_TRACKABLE_REACTOR_H_
 #define CHROMECAST_CAST_CORE_GRPC_TRACKABLE_REACTOR_H_
 
+#include "base/check.h"
+#include "base/memory/raw_ptr.h"
 #include "chromecast/cast_core/grpc/server_reactor_tracker.h"
 
 namespace cast {
@@ -21,13 +23,13 @@ class TrackableReactor : public TReactor {
       : TReactor(std::forward<TArgs&&>(args)...),
         server_reactor_tracker_(server_reactor_tracker) {
     DCHECK(server_reactor_tracker_);
-    server_reactor_tracker_->AddReactor(this);
+    server_reactor_tracker_->AddReactor(this, TReactor::name());
   }
 
   ~TrackableReactor() override { server_reactor_tracker_->RemoveReactor(this); }
 
  private:
-  ServerReactorTracker* const server_reactor_tracker_;
+  raw_ptr<ServerReactorTracker> const server_reactor_tracker_;
 };
 
 }  // namespace utils

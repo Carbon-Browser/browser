@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include "media/base/audio_processing.h"
 #include "media/mojo/mojom/audio_processing.mojom.h"
-#include "media/mojo/mojom/traits_test_service.mojom.h"
+#include "media/mojo/mojom/traits_test_service.test-mojom.h"
 #include "mojo/public/cpp/test_support/test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -24,16 +24,9 @@ TEST(AudioProcessingMojomTraitsTest, AudioProcessingSettings) {
   // Flip all fields.
   settings_in.echo_cancellation = !settings_in.echo_cancellation;
   settings_in.noise_suppression = !settings_in.noise_suppression;
-  settings_in.transient_noise_suppression =
-      !settings_in.transient_noise_suppression;
   settings_in.automatic_gain_control = !settings_in.automatic_gain_control;
-  settings_in.experimental_automatic_gain_control =
-      !settings_in.experimental_automatic_gain_control;
-  settings_in.high_pass_filter = !settings_in.high_pass_filter;
   settings_in.multi_channel_capture_processing =
       !settings_in.multi_channel_capture_processing;
-  settings_in.stereo_mirroring = !settings_in.stereo_mirroring;
-  settings_in.force_apm_creation = !settings_in.force_apm_creation;
 
   mojo::test::SerializeAndDeserialize<media::mojom::AudioProcessingSettings>(
       settings_in, settings_out);

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,11 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/ref_counted_delete_on_sequence.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/cancelable_task_tracker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/password_manager/core/browser/password_manager_metrics_util.h"
@@ -54,8 +56,7 @@ using password_manager::metrics_util::PasswordType;
 //     |        | On deletion of |password_protection_service_|, cancel request.
 class PasswordProtectionRequest
     : public CancelableRequest,
-      public base::RefCountedDeleteOnSequence<PasswordProtectionRequest>,
-      public base::SupportsWeakPtr<PasswordProtectionRequest> {
+      public base::RefCountedDeleteOnSequence<PasswordProtectionRequest> {
  public:
   // Not copyable or movable
   PasswordProtectionRequest(const PasswordProtectionRequest&) = delete;
@@ -113,6 +114,8 @@ class PasswordProtectionRequest
     Finish(outcome, std::move(response));
   }
 
+  virtual base::WeakPtr<PasswordProtectionRequest> AsWeakPtr() = 0;
+
  protected:
   friend class base::RefCountedThreadSafe<PasswordProtectionRequest>;
 
@@ -162,17 +165,16 @@ class PasswordProtectionRequest
 
   std::unique_ptr<LoginReputationClientRequest> request_proto_;
 
+  // Used in tests to avoid dispatching a real request. Tests using this must
+  // manually finish the request.
+  bool prevent_initiating_url_loader_for_testing_ = false;
+
  private:
   friend base::RefCountedDeleteOnSequence<PasswordProtectionRequest>;
   friend base::DeleteHelper<PasswordProtectionRequest>;
 
   // Start checking the allowlist.
   void CheckAllowlist();
-
-  static void OnAllowlistCheckDoneOnIO(
-      scoped_refptr<base::SequencedTaskRunner> ui_task_runner,
-      base::WeakPtr<PasswordProtectionRequest> weak_request,
-      bool match_allowlist);
 
   // If |main_frame_url_| matches allowlist, call Finish() immediately;
   // otherwise call CheckCachedVerdicts().
@@ -231,7 +233,7 @@ class PasswordProtectionRequest
   const GURL password_form_frame_url_;
 
   // The contents MIME type.
-  const std::string& mime_type_;
+  const raw_ref<const std::string, DanglingUntriaged> mime_type_;
 
   // The username of the reused password hash. The username can be an email or
   // a username for a non-GAIA or saved-password reuse. No validation has been
@@ -266,10 +268,11 @@ class PasswordProtectionRequest
 
   // The PasswordProtectionServiceBase instance owns |this|.
   // Can only be accessed on UI thread.
-  raw_ptr<PasswordProtectionServiceBase> password_protection_service_;
+  raw_ptr<PasswordProtectionServiceBase, DanglingUntriaged>
+      password_protection_service_;
 
   // The outcome of the password protection request.
-  RequestOutcome request_outcome_;
+  RequestOutcome request_outcome_ = RequestOutcome::UNKNOWN;
 
   // If we haven't receive response after this period of time, we cancel this
   // request.
@@ -280,8 +283,6 @@ class PasswordProtectionRequest
 
   // Whether there is a modal warning triggered by this request.
   bool is_modal_warning_showing_;
-
-  base::WeakPtrFactory<PasswordProtectionRequest> weak_factory_{this};
 };
 
 }  // namespace safe_browsing

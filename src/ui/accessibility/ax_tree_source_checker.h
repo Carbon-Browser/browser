@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
+#include "ui/accessibility/ax_tree_data.h"
 #include "ui/accessibility/ax_tree_source.h"
 
 namespace ui {
@@ -17,7 +18,8 @@ namespace ui {
 template <typename AXSourceNode>
 class AXTreeSourceChecker {
  public:
-  explicit AXTreeSourceChecker(AXTreeSource<AXSourceNode>* tree);
+  explicit AXTreeSourceChecker(
+      AXTreeSource<AXSourceNode, AXTreeData*, AXNodeData>* tree);
 
   AXTreeSourceChecker(const AXTreeSourceChecker&) = delete;
   AXTreeSourceChecker& operator=(const AXTreeSourceChecker&) = delete;
@@ -33,14 +35,14 @@ class AXTreeSourceChecker {
   bool Check(AXSourceNode node, std::string indent, std::string* output);
   std::string NodeToString(AXSourceNode node);
 
-  raw_ptr<AXTreeSource<AXSourceNode>> tree_;
+  raw_ptr<AXTreeSource<AXSourceNode, AXTreeData*, AXNodeData>> tree_;
 
   std::map<AXNodeID, AXNodeID> node_id_to_parent_id_map_;
 };
 
 template <typename AXSourceNode>
 AXTreeSourceChecker<AXSourceNode>::AXTreeSourceChecker(
-    AXTreeSource<AXSourceNode>* tree)
+    AXTreeSource<AXSourceNode, AXTreeData*, AXNodeData>* tree)
     : tree_(tree) {}
 
 template <typename AXSourceNode>
@@ -52,8 +54,8 @@ bool AXTreeSourceChecker<AXSourceNode>::CheckAndGetErrorString(
   node_id_to_parent_id_map_.clear();
 
   AXSourceNode root = tree_->GetRoot();
-  if (!tree_->IsValid(root)) {
-    *error_string = "Root is not valid.";
+  if (!root) {
+    *error_string = "Root is not present.";
     return false;
   }
 
@@ -68,24 +70,25 @@ std::string AXTreeSourceChecker<AXSourceNode>::NodeToString(AXSourceNode node) {
   AXNodeData node_data;
   tree_->SerializeNode(node, &node_data);
 
-  std::vector<AXSourceNode> children;
-  tree_->GetChildren(node, &children);
+  tree_->CacheChildrenIfNeeded(node);
+  auto num_children = tree_->GetChildCount(node);
   std::string children_str;
-  if (children.empty()) {
+  if (num_children == 0) {
     children_str = "(no children)";
   } else {
-    for (size_t i = 0; i < children.size(); i++) {
-      auto& child = children[i];
-      AXNodeID child_id =
-          tree_->IsValid(child) ? tree_->GetId(child) : kInvalidAXNodeID;
+    for (size_t i = 0; i < num_children; i++) {
+      auto* child = tree_->ChildAt(node, i);
+      DCHECK(child);
+      AXNodeID child_id = tree_->GetId(child);
       if (i == 0)
         children_str += "child_ids=" + base::NumberToString(child_id);
       else
         children_str += "," + base::NumberToString(child_id);
     }
   }
+  tree_->ClearChildCache(node);
 
-  AXNodeID parent_id = tree_->IsValid(tree_->GetParent(node))
+  AXNodeID parent_id = tree_->GetParent(node)
                            ? tree_->GetId(tree_->GetParent(node))
                            : kInvalidAXNodeID;
 
@@ -112,7 +115,7 @@ bool AXTreeSourceChecker<AXSourceNode>::Check(AXSourceNode node,
   AXNodeID expected_parent_id = node_id_to_parent_id_map_[node_id];
   AXSourceNode parent = tree_->GetParent(node);
   if (expected_parent_id == kInvalidAXNodeID) {
-    if (tree_->IsValid(parent)) {
+    if (parent) {
       std::string msg = base::StringPrintf(
           "Node %d is the root, so its parent should be invalid, but we "
           "got a node with id %d.\n"
@@ -124,7 +127,7 @@ bool AXTreeSourceChecker<AXSourceNode>::Check(AXSourceNode node,
       return false;
     }
   } else {
-    if (!tree_->IsValid(parent)) {
+    if (!parent) {
       std::string msg = base::StringPrintf(
           "Node %d is not the root, but its parent was invalid:\n%s\n", node_id,
           NodeToString(node).c_str());
@@ -133,7 +136,7 @@ bool AXTreeSourceChecker<AXSourceNode>::Check(AXSourceNode node,
     }
     AXNodeID parent_id = tree_->GetId(parent);
     if (parent_id != expected_parent_id) {
-      AXSourceNode expected_parent = tree_->GetFromId(expected_parent_id);
+      AXSourceNode expected_parent = tree_->EnsureGetFromId(expected_parent_id);
       std::string msg = base::StringPrintf(
           "Expected node %d to have a parent of %d, but found a parent of %d.\n"
           "Node: %s\n"
@@ -147,17 +150,13 @@ bool AXTreeSourceChecker<AXSourceNode>::Check(AXSourceNode node,
   }
 
   // Check children.
-  std::vector<AXSourceNode> children;
-  tree_->GetChildren(node, &children);
+  tree_->CacheChildrenIfNeeded(node);
+  auto num_children = tree_->GetChildCount(node);
 
-  for (size_t i = 0; i < children.size(); i++) {
-    auto& child = children[i];
-    if (!tree_->IsValid(child)) {
-      std::string msg = base::StringPrintf(
-          "Node %d has an invalid child (index %d): %s\n", node_id,
-          static_cast<int>(i), NodeToString(node).c_str());
-      *output = msg + *output;
-      return false;
+  for (size_t i = 0; i < num_children; i++) {
+    auto* child = tree_->ChildAt(node, i);
+    if (!child) {
+      continue;
     }
 
     AXNodeID child_id = tree_->GetId(child);
@@ -175,6 +174,7 @@ bool AXTreeSourceChecker<AXSourceNode>::Check(AXSourceNode node,
           node_id, child_id, node_id_to_parent_id_map_[child_id],
           NodeToString(node).c_str());
       *output = msg + *output;
+      tree_->ClearChildCache(node);
       return false;
     }
 
@@ -183,10 +183,17 @@ bool AXTreeSourceChecker<AXSourceNode>::Check(AXSourceNode node,
 
   *output += "\n";
 
-  for (auto& child : children) {
-    if (!Check(child, indent + "  ", output))
+  for (size_t i = 0; i < num_children; i++) {
+    auto* child = tree_->ChildAt(node, i);
+    if (!child) {
+      continue;
+    }
+    if (!Check(child, indent + "  ", output)) {
+      tree_->ClearChildCache(node);
       return false;
+    }
   }
+  tree_->ClearChildCache(node);
 
   return true;
 }

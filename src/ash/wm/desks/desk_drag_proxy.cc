@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 
 #include "ash/drag_drop/drag_image_view.h"
 #include "ash/style/system_shadow.h"
+#include "ash/wm/desks/desk_bar_view_base.h"
 #include "ash/wm/desks/desk_mini_view.h"
 #include "ash/wm/desks/desk_preview_view.h"
-#include "ash/wm/desks/desks_bar_view.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "ui/base/dragdrop/mojom/drag_drop_types.mojom-shared.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
@@ -30,24 +31,27 @@ constexpr base::TimeDelta kDragProxySnapBackDuration = base::Milliseconds(300);
 
 }  // namespace
 
-DeskDragProxy::DeskDragProxy(DesksBarView* desks_bar_view,
-                             DeskMiniView* drag_view,
-                             float init_offset_x)
-    : desks_bar_view_(desks_bar_view),
+DeskDragProxy::DeskDragProxy(
+    DeskBarViewBase* desk_bar_view,
+    DeskMiniView* drag_view,
+    float init_offset_x,
+    base::WeakPtr<WindowOcclusionCalculator> window_occlusion_calculator)
+    : desk_bar_view_(desk_bar_view),
       drag_view_(drag_view),
       drag_preview_size_(drag_view->GetPreviewBoundsInScreen().size()),
       preview_screen_y_(drag_view->GetPreviewBoundsInScreen().y()),
-      init_offset_x_(init_offset_x) {}
+      init_offset_x_(init_offset_x),
+      window_occlusion_calculator_(window_occlusion_calculator) {}
 
 DeskDragProxy::~DeskDragProxy() = default;
 
 void DeskDragProxy::OnImplicitAnimationsCompleted() {
-  DCHECK(desks_bar_view_);
+  DCHECK(desk_bar_view_);
 
   state_ = State::kEnded;
 
-  // |this| is destroyed here.
-  desks_bar_view_->FinalizeDragDesk();
+  // `this` is destroyed here.
+  desk_bar_view_->FinalizeDragDesk();
 }
 
 gfx::Rect DeskDragProxy::GetBoundsInScreen() const {
@@ -68,9 +72,9 @@ void DeskDragProxy::InitAndScaleAndMoveToX(float location_screen_x) {
   drag_widget_->SetVisibilityAnimationTransition(views::Widget::ANIMATE_NONE);
 
   // Copy the preview of the dragged desk to the widget content.
-  drag_preview_ =
-      drag_widget_->SetContentsView(std::make_unique<DeskPreviewView>(
-          views::Button::PressedCallback(), drag_view_));
+  drag_widget_->SetContentsView(std::make_unique<DeskPreviewView>(
+      views::Button::PressedCallback(), drag_view_,
+      window_occlusion_calculator_));
 
   // Set the bounds of dragged preview to drag proxy.
   drag_widget_->SetBounds(drag_view_->GetPreviewBoundsInScreen());
@@ -86,12 +90,9 @@ void DeskDragProxy::InitAndScaleAndMoveToX(float location_screen_x) {
   // Scale the bounds around its center.
   gfx::Rect proxy_bounds_in_screen = drag_widget_->GetWindowBoundsInScreen();
   layer->SetTransform(gfx::TransformAboutPivot(
-      proxy_bounds_in_screen.CenterPoint() -
-          proxy_bounds_in_screen.origin().OffsetFromOrigin(),
+      gfx::PointF(0.5f * proxy_bounds_in_screen.width(),
+                  0.5f * proxy_bounds_in_screen.height()),
       scale_transform));
-
-  // When being dragged, the shadow elevation will be increased.
-  drag_preview_->shadow()->SetType(DeskPreviewView::kDraggedShadowType);
 
   // Perform Moving.
   DragToX(location_screen_x);
@@ -126,9 +127,6 @@ void DeskDragProxy::SnapBackToDragView() {
   settings.SetTweenType(gfx::Tween::ACCEL_LIN_DECEL_60);
   settings.AddObserver(this);
   layer->SetTransform(gfx::Transform());
-
-  // Reset the shadow elevation when drag ends.
-  drag_preview_->shadow()->SetType(DeskPreviewView::kDefaultShadowType);
 
   state_ = State::kSnappingBack;
 }

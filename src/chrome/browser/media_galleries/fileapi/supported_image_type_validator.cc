@@ -1,16 +1,21 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/media_galleries/fileapi/supported_image_type_validator.h"
 
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
 #include "base/files/file.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/task_traits.h"
@@ -78,7 +83,7 @@ class ImageDecoderDelegateAdapter : public ImageDecoder::ImageRequest {
 
 }  // namespace
 
-SupportedImageTypeValidator::~SupportedImageTypeValidator() {}
+SupportedImageTypeValidator::~SupportedImageTypeValidator() = default;
 
 // static
 bool SupportedImageTypeValidator::SupportsFileType(const base::FilePath& path) {

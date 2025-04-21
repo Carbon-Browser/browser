@@ -1,10 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/offline_pages/core/background/initialize_store_task.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 
 namespace offline_pages {
 
@@ -17,7 +17,7 @@ InitializeStoreTask::InitializeStoreTask(
       reset_attempts_left_(kRestartAttemptsMaximum),
       callback_(std::move(callback)) {}
 
-InitializeStoreTask::~InitializeStoreTask() {}
+InitializeStoreTask::~InitializeStoreTask() = default;
 
 void InitializeStoreTask::Run() {
   InitializeStore();
@@ -51,10 +51,11 @@ void InitializeStoreTask::TryToResetStore() {
 }
 
 void InitializeStoreTask::OnStoreResetDone(bool success) {
-  if (success)
+  if (success) {
     InitializeStore();
-  else
+  } else {
     TryToResetStore();
+  }
 }
 
 }  // namespace offline_pages

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,13 +23,6 @@ SyntheticTapGestureParams::~SyntheticTapGestureParams() {}
 SyntheticGestureParams::GestureType SyntheticTapGestureParams::GetGestureType()
     const {
   return TAP_GESTURE;
-}
-
-const SyntheticTapGestureParams* SyntheticTapGestureParams::Cast(
-    const SyntheticGestureParams* gesture_params) {
-  DCHECK(gesture_params);
-  DCHECK_EQ(TAP_GESTURE, gesture_params->GetGestureType());
-  return static_cast<const SyntheticTapGestureParams*>(gesture_params);
 }
 
 }  // namespace content

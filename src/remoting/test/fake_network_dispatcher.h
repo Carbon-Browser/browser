@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <map>
 
 #include "base/compiler_specific.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/synchronization/lock.h"
 #include "third_party/webrtc/rtc_base/ip_address.h"
@@ -59,7 +60,7 @@ class FakeNetworkDispatcher
                      int data_size);
 
  private:
-  typedef std::map<rtc::IPAddress, Node*> NodesMap;
+  typedef std::map<rtc::IPAddress, raw_ptr<Node, CtnExperimental>> NodesMap;
 
   friend class base::RefCountedThreadSafe<FakeNetworkDispatcher>;
   virtual ~FakeNetworkDispatcher();

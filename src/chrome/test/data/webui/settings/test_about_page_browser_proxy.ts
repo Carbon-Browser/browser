@@ -1,9 +1,10 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {webUIListenerCallback} from 'chrome://resources/js/cr.m.js';
-import {AboutPageBrowserProxy, UpdateStatus} from 'chrome://settings/settings.js';
+import {webUIListenerCallback} from 'chrome://resources/js/cr.js';
+import type {AboutPageBrowserProxy} from 'chrome://settings/settings.js';
+import {UpdateStatus} from 'chrome://settings/settings.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 
 export class TestAboutPageBrowserProxy extends TestBrowserProxy implements

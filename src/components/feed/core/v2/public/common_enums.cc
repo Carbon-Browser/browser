@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -116,8 +116,6 @@ std::ostream& operator<<(std::ostream& out, FeedUserActionType value) {
       return out << "kShowUnfollowFailedSnackbar";
     case FeedUserActionType::kTappedGoToFeedOnSnackbar:
       return out << "kTappedGoToFeedOnSnackbar";
-    case FeedUserActionType::kTappedCrowButton:
-      return out << "kTappedCrow";
     case FeedUserActionType::kFirstFollowSheetShown:
       return out << "kFirstFollowSheetShown";
     case FeedUserActionType::kFirstFollowSheetTappedGoToFeed:
@@ -126,6 +124,20 @@ std::ostream& operator<<(std::ostream& out, FeedUserActionType value) {
       return out << "kFirstFollowSheetTappedGotIt";
     case FeedUserActionType::kFollowRecommendationIPHShown:
       return out << "kFollowRecommendationIPHShown";
+    case FeedUserActionType::kTappedOpenInNewTabInGroup:
+      return out << "kTappedOpenInNewTabInGroup";
+    case FeedUserActionType::kFollowingFeedSelectedGroupByPublisher:
+      return out << "kFollowingFeedSelectedGroupByPublisher";
+    case FeedUserActionType::kFollowingFeedSelectedSortByLatest:
+      return out << "kFollowingFeedSelectedSortByLatest";
+    case FeedUserActionType::kTappedFollowOnRecommendationFollowAccelerator:
+      return out << "kTappedFollowOnRecommendationFollowAccelerator";
+    case FeedUserActionType::kTappedGotItFeedPostFollowActiveHelp:
+      return out << "kTappedGotItFeedPostFollowActiveHelp";
+    case FeedUserActionType::kTappedRefreshFollowingFeedOnSnackbar:
+      return out << "kTappedRefreshFollowingFeedOnSnackbar";
+    case FeedUserActionType::kNonSwipeManualRefresh:
+      return out << "kNonSwipeManualRefresh";
   }
 }
 

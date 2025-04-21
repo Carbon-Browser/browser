@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -72,12 +72,17 @@ class _GenericTraceMeasurement(legacy_page_test.LegacyPageTest):
 class _GenericTraceBenchmark(perf_benchmark.PerfBenchmark):
   @classmethod
   def AddBenchmarkCommandLineArgs(cls, parser):
-    parser.add_option('--trace-categories', default=[], action='append',
-                      help='Trace categories to enable')
-    parser.add_option('--trace-names', default=[], action='append',
-                      help='Names of trace event to collect '
-                           'If not specified, all trace events in the enabled '
-                           'categories will be collected')
+    parser.add_argument('--trace-categories',
+                        default=[],
+                        action='append',
+                        help='Trace categories to enable')
+    parser.add_argument(
+        '--trace-names',
+        default=[],
+        action='append',
+        help=('Names of trace event to collect '
+              'If not specified, all trace events in the enabled '
+              'categories will be collected'))
 
   @classmethod
   def ProcessCommandLineArgs(cls, parser, args):

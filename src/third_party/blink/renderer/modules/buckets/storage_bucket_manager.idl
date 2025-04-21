@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,8 @@
   RuntimeEnabled=StorageBuckets,
   SecureContext
 ] interface StorageBucketManager {
-    [
-      CallWith=ScriptState,
-      RaisesException
-    ] Promise<StorageBucket> open(DOMString name, optional StorageBucketOptions options = {});
-    [CallWith=ScriptState, RaisesException] Promise<sequence<DOMString>> keys();
-    [CallWith=ScriptState, RaisesException, ImplementedAs=Delete] Promise<void> delete(DOMString name);
+    [CallWith=ScriptState, RaisesException, MeasureAs=StorageBucketsOpen]
+    Promise<StorageBucket> open(DOMString name, optional StorageBucketOptions options = {});
+    [CallWith=ScriptState, RaisesException, Measure] Promise<sequence<DOMString>> keys();
+    [CallWith=ScriptState, RaisesException, ImplementedAs=Delete, Measure] Promise<undefined> delete(DOMString name);
 };

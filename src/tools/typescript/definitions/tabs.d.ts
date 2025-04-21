@@ -1,9 +1,9 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 /** @fileoverview Definitions for chrome.tabs API. */
-// TODO(crbug.com/1203307): Auto-generate this file.
+// TODO(crbug.com/40179454): Auto-generate this file.
 
 import {ChromeEvent} from './chrome_event.js';
 
@@ -53,7 +53,7 @@ declare global {
         sessionId?: string;
       }
 
-      type CreateProperties = {
+      interface CreateProperties {
         windowId?: number;
         index?: number;
         url?: string;
@@ -63,15 +63,15 @@ declare global {
         openerTabId?: number;
       }
 
-      type UpdateProperties = {
-        url?: string,
-        active?: boolean,
-        highlighted?: boolean,
-        selected?: boolean,
-        pinned?: boolean,
-        muted?: boolean,
-        openerTabId?: number,
-        autoDiscardable?: boolean,
+      interface UpdateProperties {
+        url?: string;
+        active?: boolean;
+        highlighted?: boolean;
+        selected?: boolean;
+        pinned?: boolean;
+        muted?: boolean;
+        openerTabId?: number;
+        autoDiscardable?: boolean;
       }
 
       enum ZoomSettingsMode {
@@ -85,11 +85,11 @@ declare global {
         PER_TAB = 'per-tab',
       }
 
-      export type ZoomSettings = {
-        mode?: ZoomSettingsMode,
-        scope?: ZoomSettingsScope,
-        defaultZoomFactor?: number,
-      };
+      export interface ZoomSettings {
+        mode?: ZoomSettingsMode;
+        scope?: ZoomSettingsScope;
+        defaultZoomFactor?: number;
+      }
 
       export const TAB_ID_NONE: number;
 
@@ -107,6 +107,8 @@ declare global {
 
       export function reload(tabId: number): void;
 
+      export function query(queryInfo: QueryInfo): Promise<Tab[]>;
+
       export function setZoom(
           tabId: number|undefined, zoomFactor: number,
           callback?: () => void): void;
@@ -119,8 +121,26 @@ declare global {
           tabId: number|undefined,
           callback: (settings: ZoomSettings) => void): void;
 
-      type ZoomChangeInfo = {tabId: number, newZoomFactor: number};
+      interface ActiveInfo {
+        tabId: number;
+        windowId: number;
+      }
 
+      interface ChangeInfo {}
+
+      interface QueryInfo {
+        active?: boolean;
+        currentWindow?: boolean;
+      }
+
+      interface ZoomChangeInfo {
+        tabId: number;
+        newZoomFactor: number;
+      }
+
+      export const onActivated: ChromeEvent<(info: ActiveInfo) => void>;
+      export const onUpdated: ChromeEvent<(
+        tabId: number, changeInfo: ChangeInfo, tab: Tab) => void>;
       export const onZoomChange: ChromeEvent<(info: ZoomChangeInfo) => void>;
     }
   }

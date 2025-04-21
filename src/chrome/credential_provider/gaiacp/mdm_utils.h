@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -70,7 +70,7 @@ bool IsOnlineLoginEnforced(const std::wstring& sid);
 GURL EscrowServiceUrl();
 
 // Enrolls the machine to with the Google MDM server if not already.
-HRESULT EnrollToGoogleMdmIfNeeded(const base::Value& properties);
+HRESULT EnrollToGoogleMdmIfNeeded(const base::Value::Dict& properties);
 
 // Constructs the password lsa store key for the given |sid|.
 std::wstring GetUserPasswordLsaStoreKey(const std::wstring& sid);

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -17,6 +18,7 @@
 #include <vector>
 
 #include "base/compiler_specific.h"
+#include "base/containers/heap_array.h"
 #include "base/containers/queue.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -39,7 +41,6 @@
 #include "gpu/command_buffer/common/context_creation_attribs.h"
 #include "gpu/command_buffer/common/context_result.h"
 #include "gpu/command_buffer/common/debug_marker_manager.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace gpu {
 
@@ -50,6 +51,29 @@ namespace gles2 {
 class GLES2CmdHelper;
 class VertexArrayObjectManager;
 class ReadbackBufferShadowTracker;
+
+namespace internal {
+
+struct TextureUnit {
+  TextureUnit() = default;
+
+  // texture currently bound to this unit's GL_TEXTURE_2D with glBindTexture
+  GLuint bound_texture_2d = 0;
+
+  // texture currently bound to this unit's GL_TEXTURE_CUBE_MAP with
+  // glBindTexture
+  GLuint bound_texture_cube_map = 0;
+
+  // texture currently bound to this unit's GL_TEXTURE_EXTERNAL_OES with
+  // glBindTexture
+  GLuint bound_texture_external_oes = 0;
+
+  // texture currently bound to this unit's GL_TEXTURE_RECTANGLE_ARB with
+  // glBindTexture
+  GLuint bound_texture_rectangle_arb = 0;
+};
+
+}  // namespace internal
 
 // This class emulates GLES2 over command buffers. It can be used by a client
 // program so that the program does not need deal with shared memory and command
@@ -76,9 +100,6 @@ class GLES2_IMPL_EXPORT GLES2Implementation : public GLES2Interface,
   // GL names for the buffers used to emulate client side buffers.
   static const GLuint kClientSideArrayId = 0xFEDCBA98u;
   static const GLuint kClientSideElementArrayId = 0xFEDCBA99u;
-
-  // Number of swap buffers allowed before waiting.
-  static const size_t kMaxSwapBuffers = 2;
 
   GLES2Implementation(GLES2CmdHelper* helper,
                       scoped_refptr<ShareGroup> share_group,
@@ -194,6 +215,8 @@ class GLES2_IMPL_EXPORT GLES2Implementation : public GLES2Interface,
   GLint GetProgramResourceLocationHelper(
       GLuint program, GLenum program_interface, const char* name);
 
+  const GLCapabilities& gl_capabilities() const { return gl_capabilities_; }
+
   const scoped_refptr<ShareGroup>& share_group() const { return share_group_; }
 
   GpuControl* gpu_control() {
@@ -259,7 +282,7 @@ class GLES2_IMPL_EXPORT GLES2Implementation : public GLES2Interface,
     int shm_id;
 
     // Address of shared memory
-    void* shm_memory;
+    raw_ptr<void> shm_memory;
 
     // Offset of shared memory
     unsigned int shm_offset;
@@ -324,33 +347,18 @@ class GLES2_IMPL_EXPORT GLES2Implementation : public GLES2Interface,
     GLsizeiptr size;
   };
 
-  struct TextureUnit {
-    TextureUnit() {}
-
-    // texture currently bound to this unit's GL_TEXTURE_2D with glBindTexture
-    GLuint bound_texture_2d = 0;
-
-    // texture currently bound to this unit's GL_TEXTURE_CUBE_MAP with
-    // glBindTexture
-    GLuint bound_texture_cube_map = 0;
-
-    // texture currently bound to this unit's GL_TEXTURE_EXTERNAL_OES with
-    // glBindTexture
-    GLuint bound_texture_external_oes = 0;
-
-    // texture currently bound to this unit's GL_TEXTURE_RECTANGLE_ARB with
-    // glBindTexture
-    GLuint bound_texture_rectangle_arb = 0;
-  };
-
   // Prevents problematic reentrancy during error callbacks.
   class DeferErrorCallbacks {
+    STACK_ALLOCATED();
+
    public:
     explicit DeferErrorCallbacks(GLES2Implementation* gles2_implementation);
     ~DeferErrorCallbacks();
 
    private:
-    raw_ptr<GLES2Implementation> gles2_implementation_;
+    // not using raw_ptr<> here for performance reasons. A CHECK() in
+    // ~GLES2Implementation() assures lifetime invariants instead.
+    GLES2Implementation& gles2_implementation_;
   };
 
   struct DeferredErrorCallback {
@@ -578,6 +586,12 @@ class GLES2_IMPL_EXPORT GLES2Implementation : public GLES2Interface,
   bool GetFloatvHelper(GLenum pname, GLfloat* params);
   bool GetFramebufferAttachmentParameterivHelper(
       GLenum target, GLenum attachment, GLenum pname, GLint* params);
+  bool GetFramebufferPixelLocalStorageParameterfvANGLEHelper(GLint plane,
+                                                             GLenum pname,
+                                                             GLfloat* params);
+  bool GetFramebufferPixelLocalStorageParameterivANGLEHelper(GLint plane,
+                                                             GLenum pname,
+                                                             GLint* params);
   bool GetInteger64vHelper(GLenum pname, GLint64* params);
   bool GetIntegervHelper(GLenum pname, GLint* params);
   bool GetIntegeri_vHelper(GLenum pname, GLuint index, GLint* data);
@@ -662,6 +676,8 @@ class GLES2_IMPL_EXPORT GLES2Implementation : public GLES2Interface,
   void RemoveMappedBufferRangeByTarget(GLenum target);
   void RemoveMappedBufferRangeById(GLuint buffer);
   void ClearMappedBufferRangeMap();
+  void ClearMappedBufferMap();
+  void ClearMappedTextureMap();
 
   void DrawElementsImpl(GLenum mode, GLsizei count, GLenum type,
                         const void* indices, const char* func_name);
@@ -676,12 +692,13 @@ class GLES2_IMPL_EXPORT GLES2Implementation : public GLES2Interface,
   DebugMarkerManager debug_marker_manager_;
   std::string this_in_hex_;
 
-  base::queue<int32_t> swap_buffers_tokens_;
-
   ExtensionStatus chromium_framebuffer_multisample_;
 
   GLStaticState static_state_;
   ClientContextState state_;
+
+  // GLES specific capabilities.
+  GLCapabilities gl_capabilities_;
 
   // pack alignment as last set by glPixelStorei
   GLint pack_alignment_;
@@ -713,7 +730,7 @@ class GLES2_IMPL_EXPORT GLES2Implementation : public GLES2Interface,
   // unpack skip images as last set by glPixelStorei
   GLint unpack_skip_images_;
 
-  std::unique_ptr<TextureUnit[]> texture_units_;
+  base::HeapArray<internal::TextureUnit> texture_units_;
 
   // 0 to gl_state_.max_combined_texture_image_units.
   GLuint active_texture_unit_;
@@ -803,8 +820,8 @@ class GLES2_IMPL_EXPORT GLES2Implementation : public GLES2Interface,
   std::unique_ptr<BufferTracker> buffer_tracker_;
   std::unique_ptr<ReadbackBufferShadowTracker> readback_buffer_shadow_tracker_;
 
-  absl::optional<ScopedMappedMemoryPtr> font_mapped_buffer_;
-  absl::optional<ScopedTransferBufferPtr> raster_mapped_buffer_;
+  std::optional<ScopedMappedMemoryPtr> font_mapped_buffer_;
+  std::optional<ScopedTransferBufferPtr> raster_mapped_buffer_;
 
   base::RepeatingCallback<void(const char*, int32_t)> error_message_callback_;
   bool deferring_error_callbacks_ = false;
@@ -847,6 +864,22 @@ inline bool GLES2Implementation::GetBufferParameterivHelper(
 inline bool GLES2Implementation::GetFramebufferAttachmentParameterivHelper(
     GLenum /* target */,
     GLenum /* attachment */,
+    GLenum /* pname */,
+    GLint* /* params */) {
+  return false;
+}
+
+inline bool
+GLES2Implementation::GetFramebufferPixelLocalStorageParameterfvANGLEHelper(
+    GLint /* plane */,
+    GLenum /* pname */,
+    GLfloat* /* params */) {
+  return false;
+}
+
+inline bool
+GLES2Implementation::GetFramebufferPixelLocalStorageParameterivANGLEHelper(
+    GLint /* plane */,
     GLenum /* pname */,
     GLint* /* params */) {
   return false;

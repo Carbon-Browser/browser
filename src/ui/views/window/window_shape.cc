@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,7 @@
 
 namespace views {
 
-void GetDefaultWindowMask(const gfx::Size& size,
-                          SkPath* window_mask) {
+void GetDefaultWindowMask(const gfx::Size& size, SkPath* window_mask) {
   const SkScalar width = SkIntToScalar(size.width());
   const SkScalar height = SkIntToScalar(size.height());
 

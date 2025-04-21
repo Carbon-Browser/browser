@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,13 @@
 #include <map>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/strings/string_util.h"
 #include "chrome/browser/ash/smb_client/discovery/host_locator.h"
 
-namespace ash {
-namespace smb_client {
+namespace ash::smb_client {
 
 namespace {
 
@@ -51,8 +50,9 @@ void NetworkScanner::FindHostsInNetwork(FindHostsCallback callback) {
 
   const uint32_t request_id = AddNewRequest(std::move(callback));
   for (const auto& locator : locators_) {
-    locator->FindHosts(
-        base::BindOnce(&NetworkScanner::OnHostsFound, AsWeakPtr(), request_id));
+    locator->FindHosts(base::BindOnce(&NetworkScanner::OnHostsFound,
+                                      weak_ptr_factory_.GetWeakPtr(),
+                                      request_id));
   }
 }
 
@@ -130,5 +130,4 @@ void NetworkScanner::FireCallbackIfFinished(uint32_t request_id) {
   }
 }
 
-}  // namespace smb_client
-}  // namespace ash
+}  // namespace ash::smb_client

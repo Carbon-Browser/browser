@@ -1,18 +1,18 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/accessibility/ax_role_properties.h"
 
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
+#include "ui/accessibility/accessibility_features.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 
 namespace ui {
 
 namespace {
 
-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_CHROMEOS)
 constexpr bool kExposeLayoutTableAsDataTable = true;
 #else
 constexpr bool kExposeLayoutTableAsDataTable = false;
@@ -57,8 +57,8 @@ bool HasPresentationalChildren(const ax::mojom::Role role) {
 
 bool IsAlert(const ax::mojom::Role role) {
   switch (role) {
-    case ax::mojom::Role::kAlert:
-    case ax::mojom::Role::kAlertDialog:
+    case ax::mojom::Role::kAlert:        // For simple or hidden alerts.
+    case ax::mojom::Role::kAlertDialog:  // For alerts that must be dismissed.
       return true;
     default:
       return false;
@@ -85,6 +85,10 @@ bool IsButton(const ax::mojom::Role role) {
   // Role::kToggleButton.
   // https://www.w3.org/TR/wai-aria-1.1/#button
   return role == ax::mojom::Role::kButton ||
+         // TODO(crbug.com/40864556): Treat kComboBoxSelect like a combobox.
+         // When removing this, update ChromeVox's AutomationPredicate wherever
+         // it's looking at isButton.
+         role == ax::mojom::Role::kComboBoxSelect ||
          role == ax::mojom::Role::kPopUpButton ||
          role == ax::mojom::Role::kToggleButton;
 }
@@ -92,6 +96,7 @@ bool IsButton(const ax::mojom::Role role) {
 bool IsCellOrTableHeader(const ax::mojom::Role role) {
   switch (role) {
     case ax::mojom::Role::kCell:
+    case ax::mojom::Role::kGridCell:
     case ax::mojom::Role::kColumnHeader:
     case ax::mojom::Role::kMathMLTableCell:
     case ax::mojom::Role::kRowHeader:
@@ -103,28 +108,17 @@ bool IsCellOrTableHeader(const ax::mojom::Role role) {
   }
 }
 
-bool IsChildTreeOwner(const ax::mojom::Role role) {
-  switch (role) {
-    case ax::mojom::Role::kEmbeddedObject:
-    case ax::mojom::Role::kIframe:
-    case ax::mojom::Role::kIframePresentational:
-    case ax::mojom::Role::kPluginObject:
-    case ax::mojom::Role::kPortal:
-      return true;
-    default:
-      return false;
-  }
-}
-
 bool IsClickable(const ax::mojom::Role role) {
   switch (role) {
     case ax::mojom::Role::kButton:
     case ax::mojom::Role::kCheckBox:
     case ax::mojom::Role::kColorWell:
     case ax::mojom::Role::kComboBoxMenuButton:
+    case ax::mojom::Role::kComboBoxSelect:
     case ax::mojom::Role::kDate:
     case ax::mojom::Role::kDateTime:
     case ax::mojom::Role::kDisclosureTriangle:
+    case ax::mojom::Role::kDisclosureTriangleGrouped:
     case ax::mojom::Role::kDocBackLink:
     case ax::mojom::Role::kDocBiblioRef:
     case ax::mojom::Role::kDocGlossRef:
@@ -140,7 +134,6 @@ bool IsClickable(const ax::mojom::Role role) {
     case ax::mojom::Role::kMenuListOption:
     case ax::mojom::Role::kPdfActionableHighlight:
     case ax::mojom::Role::kPopUpButton:
-    case ax::mojom::Role::kPortal:
     case ax::mojom::Role::kRadioButton:
     case ax::mojom::Role::kSearchBox:
     case ax::mojom::Role::kSpinButton:
@@ -169,6 +162,7 @@ bool IsCheckBox(const ax::mojom::Role role) {
 }
 
 bool IsComboBox(const ax::mojom::Role role) {
+  // TODO(crbug.com/40864556): Treat kComboBoxSelect like a combobox.
   switch (role) {
     case ax::mojom::Role::kComboBoxMenuButton:
     case ax::mojom::Role::kComboBoxGrouping:
@@ -185,6 +179,7 @@ bool IsComboBoxContainer(const ax::mojom::Role role) {
     case ax::mojom::Role::kGrid:
     case ax::mojom::Role::kListBox:
     case ax::mojom::Role::kTree:
+    case ax::mojom::Role::kTreeGrid:
       return true;
     default:
       return false;
@@ -218,9 +213,11 @@ bool IsControl(const ax::mojom::Role role) {
     case ax::mojom::Role::kCheckBox:
     case ax::mojom::Role::kColorWell:
     case ax::mojom::Role::kComboBoxMenuButton:
+    case ax::mojom::Role::kComboBoxSelect:
     case ax::mojom::Role::kDate:
     case ax::mojom::Role::kDateTime:
     case ax::mojom::Role::kDisclosureTriangle:
+    case ax::mojom::Role::kDisclosureTriangleGrouped:
     case ax::mojom::Role::kInputTime:
     case ax::mojom::Role::kListBox:
     case ax::mojom::Role::kListGrid:
@@ -296,6 +293,18 @@ bool IsDialog(const ax::mojom::Role role) {
   }
 }
 
+bool IsEmbeddingElement(const ax::mojom::Role role) {
+  switch (role) {
+    case ax::mojom::Role::kEmbeddedObject:
+    case ax::mojom::Role::kIframe:
+    case ax::mojom::Role::kIframePresentational:
+    case ax::mojom::Role::kPluginObject:
+      return true;
+    default:
+      return false;
+  }
+}
+
 bool IsGridLike(const ax::mojom::Role role) {
   switch (role) {
     case ax::mojom::Role::kGrid:
@@ -323,20 +332,11 @@ bool IsFormatBoundary(const ax::mojom::Role role) {
 
 bool IsHeading(const ax::mojom::Role role) {
   switch (role) {
+    case ax::mojom::Role::kDisclosureTriangle:
+    case ax::mojom::Role::kDisclosureTriangleGrouped:
+      return ::features::IsAccessibilityExposeSummaryAsHeadingEnabled();
     case ax::mojom::Role::kHeading:
     case ax::mojom::Role::kDocSubtitle:
-      return true;
-    default:
-      return false;
-  }
-}
-
-bool IsHeadingOrTableHeader(const ax::mojom::Role role) {
-  switch (role) {
-    case ax::mojom::Role::kColumnHeader:
-    case ax::mojom::Role::kDocSubtitle:
-    case ax::mojom::Role::kHeading:
-    case ax::mojom::Role::kRowHeader:
       return true;
     default:
       return false;
@@ -374,6 +374,8 @@ bool IsItemLike(const ax::mojom::Role role) {
   switch (role) {
     case ax::mojom::Role::kArticle:
     case ax::mojom::Role::kComment:
+    case ax::mojom::Role::kDisclosureTriangle:
+    case ax::mojom::Role::kDisclosureTriangleGrouped:
     case ax::mojom::Role::kListItem:
     case ax::mojom::Role::kMenuItem:
     case ax::mojom::Role::kMenuItemRadio:
@@ -383,9 +385,31 @@ bool IsItemLike(const ax::mojom::Role role) {
     case ax::mojom::Role::kListBoxOption:
     case ax::mojom::Role::kMenuListOption:
     case ax::mojom::Role::kRadioButton:
-    case ax::mojom::Role::kDescriptionListTerm:
     case ax::mojom::Role::kTerm:
       DCHECK(!IsSetLike(role)) << "Role cannot be both item-like and set-like.";
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool IsLikelyActiveDescendantRole(const ax::mojom::Role role) {
+  switch (role) {
+    case ax::mojom::Role::kButton:
+    case ax::mojom::Role::kCell:
+    case ax::mojom::Role::kCheckBox:
+    case ax::mojom::Role::kComment:
+    case ax::mojom::Role::kGridCell:
+    case ax::mojom::Role::kListBoxOption:
+    case ax::mojom::Role::kMenuItem:
+    case ax::mojom::Role::kMenuItemCheckBox:
+    case ax::mojom::Role::kMenuItemRadio:
+    case ax::mojom::Role::kMenuListOption:
+    case ax::mojom::Role::kRadioButton:
+    case ax::mojom::Role::kRow:
+    case ax::mojom::Role::kTab:
+    case ax::mojom::Role::kToggleButton:
+    case ax::mojom::Role::kTreeItem:
       return true;
     default:
       return false;
@@ -424,7 +448,6 @@ bool IsLink(const ax::mojom::Role role) {
 bool IsList(const ax::mojom::Role role) {
   switch (role) {
     case ax::mojom::Role::kDescriptionList:
-    case ax::mojom::Role::kDirectory:
     case ax::mojom::Role::kDocBibliography:
     case ax::mojom::Role::kList:
     case ax::mojom::Role::kListBox:
@@ -437,7 +460,6 @@ bool IsList(const ax::mojom::Role role) {
 
 bool IsListItem(const ax::mojom::Role role) {
   switch (role) {
-    case ax::mojom::Role::kDescriptionListTerm:
     case ax::mojom::Role::kDocBiblioEntry:
     case ax::mojom::Role::kDocEndnote:
     case ax::mojom::Role::kListBoxOption:
@@ -532,15 +554,16 @@ bool IsReadOnlySupported(const ax::mojom::Role role) {
     case ax::mojom::Role::kColorWell:
     case ax::mojom::Role::kComboBoxGrouping:
     case ax::mojom::Role::kComboBoxMenuButton:
+    case ax::mojom::Role::kComboBoxSelect:
     case ax::mojom::Role::kDate:
     case ax::mojom::Role::kDateTime:
     case ax::mojom::Role::kGrid:
+    case ax::mojom::Role::kGridCell:
     case ax::mojom::Role::kInputTime:
     case ax::mojom::Role::kListBox:
     case ax::mojom::Role::kMenuItemCheckBox:
     case ax::mojom::Role::kMenuItemRadio:
     case ax::mojom::Role::kMenuListPopup:
-    case ax::mojom::Role::kPopUpButton:
     case ax::mojom::Role::kRadioButton:
     case ax::mojom::Role::kRadioGroup:
     case ax::mojom::Role::kSearchBox:
@@ -551,10 +574,6 @@ bool IsReadOnlySupported(const ax::mojom::Role role) {
     case ax::mojom::Role::kTextFieldWithComboBox:
     case ax::mojom::Role::kTreeGrid:
       return true;
-
-    // https://www.w3.org/TR/wai-aria-1.1/#aria-readonly
-    // ARIA-1.1+ 'gridcell', supports aria-readonly, but 'cell' does not.
-    //
     // https://www.w3.org/TR/wai-aria-1.1/#columnheader
     // https://www.w3.org/TR/wai-aria-1.1/#rowheader
     // While the [columnheader|rowheader] role can be used in both interactive
@@ -610,10 +629,10 @@ bool IsSection(const ax::mojom::Role role) {
     case ax::mojom::Role::kCell:
     case ax::mojom::Role::kColumnHeader:  // Subclass of kCell.
     case ax::mojom::Role::kDefinition:
-    case ax::mojom::Role::kDirectory:  // Subclass of kList.
     case ax::mojom::Role::kFeed:       // Subclass of kList.
     case ax::mojom::Role::kFigure:
     case ax::mojom::Role::kGrid:  // Subclass of kTable.
+    case ax::mojom::Role::kGridCell:  // Subclass of kCell.
     case ax::mojom::Role::kGroup:
     case ax::mojom::Role::kImage:
     case ax::mojom::Role::kList:
@@ -671,10 +690,10 @@ bool IsSelect(const ax::mojom::Role role) {
 
 bool IsSelectElement(const ax::mojom::Role role) {
   // Depending on their "size" attribute, <select> elements come in two flavors:
-  // the first appears like a list box and the second like a popup menu.
+  // the first appears like a list box and the second a specific combobox type.
   switch (role) {
     case ax::mojom::Role::kListBox:
-    case ax::mojom::Role::kPopUpButton:
+    case ax::mojom::Role::kComboBoxSelect:
       return true;
     default:
       return false;
@@ -695,7 +714,7 @@ bool IsSelectRequiredOrImplicit(const ax::mojom::Role role) {
 
 bool IsSelectSupported(const ax::mojom::Role role) {
   switch (role) {
-    case ax::mojom::Role::kCell:
+    case ax::mojom::Role::kGridCell:
     case ax::mojom::Role::kColumnHeader:
     case ax::mojom::Role::kListBoxOption:
     case ax::mojom::Role::kMathMLTableCell:
@@ -712,8 +731,8 @@ bool IsSelectSupported(const ax::mojom::Role role) {
 
 bool IsSetLike(const ax::mojom::Role role) {
   switch (role) {
+    case ax::mojom::Role::kComboBoxSelect:
     case ax::mojom::Role::kDescriptionList:
-    case ax::mojom::Role::kDirectory:
     case ax::mojom::Role::kDocBibliography:
     case ax::mojom::Role::kFeed:
     case ax::mojom::Role::kGroup:
@@ -809,36 +828,6 @@ bool IsTableHeader(ax::mojom::Role role) {
   }
 }
 
-bool IsTableItem(ax::mojom::Role role) {
-  switch (role) {
-    case ax::mojom::Role::kDescriptionListTerm:
-    case ax::mojom::Role::kListBoxOption:
-    case ax::mojom::Role::kListItem:
-    case ax::mojom::Role::kTreeItem:
-      return true;
-    default:
-      return IsCellOrTableHeader(role);
-  }
-}
-
-#if BUILDFLAG(IS_ANDROID)
-bool IsTableLike(const ax::mojom::Role role) {
-  switch (role) {
-    case ax::mojom::Role::kGrid:
-    case ax::mojom::Role::kDescriptionList:
-    case ax::mojom::Role::kDirectory:
-    case ax::mojom::Role::kList:
-    case ax::mojom::Role::kListBox:
-    case ax::mojom::Role::kListGrid:
-    case ax::mojom::Role::kTable:
-    case ax::mojom::Role::kTree:
-    case ax::mojom::Role::kTreeGrid:
-      return true;
-    default:
-      return false;
-  }
-}
-#else
 bool IsTableLike(const ax::mojom::Role role) {
   switch (role) {
     case ax::mojom::Role::kGrid:
@@ -852,7 +841,6 @@ bool IsTableLike(const ax::mojom::Role role) {
       return false;
   }
 }
-#endif
 
 bool IsTableRow(ax::mojom::Role role) {
   switch (role) {
@@ -901,12 +889,12 @@ bool IsUIAEmbeddedObject(ax::mojom::Role role) {
     case ax::mojom::Role::kColumnHeader:
     case ax::mojom::Role::kComboBoxGrouping:
     case ax::mojom::Role::kComboBoxMenuButton:
+    case ax::mojom::Role::kComboBoxSelect:
     case ax::mojom::Role::kDate:
     case ax::mojom::Role::kDateTime:
     case ax::mojom::Role::kDescriptionList:
-    case ax::mojom::Role::kDescriptionListTerm:
-    case ax::mojom::Role::kDirectory:
     case ax::mojom::Role::kDisclosureTriangle:
+    case ax::mojom::Role::kDisclosureTriangleGrouped:
     case ax::mojom::Role::kDocBackLink:
     case ax::mojom::Role::kDocBiblioEntry:
     case ax::mojom::Role::kDocBiblioRef:
@@ -918,6 +906,7 @@ bool IsUIAEmbeddedObject(ax::mojom::Role role) {
     case ax::mojom::Role::kForm:
     case ax::mojom::Role::kGraphicsSymbol:
     case ax::mojom::Role::kGrid:
+    case ax::mojom::Role::kGridCell:
     case ax::mojom::Role::kIframe:
     case ax::mojom::Role::kIframePresentational:
     case ax::mojom::Role::kImage:
@@ -998,8 +987,6 @@ bool ShouldHaveReadonlyStateByDefault(const ax::mojom::Role role) {
     case ax::mojom::Role::kArticle:
     case ax::mojom::Role::kDefinition:
     case ax::mojom::Role::kDescriptionList:
-    case ax::mojom::Role::kDescriptionListTerm:
-    case ax::mojom::Role::kDirectory:
     case ax::mojom::Role::kDocument:
     case ax::mojom::Role::kGraphicsDocument:
     case ax::mojom::Role::kImage:
@@ -1027,7 +1014,9 @@ bool SupportsExpandCollapse(const ax::mojom::Role role) {
   switch (role) {
     case ax::mojom::Role::kComboBoxGrouping:
     case ax::mojom::Role::kComboBoxMenuButton:
+    case ax::mojom::Role::kComboBoxSelect:
     case ax::mojom::Role::kDisclosureTriangle:
+    case ax::mojom::Role::kDisclosureTriangleGrouped:
     case ax::mojom::Role::kTextFieldWithComboBox:
     case ax::mojom::Role::kTreeItem:
       return true;
@@ -1072,12 +1061,12 @@ bool SupportsOrientation(const ax::mojom::Role role) {
 bool SupportsRequired(const ax::mojom::Role role) {
   switch (role) {
     case ax::mojom::Role::kButton:        // Used by the file upload button.
-    case ax::mojom::Role::kCell:          // Used only for grid.
     case ax::mojom::Role::kColumnHeader:  // Used only for gridheaders.
     case ax::mojom::Role::kComboBoxGrouping:
     case ax::mojom::Role::kCheckBox:
     case ax::mojom::Role::kDate:
     case ax::mojom::Role::kDateTime:
+    case ax::mojom::Role::kGridCell:
     case ax::mojom::Role::kInputTime:
     case ax::mojom::Role::kListBox:
     case ax::mojom::Role::kRadioButton:
@@ -1108,6 +1097,31 @@ bool SupportsToggle(const ax::mojom::Role role) {
     default:
       return false;
   }
+}
+
+bool IsPlainContentElement(ax::mojom::Role role) {
+  switch (role) {
+    case ax::mojom::Role::kInlineTextBox:
+    case ax::mojom::Role::kLineBreak:
+    case ax::mojom::Role::kStaticText:
+    case ax::mojom::Role::kCanvas:
+    case ax::mojom::Role::kDocCover:
+    case ax::mojom::Role::kGraphicsSymbol:
+    case ax::mojom::Role::kImage:
+    case ax::mojom::Role::kSvgRoot:
+    case ax::mojom::Role::kGenericContainer:
+    case ax::mojom::Role::kNone:
+    case ax::mojom::Role::kGroup:
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool SupportsArrowKeysForExpandCollapse(const ax::mojom::Role role) {
+  // TODO(accessibility): Investigate if other roles should implement this
+  // pattern.
+  return role == ax::mojom::Role::kTreeItem;
 }
 
 }  // namespace ui

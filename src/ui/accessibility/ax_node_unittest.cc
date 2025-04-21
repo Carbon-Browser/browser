@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,13 +11,16 @@
 
 #include "testing/gmock/include/gmock/gmock-matchers.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/accessibility/ax_enums.mojom-shared.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/accessibility/ax_position.h"
 #include "ui/accessibility/ax_tree.h"
 #include "ui/accessibility/ax_tree_data.h"
 #include "ui/accessibility/ax_tree_id.h"
-#include "ui/accessibility/test_ax_tree_manager.h"
+#include "ui/accessibility/test_ax_tree_update.h"
+#include "ui/accessibility/test_single_ax_tree_manager.h"
+#include "ui/gfx/geometry/rect_f.h"
 
 namespace ui {
 
@@ -228,11 +231,13 @@ TEST(AXNodeTest, TreeWalking) {
             root_node->GetLastUnignoredChildCrossingTreeBoundary()->id());
 
   EXPECT_EQ(static_text_0_0_ignored.id,
-            root_node->GetDeepestFirstChild()->id());
-  EXPECT_EQ(paragraph_0.id, root_node->GetDeepestFirstUnignoredChild()->id());
+            root_node->GetDeepestFirstDescendant()->id());
+  EXPECT_EQ(paragraph_0.id,
+            root_node->GetDeepestFirstUnignoredDescendant()->id());
 
-  EXPECT_EQ(button_3_1.id, root_node->GetDeepestLastChild()->id());
-  EXPECT_EQ(button_3_1.id, root_node->GetDeepestLastUnignoredChild()->id());
+  EXPECT_EQ(button_3_1.id, root_node->GetDeepestLastDescendant()->id());
+  EXPECT_EQ(button_3_1.id,
+            root_node->GetDeepestLastUnignoredDescendant()->id());
 
   {
     std::vector<AXNode*> siblings;
@@ -368,14 +373,14 @@ TEST(AXNodeTest, TreeWalkingCrossingTreeBoundary) {
   initial_state_2.tree_data = tree_data_2;
 
   auto tree_1 = std::make_unique<AXTree>(initial_state_1);
-  TestAXTreeManager tree_manager_1(std::move(tree_1));
+  TestSingleAXTreeManager tree_manager_1(std::move(tree_1));
   auto tree_2 = std::make_unique<AXTree>(initial_state_2);
-  TestAXTreeManager tree_manager_2(std::move(tree_2));
+  TestSingleAXTreeManager tree_manager_2(std::move(tree_2));
 
-  const AXNode* root_node_1 = tree_manager_1.GetRootAsAXNode();
+  const AXNode* root_node_1 = tree_manager_1.GetRoot();
   ASSERT_EQ(root_1.id, root_node_1->id());
 
-  const AXNode* root_node_2 = tree_manager_2.GetRootAsAXNode();
+  const AXNode* root_node_2 = tree_manager_2.GetRoot();
   ASSERT_EQ(root_2.id, root_node_2->id());
 
   EXPECT_EQ(0u, root_node_1->GetChildCount());
@@ -474,7 +479,7 @@ TEST(AXNodeTest, GetValueForControlTextField) {
                   rich_text_field_line_2};
 
   auto tree = std::make_unique<AXTree>(update);
-  TestAXTreeManager manager(std::move(tree));
+  TestSingleAXTreeManager manager(std::move(tree));
 
   {
     const AXNode* text_field_node =
@@ -631,6 +636,96 @@ TEST(AXNodeTest, GetLowestPlatformAncestor) {
   EXPECT_EQ(text_field_node, inline_box_2_node->GetLowestPlatformAncestor());
 }
 
+TEST(AXNodeTest, GetTextContentRangeBounds) {
+  constexpr char16_t kEnglishText[] = u"Hey";
+  const std::vector<int32_t> kEnglishCharacterOffsets = {12, 19, 27};
+  // A Hindi word (which means "Hindi") consisting of two letters.
+  constexpr char16_t kHindiText[] = u"\x0939\x093F\x0928\x094D\x0926\x0940";
+  const std::vector<int32_t> kHindiCharacterOffsets = {40, 40, 59, 59, 59, 59};
+  // A Thai word (which means "feel") consisting of 3 letters.
+  constexpr char16_t kThaiText[] = u"\x0E23\x0E39\x0E49\x0E2A\x0E36\x0E01";
+  const std::vector<int32_t> kThaiCharacterOffsets = {66, 66, 66, 76, 76, 85};
+
+  AXNodeData root_data;
+  root_data.id = 1;
+  root_data.role = ax::mojom::Role::kRootWebArea;
+
+  AXNodeData text_data1;
+  text_data1.id = 2;
+  text_data1.role = ax::mojom::Role::kStaticText;
+  text_data1.SetName(kEnglishText);
+  text_data1.AddIntAttribute(
+      ax::mojom::IntAttribute::kTextDirection,
+      static_cast<int32_t>(ax::mojom::WritingDirection::kLtr));
+  text_data1.AddIntListAttribute(ax::mojom::IntListAttribute::kCharacterOffsets,
+                                 kEnglishCharacterOffsets);
+
+  AXNodeData text_data2;
+  text_data2.id = 3;
+  text_data2.role = ax::mojom::Role::kStaticText;
+  text_data2.SetName(kHindiText);
+  text_data2.AddIntAttribute(
+      ax::mojom::IntAttribute::kTextDirection,
+      static_cast<int32_t>(ax::mojom::WritingDirection::kRtl));
+  text_data2.AddIntListAttribute(ax::mojom::IntListAttribute::kCharacterOffsets,
+                                 kHindiCharacterOffsets);
+
+  AXNodeData text_data3;
+  text_data3.id = 4;
+  text_data3.role = ax::mojom::Role::kStaticText;
+  text_data3.SetName(kThaiText);
+  text_data3.AddIntAttribute(
+      ax::mojom::IntAttribute::kTextDirection,
+      static_cast<int32_t>(ax::mojom::WritingDirection::kTtb));
+  text_data3.AddIntListAttribute(ax::mojom::IntListAttribute::kCharacterOffsets,
+                                 kThaiCharacterOffsets);
+
+  root_data.child_ids = {text_data1.id, text_data2.id, text_data3.id};
+
+  AXTreeUpdate update;
+  update.root_id = root_data.id;
+  update.nodes = {root_data, text_data1, text_data2, text_data3};
+  update.has_tree_data = true;
+
+  AXTreeData tree_data;
+  tree_data.tree_id = AXTreeID::CreateNewAXTreeID();
+  tree_data.title = "Application";
+  update.tree_data = tree_data;
+
+  AXTree tree;
+  ASSERT_TRUE(tree.Unserialize(update)) << tree.error();
+
+  const AXNode* root_node = tree.root();
+  ASSERT_EQ(root_data.id, root_node->id());
+
+  const AXNode* text1_node = root_node->GetUnignoredChildAtIndex(0);
+  ASSERT_EQ(text_data1.id, text1_node->id());
+  const AXNode* text2_node = root_node->GetUnignoredChildAtIndex(1);
+  ASSERT_EQ(text_data2.id, text2_node->id());
+  const AXNode* text3_node = root_node->GetUnignoredChildAtIndex(2);
+  ASSERT_EQ(text_data3.id, text3_node->id());
+
+  // Offsets correspond to code units in UTF-16
+  // Each character is a single glyph in `kEnglishText`.
+  EXPECT_EQ(gfx::RectF(0, 0, 27, 0),
+            text1_node->GetTextContentRangeBoundsUTF16(0, 3));
+  EXPECT_EQ(gfx::RectF(12, 0, 7, 0),
+            text1_node->GetTextContentRangeBoundsUTF16(1, 2));
+  EXPECT_EQ(gfx::RectF(), text1_node->GetTextContentRangeBoundsUTF16(2, 4));
+
+  // `kHindiText` is 6 code units in UTF-16.
+  EXPECT_EQ(gfx::RectF(0, 0, 59, 0),
+            text2_node->GetTextContentRangeBoundsUTF16(0, 6));
+  EXPECT_EQ(gfx::RectF(0, 0, 19, 0),
+            text2_node->GetTextContentRangeBoundsUTF16(2, 4));
+
+  // `kThaiText` is 6 code units in UTF-16.
+  EXPECT_EQ(gfx::RectF(0, 0, 0, 85),
+            text3_node->GetTextContentRangeBoundsUTF16(0, 6));
+  EXPECT_EQ(gfx::RectF(0, 66, 0, 10),
+            text3_node->GetTextContentRangeBoundsUTF16(2, 4));
+}
+
 TEST(AXNodeTest, IsGridCellReadOnlyOrDisabled) {
   // ++kRootWebArea
   // ++++kGrid
@@ -649,7 +744,7 @@ TEST(AXNodeTest, IsGridCellReadOnlyOrDisabled) {
   row.id = 3;
   gridcell_1.id = 4;
   gridcell_2.id = 5;
-  gridcell_2.id = 6;
+  gridcell_3.id = 6;
 
   root.role = ax::mojom::Role::kRootWebArea;
   root.child_ids = {grid.id};
@@ -710,6 +805,231 @@ TEST(AXNodeTest, IsGridCellReadOnlyOrDisabled) {
   const AXNode* gridcell_3_node = row_node->children()[2];
   ASSERT_EQ(gridcell_3.id, gridcell_3_node->id());
   EXPECT_TRUE(gridcell_3_node->IsReadOnlyOrDisabled());
+}
+
+TEST(AXNodeTest, GetLowestCommonAncestor) {
+  // ++kRootWebArea
+  // ++++kParagraph
+  // ++++++kStaticText
+  // ++++kParagraph
+  // ++++++kLink
+  // ++++++++kStaticText
+  // ++++++kButton
+
+  // Numbers at the end of variable names indicate their position under the
+  // root.
+  AXNodeData root;
+  AXNodeData paragraph_0;
+  AXNodeData static_text_0_0;
+  AXNodeData paragraph_1;
+  AXNodeData link_1_0;
+  AXNodeData static_text_1_0_0;
+  AXNodeData button_1_1;
+
+  root.id = 1;
+  paragraph_0.id = 2;
+  static_text_0_0.id = 3;
+  paragraph_1.id = 4;
+  link_1_0.id = 5;
+  static_text_1_0_0.id = 6;
+  button_1_1.id = 7;
+
+  root.role = ax::mojom::Role::kRootWebArea;
+  root.child_ids = {paragraph_0.id, paragraph_1.id};
+
+  paragraph_0.role = ax::mojom::Role::kParagraph;
+  paragraph_0.child_ids = {static_text_0_0.id};
+
+  static_text_0_0.role = ax::mojom::Role::kStaticText;
+  static_text_0_0.SetName("static_text_0_0");
+
+  paragraph_1.role = ax::mojom::Role::kParagraph;
+  paragraph_1.child_ids = {link_1_0.id, button_1_1.id};
+
+  link_1_0.role = ax::mojom::Role::kLink;
+  link_1_0.AddState(ax::mojom::State::kLinked);
+  link_1_0.child_ids = {static_text_1_0_0.id};
+
+  static_text_1_0_0.role = ax::mojom::Role::kStaticText;
+  static_text_1_0_0.SetName("static_text_1_0_0");
+
+  button_1_1.role = ax::mojom::Role::kButton;
+  button_1_1.SetName("button_1_1");
+
+  AXTreeUpdate initial_state;
+  initial_state.root_id = root.id;
+  initial_state.nodes = {root,        paragraph_0, static_text_0_0,
+                         paragraph_1, link_1_0,    static_text_1_0_0,
+                         button_1_1};
+  initial_state.has_tree_data = true;
+
+  AXTreeData tree_data;
+  tree_data.tree_id = AXTreeID::CreateNewAXTreeID();
+  tree_data.title = "Application";
+  initial_state.tree_data = tree_data;
+
+  AXTree tree;
+  ASSERT_TRUE(tree.Unserialize(initial_state)) << tree.error();
+
+  AXNode* root_node = tree.GetFromId(root.id);
+  AXNode* paragraph_0_node = tree.GetFromId(paragraph_0.id);
+  AXNode* static_text_0_0_node = tree.GetFromId(static_text_0_0.id);
+  AXNode* paragraph_1_node = tree.GetFromId(paragraph_1.id);
+  AXNode* link_1_0_node = tree.GetFromId(link_1_0.id);
+  AXNode* static_text_1_0_0_node = tree.GetFromId(static_text_1_0_0.id);
+  AXNode* button_1_1_node = tree.GetFromId(button_1_1.id);
+
+  // The lowest common ancestor of a node and itself is itself.
+  ASSERT_EQ(root_node, root_node->GetLowestCommonAncestor(*root_node));
+  ASSERT_EQ(paragraph_0_node,
+            paragraph_0_node->GetLowestCommonAncestor(*paragraph_0_node));
+
+  // Lowest common ancestor is reflexive.
+  ASSERT_EQ(paragraph_1_node,
+            link_1_0_node->GetLowestCommonAncestor(*button_1_1_node));
+  ASSERT_EQ(paragraph_1_node,
+            button_1_1_node->GetLowestCommonAncestor(*link_1_0_node));
+
+  // Finds the lowest common ancestor for two nodes not on the same level.
+  ASSERT_EQ(root_node, static_text_1_0_0_node->GetLowestCommonAncestor(
+                           *static_text_0_0_node));
+  ASSERT_EQ(link_1_0_node,
+            static_text_1_0_0_node->GetLowestCommonAncestor(*link_1_0_node));
+}
+
+TEST(AXNodeTest, DescendantOfNonAtomicTextField) {
+  // The test covers the different scenarios for descendants of a non-atomic
+  // text field:
+  // <div contenteditable role=spinbutton>
+  //  <div role=spinbutton></div>
+  //  <input type=text role=spinbutton>
+  //  <div></div>
+  // </div>
+  // ++1 kRootWebArea
+  // ++++2 kSpinButton
+  // ++++++3 kSpinButton
+  // ++++++4 kSpinButton
+  // ++++++5 kGenericContainer
+
+  AXNodeData root_1;
+  AXNodeData spin_button_2;
+  AXNodeData spin_button_3;
+  AXNodeData spin_button_4;
+  AXNodeData generic_container_5;
+
+  root_1.id = 1;
+  spin_button_2.id = 2;
+  spin_button_3.id = 3;
+  spin_button_4.id = 4;
+  generic_container_5.id = 5;
+
+  root_1.role = ax::mojom::Role::kRootWebArea;
+  root_1.child_ids = {spin_button_2.id};
+
+  spin_button_2.role = ax::mojom::Role::kSpinButton;
+  spin_button_2.AddState(ax::mojom::State::kRichlyEditable);
+  spin_button_2.AddState(ax::mojom::State::kEditable);
+  spin_button_2.AddBoolAttribute(
+      ax::mojom::BoolAttribute::kNonAtomicTextFieldRoot, true);
+  spin_button_2.child_ids = {spin_button_3.id, spin_button_4.id,
+                             generic_container_5.id};
+
+  spin_button_3.role = ax::mojom::Role::kSpinButton;
+
+  spin_button_4.role = ax::mojom::Role::kSpinButton;
+  spin_button_4.AddState(ax::mojom::State::kEditable);
+
+  generic_container_5.role = ax::mojom::Role::kGenericContainer;
+
+  AXTreeUpdate initial_state;
+  initial_state.root_id = root_1.id;
+  initial_state.nodes = {root_1, spin_button_2, spin_button_3, spin_button_4,
+                         generic_container_5};
+  initial_state.has_tree_data = true;
+  initial_state.tree_data.tree_id = AXTreeID::CreateNewAXTreeID();
+
+  AXTree tree(initial_state);
+
+  EXPECT_TRUE(tree.GetFromId(spin_button_2.id)->data().IsSpinnerTextField());
+  EXPECT_TRUE(tree.GetFromId(spin_button_2.id)->data().IsTextField());
+  EXPECT_FALSE(
+      tree.GetFromId(spin_button_3.id)->data().IsSpinnerTextField());
+  EXPECT_FALSE(tree.GetFromId(spin_button_3.id)->data().IsTextField());
+  EXPECT_TRUE(tree.GetFromId(spin_button_4.id)->data().IsSpinnerTextField());
+  EXPECT_FALSE(tree.GetFromId(generic_container_5.id)->data().IsSpinnerTextField());
+}
+
+TEST(AXNodeTest, MenuItemCheckboxPosInSet) {
+  TestAXTreeUpdate update(std::string(R"HTML(
+    ++1 kRootWebArea
+    ++++2 kGroup
+    ++++++3 kMenuItemCheckBox
+    ++++++++4 kStaticText name="item"
+    ++++++++++5 kInlineTextBox name="item"
+    ++++++6 kMenuItemCheckBox
+    ++++++++7 kStaticText name="item2"
+    ++++++++++8 kInlineTextBox name="item2"
+  )HTML"));
+
+  AXTree tree(update);
+
+  EXPECT_EQ(tree.GetFromId(3)->GetPosInSet(), 1);
+  EXPECT_EQ(tree.GetFromId(3)->GetSetSize(), 2);
+  EXPECT_EQ(tree.GetFromId(6)->GetPosInSet(), 2);
+  EXPECT_EQ(tree.GetFromId(6)->GetSetSize(), 2);
+}
+
+TEST(AXNodeTest, TreeItemAsTreeItemParentPosInSetSetSize) {
+  TestAXTreeUpdate update(std::string(R"HTML(
+    ++1 kRootWebArea
+    ++++2 kTree
+    ++++++3 kTreeItem intAttribute=kPosInSet,1 intAttribute=kSetSize,2
+    ++++++++4 kTreeItem intAttribute=kPosInSet,1 intAttribute=kSetSize,6
+    ++++++++5 kTreeItem intAttribute=kPosInSet,2 intAttribute=kSetSize,6
+    ++++++6 kTreeItem intAttribute=kPosInSet,2 intAttribute=kSetSize,2
+    ++++++++7 kTreeItem intAttribute=kPosInSet,3 intAttribute=kSetSize,6
+  )HTML"));
+
+  AXTree tree(update);
+
+  EXPECT_EQ(tree.GetFromId(3)->GetPosInSet(), 1);
+  EXPECT_EQ(tree.GetFromId(3)->GetSetSize(), 2);
+
+  EXPECT_EQ(tree.GetFromId(4)->GetPosInSet(), 1);
+  EXPECT_EQ(tree.GetFromId(4)->GetSetSize(), 6);
+
+  EXPECT_EQ(tree.GetFromId(5)->GetPosInSet(), 2);
+  EXPECT_EQ(tree.GetFromId(5)->GetSetSize(), 6);
+
+  EXPECT_EQ(tree.GetFromId(6)->GetPosInSet(), 2);
+  EXPECT_EQ(tree.GetFromId(6)->GetSetSize(), 2);
+
+  EXPECT_EQ(tree.GetFromId(7)->GetPosInSet(), 3);
+  EXPECT_EQ(tree.GetFromId(7)->GetSetSize(), 6);
+}
+
+TEST(AXNodeTest, GroupAsTreeItemParentPosInSetSetSize) {
+  TestAXTreeUpdate update(std::string(R"HTML(
+    ++1 kRootWebArea
+    ++++2 kTree
+    ++++++3 kGroup
+    ++++++++4 kTreeItem intAttribute=kPosInSet,1 intAttribute=kSetSize,6
+    ++++++++5 kTreeItem intAttribute=kPosInSet,2 intAttribute=kSetSize,6
+    ++++++6 kTreeItem
+    ++++++++7 kGroup
+    ++++++++++8 kTreeItem intAttribute=kPosInSet,1 intAttribute=kSetSize,6
+  )HTML"));
+
+  AXTree tree(update);
+
+  EXPECT_EQ(tree.GetFromId(4)->GetPosInSet(), 1);
+  EXPECT_EQ(tree.GetFromId(4)->GetSetSize(), 6);
+
+  EXPECT_EQ(tree.GetFromId(5)->GetPosInSet(), 2);
+  EXPECT_EQ(tree.GetFromId(5)->GetSetSize(), 6);
+
+  EXPECT_EQ(tree.GetFromId(8)->GetPosInSet(), 1);
+  EXPECT_EQ(tree.GetFromId(8)->GetSetSize(), 6);
 }
 
 }  // namespace ui

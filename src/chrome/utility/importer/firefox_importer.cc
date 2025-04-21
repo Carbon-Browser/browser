@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <set>
+#include <string_view>
 
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
@@ -27,11 +28,13 @@
 #include "sql/statement.h"
 #include "url/gurl.h"
 
-#if !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_FUCHSIA)
+#if !BUILDFLAG(IS_MAC)
 #include "chrome/utility/importer/nss_decryptor.h"
-#endif  // !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_FUCHSIA)
+#endif  // !BUILDFLAG(IS_MAC)
 
 namespace {
+
+inline constexpr sql::Database::Tag kDatabaseTag{"FirefoxImporter"};
 
 // Original definition is in:
 //   toolkit/components/places/nsINavBookmarksService.idl
@@ -86,13 +89,22 @@ bool SetFaviconData(const std::string& icon_url,
   usage_data->favicon_url = GURL(icon_url);
 
   // Don't bother importing favicons with invalid URLs.
-  if (!usage_data->favicon_url.is_valid())
+  if (!usage_data->favicon_url.is_valid()) {
     return false;
+  }
 
   // Data must be valid.
-  return !icon_data.empty() &&
-         importer::ReencodeFavicon(&icon_data[0], icon_data.size(),
-                                   &usage_data->png_data);
+  if (icon_data.empty()) {
+    return false;
+  }
+
+  std::optional<std::vector<uint8_t>> png_data =
+      importer::ReencodeFavicon(base::as_byte_span(icon_data));
+  if (png_data) {
+    usage_data->png_data = std::move(png_data).value();
+    return true;
+  }
+  return false;
 }
 
 }  // namespace
@@ -150,13 +162,13 @@ void FirefoxImporter::StartImport(const importer::SourceProfile& source_profile,
     ImportBookmarks();
     bridge_->NotifyItemEnded(importer::FAVORITES);
   }
-#if !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_FUCHSIA)
+#if !BUILDFLAG(IS_MAC)
   if ((items & importer::PASSWORDS) && !cancelled()) {
     bridge_->NotifyItemStarted(importer::PASSWORDS);
     ImportPasswords();
     bridge_->NotifyItemEnded(importer::PASSWORDS);
   }
-#endif  // !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_FUCHSIA)
+#endif  // !BUILDFLAG(IS_MAC)
   if ((items & importer::AUTOFILL_FORM_DATA) && !cancelled()) {
     bridge_->NotifyItemStarted(importer::AUTOFILL_FORM_DATA);
     ImportAutofillFormData();
@@ -170,7 +182,7 @@ void FirefoxImporter::ImportHistory() {
   if (!base::PathExists(file))
     return;
 
-  sql::Database db;
+  sql::Database db(kDatabaseTag);
   if (!db.Open(file))
     return;
 
@@ -215,7 +227,7 @@ void FirefoxImporter::ImportBookmarks() {
   if (!base::PathExists(file))
     return;
 
-  sql::Database db;
+  sql::Database db(kDatabaseTag);
   if (!db.Open(file))
     return;
 
@@ -251,7 +263,7 @@ void FirefoxImporter::ImportBookmarks() {
   std::vector<importer::SearchEngineInfo> search_engines;
   FaviconMap favicon_map;
 
-  // TODO(https://crbug.com/18107): We do not support POST based keywords yet.
+  // TODO(crbug.com/40304654): We do not support POST based keywords yet.
   // We won't include them in the list.
   std::set<int> post_keyword_ids;
   const char query[] =
@@ -375,7 +387,7 @@ void FirefoxImporter::ImportBookmarks() {
   }
 }
 
-#if !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_FUCHSIA)
+#if !BUILDFLAG(IS_MAC)
 void FirefoxImporter::ImportPasswords() {
   // Initializes NSS3.
   NSSDecryptor decryptor;
@@ -401,7 +413,7 @@ void FirefoxImporter::ImportPasswords() {
     }
   }
 }
-#endif  // !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_FUCHSIA)
+#endif  // !BUILDFLAG(IS_MAC)
 
 void FirefoxImporter::ImportHomepage() {
   GURL home_page = GetHomepage(source_path_);
@@ -415,7 +427,7 @@ void FirefoxImporter::ImportAutofillFormData() {
   if (!base::PathExists(file))
     return;
 
-  sql::Database db;
+  sql::Database db(kDatabaseTag);
   if (!db.Open(file))
     return;
 
@@ -506,7 +518,6 @@ void FirefoxImporter::GetWholeBookmarkFolder(sql::Database* db,
                                              bool* empty_folder) {
   if (position >= list->size()) {
     NOTREACHED();
-    return;
   }
 
   std::string query =
@@ -520,7 +531,7 @@ void FirefoxImporter::GetWholeBookmarkFolder(sql::Database* db,
       "LEFT JOIN moz_keywords k ON k.id = b.keyword_id "
       "WHERE b.type IN (1,2) AND b.parent = ? "
       "ORDER BY b.position";
-  sql::Statement s(db->GetUniqueStatement(query.c_str()));
+  sql::Statement s(db->GetUniqueStatement(query));
   s.BindInt(0, (*list)[position]->id);
 
   BookmarkList temp_list;
@@ -589,7 +600,7 @@ void FirefoxImporter::LoadFavicons(
   if (!base::PathExists(file))
     return;
 
-  sql::Database db;
+  sql::Database db(kDatabaseTag);
   if (!db.Open(file))
     return;
 
@@ -637,7 +648,7 @@ void FirefoxImporter::LoadFavicons(
 }
 
 base::FilePath FirefoxImporter::GetCopiedSourcePath(
-    base::StringPiece base_file_name) {
+    std::string_view base_file_name) {
   const base::FilePath file = source_path_.AppendASCII(base_file_name);
   if (!base::PathExists(file))
     return {};

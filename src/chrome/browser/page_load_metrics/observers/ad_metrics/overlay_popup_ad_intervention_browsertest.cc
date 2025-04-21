@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,10 +41,10 @@ class OverlayPopupAdViolationBrowserTest
   OverlayPopupAdViolationBrowserTest() = default;
 
   void SetUp() override {
-    std::vector<base::Feature> enabled = {
+    std::vector<base::test::FeatureRef> enabled = {
         subresource_filter::kAdTagging,
         subresource_filter::kAdsInterventionsEnforced};
-    std::vector<base::Feature> disabled = {
+    std::vector<base::test::FeatureRef> disabled = {
         blink::features::kFrequencyCappingForOverlayPopupDetection};
 
     feature_list_.InitWithFeatures(enabled, disabled);
@@ -61,8 +61,16 @@ class OverlayPopupAdViolationBrowserTest
   base::test::ScopedFeatureList feature_list_;
 };
 
+// TODO(crbug.com/40761472): Fails on Linux MSan and ChromeOS.
+#if BUILDFLAG(IS_CHROMEOS) || (BUILDFLAG(IS_LINUX) && defined(MEMORY_SANITIZER))
+#define MAYBE_NoOverlayPopupAd_AdInterventionNotTriggered \
+  DISABLED_NoOverlayPopupAd_AdInterventionNotTriggered
+#else
+#define MAYBE_NoOverlayPopupAd_AdInterventionNotTriggered \
+  NoOverlayPopupAd_AdInterventionNotTriggered
+#endif
 IN_PROC_BROWSER_TEST_F(OverlayPopupAdViolationBrowserTest,
-                       NoOverlayPopupAd_AdInterventionNotTriggered) {
+                       MAYBE_NoOverlayPopupAd_AdInterventionNotTriggered) {
   base::HistogramTester histogram_tester;
 
   GURL url = embedded_test_server()->GetURL(
@@ -87,8 +95,20 @@ IN_PROC_BROWSER_TEST_F(OverlayPopupAdViolationBrowserTest,
       subresource_filter::mojom::AdsViolation::kOverlayPopupAd, 0);
 }
 
+// TODO(crbug.com/40856777): Fix flakiness and re-enable test.
+#if (BUILDFLAG(IS_LINUX) &&                                     \
+     (defined(MEMORY_SANITIZER) || defined(LEAK_SANITIZER))) || \
+    (BUILDFLAG(IS_CHROMEOS) && !defined(NDEBUG)) ||             \
+    (defined(LEAK_SANITIZER) && BUILDFLAG(IS_CHROMEOS) &&       \
+     defined(ADDRESS_SANITIZER))
+#define MAYBE_OverlayPopupAd_AdInterventionTriggered \
+  DISABLED_OverlayPopupAd_AdInterventionTriggered
+#else
+#define MAYBE_OverlayPopupAd_AdInterventionTriggered \
+  OverlayPopupAd_AdInterventionTriggered
+#endif
 IN_PROC_BROWSER_TEST_F(OverlayPopupAdViolationBrowserTest,
-                       OverlayPopupAd_AdInterventionTriggered) {
+                       MAYBE_OverlayPopupAd_AdInterventionTriggered) {
   base::HistogramTester histogram_tester;
 
   content::WebContents* web_contents =
@@ -122,8 +142,9 @@ class OverlayPopupAdViolationBrowserTestWithoutEnforcement
   OverlayPopupAdViolationBrowserTestWithoutEnforcement() = default;
 
   void SetUp() override {
-    std::vector<base::Feature> enabled = {subresource_filter::kAdTagging};
-    std::vector<base::Feature> disabled = {
+    std::vector<base::test::FeatureRef> enabled = {
+        subresource_filter::kAdTagging};
+    std::vector<base::test::FeatureRef> disabled = {
         subresource_filter::kAdsInterventionsEnforced,
         blink::features::kFrequencyCappingForOverlayPopupDetection};
 
@@ -135,8 +156,20 @@ class OverlayPopupAdViolationBrowserTestWithoutEnforcement
   base::test::ScopedFeatureList feature_list_;
 };
 
+// TODO(crbug.com/40248595): Fails on Linux MSan, and ChromeOS Debug as
+// well as Asan LSsan.
+#if (BUILDFLAG(IS_LINUX) && defined(MEMORY_SANITIZER)) || \
+    (BUILDFLAG(IS_CHROMEOS) &&                            \
+     (!defined(NDEBUG) || defined(ADDRESS_SANITIZER) ||   \
+      defined(LEAK_SANITIZER)))
+#define MAYBE_OverlayPopupAd_NoAdInterventionTriggered \
+  DISABLED_OverlayPopupAd_NoAdInterventionTriggered
+#else
+#define MAYBE_OverlayPopupAd_NoAdInterventionTriggered \
+  OverlayPopupAd_NoAdInterventionTriggered
+#endif
 IN_PROC_BROWSER_TEST_F(OverlayPopupAdViolationBrowserTestWithoutEnforcement,
-                       OverlayPopupAd_NoAdInterventionTriggered) {
+                       MAYBE_OverlayPopupAd_NoAdInterventionTriggered) {
   base::HistogramTester histogram_tester;
 
   content::WebContents* web_contents =

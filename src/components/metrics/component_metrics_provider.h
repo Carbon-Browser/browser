@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "components/metrics/metrics_provider.h"
+#include "third_party/metrics_proto/system_profile.pb.h"
 
 namespace component_updater {
 struct ComponentInfo;
@@ -42,6 +43,11 @@ class ComponentMetricsProvider : public MetricsProvider {
   // MetricsProvider:
   void ProvideSystemProfileMetrics(
       SystemProfileProto* system_profile_proto) override;
+
+  static SystemProfileProto_ComponentId CrxIdToComponentId(
+      const std::string& app_id);
+
+  static uint32_t HashCohortId(const std::string& cohort_id);
 
  private:
   std::unique_ptr<ComponentMetricsProviderDelegate> components_info_delegate_;

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,10 @@
 
 #include <string>
 
+#include "base/observer_list.h"
 #include "build/build_config.h"
 #include "components/infobars/core/infobar_delegate.h"
 #include "components/infobars/core/infobar_manager.h"
-#include "ui/base/models/image_model.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/text_constants.h"
 
@@ -18,13 +18,17 @@ namespace infobars {
 class InfoBar;
 }
 
+namespace ui {
+class ImageModel;
+}
+
 // An interface derived from InfoBarDelegate implemented by objects wishing to
 // control a ConfirmInfoBar.
 class ConfirmInfoBarDelegate : public infobars::InfoBarDelegate {
  public:
   enum InfoBarButton {
-    BUTTON_NONE   = 0,
-    BUTTON_OK     = 1 << 0,
+    BUTTON_NONE = 0,
+    BUTTON_OK = 1 << 0,
     BUTTON_CANCEL = 1 << 1,
   };
 
@@ -32,12 +36,16 @@ class ConfirmInfoBarDelegate : public infobars::InfoBarDelegate {
   ConfirmInfoBarDelegate& operator=(const ConfirmInfoBarDelegate&) = delete;
   ~ConfirmInfoBarDelegate() override;
 
+  class Observer : public base::CheckedObserver {
+   public:
+    virtual void OnAccept() {}
+    virtual void OnDismiss() {}
+  };
+
   // InfoBarDelegate:
   bool EqualsDelegate(infobars::InfoBarDelegate* delegate) const override;
+  void InfoBarDismissed() override;
   ConfirmInfoBarDelegate* AsConfirmInfoBarDelegate() override;
-
-  // Returns the InfoBar type to be displayed for the InfoBar.
-  InfoBarAutomationType GetInfoBarAutomationType() const override;
 
   // Returns the title string to be displayed for the InfoBar.
   // Defaults to having not title. Currently only used on iOS.
@@ -69,10 +77,6 @@ class ConfirmInfoBarDelegate : public infobars::InfoBarDelegate {
   // returns an empty tooltip.
   virtual std::u16string GetButtonTooltip(InfoBarButton button) const;
 
-  // Returns whether or not the OK button will trigger a UAC elevation prompt on
-  // Windows.
-  virtual bool OKButtonTriggersUACPrompt() const;
-
 #if BUILDFLAG(IS_IOS)
   // Returns whether or not a tint should be applied to the icon background.
   // Defaults to true.
@@ -89,8 +93,14 @@ class ConfirmInfoBarDelegate : public infobars::InfoBarDelegate {
   // in handling this call something triggers the infobar to begin closing.
   virtual bool Cancel();
 
+  void AddObserver(Observer* observer);
+  void RemoveObserver(const Observer* observer);
+
  protected:
   ConfirmInfoBarDelegate();
+
+ private:
+  base::ObserverList<Observer> observers_;
 };
 
 #endif  // COMPONENTS_INFOBARS_CORE_CONFIRM_INFOBAR_DELEGATE_H_

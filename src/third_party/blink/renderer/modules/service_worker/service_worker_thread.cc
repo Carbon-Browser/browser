@@ -32,6 +32,7 @@
 
 #include <memory>
 
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/core/workers/global_scope_creation_params.h"
 #include "third_party/blink/renderer/core/workers/worker_backing_thread.h"
 #include "third_party/blink/renderer/modules/service_worker/service_worker_global_scope.h"
@@ -60,10 +61,6 @@ ServiceWorkerThread::ServiceWorkerThread(
 
 ServiceWorkerThread::~ServiceWorkerThread() {
   global_scope_proxy_->Detach();
-}
-
-void ServiceWorkerThread::ClearWorkerBackingThread() {
-  worker_backing_thread_ = nullptr;
 }
 
 void ServiceWorkerThread::TerminateForTesting() {

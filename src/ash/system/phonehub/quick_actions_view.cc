@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "ash/system/phonehub/phone_hub_view_ids.h"
 #include "ash/system/phonehub/quick_action_item.h"
 #include "ash/system/phonehub/silence_phone_quick_action_controller.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/views/layout/box_layout.h"
 
 namespace ash {
@@ -54,5 +55,15 @@ void QuickActionsView::InitQuickActionItems() {
   quick_action_controllers_.push_back(std::move(silence_phone_controller));
   quick_action_controllers_.push_back(std::move(locate_phone_controller));
 }
+
+void QuickActionsView::OnThemeChanged() {
+  views::View::OnThemeChanged();
+  for (auto& controller : quick_action_controllers_) {
+    controller->UpdateQuickActionItemUi();
+  }
+}
+
+BEGIN_METADATA(QuickActionsView)
+END_METADATA
 
 }  // namespace ash

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 #include <vector>
 
@@ -161,7 +162,7 @@ class TestLauncher {
 #if BUILDFLAG(IS_WIN)
     return true;
 #else
-    // TODO(https://crbug.com/1038857): Enable for macOS, Linux, and Fuchsia.
+    // TODO(crbug.com/40666527): Enable for macOS, Linux, and Fuchsia.
     return false;
 #endif
   }
@@ -245,6 +246,15 @@ class TestLauncher {
 
   std::vector<std::string> CollectTests();
 
+  // Helper to tell if the test runs in current shard.
+  // `prefix_stripped_name` is the test name excluding DISABLED_ and
+  // PRE_ prefixes.
+  bool ShouldRunInCurrentShard(std::string_view prefix_stripped_name) const;
+
+  // Helper to check whether only exact positive filter is passed via
+  // a filter file.
+  bool IsOnlyExactPositiveFilterFromFile(const CommandLine* command_line) const;
+
   // Make sure we don't accidentally call the wrong methods e.g. on the worker
   // pool thread.  Should be the first member so that it's destroyed last: when
   // destroying other members, especially the worker pool, we may check the code
@@ -263,6 +273,9 @@ class TestLauncher {
   bool has_at_least_one_positive_filter_;
   std::vector<std::string> positive_test_filter_;
   std::vector<std::string> negative_test_filter_;
+
+  // Enforce to run all test cases listed in exact positive filter.
+  bool enforce_exact_postive_filter_;
 
   // Class to encapsulate gtest information.
   class TestInfo;
@@ -334,6 +347,43 @@ class TestLauncher {
   int repeats_per_iteration_ = 1;
 };
 
+// Watch a gtest XML result file for tests run in a batch to complete.
+class ResultWatcher {
+ public:
+  ResultWatcher(FilePath result_file, size_t num_tests);
+
+  // Poll the incomplete result file, blocking until the batch completes or a
+  // test timed out. Returns true iff no tests timed out.
+  bool PollUntilDone(TimeDelta timeout_per_test);
+
+  // Wait and block for up to `timeout` before we poll the result file again.
+  // Returns true iff we should stop polling the results early.
+  virtual bool WaitWithTimeout(TimeDelta timeout) = 0;
+
+ private:
+  // Read the results, check if a timeout occurred, and then return how long
+  // the polling loop should wait for. A nonpositive return value indicates a
+  // timeout (i.e., the next check is overdue).
+  //
+  // If a timeout did not occur, this method tries to schedule the next check
+  // for `timeout_per_test` since the last test completed.
+  TimeDelta PollOnce(TimeDelta timeout_per_test);
+
+  // Get the timestamp of the test that completed most recently. If no tests
+  // have completed, return the null time.
+  Time LatestCompletionTimestamp(const std::vector<TestResult>& test_results);
+
+  // Path to the results file.
+  FilePath result_file_;
+
+  // The number of tests that run in this batch.
+  size_t num_tests_;
+
+  // The threshold past which we attribute a large time since latest completion
+  // to daylight savings time instead of a timed out test.
+  static constexpr TimeDelta kDaylightSavingsThreshold = Minutes(50);
+};
+
 // Return the number of parallel jobs to use, or 0U in case of error.
 size_t NumParallelJobs(unsigned int cores_per_job);
 
@@ -343,8 +393,7 @@ std::string GetTestOutputSnippet(const TestResult& result,
 
 // Truncates a snippet to approximately the allowed length, while trying to
 // retain fatal messages. Exposed for testing only.
-std::string TruncateSnippetFocused(const base::StringPiece snippet,
-                                   size_t byte_limit);
+std::string TruncateSnippetFocused(std::string_view snippet, size_t byte_limit);
 
 }  // namespace base
 

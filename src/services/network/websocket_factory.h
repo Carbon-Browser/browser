@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,11 @@
 #include <set>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/containers/unique_ptr_adapters.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "net/storage_access_api/status.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 #include "services/network/public/mojom/websocket.mojom.h"
 #include "services/network/websocket.h"
@@ -48,6 +49,7 @@ class WebSocketFactory final {
       const GURL& url,
       const std::vector<std::string>& requested_protocols,
       const net::SiteForCookies& site_for_cookies,
+      net::StorageAccessApiStatus storage_access_api_status,
       const net::IsolationInfo& isolation_info,
       std::vector<mojom::HttpHeaderPtr> additional_headers,
       int32_t process_id,
@@ -59,7 +61,7 @@ class WebSocketFactory final {
           url_loader_network_observer,
       mojo::PendingRemote<mojom::WebSocketAuthenticationHandler> auth_handler,
       mojo::PendingRemote<mojom::TrustedHeaderClient> header_client,
-      const absl::optional<base::UnguessableToken>& throttling_profile_id);
+      const std::optional<base::UnguessableToken>& throttling_profile_id);
 
   // Returns a URLRequestContext associated with this factory.
   net::URLRequestContext* GetURLRequestContext();
@@ -75,6 +77,11 @@ class WebSocketFactory final {
 
   // Removes and deletes |impl|.
   void Remove(WebSocket* impl);
+
+  // Close existing WebSocket connections when network access is revoked from a
+  // fenced frame. The frame's associated WebSockets are identified via their
+  // IsolationInfo's nonce.
+  void RemoveIfNonceMatches(const base::UnguessableToken& nonce);
 
  private:
   using WebSocketSet =

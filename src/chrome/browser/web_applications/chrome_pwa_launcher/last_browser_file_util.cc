@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,8 +43,7 @@ void WriteChromePathToLastBrowserFile(const base::FilePath& user_data_dir) {
   const base::FilePath::StringType& chrome_path_str = chrome_path.value();
   DCHECK(!chrome_path_str.empty());
   base::WriteFile(user_data_dir.Append(kLastBrowserFilename),
-                  reinterpret_cast<const char*>(chrome_path_str.data()),
-                  chrome_path_str.size() * sizeof(base::FilePath::CharType));
+                  base::as_byte_span(chrome_path_str));
 }
 
 base::FilePath GetLastBrowserFileFromWebAppDir(

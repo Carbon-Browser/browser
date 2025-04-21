@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,13 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
+#include "base/threading/sequence_bound.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "media/base/media_log.h"
@@ -22,6 +23,7 @@
 #include "media/filters/file_data_source.h"
 #include "media/filters/memory_data_source.h"
 #include "media/media_buildflags.h"
+#include "media/mojo/services/gpu_mojo_media_client_test_util.h"
 #include "media/renderers/audio_renderer_impl.h"
 #include "media/renderers/renderer_impl.h"
 #include "media/test/fake_encrypted_media.h"
@@ -44,9 +46,11 @@
 #include "media/filters/vpx_video_decoder.h"
 #endif
 
-#if BUILDFLAG(ENABLE_LIBGAV1_DECODER)
-#include "media/filters/gav1_video_decoder.h"
-#endif
+#if BUILDFLAG(ENABLE_HLS_DEMUXER)
+#include "media/filters/hls_data_source_provider_impl.h"
+#include "media/filters/hls_manifest_demuxer_engine.h"
+#include "media/filters/manifest_demuxer.h"
+#endif  // BUILDFLAG(ENABLE_HLS_DEMUXER)
 
 using ::testing::_;
 using ::testing::AnyNumber;
@@ -59,6 +63,33 @@ using ::testing::Return;
 using ::testing::SaveArg;
 
 namespace media {
+
+#if BUILDFLAG(ENABLE_HLS_DEMUXER)
+namespace {
+
+class TestDataSourceFactory
+    : public HlsDataSourceProviderImpl::DataSourceFactory {
+ public:
+  ~TestDataSourceFactory() override = default;
+  void CreateDataSource(GURL uri, bool, DataSourceCb callback) override {
+    auto file_data_source = std::make_unique<FileDataSource>();
+    base::FilePath file_path(
+#if BUILDFLAG(IS_WIN)
+        // Windows file paths can't start with '/' the way unix file paths can,
+        // So we have to strip the leading one which comes from GetContent().
+        base::UTF8ToWide(uri.GetContent().erase(0, 1))
+#else
+        uri.GetContent()
+#endif
+    );
+    CHECK(file_data_source->Initialize(file_path))
+        << "Is " << file_path.value() << " missing?";
+    std::move(callback).Run(std::move(file_data_source));
+  }
+};
+
+}  // namespace
+#endif  // BUILDFLAG(ENABLE_HLS_DEMUXER)
 
 static std::vector<std::unique_ptr<VideoDecoder>> CreateVideoDecodersForTest(
     MediaLog* media_log,
@@ -74,18 +105,10 @@ static std::vector<std::unique_ptr<VideoDecoder>> CreateVideoDecodersForTest(
   video_decoders.push_back(std::make_unique<OffloadingVpxVideoDecoder>());
 #endif
 
-#if BUILDFLAG(ENABLE_LIBGAV1_DECODER)
-  if (base::FeatureList::IsEnabled(kGav1VideoDecoder)) {
-    video_decoders.push_back(
-        std::make_unique<OffloadingGav1VideoDecoder>(media_log));
-  } else
-#endif  // BUILDFLAG(ENABLE_LIBGAV1_DECODER)
-  {
 #if BUILDFLAG(ENABLE_DAV1D_DECODER)
-    video_decoders.push_back(
-        std::make_unique<OffloadingDav1dVideoDecoder>(media_log));
+  video_decoders.push_back(
+      std::make_unique<OffloadingDav1dVideoDecoder>(media_log->Clone()));
 #endif
-  }
 
 #if BUILDFLAG(ENABLE_FFMPEG_VIDEO_DECODERS)
   video_decoders.push_back(std::make_unique<FFmpegVideoDecoder>(media_log));
@@ -115,14 +138,7 @@ const char kNullVideoHash[] = "d41d8cd98f00b204e9800998ecf8427e";
 const char kNullAudioHash[] = "0.00,0.00,0.00,0.00,0.00,0.00,";
 
 PipelineIntegrationTestBase::PipelineIntegrationTestBase()
-    :
-// Use a UI type message loop on macOS, because it doesn't seem to schedule
-// callbacks with enough precision to drive our fake audio output. See
-// https://crbug.com/1014646 for more details.
-#if BUILDFLAG(IS_MAC)
-      task_environment_(base::test::TaskEnvironment::MainThreadType::UI),
-#endif
-      hashing_enabled_(false),
+    : hashing_enabled_(false),
       clockless_playback_(false),
       webaudio_attached_(false),
       mono_output_(false),
@@ -131,6 +147,8 @@ PipelineIntegrationTestBase::PipelineIntegrationTestBase()
       pipeline_status_(PIPELINE_OK),
       last_video_frame_format_(PIXEL_FORMAT_UNKNOWN),
       current_duration_(kInfiniteDuration) {
+  AddSupplementalCodecsForTesting();
+
   pipeline_ = std::make_unique<PipelineImpl>(
       task_environment_.GetMainThreadTaskRunner(),
       task_environment_.GetMainThreadTaskRunner(),
@@ -170,6 +188,11 @@ void PipelineIntegrationTestBase::OnSeeked(base::TimeDelta seek_time,
     EXPECT_EQ(seek_time, pipeline_->GetMediaTime());
 
   pipeline_status_ = status;
+
+  // If the seek failed, then stop immediately.
+  if (!pipeline_status_.is_ok() && on_error_closure_) {
+    std::move(on_error_closure_).Run();
+  }
 }
 
 void PipelineIntegrationTestBase::OnStatusCallback(
@@ -199,8 +222,8 @@ void PipelineIntegrationTestBase::DemuxerMediaTracksUpdatedCB(
   // Verify that track ids are unique.
   std::set<MediaTrack::Id> track_ids;
   for (const auto& track : tracks->tracks()) {
-    EXPECT_EQ(track_ids.end(), track_ids.find(track->id()));
-    track_ids.insert(track->id());
+    EXPECT_EQ(track_ids.end(), track_ids.find(track->track_id()));
+    track_ids.insert(track->track_id());
   }
 }
 
@@ -246,6 +269,43 @@ void PipelineIntegrationTestBase::SetCreateRendererCB(
     CreateRendererCB create_renderer_cb) {
   create_renderer_cb_ = std::move(create_renderer_cb);
 }
+
+#if BUILDFLAG(ENABLE_HLS_DEMUXER)
+PipelineStatus PipelineIntegrationTestBase::StartPipelineWithHlsManifest(
+    const std::string& filename) {
+  hashing_enabled_ = true;
+
+  auto full_path = GetTestDataFilePath(filename);
+  std::string file_url = "file://" + full_path.MaybeAsASCII();
+  GURL manifest_root{file_url};
+
+  auto multibuffer_factory = std::make_unique<TestDataSourceFactory>();
+  // HlsManifestDemuxerEngine requires a SequenceBound data source provider,
+  // regardless of which sequence it's actually bound to.
+  auto hls_dsp = base::SequenceBound<HlsDataSourceProviderImpl>(
+      task_environment_.GetMainThreadTaskRunner(),
+      std::move(multibuffer_factory));
+
+  auto engine = std::make_unique<HlsManifestDemuxerEngine>(
+      std::move(hls_dsp), task_environment_.GetMainThreadTaskRunner(),
+      base::DoNothing(), base::DoNothing(),
+      /*name=*/false, manifest_root, &media_log_);
+  demuxer_ = std::make_unique<ManifestDemuxer>(
+      task_environment_.GetMainThreadTaskRunner(), base::DoNothing(),
+      std::move(engine), &media_log_);
+  EXPECT_CALL(*this, OnMetadata(_))
+      .Times(AtMost(1))
+      .WillRepeatedly(SaveArg<0>(&metadata_));
+
+  base::RunLoop run_loop;
+  pipeline_->Start(
+      Pipeline::StartType::kNormal, demuxer_.get(), this,
+      base::BindOnce(&PipelineIntegrationTestBase::OnStatusCallback,
+                     base::Unretained(this), run_loop.QuitClosure()));
+  RunUntilQuitOrEndedOrError(&run_loop);
+  return pipeline_status_;
+}
+#endif  // BUILDFLAG(ENABLE_HLS_DEMUXER)
 
 PipelineStatus PipelineIntegrationTestBase::StartInternal(
     std::unique_ptr<DataSource> data_source,
@@ -359,6 +419,23 @@ void PipelineIntegrationTestBase::Pause() {
   pipeline_->SetPlaybackRate(0);
 }
 
+void PipelineIntegrationTestBase::OnBufferingStateChangeForSeek(
+    BufferingState state,
+    BufferingStateChangeReason reason) {
+  // Record the first buffering state we get.
+  if (!buffering_state_) {
+    buffering_state_ = state;
+
+    // The first call must be HAVE_ENOUGH.
+    EXPECT_EQ(state, BUFFERING_HAVE_ENOUGH);
+  }
+
+  // Once we have HAVE_ENOUGH, we've had enough.
+  if (on_ended_closure_) {
+    std::move(on_ended_closure_).Run();
+  }
+}
+
 bool PipelineIntegrationTestBase::Seek(base::TimeDelta seek_time) {
   // Enforce that BUFFERING_HAVE_ENOUGH is the first call below.
   ::testing::InSequence dummy;
@@ -366,18 +443,37 @@ bool PipelineIntegrationTestBase::Seek(base::TimeDelta seek_time) {
   ended_ = false;
   base::RunLoop run_loop;
 
-  // Should always transition to HAVE_ENOUGH once the seek completes.
-  EXPECT_CALL(*this, OnBufferingStateChange(BUFFERING_HAVE_ENOUGH, _))
-      .WillOnce(InvokeWithoutArgs(&run_loop, &base::RunLoop::Quit));
+  pipeline_status_ = PIPELINE_OK;
+  buffering_state_.reset();
 
+  // Should always transition to HAVE_ENOUGH once the seek completes
+  // successfully.  On error, it shouldn't be called at all.
   // After initial HAVE_ENOUGH, any buffering state change is allowed as
   // playback may cause any number of underflow/preroll events.
-  EXPECT_CALL(*this, OnBufferingStateChange(_, _)).Times(AnyNumber());
+  EXPECT_CALL(*this, OnBufferingStateChange(_, _))
+      .Times(AnyNumber())
+      .WillRepeatedly(Invoke(
+          this, &PipelineIntegrationTestBase::OnBufferingStateChangeForSeek));
 
+  bool did_call_on_seeked = false;
   pipeline_->Seek(seek_time,
-                  base::BindOnce(&PipelineIntegrationTestBase::OnSeeked,
-                                 base::Unretained(this), seek_time));
-  RunUntilQuitOrError(&run_loop);
+                  base::BindOnce(
+                      [](PipelineIntegrationTestBase* thiz, bool* flag,
+                         base::TimeDelta seek_time, PipelineStatus status) {
+                        *flag = true;
+                        thiz->OnSeeked(seek_time, status);
+                      },
+                      base::Unretained(this), &did_call_on_seeked, seek_time));
+  RunUntilQuitOrEndedOrError(&run_loop);
+
+  // We must get at least one `OnSeeked()` status call.
+  EXPECT_TRUE(did_call_on_seeked);
+  // If the seek succeeded, then we must get to HAVE_ENOUGH
+  if (pipeline_status_ == PIPELINE_OK) {
+    EXPECT_TRUE(buffering_state_);
+    EXPECT_EQ(*buffering_state_, BUFFERING_HAVE_ENOUGH);
+  }  // else we don't care about buffering state.
+
   return (pipeline_status_ == PIPELINE_OK);
 }
 
@@ -467,16 +563,16 @@ void PipelineIntegrationTestBase::CreateDemuxer(
 }
 
 std::unique_ptr<Renderer> PipelineIntegrationTestBase::CreateRenderer(
-    absl::optional<RendererType> renderer_type) {
+    std::optional<RendererType> renderer_type) {
   if (create_renderer_cb_)
     return create_renderer_cb_.Run(renderer_type);
 
-  return CreateDefaultRenderer(renderer_type);
+  return CreateRendererImpl(renderer_type);
 }
 
-std::unique_ptr<Renderer> PipelineIntegrationTestBase::CreateDefaultRenderer(
-    absl::optional<RendererType> renderer_type) {
-  if (renderer_type && *renderer_type != RendererType::kDefault) {
+std::unique_ptr<Renderer> PipelineIntegrationTestBase::CreateRendererImpl(
+    std::optional<RendererType> renderer_type) {
+  if (renderer_type && *renderer_type != RendererType::kRendererImpl) {
     DVLOG(1) << __func__ << ": renderer_type not supported";
     return nullptr;
   }
@@ -493,7 +589,7 @@ std::unique_ptr<Renderer> PipelineIntegrationTestBase::CreateDefaultRenderer(
       task_environment_.GetMainThreadTaskRunner(), video_sink_.get(),
       base::BindRepeating(&CreateVideoDecodersForTest, &media_log_,
                           prepend_video_decoders_cb_),
-      false, &media_log_, nullptr);
+      false, &media_log_, nullptr, 0);
 
   if (!clockless_playback_) {
     DCHECK(!mono_output_) << " NullAudioSink doesn't specify output parameters";
@@ -501,13 +597,14 @@ std::unique_ptr<Renderer> PipelineIntegrationTestBase::CreateDefaultRenderer(
     audio_sink_ =
         new NullAudioSink(task_environment_.GetMainThreadTaskRunner());
   } else {
-    ChannelLayout output_layout =
-        mono_output_ ? CHANNEL_LAYOUT_MONO : CHANNEL_LAYOUT_STEREO;
+    ChannelLayoutConfig output_layout_config =
+        mono_output_ ? ChannelLayoutConfig::Mono()
+                     : ChannelLayoutConfig::Stereo();
 
     clockless_audio_sink_ = new ClocklessAudioSink(
         OutputDeviceInfo("", OUTPUT_DEVICE_STATUS_OK,
                          AudioParameters(AudioParameters::AUDIO_PCM_LOW_LATENCY,
-                                         output_layout, 44100, 512)));
+                                         output_layout_config, 44100, 512)));
 
     // Say "not optimized for hardware parameters" to disallow renderer
     // resampling. Hashed tests need this avoid platform dependent floating
@@ -526,7 +623,7 @@ std::unique_ptr<Renderer> PipelineIntegrationTestBase::CreateDefaultRenderer(
       base::BindRepeating(&CreateAudioDecodersForTest, &media_log_,
                           task_environment_.GetMainThreadTaskRunner(),
                           prepend_audio_decoders_cb_),
-      &media_log_, nullptr);
+      &media_log_, 0, nullptr);
   if (hashing_enabled_) {
     if (clockless_playback_)
       clockless_audio_sink_->StartAudioHashForTesting();
@@ -586,7 +683,7 @@ std::string PipelineIntegrationTestBase::GetVideoHash() {
   return base::MD5DigestToBase16(digest);
 }
 
-std::string PipelineIntegrationTestBase::GetAudioHash() {
+const AudioHash& PipelineIntegrationTestBase::GetAudioHash() const {
   DCHECK(hashing_enabled_);
 
   if (clockless_playback_)
@@ -665,8 +762,26 @@ PipelineStatus PipelineIntegrationTestBase::StartPipelineWithMediaSource(
         encrypted_media->GetCdmContext(),
         base::BindOnce(&PipelineIntegrationTestBase::DecryptorAttached,
                        base::Unretained(this)));
+  } else if (fuzzing_) {
+    // Encrypted content is not expected unless the fuzzer generates a stream
+    // that appears to be encrypted. The fuzzer handles any encrypted media
+    // init data callbacks, but could timeout if there is no such data but the
+    // media is determined by the parser to be encrypted (as can occur in MSE
+    // mp2t fuzzing of some kinds of encrypted media). To prevent such fuzzer
+    // timeout, post a task to the main thread to fail the test if the pipeline
+    // transitions to waiting for a CDM.
+    EXPECT_CALL(*this, OnWaiting(WaitingReason::kNoCdm))
+        .Times(AnyNumber())
+        .WillRepeatedly([this]() {
+          task_environment_.GetMainThreadTaskRunner()->PostTask(
+              FROM_HERE,
+              base::BindOnce(&PipelineIntegrationTestBase::FailTest,
+                             base::Unretained(this),
+                             media::PIPELINE_ERROR_INITIALIZATION_FAILED));
+        });
   } else {
-    // Encrypted content not used, so this is never called.
+    // We are neither fuzzing, nor expecting encrypted media, so we must not
+    // receive notification of waiting for a decryption key.
     EXPECT_CALL(*this, OnWaiting(WaitingReason::kNoDecryptionKey)).Times(0);
   }
 
@@ -683,7 +798,7 @@ PipelineStatus PipelineIntegrationTestBase::StartPipelineWithMediaSource(
 
   RunUntilQuitOrEndedOrError(&run_loop);
 
-  for (auto* stream : demuxer_->GetAllStreams()) {
+  for (media::DemuxerStream* stream : demuxer_->GetAllStreams()) {
     EXPECT_TRUE(stream->SupportsConfigChanges());
   }
 

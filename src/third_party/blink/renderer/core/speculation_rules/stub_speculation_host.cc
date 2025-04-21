@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,21 +15,24 @@ void StubSpeculationHost::BindUnsafe(mojo::ScopedMessagePipeHandle handle) {
 void StubSpeculationHost::Bind(
     mojo::PendingReceiver<SpeculationHost> receiver) {
   receiver_.Bind(std::move(receiver));
-  receiver_.set_disconnect_handler(
-      WTF::Bind(&StubSpeculationHost::OnConnectionLost, WTF::Unretained(this)));
-}
-
-void StubSpeculationHost::UpdateSpeculationCandidates(Candidates candidates) {
-  candidates_ = std::move(candidates);
-  if (candidates_updated_callback_)
-    candidates_updated_callback_.Run(candidates_);
-  if (done_closure_)
-    std::move(done_closure_).Run();
+  receiver_.set_disconnect_handler(WTF::BindOnce(
+      &StubSpeculationHost::OnConnectionLost, WTF::Unretained(this)));
 }
 
 void StubSpeculationHost::OnConnectionLost() {
   if (done_closure_)
     std::move(done_closure_).Run();
 }
+
+void StubSpeculationHost::UpdateSpeculationCandidates(Candidates candidates) {
+  candidates_ = std::move(candidates);
+  if (candidates_updated_callback_) {
+    candidates_updated_callback_.Run(candidates_);
+  }
+  if (done_closure_)
+    std::move(done_closure_).Run();
+}
+
+void StubSpeculationHost::InitiatePreview(const KURL& url) {}
 
 }  // namespace blink

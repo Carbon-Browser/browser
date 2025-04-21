@@ -1,26 +1,30 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_components/customize_themes/customize_themes.js';
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
-import 'chrome://resources/polymer/v3_0/iron-icon/iron-icon.js';
-import 'chrome://resources/cr_elements/icons.m.js';
-import './strings.m.js';
-import './signin_shared.css.js';
-import './signin_vars.css.js';
+import 'chrome://resources/cr_components/theme_color_picker/theme_color_picker.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/cr_icon/cr_icon.js';
+import 'chrome://resources/cr_elements/cr_input/cr_input.js';
+import 'chrome://resources/cr_elements/cr_profile_avatar_selector/cr_profile_avatar_selector.js';
+import 'chrome://resources/cr_elements/cr_view_manager/cr_view_manager.js';
+import 'chrome://resources/cr_elements/icons.html.js';
+import '/strings.m.js';
 
-import {CustomizeThemesElement} from 'chrome://resources/cr_components/customize_themes/customize_themes.js';
-import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
-import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
-import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import type {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import type {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.js';
+import type {AvatarIcon} from 'chrome://resources/cr_elements/cr_profile_avatar_selector/cr_profile_avatar_selector.js';
+import type {CrViewManagerElement} from 'chrome://resources/cr_elements/cr_view_manager/cr_view_manager.js';
+import {I18nMixinLit} from 'chrome://resources/cr_elements/i18n_mixin_lit.js';
+import {WebUiListenerMixinLit} from 'chrome://resources/cr_elements/web_ui_listener_mixin_lit.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+import {CrLitElement} from 'chrome://resources/lit/v3_0/lit.rollup.js';
 
-import {getTemplate} from './profile_customization_app.html.js';
-import {ProfileCustomizationBrowserProxy, ProfileCustomizationBrowserProxyImpl, ProfileInfo} from './profile_customization_browser_proxy.js';
+import {getCss} from './profile_customization_app.css.js';
+import {getHtml} from './profile_customization_app.html.js';
+import type {ProfileCustomizationBrowserProxy, ProfileInfo} from './profile_customization_browser_proxy.js';
+import {ProfileCustomizationBrowserProxyImpl} from './profile_customization_browser_proxy.js';
 
 
 export interface ProfileCustomizationAppElement {
@@ -28,11 +32,12 @@ export interface ProfileCustomizationAppElement {
     doneButton: CrButtonElement,
     nameInput: CrInputElement,
     title: HTMLElement,
-    themeSelector: CustomizeThemesElement,
+    viewManager: CrViewManagerElement,
   };
 }
 
-const ProfileCustomizationAppElementBase = WebUIListenerMixin(PolymerElement);
+const ProfileCustomizationAppElementBase =
+    WebUiListenerMixinLit(I18nMixinLit(CrLitElement));
 
 export class ProfileCustomizationAppElement extends
     ProfileCustomizationAppElementBase {
@@ -40,69 +45,83 @@ export class ProfileCustomizationAppElement extends
     return 'profile-customization-app';
   }
 
-  static get template() {
-    return getTemplate();
+  static override get styles() {
+    return getCss();
   }
 
-  static get properties() {
+  override render() {
+    return getHtml.bind(this)();
+  }
+
+  static override get properties() {
     return {
-      /** Whether the account is managed (Enterprise) */
+      /** Whether the account is managed (Enterprise). */
       isManaged_: {
         type: Boolean,
-        value: false,
       },
 
-      /** Local profile name, editable by user input */
+      /** Local profile name, editable by user input. */
       profileName_: {
         type: String,
-        value: '',
       },
 
-      /** URL for the profile picture */
-      pictureUrl_: String,
+      /** URL for the profile picture. */
+      pictureUrl_: {type: String},
 
-      /** Welcome title for the bubble */
-      welcomeTitle_: String,
+      /** Welcome title for the bubble. */
+      welcomeTitle_: {type: String},
 
-      profileCustomizationInDialogDesign_: {
-        type: Boolean,
-        value: () =>
-            loadTimeData.getBoolean('profileCustomizationInDialogDesign'),
-      },
+      /** List of available profile icon URLs and labels. */
+      availableIcons_: {type: Array},
+
+      /** The currently selected profile avatar, if any. */
+      selectedAvatar_: {type: Object},
+
+      isLocalProfileCreation_: {type: Boolean},
     };
   }
 
-  private isManaged_: boolean;
-  private profileName_: string;
-  private pictureUrl_: string;
-  private welcomeTitle_: string;
-  private profileCustomizationInDialogDesign_: boolean;
+  protected isManaged_: boolean = false;
+  protected profileName_: string = '';
+  protected pictureUrl_: string = '';
+  protected welcomeTitle_: string = '';
+  protected availableIcons_: AvatarIcon[] = [];
+  protected selectedAvatar_: AvatarIcon|null = null;
+  private confirmedAvatar_: AvatarIcon|null = null;
+  protected isLocalProfileCreation_: boolean =
+      loadTimeData.getBoolean('isLocalProfileCreation');
   private profileCustomizationBrowserProxy_: ProfileCustomizationBrowserProxy =
       ProfileCustomizationBrowserProxyImpl.getInstance();
 
-  override ready() {
-    super.ready();
-
+  override firstUpdated() {
     // profileName_ is only set now, because it triggers a validation of the
     // input which crashes if it's done too early.
-    this.profileName_ = loadTimeData.getString('profileName');
-    this.addWebUIListener(
+    if (!this.isLocalProfileCreation_) {
+      this.profileName_ = loadTimeData.getString('profileName');
+    }
+    this.addWebUiListener(
         'on-profile-info-changed',
         (info: ProfileInfo) => this.setProfileInfo_(info));
+    this.addWebUiListener(
+        'on-available-icons-changed',
+        (icons: AvatarIcon[]) => this.setAvailableIcons_(icons));
     this.profileCustomizationBrowserProxy_.initialized().then(
         info => this.setProfileInfo_(info));
+    if (this.isLocalProfileCreation_) {
+      this.profileCustomizationBrowserProxy_.getAvailableIcons().then(
+          icons => this.setAvailableIcons_(icons));
+    }
   }
 
   /**
    * Called when the Done button is clicked. Sends the profile name back to
    * native.
    */
-  private onDoneCustomizationClicked_() {
-    this.$.themeSelector.confirmThemeChanges();
+  protected onDoneCustomizationClicked_() {
     this.profileCustomizationBrowserProxy_.done(this.profileName_);
   }
 
-  private isDoneButtonDisabled_(): boolean {
+  protected isDoneButtonDisabled_(): boolean {
     return !this.profileName_ || !this.$.nameInput.validate();
   }
 
@@ -111,15 +130,74 @@ export class ProfileCustomizationAppElement extends
         '--header-background-color', profileInfo.backgroundColor);
     this.pictureUrl_ = profileInfo.pictureUrl;
     this.isManaged_ = profileInfo.isManaged;
-    this.welcomeTitle_ = profileInfo.welcomeTitle;
+    this.welcomeTitle_ = this.isLocalProfileCreation_ ?
+        this.i18n('localProfileCreationTitle') :
+        this.i18n('profileCustomizationTitle');
   }
 
-  private onSkipCustomizationClicked_() {
+  protected shouldShowCancelButton_(): boolean {
+    return !this.isLocalProfileCreation_;
+  }
+
+  protected onSkipCustomizationClicked_() {
     this.profileCustomizationBrowserProxy_.skip();
   }
 
-  private getDialogDesignClass_(inDialogDesign: boolean): string {
-    return inDialogDesign ? 'in-dialog-design' : '';
+  protected onDeleteProfileClicked_() {
+    this.profileCustomizationBrowserProxy_.deleteProfile();
+  }
+
+  protected onCustomizeAvatarClick_() {
+    assert(this.isLocalProfileCreation_);
+    this.$.viewManager.switchView('selectAvatarDialog', 'fade-in', 'fade-out');
+  }
+
+  private setAvailableIcons_(icons: AvatarIcon[]) {
+    // If there is no selectedAvatar_ yet, get it from the icons list.
+    // Setting all the icons in availableIcons_ as not selected so the only
+    // source of truth for the currently selected icon is selectedAvatar_ and
+    // there is only one icon marked as selected.
+    icons.forEach((icon, index) => {
+      if (icon.selected) {
+        icons[index]!.selected = false;
+        this.confirmedAvatar_ = icons[index]!;
+        if (!this.selectedAvatar_) {
+          this.selectedAvatar_ = icons[index]!;
+        }
+      }
+    });
+    this.availableIcons_ = icons;
+  }
+
+  protected onSelectAvatarConfirmClicked_() {
+    assert(this.isLocalProfileCreation_);
+    assert(this.selectedAvatar_);
+    this.profileCustomizationBrowserProxy_.setAvatarIcon(
+        this.selectedAvatar_.index);
+    this.confirmedAvatar_ = this.selectedAvatar_;
+    this.closeSelectAvatar_();
+  }
+
+  protected onSelectAvatarBackClicked_() {
+    assert(this.isLocalProfileCreation_);
+    this.closeSelectAvatar_();
+    this.selectedAvatar_ = this.confirmedAvatar_;
+  }
+
+  private closeSelectAvatar_() {
+    this.$.viewManager.switchView('customizeDialog', 'fade-in', 'fade-out');
+  }
+
+  protected validateInputOnBlur_() {
+    this.$.nameInput.validate();
+  }
+
+  protected onProfileNameChanged_(e: CustomEvent<{value: string}>) {
+    this.profileName_ = e.detail.value;
+  }
+
+  protected onSelectedAvatarChanged_(e: CustomEvent<{value: AvatarIcon}>) {
+    this.selectedAvatar_ = e.detail.value;
   }
 }
 

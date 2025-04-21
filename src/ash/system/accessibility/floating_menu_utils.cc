@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,7 +49,6 @@ gfx::Rect GetOnScreenBoundsForFloatingMenuPosition(
                        menu_bounds.width(), menu_bounds.height());
     case FloatingMenuPosition::kSystemDefault:
       NOTREACHED();
-      return gfx::Rect();
   }
 }
 
@@ -79,7 +78,6 @@ views::BubbleBorder::Arrow GetAnchorAlignmentForFloatingMenuPosition(
       // It's not possible for position to be kSystemDefault here because we've
       // set it via DefaultSystemPosition() above if it was kSystemDefault.
       NOTREACHED();
-      return views::BubbleBorder::Arrow::TOP_LEFT;
   }
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,43 +15,57 @@
 #include "base/strings/string_util.h"
 #include "base/values.h"
 #include "google_apis/gaia/gaia_auth_util.h"
+#include "google_apis/gaia/gaia_id.h"
 
 namespace {
 
 // Serialization keys
-const char kGaiaIdKey[] = "gaia_id";
-const char kEmailKey[] = "email";
-const char kObjGuid[] = "obj_guid";
-const char kAccountTypeKey[] = "account_type";
+constexpr char kGaiaIdKey[] = "gaia_id";
+constexpr char kEmailKey[] = "email";
+constexpr char kObjGuid[] = "obj_guid";
+constexpr char kAccountTypeKey[] = "account_type";
 
 // Serialization values for account type.
-const char kGoogle[] = "google";
-const char kAd[] = "ad";
-const char kUnknown[] = "unknown";
+constexpr char kGoogle[] = "google";
+constexpr char kAd[] = "ad";
+constexpr char kUnknown[] = "unknown";
 
 // Prefix for GetAccountIdKey().
-const char kKeyGaiaIdPrefix[] = "g-";
-const char kKeyAdIdPrefix[] = "a-";
+constexpr char kKeyGaiaIdPrefix[] = "g-";
+constexpr char kKeyAdIdPrefix[] = "a-";
 
 }  // anonymous namespace
 
 AccountId::AccountId() = default;
 
-AccountId::AccountId(const std::string& id,
-                     const std::string& user_email,
-                     const AccountType& account_type)
-    : id_(id), user_email_(user_email), account_type_(account_type) {
-  DCHECK(user_email == gaia::CanonicalizeEmail(user_email));
-  DCHECK(account_type != AccountType::UNKNOWN || id.empty());
-  DCHECK(account_type != AccountType::ACTIVE_DIRECTORY || !id.empty());
+AccountId::AccountId(std::string_view user_email,
+                     AccountType account_type,
+                     const GaiaId& gaia_id,
+                     std::string_view active_directory_id)
+    : user_email_(user_email),
+      account_type_(account_type),
+      gaia_id_(gaia_id),
+      active_directory_id_(active_directory_id) {
+  DCHECK_EQ(user_email, gaia::CanonicalizeEmail(user_email));
+
+  switch (account_type_) {
+    case AccountType::UNKNOWN:
+      CHECK(gaia_id_.empty());
+      CHECK(active_directory_id_.empty());
+      break;
+    case AccountType::GOOGLE:
+      // TODO(alemate): check gaia_id is not empty once it is required.
+      break;
+    case AccountType::ACTIVE_DIRECTORY:
+      CHECK(!active_directory_id_.empty());
+      break;
+  }
+
   // Fail if e-mail looks similar to GaiaIdKey.
   LOG_ASSERT(!base::StartsWith(user_email, kKeyGaiaIdPrefix,
                                base::CompareCase::SENSITIVE) ||
              user_email.find('@') != std::string::npos)
-      << "Bad e-mail: '" << user_email << "' with gaia_id='" << id << "'";
-
-  // TODO(alemate): DCHECK(!email.empty());
-  // TODO(alemate): check gaia_id is not empty once it is required.
+      << "Bad e-mail: '" << user_email << "' with gaia_id='" << gaia_id_ << "'";
 }
 
 AccountId::AccountId(const AccountId& other) = default;
@@ -67,16 +81,16 @@ bool AccountId::operator==(const AccountId& other) const {
   if (account_type_ != other.account_type_)
     return false;
   switch (account_type_) {
+    case AccountType::UNKNOWN:
+      NOTREACHED() << "Unknown account type";
     case AccountType::GOOGLE:
-      return (id_ == other.id_ && user_email_ == other.user_email_) ||
-             (!id_.empty() && id_ == other.id_) ||
+      return (gaia_id_ == other.gaia_id_ && user_email_ == other.user_email_) ||
+             (!gaia_id_.empty() && gaia_id_ == other.gaia_id_) ||
              (!user_email_.empty() && user_email_ == other.user_email_);
     case AccountType::ACTIVE_DIRECTORY:
-      return id_ == other.id_ && user_email_ == other.user_email_;
-    default:
-      NOTREACHED() << "Unknown account type";
+      return active_directory_id_ == other.active_directory_id_ &&
+             user_email_ == other.user_email_;
   }
-  return false;
 }
 
 bool AccountId::operator!=(const AccountId& other) const {
@@ -89,25 +103,28 @@ bool AccountId::operator<(const AccountId& right) const {
 }
 
 bool AccountId::empty() const {
-  return id_.empty() && user_email_.empty() &&
-         account_type_ == AccountType::UNKNOWN;
+  return gaia_id_.empty() && active_directory_id_.empty() &&
+         user_email_.empty() && account_type_ == AccountType::UNKNOWN;
 }
 
 bool AccountId::is_valid() const {
   switch (account_type_) {
     case AccountType::GOOGLE:
-      return /* !id_.empty() && */ !user_email_.empty();
+      // TODO(http://b/279005619): Add an additional check for empty account ids
+      // when this bug is fixed.
+      return !user_email_.empty();
     case AccountType::ACTIVE_DIRECTORY:
-      return !id_.empty() && !user_email_.empty();
+      return !active_directory_id_.empty() && !user_email_.empty();
     case AccountType::UNKNOWN:
-      return id_.empty() && !user_email_.empty();
+      return active_directory_id_.empty() && gaia_id_.empty() &&
+             !user_email_.empty();
   }
   NOTREACHED();
-  return false;
 }
 
 void AccountId::clear() {
-  id_.clear();
+  gaia_id_ = GaiaId();
+  active_directory_id_.clear();
   user_email_.clear();
   account_type_ = AccountType::UNKNOWN;
 }
@@ -116,17 +133,17 @@ AccountType AccountId::GetAccountType() const {
   return account_type_;
 }
 
-const std::string& AccountId::GetGaiaId() const {
+const GaiaId& AccountId::GetGaiaId() const {
   if (account_type_ != AccountType::GOOGLE)
     NOTIMPLEMENTED() << "Failed to get gaia_id for non-Google account.";
-  return id_;
+  return gaia_id_;
 }
 
 const std::string& AccountId::GetObjGuid() const {
   if (account_type_ != AccountType::ACTIVE_DIRECTORY)
     NOTIMPLEMENTED()
         << "Failed to get obj_guid for non-Active Directory account.";
-  return id_;
+  return active_directory_id_;
 }
 
 const std::string& AccountId::GetUserEmail() const {
@@ -134,69 +151,83 @@ const std::string& AccountId::GetUserEmail() const {
 }
 
 bool AccountId::HasAccountIdKey() const {
-  return account_type_ != AccountType::UNKNOWN && !id_.empty();
+  switch (account_type_) {
+    case AccountType::UNKNOWN:
+      return false;
+    case AccountType::GOOGLE:
+      return !gaia_id_.empty();
+    case AccountType::ACTIVE_DIRECTORY:
+      return !active_directory_id_.empty();
+  }
+  NOTREACHED();
 }
 
 const std::string AccountId::GetAccountIdKey() const {
-#ifdef NDEBUG
-  if (id_.empty())
-    LOG(FATAL) << "GetAccountIdKey(): no id for " << Serialize();
-#else
-  CHECK(!id_.empty());
-#endif
   switch (GetAccountType()) {
-    case AccountType::GOOGLE:
-      return std::string(kKeyGaiaIdPrefix) + id_;
-    case AccountType::ACTIVE_DIRECTORY:
-      return std::string(kKeyAdIdPrefix) + id_;
-    default:
+    case AccountType::UNKNOWN:
       NOTREACHED() << "Unknown account type";
+    case AccountType::GOOGLE:
+#ifdef NDEBUG
+      if (gaia_id_.empty()) {
+        LOG(FATAL) << "GetAccountIdKey(): no id for " << Serialize();
+      }
+#else
+      CHECK(!gaia_id_.empty());
+#endif
+      return std::string(kKeyGaiaIdPrefix) + gaia_id_.ToString();
+    case AccountType::ACTIVE_DIRECTORY:
+#ifdef NDEBUG
+      if (active_directory_id_.empty()) {
+        LOG(FATAL) << "GetAccountIdKey(): no id for " << Serialize();
+      }
+#else
+      CHECK(!active_directory_id_.empty());
+#endif
+      return std::string(kKeyAdIdPrefix) + active_directory_id_;
   }
-  return std::string();
 }
 
-void AccountId::SetUserEmail(const std::string& email) {
+void AccountId::SetUserEmail(std::string_view email) {
   DCHECK(email == gaia::CanonicalizeEmail(email));
   DCHECK(!email.empty());
   user_email_ = email;
 }
 
 // static
-AccountId AccountId::FromUserEmail(const std::string& email) {
+AccountId AccountId::FromNonCanonicalEmail(std::string_view email,
+                                           const GaiaId& gaia_id,
+                                           AccountType account_type) {
+  DCHECK(!email.empty());
+  return AccountId(gaia::CanonicalizeEmail(gaia::SanitizeEmail(email)),
+                   account_type, gaia_id,
+                   /*active_directory_id=*/std::string());
+}
+
+// static
+AccountId AccountId::FromUserEmail(std::string_view email) {
   // TODO(alemate): DCHECK(!email.empty());
-  return AccountId(std::string() /* id */, email, AccountType::UNKNOWN);
+  return AccountId(email, AccountType::UNKNOWN, GaiaId(),
+                   /*active_directory_id=*/std::string());
 }
 
 // static
-AccountId AccountId::FromGaiaId(const std::string& gaia_id) {
-  DCHECK(!gaia_id.empty());
-  return AccountId(gaia_id, std::string() /* email */, AccountType::GOOGLE);
-}
-
-// static
-AccountId AccountId::FromUserEmailGaiaId(const std::string& email,
-                                         const std::string& gaia_id) {
+AccountId AccountId::FromUserEmailGaiaId(std::string_view email,
+                                         const GaiaId& gaia_id) {
   DCHECK(!(email.empty() && gaia_id.empty()));
-  return AccountId(gaia_id, email, AccountType::GOOGLE);
+  return AccountId(email, AccountType::GOOGLE, gaia_id,
+                   /*active_directory_id=*/std::string());
 }
 
 // static
-AccountId AccountId::AdFromUserEmailObjGuid(const std::string& email,
-                                            const std::string& obj_guid) {
+AccountId AccountId::AdFromUserEmailObjGuid(std::string_view email,
+                                            std::string_view obj_guid) {
   DCHECK(!email.empty() && !obj_guid.empty());
-  return AccountId(obj_guid, email, AccountType::ACTIVE_DIRECTORY);
-}
-
-// static
-AccountId AccountId::AdFromObjGuid(const std::string& obj_guid) {
-  DCHECK(!obj_guid.empty());
-  return AccountId(obj_guid, std::string() /* email */,
-                   AccountType::ACTIVE_DIRECTORY);
+  return AccountId(email, AccountType::ACTIVE_DIRECTORY, GaiaId(), obj_guid);
 }
 
 // static
 AccountType AccountId::StringToAccountType(
-    const std::string& account_type_string) {
+    std::string_view account_type_string) {
   if (account_type_string == kGoogle)
     return AccountType::GOOGLE;
   if (account_type_string == kAd)
@@ -204,11 +235,10 @@ AccountType AccountId::StringToAccountType(
   if (account_type_string == kUnknown)
     return AccountType::UNKNOWN;
   NOTREACHED() << "Unknown account type " << account_type_string;
-  return AccountType::UNKNOWN;
 }
 
 // static
-std::string AccountId::AccountTypeToString(const AccountType& account_type) {
+const char* AccountId::AccountTypeToString(AccountType account_type) {
   switch (account_type) {
     case AccountType::GOOGLE:
       return kGoogle;
@@ -217,23 +247,23 @@ std::string AccountId::AccountTypeToString(const AccountType& account_type) {
     case AccountType::UNKNOWN:
       return kUnknown;
   }
-  return std::string();
+  return "";
 }
 
 std::string AccountId::Serialize() const {
-  base::DictionaryValue value;
+  base::Value::Dict value;
   switch (GetAccountType()) {
     case AccountType::GOOGLE:
-      value.SetString(kGaiaIdKey, id_);
+      value.Set(kGaiaIdKey, gaia_id_.ToString());
       break;
     case AccountType::ACTIVE_DIRECTORY:
-      value.SetString(kObjGuid, id_);
+      value.Set(kObjGuid, active_directory_id_);
       break;
     case AccountType::UNKNOWN:
       break;
   }
-  value.SetString(kAccountTypeKey, AccountTypeToString(GetAccountType()));
-  value.SetString(kEmailKey, user_email_);
+  value.Set(kAccountTypeKey, AccountTypeToString(GetAccountType()));
+  value.Set(kEmailKey, user_email_);
 
   std::string serialized;
   base::JSONWriter::Write(value, &serialized);
@@ -241,20 +271,21 @@ std::string AccountId::Serialize() const {
 }
 
 // static
-bool AccountId::Deserialize(const std::string& serialized,
-                            AccountId* account_id) {
-  absl::optional<base::Value> value(base::JSONReader::Read(serialized));
-  if (!value || !value->is_dict())
-    return false;
+std::optional<AccountId> AccountId::Deserialize(std::string_view serialized) {
+  std::optional<base::Value> value(base::JSONReader::Read(serialized));
+  if (!value || !value->is_dict()) {
+    return std::nullopt;
+  }
 
   AccountType account_type = AccountType::GOOGLE;
-  const std::string* gaia_id = value->FindStringKey(kGaiaIdKey);
-  const std::string* user_email = value->FindStringKey(kEmailKey);
-  const std::string* obj_guid = value->FindStringKey(kObjGuid);
-  const std::string* account_type_string =
-      value->FindStringKey(kAccountTypeKey);
-  if (account_type_string)
+  base::Value::Dict& dict = value->GetDict();
+  const std::string* gaia_id = dict.FindString(kGaiaIdKey);
+  const std::string* user_email = dict.FindString(kEmailKey);
+  const std::string* obj_guid = dict.FindString(kObjGuid);
+  const std::string* account_type_string = dict.FindString(kAccountTypeKey);
+  if (account_type_string) {
     account_type = StringToAccountType(*account_type_string);
+  }
 
   switch (account_type) {
     case AccountType::GOOGLE:
@@ -269,13 +300,12 @@ bool AccountId::Deserialize(const std::string& serialized,
       if (!user_email)
         DLOG(ERROR) << "user_email is not found in '" << serialized << "'";
 
-      if (!gaia_id && !user_email)
-        return false;
+      if (!gaia_id && !user_email) {
+        return std::nullopt;
+      }
 
-      *account_id =
-          FromUserEmailGaiaId(user_email ? *user_email : std::string(),
-                              gaia_id ? *gaia_id : std::string());
-      return true;
+      return FromUserEmailGaiaId(user_email ? *user_email : "",
+                                 gaia_id ? GaiaId(*gaia_id) : GaiaId());
 
     case AccountType::ACTIVE_DIRECTORY:
       if (gaia_id) {
@@ -286,31 +316,32 @@ bool AccountId::Deserialize(const std::string& serialized,
 
       if (!obj_guid) {
         DLOG(ERROR) << "obj_guid is not found in '" << serialized << "'";
-        return false;
+        return std::nullopt;
       }
 
       if (!user_email) {
         DLOG(ERROR) << "user_email is not found in '" << serialized << "'";
       }
 
-      if (!obj_guid || !user_email)
-        return false;
+      if (!obj_guid || !user_email) {
+        return std::nullopt;
+      }
 
-      *account_id = AdFromUserEmailObjGuid(*user_email, *obj_guid);
-      return true;
+      return AdFromUserEmailObjGuid(*user_email, *obj_guid);
 
     case AccountType::UNKNOWN:
-      if (!user_email)
-        return false;
-      *account_id = FromUserEmail(*user_email);
-      return true;
+      if (!user_email) {
+        return std::nullopt;
+      }
+      return FromUserEmail(*user_email);
   }
-  return false;
+  return std::nullopt;
 }
 
 std::ostream& operator<<(std::ostream& stream, const AccountId& account_id) {
-  stream << "{id: " << account_id.id_ << ", email: " << account_id.user_email_
-         << ", type: "
+  stream << "{gaia_id: " << account_id.gaia_id_
+         << ", active_directory_id: " << account_id.active_directory_id_
+         << ", email: " << account_id.user_email_ << ", type: "
          << static_cast<
                 std::underlying_type<decltype(account_id.account_type_)>::type>(
                 account_id.account_type_)

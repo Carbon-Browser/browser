@@ -1,239 +1,328 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/autofill/core/common/autofill_payments_features.h"
 
-#include <string>
-
-#include "base/command_line.h"
-#include "base/feature_list.h"
-#include "base/metrics/field_trial_params.h"
-#include "base/strings/string_number_conversions.h"
-#include "base/strings/string_util.h"
-#include "base/strings/utf_string_conversions.h"
-#include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
-#include "components/autofill/core/common/autofill_prefs.h"
-#include "components/autofill/core/common/autofill_switches.h"
-#include "components/prefs/pref_service.h"
-#include "ui/base/l10n/l10n_util.h"
-
 namespace autofill::features {
 
-// Features
+// When enabled, local credit card migration flows will not be offered.
+BASE_FEATURE(kAutofillDisableLocalCardMigration,
+             "AutofillDisableLocalCardMigration",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-// Controls whether or not Autofill client will populate form with CPAN and
-// dCVV, rather than FPAN.
-const base::Feature kAutofillAlwaysReturnCloudTokenizedCard{
-    "AutofillAlwaysReturnCloudTokenizedCard",
-    base::FEATURE_DISABLED_BY_DEFAULT};
-
-// When enabled, manual fallback will be auto-triggered on form interaction in
-// the case where autofill failed to fill a credit card form accurately.
-const base::Feature kAutofillAutoTriggerManualFallbackForCards{
-    "AutofillAutoTriggerManualFallbackForCards",
-    base::FEATURE_DISABLED_BY_DEFAULT};
-
-// Enables the use of platform authenticators through WebAuthn to retrieve
-// credit cards from Google payments.
-const base::Feature kAutofillCreditCardAuthentication{
-  "AutofillCreditCardAuthentication",
-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_ANDROID)
-      // Better Auth project is fully launched on Win/Mac/Clank.
-      base::FEATURE_ENABLED_BY_DEFAULT
-#else
-      base::FEATURE_DISABLED_BY_DEFAULT
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || \
+    (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS))
+// When enabled, Chrome will extract the checkout amount from the checkout page
+// of the allowlisted merchant websites.
+BASE_FEATURE(kAutofillEnableAmountExtractionDesktop,
+             "AutofillEnableAmountExtractionDesktop",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 #endif
-};
 
-// When enabled, if credit card upload succeeded, the avatar icon will show a
-// highlight otherwise, the credit card icon image will be updated and if user
-// clicks on the icon, a save card failure bubble will pop up.
-const base::Feature kAutofillCreditCardUploadFeedback{
-    "AutofillCreditCardUploadFeedback", base::FEATURE_DISABLED_BY_DEFAULT};
+// When enabled, buy now pay later (BNPL) in Autofill will be offered through
+// Affirm.
+BASE_FEATURE(kAutofillEnableBuyNowPayLaterForAffirm,
+             "AutofillEnableBuyNowPayLaterForAffirm",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-// When enabled, the GetDetailsForEnrollResponseDetails in the
-// UploadCardResponseDetails will be parsed, which will allow the Virtual Card
-// Enrollment flow to skip making a new GetDetailsForEnroll request. This is an
-// optimization to improve the latency of the Virtual Card Enrollment flow.
-const base::Feature
-    kAutofillEnableGetDetailsForEnrollParsingInUploadCardResponse{
-        "AutofillEnableGetDetailsForEnrollParsingInUploadCardResponse",
-        base::FEATURE_ENABLED_BY_DEFAULT};
+// When enabled, buy now pay later (BNPL) in Autofill will be offered through
+// Zip.
+BASE_FEATURE(kAutofillEnableBuyNowPayLaterForZip,
+             "AutofillEnableBuyNowPayLaterForZip",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-// When enabled, a progress dialog will display while authenticating with FIDO.
-// TODO(crbug.com/1337380): Clean up kAutofillEnableFIDOProgressDialog when it's
-// fully rolled out.
-const base::Feature kAutofillEnableFIDOProgressDialog{
-    "AutofillEnableFIDOProgressDialog", base::FEATURE_DISABLED_BY_DEFAULT};
+// When enabled, buy now pay later (BNPL) data will be synced to Chrome clients.
+BASE_FEATURE(kAutofillEnableBuyNowPayLaterSyncing,
+             "AutofillEnableBuyNowPayLaterSyncing",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-// When enabled, enable manual falling component for virtual cards on Android.
-const base::Feature kAutofillEnableManualFallbackForVirtualCards{
-    "AutofillEnableManualFallbackForVirtualCards",
-    base::FEATURE_ENABLED_BY_DEFAULT};
+// When enabled, card art images (instead of network icons) will be shown in
+// Payments Autofill UI.
+BASE_FEATURE(kAutofillEnableCardArtImage,
+             "AutofillEnableCardArtImage",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
-// When enabled, a notification will be displayed on page navigation if the
-// domain has an eligible merchant promo code offer or reward.
-const base::Feature kAutofillEnableOfferNotificationForPromoCodes{
-    "AutofillEnableOfferNotificationForPromoCodes",
-    base::FEATURE_ENABLED_BY_DEFAULT};
+// When enabled, card benefits offered by American Express will be shown in
+// Payments Autofill UI.
+BASE_FEATURE(kAutofillEnableCardBenefitsForAmericanExpress,
+             "AutofillEnableCardBenefitsForAmericanExpress",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-// When enabled, offers will be displayed in the Clank keyboard accessory during
-// downstream.
-const base::Feature kAutofillEnableOffersInClankKeyboardAccessory{
-    "AutofillEnableOffersInClankKeyboardAccessory",
-    base::FEATURE_DISABLED_BY_DEFAULT};
+// When enabled, card benefits offered by Capital One will be shown in Payments
+// Autofill UI.
+BASE_FEATURE(kAutofillEnableCardBenefitsForCapitalOne,
+             "AutofillEnableCardBenefitsForCapitalOne",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-// When enabled, some extra metrics logging for Autofill Downstream will start.
-const base::Feature kAutofillEnableRemadeDownstreamMetrics{
-    "AutofillEnableRemadeDownstreamMetrics", base::FEATURE_ENABLED_BY_DEFAULT};
-
-// Controls whether we send billing customer number in GetUploadDetails
-// preflight call.
-const base::Feature kAutofillEnableSendingBcnInGetUploadDetails{
-    "AutofillEnableSendingBcnInGetUploadDetails",
-    base::FEATURE_ENABLED_BY_DEFAULT};
-
-// When enabled, if the user interacts with the manual fallback bottom sheet
-// on Android, it'll remain sticky until the user dismisses it.
-const base::Feature kAutofillEnableStickyManualFallbackForCards{
-    "AutofillEnableStickyManualFallbackForCards",
-    base::FEATURE_DISABLED_BY_DEFAULT};
-
-// When enabled, Autofill data related icons will be shown in the status
-// chip in toolbar along with the avatar toolbar button.
-const base::Feature kAutofillEnableToolbarStatusChip{
-    "AutofillEnableToolbarStatusChip", base::FEATURE_DISABLED_BY_DEFAULT};
-
-// When enabled, UnmaskCardRequest will set instrument id, which is Chrome-side
-// field for non-legacy ID.
-const base::Feature kAutofillEnableUnmaskCardRequestSetInstrumentId{
-    "AutofillEnableUnmaskCardRequestSetInstrumentId",
-    base::FEATURE_ENABLED_BY_DEFAULT};
-
-// When enabled, the user will have the ability to update the virtual card
-// enrollment of a credit card through their chrome browser after certain
-// autofill flows (for example, downstream and upstream), and from the settings
-// page.
-const base::Feature kAutofillEnableUpdateVirtualCardEnrollment{
-  "AutofillEnableUpdateVirtualCardEnrollment",
-#if BUILDFLAG(IS_IOS)
-      base::FEATURE_DISABLED_BY_DEFAULT
-#else
-      base::FEATURE_ENABLED_BY_DEFAULT
-#endif
-};
-
-// When enabled, the option of using cloud token virtual card will be offered
-// when all requirements are met.
-const base::Feature kAutofillEnableVirtualCard{
-    "AutofillEnableVirtualCard", base::FEATURE_DISABLED_BY_DEFAULT};
-
-// When enabled, after a successful authentication to autofill a virtual card,
-// the user will be prompted to opt-in to FIDO if the user is not currently
-// opted-in, and if the user is opted-in already and the virtual card is FIDO
-// eligible the user will be prompted to register the virtual card into FIDO.
-const base::Feature kAutofillEnableVirtualCardFidoEnrollment(
-    "AutofillEnableVirtualCardFidoEnrollment",
-    base::FEATURE_ENABLED_BY_DEFAULT);
-
-// When enabled, in the payments settings page on desktop, virtual card
-// enrollment management will be provided so that the user can enroll/unenroll a
-// card in virtual card.
-const base::Feature kAutofillEnableVirtualCardManagementInDesktopSettingsPage{
-    "AutofillEnableVirtualCardManagementInDesktopSettingsPage",
-    base::FEATURE_ENABLED_BY_DEFAULT};
+// When enabled, card benefits IPH will be shown in Payments Autofill UI.
+BASE_FEATURE(kAutofillEnableCardBenefitsIph,
+             "AutofillEnableCardBenefitsIph",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 // When enabled, Chrome will show metadata along with other card information
 // when the virtual card is presented to users.
-const base::Feature kAutofillEnableVirtualCardMetadata{
-    "AutofillEnableVirtualCardMetadata", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kAutofillEnableCardBenefitsSync,
+             "AutofillEnableCardBenefitsSync",
+#if BUILDFLAG(IS_IOS)
+             base::FEATURE_DISABLED_BY_DEFAULT);
+#else
+             base::FEATURE_ENABLED_BY_DEFAULT);
+#endif
 
-// When enabled, if the previous feature offer was declined, a delay will be
-// added before Chrome attempts to show offer again.
-const base::Feature kAutofillEnforceDelaysInStrikeDatabase{
-    "AutofillEnforceDelaysInStrikeDatabase", base::FEATURE_DISABLED_BY_DEFAULT};
+// When enabled, runtime retrieval of CVC along with card number and expiry
+// from issuer for enrolled cards will be enabled during form fill.
+BASE_FEATURE(kAutofillEnableCardInfoRuntimeRetrieval,
+             "AutofillEnableCardInfoRuntimeRetrieval",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-// When enabled, Autofill will attempt to fill merchant promo/coupon/gift code
-// fields when data is available.
-const base::Feature kAutofillFillMerchantPromoCodeFields{
-    "AutofillFillMerchantPromoCodeFields", base::FEATURE_DISABLED_BY_DEFAULT};
+// When enabled, card product name (instead of issuer network) will be shown in
+// Payments Autofill UI.
+BASE_FEATURE(kAutofillEnableCardProductName,
+             "AutofillEnableCardProductName",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
-// When enabled, Autofill will attempt to find International Bank Account Number
-// (IBAN) fields when parsing forms.
-const base::Feature kAutofillParseIbanFields{"AutofillParseIbanFields",
-                                             base::FEATURE_DISABLED_BY_DEFAULT};
+// When enabled, we will store CVC for both local and server credit cards. This
+// will also allow the users to autofill their CVCs on checkout pages.
+BASE_FEATURE(kAutofillEnableCvcStorageAndFilling,
+             "AutofillEnableCvcStorageAndFilling",
+#if BUILDFLAG(IS_IOS)
+             base::FEATURE_DISABLED_BY_DEFAULT);
+#else
+             base::FEATURE_ENABLED_BY_DEFAULT);
+#endif
 
-// When enabled, Autofill will attempt to find merchant promo/coupon/gift code
-// fields when parsing forms.
-const base::Feature kAutofillParseMerchantPromoCodeFields{
-    "AutofillParseMerchantPromoCodeFields", base::FEATURE_DISABLED_BY_DEFAULT};
+// When enabled, will enhance CVV storage project. Provide better suggestion,
+// resolve conflict with COF project and add logging.
+BASE_FEATURE(kAutofillEnableCvcStorageAndFillingEnhancement,
+             "AutofillEnableCvcStorageAndFillingEnhancement",
+#if BUILDFLAG(IS_IOS)
+             base::FEATURE_DISABLED_BY_DEFAULT);
+#else
+             base::FEATURE_ENABLED_BY_DEFAULT);
+#endif
 
-// When enabled, the Save Card infobar will be dismissed by a user initiated
-// navigation other than one caused by submitted form.
-const base::Feature kAutofillSaveCardDismissOnNavigation{
-    "AutofillSaveCardDismissOnNavigation", base::FEATURE_ENABLED_BY_DEFAULT};
+// When enabled, this will enhance the CVV storage project. The enhancement will
+// enable CVV storage suggestions for standalone CVC fields.
+BASE_FEATURE(kAutofillEnableCvcStorageAndFillingStandaloneFormEnhancement,
+             "AutofillEnableCvcStorageAndFillingStandaloneFormEnhancement",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-// When enabled, the expiration date of the card will not be shown in the
-// Autofill Suggestions.
-const base::Feature kAutofillRemoveCardExpiryFromDownstreamSuggestion{
-    "AutofillRemoveCardExpiryFromDownstreamSuggestion",
-    base::FEATURE_DISABLED_BY_DEFAULT};
+// When enabled, user's will see network card art images and network icons which
+// are larger, having a white border, and don't have the standard grey overlay
+// applied to them.
+BASE_FEATURE(kAutofillEnableNewCardArtAndNetworkImages,
+             "AutofillEnableNewCardArtAndNetworkImages",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
-// When enabled, the Save Card infobar supports editing before submitting.
-const base::Feature kAutofillSaveCardInfobarEditSupport{
-    "AutofillSaveCardInfobarEditSupport", base::FEATURE_ENABLED_BY_DEFAULT};
+// When enabled, server card retrieval will begin with a risk-based check
+// instead of jumping straight to CVC or biometric auth.
+BASE_FEATURE(kAutofillEnableFpanRiskBasedAuthentication,
+             "AutofillEnableFpanRiskBasedAuthentication",
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_ANDROID)
+             base::FEATURE_ENABLED_BY_DEFAULT);
+#else
+             base::FEATURE_DISABLED_BY_DEFAULT);
+#endif
 
-// When enabled, Chrome will display experimental UI variants to the user
-// during the upload save card process.
-const base::Feature kAutofillSaveCardUiExperiment{
-    "AutofillSaveCardUiExperiment", base::FEATURE_DISABLED_BY_DEFAULT};
+// When enabled, the Virtual Card enrollment bottom sheet uses the Java
+// payments data manager and associated image fetcher to retrieve the cached
+// card art images (when available on Android). When not enabled, the native
+// payments data manager and associated image fetcher are used, where the image
+// is not cached.
+BASE_FEATURE(kAutofillEnableVirtualCardJavaPaymentsDataManager,
+             "AutofillEnableVirtualCardJavaPaymentsDataManager",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
-// This will select one of the options for the save card UI bubble which we
-// want to display to the user. The value will be an integer(number).
-const base::FeatureParam<int> kAutofillSaveCardUiExperimentSelectorInNumber{
-    &kAutofillSaveCardUiExperiment,
-    "autofill_save_card_ui_experiment_selector_in_number", 0};
+#if BUILDFLAG(IS_ANDROID)
+// When enabled, saving and autofilling local IBANs (International Bank Account
+// Numbers) will be offered.
+BASE_FEATURE(kAutofillEnableLocalIban,
+             "AutofillEnableLocalIban",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+#endif
 
-// When enabled, the entire PAN and the CVC details of the unmasked cached card
-// will be shown in the manual filling view.
-const base::Feature kAutofillShowUnmaskedCachedCardInManualFillingView{
-    "AutofillShowUnmaskedCachedCardInManualFillingView",
-    base::FEATURE_DISABLED_BY_DEFAULT};
+// When enabled, a form event will log to all of the parsed forms of the same
+// type on a webpage. This means credit card form events will log to all credit
+// card form types and address form events will log to all address form types."
+// TODO(crbug.com/359934323): Clean up when launched
+BASE_FEATURE(kAutofillEnableLogFormEventsToAllParsedFormTypes,
+             "AutofillEnableLogFormEventsToAllParsedFormTypes",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// When enabled, offers will be displayed in the Clank keyboard accessory during
+// downstream.
+BASE_FEATURE(kAutofillEnableOffersInClankKeyboardAccessory,
+             "AutofillEnableOffersInClankKeyboardAccessory",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+#if BUILDFLAG(IS_ANDROID)
+// When enabled, the payment settings page will show a card promo and allow for
+// card scans.
+BASE_FEATURE(kAutofillEnablePaymentSettingsCardPromoAndScanCard,
+             "AutofillEnablePaymentSettingsCardPromoAndScanCard",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// When enabled, the payment settings page will save new cards to the payment
+// server instead of locally.
+BASE_FEATURE(kAutofillEnablePaymentSettingsServerCardSave,
+             "AutofillEnablePaymentSettingsServerCardSave",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+#endif
+
+// When enabled, risk data is prefetched during payments autofill flows to
+// reduce user-perceived latency.
+BASE_FEATURE(kAutofillEnablePrefetchingRiskDataForRetrieval,
+             "AutofillEnablePrefetchingRiskDataForRetrieval",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// When enabled, the 'Save and Fill' suggestion will be offered in the credit
+// card dropdown menu for users who don't have any cards saved in Autofill.
+BASE_FEATURE(kAutofillEnableSaveAndFill,
+             "AutofillEnableSaveAndFill",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// When enabled, the save card screen will present a loading spinner when
+// uploading the card to the server and present a confirmation screen with the
+// result when completed.
+BASE_FEATURE(kAutofillEnableSaveCardLoadingAndConfirmation,
+             "AutofillEnableSaveCardLoadingAndConfirmation",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+// When enabled, save card will fallback to a local save if the server upload of
+// a card encounters a failure.
+BASE_FEATURE(kAutofillEnableSaveCardLocalSaveFallback,
+             "AutofillEnableSaveCardLocalSaveFallback",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+// When enabled, Autofill will attempt to offer upload save for IBANs
+// (International Bank Account Numbers) and autofill server-based IBANs.
+BASE_FEATURE(kAutofillEnableServerIban,
+             "AutofillEnableServerIban",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+#if BUILDFLAG(IS_ANDROID)
+// When enabled, Pix bank accounts are synced from Chrome Sync backend and
+// stored in the local db.
+BASE_FEATURE(kAutofillEnableSyncingOfPixBankAccounts,
+             "AutofillEnableSyncingOfPixBankAccounts",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+#endif  // BUILDFLAG(IS_ANDROID)
+
+// When enabled, Chrome will trigger 3DS authentication during a virtual card
+// retrieval if a challenge is required, 3DS authentication is available for
+// the card, and FIDO is not.
+BASE_FEATURE(kAutofillEnableVcn3dsAuthentication,
+             "AutofillEnableVcn3dsAuthentication",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// When enabled, the vcn enroll screen will present a loading spinner while
+// enrolling the card to the server and present a confirmation screen with the
+// result when completed.
+BASE_FEATURE(kAutofillEnableVcnEnrollLoadingAndConfirmation,
+             "AutofillEnableVcnEnrollLoadingAndConfirmation",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+// When enabled, Chrome will display grayed out virtual card suggestions on
+// merchant websites where the merchant has opted-out of virtual cards.
+BASE_FEATURE(kAutofillEnableVcnGrayOutForMerchantOptOut,
+             "AutofillEnableVcnGrayOutForMerchantOptOut",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// When enabled, Verve-branded card art will be shown for Verve cards.
+BASE_FEATURE(kAutofillEnableVerveCardSupport,
+             "AutofillEnableVerveCardSupport",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+// When enabled, Chrome will show metadata along with other card information
+// when the virtual card is presented to users.
+BASE_FEATURE(kAutofillEnableVirtualCardMetadata,
+             "AutofillEnableVirtualCardMetadata",
+#if BUILDFLAG(IS_IOS)
+             base::FEATURE_DISABLED_BY_DEFAULT);
+#else
+             base::FEATURE_ENABLED_BY_DEFAULT);
+#endif
+
+// When enabled, Autofill will attempt to find standalone CVC fields for VCN
+// card on file when parsing forms.
+BASE_FEATURE(kAutofillParseVcnCardOnFileStandaloneCvcFields,
+             "AutofillParseVcnCardOnFileStandaloneCvcFields",
+#if BUILDFLAG(IS_IOS)
+             base::FEATURE_DISABLED_BY_DEFAULT);
+#else
+             base::FEATURE_ENABLED_BY_DEFAULT);
+#endif
+
+// When enabled, the "Show cards from your Google Account" Autofill suggestion
+// will not be displayed, and Autofill will work as if it had been selected.
+BASE_FEATURE(kAutofillRemovePaymentsButterDropdown,
+             "AutofillRemovePaymentsButterDropdown",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// If enabled, we will store autofill server card data in shared storage.
+BASE_FEATURE(kAutofillSharedStorageServerCardData,
+             "AutofillSharedStorageServerCardData",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+#if BUILDFLAG(IS_IOS)
+// When enabled, manual fill view will be shown directly from form focusing
+// events, if a virtual card has been retrieved previously.
+BASE_FEATURE(kAutofillShowManualFillForVirtualCards,
+             "AutofillShowManualFillForVirtualCards",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+#endif
+
+#if BUILDFLAG(IS_ANDROID)
+// When enabled, IBAN Autofill suggestions are shown via the keyboard accessory
+// instead of the bottom sheet.
+BASE_FEATURE(kAutofillSkipAndroidBottomSheetForIban,
+             "AutofillSkipAndroidBottomSheetForIban",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+#endif
+
+// When enabled, adds a timeout on the network request for Unmask requests.
+BASE_FEATURE(kAutofillUnmaskCardRequestTimeout,
+             "AutofillUnmaskCardRequestTimeout",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+// When enabled, adds a timeout on the network request for UploadCard requests.
+BASE_FEATURE(kAutofillUploadCardRequestTimeout,
+             "AutofillUploadCardRequestTimeout",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+const base::FeatureParam<int> kAutofillUploadCardRequestTimeoutMilliseconds{
+    &kAutofillUploadCardRequestTimeout,
+    "autofill_upload_card_request_timeout_milliseconds",
+    /*default_value=*/6500};
 
 // Controls offering credit card upload to Google Payments. Cannot ever be
 // ENABLED_BY_DEFAULT because the feature state depends on the user's country.
 // The set of launched countries is listed in autofill_experiments.cc, and this
 // flag remains as a way to easily enable upload credit card save for testers,
 // as well as enable non-fully-launched countries on a trial basis.
-const base::Feature kAutofillUpstream{"AutofillUpstream",
-                                      base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kAutofillUpstream,
+             "AutofillUpstream",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-// When enabled, Chrome allows credit card upload to Google Payments if the
-// user's email domain is from a common email provider (thus unlikely to be an
-// enterprise or education user).
-const base::Feature kAutofillUpstreamAllowAdditionalEmailDomains{
-    "AutofillUpstreamAllowAdditionalEmailDomains",
-    base::FEATURE_DISABLED_BY_DEFAULT};
+// When enabled, adds a timeout on the network request for VcnEnroll requests.
+BASE_FEATURE(kAutofillVcnEnrollRequestTimeout,
+             "AutofillVcnEnrollRequestTimeout",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+const base::FeatureParam<int> kAutofillVcnEnrollRequestTimeoutMilliseconds{
+    &kAutofillVcnEnrollRequestTimeout,
+    "autofill_vcn_enroll_request_timeout_milliseconds",
+    /*default_value=*/6500};
 
-// When enabled, Chrome allows credit card upload to Google Payments, no matter
-// the user's email domain.
-const base::Feature kAutofillUpstreamAllowAllEmailDomains{
-    "AutofillUpstreamAllowAllEmailDomains", base::FEATURE_DISABLED_BY_DEFAULT};
-
-// The delay required since the last strike before offering another virtual card
-// enrollment attempt.
-const base::FeatureParam<int>
-    kAutofillVirtualCardEnrollDelayInStrikeDatabaseInDays{
-        &kAutofillEnforceDelaysInStrikeDatabase,
-        "autofill_virtual_card_enroll_delay_in_strike_database_in_days", 7};
+#if BUILDFLAG(IS_ANDROID)
+// When enabled, eWallet accounts are synced from the Google Payments servers
+// and displayed on the payment methods settings page.
+BASE_FEATURE(kAutofillSyncEwalletAccounts,
+             "AutofillSyncEwalletAccounts",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+#endif  // BUILDFLAG(IS_ANDROID)
 
 bool ShouldShowImprovedUserConsentForCreditCardSave() {
-// TODO(crbug.com/1052397): Revisit the macro expression once build flag switch
-// of lacros-chrome is complete.
-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_APPLE) || \
-    (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS))
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_LINUX)
   // The new user consent UI is fully launched on MacOS, Windows and Linux.
   return true;
 #else

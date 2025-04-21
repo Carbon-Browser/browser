@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,8 +30,8 @@ bool CompositorRenderPassListFromJSON(
     CompositorRenderPassList* render_pass_list);
 
 // Unzips the frame data JSON files to a temp directory so they can be read.
-absl::optional<base::FilePath> UnzipFrameData(const std::string& group,
-                                              const std::string& name);
+std::optional<base::FilePath> UnzipFrameData(const std::string& group,
+                                             const std::string& name);
 
 // Reads the specified JSON file and stores the compositor frame data in the
 // output parameter `frame_data_list`.

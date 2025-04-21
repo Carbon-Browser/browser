@@ -1,4 +1,4 @@
-// Copyright (c) 2010 The Chromium Authors. All rights reserved.
+// Copyright 2010 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,13 +13,8 @@
 
 #include <windows.h>
 
+#include <delayimp.h>
 #include <stdint.h>
-
-#if defined(_WIN32_WINNT_WIN8)
-// The Windows 8 SDK defines FACILITY_VISUALCPP in winerror.h.
-#undef FACILITY_VISUALCPP
-#endif
-#include <DelayIMP.h>
 
 namespace base {
 namespace win {

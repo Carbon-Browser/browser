@@ -28,7 +28,6 @@ Ha már be van jelölve az „<ph name="SERVICE_SCRIPT_NAME" />” melletti nég
 <translation id="2329392777730037872">Nem sikerült megnyitni a következő URL-t az ügyfélnél: <ph name="URL" />.</translation>
 <translation id="2359808026110333948">Tovább</translation>
 <translation id="2366718077645204424">A gazdagép nem érhető el. Ez valószínűleg az Ön által használt hálózat konfigurációja miatt van.</translation>
-<translation id="2370754117186920852"><ph name="OPTIONAL_OFFLINE_REASON" />  Legutóbb észlelve az interneten: <ph name="RELATIVE_TIMESTAMP" />.</translation>
 <translation id="2504109125669302160">Az „Accessibility” (Kisegítő lehetőségek) engedély megadása a következőnek: <ph name="PRODUCT_NAME" /></translation>
 <translation id="2509394361235492552">Csatlakozva a következőhöz: <ph name="HOSTNAME" /></translation>
 <translation id="2540992418118313681">Meg szeretné osztani a számítógép megtekintését és vezérlését egy másik felhasználóval?</translation>
@@ -36,7 +35,6 @@ Ha már be van jelölve az „<ph name="SERVICE_SCRIPT_NAME" />” melletti nég
 <translation id="2599300881200251572">Ez a szolgáltatás engedélyezi a bejövő kapcsolatokat a Chrome távoliasztal-szolgáltatás klienseitől.</translation>
 <translation id="2647232381348739934">Chromoting szolgáltatás</translation>
 <translation id="2676780859508944670">Feldolgozás…</translation>
-<translation id="2692522824157224199">Copyright 2022 Google LLC. Minden jog fenntartva.</translation>
 <translation id="2699970397166997657">Chromoting</translation>
 <translation id="2758123043070977469">Probléma volt a hitelesítéssel. Jelentkezzen be újra.</translation>
 <translation id="2803375539583399270">PIN-kód megadása</translation>
@@ -54,7 +52,6 @@ Ha már be van jelölve az „<ph name="SERVICE_SCRIPT_NAME" />” melletti nég
 <translation id="3423542133075182604">Biztonsági hardverkulcs távoli elérési folyamata</translation>
 <translation id="3581045510967524389">Nem sikerült kapcsolódni a hálózathoz. Kérjük, ellenőrizze, hogy eszköze online állapotban van-e.</translation>
 <translation id="3596628256176442606">Ez a szolgáltatás engedélyezi a bejövő kapcsolatokat a Chromoting klienseitől.</translation>
-<translation id="369442766917958684">Offline.</translation>
 <translation id="3695446226812920698">Tudnivalók</translation>
 <translation id="3776024066357219166">A Chrome távoliasztal-szolgáltatás munkamenet véget ért.</translation>
 <translation id="3858860766373142691">Név</translation>
@@ -73,7 +70,6 @@ Ha már be van jelölve az „<ph name="SERVICE_SCRIPT_NAME" />” melletti nég
 <translation id="4257751272692708833"><ph name="PRODUCT_NAME" /> URL-továbbító</translation>
 <translation id="4277736576214464567">A hozzáférési kód érvénytelen. Kérjük, próbálja újra.</translation>
 <translation id="4281844954008187215">Általános Szerződési Feltételek</translation>
-<translation id="4372650392690220936">Copyright 2022 – A Chromium szerzői. Minden jog fenntartva.</translation>
 <translation id="4405930547258349619">Alapkönyvtár</translation>
 <translation id="443560535555262820">Kisegítő lehetőségek beállításainak megnyitása</translation>
 <translation id="4450893287417543264">Ne jelenjen meg többé</translation>
@@ -107,7 +103,6 @@ Ha már be van jelölve az „<ph name="SERVICE_SCRIPT_NAME" />” melletti nég
 <translation id="5601503069213153581">PIN-kód</translation>
 <translation id="5690427481109656848">Google LLC</translation>
 <translation id="5708869785009007625">Az asztalt jelenleg ezzel a felhasználóval osztja meg: <ph name="USER" />.</translation>
-<translation id="5750083143895808682">Bejelentkezve mint <ph name="EMAIL_ADDRESS" />.</translation>
 <translation id="579702532610384533">Újrakapcsolódás</translation>
 <translation id="5810269635982033450">A képernyő érintőpadként viselkedik</translation>
 <translation id="5823554426827907568"><ph name="CLIENT_USERNAME" /> hozzáférési engedélyt kért az Ön képernyője megtekintésére illetve az egér és a billentyűzet vezérlésére. Nyomja meg a(z) „<ph name="IDS_SHARE_CONFIRM_DIALOG_DECLINE" />” gombot, ha nem várta ezt a kérelmet. A „<ph name="IDS_SHARE_CONFIRM_DIALOG_CONFIRM" />” megnyomásával engedélyezheti a kapcsolatot, ha erre készen áll.</translation>
@@ -154,6 +149,7 @@ Ha már be van jelölve az „<ph name="SERVICE_SCRIPT_NAME" />” melletti nég
 <translation id="7693372326588366043">Gazdagépek listájának frissítése</translation>
 <translation id="7714222945760997814">Bejelentés</translation>
 <translation id="7868137160098754906">Kérjük, adja meg a PIN kódot a távoli számítógéphez.</translation>
+<translation id="7881455334687220899">Copyright 2024 – A Chromium szerzői. Minden jog fenntartva.</translation>
 <translation id="7895403300744144251">A távoli számítógép biztonsági házirendjei nem engedélyeznek kapcsolatokat a fiókja felől.</translation>
 <translation id="7936528439960309876">Rögzítés jobbra</translation>
 <translation id="7970576581263377361">A hitelesítés nem sikerült. Kérjük, jelentkezzen be újra a Chromiumba.</translation>
@@ -185,6 +181,7 @@ Ha már be van jelölve a(z) „<ph name="SERVICE_SCRIPT_NAME" />” melletti n�
 <translation id="8747048596626351634">A munkamenet összeomlott vagy nem tudott elindulni. Ha található ~/.chrome-remote-desktop-session munkamenet a távoli számítógépen, győződjön meg arról, hogy hosszú ideig, előtérben futó folyamatot indít el, például asztali környezetet vagy ablakkezelőt.</translation>
 <translation id="8804164990146287819">Adatvédelmi irányelvek</translation>
 <translation id="8906511416443321782">Mikrofonhoz való hozzáférés szükséges a hanganyagok rögzítéséhez és a Chrome távoliasztal-szolgáltatást használó kliensre való streameléséhez.</translation>
+<translation id="9042277333359847053">Copyright 2024 – Google LLC. Minden jog fenntartva.</translation>
 <translation id="9111855907838866522">Csatlakozott a távoli eszközhöz. A menü megnyitásához koppintson négy ujjal a képernyőre.</translation>
 <translation id="9126115402994542723">Ne kérje újra a PIN kódot, amikor erről az eszközről csatlakozom a szerverhez.</translation>
 <translation id="916856682307586697">Az alapértelmezett XSession indítása</translation>

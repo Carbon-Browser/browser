@@ -1,7 +1,8 @@
 # Setting up a new builder
 
-This doc describes how to set up a new builder on LUCI. It's focused
-on Chromium builders, but parts may be applicable to other projects.
+This doc describes how to set up a new builder on LUCI. It's focused on Chromium
+builders, but parts may be applicable to other projects. If you find terms
+you're not familiar with in this doc, consult the infra [glossary][30].
 
 [TOC]
 
@@ -10,11 +11,10 @@ on Chromium builders, but parts may be applicable to other projects.
 For a typical chromium builder using the chromium recipe, you'll need to file a
 bug for tracking purposes, acquire a host, and then land **two** CLs:
 
-1. in [infradata/config][16], modifying `chromium.star`.
+1. in [infradata/config][16], modifying either [ci.star][31] for CI bots or
+   [try.star][32] for trybots.
 1. in [chromium/src][18], modifying all of the following:
-    1. LUCI service configurations and recipe configurations in
-        `//infra/config`
-    1. Compile configuration in `//tools/mb`
+    1. LUCI service + recipe + compile configurations in `//infra/config`
     1. Test configuration in `//testing/buildbot`
 
 ## Background
@@ -27,35 +27,25 @@ code). "CQ builders" are try builders that the
 non-CQ try builders are called "optional" try builders.
 
 Try builders normally pick up their configuration from a "mirrored" (i.e.,
-matching) CI builder (the mapping is set in [trybots.py][25] in the
-chromium\_tests recipe configuration) and run the exact same things.  However,
-they can be configured to use slightly different GN args (usually to enable
-DCHECKs on release builders) and (rarely) to run different tests or run them
-with different flags. [ We enable dchecks on the release builders as a
-compromise between the speed of a release builder and the coverage of a
-debug builder]. Note that differences between the try builders and the CI
-builders can cause changes to land that break the CI builders, which is
+matching) CI builder (the mapping is set in the `mirrors` field in the try
+builder's definition) and run the same set of tests/compile the same set of
+targets. However, they can be configured to use slightly different GN args
+(usually to enable DCHECKs on release builders) and (rarely) to run different
+tests or run them with different flags. [ We enable dchecks on the release
+try builders as a compromise between the speed of a release builder and the
+coverage of a debug builder]. Note that differences between the try builders and
+the CI builders can cause changes to land that break the CI builders, which is
 unfortunate, but a known tradeoff we make.
 
-Every try builder should mirror a CI builder, to help identify when failures
+Every try builder must mirror a CI builder, to help identify when failures
 are specific to a given patch, or happening more generally, and, if the latter,
 that some sheriff is looking at the failures.
 
-[ Sometimes it's okay to have an "optional" try builder that doesn't have a
-matching CI builder, but make sure to discuss that on the bug you're using
-for this work. ]
-
-Every CI builder should normally also have a mirrored try builder, so that you
+Every CI builder must normally also have a mirrored try builder, so that you
 can test changes that will affect the CI builder before landing. The only time
 you would set up a CI builder that didn't have a matching try builder should be
 if you couldn't set one up for some reason (e.g., we don't have enough capacity
 for both, or some other limitation of the infrastructure).
-
-> **Note:** not every CI builder that should have a matching try builder
-> currently does, unfortunately (see
-> [crbug.com/709214](https://crbug.com/709214)).  Also, figuring out what the
-> corresponding builders are is harder than it should be, you have to look at
-> [trybots.py][25] for the mapping (embedded in the code).
 
 All CQ builders *must* have mirrored CI builders.
 
@@ -93,9 +83,14 @@ bots, you'll likely need a large number of hosts to handle the load in parallel.
 For CI / waterfall builders or manually triggered try builders, you'll typically
 only need a single host.
 
-To acquire the hosts, please file a [capacity bug][1] (internal) and describe
-the amount needed, along with any specialized hardware that's required (e.g.
-mac hardware, attached mobile devices, a specific GPU, etc.).
+To acquire the hosts, please file a [resource request][1] (internal) and
+describe the amount needed, along with any specialized hardware that's required
+(e.g. mac hardware, attached mobile devices, a specific GPU, etc.). Note that
+even if there's hardware currently available for the new builder, a resource
+request will still be needed if the footprint of the new builder equates to
+at least 5 VMs or 50 CPU cores per hour. See
+[go/estimating-bot-capacity](https://goto.google.com/estimating-bot-capacity)
+for guidance on how many hosts to request.
 
 See [infradata docs][4] (internal) for information on how to register
 the hardware to be used by your builder.
@@ -158,6 +153,87 @@ You can generate the configuration files and then view the added entry in
 [cr-buildbucket.cfg][8] to make sure all properties and dimensions are set as
 expected and adjust your definition as necessary.
 
+#### GN build configuration
+
+The GN configuration used by the chromium family of recipes is handled by
+[MB][13] and is historically configured in a [config file][14]. However, for
+new builders, it should be configured within the builder definition in
+Starlark, by adding a `gn_args` field to the builder function call. For
+example:
+
+```starlark
+ci.linux_builder(
+    name = '$BUILDER_NAME',
+    gn_args = "$GN_CONFIG",
+)
+```
+
+The value to the `gn_args` field can be one of the following 3 types:
+
+* a call to the `gn_args.config()` function provided by the
+[gn_args Starlark library][28] - the Starlark library will create a new GN
+config under the name of `$BUCKET_NAME/$BUILDER_NAME`, such as
+`ci/my_ci_builder` or `try/my_try_builder`. A simple example:
+
+    ```starlark
+    try_.linux_builder(
+        name = '$TRY_BUILDER_NAME',
+        gn_args = gn_args.config(
+            configs = [
+                "ci/$CI_BUILDER_NAME",
+                "try_builder",
+            ],
+        ),
+    )
+    ```
+
+    The `configs` argument of the `gn_args.config()` function takes a list of
+    GN configs which can be either references to other builders that have GN
+    args specified in builder definition, or commonly used GN configs that are
+    defined in the [gn_args folder][29].
+
+* a string - reference to a single GN config or another builder that has GN
+args defined in the Starlark builder definition. For example:
+
+    ```starlark
+    try_.linux_builder(
+        name = '$TRY_BUILDER_NAME',
+        gn_args = "ci/$CI_BUILDER_NAME",
+    )
+    ```
+
+* a dictionary - this specifies a multi-phase GN build configuration, in which
+the GN args of each phase are keyed by the phase name in the dictionary. For
+example:
+
+    ```starlark
+    builders.builder(
+        name = '$BUILDER_NAME',
+        gn_args = {
+            "phase1": "release_builder",
+            "phase2": gn_args.config(
+                configs = [
+                    "debug",
+                    "shared",
+                ],
+            ),
+        },
+    )
+    ```
+
+    The value for each phase can be a string or a call to the
+    `gn_args.config()` function, but can not be a dictionary.
+
+When adding new GN configs into the [gn_args folder][29]:
+
+* Make sure to specify a name for each GN config so that they can be
+referenced by other configs or Starlark builder definitions.
+* Avoid creating new configs that are simply the combination of the names of
+several existing GN configs, unless the combined name is an actual concept.
+For example, you should avoid creating a GN config named `shared_debug`, which
+includes GN configs `shared` and `debug`; instead, you should directly specify
+`["shared", "debug"]` in the Starlark builder definition.
+
 #### Milo
 
 Milo is responsible for displaying builders and build histories on a
@@ -208,11 +284,11 @@ all entries include short name.
 
 ##### Try builders
 
-The sequence of try builders for a builder does not correspond to a linear
-history of revisions. Consequently, the interface for the consoles is different,
-as is the method of defining the console. Try builders will by default be added
-to a list view with the same name as its builder group and also to a console
-that includes all try builders, so nothing usually needs to be done to update a
+The sequence of builds for a try builder does not correspond to a linear history
+of revisions. Consequently, the interface for the consoles is different, as is
+the method of defining the console. Try builders will by default be added to a
+list view with the same name as its builder group and also to a console that
+includes all try builders, so nothing usually needs to be done to update a
 console when adding a builder to an existing builder group.
 
 ```starlark
@@ -446,12 +522,6 @@ builder is the mirror of a non-experimental try builder on the CQ.
 The chromium family of recipes reads certain types of configuration from the
 source tree.
 
-##### Build system configuration
-
-The gn configuration used by the chromium family of recipes is handled by
-[MB][13]. MB's configuration is documented [here][14]. You only need to modify
-it if your new builder will be compiling.
-
 ##### Test configuration
 
 The test configuration used by the chromium family of recipes is in a group of
@@ -468,16 +538,6 @@ specified at the builder definition simplifies adding and maintaining builders
 and removes the need to make a change to [chromium/tools/build][17]. Module
 properties must be used for all related builders (triggered/triggering builders
 and mirrored/mirroring builders).
-
-There are some configuration options present in the recipe configs that are not
-and will not be supported in the module properties: the PROVIDE_TEST_SPEC
-execution mode and mirrroring non-existent try-builders. The capabilities that
-these features provide can be achieved using supported mechanisms. Builders with
-the PROVIDE_TEST_SPEC execution mode could only appear as mirrors in a try spec
-and allowed for running the same test against multiple hardware configurations.
-This can be accomplished using variant test suites in the test specs. Within the
-recipe, a builder spec can be defined for a non-existent builder and that can
-appear as a mirror. Instead, the try builder can define its own builder spec.
 
 For the old way of defining the builder config in the recipe see the section
 titled "Recipe-based config".
@@ -574,81 +634,19 @@ not branching a builder that runs tests on a very small set of machines: with
 limited capacity, it would be overwhelmed with additional builds happening on
 the branch.
 
-## Recipe-based config
+## Testing your new builder
 
-If for some reason you can't use the chromium\_tests\_builder\_config module
-properties for defining your new builder, then you'll have to modify the recipe
-itself. Such cases should be rare, please contact gbeaty@ if you think you have
-such a use case.
+The builder must be registered before it can be tested with `led`. The best
+practice is to create the builder with no gardening rotation, no tree closing,
+and no `tryjob()` entry.
 
-Modifying the recipe involves making a change in the [chromium/tools/build][17]
-repo. If the builder being added is a tester that will be triggered by an
-existing builder, the change to the recipe should be made after defining the
-builder in chromium/src. Otherwise, the change to the recipe should be made
-before defining the builder in chromium/src.
+After the CL lands and the builder is registered it can be tested with
+[`led`][33].
 
-To configure a chromium CI builder, you'll want to add a config block to the
-file in [recipe\_modules/chromium\_tests\_builder\_config][5] corresponding to
-your new builder's builder group. The format is somewhat in flux and is not very
-consistent among the different builder groups, but something like this should
-suffice:
-
-``` py
-'your-new-builder': builder_spec.BuilderSpec.create(
-  chromium_config='chromium',
-  gclient_config='chromium',
-  chromium_apply_config=['mb', 'ninja_confirm_noop'],
-  chromium_config_kwargs={
-    'BUILD_CONFIG': 'Release', # or 'Debug', as appropriate
-    'TARGET_BITS': 64, # or 32, for some mobile builders
-  },
-  simulation_platform='$PLATFORM',  # one of 'mac', 'win', or 'linux'
-
-  # There are a variety of other options; most of them are unnecessary in most
-  # cases. If you think one may be applicable, please reach out or ask your
-  # reviewer.
-)
-```
-
-For chromium try builders, you'll also want to set up mirroring.
-You can do so by adding your new try builder to [trybots.py][21].
-
-A typical entry will just reference the matching CI builder, e.g.:
-
-``` py
-TRYBOTS = try_spec.TryDatabase.create({
-  # ...
-
-  'tryserver.chromium.example': {
-      # If you want to build and test the same targets as one
-      # CI builder, you can just do this:
-      'your-new-builder': try_spec.TrySpec.create_for_single_mirror(
-          builder_group='chromium.example',
-          buildername='your-new-builder',
-      ),
-
-      # If you want to build the same targets as one CI builder
-      # but not test anything, you can do this:
-      'your-new-compile-builder': try_spec.TrySpec.create_for_single_mirror(
-          builder_group='chromium.example',
-          buildername='your-new-builder',
-          analyze_mode='compile',
-      ),
-
-      # If you want to build and test the same targets as a builder/tester
-      # CI pair, you can do this:
-      'your-new-tester': try_spec.TrySpec.create_for_single_mirror(
-          builder_group='chromium.example',
-          buildername='your-new-builder',
-          tester='your-new-tester',
-      ),
-
-      # If you want to mirror multiple try bots, please reach out.
-    },
-
-  # ...
-})
-```
+Once the builder is green then gardening rotation, tree closing, and/or tryjob
+settings can be changed. The gardening rotation can be unset if there is a
+module-level default with `sheriff_rotations = args.ignore_default(None)` and
+tree closing can be disabled with `tree_closing = False`.
 
 ## Questions? Feedback?
 
@@ -656,7 +654,7 @@ If you're in need of further assistance, if you're not sure about
 one or more steps, or if you found this documentation lacking, please
 reach out to infra-dev@chromium.org or [file a bug][19]!
 
-[1]: http://go/file-chrome-resource-bug
+[1]: http://go/i-need-hw
 [3]: https://bit.ly/chromium-build-naming
 [4]: http://go/chromium-hardware
 [5]: https://chromium.googlesource.com/chromium/tools/build/+/HEAD/recipes/recipe_modules/chromium_tests_builder_config
@@ -674,10 +672,15 @@ reach out to infra-dev@chromium.org or [file a bug][19]!
 [17]: https://chromium.googlesource.com/chromium/tools/build
 [18]: /
 [19]: https://g.co/bugatrooper
-[21]: https://chromium.googlesource.com/chromium/tools/build/+/HEAD/recipes/recipe_modules/chromium_tests_builder_config/trybots.py
 [22]: /infra/config/main.star
 [23]: /infra/config/subprojects/chromium
 [24]: /infra/config/lib/builders.star
 [25]: https://source.chromium.org/chromium/chromium/tools/build/+/main:recipes/recipe_modules/chromium_tests_builder_config/trybots.py
 [26]: /infra/config/generated/luci/commit-queue.cfg
 [27]: https://luci-config.appspot.com/schemas/projects:commit-queue.cfg
+[28]: /infra/config/lib/gn_args.star
+[29]: /infra/config/gn_args
+[30]: /docs/infra/glossary.md
+[31]: https://chrome-internal.googlesource.com/infradata/config/+/refs/heads/main/configs/chromium-swarm/starlark/bots/chromium/ci/ci.star
+[32]: https://chrome-internal.googlesource.com/infradata/config/+/refs/heads/main/configs/chromium-swarm/starlark/bots/chromium/try.star
+[33]: chromium.googlesource.com/chromium/src/+/refs/heads/main/docs/infra/using_led.md

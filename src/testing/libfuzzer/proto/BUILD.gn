@@ -1,7 +1,8 @@
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/config/cronet/config.gni")
 import("//third_party/protobuf/proto_library.gni")
 
 proto_library("json_proto") {
@@ -9,34 +10,9 @@ proto_library("json_proto") {
   sources = [ "json.proto" ]
 }
 
-source_set("json_proto_converter") {
-  sources = [
-    "json_proto_converter.cc",
-    "json_proto_converter.h",
-  ]
-  deps = [ ":json_proto" ]
-}
-
-static_library("skia_image_filter_converter") {
-  sources = [
-    "skia_image_filter_proto_converter.cc",
-    "skia_image_filter_proto_converter.h",
-  ]
-  deps = [
-    ":skia_image_filter_proto",
-    "//base",
-    "//skia",
-    "//third_party/libprotobuf-mutator",
-  ]
-  defines = [ "AVOID_MISBEHAVIOR=1" ]
-  testonly = true
-
-  #  Can't disable instrumentation because of container-overflow false
-  # positives.
-  # Assertion failures and integer oveflows in skia are uninteresting.
-  if (is_debug || is_ubsan) {
-    all_dependent_configs = [ "//testing/libfuzzer:no_clusterfuzz" ]
-  }
+proto_library("url_proto") {
+  proto_in_dir = "//"
+  sources = [ "url.proto" ]
 }
 
 source_set("url_proto_converter") {
@@ -44,13 +20,48 @@ source_set("url_proto_converter") {
     "url_proto_converter.cc",
     "url_proto_converter.h",
   ]
-  deps = [ ":url_proto" ]
+  deps = [
+    ":url_proto",
+    "//base",
+  ]
 }
 
-proto_library("skia_image_filter_proto") {
-  sources = [ "skia_image_filter.proto" ]
-}
+if (!is_cronet_build) {
+  source_set("json_proto_converter") {
+    sources = [
+      "json_proto_converter.cc",
+      "json_proto_converter.h",
+    ]
+    deps = [ ":json_proto" ]
+  }
 
-proto_library("url_proto") {
-  sources = [ "url.proto" ]
+  static_library("skia_image_filter_converter") {
+    sources = [
+      "skia_image_filter_proto_converter.cc",
+      "skia_image_filter_proto_converter.h",
+    ]
+    deps = [
+      ":skia_image_filter_proto",
+      "//base",
+      "//skia",
+      "//third_party/libprotobuf-mutator",
+    ]
+    defines = [ "AVOID_MISBEHAVIOR=1" ]
+    testonly = true
+
+    #  Can't disable instrumentation because of container-overflow false
+    # positives.
+    # Assertion failures and integer oveflows in skia are uninteresting.
+    if (is_debug || is_ubsan) {
+      all_dependent_configs = [ "//testing/libfuzzer:no_clusterfuzz" ]
+    }
+  }
+
+  proto_library("skia_image_filter_proto") {
+    sources = [ "skia_image_filter.proto" ]
+  }
+
+  proto_library("string_compare_proto") {
+    sources = [ "string_compare.proto" ]
+  }
 }

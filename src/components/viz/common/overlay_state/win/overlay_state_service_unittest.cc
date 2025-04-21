@@ -1,9 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <utility>
 
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread.h"
@@ -81,7 +82,7 @@ void OverlayStateServiceUnittest::PerformRegistration(
 void OverlayStateServiceUnittest::SetService() {
   service_ = OverlayStateService::GetInstance();
   if (!service_->IsInitialized()) {
-    service_->Initialize(base::SequencedTaskRunnerHandle::Get());
+    service_->Initialize(base::SequencedTaskRunner::GetCurrentDefault());
   }
 }
 

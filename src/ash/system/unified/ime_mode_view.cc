@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,16 @@
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
+#include "ash/style/ash_color_id.h"
 #include "ash/system/model/system_tray_model.h"
 #include "ash/system/tray/system_tray_notifier.h"
 #include "ash/system/tray/tray_constants.h"
 #include "ash/system/tray/tray_utils.h"
-#include "ash/wm/tablet_mode/tablet_mode_controller.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/display/screen.h"
+#include "ui/display/tablet_state.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/label.h"
 
@@ -29,12 +33,9 @@ ImeModeView::ImeModeView(Shelf* shelf) : TrayItemView(shelf) {
 
   Shell::Get()->system_tray_notifier()->AddIMEObserver(this);
   Shell::Get()->system_tray_model()->locale()->AddObserver(this);
-  Shell::Get()->tablet_mode_controller()->AddObserver(this);
 }
 
 ImeModeView::~ImeModeView() {
-  if (Shell::Get()->tablet_mode_controller())
-    Shell::Get()->tablet_mode_controller()->RemoveObserver(this);
   Shell::Get()->system_tray_model()->locale()->RemoveObserver(this);
   Shell::Get()->system_tray_notifier()->RemoveIMEObserver(this);
 }
@@ -52,30 +53,23 @@ void ImeModeView::OnLocaleListSet() {
   Update();
 }
 
-void ImeModeView::OnTabletModeStarted() {
-  Update();
-}
-
-void ImeModeView::OnTabletModeEnded() {
-  Update();
-}
-
-void ImeModeView::OnSessionStateChanged(session_manager::SessionState state) {
-  Update();
-}
-
-const char* ImeModeView::GetClassName() const {
-  return "ImeModeView";
+void ImeModeView::OnDisplayTabletStateChanged(display::TabletState state) {
+  if (state == display::TabletState::kInClamshellMode ||
+      state == display::TabletState::kInTabletMode) {
+    Update();
+  }
 }
 
 void ImeModeView::HandleLocaleChange() {
   Update();
 }
 
-void ImeModeView::OnThemeChanged() {
-  TrayItemView::OnThemeChanged();
-  label()->SetEnabledColor(
-      TrayIconColor(Shell::Get()->session_controller()->GetSessionState()));
+void ImeModeView::UpdateLabelOrImageViewColor(bool active) {
+  TrayItemView::UpdateLabelOrImageViewColor(active);
+
+  label()->SetEnabledColorId(active
+                                 ? cros_tokens::kCrosSysSystemOnPrimaryContainer
+                                 : cros_tokens::kCrosSysOnSurface);
 }
 
 void ImeModeView::Update() {
@@ -91,7 +85,7 @@ void ImeModeView::Update() {
 
   // Do not show IME mode icon in tablet mode as it's less useful and screen
   // space is limited.
-  if (Shell::Get()->tablet_mode_controller()->InTabletMode()) {
+  if (display::Screen::GetScreen()->InTabletMode()) {
     SetVisible(false);
     return;
   }
@@ -108,8 +102,7 @@ void ImeModeView::Update() {
              (ime_count > 1 || ime_controller->managed_by_policy()));
 
   label()->SetText(ime_controller->current_ime().short_name);
-  label()->SetEnabledColor(
-      TrayIconColor(Shell::Get()->session_controller()->GetSessionState()));
+  UpdateLabelOrImageViewColor(is_active());
   std::u16string description =
       l10n_util::GetStringFUTF16(IDS_ASH_STATUS_TRAY_INDICATOR_IME_TOOLTIP,
                                  ime_controller->current_ime().name);
@@ -117,7 +110,10 @@ void ImeModeView::Update() {
   label()->SetCustomAccessibleName(description);
   label()->SetElideBehavior(gfx::NO_ELIDE);
 
-  Layout();
+  DeprecatedLayoutImmediately();
 }
+
+BEGIN_METADATA(ImeModeView)
+END_METADATA
 
 }  // namespace ash

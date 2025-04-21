@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,7 @@
 #include "extensions/common/permissions/permissions_data.h"
 #include "extensions/common/switches.h"
 #include "third_party/skia/include/core/SkRegion.h"
+#include "ui/gfx/geometry/rounded_corners_f.h"
 
 namespace app_current_window_internal =
     extensions::api::app_current_window_internal;
@@ -56,8 +57,6 @@ const char kRequiresFramelessWindow[] =
 const char kAlwaysOnTopPermission[] =
     "The \"app.window.alwaysOnTop\" permission is required.";
 
-const char kInvalidParameters[] = "Invalid parameters.";
-
 const int kUnboundedSize = SizeConstraints::kUnboundedSize;
 
 void GetBoundsFields(const Bounds& bounds_spec, gfx::Rect* bounds) {
@@ -74,20 +73,20 @@ void GetBoundsFields(const Bounds& bounds_spec, gfx::Rect* bounds) {
 // Copy the constraint value from the API to our internal representation of
 // content size constraints. A value of zero resets the constraints. The insets
 // are used to transform window constraints to content constraints.
-void GetConstraintWidth(const std::unique_ptr<int>& width,
+void GetConstraintWidth(const std::optional<int>& width,
                         const gfx::Insets& insets,
                         gfx::Size* size) {
-  if (!width.get())
+  if (!width)
     return;
 
   size->set_width(*width > 0 ? std::max(0, *width - insets.width())
                              : kUnboundedSize);
 }
 
-void GetConstraintHeight(const std::unique_ptr<int>& height,
+void GetConstraintHeight(const std::optional<int>& height,
                          const gfx::Insets& insets,
                          gfx::Size* size) {
-  if (!height.get())
+  if (!height)
     return;
 
   size->set_height(*height > 0 ? std::max(0, *height - insets.height())
@@ -184,8 +183,8 @@ AppCurrentWindowInternalClearAttentionFunction::Run() {
 }
 
 ExtensionFunction::ResponseAction AppCurrentWindowInternalShowFunction::Run() {
-  std::unique_ptr<Show::Params> params(Show::Params::Create(args()));
-  CHECK(params.get());
+  std::optional<Show::Params> params = Show::Params::Create(args());
+  CHECK(params);
   if (params->focused && !*params->focused)
     window()->Show(AppWindow::SHOW_INACTIVE);
   else
@@ -200,13 +199,12 @@ ExtensionFunction::ResponseAction AppCurrentWindowInternalHideFunction::Run() {
 
 ExtensionFunction::ResponseAction
 AppCurrentWindowInternalSetBoundsFunction::Run() {
-  std::unique_ptr<SetBounds::Params> params(SetBounds::Params::Create(args()));
-  CHECK(params.get());
+  std::optional<SetBounds::Params> params = SetBounds::Params::Create(args());
+  CHECK(params);
 
   bounds::BoundsType bounds_type = bounds::GetBoundsType(params->bounds_type);
   if (bounds_type == bounds::INVALID_TYPE) {
     NOTREACHED();
-    return RespondNow(Error(kInvalidParameters));
   }
 
   // Start with the current bounds, and change any values that are specified in
@@ -214,6 +212,8 @@ AppCurrentWindowInternalSetBoundsFunction::Run() {
   gfx::Rect original_window_bounds = window()->GetBaseWindow()->GetBounds();
   gfx::Rect window_bounds = original_window_bounds;
   gfx::Insets frame_insets = window()->GetBaseWindow()->GetFrameInsets();
+  gfx::RoundedCornersF window_radii =
+      window()->GetBaseWindow()->GetWindowRadii();
   const Bounds& bounds_spec = params->bounds;
 
   switch (bounds_type) {
@@ -248,11 +248,12 @@ AppCurrentWindowInternalSetBoundsFunction::Run() {
   if (original_window_bounds != window_bounds) {
     if (original_window_bounds.size() != window_bounds.size()) {
       SizeConstraints constraints(
-          SizeConstraints::AddFrameToConstraints(
-              window()->GetBaseWindow()->GetContentMinimumSize(), frame_insets),
-          SizeConstraints::AddFrameToConstraints(
-              window()->GetBaseWindow()->GetContentMaximumSize(),
-              frame_insets));
+          SizeConstraints::AddWindowToConstraints(
+              window()->GetBaseWindow()->GetContentMinimumSize(), frame_insets,
+              window_radii),
+          SizeConstraints::AddWindowToConstraints(
+              window()->GetBaseWindow()->GetContentMaximumSize(), frame_insets,
+              window_radii));
 
       window_bounds.set_size(constraints.ClampSize(window_bounds.size()));
     }
@@ -265,15 +266,14 @@ AppCurrentWindowInternalSetBoundsFunction::Run() {
 
 ExtensionFunction::ResponseAction
 AppCurrentWindowInternalSetSizeConstraintsFunction::Run() {
-  std::unique_ptr<SetSizeConstraints::Params> params(
-      SetSizeConstraints::Params::Create(args()));
-  CHECK(params.get());
+  std::optional<SetSizeConstraints::Params> params =
+      SetSizeConstraints::Params::Create(args());
+  CHECK(params);
 
   bounds::BoundsType bounds_type = bounds::GetBoundsType(params->bounds_type);
   if (bounds_type != bounds::INNER_BOUNDS &&
       bounds_type != bounds::OUTER_BOUNDS) {
     NOTREACHED();
-    return RespondNow(Error(kInvalidParameters));
   }
 
   gfx::Size original_min_size =
@@ -311,8 +311,8 @@ AppCurrentWindowInternalSetIconFunction::Run() {
     return RespondNow(Error(kDevChannelOnly));
   }
 
-  std::unique_ptr<SetIcon::Params> params(SetIcon::Params::Create(args()));
-  CHECK(params.get());
+  std::optional<SetIcon::Params> params = SetIcon::Params::Create(args());
+  CHECK(params);
   // The |icon_url| parameter may be a blob url (e.g. an image fetched with an
   // XMLHttpRequest) or a resource url.
   GURL url(params->icon_url);
@@ -328,7 +328,7 @@ AppCurrentWindowInternalSetShapeFunction::Run() {
   if (!window()->GetBaseWindow()->IsFrameless())
     return RespondNow(Error(kRequiresFramelessWindow));
 
-  std::unique_ptr<SetShape::Params> params(SetShape::Params::Create(args()));
+  std::optional<SetShape::Params> params = SetShape::Params::Create(args());
   const Region& shape = params->region;
 
   // Build the list of hit-test rects from the supplied list of rects.
@@ -358,27 +358,27 @@ AppCurrentWindowInternalSetAlwaysOnTopFunction::Run() {
     return RespondNow(Error(kAlwaysOnTopPermission));
   }
 
-  std::unique_ptr<SetAlwaysOnTop::Params> params(
-      SetAlwaysOnTop::Params::Create(args()));
-  CHECK(params.get());
+  std::optional<SetAlwaysOnTop::Params> params =
+      SetAlwaysOnTop::Params::Create(args());
+  CHECK(params);
   window()->SetAlwaysOnTop(params->always_on_top);
   return RespondNow(NoArguments());
 }
 
 ExtensionFunction::ResponseAction
 AppCurrentWindowInternalSetVisibleOnAllWorkspacesFunction::Run() {
-  std::unique_ptr<SetVisibleOnAllWorkspaces::Params> params(
-      SetVisibleOnAllWorkspaces::Params::Create(args()));
-  CHECK(params.get());
+  std::optional<SetVisibleOnAllWorkspaces::Params> params =
+      SetVisibleOnAllWorkspaces::Params::Create(args());
+  CHECK(params);
   window()->GetBaseWindow()->SetVisibleOnAllWorkspaces(params->always_visible);
   return RespondNow(NoArguments());
 }
 
 ExtensionFunction::ResponseAction
 AppCurrentWindowInternalSetActivateOnPointerFunction::Run() {
-  std::unique_ptr<SetActivateOnPointer::Params> params(
-      SetActivateOnPointer::Params::Create(args()));
-  CHECK(params.get());
+  std::optional<SetActivateOnPointer::Params> params =
+      SetActivateOnPointer::Params::Create(args());
+  CHECK(params);
   window()->GetBaseWindow()->SetActivateOnPointer(params->activate_on_pointer);
   return RespondNow(NoArguments());
 }

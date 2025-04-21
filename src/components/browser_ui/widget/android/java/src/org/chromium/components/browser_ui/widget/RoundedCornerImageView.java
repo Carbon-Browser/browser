@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,8 +47,6 @@ public class RoundedCornerImageView extends AppCompatImageView {
 
     private final Paint mRoundedBackgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private Paint mRoundedContentPaint;
-    private final Matrix mScaleMatrix = new Matrix();
-    private boolean mRoundCorners;
     // True, if constructor had a chance to run.
     // This is needed, because ImageView's constructor may trigger updates on our end
     // if certain attributes (eg. Drawable) are supplied via layout attributes.
@@ -78,19 +76,26 @@ public class RoundedCornerImageView extends AppCompatImageView {
         int color = Color.TRANSPARENT;
 
         if (attrs != null) {
-            TypedArray a = getContext().obtainStyledAttributes(
-                    attrs, R.styleable.RoundedCornerImageView, 0, 0);
-            radiusTopStart = a.getDimensionPixelSize(
-                    R.styleable.RoundedCornerImageView_cornerRadiusTopStart, 0);
-            radiusTopEnd = a.getDimensionPixelSize(
-                    R.styleable.RoundedCornerImageView_cornerRadiusTopEnd, 0);
-            radiusBottomStart = a.getDimensionPixelSize(
-                    R.styleable.RoundedCornerImageView_cornerRadiusBottomStart, 0);
-            radiusBottomEnd = a.getDimensionPixelSize(
-                    R.styleable.RoundedCornerImageView_cornerRadiusBottomEnd, 0);
+            TypedArray a =
+                    getContext()
+                            .obtainStyledAttributes(
+                                    attrs, R.styleable.RoundedCornerImageView, 0, 0);
+            radiusTopStart =
+                    a.getDimensionPixelSize(
+                            R.styleable.RoundedCornerImageView_cornerRadiusTopStart, 0);
+            radiusTopEnd =
+                    a.getDimensionPixelSize(
+                            R.styleable.RoundedCornerImageView_cornerRadiusTopEnd, 0);
+            radiusBottomStart =
+                    a.getDimensionPixelSize(
+                            R.styleable.RoundedCornerImageView_cornerRadiusBottomStart, 0);
+            radiusBottomEnd =
+                    a.getDimensionPixelSize(
+                            R.styleable.RoundedCornerImageView_cornerRadiusBottomEnd, 0);
 
-            color = a.getColor(
-                    R.styleable.RoundedCornerImageView_roundedfillColor, Color.TRANSPARENT);
+            color =
+                    a.getColor(
+                            R.styleable.RoundedCornerImageView_roundedfillColor, Color.TRANSPARENT);
             a.recycle();
         }
 
@@ -130,21 +135,44 @@ public class RoundedCornerImageView extends AppCompatImageView {
         refreshState();
     }
 
-    public void setRoundedCorners(int cornerRadiusTopStart, int cornerRadiusTopEnd,
-            int cornerRadiusBottomStart, int cornerRadiusBottomEnd) {
-        mRoundCorners = (cornerRadiusTopStart != 0 || cornerRadiusTopEnd != 0
-                || cornerRadiusBottomStart != 0 || cornerRadiusBottomEnd != 0);
-        if (!mRoundCorners) return;
+    @Override
+    public void setBackgroundColor(@ColorInt int color) {
+        super.setBackgroundColor(color);
+        assert false
+                : "Setting background color on a RoundedCornerImageView results in no rounding of"
+                        + " corners, use setRoundedFillColor instead.";
+    }
 
+    public void setRoundedCorners(
+            int cornerRadiusTopStart,
+            int cornerRadiusTopEnd,
+            int cornerRadiusBottomStart,
+            int cornerRadiusBottomEnd) {
         float[] radii;
         if (ViewCompat.getLayoutDirection(this) == ViewCompat.LAYOUT_DIRECTION_LTR) {
-            radii = new float[] {cornerRadiusTopStart, cornerRadiusTopStart, cornerRadiusTopEnd,
-                    cornerRadiusTopEnd, cornerRadiusBottomEnd, cornerRadiusBottomEnd,
-                    cornerRadiusBottomStart, cornerRadiusBottomStart};
+            radii =
+                    new float[] {
+                        cornerRadiusTopStart,
+                        cornerRadiusTopStart,
+                        cornerRadiusTopEnd,
+                        cornerRadiusTopEnd,
+                        cornerRadiusBottomEnd,
+                        cornerRadiusBottomEnd,
+                        cornerRadiusBottomStart,
+                        cornerRadiusBottomStart
+                    };
         } else {
-            radii = new float[] {cornerRadiusTopEnd, cornerRadiusTopEnd, cornerRadiusTopStart,
-                    cornerRadiusTopStart, cornerRadiusBottomStart, cornerRadiusBottomStart,
-                    cornerRadiusBottomEnd, cornerRadiusBottomEnd};
+            radii =
+                    new float[] {
+                        cornerRadiusTopEnd,
+                        cornerRadiusTopEnd,
+                        cornerRadiusTopStart,
+                        cornerRadiusTopStart,
+                        cornerRadiusBottomStart,
+                        cornerRadiusBottomStart,
+                        cornerRadiusBottomEnd,
+                        cornerRadiusBottomEnd
+                    };
         }
 
         mRoundedRectangle = new RoundRectShape(radii, null, null);
@@ -179,11 +207,6 @@ public class RoundedCornerImageView extends AppCompatImageView {
 
     @Override
     protected void onDraw(Canvas canvas) {
-        if (!mRoundCorners) {
-            super.onDraw(canvas);
-            return;
-        }
-
         final int width = getWidth() - getPaddingLeft() - getPaddingRight();
         final int height = getHeight() - getPaddingTop() - getPaddingBottom();
         if (width <= 0 || height <= 0) return;
@@ -213,7 +236,8 @@ public class RoundedCornerImageView extends AppCompatImageView {
                 Drawable drawable = getDrawable();
                 Bitmap bitmap = ((BitmapDrawable) drawable).getBitmap();
                 mTmpMatrix.set(getImageMatrix());
-                mTmpMatrix.preScale((float) drawable.getIntrinsicWidth() / bitmap.getWidth(),
+                mTmpMatrix.preScale(
+                        (float) drawable.getIntrinsicWidth() / bitmap.getWidth(),
                         (float) drawable.getIntrinsicHeight() / bitmap.getHeight());
 
                 shader.setLocalMatrix(mTmpMatrix);

@@ -28,7 +28,6 @@ Dacă opțiunea „<ph name="SERVICE_SCRIPT_NAME" />” este deja bifată, debif
 <translation id="2329392777730037872">Nu s-a putut deschide <ph name="URL" /> pe client.</translation>
 <translation id="2359808026110333948">Continuă</translation>
 <translation id="2366718077645204424">Gazda nu poate fi accesată. Acest lucru este cauzat, probabil, de configurația rețelei pe care o utilizați.</translation>
-<translation id="2370754117186920852"><ph name="OPTIONAL_OFFLINE_REASON" />  Ultima dată online <ph name="RELATIVE_TIMESTAMP" />.</translation>
 <translation id="2504109125669302160">Acordă permisiunea „Accesibilitate” pentru <ph name="PRODUCT_NAME" /></translation>
 <translation id="2509394361235492552">Conectat la <ph name="HOSTNAME" /></translation>
 <translation id="2540992418118313681">Dorești să permiți accesul la acest computer altui utilizator, pentru ca acesta să îl poată vedea și controla?</translation>
@@ -36,7 +35,6 @@ Dacă opțiunea „<ph name="SERVICE_SCRIPT_NAME" />” este deja bifată, debif
 <translation id="2599300881200251572">Acest serviciu permite conexiuni primite de la clienți Desktop la distanță Chrome.</translation>
 <translation id="2647232381348739934">Serviciul Chromoting</translation>
 <translation id="2676780859508944670">Se procesează...</translation>
-<translation id="2692522824157224199">Drept de autor 2022 Google LLC. Toate drepturile rezervate.</translation>
 <translation id="2699970397166997657">Chromoting</translation>
 <translation id="2758123043070977469">A apărut o problemă la autentificare, conectează-te din nou.</translation>
 <translation id="2803375539583399270">Introdu codul PIN</translation>
@@ -54,7 +52,6 @@ Dacă opțiunea „<ph name="SERVICE_SCRIPT_NAME" />” este deja bifată, debif
 <translation id="3423542133075182604">Proces de control la distanță al cheii de securitate</translation>
 <translation id="3581045510967524389">Nu s-a putut efectua conectarea la rețea. Verificați dacă dispozitivul este online.</translation>
 <translation id="3596628256176442606">Acest serviciu permite conexiuni primite de la clienți Chromoting.</translation>
-<translation id="369442766917958684">Offline.</translation>
 <translation id="3695446226812920698">Află cum</translation>
 <translation id="3776024066357219166">Sesiunea Desktop la distanță Chrome s-a încheiat.</translation>
 <translation id="3858860766373142691">Nume</translation>
@@ -73,7 +70,6 @@ Dacă opțiunea „<ph name="SERVICE_SCRIPT_NAME" />” este deja bifată, debif
 <translation id="4257751272692708833">Aplicația de redirecționare a adreselor URL pentru <ph name="PRODUCT_NAME" /></translation>
 <translation id="4277736576214464567">Codul de acces este greșit. Încercați din nou.</translation>
 <translation id="4281844954008187215">Condiții de furnizare a serviciilor</translation>
-<translation id="4372650392690220936">Copyright 2022 The Chromium Authors. Toate drepturile rezervate.</translation>
 <translation id="4405930547258349619">Biblioteca nucleu</translation>
 <translation id="443560535555262820">Deschide preferințele pentru accesibilitate</translation>
 <translation id="4450893287417543264">Nu mai afișa</translation>
@@ -107,7 +103,6 @@ Dacă opțiunea „<ph name="SERVICE_SCRIPT_NAME" />” este deja bifată, debif
 <translation id="5601503069213153581">Cod PIN</translation>
 <translation id="5690427481109656848">Google LLC</translation>
 <translation id="5708869785009007625">În prezent, accesul la desktopul dvs. este permis pentru <ph name="USER" />.</translation>
-<translation id="5750083143895808682">Conectat(ă) ca <ph name="EMAIL_ADDRESS" />.</translation>
 <translation id="579702532610384533">Reconectează-te</translation>
 <translation id="5810269635982033450">Ecranul funcționează ca un trackpad</translation>
 <translation id="5823554426827907568"><ph name="CLIENT_USERNAME" /> a solicitat acces să vadă ecranul și să controleze tastatura și mouse-ul. Apasă pe <ph name="IDS_SHARE_CONFIRM_DIALOG_DECLINE" /> dacă solicitarea este neașteptată. Sau selectează <ph name="IDS_SHARE_CONFIRM_DIALOG_CONFIRM" /> pentru a permite conectarea când ești gata.</translation>
@@ -154,6 +149,7 @@ Dacă opțiunea „<ph name="SERVICE_SCRIPT_NAME" />” este deja bifată, debif
 <translation id="7693372326588366043">Actualizați lista gazdelor</translation>
 <translation id="7714222945760997814">Raportează</translation>
 <translation id="7868137160098754906">Introduceți codul PIN pentru computerul la distanță.</translation>
+<translation id="7881455334687220899">Drepturi de autor 2024 The Chromium Authors. Toate drepturile rezervate.</translation>
 <translation id="7895403300744144251">Politicile de securitate de pe computerul la distanță nu permit conexiunile din contul tău.</translation>
 <translation id="7936528439960309876">Andochează în dreapta</translation>
 <translation id="7970576581263377361">Autentificarea nu a reușit. Conectează-te din nou la Chromium.</translation>
@@ -185,6 +181,7 @@ Dacă opțiunea „<ph name="SERVICE_SCRIPT_NAME" />” este deja bifată, debif
 <translation id="8747048596626351634">Sesiunea s-a blocat sau nu a pornit. Dacă pe computerul la distanță există ~/.chrome-remote-desktop-session, asigură-te că inițiază un proces în prim-plan de lungă durată, cum ar fi un mediu de desktop sau un manager de ferestre.</translation>
 <translation id="8804164990146287819">Politica de confidențialitate</translation>
 <translation id="8906511416443321782">Este necesar accesul la microfon pentru a captura conținut audio și a-l proiecta pe clientul Desktop la distanță Chrome.</translation>
+<translation id="9042277333359847053">Drepturi de autor 2024 Google LLC. Toate drepturile rezervate.</translation>
 <translation id="9111855907838866522">Te-ai conectat la dispozitivul la distanță. Pentru a deschide meniul, atinge ecranul cu patru degete.</translation>
 <translation id="9126115402994542723">Nu mai solicita un cod PIN când mă conectez la această gazdă de pe acest dispozitiv.</translation>
 <translation id="916856682307586697">Lansează sesiunea XSession prestabilită</translation>

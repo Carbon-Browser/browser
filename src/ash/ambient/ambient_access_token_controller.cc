@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include "ash/login/ui/lock_screen.h"
 #include "ash/public/cpp/ambient/ambient_client.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/rand_util.h"
 #include "base/time/time.h"
@@ -39,7 +39,7 @@ void AmbientAccessTokenController::RequestAccessToken(
     bool may_refresh_token_on_lock) {
   // |token_refresh_timer_| may become stale during sleeping.
   if (token_refresh_timer_.IsRunning())
-    token_refresh_timer_.AbandonAndStop();
+    token_refresh_timer_.Stop();
 
   if (!access_token_.empty()) {
     DCHECK(!has_pending_request_);
@@ -68,6 +68,11 @@ void AmbientAccessTokenController::RequestAccessToken(
   RefreshAccessToken();
 }
 
+base::WeakPtr<AmbientAccessTokenController>
+AmbientAccessTokenController::AsWeakPtr() {
+  return weak_factory_.GetWeakPtr();
+}
+
 void AmbientAccessTokenController::RefreshAccessToken() {
   DCHECK(!token_refresh_timer_.IsRunning());
 
@@ -78,7 +83,7 @@ void AmbientAccessTokenController::RefreshAccessToken() {
 }
 
 void AmbientAccessTokenController::AccessTokenRefreshed(
-    const std::string& gaia_id,
+    const GaiaId& gaia_id,
     const std::string& access_token,
     const base::Time& expiration_time) {
   has_pending_request_ = false;

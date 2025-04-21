@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,18 +7,25 @@
 
 #import <Foundation/Foundation.h>
 
+#import "base/memory/weak_ptr.h"
+#import "components/autofill/ios/browser/autofill_manager_observer_bridge.h"
 #import "components/autofill/ios/browser/form_suggestion_provider.h"
 #import "components/autofill/ios/form_util/form_activity_observer.h"
-#include "components/password_manager/core/browser/password_manager_interface.h"
+#import "components/password_manager/core/browser/password_manager.h"
+#import "components/password_manager/ios/password_controller_driver_helper.h"
 #import "components/password_manager/ios/password_form_helper.h"
 #import "components/password_manager/ios/password_generation_provider.h"
 #import "components/password_manager/ios/password_manager_driver_bridge.h"
 #import "components/password_manager/ios/password_suggestion_helper.h"
+#import "ios/web/public/js_messaging/web_frame.h"
+#import "ios/web/public/js_messaging/web_frames_manager_observer_bridge.h"
 #import "ios/web/public/web_state_observer_bridge.h"
+
+// The string ' ••••••••' appended to the username in the suggestion.
+extern NSString* const kPasswordFormSuggestionSuffix;
 
 namespace password_manager {
 class PasswordManagerClient;
-class PasswordManagerDriver;
 }  // namespace password_manager
 
 @class FormSuggestion;
@@ -31,16 +38,15 @@ class PasswordManagerDriver;
 @property(nonatomic, readonly)
     password_manager::PasswordManagerClient* passwordManagerClient;
 
-// The PasswordManagerClient owned by the delegate.
-@property(nonatomic, readonly)
-    password_manager::PasswordManagerDriver* passwordManagerDriver;
-
 // Called to inform the delegate that it should prompt the user for a decision
 // on whether or not to use the |generatedPotentialPassword|.
 // |decisionHandler| takes a single BOOL indicating if the user accepted the
-// the suggested |generatedPotentialPassword|.
+// the suggested |generatedPotentialPassword|. The secondary action string is
+// set according to the value of |proactive|.
 - (void)sharedPasswordController:(SharedPasswordController*)controller
     showGeneratedPotentialPassword:(NSString*)generatedPotentialPassword
+                         proactive:(BOOL)proactive
+                             frame:(base::WeakPtr<web::WebFrame>)frame
                    decisionHandler:(void (^)(BOOL accept))decisionHandler;
 
 // Called when SharedPasswordController accepts a suggestion displayed to the
@@ -48,12 +54,36 @@ class PasswordManagerDriver;
 - (void)sharedPasswordController:(SharedPasswordController*)controller
              didAcceptSuggestion:(FormSuggestion*)suggestion;
 
+// Adds event listeners to fields which are associated with a bottom sheet.
+// When the focus event occurs on these fields, a bottom sheet will be shown
+// instead of the keyboard, allowing the user to fill the fields by tapping
+// one of the suggestions.
+- (void)attachListenersForBottomSheet:
+            (const std::vector<autofill::FieldRendererId>&)rendererIds
+                           forFrameId:(const std::string&)frameId;
+
+// Adds event listeners to the field that is associated with a proactive
+// password generation bottom sheet. When the focus event occurs on this
+// field, a bottom sheet will be shown instead of the keyboard, allowing the
+// user to fill the fields by tapping on the "Use Suggested Password" button.
+- (void)attachListenersForPasswordGenerationBottomSheet:
+            (const std::vector<autofill::FieldRendererId>&)rendererIds
+                                             forFrameId:
+                                                 (const std::string&)frameId;
+
+// Detach listeners to fields which are associated with a bottom sheet.
+// When there are no more credentials, we want to show the user the keyboard
+// instead of the bottom sheet.
+- (void)detachListenersForBottomSheet:(const std::string&)frameId;
+
 @end
 
 // Per-tab shared password controller. Handles parsing forms, loading
 // suggestions, filling forms, and generating passwords.
 @interface SharedPasswordController
-    : NSObject <CRWWebStateObserver,
+    : NSObject <CRWWebFramesManagerObserver,
+                CRWWebStateObserver,
+                AutofillManagerObserver,
                 FormActivityObserver,
                 FormSuggestionProvider,
                 PasswordFormHelperDelegate,
@@ -72,6 +102,7 @@ class PasswordManagerDriver;
                                      passwordManager
                       formHelper:(PasswordFormHelper*)formHelper
                 suggestionHelper:(PasswordSuggestionHelper*)suggestionHelper
+                    driverHelper:(PasswordControllerDriverHelper*)driverHelper
     NS_DESIGNATED_INITIALIZER;
 
 - (instancetype)init NS_UNAVAILABLE;

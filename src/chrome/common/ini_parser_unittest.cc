@@ -1,13 +1,16 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "chrome/common/ini_parser.h"
 
 #include <stddef.h>
 
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "chrome/common/ini_parser.h"
+#include "base/values.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace {
@@ -33,16 +36,16 @@ class TestINIParser : public INIParser {
       : expected_triplets_(expected_triplets),
         pair_i_(0) {
   }
-  ~TestINIParser() override {}
+  ~TestINIParser() override = default;
 
   size_t pair_i() {
     return pair_i_;
   }
 
  private:
-  void HandleTriplet(base::StringPiece section,
-                     base::StringPiece key,
-                     base::StringPiece value) override {
+  void HandleTriplet(std::string_view section,
+                     std::string_view key,
+                     std::string_view value) override {
     EXPECT_EQ(expected_triplets_[pair_i_].section, section);
     EXPECT_EQ(expected_triplets_[pair_i_].key, key);
     EXPECT_EQ(expected_triplets_[pair_i_].value, value);
@@ -116,15 +119,20 @@ TEST(INIParserTest, DictionaryValueINIParser) {
       "key.4=value4\n"
       "key5=value5\n");
 
-  const base::DictionaryValue& root = test_parser.root();
-  std::string value;
-  EXPECT_TRUE(root.GetString("section1.key1", &value));
-  EXPECT_EQ("value1", value);
-  EXPECT_FALSE(root.GetString("section1.key.2", &value));
-  EXPECT_TRUE(root.GetString("section1.key3", &value));
-  EXPECT_EQ("va.lue3", value);
-  EXPECT_FALSE(root.GetString("se.ction2.key.4", &value));
-  EXPECT_FALSE(root.GetString("se.ction2.key5", &value));
+  const base::Value::Dict& root = test_parser.root();
+
+  const std::string* value = root.FindStringByDottedPath("section1.key1");
+  ASSERT_TRUE(value);
+  EXPECT_EQ("value1", *value);
+
+  EXPECT_FALSE(root.FindStringByDottedPath("section1.key.2"));
+
+  value = root.FindStringByDottedPath("section1.key3");
+  ASSERT_TRUE(value);
+  EXPECT_EQ("va.lue3", *value);
+
+  EXPECT_FALSE(root.FindStringByDottedPath("se.ction2.key.4"));
+  EXPECT_FALSE(root.FindStringByDottedPath("se.ction2.key5"));
 }
 
 }  // namespace

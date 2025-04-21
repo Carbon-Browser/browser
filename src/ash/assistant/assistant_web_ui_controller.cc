@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "ash/multi_user/multi_user_window_manager_impl.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/events/event_observer.h"
 #include "ui/views/event_monitor.h"
@@ -24,10 +25,10 @@ class AssistantWebContainerEventObserver : public ui::EventObserver {
                                      views::Widget* widget)
       : owner_(owner),
         widget_(widget),
-        event_monitor_(
-            views::EventMonitor::CreateWindowMonitor(this,
-                                                     widget->GetNativeWindow(),
-                                                     {ui::ET_KEY_PRESSED})) {}
+        event_monitor_(views::EventMonitor::CreateWindowMonitor(
+            this,
+            widget->GetNativeWindow(),
+            {ui::EventType::kKeyPressed})) {}
 
   AssistantWebContainerEventObserver(
       const AssistantWebContainerEventObserver&) = delete;
@@ -38,7 +39,7 @@ class AssistantWebContainerEventObserver : public ui::EventObserver {
 
   // ui::EventObserver:
   void OnEvent(const ui::Event& event) override {
-    DCHECK(event.type() == ui::ET_KEY_PRESSED);
+    DCHECK(event.type() == ui::EventType::kKeyPressed);
 
     const ui::KeyEvent& key_event = static_cast<const ui::KeyEvent&>(event);
     switch (key_event.key_code()) {
@@ -59,8 +60,8 @@ class AssistantWebContainerEventObserver : public ui::EventObserver {
   }
 
  private:
-  AssistantWebUiController* owner_ = nullptr;
-  views::Widget* widget_ = nullptr;
+  raw_ptr<AssistantWebUiController> owner_ = nullptr;
+  raw_ptr<views::Widget> widget_ = nullptr;
 
   std::unique_ptr<views::EventMonitor> event_monitor_;
 };

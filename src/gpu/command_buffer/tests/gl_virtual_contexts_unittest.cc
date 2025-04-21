@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
@@ -322,7 +327,6 @@ TEST_P(GLVirtualContextsTest, VirtualQueries) {
     GL_COMMANDS_COMPLETED_CHROMIUM,
     GL_COMMANDS_ISSUED_CHROMIUM,
     GL_GET_ERROR_QUERY_CHROMIUM,
-    GL_LATENCY_QUERY_CHROMIUM,
     GL_TIME_ELAPSED_EXT,
   };
 
@@ -445,4 +449,3 @@ INSTANTIATE_TEST_SUITE_P(WithWorkarounds,
                          ::testing::ValuesIn(workarounds_cases));
 
 }  // namespace gpu
-

@@ -1,14 +1,15 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/usb/web_usb_detector.h"
 
+#include <optional>
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
@@ -30,7 +31,6 @@
 #include "content/public/browser/web_contents.h"
 #include "services/device/public/mojom/usb_device.mojom.h"
 #include "services/network/public/cpp/is_potentially_trustworthy.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/page_transition_types.h"
 #include "ui/base/window_open_disposition.h"
@@ -43,6 +43,7 @@
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ash/constants/notifier_catalogs.h"
+#include "chrome/browser/ash/crosapi/browser_util.h"
 #endif
 
 namespace {
@@ -91,9 +92,12 @@ GURL GetActiveTabURL() {
 void OpenURL(const GURL& url) {
   chrome::ScopedTabbedBrowserDisplayer browser_displayer(
       ProfileManager::GetLastUsedProfileAllowedByPolicy());
-  browser_displayer.browser()->OpenURL(content::OpenURLParams(
-      url, content::Referrer(), WindowOpenDisposition::NEW_FOREGROUND_TAB,
-      ui::PAGE_TRANSITION_AUTO_TOPLEVEL, false /* is_renderer_initialized */));
+  browser_displayer.browser()->OpenURL(
+      content::OpenURLParams(url, content::Referrer(),
+                             WindowOpenDisposition::NEW_FOREGROUND_TAB,
+                             ui::PAGE_TRANSITION_AUTO_TOPLEVEL,
+                             false /* is_renderer_initialized */),
+      /*navigation_handle_callback=*/{});
 }
 
 // Delegate for webusb notification
@@ -107,7 +111,7 @@ class WebUsbNotificationDelegate : public TabStripModelObserver,
         landing_page_(landing_page),
         notification_id_(notification_id),
         disposition_(WEBUSB_NOTIFICATION_CLOSED),
-        browser_tab_strip_tracker_(absl::in_place, this, nullptr) {
+        browser_tab_strip_tracker_(std::in_place, this, nullptr) {
     browser_tab_strip_tracker_->Init();
   }
   WebUsbNotificationDelegate(const WebUsbNotificationDelegate&) = delete;
@@ -131,8 +135,8 @@ class WebUsbNotificationDelegate : public TabStripModelObserver,
     }
   }
 
-  void Click(const absl::optional<int>& button_index,
-             const absl::optional<std::u16string>& reply) override {
+  void Click(const std::optional<int>& button_index,
+             const std::optional<std::u16string>& reply) override {
     disposition_ = WEBUSB_NOTIFICATION_CLOSED_CLICKED;
 
     // If the URL is already open, activate that tab.
@@ -142,8 +146,8 @@ class WebUsbNotificationDelegate : public TabStripModelObserver,
     for (auto it = all_tabs.begin(), end = all_tabs.end(); it != end; ++it) {
       if (base::StartsWith(it->GetVisibleURL().spec(), landing_page_.spec(),
                            base::CompareCase::INSENSITIVE_ASCII) &&
-          (!tab_to_activate ||
-           it->GetLastActiveTime() > tab_to_activate->GetLastActiveTime())) {
+          (!tab_to_activate || it->GetLastActiveTimeTicks() >
+                                   tab_to_activate->GetLastActiveTimeTicks())) {
         tab_to_activate = *it;
         browser = it.browser();
       }
@@ -177,7 +181,7 @@ class WebUsbNotificationDelegate : public TabStripModelObserver,
   GURL landing_page_;
   std::string notification_id_;
   WebUsbNotificationClosed disposition_;
-  absl::optional<BrowserTabStripTracker> browser_tab_strip_tracker_;
+  std::optional<BrowserTabStripTracker> browser_tab_strip_tracker_;
 };
 
 }  // namespace
@@ -191,6 +195,13 @@ void WebUsbDetector::Initialize() {
   // buggy devices and drivers.
   if (!base::FeatureList::IsEnabled(features::kWebUsbDeviceDetection))
     return;
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  if (crosapi::browser_util::IsLacrosEnabled()) {
+    // Delegate to the Lacros browser to prevent duplicate notifications.
+    return;
+  }
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   // Tests may set a fake manager.
   if (!device_manager_) {

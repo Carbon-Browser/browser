@@ -1,10 +1,10 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/dom_distiller/core/distiller_url_fetcher.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
@@ -17,7 +17,7 @@ DistillerURLFetcherFactory::DistillerURLFetcherFactory(
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory)
     : url_loader_factory_(url_loader_factory) {}
 
-DistillerURLFetcherFactory::~DistillerURLFetcherFactory() {}
+DistillerURLFetcherFactory::~DistillerURLFetcherFactory() = default;
 
 DistillerURLFetcher* DistillerURLFetcherFactory::CreateDistillerURLFetcher()
     const {
@@ -28,7 +28,7 @@ DistillerURLFetcher::DistillerURLFetcher(
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory)
     : url_loader_factory_(url_loader_factory) {}
 
-DistillerURLFetcher::~DistillerURLFetcher() {}
+DistillerURLFetcher::~DistillerURLFetcher() = default;
 
 void DistillerURLFetcher::FetchURL(const std::string& url,
                                    URLFetcherCallback callback) {

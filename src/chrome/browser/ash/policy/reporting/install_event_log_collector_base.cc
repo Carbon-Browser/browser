@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,14 +30,12 @@ InstallEventLogCollectorBase::~InstallEventLogCollectorBase() {
 }
 
 bool InstallEventLogCollectorBase::GetOnlineState() {
-  chromeos::NetworkStateHandler::NetworkStateList network_state_list;
-  chromeos::NetworkHandler::Get()
-      ->network_state_handler()
-      ->GetNetworkListByType(
-          chromeos::NetworkTypePattern::Default(), true /* configured_only */,
-          false /* visible_only */, 0 /* limit */, &network_state_list);
+  ash::NetworkStateHandler::NetworkStateList network_state_list;
+  ash::NetworkHandler::Get()->network_state_handler()->GetNetworkListByType(
+      ash::NetworkTypePattern::Default(), true /* configured_only */,
+      false /* visible_only */, 0 /* limit */, &network_state_list);
 
-  for (const chromeos::NetworkState* network_state : network_state_list) {
+  for (const ash::NetworkState* network_state : network_state_list) {
     if (network_state->connection_state() == shill::kStateOnline) {
       return true;
     }

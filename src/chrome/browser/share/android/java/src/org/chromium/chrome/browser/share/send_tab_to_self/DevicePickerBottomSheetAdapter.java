@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,16 +16,15 @@ import android.widget.TextView;
 import androidx.appcompat.content.res.AppCompatResources;
 
 import org.chromium.chrome.R;
+import org.chromium.components.sync_device_info.FormFactor;
 import org.chromium.ui.widget.ChromeImageView;
 
 import java.util.Calendar;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Adapter to populate the Target Device Picker sheet.
- */
-public class DevicePickerBottomSheetAdapter extends BaseAdapter {
+/** Adapter to populate the Target Device Picker sheet. */
+class DevicePickerBottomSheetAdapter extends BaseAdapter {
     private final List<TargetDeviceInfo> mTargetDevices;
 
     public DevicePickerBottomSheetAdapter(List<TargetDeviceInfo> targetDevices) {
@@ -51,8 +50,9 @@ public class DevicePickerBottomSheetAdapter extends BaseAdapter {
     public View getView(int position, View convertView, ViewGroup parent) {
         if (convertView == null) {
             final Context context = parent.getContext();
-            convertView = LayoutInflater.from(context).inflate(
-                    R.layout.send_tab_to_self_device_picker_item, parent, false);
+            convertView =
+                    LayoutInflater.from(context)
+                            .inflate(R.layout.send_tab_to_self_device_picker_item, parent, false);
 
             TargetDeviceInfo deviceInfo = getItem(position);
             ChromeImageView deviceIcon = convertView.findViewById(R.id.device_icon);
@@ -64,8 +64,10 @@ public class DevicePickerBottomSheetAdapter extends BaseAdapter {
 
             TextView lastActive = convertView.findViewById(R.id.last_active);
 
-            long numDaysDeviceActive = TimeUnit.MILLISECONDS.toDays(
-                    Calendar.getInstance().getTimeInMillis() - deviceInfo.lastUpdatedTimestamp);
+            long numDaysDeviceActive =
+                    TimeUnit.MILLISECONDS.toDays(
+                            Calendar.getInstance().getTimeInMillis()
+                                    - deviceInfo.lastUpdatedTimestamp);
             lastActive.setText(getLastActiveMessage(context.getResources(), numDaysDeviceActive));
         }
         return convertView;
@@ -84,16 +86,17 @@ public class DevicePickerBottomSheetAdapter extends BaseAdapter {
 
     private static Drawable getDrawableForDeviceType(
             Context context, TargetDeviceInfo targetDevice) {
-        switch (targetDevice.deviceType) {
-            case TargetDeviceInfo.DeviceType.CHROMEOS:
-            case TargetDeviceInfo.DeviceType.LINUX:
-            case TargetDeviceInfo.DeviceType.MACOSX:
-            case TargetDeviceInfo.DeviceType.WIN: {
-                return AppCompatResources.getDrawable(context, R.drawable.computer_black_24dp);
-            }
-            case TargetDeviceInfo.DeviceType.PHONE: {
-                return AppCompatResources.getDrawable(context, R.drawable.smartphone_black_24dp);
-            }
+        // TODO(crbug.com/40868175): Update cases to handle a tablet device case.
+        switch (targetDevice.formFactor) {
+            case FormFactor.DESKTOP:
+                {
+                    return AppCompatResources.getDrawable(context, R.drawable.computer_black_24dp);
+                }
+            case FormFactor.PHONE:
+                {
+                    return AppCompatResources.getDrawable(
+                            context, R.drawable.smartphone_black_24dp);
+                }
         }
         return AppCompatResources.getDrawable(context, R.drawable.devices_black_24dp);
     }

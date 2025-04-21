@@ -1,10 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_BROWSING_TOPICS_BROWSING_TOPICS_SERVICE_H_
 #define COMPONENTS_BROWSING_TOPICS_BROWSING_TOPICS_SERVICE_H_
 
+#include "components/browsing_topics/annotator.h"
 #include "components/browsing_topics/mojom/browsing_topics_internals.mojom-forward.h"
 #include "components/browsing_topics/mojom/browsing_topics_internals.mojom.h"
 #include "components/keyed_service/core/keyed_service.h"
@@ -19,13 +20,27 @@ namespace browsing_topics {
 // to other internal components (e.g. UX).
 class BrowsingTopicsService : public KeyedService {
  public:
-  // Return the browsing topics for a particular requesting context. The
-  // calling context and top context information will also be used for the
-  // access permission check, and for the `BrowsingTopicsPageLoadDataTracker` to
-  // track the API usage.
-  virtual std::vector<blink::mojom::EpochTopicPtr> GetBrowsingTopicsForJsApi(
+  // Writes the browsing topics for a particular requesting context into the
+  // output parameter `topics` and returns whether the access permission is
+  // allowed. `context_origin` and `main_frame` will potentially be used for the
+  // access permission check, for calculating the topics, and/or for the
+  // `BrowsingTopicsPageLoadDataTracker` to track the API usage. If `get_topics`
+  // is true, topics calculation result will be stored to `topics`. If `observe`
+  // is true, record the observation (i.e. the <calling context site,
+  // top level site> pair) to the `BrowsingTopicsSiteDataStorage` database.
+  virtual bool HandleTopicsWebApi(
       const url::Origin& context_origin,
-      content::RenderFrameHost* main_frame) = 0;
+      content::RenderFrameHost* main_frame,
+      ApiCallerSource caller_source,
+      bool get_topics,
+      bool observe,
+      std::vector<blink::mojom::EpochTopicPtr>& topics) = 0;
+
+  // Returns the number of distinct epochs versions for `main_frame_origin`.
+  // Must be called when topics are eligible (i.e. `HandleTopicsWebApi` would
+  // return true for the same main frame context).
+  virtual int NumVersionsInEpochs(
+      const url::Origin& main_frame_origin) const = 0;
 
   // Get the topics state to show in the chrome://topics-internals page. If
   // `calculate_now` is true, this will first trigger a calculation before
@@ -34,18 +49,23 @@ class BrowsingTopicsService : public KeyedService {
       bool calculate_now,
       mojom::PageHandler::GetBrowsingTopicsStateCallback callback) = 0;
 
-  // Return the topics (i.e. one topic from each epoch) that can be potentially
-  // exposed to a given site. Up to `kBrowsingTopicsNumberOfEpochsToExpose`
-  // epochs' topics can be returned. Padded top topics or random topics won't be
-  // returned.
-  virtual std::vector<privacy_sandbox::CanonicalTopic>
-  GetTopicsForSiteForDisplay(const url::Origin& top_origin) const = 0;
-
   // Return the top topics from all the past epochs. Up to
   // `kBrowsingTopicsNumberOfEpochsToExpose + 1` epochs' topics are kept in
   // the browser. Padded top topics won't be returned.
   virtual std::vector<privacy_sandbox::CanonicalTopic> GetTopTopicsForDisplay()
       const = 0;
+
+  // Validates if the scheduled topics calculation ran on time, logging failure
+  // metrics if not.
+  //
+  // Validation is skipped under the following conditions:
+  //   - The topics data is not yet fully loaded.
+  //   - A calculation is currently in progress.
+  //   - The browser is in the process of shutting down.
+  //   - Failure metrics for the current session have already been logged.
+  virtual void ValidateCalculationSchedule() = 0;
+
+  virtual Annotator* GetAnnotator() = 0;
 
   // Removes topic from any existing epoch.
   virtual void ClearTopic(

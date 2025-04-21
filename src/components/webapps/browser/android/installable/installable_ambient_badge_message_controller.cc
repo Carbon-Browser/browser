@@ -1,11 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/webapps/browser/android/installable/installable_ambient_badge_message_controller.h"
 
-#include "base/bind.h"
+#include "base/command_line.h"
 #include "base/containers/lru_cache.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "components/messages/android/message_dispatcher_bridge.h"
 #include "components/messages/android/throttler/domain_session_throttler.h"
@@ -18,6 +19,10 @@
 #include "ui/base/l10n/l10n_util.h"
 
 namespace webapps {
+
+namespace {
+constexpr int kThrottleDomainsCapacity = 100;
+}
 
 InstallableAmbientBadgeMessageController::
     InstallableAmbientBadgeMessageController(
@@ -40,7 +45,8 @@ void InstallableAmbientBadgeMessageController::EnqueueMessage(
     const bool is_primary_icon_maskable,
     const GURL& start_url) {
   DCHECK(!message_);
-  if (!GetThrottler()->ShouldShow(
+  if (base::FeatureList::IsEnabled(features::kInstallMessageThrottle) &&
+      !GetThrottler()->ShouldShow(
           web_contents->GetPrimaryMainFrame()->GetLastCommittedOrigin())) {
     return;
   }
@@ -50,18 +56,17 @@ void InstallableAmbientBadgeMessageController::EnqueueMessage(
       messages::MessageIdentifier::INSTALLABLE_AMBIENT_BADGE,
       base::BindOnce(
           &InstallableAmbientBadgeMessageController::HandleInstallButtonClicked,
-          base::Unretained(this)),
+          weak_factory_.GetWeakPtr()),
       base::BindOnce(
           &InstallableAmbientBadgeMessageController::HandleMessageDismissed,
-          base::Unretained(this)));
+          weak_factory_.GetWeakPtr()));
 
   message_->SetTitle(l10n_util::GetStringFUTF16(
       IDS_AMBIENT_BADGE_INSTALL_ALTERNATIVE, app_name));
   message_->SetDescription(url_formatter::FormatUrlForSecurityDisplay(
       start_url, url_formatter::SchemeDisplay::OMIT_CRYPTOGRAPHIC));
   message_->DisableIconTint();
-  if (is_primary_icon_maskable &&
-      WebappsIconUtils::DoesAndroidSupportMaskableIcons()) {
+  if (is_primary_icon_maskable) {
     message_->SetIcon(WebappsIconUtils::GenerateAdaptiveIconBitmap(icon));
   } else {
     message_->SetIcon(icon);
@@ -93,7 +98,10 @@ void InstallableAmbientBadgeMessageController::HandleMessageDismissed(
   message_.reset();
   if (dismiss_reason == messages::DismissReason::GESTURE) {
     client_->BadgeDismissed();
+  } else if (dismiss_reason == messages::DismissReason::TIMER) {
+    client_->BadgeIgnored();
   }
+
   if (dismiss_reason != messages::DismissReason::PRIMARY_ACTION) {
     GetThrottler()->AddStrike(save_origin_);
   }
@@ -102,8 +110,7 @@ void InstallableAmbientBadgeMessageController::HandleMessageDismissed(
 // static
 messages::DomainSessionThrottler*
 InstallableAmbientBadgeMessageController::GetThrottler() {
-  static messages::DomainSessionThrottler instance(
-      features::kInstallableAmbientBadgeMessage_ThrottleDomainsCapacity.Get());
+  static messages::DomainSessionThrottler instance(kThrottleDomainsCapacity);
   return &instance;
 }
 

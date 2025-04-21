@@ -1,13 +1,16 @@
 {
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/ci/win-official/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
             "builder_id": {
               "bucket": "ci",
               "builder": "win-official",
-              "project": "chromium"
+              "project": "chromium-m133"
             },
             "builder_spec": {
               "builder_group": "chromium",
@@ -17,7 +20,8 @@
                   "mb"
                 ],
                 "config": "chromium",
-                "target_bits": 64
+                "target_bits": 64,
+                "target_platform": "win"
               },
               "legacy_gclient_config": {
                 "apply_configs": [
@@ -33,7 +37,7 @@
         {
           "bucket": "ci",
           "builder": "win-official",
-          "project": "chromium"
+          "project": "chromium-m133"
         }
       ],
       "mirroring_builder_group_and_names": [
@@ -41,14 +45,24 @@
           "builder": "win-official",
           "group": "tryserver.chromium"
         }
-      ]
+      ],
+      "targets_spec_directory": "src/infra/config/generated/builders/ci/win-official/targets"
     }
   },
-  "$build/goma": {
-    "enable_ats": true,
-    "rpc_extra_params": "?prod",
-    "server_host": "goma.chromium.org",
-    "use_luci_auth": true
+  "$build/reclient": {
+    "instance": "rbe-chromium-trusted",
+    "metrics_project": "chromium-reclient-metrics",
+    "scandeps_server": true
+  },
+  "$build/siso": {
+    "configs": [
+      "builder"
+    ],
+    "enable_cloud_profiler": true,
+    "enable_cloud_trace": true,
+    "experiments": [],
+    "project": "rbe-chromium-trusted",
+    "remote_jobs": 500
   },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],
@@ -58,6 +72,9 @@
     ]
   },
   "builder_group": "chromium",
+  "gardener_rotations": [
+    "chrome_browser_release"
+  ],
   "recipe": "chromium",
   "sheriff_rotations": [
     "chrome_browser_release"

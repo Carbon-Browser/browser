@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <vector>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/extensions/api/passwords_private/passwords_private_delegate.h"
@@ -28,7 +28,7 @@ PasswordsPrivateEventRouter::PasswordsPrivateEventRouter(
   event_router_ = EventRouter::Get(context_);
 }
 
-PasswordsPrivateEventRouter::~PasswordsPrivateEventRouter() {}
+PasswordsPrivateEventRouter::~PasswordsPrivateEventRouter() = default;
 
 void PasswordsPrivateEventRouter::OnSavedPasswordsListChanged(
     const std::vector<api::passwords_private::PasswordUiEntry>& entries) {
@@ -71,13 +71,15 @@ void PasswordsPrivateEventRouter::SendPasswordExceptionListToListeners() {
 
 void PasswordsPrivateEventRouter::OnPasswordsExportProgress(
     api::passwords_private::ExportProgressStatus status,
+    const std::string& file_path,
     const std::string& folder_name) {
   api::passwords_private::PasswordExportProgress params;
   params.status = status;
-  params.folder_name = std::make_unique<std::string>(std::move(folder_name));
+  params.file_path = file_path;
+  params.folder_name = folder_name;
 
   base::Value::List event_value;
-  event_value.Append(base::Value::FromUniquePtrValue(params.ToValue()));
+  event_value.Append(params.ToValue());
 
   auto extension_event = std::make_unique<Event>(
       events::PASSWORDS_PRIVATE_ON_PASSWORDS_FILE_EXPORT_PROGRESS,
@@ -86,34 +88,23 @@ void PasswordsPrivateEventRouter::OnPasswordsExportProgress(
   event_router_->BroadcastEvent(std::move(extension_event));
 }
 
-void PasswordsPrivateEventRouter::OnAccountStorageOptInStateChanged(
-    bool opted_in) {
+void PasswordsPrivateEventRouter::OnAccountStorageEnabledStateChanged(
+    bool enabled) {
   auto extension_event = std::make_unique<Event>(
-      events::PASSWORDS_PRIVATE_ON_ACCOUNT_STORAGE_OPT_IN_STATE_CHANGED,
-      api::passwords_private::OnAccountStorageOptInStateChanged::kEventName,
-      api::passwords_private::OnAccountStorageOptInStateChanged::Create(
-          opted_in));
+      events::PASSWORDS_PRIVATE_ON_ACCOUNT_STORAGE_ENABLED_STATE_CHANGED,
+      api::passwords_private::OnAccountStorageEnabledStateChanged::kEventName,
+      api::passwords_private::OnAccountStorageEnabledStateChanged::Create(
+          enabled));
   event_router_->BroadcastEvent(std::move(extension_event));
 }
 
-void PasswordsPrivateEventRouter::OnCompromisedCredentialsChanged(
-    std::vector<api::passwords_private::InsecureCredential>
-        compromised_credentials) {
+void PasswordsPrivateEventRouter::OnInsecureCredentialsChanged(
+    std::vector<api::passwords_private::PasswordUiEntry> insecure_credentials) {
   auto extension_event = std::make_unique<Event>(
-      events::PASSWORDS_PRIVATE_ON_COMPROMISED_CREDENTIALS_INFO_CHANGED,
-      api::passwords_private::OnCompromisedCredentialsChanged::kEventName,
-      api::passwords_private::OnCompromisedCredentialsChanged::Create(
-          compromised_credentials));
-  event_router_->BroadcastEvent(std::move(extension_event));
-}
-
-void PasswordsPrivateEventRouter::OnWeakCredentialsChanged(
-    std::vector<api::passwords_private::InsecureCredential> weak_credentials) {
-  auto extension_event = std::make_unique<Event>(
-      events::PASSWORDS_PRIVATE_ON_WEAK_CREDENTIALS_CHANGED,
-      api::passwords_private::OnWeakCredentialsChanged::kEventName,
-      api::passwords_private::OnWeakCredentialsChanged::Create(
-          weak_credentials));
+      events::PASSWORDS_PRIVATE_ON_INSECURE_CREDENTIALS_CHANGED,
+      api::passwords_private::OnInsecureCredentialsChanged::kEventName,
+      api::passwords_private::OnInsecureCredentialsChanged::Create(
+          insecure_credentials));
   event_router_->BroadcastEvent(std::move(extension_event));
 }
 
@@ -126,9 +117,11 @@ void PasswordsPrivateEventRouter::OnPasswordCheckStatusChanged(
   event_router_->BroadcastEvent(std::move(extension_event));
 }
 
-PasswordsPrivateEventRouter* PasswordsPrivateEventRouter::Create(
-    content::BrowserContext* context) {
-  return new PasswordsPrivateEventRouter(context);
+void PasswordsPrivateEventRouter::OnPasswordManagerAuthTimeout() {
+  event_router_->BroadcastEvent(std::make_unique<Event>(
+      events::PASSWORDS_PRIVATE_ON_PASSWORD_MANAGER_AUTH_TIMEOUT,
+      api::passwords_private::OnPasswordManagerAuthTimeout::kEventName,
+      api::passwords_private::OnPasswordManagerAuthTimeout::Create()));
 }
 
 }  // namespace extensions

@@ -1,12 +1,11 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-
-#include "chrome/browser/ui/views/location_bar/location_icon_view.h"
 
 #include "build/build_config.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/location_bar/location_bar_view.h"
+#include "chrome/browser/ui/views/location_bar/location_icon_view.h"
 #include "chrome/browser/ui/views/page_action/page_action_icon_view.h"
 #include "chrome/browser/ui/views/page_info/page_info_bubble_view.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
@@ -28,6 +27,8 @@ class LocationIconViewTest : public InProcessBrowserTest {
 };
 
 // Verify that clicking the location icon a second time hides the bubble.
+// TODO(crbug.com/40251927) flaky on mac11-arm64-rel, disabled via filter
+// TODO(crbug.com/41481796) Fails consistently on Linux, disabled via filter.
 IN_PROC_BROWSER_TEST_F(LocationIconViewTest, HideOnSecondClick) {
   BrowserView* browser_view = BrowserView::GetBrowserViewForBrowser(browser());
   views::View* location_icon_view =
@@ -37,7 +38,7 @@ IN_PROC_BROWSER_TEST_F(LocationIconViewTest, HideOnSecondClick) {
   // Verify that clicking once shows the location icon bubble.
   scoped_refptr<content::MessageLoopRunner> runner1 =
       new content::MessageLoopRunner;
-  ui_test_utils::MoveMouseToCenterAndPress(
+  ui_test_utils::MoveMouseToCenterAndClick(
       location_icon_view, ui_controls::LEFT,
       ui_controls::DOWN | ui_controls::UP, runner1->QuitClosure());
   runner1->Run();
@@ -48,7 +49,7 @@ IN_PROC_BROWSER_TEST_F(LocationIconViewTest, HideOnSecondClick) {
   // Verify that clicking again doesn't reshow it.
   scoped_refptr<content::MessageLoopRunner> runner2 =
       new content::MessageLoopRunner;
-  ui_test_utils::MoveMouseToCenterAndPress(
+  ui_test_utils::MoveMouseToCenterAndClick(
       location_icon_view, ui_controls::LEFT,
       ui_controls::DOWN | ui_controls::UP, runner2->QuitClosure());
   runner2->Run();
@@ -80,8 +81,8 @@ IN_PROC_BROWSER_TEST_F(LocationIconViewTest,
       translate::TranslateErrors::NONE, true);
 
   PageActionIconView* icon_view =
-      browser_view->toolbar_button_provider()
-          ->GetPageActionIconView(PageActionIconType::kTranslate);
+      browser_view->toolbar_button_provider()->GetPageActionIconView(
+          PageActionIconType::kTranslate);
   ASSERT_TRUE(icon_view);
   EXPECT_TRUE(icon_view->GetVisible());
 

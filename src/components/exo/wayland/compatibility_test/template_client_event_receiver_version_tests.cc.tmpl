@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -139,7 +139,7 @@ void {{ base_fixture_name }}::NudgeServerFor{{ step.instance_name | pascal }}Cre
 std::unique_ptr<struct {{ step.interface.name }}>
 {{ base_fixture_name }}::Make{{ step.instance_name | pascal }}() noexcept {
       {% if not step.ctor.message.is_event %}
-  auto {{ step.instance_name }} = std::unique_ptr<struct {{ step.interface.name }}>(
+  auto {{ step.instance_name }}obj = std::unique_ptr<struct {{ step.interface.name }}>(
   {{ step.ctor.interface_step.interface.name }}_{{ step.ctor.message.name }}(
       {{ step.ctor.interface_step.instance_name }}.get()
         {% for arg in step.ctor.message.args %}
@@ -160,7 +160,7 @@ std::unique_ptr<struct {{ step.interface.name }}>
         {% endfor %}
       ));
       {% else %}
-  std::unique_ptr<struct {{ step.interface.name }}> {{ step.instance_name }};
+  std::unique_ptr<struct {{ step.interface.name }}> {{ step.instance_name }}obj;
 
   static {{ step.ctor.interface_step.interface.name }}_listener {{ step.ctor.interface_step.interface.name }}_listener = {
         {% for event in step.ctor.interface_step.interface.events %}
@@ -236,7 +236,7 @@ std::unique_ptr<struct {{ step.interface.name }}>
         << "{{ step.interface.name | pascal  }}EventTest::NudgeServerFor{{ step.instance_name | pascal }}Creation()";
 
       {% endif %}
-  return {{ step.instance_name }};
+  return {{ step.instance_name }}obj;
 }
 
     {% endif %}
@@ -328,11 +328,11 @@ void {{ base_fixture_name }}::ValidateEventsImpl(uint32_t target_interface_versi
         "{{ target_interface.name }}::{{ event.name }}";
     constexpr uint32_t event_since_version =
         {{ event.since or 1 }}u;
-    absl::optional<uint32_t> received_at_version =
+    std::optional<uint32_t> received_at_version =
         recorder.MaybeGetReceivedAtVersion(event_name);
 
     if (target_interface_version == event_since_version) {
-      EXPECT_THAT(received_at_version, ::testing::Not(::testing::Eq(absl::nullopt)))
+      EXPECT_THAT(received_at_version, ::testing::Not(::testing::Eq(std::nullopt)))
           << "Failed to receive " << event_name << " at interface version "
           << target_interface_version
           << " as the event is defined as since version "
@@ -345,7 +345,7 @@ void {{ base_fixture_name }}::ValidateEventsImpl(uint32_t target_interface_versi
 
     if (target_interface_version >= event_since_version) {
       ASSERT_THAT(received_at_version, ::testing::AnyOf(
-                      ::testing::Eq(absl::nullopt),
+                      ::testing::Eq(std::nullopt),
                       ::testing::Optional(::testing::Eq(target_interface_version))))
           << "Unexpected version mismatch. Test expected to create a\n"
           << "   {{ target_interface.name }}"
@@ -357,7 +357,7 @@ void {{ base_fixture_name }}::ValidateEventsImpl(uint32_t target_interface_versi
     }
 
     if (target_interface_version < event_since_version) {
-      EXPECT_THAT(received_at_version, ::testing::Eq(absl::nullopt))
+      EXPECT_THAT(received_at_version, ::testing::Eq(std::nullopt))
           << "Unexpectedly received "
           << event_name
           << " at interface version "

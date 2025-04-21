@@ -1,14 +1,17 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/muxers/live_webm_muxer_delegate.h"
 
+#include <string_view>
+
 #include "base/numerics/ostream_operators.h"
 
 namespace media {
 
-LiveWebmMuxerDelegate::LiveWebmMuxerDelegate(WriteDataCB write_data_callback)
+LiveWebmMuxerDelegate::LiveWebmMuxerDelegate(
+    Muxer::WriteDataCB write_data_callback)
     : write_data_callback_(std::move(write_data_callback)) {
   DCHECK(!write_data_callback_.is_null());
 }
@@ -49,7 +52,9 @@ mkvmuxer::int32 LiveWebmMuxerDelegate::DoWrite(const void* buf,
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   write_data_callback_.Run(
-      base::StringPiece(reinterpret_cast<const char*>(buf), len));
+      // SAFETY: buf is a pointer that points to exactly len length.
+      UNSAFE_BUFFERS(base::span<const uint8_t>(
+          reinterpret_cast<const uint8_t*>(buf), len)));
   return 0;
 }
 

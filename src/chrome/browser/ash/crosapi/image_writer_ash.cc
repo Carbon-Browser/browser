@@ -1,11 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/crosapi/image_writer_ash.h"
 
-#include "base/bind.h"
+#include <optional>
+
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/unguessable_token.h"
 #include "chrome/browser/extensions/api/image_writer_private/operation_manager.h"
 #include "chrome/browser/extensions/api/image_writer_private/removable_storage_provider.h"
@@ -13,7 +15,6 @@
 #include "chrome/common/extensions/api/image_writer_private.h"
 #include "content/public/browser/browser_context.h"
 #include "extensions/browser/api/extensions_api_client.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace crosapi {
@@ -78,7 +79,7 @@ void ImageWriterAsh::DestroyPartitions(
 void ImageWriterAsh::WriteFromUrl(
     const std::string& storage_unit_id,
     const GURL& image_url,
-    const absl::optional<std::string>& image_hash,
+    const std::optional<std::string>& image_hash,
     mojo::PendingRemote<mojom::ImageWriterClient> remote_client,
     WriteFromUrlCallback callback) {
   mojo::Remote<mojom::ImageWriterClient> remote(std::move(remote_client));
@@ -173,7 +174,7 @@ void ImageWriterAsh::OnDeviceListReady(
     ListRemovableStorageDevicesCallback callback,
     scoped_refptr<StorageDeviceList> device_list) {
   if (!device_list) {
-    std::move(callback).Run(absl::nullopt);
+    std::move(callback).Run(std::nullopt);
     return;
   }
 
@@ -188,7 +189,7 @@ void ImageWriterAsh::OnDeviceListReady(
 void ImageWriterAsh::OnOperationCompleted(OperationCallback callback,
                                           bool success,
                                           const std::string& error) {
-  std::move(callback).Run(success ? absl::nullopt : absl::make_optional(error));
+  std::move(callback).Run(success ? std::nullopt : std::make_optional(error));
 }
 
 void ImageWriterAsh::OnCancelWriteDone(bool success, const std::string& error) {

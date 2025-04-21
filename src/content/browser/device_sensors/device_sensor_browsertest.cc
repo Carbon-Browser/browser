@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,13 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/threading/platform_thread.h"
 #include "build/build_config.h"
-#include "content/browser/generic_sensor/sensor_provider_proxy_impl.h"
+#include "content/browser/generic_sensor/web_contents_sensor_provider_proxy.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
@@ -44,19 +44,14 @@ using device::FakeSensorProvider;
 class DeviceSensorBrowserTest : public ContentBrowserTest {
  public:
   DeviceSensorBrowserTest() {
-    SensorProviderProxyImpl::OverrideSensorProviderBinderForTesting(
+    WebContentsSensorProviderProxy::OverrideSensorProviderBinderForTesting(
         base::BindRepeating(&DeviceSensorBrowserTest::BindSensorProvider,
                             base::Unretained(this)));
   }
 
   ~DeviceSensorBrowserTest() override {
-    SensorProviderProxyImpl::OverrideSensorProviderBinderForTesting(
+    WebContentsSensorProviderProxy::OverrideSensorProviderBinderForTesting(
         base::NullCallback());
-  }
-
-  void DelayAndQuit(base::TimeDelta delay) {
-    base::PlatformThread::Sleep(delay);
-    base::RunLoop::QuitCurrentWhenIdleDeprecated();
   }
 
   void WaitForAlertDialogAndQuitAfterDelay(base::TimeDelta delay) {
@@ -64,10 +59,14 @@ class DeviceSensorBrowserTest : public ContentBrowserTest {
         static_cast<ShellJavaScriptDialogManager*>(
             shell()->GetJavaScriptDialogManager(shell()->web_contents()));
 
-    scoped_refptr<MessageLoopRunner> runner = new MessageLoopRunner();
+    base::RunLoop run_loop;
     dialog_manager->set_dialog_request_callback(base::BindOnce(
-        &DeviceSensorBrowserTest::DelayAndQuit, base::Unretained(this), delay));
-    runner->Run();
+        [](base::TimeDelta delay, base::OnceClosure quit_closure) {
+          base::PlatformThread::Sleep(delay);
+          std::move(quit_closure).Run();
+        },
+        delay, run_loop.QuitWhenIdleClosure()));
+    run_loop.Run();
   }
 
   std::unique_ptr<FakeSensorProvider> sensor_provider_;
@@ -97,7 +96,6 @@ class DeviceSensorBrowserTest : public ContentBrowserTest {
   }
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
-    ContentBrowserTest::SetUpCommandLine(command_line);
     mock_cert_verifier_.SetUpCommandLine(command_line);
   }
 
@@ -210,7 +208,6 @@ IN_PROC_BROWSER_TEST_F(DeviceSensorBrowserTest, MotionNullTest) {
   EXPECT_EQ("pass", shell()->web_contents()->GetLastCommittedURL().ref());
 }
 
-// Disabled due to flakiness: https://crbug.com/783891
 IN_PROC_BROWSER_TEST_F(DeviceSensorBrowserTest,
                        MotionOnlySomeSensorsAreAvailableTest) {
   // The test page registers an event handler for motion events and
@@ -371,7 +368,7 @@ IN_PROC_BROWSER_TEST_F(DeviceSensorBrowserTest,
   EXPECT_TRUE(NavigateIframeToURL(shell()->web_contents(),
                                   "cross_origin_iframe", iframe_url));
 
-  console_observer.Wait();
+  ASSERT_TRUE(console_observer.Wait());
   EXPECT_EQ(kWarningMessage, console_observer.GetMessageAt(0u));
 }
 

@@ -1,14 +1,16 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/update_client/protocol_serializer_json.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "base/values.h"
 #include "base/version.h"
@@ -19,11 +21,7 @@
 #include "components/update_client/protocol_serializer.h"
 #include "components/update_client/test_activity_data_service.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/re2/src/re2/re2.h"
-
-using base::Value;
-using std::string;
 
 namespace update_client {
 
@@ -35,23 +33,23 @@ TEST(SerializeRequestJSON, Serialize) {
 
   {
     auto pref = std::make_unique<TestingPrefServiceSimple>();
-    PersistedData::RegisterPrefs(pref->registry());
-    auto metadata = std::make_unique<PersistedData>(pref.get(), nullptr);
+    RegisterPersistedDataPrefs(pref->registry());
+    auto metadata = CreatePersistedData(
+        base::BindRepeating([](PrefService* pref) { return pref; }, pref.get()),
+        nullptr);
     std::vector<std::string> items = {"id1"};
     test::SetDateLastData(metadata.get(), items, 1234);
 
-    std::vector<base::Value> events;
-    events.emplace_back(Value::Type::DICTIONARY);
-    events.emplace_back(Value::Type::DICTIONARY);
-    events[0].SetKey("a", Value(1));
-    events[0].SetKey("b", Value("2"));
-    events[1].SetKey("error", Value(0));
+    std::vector<base::Value::Dict> events(2);
+    events[0].Set("a", 1);
+    events[0].Set("b", "2");
+    events[1].Set("error", 0);
 
     std::vector<protocol_request::App> apps;
     apps.push_back(MakeProtocolApp(
-        "id1", base::Version("1.0"), "ap1", "BRND", "lang", "source1",
-        "location1", "fp1", {{"attr1", "1"}, {"attr2", "2"}}, "c1", "ch1",
-        "cn1", "test", {0, 1},
+        "id1", base::Version("1.0"), "ap1", "BRND", "ins_id", "lang", -1,
+        "source1", "location1", "fp1", {{"attr1", "1"}, {"attr2", "2"}}, "c1",
+        "ch1", "cn1", "test", {0, 1},
         MakeProtocolUpdateCheck(true, "33.12", true, false),
         {{"install", "foobar_install_data_index", ""}},
         MakeProtocolPing("id1", metadata.get(), {}), std::move(events)));
@@ -59,16 +57,18 @@ TEST(SerializeRequestJSON, Serialize) {
     const auto request = std::make_unique<ProtocolSerializerJSON>()->Serialize(
         MakeProtocolRequest(false, "{15160585-8ADE-4D3C-839B-1281A6035D1F}",
                             "prod_id", "1.0", "channel", "OS", "cacheable",
-                            absl::nullopt, {{"extra", "params"}}, {},
+                            std::nullopt, {{"extra", "params"}}, {},
                             std::move(apps)));
     constexpr char regex[] =
         R"({"request":{"@os":"\w+","@updater":"prod_id",)"
-        R"("acceptformat":"crx3",)"
+        R"("acceptformat":"crx3,puff",)"
         R"("app":\[{"ap":"ap1","appid":"id1","attr1":"1","attr2":"2",)"
         R"("brand":"BRND","cohort":"c1","cohorthint":"ch1","cohortname":"cn1",)"
         R"("data":\[{"index":"foobar_install_data_index","name":"install"}],)"
         R"("disabled":\[{"reason":0},{"reason":1}],"enabled":false,)"
         R"("event":\[{"a":1,"b":"2"},{"error":0}],)"
+        R"("iid":"ins_id",)"
+        R"("installdate":-1,)"
         R"("installedby":"location1","installsource":"source1",)"
         R"("lang":"lang",)"
         R"("packages":{"package":\[{"fp":"fp1"}]},)"
@@ -94,13 +94,13 @@ TEST(SerializeRequestJSON, Serialize) {
     // Tests `sameversionupdate` presence with a minimal request for one app.
     std::vector<protocol_request::App> apps;
     apps.push_back(MakeProtocolApp(
-        "id1", base::Version("1.0"), "", "", "", "", "", "", {}, "", "", "", "",
-        {}, MakeProtocolUpdateCheck(false, "", false, true), {}, absl::nullopt,
-        absl::nullopt));
+        "id1", base::Version("1.0"), "", "", "", "", -2, "", "", "", {}, "", "",
+        "", "", {}, MakeProtocolUpdateCheck(false, "", false, true), {},
+        std::nullopt, std::nullopt));
 
     const auto request = std::make_unique<ProtocolSerializerJSON>()->Serialize(
         MakeProtocolRequest(false, "{15160585-8ADE-4D3C-839B-1281A6035D1F}", "",
-                            "", "", "", "", absl::nullopt, {}, {},
+                            "", "", "", "", std::nullopt, {}, {},
                             std::move(apps)));
 
     constexpr char regex[] =
@@ -117,13 +117,13 @@ TEST(SerializeRequestJSON, DownloadPreference) {
   const auto serializer = std::make_unique<ProtocolSerializerJSON>();
   auto request = serializer->Serialize(
       MakeProtocolRequest(false, "{15160585-8ADE-4D3C-839B-1281A6035D1F}", "",
-                          "", "", "", "", absl::nullopt, {}, {}, {}));
+                          "", "", "", "", std::nullopt, {}, {}, {}));
   EXPECT_FALSE(RE2::PartialMatch(request, R"("dlpref":)")) << request;
 
   // Verifies that |download_preference| is serialized.
   request = serializer->Serialize(
       MakeProtocolRequest(false, "{15160585-8ADE-4D3C-839B-1281A6035D1F}", "",
-                          "", "", "", "cacheable", absl::nullopt, {}, {}, {}));
+                          "", "", "", "cacheable", std::nullopt, {}, {}, {}));
   EXPECT_TRUE(RE2::PartialMatch(request, R"("dlpref":"cacheable")")) << request;
 }
 
@@ -146,7 +146,7 @@ TEST(SerializeRequestJSON, UpdaterStateAttributes) {
       {}));
   constexpr char regex[] =
       R"({"request":{"@os":"\w+","@updater":"prod_id",)"
-      R"("acceptformat":"crx3","arch":"\w+","dedup":"cr",)"
+      R"("acceptformat":"crx3,puff","arch":"\w+","dedup":"cr",)"
       R"("dlpref":"cacheable","domainjoined":true,"extra":"params",)"
       R"("hw":{"avx":(true|false),)"
       R"("physmemory":\d+,"sse":(true|false),"sse2":(true|false),)"
@@ -172,7 +172,7 @@ TEST(SerializeRequestJSON, DomainJoined) {
   const auto serializer = std::make_unique<ProtocolSerializerJSON>();
   std::string request = serializer->Serialize(
       MakeProtocolRequest(false, "{15160585-8ADE-4D3C-839B-1281A6035D1F}", "",
-                          "", "", "", "", absl::nullopt, {}, {}, {}));
+                          "", "", "", "", std::nullopt, {}, {}, {}));
   EXPECT_FALSE(RE2::PartialMatch(request, R"("domainjoined")")) << request;
 
   request = serializer->Serialize(

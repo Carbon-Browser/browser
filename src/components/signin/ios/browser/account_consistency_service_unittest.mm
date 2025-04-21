@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,14 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/ios/ios_util.h"
+#import "base/memory/raw_ptr.h"
 #include "base/test/bind.h"
 #import "base/test/ios/wait_util.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/values.h"
-#include "components/content_settings/core/browser/cookie_settings.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/prefs/pref_service.h"
 #include "components/signin/core/browser/account_reconcilor.h"
@@ -32,17 +32,13 @@
 #include "ios/web/public/test/fakes/fake_browser_state.h"
 #import "ios/web/public/test/fakes/fake_web_state.h"
 #include "ios/web/public/test/web_task_environment.h"
-#include "net/base/mac/url_conversions.h"
+#include "net/base/apple/url_conversions.h"
 #include "net/cookies/cookie_util.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/platform_test.h"
 #include "third_party/ocmock/OCMock/OCMock.h"
 #include "third_party/ocmock/gtest_support.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 using testing::NiceMock;
 
@@ -78,8 +74,9 @@ bool ContainsCookie(const std::vector<net::CanonicalCookie>& cookies,
                     const std::string& domain) {
   for (const auto& cookie : cookies) {
     if (cookie.Name() == name) {
-      if (domain.empty() || cookie.Domain() == domain)
+      if (domain.empty() || cookie.Domain() == domain) {
         return true;
+      }
     }
   }
   return false;
@@ -99,8 +96,8 @@ class MockAccountReconcilor : public AccountReconcilor {
 // Fake delegate implementation; all it does it count delegate calls.
 class FakeManageAccountsDelegate : public ManageAccountsDelegate {
  public:
-  FakeManageAccountsDelegate() {}
-  ~FakeManageAccountsDelegate() override {}
+  FakeManageAccountsDelegate() = default;
+  ~FakeManageAccountsDelegate() override = default;
 
   void OnRestoreGaiaCookies() override { restore_cookies_call_count_++; }
   void OnManageAccounts() override { manage_accounts_call_count_++; }
@@ -137,8 +134,9 @@ class FakeWebState : public web::FakeWebState {
     decider_ = nullptr;
   }
   bool ShouldAllowResponse(NSURLResponse* response, bool for_main_frame) {
-    if (!decider_)
+    if (!decider_) {
       return true;
+    }
 
     __block web::WebStatePolicyDecider::PolicyDecision policyDecision =
         web::WebStatePolicyDecider::PolicyDecision::Allow();
@@ -151,40 +149,35 @@ class FakeWebState : public web::FakeWebState {
     return policyDecision.ShouldAllowNavigation();
   }
   void WebStateDestroyed() {
-    if (!decider_)
+    if (!decider_) {
       return;
+    }
     decider_->WebStateDestroyed();
   }
 
  private:
-  web::WebStatePolicyDecider* decider_;
+  raw_ptr<web::WebStatePolicyDecider> decider_;
 };
 
 }  // namespace
 
 class AccountConsistencyServiceTest : public PlatformTest {
  public:
-  AccountConsistencyServiceTest()
-      : task_environment_(web::WebTaskEnvironment::Options::DEFAULT,
-                          base::test::TaskEnvironment::TimeSource::MOCK_TIME) {}
+  AccountConsistencyServiceTest() = default;
 
  protected:
   void SetUp() override {
     PlatformTest::SetUp();
 
-    content_settings::CookieSettings::RegisterProfilePrefs(prefs_.registry());
     HostContentSettingsMap::RegisterProfilePrefs(prefs_.registry());
 
     signin_client_.reset(
         new TestSigninClient(&prefs_, &test_url_loader_factory_));
     identity_test_env_.reset(new signin::IdentityTestEnvironment(
-        /*test_url_loader_factory=*/nullptr, &prefs_,
-        signin::AccountConsistencyMethod::kDisabled, signin_client_.get()));
+        /*test_url_loader_factory=*/nullptr, &prefs_, signin_client_.get()));
     settings_map_ = new HostContentSettingsMap(
         &prefs_, false /* is_off_the_record */, false /* store_last_modified */,
-        false /* restore_session */);
-    cookie_settings_ = new content_settings::CookieSettings(settings_map_.get(),
-                                                            &prefs_, false, "");
+        false /* restore_session */, false /* should_record_metrics */);
     // Use a NiceMock here to suppress "uninteresting call" warnings.
     account_reconcilor_ =
         std::make_unique<NiceMock<MockAccountReconcilor>>(signin_client_.get());
@@ -216,8 +209,14 @@ class AccountConsistencyServiceTest : public PlatformTest {
       }
       account_consistency_service_->Shutdown();
     }
+    // base::Unretained(...) is safe since the AccountConsistencyService does
+    // not outlive the BrowserState.
+    auto cookie_manager_callback =
+        base::BindRepeating(&web::BrowserState::GetCookieManager,
+                            base::Unretained(&browser_state_));
+
     account_consistency_service_ = std::make_unique<AccountConsistencyService>(
-        &browser_state_, account_reconcilor_.get(), cookie_settings_,
+        std::move(cookie_manager_callback), account_reconcilor_.get(),
         identity_test_env_->identity_manager());
   }
 
@@ -308,7 +307,7 @@ class AccountConsistencyServiceTest : public PlatformTest {
     network::mojom::CookieDeletionFilterPtr filter =
         network::mojom::CookieDeletionFilter::New();
     filter->including_domains =
-        absl::optional<std::vector<std::string>>({kGoogleDomain});
+        std::optional<std::vector<std::string>>({kGoogleDomain});
     cookie_manager->DeleteCookies(std::move(filter),
                                   base::OnceCallback<void(uint)>());
   }
@@ -317,17 +316,17 @@ class AccountConsistencyServiceTest : public PlatformTest {
     // If we have already added the |web_state_| with a previous |delegate|,
     // remove it to enforce a one-to-one mapping between web state handler and
     // web state.
-    if (has_set_web_state_handler_)
+    if (has_set_web_state_handler_) {
       account_consistency_service_->RemoveWebStateHandler(&web_state_);
+    }
 
     account_consistency_service_->SetWebStateHandler(&web_state_, delegate);
     has_set_web_state_handler_ = true;
   }
 
   // Properties available for tests.
-  // Creates test threads, necessary for ActiveStateManager that needs a UI
-  // thread.
-  web::WebTaskEnvironment task_environment_;
+  web::WebTaskEnvironment task_environment_{
+      base::test::TaskEnvironment::TimeSource::MOCK_TIME};
   web::FakeBrowserState browser_state_;
   sync_preferences::TestingPrefServiceSyncable prefs_;
   FakeWebState web_state_;
@@ -358,12 +357,12 @@ class AccountConsistencyServiceTest : public PlatformTest {
     base::RunLoop run_loop;
     network::mojom::CookieManager* cookie_manager =
         browser_state_.GetCookieManager();
-    cookie_manager->GetAllCookies(base::BindOnce(base::BindLambdaForTesting(
+    cookie_manager->GetAllCookies(base::BindLambdaForTesting(
         [&run_loop,
          &cookies_out](const std::vector<net::CanonicalCookie>& cookies) {
           cookies_out = cookies;
           run_loop.Quit();
-        })));
+        }));
     run_loop.Run();
 
     return cookies_out;
@@ -372,7 +371,6 @@ class AccountConsistencyServiceTest : public PlatformTest {
   // Private properties.
   std::unique_ptr<TestSigninClient> signin_client_;
   scoped_refptr<HostContentSettingsMap> settings_map_;
-  scoped_refptr<content_settings::CookieSettings> cookie_settings_;
   bool has_set_web_state_handler_ = false;
 };
 

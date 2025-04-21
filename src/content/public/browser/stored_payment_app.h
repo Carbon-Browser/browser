@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,6 +38,7 @@ struct CONTENT_EXPORT StoredCapabilities {
 // This class represents the stored payment app.
 struct CONTENT_EXPORT StoredPaymentApp {
   StoredPaymentApp();
+  StoredPaymentApp(const StoredPaymentApp& other);
   ~StoredPaymentApp();
 
   // Id of the service worker registration this app is associated with.

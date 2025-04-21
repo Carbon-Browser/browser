@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,17 +8,23 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/command_line.h"
+#include "base/containers/contains.h"
 #include "base/fuchsia/fuchsia_logging.h"
 #include "base/fuchsia/process_context.h"
 #include "base/fuchsia/scheduler.h"
+#include "base/functional/callback.h"
+#include "base/time/time.h"
 #include "media/audio/fuchsia/audio_input_stream_fuchsia.h"
 #include "media/audio/fuchsia/audio_output_stream_fuchsia.h"
+#include "media/base/audio_parameters.h"
 #include "media/base/audio_timestamp_helper.h"
 #include "media/base/media_switches.h"
 
 namespace media {
+
+constexpr base::TimeDelta kMinBufferPeriod = base::kAudioSchedulingPeriod;
+constexpr base::TimeDelta kMaxBufferPeriod = base::Seconds(1);
 
 AudioManagerFuchsia::AudioManagerFuchsia(
     std::unique_ptr<AudioThread> audio_thread,
@@ -30,6 +36,16 @@ AudioManagerFuchsia::AudioManagerFuchsia(
 }
 
 AudioManagerFuchsia::~AudioManagerFuchsia() = default;
+
+void AudioManagerFuchsia::ShutdownOnAudioThread() {
+  DCHECK(GetTaskRunner()->BelongsToCurrentThread());
+
+  AudioManagerBase::ShutdownOnAudioThread();
+
+  // Teardown the AudioDeviceEnumerator channel before the audio
+  // thread, which it is bound to, stops.
+  enumerator_ = nullptr;
+}
 
 bool AudioManagerFuchsia::HasAudioOutputDevices() {
   return HasAudioDevice(false);
@@ -61,7 +77,7 @@ void AudioManagerFuchsia::GetAudioOutputDeviceNames(
 
 AudioParameters AudioManagerFuchsia::GetInputStreamParameters(
     const std::string& device_id) {
-  // TODO(crbug.com/852834): Fuchsia currently doesn't provide an API to get
+  // TODO(crbug.com/42050621): Fuchsia currently doesn't provide an API to get
   // device configuration and supported effects. Update this method when that
   // functionality is implemented.
   //
@@ -71,7 +87,8 @@ AudioParameters AudioManagerFuchsia::GetInputStreamParameters(
   const size_t kPeriodSamples = AudioTimestampHelper::TimeToFrames(
       base::kAudioSchedulingPeriod, kSampleRate);
   AudioParameters params(AudioParameters::AUDIO_PCM_LOW_LATENCY,
-                         CHANNEL_LAYOUT_MONO, kSampleRate, kPeriodSamples);
+                         ChannelLayoutConfig::Mono(), kSampleRate,
+                         kPeriodSamples);
 
   // Some AudioCapturer implementations support echo cancellation, noise
   // suppression and automatic gain control, but currently there is no way to
@@ -90,14 +107,36 @@ AudioParameters AudioManagerFuchsia::GetInputStreamParameters(
 AudioParameters AudioManagerFuchsia::GetPreferredOutputStreamParameters(
     const std::string& output_device_id,
     const AudioParameters& input_params) {
-  // TODO(crbug.com/852834): Fuchsia currently doesn't provide an API to get
+  if (input_params.IsValid()) {
+    AudioParameters params = input_params;
+
+    base::TimeDelta period = AudioTimestampHelper::FramesToTime(
+        input_params.frames_per_buffer(), input_params.sample_rate());
+
+    // Round period to a whole number of the CPU scheduling periods.
+    period = round(period / base::kAudioSchedulingPeriod) *
+             base::kAudioSchedulingPeriod;
+    period = std::min(kMaxBufferPeriod, std::max(period, kMinBufferPeriod));
+
+    params.set_frames_per_buffer(
+        AudioTimestampHelper::TimeToFrames(period, params.sample_rate()));
+
+    return params;
+  }
+
+  // TODO(crbug.com/42050621): Fuchsia currently doesn't provide an API to get
   // device configuration. Update this method when that functionality is
   // implemented.
-  const size_t kSampleRate = 48000;
-  const size_t kPeriodFrames = AudioTimestampHelper::TimeToFrames(
-      base::kAudioSchedulingPeriod, kSampleRate);
+  const int kSampleRate = 48000;
+  const int kMinPeriodFrames =
+      AudioTimestampHelper::TimeToFrames(kMinBufferPeriod, kSampleRate);
+  const int kMaxPeriodFrames =
+      AudioTimestampHelper::TimeToFrames(kMaxBufferPeriod, kSampleRate);
   return AudioParameters(AudioParameters::AUDIO_PCM_LOW_LATENCY,
-                         CHANNEL_LAYOUT_STEREO, kSampleRate, kPeriodFrames);
+                         ChannelLayoutConfig::Stereo(), kSampleRate,
+                         kMinPeriodFrames,
+                         AudioParameters::HardwareCapabilities(
+                             kMinPeriodFrames, kMaxPeriodFrames));
 }
 
 const char* AudioManagerFuchsia::GetName() {
@@ -108,7 +147,6 @@ AudioOutputStream* AudioManagerFuchsia::MakeLinearOutputStream(
     const AudioParameters& params,
     const LogCallback& log_callback) {
   NOTREACHED();
-  return nullptr;
 }
 
 AudioOutputStream* AudioManagerFuchsia::MakeLowLatencyOutputStream(
@@ -119,7 +157,7 @@ AudioOutputStream* AudioManagerFuchsia::MakeLowLatencyOutputStream(
 
   if (!device_id.empty() &&
       device_id != AudioDeviceDescription::kDefaultDeviceId) {
-    // TODO(crbug.com/852834): Fuchsia currently doesn't provide an API to
+    // TODO(crbug.com/42050621): Fuchsia currently doesn't provide an API to
     // specify a device to use.
     LOG(ERROR) << "Specifying not default output device (" << device_id
                << ") is not implemented.";
@@ -158,7 +196,7 @@ AudioInputStream* AudioManagerFuchsia::MakeInputStream(
   if (!device_id.empty() &&
       device_id != AudioDeviceDescription::kDefaultDeviceId &&
       device_id != AudioDeviceDescription::kLoopbackInputDeviceId) {
-    // TODO(crbug.com/852834): Fuchsia currently doesn't provide an API to
+    // TODO(crbug.com/42050621): Fuchsia currently doesn't provide an API to
     // specify a device to use.
     LOG(ERROR) << "Specifying not default input device (" << device_id
                << ") is not implemented.";
@@ -215,18 +253,17 @@ void AudioManagerFuchsia::OnDeviceRemoved(uint64_t device_token) {
 bool AudioManagerFuchsia::HasAudioDevice(bool is_input) {
   DCHECK(GetTaskRunner()->BelongsToCurrentThread());
 
-  return std::find_if(audio_devices_.begin(), audio_devices_.end(),
-                      [is_input](const auto& device) {
-                        return device.second.is_input == is_input;
-                      }) != audio_devices_.end();
+  return base::Contains(audio_devices_, is_input, [](const auto& device) {
+    return device.second.is_input;
+  });
 }
 
 void AudioManagerFuchsia::GetAudioDevices(AudioDeviceNames* device_names,
                                           bool is_input) {
   DCHECK(GetTaskRunner()->BelongsToCurrentThread());
 
-  // TODO(crbug.com/852834): Fuchsia currently doesn't provide an API to specify
-  // a device to use. Until then only return the default device.
+  // TODO(crbug.com/42050621): Fuchsia currently doesn't provide an API to
+  // specify a device to use. Until then only return the default device.
   device_names->clear();
   if (HasAudioDevice(is_input)) {
     *device_names = {AudioDeviceName::CreateDefault()};

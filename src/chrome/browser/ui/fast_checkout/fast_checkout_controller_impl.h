@@ -1,13 +1,14 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_FAST_CHECKOUT_FAST_CHECKOUT_CONTROLLER_IMPL_H_
 #define CHROME_BROWSER_UI_FAST_CHECKOUT_FAST_CHECKOUT_CONTROLLER_IMPL_H_
 
-#include "chrome/browser/ui/fast_checkout/fast_checkout_controller.h"
-
 #include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
+#include "chrome/browser/ui/fast_checkout/fast_checkout_controller.h"
+#include "chrome/browser/ui/fast_checkout/fast_checkout_view.h"
 #include "ui/gfx/native_widget_types.h"
 
 namespace content {
@@ -41,18 +42,36 @@ class FastCheckoutControllerImpl : public FastCheckoutController {
       delete;
 
   // FastCheckoutController:
-  void Show() override;
+  void Show(
+      const std::vector<const autofill::AutofillProfile*>& autofill_profiles,
+      const std::vector<const autofill::CreditCard*>& credit_cards) override;
   void OnOptionsSelected(
       std::unique_ptr<autofill::AutofillProfile> profile,
       std::unique_ptr<autofill::CreditCard> credit_card) override;
   void OnDismiss() override;
+  void OpenAutofillProfileSettings() override;
+  void OpenCreditCardSettings() override;
   gfx::NativeView GetNativeView() override;
+
+ protected:
+  // Methods below are protected (rather than private) and virtual for
+  // testing.
+
+  // Gets or creates (if needed) the FastCheckoutView associated with this
+  // controller.
+  virtual FastCheckoutView* GetOrCreateView();
 
  private:
   // Weak pointer to the WebContents this class is tied to.
   const raw_ptr<content::WebContents> web_contents_;
 
+  // View used to communicate with the Android frontend. It's non-null between
+  // Show() and OnDismiss()/OnOptionsSelected().
+  std::unique_ptr<FastCheckoutView> view_;
+
   // The delegate of UI events. It must outlive `this`.
   const raw_ptr<Delegate> delegate_;
+
+  base::WeakPtrFactory<FastCheckoutController> weak_ptr_factory_{this};
 };
 #endif  // CHROME_BROWSER_UI_FAST_CHECKOUT_FAST_CHECKOUT_CONTROLLER_IMPL_H_

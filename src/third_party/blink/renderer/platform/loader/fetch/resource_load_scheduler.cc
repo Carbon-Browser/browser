@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,10 @@
 #include <memory>
 #include <string>
 
+#include "base/containers/contains.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram.h"
+#include "base/not_fatal_until.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/time/default_clock.h"
@@ -59,16 +61,19 @@ uint32_t GetFieldTrialUint32Param(const char* trial_name,
                                   uint32_t default_param) {
   base::FieldTrialParams trial_params;
   bool result = base::GetFieldTrialParams(trial_name, &trial_params);
-  if (!result)
+  if (!result) {
     return default_param;
+  }
 
   const auto& found = trial_params.find(parameter_name);
-  if (found == trial_params.end())
+  if (found == trial_params.end()) {
     return default_param;
+  }
 
   uint32_t param;
-  if (!base::StringToUint(found->second, &param))
+  if (!base::StringToUint(found->second, &param)) {
     return default_param;
+  }
 
   return param;
 }
@@ -93,8 +98,9 @@ ResourceLoadScheduler::ResourceLoadScheduler(
       clock_(base::DefaultClock::GetInstance()),
       throttle_option_override_(throttle_option_override),
       loading_behavior_observer_(loading_behavior_observer) {
-  if (!frame_or_worker_scheduler)
+  if (!frame_or_worker_scheduler) {
     return;
+  }
 
   normal_outstanding_limit_ =
       GetFieldTrialUint32Param(kRendererSideResourceScheduler,
@@ -104,6 +110,10 @@ ResourceLoadScheduler::ResourceLoadScheduler(
       GetFieldTrialUint32Param(kRendererSideResourceScheduler,
                                kTightLimitForRendererSideResourceSchedulerName,
                                kTightLimitForRendererSideResourceScheduler);
+
+  if (base::FeatureList::IsEnabled(features::kBoostImagePriority)) {
+    tight_medium_limit_ = features::kBoostImagePriorityTightMediumLimit.Get();
+  }
 
   scheduler_observer_handle_ = frame_or_worker_scheduler->AddLifecycleObserver(
       FrameScheduler::ObserverType::kLoader,
@@ -133,8 +143,9 @@ void ResourceLoadScheduler::LoosenThrottlingPolicy() {
 
 void ResourceLoadScheduler::Shutdown() {
   // Do nothing if the feature is not enabled, or Shutdown() was already called.
-  if (is_shutdown_)
+  if (is_shutdown_) {
     return;
+  }
   is_shutdown_ = true;
 
   scheduler_observer_handle_.reset();
@@ -146,8 +157,9 @@ void ResourceLoadScheduler::Request(ResourceLoadSchedulerClient* client,
                                     int intra_priority,
                                     ResourceLoadScheduler::ClientId* id) {
   *id = GenerateClientId();
-  if (is_shutdown_)
+  if (is_shutdown_) {
     return;
+  }
 
   if (option == ThrottleOption::kStoppable &&
       throttle_option_override_ ==
@@ -158,14 +170,15 @@ void ResourceLoadScheduler::Request(ResourceLoadSchedulerClient* client,
   // Check if the request can be throttled.
   ClientIdWithPriority request_info(*id, priority, intra_priority);
   if (!IsClientDelayable(option)) {
-    Run(*id, client, /*throttleable=*/false);
+    Run(*id, client, /*throttleable=*/false, priority);
     return;
   }
 
   DCHECK(ThrottleOption::kStoppable == option ||
          ThrottleOption::kThrottleable == option);
-  if (pending_requests_[option].empty())
+  if (pending_requests_[option].empty()) {
     pending_queue_update_times_[option] = clock_->Now();
+  }
   pending_requests_[option].insert(request_info);
   pending_request_map_.insert(
       *id, MakeGarbageCollected<ClientInfo>(client, option, priority,
@@ -180,15 +193,16 @@ void ResourceLoadScheduler::SetPriority(ClientId client_id,
                                         ResourceLoadPriority priority,
                                         int intra_priority) {
   auto client_it = pending_request_map_.find(client_id);
-  if (client_it == pending_request_map_.end())
+  if (client_it == pending_request_map_.end()) {
     return;
+  }
 
   auto& throttle_option_queue = pending_requests_[client_it->value->option];
 
   auto it = throttle_option_queue.find(ClientIdWithPriority(
       client_id, client_it->value->priority, client_it->value->intra_priority));
 
-  DCHECK(it != throttle_option_queue.end());
+  CHECK(it != throttle_option_queue.end(), base::NotFatalUntil::M130);
   throttle_option_queue.erase(it);
 
   client_it->value->priority = priority;
@@ -203,19 +217,19 @@ bool ResourceLoadScheduler::Release(
     ResourceLoadScheduler::ReleaseOption option,
     const ResourceLoadScheduler::TrafficReportHints& hints) {
   // Check kInvalidClientId that can not be passed to the HashSet.
-  if (id == kInvalidClientId)
+  if (id == kInvalidClientId) {
     return false;
+  }
 
   auto running_request = running_requests_.find(id);
   if (running_request != running_requests_.end()) {
-    if (running_request->value)
-      in_flight_on_multiplexed_connections_--;
-
     running_requests_.erase(id);
     running_throttleable_requests_.erase(id);
+    running_medium_requests_.erase(id);
 
-    if (option == ReleaseOption::kReleaseAndSchedule)
+    if (option == ReleaseOption::kReleaseAndSchedule) {
       MaybeRun();
+    }
     return true;
   }
 
@@ -229,17 +243,21 @@ bool ResourceLoadScheduler::Release(
 
     // Didn't release any running requests, but the outstanding limit might be
     // changed to allow another request.
-    if (option == ReleaseOption::kReleaseAndSchedule)
+    if (option == ReleaseOption::kReleaseAndSchedule) {
       MaybeRun();
+    }
     return true;
   }
   return false;
 }
 
-void ResourceLoadScheduler::SetOutstandingLimitForTesting(size_t tight_limit,
-                                                          size_t normal_limit) {
+void ResourceLoadScheduler::SetOutstandingLimitForTesting(
+    size_t tight_limit,
+    size_t normal_limit,
+    size_t tight_medium_limit) {
   tight_outstanding_limit_ = tight_limit;
   normal_outstanding_limit_ = normal_limit;
+  tight_medium_limit_ = tight_medium_limit;
   MaybeRun();
 }
 
@@ -256,13 +274,15 @@ bool ResourceLoadScheduler::IsClientDelayable(ThrottleOption option) const {
 
 void ResourceLoadScheduler::OnLifecycleStateChanged(
     scheduler::SchedulingLifecycleState state) {
-  if (frame_scheduler_lifecycle_state_ == state)
+  if (frame_scheduler_lifecycle_state_ == state) {
     return;
+  }
 
   frame_scheduler_lifecycle_state_ = state;
 
-  if (state == scheduler::SchedulingLifecycleState::kNotThrottled)
+  if (state == scheduler::SchedulingLifecycleState::kNotThrottled) {
     ShowConsoleMessageIfNeeded();
+  }
 
   MaybeRun();
 }
@@ -280,8 +300,7 @@ bool ResourceLoadScheduler::IsPendingRequestEffectivelyEmpty(
     // the request is canceled, or Release() is called before firing its Run(),
     // the entry for the request remains in |pending_request_| until it is
     // popped in GetNextPendingRequest().
-    if (pending_request_map_.find(client.client_id) !=
-        pending_request_map_.end()) {
+    if (base::Contains(pending_request_map_, client.client_id)) {
       return false;
     }
   }
@@ -300,17 +319,20 @@ bool ResourceLoadScheduler::GetNextPendingRequest(ClientId* id) {
       stoppable_it != stoppable_queue.end() &&
       (!IsClientDelayable(ThrottleOption::kStoppable) ||
        IsRunningThrottleableRequestsLessThanOutStandingLimit(
-           GetOutstandingLimit(stoppable_it->priority)));
+           GetOutstandingLimit(stoppable_it->priority),
+           stoppable_it->priority));
 
   auto throttleable_it = throttleable_queue.begin();
   bool has_runnable_throttleable_request =
       throttleable_it != throttleable_queue.end() &&
       (!IsClientDelayable(ThrottleOption::kThrottleable) ||
        IsRunningThrottleableRequestsLessThanOutStandingLimit(
-           GetOutstandingLimit(throttleable_it->priority)));
+           GetOutstandingLimit(throttleable_it->priority),
+           throttleable_it->priority));
 
-  if (!has_runnable_throttleable_request && !has_runnable_stoppable_request)
+  if (!has_runnable_throttleable_request && !has_runnable_stoppable_request) {
     return false;
+  }
 
   // If both requests are allowed to be run, run the high priority requests
   // first.
@@ -337,35 +359,36 @@ bool ResourceLoadScheduler::GetNextPendingRequest(ClientId* id) {
 void ResourceLoadScheduler::MaybeRun() {
   // Requests for keep-alive loaders could be remained in the pending queue,
   // but ignore them once Shutdown() is called.
-  if (is_shutdown_)
+  if (is_shutdown_) {
     return;
-
-  // Updates the RTT before getting the next pending request in the tight mode.
-  if (policy_ == ThrottlingPolicy::kTight) {
-    http_rtt_ = http_rtt_for_testing_ ? http_rtt_for_testing_
-                                      : GetNetworkStateNotifier().HttpRtt();
   }
 
   ClientId id = kInvalidClientId;
   while (GetNextPendingRequest(&id)) {
     auto found = pending_request_map_.find(id);
-    if (found == pending_request_map_.end())
+    if (found == pending_request_map_.end()) {
       continue;  // Already released.
+    }
 
     ResourceLoadSchedulerClient* client = found->value->client;
     ThrottleOption option = found->value->option;
+    ResourceLoadPriority priority = found->value->priority;
     pending_request_map_.erase(found);
-    Run(id, client, option == ThrottleOption::kThrottleable);
+    Run(id, client, option == ThrottleOption::kThrottleable, priority);
   }
 }
 
 void ResourceLoadScheduler::Run(ResourceLoadScheduler::ClientId id,
                                 ResourceLoadSchedulerClient* client,
-                                bool throttleable) {
-  // Assuming the request connection is not multiplexed.
-  running_requests_.insert(id, IsMultiplexedConnection(false));
-  if (throttleable)
+                                bool throttleable,
+                                ResourceLoadPriority priority) {
+  running_requests_.insert(id);
+  if (throttleable) {
     running_throttleable_requests_.insert(id);
+  }
+  if (priority == ResourceLoadPriority::kMedium) {
+    running_medium_requests_.insert(id);
+  }
   client->Run();
 }
 
@@ -385,18 +408,11 @@ size_t ResourceLoadScheduler::GetOutstandingLimit(
       break;
   }
 
-  size_t policy_limit = normal_outstanding_limit_;
   switch (policy_) {
     case ThrottlingPolicy::kTight:
-      if (priority < ResourceLoadPriority::kHigh) {
-        if (CanRequestForMultiplexedConnectionsInTight()) {
-          policy_limit = static_cast<size_t>(
-              features::kMaxNumOfThrottleableRequestsInTightMode.Get());
-        } else {
-          policy_limit = tight_outstanding_limit_;
-        }
-      }
-      limit = std::min(limit, policy_limit);
+      limit = std::min(limit, priority < ResourceLoadPriority::kHigh
+                                  ? tight_outstanding_limit_
+                                  : normal_outstanding_limit_);
       break;
     case ThrottlingPolicy::kNormal:
       limit = std::min(limit, normal_outstanding_limit_);
@@ -406,8 +422,9 @@ size_t ResourceLoadScheduler::GetOutstandingLimit(
 }
 
 void ResourceLoadScheduler::ShowConsoleMessageIfNeeded() {
-  if (is_console_info_shown_ || pending_request_map_.IsEmpty())
+  if (is_console_info_shown_ || pending_request_map_.empty()) {
     return;
+  }
 
   const base::Time limit = clock_->Now() - base::Seconds(60);
   if ((pending_queue_update_times_[ThrottleOption::kThrottleable] >= limit ||
@@ -430,58 +447,19 @@ void ResourceLoadScheduler::ShowConsoleMessageIfNeeded() {
 
 bool ResourceLoadScheduler::
     IsRunningThrottleableRequestsLessThanOutStandingLimit(
-        size_t out_standing_limit) {
-  if (CanRequestForMultiplexedConnectionsInTight()) {
-    DCHECK_EQ(policy_, ThrottlingPolicy::kTight);
-    return (running_throttleable_requests_.size() -
-            in_flight_on_multiplexed_connections_ *
-                features::kCostReductionOfMultiplexedRequests.Get()) <
-           out_standing_limit;
+        size_t out_standing_limit,
+        ResourceLoadPriority priority) {
+  // Allow for a minimum number of medium-priority requests to be in-flight
+  // independent of the overall number of pending requests.
+  if (priority == ResourceLoadPriority::kMedium &&
+      running_medium_requests_.size() < tight_medium_limit_) {
+    return true;
   }
-
   return running_throttleable_requests_.size() < out_standing_limit;
 }
 
 void ResourceLoadScheduler::SetClockForTesting(const base::Clock* clock) {
   clock_ = clock;
-}
-
-void ResourceLoadScheduler::SetConnectionInfo(
-    ClientId id,
-    net::HttpResponseInfo::ConnectionInfo connection_info) {
-  DCHECK_NE(kInvalidClientId, id);
-
-  // `is_multiplexed` will be set false if the connection of the given client
-  // doesn't support multiplexing (e.g., HTTP/1.x).
-  bool is_multiplexed = true;
-  switch (connection_info) {
-    case net::HttpResponseInfo::CONNECTION_INFO_HTTP0_9:
-    case net::HttpResponseInfo::CONNECTION_INFO_HTTP1_0:
-    case net::HttpResponseInfo::CONNECTION_INFO_HTTP1_1:
-    case net::HttpResponseInfo::CONNECTION_INFO_UNKNOWN:
-      is_multiplexed = false;
-      break;
-    default:
-      break;
-  }
-
-  auto running_request = running_requests_.find(id);
-  if (running_request != running_requests_.end() && is_multiplexed) {
-    running_request->value = IsMultiplexedConnection(true);
-    in_flight_on_multiplexed_connections_++;
-  }
-
-  MaybeRun();
-}
-
-bool ResourceLoadScheduler::CanRequestForMultiplexedConnectionsInTight() const {
-  // `kDelayLowPriorityRequestAccordingToNetworkState` will be triggered
-  // practically iff it's in the tight mode and the value of RTT is less than
-  // the `kThresholdOfHttpRtt`.
-  return base::FeatureList::IsEnabled(
-             features::kDelayLowPriorityRequestsAccordingToNetworkState) &&
-         policy_ == ThrottlingPolicy::kTight && http_rtt_ &&
-         http_rtt_.value() < features::kHttpRttThreshold.Get();
 }
 
 }  // namespace blink

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include "base/containers/flat_map.h"
 #include "base/memory/ptr_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/time/time.h"
@@ -17,8 +18,9 @@
 
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/jni_string.h"
-#include "chrome/browser/profiles/profile_android.h"
+#include "chrome/browser/profiles/profile.h"
 
+// Must come after other includes, because FromJniType() uses Profile.
 #include "chrome/browser/share/jni_headers/ShareHistoryBridge_jni.h"
 
 using base::android::JavaParamRef;
@@ -124,7 +126,7 @@ void ShareHistory::GetFlatShareHistory(GetFlatHistoryCallback callback,
   }
 
   if (db_init_status_ != leveldb_proto::Enums::kOK) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), std::vector<Target>()));
     return;
   }
@@ -150,7 +152,7 @@ void ShareHistory::GetFlatShareHistory(GetFlatHistoryCallback callback,
   std::sort(result.begin(), result.end(),
             [](const Target& a, const Target& b) { return a.count > b.count; });
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), result));
 }
 
@@ -182,7 +184,7 @@ void ShareHistory::OnInitDone(leveldb_proto::Enums::InitStatus status) {
     // as in the happy case, but without going through LevelDB; i.e., act as
     // though the initial read failed, instead of the LevelDB initialization, so
     // that control always ends up in OnInitialReadDone.
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&ShareHistory::OnInitialReadDone,
                                   weak_factory_.GetWeakPtr(), false,
                                   std::make_unique<mojom::ShareHistory>()));
@@ -244,17 +246,14 @@ mojom::TargetShareHistory* ShareHistory::TargetShareHistoryByName(
 
 #if BUILDFLAG(IS_ANDROID)
 void JNI_ShareHistoryBridge_AddShareEntry(JNIEnv* env,
-                                          const JavaParamRef<jobject>& jprofile,
+                                          Profile* profile,
                                           const JavaParamRef<jstring>& name) {
-  Profile* profile = ProfileAndroid::FromProfileAndroid(jprofile);
   auto* instance = sharing::ShareHistory::Get(profile);
   if (instance)
     instance->AddShareEntry(base::android::ConvertJavaStringToUTF8(env, name));
 }
 
-void JNI_ShareHistoryBridge_Clear(JNIEnv* env,
-                                  const JavaParamRef<jobject>& jprofile) {
-  Profile* profile = ProfileAndroid::FromProfileAndroid(jprofile);
+void JNI_ShareHistoryBridge_Clear(JNIEnv* env, Profile* profile) {
   auto* instance = sharing::ShareHistory::Get(profile);
   if (instance)
     instance->Clear();

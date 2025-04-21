@@ -1,10 +1,19 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "third_party/blink/renderer/core/css/properties/css_direction_aware_resolver.h"
 
+#include "third_party/blink/renderer/core/css/properties/longhands.h"
+#include "third_party/blink/renderer/core/css/properties/shorthands.h"
 #include "third_party/blink/renderer/core/style_property_shorthand.h"
+#include "third_party/blink/renderer/platform/text/writing_direction_mode.h"
+#include "third_party/blink/renderer/platform/wtf/assertions.h"
 
 namespace blink {
 namespace {
@@ -15,7 +24,6 @@ template <size_t size>
 using PhysicalMapping = CSSDirectionAwareResolver::PhysicalMapping<size>;
 
 enum PhysicalAxis { kPhysicalAxisX, kPhysicalAxisY };
-enum PhysicalBoxSide { kTopSide, kRightSide, kBottomSide, kLeftSide };
 enum PhysicalBoxCorner {
   kTopLeftCorner,
   kTopRightCorner,
@@ -23,12 +31,35 @@ enum PhysicalBoxCorner {
   kBottomLeftCorner
 };
 
+constexpr size_t kWritingModeSize =
+    static_cast<size_t>(WritingMode::kMaxWritingMode) + 1;
+// Following four arrays contain values for horizontal-tb, vertical-rl,
+// vertical-lr, sideways-rl, and sideways-lr in this order.
+constexpr uint8_t kStartStartMap[kWritingModeSize] = {
+    kTopLeftCorner, kTopRightCorner, kTopLeftCorner, kTopRightCorner,
+    kBottomLeftCorner};
+constexpr uint8_t kStartEndMap[kWritingModeSize] = {
+    kTopRightCorner, kBottomRightCorner, kBottomLeftCorner, kBottomRightCorner,
+    kTopLeftCorner};
+constexpr uint8_t kEndStartMap[kWritingModeSize] = {
+    kBottomLeftCorner, kTopLeftCorner, kTopRightCorner, kTopLeftCorner,
+    kBottomRightCorner};
+constexpr uint8_t kEndEndMap[kWritingModeSize] = {
+    kBottomRightCorner, kBottomLeftCorner, kBottomRightCorner,
+    kBottomLeftCorner, kTopRightCorner};
+
+// Prerequisites for Physical*Mapping().
+STATIC_ASSERT_ENUM(PhysicalDirection::kUp, 0);
+STATIC_ASSERT_ENUM(PhysicalDirection::kRight, 1);
+STATIC_ASSERT_ENUM(PhysicalDirection::kDown, 2);
+STATIC_ASSERT_ENUM(PhysicalDirection::kLeft, 3);
+
 }  // namespace
 
 template <size_t size>
 CSSDirectionAwareResolver::Group<size>::Group(
     const StylePropertyShorthand& shorthand)
-    : properties_(shorthand.properties()) {
+    : properties_(shorthand.properties().data()) {
   DCHECK_EQ(size, shorthand.length());
 }
 
@@ -47,8 +78,9 @@ const CSSProperty& CSSDirectionAwareResolver::Group<size>::GetProperty(
 template <size_t size>
 bool CSSDirectionAwareResolver::Group<size>::Contains(CSSPropertyID id) const {
   for (size_t i = 0; i < size; ++i) {
-    if (properties_[i]->IDEquals(id))
+    if (properties_[i]->IDEquals(id)) {
       return true;
+    }
   }
   return false;
 }
@@ -236,6 +268,18 @@ PhysicalMapping<4> CSSDirectionAwareResolver::PhysicalScrollPaddingMapping() {
   return PhysicalMapping<4>(scrollPaddingShorthand());
 }
 
+LogicalMapping<2> CSSDirectionAwareResolver::LogicalScrollStartMapping() {
+  static const CSSProperty* kProperties[] = {
+      &GetCSSPropertyScrollStartBlock(), &GetCSSPropertyScrollStartInline()};
+  return LogicalMapping<2>(kProperties);
+}
+
+PhysicalMapping<2> CSSDirectionAwareResolver::PhysicalScrollStartMapping() {
+  static const CSSProperty* kProperties[] = {&GetCSSPropertyScrollStartX(),
+                                             &GetCSSPropertyScrollStartY()};
+  return PhysicalMapping<2>(kProperties);
+}
+
 LogicalMapping<2> CSSDirectionAwareResolver::LogicalSizeMapping() {
   static const CSSProperty* kProperties[] = {&GetCSSPropertyBlockSize(),
                                              &GetCSSPropertyInlineSize()};
@@ -269,139 +313,86 @@ CSSDirectionAwareResolver::PhysicalVisitedBorderColorMapping() {
 }
 
 const CSSProperty& CSSDirectionAwareResolver::ResolveInlineStart(
-    TextDirection direction,
-    WritingMode writing_mode,
+    WritingDirectionMode writing_direction,
     const PhysicalMapping<4>& group) {
-  if (direction == TextDirection::kLtr) {
-    if (IsHorizontalWritingMode(writing_mode))
-      return group.GetProperty(kLeftSide);
-    return group.GetProperty(kTopSide);
-  }
-  if (IsHorizontalWritingMode(writing_mode))
-    return group.GetProperty(kRightSide);
-  return group.GetProperty(kBottomSide);
+  return group.GetProperty(
+      static_cast<size_t>(writing_direction.InlineStart()));
 }
 
 const CSSProperty& CSSDirectionAwareResolver::ResolveInlineEnd(
-    TextDirection direction,
-    WritingMode writing_mode,
+    WritingDirectionMode writing_direction,
     const PhysicalMapping<4>& group) {
-  if (direction == TextDirection::kLtr) {
-    if (IsHorizontalWritingMode(writing_mode))
-      return group.GetProperty(kRightSide);
-    return group.GetProperty(kBottomSide);
-  }
-  if (IsHorizontalWritingMode(writing_mode))
-    return group.GetProperty(kLeftSide);
-  return group.GetProperty(kTopSide);
+  return group.GetProperty(static_cast<size_t>(writing_direction.InlineEnd()));
 }
 
 const CSSProperty& CSSDirectionAwareResolver::ResolveBlockStart(
-    TextDirection direction,
-    WritingMode writing_mode,
+    WritingDirectionMode writing_direction,
     const PhysicalMapping<4>& group) {
-  if (IsHorizontalWritingMode(writing_mode))
-    return group.GetProperty(kTopSide);
-  if (IsFlippedLinesWritingMode(writing_mode))
-    return group.GetProperty(kLeftSide);
-  return group.GetProperty(kRightSide);
+  return group.GetProperty(static_cast<size_t>(writing_direction.BlockStart()));
 }
 
 const CSSProperty& CSSDirectionAwareResolver::ResolveBlockEnd(
-    TextDirection direction,
-    WritingMode writing_mode,
+    WritingDirectionMode writing_direction,
     const PhysicalMapping<4>& group) {
-  if (IsHorizontalWritingMode(writing_mode))
-    return group.GetProperty(kBottomSide);
-  if (IsFlippedLinesWritingMode(writing_mode))
-    return group.GetProperty(kRightSide);
-  return group.GetProperty(kLeftSide);
+  return group.GetProperty(static_cast<size_t>(writing_direction.BlockEnd()));
 }
 
 const CSSProperty& CSSDirectionAwareResolver::ResolveInline(
-    TextDirection,
-    WritingMode writing_mode,
+    WritingDirectionMode writing_direction,
     const PhysicalMapping<2>& group) {
-  if (IsHorizontalWritingMode(writing_mode))
+  if (writing_direction.IsHorizontal()) {
     return group.GetProperty(kPhysicalAxisX);
+  }
   return group.GetProperty(kPhysicalAxisY);
 }
 
 const CSSProperty& CSSDirectionAwareResolver::ResolveBlock(
-    TextDirection,
-    WritingMode writing_mode,
+    WritingDirectionMode writing_direction,
     const PhysicalMapping<2>& group) {
-  if (IsHorizontalWritingMode(writing_mode))
+  if (writing_direction.IsHorizontal()) {
     return group.GetProperty(kPhysicalAxisY);
+  }
   return group.GetProperty(kPhysicalAxisX);
 }
 
 const CSSProperty& CSSDirectionAwareResolver::ResolveStartStart(
-    TextDirection direction,
-    WritingMode writing_mode,
+    WritingDirectionMode writing_direction,
     const PhysicalMapping<4>& group) {
-  if (direction == TextDirection::kLtr) {
-    if (IsHorizontalWritingMode(writing_mode) ||
-        IsFlippedLinesWritingMode(writing_mode))
-      return group.GetProperty(kTopLeftCorner);
-    return group.GetProperty(kTopRightCorner);
+  WritingMode writing_mode = writing_direction.GetWritingMode();
+  if (writing_direction.IsLtr()) {
+    return group.GetProperty(kStartStartMap[static_cast<int>(writing_mode)]);
   }
-  if (IsHorizontalWritingMode(writing_mode))
-    return group.GetProperty(kTopRightCorner);
-  if (IsFlippedLinesWritingMode(writing_mode))
-    return group.GetProperty(kBottomLeftCorner);
-  return group.GetProperty(kBottomRightCorner);
+  return group.GetProperty(kStartEndMap[static_cast<int>(writing_mode)]);
 }
 
 const CSSProperty& CSSDirectionAwareResolver::ResolveStartEnd(
-    TextDirection direction,
-    WritingMode writing_mode,
+    WritingDirectionMode writing_direction,
     const PhysicalMapping<4>& group) {
-  if (direction == TextDirection::kLtr) {
-    if (IsHorizontalWritingMode(writing_mode))
-      return group.GetProperty(kTopRightCorner);
-    if (IsFlippedLinesWritingMode(writing_mode))
-      return group.GetProperty(kBottomLeftCorner);
-    return group.GetProperty(kBottomRightCorner);
+  WritingMode writing_mode = writing_direction.GetWritingMode();
+  if (writing_direction.IsLtr()) {
+    return group.GetProperty(kStartEndMap[static_cast<int>(writing_mode)]);
   }
-  if (IsHorizontalWritingMode(writing_mode) ||
-      IsFlippedLinesWritingMode(writing_mode))
-    return group.GetProperty(kTopLeftCorner);
-  return group.GetProperty(kTopRightCorner);
+  return group.GetProperty(kStartStartMap[static_cast<int>(writing_mode)]);
 }
 
 const CSSProperty& CSSDirectionAwareResolver::ResolveEndStart(
-    TextDirection direction,
-    WritingMode writing_mode,
+    WritingDirectionMode writing_direction,
     const PhysicalMapping<4>& group) {
-  if (direction == TextDirection::kLtr) {
-    if (IsHorizontalWritingMode(writing_mode))
-      return group.GetProperty(kBottomLeftCorner);
-    if (IsFlippedLinesWritingMode(writing_mode))
-      return group.GetProperty(kTopRightCorner);
-    return group.GetProperty(kTopLeftCorner);
+  WritingMode writing_mode = writing_direction.GetWritingMode();
+  if (writing_direction.IsLtr()) {
+    return group.GetProperty(kEndStartMap[static_cast<int>(writing_mode)]);
   }
-  if (IsHorizontalWritingMode(writing_mode) ||
-      IsFlippedLinesWritingMode(writing_mode))
-    return group.GetProperty(kBottomRightCorner);
-  return group.GetProperty(kBottomLeftCorner);
+  return group.GetProperty(kEndEndMap[static_cast<int>(writing_mode)]);
 }
 
 const CSSProperty& CSSDirectionAwareResolver::ResolveEndEnd(
-    TextDirection direction,
-    WritingMode writing_mode,
+    WritingDirectionMode writing_direction,
     const PhysicalMapping<4>& group) {
-  if (direction == TextDirection::kLtr) {
-    if (IsHorizontalWritingMode(writing_mode) ||
-        IsFlippedLinesWritingMode(writing_mode))
-      return group.GetProperty(kBottomRightCorner);
-    return group.GetProperty(kBottomLeftCorner);
+  WritingMode writing_mode = writing_direction.GetWritingMode();
+  if (writing_direction.IsLtr()) {
+    return group.GetProperty(kEndEndMap[static_cast<int>(writing_mode)]);
   }
-  if (IsHorizontalWritingMode(writing_mode))
-    return group.GetProperty(kBottomLeftCorner);
-  if (IsFlippedLinesWritingMode(writing_mode))
-    return group.GetProperty(kTopRightCorner);
-  return group.GetProperty(kTopLeftCorner);
+  return group.GetProperty(kEndStartMap[static_cast<int>(writing_mode)]);
 }
 
 }  // namespace blink

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,7 @@ import android.content.Intent;
 import android.content.ReceiverCallNotAllowedException;
 import android.content.ServiceConnection;
 
-/**
- * Helper methods for working with Services in WebView.
- */
+/** Helper methods for working with Services in WebView. */
 public class ServiceHelper {
     /**
      * Connects to a Service specified by {@code intent} with {@code flags}. This handles edge cases
@@ -25,9 +23,14 @@ public class ServiceHelper {
     public static boolean bindService(
             Context context, Intent intent, ServiceConnection serviceConnection, int flags) {
         try {
-            return context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
+            boolean bindSuccess = context.bindService(intent, serviceConnection, flags);
+            if (!bindSuccess) {
+                context.unbindService(serviceConnection);
+            }
+            return bindSuccess;
         } catch (ReceiverCallNotAllowedException e) {
             // If we're running in a BroadcastReceiver Context then we cannot bind to Services.
+            context.unbindService(serviceConnection);
             return false;
         }
     }

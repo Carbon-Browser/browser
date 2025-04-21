@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,9 +34,6 @@ struct CONTENT_EXPORT SyntheticSmoothScrollGestureParams
   ui::ScrollGranularity granularity = ui::ScrollGranularity::kScrollByPixel;
   // A bitfield of values from blink::WebInputEvent::Modifiers.
   int modifiers = 0;
-
-  static const SyntheticSmoothScrollGestureParams* Cast(
-      const SyntheticGestureParams* gesture_params);
 };
 
 }  // namespace content

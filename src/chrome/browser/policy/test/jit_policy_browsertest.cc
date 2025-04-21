@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "components/content_settings/core/common/content_settings.h"
 #include "components/policy/core/common/policy_map.h"
 #include "components/policy/policy_constants.h"
+#include "content/public/browser/render_process_host.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_utils.h"
@@ -51,15 +52,15 @@ class JITPolicyTest
 
     AddDefaultPolicy(&policies);
 
-    base::Value block_list(base::Value::Type::LIST);
+    base::Value::List block_list;
     block_list.Append("jit-disabled.com");
     SetPolicy(&policies, key::kJavaScriptJitBlockedForSites,
-              std::move(block_list));
+              base::Value(std::move(block_list)));
 
-    base::Value allow_list(base::Value::Type::LIST);
+    base::Value::List allow_list;
     allow_list.Append("jit-enabled.com");
     SetPolicy(&policies, key::kJavaScriptJitAllowedForSites,
-              std::move(allow_list));
+              base::Value(std::move(allow_list)));
 
     provider_.UpdateChromePolicy(policies);
   }
@@ -105,10 +106,10 @@ void JITPolicyTest::ExpectThatPolicyDisablesJitOnUrl(const char* policy_value,
   PolicyMap policies;
   AddDefaultPolicy(&policies);
 
-  base::Value block_list(base::Value::Type::LIST);
+  base::Value::List block_list;
   block_list.Append(policy_value);
   SetPolicy(&policies, key::kJavaScriptJitBlockedForSites,
-            std::move(block_list));
+            base::Value(std::move(block_list)));
 
   UpdateProviderPolicy(policies);
 

@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,7 @@ TEST_F(SolidColorLayerImplTest, VerifyTilingCompleteAndNoOverlap) {
   gfx::Rect visible_layer_rect = gfx::Rect(layer_size);
   root_layer()->SetBounds(layer_size);
 
-  auto* layer = AddLayer<SolidColorLayerImpl>();
+  auto* layer = AddLayerInActiveTree<SolidColorLayerImpl>();
   layer->SetBounds(layer_size);
   layer->SetDrawsContent(true);
   layer->SetBackgroundColor(SkColors::kRed);
@@ -44,7 +44,7 @@ TEST_F(SolidColorLayerImplTest, VerifyTilingCompleteAndNoOverlap) {
 }
 
 TEST_F(SolidColorLayerImplTest, VerifyCorrectBackgroundColorInQuad) {
-  // TODO(crbug.com/1308932): Somewhere along the path this gets cast to an int
+  // TODO(crbug.com/40219248): Somewhere along the path this gets cast to an int
   // so the test fails if the values are not x/255. This should not be the case
   // when the SkColor4f project is completed.
   SkColor4f test_color{165.0f / 255.0f, 90.0f / 255.0f, 1.0f, 1.0f};
@@ -53,7 +53,7 @@ TEST_F(SolidColorLayerImplTest, VerifyCorrectBackgroundColorInQuad) {
   gfx::Rect visible_layer_rect = gfx::Rect(layer_size);
   root_layer()->SetBounds(layer_size);
 
-  auto* layer = AddLayer<SolidColorLayerImpl>();
+  auto* layer = AddLayerInActiveTree<SolidColorLayerImpl>();
   layer->SetBounds(layer_size);
   layer->SetDrawsContent(true);
   layer->SetBackgroundColor(test_color);
@@ -78,7 +78,7 @@ TEST_F(SolidColorLayerImplTest, VerifyCorrectOpacityInQuad) {
   auto render_pass = viz::CompositorRenderPass::Create();
   gfx::Size layer_size = gfx::Size(100, 100);
 
-  auto* layer = AddLayer<SolidColorLayerImpl>();
+  auto* layer = AddLayerInActiveTree<SolidColorLayerImpl>();
   layer->SetDrawsContent(true);
   layer->SetBounds(layer_size);
   layer->SetBackgroundColor(SkColors::kRed);
@@ -104,7 +104,7 @@ TEST_F(SolidColorLayerImplTest, VerifyCorrectRenderSurfaceOpacityInQuad) {
   auto render_pass = viz::CompositorRenderPass::Create();
   gfx::Size layer_size = gfx::Size(100, 100);
 
-  auto* layer = AddLayer<SolidColorLayerImpl>();
+  auto* layer = AddLayerInActiveTree<SolidColorLayerImpl>();
   layer->SetDrawsContent(true);
   layer->SetBounds(layer_size);
   layer->SetBackgroundColor(SkColors::kRed);
@@ -133,7 +133,7 @@ TEST_F(SolidColorLayerImplTest, VerifyEliminateTransparentAlpha) {
   auto render_pass = viz::CompositorRenderPass::Create();
   gfx::Size layer_size = gfx::Size(100, 100);
 
-  auto* layer = AddLayer<SolidColorLayerImpl>();
+  auto* layer = AddLayerInActiveTree<SolidColorLayerImpl>();
   layer->SetBounds(layer_size);
   layer->SetDrawsContent(true);
   layer->SetBackgroundColor(test_color);
@@ -151,7 +151,7 @@ TEST_F(SolidColorLayerImplTest, VerifyEliminateTransparentOpacity) {
   auto render_pass = viz::CompositorRenderPass::Create();
   gfx::Size layer_size = gfx::Size(100, 100);
 
-  auto* layer = AddLayer<SolidColorLayerImpl>();
+  auto* layer = AddLayerInActiveTree<SolidColorLayerImpl>();
   layer->SetBounds(layer_size);
   layer->SetDrawsContent(true);
   layer->SetBackgroundColor(test_color);
@@ -178,7 +178,7 @@ TEST_F(SolidColorLayerImplTest, VerifyNeedsBlending) {
 
   FakeLayerTreeHostClient client;
   TestTaskGraphRunner task_graph_runner;
-  auto animation_host = AnimationHost::CreateForTesting(ThreadInstance::MAIN);
+  auto animation_host = AnimationHost::CreateForTesting(ThreadInstance::kMain);
   std::unique_ptr<FakeLayerTreeHost> host = FakeLayerTreeHost::Create(
       &client, &task_graph_runner, animation_host.get());
   host->CreateFakeLayerTreeHostImpl();
@@ -220,7 +220,8 @@ TEST_F(SolidColorLayerImplTest, VerifyNeedsBlending) {
         render_pass->quad_list.front()->shared_quad_state->are_contents_opaque);
     completion_event->Signal();
   }
-  host->CommitComplete({base::TimeTicks(), base::TimeTicks::Now()});
+  host->CommitComplete(commit_state->source_frame_number,
+                       {base::TimeTicks(), base::TimeTicks::Now()});
 
   EXPECT_TRUE(layer->contents_opaque());
   layer->SetBackgroundColor({0.2f, 0.3f, 0.4f, 0.9f});
@@ -255,14 +256,15 @@ TEST_F(SolidColorLayerImplTest, VerifyNeedsBlending) {
     EXPECT_FALSE(
         render_pass->quad_list.front()->shared_quad_state->are_contents_opaque);
   }
-  host->CommitComplete({base::TimeTicks(), base::TimeTicks::Now()});
+  host->CommitComplete(commit_state->source_frame_number,
+                       {base::TimeTicks(), base::TimeTicks::Now()});
 }
 
 TEST_F(SolidColorLayerImplTest, Occlusion) {
   gfx::Size layer_size(1000, 1000);
   gfx::Size viewport_size(1000, 1000);
 
-  auto* solid_color_layer_impl = AddLayer<SolidColorLayerImpl>();
+  auto* solid_color_layer_impl = AddLayerInActiveTree<SolidColorLayerImpl>();
   solid_color_layer_impl->SetBackgroundColor({0.1f, 0.2f, 0.3f, 1.0f});
   solid_color_layer_impl->SetBounds(layer_size);
   solid_color_layer_impl->SetDrawsContent(true);

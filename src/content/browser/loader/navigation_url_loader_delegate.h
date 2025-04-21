@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,20 +6,19 @@
 #define CONTENT_BROWSER_LOADER_NAVIGATION_URL_LOADER_DELEGATE_H_
 
 #include <memory>
+#include <optional>
 
-#include "base/memory/ref_counted.h"
 #include "content/common/content_export.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "services/network/public/mojom/early_hints.mojom-forward.h"
 #include "services/network/public/mojom/url_loader.mojom.h"
 #include "services/network/public/mojom/url_loader_factory.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/navigation/navigation_policy.h"
 #include "url/origin.h"
 
 namespace net {
-class NetworkIsolationKey;
+class NetworkAnonymizationKey;
 struct RedirectInfo;
 }
 
@@ -62,12 +61,12 @@ class CONTENT_EXPORT NavigationURLLoaderDelegate {
   // Called when the request is redirected. Call FollowRedirect to continue
   // processing the request.
   //
-  // |network_isolation_key| is the NetworkIsolationKey associated with the
-  // request that was redirected, not the one that will be used if the redirect
-  // is followed.
+  // |network_anonymization_key| is the NetworkAnonymizationKey associated with
+  // the request that was redirected, not the one that will be used if the
+  // redirect is followed.
   virtual void OnRequestRedirected(
       const net::RedirectInfo& redirect_info,
-      const net::NetworkIsolationKey& network_isolation_key,
+      const net::NetworkAnonymizationKey& network_anonymization_key,
       network::mojom::URLResponseHeadPtr response) = 0;
 
   // Called when the request receives its response. No further calls will be
@@ -81,8 +80,6 @@ class CONTENT_EXPORT NavigationURLLoaderDelegate {
   // |is_download| is true if the request must be downloaded, if it isn't
   // disallowed.
   //
-  // |download_policy| specifies if downloading is disallowed.
-  //
   // Invoking this method will delete the URLLoader, so it needs to take all
   // arguments by value.
   virtual void OnResponseStarted(
@@ -91,9 +88,8 @@ class CONTENT_EXPORT NavigationURLLoaderDelegate {
       mojo::ScopedDataPipeConsumerHandle response_body,
       GlobalRequestID request_id,
       bool is_download,
-      blink::NavigationDownloadPolicy download_policy,
-      net::NetworkIsolationKey network_isolation_key,
-      absl::optional<SubresourceLoaderParams> subresource_loader_params,
+      net::NetworkAnonymizationKey network_anonymization_key,
+      SubresourceLoaderParams subresource_loader_params,
       EarlyHints early_hints) = 0;
 
   // Called if the request fails before receving a response. Specific
@@ -106,8 +102,8 @@ class CONTENT_EXPORT NavigationURLLoaderDelegate {
       const network::URLLoaderCompletionStatus& status) = 0;
 
   // Creates parameters to construct NavigationEarlyHintsManager. Returns
-  // absl::nullopt when this delegate cannot create parameters.
-  virtual absl::optional<NavigationEarlyHintsManagerParams>
+  // std::nullopt when this delegate cannot create parameters.
+  virtual std::optional<NavigationEarlyHintsManagerParams>
   CreateNavigationEarlyHintsManagerParams(
       const network::mojom::EarlyHints& early_hints) = 0;
 

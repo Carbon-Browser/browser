@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@ SpellCheckMockPanelHost::SpellCheckMockPanelHost(
     content::RenderProcessHost* process_host)
     : process_host_(process_host) {}
 
-SpellCheckMockPanelHost::~SpellCheckMockPanelHost() {}
+SpellCheckMockPanelHost::~SpellCheckMockPanelHost() = default;
 
 bool SpellCheckMockPanelHost::SpellingPanelVisible() {
   if (!show_spelling_panel_called_) {

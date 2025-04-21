@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define COMPONENTS_EXO_CUSTOM_WINDOW_STATE_DELEGATE_H_
 
 #include "ash/wm/window_state_delegate.h"
+#include "base/memory/raw_ptr.h"
 
 namespace exo {
 class ShellSurface;
@@ -27,12 +28,10 @@ class CustomWindowStateDelegate : public ash::WindowStateDelegate {
   // ash::WindowStateDelegate:
   bool ToggleFullscreen(ash::WindowState* window_state) override;
   void ToggleLockedFullscreen(ash::WindowState* window_state) override;
-  std::unique_ptr<ash::PresentationTimeRecorder> OnDragStarted(
-      int component) override;
   void OnDragFinished(bool cancel, const gfx::PointF& location) override;
 
  private:
-  ShellSurface* const shell_surface_;
+  const raw_ptr<ShellSurface> shell_surface_;
 };
 
 }  //  namespace exo

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
 #include "base/compiler_specific.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
 #include "base/strings/string_util.h"
@@ -66,9 +66,9 @@ PacFileDataWithSource::PacFileDataWithSource(const PacFileDataWithSource&) =
 PacFileDataWithSource& PacFileDataWithSource::operator=(
     const PacFileDataWithSource&) = default;
 
-base::Value PacFileDecider::PacSource::NetLogParams(
+base::Value::Dict PacFileDecider::PacSource::NetLogParams(
     const GURL& effective_pac_url) const {
-  base::Value dict(base::Value::Type::DICTIONARY);
+  base::Value::Dict dict;
   std::string source;
   switch (type) {
     case PacSource::WPAD_DHCP:
@@ -83,7 +83,7 @@ base::Value PacFileDecider::PacSource::NetLogParams(
       source += effective_pac_url.possibly_invalid_spec();
       break;
   }
-  dict.SetStringKey("source", source);
+  dict.Set("source", source);
   return dict;
 }
 
@@ -217,8 +217,6 @@ int PacFileDecider::DoLoop(int result) {
         break;
       default:
         NOTREACHED() << "bad state";
-        rv = ERR_UNEXPECTED;
-        break;
     }
   } while (rv != ERR_IO_PENDING && next_state_ != STATE_NONE);
   return rv;
@@ -283,7 +281,7 @@ int PacFileDecider::DoQuickCheck() {
       pac_file_fetcher_->GetRequestContext()->host_resolver();
   resolve_request_ = host_resolver->CreateRequest(
       HostPortPair(host, 80),
-      pac_file_fetcher_->isolation_info().network_isolation_key(), net_log_,
+      pac_file_fetcher_->isolation_info().network_anonymization_key(), net_log_,
       parameters);
 
   CompletionRepeatingCallback callback = base::BindRepeating(

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -13,16 +13,16 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/files/file_path.h"
+#include "base/files/safe_base_name.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/notreached.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "base/threading/scoped_blocking_call.h"
 #include "chrome/browser/media_galleries/fileapi/media_file_system_backend.h"
 #include "chrome/browser/media_galleries/win/mtp_device_object_entry.h"
@@ -200,7 +200,9 @@ base::File::Error ReadDirectoryOnBlockingPoolThread(
     return error;
 
   while (!(current = file_enum->Next()).empty()) {
-    entries->emplace_back(storage::VirtualPath::BaseName(current),
+    auto name = base::SafeBaseName::Create(current);
+    CHECK(name) << current;
+    entries->emplace_back(*name, std::string(),
                           file_enum->IsDirectory()
                               ? filesystem::mojom::FsFileType::DIRECTORY
                               : filesystem::mojom::FsFileType::REGULAR_FILE);
@@ -530,9 +532,9 @@ void MTPDeviceDelegateImplWin::EnsureInitAndRunTask(PendingTaskInfo task_info) {
   if ((init_state_ == INITIALIZED) && !task_in_progress_) {
     DCHECK(pending_tasks_.empty());
     DCHECK(!current_snapshot_details_.get());
-    base::PostTaskAndReplyWithResult(
-        media_task_runner_.get(), task_info.location, std::move(task_info.task),
-        std::move(task_info.reply));
+    media_task_runner_->PostTaskAndReplyWithResult(task_info.location,
+                                                   std::move(task_info.task),
+                                                   std::move(task_info.reply));
     task_in_progress_ = true;
     return;
   }
@@ -540,8 +542,8 @@ void MTPDeviceDelegateImplWin::EnsureInitAndRunTask(PendingTaskInfo task_info) {
   pending_tasks_.push(std::move(task_info));
   if (init_state_ == UNINITIALIZED) {
     init_state_ = PENDING_INIT;
-    base::PostTaskAndReplyWithResult(
-        media_task_runner_.get(), FROM_HERE,
+    media_task_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE,
         base::BindOnce(&OpenDeviceOnBlockingPoolThread,
                        storage_device_info_.pnp_device_id,
                        storage_device_info_.registered_device_path),
@@ -553,8 +555,8 @@ void MTPDeviceDelegateImplWin::EnsureInitAndRunTask(PendingTaskInfo task_info) {
 
 void MTPDeviceDelegateImplWin::WriteDataChunkIntoSnapshotFile() {
   DCHECK(current_snapshot_details_.get());
-  base::PostTaskAndReplyWithResult(
-      media_task_runner_.get(), FROM_HERE,
+  media_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(
           &WriteDataChunkIntoSnapshotFileOnBlockingPoolThread,
           current_snapshot_details_->file_info(),
@@ -574,9 +576,9 @@ void MTPDeviceDelegateImplWin::ProcessNextPendingRequest() {
     return;
   PendingTaskInfo& task_info = pending_tasks_.front();
   task_in_progress_ = true;
-  base::PostTaskAndReplyWithResult(media_task_runner_.get(), task_info.location,
-                                   std::move(task_info.task),
-                                   std::move(task_info.reply));
+  media_task_runner_->PostTaskAndReplyWithResult(task_info.location,
+                                                 std::move(task_info.task),
+                                                 std::move(task_info.reply));
   pending_tasks_.pop();
 }
 

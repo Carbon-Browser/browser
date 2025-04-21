@@ -1,11 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
-#include "base/guid.h"
 #include "base/test/task_environment.h"
+#include "base/uuid.h"
 #include "components/sync/base/client_tag_hash.h"
 #include "components/sync/engine/loopback_server/loopback_connection_manager.h"
 #include "components/sync/engine/syncer_proto_util.h"
@@ -35,7 +35,7 @@ SyncEntity NewBookmarkEntity(const std::string& url,
   SyncEntity entity;
   entity.mutable_specifics()->mutable_bookmark()->set_url(url);
   entity.set_parent_id_string(parent_id);
-  entity.set_id_string(base::GenerateGUID());
+  entity.set_id_string(base::Uuid::GenerateRandomV4().AsLowercaseString());
   return entity;
 }
 
@@ -185,7 +185,7 @@ TEST_F(LoopbackServerTest, CommitCommand) {
 
 TEST_F(LoopbackServerTest, CommitFailureNoTag) {
   // Non-bookmarks and non-commit only types must have a
-  // client_defined_unique_tag, which we don't set.
+  // client_tag_hash, which we don't set.
   SyncEntity entity;
   entity.mutable_specifics()->mutable_preference();
   CommitVerifyFailure(entity);
@@ -210,8 +210,8 @@ TEST_F(LoopbackServerTest, CommitBookmarkTombstoneFailure) {
   std::string id1 = CommitVerifySuccess(NewBookmarkEntity(kUrl1, kBookmarkBar));
   std::string id2 = CommitVerifySuccess(NewBookmarkEntity(kUrl2, "9" + id1));
 
-  // This write is going to fail, the id is supposed to encode the model type as
-  // as prefix, by adding 9 we're creating a fake model type.
+  // This write is going to fail, the id is supposed to encode the data type as
+  // as prefix, by adding 9 we're creating a fake data type.
   SyncEntity entity = DeletedBookmarkEntity("9" + id1, 1);
   CommitVerifyFailure(entity);
 
@@ -273,7 +273,7 @@ TEST_F(LoopbackServerTest, CommitCommandUpdate) {
 }
 
 TEST_F(LoopbackServerTest, CommitBookmarkCreationWithClientTag) {
-  const std::string kGuid = base::GenerateGUID();
+  const std::string kGuid = base::Uuid::GenerateRandomV4().AsLowercaseString();
   const std::string kClientTagHash =
       ClientTagHash::FromUnhashed(BOOKMARKS, kGuid).value();
 
@@ -281,19 +281,19 @@ TEST_F(LoopbackServerTest, CommitBookmarkCreationWithClientTag) {
   entity.mutable_specifics()->mutable_bookmark()->set_url(kUrl1);
   entity.set_parent_id_string(kBookmarkBar);
   entity.set_id_string(kGuid);
-  entity.set_client_defined_unique_tag(kClientTagHash);
+  entity.set_client_tag_hash(kClientTagHash);
 
   const std::string id = CommitVerifySuccess(entity);
 
   std::map<std::string, SyncEntity> bookmarks =
       ResponseToMap(GetUpdatesForType(EntitySpecifics::kBookmarkFieldNumber));
-  EXPECT_EQ(bookmarks[id].client_defined_unique_tag(), kClientTagHash);
+  EXPECT_EQ(bookmarks[id].client_tag_hash(), kClientTagHash);
 }
 
 // Verifies that a bookmark update (non-creation) does not populate the client
 // tag of a bookmark, if no client tag was provided upon creation.
 TEST_F(LoopbackServerTest, CommitBookmarkUpdateWithClientTag) {
-  const std::string kGuid = base::GenerateGUID();
+  const std::string kGuid = base::Uuid::GenerateRandomV4().AsLowercaseString();
   const std::string kClientTagHash =
       ClientTagHash::FromUnhashed(BOOKMARKS, kGuid).value();
 
@@ -307,11 +307,11 @@ TEST_F(LoopbackServerTest, CommitBookmarkUpdateWithClientTag) {
   std::map<std::string, SyncEntity> bookmarks =
       ResponseToMap(GetUpdatesForType(EntitySpecifics::kBookmarkFieldNumber));
   ASSERT_EQ(bookmarks[id].specifics().bookmark().url(), kUrl1);
-  ASSERT_FALSE(bookmarks[id].has_client_defined_unique_tag());
+  ASSERT_FALSE(bookmarks[id].has_client_tag_hash());
 
   // Issue an update, with the client tag being provided for the first time.
   entity.set_id_string(id);
-  entity.set_client_defined_unique_tag(kClientTagHash);
+  entity.set_client_tag_hash(kClientTagHash);
   entity.set_version(1);
   entity.mutable_specifics()->mutable_bookmark()->set_url(kUrl2);
   CommitVerifySuccess(entity);
@@ -319,7 +319,7 @@ TEST_F(LoopbackServerTest, CommitBookmarkUpdateWithClientTag) {
   bookmarks =
       ResponseToMap(GetUpdatesForType(EntitySpecifics::kBookmarkFieldNumber));
   ASSERT_EQ(bookmarks[id].specifics().bookmark().url(), kUrl2);
-  EXPECT_FALSE(bookmarks[id].has_client_defined_unique_tag());
+  EXPECT_FALSE(bookmarks[id].has_client_tag_hash());
 }
 
 }  // namespace syncer

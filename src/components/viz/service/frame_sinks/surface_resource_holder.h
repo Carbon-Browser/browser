@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,21 @@
 
 namespace viz {
 class SurfaceResourceHolderClient;
+
+// ReservedResourceDelegate is an interface for tracking the lifetime of
+// resources. Code which submits resources that are managed fully on the viz
+// side (with resource IDs >= kVizReservedRangeStartId) should implement this.
+class ReservedResourceDelegate {
+ public:
+  virtual ~ReservedResourceDelegate();
+
+  virtual void ReceiveFromChild(
+      const std::vector<TransferableResource>& resources) = 0;
+  virtual void RefResources(
+      const std::vector<TransferableResource>& resources) = 0;
+  virtual void UnrefResources(
+      const std::vector<ReturnedResource>& resources) = 0;
+};
 
 // A SurfaceResourceHolder manages the lifetime of resources submitted by a
 // particular SurfaceFactory. Each resource is held by the service until

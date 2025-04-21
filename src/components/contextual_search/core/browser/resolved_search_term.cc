@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,4 +62,4 @@ ResolvedSearchTerm::ResolvedSearchTerm(
       coca_card_tag(coca_card_tag),
       related_searches_json(related_searches_json) {}
 
-ResolvedSearchTerm::~ResolvedSearchTerm() {}
+ResolvedSearchTerm::~ResolvedSearchTerm() = default;

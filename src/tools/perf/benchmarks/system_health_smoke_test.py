@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -40,10 +40,6 @@ _DISABLED_TESTS = frozenset({
     # crbug.com/983326 - flaky.
     'system_health.memory_desktop/browse_accessibility:media:youtube',
 
-    # crbug.com/878390 - These stories are already covered by their 2018 or
-    # 2019 versions and will later be removed.
-    'system_health.memory_desktop/multitab:misc:typical24',
-
     # crbug.com/637230
     'system_health.memory_desktop/browse:news:cnn',
     # Permenently disabled from smoke test for being long-running.
@@ -54,9 +50,6 @@ _DISABLED_TESTS = frozenset({
 
     # crbug.com/885320
     'system_health.memory_desktop/browse:search:google:2020',
-
-    # crbug.com/893615
-    'system_health.memory_desktop/multitab:misc:typical24:2018',
 
     # crbug.com/903849
     'system_health.memory_mobile/browse:news:cnn:2018',
@@ -75,6 +68,13 @@ _DISABLED_TESTS = frozenset({
     # crbug.com/1224874
     'system_health.memory_desktop/load:social:instagram:2018',
     'system_health.memory_desktop/load:social:pinterest:2019',
+
+    # crbug.com/1428625
+    'system_health.memory_mobile/browse:news:cnn:2021',
+
+    # crbug.com/1442448
+    'system_health.memory_desktop/load:media:facebook_feed:desktop:2020',
+    'system_health.memory_desktop/load:games:miniclip:2018',
 
     # The following tests are disabled because they are disabled on the perf
     # waterfall (using tools/perf/expectations.config) on one platform or
@@ -151,7 +151,7 @@ def _GenerateSmokeTestCase(benchmark_class, story_to_smoke_test):
         self.skipTest('Test is explicitly disabled')
       single_page_benchmark = SinglePageBenchmark()
       return_code = single_page_benchmark.Run(options)
-      # TODO(crbug.com/1019139): Make 111 be the exit code that means
+      # TODO(crbug.com/40105219): Make 111 be the exit code that means
       # "no stories were run.".
       if return_code in (-1, 111):
         self.skipTest('The benchmark was not run.')
@@ -182,7 +182,6 @@ def _GenerateSmokeTestCase(benchmark_class, story_to_smoke_test):
 def GenerateBenchmarkOptions(output_dir, benchmark_cls):
   options = testing.GetRunOptions(
       output_dir=output_dir, benchmark_cls=benchmark_cls,
-      overrides={'run_full_story_set': True},
       environment=chromium_config.GetDefaultChromiumConfig())
   options.pageset_repeat = 1  # For smoke testing only run each page once.
   options.output_formats = ['histograms']

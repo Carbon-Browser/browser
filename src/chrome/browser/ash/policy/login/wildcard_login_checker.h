@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
 #include "base/values.h"
 #include "components/policy/core/common/cloud/user_info_fetcher.h"
 #include "google_apis/gaia/google_service_auth_error.h"

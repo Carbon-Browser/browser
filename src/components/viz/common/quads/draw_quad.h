@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 
 #include <stddef.h>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "components/viz/common/quads/shared_quad_state.h"
 #include "components/viz/common/resources/resource_id.h"
 #include "components/viz/common/viz_common_export.h"
@@ -49,7 +50,7 @@ class VIZ_COMMON_EXPORT DrawQuad {
     kSurfaceContent = 8,
     kTextureContent = 9,
     kTiledContent = 10,
-    kYuvVideoContent = 11,
+    // kYuvVideoContent = 11,  // Removed. kTextureContent used instead.
     kVideoHole = 12,
     kMaxValue = kVideoHole
   };
@@ -75,7 +76,13 @@ class VIZ_COMMON_EXPORT DrawQuad {
   // Stores state common to a large bundle of quads; kept separate for memory
   // efficiency. There is special treatment to reconstruct these pointers
   // during serialization.
-  const SharedQuadState* shared_quad_state;
+  // RAW_PTR_EXCLUSION: Performance reasons (rendering.mobile,
+  // Graphics.Smoothness, see crbug.com/345298647)
+  RAW_PTR_EXCLUSION const SharedQuadState* shared_quad_state;
+
+  // A resource defined by `TransferableResource` with the same `ResourceId`. If
+  // set to `kInvalidResourceId` then the quad is resourceless.
+  ResourceId resource_id = kInvalidResourceId;
 
   bool IsDebugQuad() const { return material == Material::kDebugBorder; }
 
@@ -121,27 +128,11 @@ class VIZ_COMMON_EXPORT DrawQuad {
 
   void AsValueInto(base::trace_event::TracedValue* value) const;
 
-  struct VIZ_COMMON_EXPORT Resources {
-    enum : size_t { kMaxResourceIdCount = 4 };
-    Resources();
-
-    ResourceId* begin() { return ids; }
-    ResourceId* end() {
-      DCHECK_LE(count, kMaxResourceIdCount);
-      return ids + count;
-    }
-
-    const ResourceId* begin() const { return ids; }
-    const ResourceId* end() const {
-      DCHECK_LE(count, kMaxResourceIdCount);
-      return ids + count;
-    }
-
-    uint32_t count;
-    ResourceId ids[kMaxResourceIdCount];
-  };
-
-  Resources resources;
+  template <typename T>
+  const T* DynamicCast() const {
+    return this->material == T::kMaterial ? static_cast<const T*>(this)
+                                          : nullptr;
+  }
 
  protected:
   DrawQuad();

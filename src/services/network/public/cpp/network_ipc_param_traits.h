@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,6 @@
 #include "net/base/ip_endpoint.h"
 #include "net/base/proxy_server.h"
 #include "net/base/request_priority.h"
-#include "net/cert/cert_verify_result.h"
 #include "net/cert/ct_policy_status.h"
 #include "net/cert/signed_certificate_timestamp.h"
 #include "net/cert/signed_certificate_timestamp_and_status.h"

@@ -1,21 +1,43 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/media/webrtc/capture_policy_utils.h"
 
+#include "base/containers/contains.h"
+#include "base/test/test_future.h"
 #include "base/values.h"
+#include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/common/pref_names.h"
+#include "chrome/test/base/testing_profile.h"
+#include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/testing_pref_service.h"
+#include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "chrome/browser/ash/crosapi/crosapi_manager.h"
+#include "chrome/browser/ash/crosapi/idle_service_ash.h"
+#include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
+#include "chrome/test/base/testing_browser_process.h"
+#include "chrome/test/base/testing_profile_manager.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
+#include "components/account_id/account_id.h"
+#include "components/user_manager/scoped_user_manager.h"
+#include "components/user_manager/user_type.h"
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 namespace {
 constexpr char kTestSite1[] = "https://foo.test.org";
 constexpr char kTestSite1Pattern[] = "foo.test.org";
 constexpr char kTestSite1NonMatchingPattern[] = "foo.org";
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+constexpr char kAccountId[] = "test_1@example.com";
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 }  // namespace
 
 class CapturePolicyUtilsTest : public testing::Test {
@@ -50,60 +72,62 @@ TEST_F(CapturePolicyUtilsTest, SimpleDenyTest) {
 
 // Test that the FullCapture allowed list overrides |kScreenCaptureAllowed|.
 TEST_F(CapturePolicyUtilsTest, SimpleOverrideUnrestricted) {
-  base::Value matchlist(base::Value::Type::LIST);
+  base::Value::List matchlist;
   matchlist.Append(kTestSite1Pattern);
   prefs()->SetBoolean(prefs::kScreenCaptureAllowed, false);
-  prefs()->Set(prefs::kScreenCaptureAllowedByOrigins, matchlist);
+  prefs()->SetList(prefs::kScreenCaptureAllowedByOrigins, std::move(matchlist));
   EXPECT_EQ(AllowedScreenCaptureLevel::kUnrestricted,
             capture_policy::GetAllowedCaptureLevel(GURL(kTestSite1), *prefs()));
 }
 
 // Test that the Window/Tab allowed list overrides |kScreenCaptureAllowed|.
 TEST_F(CapturePolicyUtilsTest, SimpleOverrideWindowTabs) {
-  base::Value matchlist(base::Value::Type::LIST);
+  base::Value::List matchlist;
   matchlist.Append(kTestSite1Pattern);
   prefs()->SetBoolean(prefs::kScreenCaptureAllowed, false);
-  prefs()->Set(prefs::kWindowCaptureAllowedByOrigins, matchlist);
+  prefs()->SetList(prefs::kWindowCaptureAllowedByOrigins, std::move(matchlist));
   EXPECT_EQ(AllowedScreenCaptureLevel::kWindow,
             capture_policy::GetAllowedCaptureLevel(GURL(kTestSite1), *prefs()));
 }
 
 // Test that the Tab allowed list overrides |kScreenCaptureAllowed|.
 TEST_F(CapturePolicyUtilsTest, SimpleOverrideTabs) {
-  base::Value matchlist(base::Value::Type::LIST);
+  base::Value::List matchlist;
   matchlist.Append(kTestSite1Pattern);
   prefs()->SetBoolean(prefs::kScreenCaptureAllowed, false);
-  prefs()->Set(prefs::kTabCaptureAllowedByOrigins, matchlist);
+  prefs()->SetList(prefs::kTabCaptureAllowedByOrigins, std::move(matchlist));
   EXPECT_EQ(AllowedScreenCaptureLevel::kTab,
             capture_policy::GetAllowedCaptureLevel(GURL(kTestSite1), *prefs()));
 }
 
 // Test that the Same Origin Tab allowed list overrides |kScreenCaptureAllowed|.
 TEST_F(CapturePolicyUtilsTest, SimpleOverrideSameOriginTabs) {
-  base::Value matchlist(base::Value::Type::LIST);
+  base::Value::List matchlist;
   matchlist.Append(kTestSite1Pattern);
   prefs()->SetBoolean(prefs::kScreenCaptureAllowed, false);
-  prefs()->Set(prefs::kSameOriginTabCaptureAllowedByOrigins, matchlist);
+  prefs()->SetList(prefs::kSameOriginTabCaptureAllowedByOrigins,
+                   std::move(matchlist));
   EXPECT_EQ(AllowedScreenCaptureLevel::kSameOrigin,
             capture_policy::GetAllowedCaptureLevel(GURL(kTestSite1), *prefs()));
 }
 
 // Test that an item that doesn't match any list still respects the default.
 TEST_F(CapturePolicyUtilsTest, SimpleOverrideNoMatches) {
-  base::Value matchlist(base::Value::Type::LIST);
+  base::Value::List matchlist;
   matchlist.Append(kTestSite1NonMatchingPattern);
   prefs()->SetBoolean(prefs::kScreenCaptureAllowed, false);
-  prefs()->Set(prefs::kSameOriginTabCaptureAllowedByOrigins, matchlist);
+  prefs()->SetList(prefs::kSameOriginTabCaptureAllowedByOrigins,
+                   std::move(matchlist));
   EXPECT_EQ(AllowedScreenCaptureLevel::kDisallowed,
             capture_policy::GetAllowedCaptureLevel(GURL(kTestSite1), *prefs()));
 }
 
 // Ensure that a full wildcard policy is accepted.
 TEST_F(CapturePolicyUtilsTest, TestWildcard) {
-  base::Value matchlist(base::Value::Type::LIST);
+  base::Value::List matchlist;
   matchlist.Append("*");
   prefs()->SetBoolean(prefs::kScreenCaptureAllowed, false);
-  prefs()->Set(prefs::kTabCaptureAllowedByOrigins, matchlist);
+  prefs()->SetList(prefs::kTabCaptureAllowedByOrigins, std::move(matchlist));
   EXPECT_EQ(AllowedScreenCaptureLevel::kTab,
             capture_policy::GetAllowedCaptureLevel(GURL(kTestSite1), *prefs()));
   EXPECT_EQ(
@@ -126,25 +150,28 @@ TEST_F(CapturePolicyUtilsTest, TestWildcard) {
 // Ensure that if a URL appears in multiple lists that it returns the most
 // restrictive list that it is included in.
 TEST_F(CapturePolicyUtilsTest, TestOverrideMoreRestrictive) {
-  base::Value fullCaptureList(base::Value::Type::LIST);
-  fullCaptureList.Append("a.com");
-  fullCaptureList.Append("b.com");
-  fullCaptureList.Append("c.com");
+  base::Value::List full_capture_list;
+  full_capture_list.Append("a.com");
+  full_capture_list.Append("b.com");
+  full_capture_list.Append("c.com");
   prefs()->SetBoolean(prefs::kScreenCaptureAllowed, false);
-  prefs()->Set(prefs::kScreenCaptureAllowedByOrigins, fullCaptureList);
+  prefs()->SetList(prefs::kScreenCaptureAllowedByOrigins,
+                   std::move(full_capture_list));
 
-  base::Value windowTabList(base::Value::Type::LIST);
-  windowTabList.Append("b.com");
-  prefs()->Set(prefs::kWindowCaptureAllowedByOrigins, windowTabList);
+  base::Value::List window_tab_list;
+  window_tab_list.Append("b.com");
+  prefs()->SetList(prefs::kWindowCaptureAllowedByOrigins,
+                   std::move(window_tab_list));
 
-  base::Value tabList(base::Value::Type::LIST);
-  tabList.Append("c.com");
-  tabList.Append("d.com");
-  prefs()->Set(prefs::kTabCaptureAllowedByOrigins, tabList);
+  base::Value::List tab_list;
+  tab_list.Append("c.com");
+  tab_list.Append("d.com");
+  prefs()->SetList(prefs::kTabCaptureAllowedByOrigins, std::move(tab_list));
 
-  base::Value sameOriginTabList(base::Value::Type::LIST);
-  sameOriginTabList.Append("d.com");
-  prefs()->Set(prefs::kSameOriginTabCaptureAllowedByOrigins, sameOriginTabList);
+  base::Value::List same_origin_tab_list;
+  same_origin_tab_list.Append("d.com");
+  prefs()->SetList(prefs::kSameOriginTabCaptureAllowedByOrigins,
+                   std::move(same_origin_tab_list));
   EXPECT_EQ(
       AllowedScreenCaptureLevel::kUnrestricted,
       capture_policy::GetAllowedCaptureLevel(GURL("https://a.com"), *prefs()));
@@ -167,17 +194,19 @@ TEST_F(CapturePolicyUtilsTest, TestOverrideMoreRestrictive) {
 TEST_F(CapturePolicyUtilsTest, TestSubdomainOverrides) {
   prefs()->SetBoolean(prefs::kScreenCaptureAllowed, false);
 
-  base::Value sameOriginTabList(base::Value::Type::LIST);
-  sameOriginTabList.Append("github.io");
-  prefs()->Set(prefs::kSameOriginTabCaptureAllowedByOrigins, sameOriginTabList);
+  base::Value::List same_origin_tab_list;
+  same_origin_tab_list.Append("github.io");
+  prefs()->SetList(prefs::kSameOriginTabCaptureAllowedByOrigins,
+                   std::move(same_origin_tab_list));
 
-  base::Value tabList(base::Value::Type::LIST);
-  tabList.Append("foo.github.io");
-  prefs()->Set(prefs::kTabCaptureAllowedByOrigins, tabList);
+  base::Value::List tab_list;
+  tab_list.Append("foo.github.io");
+  prefs()->SetList(prefs::kTabCaptureAllowedByOrigins, std::move(tab_list));
 
-  base::Value fullCaptureList(base::Value::Type::LIST);
-  fullCaptureList.Append("[*.]github.io");
-  prefs()->Set(prefs::kScreenCaptureAllowedByOrigins, fullCaptureList);
+  base::Value::List full_capture_list;
+  full_capture_list.Append("[*.]github.io");
+  prefs()->SetList(prefs::kScreenCaptureAllowedByOrigins,
+                   std::move(full_capture_list));
 
   EXPECT_EQ(AllowedScreenCaptureLevel::kSameOrigin,
             capture_policy::GetAllowedCaptureLevel(GURL("https://github.io"),
@@ -248,3 +277,110 @@ TEST_F(CapturePolicyUtilsTest, FilterMediaListRestrictedSameOrigin) {
 
   EXPECT_EQ(expected_media_types, actual_media_types);
 }
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+
+class MultiCaptureTest
+    : public testing::Test,
+      public ::testing::WithParamInterface<
+          std::tuple<bool, std::vector<std::string>, std::string>> {
+ public:
+  void SetUp() override {
+    testing::Test::SetUp();
+
+    fake_user_manager_.Reset(std::make_unique<ash::FakeChromeUserManager>());
+    CHECK(profile_manager_.SetUp());
+    profile_ = profile_manager_.CreateTestingProfile(kAccountId);
+
+    AccountId account_id = AccountId::FromUserEmail(kAccountId);
+    fake_user_manager_->AddUserWithAffiliationAndTypeAndProfile(
+        account_id, /*is_affiliated=*/true, user_manager::UserType::kRegular,
+        profile_);
+    fake_user_manager_->LoginUser(account_id);
+
+    // Settings required to create startup data.
+    crosapi::IdleServiceAsh::DisableForTesting();
+    if (!ash::LoginState::IsInitialized()) {
+      ash::LoginState::Initialize();
+    }
+    cros_api_manager_ = std::make_unique<crosapi::CrosapiManager>();
+
+    HostContentSettingsMap* content_settings =
+        HostContentSettingsMapFactory::GetForProfile(profile());
+    for (const std::string& url : AllowedOrigins()) {
+      content_settings->SetContentSettingDefaultScope(
+          GURL(url), GURL(url), ContentSettingsType::ALL_SCREEN_CAPTURE,
+          ContentSetting::CONTENT_SETTING_ALLOW);
+    }
+  }
+
+  void TearDown() override {
+    profile_ = nullptr;
+    // ash::LoginState::Shutdown();
+  }
+
+  Profile* profile() { return profile_; }
+  bool IsMainProfile() const { return std::get<0>(GetParam()); }
+  std::vector<std::string> AllowedOrigins() const {
+    return std::get<1>(GetParam());
+  }
+  std::string CurrentOrigin() const { return std::get<2>(GetParam()); }
+
+ protected:
+  bool ExpectedIsMultiCaptureAllowed() {
+    std::vector<std::string> allowed_urls = AllowedOrigins();
+    return
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+        IsMainProfile() &&
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+        base::Contains(allowed_urls, CurrentOrigin());
+  }
+
+  bool ExpectedIsMultiCaptureAllowedForAnyUrl() {
+    return
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+        IsMainProfile() &&
+#endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
+        !AllowedOrigins().empty();
+  }
+
+ private:
+  raw_ptr<TestingProfile> profile_;
+  content::BrowserTaskEnvironment task_environment_;
+  std::unique_ptr<crosapi::CrosapiManager> cros_api_manager_;
+  user_manager::TypedScopedUserManager<ash::FakeChromeUserManager>
+      fake_user_manager_;
+  TestingProfileManager profile_manager_{TestingBrowserProcess::GetGlobal()};
+};
+
+TEST_P(MultiCaptureTest, IsMultiCaptureAllowedBasedOnPolicy) {
+  base::test::TestFuture<bool> future;
+  capture_policy::CheckGetAllScreensMediaAllowed(
+      profile(), GURL(CurrentOrigin()), future.GetCallback());
+  ASSERT_TRUE(future.Wait());
+  EXPECT_EQ(ExpectedIsMultiCaptureAllowed(), future.Get<bool>());
+}
+
+TEST_P(MultiCaptureTest, IsMultiCaptureAllowedForAnyUrl) {
+  base::test::TestFuture<bool> future;
+  capture_policy::CheckGetAllScreensMediaAllowedForAnyOrigin(
+      profile(), future.GetCallback());
+  ASSERT_TRUE(future.Wait());
+  EXPECT_EQ(ExpectedIsMultiCaptureAllowedForAnyUrl(), future.Get<bool>());
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    MultiCaptureTestCases,
+    MultiCaptureTest,
+    ::testing::Combine(
+        // Is main profile?
+        ::testing::Bool(),
+        // Allowed origins
+        ::testing::ValuesIn({std::vector<std::string>{},
+                             std::vector<std::string>{
+                                 "https://www.google.com"}}),
+        // Origin to test
+        ::testing::ValuesIn({std::string("https://www.google.com"),
+                             std::string("https://www.notallowed.com")})));
+
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)

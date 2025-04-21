@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,12 @@
 
 #include <algorithm>
 
+#include "base/containers/fixed_flat_map.h"
 #include "base/logging.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/gfx/font_list.h"
-#include "ui/views/style/typography.h"
+#include "ui/views/controls/focus_ring.h"
+#include "ui/views/style/typography_provider.h"
 #include "ui/views/views_delegate.h"
 
 namespace views {
@@ -24,8 +27,9 @@ LayoutProvider::LayoutProvider() {
 }
 
 LayoutProvider::~LayoutProvider() {
-  if (this == g_layout_delegate)
+  if (this == g_layout_delegate) {
     g_layout_delegate = nullptr;
+  }
 }
 
 // static
@@ -37,7 +41,8 @@ LayoutProvider* LayoutProvider::Get() {
 int LayoutProvider::GetControlHeightForFont(int context,
                                             int style,
                                             const gfx::FontList& font) {
-  return std::max(style::GetLineHeight(context, style), font.GetHeight()) +
+  return std::max(TypographyProvider::Get().GetLineHeight(context, style),
+                  font.GetHeight()) +
          Get()->GetDistanceMetric(DISTANCE_CONTROL_VERTICAL_TEXT_PADDING) * 2;
 }
 
@@ -47,6 +52,7 @@ gfx::Insets LayoutProvider::GetInsetsMetric(int metric) const {
   switch (metric) {
     case InsetsMetric::INSETS_DIALOG:
     case InsetsMetric::INSETS_DIALOG_SUBSECTION:
+    case InsetsMetric::INSETS_DIALOG_FOOTNOTE:
       return gfx::Insets(13);
     case InsetsMetric::INSETS_DIALOG_BUTTON_ROW: {
       const gfx::Insets dialog_insets = GetInsetsMetric(INSETS_DIALOG);
@@ -66,9 +72,10 @@ gfx::Insets LayoutProvider::GetInsetsMetric(int metric) const {
       return gfx::Insets(4);
     case InsetsMetric::INSETS_LABEL_BUTTON:
       return gfx::Insets::VH(5, 6);
+    case InsetsMetric::INSETS_ICON_BUTTON:
+      return gfx::Insets(2);
   }
   NOTREACHED();
-  return gfx::Insets();
 }
 
 int LayoutProvider::GetDistanceMetric(int metric) const {
@@ -83,9 +90,9 @@ int LayoutProvider::GetDistanceMetric(int metric) const {
     case DISTANCE_BUTTON_MAX_LINKABLE_WIDTH:
       return 112;
     case DISTANCE_CLOSE_BUTTON_MARGIN:
-      return 4;
+      return 20;
     case DISTANCE_CONTROL_VERTICAL_TEXT_PADDING:
-      return 8;
+      return 10;
     case DISTANCE_DIALOG_BUTTON_MINIMUM_WIDTH:
       // Minimum label size plus padding.
       return 32 + 2 * GetDistanceMetric(DISTANCE_BUTTON_HORIZONTAL_PADDING);
@@ -101,6 +108,12 @@ int LayoutProvider::GetDistanceMetric(int metric) const {
     case DISTANCE_DIALOG_CONTENT_MARGIN_TOP_TEXT:
       // See the comment in DISTANCE_DIALOG_CONTENT_MARGIN_BOTTOM_TEXT above.
       return GetDistanceMetric(DISTANCE_DIALOG_CONTENT_MARGIN_TOP_CONTROL) - 8;
+    case DISTANCE_DROPDOWN_BUTTON_LABEL_ARROW_SPACING:
+      return 8;
+    case DISTANCE_DROPDOWN_BUTTON_RIGHT_MARGIN:
+      return 12;
+    case DISTANCE_DROPDOWN_BUTTON_LEFT_MARGIN:
+      return 16;
     case DISTANCE_MODAL_DIALOG_PREFERRED_WIDTH:
       return kMediumDialogWidth;
     case DISTANCE_RELATED_BUTTON_HORIZONTAL:
@@ -113,19 +126,23 @@ int LayoutProvider::GetDistanceMetric(int metric) const {
       return 12;
     case DISTANCE_DIALOG_SCROLLABLE_AREA_MAX_HEIGHT:
       return 192;
+    case DISTANCE_MODAL_DIALOG_SCROLLABLE_AREA_MAX_HEIGHT:
+      return 448;
     case DISTANCE_TABLE_CELL_HORIZONTAL_MARGIN:
       return 12;
     case DISTANCE_TEXTFIELD_HORIZONTAL_TEXT_PADDING:
-      return 8;
+      return 10;
+    case DISTANCE_UNRELATED_CONTROL_HORIZONTAL:
+      return 16;
     case DISTANCE_UNRELATED_CONTROL_VERTICAL:
       return 16;
+    case DISTANCE_VECTOR_ICON_PADDING:
+      return 4;
     case VIEWS_DISTANCE_END:
     case VIEWS_DISTANCE_MAX:
       NOTREACHED();
-      return 0;
   }
   NOTREACHED();
-  return 0;
 }
 
 const TypographyProvider& LayoutProvider::GetTypographyProvider() const {
@@ -173,6 +190,51 @@ int LayoutProvider::GetCornerRadiusMetric(Emphasis emphasis,
       return 8;
     case Emphasis::kMaximum:
       return std::min(size.width(), size.height()) / 2;
+  }
+}
+
+ShapeSysTokens GetShapeSysToken(ShapeContextTokens id) {
+  static constexpr auto shape_token_map =
+      base::MakeFixedFlatMap<ShapeContextTokens, ShapeSysTokens>({
+          {ShapeContextTokens::kBadgeRadius, ShapeSysTokens::kXSmall},
+          {ShapeContextTokens::kButtonRadius, ShapeSysTokens::kFull},
+          {ShapeContextTokens::kComboboxRadius, ShapeSysTokens::kSmall},
+          {ShapeContextTokens::kDialogRadius, ShapeSysTokens::kMediumSmall},
+          {ShapeContextTokens::kFindBarViewRadius, ShapeSysTokens::kSmall},
+          {ShapeContextTokens::kMenuRadius, ShapeSysTokens::kMediumSmall},
+          {ShapeContextTokens::kMenuAuxRadius, ShapeSysTokens::kMediumSmall},
+          {ShapeContextTokens::kMenuTouchRadius, ShapeSysTokens::kMediumSmall},
+          {ShapeContextTokens::kOmniboxExpandedRadius, ShapeSysTokens::kMedium},
+          {ShapeContextTokens::kTextfieldRadius, ShapeSysTokens::kSmall},
+          {ShapeContextTokens::kSidePanelContentRadius,
+           ShapeSysTokens::kMedium},
+          {ShapeContextTokens::kSidePanelPageContentRadius,
+           ShapeSysTokens::kSmall},
+      });
+  const auto it = shape_token_map.find(id);
+  return it == shape_token_map.end() ? ShapeSysTokens::kDefault : it->second;
+}
+
+int LayoutProvider::GetCornerRadiusMetric(ShapeContextTokens id,
+                                          const gfx::Size& size) const {
+  ShapeSysTokens token = GetShapeSysToken(id);
+  DCHECK_NE(token, ShapeSysTokens::kDefault)
+      << "kDefault token means there is a missing mapping between shape tokens";
+  switch (token) {
+    case ShapeSysTokens::kXSmall:
+      return 4;
+    case ShapeSysTokens::kSmall:
+      return 8;
+    case ShapeSysTokens::kMediumSmall:
+      return 12;
+    case ShapeSysTokens::kMedium:
+      return 16;
+    case ShapeSysTokens::kLarge:
+      return 24;
+    case ShapeSysTokens::kFull:
+      return std::min(size.width(), size.height()) / 2;
+    default:
+      return 0;
   }
 }
 

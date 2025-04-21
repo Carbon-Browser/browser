@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,20 +9,14 @@
 
 namespace content {
 
-// Define a templated type to track references to a parameterized target type.
-// The target type must provide AddHandleRef() methods and DropHandleRef()
-// methods that will be called when the CacheStorageRef<> object is created
-// and destroyed.
+// A templated type used to track CacheStorage and CacheStorageCache references.
+// The TargetType must provide AddHandleRef() and DropHandleRef() methods, which
+// are called when the CacheStorageRef<> object is created and destroyed.
 //
-// Note, the reference being tracked by CacheStorageRef is intended to
-// represent high level references from DOM objects exposed to javascript
-// and does not correspond to typical smart pointer reference counts.
-// Internally this class uses a WeakPtr<> to the target and cache_storage
-// must manager the target life cycle through other mechanisms.
-//
-// Currently this is only used to track references to CacheStorageCache
-// target objects, but will soon be used to track references to CacheStorage
-// targets as well.
+// Each CacheStorageRef corresponds to a high level reference from DOM objects
+// exposed to JavaScript, and does not correspond to typical smart pointer
+// reference counts. Internally this class uses a WeakPtr<> to the target and
+// Cache Storage must manage the target's lifecycle through other mechanisms.
 template <typename TargetType>
 class CacheStorageRef {
  public:

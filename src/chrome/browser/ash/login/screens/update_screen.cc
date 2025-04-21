@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <algorithm>
 
-#include "ash/constants/ash_features.h"
-#include "base/bind.h"
+#include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/i18n/number_formatting.h"
 #include "base/logging.h"
 #include "base/memory/weak_ptr.h"
@@ -17,13 +17,15 @@
 #include "build/branding_buildflags.h"
 #include "chrome/browser/ash/login/configuration_keys.h"
 #include "chrome/browser/ash/login/error_screens_histogram_helper.h"
+#include "chrome/browser/ash/login/login_pref_names.h"
 #include "chrome/browser/ash/login/screens/network_error.h"
 #include "chrome/browser/ash/login/wizard_context.h"
+#include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/ash/system/timezone_util.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/ui/webui/chromeos/login/update_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/update_screen_handler.h"
 #include "chrome/common/pref_names.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "chromeos/ash/components/network/network_state.h"
 #include "components/prefs/pref_service.h"
@@ -35,6 +37,7 @@
 #define ENABLED_VLOG_LEVEL 1
 
 namespace ash {
+
 namespace {
 
 constexpr const char kUserActionAcceptUpdateOverCellular[] =
@@ -49,15 +52,18 @@ constexpr const char kUserActionOptOutInfoNext[] = "opt-out-info-next";
 // Time in seconds after which we initiate reboot.
 constexpr const base::TimeDelta kWaitBeforeRebootTime = base::Seconds(2);
 
-// Delay before showing error message if captive portal is detected.
-// We wait for this delay to let captive portal to perform redirect and show
-// its login page before error message appears.
-constexpr const base::TimeDelta kDelayErrorMessage = base::Seconds(10);
-
-constexpr const base::TimeDelta kShowDelay = base::Microseconds(400);
+constexpr const base::TimeDelta kDefaultShowDelay = base::Microseconds(400);
 
 // When battery percent is lower and DISCHARGING warn user about it.
 const double kInsufficientBatteryPercent = 50;
+
+// Passing "--quick-start-test-forced-update" on the command line will simulate
+// the "Forced Update" flow after the wifi credentials transfer is complete.
+// This is for testing only and will not install an actual update. If this
+// switch is present, the Chromebook reboots and attempts to automatically
+// resume the Quick Start connection after reboot.
+constexpr char kQuickStartTestForcedUpdateSwitch[] =
+    "quick-start-test-forced-update";
 
 void RecordDownloadingTime(base::TimeDelta duration) {
   base::UmaHistogramLongTimes("OOBE.UpdateScreen.UpdateDownloadingTime",
@@ -90,10 +96,15 @@ void RecordUpdateStages(const base::TimeDelta check_time,
   RecordFinalizeTime(finalize_time);
 }
 
-}  // anonymous namespace
+void RecordUpdateCheckTimeout(bool timeout) {
+  base::UmaHistogramBoolean("OOBE.UpdateScreen.CheckTimeout", timeout);
+}
+
+}  // namespace
 
 // static
 std::string UpdateScreen::GetResultString(Result result) {
+  // LINT.IfChange(UsageMetrics)
   switch (result) {
     case Result::UPDATE_NOT_REQUIRED:
       return "UpdateNotRequired";
@@ -103,7 +114,10 @@ std::string UpdateScreen::GetResultString(Result result) {
       return BaseScreen::kNotApplicable;
     case Result::UPDATE_OPT_OUT_INFO_SHOWN:
       return "UpdateNotRequired_OptOutInfo";
+    case Result::UPDATE_CHECK_TIMEOUT:
+      return "UpdateCheckTimeout";
   }
+  // LINT.ThenChange(//tools/metrics/histograms/metadata/oobe/histograms.xml)
 }
 
 UpdateScreen::UpdateScreen(base::WeakPtr<UpdateView> view,
@@ -113,32 +127,30 @@ UpdateScreen::UpdateScreen(base::WeakPtr<UpdateView> view,
       view_(std::move(view)),
       error_screen_(error_screen),
       exit_callback_(exit_callback),
-      histogram_helper_(
-          std::make_unique<ErrorScreensHistogramHelper>("Update")),
+      histogram_helper_(std::make_unique<ErrorScreensHistogramHelper>(
+          ErrorScreensHistogramHelper::ErrorParentScreen::kUpdate)),
       version_updater_(std::make_unique<VersionUpdater>(this)),
       wait_before_reboot_time_(kWaitBeforeRebootTime),
+      show_delay_(kDefaultShowDelay),
       tick_clock_(base::DefaultTickClock::GetInstance()) {}
 
 UpdateScreen::~UpdateScreen() = default;
 
-bool UpdateScreen::MaybeSkip(WizardContext* context) {
-  if (context->enrollment_triggered_early) {
+bool UpdateScreen::MaybeSkip(WizardContext& context) {
+  if (context.enrollment_triggered_early) {
     LOG(WARNING) << "Skip OOBE Update because of enrollment request.";
     exit_callback_.Run(VersionUpdater::Result::UPDATE_SKIPPED);
     return true;
   }
 
-  const auto* skip_screen_key = context->configuration.FindKeyOfType(
-      configuration::kUpdateSkipUpdate, base::Value::Type::BOOLEAN);
-  const bool skip_screen = skip_screen_key && skip_screen_key->GetBool();
-
-  if (skip_screen) {
-    LOG(WARNING) << "Skip OOBE Update because of configuration.";
+  if (IsRollbackFlow(context)) {
+    LOG(WARNING)
+        << "Skip OOBE Update because enterprise rollback just happened.";
     exit_callback_.Run(VersionUpdater::Result::UPDATE_SKIPPED);
     return true;
   }
 
-  if (!context->is_branded_build) {
+  if (!context.is_branded_build) {
     LOG(WARNING) << "Skip OOBE Update because of not branded build.";
     exit_callback_.Run(VersionUpdater::Result::UPDATE_SKIPPED);
     return true;
@@ -156,9 +168,9 @@ void UpdateScreen::ShowImpl() {
                             weak_factory_.GetWeakPtr()));
   }
   if (!power_manager_subscription_.IsObserving()) {
-    power_manager_subscription_.Observe(PowerManagerClient::Get());
+    power_manager_subscription_.Observe(chromeos::PowerManagerClient::Get());
   }
-  PowerManagerClient::Get()->RequestStatusUpdate();
+  chromeos::PowerManagerClient::Get()->RequestStatusUpdate();
 #if !BUILDFLAG(GOOGLE_CHROME_BRANDING)
   if (view_) {
     view_->SetCancelUpdateShortcutEnabled(true);
@@ -173,7 +185,7 @@ void UpdateScreen::ShowImpl() {
   if (is_opt_out_enabled_) {
     MakeSureScreenIsShown();
   } else {
-    show_timer_.Start(FROM_HERE, kShowDelay,
+    show_timer_.Start(FROM_HERE, show_delay_,
                       base::BindOnce(&UpdateScreen::MakeSureScreenIsShown,
                                      weak_factory_.GetWeakPtr()));
   }
@@ -267,12 +279,12 @@ void UpdateScreen::ShowErrorMessage() {
   histogram_helper_->OnErrorShow(error_screen_->GetErrorState());
 }
 
-void UpdateScreen::UpdateErrorMessage(
-    const NetworkPortalDetector::CaptivePortalStatus status,
-    const NetworkError::ErrorState& error_state,
-    const std::string& network_name) {
+void UpdateScreen::UpdateErrorMessage(NetworkState::PortalState state,
+                                      NetworkError::ErrorState error_state,
+                                      const std::string& network_name) {
   error_screen_->SetErrorState(error_state, network_name);
-  if (status == NetworkPortalDetector::CAPTIVE_PORTAL_STATUS_PORTAL) {
+  if (state == NetworkState::PortalState::kPortal ||
+      state == NetworkState::PortalState::kPortalSuspected) {
     if (is_first_portal_notification_) {
       is_first_portal_notification_ = false;
       error_screen_->FixCaptivePortal();
@@ -284,12 +296,15 @@ void UpdateScreen::DelayErrorMessage() {
   if (error_message_timer_.IsRunning())
     return;
 
-  error_message_timer_.Start(FROM_HERE, kDelayErrorMessage, this,
+  error_message_timer_.Start(FROM_HERE, delay_error_message_, this,
                              &UpdateScreen::ShowErrorMessage);
 }
 
 void UpdateScreen::UpdateInfoChanged(
     const VersionUpdater::UpdateInfo& update_info) {
+  if (is_hidden()) {
+    return;
+  }
   const update_engine::StatusResult& status = update_info.status;
   hide_progress_on_exit_ = false;
   has_critical_update_ =
@@ -299,6 +314,26 @@ void UpdateScreen::UpdateInfoChanged(
     MakeSureScreenIsShown();
     return;
   }
+
+  // For testing resuming Quick Start after an update with the
+  // kQuickStartTestForcedUpdateSwitch only.
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+          kQuickStartTestForcedUpdateSwitch) &&
+      context()->quick_start_setup_ongoing) {
+    WizardController::default_controller()
+        ->quick_start_controller()
+        ->PrepareForUpdate(/*is_forced=*/true);
+    did_prepare_quick_start_for_update_ = true;
+    view_->SetUpdateState(UpdateView::UIState::kUpdateInProgress);
+    // Set that critical update applied in OOBE.
+    g_browser_process->local_state()->SetBoolean(
+        prefs::kOobeCriticalUpdateCompleted, true);
+    wait_reboot_timer_.Start(FROM_HERE, wait_before_reboot_time_,
+                             version_updater_.get(),
+                             &VersionUpdater::RebootAfterUpdate);
+    return;
+  }
+
   switch (status.current_operation()) {
     case update_engine::Operation::CHECKING_FOR_UPDATE:
       if (view_)
@@ -309,8 +344,10 @@ void UpdateScreen::UpdateInfoChanged(
       // Do nothing in these cases, we don't want to notify the user of the
       // check unless there is an update.
     case update_engine::Operation::ATTEMPTING_ROLLBACK:
+    case update_engine::Operation::CLEANUP_PREVIOUS_UPDATE:
     case update_engine::Operation::DISABLED:
     case update_engine::Operation::IDLE:
+    case update_engine::Operation::UPDATED_BUT_DEFERRED:
       break;
     case update_engine::Operation::UPDATE_AVAILABLE:
       if (view_)
@@ -330,21 +367,32 @@ void UpdateScreen::UpdateInfoChanged(
       SetUpdateStatusMessage(update_info.better_update_progress,
                              update_info.total_time_left);
       MakeSureScreenIsShown();
-      if (!is_critical_checked_) {
-        // Because update engine doesn't send UPDATE_STATUS_UPDATE_AVAILABLE we
-        // need to check if update is critical on first downloading
-        // notification.
-        is_critical_checked_ = true;
-        if (!HasCriticalUpdate()) {
-          VLOG(1) << "Non-critical update available: " << status.new_version();
-          hide_progress_on_exit_ = true;
-          ExitUpdate(Result::UPDATE_NOT_REQUIRED);
-        } else {
-          check_time_ = tick_clock_->NowTicks() - start_update_stage_;
-          start_update_stage_ = start_update_downloading_ =
-              tick_clock_->NowTicks();
-          VLOG(1) << "Critical update available: " << status.new_version();
-        }
+
+      if (is_critical_checked_) {
+        break;
+      }
+
+      // Because update engine doesn't send UPDATE_STATUS_UPDATE_AVAILABLE we
+      // need to check if update is critical on first downloading
+      // notification.
+      is_critical_checked_ = true;
+
+      if (!HasCriticalUpdate()) {
+        VLOG(1) << "Non-critical update available: " << status.new_version();
+        hide_progress_on_exit_ = true;
+        ExitUpdate(Result::UPDATE_NOT_REQUIRED);
+        break;
+      }
+
+      check_time_ = tick_clock_->NowTicks() - start_update_stage_;
+      start_update_stage_ = start_update_downloading_ = tick_clock_->NowTicks();
+      VLOG(1) << "Critical update available: " << status.new_version();
+
+      if (context()->quick_start_setup_ongoing) {
+        WizardController::default_controller()
+            ->quick_start_controller()
+            ->PrepareForUpdate(/*is_forced=*/true);
+        did_prepare_quick_start_for_update_ = true;
       }
       break;
     case update_engine::Operation::VERIFYING:
@@ -362,6 +410,9 @@ void UpdateScreen::UpdateInfoChanged(
     case update_engine::Operation::FINALIZING:
       if (view_)
         view_->SetUpdateState(UpdateView::UIState::kUpdateInProgress);
+      // set that critical update applied in OOBE.
+      g_browser_process->local_state()->SetBoolean(
+          prefs::kOobeCriticalUpdateCompleted, true);
       SetUpdateStatusMessage(update_info.better_update_progress,
                              update_info.total_time_left);
       // Make sure that VERIFYING and FINALIZING stages are recorded correctly.
@@ -409,6 +460,14 @@ void UpdateScreen::UpdateInfoChanged(
 }
 
 void UpdateScreen::FinishExitUpdate(Result result) {
+  if (did_prepare_quick_start_for_update_) {
+    WizardController::default_controller()
+        ->quick_start_controller()
+        ->ResumeSessionAfterCancelledUpdate();
+  }
+
+  RecordUpdateCheckTimeout(result == Result::UPDATE_CHECK_TIMEOUT);
+
   if (!start_update_stage_.is_null() && check_time_.is_zero()) {
     check_time_ = tick_clock_->NowTicks() - start_update_stage_;
     RecordCheckTime(check_time_);
@@ -459,8 +518,8 @@ void UpdateScreen::SetUpdateStatusMessage(int percent,
 void UpdateScreen::UpdateBatteryWarningVisibility() {
   if (!view_)
     return;
-  const absl::optional<power_manager::PowerSupplyProperties>& proto =
-      PowerManagerClient::Get()->GetLastStatus();
+  const std::optional<power_manager::PowerSupplyProperties>& proto =
+      chromeos::PowerManagerClient::Get()->GetLastStatus();
   if (!proto.has_value())
     return;
   view_->ShowLowBatteryWarningMessage(
@@ -488,8 +547,6 @@ void UpdateScreen::MakeSureScreenIsShown() {
     view_->SetAutoTransition(
         !AccessibilityManager::Get()->IsSpokenFeedbackEnabled());
   }
-  // `is_opt_out_enabled_` can be true only if the feature is enabled.
-  DCHECK(!is_opt_out_enabled_ || features::IsConsumerAutoUpdateToggleAllowed());
   view_->Show(is_opt_out_enabled_);
 }
 
@@ -522,17 +579,15 @@ void UpdateScreen::OnAccessibilityStatusChanged(
 }
 
 void UpdateScreen::OnErrorScreenHidden() {
-  error_screen_->SetParentScreen(ash::OOBE_SCREEN_UNKNOWN);
+  error_screen_->SetParentScreen(OOBE_SCREEN_UNKNOWN);
   Show(context());
 }
 
 // static
 bool UpdateScreen::CheckIfOptOutIsEnabled() {
-  if (!features::IsConsumerAutoUpdateToggleAllowed())
-    return false;
   auto country = system::GetCountryCodeFromTimezoneIfAvailable(
       g_browser_process->local_state()->GetString(
-          prefs::kSigninScreenTimezone));
+          ::prefs::kSigninScreenTimezone));
   if (!country.has_value()) {
     return false;
   }

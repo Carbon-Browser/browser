@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,14 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/base_export.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/types/expected.h"
+#include "base/types/strong_alias.h"
 #include "base/win/windows_types.h"
 
 namespace base {
@@ -43,21 +46,27 @@ class BASE_EXPORT RegKey {
 
   ~RegKey();
 
-  LONG Create(HKEY rootkey, const wchar_t* subkey, REGSAM access);
+  // Creates a new reg key, replacing `this` with a reference to the
+  // newly-opened key. In case of error, `this` is unchanged.
+  [[nodiscard]] LONG Create(HKEY rootkey, const wchar_t* subkey, REGSAM access);
 
-  LONG CreateWithDisposition(HKEY rootkey,
-                             const wchar_t* subkey,
-                             DWORD* disposition,
-                             REGSAM access);
+  // Creates a new reg key, replacing `this` with a reference to the
+  // newly-opened key. In case of error, `this` is unchanged.
+  [[nodiscard]] LONG CreateWithDisposition(HKEY rootkey,
+                                           const wchar_t* subkey,
+                                           DWORD* disposition,
+                                           REGSAM access);
 
-  // Creates a subkey or open it if it already exists.
-  LONG CreateKey(const wchar_t* name, REGSAM access);
+  // Creates a subkey or opens it if it already exists. In case of error, `this`
+  // is unchanged.
+  [[nodiscard]] LONG CreateKey(const wchar_t* name, REGSAM access);
 
-  // Opens an existing reg key.
-  LONG Open(HKEY rootkey, const wchar_t* subkey, REGSAM access);
+  // Opens an existing reg key, replacing `this` with a reference to the
+  // newly-opened key. In case of error, `this` is unchanged.
+  [[nodiscard]] LONG Open(HKEY rootkey, const wchar_t* subkey, REGSAM access);
 
   // Opens an existing reg key, given the relative key name.
-  LONG OpenKey(const wchar_t* relative_key_name, REGSAM access);
+  [[nodiscard]] LONG OpenKey(const wchar_t* relative_key_name, REGSAM access);
 
   // Closes this reg key.
   void Close();
@@ -72,9 +81,9 @@ class BASE_EXPORT RegKey {
   // occurrs while attempting to access it.
   bool HasValue(const wchar_t* value_name) const;
 
-  // Returns the number of values for this key, or 0 if the number cannot be
-  // determined.
-  DWORD GetValueCount() const;
+  // Returns the number of values for this key, or an error code if the number
+  // cannot be determined.
+  base::expected<DWORD, LONG> GetValueCount() const;
 
   // Determines the nth value's name.
   LONG GetValueNameAt(DWORD index, std::wstring* name) const;
@@ -82,13 +91,12 @@ class BASE_EXPORT RegKey {
   // True while the key is valid.
   bool Valid() const { return key_ != nullptr; }
 
-  // Kills a key and everything that lives below it; please be careful when
-  // using it.
-  LONG DeleteKey(const wchar_t* name);
-
-  // Deletes an empty subkey.  If the subkey has subkeys or values then this
-  // will fail.
-  LONG DeleteEmptyKey(const wchar_t* name);
+  // Kills a key and, by default, everything that lives below it; please be
+  // careful when using it. `recursive` = false may be used to prevent
+  // recursion, in which case the key is only deleted if it has no subkeys.
+  using RecursiveDelete = base::StrongAlias<class RecursiveDeleteTag, bool>;
+  LONG DeleteKey(const wchar_t* name,
+                 RecursiveDelete recursive = RecursiveDelete(true));
 
   // Deletes a single value within the key.
   LONG DeleteValue(const wchar_t* name);
@@ -121,7 +129,7 @@ class BASE_EXPORT RegKey {
 
   // Setters:
 
-  // Sets an int32_t value.
+  // Sets a uint32_t value.
   LONG WriteValue(const wchar_t* name, DWORD in_value);
 
   // Sets a string value.
@@ -144,6 +152,26 @@ class BASE_EXPORT RegKey {
 
  private:
   class Watcher;
+
+  // Opens the key `subkey` under `rootkey` with the given options and
+  // access rights. `options` may be 0 or `REG_OPTION_OPEN_LINK`. Returns
+  // ERROR_SUCCESS or a Windows error code.
+  [[nodiscard]] LONG Open(HKEY rootkey,
+                          const wchar_t* subkey,
+                          DWORD options,
+                          REGSAM access);
+
+  // Returns true if the key is a symbolic link, false if it is not, or a
+  // Windows error code in case of a failure to determine. `this` *MUST* have
+  // been opened via at least `Open(..., REG_OPTION_OPEN_LINK,
+  // REG_QUERY_VALUE);`.
+  expected<bool, LONG> IsLink() const;
+
+  // Deletes the key if it is a symbolic link. Returns ERROR_SUCCESS if the key
+  // was a link and was deleted, a Windows error code if checking the key or
+  // deleting it failed, or `nullopt` if the key exists and is not a symbolic
+  // link.
+  std::optional<LONG> DeleteIfLink();
 
   // Recursively deletes a key and all of its subkeys.
   static LONG RegDelRecurse(HKEY root_key, const wchar_t* name, REGSAM access);
@@ -181,7 +209,9 @@ class BASE_EXPORT RegistryValueIterator {
   // Advances to the next registry entry.
   void operator++();
 
+  // TODO(crbug.com/329476354): Provide a wcstring_view instead of a pointer.
   const wchar_t* Name() const { return name_.c_str(); }
+  // TODO(crbug.com/329476354): Provide a wcstring_view instead of a pointer.
   const wchar_t* Value() const { return value_.data(); }
   // ValueSize() is in bytes.
   DWORD ValueSize() const { return value_size_; }
@@ -203,6 +233,10 @@ class BASE_EXPORT RegistryValueIterator {
 
   // Current values.
   std::wstring name_;
+  // The vector always has a `0` at the end, after its `ValueSize() / 2u`
+  // elements (since ValueSize() is in bytes, but the vector is of 2-byte
+  // objects). This allows the value to always be read as a NUL-terminated
+  // string, even if it's holding another type of data.
   std::vector<wchar_t> value_;
   DWORD value_size_;
   DWORD type_;

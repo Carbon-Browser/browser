@@ -1,9 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+//
+// This source code is a part of eyeo Chromium SDK.
+// Use of this source code is governed by the GPLv3 that can be found in the
+// components/adblock/LICENSE file.
 
 #include "base/one_shot_event.h"
 #include "chrome/browser/extensions/extension_browsertest.h"
+#include "chrome/browser/profiles/profile.h"
 #include "content/public/test/browser_test.h"
 #include "extensions/browser/extension_function_registry.h"
 #include "extensions/browser/extension_system.h"
@@ -30,7 +35,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionFunctionRegistrationTest,
   EXPECT_GT(factories.size(), 500u);
 
   std::set<std::string> seen_names;
-  std::set<functions::HistogramValue> seen_histograms;
+  std::map<functions::HistogramValue, std::string> seen_histograms;
 
   // The following are methods that are undocumented and may or may not ship
   // with a final API. We allow them to use the UNKNOWN histogram entry in the
@@ -56,6 +61,12 @@ IN_PROC_BROWSER_TEST_F(ExtensionFunctionRegistrationTest,
                            base::CompareCase::SENSITIVE)) {
         continue;
       }
+      // Eyeo extension API uses UNKNOWN; it's not used in histograms.
+      if (base::StartsWith(entry.function_name_, "adblockPrivate.") ||
+          base::StartsWith(entry.function_name_, "eyeoFilteringPrivate.")) {
+        continue;
+      }
+
       // Some undocumented, unlaunched APIs may also use UNKNOWN if it's unclear
       // (or unlikely) if they will ever launch.
       if (base::Contains(kAllowedUnknownHistogramEntries,
@@ -65,7 +76,15 @@ IN_PROC_BROWSER_TEST_F(ExtensionFunctionRegistrationTest,
       ADD_FAILURE() << "Un-allowlisted API found using UNKNOWN histogram entry."
                     << entry.function_name_;
     } else {
-      EXPECT_TRUE(seen_histograms.insert(entry.histogram_value_).second);
+      bool is_success =
+          seen_histograms.emplace(entry.histogram_value_, entry.function_name_)
+              .second;
+      if (!is_success) {
+        ADD_FAILURE() << "Histogram " << entry.function_name_ << " with value "
+                      << entry.histogram_value_
+                      << " already exists with another name - "
+                      << seen_histograms.find(entry.histogram_value_)->second;
+      }
     }
   }
 }

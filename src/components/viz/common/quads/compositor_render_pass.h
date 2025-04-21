@@ -1,4 +1,4 @@
-// Copyright 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,11 @@
 #include <stddef.h>
 
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/hash/hash.h"
 #include "base/types/id_type.h"
 #include "cc/base/list_container.h"
@@ -20,10 +21,9 @@
 #include "components/viz/common/quads/largest_draw_quad.h"
 #include "components/viz/common/quads/quad_list.h"
 #include "components/viz/common/quads/render_pass_internal.h"
-#include "components/viz/common/shared_element_resource_id.h"
 #include "components/viz/common/surfaces/subtree_capture_id.h"
+#include "components/viz/common/view_transition_element_resource_id.h"
 #include "components/viz/common/viz_common_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/display_color_spaces.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/rrect_f.h"
@@ -72,10 +72,10 @@ class VIZ_COMMON_EXPORT CompositorRenderPass : public RenderPassInternal {
               const gfx::Transform& transform_to_root_target,
               const cc::FilterOperations& filters,
               const cc::FilterOperations& backdrop_filters,
-              const absl::optional<gfx::RRectF>& backdrop_filter_bounds,
+              const std::optional<gfx::RRectF>& backdrop_filter_bounds,
               SubtreeCaptureId capture_id,
               gfx::Size subtree_capture_size,
-              SharedElementResourceId resource_id,
+              ViewTransitionElementResourceId resource_id,
               bool has_transparent_background,
               bool cache_render_pass,
               bool has_damage_from_contributing_content,
@@ -107,7 +107,7 @@ class VIZ_COMMON_EXPORT CompositorRenderPass : public RenderPassInternal {
 
   // A unique ID that identifies an element that this render pass corresponds
   // to. This is used to implement a live snapshot of an element's content.
-  SharedElementResourceId shared_element_resource_id;
+  ViewTransitionElementResourceId view_transition_element_resource_id;
 
   // Set to true if at least one of the quads in the |quad_list| contains damage
   // that is not contained in |damage_rect|. Only the root render pass in a

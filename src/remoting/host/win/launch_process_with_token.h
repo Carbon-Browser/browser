@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define REMOTING_HOST_WIN_LAUNCH_PROCESS_WITH_TOKEN_H_
 
 #include <windows.h>
+
 #include <stdint.h>
 
 #include "base/command_line.h"
@@ -39,6 +40,6 @@ bool LaunchProcessWithToken(
     base::win::ScopedHandle* process_out,
     base::win::ScopedHandle* thread_out);
 
-} // namespace remoting
+}  // namespace remoting
 
 #endif  // REMOTING_HOST_WIN_LAUNCH_PROCESS_WITH_TOKEN_H_

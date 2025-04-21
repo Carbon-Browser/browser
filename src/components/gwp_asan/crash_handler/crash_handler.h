@@ -1,9 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_GWP_ASAN_CRASH_HANDLER_CRASH_HANDLER_H_
 #define COMPONENTS_GWP_ASAN_CRASH_HANDLER_CRASH_HANDLER_H_
+
+#include <stdint.h>
 
 #include "third_party/crashpad/crashpad/handler/user_stream_data_source.h"
 

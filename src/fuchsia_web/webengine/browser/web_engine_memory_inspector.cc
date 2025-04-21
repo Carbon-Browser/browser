@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,13 +17,13 @@
 namespace {
 
 std::vector<std::string> GetAllocatorDumpNamesFromConfig() {
-  const absl::optional<base::Value>& config =
+  const std::optional<base::Value::Dict>& config =
       fuchsia_component_support::LoadPackageConfig();
   if (!config)
     return {};
 
   const base::Value::List* names_list =
-      config->GetDict().FindList("allocator-dump-names");
+      config->FindList("allocator-dump-names");
   if (!names_list)
     return {};
 
@@ -134,11 +134,11 @@ WebEngineMemoryInspector::ResolveMemoryDumpPromise(fpromise::context& context) {
   DCHECK(coordinator);
 
   coordinator->RequestGlobalMemoryDump(
-      base::trace_event::MemoryDumpType::SUMMARY_ONLY,
-      base::trace_event::MemoryDumpLevelOfDetail::BACKGROUND,
-      base::trace_event::MemoryDumpDeterminism::NONE, AllocatorDumpNames(),
+      base::trace_event::MemoryDumpType::kSummaryOnly,
+      base::trace_event::MemoryDumpLevelOfDetail::kBackground,
+      base::trace_event::MemoryDumpDeterminism::kNone, AllocatorDumpNames(),
       base::BindOnce(&WebEngineMemoryInspector::OnMemoryDumpComplete,
-                     weak_this_.GetWeakPtr(), base::TimeTicks::Now(),
+                     weak_this_.GetMutableWeakPtr(), base::TimeTicks::Now(),
                      context.suspend_task()));
 
   return fpromise::pending();

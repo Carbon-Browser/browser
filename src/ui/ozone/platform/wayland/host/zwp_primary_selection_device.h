@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,12 +36,12 @@ class ZwpPrimarySelectionDevice : public WaylandDataDeviceBase {
   void SetSelectionSource(ZwpPrimarySelectionSource* source, uint32_t serial);
 
  private:
-  // primary_selection_device_listener callbacks
+  // zwp_primary_selection_device_listener callbacks:
   static void OnDataOffer(void* data,
-                          zwp_primary_selection_device_v1* data_device,
+                          zwp_primary_selection_device_v1* selection_device,
                           zwp_primary_selection_offer_v1* offer);
   static void OnSelection(void* data,
-                          zwp_primary_selection_device_v1* data_device,
+                          zwp_primary_selection_device_v1* selection_device,
                           zwp_primary_selection_offer_v1* offer);
 
   // The Wayland object wrapped by this instance.

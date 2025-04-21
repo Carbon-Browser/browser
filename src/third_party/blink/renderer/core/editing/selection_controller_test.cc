@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,6 @@
 #include "third_party/blink/renderer/core/input/event_handler.h"
 #include "third_party/blink/renderer/core/layout/layout_object.h"
 #include "third_party/blink/renderer/core/testing/core_unit_test_helper.h"
-#include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
 
 namespace blink {
 
@@ -91,28 +90,15 @@ void SelectionControllerTest::SetNonDirectionalSelectionIfNeeded(
           SelectionController::kDoNotAdjustEndpoints);
 }
 
-class ParameterizedSelectionControllerTest
-    : public SelectionControllerTest,
-      public testing::WithParamInterface<bool>,
-      private ScopedLayoutNGForTest {
- public:
-  ParameterizedSelectionControllerTest() : ScopedLayoutNGForTest(GetParam()) {}
-
-  bool LayoutNGEnabled() const { return GetParam(); }
-};
-
-INSTANTIATE_TEST_SUITE_P(SelectionControllerTest,
-                         ParameterizedSelectionControllerTest,
-                         testing::Bool());
-
 TEST_F(SelectionControllerTest, setNonDirectionalSelectionIfNeeded) {
   const char* body_content = "<span id=top>top</span><span id=host></span>";
   const char* shadow_content = "<span id=bottom>bottom</span>";
   SetBodyContent(body_content);
   ShadowRoot* shadow_root = SetShadowContent(shadow_content, "host");
 
-  Node* top = GetDocument().getElementById("top")->firstChild();
-  Node* bottom = shadow_root->getElementById("bottom")->firstChild();
+  Node* top = GetDocument().getElementById(AtomicString("top"))->firstChild();
+  Node* bottom =
+      shadow_root->getElementById(AtomicString("bottom"))->firstChild();
 
   // top to bottom
   SetNonDirectionalSelectionIfNeeded(SelectionInFlatTree::Builder()
@@ -121,15 +107,16 @@ TEST_F(SelectionControllerTest, setNonDirectionalSelectionIfNeeded) {
                                          .Build(),
                                      TextGranularity::kCharacter);
   EXPECT_EQ(VisibleSelectionInDOMTree().Start(),
-            VisibleSelectionInDOMTree().Base());
+            VisibleSelectionInDOMTree().Anchor());
   EXPECT_EQ(VisibleSelectionInDOMTree().End(),
-            VisibleSelectionInDOMTree().Extent());
+            VisibleSelectionInDOMTree().Focus());
   EXPECT_EQ(Position(top, 1), VisibleSelectionInDOMTree().Start());
   EXPECT_EQ(Position(top, 3), VisibleSelectionInDOMTree().End());
 
-  EXPECT_EQ(PositionInFlatTree(top, 1), GetVisibleSelectionInFlatTree().Base());
+  EXPECT_EQ(PositionInFlatTree(top, 1),
+            GetVisibleSelectionInFlatTree().Anchor());
   EXPECT_EQ(PositionInFlatTree(bottom, 3),
-            GetVisibleSelectionInFlatTree().Extent());
+            GetVisibleSelectionInFlatTree().Focus());
   EXPECT_EQ(PositionInFlatTree(top, 1),
             GetVisibleSelectionInFlatTree().Start());
   EXPECT_EQ(PositionInFlatTree(bottom, 3),
@@ -143,16 +130,16 @@ TEST_F(SelectionControllerTest, setNonDirectionalSelectionIfNeeded) {
           .Build(),
       TextGranularity::kCharacter);
   EXPECT_EQ(VisibleSelectionInDOMTree().End(),
-            VisibleSelectionInDOMTree().Base());
+            VisibleSelectionInDOMTree().Anchor());
   EXPECT_EQ(VisibleSelectionInDOMTree().Start(),
-            VisibleSelectionInDOMTree().Extent());
+            VisibleSelectionInDOMTree().Focus());
   EXPECT_EQ(Position(bottom, 0), VisibleSelectionInDOMTree().Start());
   EXPECT_EQ(Position(bottom, 3), VisibleSelectionInDOMTree().End());
 
   EXPECT_EQ(PositionInFlatTree(bottom, 3),
-            GetVisibleSelectionInFlatTree().Base());
+            GetVisibleSelectionInFlatTree().Anchor());
   EXPECT_EQ(PositionInFlatTree(top, 1),
-            GetVisibleSelectionInFlatTree().Extent());
+            GetVisibleSelectionInFlatTree().Focus());
   EXPECT_EQ(PositionInFlatTree(top, 1),
             GetVisibleSelectionInFlatTree().Start());
   EXPECT_EQ(PositionInFlatTree(bottom, 3),
@@ -241,7 +228,7 @@ TEST_F(SelectionControllerTest, AdjustSelectionWithTrailingWhitespace) {
   SetBodyContent(
       "<input type=checkbox>"
       "<div style='user-select:none'>abc</div>");
-  Element* const input = GetDocument().QuerySelector("input");
+  Element* const input = GetDocument().QuerySelector(AtomicString("input"));
 
   const SelectionInFlatTree& selection = ExpandWithGranularity(
       SelectionInFlatTree::Builder()
@@ -440,7 +427,7 @@ TEST_F(SelectionControllerTest, SelectWordToEndOfTableCell) {
             GetSelectionTextFromBody());
 }
 
-TEST_P(ParameterizedSelectionControllerTest, Scroll) {
+TEST_F(SelectionControllerTest, Scroll) {
   SetBodyInnerHTML(R"HTML(
     <style>
     html, body {
@@ -473,8 +460,7 @@ TEST_P(ParameterizedSelectionControllerTest, Scroll) {
 
   // Hit-test on the first visible line. This should be "line3".
   HitTestResult line3_result = HitTestResultAtLocation(5, 50);
-  if (LayoutNGEnabled())  // Legacy fails this test.
-    EXPECT_EQ(line3_result.LocalPoint(), PhysicalOffset(5, 50));
+  EXPECT_EQ(line3_result.LocalPoint(), PhysicalOffset(5, 50));
   PositionWithAffinity line3 = line3_result.GetPosition();
   Node* line3_node = line3.AnchorNode();
   EXPECT_EQ(line3_node->nodeName(), "#text");
@@ -504,33 +490,27 @@ TEST_P(ParameterizedSelectionControllerTest, Scroll) {
 
   // At the padding of an inline box.
   HitTestResult line5_result = HitTestResultAtLocation(5, 250);
-  if (LayoutNGEnabled())  // Legacy fails this test.
-    EXPECT_EQ(line5_result.LocalPoint(), PhysicalOffset(5, 250));
+  EXPECT_EQ(line5_result.LocalPoint(), PhysicalOffset(5, 250));
   PositionWithAffinity line5 = line5_result.GetPosition();
   Node* line5_node = line5.AnchorNode();
   EXPECT_EQ(line5_node->nodeName(), "#text");
-  if (LayoutNGEnabled())  // Legacy fails this test.
-    EXPECT_EQ(line5_node->textContent(), "line5");
+  EXPECT_EQ(line5_node->textContent(), "line5");
 
   // At the border of an inline box.
   HitTestResult line6_result = HitTestResultAtLocation(5, 350);
-  if (LayoutNGEnabled())  // Legacy fails this test.
-    EXPECT_EQ(line6_result.LocalPoint(), PhysicalOffset(5, 350));
+  EXPECT_EQ(line6_result.LocalPoint(), PhysicalOffset(5, 350));
   PositionWithAffinity line6 = line6_result.GetPosition();
   Node* line6_node = line6.AnchorNode();
   EXPECT_EQ(line6_node->nodeName(), "#text");
-  if (LayoutNGEnabled())  // Legacy fails this test.
-    EXPECT_EQ(line6_node->textContent(), "line6");
+  EXPECT_EQ(line6_node->textContent(), "line6");
 
   // At the margin of an inline box.
   HitTestResult line7_result = HitTestResultAtLocation(5, 450);
-  if (LayoutNGEnabled())  // Legacy fails this test.
-    EXPECT_EQ(line7_result.LocalPoint(), PhysicalOffset(5, 450));
+  EXPECT_EQ(line7_result.LocalPoint(), PhysicalOffset(5, 450));
   PositionWithAffinity line7 = line7_result.GetPosition();
   Node* line7_node = line7.AnchorNode();
   EXPECT_EQ(line7_node->nodeName(), "#text");
-  if (LayoutNGEnabled())  // Legacy fails this test.
-    EXPECT_EQ(line7_node->textContent(), "line7");
+  EXPECT_EQ(line7_node->textContent(), "line7");
 
   // At the inline-block.
   HitTestResult line8_result = HitTestResultAtLocation(5, 550);
@@ -539,6 +519,79 @@ TEST_P(ParameterizedSelectionControllerTest, Scroll) {
   Node* line8_node = line8.AnchorNode();
   EXPECT_EQ(line8_node->nodeName(), "#text");
   EXPECT_EQ(line8_node->textContent(), "x");
+}
+
+// http://crbug.com/1372847
+TEST_F(SelectionControllerTest, AdjustSelectionByUserSelectWithInput) {
+  SetBodyContent(R"HTML(
+    <div style="user-select: none;">
+      <div id="one" style="user-select: text;">11</div>
+      <input type="text" value="input"/>
+    </div>
+    <div id="two">22</div>)HTML");
+
+  Element* one = GetDocument().getElementById(AtomicString("one"));
+  const SelectionInFlatTree& selection =
+      ExpandWithGranularity(SelectionInFlatTree::Builder()
+                                .Collapse(PositionInFlatTree(one, 0))
+                                .Build(),
+                            TextGranularity::kParagraph);
+  SelectionInFlatTree adjust_selection =
+      AdjustSelectionByUserSelect(one, selection);
+  EXPECT_EQ(adjust_selection.Anchor(), selection.Anchor());
+  EXPECT_EQ(adjust_selection.Focus(), PositionInFlatTree(one->parentNode(), 2));
+}
+
+// http://crbug.com/1410448
+TEST_F(SelectionControllerTest, AdjustSelectionByUserSelectWithSpan) {
+  SetBodyContent(R"HTML(
+    <div id="div" style="user-select:none">
+      <span id="one" style="user-select:text">
+        <span style="user-select:text">Hel</span>lo
+      </span>
+      <span style="user-select:text"> lo </span>
+      <span id="two" style="user-select:text">there</span></div>)HTML");
+
+  Element* one = GetDocument().getElementById(AtomicString("one"));
+  Element* two = GetDocument().getElementById(AtomicString("two"));
+
+  const SelectionInFlatTree& selection =
+      ExpandWithGranularity(SelectionInFlatTree::Builder()
+                                .Collapse(PositionInFlatTree(one, 0))
+                                .Build(),
+                            TextGranularity::kParagraph);
+  SelectionInFlatTree adjust_selection =
+      AdjustSelectionByUserSelect(one, selection);
+  EXPECT_EQ(adjust_selection.Anchor(), selection.Anchor());
+  EXPECT_EQ(adjust_selection.Focus(),
+            PositionInFlatTree::LastPositionInNode(*two->firstChild()));
+}
+
+// http://crbug.com/1487484
+TEST_F(SelectionControllerTest, AdjustSelectionByUserSelectWithComment) {
+  SetBodyContent(R"HTML(
+    <div id="div">
+      <span id="one">Hello World!</span>
+      <b>before comment</b><!---->
+      <span id="two">after comment Hello World!</span>
+    </div>)HTML");
+
+  Element* one = GetDocument().getElementById(AtomicString("one"));
+  Element* two = GetDocument().getElementById(AtomicString("two"));
+
+  const SelectionInFlatTree& selection =
+      ExpandWithGranularity(SelectionInFlatTree::Builder()
+                                .Collapse(PositionInFlatTree(one, 0))
+                                .Build(),
+                            TextGranularity::kParagraph);
+  SelectionInFlatTree adjust_selection =
+      AdjustSelectionByUserSelect(one, selection);
+  EXPECT_EQ(adjust_selection.Anchor(), selection.Anchor());
+  EXPECT_EQ(adjust_selection.Anchor(),
+            PositionInFlatTree::FirstPositionInNode(*one->firstChild()));
+  EXPECT_EQ(adjust_selection.Focus(), selection.Focus());
+  EXPECT_EQ(adjust_selection.Focus(),
+            PositionInFlatTree::LastPositionInNode(*two->firstChild()));
 }
 
 }  // namespace blink

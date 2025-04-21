@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include "base/memory/ref_counted.h"
 #include "base/path_service.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/default_clock.h"
 #include "chrome/common/chrome_constants.h"
 #include "components/keyed_service/core/simple_factory_key.h"
@@ -26,7 +25,7 @@ namespace offline_pages {
 
 std::unique_ptr<KeyedService> BuildTestOfflinePageModel(SimpleFactoryKey* key) {
   scoped_refptr<base::SingleThreadTaskRunner> task_runner =
-      base::ThreadTaskRunnerHandle::Get();
+      base::SingleThreadTaskRunner::GetCurrentDefault();
 
   base::FilePath store_path =
       key->GetPath().Append(chrome::kOfflinePageMetadataDirname);

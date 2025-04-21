@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
@@ -23,6 +23,7 @@
 #include "extensions/browser/extension_registry_observer.h"
 #include "extensions/browser/unloaded_extension_reason.h"
 #include "extensions/common/extension.h"
+#include "extensions/common/extension_id.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 
@@ -57,7 +58,7 @@ class VpnServiceForExtension
   void OnConfigRemoved(const std::string& configuration_name) override;
   void OnPlatformMessage(const std::string& configuration_name,
                          int32_t platform_message,
-                         const absl::optional<std::string>& error) override;
+                         const std::optional<std::string>& error) override;
   void OnPacketReceived(const std::vector<uint8_t>& data) override;
 
   mojo::Remote<crosapi::mojom::VpnServiceForExtension>& Proxy() {
@@ -67,7 +68,7 @@ class VpnServiceForExtension
  private:
   void DispatchEvent(std::unique_ptr<extensions::Event>) const;
 
-  const std::string extension_id_;
+  const extensions::ExtensionId extension_id_;
   raw_ptr<content::BrowserContext> browser_context_;
 
   mojo::Remote<crosapi::mojom::VpnServiceForExtension> vpn_service_;

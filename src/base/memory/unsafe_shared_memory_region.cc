@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,9 @@ UnsafeSharedMemoryRegion::CreateFunction*
 
 // static
 UnsafeSharedMemoryRegion UnsafeSharedMemoryRegion::Create(size_t size) {
-  if (create_hook_)
+  if (create_hook_) {
     return create_hook_(size);
+  }
 
   subtle::PlatformSharedMemoryRegion handle =
       subtle::PlatformSharedMemoryRegion::CreateUnsafe(size);
@@ -57,12 +58,14 @@ WritableSharedMemoryMapping UnsafeSharedMemoryRegion::MapAt(
     uint64_t offset,
     size_t size,
     SharedMemoryMapper* mapper) const {
-  if (!IsValid())
+  if (!IsValid()) {
     return {};
+  }
 
   auto result = handle_.MapAt(offset, size, mapper);
-  if (!result.has_value())
+  if (!result.has_value()) {
     return {};
+  }
 
   return WritableSharedMemoryMapping(result.value(), size, handle_.GetGUID(),
                                      mapper);

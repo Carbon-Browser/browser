@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/notifications/tpm_auto_update_notification.h"
-#include "chrome/browser/ash/settings/cros_settings.h"
+#include "chromeos/ash/components/settings/cros_settings.h"
 
 class PrefRegistrySimple;
 class PrefService;
@@ -100,9 +101,9 @@ class TPMAutoUpdateModePolicyHandler {
 
   void ShowTPMUpdateOnNextRebootNotification();
 
-  ash::CrosSettings* cros_settings_;
+  raw_ptr<ash::CrosSettings, DanglingUntriaged> cros_settings_;
 
-  PrefService* local_state_;
+  raw_ptr<PrefService, DanglingUntriaged> local_state_;
 
   std::unique_ptr<base::OneShotTimer> notification_timer_;
 

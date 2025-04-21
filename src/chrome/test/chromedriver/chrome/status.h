@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,10 +41,15 @@ enum StatusCode {
   kChromeNotReachable = 100,
   kNoSuchExecutionContext,
   kDisconnected,
-  kForbidden = 103,
   kTabCrashed,
   kTargetDetached,
   kUnexpectedAlertOpen_Keep,
+  kAbortedByNavigation,
+  // This error differs from all other errors and is intended to be used in the
+  // unit tests.
+  kTestError,
+  // An active page not found
+  kNoActivePage,
 };
 
 // Represents a WebDriver status, which may be an error or ok.

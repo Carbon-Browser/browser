@@ -1,14 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SEGMENTATION_PLATFORM_INTERNAL_SELECTION_SEGMENTATION_RESULT_PREFS_H_
 #define COMPONENTS_SEGMENTATION_PLATFORM_INTERNAL_SELECTION_SEGMENTATION_RESULT_PREFS_H_
 
+#include <optional>
+
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "components/segmentation_platform/public/proto/segmentation_platform.pb.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class PrefService;
 
@@ -20,11 +21,17 @@ using proto::SegmentId;
 // reading and writing to prefs.
 struct SelectedSegment {
  public:
-  explicit SelectedSegment(SegmentId segment_id);
+  SelectedSegment(SegmentId segment_id, std::optional<float> rank);
   ~SelectedSegment();
 
   // The segment selection result.
   SegmentId segment_id;
+
+  // The discrete score computed based on the `segment_id` model execution. If a
+  // discrete mapping is not provided, the value will be equal to the model
+  // score. Otherwise the value will be the mapped score based on the mapping.
+  // May not be available in prefs for versions older than M107.
+  std::optional<float> rank;
 
   // The time when the segment was selected.
   base::Time selection_time;
@@ -51,10 +58,10 @@ class SegmentationResultPrefs {
   // |selected_segment| is empty.
   virtual void SaveSegmentationResultToPref(
       const std::string& result_key,
-      const absl::optional<SelectedSegment>& selected_segment);
+      const std::optional<SelectedSegment>& selected_segment);
 
   // Reads the selected segment from pref, if any.
-  virtual absl::optional<SelectedSegment> ReadSegmentationResultFromPref(
+  virtual std::optional<SelectedSegment> ReadSegmentationResultFromPref(
       const std::string& result_key);
 
  private:

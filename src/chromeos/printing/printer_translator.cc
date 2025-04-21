@@ -1,11 +1,13 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/printing/printer_translator.h"
 
 #include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "base/logging.h"
@@ -15,7 +17,7 @@
 #include "chromeos/printing/cups_printer_status.h"
 #include "chromeos/printing/printer_configuration.h"
 #include "chromeos/printing/uri.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "url/gurl.h"
 #include "url/url_constants.h"
 
 namespace chromeos {
@@ -99,7 +101,6 @@ base::Value::Dict CreateEmptyPrinterInfo() {
   printer_info.Set("printerPPDPath", "");
   printer_info.Set("printerProtocol", "ipp");
   printer_info.Set("printerQueue", "");
-  printer_info.Set("printerStatus", "");
   return printer_info;
 }
 
@@ -146,7 +147,7 @@ std::unique_ptr<Printer> RecommendedPrinterToPrinter(
     const std::string* make_and_model = ppd->FindString(kEffectiveModel);
     if (make_and_model)
       ppd_reference->effective_make_and_model = *make_and_model;
-    absl::optional<bool> autoconf = ppd->FindBool(kAutoconf);
+    std::optional<bool> autoconf = ppd->FindBool(kAutoconf);
     if (autoconf.has_value())
       ppd_reference->autoconf = *autoconf;
   }
@@ -185,6 +186,7 @@ base::Value::Dict GetCupsPrinterInfo(const Printer& printer) {
   printer_info.Set("printerPPDPath",
                    printer.ppd_reference().user_supplied_ppd_url);
   printer_info.Set("printServerUri", printer.print_server_uri());
+  printer_info.Set("printerStatus", printer.printer_status().ConvertToValue());
 
   if (!printer.HasUri()) {
     // Uri is invalid so we set default values.
@@ -207,26 +209,6 @@ base::Value::Dict GetCupsPrinterInfo(const Printer& printer) {
   printer_info.Set("printerQueue", printer_queue);
 
   return printer_info;
-}
-
-base::Value::Dict CreateCupsPrinterStatusDictionary(
-    const CupsPrinterStatus& cups_printer_status) {
-  base::Value::Dict printer_status;
-
-  printer_status.Set("printerId", cups_printer_status.GetPrinterId());
-  printer_status.Set("timestamp",
-                     cups_printer_status.GetTimestamp().ToJsTimeIgnoringNull());
-
-  base::Value::List status_reasons;
-  for (const auto& reason : cups_printer_status.GetStatusReasons()) {
-    base::Value::Dict status_reason;
-    status_reason.Set("reason", static_cast<int>(reason.GetReason()));
-    status_reason.Set("severity", static_cast<int>(reason.GetSeverity()));
-    status_reasons.Append(std::move(status_reason));
-  }
-  printer_status.Set("statusReasons", std::move(status_reasons));
-
-  return printer_status;
 }
 
 }  // namespace chromeos

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,12 +17,14 @@
 #include "chrome/test/base/testing_profile_manager.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "content/public/test/browser_task_environment.h"
+#include "net/base/host_port_pair.h"
 #include "net/cert/x509_certificate.h"
 #include "net/ssl/client_cert_identity_test_util.h"
 #include "net/test/cert_test_util.h"
 #include "net/test/test_data_directory.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "url/gurl.h"
 
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
 #include "base/values.h"
@@ -49,7 +51,7 @@ MATCHER_P(CertEq, expected_cert, "") {
 TEST(ManagedBrowserUtils, NoPolicies) {
   content::BrowserTaskEnvironment task_environment;
   TestingProfile profile;
-  EXPECT_FALSE(chrome::enterprise_util::IsBrowserManaged(&profile));
+  EXPECT_FALSE(enterprise_util::IsBrowserManaged(&profile));
 }
 
 TEST(ManagedBrowserUtils, HasManagedConnector) {
@@ -58,7 +60,13 @@ TEST(ManagedBrowserUtils, HasManagedConnector) {
   builder.OverridePolicyConnectorIsManagedForTesting(true);
 
   std::unique_ptr<TestingProfile> profile = builder.Build();
-  EXPECT_TRUE(chrome::enterprise_util::IsBrowserManaged(profile.get()));
+  EXPECT_TRUE(enterprise_util::IsBrowserManaged(profile.get()));
+}
+
+TEST(ManagedBrowserUtils, GetRequestingUrl) {
+  GURL expected("https://hostname:1234");
+  net::HostPortPair host_port_pair("hostname", 1234);
+  EXPECT_EQ(expected, enterprise_util::GetRequestingUrl(host_port_pair));
 }
 
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
@@ -88,7 +96,7 @@ TEST_F(ManagedBrowserUtilsTest, HasMachineLevelPolicies) {
           base::Value("hello"), nullptr);
   mock_provider_->UpdateChromePolicy(map);
 
-  EXPECT_TRUE(chrome::enterprise_util::IsBrowserManaged(&profile));
+  EXPECT_TRUE(enterprise_util::IsBrowserManaged(&profile));
 }
 #endif  // !BUILDFLAG(IS_CHROMEOS_ASH)
 
@@ -133,21 +141,17 @@ class AutoSelectCertificateTest : public testing::Test {
         base::Value(std::move(root)));
   }
 
-  base::Value CreateFilterValue(const std::string& issuer,
-                                const std::string& subject) {
+  base::Value::Dict CreateFilterValue(const std::string& issuer,
+                                      const std::string& subject) {
     EXPECT_FALSE(issuer.empty() && subject.empty());
 
-    base::Value filter(base::Value::Type::DICTIONARY);
+    base::Value::Dict filter;
     if (!issuer.empty()) {
-      base::Value issuer_value(base::Value::Type::DICTIONARY);
-      issuer_value.SetStringKey("CN", issuer);
-      filter.SetKey("ISSUER", std::move(issuer_value));
+      filter.Set("ISSUER", base::Value::Dict().Set("CN", issuer));
     }
 
     if (!subject.empty()) {
-      base::Value subject_value(base::Value::Type::DICTIONARY);
-      subject_value.SetStringKey("CN", subject);
-      filter.SetKey("SUBJECT", std::move(subject_value));
+      filter.Set("SUBJECT", base::Value::Dict().Set("CN", subject));
     }
 
     return filter;
@@ -164,7 +168,7 @@ class AutoSelectCertificateTest : public testing::Test {
   scoped_refptr<net::X509Certificate> client_1_;
   scoped_refptr<net::X509Certificate> client_2_;
 
-  raw_ptr<TestingProfile> profile_;
+  raw_ptr<TestingProfile, DanglingUntriaged> profile_;
   std::unique_ptr<TestingProfileManager> profile_manager_;
 };
 
@@ -173,7 +177,7 @@ TEST_F(AutoSelectCertificateTest, NoPolicyAppliedReturnsNoMatch) {
   net::ClientCertIdentityList client_certs_list = GetDefaultClientCertList();
 
   net::ClientCertIdentityList matching_certs_list, nonmatching_certs_list;
-  chrome::enterprise_util::AutoSelectCertificates(
+  enterprise_util::AutoSelectCertificates(
       profile(), requesting_url, std::move(client_certs_list),
       &matching_certs_list, &nonmatching_certs_list);
 
@@ -194,7 +198,7 @@ TEST_F(AutoSelectCertificateTest,
   SetPolicyValueInContentSettings(std::move(filters));
 
   net::ClientCertIdentityList matching_certs_list, nonmatching_certs_list;
-  chrome::enterprise_util::AutoSelectCertificates(
+  enterprise_util::AutoSelectCertificates(
       profile(), requesting_url, std::move(client_certs_list),
       &matching_certs_list, &nonmatching_certs_list);
 
@@ -215,7 +219,7 @@ TEST_F(AutoSelectCertificateTest,
 
   net::ClientCertIdentityList matching_certs_list, nonmatching_certs_list;
 
-  chrome::enterprise_util::AutoSelectCertificates(
+  enterprise_util::AutoSelectCertificates(
       profile(), requesting_url, std::move(client_certs_list),
       &matching_certs_list, &nonmatching_certs_list);
 
@@ -237,7 +241,7 @@ TEST_F(AutoSelectCertificateTest,
 
   net::ClientCertIdentityList matching_certs_list, nonmatching_certs_list;
 
-  chrome::enterprise_util::AutoSelectCertificates(
+  enterprise_util::AutoSelectCertificates(
       profile(), requesting_url, std::move(client_certs_list),
       &matching_certs_list, &nonmatching_certs_list);
 
@@ -259,7 +263,7 @@ TEST_F(AutoSelectCertificateTest,
 
   net::ClientCertIdentityList matching_certs_list, nonmatching_certs_list;
 
-  chrome::enterprise_util::AutoSelectCertificates(
+  enterprise_util::AutoSelectCertificates(
       profile(), requesting_url, std::move(client_certs_list),
       &matching_certs_list, &nonmatching_certs_list);
 
@@ -278,7 +282,7 @@ TEST_F(AutoSelectCertificateTest, IssuerNotMatchingDoesntSelectCerts) {
 
   net::ClientCertIdentityList matching_certs_list, nonmatching_certs_list;
 
-  chrome::enterprise_util::AutoSelectCertificates(
+  enterprise_util::AutoSelectCertificates(
       profile(), requesting_url, std::move(client_certs_list),
       &matching_certs_list, &nonmatching_certs_list);
 
@@ -298,7 +302,7 @@ TEST_F(AutoSelectCertificateTest, SubjectNotMatchingDoesntSelectCerts) {
 
   net::ClientCertIdentityList matching_certs_list, nonmatching_certs_list;
 
-  chrome::enterprise_util::AutoSelectCertificates(
+  enterprise_util::AutoSelectCertificates(
       profile(), requesting_url, std::move(client_certs_list),
       &matching_certs_list, &nonmatching_certs_list);
 
@@ -317,7 +321,7 @@ TEST_F(AutoSelectCertificateTest, MatchingCertOnDifferentUrlDoesntSelectCerts) {
   SetPolicyValueInContentSettings(std::move(filters));
 
   net::ClientCertIdentityList matching_certs_list, nonmatching_certs_list;
-  chrome::enterprise_util::AutoSelectCertificates(
+  enterprise_util::AutoSelectCertificates(
       profile(), requesting_url, std::move(client_certs_list),
       &matching_certs_list, &nonmatching_certs_list);
 

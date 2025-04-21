@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,7 @@ namespace trace_event {
 
 void EnableTracing(const String& category_filter) {
   base::trace_event::TraceLog::GetInstance()->SetEnabled(
-      base::trace_event::TraceConfig(category_filter.Utf8(), ""),
-      base::trace_event::TraceLog::RECORDING_MODE);
+      base::trace_event::TraceConfig(category_filter.Utf8(), ""));
 }
 
 void DisableTracing() {

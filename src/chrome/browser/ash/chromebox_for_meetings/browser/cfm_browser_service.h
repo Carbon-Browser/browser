@@ -1,14 +1,14 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_CHROMEBOX_FOR_MEETINGS_BROWSER_CFM_BROWSER_SERVICE_H_
 #define CHROME_BROWSER_ASH_CHROMEBOX_FOR_MEETINGS_BROWSER_CFM_BROWSER_SERVICE_H_
 
-#include "ash/services/chromebox_for_meetings/public/mojom/cfm_browser.mojom.h"
 #include "base/memory/weak_ptr.h"
-#include "chrome/browser/ash/chromebox_for_meetings/service_adaptor.h"
 #include "chromeos/ash/components/dbus/chromebox_for_meetings/cfm_observer.h"
+#include "chromeos/services/chromebox_for_meetings/public/cpp/service_adaptor.h"
+#include "chromeos/services/chromebox_for_meetings/public/mojom/cfm_browser.mojom.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 
 namespace ash::cfm {
@@ -17,7 +17,7 @@ namespace ash::cfm {
 // The lifespan of this service is indicative of the lifespan of chrome browser
 // process, allowing |CfmServiceContext| to rebuild its IPC graph if required.
 class CfmBrowserService : public CfmObserver,
-                          public ServiceAdaptor::Delegate,
+                          public chromeos::cfm::ServiceAdaptor::Delegate,
                           public chromeos::cfm::mojom::CfmBrowser {
  public:
   CfmBrowserService(const CfmBrowserService&) = delete;
@@ -33,7 +33,7 @@ class CfmBrowserService : public CfmObserver,
   // CfmObserver:
   bool ServiceRequestReceived(const std::string& interface_name) override;
 
-  // ServiceAdaptorDelegate:
+  // chromeos::cfm::ServiceAdaptor::Delegate:
   void OnAdaptorDisconnect() override;
   void OnBindService(mojo::ScopedMessagePipeHandle receiver_pipe) override;
 
@@ -48,7 +48,7 @@ class CfmBrowserService : public CfmObserver,
   CfmBrowserService();
   ~CfmBrowserService() override;
 
-  ServiceAdaptor service_adaptor_;
+  chromeos::cfm::ServiceAdaptor service_adaptor_;
   mojo::ReceiverSet<chromeos::cfm::mojom::CfmBrowser> receivers_;
 
   // Note: This should remain the last member so it'll be destroyed and

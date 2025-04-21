@@ -1,10 +1,16 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "net/dns/address_info.h"
 
 #include <memory>
+#include <optional>
 
 #include "base/logging.h"
 #include "base/notreached.h"
@@ -56,7 +62,7 @@ AddressInfo::AddressInfoAndResult AddressInfo::Get(
     const std::string& host,
     const addrinfo& hints,
     std::unique_ptr<AddrInfoGetter> getter,
-    NetworkChangeNotifier::NetworkHandle network) {
+    handles::NetworkHandle network) {
   if (getter == nullptr)
     getter = std::make_unique<AddrInfoGetter>();
   int err = OK;
@@ -82,12 +88,12 @@ AddressInfo::AddressInfoAndResult AddressInfo::Get(
       err = ERR_NAME_RESOLUTION_FAILED;
 #endif
 
-    return AddressInfoAndResult(absl::optional<AddressInfo>(), err, os_error);
+    return AddressInfoAndResult(std::optional<AddressInfo>(), err, os_error);
   }
 
-  return AddressInfoAndResult(absl::optional<AddressInfo>(AddressInfo(
-                                  std::move(ai), std::move(getter))),
-                              OK, 0);
+  return AddressInfoAndResult(
+      std::optional<AddressInfo>(AddressInfo(std::move(ai), std::move(getter))),
+      OK, 0);
 }
 
 AddressInfo::AddressInfo(AddressInfo&& other) = default;
@@ -106,10 +112,10 @@ AddressInfo::const_iterator AddressInfo::end() const {
   return const_iterator(nullptr);
 }
 
-absl::optional<std::string> AddressInfo::GetCanonicalName() const {
+std::optional<std::string> AddressInfo::GetCanonicalName() const {
   return (ai_->ai_canonname != nullptr)
-             ? absl::optional<std::string>(std::string(ai_->ai_canonname))
-             : absl::optional<std::string>();
+             ? std::optional<std::string>(std::string(ai_->ai_canonname))
+             : std::optional<std::string>();
 }
 
 bool AddressInfo::IsAllLocalhostOfOneFamily() const {
@@ -138,7 +144,6 @@ bool AddressInfo::IsAllLocalhostOfOneFamily() const {
         break;
       }
       default:
-        NOTREACHED();
         return false;
     }
   }
@@ -148,9 +153,9 @@ bool AddressInfo::IsAllLocalhostOfOneFamily() const {
 
 AddressList AddressInfo::CreateAddressList() const {
   AddressList list;
-  auto canonical_name = GetCanonicalName();
+  std::optional<std::string> canonical_name = GetCanonicalName();
   if (canonical_name) {
-    std::vector<std::string> aliases({*canonical_name});
+    std::vector<std::string> aliases({*std::move(canonical_name)});
     list.SetDnsAliases(std::move(aliases));
   }
   for (auto&& ai : *this) {
@@ -179,7 +184,7 @@ std::unique_ptr<addrinfo, FreeAddrInfoFunc> AddrInfoGetter::getaddrinfo(
     const std::string& host,
     const addrinfo* hints,
     int* out_os_error,
-    NetworkChangeNotifier::NetworkHandle network) {
+    handles::NetworkHandle network) {
   addrinfo* ai;
   // We wrap freeaddrinfo() in a lambda just in case some operating systems use
   // a different signature for it.
@@ -187,7 +192,7 @@ std::unique_ptr<addrinfo, FreeAddrInfoFunc> AddrInfoGetter::getaddrinfo(
 
   std::unique_ptr<addrinfo, FreeAddrInfoFunc> rv = {nullptr, deleter};
 
-  if (network != NetworkChangeNotifier::kInvalidNetworkHandle) {
+  if (network != handles::kInvalidNetworkHandle) {
     // Currently, only Android supports lookups for a specific network.
 #if BUILDFLAG(IS_ANDROID)
     *out_os_error = android::GetAddrInfoForNetwork(network, host.c_str(),

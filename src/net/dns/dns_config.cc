@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -73,7 +73,7 @@ void DnsConfig::CopyIgnoreHosts(const DnsConfig& d) {
   allow_dns_over_https_upgrade = d.allow_dns_over_https_upgrade;
 }
 
-base::Value DnsConfig::ToValue() const {
+base::Value::Dict DnsConfig::ToDict() const {
   base::Value::Dict dict;
 
   base::Value::List nameserver_list;
@@ -101,7 +101,7 @@ base::Value DnsConfig::ToValue() const {
   dict.Set("secure_dns_mode", base::strict_cast<int>(secure_dns_mode));
   dict.Set("allow_dns_over_https_upgrade", allow_dns_over_https_upgrade);
 
-  return base::Value(std::move(dict));
+  return dict;
 }
 
 }  // namespace net

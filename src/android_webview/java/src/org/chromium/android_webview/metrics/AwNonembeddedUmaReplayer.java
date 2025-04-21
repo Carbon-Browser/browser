@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 package org.chromium.android_webview.metrics;
@@ -31,8 +31,8 @@ public class AwNonembeddedUmaReplayer {
             return;
         }
 
-        UmaRecorderHolder.get().recordBooleanHistogram(
-                proto.getHistogramName(), proto.getSample() != 0);
+        UmaRecorderHolder.get()
+                .recordBooleanHistogram(proto.getHistogramName(), proto.getSample() != 0);
     }
 
     /**
@@ -42,8 +42,13 @@ public class AwNonembeddedUmaReplayer {
     private static void replayExponentialHistogram(HistogramRecord proto) {
         assert proto.getRecordType() == RecordType.HISTOGRAM_EXPONENTIAL;
 
-        UmaRecorderHolder.get().recordExponentialHistogram(proto.getHistogramName(),
-                proto.getSample(), proto.getMin(), proto.getMax(), proto.getNumBuckets());
+        UmaRecorderHolder.get()
+                .recordExponentialHistogram(
+                        proto.getHistogramName(),
+                        proto.getSample(),
+                        proto.getMin(),
+                        proto.getMax(),
+                        proto.getNumBuckets());
     }
 
     /**
@@ -53,8 +58,13 @@ public class AwNonembeddedUmaReplayer {
     private static void replayLinearHistogram(HistogramRecord proto) {
         assert proto.getRecordType() == RecordType.HISTOGRAM_LINEAR;
 
-        UmaRecorderHolder.get().recordLinearHistogram(proto.getHistogramName(), proto.getSample(),
-                proto.getMin(), proto.getMax(), proto.getNumBuckets());
+        UmaRecorderHolder.get()
+                .recordLinearHistogram(
+                        proto.getHistogramName(),
+                        proto.getSample(),
+                        proto.getMin(),
+                        proto.getMax(),
+                        proto.getNumBuckets());
     }
 
     /**
@@ -74,8 +84,8 @@ public class AwNonembeddedUmaReplayer {
     private static void replayUserAction(HistogramRecord proto) {
         assert proto.getRecordType() == RecordType.USER_ACTION;
 
-        UmaRecorderHolder.get().recordUserAction(
-                proto.getHistogramName(), proto.getElapsedRealtimeMillis());
+        UmaRecorderHolder.get()
+                .recordUserAction(proto.getHistogramName(), proto.getElapsedRealtimeMillis());
     }
 
     /**

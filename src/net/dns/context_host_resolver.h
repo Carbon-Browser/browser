@@ -1,4 +1,4 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,19 @@
 #define NET_DNS_CONTEXT_HOST_RESOLVER_H_
 
 #include <memory>
+#include <optional>
 #include <unordered_set>
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
 #include "base/sequence_checker.h"
+#include "base/values.h"
 #include "net/base/net_export.h"
+#include "net/base/network_handle.h"
 #include "net/base/network_isolation_key.h"
 #include "net/dns/host_resolver.h"
+#include "net/dns/host_resolver_system_task.h"
 #include "net/log/net_log_with_source.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/scheme_host_port.h"
 
 namespace base {
@@ -26,7 +29,6 @@ namespace net {
 
 class HostCache;
 class HostResolverManager;
-struct ProcTaskParams;
 class ResolveContext;
 class URLRequestContext;
 
@@ -54,26 +56,29 @@ class NET_EXPORT ContextHostResolver : public HostResolver {
   void OnShutdown() override;
   std::unique_ptr<ResolveHostRequest> CreateRequest(
       url::SchemeHostPort host,
-      NetworkIsolationKey network_isolation_key,
+      NetworkAnonymizationKey network_anonymization_key,
       NetLogWithSource net_log,
-      absl::optional<ResolveHostParameters> optional_parameters) override;
+      std::optional<ResolveHostParameters> optional_parameters) override;
   std::unique_ptr<ResolveHostRequest> CreateRequest(
       const HostPortPair& host,
-      const NetworkIsolationKey& network_isolation_key,
+      const NetworkAnonymizationKey& network_anonymization_key,
       const NetLogWithSource& net_log,
-      const absl::optional<ResolveHostParameters>& optional_parameters)
-      override;
+      const std::optional<ResolveHostParameters>& optional_parameters) override;
+  std::unique_ptr<ServiceEndpointRequest> CreateServiceEndpointRequest(
+      Host host,
+      NetworkAnonymizationKey network_anonymization_key,
+      NetLogWithSource net_log,
+      ResolveHostParameters parameters) override;
   std::unique_ptr<ProbeRequest> CreateDohProbeRequest() override;
   std::unique_ptr<MdnsListener> CreateMdnsListener(
       const HostPortPair& host,
       DnsQueryType query_type) override;
   HostCache* GetHostCache() override;
-  base::Value GetDnsConfigAsValue() const override;
+  base::Value::Dict GetDnsConfigAsValue() const override;
   void SetRequestContext(URLRequestContext* request_context) override;
   HostResolverManager* GetManagerForTesting() override;
   const URLRequestContext* GetContextForTesting() const override;
-  NetworkChangeNotifier::NetworkHandle GetTargetNetworkForTesting()
-      const override;
+  handles::NetworkHandle GetTargetNetworkForTesting() const override;
 
   // Returns the number of host cache entries that were restored, or 0 if there
   // is no cache.
@@ -81,15 +86,18 @@ class NET_EXPORT ContextHostResolver : public HostResolver {
   // Returns the number of entries in the host cache, or 0 if there is no cache.
   size_t CacheSize() const;
 
-  void SetProcParamsForTesting(const ProcTaskParams& proc_params);
+  void SetHostResolverSystemParamsForTest(
+      const HostResolverSystemTask::Params& host_resolver_system_params);
   void SetTickClockForTesting(const base::TickClock* tick_clock);
   ResolveContext* resolve_context_for_testing() {
     return resolve_context_.get();
   }
 
  private:
-  const raw_ptr<HostResolverManager, DanglingUntriaged> manager_;
   std::unique_ptr<HostResolverManager> owned_manager_;
+  // `manager_` might point to `owned_manager_`. It must be declared last and
+  // cleared first.
+  const raw_ptr<HostResolverManager> manager_;
   std::unique_ptr<ResolveContext> resolve_context_;
 
   // If true, the context is shutting down. Subsequent request Start() calls

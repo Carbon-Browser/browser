@@ -1,12 +1,18 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "extensions/renderer/bindings/test_js_runner.h"
 
 #include <ostream>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "content/public/renderer/v8_value_converter.h"
 #include "extensions/renderer/bindings/api_binding_test_util.h"
 
 namespace extensions {
@@ -17,6 +23,19 @@ namespace {
 // we'll need to expand these.
 bool g_allow_errors = false;
 bool g_suspended = false;
+
+std::optional<base::Value> Convert(v8::MaybeLocal<v8::Value> maybe_value,
+                                   v8::Local<v8::Context> context) {
+  v8::Local<v8::Value> v8_value;
+  if (!maybe_value.ToLocal(&v8_value))
+    return std::nullopt;
+
+  if (std::unique_ptr<base::Value> value =
+          content::V8ValueConverter::Create()->FromV8Value(v8_value, context)) {
+    return base::Value::FromUniquePtrValue(std::move(value));
+  }
+  return std::nullopt;
+}
 
 }  // namespace
 
@@ -56,7 +75,7 @@ TestJSRunner::Suspension::~Suspension() {
   test_runner->Flush();
 }
 
-TestJSRunner::PendingCall::PendingCall() {}
+TestJSRunner::PendingCall::PendingCall() = default;
 TestJSRunner::PendingCall::~PendingCall() = default;
 TestJSRunner::PendingCall::PendingCall(PendingCall&& other) = default;
 
@@ -99,7 +118,7 @@ void TestJSRunner::RunJSFunction(v8::Local<v8::Function> function,
   }
 
   if (callback)
-    std::move(callback).Run(context, result);
+    std::move(callback).Run(context, Convert(result, context));
 }
 
 v8::MaybeLocal<v8::Value> TestJSRunner::RunJSFunctionSync(
@@ -129,7 +148,7 @@ void TestJSRunner::Flush() {
     v8::Isolate* isolate = call.isolate;
     v8::Local<v8::Context> context = call.context.Get(isolate);
     v8::Context::Scope context_scope(context);
-    std::vector<v8::Local<v8::Value>> local_arguments;
+    v8::LocalVector<v8::Value> local_arguments(isolate);
     local_arguments.reserve(call.arguments.size());
     for (auto& arg : call.arguments)
       local_arguments.push_back(arg.Get(isolate));
@@ -137,7 +156,7 @@ void TestJSRunner::Flush() {
         RunJSFunctionSync(call.function.Get(isolate), context,
                           local_arguments.size(), local_arguments.data());
     if (call.callback)
-      std::move(call.callback).Run(context, result);
+      std::move(call.callback).Run(context, Convert(result, context));
   }
 }
 

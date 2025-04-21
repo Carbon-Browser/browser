@@ -1,6 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "services/device/usb/webusb_descriptors.h"
 
@@ -9,7 +14,7 @@
 #include <algorithm>
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "services/device/usb/mock_usb_device_handle.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -53,7 +58,9 @@ const uint8_t kExampleUrlDescriptor255[] = {
 
 ACTION_P2(InvokeCallback, data, length) {
   size_t transferred_length = std::min(length, arg6->size());
-  memcpy(arg6->front(), data, transferred_length);
+  base::span(arg6->as_vector())
+      .copy_prefix_from(
+          UNSAFE_TODO(base::span(data, length)).first(transferred_length));
   std::move(arg8).Run(UsbTransferStatus::COMPLETED, arg6, transferred_length);
 }
 

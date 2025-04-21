@@ -1,14 +1,16 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_WEB_PUBLIC_TEST_FAKES_FAKE_FIND_IN_PAGE_MANAGER_DELEGATE_H_
 #define IOS_WEB_PUBLIC_TEST_FAKES_FAKE_FIND_IN_PAGE_MANAGER_DELEGATE_H_
 
+#import "ios/web/public/find_in_page/find_in_page_manager_delegate.h"
+
 #include <memory>
 #include <string>
 
-#import "ios/web/public/find_in_page/find_in_page_manager_delegate.h"
+#import "base/memory/raw_ptr.h"
 
 namespace web {
 
@@ -26,22 +28,26 @@ class FakeFindInPageManagerDelegate : public FindInPageManagerDelegate {
   ~FakeFindInPageManagerDelegate() override;
 
   // FindInPageManagerDelegate override
-  void DidHighlightMatches(WebState* web_state,
+  void DidHighlightMatches(AbstractFindInPageManager* manager,
+                           WebState* web_state,
                            int match_count,
                            NSString* query) override;
-  void DidSelectMatch(WebState* web_state,
+  void DidSelectMatch(AbstractFindInPageManager* manager,
+                      WebState* web_state,
                       int index,
                       NSString* context_string) override;
+  void UserDismissedFindNavigator(AbstractFindInPageManager* manager) override;
 
   // Holds the state passed to DidHighlightMatches and DidSelectMatch.
   struct State {
     State();
     ~State();
-    WebState* web_state = nullptr;
+    raw_ptr<WebState> web_state = nullptr;
     int match_count = -1;
     NSString* query;
     int index = -1;
     NSString* context_string;
+    bool user_dismissed_find_navigator = false;
   };
 
   // Returns the current State.

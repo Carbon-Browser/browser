@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/audio/pulse/pulse_util.h"
 
@@ -14,6 +19,7 @@
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/notreached.h"
 #include "base/synchronization/waitable_event.h"
 #include "build/branding_buildflags.h"
@@ -86,7 +92,6 @@ pa_channel_position ChromiumToPAChannelPosition(Channels channel) {
       return PA_CHANNEL_POSITION_SIDE_RIGHT;
     default:
       NOTREACHED() << "Invalid channel: " << channel;
-      return PA_CHANNEL_POSITION_INVALID;
   }
 }
 
@@ -110,7 +115,7 @@ struct InputBusData {
       : loop_(loop), name_(name), bus_() {}
 
   const raw_ptr<pa_threaded_mainloop> loop_;
-  const std::string& name_;
+  const raw_ref<const std::string> name_;
   std::string bus_;
 };
 
@@ -120,7 +125,7 @@ struct OutputBusData {
 
   const raw_ptr<pa_threaded_mainloop> loop_;
   std::string name_;
-  const std::string& bus_;
+  const raw_ref<const std::string> bus_;
 };
 
 void InputBusCallback(pa_context* context,
@@ -135,7 +140,7 @@ void InputBusCallback(pa_context* context,
     return;
   }
 
-  if (strcmp(info->name, data->name_.c_str()) == 0 &&
+  if (strcmp(info->name, data->name_->c_str()) == 0 &&
       pa_proplist_contains(info->proplist, PA_PROP_DEVICE_BUS_PATH)) {
     data->bus_ = pa_proplist_gets(info->proplist, PA_PROP_DEVICE_BUS_PATH);
   }
@@ -155,7 +160,7 @@ void OutputBusCallback(pa_context* context,
 
   if (pa_proplist_contains(info->proplist, PA_PROP_DEVICE_BUS_PATH) &&
       strcmp(pa_proplist_gets(info->proplist, PA_PROP_DEVICE_BUS_PATH),
-             data->bus_.c_str()) == 0) {
+             data->bus_->c_str()) == 0) {
     data->name_ = info->name;
   }
 }
@@ -178,9 +183,29 @@ void GetDefaultDeviceIdCallback(pa_context* c,
   pa_threaded_mainloop_signal(data->loop_, 0);
 }
 
+struct MonitorSourceData {
+  explicit MonitorSourceData(pa_threaded_mainloop* loop) : loop_(loop) {}
+  const raw_ptr<pa_threaded_mainloop> loop_;
+  std::string monitor_source_name_;
+};
+
+// Callback used by GetMonitorSourceNameForSink(). `info` contains information
+// about the queried sink, in particular, the name of the source which acts as a
+// monitor for the sink.
+void GetMonitorSourceNameForSinkCallback(pa_context* context,
+                                         const pa_sink_info* info,
+                                         int eol,
+                                         void* userdata) {
+  MonitorSourceData* data = static_cast<MonitorSourceData*>(userdata);
+  if (!eol) {
+    data->monitor_source_name_ = info->monitor_source_name;
+  }
+  pa_threaded_mainloop_signal(data->loop_, 0);
+}
+
 struct ContextStartupData {
   raw_ptr<base::WaitableEvent> context_wait;
-  raw_ptr<pa_threaded_mainloop> pa_mainloop;
+  raw_ptr<pa_threaded_mainloop, DanglingUntriaged> pa_mainloop;
 };
 
 void SignalReadyOrErrorStateCallback(pa_context* context, void* context_data) {
@@ -312,6 +337,16 @@ void StreamSuccessCallback(pa_stream* s, int error, void* mainloop) {
   pa_threaded_mainloop_signal(pa_mainloop, 0);
 }
 
+// pa_context_success_cb_t
+void ContextSuccessCallback(pa_context* context, int success, void* mainloop) {
+  pa_threaded_mainloop* pa_mainloop =
+      static_cast<pa_threaded_mainloop*>(mainloop);
+  if (!success) {
+    LOG(ERROR) << "Context operation failed.";
+  }
+  pa_threaded_mainloop_signal(pa_mainloop, 0);
+}
+
 // |pa_context| and |pa_stream| state changed cb.
 void ContextStateCallback(pa_context* context, void* mainloop) {
   pa_threaded_mainloop* pa_mainloop =
@@ -405,7 +440,7 @@ base::TimeDelta GetHardwareLatency(pa_stream* stream) {
 
 bool CreateInputStream(pa_threaded_mainloop* mainloop,
                        pa_context* context,
-                       pa_stream** stream,
+                       raw_ptr<pa_stream>* stream,
                        const AudioParameters& params,
                        const std::string& device_id,
                        pa_stream_notify_cb_t stream_callback,
@@ -478,9 +513,9 @@ bool CreateInputStream(pa_threaded_mainloop* mainloop,
   return true;
 }
 
-bool CreateOutputStream(pa_threaded_mainloop** mainloop,
-                        pa_context** context,
-                        pa_stream** stream,
+bool CreateOutputStream(raw_ptr<pa_threaded_mainloop>* mainloop,
+                        raw_ptr<pa_context>* context,
+                        raw_ptr<pa_stream>* stream,
                         const AudioParameters& params,
                         const std::string& device_id,
                         const std::string& app_name,
@@ -603,6 +638,80 @@ bool CreateOutputStream(pa_threaded_mainloop** mainloop,
   return true;
 }
 
+// Mutes all audio output sinks except the specified sink.
+void MuteAllSinksExcept(pa_threaded_mainloop* mainloop,
+                        pa_context* context,
+                        const std::string& exclude_sink_name) {
+  CHECK(mainloop);
+  CHECK(context);
+  AutoPulseLock lock(mainloop);
+
+  // Retrieve a list of all sinks from the PulseAudio context
+  pa_operation* op = pa_context_get_sink_info_list(
+      context,
+      // Define the callback to process each sink information received
+      [](pa_context* c, const pa_sink_info* i, int eol, void* userdata) {
+        if (eol != 0) {
+          return;  // Handle end of list or error
+        }
+        if (!eol) {
+          std::string* exclude_sink_name = static_cast<std::string*>(userdata);
+          // Check if current sink's name matches the exclude_sink_name
+          if (i->name != *exclude_sink_name) {
+            pa_context_set_sink_mute_by_index(
+                c, i->index, 1, /*callback=*/nullptr,
+                /*userdata=*/nullptr);  // Mute the sink
+          }
+        }
+      },
+      (void*)&exclude_sink_name);
+
+  WaitForOperationCompletion(mainloop, op, context);
+  // Clean up the operation after completion
+  if (op) {
+    pa_operation_unref(op);
+  }
+}
+
+// Unmutes all audio output sinks in the system.
+void UnmuteAllSinks(pa_threaded_mainloop* mainloop, pa_context* context) {
+  CHECK(mainloop);
+  CHECK(context);
+  // Lock the mainloop to ensure thread safety when accessing the context.
+  AutoPulseLock lock(mainloop);
+
+  // Request a list of all sinks from the PulseAudio context.
+  pa_operation* op = pa_context_get_sink_info_list(
+      context,
+      [](pa_context* c, const pa_sink_info* i, int eol, void* userdata) {
+        // eol != 0 indicates the end of list or an error. We return early.
+        if (eol != 0) {
+          return;
+        }
+
+        pa_operation* unmute_op = pa_context_set_sink_mute_by_index(
+            c, i->index, 0,  // 0 means unmute
+            [](pa_context* c, int success, void* userdata) {
+              // This callback ensures the operation completes
+              pa_threaded_mainloop_signal((pa_threaded_mainloop*)userdata, 0);
+            },
+            userdata  // Pass the mainloop as userdata
+        );
+
+        if (unmute_op) {
+          pa_operation_unref(unmute_op);
+        }
+      },
+      mainloop  // Pass mainloop as userdata
+  );
+
+  WaitForOperationCompletion(mainloop, op, context);
+  // Wait for the operation to complete to ensure all sinks are unmuted.
+  if (op) {
+    pa_operation_unref(op);
+  }
+}
+
 std::string GetBusOfInput(pa_threaded_mainloop* mainloop,
                           pa_context* context,
                           const std::string& name) {
@@ -640,6 +749,20 @@ std::string GetRealDefaultDeviceId(pa_threaded_mainloop* mainloop,
       pa_context_get_server_info(context, &GetDefaultDeviceIdCallback, &data);
   WaitForOperationCompletion(mainloop, operation, context);
   return (type == RequestType::INPUT) ? data.input_ : data.output_;
+}
+
+std::string GetMonitorSourceNameForSink(pa_threaded_mainloop* mainloop,
+                                        pa_context* context,
+                                        const std::string& sink_name) {
+  CHECK(mainloop);
+  CHECK(context);
+  CHECK(!sink_name.empty());
+  AutoPulseLock auto_lock(mainloop);
+  MonitorSourceData data(mainloop);
+  pa_operation* operation = pa_context_get_sink_info_by_name(
+      context, sink_name.c_str(), &GetMonitorSourceNameForSinkCallback, &data);
+  WaitForOperationCompletion(mainloop, operation, context);
+  return data.monitor_source_name_;
 }
 
 #undef RETURN_ON_FAILURE

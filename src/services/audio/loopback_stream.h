@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,11 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
@@ -32,7 +33,6 @@
 #include "services/audio/loopback_coordinator.h"
 #include "services/audio/loopback_group_member.h"
 #include "services/audio/snooper_node.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class TickClock;
@@ -59,7 +59,7 @@ class LoopbackStream final : public media::mojom::AudioInputStream,
                              public LoopbackCoordinator::Observer {
  public:
   using CreatedCallback =
-      base::OnceCallback<void(media::mojom::ReadOnlyAudioDataPipePtr)>;
+      base::OnceCallback<void(media::mojom::ReadWriteAudioDataPipePtr)>;
   using BindingLostCallback = base::OnceCallback<void(LoopbackStream*)>;
 
   LoopbackStream(
@@ -179,7 +179,7 @@ class LoopbackStream final : public media::mojom::AudioInputStream,
     base::Lock lock_;
 
     // The input nodes.
-    std::vector<SnooperNode*> inputs_;  // Guarded by |lock_|.
+    std::vector<raw_ptr<SnooperNode>> inputs_;  // Guarded by |lock_|.
 
     // Current stream volume. The audio output from this FlowNetwork is scaled
     // by this amount during mixing.
@@ -188,7 +188,7 @@ class LoopbackStream final : public media::mojom::AudioInputStream,
     // This is set once Start() is called, and lives until this FlowNetwork is
     // destroyed. It is used to schedule cancelable tasks run by the
     // |flow_task_runner_|.
-    absl::optional<base::DeadlineTimer> timer_;
+    std::optional<base::DeadlineTimer> timer_;
 
     // These are used to compute when the |timer_| fires and calls
     // GenerateMoreAudio(). They ensure that each timer task is scheduled to

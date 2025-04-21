@@ -1,12 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/global_media_controls/media_toolbar_button_contextual_menu.h"
 
+#include <memory>
+
 #include "base/strings/strcat.h"
 #include "chrome/app/chrome_command_ids.h"
-#include "chrome/browser/media/router/media_router_feature.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/global_media_controls/media_notification_service.h"
@@ -27,15 +28,6 @@ global_media_controls::MediaItemManager* GetItemManagerFromBrowser(
 }
 }  // namespace
 
-std::unique_ptr<MediaToolbarButtonContextualMenu>
-MediaToolbarButtonContextualMenu::Create(Browser* browser) {
-  if (media_router::GlobalMediaControlsCastStartStopEnabled(
-          browser->profile())) {
-    return std::make_unique<MediaToolbarButtonContextualMenu>(browser);
-  }
-  return nullptr;
-}
-
 MediaToolbarButtonContextualMenu::MediaToolbarButtonContextualMenu(
     Browser* browser)
     : browser_(browser), item_manager_(GetItemManagerFromBrowser(browser_)) {}
@@ -50,8 +42,7 @@ MediaToolbarButtonContextualMenu::CreateMenuModel() {
       IDS_MEDIA_TOOLBAR_CONTEXT_SHOW_OTHER_SESSIONS);
 
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
-  if (!browser_->profile()->IsOffTheRecord() &&
-      browser_->profile()->GetPrefs()->GetBoolean(
+  if (browser_->profile()->GetPrefs()->GetBoolean(
           prefs::kUserFeedbackAllowed)) {
     menu_model->AddItemWithStringId(
         IDC_MEDIA_TOOLBAR_CONTEXT_REPORT_CAST_ISSUE,
@@ -71,6 +62,21 @@ bool MediaToolbarButtonContextualMenu::IsCommandIdChecked(
               kMediaRouterShowCastSessionsStartedByOtherDevices);
     default:
       return false;
+  }
+}
+
+bool MediaToolbarButtonContextualMenu::IsCommandIdEnabled(
+    int command_id) const {
+  PrefService* pref_service = browser_->profile()->GetPrefs();
+  switch (command_id) {
+    case IDC_MEDIA_TOOLBAR_CONTEXT_SHOW_OTHER_SESSIONS:
+      // The pref may be managed by an enterprise policy and not modifiable by
+      // the user, in which case we disable the menu item.
+      return pref_service->IsUserModifiablePreference(
+          media_router::prefs::
+              kMediaRouterShowCastSessionsStartedByOtherDevices);
+    default:
+      return true;
   }
 }
 

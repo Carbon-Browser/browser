@@ -5,12 +5,6 @@ Chrome on Android.
 [TOC]
 
 ## Library Packaging
- * Android L & M (ChromeModernPublic.aab):
-   * `libchrome.so` is stored uncompressed within the apk (with the name
-     `crazy.libchrome.so` to avoid extraction).
-   * It is loaded directly from the apk via `libchromium_android_linker.so`.
-   * Only JNI_OnLoad is exported, since manual JNI registration is required
-     (see [//base/android/jni_generator/README.md]).
  * Android N, O & P (MonochromePublic.aab):
    * `libmonochrome.so` is stored uncompressed within the apk (an
      AndroidManifest.xml attribute disables extraction).
@@ -26,30 +20,28 @@ Chrome on Android.
    * It is loaded by `libchromium_android_linker.so` using
      `android_dlopen_ext()` to enable RELRO sharing.
 
-[//base/android/jni_generator/README.md]: /base/android/jni_generator/README.md
-
 ## Build Variants (eg. monochrome_64_32_apk)
 The packaging above extends to cover both 32-bit and 64-bit device
 configurations.
 
 Chrome support 64-bit builds, but these do not ship to Stable.
-The system Webview APK that ships to those devices contains a 32-bit library,
-and for 64-bit devices, a 64-bit library as well (32-bit Webview client apps
+The system WebView APK that ships to those devices contains a 32-bit library,
+and for 64-bit devices, a 64-bit library as well (32-bit WebView client apps
 will use the 32-bit library, and vice-versa).
 
 ### Monochrome
 Monochrome's intent was to eliminate the duplication between the 32-bit Chrome
-and Webview libraries (most of the library is identical). In 32-bit Monochrome,
-a single combined library serves both Chrome and Webview needs. The 64-bit
-version adds an extra Webview-only library.
+and WebView libraries (most of the library is identical). In 32-bit Monochrome,
+a single combined library serves both Chrome and WebView needs. The 64-bit
+version adds an extra WebView-only library.
 
 More recently, additional Monochrome permutations have arrived. First, Google
 Play will eventually require that apps offer a 64-bit version to compatible
 devices. In Monochrome, this implies swapping the architecture of the Chrome and
-Webview libraries (64-bit combined lib, and extra 32-bit Webview lib). Further
+WebView libraries (64-bit combined lib, and extra 32-bit WebView lib). Further
 down the road, silicon vendors may drop 32-bit support from their chips, after
 which a pure 64-bit version of Monochrome will apply. In each of these cases,
-the library name of the combined and Webview-only libraries must match (an
+the library name of the combined and WebView-only libraries must match (an
 Android platform requirement), so both libs are named libmonochrome.so (or
 libmonochrome_64.so in the 64-bit browser case).
 
@@ -60,27 +52,27 @@ the various targets:
 
 **monochrome_(browser ABI)_(extra_webview ABI)**
 
-For example, the 64-bit browser version with extra 32-bit Webview is
+For example, the 64-bit browser version with extra 32-bit WebView is
 **monochrome_64_32_apk**. The combinations are as follows:
 
 Builds on | Variant | Description
 --- | --- | ---
 32-bit | monochrome | The original 32-bit-only version
-64-bit | monochrome | The original 64-bit version, with 32-bit combined lib and 64-bit Webview. This would be named monochrome_32_64_apk if not for legacy naming.
-64-bit | monochrome_64_32 | 64-bit combined lib with 32-bit Webview library.
+64-bit | monochrome | The original 64-bit version, with 32-bit combined lib and 64-bit WebView. This would be named monochrome_32_64_apk if not for legacy naming.
+64-bit | monochrome_64_32 | 64-bit combined lib with 32-bit WebView library.
 64-bit | monochrome_64 | 64-bit combined lib only, for eventual pure 64-bit hardware.
 64-bit | monochrome_32 | A mirror of the original 32-bit-only version on 64-bit, to allow building all products on one builder. The result won't be bit-identical to the original, since there are subtle compilation differences.
 
 ### Trichrome
 Trichrome has the same 4 permutations as Monochrome, but adds another dimension.
-Trichrome returns to separate apps for Chrome and Webview, but places shared
+Trichrome returns to separate apps for Chrome and WebView, but places shared
 resources in a third shared-library APK. The table below shows which native
 libraries are packaged where. Note that **dummy** placeholder libraries are
 inserted where needed, since Android determines supported ABIs from the presence
 of native libraries, and the ABIs of a shared library APK must match its client
 app.
 
-Builds on | Variant | Chrome | Library | Webview
+Builds on | Variant | Chrome | Library | WebView
 --- | --- | --- | --- | ---
 32-bit | trichrome | `32/dummy` | `32/combined` | `32/dummy`
 64-bit | trichrome | `32/dummy`, `64/dummy` | `32/combined`, `64/dummy` | `32/dummy`, `64/webview`
@@ -147,7 +139,6 @@ Builds on | Variant | Chrome | Library | Webview
  * For ChromePublic.apk:
    * `JNI_OnLoad()` is the only exported symbol (enforced by a linker script).
    * Native methods registered explicitly during start-up by generated code.
-     * Explicit generation is required because the Android runtime uses the system's `dlsym()`, which doesn't know about Crazy-Linker-opened libraries.
  * For MonochromePublic.apk and TrichromeChrome.aab:
    * `JNI_OnLoad()` and `Java_*` symbols are exported by linker script.
    * No manual JNI registration is done. Symbols are resolved lazily by the runtime.
@@ -172,16 +163,6 @@ Builds on | Variant | Chrome | Library | Webview
  * Processes `fork()`ed from the app zygote (where the library is loaded) share RELRO (via `fork()`'s copy-on-write semantics), but this region is not shared with other process types (privileged, utility, GPU)
 
 **How does it work?**
- * For Android < N (crazy linker):
-   1. Browser Process: `libchrome.so` loaded normally.
-   2. Browser Process: `GNU_RELRO` segment copied into `ashmem` (shared memory).
-   3. Browser Process (low-end only): RELRO private memory pages swapped out for ashmem ones (using `munmap()` & `mmap()`).
-   4. Browser Process: Load address and shared memory fd passed to renderers / gpu process.
-   5. Renderer Process: Crazy linker tries to load to the given load address.
-      * Loading can fail due to address space randomization causing something else to already by loaded at the address.
-   6. Renderer Process: If loading to the desired address succeeds:
-      * Linker puts `GNU_RELRO` into private memory and applies relocations as per normal.
-      * Afterwards, memory pages are compared against the shared memory and all identical pages are swapped out for ashmem ones (using `munmap()` & `mmap()`).
  * For a more detailed description, refer to comments in [Linker.java](https://cs.chromium.org/chromium/src/base/android/java/src/org/chromium/base/library_loader/Linker.java).
  * For Android N-P:
    * The OS maintains a RELRO file on disk with the contents of the GNU_RELRO segment.
@@ -204,6 +185,13 @@ Builds on | Variant | Chrome | Library | Webview
      app zygote. `libmonochrome.so` is loaded in the zygote before `fork()`.
      * Similar to O-P, app zygote provides copy-on-write memory semantics so
        RELRO sharing is redundant.
+ * For Android R+ (still Trichrome)
+   * The RELRO region is created in the App Zygote, picked up by the Browser
+     process, which then redistributes the region to all other processes. The
+     receiving of the region and remapping it on top of the non-shared RELRO
+     happens asynchronously after the library has been loaded. Native code is
+     generally already running at this point. Hence the replacement must be
+     atomic.
 
 ## Partitioned libraries
 Some Chrome code is placed in feature-specific libraries and delivered via
@@ -267,6 +255,13 @@ Partitioned libraries are usable when all of the following are true:
    * This was removed due to [poor performance](https://bugs.chromium.org/p/chromium/issues/detail?id=719977).
  * We used to use `relocation_packer` to pack relocations after linking, which complicated our build system and caused many problems for our tools because it caused logical addresses to differ from physical addresses.
    * We now link with `lld`, which supports packed relocations natively and doesn't have these problems.
+ * We used to use the Crazy Linker until Android M was deprecated
+   * It allowed storing `libchrome.so` uncompressed within the apk before the
+     system linker allowed it (with the name `crazy.libchrome.so` to avoid extraction).
+   * It was loaded directly from the apk via `libchromium_android_linker.so`.
+   * Only JNI_OnLoad was exported. Explicit JNI registration was required
+     because the Android runtime uses the system's `dlsym()`, which doesn't know
+     about Crazy-Linker-opened libraries. (see [JNI README](/third_party/jni_zero/README.md)).
 
 ## See Also
  * [//docs/android_build_instructions.md#Multiple-Chrome-APK-Targets](android_build_instructions.md#Multiple-Chrome-APK-Targets)

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,10 +31,6 @@ Cluster CreateCluster(const std::vector<VisitID>& visit_ids);
 // Like `CreateCluster()`, but creates multiple `Cluster`s.
 std::vector<Cluster> CreateClusters(
     const std::vector<std::vector<int64_t>>& visit_ids_per_cluster);
-
-// Construct a `ClusterRow` with the specified ids.
-ClusterRow CreateClusterRow(int64_t cluster_id,
-                            const std::vector<int64_t>& visit_ids);
 
 }  // namespace history
 

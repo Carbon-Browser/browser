@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,25 +10,23 @@
 #include "ui/compositor/test/layer_animator_test_controller.h"
 #include "ui/views/animation/ink_drop_highlight.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 InkDropHighlightTestApi::InkDropHighlightTestApi(
     InkDropHighlight* ink_drop_highlight)
     : ui::test::MultiLayerAnimatorTestController(this),
-      ink_drop_highlight_(ink_drop_highlight) {}
+      ink_drop_highlight_(*ink_drop_highlight) {}
 
 InkDropHighlightTestApi::~InkDropHighlightTestApi() = default;
 
 std::vector<ui::LayerAnimator*> InkDropHighlightTestApi::GetLayerAnimators() {
   std::vector<ui::LayerAnimator*> animators;
-  animators.push_back(ink_drop_highlight()->layer_->GetAnimator());
+  animators.push_back(ink_drop_highlight_->layer_->GetAnimator());
   return animators;
 }
 
 gfx::Transform InkDropHighlightTestApi::CalculateTransform() {
-  return ink_drop_highlight()->CalculateTransform();
+  return ink_drop_highlight_->CalculateTransform();
 }
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

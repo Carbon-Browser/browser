@@ -1,10 +1,8 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "build/build_config.h"
-#include "content/browser/accessibility/browser_accessibility.h"
-#include "content/browser/accessibility/browser_accessibility_manager.h"
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/public/test/accessibility_notification_waiter.h"
 #include "content/public/test/browser_test.h"
@@ -13,6 +11,8 @@
 #include "content/public/test/content_browser_test_utils.h"
 #include "content/shell/browser/shell.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/accessibility/platform/browser_accessibility.h"
+#include "ui/accessibility/platform/browser_accessibility_manager.h"
 
 namespace content {
 
@@ -22,17 +22,20 @@ class AccessibilityLineLayoutBrowserTest : public ContentBrowserTest {
   ~AccessibilityLineLayoutBrowserTest() override = default;
 
  protected:
-  BrowserAccessibility* FindButton(BrowserAccessibility* node) {
-    if (node->GetRole() == ax::mojom::Role::kButton)
+  ui::BrowserAccessibility* FindButton(ui::BrowserAccessibility* node) {
+    if (node->GetRole() == ax::mojom::Role::kButton) {
       return node;
+    }
     for (unsigned i = 0; i < node->PlatformChildCount(); i++) {
-      if (BrowserAccessibility* button = FindButton(node->PlatformGetChild(i)))
+      if (ui::BrowserAccessibility* button =
+              FindButton(node->PlatformGetChild(i))) {
         return button;
+      }
     }
     return nullptr;
   }
 
-  int CountNextPreviousOnLineLinks(BrowserAccessibility* node,
+  int CountNextPreviousOnLineLinks(ui::BrowserAccessibility* node,
                                    bool do_not_count_inline_text) {
     int line_link_count = 0;
 
@@ -41,7 +44,7 @@ class AccessibilityLineLayoutBrowserTest : public ContentBrowserTest {
       int next_on_line_id =
           node->GetIntAttribute(ax::mojom::IntAttribute::kNextOnLineId);
       if (next_on_line_id != ui::kInvalidAXNodeID) {
-        BrowserAccessibility* other =
+        ui::BrowserAccessibility* other =
             node->manager()->GetFromID(next_on_line_id);
         EXPECT_NE(nullptr, other) << "Next on line link is invalid.";
         line_link_count++;
@@ -49,7 +52,7 @@ class AccessibilityLineLayoutBrowserTest : public ContentBrowserTest {
       int previous_on_line_id =
           node->GetIntAttribute(ax::mojom::IntAttribute::kPreviousOnLineId);
       if (previous_on_line_id != ui::kInvalidAXNodeID) {
-        BrowserAccessibility* other =
+        ui::BrowserAccessibility* other =
             node->manager()->GetFromID(previous_on_line_id);
         EXPECT_NE(nullptr, other) << "Previous on line link is invalid.";
         line_link_count++;
@@ -57,9 +60,10 @@ class AccessibilityLineLayoutBrowserTest : public ContentBrowserTest {
     }
 
     for (auto it = node->InternalChildrenBegin();
-         it != node->InternalChildrenEnd(); ++it)
+         it != node->InternalChildrenEnd(); ++it) {
       line_link_count +=
           CountNextPreviousOnLineLinks(it.get(), do_not_count_inline_text);
+    }
 
     return line_link_count;
   }
@@ -80,15 +84,17 @@ IN_PROC_BROWSER_TEST_F(AccessibilityLineLayoutBrowserTest,
 
   WebContentsImpl* web_contents =
       static_cast<WebContentsImpl*>(shell()->web_contents());
-  BrowserAccessibilityManager* manager =
+  ui::BrowserAccessibilityManager* manager =
       web_contents->GetRootBrowserAccessibilityManager();
 
   // There should be at least 2 links between nodes on the same line.
-  int line_link_count = CountNextPreviousOnLineLinks(manager->GetRoot(), false);
+  int line_link_count = CountNextPreviousOnLineLinks(
+      manager->GetBrowserAccessibilityRoot(), false);
   ASSERT_GE(line_link_count, 2);
 
   // Find the button and click it.
-  BrowserAccessibility* button = FindButton(manager->GetRoot());
+  ui::BrowserAccessibility* button =
+      FindButton(manager->GetBrowserAccessibilityRoot());
   ASSERT_NE(nullptr, button);
   manager->DoDefaultAction(*button);
 
@@ -97,7 +103,8 @@ IN_PROC_BROWSER_TEST_F(AccessibilityLineLayoutBrowserTest,
 
   // There should be at least 2 links between nodes on the same line,
   // though not necessarily the same as before.
-  line_link_count = CountNextPreviousOnLineLinks(manager->GetRoot(), false);
+  line_link_count = CountNextPreviousOnLineLinks(
+      manager->GetBrowserAccessibilityRoot(), false);
   ASSERT_GE(line_link_count, 2);
 }
 
@@ -120,20 +127,21 @@ IN_PROC_BROWSER_TEST_F(AccessibilityLineLayoutBrowserTest,
 
   WebContentsImpl* web_contents =
       static_cast<WebContentsImpl*>(shell()->web_contents());
-  BrowserAccessibilityManager* manager =
+  ui::BrowserAccessibilityManager* manager =
       web_contents->GetRootBrowserAccessibilityManager();
 
   AccessibilityNotificationWaiter waiter2(shell()->web_contents(),
                                           ui::kAXModeComplete,
                                           ax::mojom::Event::kTreeChanged);
-  manager->LoadInlineTextBoxes(*manager->GetRoot());
+  manager->LoadInlineTextBoxes(*manager->GetBrowserAccessibilityRoot());
   ASSERT_TRUE(waiter2.WaitForNotification());
 
   // There are three pieces of text, and they should be cross-linked:
   //   before <-> inside <-> after
-  int line_link_count = CountNextPreviousOnLineLinks(manager->GetRoot(), true);
-  ASSERT_EQ(line_link_count, 4);
+  int line_link_count = CountNextPreviousOnLineLinks(
+      manager->GetBrowserAccessibilityRoot(), true);
+  ASSERT_EQ(line_link_count, 2);
 }
-#endif
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 }  // namespace content

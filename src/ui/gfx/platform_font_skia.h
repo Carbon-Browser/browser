@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@
 
 namespace gfx {
 
-class GFX_EXPORT PlatformFontSkia : public PlatformFont {
+class COMPONENT_EXPORT(GFX) PlatformFontSkia : public PlatformFont {
  public:
   // TODO(derat): Get rid of the default constructor in favor of using
   // FontList (which also has the concept of a default font but may contain
@@ -26,7 +26,7 @@ class GFX_EXPORT PlatformFontSkia : public PlatformFont {
   // Wraps the provided SkTypeface without triggering a font rematch.
   PlatformFontSkia(sk_sp<SkTypeface> typeface,
                    int font_size_pixels,
-                   const absl::optional<FontRenderParams>& params);
+                   const std::optional<FontRenderParams>& params);
 
   PlatformFontSkia(const PlatformFontSkia&) = delete;
   PlatformFontSkia& operator=(const PlatformFontSkia&) = delete;
@@ -61,6 +61,10 @@ class GFX_EXPORT PlatformFontSkia : public PlatformFont {
   int GetFontSize() const override;
   const FontRenderParams& GetFontRenderParams() override;
   sk_sp<SkTypeface> GetNativeSkTypeface() const override;
+
+#if BUILDFLAG(IS_APPLE)
+  CTFontRef GetCTFont() const override;
+#endif
 
  private:
   // Create a new instance of this object with the specified properties. Called

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_IMAGE_ENCODERS_IMAGE_ENCODER_H_
 
 #include "base/check_op.h"
+#include "base/memory/raw_ptr.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_types.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
@@ -26,7 +27,9 @@ class VectorWStream : public SkWStream {
 
   bool write(const void* buffer, size_t size) override {
     DCHECK_LE(size, std::numeric_limits<wtf_size_t>::max());
-    dst_->Append((const unsigned char*)buffer, static_cast<wtf_size_t>(size));
+    // SAFETY: Skia encoders guarantees `buffer` and `size` are safe.
+    dst_->AppendSpan(UNSAFE_BUFFERS(
+        base::span(reinterpret_cast<const unsigned char*>(buffer), size)));
     return true;
   }
 
@@ -34,7 +37,7 @@ class VectorWStream : public SkWStream {
 
  private:
   // Does not have ownership.
-  Vector<unsigned char>* dst_;
+  raw_ptr<Vector<unsigned char>> dst_;
 };
 
 class PLATFORM_EXPORT ImageEncoder {

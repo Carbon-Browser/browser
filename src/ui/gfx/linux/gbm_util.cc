@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,6 +25,8 @@ uint32_t BufferUsageToGbmFlags(gfx::BufferUsage usage) {
     case gfx::BufferUsage::SCANOUT_VDA_WRITE:
       return GBM_BO_USE_SCANOUT | GBM_BO_USE_TEXTURING |
              GBM_BO_USE_HW_VIDEO_DECODER;
+    case gfx::BufferUsage::PROTECTED_SCANOUT:
+      return GBM_BO_USE_SCANOUT | GBM_BO_USE_PROTECTED;
     case gfx::BufferUsage::PROTECTED_SCANOUT_VDA_WRITE:
       return GBM_BO_USE_SCANOUT | GBM_BO_USE_PROTECTED |
              GBM_BO_USE_HW_VIDEO_DECODER;

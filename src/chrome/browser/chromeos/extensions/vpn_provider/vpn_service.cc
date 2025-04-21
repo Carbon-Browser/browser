@@ -1,14 +1,18 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/chromeos/extensions/vpn_provider/vpn_service.h"
 
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "chrome/browser/ash/crosapi/crosapi_ash.h"
+#include "chrome/browser/ash/crosapi/crosapi_manager.h"
+#include "chrome/browser/ash/crosapi/vpn_service_ash.h"
 #include "chrome/common/extensions/api/vpn_provider.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/pepper_vpn_provider_resource_host_proxy.h"
@@ -19,17 +23,6 @@
 #include "extensions/browser/unloaded_extension_reason.h"
 #include "extensions/common/permissions/permissions_data.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ash/crosapi/crosapi_ash.h"
-#include "chrome/browser/ash/crosapi/crosapi_manager.h"
-#include "chrome/browser/ash/crosapi/vpn_service_ash.h"
-#endif
-
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-#include "chromeos/lacros/lacros_service.h"
-#endif
 
 namespace chromeos {
 
@@ -52,8 +45,8 @@ void RunSuccessCallback(chromeos::VpnService::SuccessCallback success) {
 }
 
 void RunFailureCallback(chromeos::VpnService::FailureCallback failure,
-                        const absl::optional<std::string>& error_name,
-                        const absl::optional<std::string>& error_message) {
+                        const std::optional<std::string>& error_name,
+                        const std::optional<std::string>& error_message) {
   std::move(failure).Run(error_name.value_or(std::string{}),
                          error_message.value_or(std::string{}));
 }
@@ -163,7 +156,7 @@ void VpnServiceForExtension::OnAddDialog() {
   DispatchEvent(std::make_unique<extensions::Event>(
       extensions::events::HistogramValue::VPN_PROVIDER_ON_UI_EVENT,
       api_vpn::OnUIEvent::kEventName,
-      api_vpn::OnUIEvent::Create(api_vpn::UI_EVENT_SHOWADDDIALOG,
+      api_vpn::OnUIEvent::Create(api_vpn::UIEvent::kShowAddDialog,
                                  std::string()),
       browser_context_));
 }
@@ -173,7 +166,7 @@ void VpnServiceForExtension::OnConfigureDialog(
   DispatchEvent(std::make_unique<extensions::Event>(
       extensions::events::HistogramValue::VPN_PROVIDER_ON_UI_EVENT,
       api_vpn::OnUIEvent::kEventName,
-      api_vpn::OnUIEvent::Create(api_vpn::UI_EVENT_SHOWCONFIGUREDIALOG,
+      api_vpn::OnUIEvent::Create(api_vpn::UIEvent::kShowConfigureDialog,
                                  configuration_name),
       browser_context_));
 }
@@ -189,7 +182,7 @@ void VpnServiceForExtension::OnConfigRemoved(
 void VpnServiceForExtension::OnPlatformMessage(
     const std::string& configuration_name,
     int32_t platform_message,
-    const absl::optional<std::string>& error) {
+    const std::optional<std::string>& error) {
   DispatchEvent(std::make_unique<extensions::Event>(
       extensions::events::VPN_PROVIDER_ON_PLATFORM_MESSAGE,
       api_vpn::OnPlatformMessage::kEventName,
@@ -338,22 +331,13 @@ void VpnService::OnListenerAdded(const extensions::EventListenerInfo& details) {
 
 // static
 crosapi::mojom::VpnService* VpnService::GetVpnService() {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
   // CrosapiManager may not be initialized.
-  // TODO(crbug.com/1326801): Assert it's only happening in tests.
+  // TODO(crbug.com/40225953): Assert it's only happening in tests.
   if (!crosapi::CrosapiManager::IsInitialized()) {
     LOG(ERROR) << "CrosapiManager is not initialized.";
     return nullptr;
   }
   return crosapi::CrosapiManager::Get()->crosapi_ash()->vpn_service_ash();
-#else
-  auto* service = chromeos::LacrosService::Get();
-  if (!service->IsAvailable<crosapi::mojom::VpnService>()) {
-    LOG(ERROR) << "chrome.vpnProvider is not available in Lacros";
-    return nullptr;
-  }
-  return service->GetRemote<crosapi::mojom::VpnService>().get();
-#endif
 }
 
 mojo::Remote<crosapi::mojom::VpnServiceForExtension>&

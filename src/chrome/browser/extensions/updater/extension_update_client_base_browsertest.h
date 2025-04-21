@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "chrome/browser/extensions/extension_browsertest.h"
 #include "chrome/browser/extensions/updater/chrome_update_client_config.h"
 #include "components/update_client/update_client.h"
@@ -60,12 +59,11 @@ class ExtensionUpdateClientBaseTest : public ExtensionBrowserTest {
   // extension browser client (through ConfigFactoryCallback).
   virtual ConfigFactoryCallback ChromeUpdateClientConfigFactory() const;
 
-  // Wait for an update on extension |id| to finish.
+  // Wait for an update on extension `id` to finish.
   // The return value gives the result of the completed update operation
-  // (error, update, no update) as defined in
-  // |update_client::UpdateClient::Observer::Events|
-  update_client::UpdateClient::Observer::Events
-  WaitOnComponentUpdaterCompleteEvent(const std::string& id);
+  // (error, update, no update) as defined in `update_client::ComponentState`.
+  update_client::ComponentState WaitOnComponentUpdaterCompleteEvent(
+      const std::string& id);
 
   // Creates network interceptors.
   // Override this function to provide your own network interceptors.
@@ -82,7 +80,8 @@ class ExtensionUpdateClientBaseTest : public ExtensionBrowserTest {
   int get_interceptor_count() { return get_interceptor_count_; }
 
  protected:
-  raw_ptr<extensions::UpdateService> update_service_ = nullptr;
+  raw_ptr<extensions::UpdateService, DanglingUntriaged> update_service_ =
+      nullptr;
   std::unique_ptr<content::URLLoaderInterceptor> get_interceptor_;
   int get_interceptor_count_ = 0;
   content::URLLoaderInterceptor::InterceptCallback callback_;

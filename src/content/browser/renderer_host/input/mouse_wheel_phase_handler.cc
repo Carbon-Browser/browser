@@ -1,13 +1,13 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/renderer_host/input/mouse_wheel_phase_handler.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/trace_event/trace_event.h"
+#include "components/input/render_widget_host_input_event_router.h"
 #include "content/browser/renderer_host/render_widget_host_impl.h"
-#include "content/browser/renderer_host/render_widget_host_input_event_router.h"
 #include "content/browser/renderer_host/render_widget_host_view_base.h"
 #include "ui/events/base_event_utils.h"
 
@@ -179,11 +179,10 @@ void MouseWheelPhaseHandler::SendSyntheticWheelEventWithPhaseEnded(
       return;
 
     widget_host->delegate()->GetInputEventRouter()->RouteMouseWheelEvent(
-        host_view_, &last_mouse_wheel_event_,
-        ui::LatencyInfo(ui::SourceEventType::WHEEL));
+        host_view_, &last_mouse_wheel_event_, ui::LatencyInfo());
   } else {
-    host_view_->ProcessMouseWheelEvent(
-        last_mouse_wheel_event_, ui::LatencyInfo(ui::SourceEventType::WHEEL));
+    host_view_->ProcessMouseWheelEvent(last_mouse_wheel_event_,
+                                       ui::LatencyInfo());
   }
 }
 

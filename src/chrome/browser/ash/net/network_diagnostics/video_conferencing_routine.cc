@@ -1,9 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/net/network_diagnostics/video_conferencing_routine.h"
 
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -11,18 +12,16 @@
 #include "base/time/time.h"
 #include "chrome/browser/ash/net/network_diagnostics/network_diagnostics_util.h"
 #include "chrome/browser/ash/net/network_diagnostics/udp_prober.h"
-#include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/profiles/profile.h"
 #include "content/public/browser/storage_partition.h"
 #include "net/base/net_errors.h"
 #include "services/network/public/mojom/network_context.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ash {
 namespace network_diagnostics {
 
 namespace {
 
-// TODO(https://crbug.com/1164001): remove when migrated to namespace ash.
 namespace mojom = ::chromeos::network_diagnostics::mojom;
 
 const char kDefaultStunServer[] = "stun.l.google.com";
@@ -33,8 +32,10 @@ const char kDefaultStunServer[] = "stun.l.google.com";
 const char kSupportDetails[] = "https://support.google.com/a/answer/1279090";
 const base::TimeDelta kTimeoutAfterHostResolution = base::Seconds(10);
 
-VideoConferencingRoutine::VideoConferencingRoutine()
-    : stun_server_hostname_(kDefaultStunServer),
+VideoConferencingRoutine::VideoConferencingRoutine(
+    mojom::RoutineCallSource source)
+    : NetworkDiagnosticsRoutine(source),
+      stun_server_hostname_(kDefaultStunServer),
       udp_prober_getter_callback_(base::BindRepeating(
           &VideoConferencingRoutine::CreateAndExecuteUdpProber)),
       tls_prober_getter_callback_(base::BindRepeating(
@@ -44,8 +45,10 @@ VideoConferencingRoutine::VideoConferencingRoutine()
       media_hostnames_(util::GetDefaultMediaUrls()) {}
 
 VideoConferencingRoutine::VideoConferencingRoutine(
+    mojom::RoutineCallSource source,
     const std::string& stun_server_hostname)
-    : stun_server_hostname_(stun_server_hostname),
+    : NetworkDiagnosticsRoutine(source),
+      stun_server_hostname_(stun_server_hostname),
       udp_prober_getter_callback_(base::BindRepeating(
           &VideoConferencingRoutine::CreateAndExecuteUdpProber)),
       tls_prober_getter_callback_(base::BindRepeating(
@@ -65,7 +68,7 @@ void VideoConferencingRoutine::Run() {
 }
 
 void VideoConferencingRoutine::AnalyzeResultsAndExecuteCallback() {
-  absl::optional<std::string> support_details = kSupportDetails;
+  std::optional<std::string> support_details = kSupportDetails;
   set_verdict(mojom::RoutineVerdict::kProblem);
   if (!open_udp_port_found_) {
     problems_.push_back(mojom::VideoConferencingProblem::kUdpFailure);
@@ -78,7 +81,7 @@ void VideoConferencingRoutine::AnalyzeResultsAndExecuteCallback() {
   }
   if (problems_.empty()) {
     set_verdict(mojom::RoutineVerdict::kNoProblem);
-    support_details = absl::nullopt;
+    support_details = std::nullopt;
   }
   set_problems(mojom::RoutineProblems::NewVideoConferencingProblems(problems_));
   ExecuteCallback();
@@ -123,7 +126,7 @@ network::mojom::NetworkContext* VideoConferencingRoutine::GetNetworkContext() {
 }
 
 std::unique_ptr<UdpProber> VideoConferencingRoutine::CreateAndExecuteUdpProber(
-    UdpProber::NetworkContextGetter network_context_getter,
+    network::NetworkContextGetter network_context_getter,
     net::HostPortPair host_port_pair,
     base::span<const uint8_t> data,
     net::NetworkTrafficAnnotationTag tag,
@@ -135,7 +138,7 @@ std::unique_ptr<UdpProber> VideoConferencingRoutine::CreateAndExecuteUdpProber(
 }
 
 std::unique_ptr<TlsProber> VideoConferencingRoutine::CreateAndExecuteTlsProber(
-    TlsProber::NetworkContextGetter network_context_getter,
+    network::NetworkContextGetter network_context_getter,
     net::HostPortPair host_port_pair,
     bool negotiate_tls,
     TlsProber::TlsProbeCompleteCallback callback) {

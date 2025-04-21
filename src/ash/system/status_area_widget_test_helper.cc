@@ -1,8 +1,9 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/system/status_area_widget_test_helper.h"
+#include "base/memory/raw_ptr.h"
 
 #include "ash/root_window_controller.h"
 #include "ash/session/session_controller_impl.h"
@@ -41,7 +42,7 @@ class AnimationEndObserver : public ui::LayerAnimationObserver {
       ui::LayerAnimationSequence* sequence) override {}
 
  private:
-  ui::LayerAnimator* animator_;
+  raw_ptr<ui::LayerAnimator> animator_;
   base::RunLoop run_loop_;
 };
 

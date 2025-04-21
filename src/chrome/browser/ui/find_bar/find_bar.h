@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -11,7 +11,7 @@
 
 #include <string>
 
-#include "ui/gfx/geometry/rect.h"
+#include "build/build_config.h"
 
 class FindBarController;
 class FindBarTesting;
@@ -21,17 +21,23 @@ class FindNotificationDetails;
 }
 
 namespace gfx {
+class Point;
 class Range;
+}  // namespace gfx
+
+#if BUILDFLAG(IS_MAC)
+namespace views {
+class Widget;
 }
+#endif
 
 class FindBar {
  public:
-  virtual ~FindBar() { }
+  virtual ~FindBar() {}
 
   // Accessor and setter for the FindBarController.
   virtual FindBarController* GetFindBarController() const = 0;
-  virtual void SetFindBarController(
-      FindBarController* find_bar_controller) = 0;
+  virtual void SetFindBarController(FindBarController* find_bar_controller) = 0;
 
   // Shows the find bar. Any previous search string will again be visible.
   // If |animate| is true, we try to slide the find bar in.
@@ -90,11 +96,17 @@ class FindBar {
   // Returns a pointer to the testing interface to the FindBar, or NULL
   // if there is none.
   virtual const FindBarTesting* GetFindBarTesting() const = 0;
+
+#if BUILDFLAG(IS_MAC)
+  // Get the host widget. Used by immersive fullscreen to detect the find bar
+  // widget and reparent as necessary.
+  virtual views::Widget* GetHostWidget() = 0;
+#endif
 };
 
 class FindBarTesting {
  public:
-  virtual ~FindBarTesting() { }
+  virtual ~FindBarTesting() {}
 
   // Computes the location of the find bar and whether it is fully visible in
   // its parent window. The return value indicates if the window is visible at

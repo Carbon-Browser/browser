@@ -1,20 +1,20 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/bind.h"
+#include "chrome/browser/ui/views/ssl_client_certificate_selector.h"
+
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/ssl/ssl_client_auth_metrics.h"
 #include "chrome/browser/ssl/ssl_client_auth_requestor_mock.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
-#include "chrome/browser/ui/views/ssl_client_certificate_selector.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/interactive_test_utils.h"
 #include "chrome/test/base/ui_test_utils.h"
@@ -31,6 +31,7 @@
 #include "net/test/test_data_directory.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/views/test/widget_activation_waiter.h"
 #include "ui/views/test/widget_test.h"
 
 using ::testing::Mock;
@@ -80,9 +81,7 @@ class SSLClientCertificateSelectorTest : public InProcessBrowserTest {
 
   // Have to release our reference to the auth handler during the test to allow
   // it to be destroyed while the Browser still exists.
-  void TearDownOnMainThread() override {
-    auth_requestor_.reset();
-  }
+  void TearDownOnMainThread() override { auth_requestor_.reset(); }
 
  protected:
   std::unique_ptr<net::FakeClientCertIdentity> cert_identity_1_;
@@ -90,7 +89,8 @@ class SSLClientCertificateSelectorTest : public InProcessBrowserTest {
   scoped_refptr<net::SSLCertRequestInfo> cert_request_info_;
   scoped_refptr<StrictMock<SSLClientAuthRequestorMock>> auth_requestor_;
   // The selector will be deleted when a cert is selected or the tab is closed.
-  raw_ptr<SSLClientCertificateSelector> selector_ = nullptr;
+  raw_ptr<SSLClientCertificateSelector, AcrossTasksDanglingUntriaged>
+      selector_ = nullptr;
 };
 
 class SSLClientCertificateSelectorMultiTabTest
@@ -118,9 +118,9 @@ class SSLClientCertificateSelectorMultiTabTest
         AddTabAtIndex(1, GURL("about:blank"), ui::PAGE_TRANSITION_LINK));
     ASSERT_TRUE(
         AddTabAtIndex(2, GURL("about:blank"), ui::PAGE_TRANSITION_LINK));
-    ASSERT_TRUE(NULL != browser()->tab_strip_model()->GetWebContentsAt(0));
-    ASSERT_TRUE(NULL != browser()->tab_strip_model()->GetWebContentsAt(1));
-    ASSERT_TRUE(NULL != browser()->tab_strip_model()->GetWebContentsAt(2));
+    ASSERT_TRUE(nullptr != browser()->tab_strip_model()->GetWebContentsAt(0));
+    ASSERT_TRUE(nullptr != browser()->tab_strip_model()->GetWebContentsAt(1));
+    ASSERT_TRUE(nullptr != browser()->tab_strip_model()->GetWebContentsAt(2));
     EXPECT_TRUE(content::WaitForLoadStop(
         browser()->tab_strip_model()->GetWebContentsAt(1)));
     EXPECT_TRUE(content::WaitForLoadStop(
@@ -166,8 +166,10 @@ class SSLClientCertificateSelectorMultiTabTest
   scoped_refptr<net::SSLCertRequestInfo> cert_request_info_2_;
   scoped_refptr<StrictMock<SSLClientAuthRequestorMock>> auth_requestor_1_;
   scoped_refptr<StrictMock<SSLClientAuthRequestorMock>> auth_requestor_2_;
-  raw_ptr<SSLClientCertificateSelector> selector_1_;
-  raw_ptr<SSLClientCertificateSelector> selector_2_;
+  raw_ptr<SSLClientCertificateSelector, AcrossTasksDanglingUntriaged>
+      selector_1_;
+  raw_ptr<SSLClientCertificateSelector, AcrossTasksDanglingUntriaged>
+      selector_2_;
 };
 
 class SSLClientCertificateSelectorMultiProfileTest
@@ -197,8 +199,7 @@ class SSLClientCertificateSelectorMultiProfileTest
     gfx::NativeWindow window = browser_1_->window()->GetNativeWindow();
     views::Widget* widget = views::Widget::GetWidgetForNativeWindow(window);
     ASSERT_NE(nullptr, widget);
-    views::test::WidgetActivationWaiter waiter(widget, true);
-    waiter.Wait();
+    views::test::WaitForWidgetActive(widget, true);
 
     auth_requestor_1_ =
         new StrictMock<SSLClientAuthRequestorMock>(cert_request_info_1_);
@@ -224,10 +225,11 @@ class SSLClientCertificateSelectorMultiProfileTest
   }
 
  protected:
-  raw_ptr<Browser> browser_1_;
+  raw_ptr<Browser, AcrossTasksDanglingUntriaged> browser_1_;
   scoped_refptr<net::SSLCertRequestInfo> cert_request_info_1_;
-  scoped_refptr<StrictMock<SSLClientAuthRequestorMock> > auth_requestor_1_;
-  raw_ptr<SSLClientCertificateSelector> selector_1_;
+  scoped_refptr<StrictMock<SSLClientAuthRequestorMock>> auth_requestor_1_;
+  raw_ptr<SSLClientCertificateSelector, AcrossTasksDanglingUntriaged>
+      selector_1_;
 };
 
 IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorTest, SelectNone) {
@@ -237,64 +239,45 @@ IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorTest, SelectNone) {
 }
 
 IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorTest, Escape) {
-  base::HistogramTester histograms;
   EXPECT_CALL(*auth_requestor_, CertificateSelected(nullptr, nullptr));
 
-  EXPECT_TRUE(ui_test_utils::SendKeyPressSync(
-      browser(), ui::VKEY_ESCAPE, false, false, false, false));
+  EXPECT_TRUE(ui_test_utils::SendKeyPressSync(browser(), ui::VKEY_ESCAPE, false,
+                                              false, false, false));
   auth_requestor_->WaitForCompletion();
-
-  histograms.ExpectUniqueSample(kClientCertSelectHistogramName,
-                                ClientCertSelectionResult::kUserCancel, 1);
 
   Mock::VerifyAndClear(auth_requestor_.get());
 }
 
 IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorTest, SelectDefault) {
-  base::HistogramTester histograms;
   EXPECT_CALL(*auth_requestor_,
               CertificateSelected(cert_identity_1_->certificate(),
                                   cert_identity_1_->ssl_private_key()));
 
-  EXPECT_TRUE(ui_test_utils::SendKeyPressSync(
-      browser(), ui::VKEY_RETURN, false, false, false, false));
+  EXPECT_TRUE(ui_test_utils::SendKeyPressSync(browser(), ui::VKEY_RETURN, false,
+                                              false, false, false));
   auth_requestor_->WaitForCompletion();
-
-  histograms.ExpectUniqueSample(kClientCertSelectHistogramName,
-                                ClientCertSelectionResult::kUserSelect, 1);
 
   Mock::VerifyAndClear(auth_requestor_.get());
 }
 
 IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorTest, CloseTab) {
-  base::HistogramTester histograms;
   EXPECT_CALL(*auth_requestor_, CancelCertificateSelection());
 
   browser()->tab_strip_model()->CloseAllTabs();
   auth_requestor_->WaitForCompletion();
 
-  histograms.ExpectBucketCount(kClientCertSelectHistogramName,
-                               ClientCertSelectionResult::kUserCloseTab, 1);
-
   Mock::VerifyAndClear(auth_requestor_.get());
 }
 
-// TODO(https://crbug.com/1287764): Fails on the linux-wayland-rel bot.
-#if defined(OZONE_PLATFORM_WAYLAND)
-#define MAYBE_EscapeTest DISABLED_Escape
-#else
-#define MAYBE_EscapeTest Escape
-#endif
-IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorMultiTabTest,
-                       MAYBE_EscapeTest) {
+IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorMultiTabTest, EscapeTest) {
   // auth_requestor_1_ should get selected automatically by the
   // SSLClientAuthObserver when selector_2_ is accepted, since both 1 & 2 have
   // the same host:port.
   EXPECT_CALL(*auth_requestor_1_, CertificateSelected(nullptr, nullptr));
   EXPECT_CALL(*auth_requestor_2_, CertificateSelected(nullptr, nullptr));
 
-  EXPECT_TRUE(ui_test_utils::SendKeyPressSync(
-      browser(), ui::VKEY_ESCAPE, false, false, false, false));
+  EXPECT_TRUE(ui_test_utils::SendKeyPressSync(browser(), ui::VKEY_ESCAPE, false,
+                                              false, false, false));
   auth_requestor_1_->WaitForCompletion();
   auth_requestor_2_->WaitForCompletion();
 
@@ -307,14 +290,7 @@ IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorMultiTabTest,
   EXPECT_CALL(*auth_requestor_, CancelCertificateSelection());
 }
 
-// TODO(https://crbug.com/1287784): Fails on the linux-wayland-rel bot.
-#if defined(OZONE_PLATFORM_WAYLAND)
-#define MAYBE_SelectSecond DISABLED_SelectSecond
-#else
-#define MAYBE_SelectSecond SelectSecond
-#endif
-IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorMultiTabTest,
-                       MAYBE_SelectSecond) {
+IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorMultiTabTest, SelectSecond) {
   // auth_requestor_1_ should get selected automatically by the
   // SSLClientAuthObserver when selector_2_ is accepted, since both 1 & 2 have
   // the same host:port.
@@ -325,8 +301,8 @@ IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorMultiTabTest,
               CertificateSelected(cert_identity_2_->certificate(),
                                   cert_identity_2_->ssl_private_key()));
 
-  EXPECT_TRUE(ui_test_utils::SendKeyPressSync(
-      browser(), ui::VKEY_DOWN, false, false, false, false));
+  EXPECT_TRUE(ui_test_utils::SendKeyPressSync(browser(), ui::VKEY_DOWN, false,
+                                              false, false, false));
 
   ASSERT_TRUE(selector_->GetSelectedCert());
   EXPECT_EQ(cert_identity_1_->certificate(),
@@ -338,8 +314,8 @@ IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorMultiTabTest,
   EXPECT_EQ(cert_identity_2_->certificate(),
             selector_2_->GetSelectedCert()->certificate());
 
-  EXPECT_TRUE(ui_test_utils::SendKeyPressSync(
-      browser(), ui::VKEY_RETURN, false, false, false, false));
+  EXPECT_TRUE(ui_test_utils::SendKeyPressSync(browser(), ui::VKEY_RETURN, false,
+                                              false, false, false));
   auth_requestor_1_->WaitForCompletion();
   auth_requestor_2_->WaitForCompletion();
 
@@ -352,18 +328,11 @@ IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorMultiTabTest,
   EXPECT_CALL(*auth_requestor_, CancelCertificateSelection());
 }
 
-// TODO(crbug.com/1249827): Test is flaky on Mac, Linux and Lacros.
-#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
-#define MAYBE_Escape DISABLED_Escape
-#else
-#define MAYBE_Escape Escape
-#endif
-IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorMultiProfileTest,
-                       MAYBE_Escape) {
+IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorMultiProfileTest, Escape) {
   EXPECT_CALL(*auth_requestor_1_, CertificateSelected(nullptr, nullptr));
 
-  EXPECT_TRUE(ui_test_utils::SendKeyPressSync(
-      browser_1_, ui::VKEY_ESCAPE, false, false, false, false));
+  EXPECT_TRUE(ui_test_utils::SendKeyPressSync(browser_1_, ui::VKEY_ESCAPE,
+                                              false, false, false, false));
   auth_requestor_1_->WaitForCompletion();
 
   Mock::VerifyAndClear(auth_requestor_.get());
@@ -374,20 +343,14 @@ IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorMultiProfileTest,
   EXPECT_CALL(*auth_requestor_, CancelCertificateSelection());
 }
 
-// TODO(crbug.com/1249705): Test is flaky on Mac, Linux and Lacros.
-#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
-#define MAYBE_SelectDefault DISABLED_SelectDefault
-#else
-#define MAYBE_SelectDefault SelectDefault
-#endif
 IN_PROC_BROWSER_TEST_F(SSLClientCertificateSelectorMultiProfileTest,
-                       MAYBE_SelectDefault) {
+                       SelectDefault) {
   EXPECT_CALL(*auth_requestor_1_,
               CertificateSelected(cert_identity_1_->certificate(),
                                   cert_identity_1_->ssl_private_key()));
 
-  EXPECT_TRUE(ui_test_utils::SendKeyPressSync(
-      browser_1_, ui::VKEY_RETURN, false, false, false, false));
+  EXPECT_TRUE(ui_test_utils::SendKeyPressSync(browser_1_, ui::VKEY_RETURN,
+                                              false, false, false, false));
   auth_requestor_1_->WaitForCompletion();
 
   Mock::VerifyAndClear(auth_requestor_.get());

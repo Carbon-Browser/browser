@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,7 +38,7 @@ HttpServerResponseInfo HttpServerResponseInfo::CreateFor500(
 
 void HttpServerResponseInfo::AddHeader(const std::string& name,
                                        const std::string& value) {
-  headers_.push_back(std::make_pair(name, value));
+  headers_.emplace_back(name, value);
 }
 
 void HttpServerResponseInfo::SetBody(const std::string& body,

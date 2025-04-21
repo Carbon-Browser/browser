@@ -1,11 +1,10 @@
 #!/usr/bin/env vpython3
-# Copyright 2015 The Chromium Authors. All rights reserved.
+# Copyright 2015 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 """Utility for reading / writing command-line flag files on device(s)."""
 
-from __future__ import print_function
 
 import argparse
 import logging
@@ -69,6 +68,8 @@ Otherwise: Writes command-line file.
     remote_args = []
     action = 'Deleted command line file. '
   else:
+    if remote_args[0] == '--':
+      remote_args.pop(0)
     action = 'Wrote command line file. '
 
   def update_flags(device):

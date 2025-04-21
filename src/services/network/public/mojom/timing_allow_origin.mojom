@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,6 @@ union TimingAllowOrigin {
   array<string> serialized_origins;
   // Note: the actual value is irrelevant here; this is just to create a
   // distinct union subtype.
-  // TODO(https://crbug.com/999900): Replace this with a real placeholder type.
+  // TODO(crbug.com/40643013): Replace this with a real placeholder type.
   uint8 all;
 };

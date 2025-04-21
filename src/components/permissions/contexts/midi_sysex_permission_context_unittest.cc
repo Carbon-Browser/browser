@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/content_settings/core/common/content_settings.h"
 #include "components/content_settings/core/common/content_settings_types.h"
@@ -22,6 +22,8 @@
 namespace permissions {
 
 namespace {
+
+using PermissionStatus = blink::mojom::PermissionStatus;
 
 class TestPermissionContext : public MidiSysexPermissionContext {
  public:
@@ -76,11 +78,11 @@ TEST_F(MidiSysexPermissionContextTests, TestInsecureRequestingUrl) {
   content::WebContentsTester::For(web_contents())->NavigateAndCommit(url);
 
   const PermissionRequestID id(
-      web_contents()->GetPrimaryMainFrame()->GetProcess()->GetID(),
-      web_contents()->GetPrimaryMainFrame()->GetRoutingID(),
+      web_contents()->GetPrimaryMainFrame()->GetGlobalId(),
       permissions::PermissionRequestID::RequestLocalId());
   permission_context.RequestPermission(
-      id, url, true,
+      PermissionRequestData(&permission_context, id,
+                            /*user_gesture=*/true, url),
       base::BindOnce(&TestPermissionContext::TrackPermissionDecision,
                      base::Unretained(&permission_context)));
 
@@ -123,17 +125,17 @@ TEST_F(MidiSysexPermissionContextTests, TestInsecureQueryingUrl) {
                                     secure_url.DeprecatedGetOriginAsURL(),
                                     ContentSettingsType::MIDI_SYSEX));
 
-  EXPECT_EQ(CONTENT_SETTING_BLOCK,
+  EXPECT_EQ(PermissionStatus::DENIED,
             permission_context
                 .GetPermissionStatus(nullptr /* render_frame_host */,
                                      insecure_url, insecure_url)
-                .content_setting);
+                .status);
 
-  EXPECT_EQ(CONTENT_SETTING_BLOCK,
+  EXPECT_EQ(PermissionStatus::DENIED,
             permission_context
                 .GetPermissionStatus(nullptr /* render_frame_host */,
                                      insecure_url, secure_url)
-                .content_setting);
+                .status);
 }
 
 }  // namespace permissions

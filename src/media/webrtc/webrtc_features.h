@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,23 +9,54 @@
 
 #include "base/component_export.h"
 #include "base/feature_list.h"
+#include "base/metrics/field_trial_params.h"
+#include "build/build_config.h"
+#include "third_party/webrtc/modules/audio_processing/include/audio_processing.h"
 
 namespace features {
 
 COMPONENT_EXPORT(MEDIA_WEBRTC)
-extern const base::Feature kWebRtcAllowWgcDesktopCapturer;
+BASE_DECLARE_FEATURE(kWebRtcAllowWgcScreenCapturer);
 
 COMPONENT_EXPORT(MEDIA_WEBRTC)
-extern const base::Feature kWebRtcAllow48kHzProcessingOnArm;
+BASE_DECLARE_FEATURE(kWebRtcAllowWgcWindowCapturer);
 
 COMPONENT_EXPORT(MEDIA_WEBRTC)
-extern const base::Feature kWebRtcHybridAgc;
+BASE_DECLARE_FEATURE(kWebRtcAllowWgcScreenZeroHz);
 
 COMPONENT_EXPORT(MEDIA_WEBRTC)
-extern const base::Feature kWebRtcAnalogAgcClippingControl;
+BASE_DECLARE_FEATURE(kWebRtcAllowWgcWindowZeroHz);
 
 COMPONENT_EXPORT(MEDIA_WEBRTC)
-extern const base::Feature kWebRtcAnalogAgcStartupMinVolume;
+BASE_DECLARE_FEATURE(kWebRtcAllowInputVolumeAdjustment);
+
+COMPONENT_EXPORT(MEDIA_WEBRTC)
+BASE_DECLARE_FEATURE(kWebRtcApmDownmixCaptureAudioMethod);
+
+COMPONENT_EXPORT(MEDIA_WEBRTC)
+extern const base::FeatureParam<
+    ::webrtc::AudioProcessing::Config::Pipeline::DownmixMethod>
+    kWebRtcApmDownmixMethodParam;
+
+COMPONENT_EXPORT(MEDIA_WEBRTC)
+BASE_DECLARE_FEATURE(kWebRtcApmTellsIfPlayoutReferenceIsNeeded);
+
+COMPONENT_EXPORT(MEDIA_WEBRTC)
+BASE_DECLARE_FEATURE(kWebRtcAllowH265Send);
+
+COMPONENT_EXPORT(MEDIA_WEBRTC)
+BASE_DECLARE_FEATURE(kWebRtcAllowH265Receive);
+
+COMPONENT_EXPORT(MEDIA_WEBRTC)
+BASE_DECLARE_FEATURE(kWebRtcH265L1T2);
+
+COMPONENT_EXPORT(MEDIA_WEBRTC)
+BASE_DECLARE_FEATURE(kWebRtcH265L1T3);
+
+#if BUILDFLAG(IS_ANDROID)
+COMPONENT_EXPORT(MEDIA_WEBRTC)
+BASE_DECLARE_FEATURE(kWebRtcApm48kHzSampleRateOnAndroidKillSwitch);
+#endif
 
 }  // namespace features
 

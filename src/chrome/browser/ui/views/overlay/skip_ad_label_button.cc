@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/color_palette.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/background.h"
 #include "ui/views/controls/button/label_button.h"
 
@@ -28,7 +29,7 @@ SkipAdLabelButton::SkipAdLabelButton(PressedCallback callback)
   SetSize(gfx::Size(kSkipAdButtonWidth, kSkipAdButtonHeight));
 
   // Accessibility.
-  SetAccessibleName(label()->GetText());
+  GetViewAccessibility().SetName(label()->GetText());
   SetTooltipText(label()->GetText());
   SetInstallFocusRingOnFocus(true);
 }
@@ -55,11 +56,9 @@ void SkipAdLabelButton::OnThemeChanged() {
       views::Painter::CreateRoundRectWith1PxBorderPainter(
           color_provider->GetColor(kColorPipWindowSkipAdButtonBackground),
           color_provider->GetColor(kColorPipWindowSkipAdButtonBorder), 1.f)));
-  const SkColor foreground_color =
-      color_provider->GetColor(kColorPipWindowForeground);
-  SetEnabledTextColors(foreground_color);
-  SetTextColor(views::Button::STATE_DISABLED, foreground_color);
+  SetEnabledTextColorIds(kColorPipWindowForeground);
+  SetTextColorId(views::Button::STATE_DISABLED, kColorPipWindowForeground);
 }
 
-BEGIN_METADATA(SkipAdLabelButton, views::LabelButton)
+BEGIN_METADATA(SkipAdLabelButton)
 END_METADATA

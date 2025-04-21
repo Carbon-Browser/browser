@@ -1,6 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "third_party/blink/renderer/modules/webaudio/script_processor_handler.h"
 
@@ -21,6 +26,7 @@
 #include "third_party/blink/renderer/modules/webaudio/base_audio_context.h"
 #include "third_party/blink/renderer/modules/webaudio/realtime_audio_destination_node.h"
 #include "third_party/blink/renderer/modules/webaudio/script_processor_node.h"
+#include "third_party/blink/renderer/platform/audio/denormal_disabler.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_copier_base.h"
@@ -43,7 +49,9 @@ ScriptProcessorHandler::ScriptProcessorHandler(
       internal_input_bus_(AudioBus::Create(
           number_of_input_channels,
           node.context()->GetDeferredTaskHandler().RenderQuantumFrames(),
-          false)) {
+          false)),
+      allow_denormal_in_processing_(base::FeatureList::IsEnabled(
+          features::kWebAudioAllowDenormalInProcessing)) {
   DCHECK_GE(buffer_size_,
             node.context()->GetDeferredTaskHandler().RenderQuantumFrames());
   DCHECK_LE(number_of_input_channels, BaseAudioContext::MaxNumberOfChannels());
@@ -52,7 +60,7 @@ ScriptProcessorHandler::ScriptProcessorHandler(
   AddOutput(number_of_output_channels);
 
   channel_count_ = number_of_input_channels;
-  SetInternalChannelCountMode(kExplicit);
+  SetInternalChannelCountMode(V8ChannelCountMode::Enum::kExplicit);
 
   if (Context()->GetExecutionContext()) {
     task_runner_ = Context()->GetExecutionContext()->GetTaskRunner(
@@ -104,7 +112,7 @@ void ScriptProcessorHandler::Initialize() {
   AudioHandler::Initialize();
 }
 
-void ScriptProcessorHandler::Process(uint32_t frames_to_process) {
+void ScriptProcessorHandler::ProcessInternal(uint32_t frames_to_process) {
   TRACE_EVENT_BEGIN0(TRACE_DISABLED_BY_DEFAULT("webaudio.audionode"),
                      "ScriptProcessorHandler::Process");
 
@@ -210,7 +218,8 @@ void ScriptProcessorHandler::Process(uint32_t frames_to_process) {
       PostCrossThreadTask(
           *task_runner_, FROM_HERE,
           CrossThreadBindOnce(&ScriptProcessorHandler::FireProcessEvent,
-                              AsWeakPtr(), double_buffer_index_));
+                              weak_ptr_factory_.GetWeakPtr(),
+                              double_buffer_index_));
     } else {
       // For an offline context, wait until the script execution is finished.
       std::unique_ptr<base::WaitableEvent> waitable_event =
@@ -219,7 +228,7 @@ void ScriptProcessorHandler::Process(uint32_t frames_to_process) {
           *task_runner_, FROM_HERE,
           CrossThreadBindOnce(
               &ScriptProcessorHandler::FireProcessEventForOfflineAudioContext,
-              AsWeakPtr(), double_buffer_index_,
+              weak_ptr_factory_.GetWeakPtr(), double_buffer_index_,
               CrossThreadUnretained(waitable_event.get())));
       waitable_event->Wait();
     }
@@ -230,6 +239,15 @@ void ScriptProcessorHandler::Process(uint32_t frames_to_process) {
 
   TRACE_EVENT_END0(TRACE_DISABLED_BY_DEFAULT("webaudio.audionode"),
                    "ScriptProcessorHandler::Process");
+}
+
+void ScriptProcessorHandler::Process(uint32_t frames_to_process) {
+  if (allow_denormal_in_processing_) {
+    DenormalEnabler denormal_enabler;
+    ProcessInternal(frames_to_process);
+  } else {
+    ProcessInternal(frames_to_process);
+  }
 }
 
 void ScriptProcessorHandler::FireProcessEvent(uint32_t double_buffer_index) {
@@ -297,7 +315,7 @@ double ScriptProcessorHandler::LatencyTime() const {
 void ScriptProcessorHandler::SetChannelCount(uint32_t channel_count,
                                              ExceptionState& exception_state) {
   DCHECK(IsMainThread());
-  BaseAudioContext::GraphAutoLocker locker(Context());
+  DeferredTaskHandler::GraphAutoLocker locker(Context());
 
   if (channel_count != channel_count_) {
     exception_state.ThrowDOMException(DOMExceptionCode::kNotSupportedError,
@@ -309,15 +327,17 @@ void ScriptProcessorHandler::SetChannelCount(uint32_t channel_count,
 }
 
 void ScriptProcessorHandler::SetChannelCountMode(
-    const String& mode,
+    V8ChannelCountMode::Enum mode,
     ExceptionState& exception_state) {
   DCHECK(IsMainThread());
-  BaseAudioContext::GraphAutoLocker locker(Context());
+  DeferredTaskHandler::GraphAutoLocker locker(Context());
 
-  if ((mode == "max") || (mode == "clamped-max")) {
+  if ((mode == V8ChannelCountMode::Enum::kMax) ||
+      (mode == V8ChannelCountMode::Enum::kClampedMax)) {
     exception_state.ThrowDOMException(
         DOMExceptionCode::kNotSupportedError,
-        "channelCountMode cannot be changed from 'explicit' to '" + mode + "'");
+        "channelCountMode cannot be changed from 'explicit' to '" +
+            V8ChannelCountMode(mode).AsString() + "'");
   }
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,6 @@
 #include "content/public/browser/browser_child_process_host_iterator.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/child_process_data.h"
-#include "content/public/browser/notification_service.h"
-#include "content/public/browser/notification_types.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/common/process_type.h"
 #include "extensions/buildflags/buildflags.h"
@@ -20,7 +18,7 @@ using content::BrowserThread;
 using content::ChildProcessData;
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
-#include "extensions/browser/process_map.h"
+#include "extensions/browser/process_map.h"  // nogncheck
 #endif
 
 namespace task_manager {
@@ -45,29 +43,26 @@ void RenderProcessHostTaskProvider::StartUpdating() {
   for (RenderProcessHost::iterator it(RenderProcessHost::AllHostsIterator());
        !it.IsAtEnd(); it.Advance()) {
     RenderProcessHost* host = it.GetCurrentValue();
+    host_observation_.AddObservation(host);
     if (host->GetProcess().IsValid()) {
-      CreateTask(host->GetID());
+      CreateTask(host->GetDeprecatedID());
     } else {
-      // If the host isn't ready do nothing and we will learn of its creation
-      // from the notification service.
+      // If the host isn't ready, do nothing and wait for the
+      // OnRenderProcessHostCreated() notification.
     }
   }
 
-  registrar_.Add(this, content::NOTIFICATION_RENDERER_PROCESS_CREATED,
-                 content::NotificationService::AllBrowserContextsAndSources());
-  registrar_.Add(this, content::NOTIFICATION_RENDERER_PROCESS_CLOSED,
-                 content::NotificationService::AllBrowserContextsAndSources());
-  registrar_.Add(this, content::NOTIFICATION_RENDERER_PROCESS_TERMINATED,
-                 content::NotificationService::AllBrowserContextsAndSources());
+  is_updating_ = true;
 }
 
 void RenderProcessHostTaskProvider::StopUpdating() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
-  registrar_.RemoveAll();
-
   // Then delete all tasks (if any).
+  host_observation_.RemoveAllObservations();
   tasks_by_rph_id_.clear();
+
+  is_updating_ = false;
 }
 
 void RenderProcessHostTaskProvider::CreateTask(
@@ -82,9 +77,9 @@ void RenderProcessHostTaskProvider::CreateTask(
 
   // TODO(cburn): plumb out something from RPH so the title can be set here.
   // Create the task and notify the observer.
-  ChildProcessData data(content::PROCESS_TYPE_RENDERER);
+  ChildProcessData data(content::PROCESS_TYPE_RENDERER, host->GetID());
   data.SetProcess(host->GetProcess().Duplicate());
-  data.id = host->GetID();
+
   task = std::make_unique<ChildProcessTask>(
       data, ChildProcessTask::ProcessSubtype::kUnknownRenderProcess);
   NotifyObserverTaskAdded(task.get());
@@ -104,25 +99,29 @@ void RenderProcessHostTaskProvider::DeleteTask(
   tasks_by_rph_id_.erase(itr);
 }
 
-void RenderProcessHostTaskProvider::Observe(
-    int type,
-    const content::NotificationSource& source,
-    const content::NotificationDetails& details) {
-  content::RenderProcessHost* host =
-      content::Source<content::RenderProcessHost>(source).ptr();
-  ChildProcessData data(content::PROCESS_TYPE_RENDERER);
-  switch (type) {
-    case content::NOTIFICATION_RENDERER_PROCESS_CREATED:
-      CreateTask(host->GetID());
-      break;
-    case content::NOTIFICATION_RENDERER_PROCESS_CLOSED:
-    case content::NOTIFICATION_RENDERER_PROCESS_TERMINATED:
-      DeleteTask(host->GetID());
-      break;
-    default:
-      NOTREACHED();
-      break;
+void RenderProcessHostTaskProvider::OnRenderProcessHostCreated(
+    content::RenderProcessHost* host) {
+  if (is_updating_) {
+    CreateTask(host->GetDeprecatedID());
+    // If the host is reused after the process exited, it is possible to get a
+    // second created notification for the same host.
+    if (!host_observation_.IsObservingSource(host)) {
+      host_observation_.AddObservation(host);
+    }
   }
+}
+
+void RenderProcessHostTaskProvider::RenderProcessExited(
+    content::RenderProcessHost* host,
+    const content::ChildProcessTerminationInfo& info) {
+  DeleteTask(host->GetDeprecatedID());
+  host_observation_.RemoveObservation(host);
+}
+
+void RenderProcessHostTaskProvider::RenderProcessHostDestroyed(
+    content::RenderProcessHost* host) {
+  DeleteTask(host->GetDeprecatedID());
+  host_observation_.RemoveObservation(host);
 }
 
 }  // namespace task_manager

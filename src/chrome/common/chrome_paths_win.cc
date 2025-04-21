@@ -1,20 +1,20 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "chrome/common/chrome_paths_internal.h"
-
+#include <shobjidl.h>
 #include <windows.h>
+
 #include <knownfolders.h>
 #include <shellapi.h>
 #include <shlobj.h>
-#include <shobjidl.h>
 
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/path_service.h"
 #include "base/win/scoped_co_mem.h"
 #include "chrome/common/chrome_constants.h"
+#include "chrome/common/chrome_paths_internal.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/install_static/install_util.h"
 #include "components/nacl/common/nacl_switches.h"
@@ -32,8 +32,8 @@ bool GetUserDirectory(int csidl_folder, base::FilePath* result) {
   // so we don't bother handling it.
   wchar_t path_buf[MAX_PATH];
   path_buf[0] = 0;
-  if (FAILED(SHGetFolderPath(NULL, csidl_folder, NULL,
-                             SHGFP_TYPE_CURRENT, path_buf))) {
+  if (FAILED(::SHGetFolderPath(nullptr, csidl_folder, nullptr,
+                               SHGFP_TYPE_CURRENT, path_buf))) {
     return false;
   }
   *result = base::FilePath(path_buf);
@@ -80,16 +80,13 @@ bool GetUserDownloadsDirectorySafe(base::FilePath* result) {
   return true;
 }
 
-// On Vista and higher, use the downloads known folder. Since it can be
-// relocated to point to a "dangerous" folder, callers should validate that the
-// returned path is not dangerous before using it.
+// Get the downloads known folder. Since it can be relocated to point to a
+// "dangerous" folder, callers should validate that the returned path is not
+// dangerous before using it.
 bool GetUserDownloadsDirectory(base::FilePath* result) {
-  typedef HRESULT (WINAPI *GetKnownFolderPath)(
-      REFKNOWNFOLDERID, DWORD, HANDLE, PWSTR*);
-  GetKnownFolderPath f = reinterpret_cast<GetKnownFolderPath>(
-      GetProcAddress(GetModuleHandle(L"shell32.dll"), "SHGetKnownFolderPath"));
   base::win::ScopedCoMem<wchar_t> path_buf;
-  if (f && SUCCEEDED(f(FOLDERID_Downloads, 0, NULL, &path_buf))) {
+  if (SUCCEEDED(
+          ::SHGetKnownFolderPath(FOLDERID_Downloads, 0, nullptr, &path_buf))) {
     *result = base::FilePath(std::wstring(path_buf));
     return true;
   }

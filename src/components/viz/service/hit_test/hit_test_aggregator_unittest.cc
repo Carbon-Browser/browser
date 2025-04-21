@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "base/memory/raw_ptr.h"
@@ -97,7 +98,7 @@ class TestHitTestAggregator final : public HitTestAggregator {
                           local_surface_id_lookup_delegate,
                           frame_sink_id),
         frame_sink_id_(frame_sink_id) {}
-  ~TestHitTestAggregator() = default;
+  ~TestHitTestAggregator() override = default;
 
   int GetRegionCount() const { return hit_test_data_size_; }
   int GetHitTestRegionListCapacity() { return hit_test_data_capacity_; }
@@ -134,6 +135,7 @@ class HitTestAggregatorTest : public testing::Test {
         local_surface_id_lookup_delegate(), kDisplayFrameSink);
   }
   void TearDown() override {
+    hit_test_aggregator_.reset();
     support_.reset();
     frame_sink_manager_.reset();
     host_frame_sink_manager_.reset();
@@ -688,9 +690,8 @@ TEST_F(HitTestAggregatorTest, ClippedChildWithTabAndTransparentBackground) {
   EXPECT_EQ(region.rect, gfx::Rect(300, 100, 1600, 800));
   EXPECT_EQ(region.child_count, 2);
 
-  gfx::Point point(300, 300);
-  EXPECT_TRUE(region.transform.TransformPointReverse(&point));
-  EXPECT_EQ(gfx::Point(100, 200), point);
+  EXPECT_EQ(gfx::Point(100, 200),
+            region.transform.InverseMapPoint(gfx::Point(300, 300)));
 
   region = host_regions()[2];
   EXPECT_EQ(HitTestRegionFlags::kHitTestChildSurface |
@@ -1166,7 +1167,7 @@ TEST_F(HitTestAggregatorTest, HitTestDataNotUpdated) {
   // We did not update the hit-test data. Expect the index from Aggregator /
   // Manager to remain unchanged.
   support()->SubmitCompositorFrame(surface_id.local_surface_id(),
-                                   MakeDefaultCompositorFrame(), absl::nullopt);
+                                   MakeDefaultCompositorFrame(), std::nullopt);
   aggregator->Aggregate(surface_id);
   EXPECT_EQ(last_index, aggregator->GetLastSubmitHitTestRegionListIndex());
 

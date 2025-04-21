@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,13 @@
 #include "base/memory/raw_ptr.h"
 #include "base/supports_user_data.h"
 #include "content/common/content_export.h"
+#include "url/origin.h"
 
 namespace content {
 
 class RenderFrameHost;
+
+namespace internal {
 
 CONTENT_EXPORT base::SupportsUserData::Data* GetDocumentUserData(
     const RenderFrameHost* rfh,
@@ -25,6 +28,8 @@ CONTENT_EXPORT void SetDocumentUserData(
 
 CONTENT_EXPORT void RemoveDocumentUserData(RenderFrameHost* rfh,
                                            const void* key);
+
+}  // namespace internal
 
 // This class approximates the lifetime of a single blink::Document in the
 // browser process. At the moment RenderFrameHost can correspond to multiple
@@ -85,7 +90,10 @@ CONTENT_EXPORT void RemoveDocumentUserData(RenderFrameHost* rfh,
 // DOCUMENT_USER_DATA_KEY_IMPL(FooDocumentHelper);
 //
 // FooDocumentHelper::FooDocumentHelper(content::RenderFrameHost* rfh)
-//     : DocumentUserData(rfh) { ... }
+//     : DocumentUserData(rfh) {}
+//
+// FooDocumentHelper::~FooDocumentHelper() {}
+//
 template <typename T>
 class DocumentUserData : public base::SupportsUserData::Data {
  public:
@@ -94,13 +102,19 @@ class DocumentUserData : public base::SupportsUserData::Data {
     DCHECK(rfh);
     if (!GetForCurrentDocument(rfh)) {
       T* data = new T(rfh, std::forward<Args>(args)...);
-      SetDocumentUserData(rfh, UserDataKey(), base::WrapUnique(data));
+      internal::SetDocumentUserData(rfh, UserDataKey(), base::WrapUnique(data));
     }
   }
 
   static T* GetForCurrentDocument(RenderFrameHost* rfh) {
     DCHECK(rfh);
-    return static_cast<T*>(GetDocumentUserData(rfh, UserDataKey()));
+    return static_cast<T*>(internal::GetDocumentUserData(rfh, UserDataKey()));
+  }
+
+  static const T* GetForCurrentDocument(const RenderFrameHost* rfh) {
+    DCHECK(rfh);
+    return static_cast<const T*>(
+        internal::GetDocumentUserData(rfh, UserDataKey()));
   }
 
   static T* GetOrCreateForCurrentDocument(RenderFrameHost* rfh) {
@@ -116,7 +130,7 @@ class DocumentUserData : public base::SupportsUserData::Data {
   static void DeleteForCurrentDocument(RenderFrameHost* rfh) {
     DCHECK(rfh);
     DCHECK(GetForCurrentDocument(rfh));
-    RemoveDocumentUserData(rfh, UserDataKey());
+    internal::RemoveDocumentUserData(rfh, UserDataKey());
   }
 
   // Returns the RenderFrameHost associated with `this` object of a subclass
@@ -130,10 +144,23 @@ class DocumentUserData : public base::SupportsUserData::Data {
   RenderFrameHost& render_frame_host() const { return *render_frame_host_; }
 
  protected:
-  // TODO(https://crbug.com/1252044): Take a reference instead of a pointer
+  // TODO(crbug.com/40198594): Take a reference instead of a pointer
   // (here + transitively/as-far-as-reasonably-possible in callers).
   explicit DocumentUserData(RenderFrameHost* rfh) : render_frame_host_(rfh) {
     CHECK(rfh);
+  }
+
+  // Returns the origin of the associated document.
+  //
+  // Note that a DocumentUserData can be attached to a speculative
+  // RenderFrameHost, but while the RenderFrameHost remains speculative/pending
+  // commit, `origin()` returns a meaningless unique opaque origin. Only after
+  // the commit will the returned value become meaningful.
+  const url::Origin& origin() const {
+    // `this` is promptly deleted if `render_frame_host_` commits a
+    // cross-document navigation, so it is always safe to simply call
+    // `GetLastCommittedOrigin()` directly, even without RenderDocument.
+    return render_frame_host().GetLastCommittedOrigin();
   }
 
  private:

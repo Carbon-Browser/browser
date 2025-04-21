@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 
 #include <stddef.h>
 #include <stdint.h>
-
 
 namespace base {
 namespace internal {
@@ -21,9 +20,7 @@ extern const uint8_t kUtf8ValidatorTables[];
 extern const size_t kUtf8ValidatorTablesSize;
 
 // The offset of the INVALID state in kUtf8ValidatorTables.
-enum {
-  I18N_UTF8_VALIDATOR_INVALID_INDEX = 129
-};
+enum { I18N_UTF8_VALIDATOR_INVALID_INDEX = 129 };
 
 }  // namespace internal
 }  // namespace base

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,13 @@
 
 #include "third_party/blink/renderer/modules/xr/xr_view.h"
 
+#include <algorithm>
 #include <cmath>
 
-#include "base/cxx17_backports.h"
+#include "base/trace_event/trace_event.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_xr_eye.h"
 #include "third_party/blink/renderer/modules/xr/xr_camera.h"
+#include "third_party/blink/renderer/modules/xr/xr_depth_manager.h"
 #include "third_party/blink/renderer/modules/xr/xr_frame.h"
 #include "third_party/blink/renderer/modules/xr/xr_session.h"
 #include "third_party/blink/renderer/modules/xr/xr_utils.h"
@@ -21,10 +24,10 @@ namespace {
 
 // Arbitrary minimum size multiplier for dynamic viewport scaling,
 // where 1.0 is full framebuffer size (which may in turn be adjusted
-// by framebufferScaleFactor). TODO(klausw): a value around 0.2 would
-// be more reasonable. Intentionally allow extreme viewport scaling
-// to make the effect more obvious in initial testing.
-constexpr double kMinViewportScale = 0.05;
+// by framebufferScaleFactor). This should be less than or equal to
+// kMinScale in xr_session_viewport_scaler.cc to allow use of the full
+// dynamic viewport scaling range.
+constexpr double kMinViewportScale = 0.125;
 
 const double kDegToRad = M_PI / 180.0;
 
@@ -32,18 +35,8 @@ const double kDegToRad = M_PI / 180.0;
 
 XRView::XRView(XRFrame* frame,
                XRViewData* view_data,
-               const TransformationMatrix& ref_space_from_mojo)
+               const gfx::Transform& ref_space_from_mojo)
     : eye_(view_data->Eye()), frame_(frame), view_data_(view_data) {
-  switch (eye_) {
-    case device::mojom::blink::XREye::kLeft:
-      eye_string_ = "left";
-      break;
-    case device::mojom::blink::XREye::kRight:
-      eye_string_ = "right";
-      break;
-    default:
-      eye_string_ = "none";
-  }
   ref_space_from_view_ = MakeGarbageCollected<XRRigidTransform>(
       ref_space_from_mojo * view_data->MojoFromView());
   projection_matrix_ =
@@ -60,36 +53,77 @@ XRViewport* XRView::Viewport(double framebuffer_scale) {
         viewport.height() * scale);
   }
 
-  return viewport_;
+  return viewport_.Get();
+}
+
+V8XREye XRView::eye() const {
+  switch (eye_) {
+    case device::mojom::blink::XREye::kLeft:
+      return V8XREye(V8XREye::Enum::kLeft);
+    case device::mojom::blink::XREye::kRight:
+      return V8XREye(V8XREye::Enum::kRight);
+    case device::mojom::blink::XREye::kNone:
+      return V8XREye(V8XREye::Enum::kNone);
+  }
+  NOTREACHED();
 }
 
 XRFrame* XRView::frame() const {
-  return frame_;
+  return frame_.Get();
 }
 
 XRSession* XRView::session() const {
   return frame_->session();
 }
 
-DOMFloat32Array* XRView::projectionMatrix() const {
+NotShared<DOMFloat32Array> XRView::projectionMatrix() const {
   if (!projection_matrix_ || !projection_matrix_->Data()) {
     // A page may take the projection matrix value and detach it so
     // projection_matrix_ is a detached array buffer.  This breaks the
     // inspector, so return null instead.
-    return nullptr;
+    return NotShared<DOMFloat32Array>();
   }
 
   return projection_matrix_;
 }
 
-XRViewData::XRViewData(const device::mojom::blink::XRViewPtr& view,
-                       double depth_near,
-                       double depth_far)
-    : eye_(view->eye), viewport_(view->viewport) {
-  UpdateView(view, depth_near, depth_far);
+XRCPUDepthInformation* XRView::GetCpuDepthInformation(
+    ExceptionState& exception_state) const {
+  return view_data_->GetCpuDepthInformation(frame(), exception_state);
 }
 
-void XRViewData::UpdateView(const device::mojom::blink::XRViewPtr& view,
+XRWebGLDepthInformation* XRView::GetWebGLDepthInformation(
+    ExceptionState& exception_state) const {
+  return view_data_->GetWebGLDepthInformation(frame(), exception_state);
+}
+
+XRViewData::XRViewData(
+    wtf_size_t index,
+    device::mojom::blink::XRViewPtr view,
+    double depth_near,
+    double depth_far,
+    const device::mojom::blink::XRSessionDeviceConfig& device_config,
+    const HashSet<device::mojom::XRSessionFeature>& enabled_feature_set,
+    XRGraphicsBinding::Api graphics_api)
+    : index_(index),
+      eye_(view->eye),
+      graphics_api_(graphics_api),
+      viewport_(view->viewport) {
+  if (base::Contains(enabled_feature_set,
+                     device::mojom::XRSessionFeature::DEPTH)) {
+    if (!device_config.depth_configuration) {
+      DCHECK(false)
+          << "The session reports that depth sensing is supported but "
+             "did not report depth sensing API configuration!";
+    }
+    depth_manager_ = MakeGarbageCollected<XRDepthManager>(
+        base::PassKey<XRViewData>{}, *device_config.depth_configuration);
+  }
+
+  UpdateView(std::move(view), depth_near, depth_far);
+}
+
+void XRViewData::UpdateView(device::mojom::blink::XRViewPtr view,
                             double depth_near,
                             double depth_far) {
   DCHECK_EQ(eye_, view->eye);
@@ -100,10 +134,13 @@ void XRViewData::UpdateView(const device::mojom::blink::XRViewPtr& view,
       fov->left_degrees * kDegToRad, fov->right_degrees * kDegToRad, depth_near,
       depth_far);
 
-  mojo_from_view_ = TransformationMatrix(view->mojo_from_view);
+  mojo_from_view_ = view->mojo_from_view;
 
   viewport_ = view->viewport;
   is_first_person_observer_ = view->is_first_person_observer;
+  if (depth_manager_) {
+    depth_manager_->ProcessDepthInformation(std::move(view->depth_data));
+  }
 }
 
 void XRViewData::UpdateProjectionMatrixFromFoV(float up_rad,
@@ -120,11 +157,24 @@ void XRViewData::UpdateProjectionMatrixFromFoV(float up_rad,
   float y_scale = 2.0f / (up_tan + down_tan);
   float inv_nf = 1.0f / (near_depth - far_depth);
 
-  projection_matrix_ = TransformationMatrix(
-      x_scale, 0.0f, 0.0f, 0.0f, 0.0f, y_scale, 0.0f, 0.0f,
-      -((left_tan - right_tan) * x_scale * 0.5),
-      ((up_tan - down_tan) * y_scale * 0.5), (near_depth + far_depth) * inv_nf,
-      -1.0f, 0.0f, 0.0f, (2.0f * far_depth * near_depth) * inv_nf, 0.0f);
+  // Compute the appropriate matrix for the graphics API being used.
+  // WebGPU uses a clip space with a depth range of [0, 1], which requires a
+  // different projection matrix than WebGL, which uses a clip space with a
+  // depth range of [-1, 1].
+  if (graphics_api_ == XRGraphicsBinding::Api::kWebGPU) {
+    projection_matrix_ = gfx::Transform::ColMajor(
+        x_scale, 0.0f, 0.0f, 0.0f, 0.0f, y_scale, 0.0f, 0.0f,
+        -((left_tan - right_tan) * x_scale * 0.5),
+        ((up_tan - down_tan) * y_scale * 0.5), far_depth * inv_nf, -1.0f, 0.0f,
+        0.0f, far_depth * near_depth * inv_nf, 0.0f);
+  } else {
+    projection_matrix_ = gfx::Transform::ColMajor(
+        x_scale, 0.0f, 0.0f, 0.0f, 0.0f, y_scale, 0.0f, 0.0f,
+        -((left_tan - right_tan) * x_scale * 0.5),
+        ((up_tan - down_tan) * y_scale * 0.5),
+        (near_depth + far_depth) * inv_nf, -1.0f, 0.0f, 0.0f,
+        (2.0f * far_depth * near_depth) * inv_nf, 0.0f);
+  }
 }
 
 void XRViewData::UpdateProjectionMatrixFromAspect(float fovy,
@@ -134,21 +184,28 @@ void XRViewData::UpdateProjectionMatrixFromAspect(float fovy,
   float f = 1.0f / tanf(fovy / 2);
   float inv_nf = 1.0f / (near_depth - far_depth);
 
-  projection_matrix_ = TransformationMatrix(
-      f / aspect, 0.0f, 0.0f, 0.0f, 0.0f, f, 0.0f, 0.0f, 0.0f, 0.0f,
-      (far_depth + near_depth) * inv_nf, -1.0f, 0.0f, 0.0f,
-      (2.0f * far_depth * near_depth) * inv_nf, 0.0f);
+  if (graphics_api_ == XRGraphicsBinding::Api::kWebGPU) {
+    projection_matrix_ = gfx::Transform::ColMajor(
+        f / aspect, 0.0f, 0.0f, 0.0f, 0.0f, f, 0.0f, 0.0f, 0.0f, 0.0f,
+        far_depth * inv_nf, -1.0f, 0.0f, 0.0f, far_depth * near_depth * inv_nf,
+        0.0f);
+  } else {
+    projection_matrix_ = gfx::Transform::ColMajor(
+        f / aspect, 0.0f, 0.0f, 0.0f, 0.0f, f, 0.0f, 0.0f, 0.0f, 0.0f,
+        (far_depth + near_depth) * inv_nf, -1.0f, 0.0f, 0.0f,
+        (2.0f * far_depth * near_depth) * inv_nf, 0.0f);
+  }
 
   inv_projection_dirty_ = true;
 }
 
-TransformationMatrix XRViewData::UnprojectPointer(double x,
-                                                  double y,
-                                                  double canvas_width,
-                                                  double canvas_height) {
+gfx::Transform XRViewData::UnprojectPointer(double x,
+                                            double y,
+                                            double canvas_width,
+                                            double canvas_height) {
   // Recompute the inverse projection matrix if needed.
   if (inv_projection_dirty_) {
-    inv_projection_ = projection_matrix_.Inverse();
+    inv_projection_ = projection_matrix_.InverseOrIdentity();
     inv_projection_dirty_ = false;
   }
 
@@ -175,26 +232,56 @@ TransformationMatrix XRViewData::UnprojectPointer(double x,
   y_axis.GetNormalized(&y_axis);
 
   // TODO(bajones): There's probably a more efficient way to do this?
-  TransformationMatrix inv_pointer(x_axis.x(), y_axis.x(), z_axis.x(), 0.0,
-                                   x_axis.y(), y_axis.y(), z_axis.y(), 0.0,
-                                   x_axis.z(), y_axis.z(), z_axis.z(), 0.0, 0.0,
-                                   0.0, 0.0, 1.0);
+  auto inv_pointer = gfx::Transform::ColMajor(
+      x_axis.x(), y_axis.x(), z_axis.x(), 0.0, x_axis.y(), y_axis.y(),
+      z_axis.y(), 0.0, x_axis.z(), y_axis.z(), z_axis.z(), 0.0, 0.0, 0.0, 0.0,
+      1.0);
   inv_pointer.Translate3d(-point_in_view_space.x(), -point_in_view_space.y(),
                           -point_in_view_space.z());
 
   // LookAt matrices are view matrices (inverted), so invert before returning.
-  return inv_pointer.Inverse();
+  return inv_pointer.InverseOrIdentity();
+}
+
+void XRViewData::SetMojoFromView(const gfx::Transform& mojo_from_view) {
+  mojo_from_view_ = mojo_from_view;
+}
+
+XRCPUDepthInformation* XRViewData::GetCpuDepthInformation(
+    const XRFrame* xr_frame,
+    ExceptionState& exception_state) const {
+  if (!depth_manager_) {
+    exception_state.ThrowDOMException(
+        DOMExceptionCode::kInvalidStateError,
+        XRSession::kDepthSensingFeatureNotSupported);
+    return nullptr;
+  }
+
+  return depth_manager_->GetCpuDepthInformation(xr_frame, exception_state);
+}
+
+XRWebGLDepthInformation* XRViewData::GetWebGLDepthInformation(
+    const XRFrame* xr_frame,
+    ExceptionState& exception_state) const {
+  if (!depth_manager_) {
+    exception_state.ThrowDOMException(
+        DOMExceptionCode::kInvalidStateError,
+        XRSession::kDepthSensingFeatureNotSupported);
+    return nullptr;
+  }
+
+  return depth_manager_->GetWebGLDepthInformation(xr_frame, exception_state);
 }
 
 XRRigidTransform* XRView::refSpaceFromView() const {
-  return ref_space_from_view_;
+  return ref_space_from_view_.Get();
 }
 
-absl::optional<double> XRView::recommendedViewportScale() const {
+std::optional<double> XRView::recommendedViewportScale() const {
   return view_data_->recommendedViewportScale();
 }
 
-void XRView::requestViewportScale(absl::optional<double> scale) {
+void XRView::requestViewportScale(std::optional<double> scale) {
   view_data_->requestViewportScale(scale);
 }
 
@@ -238,15 +325,37 @@ void XRView::Trace(Visitor* visitor) const {
   ScriptWrappable::Trace(visitor);
 }
 
-absl::optional<double> XRViewData::recommendedViewportScale() const {
+std::optional<double> XRViewData::recommendedViewportScale() const {
   return recommended_viewport_scale_;
 }
 
-void XRViewData::requestViewportScale(absl::optional<double> scale) {
+void XRViewData::requestViewportScale(std::optional<double> scale) {
   if (!scale)
     return;
 
-  requested_viewport_scale_ = base::clamp(*scale, kMinViewportScale, 1.0);
+  requested_viewport_scale_ = std::clamp(*scale, kMinViewportScale, 1.0);
+}
+
+bool XRViewData::ApplyViewportScaleForFrame() {
+  bool changed = false;
+
+  // Dynamic viewport scaling, see steps 6 and 7 in
+  // https://immersive-web.github.io/webxr/#dom-xrwebgllayer-getviewport
+  if (ViewportModifiable() &&
+      CurrentViewportScale() != RequestedViewportScale()) {
+    DVLOG(2) << __func__
+             << ": apply ViewportScale=" << RequestedViewportScale();
+    SetCurrentViewportScale(RequestedViewportScale());
+    changed = true;
+  }
+  TRACE_COUNTER1("xr", "XR viewport scale (%)", CurrentViewportScale() * 100);
+  SetViewportModifiable(false);
+
+  return changed;
+}
+
+void XRViewData::Trace(Visitor* visitor) const {
+  visitor->Trace(depth_manager_);
 }
 
 }  // namespace blink

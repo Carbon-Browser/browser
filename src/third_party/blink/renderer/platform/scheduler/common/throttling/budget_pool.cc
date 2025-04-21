@@ -1,12 +1,12 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/scheduler/common/throttling/budget_pool.h"
 
 #include <cstdint>
+#include <optional>
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/platform/scheduler/common/tracing_helper.h"
 
 namespace blink {
@@ -52,7 +52,7 @@ void BudgetPool::RemoveThrottler(base::TimeTicks now,
   throttler->UpdateQueueState(now);
 }
 
-void BudgetPool::EnableThrottling(base::sequence_manager::LazyNow* lazy_now) {
+void BudgetPool::EnableThrottling(base::LazyNow* lazy_now) {
   if (is_enabled_)
     return;
   is_enabled_ = true;
@@ -62,7 +62,7 @@ void BudgetPool::EnableThrottling(base::sequence_manager::LazyNow* lazy_now) {
   UpdateStateForAllThrottlers(lazy_now->Now());
 }
 
-void BudgetPool::DisableThrottling(base::sequence_manager::LazyNow* lazy_now) {
+void BudgetPool::DisableThrottling(base::LazyNow* lazy_now) {
   if (!is_enabled_)
     return;
   is_enabled_ = false;

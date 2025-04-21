@@ -1,6 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <stddef.h>
 #include <stdint.h>
@@ -13,7 +18,7 @@ struct Environment {
   Environment() {
     // Disable noisy logging as per "libFuzzer in Chrome" documentation:
     // testing/libfuzzer/getting_started.md#Disable-noisy-error-message-logging.
-    logging::SetMinLogLevel(logging::LOG_FATAL);
+    logging::SetMinLogLevel(logging::LOGGING_FATAL);
   }
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <cstring>
 #include <sstream>
+#include <string_view>
 
 #include "base/debug/debugger.h"
 #include "base/immediate_crash.h"
@@ -18,23 +19,23 @@ namespace {
 ::logging::LogSeverity MapLogLevel(LogLevel level) {
   switch (level) {
     case LogLevel::kVerbose:
-      return ::logging::LOG_VERBOSE;
+      return ::logging::LOGGING_VERBOSE;
     case LogLevel::kInfo:
-      return ::logging::LOG_INFO;
+      return ::logging::LOGGING_INFO;
     case LogLevel::kWarning:
-      return ::logging::LOG_WARNING;
+      return ::logging::LOGGING_WARNING;
     case LogLevel::kError:
-      return ::logging::LOG_ERROR;
+      return ::logging::LOGGING_ERROR;
     case LogLevel::kFatal:
-      return ::logging::LOG_FATAL;
+      return ::logging::LOGGING_FATAL;
   }
 }
 
 }  // namespace
 
-bool IsLoggingOn(LogLevel level, const char* file) {
+bool IsLoggingOn(LogLevel level, std::string_view file) {
   if (level == LogLevel::kVerbose) {
-    return ::logging::GetVlogLevelHelper(file, strlen(file)) > 0;
+    return ::logging::GetVlogLevelHelper(file.data(), file.size()) > 0;
   }
   return ::logging::ShouldCreateLogMessage(MapLogLevel(level));
 }
@@ -49,7 +50,7 @@ void LogWithLevel(LogLevel level,
 
 void Break() {
 #if defined(OFFICIAL_BUILD) && defined(NDEBUG)
-  IMMEDIATE_CRASH();
+  base::ImmediateCrash();
 #else
   // Chrome's base::debug::BreakDebugger is not properly annotated as
   // [[noreturn]], so we abort instead. This may need to be revisited

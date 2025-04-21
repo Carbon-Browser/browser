@@ -30,7 +30,7 @@
 #include "third_party/blink/renderer/platform/geometry/float_rounded_rect.h"
 
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/blink/renderer/platform/geometry/layout_rect.h"
+#include "third_party/blink/renderer/platform/geometry/infinite_int_rect.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "ui/gfx/geometry/quad_f.h"
 
@@ -348,6 +348,43 @@ TEST(FloatRoundedRectTest, OutsetForShapeMargin) {
       r);
 }
 
+TEST(FloatRoundedRectTest, IntersectsQuadEnclosing) {
+  gfx::SizeF one_radii(20, 20);
+  FloatRoundedRect::Radii corner_radii;
+  corner_radii.SetTopLeft(one_radii);
+  corner_radii.SetTopRight(one_radii);
+  corner_radii.SetBottomLeft(one_radii);
+  corner_radii.SetBottomRight(one_radii);
+  // A rect at (100, 25) with dimensions 100x100 and radii of size 20x20.
+  FloatRoundedRect r(gfx::RectF(100, 25, 100, 100), corner_radii);
+
+  // Encloses `r` without intersecting any of the geometry (corners or base
+  // rectangle).
+  gfx::QuadF fully_outside(gfx::PointF(150, -30), gfx::PointF(255, 75),
+                           gfx::PointF(150, 180), gfx::PointF(45, 75));
+  EXPECT_TRUE(r.IntersectsQuad(fully_outside));
+
+  // Encloses `r`, touching at the corners of the base rectangle.
+  gfx::QuadF touching(gfx::PointF(150, -25), gfx::PointF(250, 75),
+                      gfx::PointF(150, 175), gfx::PointF(50, 75));
+  EXPECT_TRUE(r.IntersectsQuad(touching));
+
+  // Encloses `r`, crossing through the rounded corners (without intersecting
+  // them).
+  gfx::QuadF crossing_corners(gfx::PointF(150, -15), gfx::PointF(240, 75),
+                              gfx::PointF(150, 165), gfx::PointF(60, 75));
+  EXPECT_TRUE(r.IntersectsQuad(crossing_corners));
+}
+
+TEST(FloatRoundedRectTest, Conversion) {
+  FloatRoundedRect r(gfx::RectF(100, 200, 300, 400), gfx::SizeF(5, 6),
+                     gfx::SizeF(7, 8), gfx::SizeF(9, 10), gfx::SizeF(11, 12));
+  gfx::RRectF gfx_r(r);
+  SkRRect sk_r(r);
+  EXPECT_EQ(r, FloatRoundedRect(gfx_r));
+  EXPECT_EQ(r, FloatRoundedRect(sk_r));
+}
+
 TEST(FloatRoundedRectTest, ToString) {
   gfx::SizeF corner_rect(1, 2);
   FloatRoundedRect rounded_rect(
@@ -357,7 +394,7 @@ TEST(FloatRoundedRectTest, ToString) {
   EXPECT_EQ("3,5 7x11 radii:(tl:1x2; tr:1x2; bl:1x2; br:1x2)",
             rounded_rect.ToString());
 
-  FloatRoundedRect infinite((gfx::RectF(LayoutRect::InfiniteIntRect())));
+  FloatRoundedRect infinite((gfx::RectF(InfiniteIntRect())));
   EXPECT_EQ("InfiniteIntRect", infinite.ToString());
 
   FloatRoundedRect rect_without_radii(gfx::RectF(1, 3, 5, 7));

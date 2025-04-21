@@ -1,12 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMEOS_ASH_SERVICES_ASSISTANT_PLATFORM_AUDIO_INPUT_HOST_H_
 #define CHROMEOS_ASH_SERVICES_ASSISTANT_PLATFORM_AUDIO_INPUT_HOST_H_
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 // Class that provides the bridge between the ChromeOS UI thread and the
 // Libassistant audio input class.
@@ -23,7 +22,6 @@ class AudioInputHost {
   virtual void OnConversationTurnStarted() = 0;
 };
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant
 
 #endif  // CHROMEOS_ASH_SERVICES_ASSISTANT_PLATFORM_AUDIO_INPUT_HOST_H_

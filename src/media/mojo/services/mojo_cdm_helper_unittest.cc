@@ -1,10 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/mojo/services/mojo_cdm_helper.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
@@ -81,6 +81,8 @@ class TestFrameInterfaceFactory : public mojom::FrameInterfaceFactory {
       mojo::PendingReceiver<mojom::DCOMPSurfaceRegistry> receiver) override {}
 #endif  // BUILDFLAG(IS_WIN)
   void GetCdmOrigin(GetCdmOriginCallback callback) override {}
+  bool GetPageUkmSourceId(int64_t* ukm_source_id) override { return true; }
+  void GetPageUkmSourceId(GetPageUkmSourceIdCallback callback) override {}
   void BindEmbedderReceiver(mojo::GenericPendingReceiver) override {}
 };
 
@@ -121,6 +123,6 @@ TEST_F(MojoCdmHelperTest, CreateCdmFileIO_OpenWithoutClose) {
   base::RunLoop().RunUntilIdle();
 }
 
-// TODO(crbug.com/773860): Add more test cases.
+// TODO(crbug.com/40544338): Add more test cases.
 
 }  // namespace media

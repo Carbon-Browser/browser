@@ -1,17 +1,19 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "storage/browser/database/databases_table.h"
 
 #include <stddef.h>
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_util.h"
 #include "sql/database.h"
 #include "sql/statement.h"
 #include "sql/test/scoped_error_expecter.h"
-#include "storage/browser/database/databases_table.h"
+#include "sql/test/test_helpers.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/sqlite/sqlite3.h"
 
@@ -32,7 +34,7 @@ static bool DatabasesTableIsEmpty(sql::Database* db) {
 
 TEST(DatabasesTableTest, TestIt) {
   // Initialize the 'Databases' table.
-  sql::Database db;
+  sql::Database db(sql::test::kTestTag);
 
   sql::test::ScopedErrorExpecter expecter;
   // TODO(shess): Suppressing SQLITE_CONSTRAINT because the code

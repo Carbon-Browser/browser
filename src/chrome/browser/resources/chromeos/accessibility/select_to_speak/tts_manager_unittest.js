@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,8 +31,6 @@ SelectToSpeakTtsManagerUnitTest = class extends SelectToSpeakE2ETest {
   /** @override */
   async setUpDeferred() {
     await super.setUpDeferred();
-    const module = await import('/select_to_speak/tts_manager.js');
-    window.TtsManager = module.TtsManager;
 
     this.mockTtsClient = new MockTtsClient();
     this.ttsManager = new TtsManager();

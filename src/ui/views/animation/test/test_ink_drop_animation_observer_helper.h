@@ -1,17 +1,18 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
 #ifndef UI_VIEWS_ANIMATION_TEST_TEST_INK_DROP_ANIMATION_OBSERVER_HELPER_H_
 #define UI_VIEWS_ANIMATION_TEST_TEST_INK_DROP_ANIMATION_OBSERVER_HELPER_H_
 
 #include <algorithm>
 #include <vector>
 
+#include "base/ranges/algorithm.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/views/animation/ink_drop_animation_ended_reason.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 // Context tracking helper that can be used with test implementations of
 // ink drop animation observers.
@@ -89,8 +90,9 @@ class TestInkDropAnimationObserverHelper {
   // Passes *_TRUE assertions when an AnimationStarted() event has NOT been
   // observed.
   testing::AssertionResult AnimationHasNotStarted() {
-    if (last_animation_started_ordinal() < 0)
+    if (last_animation_started_ordinal() < 0) {
       return testing::AssertionSuccess();
+    }
     return testing::AssertionFailure()
            << "Animations were started at ordinal="
            << last_animation_started_ordinal() << ".";
@@ -109,8 +111,9 @@ class TestInkDropAnimationObserverHelper {
   // Passes *_TRUE assertions when an AnimationEnded() event has NOT been
   // observed.
   testing::AssertionResult AnimationHasNotEnded() {
-    if (last_animation_ended_ordinal() < 0)
+    if (last_animation_ended_ordinal() < 0) {
       return testing::AssertionSuccess();
+    }
     return testing::AssertionFailure() << "Animations were ended at ordinal="
                                        << last_animation_ended_ordinal() << ".";
   }
@@ -135,27 +138,27 @@ class TestInkDropAnimationObserverHelper {
   testing::AssertionResult ContextsMatch(
       const std::vector<ContextType>& expected_contexts,
       const std::vector<ContextType>& actual_contexts) {
-    const bool match =
-        expected_contexts.size() == actual_contexts.size() &&
-        std::equal(expected_contexts.begin(), expected_contexts.end(),
-                   actual_contexts.begin());
+    const bool match = base::ranges::equal(expected_contexts, actual_contexts);
     testing::AssertionResult result =
         match ? (testing::AssertionSuccess() << "Expected == Actual: {")
               : (testing::AssertionFailure() << "Expected != Actual: {");
     for (auto eit = expected_contexts.begin(), ait = actual_contexts.begin();
          eit != expected_contexts.end() || ait != actual_contexts.end();) {
-      if (eit != expected_contexts.begin())
+      if (eit != expected_contexts.begin()) {
         result << ", ";
+      }
       const bool eexists = eit != expected_contexts.end();
       const bool aexists = ait != actual_contexts.end();
       const bool item_match = eexists && aexists && *eit == *ait;
       result << (eexists ? ToString(*eit) : "<none>")
              << (item_match ? " == " : " != ")
              << (aexists ? ToString(*ait) : "<none>");
-      if (eexists)
+      if (eexists) {
         eit++;
-      if (aexists)
+      }
+      if (aexists) {
         ait++;
+      }
     }
     result << "}";
     return result;
@@ -190,7 +193,6 @@ class TestInkDropAnimationObserverHelper {
       InkDropAnimationEndedReason::SUCCESS;
 };
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test
 
 #endif  // UI_VIEWS_ANIMATION_TEST_TEST_INK_DROP_ANIMATION_OBSERVER_HELPER_H_

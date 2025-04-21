@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,14 +9,15 @@
 #include "base/files/scoped_temp_dir.h"
 #include "components/history/core/browser/url_row.h"
 #include "components/sync/model/metadata_batch.h"
+#include "components/sync/protocol/data_type_state.pb.h"
 #include "components/sync/protocol/entity_metadata.pb.h"
-#include "components/sync/protocol/model_type_state.pb.h"
 #include "sql/meta_table.h"
 #include "sql/statement.h"
+#include "sql/test/test_helpers.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
+using sync_pb::DataTypeState;
 using sync_pb::EntityMetadata;
-using sync_pb::ModelTypeState;
 using syncer::EntityMetadataMap;
 using syncer::MetadataBatch;
 
@@ -50,12 +51,12 @@ class HistorySyncMetadataDatabaseTest : public testing::Test {
   void SetUp() override {
     EXPECT_TRUE(db_.OpenInMemory());
     metadata_db_.Init();
-    meta_table_.Init(&db_, 1, 1);
+    ASSERT_TRUE(meta_table_.Init(&db_, 1, 1));
   }
   void TearDown() override { db_.Close(); }
 
  private:
-  sql::Database db_;
+  sql::Database db_{sql::test::kTestTag};
   sql::MetaTable meta_table_;
 
   HistorySyncMetadataDatabase metadata_db_;
@@ -92,8 +93,8 @@ TEST_F(HistorySyncMetadataDatabaseTest, EmptyStateIsValid) {
   MetadataBatch metadata_batch;
   EXPECT_TRUE(metadata_db()->GetAllSyncMetadata(&metadata_batch));
   EXPECT_EQ(0u, metadata_batch.TakeAllMetadata().size());
-  EXPECT_EQ(ModelTypeState().SerializeAsString(),
-            metadata_batch.GetModelTypeState().SerializeAsString());
+  EXPECT_EQ(DataTypeState().SerializeAsString(),
+            metadata_batch.GetDataTypeState().SerializeAsString());
 }
 
 TEST_F(HistorySyncMetadataDatabaseTest, StoresAndReturnsMetadata) {
@@ -102,29 +103,31 @@ TEST_F(HistorySyncMetadataDatabaseTest, StoresAndReturnsMetadata) {
   const std::string storage_key2 =
       HistorySyncMetadataDatabase::StorageKeyFromVisitTime(kVisitTime2);
 
-  // Store some data - both entity metadata and model type state.
+  // Store some data - both entity metadata and data type state.
   EntityMetadata metadata1;
   metadata1.set_sequence_number(1);
   metadata1.set_client_tag_hash("client_hash1");
-  ASSERT_TRUE(metadata_db()->UpdateSyncMetadata(syncer::HISTORY, storage_key1,
-                                                metadata1));
+  ASSERT_TRUE(metadata_db()->UpdateEntityMetadata(syncer::HISTORY, storage_key1,
+                                                  metadata1));
 
-  ModelTypeState model_type_state;
-  model_type_state.set_initial_sync_done(true);
+  DataTypeState data_type_state;
+  data_type_state.set_initial_sync_state(
+      sync_pb::DataTypeState_InitialSyncState_INITIAL_SYNC_DONE);
   ASSERT_TRUE(
-      metadata_db()->UpdateModelTypeState(syncer::HISTORY, model_type_state));
+      metadata_db()->UpdateDataTypeState(syncer::HISTORY, data_type_state));
 
   EntityMetadata metadata2;
   metadata2.set_sequence_number(2);
   metadata2.set_client_tag_hash("client_hash2");
-  ASSERT_TRUE(metadata_db()->UpdateSyncMetadata(syncer::HISTORY, storage_key2,
-                                                metadata2));
+  ASSERT_TRUE(metadata_db()->UpdateEntityMetadata(syncer::HISTORY, storage_key2,
+                                                  metadata2));
 
   // Read the metadata and make sure it matches what we wrote.
   MetadataBatch metadata_batch;
   EXPECT_TRUE(metadata_db()->GetAllSyncMetadata(&metadata_batch));
 
-  EXPECT_TRUE(metadata_batch.GetModelTypeState().initial_sync_done());
+  EXPECT_EQ(metadata_batch.GetDataTypeState().initial_sync_state(),
+            sync_pb::DataTypeState_InitialSyncState_INITIAL_SYNC_DONE);
 
   EntityMetadataMap metadata_records = metadata_batch.TakeAllMetadata();
   EXPECT_EQ(metadata_records.size(), 2u);
@@ -133,18 +136,21 @@ TEST_F(HistorySyncMetadataDatabaseTest, StoresAndReturnsMetadata) {
   EXPECT_EQ(metadata_records[storage_key2]->sequence_number(), 2);
   EXPECT_EQ(metadata_records[storage_key2]->client_tag_hash(), "client_hash2");
 
-  // Now check that an entity update and a model type state update replace the
+  // Now check that an entity update and a data type state update replace the
   // old values.
   metadata1.set_sequence_number(2);
-  ASSERT_TRUE(metadata_db()->UpdateSyncMetadata(syncer::HISTORY, storage_key1,
-                                                metadata1));
-  model_type_state.set_initial_sync_done(false);
+  ASSERT_TRUE(metadata_db()->UpdateEntityMetadata(syncer::HISTORY, storage_key1,
+                                                  metadata1));
+  data_type_state.set_initial_sync_state(
+      sync_pb::DataTypeState_InitialSyncState_INITIAL_SYNC_STATE_UNSPECIFIED);
   ASSERT_TRUE(
-      metadata_db()->UpdateModelTypeState(syncer::HISTORY, model_type_state));
+      metadata_db()->UpdateDataTypeState(syncer::HISTORY, data_type_state));
 
   MetadataBatch metadata_batch2;
   ASSERT_TRUE(metadata_db()->GetAllSyncMetadata(&metadata_batch2));
-  EXPECT_FALSE(metadata_batch2.GetModelTypeState().initial_sync_done());
+  EXPECT_EQ(
+      metadata_batch2.GetDataTypeState().initial_sync_state(),
+      sync_pb::DataTypeState_InitialSyncState_INITIAL_SYNC_STATE_UNSPECIFIED);
 
   EntityMetadataMap metadata_records2 = metadata_batch2.TakeAllMetadata();
   EXPECT_EQ(metadata_records2.size(), 2u);
@@ -156,31 +162,32 @@ TEST_F(HistorySyncMetadataDatabaseTest, DeletesSyncMetadata) {
       HistorySyncMetadataDatabase::StorageKeyFromVisitTime(kVisitTime1);
 
   // Write some data into the store.
-  ModelTypeState model_type_state;
-  model_type_state.set_initial_sync_done(true);
+  DataTypeState data_type_state;
+  data_type_state.set_initial_sync_state(
+      sync_pb::DataTypeState_InitialSyncState_INITIAL_SYNC_DONE);
   ASSERT_TRUE(
-      metadata_db()->UpdateModelTypeState(syncer::HISTORY, model_type_state));
+      metadata_db()->UpdateDataTypeState(syncer::HISTORY, data_type_state));
 
   EntityMetadata metadata;
   metadata.set_client_tag_hash("client_hash");
-  ASSERT_TRUE(metadata_db()->UpdateSyncMetadata(syncer::HISTORY, storage_key,
-                                                metadata));
+  ASSERT_TRUE(metadata_db()->UpdateEntityMetadata(syncer::HISTORY, storage_key,
+                                                  metadata));
 
   // Delete the data we just wrote.
-  ASSERT_TRUE(metadata_db()->ClearSyncMetadata(syncer::HISTORY, storage_key));
+  ASSERT_TRUE(metadata_db()->ClearEntityMetadata(syncer::HISTORY, storage_key));
 
   // It shouldn't be there anymore.
   MetadataBatch metadata_batch;
   ASSERT_TRUE(metadata_db()->GetAllSyncMetadata(&metadata_batch));
   EXPECT_EQ(metadata_batch.GetAllMetadata().size(), 0u);
 
-  // Now delete the model type state and make sure it's gone.
-  ASSERT_NE(ModelTypeState().SerializeAsString(),
-            metadata_batch.GetModelTypeState().SerializeAsString());
-  ASSERT_TRUE(metadata_db()->ClearModelTypeState(syncer::HISTORY));
+  // Now delete the data type state and make sure it's gone.
+  ASSERT_NE(DataTypeState().SerializeAsString(),
+            metadata_batch.GetDataTypeState().SerializeAsString());
+  ASSERT_TRUE(metadata_db()->ClearDataTypeState(syncer::HISTORY));
   ASSERT_TRUE(metadata_db()->GetAllSyncMetadata(&metadata_batch));
-  EXPECT_EQ(ModelTypeState().SerializeAsString(),
-            metadata_batch.GetModelTypeState().SerializeAsString());
+  EXPECT_EQ(DataTypeState().SerializeAsString(),
+            metadata_batch.GetDataTypeState().SerializeAsString());
 }
 
 TEST_F(HistorySyncMetadataDatabaseTest, FailsToReadCorruptSyncMetadata) {
@@ -194,7 +201,7 @@ TEST_F(HistorySyncMetadataDatabaseTest, FailsToReadCorruptSyncMetadata) {
   EXPECT_FALSE(metadata_db()->GetAllSyncMetadata(&metadata_batch));
 }
 
-TEST_F(HistorySyncMetadataDatabaseTest, FailsToReadCorruptModelTypeState) {
+TEST_F(HistorySyncMetadataDatabaseTest, FailsToReadCorruptDataTypeState) {
   // Insert some corrupt data into the meta table.
   sql_meta_table()->SetValue("history_model_type_state", "unparseable");
 

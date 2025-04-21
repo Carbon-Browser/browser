@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,11 +23,10 @@ class BluetoothLocalGattDescriptorTest : public BluetoothGattServerTest {
     // We will need this device to use with simulating read/write attribute
     // value events.
     device_ = SimulateLowEnergyDevice(1);
-    characteristic_ = BluetoothLocalGattCharacteristic::Create(
+    characteristic_ = service_->CreateCharacteristic(
         BluetoothUUID(kTestUUIDGenericAttribute),
         device::BluetoothLocalGattCharacteristic::Properties(),
-        device::BluetoothLocalGattCharacteristic::Permissions(),
-        service_.get());
+        device::BluetoothLocalGattCharacteristic::Permissions());
     read_descriptor_ = BluetoothLocalGattDescriptor::Create(
         BluetoothUUID(kTestUUIDGenericAttribute),
         device::BluetoothLocalGattCharacteristic::PERMISSION_READ,
@@ -46,7 +45,7 @@ class BluetoothLocalGattDescriptorTest : public BluetoothGattServerTest {
   base::WeakPtr<BluetoothLocalGattCharacteristic> characteristic_;
   base::WeakPtr<BluetoothLocalGattDescriptor> read_descriptor_;
   base::WeakPtr<BluetoothLocalGattDescriptor> write_descriptor_;
-  raw_ptr<BluetoothDevice> device_;
+  raw_ptr<BluetoothDevice, DanglingUntriaged> device_;
 };
 
 #if BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX)

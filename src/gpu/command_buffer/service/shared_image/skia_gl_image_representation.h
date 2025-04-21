@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,14 +10,14 @@
 #include "ui/gl/gl_context.h"
 
 namespace gpu {
-// This is a wrapper class for SkiaImageRepresentation to be used in GL
+// This is a wrapper class for SkiaGaneshImageRepresentation to be used in GL
 // mode. For most of the SharedImageBackings, GLTextureImageRepresentation
-// and SkiaImageRepresentation implementations do the same work which
+// and SkiaGaneshImageRepresentation implementations do the same work which
 // results in duplicate code. Hence instead of implementing
-// SkiaImageRepresentation, this wrapper can be directly used or
+// SkiaGaneshImageRepresentation, this wrapper can be directly used or
 // implemented by the backings.
 class GPU_GLES2_EXPORT SkiaGLImageRepresentation
-    : public SkiaImageRepresentation {
+    : public SkiaGaneshImageRepresentation {
  public:
   static std::unique_ptr<SkiaGLImageRepresentation> Create(
       std::unique_ptr<GLTextureImageRepresentationBase> gl_representation,
@@ -28,38 +28,44 @@ class GPU_GLES2_EXPORT SkiaGLImageRepresentation
 
   ~SkiaGLImageRepresentation() override;
 
-  sk_sp<SkSurface> BeginWriteAccess(
+  std::vector<sk_sp<SkSurface>> BeginWriteAccess(
       int final_msaa_count,
       const SkSurfaceProps& surface_props,
-      std::vector<GrBackendSemaphore>* begin_semaphores,
-      std::vector<GrBackendSemaphore>* end_semaphores) override;
-  sk_sp<SkPromiseImageTexture> BeginWriteAccess(
+      const gfx::Rect& update_rect,
       std::vector<GrBackendSemaphore>* begin_semaphores,
       std::vector<GrBackendSemaphore>* end_semaphores,
-      std::unique_ptr<GrBackendSurfaceMutableState>* end_state) override;
-  void EndWriteAccess(sk_sp<SkSurface> surface) override;
-  sk_sp<SkPromiseImageTexture> BeginReadAccess(
+      std::unique_ptr<skgpu::MutableTextureState>* end_state) override;
+  std::vector<sk_sp<GrPromiseImageTexture>> BeginWriteAccess(
       std::vector<GrBackendSemaphore>* begin_semaphores,
-      std::vector<GrBackendSemaphore>* end_semaphores) override;
+      std::vector<GrBackendSemaphore>* end_semaphores,
+      std::unique_ptr<skgpu::MutableTextureState>* end_state) override;
+  void EndWriteAccess() override;
+  std::vector<sk_sp<GrPromiseImageTexture>> BeginReadAccess(
+      std::vector<GrBackendSemaphore>* begin_semaphores,
+      std::vector<GrBackendSemaphore>* end_semaphores,
+      std::unique_ptr<skgpu::MutableTextureState>* end_state) override;
   void EndReadAccess() override;
 
   bool SupportsMultipleConcurrentReadAccess() override;
 
- private:
+ protected:
   SkiaGLImageRepresentation(
       std::unique_ptr<GLTextureImageRepresentationBase> gl_representation,
-      sk_sp<SkPromiseImageTexture> promise_texture,
+      std::vector<sk_sp<GrPromiseImageTexture>> promise_textures,
       scoped_refptr<SharedContextState> context_state,
       SharedImageManager* manager,
       SharedImageBacking* backing,
       MemoryTypeTracker* tracker);
 
+  void ClearCachedSurfaces();
+
+ private:
   void CheckContext();
 
   std::unique_ptr<GLTextureImageRepresentationBase> gl_representation_;
-  sk_sp<SkPromiseImageTexture> promise_texture_;
+  std::vector<sk_sp<GrPromiseImageTexture>> promise_textures_;
   scoped_refptr<SharedContextState> context_state_;
-  sk_sp<SkSurface> surface_;
+  std::vector<sk_sp<SkSurface>> surfaces_;
   RepresentationAccessMode mode_ = RepresentationAccessMode::kNone;
 #if DCHECK_IS_ON()
   raw_ptr<gl::GLContext> context_;

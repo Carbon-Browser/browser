@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 
 #include <stddef.h>
 #include <utility>
-#include "build/chromeos_buildflags.h"
 
 #include "content/browser/renderer_host/pepper/browser_ppapi_host_impl.h"
 #include "content/browser/renderer_host/pepper/pepper_browser_font_singleton_host.h"
@@ -76,7 +75,6 @@ ContentBrowserPepperHostFactory::CreateResourceHost(
       if (!ppapi::UnpackMessage<PpapiHostMsg_FileSystem_Create>(
               message, &file_system_type)) {
         NOTREACHED();
-        return nullptr;
       }
       return std::unique_ptr<ppapi::host::ResourceHost>(
           new PepperFileSystemBrowserHost(host_, instance, resource,
@@ -103,7 +101,6 @@ ContentBrowserPepperHostFactory::CreateResourceHost(
       if (!ppapi::UnpackMessage<PpapiHostMsg_FileRef_CreateForFileAPI>(
               message, &file_system, &internal_path)) {
         NOTREACHED();
-        return nullptr;
       }
       return std::unique_ptr<ppapi::host::ResourceHost>(new PepperFileRefHost(
           host_, instance, resource, file_system, internal_path));

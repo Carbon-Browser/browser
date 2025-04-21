@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "build/buildflag.h"
 #include "build/chromeos_buildflags.h"
@@ -29,7 +29,7 @@ class NSSCertDatabase;
 // Ownership of the `NSSCertDatabase` is not transferred, and the lifetime
 // should only be considered valid for the current Task.
 //
-// TODO(https://crbug.com/1186373): Provide better lifetime guarantees.
+// TODO(crbug.com/40753707): Provide better lifetime guarantees.
 using NssCertDatabaseGetter = base::OnceCallback<net::NSSCertDatabase*(
     base::OnceCallback<void(net::NSSCertDatabase*)> callback)>;
 
@@ -50,7 +50,7 @@ class NssService : public KeyedService {
   // thread and then invoked.  While the returned getter must be invoked on
   // the IO thread, this method itself may only be invoked on the UI thread,
   // where the NssService lives.
-  NssCertDatabaseGetter CreateNSSCertDatabaseGetterForIOThread();
+  virtual NssCertDatabaseGetter CreateNSSCertDatabaseGetterForIOThread();
 
   // Unsafely returns the `NssCertDatabase` directly to the caller (on the UI
   // thread). This is unsafe, because if the `content::BrowserContext` / this

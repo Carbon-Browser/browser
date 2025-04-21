@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,7 @@ base::FilePath GetTestNetDirectory() {
   base::FilePath src_root;
   {
     base::ScopedAllowBlockingForTesting allow_blocking;
-    base::PathService::Get(base::DIR_SOURCE_ROOT, &src_root);
+    base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &src_root);
   }
 
   return src_root.Append(kNetRelativePath);

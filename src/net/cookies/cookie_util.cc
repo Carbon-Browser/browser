@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,33 +6,42 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <string>
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/command_line.h"
+#include "base/compiler_specific.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
-#include "base/stl_util.h"
 #include "base/strings/strcat.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_tokenizer.h"
 #include "base/strings/string_util.h"
+#include "base/types/optional_ref.h"
+#include "base/types/optional_util.h"
 #include "build/build_config.h"
 #include "net/base/features.h"
 #include "net/base/isolation_info.h"
 #include "net/base/registry_controlled_domains/registry_controlled_domain.h"
+#include "net/base/schemeful_site.h"
 #include "net/base/url_util.h"
 #include "net/cookies/cookie_access_delegate.h"
 #include "net/cookies/cookie_constants.h"
 #include "net/cookies/cookie_inclusion_status.h"
 #include "net/cookies/cookie_monster.h"
 #include "net/cookies/cookie_options.h"
-#include "net/cookies/first_party_set_metadata.h"
-#include "net/cookies/same_party_context.h"
+#include "net/cookies/cookie_setting_override.h"
+#include "net/cookies/cookie_switches.h"
+#include "net/cookies/parsed_cookie.h"
+#include "net/first_party_sets/first_party_set_metadata.h"
+#include "net/first_party_sets/first_party_sets_cache_filter.h"
 #include "net/http/http_util.h"
+#include "net/storage_access_api/status.h"
 #include "url/gurl.h"
 #include "url/url_constants.h"
 
@@ -90,6 +99,18 @@ bool SaturatedTimeFromUTCExploded(const base::Time::Exploded& exploded,
   return false;
 }
 
+// Tests that a cookie has the attributes for a valid __Host- prefix without
+// testing that the prefix is in the cookie name.
+bool HasValidHostPrefixAttributes(const GURL& url,
+                                  bool secure,
+                                  const std::string& domain,
+                                  const std::string& path) {
+  if (!secure || !url.SchemeIsCryptographic() || path != "/") {
+    return false;
+  }
+  return domain.empty() || (url.HostIsIPAddress() && url.host() == domain);
+}
+
 struct ComputeSameSiteContextResult {
   ContextType context_type = ContextType::CROSS_SITE;
   ContextMetadata metadata;
@@ -137,7 +158,7 @@ ComputeContextRedirectTypeBug1221316(bool url_chain_is_length_one,
 ComputeSameSiteContextResult ComputeSameSiteContext(
     const std::vector<GURL>& url_chain,
     const SiteForCookies& site_for_cookies,
-    const absl::optional<url::Origin>& initiator,
+    const std::optional<url::Origin>& initiator,
     bool is_http,
     bool is_main_frame_navigation,
     bool compute_schemefully) {
@@ -253,7 +274,7 @@ void NormalizeStrictToLaxForSet(ComputeSameSiteContextResult& result) {
 CookieOptions::SameSiteCookieContext ComputeSameSiteContextForSet(
     const std::vector<GURL>& url_chain,
     const SiteForCookies& site_for_cookies,
-    const absl::optional<url::Origin>& initiator,
+    const std::optional<url::Origin>& initiator,
     bool is_http,
     bool is_main_frame_navigation) {
   CookieOptions::SameSiteCookieContext same_site_context;
@@ -276,10 +297,29 @@ bool CookieWithAccessResultSorter(const CookieWithAccessResult& a,
   return CookieMonster::CookieSorter(&a.cookie, &b.cookie);
 }
 
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class StorageAccessNetRequestKind {
+  // The request had the `kStorageAccessGrantEligible` override, and was
+  // same-origin.
+  kSameOrigin = 0,
+  // The request had the `kStorageAccessGrantEligible` override, and was
+  // cross-origin, same-site.
+  kCrossOriginSameSite = 1,
+  // The request had the `kStorageAccessGrantEligible` override, and was
+  // cross-site.
+  kCrossSite = 2,
+  kMaxValue = kCrossSite
+};
+
+void RecordStorageAccessNetRequestMetric(StorageAccessNetRequestKind kind) {
+  base::UmaHistogramEnumeration("Net.HttpJob.StorageAccessNetRequest", kind);
+}
+
 }  // namespace
 
 void FireStorageAccessHistogram(StorageAccessResult result) {
-  UMA_HISTOGRAM_ENUMERATION("API.StorageAccess.AllowedRequests2", result);
+  UMA_HISTOGRAM_ENUMERATION("API.StorageAccess.AllowedRequests4", result);
 }
 
 bool DomainIsHostOnly(const std::string& domain_string) {
@@ -319,6 +359,15 @@ bool GetCookieDomainWithString(const GURL& url,
   }
 
   const std::string url_host(url.host());
+
+  // Disallow invalid hostnames containing multiple `.` at the end.
+  // Httpbis-rfc6265bis draft-11, §5.1.2 says to convert the request host "into
+  // a sequence of individual domain name labels"; a label can only be empty if
+  // it is the last label in the name, but a name ending in `..` would have an
+  // empty label in the penultimate position and is thus invalid.
+  if (url_host.ends_with("..")) {
+    return false;
+  }
   // If no domain was specified in the domain string, default to a host cookie.
   // We match IE/Firefox in allowing a domain=IPADDR if it matches (case
   // in-sensitive) the url ip address hostname and ignoring a leading dot if one
@@ -327,7 +376,17 @@ bool GetCookieDomainWithString(const GURL& url,
       (url.HostIsIPAddress() &&
        (base::EqualsCaseInsensitiveASCII(url_host, domain_string) ||
         base::EqualsCaseInsensitiveASCII("." + url_host, domain_string)))) {
-    *result = url_host;
+    if (url.SchemeIsHTTPOrHTTPS() || url.SchemeIsWSOrWSS()) {
+      *result = url_host;
+    } else {
+      // If the URL uses an unknown scheme, we should ensure the host has been
+      // canonicalized.
+      url::CanonHostInfo ignored;
+      *result = CanonicalizeHost(url_host, &ignored);
+    }
+    // TODO(crbug.com/40271909): Once empty label support is implemented we can
+    // CHECK our assumptions here. For now, we DCHECK as DUMP_WILL_BE_CHECK is
+    // generating too many crash reports and already know why this is failing.
     DCHECK(DomainIsHostOnly(*result));
     return true;
   }
@@ -351,9 +410,12 @@ bool GetCookieDomainWithString(const GURL& url,
   const std::string url_domain_and_registry(
       GetEffectiveDomain(url_scheme, url_host));
   if (url_domain_and_registry.empty()) {
-    // We match IE/Firefox by treating an exact match between the domain
-    // attribute and the request host to be treated as a host cookie.
-    if (url_host == domain_string) {
+    // We match IE/Firefox by treating an exact match between the normalized
+    // domain attribute and the request host to be treated as a host cookie.
+    std::string normalized_domain_string = base::ToLowerASCII(
+        domain_string[0] == '.' ? domain_string.substr(1) : domain_string);
+
+    if (url_host == normalized_domain_string) {
       *result = url_host;
       DCHECK(DomainIsHostOnly(*result));
       return true;
@@ -422,7 +484,8 @@ base::Time ParseCookieExpirationTime(const std::string& time_string) {
       if (!found_month) {
         for (size_t i = 0; i < std::size(kMonths); ++i) {
           // Match prefix, so we could match January, etc
-          if (base::StartsWith(token, base::StringPiece(kMonths[i], 3),
+          if (base::StartsWith(token,
+                               UNSAFE_TODO(std::string_view(kMonths[i], 3)),
                                base::CompareCase::INSENSITIVE_ASCII)) {
             exploded.month = static_cast<int>(i) + 1;
             found_month = true;
@@ -497,6 +560,32 @@ base::Time ParseCookieExpirationTime(const std::string& time_string) {
   // NOTREACHED() << "Cookie exploded expiration failed: " << time_string;
 
   return base::Time();
+}
+
+std::string CanonPathWithString(const GURL& url,
+                                const std::string& path_string) {
+  // The path was supplied in the cookie, we'll take it.
+  if (!path_string.empty() && path_string[0] == '/') {
+    return path_string;
+  }
+
+  // The path was not supplied in the cookie or invalid, we will default
+  // to the current URL path.
+  // """Defaults to the path of the request URL that generated the
+  //    Set-Cookie response, up to, but not including, the
+  //    right-most /."""
+  // How would this work for a cookie on /?  We will include it then.
+  const std::string& url_path = url.path();
+
+  size_t idx = url_path.find_last_of('/');
+
+  // The cookie path was invalid or a single '/'.
+  if (idx == 0 || idx == std::string::npos) {
+    return std::string("/");
+  }
+
+  // Return up to the rightmost '/'.
+  return url_path.substr(0, idx);
 }
 
 GURL CookieDomainAndPathToURL(const std::string& domain,
@@ -575,6 +664,104 @@ bool IsDomainMatch(const std::string& domain, const std::string& host) {
                        domain) == 0);
 }
 
+bool IsOnPath(const std::string& cookie_path, const std::string& url_path) {
+  // A zero length would be unsafe for our trailing '/' checks, and
+  // would also make no sense for our prefix match.  The code that
+  // creates a CanonicalCookie should make sure the path is never zero length,
+  // but we double check anyway.
+  if (cookie_path.empty()) {
+    return false;
+  }
+
+  // The Mozilla code broke this into three cases, based on if the cookie path
+  // was longer, the same length, or shorter than the length of the url path.
+  // I think the approach below is simpler.
+
+  // Make sure the cookie path is a prefix of the url path.  If the url path is
+  // shorter than the cookie path, then the cookie path can't be a prefix.
+  if (!url_path.starts_with(cookie_path)) {
+    return false;
+  }
+
+  // |url_path| is >= |cookie_path|, and |cookie_path| is a prefix of
+  // |url_path|.  If they are the are the same length then they are identical,
+  // otherwise need an additional check:
+
+  // In order to avoid in correctly matching a cookie path of /blah
+  // with a request path of '/blahblah/', we need to make sure that either
+  // the cookie path ends in a trailing '/', or that we prefix up to a '/'
+  // in the url path.  Since we know that the url path length is greater
+  // than the cookie path length, it's safe to index one byte past.
+  if (cookie_path.length() != url_path.length() && cookie_path.back() != '/' &&
+      url_path[cookie_path.length()] != '/') {
+    return false;
+  }
+
+  return true;
+}
+
+CookiePrefix GetCookiePrefix(const std::string& name) {
+  const char kSecurePrefix[] = "__Secure-";
+  const char kHostPrefix[] = "__Host-";
+
+  if (base::StartsWith(name, kSecurePrefix,
+                       base::CompareCase::INSENSITIVE_ASCII)) {
+    return COOKIE_PREFIX_SECURE;
+  }
+  if (base::StartsWith(name, kHostPrefix,
+                       base::CompareCase::INSENSITIVE_ASCII)) {
+    return COOKIE_PREFIX_HOST;
+  }
+  return COOKIE_PREFIX_NONE;
+}
+
+bool IsCookiePrefixValid(CookiePrefix prefix,
+                         const GURL& url,
+                         const ParsedCookie& parsed_cookie) {
+  return IsCookiePrefixValid(
+      prefix, url, parsed_cookie.IsSecure(),
+      parsed_cookie.HasDomain() ? parsed_cookie.Domain() : "",
+      parsed_cookie.HasPath() ? parsed_cookie.Path() : "");
+}
+
+bool IsCookiePrefixValid(CookiePrefix prefix,
+                         const GURL& url,
+                         bool secure,
+                         const std::string& domain,
+                         const std::string& path) {
+  if (prefix == COOKIE_PREFIX_SECURE) {
+    return secure && url.SchemeIsCryptographic();
+  }
+  if (prefix == COOKIE_PREFIX_HOST) {
+    return HasValidHostPrefixAttributes(url, secure, domain, path);
+  }
+  return true;
+}
+
+bool IsCookiePartitionedValid(const GURL& url,
+                              const ParsedCookie& parsed_cookie,
+                              bool partition_has_nonce) {
+  return IsCookiePartitionedValid(
+      url, /*secure=*/parsed_cookie.IsSecure(),
+      /*is_partitioned=*/parsed_cookie.IsPartitioned(), partition_has_nonce);
+}
+
+bool IsCookiePartitionedValid(const GURL& url,
+                              bool secure,
+                              bool is_partitioned,
+                              bool partition_has_nonce) {
+  if (!is_partitioned) {
+    return true;
+  }
+  if (partition_has_nonce) {
+    return true;
+  }
+  CookieAccessScheme scheme = cookie_util::ProvisionalAccessScheme(url);
+  bool result = (scheme != CookieAccessScheme::kNonCryptographic) && secure;
+  DLOG_IF(WARNING, !result) << "Cookie has invalid Partitioned attribute";
+  return result;
+}
+
 void ParseRequestCookieLine(const std::string& header_value,
                             ParsedRequestCookies* parsed_cookies) {
   std::string::const_iterator i = header_value.begin();
@@ -591,7 +778,7 @@ void ParseRequestCookieLine(const std::string& header_value,
     auto cookie_name = base::MakeStringPiece(cookie_name_beginning, i);
 
     // Find cookie value.
-    base::StringPiece cookie_value;
+    std::string_view cookie_value;
     // Cookies may have no value, in this case '=' may or may not be there.
     if (i != header_value.end() && i + 1 != header_value.end()) {
       ++i;  // Skip '='.
@@ -633,7 +820,7 @@ CookieOptions::SameSiteCookieContext ComputeSameSiteContextForRequest(
     const std::string& http_method,
     const std::vector<GURL>& url_chain,
     const SiteForCookies& site_for_cookies,
-    const absl::optional<url::Origin>& initiator,
+    const std::optional<url::Origin>& initiator,
     bool is_main_frame_navigation,
     bool force_ignore_site_for_cookies) {
   // Set SameSiteCookieContext according to the rules laid out in
@@ -681,13 +868,26 @@ CookieOptions::SameSiteCookieContext ComputeSameSiteContextForRequest(
       schemeful_result.context_type = ContextType::SAME_SITE_LAX_METHOD_UNSAFE;
   }
 
+  ContextMetadata::HttpMethod http_method_enum =
+      HttpMethodStringToEnum(http_method);
+
+  if (result.metadata.cross_site_redirect_downgrade !=
+      ContextMetadata::ContextDowngradeType::kNoDowngrade) {
+    result.metadata.http_method_bug_1221316 = http_method_enum;
+  }
+
+  if (schemeful_result.metadata.cross_site_redirect_downgrade !=
+      ContextMetadata::ContextDowngradeType::kNoDowngrade) {
+    schemeful_result.metadata.http_method_bug_1221316 = http_method_enum;
+  }
+
   return MakeSameSiteCookieContext(result, schemeful_result);
 }
 
 NET_EXPORT CookieOptions::SameSiteCookieContext
 ComputeSameSiteContextForScriptGet(const GURL& url,
                                    const SiteForCookies& site_for_cookies,
-                                   const absl::optional<url::Origin>& initiator,
+                                   const std::optional<url::Origin>& initiator,
                                    bool force_ignore_site_for_cookies) {
   if (force_ignore_site_for_cookies)
     return CookieOptions::SameSiteCookieContext::MakeInclusive();
@@ -707,7 +907,7 @@ ComputeSameSiteContextForScriptGet(const GURL& url,
 CookieOptions::SameSiteCookieContext ComputeSameSiteContextForResponse(
     const std::vector<GURL>& url_chain,
     const SiteForCookies& site_for_cookies,
-    const absl::optional<url::Origin>& initiator,
+    const std::optional<url::Origin>& initiator,
     bool is_main_frame_navigation,
     bool force_ignore_site_for_cookies) {
   if (force_ignore_site_for_cookies)
@@ -772,7 +972,7 @@ CookieOptions::SameSiteCookieContext ComputeSameSiteContextForScriptSet(
   // with the url. We don't check the redirect chain for script access to
   // cookies (only the URL itself).
   return ComputeSameSiteContextForSet(
-      {url}, site_for_cookies, absl::nullopt /* initiator */,
+      {url}, site_for_cookies, std::nullopt /* initiator */,
       false /* is_http */, false /* is_main_frame_navigation */);
 }
 
@@ -801,55 +1001,80 @@ CookieOptions::SameSiteCookieContext ComputeSameSiteContextForSubresource(
   return CookieOptions::SameSiteCookieContext::MakeInclusive();
 }
 
+bool IsPortBoundCookiesEnabled() {
+  return base::FeatureList::IsEnabled(features::kEnablePortBoundCookies);
+}
+
+bool IsSchemeBoundCookiesEnabled() {
+  return base::FeatureList::IsEnabled(features::kEnableSchemeBoundCookies);
+}
+
+bool IsSchemeBoundCookiesBehaviorActive(CookieScopeSemantics scope_semantics) {
+  return scope_semantics != CookieScopeSemantics::LEGACY &&
+         IsSchemeBoundCookiesEnabled();
+}
+
+bool IsOriginBoundCookiesPartiallyEnabled() {
+  return IsPortBoundCookiesEnabled() || IsSchemeBoundCookiesEnabled();
+}
+
+bool IsTimeLimitedInsecureCookiesEnabled() {
+  return IsSchemeBoundCookiesEnabled() &&
+         base::FeatureList::IsEnabled(features::kTimeLimitedInsecureCookies);
+}
+
 bool IsSchemefulSameSiteEnabled() {
   return base::FeatureList::IsEnabled(features::kSchemefulSameSite);
 }
 
-absl::optional<FirstPartySetMetadata> ComputeFirstPartySetMetadataMaybeAsync(
+std::optional<
+    std::pair<FirstPartySetMetadata, FirstPartySetsCacheFilter::MatchInfo>>
+ComputeFirstPartySetMetadataMaybeAsync(
     const SchemefulSite& request_site,
     const IsolationInfo& isolation_info,
     const CookieAccessDelegate* cookie_access_delegate,
-    bool force_ignore_top_frame_party,
-    base::OnceCallback<void(FirstPartySetMetadata)> callback) {
-  if (!isolation_info.IsEmpty() && isolation_info.party_context().has_value() &&
-      cookie_access_delegate) {
+    base::OnceCallback<void(FirstPartySetMetadata,
+                            FirstPartySetsCacheFilter::MatchInfo)> callback) {
+  if (cookie_access_delegate) {
     return cookie_access_delegate->ComputeFirstPartySetMetadataMaybeAsync(
         request_site,
-        force_ignore_top_frame_party
-            ? nullptr
-            : base::OptionalOrNullptr(
-                  isolation_info.network_isolation_key().GetTopFrameSite()),
-        isolation_info.party_context().value(), std::move(callback));
+        base::OptionalToPtr(
+            isolation_info.network_isolation_key().GetTopFrameSite()),
+        std::move(callback));
   }
 
-  return FirstPartySetMetadata();
+  return std::pair(FirstPartySetMetadata(),
+                   FirstPartySetsCacheFilter::MatchInfo());
 }
 
-CookieSamePartyStatus GetSamePartyStatus(const CanonicalCookie& cookie,
-                                         const CookieOptions& options,
-                                         const bool first_party_sets_enabled) {
-  if (!first_party_sets_enabled || !cookie.IsSameParty() ||
-      !options.is_in_nontrivial_first_party_set()) {
-    return CookieSamePartyStatus::kNoSamePartyEnforcement;
-  }
+CookieOptions::SameSiteCookieContext::ContextMetadata::HttpMethod
+HttpMethodStringToEnum(const std::string& in) {
+  using HttpMethod =
+      CookieOptions::SameSiteCookieContext::ContextMetadata::HttpMethod;
+  if (in == "GET")
+    return HttpMethod::kGet;
+  if (in == "HEAD")
+    return HttpMethod::kHead;
+  if (in == "POST")
+    return HttpMethod::kPost;
+  if (in == "PUT")
+    return HttpMethod::KPut;
+  if (in == "DELETE")
+    return HttpMethod::kDelete;
+  if (in == "CONNECT")
+    return HttpMethod::kConnect;
+  if (in == "OPTIONS")
+    return HttpMethod::kOptions;
+  if (in == "TRACE")
+    return HttpMethod::kTrace;
+  if (in == "PATCH")
+    return HttpMethod::kPatch;
 
-  switch (options.same_party_context().context_type()) {
-    case SamePartyContext::Type::kCrossParty:
-      return CookieSamePartyStatus::kEnforceSamePartyExclude;
-    case SamePartyContext::Type::kSameParty:
-      return CookieSamePartyStatus::kEnforceSamePartyInclude;
-  };
+  return HttpMethod::kUnknown;
 }
 
-base::OnceCallback<void(CookieAccessResult)> AdaptCookieAccessResultToBool(
-    base::OnceCallback<void(bool)> callback) {
-  return base::BindOnce(
-      [](base::OnceCallback<void(bool)> inner_callback,
-         const CookieAccessResult access_result) {
-        bool success = access_result.status.IsInclude();
-        std::move(inner_callback).Run(success);
-      },
-      std::move(callback));
+bool IsCookieAccessResultInclude(CookieAccessResult cookie_access_result) {
+  return cookie_access_result.status.IsInclude();
 }
 
 CookieList StripAccessResults(
@@ -894,6 +1119,50 @@ NET_EXPORT void DCheckIncludedAndExcludedCookieLists(
   // Check that the included cookies are still in the correct order.
   DCHECK(
       base::ranges::is_sorted(included_cookies, CookieWithAccessResultSorter));
+}
+
+NET_EXPORT bool IsForceThirdPartyCookieBlockingEnabled() {
+  return base::FeatureList::IsEnabled(
+             features::kForceThirdPartyCookieBlocking) &&
+         base::FeatureList::IsEnabled(features::kThirdPartyStoragePartitioning);
+}
+
+bool PartitionedCookiesDisabledByCommandLine() {
+  const base::CommandLine* command_line =
+      base::CommandLine::ForCurrentProcess();
+  if (!command_line) {
+    return false;
+  }
+  return command_line->HasSwitch(kDisablePartitionedCookiesSwitch);
+}
+
+bool ShouldAddInitialStorageAccessApiOverride(
+    const GURL& url,
+    StorageAccessApiStatus api_status,
+    base::optional_ref<const url::Origin> request_initiator,
+    bool emit_metrics) {
+  if (api_status != StorageAccessApiStatus::kAccessViaAPI ||
+      !request_initiator) {
+    return false;
+  }
+
+  using enum StorageAccessNetRequestKind;
+  StorageAccessNetRequestKind kind = kCrossSite;
+  if (request_initiator->IsSameOriginWith(url)) {
+    kind = kSameOrigin;
+  } else {
+    SchemefulSite request_site(url.SchemeIsHTTPOrHTTPS()
+                                   ? url
+                                   : ChangeWebSocketSchemeToHttpScheme(url));
+    if (SchemefulSite(request_initiator.value()) == request_site) {
+      kind = kCrossOriginSameSite;
+    }
+  }
+  if (emit_metrics) {
+    RecordStorageAccessNetRequestMetric(kind);
+  }
+
+  return kind != kCrossSite;
 }
 
 }  // namespace net::cookie_util

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,10 +17,10 @@
 #include <ios>
 #include <limits>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/debug/activity_tracker.h"
+#include "base/debug/alias.h"
 #include "base/debug/stack_trace.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/metrics/histogram.h"
 #include "base/process/environment_internal.h"
@@ -40,7 +40,7 @@ namespace base {
 
 namespace {
 
-bool GetAppOutputInternal(CommandLine::StringPieceType cl,
+bool GetAppOutputInternal(CommandLine::StringViewType cl,
                           bool include_stderr,
                           std::string* output,
                           int* exit_code) {
@@ -57,7 +57,7 @@ bool GetAppOutputInternal(CommandLine::StringPieceType cl,
 
   // Create the pipe for the child process's STDOUT.
   if (!CreatePipe(&out_read, &out_write, &sa_attr, 0)) {
-    NOTREACHED() << "Failed to create pipe";
+    DPLOG(ERROR) << "Failed to create pipe";
     return false;
   }
 
@@ -67,7 +67,7 @@ bool GetAppOutputInternal(CommandLine::StringPieceType cl,
 
   // Ensure the read handles to the pipes are not inherited.
   if (!SetHandleInformation(out_read, HANDLE_FLAG_INHERIT, 0)) {
-    NOTREACHED() << "Failed to disabled pipe inheritance";
+    DPLOG(ERROR) << "Failed to disabled pipe inheritance";
     return false;
   }
 
@@ -92,15 +92,11 @@ bool GetAppOutputInternal(CommandLine::StringPieceType cl,
                      nullptr,
                      TRUE,  // Handles are inherited.
                      0, nullptr, nullptr, &start_info, &temp_process_info)) {
-    NOTREACHED() << "Failed to start process";
+    DPLOG(ERROR) << "Failed to start process";
     return false;
   }
 
   win::ScopedProcessInformation proc_info(temp_process_info);
-  debug::GlobalActivityTracker* tracker = debug::GlobalActivityTracker::Get();
-  if (tracker)
-    tracker->RecordProcessLaunch(proc_info.process_id(),
-                                 CommandLine::StringType(cl));
 
   // Close our writing end of pipe now. Otherwise later read would not be able
   // to detect end of child's output.
@@ -114,8 +110,9 @@ bool GetAppOutputInternal(CommandLine::StringPieceType cl,
     DWORD bytes_read = 0;
     BOOL success =
         ::ReadFile(out_read, buffer, kBufferSize, &bytes_read, nullptr);
-    if (!success || bytes_read == 0)
+    if (!success || bytes_read == 0) {
       break;
+    }
     output->append(buffer, bytes_read);
   }
 
@@ -131,8 +128,6 @@ bool GetAppOutputInternal(CommandLine::StringPieceType cl,
 
   TerminationStatus status =
       GetTerminationStatus(proc_info.process_handle(), exit_code);
-  debug::GlobalActivityTracker::RecordProcessExitIfEnabled(
-      proc_info.process_id(), *exit_code);
   return status != TERMINATION_STATUS_PROCESS_CRASHED &&
          status != TERMINATION_STATUS_ABNORMAL_TERMINATION;
 }
@@ -165,8 +160,6 @@ Process LaunchElevatedProcess(const CommandLine& cmdline,
     WaitForSingleObject(shex_info.hProcess, INFINITE);
   }
 
-  debug::GlobalActivityTracker::RecordProcessLaunchIfEnabled(
-      GetProcessId(shex_info.hProcess), file, arguments);
   return Process(shex_info.hProcess);
 }
 
@@ -195,19 +188,22 @@ void RouteStdioToConsole(bool create_console_if_not_found) {
 
     intptr_t stdout_handle = _get_osfhandle(_fileno(stdout));
     intptr_t stderr_handle = _get_osfhandle(_fileno(stderr));
-    if (stdout_handle >= 0 || stderr_handle >= 0)
+    if (stdout_handle >= 0 || stderr_handle >= 0) {
       return;
+    }
   }
 
   if (!AttachConsole(ATTACH_PARENT_PROCESS)) {
     unsigned int result = GetLastError();
     // Was probably already attached.
-    if (result == ERROR_ACCESS_DENIED)
+    if (result == ERROR_ACCESS_DENIED) {
       return;
+    }
     // Don't bother creating a new console for each child process if the
     // parent process is invalid (eg: crashed).
-    if (result == ERROR_GEN_FAILURE)
+    if (result == ERROR_GEN_FAILURE) {
       return;
+    }
     if (create_console_if_not_found) {
       // Make a new console if attaching to parent fails with any other error.
       // It should be ERROR_INVALID_HANDLE at this point, which means the
@@ -243,13 +239,18 @@ void RouteStdioToConsole(bool create_console_if_not_found) {
 
 Process LaunchProcess(const CommandLine& cmdline,
                       const LaunchOptions& options) {
-  if (options.elevated)
+  if (options.elevated) {
     return LaunchElevatedProcess(cmdline, options.start_hidden, options.wait);
+  }
   return LaunchProcess(cmdline.GetCommandLineString(), options);
 }
 
 Process LaunchProcess(const CommandLine::StringType& cmdline,
                       const LaunchOptions& options) {
+  // Retain the command line on the stack for investigating shutdown hangs
+  // tracked in https://crbug.com/1431378
+  DEBUG_ALIAS_FOR_WCHARCSTR(cmdline_for_debugging, cmdline.c_str(), 200);
+
   if (options.elevated) {
     return LaunchElevatedProcess(base::CommandLine::FromString(cmdline),
                                  options.start_hidden, options.wait);
@@ -274,8 +275,9 @@ Process LaunchProcess(const CommandLine::StringType& cmdline,
   }
 
   // Count PROC_THREAD_ATTRIBUTE_HANDLE_LIST.
-  if (!options.handles_to_inherit.empty())
+  if (!options.handles_to_inherit.empty()) {
     ++attribute_count;
+  }
 
   // Reserve space for attributes.
   if (attribute_count > 0) {
@@ -331,35 +333,33 @@ Process LaunchProcess(const CommandLine::StringType& cmdline,
     inherit_handles = true;
   }
 
-  if (options.feedback_cursor_off)
+  if (options.feedback_cursor_off) {
     startup_info->dwFlags |= STARTF_FORCEOFFFEEDBACK;
-  if (options.empty_desktop_name)
+  }
+  if (options.empty_desktop_name) {
     startup_info->lpDesktop = const_cast<wchar_t*>(L"");
+  }
   startup_info->dwFlags |= STARTF_USESHOWWINDOW;
   startup_info->wShowWindow = options.start_hidden ? SW_HIDE : SW_SHOWNORMAL;
 
   if (options.stdin_handle || options.stdout_handle || options.stderr_handle) {
     DCHECK(inherit_handles);
-    DCHECK(options.stdin_handle);
-    DCHECK(options.stdout_handle);
-    DCHECK(options.stderr_handle);
+    // If an explicit handle inheritance list is not set, require that all
+    // stdio handle values be explicitly specified.
+    if (options.handles_to_inherit.empty()) {
+      CHECK(options.stdin_handle);
+      CHECK(options.stdout_handle);
+      CHECK(options.stderr_handle);
+    }
     startup_info->dwFlags |= STARTF_USESTDHANDLES;
     startup_info->hStdInput = options.stdin_handle;
     startup_info->hStdOutput = options.stdout_handle;
     startup_info->hStdError = options.stderr_handle;
   }
 
-  if (options.job_handle) {
-    // If this code is run under a debugger, the launched process is
-    // automatically associated with a job object created by the debugger.
-    // The CREATE_BREAKAWAY_FROM_JOB flag is used to prevent this on Windows
-    // releases that do not support nested jobs.
-    if (win::GetVersion() < win::Version::WIN8)
-      flags |= CREATE_BREAKAWAY_FROM_JOB;
-  }
-
-  if (options.force_breakaway_from_job_)
+  if (options.force_breakaway_from_job_) {
     flags |= CREATE_BREAKAWAY_FROM_JOB;
+  }
 
   PROCESS_INFORMATION temp_process_info = {};
 
@@ -445,19 +445,15 @@ Process LaunchProcess(const CommandLine::StringType& cmdline,
     WaitForSingleObject(process_info.process_handle(), INFINITE);
   }
 
-  debug::GlobalActivityTracker::RecordProcessLaunchIfEnabled(
-      process_info.process_id(), cmdline);
   return Process(process_info.TakeProcessHandle());
 }
 
 bool SetJobObjectLimitFlags(HANDLE job_object, DWORD limit_flags) {
   JOBOBJECT_EXTENDED_LIMIT_INFORMATION limit_info = {};
   limit_info.BasicLimitInformation.LimitFlags = limit_flags;
-  return 0 != SetInformationJobObject(
-      job_object,
-      JobObjectExtendedLimitInformation,
-      &limit_info,
-      sizeof(limit_info));
+  return 0 != SetInformationJobObject(job_object,
+                                      JobObjectExtendedLimitInformation,
+                                      &limit_info, sizeof(limit_info));
 }
 
 bool GetAppOutput(const CommandLine& cl, std::string* output) {
@@ -466,18 +462,18 @@ bool GetAppOutput(const CommandLine& cl, std::string* output) {
 
 bool GetAppOutputAndError(const CommandLine& cl, std::string* output) {
   int exit_code;
-  return GetAppOutputInternal(
-      cl.GetCommandLineString(), true, output, &exit_code);
+  return GetAppOutputInternal(cl.GetCommandLineString(), true, output,
+                              &exit_code);
 }
 
 bool GetAppOutputWithExitCode(const CommandLine& cl,
                               std::string* output,
                               int* exit_code) {
-  return GetAppOutputInternal(
-      cl.GetCommandLineString(), false, output, exit_code);
+  return GetAppOutputInternal(cl.GetCommandLineString(), false, output,
+                              exit_code);
 }
 
-bool GetAppOutput(CommandLine::StringPieceType cl, std::string* output) {
+bool GetAppOutput(CommandLine::StringViewType cl, std::string* output) {
   int exit_code;
   return GetAppOutputInternal(cl, false, output, &exit_code);
 }

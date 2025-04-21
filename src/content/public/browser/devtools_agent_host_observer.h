@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,6 +27,9 @@ class CONTENT_EXPORT DevToolsAgentHostObserver {
 
   // Called when DevToolsAgentHost was created and is ready to be used.
   virtual void DevToolsAgentHostNavigated(DevToolsAgentHost* agent_host);
+
+  // Called when a process associated with inspected target has changed.
+  virtual void DevToolsAgentHostProcessChanged(DevToolsAgentHost* agent_host);
 
   // Called when client has attached to DevToolsAgentHost.
   virtual void DevToolsAgentHostAttached(DevToolsAgentHost* agent_host);

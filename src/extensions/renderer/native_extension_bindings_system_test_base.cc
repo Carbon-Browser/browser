@@ -1,15 +1,17 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/renderer/native_extension_bindings_system_test_base.h"
 
+#include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "content/public/test/mock_render_thread.h"
-#include "extensions/common/extension_messages.h"
 #include "extensions/common/manifest.h"
+#include "extensions/common/mojom/context_type.mojom.h"
 #include "extensions/common/mojom/frame.mojom.h"
 #include "extensions/common/permissions/permissions_data.h"
+#include "extensions/common/utils/extension_utils.h"
 #include "extensions/renderer/module_system.h"
 #include "extensions/renderer/native_extension_bindings_system.h"
 #include "extensions/renderer/script_context.h"
@@ -19,8 +21,8 @@
 
 namespace extensions {
 
-TestIPCMessageSender::TestIPCMessageSender() {}
-TestIPCMessageSender::~TestIPCMessageSender() {}
+TestIPCMessageSender::TestIPCMessageSender() = default;
+TestIPCMessageSender::~TestIPCMessageSender() = default;
 void TestIPCMessageSender::SendRequestIPC(ScriptContext* context,
                                           mojom::RequestParamsPtr params) {
   last_params_ = std::move(params);
@@ -49,7 +51,9 @@ void NativeExtensionBindingsSystemUnittest::SetUp() {
   }
   ipc_message_sender_ = message_sender.get();
   bindings_system_ = std::make_unique<NativeExtensionBindingsSystem>(
-      std::move(message_sender));
+      this, std::move(message_sender));
+  api_provider_.AddBindingsSystemHooks(/*dispatcher=*/nullptr,
+                                       bindings_system_.get());
   APIBindingTest::SetUp();
 }
 
@@ -73,9 +77,11 @@ void NativeExtensionBindingsSystemUnittest::TearDown() {
 ScriptContext* NativeExtensionBindingsSystemUnittest::CreateScriptContext(
     v8::Local<v8::Context> v8_context,
     const Extension* extension,
-    Feature::Context context_type) {
+    mojom::ContextType context_type) {
   auto script_context = std::make_unique<ScriptContext>(
-      v8_context, nullptr, extension, context_type, extension, context_type);
+      v8_context, nullptr, GenerateHostIdFromExtension(extension), extension,
+      /*blink_isolated_world_id=*/std::nullopt, context_type, extension,
+      context_type);
   script_context->SetModuleSystem(
       std::make_unique<ModuleSystem>(script_context.get(), source_map()));
   ScriptContext* raw_script_context = script_context.get();
@@ -87,11 +93,8 @@ ScriptContext* NativeExtensionBindingsSystemUnittest::CreateScriptContext(
 
 void NativeExtensionBindingsSystemUnittest::OnWillDisposeContext(
     v8::Local<v8::Context> context) {
-  auto iter =
-      std::find_if(raw_script_contexts_.begin(), raw_script_contexts_.end(),
-                   [context](ScriptContext* script_context) {
-                     return script_context->v8_context() == context;
-                   });
+  auto iter = base::ranges::find(raw_script_contexts_, context,
+                                 &ScriptContext::v8_context);
   if (iter == raw_script_contexts_.end()) {
     ASSERT_TRUE(allow_unregistered_contexts_);
     return;
@@ -116,6 +119,11 @@ void NativeExtensionBindingsSystemUnittest::RegisterExtension(
 
 bool NativeExtensionBindingsSystemUnittest::UseStrictIPCMessageSender() {
   return false;
+}
+
+ScriptContextSetIterable*
+NativeExtensionBindingsSystemUnittest::GetScriptContextSet() {
+  return script_context_set_.get();
 }
 
 }  // namespace extensions

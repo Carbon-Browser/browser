@@ -46,8 +46,8 @@ ChromeDriver and the browser:
 * `ChromeImpl::web_views_` is a list of `WebView` objects,
   one for each tab active in the browser.
   These objects are used for sending commands that apply to a specific tab.
-  `Chrome::GetWebViewById` allows retrieving a `WebView` by its ID.
-  (There are additional `WebView` instances that represent frames,
+  `Chrome::GetWebViewById` allows retrieving a `WebView` (tab or page) by
+  its ID. (There are additional `WebView` instances that represent frames,
   but `ChromeImpl` is not aware of them.)
 
 ## `DevToolsClient` and `WebView`
@@ -90,7 +90,7 @@ Note that in most case, each instance of `DevToolsClient` is wrapped by a
 `WebView`. The browser-wide `DevToolsClient` is the only instance not wrapped.
 
 From the point of view of the client application, each browser tab or window is
-represented by a window handle, a string formed by concatenation `"CDwindow-"`
-with the ID of the `DevToolsClient` and `WebView` representing the tab/window.
-Each session has a tab that is currently active. The `WebView` connected to that
-tab can be retrieved with `Session::GetTargetWindow`.
+represented by a window handle, the `DevToolsClient`, and `WebView`
+representing the tab/window. Each session has a tab that is currently active.
+The `WebView` connected to that tab can be retrieved with
+`Session::GetTargetWindow`.

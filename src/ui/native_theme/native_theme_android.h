@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,20 +28,32 @@ class NativeThemeAndroid : public NativeThemeBase {
 
   // NativeThemeBase:
   void AdjustCheckboxRadioRectForPadding(SkRect* rect) const override;
-  // TODO(crbug.com/1165342): Refine hover state behavior on available pointing
+  // TODO(crbug.com/40741411): Refine hover state behavior on available pointing
   // devices.
-  SkColor ControlsAccentColorForState(State state,
-                                      ColorScheme color_scheme) const override;
-  SkColor ControlsSliderColorForState(State state,
-                                      ColorScheme color_scheme) const override;
-  SkColor ButtonBorderColorForState(State state,
-                                    ColorScheme color_scheme) const override;
-  SkColor ButtonFillColorForState(State state,
-                                  ColorScheme color_scheme) const override;
-  SkColor ControlsBorderColorForState(State state,
-                                      ColorScheme color_scheme) const override;
-  SkColor ControlsFillColorForState(State state,
-                                    ColorScheme color_scheme) const override;
+  SkColor ControlsAccentColorForState(
+      State state,
+      ColorScheme color_scheme,
+      const ColorProvider* color_provider) const override;
+  SkColor ControlsSliderColorForState(
+      State state,
+      ColorScheme color_scheme,
+      const ColorProvider* color_provider) const override;
+  SkColor ButtonBorderColorForState(
+      State state,
+      ColorScheme color_scheme,
+      const ColorProvider* color_provider) const override;
+  SkColor ButtonFillColorForState(
+      State state,
+      ColorScheme color_scheme,
+      const ColorProvider* color_provider) const override;
+  SkColor ControlsBorderColorForState(
+      State state,
+      ColorScheme color_scheme,
+      const ColorProvider* color_provider) const override;
+  SkColor ControlsFillColorForState(
+      State state,
+      ColorScheme color_scheme,
+      const ColorProvider* color_provider) const override;
 
  private:
   NativeThemeAndroid();

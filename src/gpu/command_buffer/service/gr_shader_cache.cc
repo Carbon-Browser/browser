@@ -1,6 +1,11 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "gpu/command_buffer/service/gr_shader_cache.h"
 
@@ -8,14 +13,16 @@
 
 #include "base/auto_reset.h"
 #include "base/base64.h"
-#include "base/callback_helpers.h"
+#include "base/feature_list.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/trace_event.h"
+#include "build/build_config.h"
 #include "gpu/config/gpu_finch_features.h"
-#include "third_party/skia/include/gpu/GrDirectContext.h"
+#include "third_party/skia/include/gpu/ganesh/GrDirectContext.h"
 
 namespace gpu {
 namespace raster {
@@ -29,23 +36,6 @@ sk_sp<SkData> MakeData(const std::string& str) {
   return SkData::MakeWithCopy(str.c_str(), str.length());
 }
 
-enum class VkPipelinePopulatedCacheEntryUsage {
-  // These values are persisted to logs. Entries should not be renumbered and
-  // numeric values should never be reused.
-  kUsed = 0,
-  kOverwritten = 1,
-  kDiscardedTooLarge = 2,
-  kDiscardedHaveNewer = 3,
-  kEvicted = 4,
-  kMaxValue = kEvicted
-};
-
-void ReportPipelinePopulatedCacheEntryUsage(
-    VkPipelinePopulatedCacheEntryUsage usage) {
-  UMA_HISTOGRAM_ENUMERATION("GPU.Vulkan.PipelineCache.PopulatedCacheUsage",
-                            usage);
-}
-
 }  // namespace
 
 GrShaderCache::GrShaderCache(size_t max_cache_size_bytes, Client* client)
@@ -54,9 +44,10 @@ GrShaderCache::GrShaderCache(size_t max_cache_size_bytes, Client* client)
       client_(client),
       enable_vk_pipeline_cache_(
           base::FeatureList::IsEnabled(features::kEnableVkPipelineCache)) {
-  if (base::ThreadTaskRunnerHandle::IsSet()) {
+  if (base::SingleThreadTaskRunner::HasCurrentDefault()) {
     base::trace_event::MemoryDumpManager::GetInstance()->RegisterDumpProvider(
-        this, "GrShaderCache", base::ThreadTaskRunnerHandle::Get());
+        this, "GrShaderCache",
+        base::SingleThreadTaskRunner::GetCurrentDefault());
   }
 }
 
@@ -72,16 +63,8 @@ sk_sp<SkData> GrShaderCache::load(const SkData& key) {
 
   CacheKey cache_key(SkData::MakeWithoutCopy(key.data(), key.size()));
   auto it = store_.Get(cache_key);
-
-  if (IsVkPipelineCacheEntry(cache_key)) {
-    UMA_HISTOGRAM_BOOLEAN("GPU.Vulkan.PipelineCache.LoadCacheHit",
-                          it != store_.end());
-    if (it != store_.end() && it->second.prefetched_but_not_read) {
-      // This entry was loaded from the disk and skia used it.
-      ReportPipelinePopulatedCacheEntryUsage(
-          VkPipelinePopulatedCacheEntryUsage::kUsed);
-    }
-  }
+  UMA_HISTOGRAM_BOOLEAN("Gpu.GrShaderCacheLoadHitInCache",
+                        (it != store_.end()));
 
   if (it == store_.end())
     return nullptr;
@@ -108,11 +91,6 @@ void GrShaderCache::store(const SkData& key, const SkData& data) {
   DCHECK_NE(current_client_id(), kInvalidClientId);
 
   CacheKey cache_key(SkData::MakeWithCopy(key.data(), key.size()));
-  if (IsVkPipelineCacheEntry(cache_key)) {
-    auto size_in_kb = data.size() / 1024;
-    UMA_HISTOGRAM_CUSTOM_COUNTS("GPU.Vulkan.PipelineCache.Size", size_in_kb, 32,
-                                10 * 1024, 100);
-  }
 
   if (data.size() > cache_size_limit_)
     return;
@@ -122,7 +100,7 @@ void GrShaderCache::store(const SkData& key, const SkData& data) {
   if (existing_it != store_.end()) {
     // Skia may ignore the cached entry and regenerate a shader if it fails to
     // link, in which case replace the current version with the latest one.
-    EraseFromCache(existing_it, /*overwriting=*/true);
+    EraseFromCache(existing_it);
   }
 
   CacheData cache_data(SkData::MakeWithCopy(data.data(), data.size()));
@@ -146,10 +124,6 @@ void GrShaderCache::PopulateCache(const std::string& key,
   CacheKey cache_key(MakeData(decoded_key));
 
   if (data.length() > cache_size_limit_) {
-    if (IsVkPipelineCacheEntry(cache_key)) {
-      ReportPipelinePopulatedCacheEntryUsage(
-          VkPipelinePopulatedCacheEntryUsage::kDiscardedTooLarge);
-    }
     return;
   }
 
@@ -159,10 +133,6 @@ void GrShaderCache::PopulateCache(const std::string& key,
   // was loaded off the disk cache. Its better to keep the latest version
   // generated version than overwriting it here.
   if (store_.Get(cache_key) != store_.end()) {
-    if (IsVkPipelineCacheEntry(cache_key)) {
-      ReportPipelinePopulatedCacheEntryUsage(
-          VkPipelinePopulatedCacheEntryUsage::kDiscardedHaveNewer);
-    }
     return;
   }
 
@@ -184,16 +154,9 @@ GrShaderCache::Store::iterator GrShaderCache::AddToCache(CacheKey key,
 }
 
 template <typename Iterator>
-void GrShaderCache::EraseFromCache(Iterator it, bool overwriting) {
+void GrShaderCache::EraseFromCache(Iterator it) {
   lock_.AssertAcquired();
   DCHECK_GE(curr_size_bytes_, it->second.data->size());
-
-  if (it->second.prefetched_but_not_read && IsVkPipelineCacheEntry(it->first)) {
-    // We're about to erase populated entry, it won't be used anymore.
-    ReportPipelinePopulatedCacheEntryUsage(
-        overwriting ? VkPipelinePopulatedCacheEntryUsage::kOverwritten
-                    : VkPipelinePopulatedCacheEntryUsage::kEvicted);
-  }
 
   curr_size_bytes_ -= it->second.data->size();
   store_.Erase(it);
@@ -213,10 +176,26 @@ void GrShaderCache::PurgeMemory(
     case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_NONE:
       return;
     case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_MODERATE:
-      cache_size_limit_ = cache_size_limit_ / 4;
+      if (base::FeatureList::IsEnabled(
+              ::features::kAggressiveShaderCacheLimits)) {
+        // Ignore moderate memory pressure.
+      } else {
+        cache_size_limit_ = cache_size_limit_ / 4;
+      }
       break;
     case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_CRITICAL:
-      cache_size_limit_ = 0;
+      if (base::FeatureList::IsEnabled(
+              ::features::kAggressiveShaderCacheLimits)) {
+#if BUILDFLAG(IS_ANDROID)
+        // On Android, critical memory pressure notifications are very common,
+        // and not necessarily tied to actual critical memory pressure. Ignore.
+        break;
+#else
+        cache_size_limit_ /= 4;
+#endif
+      } else {
+        cache_size_limit_ = 0;
+      }
       break;
   }
 
@@ -261,8 +240,7 @@ void GrShaderCache::WriteToDisk(const CacheKey& key, CacheData* data) {
 
   data->pending_disk_write = false;
 
-  std::string encoded_key;
-  base::Base64Encode(MakeString(key.data.get()), &encoded_key);
+  std::string encoded_key = base::Base64Encode(MakeString(key.data.get()));
   client_->StoreShader(encoded_key, MakeString(data->data.get()));
 }
 
@@ -271,7 +249,7 @@ void GrShaderCache::EnforceLimits(size_t size_needed) {
   DCHECK_LE(size_needed, cache_size_limit_);
 
   while (size_needed + curr_size_bytes_ > cache_size_limit_)
-    EraseFromCache(store_.rbegin(), /*overwriting=*/false);
+    EraseFromCache(store_.rbegin());
 }
 
 void GrShaderCache::StoreVkPipelineCacheIfNeeded(GrDirectContext* gr_context) {
@@ -289,15 +267,6 @@ void GrShaderCache::StoreVkPipelineCacheIfNeeded(GrDirectContext* gr_context) {
 
   if (enable_vk_pipeline_cache_ && need_store_pipeline_cache) {
     {
-      base::ScopedClosureRunner uma_runner(base::BindOnce(
-          [](base::Time time) {
-            UMA_HISTOGRAM_CUSTOM_MICROSECONDS_TIMES(
-                "GPU.Vulkan.PipelineCache.StoreDuration",
-                base::Time::Now() - time, base::Microseconds(1),
-                base::Microseconds(5000), 50);
-          },
-          base::Time::Now()));
-
       gr_context->storeVkPipelineCacheData();
       {
         base::AutoLock auto_lock(lock_);
@@ -305,13 +274,6 @@ void GrShaderCache::StoreVkPipelineCacheIfNeeded(GrDirectContext* gr_context) {
       }
     }
   }
-}
-
-// This function is used only to facilitate debug metrics, this is not reliable
-// way and it should be removed when the feature is launched and we know how
-// cache is performing.
-bool GrShaderCache::IsVkPipelineCacheEntry(const CacheKey& key) {
-  return key.data->size() == 4;
 }
 
 int32_t GrShaderCache::current_client_id() const {
@@ -337,7 +299,7 @@ GrShaderCache::ScopedCacheUse::~ScopedCacheUse() {
 }
 
 GrShaderCache::CacheKey::CacheKey(sk_sp<SkData> data) : data(std::move(data)) {
-  hash = base::Hash(this->data->data(), this->data->size());
+  hash = base::FastHash(base::span(this->data->bytes(), this->data->size()));
 }
 GrShaderCache::CacheKey::CacheKey(const CacheKey& other) = default;
 GrShaderCache::CacheKey::CacheKey(CacheKey&& other) = default;

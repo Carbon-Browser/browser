@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -69,7 +69,7 @@ if (is_wasm) {
     ]
     ldflags = [
       "-s",
-      "EXPORTED_FUNCTIONS=['_GetMetadata','_LoadSizeFile','_LoadBeforeSizeFile','_BuildTree','_Open','_QueryProperty','_malloc','_free']",
+      "EXPORTED_FUNCTIONS=['_BuildTree','_GetMetadata','_LoadBeforeSizeFile','_LoadSizeFile','_Open','_QueryAncestryById','_QueryProperty','_free','_malloc']",
       "-s",
       "EXPORTED_RUNTIME_METHODS=['ccall','cwrap','UTF8ToString']",
     ]

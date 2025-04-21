@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,12 +56,29 @@ class FileSystemProviderServiceAsh : public mojom::FileSystemProviderService {
                          int64_t request_id,
                          base::Value::List args,
                          OperationFinishedCallback callback) override;
+  void OpenFileFinishedSuccessfully(
+      mojom::FileSystemIdPtr file_system_id,
+      int64_t request_id,
+      base::Value::List args,
+      OperationFinishedCallback callback) override;
+  void MountFinished(const std::string& extension_id,
+                     int64_t request_id,
+                     base::Value::List args,
+                     MountFinishedCallback callback) override;
+  void ExtensionLoadedDeprecated(bool configurable,
+                                 bool watchable,
+                                 bool multiple_mounts,
+                                 mojom::FileSystemSource source,
+                                 const std::string& name,
+                                 const std::string& id) override;
   void ExtensionLoaded(bool configurable,
                        bool watchable,
                        bool multiple_mounts,
                        mojom::FileSystemSource source,
                        const std::string& name,
-                       const std::string& id) override;
+                       const std::string& id,
+                       const gfx::ImageSkia& icon16x16,
+                       const gfx::ImageSkia& icon32x32) override;
   void ExtensionUnloaded(const std::string& id, bool due_to_shutdown) override;
 
   // In order to support multi-login in ash, a legacy feature that is going
@@ -92,6 +109,17 @@ class FileSystemProviderServiceAsh : public mojom::FileSystemProviderService {
                                     base::Value::List args,
                                     OperationFinishedCallback callback,
                                     Profile* profile);
+  void OpenFileFinishedSuccessfullyWithProfile(
+      mojom::FileSystemIdPtr file_system_id,
+      int64_t request_id,
+      base::Value::List args,
+      OperationFinishedCallback callback,
+      Profile* profile);
+  void MountFinishedWithProfile(const std::string& extension_id,
+                                int64_t request_id,
+                                base::Value::List args,
+                                MountFinishedCallback callback,
+                                Profile* profile);
 
   // Exposed so that ash clients can work with Lacros file system providers.
   mojo::RemoteSet<mojom::FileSystemProvider>& remotes() { return remotes_; }

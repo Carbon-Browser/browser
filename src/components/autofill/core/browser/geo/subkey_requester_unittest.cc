@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <utility>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/task_environment.h"
@@ -19,7 +19,6 @@
 #include "third_party/libaddressinput/src/cpp/test/testdata_source.h"
 
 namespace autofill {
-
 namespace {
 
 using ::i18n::addressinput::NullStorage;
@@ -50,7 +49,7 @@ class SubKeyReceiver : public base::RefCountedThreadSafe<SubKeyReceiver> {
 
  private:
   friend class base::RefCountedThreadSafe<SubKeyReceiver>;
-  ~SubKeyReceiver() {}
+  ~SubKeyReceiver() = default;
 
   int subkeys_size_;
 };
@@ -60,14 +59,15 @@ class SubKeyReceiver : public base::RefCountedThreadSafe<SubKeyReceiver> {
 class TestSubKeyRequester : public SubKeyRequester {
  public:
   TestSubKeyRequester(std::unique_ptr<::i18n::addressinput::Source> source,
-                      std::unique_ptr<::i18n::addressinput::Storage> storage)
-      : SubKeyRequester(std::move(source), std::move(storage)),
+                      std::unique_ptr<::i18n::addressinput::Storage> storage,
+                      const std::string& language)
+      : SubKeyRequester(std::move(source), std::move(storage), language),
         should_load_rules_(true) {}
 
   TestSubKeyRequester(const TestSubKeyRequester&) = delete;
   TestSubKeyRequester& operator=(const TestSubKeyRequester&) = delete;
 
-  ~TestSubKeyRequester() override {}
+  ~TestSubKeyRequester() override = default;
 
   void ShouldLoadRules(bool should_load_rules) {
     should_load_rules_ = should_load_rules;
@@ -83,8 +83,6 @@ class TestSubKeyRequester : public SubKeyRequester {
   bool should_load_rules_;
 };
 
-}  // namespace
-
 class SubKeyRequesterTest : public testing::Test {
  public:
   SubKeyRequesterTest(const SubKeyRequesterTest&) = delete;
@@ -93,7 +91,7 @@ class SubKeyRequesterTest : public testing::Test {
  protected:
   SubKeyRequesterTest() {
     base::FilePath file_path;
-    CHECK(base::PathService::Get(base::DIR_SOURCE_ROOT, &file_path));
+    CHECK(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &file_path));
     file_path = file_path.Append(FILE_PATH_LITERAL("third_party"))
                     .Append(FILE_PATH_LITERAL("libaddressinput"))
                     .Append(FILE_PATH_LITERAL("src"))
@@ -103,10 +101,10 @@ class SubKeyRequesterTest : public testing::Test {
     requester_ = std::make_unique<TestSubKeyRequester>(
         std::unique_ptr<Source>(
             new TestdataSource(true, file_path.AsUTF8Unsafe())),
-        std::unique_ptr<Storage>(new NullStorage));
+        std::unique_ptr<Storage>(new NullStorage), kLanguage);
   }
 
-  ~SubKeyRequesterTest() override {}
+  ~SubKeyRequesterTest() override = default;
 
   base::test::TaskEnvironment task_environment_;
   std::unique_ptr<TestSubKeyRequester> requester_;
@@ -136,7 +134,7 @@ TEST_F(SubKeyRequesterTest, StartRequest_RulesLoaded) {
   EXPECT_TRUE(requester_->AreRulesLoadedForRegion(kLocale));
 
   // Start the request.
-  requester_->StartRegionSubKeysRequest(kLocale, kLanguage, 0, std::move(cb));
+  requester_->StartRegionSubKeysRequest(kLocale, 0, std::move(cb));
 
   // Since the rules are already loaded, the subkeys should be received
   // synchronously.
@@ -157,7 +155,7 @@ TEST_F(SubKeyRequesterTest, StartRequest_RulesNotLoaded_WillNotLoad) {
   requester_->ShouldLoadRules(false);
 
   // Start the normalization.
-  requester_->StartRegionSubKeysRequest(kLocale, kLanguage, 0, std::move(cb));
+  requester_->StartRegionSubKeysRequest(kLocale, 0, std::move(cb));
 
   // Let the timeout execute.
   task_environment_.RunUntilIdle();
@@ -179,7 +177,7 @@ TEST_F(SubKeyRequesterTest, StartRequest_RulesNotLoaded_WillLoad) {
   // call.
   requester_->ShouldLoadRules(true);
   // Start the request.
-  requester_->StartRegionSubKeysRequest(kLocale, kLanguage, 0, std::move(cb));
+  requester_->StartRegionSubKeysRequest(kLocale, 0, std::move(cb));
 
   // Even if the rules are not loaded before the call to
   // StartRegionSubKeysRequest, they should get loaded in the call. Since our
@@ -189,4 +187,5 @@ TEST_F(SubKeyRequesterTest, StartRequest_RulesNotLoaded_WillLoad) {
   EXPECT_EQ(subkey_receiver_->subkeys_size(), kExpectedSubkeySize);
 }
 
+}  // namespace
 }  // namespace autofill

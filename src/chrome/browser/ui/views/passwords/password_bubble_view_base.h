@@ -1,27 +1,19 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_VIEWS_PASSWORDS_PASSWORD_BUBBLE_VIEW_BASE_H_
 #define CHROME_BROWSER_UI_VIEWS_PASSWORDS_PASSWORD_BUBBLE_VIEW_BASE_H_
 
-#include <memory>
-
 #include "build/build_config.h"
 #include "chrome/browser/ui/views/location_bar/location_bar_bubble_delegate_view.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 
 namespace content {
 class WebContents;
 }
 
-namespace password_manager {
-struct PasswordForm;
-}  // namespace password_manager
-
-namespace views {
-class Label;
-}
-
+class Browser;
 class PasswordBubbleControllerBase;
 
 // Base class for all manage-passwords bubbles. Provides static methods for
@@ -34,6 +26,8 @@ class PasswordBubbleControllerBase;
 // no longer relevant for checking dialog ownership. These two work items should
 // make this base class significantly smaller.
 class PasswordBubbleViewBase : public LocationBarBubbleDelegateView {
+  METADATA_HEADER(PasswordBubbleViewBase, LocationBarBubbleDelegateView)
+
  public:
   PasswordBubbleViewBase(const PasswordBubbleViewBase&) = delete;
   PasswordBubbleViewBase& operator=(const PasswordBubbleViewBase&) = delete;
@@ -77,11 +71,6 @@ class PasswordBubbleViewBase : public LocationBarBubbleDelegateView {
 
   ~PasswordBubbleViewBase() override;
 
-  static std::unique_ptr<views::Label> CreateUsernameLabel(
-      const password_manager::PasswordForm& form);
-  static std::unique_ptr<views::Label> CreatePasswordLabel(
-      const password_manager::PasswordForm& form);
-
   // Sets the resource ids of the images used in the header in light and dark
   // mode.
   void SetBubbleHeader(int light_image_id, int dark_image_id);
@@ -89,6 +78,8 @@ class PasswordBubbleViewBase : public LocationBarBubbleDelegateView {
  private:
   // views::BubbleDialogDelegateView:
   void Init() override;
+
+  raw_ptr<Browser> browser_ = nullptr;
 
   // Singleton instance of the Password bubble.The instance is owned by the
   // Bubble and will be deleted when the bubble closes.

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,12 +13,12 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/sequence_checker.h"
 #include "base/strings/string_number_conversions.h"
@@ -27,20 +27,16 @@
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "components/device_event_log/device_event_log.h"
 #include "device/udev_linux/scoped_udev.h"
 #include "device/udev_linux/udev_watcher.h"
 #include "services/device/hid/hid_connection_linux.h"
 
-// TODO(huangs): Enable for IS_CHROMEOS_LACROS. This will simplify crosapi so
-// that it won't need to pass HidManager around (crbug.com/1109621).
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 #include "base/system/sys_info.h"
 #include "chromeos/dbus/permission_broker/permission_broker_client.h"  // nogncheck
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 namespace device {
 
@@ -198,7 +194,7 @@ struct HidServiceLinux::ConnectParams {
         allow_protected_reports(allow_protected_reports),
         allow_fido_reports(allow_fido_reports),
         callback(std::move(callback)),
-        task_runner(base::SequencedTaskRunnerHandle::Get()),
+        task_runner(base::SequencedTaskRunner::GetCurrentDefault()),
         blocking_task_runner(
             base::ThreadPool::CreateSequencedTaskRunner(kBlockingTaskTraits)) {}
   ~ConnectParams() {}
@@ -214,10 +210,14 @@ struct HidServiceLinux::ConnectParams {
 
 class HidServiceLinux::BlockingTaskRunnerHelper : public UdevWatcher::Observer {
  public:
-  BlockingTaskRunnerHelper(base::WeakPtr<HidServiceLinux> service)
-      : service_(std::move(service)),
-        task_runner_(base::SequencedTaskRunnerHandle::Get()) {
-    DETACH_FROM_SEQUENCE(sequence_checker_);
+  BlockingTaskRunnerHelper(base::WeakPtr<HidServiceLinux> service,
+                           scoped_refptr<base::SequencedTaskRunner> task_runner)
+      : service_(std::move(service)), task_runner_(std::move(task_runner)) {
+    watcher_ = UdevWatcher::StartWatching(this);
+    watcher_->EnumerateExistingDevices();
+    task_runner_->PostTask(
+        FROM_HERE,
+        base::BindOnce(&HidServiceLinux::FirstEnumerationComplete, service_));
   }
 
   BlockingTaskRunnerHelper(const BlockingTaskRunnerHelper&) = delete;
@@ -225,16 +225,6 @@ class HidServiceLinux::BlockingTaskRunnerHelper : public UdevWatcher::Observer {
 
   ~BlockingTaskRunnerHelper() override {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  }
-
-  void Start() {
-    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-    watcher_ = UdevWatcher::StartWatching(this);
-    watcher_->EnumerateExistingDevices();
-    task_runner_->PostTask(
-        FROM_HERE,
-        base::BindOnce(&HidServiceLinux::FirstEnumerationComplete, service_));
   }
 
  private:
@@ -272,19 +262,19 @@ class HidServiceLinux::BlockingTaskRunnerHelper : public UdevWatcher::Observer {
       return;
 
     uint32_t int_property = 0;
-    if (!HexStringToUInt(base::StringPiece(parts[0]), &int_property) ||
+    if (!base::HexStringToUInt(parts[0], &int_property) ||
         int_property > std::numeric_limits<uint16_t>::max()) {
       return;
     }
     auto bus_type = BusTypeFromLinuxBusId(int_property);
 
-    if (!HexStringToUInt(base::StringPiece(parts[1]), &int_property) ||
+    if (!base::HexStringToUInt(parts[1], &int_property) ||
         int_property > std::numeric_limits<uint16_t>::max()) {
       return;
     }
     uint16_t vendor_id = int_property;
 
-    if (!HexStringToUInt(base::StringPiece(parts[2]), &int_property) ||
+    if (!base::HexStringToUInt(parts[2], &int_property) ||
         int_property > std::numeric_limits<uint16_t>::max()) {
       return;
     }
@@ -351,16 +341,11 @@ class HidServiceLinux::BlockingTaskRunnerHelper : public UdevWatcher::Observer {
   scoped_refptr<base::SequencedTaskRunner> task_runner_;
 };
 
-HidServiceLinux::HidServiceLinux()
-    : blocking_task_runner_(
-          base::ThreadPool::CreateSequencedTaskRunner(kBlockingTaskTraits)),
-      helper_(nullptr, base::OnTaskRunnerDeleter(blocking_task_runner_)) {
-  // We need to properly initialize |blocking_task_helper_| here because we need
-  // |weak_factory_| to be created first.
-  helper_.reset(new BlockingTaskRunnerHelper(weak_factory_.GetWeakPtr()));
-  blocking_task_runner_->PostTask(
-      FROM_HERE, base::BindOnce(&BlockingTaskRunnerHelper::Start,
-                                base::Unretained(helper_.get())));
+HidServiceLinux::HidServiceLinux() {
+  helper_ = base::SequenceBound<BlockingTaskRunnerHelper>(
+      base::ThreadPool::CreateSequencedTaskRunner(kBlockingTaskTraits),
+      weak_factory_.GetWeakPtr(),
+      base::SequencedTaskRunner::GetCurrentDefault());
 }
 
 HidServiceLinux::~HidServiceLinux() = default;
@@ -377,14 +362,13 @@ void HidServiceLinux::Connect(const std::string& device_guid,
 
   const auto& map_entry = devices().find(device_guid);
   if (map_entry == devices().end()) {
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), nullptr));
     return;
   }
   scoped_refptr<HidDeviceInfo> device_info = map_entry->second;
 
-// TODO(huangs): Enable for IS_CHROMEOS_LACROS for crbug.com/1223456.
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   auto split_callback = base::SplitOnceCallback(std::move(callback));
   chromeos::PermissionBrokerClient::Get()->OpenPath(
       device_info->device_node(),
@@ -404,10 +388,10 @@ void HidServiceLinux::Connect(const std::string& device_guid,
   blocking_task_runner->PostTask(
       FROM_HERE, base::BindOnce(&HidServiceLinux::OpenOnBlockingThread,
                                 std::move(params)));
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 
 // static
 void HidServiceLinux::OnPathOpenComplete(std::unique_ptr<ConnectParams> params,
@@ -464,7 +448,7 @@ void HidServiceLinux::OpenOnBlockingThread(
                                                   std::move(params)));
 }
 
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 // static
 void HidServiceLinux::FinishOpen(std::unique_ptr<ConnectParams> params) {

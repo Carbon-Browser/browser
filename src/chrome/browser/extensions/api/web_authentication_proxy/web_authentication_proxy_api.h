@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -88,7 +88,7 @@ class WebAuthenticationProxyCompleteCreateRequestFunction
  protected:
   ~WebAuthenticationProxyCompleteCreateRequestFunction() override;
 
-  void DoRespond(absl::optional<std::string> error);
+  void DoRespond(std::optional<std::string> error);
 
   // ExtensionFunction:
   ResponseAction Run() override;
@@ -104,7 +104,7 @@ class WebAuthenticationProxyCompleteGetRequestFunction
  protected:
   ~WebAuthenticationProxyCompleteGetRequestFunction() override;
 
-  void DoRespond(absl::optional<std::string> error);
+  void DoRespond(std::optional<std::string> error);
 
   // ExtensionFunction:
   ResponseAction Run() override;

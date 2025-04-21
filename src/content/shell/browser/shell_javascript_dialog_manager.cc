@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -126,6 +126,16 @@ void ShellJavaScriptDialogManager::DialogClosed(ShellJavaScriptDialog* dialog) {
 #else
   // TODO: implement ShellJavaScriptDialog for other platforms, drop this #if
 #endif
+}
+
+bool ShellJavaScriptDialogManager::RunBeforeUnloadCallback(
+    bool success,
+    const std::u16string& title) {
+  if (before_unload_callback_) {
+    std::move(before_unload_callback_).Run(success, title);
+    return true;
+  }
+  return false;
 }
 
 }  // namespace content

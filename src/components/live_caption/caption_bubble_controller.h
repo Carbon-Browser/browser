@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,14 @@
 #define COMPONENTS_LIVE_CAPTION_CAPTION_BUBBLE_CONTROLLER_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "components/live_caption/views/caption_bubble.h"
 #include "media/mojo/mojom/speech_recognition.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/native_theme/caption_style.h"
+
+class PrefService;
 
 namespace content {
 class BrowserContext;
@@ -37,7 +39,9 @@ class CaptionBubbleController {
   CaptionBubbleController(const CaptionBubbleController&) = delete;
   CaptionBubbleController& operator=(const CaptionBubbleController&) = delete;
 
-  static std::unique_ptr<CaptionBubbleController> Create();
+  static std::unique_ptr<CaptionBubbleController> Create(
+      PrefService* profile_prefs,
+      const std::string& application_locale);
 
   // Called when a transcription is received from the service. Returns whether
   // the transcription result was set on the caption bubble successfully.
@@ -59,14 +63,16 @@ class CaptionBubbleController {
 
   // Called when the caption style changes.
   virtual void UpdateCaptionStyle(
-      absl::optional<ui::CaptionStyle> caption_style) = 0;
-
- private:
-  friend class LiveCaptionControllerTest;
-  friend class LiveCaptionSpeechRecognitionHostTest;
+      std::optional<ui::CaptionStyle> caption_style) = 0;
 
   virtual bool IsWidgetVisibleForTesting() = 0;
+  virtual bool IsGenericErrorMessageVisibleForTesting() = 0;
   virtual std::string GetBubbleLabelTextForTesting() = 0;
+  virtual void CloseActiveModelForTesting() = 0;
+
+  virtual void OnLanguageIdentificationEvent(
+      CaptionBubbleContext* caption_bubble_context,
+      const media::mojom::LanguageIdentificationEventPtr& event) = 0;
 };
 
 }  // namespace captions

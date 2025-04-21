@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,9 +17,7 @@ import org.chromium.chrome.R;
 import org.chromium.chrome.browser.share.screenshot.ScreenshotShareSheetViewProperties.NoArgOperation;
 import org.chromium.ui.widget.ChromeImageView;
 
-/**
- * Manages the Android View representing the Screenshot share panel.
- */
+/** Manages the Android View representing the Screenshot share panel. */
 class ScreenshotShareSheetView extends FrameLayout {
     /** Constructor for use from XML. */
     public ScreenshotShareSheetView(Context context, AttributeSet attrs) {
@@ -36,7 +34,6 @@ class ScreenshotShareSheetView extends FrameLayout {
         setNoArgOperationListener(NoArgOperation.SAVE, R.id.save, noArgOperationCallback);
         setNoArgOperationListener(NoArgOperation.DELETE, R.id.delete, noArgOperationCallback);
         setNoArgOperationListener(NoArgOperation.DELETE, R.id.close_button, noArgOperationCallback);
-        setNoArgOperationListener(NoArgOperation.INSTALL, R.id.edit, noArgOperationCallback);
     }
 
     /**
@@ -44,12 +41,15 @@ class ScreenshotShareSheetView extends FrameLayout {
      *
      * @param operation The type of operation as defined by BottomBarProperties.NoArgOperation
      * @param viewId The id to listen for a tap on
-     * @param setNoArgOperationCallback The callback to perform on tap
+     * @param noArgOperationCallback The callback to perform on tap
      */
     private void setNoArgOperationListener(
             Integer operation, int viewId, Callback<Integer> noArgOperationCallback) {
         View button = findViewById(viewId);
-        button.setOnClickListener(v -> { noArgOperationCallback.onResult(operation); });
+        button.setOnClickListener(
+                v -> {
+                    noArgOperationCallback.onResult(operation);
+                });
     }
 
     /**

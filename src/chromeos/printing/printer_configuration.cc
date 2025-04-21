@@ -1,19 +1,20 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/printing/printer_configuration.h"
 
+#include <optional>
+#include <string_view>
+
 #include "base/containers/fixed_flat_set.h"
-#include "base/guid.h"
 #include "base/logging.h"
 #include "base/notreached.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
+#include "base/uuid.h"
 #include "chromeos/printing/printing_constants.h"
 #include "chromeos/printing/uri.h"
 #include "net/base/ip_endpoint.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/third_party/mozilla/url_parse.h"
 #include "url/url_constants.h"
 
@@ -57,12 +58,11 @@ std::string ToString(PrinterClass pclass) {
       return "Saved";
   }
   NOTREACHED();
-  return "";
 }
 
 bool IsValidPrinterUri(const Uri& uri, std::string* error_message) {
   static constexpr auto kKnownSchemes =
-      base::MakeFixedFlatSet<base::StringPiece>(
+      base::MakeFixedFlatSet<std::string_view>(
           {"http", "https", "ipp", "ipps", "ippusb", "lpd", "socket", "usb"});
   static const std::string kPrefix = "Malformed printer URI: ";
 
@@ -118,11 +118,20 @@ bool Printer::PpdReference::IsFilled() const {
          !effective_make_and_model.empty();
 }
 
-Printer::Printer() : id_(base::GenerateGUID()), source_(SRC_USER_PREFS) {}
+Printer::ManagedPrintOptions::ManagedPrintOptions() = default;
+Printer::ManagedPrintOptions::ManagedPrintOptions(
+    const Printer::ManagedPrintOptions& other) = default;
+Printer::ManagedPrintOptions& Printer::ManagedPrintOptions::operator=(
+    const Printer::ManagedPrintOptions& other) = default;
+Printer::ManagedPrintOptions::~ManagedPrintOptions() = default;
+
+Printer::Printer()
+    : id_(base::Uuid::GenerateRandomV4().AsLowercaseString()),
+      source_(SRC_USER_PREFS) {}
 
 Printer::Printer(const std::string& id) : id_(id), source_(SRC_USER_PREFS) {
   if (id_.empty())
-    id_ = base::GenerateGUID();
+    id_ = base::Uuid::GenerateRandomV4().AsLowercaseString();
 }
 
 Printer::Printer(const Printer& other) = default;
@@ -151,6 +160,19 @@ bool Printer::SetUri(const std::string& uri, std::string* error_message) {
 
 bool Printer::IsIppEverywhere() const {
   return ppd_reference_.autoconf;
+}
+
+bool Printer::RequiresDriverlessUsb() const {
+  // TODO(b/184293121): Replace this list with more generic logic after general
+  // IPP-USB evaluation is complete.
+  static constexpr auto kDriverlessUsbMakeModels =
+      base::MakeFixedFlatSet<std::string_view>({
+          "epson et-5180 series",    // b/319373509
+          "epson et-8550 series",    // b/301387697
+          "epson wf-110 series",     // b/287159028
+          "hp deskjet 4100 series",  // b/279387801
+      });
+  return kDriverlessUsbMakeModels.contains(base::ToLowerASCII(make_and_model_));
 }
 
 net::HostPortPair Printer::GetHostAndPort() const {

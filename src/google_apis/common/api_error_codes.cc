@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -87,6 +87,9 @@ std::string ApiErrorCodeToString(ApiErrorCode error) {
 
     case DRIVE_RESPONSE_TOO_LARGE:
       return "DRIVE_RESPONSE_TOO_LARGE";
+
+    case YOUTUBE_MUSIC_UPDATE_REQUIRED:
+      return "YOUTUBE_MUSIC_UPDATE_REQUIRED";
   }
 
   return "UNKNOWN_ERROR_" + base::NumberToString(error);

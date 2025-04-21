@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,6 @@ import android.graphics.Rect;
 import android.view.View;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
@@ -28,18 +27,20 @@ import org.robolectric.annotation.Config;
 import org.robolectric.annotation.Implementation;
 import org.robolectric.annotation.Implements;
 
+import org.chromium.base.Callback;
 import org.chromium.base.test.BaseRobolectricTestRunner;
-import org.chromium.base.test.util.JniMocker;
+import org.chromium.base.test.util.CallbackHelper;
+import org.chromium.ui.resources.Resource;
 import org.chromium.ui.resources.ResourceFactory;
 import org.chromium.ui.resources.ResourceFactoryJni;
 
 import java.lang.ref.WeakReference;
 
-/**
- * Tests for {@link ViewResourceAdapter}.
- */
+/** Tests for {@link ViewResourceAdapter}. */
 @RunWith(BaseRobolectricTestRunner.class)
-@Config(manifest = Config.NONE, shadows = {ViewResourceAdapterTest.ShadowCaptureUtils.class})
+@Config(
+        manifest = Config.NONE,
+        shadows = {ViewResourceAdapterTest.ShadowCaptureUtils.class})
 public class ViewResourceAdapterTest {
     /**
      * Mock this out to avoid calling {@link View#draw(Canvas)} on the mocked mView.
@@ -49,28 +50,28 @@ public class ViewResourceAdapterTest {
     @Implements(CaptureUtils.class)
     static class ShadowCaptureUtils {
         @Implementation
-        public static boolean captureCommon(Canvas canvas, View view, Rect dirtyRect, float scale,
-                boolean drawWhileDetached, CaptureObserver observer) {
+        public static boolean captureCommon(
+                Canvas canvas,
+                View view,
+                Rect dirtyRect,
+                float scale,
+                boolean drawWhileDetached,
+                CaptureObserver observer) {
             return true;
         }
     }
 
     private int mViewWidth;
     private int mViewHeight;
-
-    @Rule
-    public JniMocker mJniMocker = new JniMocker();
-    @Mock
-    private ResourceFactory.Natives mResourceFactoryJni;
-    @Mock
-    private View mView;
+    @Mock private ResourceFactory.Natives mResourceFactoryJni;
+    @Mock private View mView;
 
     private ViewResourceAdapter mAdapter;
 
     @Before
     public void setup() {
         initMocks(this);
-        mJniMocker.mock(ResourceFactoryJni.TEST_HOOKS, mResourceFactoryJni);
+        ResourceFactoryJni.setInstanceForTesting(mResourceFactoryJni);
 
         mViewWidth = 200;
         mViewHeight = 100;
@@ -303,5 +304,33 @@ public class ViewResourceAdapterTest {
         rect = mAdapter.getDirtyRect();
         assertEquals(mViewWidth, rect.width());
         assertEquals(mViewHeight, rect.height());
+    }
+
+    @Test
+    public void testManuallyTriggerCapture() throws Exception {
+        Bitmap bitmap = getBitmap();
+
+        Bitmap[] bitmapHolder = new Bitmap[1];
+        Callback<Resource> callback =
+                (resource) -> {
+                    bitmapHolder[0] = resource.getBitmap();
+                };
+        mAdapter.addOnResourceReadyCallback(callback);
+
+        CallbackHelper helper = new CallbackHelper();
+        DynamicResourceReadyOnceCallback.onNext(mAdapter, (r) -> helper.notifyCalled());
+
+        mAdapter.triggerBitmapCapture();
+
+        helper.waitForOnly("Capture never completed.");
+        // Bitmap is re-used.
+        assertEquals(bitmap, bitmapHolder[0]);
+
+        mAdapter.triggerBitmapCapture();
+        // Assert that no further captures occur.
+        assertEquals(1, helper.getCallCount());
+
+        // Clear this out in case another case depends on it being unset.
+        mAdapter.removeOnResourceReadyCallback(callback);
     }
 }

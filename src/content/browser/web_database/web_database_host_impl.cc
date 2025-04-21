@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,11 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/services/storage/public/cpp/buckets/bucket_info.h"
 #include "components/services/storage/public/cpp/buckets/constants.h"
 #include "content/browser/child_process_security_policy_impl.h"
@@ -125,8 +126,9 @@ void WebDatabaseHostImpl::OpenFileValidated(const std::u16string& vfs_file_name,
                                                    database_name)) {
     DCHECK(db_tracker_->quota_manager_proxy());
     db_tracker_->quota_manager_proxy()->UpdateOrCreateBucket(
-        storage::BucketInitParams::ForDefaultBucket(blink::StorageKey(
-            storage::GetOriginFromIdentifier(origin_identifier))),
+        storage::BucketInitParams::ForDefaultBucket(
+            blink::StorageKey::CreateFirstParty(
+                storage::GetOriginFromIdentifier(origin_identifier))),
         db_tracker_->task_runner(),
         base::BindOnce(&WebDatabaseHostImpl::OpenFileWithBucketCreated,
                        weak_ptr_factory_.GetWeakPtr(), vfs_file_name,
@@ -148,7 +150,7 @@ void WebDatabaseHostImpl::OpenFileWithBucketCreated(
     OpenFileCallback callback,
     storage::QuotaErrorOr<storage::BucketInfo> bucket) {
   // Return invalid file path on `UpdateOrCreateBucket` error.
-  if (!bucket.ok()) {
+  if (!bucket.has_value()) {
     std::move(callback).Run(base::File());
     return;
   }
@@ -227,30 +229,6 @@ void WebDatabaseHostImpl::GetFileAttributesValidated(
   std::move(callback).Run(attributes);
 }
 
-void WebDatabaseHostImpl::SetFileSize(const std::u16string& vfs_file_name,
-                                      int64_t expected_size,
-                                      SetFileSizeCallback callback) {
-  DCHECK(db_tracker_->task_runner()->RunsTasksInCurrentSequence());
-  ValidateOrigin(vfs_file_name,
-                 base::BindOnce(&WebDatabaseHostImpl::SetFileSizeValidated,
-                                weak_ptr_factory_.GetWeakPtr(), vfs_file_name,
-                                expected_size, std::move(callback)));
-}
-
-void WebDatabaseHostImpl::SetFileSizeValidated(
-    const std::u16string& vfs_file_name,
-    int64_t expected_size,
-    SetFileSizeCallback callback) {
-  DCHECK(db_tracker_->task_runner()->RunsTasksInCurrentSequence());
-  bool success = false;
-  base::FilePath db_file =
-      DatabaseUtil::GetFullFilePathForVfsFile(db_tracker_.get(), vfs_file_name);
-  if (!db_file.empty()) {
-    success = VfsBackend::SetFileSize(db_file, expected_size);
-  }
-  std::move(callback).Run(success);
-}
-
 void WebDatabaseHostImpl::GetSpaceAvailable(
     const url::Origin& origin,
     GetSpaceAvailableCallback callback) {
@@ -271,8 +249,8 @@ void WebDatabaseHostImpl::GetSpaceAvailableValidated(
 
   DCHECK(db_tracker_->quota_manager_proxy());
   db_tracker_->quota_manager_proxy()->GetUsageAndQuota(
-      blink::StorageKey(origin), blink::mojom::StorageType::kTemporary,
-      db_tracker_->task_runner(),
+      blink::StorageKey::CreateFirstParty(origin),
+      blink::mojom::StorageType::kTemporary, db_tracker_->task_runner(),
       base::BindOnce(
           [](GetSpaceAvailableCallback callback,
              blink::mojom::QuotaStatusCode status, int64_t usage,
@@ -356,7 +334,7 @@ void WebDatabaseHostImpl::OpenedValidated(
     const std::u16string& database_description) {
   DCHECK(db_tracker_->task_runner()->RunsTasksInCurrentSequence());
 
-  // TODO(https://crbug.com/1158302): Use IsOriginPotentiallyTrustworthy?
+  // TODO(crbug.com/40161236): Use IsOriginPotentiallyTrustworthy?
   UMA_HISTOGRAM_BOOLEAN("websql.OpenDatabase",
                         network::IsUrlPotentiallyTrustworthy(origin.GetURL()));
 

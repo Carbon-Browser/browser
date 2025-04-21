@@ -1,10 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_PUBLIC_COMMON_INPUT_WEB_KEYBOARD_EVENT_H_
 #define THIRD_PARTY_BLINK_PUBLIC_COMMON_INPUT_WEB_KEYBOARD_EVENT_H_
 
+#include <array>
 #include <string>
 
 #include "third_party/blink/public/common/input/web_input_event.h"
@@ -40,7 +41,7 @@ class BLINK_COMMON_EXPORT WebKeyboardEvent : public WebInputEvent {
 
   // The DOM key enum of the key pressed as passed by the embedder. DOM
   // key enums are defined in ui/events/keycodes/dom/dom_key_data.inc.
-  int dom_key = 0;
+  uint32_t dom_key = 0;
 
   // This identifies whether this event was tagged by the system as being a
   // "system key" event (see
@@ -60,8 +61,8 @@ class BLINK_COMMON_EXPORT WebKeyboardEvent : public WebInputEvent {
   // Windows guarantee one character per event.  The Mac does not, but in
   // reality that's all it ever gives.  We're generous, and cap it a bit
   // longer.
-  char16_t text[kTextLengthCap] = {};
-  char16_t unmodified_text[kTextLengthCap] = {};
+  std::array<char16_t, kTextLengthCap> text = {};
+  std::array<char16_t, kTextLengthCap> unmodified_text = {};
 
   WebKeyboardEvent(Type type, int modifiers, base::TimeTicks time_stamp)
       : WebInputEvent(type, modifiers, time_stamp) {}

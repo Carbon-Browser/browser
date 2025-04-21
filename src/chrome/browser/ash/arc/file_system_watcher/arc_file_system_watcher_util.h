@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,6 @@
 #include "base/files/file_path.h"
 
 namespace arc {
-
-// Exposed only for testing.
-extern const char* kAndroidSupportedMediaExtensions[];
-extern const int kAndroidSupportedMediaExtensionsSize;
 
 // The removable media path in ChromeOS. This is the actual directory to be
 // watched.

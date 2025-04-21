@@ -1,13 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_SYNC_TEST_INTEGRATION_COMMITTED_ALL_NUDGED_CHANGES_CHECKER_H_
 #define CHROME_BROWSER_SYNC_TEST_INTEGRATION_COMMITTED_ALL_NUDGED_CHANGES_CHECKER_H_
 
+#include <optional>
+
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/sync/test/integration/single_client_status_change_checker.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace syncer {
 class SyncServiceImpl;
@@ -31,7 +32,7 @@ class CommittedAllNudgedChangesChecker
  private:
   void GotHasUnsyncedItems(bool has_unsynced_items);
 
-  absl::optional<bool> has_unsynced_items_;
+  std::optional<bool> has_unsynced_items_;
   base::WeakPtrFactory<CommittedAllNudgedChangesChecker> weak_ptr_factory_{
       this};
 };

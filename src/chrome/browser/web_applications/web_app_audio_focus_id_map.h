@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <map>
 
-#include "chrome/browser/web_applications/web_app_id.h"
+#include "components/webapps/common/web_app_id.h"
 
 namespace base {
 class UnguessableToken;
@@ -28,10 +28,11 @@ class WebAppAudioFocusIdMap {
  protected:
   friend class WebAppTabHelper;
 
-  const base::UnguessableToken& CreateOrGetIdForApp(const AppId& app_id);
+  const base::UnguessableToken& CreateOrGetIdForApp(
+      const webapps::AppId& app_id);
 
  private:
-  std::map<AppId, base::UnguessableToken> ids_;
+  std::map<webapps::AppId, base::UnguessableToken> ids_;
 };
 
 }  // namespace web_app

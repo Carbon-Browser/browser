@@ -1,8 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/http/http_content_disposition.h"
+
+#include <array>
 
 #include "base/strings/utf_string_conversions.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -423,10 +425,11 @@ TEST(HttpContentDispositionTest, tc2231) {
 }
 
 TEST(HttpContentDispositionTest, ParseResult) {
-  const struct ParseResultTestCase {
+  struct ParseResultTestCase {
     const char* header;
     int expected_flags;
-  } kTestCases[] = {
+  };
+  const auto kTestCases = std::to_array<ParseResultTestCase>({
       // Basic feature tests
       {"", HttpContentDisposition::INVALID},
       {"example=x", HttpContentDisposition::INVALID},
@@ -484,7 +487,7 @@ TEST(HttpContentDispositionTest, ParseResult) {
        HttpContentDisposition::INVALID},
       {"filename=foo\xcc\x88 foo%cc%88 =?utf-8?Q?foo?; name=x",
        HttpContentDisposition::INVALID},
-  };
+  });
 
   for (size_t i = 0; i < std::size(kTestCases); ++i) {
     const ParseResultTestCase& test_case = kTestCases[i];

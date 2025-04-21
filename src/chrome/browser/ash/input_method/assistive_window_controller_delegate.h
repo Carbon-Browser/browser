@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,12 +12,18 @@ struct AssistiveWindowButton;
 }  // namespace ui
 
 namespace ash {
+namespace ime {
+struct AssistiveWindow;
+}  // namespace ime
+
 namespace input_method {
 
 class AssistiveWindowControllerDelegate {
  public:
   virtual void AssistiveWindowButtonClicked(
       const ui::ime::AssistiveWindowButton& button) const = 0;
+  virtual void AssistiveWindowChanged(
+      const ash::ime::AssistiveWindow& window) const = 0;
 
  protected:
   AssistiveWindowControllerDelegate() = default;

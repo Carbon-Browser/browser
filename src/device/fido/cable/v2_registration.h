@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,13 @@
 
 #include <array>
 #include <memory>
+#include <optional>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/containers/span.h"
+#include "base/functional/callback_forward.h"
 #include "device/fido/cable/v2_constants.h"
 #include "device/fido/fido_constants.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace instance_id {
 class InstanceIDDriver;
@@ -51,7 +51,7 @@ class Registration {
 
     // Serialize returns a serialized form of the |Event|. This format is
     // not stable and is suitable only for transient storage.
-    absl::optional<std::vector<uint8_t>> Serialize();
+    std::optional<std::vector<uint8_t>> Serialize();
 
     // FromSerialized parses the bytes produced by |Serialize|. It assumes that
     // the input is well formed. It returns |nullptr| on error.
@@ -63,11 +63,7 @@ class Registration {
     std::array<uint8_t, kRoutingIdSize> routing_id;
     std::array<uint8_t, kPairingIDSize> pairing_id;
     std::array<uint8_t, kClientNonceSize> client_nonce;
-    absl::optional<std::vector<uint8_t>> contact_id;
-
-    // protocol_revision can be optionally asserted while we transition from
-    // revision zero to revision one. This might be removed in the future.
-    unsigned protocol_revision = 0;
+    std::optional<std::vector<uint8_t>> contact_id;
   };
 
   virtual ~Registration();
@@ -84,7 +80,7 @@ class Registration {
   // contact_id returns an opaque token that may be placed in pairing data for
   // desktops to later connect to. |nullopt| will be returned if the value is
   // not yet ready.
-  virtual absl::optional<std::vector<uint8_t>> contact_id() const = 0;
+  virtual std::optional<std::vector<uint8_t>> contact_id() const = 0;
 };
 
 // Register subscribes to the tunnel service and returns a |Registration|. This

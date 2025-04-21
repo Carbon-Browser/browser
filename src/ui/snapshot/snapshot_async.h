@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,12 +25,12 @@ class SnapshotAsync {
   SnapshotAsync& operator=(const SnapshotAsync&) = delete;
 
   static void ScaleCopyOutputResult(
-      GrabWindowSnapshotAsyncCallback callback,
+      GrabSnapshotImageCallback callback,
       const gfx::Size& target_size,
       std::unique_ptr<viz::CopyOutputResult> result);
 
   static void RunCallbackWithCopyOutputResult(
-      GrabWindowSnapshotAsyncCallback callback,
+      GrabSnapshotImageCallback callback,
       std::unique_ptr<viz::CopyOutputResult> result);
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ TEST(GraphicsMemoryDumpProviderTest, ParseResponse) {
   const char* kDumpBaseName = GraphicsMemoryDumpProvider::kDumpBaseName;
 
   base::trace_event::ProcessMemoryDump pmd(
-      {base::trace_event::MemoryDumpLevelOfDetail::DETAILED});
+      {base::trace_event::MemoryDumpLevelOfDetail::kDetailed});
   auto* instance = GraphicsMemoryDumpProvider::GetInstance();
   char buf[] = "graphics_total 12\ngraphics_pss 34\ngl_total 56\ngl_pss 78";
   instance->ParseResponseAndAddToDump(buf, strlen(buf), &pmd);

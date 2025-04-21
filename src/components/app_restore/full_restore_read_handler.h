@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/containers/flat_map.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_multi_source_observation.h"
 #include "base/scoped_observation.h"
@@ -26,15 +26,15 @@
 
 namespace app_restore {
 struct AppLaunchInfo;
-class LacrosReadHandler;
+struct AppRestoreData;
 class RestoreData;
 struct WindowInfo;
 }  // namespace app_restore
 
 namespace ash {
+class AppLaunchInfoSaveWaiter;
 namespace full_restore {
-class FullRestoreAppLaunchHandlerBrowserTest;
-class FullRestoreAppLaunchHandlerSystemWebAppsBrowserTest;
+class FullRestoreAppLaunchHandlerTestBase;
 class FullRestoreServiceTestHavingFullRestoreFile;
 }  // namespace full_restore
 }  // namespace ash
@@ -73,7 +73,6 @@ class COMPONENT_EXPORT(APP_RESTORE) FullRestoreReadHandler
   void OnWindowInitialized(aura::Window* window) override;
 
   // aura::WindowObserver:
-  void OnWindowAddedToRootWindow(aura::Window* window) override;
   void OnWindowDestroyed(aura::Window* window) override;
 
   // app_restore::ArcReadHandler::Delegate:
@@ -94,18 +93,6 @@ class COMPONENT_EXPORT(APP_RESTORE) FullRestoreReadHandler
                      int32_t task_id,
                      int32_t session_id) override;
   void OnTaskDestroyed(int32_t task_id) override;
-
-  // Invoked when an Chrome app Lacros window is created. `app_id` is the
-  // AppService id, and `window_id` is the wayland app_id property for the
-  // window.
-  void OnLacrosChromeAppWindowAdded(const std::string& app_id,
-                                    const std::string& window_id);
-
-  // Invoked when an Chrome app Lacros window is removed. `app_id` is the
-  // AppService id, and `window_id` is the wayland app_id property for the
-  // window.
-  void OnLacrosChromeAppWindowRemoved(const std::string& app_id,
-                                      const std::string& window_id);
 
   void SetPrimaryProfilePath(const base::FilePath& profile_path);
 
@@ -166,10 +153,6 @@ class COMPONENT_EXPORT(APP_RESTORE) FullRestoreReadHandler
   // Returns the restore window id for the ARC app's |session_id|.
   int32_t GetArcRestoreWindowIdForSessionId(int32_t session_id);
 
-  // Returns the restore window id for the Lacros window with
-  // `lacros_window_id`.
-  int32_t GetLacrosRestoreWindowId(const std::string& lacros_window_id) const;
-
   // Sets |arc session id| for |window_id| to |arc_session_id_to_window_id_|.
   // |arc session id| is assigned when ARC apps are restored.
   void SetArcSessionIdForWindowId(int32_t arc_session_id, int32_t window_id);
@@ -185,9 +168,8 @@ class COMPONENT_EXPORT(APP_RESTORE) FullRestoreReadHandler
   void AddChromeBrowserLaunchInfoForTesting(const base::FilePath& profile_path);
 
  private:
-  friend class ash::full_restore::FullRestoreAppLaunchHandlerBrowserTest;
-  friend class ash::full_restore::
-      FullRestoreAppLaunchHandlerSystemWebAppsBrowserTest;
+  friend class ash::AppLaunchInfoSaveWaiter;
+  friend class ash::full_restore::FullRestoreAppLaunchHandlerTestBase;
   friend class ash::full_restore::FullRestoreServiceTestHavingFullRestoreFile;
   friend class FullRestoreReadHandlerTestApi;
 
@@ -199,10 +181,6 @@ class COMPONENT_EXPORT(APP_RESTORE) FullRestoreReadHandler
   // Returns true if ARC restore launching is thought to be underway on
   // `primary_profile_path_`.
   bool IsArcRestoreRunning() const;
-
-  // Returns true if Lacros restore launching is thought to be underway on
-  // `primary_profile_path_`.
-  bool IsLacrosRestoreRunning() const;
 
   // Invoked when reading the restore data from |profile_path| is finished, and
   // calls |callback| to notify that the reading operation is done.
@@ -238,8 +216,6 @@ class COMPONENT_EXPORT(APP_RESTORE) FullRestoreReadHandler
       profile_path_to_start_time_data_;
 
   std::unique_ptr<app_restore::ArcReadHandler> arc_read_handler_;
-
-  std::unique_ptr<app_restore::LacrosReadHandler> lacros_read_handler_;
 
   // Records whether we need to check the restore data for the profile path. If
   // the profile path is recorded, we should check the restore data. Otherwise,

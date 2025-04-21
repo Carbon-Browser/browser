@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,14 @@
 
 #include "ash/components/arc/compat_mode/resize_util.h"
 #include "ash/components/arc/compat_mode/test/compat_mode_test_base.h"
-#include "ash/constants/app_types.h"
 #include "ash/public/cpp/window_properties.h"
+#include "chromeos/ui/frame/caption_buttons/frame_center_button.h"
 #include "chromeos/ui/frame/default_frame_header.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/views/widget/widget_delegate.h"
+#include "ui/views/window/caption_button_layout_constants.h"
 
 namespace arc {
 
@@ -67,9 +68,10 @@ class CompatModeButtonControllerTest : public CompatModeTestBase {
   // CompatModeTestBase:
   void SetUp() override {
     CompatModeTestBase::SetUp();
-    widget_ = CreateArcWidget(/*app_id=*/absl::nullopt);
+    widget_ = CreateArcWidget(/*app_id=*/std::nullopt);
     controller_.set_frame_header(
         std::make_unique<FakeFrameHeader>(widget_.get()));
+    controller_.SetPrefDelegate(pref_delegate());
   }
   void TearDown() override {
     widget_->CloseNow();
@@ -90,7 +92,7 @@ TEST_F(CompatModeButtonControllerTest, ConstructDestruct) {}
 TEST_F(CompatModeButtonControllerTest, UpdateWithoutAppId) {
   const auto* frame_header = controller()->GetFrameHeader(window());
 
-  controller()->Update(pref_delegate(), window());
+  controller()->Update(window());
   EXPECT_FALSE(frame_header->GetCenterButton());
 }
 
@@ -103,7 +105,7 @@ TEST_F(CompatModeButtonControllerTest, UpdateWithStateUndefined) {
   pref_delegate()->SetResizeLockState(app_id,
                                       mojom::ArcResizeLockState::UNDEFINED);
   SyncResizeLockPropertyWithMojoState(widget());
-  controller()->Update(pref_delegate(), window());
+  controller()->Update(window());
   EXPECT_FALSE(frame_header->GetCenterButton());
 }
 
@@ -115,7 +117,7 @@ TEST_F(CompatModeButtonControllerTest, UpdateWithStateReady) {
 
   pref_delegate()->SetResizeLockState(app_id, mojom::ArcResizeLockState::READY);
   SyncResizeLockPropertyWithMojoState(widget());
-  controller()->Update(pref_delegate(), window());
+  controller()->Update(window());
   EXPECT_FALSE(frame_header->GetCenterButton());
 }
 
@@ -129,12 +131,12 @@ TEST_F(CompatModeButtonControllerTest, UpdateWithStateOn) {
   SyncResizeLockPropertyWithMojoState(widget());
   // Phone
   ResizeLockToPhone(widget(), pref_delegate());
-  controller()->Update(pref_delegate(), window());
+  controller()->Update(window());
   EXPECT_TRUE(frame_header->GetCenterButton());
   EXPECT_TRUE(frame_header->GetCenterButton()->GetEnabled());
   // Tablet
   ResizeLockToTablet(widget(), pref_delegate());
-  controller()->Update(pref_delegate(), window());
+  controller()->Update(window());
   EXPECT_TRUE(frame_header->GetCenterButton());
   EXPECT_TRUE(frame_header->GetCenterButton()->GetEnabled());
 }
@@ -147,7 +149,7 @@ TEST_F(CompatModeButtonControllerTest, UpdateWithStateOff) {
 
   pref_delegate()->SetResizeLockState(app_id, mojom::ArcResizeLockState::OFF);
   SyncResizeLockPropertyWithMojoState(widget());
-  controller()->Update(pref_delegate(), window());
+  controller()->Update(window());
   EXPECT_TRUE(frame_header->GetCenterButton());
   EXPECT_TRUE(frame_header->GetCenterButton()->GetEnabled());
 }
@@ -164,12 +166,12 @@ TEST_F(CompatModeButtonControllerTest, UpdateWithStateFullyLocked) {
   SyncResizeLockPropertyWithMojoState(widget());
   // Phone
   ResizeLockToPhone(widget(), pref_delegate());
-  controller()->Update(pref_delegate(), window());
+  controller()->Update(window());
   EXPECT_TRUE(frame_header->GetCenterButton());
   EXPECT_FALSE(frame_header->GetCenterButton()->GetEnabled());
   // Tablet
   ResizeLockToTablet(widget(), pref_delegate());
-  controller()->Update(pref_delegate(), window());
+  controller()->Update(window());
   EXPECT_TRUE(frame_header->GetCenterButton());
   EXPECT_FALSE(frame_header->GetCenterButton()->GetEnabled());
 }

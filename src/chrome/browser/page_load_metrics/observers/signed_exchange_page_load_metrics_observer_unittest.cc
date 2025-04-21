@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,7 +57,7 @@ class SignedExchangePageLoadMetricsObserverTest
   void InitializeTestPageLoadTiming(
       page_load_metrics::mojom::PageLoadTiming* timing) {
     page_load_metrics::InitPageLoadTimingForTest(timing);
-    timing->navigation_start = base::Time::FromDoubleT(1);
+    timing->navigation_start = base::Time::FromSecondsSinceUnixEpoch(1);
     timing->interactive_timing->first_input_delay = base::Milliseconds(50);
     // Use timestamps larger than 1000ms, so that they will not race with
     // background time in the WithSignedExchangeBackground test case.

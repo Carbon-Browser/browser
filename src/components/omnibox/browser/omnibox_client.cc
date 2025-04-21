@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,6 +25,10 @@ gfx::Image OmniboxClient::GetFavicon() const {
   return gfx::Image();
 }
 
+ukm::SourceId OmniboxClient::GetUKMSourceId() const {
+  return ukm::kInvalidSourceId;
+}
+
 bool OmniboxClient::IsLoading() const {
   return false;
 }
@@ -38,10 +42,6 @@ bool OmniboxClient::IsDefaultSearchProviderEnabled() const {
 }
 
 bookmarks::BookmarkModel* OmniboxClient::GetBookmarkModel() {
-  return nullptr;
-}
-
-OmniboxControllerEmitter* OmniboxClient::GetOmniboxControllerEmitter() {
   return nullptr;
 }
 
@@ -79,12 +79,19 @@ gfx::Image OmniboxClient::GetSizedIcon(const gfx::Image& icon) const {
   return gfx::Image();
 }
 
+std::optional<lens::proto::LensOverlaySuggestInputs>
+OmniboxClient::GetLensOverlaySuggestInputs() const {
+  return std::nullopt;
+}
+
 bool OmniboxClient::ProcessExtensionKeyword(const std::u16string& text,
                                             const TemplateURL* template_url,
                                             const AutocompleteMatch& match,
                                             WindowOpenDisposition disposition) {
   return false;
 }
+
+void OmniboxClient::OnUserPastedInOmniboxResultingInValidURL() {}
 
 gfx::Image OmniboxClient::GetFaviconForPageUrl(
     const GURL& page_url,
@@ -101,4 +108,8 @@ gfx::Image OmniboxClient::GetFaviconForKeywordSearchProvider(
     const TemplateURL* template_url,
     FaviconFetchedCallback on_favicon_fetched) {
   return gfx::Image();
+}
+
+bool OmniboxClient::IsHistoryEmbeddingsEnabled() const {
+  return false;
 }

@@ -1,16 +1,14 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_APP_LIST_MODEL_SEARCH_SEARCH_BOX_MODEL_H_
 #define ASH_APP_LIST_MODEL_SEARCH_SEARCH_BOX_MODEL_H_
 
-#include <memory>
-#include <string>
-
 #include "ash/app_list/model/app_list_model_export.h"
+#include "ash/public/cpp/app_list/app_list_client.h"
+#include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
-#include "ui/gfx/selection_model.h"
 
 namespace ash {
 
@@ -28,21 +26,33 @@ class APP_LIST_MODEL_EXPORT SearchBoxModel {
   void SetShowAssistantButton(bool show);
   bool show_assistant_button() const { return show_assistant_button_; }
 
+  void SetShowAssistantNewEntryPointButton(bool show);
+  bool show_assistant_new_entry_point_button() const {
+    return show_assistant_new_entry_point_button_;
+  }
+
+  void SetShowSunfishButton(bool show);
+  bool show_sunfish_button() const { return show_sunfish_button_; }
+
+  void SetWouldTriggerIph(bool would_trigger_iph);
+  bool would_trigger_iph() const { return would_trigger_iph_; }
+
   void SetSearchEngineIsGoogle(bool is_google);
   bool search_engine_is_google() const { return search_engine_is_google_; }
-
-  // Sets/gets the text for the search box's Textfield and the voice search
-  // flag.
-  void Update(const std::u16string& text, bool initiated_by_user);
-  const std::u16string& text() const { return text_; }
 
   void AddObserver(SearchBoxModelObserver* observer);
   void RemoveObserver(SearchBoxModelObserver* observer);
 
  private:
-  std::u16string text_;
   bool search_engine_is_google_ = false;
   bool show_assistant_button_ = false;
+  bool show_assistant_new_entry_point_button_ = false;
+  bool show_sunfish_button_ = false;
+
+  // `would_trigger_iph_` indicates whether we should START showing an IPH or
+  // not. This can be set to false while an IPH is being shown and the IPH
+  // should be kept showing.
+  bool would_trigger_iph_ = false;
 
   base::ObserverList<SearchBoxModelObserver> observers_;
 };

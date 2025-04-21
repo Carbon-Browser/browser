@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/accessibility/accessibility_state_utils.h"
@@ -18,6 +18,7 @@
 #include "content/public/browser/render_widget_host_view.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
+#include "ui/accessibility/accessibility_features.h"
 
 namespace settings {
 
@@ -27,13 +28,18 @@ AccessibilityMainHandler::~AccessibilityMainHandler() = default;
 
 void AccessibilityMainHandler::RegisterMessages() {
   web_ui()->RegisterMessageCallback(
-      "a11yPageReady",
-      base::BindRepeating(&AccessibilityMainHandler::HandleA11yPageReady,
+      "getScreenReaderState",
+      base::BindRepeating(&AccessibilityMainHandler::HandleGetScreenReaderState,
                           base::Unretained(this)));
   web_ui()->RegisterMessageCallback(
       "confirmA11yImageLabels",
       base::BindRepeating(
           &AccessibilityMainHandler::HandleCheckAccessibilityImageLabels,
+          base::Unretained(this)));
+  web_ui()->RegisterMessageCallback(
+      "getScreenAiInstallState",
+      base::BindRepeating(
+          &AccessibilityMainHandler::HandleGetScreenAIInstallState,
           base::Unretained(this)));
 }
 
@@ -44,18 +50,59 @@ void AccessibilityMainHandler::OnJavascriptAllowed() {
           &AccessibilityMainHandler::OnAccessibilityStatusChanged,
           base::Unretained(this)));
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
+  if (features::IsMainNodeAnnotationsEnabled()) {
+    CHECK(!component_ready_observer_.IsObserving());
+    component_ready_observer_.Observe(
+        screen_ai::ScreenAIInstallState::GetInstance());
+  }
 }
 
 void AccessibilityMainHandler::OnJavascriptDisallowed() {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   accessibility_subscription_ = {};
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
+  if (features::IsMainNodeAnnotationsEnabled()) {
+    component_ready_observer_.Reset();
+  }
 }
 
-void AccessibilityMainHandler::HandleA11yPageReady(
+void AccessibilityMainHandler::DownloadProgressChanged(double progress) {
+  CHECK_GE(progress, 0.0);
+  CHECK_LE(progress, 1.0);
+  const int progress_num = progress * 100;
+  FireWebUIListener("screen-ai-downloading-progress-changed",
+                    base::Value(progress_num));
+}
+
+void AccessibilityMainHandler::StateChanged(
+    screen_ai::ScreenAIInstallState::State state) {
+  base::Value state_value = base::Value(static_cast<int>(state));
+  FireWebUIListener("screen-ai-state-changed", state_value);
+}
+
+void AccessibilityMainHandler::HandleGetScreenAIInstallState(
     const base::Value::List& args) {
+  CHECK_EQ(1U, args.size());
+  const base::Value& callback_id = args[0];
   AllowJavascript();
-  SendScreenReaderStateChanged();
+  // Get the current install state and send it back to a UI callback.
+  screen_ai::ScreenAIInstallState::State current_install_state =
+      screen_ai::ScreenAIInstallState::GetInstance()->get_state();
+  ResolveJavascriptCallback(
+      callback_id, base::Value(static_cast<int>(current_install_state)));
+}
+
+void AccessibilityMainHandler::HandleGetScreenReaderState(
+    const base::Value::List& args) {
+  CHECK_EQ(1U, args.size());
+  const base::Value& callback_id = args[0];
+  AllowJavascript();
+  // Get the current install state and send it back to a UI callback.
+  base::Value is_screen_reader_enabled(
+      accessibility_state_utils::IsScreenReaderEnabled());
+  ResolveJavascriptCallback(callback_id, is_screen_reader_enabled);
 }
 
 void AccessibilityMainHandler::HandleCheckAccessibilityImageLabels(

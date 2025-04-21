@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
 #include "base/task/thread_pool.h"
@@ -22,9 +22,10 @@
 namespace updater {
 namespace {
 
-void SetCrashUploadEnabled(bool enabled) {
-  CrashClient::GetInstance()->database()->GetSettings()->SetUploadsEnabled(
-      enabled);
+void SetUsageStatsEnabled(scoped_refptr<PersistedData> persisted_data,
+                          bool enabled) {
+  persisted_data->SetUsageStatsEnabled(enabled);
+  CrashClient::GetInstance()->SetUploadsEnabled(enabled);
 }
 
 }  // namespace
@@ -41,9 +42,10 @@ void UpdateUsageStatsTask::Run(base::OnceClosure callback) {
 
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE, {base::MayBlock()},
-      base::BindOnce(&UpdateUsageStatsTask::UsageStatsAllowed, this,
-                     persisted_data_->GetAppIds()),
-      base::BindOnce(&SetCrashUploadEnabled).Then(std::move(callback)));
+      base::BindOnce(&OtherAppUsageStatsAllowed, persisted_data_->GetAppIds(),
+                     scope_),
+      base::BindOnce(&SetUsageStatsEnabled, persisted_data_)
+          .Then(std::move(callback)));
 }
 
 }  // namespace updater

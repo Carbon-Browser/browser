@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -7,13 +7,6 @@ import copy
 import os
 import re
 import sys
-
-sys.path.insert(
-    0,
-    os.path.join(os.path.dirname(__file__), os.pardir, os.pardir, os.pardir,
-                 os.pardir, 'third_party', 'six', 'src'))
-
-import six
 
 
 def IsGroupOrAtomicGroup(policy):
@@ -30,7 +23,6 @@ class PolicyTemplateGenerator:
   '''
 
   def _ImportMessage(self, msg_txt):
-    msg_txt = six.ensure_text(msg_txt)
     lines = msg_txt.split('\n')
 
     # Strip any extra leading spaces, but keep useful indentation:
@@ -102,6 +94,7 @@ class PolicyTemplateGenerator:
           'ios': ('chrome', 'ios'),
           'chrome_os': ('chrome_os', 'chrome_os'),
           'chrome_frame': ('chrome_frame', 'win'),
+          'fuchsia': ('chrome', 'fuchsia'),
       }[product_platform_string]
       platforms = [platform]
     return product, platforms

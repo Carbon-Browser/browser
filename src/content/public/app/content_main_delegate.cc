@@ -1,10 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/public/app/content_main_delegate.h"
 
 #include "base/check.h"
+#include "base/notreached.h"
 #include "build/build_config.h"
 #include "content/public/browser/content_browser_client.h"
 #include "content/public/common/content_client.h"
@@ -14,8 +15,8 @@
 
 namespace content {
 
-absl::optional<int> ContentMainDelegate::BasicStartupComplete() {
-  return absl::nullopt;
+std::optional<int> ContentMainDelegate::BasicStartupComplete() {
+  return std::nullopt;
 }
 
 absl::variant<int, MainFunctionParams> ContentMainDelegate::RunProcess(
@@ -32,8 +33,7 @@ void ContentMainDelegate::ZygoteStarting(
 #endif  // BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 
 int ContentMainDelegate::TerminateForFatalInitializationError() {
-  CHECK(false);
-  return 0;
+  NOTREACHED();
 }
 
 #if BUILDFLAG(IS_WIN)
@@ -46,11 +46,15 @@ bool ContentMainDelegate::ShouldLockSchemeRegistry() {
   return true;
 }
 
-absl::optional<int> ContentMainDelegate::PreBrowserMain() {
-  return absl::nullopt;
+std::optional<int> ContentMainDelegate::PreBrowserMain() {
+  return std::nullopt;
 }
 
 bool ContentMainDelegate::ShouldCreateFeatureList(InvokedIn invoked_in) {
+  return true;
+}
+
+bool ContentMainDelegate::ShouldInitializeMojo(InvokedIn invoked_in) {
   return true;
 }
 
@@ -59,9 +63,13 @@ ContentMainDelegate::CreateVariationsIdsProvider() {
   return nullptr;
 }
 
-absl::optional<int> ContentMainDelegate::PostEarlyInitialization(
+void ContentMainDelegate::CreateThreadPool(std::string_view name) {
+  base::ThreadPoolInstance::Create(name);
+}
+
+std::optional<int> ContentMainDelegate::PostEarlyInitialization(
     InvokedIn invoked_in) {
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 ContentClient* ContentMainDelegate::CreateContentClient() {

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,7 @@ class ShellExtensionsBrowserClient;
 class ShellExtensionSystem;
 class ShellUpdateQueryParamsDelegate;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 class ShellAudioController;
 class ShellNetworkController;
 #endif
@@ -60,7 +60,7 @@ class ShellBrowserMainParts : public content::BrowserMainParts {
   // Initializes the ExtensionSystem.
   void InitExtensionSystem();
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   std::unique_ptr<ShellNetworkController> network_controller_;
 #endif
 
@@ -68,7 +68,7 @@ class ShellBrowserMainParts : public content::BrowserMainParts {
   std::unique_ptr<PrefService> local_state_;
   std::unique_ptr<PrefService> user_pref_service_;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   std::unique_ptr<ShellAudioController> audio_controller_;
 #endif
 
@@ -80,7 +80,7 @@ class ShellBrowserMainParts : public content::BrowserMainParts {
   std::unique_ptr<ShellUpdateQueryParamsDelegate> update_query_params_delegate_;
 
   // Owned by the KeyedService system.
-  raw_ptr<ShellExtensionSystem> extension_system_;
+  raw_ptr<ShellExtensionSystem, DanglingUntriaged> extension_system_;
 
   std::unique_ptr<ShellBrowserMainDelegate> browser_main_delegate_;
 

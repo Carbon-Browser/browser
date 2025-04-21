@@ -1,100 +1,93 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_WEB_APPLICATIONS_COMMANDS_WEB_APP_UNINSTALL_COMMAND_H_
 #define CHROME_BROWSER_WEB_APPLICATIONS_COMMANDS_WEB_APP_UNINSTALL_COMMAND_H_
 
-#include "base/memory/raw_ptr.h"
+#include <memory>
+
 #include "base/memory/weak_ptr.h"
 #include "base/values.h"
 #include "chrome/browser/web_applications/commands/web_app_command.h"
-#include "chrome/browser/web_applications/os_integration/os_integration_manager.h"
-#include "chrome/browser/web_applications/web_app_id.h"
-#include "third_party/blink/public/mojom/manifest/manifest.mojom-forward.h"
+#include "chrome/browser/web_applications/jobs/uninstall/uninstall_job.h"
+#include "chrome/browser/web_applications/locks/all_apps_lock.h"
+#include "chrome/browser/web_applications/web_app_constants.h"
 
+class GURL;
 class Profile;
-class PrefService;
 
 namespace webapps {
 enum class UninstallResultCode;
-enum class WebappUninstallSource;
 }  // namespace webapps
 
 namespace web_app {
 
-class OsIntegrationManager;
-class WebAppIconManager;
-class WebAppInstallManager;
-class WebAppInstallFinalizer;
-class WebAppRegistrar;
-class WebAppSyncBridge;
-class WebAppTranslationManager;
-
-// Uninstall the web app.
-class WebAppUninstallCommand : public WebAppCommand {
+// This command acquires the AllAppsLock needed by three uninstall related jobs:
+// `RemoveInstallUrlJob`, `RemoveInstallSourceJob`, and `RemoveWebAppJob`.
+class WebAppUninstallCommand
+    : public WebAppCommand<AllAppsLock, webapps::UninstallResultCode> {
  public:
-  using UninstallWebAppCallback =
-      base::OnceCallback<void(webapps::UninstallResultCode)>;
+  static std::unique_ptr<WebAppUninstallCommand> CreateForRemoveInstallUrl(
+      webapps::WebappUninstallSource uninstall_source,
+      Profile& profile,
+      std::optional<webapps::AppId> app_id,
+      WebAppManagement::Type install_source,
+      GURL install_url,
+      UninstallJob::Callback callback);
 
-  WebAppUninstallCommand(const AppId& app_id,
-                         const url::Origin& app_origin,
-                         Profile* profile,
-                         OsIntegrationManager* os_integration_manager,
-                         WebAppSyncBridge* sync_bridge,
-                         WebAppIconManager* icon_manager,
-                         WebAppRegistrar* registrar,
-                         WebAppInstallManager* install_manager,
-                         WebAppInstallFinalizer* install_finalizer,
-                         WebAppTranslationManager* translation_manager,
-                         webapps::WebappUninstallSource source,
-                         UninstallWebAppCallback callback);
+  static std::unique_ptr<WebAppUninstallCommand>
+  CreateForRemoveInstallManagements(
+      webapps::WebappUninstallSource uninstall_source,
+      Profile& profile,
+      webapps::AppId app_id,
+      WebAppManagementTypes install_sources,
+      UninstallJob::Callback callback);
+
+  static std::unique_ptr<WebAppUninstallCommand>
+  CreateForRemoveUserUninstallableManagement(
+      webapps::WebappUninstallSource uninstall_source,
+      Profile& profile,
+      webapps::AppId app_id,
+      UninstallJob::Callback callback);
+
   ~WebAppUninstallCommand() override;
 
-  void Start() override;
-  void OnSyncSourceRemoved() override;
-  void OnShutdown() override;
+  // WebAppCommand:
+  void OnShutdown(base::PassKey<WebAppCommandManager>) const override;
 
-  base::Value ToDebugValue() const override;
+ protected:
+  // WebAppCommand:
+  void StartWithLock(std::unique_ptr<AllAppsLock> lock) override;
 
  private:
-  void Abort(webapps::UninstallResultCode code);
-  void OnSubAppUninstalled(webapps::UninstallResultCode code);
-  void OnOsHooksUninstalled(OsHooksErrors errors);
-  void OnIconDataDeleted(bool success);
-  void OnTranslationDataDeleted(bool success);
-  void MaybeFinishUninstall();
+  // Constructor for RemoveInstallUrlJob.
+  WebAppUninstallCommand(webapps::WebappUninstallSource uninstall_source,
+                         Profile& profile,
+                         std::optional<webapps::AppId> app_id,
+                         WebAppManagement::Type install_source,
+                         GURL install_url,
+                         UninstallJob::Callback callback);
+  // Constructor for RemoveInstallSourceJob.
+  WebAppUninstallCommand(webapps::WebappUninstallSource uninstall_source,
+                         Profile& profile,
+                         webapps::AppId app_id,
+                         WebAppManagementTypes install_managements,
+                         UninstallJob::Callback callback);
+  // Constructor for RemoveInstallSourceJob with user uninstallable sources.
+  WebAppUninstallCommand(webapps::WebappUninstallSource uninstall_source,
+                         Profile& profile,
+                         webapps::AppId app_id,
+                         UninstallJob::Callback callback);
 
-  enum class State {
-    kNotStarted = 0,
-    kPendingDataDeletion = 1,
-    kDone = 2,
-  } state_ = State::kNotStarted;
+  void OnCompletion(webapps::UninstallResultCode code);
 
-  AppId app_id_;
-  url::Origin app_origin_;
-  webapps::WebappUninstallSource source_;
-  UninstallWebAppCallback callback_;
-
-  raw_ptr<OsIntegrationManager> os_integration_manager_;
-  raw_ptr<WebAppSyncBridge> sync_bridge_;
-  raw_ptr<WebAppIconManager> icon_manager_;
-  raw_ptr<WebAppRegistrar> registrar_;
-  raw_ptr<WebAppInstallManager> install_manager_;
-  raw_ptr<WebAppInstallFinalizer> install_finalizer_;
-  raw_ptr<WebAppTranslationManager> translation_manager_;
-  raw_ptr<PrefService> profile_prefs_;
-
-  size_t num_pending_sub_app_uninstalls_;
-
-  bool app_data_deleted_ = false;
-  bool translation_data_deleted_ = false;
-  bool hooks_uninstalled_ = false;
-  bool errors_ = false;
+  std::unique_ptr<AllAppsLock> lock_;
+  std::unique_ptr<UninstallJob> job_;
 
   base::WeakPtrFactory<WebAppUninstallCommand> weak_factory_{this};
 };
 
 }  // namespace web_app
 
-#endif  // CHROME_BROWSER_WEB_APPLICATIONS_COMMANDS_WEB_APP_INSTALL_COMMAND_H_
+#endif  // CHROME_BROWSER_WEB_APPLICATIONS_COMMANDS_WEB_APP_UNINSTALL_COMMAND_H_

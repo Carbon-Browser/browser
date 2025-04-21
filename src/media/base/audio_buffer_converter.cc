@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/base/audio_buffer_converter.h"
 
@@ -9,6 +14,7 @@
 #include <memory>
 
 #include "base/check_op.h"
+#include "base/numerics/safe_conversions.h"
 #include "media/base/audio_bus.h"
 #include "media/base/audio_decoder_config.h"
 #include "media/base/audio_timestamp_helper.h"
@@ -57,8 +63,9 @@ void AudioBufferConverter::AddInput(scoped_refptr<AudioBuffer> buffer) {
     return;
   }
 
-  if (timestamp_helper_.base_timestamp() == kNoTimestamp)
+  if (!timestamp_helper_.base_timestamp()) {
     timestamp_helper_.SetBaseTimestamp(buffer->timestamp());
+  }
 
   input_frames_ += buffer->frame_count();
   queued_inputs_.push_back(std::move(buffer));
@@ -79,7 +86,7 @@ void AudioBufferConverter::Reset() {
   audio_converter_.reset();
   queued_inputs_.clear();
   queued_outputs_.clear();
-  timestamp_helper_.SetBaseTimestamp(kNoTimestamp);
+  timestamp_helper_.Reset();
   input_params_ = output_params_;
   input_frames_ = 0;
   buffered_input_frames_ = 0.0;
@@ -88,11 +95,12 @@ void AudioBufferConverter::Reset() {
 
 void AudioBufferConverter::ResetTimestampState() {
   Flush();
-  timestamp_helper_.SetBaseTimestamp(kNoTimestamp);
+  timestamp_helper_.Reset();
 }
 
 double AudioBufferConverter::ProvideInput(AudioBus* audio_bus,
-                                          uint32_t frames_delayed) {
+                                          uint32_t frames_delayed,
+                                          const AudioGlitchInfo& glitch_info) {
   DCHECK(is_flushing_ || input_frames_ >= audio_bus->frames());
 
   int requested_frames_left = audio_bus->frames();
@@ -140,14 +148,14 @@ void AudioBufferConverter::ResetConverter(const AudioBuffer& buffer) {
   Flush();
   audio_converter_.reset();
   input_params_.Reset(
-      input_params_.format(), buffer.channel_layout(), buffer.sample_rate(),
+      input_params_.format(), {buffer.channel_layout(), buffer.channel_count()},
+      buffer.sample_rate(),
       // If resampling is needed and the FIFO disabled, the AudioConverter will
       // always request SincResampler::kDefaultRequestSize frames.  Otherwise it
       // will use the output frame size.
       buffer.sample_rate() == output_params_.sample_rate()
           ? output_params_.frames_per_buffer()
           : SincResampler::kDefaultRequestSize);
-  input_params_.set_channels_for_discrete(buffer.channel_count());
 
   io_sample_rate_ratio_ = static_cast<double>(input_params_.sample_rate()) /
                           output_params_.sample_rate();
@@ -201,17 +209,21 @@ void AudioBufferConverter::ConvertIfPossible() {
     // will crash on unaligned data.
     const int frames_this_iteration = std::min(
         static_cast<int>(SincResampler::kDefaultRequestSize), frames_remaining);
-    const int offset_into_buffer =
+    const size_t offset_into_buffer =
         output_buffer->frame_count() - frames_remaining;
 
     // Wrap the portion of the AudioBuffer in an AudioBus so the AudioConverter
     // can fill it.
     output_bus->set_frames(frames_this_iteration);
     for (int ch = 0; ch < output_buffer->channel_count(); ++ch) {
+      AudioBus::Channel output_channel = base::span(
+          reinterpret_cast<float*>(output_buffer->channel_data()[ch]),
+          base::checked_cast<size_t>(output_buffer->frame_count()));
+
       output_bus->SetChannelData(
-          ch,
-          reinterpret_cast<float*>(output_buffer->channel_data()[ch]) +
-              offset_into_buffer);
+          ch, output_channel.subspan(
+                  offset_into_buffer,
+                  base::checked_cast<size_t>(frames_this_iteration)));
     }
 
     // Do the actual conversion.

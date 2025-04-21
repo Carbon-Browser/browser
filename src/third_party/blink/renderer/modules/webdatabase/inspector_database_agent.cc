@@ -48,8 +48,6 @@ typedef blink::protocol::Database::Backend::ExecuteSQLCallback
     ExecuteSQLCallback;
 
 namespace blink {
-using protocol::Maybe;
-using protocol::Response;
 
 namespace {
 
@@ -67,9 +65,7 @@ class ExecuteSQLCallbackWrapper : public RefCounted<ExecuteSQLCallbackWrapper> {
                             .setMessage(error->message())
                             .setCode(error->code())
                             .build();
-    callback_->sendSuccess(Maybe<protocol::Array<String>>(),
-                           Maybe<protocol::Array<protocol::Value>>(),
-                           std::move(error_object));
+    callback_->sendSuccess(nullptr, nullptr, std::move(error_object));
   }
 
  private:
@@ -112,8 +108,7 @@ class StatementCallback final : public SQLStatement::OnSuccessCallback {
       }
     }
     request_callback_->Get()->sendSuccess(std::move(column_names),
-                                          std::move(values),
-                                          Maybe<protocol::Database::Error>());
+                                          std::move(values), nullptr);
     return true;
   }
 
@@ -232,22 +227,22 @@ void InspectorDatabaseAgent::InnerEnable() {
                          WrapPersistent(this)));
 }
 
-Response InspectorDatabaseAgent::enable() {
+protocol::Response InspectorDatabaseAgent::enable() {
   if (enabled_.Get())
-    return Response::Success();
+    return protocol::Response::Success();
   enabled_.Set(true);
   InnerEnable();
-  return Response::Success();
+  return protocol::Response::Success();
 }
 
-Response InspectorDatabaseAgent::disable() {
+protocol::Response InspectorDatabaseAgent::disable() {
   if (!enabled_.Get())
-    return Response::Success();
+    return protocol::Response::Success();
   enabled_.Set(false);
   if (DatabaseClient* client = DatabaseClient::FromPage(page_))
     client->SetInspectorAgent(nullptr);
   resources_.clear();
-  return Response::Success();
+  return protocol::Response::Success();
 }
 
 void InspectorDatabaseAgent::Restore() {
@@ -255,11 +250,11 @@ void InspectorDatabaseAgent::Restore() {
     InnerEnable();
 }
 
-Response InspectorDatabaseAgent::getDatabaseTableNames(
+protocol::Response InspectorDatabaseAgent::getDatabaseTableNames(
     const String& database_id,
     std::unique_ptr<protocol::Array<String>>* names) {
   if (!enabled_.Get())
-    return Response::ServerError("Database agent is not enabled");
+    return protocol::Response::ServerError("Database agent is not enabled");
 
   blink::Database* database = DatabaseForId(database_id);
   if (database) {
@@ -269,7 +264,7 @@ Response InspectorDatabaseAgent::getDatabaseTableNames(
   } else {
     *names = std::make_unique<protocol::Array<String>>();
   }
-  return Response::Success();
+  return protocol::Response::Success();
 }
 
 void InspectorDatabaseAgent::executeSQL(
@@ -278,13 +273,14 @@ void InspectorDatabaseAgent::executeSQL(
     std::unique_ptr<ExecuteSQLCallback> request_callback) {
   if (!enabled_.Get()) {
     request_callback->sendFailure(
-        Response::ServerError("Database agent is not enabled"));
+        protocol::Response::ServerError("Database agent is not enabled"));
     return;
   }
 
   blink::Database* database = DatabaseForId(database_id);
   if (!database) {
-    request_callback->sendFailure(Response::ServerError("Database not found"));
+    request_callback->sendFailure(
+        protocol::Response::ServerError("Database not found"));
     return;
   }
 

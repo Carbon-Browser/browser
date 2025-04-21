@@ -1,16 +1,24 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/377326291): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/updater/device_management/dm_policy_builder_for_testing.h"
 
 #include <stdint.h>
+
+#include <memory>
+#include <string>
 #include <utility>
 
-#include "base/strings/string_util.h"
-#include "chrome/updater/device_management/dm_cached_policy_info.h"
+#include "base/logging.h"
+#include "base/time/time.h"
 #include "chrome/updater/protos/omaha_settings.pb.h"
-#include "chrome/updater/unittest_util.h"
+#include "chrome/updater/test/unit_test_util.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "crypto/rsa_private_key.h"
 #include "crypto/signature_creator.h"
@@ -168,12 +176,12 @@ GetDefaultTestingOmahaPolicyProto() {
   omaha_settings->set_proxy_mode("pac_script");
   omaha_settings->set_proxy_pac_url("foo.c/proxy.pa");
   omaha_settings->set_install_default(
-      ::wireless_android_enterprise_devicemanagement::INSTALL_ENABLED);
+      ::wireless_android_enterprise_devicemanagement::INSTALL_DEFAULT_ENABLED);
   omaha_settings->set_update_default(
       ::wireless_android_enterprise_devicemanagement::MANUAL_UPDATES_ONLY);
 
   ::wireless_android_enterprise_devicemanagement::ApplicationSettings app;
-  app.set_app_guid(kChromeAppId);
+  app.set_app_guid(test::kChromeAppId);
   app.set_install(
       ::wireless_android_enterprise_devicemanagement::INSTALL_DISABLED);
   app.set_update(
@@ -189,17 +197,29 @@ GetDefaultTestingOmahaPolicyProto() {
 }
 
 std::unique_ptr<::enterprise_management::DeviceManagementResponse>
+GetDMResponseForOmahaPolicy(
+    bool first_request,
+    bool rotate_to_new_key,
+    DMPolicyBuilderForTesting::SigningOption signing_option,
+    const std::string& dm_token,
+    const std::string& device_id,
+    const ::wireless_android_enterprise_devicemanagement::
+        OmahaSettingsClientProto& omaha_settings) {
+  return DMPolicyBuilderForTesting::CreateInstanceWithOptions(
+             first_request, rotate_to_new_key, signing_option, dm_token,
+             device_id)
+      ->BuildDMResponseForPolicies(
+          {{"google/machine-level-omaha", omaha_settings.SerializeAsString()}});
+}
+
+std::unique_ptr<::enterprise_management::DeviceManagementResponse>
 GetDefaultTestingPolicyFetchDMResponse(
     bool first_request,
     bool rotate_to_new_key,
     DMPolicyBuilderForTesting::SigningOption signing_option) {
-  std::unique_ptr<DMPolicyBuilderForTesting> policy_builder =
-      DMPolicyBuilderForTesting::CreateInstanceWithOptions(
-          first_request, rotate_to_new_key, signing_option);
-  DMPolicyMap policy_map;
-  policy_map.emplace("google/machine-level-omaha",
-                     GetDefaultTestingOmahaPolicyProto()->SerializeAsString());
-  return policy_builder->BuildDMResponseForPolicies(policy_map);
+  return GetDMResponseForOmahaPolicy(
+      first_request, rotate_to_new_key, signing_option, "test-dm-token",
+      "test-device-id", *GetDefaultTestingOmahaPolicyProto());
 }
 
 DMSigningKeyForTesting::DMSigningKeyForTesting(const uint8_t key_data[],
@@ -262,7 +282,9 @@ std::unique_ptr<DMPolicyBuilderForTesting>
 DMPolicyBuilderForTesting::CreateInstanceWithOptions(
     bool first_request,
     bool rotate_to_new_key,
-    SigningOption signing_option) {
+    SigningOption signing_option,
+    const std::string& dm_token,
+    const std::string& device_id) {
   std::unique_ptr<DMSigningKeyForTesting> signing_key;
   std::unique_ptr<DMSigningKeyForTesting> new_signing_key;
 
@@ -276,16 +298,18 @@ DMPolicyBuilderForTesting::CreateInstanceWithOptions(
   }
 
   return std::make_unique<DMPolicyBuilderForTesting>(
-      "test-dm-token", "username@example.com", "test-device-id",
-      std::move(signing_key), std::move(new_signing_key), signing_option);
+      dm_token, "username@example.com", device_id, std::move(signing_key),
+      std::move(new_signing_key), signing_option);
 }
 
 void DMPolicyBuilderForTesting::FillPolicyFetchResponseWithPayload(
     enterprise_management::PolicyFetchResponse* policy_response,
     const std::string& policy_type,
-    const std::string& policy_payload) const {
+    const std::string& policy_payload,
+    bool attach_new_public_key) const {
   const DMSigningKeyForTesting* signing_key = signing_key_.get();
-  if (new_signing_key_) {
+  if (new_signing_key_ && attach_new_public_key) {
+    VLOG(1) << "Attaching new public key for policy " << policy_type;
     signing_key = new_signing_key_.get();
 
     // Attach the new public key and its signature to the policy response.
@@ -297,6 +321,8 @@ void DMPolicyBuilderForTesting::FillPolicyFetchResponseWithPayload(
       if (signing_option_ == SigningOption::kTamperKeySignature) {
         *policy_response->mutable_new_public_key_signature() = "bad-key-sig";
       } else {
+        policy_response->set_policy_data_signature_type(
+            enterprise_management::PolicyFetchRequest::SHA256_RSA);
         signing_key_->SignData(
             policy_response->new_public_key(),
             policy_response->mutable_new_public_key_signature());
@@ -313,6 +339,8 @@ void DMPolicyBuilderForTesting::FillPolicyFetchResponseWithPayload(
     policy_response->set_new_public_key_verification_data_signature(
         new_signing_key_->GetPublicKeySignature());
   } else {
+    VLOG(1) << "Added policy [" << policy_type
+            << "] in response without a public key.";
     policy_response->clear_new_public_key();
     policy_response->clear_new_public_key_verification_data();
     policy_response->clear_new_public_key_verification_data_signature();
@@ -321,7 +349,8 @@ void DMPolicyBuilderForTesting::FillPolicyFetchResponseWithPayload(
 
   enterprise_management::PolicyData policy_data;
   policy_data.set_policy_type(policy_type);
-  policy_data.set_timestamp(time(nullptr));
+  policy_data.set_timestamp(
+      (base::Time::Now() - base::Time::UnixEpoch()).InMilliseconds());
   policy_data.set_request_token(dm_token_);
   if (signing_key->has_key_version()) {
     policy_data.set_public_key_version(signing_key->key_version());
@@ -335,6 +364,8 @@ void DMPolicyBuilderForTesting::FillPolicyFetchResponseWithPayload(
   if (signing_option_ == SigningOption::kTamperDataSignature) {
     *policy_response->mutable_policy_data_signature() = "bad-data-sig";
   } else {
+    policy_response->set_policy_data_signature_type(
+        enterprise_management::PolicyFetchRequest::SHA256_RSA);
     signing_key->SignData(policy_response->policy_data(),
                           policy_response->mutable_policy_data_signature());
   }
@@ -345,7 +376,8 @@ std::string DMPolicyBuilderForTesting::GetResponseBlobForPolicyPayload(
     const std::string& policy_payload) const {
   enterprise_management::PolicyFetchResponse policy_response;
   FillPolicyFetchResponseWithPayload(&policy_response, policy_type,
-                                     policy_payload);
+                                     policy_payload,
+                                     /*attach_new_public_key=*/true);
   return policy_response.SerializeAsString();
 }
 
@@ -355,11 +387,21 @@ DMPolicyBuilderForTesting::BuildDMResponseForPolicies(
   auto dm_response =
       std::make_unique<::enterprise_management::DeviceManagementResponse>();
 
-  for (const auto& policy : policies) {
+  for (const auto& [policy_type, policy_data] : policies) {
     FillPolicyFetchResponseWithPayload(
-        dm_response->mutable_policy_response()->add_responses(), policy.first,
-        policy.second);
+        dm_response->mutable_policy_response()->add_responses(), policy_type,
+        policy_data,
+        /*attach_new_public_key=*/policy_type == "google/machine-level-omaha");
   }
+  return dm_response;
+}
+
+std::unique_ptr<::enterprise_management::DeviceManagementResponse>
+DMPolicyBuilderForTesting::BuildDMResponseWithError(
+    ::enterprise_management::DeviceManagementErrorDetail error) const {
+  auto dm_response =
+      std::make_unique<::enterprise_management::DeviceManagementResponse>();
+  dm_response->add_error_detail(error);
   return dm_response;
 }
 

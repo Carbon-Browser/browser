@@ -1,6 +1,6 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file. See the AUTHORS file for names of contributors.
+// found in the LICENSE file.
 
 #include "third_party/leveldatabase/leveldb_chrome.h"
 
@@ -8,18 +8,17 @@
 #include <set>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/containers/flat_set.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
 #include "base/format_macros.h"
+#include "base/functional/bind.h"
 #include "base/memory/memory_pressure_listener.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/no_destructor.h"
 #include "base/strings/stringprintf.h"
 #include "base/system/sys_info.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/memory_dump_provider.h"
 #include "base/trace_event/process_memory_dump.h"
@@ -41,10 +40,11 @@ namespace leveldb_chrome {
 namespace {
 
 size_t DefaultBlockCacheSize() {
-  if (base::SysInfo::IsLowEndDevice())
+  if (base::SysInfo::IsLowEndDeviceOrPartialLowEndModeEnabled()) {
     return 1 << 20;  // 1MB
-  else
+  } else {
     return 8 << 20;  // 8MB
+  }
 }
 
 std::string GetDumpNameForMemEnv(const leveldb::Env* memenv) {
@@ -61,9 +61,10 @@ class Globals {
   }
 
   Globals()
-      : web_block_cache_(base::SysInfo::IsLowEndDevice()
-                             ? nullptr
-                             : NewLRUCache(DefaultBlockCacheSize())),
+      : web_block_cache_(
+            base::SysInfo::IsLowEndDeviceOrPartialLowEndModeEnabled()
+                ? nullptr
+                : NewLRUCache(DefaultBlockCacheSize())),
         browser_block_cache_(NewLRUCache(DefaultBlockCacheSize())),
         // Using |this| here (when Globals is only partially constructed) is
         // safe because base::MemoryPressureListener calls our callback
@@ -226,7 +227,7 @@ class ChromeMemEnv : public leveldb::EnvWrapper {
                         size());
 
     if (dump_args.level_of_detail !=
-        base::trace_event::MemoryDumpLevelOfDetail::BACKGROUND) {
+        base::trace_event::MemoryDumpLevelOfDetail::kBackground) {
       env_dump->AddString("name", "", name());
     }
 
@@ -285,6 +286,32 @@ leveldb::Status RemoveEnvDirectory(const std::string& directory,
   return result;
 }
 
+// This is an empty `Cache`, suitable for use as a block cache for in-memory
+// databases. It will not function in contexts where `Cache` is expected to
+// behave consistently, i.e. where `Insert()` is expected to return a non-null
+// value that can be handled by `Lookup()` or `Value()`. The block cache in
+// particular does not have this requirement.
+class NoOpBlockCache : public Cache {
+ public:
+  NoOpBlockCache() = default;
+  ~NoOpBlockCache() override = default;
+
+  Handle* Insert(const leveldb::Slice& key,
+                 void* value,
+                 size_t charge,
+                 void (*deleter)(const leveldb::Slice& key,
+                                 void* value)) override {
+    return nullptr;
+  }
+  Handle* Lookup(const leveldb::Slice& key) override { return nullptr; }
+  void Release(Handle* handle) override {}
+  void* Value(Handle* handle) override { return nullptr; }
+  void Erase(const leveldb::Slice& key) override {}
+  uint64_t NewId() override { return 0; }
+  void Prune() override {}
+  size_t TotalCharge() const override { return 0u; }
+};
+
 }  // namespace
 
 // Returns a separate (from the default) block cache for use by web APIs.
@@ -301,9 +328,8 @@ Cache* GetSharedBrowserBlockCache() {
 }
 
 Cache* GetSharedInMemoryBlockCache() {
-  // Zero size cache to prevent cache hits.
-  static leveldb::Cache* s_empty_cache = leveldb::NewLRUCache(0);
-  return s_empty_cache;
+  static base::NoDestructor<NoOpBlockCache> s_empty_cache;
+  return s_empty_cache.get();
 }
 
 bool IsMemEnv(const leveldb::Env* env) {

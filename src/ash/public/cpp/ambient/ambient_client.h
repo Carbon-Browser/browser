@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,11 @@
 
 #include "ash/public/cpp/ash_public_export.h"
 #include "ash/public/cpp/image_downloader.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "services/device/public/mojom/wake_lock_provider.mojom.h"
+
+class GaiaId;
 
 namespace base {
 class Time;
@@ -29,7 +31,7 @@ namespace ash {
 class ASH_PUBLIC_EXPORT AmbientClient {
  public:
   using GetAccessTokenCallback =
-      base::OnceCallback<void(const std::string& gaia_id,
+      base::OnceCallback<void(const GaiaId& gaia_id,
                               const std::string& access_token,
                               const base::Time& expiration_time)>;
 
@@ -54,6 +56,10 @@ class ASH_PUBLIC_EXPORT AmbientClient {
   // Return the URL loader factory associated with the active user's profile.
   virtual scoped_refptr<network::SharedURLLoaderFactory>
   GetURLLoaderFactory() = 0;
+
+  // Return the URL loader factory associated with the sign in profile.
+  virtual scoped_refptr<network::SharedURLLoaderFactory>
+  GetSigninURLLoaderFactory() = 0;
 
   // Requests a connection to the device service's |WakeLockProvider|
   // from the browser.

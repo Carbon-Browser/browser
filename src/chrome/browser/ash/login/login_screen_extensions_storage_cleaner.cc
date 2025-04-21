@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_util.h"
 #include "base/values.h"
-#include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chromeos/ash/components/browser_context_helper/browser_context_helper.h"
 #include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 #include "components/prefs/pref_service.h"
 #include "extensions/browser/pref_names.h"
@@ -23,8 +23,10 @@ const char kPersistentDataKeyPrefix[] = "persistent_data_";
 }  // namespace
 
 LoginScreenExtensionsStorageCleaner::LoginScreenExtensionsStorageCleaner() {
-  DCHECK(ProfileHelper::IsSigninProfileInitialized());
-  prefs_ = ProfileHelper::GetSigninProfile()->GetPrefs();
+  auto* browser_context =
+      BrowserContextHelper::Get()->GetSigninBrowserContext();
+  DCHECK(browser_context);
+  prefs_ = Profile::FromBrowserContext(browser_context)->GetPrefs();
   pref_change_registrar_.Init(prefs_);
   pref_change_registrar_.Add(
       extensions::pref_names::kInstallForceList,
@@ -44,11 +46,11 @@ void LoginScreenExtensionsStorageCleaner::
   std::vector<std::string> installed_extension_ids;
   const PrefService::Preference* const pref =
       prefs_->FindPreference(extensions::pref_names::kInstallForceList);
-  if (pref && pref->IsManaged() &&
-      pref->GetType() == base::Value::Type::DICTIONARY) {
+  if (pref && pref->IsManaged() && pref->GetType() == base::Value::Type::DICT) {
     // Each `item` contains a pair of extension ID and update URL.
-    for (const auto item : pref->GetValue()->DictItems())
+    for (const auto item : pref->GetValue()->GetDict()) {
       installed_extension_ids.push_back(item.first);
+    }
   }
   SessionManagerClient::Get()->LoginScreenStorageListKeys(base::BindOnce(
       &LoginScreenExtensionsStorageCleaner::
@@ -60,7 +62,7 @@ void LoginScreenExtensionsStorageCleaner::
     ClearPersistentDataForUninstalledExtensionsImpl(
         const std::vector<std::string>& installed_extension_ids,
         std::vector<std::string> keys,
-        absl::optional<std::string> error) {
+        std::optional<std::string> error) {
   if (error)
     return;
 

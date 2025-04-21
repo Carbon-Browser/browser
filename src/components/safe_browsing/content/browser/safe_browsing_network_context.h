@@ -1,15 +1,15 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SAFE_BROWSING_CONTENT_BROWSER_SAFE_BROWSING_NETWORK_CONTEXT_H_
 #define COMPONENTS_SAFE_BROWSING_CONTENT_BROWSER_SAFE_BROWSING_NETWORK_CONTEXT_H_
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
-#include "services/network/public/mojom/network_service.mojom.h"
+#include "services/network/public/mojom/network_context.mojom-forward.h"
 
 namespace network {
 namespace mojom {

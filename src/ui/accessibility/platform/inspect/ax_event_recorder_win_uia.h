@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,27 +6,31 @@
 #define UI_ACCESSIBILITY_PLATFORM_INSPECT_AX_EVENT_RECORDER_WIN_UIA_H_
 
 #include <ole2.h>
+
 #include <stdint.h>
-#include <uiautomation.h>
 #include <wrl/client.h>
+
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "base/atomicops.h"
+#include "base/component_export.h"
 #include "base/memory/raw_ptr.h"
 #include "base/process/process_handle.h"
 #include "base/run_loop.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/threading/platform_thread.h"
 #include "base/win/atl.h"
-#include "ui/accessibility/ax_export.h"
 #include "ui/accessibility/platform/inspect/ax_event_recorder.h"
 #include "ui/accessibility/platform/inspect/ax_inspect.h"
 
+#include <uiautomation.h>
+
 namespace ui {
 
-class AX_EXPORT AXEventRecorderWinUia : public AXEventRecorder {
+class COMPONENT_EXPORT(AX_PLATFORM) AXEventRecorderWinUia
+    : public AXEventRecorder {
  public:
   AXEventRecorderWinUia(const AXTreeSelector& selector);
 

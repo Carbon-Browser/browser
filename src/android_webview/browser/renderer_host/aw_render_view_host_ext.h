@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include "content/public/browser/web_contents_observer.h"
 
 #include "android_webview/common/mojom/frame.mojom.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "content/public/browser/global_routing_id.h"
 #include "content/public/browser/render_frame_host_receiver_set.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
@@ -57,11 +57,6 @@ class AwRenderViewHostExt : public content::WebContentsObserver,
   using DocumentHasImagesResult = base::OnceCallback<void(bool)>;
   void DocumentHasImages(DocumentHasImagesResult result);
 
-  // Do a hit test at the view port coordinates and asynchronously update
-  // |last_hit_test_data_|. Width and height in |touch_area| are in density
-  // independent pixels used by blink::WebView.
-  void RequestNewHitTestDataAt(const gfx::PointF& touch_center,
-                               const gfx::SizeF& touch_area);
   // Return |last_hit_test_data_|. Note that this is unavoidably racy;
   // the corresponding public WebView API is as well.
   mojom::HitTestDataPtr TakeLastHitTestData();

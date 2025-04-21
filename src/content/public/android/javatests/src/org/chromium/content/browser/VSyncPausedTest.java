@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,22 +13,20 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.BaseJUnit4ClassRunner;
 import org.chromium.base.test.util.CallbackHelper;
 import org.chromium.base.test.util.UrlUtils;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.content_public.browser.WebContentsObserver;
 import org.chromium.content_public.browser.test.util.JavaScriptUtils;
-import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.content_shell_apk.ContentShellActivity;
 import org.chromium.content_shell_apk.ContentShellActivityTestRule;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-/**
- * Tests pausing the VSync loop for a WindowAndroid.
- */
+/** Tests pausing the VSync loop for a WindowAndroid. */
 @RunWith(BaseJUnit4ClassRunner.class)
 public class VSyncPausedTest {
     @Rule
@@ -45,24 +43,27 @@ public class VSyncPausedTest {
 
     @Before
     public void setUp() throws Exception {
-        mActivity = mActivityTestRule.launchContentShellWithUrl(
-                UrlUtils.getIsolatedTestFileUrl(VSYNC_HTML));
+        mActivity =
+                mActivityTestRule.launchContentShellWithUrl(
+                        UrlUtils.getIsolatedTestFileUrl(VSYNC_HTML));
         mActivityTestRule.waitForActiveShellToBeDoneLoading();
         final WebContents webContents = mActivity.getActiveWebContents();
         mObserver =
-                TestThreadUtils.runOnUiThreadBlocking(() -> new WebContentsObserver(webContents) {
-                    @Override
-                    public void titleWasSet(String title) {
-                        mTitle = title;
-                        mOnTitleUpdatedHelper.notifyCalled();
-                    }
-                });
+                ThreadUtils.runOnUiThreadBlocking(
+                        () ->
+                                new WebContentsObserver(webContents) {
+                                    @Override
+                                    public void titleWasSet(String title) {
+                                        mTitle = title;
+                                        mOnTitleUpdatedHelper.notifyCalled();
+                                    }
+                                });
         mOnTitleUpdatedHelper = new CallbackHelper();
     }
 
     @After
     public void tearDown() {
-        TestThreadUtils.runOnUiThreadBlocking(() -> mObserver.destroy());
+        ThreadUtils.runOnUiThreadBlocking(() -> mObserver.destroy());
     }
 
     @Test
@@ -73,10 +74,14 @@ public class VSyncPausedTest {
                 mActivity.getActiveWebContents(), CALL_RAF);
         mOnTitleUpdatedHelper.waitForCallback(callCount);
         Assert.assertEquals("1", mTitle);
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mActivity.getActiveShell().getWebContents().getTopLevelNativeWindow().setVSyncPaused(
-                    true);
-        });
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mActivity
+                            .getActiveShell()
+                            .getWebContents()
+                            .getTopLevelNativeWindow()
+                            .setVSyncPaused(true);
+                });
         callCount = mOnTitleUpdatedHelper.getCallCount();
         JavaScriptUtils.executeJavaScriptAndWaitForResult(
                 mActivity.getActiveWebContents(), CALL_RAF);
@@ -101,10 +106,14 @@ public class VSyncPausedTest {
             }
             Assert.assertEquals("2", mTitle);
         }
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            mActivity.getActiveShell().getWebContents().getTopLevelNativeWindow().setVSyncPaused(
-                    false);
-        });
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mActivity
+                            .getActiveShell()
+                            .getWebContents()
+                            .getTopLevelNativeWindow()
+                            .setVSyncPaused(false);
+                });
         mOnTitleUpdatedHelper.waitForCallback(callCount);
         Assert.assertEquals(expected, mTitle);
     }

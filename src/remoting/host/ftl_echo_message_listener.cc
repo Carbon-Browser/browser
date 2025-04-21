@@ -1,8 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "remoting/host/ftl_echo_message_listener.h"
+
+#include <string>
 
 #include "base/logging.h"
 #include "remoting/base/logging.h"
@@ -16,9 +18,11 @@ constexpr int kMaxEchoMessageLength = 16;
 
 namespace remoting {
 
-FtlEchoMessageListener::FtlEchoMessageListener(std::string host_owner,
-                                               SignalStrategy* signal_strategy)
-    : host_owner_(host_owner), signal_strategy_(signal_strategy) {
+FtlEchoMessageListener::FtlEchoMessageListener(
+    CheckAccessPermissionCallback check_access_permission_callback,
+    SignalStrategy* signal_strategy)
+    : check_access_permission_callback_(check_access_permission_callback),
+      signal_strategy_(signal_strategy) {
   DCHECK(signal_strategy_);
   signal_strategy_->AddListener(this);
 }
@@ -45,7 +49,7 @@ bool FtlEchoMessageListener::OnSignalStrategyIncomingMessage(
 
   // Only respond to echo messages from the machine owner.
   if (sender_id.type() != ftl::IdType_Type_EMAIL ||
-      sender_id.id() != host_owner_) {
+      !check_access_permission_callback_.Run(sender_id.id())) {
     LOG(WARNING) << "Dropping echo message from " << sender_id.id();
     return false;
   }

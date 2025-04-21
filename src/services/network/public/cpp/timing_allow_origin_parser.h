@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,12 @@
 #define SERVICES_NETWORK_PUBLIC_CPP_TIMING_ALLOW_ORIGIN_PARSER_H_
 
 #include <string>
+#include <string_view>
 
 #include "base/component_export.h"
+#include "services/network/public/mojom/timing_allow_origin.mojom-forward.h"
 #include "services/network/public/mojom/timing_allow_origin.mojom.h"
+#include "url/origin.h"
 
 namespace network {
 
@@ -23,10 +26,14 @@ namespace network {
 // In an ideal world though, Blink would be able to use `URLResponseHead` as
 // well...
 //
-// TODO(https://crbug.com/1199547): Use base::StringPiece here, though this
+// TODO(crbug.com/40177882): Use std::string_view here, though this
 // requires fixing a lot of other plumbing.
 COMPONENT_EXPORT(NETWORK_CPP)
 mojom::TimingAllowOriginPtr ParseTimingAllowOrigin(const std::string& value);
+
+COMPONENT_EXPORT(NETWORK_CPP)
+bool TimingAllowOriginCheck(const mojom::TimingAllowOriginPtr& tao,
+                            const url::Origin& origin);
 
 }  // namespace network
 

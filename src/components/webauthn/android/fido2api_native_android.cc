@@ -1,16 +1,20 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <jni.h>
 
 #include "base/android/jni_array.h"
-#include "components/cbor/reader.h"
-#include "components/webauthn/android/jni_headers/Fido2Api_jni.h"
-#include "device/fido/attested_credential_data.h"
-#include "device/fido/public_key.h"
-#include "third_party/boringssl/src/include/openssl/bytestring.h"
+#include "components/cbor/values.h"
+#include "device/fido/attestation_object.h"
+#include "device/fido/authenticator_data.h"
+#include "device/fido/fido_constants.h"
 
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "components/webauthn/android/jni_headers/Fido2Api_jni.h"
+
+using base::android::JavaByteArrayToByteVector;
+using base::android::JavaParamRef;
 using base::android::ScopedJavaLocalRef;
 using base::android::ToJavaByteArray;
 
@@ -29,51 +33,22 @@ static jboolean JNI_Fido2Api_ParseAttestationObject(
   std::vector<uint8_t> attestation_object_bytes;
   JavaByteArrayToByteVector(env, jattestation_object_bytes,
                             &attestation_object_bytes);
-
-  absl::optional<cbor::Value> attestation_object =
-      cbor::Reader::Read(attestation_object_bytes);
-  if (!attestation_object || !attestation_object->is_map()) {
+  std::optional<device::AttestationObject::ResponseFields> fields =
+      device::AttestationObject::ParseForResponseFields(
+          std::move(attestation_object_bytes), /*attestation_acceptable=*/true);
+  if (!fields) {
     return false;
   }
 
-  const cbor::Value::MapValue& map = attestation_object->GetMap();
-  // See https://www.w3.org/TR/webauthn/#generating-an-attestation-object
-  cbor::Value::MapValue::const_iterator it = map.find(cbor::Value("authData"));
-  if (it == map.end() || !it->second.is_bytestring()) {
-    return false;
-  }
-  const std::vector<uint8_t>& auth_data = it->second.GetBytestring();
-  // See https://www.w3.org/TR/webauthn/#sec-authenticator-data
-  CBS cbs;
-  CBS_init(&cbs, auth_data.data(), auth_data.size());
-  uint8_t flags;
-  if (  // RP ID hash.
-      !CBS_skip(&cbs, 32) || !CBS_get_u8(&cbs, &flags) ||
-      // Check AT flag is set.
-      ((flags >> 6) & 1) == 0 ||
-      // Signature counter.
-      !CBS_skip(&cbs, 4)) {
-    return false;
-  }
-
-  const auto result = device::AttestedCredentialData::ConsumeFromCtapResponse(
-      base::span<const uint8_t>(CBS_data(&cbs), CBS_len(&cbs)));
-  if (!result) {
-    return false;
-  }
-
-  ScopedJavaLocalRef<jbyteArray> auth_data_java(
-      ToJavaByteArray(env, auth_data));
-
-  const device::PublicKey* pub_key = result->first.public_key();
-  const absl::optional<std::vector<uint8_t>>& der_bytes(pub_key->der_bytes);
   ScopedJavaLocalRef<jbyteArray> spki_java;
-  if (der_bytes) {
-    spki_java.Reset(ToJavaByteArray(env, *der_bytes));
+  if (fields->public_key_der) {
+    spki_java.Reset(ToJavaByteArray(env, *fields->public_key_der));
   }
 
-  Java_AttestationObjectParts_setAll(env, out_result, auth_data_java, spki_java,
-                                     pub_key->algorithm);
+  Java_AttestationObjectParts_setAll(
+      env, out_result, ToJavaByteArray(env, fields->authenticator_data),
+      spki_java, fields->public_key_algo,
+      ToJavaByteArray(env, fields->attestation_object_bytes));
 
   return true;
 }

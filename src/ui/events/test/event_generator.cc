@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ui/events/test/event_generator.h"
 
@@ -10,13 +15,13 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/check.h"
+#include "base/containers/adapters.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/tick_clock.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "ui/events/event.h"
 #include "ui/events/event_source.h"
 #include "ui/events/event_utils.h"
@@ -27,6 +32,10 @@
 #include <windows.h>
 
 #include "ui/events/keycodes/keyboard_code_conversion.h"
+#endif
+
+#if BUILDFLAG(IS_OZONE)
+#include "ui/events/ozone/events_ozone.h"
 #endif
 
 namespace ui {
@@ -40,11 +49,18 @@ class TestTickClock : public base::TickClock {
   TestTickClock(const TestTickClock&) = delete;
   TestTickClock& operator=(const TestTickClock&) = delete;
 
-  // Unconditionally returns a tick count that is 1ms later than the previous
-  // call, starting at 1ms.
+  // Returns a tick count that is 1ms later than the previous call to
+  // `NowTicks`, plus possible additional time from calls to `Advance`. Starts
+  // at 1ms.
   base::TimeTicks NowTicks() const override {
     static constexpr base::TimeDelta kOneMillisecond = base::Milliseconds(1);
     return ticks_ += kOneMillisecond;
+  }
+
+  // Advances the clock by `delta`. `delta` should be non-negative.
+  void Advance(const base::TimeDelta& delta) {
+    DCHECK(delta >= base::TimeDelta());
+    ticks_ += delta;
   }
 
  private:
@@ -55,30 +71,37 @@ namespace {
 
 void DummyCallback(EventType, const gfx::Vector2dF&) {}
 
-class TestTouchEvent : public ui::TouchEvent {
- public:
-  TestTouchEvent(ui::EventType type,
-                 const gfx::Point& root_location,
-                 int touch_id,
-                 int flags,
-                 base::TimeTicks timestamp)
-      : TouchEvent(type,
-                   root_location,
-                   timestamp,
-                   ui::PointerDetails(ui::EventPointerType::kTouch,
-                                      /* pointer_id*/ touch_id,
-                                      /* radius_x */ 1.0f,
-                                      /* radius_y */ 1.0f,
-                                      /* force */ 0.0f),
-                   flags) {}
-
-  TestTouchEvent(const TestTouchEvent&) = delete;
-  TestTouchEvent& operator=(const TestTouchEvent&) = delete;
-};
+ui::TouchEvent CreateTestTouchEvent(ui::EventType type,
+                                    const gfx::Point& root_location,
+                                    int touch_id,
+                                    int flags,
+                                    base::TimeTicks timestamp) {
+  return ui::TouchEvent(type, root_location, timestamp,
+                        ui::PointerDetails(ui::EventPointerType::kTouch,
+                                           /* pointer_id*/ touch_id,
+                                           /* radius_x */ 1.0f,
+                                           /* radius_y */ 1.0f,
+                                           /* force */ 0.0f),
+                        flags);
+}
 
 const int kAllButtonMask = ui::EF_LEFT_MOUSE_BUTTON | ui::EF_RIGHT_MOUSE_BUTTON;
 
 EventGeneratorDelegate::FactoryFunction g_event_generator_delegate_factory;
+
+bool g_event_generator_allowed = true;
+
+struct ModifierKey {
+  KeyboardCode key;
+  EventFlags flag;
+};
+
+constexpr ModifierKey kModifierKeys[] = {
+    {VKEY_SHIFT, EF_SHIFT_DOWN},
+    {VKEY_CONTROL, EF_CONTROL_DOWN},
+    {VKEY_MENU, EF_ALT_DOWN},
+    {VKEY_LWIN, EF_COMMAND_DOWN},
+};
 
 }  // namespace
 
@@ -87,19 +110,24 @@ void EventGeneratorDelegate::SetFactoryFunction(FactoryFunction factory) {
   g_event_generator_delegate_factory = std::move(factory);
 }
 
+// static
+void EventGenerator::BanEventGenerator() {
+  g_event_generator_allowed = false;
+}
+
 EventGenerator::EventGenerator(std::unique_ptr<EventGeneratorDelegate> delegate)
     : delegate_(std::move(delegate)) {
-  Init(nullptr, nullptr);
+  Init(gfx::NativeWindow(), gfx::NativeWindow());
 }
 
 EventGenerator::EventGenerator(gfx::NativeWindow root_window) {
-  Init(root_window, nullptr);
+  Init(root_window, gfx::NativeWindow());
 }
 
 EventGenerator::EventGenerator(gfx::NativeWindow root_window,
                                const gfx::Point& point)
     : current_screen_location_(point) {
-  Init(root_window, nullptr);
+  Init(root_window, gfx::NativeWindow());
 }
 
 EventGenerator::EventGenerator(gfx::NativeWindow root_window,
@@ -114,6 +142,30 @@ EventGenerator::~EventGenerator() {
 void EventGenerator::SetTargetWindow(gfx::NativeWindow target_window) {
   delegate()->SetTargetWindow(target_window);
   SetCurrentScreenLocation(delegate()->CenterOfWindow(target_window));
+}
+
+void EventGenerator::PressButton(int flag) {
+  if (!(flags_ & flag)) {
+    flags_ |= flag;
+    grab_ = (flags_ & kAllButtonMask) != 0;
+    gfx::Point location = GetLocationInCurrentRoot();
+    ui::MouseEvent mouseev(ui::EventType::kMousePressed, location, location,
+                           ui::EventTimeForNow(), flags_, flag);
+    mouseev.set_source_device_id(mouse_source_device_id_);
+    Dispatch(&mouseev);
+  }
+}
+
+void EventGenerator::ReleaseButton(int flag) {
+  if (flags_ & flag) {
+    gfx::Point location = GetLocationInCurrentRoot();
+    ui::MouseEvent mouseev(ui::EventType::kMouseReleased, location, location,
+                           ui::EventTimeForNow(), flags_, flag);
+    mouseev.set_source_device_id(mouse_source_device_id_);
+    Dispatch(&mouseev);
+    flags_ ^= flag;
+  }
+  grab_ = (flags_ & kAllButtonMask) != 0;
 }
 
 void EventGenerator::PressLeftButton() {
@@ -154,26 +206,29 @@ void EventGenerator::MoveMouseWheel(int delta_x, int delta_y) {
   gfx::Point location = GetLocationInCurrentRoot();
   ui::MouseWheelEvent wheelev(gfx::Vector2d(delta_x, delta_y), location,
                               location, ui::EventTimeForNow(), flags_, 0);
+  wheelev.set_source_device_id(mouse_source_device_id_);
   Dispatch(&wheelev);
 }
 
 void EventGenerator::SendMouseEnter() {
   gfx::Point enter_location(current_screen_location_);
   delegate()->ConvertPointToTarget(current_target_, &enter_location);
-  ui::MouseEvent mouseev(ui::ET_MOUSE_ENTERED, enter_location, enter_location,
-                         ui::EventTimeForNow(), flags_, 0);
+  ui::MouseEvent mouseev(ui::EventType::kMouseEntered, enter_location,
+                         enter_location, ui::EventTimeForNow(), flags_, 0);
+  mouseev.set_source_device_id(mouse_source_device_id_);
   Dispatch(&mouseev);
 }
 
 void EventGenerator::SendMouseExit() {
   gfx::Point exit_location(current_screen_location_);
   delegate()->ConvertPointToTarget(current_target_, &exit_location);
-  ui::MouseEvent mouseev(ui::ET_MOUSE_EXITED, exit_location, exit_location,
-                         ui::EventTimeForNow(), flags_, 0);
+  ui::MouseEvent mouseev(ui::EventType::kMouseExited, exit_location,
+                         exit_location, ui::EventTimeForNow(), flags_, 0);
+  mouseev.set_source_device_id(mouse_source_device_id_);
   Dispatch(&mouseev);
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 void EventGenerator::MoveMouseToWithNative(const gfx::Point& point_in_host,
                                            const gfx::Point& point_for_native) {
   // Ozone uses the location in native event as a system location.
@@ -181,9 +236,10 @@ void EventGenerator::MoveMouseToWithNative(const gfx::Point& point_in_host,
   // to the non native event, then update the native event with the native
   // (root) one.
   std::unique_ptr<ui::MouseEvent> native_event(
-      new ui::MouseEvent(ui::ET_MOUSE_MOVED, point_in_host, point_in_host,
-                         ui::EventTimeForNow(), flags_, 0));
+      new ui::MouseEvent(ui::EventType::kMouseMoved, point_in_host,
+                         point_in_host, ui::EventTimeForNow(), flags_, 0));
   ui::MouseEvent mouseev(native_event.get());
+  mouseev.set_source_device_id(mouse_source_device_id_);
   native_event->set_location(point_for_native);
   Dispatch(&mouseev);
 
@@ -193,10 +249,12 @@ void EventGenerator::MoveMouseToWithNative(const gfx::Point& point_in_host,
 #endif
 
 void EventGenerator::MoveMouseToInHost(const gfx::Point& point_in_host) {
-  const ui::EventType event_type = (flags_ & ui::EF_LEFT_MOUSE_BUTTON) ?
-      ui::ET_MOUSE_DRAGGED : ui::ET_MOUSE_MOVED;
+  const ui::EventType event_type = (flags_ & ui::EF_LEFT_MOUSE_BUTTON)
+                                       ? ui::EventType::kMouseDragged
+                                       : ui::EventType::kMouseMoved;
   ui::MouseEvent mouseev(event_type, point_in_host, point_in_host,
                          ui::EventTimeForNow(), flags_, 0);
+  mouseev.set_source_device_id(mouse_source_device_id_);
   Dispatch(&mouseev);
 
   SetCurrentScreenLocation(point_in_host);
@@ -206,8 +264,9 @@ void EventGenerator::MoveMouseToInHost(const gfx::Point& point_in_host) {
 void EventGenerator::MoveMouseTo(const gfx::Point& point_in_screen,
                                  int count) {
   DCHECK_GT(count, 0);
-  const ui::EventType event_type = (flags_ & ui::EF_LEFT_MOUSE_BUTTON) ?
-      ui::ET_MOUSE_DRAGGED : ui::ET_MOUSE_MOVED;
+  const ui::EventType event_type = (flags_ & ui::EF_LEFT_MOUSE_BUTTON)
+                                       ? ui::EventType::kMouseDragged
+                                       : ui::EventType::kMouseMoved;
 
   gfx::Vector2dF diff(point_in_screen - current_screen_location_);
   for (float i = 1; i <= count; i++) {
@@ -220,6 +279,7 @@ void EventGenerator::MoveMouseTo(const gfx::Point& point_in_screen,
     delegate()->ConvertPointToTarget(current_target_, &move_point);
     ui::MouseEvent mouseev(event_type, move_point, move_point,
                            ui::EventTimeForNow(), flags_, 0);
+    mouseev.set_source_device_id(mouse_source_device_id_);
     Dispatch(&mouseev);
   }
   SetCurrentScreenLocation(point_in_screen);
@@ -260,18 +320,24 @@ void EventGenerator::SetTouchTilt(float x, float y) {
   touch_pointer_details_.tilt_y = y;
 }
 
+void EventGenerator::SetProperties(
+    std::optional<Event::Properties> properties) {
+  properties_ = std::move(properties);
+}
+
 void EventGenerator::PressTouch(
-    const absl::optional<gfx::Point>& touch_location_in_screen) {
+    const std::optional<gfx::Point>& touch_location_in_screen) {
   PressTouchId(0, touch_location_in_screen);
 }
 
 void EventGenerator::PressTouchId(
     int touch_id,
-    const absl::optional<gfx::Point>& touch_location_in_screen) {
+    const std::optional<gfx::Point>& touch_location_in_screen) {
   if (touch_location_in_screen.has_value())
     SetCurrentScreenLocation(*touch_location_in_screen);
-  TestTouchEvent touchev(ui::ET_TOUCH_PRESSED, GetLocationInCurrentRoot(),
-                         touch_id, flags_, ui::EventTimeForNow());
+  ui::TouchEvent touchev = CreateTestTouchEvent(
+      ui::EventType::kTouchPressed, GetLocationInCurrentRoot(), touch_id,
+      flags_, ui::EventTimeForNow());
   Dispatch(&touchev);
 }
 
@@ -281,8 +347,9 @@ void EventGenerator::MoveTouch(const gfx::Point& point) {
 
 void EventGenerator::MoveTouchId(const gfx::Point& point, int touch_id) {
   SetCurrentScreenLocation(point);
-  TestTouchEvent touchev(ui::ET_TOUCH_MOVED, GetLocationInCurrentRoot(),
-                         touch_id, flags_, ui::EventTimeForNow());
+  ui::TouchEvent touchev = CreateTestTouchEvent(
+      ui::EventType::kTouchMoved, GetLocationInCurrentRoot(), touch_id, flags_,
+      ui::EventTimeForNow());
   Dispatch(&touchev);
 
   if (!grab_)
@@ -294,8 +361,20 @@ void EventGenerator::ReleaseTouch() {
 }
 
 void EventGenerator::ReleaseTouchId(int touch_id) {
-  TestTouchEvent touchev(ui::ET_TOUCH_RELEASED, GetLocationInCurrentRoot(),
-                         touch_id, flags_, ui::EventTimeForNow());
+  ui::TouchEvent touchev = CreateTestTouchEvent(
+      ui::EventType::kTouchReleased, GetLocationInCurrentRoot(), touch_id,
+      flags_, ui::EventTimeForNow());
+  Dispatch(&touchev);
+}
+
+void EventGenerator::CancelTouch() {
+  CancelTouchId(0);
+}
+
+void EventGenerator::CancelTouchId(int touch_id) {
+  ui::TouchEvent touchev = CreateTestTouchEvent(
+      ui::EventType::kTouchCancelled, GetLocationInCurrentRoot(), touch_id,
+      flags_, ui::EventTimeForNow());
   Dispatch(&touchev);
 }
 
@@ -316,12 +395,12 @@ void EventGenerator::GestureTapAt(const gfx::Point& location) {
 
   const int kTouchId = 2;
   ui::TouchEvent press(
-      ui::ET_TOUCH_PRESSED, converted_location, ui::EventTimeForNow(),
+      ui::EventType::kTouchPressed, converted_location, ui::EventTimeForNow(),
       ui::PointerDetails(ui::EventPointerType::kTouch, kTouchId));
   Dispatch(&press);
 
   ui::TouchEvent release(
-      ui::ET_TOUCH_RELEASED, converted_location,
+      ui::EventType::kTouchReleased, converted_location,
       press.time_stamp() + base::Milliseconds(50),
       ui::PointerDetails(ui::EventPointerType::kTouch, kTouchId));
   Dispatch(&release);
@@ -334,12 +413,12 @@ void EventGenerator::GestureTapDownAndUp(const gfx::Point& location) {
 
   const int kTouchId = 3;
   ui::TouchEvent press(
-      ui::ET_TOUCH_PRESSED, converted_location, ui::EventTimeForNow(),
+      ui::EventType::kTouchPressed, converted_location, ui::EventTimeForNow(),
       ui::PointerDetails(ui::EventPointerType::kTouch, kTouchId));
   Dispatch(&press);
 
   ui::TouchEvent release(
-      ui::ET_TOUCH_RELEASED, converted_location,
+      ui::EventType::kTouchReleased, converted_location,
       press.time_stamp() + base::Milliseconds(1000),
       ui::PointerDetails(ui::EventPointerType::kTouch, kTouchId));
   Dispatch(&release);
@@ -372,7 +451,7 @@ void EventGenerator::GestureScrollSequenceWithCallback(
   UpdateCurrentDispatcher(start);
   const int kTouchId = 5;
   base::TimeTicks timestamp = ui::EventTimeForNow();
-  ui::TouchEvent press(ui::ET_TOUCH_PRESSED, start, timestamp,
+  ui::TouchEvent press(ui::EventType::kTouchPressed, start, timestamp,
                        PointerDetails(ui::EventPointerType::kTouch,
                                       /* pointer_id*/ kTouchId,
                                       /* radius_x */ 5.0f,
@@ -380,7 +459,7 @@ void EventGenerator::GestureScrollSequenceWithCallback(
                                       /* force */ 1.0f));
   Dispatch(&press);
 
-  callback.Run(ui::ET_GESTURE_SCROLL_BEGIN, gfx::Vector2dF());
+  callback.Run(ui::EventType::kGestureScrollBegin, gfx::Vector2dF());
 
   float dx = static_cast<float>(end.x() - start.x()) / steps;
   float dy = static_cast<float>(end.y() - start.y()) / steps;
@@ -388,7 +467,7 @@ void EventGenerator::GestureScrollSequenceWithCallback(
   for (int i = 0; i < steps; ++i) {
     location.Offset(dx, dy);
     timestamp += step_delay;
-    ui::TouchEvent move(ui::ET_TOUCH_MOVED, gfx::Point(), timestamp,
+    ui::TouchEvent move(ui::EventType::kTouchMoved, gfx::Point(), timestamp,
                         PointerDetails(ui::EventPointerType::kTouch,
                                        /* pointer_id*/ kTouchId,
                                        /* radius_x */ 5.0f,
@@ -397,10 +476,10 @@ void EventGenerator::GestureScrollSequenceWithCallback(
     move.set_location_f(location);
     move.set_root_location_f(location);
     Dispatch(&move);
-    callback.Run(ui::ET_GESTURE_SCROLL_UPDATE, gfx::Vector2dF(dx, dy));
+    callback.Run(ui::EventType::kGestureScrollUpdate, gfx::Vector2dF(dx, dy));
   }
 
-  ui::TouchEvent release(ui::ET_TOUCH_RELEASED, end, timestamp,
+  ui::TouchEvent release(ui::EventType::kTouchReleased, end, timestamp,
                          PointerDetails(ui::EventPointerType::kTouch,
                                         /* pointer_id*/ kTouchId,
                                         /* radius_x */ 5.0f,
@@ -408,7 +487,7 @@ void EventGenerator::GestureScrollSequenceWithCallback(
                                         /* force */ 1.0f));
   Dispatch(&release);
 
-  callback.Run(ui::ET_GESTURE_SCROLL_END, gfx::Vector2dF());
+  callback.Run(ui::EventType::kGestureScrollEnd, gfx::Vector2dF());
 }
 
 void EventGenerator::GestureMultiFingerScrollWithDelays(
@@ -451,7 +530,7 @@ void EventGenerator::GestureMultiFingerScrollWithDelays(
     for (int i = 0; i < count; ++i) {
       if (!pressed[i] && move_time >= press_time[i]) {
         ui::TouchEvent press(
-            ui::ET_TOUCH_PRESSED, points[i], press_time[i],
+            ui::EventType::kTouchPressed, points[i], press_time[i],
             ui::PointerDetails(ui::EventPointerType::kTouch, i));
         Dispatch(&press);
         pressed[i] = true;
@@ -463,7 +542,7 @@ void EventGenerator::GestureMultiFingerScrollWithDelays(
     for (int i = 0; i < count && event_separation_time_ms > 0; ++i) {
       if (pressed[i] && move_time >= release_time[i]) {
         ui::TouchEvent release(
-            ui::ET_TOUCH_RELEASED, points[i], release_time[i],
+            ui::EventType::kTouchReleased, points[i], release_time[i],
             ui::PointerDetails(ui::EventPointerType::kTouch, i));
         Dispatch(&release);
         pressed[i] = false;
@@ -474,7 +553,7 @@ void EventGenerator::GestureMultiFingerScrollWithDelays(
       points[i] += delta_per_step[i];
       if (pressed[i]) {
         ui::TouchEvent move(
-            ui::ET_TOUCH_MOVED, points[i], move_time,
+            ui::EventType::kTouchMoved, points[i], move_time,
             ui::PointerDetails(ui::EventPointerType::kTouch, i));
         Dispatch(&move);
       }
@@ -487,7 +566,7 @@ void EventGenerator::GestureMultiFingerScrollWithDelays(
   for (int i = 0; i < count; ++i) {
     if (pressed[i]) {
       ui::TouchEvent release(
-          ui::ET_TOUCH_RELEASED, points[i], default_release_time,
+          ui::EventType::kTouchReleased, points[i], default_release_time,
           ui::PointerDetails(ui::EventPointerType::kTouch, i));
       Dispatch(&release);
       pressed[i] = false;
@@ -523,7 +602,7 @@ void EventGenerator::GestureMultiFingerScroll(int count,
                                               int move_x,
                                               int move_y) {
   const int kMaxTouchPoints = 10;
-  int delays[kMaxTouchPoints] = {0};
+  int delays[kMaxTouchPoints] = {};
   GestureMultiFingerScrollWithDelays(
       count, start, delays, event_separation_time_ms, steps, move_x, move_y);
 }
@@ -533,46 +612,39 @@ void EventGenerator::ScrollSequence(const gfx::Point& start,
                                     float x_offset,
                                     float y_offset,
                                     int steps,
-                                    int num_fingers) {
+                                    int num_fingers,
+                                    ScrollSequenceType end_state) {
   UpdateCurrentDispatcher(start);
 
   base::TimeTicks timestamp = ui::EventTimeForNow();
-  ui::ScrollEvent fling_cancel(ui::ET_SCROLL_FLING_CANCEL,
-                               start,
-                               timestamp,
-                               0,
-                               0, 0,
-                               0, 0,
-                               num_fingers);
+  ui::ScrollEvent fling_cancel(ui::EventType::kScrollFlingCancel, start,
+                               timestamp, 0, 0, 0, 0, 0, num_fingers);
   Dispatch(&fling_cancel);
 
   float dx = x_offset / steps;
   float dy = y_offset / steps;
   for (int i = 0; i < steps; ++i) {
     timestamp += step_delay;
-    ui::ScrollEvent move(ui::ET_SCROLL,
-                         start,
-                         timestamp,
-                         0,
-                         dx, dy,
-                         dx, dy,
-                         num_fingers);
+    ui::ScrollEvent move(ui::EventType::kScroll, start, timestamp, 0, dx, dy,
+                         dx, dy, num_fingers);
     Dispatch(&move);
   }
 
-  ui::ScrollEvent fling_start(ui::ET_SCROLL_FLING_START,
-                              start,
-                              timestamp,
-                              0,
-                              x_offset, y_offset,
-                              x_offset, y_offset,
-                              num_fingers);
+  // End the scroll sequence early if we want to end with the fingers rested on
+  // the trackpad.
+  if (end_state == ScrollSequenceType::ScrollOnly) {
+    return;
+  }
+
+  ui::ScrollEvent fling_start(ui::EventType::kScrollFlingStart, start,
+                              timestamp, 0, x_offset, y_offset, x_offset,
+                              y_offset, num_fingers);
   Dispatch(&fling_start);
 }
 
 void EventGenerator::GenerateTrackpadRest() {
   int num_fingers = 2;
-  ui::ScrollEvent scroll(ui::ET_SCROLL, current_screen_location_,
+  ui::ScrollEvent scroll(ui::EventType::kScroll, current_screen_location_,
                          ui::EventTimeForNow(), 0, 0, 0, 0, 0, num_fingers,
                          EventMomentumPhase::MAY_BEGIN);
   Dispatch(&scroll);
@@ -580,7 +652,7 @@ void EventGenerator::GenerateTrackpadRest() {
 
 void EventGenerator::CancelTrackpadRest() {
   int num_fingers = 2;
-  ui::ScrollEvent scroll(ui::ET_SCROLL, current_screen_location_,
+  ui::ScrollEvent scroll(ui::EventType::kScroll, current_screen_location_,
                          ui::EventTimeForNow(), 0, 0, 0, 0, 0, num_fingers,
                          EventMomentumPhase::END);
   Dispatch(&scroll);
@@ -605,11 +677,56 @@ void EventGenerator::PressAndReleaseKey(KeyboardCode key_code,
   ReleaseKey(key_code, flags, source_device_id);
 }
 
+void EventGenerator::PressModifierKeys(int flags, int source_device_id) {
+  EventFlags current_flags = 0;
+  for (const auto& modifier_key : kModifierKeys) {
+    if (flags & modifier_key.flag) {
+      current_flags |= modifier_key.flag;
+      PressKey(modifier_key.key, current_flags, source_device_id);
+    }
+  }
+}
+
+void EventGenerator::ReleaseModifierKeys(int flags, int source_device_id) {
+  EventFlags current_flags = flags;
+  for (const auto& modifier_key : base::Reversed(kModifierKeys)) {
+    if (flags & modifier_key.flag) {
+      current_flags &= ~modifier_key.flag;
+      ReleaseKey(modifier_key.key, current_flags, source_device_id);
+    }
+  }
+}
+
+void EventGenerator::PressKeyAndModifierKeys(KeyboardCode key_code,
+                                             int flags,
+                                             int source_device_id) {
+  PressModifierKeys(flags, source_device_id);
+  PressKey(key_code, flags, source_device_id);
+}
+
+void EventGenerator::ReleaseKeyAndModifierKeys(KeyboardCode key_code,
+                                               int flags,
+                                               int source_device_id) {
+  ReleaseKey(key_code, flags, source_device_id);
+  ReleaseModifierKeys(flags, source_device_id);
+}
+
+void EventGenerator::PressAndReleaseKeyAndModifierKeys(KeyboardCode key_code,
+                                                       int flags,
+                                                       int source_device_id) {
+  PressKeyAndModifierKeys(key_code, flags, source_device_id);
+  ReleaseKeyAndModifierKeys(key_code, flags, source_device_id);
+}
+
 void EventGenerator::Dispatch(ui::Event* event) {
   if (event->IsTouchEvent()) {
     ui::TouchEvent* touch_event = static_cast<ui::TouchEvent*>(event);
     touch_pointer_details_.id = touch_event->pointer_details().id;
     touch_event->SetPointerDetailsForTest(touch_pointer_details_);
+  }
+
+  if (properties_.has_value()) {
+    event->SetProperties(properties_.value());
   }
 
   if (!event->handled()) {
@@ -621,8 +738,16 @@ void EventGenerator::Dispatch(ui::Event* event) {
   }
 }
 
+void EventGenerator::AdvanceClock(const base::TimeDelta& delta) {
+  tick_clock_->Advance(delta);
+}
+
 void EventGenerator::Init(gfx::NativeWindow root_window,
                           gfx::NativeWindow target_window) {
+  CHECK(g_event_generator_allowed)
+      << "EventGenerator is not allowed in this test suite. Please use "
+         "functions from ui_controls.h instead.";
+
   tick_clock_ = std::make_unique<TestTickClock>();
   ui::SetEventTickClockForTesting(tick_clock_.get());
   if (!delegate_) {
@@ -669,17 +794,17 @@ void EventGenerator::DispatchKeyEvent(bool is_press,
       (ui::EventTimeForNow() - base::TimeTicks()).InMilliseconds() & UINT32_MAX;
   ui::KeyEvent keyev(native_event, flags);
 #else
-  ui::EventType type = is_press ? ui::ET_KEY_PRESSED : ui::ET_KEY_RELEASED;
+  ui::EventType type =
+      is_press ? ui::EventType::kKeyPressed : ui::EventType::kKeyReleased;
   ui::KeyEvent keyev(type, key_code, flags);
+#if BUILDFLAG(IS_OZONE)
   if (is_press) {
     // Set a property as if this is a key event not consumed by IME.
     // Ozone/X11+GTK IME works so already. Ozone/wayland IME relies on this
     // flag to work properly.
-    keyev.SetProperties({{
-        kPropertyKeyboardImeFlag,
-        std::vector<uint8_t>{kPropertyKeyboardImeIgnoredFlag},
-    }});
+    SetKeyboardImeFlags(&keyev, kPropertyKeyboardImeIgnoredFlag);
   }
+#endif  // BUILDFLAG(IS_OZONE)
 #endif  // BUILDFLAG(IS_WIN)
   keyev.set_source_device_id(source_device_id);
   Dispatch(&keyev);
@@ -694,28 +819,6 @@ void EventGenerator::UpdateCurrentDispatcher(const gfx::Point& point) {
   current_target_ = delegate()->GetTargetAt(point);
 }
 
-void EventGenerator::PressButton(int flag) {
-  if (!(flags_ & flag)) {
-    flags_ |= flag;
-    grab_ = (flags_ & kAllButtonMask) != 0;
-    gfx::Point location = GetLocationInCurrentRoot();
-    ui::MouseEvent mouseev(ui::ET_MOUSE_PRESSED, location, location,
-                           ui::EventTimeForNow(), flags_, flag);
-    Dispatch(&mouseev);
-  }
-}
-
-void EventGenerator::ReleaseButton(int flag) {
-  if (flags_ & flag) {
-    gfx::Point location = GetLocationInCurrentRoot();
-    ui::MouseEvent mouseev(ui::ET_MOUSE_RELEASED, location, location,
-                           ui::EventTimeForNow(), flags_, flag);
-    Dispatch(&mouseev);
-    flags_ ^= flag;
-  }
-  grab_ = (flags_ & kAllButtonMask) != 0;
-}
-
 gfx::Point EventGenerator::GetLocationInCurrentRoot() const {
   gfx::Point p = current_screen_location_;
   delegate()->ConvertPointToTarget(current_target_, &p);
@@ -724,6 +827,50 @@ gfx::Point EventGenerator::GetLocationInCurrentRoot() const {
 
 gfx::Point EventGenerator::CenterOfWindow(const EventTarget* window) const {
   return delegate()->CenterOfTarget(window);
+}
+
+void EmulateFullKeyPressReleaseSequence(test::EventGenerator* generator,
+                                        KeyboardCode key,
+                                        bool control,
+                                        bool shift,
+                                        bool alt,
+                                        bool command) {
+  int flags = ui::EF_FINAL;
+  if (control) {
+    flags |= ui::EF_CONTROL_DOWN;
+    generator->PressKey(ui::VKEY_CONTROL, flags);
+  }
+  if (shift) {
+    flags |= ui::EF_SHIFT_DOWN;
+    generator->PressKey(ui::VKEY_SHIFT, flags);
+  }
+  if (alt) {
+    flags |= ui::EF_ALT_DOWN;
+    generator->PressKey(ui::VKEY_MENU, flags);
+  }
+  if (command) {
+    flags |= ui::EF_COMMAND_DOWN;
+    generator->PressKey(ui::VKEY_COMMAND, flags);
+  }
+
+  generator->PressAndReleaseKey(key, flags);
+
+  if (command) {
+    flags &= ~ui::EF_COMMAND_DOWN;
+    generator->ReleaseKey(ui::VKEY_COMMAND, flags);
+  }
+  if (alt) {
+    flags &= ~ui::EF_ALT_DOWN;
+    generator->ReleaseKey(ui::VKEY_MENU, flags);
+  }
+  if (shift) {
+    flags &= ~ui::EF_SHIFT_DOWN;
+    generator->ReleaseKey(ui::VKEY_SHIFT, flags);
+  }
+  if (control) {
+    flags &= ~ui::EF_CONTROL_DOWN;
+    generator->ReleaseKey(ui::VKEY_CONTROL, flags);
+  }
 }
 
 }  // namespace test

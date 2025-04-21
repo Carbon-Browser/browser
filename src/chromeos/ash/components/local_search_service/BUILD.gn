@@ -1,4 +1,4 @@
-# Copyright 2020 The Chromium Authors. All rights reserved.
+# Copyright 2020 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -34,7 +34,7 @@ source_set("local_search_service") {
     "//base:i18n",
     "//cc",
     "//chromeos/ash/components/local_search_service/public/mojom",
-    "//chromeos/components/string_matching",
+    "//chromeos/ash/components/string_matching",
   ]
 
   public_deps = [

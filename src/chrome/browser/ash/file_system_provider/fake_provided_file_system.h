@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/task/cancelable_task_tracker.h"
@@ -34,14 +34,15 @@ namespace net {
 class IOBuffer;
 }  // namespace net
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 
-class RequestManager;
+class OperationRequestManager;
 
 // Path of a sample fake file, which is added to the fake file system by
 // default.
 extern const base::FilePath::CharType kFakeFilePath[];
+extern const char kFakeFileText[];
+extern const char kFakeFileVersionTag[];
 
 // Represents a file or a directory on a fake file system.
 struct FakeEntry {
@@ -56,6 +57,8 @@ struct FakeEntry {
 
   std::unique_ptr<EntryMetadata> metadata;
   std::string contents;
+  // Used when the file is open for writing.
+  std::optional<std::string> write_buffer;
 };
 
 // Fake provided file system implementation. Does not communicate with target
@@ -77,12 +80,20 @@ class FakeProvidedFileSystem : public ProvidedFileSystemInterface {
                 int64_t size,
                 base::Time modification_time,
                 std::string mime_type,
+                std::unique_ptr<CloudFileInfo> cloud_file_info,
                 std::string contents);
 
   // Fetches a pointer to a fake entry registered in the fake file system. If
   // not found, then returns NULL. The returned pointes is owned by
   // FakeProvidedFileSystem.
-  const FakeEntry* GetEntry(const base::FilePath& entry_path) const;
+  FakeEntry* GetEntry(const base::FilePath& entry_path) const;
+
+  // Copies or moves an entry from `source_path` to `target_path`.
+  base::File::Error CopyOrMoveEntry(const base::FilePath& source_path,
+                                    const base::FilePath& target_path,
+                                    bool is_move);
+
+  void SetFlushRequired(bool required) { flush_required_ = required; }
 
   // ProvidedFileSystemInterface overrides.
   AbortCallback RequestUnmount(
@@ -140,6 +151,9 @@ class FakeProvidedFileSystem : public ProvidedFileSystemInterface {
       int64_t offset,
       int length,
       storage::AsyncFileUtil::StatusCallback callback) override;
+  AbortCallback FlushFile(
+      int file_handle,
+      storage::AsyncFileUtil::StatusCallback callback) override;
   AbortCallback AddWatcher(const GURL& origin,
                            const base::FilePath& entry_path,
                            bool recursive,
@@ -152,7 +166,7 @@ class FakeProvidedFileSystem : public ProvidedFileSystemInterface {
                      bool recursive,
                      storage::AsyncFileUtil::StatusCallback callback) override;
   const ProvidedFileSystemInfo& GetFileSystemInfo() const override;
-  RequestManager* GetRequestManager() override;
+  OperationRequestManager* GetRequestManager() override;
   Watchers* GetWatchers() override;
   const OpenedFiles& GetOpenedFiles() const override;
   void AddObserver(ProvidedFileSystemObserver* observer) override;
@@ -165,9 +179,15 @@ class FakeProvidedFileSystem : public ProvidedFileSystemInterface {
               storage::AsyncFileUtil::StatusCallback callback) override;
   void Configure(storage::AsyncFileUtil::StatusCallback callback) override;
   base::WeakPtr<ProvidedFileSystemInterface> GetWeakPtr() override;
+  std::unique_ptr<ScopedUserInteraction> StartUserInteraction() override;
+
+  base::WeakPtr<FakeProvidedFileSystem> GetFakeWeakPtr();
 
  private:
   using Entries = std::map<base::FilePath, std::unique_ptr<FakeEntry>>;
+
+  base::File::Error DoDeleteEntry(const base::FilePath& entry_path,
+                                  bool recursive);
 
   // Utility function for posting a task which can be aborted by calling the
   // returned callback.
@@ -189,11 +209,11 @@ class FakeProvidedFileSystem : public ProvidedFileSystemInterface {
   base::CancelableTaskTracker tracker_;
   base::ObserverList<ProvidedFileSystemObserver>::Unchecked observers_;
   Watchers watchers_;
+  bool flush_required_ = false;
 
   base::WeakPtrFactory<FakeProvidedFileSystem> weak_ptr_factory_{this};
 };
 
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider
 
 #endif  // CHROME_BROWSER_ASH_FILE_SYSTEM_PROVIDER_FAKE_PROVIDED_FILE_SYSTEM_H_

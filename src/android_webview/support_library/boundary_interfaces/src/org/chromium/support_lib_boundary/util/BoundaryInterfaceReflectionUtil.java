@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 package org.chromium.support_lib_boundary.util;
@@ -7,7 +7,6 @@ import android.os.Build;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.annotation.RequiresApi;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
@@ -16,9 +15,7 @@ import java.lang.reflect.Proxy;
 import java.util.Arrays;
 import java.util.Collection;
 
-/**
- * A set of utility methods used for calling across the support library boundary.
- */
+/** A set of utility methods used for calling across the support library boundary. */
 // Although this is not enforced in chromium, this is a requirement enforced when this file is
 // mirrored into AndroidX. See http://b/120770118 for details.
 public class BoundaryInterfaceReflectionUtil {
@@ -74,8 +71,10 @@ public class BoundaryInterfaceReflectionUtil {
             @NonNull Class<T> clazz, @Nullable InvocationHandler invocationHandler) {
         if (invocationHandler == null) return null;
         return clazz.cast(
-                Proxy.newProxyInstance(BoundaryInterfaceReflectionUtil.class.getClassLoader(),
-                        new Class[] {clazz}, invocationHandler));
+                Proxy.newProxyInstance(
+                        BoundaryInterfaceReflectionUtil.class.getClassLoader(),
+                        new Class[] {clazz},
+                        invocationHandler));
     }
 
     /**
@@ -89,7 +88,6 @@ public class BoundaryInterfaceReflectionUtil {
      *     method calls to.
      * @return an InvocationHandlerWithDelegateGetter wrapping {@code delegate}
      */
-    @RequiresApi(Build.VERSION_CODES.KITKAT)
     @Nullable
     public static InvocationHandler createInvocationHandlerFor(@Nullable final Object delegate) {
         if (delegate == null) return null;
@@ -104,12 +102,11 @@ public class BoundaryInterfaceReflectionUtil {
      * <p>A {@code null} array of delegates is represented with a {@code null} array of {@link
      * InvocationHandler}s. Any individual {@code null} delegate is represented with a {@code null}
      * {@link InvocationHandler}.
-
+     *
      * @param delegates an array of objects to which to delegate.
-     * @return an array of InvocationHandlerWithDelegateGetter instances, each delegating to
-     *     the corresponding member of {@code delegates}.
+     * @return an array of InvocationHandlerWithDelegateGetter instances, each delegating to the
+     *     corresponding member of {@code delegates}.
      */
-    @RequiresApi(Build.VERSION_CODES.KITKAT)
     @Nullable
     public static InvocationHandler[] createInvocationHandlersForArray(
             @Nullable final Object[] delegates) {
@@ -132,7 +129,6 @@ public class BoundaryInterfaceReflectionUtil {
      * @param invocationHandler a {@link Nullable} InvocationHandlerWithDelegateGetter.
      * @return the corresponding delegate.
      */
-    @RequiresApi(Build.VERSION_CODES.KITKAT)
     @Nullable
     public static Object getDelegateFromInvocationHandler(
             @Nullable InvocationHandler invocationHandler) {
@@ -143,11 +139,10 @@ public class BoundaryInterfaceReflectionUtil {
     }
 
     /**
-     * An InvocationHandler storing the original object that method calls are delegated to.
-     * This allows us to pass InvocationHandlers across the support library boundary and later
-     * unwrap the objects used as delegates within those InvocationHandlers.
+     * An InvocationHandler storing the original object that method calls are delegated to. This
+     * allows us to pass InvocationHandlers across the support library boundary and later unwrap the
+     * objects used as delegates within those InvocationHandlers.
      */
-    @RequiresApi(Build.VERSION_CODES.KITKAT)
     private static class InvocationHandlerWithDelegateGetter implements InvocationHandler {
         private final Object mDelegate;
 
@@ -168,9 +163,7 @@ public class BoundaryInterfaceReflectionUtil {
             }
         }
 
-        /**
-         * Gets the delegate object (which is never {@code null}).
-         */
+        /** Gets the delegate object (which is never {@code null}). */
         @NonNull
         public Object getDelegate() {
             return mDelegate;

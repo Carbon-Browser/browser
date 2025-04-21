@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,8 +14,7 @@
 #include "ui/views/test/views_test_base.h"
 #include "ui/views/widget/widget.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 
 class InfoBubbleTest : public ViewsTestBase {
  public:
@@ -29,7 +28,8 @@ class InfoBubbleTest : public ViewsTestBase {
     ViewsTestBase::SetUp();
 
     Widget::InitParams params =
-        CreateParamsForTestWidget(Widget::InitParams::TYPE_WINDOW);
+        CreateParamsForTestWidget(Widget::InitParams::CLIENT_OWNS_WIDGET,
+                                  Widget::InitParams::TYPE_WINDOW);
     anchor_widget_ = std::make_unique<Widget>();
     anchor_widget_->Init(std::move(params));
     anchor_widget_->Show();
@@ -147,5 +147,4 @@ TEST_F(InfoBubbleTest, MetadataTest) {
   RunPendingMessages();
 }
 
-}  // namespace test
-}  // namespace views
+}  // namespace views::test

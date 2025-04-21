@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@ bool LeaveSetupBeacon();
 
 // Looks for the setup running beacon that LeaveSetupBeacon() creates and resets
 // it to to show the setup was successful.
-// Returns true if the beacon was successfully set to BLACKLIST_ENABLED.
+// Returns true if the beacon was successfully set to BLOCKLIST_ENABLED.
 bool ResetBeacon();
 
 }  // namespace third_party_dlls

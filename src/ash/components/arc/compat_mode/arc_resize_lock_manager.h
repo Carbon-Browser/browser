@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "ash/components/arc/compat_mode/arc_resize_lock_pref_delegate.h"
 #include "ash/components/arc/compat_mode/compat_mode_button_controller.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_multi_source_observation.h"
 #include "base/scoped_observation.h"
 #include "components/keyed_service/core/keyed_service.h"
@@ -40,6 +41,13 @@ class ArcResizeLockManager : public KeyedService,
   ArcResizeLockManager& operator=(const ArcResizeLockManager&) = delete;
   ~ArcResizeLockManager() override;
 
+  CompatModeButtonController* compat_mode_button_controller() {
+    return compat_mode_button_controller_.get();
+  }
+
+  // KeyedService:
+  void Shutdown() override;
+
   // aura::EnvObserver:
   void OnWindowInitialized(aura::Window* new_window) override;
 
@@ -53,9 +61,12 @@ class ArcResizeLockManager : public KeyedService,
                              ui::PropertyChangeReason reason) override;
   void OnWindowDestroying(aura::Window* window) override;
 
-  void SetPrefDelegate(ArcResizeLockPrefDelegate* delegate) {
-    pref_delegate_ = delegate;
-  }
+  // Sets `pref_delegate_` to `delegate`, ensuring that it was not already set.
+  // Also, calls `compat_mode_button_controller_->SetPrefDelegate()` with
+  // `delegate`.
+  void SetPrefDelegate(ArcResizeLockPrefDelegate* delegate);
+
+  static void EnsureFactoryBuilt();
 
  private:
   friend class ArcResizeLockManagerTest;
@@ -69,14 +80,15 @@ class ArcResizeLockManager : public KeyedService,
   virtual void ShowSplashScreenDialog(aura::Window* window,
                                       bool is_fully_locked);
 
-  ArcResizeLockPrefDelegate* pref_delegate_{nullptr};
+  raw_ptr<ArcResizeLockPrefDelegate> pref_delegate_{nullptr};
 
   // Using unique_ptr to allow unittest to override.
   std::unique_ptr<CompatModeButtonController> compat_mode_button_controller_;
 
   std::unique_ptr<TouchModeMouseRewriter> touch_mode_mouse_rewriter_;
 
-  base::flat_set<aura::Window*> resize_lock_enabled_windows_;
+  base::flat_set<raw_ptr<aura::Window, CtnExperimental>>
+      resize_lock_enabled_windows_;
 
   base::ScopedObservation<aura::Env, aura::EnvObserver> env_observation{this};
 

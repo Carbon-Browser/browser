@@ -1,4 +1,4 @@
-// Copyright 2014 The Crashpad Authors. All rights reserved.
+// Copyright 2014 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -175,6 +175,8 @@ std::string MinidumpMiscInfoDebugBuildString() {
   static constexpr char kCPU[] = "mips";
 #elif defined(ARCH_CPU_MIPS64EL)
   static constexpr char kCPU[] = "mips64";
+#elif defined(ARCH_CPU_RISCV64)
+  static constexpr char kCPU[] = "riscv64";
 #else
 #error define kCPU for this CPU
 #endif

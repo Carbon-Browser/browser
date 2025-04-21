@@ -1,8 +1,10 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/log/net_log.h"
+
+#include <array>
 
 #include "base/memory/raw_ptr.h"
 #include "base/synchronization/waitable_event.h"
@@ -31,10 +33,10 @@ base::Value CaptureModeToValue(NetLogCaptureMode capture_mode) {
   return base::Value(CaptureModeToInt(capture_mode));
 }
 
-base::Value NetCaptureModeParams(NetLogCaptureMode capture_mode) {
+base::Value::Dict NetCaptureModeParams(NetLogCaptureMode capture_mode) {
   base::Value::Dict dict;
   dict.Set("capture_mode", CaptureModeToValue(capture_mode));
-  return base::Value(std::move(dict));
+  return dict;
 }
 
 TEST(NetLogTest, BasicGlobalEvents) {
@@ -211,23 +213,27 @@ class LoggingObserver : public NetLog::ThreadSafeObserver {
   }
 
   void OnAddEntry(const NetLogEntry& entry) override {
-    std::unique_ptr<base::Value> dict =
-        base::Value::ToUniquePtrValue(entry.ToValue());
+    // TODO(crbug.com/40257546): This should be updated to be a
+    // base::Value::Dict instead of a std::unique_ptr.
+    std::unique_ptr<base::Value::Dict> dict =
+        std::make_unique<base::Value::Dict>(entry.ToDict());
     ASSERT_TRUE(dict);
     values_.push_back(std::move(dict));
   }
 
   size_t GetNumValues() const { return values_.size(); }
-  base::Value* GetValue(size_t index) const { return values_[index].get(); }
+  base::Value::Dict* GetDict(size_t index) const {
+    return values_[index].get();
+  }
 
  private:
-  std::vector<std::unique_ptr<base::Value>> values_;
+  std::vector<std::unique_ptr<base::Value::Dict>> values_;
 };
 
 void AddEvent(NetLog* net_log) {
   net_log->AddGlobalEntry(NetLogEventType::CANCELLED,
                           [&](NetLogCaptureMode capture_mode) {
-                            return CaptureModeToValue(capture_mode);
+                            return NetCaptureModeParams(capture_mode);
                           });
 }
 
@@ -314,11 +320,12 @@ class AddRemoveObserverTestThread : public NetLogTestThread {
 // to completion.
 template <class ThreadType>
 void RunTestThreads(NetLog* net_log) {
-  ThreadType threads[kThreads];
+  // Must outlive `threads`.
   base::WaitableEvent start_event(
       base::WaitableEvent::ResetPolicy::MANUAL,
       base::WaitableEvent::InitialState::NOT_SIGNALED);
 
+  std::array<ThreadType, kThreads> threads;
   for (size_t i = 0; i < std::size(threads); ++i) {
     threads[i].Init(net_log, &start_event);
     threads[i].Start();
@@ -391,7 +398,7 @@ TEST(NetLogTest, NetLogAddRemoveObserver) {
 
 // Test adding and removing two observers at different log levels.
 TEST(NetLogTest, NetLogTwoObservers) {
-  LoggingObserver observer[2];
+  std::array<LoggingObserver, 2> observer;
 
   // Add first observer.
   NetLog::Get()->AddObserver(&observer[0],
@@ -411,14 +418,14 @@ TEST(NetLogTest, NetLogTwoObservers) {
 
   // Add event and make sure both observers receive it at their respective log
   // levels.
-  absl::optional<int> param;
+  std::optional<int> param;
   AddEvent(NetLog::Get());
   ASSERT_EQ(1U, observer[0].GetNumValues());
-  param = observer[0].GetValue(0)->GetDict().FindInt("params");
+  param = observer[0].GetDict(0)->FindDict("params")->FindInt("capture_mode");
   ASSERT_TRUE(param);
   EXPECT_EQ(CaptureModeToInt(observer[0].capture_mode()), param.value());
   ASSERT_EQ(1U, observer[1].GetNumValues());
-  param = observer[1].GetValue(0)->GetDict().FindInt("params");
+  param = observer[1].GetDict(0)->FindDict("params")->FindInt("capture_mode");
   ASSERT_TRUE(param);
   EXPECT_EQ(CaptureModeToInt(observer[1].capture_mode()), param.value());
 
@@ -459,10 +466,11 @@ TEST(NetLogTest, NetLogAddRemoveObserverThreads) {
 TEST(NetLogTest, NetLogEntryToValueEmptyParams) {
   // NetLogEntry with no params.
   NetLogEntry entry1(NetLogEventType::REQUEST_ALIVE, NetLogSource(),
-                     NetLogEventPhase::BEGIN, base::TimeTicks(), base::Value());
+                     NetLogEventPhase::BEGIN, base::TimeTicks(),
+                     base::Value::Dict());
 
-  ASSERT_TRUE(entry1.params.is_none());
-  ASSERT_FALSE(entry1.ToValue().GetDict().Find("params"));
+  ASSERT_TRUE(entry1.params.empty());
+  ASSERT_FALSE(entry1.ToDict().Find("params"));
 }
 
 }  // namespace

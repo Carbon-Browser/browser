@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,11 @@
 #include <utility>
 #include <vector>
 
+#include "ash/ambient/metrics/ambient_metrics.h"
 #include "ash/ambient/model/ambient_backend_model_observer.h"
 #include "ash/ambient/model/ambient_photo_config.h"
 #include "ash/public/cpp/ambient/ambient_ui_model.h"
+#include "ash/webui/personalization_app/mojom/personalization_app.mojom-shared.h"
 #include "base/check.h"
 #include "base/containers/flat_map.h"
 #include "base/logging.h"
@@ -94,6 +96,8 @@ void AmbientBackendModel::OnImagesReadyTimeoutFired() {
 void AmbientBackendModel::AddNextImage(
     const PhotoWithDetails& photo_with_details) {
   DCHECK(!photo_with_details.IsNull());
+  DCHECK(!photo_config_.IsEmpty())
+      << "Photos should not be getting added to the model";
 
   ResetImageFailures();
 
@@ -112,6 +116,13 @@ void AmbientBackendModel::AddNextImage(
   bool new_images_ready = ImagesReady();
   if (!old_images_ready && new_images_ready) {
     NotifyImagesReady();
+    if (photo_with_details.topic_type == ::ambient::TopicType::kPersonal) {
+      ambient::RecordAmbientModeTopicSource(
+          personalization_app::mojom::TopicSource::kGooglePhotos);
+    } else {
+      ambient::RecordAmbientModeTopicSource(
+          personalization_app::mojom::TopicSource::kArtGallery);
+    }
   } else if (!new_images_ready &&
              all_decoded_topics_.size() >=
                  photo_config_.min_total_topics_required &&
@@ -154,11 +165,8 @@ base::TimeDelta AmbientBackendModel::GetPhotoRefreshInterval() const {
 
 void AmbientBackendModel::SetPhotoConfig(AmbientPhotoConfig photo_config) {
   photo_config_ = std::move(photo_config);
-  DCHECK_GT(photo_config_.GetNumDecodedTopicsToBuffer(), 0u);
-  DCHECK_GT(photo_config_.min_total_topics_required, 0u);
   DCHECK_LE(photo_config_.min_total_topics_required,
             photo_config_.GetNumDecodedTopicsToBuffer());
-  DCHECK(!photo_config_.refresh_topic_markers.empty());
   Clear();
 }
 

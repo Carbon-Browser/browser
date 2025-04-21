@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,19 +10,17 @@
 #include "ash/system/network/network_observer.h"
 #include "ash/system/tray/system_tray_notifier.h"
 #include "ash/test/ash_test_base.h"
-#include "ash/test/ui_controls_factory_ash.h"
 #include "ash/wm/overview/overview_controller.h"
 #include "ash/wm/overview/overview_observer.h"
 #include "ash/wm/window_state.h"
 #include "ash/wm/window_util.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/user_action_tester.h"
+#include "chromeos/ash/components/dbus/shill/shill_clients.h"
 #include "chromeos/ash/components/network/network_handler.h"
-#include "chromeos/dbus/shill/shill_clients.h"
 #include "ui/aura/window.h"
 #include "ui/base/accelerators/accelerator.h"
 #include "ui/base/accelerators/test_accelerator_target.h"
-#include "ui/base/test/ui_controls.h"
 #include "ui/events/event.h"
 #include "ui/events/test/event_generator.h"
 
@@ -56,8 +54,7 @@ class TestNetworkObserver : public NetworkObserver {
 ////////////////////////////////////////////////////////////////////////////////
 
 // This is intended to test few samples from each category of accelerators to
-// make sure they work properly. The test is done as an interactive ui test
-// using ui_controls::Send*() functions.
+// make sure they work properly.
 // This is to catch any future regressions (crbug.com/469235).
 class AcceleratorTest : public AshTestBase, public OverviewObserver {
  public:
@@ -67,8 +64,6 @@ class AcceleratorTest : public AshTestBase, public OverviewObserver {
   AcceleratorTest& operator=(const AcceleratorTest&) = delete;
 
   void SetUp() override {
-    ui_controls::InstallUIControlsAura(test::CreateAshUIControls());
-
     AshTestBase::SetUp();
 
     Shell::Get()->overview_controller()->AddObserver(this);
@@ -78,8 +73,6 @@ class AcceleratorTest : public AshTestBase, public OverviewObserver {
     Shell::Get()->overview_controller()->RemoveObserver(this);
 
     AshTestBase::TearDown();
-
-    ui_controls::InstallUIControlsAura(nullptr);
   }
 
   // Sends a key press event and waits synchronously until it's completely
@@ -88,11 +81,8 @@ class AcceleratorTest : public AshTestBase, public OverviewObserver {
                         bool control,
                         bool shift,
                         bool alt) {
-    base::RunLoop loop;
-    ui_controls::SendKeyPressNotifyWhenDone(Shell::GetPrimaryRootWindow(), key,
-                                            control, shift, alt, false,
-                                            loop.QuitClosure());
-    loop.Run();
+    ui::test::EmulateFullKeyPressReleaseSequence(
+        GetEventGenerator(), key, control, shift, alt, /*command=*/false);
   }
 
   // OverviewObserver:

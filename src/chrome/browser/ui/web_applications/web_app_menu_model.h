@@ -1,11 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_WEB_APPLICATIONS_WEB_APP_MENU_MODEL_H_
 #define CHROME_BROWSER_UI_WEB_APPLICATIONS_WEB_APP_MENU_MODEL_H_
 
-#include "build/chromeos_buildflags.h"
 #include "chrome/browser/ui/toolbar/app_menu_model.h"
 
 namespace chromeos {
@@ -31,10 +30,9 @@ class WebAppMenuModel : public AppMenuModel {
  protected:
   // AppMenuModel:
   void Build() override;
-  void LogMenuAction(AppMenuAction action_id) override;
 
  private:
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   std::unique_ptr<chromeos::MoveToDesksMenuModel> move_to_desks_submenu_;
 #endif
 };

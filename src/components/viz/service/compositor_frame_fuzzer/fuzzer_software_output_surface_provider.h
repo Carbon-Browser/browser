@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,10 @@
 #define COMPONENTS_VIZ_SERVICE_COMPOSITOR_FRAME_FUZZER_FUZZER_SOFTWARE_OUTPUT_SURFACE_PROVIDER_H_
 
 #include <memory>
+#include <optional>
 
 #include "base/files/file_path.h"
 #include "components/viz/service/display_embedder/output_surface_provider.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace viz {
 
@@ -18,7 +18,7 @@ namespace viz {
 class FuzzerSoftwareOutputSurfaceProvider : public OutputSurfaceProvider {
  public:
   explicit FuzzerSoftwareOutputSurfaceProvider(
-      absl::optional<base::FilePath> png_dir_path);
+      std::optional<base::FilePath> png_dir_path);
 
   FuzzerSoftwareOutputSurfaceProvider(
       const FuzzerSoftwareOutputSurfaceProvider&) = delete;
@@ -38,9 +38,12 @@ class FuzzerSoftwareOutputSurfaceProvider : public OutputSurfaceProvider {
       DisplayCompositorMemoryAndTaskController* gpu_dependency,
       const RendererSettings& renderer_settings,
       const DebugRendererSettings* debug_settings) override;
+  gpu::SharedImageManager* GetSharedImageManager() override;
+  gpu::SyncPointManager* GetSyncPointManager() override;
+  gpu::Scheduler* GetGpuScheduler() override;
 
  private:
-  absl::optional<base::FilePath> png_dir_path_;
+  std::optional<base::FilePath> png_dir_path_;
 };
 
 }  // namespace viz

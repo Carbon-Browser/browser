@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,15 +34,16 @@ class MediaRouterBase : public MediaRouter {
       override;
 
  protected:
-  FRIEND_TEST_ALL_PREFIXES(MediaRouterMojoImplTest,
+  FRIEND_TEST_ALL_PREFIXES(MediaRouterDesktopTest,
                            PresentationConnectionStateChangedCallback);
-  FRIEND_TEST_ALL_PREFIXES(MediaRouterMojoImplTest,
+  FRIEND_TEST_ALL_PREFIXES(MediaRouterDesktopTest,
                            PresentationConnectionStateChangedCallbackRemoved);
   FRIEND_TEST_ALL_PREFIXES(MediaRouterBaseTest, CreatePresentationIds);
   FRIEND_TEST_ALL_PREFIXES(MediaRouterBaseTest, NotifyCallbacks);
-  FRIEND_TEST_ALL_PREFIXES(PresentationServiceDelegateImplTest,
+  FRIEND_TEST_ALL_PREFIXES(ControllerPresentationServiceDelegateImplTest,
                            ListenForConnectionStateChange);
-  FRIEND_TEST_ALL_PREFIXES(PresentationServiceDelegateImplTest, GetMediaRoutes);
+  FRIEND_TEST_ALL_PREFIXES(ControllerPresentationServiceDelegateImplTest,
+                           GetMediaRoutes);
 
   MediaRouterBase();
 

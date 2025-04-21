@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "cc/mojom/render_frame_metadata.mojom.h"
@@ -55,15 +56,20 @@ class CONTENT_EXPORT RenderFrameMetadataProviderImpl
   const cc::RenderFrameMetadata& LastRenderFrameMetadata() override;
 
 #if BUILDFLAG(IS_ANDROID)
-  // Notifies the renderer to begin sending a notification on all root scroll
-  // changes, which is needed for accessibility and GestureListenerManager on
-  // Android.
-  void ReportAllRootScrolls(bool enabled);
+  // Notifies the renderer of the changes in the notification frequency of the
+  // root scroll updates, which is needed for accessibility and
+  // GestureListenerManager on Android.
+  void UpdateRootScrollOffsetUpdateFrequency(
+      cc::mojom::RootScrollOffsetUpdateFrequency frequency);
 #endif
 
   // Notifies the renderer to begin sending a notification on all frame
   // submissions.
   void ReportAllFrameSubmissionsForTesting(bool enabled);
+
+  // Set |last_render_frame_metadata_| to the given |metadata| for testing
+  // purpose.
+  void SetLastRenderFrameMetadataForTest(cc::RenderFrameMetadata metadata);
 
  private:
   friend class FakeRenderWidgetHostViewAura;
@@ -79,10 +85,6 @@ class CONTENT_EXPORT RenderFrameMetadataProviderImpl
       base::TimeTicks activation_time);
   void OnFrameTokenFrameSubmissionForTesting(base::TimeTicks activation_time);
 
-  // Set |last_render_frame_metadata_| to the given |metadata| for testing
-  // purpose.
-  void SetLastRenderFrameMetadataForTest(cc::RenderFrameMetadata metadata);
-
   // cc::mojom::RenderFrameMetadataObserverClient:
   void OnRenderFrameMetadataChanged(
       uint32_t frame_token,
@@ -93,11 +95,11 @@ class CONTENT_EXPORT RenderFrameMetadataProviderImpl
       const gfx::PointF& root_scroll_offset) override;
 #endif
 
-  base::ObserverList<Observer>::Unchecked observers_;
+  base::ObserverList<Observer>::UncheckedAndDanglingUntriaged observers_;
 
   cc::RenderFrameMetadata last_render_frame_metadata_;
 
-  absl::optional<viz::LocalSurfaceId> last_local_surface_id_;
+  std::optional<viz::LocalSurfaceId> last_local_surface_id_;
 
   scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
 
@@ -110,9 +112,10 @@ class CONTENT_EXPORT RenderFrameMetadataProviderImpl
       render_frame_metadata_observer_remote_;
 
 #if BUILDFLAG(IS_ANDROID)
-  absl::optional<bool> pending_report_all_root_scrolls_;
+  std::optional<cc::mojom::RootScrollOffsetUpdateFrequency>
+      pending_root_scroll_offset_update_frequency_;
 #endif
-  absl::optional<bool> pending_report_all_frame_submission_for_testing_;
+  std::optional<bool> pending_report_all_frame_submission_for_testing_;
 
   base::WeakPtrFactory<RenderFrameMetadataProviderImpl> weak_factory_{this};
 };

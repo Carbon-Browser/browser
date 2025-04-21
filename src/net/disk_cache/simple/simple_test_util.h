@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 
 #include <stddef.h>
 
+#include <array>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 
 namespace base {
 class FilePath;
@@ -36,7 +37,7 @@ class ImmutableArray {
   }
 
  private:
-  T data_[size];
+  std::array<T, size> data_;
 };
 
 // Creates a corrupt file to be used in tests.

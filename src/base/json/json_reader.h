@@ -1,8 +1,8 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// A JSON parser, converting from a base::StringPiece to a base::Value.
+// A JSON parser, converting from a std::string_view to a base::Value.
 //
 // The JSON spec is:
 // https://tools.ietf.org/rfc/rfc8259.txt
@@ -14,7 +14,7 @@
 // Implementation choices permitted by the RFC:
 // - Nesting is limited (to a configurable depth, 200 by default).
 // - Numbers are limited to those representable by a finite double. The
-//   conversion from a JSON number (in the base::StringPiece input) to a
+//   conversion from a JSON number (in the std::string_view input) to a
 //   double-flavored base::Value may also be lossy.
 // - The input (which must be UTF-8) may begin with a BOM (Byte Order Mark).
 // - Duplicate object keys (strings) are silently allowed. Last key-value pair
@@ -36,15 +36,15 @@
 #ifndef BASE_JSON_JSON_READER_H_
 #define BASE_JSON_JSON_READER_H_
 
-#include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
 
 #include "base/base_export.h"
 #include "base/json/json_common.h"
-#include "base/strings/string_piece.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/types/expected.h"
 #include "base/values.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 
@@ -74,6 +74,10 @@ enum JSONParserOptions {
   // Permits \\xNN escapes as described above.
   JSON_ALLOW_X_ESCAPES = 1 << 5,
 
+  // Permits exactly \r and \n to occur in strings, which is normally not
+  // allowed; this is a subset of the behavior of JSON_ALLOW_CONTROL_CHARS.
+  JSON_ALLOW_NEWLINES_IN_STRINGS = 1 << 6,
+
   // This parser historically accepted, without configuration flags,
   // non-standard JSON extensions. This flag enables that traditional parsing
   // behavior.
@@ -81,25 +85,21 @@ enum JSONParserOptions {
   // This set of options is mirrored in Rust
   // base::JsonOptions::with_chromium_extensions().
   JSON_PARSE_CHROMIUM_EXTENSIONS = JSON_ALLOW_COMMENTS |
-                                   JSON_ALLOW_CONTROL_CHARS |
-                                   JSON_ALLOW_VERT_TAB | JSON_ALLOW_X_ESCAPES,
+                                   JSON_ALLOW_NEWLINES_IN_STRINGS |
+                                   JSON_ALLOW_X_ESCAPES,
 };
 
 class BASE_EXPORT JSONReader {
  public:
   struct BASE_EXPORT Error {
-    Error();
-    Error(Error&& other);
-    Error& operator=(Error&& other);
-
-    Error(const Error&) = delete;
-    Error& operator=(const Error&) = delete;
-
-    ~Error();
-
     std::string message;
     int line = 0;
     int column = 0;
+
+    std::string ToString() const {
+      return "line " + base::NumberToString(line) + ", column " +
+             base::NumberToString(column) + ": " + message;
+    }
   };
 
   using Result = base::expected<Value, Error>;
@@ -110,19 +110,16 @@ class BASE_EXPORT JSONReader {
   JSONReader& operator=(const JSONReader&) = delete;
 
   // Reads and parses |json|, returning a Value.
-  // If |json| is not a properly formed JSON string, returns absl::nullopt.
-  static absl::optional<Value> Read(
-      StringPiece json,
+  // If |json| is not a properly formed JSON string, returns std::nullopt.
+  static std::optional<Value> Read(
+      std::string_view json,
       int options = JSON_PARSE_CHROMIUM_EXTENSIONS,
       size_t max_depth = internal::kAbsoluteMaxDepth);
 
-  // Deprecated. Use the Read() method above.
-  // Reads and parses |json|, returning a Value.
-  // If |json| is not a properly formed JSON string, returns nullptr.
-  // Wrap this in base::FooValue::From() to check the Value is of type Foo and
-  // convert to a FooValue at the same time.
-  static std::unique_ptr<Value> ReadDeprecated(
-      StringPiece json,
+  // Reads and parses |json|, returning a Value::Dict.
+  // If |json| is not a properly formed JSON dict string, returns std::nullopt.
+  static std::optional<Value::Dict> ReadDict(
+      std::string_view json,
       int options = JSON_PARSE_CHROMIUM_EXTENSIONS,
       size_t max_depth = internal::kAbsoluteMaxDepth);
 
@@ -131,8 +128,11 @@ class BASE_EXPORT JSONReader {
   // formatted error message, an error code, and the error location if
   // appropriate as the error value of the expected type.
   static Result ReadAndReturnValueWithError(
-      StringPiece json,
+      std::string_view json,
       int options = JSON_PARSE_CHROMIUM_EXTENSIONS);
+
+  // Determine whether the Rust parser is in use.
+  static bool UsingRust();
 };
 
 }  // namespace base

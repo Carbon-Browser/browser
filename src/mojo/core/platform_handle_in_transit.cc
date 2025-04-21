@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,11 +12,13 @@
 #include "build/build_config.h"
 
 #if BUILDFLAG(IS_WIN)
-#include <ntstatus.h>
 #include <windows.h>
+
+#include <ntstatus.h>
 
 #include "base/win/nt_status.h"
 #include "base/win/scoped_handle.h"
+#include "mojo/public/cpp/platform/platform_handle_security_util_win.h"
 #endif
 
 namespace mojo {
@@ -27,7 +29,17 @@ namespace {
 #if BUILDFLAG(IS_WIN)
 HANDLE TransferHandle(HANDLE handle,
                       base::ProcessHandle from_process,
-                      base::ProcessHandle to_process) {
+                      base::ProcessHandle to_process,
+                      PlatformHandleInTransit::TransferTargetTrustLevel trust) {
+  if (trust == PlatformHandleInTransit::kUntrustedTarget) {
+    DcheckIfFileHandleIsUnsafe(handle);
+  }
+
+  // Duplicating INVALID_HANDLE_VALUE passes a process handle. If you intend to
+  // do this, you must open a valid process handle, not pass the result of
+  // GetCurrentProcess(). e.g. https://crbug.com/243339.
+  CHECK(handle != INVALID_HANDLE_VALUE);
+
   HANDLE out_handle;
   BOOL result =
       ::DuplicateHandle(from_process, handle, to_process, &out_handle, 0, FALSE,
@@ -132,14 +144,16 @@ void PlatformHandleInTransit::CompleteTransit() {
   owning_process_ = base::Process();
 }
 
-bool PlatformHandleInTransit::TransferToProcess(base::Process target_process) {
+bool PlatformHandleInTransit::TransferToProcess(
+    base::Process target_process,
+    TransferTargetTrustLevel trust) {
   DCHECK(target_process.IsValid());
   DCHECK(!owning_process_.IsValid());
   DCHECK(handle_.is_valid());
 #if BUILDFLAG(IS_WIN)
   remote_handle_ =
       TransferHandle(handle_.ReleaseHandle(), base::GetCurrentProcessHandle(),
-                     target_process.Handle());
+                     target_process.Handle(), trust);
   if (remote_handle_ == INVALID_HANDLE_VALUE)
     return false;
 #endif
@@ -168,7 +182,8 @@ PlatformHandle PlatformHandleInTransit::TakeIncomingRemoteHandle(
     HANDLE handle,
     base::ProcessHandle owning_process) {
   return PlatformHandle(base::win::ScopedHandle(
-      TransferHandle(handle, owning_process, base::GetCurrentProcessHandle())));
+      TransferHandle(handle, owning_process, base::GetCurrentProcessHandle(),
+                     kTrustedTarget)));
 }
 #endif
 

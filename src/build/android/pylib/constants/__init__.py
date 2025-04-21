@@ -1,4 +1,4 @@
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -9,11 +9,9 @@
 # pylint: disable=W0212
 
 
-import collections
 import glob
 import logging
 import os
-import subprocess
 
 import devil.android.sdk.keyevent
 from devil.android.constants import chrome
@@ -27,6 +25,7 @@ keyevent = devil.android.sdk.keyevent
 DIR_SOURCE_ROOT = os.environ.get('CHECKOUT_SOURCE_ROOT',
     os.path.abspath(os.path.join(os.path.dirname(__file__),
                                  os.pardir, os.pardir, os.pardir, os.pardir)))
+JAVA_HOME = os.path.join(DIR_SOURCE_ROOT, 'third_party', 'jdk', 'current')
 
 PACKAGE_INFO = dict(chrome.PACKAGE_INFO)
 PACKAGE_INFO.update({
@@ -115,13 +114,13 @@ DEVICE_PERF_OUTPUT_DIR = (
 
 SCREENSHOTS_DIR = os.path.join(DIR_SOURCE_ROOT, 'out_screenshots')
 
-ANDROID_SDK_BUILD_TOOLS_VERSION = '31.0.0'
+ANDROID_SDK_BUILD_TOOLS_VERSION = '35.0.0'
 ANDROID_SDK_ROOT = os.path.join(DIR_SOURCE_ROOT, 'third_party', 'android_sdk',
                                 'public')
 ANDROID_SDK_TOOLS = os.path.join(ANDROID_SDK_ROOT,
                                  'build-tools', ANDROID_SDK_BUILD_TOOLS_VERSION)
-ANDROID_NDK_ROOT = os.path.join(DIR_SOURCE_ROOT,
-                                'third_party', 'android_ndk')
+ANDROID_NDK_ROOT = os.path.join(DIR_SOURCE_ROOT, 'third_party',
+                                'android_toolchain', 'ndk')
 
 BAD_DEVICES_JSON = os.path.join(DIR_SOURCE_ROOT,
                                 os.environ.get('CHROMIUM_OUT_DIR', 'out'),
@@ -151,7 +150,6 @@ PYTHON_UNIT_TEST_SUITES = {
             'devil.android.md5sum_test',
             'devil.utils.cmd_helper_test',
             'pylib.results.json_results_test',
-            'pylib.utils.proguard_test',
         ]
     },
     'gyp_py_unittests': {
@@ -167,10 +165,10 @@ PYTHON_UNIT_TEST_SUITES = {
     },
 }
 
-LOCAL_MACHINE_TESTS = ['junit', 'python']
+LOCAL_MACHINE_TESTS = ['hostside', 'junit', 'python']
 VALID_ENVIRONMENTS = ['local']
-VALID_TEST_TYPES = ['gtest', 'instrumentation', 'junit', 'linker', 'monkey',
-                    'perf', 'python']
+VALID_TEST_TYPES = ['gtest', 'hostside', 'instrumentation', 'junit', 'linker',
+                    'monkey', 'perf', 'python']
 VALID_DEVICE_TYPES = ['Android', 'iOS']
 
 

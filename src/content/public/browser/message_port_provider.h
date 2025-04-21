@@ -1,17 +1,17 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_PUBLIC_BROWSER_MESSAGE_PORT_PROVIDER_H_
 #define CONTENT_PUBLIC_BROWSER_MESSAGE_PORT_PROVIDER_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "build/build_config.h"
 #include "build/chromecast_buildflags.h"
 #include "content/common/content_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/messaging/string_message_codec.h"
 #include "third_party/blink/public/common/messaging/web_message_port.h"
 
@@ -51,7 +51,8 @@ class CONTENT_EXPORT MessagePortProvider {
       JNIEnv* env,
       const base::android::JavaParamRef<jstring>& source_origin,
       const base::android::JavaParamRef<jstring>& target_origin,
-      const base::android::JavaParamRef<jstring>& data,
+      /* org.chromium.content_public.browser.MessagePayload */
+      const base::android::JavaParamRef<jobject>& payload,
       const base::android::JavaParamRef<jobjectArray>& ports);
 #endif  // BUILDFLAG(IS_ANDROID)
 
@@ -64,7 +65,7 @@ class CONTENT_EXPORT MessagePortProvider {
   static void PostMessageToFrame(
       Page& page,
       const std::u16string& source_origin,
-      const absl::optional<std::u16string>& target_origin,
+      const std::optional<std::u16string>& target_origin,
       const std::u16string& data,
       std::vector<blink::WebMessagePort> ports);
 #endif

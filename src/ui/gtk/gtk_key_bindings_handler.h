@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -172,8 +172,8 @@ class GtkKeyBindingsHandler {
   // Handler of "move-focus" signal.
   static void MoveFocus(GtkWidget* widget, GtkDirectionType arg1);
 
-  GtkWidget* fake_window_;
-  GtkWidget* handler_;
+  raw_ptr<GtkWidget> fake_window_;
+  raw_ptr<GtkWidget> handler_;
 
   // Buffer to store the match results.
   std::vector<ui::TextEditCommandAuraLinux> edit_commands_;

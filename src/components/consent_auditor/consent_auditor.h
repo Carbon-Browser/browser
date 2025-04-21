@@ -1,15 +1,13 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_CONSENT_AUDITOR_CONSENT_AUDITOR_H_
 #define COMPONENTS_CONSENT_AUDITOR_CONSENT_AUDITOR_H_
 
-#include <string>
-
 #include "base/memory/weak_ptr.h"
 #include "components/keyed_service/core/keyed_service.h"
-#include "components/sync/model/model_type_controller_delegate.h"
+#include "components/sync/model/data_type_controller_delegate.h"
 #include "components/sync/protocol/user_consent_types.pb.h"
 #include "google_apis/gaia/core_account_id.h"
 
@@ -30,8 +28,9 @@ enum class Feature {
   GOOGLE_LOCATION_SERVICE = 3,
   // CHROME_UNIFIED_CONSENT = 4, (deprecated, not used)
   ASSISTANT_ACTIVITY_CONTROL = 5,
+  RECORDER_SPEAKER_LABEL = 6,
 
-  FEATURE_LAST = ASSISTANT_ACTIVITY_CONTROL
+  FEATURE_LAST = RECORDER_SPEAKER_LABEL,
 };
 
 // Whether a consent is given or not given.
@@ -83,28 +82,21 @@ class ConsentAuditor : public KeyedService {
       const sync_pb::UserConsentTypes::AssistantActivityControlConsent&
           consent) = 0;
 
+  // Records the Recorder app speaker label |consent| for the signed-in GAIA
+  // account with the ID |accounts_id| (as defined in Account Info).
+  virtual void RecordRecorderSpeakerLabelConsent(
+      const CoreAccountId& account_id,
+      const sync_pb::UserConsentTypes::RecorderSpeakerLabelConsent&
+          consent) = 0;
+
   // Records the |consent| to download and use passwords from the signed-in GAIA
   // account with the ID |account_id| (as defined in AccountInfo).
   virtual void RecordAccountPasswordsConsent(
       const CoreAccountId& account_id,
       const sync_pb::UserConsentTypes::AccountPasswordsConsent& consent) = 0;
 
-  // Records the `consent` to use Autofill Assistant for the signed-in GAIA
-  // account and the current user profile.
-  virtual void RecordAutofillAssistantConsent(
-      const CoreAccountId& account_id,
-      const sync_pb::UserConsentTypes::AutofillAssistantConsent& consent) = 0;
-
-  // Records that the user consented to a |feature|. The user was presented with
-  // |description_text| and accepted it by interacting |confirmation_text|
-  // (e.g. clicking on a button; empty if not applicable).
-  // Returns true if successful.
-  virtual void RecordLocalConsent(const std::string& feature,
-                                  const std::string& description_text,
-                                  const std::string& confirmation_text) = 0;
-
   // Returns the underlying Sync integration point.
-  virtual base::WeakPtr<syncer::ModelTypeControllerDelegate>
+  virtual base::WeakPtr<syncer::DataTypeControllerDelegate>
   GetControllerDelegate() = 0;
 };
 

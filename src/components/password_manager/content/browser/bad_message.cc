@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,9 +32,9 @@ void ReceivedBadMessage(content::RenderProcessHost* host,
 
 }  // namespace
 
-bool CheckChildProcessSecurityPolicyForURL(content::RenderFrameHost* frame,
-                                           const GURL& form_url,
-                                           BadMessageReason reason) {
+bool CheckForIllegalURL(content::RenderFrameHost* frame,
+                        const GURL& form_url,
+                        BadMessageReason reason) {
   if (form_url.SchemeIs(url::kAboutScheme) ||
       form_url.SchemeIs(url::kDataScheme)) {
     SYSLOG(WARNING) << "Killing renderer: illegal password access from about: "
@@ -43,9 +43,19 @@ bool CheckChildProcessSecurityPolicyForURL(content::RenderFrameHost* frame,
     return false;
   }
 
+  return true;
+}
+
+bool CheckChildProcessSecurityPolicyForURL(content::RenderFrameHost* frame,
+                                           const GURL& form_url,
+                                           BadMessageReason reason) {
+  if (!CheckForIllegalURL(frame, form_url, reason)) {
+    return false;
+  }
+
   content::ChildProcessSecurityPolicy* policy =
       content::ChildProcessSecurityPolicy::GetInstance();
-  if (!policy->CanAccessDataForOrigin(frame->GetProcess()->GetID(),
+  if (!policy->CanAccessDataForOrigin(frame->GetProcess()->GetDeprecatedID(),
                                       url::Origin::Create(form_url))) {
     SYSLOG(WARNING) << "Killing renderer: illegal password access. Reason: "
                     << static_cast<int>(reason);
@@ -53,40 +63,6 @@ bool CheckChildProcessSecurityPolicyForURL(content::RenderFrameHost* frame,
     return false;
   }
 
-  return true;
-}
-
-bool CheckChildProcessSecurityPolicy(content::RenderFrameHost* frame,
-                                     const PasswordForm& password_form,
-                                     BadMessageReason reason) {
-  return CheckChildProcessSecurityPolicyForURL(frame, password_form.url,
-                                               reason) &&
-         CheckChildProcessSecurityPolicyForURL(
-             frame, GURL(password_form.signon_realm), reason) &&
-         CheckChildProcessSecurityPolicyForURL(
-             frame, password_form.form_data.url, reason);
-}
-
-bool CheckChildProcessSecurityPolicy(content::RenderFrameHost* frame,
-                                     const std::vector<PasswordForm>& forms,
-                                     BadMessageReason reason) {
-  for (const auto& form : forms) {
-    if (!bad_message::CheckChildProcessSecurityPolicy(frame, form, reason))
-      return false;
-  }
-  return true;
-}
-
-bool CheckChildProcessSecurityPolicy(
-    content::RenderFrameHost* frame,
-    const std::vector<autofill::FormData>& forms_data,
-    BadMessageReason reason) {
-  for (const auto& form_data : forms_data) {
-    if (!bad_message::CheckChildProcessSecurityPolicyForURL(
-            frame, form_data.url, reason)) {
-      return false;
-    }
-  }
   return true;
 }
 

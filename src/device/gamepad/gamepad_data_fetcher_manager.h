@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,8 @@ class DEVICE_GAMEPAD_EXPORT GamepadDataFetcherManager {
   void CreateDataFetcherFromFactory(GamepadDataFetcherFactory* factory);
   void RemoveSourceDataFetcher(GamepadSource* source);
 
-  typedef std::vector<GamepadDataFetcherFactory*> FactoryVector;
+  typedef std::vector<raw_ptr<GamepadDataFetcherFactory, VectorExperimental>>
+      FactoryVector;
   FactoryVector factories_;
 
   raw_ptr<GamepadProvider> provider_;

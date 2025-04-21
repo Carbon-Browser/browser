@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,6 +43,13 @@ class CONTENT_EXPORT RenderProcessHostObserver : public base::CheckedObserver {
   // This is not called in --single-process mode.
   virtual void RenderProcessExited(RenderProcessHost* host,
                                    const ChildProcessTerminationInfo& info) {}
+
+  // This is the equivalent to the `RenderProcessExited` notification above but
+  // for --single-process mode only. This is invoked just before calling
+  // `RenderProcessHostDestroyed`. Useful for observers that needs the two-step
+  // destruction mechanism of RenderProcessHost objects, even in
+  // --single--process mode, allowing the logic to be shared between both modes.
+  virtual void InProcessRendererExiting(RenderProcessHost* host) {}
 
   // This method is invoked when the observed RenderProcessHost itself is
   // destroyed. This is guaranteed to be the last call made to the observer, so

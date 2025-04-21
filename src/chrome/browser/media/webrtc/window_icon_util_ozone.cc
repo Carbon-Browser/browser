@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include "ui/ozone/public/platform_utils.h"
 
 gfx::ImageSkia GetWindowIcon(content::DesktopMediaID id) {
-  // TODO(https://crbug.com/1094460): Hook up Window Icons for lacros.
+  // TODO(crbug.com/40135428): Hook up Window Icons for lacros.
   DCHECK_EQ(content::DesktopMediaID::TYPE_WINDOW, id.type);
   if (auto* platform_utils =
           ui::OzonePlatform::GetInstance()->GetPlatformUtils()) {

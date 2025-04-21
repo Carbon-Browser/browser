@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,11 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/string_util.h"
+#include "chrome/browser/metrics/chrome_metrics_service_accessor.h"
 #include "chrome/browser/safe_browsing/download_protection/download_protection_service.h"
 #include "chrome/browser/safe_browsing/incident_reporting/incident_reporting_service.h"
 #include "chrome/browser/safe_browsing/safe_browsing_service.h"
@@ -25,21 +26,21 @@ namespace safe_browsing {
 
 // static
 std::unique_ptr<ServicesDelegate> ServicesDelegate::Create(
-    SafeBrowsingService* safe_browsing_service) {
+    SafeBrowsingServiceImpl* safe_browsing_service) {
   return base::WrapUnique(
       new ServicesDelegateDesktop(safe_browsing_service, nullptr));
 }
 
 // static
 std::unique_ptr<ServicesDelegate> ServicesDelegate::CreateForTest(
-    SafeBrowsingService* safe_browsing_service,
+    SafeBrowsingServiceImpl* safe_browsing_service,
     ServicesDelegate::ServicesCreator* services_creator) {
   return base::WrapUnique(
       new ServicesDelegateDesktop(safe_browsing_service, services_creator));
 }
 
 ServicesDelegateDesktop::ServicesDelegateDesktop(
-    SafeBrowsingService* safe_browsing_service,
+    SafeBrowsingServiceImpl* safe_browsing_service,
     ServicesDelegate::ServicesCreator* services_creator)
     : ServicesDelegate(safe_browsing_service, services_creator) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
@@ -130,7 +131,7 @@ DownloadProtectionService* ServicesDelegateDesktop::GetDownloadService() {
 scoped_refptr<SafeBrowsingDatabaseManager>
 ServicesDelegateDesktop::CreateDatabaseManager() {
   return V4LocalDatabaseManager::Create(
-      SafeBrowsingService::GetBaseFilename(),
+      SafeBrowsingServiceImpl::GetBaseFilename(),
       content::GetUIThreadTaskRunner({}), content::GetIOThreadTaskRunner({}),
       base::BindRepeating(
           &ServicesDelegateDesktop::GetEstimatedExtendedReportingLevel,
@@ -147,14 +148,14 @@ ServicesDelegateDesktop::CreateIncidentReportingService() {
   return new IncidentReportingService(safe_browsing_service_);
 }
 
-void ServicesDelegateDesktop::StartOnIOThread(
+void ServicesDelegateDesktop::StartOnUIThread(
     scoped_refptr<network::SharedURLLoaderFactory> browser_url_loader_factory,
     const V4ProtocolConfig& v4_config) {
-  database_manager_->StartOnIOThread(browser_url_loader_factory, v4_config);
+  database_manager_->StartOnUIThread(browser_url_loader_factory, v4_config);
 }
 
-void ServicesDelegateDesktop::StopOnIOThread(bool shutdown) {
-  database_manager_->StopOnIOThread(shutdown);
+void ServicesDelegateDesktop::StopOnUIThread(bool shutdown) {
+  database_manager_->StopOnUIThread(shutdown);
 }
 
 void ServicesDelegateDesktop::OnProfileWillBeDestroyed(Profile* profile) {

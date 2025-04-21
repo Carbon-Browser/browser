@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,9 +48,9 @@ class CORE_EXPORT CSSTranslate final : public CSSTransformComponent {
   CSSTranslate& operator=(const CSSTranslate&) = delete;
 
   // Getters and setters for attributes defined in the IDL.
-  CSSNumericValue* x() { return x_; }
-  CSSNumericValue* y() { return y_; }
-  CSSNumericValue* z() { return z_; }
+  CSSNumericValue* x() { return x_.Get(); }
+  CSSNumericValue* y() { return y_.Get(); }
+  CSSNumericValue* z() { return z_.Get(); }
   void setX(CSSNumericValue* x, ExceptionState&);
   void setY(CSSNumericValue* y, ExceptionState&);
   void setZ(CSSNumericValue* z, ExceptionState&);

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "base/base64url.h"
 #include "base/command_line.h"
+#include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/memory/raw_ptr.h"
@@ -24,6 +25,7 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/common/chrome_paths.h"
 #include "components/policy/core/browser/browser_policy_connector.h"
+#include "components/policy/core/browser/cloud/user_policy_signin_service_base.h"
 #include "components/policy/core/common/cloud/cloud_policy_client.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/policy/core/common/cloud/mock_cloud_policy_client.h"
@@ -38,6 +40,7 @@
 #include "components/policy/test_support/embedded_policy_test_server.h"
 #include "components/policy/test_support/policy_storage.h"
 #include "components/signin/public/base/signin_metrics.h"
+#include "components/signin/public/base/signin_switches.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_utils.h"
 #include "extensions/common/extension.h"
@@ -206,7 +209,7 @@ class ComponentCloudPolicyTest : public extensions::ExtensionBrowserTest {
         PolicyBuilder::GetFakeAccountIdForTesting());
     policy_manager->Connect(
         g_browser_process->local_state(),
-        UserCloudPolicyManager::CreateCloudPolicyClient(
+        std::make_unique<CloudPolicyClient>(
             connector->device_management_service(),
             g_browser_process->shared_url_loader_factory()));
 
@@ -234,8 +237,7 @@ class ComponentCloudPolicyTest : public extensions::ExtensionBrowserTest {
         IdentityManagerFactory::GetForProfile(browser()->profile())
             ->GetPrimaryAccountMutator();
     primary_account_mutator->ClearPrimaryAccount(
-        signin_metrics::SIGNOUT_TEST,
-        signin_metrics::SignoutDelete::kIgnoreMetric);
+        signin_metrics::ProfileSignout::kTest);
   }
 #endif
 
@@ -244,14 +246,15 @@ class ComponentCloudPolicyTest : public extensions::ExtensionBrowserTest {
         browser()->profile()->GetProfilePolicyConnector();
     PolicyService* policy_service = profile_connector->policy_service();
     base::RunLoop run_loop;
-    policy_service->RefreshPolicies(run_loop.QuitClosure());
+    policy_service->RefreshPolicies(run_loop.QuitClosure(),
+                                    PolicyFetchReason::kTest);
     run_loop.Run();
   }
 
   EmbeddedPolicyTestServer test_server_;
   scoped_refptr<const extensions::Extension> extension_;
   std::unique_ptr<ExtensionTestMessageListener> event_listener_;
-  raw_ptr<CloudPolicyClient> client_ = nullptr;
+  raw_ptr<CloudPolicyClient, DanglingUntriaged> client_ = nullptr;
 };
 
 // crbug.com/1230268 not working on Lacros.
@@ -344,6 +347,12 @@ IN_PROC_BROWSER_TEST_F(ComponentCloudPolicyTest, MAYBE_InstallNewExtension) {
 // Signing out on Lacros is not possible.
 #if !BUILDFLAG(IS_CHROMEOS)
 IN_PROC_BROWSER_TEST_F(ComponentCloudPolicyTest, SignOutAndBackIn) {
+  // Signout is not enabled when this feature is enabled.
+  if (base::FeatureList::IsEnabled(kDisallowManagedProfileSignout)) {
+    event_listener_->Reply("idle");
+    event_listener_.reset();
+    return;
+  }
   // Read the initial policy.
   ExtensionTestMessageListener initial_policy_listener(
       kTestPolicyJSON, ReplyBehavior::kWillReply);

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,7 @@ import org.chromium.components.security_state.ConnectionSecurityLevel;
 import org.chromium.content_public.browser.BrowserContextHandle;
 import org.chromium.url.GURL;
 
-/**
- * Interface for a page info main page controller.
- */
+/** Interface for a page info main page controller. */
 public interface PageInfoMainController {
     /**
      * Launches the PageInfoSubpage provided by |pageInfoCookiesController|.
@@ -22,9 +20,7 @@ public interface PageInfoMainController {
      */
     void launchSubpage(PageInfoSubpageController controller);
 
-    /**
-     * Switches back to the main page info view.
-     */
+    /** Switches back to the main page info view. */
     void exitSubpage();
 
     /**
@@ -33,14 +29,6 @@ public interface PageInfoMainController {
      * @param action The action to record.
      */
     void recordAction(@PageInfoAction int action);
-
-    /**
-     * Inform the native controller that the AboutThisSite section was shown.
-     * This signal is used for metrics.
-     *
-     * @param wasAboutThisSiteShown Whether the section was shown.
-     */
-    void setAboutThisSiteShown(boolean wasAboutThisSiteShown);
 
     /** Refreshes the permissions of the page info. */
     void refreshPermissions();

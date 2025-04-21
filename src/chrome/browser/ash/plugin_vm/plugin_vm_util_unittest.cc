@@ -1,18 +1,17 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/plugin_vm/plugin_vm_util.h"
 
-#include "ash/components/tpm/stub_install_attributes.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_features.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_pref_names.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_test_helper.h"
-#include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
+#include "chromeos/ash/components/install_attributes/stub_install_attributes.h"
+#include "chromeos/ash/components/settings/cros_settings.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
 #include "content/public/test/browser_task_environment.h"
@@ -29,20 +28,16 @@ class PluginVmUtilTest : public testing::Test {
   PluginVmUtilTest(const PluginVmUtilTest&) = delete;
   PluginVmUtilTest& operator=(const PluginVmUtilTest&) = delete;
 
-  MOCK_METHOD(void, OnPolicyChanged, (bool));
+  MOCK_METHOD(void, OnAvailabilityChanged, (bool, bool));
 
  protected:
-  struct ScopedDBusThreadManager {
-    ScopedDBusThreadManager() {
-      chromeos::DBusThreadManager::Initialize();
+  struct ScopedDBusClients {
+    ScopedDBusClients() {
       ash::ConciergeClient::InitializeFake(
           /*fake_cicerone_client=*/nullptr);
     }
-    ~ScopedDBusThreadManager() {
-      ash::ConciergeClient::Shutdown();
-      chromeos::DBusThreadManager::Shutdown();
-    }
-  } dbus_thread_manager_;
+    ~ScopedDBusClients() { ash::ConciergeClient::Shutdown(); }
+  } dbus_clients_;
 
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<TestingProfile> testing_profile_;
@@ -85,45 +80,56 @@ TEST_F(PluginVmUtilTest, PluginVmShouldBeConfiguredOnceAllConditionsAreMet) {
   EXPECT_TRUE(PluginVmFeatures::Get()->IsConfigured(testing_profile_.get()));
 }
 
-TEST_F(PluginVmUtilTest, AddPluginVmPolicyObserver) {
-  const std::unique_ptr<PluginVmPolicySubscription> subscription =
-      std::make_unique<plugin_vm::PluginVmPolicySubscription>(
-          testing_profile_.get(),
-          base::BindRepeating(&PluginVmUtilTest::OnPolicyChanged,
-                              base::Unretained(this)));
+TEST_F(PluginVmUtilTest, AvailabilitySubscription) {
+  PluginVmAvailabilitySubscription subscription(
+      testing_profile_.get(),
+      base::BindRepeating(&PluginVmUtilTest::OnAvailabilityChanged,
+                          base::Unretained(this)));
+
+  // Callback args are: (is_allowed, is_configured).
 
   EXPECT_FALSE(PluginVmFeatures::Get()->IsAllowed(testing_profile_.get()));
 
-  EXPECT_CALL(*this, OnPolicyChanged(true));
+  EXPECT_CALL(*this, OnAvailabilityChanged(true, false));
   test_helper_->AllowPluginVm();
   testing::Mock::VerifyAndClearExpectations(this);
 
-  EXPECT_CALL(*this, OnPolicyChanged(false));
+  EXPECT_CALL(*this, OnAvailabilityChanged(false, false));
   testing_profile_->ScopedCrosSettingsTestHelper()->SetBoolean(
       ash::kPluginVmAllowed, false);
   testing::Mock::VerifyAndClearExpectations(this);
 
-  EXPECT_CALL(*this, OnPolicyChanged(true));
+  EXPECT_CALL(*this, OnAvailabilityChanged(true, false));
   testing_profile_->ScopedCrosSettingsTestHelper()->SetBoolean(
       ash::kPluginVmAllowed, true);
   testing::Mock::VerifyAndClearExpectations(this);
 
-  EXPECT_CALL(*this, OnPolicyChanged(false));
+  EXPECT_CALL(*this, OnAvailabilityChanged(true, true));
+  testing_profile_->GetPrefs()->SetBoolean(
+      plugin_vm::prefs::kPluginVmImageExists, true);
+  testing::Mock::VerifyAndClearExpectations(this);
+
+  EXPECT_CALL(*this, OnAvailabilityChanged(false, true));
   testing_profile_->GetPrefs()->SetBoolean(plugin_vm::prefs::kPluginVmAllowed,
                                            false);
   testing::Mock::VerifyAndClearExpectations(this);
 
-  EXPECT_CALL(*this, OnPolicyChanged(true));
+  EXPECT_CALL(*this, OnAvailabilityChanged(true, true));
   testing_profile_->GetPrefs()->SetBoolean(plugin_vm::prefs::kPluginVmAllowed,
                                            true);
   testing::Mock::VerifyAndClearExpectations(this);
 
-  EXPECT_CALL(*this, OnPolicyChanged(false));
+  EXPECT_CALL(*this, OnAvailabilityChanged(false, true));
   testing_profile_->GetPrefs()->SetString(plugin_vm::prefs::kPluginVmUserId,
                                           "");
   testing::Mock::VerifyAndClearExpectations(this);
 
-  EXPECT_CALL(*this, OnPolicyChanged(true));
+  EXPECT_CALL(*this, OnAvailabilityChanged(false, false));
+  testing_profile_->GetPrefs()->SetBoolean(
+      plugin_vm::prefs::kPluginVmImageExists, false);
+  testing::Mock::VerifyAndClearExpectations(this);
+
+  EXPECT_CALL(*this, OnAvailabilityChanged(true, false));
   const std::string kPluginVmUserId = "fancy-user-id";
   testing_profile_->GetPrefs()->SetString(plugin_vm::prefs::kPluginVmUserId,
                                           kPluginVmUserId);
@@ -131,19 +137,19 @@ TEST_F(PluginVmUtilTest, AddPluginVmPolicyObserver) {
 }
 
 TEST_F(PluginVmUtilTest, DriveUrlNonMatches) {
-  EXPECT_EQ(absl::nullopt,
+  EXPECT_EQ(std::nullopt,
             GetIdFromDriveUrl(GURL(
                 "http://192.168.0.2?id=Yxhi5BDTxsEl9onT8AunH4o_tkKviFGjY")));
-  EXPECT_EQ(absl::nullopt,
+  EXPECT_EQ(std::nullopt,
             GetIdFromDriveUrl(
                 GURL("https://drive.notgoogle.com/open?id=someSortOfId123")));
-  EXPECT_EQ(absl::nullopt,
+  EXPECT_EQ(std::nullopt,
             GetIdFromDriveUrl(GURL(
                 "https://site.com/a/site.com/file/d/definitelyNotDrive/view")));
-  EXPECT_EQ(
-      absl::nullopt,
-      GetIdFromDriveUrl(GURL("file:///home/chronos/user/Downloads/file.zip")));
-  EXPECT_EQ(absl::nullopt,
+  EXPECT_EQ(std::nullopt,
+            GetIdFromDriveUrl(
+                GURL("file:///home/chronos/user/MyFiles/Downloads/file.zip")));
+  EXPECT_EQ(std::nullopt,
             GetIdFromDriveUrl(GURL("http://drive.google.com/open?id=fancyId")));
 }
 

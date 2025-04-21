@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -703,7 +703,6 @@ virtual GLint GetProgramResourceLocation(GLuint program,
                                          const char* name) = 0;
 virtual void MemoryBarrierEXT(GLbitfield barriers) = 0;
 virtual void MemoryBarrierByRegion(GLbitfield barriers) = 0;
-virtual void SwapBuffers(GLuint64 swap_id, GLbitfield flags = 0) = 0;
 virtual GLuint GetMaxValueInBufferCHROMIUM(GLuint buffer_id,
                                            GLsizei count,
                                            GLenum type,
@@ -734,11 +733,6 @@ virtual void* MapTexSubImage2DCHROMIUM(GLenum target,
                                        GLenum type,
                                        GLenum access) = 0;
 virtual void UnmapTexSubImage2DCHROMIUM(const void* mem) = 0;
-virtual void ResizeCHROMIUM(GLuint width,
-                            GLuint height,
-                            GLfloat scale_factor,
-                            GLcolorSpace color_space,
-                            GLboolean alpha) = 0;
 virtual const GLchar* GetRequestableExtensionsCHROMIUM() = 0;
 virtual void RequestExtensionCHROMIUM(const char* extension) = 0;
 virtual void GetProgramInfoCHROMIUM(GLuint program,
@@ -809,8 +803,6 @@ virtual void DrawElementsInstancedBaseVertexBaseInstanceANGLE(
     GLint basevertex,
     GLuint baseinstance) = 0;
 virtual void VertexAttribDivisorANGLE(GLuint index, GLuint divisor) = 0;
-virtual void ProduceTextureDirectCHROMIUM(GLuint texture, GLbyte* mailbox) = 0;
-virtual GLuint CreateAndConsumeTextureCHROMIUM(const GLbyte* mailbox) = 0;
 virtual void BindUniformLocationCHROMIUM(GLuint program,
                                          GLint location,
                                          const char* name) = 0;
@@ -822,12 +814,10 @@ virtual void DiscardFramebufferEXT(GLenum target,
                                    const GLenum* attachments) = 0;
 virtual void LoseContextCHROMIUM(GLenum current, GLenum other) = 0;
 virtual void DrawBuffersEXT(GLsizei count, const GLenum* bufs) = 0;
-virtual void DiscardBackbufferCHROMIUM() = 0;
 virtual void FlushDriverCachesCHROMIUM() = 0;
 virtual GLuint GetLastFlushIdCHROMIUM() = 0;
 virtual void SetActiveURLCHROMIUM(const char* url) = 0;
 virtual void ContextVisibilityHintCHROMIUM(GLboolean visibility) = 0;
-virtual void CoverageModulationCHROMIUM(GLenum components) = 0;
 virtual GLenum GetGraphicsResetStatusKHR() = 0;
 virtual void BlendBarrierKHR() = 0;
 virtual void BindFragDataLocationIndexedEXT(GLuint program,
@@ -858,12 +848,57 @@ virtual void FramebufferTextureMultiviewOVR(GLenum target,
 virtual void MaxShaderCompilerThreadsKHR(GLuint count) = 0;
 virtual GLuint CreateAndTexStorage2DSharedImageCHROMIUM(
     const GLbyte* mailbox) = 0;
-virtual GLuint CreateAndTexStorage2DSharedImageWithInternalFormatCHROMIUM(
-    const GLbyte* mailbox,
-    GLenum internalformat) = 0;
 virtual void BeginSharedImageAccessDirectCHROMIUM(GLuint texture,
                                                   GLenum mode) = 0;
 virtual void EndSharedImageAccessDirectCHROMIUM(GLuint texture) = 0;
+virtual void CopySharedImageINTERNAL(GLint xoffset,
+                                     GLint yoffset,
+                                     GLint x,
+                                     GLint y,
+                                     GLsizei width,
+                                     GLsizei height,
+                                     const GLbyte* mailboxes) = 0;
+virtual void CopySharedImageToTextureINTERNAL(GLuint texture,
+                                              GLenum target,
+                                              GLuint internal_format,
+                                              GLenum type,
+                                              GLint src_x,
+                                              GLint src_y,
+                                              GLsizei width,
+                                              GLsizei height,
+                                              GLboolean flip_y,
+                                              const GLbyte* src_mailbox) = 0;
+virtual GLboolean ReadbackARGBImagePixelsINTERNAL(const GLbyte* mailbox,
+                                                  const void* dst_color_space,
+                                                  GLuint dst_color_space_size,
+                                                  GLuint dst_size,
+                                                  GLuint dst_width,
+                                                  GLuint dst_height,
+                                                  GLuint dst_color_type,
+                                                  GLuint dst_alpha_type,
+                                                  GLuint dst_row_bytes,
+                                                  GLint src_x,
+                                                  GLint src_y,
+                                                  GLint plane_index,
+                                                  void* pixels) = 0;
+virtual void WritePixelsYUVINTERNAL(const GLbyte* mailbox,
+                                    GLuint src_size_plane1,
+                                    GLuint src_size_plane2,
+                                    GLuint src_size_plane3,
+                                    GLuint src_size_plane4,
+                                    GLuint src_width,
+                                    GLuint src_height,
+                                    GLuint src_plane_config,
+                                    GLuint src_subsampling,
+                                    GLuint src_datatype,
+                                    GLuint src_row_bytes_plane1,
+                                    GLuint src_row_bytes_plane2,
+                                    GLuint src_row_bytes_plane3,
+                                    GLuint src_row_bytes_plane4,
+                                    const void* src_pixels_plane1,
+                                    const void* src_pixels_plane2,
+                                    const void* src_pixels_plane3,
+                                    const void* src_pixels_plane4) = 0;
 virtual void EnableiOES(GLenum target, GLuint index) = 0;
 virtual void DisableiOES(GLenum target, GLuint index) = 0;
 virtual void BlendEquationiOES(GLuint buf, GLenum mode) = 0;
@@ -882,4 +917,37 @@ virtual void ColorMaskiOES(GLuint buf,
                            GLboolean b,
                            GLboolean a) = 0;
 virtual GLboolean IsEnablediOES(GLenum target, GLuint index) = 0;
+virtual void ProvokingVertexANGLE(GLenum provokeMode) = 0;
+virtual void FramebufferMemorylessPixelLocalStorageANGLE(
+    GLint plane,
+    GLenum internalformat) = 0;
+virtual void FramebufferTexturePixelLocalStorageANGLE(GLint plane,
+                                                      GLuint backingtexture,
+                                                      GLint level,
+                                                      GLint layer) = 0;
+virtual void FramebufferPixelLocalClearValuefvANGLE(GLint plane,
+                                                    const GLfloat* value) = 0;
+virtual void FramebufferPixelLocalClearValueivANGLE(GLint plane,
+                                                    const GLint* value) = 0;
+virtual void FramebufferPixelLocalClearValueuivANGLE(GLint plane,
+                                                     const GLuint* value) = 0;
+virtual void BeginPixelLocalStorageANGLE(GLsizei count,
+                                         const GLenum* loadops) = 0;
+virtual void EndPixelLocalStorageANGLE(GLsizei count,
+                                       const GLenum* storeops) = 0;
+virtual void PixelLocalStorageBarrierANGLE() = 0;
+virtual void FramebufferPixelLocalStorageInterruptANGLE() = 0;
+virtual void FramebufferPixelLocalStorageRestoreANGLE() = 0;
+virtual void GetFramebufferPixelLocalStorageParameterfvANGLE(
+    GLint plane,
+    GLenum pname,
+    GLfloat* params) = 0;
+virtual void GetFramebufferPixelLocalStorageParameterivANGLE(GLint plane,
+                                                             GLenum pname,
+                                                             GLint* params) = 0;
+virtual void ClipControlEXT(GLenum origin, GLenum depth) = 0;
+virtual void PolygonModeANGLE(GLenum face, GLenum mode) = 0;
+virtual void PolygonOffsetClampEXT(GLfloat factor,
+                                   GLfloat units,
+                                   GLfloat clamp) = 0;
 #endif  // GPU_COMMAND_BUFFER_CLIENT_GLES2_INTERFACE_AUTOGEN_H_

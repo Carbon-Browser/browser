@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,20 @@
 #include "build/build_config.h"
 #include "content/browser/renderer_host/render_widget_host_impl.h"
 #include "ui/compositor/compositor.h"
+#include "ui/display/screen.h"
 
 #if defined(USE_AURA)
 #include "ui/aura/window.h"
 #include "ui/aura/window_tree_host.h"
 #endif
+
+#if BUILDFLAG(IS_CHROMEOS)
+#include "ui/display/screen.h"
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
+#if BUILDFLAG(IS_WIN)
+#include "ui/display/win/screen_win.h"
+#endif  // BUILDFLAG(IS_WIN)
 
 namespace content {
 
@@ -25,7 +34,7 @@ FlingScheduler::~FlingScheduler() {
 }
 
 void FlingScheduler::ScheduleFlingProgress(
-    base::WeakPtr<FlingController> fling_controller) {
+    base::WeakPtr<input::FlingController> fling_controller) {
   DCHECK(fling_controller);
   fling_controller_ = fling_controller;
   // Don't do anything if a ui::Compositor is already being observed.
@@ -40,18 +49,39 @@ void FlingScheduler::ScheduleFlingProgress(
 }
 
 void FlingScheduler::DidStopFlingingOnBrowser(
-    base::WeakPtr<FlingController> fling_controller) {
+    base::WeakPtr<input::FlingController> fling_controller) {
   DCHECK(fling_controller);
   if (observed_compositor_) {
     observed_compositor_->RemoveAnimationObserver(this);
     observed_compositor_ = nullptr;
   }
   fling_controller_ = nullptr;
-  host_->DidStopFlinging();
+  host_->GetRenderInputRouter()->DidStopFlinging();
 }
 
 bool FlingScheduler::NeedsBeginFrameForFlingProgress() {
   return !GetCompositor();
+}
+
+bool FlingScheduler::ShouldUseMobileFlingCurve() {
+#if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
+  return true;
+#elif BUILDFLAG(IS_CHROMEOS)
+  CHECK(display::Screen::GetScreen());
+  return display::Screen::GetScreen()->InTabletMode();
+#else
+  return false;
+#endif
+}
+
+gfx::Vector2dF FlingScheduler::GetPixelsPerInch(
+    const gfx::PointF& position_in_screen) {
+#if BUILDFLAG(IS_WIN)
+  return display::win::ScreenWin::GetPixelsPerInch(position_in_screen);
+#else
+  return gfx::Vector2dF(input::kDefaultPixelsPerInch,
+                        input::kDefaultPixelsPerInch);
+#endif
 }
 
 void FlingScheduler::ProgressFlingOnBeginFrameIfneeded(
@@ -68,15 +98,10 @@ void FlingScheduler::ProgressFlingOnBeginFrameIfneeded(
 }
 
 ui::Compositor* FlingScheduler::GetCompositor() {
-#if defined(USE_AURA)
-  if (host_->GetView() && host_->GetView()->GetNativeView() &&
-      host_->GetView()->GetNativeView()->GetHost() &&
-      host_->GetView()->GetNativeView()->GetHost()->compositor()) {
-    return host_->GetView()->GetNativeView()->GetHost()->compositor();
+  if (!host_->GetView()) {
+    return nullptr;
   }
-#endif
-
-  return nullptr;
+  return host_->GetView()->GetCompositor();
 }
 
 void FlingScheduler::OnAnimationStep(base::TimeTicks timestamp) {

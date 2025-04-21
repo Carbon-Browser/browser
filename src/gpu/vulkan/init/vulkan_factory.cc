@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #include "build/build_config.h"
 
 #include <memory>
+#include <ostream>
 
 #if BUILDFLAG(IS_ANDROID)
 #include "gpu/vulkan/android/vulkan_implementation_android.h"
@@ -15,7 +16,7 @@
 #include "gpu/vulkan/win32/vulkan_implementation_win32.h"
 #endif
 
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #include "ui/ozone/public/ozone_platform.h"
 #include "ui/ozone/public/surface_factory_ozone.h"
 #endif
@@ -29,7 +30,7 @@ namespace gpu {
 std::unique_ptr<VulkanImplementation> CreateVulkanImplementation(
     bool use_swiftshader,
     bool allow_protected_memory) {
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
   return ui::OzonePlatform::GetInstance()
       ->GetSurfaceFactoryOzone()
       ->CreateVulkanImplementation(use_swiftshader, allow_protected_memory);
@@ -55,7 +56,6 @@ std::unique_ptr<VulkanImplementation> CreateVulkanImplementation(
   return std::make_unique<VulkanImplementationMac>(use_swiftshader);
 #else
   NOTREACHED();
-  return {};
 #endif
 #endif
 }

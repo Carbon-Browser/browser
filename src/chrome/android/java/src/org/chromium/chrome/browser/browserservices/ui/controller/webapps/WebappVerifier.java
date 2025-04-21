@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,9 +36,7 @@ public abstract class WebappVerifier implements Verifier {
         return isUrlInScope(url);
     }
 
-    /**
-     * Returns the scope that the homscreen shortcut/WebAPK is valid for.
-     */
+    /** Returns the scope that the homscreen shortcut/WebAPK is valid for. */
     protected abstract String getScope();
 
     /**

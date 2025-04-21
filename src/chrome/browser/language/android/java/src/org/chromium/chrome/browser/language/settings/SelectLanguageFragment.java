@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,6 +25,8 @@ import androidx.recyclerview.widget.RecyclerView.ViewHolder;
 
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.language.R;
+import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.settings.ProfileDependentSetting;
 import org.chromium.components.browser_ui.settings.SettingsUtils;
 
 import java.util.ArrayList;
@@ -35,25 +37,21 @@ import java.util.Locale;
  * Fragment with a {@link RecyclerView} containing a list of languages that users may add to their
  * accept languages. There is a {@link SearchView} on its Actionbar to make a quick lookup.
  */
-public class SelectLanguageFragment extends Fragment {
+public class SelectLanguageFragment extends Fragment implements ProfileDependentSetting {
     // Intent key to pass selected language code from SelectLanguageFragment.
     static final String INTENT_SELECTED_LANGUAGE = "SelectLanguageFragment.SelectedLanguage";
     // Intent key to receive type of languages to populate fragment with.
     static final String INTENT_POTENTIAL_LANGUAGES = "SelectLanguageFragment.PotentialLanguages";
 
-    /**
-     * A host to launch SelectLanguageFragment and receive the result.
-     */
+    /** A host to launch SelectLanguageFragment and receive the result. */
     interface Launcher {
-        /**
-         * Launches SelectLanguageFragment.
-         */
+        /** Launches SelectLanguageFragment. */
         void launchAddLanguage();
     }
 
     private class LanguageSearchListAdapter extends LanguageListBaseAdapter {
-        LanguageSearchListAdapter(Context context) {
-            super(context);
+        LanguageSearchListAdapter(Context context, Profile profile) {
+            super(context, profile);
         }
 
         @Override
@@ -77,7 +75,7 @@ public class SelectLanguageFragment extends Fragment {
             query = query.trim().toLowerCase(locale);
             List<LanguageItem> results = new ArrayList<>();
             for (LanguageItem item : mFilteredLanguages) {
-                // TODO(crbug/783049): Consider searching in item's native display name and
+                // TODO(crbug.com/40548938): Consider searching in item's native display name and
                 // language code too.
                 if (item.getDisplayName().toLowerCase(locale).contains(query)) {
                     results.add(item);
@@ -97,6 +95,7 @@ public class SelectLanguageFragment extends Fragment {
     private LanguageSearchListAdapter mAdapter;
     private List<LanguageItem> mFilteredLanguages;
     private LanguageListBaseAdapter.ItemClickListener mItemClickListener;
+    private Profile mProfile;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -124,22 +123,30 @@ public class SelectLanguageFragment extends Fragment {
                 new DividerItemDecoration(activity, layoutManager.getOrientation()));
 
         @LanguagesManager.LanguageListType
-        int languageOption = getActivity().getIntent().getIntExtra(
-                INTENT_POTENTIAL_LANGUAGES, LanguagesManager.LanguageListType.ACCEPT_LANGUAGES);
-        mFilteredLanguages = LanguagesManager.getInstance().getPotentialLanguages(languageOption);
-        mItemClickListener = item -> {
-            Intent intent = new Intent();
-            intent.putExtra(INTENT_SELECTED_LANGUAGE, item.getCode());
-            activity.setResult(Activity.RESULT_OK, intent);
-            activity.finish();
-        };
-        mAdapter = new LanguageSearchListAdapter(activity);
+        int languageOption =
+                getActivity()
+                        .getIntent()
+                        .getIntExtra(
+                                INTENT_POTENTIAL_LANGUAGES,
+                                LanguagesManager.LanguageListType.ACCEPT_LANGUAGES);
+        mFilteredLanguages =
+                LanguagesManager.getForProfile(mProfile).getPotentialLanguages(languageOption);
+        mItemClickListener =
+                item -> {
+                    Intent intent = new Intent();
+                    intent.putExtra(INTENT_SELECTED_LANGUAGE, item.getCode());
+                    activity.setResult(Activity.RESULT_OK, intent);
+                    activity.finish();
+                };
+        mAdapter = new LanguageSearchListAdapter(activity, mProfile);
 
         mRecyclerView.setAdapter(mAdapter);
         mAdapter.setDisplayedLanguages(mFilteredLanguages);
-        mRecyclerView.getViewTreeObserver().addOnScrollChangedListener(
-                SettingsUtils.getShowShadowOnScrollListener(
-                        mRecyclerView, view.findViewById(R.id.shadow)));
+        mRecyclerView
+                .getViewTreeObserver()
+                .addOnScrollChangedListener(
+                        SettingsUtils.getShowShadowOnScrollListener(
+                                mRecyclerView, view.findViewById(R.id.shadow)));
         return view;
     }
 
@@ -151,28 +158,35 @@ public class SelectLanguageFragment extends Fragment {
         mSearchView = (SearchView) menu.findItem(R.id.search).getActionView();
         mSearchView.setImeOptions(EditorInfo.IME_FLAG_NO_FULLSCREEN);
 
-        mSearchView.setOnCloseListener(() -> {
-            mSearch = "";
-            mAdapter.setDisplayedLanguages(mFilteredLanguages);
-            return false;
-        });
+        mSearchView.setOnCloseListener(
+                () -> {
+                    mSearch = "";
+                    mAdapter.setDisplayedLanguages(mFilteredLanguages);
+                    return false;
+                });
 
-        mSearchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
-            @Override
-            public boolean onQueryTextSubmit(String query) {
-                return true;
-            }
+        mSearchView.setOnQueryTextListener(
+                new SearchView.OnQueryTextListener() {
+                    @Override
+                    public boolean onQueryTextSubmit(String query) {
+                        return true;
+                    }
 
-            @Override
-            public boolean onQueryTextChange(String query) {
-                if (TextUtils.isEmpty(query) || TextUtils.equals(query, mSearch)) {
-                    return true;
-                }
+                    @Override
+                    public boolean onQueryTextChange(String query) {
+                        if (TextUtils.isEmpty(query) || TextUtils.equals(query, mSearch)) {
+                            return true;
+                        }
 
-                mSearch = query;
-                mAdapter.search(mSearch);
-                return true;
-            }
-        });
+                        mSearch = query;
+                        mAdapter.search(mSearch);
+                        return true;
+                    }
+                });
+    }
+
+    @Override
+    public void setProfile(Profile profile) {
+        mProfile = profile;
     }
 }

@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "base/sequence_checker.h"
+#include "components/adblock/content/browser/request_initiator.h"
 #include "content/public/browser/render_frame_host.h"
 
 class GURL;
@@ -46,12 +47,13 @@ class FrameHierarchyBuilder {
   FrameHierarchyBuilder();
   virtual ~FrameHierarchyBuilder();
 
-  virtual content::RenderFrameHost* FindRenderFrameHost(
-      int32_t process_id,
-      int32_t routing_id) const;
-
+  // For request initiated by a frame, traverses the parents of the frame and
+  // returns a filtered list of frame URLs. For detached requests, like the ones
+  // issued by service workers, creates an approximation based on the URL of the
+  // initiator of the request.
   virtual std::vector<GURL> BuildFrameHierarchy(
-      content::RenderFrameHost* host) const;
+      const RequestInitiator& request_initiator) const;
+
   virtual GURL FindUrlForFrame(content::RenderFrameHost* host,
                                content::WebContents* web_contents) const;
 

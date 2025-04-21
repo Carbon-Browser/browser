@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@
 namespace blink {
 
 class ExecutionContext;
-class ScriptValue;
+class PaymentHandlerResponse;
 class WaitUntilObserver;
 
 // Implementation for PaymentRequestEvent.respondWith(), which is used by the
@@ -31,10 +31,8 @@ class MODULES_EXPORT PaymentRequestRespondWithObserver final
                                                    int event_id,
                                                    WaitUntilObserver*);
 
+  void OnResponseFulfilled(ScriptState*, PaymentHandlerResponse*);
   void OnResponseRejected(mojom::ServiceWorkerResponseError) override;
-  void OnResponseFulfilled(ScriptState*,
-                           const ScriptValue&,
-                           const ExceptionContext&) override;
   void OnNoResponse(ScriptState*) override;
 
   void Trace(Visitor*) const override;

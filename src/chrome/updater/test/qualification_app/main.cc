@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,4 +8,16 @@
 // For example, it could verify that the application installer is being called
 // with the proper environment variables or arguments. It must not mutate the
 // state of the system, except possibly in a side-by-side manner.
+
+#include "build/build_config.h"
+
+#if BUILDFLAG(IS_WIN)
+#include <windows.h>
+
+int WINAPI wWinMain(HINSTANCE /*instance*/,
+                    HINSTANCE /*previous_instance*/,
+                    LPWSTR /*command_line*/,
+                    int /*command_show*/) {}
+#else
 int main() {}
+#endif

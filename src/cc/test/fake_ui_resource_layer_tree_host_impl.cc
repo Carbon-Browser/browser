@@ -1,10 +1,12 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "cc/test/fake_ui_resource_layer_tree_host_impl.h"
 
-#include "base/callback_helpers.h"
+#include <utility>
+
+#include "base/functional/callback_helpers.h"
 #include "cc/resources/ui_resource_bitmap.h"
 #include "cc/test/fake_layer_tree_host_impl.h"
 
@@ -26,9 +28,10 @@ void FakeUIResourceLayerTreeHostImpl::CreateUIResource(
   UIResourceData data;
 
   data.resource_id_for_export = resource_provider()->ImportResource(
-      viz::TransferableResource::MakeGL(
-          gpu::Mailbox::Generate(), GL_LINEAR, GL_TEXTURE_2D, gpu::SyncToken(),
-          bitmap.GetSize(), false /* is_overlay_candidate */),
+      viz::TransferableResource::MakeGpu(
+          gpu::Mailbox::Generate(), GL_TEXTURE_2D, gpu::SyncToken(),
+          bitmap.GetSize(), viz::SinglePlaneFormat::kRGBA_8888,
+          false /* is_overlay_candidate */),
       base::DoNothing());
 
   data.opaque = bitmap.GetOpaque();
@@ -54,7 +57,7 @@ viz::ResourceId FakeUIResourceLayerTreeHostImpl::ResourceIdForUIResource(
 bool FakeUIResourceLayerTreeHostImpl::IsUIResourceOpaque(UIResourceId uid)
     const {
   auto iter = fake_ui_resource_map_.find(uid);
-  DCHECK(iter != fake_ui_resource_map_.end());
+  CHECK(iter != fake_ui_resource_map_.end());
   return iter->second.opaque;
 }
 

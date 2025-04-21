@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,19 +8,20 @@
 #include <memory>
 #include <utility>
 
-#include "ash/constants/ash_features.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "ash/style/ash_color_provider.h"
+#include "ash/style/ash_color_id.h"
 #include "ash/system/bluetooth/bluetooth_device_list_item_battery_view.h"
 #include "ash/system/bluetooth/bluetooth_device_list_item_multiple_battery_view.h"
 #include "ash/system/bluetooth/fake_bluetooth_detailed_view.h"
 #include "ash/test/ash_test_base.h"
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/scoped_feature_list.h"
-#include "chromeos/services/bluetooth_config/public/mojom/cros_bluetooth_config.mojom.h"
+#include "chromeos/ash/services/bluetooth_config/public/mojom/cros_bluetooth_config.mojom.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "chromeos/strings/grit/chromeos_strings.h"
 #include "chromeos/ui/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -29,24 +30,25 @@
 #include "ui/gfx/image/image_skia.h"
 #include "ui/gfx/image/image_unittest_util.h"
 #include "ui/gfx/paint_vector_icon.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/controls/image_view.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/view_utils.h"
 #include "ui/views/widget/widget.h"
 
 namespace ash {
+
 namespace {
 
-using chromeos::bluetooth_config::mojom::BatteryProperties;
-using chromeos::bluetooth_config::mojom::BatteryPropertiesPtr;
-using chromeos::bluetooth_config::mojom::BluetoothDeviceProperties;
-using chromeos::bluetooth_config::mojom::BluetoothDevicePropertiesPtr;
-using chromeos::bluetooth_config::mojom::DeviceBatteryInfo;
-using chromeos::bluetooth_config::mojom::DeviceBatteryInfoPtr;
-using chromeos::bluetooth_config::mojom::DeviceConnectionState;
-using chromeos::bluetooth_config::mojom::DeviceType;
-using chromeos::bluetooth_config::mojom::PairedBluetoothDeviceProperties;
-using chromeos::bluetooth_config::mojom::PairedBluetoothDevicePropertiesPtr;
+using bluetooth_config::mojom::BatteryProperties;
+using bluetooth_config::mojom::BatteryPropertiesPtr;
+using bluetooth_config::mojom::BluetoothDeviceProperties;
+using bluetooth_config::mojom::DeviceBatteryInfo;
+using bluetooth_config::mojom::DeviceBatteryInfoPtr;
+using bluetooth_config::mojom::DeviceConnectionState;
+using bluetooth_config::mojom::DeviceType;
+using bluetooth_config::mojom::PairedBluetoothDeviceProperties;
+using bluetooth_config::mojom::PairedBluetoothDevicePropertiesPtr;
 
 const char kDeviceId[] = "/device/id";
 const std::string kDeviceNickname = "clicky keys";
@@ -76,9 +78,9 @@ DeviceBatteryInfoPtr CreateDefaultBatteryInfo(uint8_t battery_percentage) {
 }
 
 DeviceBatteryInfoPtr CreateMultipleBatteryInfo(
-    absl::optional<uint8_t> left_bud_battery_percentage,
-    absl::optional<uint8_t> case_battery_percentage,
-    absl::optional<uint8_t> right_bud_battery_percentage) {
+    std::optional<uint8_t> left_bud_battery_percentage,
+    std::optional<uint8_t> case_battery_percentage,
+    std::optional<uint8_t> right_bud_battery_percentage) {
   EXPECT_TRUE(left_bud_battery_percentage || case_battery_percentage ||
               right_bud_battery_percentage);
   DeviceBatteryInfoPtr battery_info = DeviceBatteryInfo::New();
@@ -106,8 +108,6 @@ class BluetoothDeviceListItemViewTest : public AshTestBase {
  public:
   void SetUp() override {
     AshTestBase::SetUp();
-
-    feature_list_.InitAndEnableFeature(features::kBluetoothRevamp);
 
     fake_bluetooth_detailed_view_ =
         std::make_unique<FakeBluetoothDetailedView>(/*delegate=*/nullptr);
@@ -140,11 +140,11 @@ class BluetoothDeviceListItemViewTest : public AshTestBase {
     return fake_bluetooth_detailed_view_->last_clicked_device_list_item();
   }
 
- private:
-  base::test::ScopedFeatureList feature_list_;
+ protected:
   std::unique_ptr<views::Widget> widget_;
   std::unique_ptr<FakeBluetoothDetailedView> fake_bluetooth_detailed_view_;
-  BluetoothDeviceListItemView* bluetooth_device_list_item_;
+  raw_ptr<BluetoothDeviceListItemView, DanglingUntriaged>
+      bluetooth_device_list_item_;
 };
 
 TEST_F(BluetoothDeviceListItemViewTest, HasCorrectLabel) {
@@ -240,24 +240,24 @@ TEST_F(BluetoothDeviceListItemViewTest, HasExpectedA11yText) {
   battery_info_permutations.push_back(DeviceBatteryInfo::New());
   battery_info_permutations.push_back(
       CreateDefaultBatteryInfo(kBatteryPercentage));
+  battery_info_permutations.push_back(
+      CreateMultipleBatteryInfo(kLeftBudBatteryPercentage,
+                                /*case_battery_percentage=*/std::nullopt,
+                                /*right_bud_battery_percentage=*/std::nullopt));
   battery_info_permutations.push_back(CreateMultipleBatteryInfo(
-      kLeftBudBatteryPercentage,
-      /*case_battery_percentage=*/absl::nullopt,
-      /*right_bud_battery_percentage=*/absl::nullopt));
+      /*left_bud_battery_percentage=*/std::nullopt, kCaseBatteryPercentage,
+      /*right_bud_battery_percentage=*/std::nullopt));
   battery_info_permutations.push_back(CreateMultipleBatteryInfo(
-      /*left_bud_battery_percentage=*/absl::nullopt, kCaseBatteryPercentage,
-      /*right_bud_battery_percentage=*/absl::nullopt));
-  battery_info_permutations.push_back(CreateMultipleBatteryInfo(
-      /*left_bud_battery_percentage=*/absl::nullopt,
-      /*case_battery_percentage=*/absl::nullopt, kRightBudBatteryPercentage));
+      /*left_bud_battery_percentage=*/std::nullopt,
+      /*case_battery_percentage=*/std::nullopt, kRightBudBatteryPercentage));
   battery_info_permutations.push_back(CreateMultipleBatteryInfo(
       kLeftBudBatteryPercentage, kCaseBatteryPercentage,
-      /*right_bud_battery_percentage=*/absl::nullopt));
+      /*right_bud_battery_percentage=*/std::nullopt));
   battery_info_permutations.push_back(CreateMultipleBatteryInfo(
-      kLeftBudBatteryPercentage, /*case_battery_percentage=*/absl::nullopt,
+      kLeftBudBatteryPercentage, /*case_battery_percentage=*/std::nullopt,
       kRightBudBatteryPercentage));
   battery_info_permutations.push_back(CreateMultipleBatteryInfo(
-      /*left_bud_battery_percentage=*/absl::nullopt, kCaseBatteryPercentage,
+      /*left_bud_battery_percentage=*/std::nullopt, kCaseBatteryPercentage,
       kRightBudBatteryPercentage));
   battery_info_permutations.push_back(CreateMultipleBatteryInfo(
       kLeftBudBatteryPercentage, kCaseBatteryPercentage,
@@ -330,8 +330,9 @@ TEST_F(BluetoothDeviceListItemViewTest, HasExpectedA11yText) {
               IDS_BLUETOOTH_A11Y_DEVICE_NAMED_BATTERY_INFO_RIGHT_BUD);
         }
 
-        EXPECT_EQ(expected_a11y_text,
-                  bluetooth_device_list_item()->GetAccessibleName());
+        EXPECT_EQ(expected_a11y_text, bluetooth_device_list_item()
+                                          ->GetViewAccessibility()
+                                          .GetCachedName());
       }
     }
   }
@@ -355,9 +356,10 @@ TEST_F(BluetoothDeviceListItemViewTest, HasCorrectIcon) {
           {DeviceType::kTablet, &ash::kSystemMenuTabletIcon},
           {DeviceType::kUnknown, &ash::kSystemMenuBluetoothIcon},
       }};
-  const SkColor icon_color = AshColorProvider::Get()->GetContentLayerColor(
-      AshColorProvider::ContentLayerType::kIconColorPrimary);
 
+  const SkColor icon_color =
+      bluetooth_device_list_item()->GetColorProvider()->GetColor(
+          kColorAshIconColorPrimary);
   for (const auto& it : device_type_to_icon_map) {
     PairedBluetoothDevicePropertiesPtr paired_device_properties =
         CreatePairedDeviceProperties();
@@ -394,8 +396,9 @@ TEST_F(BluetoothDeviceListItemViewTest,
   ASSERT_TRUE(bluetooth_device_list_item()->right_view());
   EXPECT_TRUE(bluetooth_device_list_item()->right_view()->GetVisible());
 
-  const gfx::Image expected_image(CreateVectorIcon(
-      chromeos::kEnterpriseIcon, /*dip_size=*/20, gfx::kGoogleGrey100));
+  const gfx::Image expected_image(gfx::CreateVectorIcon(
+      chromeos::kEnterpriseIcon, /*dip_size=*/20,
+      widget_->GetColorProvider()->GetColor(cros_tokens::kCrosSysOnSurface)));
 
   ASSERT_TRUE(views::IsViewClass<views::ImageView>(
       bluetooth_device_list_item()->right_view()));

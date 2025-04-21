@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <pulse/pulseaudio.h>
 #include <stddef.h>
+
 #include <string>
 
 #include "base/memory/raw_ptr.h"
@@ -15,6 +16,7 @@
 #include "media/audio/audio_device_name.h"
 #include "media/audio/audio_io.h"
 #include "media/audio/audio_manager.h"
+#include "media/base/amplitude_peak_detector.h"
 #include "media/base/audio_block_fifo.h"
 #include "media/base/audio_parameters.h"
 
@@ -25,7 +27,7 @@ class AudioManagerPulse;
 class PulseAudioInputStream : public AgcAudioStream<AudioInputStream> {
  public:
   PulseAudioInputStream(AudioManagerPulse* audio_manager,
-                        const std::string& device_name,
+                        const std::string& source_name,
                         const AudioParameters& params,
                         pa_threaded_mainloop* mainloop,
                         pa_context* context,
@@ -49,7 +51,7 @@ class PulseAudioInputStream : public AgcAudioStream<AudioInputStream> {
 
  private:
   // Helper method used for sending native logs to the registered client.
-  void SendLogMessage(const char* format, ...) PRINTF_FORMAT(2, 3);
+  PRINTF_FORMAT(2, 3) void SendLogMessage(const char* format, ...);
 
   // PulseAudio Callbacks.
   static void ReadCallback(pa_stream* handle, size_t length, void* user_data);
@@ -67,9 +69,10 @@ class PulseAudioInputStream : public AgcAudioStream<AudioInputStream> {
   // Utility method used by GetVolume() and IsMuted().
   bool GetSourceInformation(pa_source_info_cb_t callback);
 
+  // May be nullptr if not managed by AudioManagerPulse.
   raw_ptr<AudioManagerPulse> audio_manager_;
   raw_ptr<AudioInputCallback> callback_;
-  std::string device_name_;
+  std::string source_name_;
   AudioParameters params_;
   int channels_;
   double volume_;
@@ -90,7 +93,9 @@ class PulseAudioInputStream : public AgcAudioStream<AudioInputStream> {
   // Callback to send log messages to registered clients.
   AudioManager::LogCallback log_callback_;
 
-  pa_stream* handle_;
+  raw_ptr<pa_stream> handle_;
+
+  AmplitudePeakDetector peak_detector_;
 
   base::ThreadChecker thread_checker_;
 };

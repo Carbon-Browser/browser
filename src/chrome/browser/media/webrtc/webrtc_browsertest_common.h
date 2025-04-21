@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,9 @@
 #include <string>
 
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/process/process_handle.h"
+#include "base/time/time.h"
 
 namespace content {
 class WebContents;
@@ -48,10 +50,9 @@ extern const char kAdviseOnGclientSolution[];
 // Returns true on success.
 bool SleepInJavascript(content::WebContents* tab_contents, int timeout_msec);
 
-// This function will execute the provided |javascript| until it causes a call
-// to window.domAutomationController.send() with |evaluates_to| as the message.
-// That is, we are NOT checking what the javascript evaluates to. Returns false
-// if we exceed the TestTimeouts::action_max_timeout().
+// This function will execute the provided |javascript| until the script's
+// completion value is |evaluates_to|. Returns false if we exceed the
+// TestTimeouts::action_max_timeout().
 // TODO(phoglund): Consider a better interaction method with the javascript
 // than polling javascript methods.
 bool PollingWaitUntil(const std::string& javascript,
@@ -61,6 +62,14 @@ bool PollingWaitUntil(const std::string& javascript,
                       const std::string& evaluates_to,
                       content::WebContents* tab_contents,
                       int poll_interval_msec);
+
+// This function will execute the provided |closure| until it evaluates true,
+// causing a function return value of true, unless we exceed the
+// TestTimeouts::action_max_timeout() in which case the function returns false.
+bool PollingWaitUntilClosureEvaluatesTrue(
+    base::RepeatingCallback<bool()> closure,
+    content::WebContents* tab_contents,
+    base::TimeDelta poll_interval);
 
 }  // namespace test
 

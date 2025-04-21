@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include "base/system/sys_info.h"
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "components/update_client/update_query_params_delegate.h"
 #include "components/version_info/version_info.h"
 
@@ -34,7 +33,7 @@ const char kOs[] =
     "android";
 #elif BUILDFLAG(IS_CHROMEOS)
     "cros";
-#elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#elif BUILDFLAG(IS_LINUX)
     "linux";
 #elif BUILDFLAG(IS_FUCHSIA)
     "fuchsia";
@@ -45,24 +44,26 @@ const char kOs[] =
 #endif
 
 const char kArch[] =
-#if defined(__amd64__) || defined(_WIN64)
+#if defined(ARCH_CPU_X86_64)
     "x64";
-#elif defined(__i386__) || defined(_WIN32)
+#elif defined(ARCH_CPU_X86)
     "x86";
-#elif defined(__arm__)
+#elif defined(ARCH_CPU_ARMEL)
     "arm";
-#elif defined(__aarch64__)
+#elif defined(ARCH_CPU_ARM64)
     "arm64";
-#elif defined(__mips__) && (__mips == 64)
+#elif defined(ARCH_CPU_MIPS64EL)
     "mips64el";
-#elif defined(__mips__)
+#elif defined(ARCH_CPU_MIPSEL)
     "mipsel";
 #elif defined(__powerpc64__)
     "ppc64";
-#elif defined(__loongarch32)
-    "loong32";
-#elif defined(__loongarch64)
-    "loong64";
+#elif defined(ARCH_CPU_LOONGARCH32)
+        "loongarch32";
+#elif defined(ARCH_CPU_LOONGARCH64)
+        "loongarch64";
+#elif defined(ARCH_CPU_RISCV64)
+        "riscv64";
 #else
 #error "unknown arch"
 #endif
@@ -84,8 +85,8 @@ UpdateQueryParamsDelegate* g_delegate = nullptr;
 // static
 std::string UpdateQueryParams::Get(ProdId prod) {
   return base::StringPrintf(
-      "os=%s&arch=%s&os_arch=%s&nacl_arch=%s&prod=%s%s&acceptformat=crx3", kOs,
-      kArch, base::SysInfo().OperatingSystemArchitecture().c_str(),
+      "os=%s&arch=%s&os_arch=%s&nacl_arch=%s&prod=%s%s&acceptformat=crx3,puff",
+      kOs, kArch, base::SysInfo().OperatingSystemArchitecture().c_str(),
       GetNaclArch(), GetProdIdString(prod),
       g_delegate ? g_delegate->GetExtraParams().c_str() : "");
 }
@@ -132,25 +133,27 @@ const char* UpdateQueryParams::GetNaclArch() {
   return "mips64";
 #elif defined(ARCH_CPU_PPC64)
   return "ppc64";
-#elif defined(ARCH_CPU_LOONG32)
-  return "loong32";
-#elif defined(ARCH_CPU_LOONG64)
-  return "loong64";
+#elif defined(ARCH_CPU_LOONGARCH32)
+  return "loongarch32";
+#elif defined(ARCH_CPU_LOONGARCH64)
+  return "loongarch64";
+#elif defined(ARCH_CPU_RISCV64)
+  return "riscv64";
 #else
-// NOTE: when adding new values here, please remember to update the
-// comment in the .h file about possible return values from this function.
+  // NOTE: when adding new values here, please remember to update the
+  // comment in the .h file about possible return values from this function.
 #error "You need to add support for your architecture here"
 #endif
 }
 
 // static
 std::string UpdateQueryParams::GetProdVersion() {
-  return version_info::GetVersionNumber();
+  return std::string(version_info::GetVersionNumber());
 }
 
 // static
 void UpdateQueryParams::SetDelegate(UpdateQueryParamsDelegate* delegate) {
-  DCHECK(!g_delegate || !delegate || (delegate == g_delegate));
+  CHECK(!g_delegate || !delegate || (delegate == g_delegate));
   g_delegate = delegate;
 }
 

@@ -14,39 +14,17 @@
 # limitations under the License.
 #
 
-# Most widely used distributions have cmake 3.5 or greater available as of March
-# 2019.  A notable exception is RHEL-7 (CentOS7).  You can install a current
-# version of CMake by first installing Extra Packages for Enterprise Linux
-# (https://fedoraproject.org/wiki/EPEL#Extra_Packages_for_Enterprise_Linux_.28EPEL.29)
-# and then issuing `yum install cmake3` on the command line.
-cmake_minimum_required(VERSION 3.5)
+# https://github.com/google/oss-policies-info/blob/main/foundational-cxx-support-matrix.md
+# As of 2024-07-01, CMake 3.16 is the minimum supported version.
+cmake_minimum_required(VERSION 3.16)
 
-# Compiler id for Apple Clang is now AppleClang.
-if (POLICY CMP0025)
-  cmake_policy(SET CMP0025 NEW)
-endif (POLICY CMP0025)
-
-# if command can use IN_LIST
-if (POLICY CMP0057)
-  cmake_policy(SET CMP0057 NEW)
-endif (POLICY CMP0057)
-
-# Project version variables are the empty string if version is unspecified
-if (POLICY CMP0048)
-  cmake_policy(SET CMP0048 NEW)
-endif (POLICY CMP0048)
-
-# option() honor variables
-if (POLICY CMP0077)
-  cmake_policy(SET CMP0077 NEW)
-endif (POLICY CMP0077)
-
-# Allow the user to specify the MSVC runtime
-if (POLICY CMP0091)
-  cmake_policy(SET CMP0091 NEW)
-endif (POLICY CMP0091)
+# Allow the user to specify the CMAKE_MSVC_DEBUG_INFORMATION_FORMAT
+if (POLICY CMP0141)
+  cmake_policy(SET CMP0141 NEW)
+endif (POLICY CMP0141)
 
 project(absl LANGUAGES CXX)
+set(ABSL_SOVERSION 0)
 include(CTest)
 
 # Output directory is correct by default for most build setups. However, when
@@ -63,17 +41,31 @@ else()
   option(ABSL_ENABLE_INSTALL "Enable install rule" ON)
 endif()
 
+set(CMAKE_INSTALL_RPATH "$ORIGIN")
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
+set(CMAKE_BUILD_RPATH_USE_ORIGIN ON)
+
 option(ABSL_PROPAGATE_CXX_STD
   "Use CMake C++ standard meta features (e.g. cxx_std_14) that propagate to targets that link to Abseil"
-  OFF)  # TODO: Default to ON for CMake 3.8 and greater.
-if((${CMAKE_VERSION} VERSION_GREATER_EQUAL 3.8) AND (NOT ABSL_PROPAGATE_CXX_STD))
-  message(WARNING "A future Abseil release will default ABSL_PROPAGATE_CXX_STD to ON for CMake 3.8 and up. We recommend enabling this option to ensure your project still builds correctly.")
-endif()
+  ON)
+
+option(ABSL_USE_SYSTEM_INCLUDES
+  "Silence warnings in Abseil headers by marking them as SYSTEM includes"
+  OFF)
 
 list(APPEND CMAKE_MODULE_PATH
   ${CMAKE_CURRENT_LIST_DIR}/CMake
   ${CMAKE_CURRENT_LIST_DIR}/absl/copts
 )
+
+option(ABSL_MSVC_STATIC_RUNTIME
+  "Link static runtime libraries"
+  OFF)
+if(ABSL_MSVC_STATIC_RUNTIME)
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+else()
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+endif()
 
 include(CMakePackageConfigHelpers)
 include(GNUInstallDirs)
@@ -110,6 +102,10 @@ include(CMakeDependentOption)
 option(ABSL_BUILD_TESTING
   "If ON, Abseil will build all of Abseil's own tests." OFF)
 
+option(ABSL_BUILD_TEST_HELPERS
+  "If ON, Abseil will build libraries that you can use to write tests against Abseil code. This option requires that Abseil is configured to use GoogleTest."
+  OFF)
+
 option(ABSL_USE_EXTERNAL_GOOGLETEST
   "If ON, Abseil will assume that the targets for GoogleTest are already provided by the including project. This makes sense when Abseil is used with add_subdirectory." OFF)
 
@@ -129,8 +125,15 @@ set(ABSL_LOCAL_GOOGLETEST_DIR "/usr/src/googletest" CACHE PATH
   "If ABSL_USE_GOOGLETEST_HEAD is OFF and ABSL_GOOGLETEST_URL is not set, specifies the directory of a local GoogleTest checkout."
   )
 
-if(BUILD_TESTING AND ABSL_BUILD_TESTING)
-  ## check targets
+option(ABSL_BUILD_MONOLITHIC_SHARED_LIBS
+  "Build Abseil as a single shared library (always enabled for Windows)"
+  OFF
+)
+if(NOT BUILD_SHARED_LIBS AND ABSL_BUILD_MONOLITHIC_SHARED_LIBS)
+  message(WARNING "Not building a shared library because BUILD_SHARED_LIBS is not set. Ignoring ABSL_BUILD_MONOLITHIC_SHARED_LIBS.")
+endif()
+
+if((BUILD_TESTING AND ABSL_BUILD_TESTING) OR ABSL_BUILD_TEST_HELPERS)
   if (ABSL_USE_EXTERNAL_GOOGLETEST)
     if (ABSL_FIND_GOOGLETEST)
       find_package(GTest REQUIRED)
@@ -162,11 +165,6 @@ if(BUILD_TESTING AND ABSL_BUILD_TESTING)
     endif()
     include(CMake/Googletest/DownloadGTest.cmake)
   endif()
-
-  check_target(GTest::gtest)
-  check_target(GTest::gtest_main)
-  check_target(GTest::gmock)
-  check_target(GTest::gmock_main)
 endif()
 
 add_subdirectory(absl)
@@ -213,12 +211,70 @@ if(ABSL_ENABLE_INSTALL)
     )
   endif()  # absl_VERSION
 
+  # Install the headers except for "options.h" which is installed separately.
   install(DIRECTORY absl
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
     FILES_MATCHING
       PATTERN "*.inc"
       PATTERN "*.h"
+      PATTERN "options.h" EXCLUDE
       PATTERN "copts" EXCLUDE
       PATTERN "testdata" EXCLUDE
     )
+
+  # Rewrite options.h to use the compiled ABI.
+  file(READ "absl/base/options.h" ABSL_INTERNAL_OPTIONS_H_CONTENTS)
+
+  # Handle features that require at least C++20.
+  if (ABSL_INTERNAL_AT_LEAST_CXX20)
+    foreach(FEATURE "ORDERING")
+      string(REPLACE
+      "#define ABSL_OPTION_USE_STD_${FEATURE} 2"
+      "#define ABSL_OPTION_USE_STD_${FEATURE} 1"
+      ABSL_INTERNAL_OPTIONS_H_PINNED
+      "${ABSL_INTERNAL_OPTIONS_H_CONTENTS}")
+      set(ABSL_INTERNAL_OPTIONS_H_CONTENTS "${ABSL_INTERNAL_OPTIONS_H_PINNED}")
+    endforeach()
+  endif()
+
+  # Handle features that require at least C++17.
+  if (ABSL_INTERNAL_AT_LEAST_CXX17)
+    foreach(FEATURE "ANY" "OPTIONAL" "STRING_VIEW" "VARIANT")
+      string(REPLACE
+      "#define ABSL_OPTION_USE_STD_${FEATURE} 2"
+      "#define ABSL_OPTION_USE_STD_${FEATURE} 1"
+      ABSL_INTERNAL_OPTIONS_H_PINNED
+      "${ABSL_INTERNAL_OPTIONS_H_CONTENTS}")
+      set(ABSL_INTERNAL_OPTIONS_H_CONTENTS "${ABSL_INTERNAL_OPTIONS_H_PINNED}")
+    endforeach()
+  endif()
+
+  # Any feature that still has the value of 2 (because it was not handled above)
+  # should be set to 0.
+  string(REGEX REPLACE
+    "#define ABSL_OPTION_USE_STD_([^ ]*) 2"
+    "#define ABSL_OPTION_USE_STD_\\1 0"
+    ABSL_INTERNAL_OPTIONS_H_PINNED
+    "${ABSL_INTERNAL_OPTIONS_H_CONTENTS}")
+
+  # If the file already exists, check if it matches the new contents.
+  # This avoids writing the file if it is already up-to-date when the CMake
+  # generation is triggered and triggering unnecessary rebuilds.
+  set(ABSL_INTERNAL_OPTIONS_H_PINNED_NEEDS_UPDATE TRUE)
+  if (EXISTS "${CMAKE_BINARY_DIR}/options-pinned.h")
+    file(READ "${CMAKE_BINARY_DIR}/options-pinned.h" ABSL_INTERNAL_OPTIONS_PINNED_H_CONTENTS)
+    if ("${ABSL_INTERNAL_OPTIONS_H_PINNED}" STREQUAL "${ABSL_INTERNAL_OPTIONS_PINNED_H_CONTENTS}")
+      set(ABSL_INTERNAL_OPTIONS_H_PINNED_NEEDS_UPDATE FALSE)
+    endif()
+  endif()
+
+  # If the file needs an update, generate it.
+  if (ABSL_INTERNAL_OPTIONS_H_PINNED_NEEDS_UPDATE)
+    file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/options-pinned.h" CONTENT "${ABSL_INTERNAL_OPTIONS_H_PINNED}")
+  endif()
+
+  install(FILES "${CMAKE_BINARY_DIR}/options-pinned.h"
+         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/absl/base
+         RENAME "options.h")
+
 endif()  # ABSL_ENABLE_INSTALL

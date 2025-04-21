@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,8 @@ class AndroidTelemetryService;
 // ServicesDelegate::Create().
 class ServicesDelegateAndroid : public ServicesDelegate {
  public:
-  explicit ServicesDelegateAndroid(SafeBrowsingService* safe_browsing_service);
+  explicit ServicesDelegateAndroid(
+      SafeBrowsingServiceImpl* safe_browsing_service);
 
   ServicesDelegateAndroid(const ServicesDelegateAndroid&) = delete;
   ServicesDelegateAndroid& operator=(const ServicesDelegateAndroid&) = delete;
@@ -38,10 +39,10 @@ class ServicesDelegateAndroid : public ServicesDelegate {
       DelayedAnalysisCallback callback) override;
   void AddDownloadManager(content::DownloadManager* download_manager) override;
 
-  void StartOnIOThread(
+  void StartOnUIThread(
       scoped_refptr<network::SharedURLLoaderFactory> browser_url_loader_factory,
       const V4ProtocolConfig& v4_config) override;
-  void StopOnIOThread(bool shutdown) override;
+  void StopOnUIThread(bool shutdown) override;
 
   void CreateTelemetryService(Profile* profile) override;
   void RemoveTelemetryService(Profile* profile) override;

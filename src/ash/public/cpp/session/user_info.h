@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,7 @@ struct ASH_PUBLIC_EXPORT UserInfo {
   UserInfo(const UserInfo& other);
   ~UserInfo();
 
-  user_manager::UserType type = user_manager::USER_TYPE_REGULAR;
+  user_manager::UserType type = user_manager::UserType::kRegular;
   AccountId account_id;
   std::string display_name;
   std::string display_email;
@@ -57,6 +57,9 @@ struct ASH_PUBLIC_EXPORT UserInfo {
 
   // True if should display managed ui.
   bool should_display_managed_ui = false;
+
+  // True if the account specified by `account_id` is under policy management.
+  bool is_managed = false;
 };
 
 ASH_PUBLIC_EXPORT bool operator==(const UserInfo& a, const UserInfo& b);

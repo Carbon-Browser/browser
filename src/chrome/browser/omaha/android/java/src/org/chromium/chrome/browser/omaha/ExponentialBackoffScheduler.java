@@ -1,21 +1,15 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.omaha;
 
-import android.app.AlarmManager;
-import android.app.PendingIntent;
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
 
-import androidx.annotation.VisibleForTesting;
+import org.chromium.base.ContextUtils;
+import org.chromium.base.TimeUtils;
 
-import org.chromium.base.IntentUtils;
-import org.chromium.base.Log;
-
-import java.util.Date;
 import java.util.Random;
 
 import javax.annotation.concurrent.NotThreadSafe;
@@ -23,23 +17,23 @@ import javax.annotation.concurrent.NotThreadSafe;
 /**
  * Manages a timer that implements exponential backoff for failed attempts.
  *
- * The first timer will fire after BASE_MILLISECONDS.  On a failure, the timer is changed to
- * (randomInteger[0, 2^failures) + 1) * BASE_MILLISECONDS.  MAX_MILLISECONDS is used to ensure that
+ * <p>The first timer will fire after BASE_MILLISECONDS. On a failure, the timer is changed to
+ * (randomInteger[0, 2^failures) + 1) * BASE_MILLISECONDS. MAX_MILLISECONDS is used to ensure that
  * you aren't waiting years for a timer to fire.
  *
- * The state is stored in shared preferences to ensure that they are kept after the device sleeps.
- * Because multiple ExponentialBackoffSchedulers can be used by different components,
- * the owning class must set the preference name.
+ * <p>The state is stored in shared preferences to ensure that they are kept after the device
+ * sleeps. Because multiple ExponentialBackoffSchedulers can be used by different components, the
+ * owning class must set the preference name.
  *
- * Timestamps are recorded in RTC to avoid situations where the phone is rebooted, messing up
- * any timestamps generated using elapsedRealtime().
+ * <p>Timestamps are recorded in RTC to avoid situations where the phone is rebooted, messing up any
+ * timestamps generated using elapsedRealtime().
  *
- * This class is not thread-safe because any two different classes could be accessing the same
+ * <p>This class is not thread-safe because any two different classes could be accessing the same
  * SharedPreferences.
  */
 @NotThreadSafe
 public class ExponentialBackoffScheduler {
-    // TODO(crbug.com/1131415): remove and use OmahaBase.TAG when OmahaBase.java is modularized.
+    // TODO(crbug.com/40150188): remove and use OmahaBase.TAG when OmahaBase.java is modularized.
     // Used in various org.chromium.chrome.browser.omaha files.
     static final String TAG = "omaha";
 
@@ -52,42 +46,24 @@ public class ExponentialBackoffScheduler {
 
     private final long mBaseMilliseconds;
     private final long mMaxMilliseconds;
-    private final Context mContext;
     private final String mPreferencePackage;
 
     /**
      * Creates a new scheduler.
      * @param packageName The name under which to store its state in SharedPreferences.
-     * @param context The application's context.
      * @param baseMilliseconds Used to calculate random backoff times.
      * @param maxMilliseconds The absolute maximum delay allowed.
      */
     public ExponentialBackoffScheduler(
-            String packageName, Context context, long baseMilliseconds, long maxMilliseconds) {
+            String packageName, long baseMilliseconds, long maxMilliseconds) {
         mPreferencePackage = packageName;
-        mContext = context;
         mBaseMilliseconds = baseMilliseconds;
         mMaxMilliseconds = maxMilliseconds;
     }
 
-    /**
-     * Calculates when the next event should occur, including delays due to failures.
-     */
+    /** Calculates when the next event should occur, including delays due to failures. */
     public long calculateNextTimestamp() {
         return generateRandomDelay() + getCurrentTime();
-    }
-
-    /**
-     * Creates an alarm to fire the specified intent at the specified time.
-     * @param intent The intent to fire.
-     * @return the timestamp of the scheduled intent
-     */
-    public long createAlarm(Intent intent, long timestamp) {
-        PendingIntent retryPIntent = PendingIntent.getService(
-                mContext, 0, intent, IntentUtils.getPendingIntentMutabilityFlag(false));
-        AlarmManager am = (AlarmManager) mContext.getSystemService(Context.ALARM_SERVICE);
-        setAlarm(am, timestamp, retryPIntent);
-        return timestamp;
     }
 
     public int getNumFailedAttempts() {
@@ -106,11 +82,9 @@ public class ExponentialBackoffScheduler {
         preferences.edit().putInt(PREFERENCE_FAILED_ATTEMPTS, 0).apply();
     }
 
-    /**
-     * Returns a timestamp representing now, according to the backoff scheduler.
-     */
+    /** Returns a timestamp representing now, according to the backoff scheduler. */
     public long getCurrentTime() {
-        return System.currentTimeMillis();
+        return TimeUtils.currentTimeMillis();
     }
 
     /**
@@ -120,20 +94,6 @@ public class ExponentialBackoffScheduler {
     public long getGeneratedDelay() {
         SharedPreferences preferences = getSharedPreferences();
         return preferences.getLong(PREFERENCE_DELAY, mBaseMilliseconds);
-    }
-
-    /**
-     * Sets an alarm in the alarm manager.
-     */
-    @VisibleForTesting
-    protected void setAlarm(AlarmManager am, long timestamp, PendingIntent retryPIntent) {
-        Log.d(TAG,
-                "now(" + new Date(getCurrentTime()) + ") refiringAt(" + new Date(timestamp) + ")");
-        try {
-            am.set(AlarmManager.RTC, timestamp, retryPIntent);
-        } catch (SecurityException e) {
-            Log.e(TAG, "Failed to set backoff alarm.");
-        }
     }
 
     /**
@@ -150,7 +110,7 @@ public class ExponentialBackoffScheduler {
             delay = Math.min(backoffCoefficient * mBaseMilliseconds, mMaxMilliseconds);
         }
 
-        // Save the delay for sanity checks.
+        // Save the delay for validation checks.
         SharedPreferences preferences = getSharedPreferences();
         preferences.edit().putLong(PREFERENCE_DELAY, delay).apply();
         return delay;
@@ -170,7 +130,8 @@ public class ExponentialBackoffScheduler {
 
     private SharedPreferences getSharedPreferences() {
         SharedPreferences preferences =
-                mContext.getSharedPreferences(mPreferencePackage, Context.MODE_PRIVATE);
+                ContextUtils.getApplicationContext()
+                        .getSharedPreferences(mPreferencePackage, Context.MODE_PRIVATE);
         return preferences;
     }
 }

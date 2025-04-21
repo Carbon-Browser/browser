@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_WEBAPPS_BROWSER_ANDROID_ADD_TO_HOMESCREEN_INSTALLER_H_
 #define COMPONENTS_WEBAPPS_BROWSER_ANDROID_ADD_TO_HOMESCREEN_INSTALLER_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "components/webapps/browser/android/add_to_homescreen_params.h"
 
 namespace content {

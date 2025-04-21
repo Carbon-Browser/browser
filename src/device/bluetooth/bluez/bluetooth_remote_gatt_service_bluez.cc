@@ -1,10 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <iterator>
 #include <utility>
 
+#include "base/containers/contains.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "dbus/property.h"
@@ -146,7 +147,7 @@ void BluetoothRemoteGattServiceBlueZ::GattServicePropertyChanged(
 
 void BluetoothRemoteGattServiceBlueZ::GattCharacteristicAdded(
     const dbus::ObjectPath& object_path) {
-  if (characteristics_.find(object_path.value()) != characteristics_.end()) {
+  if (base::Contains(characteristics_, object_path.value())) {
     DVLOG(1) << "Remote GATT characteristic already exists: "
              << object_path.value();
     return;

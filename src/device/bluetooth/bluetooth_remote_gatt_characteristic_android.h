@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -69,12 +69,12 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothRemoteGattCharacteristicAndroid
   std::vector<BluetoothRemoteGattDescriptor*> GetDescriptorsByUUID(
       const BluetoothUUID& uuid) const override;
   void ReadRemoteCharacteristic(ValueCallback callback) override;
-  void WriteRemoteCharacteristic(const std::vector<uint8_t>& value,
+  void WriteRemoteCharacteristic(base::span<const uint8_t> value,
                                  WriteType write_type,
                                  base::OnceClosure callback,
                                  ErrorCallback error_callback) override;
   void DeprecatedWriteRemoteCharacteristic(
-      const std::vector<uint8_t>& value,
+      base::span<const uint8_t> value,
       base::OnceClosure callback,
       ErrorCallback error_callback) override;
 

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,12 +11,12 @@ class UIElement;
 
 class UIElementDelegate {
  public:
-  UIElementDelegate() {}
+  UIElementDelegate() = default;
 
   UIElementDelegate(const UIElementDelegate&) = delete;
   UIElementDelegate& operator=(const UIElementDelegate&) = delete;
 
-  virtual ~UIElementDelegate() {}
+  virtual ~UIElementDelegate() = default;
 
   virtual void OnUIElementAdded(UIElement* parent, UIElement* child) = 0;
 

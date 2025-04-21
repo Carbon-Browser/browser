@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,14 +9,16 @@
 
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
+#include "base/feature_list.h"
+#include "base/functional/callback_forward.h"
 #include "services/network/public/cpp/url_loader_completion_status.h"
 #include "services/network/public/mojom/url_response_head.mojom-forward.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class GURL;
 
@@ -44,8 +46,10 @@ class URLLoaderFactory;
 
 namespace network {
 
+COMPONENT_EXPORT(NETWORK_CPP)
+BASE_DECLARE_FEATURE(kSimpleURLLoaderUseReadAndDiscardBodyOption);
+
 class SimpleURLLoaderStreamConsumer;
-class SimpleURLLoaderThrottle;
 
 // Creates and wraps a URLLoader, and runs it to completion. It's recommended
 // that consumers use this class instead of URLLoader directly, due to the
@@ -98,8 +102,10 @@ class COMPONENT_EXPORT(NETWORK_CPP) SimpleURLLoader {
   // like HTTP_OK, which could happen if there's an interruption before the
   // full response body is received. It is safe to delete the SimpleURLLoader
   // during the callback.
-  using BodyAsStringCallback =
+  using BodyAsStringCallbackDeprecated =
       base::OnceCallback<void(std::unique_ptr<std::string> response_body)>;
+  using BodyAsStringCallback =
+      base::OnceCallback<void(std::optional<std::string> response_body)>;
 
   // Callback used when ignoring the response body. |headers| are the received
   // HTTP headers, or nullptr if none were received. It is safe to delete the
@@ -115,10 +121,12 @@ class COMPONENT_EXPORT(NETWORK_CPP) SimpleURLLoader {
 
   // Callback used when a redirect is being followed. It is safe to delete the
   // SimpleURLLoader during the callback.
+  // |url_before_redirect| is the url before redirect that sent the response.
   // |removed_headers| is used to set variations headers that need to be
   // removed for requests when a redirect to a non-Google URL occurs.
   using OnRedirectCallback =
-      base::RepeatingCallback<void(const net::RedirectInfo& redirect_info,
+      base::RepeatingCallback<void(const GURL& url_before_redirect,
+                                   const net::RedirectInfo& redirect_info,
                                    const mojom::URLResponseHead& response_head,
                                    std::vector<std::string>* removed_headers)>;
 
@@ -145,7 +153,8 @@ class COMPONENT_EXPORT(NETWORK_CPP) SimpleURLLoader {
   // be reused.
   static std::unique_ptr<SimpleURLLoader> Create(
       std::unique_ptr<ResourceRequest> resource_request,
-      const net::NetworkTrafficAnnotationTag& annotation_tag);
+      const net::NetworkTrafficAnnotationTag& annotation_tag,
+      base::Location created_from = base::Location::Current());
 
   // The TickClock to use to configure a timer that tracks if |timeout_duration|
   // has been reached or not. This can be removed once https://crbug.com/905412
@@ -170,6 +179,10 @@ class COMPONENT_EXPORT(NETWORK_CPP) SimpleURLLoader {
   // invoked on completion. Deleting the SimpleURLLoader before the callback is
   // invoked will result in cancelling the request, and the callback will not be
   // called.
+  virtual void DownloadToString(
+      mojom::URLLoaderFactory* url_loader_factory,
+      BodyAsStringCallbackDeprecated body_as_string_callback,
+      size_t max_body_size) = 0;
   virtual void DownloadToString(mojom::URLLoaderFactory* url_loader_factory,
                                 BodyAsStringCallback body_as_string_callback,
                                 size_t max_body_size) = 0;
@@ -179,6 +192,9 @@ class COMPONENT_EXPORT(NETWORK_CPP) SimpleURLLoader {
   // exceeded. It's recommended consumers use one of the other download methods
   // instead (DownloadToString if the body is expected to be of reasonable
   // length, or DownloadToFile otherwise).
+  virtual void DownloadToStringOfUnboundedSizeUntilCrashAndDie(
+      mojom::URLLoaderFactory* url_loader_factory,
+      BodyAsStringCallbackDeprecated body_as_string_callback) = 0;
   virtual void DownloadToStringOfUnboundedSizeUntilCrashAndDie(
       mojom::URLLoaderFactory* url_loader_factory,
       BodyAsStringCallback body_as_string_callback) = 0;
@@ -290,11 +306,21 @@ class COMPONENT_EXPORT(NETWORK_CPP) SimpleURLLoader {
   // |content_type| will overwrite any Content-Type header in the
   // ResourceRequest passed to Create().
   //
-  // TODO(mmenke): This currently always requires a copy. Update DataElement not
-  // to require this.
-  virtual void AttachStringForUpload(
-      const std::string& upload_data,
-      const std::string& upload_content_type) = 0;
+  // Short strings will be copied and then passed across processes. Long strings
+  // if passed by value will be stored in-process and then streamed to the other
+  // process.
+  //
+  // This number of overloads is rather unfortunate, but base::optional_ref
+  // doesn't allow implicit conversions.
+  virtual void AttachStringForUpload(std::string_view upload_data,
+                                     std::string_view upload_content_type) = 0;
+  virtual void AttachStringForUpload(std::string_view upload_data) = 0;
+  virtual void AttachStringForUpload(const char* upload_data,
+                                     std::string_view upload_content_type) = 0;
+  virtual void AttachStringForUpload(const char* upload_data) = 0;
+  virtual void AttachStringForUpload(std::string&& upload_data,
+                                     std::string_view upload_content_type) = 0;
+  virtual void AttachStringForUpload(std::string&& upload_data) = 0;
 
   // Helper method to attach a file for upload, so the consumer won't need to
   // open the file itself off-thread. May only be called once, and only if the
@@ -310,6 +336,13 @@ class COMPONENT_EXPORT(NETWORK_CPP) SimpleURLLoader {
       const std::string& upload_content_type,
       uint64_t offset = 0,
       uint64_t length = std::numeric_limits<uint64_t>::max()) = 0;
+  virtual void AttachFileForUpload(const base::FilePath& upload_file_path,
+                                   uint64_t offset,
+                                   uint64_t length) = 0;
+  void AttachFileForUpload(const base::FilePath& upload_file_path) {
+    AttachFileForUpload(upload_file_path, 0,
+                        std::numeric_limits<uint64_t>::max());
+  }
 
   // Sets the when to try and the max number of times to retry a request, if
   // any. |max_retries| is the number of times to retry the request, not
@@ -344,26 +377,24 @@ class COMPONENT_EXPORT(NETWORK_CPP) SimpleURLLoader {
   // as much time as it wants.
   virtual void SetTimeoutDuration(base::TimeDelta timeout_duration) = 0;
 
-  // Allows this SimpleURLLoader to be batched when sending a network request
-  // impacts on battery consumption. This should be called before the request
-  // is started.
-  // NOTE: This is for an experimental use. Please contact bashi@chromium.org
-  // before starting using this function.
-  virtual void SetAllowBatching() = 0;
-
   // Returns the net::Error representing the final status of the request. May
   // only be called once the loader has informed the caller of completion.
   virtual int NetError() const = 0;
 
   // The URLResponseHead for the request. Will be nullptr if ResponseInfo
-  // was never received. May only be called once the loader has informed the
-  // caller of completion.
+  // was never received or if `TakeResponseInfo()` has been called. May only be
+  // called once the loader has informed the caller of completion.
   virtual const mojom::URLResponseHead* ResponseInfo() const = 0;
+
+  // The URLResponseHead for the request. Ownership is transferred to the
+  // caller. Will be nullptr if ResponseInfo was never received. May only be
+  // called once the loader has informed the caller of completion.
+  virtual mojom::URLResponseHeadPtr TakeResponseInfo() = 0;
 
   // The URLLoaderCompletionStatus for the request. Will be nullopt if the
   // response never completed. May only be called once the loader has informed
   // the caller of completion.
-  virtual const absl::optional<URLLoaderCompletionStatus>& CompletionStatus()
+  virtual const std::optional<URLLoaderCompletionStatus>& CompletionStatus()
       const = 0;
 
   // Returns the URL that this loader is processing. May only be called once the
@@ -390,7 +421,8 @@ class COMPONENT_EXPORT(NETWORK_CPP) SimpleURLLoader {
   // Returns the number of times retry has been attempted.
   virtual int GetNumRetries() const = 0;
 
-  virtual SimpleURLLoaderThrottle* GetThrottleForTesting() = 0;
+  // Returns a weak reference to this loader.
+  virtual base::WeakPtr<const SimpleURLLoader> GetWeakPtr() const = 0;
 
  protected:
   SimpleURLLoader();

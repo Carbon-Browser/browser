@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,15 @@
 
 #include "base/memory/ptr_util.h"
 
-namespace ash {
-namespace eche_app {
+namespace ash::eche_app {
 
 SystemInfo::Builder::Builder() = default;
 
 SystemInfo::Builder::~Builder() = default;
 
 std::unique_ptr<SystemInfo> SystemInfo::Builder::Build() {
-  return base::WrapUnique(new SystemInfo(device_name_, board_name_, gaia_id_));
+  return base::WrapUnique(new SystemInfo(device_name_, board_name_, gaia_id_,
+                                         device_type_, os_version_, channel_));
 }
 
 SystemInfo::Builder& SystemInfo::Builder::SetDeviceName(
@@ -29,9 +29,26 @@ SystemInfo::Builder& SystemInfo::Builder::SetBoardName(
   return *this;
 }
 
-SystemInfo::Builder& SystemInfo::Builder::SetGaiaId(
-    const std::string& gaia_id) {
+SystemInfo::Builder& SystemInfo::Builder::SetGaiaId(const GaiaId& gaia_id) {
   gaia_id_ = gaia_id;
+  return *this;
+}
+
+SystemInfo::Builder& SystemInfo::Builder::SetDeviceType(
+    const std::string& device_type) {
+  device_type_ = device_type;
+  return *this;
+}
+
+SystemInfo::Builder& SystemInfo::Builder::SetOsVersion(
+    const std::string& os_version) {
+  os_version_ = os_version;
+  return *this;
+}
+
+SystemInfo::Builder& SystemInfo::Builder::SetChannel(
+    const std::string& channel) {
+  channel_ = channel;
   return *this;
 }
 
@@ -41,8 +58,15 @@ SystemInfo::~SystemInfo() = default;
 
 SystemInfo::SystemInfo(const std::string& device_name,
                        const std::string& board_name,
-                       const std::string& gaia_id)
-    : device_name_(device_name), board_name_(board_name), gaia_id_(gaia_id) {}
+                       const GaiaId& gaia_id,
+                       const std::string& device_type,
+                       const std::string& os_version,
+                       const std::string& channel)
+    : device_name_(device_name),
+      board_name_(board_name),
+      gaia_id_(gaia_id),
+      device_type_(device_type),
+      os_version_(os_version),
+      channel_(channel) {}
 
-}  // namespace eche_app
-}  // namespace ash
+}  // namespace ash::eche_app

@@ -1,13 +1,17 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef NET_QUIC_DEDICATED_WEB_TRANSPORT_HTTP3_CLIENT_H_
 #define NET_QUIC_DEDICATED_WEB_TRANSPORT_HTTP3_CLIENT_H_
 
+#include <optional>
+#include <string_view>
+
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "net/base/network_isolation_key.h"
+#include "base/task/sequenced_task_runner.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/dns/host_resolver.h"
 #include "net/log/net_log_with_source.h"
 #include "net/proxy_resolution/proxy_info.h"
@@ -18,14 +22,15 @@
 #include "net/quic/web_transport_client.h"
 #include "net/quic/web_transport_error.h"
 #include "net/socket/client_socket_factory.h"
+#include "net/third_party/quiche/src/quiche/common/http/http_header_block.h"
 #include "net/third_party/quiche/src/quiche/quic/core/crypto/quic_crypto_client_config.h"
 #include "net/third_party/quiche/src/quiche/quic/core/crypto/web_transport_fingerprint_proof_verifier.h"
-#include "net/third_party/quiche/src/quiche/quic/core/http/quic_client_push_promise_index.h"
+#include "net/third_party/quiche/src/quiche/quic/core/deterministic_connection_id_generator.h"
 #include "net/third_party/quiche/src/quiche/quic/core/http/quic_spdy_client_session.h"
 #include "net/third_party/quiche/src/quiche/quic/core/quic_config.h"
+#include "net/third_party/quiche/src/quiche/quic/core/quic_connection_id.h"
 #include "net/third_party/quiche/src/quiche/quic/core/quic_versions.h"
 #include "net/third_party/quiche/src/quiche/quic/core/web_transport_interface.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
@@ -43,12 +48,13 @@ class NET_EXPORT DedicatedWebTransportHttp3Client
       public QuicChromiumPacketWriter::Delegate {
  public:
   // |visitor| and |context| must outlive this object.
-  DedicatedWebTransportHttp3Client(const GURL& url,
-                                   const url::Origin& origin,
-                                   WebTransportClientVisitor* visitor,
-                                   const NetworkIsolationKey& isolation_key,
-                                   URLRequestContext* context,
-                                   const WebTransportParameters& parameters);
+  DedicatedWebTransportHttp3Client(
+      const GURL& url,
+      const url::Origin& origin,
+      WebTransportClientVisitor* visitor,
+      const NetworkAnonymizationKey& anonymization_key,
+      URLRequestContext* context,
+      const WebTransportParameters& parameters);
   ~DedicatedWebTransportHttp3Client() override;
 
   WebTransportState state() const { return state_; }
@@ -56,24 +62,25 @@ class NET_EXPORT DedicatedWebTransportHttp3Client
   // Connect() is an asynchronous operation.  Once the operation is finished,
   // OnConnected() or OnConnectionFailed() is called on the Visitor.
   void Connect() override;
-  void Close(const absl::optional<WebTransportCloseInfo>& close_info) override;
+  void Close(const std::optional<WebTransportCloseInfo>& close_info) override;
 
   quic::WebTransportSession* session() override;
 
   void OnSettingsReceived();
-  void OnHeadersComplete();
+  void OnHeadersComplete(const quiche::HttpHeaderBlock& headers);
   void OnConnectStreamWriteSideInDataRecvdState();
   void OnConnectStreamAborted();
+  void OnConnectStreamDeleted();
   void OnCloseTimeout();
-  void OnDatagramProcessed(absl::optional<quic::MessageStatus> status);
+  void OnDatagramProcessed(std::optional<quic::MessageStatus> status);
 
   // QuicTransportClientSession::ClientVisitor methods.
-  void OnSessionReady(const spdy::SpdyHeaderBlock&) override;
+  void OnSessionReady() override;
   void OnSessionClosed(quic::WebTransportSessionError error_code,
                        const std::string& error_message) override;
   void OnIncomingBidirectionalStreamAvailable() override;
   void OnIncomingUnidirectionalStreamAvailable() override;
-  void OnDatagramReceived(absl::string_view datagram) override;
+  void OnDatagramReceived(std::string_view datagram) override;
   void OnCanCreateNewOutgoingBidirectionalStream() override;
   void OnCanCreateNewOutgoingUnidirectionalStream() override;
 
@@ -104,6 +111,7 @@ class NET_EXPORT DedicatedWebTransportHttp3Client
     CONNECT_STATE_RESOLVE_HOST,
     CONNECT_STATE_RESOLVE_HOST_COMPLETE,
     CONNECT_STATE_CONNECT,
+    CONNECT_STATE_CONNECT_CONFIGURE,
     CONNECT_STATE_CONNECT_COMPLETE,
     CONNECT_STATE_SEND_REQUEST,
     CONNECT_STATE_CONFIRM_CONNECTION,
@@ -123,6 +131,7 @@ class NET_EXPORT DedicatedWebTransportHttp3Client
   int DoResolveHostComplete(int rv);
   // Establishes the QUIC connection.
   int DoConnect();
+  int DoConnectConfigure(int rv);
   int DoConnectComplete();
   void CreateConnection();
   // Sends the CONNECT request to establish a WebTransport session.
@@ -135,15 +144,14 @@ class NET_EXPORT DedicatedWebTransportHttp3Client
   void SetErrorIfNecessary(int error);
   void SetErrorIfNecessary(int error,
                            quic::QuicErrorCode quic_error,
-                           base::StringPiece details);
+                           std::string_view details);
 
   const GURL url_;
   const url::Origin origin_;
-  const NetworkIsolationKey isolation_key_;
+  const NetworkAnonymizationKey anonymization_key_;
   const raw_ptr<URLRequestContext> context_;          // Unowned.
   const raw_ptr<WebTransportClientVisitor> visitor_;  // Unowned.
 
-  const raw_ptr<ClientSocketFactory> client_socket_factory_;  // Unowned.
   const raw_ptr<QuicContext> quic_context_;                   // Unowned.
   NetLogWithSource net_log_;
   raw_ptr<base::SequencedTaskRunner> task_runner_;  // Unowned.
@@ -160,7 +168,7 @@ class NET_EXPORT DedicatedWebTransportHttp3Client
 
   WebTransportState state_ = WebTransportState::NEW;
   ConnectState next_connect_state_ = CONNECT_STATE_NONE;
-  absl::optional<WebTransportError> error_;
+  std::optional<WebTransportError> error_;
   bool retried_with_new_version_ = false;
   bool session_ready_ = false;
   bool safe_to_report_error_details_ = false;
@@ -171,15 +179,18 @@ class NET_EXPORT DedicatedWebTransportHttp3Client
   std::unique_ptr<HostResolver::ResolveHostRequest> resolve_host_request_;
 
   std::unique_ptr<DatagramClientSocket> socket_;
-  raw_ptr<quic::QuicConnection> connection_;  // owned by |session_|
-  std::unique_ptr<quic::QuicSpdyClientSession> session_;
-  raw_ptr<quic::QuicSpdyStream> connect_stream_ = nullptr;
-  raw_ptr<quic::WebTransportSession> web_transport_session_ = nullptr;
+  // This must be destroyed after `session_`, as it owns the underlying socket
+  // and `session_` owns the packet writer, which has a raw pointer to the
+  // socket.
   std::unique_ptr<QuicChromiumPacketReader> packet_reader_;
+  std::unique_ptr<quic::QuicSpdyClientSession> session_;
+  raw_ptr<quic::QuicConnection> connection_;  // owned by |session_|
+  raw_ptr<quic::WebTransportSession> web_transport_session_ = nullptr;
   std::unique_ptr<QuicEventLogger> event_logger_;
-  quic::QuicClientPushPromiseIndex push_promise_index_;
+  quic::DeterministicConnectionIdGenerator connection_id_generator_{
+      quic::kQuicDefaultConnectionIdLength};
 
-  absl::optional<WebTransportCloseInfo> close_info_;
+  std::optional<WebTransportCloseInfo> close_info_;
 
   base::OneShotTimer close_timeout_timer_;
   base::WeakPtrFactory<DedicatedWebTransportHttp3Client> weak_factory_{this};

@@ -1,18 +1,24 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "remoting/host/audio_capturer_mac.h"
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/no_destructor.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/synchronization/lock.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread_restrictions.h"
 #include "remoting/base/host_settings.h"
 #include "remoting/base/logging.h"
@@ -80,7 +86,7 @@ void AudioCapturerInstanceSet::Remove(AudioCapturerMac* instance) {
 
 // static
 bool AudioCapturerInstanceSet::Contains(AudioCapturerMac* instance) {
-  return Get()->instance_set_.find(instance) != Get()->instance_set_.end();
+  return base::Contains(Get()->instance_set_, instance);
 }
 
 AudioCapturerInstanceSet::AudioCapturerInstanceSet() = default;
@@ -100,7 +106,7 @@ std::vector<AudioCapturerMac::AudioDeviceInfo>
 AudioCapturerMac::GetAudioDevices() {
   AudioObjectPropertyAddress property_address;
   property_address.mScope = kAudioObjectPropertyScopeGlobal;
-  property_address.mElement = kAudioObjectPropertyElementMaster;
+  property_address.mElement = kAudioObjectPropertyElementMain;
 
   UInt32 property_size;
 
@@ -134,7 +140,7 @@ AudioCapturerMac::GetAudioDevices() {
 
     // Get the device name.
     property_address.mSelector = kAudioObjectPropertyName;
-    base::ScopedCFTypeRef<CFStringRef> device_name;
+    base::apple::ScopedCFTypeRef<CFStringRef> device_name;
     property_size = sizeof(CFStringRef);
     result = AudioObjectGetPropertyData(device_id, &property_address, 0, NULL,
                                         &property_size,
@@ -145,11 +151,11 @@ AudioCapturerMac::GetAudioDevices() {
                  << "failed. Error: " << result;
       continue;
     }
-    audio_device.device_name = base::SysCFStringRefToUTF8(device_name);
+    audio_device.device_name = base::SysCFStringRefToUTF8(device_name.get());
 
     // Now find out its UID.
     property_address.mSelector = kAudioDevicePropertyDeviceUID;
-    base::ScopedCFTypeRef<CFStringRef> device_uid;
+    base::apple::ScopedCFTypeRef<CFStringRef> device_uid;
     property_size = sizeof(CFStringRef);
     result =
         AudioObjectGetPropertyData(device_id, &property_address, 0, NULL,
@@ -160,7 +166,7 @@ AudioCapturerMac::GetAudioDevices() {
                  << "failed. Error: " << result;
       continue;
     }
-    audio_device.device_uid = base::SysCFStringRefToUTF8(device_uid);
+    audio_device.device_uid = base::SysCFStringRefToUTF8(device_uid.get());
     audio_devices.push_back(audio_device);
   }
   return audio_devices;
@@ -199,7 +205,7 @@ bool AudioCapturerMac::Start(const PacketCapturedCallback& callback) {
   DCHECK(!callback_);
   DCHECK(callback);
 
-  caller_task_runner_ = base::SequencedTaskRunnerHandle::Get();
+  caller_task_runner_ = base::SequencedTaskRunner::GetCurrentDefault();
 
   if (!StartInputQueue()) {
     return false;
@@ -297,7 +303,7 @@ bool AudioCapturerMac::StartInputQueue() {
 
   // Use the loopback device for input.
   HOST_LOG << "Using loopback device: " << audio_device_uid_;
-  base::ScopedCFTypeRef<CFStringRef> device_uid =
+  base::apple::ScopedCFTypeRef<CFStringRef> device_uid =
       base::SysUTF8ToCFStringRef(audio_device_uid_);
   CFStringRef unowned_device_uid = device_uid.get();
   err = AudioQueueSetProperty(input_queue_, kAudioQueueProperty_CurrentDevice,

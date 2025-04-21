@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,12 +15,12 @@
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
 #include "components/sync/model/data_batch.h"
+#include "components/sync/model/data_type_store.h"
 #include "components/sync/model/entity_change.h"
 #include "components/sync/model/in_memory_metadata_change_list.h"
-#include "components/sync/model/model_type_store.h"
 #include "components/sync/protocol/entity_data.h"
-#include "components/sync/test/model/mock_model_type_change_processor.h"
-#include "components/sync/test/model/model_type_store_test_util.h"
+#include "components/sync/test/data_type_store_test_util.h"
+#include "components/sync/test/mock_data_type_local_change_processor.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
@@ -60,8 +60,7 @@ class PrintingOAuth2ProfileAuthServersSyncBridgeTest : public testing::Test {
     SaveToLocalStore(uris);
     bridge_ = ProfileAuthServersSyncBridge::CreateForTesting(
         &mock_observer_, mock_processor_.CreateForwardingProcessor(),
-        syncer::ModelTypeStoreTestUtil::FactoryForForwardingStore(
-            store_.get()));
+        syncer::DataTypeStoreTestUtil::FactoryForForwardingStore(store_.get()));
     base::RunLoop loop;
     EXPECT_CALL(mock_observer_, OnProfileAuthorizationServersInitialized())
         .WillOnce([&loop]() { loop.Quit(); });
@@ -76,13 +75,13 @@ class PrintingOAuth2ProfileAuthServersSyncBridgeTest : public testing::Test {
     }
     ON_CALL(mock_processor_, IsTrackingMetadata())
         .WillByDefault(testing::Return(true));
-    absl::optional<syncer::ModelError> error = bridge_->MergeSyncData(
+    std::optional<syncer::ModelError> error = bridge_->MergeFullSyncData(
         bridge_->CreateMetadataChangeList(), std::move(data_change_list));
     ASSERT_FALSE(error);
   }
 
-  void DoApplySyncChanges(const std::vector<std::string>& added,
-                          const std::vector<std::string>& deleted) {
+  void DoApplyIncrementalSyncChanges(const std::vector<std::string>& added,
+                                     const std::vector<std::string>& deleted) {
     syncer::EntityChangeList data_change_list;
     for (const std::string& uri : added) {
       data_change_list.push_back(
@@ -91,20 +90,15 @@ class PrintingOAuth2ProfileAuthServersSyncBridgeTest : public testing::Test {
     for (const std::string& uri : deleted) {
       data_change_list.push_back(syncer::EntityChange::CreateDelete(uri));
     }
-    absl::optional<syncer::ModelError> error = bridge_->ApplySyncChanges(
-        bridge_->CreateMetadataChangeList(), std::move(data_change_list));
+    std::optional<syncer::ModelError> error =
+        bridge_->ApplyIncrementalSyncChanges(
+            bridge_->CreateMetadataChangeList(), std::move(data_change_list));
     ASSERT_FALSE(error);
   }
 
   std::vector<std::string> GetAllData() {
-    std::unique_ptr<syncer::DataBatch> output;
-    base::RunLoop loop;
-    auto callback = [&output, &loop](std::unique_ptr<syncer::DataBatch> data) {
-      output = std::move(data);
-      loop.Quit();
-    };
-    bridge_->GetAllDataForDebugging(base::BindLambdaForTesting(callback));
-    loop.Run();
+    std::unique_ptr<syncer::DataBatch> output =
+        bridge_->GetAllDataForDebugging();
 
     std::vector<std::string> uris;
     while (output->HasNext()) {
@@ -125,12 +119,12 @@ class PrintingOAuth2ProfileAuthServersSyncBridgeTest : public testing::Test {
   const GURL uri_4u_ = GURL(uri_4_);
 
   testing::StrictMock<MockProfileAuthServersSyncBridgeObserver> mock_observer_;
-  testing::NiceMock<syncer::MockModelTypeChangeProcessor> mock_processor_;
+  testing::NiceMock<syncer::MockDataTypeLocalChangeProcessor> mock_processor_;
   std::unique_ptr<ProfileAuthServersSyncBridge> bridge_;
 
  private:
   void SaveToLocalStore(const std::vector<std::string>& uris) {
-    std::unique_ptr<syncer::ModelTypeStore::WriteBatch> batch =
+    std::unique_ptr<syncer::DataTypeStore::WriteBatch> batch =
         store_->CreateWriteBatch();
     for (const std::string& uri : uris) {
       sync_pb::PrintersAuthorizationServerSpecifics specifics;
@@ -142,17 +136,17 @@ class PrintingOAuth2ProfileAuthServersSyncBridgeTest : public testing::Test {
     store_->CommitWriteBatch(
         std::move(batch),
         base::BindLambdaForTesting(
-            [&loop](const absl::optional<syncer::ModelError>& error) {
+            [&loop](const std::optional<syncer::ModelError>& error) {
               DCHECK(!error);
               loop.Quit();
             }));
     loop.Run();
   }
 
-  // In memory model type store needs to be able to post tasks.
+  // In memory data type store needs to be able to post tasks.
   base::test::SingleThreadTaskEnvironment task_environment_;
-  std::unique_ptr<syncer::ModelTypeStore> store_ =
-      syncer::ModelTypeStoreTestUtil::CreateInMemoryStoreForTest();
+  std::unique_ptr<syncer::DataTypeStore> store_ =
+      syncer::DataTypeStoreTestUtil::CreateInMemoryStoreForTest();
 };
 
 TEST_F(PrintingOAuth2ProfileAuthServersSyncBridgeTest, Initialization) {
@@ -160,7 +154,7 @@ TEST_F(PrintingOAuth2ProfileAuthServersSyncBridgeTest, Initialization) {
   CreateBridge();
 }
 
-TEST_F(PrintingOAuth2ProfileAuthServersSyncBridgeTest, MergeSyncData) {
+TEST_F(PrintingOAuth2ProfileAuthServersSyncBridgeTest, MergeFullSyncData) {
   EXPECT_CALL(mock_observer_,
               OnProfileAuthorizationServersUpdate(std::set{uri_1u_, uri_3u_},
                                                   std::set<GURL>{}));
@@ -210,43 +204,41 @@ TEST_F(PrintingOAuth2ProfileAuthServersSyncBridgeTest,
   EXPECT_EQ(uris, (std::vector{uri_1_, uri_2_}));
 }
 
-TEST_F(PrintingOAuth2ProfileAuthServersSyncBridgeTest, ApplySyncChanges) {
+TEST_F(PrintingOAuth2ProfileAuthServersSyncBridgeTest,
+       ApplyIncrementalSyncChanges) {
   CreateBridge();
   DoInitialMerge({});
 
   EXPECT_CALL(mock_observer_,
               OnProfileAuthorizationServersUpdate(std::set{uri_1u_, uri_2u_},
                                                   std::set<GURL>{}));
-  DoApplySyncChanges(/*added=*/{uri_1_, uri_2_}, /*deleted=*/{});
+  DoApplyIncrementalSyncChanges(/*added=*/{uri_1_, uri_2_}, /*deleted=*/{});
   std::vector<std::string> uris = GetAllData();
   EXPECT_EQ(uris, (std::vector{uri_1_, uri_2_}));
 
   EXPECT_CALL(mock_observer_, OnProfileAuthorizationServersUpdate(
                                   std::set{uri_3u_}, std::set{uri_1u_}));
-  DoApplySyncChanges(/*added=*/{uri_3_}, /*deleted=*/{uri_1_});
+  DoApplyIncrementalSyncChanges(/*added=*/{uri_3_}, /*deleted=*/{uri_1_});
   uris = GetAllData();
   EXPECT_EQ(uris, (std::vector{uri_2_, uri_3_}));
 }
 
-TEST_F(PrintingOAuth2ProfileAuthServersSyncBridgeTest, GetData) {
+TEST_F(PrintingOAuth2ProfileAuthServersSyncBridgeTest, GetDataForCommit) {
   CreateBridge();
   EXPECT_CALL(mock_observer_,
               OnProfileAuthorizationServersUpdate(std::set{uri_1u_, uri_2u_},
                                                   std::set<GURL>{}));
   DoInitialMerge({uri_1_, uri_2_});
 
-  std::unique_ptr<syncer::DataBatch> output;
-  base::MockOnceCallback<void(std::unique_ptr<syncer::DataBatch> data_batch)>
-      callback;
-  EXPECT_CALL(callback, Run).WillOnce(MoveArg(&output));
-  bridge_->GetData({uri_1_, uri_3_}, callback.Get());
+  std::unique_ptr<syncer::DataBatch> output =
+      bridge_->GetDataForCommit({uri_1_, uri_3_});
 
   ASSERT_TRUE(output);
   std::vector<syncer::KeyAndData> data;
   while (output->HasNext()) {
     data.push_back(output->Next());
   }
-  ASSERT_EQ(data.size(), 1);
+  ASSERT_EQ(data.size(), 1u);
   EXPECT_EQ(data[0].first, uri_1_);
   ASSERT_TRUE(data[0].second);
   EXPECT_EQ(
@@ -264,7 +256,8 @@ TEST_F(PrintingOAuth2ProfileAuthServersSyncBridgeTest,
 
   EXPECT_CALL(mock_observer_, OnProfileAuthorizationServersUpdate(
                                   std::set{uri_3u_}, std::set{uri_2u_}));
-  DoApplySyncChanges(/*added=*/{uri_1_, uri_3_}, /*deleted=*/{uri_2_, uri_4_});
+  DoApplyIncrementalSyncChanges(/*added=*/{uri_1_, uri_3_},
+                                /*deleted=*/{uri_2_, uri_4_});
 }
 
 }  // namespace

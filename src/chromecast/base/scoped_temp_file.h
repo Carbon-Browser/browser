@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,9 +31,9 @@ class ScopedTempFile {
   // return false, for example, if the file has been moved or deleted.
   bool FileExists() const;
 
-  // Write the contents of |str| to the file. Return the number of characters
-  // written, or -1 on error. CHECKs that FileExists() returns true.
-  int Write(const std::string& str);
+  // Write the contents of |str| to the file. Returns the whether all the
+  // contents were written to the file. CHECKs that FileExists() returns true.
+  bool Write(const std::string& str);
 
   // Read the file and return the contents. CHECKs that FileExists() returns
   // true.

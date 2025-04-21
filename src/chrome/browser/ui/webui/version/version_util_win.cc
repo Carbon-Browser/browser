@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -72,13 +72,15 @@ std::string GetFullWindowsVersion() {
 
   const std::string release_id = gi->release_id();
 
-  if (!release_id.empty())
+  if (!release_id.empty()) {
     version += " Version " + release_id;
+  }
 
-  if (patch > 0)
+  if (patch > 0) {
     version += base::StringPrintf(" (Build %u.%u)", build, patch);
-  else
+  } else {
     version += base::StringPrintf(" (Build %u)", build);
+  }
   return version;
 }
 

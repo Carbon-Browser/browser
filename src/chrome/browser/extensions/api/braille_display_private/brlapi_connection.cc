@@ -1,6 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/extensions/api/braille_display_private/brlapi_connection.h"
 
@@ -11,6 +16,7 @@
 #include "base/files/file_descriptor_watcher_posix.h"
 #include "base/logging.h"
 #include "base/memory/free_deleter.h"
+#include "base/memory/raw_ptr.h"
 #include "base/system/sys_info.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -26,7 +32,7 @@ namespace {
 // TODO(plundblad): Find a way to detect the controlling terminal of the
 // X server.
 static const int kDefaultTtyLinux = 7;
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 // The GUI is always running on vt1 in Chrome OS.
 static const int kDefaultTtyChromeOS = 1;
 #endif
@@ -54,7 +60,7 @@ class BrlapiConnectionImpl : public BrlapiConnection {
   bool CheckConnected();
   ConnectResult ConnectResultForError();
 
-  LibBrlapiLoader* libbrlapi_loader_;
+  raw_ptr<LibBrlapiLoader> libbrlapi_loader_;
   std::unique_ptr<brlapi_handle_t, base::FreeDeleter> handle_;
   std::unique_ptr<base::FileDescriptorWatcher::Controller> fd_controller_;
 };
@@ -79,7 +85,7 @@ BrlapiConnection::ConnectResult BrlapiConnectionImpl::Connect(
   }
   int path[2] = {0, 0};
   int pathElements = 0;
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   if (base::SysInfo::IsRunningOnChromeOS())
     path[pathElements++] = kDefaultTtyChromeOS;
 #endif

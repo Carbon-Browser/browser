@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,11 +25,14 @@ class PolicyValueProvider {
   PolicyValueProvider& operator=(const PolicyValueProvider&) = delete;
   virtual ~PolicyValueProvider();
 
-  // Returns the list of available policy values.
-  virtual base::Value::List GetValues() = 0;
+  // Returns the dictionary containing policy values.
+  virtual base::Value::Dict GetValues() = 0;
 
   // Returns the dictionary containing the policy names.
   virtual base::Value::Dict GetNames() = 0;
+
+  // Refreshes the policy values and notifies the observers.
+  virtual void Refresh();
 
   void AddObserver(Observer* observer);
   void RemoveObserver(Observer* observer);

@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_OFFLINE_ITEMS_COLLECTION_CORE_UPDATE_DELTA_H_
 #define COMPONENTS_OFFLINE_ITEMS_COLLECTION_CORE_UPDATE_DELTA_H_
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
 
 namespace offline_items_collection {
 
@@ -14,9 +14,9 @@ namespace offline_items_collection {
 // to make a decision on whether to act on the new info contained in the offline
 // item.
 struct UpdateDelta {
-  static absl::optional<UpdateDelta> MergeUpdates(
-      const absl::optional<UpdateDelta>& update1,
-      const absl::optional<UpdateDelta>& update2);
+  static std::optional<UpdateDelta> MergeUpdates(
+      const std::optional<UpdateDelta>& update1,
+      const std::optional<UpdateDelta>& update2);
 
   UpdateDelta();
   UpdateDelta(const UpdateDelta& other);

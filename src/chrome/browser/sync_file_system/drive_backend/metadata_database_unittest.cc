@@ -1,6 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/sync_file_system/drive_backend/metadata_database.h"
 
@@ -9,13 +14,13 @@
 #include <unordered_map>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/values.h"
 #include "chrome/browser/sync_file_system/drive_backend/drive_backend_constants.h"
 #include "chrome/browser/sync_file_system/drive_backend/drive_backend_test_util.h"
 #include "chrome/browser/sync_file_system/drive_backend/drive_backend_util.h"
@@ -195,7 +200,7 @@ class MetadataDatabaseTest : public testing::TestWithParam<bool> {
   MetadataDatabaseTest(const MetadataDatabaseTest&) = delete;
   MetadataDatabaseTest& operator=(const MetadataDatabaseTest&) = delete;
 
-  virtual ~MetadataDatabaseTest() {}
+  virtual ~MetadataDatabaseTest() = default;
 
   void SetUp() override {
     ASSERT_TRUE(database_dir_.CreateUniqueTempDir());
@@ -1140,43 +1145,6 @@ TEST_P(MetadataDatabaseTest, PopulateInitialDataTest) {
 
   VerifyTrackedFiles(tracked_files, std::size(tracked_files));
   VerifyReloadConsistency();
-}
-
-TEST_P(MetadataDatabaseTest, DumpFiles) {
-  TrackedFile sync_root(CreateTrackedSyncRoot());
-  TrackedFile app_root(CreateTrackedAppRoot(sync_root, "app_id"));
-  app_root.tracker.set_app_id(app_root.metadata.details().title());
-
-  TrackedFile folder_0(CreateTrackedFolder(app_root, "folder_0"));
-  TrackedFile file_0(CreateTrackedFile(folder_0, "file_0"));
-
-  const TrackedFile* tracked_files[] = {&sync_root, &app_root, &folder_0,
-                                        &file_0};
-
-  SetUpDatabaseByTrackedFiles(tracked_files, std::size(tracked_files));
-  EXPECT_EQ(SYNC_STATUS_OK, InitializeMetadataDatabase());
-  VerifyTrackedFiles(tracked_files, std::size(tracked_files));
-
-  std::unique_ptr<base::ListValue> files =
-      metadata_database()->DumpFiles(app_root.tracker.app_id());
-  ASSERT_EQ(2u, files->GetListDeprecated().size());
-
-  const std::string* str;
-  const base::Value& folder = files->GetListDeprecated()[0];
-  ASSERT_TRUE(folder.is_dict());
-  str = folder.FindStringKey("title");
-  EXPECT_TRUE(str && *str == "folder_0");
-  str = folder.FindStringKey("type");
-  EXPECT_TRUE(str && *str == "folder");
-  EXPECT_TRUE(folder.FindKey("details"));
-
-  const base::Value& file = files->GetListDeprecated()[1];
-  ASSERT_TRUE(file.is_dict());
-  str = file.FindStringKey("title");
-  EXPECT_TRUE(str && *str == "file_0");
-  str = file.FindStringKey("type");
-  EXPECT_TRUE(str && *str == "file");
-  EXPECT_TRUE(file.FindKey("details"));
 }
 
 TEST_P(MetadataDatabaseTest, ClearDatabase) {

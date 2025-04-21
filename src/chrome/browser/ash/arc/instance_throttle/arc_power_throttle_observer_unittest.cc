@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,12 @@
 #include "ash/components/arc/session/arc_service_manager.h"
 #include "ash/components/arc/test/arc_util_test_support.h"
 #include "ash/components/arc/test/fake_arc_session.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
 #include "chrome/browser/ash/arc/test/test_arc_session_manager.h"
 #include "chrome/test/base/testing_profile.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -44,9 +43,6 @@ class ArcPowerThrottleObserverTest : public testing::Test {
 
   void SetUp() override {
     chromeos::PowerManagerClient::InitializeFake();
-    // Need to initialize DBusThreadManager before ArcSessionManager's
-    // constructor calls DBusThreadManager::Get().
-    chromeos::DBusThreadManager::Initialize();
     ash::ConciergeClient::InitializeFake(/*fake_cicerone_client=*/nullptr);
     service_manager_ = std::make_unique<ArcServiceManager>();
     session_manager_ =
@@ -66,7 +62,6 @@ class ArcPowerThrottleObserverTest : public testing::Test {
     testing_profile_.reset();
     session_manager_.reset();
     service_manager_.reset();
-    chromeos::DBusThreadManager::Shutdown();
     chromeos::PowerManagerClient::Shutdown();
   }
 

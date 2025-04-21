@@ -1,16 +1,16 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_GFX_IMAGE_IMAGE_SKIA_REP_DEFAULT_H_
 #define UI_GFX_IMAGE_IMAGE_SKIA_REP_DEFAULT_H_
 
+#include "base/component_export.h"
 #include "build/build_config.h"
 #include "cc/paint/paint_image.h"
 #include "cc/paint/paint_op_buffer.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/gfx/geometry/size.h"
-#include "ui/gfx/gfx_export.h"
 
 namespace gfx {
 
@@ -19,7 +19,7 @@ namespace gfx {
 // (ImageSkia does not automatically scale the image).
 // TODO(malaykeshav): Support transport of PaintRecord across mojo. This would
 // require adding inline serialization support for PaintRecords.
-class GFX_EXPORT ImageSkiaRep {
+class COMPONENT_EXPORT(GFX) ImageSkiaRep {
  public:
   // Create null bitmap.
   ImageSkiaRep();
@@ -43,7 +43,7 @@ class GFX_EXPORT ImageSkiaRep {
   // is used when the image representation is sourced from a drawable such as
   // CanvasImageSource. The `size` must not be empty; in that case the default
   // constructor should be used instead.
-  ImageSkiaRep(sk_sp<cc::PaintRecord> paint_record,
+  ImageSkiaRep(cc::PaintRecord paint_record,
                const gfx::Size& size,
                float scale);
 
@@ -75,7 +75,7 @@ class GFX_EXPORT ImageSkiaRep {
 
   // Returns the backing drawable as a PaintRecord. Use this when the type of
   // ImageRep is |kImageTypeDrawable|.
-  sk_sp<cc::PaintRecord> GetPaintRecord() const;
+  cc::PaintRecord GetPaintRecord() const;
 
   const cc::PaintImage& paint_image() const { return paint_image_; }
   bool has_paint_image() const { return !!paint_image_; }
@@ -89,7 +89,7 @@ class GFX_EXPORT ImageSkiaRep {
 
   // TODO(malaykeshav): Remove when migration is complete and it is safe.
   cc::PaintImage paint_image_;
-  mutable sk_sp<cc::PaintRecord> paint_record_;
+  mutable std::optional<cc::PaintRecord> paint_record_;
   ImageRepType type_;
 
   Size pixel_size_;

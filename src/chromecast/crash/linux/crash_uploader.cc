@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <utility>
 
 #include "base/at_exit.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/task/single_thread_task_executor.h"
@@ -56,8 +56,12 @@ int main(int argc, char** argv) {
 
   std::string server_url(
       command_line->GetSwitchValueASCII(switches::kCrashServerUrl));
+  bool daemon =
+      chromecast::GetSwitchValueBoolean(switches::kCrashUploaderDaemon, false);
+  LOG_IF(INFO, daemon) << "Running crash uploader in daemon-mode";
+
   chromecast::MinidumpUploader uploader(sys_info.get(), server_url);
-  while (true) {
+  do {
     if (!uploader.UploadAllMinidumps())
       LOG(ERROR) << "Failed to process minidumps";
 
@@ -65,8 +69,10 @@ int main(int argc, char** argv) {
       chromecast::RebootUtil::RebootNow(
           chromecast::RebootShlib::CRASH_UPLOADER);
 
-    base::PlatformThread::Sleep(base::Seconds(kUploadRetryIntervalDefault));
-  }
+    if (daemon) {
+      base::PlatformThread::Sleep(base::Seconds(kUploadRetryIntervalDefault));
+    }
+  } while (daemon);
 
   return EXIT_SUCCESS;
 }

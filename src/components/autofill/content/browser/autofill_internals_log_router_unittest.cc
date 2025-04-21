@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,21 +12,17 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-using autofill::AutofillLogRouterFactory;
-using autofill::LogRouter;
-
+namespace autofill {
 namespace {
 
 const char kTestText[] = "abcd1234";
 
-class MockLogReceiver : public autofill::LogReceiver {
+class MockLogReceiver : public LogReceiver {
  public:
-  MockLogReceiver() {}
+  MockLogReceiver() = default;
 
-  MOCK_METHOD(void, LogEntry, (const base::Value&), (override));
+  MOCK_METHOD(void, LogEntry, (const base::Value::Dict&), (override));
 };
-
-}  // namespace
 
 class AutofillLogRouterFactoryTest : public testing::Test {
  public:
@@ -55,7 +51,7 @@ TEST_F(AutofillLogRouterFactoryTest, ServiceActiveNonIncognito) {
   ASSERT_TRUE(log_router);
   log_router->RegisterReceiver(&receiver);
 
-  base::Value log_entry = autofill::LogRouter::CreateEntryForText(kTestText);
+  base::Value::Dict log_entry = LogRouter::CreateEntryForText(kTestText);
   EXPECT_CALL(receiver, LogEntry(testing::Eq(testing::ByRef(log_entry))))
       .Times(1);
   log_router->ProcessLog(kTestText);
@@ -74,3 +70,6 @@ TEST_F(AutofillLogRouterFactoryTest, ServiceNotActiveIncognito) {
   // Therefore the returned |service| should also be nullptr.
   EXPECT_FALSE(log_router);
 }
+
+}  // namespace
+}  // namespace autofill

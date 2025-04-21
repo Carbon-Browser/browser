@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,25 +15,26 @@
 #include "content/public/browser/browser_context.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/permissions/permissions_data.h"
+#include "google_apis/gaia/gaia_id.h"
 
 namespace extensions {
 
 namespace {
 signin::ConsentLevel GetConsentLevelFromProfileDetails(
-    const api::identity::ProfileDetails* details) {
+    const std::optional<api::identity::ProfileDetails>& details) {
   api::identity::AccountStatus account_status =
-      details ? details->account_status : api::identity::ACCOUNT_STATUS_NONE;
+      details ? details->account_status : api::identity::AccountStatus::kNone;
 
   switch (account_status) {
-    case api::identity::ACCOUNT_STATUS_ANY:
+    case api::identity::AccountStatus::kAny:
       return signin::ConsentLevel::kSignin;
-    case api::identity::ACCOUNT_STATUS_NONE:
-    case api::identity::ACCOUNT_STATUS_SYNC:
+    case api::identity::AccountStatus::kNone:
+    case api::identity::AccountStatus::kSync:
       return signin::ConsentLevel::kSync;
   }
 
-  NOTREACHED() << "Unexpected value for account_status: " << account_status;
-  return signin::ConsentLevel::kSync;
+  NOTREACHED() << "Unexpected value for account_status: "
+               << api::identity::ToString(account_status);
 }
 }  // namespace
 
@@ -48,25 +49,24 @@ ExtensionFunction::ResponseAction IdentityGetProfileUserInfoFunction::Run() {
     return RespondNow(Error(identity_constants::kOffTheRecord));
   }
 
-  std::unique_ptr<api::identity::GetProfileUserInfo::Params> params(
-      api::identity::GetProfileUserInfo::Params::Create(args()));
-  EXTENSION_FUNCTION_VALIDATE(params.get());
+  std::optional<api::identity::GetProfileUserInfo::Params> params =
+      api::identity::GetProfileUserInfo::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(params);
 
   api::identity::ProfileUserInfo profile_user_info;
 
   if (extension()->permissions_data()->HasAPIPermission(
           mojom::APIPermissionID::kIdentityEmail)) {
     signin::ConsentLevel consent_level =
-        GetConsentLevelFromProfileDetails(params->details.get());
+        GetConsentLevelFromProfileDetails(params->details);
     auto account_info = IdentityManagerFactory::GetForProfile(
                             Profile::FromBrowserContext(browser_context()))
                             ->GetPrimaryAccountInfo(consent_level);
     profile_user_info.email = account_info.email;
-    profile_user_info.id = account_info.gaia;
+    profile_user_info.id = account_info.gaia.ToString();
   }
 
-  return RespondNow(OneArgument(
-      base::Value::FromUniquePtrValue(profile_user_info.ToValue())));
+  return RespondNow(WithArguments(profile_user_info.ToValue()));
 }
 
 }  // namespace extensions

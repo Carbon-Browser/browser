@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,8 +19,8 @@ enum class PaletteToolId {
   CREATE_NOTE,
   LASER_POINTER,
   MAGNIFY,
-  METALAYER,
   ENTER_CAPTURE_MODE,
+  MARKER_MODE,
 };
 
 // Usage of each pen palette option. This enum is used to back an UMA histogram
@@ -36,6 +36,7 @@ enum PaletteTrayOptions {
   PALETTE_LASER_POINTER,
   PALETTE_METALAYER,
   PALETTE_ENTER_CAPTURE_MODE,
+  PALETTE_MARKER_MODE,
   PALETTE_OPTIONS_COUNT
 };
 

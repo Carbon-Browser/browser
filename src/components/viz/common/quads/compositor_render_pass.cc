@@ -1,4 +1,4 @@
-// Copyright 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include <memory>
 
 #include "base/memory/ptr_util.h"
+#include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/traced_value.h"
@@ -27,7 +28,6 @@
 #include "components/viz/common/quads/texture_draw_quad.h"
 #include "components/viz/common/quads/tile_draw_quad.h"
 #include "components/viz/common/quads/video_hole_draw_quad.h"
-#include "components/viz/common/quads/yuv_video_draw_quad.h"
 #include "components/viz/common/traced_value.h"
 
 namespace viz {
@@ -87,10 +87,10 @@ void CompositorRenderPass::SetAll(
     const gfx::Transform& transform_to_root_target,
     const cc::FilterOperations& filters,
     const cc::FilterOperations& backdrop_filters,
-    const absl::optional<gfx::RRectF>& backdrop_filter_bounds,
+    const std::optional<gfx::RRectF>& backdrop_filter_bounds,
     SubtreeCaptureId capture_id,
     gfx::Size subtree_capture_size,
-    SharedElementResourceId resource_id,
+    ViewTransitionElementResourceId resource_id,
     bool has_transparent_background,
     bool cache_render_pass,
     bool has_damage_from_contributing_content,
@@ -107,7 +107,7 @@ void CompositorRenderPass::SetAll(
   this->backdrop_filter_bounds = backdrop_filter_bounds;
   this->subtree_capture_id = capture_id;
   this->subtree_size = subtree_capture_size;
-  this->shared_element_resource_id = resource_id;
+  this->view_transition_element_resource_id = resource_id;
   this->has_transparent_background = has_transparent_background;
   this->cache_render_pass = cache_render_pass;
   this->has_damage_from_contributing_content =
@@ -166,9 +166,6 @@ DrawQuad* CompositorRenderPass::CopyFromAndAppendDrawQuad(
     case DrawQuad::Material::kVideoHole:
       quad_list.AllocateAndCopyFrom(VideoHoleDrawQuad::MaterialCast(quad));
       break;
-    case DrawQuad::Material::kYuvVideoContent:
-      quad_list.AllocateAndCopyFrom(YUVVideoDrawQuad::MaterialCast(quad));
-      break;
     case DrawQuad::Material::kSharedElement:
       quad_list.AllocateAndCopyFrom(SharedElementDrawQuad::MaterialCast(quad));
       break;
@@ -176,10 +173,7 @@ DrawQuad* CompositorRenderPass::CopyFromAndAppendDrawQuad(
     case DrawQuad::Material::kAggregatedRenderPass:
     case DrawQuad::Material::kCompositorRenderPass:
     case DrawQuad::Material::kInvalid:
-      // TODO(danakj): Why is this a check instead of dcheck, and validate from
-      // IPC?
-      CHECK(false);  // Invalid DrawQuad material.
-      break;
+      NOTREACHED();
   }
   quad_list.back()->shared_quad_state = shared_quad_state_list.back();
   return quad_list.back();
@@ -195,9 +189,10 @@ std::unique_ptr<CompositorRenderPass> CompositorRenderPass::DeepCopy() const {
   copy_pass->SetAll(id, output_rect, damage_rect, transform_to_root_target,
                     filters, backdrop_filters, backdrop_filter_bounds,
                     subtree_capture_id, subtree_size,
-                    shared_element_resource_id, has_transparent_background,
-                    cache_render_pass, has_damage_from_contributing_content,
-                    generate_mipmap, has_per_quad_damage);
+                    view_transition_element_resource_id,
+                    has_transparent_background, cache_render_pass,
+                    has_damage_from_contributing_content, generate_mipmap,
+                    has_per_quad_damage);
 
   if (shared_quad_state_list.empty()) {
     DCHECK(quad_list.empty());

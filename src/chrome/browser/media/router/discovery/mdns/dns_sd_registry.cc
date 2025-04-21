@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,31 +9,18 @@
 
 #include "base/check.h"
 #include "base/observer_list.h"
+#include "base/ranges/algorithm.h"
 #include "chrome/browser/local_discovery/service_discovery_shared_client.h"  // nogncheck
 #include "chrome/browser/media/router/discovery/mdns/dns_sd_device_lister.h"
 #include "chrome/common/buildflags.h"
 
 namespace media_router {
 
-namespace {
-// Predicate to test if two discovered services have the same service_name.
-class IsSameServiceName {
- public:
-  explicit IsSameServiceName(const DnsSdService& service) : service_(service) {}
-  bool operator()(const DnsSdService& other) const {
-    return service_.service_name == other.service_name;
-  }
-
- private:
-  const DnsSdService& service_;
-};
-}  // namespace
-
 DnsSdRegistry::ServiceTypeData::ServiceTypeData(
     std::unique_ptr<DnsSdDeviceLister> lister)
     : ref_count(1), lister_(std::move(lister)) {}
 
-DnsSdRegistry::ServiceTypeData::~ServiceTypeData() {}
+DnsSdRegistry::ServiceTypeData::~ServiceTypeData() = default;
 
 void DnsSdRegistry::ServiceTypeData::ListenerAdded() {
   ref_count++;
@@ -51,8 +38,8 @@ int DnsSdRegistry::ServiceTypeData::GetListenerCount() {
 bool DnsSdRegistry::ServiceTypeData::UpdateService(
     bool added,
     const DnsSdService& service) {
-  auto it = std::find_if(service_list_.begin(), service_list_.end(),
-                         IsSameServiceName(service));
+  auto it = base::ranges::find(service_list_, service.service_name,
+                               &DnsSdService::service_name);
   // Set to true when a service is updated in or added to the registry.
   bool updated_or_added = added;
   bool known = (it != service_list_.end());
@@ -89,8 +76,9 @@ void DnsSdRegistry::ServiceTypeData::ResetAndDiscover() {
 bool DnsSdRegistry::ServiceTypeData::ClearServices() {
   lister_->Discover();
 
-  if (service_list_.empty())
+  if (service_list_.empty()) {
     return false;
+  }
 
   service_list_.clear();
   return true;
@@ -154,8 +142,9 @@ void DnsSdRegistry::ResetAndDiscover() {
 
 void DnsSdRegistry::RegisterDnsSdListener(const std::string& service_type) {
   DCHECK(thread_checker_.CalledOnValidThread());
-  if (service_type.empty())
+  if (service_type.empty()) {
     return;
+  }
 
   if (IsRegistered(service_type)) {
     service_data_map_[service_type]->ListenerAdded();
@@ -175,19 +164,27 @@ void DnsSdRegistry::RegisterDnsSdListener(const std::string& service_type) {
 void DnsSdRegistry::UnregisterDnsSdListener(const std::string& service_type) {
   DCHECK(thread_checker_.CalledOnValidThread());
   auto it = service_data_map_.find(service_type);
-  if (it == service_data_map_.end())
+  if (it == service_data_map_.end()) {
     return;
+  }
 
-  if (service_data_map_[service_type]->ListenerRemoved())
+  if (service_data_map_[service_type]->ListenerRemoved()) {
     service_data_map_.erase(it);
+  }
+}
+
+void DnsSdRegistry::ResetForTest() {
+  service_data_map_.clear();
+  service_discovery_client_.reset();
 }
 
 void DnsSdRegistry::ServiceChanged(const std::string& service_type,
                                    bool added,
                                    const DnsSdService& service) {
   DCHECK(thread_checker_.CalledOnValidThread());
-  if (!IsRegistered(service_type))
+  if (!IsRegistered(service_type)) {
     return;
+  }
 
   // TODO(imcheng): This should be validated upstream in
   // dns_sd_device_lister.cc, i.e., |service.ip_address| should be a
@@ -198,30 +195,41 @@ void DnsSdRegistry::ServiceChanged(const std::string& service_type,
   }
   bool is_updated =
       service_data_map_[service_type]->UpdateService(added, service);
-  if (is_updated)
+  if (is_updated) {
     DispatchApiEvent(service_type);
+  }
 }
 
 void DnsSdRegistry::ServiceRemoved(const std::string& service_type,
                                    const std::string& service_name) {
   DCHECK(thread_checker_.CalledOnValidThread());
-  if (!IsRegistered(service_type))
+  if (!IsRegistered(service_type)) {
     return;
+  }
 
   bool is_removed =
       service_data_map_[service_type]->RemoveService(service_name);
-  if (is_removed)
+  if (is_removed) {
     DispatchApiEvent(service_type);
+  }
 }
 
 void DnsSdRegistry::ServicesFlushed(const std::string& service_type) {
   DCHECK(thread_checker_.CalledOnValidThread());
-  if (!IsRegistered(service_type))
+  if (!IsRegistered(service_type)) {
     return;
+  }
 
   bool is_cleared = service_data_map_[service_type]->ClearServices();
-  if (is_cleared)
+  if (is_cleared) {
     DispatchApiEvent(service_type);
+  }
+}
+
+void DnsSdRegistry::ServicesPermissionRejected() {
+  for (auto& observer : observers_) {
+    observer.OnDnsSdPermissionRejected();
+  }
 }
 
 void DnsSdRegistry::DispatchApiEvent(const std::string& service_type) {

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_CSS_PARSER_FONT_VARIANT_EAST_ASIAN_PARSER_H_
 
 #include "third_party/blink/renderer/core/css/css_value_list.h"
-#include "third_party/blink/renderer/core/css/parser/css_parser_token_range.h"
 #include "third_party/blink/renderer/core/css/properties/css_parsing_utils.h"
 
 namespace blink {
@@ -22,8 +21,8 @@ class FontVariantEastAsianParser {
 
   enum class ParseResult { kConsumedValue, kDisallowedValue, kUnknownValue };
 
-  ParseResult ConsumeEastAsian(CSSParserTokenRange& range) {
-    CSSValueID value_id = range.Peek().Id();
+  ParseResult ConsumeEastAsian(CSSParserTokenStream& stream) {
+    CSSValueID value_id = stream.Peek().Id();
     switch (value_id) {
       case CSSValueID::kJis78:
       case CSSValueID::kJis83:
@@ -31,20 +30,23 @@ class FontVariantEastAsianParser {
       case CSSValueID::kJis04:
       case CSSValueID::kSimplified:
       case CSSValueID::kTraditional:
-        if (east_asian_form_value_)
+        if (east_asian_form_value_) {
           return ParseResult::kDisallowedValue;
-        east_asian_form_value_ = css_parsing_utils::ConsumeIdent(range);
+        }
+        east_asian_form_value_ = css_parsing_utils::ConsumeIdent(stream);
         return ParseResult::kConsumedValue;
       case CSSValueID::kFullWidth:
       case CSSValueID::kProportionalWidth:
-        if (east_asian_width_value_)
+        if (east_asian_width_value_) {
           return ParseResult::kDisallowedValue;
-        east_asian_width_value_ = css_parsing_utils::ConsumeIdent(range);
+        }
+        east_asian_width_value_ = css_parsing_utils::ConsumeIdent(stream);
         return ParseResult::kConsumedValue;
       case CSSValueID::kRuby:
-        if (ruby_value_)
+        if (ruby_value_) {
           return ParseResult::kDisallowedValue;
-        ruby_value_ = css_parsing_utils::ConsumeIdent(range);
+        }
+        ruby_value_ = css_parsing_utils::ConsumeIdent(stream);
         return ParseResult::kConsumedValue;
       default:
         return ParseResult::kUnknownValue;
@@ -66,8 +68,9 @@ class FontVariantEastAsianParser {
       ruby_value_ = nullptr;
     }
 
-    if (!result->length())
+    if (!result->length()) {
       return CSSIdentifierValue::Create(CSSValueID::kNormal);
+    }
     return result;
   }
 

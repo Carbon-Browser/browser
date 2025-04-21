@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,8 +22,9 @@ RootWindowLayoutManager::~RootWindowLayoutManager() = default;
 
 void RootWindowLayoutManager::OnWindowResized() {
   gfx::Rect bounds(owner_->bounds().size());
-  for (auto* container : containers_)
+  for (aura::Window* container : containers_) {
     container->SetBounds(bounds);
+  }
 }
 
 void RootWindowLayoutManager::OnWindowAddedToLayout(aura::Window* child) {}

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_ASH_ACCESSIBILITY_MAGNIFICATION_MANAGER_H_
 
 #include "ash/public/cpp/accessibility_controller_enums.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
@@ -103,14 +104,13 @@ class MagnificationManager
   void SetProfile(Profile* profile);
 
   void SetMagnifierEnabledInternal(bool enabled);
-  void SetMagnifierKeepFocusCenteredInternal(bool keep_focus_centered);
   void SetMagnifierScaleInternal(double scale);
   void SetMagnifierMouseFollowingModeInternal(
       MagnifierMouseFollowingMode mouse_following_mode);
   void UpdateMagnifierFromPrefs();
   void UpdateDockedMagnifierFromPrefs();
 
-  Profile* profile_ = nullptr;
+  raw_ptr<Profile> profile_ = nullptr;
   base::ScopedObservation<Profile, ProfileObserver> profile_observation_{this};
 
   // Last mouse event time - used for ignoring focus changes for a few
@@ -118,7 +118,6 @@ class MagnificationManager
   base::TimeTicks last_mouse_event_;
 
   bool fullscreen_magnifier_enabled_ = false;
-  bool keep_focus_centered_ = false;
   double scale_ = 0.0;
 
   base::ScopedObservation<session_manager::SessionManager,
@@ -130,11 +129,5 @@ class MagnificationManager
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the Chrome OS source code
-// directory migration is finished.
-namespace chromeos {
-using ::ash::MagnificationManager;
-}
 
 #endif  // CHROME_BROWSER_ASH_ACCESSIBILITY_MAGNIFICATION_MANAGER_H_

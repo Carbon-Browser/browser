@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,6 +25,10 @@ AXEvent::AXEvent(AXNodeData::AXID id,
       action_request_id(action_request_id) {}
 
 AXEvent::~AXEvent() = default;
+
+AXEvent::AXEvent(AXEvent&& other) = default;
+
+AXEvent& AXEvent::operator=(AXEvent&& other) = default;
 
 AXEvent::AXEvent(const AXEvent& event) = default;
 

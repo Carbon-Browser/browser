@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,16 @@
 
 namespace blink {
 
-std::unique_ptr<CompositorAnimation> CompositorAnimation::Create() {
-  return std::make_unique<CompositorAnimation>(
-      cc::Animation::Create(cc::AnimationIdProvider::NextAnimationId()));
+std::unique_ptr<CompositorAnimation> CompositorAnimation::Create(
+    std::optional<int> replaced_cc_animation_id) {
+  auto compositor_animation = std::make_unique<CompositorAnimation>(
+      cc::Animation::Create(replaced_cc_animation_id
+                                ? *replaced_cc_animation_id
+                                : cc::AnimationIdProvider::NextAnimationId()));
+  if (replaced_cc_animation_id) {
+    compositor_animation->CcAnimation()->set_is_replacement();
+  }
+  return compositor_animation;
 }
 
 std::unique_ptr<CompositorAnimation>
@@ -43,6 +50,11 @@ cc::Animation* CompositorAnimation::CcAnimation() const {
   return animation_.get();
 }
 
+int CompositorAnimation::CcAnimationId() const {
+  CHECK(CcAnimation());
+  return CcAnimation()->id();
+}
+
 void CompositorAnimation::SetAnimationDelegate(
     CompositorAnimationDelegate* delegate) {
   delegate_ = delegate;
@@ -53,8 +65,8 @@ void CompositorAnimation::AttachElement(const CompositorElementId& id) {
   animation_->AttachElement(id);
 }
 
-void CompositorAnimation::AttachNoElement() {
-  animation_->AttachNoElement();
+void CompositorAnimation::AttachPaintWorkletElement() {
+  animation_->AttachPaintWorkletElement();
 }
 
 void CompositorAnimation::DetachElement() {
@@ -130,7 +142,7 @@ void CompositorAnimation::NotifyAnimationTakeover(
 }
 
 void CompositorAnimation::NotifyLocalTimeUpdated(
-    absl::optional<base::TimeDelta> local_time) {
+    std::optional<base::TimeDelta> local_time) {
   if (delegate_) {
     delegate_->NotifyLocalTimeUpdated(local_time);
   }

@@ -1,18 +1,18 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/sharing/click_to_call/click_to_call_context_menu_observer.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/renderer_context_menu/render_view_context_menu.h"
 #include "chrome/browser/sharing/click_to_call/click_to_call_metrics.h"
 #include "chrome/browser/sharing/click_to_call/click_to_call_ui_controller.h"
-#include "chrome/browser/sharing/sharing_constants.h"
 #include "chrome/grit/generated_resources.h"
+#include "components/sharing_message/sharing_constants.h"
 #include "components/sync_device_info/device_info.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/models/image_model.h"
@@ -36,8 +36,9 @@ void ClickToCallContextMenuObserver::SubMenuDelegate::ExecuteCommand(
     int command_id,
     int event_flags) {
   if (command_id < kSubMenuFirstDeviceCommandId ||
-      command_id > kSubMenuLastDeviceCommandId)
+      command_id > kSubMenuLastDeviceCommandId) {
     return;
+  }
   int device_index = command_id - kSubMenuFirstDeviceCommandId;
   parent_->SendClickToCallMessage(device_index);
 }
@@ -71,13 +72,13 @@ void ClickToCallContextMenuObserver::BuildMenu(
         IDC_CONTENT_CONTEXT_SHARING_CLICK_TO_CALL_SINGLE_DEVICE,
         l10n_util::GetStringFUTF16(
             IDS_CONTENT_CONTEXT_SHARING_CLICK_TO_CALL_SINGLE_DEVICE,
-            base::UTF8ToUTF16(devices_[0]->client_name())));
+            base::UTF8ToUTF16(devices_[0].client_name())));
 #else
     proxy_->AddMenuItemWithIcon(
         IDC_CONTENT_CONTEXT_SHARING_CLICK_TO_CALL_SINGLE_DEVICE,
         l10n_util::GetStringFUTF16(
             IDS_CONTENT_CONTEXT_SHARING_CLICK_TO_CALL_SINGLE_DEVICE,
-            base::UTF8ToUTF16(devices_[0]->client_name())),
+            base::UTF8ToUTF16(devices_[0].client_name())),
         ui::ImageModel::FromVectorIcon(controller_->GetVectorIcon(),
                                        ui::kColorMenuIcon,
                                        ui::SimpleMenuModel::kDefaultIconSize));
@@ -110,7 +111,7 @@ void ClickToCallContextMenuObserver::BuildSubMenu() {
     if (command_id > kSubMenuLastDeviceCommandId)
       break;
     sub_menu_model_->AddItem(command_id++,
-                             base::UTF8ToUTF16(device->client_name()));
+                             base::UTF8ToUTF16(device.client_name()));
   }
 }
 
@@ -149,6 +150,6 @@ void ClickToCallContextMenuObserver::SendClickToCallMessage(
   LogSharingSelectedIndex(controller_->GetFeatureMetricsPrefix(),
                           kSharingUiContextMenu, chosen_device_index);
 
-  controller_->OnDeviceSelected(phone_number_, *devices_[chosen_device_index],
+  controller_->OnDeviceSelected(phone_number_, devices_[chosen_device_index],
                                 *entry_point_);
 }

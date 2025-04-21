@@ -25,32 +25,88 @@
 
 #include <cmath>
 #include <cstring>
+#include <optional>
 
 #include "base/check_op.h"
+#include "base/memory/stack_allocated.h"
 #include "base/notreached.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-#include "third_party/blink/renderer/platform/geometry/anchor_query_enums.h"
+#include "third_party/blink/renderer/platform/geometry/evaluation_input.h"
 #include "third_party/blink/renderer/platform/geometry/layout_unit.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/math_extras.h"
 
+namespace WTF {
+class String;
+}  // namespace WTF
+
 namespace blink {
 
 struct PixelsAndPercent {
   DISALLOW_NEW();
-  PixelsAndPercent(float pixels, float percent)
-      : pixels(pixels), percent(percent) {}
+  explicit PixelsAndPercent(float pixels)
+      : pixels(pixels),
+        percent(0.0f),
+        has_explicit_pixels(true),
+        has_explicit_percent(false) {}
+  PixelsAndPercent(float pixels,
+                   float percent,
+                   bool has_explicit_pixels,
+                   bool has_explicit_percent)
+      : pixels(pixels),
+        percent(percent),
+        has_explicit_pixels(has_explicit_pixels),
+        has_explicit_percent(has_explicit_percent) {}
+
+  PixelsAndPercent& operator+=(const PixelsAndPercent& rhs) {
+    pixels += rhs.pixels;
+    percent += rhs.percent;
+    has_explicit_pixels |= rhs.has_explicit_pixels;
+    has_explicit_percent |= rhs.has_explicit_percent;
+    return *this;
+  }
+  friend PixelsAndPercent operator+(PixelsAndPercent lhs,
+                                    const PixelsAndPercent& rhs) {
+    lhs += rhs;
+    return lhs;
+  }
+  PixelsAndPercent& operator-=(const PixelsAndPercent& rhs) {
+    pixels -= rhs.pixels;
+    percent -= rhs.percent;
+    has_explicit_pixels |= rhs.has_explicit_pixels;
+    has_explicit_percent |= rhs.has_explicit_percent;
+    return *this;
+  }
+  PixelsAndPercent& operator*=(float number) {
+    pixels *= number;
+    percent *= number;
+    return *this;
+  }
+
   float pixels;
   float percent;
+  bool has_explicit_pixels;
+  bool has_explicit_percent;
 };
 
 class CalculationValue;
+class Length;
+
+PLATFORM_EXPORT extern const Length& g_auto_length;
+PLATFORM_EXPORT extern const Length& g_fill_available_length;
+PLATFORM_EXPORT extern const Length& g_stretch_length;
+PLATFORM_EXPORT extern const Length& g_fit_content_length;
+PLATFORM_EXPORT extern const Length& g_max_content_length;
+PLATFORM_EXPORT extern const Length& g_min_content_length;
+PLATFORM_EXPORT extern const Length& g_min_intrinsic_length;
 
 class PLATFORM_EXPORT Length {
   DISALLOW_NEW();
 
  public:
+  // Initializes global instances.
+  static void Initialize();
+
   enum class ValueRange { kAll, kNonNegative };
 
   // FIXME: This enum makes it hard to tell in general what values may be
@@ -63,8 +119,10 @@ class PLATFORM_EXPORT Length {
     kMaxContent,
     kMinIntrinsic,
     kFillAvailable,
+    kStretch,
     kFitContent,
     kCalculated,
+    kFlex,
     kExtendToZoom,
     kDeviceWidth,
     kDeviceHeight,
@@ -72,34 +130,29 @@ class PLATFORM_EXPORT Length {
     kContent  // only valid for flex-basis
   };
 
-  Length() : int_value_(0), quirk_(false), type_(kAuto), is_float_(false) {}
+  Length() : value_(0), type_(kAuto) {}
 
-  explicit Length(Length::Type t)
-      : int_value_(0), quirk_(false), type_(t), is_float_(false) {
+  explicit Length(Length::Type t) : value_(0), type_(t) {
     DCHECK_NE(t, kCalculated);
   }
 
-  Length(int v, Length::Type t, bool q = false)
-      : int_value_(v), quirk_(q), type_(t), is_float_(false) {
+  Length(int v, Length::Type t) : value_(v), type_(t) {
     DCHECK_NE(t, kCalculated);
   }
 
-  Length(LayoutUnit v, Length::Type t, bool q = false)
-      : float_value_(v.ToFloat()), quirk_(q), type_(t), is_float_(true) {
+  Length(LayoutUnit v, Length::Type t) : value_(v.ToFloat()), type_(t) {
     DCHECK(std::isfinite(v.ToFloat()));
     DCHECK_NE(t, kCalculated);
   }
 
-  Length(float v, Length::Type t, bool q = false)
-      : float_value_(v), quirk_(q), type_(t), is_float_(true) {
+  Length(float v, Length::Type t) : value_(v), type_(t) {
     DCHECK(std::isfinite(v));
     DCHECK_NE(t, kCalculated);
   }
 
-  Length(double v, Length::Type t, bool q = false)
-      : quirk_(q), type_(t), is_float_(true) {
+  Length(double v, Length::Type t) : type_(t) {
     DCHECK(std::isfinite(v));
-    float_value_ = ClampTo<float>(v);
+    value_ = ClampTo<float>(v);
   }
 
   explicit Length(scoped_refptr<const CalculationValue>);
@@ -125,46 +178,44 @@ class PLATFORM_EXPORT Length {
   }
 
   bool operator==(const Length& o) const {
-    return (type_ == o.type_) && (quirk_ == o.quirk_) &&
-           (IsNone() || (GetFloatValue() == o.GetFloatValue()) ||
-            IsCalculatedEqual(o));
+    if (type_ != o.type_ || quirk_ != o.quirk_) {
+      return false;
+    }
+    if (type_ == kCalculated) {
+      return IsCalculatedEqual(o);
+    } else {
+      // For everything that doesn't use value_, it is defined to be zero,
+      // so we can compare here unconditionally.
+      return value_ == o.value_;
+    }
   }
   bool operator!=(const Length& o) const { return !(*this == o); }
 
-  const Length& operator*=(float v) {
-    if (IsCalculated()) {
-      NOTREACHED();
-      return *this;
-    }
+  static const Length& Auto() { return g_auto_length; }
+  static const Length& FillAvailable() { return g_fill_available_length; }
+  static const Length& Stretch() { return g_stretch_length; }
+  static const Length& FitContent() { return g_fit_content_length; }
+  static const Length& MaxContent() { return g_max_content_length; }
+  static const Length& MinContent() { return g_min_content_length; }
+  static const Length& MinIntrinsic() { return g_min_intrinsic_length; }
 
-    if (is_float_)
-      float_value_ = static_cast<float>(float_value_ * v);
-    else
-      int_value_ = static_cast<int>(int_value_ * v);
+  static Length Content() { return Length(kContent); }
+  static Length Fixed() { return Length(kFixed); }
+  static Length None() { return Length(kNone); }
 
-    return *this;
-  }
+  static Length ExtendToZoom() { return Length(kExtendToZoom); }
+  static Length DeviceWidth() { return Length(kDeviceWidth); }
+  static Length DeviceHeight() { return Length(kDeviceHeight); }
 
   template <typename NUMBER_TYPE>
   static Length Fixed(NUMBER_TYPE number) {
     return Length(number, kFixed);
   }
-  static Length Fixed() { return Length(kFixed); }
-  static Length Auto() { return Length(kAuto); }
-  static Length FillAvailable() { return Length(kFillAvailable); }
-  static Length MinContent() { return Length(kMinContent); }
-  static Length MaxContent() { return Length(kMaxContent); }
-  static Length MinIntrinsic() { return Length(kMinIntrinsic); }
-  static Length ExtendToZoom() { return Length(kExtendToZoom); }
-  static Length DeviceWidth() { return Length(kDeviceWidth); }
-  static Length DeviceHeight() { return Length(kDeviceHeight); }
-  static Length None() { return Length(kNone); }
-  static Length FitContent() { return Length(kFitContent); }
-  static Length Content() { return Length(kContent); }
   template <typename NUMBER_TYPE>
   static Length Percent(NUMBER_TYPE number) {
     return Length(number, kPercent);
   }
+  static Length Flex(float value) { return Length(value, kFlex); }
 
   // FIXME: Make this private (if possible) or at least rename it
   // (http://crbug.com/432707).
@@ -176,9 +227,9 @@ class PLATFORM_EXPORT Length {
   int IntValue() const {
     if (IsCalculated()) {
       NOTREACHED();
-      return 0;
     }
-    return GetIntValue();
+    DCHECK(!IsNone());
+    return static_cast<int>(value_);
   }
 
   float Pixels() const {
@@ -216,43 +267,33 @@ class PLATFORM_EXPORT Length {
     if (IsCalculated())
       return false;
 
-    return is_float_ ? !float_value_ : !int_value_;
-  }
-  bool IsPositive() const {
-    if (IsNone())
-      return false;
-    if (IsCalculated())
-      return true;
-
-    return GetFloatValue() > 0;
-  }
-  bool IsNegative() const {
-    if (IsNone() || IsCalculated())
-      return false;
-
-    return GetFloatValue() < 0;
+    return !value_;
   }
 
-  // For the layout purposes, if this |Length| is a block-axis size, see
-  // |IsAutoOrContentOrIntrinsic()|, it is usually a better choice.
+  // If this is a length in a property that accepts calc-size(), use
+  // |HasAuto()|.  If this |Length| is a block-axis size
+  // |HasAutoOrContentOrIntrinsic()| is usually a better choice.
   bool IsAuto() const { return GetType() == kAuto; }
   bool IsFixed() const { return GetType() == kFixed; }
 
   // For the block axis, intrinsic sizes such as `min-content` behave the same
   // as `auto`. https://www.w3.org/TR/css-sizing-3/#valdef-width-min-content
-  bool IsContentOrIntrinsic() const {
-    return GetType() == kMinContent || GetType() == kMaxContent ||
-           GetType() == kFitContent || GetType() == kMinIntrinsic ||
-           GetType() == kContent;
-  }
-  bool IsAutoOrContentOrIntrinsic() const {
-    return GetType() == kAuto || IsContentOrIntrinsic();
-  }
+  // This includes content-based sizes in calc-size().
+  bool HasAuto() const;
+  bool HasContentOrIntrinsic() const;
+  bool HasAutoOrContentOrIntrinsic() const;
+  // HasPercent and HasPercentOrStretch refer to whether the toplevel value
+  // should be treated as a percentage type for web-exposed behavior
+  // decisions.  However, a value can still depend on a percentage when
+  // HasPercent() is false:  for example, calc-size(any, 20%).
+  bool HasPercent() const;
+  bool HasPercentOrStretch() const;
+  bool HasStretch() const;
 
-  // NOTE: This shouldn't be use in NG code.
-  bool IsContentOrIntrinsicOrFillAvailable() const {
-    return IsContentOrIntrinsic() || GetType() == kFillAvailable;
-  }
+  bool HasMinContent() const;
+  bool HasMaxContent() const;
+  bool HasMinIntrinsic() const { return IsMinIntrinsic(); }
+  bool HasFitContent() const;
 
   bool IsSpecified() const {
     return GetType() == kFixed || GetType() == kPercent ||
@@ -261,20 +302,42 @@ class PLATFORM_EXPORT Length {
 
   bool IsCalculated() const { return GetType() == kCalculated; }
   bool IsCalculatedEqual(const Length&) const;
+
+  // These type checking methods should be used with extreme caution;
+  // many uses probably want the Has* methods above to work correctly
+  // with calc-size().
   bool IsMinContent() const { return GetType() == kMinContent; }
   bool IsMaxContent() const { return GetType() == kMaxContent; }
-  bool IsContent() const { return GetType() == kContent; }
   bool IsMinIntrinsic() const { return GetType() == kMinIntrinsic; }
   bool IsFillAvailable() const { return GetType() == kFillAvailable; }
+  bool IsStretch() const { return GetType() == kStretch; }
   bool IsFitContent() const { return GetType() == kFitContent; }
   bool IsPercent() const { return GetType() == kPercent; }
-  bool IsPercentOrCalc() const {
+  // MayHavePercentDependence should be used to decide whether to optimize
+  // away computing the value on which percentages depend or optimize away
+  // recomputation that results from changes to that value.  It is intended to
+  // be used *only* in cases where the implementation could be changed to one
+  // that returns true only if there are percentage values somewhere in the
+  // expression (that is, one that still returns true for calc-size(any, 30%)
+  // for which HasPercent() is false, but is false for calc-size(any, 30px)).
+  //
+  // We could (if we want) make this exact and remove "May" from the name.
+  // But this would require looking into the calculation value like HasPercent
+  // does.  However, it needs to be different from HasPercent because of cases
+  // where calc-size() erases percentage-ness from the type, like
+  // calc-size(any, 20%).
+  //
+  // For properties that cannot have calc-size in them, we currently use
+  // HasPercent() rather than MayHavePercentDependence() since it's a
+  // shorter/simpler function name, and the two functions are equivalent in
+  // that case.
+  bool MayHavePercentDependence() const {
     return GetType() == kPercent || GetType() == kCalculated;
   }
+  bool IsFlex() const { return GetType() == kFlex; }
   bool IsExtendToZoom() const { return GetType() == kExtendToZoom; }
   bool IsDeviceWidth() const { return GetType() == kDeviceWidth; }
   bool IsDeviceHeight() const { return GetType() == kDeviceHeight; }
-  bool HasAnchorQueries() const;
 
   Length Blend(const Length& from, double progress, ValueRange range) const {
     DCHECK(IsSpecified());
@@ -300,53 +363,41 @@ class PLATFORM_EXPORT Length {
 
   float GetFloatValue() const {
     DCHECK(!IsNone());
-    return is_float_ ? float_value_ : int_value_;
+    DCHECK(!IsCalculated());
+    return value_;
   }
 
-  class PLATFORM_EXPORT AnchorEvaluator {
-   public:
-    // Evaluate the |anchor_name| for the |anchor_value|. Returns |nullopt| if
-    // the query is invalid (e.g., no targets or wrong axis.)
-    virtual absl::optional<LayoutUnit> EvaluateAnchor(
-        const AtomicString& anchor_name,
-        AnchorValue anchor_value) const;
-    virtual absl::optional<LayoutUnit> EvaluateAnchorSize(
-        const AtomicString& anchor_name,
-        AnchorSizeValue anchor_size_value) const;
-  };
-  float NonNanCalculatedValue(LayoutUnit max_value,
-                              const AnchorEvaluator* = nullptr) const;
+  float NonNanCalculatedValue(float max_value, const EvaluationInput&) const;
 
   Length SubtractFromOneHundredPercent() const;
 
+  Length Add(const Length& other) const;
+
   Length Zoom(double factor) const;
 
-  String ToString() const;
+  WTF::String ToString() const;
 
  private:
-  int GetIntValue() const {
-    DCHECK(!IsNone());
-    return is_float_ ? static_cast<int>(float_value_) : int_value_;
-  }
-
   Length BlendMixedTypes(const Length& from, double progress, ValueRange) const;
 
   Length BlendSameTypes(const Length& from, double progress, ValueRange) const;
 
   int CalculationHandle() const {
     DCHECK(IsCalculated());
-    return GetIntValue();
+    return calculation_handle_;
   }
   void IncrementCalculatedRef() const;
   void DecrementCalculatedRef() const;
 
   union {
-    int int_value_;
-    float float_value_;
+    // If kType == kCalculated.
+    int calculation_handle_;
+
+    // Otherwise. Must be zero if not in use (e.g., for kAuto or kNone).
+    float value_;
   };
-  bool quirk_;
+  bool quirk_ = false;
   unsigned char type_;
-  bool is_float_;
 };
 
 PLATFORM_EXPORT std::ostream& operator<<(std::ostream&, const Length&);

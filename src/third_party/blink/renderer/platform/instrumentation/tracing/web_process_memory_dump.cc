@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,6 @@
 #include "base/memory/discardable_memory.h"
 #include "base/memory/ptr_util.h"
 #include "base/trace_event/process_memory_dump.h"
-#include "base/trace_event/trace_event_memory_overhead.h"
 #include "base/trace_event/traced_value.h"
 #include "skia/ext/skia_trace_memory_dump_impl.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/web_memory_allocator_dump.h"
@@ -20,9 +19,9 @@ namespace blink {
 
 WebProcessMemoryDump::WebProcessMemoryDump()
     : owned_process_memory_dump_(new base::trace_event::ProcessMemoryDump(
-          {base::trace_event::MemoryDumpLevelOfDetail::DETAILED})),
+          {base::trace_event::MemoryDumpLevelOfDetail::kDetailed})),
       process_memory_dump_(owned_process_memory_dump_.get()),
-      level_of_detail_(base::trace_event::MemoryDumpLevelOfDetail::DETAILED) {}
+      level_of_detail_(base::trace_event::MemoryDumpLevelOfDetail::kDetailed) {}
 
 WebProcessMemoryDump::WebProcessMemoryDump(
     base::trace_event::MemoryDumpLevelOfDetail level_of_detail,
@@ -109,7 +108,7 @@ void WebProcessMemoryDump::TakeAllDumpsFrom(
   // 2) Move and transfer the ownership of the WebMemoryAllocatorDump wrappers.
   const size_t expected_final_size =
       memory_allocator_dumps_.size() + other->memory_allocator_dumps_.size();
-  while (!other->memory_allocator_dumps_.IsEmpty()) {
+  while (!other->memory_allocator_dumps_.empty()) {
     auto first_entry = other->memory_allocator_dumps_.begin();
     base::trace_event::MemoryAllocatorDump* memory_allocator_dump =
         first_entry->key;
@@ -118,7 +117,7 @@ void WebProcessMemoryDump::TakeAllDumpsFrom(
         other->memory_allocator_dumps_.Take(memory_allocator_dump));
   }
   DCHECK_EQ(expected_final_size, memory_allocator_dumps_.size());
-  DCHECK(other->memory_allocator_dumps_.IsEmpty());
+  DCHECK(other->memory_allocator_dumps_.empty());
 }
 
 void WebProcessMemoryDump::AddOwnershipEdge(
@@ -161,16 +160,6 @@ WebProcessMemoryDump::CreateDiscardableMemoryAllocatorDump(
       discardable->CreateMemoryAllocatorDump(name.c_str(),
                                              process_memory_dump_);
   return CreateWebMemoryAllocatorDump(dump);
-}
-
-void WebProcessMemoryDump::DumpHeapUsage(
-    const std::unordered_map<base::trace_event::AllocationContext,
-                             base::trace_event::AllocationMetrics>&
-        metrics_by_context,
-    base::trace_event::TraceEventMemoryOverhead& overhead,
-    const char* allocator_name) {
-  process_memory_dump_->DumpHeapUsage(metrics_by_context, overhead,
-                                      allocator_name);
 }
 
 }  // namespace content

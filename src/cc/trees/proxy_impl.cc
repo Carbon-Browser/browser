@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,17 +13,21 @@
 #include <vector>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
+#include "base/task/common/task_annotator.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/traced_value.h"
+#include "base/trace_event/typed_macros.h"
+#include "base/types/optional_ref.h"
 #include "cc/base/devtools_instrumentation.h"
 #include "cc/base/features.h"
 #include "cc/benchmarks/benchmark_instrumentation.h"
 #include "cc/input/browser_controls_offset_manager.h"
+#include "cc/input/browser_controls_offset_tags_info.h"
 #include "cc/metrics/compositor_timing_history.h"
-#include "cc/metrics/jank_injector.h"
 #include "cc/paint/paint_worklet_layer_painter.h"
 #include "cc/trees/compositor_commit_data.h"
 #include "cc/trees/layer_tree_frame_sink.h"
@@ -33,11 +37,10 @@
 #include "cc/trees/proxy_main.h"
 #include "cc/trees/render_frame_metadata_observer.h"
 #include "cc/trees/task_runner_provider.h"
-#include "components/power_scheduler/power_mode_arbiter.h"
+#include "cc/trees/trace_utils.h"
 #include "components/viz/common/frame_sinks/delay_based_time_source.h"
 #include "components/viz/common/frame_timing_details.h"
-#include "components/viz/common/gpu/context_provider.h"
-#include "gpu/command_buffer/client/gles2_interface.h"
+#include "components/viz/common/gpu/raster_context_provider.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
 
 namespace cc {
@@ -54,20 +57,27 @@ constexpr auto kSmoothnessTakesPriorityExpirationDelay =
 class ScopedCommitCompletionEvent {
  public:
   ScopedCommitCompletionEvent(
+      int source_frame_number,
       CompletionEvent* event,
       base::TimeTicks start_time,
       base::SingleThreadTaskRunner* main_thread_task_runner,
+      bool notify_main,
       base::WeakPtr<ProxyMain> proxy_main_weak_ptr)
-      : event_(event),
+      : source_frame_number_(source_frame_number),
+        event_(event),
         commit_timestamps_({start_time, base::TimeTicks()}),
         main_thread_task_runner_(main_thread_task_runner),
+        notify_main_(notify_main),
         proxy_main_weak_ptr_(proxy_main_weak_ptr) {}
   ScopedCommitCompletionEvent(const ScopedCommitCompletionEvent&) = delete;
   ~ScopedCommitCompletionEvent() {
-    event_->Signal();
-    main_thread_task_runner_->PostTask(
-        FROM_HERE, base::BindOnce(&ProxyMain::DidCompleteCommit,
-                                  proxy_main_weak_ptr_, commit_timestamps_));
+    event_.ExtractAsDangling()->Signal();
+    if (notify_main_) {
+      main_thread_task_runner_->PostTask(
+          FROM_HERE,
+          base::BindOnce(&ProxyMain::DidCompleteCommit, proxy_main_weak_ptr_,
+                         source_frame_number_, commit_timestamps_));
+    }
   }
   ScopedCommitCompletionEvent& operator=(const ScopedCommitCompletionEvent&) =
       delete;
@@ -77,9 +87,11 @@ class ScopedCommitCompletionEvent {
   }
 
  private:
-  const raw_ptr<CompletionEvent, DanglingUntriaged> event_;
+  const int source_frame_number_;
+  raw_ptr<CompletionEvent> event_;
   CommitTimestamps commit_timestamps_;
   raw_ptr<base::SingleThreadTaskRunner> main_thread_task_runner_;
+  bool notify_main_;
   base::WeakPtr<ProxyMain> proxy_main_weak_ptr_;
 };
 
@@ -105,22 +117,19 @@ ProxyImpl::ProxyImpl(
   DCHECK(IsMainThreadBlocked());
 
   host_impl_ = layer_tree_host->CreateLayerTreeHostImpl(this);
-  send_compositor_frame_ack_ = settings->send_compositor_frame_ack;
-  last_raster_priority_ = SAME_PRIORITY_FOR_BOTH_TREES;
 
   SchedulerSettings scheduler_settings(settings->ToSchedulerSettings());
+  scheduler_settings.main_frame_before_commit_enabled = true;
 
   std::unique_ptr<CompositorTimingHistory> compositor_timing_history(
       new CompositorTimingHistory(
-          scheduler_settings.using_synchronous_renderer_compositor,
           CompositorTimingHistory::RENDERER_UMA,
           rendering_stats_instrumentation));
   scheduler_ = std::make_unique<Scheduler>(
       this, scheduler_settings, layer_tree_host_id_,
       task_runner_provider_->ImplThreadTaskRunner(),
       std::move(compositor_timing_history),
-      host_impl_->compositor_frame_reporting_controller(),
-      power_scheduler::PowerModeArbiter::GetInstance());
+      host_impl_->compositor_frame_reporting_controller());
 
   DCHECK_EQ(scheduler_->visible(), host_impl_->visible());
 }
@@ -165,10 +174,11 @@ void ProxyImpl::InitializePaintWorkletLayerPainterOnImpl(
 void ProxyImpl::UpdateBrowserControlsStateOnImpl(
     BrowserControlsState constraints,
     BrowserControlsState current,
-    bool animate) {
+    bool animate,
+    base::optional_ref<const BrowserControlsOffsetTagsInfo> offset_tags_info) {
   DCHECK(IsImplThread());
   host_impl_->browser_controls_manager()->UpdateBrowserControlsState(
-      constraints, current, animate);
+      constraints, current, animate, offset_tags_info);
 }
 
 void ProxyImpl::InitializeLayerTreeFrameSinkOnImpl(
@@ -204,6 +214,11 @@ void ProxyImpl::SetDeferBeginMainFrameFromMain(bool defer_begin_main_frame) {
   bool should_defer = ShouldDeferBeginMainFrame();
   if (was_deferring != should_defer)
     scheduler_->SetDeferBeginMainFrame(ShouldDeferBeginMainFrame());
+}
+
+void ProxyImpl::SetPauseRendering(bool pause_rendering) {
+  DCHECK(IsImplThread());
+  scheduler_->SetPauseRendering(pause_rendering);
 }
 
 void ProxyImpl::SetDeferBeginMainFrameFromImpl(bool defer_begin_main_frame) {
@@ -247,6 +262,7 @@ void ProxyImpl::BeginMainFrameAbortedOnImpl(
   host_impl_->BeginMainFrameAborted(
       reason, std::move(swap_promises),
       scheduler_->last_dispatched_begin_main_frame_args(),
+      static_cast<bool>(data_for_commit_.get()),
       scroll_and_viewport_changes_synced);
   scheduler_->NotifyBeginMainFrameStarted(main_thread_start_time);
   scheduler_->BeginMainFrameAborted(reason);
@@ -259,7 +275,16 @@ void ProxyImpl::SetVisibleOnImpl(bool visible) {
   scheduler_->SetVisible(visible);
 }
 
+void ProxyImpl::SetShouldWarmUpOnImpl() {
+  TRACE_EVENT0("cc", "ProxyImpl::SetShouldWarmUpOnImpl");
+  DCHECK(IsImplThread());
+  scheduler_->SetShouldWarmUp();
+}
+
 void ProxyImpl::ReleaseLayerTreeFrameSinkOnImpl(CompletionEvent* completion) {
+  TRACE_EVENT0("cc", "ProxyImpl::ReleaseLayerTreeFrameSinkOnImpl");
+  base::ScopedUmaHistogramTimer histogram_timer(
+      "Navigation.ProxyImpl.ReleaseLayerTreeFrameSinkOnImpl");
   DCHECK(IsImplThread());
 
   // Unlike DidLoseLayerTreeFrameSinkOnImplThread, we don't need to call
@@ -273,10 +298,11 @@ void ProxyImpl::FinishGLOnImpl(CompletionEvent* completion) {
   TRACE_EVENT0("cc", "ProxyImpl::FinishGLOnImplThread");
   DCHECK(IsImplThread());
   if (host_impl_->layer_tree_frame_sink()) {
-    viz::ContextProvider* context_provider =
+    auto* context_provider =
         host_impl_->layer_tree_frame_sink()->context_provider();
-    if (context_provider)
-      context_provider->ContextGL()->Finish();
+    if (context_provider) {
+      context_provider->RasterInterface()->Finish();
+    }
   }
   completion->Signal();
 }
@@ -310,12 +336,12 @@ void ProxyImpl::FrameSinksToThrottleUpdated(
   NOTREACHED();
 }
 
-void ProxyImpl::ReportEventLatency(
-    std::vector<EventLatencyTracker::LatencyData> latencies) {
-  DCHECK(IsImplThread());
-  MainThreadTaskRunner()->PostTask(
-      FROM_HERE, base::BindOnce(&ProxyMain::ReportEventLatency,
-                                proxy_main_weak_ptr_, std::move(latencies)));
+void ProxyImpl::SetHasActiveThreadedScroll(bool is_scrolling) {
+  scheduler_->SetIsScrolling(is_scrolling);
+}
+
+void ProxyImpl::SetWaitingForScrollEvent(bool waiting_for_scroll_event) {
+  scheduler_->SetWaitingForScrollEvent(waiting_for_scroll_event);
 }
 
 void ProxyImpl::NotifyReadyToCommitOnImpl(
@@ -324,30 +350,31 @@ void ProxyImpl::NotifyReadyToCommitOnImpl(
     const ThreadUnsafeCommitState* unsafe_state,
     base::TimeTicks main_thread_start_time,
     const viz::BeginFrameArgs& commit_args,
+    bool scroll_and_viewport_changes_synced,
     CommitTimestamps* commit_timestamps,
     bool commit_timeout) {
-  {
-    TRACE_EVENT_WITH_FLOW0(
-        "viz,benchmark", "MainFrame.NotifyReadyToCommitOnImpl",
-        TRACE_ID_LOCAL(commit_state->trace_id),
-        TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT);
-  }
+  TRACE_EVENT("cc,benchmark", "ProxyImpl::ReadyToCommit",
+              [&](perfetto::EventContext ctx) {
+                EmitMainFramePipelineStep(
+                    ctx, commit_state->trace_id,
+                    perfetto::protos::pbzero::MainFramePipeline::Step::
+                        READY_TO_COMMIT_ON_IMPL);
+              });
+
   DCHECK(!data_for_commit_.get());
   DCHECK(IsImplThread());
-  DCHECK(base::FeatureList::IsEnabled(features::kNonBlockingCommit) ||
-         IsMainThreadBlocked());
   DCHECK(scheduler_);
   DCHECK(scheduler_->CommitPending());
 
   // Inform the layer tree host that the commit has started, so that metrics
   // can determine how long we waited for thread synchronization.
   //
-  // If NonBlockingCommit is disabled, then commit_timestamps points to a
-  // variable on the call stack of the main thread. If NonBlockingCommit is
-  // enabled, then the commit timestamps are transmitted back to the main thread
-  // by ScopedCommitCompletionEvent.
-  DCHECK_NE((bool)commit_timestamps,
-            base::FeatureList::IsEnabled(features::kNonBlockingCommit));
+  // If the main thread is blocked waiting for commit, then commit_timestamps
+  // points to a variable on the call stack of the main thread. If the main
+  // thread is not blocked, then the commit timestamps are transmitted back to
+  // the main thread by ScopedCommitCompletionEvent.
+  DCHECK_EQ((bool)commit_timestamps,
+            task_runner_provider_->IsMainThreadBlocked());
   base::TimeTicks start_time = base::TimeTicks::Now();
   if (commit_timestamps)
     commit_timestamps->start = start_time;
@@ -364,19 +391,29 @@ void ProxyImpl::NotifyReadyToCommitOnImpl(
   scheduler_->NotifyBeginMainFrameStarted(main_thread_start_time);
 
   auto& begin_main_frame_metrics = commit_state->begin_main_frame_metrics;
+  host_impl_->ReadyToCommit(commit_args, scroll_and_viewport_changes_synced,
+                            begin_main_frame_metrics.get(), commit_timeout);
 
-  host_impl_->ReadyToCommit(commit_args, begin_main_frame_metrics.get(),
-                            commit_timeout);
-
+  int source_frame_number = commit_state->source_frame_number;
   data_for_commit_ = std::make_unique<DataForCommit>(
       std::make_unique<ScopedCommitCompletionEvent>(
-          completion_event, start_time, MainThreadTaskRunner(),
-          proxy_main_weak_ptr_),
+          source_frame_number, completion_event, start_time,
+          MainThreadTaskRunner(),
+          /*notify_main*/ !commit_timestamps, proxy_main_weak_ptr_),
       std::move(commit_state), unsafe_state, commit_timestamps);
 
   // Extract metrics data from the layer tree host and send them to the
   // scheduler to pass them to the compositor_timing_history object.
   scheduler_->NotifyReadyToCommit(std::move(begin_main_frame_metrics));
+
+  // If scroll offsets were not synchronized by this commit we need another main
+  // frame to sync them.
+  // Note that scroll_and_viewport_changes_synced will be false for the frame
+  // that contains the first contentful paint, since paint holding makes us skip
+  // ApplyCompositorChanges. This means we are guaranteed to run another main
+  // frame after FCP, which is good because there may be hover effects to apply.
+  if (!scroll_and_viewport_changes_synced)
+    scheduler_->SetNeedsBeginMainFrame();
 }
 
 void ProxyImpl::DidLoseLayerTreeFrameSinkOnImplThread() {
@@ -403,11 +440,6 @@ void ProxyImpl::DidReceiveCompositorFrameAckOnImplThread() {
                "ProxyImpl::DidReceiveCompositorFrameAckOnImplThread");
   DCHECK(IsImplThread());
   scheduler_->DidReceiveCompositorFrameAck();
-  if (send_compositor_frame_ack_) {
-    MainThreadTaskRunner()->PostTask(
-        FROM_HERE, base::BindOnce(&ProxyMain::DidReceiveCompositorFrameAck,
-                                  proxy_main_frame_sink_bound_weak_ptr_));
-  }
 }
 
 void ProxyImpl::OnCanDrawStateChanged(bool can_draw) {
@@ -417,14 +449,14 @@ void ProxyImpl::OnCanDrawStateChanged(bool can_draw) {
 }
 
 void ProxyImpl::NotifyReadyToActivate() {
-  if (host_impl_->sync_tree() &&
-      !scheduler_->pending_tree_is_ready_for_activation()) {
-    TRACE_EVENT_WITH_FLOW0(
-        "viz,benchmark", "MainFrame.NotifyReadyToActivate",
-        TRACE_ID_LOCAL(host_impl_->sync_tree()->trace_id()),
-        TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT);
-  }
   DCHECK(IsImplThread());
+  TRACE_EVENT_INSTANT("cc,benchmark", "ProxyImpl::ReadyToActivate",
+                      [&](perfetto::EventContext ctx) {
+                        EmitMainFramePipelineStep(
+                            ctx, host_impl_->active_tree()->trace_id(),
+                            perfetto::protos::pbzero::MainFramePipeline::Step::
+                                READY_TO_ACTIVATE);
+                      });
   scheduler_->NotifyReadyToActivate();
 }
 
@@ -451,6 +483,12 @@ void ProxyImpl::SetNeedsOneBeginImplFrameOnImplThread() {
   scheduler_->SetNeedsOneBeginImplFrame();
 }
 
+void ProxyImpl::SetNeedsUpdateDisplayTreeOnImplThread() {
+  TRACE_EVENT0("cc", "ProxyImpl::SetNeedsUpdateDisplayTreeOnImplThread");
+  DCHECK(IsImplThread());
+  scheduler_->SetNeedsUpdateDisplayTree();
+}
+
 void ProxyImpl::SetNeedsPrepareTilesOnImplThread() {
   DCHECK(IsImplThread());
   scheduler_->SetNeedsPrepareTiles();
@@ -471,10 +509,6 @@ void ProxyImpl::SetVideoNeedsBeginFrames(bool needs_begin_frames) {
     scheduler_->SetVideoNeedsBeginFrames(needs_begin_frames);
 }
 
-bool ProxyImpl::HasInvalidationAnimation() const {
-  return host_impl_->mutator_host()->HasInvalidationAnimation();
-}
-
 bool ProxyImpl::IsInsideDraw() {
   return inside_draw_;
 }
@@ -482,65 +516,52 @@ bool ProxyImpl::IsInsideDraw() {
 void ProxyImpl::RenewTreePriority() {
   DCHECK(IsImplThread());
 
-  bool scroll_type_considered_interaction = false;
-  bool prefer_new_content = false;
+  bool precise_scrolling_in_progress =
+      host_impl_->GetActivelyScrollingType() == ActivelyScrollingType::kPrecise;
+
+  bool avoid_entering_smoothness =
+      (base::FeatureList::IsEnabled(
+           features::kNewContentForCheckerboardedScrolls) &&
+       host_impl_->ScrollCheckerboardsIncompleteRecording()) ||
+      (precise_scrolling_in_progress &&
+       host_impl_->IsCurrentScrollMainRepainted());
+
   bool non_scroll_interaction_in_progress =
       host_impl_->IsPinchGestureActive() ||
       host_impl_->page_scale_animation_active();
 
-  ActivelyScrollingType actively_scrolling_type =
-      host_impl_->GetActivelyScrollingType();
-
-  switch (actively_scrolling_type) {
-    case ActivelyScrollingType::kNone:
-      break;
-    case ActivelyScrollingType::kPrecise:
-      scroll_type_considered_interaction = true;
-      break;
-    case ActivelyScrollingType::kAnimated:
-      scroll_type_considered_interaction = base::FeatureList::IsEnabled(
-          features::kSchedulerSmoothnessForAnimatedScrolls);
-  }
-
-  bool user_interaction_in_progress =
-      non_scroll_interaction_in_progress || scroll_type_considered_interaction;
-
-  if (host_impl_->CurrentScrollCheckerboardsDueToNoRecording() &&
-      base::FeatureList::IsEnabled(
-          features::kPreferNewContentForCheckerboardedScrolls)) {
-    prefer_new_content = true;
-  }
-
   // Schedule expiration if smoothness currently takes priority.
-  if (user_interaction_in_progress && !prefer_new_content)
+  if ((non_scroll_interaction_in_progress || precise_scrolling_in_progress) &&
+      !avoid_entering_smoothness) {
     smoothness_priority_expiration_notifier_.Schedule();
+  }
 
   // We use the same priority for both trees by default.
-  TreePriority scheduler_tree_priority = SAME_PRIORITY_FOR_BOTH_TREES;
-  TreePriority raster_tree_priority = SAME_PRIORITY_FOR_BOTH_TREES;
+  TreePriority tree_priority = SAME_PRIORITY_FOR_BOTH_TREES;
 
   // Smoothness takes priority if we have an expiration for it scheduled.
   if (smoothness_priority_expiration_notifier_.HasPendingNotification()) {
-    scheduler_tree_priority = SMOOTHNESS_TAKES_PRIORITY;
-    if (non_scroll_interaction_in_progress ||
-        actively_scrolling_type == ActivelyScrollingType::kPrecise ||
-        last_raster_priority_ == SMOOTHNESS_TAKES_PRIORITY)
-      raster_tree_priority = SMOOTHNESS_TAKES_PRIORITY;
+    tree_priority = SMOOTHNESS_TAKES_PRIORITY;
   }
 
-  last_raster_priority_ = raster_tree_priority;
-
-  // New content always takes priority when ui resources have been evicted.
+  // New content takes priority in certain cases:
+  // - When ui resources have been evicted.
+  // - When the viewport is 0x0 (may be invalid/unset?)
+  // - When the active scroll gesture requires main-thread repainting for the
+  //   scroll offset change to be visible.
   if (host_impl_->active_tree()->GetDeviceViewport().size().IsEmpty() ||
-      host_impl_->EvictedUIResourcesExist()) {
+      host_impl_->EvictedUIResourcesExist() ||
+      (host_impl_->IsCurrentScrollMainRepainted() &&
+       base::FeatureList::IsEnabled(
+           features::kMainRepaintScrollPrefersNewContent))) {
     // Once we enter NEW_CONTENTS_TAKES_PRIORITY mode, visible tiles on active
     // tree might be freed. We need to set RequiresHighResToDraw to ensure that
     // high res tiles will be required to activate pending tree.
     host_impl_->SetRequiresHighResToDraw();
-    scheduler_tree_priority = raster_tree_priority = NEW_CONTENT_TAKES_PRIORITY;
+    tree_priority = NEW_CONTENT_TAKES_PRIORITY;
   }
 
-  host_impl_->SetTreePriority(raster_tree_priority);
+  host_impl_->SetTreePriority(tree_priority);
 
   // Only put the scheduler in impl latency prioritization mode if we don't
   // have a scroll listener. This gives the scroll listener a better chance of
@@ -550,7 +571,7 @@ void ProxyImpl::RenewTreePriority() {
       host_impl_->ScrollAffectsScrollHandler()
           ? ScrollHandlerState::SCROLL_AFFECTS_SCROLL_HANDLER
           : ScrollHandlerState::SCROLL_DOES_NOT_AFFECT_SCROLL_HANDLER;
-  scheduler_->SetTreePrioritiesAndScrollState(scheduler_tree_priority,
+  scheduler_->SetTreePrioritiesAndScrollState(tree_priority,
                                               scroll_handler_state);
 }
 
@@ -572,11 +593,6 @@ void ProxyImpl::DidActivateSyncTree() {
   }
 }
 
-void ProxyImpl::WillPrepareTiles() {
-  DCHECK(IsImplThread());
-  scheduler_->WillPrepareTiles();
-}
-
 void ProxyImpl::DidPrepareTiles() {
   DCHECK(IsImplThread());
   scheduler_->DidPrepareTiles();
@@ -596,29 +612,49 @@ void ProxyImpl::OnDrawForLayerTreeFrameSink(bool resourceless_software_draw,
                                           skip_draw);
 }
 
-void ProxyImpl::NeedsImplSideInvalidation(bool needs_first_draw_on_activation) {
+void ProxyImpl::SetNeedsImplSideInvalidation(
+    bool needs_first_draw_on_activation) {
   DCHECK(IsImplThread());
   scheduler_->SetNeedsImplSideInvalidation(needs_first_draw_on_activation);
 }
 
-void ProxyImpl::NotifyImageDecodeRequestFinished() {
+void ProxyImpl::NotifyImageDecodeRequestFinished(int request_id,
+                                                 bool decode_succeeded) {
   DCHECK(IsImplThread());
-  SetNeedsCommitOnImplThread();
+  if (base::FeatureList::IsEnabled(
+          features::kSendExplicitDecodeRequestsImmediately)) {
+    MainThreadTaskRunner()->PostTask(
+        FROM_HERE,
+        base::BindOnce(&ProxyMain::NotifyImageDecodeRequestFinished,
+                       proxy_main_weak_ptr_, request_id, decode_succeeded));
+  } else {
+    SetNeedsCommitOnImplThread();
+  }
+}
+
+void ProxyImpl::NotifyTransitionRequestFinished(
+    uint32_t sequence_id,
+    const viz::ViewTransitionElementResourceRects& rects) {
+  DCHECK(IsImplThread());
+  MainThreadTaskRunner()->PostTask(
+      FROM_HERE, base::BindOnce(&ProxyMain::NotifyTransitionRequestFinished,
+                                proxy_main_weak_ptr_, sequence_id, rects));
 }
 
 void ProxyImpl::DidPresentCompositorFrameOnImplThread(
     uint32_t frame_token,
     PresentationTimeCallbackBuffer::PendingCallbacks activated,
     const viz::FrameTimingDetails& details) {
-  auto main_thread_callbacks = std::move(activated.main_thread_callbacks);
   host_impl_->NotifyDidPresentCompositorFrameOnImplThread(
-      frame_token, std::move(activated.compositor_thread_callbacks), details);
+      frame_token, std::move(activated.compositor_successful_callbacks),
+      details);
 
   MainThreadTaskRunner()->PostTask(
-      FROM_HERE, base::BindOnce(&ProxyMain::DidPresentCompositorFrame,
-                                proxy_main_weak_ptr_, frame_token,
-                                std::move(main_thread_callbacks),
-                                details.presentation_feedback));
+      FROM_HERE,
+      base::BindOnce(&ProxyMain::DidPresentCompositorFrame,
+                     proxy_main_weak_ptr_, frame_token,
+                     std::move(activated.main_callbacks),
+                     std::move(activated.main_successful_callbacks), details));
   if (scheduler_)
     scheduler_->DidPresentCompositorFrame(frame_token, details);
 }
@@ -644,21 +680,24 @@ void ProxyImpl::NotifyPaintWorkletStateChange(
   scheduler_->NotifyPaintWorkletStateChange(state);
 }
 
-void ProxyImpl::NotifyThroughputTrackerResults(CustomTrackerResults results) {
+void ProxyImpl::NotifyCompositorMetricsTrackerResults(
+    CustomTrackerResults results) {
   DCHECK(IsImplThread());
   MainThreadTaskRunner()->PostTask(
-      FROM_HERE, base::BindOnce(&ProxyMain::NotifyThroughputTrackerResults,
-                                proxy_main_weak_ptr_, std::move(results)));
+      FROM_HERE,
+      base::BindOnce(&ProxyMain::NotifyCompositorMetricsTrackerResults,
+                     proxy_main_weak_ptr_, std::move(results)));
 }
 
 void ProxyImpl::DidObserveFirstScrollDelay(
+    int source_frame_number,
     base::TimeDelta first_scroll_delay,
     base::TimeTicks first_scroll_timestamp) {
   DCHECK(IsImplThread());
   MainThreadTaskRunner()->PostTask(
       FROM_HERE, base::BindOnce(&ProxyMain::DidObserveFirstScrollDelay,
-                                proxy_main_weak_ptr_, first_scroll_delay,
-                                first_scroll_timestamp));
+                                proxy_main_weak_ptr_, source_frame_number,
+                                first_scroll_delay, first_scroll_timestamp));
 }
 
 bool ProxyImpl::WillBeginImplFrame(const viz::BeginFrameArgs& args) {
@@ -687,45 +726,44 @@ void ProxyImpl::ScheduledActionSendBeginMainFrame(
     const viz::BeginFrameArgs& args) {
   DCHECK(IsImplThread());
 
-  if (is_jank_injection_enabled_ && host_impl_->CanInjectJankOnMain()) {
-    jank_injector_.ScheduleJankIfNeeded(args, MainThreadTaskRunner());
-  }
-
   benchmark_instrumentation::ScopedBeginFrameTask begin_frame_task(
       benchmark_instrumentation::kSendBeginFrame,
       args.frame_id.sequence_number);
   std::unique_ptr<BeginMainFrameAndCommitState> begin_main_frame_state(
       new BeginMainFrameAndCommitState);
   begin_main_frame_state->begin_frame_args = args;
-  begin_main_frame_state->commit_data = host_impl_->ProcessCompositorDeltas();
+  DCHECK(!data_for_commit_ || data_for_commit_->unsafe_state->mutator_host);
+  begin_main_frame_state->commit_data = host_impl_->ProcessCompositorDeltas(
+      data_for_commit_ ? data_for_commit_->unsafe_state->mutator_host
+                       : nullptr);
   begin_main_frame_state->completed_image_decode_requests =
       host_impl_->TakeCompletedImageDecodeRequests();
-  begin_main_frame_state->finished_transition_request_sequence_ids =
-      host_impl_->TakeFinishedTransitionRequestSequenceIds();
+  DCHECK(!base::FeatureList::IsEnabled(
+             features::kSendExplicitDecodeRequestsImmediately) ||
+         begin_main_frame_state->completed_image_decode_requests.empty());
   begin_main_frame_state->mutator_events = host_impl_->TakeMutatorEvents();
   begin_main_frame_state->active_sequence_trackers =
       host_impl_->FrameSequenceTrackerActiveTypes();
   begin_main_frame_state->evicted_ui_resources =
       host_impl_->EvictedUIResourcesExist();
-  begin_main_frame_state->trace_id =
-      (0x1llu << 51) |  // Signature bit chosen at random to avoid collisions
-      (args.frame_id.source_id << 32) |
-      (args.frame_id.sequence_number & 0xffffffff);
   host_impl_->WillSendBeginMainFrame();
   {
-    TRACE_EVENT_WITH_FLOW1(
-        "viz,benchmark", "Graphics.Pipeline", TRACE_ID_GLOBAL(args.trace_id),
-        TRACE_EVENT_FLAG_FLOW_IN, "step", "SendBeginMainFrame");
-    TRACE_EVENT_WITH_FLOW0("viz,benchmark",
-                           "MainFrame.SendBeginMainFrameOnImpl",
-                           TRACE_ID_LOCAL(begin_main_frame_state->trace_id),
-                           TRACE_EVENT_FLAG_FLOW_OUT);
+    TRACE_EVENT_INSTANT(
+        "cc,benchmark", "SendBeginMainFrame", [&](perfetto::EventContext ctx) {
+          auto* pipeline = EmitMainFramePipelineStep(
+              ctx, begin_main_frame_state->trace_id,
+              perfetto::protos::pbzero::MainFramePipeline::Step::
+                  SEND_BEGIN_MAIN_FRAME);
+
+          auto* begin_frame_id = pipeline->set_begin_frame_id();
+          begin_frame_id->set_sequence_number(args.frame_id.sequence_number);
+          begin_frame_id->set_source_id(args.frame_id.source_id);
+        });
   }
   MainThreadTaskRunner()->PostTask(
       FROM_HERE,
       base::BindOnce(&ProxyMain::BeginMainFrame, proxy_main_weak_ptr_,
                      std::move(begin_main_frame_state)));
-  host_impl_->DidSendBeginMainFrame(args);
   devtools_instrumentation::DidRequestMainThreadFrame(layer_tree_host_id_);
 }
 
@@ -747,24 +785,56 @@ DrawResult ProxyImpl::ScheduledActionDrawForced() {
   return DrawInternal(forced_draw);
 }
 
-void ProxyImpl::ScheduledActionCommit() {
-  {
-    TRACE_EVENT_WITH_FLOW0(
-        "viz,benchmark", "MainFrame.BeginCommit",
-        TRACE_ID_LOCAL(data_for_commit_->commit_state->trace_id),
-        TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT);
-  }
+void ProxyImpl::ScheduledActionUpdateDisplayTree() {
+  TRACE_EVENT0("cc", "ProxyImpl::ScheduledActionUpdateDisplayTree");
   DCHECK(IsImplThread());
-  DCHECK(base::FeatureList::IsEnabled(features::kNonBlockingCommit) ||
-         IsMainThreadBlocked());
+  DCHECK(host_impl_.get());
+
+  TRACE_EVENT("cc,benchmark", "MainFrame.UpdateDisplayTree",
+              [&](perfetto::EventContext ctx) {
+                EmitMainFramePipelineStep(
+                    ctx, host_impl_->active_tree()->trace_id(),
+                    perfetto::protos::pbzero::MainFramePipeline::Step::
+                        UPDATE_DISPLAY_TREE);
+              });
+
+  // TODO(rockot): Maybe this flag should be renamed to reflect that we hold it
+  // during display tree updates too.
+  base::AutoReset<bool> mark_inside(&inside_draw_, true);
+
+  LayerTreeHostImpl::FrameData frame;
+  frame.begin_frame_ack = scheduler_->CurrentBeginFrameAckForActiveTree();
+  frame.origin_begin_main_frame_args =
+      scheduler_->last_activate_origin_frame_args();
+  host_impl_->UpdateDisplayTree(frame);
+
+  // Tell the main thread that the frame was drawn.
+  if (next_frame_is_newly_committed_frame_) {
+    next_frame_is_newly_committed_frame_ = false;
+    MainThreadTaskRunner()->PostTask(
+        FROM_HERE,
+        base::BindOnce(&ProxyMain::DidCommitAndDrawFrame, proxy_main_weak_ptr_,
+                       host_impl_->active_tree()->source_frame_number()));
+  }
+
+  // The tile visibility/priority of the pending tree needs to be updated so
+  // that it doesn't get activated before the raster is complete.
+  if (host_impl_->pending_tree()) {
+    host_impl_->pending_tree()->UpdateDrawProperties(
+        /*update_tiles=*/true, /*update_image_animation_controller=*/true);
+  }
+}
+
+void ProxyImpl::ScheduledActionCommit() {
+  TRACE_EVENT(
+      "cc,benchmark", "ProxyImpl::Commit", [&](perfetto::EventContext ctx) {
+        EmitMainFramePipelineStep(
+            ctx, data_for_commit_->commit_state->trace_id,
+            perfetto::protos::pbzero::MainFramePipeline::Step::COMMIT_ON_IMPL);
+      });
+  DCHECK(IsImplThread());
   DCHECK(data_for_commit_.get());
   DCHECK(data_for_commit_->IsValid());
-
-  // Relax the cross-thread access restriction to non-thread-safe RefCount.
-  // It's safe since the main thread is blocked while a main-thread-bound
-  // compositor stuff are accessed from the impl thread.
-  base::ScopedAllowCrossThreadRefCountAccess
-      allow_cross_thread_ref_count_access;
 
   auto* commit_state = data_for_commit_->commit_state.get();
   auto* unsafe_state = data_for_commit_->unsafe_state.get();
@@ -790,9 +860,6 @@ void ProxyImpl::ScheduledActionCommit() {
 
 void ProxyImpl::ScheduledActionPostCommit() {
   DCHECK(IsImplThread());
-  TRACE_EVENT_WITH_FLOW0("viz,benchmark", "MainFrame.CommitComplete",
-                         TRACE_ID_LOCAL(host_impl_->sync_tree()->trace_id()),
-                         TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT);
 
   // This is run as a separate step from commit because it can be time-consuming
   // and ought not delay sending the next BeginMainFrame.
@@ -803,10 +870,6 @@ void ProxyImpl::ScheduledActionActivateSyncTree() {
   if (host_impl_->sync_tree() &&
       host_impl_->sync_tree()->source_frame_number() !=
           host_impl_->active_tree()->source_frame_number()) {
-    TRACE_EVENT_WITH_FLOW0(
-        "viz,benchmark", "MainFrame.Activate",
-        TRACE_ID_LOCAL(host_impl_->sync_tree()->trace_id()),
-        TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT);
     next_frame_is_newly_committed_frame_ = true;
   }
   DCHECK(IsImplThread());
@@ -855,13 +918,29 @@ void ProxyImpl::ScheduledActionBeginMainFrameNotExpectedUntil(
                                 proxy_main_weak_ptr_, time));
 }
 
+void ProxyImpl::OnBeginImplFrameDeadline() {
+  DCHECK(IsImplThread());
+  host_impl_->OnBeginImplFrameDeadline();
+}
+
 DrawResult ProxyImpl::DrawInternal(bool forced_draw) {
   DCHECK(IsImplThread());
   DCHECK(host_impl_.get());
 
-  TRACE_EVENT_WITH_FLOW0("viz,benchmark", "MainFrame.Draw",
-                         TRACE_ID_LOCAL(host_impl_->active_tree()->trace_id()),
-                         TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT);
+  TRACE_EVENT(
+      "cc,benchmark", "MainFrame.Draw", [&](perfetto::EventContext ctx) {
+        auto* pipeline = EmitMainFramePipelineStep(
+            ctx, host_impl_->active_tree()->trace_id(),
+            perfetto::protos::pbzero::MainFramePipeline::Step::DRAW);
+        if (next_frame_is_newly_committed_frame_) {
+          viz::BeginFrameId frame_id =
+              host_impl_->CurrentBeginFrameArgs().frame_id;
+          auto* first_draw_frame_id =
+              pipeline->set_last_begin_frame_id_during_first_draw();
+          first_draw_frame_id->set_source_id(frame_id.source_id);
+          first_draw_frame_id->set_sequence_number(frame_id.sequence_number);
+        }
+      });
 
   base::AutoReset<bool> mark_inside(&inside_draw_, true);
 
@@ -883,25 +962,38 @@ DrawResult ProxyImpl::DrawInternal(bool forced_draw) {
   bool draw_frame = false;
 
   DrawResult result;
-  if (host_impl_->CanDraw()) {
-    result = host_impl_->PrepareToDraw(&frame);
-    draw_frame = forced_draw || result == DRAW_SUCCESS;
-  } else {
-    result = DRAW_ABORTED_CANT_DRAW;
-  }
+  {
+    TRACE_EVENT(
+        "viz,benchmark,graphics.pipeline", "Graphics.Pipeline",
+        perfetto::Flow::Global(host_impl_->CurrentBeginFrameArgs().trace_id),
+        [&](perfetto::EventContext ctx) {
+          base::TaskAnnotator::EmitTaskTimingDetails(ctx);
+          auto* event = ctx.event<perfetto::protos::pbzero::ChromeTrackEvent>();
+          auto* data = event->set_chrome_graphics_pipeline();
+          data->set_step(perfetto::protos::pbzero::ChromeGraphicsPipeline::
+                             StepName::STEP_GENERATE_COMPOSITOR_FRAME);
+          data->set_surface_frame_trace_id(
+              host_impl_->CurrentBeginFrameArgs().trace_id);
+        });
 
-  if (draw_frame) {
-    if (absl::optional<LayerTreeHostImpl::SubmitInfo> submit_info =
-            host_impl_->DrawLayers(&frame)) {
-      DCHECK_NE(frame.frame_token, 0u);
-      // Drawing implies we submitted a frame to the LayerTreeFrameSink.
-      scheduler_->DidSubmitCompositorFrame(
-          frame.frame_token, submit_info->time,
-          std::move(submit_info->events_metrics), frame.has_missing_content);
+    if (host_impl_->CanDraw()) {
+      result = host_impl_->PrepareToDraw(&frame);
+      draw_frame = forced_draw || result == DrawResult::kSuccess;
+    } else {
+      result = DrawResult::kAbortedCantDraw;
     }
-    result = DRAW_SUCCESS;
-  } else {
-    DCHECK_NE(DRAW_SUCCESS, result);
+
+    if (draw_frame) {
+      if (std::optional<SubmitInfo> submit_info =
+              host_impl_->DrawLayers(&frame)) {
+        DCHECK_NE(frame.frame_token, 0u);
+        // Drawing implies we submitted a frame to the LayerTreeFrameSink.
+        scheduler_->DidSubmitCompositorFrame(submit_info.value());
+      }
+      result = DrawResult::kSuccess;
+    } else {
+      DCHECK_NE(DrawResult::kSuccess, result);
+    }
   }
 
   host_impl_->DidDrawAllLayers(frame);
@@ -909,21 +1001,24 @@ DrawResult ProxyImpl::DrawInternal(bool forced_draw) {
   bool start_ready_animations = draw_frame;
   host_impl_->UpdateAnimationState(start_ready_animations);
 
-  // Tell the main thread that the newly-commited frame was drawn.
+  // Tell the main thread that the frame was drawn.
   if (next_frame_is_newly_committed_frame_) {
     next_frame_is_newly_committed_frame_ = false;
     MainThreadTaskRunner()->PostTask(
-        FROM_HERE, base::BindOnce(&ProxyMain::DidCommitAndDrawFrame,
-                                  proxy_main_weak_ptr_));
+        FROM_HERE,
+        base::BindOnce(&ProxyMain::DidCommitAndDrawFrame, proxy_main_weak_ptr_,
+                       host_impl_->active_tree()->source_frame_number()));
   }
 
   // The tile visibility/priority of the pending tree needs to be updated so
   // that it doesn't get activated before the raster is complete. But this needs
   // to happen after the draw, off of the critical path to draw.
-  if (host_impl_->pending_tree())
-    host_impl_->pending_tree()->UpdateDrawProperties();
+  if (host_impl_->pending_tree()) {
+    host_impl_->pending_tree()->UpdateDrawProperties(
+        /*update_tiles=*/true, /*update_image_animation_controller=*/true);
+  }
 
-  DCHECK_NE(INVALID_RESULT, result);
+  DCHECK_NE(DrawResult::kInvalidResult, result);
   return result;
 }
 
@@ -939,9 +1034,13 @@ base::SingleThreadTaskRunner* ProxyImpl::MainThreadTaskRunner() {
   return task_runner_provider_->MainThreadTaskRunner();
 }
 
+void ProxyImpl::QueueImageDecodeOnImpl(int request_id,
+                                       std::unique_ptr<DrawImage> image) {
+  host_impl_->QueueImageDecode(request_id, *image);
+}
+
 void ProxyImpl::SetSourceURL(ukm::SourceId source_id, const GURL& url) {
   DCHECK(IsImplThread());
-  is_jank_injection_enabled_ = JankInjector::IsEnabled(url);
   host_impl_->SetActiveURL(url, source_id);
 }
 
@@ -965,6 +1064,12 @@ void ProxyImpl::SetRenderFrameObserver(
   host_impl_->SetRenderFrameObserver(std::move(observer));
 }
 
+void ProxyImpl::DetachInputDelegateAndRenderFrameObserver(
+    CompletionEvent* completion_event) {
+  host_impl_->DetachInputDelegateAndRenderFrameObserver();
+  completion_event->Signal();
+}
+
 ProxyImpl::DataForCommit::DataForCommit(
     std::unique_ptr<ScopedCommitCompletionEvent> commit_completion_event,
     std::unique_ptr<CommitState> commit_state,
@@ -978,9 +1083,7 @@ ProxyImpl::DataForCommit::DataForCommit(
 ProxyImpl::DataForCommit::~DataForCommit() = default;
 
 bool ProxyImpl::DataForCommit::IsValid() const {
-  return commit_completion_event.get() && commit_state.get() && unsafe_state &&
-         (base::FeatureList::IsEnabled(features::kNonBlockingCommit) ||
-          commit_timestamps);
+  return commit_completion_event.get() && commit_state.get() && unsafe_state;
 }
 
 }  // namespace cc

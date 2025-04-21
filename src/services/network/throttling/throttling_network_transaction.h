@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -71,6 +71,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) ThrottlingNetworkTransaction
   void StopCaching() override;
   int64_t GetTotalReceivedBytes() const override;
   int64_t GetTotalSentBytes() const override;
+  int64_t GetReceivedBodyBytes() const override;
   void DoneReading() override;
   const net::HttpResponseInfo* GetResponseInfo() const override;
   net::LoadState GetLoadState() const override;
@@ -89,9 +90,15 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) ThrottlingNetworkTransaction
       net::ResponseHeadersCallback callback) override;
   void SetEarlyResponseHeadersCallback(
       net::ResponseHeadersCallback callback) override;
+  void SetModifyRequestHeadersCallback(
+      base::RepeatingCallback<void(net::HttpRequestHeaders*)> callback)
+      override;
+  void SetIsSharedDictionaryReadAllowedCallback(
+      base::RepeatingCallback<bool()> callback) override;
   int ResumeNetworkStart() override;
   net::ConnectionAttempts GetConnectionAttempts() const override;
   void CloseConnectionOnDestruction() override;
+  bool IsMdlMatchForMetrics() const override;
 
  protected:
   friend class ThrottlingControllerTestHelper;
@@ -122,10 +129,11 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) ThrottlingNetworkTransaction
   // User callback.
   net::CompletionOnceCallback callback_;
 
-  raw_ptr<const net::HttpRequestInfo> request_;
+  // True if Start was already invoked.
+  bool started_ = false;
 
   // True if Fail was already invoked.
-  bool failed_;
+  bool failed_ = false;
 };
 
 }  // namespace network

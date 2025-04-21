@@ -1,6 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "base/trace_event/trace_arguments.h"
 
@@ -14,11 +19,14 @@
 
 #include "base/check_op.h"
 #include "base/json/string_escape.h"
+#include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/trace_event/perfetto_proto_appender.h"
 
 namespace base {
 namespace trace_event {
@@ -99,7 +107,6 @@ const char* TypeToString(unsigned char arg_type) {
       return "convertable";
     default:
       NOTREACHED();
-      return "UNKNOWN_TYPE";
   }
 }
 
@@ -118,8 +125,9 @@ void AppendValueDebugString(const TraceArguments& args,
 
 void StringStorage::Reset(size_t alloc_size) {
   if (!alloc_size) {
-    if (data_)
+    if (data_) {
       ::free(data_);
+    }
     data_ = nullptr;
   } else if (!data_ || alloc_size != data_->size) {
     data_ = static_cast<Data*>(::realloc(data_, sizeof(size_t) + alloc_size));
@@ -138,7 +146,7 @@ bool StringStorage::Contains(const TraceArguments& args) const {
 }
 
 static_assert(
-    std::is_pod<TraceValue>::value,
+    std::is_trivial_v<TraceValue> && std::is_standard_layout_v<TraceValue>,
     "TraceValue must be plain-old-data type for performance reasons!");
 
 void TraceValue::AppendAsJSON(unsigned char type, std::string* out) const {
@@ -170,17 +178,18 @@ void TraceValue::Append(unsigned char type,
       // So as not to lose bits from a 64-bit pointer, output as a hex string.
       // For consistency, do the same for non-JSON strings, but without the
       // surrounding quotes.
-      const char* format_string = as_json ? "\"0x%" PRIx64 "\"" : "0x%" PRIx64;
-      StringAppendF(
-          out, format_string,
+      std::string value = StringPrintf(
+          "0x%" PRIx64,
           static_cast<uint64_t>(reinterpret_cast<uintptr_t>(this->as_pointer)));
+      *out += as_json ? StrCat({"\"", value, "\""}) : std::move(value);
     } break;
     case TRACE_VALUE_TYPE_STRING:
     case TRACE_VALUE_TYPE_COPY_STRING:
-      if (as_json)
+      if (as_json) {
         EscapeJSONString(this->as_string ? this->as_string : "NULL", true, out);
-      else
+      } else {
         *out += this->as_string ? this->as_string : "NULL";
+      }
       break;
     case TRACE_VALUE_TYPE_CONVERTABLE:
       this->as_convertable->AppendAsTraceFormat(out);
@@ -192,7 +201,6 @@ void TraceValue::Append(unsigned char type,
       break;
     default:
       NOTREACHED() << "Don't know how to print this value";
-      break;
   }
 }
 
@@ -208,8 +216,9 @@ TraceArguments::TraceArguments(int num_args,
                                const char* const* arg_names,
                                const unsigned char* arg_types,
                                const unsigned long long* arg_values) {
-  if (num_args > static_cast<int>(kMaxSize))
+  if (num_args > static_cast<int>(kMaxSize)) {
     num_args = static_cast<int>(kMaxSize);
+  }
 
   size_ = static_cast<unsigned char>(num_args);
   for (size_t n = 0; n < size_; ++n) {
@@ -221,8 +230,9 @@ TraceArguments::TraceArguments(int num_args,
 
 void TraceArguments::Reset() {
   for (size_t n = 0; n < size_; ++n) {
-    if (types_[n] == TRACE_VALUE_TYPE_CONVERTABLE)
+    if (types_[n] == TRACE_VALUE_TYPE_CONVERTABLE) {
       delete values_[n].as_convertable;
+    }
   }
   size_ = 0;
 }
@@ -237,14 +247,17 @@ void TraceArguments::CopyStringsTo(StringStorage* storage,
   if (copy_all_strings) {
     alloc_size +=
         GetAllocLength(*extra_string1) + GetAllocLength(*extra_string2);
-    for (size_t n = 0; n < size_; ++n)
+    for (size_t n = 0; n < size_; ++n) {
       alloc_size += GetAllocLength(names_[n]);
+    }
   }
   for (size_t n = 0; n < size_; ++n) {
-    if (copy_all_strings && types_[n] == TRACE_VALUE_TYPE_STRING)
+    if (copy_all_strings && types_[n] == TRACE_VALUE_TYPE_STRING) {
       types_[n] = TRACE_VALUE_TYPE_COPY_STRING;
-    if (types_[n] == TRACE_VALUE_TYPE_COPY_STRING)
+    }
+    if (types_[n] == TRACE_VALUE_TYPE_COPY_STRING) {
       alloc_size += GetAllocLength(values_[n].as_string);
+    }
   }
 
   if (alloc_size) {
@@ -254,26 +267,32 @@ void TraceArguments::CopyStringsTo(StringStorage* storage,
     if (copy_all_strings) {
       CopyTraceEventParameter(&ptr, extra_string1, end);
       CopyTraceEventParameter(&ptr, extra_string2, end);
-      for (size_t n = 0; n < size_; ++n)
+      for (size_t n = 0; n < size_; ++n) {
         CopyTraceEventParameter(&ptr, &names_[n], end);
+      }
     }
     for (size_t n = 0; n < size_; ++n) {
-      if (types_[n] == TRACE_VALUE_TYPE_COPY_STRING)
+      if (types_[n] == TRACE_VALUE_TYPE_COPY_STRING) {
         CopyTraceEventParameter(&ptr, &values_[n].as_string, end);
+      }
     }
 #if DCHECK_IS_ON()
     DCHECK_EQ(end, ptr) << "Overrun by " << ptr - end;
     if (copy_all_strings) {
-      if (extra_string1 && *extra_string1)
+      if (extra_string1 && *extra_string1) {
         DCHECK(storage->Contains(*extra_string1));
-      if (extra_string2 && *extra_string2)
+      }
+      if (extra_string2 && *extra_string2) {
         DCHECK(storage->Contains(*extra_string2));
-      for (size_t n = 0; n < size_; ++n)
+      }
+      for (size_t n = 0; n < size_; ++n) {
         DCHECK(storage->Contains(names_[n]));
+      }
     }
     for (size_t n = 0; n < size_; ++n) {
-      if (types_[n] == TRACE_VALUE_TYPE_COPY_STRING)
+      if (types_[n] == TRACE_VALUE_TYPE_COPY_STRING) {
         DCHECK(storage->Contains(values_[n].as_string));
+      }
     }
 #endif  // DCHECK_IS_ON()
   } else {
@@ -284,21 +303,25 @@ void TraceArguments::CopyStringsTo(StringStorage* storage,
 void TraceArguments::AppendDebugString(std::string* out) {
   *out += "TraceArguments(";
   for (size_t n = 0; n < size_; ++n) {
-    if (n > 0)
+    if (n > 0) {
       *out += ", ";
+    }
     AppendValueDebugString(*this, n, out);
   }
   *out += ")";
 }
 
-#if BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
 void ConvertableToTraceFormat::Add(
     perfetto::protos::pbzero::DebugAnnotation* annotation) const {
+  PerfettoProtoAppender proto_appender(annotation);
+  if (AppendToProto(&proto_appender)) {
+    return;
+  }
+
   std::string json;
   AppendAsTraceFormat(&json);
-  annotation->set_legacy_json_value(json);
+  annotation->set_legacy_json_value(std::move(json));
 }
-#endif  // BUILDFLAG(USE_PERFETTO_CLIENT_LIBRARY)
 
 }  // namespace trace_event
 }  // namespace base

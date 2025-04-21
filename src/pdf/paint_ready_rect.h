@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,18 +17,18 @@ namespace chrome_pdf {
 // ready.
 class PaintReadyRect {
  public:
-  PaintReadyRect(const gfx::Rect& rect,
-                 sk_sp<SkImage> image,
-                 bool flush_now = false);
-
-  PaintReadyRect(const PaintReadyRect& other);
-  PaintReadyRect& operator=(const PaintReadyRect& other);
+  PaintReadyRect(const gfx::Rect& rect, sk_sp<SkImage> image);
+  PaintReadyRect(const gfx::Rect& rect, sk_sp<SkImage> image, bool flush_now);
+  PaintReadyRect(PaintReadyRect&&) noexcept;
+  PaintReadyRect& operator=(PaintReadyRect&&) noexcept;
+  PaintReadyRect(const PaintReadyRect&);
+  PaintReadyRect& operator=(const PaintReadyRect&);
   ~PaintReadyRect();
 
   const gfx::Rect& rect() const { return rect_; }
   void set_rect(const gfx::Rect& rect) { rect_ = rect; }
 
-  const SkImage& image() const { return *image_; }
+  const SkImage* image() const { return image_.get(); }
 
   // Whether to flush to screen immediately; otherwise, when the rest of the
   // plugin viewport is ready.

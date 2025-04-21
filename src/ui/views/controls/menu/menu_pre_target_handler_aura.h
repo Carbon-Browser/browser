@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,6 +49,9 @@ class VIEWS_EXPORT MenuPreTargetHandlerAura
   // ui::EventHandler:
   void OnCancelMode(ui::CancelModeEvent* event) override;
   void OnKeyEvent(ui::KeyEvent* event) override;
+
+  // Return true, if the key event is supposed to perform some task.
+  bool ShouldCancelMenuForEvent(const ui::KeyEvent& event);
 
  private:
   void Cleanup();

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,20 +6,22 @@
 
 #include "base/notreached.h"
 #include "media/formats/hls/playlist.h"
+#include "media/formats/hls/types.h"
 
 namespace media::hls {
 
-types::DecimalInteger CommonParserState::GetVersion() const {
+bool CommonParserState::CheckVersion(
+    types::DecimalInteger expected_version) const {
   if (version_tag.has_value()) {
-    return version_tag.value().version;
+    return expected_version == version_tag->version;
   } else {
-    return Playlist::kDefaultVersion;
+    return expected_version == Playlist::kDefaultVersion;
   }
 }
 
 ParseStatus::Or<M3uTag> CheckM3uTag(SourceLineIterator* src_iter) {
   auto item_result = GetNextLineItem(src_iter);
-  if (item_result.has_error()) {
+  if (!item_result.has_value()) {
     return ParseStatus(ParseStatusCode::kPlaylistMissingM3uTag)
         .AddCause(std::move(item_result).error());
   }
@@ -34,7 +36,7 @@ ParseStatus::Or<M3uTag> CheckM3uTag(SourceLineIterator* src_iter) {
 
     // Make sure the M3U tag parses correctly
     auto result = M3uTag::Parse(*tag_item);
-    if (result.has_error()) {
+    if (!result.has_value()) {
       return ParseStatus(ParseStatusCode::kPlaylistMissingM3uTag)
           .AddCause(std::move(result).error());
     }
@@ -47,12 +49,12 @@ ParseStatus::Or<M3uTag> CheckM3uTag(SourceLineIterator* src_iter) {
 
 void HandleUnknownTag(TagItem /*tag*/) {
   // Unknown tags are ignored for forward-compatibility purposes.
-  // TODO(crbug.com/1266991): Should record a metric to discover common
+  // TODO(crbug.com/40057824): Should record a metric to discover common
   // unrecognized tags.
 }
 
-absl::optional<ParseStatus> ParseCommonTag(TagItem tag,
-                                           CommonParserState* state) {
+std::optional<ParseStatus> ParseCommonTag(TagItem tag,
+                                          CommonParserState* state) {
   DCHECK(tag.GetName() && GetTagKind(*tag.GetName()) == TagKind::kCommonTag);
 
   switch (static_cast<CommonTagName>(*tag.GetName())) {
@@ -65,7 +67,7 @@ absl::optional<ParseStatus> ParseCommonTag(TagItem tag,
     }
     case CommonTagName::kXDefine: {
       auto tag_result = XDefineTag::Parse(tag);
-      if (tag_result.has_error()) {
+      if (!tag_result.has_value()) {
         return std::move(tag_result).error();
       }
       auto tag_value = std::move(tag_result).value();
@@ -96,7 +98,7 @@ absl::optional<ParseStatus> ParseCommonTag(TagItem tag,
       return ParseUniqueTag(tag, state->independent_segments_tag);
     }
     case CommonTagName::kXStart: {
-      // TODO(crbug.com/1266991): Implement the EXT-X-START tag.
+      // TODO(crbug.com/40057824): Implement the EXT-X-START tag.
       break;
     }
     case CommonTagName::kXVersion: {
@@ -104,16 +106,11 @@ absl::optional<ParseStatus> ParseCommonTag(TagItem tag,
       if (error.has_value()) {
         return error;
       }
-
-      // Max supported playlist version is 10
-      if (state->version_tag->version > 10) {
-        return ParseStatusCode::kPlaylistHasUnsupportedVersion;
-      }
       break;
     }
   }
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 ParseStatus::Or<GURL> ParseUri(
@@ -123,7 +120,7 @@ ParseStatus::Or<GURL> ParseUri(
     VariableDictionary::SubstitutionBuffer& sub_buffer) {
   // Variables may appear in URIs, check for any occurrences and resolve them.
   auto uri_str_result = state.variable_dict.Resolve(item.content, sub_buffer);
-  if (uri_str_result.has_error()) {
+  if (!uri_str_result.has_value()) {
     return std::move(uri_str_result).error();
   }
 

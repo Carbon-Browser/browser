@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,12 @@
 #include <string>
 #include <utility>
 
-#include "ash/components/settings/timezone_settings.h"
 #include "base/containers/contains.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "chrome/browser/ash/child_accounts/time_limit_override.h"
 #include "chrome/browser/ash/child_accounts/time_limit_test_utils.h"
+#include "chromeos/ash/components/settings/timezone_settings.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace ash {
@@ -63,22 +63,23 @@ using UsageTimeLimitProcessorInternalTest = testing::Test;
 
 TEST_F(UsageTimeLimitProcessorInternalTest, TimeLimitWindowValid) {
   base::Time last_updated = utils::TimeFromString("1 Jan 1970 00:00:00");
-  base::Value monday_time_limit =
+  base::Value::Dict monday_time_limit =
       utils::CreateTimeWindow(utils::kMonday, base::Minutes(22 * 60 + 30),
                               base::Minutes(7 * 60 + 30), last_updated);
-  base::Value friday_time_limit =
+  base::Value::Dict friday_time_limit =
       utils::CreateTimeWindow(utils::kFriday, base::Hours(23),
                               base::Minutes(8 * 60 + 20), last_updated);
 
-  base::Value window_limit_entries(base::Value::Type::LIST);
+  base::Value::List window_limit_entries;
   window_limit_entries.Append(std::move(monday_time_limit));
   window_limit_entries.Append(std::move(friday_time_limit));
 
-  base::Value time_window_limit = base::Value(base::Value::Type::DICTIONARY);
-  time_window_limit.SetKey("entries", std::move(window_limit_entries));
+  base::Value::Dict time_window_limit;
+  time_window_limit.Set("entries", std::move(window_limit_entries));
 
   // Call tested function.
-  TimeWindowLimit window_limit_struct(time_window_limit);
+  TimeWindowLimit window_limit_struct(
+      base::Value(std::move(time_window_limit)));
 
   ASSERT_TRUE(window_limit_struct.entries[Weekday::kMonday]);
   ASSERT_EQ(window_limit_struct.entries[Weekday::kMonday]
@@ -117,19 +118,19 @@ TEST_F(UsageTimeLimitProcessorInternalTest, TimeUsageWindowValid) {
   // Create dictionary containing the policy information.
   base::Time last_updated_one = utils::TimeFromString("1 Jan 2018 10:00:00");
   base::Time last_updated_two = utils::TimeFromString("1 Jan 2018 11:00:00");
-  base::Value tuesday_time_usage =
+  base::Value::Dict tuesday_time_usage =
       utils::CreateTimeUsage(base::Minutes(120), last_updated_one);
-  base::Value thursday_time_usage =
+  base::Value::Dict thursday_time_usage =
       utils::CreateTimeUsage(base::Minutes(80), last_updated_two);
 
-  base::Value time_usage_limit = base::Value(base::Value::Type::DICTIONARY);
-  time_usage_limit.SetKey("tuesday", std::move(tuesday_time_usage));
-  time_usage_limit.SetKey("thursday", std::move(thursday_time_usage));
-  time_usage_limit.SetKey("reset_at",
-                          utils::CreatePolicyTime(utils::CreateTime(8, 0)));
+  base::Value::Dict time_usage_limit;
+  time_usage_limit.Set("tuesday", std::move(tuesday_time_usage));
+  time_usage_limit.Set("thursday", std::move(thursday_time_usage));
+  time_usage_limit.Set("reset_at",
+                       utils::CreatePolicyTime(utils::CreateTime(8, 0)));
 
   // Call tested functions.
-  TimeUsageLimit usage_limit_struct(time_usage_limit);
+  TimeUsageLimit usage_limit_struct(std::move(time_usage_limit));
 
   ASSERT_EQ(usage_limit_struct.resets_at.InMinutes(), 8 * 60);
 
@@ -138,14 +139,14 @@ TEST_F(UsageTimeLimitProcessorInternalTest, TimeUsageWindowValid) {
                 .usage_quota.InMinutes(),
             120);
   ASSERT_EQ(usage_limit_struct.entries[Weekday::kTuesday].value().last_updated,
-            base::Time::FromDoubleT(1514800800));
+            base::Time::FromSecondsSinceUnixEpoch(1514800800));
 
   ASSERT_EQ(usage_limit_struct.entries[Weekday::kThursday]
                 .value()
                 .usage_quota.InMinutes(),
             80);
   ASSERT_EQ(usage_limit_struct.entries[Weekday::kThursday].value().last_updated,
-            base::Time::FromDoubleT(1514804400));
+            base::Time::FromSecondsSinceUnixEpoch(1514804400));
 
   // Assert that weekdays without time_usage_limits are not set.
   ASSERT_FALSE(usage_limit_struct.entries[Weekday::kMonday]);
@@ -162,24 +163,22 @@ TEST_F(UsageTimeLimitProcessorInternalTest, OverrideValid) {
   // Create policy information.
   std::string created_at_millis =
       utils::CreatePolicyTimestamp("1 Jan 2018 10:00:00");
-  base::Value override_one = base::Value(base::Value::Type::DICTIONARY);
-  override_one.SetKey("action",
-                      ValueFromAction(TimeLimitOverride::Action::kUnlock));
-  override_one.SetKey("created_at_millis", base::Value(created_at_millis));
+  base::Value::Dict override_one;
+  override_one.Set("action",
+                   ValueFromAction(TimeLimitOverride::Action::kUnlock));
+  override_one.Set("created_at_millis", created_at_millis);
 
-  base::Value override_two = base::Value(base::Value::Type::DICTIONARY);
-  override_two.SetKey("action",
-                      ValueFromAction(TimeLimitOverride::Action::kLock));
-  override_two.SetKey(
-      "created_at_millis",
-      base::Value(utils::CreatePolicyTimestamp("1 Jan 2018 9:00:00")));
+  base::Value::Dict override_two;
+  override_two.Set("action", ValueFromAction(TimeLimitOverride::Action::kLock));
+  override_two.Set("created_at_millis",
+                   utils::CreatePolicyTimestamp("1 Jan 2018 9:00:00"));
 
-  base::Value overrides(base::Value::Type::LIST);
+  base::Value::List overrides;
   overrides.Append(std::move(override_one));
   overrides.Append(std::move(override_two));
 
   // Call tested functions.
-  absl::optional<TimeLimitOverride> override_struct =
+  std::optional<TimeLimitOverride> override_struct =
       TimeLimitOverride::MostRecentFromList(&overrides);
 
   // Assert right fields are set.
@@ -197,36 +196,33 @@ TEST_F(UsageTimeLimitProcessorInternalTest, OverrideWithDurationValid) {
   // Create policy information.
   std::string created_at_millis =
       utils::CreatePolicyTimestamp("1 Jan 2018 10:00:00");
-  base::Value action_specific_data = base::Value(base::Value::Type::DICTIONARY);
-  action_specific_data.SetKey("duration_mins", base::Value(30));
+  base::Value::Dict action_specific_data;
+  action_specific_data.Set("duration_mins", 30);
 
-  base::Value override_one = base::Value(base::Value::Type::DICTIONARY);
-  override_one.SetKey("action",
-                      ValueFromAction(TimeLimitOverride::Action::kUnlock));
-  override_one.SetKey("created_at_millis", base::Value(created_at_millis));
-  override_one.SetKey("action_specific_data", std::move(action_specific_data));
+  base::Value::Dict override_one;
+  override_one.Set("action",
+                   ValueFromAction(TimeLimitOverride::Action::kUnlock));
+  override_one.Set("created_at_millis", created_at_millis);
+  override_one.Set("action_specific_data", std::move(action_specific_data));
 
-  base::Value override_two = base::Value(base::Value::Type::DICTIONARY);
-  override_two.SetKey("action",
-                      ValueFromAction(TimeLimitOverride::Action::kLock));
-  override_two.SetKey(
-      "created_at_millis",
-      base::Value(utils::CreatePolicyTimestamp("1 Jan 2018 9:00:00")));
+  base::Value::Dict override_two;
+  override_two.Set("action", ValueFromAction(TimeLimitOverride::Action::kLock));
+  override_two.Set("created_at_millis",
+                   utils::CreatePolicyTimestamp("1 Jan 2018 9:00:00"));
 
-  base::Value override_three = base::Value(base::Value::Type::DICTIONARY);
-  override_three.SetKey("action",
-                        ValueFromAction(TimeLimitOverride::Action::kLock));
-  override_three.SetKey(
-      "created_at_millis",
-      base::Value(utils::CreatePolicyTimestamp("1 Jan 2018 8:00:00")));
+  base::Value::Dict override_three;
+  override_three.Set("action",
+                     ValueFromAction(TimeLimitOverride::Action::kLock));
+  override_three.Set("created_at_millis",
+                     utils::CreatePolicyTimestamp("1 Jan 2018 8:00:00"));
 
-  base::Value overrides(base::Value::Type::LIST);
+  base::Value::List overrides;
   overrides.Append(std::move(override_one));
   overrides.Append(std::move(override_two));
   overrides.Append(std::move(override_three));
 
   // Call tested functions.
-  absl::optional<TimeLimitOverride> override_struct =
+  std::optional<TimeLimitOverride> override_struct =
       TimeLimitOverride::MostRecentFromList(&overrides);
 
   // Assert right fields are set.
@@ -243,40 +239,39 @@ TEST_F(UsageTimeLimitProcessorInternalTest, OverrideWithDurationValid) {
 // different sizes.
 TEST_F(UsageTimeLimitProcessorInternalTest, MultipleOverrides) {
   // Create policy information.
-  base::Value override_one = base::Value(base::Value::Type::DICTIONARY);
-  override_one.SetKey("action",
-                      ValueFromAction(TimeLimitOverride::Action::kUnlock));
-  override_one.SetKey("created_at_millis", base::Value("1000000"));
+  base::Value::Dict override_one;
+  override_one.Set("action",
+                   ValueFromAction(TimeLimitOverride::Action::kUnlock));
+  override_one.Set("created_at_millis", "1000000");
 
-  base::Value override_two = base::Value(base::Value::Type::DICTIONARY);
-  override_two.SetKey("action",
-                      ValueFromAction(TimeLimitOverride::Action::kLock));
-  override_two.SetKey("created_at_millis", base::Value("999999"));
+  base::Value::Dict override_two;
+  override_two.Set("action", ValueFromAction(TimeLimitOverride::Action::kLock));
+  override_two.Set("created_at_millis", "999999");
 
-  base::Value override_three = base::Value(base::Value::Type::DICTIONARY);
-  override_two.SetKey("action",
-                      ValueFromAction(TimeLimitOverride::Action::kLock));
-  override_two.SetKey("created_at_millis", base::Value("900000"));
+  base::Value::Dict override_three;
+  override_two.Set("action", ValueFromAction(TimeLimitOverride::Action::kLock));
+  override_two.Set("created_at_millis", "900000");
 
-  base::Value override_four = base::Value(base::Value::Type::DICTIONARY);
-  override_two.SetKey("action",
-                      ValueFromAction(TimeLimitOverride::Action::kUnlock));
-  override_two.SetKey("created_at_millis", base::Value("1200000"));
+  base::Value::Dict override_four;
+  override_two.Set("action",
+                   ValueFromAction(TimeLimitOverride::Action::kUnlock));
+  override_two.Set("created_at_millis", "1200000");
 
-  base::Value overrides(base::Value::Type::LIST);
+  base::Value::List overrides;
   overrides.Append(std::move(override_one));
   overrides.Append(std::move(override_two));
   overrides.Append(std::move(override_three));
   overrides.Append(std::move(override_four));
 
   // Call tested functions.
-  absl::optional<TimeLimitOverride> override_struct =
+  std::optional<TimeLimitOverride> override_struct =
       TimeLimitOverride::MostRecentFromList(&overrides);
 
   // Assert right fields are set.
   ASSERT_TRUE(override_struct.has_value());
   EXPECT_EQ(override_struct->action(), TimeLimitOverride::Action::kUnlock);
-  EXPECT_EQ(override_struct->created_at(), base::Time::FromJavaTime(1200000));
+  EXPECT_EQ(override_struct->created_at(),
+            base::Time::FromMillisecondsSinceUnixEpoch(1200000));
   EXPECT_FALSE(override_struct->duration());
 }
 
@@ -291,7 +286,8 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateOnlyTimeWindowLimitSet) {
 
   // Set up policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 10:00 GMT+0300");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
 
   utils::AddTimeWindowLimit(&policy, utils::kSunday, utils::CreateTime(22, 0),
                             utils::CreateTime(7, 30), last_updated);
@@ -313,7 +309,7 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateOnlyTimeWindowLimitSet) {
   base::Time time_one = utils::TimeFromString("Mon, 1 Jan 2018 20:00 GMT+0300");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Minutes(0), time_one,
-               time_one, timezone.get(), absl::nullopt);
+               time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = false;
@@ -365,7 +361,8 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateOnlyTimeUsageLimitSet) {
 
   // Set up policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(8, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(8, 0));
 
   utils::AddTimeUsageLimit(&policy, utils::kTuesday, base::Hours(2),
                            last_updated);
@@ -376,7 +373,7 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateOnlyTimeUsageLimitSet) {
   base::Time time_one = utils::TimeFromString("Mon, 1 Jan 2018 20:00");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Minutes(120),
-               time_one, time_one, timezone.get(), absl::nullopt);
+               time_one, time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = false;
@@ -433,7 +430,8 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateWithTimeUsageAndWindowLimitActive) {
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(8, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(8, 0));
 
   utils::AddTimeWindowLimit(&policy, utils::kMonday, utils::CreateTime(21, 0),
                             utils::CreateTime(8, 30), last_updated);
@@ -447,7 +445,7 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateWithTimeUsageAndWindowLimitActive) {
   base::Time time_one = utils::TimeFromString("Mon, 1 Jan 2018 14:00");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Minutes(80),
-               time_one, time_one, timezone.get(), absl::nullopt);
+               time_one, time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = false;
@@ -524,14 +522,15 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateFirstExecutionLockByUsageLimit) {
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("5 Jan 2018 8:00 PST");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeUsageLimit(&policy, utils::kFriday, base::Hours(1),
                            last_updated);
 
   base::Time time_one = utils::TimeFromString("Fri, 5 Jan 2018 15:00 PST");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Hours(1), time_one,
-               time_one, timezone.get(), absl::nullopt);
+               time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = true;
@@ -552,14 +551,14 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateFirstExecutionLockByUsageLimit) {
 TEST_F(UsageTimeLimitProcessorTest, GetStateWithOverrideLock) {
   std::unique_ptr<icu::TimeZone> timezone(icu::TimeZone::createTimeZone("GMT"));
 
-  base::Value policy = base::Value(base::Value::Type::DICTIONARY);
+  base::Value::Dict policy;
   utils::AddOverride(&policy, TimeLimitOverride::Action::kLock,
                      utils::TimeFromString("Mon, 1 Jan 2018 15:00"));
 
   base::Time time_one = utils::TimeFromString("Mon, 1 Jan 2018 15:05");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Minutes(0), time_one,
-               time_one, timezone.get(), absl::nullopt);
+               time_one, timezone.get(), std::nullopt);
 
   // Check that the device is locked until next morning.
   State expected_state_one;
@@ -580,7 +579,8 @@ TEST_F(UsageTimeLimitProcessorTest,
        GetStateWithOverrideLockFollowedByWindowLimit) {
   std::unique_ptr<icu::TimeZone> timezone(icu::TimeZone::createTimeZone("GMT"));
 
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeWindowLimit(&policy, utils::kMonday, utils::CreateTime(22, 0),
                             utils::CreateTime(9, 0),
                             utils::TimeFromString("Mon, 1 Jan 2018 00:00"));
@@ -590,7 +590,7 @@ TEST_F(UsageTimeLimitProcessorTest,
   base::Time time_one = utils::TimeFromString("Mon, 1 Jan 2018 15:05");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Minutes(0), time_one,
-               time_one, timezone.get(), absl::nullopt);
+               time_one, timezone.get(), std::nullopt);
 
   // Check that the device is locked until end of window limit.
   State expected_state_one;
@@ -633,7 +633,7 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateUpdateUnlockedTimeWindowLimit) {
   // Setup policy.
   base::Time last_updated =
       utils::TimeFromString("Mon, 1 Jan 2018 8:00 GMT+0800");
-  base::Value policy = base::Value(base::Value::Type::DICTIONARY);
+  base::Value::Dict policy;
   utils::AddTimeWindowLimit(&policy, utils::kMonday, utils::CreateTime(18, 0),
                             utils::CreateTime(7, 30), last_updated);
   utils::AddOverride(&policy, TimeLimitOverride::Action::kUnlock,
@@ -643,7 +643,7 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateUpdateUnlockedTimeWindowLimit) {
   base::Time time_one = utils::TimeFromString("Mon, 1 Jan 2018 18:35 GMT+0800");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Minutes(120),
-               time_one, time_one, timezone.get(), absl::nullopt);
+               time_one, time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = false;
@@ -687,7 +687,8 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateOverrideTimeWindowLimitOnly) {
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 PST");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(8, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(8, 0));
   utils::AddTimeWindowLimit(&policy, utils::kMonday, utils::CreateTime(21, 0),
                             utils::CreateTime(10, 0), last_updated);
   utils::AddTimeUsageLimit(&policy, utils::kMonday, base::Hours(1),
@@ -698,7 +699,7 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateOverrideTimeWindowLimitOnly) {
   base::Time time_one = utils::TimeFromString("Mon, 1 Jan 2018 22:10 PST");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Minutes(40),
-               time_one, time_one, timezone.get(), absl::nullopt);
+               time_one, time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = false;
@@ -740,14 +741,15 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateOverrideTimeUsageLimit) {
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 PST");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeUsageLimit(&policy, utils::kSunday, base::Minutes(60),
                            last_updated);
 
   base::Time time_one = utils::TimeFromString("Sun, 7 Jan 2018 15:00 PST");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Minutes(40),
-               time_one, time_one, timezone.get(), absl::nullopt);
+               time_one, time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = false;
@@ -809,7 +811,8 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateOldLockOverride) {
   std::unique_ptr<icu::TimeZone> timezone(icu::TimeZone::createTimeZone("PST"));
 
   // Setup policy.
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddOverride(&policy, TimeLimitOverride::Action::kLock,
                      utils::TimeFromString("Mon, 1 Jan 2018 21:00 PST"));
 
@@ -817,7 +820,7 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateOldLockOverride) {
   base::Time time_one = utils::TimeFromString("Mon, 1 Jan 2018 21:00 PST");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Minutes(40),
-               time_one, time_one, timezone.get(), absl::nullopt);
+               time_one, time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = true;
@@ -872,7 +875,8 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateDefaultBedtime) {
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 PST");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeWindowLimit(&policy, utils::kMonday, utils::CreateTime(21, 0),
                             utils::CreateTime(7, 0), last_updated);
   utils::AddTimeWindowLimit(&policy, utils::kTuesday, utils::CreateTime(21, 0),
@@ -906,7 +910,7 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateDefaultBedtime) {
 
     State night_state =
         GetState(policy, nullptr /* local_override */, base::Minutes(40),
-                 night_time, night_time, timezone.get(), absl::nullopt);
+                 night_time, night_time, timezone.get(), std::nullopt);
 
     State expected_night_state;
     expected_night_state.is_locked = true;
@@ -921,7 +925,7 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateDefaultBedtime) {
 
     State morning_state =
         GetState(policy, nullptr /* local_override */, base::Minutes(40),
-                 morning_time, night_time, timezone.get(), absl::nullopt);
+                 morning_time, night_time, timezone.get(), std::nullopt);
 
     State expected_morning_state;
     expected_morning_state.is_locked = true;
@@ -942,7 +946,8 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateDefaultDailyLimit) {
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 PST");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeUsageLimit(&policy, utils::kMonday, base::Hours(3),
                            last_updated);
   utils::AddTimeUsageLimit(&policy, utils::kTuesday, base::Hours(3),
@@ -974,7 +979,7 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateDefaultDailyLimit) {
 
     State night_state =
         GetState(policy, nullptr /* local_override */, base::Hours(3),
-                 night_time, night_time, timezone.get(), absl::nullopt);
+                 night_time, night_time, timezone.get(), std::nullopt);
 
     State expected_night_state;
     expected_night_state.is_locked = true;
@@ -1012,7 +1017,8 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateWithPreviousDayTimeWindowLimit) {
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 GMT");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(8, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(8, 0));
   utils::AddTimeWindowLimit(&policy, utils::kSaturday, utils::CreateTime(21, 0),
                             utils::CreateTime(8, 30), last_updated);
 
@@ -1020,7 +1026,7 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateWithPreviousDayTimeWindowLimit) {
   base::Time time_one = utils::TimeFromString("Sun, 7 Jan 2018 8:00 GMT");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Minutes(80),
-               time_one, time_one, timezone.get(), absl::nullopt);
+               time_one, time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = true;
@@ -1041,7 +1047,8 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateWithPreviousDayTimeUsageLimit) {
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 GMT");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeUsageLimit(&policy, utils::kSaturday, base::Hours(2),
                            last_updated);
 
@@ -1049,7 +1056,7 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateWithPreviousDayTimeUsageLimit) {
   base::Time time_one = utils::TimeFromString("Sun, 7 Jan 2018 4:00 GMT");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Hours(2), time_one,
-               time_one, timezone.get(), absl::nullopt);
+               time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = true;
@@ -1072,7 +1079,8 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateWithWeekendTimeUsageLimit) {
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 PST");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeUsageLimit(&policy, utils::kSaturday, base::Hours(2),
                            last_updated);
 
@@ -1080,7 +1088,7 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateWithWeekendTimeUsageLimit) {
   base::Time time_one = utils::TimeFromString("Sat, 6 Jan 2018 20:00 PST");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Hours(2), time_one,
-               time_one, timezone.get(), absl::nullopt);
+               time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = true;
@@ -1104,7 +1112,8 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateLockOverrideFollowedByBedtime) {
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 PST");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeWindowLimit(&policy, utils::kMonday, utils::CreateTime(18, 0),
                             utils::CreateTime(20, 0), last_updated);
   utils::AddOverride(&policy, TimeLimitOverride::Action::kLock,
@@ -1114,7 +1123,7 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateLockOverrideFollowedByBedtime) {
   base::Time time_one = utils::TimeFromString("Mon, 1 Jan 2018 15:00 PST");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Minutes(60),
-               time_one, time_one, timezone.get(), absl::nullopt);
+               time_one, time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = true;
@@ -1169,7 +1178,8 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateUnlockLockDuringBedtime) {
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 PST");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeWindowLimit(&policy, utils::kMonday, utils::CreateTime(10, 0),
                             utils::CreateTime(20, 0), last_updated);
   utils::AddOverride(&policy, TimeLimitOverride::Action::kUnlock,
@@ -1179,7 +1189,7 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateUnlockLockDuringBedtime) {
   base::Time time_one = utils::TimeFromString("Mon, 1 Jan 2018 12:00 PST");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Minutes(60),
-               time_one, time_one, timezone.get(), absl::nullopt);
+               time_one, time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = false;
@@ -1237,7 +1247,8 @@ TEST_F(UsageTimeLimitProcessorTest,
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 PST");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeWindowLimit(&policy, utils::kMonday, utils::CreateTime(22, 0),
                             utils::CreateTime(10, 0), last_updated);
   utils::AddOverrideWithDuration(
@@ -1248,7 +1259,7 @@ TEST_F(UsageTimeLimitProcessorTest,
   base::Time time_one = utils::TimeFromString("Mon, 1 Jan 2018 22:00 PST");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Minutes(60),
-               time_one, time_one, timezone.get(), absl::nullopt);
+               time_one, time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = false;
@@ -1264,7 +1275,7 @@ TEST_F(UsageTimeLimitProcessorTest,
   base::Time time_two = utils::TimeFromString("Mon, 1 Jan 2018 22:15 PST");
   State state_two =
       GetState(policy, nullptr /* local_override */, base::Minutes(60),
-               time_two, time_two, timezone.get(), absl::nullopt);
+               time_two, time_two, timezone.get(), std::nullopt);
 
   State expected_state_two;
   expected_state_two.is_locked = true;
@@ -1286,7 +1297,8 @@ TEST_F(UsageTimeLimitProcessorTest,
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 GMT");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeWindowLimit(&policy, utils::kMonday, utils::CreateTime(22, 0),
                             utils::CreateTime(5, 0), last_updated);
   utils::AddOverrideWithDuration(
@@ -1296,7 +1308,7 @@ TEST_F(UsageTimeLimitProcessorTest,
   base::Time time = utils::TimeFromString("Mon, 1 Jan 2018 22:35 GMT");
   State state =
       GetState(policy, nullptr /* local_override */, base::Minutes(60), time,
-               time, timezone.get(), absl::nullopt);
+               time, timezone.get(), std::nullopt);
 
   // Check that the device is locked until 6AM.
   State expected_state;
@@ -1319,7 +1331,8 @@ TEST_F(UsageTimeLimitProcessorTest,
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 PST");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeWindowLimit(&policy, utils::kMonday, utils::CreateTime(22, 0),
                             utils::CreateTime(10, 0), last_updated);
   utils::AddTimeWindowLimit(&policy, utils::kTuesday, utils::CreateTime(10, 0),
@@ -1334,7 +1347,7 @@ TEST_F(UsageTimeLimitProcessorTest,
   base::Time time_one = utils::TimeFromString("Mon, 1 Jan 2018 22:00 PST");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Minutes(60),
-               time_one, time_one, timezone.get(), absl::nullopt);
+               time_one, time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = false;
@@ -1350,7 +1363,7 @@ TEST_F(UsageTimeLimitProcessorTest,
   base::Time time_two = utils::TimeFromString("Mon, 1 Jan 2018 22:15 PST");
   State state_two =
       GetState(policy, nullptr /* local_override */, base::Minutes(60),
-               time_two, time_two, timezone.get(), absl::nullopt);
+               time_two, time_two, timezone.get(), std::nullopt);
 
   State expected_state_two;
   expected_state_two.is_locked = true;
@@ -1368,7 +1381,7 @@ TEST_F(UsageTimeLimitProcessorTest,
   base::Time time_three = utils::TimeFromString("Tue, 2 Jan 2018 6:00 PST");
   State state_three =
       GetState(policy, nullptr /* local_override */, base::Minutes(60),
-               time_three, time_three, timezone.get(), absl::nullopt);
+               time_three, time_three, timezone.get(), std::nullopt);
 
   State expected_state_three;
   expected_state_three.is_locked = true;
@@ -1390,7 +1403,8 @@ TEST_F(UsageTimeLimitProcessorTest,
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 GMT");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeUsageLimit(&policy, utils::kThursday, base::Hours(2),
                            last_updated);
 
@@ -1398,7 +1412,7 @@ TEST_F(UsageTimeLimitProcessorTest,
   base::Time time_one = utils::TimeFromString("Thu, 4 Jan 2018 9:45 GMT");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Minutes(105),
-               time_one, time_one, timezone.get(), absl::nullopt);
+               time_one, time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = false;
@@ -1461,7 +1475,8 @@ TEST_F(UsageTimeLimitProcessorTest,
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 PST");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeUsageLimit(&policy, utils::kMonday, base::Hours(2),
                            last_updated);
 
@@ -1469,7 +1484,7 @@ TEST_F(UsageTimeLimitProcessorTest,
   base::Time time_one = utils::TimeFromString("Mon, 1 Jan 2018 9:45 PST");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Minutes(105),
-               time_one, time_one, timezone.get(), absl::nullopt);
+               time_one, time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = false;
@@ -1532,7 +1547,8 @@ TEST_F(UsageTimeLimitProcessorTest,
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 GMT");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeWindowLimit(&policy, utils::kSaturday, utils::CreateTime(10, 0),
                             utils::CreateTime(4, 0), last_updated);
   utils::AddTimeUsageLimit(&policy, utils::kSaturday, base::Hours(2),
@@ -1542,7 +1558,7 @@ TEST_F(UsageTimeLimitProcessorTest,
   base::Time time_one = utils::TimeFromString("Sat, 6 Jan 2018 9:45 GMT");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Minutes(105),
-               time_one, time_one, timezone.get(), absl::nullopt);
+               time_one, time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = false;
@@ -1605,7 +1621,8 @@ TEST_F(UsageTimeLimitProcessorTest,
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 BRT");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeWindowLimit(&policy, utils::kWednesday,
                             utils::CreateTime(22, 0), utils::CreateTime(10, 0),
                             last_updated);
@@ -1616,7 +1633,7 @@ TEST_F(UsageTimeLimitProcessorTest,
   base::Time time_one = utils::TimeFromString("Wed, 3 Jan 2018 9:45 BRT");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Minutes(105),
-               time_one, time_one, timezone.get(), absl::nullopt);
+               time_one, time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = false;
@@ -1679,7 +1696,8 @@ TEST_F(UsageTimeLimitProcessorTest,
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("2 Jan 2018 8:00 BRT");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeWindowLimit(&policy, utils::kTuesday, utils::CreateTime(22, 0),
                             utils::CreateTime(10, 0), last_updated);
   utils::AddOverrideWithDuration(
@@ -1690,7 +1708,7 @@ TEST_F(UsageTimeLimitProcessorTest,
   base::Time time_one = utils::TimeFromString("Tue, 2 Jan 2018 22:45 BRT");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Hours(2), time_one,
-               time_one, timezone.get(), absl::nullopt);
+               time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = false;
@@ -1706,7 +1724,7 @@ TEST_F(UsageTimeLimitProcessorTest,
   base::Time time_two = utils::TimeFromString("Tue, 2 Jan 2018 23:00 BRT");
   State state_two =
       GetState(policy, nullptr /* local_override */, base::Hours(2), time_two,
-               time_two, timezone.get(), absl::nullopt);
+               time_two, timezone.get(), std::nullopt);
 
   State expected_state_two;
   expected_state_two.is_locked = true;
@@ -1729,7 +1747,8 @@ TEST_F(UsageTimeLimitProcessorTest,
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 PST");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeUsageLimit(&policy, utils::kMonday, base::Hours(2),
                            last_updated);
 
@@ -1737,7 +1756,7 @@ TEST_F(UsageTimeLimitProcessorTest,
   base::Time time_one = utils::TimeFromString("Mon, 1 Jan 2018 10:00 PST");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Hours(2), time_one,
-               time_one, timezone.get(), absl::nullopt);
+               time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = true;
@@ -1801,7 +1820,8 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateUpdateUnlockOverrideWithDuration) {
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 BRT");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeUsageLimit(&policy, utils::kSaturday, base::Hours(2),
                            last_updated);
 
@@ -1809,7 +1829,7 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateUpdateUnlockOverrideWithDuration) {
   base::Time time_one = utils::TimeFromString("Sat, 6 Jan 2018 9:45 BRT");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Minutes(105),
-               time_one, time_one, timezone.get(), absl::nullopt);
+               time_one, time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = false;
@@ -1873,7 +1893,8 @@ TEST_F(UsageTimeLimitProcessorTest,
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 GMT");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeWindowLimit(&policy, utils::kWednesday,
                             utils::CreateTime(22, 0), utils::CreateTime(10, 0),
                             last_updated);
@@ -1885,7 +1906,7 @@ TEST_F(UsageTimeLimitProcessorTest,
   base::Time time_one = utils::TimeFromString("Wed, 3 Jan 2018 22:00 GMT");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Minutes(60),
-               time_one, time_one, timezone.get(), absl::nullopt);
+               time_one, time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = false;
@@ -1904,7 +1925,7 @@ TEST_F(UsageTimeLimitProcessorTest,
                             time_two);
   State state_two =
       GetState(policy, nullptr /* local_override */, base::Minutes(60),
-               time_two, time_two, timezone.get(), absl::nullopt);
+               time_two, time_two, timezone.get(), std::nullopt);
 
   State expected_state_two;
   expected_state_two.is_locked = false;
@@ -1925,7 +1946,8 @@ TEST_F(UsageTimeLimitProcessorTest,
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 PST");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeUsageLimit(&policy, utils::kSunday, base::Hours(2),
                            last_updated);
 
@@ -1933,7 +1955,7 @@ TEST_F(UsageTimeLimitProcessorTest,
   base::Time time_one = utils::TimeFromString("Sun, 7 Jan 2018 9:45 PST");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Minutes(105),
-               time_one, time_one, timezone.get(), absl::nullopt);
+               time_one, time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = false;
@@ -1994,7 +2016,8 @@ TEST_F(UsageTimeLimitProcessorTest,
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 PST");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeWindowLimit(&policy, utils::kMonday, utils::CreateTime(22, 0),
                             utils::CreateTime(10, 0), last_updated);
   utils::AddOverrideWithDuration(
@@ -2005,7 +2028,7 @@ TEST_F(UsageTimeLimitProcessorTest,
   base::Time time_one = utils::TimeFromString("Tue, 2 Jan 2018 0:15 PST");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Minutes(60),
-               time_one, time_one, timezone.get(), absl::nullopt);
+               time_one, time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = false;
@@ -2023,7 +2046,7 @@ TEST_F(UsageTimeLimitProcessorTest,
                             utils::CreateTime(10, 0), time_two);
   State state_two =
       GetState(policy, nullptr /* local_override */, base::Minutes(60),
-               time_two, time_two, timezone.get(), absl::nullopt);
+               time_two, time_two, timezone.get(), std::nullopt);
 
   State expected_state_two;
   expected_state_two.is_locked = true;
@@ -2046,7 +2069,8 @@ TEST_F(UsageTimeLimitProcessorTest,
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 PST");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeUsageLimit(&policy, utils::kFriday, base::Hours(2),
                            last_updated);
 
@@ -2054,7 +2078,7 @@ TEST_F(UsageTimeLimitProcessorTest,
   base::Time time_one = utils::TimeFromString("Fri, 5 Jan 2018 9:45 PST");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Minutes(105),
-               time_one, time_one, timezone.get(), absl::nullopt);
+               time_one, time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = false;
@@ -2115,7 +2139,8 @@ TEST_F(UsageTimeLimitProcessorTest,
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 GMT");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeWindowLimit(&policy, utils::kWednesday,
                             utils::CreateTime(22, 0), utils::CreateTime(10, 0),
                             last_updated);
@@ -2127,7 +2152,7 @@ TEST_F(UsageTimeLimitProcessorTest,
   base::Time time_one = utils::TimeFromString("Wed, 3 Jan 2018 22:15 GMT");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Minutes(60),
-               time_one, time_one, timezone.get(), absl::nullopt);
+               time_one, time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = false;
@@ -2143,7 +2168,7 @@ TEST_F(UsageTimeLimitProcessorTest,
   base::Time time_two = utils::TimeFromString("Wed, 3 Jan 2018 22:30 GMT");
   State state_two =
       GetState(policy, nullptr /* local_override */, base::Minutes(60),
-               time_two, time_two, timezone.get(), absl::nullopt);
+               time_two, time_two, timezone.get(), std::nullopt);
 
   State expected_state_two;
   expected_state_two.is_locked = true;
@@ -2164,7 +2189,7 @@ TEST_F(UsageTimeLimitProcessorTest,
                             time_three);
   State state_three =
       GetState(policy, nullptr /* local_override */, base::Hours(2), time_three,
-               time_three, timezone.get(), absl::nullopt);
+               time_three, timezone.get(), std::nullopt);
 
   State expected_state_three;
   expected_state_three.is_locked = false;
@@ -2185,7 +2210,8 @@ TEST_F(UsageTimeLimitProcessorTest,
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 BRT");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeUsageLimit(&policy, utils::kThursday, base::Hours(2),
                            last_updated);
 
@@ -2193,7 +2219,7 @@ TEST_F(UsageTimeLimitProcessorTest,
   base::Time time_one = utils::TimeFromString("Thu, 4 Jan 2018 10:00 BRT");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Hours(2), time_one,
-               time_one, timezone.get(), absl::nullopt);
+               time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = true;
@@ -2260,7 +2286,8 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateIncreaseUsageLimitAfterLocked) {
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 BRT");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeUsageLimit(&policy, utils::kWednesday, base::Hours(2),
                            last_updated);
 
@@ -2268,7 +2295,7 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateIncreaseUsageLimitAfterLocked) {
   base::Time time_one = utils::TimeFromString("Wed, 3 Jan 2018 14:00 BRT");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Hours(2), time_one,
-               time_one, timezone.get(), absl::nullopt);
+               time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = true;
@@ -2359,7 +2386,8 @@ TEST_F(UsageTimeLimitProcessorTest,
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 BRT");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeUsageLimit(&policy, utils::kWednesday, base::Hours(0),
                            last_updated);
   utils::AddTimeUsageLimit(&policy, utils::kThursday, base::Hours(0),
@@ -2371,7 +2399,7 @@ TEST_F(UsageTimeLimitProcessorTest,
   base::Time time_one = utils::TimeFromString("Wed, 3 Jan 2018 7:00 BRT");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Hours(0), time_one,
-               time_one, timezone.get(), absl::nullopt);
+               time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = true;
@@ -2471,7 +2499,8 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateUnlockConsecutiveLockedAllDay) {
 
   // Setup policy.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 BRT");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeUsageLimit(&policy, utils::kWednesday, base::Hours(0),
                            last_updated);
   utils::AddTimeUsageLimit(&policy, utils::kThursday, base::Hours(0),
@@ -2481,7 +2510,7 @@ TEST_F(UsageTimeLimitProcessorTest, GetStateUnlockConsecutiveLockedAllDay) {
   base::Time time_one = utils::TimeFromString("Wed, 3 Jan 2018 7:00 BRT");
   State state_one =
       GetState(policy, nullptr /* local_override */, base::Hours(0), time_one,
-               time_one, timezone.get(), absl::nullopt);
+               time_one, timezone.get(), std::nullopt);
 
   State expected_state_one;
   expected_state_one.is_locked = true;
@@ -2553,7 +2582,7 @@ TEST_F(UsageTimeLimitProcessorTest, LocalOverrideAndWindowTimeLimit) {
       base::Time::FromString("Mon, 1 Jan 2018 19:00 GMT", &current_time));
 
   const base::Time last_updated = current_time - base::Hours(4);
-  auto policy = base::Value(base::Value::Type::DICTIONARY);
+  base::Value::Dict policy;
   utils::AddTimeWindowLimit(&policy, utils::kMonday,
                             utils::CreateTime(kWindowStart, 0),
                             utils::CreateTime(kWindowEnd, 0), last_updated);
@@ -2562,15 +2591,15 @@ TEST_F(UsageTimeLimitProcessorTest, LocalOverrideAndWindowTimeLimit) {
                             utils::CreateTime(kWindowEnd, 0), last_updated);
 
   // Local override started before latest policy update - should be ignored.
-  base::Value inactive_local_override =
+  base::Value::Dict inactive_local_override =
       usage_time_limit::TimeLimitOverride(
           usage_time_limit::TimeLimitOverride::Action::kUnlock,
-          last_updated - base::Minutes(5), absl::nullopt /* duration */)
+          last_updated - base::Minutes(5), std::nullopt /* duration */)
           .ToDictionary();
 
-  State state = GetState(policy, &inactive_local_override, base::Minutes(0),
-                         current_time, current_time, timezone.get(),
-                         absl::nullopt /* previous_state */);
+  State state =
+      GetState(policy, &inactive_local_override, base::Minutes(0), current_time,
+               current_time, timezone.get(), std::nullopt /* previous_state */);
 
   base::Time monday_bedtime_end;
   ASSERT_TRUE(
@@ -2583,15 +2612,15 @@ TEST_F(UsageTimeLimitProcessorTest, LocalOverrideAndWindowTimeLimit) {
   EXPECT_EQ(monday_bedtime_end, state.next_unlock_time);
 
   // Local override started after last policy update - should take effect.
-  base::Value active_local_override =
+  base::Value::Dict active_local_override =
       usage_time_limit::TimeLimitOverride(
           usage_time_limit::TimeLimitOverride::Action::kUnlock,
-          current_time - base::Minutes(5), absl::nullopt /* duration */)
+          current_time - base::Minutes(5), std::nullopt /* duration */)
           .ToDictionary();
 
-  state = GetState(policy, &active_local_override, base::Minutes(0),
-                   current_time, current_time, timezone.get(),
-                   absl::nullopt /* previous_state */);
+  state =
+      GetState(policy, &active_local_override, base::Minutes(0), current_time,
+               current_time, timezone.get(), std::nullopt /* previous_state */);
 
   base::Time tuesday_bedtime_start;
   ASSERT_TRUE(base::Time::FromString("Tue, 2 Jan 2018 18:00 GMT",
@@ -2616,7 +2645,8 @@ TEST_F(UsageTimeLimitProcessorTest, LocalOverrideAndTimeUsageLimit) {
   ASSERT_TRUE(base::Time::FromString("Mon, 1 Jan 2018 15:00 GMT", &timestamp));
 
   const base::Time last_updated = timestamp - base::Hours(4);
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeUsageLimit(&policy, utils::kMonday, kDailyLimit, last_updated);
   utils::AddTimeUsageLimit(&policy, utils::kTuesday, kDailyLimit, last_updated);
 
@@ -2636,10 +2666,10 @@ TEST_F(UsageTimeLimitProcessorTest, LocalOverrideAndTimeUsageLimit) {
   usage_limit_lock_state.next_state_change_time = next_day_reset;
 
   // Local override started before usage time limit - should be ignored.
-  base::Value inactive_local_override =
+  base::Value::Dict inactive_local_override =
       usage_time_limit::TimeLimitOverride(
           usage_time_limit::TimeLimitOverride::Action::kUnlock,
-          timestamp - base::Minutes(5), absl::nullopt /* duration */)
+          timestamp - base::Minutes(5), std::nullopt /* duration */)
           .ToDictionary();
 
   const base::Time current_time = timestamp + base::Minutes(10);
@@ -2652,10 +2682,10 @@ TEST_F(UsageTimeLimitProcessorTest, LocalOverrideAndTimeUsageLimit) {
   AssertEqState(usage_limit_lock_state, state);
 
   // Local override that started after usage time limit - should take effect.
-  base::Value active_local_override =
+  base::Value::Dict active_local_override =
       usage_time_limit::TimeLimitOverride(
           usage_time_limit::TimeLimitOverride::Action::kUnlock, current_time,
-          absl::nullopt /* duration */)
+          std::nullopt /* duration */)
           .ToDictionary();
 
   state = GetState(policy, &active_local_override, kDailyLimit, current_time,
@@ -2679,20 +2709,20 @@ TEST_F(UsageTimeLimitProcessorTest, LocalOverrideAndRemoteOverride) {
   ASSERT_TRUE(
       base::Time::FromString("Mon, 1 Jan 2018 15:00 GMT", &current_time));
 
-  base::Value policy = base::Value(base::Value::Type::DICTIONARY);
+  base::Value::Dict policy;
   utils::AddOverride(&policy, TimeLimitOverride::Action::kLock,
                      current_time - base::Hours(1));
 
   // Local override started before latest policy update - should be ignored.
-  base::Value inactive_local_override =
+  base::Value::Dict inactive_local_override =
       usage_time_limit::TimeLimitOverride(
           usage_time_limit::TimeLimitOverride::Action::kUnlock,
-          current_time - base::Hours(2), absl::nullopt /* duration */)
+          current_time - base::Hours(2), std::nullopt /* duration */)
           .ToDictionary();
 
-  State state = GetState(policy, &inactive_local_override, base::Minutes(0),
-                         current_time, current_time, timezone.get(),
-                         absl::nullopt /* previous_state */);
+  State state =
+      GetState(policy, &inactive_local_override, base::Minutes(0), current_time,
+               current_time, timezone.get(), std::nullopt /* previous_state */);
 
   base::Time next_day;
   ASSERT_TRUE(base::Time::FromString("Mon, 2 Jan 2018 00:00 GMT", &next_day));
@@ -2704,15 +2734,15 @@ TEST_F(UsageTimeLimitProcessorTest, LocalOverrideAndRemoteOverride) {
   EXPECT_EQ(next_day, state.next_unlock_time);
 
   // Local override started after last policy update - should take effect.
-  base::Value active_local_override =
+  base::Value::Dict active_local_override =
       usage_time_limit::TimeLimitOverride(
           usage_time_limit::TimeLimitOverride::Action::kUnlock,
-          current_time - base::Minutes(5), absl::nullopt /* duration */)
+          current_time - base::Minutes(5), std::nullopt /* duration */)
           .ToDictionary();
 
-  state = GetState(policy, &active_local_override, base::Minutes(0),
-                   current_time, current_time, timezone.get(),
-                   absl::nullopt /* previous_state */);
+  state =
+      GetState(policy, &active_local_override, base::Minutes(0), current_time,
+               current_time, timezone.get(), std::nullopt /* previous_state */);
 
   // Unlocked by local override.
   EXPECT_FALSE(state.is_locked);
@@ -2728,7 +2758,7 @@ TEST_F(UsageTimeLimitProcessorTest, GetExpectedResetTimeWithEmptyPolicy) {
   std::unique_ptr<icu::TimeZone> timezone(icu::TimeZone::createTimeZone("GMT"));
 
   // Setup policy.
-  base::Value policy = base::Value(base::Value::Type::DICTIONARY);
+  base::Value::Dict policy;
 
   base::Time time_one = utils::TimeFromString("Mon, 1 Jan 2018 22:00");
   base::Time reset_time = GetExpectedResetTime(
@@ -2742,7 +2772,8 @@ TEST_F(UsageTimeLimitProcessorTest, GetExpectedResetTimeWithCustomPolicy) {
   std::unique_ptr<icu::TimeZone> timezone(icu::TimeZone::createTimeZone("EST"));
 
   // Setup policy.
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(8, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(8, 0));
 
   // Check that it resets in the same day.
   base::Time time_one = utils::TimeFromString("Tue, 2 Jan 2018 6:00 EST");
@@ -2762,7 +2793,7 @@ TEST_F(UsageTimeLimitProcessorTest, GetExpectedResetTimeWithCustomPolicy) {
 TEST_F(UsageTimeLimitProcessorTest, GetTimeUsageLimitResetTime) {
   // If there is no valid time usage limit in the policy, default value
   // (midnight) should be returned.
-  auto empty_time_limit_dictionary = base::Value(base::Value::Type::DICTIONARY);
+  base::Value::Dict empty_time_limit_dictionary;
 
   EXPECT_EQ(base::Hours(0),
             GetTimeUsageLimitResetTime(empty_time_limit_dictionary));
@@ -2771,11 +2802,11 @@ TEST_F(UsageTimeLimitProcessorTest, GetTimeUsageLimitResetTime) {
   // be returned.
   const int kHour = 8;
   const int kMinutes = 30;
-  auto time_usage_limit = base::Value(base::Value::Type::DICTIONARY);
-  time_usage_limit.SetKey(
+  base::Value::Dict time_usage_limit;
+  time_usage_limit.Set(
       "reset_at", utils::CreatePolicyTime(utils::CreateTime(kHour, kMinutes)));
-  auto time_limit_dictionary = base::Value(base::Value::Type::DICTIONARY);
-  time_limit_dictionary.SetKey("time_usage_limit", std::move(time_usage_limit));
+  base::Value::Dict time_limit_dictionary;
+  time_limit_dictionary.Set("time_usage_limit", std::move(time_usage_limit));
 
   EXPECT_EQ(base::Hours(kHour) + base::Minutes(kMinutes),
             GetTimeUsageLimitResetTime(time_limit_dictionary));
@@ -2786,13 +2817,13 @@ TEST_F(UsageTimeLimitProcessorTest, GetRemainingTimeUsageWithEmptyPolicy) {
   std::unique_ptr<icu::TimeZone> timezone(icu::TimeZone::createTimeZone("BRT"));
 
   // Setup policy.
-  base::Value policy = base::Value(base::Value::Type::DICTIONARY);
+  base::Value::Dict policy;
   base::Time time_one = utils::TimeFromString("Mon, 1 Jan 2018 22:00");
-  absl::optional<base::TimeDelta> remaining_usage =
+  std::optional<base::TimeDelta> remaining_usage =
       GetRemainingTimeUsage(policy, nullptr /* local_override */, time_one,
                             base::TimeDelta(), timezone.get());
 
-  ASSERT_EQ(remaining_usage, absl::nullopt);
+  ASSERT_EQ(remaining_usage, std::nullopt);
 }
 
 // Test GetExpectedResetTime with a policy.
@@ -2801,7 +2832,8 @@ TEST_F(UsageTimeLimitProcessorTest, GetRemainingTimeUsageWithPolicy) {
 
   // Setup policy with a time usage of 2 hours.
   base::Time last_updated = utils::TimeFromString("1 Jan 2018 8:00 BRT");
-  base::Value policy = utils::CreateTimeLimitPolicy(utils::CreateTime(8, 0));
+  base::Value::Dict policy =
+      utils::CreateTimeLimitPolicy(utils::CreateTime(8, 0));
   utils::AddTimeUsageLimit(&policy, utils::kTuesday, base::Hours(2),
                            last_updated);
   utils::AddTimeUsageLimit(&policy, utils::kWednesday, base::Hours(2),
@@ -2809,39 +2841,39 @@ TEST_F(UsageTimeLimitProcessorTest, GetRemainingTimeUsageWithPolicy) {
 
   // Check that the remaining time is 2 hours.
   base::Time time_one = utils::TimeFromString("Wed, 3 Jan 2018 10:00 BRT");
-  absl::optional<base::TimeDelta> remaining_usage_one =
+  std::optional<base::TimeDelta> remaining_usage_one =
       GetRemainingTimeUsage(policy, nullptr /* local_override */, time_one,
                             base::Hours(0), timezone.get());
 
-  ASSERT_FALSE(remaining_usage_one == absl::nullopt);
+  ASSERT_FALSE(remaining_usage_one == std::nullopt);
   ASSERT_EQ(remaining_usage_one, base::Hours(2));
 
   // Check that remaining time changes to 1 hour if device was used for 1 hour.
   base::Time time_two = utils::TimeFromString("Wed, 3 Jan 2018 11:00 BRT");
-  absl::optional<base::TimeDelta> remaining_usage_two =
+  std::optional<base::TimeDelta> remaining_usage_two =
       GetRemainingTimeUsage(policy, nullptr /* local_override */, time_two,
                             base::Hours(1), timezone.get());
 
-  ASSERT_FALSE(remaining_usage_two == absl::nullopt);
+  ASSERT_FALSE(remaining_usage_two == std::nullopt);
   ASSERT_EQ(remaining_usage_two, base::Hours(1));
 }
 
 // Tests UpdatedPolicyTypes with no polcies.
 TEST_F(UsageTimeLimitProcessorTest, UpdatedPolicyTypesEmptyPolicies) {
-  auto old_policy = base::Value(base::Value::Type::DICTIONARY);
-  auto new_policy = base::Value(base::Value::Type::DICTIONARY);
+  base::Value::Dict old_policy;
+  base::Value::Dict new_policy;
   EXPECT_TRUE(UpdatedPolicyTypes(old_policy, new_policy).empty());
 }
 
 // Tests UpdatedPolicyTypes with different simple overrides.
 TEST_F(UsageTimeLimitProcessorTest,
        UpdatedPolicyTypesDifferentSimpleOverrides) {
-  base::Value old_policy =
+  base::Value::Dict old_policy =
       utils::CreateTimeLimitPolicy(utils::CreateTime(8, 0));
   utils::AddOverride(&old_policy, TimeLimitOverride::Action::kUnlock,
                      utils::TimeFromString("Wed, 3 Jan 2019 12:30 GMT"));
 
-  base::Value new_policy =
+  base::Value::Dict new_policy =
       utils::CreateTimeLimitPolicy(utils::CreateTime(8, 0));
   // New override was created on 4 Jan instead of 3 Jan.
   utils::AddOverride(&new_policy, TimeLimitOverride::Action::kUnlock,
@@ -2854,7 +2886,7 @@ TEST_F(UsageTimeLimitProcessorTest,
 TEST_F(UsageTimeLimitProcessorTest, UpdatedPolicyTypesEquivalentPolicies) {
   base::Time last_updated = utils::TimeFromString("1 Jan 2019 8:00 BRT");
 
-  base::Value old_policy =
+  base::Value::Dict old_policy =
       utils::CreateTimeLimitPolicy(utils::CreateTime(6, 0));
   utils::AddTimeUsageLimit(&old_policy, utils::kWednesday, base::Hours(2),
                            last_updated);
@@ -2865,7 +2897,7 @@ TEST_F(UsageTimeLimitProcessorTest, UpdatedPolicyTypesEquivalentPolicies) {
       &old_policy, TimeLimitOverride::Action::kUnlock,
       utils::TimeFromString("Mon, 1 Jan 2019 10:30 PST"), base::Hours(2));
 
-  base::Value new_policy = old_policy.Clone();
+  base::Value::Dict new_policy = old_policy.Clone();
 
   EXPECT_TRUE(UpdatedPolicyTypes(old_policy, new_policy).empty());
 }
@@ -2874,7 +2906,7 @@ TEST_F(UsageTimeLimitProcessorTest, UpdatedPolicyTypesEquivalentPolicies) {
 TEST_F(UsageTimeLimitProcessorTest, UpdatedPolicyTypesDifferentUsageLimit) {
   base::Time last_updated = utils::TimeFromString("1 Jan 2019 8:00 PST");
 
-  base::Value old_policy =
+  base::Value::Dict old_policy =
       utils::CreateTimeLimitPolicy(utils::CreateTime(7, 0));
   utils::AddTimeUsageLimit(&old_policy, utils::kSaturday, base::Hours(2),
                            last_updated);
@@ -2885,7 +2917,7 @@ TEST_F(UsageTimeLimitProcessorTest, UpdatedPolicyTypesDifferentUsageLimit) {
       &old_policy, TimeLimitOverride::Action::kUnlock,
       utils::TimeFromString("Wed, 3 Jan 2019 10:30 PST"), base::Hours(3));
 
-  base::Value new_policy =
+  base::Value::Dict new_policy =
       utils::CreateTimeLimitPolicy(utils::CreateTime(7, 0));
   // New usage limit has a 3-hour duration instead of 2.
   utils::AddTimeUsageLimit(&new_policy, utils::kSaturday, base::Hours(3),
@@ -2907,7 +2939,7 @@ TEST_F(UsageTimeLimitProcessorTest, UpdatedPolicyTypesDifferentUsageLimit) {
 TEST_F(UsageTimeLimitProcessorTest, UpdatedPolicyTypesDifferentWindowLimit) {
   base::Time last_updated = utils::TimeFromString("1 Jan 2019 8:00 GMT");
 
-  base::Value old_policy =
+  base::Value::Dict old_policy =
       utils::CreateTimeLimitPolicy(utils::CreateTime(8, 0));
   utils::AddTimeUsageLimit(&old_policy, utils::kTuesday, base::Hours(3),
                            last_updated);
@@ -2918,7 +2950,7 @@ TEST_F(UsageTimeLimitProcessorTest, UpdatedPolicyTypesDifferentWindowLimit) {
       &old_policy, TimeLimitOverride::Action::kUnlock,
       utils::TimeFromString("Wed, 3 Jan 2019 12:30 GMT"), base::Hours(3));
 
-  base::Value new_policy =
+  base::Value::Dict new_policy =
       utils::CreateTimeLimitPolicy(utils::CreateTime(8, 0));
   utils::AddTimeUsageLimit(&new_policy, utils::kTuesday, base::Hours(3),
                            last_updated);
@@ -2941,7 +2973,7 @@ TEST_F(UsageTimeLimitProcessorTest,
        UpdatedPolicyTypesDifferentOverridesWithDuration) {
   base::Time last_updated = utils::TimeFromString("1 Jan 2019 8:00 GMT");
 
-  base::Value old_policy =
+  base::Value::Dict old_policy =
       utils::CreateTimeLimitPolicy(utils::CreateTime(8, 0));
   utils::AddTimeUsageLimit(&old_policy, utils::kTuesday, base::Hours(3),
                            last_updated);
@@ -2952,7 +2984,7 @@ TEST_F(UsageTimeLimitProcessorTest,
       &old_policy, TimeLimitOverride::Action::kUnlock,
       utils::TimeFromString("Wed, 3 Jan 2019 12:30 GMT"), base::Hours(3));
 
-  base::Value new_policy =
+  base::Value::Dict new_policy =
       utils::CreateTimeLimitPolicy(utils::CreateTime(8, 0));
   utils::AddTimeUsageLimit(&new_policy, utils::kTuesday, base::Hours(3),
                            last_updated);
@@ -2976,7 +3008,7 @@ TEST_F(UsageTimeLimitProcessorTest,
        UpdatedPolicyTypesDifferentWindowAndUsageLimits) {
   base::Time last_updated = utils::TimeFromString("1 Jan 2019 8:00 KST");
 
-  base::Value old_policy =
+  base::Value::Dict old_policy =
       utils::CreateTimeLimitPolicy(utils::CreateTime(8, 0));
   utils::AddTimeUsageLimit(&old_policy, utils::kMonday, base::Hours(3),
                            last_updated);
@@ -2987,7 +3019,7 @@ TEST_F(UsageTimeLimitProcessorTest,
       &old_policy, TimeLimitOverride::Action::kUnlock,
       utils::TimeFromString("Wed, 3 Jan 2019 12:30 GMT"), base::Hours(3));
 
-  base::Value new_policy =
+  base::Value::Dict new_policy =
       utils::CreateTimeLimitPolicy(utils::CreateTime(8, 0));
   // New usage limit is applied to Tuesdays not Mondays.
   utils::AddTimeUsageLimit(&new_policy, utils::kTuesday, base::Hours(3),

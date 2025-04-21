@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,30 +6,34 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/notreached.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/time/time.h"
+#include "base/tracing/protos/chrome_track_event.pbzero.h"
+#include "base/types/optional_ref.h"
+#include "base/types/pass_key.h"
 #include "build/build_config.h"
 #include "cc/base/features.h"
+#include "cc/input/browser_controls_offset_tags_info.h"
 #include "cc/metrics/event_metrics.h"
 #include "cc/trees/layer_tree_host.h"
 #include "cc/trees/paint_holding_reason.h"
-#include "components/power_scheduler/power_mode.h"
-#include "components/power_scheduler/power_mode_arbiter.h"
-#include "components/power_scheduler/power_mode_voter.h"
+#include "components/viz/common/features.h"
 #include "services/tracing/public/cpp/perfetto/flow_event_utils.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/input/web_coalesced_input_event.h"
 #include "third_party/blink/public/common/input/web_input_event_attribution.h"
 #include "third_party/blink/public/common/input/web_keyboard_event.h"
 #include "third_party/blink/public/platform/platform.h"
-#include "third_party/blink/public/platform/scheduler/web_thread_scheduler.h"
-#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/scheduler/public/agent_group_scheduler.h"
-#include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
+#include "third_party/blink/renderer/platform/scheduler/public/compositor_thread_scheduler.h"
 #include "third_party/blink/renderer/platform/scheduler/public/widget_scheduler.h"
 #include "third_party/blink/renderer/platform/widget/frame_widget.h"
 #include "third_party/blink/renderer/platform/widget/input/elastic_overscroll_controller.h"
@@ -37,6 +41,7 @@
 #include "third_party/blink/renderer/platform/widget/input/widget_input_handler_impl.h"
 #include "third_party/blink/renderer/platform/widget/widget_base.h"
 #include "third_party/blink/renderer/platform/widget/widget_base_client.h"
+#include "ui/latency/latency_info.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "third_party/blink/renderer/platform/widget/compositing/android_webview/synchronous_compositor_registry.h"
@@ -45,7 +50,7 @@
 
 namespace blink {
 
-using ::perfetto::protos::pbzero::ChromeLatencyInfo;
+using ::perfetto::protos::pbzero::ChromeLatencyInfo2;
 using ::perfetto::protos::pbzero::TrackEvent;
 
 namespace {
@@ -54,6 +59,11 @@ namespace {
 // intermittently. The time delay of the timer is 10X of the threshold of
 // long tasks which block the main thread 50 ms or longer.
 const base::TimeDelta kEventCountsTimerDelay = base::Milliseconds(500);
+
+// The 99th percentile of the delay between navigation start and first paint is
+// around 10sec on most platforms.  We are setting the max acceptable limit to
+// 1.5x to avoid false positives on slow devices.
+const base::TimeDelta kFirstPaintMaxAcceptableDelay = base::Seconds(15);
 
 mojom::blink::DidOverscrollParamsPtr ToDidOverscrollParams(
     const InputHandlerProxy::DidOverscrollParams* overscroll_params) {
@@ -72,9 +82,16 @@ void CallCallback(
     mojom::blink::InputEventResultState result_state,
     const ui::LatencyInfo& latency_info,
     mojom::blink::DidOverscrollParamsPtr overscroll_params,
-    absl::optional<cc::TouchAction> touch_action) {
-  ui::LatencyInfo::TraceIntermediateFlowEvents(
-      {latency_info}, ChromeLatencyInfo::STEP_HANDLED_INPUT_EVENT_IMPL);
+    std::optional<cc::TouchAction> touch_action) {
+  int64_t trace_id = latency_info.trace_id();
+  TRACE_EVENT("input,benchmark,latencyInfo", "LatencyInfo.Flow",
+              [&](perfetto::EventContext ctx) {
+                base::TaskAnnotator::EmitTaskTimingDetails(ctx);
+                ui::LatencyInfo::FillTraceEvent(
+                    ctx, trace_id,
+                    ChromeLatencyInfo2::Step::STEP_HANDLED_INPUT_EVENT_IMPL);
+              });
+
   std::move(callback).Run(
       mojom::blink::InputEventResultSource::kMainThread, latency_info,
       result_state, std::move(overscroll_params),
@@ -99,31 +116,7 @@ mojom::blink::InputEventResultState InputEventDispositionToAck(
     case InputHandlerProxy::REQUIRES_MAIN_THREAD_HIT_TEST:
     default:
       NOTREACHED();
-      return mojom::blink::InputEventResultState::kUnknown;
   }
-}
-
-std::unique_ptr<blink::WebGestureEvent> ScrollBeginFromScrollUpdate(
-    const WebGestureEvent& gesture_update) {
-  DCHECK(gesture_update.GetType() == WebInputEvent::Type::kGestureScrollUpdate);
-
-  auto scroll_begin = std::make_unique<WebGestureEvent>(gesture_update);
-  scroll_begin->SetType(WebInputEvent::Type::kGestureScrollBegin);
-
-  scroll_begin->data.scroll_begin.delta_x_hint =
-      gesture_update.data.scroll_update.delta_x;
-  scroll_begin->data.scroll_begin.delta_y_hint =
-      gesture_update.data.scroll_update.delta_y;
-  scroll_begin->data.scroll_begin.delta_hint_units =
-      gesture_update.data.scroll_update.delta_units;
-  scroll_begin->data.scroll_begin.target_viewport = false;
-  scroll_begin->data.scroll_begin.inertial_phase =
-      gesture_update.data.scroll_update.inertial_phase;
-  scroll_begin->data.scroll_begin.synthetic = false;
-  scroll_begin->data.scroll_begin.pointer_count = 0;
-  scroll_begin->data.scroll_begin.scrollable_area_element_id = 0;
-
-  return scroll_begin;
 }
 
 }  // namespace
@@ -133,9 +126,13 @@ class SynchronousCompositorProxyRegistry
     : public SynchronousCompositorRegistry {
  public:
   explicit SynchronousCompositorProxyRegistry(
-      scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner)
+      scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner,
+      base::PlatformThreadId io_thread_id,
+      base::PlatformThreadId main_thread_id)
       : compositor_thread_default_task_runner_(
-            std::move(compositor_task_runner)) {}
+            std::move(compositor_task_runner)),
+        io_thread_id_(io_thread_id),
+        main_thread_id_(main_thread_id) {}
 
   ~SynchronousCompositorProxyRegistry() override {
     // Ensure the proxy has already been release on the compositor thread
@@ -146,7 +143,25 @@ class SynchronousCompositorProxyRegistry
   void CreateProxy(InputHandlerProxy* handler) {
     DCHECK(compositor_thread_default_task_runner_->BelongsToCurrentThread());
     proxy_ = std::make_unique<SynchronousCompositorProxy>(handler);
+
     proxy_->Init();
+
+    if (base::FeatureList::IsEnabled(::features::kWebViewEnableADPF)) {
+      Vector<viz::Thread> renderer_threads;
+      renderer_threads.push_back(viz::Thread{base::PlatformThread::CurrentId(),
+                                             viz::Thread::Type::kCompositor});
+      if (io_thread_id_ != base::kInvalidThreadId) {
+        renderer_threads.push_back(
+            viz::Thread{io_thread_id_, viz::Thread::Type::kIO});
+      }
+      if (main_thread_id_ != base::kInvalidThreadId &&
+          base::FeatureList::IsEnabled(
+              ::features::kWebViewEnableADPFRendererMain)) {
+        renderer_threads.push_back(
+            viz::Thread{main_thread_id_, viz::Thread::Type::kMain});
+      }
+      proxy_->SetThreads(renderer_threads);
+    }
 
     if (sink_)
       proxy_->SetLayerTreeFrameSink(sink_);
@@ -179,7 +194,9 @@ class SynchronousCompositorProxyRegistry
   scoped_refptr<base::SingleThreadTaskRunner>
       compositor_thread_default_task_runner_;
   std::unique_ptr<SynchronousCompositorProxy> proxy_;
-  SynchronousLayerTreeFrameSink* sink_ = nullptr;
+  raw_ptr<SynchronousLayerTreeFrameSink> sink_ = nullptr;
+  base::PlatformThreadId io_thread_id_;
+  base::PlatformThreadId main_thread_id_;
 };
 
 #endif
@@ -189,18 +206,20 @@ scoped_refptr<WidgetInputHandlerManager> WidgetInputHandlerManager::Create(
     base::WeakPtr<mojom::blink::FrameWidgetInputHandler>
         frame_widget_input_handler,
     bool never_composited,
-    ThreadScheduler* compositor_thread_scheduler,
+    CompositorThreadScheduler* compositor_thread_scheduler,
     scoped_refptr<scheduler::WidgetScheduler> widget_scheduler,
     bool uses_input_handler,
-    bool allow_scroll_resampling) {
+    bool allow_scroll_resampling,
+    base::PlatformThreadId io_thread_id,
+    base::PlatformThreadId main_thread_id) {
   DCHECK(widget_scheduler);
-  scoped_refptr<WidgetInputHandlerManager> manager =
-      new WidgetInputHandlerManager(
-          std::move(widget), std::move(frame_widget_input_handler),
-          never_composited, compositor_thread_scheduler,
-          std::move(widget_scheduler), allow_scroll_resampling);
+  auto manager = base::MakeRefCounted<WidgetInputHandlerManager>(
+      base::PassKey<WidgetInputHandlerManager>(), std::move(widget),
+      std::move(frame_widget_input_handler), never_composited,
+      compositor_thread_scheduler, std::move(widget_scheduler),
+      allow_scroll_resampling, io_thread_id, main_thread_id);
 
-  manager->DidNavigate();
+  manager->InitializeInputEventSuppressionStates();
   if (uses_input_handler)
     manager->InitInputHandler();
 
@@ -216,47 +235,52 @@ scoped_refptr<WidgetInputHandlerManager> WidgetInputHandlerManager::Create(
 }
 
 WidgetInputHandlerManager::WidgetInputHandlerManager(
+    base::PassKey<WidgetInputHandlerManager>,
     base::WeakPtr<WidgetBase> widget,
     base::WeakPtr<mojom::blink::FrameWidgetInputHandler>
         frame_widget_input_handler,
     bool never_composited,
-    ThreadScheduler* compositor_thread_scheduler,
+    CompositorThreadScheduler* compositor_thread_scheduler,
     scoped_refptr<scheduler::WidgetScheduler> widget_scheduler,
-    bool allow_scroll_resampling)
+    bool allow_scroll_resampling,
+    base::PlatformThreadId io_thread_id,
+    base::PlatformThreadId main_thread_id)
     : widget_(std::move(widget)),
       frame_widget_input_handler_(std::move(frame_widget_input_handler)),
-
       widget_scheduler_(std::move(widget_scheduler)),
-      input_event_queue_(base::MakeRefCounted<MainThreadEventQueue>(
-          this,
-          widget_scheduler_->InputTaskRunner(),
-          widget_scheduler_,
-          /*allow_raf_aligned_input=*/!never_composited)),
+      widget_is_embedded_(widget_ && widget_->is_embedded()),
       main_thread_task_runner_(widget_scheduler_->InputTaskRunner()),
       compositor_thread_default_task_runner_(
           compositor_thread_scheduler
-              ? compositor_thread_scheduler->CompositorTaskRunner()
+              ? compositor_thread_scheduler->DefaultTaskRunner()
               : nullptr),
       compositor_thread_input_blocking_task_runner_(
           compositor_thread_scheduler
               ? compositor_thread_scheduler->InputTaskRunner()
               : nullptr),
-      response_power_mode_voter_(
-          power_scheduler::PowerModeArbiter::GetInstance()->NewVoter(
-              "PowerModeVoter.Response")),
+      input_event_queue_(base::MakeRefCounted<MainThreadEventQueue>(
+          this,
+          InputThreadTaskRunner(),
+          widget_scheduler_->InputTaskRunner(),
+          widget_scheduler_,
+          /*allow_raf_aligned_input=*/!never_composited)),
       allow_scroll_resampling_(allow_scroll_resampling) {
 #if BUILDFLAG(IS_ANDROID)
   if (compositor_thread_default_task_runner_) {
     synchronous_compositor_registry_ =
         std::make_unique<SynchronousCompositorProxyRegistry>(
-            compositor_thread_default_task_runner_);
+            compositor_thread_default_task_runner_, io_thread_id,
+            main_thread_id);
   }
 #endif
 }
 
-void WidgetInputHandlerManager::DidFirstVisuallyNonEmptyPaint() {
+void WidgetInputHandlerManager::DidFirstVisuallyNonEmptyPaint(
+    const base::TimeTicks& first_paint_time) {
   suppressing_input_events_state_ &=
       ~static_cast<uint16_t>(SuppressingInputEventsBits::kHasNotPainted);
+
+  RecordEventMetricsForPaintTiming(first_paint_time);
 }
 
 void WidgetInputHandlerManager::InitInputHandler() {
@@ -267,7 +291,8 @@ void WidgetInputHandlerManager::InitInputHandler() {
 #endif
   uses_input_handler_ = true;
   base::OnceClosure init_closure = base::BindOnce(
-      &WidgetInputHandlerManager::InitOnInputHandlingThread, AsWeakPtr(),
+      &WidgetInputHandlerManager::InitOnInputHandlingThread,
+      weak_ptr_factory_.GetWeakPtr(),
       widget_->LayerTreeHost()->GetDelegateForInput(), sync_compositing);
   InputThreadTaskRunner()->PostTask(FROM_HERE, std::move(init_closure));
 }
@@ -302,7 +327,7 @@ bool WidgetInputHandlerManager::HandleInputEvent(
          const ui::LatencyInfo& latency_info,
          std::unique_ptr<InputHandlerProxy::DidOverscrollParams>
              overscroll_params,
-         absl::optional<cc::TouchAction> touch_action) {
+         std::optional<cc::TouchAction> touch_action) {
         if (!callback)
           return;
         std::move(callback).Run(ack_state, latency_info,
@@ -312,6 +337,16 @@ bool WidgetInputHandlerManager::HandleInputEvent(
       std::move(handled_callback));
   widget_->input_handler().HandleInputEvent(event, std::move(metrics),
                                             std::move(blink_callback));
+
+  if (!widget_) {
+    // The `HandleInputEvent()` call above might result in deletion of
+    // `widget_`.
+    return true;
+  }
+  // TODO(szager): Should this be limited to discrete input events by
+  // conditioning on (!scheduler::PendingUserInput::IsContinuousEventType())?
+  widget_->LayerTreeHost()->proxy()->SetInputResponsePending();
+
   return true;
 }
 
@@ -340,6 +375,10 @@ void WidgetInputHandlerManager::SetNeedsMainFrame() {
   widget_->RequestAnimationAfterDelay(base::TimeDelta());
 }
 
+bool WidgetInputHandlerManager::RequestedMainFramePending() {
+  return widget_->LayerTreeHost()->RequestedMainFramePending();
+}
+
 void WidgetInputHandlerManager::WillShutdown() {
 #if BUILDFLAG(IS_ANDROID)
   if (synchronous_compositor_registry_)
@@ -349,17 +388,6 @@ void WidgetInputHandlerManager::WillShutdown() {
   dropped_event_counts_timer_.reset();
 }
 
-void WidgetInputHandlerManager::DispatchNonBlockingEventToMainThread(
-    std::unique_ptr<WebCoalescedInputEvent> event,
-    const WebInputEventAttribution& attribution,
-    std::unique_ptr<cc::EventMetrics> metrics) {
-  DCHECK(input_event_queue_);
-  input_event_queue_->HandleEvent(
-      std::move(event), MainThreadEventQueue::DispatchType::kNonBlocking,
-      mojom::blink::InputEventResultState::kSetNonBlocking, attribution,
-      std::move(metrics), HandledEventCallback());
-}
-
 void WidgetInputHandlerManager::FindScrollTargetOnMainThread(
     const gfx::PointF& point,
     ElementAtPointCallback callback) {
@@ -367,17 +395,15 @@ void WidgetInputHandlerManager::FindScrollTargetOnMainThread(
                "WidgetInputHandlerManager::FindScrollTargetOnMainThread",
                "point.x", point.x(), "point.y", point.y());
   DCHECK(main_thread_task_runner_->BelongsToCurrentThread());
-  DCHECK(base::FeatureList::IsEnabled(::features::kScrollUnification));
 
-  uint64_t element_id =
-      widget_->client()->FrameWidget()->GetScrollableContainerIdAt(point);
+  cc::ElementId element_id;
+  if (widget_) {
+    element_id =
+        widget_->client()->FrameWidget()->GetScrollableContainerIdAt(point);
+  }
 
   InputThreadTaskRunner(TaskRunnerType::kInputBlocking)
       ->PostTask(FROM_HERE, base::BindOnce(std::move(callback), element_id));
-}
-
-void WidgetInputHandlerManager::DidAnimateForInput() {
-  widget_scheduler_->DidAnimateForInputOnCompositorThread();
 }
 
 void WidgetInputHandlerManager::DidStartScrollingViewport() {
@@ -387,42 +413,8 @@ void WidgetInputHandlerManager::DidStartScrollingViewport() {
   host->DidStartScrollingViewport();
 }
 
-void WidgetInputHandlerManager::GenerateScrollBeginAndSendToMainThread(
-    const WebGestureEvent& update_event,
-    const WebInputEventAttribution& attribution,
-    const cc::EventMetrics* update_metrics) {
-  DCHECK_EQ(update_event.GetType(), WebInputEvent::Type::kGestureScrollUpdate);
-  auto gesture_event = ScrollBeginFromScrollUpdate(update_event);
-
-  // TODO(crbug.com/1137870): Scroll-begin events should not normally be
-  // inertial. Here, the scroll-begin is created from the first scroll-update
-  // event of a sequence and the first scroll-update should not be inertial,
-  // either. Consider setting `is_inertial` to `false` and adding
-  // DCHECKs here to make sure `gesture_event` is not inertial.
-  const bool is_inertial = gesture_event->InertialPhase() ==
-                           WebGestureEvent::InertialPhaseState::kMomentum;
-  std::unique_ptr<cc::EventMetrics> metrics =
-      cc::ScrollEventMetrics::CreateFromExisting(
-          gesture_event->GetTypeAsUiEventType(),
-          gesture_event->GetScrollInputType(), is_inertial,
-          cc::EventMetrics::DispatchStage::kRendererCompositorStarted,
-          update_metrics);
-  if (metrics) {
-    metrics->SetDispatchStageTimestamp(
-        cc::EventMetrics::DispatchStage::kRendererCompositorFinished);
-  }
-
-  auto event = std::make_unique<WebCoalescedInputEvent>(
-      std::move(gesture_event), ui::LatencyInfo());
-
-  DispatchNonBlockingEventToMainThread(std::move(event), attribution,
-                                       std::move(metrics));
-}
-
 void WidgetInputHandlerManager::SetAllowedTouchAction(
-    cc::TouchAction touch_action,
-    uint32_t unique_touch_event_id,
-    InputHandlerProxy::EventDisposition event_disposition) {
+    cc::TouchAction touch_action) {
   compositor_allowed_touch_action_ = touch_action;
 }
 
@@ -466,25 +458,94 @@ void WidgetInputHandlerManager::ObserveGestureEventOnMainThread(
 }
 
 void WidgetInputHandlerManager::LogInputTimingUMA() {
-  if (!have_emitted_uma_) {
-    InitialInputTiming lifecycle_state = InitialInputTiming::kBeforeLifecycle;
-    if (!(suppressing_input_events_state_ &
-          (unsigned)SuppressingInputEventsBits::kDeferMainFrameUpdates)) {
-      if (suppressing_input_events_state_ &
-          (unsigned)SuppressingInputEventsBits::kDeferCommits) {
-        lifecycle_state = InitialInputTiming::kBeforeCommit;
-      } else {
-        lifecycle_state = InitialInputTiming::kAfterCommit;
-      }
-    }
-    UMA_HISTOGRAM_ENUMERATION("PaintHolding.InputTiming2", lifecycle_state);
-    have_emitted_uma_ = true;
+  bool should_emit_uma;
+  {
+    base::AutoLock lock(uma_data_lock_);
+    should_emit_uma = !uma_data_.have_emitted_uma;
+    uma_data_.have_emitted_uma = true;
   }
+
+  if (!should_emit_uma)
+    return;
+
+  InitialInputTiming lifecycle_state = InitialInputTiming::kBeforeLifecycle;
+  if (!(suppressing_input_events_state_ &
+        (unsigned)SuppressingInputEventsBits::kDeferMainFrameUpdates)) {
+    if (suppressing_input_events_state_ &
+        (unsigned)SuppressingInputEventsBits::kDeferCommits) {
+      lifecycle_state = InitialInputTiming::kBeforeCommit;
+    } else if (suppressing_input_events_state_ &
+               (unsigned)SuppressingInputEventsBits::kHasNotPainted) {
+      lifecycle_state = InitialInputTiming::kBeforeFirstPaint;
+    } else {
+      lifecycle_state = InitialInputTiming::kAfterFirstPaint;
+    }
+  }
+
+  UMA_HISTOGRAM_ENUMERATION("PaintHolding.InputTiming4", lifecycle_state);
+}
+
+void WidgetInputHandlerManager::RecordEventMetricsForPaintTiming(
+    std::optional<base::TimeTicks> first_paint_time) {
+  CHECK(main_thread_task_runner_->BelongsToCurrentThread());
+
+  if (recorded_event_metric_for_paint_timing_) {
+    return;
+  }
+  recorded_event_metric_for_paint_timing_ = true;
+
+  if (first_paint_max_delay_timer_ &&
+      first_paint_max_delay_timer_->IsRunning()) {
+    first_paint_max_delay_timer_->Stop();
+  }
+
+  bool first_paint_max_delay_reached = !first_paint_time.has_value();
+
+  // Initialize to 0 timestamp and log 0 if there was no suppressed event or
+  // the most recent suppressed event was before the first_paint_time
+  auto diff = base::TimeDelta();
+  int suppressed_interactions_count = 0;
+  int suppressed_events_count = 0;
+  {
+    base::AutoLock lock(uma_data_lock_);
+    if (first_paint_max_delay_reached) {
+      diff = kFirstPaintMaxAcceptableDelay;
+    } else if (uma_data_.most_recent_suppressed_event_time >
+               first_paint_time.value()) {
+      diff = uma_data_.most_recent_suppressed_event_time -
+             first_paint_time.value();
+    }
+
+    suppressed_interactions_count = uma_data_.suppressed_interactions_count;
+    suppressed_events_count = uma_data_.suppressed_events_count;
+  }
+
+  UMA_HISTOGRAM_TIMES("PageLoad.Internal.SuppressedEventsTimingBeforePaint3",
+                      diff);
+  UMA_HISTOGRAM_COUNTS(
+      "PageLoad.Internal.SuppressedInteractionsCountBeforePaint3",
+      suppressed_interactions_count);
+  UMA_HISTOGRAM_COUNTS("PageLoad.Internal.SuppressedEventsCountBeforePaint3",
+                       suppressed_events_count);
+  UMA_HISTOGRAM_BOOLEAN(
+      "PageLoad.Internal.SuppressedEventsBeforeMissingFirstPaint",
+      first_paint_max_delay_reached);
+}
+
+void WidgetInputHandlerManager::StartFirstPaintMaxDelayTimer() {
+  if (first_paint_max_delay_timer_ || recorded_event_metric_for_paint_timing_) {
+    return;
+  }
+  first_paint_max_delay_timer_ = std::make_unique<base::OneShotTimer>();
+  first_paint_max_delay_timer_->Start(
+      FROM_HERE, kFirstPaintMaxAcceptableDelay,
+      base::BindOnce(
+          &WidgetInputHandlerManager::RecordEventMetricsForPaintTiming, this,
+          std::nullopt));
 }
 
 void WidgetInputHandlerManager::DispatchScrollGestureToCompositor(
     std::unique_ptr<WebGestureEvent> event) {
-  DCHECK(base::FeatureList::IsEnabled(::features::kScrollUnification));
   std::unique_ptr<WebCoalescedInputEvent> web_scoped_gesture_event =
       std::make_unique<WebCoalescedInputEvent>(std::move(event),
                                                ui::LatencyInfo());
@@ -499,27 +560,62 @@ void WidgetInputHandlerManager::DispatchScrollGestureToCompositor(
 void WidgetInputHandlerManager::
     HandleInputEventWithLatencyOnInputHandlingThread(
         std::unique_ptr<WebCoalescedInputEvent> event) {
-  DCHECK(base::FeatureList::IsEnabled(::features::kScrollUnification));
   DCHECK(input_handler_proxy_);
   input_handler_proxy_->HandleInputEventWithLatencyInfo(
       std::move(event), nullptr, base::DoNothing());
 }
 
+void WidgetInputHandlerManager::DispatchEventOnInputThreadForTesting(
+    std::unique_ptr<blink::WebCoalescedInputEvent> event,
+    mojom::blink::WidgetInputHandler::DispatchEventCallback callback) {
+  InputThreadTaskRunner()->PostTask(
+      FROM_HERE, base::BindOnce(&WidgetInputHandlerManager::DispatchEvent, this,
+                                std::move(event), std::move(callback)));
+}
+
 void WidgetInputHandlerManager::DispatchEvent(
     std::unique_ptr<WebCoalescedInputEvent> event,
     mojom::blink::WidgetInputHandler::DispatchEventCallback callback) {
-  // Since we can't easily track the end of processing for a non-blocking input
-  // event from here, we just temporarily bump kResponse mode for every
-  // dispatched event.
-  response_power_mode_voter_->VoteFor(power_scheduler::PowerMode::kResponse);
-  response_power_mode_voter_->ResetVoteAfterTimeout(
-      power_scheduler::PowerModeVoter::kResponseTimeout);
-
-  bool event_is_move =
-      event->Event().GetType() == WebInputEvent::Type::kMouseMove ||
-      event->Event().GetType() == WebInputEvent::Type::kPointerMove;
-  if (!event_is_move)
+  WebInputEvent::Type event_type = event->Event().GetType();
+  bool event_is_mouse_or_pointer_move =
+      event_type == WebInputEvent::Type::kMouseMove ||
+      event_type == WebInputEvent::Type::kPointerMove;
+  if (!event_is_mouse_or_pointer_move &&
+      event_type != WebInputEvent::Type::kTouchMove) {
     LogInputTimingUMA();
+
+    // We only count it if the only reason we are suppressing is because we
+    // haven't painted yet.
+    if (suppressing_input_events_state_ ==
+        static_cast<uint16_t>(SuppressingInputEventsBits::kHasNotPainted)) {
+      base::AutoLock lock(uma_data_lock_);
+      uma_data_.most_recent_suppressed_event_time = base::TimeTicks::Now();
+      uma_data_.suppressed_events_count += 1;
+
+      // Each of the events in the condition below represents a single
+      // interaction by the user even though some of these events can fire
+      // multiple JS events.  For example, further downstream from here Blink
+      // `EventHandler` fires a JS "pointerdown" event (and under certain
+      // conditions even a "mousedown" event) for single a kTouchStart event
+      // here.
+      if (event_type == WebInputEvent::Type::kMouseDown ||
+          event_type == WebInputEvent::Type::kRawKeyDown ||
+          event_type == WebInputEvent::Type::kKeyDown ||
+          event_type == WebInputEvent::Type::kTouchStart ||
+          event_type == WebInputEvent::Type::kPointerDown) {
+        uma_data_.suppressed_interactions_count += 1;
+      }
+    }
+  }
+
+  if (!widget_is_embedded_ &&
+      (suppressing_input_events_state_ &
+       static_cast<uint16_t>(SuppressingInputEventsBits::kHasNotPainted))) {
+    main_thread_task_runner_->PostTask(
+        FROM_HERE,
+        base::BindOnce(&WidgetInputHandlerManager::StartFirstPaintMaxDelayTimer,
+                       this));
+  }
 
   // Drop input if we are deferring a rendering pipeline phase, unless it's a
   // move event, or we are waiting for first visually non empty paint.
@@ -532,13 +628,21 @@ void WidgetInputHandlerManager::DispatchEvent(
   // without a begin. Scrolling, pinch-zoom etc. don't seem dangerous.
 
   uint16_t suppress_input = suppressing_input_events_state_;
-  if (!base::FeatureList::IsEnabled(
-          blink::features::kDropInputEventsBeforeFirstPaint)) {
+
+  bool ignore_first_paint = !base::FeatureList::IsEnabled(
+      blink::features::kDropInputEventsBeforeFirstPaint);
+  // TODO(https://crbug.com/1490296): Investigate the possibility of a stale
+  // subframe after navigation.
+  if (widget_is_embedded_) {
+    ignore_first_paint = true;
+  }
+  if (ignore_first_paint) {
     suppress_input &=
         ~static_cast<uint16_t>(SuppressingInputEventsBits::kHasNotPainted);
   }
 
-  if (suppress_input && !allow_pre_commit_input_ && !event_is_move) {
+  if (suppress_input && !allow_pre_commit_input_ &&
+      !event_is_mouse_or_pointer_move) {
     if (callback) {
       std::move(callback).Run(
           mojom::blink::InputEventResultSource::kMainThread, ui::LatencyInfo(),
@@ -554,12 +658,29 @@ void WidgetInputHandlerManager::DispatchEvent(
     event->EventPointer()->SetTimeStamp(base::TimeTicks::Now());
   }
 
+  // TODO(b/224960731): Fix tests and add
+  // `DCHECK(!arrived_in_browser_main_timestamp.is_null())`.
+  //  We expect that `arrived_in_browser_main_timestamp` is always
+  //  found, but there are a lot of tests where this component is not set.
+  //  Currently EventMetrics knows how to handle null timestamp, so we
+  //  don't process it here.
+  const base::TimeTicks arrived_in_browser_main_timestamp =
+      event->Event()
+          .GetEventLatencyMetadata()
+          .arrived_in_browser_main_timestamp;
   std::unique_ptr<cc::EventMetrics> metrics;
   if (event->Event().IsGestureScroll()) {
     const auto& gesture_event =
         static_cast<const WebGestureEvent&>(event->Event());
     const bool is_inertial = gesture_event.InertialPhase() ==
                              WebGestureEvent::InertialPhaseState::kMomentum;
+    //'scrolls_blocking_touch_dispatched_to_renderer' can be null. It is set
+    // by the Browser only if the corresponding TouchMove was blocking.
+    base::TimeTicks blocking_touch_dispatched_to_renderer_timestamp =
+        event->Event()
+            .GetEventLatencyMetadata()
+            .scrolls_blocking_touch_dispatched_to_renderer;
+
     if (gesture_event.GetType() == WebInputEvent::Type::kGestureScrollUpdate) {
       metrics = cc::ScrollUpdateEventMetrics::Create(
           gesture_event.GetTypeAsUiEventType(),
@@ -567,24 +688,36 @@ void WidgetInputHandlerManager::DispatchEvent(
           has_seen_first_gesture_scroll_update_after_begin_
               ? cc::ScrollUpdateEventMetrics::ScrollUpdateType::kContinued
               : cc::ScrollUpdateEventMetrics::ScrollUpdateType::kStarted,
-          gesture_event.data.scroll_update.delta_y, event->Event().TimeStamp());
+          gesture_event.data.scroll_update.delta_y, event->Event().TimeStamp(),
+          arrived_in_browser_main_timestamp,
+          blocking_touch_dispatched_to_renderer_timestamp,
+          base::IdType64<class ui::LatencyInfo>(
+              event->latency_info().trace_id()));
       has_seen_first_gesture_scroll_update_after_begin_ = true;
     } else {
       metrics = cc::ScrollEventMetrics::Create(
           gesture_event.GetTypeAsUiEventType(),
           gesture_event.GetScrollInputType(), is_inertial,
-          event->Event().TimeStamp());
+          event->Event().TimeStamp(), arrived_in_browser_main_timestamp,
+          blocking_touch_dispatched_to_renderer_timestamp,
+          base::IdType64<class ui::LatencyInfo>(
+              event->latency_info().trace_id()));
       has_seen_first_gesture_scroll_update_after_begin_ = false;
     }
-  } else if (WebInputEvent::IsPinchGestureEventType(event->Event().GetType())) {
+  } else if (WebInputEvent::IsPinchGestureEventType(event_type)) {
     const auto& gesture_event =
         static_cast<const WebGestureEvent&>(event->Event());
     metrics = cc::PinchEventMetrics::Create(
         gesture_event.GetTypeAsUiEventType(),
-        gesture_event.GetScrollInputType(), event->Event().TimeStamp());
+        gesture_event.GetScrollInputType(), event->Event().TimeStamp(),
+        base::IdType64<class ui::LatencyInfo>(
+            event->latency_info().trace_id()));
   } else {
     metrics = cc::EventMetrics::Create(event->Event().GetTypeAsUiEventType(),
-                                       event->Event().TimeStamp());
+                                       event->Event().TimeStamp(),
+                                       arrived_in_browser_main_timestamp,
+                                       base::IdType64<class ui::LatencyInfo>(
+                                           event->latency_info().trace_id()));
   }
 
   if (uses_input_handler_) {
@@ -664,9 +797,9 @@ static void WaitForInputProcessedFromMain(base::WeakPtr<WidgetBase> widget) {
   // the call will force a commit and redraw and callback when the
   // CompositorFrame has been displayed in the display service. Some examples of
   // non-trivial effects that require waiting that long: committing
-  // NonFastScrollRegions to the compositor, sending touch-action rects to the
-  // browser, and sending updated surface information to the display compositor
-  // for up-to-date OOPIF hit-testing.
+  // MainThreadScrollHitTestRegion to the compositor, sending touch-action rects
+  // to the browser, and sending updated surface information to the display
+  // compositor for up-to-date OOPIF hit-testing.
 
   widget->RequestPresentationAfterScrollAnimationEnd(
       std::move(redraw_complete_callback));
@@ -679,17 +812,35 @@ void WidgetInputHandlerManager::WaitForInputProcessed(
   DCHECK(!input_processed_callback_);
   input_processed_callback_ = std::move(callback);
 
-  // We mustn't touch widget_ from the impl thread so post all the setup
-  // to the main thread. Make sure the callback runs after all the queued events
-  // are dispatched.
-  input_event_queue_->QueueClosure(
-      base::BindOnce(&WaitForInputProcessedFromMain, widget_));
+  // We mustn't touch widget_ from the impl thread so post all the setup to the
+  // main thread. Make sure the callback runs after all the queued events are
+  // dispatched.
+  base::OnceClosure closure =
+      base::BindOnce(&MainThreadEventQueue::QueueClosure, input_event_queue_,
+                     base::BindOnce(&WaitForInputProcessedFromMain, widget_));
+
+  // If there are frame-aligned input events waiting to be dispatched, wait for
+  // that to happen before posting to the main thread input queue.
+  if (input_handler_proxy_) {
+    input_handler_proxy_->RequestCallbackAfterEventQueueFlushed(
+        std::move(closure));
+  } else {
+    std::move(closure).Run();
+  }
 }
 
-void WidgetInputHandlerManager::DidNavigate() {
+void WidgetInputHandlerManager::InitializeInputEventSuppressionStates() {
   suppressing_input_events_state_ =
       static_cast<uint16_t>(SuppressingInputEventsBits::kHasNotPainted);
-  have_emitted_uma_ = false;
+
+  first_paint_max_delay_timer_.reset();
+  recorded_event_metric_for_paint_timing_ = false;
+
+  base::AutoLock lock(uma_data_lock_);
+  uma_data_.have_emitted_uma = false;
+  uma_data_.most_recent_suppressed_event_time = base::TimeTicks();
+  uma_data_.suppressed_interactions_count = 0;
+  uma_data_.suppressed_events_count = 0;
 }
 
 void WidgetInputHandlerManager::OnDeferMainFrameUpdatesChanged(bool status) {
@@ -790,11 +941,10 @@ void WidgetInputHandlerManager::FindScrollTargetReply(
     std::unique_ptr<WebCoalescedInputEvent> event,
     std::unique_ptr<cc::EventMetrics> metrics,
     mojom::blink::WidgetInputHandler::DispatchEventCallback browser_callback,
-    uint64_t hit_test_result) {
+    cc::ElementId hit_test_result) {
   TRACE_EVENT1("input", "WidgetInputHandlerManager::FindScrollTargetReply",
-               "hit_test_result", hit_test_result);
+               "hit_test_result", hit_test_result.ToString());
   DCHECK(InputThreadTaskRunner()->BelongsToCurrentThread());
-  DCHECK(base::FeatureList::IsEnabled(::features::kScrollUnification));
 
   // If the input_handler was destroyed in the mean time just ACK the event as
   // unconsumed to the browser and drop further handling.
@@ -836,6 +986,17 @@ void WidgetInputHandlerManager::DidHandleInputEventSentToCompositor(
   TRACE_EVENT1("input",
                "WidgetInputHandlerManager::DidHandleInputEventSentToCompositor",
                "Disposition", event_disposition);
+
+  int64_t trace_id = event->latency_info().trace_id();
+  TRACE_EVENT(
+      "input,benchmark,latencyInfo", "LatencyInfo.Flow",
+      [&](perfetto::EventContext ctx) {
+        base::TaskAnnotator::EmitTaskTimingDetails(ctx);
+        ui::LatencyInfo::FillTraceEvent(
+            ctx, trace_id,
+            ChromeLatencyInfo2::Step::STEP_DID_HANDLE_INPUT_AND_OVERSCROLL);
+      });
+
   DCHECK(InputThreadTaskRunner()->BelongsToCurrentThread());
 
   if (event_disposition == InputHandlerProxy::DROP_EVENT &&
@@ -863,14 +1024,9 @@ void WidgetInputHandlerManager::DidHandleInputEventSentToCompositor(
     }
   }
 
-  ui::LatencyInfo::TraceIntermediateFlowEvents(
-      {event->latency_info()},
-      ChromeLatencyInfo::STEP_DID_HANDLE_INPUT_AND_OVERSCROLL);
-
   if (event_disposition == InputHandlerProxy::REQUIRES_MAIN_THREAD_HIT_TEST) {
     TRACE_EVENT_INSTANT0("input", "PostingHitTestToMainThread",
                          TRACE_EVENT_SCOPE_THREAD);
-    DCHECK(base::FeatureList::IsEnabled(::features::kScrollUnification));
     DCHECK_EQ(event->Event().GetType(),
               WebInputEvent::Type::kGestureScrollBegin);
     DCHECK(input_handler_proxy_);
@@ -901,7 +1057,7 @@ void WidgetInputHandlerManager::DidHandleInputEventSentToCompositor(
     return;
   }
 
-  absl::optional<cc::TouchAction> touch_action =
+  std::optional<cc::TouchAction> touch_action =
       compositor_allowed_touch_action_;
   compositor_allowed_touch_action_.reset();
 
@@ -952,29 +1108,37 @@ void WidgetInputHandlerManager::DidHandleInputEventSentToMainFromWidgetBase(
     const ui::LatencyInfo& latency_info,
     std::unique_ptr<blink::InputHandlerProxy::DidOverscrollParams>
         overscroll_params,
-    absl::optional<cc::TouchAction> touch_action) {
+    std::optional<cc::TouchAction> touch_action) {
   DidHandleInputEventSentToMain(
-      std::move(callback), absl::nullopt, ack_state, latency_info,
+      std::move(callback), std::nullopt, ack_state, latency_info,
       ToDidOverscrollParams(overscroll_params.get()), touch_action);
 }
 
 void WidgetInputHandlerManager::DidHandleInputEventSentToMain(
     mojom::blink::WidgetInputHandler::DispatchEventCallback callback,
-    absl::optional<cc::TouchAction> touch_action_from_compositor,
+    std::optional<cc::TouchAction> touch_action_from_compositor,
     mojom::blink::InputEventResultState ack_state,
     const ui::LatencyInfo& latency_info,
     mojom::blink::DidOverscrollParamsPtr overscroll_params,
-    absl::optional<cc::TouchAction> touch_action_from_main) {
+    std::optional<cc::TouchAction> touch_action_from_main) {
   if (!callback)
     return;
 
   TRACE_EVENT1("input",
                "WidgetInputHandlerManager::DidHandleInputEventSentToMain",
                "ack_state", ack_state);
-  ui::LatencyInfo::TraceIntermediateFlowEvents(
-      {latency_info}, ChromeLatencyInfo::STEP_HANDLED_INPUT_EVENT_MAIN_OR_IMPL);
 
-  absl::optional<cc::TouchAction> touch_action_for_ack = touch_action_from_main;
+  int64_t trace_id = latency_info.trace_id();
+  TRACE_EVENT(
+      "input,benchmark,latencyInfo", "LatencyInfo.Flow",
+      [&](perfetto::EventContext ctx) {
+        base::TaskAnnotator::EmitTaskTimingDetails(ctx);
+        ui::LatencyInfo::FillTraceEvent(
+            ctx, trace_id,
+            ChromeLatencyInfo2::Step::STEP_HANDLED_INPUT_EVENT_MAIN_OR_IMPL);
+      });
+
+  std::optional<cc::TouchAction> touch_action_for_ack = touch_action_from_main;
   if (!touch_action_for_ack.has_value()) {
     TRACE_EVENT_INSTANT0("input", "Using allowed_touch_action",
                          TRACE_EVENT_SCOPE_THREAD);
@@ -1042,7 +1206,58 @@ WidgetInputHandlerManager::GetSynchronousCompositorRegistry() {
 #endif
 
 void WidgetInputHandlerManager::ClearClient() {
+  first_paint_max_delay_timer_.reset();
+  recorded_event_metric_for_paint_timing_ = false;
   input_event_queue_->ClearClient();
+}
+
+void WidgetInputHandlerManager::UpdateBrowserControlsState(
+    cc::BrowserControlsState constraints,
+    cc::BrowserControlsState current,
+    bool animate,
+    base::optional_ref<const cc::BrowserControlsOffsetTagsInfo>
+        offset_tags_info) {
+  if (!input_handler_proxy_) {
+    return;
+  }
+
+  DCHECK(InputThreadTaskRunner()->BelongsToCurrentThread());
+  input_handler_proxy_->UpdateBrowserControlsState(constraints, current,
+                                                   animate, offset_tags_info);
+}
+
+void WidgetInputHandlerManager::FlushCompositorQueueForTesting() {
+  CHECK(InputThreadTaskRunner()->BelongsToCurrentThread());
+  if (!input_handler_proxy_) {
+    return;
+  }
+  input_handler_proxy_->FlushQueuedEventsForTesting();
+}
+
+void WidgetInputHandlerManager::FlushMainThreadQueueForTesting(
+    base::OnceClosure done) {
+  CHECK(main_thread_task_runner_->BelongsToCurrentThread());
+  input_event_queue()->DispatchRafAlignedInput(base::TimeTicks::Now());
+  CHECK(input_event_queue()->IsEmptyForTesting());
+  std::move(done).Run();
+}
+
+void WidgetInputHandlerManager::FlushEventQueuesForTesting(
+    base::OnceClosure done_callback) {
+  CHECK(main_thread_task_runner_->BelongsToCurrentThread());
+
+  auto flush_compositor_queue = base::BindOnce(
+      &WidgetInputHandlerManager::FlushCompositorQueueForTesting, this);
+
+  auto flush_main_queue =
+      base::BindOnce(&WidgetInputHandlerManager::FlushMainThreadQueueForTesting,
+                     this, std::move(done_callback));
+
+  // Flush the compositor queue first since dispatching compositor events may
+  // bounce them back into the main thread event queue.
+  InputThreadTaskRunner()->PostTaskAndReply(FROM_HERE,
+                                            std::move(flush_compositor_queue),
+                                            std::move(flush_main_queue));
 }
 
 }  // namespace blink

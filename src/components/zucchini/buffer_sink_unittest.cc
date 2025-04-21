@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,6 +43,19 @@ TEST_F(BufferSinkTest, PutValue) {
   EXPECT_EQ(std::vector<uint8_t>(
                 {0x10, 0x32, 0x54, 0x76, 0x98, 0xBA, 0xDC, 0xFE, 0x10, 0x00}),
             buffer_);
+}
+
+TEST_F(BufferSinkTest, PutValueUnaligned) {
+  EXPECT_EQ(size_t(10), sink_.Remaining());
+
+  EXPECT_TRUE(sink_.PutValue(uint8_t(0x10U)));
+  EXPECT_EQ(size_t(9), sink_.Remaining());
+
+  EXPECT_TRUE(sink_.PutValue(uint16_t(0x5432U)));
+  EXPECT_EQ(size_t(7), sink_.Remaining());
+
+  EXPECT_TRUE(sink_.PutValue(uint32_t(0xDCBA9876U)));
+  EXPECT_EQ(size_t(3), sink_.Remaining());
 }
 
 TEST_F(BufferSinkTest, PutRange) {

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,7 @@
 #include "components/sessions/core/serialized_navigation_entry_test_helper.h"
 #include "content/public/browser/navigation_entry.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/base/mojom/window_show_state.mojom.h"
 
 using content::NavigationEntry;
 using sessions::ContentTestHelper;
@@ -51,7 +52,7 @@ class AppSessionServiceTest : public BrowserWithTestWindowTest {
 
     app_service()->SetWindowType(app_window_id, Browser::TYPE_APP);
     app_service()->SetWindowBounds(app_window_id, window_bounds_,
-                                   ui::SHOW_STATE_NORMAL);
+                                   ui::mojom::WindowShowState::kNormal);
     app_service()->SetWindowAppName(app_window_id, "TestApp");
     app_service()->SetWindowWorkspace(app_window_id, window_workspace);
 
@@ -74,8 +75,8 @@ class AppSessionServiceTest : public BrowserWithTestWindowTest {
     app_helper_.SetService(nullptr);
   }
 
-  void AppUpdateNavigation(const SessionID& window_session_id,
-                           const SessionID& tab_id,
+  void AppUpdateNavigation(SessionID window_session_id,
+                           SessionID tab_id,
                            const SerializedNavigationEntry& navigation,
                            bool select) {
     app_service()->UpdateTabNavigation(window_session_id, tab_id, navigation);
@@ -118,14 +119,14 @@ class AppSessionServiceTest : public BrowserWithTestWindowTest {
   }
 
   // SetUp already includes one add, add one more.
-  void CreateAndWriteSessionWithTwoApps(const SessionID& app2_id,
-                                        const SessionID& tab1_id,
+  void CreateAndWriteSessionWithTwoApps(SessionID app2_id,
+                                        SessionID tab1_id,
                                         SerializedNavigationEntry* nav1) {
     *nav1 = ContentTestHelper::CreateNavigation("http://google.com", "abc");
 
     app_service()->SetWindowType(app2_id, Browser::TYPE_APP);
     app_service()->SetWindowBounds(app2_id, window_bounds_,
-                                   ui::SHOW_STATE_NORMAL);
+                                   ui::mojom::WindowShowState::kNormal);
     app_service()->SetWindowAppName(app2_id, "TestApp");
     app_service()->SetWindowWorkspace(app2_id, window_workspace);
 
@@ -196,8 +197,8 @@ TEST_F(AppSessionServiceTest, TwoApps) {
   } else {
     ASSERT_EQ(window2_id, windows[0]->window_id);
     ASSERT_EQ(window_id, windows[1]->window_id);
-    ASSERT_EQ(ui::SHOW_STATE_MAXIMIZED, windows[0]->show_state);
-    ASSERT_EQ(ui::SHOW_STATE_NORMAL, windows[1]->show_state);
+    ASSERT_EQ(ui::mojom::WindowShowState::kMaximized, windows[0]->show_state);
+    ASSERT_EQ(ui::mojom::WindowShowState::kNormal, windows[1]->show_state);
   }
 }
 
@@ -215,7 +216,7 @@ TEST_F(AppSessionServiceTest, RestoreAppWithAppSessionService) {
   // do not interfer and are isolated.
   app_helper_.service()->SetWindowType(window2_id, Browser::TYPE_APP);
   app_helper_.service()->SetWindowBounds(window2_id, window_bounds_,
-                                         ui::SHOW_STATE_NORMAL);
+                                         ui::mojom::WindowShowState::kNormal);
   app_helper_.service()->SetWindowAppName(window2_id, "TestApp");
 
   SerializedNavigationEntry nav1 =

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,18 +10,22 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/component_export.h"
+#include "base/functional/callback_forward.h"
+#include "base/functional/callback_helpers.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
+#include "components/file_access/scoped_file_access.h"
+#include "components/file_access/scoped_file_access_delegate.h"
 #include "mojo/public/cpp/base/big_buffer.h"
 #include "mojo/public/cpp/system/data_pipe.h"
 #include "net/base/completion_once_callback.h"
 #include "services/network/public/cpp/data_pipe_to_source_stream.h"
 #include "storage/browser/blob/blob_storage_constants.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class GURL;
 
@@ -106,7 +110,7 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) BlobReader {
   void ReadSideData(StatusCallback done);
 
   // Passes the side data (if any) from ReadSideData() to the caller.
-  absl::optional<mojo_base::BigBuffer> TakeSideData();
+  std::optional<mojo_base::BigBuffer> TakeSideData();
 
   // Used to set the read position.
   // * This should be called after CalculateSize and before Read.
@@ -114,22 +118,28 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) BlobReader {
   Status SetReadRange(uint64_t position, uint64_t length);
 
   // Reads a portion of the data.
-  // * CalculateSize (and optionally SetReadRange) must be called beforehand.
-  // * bytes_read is populated only if Status::DONE is returned. Otherwise the
-  //   bytes read (or error code) is populated in the 'done' callback.
-  // * The done callback is only called if Status::IO_PENDING is returned.
-  // * This method can be called multiple times. A bytes_read value (either from
-  //   the callback for Status::IO_PENDING or the bytes_read value for
-  //   Status::DONE) of 0 means we're finished reading.
+  // * `CalculateSize()` (and optionally `SetReadRange()`) must be called
+  //   beforehand.
+  // * `bytes_read` is populated only if `Status::DONE` is returned. Otherwise
+  //   the bytes read (or error code) is populated in the `done` callback.
+  // * The `done` callback is only called if `Status::IO_PENDING` is returned.
+  // * This method can be called multiple times. A bytes read value (either from
+  //   the callback for `Status::IO_PENDING` or the `bytes_read` value for
+  //   `Status::DONE`) of 0 means we're finished reading.
+  // TODO (crbug.com/362658602): Use separate parameters for the error code and
+  // bytes read in `done`.
   Status Read(net::IOBuffer* buffer,
               size_t dest_size,
               int* bytes_read,
               net::CompletionOnceCallback done);
 
-  // Returns if this reader contains a single MojoDataItem.  If so,
-  // ReadSingleMojoDataItem can be called instead of multiple Reads as an
-  // optimized path.  This can only be called after CalculateSize.
+  // Returns true iff this reader contains a single MojoDataItem. When true,
+  // `ReadSingleMojoDataItem()` can be called instead of multiple `Read()`s as
+  // an optimized path. This can only be called after `CalculateSize()`.
   bool IsSingleMojoDataItem() const;
+
+  // Reads the data from the single MojoDataItem directly into `producer` and
+  // passes the `net::Error` from the operation to the `done` callback.
   void ReadSingleMojoDataItem(mojo::ScopedDataPipeProducerHandle producer,
                               net::CompletionOnceCallback done);
 
@@ -148,7 +158,9 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) BlobReader {
     return remaining_bytes_;
   }
 
-  // Returns the net error code if there was an error. Defaults to net::OK.
+  // Returns the net error code if there was an error. Defaults to `net::OK`.
+  // Not set when `ReadSingleMojoDataItem()` is used.
+  // TODO (crbug.com/362658602): Make this an `std::optional` instead.
   int net_error() const {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     return net_error_;
@@ -168,7 +180,7 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) BlobReader {
   FRIEND_TEST_ALL_PREFIXES(BlobReaderTest, HandleBeforeAsyncCancel);
   FRIEND_TEST_ALL_PREFIXES(BlobReaderTest, ReadFromIncompleteBlob);
 
-  BlobReader(const BlobDataHandle* blob_handle);
+  explicit BlobReader(const BlobDataHandle* blob_handle);
 
   bool total_size_calculated() const {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -208,7 +220,11 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) BlobReader {
   void AdvanceItem();
   void AdvanceBytesRead(int result);
   void ReadBytesItem(const BlobDataItem& item, int bytes_to_read);
-  BlobReader::Status ReadFileItem(FileStreamReader* reader, int bytes_to_read);
+  BlobReader::Status ReadFileItem(
+      FileStreamReader* reader,
+      int bytes_to_read,
+      file_access::ScopedFileAccessDelegate::RequestFilesAccessIOCallback
+          file_access);
   void DidReadFile(int result);
   void DeleteItemReaders();
   Status ReadReadableDataHandle(const BlobDataItem& item, int bytes_to_read);
@@ -248,7 +264,7 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) BlobReader {
   std::unique_ptr<BlobDataSnapshot> blob_data_;
   std::unique_ptr<FileStreamReaderProvider> file_stream_provider_for_testing_;
   scoped_refptr<base::TaskRunner> file_task_runner_;
-  absl::optional<mojo_base::BigBuffer> side_data_;
+  std::optional<mojo_base::BigBuffer> side_data_;
 
   int net_error_;
   bool item_list_populated_ = false;

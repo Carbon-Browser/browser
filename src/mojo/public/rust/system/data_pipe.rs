@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,12 @@ use std::ptr;
 use std::slice;
 use std::vec;
 
-use crate::system::ffi;
-use crate::system::handle::{self, CastHandle, Handle, UntypedHandle};
-use crate::system::mojo_types::*;
+use crate::ffi;
+use crate::handle::{self, CastHandle, Handle, UntypedHandle};
+use crate::mojo_types::*;
 
 bitflags::bitflags! {
-    #[derive(Default)]
+    #[derive(Clone, Copy, Default)]
     pub struct WriteFlags: u32 {
         /// Write all the data to the pipe if possible or none at all.
         const ALL_OR_NONE = 1 << 0;
@@ -22,7 +22,7 @@ bitflags::bitflags! {
 }
 
 bitflags::bitflags! {
-    #[derive(Default)]
+    #[derive(Clone, Copy, Default)]
     pub struct ReadFlags: u32 {
         /// Write all the data to the pipe if possible or none at all.
         const ALL_OR_NONE = 1 << 0;
@@ -87,8 +87,8 @@ impl<'b, 'p, T> ReadDataBuffer<'b, 'p, T> {
 
         if result != MojoResult::Okay {
             // The Mojo function can return two possible errors:
-            // * MojoResult::InvalidArgument indicating either the handle is
-            //   invalid or elems_read is larger than self.buffer.
+            // * MojoResult::InvalidArgument indicating either the handle is invalid or
+            //   elems_read is larger than self.buffer.
             // * MojoResult::FailedPrecondition if not in a two-phase read.
             //
             // Either indicates a bug in the wrapper code and other errors are
@@ -171,8 +171,8 @@ impl<'b, 'p, T> WriteDataBuffer<'b, 'p, T> {
         });
         if result != MojoResult::Okay {
             // The Mojo function can return two possible errors:
-            // * MojoResult::InvalidArgument indicating either the handle is
-            //   invalid or elems_written is larger than self.buffer.
+            // * MojoResult::InvalidArgument indicating either the handle is invalid or
+            //   elems_written is larger than self.buffer.
             // * MojoResult::FailedPrecondition if not in a two-phase read.
             //
             // Either indicates a bug in the wrapper code and other errors are
@@ -290,7 +290,11 @@ impl<T> Consumer<T> {
             )
         });
         unsafe { buf.set_len((num_bytes / elem_size) as usize) }
-        if r != MojoResult::Okay { Err(r) } else { Ok(buf) }
+        if r != MojoResult::Okay {
+            Err(r)
+        } else {
+            Ok(buf)
+        }
     }
 
     /// Begin two-phase read. Returns a ReadDataBuffer to perform read and
@@ -319,13 +323,13 @@ impl<T> Consumer<T> {
 
 impl<T> CastHandle for Consumer<T> {
     /// Generates a Consumer from an untyped handle wrapper
-    /// See mojo::system::handle for information on untyped vs. typed
+    /// See crate::handle for information on untyped vs. typed
     unsafe fn from_untyped(handle: handle::UntypedHandle) -> Self {
         Consumer::<T> { handle: handle, _elem_type: marker::PhantomData }
     }
 
     /// Consumes this object and produces a plain handle wrapper
-    /// See mojo::system::handle for information on untyped vs. typed
+    /// See crate::handle for information on untyped vs. typed
     fn as_untyped(self) -> handle::UntypedHandle {
         self.handle
     }
@@ -334,7 +338,7 @@ impl<T> CastHandle for Consumer<T> {
 impl<T> Handle for Consumer<T> {
     /// Returns the native handle wrapped by this structure.
     ///
-    /// See mojo::system::handle for information on handle wrappers
+    /// See crate::handle for information on handle wrappers
     fn get_native_handle(&self) -> MojoHandle {
         self.handle.get_native_handle()
     }
@@ -394,13 +398,13 @@ impl<T> Producer<T> {
 
 impl<T> CastHandle for Producer<T> {
     /// Generates a Consumer from an untyped handle wrapper
-    /// See mojo::system::handle for information on untyped vs. typed
+    /// See crate::handle for information on untyped vs. typed
     unsafe fn from_untyped(handle: handle::UntypedHandle) -> Self {
         Producer::<T> { handle: handle, _elem_type: marker::PhantomData }
     }
 
     /// Consumes this object and produces a plain handle wrapper
-    /// See mojo::system::handle for information on untyped vs. typed
+    /// See crate::handle for information on untyped vs. typed
     fn as_untyped(self) -> handle::UntypedHandle {
         self.handle
     }
@@ -409,7 +413,7 @@ impl<T> CastHandle for Producer<T> {
 impl<T> Handle for Producer<T> {
     /// Returns the native handle wrapped by this structure.
     ///
-    /// See mojo::system::handle for information on handle wrappers
+    /// See crate::handle for information on handle wrappers
     fn get_native_handle(&self) -> MojoHandle {
         self.handle.get_native_handle()
     }

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,7 +40,8 @@ TtsPlatformImplChromeOs::TtsPlatformImplChromeOs() = default;
 TtsPlatformImplChromeOs::~TtsPlatformImplChromeOs() = default;
 
 bool TtsPlatformImplChromeOs::PlatformImplSupported() {
-  // TODO(1133813): Chrome OS Platform should support background initialisation.
+  // TODO(crbug.com/40151186): Chrome OS Platform should support background
+  // initialisation.
   return arc::ArcServiceManager::Get() && arc::ArcServiceManager::Get()
                                               ->arc_bridge_service()
                                               ->tts()
@@ -180,8 +181,7 @@ void TtsPlatformImplChromeOs::RefreshVoices() {
 }
 
 // static
-TtsPlatformImplChromeOs*
-TtsPlatformImplChromeOs::GetInstance() {
+TtsPlatformImplChromeOs* TtsPlatformImplChromeOs::GetInstance() {
   static base::NoDestructor<TtsPlatformImplChromeOs> tts_platform;
   return tts_platform.get();
 }

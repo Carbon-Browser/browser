@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,8 @@ namespace ash {
 // size, etc) and ink drop. The button is also toggleable. This is used by
 // |ProjectorColorButton|, |ProjectorImageButton|, etc.
 class ASH_EXPORT ProjectorButton : public views::ToggleImageButton {
+  METADATA_HEADER(ProjectorButton, views::ToggleImageButton)
+
  public:
   const int kProjectorButtonSize = 32;
   const int kProjectorButtonBorderSize = 1;
@@ -29,10 +31,6 @@ class ASH_EXPORT ProjectorButton : public views::ToggleImageButton {
   // views::ToggleImageButton:
   void OnPaintBackground(gfx::Canvas* canvas) override;
   void OnThemeChanged() override;
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
-
- private:
-  std::u16string name_;
 };
 
 }  // namespace ash

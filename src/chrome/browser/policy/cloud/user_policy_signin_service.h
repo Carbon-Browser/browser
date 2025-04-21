@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,14 +19,13 @@
 
 class AccountId;
 class Profile;
+class ProfileManager;
 
 namespace network {
 class SharedURLLoaderFactory;
 }
 
 namespace policy {
-
-class CloudPolicyClientRegistrationHelper;
 
 class UserPolicySigninService;
 
@@ -43,8 +42,11 @@ class ProfileManagerObserverBridge : public ProfileManagerObserver {
 
   // ProfileManagerObserver implementation:
   void OnProfileAdded(Profile* profile) override;
+  void OnProfileManagerDestroying() override;
 
  private:
+  base::ScopedObservation<ProfileManager, ProfileManagerObserver>
+      profile_manager_observation_{this};
   raw_ptr<UserPolicySigninService> user_policy_signin_service_;
 };
 
@@ -74,38 +76,40 @@ class UserPolicySigninService : public UserPolicySigninServiceBase,
       const CoreAccountInfo& account_info) override;
 
   // UserPolicySigninServiceBase implementation:
-  void ShutdownUserCloudPolicyManager() override;
+  void ShutdownCloudPolicyManager() override;
 
+  // ProfileAttributesStorage::Observer implementation:
   void OnProfileUserManagementAcceptanceChanged(
       const base::FilePath& profile_path) override;
 
   // Handler for when the profile is ready.
   void OnProfileReady(Profile* profile);
 
+  // Called when the ProfileAttributesStorage is being destroyed.
+  void OnProfileAttributesStorageDestroying();
+
   void set_profile_can_be_managed_for_testing(bool can_be_managed) {
     profile_can_be_managed_for_testing_ = can_be_managed;
   }
 
- private:
   // KeyedService implementation:
   void Shutdown() override;
 
+ private:
   // UserPolicySigninServiceBase implementation:
-  void InitializeUserCloudPolicyManager(
+  void InitializeCloudPolicyManager(
       const AccountId& account_id,
       std::unique_ptr<CloudPolicyClient> client) override;
-  void PrepareForUserCloudPolicyManagerShutdown() override;
   void ProhibitSignoutIfNeeded() override;
   bool CanApplyPolicies(bool check_for_refresh_token) override;
+  CloudPolicyClient::DeviceDMTokenCallback
+  GetDeviceDMTokenIfAffiliatedCallback() override;
+  std::string GetProfileId() override;
 
   // Helper method that attempts calls |InitializeForSignedInUser| only if
   // |policy_manager| is not-nul. Expects that there is a refresh token for
   // the primary account.
   void TryInitializeForSignedInUser();
-
-  // Invoked when a policy registration request is complete.
-  void CallPolicyRegistrationCallback(std::unique_ptr<CloudPolicyClient> client,
-                                      PolicyRegistrationCallback callback);
 
   // Initializes the UserPolicySigninService once its owning Profile becomes
   // ready. If the Profile has a signed-in account associated with it at startup
@@ -117,8 +121,6 @@ class UserPolicySigninService : public UserPolicySigninServiceBase,
   // from the test fixture. This is used to bypass the check on the profile
   // attributes entry.
   bool profile_can_be_managed_for_testing_ = false;
-
-  std::unique_ptr<CloudPolicyClientRegistrationHelper> registration_helper_;
 
   // Parent profile for this service.
   raw_ptr<Profile> profile_;

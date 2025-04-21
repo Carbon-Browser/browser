@@ -1,10 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.ui.permissions;
 
-import androidx.annotation.Nullable;
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 
 /**
  * Contains functionality to request Android notification permission contextually. This will result
@@ -12,12 +13,12 @@ import androidx.annotation.Nullable;
  * the implementation provided from chrome layer. Internally delegates the permission request to
  * {@link NotificationPermissionController}.
  */
+@NullMarked
 public abstract class ContextualNotificationPermissionRequester {
-    private static ContextualNotificationPermissionRequester sInstance;
+    private static @Nullable ContextualNotificationPermissionRequester sInstance;
 
     /** @return The singleton instance of this class. */
-    @Nullable
-    public static ContextualNotificationPermissionRequester getInstance() {
+    public static @Nullable ContextualNotificationPermissionRequester getInstance() {
         return sInstance;
     }
 

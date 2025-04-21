@@ -1,12 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/plugin_vm/plugin_vm_manager_impl.h"
 
 #include "ash/public/cpp/shelf_model.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/bind.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/mock_callback.h"
@@ -27,13 +28,12 @@
 #include "chromeos/ash/components/dbus/cicerone/cicerone_client.h"
 #include "chromeos/ash/components/dbus/concierge/concierge_client.h"
 #include "chromeos/ash/components/dbus/concierge/fake_concierge_client.h"
+#include "chromeos/ash/components/dbus/debug_daemon/debug_daemon_client.h"
+#include "chromeos/ash/components/dbus/dlcservice/fake_dlcservice_client.h"
 #include "chromeos/ash/components/dbus/seneschal/fake_seneschal_client.h"
 #include "chromeos/ash/components/dbus/seneschal/seneschal_client.h"
 #include "chromeos/ash/components/dbus/vm_plugin_dispatcher/fake_vm_plugin_dispatcher_client.h"
 #include "chromeos/ash/components/dbus/vm_plugin_dispatcher/vm_plugin_dispatcher_client.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
-#include "chromeos/dbus/debug_daemon/debug_daemon_client.h"
-#include "chromeos/dbus/dlcservice/fake_dlcservice_client.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -51,11 +51,10 @@ using MockLaunchPluginVmCallback =
 class PluginVmManagerImplTest : public testing::Test {
  public:
   PluginVmManagerImplTest() {
-    chromeos::DBusThreadManager::Initialize();
     ash::ChunneldClient::InitializeFake();
     ash::CiceroneClient::InitializeFake();
     ash::ConciergeClient::InitializeFake();
-    chromeos::DebugDaemonClient::InitializeFake();
+    ash::DebugDaemonClient::InitializeFake();
     ash::SeneschalClient::InitializeFake();
     ash::VmPluginDispatcherClient::InitializeFake();
     testing_profile_ = std::make_unique<TestingProfile>();
@@ -66,14 +65,13 @@ class PluginVmManagerImplTest : public testing::Test {
         testing_profile_.get());
     shelf_model_ = std::make_unique<ash::ShelfModel>();
     chrome_shelf_controller_ = std::make_unique<ChromeShelfController>(
-        testing_profile_.get(), shelf_model_.get(),
-        /*shelf_item_factory=*/nullptr);
+        testing_profile_.get(), shelf_model_.get());
     chrome_shelf_controller_->SetProfileForTest(testing_profile_.get());
     chrome_shelf_controller_->SetShelfControllerHelperForTest(
         std::make_unique<ShelfControllerHelper>(testing_profile_.get()));
     chrome_shelf_controller_->Init();
     histogram_tester_ = std::make_unique<base::HistogramTester>();
-    chromeos::DlcserviceClient::InitializeFake();
+    ash::DlcserviceClient::InitializeFake();
 
     // Make StartVm succeed by default, tests can override as needed.
     VmPluginDispatcherClient().set_start_vm_response(
@@ -88,7 +86,7 @@ class PluginVmManagerImplTest : public testing::Test {
   PluginVmManagerImplTest& operator=(const PluginVmManagerImplTest&) = delete;
 
   ~PluginVmManagerImplTest() override {
-    chromeos::DlcserviceClient::Shutdown();
+    ash::DlcserviceClient::Shutdown();
     histogram_tester_.reset();
     chrome_shelf_controller_.reset();
     shelf_model_.reset();
@@ -97,11 +95,10 @@ class PluginVmManagerImplTest : public testing::Test {
     testing_profile_.reset();
     ash::VmPluginDispatcherClient::Shutdown();
     ash::SeneschalClient::Shutdown();
-    chromeos::DebugDaemonClient::Shutdown();
+    ash::DebugDaemonClient::Shutdown();
     ash::ConciergeClient::Shutdown();
     ash::CiceroneClient::Shutdown();
     ash::ChunneldClient::Shutdown();
-    chromeos::DBusThreadManager::Shutdown();
   }
 
  protected:
@@ -157,7 +154,7 @@ class PluginVmManagerImplTest : public testing::Test {
   std::unique_ptr<TestingProfile> testing_profile_;
   std::unique_ptr<PluginVmTestHelper> test_helper_;
   std::unique_ptr<NotificationDisplayServiceTester> display_service_;
-  PluginVmManagerImpl* plugin_vm_manager_;
+  raw_ptr<PluginVmManagerImpl, DanglingUntriaged> plugin_vm_manager_;
   std::unique_ptr<ash::ShelfModel> shelf_model_;
   std::unique_ptr<ChromeShelfController> chrome_shelf_controller_;
   std::unique_ptr<base::HistogramTester> histogram_tester_;

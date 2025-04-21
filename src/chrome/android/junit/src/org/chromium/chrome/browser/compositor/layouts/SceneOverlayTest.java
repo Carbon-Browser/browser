@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,8 +24,8 @@ import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.chrome.browser.compositor.bottombar.contextualsearch.ContextualSearchPanel;
-import org.chromium.chrome.browser.compositor.layouts.content.TabContentManager;
 import org.chromium.chrome.browser.layouts.SceneOverlay;
+import org.chromium.chrome.browser.tab_ui.TabContentManager;
 import org.chromium.chrome.browser.theme.TopUiThemeColorProvider;
 import org.chromium.chrome.browser.toolbar.bottom.ScrollingBottomViewSceneLayer;
 import org.chromium.chrome.browser.toolbar.top.TopToolbarOverlayCoordinator;
@@ -37,26 +37,19 @@ import java.util.List;
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class SceneOverlayTest {
-    @Mock
-    private Context mContext;
+    @Mock private Context mContext;
 
-    @Mock
-    private Resources mResources;
+    @Mock private Resources mResources;
 
-    @Mock
-    private DisplayMetrics mDisplayMetrics;
+    @Mock private DisplayMetrics mDisplayMetrics;
 
-    @Mock
-    private LayoutManagerHost mLayoutManagerHost;
+    @Mock private LayoutManagerHost mLayoutManagerHost;
 
-    @Mock
-    private ViewGroup mContainerView;
+    @Mock private ViewGroup mContainerView;
 
-    @Mock
-    private ObservableSupplier<TabContentManager> mTabContentManagerSupplier;
+    @Mock private ObservableSupplier<TabContentManager> mTabContentManagerSupplier;
 
-    @Mock
-    private TopUiThemeColorProvider mTopUiThemeColorProvider;
+    @Mock private TopUiThemeColorProvider mTopUiThemeColorProvider;
 
     private LayoutManagerImpl mLayoutManager;
 
@@ -68,8 +61,12 @@ public class SceneOverlayTest {
         when(mContext.getResources()).thenReturn(mResources);
         when(mResources.getDisplayMetrics()).thenReturn(mDisplayMetrics);
 
-        mLayoutManager = new LayoutManagerImpl(mLayoutManagerHost, mContainerView,
-                mTabContentManagerSupplier, () -> mTopUiThemeColorProvider);
+        mLayoutManager =
+                new LayoutManagerImpl(
+                        mLayoutManagerHost,
+                        mContainerView,
+                        mTabContentManagerSupplier,
+                        () -> mTopUiThemeColorProvider);
     }
 
     @Test

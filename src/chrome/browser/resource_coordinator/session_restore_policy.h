@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,17 @@
 #define CHROME_BROWSER_RESOURCE_COORDINATOR_SESSION_RESTORE_POLICY_H_
 
 #include <memory>
+#include <optional>
 
-#include "base/callback.h"
 #include "base/cancelable_callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "chrome/browser/resource_coordinator/tab_manager_features.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace content {
 class WebContents;
@@ -29,6 +29,10 @@ namespace resource_coordinator {
 // merged into TabManager directly.
 class SessionRestorePolicy {
  public:
+  // Minimum site engagement score for a tab to be restored, if it doesn't
+  // communicate in the background.
+  static constexpr uint32_t kMinSiteEngagementToRestore = 15;
+
   // Callback that is used by the policy engine to notify its embedder (the
   // TabLoaderDelegate) of changes to tab priorities as they occur. Zero or one
   // score updates may be delivered for each contents that is added; callbacks
@@ -157,7 +161,7 @@ class SessionRestorePolicy {
     // Indicates whether or not the tab communicates with the user even when it
     // is in the background (tab title changes, favicons, etc).
     // It is initialized to nullopt and set asynchronously to the proper value.
-    absl::optional<bool> used_in_bg;
+    std::optional<bool> used_in_bg;
 
     // Indicates whether or not the tab has been pinned by the user. Only
     // applicable on desktop platforms.
@@ -262,9 +266,9 @@ class SessionRestorePolicy {
   base::TimeDelta max_time_since_last_use_to_restore_ = base::Days(30);
 
   // The minimum site engagement score in order for a tab to be restored.
-  // Setting this to zero means all tabs will be restored regardless of the
-  // site engagement score.
-  uint32_t min_site_engagement_to_restore_ = 15;
+  // Can be overridden for tests. Setting this to zero means all tabs will be
+  // restored regardless of the site engagement score.
+  uint32_t min_site_engagement_to_restore_ = kMinSiteEngagementToRestore;
 
   // The number of simultaneous tab loads that are permitted by policy. This
   // is computed based on the number of cores on the machine, except for in
@@ -280,11 +284,6 @@ class SessionRestorePolicy {
   // This is incremented only after the full tab data is available, which
   // may happen asynchronously.
   size_t tabs_scored_ = 0;
-
-  // Counts the total number of tabs that were observed to make use of
-  // background communication mechanisms. This is used to drive some UMA stats.
-  size_t tabs_used_in_bg_ = 0;
-  size_t tabs_used_in_bg_restored_ = 0;
 
   // Used to track the state of the "all tabs scored" notification.
   enum class NotificationState : uint16_t {

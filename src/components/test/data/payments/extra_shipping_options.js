@@ -1,19 +1,17 @@
 /*
- * Copyright 2016 The Chromium Authors. All rights reserved.
+ * Copyright 2016 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
-/* global PaymentRequest:false */
-/* global print:false */
-
 /**
  * Launches the PaymentRequest UI with shipping options, but does not request a
  * shipping address.
+ * @param {String} methodData - An array of payment method objects.
  */
-function buy() { // eslint-disable-line no-unused-vars
+function buyWithMethods(methodData) {
   try {
-    var details = {
+    const details = {
       total: {label: 'Total', amount: {currency: 'USD', value: '5.00'}},
       shippingOptions: [{
         id: 'freeShippingOption',
@@ -22,9 +20,7 @@ function buy() { // eslint-disable-line no-unused-vars
         selected: true,
       }],
     };
-    var request = new PaymentRequest(
-        [{supportedMethods: 'basic-card', data: {supportedNetworks: ['visa']}}],
-        details);
+    const request = new PaymentRequest(methodData, details);
     request.show()
         .then(function(resp) {
           resp.complete('success')

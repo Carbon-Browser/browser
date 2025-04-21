@@ -1,20 +1,24 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_OZONE_PLATFORM_FLATLAND_FLATLAND_WINDOW_H_
 #define UI_OZONE_PLATFORM_FLATLAND_FLATLAND_WINDOW_H_
 
+#include <fidl/fuchsia.ui.input3/cpp/fidl.h>
+#include <fuchsia/element/cpp/fidl.h>
 #include <fuchsia/ui/composition/cpp/fidl.h>
-#include <fuchsia/ui/input3/cpp/fidl.h>
 #include <fuchsia/ui/views/cpp/fidl.h>
-#include <lib/ui/scenic/cpp/view_ref_pair.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/component_export.h"
+#include "base/fuchsia/fidl_event_handler.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/ime/fuchsia/keyboard_client.h"
 #include "ui/events/fuchsia/input_event_sink.h"
 #include "ui/events/fuchsia/pointer_events_handler.h"
@@ -30,6 +34,7 @@
 namespace ui {
 
 class FlatlandWindowManager;
+class ScenicWindowDelegate;
 
 class COMPONENT_EXPORT(OZONE) FlatlandWindow : public PlatformWindow,
                                                public InputEventSink {
@@ -39,11 +44,13 @@ class COMPONENT_EXPORT(OZONE) FlatlandWindow : public PlatformWindow,
   // ViewrefPair will be associated with this window's View, and used to
   // identify it when calling out to other services (e.g. the SemanticsManager).
   FlatlandWindow(FlatlandWindowManager* window_manager,
-                 PlatformWindowDelegate* delegate,
+                 PlatformWindowDelegate* platform_window_delegate,
                  PlatformWindowInitProperties properties);
   ~FlatlandWindow() override;
   FlatlandWindow(const FlatlandWindow&) = delete;
   FlatlandWindow& operator=(const FlatlandWindow&) = delete;
+
+  void ResetSurfaceContent();
 
   // Embeds the Flatland identified by |token| into the scene graph.
   void AttachSurfaceContent(fuchsia::ui::views::ViewportCreationToken token);
@@ -55,11 +62,13 @@ class COMPONENT_EXPORT(OZONE) FlatlandWindow : public PlatformWindow,
   // keyboard features when creating the InputMethod for the window.
   bool virtual_keyboard_enabled() const { return is_virtual_keyboard_enabled_; }
 
-  // PlatformWindow implementation.
+  // Test only PlatformWindow implementation.
   gfx::Rect GetBoundsInPixels() const override;
   void SetBoundsInPixels(const gfx::Rect& bounds) override;
   gfx::Rect GetBoundsInDIP() const override;
   void SetBoundsInDIP(const gfx::Rect& bounds) override;
+
+  // PlatformWindow implementation.
   void SetTitle(const std::u16string& title) override;
   void Show(bool inactive) override;
   void Hide() override;
@@ -69,7 +78,7 @@ class COMPONENT_EXPORT(OZONE) FlatlandWindow : public PlatformWindow,
   void SetCapture() override;
   void ReleaseCapture() override;
   bool HasCapture() const override;
-  void ToggleFullscreen() override;
+  void SetFullscreen(bool fullscreen, int64_t target_display_id) override;
   void Maximize() override;
   void Minimize() override;
   void Restore() override;
@@ -106,13 +115,17 @@ class COMPONENT_EXPORT(OZONE) FlatlandWindow : public PlatformWindow,
 
   void UpdateSize();
 
+  void OnFlatlandError(fuchsia::ui::composition::FlatlandError error);
   void OnViewControllerDisconnected(zx_status_t status);
 
-  FlatlandWindowManager* const manager_;
-  PlatformWindowDelegate* const window_delegate_;
+  const raw_ptr<FlatlandWindowManager> manager_;
+  const raw_ptr<PlatformWindowDelegate> platform_window_delegate_;
+  const raw_ptr<ScenicWindowDelegate> scenic_window_delegate_;
   gfx::AcceleratedWidget const window_id_;
 
-  fuchsia::ui::input3::KeyboardPtr keyboard_service_;
+  fidl::Client<fuchsia_ui_input3::Keyboard> keyboard_fidl_client_;
+  base::FidlErrorEventLogger<fuchsia_ui_input3::Keyboard>
+      fidl_error_event_logger_;
   std::unique_ptr<KeyboardClient> keyboard_client_;
   std::unique_ptr<PointerEventsHandler> pointer_handler_;
 
@@ -130,13 +143,20 @@ class COMPONENT_EXPORT(OZONE) FlatlandWindow : public PlatformWindow,
 
   fuchsia::ui::composition::TransformId root_transform_id_;
   fuchsia::ui::composition::TransformId surface_transform_id_;
+  fuchsia::ui::composition::TransformId shield_transform_id_;
 
   fuchsia::ui::composition::ContentId surface_content_id_;
+
+  // Pending Viewport creation callback waiting on |logical_size_|.
+  base::OnceClosure pending_attach_surface_content_closure_;
 
   fuchsia::ui::composition::ParentViewportWatcherPtr parent_viewport_watcher_;
 
   // Protocol for watching focus changes.
   fuchsia::ui::views::ViewRefFocusedPtr view_ref_focused_;
+
+  // Flatland View size in logical pixels.
+  std::optional<gfx::Size> logical_size_;
 
   // The scale between logical pixels and physical pixels, set based on the
   // fuchsia::ui::composition::LayoutInfo. It's used to calculate dimensions of
@@ -153,7 +173,10 @@ class COMPONENT_EXPORT(OZONE) FlatlandWindow : public PlatformWindow,
   // |parent_viewport_watcher_| is bound and returns OnGetLayout().
   gfx::Rect bounds_;
 
-  absl::optional<fuchsia::math::SizeU> view_properties_;
+  // The offsets between the edges and the visible rectangle of the View, set
+  // based on fuchsia::ui::composition::LayoutInfo. Used to set
+  // `bounds_.system_ui_overlap` in `UpdateSize()`.
+  gfx::Insets view_inset_;
 
   // False if the View for this window is detached from the View tree, in which
   // case it is definitely not visible.

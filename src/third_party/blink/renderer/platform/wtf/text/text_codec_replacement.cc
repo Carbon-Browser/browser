@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,23 +34,23 @@ void TextCodecReplacement::RegisterCodecs(TextCodecRegistrar registrar) {
   registrar("replacement", NewStreamingTextDecoderReplacement, nullptr);
 }
 
-String TextCodecReplacement::Decode(const char*,
-                                    wtf_size_t length,
+String TextCodecReplacement::Decode(base::span<const uint8_t> data,
                                     FlushBehavior,
                                     bool,
                                     bool& saw_error) {
   // https://encoding.spec.whatwg.org/#replacement-decoder
 
   // 1. If byte is end-of-stream, return finished.
-  if (!length)
+  if (data.empty()) {
     return String();
+  }
 
   // 2. If replacement error returned flag is unset, set the replacement
   // error returned flag and return error.
   if (!replacement_error_returned_) {
     replacement_error_returned_ = true;
     saw_error = true;
-    return String(&kReplacementCharacter, 1u);
+    return String(base::span_from_ref(kReplacementCharacter));
   }
 
   // 3. Return finished.

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,14 +33,6 @@ class FakeBlobRegistry : public mojom::blink::BlobRegistry {
       mojo::PendingAssociatedRemote<mojom::blink::ProgressClient>,
       RegisterFromStreamCallback) override;
 
-  void GetBlobFromUUID(mojo::PendingReceiver<mojom::blink::Blob>,
-                       const String& uuid,
-                       GetBlobFromUUIDCallback) override;
-
-  void URLStoreForOrigin(
-      const scoped_refptr<const SecurityOrigin>&,
-      mojo::PendingAssociatedReceiver<mojom::blink::BlobURLStore>) override;
-
   struct Registration {
     String uuid;
     String content_type;
@@ -54,10 +46,14 @@ class FakeBlobRegistry : public mojom::blink::BlobRegistry {
   };
   Vector<OwnedReceiver> owned_receivers;
 
-  std::unique_ptr<mojo::DataPipeDrainer> drainer_;
-
   class DataPipeDrainerClient;
   std::unique_ptr<DataPipeDrainerClient> drainer_client_;
+  std::unique_ptr<mojo::DataPipeDrainer> drainer_;
+
+  // Set to true to allow tests to read blobs that contain binary data.  Updates
+  // `Register()` to create fake blobs with binary bodies.  Not implemented for
+  // `RegisterFromStream()` or any other type of body content.
+  bool support_binary_blob_bodies_ = false;
 };
 
 }  // namespace blink

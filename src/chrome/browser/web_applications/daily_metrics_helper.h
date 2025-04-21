@@ -1,12 +1,14 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_WEB_APPLICATIONS_DAILY_METRICS_HELPER_H_
 #define CHROME_BROWSER_WEB_APPLICATIONS_DAILY_METRICS_HELPER_H_
 
+#include <optional>
+
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "build/build_config.h"
 #include "url/gurl.h"
 
 class PrefRegistrySimple;
@@ -16,11 +18,14 @@ namespace web_app {
 
 struct DailyInteraction {
   // Required.
+  // TODO(crbug.com/40267110): Use manifest_identity_url here instead of
+  // start_url.
   GURL start_url;
   // Implied bool used = true;
   bool installed = false;
-  absl::optional<int> install_source;
+  std::optional<int> install_source;
   int effective_display_mode = 0;
+  bool captures_links = false;
   bool promotable = false;
   // Durations and sessions emitted iff non-zero.
   base::TimeDelta foreground_duration;

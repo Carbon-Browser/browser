@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/arc/fileapi/arc_file_system_bridge.h"
 #include "chrome/browser/ash/arc/session/arc_session_manager.h"
 #include "chrome/browser/profiles/profile.h"
@@ -33,7 +33,8 @@ arc::ArcFileSystemBridge* GetArcFileSystemBridge() {
 
 }  // namespace
 
-VirtualFileRequestServiceProvider::VirtualFileRequestServiceProvider() {}
+VirtualFileRequestServiceProvider::VirtualFileRequestServiceProvider() =
+    default;
 
 VirtualFileRequestServiceProvider::~VirtualFileRequestServiceProvider() =
     default;

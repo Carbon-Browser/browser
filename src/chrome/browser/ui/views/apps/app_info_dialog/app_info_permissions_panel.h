@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,8 +22,9 @@ class Extension;
 // The summary panel of the app info dialog, which provides basic information
 // and controls related to the app.
 class AppInfoPermissionsPanel : public AppInfoPanel {
+  METADATA_HEADER(AppInfoPermissionsPanel, AppInfoPanel)
+
  public:
-  METADATA_HEADER(AppInfoPermissionsPanel);
   AppInfoPermissionsPanel(Profile* profile, const extensions::Extension* app);
   AppInfoPermissionsPanel(const AppInfoPermissionsPanel&) = delete;
   AppInfoPermissionsPanel& operator=(const AppInfoPermissionsPanel&) = delete;

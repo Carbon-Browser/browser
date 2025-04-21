@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,25 +16,40 @@ RecordInfo::RecordInfo(CXXRecordDecl* record, RecordCache* cache)
     : cache_(cache),
       record_(record),
       name_(record->getName()),
-      fields_need_tracing_(TracingStatus::Unknown()),
-      bases_(0),
-      fields_(0),
-      is_stack_allocated_(kNotComputed),
-      is_non_newable_(kNotComputed),
-      is_only_placement_newable_(kNotComputed),
-      does_need_finalization_(kNotComputed),
-      has_gc_mixin_methods_(kNotComputed),
-      is_declaring_local_trace_(kNotComputed),
-      determined_trace_methods_(false),
-      trace_method_(0),
-      trace_dispatch_method_(0),
-      finalize_dispatch_method_(0),
-      is_gc_derived_(false),
-      directly_derived_gc_base_(nullptr) {}
+      fields_need_tracing_(TracingStatus::Unknown()) {}
 
 RecordInfo::~RecordInfo() {
   delete fields_;
   delete bases_;
+}
+
+bool RecordInfo::GetTemplateArgsInternal(
+    const llvm::ArrayRef<clang::TemplateArgument>& args,
+    size_t count,
+    TemplateArgs* output_args) {
+  bool getAllParameters = count == 0;
+  if (args.size() < count)
+    return false;
+  if (count == 0) {
+    count = args.size();
+  }
+  for (unsigned i = 0; i < count; ++i) {
+    const TemplateArgument& arg = args[i];
+    if (arg.getKind() == TemplateArgument::Type && !arg.getAsType().isNull()) {
+      output_args->push_back(arg.getAsType().getTypePtr());
+    } else if (arg.getKind() == TemplateArgument::Pack) {
+      if (!getAllParameters) {
+        return false;
+      }
+      const auto& packs = arg.getPackAsArray();
+      if (!GetTemplateArgsInternal(packs, 0, output_args)) {
+        return false;
+      }
+    } else {
+      return false;
+    }
+  }
+  return true;
 }
 
 // Get |count| number of template arguments. Returns false if there
@@ -44,22 +59,11 @@ RecordInfo::~RecordInfo() {
 bool RecordInfo::GetTemplateArgs(size_t count, TemplateArgs* output_args) {
   ClassTemplateSpecializationDecl* tmpl =
       dyn_cast<ClassTemplateSpecializationDecl>(record_);
-  if (!tmpl)
+  if (!tmpl) {
     return false;
-  const TemplateArgumentList& args = tmpl->getTemplateArgs();
-  if (args.size() < count)
-    return false;
-  if (count <= 0)
-    count = args.size();
-  for (unsigned i = 0; i < count; ++i) {
-    TemplateArgument arg = args[i];
-    if (arg.getKind() == TemplateArgument::Type && !arg.getAsType().isNull()) {
-      output_args->push_back(arg.getAsType().getTypePtr());
-    } else {
-      return false;
-    }
   }
-  return true;
+  const TemplateArgumentList& args = tmpl->getTemplateArgs();
+  return GetTemplateArgsInternal(args.asArray(), count, output_args);
 }
 
 // Test if a record is a HeapAllocated collection.
@@ -237,6 +241,12 @@ RecordInfo* RecordCache::Lookup(CXXRecordDecl* record) {
   // Ignore classes annotated with the GC_PLUGIN_IGNORE macro.
   if (!record || Config::IsIgnoreAnnotated(record))
     return 0;
+  // crbug.com/1412769: if we are given a declaration, get its definition before
+  // caching the record. Otherwise, this could lead to having incomplete
+  // information while inspecting the record (see bug for more information).
+  if (record->hasDefinition()) {
+    record = record->getDefinition();
+  }
   Cache::iterator it = cache_.find(record);
   if (it != cache_.end())
     return &it->second;
@@ -273,51 +283,31 @@ bool RecordInfo::IsStackAllocated() {
   return is_stack_allocated_;
 }
 
-bool RecordInfo::IsNonNewable() {
-  if (is_non_newable_ == kNotComputed) {
-    bool deleted = false;
-    bool all_deleted = true;
-    for (CXXRecordDecl::method_iterator it = record_->method_begin();
-         it != record_->method_end();
-         ++it) {
-      if (it->getNameAsString() == kNewOperatorName) {
-        deleted = it->isDeleted();
-        all_deleted = all_deleted && deleted;
-      }
-    }
-    is_non_newable_ = (deleted && all_deleted) ? kTrue : kFalse;
-  }
-  return is_non_newable_;
-}
-
-bool RecordInfo::IsOnlyPlacementNewable() {
-  if (is_only_placement_newable_ == kNotComputed) {
-    bool placement = false;
-    bool new_deleted = false;
-    for (CXXRecordDecl::method_iterator it = record_->method_begin();
-         it != record_->method_end();
-         ++it) {
-      if (it->getNameAsString() == kNewOperatorName) {
-        if (it->getNumParams() == 1) {
-          new_deleted = it->isDeleted();
-        } else if (it->getNumParams() == 2) {
-          placement = !it->isDeleted();
-        }
-      }
-    }
-    is_only_placement_newable_ = (placement && new_deleted) ? kTrue : kFalse;
-  }
-  return is_only_placement_newable_;
+bool RecordInfo::IsNewDisallowed() {
+  if (auto* new_operator = DeclaresNewOperator())
+    return new_operator->isDeleted();
+  return false;
 }
 
 CXXMethodDecl* RecordInfo::DeclaresNewOperator() {
-  for (CXXRecordDecl::method_iterator it = record_->method_begin();
-       it != record_->method_end();
-       ++it) {
-    if (it->getNameAsString() == kNewOperatorName && it->getNumParams() == 1)
-      return *it;
+  if (!determined_new_operator_) {
+    determined_new_operator_ = true;
+    for (auto* method : record_->methods()) {
+      if (method->getNameAsString() == kNewOperatorName &&
+          method->getNumParams() == 1) {
+        new_operator_ = method;
+        break;
+      }
+    }
+    if (!new_operator_) {
+      for (auto& base : GetBases()) {
+        new_operator_ = base.second.info()->DeclaresNewOperator();
+        if (new_operator_)
+          break;
+      }
+    }
   }
-  return 0;
+  return new_operator_;
 }
 
 // An object requires a tracing method if it has any fields that need tracing
@@ -392,11 +382,6 @@ CXXMethodDecl* RecordInfo::InheritsNonVirtualTrace() {
   return 0;
 }
 
-bool RecordInfo::DeclaresGCMixinMethods() {
-  DetermineTracingMethods();
-  return has_gc_mixin_methods_;
-}
-
 bool RecordInfo::DeclaresLocalTraceMethod() {
   if (is_declaring_local_trace_ != kNotComputed)
     return is_declaring_local_trace_;
@@ -414,9 +399,11 @@ bool RecordInfo::DeclaresLocalTraceMethod() {
   return is_declaring_local_trace_;
 }
 
-// A (non-virtual) class is considered abstract in Blink if it has
-// no public constructors and no create methods.
+// A (non-virtual) class is considered abstract in Blink if it has no implicit
+// default constructor, no public constructors and no public create methods.
 bool RecordInfo::IsConsideredAbstract() {
+  if (record()->needsImplicitDefaultConstructor())
+    return false;
   for (CXXRecordDecl::ctor_iterator it = record_->ctor_begin();
        it != record_->ctor_end();
        ++it) {
@@ -426,7 +413,7 @@ bool RecordInfo::IsConsideredAbstract() {
   for (CXXRecordDecl::method_iterator it = record_->method_begin();
        it != record_->method_end();
        ++it) {
-    if (it->getNameAsString() == kCreateName)
+    if (it->getNameAsString() == kCreateName && it->getAccess() == AS_public)
       return false;
   }
   return true;
@@ -495,8 +482,6 @@ void RecordInfo::DetermineTracingMethods() {
     return;
   CXXMethodDecl* trace = nullptr;
   CXXMethodDecl* trace_after_dispatch = nullptr;
-  bool has_adjust_and_mark = false;
-  bool has_is_heap_object_alive = false;
   for (Decl* decl : record_->decls()) {
     CXXMethodDecl* method = dyn_cast<CXXMethodDecl>(decl);
     if (!method) {
@@ -517,18 +502,12 @@ void RecordInfo::DetermineTracingMethods() {
       case Config::NOT_TRACE_METHOD:
         if (method->getNameAsString() == kFinalizeName) {
           finalize_dispatch_method_ = method;
-        } else if (method->getNameAsString() == kAdjustAndMarkName) {
-          has_adjust_and_mark = true;
-        } else if (method->getNameAsString() == kIsHeapObjectAliveName) {
-          has_is_heap_object_alive = true;
         }
         break;
     }
   }
 
   // Record if class defines the two GCMixin methods.
-  has_gc_mixin_methods_ =
-      has_adjust_and_mark && has_is_heap_object_alive ? kTrue : kFalse;
   if (trace_after_dispatch) {
     trace_method_ = trace_after_dispatch;
     trace_dispatch_method_ = trace;
@@ -650,8 +629,10 @@ Edge* RecordInfo::CreateEdgeFromOriginalType(const Type* type) {
   std::string typeName = typedefType->getDecl()->getNameAsString();
   if (!Config::IsIterator(typeName))
     return nullptr;
-  RecordInfo* info =
-      cache_->Lookup(elaboratedType->getQualifier()->getAsType());
+  const NestedNameSpecifier* qualifier = elaboratedType->getQualifier();
+  if (!qualifier)
+    return nullptr;
+  RecordInfo* info = cache_->Lookup(qualifier->getAsType());
 
   bool on_heap = false;
   // Silently handle unknown types; the on-heap collection types will
@@ -670,6 +651,13 @@ Edge* RecordInfo::CreateEdge(const Type* type) {
   if (type->isPointerType() || type->isReferenceType()) {
     if (Edge* ptr = CreateEdge(type->getPointeeType().getTypePtrOrNull()))
       return new RawPtr(ptr, type->isReferenceType());
+    return 0;
+  }
+
+  if (type->isArrayType()) {
+    if (Edge* ptr = CreateEdge(type->getPointeeOrArrayElementType())) {
+      return new ArrayEdge(ptr);
+    }
     return 0;
   }
 
@@ -737,7 +725,8 @@ Edge* RecordInfo::CreateEdge(const Type* type) {
   }
 
   if (Config::IsGCCollection(info->name()) ||
-      Config::IsWTFCollection(info->name())) {
+      Config::IsWTFCollection(info->name()) ||
+      Config::IsSTDCollection(info->name())) {
     bool on_heap = info->IsHeapAllocatedCollection();
     size_t count = Config::CollectionDimension(info->name());
     if (!info->GetTemplateArgs(count, &args))

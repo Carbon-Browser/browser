@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "device/gamepad/gamepad_platform_data_fetcher_android.h"
 
@@ -11,15 +16,16 @@
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
 #include "base/containers/flat_map.h"
-#include "base/feature_list.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/trace_event/trace_event.h"
 #include "device/gamepad/gamepad_id_list.h"
 #include "device/gamepad/haptic_gamepad_android.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
 #include "device/gamepad/jni_headers/GamepadList_jni.h"
-#include "device/gamepad/public/cpp/gamepad_features.h"
 
 using base::android::AttachCurrentThread;
 using base::android::CheckException;
@@ -248,13 +254,10 @@ static void JNI_GamepadList_SetGamepadData(
     }
     GamepadDataFetcher::UpdateGamepadStrings(product_name, vendor_id,
                                              product_id, mapping, pad);
-    if (base::FeatureList::IsEnabled(
-            features::kEnableAndroidGamepadVibration)) {
-      pad.vibration_actuator.type = GamepadHapticActuatorType::kDualRumble;
-      pad.vibration_actuator.not_null = supports_dual_rumble;
-      if (supports_dual_rumble) {
-        fetcher->SetDualRumbleVibrationActuator(state->source_id);
-      }
+    pad.vibration_actuator.type = GamepadHapticActuatorType::kDualRumble;
+    pad.vibration_actuator.not_null = supports_dual_rumble;
+    if (supports_dual_rumble) {
+      fetcher->SetDualRumbleVibrationActuator(state->source_id);
     }
   }
 

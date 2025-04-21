@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,18 @@
 #define CHROME_BROWSER_ASH_SETTINGS_DEVICE_SETTINGS_PROVIDER_H_
 
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "ash/components/settings/cros_settings_provider.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/settings/device_settings_service.h"
+#include "chromeos/ash/components/settings/cros_settings_provider.h"
 #include "components/ownership/owner_settings_service.h"
-#include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/policy/proto/chrome_device_policy.pb.h"
+#include "components/policy/proto/device_management_backend.pb.h"
 #include "components/prefs/pref_value_map.h"
 
 class PrefService;
@@ -54,12 +56,12 @@ class DeviceSettingsProvider
   ~DeviceSettingsProvider() override;
 
   // Returns true if |path| is handled by this provider.
-  static bool IsDeviceSetting(const std::string& name);
+  static bool IsDeviceSetting(std::string_view name);
 
   // CrosSettingsProvider implementation.
-  const base::Value* Get(const std::string& path) const override;
+  const base::Value* Get(std::string_view path) const override;
   TrustedStatus PrepareTrustedValues(base::OnceClosure* callback) override;
-  bool HandlesSetting(const std::string& path) const override;
+  bool HandlesSetting(std::string_view path) const override;
 
   // Helper function that decodes policies from provided proto into the pref
   // map.
@@ -72,7 +74,7 @@ class DeviceSettingsProvider
   }
 
  private:
-  // TODO(https://crbug.com/433840): There are no longer any actual callers of
+  // TODO(crbug.com/41143265): There are no longer any actual callers of
   // DeviceSettingsProvider::DoSet, but it is still called in the tests.
   // Still TODO: remove the calls from the test, and remove the extra state
   // that this class will no longer need (ie, cached written values).
@@ -120,8 +122,8 @@ class DeviceSettingsProvider
   // Pending callbacks that need to be invoked after settings verification.
   std::vector<base::OnceClosure> callbacks_;
 
-  DeviceSettingsService* device_settings_service_;
-  PrefService* local_state_;
+  raw_ptr<DeviceSettingsService> device_settings_service_;
+  raw_ptr<PrefService, DanglingUntriaged> local_state_;
 
   mutable PrefValueMap migration_values_;
 
@@ -150,18 +152,12 @@ class DeviceSettingsProvider
   FRIEND_TEST_ALL_PREFIXES(DeviceSettingsProviderTest,
                            PolicyFailedPermanentlyNotification);
   FRIEND_TEST_ALL_PREFIXES(DeviceSettingsProviderTest, PolicyLoadNotification);
-  // TODO(https://crbug.com/433840) Remove these once DoSet is removed.
+  // TODO(crbug.com/41143265) Remove these once DoSet is removed.
   FRIEND_TEST_ALL_PREFIXES(DeviceSettingsProviderTest, SetPrefFailed);
   FRIEND_TEST_ALL_PREFIXES(DeviceSettingsProviderTest, SetPrefSucceed);
   FRIEND_TEST_ALL_PREFIXES(DeviceSettingsProviderTest, SetPrefTwice);
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when Chrome OS code migration is
-// done.
-namespace chromeos {
-using ::ash::DeviceSettingsProvider;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_SETTINGS_DEVICE_SETTINGS_PROVIDER_H_

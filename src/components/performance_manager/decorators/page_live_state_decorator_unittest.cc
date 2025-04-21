@@ -1,16 +1,30 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/performance_manager/public/decorators/page_live_state_decorator.h"
 
-#include "base/bind.h"
+#include <memory>
+
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/thread_pool.h"
+#include "base/test/bind.h"
+#include "components/performance_manager/graph/page_node_impl.h"
+#include "components/performance_manager/public/performance_manager.h"
 #include "components/performance_manager/test_support/decorators_utils.h"
+#include "components/performance_manager/test_support/graph_test_harness.h"
 #include "components/performance_manager/test_support/performance_manager_test_harness.h"
+#include "components/performance_manager/test_support/run_in_graph.h"
+#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/browser/web_contents_observer.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/accessibility/ax_mode.h"
 
 namespace performance_manager {
 
@@ -32,6 +46,8 @@ class TestPageLiveStateObserver : public PageLiveStateObserver {
     kNone,
     kOnIsConnectedToUSBDeviceChanged,
     kOnIsConnectedToBluetoothDeviceChanged,
+    kOnIsConnectedToHidDeviceChanged,
+    kOnIsConnectedToSerialPortChanged,
     kOnIsCapturingVideoChanged,
     kOnIsCapturingAudioChanged,
     kOnIsBeingMirroredChanged,
@@ -39,6 +55,10 @@ class TestPageLiveStateObserver : public PageLiveStateObserver {
     kOnIsCapturingDisplayChanged,
     kOnIsAutoDiscardableChanged,
     kOnWasDiscardedChanged,
+    kOnIsActiveTabChanged,
+    kOnIsPinnedTabChanged,
+    kOnIsDevToolsOpenChanged,
+    kOnAccessibilityModeChanged,
   };
 
   void OnIsConnectedToUSBDeviceChanged(const PageNode* page_node) override {
@@ -50,6 +70,16 @@ class TestPageLiveStateObserver : public PageLiveStateObserver {
       const PageNode* page_node) override {
     latest_function_called_ =
         ObserverFunction::kOnIsConnectedToBluetoothDeviceChanged;
+    page_node_passed_ = page_node;
+  }
+  void OnIsConnectedToHidDeviceChanged(const PageNode* page_node) override {
+    latest_function_called_ =
+        ObserverFunction::kOnIsConnectedToHidDeviceChanged;
+    page_node_passed_ = page_node;
+  }
+  void OnIsConnectedToSerialPortChanged(const PageNode* page_node) override {
+    latest_function_called_ =
+        ObserverFunction::kOnIsConnectedToSerialPortChanged;
     page_node_passed_ = page_node;
   }
   void OnIsCapturingVideoChanged(const PageNode* page_node) override {
@@ -78,6 +108,22 @@ class TestPageLiveStateObserver : public PageLiveStateObserver {
   }
   void OnWasDiscardedChanged(const PageNode* page_node) override {
     latest_function_called_ = ObserverFunction::kOnWasDiscardedChanged;
+    page_node_passed_ = page_node;
+  }
+  void OnIsActiveTabChanged(const PageNode* page_node) override {
+    latest_function_called_ = ObserverFunction::kOnIsActiveTabChanged;
+    page_node_passed_ = page_node;
+  }
+  void OnIsPinnedTabChanged(const PageNode* page_node) override {
+    latest_function_called_ = ObserverFunction::kOnIsPinnedTabChanged;
+    page_node_passed_ = page_node;
+  }
+  void OnIsDevToolsOpenChanged(const PageNode* page_node) override {
+    latest_function_called_ = ObserverFunction::kOnIsDevToolsOpenChanged;
+    page_node_passed_ = page_node;
+  }
+  void OnAccessibilityModeChanged(const PageNode* page_node) override {
+    latest_function_called_ = ObserverFunction::kOnAccessibilityModeChanged;
     page_node_passed_ = page_node;
   }
 
@@ -168,28 +214,69 @@ class PageLiveStateDecoratorTest : public PerformanceManagerTestHarness {
     run_loop.Run();
   }
 
+  void OnGraphCreated(GraphImpl* graph) override {
+    graph->PassToGraph(std::make_unique<PageLiveStateDecorator>());
+  }
+
+  scoped_refptr<base::SequencedTaskRunner> task_runner() {
+    return content::GetUIThreadTaskRunner({});
+  }
+
  private:
   std::unique_ptr<TestPageLiveStateObserver> observer_;
 };
 
-TEST_F(PageLiveStateDecoratorTest, OnIsConnectedToUSBDeviceChanged) {
+TEST_F(PageLiveStateDecoratorTest, Usb) {
+  auto setter = [](content::WebContents* contents, bool value) {
+    PageLiveStateDecorator::OnCapabilityTypesChanged(
+        contents, content::WebContents::CapabilityType::kUSB, value);
+  };
   testing::EndToEndBooleanPropertyTest(
       web_contents(), &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
-      &PageLiveStateDecorator::Data::IsConnectedToUSBDevice,
-      &PageLiveStateDecorator::OnIsConnectedToUSBDeviceChanged);
+      &PageLiveStateDecorator::Data::IsConnectedToUSBDevice, setter);
   VerifyObserverExpectationOnPMSequence(
       TestPageLiveStateObserver::ObserverFunction::
           kOnIsConnectedToUSBDeviceChanged);
 }
 
-TEST_F(PageLiveStateDecoratorTest, OnIsConnectedToBluetoothDeviceChanged) {
+TEST_F(PageLiveStateDecoratorTest, Bluetooth) {
+  auto setter = [](content::WebContents* contents, bool value) {
+    PageLiveStateDecorator::OnCapabilityTypesChanged(
+        contents, content::WebContents::CapabilityType::kBluetoothConnected,
+        value);
+  };
   testing::EndToEndBooleanPropertyTest(
       web_contents(), &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
-      &PageLiveStateDecorator::Data::IsConnectedToBluetoothDevice,
-      &PageLiveStateDecorator::OnIsConnectedToBluetoothDeviceChanged);
+      &PageLiveStateDecorator::Data::IsConnectedToBluetoothDevice, setter);
   VerifyObserverExpectationOnPMSequence(
       TestPageLiveStateObserver::ObserverFunction::
           kOnIsConnectedToBluetoothDeviceChanged);
+}
+
+TEST_F(PageLiveStateDecoratorTest, Hid) {
+  auto setter = [](content::WebContents* contents, bool value) {
+    PageLiveStateDecorator::OnCapabilityTypesChanged(
+        contents, content::WebContents::CapabilityType::kHID, value);
+  };
+  testing::EndToEndBooleanPropertyTest(
+      web_contents(), &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsConnectedToHidDevice, setter);
+  VerifyObserverExpectationOnPMSequence(
+      TestPageLiveStateObserver::ObserverFunction::
+          kOnIsConnectedToHidDeviceChanged);
+}
+
+TEST_F(PageLiveStateDecoratorTest, Serial) {
+  auto setter = [](content::WebContents* contents, bool value) {
+    PageLiveStateDecorator::OnCapabilityTypesChanged(
+        contents, content::WebContents::CapabilityType::kSerial, value);
+  };
+  testing::EndToEndBooleanPropertyTest(
+      web_contents(), &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsConnectedToSerialPort, setter);
+  VerifyObserverExpectationOnPMSequence(
+      TestPageLiveStateObserver::ObserverFunction::
+          kOnIsConnectedToSerialPortChanged);
 }
 
 TEST_F(PageLiveStateDecoratorTest, OnIsCapturingVideoChanged) {
@@ -256,6 +343,120 @@ TEST_F(PageLiveStateDecoratorTest, OnWasDiscardedChanged) {
       /*default_state=*/false);
   VerifyObserverExpectationOnPMSequence(
       TestPageLiveStateObserver::ObserverFunction::kOnWasDiscardedChanged);
+}
+
+TEST_F(PageLiveStateDecoratorTest, OnIsActiveTabChanged) {
+  testing::EndToEndBooleanPropertyTest(
+      web_contents(), &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsActiveTab,
+      &PageLiveStateDecorator::SetIsActiveTab,
+      /*default_state=*/false);
+  VerifyObserverExpectationOnPMSequence(
+      TestPageLiveStateObserver::ObserverFunction::kOnIsActiveTabChanged);
+}
+
+TEST_F(PageLiveStateDecoratorTest, OnIsPinnedTabChanged) {
+  testing::EndToEndBooleanPropertyTest(
+      web_contents(), &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsPinnedTab,
+      &PageLiveStateDecorator::SetIsPinnedTab,
+      /*default_state=*/false);
+  VerifyObserverExpectationOnPMSequence(
+      TestPageLiveStateObserver::ObserverFunction::kOnIsPinnedTabChanged);
+}
+
+// DevTools not supported on Android.
+#if !BUILDFLAG(IS_ANDROID)
+TEST_F(PageLiveStateDecoratorTest, OnIsDevToolsOpenChanged) {
+  testing::EndToEndBooleanPropertyTest(
+      web_contents(), &PageLiveStateDecorator::Data::GetOrCreateForPageNode,
+      &PageLiveStateDecorator::Data::IsDevToolsOpen,
+      &PageLiveStateDecorator::SetIsDevToolsOpen,
+      /*default_state=*/false);
+  VerifyObserverExpectationOnPMSequence(
+      TestPageLiveStateObserver::ObserverFunction::kOnIsDevToolsOpenChanged);
+}
+
+#endif  // !BUILDFLAG(IS_ANDROID)
+
+TEST_F(PageLiveStateDecoratorTest, OnAccessibilityModeChanged) {
+  base::WeakPtr<PageNode> node =
+      PerformanceManager::GetPrimaryPageNodeForWebContents(web_contents());
+  const auto expect_mode_on_graph = [&node](ui::AXMode accessibility_mode) {
+    RunInGraph([&node, accessibility_mode]() {
+      ASSERT_TRUE(node);
+      auto* data =
+          PageLiveStateDecorator::Data::GetOrCreateForPageNode(node.get());
+      ASSERT_TRUE(data);
+      EXPECT_EQ(data->GetAccessibilityMode(), accessibility_mode);
+    });
+  };
+
+  // All mode flags off by default.
+  ASSERT_NO_FATAL_FAILURE(expect_mode_on_graph(ui::AXMode()));
+
+  // Pretend that the property changed and make sure that the PageNode data gets
+  // updated.
+  PageLiveStateDecorator::SetAccessibilityMode(web_contents(),
+                                               ui::kAXModeComplete);
+  ASSERT_NO_FATAL_FAILURE(expect_mode_on_graph(ui::kAXModeComplete));
+
+  // Switch back to the default state.
+  PageLiveStateDecorator::SetAccessibilityMode(web_contents(), ui::AXMode());
+  ASSERT_NO_FATAL_FAILURE(expect_mode_on_graph(ui::AXMode()));
+
+  VerifyObserverExpectationOnPMSequence(
+      TestPageLiveStateObserver::ObserverFunction::kOnAccessibilityModeChanged);
+}
+
+TEST_F(PageLiveStateDecoratorTest, UpdateTitleInBackground) {
+  base::WeakPtr<PageNode> node =
+      PerformanceManager::GetPrimaryPageNodeForWebContents(web_contents());
+  base::RunLoop run_loop;
+  PerformanceManager::CallOnGraph(
+      FROM_HERE, base::BindLambdaForTesting([&]() {
+        ASSERT_TRUE(node);
+        auto* node_impl = PageNodeImpl::FromNode(node.get());
+        auto* data =
+            PageLiveStateDecorator::Data::GetOrCreateForPageNode(node.get());
+
+        // Updating the title while the node is visible does nothing.
+        node_impl->SetIsVisible(true);
+        node_impl->OnTitleUpdated();
+        EXPECT_EQ(data->UpdatedTitleOrFaviconInBackground(), false);
+
+        node_impl->SetIsVisible(false);
+        node_impl->OnTitleUpdated();
+        EXPECT_EQ(data->UpdatedTitleOrFaviconInBackground(), true);
+
+        run_loop.Quit();
+      }));
+  run_loop.Run();
+}
+
+TEST_F(PageLiveStateDecoratorTest, UpdateFaviconInBackground) {
+  base::WeakPtr<PageNode> node =
+      PerformanceManager::GetPrimaryPageNodeForWebContents(web_contents());
+  base::RunLoop run_loop;
+  PerformanceManager::CallOnGraph(
+      FROM_HERE, base::BindLambdaForTesting([&]() {
+        ASSERT_TRUE(node);
+        auto* node_impl = PageNodeImpl::FromNode(node.get());
+        auto* data =
+            PageLiveStateDecorator::Data::GetOrCreateForPageNode(node.get());
+
+        // Updating the favicon while the node is visible does nothing.
+        node_impl->SetIsVisible(true);
+        node_impl->OnFaviconUpdated();
+        EXPECT_EQ(data->UpdatedTitleOrFaviconInBackground(), false);
+
+        node_impl->SetIsVisible(false);
+        node_impl->OnFaviconUpdated();
+        EXPECT_EQ(data->UpdatedTitleOrFaviconInBackground(), true);
+
+        run_loop.Quit();
+      }));
+  run_loop.Run();
 }
 
 }  // namespace performance_manager

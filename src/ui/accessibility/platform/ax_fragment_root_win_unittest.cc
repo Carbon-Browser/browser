@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,6 @@
 #include "base/win/scoped_safearray.h"
 #include "base/win/scoped_variant.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "ui/accessibility/accessibility_switches.h"
 #include "ui/accessibility/platform/ax_platform_node_win.h"
 #include "ui/accessibility/platform/ax_platform_node_win_unittest.h"
 #include "ui/accessibility/platform/test_ax_node_wrapper.h"
@@ -77,8 +76,8 @@ TEST_F(AXFragmentRootTest, UIAFindItemByPropertyUniqueId) {
   ComPtr<IRawElementProviderSimple> button_raw_element_provider_simple =
       GetIRawElementProviderSimpleFromChildIndex(1);
 
-  AXNode* text1_node = GetRootAsAXNode()->children()[0];
-  AXNode* button_node = GetRootAsAXNode()->children()[1];
+  AXNode* text1_node = GetRoot()->children()[0];
+  AXNode* button_node = GetRoot()->children()[1];
 
   ComPtr<IItemContainerProvider> item_container_provider;
   EXPECT_HRESULT_SUCCEEDED(root_raw_element_provider_simple->GetPatternProvider(
@@ -92,7 +91,7 @@ TEST_F(AXFragmentRootTest, UIAFindItemByPropertyUniqueId) {
   // When |start_after_element| is an invalid element, we should fail at finding
   // the item.
   {
-    unique_id = AXPlatformNodeFromNode(GetRootAsAXNode())->GetUniqueId();
+    unique_id = AXPlatformNodeFromNode(GetRoot())->GetUniqueId();
     unique_id_variant.Set(
         SysAllocString(base::NumberToWString(-unique_id).c_str()));
 
@@ -112,7 +111,7 @@ TEST_F(AXFragmentRootTest, UIAFindItemByPropertyUniqueId) {
   // Fetch the AxUniqueId of "root", and verify we can retrieve its
   // corresponding IRawElementProviderSimple through FindItemByProperty().
   {
-    unique_id = AXPlatformNodeFromNode(GetRootAsAXNode())->GetUniqueId();
+    unique_id = AXPlatformNodeFromNode(GetRoot())->GetUniqueId();
     unique_id_variant.Set(
         SysAllocString(base::NumberToWString(-unique_id).c_str()));
 
@@ -297,7 +296,7 @@ TEST_F(AXFragmentRootTest, TestUIAElementProviderFromPoint) {
   Init(root_data, element1_data, element2_data);
   InitFragmentRoot();
 
-  AXNode* root_node = GetRootAsAXNode();
+  AXNode* root_node = GetRoot();
   AXNode* element1_node = root_node->children()[0];
   AXNode* element2_node = root_node->children()[1];
 
@@ -345,7 +344,7 @@ TEST_F(AXFragmentRootTest, TestUIAGetFocus) {
   Init(root_data, element1_data, element2_data);
   InitFragmentRoot();
 
-  AXNode* root_node = GetRootAsAXNode();
+  AXNode* root_node = GetRoot();
   AXNode* element1_node = root_node->children()[0];
   AXNode* element2_node = root_node->children()[1];
 
@@ -434,7 +433,7 @@ TEST_F(AXFragmentRootTest, TestChildAtIndex) {
   InitFragmentRoot();
 
   gfx::NativeViewAccessible native_view_accessible =
-      AXPlatformNodeFromNode(GetRootAsAXNode())->GetNativeViewAccessible();
+      AXPlatformNodeFromNode(GetRoot())->GetNativeViewAccessible();
   AXPlatformNodeDelegate* fragment_root = ax_fragment_root_.get();
   EXPECT_EQ(native_view_accessible, fragment_root->ChildAtIndex(0));
   EXPECT_EQ(nullptr, fragment_root->ChildAtIndex(1));
@@ -454,7 +453,7 @@ TEST_F(AXFragmentRootTest, TestGetParent) {
   EXPECT_EQ(nullptr, fragment_root->GetParent());
 
   gfx::NativeViewAccessible native_view_accessible =
-      AXPlatformNodeFromNode(GetRootAsAXNode())->GetNativeViewAccessible();
+      AXPlatformNodeFromNode(GetRoot())->GetNativeViewAccessible();
   test_fragment_root_delegate_->parent_ = native_view_accessible;
   EXPECT_EQ(native_view_accessible, fragment_root->GetParent());
 }
@@ -521,37 +520,37 @@ TEST_F(AXFragmentRootTest, TestUIAMultipleFragmentRoots) {
   //     / \       / \
   //   U6---U7   U8---U9
 
-  ui::AXNodeData top_fragment_root_n1;
+  AXNodeData top_fragment_root_n1;
   top_fragment_root_n1.id = 1;
 
-  ui::AXNodeData sibling_n2;
+  AXNodeData sibling_n2;
   sibling_n2.id = 2;
 
-  ui::AXNodeData child_fragment_root_n3;
+  AXNodeData child_fragment_root_n3;
   child_fragment_root_n3.id = 3;
 
-  ui::AXNodeData sibling_n6;
+  AXNodeData sibling_n6;
   sibling_n6.id = 6;
-  ui::AXNodeData sibling_n7;
+  AXNodeData sibling_n7;
   sibling_n7.id = 7;
 
   child_fragment_root_n3.child_ids = {6, 7};
 
-  ui::AXNodeData sibling_n4;
+  AXNodeData sibling_n4;
   sibling_n4.id = 4;
 
-  ui::AXNodeData child_fragment_root_n5;
+  AXNodeData child_fragment_root_n5;
   child_fragment_root_n5.id = 5;
 
-  ui::AXNodeData sibling_n8;
+  AXNodeData sibling_n8;
   sibling_n8.id = 8;
-  ui::AXNodeData sibling_n9;
+  AXNodeData sibling_n9;
   sibling_n9.id = 9;
 
   child_fragment_root_n5.child_ids = {8, 9};
   top_fragment_root_n1.child_ids = {2, 3, 4, 5};
 
-  ui::AXTreeUpdate update;
+  AXTreeUpdate update;
   update.has_tree_data = true;
   update.root_id = top_fragment_root_n1.id;
   update.nodes = {top_fragment_root_n1,
@@ -563,12 +562,12 @@ TEST_F(AXFragmentRootTest, TestUIAMultipleFragmentRoots) {
                   child_fragment_root_n5,
                   sibling_n8,
                   sibling_n9};
-  update.tree_data.tree_id = ui::AXTreeID::CreateNewAXTreeID();
+  update.tree_data.tree_id = AXTreeID::CreateNewAXTreeID();
 
   Init(update);
   InitFragmentRoot();
 
-  AXNode* root_node = GetRootAsAXNode();
+  AXNode* root_node = GetRoot();
 
   // Set up other fragment roots
   AXNode* child_fragment_root_n3_node = root_node->children()[1];

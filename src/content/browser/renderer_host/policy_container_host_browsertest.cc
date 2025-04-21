@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,6 +25,7 @@ namespace content {
 
 using ::testing::ByRef;
 using ::testing::Eq;
+using ::testing::IsNull;
 using ::testing::Pointee;
 
 namespace {
@@ -264,7 +265,7 @@ IN_PROC_BROWSER_TEST_F(PolicyContainerHostBrowserTest,
                          "document.body.appendChild(iframe);",
                          same_origin_referrer_page)));
     ASSERT_EQ(1U, current_frame_host()->child_count());
-    WaitForLoadStop(web_contents());
+    EXPECT_TRUE(WaitForLoadStop(web_contents()));
     FrameTreeNode* first_iframe_node =
         current_frame_host()->child_at(current_frame_host()->child_count() - 1);
     EXPECT_EQ(network::mojom::ReferrerPolicy::kSameOrigin,
@@ -278,6 +279,7 @@ IN_PROC_BROWSER_TEST_F(PolicyContainerHostBrowserTest,
                        "iframe.srcdoc = 'hello world';"
                        "iframe.name = 'second';"
                        "parent.document.body.appendChild(iframe);"));
+    EXPECT_TRUE(WaitForLoadStop(web_contents()));
     ASSERT_EQ(2U, current_frame_host()->child_count());
     FrameTreeNode* second_iframe_node =
         current_frame_host()->child_at(current_frame_host()->child_count() - 1);
@@ -299,7 +301,7 @@ IN_PROC_BROWSER_TEST_F(PolicyContainerHostBrowserTest,
     // the initiator, the second iframe.
     ASSERT_TRUE(ExecJs(second_iframe_node->current_frame_host(),
                        "window.open('about:blank', 'first');"));
-    WaitForLoadStop(web_contents());
+    EXPECT_TRUE(WaitForLoadStop(web_contents()));
     EXPECT_EQ(network::mojom::ReferrerPolicy::kOrigin,
               first_iframe_node->current_frame_host()
                   ->policy_container_host()
@@ -319,7 +321,7 @@ IN_PROC_BROWSER_TEST_F(PolicyContainerHostBrowserTest,
     ASSERT_TRUE(
         ExecJs(second_iframe_node->current_frame_host(),
                JsReplace("document.location.href = $1", no_referrer_page)));
-    WaitForLoadStop(web_contents());
+    EXPECT_TRUE(WaitForLoadStop(web_contents()));
     EXPECT_EQ(network::mojom::ReferrerPolicy::kNever,
               second_iframe_node->current_frame_host()
                   ->policy_container_host()
@@ -427,10 +429,13 @@ IN_PROC_BROWSER_TEST_F(PolicyContainerHostBrowserTest, HistoryForMainFrame) {
 
 namespace {
 
-bool EqualsExceptCOOP(const PolicyContainerPolicies& lhs,
-                      const PolicyContainerPolicies& rhs) {
+bool EqualsExceptCOOPAndTopNavigation(const PolicyContainerPolicies& lhs,
+                                      const PolicyContainerPolicies& rhs) {
   PolicyContainerPolicies rhs_modulo_coop = rhs.Clone();
   rhs_modulo_coop.cross_origin_opener_policy = lhs.cross_origin_opener_policy;
+  rhs_modulo_coop.can_navigate_top_without_user_gesture =
+      lhs.can_navigate_top_without_user_gesture;
+
   return lhs == rhs_modulo_coop;
 }
 
@@ -494,7 +499,7 @@ IN_PROC_BROWSER_TEST_F(PolicyContainerHostBrowserTest, HistoryForChildFrame) {
   EXPECT_TRUE(WaitForLoadStop(web_contents()));
 
   // The new document inherits from the navigation initiator, except for COOP.
-  EXPECT_TRUE(EqualsExceptCOOP(
+  EXPECT_TRUE(EqualsExceptCOOPAndTopNavigation(
       main_frame_new_policies,
       child->current_frame_host()->policy_container_host()->policies()));
 
@@ -516,7 +521,7 @@ IN_PROC_BROWSER_TEST_F(PolicyContainerHostBrowserTest, HistoryForChildFrame) {
   ASSERT_TRUE(WaitForLoadStop(web_contents()));
 
   // The policies have not changed.
-  EXPECT_TRUE(EqualsExceptCOOP(
+  EXPECT_TRUE(EqualsExceptCOOPAndTopNavigation(
       main_frame_new_policies,
       child->current_frame_host()->policy_container_host()->policies()));
   ASSERT_EQ(2, controller.GetEntryCount());
@@ -542,7 +547,7 @@ IN_PROC_BROWSER_TEST_F(PolicyContainerHostBrowserTest, HistoryForChildFrame) {
   EXPECT_TRUE(WaitForLoadStop(web_contents()));
 
   // The new document inherits from the navigation initiator.
-  EXPECT_TRUE(EqualsExceptCOOP(
+  EXPECT_TRUE(EqualsExceptCOOPAndTopNavigation(
       policies_a,
       child->current_frame_host()->policy_container_host()->policies()));
 
@@ -585,7 +590,7 @@ IN_PROC_BROWSER_TEST_F(PolicyContainerHostBrowserTest, HistoryForChildFrame) {
   ASSERT_NE(nullptr, child);
 
   // The correct referrer policy should be restored from history.
-  EXPECT_TRUE(EqualsExceptCOOP(
+  EXPECT_TRUE(EqualsExceptCOOPAndTopNavigation(
       policies_a,
       child->current_frame_host()->policy_container_host()->policies()));
 
@@ -602,7 +607,7 @@ IN_PROC_BROWSER_TEST_F(PolicyContainerHostBrowserTest, HistoryForChildFrame) {
   EXPECT_TRUE(WaitForLoadStop(web_contents()));
 
   // The correct referrer policy should be restored from history.
-  EXPECT_TRUE(EqualsExceptCOOP(
+  EXPECT_TRUE(EqualsExceptCOOPAndTopNavigation(
       main_frame_new_policies,
       child->current_frame_host()->policy_container_host()->policies()));
 
@@ -616,7 +621,7 @@ IN_PROC_BROWSER_TEST_F(PolicyContainerHostBrowserTest, HistoryForChildFrame) {
   EXPECT_TRUE(WaitForLoadStop(web_contents()));
 
   // The correct referrer policy should be restored from history.
-  EXPECT_TRUE(EqualsExceptCOOP(
+  EXPECT_TRUE(EqualsExceptCOOPAndTopNavigation(
       main_frame_new_policies,
       child->current_frame_host()->policy_container_host()->policies()));
 
@@ -625,6 +630,101 @@ IN_PROC_BROWSER_TEST_F(PolicyContainerHostBrowserTest, HistoryForChildFrame) {
       entry1->GetFrameEntry(child)->policy_container_policies(),
       Pointee(Eq(ByRef(
           child->current_frame_host()->policy_container_host()->policies()))));
+}
+
+// Test for https://crbug.com/364773822.
+IN_PROC_BROWSER_TEST_F(
+    PolicyContainerHostBrowserTest,
+    PoliciesAreNotReloadedFromHistoryIfNavigationEncounteredError) {
+  NavigationControllerImpl& controller = web_contents()->GetController();
+  GURL main_url(embedded_test_server()->GetURL("/page_with_blank_iframe.html"));
+
+  FrameTreeNode* root = web_contents()->GetPrimaryFrameTree().root();
+  ASSERT_TRUE(NavigateToURL(shell(), main_url));
+
+  ASSERT_EQ(1U, root->child_count());
+  FrameTreeNode* child = root->child_at(0);
+  ASSERT_NE(nullptr, child);
+
+  GURL child_frame_url(
+      embedded_test_server()->GetURL("/page_with_srcdoc_iframe_and_csp.html"));
+  ASSERT_TRUE(NavigateFrameToURL(child, child_frame_url));
+
+  ASSERT_EQ(1, controller.GetEntryCount());
+
+  PolicyContainerPolicies child_frame_policies =
+      child->current_frame_host()->policy_container_host()->policies().Clone();
+  EXPECT_EQ(1u, child_frame_policies.content_security_policies.size());
+  NavigationEntryImpl* entry1 = controller.GetEntryAtIndex(0);
+  EXPECT_THAT(
+      entry1->GetFrameEntry(child)->policy_container_policies(),
+      Pointee(Eq(ByRef(
+          child->current_frame_host()->policy_container_host()->policies()))));
+
+  // The srcdoc document inherits from the parent, except for COOP.
+  ASSERT_EQ(1U, child->child_count());
+  FrameTreeNode* grandchild = child->child_at(0);
+  ASSERT_NE(nullptr, grandchild);
+  EXPECT_TRUE(EqualsExceptCOOPAndTopNavigation(
+      child_frame_policies,
+      grandchild->current_frame_host()->policy_container_host()->policies()));
+
+  ASSERT_EQ(1, controller.GetEntryCount());
+
+  GURL about_blank("about:blank#1");
+  ASSERT_TRUE(NavigateFrameToURL(grandchild, about_blank));
+
+  // Add a sandbox to the child iframe and navigate away and back to recompute
+  // the sandbox flag, so that it gets reloaded with an opaque origin.
+  ASSERT_TRUE(ExecJs(current_frame_host(), R"(
+    document.getElementById('test_iframe').sandbox = 'allow-scripts';
+  )"));
+  ASSERT_TRUE(NavigateFrameToURL(child, about_blank));
+  controller.GoBack();
+  EXPECT_TRUE(WaitForLoadStop(web_contents()));
+  EXPECT_TRUE(child->current_origin().opaque());
+
+  // Trying to navigate the grandchild back to about:srcdoc is disallowed by
+  // https://source.chromium.org/chromium/chromium/src/+/main:content/browser/renderer_host/navigation_request.cc;l=6957-6967;drc=580a3da6e0ea94caa1f127e4455fbdbd05625065.
+  controller.GoBack();
+  EXPECT_TRUE(WaitForLoadStop(web_contents()));
+  EXPECT_TRUE(child->child_at(0)->current_frame_host()->IsErrorDocument());
+
+  // The error page should be loaded without inheriting the parent policies.
+  EXPECT_FALSE(EqualsExceptCOOPAndTopNavigation(child_frame_policies,
+                                                child->child_at(0)
+                                                    ->current_frame_host()
+                                                    ->policy_container_host()
+                                                    ->policies()));
+
+  // The policy container of the FrameNavigationEntry should have been cleared
+  // so that the error page's policies are not used on later successful loads.
+  EXPECT_THAT(
+      entry1->GetFrameEntry(child->child_at(0))->policy_container_policies(),
+      IsNull());
+
+  controller.GoForward();
+  EXPECT_TRUE(WaitForLoadStop(web_contents()));
+  controller.GoForward();
+  EXPECT_TRUE(WaitForLoadStop(web_contents()));
+
+  // Remove the sandbox flag so that the srcdoc frame can successfully load
+  // again.
+  ASSERT_TRUE(ExecJs(current_frame_host(), R"(
+    document.getElementById('test_iframe').removeAttribute('sandbox');
+  )"));
+
+  controller.GoBack();
+  EXPECT_TRUE(WaitForLoadStop(web_contents()));
+  controller.GoBack();
+  EXPECT_TRUE(WaitForLoadStop(web_contents()));
+
+  // The srcdoc document inherits again from the parent, except for COOP.
+  EXPECT_TRUE(EqualsExceptCOOPAndTopNavigation(child_frame_policies,
+                                               child->child_at(0)
+                                                   ->current_frame_host()
+                                                   ->policy_container_host()
+                                                   ->policies()));
 }
 
 // Check that the FrameNavigationEntry for the initial empty document is
@@ -839,13 +939,13 @@ IN_PROC_BROWSER_TEST_F(PolicyContainerHostBrowserTest,
   NavigationRequest* navigation_request =
       NavigationRequest::From(manager.GetNavigationHandle());
   if (ShouldSkipEarlyCommitPendingForCrashedFrame()) {
-    EXPECT_EQ(navigation_request->associated_rfh_type(),
+    EXPECT_EQ(navigation_request->GetAssociatedRFHType(),
               NavigationRequest::AssociatedRenderFrameHostType::SPECULATIVE);
   } else {
     // Policy container is properly initialized in the early committed
-    // render frame host.
+    // RenderFrameHost.
     EXPECT_TRUE(current_frame_host()->policy_container_host());
-    EXPECT_EQ(navigation_request->associated_rfh_type(),
+    EXPECT_EQ(navigation_request->GetAssociatedRFHType(),
               NavigationRequest::AssociatedRenderFrameHostType::CURRENT);
 
     // The policy is copied from the previous RFH following the crash.
@@ -866,7 +966,7 @@ IN_PROC_BROWSER_TEST_F(PolicyContainerHostBrowserTest,
   }
 
   // Let the navigation finish.
-  manager.WaitForNavigationFinished();
+  ASSERT_TRUE(manager.WaitForNavigationFinished());
 
   EXPECT_EQ(url_b,
             web_contents()->GetPrimaryMainFrame()->GetLastCommittedURL());

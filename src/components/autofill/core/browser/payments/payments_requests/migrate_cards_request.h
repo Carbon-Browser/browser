@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,11 @@
 
 #include <string>
 
-#include "base/callback.h"
-#include "components/autofill/core/browser/autofill_client.h"
-#include "components/autofill/core/browser/payments/payments_client.h"
+#include "base/containers/span.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ref.h"
+#include "components/autofill/core/browser/payments/payments_autofill_client.h"
+#include "components/autofill/core/browser/payments/payments_request_details.h"
 #include "components/autofill/core/browser/payments/payments_requests/payments_request.h"
 
 namespace base {
@@ -18,11 +20,25 @@ class Value;
 
 namespace autofill::payments {
 
+// TODO(crbug.com/362785288): This now lives in this file and
+// PaymentsNetworkInterface. Clean it up in a separate CL.
+#if !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
+// Callback type for MigrateCards callback. `result` is the Payments Rpc result.
+// `save_result` is an unordered_map parsed from the response whose key is the
+// unique id (guid) for each card and value is the server save result string.
+// `display_text` is the returned tip from Payments to show on the UI.
+typedef base::OnceCallback<void(
+    PaymentsAutofillClient::PaymentsRpcResult result,
+    std::unique_ptr<std::unordered_map<std::string, std::string>> save_result,
+    const std::string& display_text)>
+    MigrateCardsCallback;
+#endif  // !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_IOS)
+
 class MigrateCardsRequest : public PaymentsRequest {
  public:
   MigrateCardsRequest(
-      const PaymentsClient::MigrationRequestDetails& request_details,
-      const std::vector<MigratableCreditCard>& migratable_credit_cards,
+      const MigrationRequestDetails& request_details,
+      base::span<const MigratableCreditCard> migratable_credit_cards,
       const bool full_sync_enabled,
       MigrateCardsCallback callback);
   MigrateCardsRequest(const MigrateCardsRequest&) = delete;
@@ -33,9 +49,10 @@ class MigrateCardsRequest : public PaymentsRequest {
   std::string GetRequestUrlPath() override;
   std::string GetRequestContentType() override;
   std::string GetRequestContent() override;
-  void ParseResponse(const base::Value& response) override;
+  void ParseResponse(const base::Value::Dict& response) override;
   bool IsResponseComplete() override;
-  void RespondToDelegate(AutofillClient::PaymentsRpcResult result) override;
+  void RespondToDelegate(
+      PaymentsAutofillClient::PaymentsRpcResult result) override;
 
  private:
   // Return the pan field name for the encrypted pan based on the |index|.
@@ -46,8 +63,8 @@ class MigrateCardsRequest : public PaymentsRequest {
                            const std::string& app_locale,
                            const std::string& pan_field_name);
 
-  const PaymentsClient::MigrationRequestDetails request_details_;
-  const std::vector<MigratableCreditCard>& migratable_credit_cards_;
+  const MigrationRequestDetails request_details_;
+  const std::vector<MigratableCreditCard> migratable_credit_cards_;
   const bool full_sync_enabled_;
   MigrateCardsCallback callback_;
   std::unique_ptr<std::unordered_map<std::string, std::string>> save_result_;

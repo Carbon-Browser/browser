@@ -1,16 +1,15 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ui/base/accelerators/global_media_keys_listener_win.h"
-
 #include <windows.h>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/accelerators/accelerator.h"
+#include "ui/base/accelerators/global_media_keys_listener_win.h"
 #include "ui/events/event.h"
 
 namespace ui {
@@ -58,7 +57,7 @@ class MockMediaKeysListenerDelegate : public MediaKeysListener::Delegate {
     ASSERT_LT(index, received_events_.size());
     KeyEvent* key_event = &received_events_.at(index);
     EXPECT_EQ(code, key_event->key_code());
-    EXPECT_EQ(ET_KEY_PRESSED, key_event->type());
+    EXPECT_EQ(EventType::kKeyPressed, key_event->type());
   }
 
  private:

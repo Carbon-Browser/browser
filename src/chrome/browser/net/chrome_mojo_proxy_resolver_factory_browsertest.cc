@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <stdint.h>
 
+#include <optional>
 #include <vector>
 
 #include "base/process/process.h"
@@ -21,7 +22,6 @@
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/proxy_resolver/public/mojom/proxy_resolver.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace {
 
@@ -68,7 +68,7 @@ class DumbProxyResolverFactoryRequestClient
   void ResolveDns(
       const std::string& hostname,
       net::ProxyResolveDnsOperation operation,
-      const net::NetworkIsolationKey& network_isolation_key,
+      const net::NetworkAnonymizationKey& network_anonymization_key,
       mojo::PendingRemote<proxy_resolver::mojom::HostResolverRequestClient>
           client) override {}
 
@@ -220,7 +220,7 @@ IN_PROC_BROWSER_TEST_F(ChromeMojoProxyResolverFactoryBrowserTest,
   mojo::Remote<proxy_resolver::mojom::ProxyResolverFactory> resolver_factory(
       ChromeMojoProxyResolverFactory::CreateWithSelfOwnedReceiver());
 
-  absl::optional<ProxyResolverProcessObserver> observer{absl::in_place};
+  std::optional<ProxyResolverProcessObserver> observer{std::in_place};
 
   // Create a resolver, this should create and start the service.
   std::unique_ptr<DumbProxyResolverFactoryRequestClient> resolver_client =

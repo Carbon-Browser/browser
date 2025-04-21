@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,14 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/i18n/rtl.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/extensions/chrome_content_browser_client_extensions_part.h"
 #include "chrome/browser/process_resource_usage.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/task_manager/task_manager_observer.h"
@@ -24,10 +25,14 @@
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/child_process_data.h"
-#include "content/public/common/child_process_host.h"
+#include "content/public/browser/child_process_host.h"
 #include "content/public/common/process_type.h"
-#include "extensions/browser/extension_registry.h"
-#include "extensions/common/extension_set.h"
+
+#if !BUILDFLAG(IS_ANDROID)
+#include "extensions/browser/extension_registry.h"  // nogncheck
+#include "extensions/common/extension_set.h"        // nogncheck
+#endif                                              // !BUILDFLAG(IS_ANDROID)
+
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "services/service_manager/public/cpp/interface_provider.h"
@@ -75,12 +80,19 @@ std::u16string GetLocalizedTitle(const std::u16string& title,
     case PROCESS_TYPE_NACL_BROKER:
       return l10n_util::GetStringUTF16(IDS_TASK_MANAGER_NACL_BROKER_PREFIX);
     case PROCESS_TYPE_NACL_LOADER: {
+#if !BUILDFLAG(IS_ANDROID)
       auto* profile_manager = g_browser_process->profile_manager();
       if (profile_manager) {
         // TODO(afakhry): Fix the below looping by plumbing a way to get the
         // profile or the profile path from the child process host if any.
         auto loaded_profiles = profile_manager->GetLoadedProfiles();
         for (auto* profile : loaded_profiles) {
+          // Some profiles cannot have extensions, such as the System Profile.
+          if (extensions::ChromeContentBrowserClientExtensionsPart::
+                  AreExtensionsDisabledForProfile(profile)) {
+            continue;
+          }
+
           const extensions::ExtensionSet& enabled_extensions =
               extensions::ExtensionRegistry::Get(profile)->enabled_extensions();
           const extensions::Extension* extension =
@@ -91,6 +103,7 @@ std::u16string GetLocalizedTitle(const std::u16string& title,
           }
         }
       }
+#endif  // !BUILDFLAG(IS_ANDROID)
       return l10n_util::GetStringFUTF16(IDS_TASK_MANAGER_NACL_PREFIX,
                                         result_title);
     }
@@ -161,10 +174,10 @@ ChildProcessTask::ChildProcessTask(const content::ChildProcessData& data,
       v8_memory_used_(-1),
       unique_child_process_id_(data.id),
       process_type_(data.process_type),
+      process_subtype_(subtype),
       uses_v8_memory_(UsesV8Memory(process_type_)) {}
 
-ChildProcessTask::~ChildProcessTask() {
-}
+ChildProcessTask::~ChildProcessTask() = default;
 
 void ChildProcessTask::Refresh(const base::TimeDelta& update_interval,
                                int64_t refresh_flags) {
@@ -209,6 +222,17 @@ Task::Type ChildProcessTask::GetType() const {
       return Task::RENDERER;
     default:
       return Task::UNKNOWN;
+  }
+}
+
+Task::SubType ChildProcessTask::GetSubType() const {
+  switch (process_subtype_) {
+    case ChildProcessTask::ProcessSubtype::kSpareRenderProcess:
+      return Task::SubType::kSpareRenderer;
+    case ChildProcessTask::ProcessSubtype::kUnknownRenderProcess:
+      return Task::SubType::kUnknownRenderer;
+    default:
+      return Task::SubType::kNoSubType;
   }
 }
 

@@ -1,18 +1,20 @@
-// Copyright (c) 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <memory>
-
 #include "third_party/blink/renderer/modules/peerconnection/webrtc_video_perf_reporter.h"
+
+#include <memory>
 
 #include "base/run_loop.h"
 #include "media/mojo/mojom/webrtc_video_perf.mojom-blink.h"
+#include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
 #include "third_party/blink/renderer/platform/peerconnection/stats_collector.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 using ::testing::_;
 
@@ -44,14 +46,15 @@ class WebrtcVideoPerfReporterTest : public ::testing::Test {
  public:
   WebrtcVideoPerfReporterTest() {
     mock_recorder_ = std::make_unique<MockWebrtcVideoPerfRecorder>();
-    reporter_.Initialize(
+    reporter_ = MakeGarbageCollected<WebrtcVideoPerfReporter>(
         blink::scheduler::GetSingleThreadTaskRunnerForTesting(),
-        mock_recorder_->CreatePendingRemote());
+        /* notifier */ nullptr, mock_recorder_->CreatePendingRemote());
   }
 
  protected:
+  test::TaskEnvironment task_environment_;
   std::unique_ptr<MockWebrtcVideoPerfRecorder> mock_recorder_;
-  WebrtcVideoPerfReporter reporter_;
+  Persistent<WebrtcVideoPerfReporter> reporter_;
 };
 
 TEST_F(WebrtcVideoPerfReporterTest, StoreWebrtcVideoStats) {
@@ -75,7 +78,7 @@ TEST_F(WebrtcVideoPerfReporterTest, StoreWebrtcVideoStats) {
         EXPECT_EQ(kExpectedFeaturesA, *features);
         EXPECT_EQ(kExpectedVideoStats, *video_stats);
       });
-  reporter_.StoreWebrtcVideoStats(kStatsKeyA, kVideoStats);
+  reporter_->StoreWebrtcVideoStats(kStatsKeyA, kVideoStats);
   base::RunLoop().RunUntilIdle();
 
   // Toggle the booleans.
@@ -94,7 +97,7 @@ TEST_F(WebrtcVideoPerfReporterTest, StoreWebrtcVideoStats) {
         EXPECT_EQ(kExpectedFeaturesB, *features);
         EXPECT_EQ(kExpectedVideoStats, *video_stats);
       });
-  reporter_.StoreWebrtcVideoStats(kStatsKeyB, kVideoStats);
+  reporter_->StoreWebrtcVideoStats(kStatsKeyB, kVideoStats);
   base::RunLoop().RunUntilIdle();
 }
 

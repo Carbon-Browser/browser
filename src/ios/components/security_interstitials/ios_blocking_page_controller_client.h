@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <string>
 
+#import "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/security_interstitials/core/controller_client.h"
 #include "ios/web/public/web_state_observer.h"
@@ -70,7 +71,7 @@ class IOSBlockingPageControllerClient
   // it's not possible to go back.
   void Close();
 
-  web::WebState* web_state_;
+  raw_ptr<web::WebState> web_state_;
   const std::string app_locale_;
 
   base::WeakPtrFactory<IOSBlockingPageControllerClient> weak_factory_;

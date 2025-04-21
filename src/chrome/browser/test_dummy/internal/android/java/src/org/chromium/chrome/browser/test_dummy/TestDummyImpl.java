@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,9 @@ import android.content.Intent;
 import androidx.annotation.IntDef;
 import androidx.appcompat.app.AlertDialog;
 
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.Log;
-import org.chromium.base.annotations.NativeMethods;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -23,8 +24,12 @@ import java.util.Locale;
 public class TestDummyImpl implements TestDummy {
     private static final String TAG = "TestDummyImpl";
 
-    @IntDef({TestCase.EXECUTE_JAVA, TestCase.EXECUTE_NATIVE, TestCase.LOAD_JAVA_RESOURCE,
-            TestCase.LOAD_NATIVE_RESOURCE})
+    @IntDef({
+        TestCase.EXECUTE_JAVA,
+        TestCase.EXECUTE_NATIVE,
+        TestCase.LOAD_JAVA_RESOURCE,
+        TestCase.LOAD_NATIVE_RESOURCE
+    })
     @Retention(RetentionPolicy.SOURCE)
     private @interface TestCase {
         int EXECUTE_JAVA = 0;
@@ -35,8 +40,7 @@ public class TestDummyImpl implements TestDummy {
 
     @Override
     public void launch(Intent intent, Activity activity) {
-        @TestCase
-        int testCase = intent.getExtras().getInt("test_case");
+        @TestCase int testCase = intent.getExtras().getInt("test_case");
         switch (testCase) {
             case TestCase.EXECUTE_JAVA:
                 executeJava(activity);
@@ -55,9 +59,10 @@ public class TestDummyImpl implements TestDummy {
         }
     }
 
-    @NativeMethods
+    @NativeMethods("test_dummy")
     interface Natives {
-        int execute();
+        int execute(boolean testArg);
+
         String loadResource();
     }
 
@@ -77,7 +82,7 @@ public class TestDummyImpl implements TestDummy {
     }
 
     private void executeNative(Activity activity) {
-        int value = TestDummyImplJni.get().execute();
+        int value = TestDummyImplJni.get().execute(true);
         boolean pass = (value == 123);
         showDoneDialog(activity, TestCase.EXECUTE_NATIVE, pass);
     }

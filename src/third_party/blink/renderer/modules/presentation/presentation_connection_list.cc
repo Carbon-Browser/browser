@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,8 +28,7 @@ PresentationConnectionList::connections() const {
 void PresentationConnectionList::AddedEventListener(
     const AtomicString& event_type,
     RegisteredEventListener& registered_listener) {
-  EventTargetWithInlineData::AddedEventListener(event_type,
-                                                registered_listener);
+  EventTarget::AddedEventListener(event_type, registered_listener);
   if (event_type == event_type_names::kConnectionavailable) {
     UseCounter::Count(
         GetExecutionContext(),
@@ -60,12 +59,12 @@ void PresentationConnectionList::DispatchConnectionAvailableEvent(
 }
 
 bool PresentationConnectionList::IsEmpty() {
-  return connections_.IsEmpty();
+  return connections_.empty();
 }
 
 void PresentationConnectionList::Trace(Visitor* visitor) const {
   visitor->Trace(connections_);
-  EventTargetWithInlineData::Trace(visitor);
+  EventTarget::Trace(visitor);
   ExecutionContextClient::Trace(visitor);
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,6 @@ bool GetColor(const CSSProperty& property,
       return GetColorFromPaint(style.StrokePaint(), result);
     default:
       NOTREACHED();
-      return false;
   }
 }
 
@@ -57,8 +56,29 @@ InterpolationValue CSSPaintInterpolationType::MaybeConvertInitial(
                 state.GetDocument().GetStyleResolver().InitialStyle(),
                 initial_color))
     return nullptr;
-  return InterpolationValue(
-      CSSColorInterpolationType::CreateInterpolableColor(initial_color));
+
+  mojom::blink::ColorScheme color_scheme =
+      state.StyleBuilder().UsedColorScheme();
+  const ui::ColorProvider* color_provider =
+      state.GetDocument().GetColorProviderForPainting(color_scheme);
+  return InterpolationValue(CSSColorInterpolationType::CreateInterpolableColor(
+      initial_color, color_scheme, color_provider));
+}
+
+PairwiseInterpolationValue CSSPaintInterpolationType::MaybeMergeSingles(
+    InterpolationValue&& start,
+    InterpolationValue&& end) const {
+  DCHECK(!start.non_interpolable_value);
+  DCHECK(!end.non_interpolable_value);
+
+  // Confirm that both colors are in the same colorspace and adjust if
+  // necessary.
+  auto& start_color = To<InterpolableColor>(*start.interpolable_value);
+  auto& end_color = To<InterpolableColor>(*end.interpolable_value);
+  InterpolableColor::SetupColorInterpolationSpaces(start_color, end_color);
+
+  return PairwiseInterpolationValue(std::move(start.interpolable_value),
+                                    std::move(end.interpolable_value), nullptr);
 }
 
 class InheritedPaintChecker
@@ -68,6 +88,11 @@ class InheritedPaintChecker
       : property_(property), valid_color_(false) {}
   InheritedPaintChecker(const CSSProperty& property, const StyleColor& color)
       : property_(property), valid_color_(true), color_(color) {}
+
+  void Trace(Visitor* visitor) const final {
+    visitor->Trace(color_);
+    CSSInterpolationType::CSSConversionChecker::Trace(visitor);
+  }
 
  private:
   bool IsValid(const StyleResolverState& state,
@@ -91,24 +116,35 @@ InterpolationValue CSSPaintInterpolationType::MaybeConvertInherit(
   StyleColor parent_color;
   if (!GetColor(CssProperty(), *state.ParentStyle(), parent_color)) {
     conversion_checkers.push_back(
-        std::make_unique<InheritedPaintChecker>(CssProperty()));
+        MakeGarbageCollected<InheritedPaintChecker>(CssProperty()));
     return nullptr;
   }
   conversion_checkers.push_back(
-      std::make_unique<InheritedPaintChecker>(CssProperty(), parent_color));
-  return InterpolationValue(
-      CSSColorInterpolationType::CreateInterpolableColor(parent_color));
+      MakeGarbageCollected<InheritedPaintChecker>(CssProperty(), parent_color));
+  mojom::blink::ColorScheme color_scheme =
+      state.StyleBuilder().UsedColorScheme();
+  const ui::ColorProvider* color_provider =
+      state.GetDocument().GetColorProviderForPainting(color_scheme);
+  return InterpolationValue(CSSColorInterpolationType::CreateInterpolableColor(
+      parent_color, color_scheme, color_provider));
 }
 
 InterpolationValue CSSPaintInterpolationType::MaybeConvertValue(
     const CSSValue& value,
-    const StyleResolverState*,
+    const StyleResolverState* state,
     ConversionCheckers&) const {
-  std::unique_ptr<InterpolableValue> interpolable_color =
-      CSSColorInterpolationType::MaybeCreateInterpolableColor(value);
+  mojom::blink::ColorScheme color_scheme =
+      state ? state->StyleBuilder().UsedColorScheme()
+            : mojom::blink::ColorScheme::kLight;
+  const ui::ColorProvider* color_provider =
+      state ? state->GetDocument().GetColorProviderForPainting(color_scheme)
+            : nullptr;
+  InterpolableValue* interpolable_color =
+      CSSColorInterpolationType::MaybeCreateInterpolableColor(
+          value, color_scheme, color_provider);
   if (!interpolable_color)
     return nullptr;
-  return InterpolationValue(std::move(interpolable_color));
+  return InterpolationValue(interpolable_color);
 }
 
 InterpolationValue
@@ -119,24 +155,26 @@ CSSPaintInterpolationType::MaybeConvertStandardPropertyUnderlyingValue(
   StyleColor underlying_color;
   if (!GetColor(CssProperty(), style, underlying_color))
     return nullptr;
-  return InterpolationValue(
-      CSSColorInterpolationType::CreateInterpolableColor(underlying_color));
+  // TODO(crbug.com/1231644): Need to pass an appropriate color provider here.
+  return InterpolationValue(CSSColorInterpolationType::CreateInterpolableColor(
+      underlying_color, style.UsedColorScheme(), /*color_provider=*/nullptr));
 }
 
 void CSSPaintInterpolationType::ApplyStandardPropertyValue(
     const InterpolableValue& interpolable_color,
     const NonInterpolableValue*,
     StyleResolverState& state) const {
+  ComputedStyleBuilder& builder = state.StyleBuilder();
   Color color = CSSColorInterpolationType::ResolveInterpolableColor(
       interpolable_color, state);
   switch (CssProperty().PropertyID()) {
     case CSSPropertyID::kFill:
-      state.Style()->SetFillPaint(SVGPaint(color));
-      state.Style()->SetInternalVisitedFillPaint(SVGPaint(color));
+      builder.SetFillPaint(SVGPaint(color));
+      builder.SetInternalVisitedFillPaint(SVGPaint(color));
       break;
     case CSSPropertyID::kStroke:
-      state.Style()->SetStrokePaint(SVGPaint(color));
-      state.Style()->SetInternalVisitedStrokePaint(SVGPaint(color));
+      builder.SetStrokePaint(SVGPaint(color));
+      builder.SetInternalVisitedStrokePaint(SVGPaint(color));
       break;
     default:
       NOTREACHED();

@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -42,14 +42,16 @@ source_set("app_shell_lib") {
     "//components/feedback",
     "//components/feedback/content:factory",
     "//components/guest_view/browser",
+    "//components/guest_view/common:mojom",
     "//components/guest_view/renderer",
     "//components/keep_alive_registry",
     "//components/keyed_service/content:content",
     "//components/nacl/common:buildflags",
     "//components/network_session_configurator/common",
+    "//components/origin_trials:browser",
+    "//components/origin_trials:common",
     "//components/pref_registry",
     "//components/prefs",
-    "//components/services/app_service/public/mojom",
     "//components/sessions",
     "//components/storage_monitor",
     "//components/update_client",
@@ -61,9 +63,6 @@ source_set("app_shell_lib") {
     "//extensions:extensions_resources",
     "//extensions:shell_and_test_pak",
     "//extensions/browser",
-    "//extensions/browser:core_api_provider",
-    "//extensions/browser/api",
-    "//extensions/browser/api/messaging",
     "//extensions/browser/kiosk",
     "//extensions/browser/updater",
     "//extensions/common",
@@ -158,6 +157,8 @@ source_set("app_shell_lib") {
     "common/shell_extensions_client.h",
     "common/switches.cc",
     "common/switches.h",
+    "renderer/api/shell_extensions_renderer_api_provider.cc",
+    "renderer/api/shell_extensions_renderer_api_provider.h",
     "renderer/shell_content_renderer_client.cc",
     "renderer/shell_content_renderer_client.h",
     "renderer/shell_extensions_renderer_client.cc",
@@ -175,7 +176,7 @@ source_set("app_shell_lib") {
     ]
   }
 
-  if (is_chromeos_ash) {
+  if (is_chromeos) {
     sources += [
       "browser/shell_audio_controller_chromeos.cc",
       "browser/shell_audio_controller_chromeos.h",
@@ -201,12 +202,12 @@ source_set("app_shell_lib") {
       "//ui/wm",
       "//ui/wm/public",
     ]
-    if (is_chromeos_ash) {
+    if (is_chromeos) {
       deps += [ "//ui/ozone" ]
     }
   }
 
-  if (is_linux || is_chromeos_lacros) {
+  if (is_linux) {
     sources += [
       "browser/api/file_system/shell_file_system_delegate.cc",
       "browser/api/file_system/shell_file_system_delegate.h",
@@ -224,29 +225,27 @@ source_set("app_shell_lib") {
     ]
   }
 
-  if (is_chromeos_ash) {
+  if (is_chromeos) {
     sources += [
       "browser/shell_screen.cc",
       "browser/shell_screen.h",
     ]
     deps += [
-      "//ash/components/audio",
-      "//ash/components/disks",
       "//ash/constants",
+      "//chromeos/ash/components/audio",
+      "//chromeos/ash/components/dbus",
       "//chromeos/ash/components/dbus/audio",
       "//chromeos/ash/components/dbus/cros_disks",
       "//chromeos/ash/components/dbus/hermes",
+      "//chromeos/ash/components/dbus/shill",
+      "//chromeos/ash/components/disks",
+      "//chromeos/ash/components/login/login_state",
       "//chromeos/ash/components/network",
-      "//chromeos/dbus",
-      "//chromeos/login/login_state",
       "//ui/chromeos",
       "//ui/display/manager",
     ]
   }
 
-  if (is_chromeos_lacros) {
-    deps += [ "//chromeos/lacros/dbus" ]
-  }
   if (enable_nacl) {
     sources += [
       "browser/shell_nacl_browser_delegate.cc",
@@ -261,8 +260,9 @@ source_set("app_shell_lib") {
       "//ppapi/shared_impl:shared_impl",
     ]
 
-    # TODO(https://crbug.com/1299021): Implement building these NaCl targets
-    # as ARM32 when Chrome is built for ARM64 (for Linux/Chrome OS).
+    # TODO(https://crbug.com/1299021): These dependencies might be
+    # redundant given that we were able to disable them, apparently without
+    # negative consequences, for the ARM32-NaCl-on-ARM64 case.
     if (target_cpu != "arm64") {
       deps += [ "//components/nacl/loader" ]
       if (is_linux || is_chromeos) {
@@ -315,6 +315,7 @@ test("app_shell_unittests") {
     "//apps",
     "//base",
     "//base/test:test_support",
+    "//build:android_buildflags",
     "//build:chromeos_buildflags",
     "//components/crx_file",
     "//components/feedback",
@@ -336,7 +337,7 @@ test("app_shell_unittests") {
 
   data_deps = [
     # "//gin", # TODO(dpranke): Either gin or v8 data is needed ...
-    "//third_party/mesa_headers",
+    "//third_party/angle:includes",
   ]
 
   if (use_aura) {
@@ -361,15 +362,15 @@ test("app_shell_unittests") {
     deps += [ "//chromeos/dbus/power" ]
   }
 
-  if (is_chromeos_ash) {
+  if (is_chromeos) {
     sources += [
       "browser/shell_audio_controller_chromeos_unittest.cc",
       "browser/shell_screen_unittest.cc",
     ]
     deps += [
-      "//ash/components/audio",
+      "//chromeos/ash/components/audio",
+      "//chromeos/ash/components/dbus:test_support",
       "//chromeos/ash/components/dbus/audio",
-      "//chromeos/dbus:test_support",
     ]
   }
 
@@ -420,12 +421,9 @@ source_set("browser_tests") {
     "//extensions/browser",
     "//extensions/browser:test_support",
     "//extensions/common",
+    "//extensions/renderer",
     "//ui/base",
   ]
-
-  if (is_chromeos_lacros) {
-    deps += [ "//chromeos/lacros" ]
-  }
 
   if (use_aura) {
     sources += [ "browser/shell_desktop_controller_aura_browsertest.cc" ]
@@ -444,7 +442,7 @@ source_set("unit_tests") {
     "//extensions/browser",
   ]
 
-  if (is_chromeos_ash) {
+  if (is_chromeos) {
     deps += [ "//components/keyed_service/content" ]
   }
 }

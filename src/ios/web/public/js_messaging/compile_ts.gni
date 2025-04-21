@@ -1,4 +1,4 @@
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -6,11 +6,6 @@ import("//tools/typescript/ts_library.gni")
 
 # Defines a target that compiles one or more TypeScript and JavaScript input
 # files.
-# NOTE: Since ts_library produces files with hardcoded names at
-# `target_gen_dir`, only a single `compile_ts` target may exist in a BUILD
-# file. However, even with this restriction, unrelated TypeScript files may be
-# compiled together in a single `compile_ts` target, then be used in multiple,
-# separate `optimize_js` instances.
 #
 # Variables
 #   sources:
@@ -20,6 +15,10 @@ import("//tools/typescript/ts_library.gni")
 #
 #   allow_js (optional):
 #     Whether or not JavaScript files are allowed. Defaults to false.
+#
+#   deps (optional):
+#     The dependent targets which produce typescript compiler manifest files.
+#     These manifest files will be used to resolve script imports.
 #
 template("compile_ts") {
   assert(defined(invoker.sources), "sources must be set")
@@ -52,7 +51,11 @@ template("compile_ts") {
   # directory structure to maintain path imports specified in the tsc manifest
   # file.
   ts_library(target_name) {
-    forward_variables_from(invoker, [ "deps" ])
+    forward_variables_from(invoker,
+                           [
+                             "deps",
+                             "testonly",
+                           ])
 
     composite = true
 
@@ -76,13 +79,5 @@ template("compile_ts") {
 
     # in_files are defined relative to root_dir as described in ts_library.py
     in_files = rebase_path(rebase_path(invoker.sources), root_dir)
-
-    # Specify the tsconfig file depending on whether JS is allowed.
-    if (defined(invoker.allow_js) && invoker.allow_js) {
-      tsconfig_base =
-          "//ios/web/public/js_messaging/tsconfig_allow_js_base.json"
-    } else {
-      tsconfig_base = "//ios/web/public/js_messaging/tsconfig_base.json"
-    }
   }
 }

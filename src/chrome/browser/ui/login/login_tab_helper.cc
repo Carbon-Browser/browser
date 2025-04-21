@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,27 +17,7 @@
 #include "net/http/http_status_code.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 
-LoginTabHelper::~LoginTabHelper() {}
-
-std::unique_ptr<content::LoginDelegate>
-LoginTabHelper::CreateAndStartMainFrameLoginDelegate(
-    const net::AuthChallengeInfo& auth_info,
-    content::WebContents* web_contents,
-    const content::GlobalRequestID& request_id,
-    const GURL& url,
-    scoped_refptr<net::HttpResponseHeaders> response_headers,
-    LoginAuthRequiredCallback auth_required_callback) {
-  std::unique_ptr<LoginHandler> login_handler = LoginHandler::Create(
-      auth_info, web_contents, std::move(auth_required_callback));
-  login_handler->StartMainFrame(
-      request_id, url, response_headers,
-      // The caller owns the created LoginHandler, and there's no guarantee that
-      // |this| outlives it, so use a weak pointer to receive a callback when an
-      // extension has cancelled the auth request for a navigation.
-      base::BindOnce(&LoginTabHelper::RegisterExtensionCancelledNavigation,
-                     weak_ptr_factory_.GetWeakPtr()));
-  return login_handler;
-}
+LoginTabHelper::~LoginTabHelper() = default;
 
 void LoginTabHelper::DidStartNavigation(
     content::NavigationHandle* navigation_handle) {
@@ -49,14 +29,11 @@ void LoginTabHelper::DidStartNavigation(
   // response bodies that have subframes or can trigger same-document
   // navigations.
   if (!navigation_handle->IsInPrimaryMainFrame() ||
-      navigation_handle->IsSameDocument())
+      navigation_handle->IsSameDocument()) {
     return;
-
-  if (!login_handler_)
-    return;
+  }
 
   login_handler_.reset();
-  url_for_login_handler_ = GURL();
 }
 
 void LoginTabHelper::DidFinishNavigation(
@@ -108,11 +85,10 @@ void LoginTabHelper::DidFinishNavigation(
   }
 
   challenge_ = navigation_handle->GetAuthChallengeInfo().value();
-  network_isolation_key_ =
-      navigation_handle->GetIsolationInfo().network_isolation_key();
+  network_anonymization_key_ =
+      navigation_handle->GetIsolationInfo().network_anonymization_key();
 
-  url_for_login_handler_ = navigation_handle->GetURL();
-  login_handler_ = LoginHandler::Create(
+  login_handler_ = CreateLoginHandler(
       navigation_handle->GetAuthChallengeInfo().value(),
       navigation_handle->GetWebContents(),
       base::BindOnce(
@@ -121,7 +97,7 @@ void LoginTabHelper::DidFinishNavigation(
           // callback, it's safe to use base::Unretained here; the
           // |login_handler_| cannot outlive its owning LoginTabHelper.
           base::Unretained(this)));
-  login_handler_->ShowLoginPromptAfterCommit(navigation_handle->GetURL());
+  login_handler_->ShowLoginPrompt(navigation_handle->GetURL());
 
   // If the challenge comes from a proxy, the URL should be hidden in the
   // omnibox to avoid origin confusion. Call DidChangeVisibleSecurityState() to
@@ -214,10 +190,17 @@ LoginTabHelper::LoginTabHelper(content::WebContents* web_contents)
     : content::WebContentsObserver(web_contents),
       content::WebContentsUserData<LoginTabHelper>(*web_contents) {}
 
+std::unique_ptr<LoginHandler> LoginTabHelper::CreateLoginHandler(
+    const net::AuthChallengeInfo& auth_info,
+    content::WebContents* web_contents,
+    LoginAuthRequiredCallback auth_required_callback) {
+  return LoginHandler::Create(auth_info, web_contents,
+                              std::move(auth_required_callback));
+}
+
 void LoginTabHelper::HandleCredentials(
-    const absl::optional<net::AuthCredentials>& credentials) {
+    const std::optional<net::AuthCredentials>& credentials) {
   login_handler_.reset();
-  url_for_login_handler_ = GURL();
 
   if (credentials.has_value()) {
     content::StoragePartition* storage_partition =
@@ -227,7 +210,7 @@ void LoginTabHelper::HandleCredentials(
     // LoginTabHelper) could be destroyed while the network service is
     // processing the new cache entry.
     storage_partition->GetNetworkContext()->AddAuthCacheEntry(
-        challenge_, network_isolation_key_, credentials.value(),
+        challenge_, network_anonymization_key_, credentials.value(),
         base::BindOnce(&LoginTabHelper::Reload,
                        weak_ptr_factory_.GetWeakPtr()));
   }

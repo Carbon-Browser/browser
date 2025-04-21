@@ -1,51 +1,44 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/updater/setup.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include <AvailabilityMacros.h>
+#import <Foundation/Foundation.h>
+
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/mac/mac_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
-#include "base/time/time.h"
 #include "chrome/updater/constants.h"
-#include "chrome/updater/launchd_util.h"
-#include "chrome/updater/mac/setup/setup.h"
-#include "chrome/updater/mac/xpc_service_names.h"
+#include "chrome/updater/posix/setup.h"
 #include "chrome/updater/updater_scope.h"
 
 namespace updater {
 
 namespace {
 
-void SetupDone(base::OnceCallback<void(int)> callback,
-               UpdaterScope scope,
-               int result) {
-  if (result != kErrorOk) {
-    std::move(callback).Run(result);
-    return;
-  }
-  PollLaunchctlList(
-      scope, GetUpdateServiceInternalLaunchdName(scope),
-      LaunchctlPresence::kPresent, base::Seconds(kWaitForLaunchctlUpdateSec),
-      base::BindOnce(
-          [](base::OnceCallback<void(int)> callback, bool service_exists) {
-            std::move(callback).Run(
-                service_exists
-                    ? kErrorOk
-                    : kErrorFailedAwaitingLaunchdUpdateServiceInternalJob);
-          },
-          std::move(callback)));
+int MacOSVersion() {
+  NSOperatingSystemVersion v = NSProcessInfo.processInfo.operatingSystemVersion;
+  return v.majorVersion * 100 * 100 + v.minorVersion * 100 + v.patchVersion;
 }
 
 }  // namespace
 
-void InstallCandidate(UpdaterScope scope,
-                      base::OnceCallback<void(int)> callback) {
-  base::ThreadPool::PostTaskAndReplyWithResult(
-      FROM_HERE, {base::MayBlock()}, base::BindOnce(&Setup, scope),
-      base::BindOnce(&SetupDone, std::move(callback), scope));
+void InstallPlatformCandidate(UpdaterScope scope,
+                              base::OnceCallback<void(int)> callback) {
+  if (MacOSVersion() < MAC_OS_X_VERSION_MIN_REQUIRED) {
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE,
+        base::BindOnce(std::move(callback), kErrorUnsupportedOperatingSystem));
+    return;
+  }
+  base::ThreadPool::PostTaskAndReplyWithResult(FROM_HERE, {base::MayBlock()},
+                                               base::BindOnce(&Setup, scope),
+                                               std::move(callback));
 }
 
 }  // namespace updater

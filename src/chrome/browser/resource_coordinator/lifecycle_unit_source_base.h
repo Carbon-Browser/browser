@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,7 +57,8 @@ class LifecycleUnitSourceBase : public LifecycleUnitSource {
 
  private:
   // Observers notified when a LifecycleUnit is created.
-  base::ObserverList<LifecycleUnitSourceObserver>::Unchecked observers_;
+  base::ObserverList<LifecycleUnitSourceObserver>::UncheckedAndDanglingUntriaged
+      observers_;
 
   // The count of lifecycle units associated with this source.
   size_t lifecycle_unit_count_ = 0;

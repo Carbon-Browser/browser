@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,12 @@
 #include <utility>
 
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "chrome/common/buildflags.h"
 #include "ui/base/accelerators/accelerator.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
+#include "ui/base/mojom/ui_base_types.mojom-shared.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/base/ui_base_types.h"
 #include "ui/events/event_constants.h"
@@ -28,49 +29,16 @@
 #include "ui/views/window/native_frame_view.h"
 #include "ui/views/window/non_client_view.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "ash/public/cpp/app_list/app_list_color_provider.h"
-#include "third_party/skia/include/core/SkPaint.h"
-#include "ui/views/background.h"
-#endif
-
 namespace {
 
 #if BUILDFLAG(IS_MAC)
-const ui::ModalType kModalType = ui::MODAL_TYPE_CHILD;
+const ui::mojom::ModalType kModalType = ui::mojom::ModalType::kChild;
 const views::BubbleBorder::Shadow kShadowType = views::BubbleBorder::NO_SHADOW;
 #else
-const ui::ModalType kModalType = ui::MODAL_TYPE_WINDOW;
+const ui::mojom::ModalType kModalType = ui::mojom::ModalType::kWindow;
 const views::BubbleBorder::Shadow kShadowType =
     views::BubbleBorder::STANDARD_SHADOW;
 #endif
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-// The background for App List dialogs, which appears as a rounded rectangle
-// with the same border radius and color as the app list contents.
-class AppListOverlayBackground : public views::Background {
- public:
-  AppListOverlayBackground() = default;
-  AppListOverlayBackground(const AppListOverlayBackground&) = delete;
-  AppListOverlayBackground& operator=(const AppListOverlayBackground&) = delete;
-  ~AppListOverlayBackground() override = default;
-
-  // Overridden from views::Background:
-  void Paint(gfx::Canvas* canvas, views::View* view) const override {
-    // The radius of the app list overlay (the dialog's background).
-    // TODO(sashab): Using SupportsShadow() from app_list_view.cc, make this
-    // 1px smaller on platforms that support shadows.
-    const int kAppListOverlayBorderRadius = 3;
-
-    cc::PaintFlags flags;
-    flags.setStyle(cc::PaintFlags::kFill_Style);
-    flags.setColor(
-        ash::AppListColorProvider::Get()->GetContentsBackgroundColor());
-    canvas->DrawRoundRect(view->GetContentsBounds(),
-                          kAppListOverlayBorderRadius, flags);
-  }
-};
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 // A BubbleFrameView that allows its client view to extend all the way to the
 // top of the dialog, overlapping the BubbleFrameView's close button. This
@@ -78,8 +46,9 @@ class AppListOverlayBackground : public views::Background {
 // TODO(estade): the functionality here should probably be folded into
 // BubbleFrameView.
 class FullSizeBubbleFrameView : public views::BubbleFrameView {
+  METADATA_HEADER(FullSizeBubbleFrameView, views::BubbleFrameView)
+
  public:
-  METADATA_HEADER(FullSizeBubbleFrameView);
   FullSizeBubbleFrameView()
       : views::BubbleFrameView(gfx::Insets(), gfx::Insets()) {}
   FullSizeBubbleFrameView(const FullSizeBubbleFrameView&) = delete;
@@ -91,17 +60,18 @@ class FullSizeBubbleFrameView : public views::BubbleFrameView {
   bool ExtendClientIntoTitle() const override { return true; }
 };
 
-BEGIN_METADATA(FullSizeBubbleFrameView, views::BubbleFrameView)
+BEGIN_METADATA(FullSizeBubbleFrameView)
 END_METADATA
 
 // A container view for a native dialog, which sizes to the given fixed |size|.
 class NativeDialogContainer : public views::DialogDelegateView {
+  METADATA_HEADER(NativeDialogContainer, views::DialogDelegateView)
+
  public:
-  METADATA_HEADER(NativeDialogContainer);
   NativeDialogContainer(std::unique_ptr<views::View> dialog_body,
                         const gfx::Size& size,
                         base::OnceClosure close_callback) {
-    SetButtons(ui::DIALOG_BUTTON_NONE);
+    SetButtons(static_cast<int>(ui::mojom::DialogButton::kNone));
     SetModalType(kModalType);
     AddChildView(std::move(dialog_body));
     SetLayoutManager(std::make_unique<views::FillLayout>());
@@ -126,7 +96,7 @@ class NativeDialogContainer : public views::DialogDelegateView {
   }
 };
 
-BEGIN_METADATA(NativeDialogContainer, views::DialogDelegateView)
+BEGIN_METADATA(NativeDialogContainer)
 END_METADATA
 
 }  // namespace

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,18 +46,19 @@ TargetAutoAttacher::HandleNavigation(NavigationRequest* navigation_request,
   scoped_refptr<RenderFrameDevToolsAgentHost> agent_host =
       RenderFrameDevToolsAgentHost::FindForDangling(frame_tree_node);
 
-  bool is_portal_main_frame =
-      frame_tree_node->IsMainFrame() &&
-      static_cast<WebContentsImpl*>(WebContents::FromRenderFrameHost(new_host))
-          ->IsPortal();
-  bool needs_host_attached =
-      new_host->is_local_root_subframe() || is_portal_main_frame;
+  bool needs_host_attached = new_host->is_local_root_subframe();
 
   if (needs_host_attached) {
     if (!agent_host) {
       agent_host = RenderFrameDevToolsAgentHost::
           CreateForLocalRootOrEmbeddedPageNavigation(navigation_request);
+    } else if (navigation_request->state() >=
+               NavigationRequest::NavigationState::DID_COMMIT) {
+      // If we've just committed and there's already an agent, update
+      // targetInfo.
+      DispatchTargetInfoChanged(agent_host.get());
     }
+
     return agent_host;
   }
 
@@ -133,6 +134,11 @@ void TargetAutoAttacher::DispatchSetAttachedTargetsOfType(
     const std::string& type) {
   for (auto& client : clients_)
     client.SetAttachedTargetsOfType(this, hosts, type);
+}
+
+void TargetAutoAttacher::DispatchTargetInfoChanged(DevToolsAgentHost* host) {
+  for (auto& client : clients_)
+    client.TargetInfoChanged(host);
 }
 
 RendererAutoAttacherBase::RendererAutoAttacherBase(

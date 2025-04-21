@@ -1,20 +1,21 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 component("geometry") {
   sources = [
-    "../gfx_export.h",
-    "angle_conversions.h",
     "axis_transform2d.cc",
     "axis_transform2d.h",
     "box_f.cc",
     "box_f.h",
+    "clamp_float_geometry.h",
     "cubic_bezier.cc",
     "cubic_bezier.h",
+    "decomposed_transform.cc",
+    "decomposed_transform.h",
     "dip_util.cc",
     "dip_util.h",
-    "geometry_export.h",
+    "double4.h",
     "insets.cc",
     "insets.h",
     "insets_conversions.cc",
@@ -49,12 +50,15 @@ component("geometry") {
     "resize_utils.h",
     "rounded_corners_f.cc",
     "rounded_corners_f.h",
+    "sin_cos_degrees.h",
     "size.cc",
     "size.h",
     "size_conversions.cc",
     "size_conversions.h",
     "size_f.cc",
     "size_f.h",
+    "three_point_cubic_bezier.cc",
+    "three_point_cubic_bezier.h",
     "triangle_f.cc",
     "triangle_f.h",
     "vector2d.cc",
@@ -67,7 +71,7 @@ component("geometry") {
     "vector3d_f.h",
   ]
 
-  defines = [ "GEOMETRY_IMPLEMENTATION" ]
+  defines = [ "IS_GEOMETRY_IMPL" ]
 
   deps = [ "//base" ]
 
@@ -79,7 +83,6 @@ component("geometry") {
 
 component("geometry_skia") {
   sources = [
-    "geometry_skia_export.h",
     "linear_gradient.cc",
     "linear_gradient.h",
     "mask_filter_info.cc",
@@ -107,5 +110,5 @@ component("geometry_skia") {
     "//base",
     "//skia",
   ]
-  defines = [ "GEOMETRY_SKIA_IMPLEMENTATION" ]
+  defines = [ "IS_GEOMETRY_SKIA_IMPL" ]
 }

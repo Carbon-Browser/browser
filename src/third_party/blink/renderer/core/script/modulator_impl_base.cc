@@ -1,8 +1,9 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/script/modulator_impl_base.h"
+
 #include "base/feature_list.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/devtools/console_message.mojom-blink.h"
@@ -25,7 +26,8 @@
 #include "third_party/blink/renderer/core/script/parsed_specifier.h"
 #include "third_party/blink/renderer/platform/bindings/v8_throw_exception.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
-#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
+#include "third_party/blink/renderer/platform/loader/integrity_report.h"
+#include "third_party/blink/renderer/platform/loader/subresource_integrity.h"
 
 namespace blink {
 
@@ -70,10 +72,11 @@ void ModulatorImplBase::FetchTree(
     network::mojom::RequestDestination destination,
     const ScriptFetchOptions& options,
     ModuleScriptCustomFetchType custom_fetch_type,
-    ModuleTreeClient* client) {
+    ModuleTreeClient* client,
+    String referrer) {
   tree_linker_registry_->Fetch(
       url, module_type, fetch_client_settings_object_fetcher, context_type,
-      destination, options, this, custom_fetch_type, client);
+      destination, options, this, custom_fetch_type, client, referrer);
 }
 
 void ModulatorImplBase::FetchDescendantsForInlineScript(
@@ -123,25 +126,27 @@ KURL ModulatorImplBase::ResolveModuleSpecifier(const String& specifier,
   // errors, but should be supressed (i.e. |logger| should be null) in normal
   // cases.
 
-  absl::optional<KURL> mapped_url;
-  if (GetImportMap()) {
+  std::optional<KURL> result;
+  std::optional<KURL> mapped_url;
+  if (import_map_) {
     String import_map_debug_message;
-    mapped_url = GetImportMap()->Resolve(parsed_specifier, base_url,
-                                         &import_map_debug_message);
+    mapped_url = import_map_->Resolve(parsed_specifier, base_url,
+                                      &import_map_debug_message);
 
     // Output the resolution log. This is too verbose to be always shown, but
     // will be helpful for Web developers (and also Chromium developers) for
     // debugging import maps.
-    LOG(INFO) << import_map_debug_message;
+    VLOG(1) << import_map_debug_message;
 
     if (mapped_url) {
       KURL url = *mapped_url;
       if (!url.IsValid()) {
         if (failure_reason)
           *failure_reason = import_map_debug_message;
-        return KURL();
+        result = KURL();
+      } else {
+        result = url;
       }
-      return url;
     }
   }
 
@@ -149,23 +154,32 @@ KURL ModulatorImplBase::ResolveModuleSpecifier(const String& specifier,
   // - There are no import maps, or
   // - The import map doesn't have an entry for |parsed_specifier|.
 
-  switch (parsed_specifier.GetType()) {
-    case ParsedSpecifier::Type::kInvalid:
-      NOTREACHED();
-      return KURL();
+  if (!result) {
+    switch (parsed_specifier.GetType()) {
+      case ParsedSpecifier::Type::kInvalid:
+        NOTREACHED();
 
-    case ParsedSpecifier::Type::kBare:
-      // Reject bare specifiers as specced by the pre-ImportMap spec.
-      if (failure_reason) {
-        *failure_reason =
-            "Relative references must start with either \"/\", \"./\", or "
-            "\"../\".";
-      }
-      return KURL();
+      case ParsedSpecifier::Type::kBare:
+        // Reject bare specifiers as specced by the pre-ImportMap spec.
+        if (failure_reason) {
+          *failure_reason =
+              "Relative references must start with either \"/\", \"./\", or "
+              "\"../\".";
+        }
+        return KURL();
 
-    case ParsedSpecifier::Type::kURL:
-      return parsed_specifier.GetUrl();
+      case ParsedSpecifier::Type::kURL:
+        result = parsed_specifier.GetUrl();
+    }
   }
+  // Step 13. If result is not null, then:
+  // Step 13.1. Add module to resolved module set given settingsObject,
+  // baseURLString, and normalizedSpecifier.
+  AddModuleToResolvedModuleSet(base_url.GetString(),
+                               parsed_specifier.GetImportMapKeyString());
+
+  // Step 13.2. Return result.
+  return result.value();
 }
 
 bool ModulatorImplBase::HasValidContext() {
@@ -175,7 +189,7 @@ bool ModulatorImplBase::HasValidContext() {
 void ModulatorImplBase::ResolveDynamically(
     const ModuleRequest& module_request,
     const ReferrerScriptInfo& referrer_info,
-    ScriptPromiseResolver* resolver) {
+    ScriptPromiseResolver<IDLAny>* resolver) {
   String reason;
   if (IsDynamicImportForbidden(&reason)) {
     resolver->Reject(V8ThrowException::CreateTypeError(
@@ -205,6 +219,26 @@ ModuleImportMeta ModulatorImplBase::HostGetImportMetaProperties(
   return ModuleImportMeta(url_string);
 }
 
+String ModulatorImplBase::GetIntegrityMetadataString(const KURL& url) const {
+  if (!import_map_) {
+    return String();
+  }
+  return import_map_->ResolveIntegrity(url);
+}
+
+IntegrityMetadataSet ModulatorImplBase::GetIntegrityMetadata(
+    const KURL& url) const {
+  String value = GetIntegrityMetadataString(url);
+  IntegrityMetadataSet integrity_metadata;
+  if (!value.IsNull()) {
+    IntegrityReport integrity_report;
+    SubresourceIntegrity::ParseIntegrityAttribute(value, integrity_metadata,
+                                                  &integrity_report);
+    integrity_report.SendReports(GetExecutionContext());
+  }
+  return integrity_metadata;
+}
+
 ModuleType ModulatorImplBase::ModuleTypeFromRequest(
     const ModuleRequest& module_request) const {
   String module_type_string = module_request.GetModuleTypeString();
@@ -213,14 +247,12 @@ ModuleType ModulatorImplBase::ModuleTypeFromRequest(
     // step="1">Let module type be "javascript".</spec> If no type assertion is
     // provided, the import is treated as a JavaScript module.
     return ModuleType::kJavaScript;
-  } else if (base::FeatureList::IsEnabled(blink::features::kJSONModules) &&
-             module_type_string == "json") {
+  } else if (module_type_string == "json") {
     // <spec href="https://html.spec.whatwg.org/#fetch-a-single-module-script"
     // step="17"> If...module type is "json", then set module script to the
     // result of creating a JSON module script...</spec>
     return ModuleType::kJSON;
-  } else if (RuntimeEnabledFeatures::CSSModulesEnabled() &&
-             module_type_string == "css" && GetExecutionContext()->IsWindow()) {
+  } else if (module_type_string == "css" && GetExecutionContext()->IsWindow()) {
     // <spec href="https://html.spec.whatwg.org/#fetch-a-single-module-script"
     // step="16"> If...module type is "css", then set module script to the
     // result of creating a CSS module script...</spec>

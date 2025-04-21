@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,38 @@
 
 #include <set>
 
+#include "base/feature_list.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/sync/browser_synced_tab_delegate.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "components/sync/base/features.h"
 
 BrowserSyncedWindowDelegate::BrowserSyncedWindowDelegate(Browser* browser)
-    : browser_(browser) {}
+    : browser_(browser) {
+  browser->tab_strip_model()->AddObserver(this);
+}
 
 BrowserSyncedWindowDelegate::~BrowserSyncedWindowDelegate() = default;
+
+void BrowserSyncedWindowDelegate::OnTabStripModelChanged(
+    TabStripModel* tab_strip_model,
+    const TabStripModelChange& change,
+    const TabStripSelectionChange& selection) {
+  if (selection.active_tab_changed()) {
+    if (selection.old_contents &&
+        BrowserSyncedTabDelegate::FromWebContents(selection.old_contents)) {
+      BrowserSyncedTabDelegate::FromWebContents(selection.old_contents)
+          ->ResetCachedLastActiveTime();
+    }
+
+    if (selection.new_contents &&
+        BrowserSyncedTabDelegate::FromWebContents(selection.new_contents)) {
+      BrowserSyncedTabDelegate::FromWebContents(selection.new_contents)
+          ->ResetCachedLastActiveTime();
+    }
+  }
+}
 
 bool BrowserSyncedWindowDelegate::IsTabPinned(
     const sync_sessions::SyncedTabDelegate* tab) const {
@@ -49,10 +72,6 @@ SessionID BrowserSyncedWindowDelegate::GetSessionId() const {
 
 int BrowserSyncedWindowDelegate::GetTabCount() const {
   return browser_->tab_strip_model()->count();
-}
-
-int BrowserSyncedWindowDelegate::GetActiveIndex() const {
-  return browser_->tab_strip_model()->active_index();
 }
 
 bool BrowserSyncedWindowDelegate::IsTypeNormal() const {

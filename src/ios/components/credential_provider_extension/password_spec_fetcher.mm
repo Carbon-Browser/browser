@@ -1,15 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/components/credential_provider_extension/password_spec_fetcher.h"
 
-#include "base/base64.h"
-#include "components/autofill/core/browser/proto/password_requirements.pb.h"
+#import <string_view>
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/base64.h"
+#import "components/autofill/core/browser/proto/password_requirements.pb.h"
 
 using autofill::DomainSuggestions;
 using autofill::PasswordRequirementsSpec;
@@ -114,8 +112,8 @@ const NSTimeInterval kPasswordSpecTimeout = 10;
 
   // Parse the proto and execute completion.
   std::string decoded;
-  const base::StringPiece encoded_bytes(static_cast<const char*>([data bytes]),
-                                        [data length]);
+  const std::string_view encoded_bytes(static_cast<const char*>([data bytes]),
+                                       [data length]);
   if (base::Base64Decode(encoded_bytes, &decoded)) {
     DomainSuggestions suggestions;
     suggestions.ParseFromString(decoded);

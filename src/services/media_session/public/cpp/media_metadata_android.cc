@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,10 @@
 
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
-#include "services/media_session/public/cpp/android/media_session_jni_headers/MediaMetadata_jni.h"
 #include "services/media_session/public/cpp/media_image.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "services/media_session/public/cpp/android/media_session_jni_headers/MediaMetadata_jni.h"
 
 using base::android::ScopedJavaLocalRef;
 

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "ash/ash_export.h"
 #include "ash/system/unified/feature_pod_button.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 
 namespace ash {
@@ -14,9 +15,9 @@ namespace ash {
 // This class that provides the corresponding controller with notifications of
 // when the theme for this view changes.
 class ASH_EXPORT NetworkFeaturePodButton : public FeaturePodButton {
- public:
-  METADATA_HEADER(NetworkFeaturePodButton);
+  METADATA_HEADER(NetworkFeaturePodButton, FeaturePodButton)
 
+ public:
   // This class defines the interface that NetworkFeaturePodButton will use to
   // propagate theme changes.
   class Delegate {
@@ -36,7 +37,7 @@ class ASH_EXPORT NetworkFeaturePodButton : public FeaturePodButton {
   // views::Button:
   void OnThemeChanged() override;
 
-  Delegate* delegate_;
+  raw_ptr<Delegate, DanglingUntriaged> delegate_;
 };
 
 }  // namespace ash

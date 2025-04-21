@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 namespace account_manager {
 
 Account CreateTestGaiaAccount(const std::string& raw_email) {
-  // TODO(https://crbug.com/1150770): Use signin::GetTestGaiaIdForEmail here.
+  // TODO(crbug.com/40158025): Use signin::GetTestGaiaIdForEmail here.
   AccountKey key(std::string("gaia_id_for_") + raw_email, AccountType::kGaia);
   return {key, raw_email};
 }

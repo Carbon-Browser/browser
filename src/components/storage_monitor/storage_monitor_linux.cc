@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,20 +17,19 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
-#include "base/metrics/histogram_macros.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/not_fatal_until.h"
 #include "base/process/kill.h"
 #include "base/process/launch.h"
 #include "base/process/process.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/task/task_runner_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/scoped_blocking_call.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "components/storage_monitor/media_storage_util.h"
 #include "components/storage_monitor/removable_device_constants.h"
 #include "components/storage_monitor/storage_info.h"
@@ -76,30 +75,6 @@ std::string MakeDeviceUniqueId(struct udev_device* device) {
   return kVendorModelSerialPrefix + vendor + ":" + model + ":" + serial_short;
 }
 
-// Records GetDeviceInfo result on destruction, to see how often we fail to get
-// device details.
-class ScopedGetDeviceInfoResultRecorder {
- public:
-  ScopedGetDeviceInfoResultRecorder() = default;
-
-  ScopedGetDeviceInfoResultRecorder(const ScopedGetDeviceInfoResultRecorder&) =
-      delete;
-  ScopedGetDeviceInfoResultRecorder& operator=(
-      const ScopedGetDeviceInfoResultRecorder&) = delete;
-
-  ~ScopedGetDeviceInfoResultRecorder() {
-    UMA_HISTOGRAM_BOOLEAN("MediaDeviceNotification.UdevRequestSuccess",
-                          result_);
-  }
-
-  void set_result(bool result) {
-    result_ = result;
-  }
-
- private:
-  bool result_ = false;
-};
-
 // Returns the storage partition size of the device specified by |device_path|.
 // If the requested information is unavailable, returns 0.
 uint64_t GetDeviceStorageSize(const base::FilePath& device_path,
@@ -124,8 +99,6 @@ std::unique_ptr<StorageInfo> GetDeviceInfo(const base::FilePath& device_path,
   DCHECK(!device_path.empty());
 
   std::unique_ptr<StorageInfo> storage_info;
-
-  ScopedGetDeviceInfoResultRecorder results_recorder;
 
   device::ScopedUdevPtr udev_obj(device::udev_new());
   if (!udev_obj.get())
@@ -178,8 +151,6 @@ std::unique_ptr<StorageInfo> GetDeviceInfo(const base::FilePath& device_path,
                ? StorageInfo::REMOVABLE_MASS_STORAGE_WITH_DCIM
                : StorageInfo::REMOVABLE_MASS_STORAGE_NO_DCIM;
   }
-
-  results_recorder.set_result(true);
 
   storage_info = std::make_unique<StorageInfo>(
       StorageInfo::MakeDeviceId(type, unique_id), mount_point.value(),
@@ -258,10 +229,10 @@ void StorageMonitorLinux::Init() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!mtab_path_.empty());
 
-  base::PostTaskAndReplyWithResult(
-      mtab_watcher_task_runner_.get(), FROM_HERE,
+  mtab_watcher_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&CreateMtabWatcherLinuxOnMtabWatcherTaskRunner, mtab_path_,
-                     base::SequencedTaskRunnerHandle::Get(),
+                     base::SequencedTaskRunner::GetCurrentDefault(),
                      base::BindRepeating(&StorageMonitorLinux::UpdateMtab,
                                          weak_ptr_factory_.GetWeakPtr())),
       base::BindOnce(&StorageMonitorLinux::OnMtabWatcherCreated,
@@ -354,12 +325,13 @@ void StorageMonitorLinux::UpdateMtab(const MountPointDeviceMap& new_mtab) {
     // |mount_point|.
     if (new_iter == new_mtab.end() || (new_iter->second != mount_device)) {
       auto priority = mount_priority_map_.find(mount_device);
-      DCHECK(priority != mount_priority_map_.end());
+      CHECK(priority != mount_priority_map_.end(), base::NotFatalUntil::M130);
       ReferencedMountPoint::const_iterator has_priority =
           priority->second.find(mount_point);
       if (StorageInfo::IsRemovableDevice(
               old_iter->second.storage_info.device_id())) {
-        DCHECK(has_priority != priority->second.end());
+        CHECK(has_priority != priority->second.end(),
+              base::NotFatalUntil::M130);
         if (has_priority->second) {
           receiver()->ProcessDetach(old_iter->second.storage_info.device_id());
         }
@@ -416,8 +388,8 @@ void StorageMonitorLinux::UpdateMtab(const MountPointDeviceMap& new_mtab) {
       if (IsDeviceAlreadyMounted(mount_device)) {
         HandleDeviceMountedMultipleTimes(mount_device, mount_point);
       } else {
-        base::PostTaskAndReplyWithResult(
-            mounting_task_runner.get(), FROM_HERE,
+        mounting_task_runner->PostTaskAndReplyWithResult(
+            FROM_HERE,
             base::BindOnce(get_device_info_callback_, mount_device,
                            mount_point),
             base::BindOnce(&StorageMonitorLinux::AddNewMount,
@@ -451,7 +423,7 @@ void StorageMonitorLinux::HandleDeviceMountedMultipleTimes(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   auto priority = mount_priority_map_.find(mount_device);
-  DCHECK(priority != mount_priority_map_.end());
+  CHECK(priority != mount_priority_map_.end(), base::NotFatalUntil::M130);
   const base::FilePath& other_mount_point = priority->second.begin()->first;
   priority->second[mount_point] = false;
   mount_info_map_[mount_point] =

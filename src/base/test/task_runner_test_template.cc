@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,8 +33,9 @@ std::map<int, int> TaskTracker::GetTaskRunCounts() const {
 
 void TaskTracker::WaitForCompletedTasks(int count) {
   AutoLock lock(lock_);
-  while (task_runs_ < count)
+  while (task_runs_ < count) {
     task_runs_cv_.Wait();
+  }
 }
 
 }  // namespace test

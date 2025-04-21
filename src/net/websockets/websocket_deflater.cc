@@ -1,13 +1,20 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "net/websockets/websocket_deflater.h"
 
 #include <string.h>
+
 #include <algorithm>
 #include <vector>
 
+#include "base/check.h"
 #include "base/check_op.h"
 #include "base/containers/circular_deque.h"
 #include "net/base/io_buffer.h"
@@ -64,7 +71,7 @@ bool WebSocketDeflater::Initialize(int window_bits) {
     stream_.reset();
     return false;
   }
-  const size_t kFixedBufferSize = 4096;
+  constexpr size_t kFixedBufferSize = 4096;
   fixed_buffer_.resize(kFixedBufferSize);
   return true;
 }

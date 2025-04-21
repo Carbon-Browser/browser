@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,14 @@
 
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/services/storage/indexed_db/leveldb/leveldb_state.h"
 
 namespace leveldb {
 class Iterator;
 }  // namespace leveldb
 
-namespace content {
+namespace content::indexed_db {
 class TransactionalLevelDBDatabase;
 class TransactionalLevelDBIterator;
 class LevelDBScope;
@@ -75,6 +76,6 @@ class DefaultTransactionalLevelDBFactory : public TransactionalLevelDBFactory {
       std::unique_ptr<LevelDBSnapshot> snapshot) override;
 };
 
-}  // namespace content
+}  // namespace content::indexed_db
 
 #endif  // COMPONENTS_SERVICES_STORAGE_INDEXED_DB_TRANSACTIONAL_LEVELDB_TRANSACTIONAL_LEVELDB_FACTORY_H_

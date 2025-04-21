@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ipc/ipc_message_pipe_reader.h"
 
@@ -8,13 +13,14 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/span.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/memory/raw_ref.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/trace_event.h"
 #include "ipc/ipc_channel_mojo.h"
 #include "mojo/public/cpp/bindings/message.h"
@@ -38,7 +44,7 @@ class ThreadSafeProxy : public mojo::ThreadSafeProxy {
 
   // mojo::ThreadSafeProxy:
   void SendMessage(mojo::Message& message) override {
-    message.SerializeHandles(&group_controller_);
+    message.SerializeHandles(&*group_controller_);
     task_runner_->PostTask(FROM_HERE,
                            base::BindOnce(forwarder_, std::move(message)));
   }
@@ -55,7 +61,7 @@ class ThreadSafeProxy : public mojo::ThreadSafeProxy {
 
   const scoped_refptr<base::SequencedTaskRunner> task_runner_;
   const Forwarder forwarder_;
-  mojo::AssociatedGroupController& group_controller_;
+  const raw_ref<mojo::AssociatedGroupController> group_controller_;
 };
 
 }  // namespace
@@ -108,7 +114,7 @@ bool MessagePipeReader::Send(std::unique_ptr<Message> message) {
   CHECK(message->IsValid());
   TRACE_EVENT_WITH_FLOW0("toplevel.flow", "MessagePipeReader::Send",
                          message->flags(), TRACE_EVENT_FLAG_FLOW_OUT);
-  absl::optional<std::vector<mojo::native::SerializedHandlePtr>> handles;
+  std::optional<std::vector<mojo::native::SerializedHandlePtr>> handles;
   MojoResult result = MOJO_RESULT_OK;
   result = ChannelMojo::ReadFromMessageAttachmentSet(message.get(), &handles);
   if (result != MOJO_RESULT_OK)

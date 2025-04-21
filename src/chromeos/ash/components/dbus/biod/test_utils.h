@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -65,6 +65,7 @@ class TestBiodObserver : public BiodClient::Observer {
 
   // BiodClient::Observer:
   void BiodServiceRestarted() override;
+  void BiodServiceStatusChanged(biod::BiometricsManagerStatus status) override;
   void BiodEnrollScanDoneReceived(biod::ScanResult scan_result,
                                   bool is_complete,
                                   int percent_complete) override;

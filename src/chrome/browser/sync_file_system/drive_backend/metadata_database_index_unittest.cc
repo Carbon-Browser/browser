@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -134,9 +134,9 @@ TEST_F(MetadataDatabaseIndexTest, IndexLookUpTest) {
 }
 
 TEST_F(MetadataDatabaseIndexTest, UpdateTest) {
-  EXPECT_FALSE(index()->IsDemotedDirtyTracker(kPlaceholderTrackerID));
+  EXPECT_FALSE(index()->HasDemotedDirtyTracker());
   index()->DemoteDirtyTracker(kPlaceholderTrackerID);
-  EXPECT_TRUE(index()->IsDemotedDirtyTracker(kPlaceholderTrackerID));
+  EXPECT_TRUE(index()->HasDemotedDirtyTracker());
   EXPECT_EQ(kInvalidTrackerID, index()->PickDirtyTracker());
   index()->PromoteDemotedDirtyTrackers();
   EXPECT_EQ(kPlaceholderTrackerID, index()->PickDirtyTracker());

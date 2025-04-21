@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,8 +19,8 @@ import org.chromium.base.supplier.OneshotSupplierImpl;
  * synchronously returned. Like {@link org.chromium.base.supplier.OneshotSupplier}, this class must
  * only be accessed from a single thread.
  */
-public class OriginalProfileSupplier
-        extends OneshotSupplierImpl<Profile> implements Destroyable, ProfileManager.Observer {
+public class OriginalProfileSupplier extends OneshotSupplierImpl<Profile>
+        implements Destroyable, ProfileManager.Observer {
     public OriginalProfileSupplier() {
         ProfileManager.addObserver(this);
     }

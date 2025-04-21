@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,14 +18,12 @@ import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.content.res.AppCompatResources;
+import androidx.core.widget.ImageViewCompat;
 
-import org.chromium.base.ApiCompatibilityUtils;
 import org.chromium.ui.base.ViewUtils;
 import org.chromium.ui.widget.ChromeImageView;
 
-/**
- * View showing an icon, title and subtitle for a page info row.
- */
+/** View showing an icon, title and subtitle for a page info row. */
 public class PageInfoRowView extends FrameLayout {
     /**  Parameters to configure the row view. */
     public static class ViewParams {
@@ -57,21 +55,24 @@ public class PageInfoRowView extends FrameLayout {
         setVisibility(params.visible ? VISIBLE : GONE);
         if (!params.visible) return;
 
-        DisplayMetrics displayMetrics = getContext().getResources().getDisplayMetrics();
+        Context context = getContext();
+        DisplayMetrics displayMetrics = context.getResources().getDisplayMetrics();
         mIcon.setImageResource(params.iconResId);
         if (params.decreaseIconSize) {
             // All icons are 24dp but some are effectively 20dp because fill the side with padding.
             // Add 2dp padding for the images that are otherwise too large to make them
             // equal size.
-            // TODO(crbug.com/1135124): Figure out why we have these differences.
+            // TODO(crbug.com/40723471): Figure out why we have these differences.
             int p = ViewUtils.dpToPx(displayMetrics, 2);
             mIcon.setPadding(p, p, p, p);
         }
-        ApiCompatibilityUtils.setImageTintList(mIcon,
+
+        ImageViewCompat.setImageTintList(
+                mIcon,
                 params.iconTint != 0
-                        ? ColorStateList.valueOf(getResources().getColor(params.iconTint))
+                        ? ColorStateList.valueOf(context.getColor(params.iconTint))
                         : AppCompatResources.getColorStateList(
-                                getContext(), R.color.default_icon_color_tint_list));
+                                context, R.color.default_icon_color_tint_list));
 
         mTitle.setText(params.title);
         mTitle.setVisibility(params.title != null ? VISIBLE : GONE);
@@ -87,8 +88,9 @@ public class PageInfoRowView extends FrameLayout {
             getChildAt(0).setOnClickListener((v) -> params.clickCallback.run());
         }
         if (params.rowTint != 0) {
-            setBackgroundColor(AppCompatResources.getColorStateList(getContext(), params.rowTint)
-                                       .getDefaultColor());
+            setBackgroundColor(
+                    AppCompatResources.getColorStateList(context, params.rowTint)
+                            .getDefaultColor());
         }
     }
 

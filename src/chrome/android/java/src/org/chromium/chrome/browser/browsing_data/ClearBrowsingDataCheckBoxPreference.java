@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,24 +12,24 @@ import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.TextView;
+
 import androidx.preference.PreferenceViewHolder;
+
 import org.chromium.chrome.browser.util.ChromeAccessibilityUtil;
 import org.chromium.components.browser_ui.settings.ChromeBaseCheckBoxPreference;
-import org.chromium.ui.text.NoUnderlineClickableSpan;
+import org.chromium.ui.text.ChromeClickableSpan;
 import org.chromium.ui.text.SpanApplier;
 
 /**
- * A preference representing one browsing data type in ClearBrowsingDataFragment.
- * This class allows clickable links inside the checkbox summary.
+ * A preference representing one browsing data type in ClearBrowsingDataFragment. This class allows
+ * clickable links inside the checkbox summary.
  */
 public class ClearBrowsingDataCheckBoxPreference extends ChromeBaseCheckBoxPreference {
     private View mView;
     private Runnable mLinkClickDelegate;
     private boolean mHasClickableSpans;
 
-    /**
-     * Constructor for inflating from XML.
-     */
+    /** Constructor for inflating from XML. */
     public ClearBrowsingDataCheckBoxPreference(Context context, AttributeSet attrs) {
         super(context, attrs);
     }
@@ -48,35 +48,38 @@ public class ClearBrowsingDataCheckBoxPreference extends ChromeBaseCheckBoxPrefe
 
         mView = holder.itemView;
 
-        final TextView textView = (TextView) mView.findViewById(android.R.id.summary);
+        final TextView textView = mView.findViewById(android.R.id.summary);
 
         // Create custom onTouch listener to be able to respond to click events inside the summary.
-        textView.setOnTouchListener((View v, MotionEvent event) -> {
-            if (!mHasClickableSpans) {
-                return false;
-            }
-            // Find out which character was touched.
-            int offset = textView.getOffsetForPosition(event.getX(), event.getY());
-            // Check if this character contains a span.
-            CharSequence text = textView.getText();
-            // TODO(crbug.com/783866): On some devices the SpannableString is not applied correctly.
-            boolean isSpanned = text instanceof Spanned;
-            if (!isSpanned) {
-                return false;
-            }
-            ClickableSpan[] types = ((Spanned) text).getSpans(offset, offset, ClickableSpan.class);
-
-            if (types.length > 0) {
-                if (event.getAction() == MotionEvent.ACTION_UP) {
-                    for (ClickableSpan type : types) {
-                        type.onClick(textView);
+        textView.setOnTouchListener(
+                (View v, MotionEvent event) -> {
+                    if (!mHasClickableSpans) {
+                        return false;
                     }
-                }
-                return true;
-            } else {
-                return false;
-            }
-        });
+                    // Find out which character was touched.
+                    int offset = textView.getOffsetForPosition(event.getX(), event.getY());
+                    // Check if this character contains a span.
+                    CharSequence text = textView.getText();
+                    // TODO(crbug.com/40549355): On some devices the SpannableString is not applied
+                    // correctly.
+                    boolean isSpanned = text instanceof Spanned;
+                    if (!isSpanned) {
+                        return false;
+                    }
+                    ClickableSpan[] types =
+                            ((Spanned) text).getSpans(offset, offset, ClickableSpan.class);
+
+                    if (types.length > 0) {
+                        if (event.getAction() == MotionEvent.ACTION_UP) {
+                            for (ClickableSpan type : types) {
+                                type.onClick(textView);
+                            }
+                        }
+                        return true;
+                    } else {
+                        return false;
+                    }
+                });
     }
 
     public void announceForAccessibility(CharSequence announcement) {
@@ -99,11 +102,19 @@ public class ClearBrowsingDataCheckBoxPreference extends ChromeBaseCheckBoxPrefe
             return;
         }
         // Linkify <link></link> span.
-        final SpannableString summaryWithLink = SpanApplier.applySpans(summaryString,
-                new SpanApplier.SpanInfo("<link>", "</link>",
-                        new NoUnderlineClickableSpan(getContext(), (widget) -> {
-                            if (mLinkClickDelegate != null) mLinkClickDelegate.run();
-                        })));
+        final SpannableString summaryWithLink =
+                SpanApplier.applySpans(
+                        summaryString,
+                        new SpanApplier.SpanInfo(
+                                "<link>",
+                                "</link>",
+                                new ChromeClickableSpan(
+                                        getContext(),
+                                        (widget) -> {
+                                            if (mLinkClickDelegate != null) {
+                                                mLinkClickDelegate.run();
+                                            }
+                                        })));
 
         mHasClickableSpans = true;
         super.setSummary(summaryWithLink);

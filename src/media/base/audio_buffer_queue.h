@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,6 +54,9 @@ class MEDIA_EXPORT AudioBufferQueue {
   // Moves the current position forward by |frames| frames. If |frames| exceeds
   // frames available, the seek operation will fail.
   void SeekFrames(int frames);
+
+  // Returns the timestamp of the first frame in the queue, if any exists.
+  std::optional<base::TimeDelta> FrontTimestamp() const;
 
   // Returns the number of frames buffered beyond the current position.
   int frames() const { return frames_; }

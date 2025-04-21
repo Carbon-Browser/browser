@@ -1,11 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/notifications/non_persistent_notification_handler.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "build/build_config.h"
 #include "chrome/browser/notifications/notification_common.h"
 #include "chrome/browser/notifications/notification_permission_context.h"
@@ -49,8 +49,8 @@ void NonPersistentNotificationHandler::OnClick(
     Profile* profile,
     const GURL& origin,
     const std::string& notification_id,
-    const absl::optional<int>& action_index,
-    const absl::optional<std::u16string>& reply,
+    const std::optional<int>& action_index,
+    const std::optional<std::u16string>& reply,
     base::OnceClosure completed_closure) {
   // Non persistent notifications don't allow buttons or replies.
   // https://notifications.spec.whatwg.org/#create-a-notification
@@ -65,13 +65,10 @@ void NonPersistentNotificationHandler::OnClick(
               weak_ptr_factory_.GetWeakPtr(), profile, origin, notification_id,
               std::move(completed_closure)));
 
-  if (base::FeatureList::IsEnabled(
-          permissions::features::kNotificationInteractionHistory)) {
-    auto* service =
-        NotificationsEngagementServiceFactory::GetForProfile(profile);
-    // This service might be missing for incognito profiles and in tests.
-    if (service)
-      service->RecordNotificationInteraction(origin);
+  auto* service = NotificationsEngagementServiceFactory::GetForProfile(profile);
+  // This service might be missing for incognito profiles and in tests.
+  if (service) {
+    service->RecordNotificationInteraction(origin);
   }
 }
 

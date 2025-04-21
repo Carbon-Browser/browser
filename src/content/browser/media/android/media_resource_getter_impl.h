@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include <jni.h>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/waitable_event.h"
 #include "media/base/android/media_resource_getter.h"
@@ -16,6 +15,7 @@
 #include "net/base/auth.h"
 #include "net/cookies/canonical_cookie.h"
 #include "net/cookies/site_for_cookies.h"
+#include "net/storage_access_api/status.h"
 
 namespace content {
 
@@ -44,13 +44,14 @@ class MediaResourceGetterImpl : public media::MediaResourceGetter {
   void GetCookies(const GURL& url,
                   const net::SiteForCookies& site_for_cookies,
                   const url::Origin& top_frame_origin,
+                  net::StorageAccessApiStatus storage_access_api_status,
                   GetCookieCB callback) override;
 
  private:
   // Called when GetAuthCredentials() finishes.
   void GetAuthCredentialsCallback(
       GetAuthCredentialsCB callback,
-      const absl::optional<net::AuthCredentials>& credentials);
+      const std::optional<net::AuthCredentials>& credentials);
 
   // BrowserContext to retrieve URLRequestContext and ResourceContext.
   raw_ptr<BrowserContext> browser_context_;

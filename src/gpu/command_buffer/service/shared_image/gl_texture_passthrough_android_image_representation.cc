@@ -1,11 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "gpu/command_buffer/service/shared_image/gl_texture_passthrough_android_image_representation.h"
 
 #include "gpu/command_buffer/service/texture_manager.h"
-#include "gpu/ipc/common/android/android_image_reader_utils.h"
+#include "ui/gl/android/egl_fence_utils.h"
 
 namespace gpu {
 
@@ -14,10 +14,12 @@ GLTexturePassthroughAndroidImageRepresentation::
         SharedImageManager* manager,
         AndroidImageBacking* backing,
         MemoryTypeTracker* tracker,
+        gl::ScopedEGLImage egl_image,
         scoped_refptr<gles2::TexturePassthrough> texture)
     : GLTexturePassthroughImageRepresentation(manager, backing, tracker),
+      egl_image_(std::move(egl_image)),
       texture_(std::move(texture)) {
-  // TODO(https://crbug.com/1172769): Remove this CHECK.
+  // TODO(crbug.com/40166788): Remove this CHECK.
   CHECK(texture_);
 }
 
@@ -29,13 +31,14 @@ GLTexturePassthroughAndroidImageRepresentation::
 }
 
 const scoped_refptr<gles2::TexturePassthrough>&
-GLTexturePassthroughAndroidImageRepresentation::GetTexturePassthrough() {
+GLTexturePassthroughAndroidImageRepresentation::GetTexturePassthrough(
+    int plane_index) {
+  DCHECK_EQ(plane_index, 0);
   return texture_;
 }
 
 bool GLTexturePassthroughAndroidImageRepresentation::BeginAccess(GLenum mode) {
-  bool read_only_mode = (mode == GL_SHARED_IMAGE_ACCESS_MODE_READ_CHROMIUM) ||
-                        (mode == GL_SHARED_IMAGE_ACCESS_MODE_OVERLAY_CHROMIUM);
+  bool read_only_mode = (mode == GL_SHARED_IMAGE_ACCESS_MODE_READ_CHROMIUM);
   bool read_write_mode =
       (mode == GL_SHARED_IMAGE_ACCESS_MODE_READWRITE_CHROMIUM);
   DCHECK(read_only_mode || read_write_mode);
@@ -44,14 +47,14 @@ bool GLTexturePassthroughAndroidImageRepresentation::BeginAccess(GLenum mode) {
     base::ScopedFD write_sync_fd;
     if (!android_backing()->BeginRead(this, &write_sync_fd))
       return false;
-    if (!InsertEglFenceAndWait(std::move(write_sync_fd)))
+    if (!gl::InsertEglFenceAndWait(std::move(write_sync_fd)))
       return false;
   } else {
     base::ScopedFD sync_fd;
     if (!android_backing()->BeginWrite(&sync_fd))
       return false;
 
-    if (!InsertEglFenceAndWait(std::move(sync_fd)))
+    if (!gl::InsertEglFenceAndWait(std::move(sync_fd)))
       return false;
   }
 
@@ -67,7 +70,7 @@ void GLTexturePassthroughAndroidImageRepresentation::EndAccess() {
   if (mode_ == RepresentationAccessMode::kNone)
     return;
 
-  base::ScopedFD sync_fd = CreateEglFenceAndExportFd();
+  base::ScopedFD sync_fd = gl::CreateEglFenceAndExportFd();
 
   // Pass this fd to its backing.
   if (mode_ == RepresentationAccessMode::kRead) {

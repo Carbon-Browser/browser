@@ -1,10 +1,14 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_UPDATE_CLIENT_CRX_DOWNLOADER_FACTORY_H_
 #define COMPONENTS_UPDATE_CLIENT_CRX_DOWNLOADER_FACTORY_H_
 
+#include <cstdint>
+#include <optional>
+
+#include "base/files/file_path.h"
 #include "base/memory/ref_counted.h"
 
 namespace update_client {
@@ -32,7 +36,9 @@ class CrxDownloaderFactory
 };
 
 scoped_refptr<CrxDownloaderFactory> MakeCrxDownloaderFactory(
-    scoped_refptr<NetworkFetcherFactory> network_fetcher_factory);
+    scoped_refptr<NetworkFetcherFactory> network_fetcher_factory,
+    std::optional<base::FilePath> background_downloader_cache_path =
+        std::nullopt);
 
 }  // namespace update_client
 

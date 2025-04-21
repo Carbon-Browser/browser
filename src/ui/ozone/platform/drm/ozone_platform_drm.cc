@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,14 +10,13 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
 #include "base/notreached.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/platform_thread.h"
-#include "base/threading/thread_task_runner_handle.h"
-#include "build/chromeos_buildflags.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "ui/base/buildflags.h"
@@ -47,7 +46,6 @@
 #include "ui/ozone/platform/drm/mojom/drm_device.mojom.h"
 #include "ui/ozone/public/gpu_platform_support_host.h"
 #include "ui/ozone/public/ozone_platform.h"
-#include "ui/ozone/public/ozone_switches.h"
 #include "ui/ozone/public/platform_screen.h"
 #include "ui/platform_window/platform_window_init_properties.h"
 
@@ -58,7 +56,7 @@
 #include "ui/events/ozone/layout/stub/stub_keyboard_layout_engine.h"
 #endif
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 #include "ui/base/ime/ash/input_method_ash.h"
 #else
 #include "ui/base/ime/input_method_minimal.h"
@@ -85,10 +83,7 @@ class OzonePlatformDrm : public OzonePlatform {
     return event_factory_ozone_->input_controller();
   }
 
-  std::unique_ptr<PlatformScreen> CreateScreen() override {
-    NOTREACHED();
-    return nullptr;
-  }
+  std::unique_ptr<PlatformScreen> CreateScreen() override { NOTREACHED(); }
   void InitScreen(PlatformScreen* screen) override { NOTREACHED(); }
 
   GpuPlatformSupportHost* GetGpuPlatformSupportHost() override {
@@ -173,12 +168,12 @@ class OzonePlatformDrm : public OzonePlatform {
     return std::make_unique<DrmNativeDisplayDelegate>(display_manager_.get());
   }
   std::unique_ptr<InputMethod> CreateInputMethod(
-      internal::InputMethodDelegate* delegate,
+      ImeKeyEventDispatcher* ime_key_event_dispatcher,
       gfx::AcceleratedWidget) override {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-    return std::make_unique<InputMethodAsh>(delegate);
+#if BUILDFLAG(IS_CHROMEOS)
+    return std::make_unique<ash::InputMethodAsh>(ime_key_event_dispatcher);
 #else
-    return std::make_unique<InputMethodMinimal>(delegate);
+    return std::make_unique<InputMethodMinimal>(ime_key_event_dispatcher);
 #endif
   }
 
@@ -187,6 +182,8 @@ class OzonePlatformDrm : public OzonePlatform {
     return gfx::ClientNativePixmapDmaBuf::IsConfigurationSupported(format,
                                                                    usage);
   }
+
+  bool IsWindowCompositingSupported() const override { return true; }
 
   bool InitializeUI(const InitParams& args) override {
     // Ozone drm can operate in two modes configured at runtime.
@@ -233,13 +230,7 @@ class OzonePlatformDrm : public OzonePlatform {
   }
 
   void InitializeGPU(const InitParams& args) override {
-    // Check if buffer bandwidth compression is disabled
-    if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-            switches::kDisableBufferBWCompression)) {
-      setenv("MINIGBM_DEBUG", "nocompression", 1);
-    }
-
-    gpu_task_runner_ = base::ThreadTaskRunnerHandle::Get();
+    gpu_task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
 
     // NOTE: Can't start the thread here since this is called before sandbox
     // initialization in multi-process Chrome.
@@ -252,7 +243,7 @@ class OzonePlatformDrm : public OzonePlatform {
     host_properties_.supports_native_pixmaps = true;
 
     overlay_manager_ = std::make_unique<DrmOverlayManagerGpu>(
-        drm_thread_proxy_.get(),
+        drm_thread_proxy_.get(), args.handle_overlays_swap_failure,
         args.allow_sync_and_real_buffer_page_flip_testing);
 
     // If gpu is in a separate process, rest of the initialization happens after
@@ -277,6 +268,13 @@ class OzonePlatformDrm : public OzonePlatform {
           drm_device.InitWithNewPipeAndPassReceiver());
       drm_device_connector_->ConnectSingleThreaded(std::move(drm_device));
     }
+  }
+
+  void PostCreateMainMessageLoop(base::OnceCallback<void()> shutdown_cb,
+                                 scoped_refptr<base::SingleThreadTaskRunner>
+                                     user_input_task_runner) override {
+    event_factory_ozone_->SetUserInputTaskRunner(
+        std::move(user_input_task_runner));
   }
 
   const PlatformRuntimeProperties& GetPlatformRuntimeProperties() override {

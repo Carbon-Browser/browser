@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 // Tests for GLES2Implementation.
 
@@ -137,6 +142,7 @@ void MockClientCommandBuffer::SetGetBuffer(int transfer_buffer_id) {
 scoped_refptr<gpu::Buffer> MockClientCommandBuffer::CreateTransferBuffer(
     uint32_t size,
     int32_t* id,
+    uint32_t alignment,
     TransferBufferAllocationOption option) {
   return CreateTransferBufferHelper(size, id);
 }
@@ -184,13 +190,17 @@ MockClientGpuControl::~MockClientGpuControl() = default;
 
 FakeDecoderClient::~FakeDecoderClient() = default;
 void FakeDecoderClient::OnConsoleMessage(int32_t, const std::string&) {}
-void FakeDecoderClient::CacheShader(const std::string&, const std::string&) {}
+void FakeDecoderClient::CacheBlob(gpu::GpuDiskCacheType,
+                                  const std::string&,
+                                  const std::string&) {}
 void FakeDecoderClient::OnFenceSyncRelease(uint64_t) {}
 void FakeDecoderClient::OnDescheduleUntilFinished() {}
 void FakeDecoderClient::OnRescheduleAfterFinished() {}
-void FakeDecoderClient::OnSwapBuffers(uint64_t, uint32_t) {}
 void FakeDecoderClient::ScheduleGrContextCleanup() {}
 void FakeDecoderClient::SetActiveURL(GURL) {}
 void FakeDecoderClient::HandleReturnData(base::span<const uint8_t>) {}
+bool FakeDecoderClient::ShouldYield() {
+  return false;
+}
 
 }  // namespace gpu

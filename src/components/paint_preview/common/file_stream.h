@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -56,9 +56,13 @@ class FileRStream : public SkStream {
   explicit FileRStream(base::File file);
   ~FileRStream() override;
 
+  size_t length() const { return length_; }
+
   // SkStream impl.
   size_t read(void* buffer, size_t size) override;
   bool isAtEnd() const override;
+  bool hasLength() const override;
+  size_t getLength() const override;
 
  private:
   base::File file_;

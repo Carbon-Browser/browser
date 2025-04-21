@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,7 +35,7 @@ class WebGLTransformFeedback : public WebGLContextObject {
 
   bool HasEverBeenBound() const { return object_ && target_; }
 
-  WebGLProgram* GetProgram() const { return program_; }
+  WebGLProgram* GetProgram() const { return program_.Get(); }
   void SetProgram(WebGLProgram*);
 
   // These are the indexed bind points for transform feedback buffers.
@@ -44,6 +44,9 @@ class WebGLTransformFeedback : public WebGLContextObject {
   bool SetBoundIndexedTransformFeedbackBuffer(GLuint index, WebGLBuffer*);
   bool GetBoundIndexedTransformFeedbackBuffer(GLuint index,
                                               WebGLBuffer** outBuffer) const;
+  bool HasBoundIndexedTransformFeedbackBuffer(const WebGLBuffer* buffer) {
+    return bound_indexed_transform_feedback_buffers_.Contains(buffer);
+  }
   bool HasEnoughBuffers(GLuint num_required) const;
 
   bool UsesBuffer(WebGLBuffer*);

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,12 @@
 #define GPU_COMMAND_BUFFER_COMMON_SYNC_TOKEN_H_
 
 #include <stdint.h>
-#include <string.h>
 
-#include <tuple>
+#include <compare>
+#include <string>
+#include <vector>
 
+#include "base/containers/span.h"
 #include "gpu/command_buffer/common/command_buffer_id.h"
 #include "gpu/command_buffer/common/constants.h"
 #include "gpu/gpu_export.h"
@@ -20,6 +22,20 @@
 #endif
 
 namespace gpu {
+
+struct GPU_EXPORT SyncPointClientId {
+  SyncPointClientId() = default;
+  SyncPointClientId(CommandBufferNamespace in_namespace_id,
+                    CommandBufferId in_command_buffer_id);
+
+  bool operator<(const SyncPointClientId& other) const {
+    return std::tie(namespace_id, command_buffer_id) <
+           std::tie(other.namespace_id, other.command_buffer_id);
+  }
+
+  CommandBufferNamespace namespace_id = CommandBufferNamespace::INVALID;
+  CommandBufferId command_buffer_id;
+};
 
 // A Sync Token is a binary blob which represents a waitable fence sync
 // on a particular command buffer namespace and id.
@@ -69,22 +85,15 @@ struct GPU_EXPORT SyncToken {
   CommandBufferId command_buffer_id() const { return command_buffer_id_; }
   uint64_t release_count() const { return release_count_; }
 
-  bool operator<(const SyncToken& other) const {
-    return std::tie(namespace_id_, command_buffer_id_, release_count_) <
-           std::tie(other.namespace_id_, other.command_buffer_id_,
-                    other.release_count_);
-  }
-
-  bool operator==(const SyncToken& other) const {
-    return verified_flush_ == other.verified_flush() &&
-           namespace_id_ == other.namespace_id() &&
-           command_buffer_id_ == other.command_buffer_id() &&
-           release_count_ == other.release_count();
-  }
-
-  bool operator!=(const SyncToken& other) const { return !(*this == other); }
+  friend bool operator==(const SyncToken&, const SyncToken&) = default;
+  friend std::strong_ordering operator<=>(const SyncToken&,
+                                          const SyncToken&) = default;
 
   std::string ToDebugString() const;
+
+  SyncPointClientId GetClientId() const {
+    return SyncPointClientId(namespace_id_, command_buffer_id_);
+  }
 
  private:
   bool verified_flush_;
@@ -95,6 +104,11 @@ struct GPU_EXPORT SyncToken {
 
 static_assert(sizeof(SyncToken) <= GL_SYNC_TOKEN_SIZE_CHROMIUM,
               "SyncToken size must not exceed GL_SYNC_TOKEN_SIZE_CHROMIUM");
+
+// Remove redundant tokens such that it should be equivalent to wait on all
+// tokens in the output instead of waiting on all input `tokens`.
+GPU_EXPORT std::vector<SyncToken> ReduceSyncTokens(
+    base::span<const SyncToken> tokens);
 
 }  // namespace gpu
 

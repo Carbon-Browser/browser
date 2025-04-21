@@ -1,13 +1,13 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/core/css/media_list.h"
 #include "third_party/blink/renderer/core/css/media_query.h"
+#include "third_party/blink/renderer/core/css/parser/css_parser_token_stream.h"
 #include "third_party/blink/renderer/core/css/parser/css_tokenizer.h"
 #include "third_party/blink/renderer/core/css/parser/media_query_parser.h"
-#include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
 namespace blink {
@@ -26,7 +26,7 @@ TEST(MediaConditionParserTest, Basic) {
       {"screen and (color)", "not all"},
       {"all and (min-width:500px)", "not all"},
       {"(min-width:500px)", "(min-width: 500px)"},
-      {"(min-width : -100px)", "(min-width : -100px)"},  // <general-enclosed>
+      {"(min-width : -100px)", "(min-width: -100px)"},
       {"(min-width: 100px) and print", "not all"},
       {"(min-width: 100px) and (max-width: 900px)", nullptr},
       {"(min-width: [100px) and (max-width: 900px)", "not all"},
@@ -43,40 +43,19 @@ TEST(MediaConditionParserTest, Basic) {
       {"(width: 1px), screen", "not all"},
       {"screen, (width: 1px)", "not all"},
       {"screen, (width: 1px), print", "not all"},
-
-      {nullptr, nullptr}  // Do not remove the terminator line.
   };
 
-  for (unsigned i = 0; test_cases[i].input; ++i) {
-    SCOPED_TRACE(test_cases[i].input);
-    CSSTokenizer tokenizer(test_cases[i].input);
-    const auto tokens = tokenizer.TokenizeToEOF();
+  for (const MediaConditionTestCase& test_case : test_cases) {
+    SCOPED_TRACE(test_case.input);
+    StringView str(test_case.input);
+    CSSParserTokenStream stream(str);
     MediaQuerySet* media_condition_query_set =
-        MediaQueryParser::ParseMediaCondition(CSSParserTokenRange(tokens),
-                                              nullptr);
-    String query_text = media_condition_query_set->MediaText();
+        MediaQueryParser::ParseMediaCondition(stream, nullptr);
+    String query_text =
+        stream.AtEnd() ? media_condition_query_set->MediaText() : "not all";
     const char* expected_text =
-        test_cases[i].output ? test_cases[i].output : test_cases[i].input;
+        test_case.output ? test_case.output : test_case.input;
     EXPECT_EQ(String(expected_text), query_text);
-  }
-}
-
-// Support for the 'not' keyword for ParseMediaCondition predates the
-// CSSMediaQueries4 flag, so enabling/disabling that flag must not affect
-// 'not' parsing.
-TEST(MediaConditionParserTest, NotKeyword_CSSMediaQueries4) {
-  String input = "not (min-width: 500px)";
-  CSSTokenizer tokenizer(input);
-  const auto tokens = tokenizer.TokenizeToEOF();
-
-  Vector<bool> flag_values = {true, false};
-  for (bool flag : flag_values) {
-    ScopedCSSMediaQueries4ForTest media_queries_4_flag(flag);
-
-    MediaQuerySet* media_condition_query_set =
-        MediaQueryParser::ParseMediaCondition(CSSParserTokenRange(tokens),
-                                              nullptr);
-    EXPECT_EQ(input, media_condition_query_set->MediaText());
   }
 }
 

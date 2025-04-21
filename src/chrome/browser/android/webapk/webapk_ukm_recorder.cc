@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,22 @@
 
 #include <jni.h>
 
+#include <algorithm>
+
 #include "base/android/jni_string.h"
-#include "base/cxx17_backports.h"
-#include "chrome/browser/android/browserservices/metrics/jni_headers/WebApkUkmRecorder_jni.h"
+#include "components/ukm/app_source_url_recorder.h"
 #include "components/webapps/browser/android/webapk/webapk_types.h"
+#include "components/webapps/browser/installable/installable_metrics.h"
 #include "services/metrics/public/cpp/metrics_utils.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "url/gurl.h"
 
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "chrome/browser/android/browserservices/metrics/jni_headers/WebApkUkmRecorder_jni.h"
+
+namespace webapk {
+
 using base::android::JavaParamRef;
-using PassKey = base::PassKey<WebApkUkmRecorder>;
 
 namespace {
 
@@ -30,33 +36,38 @@ GURL ConvertNullableJavaStringToGURL(JNIEnv* env,
 }  // namespace
 
 // static
-void WebApkUkmRecorder::RecordInstall(const GURL& manifest_url,
-                                      int version_code) {
-  if (!manifest_url.is_valid())
+void WebApkUkmRecorder::RecordInstall(
+    const GURL& manifest_id,
+    webapps::WebappInstallSource install_source,
+    blink::mojom::DisplayMode display) {
+  if (!manifest_id.is_valid()) {
     return;
+  }
 
-  ukm::SourceId source_id = ukm::UkmRecorder::GetSourceIdForWebApkManifestUrl(
-      PassKey(), manifest_url);
+  ukm::SourceId source_id =
+      ukm::AppSourceUrlRecorder::GetSourceIdForPWA(manifest_id);
 
   // All installs through this method are browser-installs (ie, they should all
   // use the "browser" distributor).
   ukm::builders::WebAPK_Install(source_id)
       .SetDistributor(static_cast<int64_t>(webapps::WebApkDistributor::BROWSER))
-      .SetAppVersion(version_code)
       .SetInstall(1)
+      .SetInstallSource(static_cast<int64_t>(install_source))
+      .SetDisplayMode(static_cast<int64_t>(display))
       .Record(ukm::UkmRecorder::Get());
 }
 
 // static
-void WebApkUkmRecorder::RecordSessionDuration(const GURL& manifest_url,
+void WebApkUkmRecorder::RecordSessionDuration(const GURL& manifest_id,
                                               int64_t distributor,
                                               int64_t version_code,
                                               int64_t duration) {
-  if (!manifest_url.is_valid())
+  if (!manifest_id.is_valid()) {
     return;
+  }
 
-  ukm::SourceId source_id = ukm::UkmRecorder::GetSourceIdForWebApkManifestUrl(
-      PassKey(), manifest_url);
+  ukm::SourceId source_id =
+      ukm::AppSourceUrlRecorder::GetSourceIdForPWA(manifest_id);
   ukm::builders::WebAPK_SessionEnd(source_id)
       .SetDistributor(distributor)
       .SetAppVersion(version_code)
@@ -65,15 +76,16 @@ void WebApkUkmRecorder::RecordSessionDuration(const GURL& manifest_url,
 }
 
 // static
-void WebApkUkmRecorder::RecordVisit(const GURL& manifest_url,
+void WebApkUkmRecorder::RecordVisit(const GURL& manifest_id,
                                     int64_t distributor,
                                     int64_t version_code,
                                     int source) {
-  if (!manifest_url.is_valid())
+  if (!manifest_id.is_valid()) {
     return;
+  }
 
-  ukm::SourceId source_id = ukm::UkmRecorder::GetSourceIdForWebApkManifestUrl(
-      PassKey(), manifest_url);
+  ukm::SourceId source_id =
+      ukm::AppSourceUrlRecorder::GetSourceIdForPWA(manifest_id);
   ukm::builders::WebAPK_Visit(source_id)
       .SetDistributor(distributor)
       .SetAppVersion(version_code)
@@ -83,15 +95,15 @@ void WebApkUkmRecorder::RecordVisit(const GURL& manifest_url,
 }
 
 // static
-void WebApkUkmRecorder::RecordUninstall(const GURL& manifest_url,
+void WebApkUkmRecorder::RecordUninstall(const GURL& manifest_id,
                                         int64_t distributor,
                                         int64_t version_code,
                                         int64_t launch_count,
                                         int64_t installed_duration_ms) {
   // UKM metric |launch_count| parameter is enum. '2' indicates >= 2 launches.
-  launch_count = base::clamp<int64_t>(launch_count, 0, 2);
-  ukm::SourceId source_id = ukm::UkmRecorder::GetSourceIdForWebApkManifestUrl(
-      PassKey(), manifest_url);
+  launch_count = std::clamp<int64_t>(launch_count, 0, 2);
+  ukm::SourceId source_id =
+      ukm::AppSourceUrlRecorder::GetSourceIdForPWA(manifest_id);
   ukm::builders::WebAPK_Uninstall(source_id)
       .SetDistributor(distributor)
       .SetAppVersion(version_code)
@@ -103,12 +115,13 @@ void WebApkUkmRecorder::RecordUninstall(const GURL& manifest_url,
 }
 
 // static
-void WebApkUkmRecorder::RecordWebApkableVisit(const GURL& manifest_url) {
-  if (!manifest_url.is_valid())
+void WebApkUkmRecorder::RecordWebApkableVisit(const GURL& manifest_id) {
+  if (!manifest_id.is_valid()) {
     return;
+  }
 
-  ukm::SourceId source_id = ukm::UkmRecorder::GetSourceIdForWebApkManifestUrl(
-      PassKey(), manifest_url);
+  ukm::SourceId source_id =
+      ukm::AppSourceUrlRecorder::GetSourceIdForPWA(manifest_id);
   ukm::builders::PWA_Visit(source_id).SetWebAPKableSiteVisit(1).Record(
       ukm::UkmRecorder::Get());
 }
@@ -116,36 +129,36 @@ void WebApkUkmRecorder::RecordWebApkableVisit(const GURL& manifest_url) {
 // Called by the Java counterpart to record the Session Duration UKM metric.
 void JNI_WebApkUkmRecorder_RecordSessionDuration(
     JNIEnv* env,
-    const JavaParamRef<jstring>& manifest_url,
+    const JavaParamRef<jstring>& manifest_id,
     jint distributor,
     jint version_code,
     jlong duration) {
   WebApkUkmRecorder::RecordSessionDuration(
-      ConvertNullableJavaStringToGURL(env, manifest_url), distributor,
+      ConvertNullableJavaStringToGURL(env, manifest_id), distributor,
       version_code, duration);
 }
 
 // Called by the Java counterpart to record the Visit UKM metric.
-void JNI_WebApkUkmRecorder_RecordVisit(
-    JNIEnv* env,
-    const JavaParamRef<jstring>& manifest_url,
-    jint distributor,
-    jint version_code,
-    jint source) {
+void JNI_WebApkUkmRecorder_RecordVisit(JNIEnv* env,
+                                       const JavaParamRef<jstring>& manifest_id,
+                                       jint distributor,
+                                       jint version_code,
+                                       jint source) {
   WebApkUkmRecorder::RecordVisit(
-      ConvertNullableJavaStringToGURL(env, manifest_url), distributor,
+      ConvertNullableJavaStringToGURL(env, manifest_id), distributor,
       version_code, source);
 }
 
 // Called by the Java counterpart to record the Uninstall UKM metrics.
 void JNI_WebApkUkmRecorder_RecordUninstall(
     JNIEnv* env,
-    const JavaParamRef<jstring>& manifest_url,
+    const JavaParamRef<jstring>& manifest_id,
     jint distributor,
     jint version_code,
     jint launch_count,
     jlong installed_duration_ms) {
   WebApkUkmRecorder::RecordUninstall(
-      ConvertNullableJavaStringToGURL(env, manifest_url), distributor,
+      ConvertNullableJavaStringToGURL(env, manifest_id), distributor,
       version_code, launch_count, installed_duration_ms);
 }
+}  // namespace webapk

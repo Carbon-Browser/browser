@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,10 @@
 #include <utility>
 
 #include "base/base64.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/message_loop/message_pump_type.h"
+#include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
@@ -29,8 +30,7 @@ TestHttpServer::TestHttpServer()
       all_closed_event_(base::WaitableEvent::ResetPolicy::AUTOMATIC,
                         base::WaitableEvent::InitialState::SIGNALED) {}
 
-TestHttpServer::~TestHttpServer() {
-}
+TestHttpServer::~TestHttpServer() = default;
 
 bool TestHttpServer::Start() {
   bool thread_started = thread_.StartWithOptions(
@@ -79,6 +79,11 @@ void TestHttpServer::SetMessageCallback(base::OnceClosure callback) {
   message_callback_ = std::move(callback);
 }
 
+GURL TestHttpServer::http_url() const {
+  base::AutoLock lock(url_lock_);
+  return http_url_;
+}
+
 GURL TestHttpServer::web_socket_url() const {
   base::AutoLock lock(url_lock_);
   return web_socket_url_;
@@ -87,6 +92,17 @@ GURL TestHttpServer::web_socket_url() const {
 void TestHttpServer::OnConnect(int connection_id) {
   server_->SetSendBufferSize(connection_id, kBufferSize);
   server_->SetReceiveBufferSize(connection_id, kBufferSize);
+}
+
+void TestHttpServer::OnHttpRequest(int connection_id,
+                                   const net::HttpServerRequestInfo& info) {
+  auto it = resource_map_.find(info.path);
+  if (it == resource_map_.end()) {
+    server_->Send404(connection_id, TRAFFIC_ANNOTATION_FOR_TESTS);
+    return;
+  }
+  server_->Send200(connection_id, it->second, "text/html",
+                   TRAFFIC_ANNOTATION_FOR_TESTS);
 }
 
 void TestHttpServer::OnWebSocketRequest(
@@ -149,7 +165,7 @@ void TestHttpServer::OnClose(int connection_id) {
 void TestHttpServer::StartOnServerThread(bool* success,
                                          base::WaitableEvent* event) {
   std::unique_ptr<net::ServerSocket> server_socket(
-      new net::TCPServerSocket(NULL, net::NetLogSource()));
+      new net::TCPServerSocket(nullptr, net::NetLogSource()));
   server_socket->ListenWithAddressAndPort("127.0.0.1", 0, 1);
   server_ = std::make_unique<net::HttpServer>(std::move(server_socket), this);
 
@@ -158,16 +174,40 @@ void TestHttpServer::StartOnServerThread(bool* success,
   EXPECT_EQ(net::OK, error);
   if (error == net::OK) {
     base::AutoLock lock(url_lock_);
+    http_url_ = GURL(base::StringPrintf("http://127.0.0.1:%d", address.port()));
     web_socket_url_ = GURL(base::StringPrintf("ws://127.0.0.1:%d",
                                               address.port()));
   } else {
-    server_.reset(NULL);
+    server_.reset();
   }
   *success = server_.get();
   event->Signal();
 }
 
 void TestHttpServer::StopOnServerThread(base::WaitableEvent* event) {
-  server_.reset(NULL);
+  server_.reset();
+  event->Signal();
+}
+
+void TestHttpServer::SetDataForPath(std::string path, std::string data) {
+  if (!thread_.IsRunning()) {
+    return;
+  }
+  if (!base::StartsWith(path, "/")) {
+    path = "/" + path;
+  }
+  base::WaitableEvent event(base::WaitableEvent::ResetPolicy::AUTOMATIC,
+                            base::WaitableEvent::InitialState::NOT_SIGNALED);
+  thread_.task_runner()->PostTask(
+      FROM_HERE, base::BindOnce(&TestHttpServer::SetDataForPathOnServerThread,
+                                base::Unretained(this), std::move(path),
+                                std::move(data), &event));
+  event.Wait();
+}
+
+void TestHttpServer::SetDataForPathOnServerThread(std::string path,
+                                                  std::string data,
+                                                  base::WaitableEvent* event) {
+  resource_map_[std::move(path)] = std::move(data);
   event->Signal();
 }

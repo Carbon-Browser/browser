@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,19 +8,20 @@
 #include <stdint.h>
 
 #include <map>
+#include <optional>
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
 #include "media/base/video_frame.h"
 #include "media/gpu/chromeos/fourcc.h"
+#include "media/gpu/chromeos/frame_resource.h"
 #include "media/gpu/chromeos/image_processor_backend.h"
 #include "media/gpu/media_gpu_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/native_pixmap_handle.h"
 
 namespace media {
@@ -47,7 +48,10 @@ class MEDIA_GPU_EXPORT ImageProcessor {
   using OutputMode = ImageProcessorBackend::OutputMode;
   using ErrorCB = ImageProcessorBackend::ErrorCB;
   using FrameReadyCB = ImageProcessorBackend::FrameReadyCB;
-  using LegacyFrameReadyCB = ImageProcessorBackend::LegacyFrameReadyCB;
+  using FrameResourceReadyCB = ImageProcessorBackend::FrameResourceReadyCB;
+  // Legacy callback is used when allocation mode is ALLOCATE.
+  using LegacyFrameResourceReadyCB =
+      ImageProcessorBackend::LegacyFrameResourceReadyCB;
 
   // Callback type for creating a ImageProcessorBackend instance. This allows us
   // to create ImageProcessorBackend instance inside ImageProcessor::Create().
@@ -56,16 +60,13 @@ class MEDIA_GPU_EXPORT ImageProcessor {
           const PortConfig& input_config,
           const PortConfig& output_config,
           OutputMode output_mode,
-          VideoRotation relative_rotation,
-          ErrorCB error_cb,
-          scoped_refptr<base::SequencedTaskRunner> backend_task_runner)>;
+          ErrorCB error_cb)>;
 
   static std::unique_ptr<ImageProcessor> Create(
       CreateBackendCB create_backend_cb,
       const PortConfig& input_config,
       const PortConfig& output_config,
       OutputMode output_mode,
-      VideoRotation relative_rotation,
       ErrorCB error_cb,
       scoped_refptr<base::SequencedTaskRunner> client_task_runner);
 
@@ -80,6 +81,7 @@ class MEDIA_GPU_EXPORT ImageProcessor {
 
   OutputMode output_mode() const { return backend_->output_mode(); }
 
+  std::string backend_type() const { return backend_->type(); }
   // Called by client to process |frame|. The resulting processed frame will be
   // stored in a ImageProcessor-owned output buffer and notified via |cb|. The
   // processor will drop all its references to |frame| after it finishes
@@ -88,7 +90,8 @@ class MEDIA_GPU_EXPORT ImageProcessor {
   // blocking function.
   // TODO(crbug.com/907767): Remove this once ImageProcessor always works as
   // IMPORT mode for output.
-  bool Process(scoped_refptr<VideoFrame> frame, LegacyFrameReadyCB cb);
+  bool Process(scoped_refptr<FrameResource> frame,
+               LegacyFrameResourceReadyCB cb);
 
   // Called by client to process |input_frame| and store in |output_frame|. This
   // can only be used when output mode is IMPORT. The processor will drop all
@@ -99,6 +102,11 @@ class MEDIA_GPU_EXPORT ImageProcessor {
   bool Process(scoped_refptr<VideoFrame> input_frame,
                scoped_refptr<VideoFrame> output_frame,
                FrameReadyCB cb);
+
+  // FrameResource version of Process().
+  bool Process(scoped_refptr<FrameResource> input_frame,
+               scoped_refptr<FrameResource> output_frame,
+               FrameResourceReadyCB cb);
 
   // Reset all processing frames. After this method returns, no more callbacks
   // will be invoked. ImageProcessor is ready to process more frames.
@@ -121,18 +129,21 @@ class MEDIA_GPU_EXPORT ImageProcessor {
   }
 
  protected:
-  // Container for both FrameReadyCB and LegacyFrameReadyCB. With this class,
-  // we could store both kind of callback in the same container.
-  // TODO(crbug.com/907767): Remove this once ImageProcessor always works as
-  // IMPORT mode for output.
+  // Container for FrameReadyCB, FrameResourceReadyCB, and
+  // LegacyFrameResourceReadyCB. With this class, we can store any of the
+  // callback types in the same container.
+  // TODO(crbug.com/907767): Remove LegacyFrameResourceReadyCB once
+  // ImageProcessor always works as IMPORT mode for output.
   struct ClientCallback {
     ClientCallback(FrameReadyCB ready_cb);
-    ClientCallback(LegacyFrameReadyCB legacy_ready_cb);
+    ClientCallback(FrameResourceReadyCB frame_resource_ready_cb);
+    ClientCallback(LegacyFrameResourceReadyCB legacy_frame_resource_ready_cb);
     ClientCallback(ClientCallback&&);
     ~ClientCallback();
 
     FrameReadyCB ready_cb;
-    LegacyFrameReadyCB legacy_ready_cb;
+    FrameResourceReadyCB frame_resource_ready_cb;
+    LegacyFrameResourceReadyCB legacy_frame_resource_ready_cb;
   };
 
   ImageProcessor(std::unique_ptr<ImageProcessorBackend> backend,
@@ -142,19 +153,26 @@ class MEDIA_GPU_EXPORT ImageProcessor {
   // Callbacks of processing frames.
   static void OnProcessDoneThunk(
       scoped_refptr<base::SequencedTaskRunner> task_runner,
-      absl::optional<base::WeakPtr<ImageProcessor>> weak_this,
+      std::optional<base::WeakPtr<ImageProcessor>> weak_this,
       int cb_index,
       scoped_refptr<VideoFrame> frame);
-  static void OnProcessLegacyDoneThunk(
+  static void OnProcessFrameResourceDoneThunk(
       scoped_refptr<base::SequencedTaskRunner> task_runner,
-      absl::optional<base::WeakPtr<ImageProcessor>> weak_this,
+      std::optional<base::WeakPtr<ImageProcessor>> weak_this,
+      int cb_index,
+      scoped_refptr<FrameResource> frame);
+  static void OnProcessFrameResourceLegacyDoneThunk(
+      scoped_refptr<base::SequencedTaskRunner> task_runner,
+      std::optional<base::WeakPtr<ImageProcessor>> weak_this,
       int cb_index,
       size_t buffer_id,
-      scoped_refptr<VideoFrame> frame);
+      scoped_refptr<FrameResource> frame);
   void OnProcessDone(int cb_index, scoped_refptr<VideoFrame> frame);
-  void OnProcessLegacyDone(int cb_index,
-                           size_t buffer_id,
-                           scoped_refptr<VideoFrame> frame);
+  void OnProcessFrameResourceDone(int cb_index,
+                                  scoped_refptr<FrameResource> frame);
+  void OnProcessFrameResourceLegacyDone(int cb_index,
+                                        size_t buffer_id,
+                                        scoped_refptr<FrameResource> frame);
 
   // Store |cb| at |pending_cbs_| and return a index for the callback.
   int StoreCallback(ClientCallback cb);

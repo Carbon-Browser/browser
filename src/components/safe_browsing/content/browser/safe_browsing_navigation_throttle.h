@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,8 +16,8 @@ namespace safe_browsing {
 
 class SafeBrowsingUIManager;
 
-// This throttle monitors failed requests in an outer-most main frame (i.e.
-// doesn't apply for fenced-frames or portals), and if a request failed due to
+// This throttle monitors failed requests in an outer-most main frame (e.g.
+// doesn't apply for fenced-frames), and if a request failed due to
 // it being blocked by Safe Browsing, it creates and displays an interstitial.
 // For other kinds of loads, the interstitial is navigated at the same time the
 // load is canceled in BaseUIManager::DisplayBlockingPage

@@ -34,7 +34,7 @@ namespace blink {
 class HTMLImageElement;
 class Path;
 
-class CORE_EXPORT HTMLAreaElement final : public HTMLAnchorElement {
+class CORE_EXPORT HTMLAreaElement final : public HTMLAnchorElementBase {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
@@ -60,12 +60,19 @@ class CORE_EXPORT HTMLAreaElement final : public HTMLAnchorElement {
 
  private:
   void ParseAttribute(const AttributeModificationParams&) override;
-  bool IsKeyboardFocusable() const override;
-  bool IsMouseFocusable() const override;
-  bool IsFocusableStyle() const override;
+  bool IsKeyboardFocusableSlow(
+      UpdateBehavior update_behavior =
+          UpdateBehavior::kStyleAndLayout) const override;
+  FocusableState IsFocusableState(
+      UpdateBehavior update_behavior) const override;
+  bool IsFocusableStyle(UpdateBehavior update_behavior =
+                            UpdateBehavior::kStyleAndLayout) const override;
   void UpdateSelectionOnFocus(SelectionBehaviorOnFocus,
                               const FocusOptions*) override;
   void SetFocused(bool, mojom::blink::FocusType) override;
+
+  Element* interestTargetElement() override;
+  AtomicString interestAction() const override;
 
   enum Shape { kDefault, kPoly, kRect, kCircle };
   void InvalidateCachedPath();

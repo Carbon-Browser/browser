@@ -1,3 +1,13 @@
+/*
+ *  Copyright (c) 2025 The WebM project authors. All Rights Reserved.
+ *
+ *  Use of this source code is governed by a BSD-style license
+ *  that can be found in the LICENSE file in the root of the source
+ *  tree. An additional intellectual property rights grant can be found
+ *  in the file PATENTS.  All contributing project authors may
+ *  be found in the AUTHORS file in the root of the source tree.
+ */
+
 // This file is generated. Do not edit.
 #ifndef VP9_RTCD_H_
 #define VP9_RTCD_H_
@@ -16,12 +26,17 @@
 #include "vp9/common/vp9_enums.h"
 #include "vp9/common/vp9_filter.h"
 #include "vpx/vpx_integer.h"
+#if !CONFIG_REALTIME_ONLY && CONFIG_VP9_ENCODER
+#include "vp9/encoder/vp9_temporal_filter.h"
+#endif
 
 struct macroblockd;
 
 /* Encoder forward decls */
 struct macroblock;
-struct vp9_variance_vtable;
+struct macroblock_plane;
+struct vp9_sad_table;
+struct ScanOrder;
 struct search_site_config;
 struct mv;
 union int_mv;
@@ -35,7 +50,14 @@ int64_t vp9_block_error_c(const tran_low_t* coeff,
                           const tran_low_t* dqcoeff,
                           intptr_t block_size,
                           int64_t* ssz);
-#define vp9_block_error vp9_block_error_c
+int64_t vp9_block_error_neon(const tran_low_t* coeff,
+                             const tran_low_t* dqcoeff,
+                             intptr_t block_size,
+                             int64_t* ssz);
+RTCD_EXTERN int64_t (*vp9_block_error)(const tran_low_t* coeff,
+                                       const tran_low_t* dqcoeff,
+                                       intptr_t block_size,
+                                       int64_t* ssz);
 
 int64_t vp9_block_error_fp_c(const tran_low_t* coeff,
                              const tran_low_t* dqcoeff,
@@ -78,13 +100,34 @@ RTCD_EXTERN int (*vp9_denoiser_filter)(const uint8_t* sig,
 int vp9_diamond_search_sad_c(const struct macroblock* x,
                              const struct search_site_config* cfg,
                              struct mv* ref_mv,
+                             uint32_t start_mv_sad,
                              struct mv* best_mv,
                              int search_param,
                              int sad_per_bit,
                              int* num00,
-                             const struct vp9_variance_vtable* fn_ptr,
+                             const struct vp9_sad_table* sad_fn_ptr,
                              const struct mv* center_mv);
-#define vp9_diamond_search_sad vp9_diamond_search_sad_c
+int vp9_diamond_search_sad_neon(const struct macroblock* x,
+                                const struct search_site_config* cfg,
+                                struct mv* ref_mv,
+                                uint32_t start_mv_sad,
+                                struct mv* best_mv,
+                                int search_param,
+                                int sad_per_bit,
+                                int* num00,
+                                const struct vp9_sad_table* sad_fn_ptr,
+                                const struct mv* center_mv);
+RTCD_EXTERN int (*vp9_diamond_search_sad)(
+    const struct macroblock* x,
+    const struct search_site_config* cfg,
+    struct mv* ref_mv,
+    uint32_t start_mv_sad,
+    struct mv* best_mv,
+    int search_param,
+    int sad_per_bit,
+    int* num00,
+    const struct vp9_sad_table* sad_fn_ptr,
+    const struct mv* center_mv);
 
 void vp9_fht16x16_c(const int16_t* input,
                     tran_low_t* output,
@@ -183,65 +226,55 @@ RTCD_EXTERN void (*vp9_iht8x8_64_add)(const tran_low_t* input,
 
 void vp9_quantize_fp_c(const tran_low_t* coeff_ptr,
                        intptr_t n_coeffs,
-                       const int16_t* round_ptr,
-                       const int16_t* quant_ptr,
+                       const struct macroblock_plane* const mb_plane,
                        tran_low_t* qcoeff_ptr,
                        tran_low_t* dqcoeff_ptr,
                        const int16_t* dequant_ptr,
                        uint16_t* eob_ptr,
-                       const int16_t* scan,
-                       const int16_t* iscan);
+                       const struct ScanOrder* const scan_order);
 void vp9_quantize_fp_neon(const tran_low_t* coeff_ptr,
                           intptr_t n_coeffs,
-                          const int16_t* round_ptr,
-                          const int16_t* quant_ptr,
+                          const struct macroblock_plane* const mb_plane,
                           tran_low_t* qcoeff_ptr,
                           tran_low_t* dqcoeff_ptr,
                           const int16_t* dequant_ptr,
                           uint16_t* eob_ptr,
-                          const int16_t* scan,
-                          const int16_t* iscan);
-RTCD_EXTERN void (*vp9_quantize_fp)(const tran_low_t* coeff_ptr,
-                                    intptr_t n_coeffs,
-                                    const int16_t* round_ptr,
-                                    const int16_t* quant_ptr,
-                                    tran_low_t* qcoeff_ptr,
-                                    tran_low_t* dqcoeff_ptr,
-                                    const int16_t* dequant_ptr,
-                                    uint16_t* eob_ptr,
-                                    const int16_t* scan,
-                                    const int16_t* iscan);
+                          const struct ScanOrder* const scan_order);
+RTCD_EXTERN void (*vp9_quantize_fp)(
+    const tran_low_t* coeff_ptr,
+    intptr_t n_coeffs,
+    const struct macroblock_plane* const mb_plane,
+    tran_low_t* qcoeff_ptr,
+    tran_low_t* dqcoeff_ptr,
+    const int16_t* dequant_ptr,
+    uint16_t* eob_ptr,
+    const struct ScanOrder* const scan_order);
 
 void vp9_quantize_fp_32x32_c(const tran_low_t* coeff_ptr,
                              intptr_t n_coeffs,
-                             const int16_t* round_ptr,
-                             const int16_t* quant_ptr,
+                             const struct macroblock_plane* const mb_plane,
                              tran_low_t* qcoeff_ptr,
                              tran_low_t* dqcoeff_ptr,
                              const int16_t* dequant_ptr,
                              uint16_t* eob_ptr,
-                             const int16_t* scan,
-                             const int16_t* iscan);
+                             const struct ScanOrder* const scan_order);
 void vp9_quantize_fp_32x32_neon(const tran_low_t* coeff_ptr,
                                 intptr_t n_coeffs,
-                                const int16_t* round_ptr,
-                                const int16_t* quant_ptr,
+                                const struct macroblock_plane* const mb_plane,
                                 tran_low_t* qcoeff_ptr,
                                 tran_low_t* dqcoeff_ptr,
                                 const int16_t* dequant_ptr,
                                 uint16_t* eob_ptr,
-                                const int16_t* scan,
-                                const int16_t* iscan);
-RTCD_EXTERN void (*vp9_quantize_fp_32x32)(const tran_low_t* coeff_ptr,
-                                          intptr_t n_coeffs,
-                                          const int16_t* round_ptr,
-                                          const int16_t* quant_ptr,
-                                          tran_low_t* qcoeff_ptr,
-                                          tran_low_t* dqcoeff_ptr,
-                                          const int16_t* dequant_ptr,
-                                          uint16_t* eob_ptr,
-                                          const int16_t* scan,
-                                          const int16_t* iscan);
+                                const struct ScanOrder* const scan_order);
+RTCD_EXTERN void (*vp9_quantize_fp_32x32)(
+    const tran_low_t* coeff_ptr,
+    intptr_t n_coeffs,
+    const struct macroblock_plane* const mb_plane,
+    tran_low_t* qcoeff_ptr,
+    tran_low_t* dqcoeff_ptr,
+    const int16_t* dequant_ptr,
+    uint16_t* eob_ptr,
+    const struct ScanOrder* const scan_order);
 
 void vp9_scale_and_extend_frame_c(const struct yv12_buffer_config* src,
                                   struct yv12_buffer_config* dst,
@@ -268,12 +301,18 @@ static void setup_rtcd_internal(void) {
 
   (void)flags;
 
+  vp9_block_error = vp9_block_error_c;
+  if (flags & HAS_NEON)
+    vp9_block_error = vp9_block_error_neon;
   vp9_block_error_fp = vp9_block_error_fp_c;
   if (flags & HAS_NEON)
     vp9_block_error_fp = vp9_block_error_fp_neon;
   vp9_denoiser_filter = vp9_denoiser_filter_c;
   if (flags & HAS_NEON)
     vp9_denoiser_filter = vp9_denoiser_filter_neon;
+  vp9_diamond_search_sad = vp9_diamond_search_sad_c;
+  if (flags & HAS_NEON)
+    vp9_diamond_search_sad = vp9_diamond_search_sad_neon;
   vp9_fht16x16 = vp9_fht16x16_c;
   if (flags & HAS_NEON)
     vp9_fht16x16 = vp9_fht16x16_neon;
@@ -308,4 +347,4 @@ static void setup_rtcd_internal(void) {
 }  // extern "C"
 #endif
 
-#endif
+#endif  // VP9_RTCD_H_

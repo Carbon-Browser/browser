@@ -26,59 +26,60 @@ SessionStatsImpl::SessionStatsImpl(
     ResourceClassificationRunner* classification_runner)
     : classification_runner_(classification_runner) {
   DCHECK(classification_runner_);
+  classification_runner_->AddObserver(this);
 }
 
 SessionStatsImpl::~SessionStatsImpl() {
   classification_runner_->RemoveObserver(this);
 }
 
-void SessionStatsImpl::StartCollectingStats() {
-  classification_runner_->AddObserver(this);
-}
-
-std::map<GURL, long> SessionStatsImpl::GetSessionAllowedAdsCount() const {
+std::map<GURL, long> SessionStatsImpl::GetSessionAllowedResourcesCount() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   return allowed_map_;
 }
 
-std::map<GURL, long> SessionStatsImpl::GetSessionBlockedAdsCount() const {
+std::map<GURL, long> SessionStatsImpl::GetSessionBlockedResourcesCount() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   return blocked_map_;
 }
 
-void SessionStatsImpl::OnAdMatched(const GURL& url,
-                                   mojom::FilterMatchResult match_result,
-                                   const std::vector<GURL>& parent_frame_urls,
-                                   ContentType content_type,
-                                   content::RenderFrameHost* render_frame_host,
-                                   const GURL& subscription) {
+void SessionStatsImpl::OnRequestMatched(
+    const GURL& url,
+    FilterMatchResult match_result,
+    const std::vector<GURL>& parent_frame_urls,
+    ContentType content_type,
+    content::RenderFrameHost* render_frame_host,
+    const GURL& subscription,
+    const std::string& configuration_name) {
   OnMatchedInternal(match_result, subscription);
 }
 
 void SessionStatsImpl::OnPageAllowed(
     const GURL& url,
     content::RenderFrameHost* render_frame_host,
-    const GURL& subscription) {
-  OnMatchedInternal(mojom::FilterMatchResult::kAllowRule, subscription);
+    const GURL& subscription,
+    const std::string& configuration_name) {
+  OnMatchedInternal(FilterMatchResult::kAllowRule, subscription);
 }
 
 void SessionStatsImpl::OnPopupMatched(
     const GURL& url,
-    mojom::FilterMatchResult match_result,
+    FilterMatchResult match_result,
     const GURL& opener_url,
     content::RenderFrameHost* render_frame_host,
-    const GURL& subscription) {
+    const GURL& subscription,
+    const std::string& configuration_name) {
   OnMatchedInternal(match_result, subscription);
 }
 
-void SessionStatsImpl::OnMatchedInternal(mojom::FilterMatchResult match_result,
+void SessionStatsImpl::OnMatchedInternal(FilterMatchResult match_result,
                                          const GURL& subscription) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!subscription.is_empty());
-  if (match_result == adblock::mojom::FilterMatchResult::kBlockRule) {
+  if (match_result == adblock::FilterMatchResult::kBlockRule) {
     blocked_map_[subscription]++;
   } else {
-    DCHECK(match_result == adblock::mojom::FilterMatchResult::kAllowRule);
+    DCHECK(match_result == adblock::FilterMatchResult::kAllowRule);
     allowed_map_[subscription]++;
   }
 }

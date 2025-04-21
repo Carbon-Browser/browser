@@ -1,9 +1,13 @@
 {# For bindings internals, generated code is concatenated into a larger module
  # at build time, so we avoid a superfluous file header here. #}
 {%- if not for_bindings_internals -%}
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+/**
+ * @fileoverview
+ * @suppress {missingRequire}
+ */
 'use strict';
 {%- endif %}
 

@@ -1,31 +1,34 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#import "ios/web_view/internal/cwv_web_view_configuration_internal.h"
+#import <memory>
 
-#include <memory>
-
-#include "base/threading/thread_restrictions.h"
-#include "components/keyed_service/core/service_access_type.h"
-#include "components/password_manager/core/browser/password_store_interface.h"
-#include "components/sync/driver/sync_service.h"
-#include "ios/web_view/internal/app/application_context.h"
+#import "base/threading/thread_restrictions.h"
+#import "components/affiliations/core/browser/affiliation_service.h"
+#import "components/keyed_service/core/service_access_type.h"
+#import "components/keyed_service/ios/browser_state_dependency_manager.h"
+#import "components/password_manager/core/browser/leak_detection/bulk_leak_check_service_interface.h"
+#import "components/password_manager/core/browser/password_store/password_store_interface.h"
+#import "components/sync/service/sync_service.h"
+#import "ios/web_view/internal/affiliations/web_view_affiliation_service_factory.h"
+#import "ios/web_view/internal/app/application_context.h"
 #import "ios/web_view/internal/autofill/cwv_autofill_data_manager_internal.h"
-#include "ios/web_view/internal/autofill/web_view_personal_data_manager_factory.h"
+#import "ios/web_view/internal/autofill/web_view_personal_data_manager_factory.h"
+#import "ios/web_view/internal/browser_state_keyed_service_factories.h"
 #import "ios/web_view/internal/cwv_preferences_internal.h"
 #import "ios/web_view/internal/cwv_user_content_controller_internal.h"
+#import "ios/web_view/internal/cwv_web_view_configuration_internal.h"
 #import "ios/web_view/internal/cwv_web_view_internal.h"
+#import "ios/web_view/internal/passwords/cwv_leak_check_service_internal.h"
+#import "ios/web_view/internal/passwords/cwv_reuse_check_service_internal.h"
 #import "ios/web_view/internal/passwords/web_view_account_password_store_factory.h"
-#include "ios/web_view/internal/signin/web_view_identity_manager_factory.h"
+#import "ios/web_view/internal/passwords/web_view_bulk_leak_check_service_factory.h"
+#import "ios/web_view/internal/signin/web_view_identity_manager_factory.h"
 #import "ios/web_view/internal/sync/cwv_sync_controller_internal.h"
 #import "ios/web_view/internal/sync/web_view_sync_service_factory.h"
-#include "ios/web_view/internal/web_view_browser_state.h"
-#include "ios/web_view/internal/web_view_global_state_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/web_view/internal/web_view_browser_state.h"
+#import "ios/web_view/internal/web_view_global_state_util.h"
 
 namespace {
 CWVWebViewConfiguration* gDefaultConfiguration = nil;
@@ -46,6 +49,8 @@ NSHashTable<CWVWebViewConfiguration*>* gNonPersistentConfigurations = nil;
 @implementation CWVWebViewConfiguration
 
 @synthesize autofillDataManager = _autofillDataManager;
+@synthesize leakCheckService = _leakCheckService;
+@synthesize reuseCheckService = _reuseCheckService;
 @synthesize preferences = _preferences;
 @synthesize syncController = _syncController;
 @synthesize userContentController = _userContentController;
@@ -56,6 +61,11 @@ NSHashTable<CWVWebViewConfiguration*>* gNonPersistentConfigurations = nil;
   }
 
   ios_web_view::InitializeGlobalState();
+  ios_web_view::EnsureBrowserStateKeyedServiceFactoriesBuilt();
+
+  BrowserStateDependencyManager::GetInstance()
+      ->DisallowKeyedServiceFactoryRegistration(
+          "ios_web_view::EnsureBrowserStateKeyedServiceFactoriesBuilt()");
 }
 
 + (void)shutDown {
@@ -159,6 +169,33 @@ NSHashTable<CWVWebViewConfiguration*>* gNonPersistentConfigurations = nil;
   return _syncController;
 }
 
+#pragma mark - LeakCheckService
+
+- (CWVLeakCheckService*)leakCheckService {
+  if (!_leakCheckService && self.persistent) {
+    password_manager::BulkLeakCheckServiceInterface* bulkLeakCheckService =
+        ios_web_view::WebViewBulkLeakCheckServiceFactory::GetForBrowserState(
+            self.browserState);
+    _leakCheckService = [[CWVLeakCheckService alloc]
+        initWithBulkLeakCheckService:bulkLeakCheckService];
+  }
+  return _leakCheckService;
+}
+
+#pragma mark - ReuseCheckService
+
+- (CWVReuseCheckService*)reuseCheckService {
+  if (!_reuseCheckService && self.persistent) {
+    affiliations::AffiliationService* affiliation_service =
+        ios_web_view::WebViewAffiliationServiceFactory::GetForBrowserState(
+            static_cast<ios_web_view::WebViewBrowserState*>(self.browserState));
+
+    _reuseCheckService = [[CWVReuseCheckService alloc]
+        initWithAffiliationService:affiliation_service];
+  }
+  return _reuseCheckService;
+}
+
 #pragma mark - Public Methods
 
 - (BOOL)isPersistent {
@@ -176,6 +213,7 @@ NSHashTable<CWVWebViewConfiguration*>* gNonPersistentConfigurations = nil;
 }
 
 - (void)shutDown {
+  [_autofillDataManager shutDown];
   for (CWVWebView* webView in _webViews) {
     [webView shutDown];
   }

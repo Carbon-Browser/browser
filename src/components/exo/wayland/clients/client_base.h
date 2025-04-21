@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,10 @@
 #include <vector>
 
 #include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/shared_memory_mapping.h"
 #include "components/exo/wayland/clients/client_helper.h"
+#include "components/exo/wayland/clients/globals.h"
 #include "linux-dmabuf-unstable-v1-client-protocol.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
@@ -66,36 +68,16 @@ class ClientBase {
     bool use_memfd = false;
     bool use_touch = false;
     bool use_vulkan = false;
-    bool use_xdg = false;
+    bool use_wl_shell = false;
     bool use_release_fences = false;
     bool use_stylus = false;
-    absl::optional<std::string> wayland_socket = {};
-  };
-
-  struct Globals {
-    Globals();
-    ~Globals();
-
-    std::unique_ptr<wl_output> output;
-    std::unique_ptr<wl_compositor> compositor;
-    std::unique_ptr<wl_shm> shm;
-    std::unique_ptr<wp_presentation> presentation;
-    std::unique_ptr<zwp_linux_dmabuf_v1> linux_dmabuf;
-    std::unique_ptr<wl_shell> shell;
-    std::unique_ptr<wl_seat> seat;
-    std::unique_ptr<wl_subcompositor> subcompositor;
-    std::unique_ptr<wl_touch> touch;
-    std::unique_ptr<zaura_shell> aura_shell;
-    std::unique_ptr<zaura_output> aura_output;
-    std::unique_ptr<zxdg_shell_v6> xdg_shell_v6;
-    std::unique_ptr<xdg_wm_base> xdg_wm_base;
-    std::unique_ptr<zwp_fullscreen_shell_v1> fullscreen_shell;
-    std::unique_ptr<zwp_input_timestamps_manager_v1> input_timestamps_manager;
-    std::unique_ptr<zwp_linux_explicit_synchronization_v1>
-        linux_explicit_synchronization;
-    std::unique_ptr<zcr_vsync_feedback_v1> vsync_feedback;
-    std::unique_ptr<zcr_color_manager_v1> color_manager;
-    std::unique_ptr<zcr_stylus_v2> stylus;
+    std::optional<std::string> wayland_socket = {};
+    uint32_t linux_dmabuf_version = ZWP_LINUX_DMABUF_V1_MODIFIER_SINCE_VERSION;
+    bool enable_vulkan_debug = false;
+    // by default clients only clear buffers with a solid color, this flag is
+    // meant to ensure that the rendering actually draws a textured quad.
+    bool use_vulkan_texture = false;
+    bool use_vulkan_blitter = false;
   };
 
   struct Buffer {
@@ -133,9 +115,12 @@ class ClientBase {
   std::unique_ptr<Buffer> CreateBuffer(const gfx::Size& size,
                                        int32_t drm_format,
                                        int32_t bo_usage,
-                                       bool add_buffer_listener = true);
+                                       bool add_buffer_listener = true,
+                                       bool use_vulkan = false);
   std::unique_ptr<Buffer> CreateDrmBuffer(const gfx::Size& size,
                                           int32_t drm_format,
+                                          const uint64_t* modifiers,
+                                          const unsigned int modifiers_count,
                                           int32_t bo_usage,
                                           bool y_invert);
   ClientBase::Buffer* DequeueBuffer();
@@ -221,26 +206,36 @@ class ClientBase {
   bool y_invert_ = false;
 
   std::unique_ptr<wl_display> display_;
-  std::unique_ptr<wl_registry> registry_;
   std::unique_ptr<wl_surface> surface_;
   std::unique_ptr<wl_shell_surface> shell_surface_;
   std::unique_ptr<xdg_surface> xdg_surface_;
   std::unique_ptr<xdg_toplevel> xdg_toplevel_;
-  std::unique_ptr<zxdg_surface_v6> zxdg_surface_;
-  std::unique_ptr<zxdg_toplevel_v6> zxdg_toplevel_;
   std::unique_ptr<wl_pointer> wl_pointer_;
   std::unique_ptr<zcr_pointer_stylus_v2> zcr_pointer_stylus_;
   Globals globals_;
 #if defined(USE_GBM)
   base::ScopedFD drm_fd_;
   std::unique_ptr<gbm_device> device_;
+  raw_ptr<gl::GLDisplayEGL> egl_display_ = nullptr;
 #if defined(USE_VULKAN)
   std::unique_ptr<gpu::VulkanImplementation> vk_implementation_;
   std::unique_ptr<ScopedVkInstance> vk_instance_;
   std::unique_ptr<ScopedVkDevice> vk_device_;
+  std::unique_ptr<ScopedVkDescriptorPool> vk_descriptor_pool_;
+  std::unique_ptr<ScopedVkPipeline> vk_pipeline_;
+  std::unique_ptr<ScopedVkDescriptorSetLayout> vk_descriptor_set_layout_;
   std::unique_ptr<ScopedVkCommandPool> vk_command_pool_;
   std::unique_ptr<ScopedVkRenderPass> vk_render_pass_;
+  std::unique_ptr<ScopedVkPipelineLayout> vk_pipeline_layout_;
+  std::unique_ptr<ScopedVkImage> vk_texture_image_;
+  std::unique_ptr<ScopedVkDeviceMemory> vk_texture_image_memory_;
+  std::unique_ptr<ScopedVkImageView> vk_texture_image_view_;
+  std::unique_ptr<ScopedVkSampler> vk_texture_sampler_;
+  std::vector<VkDescriptorSet> vk_descriptor_sets_;
+  // A command pool for the transfer queue (blitter)
+  std::unique_ptr<ScopedVkCommandPool> vk_command_pool_transfer_;
   VkQueue vk_queue_;
+  VkQueue vk_queue_transfer_;
 #endif
 #endif
   scoped_refptr<gl::GLSurface> gl_surface_;

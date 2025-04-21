@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,25 +31,25 @@ class SessionId;
 
 class SessionsGetRecentlyClosedFunction : public ExtensionFunction {
  protected:
-  ~SessionsGetRecentlyClosedFunction() override {}
+  ~SessionsGetRecentlyClosedFunction() override = default;
   ResponseAction Run() override;
   DECLARE_EXTENSION_FUNCTION("sessions.getRecentlyClosed",
                              SESSIONS_GETRECENTLYCLOSED)
 
  private:
-  api::tabs::Tab CreateTabModel(const sessions::TabRestoreService::Tab& tab,
+  api::tabs::Tab CreateTabModel(const sessions::tab_restore::Tab& tab,
                                 bool active);
-  std::unique_ptr<api::windows::Window> CreateWindowModel(
-      const sessions::TabRestoreService::Window& window);
-  std::unique_ptr<api::tab_groups::TabGroup> CreateGroupModel(
-      const sessions::TabRestoreService::Group& group);
-  std::unique_ptr<api::sessions::Session> CreateSessionModel(
-      const sessions::TabRestoreService::Entry& entry);
+  api::windows::Window CreateWindowModel(
+      const sessions::tab_restore::Window& window);
+  api::tab_groups::TabGroup CreateGroupModel(
+      const sessions::tab_restore::Group& group);
+  api::sessions::Session CreateSessionModel(
+      const sessions::tab_restore::Entry& entry);
 };
 
 class SessionsGetDevicesFunction : public ExtensionFunction {
  protected:
-  ~SessionsGetDevicesFunction() override {}
+  ~SessionsGetDevicesFunction() override = default;
   ResponseAction Run() override;
   DECLARE_EXTENSION_FUNCTION("sessions.getDevices", SESSIONS_GETDEVICES)
 
@@ -58,10 +58,10 @@ class SessionsGetDevicesFunction : public ExtensionFunction {
                                 const sessions::SessionTab& tab,
                                 int tab_index,
                                 bool active);
-  std::unique_ptr<api::windows::Window> CreateWindowModel(
+  std::optional<api::windows::Window> CreateWindowModel(
       const sessions::SessionWindow& window,
       const std::string& session_tag);
-  std::unique_ptr<api::sessions::Session> CreateSessionModel(
+  std::optional<api::sessions::Session> CreateSessionModel(
       const sessions::SessionWindow& window,
       const std::string& session_tag);
   api::sessions::Device CreateDeviceModel(
@@ -70,7 +70,7 @@ class SessionsGetDevicesFunction : public ExtensionFunction {
 
 class SessionsRestoreFunction : public ExtensionFunction {
  protected:
-  ~SessionsRestoreFunction() override {}
+  ~SessionsRestoreFunction() override = default;
   ResponseAction Run() override;
   DECLARE_EXTENSION_FUNCTION("sessions.restore", SESSIONS_RESTORE)
 

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,10 @@
 #include <zircon/syscalls.h>
 
 #include "base/clang_profiling_buildflags.h"
-#include "base/debug/activity_tracker.h"
 #include "base/fuchsia/default_job.h"
 #include "base/fuchsia/fuchsia_logging.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/trace_event/base_tracing.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(CLANG_PROFILING)
 #include "base/test/clang_profiling.h"
@@ -28,8 +26,9 @@ zx::process FindProcessInJobTree(const zx::job& job, ProcessId pid) {
   zx::process process;
   zx_status_t status = job.get_child(pid, ZX_RIGHT_SAME_RIGHTS, &process);
 
-  if (status == ZX_OK)
+  if (status == ZX_OK) {
     return process;
+  }
 
   if (status == ZX_ERR_NOT_FOUND) {
     std::vector<zx_koid_t> job_koids(32);
@@ -59,11 +58,13 @@ zx::process FindProcessInJobTree(const zx::job& job, ProcessId pid) {
 
     for (zx_koid_t job_koid : job_koids) {
       zx::job child_job;
-      if (job.get_child(job_koid, ZX_RIGHT_SAME_RIGHTS, &child_job) != ZX_OK)
+      if (job.get_child(job_koid, ZX_RIGHT_SAME_RIGHTS, &child_job) != ZX_OK) {
         continue;
+      }
       process = FindProcessInJobTree(child_job, pid);
-      if (process)
+      if (process) {
         return process;
+      }
     }
 
     return zx::process();
@@ -106,8 +107,9 @@ Process Process::Current() {
 
 // static
 Process Process::Open(ProcessId pid) {
-  if (pid == GetCurrentProcId())
+  if (pid == GetCurrentProcId()) {
     return Current();
+  }
 
   return Process(FindProcessInJobTree(*GetDefaultJob(), pid).release());
 }
@@ -119,7 +121,7 @@ Process Process::OpenWithExtraPrivileges(ProcessId pid) {
 }
 
 // static
-bool Process::CanBackgroundProcesses() {
+bool Process::CanSetPriority() {
   return false;
 }
 
@@ -140,11 +142,13 @@ ProcessHandle Process::Handle() const {
 }
 
 Process Process::Duplicate() const {
-  if (is_current())
+  if (is_current()) {
     return Current();
+  }
 
-  if (!IsValid())
+  if (!IsValid()) {
     return Process();
+  }
 
   zx::process out;
   zx_status_t result = process_.duplicate(ZX_RIGHT_SAME_RIGHTS, &out);
@@ -178,9 +182,8 @@ ProcessId Process::Pid() const {
 
 Time Process::CreationTime() const {
   zx_info_process_t proc_info;
-  zx_status_t status =
-      zx_object_get_info(Handle(), ZX_INFO_PROCESS, &proc_info,
-                         sizeof(proc_info), nullptr, nullptr);
+  zx_status_t status = zx_object_get_info(Handle(), ZX_INFO_PROCESS, &proc_info,
+                                          sizeof(proc_info), nullptr, nullptr);
   if (status != ZX_OK) {
     ZX_DLOG(ERROR, status) << "zx_process_get_info";
     return Time();
@@ -228,15 +231,13 @@ bool Process::WaitForExit(int* exit_code) const {
 }
 
 bool Process::WaitForExitWithTimeout(TimeDelta timeout, int* exit_code) const {
-  if (is_current_process_)
+  if (is_current_process_) {
     return false;
+  }
 
   TRACE_EVENT0("base", "Process::WaitForExitWithTimeout");
 
-  // Record the event that this thread is blocking upon (for hang diagnosis).
-  absl::optional<debug::ScopedProcessWaitActivity> process_activity;
   if (!timeout.is_zero()) {
-    process_activity.emplace(this);
     // Assert that this thread is allowed to wait below. This intentionally
     // doesn't use ScopedBlockingCallWithBaseSyncPrimitives because the process
     // being waited upon tends to itself be using the CPU and considering this
@@ -251,7 +252,8 @@ bool Process::WaitForExitWithTimeout(TimeDelta timeout, int* exit_code) const {
   zx_status_t status =
       process_.wait_one(ZX_TASK_TERMINATED, deadline, &signals_observed);
   if (status != ZX_OK) {
-    ZX_DLOG(ERROR, status) << "zx_object_wait_one";
+    ZX_DLOG_IF(ERROR, status != ZX_ERR_TIMED_OUT, status)
+        << "zx_object_wait_one";
     return false;
   }
 
@@ -260,32 +262,34 @@ bool Process::WaitForExitWithTimeout(TimeDelta timeout, int* exit_code) const {
                              nullptr, nullptr);
   if (status != ZX_OK) {
     ZX_DLOG(ERROR, status) << "zx_object_get_info";
-    if (exit_code)
+    if (exit_code) {
       *exit_code = -1;
+    }
     return false;
   }
 
-  if (exit_code)
+  if (exit_code) {
     *exit_code = static_cast<int>(proc_info.return_code);
+  }
 
   return true;
 }
 
 void Process::Exited(int exit_code) const {}
 
-bool Process::IsProcessBackgrounded() const {
-  // See SetProcessBackgrounded().
+Process::Priority Process::GetPriority() const {
+  // See SetPriority().
   DCHECK(IsValid());
-  return false;
+  return Priority::kUserBlocking;
 }
 
-bool Process::SetProcessBackgrounded(bool value) {
+bool Process::SetPriority(Priority priority) {
   // No process priorities on Fuchsia.
   // TODO(fxbug.dev/30735): Update this later if priorities are implemented.
   return false;
 }
 
-int Process::GetPriority() const {
+int Process::GetOSPriority() const {
   DCHECK(IsValid());
   // No process priorities on Fuchsia.
   return 0;

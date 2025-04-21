@@ -35,19 +35,28 @@
 
 namespace blink {
 
-// Must not grow beyond 3 bits, due to packing in CSSPropertyValueSet.
+// Must not grow beyond 4 bits, due to packing in CSSPropertyValueSet.
 enum CSSParserMode : uint8_t {
   kHTMLStandardMode,
   kHTMLQuirksMode,
   // SVG attributes are parsed in quirks mode but rules differ slightly.
   kSVGAttributeMode,
-  // @viewport/@font-face rules are specially tagged in CSSPropertyValueSet so
+  // @font-face rules are specially tagged in CSSPropertyValueSet so
   // CSSOM modifications don't treat them as style rules.
-  kCSSViewportRuleMode,
   kCSSFontFaceRuleMode,
   // @keyframes rules are specially tagged in CSSPropertyValueSet so CSSOM
   // modifications don't allow setting animation-* in their keyframes.
   kCSSKeyframeRuleMode,
+  // @property rules are specially tagged so modifications through the
+  // inspector don't treat them as style rules.
+  kCSSPropertyRuleMode,
+  // @font-palette-values rules are specially tagged so modifications through
+  // the inspector don't treat them as style rules.
+  kCSSFontPaletteValuesRuleMode,
+  // @position-try rules have limitations on what they allow, also through
+  // mutations in CSSOM.
+  // https://drafts.csswg.org/css-anchor-position-1/#om-position-try
+  kCSSPositionTryRuleMode,
   // User agent stylesheets are parsed in standards mode but also allows
   // internal properties and values.
   kUASheetMode,
@@ -61,10 +70,6 @@ inline bool IsQuirksModeBehavior(CSSParserMode mode) {
 
 inline bool IsUASheetBehavior(CSSParserMode mode) {
   return mode == kUASheetMode;
-}
-
-inline bool IsCSSViewportParsingEnabledForMode(CSSParserMode mode) {
-  return mode == kCSSViewportRuleMode;
 }
 
 inline bool IsUseCounterEnabledForMode(CSSParserMode mode) {

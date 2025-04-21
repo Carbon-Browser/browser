@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,7 @@ TEST(RegistryDictTest, SetAndGetValue) {
   EXPECT_EQ(int_value, *test_dict.GetValue("one"));
   EXPECT_EQ(string_value, *test_dict.GetValue("two"));
 
-  absl::optional<base::Value> one(test_dict.RemoveValue("one"));
+  std::optional<base::Value> one(test_dict.RemoveValue("one"));
   ASSERT_TRUE(one.has_value());
   EXPECT_EQ(1u, test_dict.values().size());
   EXPECT_EQ(int_value, one.value());
@@ -63,7 +63,7 @@ TEST(RegistryDictTest, CaseInsensitiveButPreservingValueNames) {
   EXPECT_EQ(1u, test_dict.values().size());
   EXPECT_EQ(string_value, *test_dict.GetValue("one"));
 
-  absl::optional<base::Value> removed_value(test_dict.RemoveValue("onE"));
+  std::optional<base::Value> removed_value(test_dict.RemoveValue("onE"));
   ASSERT_TRUE(removed_value.has_value());
   EXPECT_EQ(string_value, removed_value.value());
   EXPECT_TRUE(test_dict.values().empty());
@@ -206,8 +206,7 @@ TEST(RegistryDictTest, ConvertToJSON) {
   test_dict.SetValue("string-to-int", string_zero.Clone());
   test_dict.SetValue("string-to-dict", string_dict.Clone());
 
-  std::string error;
-  Schema schema = Schema::Parse(
+  const auto schema = Schema::Parse(
       "{"
       "  \"type\": \"object\","
       "  \"properties\": {"
@@ -222,32 +221,32 @@ TEST(RegistryDictTest, ConvertToJSON) {
       "    \"string-to-int\": { \"type\": \"integer\" },"
       "    \"string-to-dict\": { \"type\": \"object\" }"
       "  }"
-      "}",
-      &error);
-  ASSERT_TRUE(schema.valid()) << error;
+      "}");
+  ASSERT_TRUE(schema.has_value()) << schema.error();
 
-  std::unique_ptr<base::Value> actual(test_dict.ConvertToJSON(schema));
+  std::optional<base::Value> actual(test_dict.ConvertToJSON(*schema));
+  ASSERT_TRUE(actual);
 
-  base::DictionaryValue expected;
-  expected.SetKey("one", int_value.Clone());
-  auto expected_subdict = std::make_unique<base::DictionaryValue>();
-  expected_subdict->SetKey("two", string_value.Clone());
-  expected.Set("three", std::move(expected_subdict));
-  auto expected_list = std::make_unique<base::ListValue>();
-  expected_list->GetList().Append(string_value.Clone());
-  expected.Set("dict-to-list", std::move(expected_list));
-  expected.SetBoolKey("int-to-bool", true);
-  expected.SetDoubleKey("int-to-double", 42.0);
-  expected.SetBoolKey("string-to-bool", false);
-  expected.SetDoubleKey("string-to-double", 0.0);
-  expected.SetIntKey("string-to-int", static_cast<int>(0));
-  expected_list = std::make_unique<base::ListValue>();
-  expected_list->GetList().Append("value");
-  expected_subdict = std::make_unique<base::DictionaryValue>();
-  expected_subdict->Set("key", std::move(expected_list));
-  expected.Set("string-to-dict", std::move(expected_subdict));
+  base::Value::Dict expected;
+  expected.Set("one", int_value.Clone());
+  base::Value::Dict expected_subdict1;
+  expected_subdict1.Set("two", string_value.Clone());
+  expected.Set("three", std::move(expected_subdict1));
+  base::Value::List expected_list1;
+  expected_list1.Append(string_value.Clone());
+  expected.Set("dict-to-list", std::move(expected_list1));
+  expected.Set("int-to-bool", true);
+  expected.Set("int-to-double", 42.0);
+  expected.Set("string-to-bool", false);
+  expected.Set("string-to-double", 0.0);
+  expected.Set("string-to-int", static_cast<int>(0));
+  base::Value::List expected_list2;
+  expected_list2.Append("value");
+  base::Value::Dict expected_subdict2;
+  expected_subdict2.Set("key", std::move(expected_list2));
+  expected.Set("string-to-dict", std::move(expected_subdict2));
 
-  EXPECT_EQ(expected, *actual);
+  EXPECT_EQ(base::Value(std::move(expected)), *actual);
 }
 
 TEST(RegistryDictTest, NonSequentialConvertToJSON) {
@@ -260,8 +259,7 @@ TEST(RegistryDictTest, NonSequentialConvertToJSON) {
   list->SetValue("4", base::Value("4").Clone());
   test_dict.SetKey("dict-to-list", std::move(list));
 
-  std::string error;
-  Schema schema = Schema::Parse(
+  const auto schema = Schema::Parse(
       "{"
       "  \"type\": \"object\","
       "  \"properties\": {"
@@ -270,20 +268,20 @@ TEST(RegistryDictTest, NonSequentialConvertToJSON) {
       "      \"items\": { \"type\": \"string\" }"
       "    }"
       "  }"
-      "}",
-      &error);
-  ASSERT_TRUE(schema.valid()) << error;
+      "}");
+  ASSERT_TRUE(schema.has_value()) << schema.error();
 
-  std::unique_ptr<base::Value> actual(test_dict.ConvertToJSON(schema));
+  std::optional<base::Value> actual(test_dict.ConvertToJSON(*schema));
+  ASSERT_TRUE(actual);
 
-  base::DictionaryValue expected;
-  std::unique_ptr<base::ListValue> expected_list(new base::ListValue());
-  expected_list->GetList().Append(base::Value("1").Clone());
-  expected_list->GetList().Append(base::Value("2").Clone());
-  expected_list->GetList().Append(base::Value("4").Clone());
+  base::Value::Dict expected;
+  base::Value::List expected_list;
+  expected_list.Append("1");
+  expected_list.Append("2");
+  expected_list.Append("4");
   expected.Set("dict-to-list", std::move(expected_list));
 
-  EXPECT_EQ(expected, *actual);
+  EXPECT_EQ(base::Value(std::move(expected)), *actual);
 }
 
 TEST(RegistryDictTest, PatternPropertySchema) {
@@ -305,8 +303,7 @@ TEST(RegistryDictTest, PatternPropertySchema) {
   policy_dict->SetValue("invalid_key", string_dict.Clone());
   test_dict.SetKey("ExtensionSettings", std::move(policy_dict));
 
-  std::string error;
-  Schema schema = Schema::Parse(
+  const auto schema = Schema::Parse(
       "{"
       "  \"type\": \"object\","
       "  \"properties\": {"
@@ -335,37 +332,27 @@ TEST(RegistryDictTest, PatternPropertySchema) {
       "      },"
       "    },"
       "  },"
-      "}",
-      &error);
-  ASSERT_TRUE(schema.valid()) << error;
+      "}");
+  ASSERT_TRUE(schema.has_value()) << schema.error();
 
-  std::unique_ptr<base::Value> actual(test_dict.ConvertToJSON(schema));
+  std::optional<base::Value> actual(test_dict.ConvertToJSON(*schema));
+  ASSERT_TRUE(actual);
 
-  base::DictionaryValue expected;
-  std::unique_ptr<base::DictionaryValue> expected_extension_settings(
-      new base::DictionaryValue());
-  std::unique_ptr<base::ListValue> list_value(new base::ListValue());
-  list_value->GetList().Append("*://*.google.com");
-  std::unique_ptr<base::DictionaryValue> restrictions_properties(
-      new base::DictionaryValue());
-  restrictions_properties->Set(
-      "runtime_blocked_hosts",
-      base::Value::ToUniquePtrValue(list_value->Clone()));
-  restrictions_properties->Set(
-      "runtime_allowed_hosts",
-      base::Value::ToUniquePtrValue(list_value->Clone()));
-  restrictions_properties->Set(
-      "minimum_version_required",
-      base::Value::ToUniquePtrValue(version_string.Clone()));
-  expected_extension_settings->Set("aaaabbbbaaaabbbbaaaabbbbaaaabbbb",
-                                   std::move(restrictions_properties));
-  expected_extension_settings->Set(
-      "invalid_key", std::make_unique<base::Value>(std::move(string_dict)));
+  base::Value::Dict expected;
+  base::Value::Dict expected_extension_settings;
+  base::Value::List list_value;
+  list_value.Append("*://*.google.com");
+  base::Value::Dict restrictions_properties;
+  restrictions_properties.Set("runtime_blocked_hosts", list_value.Clone());
+  restrictions_properties.Set("runtime_allowed_hosts", list_value.Clone());
+  restrictions_properties.Set("minimum_version_required",
+                              version_string.Clone());
+  expected_extension_settings.Set("aaaabbbbaaaabbbbaaaabbbbaaaabbbb",
+                                  std::move(restrictions_properties));
+  expected_extension_settings.Set("invalid_key", std::move(string_dict));
   expected.Set("ExtensionSettings", std::move(expected_extension_settings));
 
-  // Needed so that the EXPECT below prints good values in case of a mismatch.
-  const base::Value* expected_pointer = &expected;
-  EXPECT_EQ(*expected_pointer, *actual);
+  EXPECT_EQ(base::Value(std::move(expected)), *actual);
 }
 #endif
 

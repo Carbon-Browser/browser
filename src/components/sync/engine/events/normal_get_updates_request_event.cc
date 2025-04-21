@@ -1,10 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/sync/engine/events/normal_get_updates_request_event.h"
 
 #include "base/strings/stringprintf.h"
+#include "base/values.h"
 #include "components/sync/engine/cycle/nudge_tracker.h"
 #include "components/sync/protocol/proto_value_conversions.h"
 
@@ -23,9 +24,9 @@ NormalGetUpdatesRequestEvent::NormalGetUpdatesRequestEvent(
 
 NormalGetUpdatesRequestEvent::NormalGetUpdatesRequestEvent(
     base::Time timestamp,
-    ModelTypeSet nudged_types,
-    ModelTypeSet notified_types,
-    ModelTypeSet refresh_requested_types,
+    DataTypeSet nudged_types,
+    DataTypeSet notified_types,
+    DataTypeSet refresh_requested_types,
     bool is_retry,
     sync_pb::ClientToServerMessage request)
     : timestamp_(timestamp),
@@ -54,41 +55,48 @@ std::string NormalGetUpdatesRequestEvent::GetType() const {
 std::string NormalGetUpdatesRequestEvent::GetDetails() const {
   std::string details;
 
-  if (!nudged_types_.Empty()) {
-    if (!details.empty())
+  if (!nudged_types_.empty()) {
+    if (!details.empty()) {
       details.append("\n");
+    }
     details.append(base::StringPrintf(
-        "Nudged types: %s", ModelTypeSetToDebugString(nudged_types_).c_str()));
+        "Nudged types: %s", DataTypeSetToDebugString(nudged_types_).c_str()));
   }
 
-  if (!notified_types_.Empty()) {
-    if (!details.empty())
+  if (!notified_types_.empty()) {
+    if (!details.empty()) {
       details.append("\n");
+    }
     details.append(
         base::StringPrintf("Notified types: %s",
-                           ModelTypeSetToDebugString(notified_types_).c_str()));
+                           DataTypeSetToDebugString(notified_types_).c_str()));
   }
 
-  if (!refresh_requested_types_.Empty()) {
-    if (!details.empty())
+  if (!refresh_requested_types_.empty()) {
+    if (!details.empty()) {
       details.append("\n");
+    }
     details.append(base::StringPrintf(
         "Refresh requested types: %s",
-        ModelTypeSetToDebugString(refresh_requested_types_).c_str()));
+        DataTypeSetToDebugString(refresh_requested_types_).c_str()));
   }
 
   if (is_retry_) {
-    if (!details.empty())
+    if (!details.empty()) {
       details.append("\n");
+    }
     details.append(base::StringPrintf("Is retry: True"));
   }
 
   return details;
 }
 
-std::unique_ptr<base::DictionaryValue>
-NormalGetUpdatesRequestEvent::GetProtoMessage(bool include_specifics) const {
-  return ClientToServerMessageToValue(request_, include_specifics);
+base::Value::Dict NormalGetUpdatesRequestEvent::GetProtoMessage(
+    bool include_specifics) const {
+  return ClientToServerMessageToValue(
+             request_, {.include_specifics = include_specifics,
+                        .include_full_get_update_triggers = false})
+      .TakeDict();
 }
 
 }  // namespace syncer

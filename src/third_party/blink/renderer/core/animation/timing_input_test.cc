@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,13 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_testing.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_keyframe_animation_options.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_keyframe_effect_options.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_timeline_range_offset.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_keyframeanimationoptions_unrestricteddouble.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_union_keyframeeffectoptions_unrestricteddouble.h"
 #include "third_party/blink/renderer/core/animation/animation_test_helpers.h"
+#include "third_party/blink/renderer/core/css/cssom/css_unit_values.h"
 #include "third_party/blink/renderer/core/testing/dummy_page_holder.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "v8/include/v8.h"
 
 namespace blink {
@@ -38,6 +41,7 @@ class AnimationTimingInputTest : public testing::Test {
 
   Document* GetDocument() const { return &page_holder_->GetDocument(); }
 
+  test::TaskEnvironment task_environment_;
   std::unique_ptr<DummyPageHolder> page_holder_;
 };
 
@@ -135,35 +139,43 @@ TEST_F(AnimationTimingInputTest, TimingInputStartDelay) {
   bool did_success;
   EXPECT_EQ(1.1, ApplyTimingInputNumber(scope.GetIsolate(), "delay", 1100,
                                         did_success)
-                     .start_delay.InSecondsF());
+                     .start_delay.AsTimeValue()
+                     .InSecondsF());
   EXPECT_TRUE(did_success);
   EXPECT_EQ(-1, ApplyTimingInputNumber(scope.GetIsolate(), "delay", -1000,
                                        did_success)
-                    .start_delay.InSecondsF());
+                    .start_delay.AsTimeValue()
+                    .InSecondsF());
   EXPECT_TRUE(did_success);
   EXPECT_EQ(1, ApplyTimingInputString(scope.GetIsolate(), "delay", "1000",
                                       did_success)
-                   .start_delay.InSecondsF());
+                   .start_delay.AsTimeValue()
+                   .InSecondsF());
   EXPECT_TRUE(did_success);
   EXPECT_EQ(
       0, ApplyTimingInputString(scope.GetIsolate(), "delay", "1s", did_success)
-             .start_delay.InSecondsF());
+             .start_delay.AsTimeValue()
+             .InSecondsF());
   EXPECT_FALSE(did_success);
   EXPECT_EQ(0, ApplyTimingInputString(scope.GetIsolate(), "delay", "Infinity",
                                       did_success)
-                   .start_delay.InSecondsF());
+                   .start_delay.AsTimeValue()
+                   .InSecondsF());
   EXPECT_FALSE(did_success);
   EXPECT_EQ(0, ApplyTimingInputString(scope.GetIsolate(), "delay", "-Infinity",
                                       did_success)
-                   .start_delay.InSecondsF());
+                   .start_delay.AsTimeValue()
+                   .InSecondsF());
   EXPECT_FALSE(did_success);
   EXPECT_EQ(
       0, ApplyTimingInputString(scope.GetIsolate(), "delay", "NaN", did_success)
-             .start_delay.InSecondsF());
+             .start_delay.AsTimeValue()
+             .InSecondsF());
   EXPECT_FALSE(did_success);
   EXPECT_EQ(0, ApplyTimingInputString(scope.GetIsolate(), "delay", "rubbish",
                                       did_success)
-                   .start_delay.InSecondsF());
+                   .start_delay.AsTimeValue()
+                   .InSecondsF());
   EXPECT_FALSE(did_success);
 }
 
@@ -173,28 +185,36 @@ TEST_F(AnimationTimingInputTest,
   bool ignored_success;
   EXPECT_EQ(1.1, ApplyTimingInputNumber(scope.GetIsolate(), "delay", 1100,
                                         ignored_success, false)
-                     .start_delay.InSecondsF());
+                     .start_delay.AsTimeValue()
+                     .InSecondsF());
   EXPECT_EQ(-1, ApplyTimingInputNumber(scope.GetIsolate(), "delay", -1000,
                                        ignored_success, false)
-                    .start_delay.InSecondsF());
+                    .start_delay.AsTimeValue()
+                    .InSecondsF());
   EXPECT_EQ(1, ApplyTimingInputString(scope.GetIsolate(), "delay", "1000",
                                       ignored_success, false)
-                   .start_delay.InSecondsF());
+                   .start_delay.AsTimeValue()
+                   .InSecondsF());
   EXPECT_EQ(0, ApplyTimingInputString(scope.GetIsolate(), "delay", "1s",
                                       ignored_success, false)
-                   .start_delay.InSecondsF());
+                   .start_delay.AsTimeValue()
+                   .InSecondsF());
   EXPECT_EQ(0, ApplyTimingInputString(scope.GetIsolate(), "delay", "Infinity",
                                       ignored_success, false)
-                   .start_delay.InSecondsF());
+                   .start_delay.AsTimeValue()
+                   .InSecondsF());
   EXPECT_EQ(0, ApplyTimingInputString(scope.GetIsolate(), "delay", "-Infinity",
                                       ignored_success, false)
-                   .start_delay.InSecondsF());
+                   .start_delay.AsTimeValue()
+                   .InSecondsF());
   EXPECT_EQ(0, ApplyTimingInputString(scope.GetIsolate(), "delay", "NaN",
                                       ignored_success, false)
-                   .start_delay.InSecondsF());
+                   .start_delay.AsTimeValue()
+                   .InSecondsF());
   EXPECT_EQ(0, ApplyTimingInputString(scope.GetIsolate(), "delay", "rubbish",
                                       ignored_success, false)
-                   .start_delay.InSecondsF());
+                   .start_delay.AsTimeValue()
+                   .InSecondsF());
 }
 
 TEST_F(AnimationTimingInputTest, TimingInputEndDelay) {
@@ -202,10 +222,12 @@ TEST_F(AnimationTimingInputTest, TimingInputEndDelay) {
   bool ignored_success;
   EXPECT_EQ(10, ApplyTimingInputNumber(scope.GetIsolate(), "endDelay", 10000,
                                        ignored_success)
-                    .end_delay.InSecondsF());
+                    .end_delay.AsTimeValue()
+                    .InSecondsF());
   EXPECT_EQ(-2.5, ApplyTimingInputNumber(scope.GetIsolate(), "endDelay", -2500,
                                          ignored_success)
-                      .end_delay.InSecondsF());
+                      .end_delay.AsTimeValue()
+                      .InSecondsF());
 }
 
 TEST_F(AnimationTimingInputTest, TimingInputFillMode) {
@@ -460,7 +482,8 @@ TEST_F(AnimationTimingInputTest, TimingInputEmpty) {
       TimingInput::Convert(timing_input, nullptr, exception_state);
   EXPECT_FALSE(exception_state.HadException());
 
-  EXPECT_EQ(control_timing.start_delay, updated_timing.start_delay);
+  EXPECT_EQ(control_timing.start_delay.AsTimeValue(),
+            updated_timing.start_delay.AsTimeValue());
   EXPECT_EQ(control_timing.fill_mode, updated_timing.fill_mode);
   EXPECT_EQ(control_timing.iteration_start, updated_timing.iteration_start);
   EXPECT_EQ(control_timing.iteration_count, updated_timing.iteration_count);
@@ -479,7 +502,8 @@ TEST_F(AnimationTimingInputTest, TimingInputEmptyKeyframeAnimationOptions) {
       TimingInput::Convert(input_timing, nullptr, exception_state);
   EXPECT_FALSE(exception_state.HadException());
 
-  EXPECT_EQ(control_timing.start_delay, updated_timing.start_delay);
+  EXPECT_EQ(control_timing.start_delay.AsTimeValue(),
+            updated_timing.start_delay.AsTimeValue());
   EXPECT_EQ(control_timing.fill_mode, updated_timing.fill_mode);
   EXPECT_EQ(control_timing.iteration_start, updated_timing.iteration_start);
   EXPECT_EQ(control_timing.iteration_count, updated_timing.iteration_count);

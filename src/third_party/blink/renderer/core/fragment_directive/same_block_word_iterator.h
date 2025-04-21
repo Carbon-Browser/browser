@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,7 +45,7 @@ class CORE_EXPORT ForwardDirection {
 
   // Returns the position of the next word.
   static int FindNextWordPos(const String& text, int position) {
-    return FindNextWordForward(text.Characters16(), text.length(), position);
+    return FindNextWordForward(text.Span16(), position);
   }
 
   // Returns substring of the given text for the given positions.
@@ -93,7 +93,7 @@ class CORE_EXPORT BackwardDirection {
 
   // Returns the position of the previous word.
   static int FindNextWordPos(String text, int position) {
-    return FindNextWordBackward(text.Characters16(), text.length(), position);
+    return FindNextWordBackward(text.Span16(), position);
   }
 
   // Returns substring of the given text for the given positions.

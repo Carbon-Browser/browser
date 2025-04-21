@@ -1,13 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/mediastream/media_stream_source.h"
 
+#include <optional>
+
 #include "build/build_config.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/platform/audio/audio_bus.h"
 #include "third_party/blink/renderer/platform/mediastream/webaudio_destination_consumer.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
@@ -28,8 +29,9 @@ class MediaStreamSourceTest : public testing::Test {
   void SetUp() override {
     source = MakeGarbageCollected<MediaStreamSource>(
         String::FromUTF8("audio_id"), MediaStreamSource::kTypeAudio,
-        String::FromUTF8("audio_track"), false /* remote */,
-        MediaStreamSource::kReadyStateLive, true /* requires_consumer */);
+        String::FromUTF8("audio_track"), /*remote=*/false,
+        /*platform_source=*/nullptr, MediaStreamSource::kReadyStateLive,
+        /*requires_consumer=*/true);
     bus = AudioBus::Create(2, 10);
   }
   ~MediaStreamSourceTest() override = default;

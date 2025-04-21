@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,18 +13,19 @@
 
 const parameterCommentFormatRule = {
   create: (context) => {
-    const sourceCode = context.getSourceCode();
+    const {sourceCode} = context;
     return {
       /* eslint-disable-next-line @typescript-eslint/naming-convention */
       CallExpression(node) {
         for (const arg of node.arguments) {
-          const comments = sourceCode.getComments(arg);
-          for (const comment of comments.leading) {
+          const comments = sourceCode.getCommentsBefore(arg);
+          for (const comment of comments) {
             const {type, value} = comment;
             if (type !== 'Block') {
               continue;
             }
-            if (!value.match(/ \w+= /)) {
+            if (!value.match(/ \w+= /) &&
+                !value.match(/^\s*eslint-disable-next-line/)) {
               context.report({
                 node: comment,
                 message: 'Inline block comment for parameters' +
@@ -90,7 +91,7 @@ const todoFormatRule = {
       return !/TODO(?!\((b\/\d+|crbug\.com\/\d+|[a-z]+)\))/g.test(comment);
     }
 
-    const sourceCode = context.getSourceCode();
+    const {sourceCode} = context;
     return {
       /* eslint-disable-next-line @typescript-eslint/naming-convention */
       Program: function() {
@@ -100,8 +101,40 @@ const todoFormatRule = {
           if (!verifyTodo(commentValue)) {
             context.report({
               node: comment,
-              message: `Use: TODO(ldap) / TODO(b/123) / TODO(crbug.com/123)`,
+              message: `Use: TODO(ldap) / TODO(b/123456789) /` +
+                  ` TODO(crbug.com/123456789)`,
             });
+          }
+        }
+      },
+    };
+  },
+};
+
+const stringEnumOrder = {
+  create: (context) => {
+    return {
+      /* eslint-disable-next-line @typescript-eslint/naming-convention */
+      TSEnumDeclaration(node) {
+        if (!node.members.every(
+                (member) => typeof member.initializer?.value === 'string')) {
+          // Skip if it isn't a string enum.
+          return;
+        }
+        const sortedNames =
+            node.members.map((member) => member.id.name)
+                .sort(
+                    (a, b) => a.toLowerCase().localeCompare(b.toLowerCase()),
+                );
+        for (let i = 0; i < node.members.length; i++) {
+          const correctName = sortedNames[i];
+          const member = node.members[i];
+          if (member.id.name !== correctName) {
+            context.report({
+              node: member,
+              message: `"${member.id.name}" should be after "${correctName}".`,
+            });
+            break;
           }
         }
       },
@@ -115,5 +148,6 @@ module.exports = {
     'parameter-comment-format': parameterCommentFormatRule,
     'generic-parameter-on-declaration-type': genericParameterOnDeclarationType,
     'todo-format': todoFormatRule,
+    'string-enum-order': stringEnumOrder,
   },
 };

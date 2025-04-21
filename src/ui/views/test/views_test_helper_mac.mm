@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #import <Cocoa/Cocoa.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "ui/base/test/scoped_fake_nswindow_focus.h"
 #include "ui/base/test/scoped_fake_nswindow_fullscreen.h"
 #include "ui/base/test/ui_controls.h"
@@ -26,7 +26,7 @@ ViewsTestHelperMac::ViewsTestHelperMac() {
   // Unbundled applications (those without Info.plist) default to
   // NSApplicationActivationPolicyProhibited, which prohibits the application
   // obtaining key status or activating windows without user interaction.
-  [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+  NSApp.activationPolicy = NSApplicationActivationPolicyRegular;
 
   ui::test::EventGeneratorDelegate::SetFactoryFunction(
       base::BindRepeating(&test::CreateEventGeneratorDelegateMac));
@@ -50,9 +50,10 @@ ViewsTestHelperMac::~ViewsTestHelperMac() {
   // Unit tests on Aura may create Widgets owned by a RootWindow that gets torn
   // down, but on Mac we need to be more explicit.
   @autoreleasepool {
-    NSArray* native_windows = [NSApp windows];
-    for (NSWindow* window : native_windows)
+    NSArray* native_windows = NSApp.windows;
+    for (NSWindow* window : native_windows) {
       DCHECK(!Widget::GetWidgetForNativeWindow(window)) << "Widget not closed.";
+    }
 
     ui::test::EventGeneratorDelegate::SetFactoryFunction(
         ui::test::EventGeneratorDelegate::FactoryFunction());
@@ -61,9 +62,15 @@ ViewsTestHelperMac::~ViewsTestHelperMac() {
 
 void ViewsTestHelperMac::SetUpTestViewsDelegate(
     TestViewsDelegate* delegate,
-    absl::optional<ViewsDelegate::NativeWidgetFactory> factory) {
+    std::optional<ViewsDelegate::NativeWidgetFactory> factory) {
   ViewsTestHelper::SetUpTestViewsDelegate(delegate, std::move(factory));
   delegate->set_context_factory(context_factories_.GetContextFactory());
+}
+
+void ViewsTestHelperMac::TearDownTestViewsDelegate(
+    TestViewsDelegate* delegate) {
+  delegate->set_context_factory(nullptr);
+  ViewsTestHelper::TearDownTestViewsDelegate(delegate);
 }
 
 }  // namespace views

@@ -1,6 +1,6 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
-// // found in the LICENSE file.
+// found in the LICENSE file.
 
 #ifndef COMPONENTS_TRANSLATE_CORE_BROWSER_MOCK_TRANSLATE_METRICS_LOGGER_H_
 #define COMPONENTS_TRANSLATE_CORE_BROWSER_MOCK_TRANSLATE_METRICS_LOGGER_H_
@@ -35,14 +35,13 @@ class MockTranslateMetricsLogger : public TranslateMetricsLogger {
   MOCK_METHOD0(LogRankerStart, void());
   MOCK_METHOD0(LogRankerFinish, void());
   MOCK_METHOD1(LogTriggerDecision, void(TriggerDecision));
-  MOCK_METHOD0(LogAutofillAssistantDeferredTriggerDecision, void());
   MOCK_METHOD0(LogInitialState, void());
   MOCK_METHOD1(LogHTMLContentLanguage, void(const std::string&));
   MOCK_METHOD1(LogHTMLDocumentLanguage, void(const std::string&));
   MOCK_METHOD1(LogDetectedLanguage, void(const std::string&));
   MOCK_METHOD1(LogDetectionReliabilityScore, void(const float&));
   MOCK_METHOD1(LogTranslationStarted, void(TranslationType));
-  MOCK_METHOD2(LogTranslationFinished, void(bool, TranslateErrors::Type));
+  MOCK_METHOD2(LogTranslationFinished, void(bool, TranslateErrors));
   MOCK_METHOD0(LogReversion, void());
   MOCK_METHOD1(LogUIChange, void(bool));
   MOCK_METHOD1(LogOmniboxIconChange, void(bool));

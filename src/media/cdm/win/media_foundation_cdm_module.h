@@ -1,14 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_CDM_WIN_MEDIA_FOUNDATION_CDM_MODULE_H_
 #define MEDIA_CDM_WIN_MEDIA_FOUNDATION_CDM_MODULE_H_
 
-#include <string>
-
 #include <mfcontentdecryptionmodule.h>
 #include <wrl.h>
+
+#include <string>
 
 #include "base/files/file_path.h"
 #include "base/scoped_native_library.h"
@@ -27,7 +27,7 @@ class MEDIA_EXPORT MediaFoundationCdmModule {
   // CDM is an OS or store CDM, `cdm_path` could be empty. See implementation
   // details in ActivateCdmFactory() for how OS or store CDMs are handled.
   // Must only be called once.
-  void Initialize(const base::FilePath& cdm_path);
+  bool Initialize(const base::FilePath& cdm_path);
 
   HRESULT GetCdmFactory(
       const std::string& key_system,
@@ -44,7 +44,12 @@ class MEDIA_EXPORT MediaFoundationCdmModule {
   // Declared first so it's destructed after `cdm_factory_`.
   base::ScopedNativeLibrary library_;
 
+  // Indicates whether Initialize() has been called.
   bool initialized_ = false;
+
+  // Indicates whether ActivateCdmFactory() has been called.
+  bool activated_ = false;
+
   base::FilePath cdm_path_;
   std::string key_system_;
   Microsoft::WRL::ComPtr<IMFContentDecryptionModuleFactory> cdm_factory_;

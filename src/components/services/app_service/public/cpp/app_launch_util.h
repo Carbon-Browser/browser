@@ -1,21 +1,31 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SERVICES_APP_SERVICE_PUBLIC_CPP_APP_LAUNCH_UTIL_H_
 #define COMPONENTS_SERVICES_APP_SERVICE_PUBLIC_CPP_APP_LAUNCH_UTIL_H_
 
-#include "components/services/app_service/public/mojom/types.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <iosfwd>
+#include <optional>
+
+#include "base/component_export.h"
+#include "components/services/app_service/public/protos/app_types.pb.h"
 #include "ui/gfx/geometry/rect.h"
 
 namespace apps {
 
-// Enumeration of possible app launch sources.
-// This should be kept in sync with metadata/apps/histograms.xml, and
-// LaunchSource in enums.xml.
-// Note the enumeration is used in UMA histogram so entries should not be
-// re-ordered or removed. New entries should be added at the bottom.
+// Enumeration of possible app launch sources. When adding a new entry to this
+// enum:
+// - Update DefaultAppLaunchSource in metadata/apps/histograms.xml
+// - Update LaunchSource in enums.xml
+// - Update ApplicationLaunchSource in
+//   //components/services/app_service/public/protos/app_types.proto.
+//
+// This is used for metrics, persisted to logs, and we should not
+//   - change the assigned value, nor
+//   - reuse the value which was used (even in past historically)
+// Email chromeos-data-team@google.com to request a corresponding change to
+// backend enums.
 enum class LaunchSource {
   kUnknown = 0,
   kFromAppListGrid = 1,              // Grid of apps, not the search box.
@@ -52,10 +62,23 @@ enum class LaunchSource {
   kFromOsLogin = 29,                   // Run on OS login.
   kFromProtocolHandler = 30,           // Protocol handler.
   kFromUrlHandler = 31,                // Url handler.
+  kFromLockScreen = 32,                // Lock screen app launcher.
+  kFromAppHomePage = 33,               // App Home (chrome://apps) page.
+  kFromReparenting = 34,               // Moving content into an app.
+  kFromProfileMenu =
+      35,  // Profile menu of installable chrome://password-manager WebUI.
+  kFromSysTrayCalendar = 36,      // Launches from the system tray Calendar.
+  kFromInstaller = 37,            // Installation UI
+  kFromFirstRun = 38,             // First Run.
+  kFromWelcomeTour = 39,          // Welcome Tour.
+  kFromFocusMode = 40,            // Focus Mode panel.
+  kFromSparky = 41,               // From Sparky feature.
+  kFromNavigationCapturing = 42,  // Web App Navigation Capturing.
+  kFromWebInstallApi = 43,        // Web Install API.
 
   // Add any new values above this one, and update kMaxValue to the highest
   // enumerator value.
-  kMaxValue = kFromUrlHandler,
+  kMaxValue = kFromWebInstallApi,
 };
 
 // Don't remove items or change the order of this enum.  It's used in
@@ -81,28 +104,17 @@ struct COMPONENT_EXPORT(APP_TYPES) WindowInfo {
   int32_t window_id = -1;
   int32_t state = 0;
   int64_t display_id = -1;
-  absl::optional<gfx::Rect> bounds;
+  std::optional<gfx::Rect> bounds;
 };
 
 using WindowInfoPtr = std::unique_ptr<WindowInfo>;
 
-// TODO(crbug.com/1253250): Remove these functions after migrating to non-mojo
-// AppService.
 COMPONENT_EXPORT(APP_TYPES)
-LaunchSource ConvertMojomLaunchSourceToLaunchSource(
-    apps::mojom::LaunchSource mojom_launch_source);
-
-COMPONENT_EXPORT(APP_TYPES)
-apps::mojom::LaunchSource ConvertLaunchSourceToMojomLaunchSource(
+ApplicationLaunchSource ConvertLaunchSourceToProtoApplicationLaunchSource(
     LaunchSource launch_source);
 
 COMPONENT_EXPORT(APP_TYPES)
-WindowInfoPtr ConvertMojomWindowInfoToWindowInfo(
-    const apps::mojom::WindowInfoPtr& mojom_window_info);
-
-COMPONENT_EXPORT(APP_TYPES)
-apps::mojom::WindowInfoPtr ConvertWindowInfoToMojomWindowInfo(
-    const WindowInfoPtr& mojom_window_info);
+std::ostream& operator<<(std::ostream& out, LaunchSource launch_source);
 
 }  // namespace apps
 

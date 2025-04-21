@@ -1,14 +1,14 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/base/ime/mock_input_method.h"
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/observer_list.h"
 #include "build/build_config.h"
-#include "ui/base/ime/input_method_delegate.h"
+#include "ui/base/ime/ime_key_event_dispatcher.h"
 #include "ui/base/ime/text_input_client.h"
 #include "ui/events/event.h"
 
@@ -18,16 +18,17 @@
 
 namespace ui {
 
-MockInputMethod::MockInputMethod(internal::InputMethodDelegate* delegate)
-    : text_input_client_(nullptr), delegate_(delegate) {}
+MockInputMethod::MockInputMethod(
+    ImeKeyEventDispatcher* ime_key_event_dispatcher)
+    : ime_key_event_dispatcher_(ime_key_event_dispatcher) {}
 
 MockInputMethod::~MockInputMethod() {
-  for (InputMethodObserver& observer : observer_list_)
-    observer.OnInputMethodDestroyed(this);
+  observer_list_.Notify(&InputMethodObserver::OnInputMethodDestroyed, this);
 }
 
-void MockInputMethod::SetDelegate(internal::InputMethodDelegate* delegate) {
-  delegate_ = delegate;
+void MockInputMethod::SetImeKeyEventDispatcher(
+    ImeKeyEventDispatcher* ime_key_event_dispatcher) {
+  ime_key_event_dispatcher_ = ime_key_event_dispatcher;
 }
 
 void MockInputMethod::SetFocusedTextInputClient(TextInputClient* client) {
@@ -55,19 +56,15 @@ ui::EventDispatchDetails MockInputMethod::DispatchKeyEvent(
     if (event->handled())
       return EventDispatchDetails();
   }
-  return delegate_->DispatchKeyEventPostIME(event);
+  return ime_key_event_dispatcher_->DispatchKeyEventPostIME(event);
 }
 
 void MockInputMethod::OnFocus() {
-  for (InputMethodObserver& observer : observer_list_)
-    observer.OnFocus();
+  observer_list_.Notify(&InputMethodObserver::OnFocus);
 }
 
-void MockInputMethod::OnTouch(ui::EventPointerType pointerType) {}
-
 void MockInputMethod::OnBlur() {
-  for (InputMethodObserver& observer : observer_list_)
-    observer.OnBlur();
+  observer_list_.Notify(&InputMethodObserver::OnBlur);
 }
 
 #if BUILDFLAG(IS_WIN)
@@ -83,16 +80,16 @@ void MockInputMethod::OnInputLocaleChanged() {}
 bool MockInputMethod::IsInputLocaleCJK() const {
   return false;
 }
+
+void MockInputMethod::OnUrlChanged() {}
 #endif
 
 void MockInputMethod::OnTextInputTypeChanged(TextInputClient* client) {
-  for (InputMethodObserver& observer : observer_list_)
-    observer.OnTextInputStateChanged(client);
+  observer_list_.Notify(&InputMethodObserver::OnTextInputStateChanged, client);
 }
 
 void MockInputMethod::OnCaretBoundsChanged(const TextInputClient* client) {
-  for (InputMethodObserver& observer : observer_list_)
-    observer.OnCaretBoundsChanged(client);
+  observer_list_.Notify(&InputMethodObserver::OnCaretBoundsChanged, client);
 }
 
 void MockInputMethod::CancelComposition(const TextInputClient* client) {
@@ -107,8 +104,9 @@ bool MockInputMethod::IsCandidatePopupOpen() const {
 }
 
 void MockInputMethod::SetVirtualKeyboardVisibilityIfEnabled(bool should_show) {
-  for (InputMethodObserver& observer : observer_list_)
-    observer.OnVirtualKeyboardVisibilityChangedIfEnabled(should_show);
+  observer_list_.Notify(
+      &InputMethodObserver::OnVirtualKeyboardVisibilityChangedIfEnabled,
+      should_show);
 }
 
 void MockInputMethod::AddObserver(InputMethodObserver* observer) {
@@ -122,5 +120,8 @@ void MockInputMethod::RemoveObserver(InputMethodObserver* observer) {
 VirtualKeyboardController* MockInputMethod::GetVirtualKeyboardController() {
   return &keyboard_controller_;
 }
+
+void MockInputMethod::SetVirtualKeyboardControllerForTesting(
+    std::unique_ptr<VirtualKeyboardController> controller) {}
 
 }  // namespace ui

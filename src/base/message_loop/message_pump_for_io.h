@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@
 #elif BUILDFLAG(IS_FUCHSIA)
 #include "base/message_loop/message_pump_fuchsia.h"
 #elif BUILDFLAG(IS_POSIX)
-#include "base/message_loop/message_pump_libevent.h"
+#include "base/message_loop/message_pump_epoll.h"
 #endif
 
 namespace base {
@@ -39,7 +39,7 @@ using MessagePumpForIO = MessagePumpDefault;
 #elif BUILDFLAG(IS_FUCHSIA)
 using MessagePumpForIO = MessagePumpFuchsia;
 #elif BUILDFLAG(IS_POSIX)
-using MessagePumpForIO = MessagePumpLibevent;
+using MessagePumpForIO = MessagePumpEpoll;
 #else
 #error Platform does not define MessagePumpForIO
 #endif

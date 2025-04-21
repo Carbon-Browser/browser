@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,8 @@
 namespace blink {
 namespace {
 
-const char kTimeUMAPrefix[] = "TimeTo.";
+const char kTimeToResolveUmaPrefix[] = "TimeTo.";
+const char kTimeToRejectUmaPrefix[] = "TimeTo.Reject.";
 
 CdmResultForUMA ConvertStatusToUMAResult(SessionInitStatus status) {
   switch (status) {
@@ -27,7 +28,6 @@ CdmResultForUMA ConvertStatusToUMAResult(SessionInitStatus status) {
       return SESSION_ALREADY_EXISTS;
   }
   NOTREACHED();
-  return INVALID_STATE_ERROR;
 }
 
 }  // namespace
@@ -45,7 +45,6 @@ static WebContentDecryptionModuleResult::SessionStatus ConvertStatus(
       return WebContentDecryptionModuleResult::kSessionAlreadyExists;
   }
   NOTREACHED();
-  return WebContentDecryptionModuleResult::kSessionNotFound;
 }
 
 NewSessionCdmResultPromise::NewSessionCdmResultPromise(
@@ -83,10 +82,9 @@ void NewSessionCdmResultPromise::resolve(const std::string& session_id) {
   MarkPromiseSettled();
   ReportCdmResultUMA(key_system_uma_prefix_ + uma_name_, 0,
                      ConvertStatusToUMAResult(status));
-
-  // Only report time for promise resolution (not rejection).
-  base::UmaHistogramTimes(key_system_uma_prefix_ + kTimeUMAPrefix + uma_name_,
-                          base::TimeTicks::Now() - creation_time_);
+  base::UmaHistogramTimes(
+      key_system_uma_prefix_ + kTimeToResolveUmaPrefix + uma_name_,
+      base::TimeTicks::Now() - creation_time_);
 
   web_cdm_result_.CompleteWithSession(ConvertStatus(status));
 }
@@ -100,6 +98,10 @@ void NewSessionCdmResultPromise::reject(CdmPromise::Exception exception_code,
   MarkPromiseSettled();
   ReportCdmResultUMA(key_system_uma_prefix_ + uma_name_, system_code,
                      ConvertCdmExceptionToResultForUMA(exception_code));
+  base::UmaHistogramTimes(
+      key_system_uma_prefix_ + kTimeToRejectUmaPrefix + uma_name_,
+      base::TimeTicks::Now() - creation_time_);
+
   web_cdm_result_.CompleteWithError(ConvertCdmException(exception_code),
                                     system_code,
                                     WebString::FromUTF8(error_message));

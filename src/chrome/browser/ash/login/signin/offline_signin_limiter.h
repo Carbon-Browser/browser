@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,11 @@
 
 #include <memory>
 
-#include "ash/components/login/auth/public/user_context.h"
+#include "base/memory/raw_ptr.h"
 #include "base/power_monitor/power_observer.h"
 #include "base/time/time.h"
 #include "base/timer/wall_clock_timer.h"
+#include "chromeos/ash/components/login/auth/public/user_context.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/session_manager/core/session_manager_observer.h"
@@ -31,14 +32,20 @@ class OfflineSigninLimiter : public KeyedService,
                              public base::PowerSuspendObserver,
                              public session_manager::SessionManagerObserver {
  public:
+  // `profile` and `clock` must remain valid until Shutdown() is called. If
+  // `clock` is NULL, the shared base::DefaultClock instance will be used.
+  OfflineSigninLimiter(Profile* profile, const base::Clock* clock);
   OfflineSigninLimiter(const OfflineSigninLimiter&) = delete;
   OfflineSigninLimiter& operator=(const OfflineSigninLimiter&) = delete;
+  ~OfflineSigninLimiter() override;  // public for testing purpose only.
 
   // Called when the user successfully authenticates. `auth_flow` indicates
   // the type of authentication flow that the user went through.
   void SignedIn(UserContext::AuthFlow auth_flow);
 
   base::WallClockTimer* GetTimerForTesting();
+
+  base::WallClockTimer* GetLockscreenTimerForTesting();
 
   // KeyedService:
   void Shutdown() override;
@@ -49,11 +56,6 @@ class OfflineSigninLimiter : public KeyedService,
  private:
   friend class OfflineSigninLimiterFactory;
   friend class OfflineSigninLimiterTest;
-
-  // `profile` and `clock` must remain valid until Shutdown() is called. If
-  // `clock` is NULL, the shared base::DefaultClock instance will be used.
-  OfflineSigninLimiter(Profile* profile, const base::Clock* clock);
-  ~OfflineSigninLimiter() override;
 
   // Recalculates the amount of time remaining until online login should be
   // forced and sets the `offline_signin_limit_timer_` accordingly. If the limit
@@ -67,14 +69,16 @@ class OfflineSigninLimiter : public KeyedService,
   // immediately.
   void UpdateLockScreenLimit();
 
-  // Convenience method to get the time limit for SAML and no-SAML flows
-  // taking into consideration a possible override from the command line.
+  // Reads the timestamp of the last online signin of the user from the Local
+  // State.
+  base::Time GetLastOnlineSigninTime();
+
+  // Convenience method to get the time limit for SAML and no-SAML flows.
   // Returns nullopt if it is an invalid time.
-  absl::optional<base::TimeDelta> GetGaiaNoSamlTimeLimit();
-  absl::optional<base::TimeDelta> GetGaiaSamlTimeLimit();
-  absl::optional<base::TimeDelta> GetGaiaNoSamlLockScreenTimeLimit();
-  absl::optional<base::TimeDelta> GetGaiaSamlLockScreenTimeLimit();
-  absl::optional<base::TimeDelta> GetTimeLimitOverrideForTesting();
+  std::optional<base::TimeDelta> GetGaiaNoSamlTimeLimit();
+  std::optional<base::TimeDelta> GetGaiaSamlTimeLimit();
+  std::optional<base::TimeDelta> GetGaiaNoSamlLockScreenTimeLimit();
+  std::optional<base::TimeDelta> GetGaiaSamlLockScreenTimeLimit();
 
   // Sets the flag enforcing online login. This will cause the user's next login
   // to use online authentication against GAIA.
@@ -85,10 +89,13 @@ class OfflineSigninLimiter : public KeyedService,
 
   // Stores the last online login time and offline login time limit
   void UpdateOnlineSigninData(base::Time time,
-                              absl::optional<base::TimeDelta> limit);
+                              std::optional<base::TimeDelta> limit);
 
-  Profile* profile_;
-  const base::Clock* clock_;
+  // Helper function to get user for the given profile_.
+  const user_manager::User& GetUser();
+
+  raw_ptr<Profile> profile_;
+  raw_ptr<const base::Clock> clock_;
 
   PrefChangeRegistrar pref_change_registrar_;
 

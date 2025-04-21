@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -66,9 +66,12 @@ class COMPONENT_EXPORT(UI_BASE_X) SelectionFormatMap {
   void Insert(x11::Atom atom,
               const scoped_refptr<base::RefCountedMemory>& item);
 
-  // Returns the first of the requested_types or NULL if missing.
+  // Returns the first of the |requested_types| or NULL if missing.
   ui::SelectionData GetFirstOf(
       const std::vector<x11::Atom>& requested_types) const;
+
+  // Returns the |SelectionData| of the |requested_type| or NULL if missing.
+  ui::SelectionData Get(x11::Atom requested_type) const;
 
   // Returns all the selected types.
   std::vector<x11::Atom> GetTypes() const;

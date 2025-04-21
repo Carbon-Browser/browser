@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,13 +30,13 @@ class LoginUIService : public KeyedService {
     virtual void FocusUI() = 0;
 
    protected:
-    virtual ~LoginUI() {}
+    virtual ~LoginUI() = default;
   };
 
   // Used when the sync confirmation UI is closed to signify which option was
   // selected by the user.
   enum SyncConfirmationUIClosedResult {
-    // TODO(crbug.com/1141341): Rename the first option to make it work better
+    // TODO(crbug.com/40727110): Rename the first option to make it work better
     // for the sync-disabled variant of the UI.
     // Start sync immediately, if sync can be enabled. Otherwise, keep the user
     // signed in (with sync disabled).
@@ -59,7 +59,7 @@ class LoginUIService : public KeyedService {
         SyncConfirmationUIClosedResult result) {}
 
    protected:
-    virtual ~Observer() {}
+    virtual ~Observer() = default;
   };
 
   explicit LoginUIService(Profile* profile);
@@ -87,13 +87,19 @@ class LoginUIService : public KeyedService {
   // option chosen by the user in the confirmation UI.
   void SyncConfirmationUIClosed(SyncConfirmationUIClosedResult result);
 
-  // Displays login results. This is either the Modal Signin Error dialog if
-  // |error.message()| is a non-empty string, or the User Menu with a blue
-  // header toast otherwise.
-  virtual void DisplayLoginResult(Browser* browser, const SigninUIError& error);
+  // If `error.message()` is not empty, displays login error message:
+  // - in the Modal Signin Error dialog if `browser` is not null, otherwise
+  // - in a dialog shown on top of the profile picker if `from_profile_picker`
+  //   is true.
+  // TODO(crbug.com/381231566): `from_profile_picker` is not used anymore and is
+  // now dead code, it should be removed in upcoming changes along with
+  // associated code that sets it.
+  void DisplayLoginResult(Browser* browser,
+                          const SigninUIError& error,
+                          bool from_profile_picker);
 
   // Set the profile blocking modal error dialog message.
-  virtual void SetProfileBlockingErrorMessage();
+  void SetProfileBlockingErrorMessage();
 
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
   // Gets the last error set through |DisplayLoginResult|.
@@ -102,7 +108,7 @@ class LoginUIService : public KeyedService {
 
  private:
   // Weak pointers to the recently opened UIs, with the most recent in front.
-  std::list<LoginUI*> ui_list_;
+  std::list<raw_ptr<LoginUI, CtnExperimental>> ui_list_;
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
   raw_ptr<Profile> profile_;
   SigninUIError last_login_error_ = SigninUIError::Ok();

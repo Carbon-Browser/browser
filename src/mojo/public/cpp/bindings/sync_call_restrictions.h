@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,20 +21,16 @@ class CastCdmOriginProvider;
 
 namespace content {
 class AndroidOverlaySyncHelper;
-class DesktopCapturerLacros;
 class StreamTextureFactory;
 #if BUILDFLAG(IS_WIN)
 class DCOMPTextureFactory;
 #endif
 }  // namespace content
 
-namespace crosapi {
-class ScopedAllowSyncCall;
-}  // namespace crosapi
-
 namespace gpu {
 class CommandBufferProxyImpl;
 class GpuChannelHost;
+class SharedImageInterfaceProxy;
 }  // namespace gpu
 
 namespace ui {
@@ -46,6 +42,12 @@ class GpuHostImpl;
 class HostFrameSinkManager;
 class HostGpuMemoryBufferManager;
 }  // namespace viz
+
+#if BUILDFLAG(IS_MAC)
+namespace web_app {
+class WebAppShortcutCopierSyncCallHelper;
+}  // namespace web_app
+#endif
 
 namespace mojo {
 class ScopedAllowSyncCallForTesting;
@@ -86,15 +88,25 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS) SyncCallRestrictions {
   static void DisallowSyncCall() {}
 #endif
 
+  // Globally disables sync call interrupts. This means that all sync calls in
+  // the current process will be strictly blocking until a reply is received,
+  // and no incoming sync calls can dispatch on the blocking thread in interim.
+  static void DisableSyncCallInterrupts();
+
+  // Used only in tests to re-enable sync call interrupts after disabling them.
+  static void EnableSyncCallInterruptsForTesting();
+
+  // Indicates whether sync call interrupts are enabled in the calling process.
+  // They're enabled by default, so any sync message that isn't marked [Sync]
+  // may have its blocking call interrupted to dispatch other incoming sync
+  // IPCs which target the blocking thread.
+  static bool AreSyncCallInterruptsEnabled();
+
  private:
   // DO NOT ADD ANY OTHER FRIEND STATEMENTS, talk to mojo/OWNERS first.
   // BEGIN ALLOWED USAGE.
   // SynchronousCompositorHost is used for Android webview.
   friend class content::SynchronousCompositorHost;
-  // Lacros-chrome is allowed to make sync calls to ash-chrome to mimic
-  // cross-platform sync APIs.
-  friend class content::DesktopCapturerLacros;
-  friend class crosapi::ScopedAllowSyncCall;
   friend class mojo::ScopedAllowSyncCallForTesting;
   friend class viz::GpuHostImpl;
   // For destroying the GL context/surface that draw to a platform window before
@@ -115,9 +127,13 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS) SyncCallRestrictions {
   // GPU client code uses a few sync IPCs, grandfathered in from legacy IPC.
   friend class gpu::GpuChannelHost;
   friend class gpu::CommandBufferProxyImpl;
+  friend class gpu::SharedImageInterfaceProxy;
   friend class content::StreamTextureFactory;
 #if BUILDFLAG(IS_WIN)
   friend class content::DCOMPTextureFactory;
+#endif
+#if BUILDFLAG(IS_MAC)
+  friend class web_app::WebAppShortcutCopierSyncCallHelper;
 #endif
   // END ALLOWED USAGE.
 
@@ -144,9 +160,7 @@ class COMPONENT_EXPORT(MOJO_CPP_BINDINGS) SyncCallRestrictions {
     ~ScopedAllowSyncCall() { DecreaseScopedAllowCount(); }
 
    private:
-#if ENABLE_SYNC_CALL_RESTRICTIONS
     base::ScopedAllowBaseSyncPrimitivesOutsideBlockingScope allow_wait_;
-#endif
   };
 };
 

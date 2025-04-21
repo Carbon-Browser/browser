@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,14 +10,16 @@
 
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/payments/content/android/byte_buffer_helper.h"
-#include "components/payments/content/android/jni_headers/JniPaymentApp_jni.h"
 #include "components/payments/content/android/payment_handler_host.h"
 #include "components/payments/content/payment_request_converter.h"
 #include "components/payments/core/payment_method_data.h"
 #include "third_party/blink/public/mojom/payments/payment_request.mojom.h"
 #include "ui/gfx/android/java_bitmap.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "components/payments/content/android/jni_headers/JniPaymentApp_jni.h"
 
 namespace payments {
 namespace {
@@ -66,6 +68,8 @@ ScopedJavaLocalRef<jobjectArray> JniPaymentApp::GetInstrumentMethodNames(
                                     payment_app_->GetAppMethodNames().end()));
 }
 
+// TODO(crbug.com/40182225): Remove jdata_byte_buffer here, as it is no longer
+// used.
 bool JniPaymentApp::IsValidForPaymentMethodData(
     JNIEnv* env,
     const JavaParamRef<jstring>& jmethod,
@@ -84,9 +88,7 @@ bool JniPaymentApp::IsValidForPaymentMethodData(
 
   PaymentMethodData data = ConvertPaymentMethodData(mojo_data);
   return payment_app_->IsValidForModifier(
-      ConvertJavaStringToUTF8(env, jmethod), !data.supported_networks.empty(),
-      std::set<std::string>(data.supported_networks.begin(),
-                            data.supported_networks.end()));
+      ConvertJavaStringToUTF8(env, jmethod));
 }
 
 bool JniPaymentApp::HandlesShippingAddress(JNIEnv* env) {
@@ -105,12 +107,7 @@ bool JniPaymentApp::HandlesPayerPhone(JNIEnv* env) {
   return payment_app_->HandlesPayerPhone();
 }
 
-ScopedJavaLocalRef<jstring> JniPaymentApp::GetCountryCode(JNIEnv* env) {
-  // Only autofill payment apps have country code.
-  return nullptr;
-}
-
-bool JniPaymentApp::CanMakePayment(JNIEnv* env) {
+bool JniPaymentApp::HasEnrolledInstrument(JNIEnv* env) {
   // ChromePaymentRequestService.java uses this value to determine whether
   // PaymentRequest.hasEnrolledInstrument() should return true.
   return payment_app_->HasEnrolledInstrument();

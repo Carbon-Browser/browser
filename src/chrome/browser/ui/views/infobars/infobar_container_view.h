@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,23 +16,26 @@
 // The views-specific implementation of InfoBarContainer.
 class InfoBarContainerView : public views::AccessiblePaneView,
                              public infobars::InfoBarContainer {
+  METADATA_HEADER(InfoBarContainerView, views::AccessiblePaneView)
+
  public:
-  METADATA_HEADER(InfoBarContainerView);
   explicit InfoBarContainerView(Delegate* delegate);
   InfoBarContainerView(const InfoBarContainerView&) = delete;
   InfoBarContainerView& operator=(const InfoBarContainerView&) = delete;
   ~InfoBarContainerView() override;
 
+  // Returns true if there are no infobars.
+  bool IsEmpty() const;
+
   // views::AccessiblePaneView:
-  void Layout() override;
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
-  gfx::Size CalculatePreferredSize() const override;
+  void Layout(PassKey) override;
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override;
 
   // InfobarContainer:
   void PlatformSpecificAddInfoBar(infobars::InfoBar* infobar,
                                   size_t position) override;
   void PlatformSpecificRemoveInfoBar(infobars::InfoBar* infobar) override;
-  void PlatformSpecificInfoBarStateChanged(bool is_animating) override;
 
  private:
   // This view draws the shadow over the web contents below the

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,8 +22,8 @@ class UkmConfig {
   UkmConfig();
   ~UkmConfig();
 
-  UkmConfig(UkmConfig&) = delete;
-  UkmConfig& operator=(UkmConfig&) = delete;
+  UkmConfig(const UkmConfig&) = delete;
+  UkmConfig& operator=(const UkmConfig&) = delete;
 
   // Merge all the events from the given |config|. Returns whether new UKM
   // events were added to the current config as a result of merging.

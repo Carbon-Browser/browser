@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,7 +40,7 @@ LocationBarModelImpl::LocationBarModelImpl(LocationBarModelDelegate* delegate,
   DCHECK(delegate_);
 }
 
-LocationBarModelImpl::~LocationBarModelImpl() {}
+LocationBarModelImpl::~LocationBarModelImpl() = default;
 
 // LocationBarModelImpl Implementation.
 std::u16string LocationBarModelImpl::GetFormattedFullURL() const {
@@ -159,37 +159,42 @@ net::CertStatus LocationBarModelImpl::GetCertStatus() const {
 }
 
 OmniboxEventProto::PageClassification
-LocationBarModelImpl::GetPageClassification(OmniboxFocusSource focus_source) {
+LocationBarModelImpl::GetPageClassification(bool is_prefetch) const {
   // We may be unable to fetch the current URL during startup or shutdown when
   // the omnibox exists but there is no attached page.
   GURL gurl;
-  if (!delegate_->GetURL(&gurl))
+  if (!delegate_->GetURL(&gurl)) {
     return OmniboxEventProto::OTHER;
-
+  }
   if (delegate_->IsNewTabPage()) {
-    // Note that we treat OMNIBOX as the source if focus_source_ is INVALID,
-    // i.e., if input isn't actually in progress.
-    return (focus_source == OmniboxFocusSource::FAKEBOX)
-               ? OmniboxEventProto::INSTANT_NTP_WITH_FAKEBOX_AS_STARTING_FOCUS
+    return is_prefetch ? OmniboxEventProto::NTP_ZPS_PREFETCH
                : OmniboxEventProto::INSTANT_NTP_WITH_OMNIBOX_AS_STARTING_FOCUS;
   }
-  if (!gurl.is_valid())
+  if (!gurl.is_valid()) {
     return OmniboxEventProto::INVALID_SPEC;
-  if (delegate_->IsNewTabPageURL(gurl))
-    return OmniboxEventProto::NTP;
-  if (gurl.spec() == url::kAboutBlankURL)
+  }
+  if (delegate_->IsNewTabPageURL(gurl)) {
+    return is_prefetch ? OmniboxEventProto::NTP_ZPS_PREFETCH
+                       : OmniboxEventProto::NTP;
+  }
+  if (gurl.spec() == url::kAboutBlankURL) {
     return OmniboxEventProto::BLANK;
-  if (delegate_->IsHomePage(gurl))
+  }
+  if (delegate_->IsHomePage(gurl)) {
     return OmniboxEventProto::HOME_PAGE;
+  }
 
   TemplateURLService* template_url_service = delegate_->GetTemplateURLService();
   if (template_url_service &&
       template_url_service->IsSearchResultsPageFromDefaultSearchProvider(
           gurl)) {
-    return OmniboxEventProto::SEARCH_RESULT_PAGE_NO_SEARCH_TERM_REPLACEMENT;
+    return is_prefetch ? OmniboxEventProto::SRP_ZPS_PREFETCH
+                       : OmniboxEventProto::
+                             SEARCH_RESULT_PAGE_NO_SEARCH_TERM_REPLACEMENT;
   }
 
-  return OmniboxEventProto::OTHER;
+  return is_prefetch ? OmniboxEventProto::OTHER_ZPS_PREFETCH
+                     : OmniboxEventProto::OTHER;
 }
 
 const gfx::VectorIcon& LocationBarModelImpl::GetVectorIcon() const {
@@ -200,16 +205,11 @@ const gfx::VectorIcon& LocationBarModelImpl::GetVectorIcon() const {
 
   if (IsOfflinePage())
     return omnibox::kOfflinePinIcon;
-
-  if (GetSecurityLevel() == security_state::SecurityLevel::SECURE &&
-      delegate_->IsShowingAccuracyTip()) {
-    return omnibox::kHttpIcon;
-  }
 #endif
 
   return location_bar_model::GetSecurityVectorIcon(
       GetSecurityLevel(),
-      delegate_->ShouldUseUpdatedConnectionSecurityIndicators());
+      delegate_->GetVisibleSecurityState()->malicious_content_status);
 }
 
 std::u16string LocationBarModelImpl::GetSecureDisplayText() const {
@@ -224,17 +224,19 @@ std::u16string LocationBarModelImpl::GetSecureDisplayText() const {
     case security_state::WARNING:
       return l10n_util::GetStringUTF16(IDS_NOT_SECURE_VERBOSE_STATE);
     case security_state::SECURE:
-      return delegate_->IsShowingAccuracyTip()
-                 ? l10n_util::GetStringUTF16(IDS_ACCURACY_CHECK_VERBOSE_STATE)
-                 : std::u16string();
+      return std::u16string();
     case security_state::DANGEROUS: {
       std::unique_ptr<security_state::VisibleSecurityState>
           visible_security_state = delegate_->GetVisibleSecurityState();
 
       // Don't show any text in the security indicator for sites on the billing
-      // interstitial list.
+      // interstitial list or blocked by the enterprise administrator.
       if (visible_security_state->malicious_content_status ==
-          security_state::MALICIOUS_CONTENT_STATUS_BILLING) {
+              security_state::MALICIOUS_CONTENT_STATUS_BILLING ||
+          visible_security_state->malicious_content_status ==
+              security_state::MALICIOUS_CONTENT_STATUS_MANAGED_POLICY_BLOCK ||
+          visible_security_state->malicious_content_status ==
+              security_state::MALICIOUS_CONTENT_STATUS_MANAGED_POLICY_WARN) {
         return std::u16string();
       }
 
@@ -273,9 +275,4 @@ bool LocationBarModelImpl::IsOfflinePage() const {
 
 bool LocationBarModelImpl::ShouldPreventElision() const {
   return delegate_->ShouldPreventElision();
-}
-
-bool LocationBarModelImpl::ShouldUseUpdatedConnectionSecurityIndicators()
-    const {
-  return delegate_->ShouldUseUpdatedConnectionSecurityIndicators();
 }

@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
-# Copyright 2019 The Chromium Authors. All rights reserved.
+#!/usr/bin/env vpython3
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -54,36 +54,32 @@ class AnnotationTokenizerTest(unittest.TestCase):
     self.assertEqual(')', tokenizer.advance('right_paren'))
     self.assertEqual(')', tokenizer.advance('right_paren'))
 
-  def testConcatenatedStrings(self):
-    tokenizer = Tokenizer('"hello " + "world" + "!"', 'foo.java', 22)
-    self.assertEqual('hello ', tokenizer.advance('string_literal'))
-    self.assertEqual('+', tokenizer.advance('plus'))
-    self.assertEqual('world', tokenizer.advance('string_literal'))
-    self.assertEqual('+', tokenizer.advance('plus'))
-    self.assertEqual('!', tokenizer.advance('string_literal'))
-
   def testAdvanceMultiline(self):
     tokenizer = Tokenizer('\n\tR"(the quick\nbrown\nfox)"', 'foo.txt', 33)
     self.assertEqual(
         'the quick\nbrown\nfox', tokenizer.advance('string_literal'))
 
+  def testAdvanceTextBlock(self):
+    tokenizer = Tokenizer('\n """\n  the quick\n  red\n  fox"""', 'foo.txt', 2)
+    self.assertEqual('the quick\nred\nfox', tokenizer.advance('string_literal'))
+
   def testAdvanceErrorPaths(self):
     tokenizer = Tokenizer('  hello , ', 'foo.txt', 33)
     tokenizer.advance('symbol')
-    with self.assertRaisesRegexp(SourceCodeParsingError,
-                                 'Expected symbol.+at foo.txt:33'):
+    with self.assertRaisesRegex(SourceCodeParsingError,
+                                'Expected symbol.+at foo.txt:33'):
       # There are no more tokens.
       tokenizer.advance('symbol')
 
     tokenizer = Tokenizer('"hello"', 'foo.txt', 33)
-    with self.assertRaisesRegexp(SourceCodeParsingError,
-                                 'Expected comma.+at foo.txt:33'):
+    with self.assertRaisesRegex(SourceCodeParsingError,
+                                'Expected comma.+at foo.txt:33'):
       # The type doesn't match.
       tokenizer.advance('comma')
 
     tokenizer = Tokenizer('{', 'foo.txt', 33)
-    with self.assertRaisesRegexp(SourceCodeParsingError,
-                                 'Expected string_literal.+at foo.txt:33'):
+    with self.assertRaisesRegex(SourceCodeParsingError,
+                                'Expected string_literal.+at foo.txt:33'):
       # Not a valid token at all.
       tokenizer.advance('string_literal')
 
@@ -99,10 +95,10 @@ class AnnotationTokenizerTest(unittest.TestCase):
   def testEscaping(self):
     tokenizer = Tokenizer(
         '''
-      "\\"abc \\\\\\" def \\\\\\""
+      "\\"ab\\nc \\\\\\" def \\\\\\""
       "string ends here:\\\\" this is not part of the string"
     ''', 'foo.txt', 33)
-    self.assertEqual('"abc \\" def \\"', tokenizer.advance('string_literal'))
+    self.assertEqual('"ab\nc \\" def \\"', tokenizer.advance('string_literal'))
     self.assertEqual('string ends here:\\', tokenizer.advance('string_literal'))
 
 

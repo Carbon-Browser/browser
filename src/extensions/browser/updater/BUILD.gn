@@ -1,11 +1,10 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//extensions/buildflags/buildflags.gni")
 
-assert(enable_extensions,
-       "Cannot depend on extensions because enable_extensions=false.")
+assert(enable_extensions_core)
 
 source_set("updater") {
   sources = [
@@ -60,5 +59,17 @@ source_set("keepalive") {
   sources = [
     "scoped_extension_updater_keep_alive.cc",
     "scoped_extension_updater_keep_alive.h",
+  ]
+}
+
+source_set("test_support") {
+  sources = [
+    "extension_update_found_test_observer.cc",
+    "extension_update_found_test_observer.h",
+  ]
+
+  deps = [
+    ":updater",
+    "//base:base",
   ]
 }

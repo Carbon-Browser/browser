@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,17 +10,25 @@
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/css/css_property_names.h"
 #include "third_party/blink/renderer/core/css/css_property_value_set.h"
+#include "third_party/blink/renderer/core/css/parser/css_nesting_type.h"
 #include "third_party/blink/renderer/core/css/parser/css_parser_context.h"
+#include "third_party/blink/renderer/core/css/parser/css_tokenizer.h"
+#include "third_party/blink/renderer/core/css/style_rule_keyframe.h"
+
+namespace ui {
+class ColorProvider;
+}  // namespace ui
 
 namespace blink {
 
 class Color;
 class CSSParserObserver;
-class CSSParserSelector;
+class CSSSelector;
 class CSSSelectorList;
 class Element;
 class ExecutionContext;
 class ImmutableCSSPropertyValueSet;
+class StyleRule;
 class StyleRuleBase;
 class StyleRuleKeyframe;
 class StyleSheetContents;
@@ -29,18 +37,17 @@ class CSSPrimitiveValue;
 enum class ParseSheetResult;
 enum class SecureContextMode;
 
-// See css_selector_parser.h.
-using CSSSelectorVector = Vector<std::unique_ptr<CSSParserSelector>>;
-
 // This class serves as the public API for the css/parser subsystem
 class CORE_EXPORT CSSParser {
   STATIC_ONLY(CSSParser);
 
  public:
   // As well as regular rules, allows @import and @namespace but not @charset
-  static StyleRuleBase* ParseRule(const CSSParserContext*,
-                                  StyleSheetContents*,
-                                  const String&);
+  static StyleRuleBase* ParseRule(const CSSParserContext* context,
+                                  StyleSheetContents* style_sheet,
+                                  CSSNestingType,
+                                  StyleRule* parent_rule_for_nesting,
+                                  const String& rule);
 
   static ParseSheetResult ParseSheet(
       const CSSParserContext*,
@@ -49,26 +56,40 @@ class CORE_EXPORT CSSParser {
       CSSDeferPropertyParsing defer_property_parsing =
           CSSDeferPropertyParsing::kNo,
       bool allow_import_rules = true);
-  static CSSSelectorVector ParseSelector(const CSSParserContext*,
-                                         StyleSheetContents*,
-                                         const String&);
-  static CSSSelectorList ParsePageSelector(const CSSParserContext&,
-                                           StyleSheetContents*,
-                                           const String&);
+  // See CSSSelectorParser for lifetime of the returned value.
+  static base::span<CSSSelector> ParseSelector(
+      const CSSParserContext*,
+      CSSNestingType,
+      StyleRule* parent_rule_for_nesting,
+      StyleSheetContents*,
+      const String&,
+      HeapVector<CSSSelector>& arena);
+  static CSSSelectorList* ParsePageSelector(const CSSParserContext&,
+                                            StyleSheetContents*,
+                                            const String&);
+  static StyleRuleBase* ParseMarginRule(const CSSParserContext*,
+                                        StyleSheetContents*,
+                                        const String&);
   static bool ParseDeclarationList(const CSSParserContext*,
                                    MutableCSSPropertyValueSet*,
                                    const String&);
 
+  static StyleRuleBase* ParseNestedDeclarationsRule(
+      const CSSParserContext*,
+      CSSNestingType,
+      StyleRule* parent_rule_for_nesting,
+      StringView);
+
   static MutableCSSPropertyValueSet::SetResult ParseValue(
       MutableCSSPropertyValueSet*,
       CSSPropertyID unresolved_property,
-      const String&,
+      StringView value,
       bool important,
       const ExecutionContext* execution_context = nullptr);
   static MutableCSSPropertyValueSet::SetResult ParseValue(
       MutableCSSPropertyValueSet*,
       CSSPropertyID unresolved_property,
-      const String&,
+      StringView value,
       bool important,
       SecureContextMode,
       StyleSheetContents*,
@@ -77,7 +98,7 @@ class CORE_EXPORT CSSParser {
   static MutableCSSPropertyValueSet::SetResult ParseValueForCustomProperty(
       MutableCSSPropertyValueSet*,
       const AtomicString& property_name,
-      const String& value,
+      StringView value,
       bool important,
       SecureContextMode,
       StyleSheetContents*,
@@ -95,12 +116,18 @@ class CORE_EXPORT CSSParser {
   static ImmutableCSSPropertyValueSet* ParseInlineStyleDeclaration(
       const String&,
       Element*);
-  static ImmutableCSSPropertyValueSet*
-  ParseInlineStyleDeclaration(const String&, CSSParserMode, SecureContextMode);
+  static ImmutableCSSPropertyValueSet* ParseInlineStyleDeclaration(
+      const String&,
+      CSSParserMode,
+      SecureContextMode,
+      const Document*);
 
-  static std::unique_ptr<Vector<double>> ParseKeyframeKeyList(const String&);
+  static std::unique_ptr<Vector<KeyframeOffset>> ParseKeyframeKeyList(
+      const CSSParserContext*,
+      const String&);
   static StyleRuleKeyframe* ParseKeyframeRule(const CSSParserContext*,
                                               const String&);
+  static String ParseCustomPropertyName(const String&);
 
   static bool ParseSupportsCondition(const String&, const ExecutionContext*);
 
@@ -109,7 +136,9 @@ class CORE_EXPORT CSSParser {
   static bool ParseColor(Color&, const String&, bool strict = false);
   static bool ParseSystemColor(Color&,
                                const String&,
-                               mojom::blink::ColorScheme color_scheme);
+                               mojom::blink::ColorScheme color_scheme,
+                               const ui::ColorProvider* color_provider,
+                               bool is_in_web_app_scope);
 
   static void ParseSheetForInspector(const CSSParserContext*,
                                      StyleSheetContents*,
@@ -119,8 +148,10 @@ class CORE_EXPORT CSSParser {
                                                const String&,
                                                CSSParserObserver&);
 
-  static CSSPrimitiveValue* ParseLengthPercentage(const String&,
-                                                  const CSSParserContext*);
+  static CSSPrimitiveValue* ParseLengthPercentage(
+      const String&,
+      const CSSParserContext*,
+      CSSPrimitiveValue::ValueRange);
 
   // https://html.spec.whatwg.org/multipage/canvas.html#dom-context-2d-font
   // https://drafts.csswg.org/css-font-loading/#find-the-matching-font-faces
@@ -131,7 +162,7 @@ class CORE_EXPORT CSSParser {
   static MutableCSSPropertyValueSet::SetResult ParseValue(
       MutableCSSPropertyValueSet*,
       CSSPropertyID unresolved_property,
-      const String&,
+      StringView,
       bool important,
       const CSSParserContext*);
 };

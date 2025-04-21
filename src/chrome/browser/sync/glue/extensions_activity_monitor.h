@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,16 +12,13 @@
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "chrome/browser/extensions/api/bookmarks/bookmarks_api_watcher.h"
+
+class ExtensionFunction;
 #endif
 
 namespace syncer {
 class ExtensionsActivity;
 }
-
-namespace extensions {
-class BookmarksFunction;
-class Extension;
-}  // namespace extensions
 
 namespace browser_sync {
 
@@ -31,7 +28,7 @@ using BookmarksApiWatcherObserver = extensions::BookmarksApiWatcher::Observer;
 // Provides a stub class to inherit from to support overriding the destructor.
 class BookmarksApiWatcherObserver {
  public:
-  virtual ~BookmarksApiWatcherObserver() {}
+  virtual ~BookmarksApiWatcherObserver() = default;
 };
 #endif
 
@@ -47,10 +44,8 @@ class ExtensionsActivityMonitor : public BookmarksApiWatcherObserver {
   ~ExtensionsActivityMonitor() override;
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
-  // content::BookmarksApiWatcher:
-  void OnBookmarksApiInvoked(
-      const extensions::Extension* ext,
-      const extensions::BookmarksFunction* func) override;
+  // extensions::BookmarksApiWatcher:
+  void OnBookmarksApiInvoked(const ExtensionFunction* func) override;
 #endif
 
   const scoped_refptr<syncer::ExtensionsActivity>& GetExtensionsActivity();

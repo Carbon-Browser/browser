@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,6 +36,11 @@ void SimpleDependencyManager::RegisterProfilePrefsForServices(
   TRACE_EVENT0("browser",
                "SimpleDependencyManager::RegisterProfilePrefsForServices");
   RegisterPrefsForServices(pref_registry);
+}
+
+void SimpleDependencyManager::CreateServices(SimpleFactoryKey* key) {
+  TRACE_EVENT0("browser", "SimpleDependencyManager::CreateServices");
+  DependencyManager::CreateContextServices(key, false);
 }
 
 void SimpleDependencyManager::CreateServicesForTest(SimpleFactoryKey* key) {

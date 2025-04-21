@@ -20,6 +20,8 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_SVG_SVG_RESOURCES_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_LAYOUT_SVG_SVG_RESOURCES_H_
 
+#include "third_party/blink/renderer/core/style/computed_style_constants.h"
+#include "third_party/blink/renderer/core/style/style_difference.h"
 #include "third_party/blink/renderer/core/svg/svg_resource_client.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/heap/member.h"
@@ -45,20 +47,40 @@ class SVGResources {
 
  public:
   static SVGElementResourceClient* GetClient(const LayoutObject&);
-  static gfx::RectF ReferenceBoxForEffects(const LayoutObject&);
 
-  static void UpdateClipPathFilterMask(SVGElement&,
-                                       const ComputedStyle* old_style,
-                                       const ComputedStyle&);
-  static void ClearClipPathFilterMask(SVGElement&, const ComputedStyle*);
-  static void UpdatePaints(SVGElement&,
+  // Control what reference box is returned by ReferenceBoxForEffects() for a
+  // <foreignObject> element.
+  enum class ForeignObjectQuirk {
+    // The reference box for <foreignObject> will have <0, 0> as its
+    // origin. This is to be used when the local space of the effect already
+    // includes the paint offset (== 'x' and 'y' for a <foreignObject>), and it
+    // isn't easy to undo that.
+    kEnabled,
+
+    // The reference box for <foreignObject> will be "correct" i.e include the
+    // 'x' and 'y' from the element and can thus be different from <0, 0>. This
+    // should be used if the local space does not already include this offset.
+    kDisabled,
+  };
+  static gfx::RectF ReferenceBoxForEffects(
+      const LayoutObject&,
+      GeometryBox geometry_box = GeometryBox::kFillBox,
+      ForeignObjectQuirk foreign_object_quirk = ForeignObjectQuirk::kEnabled);
+
+  static void UpdateEffects(LayoutObject&,
+                            StyleDifference,
+                            const ComputedStyle* old_style);
+  static void ClearEffects(const LayoutObject&);
+  static void UpdatePaints(const LayoutObject&,
                            const ComputedStyle* old_style,
-                           const ComputedStyle&);
-  static void ClearPaints(SVGElement&, const ComputedStyle*);
-  static void UpdateMarkers(SVGElement&,
-                            const ComputedStyle* old_style,
-                            const ComputedStyle&);
-  static void ClearMarkers(SVGElement&, const ComputedStyle*);
+                           const ComputedStyle& style);
+  static void ClearPaints(const LayoutObject&, const ComputedStyle* style);
+  static void UpdateMarkers(const LayoutObject&,
+                            const ComputedStyle* old_style);
+  static void ClearMarkers(const LayoutObject&, const ComputedStyle* style);
+
+ private:
+  static SVGElementResourceClient& EnsureClient(const LayoutObject&);
 };
 
 class SVGElementResourceClient final

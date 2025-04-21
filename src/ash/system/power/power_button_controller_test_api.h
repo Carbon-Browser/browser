@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define ASH_SYSTEM_POWER_POWER_BUTTON_CONTROLLER_TEST_API_H_
 
 #include "ash/system/power/power_button_controller.h"
+#include "base/memory/raw_ptr.h"
 
 namespace base {
 class TickClock;
@@ -58,14 +59,24 @@ class PowerButtonControllerTestApi {
   // GetMenuBoundsInScreen.
   PowerButtonMenuView* GetPowerButtonMenuView() const;
 
+  // Gets the layer associated with the `controller_`'s menu background
+  // (a `PowerButtonMenuBackgroundView`).
+  ui::Layer* GetPowerButtonMenuBackgroundLayer() const;
+
   // True if the menu is opened.
   bool IsMenuOpened() const;
+
+  // True if |controller_|'s menu has a power off item.
+  bool MenuHasPowerOffItem() const;
 
   // True if |controller_|'s menu has a sign out item.
   bool MenuHasSignOutItem() const;
 
   // True if |controller_|'s menu has a lock screen item.
   bool MenuHasLockScreenItem() const;
+
+  // True if |controller_|'s menu has a capture mode item.
+  bool MenuHasCaptureModeItem() const;
 
   // True if |controller_|'s menu has a feedback item.
   bool MenuHasFeedbackItem() const;
@@ -82,7 +93,7 @@ class PowerButtonControllerTestApi {
   bool ShowMenuAnimationDone() const;
 
  private:
-  PowerButtonController* controller_;  // Not owned.
+  raw_ptr<PowerButtonController, DanglingUntriaged> controller_;  // Not owned.
 };
 
 }  // namespace ash

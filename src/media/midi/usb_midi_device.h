@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include <memory>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "media/midi/usb_midi_export.h"
 
@@ -73,7 +73,7 @@ class USB_MIDI_EXPORT UsbMidiDevice {
   // Return the name of the manufacturer.
   virtual std::string GetManufacturer() = 0;
 
-  // Retur the name of the device.
+  // Return the name of the device.
   virtual std::string GetProductName() = 0;
 
   // Return the device version.

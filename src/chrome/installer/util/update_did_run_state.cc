@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,13 +12,13 @@
 
 namespace installer {
 
-bool UpdateDidRunState(bool did_run) {
+void UpdateDidRunState() {
   base::win::RegKey key;
-  return key.Create(HKEY_CURRENT_USER,
-                    install_static::GetClientStateKeyPath().c_str(),
-                    KEY_SET_VALUE | KEY_WOW64_32KEY) == ERROR_SUCCESS &&
-         key.WriteValue(google_update::kRegDidRunField,
-                        did_run ? L"1" : L"0") == ERROR_SUCCESS;
+  if (key.Create(HKEY_CURRENT_USER,
+                 install_static::GetClientStateKeyPath().c_str(),
+                 KEY_SET_VALUE | KEY_WOW64_32KEY) == ERROR_SUCCESS) {
+    key.WriteValue(google_update::kRegDidRunField, L"1");
+  }
 }
 
 }  // namespace installer

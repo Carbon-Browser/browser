@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,7 @@
 #include "ui/views/examples/examples_window.h"
 #include "ui/wm/test/wm_test_helper.h"
 
-namespace views {
-namespace examples {
+namespace views::examples {
 
 namespace {
 constexpr gfx::Size kDefaultSize(1024, 768);
@@ -42,5 +41,4 @@ void ExamplesViewsDelegateChromeOS::OnHostCloseRequested(
   }
 }
 
-}  // namespace examples
-}  // namespace views
+}  // namespace views::examples

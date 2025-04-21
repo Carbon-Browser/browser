@@ -1,14 +1,18 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "third_party/blink/public/platform/media/multi_buffer.h"
+#include "third_party/blink/renderer/platform/media/multi_buffer.h"
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
+#include "base/not_fatal_until.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace blink {
 
@@ -184,7 +188,7 @@ MultiBuffer::~MultiBuffer() {
 }
 
 void MultiBuffer::AddReader(const BlockId& pos, Reader* reader) {
-  std::set<Reader*>* set_of_readers = &readers_[pos];
+  std::set<raw_ptr<Reader, SetExperimental>>* set_of_readers = &readers_[pos];
   bool already_waited_for = !set_of_readers->empty();
   set_of_readers->insert(reader);
 
@@ -203,7 +207,6 @@ void MultiBuffer::AddReader(const BlockId& pos, Reader* reader) {
     if (i.value()) {
       // Shouldn't happen, we already tested that Contains(pos) is true.
       NOTREACHED();
-      closest_block = pos;
     } else if (i == present_.begin()) {
       closest_block = -1;
     } else {
@@ -218,7 +221,7 @@ void MultiBuffer::AddReader(const BlockId& pos, Reader* reader) {
     }
   }
   if (!provider) {
-    DCHECK(writer_index_.find(pos) == writer_index_.end());
+    DCHECK(!base::Contains(writer_index_, pos));
     writer_index_[pos] = CreateWriter(pos, is_client_audio_element_);
     provider = writer_index_[pos].get();
   }
@@ -248,7 +251,7 @@ void MultiBuffer::CleanupWriters(const BlockId& pos) {
 bool MultiBuffer::Contains(const BlockId& pos) const {
   DCHECK(present_[pos] == 0 || present_[pos] == 1)
       << " pos = " << pos << " present_[pos] " << present_[pos];
-  DCHECK_EQ(present_[pos], data_.find(pos) != data_.end() ? 1 : 0);
+  DCHECK_EQ(present_[pos], base::Contains(data_, pos) ? 1 : 0);
   return !!present_[pos];
 }
 
@@ -335,7 +338,7 @@ std::unique_ptr<MultiBuffer::DataProvider> MultiBuffer::RemoveProvider(
     DataProvider* provider) {
   BlockId pos = provider->Tell();
   auto iter = writer_index_.find(pos);
-  DCHECK(iter != writer_index_.end());
+  CHECK(iter != writer_index_.end(), base::NotFatalUntil::M130);
   DCHECK_EQ(iter->second.get(), provider);
   std::unique_ptr<DataProvider> ret = std::move(iter->second);
   writer_index_.erase(iter);
@@ -372,8 +375,9 @@ MultiBuffer::ProviderState MultiBuffer::SuggestProviderState(
 
 bool MultiBuffer::ProviderCollision(const BlockId& id) const {
   // If there is a writer at the same location, it is always a collision.
-  if (writer_index_.find(id) != writer_index_.end())
+  if (base::Contains(writer_index_, id)) {
     return true;
+  }
 
   // Data already exists at providers current position,
   // if the URL supports ranges, we can kill the data provider.
@@ -535,7 +539,7 @@ void MultiBuffer::PinRange(const BlockId& from,
         for (BlockId block = present_transitioned_range.end - 1;
              block >= present_transitioned_range.begin; --block) {
           DCHECK_GE(block, 0);
-          DCHECK(data_.find(block) != data_.end());
+          DCHECK(base::Contains(data_, block));
           if (pin) {
             DCHECK(pinned_[block]);
             lru_->Remove(this, block);

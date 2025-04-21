@@ -1,4 +1,4 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -7,20 +7,17 @@ import("//extensions/buildflags/buildflags.gni")
 
 assert(enable_extensions)
 
-# TODO(crbug.com/1065748): Delete web_applications/extensions/ directory.
+# TODO(crbug.com/346472679): Delete web_applications/extensions/ directory.
 source_set("extensions") {
   sources = [
-    "bookmark_app_util.cc",
-    "bookmark_app_util.h",
     "extension_status_utils.cc",
+    "extensions_manager.cc",
     "web_app_extension_shortcut.cc",
     "web_app_extension_shortcut.h",
+    "web_app_uninstall_and_replace_job.cc",
   ]
   if (is_mac) {
-    sources += [
-      "web_app_extension_shortcut_mac.h",
-      "web_app_extension_shortcut_mac.mm",
-    ]
+    sources += [ "web_app_extension_shortcut_mac.mm" ]
   }
 
   # Enable the "exit_time_destructors" warning here to avoid accidentally
@@ -29,6 +26,8 @@ source_set("extensions") {
   # by default.
   configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
+  public_deps = [ "//chrome/browser:browser_public_dependencies" ]
+
   deps = [
     "//base",
     "//chrome/browser:browser_process",
@@ -36,10 +35,10 @@ source_set("extensions") {
     "//chrome/browser/web_applications",
     "//chrome/common",
     "//components/pref_registry",
-    "//components/services/app_service/public/cpp:app_types",
-    "//components/services/app_service/public/mojom",
+    "//components/services/app_service",
     "//components/sync/model",
     "//components/webapps/browser:browser",
+    "//components/webapps/common",
     "//content/public/browser",
     "//extensions/browser",
     "//skia",
@@ -49,21 +48,18 @@ source_set("extensions") {
 source_set("unit_tests") {
   testonly = true
 
-  sources = [
-    "bookmark_app_util_unittest.cc",
-    "externally_managed_app_install_task_unittest.cc",
-    "web_app_policy_manager_unittest.cc",
-  ]
+  sources = [ "web_app_uninstall_and_replace_job_unittest.cc" ]
 
   deps = [
     ":extensions",
     "//build:chromeos_buildflags",
-    "//chrome/browser/web_applications:web_applications",
+    "//chrome/browser/web_applications",
     "//chrome/browser/web_applications:web_applications_test_support",
+    "//chrome/browser/web_applications:web_applications_unit_tests",
     "//chrome/common",
     "//chrome/test:test_support",
-    "//components/crx_file:crx_file",
-    "//components/webapps/browser:browser",
+    "//components/webapps/browser",
+    "//components/webapps/common",
     "//content/public/browser",
     "//content/test:test_support",
     "//extensions/browser/install",

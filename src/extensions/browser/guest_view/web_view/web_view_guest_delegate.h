@@ -1,12 +1,20 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef EXTENSIONS_BROWSER_GUEST_VIEW_WEB_VIEW_WEB_VIEW_GUEST_DELEGATE_H_
 #define EXTENSIONS_BROWSER_GUEST_VIEW_WEB_VIEW_WEB_VIEW_GUEST_DELEGATE_H_
 
-#include "base/callback.h"
+#include <optional>
+
+#include "base/functional/callback.h"
 #include "components/guest_view/browser/guest_view_base.h"
+
+class GURL;
+
+namespace blink {
+struct UserAgentOverride;
+}  // namespace blink
 
 namespace content {
 class RenderFrameHost;
@@ -30,6 +38,19 @@ class WebViewGuestDelegate {
 
   // Shows the context menu for the guest.
   virtual void OnShowContextMenu(int request_id) = 0;
+
+  // Called during `LoadURLWithParams` to check whether delegates have more
+  // scheme blocks in place.
+  virtual bool NavigateToURLShouldBlock(const GURL& url) = 0;
+
+  // Returns the default UserAgentOverride value for the guest, or null if the
+  // guest does not have a special default.
+  virtual std::optional<blink::UserAgentOverride>
+  GetDefaultUserAgentOverride() = 0;
+
+  // Toggles whether to include special client hints brand in the user agent
+  // override.
+  virtual void SetClientHintsEnabled(bool enable) = 0;
 };
 
 }  // namespace extensions

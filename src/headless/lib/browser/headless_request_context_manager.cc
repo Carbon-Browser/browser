@@ -1,20 +1,21 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "headless/lib/browser/headless_request_context_manager.h"
 
-#include "base/bind.h"
 #include "base/command_line.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/network_service_instance.h"
-#include "content/public/browser/resource_context.h"
-#include "headless/app/headless_shell_switches.h"
 #include "headless/lib/browser/headless_browser_context_options.h"
+#include "headless/public/switches.h"
 #include "mojo/public/cpp/bindings/receiver.h"
+#include "net/base/features.h"
 #include "net/http/http_auth_preferences.h"
 #include "net/proxy_resolution/proxy_config_service.h"
 #include "services/cert_verifier/public/mojom/cert_verifier_service_factory.mojom.h"
@@ -23,11 +24,6 @@
 #include "services/network/public/mojom/network_context.mojom.h"
 #include "services/network/public/mojom/network_service.mojom.h"
 #include "services/network/url_request_context_builder_mojo.h"
-
-#if defined(HEADLESS_USE_PREFS)
-#include "components/os_crypt/os_crypt.h"  // nogncheck
-#include "content/public/common/network_service_util.h"
-#endif
 
 namespace headless {
 
@@ -57,26 +53,6 @@ net::NetworkTrafficAnnotationTag GetProxyConfigTrafficAnnotationTag() {
         "This config is only used for headless mode and provided by user."
     })");
   return traffic_annotation;
-}
-
-void SetCryptKeyOnce(const base::FilePath& user_data_path) {
-  static bool done_once = false;
-  if (done_once)
-    return;
-  done_once = true;
-
-#if (BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX)) && defined(HEADLESS_USE_PREFS)
-  // The OSCrypt keys are process bound, so if network service is out of
-  // process, send it the required key if it is available.
-  if (content::IsOutOfProcessNetworkService()
-#if BUILDFLAG(IS_WIN)
-      && OSCrypt::IsEncryptionAvailable()
-#endif
-  ) {
-    content::GetNetworkService()->SetEncryptionKey(
-        OSCrypt::GetRawEncryptionKey());
-  }
-#endif
 }
 
 }  // namespace
@@ -121,7 +97,13 @@ class HeadlessProxyConfigMonitor
   void AddToNetworkContextParams(
       ::network::mojom::NetworkContextParams* network_context_params) {
     DCHECK(task_runner_->RunsTasksInCurrentSequence());
-    DCHECK(!proxy_config_client_);
+    if (proxy_config_client_) {
+      // This may be called in the course of re-connecting to a new instance
+      // of network service following a restart, so the config client / poller
+      // interfaces may have been previously bound.
+      proxy_config_client_.reset();
+      poller_receiver_.reset();
+    }
     network_context_params->proxy_config_client_receiver =
         proxy_config_client_.BindNewPipeAndPassReceiver();
     poller_receiver_.Bind(network_context_params->proxy_config_poller_client
@@ -150,7 +132,6 @@ class HeadlessProxyConfigMonitor
         break;
       case net::ProxyConfigService::CONFIG_PENDING:
         NOTREACHED();
-        break;
     }
   }
 
@@ -211,24 +192,22 @@ HeadlessRequestContextManager::HeadlessRequestContextManager(
               switches::kDisableCookieEncryption)),
 #endif
       user_data_path_(std::move(user_data_path)),
+      disk_cache_dir_(options->disk_cache_dir()),
       accept_language_(options->accept_language()),
       user_agent_(options->user_agent()),
       proxy_config_(
           options->proxy_config()
               ? std::make_unique<net::ProxyConfig>(*options->proxy_config())
-              : nullptr),
-      resource_context_(std::make_unique<content::ResourceContext>()) {
+              : nullptr) {
   if (!proxy_config_) {
     base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
     if (command_line->HasSwitch(switches::kNoSystemProxyConfigService)) {
       proxy_config_ = std::make_unique<net::ProxyConfig>();
     } else {
       proxy_config_monitor_ = std::make_unique<HeadlessProxyConfigMonitor>(
-          base::ThreadTaskRunnerHandle::Get());
+          base::SingleThreadTaskRunner::GetCurrentDefault());
     }
   }
-
-  SetCryptKeyOnce(user_data_path_);
 }
 
 HeadlessRequestContextManager::~HeadlessRequestContextManager() {
@@ -253,8 +232,9 @@ void HeadlessRequestContextManager::ConfigureNetworkContextParamsInternal(
         cert_verifier_creation_params) {
   context_params->user_agent = user_agent_;
   context_params->accept_language = accept_language_;
+  context_params->enable_zstd = true;
 
-  // TODO(https://crbug.com/458508): Allow
+  // TODO(crbug.com/40405715): Allow
   // context_params->http_auth_static_network_context_params->allow_default_credentials
   // to be controllable by a flag.
   context_params->http_auth_static_network_context_params =
@@ -269,17 +249,46 @@ void HeadlessRequestContextManager::ConfigureNetworkContextParamsInternal(
     context_params->file_paths->unsandboxed_data_path = user_data_path_;
     context_params->file_paths->cookie_database_name =
         base::FilePath(FILE_PATH_LITERAL("Cookies"));
-    // Headless should never perform a migration leaving it to the network
-    // service to decide which data directory (sandboxed or unsandboxed)
-    // it should pick.
+#if BUILDFLAG(IS_WIN)
+    // For the network sandbox to operate, the network data must be in the
+    // 'Network' directory and not the `unsandboxed_data_path`.
+    //
+    // On Windows, the majority of data dir is already residing in the 'Network'
+    // data dir. This is because there are three possible cases:
+    // 1. A data dir from headful is being used, and headful has migrated any
+    // data since M98 (Feb 2022). (data is in 'Network')
+    // 2. Headless has been using the 'Network' data dir since M96, since
+    // although headless never opted into migration, any new data was always in
+    // the 'Network' dir since ba2eb47b. (data is in 'Network')
+    // 3. Headless is using a data dir from before M96, and since migration was
+    // never enabled, it has been continuing to use this directory up until now.
+    // (data is in `unsandboxed_data_path` and sandbox will not function).
+    //
+    // The majority of users are in 1, or 2. For the small number of users in 3,
+    // setting `trigger_migration` will migrate their data dirs to 'Network' but
+    // this data will still interop between headless and headful as long as they
+    // are running M96 or later that understands both directories, the only
+    // noticeable difference will be that the files will move, as they have
+    // already been doing in headful.
+    context_params->file_paths->trigger_migration = true;
+#else
+    // On non-Windows platforms, trigger migration is not set, so there is no
+    // point (but equally no harm) in doing a migration since headful does not
+    // perform the migration. See
+    // ProfileNetworkContextService::ConfigureNetworkContextParamsInternal in
+    // src/chrome.
     context_params->file_paths->trigger_migration = false;
+#endif  // BUILDFLAG(IS_WIN)
   }
-  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
-  if (command_line->HasSwitch(switches::kDiskCacheDir)) {
-    context_params->http_cache_directory =
-        command_line->GetSwitchValuePath(switches::kDiskCacheDir);
+
+  if (!disk_cache_dir_.empty()) {
+    if (!context_params->file_paths) {
+      context_params->file_paths =
+          ::network::mojom::NetworkContextFilePaths::New();
+    }
+    context_params->file_paths->http_cache_directory = disk_cache_dir_;
   } else if (!user_data_path_.empty()) {
-    context_params->http_cache_directory =
+    context_params->file_paths->http_cache_directory =
         user_data_path_.Append(FILE_PATH_LITERAL("Cache"));
   }
   if (proxy_config_) {

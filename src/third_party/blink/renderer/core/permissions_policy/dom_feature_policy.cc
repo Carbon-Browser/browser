@@ -1,9 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/permissions_policy/dom_feature_policy.h"
 
+#include "third_party/blink/public/common/permissions_policy/origin_with_possible_wildcards.h"
 #include "third_party/blink/public/mojom/permissions_policy/permissions_policy.mojom-blink.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
@@ -18,9 +19,11 @@
 namespace blink {
 
 bool FeatureAvailable(const String& feature, ExecutionContext* ec) {
-  return GetDefaultFeatureNameMap().Contains(feature) &&
+  bool is_isolated_context = ec && ec->IsIsolatedContext();
+  return GetDefaultFeatureNameMap(is_isolated_context).Contains(feature) &&
          (!DisabledByOriginTrial(feature, ec)) &&
-         (!IsFeatureForMeasurementOnly(GetDefaultFeatureNameMap().at(feature)));
+         (!IsFeatureForMeasurementOnly(
+             GetDefaultFeatureNameMap(is_isolated_context).at(feature)));
 }
 
 DOMFeaturePolicy::DOMFeaturePolicy(ExecutionContext* context)
@@ -35,7 +38,10 @@ bool DOMFeaturePolicy::allowsFeature(ScriptState* script_state,
                         ? WebFeature::kFeaturePolicyJSAPIAllowsFeatureIFrame
                         : WebFeature::kFeaturePolicyJSAPIAllowsFeatureDocument);
   if (FeatureAvailable(feature, execution_context)) {
-    auto feature_name = GetDefaultFeatureNameMap().at(feature);
+    bool is_isolated_context =
+        execution_context && execution_context->IsIsolatedContext();
+    auto feature_name =
+        GetDefaultFeatureNameMap(is_isolated_context).at(feature);
     return GetPolicy()->IsFeatureEnabled(feature_name);
   }
 
@@ -68,7 +74,9 @@ bool DOMFeaturePolicy::allowsFeature(ScriptState* script_state,
     return false;
   }
 
-  auto feature_name = GetDefaultFeatureNameMap().at(feature);
+  bool is_isolated_context =
+      execution_context && execution_context->IsIsolatedContext();
+  auto feature_name = GetDefaultFeatureNameMap(is_isolated_context).at(feature);
   return GetPolicy()->IsFeatureEnabledForOrigin(feature_name,
                                                 origin->ToUrlOrigin());
 }
@@ -93,8 +101,11 @@ Vector<String> DOMFeaturePolicy::allowedFeatures(
           ? WebFeature::kFeaturePolicyJSAPIAllowedFeaturesIFrame
           : WebFeature::kFeaturePolicyJSAPIAllowedFeaturesDocument);
   Vector<String> allowed_features;
+  bool is_isolated_context =
+      execution_context && execution_context->IsIsolatedContext();
   for (const String& feature : GetAvailableFeatures(execution_context)) {
-    auto feature_name = GetDefaultFeatureNameMap().at(feature);
+    auto feature_name =
+        GetDefaultFeatureNameMap(is_isolated_context).at(feature);
     if (GetPolicy()->IsFeatureEnabled(feature_name))
       allowed_features.push_back(feature);
   }
@@ -110,8 +121,11 @@ Vector<String> DOMFeaturePolicy::getAllowlistForFeature(
                     IsIFramePolicy()
                         ? WebFeature::kFeaturePolicyJSAPIGetAllowlistIFrame
                         : WebFeature::kFeaturePolicyJSAPIGetAllowlistDocument);
+  bool is_isolated_context =
+      execution_context && execution_context->IsIsolatedContext();
   if (FeatureAvailable(feature, execution_context)) {
-    auto feature_name = GetDefaultFeatureNameMap().at(feature);
+    auto feature_name =
+        GetDefaultFeatureNameMap(is_isolated_context).at(feature);
 
     const PermissionsPolicy::Allowlist allowlist =
         GetPolicy()->GetAllowlistForFeature(feature_name);
@@ -121,8 +135,16 @@ Vector<String> DOMFeaturePolicy::getAllowlistForFeature(
         return Vector<String>({"*"});
     }
     Vector<String> result;
-    for (const auto& origin : allowed_origins) {
-      result.push_back(WTF::String::FromUTF8(origin.Serialize()));
+    result.reserve(
+        static_cast<wtf_size_t>(allowed_origins.size()) +
+        static_cast<wtf_size_t>(allowlist.SelfIfMatches().has_value()));
+    if (allowlist.SelfIfMatches()) {
+      result.push_back(
+          WTF::String::FromUTF8(allowlist.SelfIfMatches()->Serialize()));
+    }
+    for (const auto& origin_with_possible_wildcards : allowed_origins) {
+      result.push_back(
+          WTF::String::FromUTF8(origin_with_possible_wildcards.Serialize()));
     }
     return result;
   }

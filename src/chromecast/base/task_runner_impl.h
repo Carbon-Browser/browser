@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,8 @@ class SingleThreadTaskRunner;
 namespace chromecast {
 
 // Implementation of public TaskRunner interface that just calls
-// base::ThreadTaskRunnerHandle at construction time and uses it to post.
+// base::SingleThreadTaskRunner::CurrentDefaultHandle at construction time and
+// uses it to post.
 class TaskRunnerImpl : public TaskRunner {
  public:
   TaskRunnerImpl();

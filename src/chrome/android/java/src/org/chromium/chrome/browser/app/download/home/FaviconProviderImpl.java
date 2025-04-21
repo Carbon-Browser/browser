@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@ import org.chromium.base.Callback;
 import org.chromium.chrome.browser.download.home.FaviconProvider;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.ui.favicon.FaviconHelper;
+import org.chromium.url.GURL;
 
 /** Implementation for {@link FaviconHelper}. */
 class FaviconProviderImpl implements FaviconProvider {
@@ -36,13 +37,15 @@ class FaviconProviderImpl implements FaviconProvider {
             return;
         }
 
-        FaviconHelper.FaviconImageCallback imageCallback = (bitmap, iconUrl) -> {
-            // TODO(shaktisahu): Handle no favicon case.
-            if (bitmap != null) mFaviconCache.putFaviconImage(url, bitmap);
-            callback.onResult(bitmap);
-        };
+        FaviconHelper.FaviconImageCallback imageCallback =
+                (bitmap, iconUrl) -> {
+                    // TODO(shaktisahu): Handle no favicon case.
+                    if (bitmap != null) mFaviconCache.putFaviconImage(url, bitmap);
+                    callback.onResult(bitmap);
+                };
 
-        mFaviconHelper.getLocalFaviconImageForURL(mProfile, url, faviconSizePx, imageCallback);
+        mFaviconHelper.getLocalFaviconImageForURL(
+                mProfile, new GURL(url), faviconSizePx, imageCallback);
     }
 
     /** An LRU cache for caching the favicons.*/

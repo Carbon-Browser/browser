@@ -35,6 +35,7 @@
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/local_frame_client.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
+#include "third_party/blink/renderer/core/html/html_embed_element.h"
 #include "third_party/blink/renderer/core/html/html_image_loader.h"
 #include "third_party/blink/renderer/core/html/html_meta_element.h"
 #include "third_party/blink/renderer/core/html/html_param_element.h"
@@ -49,8 +50,7 @@ namespace blink {
 HTMLObjectElement::HTMLObjectElement(Document& document,
                                      const CreateElementFlags flags)
     : HTMLPlugInElement(html_names::kObjectTag, document, flags),
-      use_fallback_content_(false),
-      should_use_count_param_url_(false) {
+      use_fallback_content_(false) {
   EnsureUserAgentShadowRoot();
 }
 
@@ -100,9 +100,8 @@ void HTMLObjectElement::ParseAttribute(
     wtf_size_t pos = service_type_.Find(";");
     if (pos != kNotFound)
       SetServiceType(service_type_.Left(pos));
-    // TODO(schenney): crbug.com/572908 What is the right thing to do here?
-    // Should we suppress the reload stuff when a persistable widget-type is
-    // specified?
+    // TODO(crbug.com/572908): What is the right thing to do here? Should we
+    // suppress the reload stuff when a persistable widget-type is specified?
     ReloadPluginOnAttributeChange(name);
   } else if (name == html_names::kDataAttr) {
     SetUrl(StripLeadingAndTrailingHTMLSpaces(params.new_value));
@@ -122,72 +121,16 @@ void HTMLObjectElement::ParseAttribute(
   }
 }
 
-// TODO(schenney): crbug.com/572908 This function should not deal with url or
-// serviceType!
 void HTMLObjectElement::ParametersForPlugin(PluginParameters& plugin_params) {
-  HashSet<StringImpl*, CaseFoldingHash> unique_param_names;
-  if (RuntimeEnabledFeatures::HTMLParamElementUrlSupportEnabled()) {
-    // Scan the PARAM children and store their name/value pairs.
-    // Get the URL and type from the params if we don't already have them.
-    // Only scan <param> children if this functionality hasn't been disabled.
-    for (HTMLParamElement* p = Traversal<HTMLParamElement>::FirstChild(*this);
-         p; p = Traversal<HTMLParamElement>::NextSibling(*p)) {
-      String name = p->GetName();
-      if (name.IsEmpty())
-        continue;
-
-      unique_param_names.insert(name.Impl());
-      plugin_params.AppendNameWithValue(p->GetName(), p->Value());
-
-      // TODO(schenney): crbug.com/572908 url adjustment does not belong in this
-      // function.
-      // HTML5 says that an object resource's URL is specified by the object's
-      // data attribute, not by a param element with a name of "data". However,
-      // for compatibility, allow the resource's URL to be given by a param
-      // element with one of the common names if we know that resource points
-      // to a plugin.
-      if (url_.IsEmpty() && !EqualIgnoringASCIICase(name, "data") &&
-          HTMLParamElement::IsURLParameter(name)) {
-        UseCounter::Count(GetDocument(),
-                          WebFeature::kHTMLParamElementURLParameter);
-        // Use count this <param> usage, if it loads a PDF.
-        should_use_count_param_url_ = true;
-        SetUrl(StripLeadingAndTrailingHTMLSpaces(p->Value()));
-      }
-      // TODO(schenney): crbug.com/572908 serviceType calculation does not
-      // belong in this function.
-      if (service_type_.IsEmpty() && EqualIgnoringASCIICase(name, "type")) {
-        wtf_size_t pos = p->Value().Find(";");
-        if (pos != kNotFound)
-          SetServiceType(p->Value().GetString().Left(pos));
-      }
-    }
-  }
-
   // Turn the attributes of the <object> element into arrays, but don't override
   // <param> values.
-  AttributeCollection attributes = Attributes();
-  for (const Attribute& attribute : attributes) {
-    const AtomicString& name = attribute.GetName().LocalName();
-    if (unique_param_names.Contains(name.Impl())) {
-      DCHECK(RuntimeEnabledFeatures::HTMLParamElementUrlSupportEnabled());
-    } else {
-      plugin_params.AppendAttribute(attribute);
-    }
+  for (const Attribute& attribute : Attributes()) {
+    plugin_params.AppendAttribute(attribute);
   }
 
   // Some plugins don't understand the "data" attribute of the OBJECT tag (i.e.
   // Real and WMP require "src" attribute).
   plugin_params.MapDataParamToSrc();
-}
-
-void HTMLObjectElement::UseCountParamUrlUsageIfNeeded(bool is_pdf) const {
-  if (should_use_count_param_url_) {
-    UseCounter::Count(
-        GetDocument(),
-        is_pdf ? WebFeature::kHTMLParamElementURLParameterInUsePdf
-               : WebFeature::kHTMLParamElementURLParameterInUseNonPdf);
-  }
 }
 
 bool HTMLObjectElement::HasFallbackContent() const {
@@ -212,7 +155,7 @@ bool HTMLObjectElement::HasValidClassId() const {
 
   // HTML5 says that fallback content should be rendered if a non-empty
   // classid is specified for which the UA can't find a suitable plugin.
-  return ClassId().IsEmpty();
+  return ClassId().empty();
 }
 
 void HTMLObjectElement::ReloadPluginOnAttributeChange(
@@ -233,27 +176,26 @@ void HTMLObjectElement::ReloadPluginOnAttributeChange(
     needs_invalidation = true;
   } else {
     NOTREACHED();
-    needs_invalidation = false;
   }
   SetNeedsPluginUpdate(true);
   if (needs_invalidation)
     ReattachOnPluginChangeIfNeeded();
 }
 
-// TODO(schenney): crbug.com/572908 This should be unified with
+// TODO(crbug.com/572908): This should be unified with
 // HTMLEmbedElement::UpdatePlugin and moved down into html_plugin_element.cc
 void HTMLObjectElement::UpdatePluginInternal() {
   DCHECK(!GetLayoutEmbeddedObject()->ShowsUnavailablePluginIndicator());
   DCHECK(NeedsPluginUpdate());
   SetNeedsPluginUpdate(false);
-  // TODO(schenney): crbug.com/572908 This should ASSERT
+  // TODO(crbug.com/572908): This should ASSERT
   // isFinishedParsingChildren() instead.
   if (!IsFinishedParsingChildren()) {
     DispatchErrorEvent();
     return;
   }
 
-  // TODO(schenney): crbug.com/572908 I'm not sure it's ever possible to get
+  // TODO(crbug.com/572908): It may never be possible to get
   // into updateWidget during a removal, but just in case we should avoid
   // loading the frame to prevent security bugs.
   if (!SubframeLoadingDisabler::CanLoadFrame(*this)) {
@@ -264,13 +206,12 @@ void HTMLObjectElement::UpdatePluginInternal() {
   PluginParameters plugin_params;
   ParametersForPlugin(plugin_params);
 
-  // Note: url is modified above by parametersForPlugin.
   if (!AllowedToLoadFrameURL(url_)) {
     DispatchErrorEvent();
     return;
   }
 
-  // TODO(schenney): crbug.com/572908 Is it possible to get here without a
+  // TODO(crbug.com/572908): Is it possible to get here without a
   // layoutObject now that we don't have beforeload events?
   if (!GetLayoutObject())
     return;
@@ -280,12 +221,13 @@ void HTMLObjectElement::UpdatePluginInternal() {
       GetDocument().GetFrame()->Client()->OverrideFlashEmbedWithHTML(
           GetDocument().CompleteURL(url_));
   if (!overriden_url.IsEmpty()) {
+    UseCounter::Count(GetDocument(), WebFeature::kOverrideFlashEmbedwithHTML);
     url_ = overriden_url.GetString();
     SetServiceType("text/html");
   }
 
   if (!HasValidClassId() || !RequestObject(plugin_params)) {
-    if (!url_.IsEmpty())
+    if (!url_.empty())
       DispatchErrorEvent();
     if (HasFallbackContent())
       RenderFallbackContent(ErrorEventPolicy::kDoNotDispatch);
@@ -380,18 +322,15 @@ void HTMLObjectElement::RenderFallbackContent(
     }
   }
 
-  // TODO(dcheng): Detach the content frame here.
+  // To discard the nested browsing context, detach the content frame.
+  if (RuntimeEnabledFeatures::
+          HTMLObjectElementFallbackDetachContentFrameEnabled()) {
+    DisconnectContentFrame();
+  }
+
   UseCounter::Count(GetDocument(), WebFeature::kHTMLObjectElementFallback);
   use_fallback_content_ = true;
   ReattachFallbackContent();
-}
-
-// static
-bool HTMLObjectElement::IsClassOf(const FrameOwner& owner) {
-  auto* owner_element = DynamicTo<HTMLFrameOwnerElement>(owner);
-  if (!owner_element)
-    return false;
-  return IsA<HTMLObjectElement>(owner_element);
 }
 
 bool HTMLObjectElement::IsExposed() const {
@@ -468,23 +407,6 @@ bool HTMLObjectElement::DidFinishLoading() const {
 
 int HTMLObjectElement::DefaultTabIndex() const {
   return 0;
-}
-
-const HTMLObjectElement* ToHTMLObjectElementFromListedElement(
-    const ListedElement* element) {
-  SECURITY_DCHECK(!element || !element->IsFormControlElement());
-  const HTMLObjectElement* object_element =
-      static_cast<const HTMLObjectElement*>(element);
-  // We need to assert after the cast because ListedElement doesn't
-  // have hasTagName.
-  SECURITY_DCHECK(!object_element ||
-                  object_element->HasTagName(html_names::kObjectTag));
-  return object_element;
-}
-
-const HTMLObjectElement& ToHTMLObjectElementFromListedElement(
-    const ListedElement& element) {
-  return *ToHTMLObjectElementFromListedElement(&element);
 }
 
 }  // namespace blink

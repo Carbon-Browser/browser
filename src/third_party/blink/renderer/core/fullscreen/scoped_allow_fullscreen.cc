@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 namespace blink {
 
-absl::optional<ScopedAllowFullscreen::Reason> ScopedAllowFullscreen::reason_;
+std::optional<ScopedAllowFullscreen::Reason> ScopedAllowFullscreen::reason_;
 
 ScopedAllowFullscreen::ScopedAllowFullscreen(Reason reason) {
   DCHECK(IsMainThread());
@@ -22,7 +22,7 @@ ScopedAllowFullscreen::~ScopedAllowFullscreen() {
 }
 
 // static
-absl::optional<ScopedAllowFullscreen::Reason>
+std::optional<ScopedAllowFullscreen::Reason>
 ScopedAllowFullscreen::FullscreenAllowedReason() {
   DCHECK(IsMainThread());
   return reason_;

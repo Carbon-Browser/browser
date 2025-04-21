@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,19 +10,25 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/format_macros.h"
+#include "base/functional/bind.h"
 #include "base/i18n/rtl.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/gtest_util.h"
+#include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/accessibility/accessibility_features.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
+#include "ui/accessibility/platform/ax_platform_for_test.h"
 #include "ui/base/clipboard/clipboard.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_header_macros.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/ui_base_switches.h"
+#include "ui/color/color_provider.h"
 #include "ui/compositor/canvas_painter.h"
 #include "ui/compositor/layer.h"
 #include "ui/events/base_event_utils.h"
@@ -32,10 +38,12 @@
 #include "ui/gfx/text_constants.h"
 #include "ui/gfx/text_elider.h"
 #include "ui/strings/grit/ui_strings.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/background.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/base_control_test_widget.h"
 #include "ui/views/controls/link.h"
+#include "ui/views/layout/layout_types.h"
 #include "ui/views/style/typography.h"
 #include "ui/views/test/ax_event_counter.h"
 #include "ui/views/test/focus_manager_test.h"
@@ -61,6 +69,8 @@ const int kControlCommandModifier = ui::EF_CONTROL_DOWN;
 const int kMinTextDimension = 4;
 
 class TestLabel : public Label {
+  METADATA_HEADER(TestLabel, Label)
+
  public:
   TestLabel() : Label(u"TestLabel") { SizeToPreferredSize(); }
 
@@ -88,6 +98,9 @@ class TestLabel : public Label {
   int schedule_paint_count_ = 0;
 };
 
+BEGIN_METADATA(TestLabel)
+END_METADATA
+
 // A test utility function to set the application default text direction.
 void SetRTL(bool rtl) {
   // Override the current locale/direction.
@@ -103,13 +116,14 @@ std::u16string GetClipboardText(ui::ClipboardBuffer clipboard_buffer) {
 }
 
 // Makes an RTL string by mapping 0..6 to [א,ב,ג,ד,ה,ו,ז].
-std::u16string ToRTL(const char* ascii) {
+std::u16string ToRTL(const std::string& ascii) {
   std::u16string rtl;
-  for (const char* c = ascii; *c; ++c) {
-    if (*c >= '0' && *c <= '6')
-      rtl += L'\x5d0' + (*c - '0');
-    else
-      rtl += static_cast<std::u16string::value_type>(*c);
+  for (char c : ascii) {
+    if (c >= '0' && c <= '6') {
+      rtl += static_cast<char16_t>(u'א' + (c - '0'));
+    } else {
+      rtl += static_cast<char16_t>(c);
+    }
   }
   return rtl;
 }
@@ -122,6 +136,16 @@ class LabelTest : public test::BaseControlTestWidget {
   LabelTest(const LabelTest&) = delete;
   LabelTest& operator=(const LabelTest&) = delete;
   ~LabelTest() override = default;
+
+  void MockAXModeAdded() {
+    ui::AXMode mode = ui::AXPlatformForTest::GetInstance().GetProcessMode();
+    widget()->OnAXModeAdded(mode);
+  }
+
+  void TearDown() override {
+    label_ = nullptr;
+    test::BaseControlTestWidget::TearDown();
+  }
 
  protected:
   void CreateWidgetContent(View* container) override {
@@ -164,14 +188,14 @@ class LabelSelectionTest : public LabelTest {
 
   void PerformMousePress(const gfx::Point& point) {
     ui::MouseEvent pressed_event = ui::MouseEvent(
-        ui::ET_MOUSE_PRESSED, point, point, ui::EventTimeForNow(),
+        ui::EventType::kMousePressed, point, point, ui::EventTimeForNow(),
         ui::EF_LEFT_MOUSE_BUTTON, ui::EF_LEFT_MOUSE_BUTTON);
     label()->OnMousePressed(pressed_event);
   }
 
   void PerformMouseRelease(const gfx::Point& point) {
     ui::MouseEvent released_event = ui::MouseEvent(
-        ui::ET_MOUSE_RELEASED, point, point, ui::EventTimeForNow(),
+        ui::EventType::kMouseReleased, point, point, ui::EventTimeForNow(),
         ui::EF_LEFT_MOUSE_BUTTON, ui::EF_LEFT_MOUSE_BUTTON);
     label()->OnMouseReleased(released_event);
   }
@@ -182,7 +206,7 @@ class LabelSelectionTest : public LabelTest {
   }
 
   void PerformMouseDragTo(const gfx::Point& point) {
-    ui::MouseEvent drag(ui::ET_MOUSE_DRAGGED, point, point,
+    ui::MouseEvent drag(ui::EventType::kMouseDragged, point, point,
                         ui::EventTimeForNow(), ui::EF_LEFT_MOUSE_BUTTON, 0);
     label()->OnMouseDragged(drag);
   }
@@ -200,7 +224,7 @@ class LabelSelectionTest : public LabelTest {
 
     // For single-line text, use the glyph bounds since it gives a better
     // representation of the midpoint between glyphs when considering selection.
-    // TODO(crbug.com/248597): Add multiline support to GetCursorBounds(...).
+    // TODO(crbug.com/40321377): Add multiline support to GetCursorBounds(...).
     if (!render_text->multiline()) {
       return render_text
           ->GetCursorBounds(gfx::SelectionModel(index, gfx::CURSOR_FORWARD),
@@ -289,6 +313,50 @@ TEST_F(LabelTest, ColorProperty) {
   EXPECT_EQ(color, label()->GetEnabledColor());
 }
 
+TEST_F(LabelTest, ColorPropertyOnEnabledColorIdChange) {
+  const auto color = label()->GetWidget()->GetColorProvider()->GetColor(
+      ui::kColorPrimaryForeground);
+  label()->SetAutoColorReadabilityEnabled(false);
+  label()->SetEnabledColorId(ui::kColorPrimaryForeground);
+  EXPECT_EQ(color, label()->GetEnabledColor());
+
+  // Update the enabled id and verify the actual enabled color is updated to
+  // reflect the color id change. Regression test case for: b/262402965.
+  label()->SetEnabledColorId(ui::kColorAccent);
+  EXPECT_EQ(
+      label()->GetWidget()->GetColorProvider()->GetColor(ui::kColorAccent),
+      label()->GetEnabledColor());
+}
+
+TEST_F(LabelTest, BackgroundColor) {
+  // The correct default background color is set.
+  EXPECT_EQ(widget()->GetColorProvider()->GetColor(ui::kColorDialogBackground),
+            label()->GetBackgroundColor());
+
+  label()->SetBackgroundColor(SK_ColorBLUE);
+  EXPECT_EQ(SK_ColorBLUE, label()->GetBackgroundColor());
+}
+
+TEST_F(LabelTest, BackgroundColorId) {
+  // The correct default background color is set.
+  EXPECT_EQ(widget()->GetColorProvider()->GetColor(ui::kColorDialogBackground),
+            label()->GetBackgroundColor());
+
+  label()->SetBackgroundColorId(ui::kColorAlertHighSeverity);
+  EXPECT_EQ(widget()->GetColorProvider()->GetColor(ui::kColorAlertHighSeverity),
+            label()->GetBackgroundColor());
+
+  // A color id takes precedence.
+  label()->SetBackgroundColor(SK_ColorBLUE);
+  EXPECT_EQ(widget()->GetColorProvider()->GetColor(ui::kColorAlertHighSeverity),
+            label()->GetBackgroundColor());
+
+  // Once a color id is no longer set, colors can be set again.
+  label()->SetBackgroundColorId(std::nullopt);
+  label()->SetBackgroundColor(SK_ColorBLUE);
+  EXPECT_EQ(SK_ColorBLUE, label()->GetBackgroundColor());
+}
+
 TEST_F(LabelTest, AlignmentProperty) {
   const bool was_rtl = base::i18n::IsRTL();
 
@@ -370,7 +438,7 @@ TEST_F(LabelTest, ElideBehavior) {
   std::u16string text(u"This is example text.");
   label()->SetText(text);
   EXPECT_EQ(gfx::ELIDE_TAIL, label()->GetElideBehavior());
-  gfx::Size size = label()->GetPreferredSize();
+  gfx::Size size = label()->GetPreferredSize({});
   label()->SetBoundsRect(gfx::Rect(size));
   EXPECT_EQ(text, label()->GetDisplayTextForTesting());
 
@@ -469,27 +537,35 @@ TEST_F(LabelTest, ObscuredSurrogatePair) {
   EXPECT_EQ(kTestText, label()->GetText());
 }
 
-// This test case verifies the label preferred size will change based on the
-// current layout, which may seem wrong. However many of our code base assumes
-// this behavior, therefore this behavior will have to be kept until the code
-// with this assumption is fixed. See http://crbug.com/468494 and
-// http://crbug.com/467526.
-// TODO(mukai): fix the code assuming this behavior and then fix Label
-// implementation, and remove this test case.
-TEST_F(LabelTest, MultilinePreferredSizeTest) {
+TEST_F(LabelTest, MultilinePreferredSizeWithConstraintTest) {
   label()->SetText(u"This is an example.");
 
-  gfx::Size single_line_size = label()->GetPreferredSize();
+  const gfx::Size single_line_size =
+      label()->GetPreferredSize({/* Unbounded */});
 
+  // Test the preferred size when the label is not yet laid out.
   label()->SetMultiLine(true);
-  gfx::Size multi_line_size = label()->GetPreferredSize();
-  EXPECT_EQ(single_line_size, multi_line_size);
+  const gfx::Size multi_line_size_unbounded =
+      label()->GetPreferredSize({/* Unbounded */});
+  EXPECT_EQ(single_line_size, multi_line_size_unbounded);
 
-  int new_width = multi_line_size.width() / 2;
-  label()->SetBounds(0, 0, new_width, label()->GetHeightForWidth(new_width));
-  gfx::Size new_size = label()->GetPreferredSize();
-  EXPECT_GT(multi_line_size.width(), new_size.width());
-  EXPECT_LT(multi_line_size.height(), new_size.height());
+  const gfx::Size multi_line_size_bounded = label()->GetPreferredSize(
+      {single_line_size.width() / 2, {/* Unbounded */}});
+  EXPECT_GT(multi_line_size_unbounded.width(), multi_line_size_bounded.width());
+  EXPECT_LT(multi_line_size_unbounded.height(),
+            multi_line_size_bounded.height());
+
+  // Test the preferred size after the label is laid out.
+  // GetPreferredSize(SizeBounds) should ignore the existing bounds.
+  const int layout_width = multi_line_size_unbounded.width() / 3;
+  label()->SetBounds(0, 0, layout_width,
+                     label()->GetHeightForWidth(layout_width));
+  const gfx::Size multi_line_size_unbounded2 =
+      label()->GetPreferredSize({/* Unbounded */});
+  const gfx::Size multi_line_size_bounded2 = label()->GetPreferredSize(
+      {single_line_size.width() / 2, {/* Unbounded */}});
+  EXPECT_EQ(multi_line_size_unbounded, multi_line_size_unbounded2);
+  EXPECT_EQ(multi_line_size_bounded, multi_line_size_bounded2);
 }
 
 TEST_F(LabelTest, SingleLineGetHeightForWidth) {
@@ -499,7 +575,7 @@ TEST_F(LabelTest, SingleLineGetHeightForWidth) {
 
   // Given any amount of width, the label should take one line.
   label()->SetText(u"This is an example.");
-  const int width = label()->GetPreferredSize().width();
+  const int width = label()->GetPreferredSize({}).width();
   EXPECT_EQ(line_height, label()->GetHeightForWidth(width));
   EXPECT_EQ(line_height, label()->GetHeightForWidth(width * 2));
   EXPECT_EQ(line_height, label()->GetHeightForWidth(width / 2));
@@ -514,7 +590,7 @@ TEST_F(LabelTest, MultiLineGetHeightForWidth) {
 
   // Given its preferred width or more, the label should take one line.
   label()->SetText(u"This is an example.");
-  const int width = label()->GetPreferredSize().width();
+  const int width = label()->GetPreferredSize({}).width();
   EXPECT_EQ(line_height, label()->GetHeightForWidth(width));
   EXPECT_EQ(line_height, label()->GetHeightForWidth(width * 2));
 
@@ -523,12 +599,6 @@ TEST_F(LabelTest, MultiLineGetHeightForWidth) {
   const int height_for_half_width = label()->GetHeightForWidth(width / 2);
   EXPECT_GT(height_for_half_width, line_height);
   EXPECT_GT(label()->GetHeightForWidth(width / 4), height_for_half_width);
-
-  // Given zero width, the label should take GetMaxLines(); if this is not set,
-  // default to one.
-  EXPECT_EQ(line_height, label()->GetHeightForWidth(0));
-  label()->SetMaxLines(10);
-  EXPECT_EQ(line_height * 10, label()->GetHeightForWidth(0));
 }
 
 TEST_F(LabelTest, TooltipProperty) {
@@ -570,7 +640,8 @@ TEST_F(LabelTest, TooltipProperty) {
   EXPECT_TRUE(label()->GetTooltipText(gfx::Point()).empty());
 
   // Shrinking the single-line label's height shouldn't trigger a tooltip.
-  label()->SetBounds(0, 0, 1000, label()->GetPreferredSize().height() / 2);
+  label()->SetBounds(
+      0, 0, 1000, label()->GetPreferredSize(SizeBounds(1000, {})).height() / 2);
   EXPECT_TRUE(label()->GetTooltipText(gfx::Point()).empty());
 
   // Verify that explicitly set tooltip text is shown, regardless of size.
@@ -605,13 +676,93 @@ TEST_F(LabelTest, TooltipProperty) {
   label()->SetTooltipText(std::u16string());
 }
 
+TEST_F(LabelTest, TooltipPropertyAccessibility) {
+  label()->SetText(u"My cool string.");
+  ui::AXNodeData ax_data;
+
+  // Initially, label has no bounds, its text does not fit, and therefore its
+  // text should be returned as the tooltip text.
+  // Since the tooltip text should be the same as the name, we shouldn't be
+  // using it for the accessible description.
+  EXPECT_EQ(label()->GetText(), label()->GetTooltipText(gfx::Point()));
+  label()->GetViewAccessibility().GetAccessibleNodeData(&ax_data);
+  EXPECT_FALSE(
+      ax_data.HasStringAttribute(ax::mojom::StringAttribute::kDescription));
+  EXPECT_EQ(label()->GetText(),
+            ax_data.GetString16Attribute(ax::mojom::StringAttribute::kName));
+
+  // When set, custom tooltip text should be returned instead of the label's
+  // text. The tooltip text should be used for the accessible description.
+  std::u16string tooltip_text(u"The tooltip!");
+  ax_data = ui::AXNodeData();
+  label()->SetTooltipText(tooltip_text);
+  EXPECT_EQ(tooltip_text, label()->GetTooltipText(gfx::Point()));
+  label()->GetViewAccessibility().GetAccessibleNodeData(&ax_data);
+  EXPECT_EQ(tooltip_text, ax_data.GetString16Attribute(
+                              ax::mojom::StringAttribute::kDescription));
+
+  // While tooltip handling is disabled, GetTooltipText() should fail.
+  label()->SetHandlesTooltips(false);
+  ax_data = ui::AXNodeData();
+  label()->GetViewAccessibility().GetAccessibleNodeData(&ax_data);
+  EXPECT_TRUE(label()->GetTooltipText(gfx::Point()).empty());
+  EXPECT_FALSE(
+      ax_data.HasStringAttribute(ax::mojom::StringAttribute::kDescription));
+  label()->SetHandlesTooltips(true);
+
+  // When the tooltip text is set to an empty string, the original behavior is
+  // restored, and the accessible description should be cleared since the
+  // accessible name would be the same as the tooltip text.
+  label()->SetTooltipText(std::u16string());
+  ax_data = ui::AXNodeData();
+  label()->GetViewAccessibility().GetAccessibleNodeData(&ax_data);
+  EXPECT_EQ(label()->GetText(), label()->GetTooltipText(gfx::Point()));
+  EXPECT_FALSE(
+      ax_data.HasStringAttribute(ax::mojom::StringAttribute::kDescription));
+
+  // Verify that explicitly set tooltip text is shown. It should become the
+  // accessible description.
+  label()->SetTooltipText(tooltip_text);
+  ax_data = ui::AXNodeData();
+  label()->GetViewAccessibility().GetAccessibleNodeData(&ax_data);
+  EXPECT_EQ(tooltip_text, label()->GetTooltipText(gfx::Point()));
+  EXPECT_EQ(tooltip_text, ax_data.GetString16Attribute(
+                              ax::mojom::StringAttribute::kDescription));
+
+  // Clear out the explicitly set tooltip text. We now should not have a
+  // description.
+  label()->SetTooltipText(std::u16string());
+  ax_data = ui::AXNodeData();
+  label()->GetViewAccessibility().GetAccessibleNodeData(&ax_data);
+  EXPECT_FALSE(
+      ax_data.HasStringAttribute(ax::mojom::StringAttribute::kDescription));
+
+  ax_data = ui::AXNodeData();
+  label()->SetTooltipText(tooltip_text);
+
+  // Make the label obscured and there is no tooltip.
+  label()->SetObscured(true);
+  EXPECT_TRUE(label()->GetTooltipText(gfx::Point()).empty());
+  label()->GetViewAccessibility().GetAccessibleNodeData(&ax_data);
+  EXPECT_FALSE(
+      ax_data.HasStringAttribute(ax::mojom::StringAttribute::kDescription));
+
+  // Unobscuring should restore the tooltip.
+  label()->SetObscured(false);
+  EXPECT_FALSE(label()->GetTooltipText(gfx::Point()).empty());
+  ax_data = ui::AXNodeData();
+  label()->GetViewAccessibility().GetAccessibleNodeData(&ax_data);
+  EXPECT_EQ(tooltip_text, ax_data.GetString16Attribute(
+                              ax::mojom::StringAttribute::kDescription));
+}
+
 TEST_F(LabelTest, Accessibility) {
   const std::u16string accessible_name = u"A11y text.";
 
   label()->SetText(u"Displayed text.");
 
   ui::AXNodeData node_data;
-  label()->GetAccessibleNodeData(&node_data);
+  label()->GetViewAccessibility().GetAccessibleNodeData(&node_data);
   EXPECT_EQ(ax::mojom::Role::kStaticText, node_data.role);
   EXPECT_EQ(label()->GetText(),
             node_data.GetString16Attribute(ax::mojom::StringAttribute::kName));
@@ -620,9 +771,10 @@ TEST_F(LabelTest, Accessibility) {
 
   // Setting a custom accessible name overrides the displayed text in
   // screen reader announcements.
-  label()->SetAccessibleName(accessible_name);
+  label()->GetViewAccessibility().SetName(accessible_name);
 
-  label()->GetAccessibleNodeData(&node_data);
+  node_data = ui::AXNodeData();
+  label()->GetViewAccessibility().GetAccessibleNodeData(&node_data);
   EXPECT_EQ(accessible_name,
             node_data.GetString16Attribute(ax::mojom::StringAttribute::kName));
   EXPECT_NE(label()->GetText(),
@@ -631,7 +783,8 @@ TEST_F(LabelTest, Accessibility) {
   // Changing the displayed text will not impact the non-empty accessible name.
   label()->SetText(u"Different displayed Text.");
 
-  label()->GetAccessibleNodeData(&node_data);
+  node_data = ui::AXNodeData();
+  label()->GetViewAccessibility().GetAccessibleNodeData(&node_data);
   EXPECT_EQ(accessible_name,
             node_data.GetString16Attribute(ax::mojom::StringAttribute::kName));
   EXPECT_NE(label()->GetText(),
@@ -639,9 +792,18 @@ TEST_F(LabelTest, Accessibility) {
 
   // Clearing the accessible name will cause the screen reader to default to
   // verbalizing the displayed text.
-  label()->SetAccessibleName(u"");
+  label()->GetViewAccessibility().SetName(u"");
 
-  label()->GetAccessibleNodeData(&node_data);
+  node_data = ui::AXNodeData();
+  label()->GetViewAccessibility().GetAccessibleNodeData(&node_data);
+  EXPECT_EQ(label()->GetText(),
+            node_data.GetString16Attribute(ax::mojom::StringAttribute::kName));
+
+  // If the displayed text is the source of the accessible name, and that text
+  // is cleared, the accessible name should also be cleared.
+  label()->SetText(u"");
+  node_data = ui::AXNodeData();
+  label()->GetViewAccessibility().GetAccessibleNodeData(&node_data);
   EXPECT_EQ(label()->GetText(),
             node_data.GetString16Attribute(ax::mojom::StringAttribute::kName));
 }
@@ -652,15 +814,15 @@ TEST_F(LabelTest, SetTextNotifiesAccessibilityEvent) {
   // Changing the text affects the accessible name, so it should notify.
   EXPECT_EQ(0, counter.GetCount(ax::mojom::Event::kTextChanged));
   label()->SetText(u"Example");
-  EXPECT_EQ(u"Example", label()->GetAccessibleName());
+  EXPECT_EQ(u"Example", label()->GetViewAccessibility().GetCachedName());
   EXPECT_EQ(1, counter.GetCount(ax::mojom::Event::kTextChanged));
 
   // Changing the text when it doesn't affect the accessible name should not
   // notify.
-  label()->SetAccessibleName(u"Name");
+  label()->GetViewAccessibility().SetName(u"Name");
   EXPECT_EQ(2, counter.GetCount(ax::mojom::Event::kTextChanged));
   label()->SetText(u"Example2");
-  EXPECT_EQ(u"Name", label()->GetAccessibleName());
+  EXPECT_EQ(u"Name", label()->GetViewAccessibility().GetCachedName());
   EXPECT_EQ(2, counter.GetCount(ax::mojom::Event::kTextChanged));
 }
 
@@ -674,33 +836,72 @@ TEST_F(LabelTest, TextChangeWithoutLayout) {
   EXPECT_EQ(u"Example", label()->display_text_->GetDisplayText());
 
   label()->SetText(u"Altered");
-  // The altered text should be painted even though Layout() or SetBounds() are
-  // not called.
+  // The altered text should be painted even though
+  // DeprecatedLayoutImmediately() or SetBounds() are not called.
   label()->OnPaint(&canvas);
   EXPECT_TRUE(label()->display_text_);
   EXPECT_EQ(u"Altered", label()->display_text_->GetDisplayText());
 }
 
+TEST_F(LabelTest, AccessibleNameAndRole) {
+  label()->SetText(u"Text");
+
+  EXPECT_EQ(label()->GetViewAccessibility().GetCachedName(), u"Text");
+  EXPECT_EQ(label()->GetViewAccessibility().GetCachedRole(),
+            ax::mojom::Role::kStaticText);
+
+  ui::AXNodeData data;
+  label()->GetViewAccessibility().GetAccessibleNodeData(&data);
+  EXPECT_EQ(data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+            u"Text");
+  EXPECT_EQ(data.role, ax::mojom::Role::kStaticText);
+
+  label()->SetTextContext(style::CONTEXT_DIALOG_TITLE);
+
+  EXPECT_EQ(label()->GetViewAccessibility().GetCachedName(), u"Text");
+  EXPECT_EQ(label()->GetViewAccessibility().GetCachedRole(),
+            ax::mojom::Role::kTitleBar);
+
+  data = ui::AXNodeData();
+  label()->GetViewAccessibility().GetAccessibleNodeData(&data);
+  EXPECT_EQ(data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+            u"Text");
+  EXPECT_EQ(data.role, ax::mojom::Role::kTitleBar);
+
+  label()->SetText(u"New Text");
+  label()->GetViewAccessibility().SetRole(ax::mojom::Role::kLink);
+  EXPECT_EQ(label()->GetViewAccessibility().GetCachedName(), u"New Text");
+  EXPECT_EQ(label()->GetViewAccessibility().GetCachedRole(),
+            ax::mojom::Role::kLink);
+
+  data = ui::AXNodeData();
+  label()->GetViewAccessibility().GetAccessibleNodeData(&data);
+  EXPECT_EQ(data.GetString16Attribute(ax::mojom::StringAttribute::kName),
+            u"New Text");
+  EXPECT_EQ(data.role, ax::mojom::Role::kLink);
+}
+
 TEST_F(LabelTest, EmptyLabelSizing) {
   const gfx::Size expected_size(0, label()->font_list().GetHeight());
-  EXPECT_EQ(expected_size, label()->GetPreferredSize());
+  EXPECT_EQ(expected_size, label()->GetPreferredSize({}));
   label()->SetMultiLine(!label()->GetMultiLine());
-  EXPECT_EQ(expected_size, label()->GetPreferredSize());
+  EXPECT_EQ(expected_size, label()->GetPreferredSize({}));
 }
 
 TEST_F(LabelTest, SingleLineSizing) {
   label()->SetText(u"A not so random string in one line.");
-  const gfx::Size size = label()->GetPreferredSize();
+  const gfx::Size size = label()->GetPreferredSize({});
   EXPECT_GT(size.height(), kMinTextDimension);
   EXPECT_GT(size.width(), kMinTextDimension);
 
   // Setting a size smaller than preferred should not change the preferred size.
   label()->SetSize(gfx::Size(size.width() / 2, size.height() / 2));
-  EXPECT_EQ(size, label()->GetPreferredSize());
+  EXPECT_EQ(size, label()->GetPreferredSize(SizeBounds(label()->size())));
 
   const auto border = gfx::Insets::TLBR(10, 20, 30, 40);
   label()->SetBorder(CreateEmptyBorder(border));
-  const gfx::Size size_with_border = label()->GetPreferredSize();
+  const gfx::Size size_with_border =
+      label()->GetPreferredSize(SizeBounds(label()->size()));
   EXPECT_EQ(size_with_border.height(), size.height() + border.height());
   EXPECT_EQ(size_with_border.width(), size.width() + border.width());
   EXPECT_EQ(size.height() + border.height(),
@@ -715,20 +916,21 @@ TEST_F(LabelTest, MultilineSmallAvailableWidthSizing) {
   // Check that Label can be laid out at a variety of small sizes,
   // splitting the words into up to one character per line if necessary.
   // Incorrect word splitting may cause infinite loops in text layout.
-  gfx::Size required_size = label()->GetPreferredSize();
-  for (int i = 1; i < required_size.width(); ++i)
+  gfx::Size required_size = label()->GetPreferredSize({});
+  for (int i = 1; i < required_size.width(); ++i) {
     EXPECT_GT(label()->GetHeightForWidth(i), 0);
+  }
 }
 
 // Verifies if SetAllowCharacterBreak(true) doesn't change the preferred size.
 // See crbug.com/469559
 TEST_F(LabelTest, PreferredSizeForAllowCharacterBreak) {
   label()->SetText(u"Example");
-  gfx::Size preferred_size = label()->GetPreferredSize();
+  gfx::Size preferred_size = label()->GetPreferredSize({});
 
   label()->SetMultiLine(true);
   label()->SetAllowCharacterBreak(true);
-  EXPECT_EQ(preferred_size, label()->GetPreferredSize());
+  EXPECT_EQ(preferred_size, label()->GetPreferredSize({}));
 }
 
 TEST_F(LabelTest, MultiLineSizing) {
@@ -736,7 +938,7 @@ TEST_F(LabelTest, MultiLineSizing) {
   label()->SetMultiLine(true);
 
   // GetPreferredSize
-  gfx::Size required_size = label()->GetPreferredSize();
+  gfx::Size required_size = label()->GetPreferredSize({});
   EXPECT_GT(required_size.height(), kMinTextDimension);
   EXPECT_GT(required_size.width(), kMinTextDimension);
 
@@ -748,27 +950,22 @@ TEST_F(LabelTest, MultiLineSizing) {
   // SizeToFit with limited width.
   label()->SizeToFit(required_width - 1);
   int constrained_width = label()->GetLocalBounds().width();
-#if BUILDFLAG(IS_WIN)
-  // Canvas::SizeStringInt (in ui/gfx/canvas_linux.cc)
-  // has to be fixed to return the size that fits to given width/height.
   EXPECT_LT(constrained_width, required_width);
-#endif
   EXPECT_GT(constrained_width, kMinTextDimension);
 
   // Change the width back to the desire width.
   label()->SizeToFit(required_width);
   EXPECT_EQ(required_width, label()->GetLocalBounds().width());
 
+  // SizeToFit with unlimited width.
+  label()->SizeToFit(0);
+
   // General tests for GetHeightForWidth.
   int required_height = label()->GetHeightForWidth(required_width);
   EXPECT_GT(required_height, kMinTextDimension);
   int height_for_constrained_width =
       label()->GetHeightForWidth(constrained_width);
-#if BUILDFLAG(IS_WIN)
-  // Canvas::SizeStringInt (in ui/gfx/canvas_linux.cc)
-  // has to be fixed to return the size that fits to given width/height.
   EXPECT_GT(height_for_constrained_width, required_height);
-#endif
   // Using the constrained width or the required_width - 1 should give the
   // same result for the height because the constrainted width is the tight
   // width when given "required_width - 1" as the max width.
@@ -793,16 +990,10 @@ TEST_F(LabelTest, MultiLineSizing) {
   // calculation.  If it is, then the height will grow when width
   // is shrunk.
   int height1 = label()->GetHeightForWidth(required_width_with_border - 1);
-#if BUILDFLAG(IS_WIN)
-  // Canvas::SizeStringInt (in ui/gfx/canvas_linux.cc)
-  // has to be fixed to return the size that fits to given width/height.
   EXPECT_GT(height1, required_height_with_border);
-#endif
   EXPECT_EQ(height1, height_for_constrained_width + border.height());
 
-  // GetPreferredSize and borders.
-  label()->SetBounds(0, 0, 0, 0);
-  gfx::Size required_size_with_border = label()->GetPreferredSize();
+  gfx::Size required_size_with_border = label()->GetPreferredSize({});
   EXPECT_EQ(required_size_with_border.height(),
             required_size.height() + border.height());
   EXPECT_EQ(required_size_with_border.width(),
@@ -816,9 +1007,9 @@ TEST_F(LabelTest, MultiLineSetMaxLines) {
   // Ensure SetMaxLines clamps the line count of a string with returns.
   label()->SetText(u"first line\nsecond line\nthird line");
   label()->SetMultiLine(true);
-  gfx::Size string_size = label()->GetPreferredSize();
+  gfx::Size string_size = label()->GetPreferredSize({});
   label()->SetMaxLines(2);
-  gfx::Size two_line_size = label()->GetPreferredSize();
+  gfx::Size two_line_size = label()->GetPreferredSize({});
   EXPECT_EQ(string_size.width(), two_line_size.width());
   EXPECT_GT(string_size.height(), two_line_size.height());
 
@@ -830,20 +1021,20 @@ TEST_F(LabelTest, MultiLineSetMaxLines) {
   label()->SetText(u"A long string that will be wrapped");
   label()->SetMaxLines(0);  // Used to get the uncapped height.
   label()->SizeToFit(0);    // Used to get the uncapped width.
-  label()->SizeToFit(label()->GetPreferredSize().width() / 4);
-  string_size = label()->GetPreferredSize();
+  label()->SizeToFit(label()->GetPreferredSize({}).width() / 4);
+  string_size = label()->GetPreferredSize({});
   label()->SetMaxLines(2);
-  two_line_size = label()->GetPreferredSize();
+  two_line_size = label()->GetPreferredSize({});
   EXPECT_EQ(string_size.width(), two_line_size.width());
   EXPECT_GT(string_size.height(), two_line_size.height());
 
   // Ensure SetMaxLines also works with line wrapping for SetMaximumWidth.
   label()->SetMaxLines(0);  // Used to get the uncapped height.
   label()->SizeToFit(0);    // Used to get the uncapped width.
-  label()->SetMaximumWidth(label()->GetPreferredSize().width() / 4);
-  string_size = label()->GetPreferredSize();
+  label()->SetMaximumWidth(label()->GetPreferredSize({}).width() / 4);
+  string_size = label()->GetPreferredSize({});
   label()->SetMaxLines(2);
-  two_line_size = label()->GetPreferredSize();
+  two_line_size = label()->GetPreferredSize({});
   EXPECT_EQ(string_size.width(), two_line_size.width());
   EXPECT_GT(string_size.height(), two_line_size.height());
 
@@ -851,7 +1042,7 @@ TEST_F(LabelTest, MultiLineSetMaxLines) {
   const auto border = gfx::Insets::TLBR(1, 2, 3, 4);
   label()->SetBorder(CreateEmptyBorder(border));
   EXPECT_EQ(two_line_size.height() + border.height(),
-            label()->GetPreferredSize().height());
+            label()->GetPreferredSize({}).height());
 }
 #endif
 
@@ -863,28 +1054,31 @@ TEST_F(LabelTest, MultiLineSizingWithElide) {
   label()->SetText(text);
   label()->SetMultiLine(true);
 
-  gfx::Size required_size = label()->GetPreferredSize();
+  gfx::Size required_size = label()->GetPreferredSize({});
   EXPECT_GT(required_size.height(), kMinTextDimension);
   EXPECT_GT(required_size.width(), kMinTextDimension);
   label()->SetBoundsRect(gfx::Rect(required_size));
 
   label()->SetElideBehavior(gfx::ELIDE_TAIL);
-  EXPECT_EQ(required_size, label()->GetPreferredSize());
+  EXPECT_EQ(required_size,
+            label()->GetPreferredSize(SizeBounds(required_size)));
   EXPECT_EQ(text, label()->GetDisplayTextForTesting());
 
-  label()->SizeToFit(required_size.width() - 1);
-  gfx::Size narrow_size = label()->GetPreferredSize();
+  gfx::Size narrow_size =
+      label()->GetPreferredSize(SizeBounds(required_size.width() - 1, {}));
   EXPECT_GT(required_size.width(), narrow_size.width());
   EXPECT_LT(required_size.height(), narrow_size.height());
 
   // SetBounds() doesn't change the preferred size.
   label()->SetBounds(0, 0, narrow_size.width() - 1, narrow_size.height());
-  EXPECT_EQ(narrow_size, label()->GetPreferredSize());
+  EXPECT_EQ(narrow_size, label()->GetPreferredSize(
+                             SizeBounds(required_size.width() - 1, {})));
 
   // Paint() doesn't change the preferred size.
   gfx::Canvas canvas;
   label()->OnPaint(&canvas);
-  EXPECT_EQ(narrow_size, label()->GetPreferredSize());
+  EXPECT_EQ(narrow_size, label()->GetPreferredSize(
+                             SizeBounds(required_size.width() - 1, {})));
 }
 
 // Check that labels support GetTooltipHandlerForPoint.
@@ -936,7 +1130,7 @@ TEST_F(LabelTest, GetTooltipHandlerForPoint) {
 TEST_F(LabelTest, ResetRenderTextData) {
   label()->SetText(u"Example");
   label()->SizeToPreferredSize();
-  gfx::Size preferred_size = label()->GetPreferredSize();
+  gfx::Size preferred_size = label()->GetPreferredSize({});
 
   EXPECT_NE(gfx::Size(), preferred_size);
   EXPECT_FALSE(label()->display_text_);
@@ -955,7 +1149,7 @@ TEST_F(LabelTest, ResetRenderTextData) {
   EXPECT_EQ(u"Example", label()->GetText());
   EXPECT_FALSE(label()->display_text_);
 
-  EXPECT_EQ(preferred_size, label()->GetPreferredSize());
+  EXPECT_EQ(preferred_size, label()->GetPreferredSize({}));
   EXPECT_FALSE(label()->display_text_);
 
   // RenderText data should be back when it's necessary.
@@ -979,7 +1173,7 @@ TEST_F(LabelTest, MultilineSupportedRenderText) {
   label()->SetMultiLine(true);
   label()->SizeToPreferredSize();
 
-  gfx::Canvas canvas(label()->GetPreferredSize(), 1.0f, true);
+  gfx::Canvas canvas(label()->GetPreferredSize({}), 1.0f, true);
   label()->OnPaint(&canvas);
 
   // There's only RenderText instance, which should have multiple lines.
@@ -1029,7 +1223,7 @@ TEST_F(LabelTest, EmptyLabel) {
 
   // With no text, neither links nor labels have a size in any dimension.
   Link concrete_link;
-  EXPECT_TRUE(concrete_link.GetPreferredSize().IsEmpty());
+  EXPECT_TRUE(concrete_link.GetPreferredSize({}).IsEmpty());
 }
 
 TEST_F(LabelTest, CanForceDirectionality) {
@@ -1047,18 +1241,6 @@ TEST_F(LabelTest, CanForceDirectionality) {
                            gfx::DirectionalityMode::DIRECTIONALITY_FORCE_RTL);
   EXPECT_EQ(base::i18n::TextDirection::RIGHT_TO_LEFT,
             ltr_text_force_rtl.GetTextDirectionForTesting());
-
-  SetRTL(true);
-  Label ltr_use_ui(u"0123456", 0, style::STYLE_PRIMARY,
-                   gfx::DirectionalityMode::DIRECTIONALITY_FROM_UI);
-  EXPECT_EQ(base::i18n::TextDirection::RIGHT_TO_LEFT,
-            ltr_use_ui.GetTextDirectionForTesting());
-
-  SetRTL(false);
-  Label rtl_use_ui(ToRTL("0123456"), 0, style::STYLE_PRIMARY,
-                   gfx::DirectionalityMode::DIRECTIONALITY_FROM_UI);
-  EXPECT_EQ(base::i18n::TextDirection::LEFT_TO_RIGHT,
-            rtl_use_ui.GetTextDirectionForTesting());
 }
 
 TEST_F(LabelTest, DefaultDirectionalityIsFromText) {
@@ -1127,7 +1309,7 @@ TEST_F(LabelTest, GetSubstringBounds) {
             substring_bounds_with_inset[0].height());
 }
 
-// TODO(crbug.com/1139395): Enable on ChromeOS along with the DCHECK in Label.
+// TODO(crbug.com/40725997): Enable on ChromeOS along with the DCHECK in Label.
 #if BUILDFLAG(IS_CHROMEOS)
 #define MAYBE_ChecksSubpixelRenderingOntoOpaqueSurface \
   DISABLED_ChecksSubpixelRenderingOntoOpaqueSurface
@@ -1166,6 +1348,153 @@ TEST_F(LabelTest, MAYBE_ChecksSubpixelRenderingOntoOpaqueSurface) {
   view.SetBackground(CreateSolidBackground(SK_ColorWHITE));
   label->OnPaint(&canvas);
 }
+
+#if BUILDFLAG(SUPPORTS_AX_TEXT_OFFSETS)
+TEST_F(LabelTest, WordOffsets) {
+  const ::ui::ScopedAXModeSetter ax_mode_setter(ui::AXMode::kNativeAPIs);
+  MockAXModeAdded();
+  ASSERT_TRUE(label()->GetViewAccessibility().is_initialized());
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(::features::kUiaProvider);
+  const std::u16string text = u"This is a string";
+  label()->SetText(text);
+  label()->SizeToPreferredSize();
+  EXPECT_EQ(text, label()->GetDisplayTextForTesting());
+  ui::AXNodeData node_data;
+  label()->GetViewAccessibility().GetAccessibleNodeData(&node_data);
+  std::vector<int32_t> expected_starts = {0, 5, 8, 10};
+  std::vector<int32_t> expected_ends = {4, 7, 9, 16};
+  EXPECT_EQ(
+      node_data.GetIntListAttribute(ax::mojom::IntListAttribute::kWordStarts),
+      expected_starts);
+  EXPECT_EQ(
+      node_data.GetIntListAttribute(ax::mojom::IntListAttribute::kWordEnds),
+      expected_ends);
+}
+
+TEST_F(LabelTest, WordOffsetsAXNotOn) {
+  const ::ui::ScopedAXModeSetter ax_mode_setter(ui::AXMode::kNativeAPIs);
+  ASSERT_FALSE(label()->GetViewAccessibility().is_initialized());
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(::features::kUiaProvider);
+  const std::u16string text = u"This is a string";
+  label()->SetText(text);
+  label()->SizeToPreferredSize();
+  EXPECT_EQ(text, label()->GetDisplayTextForTesting());
+  ui::AXNodeData node_data;
+  label()->GetViewAccessibility().GetAccessibleNodeData(&node_data);
+  std::vector<int32_t> expected_starts = {};
+  std::vector<int32_t> expected_ends = {};
+  EXPECT_EQ(
+      node_data.GetIntListAttribute(ax::mojom::IntListAttribute::kWordStarts),
+      expected_starts);
+  EXPECT_EQ(
+      node_data.GetIntListAttribute(ax::mojom::IntListAttribute::kWordEnds),
+      expected_ends);
+}
+
+TEST_F(LabelTest, AccessibleGraphemeOffsets) {
+  const ::ui::ScopedAXModeSetter ax_mode_setter(ui::AXMode::kNativeAPIs);
+  MockAXModeAdded();
+  ASSERT_TRUE(label()->GetViewAccessibility().is_initialized());
+  struct Case {
+    std::u16string text;
+    std::vector<int32_t> expected_offsets;
+  };
+  const auto cases = std::to_array<Case>({
+      {std::u16string(), {}},
+      // LTR.
+      {u"This is a string",
+       {0, 6, 13, 15, 21, 24, 27, 32, 35, 41, 45, 50, 54, 58, 61, 68, 76}},
+      // RTL: should render left-to-right as "<space>43210 \n cba9876".
+      // Note this used to say "Arabic language", in Arabic, but the last
+      // character in the string (\u0629) got fancy in an updated Mac font, so
+      // now the penultimate character repeats.
+      //
+      // TODO(accessibility): This is not the correct order of grapheme offsets.
+      // Blink returns the offsets from the right boundary when in RTL and so
+      // should we for Views.
+      {u"اللغة العربيي",
+       {67, 63, 59, 52, 46, 43, 40, 36, 29, 24, 20, 16, 6, 17}},
+      // LTR कि (DEVANAGARI KA with VOWEL I) (2-char grapheme), LTR abc, and LTR
+      // कि.
+      {u"\u0915\u093fabc\u0915\u093f", {10, 23, 29, 36, 42, 56}},
+      // LTR ab, LTR कि (DEVANAGARI KA with VOWEL I) (2-char grapheme), LTR cd.
+      {u"ab\u0915\u093fcd", {3, 9, 16, 29, 35, 43}},
+      // LTR ab, 𝄞 'MUSICAL SYMBOL G CLEF' U+1D11E (surrogate pair), LTR cd.
+      // Windows requires wide strings for \Unnnnnnnn universal character names.
+      {u"ab\U0001D11Ecd", {4, 10, 17, 23, 29, 37}},
+  });
+
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(::features::kUiaProvider);
+
+  for (size_t i = 0; i < std::size(cases); i++) {
+    ASSERT_TRUE(label()->GetViewAccessibility().is_initialized());
+    SCOPED_TRACE(base::StringPrintf("Testing cases[%" PRIuS "]", i));
+    label()->SetText(cases[i].text);
+    label()->SizeToPreferredSize();
+    EXPECT_EQ(cases[i].text, label()->GetDisplayTextForTesting());
+
+    ui::AXNodeData node_data;
+    label()->GetViewAccessibility().GetAccessibleNodeData(&node_data);
+    EXPECT_EQ(node_data.GetIntListAttribute(
+                  ax::mojom::IntListAttribute::kCharacterOffsets),
+              cases[i].expected_offsets);
+  }
+}
+
+TEST_F(LabelTest, AccessibleGraphemeOffsetsObscured) {
+  const ::ui::ScopedAXModeSetter ax_mode_setter(ui::AXMode::kNativeAPIs);
+  MockAXModeAdded();
+  ASSERT_TRUE(label()->GetViewAccessibility().is_initialized());
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(::features::kUiaProvider);
+  const std::u16string text = u"password";
+  label()->SetText(text);
+  label()->SizeToPreferredSize();
+  label()->SetObscured(true);
+  EXPECT_EQ(
+      std::u16string(text.size(), gfx::RenderText::kPasswordReplacementChar),
+      label()->GetDisplayTextForTesting());
+  ui::AXNodeData node_data;
+  label()->GetViewAccessibility().GetAccessibleNodeData(&node_data);
+  std::vector<int32_t> expected_offsets = {6, 10, 15, 20, 25, 30, 35, 40, 45};
+  EXPECT_EQ(node_data.GetIntListAttribute(
+                ax::mojom::IntListAttribute::kCharacterOffsets),
+            expected_offsets);
+}
+
+TEST_F(LabelTest, AccessibleGraphemeOffsetsElided) {
+  const ::ui::ScopedAXModeSetter ax_mode_setter(ui::AXMode::kNativeAPIs);
+  MockAXModeAdded();
+  ASSERT_TRUE(label()->GetViewAccessibility().is_initialized());
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(::features::kUiaProvider);
+  label()->SetElideBehavior(gfx::NO_ELIDE);
+  const std::u16string text = u"This is a string";
+
+  label()->SetText(text);
+  gfx::Size size = label()->GetPreferredSize({});
+  label()->SetBoundsRect(gfx::Rect(size));
+  EXPECT_EQ(text, label()->GetDisplayTextForTesting());
+
+  size.set_width(size.width() / 2);
+  label()->SetBoundsRect(gfx::Rect(size));
+
+  label()->SetElideBehavior(gfx::ELIDE_TAIL);
+  EXPECT_GT(text.size(), label()->GetDisplayTextForTesting().size());
+  EXPECT_EQ(u"This i\x2026", label()->GetDisplayTextForTesting());
+
+  ui::AXNodeData node_data;
+  label()->GetViewAccessibility().GetAccessibleNodeData(&node_data);
+  std::vector<int32_t> expected_offsets = {1,  7,  14, 16, 22, 25, 28, 38, 38,
+                                           38, 38, 38, 38, 38, 38, 38, 38};
+  EXPECT_EQ(node_data.GetIntListAttribute(
+                ax::mojom::IntListAttribute::kCharacterOffsets),
+            expected_offsets);
+}
+#endif  // BUILDFLAG(SUPPORTS_AX_TEXT_OFFSETS)
 
 TEST_F(LabelSelectionTest, Selectable) {
   // By default, labels don't support text selection.
@@ -1299,14 +1628,14 @@ TEST_F(LabelSelectionTest, MouseDragMultilineLTR) {
   PerformMouseDragTo(gfx::Point(100, GetCursorPoint(6).y()));
   EXPECT_EQ(u"cd\nefgh", GetSelectedText());
 
-  const gfx::Point points[] = {
+  const auto points = std::to_array<gfx::Point>({
       {GetCursorPoint(1).x(), -5},   // NW.
       {GetCursorPoint(2).x(), -5},   // NORTH.
       {GetCursorPoint(3).x(), -5},   // NE.
       {GetCursorPoint(8).x(), 100},  // SE.
       {GetCursorPoint(7).x(), 100},  // SOUTH.
       {GetCursorPoint(6).x(), 100},  // SW.
-  };
+  });
   constexpr const char16_t* kExtendLeft = u"ab";
   constexpr const char16_t* kExtendRight = u"cd\nefgh";
 
@@ -1331,14 +1660,14 @@ TEST_F(LabelSelectionTest, MouseDragSingleLineLTR) {
   label()->SizeToPreferredSize();
   ASSERT_TRUE(label()->SetSelectable(true));
   PerformMousePress(GetCursorPoint(2));
-  const gfx::Point points[] = {
+  const auto points = std::to_array<gfx::Point>({
       {GetCursorPoint(1).x(), -5},   // NW.
       {GetCursorPoint(2).x(), -5},   // NORTH.
       {GetCursorPoint(3).x(), -5},   // NE.
       {GetCursorPoint(3).x(), 100},  // SE.
       {GetCursorPoint(2).x(), 100},  // SOUTH.
       {GetCursorPoint(1).x(), 100},  // SW.
-  };
+  });
   constexpr const char16_t* kExtendLeft = u"ab";
   constexpr const char16_t* kExtendRight = u"cdef";
 
@@ -1380,14 +1709,14 @@ TEST_F(LabelSelectionTest, MouseDragMultilineRTL) {
   PerformMouseDragTo(gfx::Point(100, GetCursorPoint(6).y()));
   EXPECT_EQ(ToRTL("12\n"), GetSelectedText());
 
-  const gfx::Point points[] = {
+  const auto points = std::to_array<gfx::Point>({
       {GetCursorPoint(2).x(), -5},   // NW: Now towards the end of the string.
       {GetCursorPoint(1).x(), -5},   // NORTH,
       {GetCursorPoint(0).x(), -5},   // NE: Towards the start.
       {GetCursorPoint(4).x(), 100},  // SE.
       {GetCursorPoint(5).x(), 100},  // SOUTH.
       {GetCursorPoint(6).x(), 100},  // SW.
-  };
+  });
 
   // Visual right, so to the beginning of the string for RTL.
   const std::u16string extend_right = ToRTL("0");
@@ -1414,7 +1743,7 @@ TEST_F(LabelSelectionTest, MouseDragSingleLineRTL) {
   ASSERT_TRUE(label()->SetSelectable(true));
 
   PerformMousePress(GetCursorPoint(1));
-  const gfx::Point points[] = {
+  const std::vector<gfx::Point> points{
       {GetCursorPoint(2).x(), -5},   // NW.
       {GetCursorPoint(1).x(), -5},   // NORTH.
       {GetCursorPoint(0).x(), -5},   // NE.
@@ -1461,18 +1790,9 @@ TEST_F(LabelSelectionTest, MouseDragWord) {
   EXPECT_EQ(u"drag word", GetSelectedText());
 }
 
-// TODO(crbug.com/1201128): LabelSelectionTest.SelectionClipboard is failing on
-// linux-lacros.
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-#define MAYBE_SelectionClipboard DISABLED_SelectionClipboard
-#else
-#define MAYBE_SelectionClipboard SelectionClipboard
-#endif
-// TODO(crbug.com/1052397): Revisit the macro expression once build flag switch
-// of lacros-chrome is complete.
-#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
+#if BUILDFLAG(IS_LINUX)
 // Verify selection clipboard behavior on text selection.
-TEST_F(LabelSelectionTest, MAYBE_SelectionClipboard) {
+TEST_F(LabelSelectionTest, SelectionClipboard) {
   label()->SetText(u"Label selection clipboard");
   label()->SizeToPreferredSize();
   ASSERT_TRUE(label()->SetSelectable(true));

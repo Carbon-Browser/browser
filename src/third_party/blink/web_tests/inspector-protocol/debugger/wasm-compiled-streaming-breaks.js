@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -64,7 +64,7 @@ function compileStreamingAndBreak() {
     .then(instance => instance.exports.main())
 }
 
-(async function(testRunner) {
+(async function(/** @type {import('test_runner').TestRunner} */ testRunner) {
   const {session, dp} = await testRunner.startBlank(
       'Test pausing in wasm script.');
   let debuggerId = (await dp.Debugger.enable()).result.debuggerId;

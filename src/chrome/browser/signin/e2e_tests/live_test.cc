@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 #include "chrome/browser/signin/e2e_tests/live_test.h"
@@ -37,10 +37,13 @@ void LiveTest::SetUp() {
     GTEST_SKIP();
   }
   base::FilePath root_path;
-  base::PathService::Get(base::BasePathKey::DIR_SOURCE_ROOT, &root_path);
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &root_path);
   base::FilePath config_path =
       base::MakeAbsoluteFilePath(root_path.Append(kTestAccountFilePath));
-  test_accounts_.Init(config_path);
+  CHECK(!config_path.empty()) << kTestAccountFilePath
+                              << " does not exist. This file is only available "
+                                 "in Google-internal checkouts.";
+  CHECK(test_accounts_.Init(config_path));
   InProcessBrowserTest::SetUp();
 }
 

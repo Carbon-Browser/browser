@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,9 @@
 #include "ui/display/screen.h"
 
 namespace views {
+
+const char kWidgetIdentifierKey[] = "kWidgetIdentifierKey";
+
 namespace internal {
 
 // static
@@ -17,10 +20,13 @@ gfx::Rect NativeWidgetPrivate::ConstrainBoundsToDisplayWorkArea(
   gfx::Rect new_bounds(bounds);
   gfx::Rect work_area =
       display::Screen::GetScreen()->GetDisplayMatching(bounds).work_area();
-  if (!work_area.IsEmpty())
+  if (!work_area.IsEmpty()) {
     new_bounds.AdjustToFit(work_area);
+  }
   return new_bounds;
 }
+
+void NativeWidgetPrivate::PaintAsActiveChanged() {}
 
 void NativeWidgetPrivate::ShowEmojiPanel() {
   ui::ShowEmojiPanel();
@@ -31,4 +37,5 @@ bool NativeWidgetPrivate::IsMoveLoopSupported() const {
 }
 
 }  // namespace internal
+
 }  // namespace views

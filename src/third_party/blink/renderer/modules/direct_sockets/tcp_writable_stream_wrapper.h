@@ -1,17 +1,18 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_DIRECT_SOCKETS_TCP_WRITABLE_STREAM_WRAPPER_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_DIRECT_SOCKETS_TCP_WRITABLE_STREAM_WRAPPER_H_
 
-#include "base/allocator/partition_allocator/partition_root.h"
 #include "base/notreached.h"
 #include "mojo/public/cpp/system/data_pipe.h"
 #include "mojo/public/cpp/system/simple_watcher.h"
+#include "partition_alloc/partition_root.h"
 #include "third_party/blink/renderer/bindings/core/v8/active_script_wrappable.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
+#include "third_party/blink/renderer/bindings/core/v8/v8_typedefs.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_observer.h"
 #include "third_party/blink/renderer/modules/direct_sockets/stream_wrapper.h"
@@ -41,11 +42,9 @@ class MODULES_EXPORT TCPWritableStreamWrapper
   void ErrorStream(int32_t error_code) override;
   bool HasPendingWrite() const override;
   void Trace(Visitor*) const override;
-
- protected:
-  // WritableStreamWrapper:
   void OnAbortSignal() override;
-  ScriptPromise Write(ScriptValue chunk, ExceptionState&) override;
+  ScriptPromise<IDLUndefined> Write(ScriptValue chunk,
+                                    ExceptionState&) override;
 
  private:
   // Called when |data_pipe_| becomes writable or errored.
@@ -54,17 +53,17 @@ class MODULES_EXPORT TCPWritableStreamWrapper
   // Called when |data_pipe_| is closed.
   void OnHandleReset(MojoResult, const mojo::HandleSignalsState&);
 
-  // Writes |data| to |data_pipe_|, possible saving unwritten data to
-  // |cached_data_|.
-  ScriptPromise WriteOrCacheData(base::span<const uint8_t> data,
-                                 ExceptionState&);
-
-  // Attempts to write some more of |cached_data_| to |data_pipe_|.
-  void WriteCachedData();
+  // Writes data contained in |buffer_source_| to |data_pipe_|, possibly in
+  // several asynchronous attempts.
+  void WriteDataAsynchronously();
 
   // Writes zero or more bytes of |data| synchronously to |data_pipe_|,
   // returning the number of bytes that were written.
   size_t WriteDataSynchronously(base::span<const uint8_t> data);
+
+  // Resolves |write_promise_resolver_| and resets |buffer_source_| if write
+  // operation finished successfully.
+  void FinalizeWrite();
 
   // Errors |writable_|, resolves |writing_aborted_| and resets |data_pipe_|.
   void ErrorStreamAbortAndReset(bool error);
@@ -74,31 +73,6 @@ class MODULES_EXPORT TCPWritableStreamWrapper
 
   // Prepares the object for destruction.
   void Dispose();
-
-  // TODO(crbug.com/1337286): Remove this class.
-  class CachedDataBuffer {
-   public:
-    CachedDataBuffer(v8::Isolate* isolate, const uint8_t* data, size_t length);
-
-    ~CachedDataBuffer();
-
-    size_t length() const { return length_; }
-
-    uint8_t* data() { return buffer_.get(); }
-
-   private:
-    // We need the isolate to call |AdjustAmountOfExternalAllocatedMemory| for
-    // the memory stored in |buffer_|.
-    v8::Isolate* isolate_;
-    size_t length_ = 0u;
-
-    struct OnFree {
-      void operator()(void* ptr) const {
-        WTF::Partitions::BufferPartition()->Free(ptr);
-      }
-    };
-    std::unique_ptr<uint8_t[], OnFree> buffer_;
-  };
 
   CloseOnceCallback on_close_;
 
@@ -112,9 +86,7 @@ class MODULES_EXPORT TCPWritableStreamWrapper
 
   // Data which has been passed to write() but still needs to be written
   // asynchronously.
-  // Uses a custom CachedDataBuffer rather than a Vector because
-  // WTF::Vector is currently limited to 2GB.
-  std::unique_ptr<CachedDataBuffer> cached_data_;
+  Member<V8BufferSource> buffer_source_;
 
   // The offset into |cached_data_| of the first byte that still needs to be
   // written.
@@ -122,7 +94,7 @@ class MODULES_EXPORT TCPWritableStreamWrapper
 
   // If an asynchronous write() on the underlying sink object is pending, this
   // will be non-null.
-  Member<ScriptPromiseResolver> write_promise_resolver_;
+  Member<ScriptPromiseResolver<IDLUndefined>> write_promise_resolver_;
 };
 
 }  // namespace blink

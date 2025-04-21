@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #import <WebKit/WebKit.h>
 
+#include "base/task/sequenced_task_runner.h"
 #include "ios/web/download/download_task_impl.h"
 
 @class DownloadNativeTaskBridge;
@@ -17,18 +18,19 @@ namespace web {
 // NativeTaskBridge) to perform the download
 class DownloadNativeTaskImpl final : public DownloadTaskImpl {
  public:
-  // Constructs a new DownloadSessionTaskImpl objects. |web_state|, |identifier|
-  // and |download| must be valid.
+  // Constructs a new `DownloadNativeTaskImpl` object. `web_state`, `identifier`
+  // and `download` must be valid.
   DownloadNativeTaskImpl(
       WebState* web_state,
       const GURL& original_url,
+      NSString* originating_host,
       NSString* http_method,
       const std::string& content_disposition,
       int64_t total_bytes,
       const std::string& mime_type,
       NSString* identifier,
       const scoped_refptr<base::SequencedTaskRunner>& task_runner,
-      DownloadNativeTaskBridge* download) API_AVAILABLE(ios(15));
+      DownloadNativeTaskBridge* download);
 
   DownloadNativeTaskImpl(const DownloadNativeTaskImpl&) = delete;
   DownloadNativeTaskImpl& operator=(const DownloadNativeTaskImpl&) = delete;
@@ -49,7 +51,7 @@ class DownloadNativeTaskImpl final : public DownloadTaskImpl {
   // Invoked when the NSURLResponse of WKDownload is received.
   void OnResponseReceived(int http_error_code, NSString* mime_type);
 
-  DownloadNativeTaskBridge* download_bridge_ API_AVAILABLE(ios(15)) = nil;
+  DownloadNativeTaskBridge* download_bridge_ = nil;
 
   base::WeakPtrFactory<DownloadNativeTaskImpl> weak_factory_{this};
 };

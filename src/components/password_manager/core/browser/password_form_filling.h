@@ -1,17 +1,24 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_PASSWORD_MANAGER_CORE_BROWSER_PASSWORD_FORM_FILLING_H_
 #define COMPONENTS_PASSWORD_MANAGER_CORE_BROWSER_PASSWORD_FORM_FILLING_H_
 
+#include <optional>
 #include <vector>
 
-#include "base/memory/weak_ptr.h"
+#include "base/containers/span.h"
+#include "base/memory/raw_ptr.h"
+#include "components/autofill/core/common/unique_ids.h"
 
 namespace autofill {
 struct PasswordFormFillData;
 }  // namespace autofill
+
+namespace url {
+class Origin;
+}  // namespace url
 
 namespace password_manager {
 class PasswordFormMetricsRecorder;
@@ -42,11 +49,12 @@ LikelyFormFilling SendFillInformationToRenderer(
     PasswordManagerClient* client,
     PasswordManagerDriver* driver,
     const PasswordForm& observed_form,
-    const std::vector<const PasswordForm*>& best_matches,
-    const std::vector<const PasswordForm*>& federated_matches,
+    base::span<const PasswordForm> best_matches,
+    base::span<const PasswordForm> federated_matches,
     const PasswordForm* preferred_match,
-    bool blocked_by_user,
-    PasswordFormMetricsRecorder* metrics_recorder);
+    PasswordFormMetricsRecorder* metrics_recorder,
+    bool webauthn_suggestions_available,
+    base::span<autofill::FieldRendererId> suggestion_banned_fields);
 
 // Create a PasswordFormFillData structure in preparation for filling a form
 // identified by |form_on_page|, with credentials from |preferred_match| and
@@ -54,9 +62,11 @@ LikelyFormFilling SendFillInformationToRenderer(
 // If |wait_for_username| is true then fill on account select will be used.
 autofill::PasswordFormFillData CreatePasswordFormFillData(
     const PasswordForm& form_on_page,
-    const std::vector<const PasswordForm*>& matches,
-    const PasswordForm& preferred_match,
-    bool wait_for_username);
+    base::span<const PasswordForm> best_matches,
+    std::optional<PasswordForm> preferred_match,
+    const url::Origin& main_frame_origin,
+    bool wait_for_username,
+    base::span<autofill::FieldRendererId> suggestion_banned_fields);
 
 }  // namespace password_manager
 

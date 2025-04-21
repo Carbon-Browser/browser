@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,15 @@
 #define CHROME_BROWSER_SSL_HTTPS_ONLY_MODE_CONTROLLER_CLIENT_H_
 
 #include "base/memory/raw_ptr.h"
-#include "components/security_interstitials/content/content_metrics_helper.h"
 #include "components/security_interstitials/content/security_interstitial_controller_client.h"
 
 namespace content {
 class WebContents;
 }  // namespace content
+
+namespace security_interstitials {
+class MetricsHelper;
+}  // namespace security_interstitials
 
 class HttpsOnlyModeControllerClient
     : public security_interstitials::SecurityInterstitialControllerClient {

@@ -1,19 +1,21 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/accessibility/accessibility_browsertest.h"
-#include "base/callback_helpers.h"
+
+#include "base/functional/callback_helpers.h"
 #include "base/strings/escape.h"
-#include "content/browser/accessibility/browser_accessibility.h"
 #include "content/browser/renderer_host/render_widget_host_view_aura.h"
 #include "content/browser/web_contents/web_contents_impl.h"
+#include "content/public/common/isolated_world_ids.h"
 #include "content/public/test/accessibility_notification_waiter.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_browser_test.h"
 #include "content/public/test/content_browser_test_utils.h"
 #include "content/shell/browser/shell.h"
 #include "content/test/content_browser_test_utils_internal.h"
+#include "ui/accessibility/platform/browser_accessibility.h"
 
 namespace content {
 
@@ -31,7 +33,7 @@ gfx::NativeViewAccessible AccessibilityBrowserTest::GetRendererAccessible() {
 
 void AccessibilityBrowserTest::ExecuteScript(const std::u16string& script) {
   shell()->web_contents()->GetPrimaryMainFrame()->ExecuteJavaScriptForTests(
-      script, base::NullCallback());
+      script, base::NullCallback(), ISOLATED_WORLD_ID_GLOBAL);
 }
 
 void AccessibilityBrowserTest::LoadInitialAccessibilityTreeFromHtml(
@@ -57,6 +59,19 @@ void AccessibilityBrowserTest::LoadInputField() {
                                        base::EscapeForHTML(kInputContents) +
                                        std::string(R"HTML(">
             </form>
+          </body>
+          </html>)HTML"));
+}
+
+void AccessibilityBrowserTest::LoadScrollableInputField(std::string type) {
+  LoadInitialAccessibilityTreeFromHtml(
+      std::string(
+          R"HTML(<!DOCTYPE html>
+          <html>
+          <body>
+            <input type=")HTML") +
+      type + std::string(R"HTML(" style="width: 150px;" value=")HTML") +
+      base::EscapeForHTML(kInputContents) + std::string(R"HTML(">
           </body>
           </html>)HTML"));
 }
@@ -100,7 +115,7 @@ void AccessibilityBrowserTest::LoadSampleParagraphInScrollableEditable() {
 
   AccessibilityNotificationWaiter selection_waiter(
       shell()->web_contents(), ui::kAXModeComplete,
-      ax::mojom::Event::kTextSelectionChanged);
+      ui::AXEventGenerator::Event::TEXT_SELECTION_CHANGED);
   ExecuteScript(
       u"let selection=document.getSelection();"
       u"let range=document.createRange();"

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include "base/at_exit.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/persistent_histogram_storage.h"
 #include "base/process/memory.h"
@@ -67,6 +68,7 @@ extern "C" int WINAPI wWinMain(HINSTANCE instance,
   // Make sure the process exits cleanly on unexpected errors.
   base::EnableTerminationOnHeapCorruption();
   base::EnableTerminationOnOutOfMemory();
+  logging::RegisterAbslAbortHook();
   base::win::RegisterInvalidParamHandler();
   base::win::SetupCRT(*base::CommandLine::ForCurrentProcess());
 

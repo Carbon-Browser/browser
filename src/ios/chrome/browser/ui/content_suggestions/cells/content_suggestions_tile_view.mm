@@ -1,95 +1,108 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/browser/ui/content_suggestions/cells/content_suggestions_tile_view.h"
 
+#import "ios/chrome/browser/shared/ui/util/dynamic_type_util.h"
+#import "ios/chrome/browser/shared/ui/util/uikit_ui_util.h"
 #import "ios/chrome/browser/ui/content_suggestions/cells/content_suggestions_tile_layout_util.h"
-#import "ios/chrome/browser/ui/content_suggestions/content_suggestions_feature.h"
-#import "ios/chrome/browser/ui/util/dynamic_type_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
 #import "ios/chrome/common/ui/util/constraints_ui_util.h"
-#include "ios/chrome/common/ui/util/dynamic_type_util.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "ios/chrome/common/ui/util/dynamic_type_util.h"
+#import "ios/public/provider/chrome/browser/raccoon/raccoon_api.h"
 
 namespace {
 
 const NSInteger kLabelNumLines = 2;
 const CGFloat kSpaceIconTitle = 10;
-const CGFloat kIconSize = 56;
-const CGFloat kPreferredMaxWidth = 73;
+const CGFloat kMagicStackIconSize = 52;
+// Standard width of tiles.
+const CGFloat kPreferredMaxWidth = 74;
+// Image container corner radius.
+const CGFloat kCornerRadius = 8.0;
 
 }  // namespace
 
 @interface ContentSuggestionsTileView ()
 // Hold onto the created interaction for pointer support so it can be removed
 // when the view goes away.
-@property(nonatomic, strong)
-    UIPointerInteraction* pointerInteraction API_AVAILABLE(ios(13.4));
+@property(nonatomic, strong) UIPointerInteraction* pointerInteraction;
 @end
 
-@implementation ContentSuggestionsTileView
+@implementation ContentSuggestionsTileView {
+  ContentSuggestionsTileType _type;
+  BOOL _inMagicStack;
+}
 
-- (instancetype)initWithFrame:(CGRect)frame placeholder:(BOOL)isPlaceholder {
+- (instancetype)initWithFrame:(CGRect)frame
+                     tileType:(ContentSuggestionsTileType)type
+                 inMagicStack:(BOOL)inMagicStack {
   self = [super initWithFrame:frame];
   if (self) {
+    _type = type;
+    _inMagicStack = inMagicStack;
     _titleLabel = [[UILabel alloc] init];
     _titleLabel.textColor = [UIColor colorNamed:kTextSecondaryColor];
     _titleLabel.font = [self titleLabelFont];
     _titleLabel.textAlignment = NSTextAlignmentCenter;
     _titleLabel.preferredMaxLayoutWidth = kPreferredMaxWidth;
     _titleLabel.numberOfLines = kLabelNumLines;
+    _titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    [self updateTitleLabelNumberOfLines];
 
     _imageContainerView = [[UIView alloc] init];
-    _titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
     _imageContainerView.translatesAutoresizingMaskIntoConstraints = NO;
+    if (ios::provider::IsRaccoonEnabled()) {
+      if (@available(iOS 17.0, *)) {
+        _imageContainerView.hoverStyle = [UIHoverStyle
+            styleWithShape:[UIShape rectShapeWithCornerRadius:kCornerRadius]];
+      }
+    }
 
-    [self addSubview:_titleLabel];
+    // Use original rounded-square background image for Shorcuts
+    if (type == ContentSuggestionsTileType::kShortcuts) {
+      [self addSubview:_titleLabel];
 
-    // The squircle background view.
-    UIImageView* backgroundView =
-        [[UIImageView alloc] initWithFrame:self.bounds];
-    backgroundView.translatesAutoresizingMaskIntoConstraints = NO;
-    UIImage* backgroundImage = [[UIImage imageNamed:@"ntp_most_visited_tile"]
-        imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
-    backgroundView.image = backgroundImage;
-    backgroundView.tintColor = [UIColor colorNamed:kGrey100Color];
-    [self addSubview:backgroundView];
-    [self addSubview:_imageContainerView];
+      // The squircle background view.
+      UIImageView* backgroundView =
+          [[UIImageView alloc] initWithFrame:self.bounds];
+      backgroundView.translatesAutoresizingMaskIntoConstraints = NO;
+      UIImage* backgroundImage = [[UIImage imageNamed:@"ntp_most_visited_tile"]
+          imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+      backgroundView.image = backgroundImage;
+      backgroundView.tintColor = [UIColor colorNamed:kGrey100Color];
+      [self addSubview:backgroundView];
+      [self addSubview:_imageContainerView];
 
-    [NSLayoutConstraint activateConstraints:@[
-      [backgroundView.widthAnchor constraintEqualToConstant:kIconSize],
-      [backgroundView.heightAnchor
-          constraintEqualToAnchor:backgroundView.widthAnchor],
-      [backgroundView.centerXAnchor
-          constraintEqualToAnchor:_titleLabel.centerXAnchor],
-    ]];
-    AddSameCenterConstraints(_imageContainerView, backgroundView);
-    UIView* containerView = backgroundView;
-
-    if (IsContentSuggestionsUIModuleRefreshEnabled() && isPlaceholder) {
-      ApplyVisualConstraintsWithMetrics(
-          @[ @"V:|[container]-(space)-[title]-(>=0)-|" ],
-          @{@"container" : containerView, @"title" : _titleLabel},
-          @{@"space" : @(kSpaceIconTitle)});
       [NSLayoutConstraint activateConstraints:@[
-        [_titleLabel.widthAnchor constraintEqualToConstant:kIconSize],
-        [_titleLabel.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
+        [backgroundView.widthAnchor
+            constraintEqualToConstant:kMagicStackIconSize],
+        [backgroundView.heightAnchor
+            constraintEqualToAnchor:backgroundView.widthAnchor],
+        [backgroundView.centerXAnchor
+            constraintEqualToAnchor:_titleLabel.centerXAnchor],
       ]];
-    } else {
+      AddSameCenterConstraints(_imageContainerView, backgroundView);
+      UIView* containerView = backgroundView;
+
       ApplyVisualConstraintsWithMetrics(
           @[ @"V:|[container]-(space)-[title]|", @"H:|[title]|" ],
           @{@"container" : containerView, @"title" : _titleLabel},
           @{@"space" : @(kSpaceIconTitle)});
-    }
 
-    _imageBackgroundView = backgroundView;
+      _imageBackgroundView = backgroundView;
+    }
 
     _pointerInteraction = [[UIPointerInteraction alloc] initWithDelegate:self];
     [self addInteraction:self.pointerInteraction];
+
+    if (@available(iOS 17, *)) {
+      NSArray<UITrait>* traits = TraitCollectionSetForTraits(
+          @[ UITraitPreferredContentSizeCategory.class ]);
+      [self registerForTraitChanges:traits
+                         withAction:@selector(updateTitleLabelOnTraitChange)];
+    }
   }
   return self;
 }
@@ -101,38 +114,37 @@ const CGFloat kPreferredMaxWidth = 73;
 
 // Returns the font size for the location label.
 - (UIFont*)titleLabelFont {
-  if (IsContentSuggestionsUIModuleRefreshEnabled()) {
-    return [UIFont preferredFontForTextStyle:UIFontTextStyleCaption1];
-  } else {
-    return PreferredFontForTextStyleWithMaxCategory(
-        UIFontTextStyleCaption1,
-        self.traitCollection.preferredContentSizeCategory,
-        UIContentSizeCategoryAccessibilityLarge);
-  }
+  return PreferredFontForTextStyleWithMaxCategory(
+      UIFontTextStyleCaption1,
+      self.traitCollection.preferredContentSizeCategory,
+      UIContentSizeCategoryAccessibilityLarge);
 }
 
 #pragma mark - UIView
 
+#if !defined(__IPHONE_17_0) || __IPHONE_OS_VERSION_MIN_REQUIRED < __IPHONE_17_0
 - (void)traitCollectionDidChange:(UITraitCollection*)previousTraitCollection {
   [super traitCollectionDidChange:previousTraitCollection];
+  if (@available(iOS 17, *)) {
+    return;
+  }
   if (previousTraitCollection.preferredContentSizeCategory !=
       self.traitCollection.preferredContentSizeCategory) {
-    self.titleLabel.font = [self titleLabelFont];
+    [self updateTitleLabelOnTraitChange];
   }
 }
+#endif
 
 #pragma mark - UIPointerInteractionDelegate
 
 - (UIPointerRegion*)pointerInteraction:(UIPointerInteraction*)interaction
                       regionForRequest:(UIPointerRegionRequest*)request
-                         defaultRegion:(UIPointerRegion*)defaultRegion
-    API_AVAILABLE(ios(13.4)) {
+                         defaultRegion:(UIPointerRegion*)defaultRegion {
   return defaultRegion;
 }
 
 - (UIPointerStyle*)pointerInteraction:(UIPointerInteraction*)interaction
-                       styleForRegion:(UIPointerRegion*)region
-    API_AVAILABLE(ios(13.4)) {
+                       styleForRegion:(UIPointerRegion*)region {
   // The preview APIs require the view to be in a window. Ensure they are before
   // proceeding.
   if (!self.window)
@@ -144,8 +156,36 @@ const CGFloat kPreferredMaxWidth = 73;
       [UIPointerHighlightEffect effectWithPreview:preview];
   UIPointerShape* shape =
       [UIPointerShape shapeWithRoundedRect:_imageContainerView.frame
-                              cornerRadius:8.0];
+                              cornerRadius:kCornerRadius];
   return [UIPointerStyle styleWithEffect:effect shape:shape];
+}
+
+// Updates the title label's number of rows depending on the preferred content
+// size if it is in the Magic Stack since the Magic Stack has a fixed height,
+// limiting the space available for multiple lines of text.
+- (void)updateTitleLabelNumberOfLines {
+  if (!_inMagicStack) {
+    return;
+  }
+
+  UIContentSizeCategory category =
+      self.traitCollection.preferredContentSizeCategory;
+  NSComparisonResult result = UIContentSizeCategoryCompareToCategory(
+      category, UIContentSizeCategoryExtraLarge);
+  if (result == NSOrderedAscending) {
+    self.titleLabel.numberOfLines = kLabelNumLines;
+  } else {
+    self.titleLabel.numberOfLines = 1;
+  }
+}
+
+#pragma mark - Private
+
+// Updates the `titleLabel`'s font and numberOfLines property when a change in
+// the device's UITraits is detected.
+- (void)updateTitleLabelOnTraitChange {
+  self.titleLabel.font = [self titleLabelFont];
+  [self updateTitleLabelNumberOfLines];
 }
 
 @end

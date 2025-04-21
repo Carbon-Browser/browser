@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,46 +8,47 @@
  * category.
  */
 import 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/policy/cr_policy_pref_indicator.m.js';
-import 'chrome://resources/cr_elements/shared_style_css.m.js';
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
-import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import '/shared/settings/controls/cr_policy_pref_indicator.js';
+import 'chrome://resources/cr_elements/cr_shared_style.css.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
+import 'chrome://resources/cr_elements/cr_tooltip/cr_tooltip.js';
 import 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
-import 'chrome://resources/polymer/v3_0/paper-tooltip/paper-tooltip.js';
 import '../settings_shared.css.js';
 import './add_site_dialog.js';
 import './edit_exception_dialog.js';
 import './site_list_entry.js';
 
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {focusWithoutInk} from 'chrome://resources/js/cr/ui/focus_without_ink.m.js';
-import {ListPropertyUpdateMixin} from 'chrome://resources/js/list_property_update_mixin.js';
-import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
-import {PaperTooltipElement} from 'chrome://resources/polymer/v3_0/paper-tooltip/paper-tooltip.js';
+import type {CrTooltipElement} from 'chrome://resources/cr_elements/cr_tooltip/cr_tooltip.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {ListPropertyUpdateMixin} from 'chrome://resources/cr_elements/list_property_update_mixin.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {focusWithoutInk} from 'chrome://resources/js/focus_without_ink.js';
+import {sanitizeInnerHtml} from 'chrome://resources/js/parse_html_subset.js';
+import type {SanitizeInnerHtmlOpts} from 'chrome://resources/js/parse_html_subset.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-// <if expr="chromeos_ash">
-import {loadTimeData} from '../i18n_setup.js';
+import {TooltipMixin} from '../tooltip_mixin.js';
 
-import {AndroidInfoBrowserProxyImpl, AndroidSmsInfo} from './android_info_browser_proxy.js';
-// </if>
-import {ContentSetting, ContentSettingsTypes, INVALID_CATEGORY_SUBTYPE} from './constants.js';
+import {ContentSetting, ContentSettingsTypes, CookiesExceptionType, INVALID_CATEGORY_SUBTYPE, SITE_EXCEPTION_WILDCARD} from './constants.js';
 import {getTemplate} from './site_list.html.js';
 import {SiteSettingsMixin} from './site_settings_mixin.js';
-import {RawSiteException, SiteException, SiteSettingsPrefsBrowserProxy, SiteSettingsPrefsBrowserProxyImpl} from './site_settings_prefs_browser_proxy.js';
+import type {RawSiteException, SiteException, SiteSettingsPrefsBrowserProxy} from './site_settings_prefs_browser_proxy.js';
+import {SiteSettingsPrefsBrowserProxyImpl} from './site_settings_prefs_browser_proxy.js';
 
 export interface SiteListElement {
   $: {
     addSite: HTMLElement,
     category: HTMLElement,
     listContainer: HTMLElement,
-    tooltip: PaperTooltipElement,
+    listHeader: HTMLElement,
+    tooltip: CrTooltipElement,
   };
 }
 
-const SiteListElementBase = ListPropertyUpdateMixin(
-    SiteSettingsMixin(WebUIListenerMixin(PolymerElement)));
+const SiteListElementBase = TooltipMixin(ListPropertyUpdateMixin(
+    SiteSettingsMixin(WebUiListenerMixin(I18nMixin(PolymerElement)))));
 
 export class SiteListElement extends SiteListElementBase {
   static get is() {
@@ -70,6 +71,15 @@ export class SiteListElement extends SiteListElementBase {
       },
 
       categoryHeader: String,
+
+      /**
+       * Optional warning message to be displayed bellow the category header.
+       */
+      systemPermissionWarningKey_: {
+        type: String,
+        value: null,
+        observer: 'attachSystemPermissionSettingsLinkClick_',
+      },
 
       /**
        * The site serving as the model for the currently open action menu.
@@ -100,6 +110,19 @@ export class SiteListElement extends SiteListElementBase {
         type: String,
         value: INVALID_CATEGORY_SUBTYPE,
       },
+
+      /**
+       * Filters cookies exceptions based on the type (CookiesExceptionType):
+       * - THIRD_PARTY: Only show cookies exceptions that have primary pattern
+       * as wildcard (third-party cookies exceptions).
+       * - SITE_DATA: Only show cookies exceptions that have primary pattern
+       * set. This includes site data exceptions (secondary pattern is wildcard)
+       * and exceptions with both patterns set (currently possible only via
+       * exceptions API).
+       * - COMBINED: Doesn't apply any filters, will show exceptions with both
+       * pattern types.
+       */
+      cookiesExceptionType: String,
 
       hasIncognito_: Boolean,
 
@@ -157,6 +180,7 @@ export class SiteListElement extends SiteListElementBase {
 
   readOnlyList: boolean;
   categoryHeader: string;
+  private systemPermissionWarningKey_: string|null;
   private actionMenuSite_: SiteException|null;
   private showEditExceptionDialog_: boolean;
   sites: SiteException[];
@@ -171,25 +195,16 @@ export class SiteListElement extends SiteListElementBase {
   private listBlurred_: boolean;
   private tooltipText_: string;
   searchFilter: string;
+  cookiesExceptionType: CookiesExceptionType;
 
   private activeDialogAnchor_: HTMLElement|null;
   private browserProxy_: SiteSettingsPrefsBrowserProxy =
       SiteSettingsPrefsBrowserProxyImpl.getInstance();
 
-  // <if expr="chromeos_ash">
-  private androidSmsInfo_: AndroidSmsInfo|null;
-  // </if>
-
   constructor() {
     super();
 
-    // <if expr="chromeos_ash">
-    /**
-     * Android messages info object containing messages feature state and
-     * exception origin.
-     */
-    this.androidSmsInfo_ = null;
-    // </if>
+    this.updateCategoryWarning_();
 
     /**
      * The element to return focus to, when the currently active dialog is
@@ -201,26 +216,59 @@ export class SiteListElement extends SiteListElementBase {
   override ready() {
     super.ready();
 
-    this.addWebUIListener(
+    this.addWebUiListener(
         'contentSettingSitePermissionChanged',
         (category: ContentSettingsTypes) =>
             this.siteWithinCategoryChanged_(category));
-    this.addWebUIListener(
+    this.addWebUiListener(
         'contentSettingCategoryChanged',
         (category: ContentSettingsTypes) =>
             this.siteWithinCategoryChanged_(category));
-    this.addWebUIListener(
+    this.addWebUiListener(
         'onIncognitoStatusChanged',
         (hasIncognito: boolean) =>
             this.onIncognitoStatusChanged_(hasIncognito));
-    // <if expr="chromeos_ash">
-    this.addWebUIListener(
-        'settings.onAndroidSmsInfoChange', (info: AndroidSmsInfo) => {
-          this.androidSmsInfo_ = info;
-          this.populateList_();
+    this.addWebUiListener(
+        'osGlobalPermissionChanged', (messages: ContentSettingsTypes[]) => {
+          this.setCategoryWarning_(messages.includes(this.category));
         });
-    // </if>
     this.browserProxy.updateIncognitoStatus();
+  }
+
+  /**
+   * Update the category warning when the OS permission for this category
+   * changed.
+   */
+  private updateCategoryWarning_() {
+    this.browserProxy.getSystemDeniedPermissions().then(
+        (messages: ContentSettingsTypes[]) => {
+          this.setCategoryWarning_(messages.includes(this.category));
+        });
+  }
+
+  /**
+   * Sets the category warning when the OS permission for this category changed.
+   */
+  private setCategoryWarning_(categoryBlocked: boolean) {
+    this.set(
+        'systemPermissionWarningKey_', ((category: ContentSettingsTypes) => {
+          // We return null as warningKey in case the category is not one of
+          // the listed, as the warning in case of an OS level block is
+          // supported only for camera, microphone and location permissions.
+          if (!categoryBlocked) {
+            return null;
+          }
+          switch (category) {
+            case ContentSettingsTypes.CAMERA:
+              return 'siteSettingsContentCameraBlockedByOs';
+            case ContentSettingsTypes.MIC:
+              return 'siteSettingsContentMicBlockedByOs';
+            case ContentSettingsTypes.GEOLOCATION:
+              return 'siteSettingsContentLocationBlockedByOs';
+            default:
+              return null;
+          }
+        })(this.category));
   }
 
   /**
@@ -228,7 +276,9 @@ export class SiteListElement extends SiteListElementBase {
    * @param category The category of the site that changed.
    */
   private siteWithinCategoryChanged_(category: ContentSettingsTypes) {
-    if (category === this.category) {
+    if (category === this.category ||
+        (this.category === ContentSettingsTypes.TRACKING_PROTECTION &&
+         category === ContentSettingsTypes.COOKIES)) {
       this.configureWidget_();
     }
   }
@@ -261,14 +311,7 @@ export class SiteListElement extends SiteListElementBase {
     }
 
     this.setUpActionMenu_();
-
-    // <if expr="not chromeos_ash">
     this.populateList_();
-    // </if>
-
-    // <if expr="chromeos_ash">
-    this.updateAndroidSmsInfo_().then(() => this.populateList_());
-    // </if>
 
     // The Session permissions are only for cookies.
     if (this.categorySubtype === ContentSetting.SESSION_ONLY) {
@@ -276,11 +319,62 @@ export class SiteListElement extends SiteListElementBase {
     }
   }
 
-  /**
-   * Whether there are any site exceptions added for this content setting.
-   */
+  /** Whether there are any site exceptions added for this content setting. */
   private hasSites_(): boolean {
     return this.sites.length > 0;
+  }
+
+  /** Whether the header warning should be shown. */
+  private showHeaderWarning_(): boolean {
+    return this.hasSites_() && (this.systemPermissionWarningKey_ !== null);
+  }
+
+  /** The text of the warning. Null if the warning is not to be shown. */
+  private getSystemPermissionWarning_(): TrustedHTML {
+    const sanitizeOptions: SanitizeInnerHtmlOpts = {tags: ['a'], attrs: ['id']};
+    if (this.systemPermissionWarningKey_ !== null) {
+      return this.i18nAdvanced(
+          this.systemPermissionWarningKey_, sanitizeOptions);
+    }
+    return sanitizeInnerHtml('');
+  }
+
+  /** Attempts to open the system permission settings. */
+  private onSystemPermissionSettingsLinkClick_(event: MouseEvent) {
+    // Prevents navigation to href='#'.
+    event.preventDefault();
+    if (this.category !== null) {
+      this.browserProxy.openSystemPermissionSettings(this.category);
+    }
+  }
+
+  /** Attached the click action to the anchor element. */
+  private attachSystemPermissionSettingsLinkClick_(): void {
+    const elementId = 'openSystemSettingsLink';
+    const element: HTMLElement|null|undefined =
+        this.shadowRoot?.querySelector(`#${elementId}`);
+    if (element !== null && element !== undefined) {
+      element!.addEventListener('click', (me: MouseEvent) => {
+        this.onSystemPermissionSettingsLinkClick_(me);
+      });
+      // Set the correct aria label describing the link target.
+      const settingsPageName: string|null = (() => {
+        switch (this.category) {
+          case ContentSettingsTypes.CAMERA:
+            return 'Camera';
+          case ContentSettingsTypes.MIC:
+            return 'Microphone';
+          case ContentSettingsTypes.GEOLOCATION:
+            return 'Location';
+          default:
+            return null;
+        }
+      })();
+      if (settingsPageName) {
+        element.setAttribute(
+            'aria-label', `System Settings: ${settingsPageName}`);
+      }
+    }
   }
 
   /**
@@ -301,7 +395,7 @@ export class SiteListElement extends SiteListElementBase {
   /**
    * A handler for the Add Site button.
    */
-  private onAddSiteTap_() {
+  private onAddSiteClick_() {
     assert(!this.readOnlyList);
     this.showAddSiteDialog_ = true;
   }
@@ -317,67 +411,11 @@ export class SiteListElement extends SiteListElementBase {
    */
   private onShowTooltip_(e: CustomEvent<{target: HTMLElement, text: string}>) {
     this.tooltipText_ = e.detail.text;
-    const target = e.detail.target;
-    // paper-tooltip normally determines the target from the |for| property,
-    // which is a selector. Here paper-tooltip is being reused by multiple
+    // cr-tooltip normally determines the target from the |for| property,
+    // which is a selector. Here cr-tooltip is being reused by multiple
     // potential targets.
-    const tooltip = this.$.tooltip;
-    tooltip.target = target;
-    tooltip.updatePosition();
-    const hide = () => {
-      this.$.tooltip.hide();
-      target.removeEventListener('mouseleave', hide);
-      target.removeEventListener('blur', hide);
-      target.removeEventListener('click', hide);
-      this.$.tooltip.removeEventListener('mouseenter', hide);
-    };
-    target.addEventListener('mouseleave', hide);
-    target.addEventListener('blur', hide);
-    target.addEventListener('click', hide);
-    this.$.tooltip.addEventListener('mouseenter', hide);
-    this.$.tooltip.show();
+    this.showTooltipAtTarget(this.$.tooltip, e.detail.target);
   }
-
-  // <if expr="chromeos_ash">
-  /**
-   * Load android sms info if required and sets it to the |androidSmsInfo_|
-   * property. Returns a promise that resolves when load is complete.
-   */
-  private updateAndroidSmsInfo_() {
-    // |androidSmsInfo_| is only relevant for NOTIFICATIONS category. Don't
-    // bother fetching it for other categories.
-    if (this.category === ContentSettingsTypes.NOTIFICATIONS &&
-        loadTimeData.valueExists('multideviceAllowedByPolicy') &&
-        loadTimeData.getBoolean('multideviceAllowedByPolicy') &&
-        !this.androidSmsInfo_) {
-      const androidInfoBrowserProxy = AndroidInfoBrowserProxyImpl.getInstance();
-      return androidInfoBrowserProxy.getAndroidSmsInfo().then(
-          (info: AndroidSmsInfo) => {
-            this.androidSmsInfo_ = info;
-          });
-    }
-
-    return Promise.resolve();
-  }
-
-  /**
-   * Processes exceptions and adds showAndroidSmsNote field to
-   * the required exception item.
-   */
-  private processExceptionsForAndroidSmsInfo_(sites: SiteException[]):
-      SiteException[] {
-    if (!this.androidSmsInfo_ || !this.androidSmsInfo_.enabled) {
-      return sites;
-    }
-    return sites.map((site) => {
-      if (site.origin === this.androidSmsInfo_!.origin) {
-        return Object.assign({showAndroidSmsNote: true}, site);
-      } else {
-        return site;
-      }
-    });
-  }
-  // </if>
 
   /**
    * Populate the sites list for display.
@@ -393,15 +431,32 @@ export class SiteListElement extends SiteListElementBase {
    * Process the exception list returned from the native layer.
    */
   private processExceptions_(exceptionList: RawSiteException[]) {
-    let sites = exceptionList
-                    .filter(
-                        site => site.setting !== ContentSetting.DEFAULT &&
-                            site.setting === this.categorySubtype)
-                    .map(site => this.expandSiteException(site));
-
-    // <if expr="chromeos_ash">
-    sites = this.processExceptionsForAndroidSmsInfo_(sites);
-    // </if>
+    const sites = exceptionList
+                      .filter(
+                          site => site.setting !== ContentSetting.DEFAULT &&
+                              site.setting === this.categorySubtype)
+                      .filter(site => {
+                        if (this.category !== ContentSettingsTypes.COOKIES) {
+                          return true;
+                        }
+                        assert(this.cookiesExceptionType !== undefined);
+                        switch (this.cookiesExceptionType) {
+                          case CookiesExceptionType.THIRD_PARTY:
+                            return site.origin === SITE_EXCEPTION_WILDCARD;
+                          case CookiesExceptionType.SITE_DATA:
+                            // Site data exceptions include all exceptions that
+                            // have `origin` set. This includes site data
+                            // exceptions and exceptions with both patterns set
+                            // (currently possible only via exceptions API).
+                            return site.origin !== SITE_EXCEPTION_WILDCARD;
+                          case CookiesExceptionType.COMBINED:
+                            // For cookies exception type COMBINED, don't apply
+                            // any filters and show exceptions with both pattern
+                            // types.
+                            return true;
+                        }
+                      })
+                      .map(site => this.expandSiteException(site));
     this.updateList('sites', x => x.origin, sites);
   }
 
@@ -438,22 +493,32 @@ export class SiteListElement extends SiteListElementBase {
         this.category, contentSetting, this.actionMenuSite_!.incognito);
   }
 
-  private onAllowTap_() {
+  private onAllowClick_() {
+    // Removing the last visible item should focus the list's header.
+    const shouldMoveFocus = this.getFilteredSites_().length === 1;
     this.setContentSettingForActionMenuSite_(ContentSetting.ALLOW);
     this.closeActionMenu_();
+    if (shouldMoveFocus) {
+      this.$.listHeader.focus();
+    }
   }
 
-  private onBlockTap_() {
+  private onBlockClick_() {
+    // Removing the last visible item should focus the list's header.
+    const shouldMoveFocus = this.getFilteredSites_().length === 1;
     this.setContentSettingForActionMenuSite_(ContentSetting.BLOCK);
     this.closeActionMenu_();
+    if (shouldMoveFocus) {
+      this.$.listHeader.focus();
+    }
   }
 
-  private onSessionOnlyTap_() {
+  private onSessionOnlyClick_() {
     this.setContentSettingForActionMenuSite_(ContentSetting.SESSION_ONLY);
     this.closeActionMenu_();
   }
 
-  private onEditTap_() {
+  private onEditClick_() {
     // Close action menu without resetting |this.actionMenuSite_| since it is
     // bound to the dialog.
     this.shadowRoot!.querySelector('cr-action-menu')!.close();
@@ -469,12 +534,17 @@ export class SiteListElement extends SiteListElementBase {
     }
   }
 
-  private onResetTap_() {
+  private onResetClick_() {
+    // Removing the last visible item should focus the list's header.
+    const shouldMoveFocus = this.getFilteredSites_().length === 1;
     assert(this.actionMenuSite_);
     this.browserProxy.resetCategoryPermissionForPattern(
         this.actionMenuSite_.origin, this.actionMenuSite_.embeddingOrigin,
         this.category, this.actionMenuSite_.incognito);
     this.closeActionMenu_();
+    if (shouldMoveFocus) {
+      this.$.listHeader.focus();
+    }
   }
 
   private onShowActionMenu_(
@@ -483,6 +553,13 @@ export class SiteListElement extends SiteListElementBase {
     this.actionMenuSite_ = e.detail.model;
     this.shadowRoot!.querySelector('cr-action-menu')!.showAt(
         this.activeDialogAnchor_);
+  }
+
+  private onResetEntry_() {
+    // Removing the last visible item should focus the list's header.
+    if (this.getFilteredSites_().length === 1) {
+      this.$.listHeader.focus();
+    }
   }
 
   private closeActionMenu_() {
@@ -499,12 +576,23 @@ export class SiteListElement extends SiteListElementBase {
       return this.sites.slice();
     }
 
-    type SearchableProperty = 'displayName'|'origin';
-    const propNames: SearchableProperty[] = ['displayName', 'origin'];
+    type SearchableProperty = 'displayName'|'origin'|'embeddingOrigin';
+    const propNames: SearchableProperty[] =
+        ['displayName', 'origin', 'embeddingOrigin'];
     const searchFilter = this.searchFilter.toLowerCase();
     return this.sites.filter(
         site => propNames.some(
             propName => site[propName].toLowerCase().includes(searchFilter)));
+  }
+
+  private getAddButtonLabel_(): string {
+    if (this.categorySubtype === ContentSetting.ALLOW) {
+      return this.i18n('siteDataPageAddSiteToAllowListLabel');
+    } else if (this.categorySubtype === ContentSetting.BLOCK) {
+      return this.i18n('siteDataPageAddSiteToBlockListLabel');
+    } else {
+      return '';
+    }
   }
 }
 

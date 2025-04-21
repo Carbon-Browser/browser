@@ -1,13 +1,13 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/offline_pages/core/archive_manager.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
@@ -15,7 +15,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/system/sys_info.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 
 namespace offline_pages {
@@ -32,15 +32,6 @@ void EnsureArchivesDirCreatedImpl(const base::FilePath& archives_dir,
     if (!base::CreateDirectoryAndGetError(archives_dir, &error)) {
       LOG(ERROR) << "Failed to create offline pages archive directory: "
                  << base::File::ErrorToString(error);
-    }
-    if (is_temp) {
-      UMA_HISTOGRAM_ENUMERATION(
-          "OfflinePages.ArchiveManager.ArchiveDirsCreationResult2.Temporary",
-          -error, -base::File::FILE_ERROR_MAX);
-    } else {
-      UMA_HISTOGRAM_ENUMERATION(
-          "OfflinePages.ArchiveManager.ArchiveDirsCreationResult2.Persistent",
-          -error, -base::File::FILE_ERROR_MAX);
     }
   }
 }
@@ -79,9 +70,10 @@ void GetStorageStatsImpl(const base::FilePath& temporary_archives_dir,
       std::string extension =
           file_enumerator.GetInfo().GetName().FinalExtension();
 #endif
-      if (extension == "mhtml" || extension == "mht")
+      if (extension == "mhtml" || extension == "mht") {
         storage_stats.public_archives_size +=
             file_enumerator.GetInfo().GetSize();
+      }
     }
   }
   task_runner->PostTask(FROM_HERE,
@@ -91,7 +83,7 @@ void GetStorageStatsImpl(const base::FilePath& temporary_archives_dir,
 }  // namespace
 
 // protected and used for testing.
-ArchiveManager::ArchiveManager() {}
+ArchiveManager::ArchiveManager() = default;
 
 ArchiveManager::ArchiveManager(
     const base::FilePath& temporary_archives_dir,
@@ -103,7 +95,7 @@ ArchiveManager::ArchiveManager(
       public_archives_dir_(public_archives_dir),
       task_runner_(task_runner) {}
 
-ArchiveManager::~ArchiveManager() {}
+ArchiveManager::~ArchiveManager() = default;
 
 void ArchiveManager::EnsureArchivesDirCreated(
     base::OnceCallback<void()> callback) {
@@ -125,7 +117,8 @@ void ArchiveManager::GetStorageStats(StorageStatsCallback callback) const {
       FROM_HERE,
       base::BindOnce(GetStorageStatsImpl, temporary_archives_dir_,
                      private_archives_dir_, public_archives_dir_,
-                     base::ThreadTaskRunnerHandle::Get(), std::move(callback)));
+                     base::SingleThreadTaskRunner::GetCurrentDefault(),
+                     std::move(callback)));
 }
 
 const base::FilePath& ArchiveManager::GetTemporaryArchivesDir() const {

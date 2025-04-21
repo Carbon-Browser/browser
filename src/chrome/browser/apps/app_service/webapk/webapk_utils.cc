@@ -1,15 +1,16 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/apps/app_service/webapk/webapk_utils.h"
 
-#include <algorithm>
+#include <optional>
 #include <utility>
 #include <vector>
 
 #include "base/location.h"
 #include "base/logging.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
@@ -19,18 +20,17 @@
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
 #include "components/services/app_service/public/cpp/share_target.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/manifest/manifest.mojom.h"
 #include "third_party/smhasher/src/MurmurHash2.h"
 #include "url/gurl.h"
 
-// TODO(crbug.com/1254199): Consolidate logic with apps::WebApkInstallTask.
+// TODO(crbug.com/40199484): Consolidate logic with apps::WebApkInstallTask.
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
 
 namespace {
 
-const SquareSizePx kMinimumIconSize = 64;
+const web_app::SquareSizePx kMinimumIconSize = 64;
 
 // The seed to use when taking the murmur2 hash of the icon.
 const uint64_t kMurmur2HashSeed = 0;
@@ -60,7 +60,7 @@ crosapi::mojom::WebApkCreationParamsPtr AddIconDataAndSerializeProto(
 void OnLoadedIcon(apps::GetWebApkCreationParamsCallback callback,
                   const GURL& manifest_url,
                   std::unique_ptr<webapk::WebAppManifest> webapk_manifest,
-                  IconPurpose purpose,
+                  web_app::IconPurpose purpose,
                   std::vector<uint8_t> data) {
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE, {base::TaskPriority::BEST_EFFORT},
@@ -79,9 +79,9 @@ void PopulateWebApkManifest(Profile* profile,
                             const std::string& app_id,
                             webapk::WebAppManifest* web_app_manifest) {
   auto* provider = web_app::WebAppProvider::GetForWebApps(profile);
-  auto& registrar = provider->registrar();
+  auto& registrar = provider->registrar_unsafe();
 
-  // TODO(crbug.com/1254199): Call WebAppRegistrar::GetAppById(const AppId&
+  // TODO(crbug.com/40199484): Call WebAppRegistrar::GetAppById(const AppId&
   // app_id) instead of performing repeated app_id lookups.
 
   web_app_manifest->set_short_name(registrar.GetAppShortName(app_id));
@@ -133,9 +133,9 @@ void GetWebApkCreationParams(Profile* profile,
     return;
   }
 
-  auto& registrar = provider->registrar();
+  auto& registrar = provider->registrar_unsafe();
 
-  // TODO(crbug.com/1254199): Call WebAppRegistrar::GetAppById(const AppId&
+  // TODO(crbug.com/40199484): Call WebAppRegistrar::GetAppById(const AppId&
   // app_id) instead of performing repeated app_id lookups.
 
   // Installation & share target are already checked in WebApkManager, check
@@ -152,9 +152,10 @@ void GetWebApkCreationParams(Profile* profile,
   auto webapk_manifest = std::make_unique<webapk::WebAppManifest>();
 
   auto& icon_manager = provider->icon_manager();
-  absl::optional<web_app::WebAppIconManager::IconSizeAndPurpose>
+  std::optional<web_app::WebAppIconManager::IconSizeAndPurpose>
       icon_size_and_purpose = icon_manager.FindIconMatchBigger(
-          app_id, {IconPurpose::MASKABLE, IconPurpose::ANY}, kMinimumIconSize);
+          app_id, {web_app::IconPurpose::MASKABLE, web_app::IconPurpose::ANY},
+          kMinimumIconSize);
 
   if (!icon_size_and_purpose) {
     LOG(ERROR) << "Could not find suitable icon";
@@ -167,11 +168,10 @@ void GetWebApkCreationParams(Profile* profile,
   // the manifest. Since we can't be perfect, it's okay to be roughly correct
   // and just send any URL of the correct purpose.
   const auto& manifest_icons = registrar.GetAppIconInfos(app_id);
-  auto it = std::find_if(
-      manifest_icons.begin(), manifest_icons.end(),
-      [&icon_size_and_purpose](const apps::IconInfo& info) {
-        return info.purpose ==
-               ManifestPurposeToIconInfoPurpose(icon_size_and_purpose->purpose);
+  auto it = base::ranges::find_if(
+      manifest_icons, [&icon_size_and_purpose](const apps::IconInfo& info) {
+        return info.purpose == web_app::ManifestPurposeToIconInfoPurpose(
+                                   icon_size_and_purpose->purpose);
       });
 
   if (it == manifest_icons.end()) {
@@ -185,7 +185,8 @@ void GetWebApkCreationParams(Profile* profile,
 
   webapk::Image* image = webapk_manifest->add_icons();
   image->set_src(std::move(icon_url));
-  image->add_purposes(icon_size_and_purpose->purpose == IconPurpose::MASKABLE
+  image->add_purposes(icon_size_and_purpose->purpose ==
+                              web_app::IconPurpose::MASKABLE
                           ? webapk::Image::MASKABLE
                           : webapk::Image::ANY);
   image->add_usages(webapk::Image::PRIMARY_ICON);

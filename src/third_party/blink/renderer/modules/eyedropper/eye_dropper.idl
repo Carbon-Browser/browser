@@ -1,8 +1,8 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// https://github.com/MicrosoftEdge/MSEdgeExplainers/blob/main/EyeDropper/explainer.md
+// https://github.com/WICG/eyedropper-api/blob/main/README.md
 
 [
   Exposed=Window,
@@ -11,6 +11,6 @@
 ] interface EyeDropper {
   [CallWith=ExecutionContext] constructor();
 
-  [CallWith=ScriptState, RaisesException] Promise<ColorSelectionResult> open(
+  [CallWith=ScriptState, RaisesException, MeasureAs=EyeDropperOpen] Promise<ColorSelectionResult> open(
       optional ColorSelectionOptions options = {});
 };

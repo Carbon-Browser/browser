@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,8 +36,6 @@ OfflinePagesNamespaceEnumeration ToNamespaceEnum(
     return OfflinePagesNamespaceEnumeration::DOWNLOAD;
   else if (name_space == kNTPSuggestionsNamespace)
     return OfflinePagesNamespaceEnumeration::NTP_SUGGESTION;
-  else if (name_space == kSuggestedArticlesNamespace)
-    return OfflinePagesNamespaceEnumeration::SUGGESTED_ARTICLES;
   else if (name_space == kBrowserActionsNamespace)
     return OfflinePagesNamespaceEnumeration::BROWSER_ACTIONS;
   else if (name_space == kLivePageSharingNamespace)
@@ -45,7 +43,6 @@ OfflinePagesNamespaceEnumeration ToNamespaceEnum(
   else if (name_space == kAutoAsyncNamespace)
     return OfflinePagesNamespaceEnumeration::ASYNC_AUTO_LOADING;
 
-  NOTREACHED();
   return OfflinePagesNamespaceEnumeration::DEFAULT;
 }
 
@@ -53,7 +50,6 @@ std::string AddHistogramSuffix(const std::string& name_space,
                                const char* histogram_name) {
   if (name_space.empty()) {
     NOTREACHED();
-    return histogram_name;
   }
   std::string adjusted_histogram_name(histogram_name);
   adjusted_histogram_name += ".";
@@ -72,30 +68,21 @@ base::FilePath GenerateUniqueFilenameForOfflinePage(
       target_dir.Append(filename_generation::GenerateFilename(
           title, url, false /* can_save_as_complete */, kMHTMLMimeType));
 
-  // Find a unique name based on |suggested_path|.
-  int uniquifier = base::GetUniquePathNumber(suggested_path);
-  base::FilePath::StringType suffix;
-  if (uniquifier > 0)
-#if BUILDFLAG(IS_WIN)
-    suffix = base::StringPrintf(L" (%d)", uniquifier);
-#else   // BUILDFLAG(IS_WIN)
-    suffix = base::StringPrintf(" (%d)", uniquifier);
-#endif  // BUILDFLAG(IS_WIN)
-
-  // Truncation.
+  // Truncation based on the maximum length the suffix may have " (99)".
+  const int kMaxSuffixLength = 5;
   int max_path_component_length =
       base::GetMaximumPathComponentLength(target_dir);
   if (max_path_component_length != -1) {
     int limit = max_path_component_length -
-                suggested_path.Extension().length() - suffix.length();
+                suggested_path.Extension().length() - kMaxSuffixLength;
     if (limit <= 0 ||
-        !filename_generation::TruncateFilename(&suggested_path, limit))
+        !filename_generation::TruncateFilename(&suggested_path, limit)) {
       return base::FilePath();
+    }
   }
 
-  // Adding uniquifier suffix if needed.
-  if (uniquifier > 0)
-    suggested_path = suggested_path.InsertBeforeExtension(suffix);
+  // Find a unique name based on |suggested_path|.
+  suggested_path = base::GetUniquePath(suggested_path);
 
   return suggested_path;
 }

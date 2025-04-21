@@ -64,7 +64,7 @@ public class RemoteHelper {
               HttpURLConnection conn = null;
               StringBuffer response = new StringBuffer();
               try {
-                  URL mUrl = new URL("https://hydrisapps.com/carbon/android-resources/country-getter/?key=4ktn59ugn93473474nedkdvwoeegzz");
+                  URL mUrl = new URL("https://carbon.website/carbon/android-resources/country-getter/?key=4ktn59ugn93473474nedkdvwoeegzz");
 
                   conn = (HttpURLConnection) mUrl.openConnection();
                   conn.setDoOutput(false);
@@ -125,7 +125,7 @@ public class RemoteHelper {
                 HttpURLConnection conn = null;
                 StringBuffer response = new StringBuffer();
                 try {
-                    URL mUrl = new URL("https://hydrisapps.com/carbon/android-resources/ip-getter/?key=trccfbgf3q98hr9ofpbjevlksjdcb");
+                    URL mUrl = new URL("https://carbon.website/carbon/android-resources/ip-getter/?key=trccfbgf3q98hr9ofpbjevlksjdcb");
 
                     conn = (HttpURLConnection) mUrl.openConnection();
                     conn.setDoOutput(false);
@@ -219,7 +219,7 @@ public class RemoteHelper {
             URL url;
             StringBuffer response = new StringBuffer();
             try {
-                url = new URL("https://hydrisapps.com/carbon/android-resources/takeover/info.json");
+                url = new URL("https://carbon.website/carbon/android-resources/takeover/info.json");
               } catch (MalformedURLException e) {
                   throw new IllegalArgumentException("invalid url");
               }
@@ -295,7 +295,7 @@ public class RemoteHelper {
             URL url;
             StringBuffer response = new StringBuffer();
             try {
-                url = new URL("https://hydrisapps.com/carbon/android-resources/dapps/info.json");
+                url = new URL("https://carbon.website/carbon/android-resources/dapps/info.json");
               } catch (MalformedURLException e) {
                   throw new IllegalArgumentException("invalid url");
               }

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,120 +22,116 @@ bool DoesWorldMatch(const Config& config, const DOMWrapperWorld& world) {
   return config.world & world_bit;
 }
 
-enum class FunctionKind {
-  kAttributeGet,
-  kAttributeSet,
-  kOperation,
-};
-
-template <FunctionKind kind, typename Config>
+template <v8::ExceptionContext kind, typename Config>
 v8::FunctionCallback GetConfigCallback(const Config& config);
 template <>
-v8::FunctionCallback GetConfigCallback<FunctionKind::kAttributeGet>(
+v8::FunctionCallback GetConfigCallback<v8::ExceptionContext::kAttributeGet>(
     const IDLMemberInstaller::AttributeConfig& config) {
   return config.callback_for_get;
 }
 template <>
-v8::FunctionCallback GetConfigCallback<FunctionKind::kAttributeSet>(
+v8::FunctionCallback GetConfigCallback<v8::ExceptionContext::kAttributeSet>(
     const IDLMemberInstaller::AttributeConfig& config) {
   return config.callback_for_set;
 }
 template <>
-v8::FunctionCallback GetConfigCallback<FunctionKind::kOperation>(
+v8::FunctionCallback GetConfigCallback<v8::ExceptionContext::kOperation>(
     const IDLMemberInstaller::OperationConfig& config) {
   return config.callback;
 }
 
-template <FunctionKind kind, typename Config>
+template <v8::ExceptionContext kind, typename Config>
 int GetConfigLength(const Config& config);
 template <>
-int GetConfigLength<FunctionKind::kAttributeGet>(
+int GetConfigLength<v8::ExceptionContext::kAttributeGet>(
     const IDLMemberInstaller::AttributeConfig& config) {
   return 0;
 }
 template <>
-int GetConfigLength<FunctionKind::kAttributeSet>(
+int GetConfigLength<v8::ExceptionContext::kAttributeSet>(
     const IDLMemberInstaller::AttributeConfig& config) {
   return 1;
 }
 template <>
-int GetConfigLength<FunctionKind::kOperation>(
+int GetConfigLength<v8::ExceptionContext::kOperation>(
     const IDLMemberInstaller::OperationConfig& config) {
   return config.length;
 }
 
-template <FunctionKind kind, typename Config>
+template <v8::ExceptionContext kind, typename Config>
 IDLMemberInstaller::FlagCrossOriginCheck GetConfigCrossOriginCheck(
     const Config& config);
 template <>
 IDLMemberInstaller::FlagCrossOriginCheck
-GetConfigCrossOriginCheck<FunctionKind::kAttributeGet>(
+GetConfigCrossOriginCheck<v8::ExceptionContext::kAttributeGet>(
     const IDLMemberInstaller::AttributeConfig& config) {
   return static_cast<IDLMemberInstaller::FlagCrossOriginCheck>(
       config.cross_origin_check_for_get);
 }
 template <>
 IDLMemberInstaller::FlagCrossOriginCheck
-GetConfigCrossOriginCheck<FunctionKind::kAttributeSet>(
+GetConfigCrossOriginCheck<v8::ExceptionContext::kAttributeSet>(
     const IDLMemberInstaller::AttributeConfig& config) {
   return static_cast<IDLMemberInstaller::FlagCrossOriginCheck>(
       config.cross_origin_check_for_set);
 }
 template <>
 IDLMemberInstaller::FlagCrossOriginCheck
-GetConfigCrossOriginCheck<FunctionKind::kOperation>(
+GetConfigCrossOriginCheck<v8::ExceptionContext::kOperation>(
     const IDLMemberInstaller::OperationConfig& config) {
   return static_cast<IDLMemberInstaller::FlagCrossOriginCheck>(
       config.cross_origin_check);
 }
 
-template <FunctionKind kind, typename Config>
+template <v8::ExceptionContext kind, typename Config>
 v8::SideEffectType GetConfigSideEffect(const Config& config);
 template <>
-v8::SideEffectType GetConfigSideEffect<FunctionKind::kAttributeGet>(
+v8::SideEffectType GetConfigSideEffect<v8::ExceptionContext::kAttributeGet>(
     const IDLMemberInstaller::AttributeConfig& config) {
   return static_cast<v8::SideEffectType>(config.v8_side_effect);
 }
 template <>
-v8::SideEffectType GetConfigSideEffect<FunctionKind::kAttributeSet>(
+v8::SideEffectType GetConfigSideEffect<v8::ExceptionContext::kAttributeSet>(
     const IDLMemberInstaller::AttributeConfig& config) {
   return v8::SideEffectType::kHasSideEffect;
 }
 template <>
-v8::SideEffectType GetConfigSideEffect<FunctionKind::kOperation>(
+v8::SideEffectType GetConfigSideEffect<v8::ExceptionContext::kOperation>(
     const IDLMemberInstaller::OperationConfig& config) {
   return static_cast<v8::SideEffectType>(config.v8_side_effect);
 }
 
-template <FunctionKind kind, typename Config>
+template <v8::ExceptionContext kind, typename Config>
 V8PrivateProperty::CachedAccessor GetConfigV8CachedAccessor(
     const Config& config);
 template <>
 V8PrivateProperty::CachedAccessor
-GetConfigV8CachedAccessor<FunctionKind::kAttributeGet>(
+GetConfigV8CachedAccessor<v8::ExceptionContext::kAttributeGet>(
     const IDLMemberInstaller::AttributeConfig& config) {
   return static_cast<V8PrivateProperty::CachedAccessor>(
       config.v8_cached_accessor);
 }
 template <>
 V8PrivateProperty::CachedAccessor
-GetConfigV8CachedAccessor<FunctionKind::kAttributeSet>(
+GetConfigV8CachedAccessor<v8::ExceptionContext::kAttributeSet>(
     const IDLMemberInstaller::AttributeConfig& config) {
   return V8PrivateProperty::CachedAccessor::kNone;
 }
 template <>
 V8PrivateProperty::CachedAccessor
-GetConfigV8CachedAccessor<FunctionKind::kOperation>(
+GetConfigV8CachedAccessor<v8::ExceptionContext::kOperation>(
     const IDLMemberInstaller::OperationConfig& config) {
   return V8PrivateProperty::CachedAccessor::kNone;
 }
 
-template <FunctionKind kind, typename Config>
+template <v8::ExceptionContext kind, typename Config>
 v8::Local<v8::FunctionTemplate> CreateFunctionTemplate(
     v8::Isolate* isolate,
     const DOMWrapperWorld& world,
     v8::Local<v8::Signature> signature,
-    v8::Local<v8::String> name,
+    v8::Local<v8::String> property_name,
+    v8::Local<v8::String> interface_name,
+    v8::ExceptionContext exception_context,
     const Config& config,
     const v8::CFunction* v8_cfunction_table_data = nullptr,
     uint32_t v8_cfunction_table_size = 0) {
@@ -158,6 +154,8 @@ v8::Local<v8::FunctionTemplate> CreateFunctionTemplate(
         v8::ConstructorBehavior::kThrow, v8_side_effect,
         {v8_cfunction_table_data, v8_cfunction_table_size});
   } else {
+    DCHECK(!v8_cfunction_table_data);
+    DCHECK_EQ(v8_cfunction_table_size, 0u);
     function_template = v8::FunctionTemplate::NewWithCache(
         isolate, callback,
         V8PrivateProperty::GetCachedAccessor(isolate, v8_cached_accessor)
@@ -166,7 +164,10 @@ v8::Local<v8::FunctionTemplate> CreateFunctionTemplate(
     function_template->RemovePrototype();
   }
 
-  function_template->SetClassName(name);
+  function_template->SetClassName(property_name);
+  function_template->SetInterfaceName(interface_name);
+  function_template->SetExceptionContext(kind);
+
   function_template->SetAcceptAnyReceiver(
       GetConfigCrossOriginCheck<kind>(config) ==
       IDLMemberInstaller::FlagCrossOriginCheck::kDoNotCheck);
@@ -174,20 +175,23 @@ v8::Local<v8::FunctionTemplate> CreateFunctionTemplate(
   return function_template;
 }
 
-template <FunctionKind kind, typename Config>
+template <v8::ExceptionContext kind, typename Config>
 v8::Local<v8::Function> CreateFunction(
     v8::Isolate* isolate,
     v8::Local<v8::Context> context,
     const DOMWrapperWorld& world,
     v8::Local<v8::Signature> signature,
-    v8::Local<v8::String> name,
+    v8::Local<v8::String> property_name,
+    v8::Local<v8::String> interface_name,
+    v8::ExceptionContext exception_context,
     const Config& config,
     const v8::CFunction* v8_cfunction_table_data = nullptr,
     uint32_t v8_cfunction_table_size = 0) {
   if (!GetConfigCallback<kind>(config))
     return v8::Local<v8::Function>();
 
-  return CreateFunctionTemplate<kind>(isolate, world, signature, name, config,
+  return CreateFunctionTemplate<kind>(isolate, world, signature, property_name,
+                                      interface_name, exception_context, config,
                                       v8_cfunction_table_data,
                                       v8_cfunction_table_size)
       ->GetFunction(context)
@@ -200,7 +204,9 @@ void InstallAttribute(v8::Isolate* isolate,
                       v8::Local<v8::Template> prototype_template,
                       v8::Local<v8::Template> interface_template,
                       v8::Local<v8::Signature> signature,
-                      const IDLMemberInstaller::AttributeConfig& config) {
+                      const char* interface_name_ptr,
+                      const IDLMemberInstaller::AttributeConfig& config,
+                      const v8::CFunction* v8_cfunction_for_set = nullptr) {
   if (!DoesWorldMatch(config, world))
     return;
 
@@ -212,18 +218,28 @@ void InstallAttribute(v8::Isolate* isolate,
       location == IDLMemberInstaller::FlagLocation::kInterface)
     signature = v8::Local<v8::Signature>();
 
-  StringView name_as_view(config.name);
-  v8::Local<v8::String> name = V8AtomicString(isolate, name_as_view);
+  StringView property_name_as_view(config.property_name);
+  v8::Local<v8::String> property_name =
+      V8AtomicString(isolate, property_name_as_view);
+  v8::Local<v8::String> interface_name =
+      V8AtomicString(isolate, interface_name_ptr);
   v8::Local<v8::String> get_name = V8AtomicString(
-      isolate, static_cast<String>(StringView("get ", 4) + name_as_view));
+      isolate,
+      static_cast<String>(StringView(base::byte_span_from_cstring("get ")) +
+                          property_name_as_view));
   v8::Local<v8::String> set_name = V8AtomicString(
-      isolate, static_cast<String>(StringView("set ", 4) + name_as_view));
+      isolate,
+      static_cast<String>(StringView(base::byte_span_from_cstring("set ")) +
+                          property_name_as_view));
   v8::Local<v8::FunctionTemplate> get_func =
-      CreateFunctionTemplate<FunctionKind::kAttributeGet>(
-          isolate, world, signature, get_name, config);
+      CreateFunctionTemplate<v8::ExceptionContext::kAttributeGet>(
+          isolate, world, signature, get_name, interface_name,
+          v8::ExceptionContext::kAttributeGet, config);
   v8::Local<v8::FunctionTemplate> set_func =
-      CreateFunctionTemplate<FunctionKind::kAttributeSet>(
-          isolate, world, signature, set_name, config);
+      CreateFunctionTemplate<v8::ExceptionContext::kAttributeSet>(
+          isolate, world, signature, set_name, interface_name,
+          v8::ExceptionContext::kAttributeSet, config, v8_cfunction_for_set,
+          v8_cfunction_for_set == nullptr ? 0 : 1);
 
   v8::Local<v8::Template> target_template;
   switch (location) {
@@ -240,7 +256,7 @@ void InstallAttribute(v8::Isolate* isolate,
       NOTREACHED();
   }
   target_template->SetAccessorProperty(
-      name, get_func, set_func,
+      property_name, get_func, set_func,
       static_cast<v8::PropertyAttribute>(config.v8_property_attribute));
 }
 
@@ -251,7 +267,9 @@ void InstallAttribute(v8::Isolate* isolate,
                       v8::Local<v8::Object> prototype_object,
                       v8::Local<v8::Object> interface_object,
                       v8::Local<v8::Signature> signature,
-                      const IDLMemberInstaller::AttributeConfig& config) {
+                      const char* interface_name_ptr,
+                      const IDLMemberInstaller::AttributeConfig& config,
+                      const v8::CFunction* v8_cfunction_for_set = nullptr) {
   if (!DoesWorldMatch(config, world))
     return;
 
@@ -263,18 +281,27 @@ void InstallAttribute(v8::Isolate* isolate,
       location == IDLMemberInstaller::FlagLocation::kInterface)
     signature = v8::Local<v8::Signature>();
 
-  StringView name_as_view(config.name);
-  v8::Local<v8::String> name = V8AtomicString(isolate, name_as_view);
+  StringView name_as_view(config.property_name);
+  v8::Local<v8::String> property_name = V8AtomicString(isolate, name_as_view);
+  v8::Local<v8::String> interface_name =
+      V8AtomicString(isolate, interface_name_ptr);
   v8::Local<v8::String> get_name = V8AtomicString(
-      isolate, static_cast<String>(StringView("get ", 4) + name_as_view));
+      isolate,
+      static_cast<String>(StringView(base::byte_span_from_cstring("get ")) +
+                          name_as_view));
   v8::Local<v8::String> set_name = V8AtomicString(
-      isolate, static_cast<String>(StringView("set ", 4) + name_as_view));
+      isolate,
+      static_cast<String>(StringView(base::byte_span_from_cstring("set ")) +
+                          name_as_view));
   v8::Local<v8::Function> get_func =
-      CreateFunction<FunctionKind::kAttributeGet>(isolate, context, world,
-                                                  signature, get_name, config);
+      CreateFunction<v8::ExceptionContext::kAttributeGet>(
+          isolate, context, world, signature, get_name, interface_name,
+          v8::ExceptionContext::kAttributeGet, config);
   v8::Local<v8::Function> set_func =
-      CreateFunction<FunctionKind::kAttributeSet>(isolate, context, world,
-                                                  signature, set_name, config);
+      CreateFunction<v8::ExceptionContext::kAttributeSet>(
+          isolate, context, world, signature, set_name, interface_name,
+          v8::ExceptionContext::kAttributeSet, config, v8_cfunction_for_set,
+          v8_cfunction_for_set == nullptr ? 0 : 1);
 
   v8::Local<v8::Object> target_object;
   switch (location) {
@@ -291,7 +318,7 @@ void InstallAttribute(v8::Isolate* isolate,
       NOTREACHED();
   }
   target_object->SetAccessorProperty(
-      name, get_func, set_func,
+      property_name, get_func, set_func,
       static_cast<v8::PropertyAttribute>(config.v8_property_attribute));
 }
 
@@ -301,6 +328,7 @@ void InstallOperation(v8::Isolate* isolate,
                       v8::Local<v8::Template> prototype_template,
                       v8::Local<v8::Template> interface_template,
                       v8::Local<v8::Signature> signature,
+                      const char* interface_name_ptr,
                       const IDLMemberInstaller::OperationConfig& config,
                       const v8::CFunction* v8_cfunction_table_data = nullptr,
                       uint32_t v8_cfunction_table_size = 0) {
@@ -315,10 +343,14 @@ void InstallOperation(v8::Isolate* isolate,
       location == IDLMemberInstaller::FlagLocation::kInterface)
     signature = v8::Local<v8::Signature>();
 
-  v8::Local<v8::String> name = V8AtomicString(isolate, config.name);
+  v8::Local<v8::String> property_name =
+      V8AtomicString(isolate, config.property_name);
+  v8::Local<v8::String> interface_name =
+      V8AtomicString(isolate, interface_name_ptr);
   v8::Local<v8::FunctionTemplate> func =
-      CreateFunctionTemplate<FunctionKind::kOperation>(
-          isolate, world, signature, name, config, v8_cfunction_table_data,
+      CreateFunctionTemplate<v8::ExceptionContext::kOperation>(
+          isolate, world, signature, property_name, interface_name,
+          v8::ExceptionContext::kOperation, config, v8_cfunction_table_data,
           v8_cfunction_table_size);
 
   v8::Local<v8::Template> target_template;
@@ -336,7 +368,7 @@ void InstallOperation(v8::Isolate* isolate,
       NOTREACHED();
   }
   target_template->Set(
-      name, func,
+      property_name, func,
       static_cast<v8::PropertyAttribute>(config.v8_property_attribute));
 }
 
@@ -347,6 +379,7 @@ void InstallOperation(v8::Isolate* isolate,
                       v8::Local<v8::Object> prototype_object,
                       v8::Local<v8::Object> interface_object,
                       v8::Local<v8::Signature> signature,
+                      const char* interface_name_ptr,
                       const IDLMemberInstaller::OperationConfig& config,
                       const v8::CFunction* v8_cfunction_table_data = nullptr,
                       uint32_t v8_cfunction_table_size = 0) {
@@ -361,10 +394,15 @@ void InstallOperation(v8::Isolate* isolate,
       location == IDLMemberInstaller::FlagLocation::kInterface)
     signature = v8::Local<v8::Signature>();
 
-  v8::Local<v8::String> name = V8AtomicString(isolate, config.name);
-  v8::Local<v8::Function> func = CreateFunction<FunctionKind::kOperation>(
-      isolate, context, world, signature, name, config, v8_cfunction_table_data,
-      v8_cfunction_table_size);
+  v8::Local<v8::String> property_name =
+      V8AtomicString(isolate, config.property_name);
+  v8::Local<v8::String> interface_name =
+      V8AtomicString(isolate, interface_name_ptr);
+  v8::Local<v8::Function> func =
+      CreateFunction<v8::ExceptionContext::kOperation>(
+          isolate, context, world, signature, property_name, interface_name,
+          v8::ExceptionContext::kOperation, config, v8_cfunction_table_data,
+          v8_cfunction_table_size);
 
   v8::Local<v8::Object> target_object;
   switch (location) {
@@ -382,7 +420,7 @@ void InstallOperation(v8::Isolate* isolate,
   }
   target_object
       ->DefineOwnProperty(
-          context, name, func,
+          context, property_name, func,
           static_cast<v8::PropertyAttribute>(config.v8_property_attribute))
       .ToChecked();
 }
@@ -397,10 +435,11 @@ void IDLMemberInstaller::InstallAttributes(
     v8::Local<v8::Template> prototype_template,
     v8::Local<v8::Template> interface_template,
     v8::Local<v8::Signature> signature,
+    const char* interface_name,
     base::span<const AttributeConfig> configs) {
   for (const auto& config : configs) {
     InstallAttribute(isolate, world, instance_template, prototype_template,
-                     interface_template, signature, config);
+                     interface_template, signature, interface_name, config);
   }
 }
 
@@ -412,11 +451,47 @@ void IDLMemberInstaller::InstallAttributes(
     v8::Local<v8::Object> prototype_object,
     v8::Local<v8::Object> interface_object,
     v8::Local<v8::Signature> signature,
+    const char* interface_name,
     base::span<const AttributeConfig> configs) {
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
   for (const auto& config : configs) {
     InstallAttribute(isolate, context, world, instance_object, prototype_object,
-                     interface_object, signature, config);
+                     interface_object, signature, interface_name, config);
+  }
+}
+
+// static
+void IDLMemberInstaller::InstallAttributes(
+    v8::Isolate* isolate,
+    const DOMWrapperWorld& world,
+    v8::Local<v8::Template> instance_template,
+    v8::Local<v8::Template> prototype_template,
+    v8::Local<v8::Template> interface_template,
+    v8::Local<v8::Signature> signature,
+    const char* interface_name,
+    base::span<const NoAllocDirectCallAttributeConfig> configs) {
+  for (const auto& config : configs) {
+    InstallAttribute(isolate, world, instance_template, prototype_template,
+                     interface_template, signature, interface_name,
+                     config.attribute_config, config.v8_cfunction_for_set);
+  }
+}
+
+// static
+void IDLMemberInstaller::InstallAttributes(
+    v8::Isolate* isolate,
+    const DOMWrapperWorld& world,
+    v8::Local<v8::Object> instance_object,
+    v8::Local<v8::Object> prototype_object,
+    v8::Local<v8::Object> interface_object,
+    v8::Local<v8::Signature> signature,
+    const char* interface_name,
+    base::span<const NoAllocDirectCallAttributeConfig> configs) {
+  v8::Local<v8::Context> context = isolate->GetCurrentContext();
+  for (const auto& config : configs) {
+    InstallAttribute(isolate, context, world, instance_object, prototype_object,
+                     interface_object, signature, interface_name,
+                     config.attribute_config, config.v8_cfunction_for_set);
   }
 }
 
@@ -484,10 +559,11 @@ void IDLMemberInstaller::InstallOperations(
     v8::Local<v8::Template> prototype_template,
     v8::Local<v8::Template> interface_template,
     v8::Local<v8::Signature> signature,
+    const char* interface_name,
     base::span<const OperationConfig> configs) {
   for (const auto& config : configs) {
     InstallOperation(isolate, world, instance_template, prototype_template,
-                     interface_template, signature, config);
+                     interface_template, signature, interface_name, config);
   }
 }
 
@@ -499,11 +575,12 @@ void IDLMemberInstaller::InstallOperations(
     v8::Local<v8::Object> prototype_object,
     v8::Local<v8::Object> interface_object,
     v8::Local<v8::Signature> signature,
+    const char* interface_name,
     base::span<const OperationConfig> configs) {
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
   for (const auto& config : configs) {
     InstallOperation(isolate, context, world, instance_object, prototype_object,
-                     interface_object, signature, config);
+                     interface_object, signature, interface_name, config);
   }
 }
 
@@ -515,11 +592,12 @@ void IDLMemberInstaller::InstallOperations(
     v8::Local<v8::Template> prototype_template,
     v8::Local<v8::Template> interface_template,
     v8::Local<v8::Signature> signature,
+    const char* interface_name,
     base::span<const NoAllocDirectCallOperationConfig> configs) {
   for (const auto& config : configs) {
     InstallOperation(isolate, world, instance_template, prototype_template,
-                     interface_template, signature, config.operation_config,
-                     config.v8_cfunction_table_data,
+                     interface_template, signature, interface_name,
+                     config.operation_config, config.v8_cfunction_table_data,
                      config.v8_cfunction_table_size);
   }
 }
@@ -532,12 +610,13 @@ void IDLMemberInstaller::InstallOperations(
     v8::Local<v8::Object> prototype_object,
     v8::Local<v8::Object> interface_object,
     v8::Local<v8::Signature> signature,
+    const char* interface_name,
     base::span<const NoAllocDirectCallOperationConfig> configs) {
   v8::Local<v8::Context> context = isolate->GetCurrentContext();
   for (const auto& config : configs) {
     InstallOperation(isolate, context, world, instance_object, prototype_object,
-                     interface_object, signature, config.operation_config,
-                     config.v8_cfunction_table_data,
+                     interface_object, signature, interface_name,
+                     config.operation_config, config.v8_cfunction_table_data,
                      config.v8_cfunction_table_size);
   }
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -47,10 +47,9 @@ def main():
     sys.exit(1)
 
   update_histogram_enum.UpdateHistogramFromDict(
-      'GpuDriverBugWorkaroundEntry',
+      'tools/metrics/histograms/enums.xml', 'GpuDriverBugWorkaroundEntry',
       ReadGpuDriverBugEntries(GPU_DRIVER_BUG_WORKAROUND_PATH),
-      GPU_DRIVER_BUG_WORKAROUND_PATH,
-      os.path.basename(__file__))
+      GPU_DRIVER_BUG_WORKAROUND_PATH, os.path.basename(__file__))
 
 
 if __name__ == '__main__':

@@ -1,10 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 module blink.mojom;
 
-import "mojo/public/mojom/base/read_only_file.mojom";
+import "mojo/public/mojom/base/file.mojom";
 
 // The interface to provide status and statm files to the renderer's memory
 // usage monitor. The interface is required only for Linux.

@@ -1,27 +1,27 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <stddef.h>
 
-#include <algorithm>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/containers/contains.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
+#include "base/value_iterators.h"
 #include "base/values.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_impl.h"
 #include "chrome/browser/signin/signin_promo.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -65,7 +65,7 @@ class ZoomLevelChangeObserver {
   ZoomLevelChangeObserver& operator=(const ZoomLevelChangeObserver&) = delete;
 
   void BlockUntilZoomLevelForHostHasChanged(const std::string& host) {
-    while (!std::count(changed_hosts_.begin(), changed_hosts_.end(), host)) {
+    while (!base::Contains(changed_hosts_, host)) {
       message_loop_runner_->Run();
       message_loop_runner_ = new content::MessageLoopRunner;
     }
@@ -87,7 +87,7 @@ class ZoomLevelChangeObserver {
 
 class HostZoomMapBrowserTest : public InProcessBrowserTest {
  public:
-  HostZoomMapBrowserTest() {}
+  HostZoomMapBrowserTest() = default;
 
   HostZoomMapBrowserTest(const HostZoomMapBrowserTest&) = delete;
   HostZoomMapBrowserTest& operator=(const HostZoomMapBrowserTest&) = delete;
@@ -121,22 +121,23 @@ class HostZoomMapBrowserTest : public InProcessBrowserTest {
 
   std::vector<std::string> GetHostsWithZoomLevelsFromPrefs() {
     PrefService* prefs = browser()->profile()->GetPrefs();
-    const base::Value* dictionaries =
-        prefs->GetDictionary(prefs::kPartitionPerHostZoomLevels);
+    const base::Value::Dict& dictionaries =
+        prefs->GetDict(prefs::kPartitionPerHostZoomLevels);
     std::string partition_key =
         ChromeZoomLevelPrefs::GetPartitionKeyForTesting(base::FilePath());
-    const base::Value* values = dictionaries->FindDictPath(partition_key);
+    const base::Value::Dict* values =
+        dictionaries.FindDictByDottedPath(partition_key);
     std::vector<std::string> results;
     if (values) {
-      for (const auto it : values->DictItems())
-        results.push_back(it.first);
+      for (const auto key_value_pair : *values)
+        results.push_back(key_value_pair.first);
     }
     return results;
   }
 
   GURL ConstructTestServerURL(const char* url_template) {
-    return GURL(base::StringPrintf(
-        url_template, embedded_test_server()->port()));
+    return GURL(base::StringPrintfNonConstexpr(url_template,
+                                               embedded_test_server()->port()));
   }
 
  private:
@@ -250,7 +251,7 @@ IN_PROC_BROWSER_TEST_F(HostZoomMapBrowserTest, ZoomEventsWorkForOffTheRecord) {
                                 test_scheme, test_host));
 }
 
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
+#if !BUILDFLAG(IS_CHROMEOS)
 IN_PROC_BROWSER_TEST_F(
     HostZoomMapBrowserTest,
     WebviewBasedSigninUsesDefaultStoragePartitionForEmbedder) {
@@ -277,7 +278,7 @@ IN_PROC_BROWSER_TEST_F(
 
 // Regression test for crbug.com/364399.
 IN_PROC_BROWSER_TEST_F(HostZoomMapBrowserTest, ToggleDefaultZoomLevel) {
-  const double default_zoom_level = blink::PageZoomFactorToZoomLevel(1.5);
+  const double default_zoom_level = blink::ZoomFactorToZoomLevel(1.5);
 
   const char kTestURLTemplate1[] = "http://host1:%u/";
   const char kTestURLTemplate2[] = "http://host2:%u/";
@@ -290,26 +291,26 @@ IN_PROC_BROWSER_TEST_F(HostZoomMapBrowserTest, ToggleDefaultZoomLevel) {
   SetDefaultZoomLevel(default_zoom_level);
   observer.BlockUntilZoomLevelForHostHasChanged(test_url1.host());
   EXPECT_TRUE(
-      blink::PageZoomValuesEqual(default_zoom_level, GetZoomLevel(test_url1)));
+      blink::ZoomValuesEqual(default_zoom_level, GetZoomLevel(test_url1)));
 
   GURL test_url2 = ConstructTestServerURL(kTestURLTemplate2);
   ui_test_utils::NavigateToURLWithDisposition(
       browser(), test_url2, WindowOpenDisposition::NEW_FOREGROUND_TAB,
       ui_test_utils::BROWSER_TEST_WAIT_FOR_LOAD_STOP);
   EXPECT_TRUE(
-      blink::PageZoomValuesEqual(default_zoom_level, GetZoomLevel(test_url2)));
+      blink::ZoomValuesEqual(default_zoom_level, GetZoomLevel(test_url2)));
 
   content::WebContents* web_contents =
       browser()->tab_strip_model()->GetActiveWebContents();
   zoom::PageZoom::Zoom(web_contents, content::PAGE_ZOOM_OUT);
   observer.BlockUntilZoomLevelForHostHasChanged(test_url2.host());
   EXPECT_FALSE(
-      blink::PageZoomValuesEqual(default_zoom_level, GetZoomLevel(test_url2)));
+      blink::ZoomValuesEqual(default_zoom_level, GetZoomLevel(test_url2)));
 
   zoom::PageZoom::Zoom(web_contents, content::PAGE_ZOOM_IN);
   observer.BlockUntilZoomLevelForHostHasChanged(test_url2.host());
   EXPECT_TRUE(
-      blink::PageZoomValuesEqual(default_zoom_level, GetZoomLevel(test_url2)));
+      blink::ZoomValuesEqual(default_zoom_level, GetZoomLevel(test_url2)));
 
   // Now both tabs should be at the default zoom level, so there should not be
   // any per-host values saved either to Pref, or internally in HostZoomMap.
@@ -338,8 +339,7 @@ IN_PROC_BROWSER_TEST_F(HostZoomMapBrowserTest,
 
   Profile* parent_profile = browser()->profile();
   Profile* child_profile =
-      static_cast<ProfileImpl*>(parent_profile)
-          ->GetPrimaryOTRProfile(/*create_if_needed=*/true);
+      parent_profile->GetPrimaryOTRProfile(/*create_if_needed=*/true);
   HostZoomMap* parent_zoom_map =
       HostZoomMap::GetDefaultForBrowserContext(parent_profile);
   ASSERT_TRUE(parent_zoom_map);
@@ -384,8 +384,7 @@ IN_PROC_BROWSER_TEST_F(HostZoomMapBrowserTest,
                        ParentDefaultZoomPropagatesToIncognitoChild) {
   Profile* parent_profile = browser()->profile();
   Profile* child_profile =
-      static_cast<ProfileImpl*>(parent_profile)
-          ->GetPrimaryOTRProfile(/*create_if_needed=*/true);
+      parent_profile->GetPrimaryOTRProfile(/*create_if_needed=*/true);
 
   double new_default_zoom_level =
       parent_profile->GetZoomLevelPrefs()->GetDefaultZoomLevelPref() + 1.f;

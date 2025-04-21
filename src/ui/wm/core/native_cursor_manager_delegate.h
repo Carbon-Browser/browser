@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,10 @@
 
 #include "base/component_export.h"
 #include "ui/gfx/native_widget_types.h"
+
+namespace gfx {
+class Size;
+}
 
 namespace ui {
 enum class CursorSize;
@@ -30,6 +34,7 @@ class COMPONENT_EXPORT(UI_WM) NativeCursorManagerDelegate {
   virtual void CommitCursorSize(ui::CursorSize cursor_size) = 0;
   virtual void CommitMouseEventsEnabled(bool enabled) = 0;
   virtual void CommitSystemCursorSize(const gfx::Size& cursor_size) = 0;
+  virtual void CommitSystemCursorVisibility(bool visible) = 0;
 };
 
 }  // namespace wm

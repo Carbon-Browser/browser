@@ -1,12 +1,12 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/gfx/font_fallback_win.h"
 
-#include "base/strings/string_piece.h"
+#include <string_view>
+
 #include "base/test/task_environment.h"
-#include "base/win/windows_version.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace gfx {
@@ -80,7 +80,7 @@ TEST_F(FontFallbackWinTest, EmptyStringFallback) {
   Font base_font;
   Font fallback_font;
   bool result = GetFallbackFont(base_font, kDefaultApplicationLocale,
-                                base::StringPiece16(), &fallback_font);
+                                std::u16string_view(), &fallback_font);
   EXPECT_FALSE(result);
 }
 
@@ -90,26 +90,22 @@ TEST_F(FontFallbackWinTest, NulTerminatedStringPiece) {
   // Multiple ending NUL characters.
   const char16_t kTest1[] = {0x0540, 0x0541, 0, 0, 0};
   EXPECT_FALSE(GetFallbackFont(base_font, kDefaultApplicationLocale,
-                               base::StringPiece16(kTest1, std::size(kTest1)),
+                               std::u16string_view(kTest1, std::size(kTest1)),
                                &fallback_font));
   // No ending NUL character.
   const char16_t kTest2[] = {0x0540, 0x0541};
   EXPECT_TRUE(GetFallbackFont(base_font, kDefaultApplicationLocale,
-                              base::StringPiece16(kTest2, std::size(kTest2)),
+                              std::u16string_view(kTest2, std::size(kTest2)),
                               &fallback_font));
 
   // NUL only characters.
   const char16_t kTest3[] = {0, 0, 0};
   EXPECT_FALSE(GetFallbackFont(base_font, kDefaultApplicationLocale,
-                               base::StringPiece16(kTest3, std::size(kTest3)),
+                               std::u16string_view(kTest3, std::size(kTest3)),
                                &fallback_font));
 }
 
 TEST_F(FontFallbackWinTest, CJKLocaleFallback) {
-  // The uniscribe fallback used by win7 does not support locale.
-  if (base::win::GetVersion() < base::win::Version::WIN10)
-    return;
-
   // Han unification is an effort to map multiple character sets of the CJK
   // languages into a single set of unified characters. Han characters are a
   // common feature of written Chinese (hanzi), Japanese (kanji), and Korean

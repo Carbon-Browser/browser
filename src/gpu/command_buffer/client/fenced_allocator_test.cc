@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 // This file contains the tests for the FencedAllocator class.
 
@@ -8,8 +13,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/aligned_memory.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
@@ -37,9 +42,8 @@ class BaseFencedAllocatorTest : public testing::Test {
 
   void SetUp() override {
     command_buffer_ = std::make_unique<CommandBufferDirect>();
-    api_mock_ =
-        std::make_unique<AsyncAPIMock>(true, command_buffer_->service());
-    command_buffer_->set_handler(api_mock_.get());
+    api_mock_ = std::make_unique<AsyncAPIMock>(true, command_buffer_.get(),
+                                               command_buffer_->service());
 
     // ignore noops in the mock - we don't want to inspect the internals of the
     // helper.
@@ -395,8 +399,8 @@ class FencedAllocatorWrapperTest : public BaseFencedAllocatorTest {
     BaseFencedAllocatorTest::TearDown();
   }
 
-  std::unique_ptr<FencedAllocatorWrapper> allocator_;
   std::unique_ptr<char, base::AlignedFreeDeleter> buffer_;
+  std::unique_ptr<FencedAllocatorWrapper> allocator_;
 };
 
 // Checks basic alloc and free.

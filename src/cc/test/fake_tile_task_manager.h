@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,7 @@ class FakeTileTaskManagerImpl : public TileTaskManager {
   // Overridden from TileTaskManager:
   void ScheduleTasks(TaskGraph* graph) override;
   void CheckForCompletedTasks() override;
+  void ExternalDependencyCompletedForTask(scoped_refptr<TileTask>) override;
   void Shutdown() override;
 
  protected:

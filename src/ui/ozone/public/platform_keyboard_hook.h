@@ -1,16 +1,16 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_OZONE_PUBLIC_PLATFORM_KEYBOARD_HOOK_H_
 #define UI_OZONE_PUBLIC_PLATFORM_KEYBOARD_HOOK_H_
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 
 namespace ui {
 
-enum class DomCode;
+enum class DomCode : uint32_t;
 class KeyEvent;
 
 // Supported hook types.

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -79,19 +79,19 @@ TEST(UsbMidiDescriptorParserTest, Parse) {
   EXPECT_EQ(0u, jacks[0].cable_number);
   EXPECT_EQ(2u, jacks[0].endpoint_number());
   EXPECT_EQ(UsbMidiJack::DIRECTION_OUT, jacks[0].direction());
-  EXPECT_EQ(nullptr, jacks[0].device);
+  EXPECT_EQ(nullptr, jacks[0].device.get());
 
   EXPECT_EQ(3u, jacks[1].jack_id);
   EXPECT_EQ(1u, jacks[1].cable_number);
   EXPECT_EQ(2u, jacks[1].endpoint_number());
   EXPECT_EQ(UsbMidiJack::DIRECTION_OUT, jacks[1].direction());
-  EXPECT_EQ(nullptr, jacks[1].device);
+  EXPECT_EQ(nullptr, jacks[1].device.get());
 
   EXPECT_EQ(7u, jacks[2].jack_id);
   EXPECT_EQ(0u, jacks[2].cable_number);
   EXPECT_EQ(2u, jacks[2].endpoint_number());
   EXPECT_EQ(UsbMidiJack::DIRECTION_IN, jacks[2].direction());
-  EXPECT_EQ(nullptr, jacks[2].device);
+  EXPECT_EQ(nullptr, jacks[2].device.get());
 }
 
 TEST(UsbMidiDescriptorParserTest, ParseDeviceInfoEmpty) {

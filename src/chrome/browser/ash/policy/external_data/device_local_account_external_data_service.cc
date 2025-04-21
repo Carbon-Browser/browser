@@ -1,24 +1,24 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/policy/external_data/device_local_account_external_data_service.h"
 
 #include <memory>
+#include <optional>
 #include <set>
 #include <utility>
 
 #include "ash/constants/ash_paths.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/path_service.h"
 #include "base/task/sequenced_task_runner.h"
 #include "components/policy/core/common/cloud/cloud_policy_store.h"
 #include "components/policy/policy_constants.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace policy {
 
@@ -30,7 +30,7 @@ DeviceLocalAccountExternalDataService::DeviceLocalAccountExternalDataService(
       ash::DIR_DEVICE_LOCAL_ACCOUNT_EXTERNAL_DATA);
   resource_cache_ =
       std::make_unique<ResourceCache>(cache_dir, backend_task_runner_,
-                                      /* max_cache_size */ absl::nullopt);
+                                      /* max_cache_size */ std::nullopt);
   parent_->AddObserver(this);
 }
 

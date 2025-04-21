@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,8 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
+#include <string>
 #include <vector>
 
 #include "ash/app_list/app_list_model_provider.h"
@@ -15,24 +17,30 @@
 #include "ash/app_list/model/search/search_box_model.h"
 #include "ash/app_list/model/search/search_box_model_observer.h"
 #include "ash/ash_export.h"
+#include "ash/assistant/ui/assistant_view_delegate.h"
+#include "ash/assistant/ui/main_stage/launcher_search_iph_view.h"
 #include "ash/public/cpp/app_list/app_list_types.h"
 #include "ash/search_box/search_box_view_base.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/accessibility/platform/ax_platform_node_id.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 
 namespace views {
+class MenuItemView;
 class Textfield;
 class View;
 }  // namespace views
 
 namespace ash {
 
-class AppListView;
 class AppListViewDelegate;
-class ContentsView;
+class FilterMenuAdapter;
 class ResultSelectionController;
+class SearchBoxViewDelegate;
 class SearchResultBaseView;
+using QueryChangedCallback = base::RepeatingCallback<void()>;
 
 // Subclass of SearchBoxViewBase. SearchBoxModel is its data model
 // that controls what icon to display, what placeholder text to use for
@@ -40,31 +48,41 @@ class SearchResultBaseView;
 // contents and selection model of the Textfield.
 class ASH_EXPORT SearchBoxView : public SearchBoxViewBase,
                                  public AppListModelProvider::Observer,
-                                 public SearchBoxModelObserver {
+                                 public SearchBoxModelObserver,
+                                 public LauncherSearchIphView::Delegate,
+                                 public AssistantViewDelegateObserver {
+  METADATA_HEADER(SearchBoxView, SearchBoxViewBase)
+
  public:
   enum class PlaceholderTextType {
     kShortcuts = 0,
     kTabs = 1,
     kSettings = 2,
-    kGames = 3
+    kGames = 3,
+    kImages = 4
   };
 
   SearchBoxView(SearchBoxViewDelegate* delegate,
                 AppListViewDelegate* view_delegate,
-                AppListView* app_list_view = nullptr);
+                bool is_app_list_bubble);
 
   SearchBoxView(const SearchBoxView&) = delete;
   SearchBoxView& operator=(const SearchBoxView&) = delete;
 
   ~SearchBoxView() override;
 
+  // Initializes the search box style for usage in bubble (clamshell mode)
+  // launcher.
+  void InitializeForBubbleLauncher();
+
+  // Initializes the search box style for usage in fullscreen (tablet mode)
+  // launcher.
+  void InitializeForFullscreenLauncher();
+
   // Must be called before the user interacts with the search box. Cannot be
   // part of Init() because the controller isn't available until after Init()
   // is called.
   void SetResultSelectionController(ResultSelectionController* controller);
-
-  // Called when tablet mode starts and ends.
-  void OnTabletModeChanged(bool started);
 
   // Resets state of SearchBoxView so it can be reshown.
   void ResetForShow();
@@ -72,26 +90,16 @@ class ASH_EXPORT SearchBoxView : public SearchBoxViewBase,
   // Returns the total focus ring spacing for use in folders.
   static int GetFocusRingSpacing();
 
-  // Creates a focus ring layer if the search box is not in the bubble launcher.
-  void MaybeCreateFocusRing();
-
   // Overridden from SearchBoxViewBase:
-  void Init(const InitParams& params) override;
-  void UpdateSearchTextfieldAccessibleNodeData(
-      ui::AXNodeData* node_data) override;
-  void ClearSearch() override;
-  void HandleSearchBoxEvent(ui::LocatedEvent* located_event) override;
+  void UpdateSearchTextfieldAccessibleActiveDescendantId() override;
   void UpdateKeyboardVisibility() override;
-  void UpdateModel(bool initiated_by_user) override;
-  void UpdateSearchIcon() override;
+  void HandleQueryChange(const std::u16string& query,
+                         bool initiated_by_user) override;
   void UpdatePlaceholderTextStyle() override;
   void UpdateSearchBoxBorder() override;
-  void SetupAssistantButton() override;
-  void SetupCloseButton() override;
-  void SetupBackButton() override;
-  void RecordSearchBoxActivationHistogram(ui::EventType event_type) override;
   void OnSearchBoxActiveChanged(bool active) override;
   void UpdateSearchBoxFocusPaint() override;
+  void OnAfterUserAction(views::Textfield* sender) override;
 
   // AppListModelProvider::Observer:
   void OnActiveAppListModelsChanged(AppListModel* model,
@@ -99,13 +107,35 @@ class ASH_EXPORT SearchBoxView : public SearchBoxViewBase,
 
   // Overridden from views::View:
   void OnKeyEvent(ui::KeyEvent* event) override;
-  bool OnMouseWheel(const ui::MouseWheelEvent& event) override;
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
   void OnPaintBackground(gfx::Canvas* canvas) override;
   void OnPaintBorder(gfx::Canvas* canvas) override;
-  const char* GetClassName() const override;
   void OnThemeChanged() override;
   void OnBoundsChanged(const gfx::Rect& previous_bounds) override;
+  void AddedToWidget() override;
+
+  // LauncherSearchIphView::Delegate:
+  void RunLauncherSearchQuery(const std::u16string& query) override;
+  void OpenAssistantPage() override;
+
+  // AssistantViewDelegateObserver:
+  void OnLauncherSearchChipPressed(const std::u16string& query) override;
+
+  // Shows the category filter menu that allows users to enable/disable specific
+  // search categories.
+  void ShowFilterMenu();
+
+  // Called when the category filter menu is closed.
+  void OnFilterMenuClosed();
+
+  // Returns the menu item view in the category filter menu that indicates the
+  // `category` button. This should only be called when `filter_button_` exists
+  // and the menu is opened.
+  views::MenuItemView* GetFilterMenuItemByCategory(
+      AppListSearchControlCategory category);
+
+  // Returns true if the category filter menu is opened. This should only be
+  // called when `filter_button_` exists.
+  bool IsFilterMenuOpen();
 
   // Updates the search box's background corner radius and color based on the
   // state of AppListModel.
@@ -120,20 +150,21 @@ class ASH_EXPORT SearchBoxView : public SearchBoxViewBase,
   // Returns background color for the given state.
   SkColor GetBackgroundColorForState(AppListState state) const;
 
-  // Shows Zero State suggestions.
-  void ShowZeroStateSuggestions();
-
-  // Called when the wallpaper colors change.
-  void OnWallpaperColorsChanged();
-
   // Sets the autocomplete text if autocomplete conditions are met.
   void ProcessAutocomplete(SearchResultBaseView* first_result_view);
+
+  // Sets up prefix match autocomplete. Returns true if successful.
+  bool ProcessPrefixMatchAutocomplete(SearchResult* search_result,
+                                      const std::u16string& user_typed_text);
 
   // Removes all autocomplete text.
   void ClearAutocompleteText();
 
   // Updates the search box with |new_query| and starts a new search.
   void UpdateQuery(const std::u16string& new_query);
+
+  // Moves the focus back to search box and find a search result to select.
+  void EnterSearchResultSelection(const ui::KeyEvent& event);
 
   // Clears the search query and de-activate the search box.
   void ClearSearchAndDeactivateSearchBox();
@@ -143,12 +174,11 @@ class ASH_EXPORT SearchBoxView : public SearchBoxViewBase,
   // search results list.
   // `nullopt` indicates no active descendant, i.e. that no result is selected.
   void SetA11yActiveDescendant(
-      const absl::optional<int32_t>& active_descendant);
+      const std::optional<ui::AXPlatformNodeId>& active_descendant);
 
-  void set_contents_view(ContentsView* contents_view) {
-    contents_view_ = contents_view;
-  }
-  ContentsView* contents_view() { return contents_view_; }
+  // Refreshes the placeholder text with a fixed one rather than the one picked
+  // up randomly
+  void UseFixedPlaceholderTextForTest();
 
   ResultSelectionController* result_selection_controller_for_test() {
     return result_selection_controller_;
@@ -156,6 +186,8 @@ class ASH_EXPORT SearchBoxView : public SearchBoxViewBase,
   void set_highlight_range_for_test(const gfx::Range& range) {
     highlight_range_ = range;
   }
+
+  const std::u16string& current_query() const { return current_query_; }
 
   // Update search box view background when result container visibility changes.
   void OnResultContainerVisibilityChanged(bool visible);
@@ -167,8 +199,30 @@ class ASH_EXPORT SearchBoxView : public SearchBoxViewBase,
   int GetSearchBoxIconSize();
   int GetSearchBoxButtonSize();
 
+  void SetQueryChangedCallback(QueryChangedCallback callback);
+
  private:
   class FocusRingLayer;
+
+  // Called when the close button within the search box gets pressed.
+  void CloseButtonPressed();
+
+  // Called when the assistant button within the search box gets pressed.
+  void AssistantButtonPressed();
+
+  // Called when the assistant new entry point button within the search box gets
+  // pressed.
+  void AssistantNewEntryPointButtonPressed();
+
+  // Called when the sunfish launcher button within the search box gets pressed.
+  void SunfishButtonPressed();
+
+  // Updates the icon shown left of the search box texfield.
+  void UpdateSearchIcon();
+
+  // Whether 'autocomplete_text' is a valid candidate for classic highlighted
+  // autocomplete.
+  bool IsValidAutocompleteText(const std::u16string& autocomplete_text);
 
   // Updates the text field text color.
   void UpdateTextColor();
@@ -187,10 +241,11 @@ class ASH_EXPORT SearchBoxView : public SearchBoxViewBase,
   // text to the autocomplete text and sets the text highlight.
   void SetAutocompleteText(const std::u16string& autocomplete_text);
 
+  // Returns the text shown in the text field when there is no text inputs.
+  SearchBoxView::PlaceholderTextType SelectPlaceholderText() const;
+
   // Overridden from views::TextfieldController:
   void OnBeforeUserAction(views::Textfield* sender) override;
-  void ContentsChanged(views::Textfield* sender,
-                       const std::u16string& new_contents) override;
   bool HandleKeyEvent(views::Textfield* sender,
                       const ui::KeyEvent& key_event) override;
   bool HandleMouseEvent(views::Textfield* sender,
@@ -198,20 +253,46 @@ class ASH_EXPORT SearchBoxView : public SearchBoxViewBase,
   bool HandleGestureEvent(views::Textfield* sender,
                           const ui::GestureEvent& gesture_event) override;
 
-  // Overridden from SearchBoxModelObserver:
-  void Update() override;
-  void SearchEngineChanged() override;
-  void ShowAssistantChanged() override;
-
   // Updates search_box() for the |selected_result|. Should be called when the
   // selected search result changes.
   void UpdateSearchBoxForSelectedResult(SearchResult* selected_result);
+
+  // Overridden from SearchBoxModelObserver:
+  void SearchEngineChanged() override;
+  void ShowAssistantChanged() override;
+  void ShowAssistantNewEntryPointChanged() override;
+  void ShowSunfishChanged() override;
+
+  // Updates the visibility of an IPH view.
+  // If `can_show_iph` is false, delete the IPH view if it is visible.
+  // If `can_show_iph` is true, show the IPH view when other conditions are met.
+  void UpdateIphViewVisibility(bool can_show_iph);
 
   // Returns true if the event to trigger autocomplete should be handled.
   bool ShouldProcessAutocomplete();
 
   // Clear highlight range.
   void ResetHighlightRange();
+
+  // Updates the kValue attribute of the search box textfield for accessibility.
+  void UpdateAccessibleValue();
+
+  // Updates the search box's text value.
+  void SetText(const std::u16string& text);
+
+  // Builds the menu model for the category filter menu. This returns a vector
+  // of AppListSearchControlCategory that is shown in the filter menu.
+  ui::SimpleMenuModel* BuildFilterMenuModel();
+
+  // Returns the search categories that are available for users to choose if
+  // they want to have the results in the categories displayed in launcher
+  // search. These category will be listed in the filter menu for users to
+  // toggle.
+  std::vector<AppListSearchControlCategory> GetToggleableCategories();
+
+  // Returns a map of enable states for each category, including the
+  // non-toggleable ones. The result is used for metrics.
+  CategoryEnableStateMap GetSearchCategoryEnableState();
 
   // Tracks whether the search result page view is visible.
   bool search_result_page_visible_ = false;
@@ -221,19 +302,16 @@ class ASH_EXPORT SearchBoxView : public SearchBoxViewBase,
 
   std::u16string current_query_;
 
+  QueryChangedCallback query_changed_callback_;
+
   // The range of highlighted text for autocomplete.
   gfx::Range highlight_range_;
 
   // The key most recently pressed.
   ui::KeyboardCode last_key_pressed_ = ui::VKEY_UNKNOWN;
 
-  AppListViewDelegate* const view_delegate_;
-
-  // Owned by views hierarchy. May be null for bubble launcher.
-  AppListView* const app_list_view_;
-
-  // Owned by views hierarchy. May be null for bubble launcher.
-  ContentsView* contents_view_ = nullptr;
+  const raw_ptr<SearchBoxViewDelegate, DanglingUntriaged> delegate_;
+  const raw_ptr<AppListViewDelegate> view_delegate_;
 
   // The layer that will draw the focus ring if needed. Could be a nullptr if
   // the search box is in the bubble launcher.
@@ -242,31 +320,40 @@ class ASH_EXPORT SearchBoxView : public SearchBoxViewBase,
   // Whether the search box is embedded in the bubble launcher.
   const bool is_app_list_bubble_;
 
-  // Whether tablet mode is active.
-  bool is_tablet_mode_;
-
   // Whether the search box view should draw a highlight border.
   bool should_paint_highlight_border_ = false;
 
   // The corner radius of the search box background.
   int corner_radius_ = 0;
 
+  // The category filter menu adapter and model that handles the menu life cycle
+  // and command execution.
+  std::unique_ptr<ui::SimpleMenuModel> filter_menu_model_;
+  std::unique_ptr<FilterMenuAdapter> filter_menu_adapter_;
+
   // Set by SearchResultPageView when the accessibility selection moves to a
   // search result view - the value is the ID of the currently selected result
   // view.
-  absl::optional<int32_t> a11y_active_descendant_;
+  std::optional<ui::AXPlatformNodeId> a11y_active_descendant_;
 
-  // Owned by SearchResultPageView (for fullscreen launcher) or
-  // ProductivityLauncherSearchPage (for bubble launcher).
-  ResultSelectionController* result_selection_controller_ = nullptr;
+  // Owned by AppListSearchView.
+  raw_ptr<ResultSelectionController, DanglingUntriaged>
+      result_selection_controller_ = nullptr;
 
   // The timestamp taken when the search box model's query is updated by the
   // user. Used in metrics. Metrics are only recorded for search model updates
   // that occur after a search has been initiated.
   base::TimeTicks user_initiated_model_update_time_;
 
+  // If true, `SelectPlaceholderText()` always returns a fixed placeholder text
+  // instead of the one picked randomly.
+  bool use_fixed_placeholder_text_for_test_ = false;
+
   base::ScopedObservation<SearchBoxModel, SearchBoxModelObserver>
       search_box_model_observer_{this};
+
+  base::ScopedObservation<AssistantViewDelegate, AssistantViewDelegateObserver>
+      assistant_view_delegate_observer_{this};
 
   base::WeakPtrFactory<SearchBoxView> weak_ptr_factory_{this};
 };

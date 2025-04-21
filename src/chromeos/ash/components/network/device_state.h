@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include "chromeos/ash/components/network/managed_state.h"
 #include "chromeos/ash/components/network/network_util.h"
 
-namespace chromeos {
+namespace ash {
 
 // Simple class to provide device state information. Similar to NetworkState;
 // see network_state.h for usage guidelines.
@@ -33,7 +33,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) DeviceState : public ManagedState {
   bool IsActive() const override;
 
   void IPConfigPropertiesChanged(const std::string& ip_config_path,
-                                 const base::Value& properties);
+                                 base::Value::Dict properties);
 
   // Accessors
   const std::string& mac_address() const { return mac_address_; }
@@ -57,13 +57,14 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) DeviceState : public ManagedState {
   const std::string& mdn() const { return mdn_; }
   const CellularScanResults& scan_results() const { return scan_results_; }
   bool inhibited() const { return inhibited_; }
+  bool flashing() const { return flashing_; }
 
   // |ip_configs_| is kept up to date by NetworkStateHandler.
-  const base::Value& ip_configs() const { return ip_configs_; }
+  const base::Value::Dict& ip_configs() const { return ip_configs_; }
 
   // Do not use this. It exists temporarily for internet_options_handler.cc
   // which is being deprecated.
-  const base::Value& properties() const { return properties_; }
+  const base::Value::Dict& properties() const { return properties_; }
 
   // Ethernet specific accessors
   bool eap_authentication_completed() const {
@@ -94,6 +95,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) DeviceState : public ManagedState {
   // The following return false if the technology does not require a SIM.
   bool IsSimAbsent() const;
   bool IsSimLocked() const;
+  bool IsSimCarrierLocked() const;
 
   // Returns true if |access_point_name| exists in apn_list for this device.
   bool HasAPN(const std::string& access_point_name) const;
@@ -121,6 +123,7 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) DeviceState : public ManagedState {
   CellularScanResults scan_results_;
   CellularSIMSlotInfos sim_slot_infos_;
   bool inhibited_ = false;
+  bool flashing_ = false;
 
   // Ethernet specific properties
   bool eap_authentication_completed_ = false;
@@ -132,20 +135,15 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) DeviceState : public ManagedState {
   std::string available_managed_network_path_;
 
   // Keep all Device properties in a dictionary for now. See comment above.
-  base::Value properties_{base::Value::Type::DICTIONARY};
+  base::Value::Dict properties_;
 
   // List of APNs.
-  base::Value apn_list_;
+  base::Value::List apn_list_;
 
   // Dictionary of IPConfig properties, keyed by IpConfig path.
-  base::Value ip_configs_{base::Value::Type::DICTIONARY};
+  base::Value::Dict ip_configs_;
 };
 
-}  // namespace chromeos
-
-// TODO(https://crbug.com/1164001): remove when moved to ash
-namespace ash {
-using ::chromeos::DeviceState;
-}
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_DEVICE_STATE_H_

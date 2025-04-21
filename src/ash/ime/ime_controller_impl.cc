@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,10 @@
 #include "ash/ime/mode_indicator_observer.h"
 #include "ash/shell.h"
 #include "ash/system/tray/system_tray_notifier.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/callback_helpers.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/ranges/algorithm.h"
 #include "ui/base/accelerators/accelerator.h"
 #include "ui/base/ime/ash/extension_ime_util.h"
 #include "ui/display/manager/display_manager.h"
@@ -61,21 +62,7 @@ bool ImeControllerImpl::IsCurrentImeVisible() const {
 }
 
 void ImeControllerImpl::SetClient(ImeControllerClient* client) {
-  if (client_) {
-    if (CastConfigController::Get())
-      CastConfigController::Get()->RemoveObserver(this);
-    Shell::Get()->display_manager()->RemoveObserver(this);
-    Shell::Get()->system_tray_notifier()->RemoveScreenCaptureObserver(this);
-  }
-
   client_ = client;
-
-  if (client_) {
-    if (CastConfigController::Get())
-      CastConfigController::Get()->AddObserver(this);
-    Shell::Get()->system_tray_notifier()->AddScreenCaptureObserver(this);
-    Shell::Get()->display_manager()->AddObserver(this);
-  }
 }
 
 bool ImeControllerImpl::CanSwitchIme() const {
@@ -127,8 +114,7 @@ void ImeControllerImpl::SwitchImeWithAccelerator(
       GetCandidateImesForAccelerator(accelerator);
   if (candidate_ids.empty())
     return;
-  auto it =
-      std::find(candidate_ids.begin(), candidate_ids.end(), current_ime_.id);
+  auto it = base::ranges::find(candidate_ids, current_ime_.id);
   if (it != candidate_ids.end())
     ++it;
   if (it == candidate_ids.end())
@@ -185,16 +171,24 @@ void ImeControllerImpl::ShowImeMenuOnShelf(bool show) {
 void ImeControllerImpl::UpdateCapsLockState(bool caps_enabled) {
   is_caps_lock_enabled_ = caps_enabled;
 
-  for (ImeControllerImpl::Observer& observer : observers_)
+  for (ImeController::Observer& observer : observers_) {
     observer.OnCapsLockChanged(caps_enabled);
+  }
 }
 
 void ImeControllerImpl::OnKeyboardLayoutNameChanged(
     const std::string& layout_name) {
   keyboard_layout_name_ = layout_name;
 
-  for (ImeControllerImpl::Observer& observer : observers_)
+  for (ImeController::Observer& observer : observers_) {
     observer.OnKeyboardLayoutNameChanged(layout_name);
+  }
+}
+
+void ImeControllerImpl::OnKeyboardEnabledChanged(bool is_enabled) {
+  if (!is_enabled) {
+    OverrideKeyboardKeyset(input_method::ImeKeyset::kNone);
+  }
 }
 
 void ImeControllerImpl::SetExtraInputOptionsEnabledState(
@@ -216,28 +210,6 @@ void ImeControllerImpl::ShowModeIndicator(
   views::BubbleDialogDelegateView::CreateBubble(mi_view);
   mode_indicator_observer_->AddModeIndicatorWidget(mi_view->GetWidget());
   mi_view->ShowAndFadeOut();
-}
-
-void ImeControllerImpl::OnDisplayMetricsChanged(const display::Display& display,
-                                                uint32_t changed_metrics) {
-  if (changed_metrics & display::DisplayObserver::DISPLAY_METRIC_MIRROR_STATE) {
-    Shell* shell = Shell::Get();
-    client_->UpdateMirroringState(shell->display_manager()->IsInMirrorMode());
-  }
-}
-
-void ImeControllerImpl::OnDevicesUpdated(
-    const std::vector<SinkAndRoute>& devices) {
-  DCHECK(client_);
-
-  bool casting_desktop = false;
-  for (const auto& receiver : devices) {
-    if (receiver.route.content_source == ContentSource::kDesktop) {
-      casting_desktop = true;
-      break;
-    }
-  }
-  client_->UpdateCastingState(casting_desktop);
 }
 
 void ImeControllerImpl::SetCapsLockEnabled(bool caps_enabled) {
@@ -298,17 +270,6 @@ std::vector<std::string> ImeControllerImpl::GetCandidateImesForAccelerator(
       candidate_ids.push_back(ime.id);
   }
   return candidate_ids;
-}
-
-void ImeControllerImpl::OnScreenCaptureStart(
-    const base::RepeatingClosure& stop_callback,
-    const base::RepeatingClosure& source_callback,
-    const std::u16string& screen_capture_status) {
-  client_->UpdateCastingState(true);
-}
-
-void ImeControllerImpl::OnScreenCaptureStop() {
-  client_->UpdateCastingState(false);
 }
 
 }  // namespace ash

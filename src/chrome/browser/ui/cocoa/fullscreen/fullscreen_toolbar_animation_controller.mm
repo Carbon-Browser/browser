@@ -1,10 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "chrome/browser/ui/cocoa/fullscreen/fullscreen_toolbar_animation_controller.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #import "chrome/browser/ui/cocoa/fullscreen/fullscreen_toolbar_controller.h"
 #include "content/public/browser/web_contents.h"
 
@@ -39,7 +39,8 @@ FullscreenToolbarAnimationController::FullscreenToolbarAnimationController(
   animation_.SetTweenType(gfx::Tween::EASE_OUT);
 }
 
-FullscreenToolbarAnimationController::~FullscreenToolbarAnimationController() {}
+FullscreenToolbarAnimationController::~FullscreenToolbarAnimationController() =
+    default;
 
 void FullscreenToolbarAnimationController::ToolbarDidUpdate() {
   animation_start_value_ = [owner_ toolbarFraction];
@@ -54,8 +55,9 @@ void FullscreenToolbarAnimationController::AnimateToolbarForTabstripChanges(
     content::WebContents* contents,
     bool in_foreground) {
   // Don't kickstart the animation if the toolbar is already displayed.
-  if ([owner_ mustShowFullscreenToolbar])
+  if ([owner_ mustShowFullscreenToolbar]) {
     return;
+  }
 
   if (animation_.IsShowing()) {
     hide_toolbar_timer_.Reset();
@@ -73,19 +75,22 @@ void FullscreenToolbarAnimationController::AnimateToolbarForTabstripChanges(
 }
 
 void FullscreenToolbarAnimationController::AnimateToolbarIn() {
-  if (![owner_ isInFullscreen])
+  if (![owner_ isInFullscreen]) {
     return;
+  }
 
   animation_.Reset(animation_start_value_);
   animation_.Show();
 }
 
 void FullscreenToolbarAnimationController::AnimateToolbarOutIfPossible() {
-  if (![owner_ isInFullscreen] || [owner_ mustShowFullscreenToolbar])
+  if (![owner_ isInFullscreen] || [owner_ mustShowFullscreenToolbar]) {
     return;
+  }
 
-  if (animation_.IsClosing())
+  if (animation_.IsClosing()) {
     return;
+  }
 
   animation_.Stop();
   animation_.Hide();
@@ -118,8 +123,9 @@ void FullscreenToolbarAnimationController::AnimationProgressed(
 
 void FullscreenToolbarAnimationController::AnimationEnded(
     const gfx::Animation* animation) {
-  if (!web_contents() && animation_.IsShowing())
+  if (!web_contents() && animation_.IsShowing()) {
     StartHideTimerIfPossible();
+  }
 }
 
 //////////////////////////////////////////////////////////////////

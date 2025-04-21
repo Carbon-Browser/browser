@@ -1,8 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/location_bar/icon_label_bubble_view.h"
+
+#include <optional>
 
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
@@ -14,14 +16,14 @@
 #include "chrome/test/views/chrome_views_test_base.h"
 #include "components/strings/grit/components_strings.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
 #include "ui/events/base_event_utils.h"
 #include "ui/events/gesture_detection/gesture_configuration.h"
 #include "ui/events/test/event_generator.h"
+#include "ui/gfx/image/image_unittest_util.h"
 #include "ui/views/animation/ink_drop.h"
-#include "ui/views/animation/test/ink_drop_host_view_test_api.h"
+#include "ui/views/animation/test/ink_drop_host_test_api.h"
 #include "ui/views/animation/test/test_ink_drop.h"
 #include "ui/views/controls/image_view.h"
 #include "ui/views/widget/widget_utils.h"
@@ -56,7 +58,8 @@ class TestIconLabelBubbleView : public IconLabelBubbleView {
   explicit TestIconLabelBubbleView(const gfx::FontList& font_list,
                                    Delegate* delegate)
       : IconLabelBubbleView(font_list, delegate) {
-    GetImageView()->SetImageSize(gfx::Size(kImageSize, kImageSize));
+    SetImageModel(
+        ui::ImageModel::FromImageSkia(gfx::test::CreateImageSkia(kImageSize)));
     SetLabel(u"Label");
   }
 
@@ -76,10 +79,12 @@ class TestIconLabelBubbleView : public IconLabelBubbleView {
   State state() const {
     const double kOpenFraction = double{kOpenTimeMS} / kAnimationDurationMS;
     double state = static_cast<double>(value_) / kNumberOfSteps;
-    if (state < kOpenFraction)
+    if (state < kOpenFraction) {
       return GROWING;
-    if (state > (1.0 - kOpenFraction))
+    }
+    if (state > (1.0 - kOpenFraction)) {
       return SHRINKING;
+    }
     return STEADY;
   }
 
@@ -105,7 +110,6 @@ class TestIconLabelBubbleView : public IconLabelBubbleView {
         return min + (max - min) * ((1.0 - fraction) / kOpenFraction);
     }
     NOTREACHED();
-    return 1.0;
   }
 
   bool IsShrinking() const override { return state() == SHRINKING; }
@@ -146,14 +150,18 @@ class IconLabelBubbleViewTest : public IconLabelBubbleViewTestBase {
     ChromeViewsTestBase::SetUp();
     gfx::FontList font_list;
 
-    widget_ = CreateTestWidget();
+    widget_ =
+        CreateTestWidget(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET);
     generator_ = std::make_unique<ui::test::EventGenerator>(
         GetRootWindow(widget_.get()));
     view_ = widget_->SetContentsView(
         std::make_unique<TestIconLabelBubbleView>(font_list, this));
     view_->SetBoundsRect(gfx::Rect(0, 0, 24, 24));
-
     widget_->Show();
+
+    // Attach the test inkdrop to avoid interference with the built-in inkdrop.
+    InkDropHostTestApi(views::InkDrop::Get(view_))
+        .SetInkDrop(std::make_unique<TestInkDrop>());
 
     generator_->MoveMouseTo(view_->GetBoundsInScreen().CenterPoint());
   }
@@ -174,17 +182,13 @@ class IconLabelBubbleViewTest : public IconLabelBubbleViewTestBase {
     view_->SetLabelVisible(false);
   }
 
-  TestInkDrop* ink_drop() { return ink_drop_; }
+  TestInkDrop* GetInkDrop() {
+    return static_cast<TestInkDrop*>(views::InkDrop::Get(view_)->GetInkDrop());
+  }
 
   TestIconLabelBubbleView* view() { return view_; }
 
   ui::test::EventGenerator* generator() { return generator_.get(); }
-
-  void AttachInkDrop() {
-    ink_drop_ = new TestInkDrop();
-    InkDropHostTestApi(views::InkDrop::Get(view_))
-        .SetInkDrop(base::WrapUnique(ink_drop_.get()));
-  }
 
  private:
   void Reset(bool icon_visible) {
@@ -193,7 +197,7 @@ class IconLabelBubbleViewTest : public IconLabelBubbleViewTestBase {
     steady_reached_ = false;
     shrinking_reached_ = false;
     minimum_size_reached_ = false;
-    initial_image_x_ = GetImageBounds().x();
+    initial_image_x_ = GetImageContainerBounds().x();
     EXPECT_EQ(GetLayoutInsets(LOCATION_BAR_ICON_INTERIOR_PADDING).left(),
               initial_image_x_);
 
@@ -205,49 +209,54 @@ class IconLabelBubbleViewTest : public IconLabelBubbleViewTestBase {
     switch (state()) {
       case TestIconLabelBubbleView::State::GROWING: {
         EXPECT_GE(width(), previous_width_);
-        EXPECT_EQ(initial_image_x_, GetImageBounds().x());
-        EXPECT_GE(GetImageBounds().x(), 0);
-        if (GetImageBounds().width() > 0)
-          EXPECT_LE(GetImageBounds().right(), width());
+        EXPECT_EQ(initial_image_x_, GetImageContainerBounds().x());
+        EXPECT_GE(GetImageContainerBounds().x(), 0);
+        if (GetImageContainerBounds().width() > 0) {
+          EXPECT_LE(GetImageContainerBounds().right(), width());
+        }
         EXPECT_TRUE(IsLabelVisible());
         if (GetLabelBounds().width() > 0) {
-          EXPECT_GT(GetLabelBounds().x(), GetImageBounds().right());
+          EXPECT_GT(GetLabelBounds().x(), GetImageContainerBounds().right());
           EXPECT_LT(GetLabelBounds().right(), width());
         }
         break;
       }
       case TestIconLabelBubbleView::State::STEADY: {
-        if (steady_reached_)
+        if (steady_reached_) {
           EXPECT_EQ(previous_width_, width());
-        EXPECT_EQ(initial_image_x_, GetImageBounds().x());
-        EXPECT_LT(GetImageBounds().right(), width());
+        }
+        EXPECT_EQ(initial_image_x_, GetImageContainerBounds().x());
+        EXPECT_LT(GetImageContainerBounds().right(), width());
         EXPECT_TRUE(IsLabelVisible());
-        EXPECT_GT(GetLabelBounds().x(), GetImageBounds().right());
+        EXPECT_GT(GetLabelBounds().x(), GetImageContainerBounds().right());
         EXPECT_LT(GetLabelBounds().right(), width());
         steady_reached_ = true;
         break;
       }
       case TestIconLabelBubbleView::State::SHRINKING: {
-        if (shrinking_reached_)
+        if (shrinking_reached_) {
           EXPECT_LE(width(), previous_width_);
-        if (minimum_size_reached_)
+        }
+        if (minimum_size_reached_) {
           EXPECT_EQ(previous_width_, width());
+        }
 
-        EXPECT_GE(GetImageBounds().x(), 0);
+        EXPECT_GE(GetImageContainerBounds().x(), 0);
         if (width() <= initial_image_x_ + kImageSize) {
-          EXPECT_EQ(width(), GetImageBounds().right());
+          EXPECT_EQ(width(), GetImageContainerBounds().right());
           EXPECT_EQ(0, GetLabelBounds().width());
         } else {
-          EXPECT_EQ(initial_image_x_, GetImageBounds().x());
-          EXPECT_LE(GetImageBounds().right(), width());
+          EXPECT_EQ(initial_image_x_, GetImageContainerBounds().x());
+          EXPECT_LE(GetImageContainerBounds().right(), width());
         }
         if (GetLabelBounds().width() > 0) {
-          EXPECT_GT(GetLabelBounds().x(), GetImageBounds().right());
+          EXPECT_GT(GetLabelBounds().x(), GetImageContainerBounds().right());
           EXPECT_LT(GetLabelBounds().right(), width());
         }
         shrinking_reached_ = true;
-        if (width() == kImageSize)
+        if (width() == kImageSize) {
           minimum_size_reached_ = true;
+        }
         break;
       }
     }
@@ -264,13 +273,13 @@ class IconLabelBubbleViewTest : public IconLabelBubbleViewTestBase {
 
   const gfx::Rect& GetLabelBounds() const { return view_->GetLabelBounds(); }
 
-  const gfx::Rect& GetImageBounds() const {
-    return view_->GetImageView()->bounds();
+  const gfx::Rect& GetImageContainerBounds() const {
+    return view_->GetImageContainerView()->bounds();
   }
 
   std::unique_ptr<views::Widget> widget_;
-  raw_ptr<TestIconLabelBubbleView> view_ = nullptr;
-  raw_ptr<TestInkDrop> ink_drop_ = nullptr;
+  raw_ptr<TestIconLabelBubbleView, DanglingUntriaged> view_ = nullptr;
+  raw_ptr<TestInkDrop, DanglingUntriaged> ink_drop_ = nullptr;
   std::unique_ptr<ui::test::EventGenerator> generator_;
 
   bool steady_reached_ = false;
@@ -319,27 +328,26 @@ TEST_F(IconLabelBubbleViewTest, SecondClick) {
 }
 
 TEST_F(IconLabelBubbleViewTest, MouseInkDropState) {
-  AttachInkDrop();
   generator()->PressLeftButton();
   EXPECT_EQ(views::InkDropState::ACTION_PENDING,
-            ink_drop()->GetTargetInkDropState());
+            GetInkDrop()->GetTargetInkDropState());
   generator()->ReleaseLeftButton();
   EXPECT_EQ(views::InkDropState::ACTIVATED,
-            ink_drop()->GetTargetInkDropState());
+            GetInkDrop()->GetTargetInkDropState());
   view()->HideBubble();
-  EXPECT_EQ(views::InkDropState::HIDDEN, ink_drop()->GetTargetInkDropState());
+  EXPECT_EQ(views::InkDropState::HIDDEN, GetInkDrop()->GetTargetInkDropState());
 
   // If the bubble is shown, the InkDropState should not change to
   // ACTION_PENDING.
   generator()->PressLeftButton();
   EXPECT_EQ(views::InkDropState::ACTION_PENDING,
-            ink_drop()->GetTargetInkDropState());
+            GetInkDrop()->GetTargetInkDropState());
   generator()->ReleaseLeftButton();
   EXPECT_EQ(views::InkDropState::ACTIVATED,
-            ink_drop()->GetTargetInkDropState());
+            GetInkDrop()->GetTargetInkDropState());
   generator()->PressLeftButton();
   EXPECT_NE(views::InkDropState::ACTION_PENDING,
-            ink_drop()->GetTargetInkDropState());
+            GetInkDrop()->GetTargetInkDropState());
 }
 
 // Tests the separator opacity. The separator should disappear when there's
@@ -350,51 +358,49 @@ TEST_F(IconLabelBubbleViewTest, SeparatorOpacity) {
   view()->SetLabel(u"x");
   EXPECT_EQ(1.0f, separator_view->layer()->opacity());
 
-  AttachInkDrop();
   generator()->PressLeftButton();
   view()->InkDropAnimationStarted();
   EXPECT_EQ(views::InkDropState::ACTION_PENDING,
-            ink_drop()->GetTargetInkDropState());
+            GetInkDrop()->GetTargetInkDropState());
   EXPECT_EQ(0.0f, separator_view->layer()->opacity());
 
   generator()->ReleaseLeftButton();
   EXPECT_EQ(views::InkDropState::ACTIVATED,
-            ink_drop()->GetTargetInkDropState());
+            GetInkDrop()->GetTargetInkDropState());
   EXPECT_EQ(0.0f, separator_view->layer()->opacity());
 
   view()->HideBubble();
   view()->InkDropAnimationStarted();
-  EXPECT_EQ(views::InkDropState::HIDDEN, ink_drop()->GetTargetInkDropState());
+  EXPECT_EQ(views::InkDropState::HIDDEN, GetInkDrop()->GetTargetInkDropState());
   EXPECT_EQ(1.0f, separator_view->layer()->opacity());
 }
 
 #if !BUILDFLAG(IS_MAC)
 TEST_F(IconLabelBubbleViewTest, GestureInkDropState) {
-  AttachInkDrop();
   generator()->GestureTapAt(gfx::Point());
   EXPECT_EQ(views::InkDropState::ACTIVATED,
-            ink_drop()->GetTargetInkDropState());
+            GetInkDrop()->GetTargetInkDropState());
   view()->HideBubble();
-  EXPECT_EQ(views::InkDropState::HIDDEN, ink_drop()->GetTargetInkDropState());
+  EXPECT_EQ(views::InkDropState::HIDDEN, GetInkDrop()->GetTargetInkDropState());
 
   // If the bubble is shown, the InkDropState should not change to
   // ACTIVATED.
   generator()->GestureTapAt(gfx::Point());
   EXPECT_EQ(views::InkDropState::ACTIVATED,
-            ink_drop()->GetTargetInkDropState());
+            GetInkDrop()->GetTargetInkDropState());
   generator()->GestureTapAt(gfx::Point());
   view()->HideBubble();
-  EXPECT_EQ(views::InkDropState::HIDDEN, ink_drop()->GetTargetInkDropState());
+  EXPECT_EQ(views::InkDropState::HIDDEN, GetInkDrop()->GetTargetInkDropState());
 }
 #endif
 
 TEST_F(IconLabelBubbleViewTest, LabelVisibilityAfterAnimation) {
-  view()->AnimateIn(absl::nullopt);
+  view()->AnimateIn(std::nullopt);
   EXPECT_TRUE(view()->IsLabelVisible());
   view()->AnimateOut();
   EXPECT_FALSE(view()->IsLabelVisible());
   // Label should reappear if animated in after being animated out.
-  view()->AnimateIn(absl::nullopt);
+  view()->AnimateIn(std::nullopt);
   EXPECT_TRUE(view()->IsLabelVisible());
 }
 
@@ -404,7 +410,7 @@ TEST_F(IconLabelBubbleViewTest, LabelVisibilityAfterAnimationReset) {
   view()->ResetSlideAnimation(false);
   EXPECT_FALSE(view()->IsLabelVisible());
   // Label should reappear if animated in after being reset out.
-  view()->AnimateIn(absl::nullopt);
+  view()->AnimateIn(std::nullopt);
   EXPECT_TRUE(view()->IsLabelVisible());
 }
 
@@ -419,16 +425,17 @@ TEST_F(IconLabelBubbleViewTest,
   EXPECT_TRUE(view()->IsLabelVisible());
 }
 
-TEST_F(IconLabelBubbleViewTest, LabelPaintsOverSolidBackgroundWhenNecessary) {
+TEST_F(IconLabelBubbleViewTest, LabelPaintsBackgroundWithLabel) {
   view()->ResetSlideAnimation(false);
 
   // Initially no background should be present.
   EXPECT_FALSE(view()->IsLabelVisible());
   EXPECT_EQ(nullptr, view()->GetBackground());
 
-  // Set the view to paint its label over a solid background. There should still
-  // be no background present as the label will not be visible.
-  view()->SetPaintLabelOverSolidBackground(true);
+  // Set the view to paint its background when a label is showing. There should
+  // still be no background present as the label will not be visible.
+  view()->SetBackgroundVisibility(
+      IconLabelBubbleView::BackgroundVisibility::kWithLabel);
   EXPECT_FALSE(view()->IsLabelVisible());
   EXPECT_EQ(nullptr, view()->GetBackground());
 
@@ -445,7 +452,39 @@ TEST_F(IconLabelBubbleViewTest, LabelPaintsOverSolidBackgroundWhenNecessary) {
 
   // Disable painting over a background. The background should no longer be
   // present when it animates in.
-  view()->SetPaintLabelOverSolidBackground(false);
+  view()->SetBackgroundVisibility(
+      IconLabelBubbleView::BackgroundVisibility::kNever);
+  view()->AnimateIn(IDS_AUTOFILL_CARD_SAVED);
+  EXPECT_TRUE(view()->IsLabelVisible());
+  EXPECT_EQ(nullptr, view()->GetBackground());
+}
+
+TEST_F(IconLabelBubbleViewTest, LabelPaintsBackgroundAlways) {
+  view()->ResetSlideAnimation(false);
+
+  // Initially no background should be present.
+  EXPECT_FALSE(view()->IsLabelVisible());
+  EXPECT_EQ(nullptr, view()->GetBackground());
+
+  // Set the view to always paint its background. From this point onwards, as
+  // the label animation changes, the background should always be set.
+  view()->SetBackgroundVisibility(
+      IconLabelBubbleView::BackgroundVisibility::kAlways);
+  EXPECT_FALSE(view()->IsLabelVisible());
+  EXPECT_NE(nullptr, view()->GetBackground());
+
+  view()->AnimateIn(IDS_AUTOFILL_CARD_SAVED);
+  EXPECT_TRUE(view()->IsLabelVisible());
+  EXPECT_NE(nullptr, view()->GetBackground());
+
+  view()->ResetSlideAnimation(false);
+  EXPECT_FALSE(view()->IsLabelVisible());
+  EXPECT_NE(nullptr, view()->GetBackground());
+
+  // Disable painting over a background. The background should no longer be
+  // present.
+  view()->SetBackgroundVisibility(
+      IconLabelBubbleView::BackgroundVisibility::kNever);
   view()->AnimateIn(IDS_AUTOFILL_CARD_SAVED);
   EXPECT_TRUE(view()->IsLabelVisible());
   EXPECT_EQ(nullptr, view()->GetBackground());
@@ -459,7 +498,8 @@ using IconLabelBubbleViewCrashTest = IconLabelBubbleViewTestBase;
 TEST_F(IconLabelBubbleViewCrashTest,
        GetPreferredSizeDoesntCrashWhenNoCompositor) {
   gfx::FontList font_list;
-  std::unique_ptr<views::Widget> widget = CreateTestWidget();
+  std::unique_ptr<views::Widget> widget =
+      CreateTestWidget(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET);
   IconLabelBubbleView* icon_label_bubble_view = widget->SetContentsView(
       std::make_unique<TestIconLabelBubbleView>(font_list, this));
   icon_label_bubble_view->SetLabel(u"x");

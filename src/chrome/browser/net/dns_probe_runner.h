@@ -1,15 +1,17 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_NET_DNS_PROBE_RUNNER_H_
 #define CHROME_BROWSER_NET_DNS_PROBE_RUNNER_H_
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/sequence_checker.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
+#include "net/dns/public/host_resolver_results.h"
+#include "services/network/public/cpp/network_context_getter.h"
 #include "services/network/public/cpp/resolve_host_client_base.h"
 #include "services/network/public/mojom/host_resolver.mojom-forward.h"
 
@@ -29,9 +31,6 @@ class DnsProbeRunner : public network::ResolveHostClientBase {
  public:
   static const char kKnownGoodHostname[];
 
-  using NetworkContextGetter =
-      base::RepeatingCallback<network::mojom::NetworkContext*(void)>;
-
   // Used in histograms; add new entries at the bottom, and don't remove any.
   enum Result {
     UNKNOWN,
@@ -46,7 +45,7 @@ class DnsProbeRunner : public network::ResolveHostClientBase {
   // NetworkContext to create the HostResolver.  The |network_context_getter|
   // may be called multiple times.
   DnsProbeRunner(net::DnsConfigOverrides dns_config_overrides,
-                 const NetworkContextGetter& network_context_getter);
+                 const network::NetworkContextGetter& network_context_getter);
 
   DnsProbeRunner(const DnsProbeRunner&) = delete;
   DnsProbeRunner& operator=(const DnsProbeRunner&) = delete;
@@ -70,10 +69,11 @@ class DnsProbeRunner : public network::ResolveHostClientBase {
   }
 
   // network::ResolveHostClientBase impl:
-  void OnComplete(
-      int32_t result,
-      const net::ResolveErrorInfo& resolve_error_info,
-      const absl::optional<net::AddressList>& resolved_addresses) override;
+  void OnComplete(int32_t result,
+                  const net::ResolveErrorInfo& resolve_error_info,
+                  const std::optional<net::AddressList>& resolved_addresses,
+                  const std::optional<net::HostResolverEndpointResults>&
+                      endpoint_results_with_metadata) override;
 
   net::DnsConfigOverrides GetConfigOverridesForTesting() {
     return dns_config_overrides_;
@@ -86,7 +86,7 @@ class DnsProbeRunner : public network::ResolveHostClientBase {
   mojo::Receiver<network::mojom::ResolveHostClient> receiver_{this};
 
   net::DnsConfigOverrides dns_config_overrides_;
-  NetworkContextGetter network_context_getter_;
+  network::NetworkContextGetter network_context_getter_;
 
   mojo::Remote<network::mojom::HostResolver> host_resolver_;
 

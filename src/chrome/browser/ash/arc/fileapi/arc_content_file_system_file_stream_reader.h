@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,13 @@
 #define CHROME_BROWSER_ASH_ARC_FILEAPI_ARC_CONTENT_FILE_SYSTEM_FILE_STREAM_READER_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "ash/components/arc/mojom/file_system.mojom-forward.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/arc/fileapi/arc_file_system_operation_runner_util.h"
-#include "mojo/public/cpp/system/handle.h"
 #include "net/base/completion_once_callback.h"
 #include "storage/browser/file_system/file_stream_reader.h"
 #include "url/gurl.h"
@@ -59,7 +59,8 @@ class ArcContentFileSystemFileStreamReader : public storage::FileStreamReader {
                     net::CompletionOnceCallback callback);
 
   // Called when read completes.
-  void OnRead(net::CompletionOnceCallback callback, int result);
+  void OnRead(net::CompletionOnceCallback callback,
+              std::optional<size_t> result);
 
   // Called when GetFileSize() completes.
   void OnGetFileSize(net::Int64CompletionOnceCallback callback, int64_t size);
@@ -91,7 +92,7 @@ class ArcContentFileSystemFileStreamReader : public storage::FileStreamReader {
       net::CompletionOnceCallback callback,
       scoped_refptr<net::IOBufferWithSize> temporary_buffer,
       int64_t num_bytes_to_consume,
-      int read_result);
+      std::optional<size_t> read_result);
 
   GURL arc_url_;
   int64_t offset_;

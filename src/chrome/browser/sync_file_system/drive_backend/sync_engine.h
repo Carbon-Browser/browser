@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/sync_file_system/drive_backend/callback_tracker.h"
 #include "chrome/browser/sync_file_system/local_change_processor.h"
 #include "chrome/browser/sync_file_system/remote_file_sync_service.h"
@@ -73,12 +74,12 @@ class SyncEngine
 
   class DriveServiceFactory {
    public:
-    DriveServiceFactory() {}
+    DriveServiceFactory() = default;
 
     DriveServiceFactory(const DriveServiceFactory&) = delete;
     DriveServiceFactory& operator=(const DriveServiceFactory&) = delete;
 
-    virtual ~DriveServiceFactory() {}
+    virtual ~DriveServiceFactory() = default;
     virtual std::unique_ptr<drive::DriveServiceInterface> CreateDriveService(
         signin::IdentityManager* identity_manager,
         scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
@@ -122,9 +123,6 @@ class SyncEngine
   void SetRemoteChangeProcessor(RemoteChangeProcessor* processor) override;
   LocalChangeProcessor* GetLocalChangeProcessor() override;
   RemoteServiceState GetCurrentState() const override;
-  void GetOriginStatusMap(StatusMapCallback callback) override;
-  void DumpFiles(const GURL& origin, ListCallback callback) override;
-  void DumpDatabase(ListCallback callback) override;
   void SetSyncEnabled(bool enabled) override;
   void PromoteDemotedChanges(base::OnceClosure callback) override;
 
@@ -195,9 +193,11 @@ class SyncEngine
   // The owner of the SyncEngine is responsible for their lifetime.
   // I.e. the owner should declare the dependency explicitly by calling
   // KeyedService::DependsOn().
-  raw_ptr<drive::DriveNotificationManager> notification_manager_;
-  raw_ptr<extensions::ExtensionServiceInterface> extension_service_;
-  raw_ptr<extensions::ExtensionRegistry> extension_registry_;
+  raw_ptr<drive::DriveNotificationManager, DanglingUntriaged>
+      notification_manager_;
+  raw_ptr<extensions::ExtensionServiceInterface, DanglingUntriaged>
+      extension_service_;
+  raw_ptr<extensions::ExtensionRegistry, DanglingUntriaged> extension_registry_;
   raw_ptr<signin::IdentityManager> identity_manager_;
 
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
@@ -209,7 +209,8 @@ class SyncEngine
   std::unique_ptr<drive::DriveUploaderInterface> drive_uploader_;
   std::unique_ptr<DriveUploaderWrapper> drive_uploader_wrapper_;
 
-  raw_ptr<RemoteChangeProcessor> remote_change_processor_;  // Not owned.
+  raw_ptr<RemoteChangeProcessor, DanglingUntriaged>
+      remote_change_processor_;  // Not owned.
   std::unique_ptr<RemoteChangeProcessorWrapper>
       remote_change_processor_wrapper_;
   // Delete this on worker.
@@ -225,8 +226,10 @@ class SyncEngine
   std::unique_ptr<WorkerObserver> worker_observer_;
   std::unique_ptr<SyncWorkerInterface> sync_worker_;
 
-  base::ObserverList<SyncServiceObserver>::Unchecked service_observers_;
-  base::ObserverList<FileStatusObserver>::Unchecked file_status_observers_;
+  base::ObserverList<SyncServiceObserver>::UncheckedAndDanglingUntriaged
+      service_observers_;
+  base::ObserverList<FileStatusObserver>::UncheckedAndDanglingUntriaged
+      file_status_observers_;
   raw_ptr<leveldb::Env> env_override_;
 
   CallbackTracker callback_tracker_;

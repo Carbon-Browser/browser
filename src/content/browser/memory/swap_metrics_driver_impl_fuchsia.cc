@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@ namespace content {
 std::unique_ptr<SwapMetricsDriver> SwapMetricsDriver::Create(
     std::unique_ptr<Delegate> delegate,
     const base::TimeDelta update_interval) {
-  // TODO(crbug.com/1234304): Implement the driver on Fuchsia.
+  // TODO(crbug.com/40191902): Implement the driver on Fuchsia.
   NOTIMPLEMENTED_LOG_ONCE();
   return nullptr;
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,6 @@
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/link.h"
 
-
 // AlternateNavInfoBarDelegate -------------------------------------------------
 
 // static
@@ -24,7 +23,6 @@ std::unique_ptr<infobars::InfoBar> AlternateNavInfoBarDelegate::CreateInfoBar(
     std::unique_ptr<AlternateNavInfoBarDelegate> delegate) {
   return std::make_unique<AlternateNavInfoBarView>(std::move(delegate));
 }
-
 
 // AlternateNavInfoBarView -----------------------------------------------------
 
@@ -52,22 +50,28 @@ void AlternateNavInfoBarView::ElideLabels(Labels* labels, int available_width) {
   views::Label* last_label = labels->back();
   labels->pop_back();
   int used_width = 0;
-  for (auto i(labels->begin()); i != labels->end(); ++i)
-    used_width += (*i)->GetPreferredSize().width();
-  int last_label_width = std::min(last_label->GetPreferredSize().width(),
-                                  available_width - used_width);
+  for (auto& label : *labels) {
+    used_width +=
+        label->GetPreferredSize(views::SizeBounds(label->width(), {})).width();
+  }
+  int last_label_width = std::min(
+      last_label->GetPreferredSize(views::SizeBounds(last_label->width(), {}))
+          .width(),
+      available_width - used_width);
   if (last_label_width < last_label->GetMinimumSize().width()) {
     last_label_width = 0;
-    if (!labels->empty())
+    if (!labels->empty()) {
       labels->back()->SetText(labels->back()->GetText() + gfx::kEllipsisUTF16);
+    }
   }
   last_label->SetSize(gfx::Size(last_label_width, last_label->height()));
-  if (!labels->empty())
+  if (!labels->empty()) {
     ElideLabels(labels, available_width - last_label_width);
+  }
 }
 
-void AlternateNavInfoBarView::Layout() {
-  InfoBarView::Layout();
+void AlternateNavInfoBarView::Layout(PassKey) {
+  LayoutSuperclass<InfoBarView>(this);
 
   label_1_->SetText(label_1_text_);
   link_->SetText(link_text_);

@@ -2,10 +2,11 @@ Name: CountryCodePicker
 Short Name: ccp
 URL: https://github.com/hbb20/CountryCodePickerProject
 Version: 2.5.4
-License: Apache Version 2.0
+License: Apache-2.0
 License File: LICENSE
 CPEPrefix: unknown
 Security Critical: yes
+Shipped: yes
 
 Description:
 Country Code Picker (CCP) is an android library which provides an easy way to search and select international country code for the phone number.

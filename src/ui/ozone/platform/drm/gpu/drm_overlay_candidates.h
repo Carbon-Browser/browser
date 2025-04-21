@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,13 @@
 
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/ozone/public/hardware_capabilities.h"
 #include "ui/ozone/public/overlay_candidates_ozone.h"
 
 namespace ui {
+
 class DrmOverlayManager;
 class OverlaySurfaceCandidate;
 
@@ -33,9 +35,14 @@ class DrmOverlayCandidates : public OverlayCandidatesOzone {
   void ObserveHardwareCapabilities(
       HardwareCapabilitiesCallback receive_callback) override;
   void RegisterOverlayRequirement(bool requires_overlay) override;
+  void OnSwapBuffersComplete(gfx::SwapResult swap_result) override;
+  void SetSupportedBufferFormats(
+      base::flat_set<gfx::BufferFormat> supported_buffer_formats) override;
+  void NotifyOverlayPromotion(
+      std::vector<gfx::OverlayType> promoted_overlay_types) override;
 
  private:
-  DrmOverlayManager* const overlay_manager_;  // Not owned.
+  const raw_ptr<DrmOverlayManager> overlay_manager_;  // Not owned.
   const gfx::AcceleratedWidget widget_;
 };
 

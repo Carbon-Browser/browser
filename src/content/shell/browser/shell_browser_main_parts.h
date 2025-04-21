@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,10 @@
 #include "content/public/browser/browser_main_parts.h"
 #include "content/shell/browser/shell_browser_context.h"
 
+#if BUILDFLAG(IS_IOS)
+#include "services/device/public/cpp/geolocation/geolocation_system_permission_manager.h"
+#endif
+
 namespace performance_manager {
 class PerformanceManagerLifetime;
 }  // namespace performance_manager
@@ -24,6 +28,10 @@ class ChildExitObserver;
 
 namespace content {
 class ShellPlatformDelegate;
+
+#if BUILDFLAG(IS_FUCHSIA)
+class FuchsiaViewPresenter;
+#endif
 
 class ShellBrowserMainParts : public BrowserMainParts {
  public:
@@ -48,6 +56,10 @@ class ShellBrowserMainParts : public BrowserMainParts {
       std::unique_ptr<base::RunLoop>& run_loop) override;
   void PostMainMessageLoopRun() override;
   void PostDestroyThreads() override;
+#if BUILDFLAG(IS_IOS)
+  device::GeolocationSystemPermissionManager*
+  GetGeolocationSystemPermissionManager();
+#endif
 
   ShellBrowserContext* browser_context() { return browser_context_.get(); }
   ShellBrowserContext* off_the_record_browser_context() {
@@ -76,6 +88,9 @@ class ShellBrowserMainParts : public BrowserMainParts {
       performance_manager_lifetime_;
 #if BUILDFLAG(IS_ANDROID)
   std::unique_ptr<crash_reporter::ChildExitObserver> child_exit_observer_;
+#endif
+#if BUILDFLAG(IS_FUCHSIA)
+  std::unique_ptr<FuchsiaViewPresenter> fuchsia_view_presenter_;
 #endif
 };
 

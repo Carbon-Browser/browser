@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@ class X509Certificate;
 using CertificateList = std::vector<scoped_refptr<X509Certificate>>;
 }  // namespace net
 
-namespace chromeos {
+namespace ash {
 
 // An interface for a class which makes server and authority certificates
 // available from enterprise policy. Clients of this interface can register as
@@ -33,6 +33,9 @@ class PolicyCertificateProvider {
     // Called every time the list of policy-set server and authority
     // certificates changes.
     virtual void OnPolicyProvidedCertsChanged() = 0;
+    // Called when the PolicyCertificateProvider is being destroyed.
+    // Observers should unregister themselves.
+    virtual void OnPolicyCertificateProviderDestroying() {}
   };
 
   virtual void AddPolicyProvidedCertsObserver(Observer* observer) = 0;
@@ -70,6 +73,6 @@ class PolicyCertificateProvider {
       const = 0;
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_POLICY_CERTIFICATE_PROVIDER_H_

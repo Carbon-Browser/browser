@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,7 +51,7 @@ class JSEventHandlerForContentAttribute final : public JSEventHandler {
   // In case of the content scripts, Blink runs script in the main world instead
   // of the isolated world for the content script by design.
   DOMWrapperWorld& GetWorld() const override {
-    return DOMWrapperWorld::MainWorld();
+    return DOMWrapperWorld::MainWorld(isolate_);
   }
 
  private:

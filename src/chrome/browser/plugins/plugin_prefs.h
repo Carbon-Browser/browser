@@ -1,10 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_PLUGINS_PLUGIN_PREFS_H_
 #define CHROME_BROWSER_PLUGINS_PLUGIN_PREFS_H_
 
+#include <memory>
 #include <string>
 
 #include "base/memory/raw_ptr.h"
@@ -29,12 +30,6 @@ struct WebPluginInfo;
 // Except where otherwise noted, it can be used on every thread.
 class PluginPrefs : public RefcountedKeyedService {
  public:
-  enum PolicyStatus {
-    NO_POLICY = 0,  // Neither enabled or disabled by policy.
-    POLICY_ENABLED,
-    POLICY_DISABLED,
-  };
-
   // Returns the instance associated with |profile|, creating it if necessary.
   static scoped_refptr<PluginPrefs> GetForProfile(Profile* profile);
 
@@ -54,10 +49,6 @@ class PluginPrefs : public RefcountedKeyedService {
   // This method should only be called on the UI thread.
   void SetPrefs(PrefService* prefs);
 
-  // Returns whether there is a policy enabling or disabling plugins of the
-  // given name.
-  PolicyStatus PolicyStatusForPlugin(const std::u16string& name) const;
-
   // Returns whether the plugin is enabled or not.
   bool IsPluginEnabled(const content::WebPluginInfo& plugin) const;
 
@@ -69,6 +60,7 @@ class PluginPrefs : public RefcountedKeyedService {
  private:
   friend class base::RefCountedThreadSafe<PluginPrefs>;
   friend class PDFIFrameNavigationThrottleTest;
+  friend class PluginInfoHostImplTest;
   friend class PluginPrefsTest;
   friend class PrintPreviewDialogControllerBrowserTest;
 
@@ -87,7 +79,7 @@ class PluginPrefs : public RefcountedKeyedService {
   // Weak pointer, owned by the profile.
   raw_ptr<PrefService> prefs_ = nullptr;
 
-  PrefChangeRegistrar registrar_;
+  std::unique_ptr<PrefChangeRegistrar> registrar_;
 };
 
 #endif  // CHROME_BROWSER_PLUGINS_PLUGIN_PREFS_H_

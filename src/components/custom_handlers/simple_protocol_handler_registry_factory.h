@@ -1,4 +1,4 @@
-// Copyright (c) 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -58,10 +58,10 @@ class SimpleProtocolHandlerRegistryFactory
   ~SimpleProtocolHandlerRegistryFactory() override = default;
 
   // BrowserContextKeyedServiceFactory implementation.
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* profile) const override;
 };
 
 }  // namespace custom_handlers
 
-#endif  // COMPONENTS_CUSTOM_HANDLERS_SIMPLE_PROTOCOL_HANDLER_REGISTRY_FACTORY_H
+#endif  // COMPONENTS_CUSTOM_HANDLERS_SIMPLE_PROTOCOL_HANDLER_REGISTRY_FACTORY_H_

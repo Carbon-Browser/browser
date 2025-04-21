@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define UI_VIEWS_WIDGET_DESKTOP_AURA_DESKTOP_NATIVE_CURSOR_MANAGER_WIN_H_
 
 #include "base/win/registry.h"
+#include "ui/gfx/geometry/size.h"
 #include "ui/views/views_export.h"
 #include "ui/views/widget/desktop_aura/desktop_native_cursor_manager.h"
 
@@ -29,16 +30,20 @@ class VIEWS_EXPORT DesktopNativeCursorManagerWin
 
   ~DesktopNativeCursorManagerWin() override;
 
-  void InitCursorSizeObserver(
+  void InitSystemCursorObservers(
       wm::NativeCursorManagerDelegate* delegate) override;
+  void OnSystemCursorVisibilityChanged(bool visible);
 
  private:
   // Retrieve and report the cursor size to cursor manager.
-  void SetSystemCursorSize(wm::NativeCursorManagerDelegate* delegate);
-  void RegisterCursorRegkeyObserver(wm::NativeCursorManagerDelegate* delegate);
+  void SetSystemCursorSize();
+  void RegisterCursorRegkeyObserver();
 
   base::win::RegKey hkcu_cursor_regkey_;
   gfx::Size system_cursor_size_;
+
+  // Whether the cursor is visible from GetCursorInfo().
+  bool system_cursor_visible_ = true;
 };
 
 }  // namespace views

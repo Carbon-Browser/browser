@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
@@ -53,7 +53,7 @@ bool ConvertListToString(const base::Value::List& bytes, std::string* out) {
       if (!value.has_value()) {
         return false;
       }
-      out->push_back(static_cast<char>(value.value()));
+      out->push_back(static_cast<char>(*value));
     }
   }
   return true;
@@ -95,26 +95,24 @@ bool SecurityKeyExtensionSession::OnExtensionMessage(
     return false;
   }
 
-  std::unique_ptr<base::Value> value =
-      base::JSONReader::ReadDeprecated(message.data());
+  std::optional<base::Value> value = base::JSONReader::Read(message.data());
   if (!value || !value->is_dict()) {
     LOG(WARNING) << "Failed to retrieve data from gnubby-auth message.";
     return true;
   }
 
-  std::string* maybe_type = value->FindStringKey(kMessageType);
-  if (!maybe_type) {
+  const base::Value::Dict& client_message = value->GetDict();
+  const std::string* type = client_message.FindString(kMessageType);
+  if (!type) {
     LOG(WARNING) << "Invalid gnubby-auth message format.";
     return true;
   }
-  std::string type = *maybe_type;
 
-  base::Value::Dict client_message = std::move(value->GetDict());
-  if (type == kControlMessage) {
+  if (*type == kControlMessage) {
     ProcessControlMessage(client_message);
-  } else if (type == kDataMessage) {
+  } else if (*type == kDataMessage) {
     ProcessDataMessage(client_message);
-  } else if (type == kErrorMessage) {
+  } else if (*type == kErrorMessage) {
     ProcessErrorMessage(client_message);
   } else {
     VLOG(2) << "Unknown gnubby-auth message type: " << type;
@@ -122,6 +120,13 @@ bool SecurityKeyExtensionSession::OnExtensionMessage(
 
   return true;
 }
+
+#if BUILDFLAG(IS_WIN)
+void SecurityKeyExtensionSession::BindSecurityKeyForwarder(
+    mojo::PendingReceiver<mojom::SecurityKeyForwarder> receiver) {
+  security_key_auth_handler_->BindSecurityKeyForwarder(std::move(receiver));
+}
+#endif  // BUILDFLAG(IS_WIN)
 
 void SecurityKeyExtensionSession::ProcessControlMessage(
     const base::Value::Dict& message_data) const {
@@ -140,7 +145,7 @@ void SecurityKeyExtensionSession::ProcessControlMessage(
 
 void SecurityKeyExtensionSession::ProcessDataMessage(
     const base::Value::Dict& message_data) const {
-  absl::optional<int> connection_id_opt = message_data.FindInt(kConnectionId);
+  std::optional<int> connection_id_opt = message_data.FindInt(kConnectionId);
   if (!connection_id_opt.has_value()) {
     LOG(WARNING) << "Could not extract connection id from message.";
     return;
@@ -156,7 +161,8 @@ void SecurityKeyExtensionSession::ProcessDataMessage(
   std::string response;
   const base::Value::List* bytes_list = message_data.FindList(kDataPayload);
   if (bytes_list && ConvertListToString(*bytes_list, &response)) {
-    HOST_LOG << "Sending security key response: " << GetCommandCode(response);
+    HOST_LOG << "Processing security key response: "
+             << GetCommandCode(response);
     security_key_auth_handler_->SendClientResponse(connection_id, response);
   } else {
     LOG(WARNING) << "Could not extract response data from message.";
@@ -167,7 +173,7 @@ void SecurityKeyExtensionSession::ProcessDataMessage(
 
 void SecurityKeyExtensionSession::ProcessErrorMessage(
     const base::Value::Dict& message_data) const {
-  absl::optional<int> connection_id_opt = message_data.FindInt(kConnectionId);
+  std::optional<int> connection_id_opt = message_data.FindInt(kConnectionId);
   if (!connection_id_opt.has_value()) {
     LOG(WARNING) << "Could not extract connection id from message.";
     return;
@@ -188,15 +194,19 @@ void SecurityKeyExtensionSession::SendMessageToClient(
   DCHECK(thread_checker_.CalledOnValidThread());
   DCHECK(client_stub_);
 
-  base::DictionaryValue request;
-  request.SetString(kMessageType, kDataMessage);
-  request.SetInteger(kConnectionId, connection_id);
+  HOST_LOG << "Sending security key request: " << GetCommandCode(data);
 
-  base::ListValue bytes;
+  base::Value::Dict request_dict;
+  request_dict.Set(kMessageType, kDataMessage);
+  request_dict.Set(kConnectionId, connection_id);
+
+  base::Value::List bytes;
   for (auto& byte : data) {
     bytes.Append(static_cast<unsigned char>(byte));
   }
-  request.SetKey(kDataPayload, std::move(bytes));
+  request_dict.Set(kDataPayload, std::move(bytes));
+
+  base::Value request(std::move(request_dict));
 
   std::string request_json;
   CHECK(base::JSONWriter::Write(request, &request_json));

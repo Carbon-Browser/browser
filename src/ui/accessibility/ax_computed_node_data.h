@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,15 @@
 
 #include <stdint.h>
 
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/accessibility/ax_enums.mojom-forward.h"
 #include "ui/accessibility/ax_export.h"
 #include "ui/accessibility/ax_node_data.h"
+#include "ui/accessibility/ax_node_id_forward.h"
 
 namespace ui {
 
@@ -37,6 +38,12 @@ class AX_EXPORT AXComputedNodeData final {
   // associated node is ignored.
   int GetOrComputeUnignoredIndexInParent() const;
 
+  // The lowest unignored parent. This value should be computed for all
+  // associated nodes, ignored and unignored. Only the rootnode should not have
+  // an unignored parent.
+  AXNodeID GetOrComputeUnignoredParentID() const;
+  AXNode* GetOrComputeUnignoredParent() const;
+
   // If the associated node is unignored, i.e. exposed to the platform's
   // assistive software, the number of its children that are also unignored.
   // Naturally, this value is not defined when the associated node is ignored.
@@ -46,23 +53,20 @@ class AX_EXPORT AXComputedNodeData final {
   // assistive software, the IDs of its children that are also unignored.
   const std::vector<AXNodeID>& GetOrComputeUnignoredChildIDs() const;
 
-  // Given an accessibility attribute, returns whether the attribute is
-  // currently present in the node's data, or if it can always be computed on
-  // demand.
-  bool HasOrCanComputeAttribute(
-      const ax::mojom::StringAttribute attribute) const;
-  bool HasOrCanComputeAttribute(
-      const ax::mojom::IntListAttribute attribute) const;
+  // Whether the associated node is a descendant of a platform leaf. The set of
+  // platform leaves are the lowest nodes that are exposed to the platform's
+  // assistive software.
+  bool GetOrComputeIsDescendantOfPlatformLeaf() const;
 
   // Given an accessibility attribute, returns the attribute's value. The
   // attribute is computed if not provided by the tree's source, otherwise it is
   // simply returned from the node's data. String and intlist attributes are
   // potentially the slowest to compute at the tree's source, e.g. in Blink.
-  const std::string& GetOrComputeAttributeUTF8(
+  const std::string& ComputeAttributeUTF8(
       const ax::mojom::StringAttribute attribute) const;
-  std::u16string GetOrComputeAttributeUTF16(
+  std::u16string ComputeAttributeUTF16(
       const ax::mojom::StringAttribute attribute) const;
-  const std::vector<int32_t>& GetOrComputeAttribute(
+  const std::vector<int32_t>& ComputeAttribute(
       const ax::mojom::IntListAttribute attribute) const;
 
   // Retrieves from the cache or computes the on-screen text that is found
@@ -97,10 +101,20 @@ class AX_EXPORT AXComputedNodeData final {
   int GetOrComputeTextContentLengthUTF16() const;
 
  private:
-  // Computes and caches the `unignored_index_in_parent_`,
+  // Computes and caches the `unignored_index_in_parent_`, `unignored_parent_`,
   // `unignored_child_count_` and `unignored_child_ids_` for the associated
   // node.
-  void ComputeUnignoredValues(int starting_index_in_parent = 0) const;
+  void ComputeUnignoredValues(AXNodeID unignored_parent_id = kInvalidAXNodeID,
+                              int starting_index_in_parent = 0) const;
+
+  // Walks up the accessibility tree from the associated node until it finds the
+  // lowest unignored ancestor.
+  AXNode* SlowGetUnignoredParent() const;
+
+  // Computes and caches (if not already in the cache) whether the associated
+  // node is a descendant of a platform leaf. The set of platform leaves are the
+  // lowest nodes that are exposed to the platform's assistive software.
+  void ComputeIsDescendantOfPlatformLeaf() const;
 
   // Computes and caches (if not already in the cache) the character offsets
   // where each line in the associated node's on-screen text starts and ends.
@@ -122,18 +136,22 @@ class AX_EXPORT AXComputedNodeData final {
   std::string ComputeTextContentUTF8() const;
   std::u16string ComputeTextContentUTF16() const;
 
+  bool CanInferNameAttribute() const;
+
   // The node that is associated with this instance. Weak, owns us.
   const raw_ptr<const AXNode> owner_;
 
-  mutable absl::optional<int> unignored_index_in_parent_;
-  mutable absl::optional<int> unignored_child_count_;
-  mutable absl::optional<std::vector<AXNodeID>> unignored_child_ids_;
-  mutable absl::optional<std::vector<int32_t>> line_starts_;
-  mutable absl::optional<std::vector<int32_t>> line_ends_;
-  mutable absl::optional<std::vector<int32_t>> sentence_starts_;
-  mutable absl::optional<std::vector<int32_t>> sentence_ends_;
-  mutable absl::optional<std::vector<int32_t>> word_starts_;
-  mutable absl::optional<std::vector<int32_t>> word_ends_;
+  mutable std::optional<int> unignored_index_in_parent_;
+  mutable std::optional<AXNodeID> unignored_parent_id_;
+  mutable std::optional<int> unignored_child_count_;
+  mutable std::optional<std::vector<AXNodeID>> unignored_child_ids_;
+  mutable std::optional<bool> is_descendant_of_leaf_;
+  mutable std::optional<std::vector<int32_t>> line_starts_;
+  mutable std::optional<std::vector<int32_t>> line_ends_;
+  mutable std::optional<std::vector<int32_t>> sentence_starts_;
+  mutable std::optional<std::vector<int32_t>> sentence_ends_;
+  mutable std::optional<std::vector<int32_t>> word_starts_;
+  mutable std::optional<std::vector<int32_t>> word_ends_;
 
   // There are two types of "text content". The first takes into
   // account any formatting changes, such as paragraph breaks, that have been
@@ -142,11 +160,23 @@ class AX_EXPORT AXComputedNodeData final {
   // Only one copy (either UTF8 or UTF16) should be cached as each platform
   // should only need one of the encodings. This applies to both text content as
   // well as text content with paragraph breaks.
-  mutable absl::optional<std::string> text_content_with_paragraph_breaks_utf8_;
-  mutable absl::optional<std::u16string>
+  // TODO(kevers): Presently it is possible to get both cached since the bounds
+  // calculations are done using UTF16 and text content can be extracted in
+  // either format (platform specific). We should be able to remove the UTF16
+  // extraction for bounds calculations now that the character bounds vector is
+  // guaranteed to match the length of the text in UTF16. The CharacterWidths
+  // method in AbstractInlineTextBox pads the vector in the event of the shaper
+  // failing to return glyph metrics for all characters.
+  mutable std::optional<std::string> text_content_with_paragraph_breaks_utf8_;
+  mutable std::optional<std::u16string>
       text_content_with_paragraph_breaks_utf16_;
-  mutable absl::optional<std::string> text_content_utf8_;
-  mutable absl::optional<std::u16string> text_content_utf16_;
+  mutable std::optional<std::string> text_content_utf8_;
+  mutable std::optional<std::u16string> text_content_utf16_;
+  // In rare cases, the length of the text content in UTF16 does not align with
+  // the length of the character offsets array. Store the computed length to
+  // avoid needing to cache the UTF16 representation of the text.
+  // TODO(kevers): Remove once alignment is guaranteed.
+  mutable std::optional<int32_t> utf16_length_;
 };
 
 }  // namespace ui

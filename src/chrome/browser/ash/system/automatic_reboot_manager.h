@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,10 @@
 #define CHROME_BROWSER_ASH_SYSTEM_AUTOMATIC_REBOOT_MANAGER_H_
 
 #include <memory>
+#include <optional>
 
 #include "base/callback_list.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
@@ -72,7 +74,7 @@ struct SystemEventTimes;
 // applying an update is stored in /var/run/chrome/update_reboot_needed_uptime,
 // making it persist across browser restarts and crashes. Placing the file under
 // /var/run ensures that it gets cleared automatically on every boot.
-class AutomaticRebootManager : public PowerManagerClient::Observer,
+class AutomaticRebootManager : public chromeos::PowerManagerClient::Observer,
                                public UpdateEngineClient::Observer,
                                public ui::UserActivityObserver,
                                public session_manager::SessionManagerObserver {
@@ -143,8 +145,8 @@ class AutomaticRebootManager : public PowerManagerClient::Observer,
       base::WaitableEvent::InitialState::NOT_SIGNALED};
 
   // Clocks that can be mocked in tests to fast-forward time.
-  const base::Clock* const clock_;
-  const base::TickClock* const tick_clock_;
+  const raw_ptr<const base::Clock> clock_;
+  const raw_ptr<const base::TickClock> tick_clock_;
 
   PrefChangeRegistrar local_state_registrar_;
 
@@ -155,11 +157,11 @@ class AutomaticRebootManager : public PowerManagerClient::Observer,
   std::unique_ptr<base::OneShotTimer> login_screen_idle_timer_;
 
   // The time at which the device was booted, in |tick_clock_| ticks.
-  absl::optional<base::TimeTicks> boot_time_;
+  std::optional<base::TimeTicks> boot_time_;
 
   // The time at which an update was applied and a reboot became necessary to
   // complete the update process, in |tick_clock_| ticks.
-  absl::optional<base::TimeTicks> update_reboot_needed_time_;
+  std::optional<base::TimeTicks> update_reboot_needed_time_;
 
   // The reason for the reboot request. Updated whenever a reboot is scheduled.
   AutomaticRebootManagerObserver::Reason reboot_reason_ =

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,11 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
-#include "chrome/android/chrome_jni_headers/CredentialLeakDialogBridge_jni.h"
 #include "chrome/browser/password_manager/android/credential_leak_controller_android.h"
 #include "ui/android/window_android.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "chrome/android/chrome_jni_headers/CredentialLeakDialogBridge_jni.h"
 
 CredentialLeakDialogViewAndroid::CredentialLeakDialogViewAndroid(
     CredentialLeakControllerAndroid* controller)
@@ -27,13 +29,8 @@ void CredentialLeakDialogViewAndroid::Show(ui::WindowAndroid* window_android) {
       env, window_android->GetJavaObject(), reinterpret_cast<intptr_t>(this)));
 
   Java_CredentialLeakDialogBridge_showDialog(
-      env, java_object_,
-      base::android::ConvertUTF16ToJavaString(env, controller_->GetTitle()),
-      base::android::ConvertUTF16ToJavaString(env,
-                                              controller_->GetDescription()),
-      controller_->ShouldShowAutomaticChangePasswordButton(),
-      base::android::ConvertUTF16ToJavaString(
-          env, controller_->GetAcceptButtonLabel()),
+      env, java_object_, controller_->GetTitle(), controller_->GetDescription(),
+      controller_->GetAcceptButtonLabel(),
       controller_->ShouldShowCancelButton()
           ? base::android::ConvertUTF16ToJavaString(
                 env, controller_->GetCancelButtonLabel())

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,7 +55,7 @@ function makeApiCall() {
 // Makes an API call that has a custom binding.
 function makeSpecialApiCalls() {
   resetStatus();
-  var url = chrome.extension.getURL('image/cat.jpg');
+  var url = chrome.runtime.getURL('image/cat.jpg');
   var noparam = chrome.extension.getViews();
   appendCompleted('makeSpecialApiCalls');
 }
@@ -315,10 +315,6 @@ function executeDOMChangesOnTabUpdated() {
           'store.removeItem("foo"); ' +
           'store.clear();';
 
-  // Accesses the HTML5 WebDatabase API from inside a content script.
-  code += 'var db = openDatabase("testdb", "1.0", "test database", ' +
-          '                      1024 * 1024);';
-
   // Accesses the HTML5 Canvas API from inside a content script.
   code += 'var testCanvas = document.createElement("canvas"); ' +
           'var testContext = testCanvas.getContext("2d");';
@@ -381,7 +377,7 @@ function executeDOMFullscreen() {
 // Opens the extensions options page and then runs the executeDOMFullscreen
 // test.
 function launchDOMFullscreenTest() {
-  openTab(chrome.extension.getURL('/options.html#dom_fullscreen'));
+  openTab(chrome.runtime.getURL('/options.html#dom_fullscreen'));
 }
 
 // ADD TESTS CASES TO THE MAP HERE.

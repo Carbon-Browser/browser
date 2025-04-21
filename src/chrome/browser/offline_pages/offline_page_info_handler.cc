@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,9 +23,9 @@ void OfflinePageInfoHandler::Register() {
       ->RegisterExtendedInfoHandler(kOfflinePageInfoKey, std::move(instance));
 }
 
-OfflinePageInfoHandler::OfflinePageInfoHandler() {}
+OfflinePageInfoHandler::OfflinePageInfoHandler() = default;
 
-OfflinePageInfoHandler::~OfflinePageInfoHandler() {}
+OfflinePageInfoHandler::~OfflinePageInfoHandler() = default;
 
 std::string OfflinePageInfoHandler::GetExtendedInfo(
     content::NavigationEntry* entry) const {

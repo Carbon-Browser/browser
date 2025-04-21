@@ -1,8 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/ambient/ui/ambient_animation_background_color.h"
+
+#include <string_view>
 
 #include "base/logging.h"
 #include "cc/paint/skottie_color_map.h"
@@ -15,7 +17,7 @@ namespace {
 // This name is agreed upon with animation designers and supposed to be the same
 // for all ambient-mode skottie animations. Do not change without consulting
 // them.
-constexpr base::StringPiece kBackgroundColorNode = "background_solid";
+constexpr std::string_view kBackgroundColorNode = "background_solid";
 
 // Only used as a fallback. This should really not be used, but it's not worth
 // crashing the production binary over this error.

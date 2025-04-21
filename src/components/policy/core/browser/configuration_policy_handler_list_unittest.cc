@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <string>
 #include <tuple>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "components/policy/core/browser/configuration_policy_handler.h"
 #include "components/policy/core/browser/policy_conversions_client.h"
@@ -80,14 +80,14 @@ class ConfigurationPolicyHandlerListTest : public ::testing::Test {
         policies_, &prefs_, &errors_, &deprecated_policies_, &future_policies_);
   }
 
-  void CreateHandlerList(bool allow_all_future_policies = false) {
+  void CreateHandlerList(bool are_future_policies_allowed_by_default = false) {
     handler_list_ = std::make_unique<ConfigurationPolicyHandlerList>(
         ConfigurationPolicyHandlerList::
             PopulatePolicyHandlerParametersCallback(),
         base::BindRepeating(
             &ConfigurationPolicyHandlerListTest::GetPolicyDetails,
             base::Unretained(this)),
-        allow_all_future_policies);
+        are_future_policies_allowed_by_default);
   }
 
   PrefValueMap* prefs() { return &prefs_; }
@@ -125,7 +125,7 @@ class ConfigurationPolicyHandlerListTest : public ::testing::Test {
   PolicyMap policies_;
   PoliciesSet deprecated_policies_;
   PoliciesSet future_policies_;
-  PolicyDetails details_{false, false, false, 0, 0, {}};
+  PolicyDetails details_{false, false, kProfile, 0, 0, {}};
 
   std::unique_ptr<ConfigurationPolicyHandlerList> handler_list_;
 };
@@ -183,7 +183,7 @@ TEST_F(ConfigurationPolicyHandlerListTest,
 TEST_F(ConfigurationPolicyHandlerListTest,
        ApplySettingsWithPlatformDevicePolicy) {
   AddSimplePolicy();
-  details()->is_device_policy = true;
+  details()->scope = kDevice;
 
   ApplySettings();
   VerifyPolicyAndPref(kPolicyName, /* in_pref */ true);

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,10 +25,17 @@ struct COMPONENT_EXPORT(STORAGE_SERVICE_BUCKETS_SUPPORT) BucketLocator {
 
   ~BucketLocator();
 
+  static BucketLocator ForDefaultBucket(blink::StorageKey storage_key);
+
   BucketLocator(const BucketLocator&);
   BucketLocator(BucketLocator&&) noexcept;
   BucketLocator& operator=(const BucketLocator&);
   BucketLocator& operator=(BucketLocator&&) noexcept;
+
+  bool is_null() const { return *this == BucketLocator(); }
+
+  // Returns true if `this` and `other` refer to the same bucket.
+  bool IsEquivalentTo(const BucketLocator& other) const;
 
   COMPONENT_EXPORT(STORAGE_SERVICE_BUCKETS_SUPPORT)
   friend bool operator==(const BucketLocator& lhs, const BucketLocator& rhs);
@@ -39,10 +46,18 @@ struct COMPONENT_EXPORT(STORAGE_SERVICE_BUCKETS_SUPPORT) BucketLocator {
   COMPONENT_EXPORT(STORAGE_SERVICE_BUCKETS_SUPPORT)
   friend bool operator<(const BucketLocator& lhs, const BucketLocator& rhs);
 
+  // Only positive IDs are valid. A default bucket without a specified bucket ID
+  // can be represented by this struct when `id` is zero.
   BucketId id = BucketId::FromUnsafeValue(0);
   blink::StorageKey storage_key = blink::StorageKey();
   blink::mojom::StorageType type = blink::mojom::StorageType::kUnknown;
   bool is_default = false;
+};
+
+// A comparator for maps that wish to take into account that default buckets can
+// be represented with or without a bucket id.
+struct COMPONENT_EXPORT(STORAGE_SERVICE_BUCKETS_SUPPORT) CompareBucketLocators {
+  bool operator()(const BucketLocator& a, const BucketLocator& b) const;
 };
 
 }  // namespace storage

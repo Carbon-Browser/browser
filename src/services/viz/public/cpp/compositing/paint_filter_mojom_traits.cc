@@ -1,20 +1,21 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/viz/public/cpp/compositing/paint_filter_mojom_traits.h"
+
+#include <utility>
 
 #include "cc/paint/paint_filter.h"
 
 namespace mojo {
 
 // static
-absl::optional<std::vector<uint8_t>>
+std::optional<std::vector<uint8_t>>
 StructTraits<viz::mojom::PaintFilterDataView, sk_sp<cc::PaintFilter>>::data(
     const sk_sp<cc::PaintFilter>& filter) {
   std::vector<uint8_t> memory;
-  memory.resize(cc::PaintOpWriter::HeaderBytes() +
-                cc::PaintFilter::GetFilterSize(filter.get()));
+  memory.resize(cc::PaintOpWriter::SerializedSize(filter.get()));
   // No need to populate the SerializeOptions here since the security
   // constraints explicitly disable serializing images using the transfer cache
   // and serialization of PaintRecords.
@@ -24,7 +25,7 @@ StructTraits<viz::mojom::PaintFilterDataView, sk_sp<cc::PaintFilter>>::data(
   writer.Write(filter.get(), SkM44());
 
   if (writer.size() == 0)
-    return absl::nullopt;
+    return std::nullopt;
 
   memory.resize(writer.size());
   return memory;
@@ -33,7 +34,7 @@ StructTraits<viz::mojom::PaintFilterDataView, sk_sp<cc::PaintFilter>>::data(
 // static
 bool StructTraits<viz::mojom::PaintFilterDataView, sk_sp<cc::PaintFilter>>::
     Read(viz::mojom::PaintFilterDataView data, sk_sp<cc::PaintFilter>* out) {
-  absl::optional<std::vector<uint8_t>> buffer;
+  std::optional<std::vector<uint8_t>> buffer;
   if (!data.ReadData(&buffer))
     return false;
 
@@ -48,10 +49,9 @@ bool StructTraits<viz::mojom::PaintFilterDataView, sk_sp<cc::PaintFilter>>::
   // constraints explicitly disable serializing images using the transfer
   // cache/gpu::Mailbox and serialization of PaintRecords.
   std::vector<uint8_t> scratch_buffer;
-  cc::PaintOp::DeserializeOptions options(nullptr, nullptr, nullptr,
-                                          &scratch_buffer, false, nullptr);
+  cc::PaintOp::DeserializeOptions options{.scratch_buffer = scratch_buffer};
   cc::PaintOpReader reader(buffer->data(), buffer->size(), options,
-                           true /* enable_security_constraints */);
+                           /*enable_security_constraints=*/true);
   sk_sp<cc::PaintFilter> filter;
   reader.Read(&filter);
   if (!reader.valid()) {

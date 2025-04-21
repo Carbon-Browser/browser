@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,6 +26,7 @@
 #include <memory>
 
 #include "base/check.h"
+#include "base/memory/raw_ptr.h"
 #include "media/base/container_names.h"
 #include "media/base/media_export.h"
 #include "media/ffmpeg/ffmpeg_deleters.h"
@@ -84,10 +85,14 @@ class MEDIA_EXPORT FFmpegGlue {
  private:
   bool open_called_ = false;
   bool detected_hls_ = false;
-  AVFormatContext* format_context_ = nullptr;
+
+  // DanglingUntriaged: We seem to get a dangling pointer warning
+  // if avformat_open_input fails. It seems spurious, possibly this pointer
+  // is meant to be owning?
+  raw_ptr<AVFormatContext, DanglingUntriaged> format_context_ = nullptr;
   std::unique_ptr<AVIOContext, ScopedPtrAVFree> avio_context_;
   container_names::MediaContainerName container_ =
-      container_names::CONTAINER_UNKNOWN;
+      container_names::MediaContainerName::kContainerUnknown;
 };
 
 }  // namespace media

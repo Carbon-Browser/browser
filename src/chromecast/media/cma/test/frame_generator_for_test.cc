@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -69,7 +69,7 @@ scoped_refptr<DecoderBufferBase> FrameGeneratorForTest::Generate() {
 
   // Generate the decrypt configuration.
   if (frame_spec.has_decrypt_config) {
-    uint32_t frame_size = buffer->data_size();
+    uint32_t frame_size = buffer->size();
     uint32_t chunk_size = 1;
     std::vector< ::media::SubsampleEntry> subsamples;
     while (frame_size > 0) {

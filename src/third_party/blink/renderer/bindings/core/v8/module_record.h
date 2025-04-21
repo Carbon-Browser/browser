@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_code_cache.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/platform/bindings/trace_wrapper_v8_reference.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/loader/fetch/url_loader/cached_metadata_handler.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_position.h"
@@ -20,7 +21,6 @@
 
 namespace blink {
 
-class ExceptionState;
 class KURL;
 class ModuleScriptCreationParams;
 class ScriptFetchOptions;
@@ -33,13 +33,13 @@ class CORE_EXPORT ModuleRecordProduceCacheData final
     : public GarbageCollected<ModuleRecordProduceCacheData> {
  public:
   ModuleRecordProduceCacheData(v8::Isolate*,
-                               SingleCachedMetadataHandler*,
+                               CachedMetadataHandler*,
                                V8CodeCache::ProduceCacheOptions,
                                v8::Local<v8::Module>);
 
   void Trace(Visitor*) const;
 
-  SingleCachedMetadataHandler* CacheHandler() const { return cache_handler_; }
+  CachedMetadataHandler* CacheHandler() const { return cache_handler_.Get(); }
   V8CodeCache::ProduceCacheOptions GetProduceCacheOptions() const {
     return produce_cache_options_;
   }
@@ -48,7 +48,7 @@ class CORE_EXPORT ModuleRecordProduceCacheData final
   }
 
  private:
-  Member<SingleCachedMetadataHandler> cache_handler_;
+  Member<CachedMetadataHandler> cache_handler_;
   V8CodeCache::ProduceCacheOptions produce_cache_options_;
   TraceWrapperV8Reference<v8::UnboundModuleScript> unbound_script_;
 };
@@ -63,7 +63,6 @@ class CORE_EXPORT ModuleRecord final {
       const ModuleScriptCreationParams& params,
       const ScriptFetchOptions&,
       const TextPosition&,
-      ExceptionState&,
       mojom::blink::V8CacheOptions = mojom::blink::V8CacheOptions::kDefault,
       ModuleRecordProduceCacheData** out_produce_cache_data = nullptr);
 
@@ -79,24 +78,24 @@ class CORE_EXPORT ModuleRecord final {
 
   static v8::Local<v8::Value> V8Namespace(v8::Local<v8::Module> record);
 
-  // ToBlinkImportAssertions deserializes v8::FixedArray encoded import
-  // assertions to blink::ImportAssertion. When
-  // |v8_import_assertions_has_positions| is set to true, it expects [key1,
+  // ToBlinkImportAttributes deserializes v8::FixedArray encoded import
+  // attributes to blink::ImportAttribute. When
+  // |v8_import_attributes_has_positions| is set to true, it expects [key1,
   // value1, position1, key2, value2, position2, ...] encoding used in
-  // v8::ModuleRequest::GetImportAssertions(). When it is set to false, it
+  // v8::ModuleRequest::GetImportAttributes(). When it is set to false, it
   // expects [key1, value1, key2, value2, ...] encoding used in the
   // |HostImportModuleDynamically| callback.
-  static Vector<ImportAssertion> ToBlinkImportAssertions(
+  static Vector<ImportAttribute> ToBlinkImportAttributes(
       v8::Local<v8::Context> context,
       v8::Local<v8::Module> record,
-      v8::Local<v8::FixedArray> v8_import_assertions,
-      bool v8_import_assertions_has_positions);
+      v8::Local<v8::FixedArray> v8_import_attributes,
+      bool v8_import_attributes_has_positions);
 
  private:
   static v8::MaybeLocal<v8::Module> ResolveModuleCallback(
       v8::Local<v8::Context>,
       v8::Local<v8::String> specifier,
-      v8::Local<v8::FixedArray> import_assertions,
+      v8::Local<v8::FixedArray> import_attributes,
       v8::Local<v8::Module> referrer);
 };
 

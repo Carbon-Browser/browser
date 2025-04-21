@@ -1,11 +1,12 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef NET_SSL_CLIENT_CERT_STORE_H_
 #define NET_SSL_CLIENT_CERT_STORE_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/scoped_refptr.h"
 #include "net/base/net_export.h"
 #include "net/cert/x509_certificate.h"
 #include "net/ssl/client_cert_identity.h"
@@ -29,11 +30,11 @@ class NET_EXPORT ClientCertStore {
       base::OnceCallback<void(ClientCertIdentityList)>;
 
   // Get client certs matching the |cert_request_info| and pass them to the
-  // |callback|.  The |callback| may be called sychronously. The caller must
-  // ensure the ClientCertStore and |cert_request_info| remain alive until the
-  // callback has been run.
-  virtual void GetClientCerts(const SSLCertRequestInfo& cert_request_info,
-                              ClientCertListCallback callback) = 0;
+  // |callback|.  The |callback| may be called synchronously. If the
+  // ClientCertStore is destroyed, |callback| will not be called.
+  virtual void GetClientCerts(
+      scoped_refptr<const SSLCertRequestInfo> cert_request_info,
+      ClientCertListCallback callback) = 0;
 
  protected:
   ClientCertStore() = default;

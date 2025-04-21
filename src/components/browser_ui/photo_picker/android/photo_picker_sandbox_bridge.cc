@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,15 @@
 #include "base/android/jni_android.h"
 #include "base/android/scoped_java_ref.h"
 #include "base/metrics/histogram_macros.h"
-#include "components/browser_ui/photo_picker/android/photo_picker_jni_headers/ImageDecoder_jni.h"
 #include "sandbox/linux/seccomp-bpf-helpers/seccomp_starter_android.h"
 #include "sandbox/sandbox_buildflags.h"
 
 #if BUILDFLAG(USE_SECCOMP_BPF)
 #include "sandbox/linux/seccomp-bpf-helpers/baseline_policy_android.h"
 #endif
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "components/browser_ui/photo_picker/android/photo_picker_jni_headers/ImageDecoder_jni.h"
 
 void JNI_ImageDecoder_InitializePhotoPickerSandbox(JNIEnv* env) {
   auto* info = base::android::BuildInfo::GetInstance();
@@ -24,8 +26,4 @@ void JNI_ImageDecoder_InitializePhotoPickerSandbox(JNIEnv* env) {
       starter.GetDefaultBaselineOptions()));
 #endif
   starter.StartSandbox();
-
-  UMA_HISTOGRAM_ENUMERATION("Android.SeccompStatus.PhotoPickerSandbox",
-                            starter.status(),
-                            sandbox::SeccompSandboxStatus::STATUS_MAX);
 }

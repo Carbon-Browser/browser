@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,14 +43,16 @@ PrinterProviderAPIFactory::PrinterProviderAPIFactory()
 PrinterProviderAPIFactory::~PrinterProviderAPIFactory() {
 }
 
-KeyedService* PrinterProviderAPIFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+PrinterProviderAPIFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   return PrinterProviderAPI::Create(context);
 }
 
 content::BrowserContext* PrinterProviderAPIFactory::GetBrowserContextToUse(
     content::BrowserContext* context) const {
-  return ExtensionsBrowserClient::Get()->GetOriginalContext(context);
+  return ExtensionsBrowserClient::Get()->GetContextRedirectedToOriginal(
+      context);
 }
 
 }  // namespace extensions

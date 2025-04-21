@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,23 +16,27 @@ DistillerJavaScriptServiceImpl::DistillerJavaScriptServiceImpl(
 DistillerJavaScriptServiceImpl::~DistillerJavaScriptServiceImpl() = default;
 
 void DistillerJavaScriptServiceImpl::HandleDistillerOpenSettingsCall() {
-  if (distiller_service_weak_ptr_.WasInvalidated())
+  if (!distiller_service_weak_ptr_ ||
+      !distiller_service_weak_ptr_->GetDistillerUIHandle()) {
     return;
+  }
 
   distiller_service_weak_ptr_.get()->GetDistillerUIHandle()->OpenSettings();
 }
 
 void DistillerJavaScriptServiceImpl::HandleStoreThemePref(mojom::Theme theme) {
-  if (distiller_service_weak_ptr_.WasInvalidated())
+  if (!distiller_service_weak_ptr_) {
     return;
+  }
 
   distiller_service_weak_ptr_.get()->GetDistilledPagePrefs()->SetTheme(theme);
 }
 
 void DistillerJavaScriptServiceImpl::HandleStoreFontFamilyPref(
     mojom::FontFamily font_family) {
-  if (distiller_service_weak_ptr_.WasInvalidated())
+  if (!distiller_service_weak_ptr_) {
     return;
+  }
 
   distiller_service_weak_ptr_.get()->GetDistilledPagePrefs()->SetFontFamily(
       font_family);
@@ -40,8 +44,9 @@ void DistillerJavaScriptServiceImpl::HandleStoreFontFamilyPref(
 
 void DistillerJavaScriptServiceImpl::HandleStoreFontScalingPref(
     float font_scale) {
-  if (distiller_service_weak_ptr_.WasInvalidated())
+  if (!distiller_service_weak_ptr_) {
     return;
+  }
 
   distiller_service_weak_ptr_.get()->GetDistilledPagePrefs()->SetFontScaling(
       font_scale);

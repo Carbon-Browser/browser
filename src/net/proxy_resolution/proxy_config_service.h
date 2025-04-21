@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "net/base/net_export.h"
 
 namespace base {
@@ -69,6 +69,10 @@ class NET_EXPORT ProxyConfigService {
   // X seconds at which point they check for changes. However that has
   // the disadvantage of doing continuous work even during idle periods.
   virtual void OnLazyPoll() {}
+
+  // True if this implementation uses polling, i.e. needs `OnLazyPoll` to be
+  // called.
+  virtual bool UsesPolling();
 
   // Creates a config service appropriate for this platform that fetches the
   // system proxy settings. |main_task_runner| is the sequence where the

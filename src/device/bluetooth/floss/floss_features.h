@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,12 +14,15 @@ namespace features {
 
 // The feature is defined in Ash and propagated to Lacros over crosapi.
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-extern const DEVICE_BLUETOOTH_EXPORT base::Feature kFlossEnabled;
+DEVICE_BLUETOOTH_EXPORT BASE_DECLARE_FEATURE(kFlossEnabled);
+DEVICE_BLUETOOTH_EXPORT BASE_DECLARE_FEATURE(kLLPrivacyIsAvailable);
 #endif
 
 // A helper method that has the appropriate behavior on both Ash and Lacros.
 bool DEVICE_BLUETOOTH_EXPORT IsFlossEnabled();
 
+// Helper method to get if the current device is available to enable LL privacy.
+bool DEVICE_BLUETOOTH_EXPORT IsLLPrivacyAvailable();
 }  // namespace features
 }  // namespace floss
 

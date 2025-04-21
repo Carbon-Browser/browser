@@ -1,4 +1,4 @@
-// Copyright 2014 The Crashpad Authors. All rights reserved.
+// Copyright 2014 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #include <Availability.h>
 #include <pthread.h>
 
-#include "base/mac/mach_logging.h"
+#include "base/apple/mach_logging.h"
 #include "build/build_config.h"
 #include "util/mac/mac_util.h"
 

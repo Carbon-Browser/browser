@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
  * @return {object} The updated details.
  */
 function updateDetails(details, shippingOption) {
-  var selectedShippingOption;
-  var otherShippingOption;
+  let selectedShippingOption;
+  let otherShippingOption;
   if (shippingOption === 'standard') {
     selectedShippingOption = details.shippingOptions[0];
     otherShippingOption = details.shippingOptions[1];
@@ -34,8 +34,8 @@ function updateDetails(details, shippingOption) {
  * Launches payment request that provides multiple shipping options worldwide,
  * regardless of the shipping address.
  */
-function onBuyClicked() { // eslint-disable-line no-unused-vars
-  var supportedInstruments = [
+function onBuyClicked() {
+  const supportedInstruments = [
     {
       supportedMethods: 'https://android.com/pay',
       data: {
@@ -57,7 +57,7 @@ function onBuyClicked() { // eslint-disable-line no-unused-vars
     },
   ];
 
-  var details = {
+  const details = {
     total: {
       label: 'Donation',
       amount: {
@@ -102,7 +102,7 @@ function onBuyClicked() { // eslint-disable-line no-unused-vars
     ],
   };
 
-  var options = {
+  const options = {
     requestShipping: true,
     requestPayerName: true,
     requestPayerPhone: true,
@@ -115,7 +115,7 @@ function onBuyClicked() { // eslint-disable-line no-unused-vars
   }
 
   try {
-    var request = new PaymentRequest(supportedInstruments, details, options);
+    const request = new PaymentRequest(supportedInstruments, details, options);
 
     request.addEventListener('shippingaddresschange', function(e) {
       e.updateWith(new Promise(function(resolve) {

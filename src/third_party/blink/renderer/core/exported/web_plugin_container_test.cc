@@ -39,7 +39,6 @@
 #include "third_party/blink/public/common/input/web_coalesced_input_event.h"
 #include "third_party/blink/public/common/input/web_mouse_wheel_event.h"
 #include "third_party/blink/public/common/input/web_pointer_event.h"
-#include "third_party/blink/public/platform/web_url_loader_mock_factory.h"
 #include "third_party/blink/public/web/web_document.h"
 #include "third_party/blink/public/web/web_element.h"
 #include "third_party/blink/public/web/web_local_frame_client.h"
@@ -68,8 +67,8 @@
 #include "third_party/blink/renderer/platform/graphics/paint/paint_recorder.h"
 #include "third_party/blink/renderer/platform/keyboard_codes.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread.h"
-#include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
+#include "third_party/blink/renderer/platform/testing/url_loader_mock_factory.h"
 #include "third_party/blink/renderer/platform/testing/url_test_helpers.h"
 
 using blink::test::RunPendingTasks;
@@ -80,8 +79,15 @@ class WebPluginContainerTest : public PageTestBase {
  public:
   WebPluginContainerTest() : base_url_("http://www.test.com/") {}
 
+  void SetUp() override {
+    PageTestBase::SetUp();
+    mock_clipboard_host_provider_.Install(
+        GetFrame().GetBrowserInterfaceBroker());
+  }
+
   void TearDown() override {
     url_test_helpers::UnregisterAllURLsAndClearMemoryCache();
+    PageTestBase::TearDown();
   }
 
   void CalculateGeometry(WebPluginContainerImpl* plugin_container_impl,
@@ -110,6 +116,9 @@ class WebPluginContainerTest : public PageTestBase {
  protected:
   ScopedFakePluginRegistry fake_plugins_;
   std::string base_url_;
+
+ private:
+  PageTestBase::MockClipboardHostProvider mock_clipboard_host_provider_;
 };
 
 namespace {
@@ -142,9 +151,10 @@ class TestPlugin : public FakeWebPlugin {
   bool HasSelection() const override { return true; }
   WebString SelectionAsText() const override { return WebString("x"); }
   WebString SelectionAsMarkup() const override { return WebString("y"); }
+  bool CanCopy() const override;
   bool SupportsPaginatedPrint() override { return true; }
   int PrintBegin(const WebPrintParams& print_params) override { return 1; }
-  void PrintPage(int page_number, cc::PaintCanvas*) override;
+  void PrintPage(int page_index, cc::PaintCanvas* canvas) override;
 
  private:
   ~TestPlugin() override = default;
@@ -202,10 +212,12 @@ class TestPluginWebFrameClient : public frame_test_helpers::TestWebFrameClient {
       const FramePolicy&,
       const WebFrameOwnerProperties&,
       FrameOwnerElementType owner_type,
-      WebPolicyContainerBindParams policy_container_bind_params) override {
-    return CreateLocalChild(*Frame(), scope,
-                            std::make_unique<TestPluginWebFrameClient>(),
-                            std::move(policy_container_bind_params));
+      WebPolicyContainerBindParams policy_container_bind_params,
+      ukm::SourceId document_ukm_source_id,
+      FinishChildFrameCreationFn finish_creation) override {
+    return CreateLocalChild(
+        *Frame(), scope, std::make_unique<TestPluginWebFrameClient>(),
+        std::move(policy_container_bind_params), finish_creation);
   }
 
   WebPlugin* CreatePlugin(const WebPluginParams& params) override {
@@ -220,23 +232,28 @@ class TestPluginWebFrameClient : public frame_test_helpers::TestWebFrameClient {
   }
 
  public:
-  TestPluginWebFrameClient() {
-    mock_clipboard_host_provider_.Install(*GetBrowserInterfaceBroker());
-  }
+  TestPluginWebFrameClient() = default;
 
   void OnPrintPage() { printed_page_ = true; }
   bool PrintedAtLeastOnePage() const { return printed_page_; }
   void SetHasEditableText(bool has_editable_text) {
     has_editable_text_ = has_editable_text;
   }
+  void SetCanCopy(bool can_copy) { can_copy_ = can_copy; }
+  bool CanCopy() const { return can_copy_; }
 
  private:
   bool printed_page_ = false;
   bool has_editable_text_ = false;
-  PageTestBase::MockClipboardHostProvider mock_clipboard_host_provider_;
+  bool can_copy_ = true;
 };
 
-void TestPlugin::PrintPage(int page_number, cc::PaintCanvas* canvas) {
+bool TestPlugin::CanCopy() const {
+  DCHECK(test_client_);
+  return test_client_->CanCopy();
+}
+
+void TestPlugin::PrintPage(int page_index, cc::PaintCanvas* canvas) {
   DCHECK(test_client_);
   test_client_->OnPrintPage();
 }
@@ -368,7 +385,7 @@ TEST_F(WebPluginContainerTest, LocalToWindowPointTest) {
 // Verifies executing the command 'Copy' results in copying to the clipboard.
 TEST_F(WebPluginContainerTest, Copy) {
   RegisterMockedURL("plugin_container.html");
-  // Must outlive |web_view_helper|.
+  // Must outlive `web_view_helper`.
   TestPluginWebFrameClient plugin_web_frame_client;
   frame_test_helpers::WebViewHelper web_view_helper;
   WebViewImpl* web_view = web_view_helper.InitializeAndLoad(
@@ -379,7 +396,7 @@ TEST_F(WebPluginContainerTest, Copy) {
       ->GetDocument()
       .Unwrap<Document>()
       ->body()
-      ->getElementById("translated-plugin")
+      ->getElementById(AtomicString("translated-plugin"))
       ->Focus();
   EXPECT_TRUE(web_view->MainFrame()->ToWebLocalFrame()->ExecuteCommand("Copy"));
 
@@ -388,9 +405,35 @@ TEST_F(WebPluginContainerTest, Copy) {
   ClearClipboardBuffer(*local_frame);
 }
 
+// Verifies executing the command 'Copy' results in copying nothing to the
+// clipboard when the plugin does not have the copy permission.
+TEST_F(WebPluginContainerTest, CopyWithoutPermission) {
+  RegisterMockedURL("plugin_container.html");
+  // Must outlive `web_view_helper`.
+  TestPluginWebFrameClient plugin_web_frame_client;
+  // Make sure to create a plugin without the copy permission.
+  plugin_web_frame_client.SetCanCopy(false);
+  frame_test_helpers::WebViewHelper web_view_helper;
+  WebViewImpl* web_view = web_view_helper.InitializeAndLoad(
+      base_url_ + "plugin_container.html", &plugin_web_frame_client);
+  EnablePlugins(web_view, gfx::Size(300, 300));
+
+  web_view->MainFrameImpl()
+      ->GetDocument()
+      .Unwrap<Document>()
+      ->body()
+      ->getElementById(AtomicString("translated-plugin"))
+      ->Focus();
+  EXPECT_TRUE(web_view->MainFrame()->ToWebLocalFrame()->ExecuteCommand("Copy"));
+
+  LocalFrame* local_frame = web_view->MainFrameImpl()->GetFrame();
+  EXPECT_EQ(String(""), ReadClipboard(*local_frame));
+  ClearClipboardBuffer(*local_frame);
+}
+
 TEST_F(WebPluginContainerTest, CopyFromContextMenu) {
   RegisterMockedURL("plugin_container.html");
-  // Must outlive |web_view_helper|.
+  // Must outlive `web_view_helper`.
   TestPluginWebFrameClient plugin_web_frame_client;
   frame_test_helpers::WebViewHelper web_view_helper;
   WebViewImpl* web_view = web_view_helper.InitializeAndLoad(
@@ -423,11 +466,46 @@ TEST_F(WebPluginContainerTest, CopyFromContextMenu) {
   ClearClipboardBuffer(*local_frame);
 }
 
-// Verifies |Ctrl-C| and |Ctrl-Insert| keyboard events, results in copying to
+TEST_F(WebPluginContainerTest, CopyFromContextMenuWithoutCopyPermission) {
+  RegisterMockedURL("plugin_container.html");
+  // Must outlive `web_view_helper`.
+  TestPluginWebFrameClient plugin_web_frame_client;
+  // Make sure to create a plugin without the copy permission.
+  plugin_web_frame_client.SetCanCopy(false);
+  frame_test_helpers::WebViewHelper web_view_helper;
+  WebViewImpl* web_view = web_view_helper.InitializeAndLoad(
+      base_url_ + "plugin_container.html", &plugin_web_frame_client);
+  EnablePlugins(web_view, gfx::Size(300, 300));
+
+  // Make sure the right-click + command copies nothing in common scenario.
+  ExecuteContextMenuCommand(web_view, "Copy");
+  LocalFrame* local_frame = web_view->MainFrameImpl()->GetFrame();
+  EXPECT_EQ(String(""), ReadClipboard(*local_frame));
+  ClearClipboardBuffer(*local_frame);
+
+  auto event = frame_test_helpers::CreateMouseEvent(
+      WebMouseEvent::Type::kMouseDown, WebMouseEvent::Button::kRight,
+      gfx::Point(30, 30), 0);
+  event.click_count = 1;
+
+  // Now, make sure the context menu copies nothing in a more complex scenario.
+  // 1) open the context menu. This will focus the plugin.
+  web_view->MainFrameWidget()->HandleInputEvent(
+      WebCoalescedInputEvent(event, ui::LatencyInfo()));
+  // 2) document blurs the plugin, because it can.
+  web_view->FocusedElement()->blur();
+  // 3) Copy should still operate on the context node, even though the focus had
+  //    shifted.
+  EXPECT_TRUE(web_view->MainFrameImpl()->ExecuteCommand("Copy"));
+  EXPECT_EQ(String(""), ReadClipboard(*local_frame));
+  ClearClipboardBuffer(*local_frame);
+}
+
+// Verifies `Ctrl-C` and `Ctrl-Insert` keyboard events, results in copying to
 // the clipboard.
 TEST_F(WebPluginContainerTest, CopyInsertKeyboardEventsTest) {
   RegisterMockedURL("plugin_container.html");
-  // Must outlive |web_view_helper|.
+  // Must outlive `web_view_helper`.
   TestPluginWebFrameClient plugin_web_frame_client;
   frame_test_helpers::WebViewHelper web_view_helper;
   WebViewImpl* web_view = web_view_helper.InitializeAndLoad(
@@ -448,6 +526,37 @@ TEST_F(WebPluginContainerTest, CopyInsertKeyboardEventsTest) {
   CreateAndHandleKeyboardEvent(&plugin_container_one_element, modifier_key,
                                VKEY_INSERT);
   EXPECT_EQ(String("x"), ReadClipboard(*local_frame));
+  ClearClipboardBuffer(*local_frame);
+}
+
+// Verifies `Ctrl-C` and `Ctrl-Insert` keyboard events, results in copying
+// nothing to the clipboard.
+TEST_F(WebPluginContainerTest,
+       CopyInsertKeyboardEventsTestWithoutCopyPermission) {
+  RegisterMockedURL("plugin_container.html");
+  // Must outlive `web_view_helper`.
+  TestPluginWebFrameClient plugin_web_frame_client;
+  // Make sure to create a plugin without the copy permission.
+  plugin_web_frame_client.SetCanCopy(false);
+  frame_test_helpers::WebViewHelper web_view_helper;
+  WebViewImpl* web_view = web_view_helper.InitializeAndLoad(
+      base_url_ + "plugin_container.html", &plugin_web_frame_client);
+  EnablePlugins(web_view, gfx::Size(300, 300));
+
+  WebElement plugin_container_one_element =
+      web_view->MainFrameImpl()->GetDocument().GetElementById(
+          WebString::FromUTF8("translated-plugin"));
+  WebInputEvent::Modifiers modifier_key = static_cast<WebInputEvent::Modifiers>(
+      kEditingModifier | WebInputEvent::kNumLockOn | WebInputEvent::kIsLeft);
+  CreateAndHandleKeyboardEvent(&plugin_container_one_element, modifier_key,
+                               VKEY_C);
+  LocalFrame* local_frame = web_view->MainFrameImpl()->GetFrame();
+  EXPECT_EQ(String(""), ReadClipboard(*local_frame));
+  ClearClipboardBuffer(*local_frame);
+
+  CreateAndHandleKeyboardEvent(&plugin_container_one_element, modifier_key,
+                               VKEY_INSERT);
+  EXPECT_EQ(String(""), ReadClipboard(*local_frame));
   ClearClipboardBuffer(*local_frame);
 }
 
@@ -728,7 +837,7 @@ TEST_F(WebPluginContainerTest, GestureLongPressReachesPlugin) {
 
   // Next, send an event that does hit the plugin, and verify it does receive
   // it.
-  gfx::Rect rect = plugin_container_one_element.BoundsInViewport();
+  gfx::Rect rect = plugin_container_one_element.BoundsInWidget();
   event.SetPositionInWidget(
       gfx::PointF(rect.x() + rect.width() / 2, rect.y() + rect.height() / 2));
 
@@ -762,7 +871,7 @@ TEST_F(WebPluginContainerTest, MouseEventButtons) {
       gfx::Point(30, 30),
       WebInputEvent::kMiddleButtonDown | WebInputEvent::kShiftKey);
 
-  gfx::Rect rect = plugin_container_one_element.BoundsInViewport();
+  gfx::Rect rect = plugin_container_one_element.BoundsInWidget();
   event.SetPositionInWidget(rect.x() + rect.width() / 2,
                             rect.y() + rect.height() / 2);
 
@@ -797,7 +906,7 @@ TEST_F(WebPluginContainerTest, MouseWheelEventTranslated) {
                            WebInputEvent::kNoModifiers,
                            WebInputEvent::GetStaticTimeStampForTests());
 
-  gfx::Rect rect = plugin_container_one_element.BoundsInViewport();
+  gfx::Rect rect = plugin_container_one_element.BoundsInWidget();
   event.SetPositionInWidget(rect.x() + rect.width() / 2,
                             rect.y() + rect.height() / 2);
 
@@ -833,7 +942,7 @@ TEST_F(WebPluginContainerTest, TouchEventScrolled) {
                           ->Plugin();
   EventTestPlugin* test_plugin = static_cast<EventTestPlugin*>(plugin);
 
-  gfx::Rect rect = plugin_container_one_element.BoundsInViewport();
+  gfx::Rect rect = plugin_container_one_element.BoundsInWidget();
   WebPointerEvent event(
       WebInputEvent::Type::kPointerDown,
       WebPointerProperties(1, WebPointerProperties::PointerType::kTouch,
@@ -878,7 +987,7 @@ TEST_F(WebPluginContainerTest, TouchEventScrolledWithCoalescedTouches) {
   EventTestPlugin* test_plugin = static_cast<EventTestPlugin*>(plugin);
 
   {
-    gfx::Rect rect = plugin_container_one_element.BoundsInViewport();
+    gfx::Rect rect = plugin_container_one_element.BoundsInWidget();
     WebPointerEvent event(
         WebInputEvent::Type::kPointerDown,
         WebPointerProperties(1, WebPointerProperties::PointerType::kTouch,
@@ -904,7 +1013,7 @@ TEST_F(WebPluginContainerTest, TouchEventScrolledWithCoalescedTouches) {
   }
 
   {
-    gfx::Rect rect = plugin_container_one_element.BoundsInViewport();
+    gfx::Rect rect = plugin_container_one_element.BoundsInWidget();
     WebPointerEvent event1(
         WebInputEvent::Type::kPointerMove,
         WebPointerProperties(1, WebPointerProperties::PointerType::kTouch,
@@ -978,7 +1087,7 @@ TEST_F(WebPluginContainerTest, MouseWheelEventScrolled) {
                            WebInputEvent::kNoModifiers,
                            WebInputEvent::GetStaticTimeStampForTests());
 
-  gfx::Rect rect = plugin_container_one_element.BoundsInViewport();
+  gfx::Rect rect = plugin_container_one_element.BoundsInWidget();
   event.SetPositionInWidget(rect.x() + rect.width() / 2,
                             rect.y() + rect.height() / 2);
 
@@ -1018,7 +1127,7 @@ TEST_F(WebPluginContainerTest, MouseEventScrolled) {
                       WebInputEvent::kNoModifiers,
                       WebInputEvent::GetStaticTimeStampForTests());
 
-  gfx::Rect rect = plugin_container_one_element.BoundsInViewport();
+  gfx::Rect rect = plugin_container_one_element.BoundsInWidget();
   event.SetPositionInWidget(rect.x() + rect.width() / 2,
                             rect.y() + rect.height() / 2);
 
@@ -1061,7 +1170,7 @@ TEST_F(WebPluginContainerTest, MouseEventZoomed) {
                       WebInputEvent::kNoModifiers,
                       WebInputEvent::GetStaticTimeStampForTests());
 
-  gfx::Rect rect = plugin_container_one_element.BoundsInViewport();
+  gfx::Rect rect = plugin_container_one_element.BoundsInWidget();
   event.SetPositionInWidget(rect.x() + rect.width() / 2,
                             rect.y() + rect.height() / 2);
 
@@ -1106,7 +1215,7 @@ TEST_F(WebPluginContainerTest, MouseWheelEventZoomed) {
                            WebInputEvent::kNoModifiers,
                            WebInputEvent::GetStaticTimeStampForTests());
 
-  gfx::Rect rect = plugin_container_one_element.BoundsInViewport();
+  gfx::Rect rect = plugin_container_one_element.BoundsInWidget();
   event.SetPositionInWidget(rect.x() + rect.width() / 2,
                             rect.y() + rect.height() / 2);
 
@@ -1147,7 +1256,7 @@ TEST_F(WebPluginContainerTest, TouchEventZoomed) {
                           ->Plugin();
   EventTestPlugin* test_plugin = static_cast<EventTestPlugin*>(plugin);
 
-  gfx::Rect rect = plugin_container_one_element.BoundsInViewport();
+  gfx::Rect rect = plugin_container_one_element.BoundsInWidget();
   WebPointerEvent event(
       WebInputEvent::Type::kPointerDown,
       WebPointerProperties(1, WebPointerProperties::PointerType::kTouch,
@@ -1186,7 +1295,7 @@ TEST_F(WebPluginContainerTest, IsRectTopmostTest) {
           web_view, WebString::FromUTF8("translated-plugin")));
   plugin_container_impl->SetFrameRect(gfx::Rect(0, 0, 300, 300));
 
-  gfx::Rect rect = plugin_container_impl->GetElement().BoundsInViewport();
+  gfx::Rect rect = plugin_container_impl->GetElement().BoundsInWidget();
   EXPECT_TRUE(plugin_container_impl->IsRectTopmost(rect));
 
   // Cause the plugin's frame to be detached.
@@ -1209,14 +1318,14 @@ TEST_F(WebPluginContainerTest, IsRectTopmostTestWithOddAndEvenDimensions) {
       To<WebPluginContainerImpl>(GetWebPluginContainer(
           web_view, WebString::FromUTF8("translated-plugin")));
   even_plugin_container_impl->SetFrameRect(gfx::Rect(0, 0, 300, 300));
-  auto even_rect = even_plugin_container_impl->GetElement().BoundsInViewport();
+  auto even_rect = even_plugin_container_impl->GetElement().BoundsInWidget();
   EXPECT_TRUE(even_plugin_container_impl->IsRectTopmost(even_rect));
 
   auto* odd_plugin_container_impl =
       To<WebPluginContainerImpl>(GetWebPluginContainer(
           web_view, WebString::FromUTF8("odd-dimensions-plugin")));
   odd_plugin_container_impl->SetFrameRect(gfx::Rect(0, 0, 300, 300));
-  auto odd_rect = odd_plugin_container_impl->GetElement().BoundsInViewport();
+  auto odd_rect = odd_plugin_container_impl->GetElement().BoundsInWidget();
   EXPECT_TRUE(odd_plugin_container_impl->IsRectTopmost(odd_rect));
 }
 
@@ -1470,17 +1579,14 @@ TEST_F(WebPluginContainerTest, CompositedPlugin) {
   const auto* plugin =
       static_cast<const CompositedPlugin*>(container->Plugin());
 
-  auto paint_controller =
-      std::make_unique<PaintController>(PaintController::kTransient);
-  paint_controller->UpdateCurrentPaintChunkProperties(
-      PropertyTreeState::Root());
-  GraphicsContext graphics_context(*paint_controller);
+  PaintController paint_controller;
+  paint_controller.UpdateCurrentPaintChunkProperties(PropertyTreeState::Root());
+  GraphicsContext graphics_context(paint_controller);
   container->Paint(graphics_context, PaintFlag::kNoFlag,
                    CullRect(gfx::Rect(10, 10, 400, 300)), gfx::Vector2d());
-  paint_controller->CommitNewDisplayItems();
+  auto& paint_artifact = paint_controller.CommitNewDisplayItems();
 
-  const auto& display_items =
-      paint_controller->GetPaintArtifact().GetDisplayItemList();
+  const auto& display_items = paint_artifact.GetDisplayItemList();
   ASSERT_EQ(1u, display_items.size());
   ASSERT_EQ(DisplayItem::kForeignLayerPlugin, display_items[0].GetType());
   const auto& foreign_layer_display_item =

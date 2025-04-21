@@ -1,19 +1,16 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//build/config/chromeos/ui_mode.gni")
 import("//printing/buildflags/buildflags.gni")
 
-import("//chrome/browser/resources/tools/build_webui.gni")
+import("//ui/webui/resources/tools/build_webui.gni")
 
 assert(enable_print_preview, "enable_print_preview check failed")
 
 build_webui("build") {
   grd_prefix = "print_preview"
-
-  extra_grdp_deps = [ "../pdf:build_print_preview_grdp" ]
-  extra_grdp_files = [ "$root_gen_dir/chrome/browser/resources/pdf/print_preview_pdf_resources.grdp" ]
 
   static_files = [ "print_preview.html" ]
 
@@ -36,6 +33,7 @@ build_webui("build") {
     "ui/margin_control_container.ts",
     "ui/margins_settings.ts",
     "ui/media_size_settings.ts",
+    "ui/media_type_settings.ts",
     "ui/more_settings.ts",
     "ui/number_settings_section.ts",
     "ui/other_options_settings.ts",
@@ -51,31 +49,28 @@ build_webui("build") {
 
   if (is_chromeos) {
     web_component_files += [
+      "ui/destination_dialog_cros.ts",
       "ui/destination_dropdown_cros.ts",
       "ui/destination_list_item_cros.ts",
       "ui/destination_select_cros.ts",
       "ui/pin_settings.ts",
+      "ui/printer_setup_info_cros.ts",
       "ui/provisional_destination_resolver.ts",
-      "ui/destination_dialog_cros.ts",
+      "ui/searchable_drop_down_cros.ts",
     ]
   } else {
     web_component_files += [
-      "ui/destination_select.ts",
-      "ui/link_container.ts",
       "ui/destination_dialog.ts",
       "ui/destination_list_item.ts",
+      "ui/destination_select.ts",
+      "ui/link_container.ts",
     ]
   }
 
   non_web_component_files = [
     "dark_mode_mixin.ts",
-    "metrics.ts",
-    "native_layer.ts",
-    "print_preview.ts",
-    "print_preview_utils.ts",
     "data/cdd.ts",
     "data/coordinate2d.ts",
-    "data/destination.ts",
     "data/destination_match.ts",
     "data/destination_store.ts",
     "data/document_info.ts",
@@ -87,6 +82,10 @@ build_webui("build") {
     "data/scaling.ts",
     "data/size.ts",
     "data/state.ts",
+    "metrics.ts",
+    "native_layer.ts",
+    "print_preview.ts",
+    "print_preview_utils.ts",
     "ui/highlight_utils.ts",
     "ui/input_mixin.ts",
     "ui/plugin_proxy.ts",
@@ -96,10 +95,14 @@ build_webui("build") {
 
   if (is_chromeos) {
     non_web_component_files += [
+      "data/destination_cros.ts",
+      "data/managed_print_options_cros.ts",
       "data/print_server_store.ts",
       "data/printer_status_cros.ts",
       "native_layer_cros.ts",
     ]
+  } else {
+    non_web_component_files += [ "data/destination.ts" ]
   }
 
   # Files that are passed as input to css_to_wrapper().
@@ -113,9 +116,11 @@ build_webui("build") {
   ]
 
   icons_html_files = [ "ui/icons.html" ]
+  html_to_wrapper_template = "detect"
 
   ts_composite = true
   ts_definitions = [
+    "//tools/typescript/definitions/chrome_event.d.ts",
     "//tools/typescript/definitions/chrome_send.d.ts",
     "//tools/typescript/definitions/mime_handler_private.d.ts",
     "//tools/typescript/definitions/pending.d.ts",
@@ -124,23 +129,19 @@ build_webui("build") {
   ts_deps = [
     "//chrome/browser/resources/pdf:build_ts",
     "//third_party/polymer/v3_0:library",
-    "//ui/webui/resources:library",
+    "//ui/webui/resources/cr_elements:build_ts",
+    "//ui/webui/resources/js:build_ts",
   ]
 
   ts_path_mappings = [ "chrome://print/pdf/*|" + rebase_path(
                            "$root_gen_dir/chrome/browser/resources/pdf/tsc/*",
                            target_gen_dir) ]
 
+  webui_context_type = "trusted"
   optimize = optimize_webui
   if (optimize) {
     optimize_webui_host = "print"
-    optimize_webui_out_files = [ "print_preview.rollup.js" ]
     optimize_webui_in_files = [ "print_preview.js" ]
-    optimize_webui_excludes = [
-      "chrome://resources/js/cr.m.js",
-      "pdf/pdf_scripting_api.js",
-    ]
-    optimize_webui_resource_paths_rewrites =
-        [ "print_preview.rollup.js|print_preview.js" ]
+    optimize_webui_excludes = [ "chrome://print/pdf/pdf_scripting_api.js" ]
   }
 }

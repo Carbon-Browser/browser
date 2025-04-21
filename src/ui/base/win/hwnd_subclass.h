@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/base/view_prop.h"
 
 namespace ui {
@@ -74,7 +75,7 @@ class COMPONENT_EXPORT(UI_BASE) HWNDSubclass {
   explicit HWNDSubclass(HWND target);
 
   HWND target_;
-  std::vector<HWNDMessageFilter*> filters_;
+  std::vector<raw_ptr<HWNDMessageFilter, VectorExperimental>> filters_;
   WNDPROC original_wnd_proc_;
   ui::ViewProp prop_;
 };

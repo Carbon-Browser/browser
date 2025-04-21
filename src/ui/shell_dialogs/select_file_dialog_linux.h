@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -39,7 +39,6 @@ class SHELL_DIALOGS_EXPORT SelectFileDialogLinux : public SelectFileDialog {
   ~SelectFileDialogLinux() override;
 
   // SelectFileDialog implementation.
-  // |params| is user data we pass back via the Listener interface.
   void SelectFileImpl(Type type,
                       const std::u16string& title,
                       const base::FilePath& default_path,
@@ -47,7 +46,7 @@ class SHELL_DIALOGS_EXPORT SelectFileDialogLinux : public SelectFileDialog {
                       int file_type_index,
                       const base::FilePath::StringType& default_extension,
                       gfx::NativeWindow owning_window,
-                      void* params) override = 0;
+                      const GURL* caller) override = 0;
 
   // Wrapper for base::DirectoryExists() that allow access on the UI
   // thread. Use this only in the file dialog functions, where it's ok

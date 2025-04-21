@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,35 +8,26 @@ import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.TextView;
 
-import androidx.annotation.VisibleForTesting;
+import androidx.annotation.NonNull;
 
 import org.chromium.base.metrics.RecordUserAction;
 import org.chromium.chrome.R;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
+import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent;
 
 /** Content shown if the send-tab-to-self feature is ready but there are no target devices. */
-public class NoTargetDeviceBottomSheetContent implements BottomSheetContent {
-    private final View mContentView;
+class NoTargetDeviceBottomSheetContent implements BottomSheetContent {
+    private final ViewGroup mContentView;
 
-    public NoTargetDeviceBottomSheetContent(Context context) {
-        this(context, ChromeFeatureList.isEnabled(ChromeFeatureList.SEND_TAB_TO_SELF_SIGNIN_PROMO));
-    }
-
-    /** Exposed so tests don't call ChromeFeatureList.isEnabled(), which requires native. */
-    @VisibleForTesting
-    public NoTargetDeviceBottomSheetContent(Context context, boolean isPromoFeatureEnabled) {
-        mContentView = (ViewGroup) LayoutInflater.from(context).inflate(
-                R.layout.send_tab_to_self_feature_unavailable_prompt, null);
-        if (isPromoFeatureEnabled) {
-            TextView label = (TextView) mContentView.findViewById(R.id.empty_state_label);
-            label.setText(R.string.send_tab_to_self_android_no_target_device_label);
-            mContentView.findViewById(R.id.manage_account_devices_link).setVisibility(View.VISIBLE);
-        }
-        // TODO(crbug.com/1298185): This is cumulating both signed-out and single device users.
-        // Those should be recorded separately instead.
+    public NoTargetDeviceBottomSheetContent(Context context, Profile profile) {
+        mContentView =
+                (ViewGroup)
+                        LayoutInflater.from(context)
+                                .inflate(
+                                        R.layout.send_tab_to_self_feature_unavailable_prompt, null);
+        ((ManageAccountDevicesLinkView) mContentView.findViewById(R.id.manage_account_devices_link))
+                .setProfile(profile);
         RecordUserAction.record("SharingHubAndroid.SendTabToSelf.NoTargetDevices");
     }
 
@@ -84,8 +75,8 @@ public class NoTargetDeviceBottomSheetContent implements BottomSheetContent {
     }
 
     @Override
-    public int getSheetContentDescriptionStringId() {
-        return R.string.send_tab_to_self_content_description;
+    public @NonNull String getSheetContentDescription(Context context) {
+        return context.getString(R.string.send_tab_to_self_content_description);
     }
 
     @Override

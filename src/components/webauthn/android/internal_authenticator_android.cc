@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,21 +10,23 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/jni_array.h"
+#include "base/android/jni_bytebuffer.h"
 #include "base/android/jni_string.h"
-#include "base/timer/timer.h"
-#include "components/webauthn/android/jni_headers/InternalAuthenticator_jni.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
-#include "mojo/public/cpp/base/time_mojom_traits.h"
-#include "mojo/public/mojom/base/time.mojom.h"
-#include "third_party/blink/public/mojom/authenticator_mojom_traits.h"
-#include "third_party/blink/public/mojom/webauthn/authenticator.mojom-blink.h"
 #include "url/origin.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "components/webauthn/android/jni_headers/InternalAuthenticator_jni.h"
 
 using base::android::AttachCurrentThread;
 using base::android::ConvertUTF8ToJavaString;
+using base::android::JavaArrayOfByteArrayToBytesVector;
 using base::android::JavaRef;
 using base::android::ScopedJavaLocalRef;
+using base::android::ToJavaArrayOfByteArray;
+
+namespace webauthn {
 
 InternalAuthenticatorAndroid::InternalAuthenticatorAndroid(
     content::RenderFrameHost* render_frame_host)
@@ -49,7 +51,7 @@ void InternalAuthenticatorAndroid::SetEffectiveOrigin(
   DCHECK(!obj.is_null());
 
   Java_InternalAuthenticator_setEffectiveOrigin(env, obj,
-                                                origin.CreateJavaObject());
+                                                origin.ToJavaObject(env));
 }
 
 void InternalAuthenticatorAndroid::SetPaymentOptions(
@@ -116,6 +118,31 @@ void InternalAuthenticatorAndroid::
                                                                            obj);
 }
 
+bool InternalAuthenticatorAndroid::IsGetMatchingCredentialIdsSupported() {
+  JNIEnv* env = AttachCurrentThread();
+  JavaRef<jobject>& obj = GetJavaObject();
+  DCHECK(!obj.is_null());
+
+  return Java_InternalAuthenticator_isGetMatchingCredentialIdsSupported(env,
+                                                                        obj);
+}
+
+void InternalAuthenticatorAndroid::GetMatchingCredentialIds(
+    const std::string& relying_party_id,
+    const std::vector<std::vector<uint8_t>>& credential_ids,
+    bool require_third_party_payment_bit,
+    webauthn::GetMatchingCredentialIdsCallback callback) {
+  JNIEnv* env = AttachCurrentThread();
+  JavaRef<jobject>& obj = GetJavaObject();
+  DCHECK(!obj.is_null());
+
+  get_matching_credential_ids_callback_ = std::move(callback);
+  Java_InternalAuthenticator_getMatchingCredentialIds(
+      env, obj, ConvertUTF8ToJavaString(env, relying_party_id),
+      ToJavaArrayOfByteArray(env, std::move(credential_ids)),
+      require_third_party_payment_bit);
+}
+
 void InternalAuthenticatorAndroid::Cancel() {
   JNIEnv* env = AttachCurrentThread();
   JavaRef<jobject>& obj = GetJavaObject();
@@ -136,11 +163,9 @@ void InternalAuthenticatorAndroid::InvokeMakeCredentialResponse(
 
   // |byte_buffer| may be null if authentication failed.
   if (byte_buffer) {
-    jbyte* buf_in =
-        static_cast<jbyte*>(env->GetDirectBufferAddress(byte_buffer.obj()));
-    jlong buf_size = env->GetDirectBufferCapacity(byte_buffer.obj());
+    auto span = base::android::JavaByteBufferToSpan(env, byte_buffer.obj());
     blink::mojom::MakeCredentialAuthenticatorResponse::Deserialize(
-        buf_in, buf_size, &response);
+        span.data(), span.size(), &response);
   }
 
   DCHECK_NE(
@@ -160,11 +185,9 @@ void InternalAuthenticatorAndroid::InvokeGetAssertionResponse(
 
   // |byte_buffer| may be null if authentication failed.
   if (byte_buffer) {
-    jbyte* buf_in =
-        static_cast<jbyte*>(env->GetDirectBufferAddress(byte_buffer.obj()));
-    jlong buf_size = env->GetDirectBufferCapacity(byte_buffer.obj());
+    auto span = base::android::JavaByteBufferToSpan(env, byte_buffer.obj());
     blink::mojom::GetAssertionAuthenticatorResponse::Deserialize(
-        buf_in, buf_size, &response);
+        span.data(), span.size(), &response);
   }
 
   DCHECK_NE(
@@ -183,6 +206,15 @@ void InternalAuthenticatorAndroid::
   std::move(is_uvpaa_callback_).Run(static_cast<bool>(is_uvpaa));
 }
 
+void InternalAuthenticatorAndroid::InvokeGetMatchingCredentialIdsResponse(
+    JNIEnv* env,
+    const base::android::JavaParamRef<jobjectArray>& credential_ids_array) {
+  std::vector<std::vector<uint8_t>> credential_ids;
+  JavaArrayOfByteArrayToBytesVector(env, credential_ids_array, &credential_ids);
+  std::move(get_matching_credential_ids_callback_)
+      .Run(std::move(credential_ids));
+}
+
 JavaRef<jobject>& InternalAuthenticatorAndroid::GetJavaObject() {
   if (java_internal_authenticator_ref_.is_null()) {
     JNIEnv* env = AttachCurrentThread();
@@ -192,3 +224,5 @@ JavaRef<jobject>& InternalAuthenticatorAndroid::GetJavaObject() {
   }
   return java_internal_authenticator_ref_;
 }
+
+}  // namespace webauthn

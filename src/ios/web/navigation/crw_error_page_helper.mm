@@ -1,32 +1,24 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/web/navigation/crw_error_page_helper.h"
 
-#include <ostream>
+#import <ostream>
 
-#include "base/check.h"
-#include "base/strings/escape.h"
-#include "base/strings/sys_string_conversions.h"
-#include "base/strings/utf_string_conversions.h"
-#include "net/base/url_util.h"
-#include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "base/apple/bundle_locations.h"
+#import "base/check.h"
+#import "base/strings/escape.h"
+#import "base/strings/sys_string_conversions.h"
+#import "base/strings/utf_string_conversions.h"
+#import "net/base/url_util.h"
+#import "url/gurl.h"
 
 namespace {
 
 const char kOriginalUrlKey[] = "url";
 
-// Returns the bundle from which the html files should be loaded.
-NSBundle* BundleForHTMLFiles() {
-  return [NSBundle bundleForClass:CRWErrorPageHelper.class];
-}
-
-// Escapes HTML characters in |text|.
+// Escapes HTML characters in `text`.
 NSString* EscapeHTMLCharacters(NSString* text) {
   return base::SysUTF8ToNSString(
       base::EscapeForHTML(base::SysNSStringToUTF8(text)));
@@ -34,16 +26,18 @@ NSString* EscapeHTMLCharacters(NSString* text) {
 
 // Resturns the path for the error page to be loaded.
 NSString* LoadedErrorPageFilePath() {
-  NSString* path = [BundleForHTMLFiles() pathForResource:@"error_page_loaded"
-                                                  ofType:@"html"];
+  NSString* path =
+      [base::apple::FrameworkBundle() pathForResource:@"error_page_loaded"
+                                               ofType:@"html"];
   DCHECK(path) << "Loaded error page should exist";
   return path;
 }
 
 // Returns the path for the error page to be injected.
 NSString* InjectedErrorPageFilePath() {
-  NSString* path = [BundleForHTMLFiles() pathForResource:@"error_page_injected"
-                                                  ofType:@"html"];
+  NSString* path =
+      [base::apple::FrameworkBundle() pathForResource:@"error_page_injected"
+                                               ofType:@"html"];
   DCHECK(path) << "Injected error page should exist";
   return path;
 }
@@ -63,7 +57,7 @@ NSString* InjectedErrorPageFilePath() {
 @synthesize errorPageFileURL = _errorPageFileURL;
 
 - (instancetype)initWithError:(NSError*)error {
-  if (self = [super init]) {
+  if ((self = [super init])) {
     _error = [error copy];
   }
   return self;
@@ -160,11 +154,11 @@ NSString* InjectedErrorPageFilePath() {
 }
 
 - (BOOL)isErrorPageFileURLForFailedNavigationURL:(NSURL*)URL {
-  // Check that |URL| is a file URL of error page.
+  // Check that `URL` is a file URL of error page.
   if (!URL.fileURL || ![URL.path isEqualToString:self.errorPageFileURL.path]) {
     return NO;
   }
-  // Check that |URL| has the same failed URL as |self|.
+  // Check that `URL` has the same failed URL as `self`.
   NSURLComponents* URLComponents = [NSURLComponents componentsWithURL:URL
                                               resolvingAgainstBaseURL:NO];
   NSURL* failedNavigationURL = nil;

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,7 @@
 #include "base/notreached.h"
 #include "third_party/webrtc/rtc_base/ref_counted_object.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 WebrtcVideoFrameAdapter::WebrtcVideoFrameAdapter(
     std::unique_ptr<webrtc::DesktopFrame> frame,
@@ -46,6 +45,9 @@ webrtc::VideoFrame WebrtcVideoFrameAdapter::CreateVideoFrame(
   return webrtc::VideoFrame::Builder()
       .set_video_frame_buffer(adapter)
       .set_update_rect(video_update_rect)
+      // Added for b/333806004 - webrtc::FrameCadenceAdapterImpl requires
+      // video-frames to have monotonically increasing timestamps.
+      .set_timestamp_us(base::TimeTicks::Now().since_origin().InMicroseconds())
       .build();
 }
 
@@ -74,12 +76,10 @@ int WebrtcVideoFrameAdapter::height() const {
 rtc::scoped_refptr<webrtc::I420BufferInterface>
 WebrtcVideoFrameAdapter::ToI420() {
   // Strictly speaking all adapters must implement ToI420(), so that if the
-  // external encoder fails, an internal libvpx could be used. But the
-  // remoting encoder already uses libvpx, so there's no reason for fallback to
-  // happen.
+  // external encoder fails, an internal libvpx could be used. But the remoting
+  // encoder already uses libvpx, so there's no reason for fallback to happen.
   NOTIMPLEMENTED();
   return nullptr;
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

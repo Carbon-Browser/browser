@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -85,14 +85,17 @@ static WebVector<WebEncryptedMediaSessionType> ConvertSessionTypes(
 }  // namespace
 
 MediaKeySystemAccessInitializerBase::MediaKeySystemAccessInitializerBase(
-    ScriptState* script_state,
+    ExecutionContext* context,
+    ScriptPromiseResolverBase* resolver,
     const String& key_system,
     const HeapVector<Member<MediaKeySystemConfiguration>>&
-        supported_configurations)
-    : ExecutionContextClient(ExecutionContext::From((script_state))),
-      resolver_(MakeGarbageCollected<ScriptPromiseResolver>(script_state)),
+        supported_configurations,
+    bool is_from_media_capabilities)
+    : ExecutionContextClient(context),
+      resolver_(resolver),
       key_system_(key_system),
-      supported_configurations_(supported_configurations.size()) {
+      supported_configurations_(supported_configurations.size()),
+      is_from_media_capabilities_(is_from_media_capabilities) {
   for (wtf_size_t i = 0; i < supported_configurations.size(); ++i) {
     const MediaKeySystemConfiguration* config = supported_configurations[i];
     WebMediaKeySystemConfiguration web_config;
@@ -111,12 +114,12 @@ MediaKeySystemAccessInitializerBase::MediaKeySystemAccessInitializerBase(
     DCHECK(config->hasDistinctiveIdentifier());
     web_config.distinctive_identifier =
         EncryptedMediaUtils::ConvertToMediaKeysRequirement(
-            config->distinctiveIdentifier());
+            config->distinctiveIdentifier().AsEnum());
 
     DCHECK(config->hasPersistentState());
     web_config.persistent_state =
         EncryptedMediaUtils::ConvertToMediaKeysRequirement(
-            config->persistentState());
+            config->persistentState().AsEnum());
 
     if (config->hasSessionTypes()) {
       web_config.session_types = ConvertSessionTypes(config->sessionTypes());
@@ -144,10 +147,6 @@ const SecurityOrigin* MediaKeySystemAccessInitializerBase::GetSecurityOrigin()
     const {
   return IsExecutionContextValid() ? GetExecutionContext()->GetSecurityOrigin()
                                    : nullptr;
-}
-
-ScriptPromise MediaKeySystemAccessInitializerBase::Promise() {
-  return resolver_->Promise();
 }
 
 void MediaKeySystemAccessInitializerBase::Trace(Visitor* visitor) const {
@@ -220,7 +219,7 @@ void MediaKeySystemAccessInitializerBase::GenerateWarningAndReportMetrics()
   ukm::builders::Media_EME_RequestMediaKeySystemAccess builder(
       DomWindow()->UkmSourceID());
   builder.SetKeySystem(KeySystemForUkmLegacy::kWidevine);
-  builder.SetIsAdFrame(static_cast<int>(frame->IsAdSubframe()));
+  builder.SetIsAdFrame(static_cast<int>(frame->IsAdFrame()));
   builder.SetIsCrossOrigin(
       static_cast<int>(frame->IsCrossOriginToOutermostMainFrame()));
   builder.SetIsTopFrame(static_cast<int>(frame->IsOutermostMainFrame()));
@@ -229,6 +228,8 @@ void MediaKeySystemAccessInitializerBase::GenerateWarningAndReportMetrics()
       static_cast<int>(has_empty_robustness));
   builder.SetVideoCapabilities_HasHwSecureAllRobustness(
       static_cast<int>(has_hw_secure_all));
+  builder.SetIsFromMediaCapabilities(
+      static_cast<int>(is_from_media_capabilities_));
   builder.Record(DomWindow()->UkmRecorder());
 }
 

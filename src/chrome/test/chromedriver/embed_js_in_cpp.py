@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -31,7 +31,7 @@ def main():
     base_name = os.path.basename(js_file)[:-3].title().replace('_', '')
     func_name = base_name[0].lower() + base_name[1:]
     script_name = 'k%sScript' % base_name
-    with open(js_file, 'r') as f:
+    with open(js_file, 'r', encoding='utf-8') as f:
       contents = f.read()
     script = 'function() { %s; return %s.apply(null, arguments) }' % (
         contents, func_name)

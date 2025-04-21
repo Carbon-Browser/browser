@@ -1,14 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef SERVICES_DEVICE_GENERIC_SENSOR_PLATFORM_SENSOR_PROVIDER_CHROMEOS_H_
 #define SERVICES_DEVICE_GENERIC_SENSOR_PLATFORM_SENSOR_PROVIDER_CHROMEOS_H_
 
-#include "services/device/generic_sensor/platform_sensor_provider_linux_base.h"
-
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -18,8 +17,9 @@
 #include "base/time/time.h"
 #include "chromeos/components/sensors/mojom/cros_sensor_service.mojom.h"
 #include "chromeos/components/sensors/mojom/sensor.mojom.h"
+#include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "services/device/generic_sensor/platform_sensor_provider_linux_base.h"
 
 namespace device {
 
@@ -44,10 +44,11 @@ class PlatformSensorProviderChromeOS
       int32_t iio_device_id,
       const std::vector<chromeos::sensors::mojom::DeviceType>& types) override;
 
+  base::WeakPtr<PlatformSensorProvider> AsWeakPtr() override;
+
  protected:
   // PlatformSensorProviderLinuxBase overrides:
   void CreateSensorInternal(mojom::SensorType type,
-                            SensorReadingSharedBuffer* reading_buffer,
                             CreateSensorCallback callback) override;
   void FreeResources() override;
 
@@ -74,8 +75,8 @@ class PlatformSensorProviderChromeOS
 
     std::vector<mojom::SensorType> types;
     bool ignored = false;
-    absl::optional<SensorLocation> location;
-    absl::optional<double> scale;
+    std::optional<SensorLocation> location;
+    std::optional<double> scale;
 
     // Temporarily stores the remote, waiting for its attributes information.
     // It'll be passed to PlatformSensorChromeOS' constructor as an argument
@@ -83,10 +84,10 @@ class PlatformSensorProviderChromeOS
     mojo::Remote<chromeos::sensors::mojom::SensorDevice> remote;
   };
 
-  absl::optional<SensorLocation> ParseLocation(
-      const absl::optional<std::string>& location);
+  std::optional<SensorLocation> ParseLocation(
+      const std::optional<std::string>& location);
 
-  absl::optional<int32_t> GetDeviceId(mojom::SensorType type) const;
+  std::optional<int32_t> GetDeviceId(mojom::SensorType type) const;
 
   void RegisterSensorClient();
   void OnSensorHalClientFailure(base::TimeDelta reconnection_delay);
@@ -104,7 +105,7 @@ class PlatformSensorProviderChromeOS
 
   void GetAttributesCallback(
       int32_t id,
-      const std::vector<absl::optional<std::string>>& values);
+      const std::vector<std::optional<std::string>>& values);
   void IgnoreSensor(SensorData& sensor);
   bool AreAllSensorsReady() const;
 

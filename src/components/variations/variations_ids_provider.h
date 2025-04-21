@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,6 @@
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/field_trial.h"
-#include "base/observer_list.h"
 #include "base/synchronization/lock.h"
 #include "components/variations/proto/study.pb.h"
 #include "components/variations/synthetic_trials.h"
@@ -24,6 +23,11 @@
 
 namespace variations {
 class VariationsClient;
+
+namespace cros_early_boot::evaluate_seed {
+// For friend purposes (for DestroyInstanceForTesting().)
+class VariationsCrosEvaluateSeedMainTest;
+}  // namespace cros_early_boot::evaluate_seed
 
 // The key for a VariationsIdsProvider's |variations_headers_map_|. A
 // VariationsHeaderKey provides more details about the VariationsIDs included in
@@ -53,7 +57,7 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
     virtual void VariationIdsHeaderUpdated() = 0;
 
    protected:
-    virtual ~Observer() {}
+    virtual ~Observer() = default;
   };
 
   enum class Mode {
@@ -110,6 +114,10 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
   // apps.
   std::string GetGoogleAppVariationsString();
 
+  // Same as GetVariationString(), but returns all triggering IDs.
+  // IMPORTANT: This string should only be used for debugging and diagnostics.
+  std::string GetTriggerVariationsString();
+
   // Returns the collection of VariationIDs associated with |keys|. Each entry
   // in the returned vector is unique.
   std::vector<VariationID> GetVariationsVector(
@@ -121,7 +129,7 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
 
   // Sets low entropy source value that was used for client-side randomization
   // of variations.
-  void SetLowEntropySourceValue(absl::optional<int> low_entropy_source_value);
+  void SetLowEntropySourceValue(std::optional<int> low_entropy_source_value);
 
   // Result of ForceVariationIds() call.
   enum class ForceIdsResult {
@@ -157,6 +165,9 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
   typedef std::pair<VariationID, IDCollectionKey> VariationIDEntry;
 
   friend class ScopedVariationsIdsProvider;
+  // For DestroyInstanceForTesting
+  friend class cros_early_boot::evaluate_seed::
+      VariationsCrosEvaluateSeedMainTest;
 
   FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest, ForceVariationIds_Valid);
   FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest,
@@ -167,11 +178,11 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
                            ForceDisableVariationIds_ValidCommandLine);
   FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest,
                            ForceDisableVariationIds_Invalid);
-  FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTestWithRestrictedVisibility,
+  FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest,
                            OnFieldTrialGroupFinalized);
-  FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTestWithRestrictedVisibility,
+  FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest,
                            LowEntropySourceValue_Valid);
-  FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTestWithRestrictedVisibility,
+  FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest,
                            LowEntropySourceValue_Null);
   FRIEND_TEST_ALL_PREFIXES(VariationsIdsProviderTest,
                            GetGoogleAppVariationsString);
@@ -195,11 +206,13 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
   // base::FieldTrialList::Observer:
   // This will add the variation ID associated with |trial_name| and
   // |group_name| to the variation ID cache.
-  void OnFieldTrialGroupFinalized(const std::string& trial_name,
+  void OnFieldTrialGroupFinalized(const base::FieldTrial& trial,
                                   const std::string& group_name) override;
 
   // metrics::SyntheticTrialObserver:
   void OnSyntheticTrialsChanged(
+      const std::vector<SyntheticTrialGroup>& trials_updated,
+      const std::vector<SyntheticTrialGroup>& trials_removed,
       const std::vector<SyntheticTrialGroup>& groups) override;
 
   // Prepares the variation IDs cache with initial values if not already done.
@@ -268,7 +281,7 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
 
   // Low entropy source value from client that was used for client-side
   // randomization of variations.
-  absl::optional<int> low_entropy_source_value_;
+  std::optional<int> low_entropy_source_value_;
 
   // Whether or not we've initialized the caches.
   bool variation_ids_cache_initialized_;
@@ -299,8 +312,9 @@ class COMPONENT_EXPORT(VARIATIONS) VariationsIdsProvider
 
   // List of observers to notify on variation ids header update.
   // NOTE this should really check observers are unregistered but due to
-  // https://crbug.com/1051937 this isn't currently possible.
-  base::ObserverList<Observer>::Unchecked observer_list_;
+  // https://crbug.com/1051937 this isn't currently possible. Note that
+  // ObserverList is sequence checked so we can't use that here.
+  std::vector<Observer*> observer_list_ GUARDED_BY(lock_);
 
   raw_ptr<const VariationsClient> variations_client_ = nullptr;
 };

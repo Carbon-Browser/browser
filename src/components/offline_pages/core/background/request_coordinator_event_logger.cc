@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,8 +36,7 @@ static std::string BackgroundSavePageResultToString(
     case RequestNotifier::BackgroundSavePageResult::DOWNLOAD_THROTTLED:
       return "DOWNLOAD_THROTTLED";
     default:
-      NOTREACHED();
-      return base::NumberToString(static_cast<int>(result));
+      NOTREACHED() << static_cast<int>(result);
   }
 }
 
@@ -50,8 +49,7 @@ static std::string UpdateRequestResultToString(UpdateRequestResult result) {
     case UpdateRequestResult::REQUEST_DOES_NOT_EXIST:
       return "REQUEST_DOES_NOT_EXIST";
     default:
-      NOTREACHED();
-      return base::NumberToString(static_cast<int>(result));
+      NOTREACHED() << static_cast<int>(result);
   }
 }
 

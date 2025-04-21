@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,11 +43,22 @@ COMPONENT_EXPORT(UI_WM)
 extern const ui::ClassProperty<float>* const
     kWindowVisibilityAnimationVerticalPositionKey;
 
+// The number of hiding animations in progress on the window.
+COMPONENT_EXPORT(UI_WM)
+extern const ui::ClassProperty<int32_t>* const kWindowHidingAnimationCountKey;
+
+COMPONENT_EXPORT(UI_WM)
+extern const ui::ClassProperty<bool>* const kPersistableKey;
+
 }  // namespace wm
 
-// These need to be declared here for jumbo builds.
+// Declare template specializations introduced by WM here to make sure that the
+// compiler knows about them before the first template instance use. Using a
+// template instance before its specialization is declared in a translation unit
+// is an error.
+DECLARE_EXPORTED_UI_CLASS_PROPERTY_TYPE(COMPONENT_EXPORT(UI_WM),
+                                        base::TimeDelta)
 DECLARE_EXPORTED_UI_CLASS_PROPERTY_TYPE(COMPONENT_EXPORT(UI_WM),
                                         wm::WindowVisibilityAnimationTransition)
-DECLARE_EXPORTED_UI_CLASS_PROPERTY_TYPE(COMPONENT_EXPORT(UI_WM), float)
 
 #endif  // UI_WM_CORE_WINDOW_PROPERTIES_H_

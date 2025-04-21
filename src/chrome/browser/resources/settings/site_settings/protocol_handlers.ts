@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,53 +8,55 @@
  * protocol handlers category under Site Settings.
  */
 
+import '/shared/settings/prefs/prefs.js';
 import 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
-import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
-import 'chrome://resources/cr_elements/cr_radio_group/cr_radio_group.m.js';
+import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
+import 'chrome://resources/cr_elements/cr_radio_group/cr_radio_group.js';
 import 'chrome://resources/cr_elements/cr_link_row/cr_link_row.js';
-import 'chrome://resources/cr_elements/cr_toggle/cr_toggle.m.js';
-import 'chrome://resources/cr_elements/shared_style_css.m.js';
-import 'chrome://resources/cr_elements/icons.m.js';
-import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
+import 'chrome://resources/cr_elements/cr_toggle/cr_toggle.js';
+import 'chrome://resources/cr_elements/cr_shared_style.css.js';
+import 'chrome://resources/cr_elements/icons.html.js';
 import '../controls/settings_toggle_button.js';
-import '../prefs/prefs.js';
+import '../privacy_icons.html.js';
 import '../privacy_page/collapse_radio_button.js';
 import '../settings_shared.css.js';
 import '../site_favicon.js';
 
-import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
-import {DomRepeatEvent, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import type {DomRepeatEvent} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './protocol_handlers.html.js';
 import {SiteSettingsMixin} from './site_settings_mixin.js';
 
-export type HandlerEntry = {
-  host: string,
-  is_default: boolean,
-  protocol: string,
-  protocol_display_name: string,
-  spec: string,
-};
+export interface HandlerEntry {
+  host: string;
+  is_default: boolean;
+  protocol: string;
+  protocol_display_name: string;
+  spec: string;
+}
 
-export type ProtocolEntry = {
-  handlers: HandlerEntry[],
-  protocol: string,
-  protocol_display_name: string,
-};
+export interface ProtocolEntry {
+  handlers: HandlerEntry[];
+  protocol: string;
+  protocol_display_name: string;
+}
 
-export type AppHandlerEntry = {
-  host: string,
-  protocol: string,
-  protocol_display_name: string,
-  spec: string,
-  app_id: string,
-};
+export interface AppHandlerEntry {
+  host: string;
+  protocol: string;
+  protocol_display_name: string;
+  spec: string;
+  app_id: string;
+  app_name?: string;
+}
 
-export type AppProtocolEntry = {
-  handlers: AppHandlerEntry[],
-  protocol: string,
-  protocol_display_name: string,
-};
+export interface AppProtocolEntry {
+  handlers: AppHandlerEntry[];
+  protocol: string;
+  protocol_display_name: string;
+}
 
 export interface ProtocolHandlersElement {
   $: {
@@ -63,7 +65,7 @@ export interface ProtocolHandlersElement {
 }
 
 const ProtocolHandlersElementBase =
-    WebUIListenerMixin(SiteSettingsMixin(PolymerElement));
+    WebUiListenerMixin(SiteSettingsMixin(PolymerElement));
 
 export class ProtocolHandlersElement extends ProtocolHandlersElementBase {
   static get is() {
@@ -144,28 +146,28 @@ export class ProtocolHandlersElement extends ProtocolHandlersElementBase {
   toggleOffLabel: string;
   toggleOnLabel: string;
   ignoredProtocols: HandlerEntry[];
-  private handlersEnabledPref_: chrome.settingsPrivate.PrefObject;
+  private handlersEnabledPref_: chrome.settingsPrivate.PrefObject<boolean>;
 
   override ready() {
     super.ready();
 
-    this.addWebUIListener(
+    this.addWebUiListener(
         'setHandlersEnabled',
         (enabled: boolean) => this.setHandlersEnabled_(enabled));
-    this.addWebUIListener(
+    this.addWebUiListener(
         'setProtocolHandlers',
         (protocols: ProtocolEntry[]) => this.setProtocolHandlers_(protocols));
-    this.addWebUIListener(
+    this.addWebUiListener(
         'setIgnoredProtocolHandlers',
         (ignoredProtocols: HandlerEntry[]) =>
             this.setIgnoredProtocolHandlers_(ignoredProtocols));
     this.browserProxy.observeProtocolHandlers();
 
     // Web App Observer
-    this.addWebUIListener(
+    this.addWebUiListener(
         'setAppAllowedProtocolHandlers',
         this.setAppAllowedProtocolHandlers_.bind(this));
-    this.addWebUIListener(
+    this.addWebUiListener(
         'setAppDisallowedProtocolHandlers',
         this.setAppDisallowedProtocolHandlers_.bind(this));
     this.browserProxy.observeAppProtocolHandlers();
@@ -303,6 +305,14 @@ export class ProtocolHandlersElement extends ProtocolHandlersElementBase {
     this.actionMenuModel_ = event.model.item;
     this.shadowRoot!.querySelector('cr-action-menu')!.showAt(
         event.target as HTMLElement);
+  }
+
+  private getNameCssClass_(item: AppHandlerEntry): string {
+    return item.app_name ? '' : 'url-directionality';
+  }
+
+  private getNameText_(item: AppHandlerEntry): string {
+    return item.app_name || item.host;
   }
 }
 

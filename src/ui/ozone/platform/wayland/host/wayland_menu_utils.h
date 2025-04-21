@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,10 +20,9 @@ class WaylandMenuUtils : public PlatformMenuUtils {
   ~WaylandMenuUtils() override;
 
   int GetCurrentKeyModifiers() const override;
-  std::string ToDBusKeySym(KeyboardCode code) const override;
 
  private:
-  const raw_ptr<WaylandConnection> connection_;
+  const raw_ptr<WaylandConnection, LeakedDanglingUntriaged> connection_;
 };
 
 }  // namespace ui

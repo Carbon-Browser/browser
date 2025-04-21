@@ -1,15 +1,22 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 module wl.mojom;
 
 import "ui/gfx/geometry/mojom/geometry.mojom";
+import "ui/gfx/mojom/color_space.mojom";
 import "ui/gfx/mojom/gpu_fence_handle.mojom";
 import "ui/gfx/mojom/overlay_transform.mojom";
 import "ui/gfx/mojom/overlay_priority_hint.mojom";
 import "ui/gfx/mojom/rrect_f.mojom";
-import "skia/public/mojom/skcolor.mojom";
+import "ui/gfx/mojom/transform.mojom";
+import "skia/public/mojom/skcolor4f.mojom";
+
+union TransformUnion {
+  gfx.mojom.OverlayTransform overlay_transform;
+  gfx.mojom.Transform matrix_transform;
+};
 
 // This is not a mirror of ui::OverlayPlane, it only contains things that are
 // useful to ozone/wayland.
@@ -18,8 +25,11 @@ struct WaylandOverlayConfig {
   // plane.
   int32 z_order;
 
+  // Optional: specifies the color space data of the wayland config.
+  gfx.mojom.ColorSpace? color_space;
+
   // Specifies how the buffer is to be transformed during composition.
-  gfx.mojom.OverlayTransform transform;
+  TransformUnion transform;
 
   // A unique id for the buffer, which is used to identify imported wl_buffers
   // on the browser process.
@@ -58,11 +68,4 @@ struct WaylandOverlayConfig {
   // Specifies priority of this overlay if delegated composition is supported
   // and enabled.
   gfx.mojom.OverlayPriorityHint priority_hint;
-
-  // Specifies rounded clip bounds of the overlay if delegated composition is
-  // supported and enabled.
-  gfx.mojom.RRectF rounded_clip_bounds;
-
-  // Optional: background color of this overlay plane.
-  skia.mojom.SkColor? background_color;
 };

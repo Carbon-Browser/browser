@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
   {
     "namespace":"wallpaper",
     "compiler_options": {
-      "implemented_in": "chrome/browser/chromeos/extensions/wallpaper_api.h"
+      "implemented_in": "chrome/browser/chromeos/extensions/wallpaper/wallpaper_api.h"
     },
     "description": "Use the <code>chrome.wallpaper</code> API to change the ChromeOS wallpaper.",
     "platforms": ["chromeos", "lacros"],

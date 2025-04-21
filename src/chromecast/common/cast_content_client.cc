@@ -1,18 +1,20 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromecast/common/cast_content_client.h"
 
 #include <stdint.h>
+
 #include <memory>
+#include <string_view>
 #include <utility>
 
 #include "base/command_line.h"
 #include "base/files/file_util.h"
 #include "base/native_library.h"
 #include "base/path_service.h"
-#include "base/strings/string_piece.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "chromecast/base/cast_constants.h"
 #include "chromecast/base/cast_paths.h"
@@ -21,6 +23,7 @@
 #include "components/cast/common/constants.h"
 #include "content/public/common/cdm_info.h"
 #include "media/base/media_switches.h"
+#include "media/cdm/cdm_type.h"
 #include "media/media_buildflags.h"
 #include "mojo/public/cpp/bindings/binder_map.h"
 #include "third_party/widevine/cdm/buildflags.h"
@@ -28,12 +31,11 @@
 #include "ui/base/resource/resource_bundle.h"
 #include "url/url_util.h"
 
-#if BUILDFLAG(ENABLE_CHROMECAST_EXTENSIONS)
-#include "extensions/common/constants.h"  // nogncheck
-#endif
-
 #if BUILDFLAG(IS_ANDROID)
+#include <optional>
+
 #include "chromecast/common/media/cast_media_drm_bridge_client.h"
+#include "components/cdm/common/android_cdm_registration.h"
 #endif
 
 #if !BUILDFLAG(IS_FUCHSIA)
@@ -49,7 +51,7 @@
 #if BUILDFLAG(BUNDLE_WIDEVINE_CDM) && BUILDFLAG(IS_LINUX)
 #include "base/no_destructor.h"
 #include "components/cdm/common/cdm_manifest.h"
-#include "media/cdm/cdm_capability.h"
+#include "media/base/cdm_capability.h"
 #include "third_party/widevine/cdm/widevine_cdm_common.h"  // nogncheck
 // component updated CDM on all desktop platforms and remove this.
 // This file is In SHARED_INTERMEDIATE_DIR.
@@ -78,7 +80,7 @@ std::unique_ptr<content::CdmInfo> CreateWidevineCdmInfo(
 // directory and create a CdmInfo. If that is successful, return the CdmInfo. If
 // not, return nullptr.
 // Copied from chrome_content_client.cc
-// TODO(crbug.com/1174571): move the functions to a common file.
+// TODO(crbug.com/40746872): move the functions to a common file.
 std::unique_ptr<content::CdmInfo> CreateCdmInfoFromWidevineDirectory(
     const base::FilePath& cdm_base_path) {
   // Library should be inside a platform specific directory.
@@ -136,20 +138,13 @@ void CastContentClient::SetActiveURL(const GURL& url, std::string top_origin) {
 
 void CastContentClient::AddAdditionalSchemes(Schemes* schemes) {
   schemes->standard_schemes.push_back(kChromeResourceScheme);
-#if BUILDFLAG(ENABLE_CHROMECAST_EXTENSIONS)
-  schemes->standard_schemes.push_back(extensions::kExtensionScheme);
-  // Treat as secure because we only load extension code written by us.
-  schemes->secure_schemes.push_back(extensions::kExtensionScheme);
-  schemes->service_worker_schemes.push_back(extensions::kExtensionScheme);
-  schemes->csp_bypassing_schemes.push_back(extensions::kExtensionScheme);
-#endif
 }
 
 std::u16string CastContentClient::GetLocalizedString(int message_id) {
   return l10n_util::GetStringUTF16(message_id);
 }
 
-base::StringPiece CastContentClient::GetDataResource(
+std::string_view CastContentClient::GetDataResource(
     int resource_id,
     ui::ResourceScaleFactor scale_factor) {
   return ui::ResourceBundle::GetSharedInstance().GetRawDataResourceForScale(
@@ -212,6 +207,10 @@ void CastContentClient::AddContentDecryptionModules(
     } else {
       DVLOG(1) << "Widevine enabled but no library found";
     }
+#elif BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(ENABLE_WIDEVINE)
+    cdm::AddAndroidWidevineCdm(cdms);
+#endif  // BUILDFLAG(ENABLE_WIDEVINE)
 
 #endif  // BUILDFLAG(BUNDLE_WIDEVINE_CDM) && BUILDFLAG(IS_LINUX)
   }

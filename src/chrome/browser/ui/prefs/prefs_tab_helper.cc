@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/ui/prefs/prefs_tab_helper.h"
 
@@ -10,12 +15,12 @@
 #include <set>
 #include <string>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
@@ -61,6 +66,15 @@
 #include <windows.h>
 #endif
 
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
+// If a font name in prefs default values starts with a comma, consider it's a
+// comma-separated font list and resolve it to the first available font.
+#define PREFS_FONT_LIST 1
+#include "ui/gfx/font_list.h"
+#else
+#define PREFS_FONT_LIST 0
+#endif
+
 using blink::web_pref::WebPreferences;
 using content::WebContents;
 
@@ -97,8 +111,7 @@ ALL_FONT_SCRIPTS(WEBKIT_WEBPREFS_FONTS_STANDARD)
   };
   // clang-format on
 
-  for (size_t i = 0; i < std::size(kFontFamilyMap); ++i) {
-    const char* pref_name = kFontFamilyMap[i];
+  for (const char* const pref_name : kFontFamilyMap) {
     if (fonts_with_defaults.find(pref_name) == fonts_with_defaults.end()) {
       // We haven't already set a default value for this font preference, so set
       // an empty string as the default.
@@ -113,8 +126,9 @@ ALL_FONT_SCRIPTS(WEBKIT_WEBPREFS_FONTS_STANDARD)
 // Consolas, which looks much better than Courier New.
 bool ShouldUseAlternateDefaultFixedFont(const std::string& script) {
   if (!base::StartsWith(script, "courier",
-                        base::CompareCase::INSENSITIVE_ASCII))
+                        base::CompareCase::INSENSITIVE_ASCII)) {
     return false;
+  }
   UINT smooth_type = 0;
   SystemParametersInfo(SPI_GETFONTSMOOTHINGTYPE, 0, &smooth_type, 0);
   return smooth_type == FE_FONTSMOOTHINGCLEARTYPE;
@@ -201,8 +215,6 @@ const FontDefault kFontDefaults[] = {
 #endif
 };
 
-const size_t kFontDefaultsLength = std::size(kFontDefaults);
-
 // Returns the script of the font pref |pref_name|.  For example, suppose
 // |pref_name| is "webkit.webprefs.fonts.serif.Hant".  Since the script code for
 // the script name "Hant" is USCRIPT_TRADITIONAL_HAN, the function returns
@@ -226,25 +238,30 @@ UScriptCode GetScriptOfBrowserLocale(const std::string& locale) {
   // For Chinese locales, uscript_getCode() just returns USCRIPT_HAN but our
   // per-script fonts are for USCRIPT_SIMPLIFIED_HAN and
   // USCRIPT_TRADITIONAL_HAN.
-  if (locale == "zh-CN")
+  if (locale == "zh-CN") {
     return USCRIPT_SIMPLIFIED_HAN;
-  if (locale == "zh-TW")
+  }
+  if (locale == "zh-TW") {
     return USCRIPT_TRADITIONAL_HAN;
+  }
   // For Korean and Japanese, multiple scripts are returned by
   // |uscript_getCode|, but we're passing a one entry buffer leading
   // the buffer to be filled by USCRIPT_INVALID_CODE. We need to
   // hard-code the results for them.
-  if (locale == "ko")
+  if (locale == "ko") {
     return USCRIPT_HANGUL;
-  if (locale == "ja")
+  }
+  if (locale == "ja") {
     return USCRIPT_JAPANESE;
+  }
 
   UScriptCode code = USCRIPT_INVALID_CODE;
   UErrorCode err = U_ZERO_ERROR;
   uscript_getCode(locale.c_str(), &code, 1, &err);
 
-  if (U_FAILURE(err))
+  if (U_FAILURE(err)) {
     code = USCRIPT_INVALID_CODE;
+  }
   return code;
 }
 
@@ -254,22 +271,23 @@ void OverrideFontFamily(blink::web_pref::WebPreferences* prefs,
                         const std::string& script,
                         const std::string& pref_value) {
   blink::web_pref::ScriptFontFamilyMap* map = nullptr;
-  if (generic_family == "standard")
+  if (generic_family == "standard") {
     map = &prefs->standard_font_family_map;
-  else if (generic_family == "fixed")
+  } else if (generic_family == "fixed") {
     map = &prefs->fixed_font_family_map;
-  else if (generic_family == "serif")
+  } else if (generic_family == "serif") {
     map = &prefs->serif_font_family_map;
-  else if (generic_family == "sansserif")
+  } else if (generic_family == "sansserif") {
     map = &prefs->sans_serif_font_family_map;
-  else if (generic_family == "cursive")
+  } else if (generic_family == "cursive") {
     map = &prefs->cursive_font_family_map;
-  else if (generic_family == "fantasy")
+  } else if (generic_family == "fantasy") {
     map = &prefs->fantasy_font_family_map;
-  else if (generic_family == "math")
+  } else if (generic_family == "math") {
     map = &prefs->math_font_family_map;
-  else
+  } else {
     NOTREACHED() << "Unknown generic font family: " << generic_family;
+  }
   (*map)[script] = base::UTF8ToUTF16(pref_value);
 }
 
@@ -278,8 +296,8 @@ void RegisterLocalizedFontPref(user_prefs::PrefRegistrySyncable* registry,
                                const char* path,
                                int default_message_id) {
   int val = 0;
-  bool success = base::StringToInt(l10n_util::GetStringUTF8(
-      default_message_id), &val);
+  bool success =
+      base::StringToInt(l10n_util::GetStringUTF8(default_message_id), &val);
   DCHECK(success);
   registry->RegisterIntegerPref(path, val);
 }
@@ -364,10 +382,13 @@ void PrefsTabHelper::RegisterProfilePrefs(
   registry->RegisterBooleanPref(prefs::kScrollToTextFragmentEnabled, true);
 #if BUILDFLAG(IS_ANDROID)
   registry->RegisterDoublePref(browser_ui::prefs::kWebKitFontScaleFactor, 1.0);
-  registry->RegisterBooleanPref(browser_ui::prefs::kWebKitForceEnableZoom,
+  registry->RegisterIntegerPref(prefs::kAccessibilityTextSizeContrastFactor, 0);
+  registry->RegisterBooleanPref(prefs::kAccessibilityForceEnableZoom,
                                 pref_defaults.force_enable_zoom);
   registry->RegisterBooleanPref(prefs::kWebKitPasswordEchoEnabled,
                                 pref_defaults.password_echo_enabled);
+  registry->RegisterIntegerPref(prefs::kAccessibilityFontWeightAdjustment, 0);
+
 #endif
 
   bool force_dark_mode_enabled =
@@ -376,22 +397,20 @@ void PrefsTabHelper::RegisterProfilePrefs(
           : pref_defaults.force_dark_mode_enabled;
   registry->RegisterBooleanPref(prefs::kWebKitForceDarkModeEnabled,
                                 force_dark_mode_enabled);
-  registry->RegisterStringPref(
-      prefs::kDefaultCharset,
-      l10n_util::GetStringUTF8(IDS_DEFAULT_ENCODING),
-      user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+  registry->RegisterStringPref(prefs::kDefaultCharset,
+                               l10n_util::GetStringUTF8(IDS_DEFAULT_ENCODING),
+                               user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
 
   // Register font prefs that have defaults.
   std::set<std::string> fonts_with_defaults;
   UScriptCode browser_script = GetScriptOfBrowserLocale(locale);
-  for (size_t i = 0; i < kFontDefaultsLength; ++i) {
-    FontDefault pref = kFontDefaults[i];
-
+  for (FontDefault pref : kFontDefaults) {
 #if BUILDFLAG(IS_WIN)
     if (pref.pref_name == prefs::kWebKitFixedFontFamily) {
       if (ShouldUseAlternateDefaultFixedFont(
-              l10n_util::GetStringUTF8(pref.resource_id)))
+              l10n_util::GetStringUTF8(pref.resource_id))) {
         pref.resource_id = IDS_FIXED_FONT_FAMILY_ALT_WIN;
+      }
     }
 #endif
 
@@ -410,8 +429,17 @@ void PrefsTabHelper::RegisterProfilePrefs(
     // prefs (e.g., via the extensions workflow), or the problem turns out to
     // not be really critical after all.
     if (browser_script != pref_script) {
-      registry->RegisterStringPref(pref.pref_name,
-                                   l10n_util::GetStringUTF8(pref.resource_id));
+      std::string value = l10n_util::GetStringUTF8(pref.resource_id);
+#if PREFS_FONT_LIST
+      if (value.starts_with(',')) {
+        value = gfx::FontList::FirstAvailableOrFirst(value);
+      }
+#else   // !PREFS_FONT_LIST
+      DCHECK(!value.starts_with(','))
+          << "This platform doesn't support default font lists. "
+          << pref.pref_name << "=" << value;
+#endif  // PREFS_FONT_LIST
+      registry->RegisterStringPref(pref.pref_name, value);
       fonts_with_defaults.insert(pref.pref_name);
     }
   }
@@ -422,8 +450,7 @@ void PrefsTabHelper::RegisterProfilePrefs(
 
   registry->RegisterIntegerPref(prefs::kWebKitDefaultFontSize, 16);
   registry->RegisterIntegerPref(prefs::kWebKitDefaultFixedFontSize, 13);
-  RegisterLocalizedFontPref(registry, prefs::kWebKitMinimumFontSize,
-                            IDS_MINIMUM_FONT_SIZE);
+  registry->RegisterIntegerPref(prefs::kWebKitMinimumFontSize, 0);
   RegisterLocalizedFontPref(registry, prefs::kWebKitMinimumLogicalFontSize,
                             IDS_MINIMUM_LOGICAL_FONT_SIZE);
 #endif
@@ -464,8 +491,7 @@ void PrefsTabHelper::OnFontFamilyPrefChanged(const std::string& pref_name) {
   // WebKit know.
   std::string generic_family;
   std::string script;
-  if (pref_names_util::ParseFontNamePrefPath(pref_name,
-                                             &generic_family,
+  if (pref_names_util::ParseFontNamePrefPath(pref_name, &generic_family,
                                              &script)) {
     PrefService* prefs = profile_->GetPrefs();
     std::string pref_value = prefs->GetString(pref_name);
@@ -483,7 +509,7 @@ void PrefsTabHelper::OnWebPrefChanged(const std::string& pref_name) {
   // Use PostTask to dispatch the OnWebkitPreferencesChanged notification to
   // give other observers (particularly the FontFamilyCache) a chance to react
   // to the pref change.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&PrefsTabHelper::NotifyWebkitPreferencesChanged,
                                 weak_ptr_factory_.GetWeakPtr(), pref_name));
 }

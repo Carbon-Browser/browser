@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "base/logging.h"
 #include "base/strings/string_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/webrtc/thread_wrapper.h"
 #include "remoting/base/constants.h"
 #include "remoting/protocol/client_control_dispatcher.h"
@@ -23,8 +24,7 @@
 #include "remoting/protocol/webrtc_transport.h"
 #include "remoting/protocol/webrtc_video_renderer_adapter.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 WebrtcConnectionToHost::WebrtcConnectionToHost() = default;
 WebrtcConnectionToHost::~WebrtcConnectionToHost() = default;
@@ -39,8 +39,9 @@ void WebrtcConnectionToHost::Connect(
   transport_ = std::make_unique<WebrtcTransport>(
       webrtc::ThreadWrapper::current(), transport_context, nullptr, this);
 
-  if (audio_decode_task_runner_)
+  if (audio_decode_task_runner_) {
     transport_->audio_module()->SetAudioTaskRunner(audio_decode_task_runner_);
+  }
 
   session_ = std::move(session);
   session_->SetEventHandler(this);
@@ -48,11 +49,16 @@ void WebrtcConnectionToHost::Connect(
 
   event_callback_ = event_callback;
 
-  SetState(CONNECTING, OK);
+  SetState(CONNECTING, ErrorCode::OK);
 }
 
 void WebrtcConnectionToHost::Disconnect(ErrorCode error) {
   session_->Close(error);
+}
+
+void WebrtcConnectionToHost::ApplyNetworkSettings(
+    const NetworkSettings& settings) {
+  transport_->ApplyNetworkSettings(settings);
 }
 
 const SessionConfig& WebrtcConnectionToHost::config() {
@@ -103,12 +109,12 @@ void WebrtcConnectionToHost::OnSessionStateChange(Session::State state) {
       break;
 
     case Session::AUTHENTICATED:
-      SetState(AUTHENTICATED, OK);
+      SetState(AUTHENTICATED, ErrorCode::OK);
       break;
 
     case Session::CLOSED:
       CloseChannels();
-      SetState(CLOSED,  OK);
+      SetState(CLOSED, ErrorCode::OK);
       break;
 
     case Session::FAILED:
@@ -137,8 +143,9 @@ void WebrtcConnectionToHost::OnWebrtcTransportProtocolChanged() {}
 void WebrtcConnectionToHost::OnWebrtcTransportIncomingDataChannel(
     const std::string& name,
     std::unique_ptr<MessagePipe> pipe) {
-  if (!control_dispatcher_)
+  if (!control_dispatcher_) {
     control_dispatcher_ = std::make_unique<ClientControlDispatcher>();
+  }
 
   if (name == control_dispatcher_->channel_name() &&
       !control_dispatcher_->is_connected()) {
@@ -170,8 +177,9 @@ void WebrtcConnectionToHost::OnWebrtcTransportMediaStreamAdded(
 
 void WebrtcConnectionToHost::OnWebrtcTransportMediaStreamRemoved(
     rtc::scoped_refptr<webrtc::MediaStreamInterface> stream) {
-  if (video_adapter_ && video_adapter_->label() == stream->id())
+  if (video_adapter_ && video_adapter_->label() == stream->id()) {
     video_adapter_.reset();
+  }
 }
 
 void WebrtcConnectionToHost::OnWebrtcTransportRouteChanged(
@@ -186,7 +194,7 @@ void WebrtcConnectionToHost::OnChannelClosed(
     ChannelDispatcherBase* channel_dispatcher) {
   LOG(ERROR) << "Channel " << channel_dispatcher->channel_name()
              << " was closed unexpectedly.";
-  SetState(FAILED, INCOMPATIBLE_PROTOCOL);
+  SetState(FAILED, ErrorCode::INCOMPATIBLE_PROTOCOL);
 }
 
 ConnectionToHost::State WebrtcConnectionToHost::state() const {
@@ -194,15 +202,17 @@ ConnectionToHost::State WebrtcConnectionToHost::state() const {
 }
 
 void WebrtcConnectionToHost::NotifyIfChannelsReady() {
-  if (!control_dispatcher_.get() || !control_dispatcher_->is_connected())
+  if (!control_dispatcher_.get() || !control_dispatcher_->is_connected()) {
     return;
-  if (!event_dispatcher_.get() || !event_dispatcher_->is_connected())
+  }
+  if (!event_dispatcher_.get() || !event_dispatcher_->is_connected()) {
     return;
+  }
 
   // Start forwarding clipboard and input events.
   clipboard_forwarder_.set_clipboard_stub(control_dispatcher_.get());
   event_forwarder_.set_input_stub(event_dispatcher_.get());
-  SetState(CONNECTED, OK);
+  SetState(CONNECTED, ErrorCode::OK);
 }
 
 WebrtcVideoRendererAdapter* WebrtcConnectionToHost::GetOrCreateVideoAdapter(
@@ -227,7 +237,7 @@ void WebrtcConnectionToHost::CloseChannels() {
 
 void WebrtcConnectionToHost::SetState(State state, ErrorCode error) {
   // |error| should be specified only when |state| is set to FAILED.
-  DCHECK(state == FAILED || error == OK);
+  DCHECK(state == FAILED || error == ErrorCode::OK);
 
   if (state != state_) {
     state_ = state;
@@ -236,5 +246,4 @@ void WebrtcConnectionToHost::SetState(State state, ErrorCode error) {
   }
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,9 @@
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "ui/base/ime/text_input_client.h"
 #include "ui/views/views_export.h"
 
@@ -46,8 +46,9 @@ class VIEWS_EXPORT PrefixSelector : public ui::TextInputClient {
   bool ShouldContinueSelection() const;
 
   // ui::TextInputClient:
+  base::WeakPtr<ui::TextInputClient> AsWeakPtr() override;
   void SetCompositionText(const ui::CompositionText& composition) override;
-  uint32_t ConfirmCompositionText(bool keep_selection) override;
+  size_t ConfirmCompositionText(bool keep_selection) override;
   void ClearCompositionText() override;
   void InsertText(const std::u16string& text,
                   InsertTextCursorBehavior cursor_behavior) override;
@@ -59,7 +60,14 @@ class VIEWS_EXPORT PrefixSelector : public ui::TextInputClient {
   bool CanComposeInline() const override;
   gfx::Rect GetCaretBounds() const override;
   gfx::Rect GetSelectionBoundingBox() const override;
-  bool GetCompositionCharacterBounds(uint32_t index,
+#if BUILDFLAG(IS_WIN)
+  std::optional<gfx::Rect> GetProximateCharacterBounds(
+      const gfx::Range& range) const override;
+  std::optional<size_t> GetProximateCharacterIndexFromPoint(
+      const gfx::Point& point,
+      ui::IndexFromPointFlags flags) const override;
+#endif  // BUILDFLAG(IS_WIN)
+  bool GetCompositionCharacterBounds(size_t index,
                                      gfx::Rect* rect) const override;
   bool HasCompositionText() const override;
   FocusReason GetFocusReason() const override;
@@ -97,8 +105,8 @@ class VIEWS_EXPORT PrefixSelector : public ui::TextInputClient {
 
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_CHROMEOS)
   void GetActiveTextInputControlLayoutBounds(
-      absl::optional<gfx::Rect>* control_bounds,
-      absl::optional<gfx::Rect>* selection_bounds) override;
+      std::optional<gfx::Rect>* control_bounds,
+      std::optional<gfx::Rect>* selection_bounds) override;
 #endif
 
 #if BUILDFLAG(IS_WIN)
@@ -134,6 +142,8 @@ class VIEWS_EXPORT PrefixSelector : public ui::TextInputClient {
   // TickClock used for getting the time of the current keystroke, used for
   // continuing or restarting selections.
   raw_ptr<const base::TickClock> tick_clock_;
+
+  base::WeakPtrFactory<PrefixSelector> weak_ptr_factory_{this};
 };
 
 }  // namespace views

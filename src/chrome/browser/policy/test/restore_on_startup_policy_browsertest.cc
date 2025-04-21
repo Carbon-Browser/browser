@@ -1,11 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <vector>
 
 #include "base/command_line.h"
-#include "base/containers/cxx20_erase.h"
+#include "base/ranges/algorithm.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/values.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/policy/url_blocking_policy_test_utils.h"
@@ -17,6 +23,7 @@
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/search/ntp_test_utils.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/common/chrome_features.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/common/webui_url_constants.h"
@@ -28,6 +35,7 @@
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
 
@@ -36,8 +44,8 @@ namespace policy {
 namespace {
 
 constexpr const char* kRestoredURLs[] = {
-    "http://aaa.com/empty.html",
-    "http://bbb.com/empty.html",
+    "https://aaa.com/empty.html",
+    "https://bbb.com/empty.html",
 };
 
 bool IsNonSwitchArgument(const base::CommandLine::StringType& s) {
@@ -65,15 +73,14 @@ class RestoreOnStartupPolicyTest : public UrlBlockingPolicyTest,
     // these tests.
     base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
     base::CommandLine::StringVector argv = command_line->argv();
-    base::EraseIf(argv, IsNonSwitchArgument);
+    std::erase_if(argv, IsNonSwitchArgument);
     command_line->InitFromArgv(argv);
-    ASSERT_TRUE(
-        std::equal(argv.begin(), argv.end(), command_line->argv().begin()));
+    ASSERT_TRUE(base::ranges::equal(argv, command_line->argv()));
   }
 
   void ListOfURLs() {
     // Verifies that policy can set the startup pages to a list of URLs.
-    base::ListValue urls;
+    base::Value::List urls;
     for (const auto* url : kRestoredURLs) {
       urls.Append(url);
       expected_urls_.push_back(GURL(url));
@@ -83,7 +90,8 @@ class RestoreOnStartupPolicyTest : public UrlBlockingPolicyTest,
                  POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD,
                  base::Value(SessionStartupPref::kPrefValueURLs), nullptr);
     policies.Set(key::kRestoreOnStartupURLs, POLICY_LEVEL_MANDATORY,
-                 POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD, urls.Clone(), nullptr);
+                 POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD,
+                 base::Value(std::move(urls)), nullptr);
     provider_.UpdateChromePolicy(policies);
   }
 
@@ -114,7 +122,7 @@ class RestoreOnStartupPolicyTest : public UrlBlockingPolicyTest,
     // list of URLs". |expected_urls_| will be restored from the last session.
     // |expected_urls_in_new_window_| will be opened on a policy-designated new
     // window.
-    base::ListValue urls;
+    base::Value::List urls;
     for (const auto* url : kRestoredURLs) {
       urls.Append(url);
       expected_urls_.emplace_back(url);
@@ -126,7 +134,8 @@ class RestoreOnStartupPolicyTest : public UrlBlockingPolicyTest,
                  base::Value(SessionStartupPref::kPrefValueLastAndURLs),
                  nullptr);
     policies.Set(key::kRestoreOnStartupURLs, POLICY_LEVEL_MANDATORY,
-                 POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD, urls.Clone(), nullptr);
+                 POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD,
+                 base::Value(std::move(urls)), nullptr);
     provider_.UpdateChromePolicy(policies);
   }
 
@@ -136,11 +145,11 @@ class RestoreOnStartupPolicyTest : public UrlBlockingPolicyTest,
     policies.Set(key::kRestoreOnStartup, POLICY_LEVEL_MANDATORY,
                  POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD,
                  base::Value(SessionStartupPref::kPrefValueLast), nullptr);
-    base::Value urls(base::Value::Type::LIST);
+    base::Value::List urls;
     for (const auto* url_string : kRestoredURLs)
       urls.Append(url_string);
     policies.Set(key::kURLBlocklist, POLICY_LEVEL_MANDATORY, POLICY_SCOPE_USER,
-                 POLICY_SOURCE_CLOUD, std::move(urls), nullptr);
+                 POLICY_SOURCE_CLOUD, base::Value(std::move(urls)), nullptr);
     provider_.UpdateChromePolicy(policies);
     // This should restore the tabs opened at PRE_RunTest below, yet all should
     // be blocked.
@@ -160,6 +169,8 @@ class RestoreOnStartupPolicyTest : public UrlBlockingPolicyTest,
     }
     return true;
   }
+
+  base::test::ScopedFeatureList feature_list_;
 
   // URLs that are expected to be loaded.
   std::vector<GURL> expected_urls_;
@@ -195,19 +206,21 @@ IN_PROC_BROWSER_TEST_P(RestoreOnStartupPolicyTest, PRE_RunTest) {
 }
 
 IN_PROC_BROWSER_TEST_P(RestoreOnStartupPolicyTest, RunTest) {
-  TabStripModel* model = browser()->tab_strip_model();
-  int size = static_cast<int>(expected_urls_.size());
-  EXPECT_EQ(size, model->count());
-  resource_coordinator::WaitForTransitionToLoaded(model);
-  for (int i = 0; i < size && i < model->count(); ++i) {
-    content::WebContents* web_contents = model->GetWebContentsAt(i);
-    if (blocked_) {
-      CheckURLIsBlockedInWebContents(web_contents, expected_urls_[i]);
-    } else if (expected_urls_[i] == GURL(chrome::kChromeUINewTabURL)) {
-      EXPECT_EQ(ntp_test_utils::GetFinalNtpUrl(browser()->profile()),
-                web_contents->GetLastCommittedURL());
-    } else {
-      EXPECT_EQ(expected_urls_[i], web_contents->GetLastCommittedURL());
+  {
+    TabStripModel* model = browser()->tab_strip_model();
+    int size = static_cast<int>(expected_urls_.size());
+    EXPECT_EQ(size, model->count());
+    resource_coordinator::WaitForTransitionToLoaded(model);
+    for (int i = 0; i < size && i < model->count(); ++i) {
+      content::WebContents* web_contents = model->GetWebContentsAt(i);
+      if (blocked_) {
+        CheckURLIsBlockedInWebContents(web_contents, expected_urls_[i]);
+      } else if (expected_urls_[i] == GURL(chrome::kChromeUINewTabURL)) {
+        EXPECT_EQ(ntp_test_utils::GetFinalNtpUrl(browser()->profile()),
+                  web_contents->GetLastCommittedURL());
+      } else {
+        EXPECT_EQ(expected_urls_[i], web_contents->GetLastCommittedURL());
+      }
     }
   }
   // Policy urls should be opened on a new window if the startup policy is set

@@ -1,20 +1,18 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef EXTENSIONS_BROWSER_API_AUTOMATION_INTERNAL_AUTOMATION_EVENT_ROUTER_INTERFACE_H_
 #define EXTENSIONS_BROWSER_API_AUTOMATION_INTERNAL_AUTOMATION_EVENT_ROUTER_INTERFACE_H_
 
+#include <optional>
 #include <set>
 #include <vector>
 
-#include "content/public/browser/ax_event_notification_details.h"
-#include "content/public/browser/notification_observer.h"
-#include "content/public/browser/notification_registrar.h"
 #include "extensions/common/api/automation_internal.h"
 #include "extensions/common/extension_id.h"
-#include "extensions/common/extension_messages.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/accessibility/ax_location_and_scroll_updates.h"
+#include "ui/accessibility/ax_updates_and_events.h"
 
 namespace content {
 class BrowserContext;
@@ -24,25 +22,25 @@ namespace ui {
 struct AXActionData;
 }  // namespace ui
 
-struct ExtensionMsg_AccessibilityLocationChangeParams;
-
 namespace extensions {
 
 class AutomationEventRouterInterface {
  public:
   virtual void DispatchAccessibilityEvents(
       const ui::AXTreeID& tree_id,
-      std::vector<ui::AXTreeUpdate> updates,
+      const std::vector<ui::AXTreeUpdate>& updates,
       const gfx::Point& mouse_location,
-      std::vector<ui::AXEvent> events) = 0;
+      const std::vector<ui::AXEvent>& events) = 0;
   virtual void DispatchAccessibilityLocationChange(
-      const ExtensionMsg_AccessibilityLocationChangeParams& params) = 0;
+      const ui::AXTreeID& tree_id,
+      const ui::AXLocationChange& details) = 0;
+  virtual void DispatchAccessibilityScrollChange(
+      const ui::AXTreeID& tree_id,
+      const ui::AXScrollChange& details) = 0;
 
   // Notify all automation extensions that an accessibility tree was
   // destroyed. If |browser_context| is null, use the currently active context.
-  virtual void DispatchTreeDestroyedEvent(
-      ui::AXTreeID tree_id,
-      content::BrowserContext* browser_context) = 0;
+  virtual void DispatchTreeDestroyedEvent(ui::AXTreeID tree_id) = 0;
 
   // Notify the source extension of the action of an action result.
   virtual void DispatchActionResult(
@@ -55,7 +53,7 @@ class AutomationEventRouterInterface {
   // ax::mojom::Action::kGetTextLocation.
   virtual void DispatchGetTextLocationDataResult(
       const ui::AXActionData& data,
-      const absl::optional<gfx::Rect>& rect) = 0;
+      const std::optional<gfx::Rect>& rect) = 0;
 };
 
 }  // namespace extensions

@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -39,8 +39,8 @@ source_set("public") {
     "user_action_handler.h",
   ]
 
+  public_deps = [ "//base" ]
   deps = [
-    "//base",
     "//components/keyed_service/core",
     "//skia",
   ]

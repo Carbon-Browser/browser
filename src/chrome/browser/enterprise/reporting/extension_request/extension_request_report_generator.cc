@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,11 +14,9 @@
 #include "chrome/browser/enterprise/reporting/prefs.h"
 #include "chrome/browser/extensions/extension_management.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/common/chrome_features.h"
 #include "chrome/common/extensions/extension_constants.h"
 #include "chrome/common/pref_names.h"
-#include "components/enterprise/common/proto/extensions_workflow_events.pb.h"
+#include "components/enterprise/common/proto/synced/extensions_workflow_events.pb.h"
 #include "components/policy/core/common/cloud/cloud_policy_util.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
@@ -27,32 +25,26 @@
 namespace enterprise_reporting {
 namespace {
 
-bool IsRequestInDict(const std::string& extension_id,
-                     const base::Value* requests) {
-  return requests->FindKey(extension_id) != nullptr;
-}
-
 // Create the ExtensionsWorkflowEvent based on the |extension_id| and
 // |request_data|. |request_data| is nullptr for remove-request and used for
 // add-request.
 std::unique_ptr<ExtensionsWorkflowEvent> GenerateReport(
     const std::string& extension_id,
-    const base::Value* request_data) {
+    const base::Value::Dict* request_data) {
   auto report = std::make_unique<ExtensionsWorkflowEvent>();
   report->set_id(extension_id);
   if (request_data) {
-    if (request_data->is_dict()) {
-      absl::optional<base::Time> timestamp = ::base::ValueToTime(
-          request_data->FindKey(extension_misc::kExtensionRequestTimestamp));
-      if (timestamp)
-        report->set_request_timestamp_millis(timestamp->ToJavaTime());
-      if (base::FeatureList::IsEnabled(
-              features::kExtensionWorkflowJustification)) {
-        const std::string* justification = request_data->FindStringKey(
-            extension_misc::kExtensionWorkflowJustification);
-        if (justification)
-          report->set_justification(*justification);
-      }
+    std::optional<base::Time> timestamp = ::base::ValueToTime(
+        request_data->Find(extension_misc::kExtensionRequestTimestamp));
+    if (timestamp) {
+      report->set_request_timestamp_millis(
+          timestamp->InMillisecondsSinceUnixEpoch());
+    }
+
+    const std::string* justification = request_data->FindString(
+        extension_misc::kExtensionWorkflowJustification);
+    if (justification) {
+      report->set_justification(*justification);
     }
     report->set_removed(false);
   } else {
@@ -102,47 +94,44 @@ ExtensionRequestReportGenerator::GenerateForProfile(Profile* profile) {
   std::string webstore_update_url =
       extension_urls::GetDefaultWebstoreUpdateUrl().spec();
 
-  const base::Value* pending_requests =
-      profile->GetPrefs()->GetDictionary(prefs::kCloudExtensionRequestIds);
-  const base::Value* uploaded_requests =
-      profile->GetPrefs()->GetDictionary(kCloudExtensionRequestUploadedIds);
+  const base::Value::Dict& pending_requests =
+      profile->GetPrefs()->GetDict(prefs::kCloudExtensionRequestIds);
+  const base::Value::Dict& uploaded_requests =
+      profile->GetPrefs()->GetDict(kCloudExtensionRequestUploadedIds);
 
-  for (auto it : pending_requests->DictItems()) {
-    const std::string& extension_id = it.first;
+  for (auto [extension_id, request_data] : pending_requests) {
     if (!ShouldUploadExtensionRequest(extension_id, webstore_update_url,
                                       extension_management)) {
       continue;
     }
 
     // Request has already been uploaded.
-    if (IsRequestInDict(extension_id, uploaded_requests))
+    if (uploaded_requests.contains(extension_id))
       continue;
 
-    reports.push_back(
-        GenerateReport(extension_id, /*request_data=*/&it.second));
+    CHECK(request_data.is_dict());
+    reports.push_back(GenerateReport(extension_id, &request_data.GetDict()));
   }
 
-  for (auto it : uploaded_requests->DictItems()) {
-    const std::string& extension_id = it.first;
-
+  for (auto [extension_id, ignored] : uploaded_requests) {
     // Request is still pending, no need to send remove request.
-    if (IsRequestInDict(extension_id, pending_requests))
+    if (pending_requests.contains(extension_id))
       continue;
 
     reports.push_back(GenerateReport(extension_id, /*request_data=*/nullptr));
   }
 
   // Update the preference in the end.
-  DictionaryPrefUpdate uploaded_requests_update(
+  ScopedDictPrefUpdate uploaded_requests_update(
       profile->GetPrefs(), kCloudExtensionRequestUploadedIds);
 
   for (const auto& report : reports) {
     std::string id = report.get()->id();
     if (!report.get()->removed()) {
-      uploaded_requests_update->SetPath(id + ".upload_timestamp",
-                                        ::base::TimeToValue(base::Time::Now()));
+      uploaded_requests_update->SetByDottedPath(
+          id + ".upload_timestamp", ::base::TimeToValue(base::Time::Now()));
     } else {
-      uploaded_requests_update->RemoveKey(id);
+      uploaded_requests_update->Remove(id);
     }
   }
 

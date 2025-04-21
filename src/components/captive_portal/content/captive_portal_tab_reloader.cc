@@ -1,14 +1,13 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/captive_portal/content/captive_portal_tab_reloader.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/captive_portal/core/captive_portal_types.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/navigation_entry.h"
@@ -56,7 +55,7 @@ CaptivePortalTabReloader::CaptivePortalTabReloader(
       slow_ssl_load_time_(base::Seconds(kDefaultSlowSSLTimeSeconds)),
       open_login_tab_callback_(open_login_tab_callback) {}
 
-CaptivePortalTabReloader::~CaptivePortalTabReloader() {}
+CaptivePortalTabReloader::~CaptivePortalTabReloader() = default;
 
 void CaptivePortalTabReloader::OnLoadStart(bool is_ssl) {
   provisional_main_frame_load_ = true;
@@ -107,7 +106,7 @@ void CaptivePortalTabReloader::OnLoadCommitted(
   // If the tab needs to reload, do so asynchronously, to avoid reentrancy
   // issues.
   if (state_ == STATE_NEEDS_RELOAD) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&CaptivePortalTabReloader::ReloadTabIfNeeded,
                                   weak_factory_.GetWeakPtr()));
   }
@@ -198,7 +197,7 @@ void CaptivePortalTabReloader::OnSecureDnsNetworkError() {
   }
 
   if (state_ == STATE_NEEDS_RELOAD) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&CaptivePortalTabReloader::ReloadTabIfNeeded,
                                   weak_factory_.GetWeakPtr()));
   }
@@ -235,7 +234,6 @@ void CaptivePortalTabReloader::SetState(State new_state) {
       break;
     default:
       NOTREACHED();
-      break;
   }
 
   state_ = new_state;

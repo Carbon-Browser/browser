@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,6 +25,7 @@ struct StructTraits<nearby_share::mojom::ShareTargetDataView, ShareTarget> {
       const ShareTarget& share_target);
   static nearby_share::mojom::PayloadPreviewPtr payload_preview(
       const ShareTarget& share_target);
+  static bool for_self_share(const ShareTarget& share_target);
   static bool Read(nearby_share::mojom::ShareTargetDataView data,
                    ShareTarget* out);
 };

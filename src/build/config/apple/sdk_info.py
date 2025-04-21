@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -134,7 +134,10 @@ def main():
                       default='.',
                       help='Value of gn $root_build_dir')
   parser.add_argument('platform',
-                      choices=['iphoneos', 'iphonesimulator', 'macosx'])
+                      choices=[
+                          'iphoneos', 'iphonesimulator', 'macosx', 'watchos',
+                          'watchsimulator'
+                      ])
   args = parser.parse_args()
   if args.developer_dir:
     os.environ['DEVELOPER_DIR'] = args.developer_dir

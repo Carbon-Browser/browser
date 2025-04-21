@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,12 @@ CWV_EXPORT
 @interface CWVTranslationLanguage : NSObject
 
 - (instancetype)init NS_UNAVAILABLE;
+
+// The automatic language to be used when a source/page language for a
+// translation is not determined.
+// Note that this language code will map to 'auto'.
++ (instancetype)autoLanguageWithLocalizedName:(NSString*)localizedName
+                                   nativeName:(NSString*)nativeName;
 
 // The ISO language code. en for English, es for Spanish, etc...
 // https://cloud.google.com/translate/docs/languages

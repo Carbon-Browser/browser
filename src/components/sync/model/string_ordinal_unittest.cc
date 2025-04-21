@@ -1,16 +1,16 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/sync/model/string_ordinal.h"
 
 #include <algorithm>
-#include <cctype>
 #include <vector>
 
 #include "base/rand_util.h"
 #include "base/ranges/algorithm.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/strings/ascii.h"
 
 namespace syncer {
 
@@ -125,11 +125,13 @@ TEST(StringOrdinalTest, ToInternalValue) {
 }
 
 bool IsNonEmptyPrintableString(const std::string& str) {
-  if (str.empty())
+  if (str.empty()) {
     return false;
+  }
   for (char c : str) {
-    if (!isprint(c))
+    if (!absl::ascii_isprint(static_cast<unsigned char>(c))) {
       return false;
+    }
   }
   return true;
 }
@@ -264,8 +266,8 @@ TEST(StringOrdinalTest, Sort) {
   std::vector<StringOrdinal> ordinals = sorted_ordinals;
   base::RandomShuffle(ordinals.begin(), ordinals.end());
   base::ranges::sort(ordinals, StringOrdinal::LessThanFn());
-  EXPECT_TRUE(std::equal(ordinals.begin(), ordinals.end(),
-                         sorted_ordinals.begin(), StringOrdinal::EqualsFn()));
+  EXPECT_TRUE(base::ranges::equal(ordinals, sorted_ordinals,
+                                  StringOrdinal::EqualsFn()));
 }
 
 }  // namespace

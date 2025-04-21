@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ void ModuleRecordResolverImpl::RegisterModuleScript(
   BoxedV8Module* record = MakeGarbageCollected<BoxedV8Module>(isolate, module);
   DVLOG(1) << "ModuleRecordResolverImpl::RegisterModuleScript(url="
            << module_script->BaseUrl().GetString()
-           << ", hash=" << BoxedV8ModuleHash::GetHash(record) << ")";
+           << ", hash=" << WTF::GetHash(record) << ")";
 
   auto result = record_to_module_script_map_.Set(record, module_script);
 
@@ -40,7 +40,7 @@ void ModuleRecordResolverImpl::UnregisterModuleScript(
   BoxedV8Module* record = MakeGarbageCollected<BoxedV8Module>(isolate, module);
   DVLOG(1) << "ModuleRecordResolverImpl::UnregisterModuleScript(url="
            << module_script->BaseUrl().GetString()
-           << ", hash=" << BoxedV8ModuleHash::GetHash(record) << ")";
+           << ", hash=" << WTF::GetHash(record) << ")";
 
   record_to_module_script_map_.erase(record);
 }
@@ -54,11 +54,10 @@ const ModuleScript* ModuleRecordResolverImpl::GetModuleScriptFromModuleRecord(
       << "Failed to find ModuleScript corresponding to the "
          "record.[[HostDefined]]";
   CHECK(it->value);
-  return it->value;
+  return it->value.Get();
 }
 
-// <specdef
-// href="https://html.spec.whatwg.org/C/#hostresolveimportedmodule(referencingscriptormodule,-specifier)">
+// <specdef href="https://html.spec.whatwg.org/C/#hostloadimportedmodule">
 v8::Local<v8::Module> ModuleRecordResolverImpl::Resolve(
     const ModuleRequest& module_request,
     v8::Local<v8::Module> referrer,
@@ -66,7 +65,7 @@ v8::Local<v8::Module> ModuleRecordResolverImpl::Resolve(
   v8::Isolate* isolate = modulator_->GetScriptState()->GetIsolate();
   DVLOG(1) << "ModuleRecordResolverImpl::resolve(specifier=\""
            << module_request.specifier << ", referrer.hash="
-           << BoxedV8ModuleHash::GetHash(
+           << WTF::GetHash(
                   MakeGarbageCollected<BoxedV8Module>(isolate, referrer))
            << ")";
 

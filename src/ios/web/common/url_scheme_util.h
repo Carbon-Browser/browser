@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,9 @@ bool UrlHasWebScheme(const GURL& url);
 // GURL call would return (assuming the URL is a valid GURL).
 // Returns true if the URL has a www content scheme, i.e. http, https or data.
 bool UrlHasWebScheme(NSURL* url);
+
+// The scheme used for links to install apps on iOS.
+inline constexpr char kMarketplaceKitScheme[] = "marketplace-kit";
 
 }  // namespace web
 

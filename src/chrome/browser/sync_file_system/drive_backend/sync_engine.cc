@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/observer_list.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "base/values.h"
 #include "chrome/browser/drive/drive_notification_manager_factory.h"
@@ -112,14 +113,14 @@ class SyncEngine::WorkerObserver : public SyncWorkerInterface::Observer {
                  base::WeakPtr<SyncEngine> sync_engine)
       : ui_task_runner_(ui_task_runner),
         sync_engine_(sync_engine) {
-    sequence_checker_.DetachFromSequence();
+    DETACH_FROM_SEQUENCE(sequence_checker_);
   }
 
   WorkerObserver(const WorkerObserver&) = delete;
   WorkerObserver& operator=(const WorkerObserver&) = delete;
 
   ~WorkerObserver() override {
-    DCHECK(sequence_checker_.CalledOnValidSequence());
+    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   }
 
   void OnPendingFileListUpdated(int item_count) override {
@@ -129,7 +130,7 @@ class SyncEngine::WorkerObserver : public SyncWorkerInterface::Observer {
       return;
     }
 
-    DCHECK(sequence_checker_.CalledOnValidSequence());
+    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     ui_task_runner_->PostTask(
         FROM_HERE, base::BindOnce(&SyncEngine::OnPendingFileListUpdated,
                                   sync_engine_, item_count));
@@ -147,7 +148,7 @@ class SyncEngine::WorkerObserver : public SyncWorkerInterface::Observer {
       return;
     }
 
-    DCHECK(sequence_checker_.CalledOnValidSequence());
+    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     ui_task_runner_->PostTask(
         FROM_HERE,
         base::BindOnce(&SyncEngine::OnFileStatusChanged, sync_engine_, url,
@@ -162,28 +163,26 @@ class SyncEngine::WorkerObserver : public SyncWorkerInterface::Observer {
       return;
     }
 
-    DCHECK(sequence_checker_.CalledOnValidSequence());
+    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
     ui_task_runner_->PostTask(
         FROM_HERE, base::BindOnce(&SyncEngine::UpdateServiceState, sync_engine_,
                                   state, description));
   }
 
-  void DetachFromSequence() {
-    sequence_checker_.DetachFromSequence();
-  }
+  void DetachFromSequence() { DETACH_FROM_SEQUENCE(sequence_checker_); }
 
  private:
   scoped_refptr<base::SequencedTaskRunner> ui_task_runner_;
   base::WeakPtr<SyncEngine> sync_engine_;
 
-  base::SequenceChecker sequence_checker_;
+  SEQUENCE_CHECKER(sequence_checker_);
 };
 
 std::unique_ptr<SyncEngine> SyncEngine::CreateForBrowserContext(
     content::BrowserContext* context,
     TaskLogger* task_logger) {
   scoped_refptr<base::SingleThreadTaskRunner> ui_task_runner =
-      base::ThreadTaskRunnerHandle::Get();
+      base::SingleThreadTaskRunner::GetCurrentDefault();
   scoped_refptr<base::SequencedTaskRunner> worker_task_runner =
       base::ThreadPool::CreateSequencedTaskRunner(
           {base::MayBlock(), base::TaskPriority::BEST_EFFORT,
@@ -502,70 +501,6 @@ RemoteServiceState SyncEngine::GetCurrentState() const {
   if (!has_refresh_token_)
     return REMOTE_SERVICE_AUTHENTICATION_REQUIRED;
   return service_state_;
-}
-
-void SyncEngine::GetOriginStatusMap(StatusMapCallback callback) {
-  if (!sync_worker_) {
-    std::move(callback).Run(nullptr);
-    return;
-  }
-
-  auto split_callback = base::SplitOnceCallback(std::move(callback));
-
-  base::OnceClosure abort_closure =
-      base::BindOnce(std::move(split_callback.first), nullptr);
-
-  StatusMapCallback tracked_callback = callback_tracker_.Register(
-      std::move(abort_closure), std::move(split_callback.second));
-  StatusMapCallback relayed_callback =
-      RelayCallbackToCurrentThread(FROM_HERE, std::move(tracked_callback));
-
-  worker_task_runner_->PostTask(
-      FROM_HERE, base::BindOnce(&SyncWorkerInterface::GetOriginStatusMap,
-                                base::Unretained(sync_worker_.get()),
-                                std::move(relayed_callback)));
-}
-
-void SyncEngine::DumpFiles(const GURL& origin, ListCallback callback) {
-  if (!sync_worker_) {
-    std::move(callback).Run(nullptr);
-    return;
-  }
-
-  auto split_callback = base::SplitOnceCallback(std::move(callback));
-
-  base::OnceClosure abort_closure =
-      base::BindOnce(std::move(split_callback.first), nullptr);
-
-  ListCallback tracked_callback = callback_tracker_.Register(
-      std::move(abort_closure), std::move(split_callback.second));
-
-  PostTaskAndReplyWithResult(
-      worker_task_runner_.get(), FROM_HERE,
-      base::BindOnce(&SyncWorkerInterface::DumpFiles,
-                     base::Unretained(sync_worker_.get()), origin),
-      std::move(tracked_callback));
-}
-
-void SyncEngine::DumpDatabase(ListCallback callback) {
-  if (!sync_worker_) {
-    std::move(callback).Run(nullptr);
-    return;
-  }
-
-  auto split_callback = base::SplitOnceCallback(std::move(callback));
-
-  base::OnceClosure abort_closure =
-      base::BindOnce(std::move(split_callback.first), nullptr);
-
-  ListCallback tracked_callback = callback_tracker_.Register(
-      std::move(abort_closure), std::move(split_callback.second));
-
-  PostTaskAndReplyWithResult(
-      worker_task_runner_.get(), FROM_HERE,
-      base::BindOnce(&SyncWorkerInterface::DumpDatabase,
-                     base::Unretained(sync_worker_.get())),
-      std::move(tracked_callback));
 }
 
 void SyncEngine::SetSyncEnabled(bool sync_enabled) {

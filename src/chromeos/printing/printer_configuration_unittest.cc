@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -122,6 +122,20 @@ TEST(PrinterConfigurationTest, NonSecureProtocolUnknown) {
   chromeos::Printer printer;
   EXPECT_FALSE(printer.SetUri("foobar"));
   EXPECT_FALSE(printer.HasSecureProtocol());
+}
+
+TEST(PrinterConfigurationTest, DriverlessUsbForced) {
+  chromeos::Printer printer;
+  printer.set_make_and_model("Epson WF-110 Series");
+  EXPECT_TRUE(printer.SetUri("usb://1234/5678"));
+  EXPECT_TRUE(printer.RequiresDriverlessUsb());
+}
+
+TEST(PrinterConfigurationTest, DriverlessUsbNotForced) {
+  chromeos::Printer printer;
+  printer.set_make_and_model("Epson XP-7100 Series");
+  EXPECT_TRUE(printer.SetUri("usb://1234/5678"));
+  EXPECT_FALSE(printer.RequiresDriverlessUsb());
 }
 
 }  // namespace

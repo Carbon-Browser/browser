@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,22 +8,24 @@
 #include <string>
 #include <vector>
 
+#include "google_apis/gaia/gaia_id.h"
+
 class Profile;
 
 namespace ash {
 namespace edu_coexistence {
 
 // The first google3 cl number that is sent through a policy which is mapped
-// to |ash::prefs::kEduCoexistenceToSVersion|. All version numbers sent
-// will be greater than or equal to |kMinTOSVersionNumber|.
+// to `prefs::kEduCoexistenceToSVersion`. All version numbers sent
+// will be greater than or equal to `kMinTOSVersionNumber`.
 extern const char kMinTOSVersionNumber[];
 
 // Used to store the gaia id and corresponding accepted terms of
 // service version number. The user is the child account but the parent is the
 // one who accepts the terms of service.
 struct UserConsentInfo {
-  UserConsentInfo(const std::string& gaia_id, const std::string& version);
-  std::string edu_account_gaia_id;
+  UserConsentInfo(const GaiaId& gaia_id, const std::string& version);
+  GaiaId edu_account_gaia_id;
   std::string edu_coexistence_tos_version;
 };
 
@@ -38,8 +40,8 @@ bool IsConsentVersionLessThan(const std::string& lhs_version,
 // If the account already exists in user's pref, then its accepted tos will be
 // updated. Otherwise, a new entry will be created.
 // The pref that is used to store the UserConsentInfo is defined in:
-// |ash::prefs::kEduCoexistenceToSAcceptedVersion|
-// Unlike |SetUserConsentInfoListForProfile| this doesn't overwrite the entire
+// `prefs::kEduCoexistenceToSAcceptedVersion`
+// Unlike `SetUserConsentInfoListForProfile` this doesn't overwrite the entire
 // stored UserConsentInfo list; it instead updates it.
 void UpdateAcceptedToSVersionPref(Profile* profile,
                                   const UserConsentInfo& user_consent_info);
@@ -50,7 +52,7 @@ void SetUserConsentInfoListForProfile(
     const std::vector<UserConsentInfo>& user_consent_info_list);
 
 // Returns the list of UserConsentInfo stored in
-// |ash::prefs::kEduCoexistenceToSAcceptedVersion|.
+// `prefs::kEduCoexistenceToSAcceptedVersion`.
 std::vector<UserConsentInfo> GetUserConsentInfoListForProfile(Profile* profile);
 
 // |profile| is the Primary user profile which is the family link user.

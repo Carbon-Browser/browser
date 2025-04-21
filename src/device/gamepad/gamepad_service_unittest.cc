@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "device/gamepad/gamepad_service.h"
 
@@ -42,7 +47,6 @@ class MockGamepadConsumer : public GamepadConsumer {
 
   MOCK_METHOD2(OnGamepadConnected, void(uint32_t, const Gamepad&));
   MOCK_METHOD2(OnGamepadDisconnected, void(uint32_t, const Gamepad&));
-  MOCK_METHOD1(OnGamepadChanged, void(const mojom::GamepadChanges&));
 };
 
 class GamepadServiceTest : public testing::Test {
@@ -111,8 +115,8 @@ class GamepadServiceTest : public testing::Test {
 
  private:
   base::test::SingleThreadTaskEnvironment task_environment_;
-  raw_ptr<MockGamepadDataFetcher> fetcher_;
-  raw_ptr<GamepadService> service_;
+  raw_ptr<MockGamepadDataFetcher, AcrossTasksDanglingUntriaged> fetcher_;
+  raw_ptr<GamepadService, AcrossTasksDanglingUntriaged> service_;
   std::vector<std::unique_ptr<MockGamepadConsumer>> consumers_;
   Gamepads test_data_;
 };
@@ -320,7 +324,8 @@ TEST_F(GamepadServiceTest, ConnectWhileInactiveTest) {
   }
 }
 
-TEST_F(GamepadServiceTest, ConnectAndDisconnectWhileInactiveTest) {
+// https://crbug.com/1405460: Flaky on Android.
+TEST_F(GamepadServiceTest, DISABLED_ConnectAndDisconnectWhileInactiveTest) {
   // Create two active consumers.
   auto* consumer1 = CreateConsumer();
   auto* consumer2 = CreateConsumer();
@@ -389,7 +394,8 @@ TEST_F(GamepadServiceTest, ConnectAndDisconnectWhileInactiveTest) {
   WaitForData();
 }
 
-TEST_F(GamepadServiceTest, DisconnectWhileInactiveTest) {
+// https://crbug.com/1346527 Flaky on Android and Linux.
+TEST_F(GamepadServiceTest, DISABLED_DisconnectWhileInactiveTest) {
   // Create two active consumers.
   auto* consumer1 = CreateConsumer();
   auto* consumer2 = CreateConsumer();

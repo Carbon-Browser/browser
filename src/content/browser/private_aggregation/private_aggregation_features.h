@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2023 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,25 @@
 #define CONTENT_BROWSER_PRIVATE_AGGREGATION_PRIVATE_AGGREGATION_FEATURES_H_
 
 #include "base/feature_list.h"
+#include "content/common/content_export.h"
 
 namespace content {
 
-// Enables the Private Aggregation API. Note that this API also requires the
-// `kPrivacySandboxAggregationService` to be enabled to successfully send
-// reports.
-extern const base::Feature kPrivateAggregationApi;
+// Controls whether third-party cookie eligibility should be queried before
+// allowing debug mode to be used by a context. If enabled, any
+// `enableDebugMode()` calls in a context that does not have third-party cookie
+// eligibility will essentially have no effect. This feature has no effect on
+// debug mode if `blink::features::kPrivateAggregationApiDebugModeEnabledAtAll`
+// is disabled.
+CONTENT_EXPORT BASE_DECLARE_FEATURE(
+    kPrivateAggregationApiDebugModeRequires3pcEligibility);
+
+// Controls whether Protected Audience callers can make up to 100 contributions
+// per report instead of 20. When enabled, reports for Protected Audience
+// callers will be padded up to 100 contributions. This feature has no effect on
+// Shared Storage callers.
+CONTENT_EXPORT BASE_DECLARE_FEATURE(
+    kPrivateAggregationApi100ContributionsForProtectedAudience);
 
 }  // namespace content
 

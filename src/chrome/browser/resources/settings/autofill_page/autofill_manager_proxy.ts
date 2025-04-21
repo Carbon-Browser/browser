@@ -1,15 +1,22 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 export type PersonalDataChangedListener =
     (addresses: chrome.autofillPrivate.AddressEntry[],
-     creditCards: chrome.autofillPrivate.CreditCardEntry[]) => void;
+     creditCards: chrome.autofillPrivate.CreditCardEntry[],
+     ibans: chrome.autofillPrivate.IbanEntry[],
+     accountInfo?: chrome.autofillPrivate.AccountInfo) => void;
 
 /**
  * Interface for all callbacks to the autofill API.
  */
 export interface AutofillManagerProxy {
+  /**
+   * Gets currently signed-in user account info, or undefined if not signed-in.
+   */
+  getAccountInfo(): Promise<chrome.autofillPrivate.AccountInfo|undefined>;
+
   /**
    * Add an observer to the list of personal data.
    */
@@ -24,8 +31,7 @@ export interface AutofillManagerProxy {
   /**
    * Request the list of addresses.
    */
-  getAddressList(
-      callback: (entries: chrome.autofillPrivate.AddressEntry[]) => void): void;
+  getAddressList(): Promise<chrome.autofillPrivate.AddressEntry[]>;
 
   /**
    * Saves the given address.
@@ -34,12 +40,21 @@ export interface AutofillManagerProxy {
 
   /** @param guid The guid of the address to remove.  */
   removeAddress(guid: string): void;
+
+  /**
+   * Sets the Sync Autofill toggle value.
+   */
+  setAutofillSyncToggleEnabled(enabled: boolean): void;
 }
 
 /**
  * Implementation that accesses the private API.
  */
 export class AutofillManagerImpl implements AutofillManagerProxy {
+  getAccountInfo(): Promise<chrome.autofillPrivate.AccountInfo|undefined> {
+    return chrome.autofillPrivate.getAccountInfo();
+  }
+
   setPersonalDataManagerListener(listener: PersonalDataChangedListener) {
     chrome.autofillPrivate.onPersonalDataChanged.addListener(listener);
   }
@@ -48,9 +63,8 @@ export class AutofillManagerImpl implements AutofillManagerProxy {
     chrome.autofillPrivate.onPersonalDataChanged.removeListener(listener);
   }
 
-  getAddressList(
-      callback: (entries: chrome.autofillPrivate.AddressEntry[]) => void) {
-    chrome.autofillPrivate.getAddressList(callback);
+  getAddressList() {
+    return chrome.autofillPrivate.getAddressList();
   }
 
   saveAddress(address: chrome.autofillPrivate.AddressEntry) {
@@ -59,6 +73,10 @@ export class AutofillManagerImpl implements AutofillManagerProxy {
 
   removeAddress(guid: string) {
     chrome.autofillPrivate.removeEntry(guid);
+  }
+
+  setAutofillSyncToggleEnabled(enabled: boolean) {
+    chrome.autofillPrivate.setAutofillSyncToggleEnabled(enabled);
   }
 
   static getInstance(): AutofillManagerProxy {

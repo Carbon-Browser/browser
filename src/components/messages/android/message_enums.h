@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@ namespace messages {
 // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.components.messages
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused.
-// TODO(crbug.com/1188983): Revisit enum values. TAB_SWITCHED is not currently
+// TODO(crbug.com/40755174): Revisit enum values. TAB_SWITCHED is not currently
 // used. Likely the same for TAB_DESTROYED and ACTIVITY_DESTROYED. We also need
 // a dedicated value for message dismissed from feature code.
 enum class DismissReason {
@@ -44,7 +44,9 @@ enum class DismissReason {
   DISMISSED_BY_FEATURE = 9,
 
   // Insert new values before this line.
-  COUNT
+  COUNT,
+
+  kMaxValue = COUNT,
 };
 
 // "Urgent" means the user should take actions ASAP, such as responding to
@@ -69,13 +71,16 @@ enum class MessageScopeType {
 //
 // When adding a new message identifier, make corresponding changes in the
 // following locations:
-// - tools/metrics/histograms/enums.xml: <enum name="MessageIdentifier">
+// - tools/metrics/histograms/metadata/android/enums.xml:
+//       <enum name="MessageIdentifier">
 // - tools/metrics/histograms/metadata/android/histograms.xml:
 //       <variants name="MessageIdentifiers">
 // - MessagesMetrics.java: #messageIdentifierToHistogramSuffix()
 //
 // A Java counterpart is generated for this enum.
 // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.components.messages
+//
+// LINT.IfChange(MessageIdentifier)
 enum class MessageIdentifier {
   INVALID_MESSAGE = 0,
   SAVE_PASSWORD = 1,
@@ -85,7 +90,7 @@ enum class MessageIdentifier {
   SAFETY_TIP = 5,
   SAVE_ADDRESS_PROFILE = 6,
   MERCHANT_TRUST = 7,
-  ADD_TO_HOMESCREEN_IPH = 8,
+  // Removed: ADD_TO_HOMESCREEN_IPH = 8,
   SEND_TAB_TO_SELF = 9,
   READER_MODE = 10,
   CHROME_SURVEY = 11,
@@ -104,16 +109,42 @@ enum class MessageIdentifier {
   VR_SERVICES_UPGRADE = 24,
   TAILORED_SECURITY_DISABLED = 25,
   AR_CORE_UPGRADE = 26,
-  INSTANT_APPS = 27,
+  // Removed: INSTANT_APPS = 27,
   ABOUT_THIS_SITE = 28,
   TRANSLATE = 29,
   OFFER_NOTIFICATION = 30,
   EXTERNAL_NAVIGATION = 31,
   FRAMEBUST_BLOCKED = 32,
-
+  DESKTOP_SITE_GLOBAL_DEFAULT_OPT_OUT = 33,
+  DESKTOP_SITE_GLOBAL_OPT_IN = 34,
+  PASSWORD_MANAGER_ERROR = 35,
+  DOWNLOAD_INCOGNITO_WARNING = 36,
+  // Removed: RESTORE_CUSTOM_TAB = 37,
+  // Removed: UNDO_CUSTOM_TAB_RESTORATION = 38,
+  CVC_SAVE = 39,
+  // Removed: TRACKING_PROTECTION_NOTICE = 40,
+  DESKTOP_SITE_WINDOW_SETTING = 41,
+  PROMPT_HATS_LOCATION_CUSTOM_INVITATION = 42,
+  PROMPT_HATS_LOCATION_GENERIC_INVITATION = 43,
+  PROMPT_HATS_CAMERA_CUSTOM_INVITATION = 44,
+  PROMPT_HATS_CAMERA_GENERIC_INVITATION = 45,
+  PROMPT_HATS_MICROPHONE_CUSTOM_INVITATION = 46,
+  PROMPT_HATS_MICROPHONE_GENERIC_INVITATION = 47,
+  PERMISSION_BLOCKED = 48,
+  SAVE_CARD_FAILURE = 49,
+  VIRTUAL_CARD_ENROLL_FAILURE = 50,
+  PROMPT_HATS_QUICK_DELETE = 51,
+  PROMPT_HATS_SAFETY_HUB = 52,
+  DEFAULT_BROWSER_PROMO = 53,
+  TAB_REMOVED_THROUGH_COLLABORATION = 54,
+  TAB_NAVIGATED_THROUGH_COLLABORATION = 55,
+  COLLABORATION_MEMBER_ADDED = 56,
+  COLLABORATION_REMOVED = 57,
+  CCT_ACCOUNT_MISMATCH_NOTICE = 58,
   // Insert new values before this line.
   COUNT
 };
+// LINT.ThenChange(//tools/metrics/histograms/metadata/android/histograms.xml:MessageIdentifier)
 
 // The behavior the message should follow when the primary button is clicked,
 // after running the primary action callback.

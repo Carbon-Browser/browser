@@ -1,16 +1,24 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "cc/metrics/compositor_frame_reporting_controller.h"
 
-#include <algorithm>
+#include <string>
 #include <utility>
 #include <vector>
 
+#include "base/rand_util.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/strcat.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/simple_test_tick_clock.h"
+#include "base/test/test_trace_processor.h"
 #include "base/time/time.h"
 #include "cc/metrics/dropped_frame_counter.h"
 #include "cc/metrics/event_metrics.h"
@@ -178,10 +186,10 @@ class CompositorFrameReportingControllerTest : public testing::Test {
               [CompositorFrameReportingController::PipelineStage::kActivate]);
     submit_time_ = AdvanceNowByMs(10);
     ++current_token_;
-    reporting_controller_.DidSubmitCompositorFrame(
-        *current_token_, submit_time_, current_id_, last_activated_id_,
-        std::move(events_metrics),
-        /*has_missing_content=*/false);
+    SubmitInfo submit_info = {*current_token_, submit_time_};
+    submit_info.events_metrics = std::move(events_metrics);
+    reporting_controller_.DidSubmitCompositorFrame(submit_info, current_id_,
+                                                   last_activated_id_);
   }
 
   void SimulatePresentCompositorFrame() {
@@ -251,29 +259,40 @@ class CompositorFrameReportingControllerTest : public testing::Test {
     return metrics;
   }
 
-  std::unique_ptr<EventMetrics> CreateEventMetrics(ui::EventType type) {
+  std::unique_ptr<EventMetrics> CreateEventMetrics(
+      ui::EventType type,
+      std::optional<EventMetrics::TraceId> trace_id) {
     const base::TimeTicks event_time = AdvanceNowByMs(10);
+    const base::TimeTicks arrived_in_browser_main_timestamp = AdvanceNowByMs(3);
     AdvanceNowByMs(10);
-    return SetupEventMetrics(
-        EventMetrics::CreateForTesting(type, event_time, &test_tick_clock_));
+    return SetupEventMetrics(EventMetrics::CreateForTesting(
+        type, event_time, arrived_in_browser_main_timestamp, &test_tick_clock_,
+        trace_id));
   }
 
-  std::unique_ptr<EventMetrics> CreateScrollBeginEventMetrics() {
+  std::unique_ptr<EventMetrics> CreateScrollBeginEventMetrics(
+      ui::ScrollInputType input_type) {
     const base::TimeTicks event_time = AdvanceNowByMs(10);
+    const base::TimeTicks arrived_in_browser_main_timestamp = AdvanceNowByMs(3);
     AdvanceNowByMs(10);
     return SetupEventMetrics(ScrollEventMetrics::CreateForTesting(
-        ui::ET_GESTURE_SCROLL_BEGIN, ui::ScrollInputType::kWheel,
-        /*is_inertial=*/false, event_time, &test_tick_clock_));
+        ui::EventType::kGestureScrollBegin, input_type,
+        /*is_inertial=*/false, event_time, arrived_in_browser_main_timestamp,
+        &test_tick_clock_));
   }
 
   std::unique_ptr<EventMetrics> CreateScrollUpdateEventMetrics(
+      ui::ScrollInputType input_type,
       bool is_inertial,
-      ScrollUpdateEventMetrics::ScrollUpdateType scroll_update_type) {
+      ScrollUpdateEventMetrics::ScrollUpdateType scroll_update_type,
+      std::optional<EventMetrics::TraceId> trace_id) {
     const base::TimeTicks event_time = AdvanceNowByMs(10);
+    const base::TimeTicks arrived_in_browser_main_timestamp = AdvanceNowByMs(3);
     AdvanceNowByMs(10);
     return SetupEventMetrics(ScrollUpdateEventMetrics::CreateForTesting(
-        ui::ET_GESTURE_SCROLL_UPDATE, ui::ScrollInputType::kWheel, is_inertial,
-        scroll_update_type, /*delta=*/10.0f, event_time, &test_tick_clock_));
+        ui::EventType::kGestureScrollUpdate, input_type, is_inertial,
+        scroll_update_type, /*delta=*/10.0f, event_time,
+        arrived_in_browser_main_timestamp, &test_tick_clock_, trace_id));
   }
 
   std::unique_ptr<EventMetrics> CreatePinchEventMetrics(
@@ -289,21 +308,22 @@ class CompositorFrameReportingControllerTest : public testing::Test {
       const EventMetrics::List& events_metrics) {
     std::vector<base::TimeTicks> event_times;
     event_times.reserve(events_metrics.size());
-    std::transform(events_metrics.cbegin(), events_metrics.cend(),
-                   std::back_inserter(event_times),
-                   [](const auto& event_metrics) {
-                     return event_metrics->GetDispatchStageTimestamp(
-                         EventMetrics::DispatchStage::kGenerated);
-                   });
+    base::ranges::transform(events_metrics, std::back_inserter(event_times),
+                            [](const auto& event_metrics) {
+                              return event_metrics->GetDispatchStageTimestamp(
+                                  EventMetrics::DispatchStage::kGenerated);
+                            });
     return event_times;
   }
 
  protected:
+  // Disable sub-sampling to deterministically record histograms under test.
+  base::MetricsSubSampler::ScopedAlwaysSampleForTesting no_subsampling_;
+
   // This should be defined before |reporting_controller_| so it is created
   // before and destroyed after that.
   base::SimpleTestTickClock test_tick_clock_;
 
-  TestCompositorFrameReportingController reporting_controller_;
   viz::BeginFrameArgs args_;
   viz::BeginFrameId current_id_;
   viz::BeginFrameId last_activated_id_;
@@ -318,6 +338,8 @@ class CompositorFrameReportingControllerTest : public testing::Test {
   viz::FrameTokenGenerator current_token_;
   DroppedFrameCounter dropped_counter_;
   TotalFrameCounter total_frame_counter_;
+  TestCompositorFrameReportingController reporting_controller_;
+  ::base::test::TracingEnvironment tracing_environment_;
 };
 
 TEST_F(CompositorFrameReportingControllerTest, ActiveReporterCounts) {
@@ -363,6 +385,7 @@ TEST_F(CompositorFrameReportingControllerTest, ActiveReporterCounts) {
 
   // BF -> BMF -> BF -> Commit
   // Should stay same.
+  reporting_controller_.NotifyReadyToCommit(nullptr);
   reporting_controller_.WillCommit();
   reporting_controller_.DidCommit();
   EXPECT_EQ(2, reporting_controller_.ActiveReporters());
@@ -377,6 +400,7 @@ TEST_F(CompositorFrameReportingControllerTest, ActiveReporterCounts) {
   // for frame_2 in activate state.
   EXPECT_EQ(2, reporting_controller_.ActiveReporters());
 
+  reporting_controller_.NotifyReadyToCommit(nullptr);
   reporting_controller_.WillCommit();
   reporting_controller_.DidCommit();
   reporting_controller_.WillActivate();
@@ -386,9 +410,10 @@ TEST_F(CompositorFrameReportingControllerTest, ActiveReporterCounts) {
   EXPECT_EQ(1, reporting_controller_.ActiveReporters());
 
   last_activated_id_ = current_id_3;
-  reporting_controller_.DidSubmitCompositorFrame(
-      0, AdvanceNowByMs(10), current_id_3, last_activated_id_, {},
-      /*has_missing_content=*/false);
+  SubmitInfo submit_info;
+  submit_info.time = AdvanceNowByMs(10);
+  reporting_controller_.DidSubmitCompositorFrame(submit_info, current_id_3,
+                                                 last_activated_id_);
   EXPECT_EQ(0, reporting_controller_.ActiveReporters());
 
   // Start a frame and take it all the way to the activate stage.
@@ -507,7 +532,7 @@ TEST_F(CompositorFrameReportingControllerTest, MainFrameCausedNoDamage) {
   reporting_controller_.WillBeginImplFrame(args_1);
   reporting_controller_.WillBeginMainFrame(args_1);
   reporting_controller_.BeginMainFrameAborted(
-      current_id_1, CommitEarlyOutReason::FINISHED_NO_UPDATES);
+      current_id_1, CommitEarlyOutReason::kFinishedNoUpdates);
   reporting_controller_.OnFinishImplFrame(current_id_1);
   reporting_controller_.DidNotProduceFrame(current_id_1,
                                            FrameSkippedReason::kNoDamage);
@@ -516,7 +541,7 @@ TEST_F(CompositorFrameReportingControllerTest, MainFrameCausedNoDamage) {
   reporting_controller_.WillBeginMainFrame(args_2);
   reporting_controller_.OnFinishImplFrame(current_id_2);
   reporting_controller_.BeginMainFrameAborted(
-      current_id_2, CommitEarlyOutReason::FINISHED_NO_UPDATES);
+      current_id_2, CommitEarlyOutReason::kFinishedNoUpdates);
   reporting_controller_.DidNotProduceFrame(current_id_2,
                                            FrameSkippedReason::kNoDamage);
 
@@ -546,13 +571,14 @@ TEST_F(CompositorFrameReportingControllerTest, DidNotProduceFrame) {
 
   reporting_controller_.WillBeginImplFrame(args_2);
   reporting_controller_.OnFinishImplFrame(current_id_2);
+  reporting_controller_.NotifyReadyToCommit(nullptr);
   reporting_controller_.WillCommit();
   reporting_controller_.DidCommit();
   reporting_controller_.WillActivate();
   reporting_controller_.DidActivate();
-  reporting_controller_.DidSubmitCompositorFrame(1, AdvanceNowByMs(10),
-                                                 current_id_2, current_id_1, {},
-                                                 /*has_missing_content=*/false);
+  SubmitInfo submit_info = {1u, AdvanceNowByMs(10)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info, current_id_2,
+                                                 current_id_1);
   viz::FrameTimingDetails details = {};
   reporting_controller_.DidPresentCompositorFrame(1, details);
 
@@ -612,14 +638,15 @@ TEST_F(CompositorFrameReportingControllerTest,
                                            FrameSkippedReason::kWaitingOnMain);
 
   reporting_controller_.WillBeginImplFrame(args_3);
+  reporting_controller_.NotifyReadyToCommit(nullptr);
   reporting_controller_.WillCommit();
   reporting_controller_.DidCommit();
   reporting_controller_.WillActivate();
   reporting_controller_.DidActivate();
   reporting_controller_.OnFinishImplFrame(current_id_3);
-  reporting_controller_.DidSubmitCompositorFrame(1, AdvanceNowByMs(10),
-                                                 current_id_3, current_id_1, {},
-                                                 /*has_missing_content=*/false);
+  SubmitInfo submit_info = {1u, AdvanceNowByMs(10)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info, current_id_3,
+                                                 current_id_1);
   viz::FrameTimingDetails details;
   details.presentation_feedback = {args_3.frame_time + args_3.interval,
                                    args_3.interval, 0};
@@ -649,11 +676,11 @@ TEST_F(CompositorFrameReportingControllerTest, MainFrameAborted) {
   reporting_controller_.WillBeginImplFrame(args_);
   reporting_controller_.WillBeginMainFrame(args_);
   reporting_controller_.BeginMainFrameAborted(
-      current_id_, CommitEarlyOutReason::FINISHED_NO_UPDATES);
+      current_id_, CommitEarlyOutReason::kFinishedNoUpdates);
   reporting_controller_.OnFinishImplFrame(current_id_);
-  reporting_controller_.DidSubmitCompositorFrame(
-      1, AdvanceNowByMs(10), current_id_, last_activated_id_, {},
-      /*has_missing_content=*/false);
+  SubmitInfo submit_info = {1u, AdvanceNowByMs(10)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info, current_id_,
+                                                 last_activated_id_);
 
   viz::FrameTimingDetails details = {};
   reporting_controller_.DidPresentCompositorFrame(1, details);
@@ -699,6 +726,7 @@ TEST_F(CompositorFrameReportingControllerTest, MainFrameAborted2) {
   reporting_controller_.WillBeginImplFrame(args_1);
   reporting_controller_.OnFinishImplFrame(current_id_1);
   reporting_controller_.WillBeginMainFrame(args_1);
+  reporting_controller_.NotifyReadyToCommit(nullptr);
   reporting_controller_.WillCommit();
   reporting_controller_.DidCommit();
   reporting_controller_.WillActivate();
@@ -707,10 +735,10 @@ TEST_F(CompositorFrameReportingControllerTest, MainFrameAborted2) {
   reporting_controller_.WillBeginMainFrame(args_2);
   reporting_controller_.OnFinishImplFrame(current_id_2);
   reporting_controller_.BeginMainFrameAborted(
-      current_id_2, CommitEarlyOutReason::FINISHED_NO_UPDATES);
-  reporting_controller_.DidSubmitCompositorFrame(1, AdvanceNowByMs(10),
-                                                 current_id_2, current_id_1, {},
-                                                 /*has_missing_content=*/false);
+      current_id_2, CommitEarlyOutReason::kFinishedNoUpdates);
+  SubmitInfo submit_info = {1u, AdvanceNowByMs(10)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info, current_id_2,
+                                                 current_id_1);
   viz::FrameTimingDetails details = {};
   reporting_controller_.DidPresentCompositorFrame(1, details);
   histogram_tester.ExpectTotalCount(
@@ -728,9 +756,9 @@ TEST_F(CompositorFrameReportingControllerTest, MainFrameAborted2) {
   histogram_tester.ExpectTotalCount(
       "CompositorLatency.SubmitCompositorFrameToPresentationCompositorFrame",
       2);
-  reporting_controller_.DidSubmitCompositorFrame(2, AdvanceNowByMs(10),
-                                                 current_id_2, current_id_1, {},
-                                                 /*has_missing_content=*/false);
+  SubmitInfo submit_info2 = {2u, AdvanceNowByMs(10)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info2, current_id_2,
+                                                 current_id_1);
   reporting_controller_.DidPresentCompositorFrame(2, details);
   histogram_tester.ExpectTotalCount(
       "CompositorLatency.DroppedFrame.BeginImplFrameToSendBeginMainFrame", 0);
@@ -749,9 +777,9 @@ TEST_F(CompositorFrameReportingControllerTest, MainFrameAborted2) {
       2);
   reporting_controller_.WillBeginImplFrame(args_3);
   reporting_controller_.OnFinishImplFrame(current_id_3);
-  reporting_controller_.DidSubmitCompositorFrame(3, AdvanceNowByMs(10),
-                                                 current_id_3, current_id_1, {},
-                                                 /*has_missing_content=*/false);
+  SubmitInfo submit_info3 = {3u, AdvanceNowByMs(10)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info3, current_id_3,
+                                                 current_id_1);
   reporting_controller_.DidPresentCompositorFrame(3, details);
   histogram_tester.ExpectTotalCount(
       "CompositorLatency.DroppedFrame.BeginImplFrameToSendBeginMainFrame", 0);
@@ -785,13 +813,14 @@ TEST_F(CompositorFrameReportingControllerTest, LongMainFrame) {
   reporting_controller_.WillBeginImplFrame(args_1);
   reporting_controller_.OnFinishImplFrame(current_id_1);
   reporting_controller_.WillBeginMainFrame(args_1);
+  reporting_controller_.NotifyReadyToCommit(nullptr);
   reporting_controller_.WillCommit();
   reporting_controller_.DidCommit();
   reporting_controller_.WillActivate();
   reporting_controller_.DidActivate();
-  reporting_controller_.DidSubmitCompositorFrame(1, AdvanceNowByMs(10),
-                                                 current_id_1, current_id_1, {},
-                                                 /*has_missing_content=*/false);
+  SubmitInfo submit_info = {1u, AdvanceNowByMs(10)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info, current_id_1,
+                                                 current_id_1);
   reporting_controller_.DidPresentCompositorFrame(1, details);
 
   histogram_tester.ExpectTotalCount(
@@ -813,9 +842,9 @@ TEST_F(CompositorFrameReportingControllerTest, LongMainFrame) {
   reporting_controller_.WillBeginImplFrame(args_2);
   reporting_controller_.WillBeginMainFrame(args_2);
   reporting_controller_.OnFinishImplFrame(current_id_2);
-  reporting_controller_.DidSubmitCompositorFrame(2, AdvanceNowByMs(10),
-                                                 current_id_2, current_id_1, {},
-                                                 /*has_missing_content=*/false);
+  SubmitInfo submit_info2 = {2u, AdvanceNowByMs(10)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info2, current_id_2,
+                                                 current_id_1);
   reporting_controller_.DidPresentCompositorFrame(2, details);
 
   // The reporting for the second frame is delayed until the main-thread
@@ -850,13 +879,14 @@ TEST_F(CompositorFrameReportingControllerTest, LongMainFrame) {
 
   reporting_controller_.WillBeginImplFrame(args_3);
   reporting_controller_.OnFinishImplFrame(current_id_3);
+  reporting_controller_.NotifyReadyToCommit(nullptr);
   reporting_controller_.WillCommit();
   reporting_controller_.DidCommit();
   reporting_controller_.WillActivate();
   reporting_controller_.DidActivate();
-  reporting_controller_.DidSubmitCompositorFrame(3, AdvanceNowByMs(10),
-                                                 current_id_3, current_id_2, {},
-                                                 /*has_missing_content=*/false);
+  SubmitInfo submit_info3 = {3u, AdvanceNowByMs(10)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info3, current_id_3,
+                                                 current_id_2);
   reporting_controller_.DidPresentCompositorFrame(3, details);
 
   // The main-thread responded, so the metrics for |args_2| should now be
@@ -902,13 +932,14 @@ TEST_F(CompositorFrameReportingControllerTest, LongMainFrame2) {
   reporting_controller_.WillBeginImplFrame(args_1);
   reporting_controller_.OnFinishImplFrame(current_id_1);
   reporting_controller_.WillBeginMainFrame(args_1);
+  reporting_controller_.NotifyReadyToCommit(nullptr);
   reporting_controller_.WillCommit();
   reporting_controller_.DidCommit();
   reporting_controller_.WillActivate();
   reporting_controller_.DidActivate();
-  reporting_controller_.DidSubmitCompositorFrame(1, AdvanceNowByMs(10),
-                                                 current_id_1, current_id_1, {},
-                                                 /*has_missing_content=*/false);
+  SubmitInfo submit_info = {1u, AdvanceNowByMs(10)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info, current_id_1,
+                                                 current_id_1);
   reporting_controller_.DidPresentCompositorFrame(1, details);
 
   histogram_tester.ExpectTotalCount(
@@ -928,12 +959,13 @@ TEST_F(CompositorFrameReportingControllerTest, LongMainFrame2) {
   // The reporting for the second frame is delayed until activation happens.
   reporting_controller_.WillBeginImplFrame(args_2);
   reporting_controller_.WillBeginMainFrame(args_2);
+  reporting_controller_.NotifyReadyToCommit(nullptr);
   reporting_controller_.WillCommit();
   reporting_controller_.DidCommit();
   reporting_controller_.OnFinishImplFrame(current_id_2);
-  reporting_controller_.DidSubmitCompositorFrame(2, AdvanceNowByMs(10),
-                                                 current_id_2, current_id_1, {},
-                                                 /*has_missing_content=*/false);
+  SubmitInfo submit_info2 = {2u, AdvanceNowByMs(10)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info2, current_id_2,
+                                                 current_id_1);
   reporting_controller_.DidPresentCompositorFrame(2, details);
 
   histogram_tester.ExpectTotalCount(
@@ -973,9 +1005,9 @@ TEST_F(CompositorFrameReportingControllerTest, LongMainFrame2) {
   reporting_controller_.DidActivate();
   reporting_controller_.WillBeginImplFrame(args_3);
   reporting_controller_.OnFinishImplFrame(current_id_3);
-  reporting_controller_.DidSubmitCompositorFrame(3, AdvanceNowByMs(10),
-                                                 current_id_3, current_id_2, {},
-                                                 /*has_missing_content=*/false);
+  SubmitInfo submit_info3 = {3u, AdvanceNowByMs(10)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info3, current_id_3,
+                                                 current_id_2);
   reporting_controller_.DidPresentCompositorFrame(3, details);
   histogram_tester.ExpectTotalCount(
       "CompositorLatency.BeginImplFrameToSendBeginMainFrame", 4);
@@ -1055,13 +1087,14 @@ TEST_F(CompositorFrameReportingControllerTest, ReportingMissedDeadlineFrame1) {
   reporting_controller_.WillBeginImplFrame(args_);
   reporting_controller_.OnFinishImplFrame(current_id_);
   reporting_controller_.WillBeginMainFrame(args_);
+  reporting_controller_.NotifyReadyToCommit(nullptr);
   reporting_controller_.WillCommit();
   reporting_controller_.DidCommit();
   reporting_controller_.WillActivate();
   reporting_controller_.DidActivate();
-  reporting_controller_.DidSubmitCompositorFrame(1, AdvanceNowByMs(10),
-                                                 current_id_, current_id_, {},
-                                                 /*has_missing_content=*/false);
+  SubmitInfo submit_info = {1u, AdvanceNowByMs(10)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info, current_id_,
+                                                 current_id_);
   viz::FrameTimingDetails details = {};
   details.presentation_feedback.timestamp =
       args_.frame_time + args_.interval * 1.5 - base::Microseconds(100);
@@ -1094,13 +1127,14 @@ TEST_F(CompositorFrameReportingControllerTest, ReportingMissedDeadlineFrame2) {
   reporting_controller_.WillBeginImplFrame(args_);
   reporting_controller_.OnFinishImplFrame(current_id_);
   reporting_controller_.WillBeginMainFrame(args_);
+  reporting_controller_.NotifyReadyToCommit(nullptr);
   reporting_controller_.WillCommit();
   reporting_controller_.DidCommit();
   reporting_controller_.WillActivate();
   reporting_controller_.DidActivate();
-  reporting_controller_.DidSubmitCompositorFrame(1, AdvanceNowByMs(10),
-                                                 current_id_, current_id_, {},
-                                                 /*has_missing_content=*/false);
+  SubmitInfo submit_info = {1u, AdvanceNowByMs(10)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info, current_id_,
+                                                 current_id_);
   viz::FrameTimingDetails details = {};
   details.presentation_feedback.timestamp =
       args_.frame_time + args_.interval * 1.5 + base::Microseconds(100);
@@ -1132,9 +1166,9 @@ TEST_F(CompositorFrameReportingControllerTest, LongCompositorAnimation) {
 
   reporting_controller_.WillBeginImplFrame(args_);
   reporting_controller_.OnFinishImplFrame(current_id_);
-  reporting_controller_.DidSubmitCompositorFrame(
-      1, AdvanceNowByMs(10), current_id_, last_activated_id_, {},
-      /*has_missing_content=*/false);
+  SubmitInfo submit_info = {1u, AdvanceNowByMs(10)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info, current_id_,
+                                                 last_activated_id_);
   viz::FrameTimingDetails details = {};
   reporting_controller_.DidPresentCompositorFrame(*current_token_, details);
 
@@ -1190,9 +1224,9 @@ TEST_F(CompositorFrameReportingControllerTest,
   base::HistogramTester histogram_tester;
 
   std::unique_ptr<EventMetrics> event_metrics_ptrs[] = {
-      CreateEventMetrics(ui::ET_TOUCH_PRESSED),
-      CreateEventMetrics(ui::ET_TOUCH_MOVED),
-      CreateEventMetrics(ui::ET_TOUCH_MOVED),
+      CreateEventMetrics(ui::EventType::kTouchPressed, std::nullopt),
+      CreateEventMetrics(ui::EventType::kTouchMoved, std::nullopt),
+      CreateEventMetrics(ui::EventType::kTouchMoved, std::nullopt),
   };
   EXPECT_THAT(event_metrics_ptrs, Each(NotNull()));
   EventMetrics::List events_metrics(
@@ -1262,16 +1296,26 @@ TEST_F(CompositorFrameReportingControllerTest,
   const bool kScrollIsInertial = true;
   const bool kScrollIsNotInertial = false;
   std::unique_ptr<EventMetrics> event_metrics_ptrs[] = {
-      CreateScrollBeginEventMetrics(),
+      CreateScrollBeginEventMetrics(ui::ScrollInputType::kWheel),
       CreateScrollUpdateEventMetrics(
-          kScrollIsNotInertial,
-          ScrollUpdateEventMetrics::ScrollUpdateType::kStarted),
+          ui::ScrollInputType::kWheel, kScrollIsNotInertial,
+          ScrollUpdateEventMetrics::ScrollUpdateType::kStarted, std::nullopt),
       CreateScrollUpdateEventMetrics(
-          kScrollIsNotInertial,
-          ScrollUpdateEventMetrics::ScrollUpdateType::kContinued),
+          ui::ScrollInputType::kWheel, kScrollIsNotInertial,
+          ScrollUpdateEventMetrics::ScrollUpdateType::kContinued, std::nullopt),
       CreateScrollUpdateEventMetrics(
-          kScrollIsInertial,
-          ScrollUpdateEventMetrics::ScrollUpdateType::kContinued),
+          ui::ScrollInputType::kWheel, kScrollIsInertial,
+          ScrollUpdateEventMetrics::ScrollUpdateType::kContinued, std::nullopt),
+      CreateScrollBeginEventMetrics(ui::ScrollInputType::kTouchscreen),
+      CreateScrollUpdateEventMetrics(
+          ui::ScrollInputType::kTouchscreen, kScrollIsNotInertial,
+          ScrollUpdateEventMetrics::ScrollUpdateType::kStarted, std::nullopt),
+      CreateScrollUpdateEventMetrics(
+          ui::ScrollInputType::kTouchscreen, kScrollIsNotInertial,
+          ScrollUpdateEventMetrics::ScrollUpdateType::kContinued, std::nullopt),
+      CreateScrollUpdateEventMetrics(
+          ui::ScrollInputType::kTouchscreen, kScrollIsInertial,
+          ScrollUpdateEventMetrics::ScrollUpdateType::kContinued, std::nullopt),
   };
   EXPECT_THAT(event_metrics_ptrs, Each(NotNull()));
   EventMetrics::List events_metrics(
@@ -1297,11 +1341,24 @@ TEST_F(CompositorFrameReportingControllerTest,
     const char* name;
     const base::HistogramBase::Count count;
   } expected_counts[] = {
-      {"EventLatency.GestureScrollBegin.Wheel.TotalLatency", 1},
-      {"EventLatency.FirstGestureScrollUpdate.Wheel.TotalLatency", 1},
-      {"EventLatency.GestureScrollUpdate.Wheel.TotalLatency", 1},
-      {"EventLatency.InertialGestureScrollUpdate.Wheel.TotalLatency", 1},
-      {"EventLatency.TotalLatency", 4},
+      {"EventLatency.GestureScrollBegin.Wheel.TotalLatency2", 1},
+      {"EventLatency.FirstGestureScrollUpdate.Wheel.TotalLatency2", 1},
+      {"EventLatency.GestureScrollUpdate.Wheel.TotalLatency2", 1},
+      {"EventLatency.InertialGestureScrollUpdate.Wheel.TotalLatency2", 1},
+      {"EventLatency.GestureScrollBegin.Touchscreen.TotalLatency2", 1},
+      {"EventLatency.FirstGestureScrollUpdate.Touchscreen.TotalLatency2", 1},
+      {"EventLatency.GestureScrollUpdate.Touchscreen.TotalLatency", 1},
+      {"EventLatency.GestureScrollUpdate.Touchscreen.TotalLatency2", 1},
+      {"EventLatency.InertialGestureScrollUpdate.Touchscreen.TotalLatency2", 1},
+      {"EventLatency.GestureScrollBegin.TotalLatency2", 2},
+      {"EventLatency.GestureScrollBegin.GenerationToBrowserMain", 2},
+      {"EventLatency.FirstGestureScrollUpdate.TotalLatency2", 2},
+      {"EventLatency.FirstGestureScrollUpdate.GenerationToBrowserMain", 2},
+      {"EventLatency.GestureScrollUpdate.TotalLatency2", 2},
+      {"EventLatency.GestureScrollUpdate.GenerationToBrowserMain", 2},
+      {"EventLatency.InertialGestureScrollUpdate.TotalLatency2", 2},
+      {"EventLatency.InertialGestureScrollUpdate.GenerationToBrowserMain", 2},
+      {"EventLatency.TotalLatency", 8},
   };
   for (const auto& expected_count : expected_counts) {
     histogram_tester.ExpectTotalCount(expected_count.name,
@@ -1314,18 +1371,33 @@ TEST_F(CompositorFrameReportingControllerTest,
     const char* name;
     const base::HistogramBase::Sample latency_ms;
   } expected_latencies[] = {
-      {"EventLatency.GestureScrollBegin.Wheel.TotalLatency",
+      {"EventLatency.GestureScrollBegin.Wheel.TotalLatency2",
        static_cast<base::HistogramBase::Sample>(
            (presentation_time - event_times[0]).InMicroseconds())},
-      {"EventLatency.FirstGestureScrollUpdate.Wheel.TotalLatency",
+      {"EventLatency.FirstGestureScrollUpdate.Wheel.TotalLatency2",
        static_cast<base::HistogramBase::Sample>(
            (presentation_time - event_times[1]).InMicroseconds())},
-      {"EventLatency.GestureScrollUpdate.Wheel.TotalLatency",
+      {"EventLatency.GestureScrollUpdate.Wheel.TotalLatency2",
        static_cast<base::HistogramBase::Sample>(
            (presentation_time - event_times[2]).InMicroseconds())},
-      {"EventLatency.InertialGestureScrollUpdate.Wheel.TotalLatency",
+      {"EventLatency.InertialGestureScrollUpdate.Wheel.TotalLatency2",
        static_cast<base::HistogramBase::Sample>(
            (presentation_time - event_times[3]).InMicroseconds())},
+      {"EventLatency.GestureScrollBegin.Touchscreen.TotalLatency2",
+       static_cast<base::HistogramBase::Sample>(
+           (presentation_time - event_times[4]).InMicroseconds())},
+      {"EventLatency.FirstGestureScrollUpdate.Touchscreen.TotalLatency2",
+       static_cast<base::HistogramBase::Sample>(
+           (presentation_time - event_times[5]).InMicroseconds())},
+      {"EventLatency.GestureScrollUpdate.Touchscreen.TotalLatency",
+       static_cast<base::HistogramBase::Sample>(
+           (presentation_time - event_times[6]).InMicroseconds())},
+      {"EventLatency.GestureScrollUpdate.Touchscreen.TotalLatency2",
+       static_cast<base::HistogramBase::Sample>(
+           (presentation_time - event_times[6]).InMicroseconds())},
+      {"EventLatency.InertialGestureScrollUpdate.Touchscreen.TotalLatency2",
+       static_cast<base::HistogramBase::Sample>(
+           (presentation_time - event_times[7]).InMicroseconds())},
   };
   for (const auto& expected_latency : expected_latencies) {
     histogram_tester.ExpectBucketCount(expected_latency.name,
@@ -1339,9 +1411,8 @@ TEST_F(CompositorFrameReportingControllerTest,
 
   // Set up two EventMetrics objects.
   std::unique_ptr<EventMetrics> metrics_1 = CreateScrollUpdateEventMetrics(
-      false /* is_inertial */,
-      ScrollUpdateEventMetrics::ScrollUpdateType::kStarted);
-  metrics_1->set_requires_main_thread_update();
+      ui::ScrollInputType::kWheel, /*is_inertial=*/false,
+      ScrollUpdateEventMetrics::ScrollUpdateType::kStarted, std::nullopt);
   base::TimeTicks start_time_1 = metrics_1->GetDispatchStageTimestamp(
       EventMetrics::DispatchStage::kGenerated);
 
@@ -1349,8 +1420,9 @@ TEST_F(CompositorFrameReportingControllerTest,
   // (It's not very realistic for the same scroll gesture to produce two events
   // with differing values for this bit, but let's test both conditions here.)
   std::unique_ptr<EventMetrics> metrics_2 = CreateScrollUpdateEventMetrics(
-      false /* is_inertial */,
-      ScrollUpdateEventMetrics::ScrollUpdateType::kContinued);
+      ui::ScrollInputType::kWheel, /*is_inertial=*/false,
+      ScrollUpdateEventMetrics::ScrollUpdateType::kContinued, std::nullopt);
+  metrics_2->set_requires_main_thread_update();
   base::TimeTicks start_time_2 = metrics_2->GetDispatchStageTimestamp(
       EventMetrics::DispatchStage::kGenerated);
 
@@ -1363,10 +1435,9 @@ TEST_F(CompositorFrameReportingControllerTest,
   EventMetrics::List metrics_list;
   metrics_list.push_back(std::move(metrics_1));
   metrics_list.push_back(std::move(metrics_2));
-  reporting_controller_.DidSubmitCompositorFrame(
-      *current_token_, AdvanceNowByMs(10), current_id_, {},
-      {{}, std::move(metrics_list)},
-      /*has_missing_content=*/false);
+  SubmitInfo submit_info = {*current_token_, AdvanceNowByMs(10)};
+  submit_info.events_metrics = {{}, std::move(metrics_list)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info, current_id_, {});
 
   // Present the partial update.
   viz::FrameTimingDetails details_1 = {};
@@ -1387,20 +1458,20 @@ TEST_F(CompositorFrameReportingControllerTest,
   details_2.presentation_feedback.timestamp = AdvanceNowByMs(10);
   reporting_controller_.DidPresentCompositorFrame(*current_token_, details_2);
 
-  // metrics_1 has requires_main_thread_update(), so its latency is based on the
-  // final-update presentation (details_2).
+  // metrics_1 did NOT have requires_main_thread_update(), so its latency is
+  // based on the partial-update presentation (details_1).
   base::TimeDelta expected_latency_1 =
-      details_2.presentation_feedback.timestamp - start_time_1;
+      details_1.presentation_feedback.timestamp - start_time_1;
   histogram_tester.ExpectBucketCount(
-      "EventLatency.FirstGestureScrollUpdate.Wheel.TotalLatency",
+      "EventLatency.FirstGestureScrollUpdate.Wheel.TotalLatency2",
       expected_latency_1.InMicroseconds(), 1);
 
-  // metrics_2 did NOT have requires_main_thread_update(), so its latency is
-  // based on the partial-update presentation (details_1).
+  // metrics_2 has requires_main_thread_update(), so its latency is based on the
+  // final-update presentation (details_2).
   base::TimeDelta expected_latency_2 =
-      details_1.presentation_feedback.timestamp - start_time_2;
+      details_2.presentation_feedback.timestamp - start_time_2;
   histogram_tester.ExpectBucketCount(
-      "EventLatency.GestureScrollUpdate.Wheel.TotalLatency",
+      "EventLatency.GestureScrollUpdate.Wheel.TotalLatency2",
       expected_latency_2.InMicroseconds(), 1);
 }
 
@@ -1411,13 +1482,13 @@ TEST_F(CompositorFrameReportingControllerTest,
   base::HistogramTester histogram_tester;
 
   std::unique_ptr<EventMetrics> event_metrics_ptrs[] = {
-      CreatePinchEventMetrics(ui::ET_GESTURE_PINCH_BEGIN,
+      CreatePinchEventMetrics(ui::EventType::kGesturePinchBegin,
                               ui::ScrollInputType::kWheel),
-      CreatePinchEventMetrics(ui::ET_GESTURE_PINCH_UPDATE,
+      CreatePinchEventMetrics(ui::EventType::kGesturePinchUpdate,
                               ui::ScrollInputType::kWheel),
-      CreatePinchEventMetrics(ui::ET_GESTURE_PINCH_BEGIN,
+      CreatePinchEventMetrics(ui::EventType::kGesturePinchBegin,
                               ui::ScrollInputType::kTouchscreen),
-      CreatePinchEventMetrics(ui::ET_GESTURE_PINCH_UPDATE,
+      CreatePinchEventMetrics(ui::EventType::kGesturePinchUpdate,
                               ui::ScrollInputType::kTouchscreen),
   };
   EXPECT_THAT(event_metrics_ptrs, Each(NotNull()));
@@ -1487,9 +1558,9 @@ TEST_F(CompositorFrameReportingControllerTest,
   base::HistogramTester histogram_tester;
 
   std::unique_ptr<EventMetrics> event_metrics_ptrs[] = {
-      CreateEventMetrics(ui::ET_TOUCH_PRESSED),
-      CreateEventMetrics(ui::ET_TOUCH_MOVED),
-      CreateEventMetrics(ui::ET_TOUCH_MOVED),
+      CreateEventMetrics(ui::EventType::kTouchPressed, std::nullopt),
+      CreateEventMetrics(ui::EventType::kTouchMoved, std::nullopt),
+      CreateEventMetrics(ui::EventType::kTouchMoved, std::nullopt),
   };
   EXPECT_THAT(event_metrics_ptrs, Each(NotNull()));
   EventMetrics::List events_metrics(
@@ -1563,14 +1634,14 @@ TEST_F(CompositorFrameReportingControllerTest,
   // for the pending main-thread frame).
   SimulateBeginMainFrame();
   reporting_controller_.OnFinishImplFrame(current_id_);
-  reporting_controller_.DidSubmitCompositorFrame(1u, AdvanceNowByMs(10),
-                                                 current_id_, {}, {},
-                                                 /*has_missing_content=*/false);
+  SubmitInfo submit_info = {1u, AdvanceNowByMs(10)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info, current_id_, {});
   viz::FrameTimingDetails details = {};
   details.presentation_feedback.timestamp = AdvanceNowByMs(10);
   reporting_controller_.DidPresentCompositorFrame(1u, details);
 
   // The main-thread responds now, triggering a commit and activation.
+  reporting_controller_.NotifyReadyToCommit(nullptr);
   reporting_controller_.WillCommit();
   reporting_controller_.DidCommit();
   reporting_controller_.WillActivate();
@@ -1583,9 +1654,9 @@ TEST_F(CompositorFrameReportingControllerTest,
   // and R2M.
   SimulateBeginMainFrame();
   reporting_controller_.OnFinishImplFrame(current_id_);
-  reporting_controller_.DidSubmitCompositorFrame(1u, AdvanceNowByMs(10),
-                                                 current_id_, previous_id, {},
-                                                 /*has_missing_content=*/false);
+  SubmitInfo submit_info_main = {1u, AdvanceNowByMs(10)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info_main, current_id_,
+                                                 previous_id);
   details.presentation_feedback.timestamp = AdvanceNowByMs(10);
   reporting_controller_.DidPresentCompositorFrame(1u, details);
 
@@ -1615,9 +1686,8 @@ TEST_F(CompositorFrameReportingControllerTest,
   // main reporter and adopted by it.
   SimulateBeginImplFrame();
   reporting_controller_.OnFinishImplFrame(current_id_);
-  reporting_controller_.DidSubmitCompositorFrame(1u, AdvanceNowByMs(10),
-                                                 current_id_, {}, {},
-                                                 /*has_missing_content=*/false);
+  SubmitInfo submit_info = {1u, AdvanceNowByMs(10)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info, current_id_, {});
 
   viz::FrameTimingDetails details_1 = {};
   details_1.presentation_feedback.timestamp = AdvanceNowByMs(10);
@@ -1639,9 +1709,8 @@ TEST_F(CompositorFrameReportingControllerTest,
   // failure, hence not adopted by the main reporter.
   SimulateBeginImplFrame();
   reporting_controller_.OnFinishImplFrame(current_id_);
-  reporting_controller_.DidSubmitCompositorFrame(2u, AdvanceNowByMs(10),
-                                                 current_id_, {}, {},
-                                                 /*has_missing_content=*/false);
+  SubmitInfo submit_info2 = {2u, AdvanceNowByMs(10)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info2, current_id_, {});
 
   viz::FrameTimingDetails details_2 = {};
   details_2.presentation_feedback.timestamp = AdvanceNowByMs(10);
@@ -1765,7 +1834,7 @@ TEST_F(CompositorFrameReportingControllerTest,
   EXPECT_EQ(0u, dropped_counter_.total_frames());
 
   reporting_controller_.BeginMainFrameAborted(
-      args_1.frame_id, CommitEarlyOutReason::FINISHED_NO_UPDATES);
+      args_1.frame_id, CommitEarlyOutReason::kFinishedNoUpdates);
   reporting_controller_.DidNotProduceFrame(args_1.frame_id,
                                            FrameSkippedReason::kNoDamage);
   EXPECT_EQ(0u, dropped_counter_.total_dropped());
@@ -1784,7 +1853,7 @@ TEST_F(CompositorFrameReportingControllerTest,
   auto thread_type_compositor = SmoothEffectDrivingThread::kCompositor;
   reporting_controller_.SetThreadAffectsSmoothness(thread_type_compositor,
                                                    true);
-  dropped_counter_.OnFcpReceived();
+  dropped_counter_.OnFirstContentfulPaintReceived();
 
   // Submit and present two compositor frames.
   SimulatePresentCompositorFrame();
@@ -1870,7 +1939,7 @@ TEST_F(CompositorFrameReportingControllerTest,
     SimulateBeginMainFrame();
     reporting_controller_.OnFinishImplFrame(current_id_);
     reporting_controller_.BeginMainFrameAborted(
-        current_id_, CommitEarlyOutReason::FINISHED_NO_UPDATES);
+        current_id_, CommitEarlyOutReason::kFinishedNoUpdates);
   }
   EXPECT_EQ(0u, dropped_counter_.total_dropped());
 
@@ -1880,7 +1949,7 @@ TEST_F(CompositorFrameReportingControllerTest,
     SimulateBeginMainFrame();
     reporting_controller_.OnFinishImplFrame(current_id_);
     reporting_controller_.BeginMainFrameAborted(
-        current_id_, CommitEarlyOutReason::ABORTED_DEFERRED_COMMIT);
+        current_id_, CommitEarlyOutReason::kAbortedDeferredCommit);
     SimulateSubmitCompositorFrame({});
   }
   SimulatePresentCompositorFrame();
@@ -1924,14 +1993,14 @@ TEST_F(CompositorFrameReportingControllerTest,
   auto thread_type_main = SmoothEffectDrivingThread::kMain;
   reporting_controller_.SetThreadAffectsSmoothness(thread_type_main,
                                                    /*affects_smoothness=*/true);
-  dropped_counter_.OnFcpReceived();
-  dropped_counter_.SetTimeFcpReceivedForTesting(args_.frame_time);
+  dropped_counter_.OnFirstContentfulPaintReceived();
+  dropped_counter_.SetTimeFirstContentfulPaintReceivedForTesting(
+      args_.frame_time);
 
   SimulateBeginMainFrame();
   reporting_controller_.OnFinishImplFrame(current_id_);
-  reporting_controller_.DidSubmitCompositorFrame(1u, AdvanceNowByMs(10),
-                                                 current_id_, {}, {},
-                                                 /*has_missing_content=*/false);
+  SubmitInfo submit_info = {1u, AdvanceNowByMs(10)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info, current_id_, {});
   viz::FrameTimingDetails details = {};
   details.presentation_feedback.timestamp = AdvanceNowByMs(10);
   reporting_controller_.DidPresentCompositorFrame(1u, details);
@@ -1950,9 +2019,9 @@ TEST_F(CompositorFrameReportingControllerTest,
   reporting_controller_.WillActivate();
   reporting_controller_.DidActivate();
 
-  reporting_controller_.DidSubmitCompositorFrame(2u, AdvanceNowByMs(10),
-                                                 current_id_, previous_id, {},
-                                                 /*has_missing_content=*/false);
+  SubmitInfo submit_info2 = {2u, AdvanceNowByMs(10)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info2, current_id_,
+                                                 previous_id);
   details.presentation_feedback.timestamp = AdvanceNowByMs(10);
   reporting_controller_.DidPresentCompositorFrame(2u, details);
 
@@ -1973,8 +2042,9 @@ TEST_F(CompositorFrameReportingControllerTest,
   reporting_controller_.SetThreadAffectsSmoothness(
       SmoothEffectDrivingThread::kMain, /*affects_smoothness=*/false);
 
-  dropped_counter_.OnFcpReceived();
-  dropped_counter_.SetTimeFcpReceivedForTesting(args_.frame_time);
+  dropped_counter_.OnFirstContentfulPaintReceived();
+  dropped_counter_.SetTimeFirstContentfulPaintReceivedForTesting(
+      args_.frame_time);
 
   // Start a new frame and take it all the way to start the frame on the main
   // thread (i.e. 'begin main frame').
@@ -2003,6 +2073,707 @@ TEST_F(CompositorFrameReportingControllerTest,
   EXPECT_EQ(0u, dropped_counter_.total_smoothness_dropped());
   EXPECT_EQ(3u, dropped_counter_.total_frames());
 }
+
+TEST_F(CompositorFrameReportingControllerTest, MainFrameBeforeCommit) {
+  viz::BeginFrameArgs args1 = SimulateBeginFrameArgs({1, 1});
+  viz::BeginFrameArgs args2 = SimulateBeginFrameArgs({1, 2});
+  viz::BeginFrameArgs args3 = SimulateBeginFrameArgs({1, 3});
+  viz::BeginFrameArgs args4 = SimulateBeginFrameArgs({1, 4});
+
+  // Frame 1
+  reporting_controller_.WillBeginImplFrame(args1);
+  reporting_controller_.WillBeginMainFrame(args1);
+  reporting_controller_.NotifyReadyToCommit(nullptr);
+  // Frame 1 is ready to commit, so we can pipeline frame 2.
+  reporting_controller_.WillBeginImplFrame(args2);
+  reporting_controller_.WillBeginMainFrame(args2);
+  EXPECT_EQ(2, reporting_controller_.ActiveReporters());
+  EXPECT_TRUE(reporting_controller_.HasReporterAt(
+      CompositorFrameReportingController::PipelineStage::kBeginMainFrame));
+  EXPECT_TRUE(reporting_controller_.HasReporterAt(
+      CompositorFrameReportingController::PipelineStage::kReadyToCommit));
+
+  // Commit frame 1
+  reporting_controller_.WillCommit();
+  reporting_controller_.DidCommit();
+  // Frame 2 ready to commit
+  reporting_controller_.NotifyReadyToCommit(nullptr);
+  reporting_controller_.WillBeginImplFrame(args3);
+  EXPECT_EQ(3, reporting_controller_.ActiveReporters());
+  // Pipeline frame 3
+  reporting_controller_.WillBeginMainFrame(args3);
+  EXPECT_EQ(3, reporting_controller_.ActiveReporters());
+  EXPECT_TRUE(reporting_controller_.HasReporterAt(
+      CompositorFrameReportingController::PipelineStage::kBeginMainFrame));
+  EXPECT_TRUE(reporting_controller_.HasReporterAt(
+      CompositorFrameReportingController::PipelineStage::kReadyToCommit));
+  EXPECT_TRUE(reporting_controller_.HasReporterAt(
+      CompositorFrameReportingController::PipelineStage::kCommit));
+
+  // Activate frame 1
+  reporting_controller_.WillActivate();
+  reporting_controller_.DidActivate();
+  // Commit frame 2
+  reporting_controller_.WillCommit();
+  reporting_controller_.DidCommit();
+  // Frame 3 ready to commit
+  reporting_controller_.NotifyReadyToCommit(nullptr);
+  reporting_controller_.WillBeginImplFrame(args4);
+  EXPECT_EQ(4, reporting_controller_.ActiveReporters());
+  // Pipeline frame 4
+  reporting_controller_.WillBeginMainFrame(args4);
+  EXPECT_EQ(4, reporting_controller_.ActiveReporters());
+  EXPECT_TRUE(reporting_controller_.HasReporterAt(
+      CompositorFrameReportingController::PipelineStage::kBeginMainFrame));
+  EXPECT_TRUE(reporting_controller_.HasReporterAt(
+      CompositorFrameReportingController::PipelineStage::kReadyToCommit));
+  EXPECT_TRUE(reporting_controller_.HasReporterAt(
+      CompositorFrameReportingController::PipelineStage::kCommit));
+  EXPECT_TRUE(reporting_controller_.HasReporterAt(
+      CompositorFrameReportingController::PipelineStage::kActivate));
+}
+
+// Glossary of acronyms used in the tests below.
+// AMF - Activate Main Frame
+// AbMF - AbortMainFrame
+// BF - Begin Impl Frame
+// BMF - Begin Main Frame
+// CMF - Commit Main Frame
+// PF - PresentFrame
+// SF - Submit Compositor Frame
+//
+// This test verifies a compositor scroll scenario where the reporter
+// termination is not in order, but we still expect the scroll jank tracker to
+// receive the presentation data in order since it gets notified when controller
+// receives DidPresentCompositorFrame.
+//
+// |          R1main           |
+// | R1impl | R2impl | R3impl  |
+//          | R2main   | (aborted on main)
+//                   | R3main         |
+//
+// The order of events (using the glossary above) is:
+// BF1->BMF1->SF1->PF1->BF2->CMF1->BMF2->SF2->AMF1->AbMF2->
+// BF3->BMF3->PF2->SF(3+1)->PF(3+1)
+TEST_F(CompositorFrameReportingControllerTest,
+       ScrollJankMetricsPresentationOrderAbortedMain) {
+  base::test::TestTraceProcessor ttp;
+  ttp.StartTrace("input");
+
+  std::unique_ptr<EventMetrics> metrics_1 = CreateScrollUpdateEventMetrics(
+      ui::ScrollInputType::kWheel, /*is_inertial=*/false,
+      ScrollUpdateEventMetrics::ScrollUpdateType::kStarted, std::nullopt);
+
+  std::unique_ptr<EventMetrics> metrics_2 = CreateScrollUpdateEventMetrics(
+      ui::ScrollInputType::kWheel, /*is_inertial=*/false,
+      ScrollUpdateEventMetrics::ScrollUpdateType::kContinued, std::nullopt);
+
+  std::unique_ptr<EventMetrics> metrics_3 = CreateScrollUpdateEventMetrics(
+      ui::ScrollInputType::kWheel, /*is_inertial=*/false,
+      ScrollUpdateEventMetrics::ScrollUpdateType::kContinued, std::nullopt);
+
+  SimulateBeginImplFrame();  // BF1
+  viz::BeginFrameId bf1_id = current_id_;
+  SimulateBeginMainFrame();  // BMF1
+  reporting_controller_.OnFinishImplFrame(current_id_);
+
+  // Submit a partial update with update from R1impl.
+  EventMetrics::List metrics_list_1;
+  metrics_list_1.push_back(std::move(metrics_1));
+  ++current_token_;
+  SubmitInfo submit_info = {*current_token_, AdvanceNowByMs(10)};
+  submit_info.events_metrics = {{}, std::move(metrics_list_1)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info, current_id_,
+                                                 {});  // SF1
+
+  // Present the frame with R1impl.
+  viz::FrameTimingDetails details_1 = {};
+  details_1.presentation_feedback.timestamp = AdvanceNowByMs(10);
+  reporting_controller_.DidPresentCompositorFrame(*current_token_,
+                                                  details_1);  // PF1
+
+  SimulateBeginImplFrame();  // BF2
+  viz::BeginFrameId bf2_id = current_id_;
+  reporting_controller_.OnFinishImplFrame(current_id_);
+  SimulateCommit(nullptr);   // CMF1
+  SimulateBeginMainFrame();  // BMF2
+
+  // Submit partial update containing R2impl, R1main update is only committed
+  // yet not activated, so it doesn't go into the frame.
+  EventMetrics::List metrics_list_2;
+  metrics_list_2.push_back(std::move(metrics_2));
+  ++current_token_;
+  SubmitInfo submit_info2 = {*current_token_, AdvanceNowByMs(10)};
+  submit_info.events_metrics = {{}, std::move(metrics_list_2)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info2, current_id_,
+                                                 {});  // SF2
+  SimulateActivate();  // AMF1
+
+  // R2main is aborted with no updates desired.
+  reporting_controller_.BeginMainFrameAborted(
+      bf2_id, CommitEarlyOutReason::kFinishedNoUpdates);  // AbMF2
+
+  SimulateBeginImplFrame();  // BF3
+  reporting_controller_.OnFinishImplFrame(current_id_);
+  // Begin main frame 3, this replaces the R2main in controller and terminates
+  // the reporter. So R2impl won't get adopted by R2main.
+  SimulateBeginMainFrame();  // BMF3
+
+  // Present the frame containing R2impl.
+  // R2impl gets terminated here immediately and reports its metrics to scroll
+  // jank tracker.
+  viz::FrameTimingDetails details_2 = {};
+  details_2.presentation_feedback.timestamp = AdvanceNowByMs(10);
+  reporting_controller_.DidPresentCompositorFrame(*current_token_,
+                                                  details_2);  // PF2
+
+  // Submit frame containing R1main and R3impl.
+  ++current_token_;
+  SubmitInfo submit_info3 = {*current_token_, AdvanceNowByMs(10)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info3, current_id_,
+                                                 bf1_id);  // SF(3+1)
+
+  // Present frame containing R1main and R3impl.
+  // This is where R1impl will be terminated as well, since it got adopted by
+  // R1main.
+  viz::FrameTimingDetails details_3 = {};
+  details_3.presentation_feedback.timestamp = AdvanceNowByMs(10);
+  reporting_controller_.DidPresentCompositorFrame(*current_token_,
+                                                  details_3);  // PF(3+1)
+
+  absl::Status status = ttp.StopAndParseTrace();
+  ASSERT_TRUE(status.ok()) << status.message();
+  std::string query =
+      R"(
+      SELECT count(*) as cnt from slice
+      where name = 'OutOfOrderTerminatedFrame'
+      )";
+  auto result = ttp.RunQuery(query);
+  ASSERT_TRUE(result.has_value()) << result.error();
+  // Even though R2impl gets terminated before R1impl, but we still expect the
+  // scroll jank metrics to be reported in order.
+  EXPECT_THAT(result.value(),
+              ::testing::ElementsAre(std::vector<std::string>{"cnt"},
+                                     std::vector<std::string>{"0"}));
+}
+
+// This test verifies a main thread scroll scenario where a frame with
+// compositor only update gets dropped, and the events should end up in the long
+// running main reporter. So we expect the scroll jank dropped frame tracker
+// receives data only for the one presented frame corresponding to the long
+// running main thread update.
+//
+// |          R1main           |
+// | R1impl | R2impl | R3impl  |
+//
+// The order of events (using the glossary above) is:
+// BF1->BMF1->SF1->PF1->BF2->SF2->PF2(dropped)->AMF1->BF3->SF(3+1)->PF(3+1)
+TEST_F(CompositorFrameReportingControllerTest,
+       ScrollJankMetricsPresentationOrderDroppedPartialOnMainScroll) {
+  base::HistogramTester histogram_tester;
+
+  base::test::TestTraceProcessor ttp;
+  ttp.StartTrace("input");
+
+  std::unique_ptr<EventMetrics> metrics_1 = CreateScrollUpdateEventMetrics(
+      ui::ScrollInputType::kWheel, /*is_inertial=*/false,
+      ScrollUpdateEventMetrics::ScrollUpdateType::kStarted, std::nullopt);
+  metrics_1->set_requires_main_thread_update();
+
+  std::unique_ptr<EventMetrics> metrics_2 = CreateScrollUpdateEventMetrics(
+      ui::ScrollInputType::kWheel, /*is_inertial=*/false,
+      ScrollUpdateEventMetrics::ScrollUpdateType::kContinued, std::nullopt);
+  metrics_2->set_requires_main_thread_update();
+
+  SimulateBeginImplFrame();  // BF1
+  viz::BeginFrameId bf1_id = current_id_;
+  SimulateBeginMainFrame();  // BMF1
+  reporting_controller_.OnFinishImplFrame(current_id_);
+
+  // Submit a partial update including only main update from R1impl.
+  EventMetrics::List metrics_list_1;
+  metrics_list_1.push_back(std::move(metrics_1));
+  ++current_token_;
+  SubmitInfo submit_info = {*current_token_, AdvanceNowByMs(10)};
+  submit_info.events_metrics = {{}, std::move(metrics_list_1)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info, current_id_,
+                                                 {});  // SF1
+
+  // Present the partial update.
+  viz::FrameTimingDetails details_1 = {};
+  details_1.presentation_feedback.timestamp = AdvanceNowByMs(10);
+  reporting_controller_.DidPresentCompositorFrame(*current_token_,
+                                                  details_1);  // PF1
+
+  SimulateBeginImplFrame();  // BF2
+  reporting_controller_.OnFinishImplFrame(current_id_);
+
+  // Submit a partial update including only main update from R2impl.
+  EventMetrics::List metrics_list_2;
+  metrics_list_2.push_back(std::move(metrics_2));
+  ++current_token_;
+  SubmitInfo submit_info2 = {*current_token_, AdvanceNowByMs(10)};
+  submit_info.events_metrics = {{}, std::move(metrics_list_2)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info2, current_id_,
+                                                 {});  // SF2
+
+  // The frame containing R2impl update got dropped.
+  viz::FrameTimingDetails details_2 = {};
+  details_2.presentation_feedback.timestamp = AdvanceNowByMs(10);
+  details_2.presentation_feedback.flags |= gfx::PresentationFeedback::kFailure;
+  reporting_controller_.DidPresentCompositorFrame(*current_token_,
+                                                  details_2);  // PF2
+
+  // Main thread commits and the tree is activated.
+  SimulateCommit(nullptr);
+  SimulateActivate();  // AMF1
+
+  SimulateBeginImplFrame();  // BF3
+  reporting_controller_.OnFinishImplFrame(current_id_);
+
+  // Submit the frame containing updates from R1main and R3impl.
+  ++current_token_;
+  SubmitInfo submit_info3 = {*current_token_, AdvanceNowByMs(10)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info3, current_id_,
+                                                 bf1_id);  // SF(3+1)
+
+  // Present frame containing update from R1main and R3impl.
+  viz::FrameTimingDetails details_3 = {};
+  details_3.presentation_feedback.timestamp = AdvanceNowByMs(10);
+  reporting_controller_.DidPresentCompositorFrame(*current_token_,
+                                                  details_3);  // PF(3+1)
+
+  absl::Status status = ttp.StopAndParseTrace();
+  ASSERT_TRUE(status.ok()) << status.message();
+  std::string query =
+      R"(
+      SELECT count(*) as cnt from slice
+      where name = 'OutOfOrderTerminatedFrame'
+      )";
+  auto result = ttp.RunQuery(query);
+  ASSERT_TRUE(result.has_value()) << result.error();
+  // R1main should ideally have gotten both the events i.e. from R1impl and
+  // R2impl, so we wouldn't expect anything to be out of order with just 1
+  // reporter having both inputs.
+  EXPECT_THAT(result.value(),
+              ::testing::ElementsAre(std::vector<std::string>{"cnt"},
+                                     std::vector<std::string>{"0"}));
+
+  histogram_tester.ExpectTotalCount("Event.ScrollJank.MissedVsyncs.PerFrame",
+                                    1);
+}
+
+// This test verifies events from a dropped impl reporter gets added to
+// corresponding impl reporter only.
+//
+// |     R1main      |
+// | R1impl | R2impl |
+//
+// The order of events (using the glossary above) is:
+// BF1->BMF1->SF1->PF1(dropped)->BF2->AMF1->SF(2+1)->PF(2+1)
+TEST_F(CompositorFrameReportingControllerTest,
+       ScrollJankMetricsPresentationOrderDroppedPartialOnImplScroll) {
+  base::HistogramTester histogram_tester;
+
+  base::test::TestTraceProcessor ttp;
+  ttp.StartTrace("input");
+
+  std::unique_ptr<EventMetrics> metrics_1 = CreateScrollUpdateEventMetrics(
+      ui::ScrollInputType::kWheel, /*is_inertial=*/false,
+      ScrollUpdateEventMetrics::ScrollUpdateType::kStarted, std::nullopt);
+
+  std::unique_ptr<EventMetrics> metrics_2 = CreateScrollUpdateEventMetrics(
+      ui::ScrollInputType::kWheel, /*is_inertial=*/false,
+      ScrollUpdateEventMetrics::ScrollUpdateType::kContinued, std::nullopt);
+
+  SimulateBeginImplFrame();  // BF1
+  viz::BeginFrameId bf1_id = current_id_;
+  SimulateBeginMainFrame();  // BMF1
+  reporting_controller_.OnFinishImplFrame(current_id_);
+
+  // Submit a partial update including only main update from R1impl.
+  EventMetrics::List metrics_list_1;
+  metrics_list_1.push_back(std::move(metrics_1));
+  ++current_token_;
+  SubmitInfo submit_info = {*current_token_, AdvanceNowByMs(10)};
+  submit_info.events_metrics = {{}, std::move(metrics_list_1)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info, current_id_,
+                                                 {});  // SF1
+
+  // Frame 1 is dropped.
+  viz::FrameTimingDetails details_1 = {};
+  details_1.presentation_feedback.timestamp = AdvanceNowByMs(10);
+  details_1.presentation_feedback.flags |= gfx::PresentationFeedback::kFailure;
+  reporting_controller_.DidPresentCompositorFrame(*current_token_,
+                                                  details_1);  // PF1(dropped)
+
+  SimulateBeginImplFrame();  // BF2
+  reporting_controller_.OnFinishImplFrame(current_id_);
+  SimulateCommit(nullptr);
+  SimulateActivate();  // AMF1
+
+  // Submit a partial update including only main update from R2impl.
+  EventMetrics::List metrics_list_2;
+  metrics_list_2.push_back(std::move(metrics_2));
+  ++current_token_;
+  SubmitInfo submit_info2 = {*current_token_, AdvanceNowByMs(10)};
+  submit_info2.events_metrics = {{}, std::move(metrics_list_2)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info2, current_id_,
+                                                 bf1_id);  // SF(2+1)
+
+  // The frame containing R2impl and R1main is presented.
+  viz::FrameTimingDetails details_2 = {};
+  details_2.presentation_feedback.timestamp = AdvanceNowByMs(10);
+  reporting_controller_.DidPresentCompositorFrame(*current_token_,
+                                                  details_2);  // PF(2+1)
+
+  absl::Status status = ttp.StopAndParseTrace();
+  ASSERT_TRUE(status.ok()) << status.message();
+  std::string query =
+      R"(
+      SELECT count(*) as cnt from slice
+      where name = 'OutOfOrderTerminatedFrame'
+      )";
+  auto result = ttp.RunQuery(query);
+  ASSERT_TRUE(result.has_value()) << result.error();
+  // R2impl should get the events from R1impl so we wouldn't expect anything to
+  // be out of order with just 1 reporter having both inputs.
+  EXPECT_THAT(result.value(),
+              ::testing::ElementsAre(std::vector<std::string>{"cnt"},
+                                     std::vector<std::string>{"0"}));
+
+  histogram_tester.ExpectTotalCount("Event.ScrollJank.MissedVsyncs.PerFrame",
+                                    1);
+}
+
+// This test verifies the events from dropped frames doesn't get passed to
+// adopter if the impl only update was successful. As a result we expect only
+// two frames to report scroll jank metrics i.e. the frames corresponding to
+// R3impl and R4impl+R2main.
+//
+// |     R1main      |
+// | R1impl | R2impl | R3impl | R4impl |
+//          |          R2main          |
+//
+// The order of events (using the glossary above) is:
+// BF1->BMF1->SF1->PF1->AMF1->BF2->BMF2->SF(2+1)->PF(2+1)(dropped)->
+// BF3->SF3->PF3->AMF2->BF4->SF(4+2)->PF(4+2)
+TEST_F(CompositorFrameReportingControllerTest,
+       ScrollJankMetricsPresentationOrderReceivedDroppedEventsAreNotPassed) {
+  base::HistogramTester histogram_tester;
+
+  base::test::TestTraceProcessor ttp;
+  ttp.StartTrace("input");
+
+  std::unique_ptr<EventMetrics> metrics_1 = CreateScrollUpdateEventMetrics(
+      ui::ScrollInputType::kWheel, /*is_inertial=*/false,
+      ScrollUpdateEventMetrics::ScrollUpdateType::kStarted, std::nullopt);
+  metrics_1->set_requires_main_thread_update();
+
+  std::unique_ptr<EventMetrics> metrics_2 = CreateScrollUpdateEventMetrics(
+      ui::ScrollInputType::kWheel, /*is_inertial=*/false,
+      ScrollUpdateEventMetrics::ScrollUpdateType::kContinued, std::nullopt);
+  metrics_2->set_requires_main_thread_update();
+
+  std::unique_ptr<EventMetrics> metrics_3 = CreateScrollUpdateEventMetrics(
+      ui::ScrollInputType::kWheel, /*is_inertial=*/false,
+      ScrollUpdateEventMetrics::ScrollUpdateType::kContinued, std::nullopt);
+  metrics_3->set_requires_main_thread_update();
+
+  SimulateBeginImplFrame();  // BF1
+  viz::BeginFrameId bf1_id = current_id_;
+  SimulateBeginMainFrame();  // BMF1
+  reporting_controller_.OnFinishImplFrame(current_id_);
+
+  // Submit a partial update containing R1impl.
+  EventMetrics::List metrics_list_1;
+  metrics_list_1.push_back(std::move(metrics_1));
+  ++current_token_;
+  SubmitInfo submit_info = {*current_token_, AdvanceNowByMs(10)};
+  submit_info.events_metrics = {{}, std::move(metrics_list_1)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info, current_id_,
+                                                 {});  // SF1
+
+  // Present frame containing update from R1impl.
+  viz::FrameTimingDetails details_1 = {};
+  details_1.presentation_feedback.timestamp = AdvanceNowByMs(10);
+  reporting_controller_.DidPresentCompositorFrame(*current_token_,
+                                                  details_1);  // PF1
+
+  // Commit and activate main update from R1main.
+  SimulateCommit(nullptr);
+  SimulateActivate();  // AMF1
+
+  SimulateBeginImplFrame();  // BF2
+  viz::BeginFrameId bf2_id = current_id_;
+  reporting_controller_.OnFinishImplFrame(current_id_);
+  SimulateBeginMainFrame();  // BMF2
+
+  // Submit frame containing update from R1main and R2impl.
+  EventMetrics::List metrics_list_2;
+  metrics_list_2.push_back(std::move(metrics_2));
+  ++current_token_;
+  SubmitInfo submit_info2 = {*current_token_, AdvanceNowByMs(10)};
+  submit_info2.events_metrics = {{}, std::move(metrics_list_2)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info2, current_id_,
+                                                 bf1_id);  // SF(2+1)
+
+  // The frame containing R1main and R2impl was dropped.
+  viz::FrameTimingDetails details_2 = {};
+  details_2.presentation_feedback.timestamp = AdvanceNowByMs(10);
+  details_2.presentation_feedback.flags |= gfx::PresentationFeedback::kFailure;
+  reporting_controller_.DidPresentCompositorFrame(*current_token_,
+                                                  details_2);  // PF(2+1)
+
+  SimulateBeginImplFrame();  // BF3
+  reporting_controller_.OnFinishImplFrame(current_id_);
+
+  // Submit partial update containing R3impl.
+  EventMetrics::List metrics_list_3;
+  metrics_list_3.push_back(std::move(metrics_3));
+  ++current_token_;
+  SubmitInfo submit_info3 = {*current_token_, AdvanceNowByMs(10)};
+  submit_info3.events_metrics = {{}, std::move(metrics_list_3)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info3, current_id_,
+                                                 bf1_id);  // SF3
+
+  viz::FrameTimingDetails details_3 = {};
+  details_3.presentation_feedback.timestamp = AdvanceNowByMs(10);
+  reporting_controller_.DidPresentCompositorFrame(*current_token_,
+                                                  details_3);  // PF3
+
+  // Commit and activate main update from R2main.
+  SimulateCommit(nullptr);
+  SimulateActivate();  // AMF2
+
+  SimulateBeginImplFrame();  // BF4
+  reporting_controller_.OnFinishImplFrame(current_id_);
+
+  // Submit frame containing update from R2main and R4impl.
+  ++current_token_;
+  SubmitInfo submit_info4 = {*current_token_, AdvanceNowByMs(10)};
+  reporting_controller_.DidSubmitCompositorFrame(submit_info4, current_id_,
+                                                 bf2_id);  // SF(4+2)
+
+  // Present frame containing R2main and R4impl.
+  viz::FrameTimingDetails details_4 = {};
+  details_4.presentation_feedback.timestamp = AdvanceNowByMs(10);
+  reporting_controller_.DidPresentCompositorFrame(*current_token_,
+                                                  details_4);  // PF(4+2)
+
+  absl::Status status = ttp.StopAndParseTrace();
+  ASSERT_TRUE(status.ok()) << status.message();
+  std::string query =
+      R"(
+      SELECT count(*) as cnt from slice
+      where name = 'OutOfOrderTerminatedFrame'
+      )";
+  auto result = ttp.RunQuery(query);
+  ASSERT_TRUE(result.has_value()) << result.error();
+  EXPECT_THAT(result.value(),
+              ::testing::ElementsAre(std::vector<std::string>{"cnt"},
+                                     std::vector<std::string>{"0"}));
+
+  // Expect reporters R3impl, R2main to report data to scroll jank tracker.
+  // R3impl - The events it received from previously dropped frames.
+  // R2main - The events associated with the reporter itself.
+  histogram_tester.ExpectTotalCount("Event.ScrollJank.MissedVsyncs.PerFrame",
+                                    2);
+}
+
+TEST_F(CompositorFrameReportingControllerTest, EmitsEventLatencyId) {
+  base::test::TestTraceProcessor ttp;
+  ttp.StartTrace("input");
+
+  std::unique_ptr<EventMetrics> metrics_1 = CreateScrollUpdateEventMetrics(
+      ui::ScrollInputType::kWheel, /*is_inertial=*/false,
+      ScrollUpdateEventMetrics::ScrollUpdateType::kStarted,
+      base::IdType64<class ui::LatencyInfo>(14));
+
+  std::unique_ptr<EventMetrics> metrics_2 = CreateEventMetrics(
+      ui::EventType::kTouchPressed, base::IdType64<class ui::LatencyInfo>(15));
+
+  EventMetrics::List metrics_list_1;
+  metrics_list_1.push_back(std::move(metrics_1));
+  metrics_list_1.push_back(std::move(metrics_2));
+  SimulateSubmitCompositorFrame({{}, std::move(metrics_list_1)});
+  SimulatePresentCompositorFrame();
+
+  absl::Status status = ttp.StopAndParseTrace();
+  ASSERT_TRUE(status.ok()) << status.message();
+  std::string query =
+      R"(
+      SELECT count(*) AS cnt
+      FROM slice
+      WHERE name = 'EventLatency'
+      AND (EXTRACT_ARG(arg_set_id, 'event_latency.event_latency_id') = 14
+      OR EXTRACT_ARG(arg_set_id, 'event_latency.event_latency_id') = 15)
+      )";
+  auto result = ttp.RunQuery(query);
+  ASSERT_TRUE(result.has_value()) << result.error();
+  EXPECT_THAT(result.value(),
+              ::testing::ElementsAre(std::vector<std::string>{"cnt"},
+                                     std::vector<std::string>{"2"}));
+}
+
+/*
+Test if we emit is_janky_scrolled_frame argument.
+vsync                   v0        v1   v2
+                        |    |    |    |
+input  GSU1    GSU2    non-GSU
+        |       |       |
+F1:     |---------------|
+F2:             |-----------------|
+F3:                     |--------------|
+F1 should have is_janky_scrolled_frame set to false while F2 should have it set
+to true and F3 should not have a value for the argument.
+*/
+TEST_F(CompositorFrameReportingControllerTest, JankyScrolledFrameArg) {
+  base::test::TestTraceProcessor ttp;
+  ttp.StartTrace("input");
+
+  std::unique_ptr<EventMetrics> metrics_1 = CreateScrollUpdateEventMetrics(
+      ui::ScrollInputType::kWheel, /*is_inertial=*/false,
+      ScrollUpdateEventMetrics::ScrollUpdateType::kStarted, std::nullopt);
+  base::TimeTicks event1_generation_ts = metrics_1->GetDispatchStageTimestamp(
+      EventMetrics::DispatchStage::kGenerated);
+
+  std::unique_ptr<EventMetrics> metrics_2 = CreateScrollUpdateEventMetrics(
+      ui::ScrollInputType::kWheel, /*is_inertial=*/false,
+      ScrollUpdateEventMetrics::ScrollUpdateType::kContinued, std::nullopt);
+  base::TimeTicks event2_generation_ts = metrics_2->GetDispatchStageTimestamp(
+      EventMetrics::DispatchStage::kGenerated);
+
+  std::unique_ptr<EventMetrics> non_scroll_event =
+      CreateEventMetrics(ui::EventType::kTouchPressed, std::nullopt);
+
+  base::TimeDelta vsync_interval = event2_generation_ts - event1_generation_ts;
+  args_.interval = vsync_interval;
+
+  SimulateBeginImplFrame();  // BF1
+  reporting_controller_.OnFinishImplFrame(current_id_);
+  EventMetrics::List metrics_list_1;
+  metrics_list_1.push_back(std::move(metrics_1));
+  SimulateSubmitCompositorFrame({{}, std::move(metrics_list_1)});
+
+  viz::FrameTimingDetails details_1 = {};
+  details_1.presentation_feedback.timestamp =
+      event1_generation_ts + base::Microseconds(200);
+  reporting_controller_.DidPresentCompositorFrame(*current_token_,
+                                                  details_1);  // PF1
+
+  SimulateBeginImplFrame();  // BF2
+  reporting_controller_.OnFinishImplFrame(current_id_);
+  EventMetrics::List metrics_list_2;
+  metrics_list_2.push_back(std::move(metrics_2));
+  SimulateSubmitCompositorFrame({{}, std::move(metrics_list_2)});
+
+  viz::FrameTimingDetails details_2 = {};
+  details_2.presentation_feedback.timestamp =
+      event2_generation_ts + base::Microseconds(200) + args_.interval;
+  reporting_controller_.DidPresentCompositorFrame(*current_token_,
+                                                  details_2);  // PF2
+
+  SimulateBeginImplFrame();  // BF3
+  reporting_controller_.OnFinishImplFrame(current_id_);
+  EventMetrics::List metrics_list_3;
+  metrics_list_3.push_back(std::move(non_scroll_event));
+  SimulateSubmitCompositorFrame({{}, std::move(metrics_list_3)});
+
+  viz::FrameTimingDetails details_3 = {};
+  details_3.presentation_feedback.timestamp =
+      details_2.presentation_feedback.timestamp + args_.interval;
+  reporting_controller_.DidPresentCompositorFrame(*current_token_,
+                                                  details_3);  // PF3
+
+  absl::Status status = ttp.StopAndParseTrace();
+  ASSERT_TRUE(status.ok()) << status.message();
+  constexpr char query[] =
+      R"(
+      SELECT COUNT(*) AS cnt
+      FROM slice
+      WHERE name = 'EventLatency'
+      AND EXTRACT_ARG(slice.arg_set_id,
+             'event_latency.is_janky_scrolled_frame') %s
+      )";
+  auto result = ttp.RunQuery(base::StringPrintf(query, "= FALSE"));
+  ASSERT_TRUE(result.has_value()) << result.error();
+  EXPECT_THAT(result.value(),
+              ::testing::ElementsAre(std::vector<std::string>{"cnt"},
+                                     std::vector<std::string>{"1"}));
+
+  result = ttp.RunQuery(base::StringPrintf(query, "= TRUE"));
+  ASSERT_TRUE(result.has_value()) << result.error();
+  EXPECT_THAT(result.value(),
+              ::testing::ElementsAre(std::vector<std::string>{"cnt"},
+                                     std::vector<std::string>{"1"}));
+
+  result = ttp.RunQuery(base::StringPrintf(query, "IS NULL"));
+  ASSERT_TRUE(result.has_value()) << result.error();
+  EXPECT_THAT(result.value(),
+              ::testing::ElementsAre(std::vector<std::string>{"cnt"},
+                                     std::vector<std::string>{"1"}));
+}
+
+// A simple test that ensures the vsync_interval is copied onto the
+// EventLatency.
+TEST_F(CompositorFrameReportingControllerTest, VsyncIntervalArg) {
+  base::test::TestTraceProcessor ttp;
+  ttp.StartTrace("input");
+
+  std::unique_ptr<EventMetrics> metrics_1 = CreateScrollUpdateEventMetrics(
+      ui::ScrollInputType::kWheel, /*is_inertial=*/false,
+      ScrollUpdateEventMetrics::ScrollUpdateType::kStarted, std::nullopt);
+
+  std::unique_ptr<EventMetrics> metrics_2 = CreateScrollUpdateEventMetrics(
+      ui::ScrollInputType::kWheel, /*is_inertial=*/false,
+      ScrollUpdateEventMetrics::ScrollUpdateType::kContinued, std::nullopt);
+
+  std::unique_ptr<EventMetrics> non_scroll_event =
+      CreateEventMetrics(ui::EventType::kTouchPressed, std::nullopt);
+
+  // First BeginFrame with a 32ms interval.
+  args_.interval = base::Milliseconds(32);
+  SimulateBeginImplFrame();  // BF1
+  reporting_controller_.OnFinishImplFrame(current_id_);
+  EventMetrics::List metrics_list_1;
+  metrics_list_1.push_back(std::move(metrics_1));
+  SimulateSubmitCompositorFrame({{}, std::move(metrics_list_1)});
+
+  // Presentation of the first BeginFrame.
+  SimulatePresentCompositorFrame();
+
+  // Second BeginFrame with an 8ms interval.
+  args_.interval = base::Milliseconds(8);
+  SimulateBeginImplFrame();  // BF2
+  reporting_controller_.OnFinishImplFrame(current_id_);
+  EventMetrics::List metrics_list_2;
+  metrics_list_2.push_back(std::move(metrics_2));
+  SimulateSubmitCompositorFrame({{}, std::move(metrics_list_2)});
+
+  // Presentation of the second BeginFrame.
+  SimulatePresentCompositorFrame();
+
+  // Query and ensure we see both intervals on different events.
+  absl::Status status = ttp.StopAndParseTrace();
+  ASSERT_TRUE(status.ok()) << status.message();
+  constexpr char kQuery[] =
+      R"(
+      SELECT
+        EXTRACT_ARG(slice.arg_set_id, 'event_latency.vsync_interval_ms') AS interval, COUNT(*) AS cnt
+      FROM slice
+      WHERE name = 'EventLatency'
+      GROUP BY 1
+      ORDER BY 1 ASC
+      )";
+  auto result = ttp.RunQuery(kQuery);
+  ASSERT_TRUE(result.has_value()) << result.error();
+  EXPECT_THAT(result.value(), ::testing::ElementsAre(
+                                  std::vector<std::string>{"interval", "cnt"},
+                                  std::vector<std::string>{"8", "1"},
+                                  std::vector<std::string>{"32", "1"}));
+}
+
 
 }  // namespace
 }  // namespace cc

@@ -1,4 +1,4 @@
-# Copyright 2013 The Chromium Authors. All rights reserved.
+# Copyright 2013 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Generates JavaScript source files from a mojom.Module."""
@@ -77,9 +77,22 @@ _kind_to_closure_type = {
     mojom.INT32: "number",
     mojom.UINT32: "number",
     mojom.FLOAT: "number",
-    mojom.INT64: "number",
-    mojom.UINT64: "number",
+    mojom.INT64: "bigint",
+    mojom.UINT64: "bigint",
     mojom.DOUBLE: "number",
+    # The nullability annotation i.e. '?' is added by the code that needs it, so
+    # these have the same types as the above non-nullable kinds.
+    mojom.NULLABLE_BOOL: "boolean",
+    mojom.NULLABLE_INT8: "number",
+    mojom.NULLABLE_UINT8: "number",
+    mojom.NULLABLE_INT16: "number",
+    mojom.NULLABLE_UINT16: "number",
+    mojom.NULLABLE_INT32: "number",
+    mojom.NULLABLE_UINT32: "number",
+    mojom.NULLABLE_FLOAT: "number",
+    mojom.NULLABLE_INT64: "bigint",
+    mojom.NULLABLE_UINT64: "bigint",
+    mojom.NULLABLE_DOUBLE: "number",
     mojom.STRING: "string",
     mojom.NULLABLE_STRING: "string",
     mojom.HANDLE: "MojoHandle",
@@ -173,16 +186,27 @@ _js_reserved_keywords = [
 
 _primitive_kind_to_fuzz_type = {
     mojom.BOOL: "Bool",
+    mojom.NULLABLE_BOOL: "Bool",
     mojom.INT8: "Int8",
+    mojom.NULLABLE_INT8: "Int8",
     mojom.UINT8: "Uint8",
+    mojom.NULLABLE_UINT8: "Uint8",
     mojom.INT16: "Int16",
+    mojom.NULLABLE_INT16: "Int16",
     mojom.UINT16: "Uint16",
+    mojom.NULLABLE_UINT16: "Uint16",
     mojom.INT32: "Int32",
+    mojom.NULLABLE_INT32: "Int32",
     mojom.UINT32: "Uint32",
+    mojom.NULLABLE_UINT32: "Uint32",
     mojom.FLOAT: "Float",
+    mojom.NULLABLE_FLOAT: "Float",
     mojom.INT64: "Int64",
+    mojom.NULLABLE_INT64: "Int64",
     mojom.UINT64: "Uint64",
+    mojom.NULLABLE_UINT64: "Uint64",
     mojom.DOUBLE: "Double",
+    mojom.NULLABLE_DOUBLE: "Double",
     mojom.STRING: "String",
     mojom.NULLABLE_STRING: "String",
     mojom.HANDLE: "Handle",
@@ -200,11 +224,18 @@ _primitive_kind_to_fuzz_type = {
 }
 
 
-_SHARED_MODULE_PREFIX = 'chrome://resources/mojo'
+_CHROME_SCHEME_PREFIX = 'chrome:'
+_SHARED_MODULE_PREFIX = '//resources/mojo'
+
+
+def _IsSharedModulePath(path):
+  return path.startswith(_SHARED_MODULE_PREFIX) or \
+      path.startswith(_CHROME_SCHEME_PREFIX + _SHARED_MODULE_PREFIX)
 
 
 def _IsAbsoluteChromeResourcesPath(path):
-  return path.startswith('chrome://resources/')
+  return path.startswith('chrome://resources/') or \
+      path.startswith('//resources/')
 
 
 def _GetWebUiModulePath(module):
@@ -291,8 +322,6 @@ class Generator(generator.Generator):
         self.module.enums,
         "for_bindings_internals":
         self.disallow_native_types,
-        "html_imports":
-        self._GenerateHtmlImports(),
         "imports":
         self.module.imports,
         "interfaces":
@@ -303,8 +332,6 @@ class Generator(generator.Generator):
         self.module.kinds,
         "module":
         self.module,
-        "mojom_filename":
-        os.path.basename(self.module.path),
         "mojom_namespace":
         self.module.mojom_namespace,
         "structs":
@@ -325,6 +352,10 @@ class Generator(generator.Generator):
 
   def GetFilters(self):
     js_filters = {
+        "is_nullable_value_kind_packed_field":
+        pack.IsNullableValueKindPackedField,
+        "is_primary_nullable_value_kind_packed_field":
+        pack.IsPrimaryNullableValueKindPackedField,
         "closure_type": self._ClosureType,
         "constant_value": self._GetConstantValue,
         "constant_value_in_js_module": self._GetConstantValueInJsModule,
@@ -340,11 +371,8 @@ class Generator(generator.Generator):
         "imports_for_kind": self._GetImportsForKind,
         "is_any_handle_or_interface_kind": mojom.IsAnyHandleOrInterfaceKind,
         "is_array_kind": mojom.IsArrayKind,
-        "is_associated_interface_kind": mojom.IsAssociatedInterfaceKind,
         "is_pending_associated_remote_kind":
         mojom.IsPendingAssociatedRemoteKind,
-        "is_associated_interface_request_kind":
-        mojom.IsAssociatedInterfaceRequestKind,
         "is_pending_associated_receiver_kind":
         mojom.IsPendingAssociatedReceiverKind,
         "is_bool_kind": mojom.IsBoolKind,
@@ -353,7 +381,6 @@ class Generator(generator.Generator):
         "is_any_interface_kind": mojom.IsAnyInterfaceKind,
         "is_interface_kind": mojom.IsInterfaceKind,
         "is_pending_remote_kind": mojom.IsPendingRemoteKind,
-        "is_interface_request_kind": mojom.IsInterfaceRequestKind,
         "is_pending_receiver_kind": mojom.IsPendingReceiverKind,
         "is_map_kind": mojom.IsMapKind,
         "is_object_kind": mojom.IsObjectKind,
@@ -399,10 +426,6 @@ class Generator(generator.Generator):
   def _GenerateAMDModule(self):
     return self._GetParameters()
 
-  @UseJinja("lite/mojom.html.tmpl")
-  def _GenerateLiteHtml(self):
-    return self._GetParameters()
-
   @UseJinja("lite/mojom-lite.js.tmpl")
   def _GenerateLiteBindings(self):
     return self._GetParameters()
@@ -425,24 +448,21 @@ class Generator(generator.Generator):
 
     self.module.Stylize(JavaScriptStylizer())
 
-    # TODO(crbug.com/795977): Change the media router extension to not mess with
+    # TODO(crbug.com/41361453): Change the media router extension to not mess with
     # the mojo namespace, so that namespaces such as "mojo.common.mojom" are not
     # affected and we can remove this method.
     self._SetUniqueNameForImports()
 
     self.WriteWithComment(self._GenerateAMDModule(), "%s.js" % self.module.path)
-    if self.js_bindings_mode == "new":
-      self.WriteWithComment(self._GenerateLiteHtml(),
-                            "%s.html" % self.module.path)
-      self.WriteWithComment(self._GenerateLiteBindings(),
-                            "%s-lite.js" % self.module.path)
-      self.WriteWithComment(self._GenerateLiteBindingsForCompile(),
-                            "%s-lite-for-compile.js" % self.module.path)
-      self.WriteWithComment(self._GenerateJsModule(),
-                            "%s.m.js" % self.module.path)
-      if _GetWebUiModulePath(self.module) is not None:
-        self.WriteWithComment(self._GenerateWebUiModule(),
-                              "mojom-webui/%s-webui.js" % self.module.path)
+    self.WriteWithComment(self._GenerateLiteBindings(),
+                          "%s-lite.js" % self.module.path)
+    self.WriteWithComment(self._GenerateLiteBindingsForCompile(),
+                          "%s-lite-for-compile.js" % self.module.path)
+    self.WriteWithComment(self._GenerateJsModule(),
+                          "%s.m.js" % self.module.path)
+    if self.module.metadata.get("generate_webui_js") is not None:
+      self.WriteWithComment(self._GenerateWebUiModule(),
+                            "mojom-webui/%s-webui.js" % self.module.path)
 
   def _GetRelativePath(self, path):
     relpath = urllib.request.pathname2url(
@@ -490,15 +510,13 @@ class Generator(generator.Generator):
     if mojom.IsMapKind(kind):
       return "Map<%s, %s>" % (self._ClosureType(
           kind.key_kind), self._ClosureType(kind.value_kind))
-    if mojom.IsInterfaceRequestKind(kind) or mojom.IsPendingReceiverKind(kind):
+    if mojom.IsPendingReceiverKind(kind):
       return "mojo.InterfaceRequest"
     # TODO(calamity): Support associated interfaces properly.
-    if (mojom.IsAssociatedInterfaceKind(kind)
-        or mojom.IsPendingAssociatedRemoteKind(kind)):
+    if mojom.IsPendingAssociatedRemoteKind(kind):
       return "mojo.AssociatedInterfacePtrInfo"
     # TODO(calamity): Support associated interface requests properly.
-    if (mojom.IsAssociatedInterfaceRequestKind(kind)
-        or mojom.IsPendingAssociatedReceiverKind(kind)):
+    if mojom.IsPendingAssociatedReceiverKind(kind):
       return "mojo.AssociatedInterfaceRequest"
     # TODO(calamity): Support enums properly.
 
@@ -520,6 +538,8 @@ class Generator(generator.Generator):
                                  kind,
                                  with_nullability=False,
                                  for_module=False):
+    # If `with_nullability` is true, we'll include a nullable annotation which
+    # in the Closure case is `?`. Otherwise, the annotation will be omitted.
     def recurse_with_nullability(kind):
       return self._GetTypeNameForNewBindings(kind,
                                              with_nullability=True,
@@ -539,8 +559,7 @@ class Generator(generator.Generator):
         return "Map<%s, %s>" % (recurse_with_nullability(
             kind.key_kind), recurse_with_nullability(kind.value_kind))
 
-      if (mojom.IsAssociatedKind(kind) or mojom.IsInterfaceRequestKind(kind)
-          or mojom.IsPendingRemoteKind(kind)
+      if (mojom.IsAssociatedKind(kind) or mojom.IsPendingRemoteKind(kind)
           or mojom.IsPendingReceiverKind(kind)
           or mojom.IsPendingAssociatedRemoteKind(kind)
           or mojom.IsPendingAssociatedReceiverKind(kind)):
@@ -570,19 +589,18 @@ class Generator(generator.Generator):
         return name
       if mojom.IsInterfaceKind(kind) or mojom.IsPendingRemoteKind(kind):
         return name + "Remote"
-      if mojom.IsInterfaceRequestKind(kind) or mojom.IsPendingReceiverKind(
-          kind):
+      if mojom.IsPendingReceiverKind(kind):
         return name + "PendingReceiver"
       # TODO(calamity): Support associated interfaces properly.
-      if (mojom.IsAssociatedInterfaceKind(kind)
-          or mojom.IsPendingAssociatedRemoteKind(kind)):
+      if mojom.IsPendingAssociatedRemoteKind(kind):
         return "Object"
       # TODO(calamity): Support associated interface requests properly.
-      if (mojom.IsAssociatedInterfaceRequestKind(kind)
-          or mojom.IsPendingAssociatedReceiverKind(kind)):
+      if mojom.IsPendingAssociatedReceiverKind(kind):
         return "Object"
       raise Exception("No valid closure type: %s" % kind)
 
+    # Prepend `?` for nullable kinds and `!` for non-nullable kinds. These are
+    # used by Closure.
     if with_nullability:
       return ('?' if mojom.IsNullableKind(kind) else '!') + get_type_name(kind)
 
@@ -674,7 +692,7 @@ class Generator(generator.Generator):
   def _GetSpecType(self, kind, for_module=False):
     def get_spec(kind):
       if self._IsPrimitiveKind(kind):
-        return _kind_to_lite_js_type[kind]
+        return _kind_to_lite_js_type[mojom.EnsureUnnullable(kind)]
       if mojom.IsArrayKind(kind):
         return "mojo.internal.Array(%s, %s)" % (get_spec(
             kind.kind), "true" if mojom.IsNullableKind(kind.kind) else "false")
@@ -683,8 +701,7 @@ class Generator(generator.Generator):
             get_spec(kind.key_kind), get_spec(kind.value_kind),
             "true" if mojom.IsNullableKind(kind.value_kind) else "false")
 
-      if (mojom.IsAssociatedKind(kind) or mojom.IsInterfaceRequestKind(kind)
-          or mojom.IsPendingRemoteKind(kind)
+      if (mojom.IsAssociatedKind(kind) or mojom.IsPendingRemoteKind(kind)
           or mojom.IsPendingReceiverKind(kind)
           or mojom.IsPendingAssociatedRemoteKind(kind)
           or mojom.IsPendingAssociatedReceiverKind(kind)):
@@ -711,15 +728,12 @@ class Generator(generator.Generator):
         return "%sSpec.$" % name
       if mojom.IsInterfaceKind(kind) or mojom.IsPendingRemoteKind(kind):
         return "mojo.internal.InterfaceProxy(%sRemote)" % name
-      if mojom.IsInterfaceRequestKind(kind) or mojom.IsPendingReceiverKind(
-          kind):
+      if mojom.IsPendingReceiverKind(kind):
         return "mojo.internal.InterfaceRequest(%sPendingReceiver)" % name
-      if (mojom.IsAssociatedInterfaceKind(kind)
-          or mojom.IsPendingAssociatedRemoteKind(kind)):
+      if mojom.IsPendingAssociatedRemoteKind(kind):
         # TODO(rockot): Implement associated interfaces.
         return "mojo.internal.AssociatedInterfaceProxy(%sRemote)" % (name)
-      if (mojom.IsAssociatedInterfaceRequestKind(kind)
-          or mojom.IsPendingAssociatedReceiverKind(kind)):
+      if mojom.IsPendingAssociatedReceiverKind(kind):
         return "mojo.internal.AssociatedInterfaceRequest(%sPendingReceiver)" % (
             name)
 
@@ -762,14 +776,11 @@ class Generator(generator.Generator):
       return "new %sPtr()" % self._JavaScriptType(field.kind)
     if mojom.IsPendingRemoteKind(field.kind):
       return "new %sPtr()" % self._JavaScriptType(field.kind.kind)
-    if (mojom.IsInterfaceRequestKind(field.kind)
-        or mojom.IsPendingReceiverKind(field.kind)):
+    if mojom.IsPendingReceiverKind(field.kind):
       return "new bindings.InterfaceRequest()"
-    if (mojom.IsAssociatedInterfaceKind(field.kind)
-        or mojom.IsPendingAssociatedRemoteKind(field.kind)):
+    if mojom.IsPendingAssociatedRemoteKind(field.kind):
       return "new associatedBindings.AssociatedInterfacePtrInfo()"
-    if (mojom.IsAssociatedInterfaceRequestKind(field.kind)
-        or mojom.IsPendingAssociatedReceiverKind(field.kind)):
+    if mojom.IsPendingAssociatedReceiverKind(field.kind):
       return "new associatedBindings.AssociatedInterfaceRequest()"
     if mojom.IsEnumKind(field.kind):
       return "0"
@@ -791,7 +802,10 @@ class Generator(generator.Generator):
     if field.kind in mojom.PRIMITIVES:
       return _kind_to_javascript_default_value[field.kind]
     if mojom.IsEnumKind(field.kind):
+      if field.kind.min_value is not None:
+        return f'{field.kind.min_value}'
       return "0"
+
     return "null"
 
   def _LiteJavaScriptDefaultValue(self, field):
@@ -802,7 +816,7 @@ class Generator(generator.Generator):
 
   def _CodecType(self, kind):
     if kind in mojom.PRIMITIVES:
-      return _kind_to_codec_type[kind]
+      return _kind_to_codec_type[mojom.EnsureUnnullable(kind)]
     if mojom.IsStructKind(kind):
       pointer_type = "NullablePointerTo" if mojom.IsNullableKind(kind) \
           else "PointerTo"
@@ -823,16 +837,14 @@ class Generator(generator.Generator):
       return "new codec.%s(%sPtr)" % (
           "NullableInterface" if mojom.IsNullableKind(kind) else "Interface",
           self._JavaScriptType(kind.kind))
-    if mojom.IsInterfaceRequestKind(kind) or mojom.IsPendingReceiverKind(kind):
+    if mojom.IsPendingReceiverKind(kind):
       return "codec.%s" % ("NullableInterfaceRequest" if
                            mojom.IsNullableKind(kind) else "InterfaceRequest")
-    if (mojom.IsAssociatedInterfaceKind(kind)
-        or mojom.IsPendingAssociatedRemoteKind(kind)):
+    if mojom.IsPendingAssociatedRemoteKind(kind):
       return "codec.%s" % ("NullableAssociatedInterfacePtrInfo"
                            if mojom.IsNullableKind(kind) else
                            "AssociatedInterfacePtrInfo")
-    if (mojom.IsAssociatedInterfaceRequestKind(kind)
-        or mojom.IsPendingAssociatedReceiverKind(kind)):
+    if mojom.IsPendingAssociatedReceiverKind(kind):
       return "codec.%s" % ("NullableAssociatedInterfaceRequest"
                            if mojom.IsNullableKind(kind) else
                            "AssociatedInterfaceRequest")
@@ -902,7 +914,7 @@ class Generator(generator.Generator):
 
   def _JavaScriptValidateArrayParams(self, field):
     nullable = self._JavaScriptNullableParam(field)
-    element_kind = field.kind.kind
+    element_kind = mojom.EnsureUnnullable(field.kind.kind)
     element_size = pack.PackedField.GetSizeForKind(element_kind)
     expected_dimension_sizes = GetArrayExpectedDimensionSizes(field.kind)
     element_type = self._ElementCodecType(element_kind)
@@ -1005,18 +1017,17 @@ class Generator(generator.Generator):
   def _GetConstantValueInJsModule(self, constant):
     return self._GetConstantValue(constant, for_module=True)
 
-  def _GenerateHtmlImports(self):
-    result = []
-    for full_import in self.module.imports:
-      result.append(
-          os.path.relpath(full_import.path, os.path.dirname(self.module.path)))
-    return result
-
   def _GetJsModuleImports(self, for_webui_module=False):
     this_module_path = _GetWebUiModulePath(self.module)
-    this_module_is_shared = bool(
-        this_module_path and this_module_path.startswith(_SHARED_MODULE_PREFIX))
+    this_module_is_shared = bool(this_module_path
+                                 and _IsSharedModulePath(this_module_path))
     imports = dict()
+
+    def strip_prefix(s, prefix):
+      if s.startswith(prefix):
+        return s[len(prefix):]
+      return s
+
     for spec, kind in self.module.imported_kinds.items():
       if for_webui_module:
         assert this_module_path is not None
@@ -1025,15 +1036,15 @@ class Generator(generator.Generator):
         import_path = '{}{}-webui.js'.format(base_path,
                                              os.path.basename(kind.module.path))
 
-        import_module_is_shared = import_path.startswith(_SHARED_MODULE_PREFIX)
+        import_module_is_shared = _IsSharedModulePath(import_path)
         if this_module_is_shared:
           assert import_module_is_shared, \
               'Shared WebUI module "{}" cannot depend on non-shared WebUI ' \
                   'module "{}"'.format(self.module.path, kind.module.path)
 
-        # Some Mojo JS files are served from chrome://resources/, but not from
-        # chrome://resources/mojo/, for example from
-        # chrome://resources/cr_components/. Need to use absolute paths when
+        # Some Mojo JS files are served from //resources/, but not from
+        # //resources/mojo/, for example from
+        # //resources/cr_components/. Need to use absolute paths when
         # referring to such files from other modules, so that TypeScript can
         # correctly resolve them since they belong to a different ts_library()
         # target compared to |this_module_path|.
@@ -1050,19 +1061,19 @@ class Generator(generator.Generator):
                 import_module_is_shared == this_module_is_shared
 
         if use_relative_path:
-
-          def strip_prefix(s, prefix):
-            if s.startswith(prefix):
-              return s[len(prefix):]
-            return s
-
           import_path = urllib.request.pathname2url(
               os.path.relpath(
-                  strip_prefix(import_path, _SHARED_MODULE_PREFIX),
-                  strip_prefix(this_module_path, _SHARED_MODULE_PREFIX)))
+                  strip_prefix(strip_prefix(import_path, _CHROME_SCHEME_PREFIX),
+                               _SHARED_MODULE_PREFIX),
+                  strip_prefix(
+                      strip_prefix(this_module_path, _CHROME_SCHEME_PREFIX),
+                      _SHARED_MODULE_PREFIX)))
           if (not import_path.startswith('.')
               and not import_path.startswith('/')):
             import_path = './' + import_path
+        else:
+          # Import absolute imports from scheme-relative paths.
+          import_path = strip_prefix(import_path, _CHROME_SCHEME_PREFIX)
       else:
         import_path = self._GetRelativePath(kind.module.path) + '.m.js'
 
@@ -1081,18 +1092,16 @@ class Generator(generator.Generator):
     return result
 
   def _FuzzHandleName(self, kind):
-    if mojom.IsInterfaceRequestKind(kind) or mojom.IsPendingReceiverKind(kind):
+    if mojom.IsPendingReceiverKind(kind):
       return '{0}.{1}Request'.format(kind.kind.module.namespace, kind.kind.name)
     elif mojom.IsInterfaceKind(kind):
       return '{0}.{1}Ptr'.format(kind.module.namespace, kind.name)
     elif mojom.IsPendingRemoteKind(kind):
       return '{0}.{1}Ptr'.format(kind.kind.module.namespace, kind.kind.name)
-    elif (mojom.IsAssociatedInterfaceRequestKind(kind)
-          or mojom.IsPendingAssociatedReceiverKind(kind)):
+    elif mojom.IsPendingAssociatedReceiverKind(kind):
       return '{0}.{1}AssociatedRequest'.format(kind.kind.module.namespace,
                                                kind.kind.name)
-    elif (mojom.IsAssociatedInterfaceKind(kind)
-          or mojom.IsPendingAssociatedRemoteKind(kind)):
+    elif mojom.IsPendingAssociatedRemoteKind(kind):
       return '{0}.{1}AssociatedPtr'.format(kind.kind.module.namespace,
                                            kind.kind.name)
     elif mojom.IsSharedBufferKind(kind):

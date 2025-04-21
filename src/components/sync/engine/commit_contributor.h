@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,7 @@ class CommitContributor {
   CommitContributor() = default;
   virtual ~CommitContributor() = default;
 
-  // Gathers up to |max_entries| unsynced items from this contributor into a
+  // Gathers up to `max_entries` unsynced items from this contributor into a
   // CommitContribution.  Returns null when the contributor has nothing to
   // contribute.
   virtual std::unique_ptr<CommitContribution> GetContribution(

@@ -1,15 +1,14 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.toolbar.menu_button;
 
-import static junit.framework.Assert.assertFalse;
-import static junit.framework.Assert.assertTrue;
-
-import static org.mockito.Mockito.anyObject;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -42,40 +41,24 @@ import org.chromium.ui.util.TokenHolder;
 
 import java.lang.ref.WeakReference;
 
-/**
- * Unit tests for ToolbarAppMenuManager.
- */
+/** Unit tests for ToolbarAppMenuManager. */
 @RunWith(BaseRobolectricTestRunner.class)
 @LooperMode(LooperMode.Mode.LEGACY)
 public class MenuButtonMediatorTest {
-    @Mock
-    private BrowserStateBrowserControlsVisibilityDelegate mControlsVisibilityDelegate;
-    @Mock
-    private Activity mActivity;
-    @Mock
-    private MenuButtonCoordinator.SetFocusFunction mFocusFunction;
-    @Mock
-    private AppMenuCoordinator mAppMenuCoordinator;
-    @Mock
-    private AppMenuHandler mAppMenuHandler;
-    @Mock
-    private AppMenuButtonHelper mAppMenuButtonHelper;
-    @Mock
-    private AppMenuPropertiesDelegate mAppMenuPropertiesDelegate;
-    @Mock
-    private Runnable mOnMenuButtonClicked;
-    @Mock
-    private Runnable mRequestRenderRunnable;
-    @Mock
-    ThemeColorProvider mThemeColorProvider;
-    @Mock
-    Resources mResources;
-    @Mock
-    private WindowAndroid mWindowAndroid;
-    @Mock
-    private KeyboardVisibilityDelegate mKeyboardDelegate;
-    @Mock
-    private View mUtilityView;
+    @Mock private BrowserStateBrowserControlsVisibilityDelegate mControlsVisibilityDelegate;
+    @Mock private Activity mActivity;
+    @Mock private MenuButtonCoordinator.SetFocusFunction mFocusFunction;
+    @Mock private AppMenuCoordinator mAppMenuCoordinator;
+    @Mock private AppMenuHandler mAppMenuHandler;
+    @Mock private AppMenuButtonHelper mAppMenuButtonHelper;
+    @Mock private AppMenuPropertiesDelegate mAppMenuPropertiesDelegate;
+    @Mock private Runnable mOnMenuButtonClicked;
+    @Mock private Runnable mRequestRenderRunnable;
+    @Mock ThemeColorProvider mThemeColorProvider;
+    @Mock Resources mResources;
+    @Mock private WindowAndroid mWindowAndroid;
+    @Mock private KeyboardVisibilityDelegate mKeyboardDelegate;
+    @Mock private View mUtilityView;
 
     private MenuUiState mMenuUiState;
     private OneshotSupplierImpl<AppMenuCoordinator> mAppMenuSupplier;
@@ -85,14 +68,18 @@ public class MenuButtonMediatorTest {
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
-        mPropertyModel = new PropertyModel.Builder(MenuButtonProperties.ALL_KEYS)
-                                 .with(MenuButtonProperties.SHOW_UPDATE_BADGE,
-                                         new ShowBadgeProperty(false, false))
-                                 .with(MenuButtonProperties.THEME,
-                                         new ThemeProperty(mThemeColorProvider.getTint(),
-                                                 mThemeColorProvider.getBrandedColorScheme()))
-                                 .with(MenuButtonProperties.IS_VISIBLE, true)
-                                 .build();
+        mPropertyModel =
+                new PropertyModel.Builder(MenuButtonProperties.ALL_KEYS)
+                        .with(
+                                MenuButtonProperties.SHOW_UPDATE_BADGE,
+                                new ShowBadgeProperty(false, false))
+                        .with(
+                                MenuButtonProperties.THEME,
+                                new ThemeProperty(
+                                        mThemeColorProvider.getTint(),
+                                        mThemeColorProvider.getBrandedColorScheme()))
+                        .with(MenuButtonProperties.IS_VISIBLE, true)
+                        .build();
         doReturn(mAppMenuHandler).when(mAppMenuCoordinator).getAppMenuHandler();
         doReturn(mAppMenuButtonHelper).when(mAppMenuHandler).createAppMenuButtonHelper();
         doReturn(mAppMenuPropertiesDelegate)
@@ -104,12 +91,20 @@ public class MenuButtonMediatorTest {
         doReturn(new WeakReference<>(mActivity)).when(mWindowAndroid).getActivity();
         doReturn(mKeyboardDelegate).when(mWindowAndroid).getKeyboardDelegate();
 
-        // clang-format off
-        mMenuButtonMediator = new MenuButtonMediator(mPropertyModel, true, () -> false,
-                mRequestRenderRunnable, mThemeColorProvider, () -> false,
-                mControlsVisibilityDelegate, mFocusFunction, mAppMenuSupplier, mWindowAndroid,
-                () -> mMenuUiState.buttonState, mOnMenuButtonClicked);
-        // clang-format on
+        mMenuButtonMediator =
+                new MenuButtonMediator(
+                        mPropertyModel,
+                        true,
+                        () -> false,
+                        mRequestRenderRunnable,
+                        mThemeColorProvider,
+                        () -> false,
+                        mControlsVisibilityDelegate,
+                        mFocusFunction,
+                        mAppMenuSupplier,
+                        mWindowAndroid,
+                        () -> mMenuUiState.buttonState,
+                        mOnMenuButtonClicked);
     }
 
     @Test
@@ -178,12 +173,20 @@ public class MenuButtonMediatorTest {
 
     @Test
     public void testAppMenuUpdateBadge_activityShouldNotShow() {
-        // clang-format off
-        MenuButtonMediator newMediator = new MenuButtonMediator(mPropertyModel, false, () -> false,
-                mRequestRenderRunnable, mThemeColorProvider, () -> false,
-                mControlsVisibilityDelegate, mFocusFunction, mAppMenuSupplier, mWindowAndroid,
-                () -> mMenuUiState.buttonState, mOnMenuButtonClicked);
-        // clang-format on
+        MenuButtonMediator newMediator =
+                new MenuButtonMediator(
+                        mPropertyModel,
+                        false,
+                        () -> false,
+                        mRequestRenderRunnable,
+                        mThemeColorProvider,
+                        () -> false,
+                        mControlsVisibilityDelegate,
+                        mFocusFunction,
+                        mAppMenuSupplier,
+                        mWindowAndroid,
+                        () -> mMenuUiState.buttonState,
+                        mOnMenuButtonClicked);
 
         doReturn(true).when(mActivity).isDestroyed();
         newMediator.updateStateChanged();
@@ -211,7 +214,6 @@ public class MenuButtonMediatorTest {
         mMenuButtonMediator.getMenuButtonHelperSupplier();
         mMenuButtonMediator.onMenuHighlightChanged(true);
         mMenuButtonMediator.onMenuVisibilityChanged(false);
-        mMenuButtonMediator.setAppMenuUpdateBadgeSuppressed(true);
         mMenuButtonMediator.updateReloadingState(true);
         mMenuButtonMediator.updateStateChanged();
     }
@@ -227,6 +229,6 @@ public class MenuButtonMediatorTest {
     public void testKeyboardIsNotDismissedWhenMenuShowsWithNoFocusedViews() {
         doReturn(null).when(mActivity).getCurrentFocus();
         mMenuButtonMediator.onMenuVisibilityChanged(true);
-        verify(mKeyboardDelegate, never()).hideKeyboard(anyObject());
+        verify(mKeyboardDelegate, never()).hideKeyboard(any());
     }
 }

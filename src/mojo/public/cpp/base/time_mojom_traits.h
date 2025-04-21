@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,14 @@ struct COMPONENT_EXPORT(MOJO_BASE_SHARED_TRAITS)
   static int64_t internal_value(const base::Time& time);
 
   static bool Read(mojo_base::mojom::TimeDataView data, base::Time* time);
+};
+
+template <>
+struct COMPONENT_EXPORT(MOJO_BASE_SHARED_TRAITS)
+    StructTraits<mojo_base::mojom::JSTimeDataView, base::Time> {
+  static double msec(const base::Time& time);
+
+  static bool Read(mojo_base::mojom::JSTimeDataView data, base::Time* time);
 };
 
 template <>

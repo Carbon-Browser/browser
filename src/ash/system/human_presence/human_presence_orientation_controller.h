@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,7 @@ namespace ash {
 class ASH_EXPORT HumanPresenceOrientationController
     : public TabletModeObserver,
       public display::DisplayObserver,
-      public PowerManagerClient::Observer {
+      public chromeos::PowerManagerClient::Observer {
  public:
   class Observer : public base::CheckedObserver {
    public:
@@ -61,7 +61,7 @@ class ASH_EXPORT HumanPresenceOrientationController
   void LidEventReceived(chromeos::PowerManagerClient::LidState state,
                         base::TimeTicks timestamp) override;
   void OnReceiveSwitchStates(
-      absl::optional<chromeos::PowerManagerClient::SwitchStates> switch_states);
+      std::optional<chromeos::PowerManagerClient::SwitchStates> switch_states);
 
   // Updates the internal state of the controller, and notifies observers if
   // the state has changed.

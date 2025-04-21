@@ -1,9 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/csspaint/nativepaint/clip_path_paint_image_generator_impl.h"
 
+#include "third_party/blink/renderer/core/frame/local_frame.h"
+#include "third_party/blink/renderer/core/frame/local_frame_client.h"
 #include "third_party/blink/renderer/modules/csspaint/nativepaint/clip_path_paint_definition.h"
 #include "third_party/blink/renderer/platform/graphics/image.h"
 
@@ -14,7 +16,6 @@ ClipPathPaintImageGenerator* ClipPathPaintImageGeneratorImpl::Create(
   ClipPathPaintDefinition* clip_path_paint_definition =
       ClipPathPaintDefinition::Create(local_root);
 
-  DCHECK(clip_path_paint_definition);
   ClipPathPaintImageGeneratorImpl* generator =
       MakeGarbageCollected<ClipPathPaintImageGeneratorImpl>(
           clip_path_paint_definition);
@@ -29,8 +30,11 @@ ClipPathPaintImageGeneratorImpl::ClipPathPaintImageGeneratorImpl(
 scoped_refptr<Image> ClipPathPaintImageGeneratorImpl::Paint(
     float zoom,
     const gfx::RectF& reference_box,
+    const gfx::SizeF& clip_area_size,
     const Node& node) {
-  return clip_path_paint_definition_->Paint(zoom, reference_box, node);
+  return ClipPathPaintDefinition::Paint(
+      zoom, reference_box, clip_area_size, node,
+      clip_path_paint_definition_->GetWorkletId());
 }
 
 Animation* ClipPathPaintImageGeneratorImpl::GetAnimationIfCompositable(

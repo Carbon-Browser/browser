@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,6 +26,17 @@
 
 namespace testing {
 namespace internal {
+
+// Verbatim copy from gtest-port.cc, since it only provides these constants when
+// GTEST_HAS_STREAM_REDIRECTION is true.
+#if defined(_MSC_VER) || defined(__BORLANDC__)
+// MSVC and C++Builder do not provide a definition of STDERR_FILENO.
+const int kStdOutFileno = 1;
+const int kStdErrFileno = 2;
+#else
+const int kStdOutFileno = STDOUT_FILENO;
+const int kStdErrFileno = STDERR_FILENO;
+#endif  // defined(_MSC_VER) || defined(__BORLANDC__)
 
 // Object that captures an output stream (stdout/stderr).
 class CapturedStream {
@@ -71,6 +82,9 @@ class CapturedStream {
     close(captured_fd);
   }
 
+  CapturedStream(const CapturedStream&) = delete;
+  CapturedStream& operator=(const CapturedStream&) = delete;
+
   ~CapturedStream() { remove(filename_.c_str()); }
 
   std::string GetCapturedString() {
@@ -97,11 +111,7 @@ class CapturedStream {
   int uncaptured_fd_;
   // Name of the temporary file holding the stderr output.
   ::std::string filename_;
-
-  GTEST_DISALLOW_COPY_AND_ASSIGN_(CapturedStream);
 };
-
-GTEST_DISABLE_MSC_DEPRECATED_POP_()
 
 static CapturedStream* g_captured_stderr = nullptr;
 static CapturedStream* g_captured_stdout = nullptr;

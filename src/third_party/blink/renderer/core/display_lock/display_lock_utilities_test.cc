@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,45 +12,40 @@
 #include "third_party/blink/renderer/core/testing/core_unit_test_helper.h"
 #include "third_party/blink/renderer/core/testing/intersection_observer_test_helper.h"
 #include "third_party/blink/renderer/core/testing/page_test_base.h"
-#include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 
 namespace blink {
 
-class DisplayLockUtilitiesTest
-    : public RenderingTest,
-      private ScopedCSSContentVisibilityHiddenMatchableForTest {
+class DisplayLockUtilitiesTest : public RenderingTest {
  public:
   DisplayLockUtilitiesTest()
-      : RenderingTest(MakeGarbageCollected<SingleChildLocalFrameClient>()),
-        ScopedCSSContentVisibilityHiddenMatchableForTest(true) {}
+      : RenderingTest(MakeGarbageCollected<SingleChildLocalFrameClient>()) {}
 
   void LockElement(Element& element, bool activatable) {
-    StringBuilder value;
-    value.Append("content-visibility: hidden");
-    if (activatable)
-      value.Append("-matchable");
-    element.setAttribute(html_names::kStyleAttr, value.ToAtomicString());
+    if (activatable) {
+      element.setAttribute(html_names::kHiddenAttr,
+                           AtomicString("until-found"));
+    } else {
+      element.setAttribute(html_names::kStyleAttr,
+                           AtomicString("content-visibility: hidden"));
+    }
     UpdateAllLifecyclePhasesForTest();
   }
 
   void CommitElement(Element& element) {
-    element.setAttribute(html_names::kStyleAttr, "");
+    element.setAttribute(html_names::kStyleAttr, g_empty_atom);
     UpdateAllLifecyclePhasesForTest();
   }
 };
 
-TEST_F(DisplayLockUtilitiesTest, ShouldIgnoreHiddenMatchableChildren) {
+TEST_F(DisplayLockUtilitiesTest, ShouldIgnoreHiddenUntilFoundChildren) {
   SetBodyInnerHTML(R"HTML(
-    <style>
-    .hidden { content-visibility: hidden-matchable }
-    </style>
-    <div class=hidden>
+    <div hidden=until-found>
       <div id=target></div>
     </div>
   )HTML");
 
-  Node* target = GetDocument().getElementById("target");
+  Node* target = GetDocument().getElementById(AtomicString("target"));
   EXPECT_TRUE(DisplayLockUtilities::ShouldIgnoreNodeDueToDisplayLock(
       *target, DisplayLockActivationReason::kAccessibility));
 }
@@ -70,14 +65,14 @@ TEST_F(DisplayLockUtilitiesTest, DISABLED_ActivatableLockedInclusiveAncestors) {
     </div>
   )HTML");
 
-  Element& outer = *GetDocument().getElementById("outer");
-  Element& inner_a = *GetDocument().getElementById("innerA");
-  Element& inner_b = *GetDocument().getElementById("innerB");
-  Element& innermost = *GetDocument().getElementById("innermost");
+  Element& outer = *GetDocument().getElementById(AtomicString("outer"));
+  Element& inner_a = *GetDocument().getElementById(AtomicString("innerA"));
+  Element& inner_b = *GetDocument().getElementById(AtomicString("innerB"));
+  Element& innermost = *GetDocument().getElementById(AtomicString("innermost"));
   ShadowRoot& shadow_root =
-      inner_b.AttachShadowRootInternal(ShadowRootType::kOpen);
+      inner_b.AttachShadowRootForTesting(ShadowRootMode::kOpen);
   shadow_root.setInnerHTML("<div id='shadowDiv'>shadow!</div>");
-  Element& shadow_div = *shadow_root.getElementById("shadowDiv");
+  Element& shadow_div = *shadow_root.getElementById(AtomicString("shadowDiv"));
 
   LockElement(outer, true);
   EXPECT_EQ(
@@ -213,9 +208,10 @@ TEST_F(DisplayLockUtilitiesTest, LockedSubtreeCrossingFrames) {
 
   UpdateAllLifecyclePhasesForTest();
 
-  Element* grandparent = GetDocument().getElementById("grandparent");
-  Element* parent = ChildDocument().getElementById("parent");
-  Element* child = ChildDocument().getElementById("child");
+  Element* grandparent =
+      GetDocument().getElementById(AtomicString("grandparent"));
+  Element* parent = ChildDocument().getElementById(AtomicString("parent"));
+  Element* child = ChildDocument().getElementById(AtomicString("child"));
 
   ASSERT_TRUE(grandparent);
   ASSERT_TRUE(parent);
@@ -274,8 +270,8 @@ TEST_F(DisplayLockUtilitiesTest, InteractionWithIntersectionObserver) {
     <div id="target"></target>
   )HTML");
 
-  auto* container = GetDocument().getElementById("container");
-  auto* target = ChildDocument().getElementById("target");
+  auto* container = GetDocument().getElementById(AtomicString("container"));
+  auto* target = ChildDocument().getElementById(AtomicString("target"));
 
   UpdateAllLifecyclePhasesForTest();
   EXPECT_FALSE(ChildDocument().View()->ShouldThrottleRenderingForTest());
@@ -291,8 +287,9 @@ TEST_F(DisplayLockUtilitiesTest, InteractionWithIntersectionObserver) {
   IntersectionObserverInit* observer_init = IntersectionObserverInit::Create();
   TestIntersectionObserverDelegate* observer_delegate =
       MakeGarbageCollected<TestIntersectionObserverDelegate>(ChildDocument());
-  IntersectionObserver* observer =
-      IntersectionObserver::Create(observer_init, *observer_delegate);
+  IntersectionObserver* observer = IntersectionObserver::Create(
+      observer_init, *observer_delegate,
+      LocalFrameUkmAggregator::kDisplayLockIntersectionObserver);
   observer->observe(target);
   UpdateAllLifecyclePhasesForTest();
   test::RunPendingTasks();
@@ -303,9 +300,9 @@ TEST_F(DisplayLockUtilitiesTest, InteractionWithIntersectionObserver) {
   EXPECT_EQ(observer_delegate->EntryCount(), 1);
   EXPECT_FALSE(observer_delegate->LastEntry()->GetGeometry().IsIntersecting());
   EXPECT_EQ(observer_delegate->LastEntry()->GetGeometry().TargetRect(),
-            PhysicalRect());
+            gfx::RectF());
   EXPECT_EQ(observer_delegate->LastEntry()->GetGeometry().RootRect(),
-            PhysicalRect());
+            gfx::RectF());
 
   CommitElement(*container);
   test::RunPendingTasks();
@@ -324,16 +321,14 @@ TEST_F(DisplayLockUtilitiesTest, InteractionWithIntersectionObserver) {
   EXPECT_EQ(observer_delegate->EntryCount(), 2);
   EXPECT_TRUE(observer_delegate->LastEntry()->GetGeometry().IsIntersecting());
   EXPECT_NE(observer_delegate->LastEntry()->GetGeometry().TargetRect(),
-            PhysicalRect());
+            gfx::RectF());
   EXPECT_EQ(observer_delegate->LastEntry()->GetGeometry().IntersectionRect(),
             observer_delegate->LastEntry()->GetGeometry().TargetRect());
   EXPECT_NE(observer_delegate->LastEntry()->GetGeometry().RootRect(),
-            PhysicalRect());
+            gfx::RectF());
 }
 
 TEST_F(DisplayLockUtilitiesTest, ContainerQueryCrash) {
-  ScopedCSSContainerQueriesForTest cq_enabled(true);
-
   SetHtmlInnerHTML(R"HTML(
     <style>
       #container {
@@ -344,7 +339,8 @@ TEST_F(DisplayLockUtilitiesTest, ContainerQueryCrash) {
     <div id="container"><div id="child"></div></div>
   )HTML");
 
-  auto* child = DynamicTo<HTMLElement>(GetDocument().getElementById("child"));
+  auto* child = DynamicTo<HTMLElement>(
+      GetDocument().getElementById(AtomicString("child")));
   ASSERT_TRUE(child);
 
   // Should not fail DCHECKs or crash.

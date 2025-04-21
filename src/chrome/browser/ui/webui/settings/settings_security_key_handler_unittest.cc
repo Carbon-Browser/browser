@@ -1,24 +1,36 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/webui/settings/settings_security_key_handler.h"
 
+#include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <string>
+#include <vector>
 
+#include "base/run_loop.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/values.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
 #include "content/public/test/test_web_ui.h"
-#include "device/fido/fake_fido_discovery.h"
 #include "device/fido/fido_constants.h"
-#include "device/fido/fido_discovery_factory.h"
+#include "device/fido/fido_parsing_utils.h"
 #include "device/fido/fido_types.h"
 #include "device/fido/public_key_credential_rp_entity.h"
 #include "device/fido/public_key_credential_user_entity.h"
+#include "device/fido/virtual_ctap2_device.h"
 #include "device/fido/virtual_fido_device_factory.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/l10n/l10n_util.h"
+
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
+#include "base/test/gmock_callback_support.h"
+#include "chrome/browser/webauthn/local_credential_management.h"
+#endif  // BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
 
 namespace settings {
 
@@ -175,12 +187,10 @@ TEST_F(SecurityKeysCredentialHandlerTest, TestUpdateUserInformation) {
   std::vector<uint8_t> credential_id =
       device::fido_parsing_utils::Materialize(kCredentialID);
 
-  device::PublicKeyCredentialRpEntity rp(kRPID, kRPName,
-                                         /*icon_url=*/absl::nullopt);
+  device::PublicKeyCredentialRpEntity rp(kRPID, kRPName);
   device::PublicKeyCredentialUserEntity user(
       device::fido_parsing_utils::Materialize(kUserID), kUserName,
-      kUserDisplayName,
-      /*icon_url=*/absl::nullopt);
+      kUserDisplayName);
 
   ASSERT_TRUE(
       handler_->GetDiscoveryFactory()->mutable_state()->InjectResidentKey(
@@ -217,8 +227,7 @@ TEST_F(SecurityKeysCredentialHandlerTest, TestUpdateUserInformation) {
 
   device::PublicKeyCredentialUserEntity updated_user(
       device::fido_parsing_utils::Materialize(kUserID), new_username,
-      new_displayname,
-      /*icon_url=*/absl::nullopt);
+      new_displayname);
 
   EXPECT_EQ(handler_->GetDiscoveryFactory()
                 ->mutable_state()
@@ -328,4 +337,146 @@ TEST_F(SecurityKeysBioEnrollmentHandlerTest, TestStorageFullError) {
 
 }  // namespace
 
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC)
+class MockLocalCredentialManagement : public LocalCredentialManagement {
+ public:
+  ~MockLocalCredentialManagement() override = default;
+
+  MOCK_METHOD(void, HasCredentials, (base::OnceCallback<void(bool)> callback));
+  MOCK_METHOD(
+      void,
+      Enumerate,
+      (base::OnceCallback<void(
+           std::optional<std::vector<device::DiscoverableCredentialMetadata>>)>
+           callback));
+  MOCK_METHOD(void,
+              Delete,
+              (base::span<const uint8_t> credential_id,
+               base::OnceCallback<void(bool)> callback));
+  MOCK_METHOD(void,
+              Edit,
+              (base::span<uint8_t> credential_id,
+               std::string new_username,
+               base::OnceCallback<void(bool)> callback));
+};
+
+class TestPasskeysHandler : public PasskeysHandler {
+ public:
+  TestPasskeysHandler(content::TestWebUI* web_ui,
+                      std::unique_ptr<LocalCredentialManagement> lcm)
+      : PasskeysHandler(std::move(lcm)) {
+    set_web_ui(web_ui);
+    AllowJavascriptForTesting();
+  }
+
+  using PasskeysHandler::HandleDelete;
+  using PasskeysHandler::HandleEdit;
+
+  std::string SimulateEdit(std::string credential_id,
+                           std::string new_username) {
+    constexpr char kCallbackId[] = "passkeysEdit";
+    base::Value::List args;
+    args.Append(kCallbackId);
+    args.Append(credential_id);
+    args.Append(new_username);
+    HandleEdit(args);
+    base::RunLoop().RunUntilIdle();
+    return kCallbackId;
+  }
+
+  std::string SimulateDelete(std::string credential_id) {
+    constexpr char kCallbackId[] = "passkeysDelete";
+    base::Value::List args;
+    args.Append(kCallbackId);
+    args.Append(credential_id);
+    HandleDelete(args);
+    base::RunLoop().RunUntilIdle();
+    return kCallbackId;
+  }
+};
+
+class PasskeysHandlerTest : public ChromeRenderViewHostTestHarness {
+ protected:
+  void SetUp() override {
+    ChromeRenderViewHostTestHarness::SetUp();
+    web_ui_ = std::make_unique<content::TestWebUI>();
+    web_ui_->set_web_contents(web_contents());
+    local_cred_man_ = std::make_unique<MockLocalCredentialManagement>();
+    weak_local_cred_man_ = local_cred_man_.get();
+    handler_ = std::make_unique<TestPasskeysHandler>(
+        web_ui_.get(), std::move(local_cred_man_));
+    web_ui_->ClearTrackedCalls();
+  }
+
+  std::unique_ptr<TestPasskeysHandler> handler_;
+  std::unique_ptr<content::TestWebUI> web_ui_;
+  std::unique_ptr<MockLocalCredentialManagement> local_cred_man_;
+  raw_ptr<MockLocalCredentialManagement> weak_local_cred_man_;
+};
+
+TEST_F(PasskeysHandlerTest, TestHandleEdit) {
+  std::vector<uint8_t> credential_id =
+      device::fido_parsing_utils::Materialize(kCredentialID);
+  std::string credential_id_hex = base::HexEncode(credential_id);
+  EXPECT_CALL(
+      *weak_local_cred_man_,
+      Edit(testing::ElementsAreArray(kCredentialID),
+           testing::Eq("new-username"), base::test::IsNotNullCallback()))
+      .Times(testing::AtLeast(1))
+      .WillOnce([](base::span<uint8_t> credential_id, std::string new_username,
+                   base::OnceCallback<void(bool)> callback) {
+        std::move(callback).Run(true);
+        base::RunLoop().RunUntilIdle();
+      });
+  EXPECT_CALL(*weak_local_cred_man_, Enumerate)
+      .WillOnce([](base::OnceCallback<
+                    void(std::optional<
+                         std::vector<device::DiscoverableCredentialMetadata>>)>
+                       callback) {
+        std::vector<device::DiscoverableCredentialMetadata> credential_metadata{
+            device::DiscoverableCredentialMetadata{
+                device::AuthenticatorType::kOther,
+                "a.com",
+                {0},
+                device::PublicKeyCredentialUserEntity(
+                    {0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa,
+                     0xa, 0xa, 0xa, 0xa},
+                    "new-username", "new-username")}};
+        std::move(callback).Run(std::move(credential_metadata));
+        base::RunLoop().RunUntilIdle();
+      });
+  handler_->SimulateEdit(credential_id_hex, "new-username");
+  EXPECT_EQ(web_ui_->call_data()[0]->arg1()->GetString(), "passkeysEdit");
+  EXPECT_EQ(web_ui_->call_data()[0]->arg2()->GetBool(), true);
+  EXPECT_EQ(*web_ui_->call_data()[0]->arg3()->GetList()[0].GetDict().FindString(
+                "userName"),
+            "new-username");
+}
+
+TEST_F(PasskeysHandlerTest, TestRecordPasskeyDelete) {
+  std::vector<uint8_t> credential_id =
+      device::fido_parsing_utils::Materialize(kCredentialID);
+  std::string credential_id_hex = base::HexEncode(credential_id);
+  EXPECT_CALL(*weak_local_cred_man_,
+              Delete(testing::ElementsAreArray(kCredentialID),
+                     base::test::IsNotNullCallback()))
+      .Times(testing::AtLeast(1))
+      .WillOnce([](auto response, base::OnceCallback<void(bool)> callback) {
+        std::move(callback).Run(true);
+        base::RunLoop().RunUntilIdle();
+      });
+  EXPECT_CALL(*weak_local_cred_man_, Enumerate)
+      .WillOnce(
+          [](base::OnceCallback<void(
+                 std::optional<std::vector<
+                     device::DiscoverableCredentialMetadata>>)> callback) {
+            std::move(callback).Run(/*credential_metadata=*/{});
+            base::RunLoop().RunUntilIdle();
+          });
+  handler_->SimulateDelete(credential_id_hex);
+  EXPECT_EQ(web_ui_->call_data()[0]->arg1()->GetString(), "passkeysDelete");
+  EXPECT_EQ(web_ui_->call_data()[0]->arg2()->GetBool(), true);
+}
+
+#endif
 }  // namespace settings

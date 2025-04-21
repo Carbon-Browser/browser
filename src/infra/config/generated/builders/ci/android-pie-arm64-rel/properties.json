@@ -1,13 +1,16 @@
 {
   "$build/chromium_tests_builder_config": {
     "builder_config": {
+      "additional_exclusions": [
+        "infra/config/generated/builders/ci/android-pie-arm64-rel/gn-args.json"
+      ],
       "builder_db": {
         "entries": [
           {
             "builder_id": {
               "bucket": "ci",
               "builder": "android-pie-arm64-rel",
-              "project": "chromium"
+              "project": "chromium-m133"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-android-archive",
@@ -18,6 +21,7 @@
               },
               "legacy_chromium_config": {
                 "apply_configs": [
+                  "download_xr_test_apks",
                   "mb"
                 ],
                 "build_config": "Release",
@@ -27,8 +31,7 @@
               },
               "legacy_gclient_config": {
                 "apply_configs": [
-                  "android",
-                  "enable_reclient"
+                  "android"
                 ],
                 "config": "chromium"
               }
@@ -40,21 +43,32 @@
         {
           "bucket": "ci",
           "builder": "android-pie-arm64-rel",
-          "project": "chromium"
+          "project": "chromium-m133"
         }
       ],
       "mirroring_builder_group_and_names": [
         {
-          "builder": "android-pie-arm64-rel",
+          "builder": "android-arm64-rel",
           "group": "tryserver.chromium.android"
         }
-      ]
+      ],
+      "targets_spec_directory": "src/infra/config/generated/builders/ci/android-pie-arm64-rel/targets"
     }
   },
   "$build/reclient": {
     "instance": "rbe-chromium-trusted",
-    "jobs": 500,
-    "metrics_project": "chromium-reclient-metrics"
+    "metrics_project": "chromium-reclient-metrics",
+    "scandeps_server": true
+  },
+  "$build/siso": {
+    "configs": [
+      "builder"
+    ],
+    "enable_cloud_profiler": true,
+    "enable_cloud_trace": true,
+    "experiments": [],
+    "project": "rbe-chromium-trusted",
+    "remote_jobs": 500
   },
   "$recipe_engine/resultdb/test_presentation": {
     "column_keys": [],
@@ -64,6 +78,9 @@
     ]
   },
   "builder_group": "chromium.android",
+  "gardener_rotations": [
+    "chrome_browser_release"
+  ],
   "recipe": "chromium",
   "sheriff_rotations": [
     "chrome_browser_release"

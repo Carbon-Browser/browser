@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright 2020 The Chromium Authors. All rights reserved.
-     Use of this source code is governed by a BSD-style license that can be
-     found in the LICENSE file. -->
+<!--
+Copyright 2020 The Chromium Authors
+Use of this source code is governed by a BSD-style license that can be
+found in the LICENSE file.
+-->
 
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_height="wrap_content"
@@ -33,7 +35,7 @@
             android:id="@+id/base_primary_bg_override"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="@color/modern_grey_100"
+            android:background="@color/baseline_neutral_90"
             app:primaryText="@string/test_string"
             app:descriptionText="@string/test_string" />
 
@@ -105,7 +107,7 @@
             android:id="@+id/aux_bg_override"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="@color/modern_grey_100"
+            android:background="@color/baseline_neutral_90"
             app:primaryText="@string/test_string"
             app:descriptionText="@string/test_string" />
     </org.chromium.components.browser_ui.widget.RadioButtonWithDescriptionLayout>

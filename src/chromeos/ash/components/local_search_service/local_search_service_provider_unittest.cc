@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,7 @@
 #include "base/test/task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace chromeos {
-namespace local_search_service {
+namespace ash::local_search_service {
 
 class LocalSearchServiceProviderTest : public testing::Test {
  public:
@@ -39,7 +38,7 @@ TEST_F(LocalSearchServiceProviderTest, SetUpAndRun) {
                      mojo::NullRemote(),
                      base::BindOnce(
                          [](bool* callback_done, std::string* error,
-                            const absl::optional<std::string>& error_callback) {
+                            const std::optional<std::string>& error_callback) {
                            *callback_done = true;
                            if (error_callback)
                              *error = error_callback.value();
@@ -63,5 +62,4 @@ TEST_F(LocalSearchServiceProviderTest, SetUpAndRun) {
   EXPECT_EQ(num_items, 0u);
 }
 
-}  // namespace local_search_service
-}  // namespace chromeos
+}  // namespace ash::local_search_service

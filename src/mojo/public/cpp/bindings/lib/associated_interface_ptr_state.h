@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,11 +12,11 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_forward.h"
 #include "base/component_export.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ptr_util.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/task/sequenced_task_runner.h"
 #include "mojo/public/cpp/bindings/associated_group.h"
 #include "mojo/public/cpp/bindings/associated_interface_ptr_info.h"
@@ -139,6 +139,10 @@ class AssociatedInterfacePtrState : public AssociatedInterfacePtrStateBase {
     AssociatedInterfacePtrInfo<Interface> info(PassHandle(), version());
     proxy_.reset();
     return info;
+  }
+
+  InterfaceEndpointClient* endpoint_client_for_test() {
+    return endpoint_client();
   }
 
  private:

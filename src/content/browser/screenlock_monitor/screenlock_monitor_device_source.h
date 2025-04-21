@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,25 +8,25 @@
 #include <memory>
 
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "content/browser/screenlock_monitor/screenlock_monitor_source.h"
 #include "content/common/content_export.h"
 
 #if BUILDFLAG(IS_WIN)
 #include <windows.h>
+
 #include <wtsapi32.h>
 #endif  // BUILDFLAG(IS_WIN)
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
+#include <optional>
+
 #include "components/session_manager/core/session_manager_observer.h"
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 #if BUILDFLAG(IS_WIN)
-namespace base {
-namespace win {
-class MessageWindow;
-}
-}  // namespace base
+namespace gfx {
+class SingletonHwndObserver;
+}  // namespace gfx
 #endif  // BUILDFLAG(IS_WIN)
 
 namespace content {
@@ -58,7 +58,7 @@ class CONTENT_EXPORT ScreenlockMonitorDeviceSource
 
  private:
 #if BUILDFLAG(IS_WIN)
-  // Represents a message-only window for screenlock message handling on Win.
+  // Represents a singleton hwnd for screenlock message handling on Win.
   // Only allow ScreenlockMonitor to create it.
   class SessionMessageWindow {
    public:
@@ -74,14 +74,14 @@ class CONTENT_EXPORT ScreenlockMonitorDeviceSource
         WTSUnRegisterSessionNotificationFunction unregister_function);
 
    private:
-    bool OnWndProc(UINT message, WPARAM wparam, LPARAM lparam, LRESULT* result);
+    void OnWndProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam);
     void ProcessWTSSessionLockMessage(WPARAM event_id);
 
     static WTSRegisterSessionNotificationFunction
         register_session_notification_function_;
     static WTSUnRegisterSessionNotificationFunction
         unregister_session_notification_function_;
-    std::unique_ptr<base::win::MessageWindow> window_;
+    std::unique_ptr<gfx::SingletonHwndObserver> singleton_hwnd_observer_;
   };
 
   SessionMessageWindow session_message_window_;
@@ -92,7 +92,7 @@ class CONTENT_EXPORT ScreenlockMonitorDeviceSource
   void StopListeningForScreenlock();
 #endif  // BUILDFLAG(IS_MAC)
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   class ScreenLockListener : public session_manager::SessionManagerObserver {
    public:
     ScreenLockListener();
@@ -104,10 +104,13 @@ class CONTENT_EXPORT ScreenlockMonitorDeviceSource
 
     // session_manager::SessionManagerObserver:
     void OnSessionStateChanged() override;
+
+   private:
+    std::optional<ScreenlockEvent> prev_event_;
   };
 
   ScreenLockListener screenlock_listener_;
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 };
 
 }  // namespace content

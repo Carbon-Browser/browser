@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ui/display/manager/update_display_configuration_task.h"
 
@@ -8,17 +13,17 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "ui/display/fake/fake_display_snapshot.h"
 #include "ui/display/manager/display_layout_manager.h"
 #include "ui/display/manager/test/action_logger_util.h"
+#include "ui/display/manager/test/fake_display_snapshot.h"
 #include "ui/display/manager/test/test_native_display_delegate.h"
 #include "ui/display/types/display_constants.h"
 
-namespace display {
-namespace test {
+namespace display::test {
 
 namespace {
 
@@ -92,10 +97,10 @@ class TestDisplayLayoutManager : public DisplayLayoutManager {
   }
 
   bool GetDisplayLayout(
-      const std::vector<DisplaySnapshot*>& displays,
+      const std::vector<raw_ptr<DisplaySnapshot, VectorExperimental>>& displays,
       MultipleDisplayState new_display_state,
       chromeos::DisplayPowerState new_power_state,
-      RefreshRateThrottleState new_throttle_state,
+      const base::flat_set<int64_t>& new_vrr_state,
       std::vector<DisplayConfigureRequest>* requests) const override {
     gfx::Point origin;
     for (DisplaySnapshot* display : displays) {
@@ -106,11 +111,12 @@ class TestDisplayLayoutManager : public DisplayLayoutManager {
       if (!mode)
         return false;
 
-      if (new_power_state == chromeos::DISPLAY_POWER_ALL_ON) {
-        requests->push_back(DisplayConfigureRequest(display, mode, origin));
-      } else {
-        requests->push_back(DisplayConfigureRequest(display, nullptr, origin));
-      }
+      const DisplayMode* request_mode =
+          new_power_state == chromeos::DISPLAY_POWER_ALL_ON ? mode : nullptr;
+      bool request_vrr_state = new_vrr_state.contains(display->display_id()) &&
+                               display->IsVrrCapable();
+      requests->push_back(DisplayConfigureRequest(display, request_mode, origin,
+                                                  request_vrr_state));
 
       if (new_display_state != MULTIPLE_DISPLAY_STATE_MULTI_MIRROR)
         origin.Offset(0, mode->size().height());
@@ -121,7 +127,6 @@ class TestDisplayLayoutManager : public DisplayLayoutManager {
 
   DisplayConfigurator::DisplayStateList GetDisplayStates() const override {
     NOTREACHED();
-    return DisplayConfigurator::DisplayStateList();
   }
 
   bool IsMirroring() const override {
@@ -130,7 +135,8 @@ class TestDisplayLayoutManager : public DisplayLayoutManager {
 
  private:
   const DisplayMode* FindMirrorMode(
-      const std::vector<DisplaySnapshot*>& displays) const {
+      const std::vector<raw_ptr<DisplaySnapshot, VectorExperimental>>& displays)
+      const {
     const DisplayMode* mode = displays[0]->native_mode();
     for (DisplaySnapshot* display : displays) {
       if (mode->size().GetArea() > display->native_mode()->size().GetArea())
@@ -154,19 +160,17 @@ class UpdateDisplayConfigurationTaskTest : public testing::Test {
  public:
   UpdateDisplayConfigurationTaskTest()
       : delegate_(&log_),
-        small_mode_(gfx::Size(1366, 768), false, 60.0f),
-        big_mode_(gfx::Size(2560, 1600), false, 60.0f),
-        configured_(false),
-        configuration_status_(false),
-        display_state_(MULTIPLE_DISPLAY_STATE_INVALID),
-        power_state_(chromeos::DISPLAY_POWER_ALL_ON) {
-    displays_[0] = FakeDisplaySnapshot::Builder()
-                       .SetId(123)
-                       .SetNativeMode(small_mode_.Clone())
-                       .SetCurrentMode(small_mode_.Clone())
-                       .SetType(DISPLAY_CONNECTION_TYPE_INTERNAL)
-                       .SetBaseConnectorId(kEdpConnectorId)
-                       .Build();
+        small_mode_({1366, 768}, false, 60.0f),
+        big_mode_({2560, 1600}, false, 60.0f, 40.0f) {
+    displays_[0] =
+        FakeDisplaySnapshot::Builder()
+            .SetId(123)
+            .SetNativeMode(small_mode_.Clone())
+            .SetCurrentMode(small_mode_.Clone())
+            .SetType(DISPLAY_CONNECTION_TYPE_INTERNAL)
+            .SetBaseConnectorId(kEdpConnectorId)
+            .SetVariableRefreshRateState(VariableRefreshRateState::kVrrDisabled)
+            .Build();
 
     displays_[1] = FakeDisplaySnapshot::Builder()
                        .SetId(456)
@@ -175,6 +179,8 @@ class UpdateDisplayConfigurationTaskTest : public testing::Test {
                        .SetType(DISPLAY_CONNECTION_TYPE_DISPLAYPORT)
                        .AddMode(small_mode_.Clone())
                        .SetBaseConnectorId(kSecondConnectorId)
+                       .SetVariableRefreshRateState(
+                           VariableRefreshRateState::kVrrNotCapable)
                        .Build();
   }
 
@@ -186,17 +192,18 @@ class UpdateDisplayConfigurationTaskTest : public testing::Test {
   ~UpdateDisplayConfigurationTaskTest() override = default;
 
   void UpdateDisplays(size_t count) {
-    std::vector<DisplaySnapshot*> displays;
+    std::vector<std::unique_ptr<DisplaySnapshot>> displays;
     for (size_t i = 0; i < count; ++i)
-      displays.push_back(displays_[i].get());
+      displays.push_back(displays_[i]->Clone());
 
-    delegate_.set_outputs(displays);
+    delegate_.SetOutputs(std::move(displays));
   }
 
   void ResponseCallback(
       bool success,
-      const std::vector<DisplaySnapshot*>& displays,
-      const std::vector<DisplaySnapshot*>& unassociated_displays,
+      const std::vector<raw_ptr<DisplaySnapshot, VectorExperimental>>& displays,
+      const std::vector<raw_ptr<DisplaySnapshot, VectorExperimental>>&
+          unassociated_displays,
       MultipleDisplayState new_display_state,
       chromeos::DisplayPowerState new_power_state) {
     configured_ = true;
@@ -221,11 +228,11 @@ class UpdateDisplayConfigurationTaskTest : public testing::Test {
 
   std::unique_ptr<DisplaySnapshot> displays_[2];
 
-  bool configured_;
-  bool configuration_status_;
-  std::vector<DisplaySnapshot*> display_states_;
-  MultipleDisplayState display_state_;
-  chromeos::DisplayPowerState power_state_;
+  bool configured_ = false;
+  bool configuration_status_ = false;
+  std::vector<raw_ptr<DisplaySnapshot, VectorExperimental>> display_states_;
+  MultipleDisplayState display_state_ = MULTIPLE_DISPLAY_STATE_INVALID;
+  chromeos::DisplayPowerState power_state_ = chromeos::DISPLAY_POWER_ALL_ON;
 };
 
 }  // namespace
@@ -234,8 +241,10 @@ TEST_F(UpdateDisplayConfigurationTaskTest, HeadlessConfiguration) {
   {
     UpdateDisplayConfigurationTask task(
         &delegate_, &layout_manager_, MULTIPLE_DISPLAY_STATE_HEADLESS,
-        chromeos::DISPLAY_POWER_ALL_ON, 0, kRefreshRateThrottleEnabled, false,
-        kConfigurationTypeFull,
+        chromeos::DISPLAY_POWER_ALL_ON,
+        DisplayConfigurator::kSetDisplayPowerNoFlags,
+        /*new_vrr_state=*/{}, /*refresh_rate_overrides=*/{},
+        /*force_configure=*/false, kConfigurationTypeFull,
         base::BindOnce(&UpdateDisplayConfigurationTaskTest::ResponseCallback,
                        base::Unretained(this)));
     task.Run();
@@ -254,8 +263,10 @@ TEST_F(UpdateDisplayConfigurationTaskTest, SingleConfiguration) {
   {
     UpdateDisplayConfigurationTask task(
         &delegate_, &layout_manager_, MULTIPLE_DISPLAY_STATE_SINGLE,
-        chromeos::DISPLAY_POWER_ALL_ON, 0, kRefreshRateThrottleEnabled, false,
-        kConfigurationTypeFull,
+        chromeos::DISPLAY_POWER_ALL_ON,
+        DisplayConfigurator::kSetDisplayPowerNoFlags,
+        /*new_vrr_state=*/{}, /*refresh_rate_overrides=*/{},
+        /*force_configure=*/false, kConfigurationTypeFull,
         base::BindOnce(&UpdateDisplayConfigurationTaskTest::ResponseCallback,
                        base::Unretained(this)));
     task.Run();
@@ -283,8 +294,10 @@ TEST_F(UpdateDisplayConfigurationTaskTest, ExtendedConfiguration) {
   {
     UpdateDisplayConfigurationTask task(
         &delegate_, &layout_manager_, MULTIPLE_DISPLAY_STATE_MULTI_EXTENDED,
-        chromeos::DISPLAY_POWER_ALL_ON, 0, kRefreshRateThrottleEnabled, false,
-        kConfigurationTypeFull,
+        chromeos::DISPLAY_POWER_ALL_ON,
+        DisplayConfigurator::kSetDisplayPowerNoFlags,
+        /*new_vrr_state=*/{}, /*refresh_rate_overrides=*/{},
+        /*force_configure=*/false, kConfigurationTypeFull,
         base::BindOnce(&UpdateDisplayConfigurationTaskTest::ResponseCallback,
                        base::Unretained(this)));
     task.Run();
@@ -321,8 +334,10 @@ TEST_F(UpdateDisplayConfigurationTaskTest, MirrorConfiguration) {
   {
     UpdateDisplayConfigurationTask task(
         &delegate_, &layout_manager_, MULTIPLE_DISPLAY_STATE_MULTI_MIRROR,
-        chromeos::DISPLAY_POWER_ALL_ON, 0, kRefreshRateThrottleEnabled, false,
-        kConfigurationTypeFull,
+        chromeos::DISPLAY_POWER_ALL_ON,
+        DisplayConfigurator::kSetDisplayPowerNoFlags,
+        /*new_vrr_state=*/{}, /*refresh_rate_overrides=*/{},
+        /*force_configure=*/false, kConfigurationTypeFull,
         base::BindOnce(&UpdateDisplayConfigurationTaskTest::ResponseCallback,
                        base::Unretained(this)));
     task.Run();
@@ -357,8 +372,10 @@ TEST_F(UpdateDisplayConfigurationTaskTest, FailMirrorConfiguration) {
   {
     UpdateDisplayConfigurationTask task(
         &delegate_, &layout_manager_, MULTIPLE_DISPLAY_STATE_MULTI_MIRROR,
-        chromeos::DISPLAY_POWER_ALL_ON, 0, kRefreshRateThrottleEnabled, false,
-        kConfigurationTypeFull,
+        chromeos::DISPLAY_POWER_ALL_ON,
+        DisplayConfigurator::kSetDisplayPowerNoFlags,
+        /*new_vrr_state=*/{}, /*refresh_rate_overrides=*/{},
+        /*force_configure=*/false, kConfigurationTypeFull,
         base::BindOnce(&UpdateDisplayConfigurationTaskTest::ResponseCallback,
                        base::Unretained(this)));
     task.Run();
@@ -376,8 +393,10 @@ TEST_F(UpdateDisplayConfigurationTaskTest, FailExtendedConfiguration) {
   {
     UpdateDisplayConfigurationTask task(
         &delegate_, &layout_manager_, MULTIPLE_DISPLAY_STATE_MULTI_EXTENDED,
-        chromeos::DISPLAY_POWER_ALL_ON, 0, kRefreshRateThrottleEnabled, false,
-        kConfigurationTypeFull,
+        chromeos::DISPLAY_POWER_ALL_ON,
+        DisplayConfigurator::kSetDisplayPowerNoFlags,
+        /*new_vrr_state=*/{}, /*refresh_rate_overrides=*/{},
+        /*force_configure=*/false, kConfigurationTypeFull,
         base::BindOnce(&UpdateDisplayConfigurationTaskTest::ResponseCallback,
                        base::Unretained(this)));
     task.Run();
@@ -437,8 +456,10 @@ TEST_F(UpdateDisplayConfigurationTaskTest, SingleChangePowerConfiguration) {
   {
     UpdateDisplayConfigurationTask task(
         &delegate_, &layout_manager_, MULTIPLE_DISPLAY_STATE_SINGLE,
-        chromeos::DISPLAY_POWER_ALL_ON, 0, kRefreshRateThrottleEnabled, false,
-        kConfigurationTypeFull,
+        chromeos::DISPLAY_POWER_ALL_ON,
+        DisplayConfigurator::kSetDisplayPowerNoFlags,
+        /*new_vrr_state=*/{}, /*refresh_rate_overrides=*/{},
+        /*force_configure=*/false, kConfigurationTypeFull,
         base::BindOnce(&UpdateDisplayConfigurationTaskTest::ResponseCallback,
                        base::Unretained(this)));
     task.Run();
@@ -463,8 +484,10 @@ TEST_F(UpdateDisplayConfigurationTaskTest, SingleChangePowerConfiguration) {
   {
     UpdateDisplayConfigurationTask task(
         &delegate_, &layout_manager_, MULTIPLE_DISPLAY_STATE_SINGLE,
-        chromeos::DISPLAY_POWER_ALL_OFF, 0, kRefreshRateThrottleEnabled, false,
-        kConfigurationTypeFull,
+        chromeos::DISPLAY_POWER_ALL_OFF,
+        DisplayConfigurator::kSetDisplayPowerNoFlags,
+        /*new_vrr_state=*/{}, /*refresh_rate_overrides=*/{},
+        /*force_configure=*/false, kConfigurationTypeFull,
         base::BindOnce(&UpdateDisplayConfigurationTaskTest::ResponseCallback,
                        base::Unretained(this)));
     task.Run();
@@ -494,8 +517,10 @@ TEST_F(UpdateDisplayConfigurationTaskTest, NoopSoftwareMirrorConfiguration) {
   {
     UpdateDisplayConfigurationTask task(
         &delegate_, &layout_manager_, MULTIPLE_DISPLAY_STATE_MULTI_EXTENDED,
-        chromeos::DISPLAY_POWER_ALL_ON, 0, kRefreshRateThrottleEnabled, false,
-        kConfigurationTypeFull,
+        chromeos::DISPLAY_POWER_ALL_ON,
+        DisplayConfigurator::kSetDisplayPowerNoFlags,
+        /*new_vrr_state=*/{}, /*refresh_rate_overrides=*/{},
+        /*force_configure=*/false, kConfigurationTypeFull,
         base::BindOnce(&UpdateDisplayConfigurationTaskTest::ResponseCallback,
                        base::Unretained(this)));
     task.Run();
@@ -506,8 +531,10 @@ TEST_F(UpdateDisplayConfigurationTaskTest, NoopSoftwareMirrorConfiguration) {
   {
     UpdateDisplayConfigurationTask task(
         &delegate_, &layout_manager_, MULTIPLE_DISPLAY_STATE_MULTI_MIRROR,
-        chromeos::DISPLAY_POWER_ALL_ON, 0, kRefreshRateThrottleEnabled, false,
-        kConfigurationTypeFull,
+        chromeos::DISPLAY_POWER_ALL_ON,
+        DisplayConfigurator::kSetDisplayPowerNoFlags,
+        /*new_vrr_state=*/{}, /*refresh_rate_overrides=*/{},
+        /*force_configure=*/false, kConfigurationTypeFull,
         base::BindOnce(&UpdateDisplayConfigurationTaskTest::ResponseCallback,
                        base::Unretained(this)));
     task.Run();
@@ -530,8 +557,10 @@ TEST_F(UpdateDisplayConfigurationTaskTest,
   {
     UpdateDisplayConfigurationTask task(
         &delegate_, &layout_manager_, MULTIPLE_DISPLAY_STATE_MULTI_EXTENDED,
-        chromeos::DISPLAY_POWER_ALL_ON, 0, kRefreshRateThrottleEnabled, false,
-        kConfigurationTypeFull,
+        chromeos::DISPLAY_POWER_ALL_ON,
+        DisplayConfigurator::kSetDisplayPowerNoFlags,
+        /*new_vrr_state=*/{}, /*refresh_rate_overrides=*/{},
+        /*force_configure=*/false, kConfigurationTypeFull,
         base::BindOnce(&UpdateDisplayConfigurationTaskTest::ResponseCallback,
                        base::Unretained(this)));
     task.Run();
@@ -542,8 +571,10 @@ TEST_F(UpdateDisplayConfigurationTaskTest,
   {
     UpdateDisplayConfigurationTask task(
         &delegate_, &layout_manager_, MULTIPLE_DISPLAY_STATE_MULTI_MIRROR,
-        chromeos::DISPLAY_POWER_ALL_ON, 0, kRefreshRateThrottleEnabled,
-        true /* force_configure */, kConfigurationTypeFull,
+        chromeos::DISPLAY_POWER_ALL_ON,
+        DisplayConfigurator::kSetDisplayPowerNoFlags,
+        /*new_vrr_state=*/{}, /*refresh_rate_overrides=*/{},
+        /*force_configure=*/true, kConfigurationTypeFull,
         base::BindOnce(&UpdateDisplayConfigurationTaskTest::ResponseCallback,
                        base::Unretained(this)));
     task.Run();
@@ -574,5 +605,104 @@ TEST_F(UpdateDisplayConfigurationTaskTest,
       log_.GetActionsAndClear());
 }
 
-}  // namespace test
-}  // namespace display
+TEST_F(UpdateDisplayConfigurationTaskTest, VrrConfiguration) {
+  UpdateDisplays(2);
+
+  // Initial configuration.
+  {
+    UpdateDisplayConfigurationTask task(
+        &delegate_, &layout_manager_, MULTIPLE_DISPLAY_STATE_MULTI_EXTENDED,
+        chromeos::DISPLAY_POWER_ALL_ON,
+        DisplayConfigurator::kSetDisplayPowerNoFlags,
+        /*new_vrr_state=*/{}, /*refresh_rate_overrides=*/{},
+        /*force_configure=*/false, kConfigurationTypeFull,
+        base::BindOnce(&UpdateDisplayConfigurationTaskTest::ResponseCallback,
+                       base::Unretained(this)));
+    task.Run();
+  }
+
+  configured_ = false;
+  configuration_status_ = false;
+  log_.GetActionsAndClear();
+
+  // VRR configuration.
+  {
+    UpdateDisplayConfigurationTask task(
+        &delegate_, &layout_manager_, MULTIPLE_DISPLAY_STATE_MULTI_EXTENDED,
+        chromeos::DISPLAY_POWER_ALL_ON,
+        DisplayConfigurator::kSetDisplayPowerOnlyIfSingleInternalDisplay,
+        /*new_vrr_state=*/
+        {displays_[0]->display_id(), displays_[1]->display_id()},
+        /*refresh_rate_overrides=*/{},
+        /*force_configure=*/false, kConfigurationTypeFull,
+        base::BindOnce(&UpdateDisplayConfigurationTaskTest::ResponseCallback,
+                       base::Unretained(this)));
+    task.Run();
+  }
+
+  EXPECT_TRUE(configured_);
+  EXPECT_TRUE(configuration_status_);
+  EXPECT_EQ(MULTIPLE_DISPLAY_STATE_MULTI_EXTENDED, display_state_);
+  EXPECT_EQ(chromeos::DISPLAY_POWER_ALL_ON, power_state_);
+  EXPECT_EQ(
+      JoinActions(kTestModesetStr,
+                  GetCrtcAction({displays_[0]->display_id(), gfx::Point(),
+                                 &small_mode_, /*enable_vrr=*/true})
+                      .c_str(),
+                  GetCrtcAction({displays_[1]->display_id(),
+                                 gfx::Point(0, small_mode_.size().height()),
+                                 &big_mode_, /*enable_vrr=*/false})
+                      .c_str(),
+                  kModesetOutcomeSuccess, kCommitModesetStr,
+                  GetCrtcAction({displays_[0]->display_id(), gfx::Point(),
+                                 &small_mode_, /*enable_vrr=*/true})
+                      .c_str(),
+                  GetCrtcAction({displays_[1]->display_id(),
+                                 gfx::Point(0, small_mode_.size().height()),
+                                 &big_mode_, /*enable_vrr=*/false})
+                      .c_str(),
+                  kModesetOutcomeSuccess, nullptr),
+      log_.GetActionsAndClear());
+}
+
+TEST_F(UpdateDisplayConfigurationTaskTest, NoopConfiguration) {
+  UpdateDisplays(2);
+
+  // Initial configuration.
+  {
+    UpdateDisplayConfigurationTask task(
+        &delegate_, &layout_manager_, MULTIPLE_DISPLAY_STATE_MULTI_EXTENDED,
+        chromeos::DISPLAY_POWER_ALL_ON,
+        DisplayConfigurator::kSetDisplayPowerNoFlags,
+        /*new_vrr_state=*/{}, /*refresh_rate_overrides=*/{},
+        /*force_configure=*/false, kConfigurationTypeFull,
+        base::BindOnce(&UpdateDisplayConfigurationTaskTest::ResponseCallback,
+                       base::Unretained(this)));
+    task.Run();
+  }
+
+  configured_ = false;
+  configuration_status_ = false;
+  log_.GetActionsAndClear();
+
+  // Noop configuration.
+  {
+    UpdateDisplayConfigurationTask task(
+        &delegate_, &layout_manager_, MULTIPLE_DISPLAY_STATE_MULTI_EXTENDED,
+        chromeos::DISPLAY_POWER_ALL_ON,
+        DisplayConfigurator::kSetDisplayPowerOnlyIfSingleInternalDisplay,
+        /*new_vrr_state=*/{}, /*refresh_rate_overrides=*/{},
+        /*force_configure=*/false, kConfigurationTypeFull,
+        base::BindOnce(&UpdateDisplayConfigurationTaskTest::ResponseCallback,
+                       base::Unretained(this)));
+    task.Run();
+  }
+
+  EXPECT_TRUE(configured_);
+  EXPECT_TRUE(configuration_status_);
+  EXPECT_EQ(MULTIPLE_DISPLAY_STATE_MULTI_EXTENDED, display_state_);
+  EXPECT_EQ(chromeos::DISPLAY_POWER_ALL_ON, power_state_);
+  EXPECT_EQ(kNoActions, log_.GetActionsAndClear());
+}
+
+}  // namespace display::test

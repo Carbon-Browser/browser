@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 
 #include "base/callback_list.h"
+#include "base/values.h"
 
 namespace reporting {
 
@@ -32,6 +33,13 @@ class ReportingSettings {
   // do not change value and return false.
   virtual bool GetBoolean(const std::string& path, bool* out_value) const = 0;
   virtual bool GetInteger(const std::string& path, int* out_value) const = 0;
+  virtual bool GetList(const std::string& path,
+                       const base::Value::List** out_value) const = 0;
+
+  // Return whether reporting is enabled or not, allowed settings types will be
+  // defined by the implementation.
+  virtual bool GetReportingEnabled(const std::string& path,
+                                   bool* out_value) const = 0;
 };
 
 }  // namespace reporting

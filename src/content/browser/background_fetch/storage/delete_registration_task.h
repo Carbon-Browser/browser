@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,8 +45,6 @@ class DeleteRegistrationTask : public background_fetch::DatabaseTask {
                       blink::mojom::CacheStorageError error);
 
   void FinishWithError(blink::mojom::BackgroundFetchError error) override;
-
-  std::string HistogramName() const override;
 
   int64_t service_worker_registration_id_;
   blink::StorageKey storage_key_;

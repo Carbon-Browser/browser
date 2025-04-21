@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@
 template <typename T>
 class BrowsingDataHelperCallback {
  public:
-  BrowsingDataHelperCallback() {}
+  BrowsingDataHelperCallback() = default;
 
   BrowsingDataHelperCallback(const BrowsingDataHelperCallback&) = delete;
   BrowsingDataHelperCallback& operator=(const BrowsingDataHelperCallback&) =

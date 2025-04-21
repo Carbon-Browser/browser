@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,14 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "build/build_config.h"
 #include "components/download/public/common/quarantine_connection.h"
 #include "content/public/browser/browser_thread.h"
 
 #if BUILDFLAG(IS_WIN)
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "components/services/quarantine/public/mojom/quarantine.mojom.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "url/gurl.h"
@@ -42,7 +42,8 @@ void ScanFile(
 
   if (quarantine_remote) {
     quarantine_remote->QuarantineFile(
-        dest_platform_path, GURL(), GURL(), std::string(),
+        dest_platform_path, GURL(), GURL(), /*request_initiator=*/std::nullopt,
+        std::string(),
         base::BindOnce(&OnFileQuarantined, std::move(result_callback)));
   } else {
     std::move(result_callback).Run(base::File::FILE_OK);
@@ -52,7 +53,7 @@ void ScanFile(
 
 }  // namespace
 
-AVScanningFileValidator::~AVScanningFileValidator() {}
+AVScanningFileValidator::~AVScanningFileValidator() = default;
 
 void AVScanningFileValidator::StartPostWriteValidation(
     const base::FilePath& dest_platform_path,

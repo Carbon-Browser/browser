@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,9 +53,13 @@ void ProtoTableManager::CreateOrClearTablesIfNecessary() {
   // was previously written.
   if (!sql::MetaTable::DoesTableExist(db))
     db->Raze();
-  sql::MetaTable::RazeIfIncompatible(
-      db, /*lowest_supported_version=*/schema_version_,
-      /*current_version=*/schema_version_);
+  if (sql::MetaTable::RazeIfIncompatible(
+          db, /*lowest_supported_version=*/schema_version_,
+          /*current_version=*/schema_version_) ==
+      sql::RazeIfIncompatibleResult::kFailed) {
+    ResetDB();
+    return;
+  }
 
   sql::Transaction transaction(db);
   bool success = transaction.Begin();
@@ -66,17 +70,20 @@ void ProtoTableManager::CreateOrClearTablesIfNecessary() {
                                        /*compatible_version=*/schema_version_);
 
   for (const std::string& table_name : table_names_) {
-    success =
-        success &&
-        (db->DoesTableExist(table_name.c_str()) ||
-         db->Execute(base::StringPrintf(kCreateProtoTableStatementTemplate,
-                                        table_name.c_str())
-                         .c_str()));
+    success = success &&
+              (db->DoesTableExist(table_name.c_str()) ||
+               db->Execute(base::StringPrintf(
+                   kCreateProtoTableStatementTemplate, table_name.c_str())));
   }
 
   if (!success || !transaction.Commit())
     ResetDB();  // Resets our non-owning pointer; doesn't mutate the database
                 // object.
+}
+
+void ProtoTableManager::WillShutdown() {
+  DCHECK(GetTaskRunner()->RunsTasksInCurrentSequence());
+  ResetDB();
 }
 
 }  // namespace sqlite_proto

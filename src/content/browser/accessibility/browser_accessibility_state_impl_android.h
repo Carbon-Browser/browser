@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,27 +6,31 @@
 #define CONTENT_BROWSER_ACCESSIBILITY_BROWSER_ACCESSIBILITY_STATE_IMPL_ANDROID_H_
 
 #include "content/browser/accessibility/browser_accessibility_state_impl.h"
-
-#include "base/android/jni_android.h"
-#include "base/android/jni_array.h"
+#include "ui/accessibility/android/accessibility_state.h"
 
 namespace content {
 
-class BrowserContext;
-
 class BrowserAccessibilityStateImplAndroid
-    : public BrowserAccessibilityStateImpl {
+    : public BrowserAccessibilityStateImpl,
+      public ui::AccessibilityState::AccessibilityStateDelegate {
  public:
   BrowserAccessibilityStateImplAndroid();
-  ~BrowserAccessibilityStateImplAndroid() override {}
+  ~BrowserAccessibilityStateImplAndroid() override;
 
-  void CollectAccessibilityServiceStats();
+  // ui::AccessibilityState::AccessibilityStateDelegate overrides
+  void OnAnimatorDurationScaleChanged() override;
+  void OnDisplayInversionEnabledChanged(bool enabled) override;
+  void OnContrastLevelChanged(bool highContrastEnabled) override;
+  void RecordAccessibilityServiceInfoHistograms() override;
 
  protected:
   void UpdateHistogramsOnOtherThread() override;
   void UpdateUniqueUserHistograms() override;
-  void SetImageLabelsModeForProfile(bool enabled,
-                                    BrowserContext* profile) override;
+  void RecordAccessibilityServiceStatsHistogram(int event_type_mask,
+                                                int feedback_type_mask,
+                                                int flags_mask,
+                                                int capabilities_mask,
+                                                std::string histogram);
 };
 
 }  // namespace content

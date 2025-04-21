@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,19 +26,22 @@ class CORE_EXPORT TransitionKeyframe : public Keyframe {
   }
 
   TransitionKeyframe(const TransitionKeyframe& copy_from)
-      : Keyframe(copy_from.offset_, copy_from.composite_, copy_from.easing_),
+      : Keyframe(copy_from.offset_,
+                 copy_from.timeline_offset_,
+                 copy_from.composite_,
+                 copy_from.easing_),
         property_(copy_from.property_),
         value_(copy_from.value_->Clone()),
         compositor_value_(copy_from.compositor_value_) {}
 
-  void SetValue(std::unique_ptr<TypedInterpolationValue> value) {
+  void SetValue(TypedInterpolationValue* value) {
     // Speculative CHECK to help investigate crbug.com/826627. The theory is
     // that |SetValue| is being called with a |value| that has no underlying
     // InterpolableValue. This then would later cause a crash in the
     // TransitionInterpolation constructor.
     // TODO(crbug.com/826627): Revert once bug is fixed.
     CHECK(!!value->Value());
-    value_ = std::move(value);
+    value_ = value;
   }
   void SetCompositorValue(CompositorKeyframeValue*);
   PropertyHandleSet Properties() const final;
@@ -53,16 +56,16 @@ class CORE_EXPORT TransitionKeyframe : public Keyframe {
     PropertySpecificKeyframe(double offset,
                              scoped_refptr<TimingFunction> easing,
                              EffectModel::CompositeOperation composite,
-                             std::unique_ptr<TypedInterpolationValue> value,
+                             TypedInterpolationValue* value,
                              CompositorKeyframeValue* compositor_value)
         : Keyframe::PropertySpecificKeyframe(offset,
                                              std::move(easing),
                                              composite),
-          value_(std::move(value)),
+          value_(value),
           compositor_value_(compositor_value) {}
 
     const CompositorKeyframeValue* GetCompositorKeyframeValue() const final {
-      return compositor_value_;
+      return compositor_value_.Get();
     }
 
     bool IsNeutral() const final { return false; }
@@ -72,7 +75,6 @@ class CORE_EXPORT TransitionKeyframe : public Keyframe {
         double offset,
         scoped_refptr<TimingFunction> easing) const final {
       NOTREACHED();
-      return nullptr;
     }
     Interpolation* CreateInterpolation(
         const PropertyHandle&,
@@ -80,7 +82,7 @@ class CORE_EXPORT TransitionKeyframe : public Keyframe {
 
     bool IsTransitionPropertySpecificKeyframe() const final { return true; }
 
-    const TypedInterpolationValue* GetValue() const { return value_.get(); }
+    const TypedInterpolationValue* GetValue() const { return value_.Get(); }
 
     void Trace(Visitor*) const override;
 
@@ -91,7 +93,7 @@ class CORE_EXPORT TransitionKeyframe : public Keyframe {
           offset, easing_, composite_, value_->Clone(), compositor_value_);
     }
 
-    std::unique_ptr<TypedInterpolationValue> value_;
+    Member<TypedInterpolationValue> value_;
     Member<CompositorKeyframeValue> compositor_value_;
   };
 
@@ -108,7 +110,7 @@ class CORE_EXPORT TransitionKeyframe : public Keyframe {
       double offset) const final;
 
   PropertyHandle property_;
-  std::unique_ptr<TypedInterpolationValue> value_;
+  Member<TypedInterpolationValue> value_;
   Member<CompositorKeyframeValue> compositor_value_;
 };
 

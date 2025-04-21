@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,11 @@ class CORE_EXPORT AudioTrackList final : public TrackListBase<AudioTrack> {
   ~AudioTrackList() override;
 
   bool HasEnabledTrack() const;
+
+  // If we are enabling a track in exclusive mode, clear the enabled flag for
+  // any other enabled tracks. Also clear the enabled flag for any other
+  // exclusive tracks that are enabled.
+  void TrackEnabled(const String& track_id, bool exclusive);
 
   // EventTarget
   const AtomicString& InterfaceName() const override;

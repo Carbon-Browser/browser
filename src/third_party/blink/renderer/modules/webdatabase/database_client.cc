@@ -39,8 +39,7 @@
 
 namespace blink {
 
-DatabaseClient::DatabaseClient()
-    : Supplement(nullptr), inspector_agent_(nullptr) {}
+DatabaseClient::DatabaseClient(Page& page) : Supplement(page) {}
 
 void DatabaseClient::Trace(Visitor* visitor) const {
   visitor->Trace(inspector_agent_);
@@ -61,11 +60,8 @@ const char DatabaseClient::kSupplementName[] = "DatabaseClient";
 bool DatabaseClient::AllowDatabase(ExecutionContext* context) {
   DCHECK(context->IsContextThread());
   LocalDOMWindow* window = To<LocalDOMWindow>(context);
-  if (auto* client = window->GetFrame()->GetContentSettingsClient()) {
-    return client->AllowStorageAccessSync(
-        WebContentSettingsClient::StorageType::kDatabase);
-  }
-  return true;
+  return window->GetFrame()->AllowStorageAccessSyncAndNotify(
+      WebContentSettingsClient::StorageType::kDatabase);
 }
 
 void DatabaseClient::DidOpenDatabase(blink::Database* database,
@@ -80,10 +76,6 @@ void DatabaseClient::SetInspectorAgent(InspectorDatabaseAgent* agent) {
   // TODO(dgozman): we should not set agent twice, but it's happening in OOPIF
   // case.
   inspector_agent_ = agent;
-}
-
-void ProvideDatabaseClientTo(Page& page, DatabaseClient* client) {
-  page.ProvideSupplement(client);
 }
 
 }  // namespace blink

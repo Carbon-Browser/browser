@@ -1,4 +1,4 @@
-/* Copyright (c) 2014 The Chromium Authors. All rights reserved.
+/* Copyright 2014 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file. */
 
@@ -40,13 +40,13 @@ chrome.windows.getAll({'populate': true}, function(windows) {
 /**
  * Add context menu item when the extension is installed.
  */
+chrome.contextMenus.onClicked.addListener(contextMenuClicked);
 chrome.contextMenus.create({
     "title": chrome.i18n.getMessage('longdesc_context_menu_item'),
     "contexts": ["all"],
     "id": "moreInfo",
-    "onclick": contextMenuClicked,
     "enabled": false
-  });
+  }, onMenuReady);
 
 /**
  * Add listener for messages from content script.
@@ -58,10 +58,16 @@ chrome.runtime.onMessage.addListener(
       ariaDescribedAt = request.ariaDescribedAt;
       longDesc = request.longDesc;
     }
-    chrome.contextMenus.update('moreInfo', {
-      "enabled": request.enabled
-    });
+    if (globalThis.menuReady) {
+      chrome.contextMenus.update('moreInfo', {
+        "enabled": request.enabled
+      });
+    }
   });
+
+function onMenuReady() {
+  globalThis.menuReady = true;
+}
 
 /**
  * Event handler for when a context menu item is clicked.

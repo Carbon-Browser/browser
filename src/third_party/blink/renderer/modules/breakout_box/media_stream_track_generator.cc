@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,6 @@
 #include "third_party/blink/renderer/platform/mediastream/media_stream_audio_track.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_component_impl.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_source.h"
-#include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread.h"
 #include "third_party/blink/renderer/platform/wtf/uuid.h"
 
 namespace blink {
@@ -96,17 +95,22 @@ MediaStreamComponent* MediaStreamTrackGenerator::MakeMediaStreamComponent(
           /*enabled=*/true);
       break;
     case MediaStreamSource::StreamType::kTypeAudio:
+      // If running on a dedicated worker, use the worker thread to deliver
+      // audio, but use a different thread if running on Window to avoid
+      // introducing jank.
       // TODO(https://crbug.com/1168281): use a different thread than the IO
       // thread to deliver Audio.
       platform_source = std::make_unique<PushableMediaStreamAudioSource>(
           execution_context->GetTaskRunner(TaskType::kInternalMediaRealTime),
-          Platform::Current()->GetIOTaskRunner());
+          execution_context->IsDedicatedWorkerGlobalScope()
+              ? execution_context->GetTaskRunner(
+                    TaskType::kInternalMediaRealTime)
+              : Platform::Current()->GetIOTaskRunner());
       platform_track =
           std::make_unique<MediaStreamAudioTrack>(/*is_local_track=*/true);
       break;
     default:
       NOTREACHED();
-      return nullptr;
   }
 
   const String track_id = WTF::CreateCanonicalUUIDString();
@@ -131,19 +135,19 @@ MediaStreamTrackGenerator::MediaStreamTrackGenerator(
 
 WritableStream* MediaStreamTrackGenerator::writable(ScriptState* script_state) {
   if (writable_)
-    return writable_;
+    return writable_.Get();
 
   if (kind() == "video")
     CreateVideoStream(script_state);
   else if (kind() == "audio")
     CreateAudioStream(script_state);
 
-  return writable_;
+  return writable_.Get();
 }
 
 PushableMediaStreamVideoSource* MediaStreamTrackGenerator::PushableVideoSource()
     const {
-  DCHECK_EQ(Component()->Source()->GetType(), MediaStreamSource::kTypeVideo);
+  DCHECK_EQ(Component()->GetSourceType(), MediaStreamSource::kTypeVideo);
   return static_cast<PushableMediaStreamVideoSource*>(
       GetExecutionContext()->GetTaskRunner(TaskType::kInternalMediaRealTime),
       MediaStreamVideoSource::GetVideoSource(Component()->Source()));

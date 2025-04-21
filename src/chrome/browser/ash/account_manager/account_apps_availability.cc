@@ -1,15 +1,18 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/account_manager/account_apps_availability.h"
 
+#include <optional>
+
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
 #include "base/containers/flat_set.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
+#include "chrome/browser/ash/crosapi/browser_util.h"
 #include "components/account_manager_core/account.h"
 #include "components/account_manager_core/account_manager_facade.h"
 #include "components/account_manager_core/pref_names.h"
@@ -17,7 +20,7 @@
 #include "components/prefs/pref_service.h"
 #include "components/prefs/scoped_user_pref_update.h"
 #include "components/user_manager/user_manager.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "google_apis/gaia/gaia_id.h"
 
 // Structure of `account_manager::prefs::kAccountAppsAvailability`.
 // `kAccountAppsAvailability` is a dictionary of dictionaries of the following
@@ -38,41 +41,37 @@ namespace {
 constexpr int kMaxNumAccountsInArcMetric =
     10;  // To match AccountManager.NumAccounts metrics.
 
-bool IsPrimaryGaiaAccount(const std::string& gaia_id) {
+bool IsPrimaryGaiaAccount(const GaiaId& gaia_id) {
   const user_manager::User* user =
       user_manager::UserManager::Get()->GetPrimaryUser();
-  DCHECK(user);
+  // GetPrimaryUser may return nullptr in tests.
+  if (!user)
+    return false;
+
   return user->GetAccountId().GetAccountType() == AccountType::GOOGLE &&
          user->GetAccountId().GetGaiaId() == gaia_id;
 }
 
-bool IsActiveDirectoryUser() {
-  const user_manager::User* user =
-      user_manager::UserManager::Get()->GetPrimaryUser();
-  DCHECK(user);
-  return user->GetType() == user_manager::USER_TYPE_ACTIVE_DIRECTORY;
-}
-
 bool IsPrefInitialized(PrefService* prefs) {
-  const base::Value* accounts =
-      prefs->GetDictionary(account_manager::prefs::kAccountAppsAvailability);
-  return accounts && (accounts->DictSize() > 0 || IsActiveDirectoryUser());
+  const base::Value::Dict& accounts =
+      prefs->GetDict(account_manager::prefs::kAccountAppsAvailability);
+  return accounts.size() > 0;
 }
 
 void CompleteFindAccountByGaiaId(
-    const std::string& gaia_id,
-    base::OnceCallback<void(const absl::optional<account_manager::Account>&)>
+    const GaiaId& gaia_id,
+    base::OnceCallback<void(const std::optional<account_manager::Account>&)>
         callback,
     const std::vector<account_manager::Account>& accounts) {
   for (const auto& account : accounts) {
     if (account.key.account_type() == account_manager::AccountType::kGaia &&
-        account.key.id() == gaia_id) {
+        GaiaId(account.key.id()) == gaia_id) {
       std::move(callback).Run(account);
       return;
     }
   }
   LOG(ERROR) << "Couldn't find account by gaia id in AccountManager";
-  std::move(callback).Run(absl::nullopt);
+  std::move(callback).Run(std::nullopt);
 }
 
 void CompleteGetAccountsAvailableInArc(
@@ -100,18 +99,13 @@ void CompleteGetAccountsAvailableInArc(
 
 base::flat_set<std::string> GetGaiaIdsAvailableInArc(PrefService* prefs) {
   base::flat_set<std::string> result;
-  const base::Value* accounts =
-      prefs->GetDictionary(account_manager::prefs::kAccountAppsAvailability);
-  if (!accounts) {
-    LOG(ERROR) << "Couldn't find "
-               << account_manager::prefs::kAccountAppsAvailability
-               << " dict in prefs";
-    return result;
-  }
+  const base::Value::Dict& accounts =
+      prefs->GetDict(account_manager::prefs::kAccountAppsAvailability);
+
   // See structure of `accounts` at the top of the file.
-  for (const auto dict : accounts->DictItems()) {
-    absl::optional<bool> is_available =
-        dict.second.FindBoolKey(account_manager::prefs::kIsAvailableInArcKey);
+  for (const auto dict : accounts) {
+    std::optional<bool> is_available = dict.second.GetDict().FindBool(
+        account_manager::prefs::kIsAvailableInArcKey);
     if (!is_available.has_value() || !is_available.value())
       continue;
 
@@ -125,24 +119,19 @@ base::flat_set<std::string> GetGaiaIdsAvailableInArc(PrefService* prefs) {
 // Return `false` if account with `gaia_id` should not be available in ARC.
 // Return `nullopt` if account with `gaia_id` is not in prefs (it can happen if
 // `SetIsAccountAvailableInArc` wasn't called for this account yet).
-absl::optional<bool> IsAccountAvailableInArc(PrefService* prefs,
-                                             const std::string& gaia_id) {
-  const base::Value* accounts =
-      prefs->GetDictionary(account_manager::prefs::kAccountAppsAvailability);
-  if (!accounts) {
-    LOG(ERROR) << "Couldn't find "
-               << account_manager::prefs::kAccountAppsAvailability
-               << " dict in prefs";
-    return absl::nullopt;
-  }
-  // See structure of `accounts` at the top of the file.
-  const base::Value* account_entry = accounts->FindDictKey(gaia_id);
-  if (!account_entry)
-    return absl::nullopt;
+std::optional<bool> IsAccountAvailableInArc(PrefService* prefs,
+                                            const GaiaId& gaia_id) {
+  const base::Value::Dict& accounts =
+      prefs->GetDict(account_manager::prefs::kAccountAppsAvailability);
 
-  DCHECK(account_entry->is_dict());
-  absl::optional<bool> is_available_in_arc =
-      account_entry->FindBoolKey(account_manager::prefs::kIsAvailableInArcKey);
+  // See structure of `accounts` at the top of the file.
+  const base::Value::Dict* account_entry =
+      accounts.FindDict(gaia_id.ToString());
+  if (!account_entry)
+    return std::nullopt;
+
+  std::optional<bool> is_available_in_arc =
+      account_entry->FindBool(account_manager::prefs::kIsAvailableInArcKey);
   DCHECK(is_available_in_arc);
   // If there is no `is_available_in_arc` key, assume that account is available
   // in ARC.
@@ -150,40 +139,41 @@ absl::optional<bool> IsAccountAvailableInArc(PrefService* prefs,
   return is_available_in_arc.value_or(true);
 }
 
-void RemoveAccountFromPrefs(PrefService* prefs, const std::string& gaia_id) {
+void RemoveAccountFromPrefs(PrefService* prefs, const GaiaId& gaia_id) {
   DCHECK(!IsPrimaryGaiaAccount(gaia_id));
 
-  DictionaryPrefUpdate update(prefs,
+  ScopedDictPrefUpdate update(prefs,
                               account_manager::prefs::kAccountAppsAvailability);
-  const bool success = update->RemoveKey(gaia_id);
-  DCHECK(success);
+  const bool success = update->Remove(gaia_id.ToString());
+  if (!success)
+    LOG(ERROR) << "Account apps availability pref not found";
 }
 
 void AddAccountToPrefs(PrefService* prefs,
-                       const std::string& gaia_id,
+                       const GaiaId& gaia_id,
                        bool is_available_in_arc) {
   // Account shouldn't already exist.
   DCHECK(!IsAccountAvailableInArc(prefs, gaia_id).has_value());
 
-  base::Value account_entry(base::Value::Type::DICTIONARY);
-  account_entry.SetKey(account_manager::prefs::kIsAvailableInArcKey,
-                       base::Value(is_available_in_arc));
+  base::Value::Dict account_entry;
+  account_entry.Set(account_manager::prefs::kIsAvailableInArcKey,
+                    base::Value(is_available_in_arc));
 
-  DictionaryPrefUpdate update(prefs,
+  ScopedDictPrefUpdate update(prefs,
                               account_manager::prefs::kAccountAppsAvailability);
-  update->SetKey(gaia_id, std::move(account_entry));
+  update->Set(gaia_id.ToString(), std::move(account_entry));
 }
 
 void UpdateAccountInPrefs(PrefService* prefs,
-                          const std::string& gaia_id,
+                          const GaiaId& gaia_id,
                           bool is_available_in_arc) {
-  DictionaryPrefUpdate update(prefs,
+  ScopedDictPrefUpdate update(prefs,
                               account_manager::prefs::kAccountAppsAvailability);
-  base::Value* account_entry = update->FindDictKey(gaia_id);
+  base::Value::Dict* account_entry = update->FindDict(gaia_id.ToString());
   DCHECK(account_entry);
 
-  account_entry->SetKey(account_manager::prefs::kIsAvailableInArcKey,
-                        base::Value(is_available_in_arc));
+  account_entry->Set(account_manager::prefs::kIsAvailableInArcKey,
+                     is_available_in_arc);
 }
 
 }  // namespace
@@ -207,8 +197,8 @@ AccountAppsAvailability::AccountAppsAvailability(
   DCHECK(identity_manager_);
   DCHECK(prefs_);
 
-  account_manager_facade_observation_.Observe(account_manager_facade_);
-  identity_manager_observation_.Observe(identity_manager_);
+  account_manager_facade_observation_.Observe(account_manager_facade_.get());
+  identity_manager_observation_.Observe(identity_manager_.get());
 
   if (IsPrefInitialized(prefs_)) {
     is_initialized_ = true;
@@ -227,9 +217,7 @@ AccountAppsAvailability::~AccountAppsAvailability() = default;
 
 // static
 bool AccountAppsAvailability::IsArcAccountRestrictionsEnabled() {
-  return base::FeatureList::IsEnabled(
-             chromeos::features::kArcAccountRestrictions) &&
-         base::FeatureList::IsEnabled(chromeos::features::kLacrosSupport);
+  return crosapi::browser_util::IsLacrosEnabled();
 }
 
 // static
@@ -263,11 +251,11 @@ void AccountAppsAvailability::SetIsAccountAvailableInArc(
     return;
   }
 
-  absl::optional<bool> current_status =
-      IsAccountAvailableInArc(prefs_, account.key.id());
+  std::optional<bool> current_status =
+      IsAccountAvailableInArc(prefs_, GaiaId(account.key.id()));
   if (!current_status.has_value()) {
     // Account is not in prefs yet - add a new entry.
-    AddAccountToPrefs(prefs_, account.key.id(), is_available);
+    AddAccountToPrefs(prefs_, GaiaId(account.key.id()), is_available);
 
     // Notify observers only if account should be available.
     if (is_available)
@@ -279,7 +267,7 @@ void AccountAppsAvailability::SetIsAccountAvailableInArc(
   if (current_status.value() == is_available)
     return;
 
-  UpdateAccountInPrefs(prefs_, account.key.id(), is_available);
+  UpdateAccountInPrefs(prefs_, GaiaId(account.key.id()), is_available);
   NotifyObservers(account, is_available);
 }
 
@@ -318,7 +306,7 @@ void AccountAppsAvailability::OnRefreshTokenUpdatedForAccount(
     return;
   }
 
-  absl::optional<bool> current_status =
+  std::optional<bool> current_status =
       IsAccountAvailableInArc(prefs_, account_info.gaia);
   // - If `current_status.has_value()` is `false` - this account is not in prefs
   // yet. This happens when account is just added and
@@ -362,13 +350,19 @@ void AccountAppsAvailability::OnAccountRemoved(
     return;
   }
 
-  absl::optional<bool> current_status =
-      IsAccountAvailableInArc(prefs_, account.key.id());
-  RemoveAccountFromPrefs(prefs_, account.key.id());
+  std::optional<bool> current_status =
+      IsAccountAvailableInArc(prefs_, GaiaId(account.key.id()));
+  RemoveAccountFromPrefs(prefs_, GaiaId(account.key.id()));
   if (!current_status.has_value() || !current_status.value())
     return;
 
   NotifyObservers(account, /*is_available_in_arc=*/false);
+}
+
+void AccountAppsAvailability::OnAuthErrorChanged(
+    const account_manager::AccountKey& account,
+    const GoogleServiceAuthError& error) {
+  // Nothing to do.
 }
 
 bool AccountAppsAvailability::IsInitialized() const {
@@ -389,31 +383,28 @@ void AccountAppsAvailability::InitAccountsAvailableInArcPref(
     return;
 
   prefs_->Set(account_manager::prefs::kAccountAppsAvailability,
-              base::Value(base::Value::Type::DICTIONARY));
+              base::Value(base::Value::Type::DICT));
 
-  DictionaryPrefUpdate update(prefs_,
+  ScopedDictPrefUpdate update(prefs_,
                               account_manager::prefs::kAccountAppsAvailability);
-  DCHECK(update->DictEmpty());
+  DCHECK(update->empty());
 
   // See structure of `update` dictionary at the top of the file.
   for (const auto& account : accounts) {
     if (account.key.account_type() != account_manager::AccountType::kGaia)
       continue;
 
-    base::Value account_entry(base::Value::Type::DICTIONARY);
-    account_entry.SetKey(account_manager::prefs::kIsAvailableInArcKey,
-                         base::Value(true));
+    base::Value::Dict account_entry;
+    account_entry.Set(account_manager::prefs::kIsAvailableInArcKey, true);
 
     // Key: `account.key.id()` = Gaia ID
     // Value: { "is_available_in_arc": true }
-    update->SetKey(account.key.id(), std::move(account_entry));
+    update->Set(account.key.id(), std::move(account_entry));
   }
 
-  if (!IsActiveDirectoryUser()) {
-    // If user type is not active directory, we expect to have at least primary
-    // account in the list.
-    DCHECK(!update->DictEmpty());
-  }
+  // User type cannot be active directory, so we expect to have at least
+  // primary account in the list.
+  DCHECK(!update->empty());
 
   is_initialized_ = true;
 
@@ -438,8 +429,8 @@ void AccountAppsAvailability::ReportMetrics(
 }
 
 void AccountAppsAvailability::FindAccountByGaiaId(
-    const std::string& gaia_id,
-    base::OnceCallback<void(const absl::optional<account_manager::Account>&)>
+    const GaiaId& gaia_id,
+    base::OnceCallback<void(const std::optional<account_manager::Account>&)>
         callback) {
   account_manager_facade_->GetAccounts(base::BindOnce(
       &CompleteFindAccountByGaiaId, gaia_id, std::move(callback)));
@@ -447,7 +438,7 @@ void AccountAppsAvailability::FindAccountByGaiaId(
 
 void AccountAppsAvailability::MaybeNotifyObservers(
     bool is_available_in_arc,
-    const absl::optional<account_manager::Account>& account) {
+    const std::optional<account_manager::Account>& account) {
   if (!account)
     return;
 

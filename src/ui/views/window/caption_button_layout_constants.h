@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,8 +27,8 @@ enum class CaptionButtonLayoutSize {
 // Default radius of caption button ink drop highlight and mask.
 constexpr int kCaptionButtonInkDropDefaultCornerRadius = 14;
 
-// Caption button width.
-constexpr int kCaptionButtonWidth = 32;
+// Returns default caption button width.
+VIEWS_EXPORT int GetCaptionButtonWidth();
 
 // Calculates the preferred size of an MD-style frame caption button.  Only used
 // on ChromeOS and desktop Linux.

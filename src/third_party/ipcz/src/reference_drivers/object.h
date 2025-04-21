@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,17 +14,12 @@
 namespace ipcz::reference_drivers {
 
 // Base class for all driver-managed objects used by both reference drivers.
-class Object : public RefCounted {
+class Object : public RefCounted<Object> {
  public:
   enum Type : uint32_t {
     kTransport,
     kMemory,
     kMapping,
-
-    // A non-standard driver object type, used to exercise more complex, custom
-    // driver object de/serialization via boxing and unboxing in tests. See the
-    // Blob definition in src/reference_drivers/blob.h.
-    kBlob,
 
 #if defined(OS_LINUX)
     // A non-standard driver object type which wraps a FileDescriptor object.
@@ -55,9 +50,11 @@ class Object : public RefCounted {
   virtual IpczResult Close();
 
  protected:
-  ~Object() override;
+  virtual ~Object();
 
  private:
+  friend class RefCounted<Object>;
+
   const Type type_;
 };
 
@@ -86,7 +83,7 @@ class ObjectImpl : public Object {
   }
 
  protected:
-  ~ObjectImpl() override = default;
+  virtual ~ObjectImpl() = default;
 };
 
 }  // namespace ipcz::reference_drivers

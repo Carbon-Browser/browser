@@ -1,13 +1,13 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef PRINTING_PRINTING_CONTEXT_SYSTEM_DIALOG_WIN_H_
 #define PRINTING_PRINTING_CONTEXT_SYSTEM_DIALOG_WIN_H_
 
-#include <ocidl.h>  // NOLINT(build/include_order)
+#include <ocidl.h>
 
-#include <commdlg.h>  // Must come after ocidl.h.
+#include <commdlg.h>
 
 #include <string>
 
@@ -20,7 +20,8 @@ namespace printing {
 class COMPONENT_EXPORT(PRINTING) PrintingContextSystemDialogWin
     : public PrintingContextWin {
  public:
-  explicit PrintingContextSystemDialogWin(Delegate* delegate);
+  PrintingContextSystemDialogWin(Delegate* delegate,
+                                 ProcessBehavior process_behavior);
   PrintingContextSystemDialogWin(const PrintingContextSystemDialogWin&) =
       delete;
   PrintingContextSystemDialogWin& operator=(

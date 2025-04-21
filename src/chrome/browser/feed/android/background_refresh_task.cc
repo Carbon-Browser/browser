@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@ namespace feed {
 
 BackgroundRefreshTask::BackgroundRefreshTask(RefreshTaskId task_id)
     : task_id_(task_id) {}
-BackgroundRefreshTask::~BackgroundRefreshTask() {}
+BackgroundRefreshTask::~BackgroundRefreshTask() = default;
 
 void BackgroundRefreshTask::OnStartTaskInReducedMode(
     const background_task::TaskParameters& task_params,

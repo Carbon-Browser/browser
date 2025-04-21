@@ -1,13 +1,12 @@
-#!/usr/bin/env python
-# Copyright 2014 The Chromium Authors. All rights reserved.
+#!/usr/bin/env python3
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 """Compare the artifacts from two builds."""
 
-from __future__ import print_function
-
 import ast
+import binascii
 import difflib
 import glob
 import json
@@ -64,7 +63,7 @@ def get_files_to_compare(build_dir, recursive=False):
 
 def get_files_to_compare_using_isolate(build_dir):
   # First, find all .runtime_deps files in build_dir.
-  # TODO(crbug.com/1066213): This misses some files.
+  # TODO(crbug.com/40124452): This misses some files.
   runtime_deps_files = glob.glob(os.path.join(build_dir, '*.runtime_deps'))
 
   # Then, extract their contents.
@@ -102,7 +101,7 @@ def diff_binary(first_filepath, second_filepath, file_len):
   """Returns a compact binary diff if the diff is small enough."""
   BLOCK_SIZE = 8192
   CHUNK_SIZE = 32
-  NUM_CHUNKS_IN_BLOCK = BLOCK_SIZE / CHUNK_SIZE
+  NUM_CHUNKS_IN_BLOCK = BLOCK_SIZE // CHUNK_SIZE
   MAX_STREAMS = 10
   num_diffs = 0
   streams = []
@@ -114,11 +113,11 @@ def diff_binary(first_filepath, second_filepath, file_len):
       if not lhs_data or not rhs_data:
         break
       if lhs_data != rhs_data:
-        for i in xrange(min(len(lhs_data), len(rhs_data))):
+        for i in range(min(len(lhs_data), len(rhs_data))):
           if lhs_data[i] != rhs_data[i]:
             num_diffs += 1
         if len(streams) < MAX_STREAMS:
-          for idx in xrange(NUM_CHUNKS_IN_BLOCK):
+          for idx in range(NUM_CHUNKS_IN_BLOCK):
             lhs_chunk = lhs_data[idx * CHUNK_SIZE:(idx + 1) * CHUNK_SIZE]
             rhs_chunk = rhs_data[idx * CHUNK_SIZE:(idx + 1) * CHUNK_SIZE]
             if lhs_chunk != rhs_chunk:
@@ -135,13 +134,15 @@ def diff_binary(first_filepath, second_filepath, file_len):
   result = '%d out of %d bytes are different (%.2f%%)' % (
         num_diffs, file_len, 100.0 * num_diffs / file_len)
   if streams:
-    encode = lambda text: ''.join(i if 31 < ord(i) < 127 else '.' for i in text)
+    encode = lambda text: ''.join(chr(i) if 31 < i < 127 else '.' for i in text)
+
     for offset, lhs_data, rhs_data in streams:
-      lhs_line = '%s \'%s\'' % (lhs_data.encode('hex'), encode(lhs_data))
-      rhs_line = '%s \'%s\'' % (rhs_data.encode('hex'), encode(rhs_data))
+      lhs_line = '%s \'%s\'' % (lhs_data.hex(), encode(lhs_data))
+      rhs_line = '%s \'%s\'' % (rhs_data.hex(), encode(rhs_data))
       diff = list(difflib.Differ().compare([lhs_line], [rhs_line]))[-1][2:-1]
       result += '\n  0x%-8x: %s\n              %s\n              %s' % (
-            offset, lhs_line, rhs_line, diff)
+          offset, lhs_line, rhs_line, diff)
+
   return result
 
 
@@ -208,7 +209,12 @@ def compare_files(first_filepath, second_filepath):
 
   if ret and zipfile.is_zipfile(first_filepath) and zipfile.is_zipfile(
       second_filepath):
-    ret += '\n' + diff_zips(first_filepath, second_filepath)
+    try:
+      ret += '\n' + diff_zips(first_filepath, second_filepath)
+    except OSError:
+      print("https://crbug.com/1427203: error from diff_zips(%s, %s)?" %
+            (first_filepath, second_filepath))
+      raise
   return ret
 
 
@@ -231,8 +237,9 @@ def get_deps(ninja_path, build_dir, target):
       shutil.move(build_dir, fixed_build_dir)
 
   try:
-    out = subprocess.check_output([ninja_path, '-C', fixed_build_dir,
-                                   '-t', 'graph', target])
+    out = subprocess.check_output(
+        [ninja_path, '-C', fixed_build_dir, '-t', 'graph', target],
+        universal_newlines=True)
   except subprocess.CalledProcessError as e:
     print('error to get graph for %s: %s' % (target, e), file=sys.stderr)
     return []
@@ -293,9 +300,9 @@ def compare_build_artifacts(first_dir, second_dir, ninja_path, target_platform,
     print('%s isn\'t a valid directory.' % second_dir, file=sys.stderr)
     return 1
 
-  epoch_hex = struct.pack('<I', int(time.time())).encode('hex')
-  print('Epoch: %s' %
-      ' '.join(epoch_hex[i:i+2] for i in xrange(0, len(epoch_hex), 2)))
+  epoch_hex = binascii.hexlify(struct.pack('<I', int(time.time()))).decode()
+  print('Epoch: %s' % ' '.join(epoch_hex[i:i + 2]
+                               for i in range(0, len(epoch_hex), 2)))
 
   with open(os.path.join(BASE_DIR, 'deterministic_build_ignorelist.pyl')) as f:
     raw_ignorelist = ast.literal_eval(f.read())

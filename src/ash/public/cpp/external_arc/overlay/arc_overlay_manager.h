@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 #define ASH_PUBLIC_CPP_EXTERNAL_ARC_OVERLAY_ARC_OVERLAY_MANAGER_H_
 
 #include "ash/public/cpp/ash_public_export.h"
-#include "base/callback_helpers.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback_helpers.h"
 #include "base/scoped_multi_source_observation.h"
 #include "base/scoped_observation.h"
 #include "ui/aura/env.h"

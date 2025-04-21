@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,13 +12,16 @@
 #include "components/permissions/permission_request_manager.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_features.h"
-#include "device/base/features.h"
 #include "device/vr/buildflags/buildflags.h"
 #include "ui/gfx/geometry/vector3d_f.h"
 
 #if BUILDFLAG(IS_WIN)
 #include "sandbox/policy/features.h"
 #endif
+
+namespace permissions {
+class MockPermissionPromptFactory;
+}
 
 namespace vr {
 
@@ -32,24 +35,32 @@ class WebXrVrBrowserTestBase : public WebXrBrowserTestBase {
       content::WebContents* web_contents) override;
   void EndSession(content::WebContents* web_contents) override;
   void EndSessionOrFail(content::WebContents* web_contents) override;
+  void WaitForSessionEndOrFail(content::WebContents* web_contents) override;
 
-  permissions::PermissionRequestManager* GetPermissionRequestManager();
-  permissions::PermissionRequestManager* GetPermissionRequestManager(
-      content::WebContents* web_contents);
+  permissions::MockPermissionPromptFactory* GetPermissionPromptFactory();
+  void SetPermissionAutoResponse(
+      permissions::PermissionRequestManager::AutoResponseType
+          permission_auto_response);
 
   virtual gfx::Vector3dF GetControllerOffset() const;
 
   // Necessary to use the WebContents-less versions of functions.
-  using WebXrBrowserTestBase::XrDeviceFound;
+  using WebXrBrowserTestBase::EndSession;
+  using WebXrBrowserTestBase::EndSessionOrFail;
   using WebXrBrowserTestBase::EnterSessionWithUserGesture;
   using WebXrBrowserTestBase::EnterSessionWithUserGestureAndWait;
   using WebXrBrowserTestBase::EnterSessionWithUserGestureOrFail;
-  using WebXrBrowserTestBase::EndSession;
-  using WebXrBrowserTestBase::EndSessionOrFail;
+  using WebXrBrowserTestBase::WaitForSessionEndOrFail;
+  using WebXrBrowserTestBase::XrDeviceFound;
 
+ private:
+  void OnBeforeLoadFile() override;
   permissions::PermissionRequestManager::AutoResponseType
       permission_auto_response_ =
           permissions::PermissionRequestManager::ACCEPT_ALL;
+  base::flat_map<content::WebContents*,
+                 std::unique_ptr<permissions::MockPermissionPromptFactory>>
+      mock_permissions_map_;
 };
 
 // Test class with all runtimes disabled.

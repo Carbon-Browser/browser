@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,9 @@ class DemoSessionMetricsRecorder;
 class DesktopTaskSwitchMetricRecorder;
 enum class DictationToggleSource;
 class PointerMetricsRecorder;
+class TouchUsageMetricsRecorder;
 class StylusMetricsRecorder;
+class WMFeatureMetricsRecorder;
 
 // User Metrics Recorder provides a repeating callback (RecordPeriodicMetrics)
 // on a timer to allow recording of state data over time to the UMA records.
@@ -56,7 +58,7 @@ class ASH_EXPORT UserMetricsRecorder {
   // Informs |this| that the Shell is going to be shut down.
   void OnShellShuttingDown();
 
-  LoginMetricsRecorder* login_metrics_recorder() {
+  LoginMetricsRecorder* login_metrics_recorder() const {
     return login_metrics_recorder_.get();
   }
 
@@ -94,6 +96,9 @@ class ASH_EXPORT UserMetricsRecorder {
   // Metric recorder to track pointer down events.
   std::unique_ptr<PointerMetricsRecorder> pointer_metrics_recorder_;
 
+  // Metric recorder to track input device usage.
+  std::unique_ptr<TouchUsageMetricsRecorder> touch_usage_metrics_recorder_;
+
   // Metric recorder to track stylus events.
   std::unique_ptr<StylusMetricsRecorder> stylus_metrics_recorder_;
 
@@ -102,6 +107,9 @@ class ASH_EXPORT UserMetricsRecorder {
 
   // Metric recorder to track app use in demo sessions.
   std::unique_ptr<DemoSessionMetricsRecorder> demo_session_metrics_recorder_;
+
+  // Metrics recorder to track window management related usage.
+  std::unique_ptr<WMFeatureMetricsRecorder> wm_feature_metrics_recorder_;
 };
 
 }  // namespace ash

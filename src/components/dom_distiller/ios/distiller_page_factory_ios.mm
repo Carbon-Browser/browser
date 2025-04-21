@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,17 +9,13 @@
 #include "components/dom_distiller/ios/distiller_page_ios.h"
 #include "ios/web/public/browser_state.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
 namespace dom_distiller {
 
 DistillerPageFactoryIOS::DistillerPageFactoryIOS(
     web::BrowserState* browser_state)
     : browser_state_(browser_state) {}
 
-DistillerPageFactoryIOS::~DistillerPageFactoryIOS() {}
+DistillerPageFactoryIOS::~DistillerPageFactoryIOS() = default;
 
 std::unique_ptr<DistillerPage> DistillerPageFactoryIOS::CreateDistillerPage(
     const gfx::Size& view_size) const {

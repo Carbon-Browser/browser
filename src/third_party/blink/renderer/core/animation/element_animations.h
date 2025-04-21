@@ -38,6 +38,7 @@
 #include "third_party/blink/renderer/core/animation/worklet_animation_base.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/css/properties/css_bitset.h"
+#include "third_party/blink/renderer/core/dom/element_rare_data_field.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_counted_set.h"
 #include "third_party/blink/renderer/platform/heap/collection_support/heap_hash_set.h"
 #include "third_party/blink/renderer/platform/wtf/hash_counted_set.h"
@@ -50,7 +51,8 @@ using AnimationCountedSet = HeapHashCountedSet<WeakMember<Animation>>;
 using WorkletAnimationSet = HeapHashSet<WeakMember<WorkletAnimationBase>>;
 
 class CORE_EXPORT ElementAnimations final
-    : public GarbageCollected<ElementAnimations> {
+    : public GarbageCollected<ElementAnimations>,
+      public ElementRareDataField {
  public:
   ElementAnimations();
   ElementAnimations(const ElementAnimations&) = delete;
@@ -58,14 +60,13 @@ class CORE_EXPORT ElementAnimations final
   ~ElementAnimations();
 
   enum class CompositedPaintStatus {
-    // Either no animation is running that affects the target property, or a
-    // fresh compositing decision is required for an animated property.
+    // A fresh compositing decision is required for an animated property.
     // Any style change for the corresponding property requires paint
     // invalidation. Even if rendered by a composited animation, we need to
     // trigger repaint in order to set up a worklet paint image. If the property
     // is animated, paint will decide if the animation is composited and will
     // update the status accordingly.
-    kNeedsRepaintOrNoAnimation = 0,
+    kNeedsRepaint = 0,
 
     // An animation is affecting the target property, but it is not being
     // composited. Paint can short-circuit setting up a worklet paint image
@@ -77,7 +78,11 @@ class CORE_EXPORT ElementAnimations final
     // compositor. Though repaint won't get triggered by a change to the
     // property, it can still be triggered for other reasons, in which case a
     // worklet paint image must be generated.
-    kComposited = 2
+    kComposited = 2,
+
+    // No animation affects the targeted property, so no paint invalidation or
+    // image generation is required.
+    kNoAnimation = 3
   };
 
   // Animations that are currently active for this element, their effects will
@@ -98,7 +103,7 @@ class CORE_EXPORT ElementAnimations final
 
   bool IsEmpty() const {
     return effect_stack_.IsEmpty() && css_animations_.IsEmpty() &&
-           animations_.IsEmpty() && worklet_animations_.IsEmpty();
+           animations_.empty() && worklet_animations_.empty();
   }
 
   void RestartAnimationOnCompositor();
@@ -111,6 +116,13 @@ class CORE_EXPORT ElementAnimations final
   bool UpdateBoxSizeAndCheckTransformAxisAlignment(const gfx::SizeF& box_size);
   bool IsIdentityOrTranslation() const;
 
+  bool HasCompositedPaintWorkletAnimation();
+
+  void RecalcCompositedStatusForKeyframeChange(
+      Element& element,
+      Animation::NativePaintWorkletReasons properties);
+  void RecalcCompositedStatus(Element* element);
+
   // TODO(crbug.com/1301961): Consider converting to an array or flat map of
   // fields for paint properties that can be composited.
   CompositedPaintStatus CompositedBackgroundColorStatus() {
@@ -118,11 +130,15 @@ class CORE_EXPORT ElementAnimations final
         composited_background_color_status_);
   }
 
-  void SetCompositedBackgroundColorStatus(CompositedPaintStatus status) {
-    composited_background_color_status_ = static_cast<unsigned>(status);
+  bool SetCompositedBackgroundColorStatus(CompositedPaintStatus status);
+
+  CompositedPaintStatus CompositedClipPathStatus() {
+    return static_cast<CompositedPaintStatus>(composited_clip_path_status_);
   }
 
-  void Trace(Visitor*) const;
+  bool SetCompositedClipPathStatus(CompositedPaintStatus status);
+
+  void Trace(Visitor*) const override;
 
  private:
   EffectStack effect_stack_;
@@ -140,11 +156,12 @@ class CORE_EXPORT ElementAnimations final
   // See also StyleBaseData.
   bool animation_style_change_ : 1;
 
-  // The decision of whether to composite a background color animation needs to
+  // The decision of whether to composite a compositable animations needs to
   // be made at Paint time and respected by the compositor.
   // The size of the bit-field must be updated if adding new
   // CompositedPaintStatus values to ensure that it can hold the value.
   unsigned composited_background_color_status_ : 2;
+  unsigned composited_clip_path_status_ : 2;
 
   FRIEND_TEST_ALL_PREFIXES(StyleEngineTest, PseudoElementBaseComputedStyle);
 };

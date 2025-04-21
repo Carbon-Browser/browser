@@ -33,10 +33,13 @@
 #include "third_party/blink/renderer/core/html/forms/html_input_element.h"
 #include "third_party/blink/renderer/core/html_names.h"
 #include "third_party/blink/renderer/core/input_type_names.h"
+#include "third_party/blink/renderer/core/keywords.h"
 #include "third_party/blink/renderer/core/page/spatial_navigation.h"
 #include "third_party/blink/renderer/platform/text/platform_locale.h"
 
 namespace blink {
+
+using mojom::blink::FormControlType;
 
 namespace {
 
@@ -53,12 +56,8 @@ void RadioInputType::CountUsage() {
   CountUsageIfVisible(WebFeature::kInputTypeRadio);
 }
 
-const AtomicString& RadioInputType::FormControlType() const {
-  return input_type_names::kRadio;
-}
-
-ControlPart RadioInputType::AutoAppearance() const {
-  return kRadioPart;
+AppearanceValue RadioInputType::AutoAppearance() const {
+  return AppearanceValue::kRadio;
 }
 
 bool RadioInputType::ValueMissing(const String&) const {
@@ -71,16 +70,17 @@ bool RadioInputType::ValueMissing(const String&) const {
   DCHECK(!input.isConnected());
   DCHECK(!input.formOwner());
   const AtomicString& name = input.GetName();
-  if (name.IsEmpty())
+  if (name.empty())
     return false;
   bool is_required = false;
   bool is_checked = false;
   Node& root = input.TreeRoot();
   for (auto* another = Traversal<HTMLInputElement>::InclusiveFirstWithin(root);
        another; another = Traversal<HTMLInputElement>::Next(*another, &root)) {
-    if (another->type() != input_type_names::kRadio ||
-        another->GetName() != name || another->formOwner())
+    if (another->FormControlType() != FormControlType::kInputRadio ||
+        another->GetName() != name || another->formOwner()) {
       continue;
+    }
     if (another->Checked())
       is_checked = true;
     if (another->FastHasAttribute(html_names::kRequiredAttr))
@@ -119,10 +119,11 @@ void RadioInputType::HandleKeydownEvent(KeyboardEvent& event) {
   BaseCheckableInputType::HandleKeydownEvent(event);
   if (event.DefaultHandled())
     return;
-  const String& key = event.key();
-  if (key != "ArrowUp" && key != "ArrowDown" && key != "ArrowLeft" &&
-      key != "ArrowRight")
+  const AtomicString key(event.key());
+  if (key != keywords::kArrowUp && key != keywords::kArrowDown &&
+      key != keywords::kArrowLeft && key != keywords::kArrowRight) {
     return;
+  }
 
   if (event.ctrlKey() || event.metaKey() || event.altKey())
     return;
@@ -136,9 +137,10 @@ void RadioInputType::HandleKeydownEvent(KeyboardEvent& event) {
   Document& document = GetElement().GetDocument();
   if (IsSpatialNavigationEnabled(document.GetFrame()))
     return;
-  bool forward = ComputedTextDirection() == TextDirection::kRtl
-                     ? (key == "ArrowDown" || key == "ArrowLeft")
-                     : (key == "ArrowDown" || key == "ArrowRight");
+  bool forward =
+      ComputedTextDirection() == TextDirection::kRtl
+          ? (key == keywords::kArrowDown || key == keywords::kArrowLeft)
+          : (key == keywords::kArrowDown || key == keywords::kArrowRight);
 
   // Force layout for isFocusable() in findNextFocusableRadioButtonInGroup().
   document.UpdateStyleAndLayout(DocumentUpdateReason::kInput);
@@ -173,7 +175,7 @@ void RadioInputType::HandleKeyupEvent(KeyboardEvent& event) {
   // Use Enter key simulated click when Spatial Navigation enabled.
   if (event.key() == " " ||
       (IsSpatialNavigationEnabled(GetElement().GetDocument().GetFrame()) &&
-       event.key() == "Enter")) {
+       event.key() == keywords::kCapitalEnter)) {
     // If an unselected radio is tabbed into (because the entire group has
     // nothing checked, or because of some explicit .focus() call), then allow
     // space to check it.
@@ -188,9 +190,11 @@ void RadioInputType::HandleKeyupEvent(KeyboardEvent& event) {
   }
 }
 
-bool RadioInputType::IsKeyboardFocusable() const {
-  if (!InputType::IsKeyboardFocusable())
+bool RadioInputType::IsKeyboardFocusableSlow(
+    Element::UpdateBehavior update_behavior) const {
+  if (!InputType::IsKeyboardFocusableSlow(update_behavior)) {
     return false;
+  }
 
   // When using Spatial Navigation, every radio button should be focusable.
   if (IsSpatialNavigationEnabled(GetElement().GetDocument().GetFrame()))
@@ -202,10 +206,12 @@ bool RadioInputType::IsKeyboardFocusable() const {
       GetElement().GetDocument().FocusedElement();
   if (auto* focused_input =
           DynamicTo<HTMLInputElement>(current_focused_element)) {
-    if (focused_input->type() == input_type_names::kRadio &&
+    if (focused_input->FormControlType() == FormControlType::kInputRadio &&
+        focused_input->GetTreeScope() == GetElement().GetTreeScope() &&
         focused_input->Form() == GetElement().Form() &&
-        focused_input->GetName() == GetElement().GetName())
+        focused_input->GetName() == GetElement().GetName()) {
       return false;
+    }
   }
 
   // Allow keyboard focus if we're checked or if nothing in the group is
@@ -245,12 +251,14 @@ void RadioInputType::DidDispatchClick(Event& event,
     // Make sure it is still a radio button and only do the restoration if it
     // still belongs to our group.
     HTMLInputElement* checked_radio_button = state.checked_radio_button.Get();
-    if (!checked_radio_button)
+    if (!checked_radio_button) {
       GetElement().SetChecked(false);
-    else if (checked_radio_button->type() == input_type_names::kRadio &&
-             checked_radio_button->Form() == GetElement().Form() &&
-             checked_radio_button->GetName() == GetElement().GetName())
+    } else if (checked_radio_button->FormControlType() ==
+                   FormControlType::kInputRadio &&
+               checked_radio_button->Form() == GetElement().Form() &&
+               checked_radio_button->GetName() == GetElement().GetName()) {
       checked_radio_button->SetChecked(true);
+    }
   } else if (state.checked != GetElement().Checked()) {
     GetElement().DispatchInputAndChangeEventIfNeeded();
   }
@@ -266,8 +274,9 @@ bool RadioInputType::ShouldAppearIndeterminate() const {
 HTMLInputElement* RadioInputType::NextRadioButtonInGroup(
     HTMLInputElement* current,
     bool forward) {
-  // TODO(tkent): Staying within form() is incorrect.  This code ignore input
-  // elements associated by |form| content attribute.
+  // TODO(https://crbug.com/323953913): Staying within form() is
+  // incorrect.  This code ignore input elements associated by |form|
+  // content attribute.
   // TODO(tkent): Comparing name() with == is incorrect.  It should be
   // case-insensitive.
   for (HTMLInputElement* input_element =
@@ -275,9 +284,11 @@ HTMLInputElement* RadioInputType::NextRadioButtonInGroup(
        input_element; input_element = NextInputElement(
                           *input_element, current->Form(), forward)) {
     if (current->Form() == input_element->Form() &&
-        input_element->type() == input_type_names::kRadio &&
-        input_element->GetName() == current->GetName())
+        input_element->GetTreeScope() == current->GetTreeScope() &&
+        input_element->FormControlType() == FormControlType::kInputRadio &&
+        input_element->GetName() == current->GetName()) {
       return input_element;
+    }
   }
   return nullptr;
 }
@@ -294,14 +305,15 @@ HTMLInputElement* RadioInputType::CheckedRadioButtonForGroup() const {
   DCHECK(!input.isConnected());
   DCHECK(!input.formOwner());
   const AtomicString& name = input.GetName();
-  if (name.IsEmpty())
+  if (name.empty())
     return nullptr;
   Node& root = input.TreeRoot();
   for (auto* another = Traversal<HTMLInputElement>::InclusiveFirstWithin(root);
        another; another = Traversal<HTMLInputElement>::Next(*another, &root)) {
-    if (another->type() != input_type_names::kRadio ||
-        another->GetName() != name || another->formOwner())
+    if (another->FormControlType() != FormControlType::kInputRadio ||
+        another->GetName() != name || another->formOwner()) {
       continue;
+    }
     if (another->Checked())
       return another;
   }

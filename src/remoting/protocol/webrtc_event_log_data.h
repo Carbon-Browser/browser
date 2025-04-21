@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,12 @@
 #define REMOTING_PROTOCOL_WEBRTC_EVENT_LOG_DATA_H_
 
 #include <cstdint>
+#include <string_view>
 #include <vector>
 
 #include "base/containers/circular_deque.h"
-#include "base/strings/string_piece.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 // A data store which records the most recent RTC event log data. This is
 // written to by an RTCEventLogOutput instance, which is owned by the
@@ -44,7 +43,7 @@ class WebrtcEventLogData {
   // than RTCP packets). If that ever happens, the log_event will be stored in
   // a new section anyway - the buffer's reserved capacity may be exceeded and
   // re-allocation may occur.
-  void Write(base::StringPiece log_event);
+  void Write(std::string_view log_event);
 
   // Removes all event data, so the instance can be reused.
   void Clear();
@@ -71,7 +70,6 @@ class WebrtcEventLogData {
   int max_section_size_ = kMaxSectionSize;
 };
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol
 
 #endif  // REMOTING_PROTOCOL_WEBRTC_EVENT_LOG_DATA_H_

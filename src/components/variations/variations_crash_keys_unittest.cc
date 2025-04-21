@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,17 @@
 
 #include <string>
 
+#include "base/command_line.h"
 #include "base/metrics/field_trial.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
 #include "components/crash/core/common/crash_key.h"
+#include "components/variations/active_field_trials.h"
 #include "components/variations/hashing.h"
 #include "components/variations/synthetic_trial_registry.h"
 #include "components/variations/synthetic_trials_active_group_id_provider.h"
+#include "components/variations/variations_switches.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace variations {
@@ -26,6 +29,10 @@ std::string GetVariationsCrashKey() {
 
 std::string GetNumExperimentsCrashKey() {
   return crash_reporter::GetCrashKeyValue("num-experiments");
+}
+
+std::string GetVariationsSeedVersionCrashKey() {
+  return crash_reporter::GetCrashKeyValue("variations-seed-version");
 }
 
 class VariationsCrashKeysTest : public ::testing::Test {
@@ -52,11 +59,10 @@ class VariationsCrashKeysTest : public ::testing::Test {
 
 TEST_F(VariationsCrashKeysTest, BasicFunctionality) {
   SyntheticTrialRegistry registry;
-  registry.AddSyntheticTrialObserver(
-      SyntheticTrialsActiveGroupIdProvider::GetInstance());
+  registry.AddObserver(SyntheticTrialsActiveGroupIdProvider::GetInstance());
 
   // Start with 2 trials, one active and one not
-  base::FieldTrialList::CreateFieldTrial("Trial1", "Group1")->group();
+  base::FieldTrialList::CreateFieldTrial("Trial1", "Group1")->Activate();
   base::FieldTrialList::CreateFieldTrial("Trial2", "Group2");
 
   InitCrashKeys();
@@ -92,7 +98,7 @@ TEST_F(VariationsCrashKeysTest, BasicFunctionality) {
             info.experiment_list);
 
   // Add another regular trial.
-  base::FieldTrialList::CreateFieldTrial("Trial4", "Group4")->group();
+  base::FieldTrialList::CreateFieldTrial("Trial4", "Group4")->Activate();
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ("4", GetNumExperimentsCrashKey());
   EXPECT_EQ(
@@ -125,6 +131,33 @@ TEST_F(VariationsCrashKeysTest, BasicFunctionality) {
       "8e7abfb0-c16397b7,277f2a3d-d77354d0,21710f4c-99b90b01,"
       "9f339c9d-3250dddc,21710f4c-99b90b01,",
       info.experiment_list);
+}
+
+TEST_F(VariationsCrashKeysTest, SeedVersionFromParsedSeed) {
+  SetSeedVersion("version-123");
+  InitCrashKeys();
+  EXPECT_EQ("version-123", GetVariationsSeedVersionCrashKey());
+}
+
+TEST_F(VariationsCrashKeysTest, SeedVersionFromCommandLineSwitch) {
+  base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
+      variations::switches::kVariationsSeedVersion, "version-456");
+  InitCrashKeys();
+  EXPECT_EQ("version-456", GetVariationsSeedVersionCrashKey());
+}
+
+TEST_F(VariationsCrashKeysTest, OverriddenFieldTrial) {
+  base::FieldTrialList::CreateFieldTrial("Trial1", "Group1",
+                                         /*is_low_anonymity=*/false,
+                                         /*is_overridden=*/true)
+      ->Activate();
+
+  InitCrashKeys();
+
+  // Because the trial is overridden, it has a different group variation ID.
+  EXPECT_EQ("1", GetNumExperimentsCrashKey());
+  EXPECT_EQ("2a140065", HashNameAsHexString("Group1_MANUALLY_FORCED"));
+  EXPECT_EQ("8e7abfb0-2a140065,", GetVariationsCrashKey());
 }
 
 }  // namespace variations

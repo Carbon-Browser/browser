@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,7 +42,7 @@ void GpuServiceTest::SetUpWithGLVersion(const char* gl_version,
 }
 
 void GpuServiceTest::SetUp() {
-  SetUpWithGLVersion("2.0", "GL_EXT_framebuffer_object");
+  SetUpWithGLVersion("OpenGL ES 2.0", "GL_EXT_framebuffer_object");
 }
 
 void GpuServiceTest::TearDown() {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2015 The Chromium Authors. All rights reserved.
+# Copyright 2015 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -59,7 +59,7 @@ def main():
   networks = '['
   file_name = args[0]
   inside_list = False
-  with open(file_name, 'r') as f:
+  with open(file_name, 'r', encoding='utf-8') as f:
     for line in f:
       if not inside_list:
         if 'WebInspector.OverridesUI._networkConditionsPresets = [' in line:

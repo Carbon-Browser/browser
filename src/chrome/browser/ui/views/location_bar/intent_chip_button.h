@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,10 +15,10 @@ class IntentPickerTabHelper;
 
 // A chip-style button which allows opening the current URL in an installed app.
 class IntentChipButton : public OmniboxChipButton {
- public:
-  METADATA_HEADER(IntentChipButton);
+  METADATA_HEADER(IntentChipButton, OmniboxChipButton)
 
-  // TODO(crbug.com/1295932): Consider creating a more appropriate Delegate
+ public:
+  // TODO(crbug.com/40821394): Consider creating a more appropriate Delegate
   // interface.
   explicit IntentChipButton(Browser* browser,
                             PageActionIconView::Delegate* delegate);
@@ -27,6 +27,7 @@ class IntentChipButton : public OmniboxChipButton {
   ~IntentChipButton() override;
 
   void Update();
+  ui::ImageModel GetAppIconForTesting() const;
 
  private:
   bool GetShowChip() const;
@@ -38,7 +39,8 @@ class IntentChipButton : public OmniboxChipButton {
 
   // OmniboxChipButton:
   ui::ImageModel GetIconImageModel() const override;
-  const gfx::VectorIcon& GetIcon() const override;
+  ui::ColorId GetForegroundColorId() const override;
+  ui::ColorId GetBackgroundColorId() const override;
 
   const raw_ptr<Browser> browser_;
   const raw_ptr<PageActionIconView::Delegate> delegate_;

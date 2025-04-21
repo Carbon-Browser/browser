@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 
 #include "base/component_export.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -66,8 +65,8 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) TCPBoundSocket
 
  private:
   void OnConnectComplete(int result,
-                         const absl::optional<net::IPEndPoint>& local_addr,
-                         const absl::optional<net::IPEndPoint>& peer_addr,
+                         const std::optional<net::IPEndPoint>& local_addr,
+                         const std::optional<net::IPEndPoint>& peer_addr,
                          mojo::ScopedDataPipeConsumerHandle receive_stream,
                          mojo::ScopedDataPipeProducerHandle send_stream);
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <tuple>
@@ -21,7 +22,6 @@
 #include "base/compiler_specific.h"
 #include "base/component_export.h"
 #include "base/containers/flat_map.h"
-#include "base/containers/stack_container.h"
 #include "base/files/file.h"
 #include "base/memory/platform_shared_memory_region.h"
 #include "base/memory/read_only_shared_memory_region.h"
@@ -34,7 +34,7 @@
 #include "build/build_config.h"
 #include "ipc/ipc_buildflags.h"
 #include "ipc/ipc_param_traits.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/abseil-cpp/absl/container/inlined_vector.h"
 
 #if BUILDFLAG(IS_ANDROID)
 #include "base/android/scoped_hardware_buffer_handle.h"
@@ -191,7 +191,9 @@ struct ParamTraits<int> {
 template <>
 struct ParamTraits<unsigned int> {
   typedef unsigned int param_type;
-  static void Write(base::Pickle* m, const param_type& p) { m->WriteInt(p); }
+  static void Write(base::Pickle* m, const param_type& p) {
+    m->WriteInt(static_cast<int>(p));
+  }
   static bool Read(const base::Pickle* m,
                    base::PickleIterator* iter,
                    param_type* r) {
@@ -260,7 +262,9 @@ struct ParamTraits<long long> {
 template <>
 struct ParamTraits<unsigned long long> {
   typedef unsigned long long param_type;
-  static void Write(base::Pickle* m, const param_type& p) { m->WriteInt64(p); }
+  static void Write(base::Pickle* m, const param_type& p) {
+    m->WriteInt64(static_cast<int64_t>(p));
+  }
   static bool Read(const base::Pickle* m,
                    base::PickleIterator* iter,
                    param_type* r) {
@@ -541,16 +545,6 @@ struct ParamTraits<std::pair<A, B> > {
 // Base ParamTraits ------------------------------------------------------------
 
 template <>
-struct COMPONENT_EXPORT(IPC) ParamTraits<base::DictionaryValue> {
-  typedef base::DictionaryValue param_type;
-  static void Write(base::Pickle* m, const param_type& p);
-  static bool Read(const base::Pickle* m,
-                   base::PickleIterator* iter,
-                   param_type* r);
-  static void Log(const param_type& p, std::string* l);
-};
-
-template <>
 struct COMPONENT_EXPORT(IPC) ParamTraits<base::Value::Dict> {
   typedef base::Value::Dict param_type;
   static void Write(base::Pickle* m, const param_type& p);
@@ -720,16 +714,6 @@ struct COMPONENT_EXPORT(IPC) ParamTraits<base::FilePath> {
 };
 
 template <>
-struct COMPONENT_EXPORT(IPC) ParamTraits<base::ListValue> {
-  typedef base::ListValue param_type;
-  static void Write(base::Pickle* m, const param_type& p);
-  static bool Read(const base::Pickle* m,
-                   base::PickleIterator* iter,
-                   param_type* r);
-  static void Log(const param_type& p, std::string* l);
-};
-
-template <>
 struct COMPONENT_EXPORT(IPC) ParamTraits<base::Value::List> {
   typedef base::Value::List param_type;
   static void Write(base::Pickle* m, const param_type& p);
@@ -874,34 +858,39 @@ struct ParamTraits<std::tuple<Args...>> {
 };
 
 template <class P, size_t stack_capacity>
-struct ParamTraits<base::StackVector<P, stack_capacity> > {
-  typedef base::StackVector<P, stack_capacity> param_type;
+struct ParamTraits<absl::InlinedVector<P, stack_capacity>> {
+  typedef absl::InlinedVector<P, stack_capacity> param_type;
   static void Write(base::Pickle* m, const param_type& p) {
-    WriteParam(m, base::checked_cast<int>(p->size()));
-    for (size_t i = 0; i < p->size(); i++)
+    WriteParam(m, base::checked_cast<int>(p.size()));
+    for (size_t i = 0; i < p.size(); i++) {
       WriteParam(m, p[i]);
+    }
   }
   static bool Read(const base::Pickle* m,
                    base::PickleIterator* iter,
                    param_type* r) {
     size_t size;
-    if (!iter->ReadLength(&size))
+    if (!iter->ReadLength(&size)) {
       return false;
+    }
     // Sanity check for the vector size.
-    if (size > INT_MAX / sizeof(P))
+    if (size > INT_MAX / sizeof(P)) {
       return false;
+    }
     P value;
     for (size_t i = 0; i < size; i++) {
-      if (!ReadParam(m, iter, &value))
+      if (!ReadParam(m, iter, &value)) {
         return false;
-      (*r)->push_back(value);
+      }
+      r->push_back(value);
     }
     return true;
   }
   static void Log(const param_type& p, std::string* l) {
-    for (size_t i = 0; i < p->size(); ++i) {
-      if (i != 0)
+    for (size_t i = 0; i < p.size(); ++i) {
+      if (i != 0) {
         l->append(" ");
+      }
       LogParam((p[i]), l);
     }
   }
@@ -984,8 +973,8 @@ struct ParamTraits<std::unique_ptr<P>> {
 // absl types ParamTraits
 
 template <class P>
-struct ParamTraits<absl::optional<P>> {
-  typedef absl::optional<P> param_type;
+struct ParamTraits<std::optional<P>> {
+  typedef std::optional<P> param_type;
   static void Write(base::Pickle* m, const param_type& p) {
     const bool is_set = static_cast<bool>(p);
     WriteParam(m, is_set);

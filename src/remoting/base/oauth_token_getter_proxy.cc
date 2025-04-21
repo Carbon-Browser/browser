@@ -1,12 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "remoting/base/oauth_token_getter_proxy.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/threading/thread_checker.h"
 
 namespace remoting {
@@ -17,16 +17,15 @@ void ResolveCallback(
     OAuthTokenGetter::TokenCallback on_access_token,
     scoped_refptr<base::SequencedTaskRunner> original_task_runner,
     OAuthTokenGetter::Status status,
-    const std::string& user_email,
-    const std::string& access_token) {
+    const OAuthTokenInfo& token_info) {
   if (!original_task_runner->RunsTasksInCurrentSequence()) {
     original_task_runner->PostTask(
-        FROM_HERE, base::BindOnce(std::move(on_access_token), status,
-                                  user_email, access_token));
+        FROM_HERE,
+        base::BindOnce(std::move(on_access_token), status, token_info));
     return;
   }
 
-  std::move(on_access_token).Run(status, user_email, access_token);
+  std::move(on_access_token).Run(status, token_info);
 }
 
 }  // namespace
@@ -39,14 +38,14 @@ OAuthTokenGetterProxy::OAuthTokenGetterProxy(
 OAuthTokenGetterProxy::OAuthTokenGetterProxy(
     base::WeakPtr<OAuthTokenGetter> token_getter)
     : OAuthTokenGetterProxy(token_getter,
-                            base::SequencedTaskRunnerHandle::Get()) {}
+                            base::SequencedTaskRunner::GetCurrentDefault()) {}
 
 OAuthTokenGetterProxy::~OAuthTokenGetterProxy() = default;
 
 void OAuthTokenGetterProxy::CallWithToken(
     OAuthTokenGetter::TokenCallback on_access_token) {
   if (!task_runner_->RunsTasksInCurrentSequence()) {
-    auto task_runner_to_reply = base::SequencedTaskRunnerHandle::Get();
+    auto task_runner_to_reply = base::SequencedTaskRunner::GetCurrentDefault();
 
     auto reply_callback = base::BindOnce(
         &ResolveCallback, std::move(on_access_token), task_runner_to_reply);

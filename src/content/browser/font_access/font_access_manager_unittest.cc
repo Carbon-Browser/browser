@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/font_access/font_access_manager.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -12,6 +13,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
@@ -25,7 +27,6 @@
 #include "content/test/test_render_frame_host.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/font_access/font_enumeration_table.pb.h"
 #include "third_party/blink/public/mojom/font_access/font_access.mojom.h"
@@ -80,7 +81,7 @@ class FontAccessManagerTest : public RenderViewHostImplTestHarness {
     RenderViewHostImplTestHarness::SetUp();
     NavigateAndCommit(kTestUrl);
 
-    const int process_id = main_rfh()->GetProcess()->GetID();
+    const int process_id = main_rfh()->GetProcess()->GetDeprecatedID();
     const int routing_id = main_rfh()->GetRoutingID();
     const GlobalRenderFrameHostId main_frame_id(process_id, routing_id);
 
@@ -89,7 +90,7 @@ class FontAccessManagerTest : public RenderViewHostImplTestHarness {
     base::SequenceBound<FontEnumerationCache> font_enumeration_cache =
         FontEnumerationCache::CreateForTesting(
             cache_task_runner_, FontEnumerationDataSource::Create(),
-            /* locale_override= */ absl::nullopt);
+            /* locale_override= */ std::nullopt);
     manager_ =
         FontAccessManager::CreateForTesting(std::move(font_enumeration_cache));
     manager_->BindReceiver(main_frame_id,

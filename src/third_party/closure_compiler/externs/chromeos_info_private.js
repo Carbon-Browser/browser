@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2024 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,12 @@
 // NOTE: The format of types has changed. 'FooType' is now
 //   'chrome.chromeosInfoPrivate.FooType'.
 // Please run the closure compiler before committing changes.
-// See https://chromium.googlesource.com/chromium/src/+/master/docs/closure_compilation.md
+// See https://chromium.googlesource.com/chromium/src/+/main/docs/closure_compilation.md
 
-/** @fileoverview Externs generated from namespace: chromeosInfoPrivate */
+/**
+ * @fileoverview Externs generated from namespace: chromeosInfoPrivate
+ * @externs
+ */
 
 /** @const */
 chrome.chromeosInfoPrivate = {};
@@ -99,6 +102,7 @@ chrome.chromeosInfoPrivate.AssistantStatus = {
  *   customizationId: (string|undefined),
  *   homeProvider: (string|undefined),
  *   hwid: (string|undefined),
+ *   deviceRequisition: (string|undefined),
  *   isMeetDevice: (boolean|undefined),
  *   initialLocale: (string|undefined),
  *   isOwner: (boolean|undefined),
@@ -144,3 +148,10 @@ chrome.chromeosInfoPrivate.set = function(propertyName, propertyValue) {};
  *     as a boolean.
  */
 chrome.chromeosInfoPrivate.isTabletModeEnabled = function(callback) {};
+
+/**
+ * Called to request status of lacros browser enabled for primary user.
+ * @param {function(boolean): void} callback Returns true if called from within
+ *     the Lacros context.
+ */
+chrome.chromeosInfoPrivate.isRunningOnLacros = function(callback) {};

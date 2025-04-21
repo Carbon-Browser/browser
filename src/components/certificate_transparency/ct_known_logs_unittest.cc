@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,12 +18,6 @@ namespace certificate_transparency {
 namespace {
 #include "components/certificate_transparency/data/log_list-inc.cc"
 }  // namespace
-
-TEST(CTKnownLogsTest, GoogleIDsAreSorted) {
-  std::vector<std::string> google_log_ids = GetLogsOperatedByGoogle();
-  ASSERT_TRUE(
-      std::is_sorted(std::begin(google_log_ids), std::end(google_log_ids)));
-}
 
 TEST(CTKnownLogsTest, DisallowedLogsAreSortedByLogID) {
   std::vector<std::pair<std::string, base::Time>> disqualified_logs =

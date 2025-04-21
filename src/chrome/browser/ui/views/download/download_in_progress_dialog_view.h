@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,9 @@
 // Dialog shown when the user tries to exit the browser or all incognito windows
 // while a download is in progress.
 class DownloadInProgressDialogView : public views::DialogDelegateView {
- public:
-  METADATA_HEADER(DownloadInProgressDialogView);
+  METADATA_HEADER(DownloadInProgressDialogView, views::DialogDelegateView)
 
+ public:
   DownloadInProgressDialogView(const DownloadInProgressDialogView&) = delete;
   DownloadInProgressDialogView& operator=(const DownloadInProgressDialogView&) =
       delete;

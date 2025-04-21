@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 #include <memory>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/i18n/number_formatting.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
@@ -28,6 +28,7 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "third_party/re2/src/re2/re2.h"
 #include "ui/gfx/image/image_skia.h"
+#include "ui/gfx/image/image_unittest_util.h"
 #include "ui/message_center/public/cpp/notification.h"
 #include "ui/message_center/public/cpp/notification_delegate.h"
 
@@ -36,6 +37,7 @@ using message_center::Notification;
 using message_center::SettingsButtonHandler;
 using testing::_;
 using testing::ByMove;
+using testing::Invoke;
 using testing::Return;
 using testing::StrictMock;
 
@@ -63,7 +65,7 @@ class NotificationBuilder {
   Notification GetResult() { return notification_; }
 
   NotificationBuilder& SetImage(const gfx::Image& image) {
-    notification_.set_image(image);
+    notification_.SetImage(image);
     return *this;
   }
 
@@ -149,38 +151,39 @@ struct TestParams {
         expect_shutdown(true),
         connect_signals(true) {}
 
-  TestParams& SetNameHasOwner(bool name_has_owner) {
-    this->name_has_owner = name_has_owner;
+  TestParams& SetNameHasOwner(bool new_name_has_owner) {
+    this->name_has_owner = new_name_has_owner;
     return *this;
   }
 
-  TestParams& SetCapabilities(const std::vector<std::string>& capabilities) {
-    this->capabilities = capabilities;
+  TestParams& SetCapabilities(
+      const std::vector<std::string>& new_capabilities) {
+    this->capabilities = new_capabilities;
     return *this;
   }
 
-  TestParams& SetServerName(const std::string& server_name) {
-    this->server_name = server_name;
+  TestParams& SetServerName(const std::string& new_server_name) {
+    this->server_name = new_server_name;
     return *this;
   }
 
-  TestParams& SetServerVersion(const std::string& server_version) {
-    this->server_version = server_version;
+  TestParams& SetServerVersion(const std::string& new_server_version) {
+    this->server_version = new_server_version;
     return *this;
   }
 
-  TestParams& SetExpectInitSuccess(bool expect_init_success) {
-    this->expect_init_success = expect_init_success;
+  TestParams& SetExpectInitSuccess(bool new_expect_init_success) {
+    this->expect_init_success = new_expect_init_success;
     return *this;
   }
 
-  TestParams& SetExpectShutdown(bool expect_shutdown) {
-    this->expect_shutdown = expect_shutdown;
+  TestParams& SetExpectShutdown(bool new_expect_shutdown) {
+    this->expect_shutdown = new_expect_shutdown;
     return *this;
   }
 
-  TestParams& SetConnectSignals(bool connect_signals) {
-    this->connect_signals = connect_signals;
+  TestParams& SetConnectSignals(bool new_connect_signals) {
+    this->connect_signals = new_connect_signals;
     return *this;
   }
 
@@ -192,17 +195,6 @@ struct TestParams {
   bool expect_shutdown;
   bool connect_signals;
 };
-
-const SkBitmap CreateBitmap(int width, int height) {
-  SkBitmap bitmap;
-  bitmap.allocN32Pixels(width, height);
-  bitmap.eraseARGB(255, 0, 255, 0);
-  return bitmap;
-}
-
-gfx::ImageSkia CreateImageSkia(int width, int height) {
-  return gfx::ImageSkia::CreateFrom1xBitmap(CreateBitmap(width, height));
-}
 
 NotificationRequest ParseRequest(dbus::MethodCall* method_call) {
   // The "Notify" message must have type (susssasa{sv}i).
@@ -352,9 +344,9 @@ class NotificationPlatformBridgeLinuxTest : public BrowserWithTestWindowTest {
                        NotificationHandler::Type notification_type,
                        const GURL& origin,
                        const std::string& notification_id,
-                       const absl::optional<int>& action_index,
-                       const absl::optional<std::u16string>& reply,
-                       const absl::optional<bool>& by_user) {
+                       const std::optional<int>& action_index,
+                       const std::optional<std::u16string>& reply,
+                       const std::optional<bool>& by_user) {
     last_operation_ = operation;
     last_action_index_ = action_index;
     last_reply_ = reply;
@@ -371,12 +363,17 @@ class NotificationPlatformBridgeLinuxTest : public BrowserWithTestWindowTest {
                                dbus::ObjectPath(kFreedesktopNotificationsPath)))
         .WillOnce(Return(mock_notification_proxy_.get()));
 
-    auto name_has_owner_response = dbus::Response::CreateEmpty();
-    dbus::MessageWriter name_has_owner_writer(name_has_owner_response.get());
-    name_has_owner_writer.AppendBool(test_params.name_has_owner);
     EXPECT_CALL(*mock_dbus_proxy_.get(),
-                CallMethodAndBlock(Calls("NameHasOwner"), _))
-        .WillOnce(Return(ByMove(std::move(name_has_owner_response))));
+                DoCallMethod(Calls("NameHasOwner"), _, _))
+        .WillOnce(Invoke([name_has_owner = test_params.name_has_owner](
+                             dbus::MethodCall* method_call, int timeout_ms,
+                             dbus::ObjectProxy::ResponseCallback* callback) {
+          auto name_has_owner_response = dbus::Response::CreateEmpty();
+          dbus::MessageWriter name_has_owner_writer(
+              name_has_owner_response.get());
+          name_has_owner_writer.AppendBool(name_has_owner);
+          std::move(*callback).Run(name_has_owner_response.get());
+        }));
 
     auto capabilities_response = dbus::Response::CreateEmpty();
     dbus::MessageWriter capabilities_writer(capabilities_response.get());
@@ -452,9 +449,9 @@ class NotificationPlatformBridgeLinuxTest : public BrowserWithTestWindowTest {
   std::unique_ptr<NotificationPlatformBridgeLinux> notification_bridge_linux_;
   std::unique_ptr<NotificationDisplayServiceTester> display_service_tester_;
 
-  absl::optional<NotificationOperation> last_operation_;
-  absl::optional<int> last_action_index_;
-  absl::optional<std::u16string> last_reply_;
+  std::optional<NotificationOperation> last_operation_;
+  std::optional<int> last_action_index_;
+  std::optional<std::u16string> last_reply_;
 
  private:
   void DoInvokeAction(uint32_t dbus_id, const std::string& action) {
@@ -588,7 +585,7 @@ TEST_F(NotificationPlatformBridgeLinuxTest, NotificationImages) {
   const int expected_height = kMaxImageHeight / 2;
 
   gfx::Image original_image =
-      gfx::Image(CreateImageSkia(original_width, original_height));
+      gfx::Image(gfx::test::CreateImageSkia(original_width, original_height));
 
   EXPECT_CALL(*mock_notification_proxy_.get(),
               CallMethodAndBlock(Calls("Notify"), _))
@@ -603,8 +600,7 @@ TEST_F(NotificationPlatformBridgeLinuxTest, NotificationImages) {
             EXPECT_TRUE(base::ReadFileToString(base::FilePath(file_name),
                                                &file_contents));
             gfx::Image image = gfx::Image::CreateFrom1xPNGBytes(
-                reinterpret_cast<const unsigned char*>(file_contents.c_str()),
-                file_contents.size());
+                base::as_byte_span(file_contents));
             EXPECT_EQ(expected_width, image.Width());
             EXPECT_EQ(expected_height, image.Height());
           },

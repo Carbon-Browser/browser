@@ -1,12 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_DBUS_PROPERTIES_DBUS_PROPERTIES_H_
 #define COMPONENTS_DBUS_PROPERTIES_DBUS_PROPERTIES_H_
 
-#include "base/callback_forward.h"
 #include "base/component_export.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/dbus/properties/types.h"
@@ -14,7 +14,7 @@
 #include "dbus/exported_object.h"
 
 // https://dbus.freedesktop.org/doc/dbus-specification.html#standard-interfaces-properties
-class COMPONENT_EXPORT(DBUS) DbusProperties {
+class COMPONENT_EXPORT(COMPONENTS_DBUS) DbusProperties {
  public:
   using InitializedCallback = base::OnceCallback<void(bool success)>;
 
@@ -72,7 +72,8 @@ class COMPONENT_EXPORT(DBUS) DbusProperties {
 
   bool initialized_ = false;
 
-  raw_ptr<dbus::ExportedObject> exported_object_ = nullptr;
+  raw_ptr<dbus::ExportedObject, AcrossTasksDanglingUntriaged> exported_object_ =
+      nullptr;
 
   base::RepeatingCallback<void(bool)> barrier_;
 

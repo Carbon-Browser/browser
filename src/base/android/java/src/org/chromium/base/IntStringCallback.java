@@ -1,10 +1,13 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.base;
 
-import org.chromium.base.annotations.CalledByNative;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JniType;
+
+import org.chromium.build.annotations.NullMarked;
 
 /**
  * A simple 2-argument callback with an int and a String as arguments.
@@ -17,6 +20,7 @@ import org.chromium.base.annotations.CalledByNative;
  * 2-argument callback also adds a few code lines but it is clear and the compiler does the type
  * checking.
  */
+@NullMarked
 public interface IntStringCallback {
     /**
      * Invoked with the result of a computation.
@@ -25,5 +29,5 @@ public interface IntStringCallback {
      * @param string String part of the result.
      */
     @CalledByNative
-    void onResult(int number, String string);
+    void onResult(int number, @JniType("std::string") String string);
 }

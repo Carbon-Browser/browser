@@ -1,6 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "components/leveldb_proto/public/shared_proto_database_client_list.h"
 
@@ -110,9 +115,22 @@ std::string SharedProtoDatabaseClientList::ProtoDbTypeToString(
       return "PageEntityMetadataDatabase";
     case ProtoDbType::WEBRTC_VIDEO_STATS_DB:
       return "WebrtcVideoStatsDB";
+    case ProtoDbType::PERSISTENT_ORIGIN_TRIALS:
+      return "PersistentOriginTrials";
+    case ProtoDbType::NEARBY_PRESENCE_LOCAL_PUBLIC_CREDENTIAL_DATABASE:
+      return "NearbyPresenceLocalPublicCredentialDatabase";
+    case ProtoDbType::NEARBY_PRESENCE_PRIVATE_CREDENTIAL_DATABASE:
+      return "NearbyPresencePrivateCredentialDatabase";
+    case ProtoDbType::NEARBY_PRESENCE_REMOTE_PUBLIC_CREDENTIAL_DATABASE:
+      return "NearbyPresenceRemotePublicCredentialDatabase";
+    case ProtoDbType::DISCOUNTS_DATABASE:
+      return "DiscountsDatabase";
+    case ProtoDbType::COMMERCE_PARCEL_TRACKING_DATABASE:
+      return "CommerceParcelTrackingDatabase";
+    case ProtoDbType::CLIENT_CERTIFICATES_DATABASE:
+      return "ClientCertificatesDatabase";
     case ProtoDbType::LAST:
       NOTREACHED();
-      return std::string();
   }
 }
 

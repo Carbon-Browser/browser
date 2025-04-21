@@ -1,24 +1,27 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/feature_engagement/internal/never_availability_model.h"
 
-#include "base/bind.h"
+#include <optional>
+
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace feature_engagement {
 
 namespace {
 
-const base::Feature kAvailabilityTestFeatureFoo{
-    "test_foo", base::FEATURE_DISABLED_BY_DEFAULT};
-const base::Feature kAvailabilityTestFeatureBar{
-    "test_bar", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kAvailabilityTestFeatureFoo,
+             "test_foo",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+BASE_FEATURE(kAvailabilityTestFeatureBar,
+             "test_bar",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
 class NeverAvailabilityModelTest : public ::testing::Test {
  public:
@@ -33,7 +36,7 @@ class NeverAvailabilityModelTest : public ::testing::Test {
 
  protected:
   std::unique_ptr<NeverAvailabilityModel> availability_model_;
-  absl::optional<bool> success_;
+  std::optional<bool> success_;
 
  private:
   base::test::SingleThreadTaskEnvironment task_environment_;
@@ -42,9 +45,9 @@ class NeverAvailabilityModelTest : public ::testing::Test {
 }  // namespace
 
 TEST_F(NeverAvailabilityModelTest, ShouldNeverHaveData) {
-  EXPECT_EQ(absl::nullopt,
+  EXPECT_EQ(std::nullopt,
             availability_model_->GetAvailability(kAvailabilityTestFeatureFoo));
-  EXPECT_EQ(absl::nullopt,
+  EXPECT_EQ(std::nullopt,
             availability_model_->GetAvailability(kAvailabilityTestFeatureBar));
 
   availability_model_->Initialize(
@@ -53,9 +56,9 @@ TEST_F(NeverAvailabilityModelTest, ShouldNeverHaveData) {
       14u);
   base::RunLoop().RunUntilIdle();
 
-  EXPECT_EQ(absl::nullopt,
+  EXPECT_EQ(std::nullopt,
             availability_model_->GetAvailability(kAvailabilityTestFeatureFoo));
-  EXPECT_EQ(absl::nullopt,
+  EXPECT_EQ(std::nullopt,
             availability_model_->GetAvailability(kAvailabilityTestFeatureBar));
 }
 

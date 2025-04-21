@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.when;
 
 import static org.chromium.chrome.browser.tasks.tab_management.TabListModel.CardProperties.CARD_ALPHA;
 
@@ -20,57 +19,54 @@ import androidx.test.filters.SmallTest;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
+import org.chromium.base.Callback;
 import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.chrome.browser.tab.state.ShoppingPersistedTabData;
 import org.chromium.ui.modelutil.PropertyModel;
 import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
 
-/**
- * Tests for {@link LargeMessageCardViewBinder}.
- */
+/** Tests for {@link LargeMessageCardViewBinder}. */
 @RunWith(BaseRobolectricTestRunner.class)
 public class LargeMessageCardViewBinderUnitTest {
     private static final String FAKE_DISPLAY_TEXT = "Fake Text";
     private static final int FAKE_ICON_WIDTH = 666;
     private static final int FAKE_ICON_HEIGHT = 999;
 
-    @Mock
-    LargeMessageCardView mMockLargeCardView;
+    @Rule public final MockitoRule mMockitoRule = MockitoJUnit.rule();
 
-    @Mock
-    MessageCardView.DismissActionProvider mMockDismissActionProvider1;
+    @Mock LargeMessageCardView mMockLargeCardView;
 
-    @Mock
-    MessageCardView.DismissActionProvider mMockDismissActionProvider2;
+    @Mock MessageCardView.DismissActionProvider mMockDismissActionProvider1;
 
-    @Mock
-    MessageCardView.ReviewActionProvider mMockReviewActionProvider1;
+    @Mock MessageCardView.DismissActionProvider mMockDismissActionProvider2;
 
-    @Mock
-    MessageCardView.ReviewActionProvider mMockReviewActionProvider2;
+    @Mock MessageCardView.ReviewActionProvider mMockReviewActionProvider1;
 
-    @Mock
-    ShoppingPersistedTabData.PriceDrop mMockPriceDrop;
+    @Mock MessageCardView.ReviewActionProvider mMockReviewActionProvider2;
 
-    @Mock
-    MessageCardView.IconProvider mMockIconProvider;
+    @Mock ShoppingPersistedTabData.PriceDrop mMockPriceDrop;
 
-    @Mock
-    Drawable mMockDrawable;
+    @Mock MessageCardView.IconProvider mMockIconProvider;
 
-    @Mock
-    private OnClickListener mMockOnClickListenerMock;
+    @Mock Drawable mMockDrawable;
+
+    @Mock private OnClickListener mMockOnClickListenerMock;
+
+    @Captor ArgumentCaptor<Callback<Drawable>> mCallbackDrawableArgumentCaptor;
 
     private PropertyModel mModel;
 
     @Before
     public void setUp() {
-        MockitoAnnotations.initMocks(this);
 
         mModel = new PropertyModel(MessageCardViewProperties.ALL_KEYS);
         PropertyModelChangeProcessor.create(
@@ -79,9 +75,16 @@ public class LargeMessageCardViewBinderUnitTest {
 
     @After
     public void tearDown() {
-        verifyNoMoreInteractions(mMockLargeCardView, mMockDismissActionProvider1,
-                mMockDismissActionProvider2, mMockReviewActionProvider1, mMockReviewActionProvider2,
-                mMockPriceDrop, mMockIconProvider, mMockDrawable, mMockOnClickListenerMock);
+        verifyNoMoreInteractions(
+                mMockLargeCardView,
+                mMockDismissActionProvider1,
+                mMockDismissActionProvider2,
+                mMockReviewActionProvider1,
+                mMockReviewActionProvider2,
+                mMockPriceDrop,
+                mMockIconProvider,
+                mMockDrawable,
+                mMockOnClickListenerMock);
     }
 
     @Test
@@ -118,7 +121,8 @@ public class LargeMessageCardViewBinderUnitTest {
     @Test
     @SmallTest
     public void updateSecondaryActionButtonOnClickListener() {
-        mModel.set(MessageCardViewProperties.SECONDARY_ACTION_BUTTON_CLICK_HANDLER,
+        mModel.set(
+                MessageCardViewProperties.SECONDARY_ACTION_BUTTON_CLICK_HANDLER,
                 mMockOnClickListenerMock);
         verify(mMockLargeCardView, times(1))
                 .setSecondaryActionButtonOnClickListener(mMockOnClickListenerMock);
@@ -178,10 +182,15 @@ public class LargeMessageCardViewBinderUnitTest {
     @Test
     @SmallTest
     public void updateIconDrawable() {
-        when(mMockIconProvider.getIconDrawable()).thenReturn(mMockDrawable);
-        mModel.set(MessageCardViewProperties.ICON_PROVIDER, mMockIconProvider);
+        mModel =
+                new PropertyModel.Builder(MessageCardViewProperties.ALL_KEYS)
+                        .with(MessageCardViewProperties.ICON_PROVIDER, mMockIconProvider)
+                        .build();
 
-        verify(mMockIconProvider, times(1)).getIconDrawable();
+        LargeMessageCardViewBinder.updateIconDrawable(mModel, mMockLargeCardView);
+        verify(mMockIconProvider).fetchIconDrawable(mCallbackDrawableArgumentCaptor.capture());
+        Callback<Drawable> callback = mCallbackDrawableArgumentCaptor.getValue();
+        callback.onResult(mMockDrawable);
         verify(mMockLargeCardView, times(1)).setIconDrawable(mMockDrawable);
     }
 
@@ -195,14 +204,18 @@ public class LargeMessageCardViewBinderUnitTest {
     @Test
     @SmallTest
     public void handleDismissActionButton_NoServiceProvider() {
-        mModel = new PropertyModel.Builder(MessageCardViewProperties.ALL_KEYS)
-                         .with(MessageCardViewProperties.UI_DISMISS_ACTION_PROVIDER,
-                                 mMockDismissActionProvider1)
-                         .with(MessageCardViewProperties.MESSAGE_TYPE,
-                                 MessageService.MessageType.FOR_TESTING)
-                         .with(MessageCardViewProperties.MESSAGE_SERVICE_DISMISS_ACTION_PROVIDER,
-                                 null)
-                         .build();
+        mModel =
+                new PropertyModel.Builder(MessageCardViewProperties.ALL_KEYS)
+                        .with(
+                                MessageCardViewProperties.UI_DISMISS_ACTION_PROVIDER,
+                                mMockDismissActionProvider1)
+                        .with(
+                                MessageCardViewProperties.MESSAGE_TYPE,
+                                MessageService.MessageType.FOR_TESTING)
+                        .with(
+                                MessageCardViewProperties.MESSAGE_SERVICE_DISMISS_ACTION_PROVIDER,
+                                null)
+                        .build();
 
         LargeMessageCardViewBinder.handleDismissActionButton(mModel);
         verify(mMockDismissActionProvider1, times(1))
@@ -212,13 +225,16 @@ public class LargeMessageCardViewBinderUnitTest {
     @Test
     @SmallTest
     public void handleDismissActionButton_NoUiProvider() {
-        mModel = new PropertyModel.Builder(MessageCardViewProperties.ALL_KEYS)
-                         .with(MessageCardViewProperties.UI_DISMISS_ACTION_PROVIDER, null)
-                         .with(MessageCardViewProperties.MESSAGE_TYPE,
-                                 MessageService.MessageType.FOR_TESTING)
-                         .with(MessageCardViewProperties.MESSAGE_SERVICE_DISMISS_ACTION_PROVIDER,
-                                 mMockDismissActionProvider1)
-                         .build();
+        mModel =
+                new PropertyModel.Builder(MessageCardViewProperties.ALL_KEYS)
+                        .with(MessageCardViewProperties.UI_DISMISS_ACTION_PROVIDER, null)
+                        .with(
+                                MessageCardViewProperties.MESSAGE_TYPE,
+                                MessageService.MessageType.FOR_TESTING)
+                        .with(
+                                MessageCardViewProperties.MESSAGE_SERVICE_DISMISS_ACTION_PROVIDER,
+                                mMockDismissActionProvider1)
+                        .build();
 
         LargeMessageCardViewBinder.handleDismissActionButton(mModel);
         verify(mMockDismissActionProvider1, times(1))
@@ -228,14 +244,18 @@ public class LargeMessageCardViewBinderUnitTest {
     @Test
     @SmallTest
     public void handleDismissActionButton() {
-        mModel = new PropertyModel.Builder(MessageCardViewProperties.ALL_KEYS)
-                         .with(MessageCardViewProperties.UI_DISMISS_ACTION_PROVIDER,
-                                 mMockDismissActionProvider1)
-                         .with(MessageCardViewProperties.MESSAGE_TYPE,
-                                 MessageService.MessageType.FOR_TESTING)
-                         .with(MessageCardViewProperties.MESSAGE_SERVICE_DISMISS_ACTION_PROVIDER,
-                                 mMockDismissActionProvider2)
-                         .build();
+        mModel =
+                new PropertyModel.Builder(MessageCardViewProperties.ALL_KEYS)
+                        .with(
+                                MessageCardViewProperties.UI_DISMISS_ACTION_PROVIDER,
+                                mMockDismissActionProvider1)
+                        .with(
+                                MessageCardViewProperties.MESSAGE_TYPE,
+                                MessageService.MessageType.FOR_TESTING)
+                        .with(
+                                MessageCardViewProperties.MESSAGE_SERVICE_DISMISS_ACTION_PROVIDER,
+                                mMockDismissActionProvider2)
+                        .build();
 
         LargeMessageCardViewBinder.handleDismissActionButton(mModel);
         verify(mMockDismissActionProvider1, times(1))
@@ -247,17 +267,22 @@ public class LargeMessageCardViewBinderUnitTest {
     @Test
     @SmallTest
     public void handleReviewActionButton() {
-        mModel = new PropertyModel.Builder(MessageCardViewProperties.ALL_KEYS)
-                         .with(MessageCardViewProperties.UI_DISMISS_ACTION_PROVIDER,
-                                 mMockDismissActionProvider1)
-                         .with(MessageCardViewProperties.UI_ACTION_PROVIDER,
-                                 mMockReviewActionProvider1)
-                         .with(MessageCardViewProperties.MESSAGE_SERVICE_ACTION_PROVIDER,
-                                 mMockReviewActionProvider2)
-                         .with(MessageCardViewProperties.MESSAGE_TYPE,
-                                 MessageService.MessageType.FOR_TESTING)
-                         .with(MessageCardViewProperties.SHOULD_KEEP_AFTER_REVIEW, false)
-                         .build();
+        mModel =
+                new PropertyModel.Builder(MessageCardViewProperties.ALL_KEYS)
+                        .with(
+                                MessageCardViewProperties.UI_DISMISS_ACTION_PROVIDER,
+                                mMockDismissActionProvider1)
+                        .with(
+                                MessageCardViewProperties.UI_ACTION_PROVIDER,
+                                mMockReviewActionProvider1)
+                        .with(
+                                MessageCardViewProperties.MESSAGE_SERVICE_ACTION_PROVIDER,
+                                mMockReviewActionProvider2)
+                        .with(
+                                MessageCardViewProperties.MESSAGE_TYPE,
+                                MessageService.MessageType.FOR_TESTING)
+                        .with(MessageCardViewProperties.SHOULD_KEEP_AFTER_REVIEW, false)
+                        .build();
 
         LargeMessageCardViewBinder.handleReviewActionButton(mModel);
         verify(mMockReviewActionProvider1, times(1)).review();
@@ -269,16 +294,20 @@ public class LargeMessageCardViewBinderUnitTest {
     @Test
     @SmallTest
     public void handleReviewActionButton_NoUiProvider() {
-        mModel = new PropertyModel.Builder(MessageCardViewProperties.ALL_KEYS)
-                         .with(MessageCardViewProperties.UI_DISMISS_ACTION_PROVIDER,
-                                 mMockDismissActionProvider1)
-                         .with(MessageCardViewProperties.UI_ACTION_PROVIDER, null)
-                         .with(MessageCardViewProperties.MESSAGE_SERVICE_ACTION_PROVIDER,
-                                 mMockReviewActionProvider1)
-                         .with(MessageCardViewProperties.MESSAGE_TYPE,
-                                 MessageService.MessageType.FOR_TESTING)
-                         .with(MessageCardViewProperties.SHOULD_KEEP_AFTER_REVIEW, false)
-                         .build();
+        mModel =
+                new PropertyModel.Builder(MessageCardViewProperties.ALL_KEYS)
+                        .with(
+                                MessageCardViewProperties.UI_DISMISS_ACTION_PROVIDER,
+                                mMockDismissActionProvider1)
+                        .with(MessageCardViewProperties.UI_ACTION_PROVIDER, null)
+                        .with(
+                                MessageCardViewProperties.MESSAGE_SERVICE_ACTION_PROVIDER,
+                                mMockReviewActionProvider1)
+                        .with(
+                                MessageCardViewProperties.MESSAGE_TYPE,
+                                MessageService.MessageType.FOR_TESTING)
+                        .with(MessageCardViewProperties.SHOULD_KEEP_AFTER_REVIEW, false)
+                        .build();
 
         LargeMessageCardViewBinder.handleReviewActionButton(mModel);
         verify(mMockReviewActionProvider1, times(1)).review();
@@ -289,16 +318,20 @@ public class LargeMessageCardViewBinderUnitTest {
     @Test
     @SmallTest
     public void handleReviewActionButton_NoServiceProvider() {
-        mModel = new PropertyModel.Builder(MessageCardViewProperties.ALL_KEYS)
-                         .with(MessageCardViewProperties.UI_DISMISS_ACTION_PROVIDER,
-                                 mMockDismissActionProvider1)
-                         .with(MessageCardViewProperties.UI_ACTION_PROVIDER,
-                                 mMockReviewActionProvider1)
-                         .with(MessageCardViewProperties.MESSAGE_SERVICE_ACTION_PROVIDER, null)
-                         .with(MessageCardViewProperties.MESSAGE_TYPE,
-                                 MessageService.MessageType.FOR_TESTING)
-                         .with(MessageCardViewProperties.SHOULD_KEEP_AFTER_REVIEW, false)
-                         .build();
+        mModel =
+                new PropertyModel.Builder(MessageCardViewProperties.ALL_KEYS)
+                        .with(
+                                MessageCardViewProperties.UI_DISMISS_ACTION_PROVIDER,
+                                mMockDismissActionProvider1)
+                        .with(
+                                MessageCardViewProperties.UI_ACTION_PROVIDER,
+                                mMockReviewActionProvider1)
+                        .with(MessageCardViewProperties.MESSAGE_SERVICE_ACTION_PROVIDER, null)
+                        .with(
+                                MessageCardViewProperties.MESSAGE_TYPE,
+                                MessageService.MessageType.FOR_TESTING)
+                        .with(MessageCardViewProperties.SHOULD_KEEP_AFTER_REVIEW, false)
+                        .build();
 
         LargeMessageCardViewBinder.handleReviewActionButton(mModel);
         verify(mMockReviewActionProvider1, times(1)).review();
@@ -309,16 +342,20 @@ public class LargeMessageCardViewBinderUnitTest {
     @Test
     @SmallTest
     public void handleReviewActionButton_NoDismissProvider() {
-        mModel = new PropertyModel.Builder(MessageCardViewProperties.ALL_KEYS)
-                         .with(MessageCardViewProperties.UI_DISMISS_ACTION_PROVIDER, null)
-                         .with(MessageCardViewProperties.UI_ACTION_PROVIDER,
-                                 mMockReviewActionProvider1)
-                         .with(MessageCardViewProperties.MESSAGE_SERVICE_ACTION_PROVIDER,
-                                 mMockReviewActionProvider2)
-                         .with(MessageCardViewProperties.MESSAGE_TYPE,
-                                 MessageService.MessageType.FOR_TESTING)
-                         .with(MessageCardViewProperties.SHOULD_KEEP_AFTER_REVIEW, false)
-                         .build();
+        mModel =
+                new PropertyModel.Builder(MessageCardViewProperties.ALL_KEYS)
+                        .with(MessageCardViewProperties.UI_DISMISS_ACTION_PROVIDER, null)
+                        .with(
+                                MessageCardViewProperties.UI_ACTION_PROVIDER,
+                                mMockReviewActionProvider1)
+                        .with(
+                                MessageCardViewProperties.MESSAGE_SERVICE_ACTION_PROVIDER,
+                                mMockReviewActionProvider2)
+                        .with(
+                                MessageCardViewProperties.MESSAGE_TYPE,
+                                MessageService.MessageType.FOR_TESTING)
+                        .with(MessageCardViewProperties.SHOULD_KEEP_AFTER_REVIEW, false)
+                        .build();
 
         LargeMessageCardViewBinder.handleReviewActionButton(mModel);
         verify(mMockReviewActionProvider1, times(1)).review();
@@ -328,17 +365,22 @@ public class LargeMessageCardViewBinderUnitTest {
     @Test
     @SmallTest
     public void handleReviewActionButton_DismissNotAllowed() {
-        mModel = new PropertyModel.Builder(MessageCardViewProperties.ALL_KEYS)
-                         .with(MessageCardViewProperties.UI_DISMISS_ACTION_PROVIDER,
-                                 mMockDismissActionProvider1)
-                         .with(MessageCardViewProperties.UI_ACTION_PROVIDER,
-                                 mMockReviewActionProvider1)
-                         .with(MessageCardViewProperties.MESSAGE_SERVICE_ACTION_PROVIDER,
-                                 mMockReviewActionProvider2)
-                         .with(MessageCardViewProperties.MESSAGE_TYPE,
-                                 MessageService.MessageType.FOR_TESTING)
-                         .with(MessageCardViewProperties.SHOULD_KEEP_AFTER_REVIEW, true)
-                         .build();
+        mModel =
+                new PropertyModel.Builder(MessageCardViewProperties.ALL_KEYS)
+                        .with(
+                                MessageCardViewProperties.UI_DISMISS_ACTION_PROVIDER,
+                                mMockDismissActionProvider1)
+                        .with(
+                                MessageCardViewProperties.UI_ACTION_PROVIDER,
+                                mMockReviewActionProvider1)
+                        .with(
+                                MessageCardViewProperties.MESSAGE_SERVICE_ACTION_PROVIDER,
+                                mMockReviewActionProvider2)
+                        .with(
+                                MessageCardViewProperties.MESSAGE_TYPE,
+                                MessageService.MessageType.FOR_TESTING)
+                        .with(MessageCardViewProperties.SHOULD_KEEP_AFTER_REVIEW, true)
+                        .build();
 
         LargeMessageCardViewBinder.handleReviewActionButton(mModel);
         verify(mMockReviewActionProvider1, times(1)).review();

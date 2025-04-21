@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,8 +49,8 @@ struct CrossThreadCopier<media::DecoderStatus>
 };
 
 template <>
-struct CrossThreadCopier<absl::optional<DecoderDetails>>
-    : public CrossThreadCopierPassThrough<absl::optional<DecoderDetails>> {
+struct CrossThreadCopier<std::optional<DecoderDetails>>
+    : public CrossThreadCopierPassThrough<std::optional<DecoderDetails>> {
   STATIC_ONLY(CrossThreadCopier);
 };
 
@@ -66,7 +66,7 @@ class MediaAudioTaskWrapper {
  public:
   using CrossThreadOnceInitCB =
       WTF::CrossThreadOnceFunction<void(media::DecoderStatus status,
-                                        absl::optional<DecoderDetails>)>;
+                                        std::optional<DecoderDetails>)>;
   using CrossThreadOnceDecodeCB =
       WTF::CrossThreadOnceFunction<void(media::DecoderStatus)>;
   using CrossThreadOnceResetCB = WTF::CrossThreadOnceClosure;
@@ -126,8 +126,8 @@ class MediaAudioTaskWrapper {
 
     selector_->SelectDecoder(
         config, /*low_delay=*/false,
-        WTF::Bind(&MediaAudioTaskWrapper::OnDecoderSelected,
-                  weak_factory_.GetWeakPtr()));
+        WTF::BindOnce(&MediaAudioTaskWrapper::OnDecoderSelected,
+                      weak_factory_.GetWeakPtr()));
   }
 
   void Decode(scoped_refptr<media::DecoderBuffer> buffer, int cb_id) {
@@ -140,8 +140,8 @@ class MediaAudioTaskWrapper {
     }
 
     decoder_->Decode(std::move(buffer),
-                     WTF::Bind(&MediaAudioTaskWrapper::OnDecodeDone,
-                               weak_factory_.GetWeakPtr(), cb_id));
+                     WTF::BindOnce(&MediaAudioTaskWrapper::OnDecodeDone,
+                                   weak_factory_.GetWeakPtr(), cb_id));
   }
 
   void Reset(int cb_id) {
@@ -153,8 +153,8 @@ class MediaAudioTaskWrapper {
       return;
     }
 
-    decoder_->Reset(WTF::Bind(&MediaAudioTaskWrapper::OnReset,
-                              weak_factory_.GetWeakPtr(), cb_id));
+    decoder_->Reset(WTF::BindOnce(&MediaAudioTaskWrapper::OnReset,
+                                  weak_factory_.GetWeakPtr(), cb_id));
   }
 
  private:
@@ -197,7 +197,7 @@ class MediaAudioTaskWrapper {
     decoder_ = std::move(decoder);
 
     media::DecoderStatus status = media::DecoderStatus::Codes::kOk;
-    absl::optional<DecoderDetails> decoder_details = absl::nullopt;
+    std::optional<DecoderDetails> decoder_details = std::nullopt;
     if (decoder_) {
       decoder_details = DecoderDetails({decoder_->GetDecoderType(),
                                         decoder_->IsPlatformDecoder(),
@@ -329,7 +329,7 @@ int AudioDecoderBroker::CreateCallbackId() {
 }
 
 void AudioDecoderBroker::OnInitialize(media::DecoderStatus status,
-                                      absl::optional<DecoderDetails> details) {
+                                      std::optional<DecoderDetails> details) {
   DVLOG(2) << __func__;
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   decoder_details_ = details;

@@ -281,7 +281,7 @@ TEST(VariantTest, TestDefaultConstructor) {
     using X = variant<int>;
     constexpr variant<int> x{};
     ASSERT_FALSE(x.valueless_by_exception());
-    ASSERT_EQ(0, x.index());
+    ASSERT_EQ(0u, x.index());
     EXPECT_EQ(0, absl::get<0>(x));
     EXPECT_TRUE(std::is_nothrow_default_constructible<X>::value);
   }
@@ -290,7 +290,7 @@ TEST(VariantTest, TestDefaultConstructor) {
     using X = variant<NonNoexceptDefaultConstructible>;
     X x{};
     ASSERT_FALSE(x.valueless_by_exception());
-    ASSERT_EQ(0, x.index());
+    ASSERT_EQ(0u, x.index());
     EXPECT_EQ(5, absl::get<0>(x).value);
     EXPECT_FALSE(std::is_nothrow_default_constructible<X>::value);
   }
@@ -299,7 +299,7 @@ TEST(VariantTest, TestDefaultConstructor) {
     using X = variant<int, NonNoexceptDefaultConstructible>;
     X x{};
     ASSERT_FALSE(x.valueless_by_exception());
-    ASSERT_EQ(0, x.index());
+    ASSERT_EQ(0u, x.index());
     EXPECT_EQ(0, absl::get<0>(x));
     EXPECT_TRUE(std::is_nothrow_default_constructible<X>::value);
   }
@@ -308,7 +308,7 @@ TEST(VariantTest, TestDefaultConstructor) {
     using X = variant<NonNoexceptDefaultConstructible, int>;
     X x{};
     ASSERT_FALSE(x.valueless_by_exception());
-    ASSERT_EQ(0, x.index());
+    ASSERT_EQ(0u, x.index());
     EXPECT_EQ(5, absl::get<0>(x).value);
     EXPECT_FALSE(std::is_nothrow_default_constructible<X>::value);
   }
@@ -389,7 +389,7 @@ TEST(VariantTest, TestMoveConstruct) {
   using V = variant<MoveOnly<class A>, MoveOnly<class B>, MoveOnly<class C>>;
 
   V v(in_place_index<1>, 10);
-  V v2 = absl::move(v);
+  V v2 = std::move(v);
   EXPECT_EQ(10, absl::get<1>(v2).value);
 }
 
@@ -480,7 +480,7 @@ TEST(VariantTest, InPlaceType) {
   ASSERT_TRUE(absl::holds_alternative<std::string>(v2));
   EXPECT_EQ("ABC", absl::get<std::string>(v2));
 
-  Var v3(in_place_type_t<std::string>(), "ABC", 2);
+  Var v3(in_place_type_t<std::string>(), "ABC", 2u);
   ASSERT_TRUE(absl::holds_alternative<std::string>(v3));
   EXPECT_EQ("AB", absl::get<std::string>(v3));
 
@@ -503,7 +503,7 @@ TEST(VariantTest, InPlaceTypeVariableTemplate) {
   ASSERT_TRUE(absl::holds_alternative<std::string>(v2));
   EXPECT_EQ("ABC", absl::get<std::string>(v2));
 
-  Var v3(in_place_type<std::string>, "ABC", 2);
+  Var v3(in_place_type<std::string>, "ABC", 2u);
   ASSERT_TRUE(absl::holds_alternative<std::string>(v3));
   EXPECT_EQ("AB", absl::get<std::string>(v3));
 
@@ -544,7 +544,7 @@ TEST(VariantTest, InPlaceIndex) {
   ASSERT_TRUE(absl::holds_alternative<std::string>(v2));
   EXPECT_EQ("ABC", absl::get<std::string>(v2));
 
-  Var v3(in_place_index_t<1>(), "ABC", 2);
+  Var v3(in_place_index_t<1>(), "ABC", 2u);
   ASSERT_TRUE(absl::holds_alternative<std::string>(v3));
   EXPECT_EQ("AB", absl::get<std::string>(v3));
 
@@ -571,7 +571,7 @@ TEST(VariantTest, InPlaceIndexVariableTemplate) {
   ASSERT_TRUE(absl::holds_alternative<std::string>(v2));
   EXPECT_EQ("ABC", absl::get<std::string>(v2));
 
-  Var v3(in_place_index<1>, "ABC", 2);
+  Var v3(in_place_index<1>, "ABC", 2u);
   ASSERT_TRUE(absl::holds_alternative<std::string>(v3));
   EXPECT_EQ("AB", absl::get<std::string>(v3));
 
@@ -688,11 +688,11 @@ TEST(VariantTest, TestSelfAssignment) {
   EXPECT_EQ(long_str, foo);
 
   variant<int, std::string> so = long_str;
-  ASSERT_EQ(1, so.index());
+  ASSERT_EQ(1u, so.index());
   EXPECT_EQ(long_str, absl::get<1>(so));
   so = *&so;
 
-  ASSERT_EQ(1, so.index());
+  ASSERT_EQ(1u, so.index());
   EXPECT_EQ(long_str, absl::get<1>(so));
 }
 
@@ -968,16 +968,16 @@ TEST(VariantTest, Index) {
   using Var = variant<int, std::string, double>;
 
   Var v = 1;
-  EXPECT_EQ(0, v.index());
+  EXPECT_EQ(0u, v.index());
   v = "str";
-  EXPECT_EQ(1, v.index());
+  EXPECT_EQ(1u, v.index());
   v = 0.;
-  EXPECT_EQ(2, v.index());
+  EXPECT_EQ(2u, v.index());
 
   Var v2 = v;
-  EXPECT_EQ(2, v2.index());
+  EXPECT_EQ(2u, v2.index());
   v2.emplace<int>(3);
-  EXPECT_EQ(0, v2.index());
+  EXPECT_EQ(0u, v2.index());
 }
 
 TEST(VariantTest, NotValuelessByException) {
@@ -1002,11 +1002,11 @@ TEST(VariantTest, IndexValuelessByException) {
   using Var = variant<MoveCanThrow, std::string, double>;
 
   Var v(absl::in_place_index<0>);
-  EXPECT_EQ(0, v.index());
+  EXPECT_EQ(0u, v.index());
   ToValuelessByException(v);
   EXPECT_EQ(absl::variant_npos, v.index());
   v = "str";
-  EXPECT_EQ(1, v.index());
+  EXPECT_EQ(1u, v.index());
 }
 
 TEST(VariantTest, ValuelessByException) {
@@ -1084,18 +1084,18 @@ TEST(VariantTest, MemberSwap) {
 TEST(VariantTest, VariantSize) {
   {
     using Size1Variant = absl::variant<int>;
-    EXPECT_EQ(1, absl::variant_size<Size1Variant>::value);
-    EXPECT_EQ(1, absl::variant_size<const Size1Variant>::value);
-    EXPECT_EQ(1, absl::variant_size<volatile Size1Variant>::value);
-    EXPECT_EQ(1, absl::variant_size<const volatile Size1Variant>::value);
+    EXPECT_EQ(1u, absl::variant_size<Size1Variant>::value);
+    EXPECT_EQ(1u, absl::variant_size<const Size1Variant>::value);
+    EXPECT_EQ(1u, absl::variant_size<volatile Size1Variant>::value);
+    EXPECT_EQ(1u, absl::variant_size<const volatile Size1Variant>::value);
   }
 
   {
     using Size3Variant = absl::variant<int, float, int>;
-    EXPECT_EQ(3, absl::variant_size<Size3Variant>::value);
-    EXPECT_EQ(3, absl::variant_size<const Size3Variant>::value);
-    EXPECT_EQ(3, absl::variant_size<volatile Size3Variant>::value);
-    EXPECT_EQ(3, absl::variant_size<const volatile Size3Variant>::value);
+    EXPECT_EQ(3u, absl::variant_size<Size3Variant>::value);
+    EXPECT_EQ(3u, absl::variant_size<const Size3Variant>::value);
+    EXPECT_EQ(3u, absl::variant_size<volatile Size3Variant>::value);
+    EXPECT_EQ(3u, absl::variant_size<const volatile Size3Variant>::value);
   }
 }
 
@@ -1209,60 +1209,60 @@ TEST(VariantTest, GetIndex) {
     Var v(absl::in_place_index<0>, 0);
 
     using LValueGetType = decltype(absl::get<0>(v));
-    using RValueGetType = decltype(absl::get<0>(absl::move(v)));
+    using RValueGetType = decltype(absl::get<0>(std::move(v)));
 
     EXPECT_TRUE((std::is_same<LValueGetType, int&>::value));
     EXPECT_TRUE((std::is_same<RValueGetType, int&&>::value));
     EXPECT_EQ(absl::get<0>(v), 0);
-    EXPECT_EQ(absl::get<0>(absl::move(v)), 0);
+    EXPECT_EQ(absl::get<0>(std::move(v)), 0);
 
     const Var& const_v = v;
     using ConstLValueGetType = decltype(absl::get<0>(const_v));
-    using ConstRValueGetType = decltype(absl::get<0>(absl::move(const_v)));
+    using ConstRValueGetType = decltype(absl::get<0>(std::move(const_v)));
     EXPECT_TRUE((std::is_same<ConstLValueGetType, const int&>::value));
     EXPECT_TRUE((std::is_same<ConstRValueGetType, const int&&>::value));
     EXPECT_EQ(absl::get<0>(const_v), 0);
-    EXPECT_EQ(absl::get<0>(absl::move(const_v)), 0);
+    EXPECT_EQ(absl::get<0>(std::move(const_v)), 0);
   }
 
   {
     Var v = std::string("Hello");
 
     using LValueGetType = decltype(absl::get<1>(v));
-    using RValueGetType = decltype(absl::get<1>(absl::move(v)));
+    using RValueGetType = decltype(absl::get<1>(std::move(v)));
 
     EXPECT_TRUE((std::is_same<LValueGetType, std::string&>::value));
     EXPECT_TRUE((std::is_same<RValueGetType, std::string&&>::value));
     EXPECT_EQ(absl::get<1>(v), "Hello");
-    EXPECT_EQ(absl::get<1>(absl::move(v)), "Hello");
+    EXPECT_EQ(absl::get<1>(std::move(v)), "Hello");
 
     const Var& const_v = v;
     using ConstLValueGetType = decltype(absl::get<1>(const_v));
-    using ConstRValueGetType = decltype(absl::get<1>(absl::move(const_v)));
+    using ConstRValueGetType = decltype(absl::get<1>(std::move(const_v)));
     EXPECT_TRUE((std::is_same<ConstLValueGetType, const std::string&>::value));
     EXPECT_TRUE((std::is_same<ConstRValueGetType, const std::string&&>::value));
     EXPECT_EQ(absl::get<1>(const_v), "Hello");
-    EXPECT_EQ(absl::get<1>(absl::move(const_v)), "Hello");
+    EXPECT_EQ(absl::get<1>(std::move(const_v)), "Hello");
   }
 
   {
     Var v = 2.0;
 
     using LValueGetType = decltype(absl::get<2>(v));
-    using RValueGetType = decltype(absl::get<2>(absl::move(v)));
+    using RValueGetType = decltype(absl::get<2>(std::move(v)));
 
     EXPECT_TRUE((std::is_same<LValueGetType, double&>::value));
     EXPECT_TRUE((std::is_same<RValueGetType, double&&>::value));
     EXPECT_EQ(absl::get<2>(v), 2.);
-    EXPECT_EQ(absl::get<2>(absl::move(v)), 2.);
+    EXPECT_EQ(absl::get<2>(std::move(v)), 2.);
 
     const Var& const_v = v;
     using ConstLValueGetType = decltype(absl::get<2>(const_v));
-    using ConstRValueGetType = decltype(absl::get<2>(absl::move(const_v)));
+    using ConstRValueGetType = decltype(absl::get<2>(std::move(const_v)));
     EXPECT_TRUE((std::is_same<ConstLValueGetType, const double&>::value));
     EXPECT_TRUE((std::is_same<ConstRValueGetType, const double&&>::value));
     EXPECT_EQ(absl::get<2>(const_v), 2.);
-    EXPECT_EQ(absl::get<2>(absl::move(const_v)), 2.);
+    EXPECT_EQ(absl::get<2>(std::move(const_v)), 2.);
   }
 
   {
@@ -1270,20 +1270,20 @@ TEST(VariantTest, GetIndex) {
     v.emplace<3>(1);
 
     using LValueGetType = decltype(absl::get<3>(v));
-    using RValueGetType = decltype(absl::get<3>(absl::move(v)));
+    using RValueGetType = decltype(absl::get<3>(std::move(v)));
 
     EXPECT_TRUE((std::is_same<LValueGetType, int&>::value));
     EXPECT_TRUE((std::is_same<RValueGetType, int&&>::value));
     EXPECT_EQ(absl::get<3>(v), 1);
-    EXPECT_EQ(absl::get<3>(absl::move(v)), 1);
+    EXPECT_EQ(absl::get<3>(std::move(v)), 1);
 
     const Var& const_v = v;
     using ConstLValueGetType = decltype(absl::get<3>(const_v));
-    using ConstRValueGetType = decltype(absl::get<3>(absl::move(const_v)));
+    using ConstRValueGetType = decltype(absl::get<3>(std::move(const_v)));
     EXPECT_TRUE((std::is_same<ConstLValueGetType, const int&>::value));
     EXPECT_TRUE((std::is_same<ConstRValueGetType, const int&&>::value));
     EXPECT_EQ(absl::get<3>(const_v), 1);
-    EXPECT_EQ(absl::get<3>(absl::move(const_v)), 1);  // NOLINT
+    EXPECT_EQ(absl::get<3>(std::move(const_v)), 1);  // NOLINT
   }
 }
 
@@ -1322,60 +1322,60 @@ TEST(VariantTest, GetType) {
     Var v = 1;
 
     using LValueGetType = decltype(absl::get<int>(v));
-    using RValueGetType = decltype(absl::get<int>(absl::move(v)));
+    using RValueGetType = decltype(absl::get<int>(std::move(v)));
 
     EXPECT_TRUE((std::is_same<LValueGetType, int&>::value));
     EXPECT_TRUE((std::is_same<RValueGetType, int&&>::value));
     EXPECT_EQ(absl::get<int>(v), 1);
-    EXPECT_EQ(absl::get<int>(absl::move(v)), 1);
+    EXPECT_EQ(absl::get<int>(std::move(v)), 1);
 
     const Var& const_v = v;
     using ConstLValueGetType = decltype(absl::get<int>(const_v));
-    using ConstRValueGetType = decltype(absl::get<int>(absl::move(const_v)));
+    using ConstRValueGetType = decltype(absl::get<int>(std::move(const_v)));
     EXPECT_TRUE((std::is_same<ConstLValueGetType, const int&>::value));
     EXPECT_TRUE((std::is_same<ConstRValueGetType, const int&&>::value));
     EXPECT_EQ(absl::get<int>(const_v), 1);
-    EXPECT_EQ(absl::get<int>(absl::move(const_v)), 1);
+    EXPECT_EQ(absl::get<int>(std::move(const_v)), 1);
   }
 
   {
     Var v = std::string("Hello");
 
     using LValueGetType = decltype(absl::get<1>(v));
-    using RValueGetType = decltype(absl::get<1>(absl::move(v)));
+    using RValueGetType = decltype(absl::get<1>(std::move(v)));
 
     EXPECT_TRUE((std::is_same<LValueGetType, std::string&>::value));
     EXPECT_TRUE((std::is_same<RValueGetType, std::string&&>::value));
     EXPECT_EQ(absl::get<std::string>(v), "Hello");
-    EXPECT_EQ(absl::get<std::string>(absl::move(v)), "Hello");
+    EXPECT_EQ(absl::get<std::string>(std::move(v)), "Hello");
 
     const Var& const_v = v;
     using ConstLValueGetType = decltype(absl::get<1>(const_v));
-    using ConstRValueGetType = decltype(absl::get<1>(absl::move(const_v)));
+    using ConstRValueGetType = decltype(absl::get<1>(std::move(const_v)));
     EXPECT_TRUE((std::is_same<ConstLValueGetType, const std::string&>::value));
     EXPECT_TRUE((std::is_same<ConstRValueGetType, const std::string&&>::value));
     EXPECT_EQ(absl::get<std::string>(const_v), "Hello");
-    EXPECT_EQ(absl::get<std::string>(absl::move(const_v)), "Hello");
+    EXPECT_EQ(absl::get<std::string>(std::move(const_v)), "Hello");
   }
 
   {
     Var v = 2.0;
 
     using LValueGetType = decltype(absl::get<2>(v));
-    using RValueGetType = decltype(absl::get<2>(absl::move(v)));
+    using RValueGetType = decltype(absl::get<2>(std::move(v)));
 
     EXPECT_TRUE((std::is_same<LValueGetType, double&>::value));
     EXPECT_TRUE((std::is_same<RValueGetType, double&&>::value));
     EXPECT_EQ(absl::get<double>(v), 2.);
-    EXPECT_EQ(absl::get<double>(absl::move(v)), 2.);
+    EXPECT_EQ(absl::get<double>(std::move(v)), 2.);
 
     const Var& const_v = v;
     using ConstLValueGetType = decltype(absl::get<2>(const_v));
-    using ConstRValueGetType = decltype(absl::get<2>(absl::move(const_v)));
+    using ConstRValueGetType = decltype(absl::get<2>(std::move(const_v)));
     EXPECT_TRUE((std::is_same<ConstLValueGetType, const double&>::value));
     EXPECT_TRUE((std::is_same<ConstRValueGetType, const double&&>::value));
     EXPECT_EQ(absl::get<double>(const_v), 2.);
-    EXPECT_EQ(absl::get<double>(absl::move(const_v)), 2.);
+    EXPECT_EQ(absl::get<double>(std::move(const_v)), 2.);
   }
 }
 
@@ -1799,14 +1799,14 @@ TEST(VariantTest, VisitSimple) {
   EXPECT_EQ("B", piece);
 
   struct StrLen {
-    int operator()(const char* s) const { return strlen(s); }
-    int operator()(const std::string& s) const { return s.size(); }
+    size_t operator()(const char* s) const { return strlen(s); }
+    size_t operator()(const std::string& s) const { return s.size(); }
   };
 
   v = "SomeStr";
-  EXPECT_EQ(7, absl::visit(StrLen{}, v));
+  EXPECT_EQ(7u, absl::visit(StrLen{}, v));
   v = std::string("VeryLargeThisTime");
-  EXPECT_EQ(17, absl::visit(StrLen{}, v));
+  EXPECT_EQ(17u, absl::visit(StrLen{}, v));
 }
 
 TEST(VariantTest, VisitRValue) {
@@ -1825,13 +1825,13 @@ TEST(VariantTest, VisitRValue) {
     int operator()(std::string&&, std::string&&) const { return 3; }  // NOLINT
   };
   EXPECT_FALSE(absl::visit(Visitor{}, v));
-  EXPECT_TRUE(absl::visit(Visitor{}, absl::move(v)));
+  EXPECT_TRUE(absl::visit(Visitor{}, std::move(v)));
 
   // Also test the variadic overload.
   EXPECT_EQ(0, absl::visit(Visitor{}, v, v));
-  EXPECT_EQ(1, absl::visit(Visitor{}, v, absl::move(v)));
-  EXPECT_EQ(2, absl::visit(Visitor{}, absl::move(v), v));
-  EXPECT_EQ(3, absl::visit(Visitor{}, absl::move(v), absl::move(v)));
+  EXPECT_EQ(1, absl::visit(Visitor{}, v, std::move(v)));
+  EXPECT_EQ(2, absl::visit(Visitor{}, std::move(v), v));
+  EXPECT_EQ(3, absl::visit(Visitor{}, std::move(v), std::move(v)));
 }
 
 TEST(VariantTest, VisitRValueVisitor) {
@@ -1862,12 +1862,12 @@ TEST(VariantTest, VisitResultTypeDifferent) {
       (std::is_same<LValue_LValue, decltype(absl::visit(visitor, v))>::value));
   EXPECT_TRUE(
       (std::is_same<RValue_LValue,
-                    decltype(absl::visit(visitor, absl::move(v)))>::value));
+                    decltype(absl::visit(visitor, std::move(v)))>::value));
   EXPECT_TRUE((
       std::is_same<LValue_RValue, decltype(absl::visit(Visitor{}, v))>::value));
   EXPECT_TRUE(
       (std::is_same<RValue_RValue,
-                    decltype(absl::visit(Visitor{}, absl::move(v)))>::value));
+                    decltype(absl::visit(Visitor{}, std::move(v)))>::value));
 }
 
 TEST(VariantTest, VisitVariadic) {
@@ -1979,7 +1979,7 @@ TEST(VariantTest, MonostateBasic) {
 
 TEST(VariantTest, VariantMonostateDefaultConstruction) {
   absl::variant<absl::monostate, NonDefaultConstructible> var;
-  EXPECT_EQ(var.index(), 0);
+  EXPECT_EQ(var.index(), 0u);
 }
 
 ////////////////////////////////
@@ -2100,7 +2100,7 @@ TEST(VariantTest, Hash) {
     for (int i = 0; i < 100; ++i) {
       hashcodes.insert(hash(i));
     }
-    EXPECT_GT(hashcodes.size(), 90);
+    EXPECT_GT(hashcodes.size(), 90u);
 
     // test const-qualified
     static_assert(type_traits_internal::IsHashable<variant<const int>>::value,
@@ -2225,7 +2225,7 @@ TEST(VariantTest, TestMoveSemantics) {
   EXPECT_TRUE(absl::holds_alternative<std::unique_ptr<int>>(v));
 
   // Construct a variant by moving from another variant.
-  Variant v2(absl::move(v));
+  Variant v2(std::move(v));
   ASSERT_TRUE(absl::holds_alternative<std::unique_ptr<int>>(v2));
   ASSERT_NE(nullptr, absl::get<std::unique_ptr<int>>(v2));
   EXPECT_EQ(10, *absl::get<std::unique_ptr<int>>(v2));
@@ -2242,7 +2242,7 @@ TEST(VariantTest, TestMoveSemantics) {
   EXPECT_EQ("foo", *absl::get<std::unique_ptr<std::string>>(v));
 
   // Move-assign a variant.
-  v2 = absl::move(v);
+  v2 = std::move(v);
   ASSERT_TRUE(absl::holds_alternative<std::unique_ptr<std::string>>(v2));
   EXPECT_EQ("foo", *absl::get<std::unique_ptr<std::string>>(v2));
   EXPECT_TRUE(absl::holds_alternative<std::unique_ptr<std::string>>(v));
@@ -2312,9 +2312,9 @@ TEST(VariantTest, TestRvalueConversion) {
   EXPECT_EQ(42, absl::get<int32_t>(variant2));
 
   variant2 =
-      ConvertVariantTo<variant<int32_t, uint32_t>>(variant<uint32_t>(42));
+      ConvertVariantTo<variant<int32_t, uint32_t>>(variant<uint32_t>(42u));
   ASSERT_TRUE(absl::holds_alternative<uint32_t>(variant2));
-  EXPECT_EQ(42, absl::get<uint32_t>(variant2));
+  EXPECT_EQ(42u, absl::get<uint32_t>(variant2));
 #endif  // !ABSL_USES_STD_VARIANT
 
   variant<Convertible1, Convertible2> variant3(
@@ -2361,10 +2361,10 @@ TEST(VariantTest, TestLvalueConversion) {
   ASSERT_TRUE(absl::holds_alternative<int32_t>(variant2));
   EXPECT_EQ(42, absl::get<int32_t>(variant2));
 
-  variant<uint32_t> source6(42);
+  variant<uint32_t> source6(42u);
   variant2 = ConvertVariantTo<variant<int32_t, uint32_t>>(source6);
   ASSERT_TRUE(absl::holds_alternative<uint32_t>(variant2));
-  EXPECT_EQ(42, absl::get<uint32_t>(variant2));
+  EXPECT_EQ(42u, absl::get<uint32_t>(variant2));
 #endif
 
   variant<Convertible2, Convertible1> source7((Convertible1()));
@@ -2455,8 +2455,8 @@ TEST(VariantTest, TestRvalueConversionViaConvertVariantTo) {
   EXPECT_THAT(absl::get_if<int32_t>(&variant2), Pointee(42));
 
   variant2 =
-      ConvertVariantTo<variant<int32_t, uint32_t>>(variant<uint32_t>(42));
-  EXPECT_THAT(absl::get_if<uint32_t>(&variant2), Pointee(42));
+      ConvertVariantTo<variant<int32_t, uint32_t>>(variant<uint32_t>(42u));
+  EXPECT_THAT(absl::get_if<uint32_t>(&variant2), Pointee(42u));
 #endif
 
   variant<Convertible1, Convertible2> variant3(
@@ -2499,9 +2499,9 @@ TEST(VariantTest, TestLvalueConversionViaConvertVariantTo) {
       ConvertVariantTo<variant<int32_t, uint32_t>>(source5));
   EXPECT_THAT(absl::get_if<int32_t>(&variant2), Pointee(42));
 
-  variant<uint32_t> source6(42);
+  variant<uint32_t> source6(42u);
   variant2 = ConvertVariantTo<variant<int32_t, uint32_t>>(source6);
-  EXPECT_THAT(absl::get_if<uint32_t>(&variant2), Pointee(42));
+  EXPECT_THAT(absl::get_if<uint32_t>(&variant2), Pointee(42u));
 #endif  // !ABSL_USES_STD_VARIANT
 
   variant<Convertible2, Convertible1> source7((Convertible1()));
@@ -2568,9 +2568,9 @@ TEST(VariantTest, TestVectorOfMoveonlyVariant) {
   vec.push_back(absl::make_unique<int>(42));
   vec.emplace_back("Hello");
   vec.reserve(3);
-  auto another_vec = absl::move(vec);
+  auto another_vec = std::move(vec);
   // As a sanity check, verify vector contents.
-  ASSERT_EQ(2, another_vec.size());
+  ASSERT_EQ(2u, another_vec.size());
   EXPECT_EQ(42, *absl::get<std::unique_ptr<int>>(another_vec[0]));
   EXPECT_EQ("Hello", absl::get<std::string>(another_vec[1]));
 }

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,14 @@
 
 #import <UIKit/UIKit.h>
 
+#import "base/power_monitor/power_monitor_features.h"
+
 namespace base {
 
-bool PowerMonitorDeviceSource::IsOnBatteryPower() {
+PowerStateObserver::BatteryPowerStatus
+PowerMonitorDeviceSource::GetBatteryPowerStatus() const {
 #if TARGET_IPHONE_SIMULATOR
-  return false;
+  return PowerStateObserver::BatteryPowerStatus::kExternalPower;
 #else
   UIDevice* currentDevice = [UIDevice currentDevice];
   BOOL isCurrentAppMonitoringBattery = currentDevice.isBatteryMonitoringEnabled;
@@ -18,25 +21,31 @@ bool PowerMonitorDeviceSource::IsOnBatteryPower() {
   UIDeviceBatteryState batteryState = [UIDevice currentDevice].batteryState;
   currentDevice.batteryMonitoringEnabled = isCurrentAppMonitoringBattery;
   DCHECK(batteryState != UIDeviceBatteryStateUnknown);
-  return batteryState == UIDeviceBatteryStateUnplugged;
+  return batteryState == UIDeviceBatteryStateUnplugged
+             ? PowerStateObserver::BatteryPowerStatus::kBatteryPower
+             : PowerStateObserver::BatteryPowerStatus::kExternalPower;
 #endif
 }
 
 void PowerMonitorDeviceSource::PlatformInit() {
+  if (FeatureList::IsEnabled(kRemoveIOSPowerEventNotifications)) {
+    return;
+  }
+
   NSNotificationCenter* nc = [NSNotificationCenter defaultCenter];
   id foreground =
       [nc addObserverForName:UIApplicationWillEnterForegroundNotification
                       object:nil
                        queue:nil
                   usingBlock:^(NSNotification* notification) {
-                      ProcessPowerEvent(RESUME_EVENT);
+                    ProcessPowerEvent(RESUME_EVENT);
                   }];
   id background =
       [nc addObserverForName:UIApplicationDidEnterBackgroundNotification
                       object:nil
                        queue:nil
                   usingBlock:^(NSNotification* notification) {
-                      ProcessPowerEvent(SUSPEND_EVENT);
+                    ProcessPowerEvent(SUSPEND_EVENT);
                   }];
   notification_observers_.push_back(foreground);
   notification_observers_.push_back(background);

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,18 @@
 #include "ash/public/cpp/session/session_observer.h"
 #include "ash/public/cpp/shelf_config.h"
 #include "ash/public/cpp/tablet_mode_observer.h"
+#include "ash/shelf/shelf.h"
 #include "ash/system/tray/tray_background_view.h"
 #include "ash/wm/overview/overview_observer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/events/event_constants.h"
+
+namespace ui {
+class Event;
+class GestureEvent;
+}  // namespace ui
 
 namespace views {
 class ImageView;
@@ -31,13 +38,13 @@ class ASH_EXPORT OverviewButtonTray : public TrayBackgroundView,
                                       public OverviewObserver,
                                       public TabletModeObserver,
                                       public ShelfConfig::Observer {
- public:
-  METADATA_HEADER(OverviewButtonTray);
+  METADATA_HEADER(OverviewButtonTray, TrayBackgroundView)
 
+ public:
   // Second taps within this time will be counted as double taps. Use this
   // instead of ui::Event's click_count and tap_count as those have a minimum
   // time bewtween events before the second tap counts as a double tap.
-  // TODO(crbug.com/817883): We should the gesture detector double tap time or
+  // TODO(crbug.com/40565331): We should the gesture detector double tap time or
   // overview enter animation time, once ux decides which one to match (both are
   // 300ms currently).
   static constexpr base::TimeDelta kDoubleTapThresholdMs =
@@ -54,11 +61,6 @@ class ASH_EXPORT OverviewButtonTray : public TrayBackgroundView,
   // views::Button:
   void OnGestureEvent(ui::GestureEvent* event) override;
 
-  // ActionableView:
-  bool PerformAction(const ui::Event& event) override;
-  void HandlePerformActionResult(bool action_performed,
-                                 const ui::Event& event) override;
-
   // SessionObserver:
   void OnSessionStateChanged(session_manager::SessionState state) override;
 
@@ -74,25 +76,33 @@ class ASH_EXPORT OverviewButtonTray : public TrayBackgroundView,
 
   // TrayBackgroundView:
   void UpdateAfterLoginStatusChange() override;
-  void ClickedOutsideBubble() override;
-  std::u16string GetAccessibleNameForTray() override;
+  void ClickedOutsideBubble(const ui::LocatedEvent& event) override;
+  void UpdateTrayItemColor(bool is_active) override;
   void HandleLocaleChange() override;
   void HideBubbleWithView(const TrayBubbleView* bubble_view) override;
   void OnThemeChanged() override;
+  void HideBubble(const TrayBubbleView* bubble_view) override;
 
  private:
   friend class OverviewButtonTrayTest;
 
+  // Callback called when this is pressed. Long press is reacted to in
+  // `OnGestureEvent()`, see crbug/1374368.
+  void OnButtonPressed(const ui::Event& event);
+
   void UpdateIconVisibility();
 
+  // Gets the icon image of `icon_`.
+  gfx::ImageSkia GetIconImage();
+
   // Weak pointer, will be parented by TrayContainer for its lifetime.
-  views::ImageView* icon_;
+  raw_ptr<views::ImageView> icon_;
 
   ScopedSessionObserver scoped_session_observer_;
 
   // Stores the timestamp of the last tap event time that happened while not
   // in overview mode. Used to check for double taps, which invoke quick switch.
-  absl::optional<base::TimeTicks> last_press_event_time_;
+  std::optional<base::TimeTicks> last_press_event_time_;
 };
 
 }  // namespace ash

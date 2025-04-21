@@ -1,23 +1,25 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/cache_storage/cache_storage_cache_entry_handler.h"
 
-#include "base/callback_helpers.h"
-#include "base/guid.h"
+#include <optional>
+
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
+#include "base/uuid.h"
 #include "components/services/storage/public/mojom/blob_storage_context.mojom.h"
 #include "content/browser/cache_storage/background_fetch_cache_entry_handler_impl.h"
 #include "content/browser/cache_storage/cache_storage.h"
 #include "content/browser/cache_storage/cache_storage_manager.h"
-#include "content/public/browser/browser_task_traits.h"
+#include "content/public/browser/browser_thread.h"
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 #include "net/filter/source_stream.h"
 #include "services/network/public/cpp/source_stream_to_data_pipe.h"
 #include "storage/browser/blob/blob_data_builder.h"
 #include "storage/browser/blob/blob_impl.h"
 #include "storage/browser/blob/blob_storage_context.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/blob/blob_utils.h"
 
 namespace content {
@@ -140,8 +142,7 @@ class EntryReaderImpl : public storage::mojom::BlobDataItemReader {
     // to the BigBuffer without a copy.
     int length = blob_entry_->GetSize(side_data_disk_cache_index_);
     mojo_base::BigBuffer output_buf(static_cast<size_t>(length));
-    auto wrapped_buf = base::MakeRefCounted<net::WrappedIOBuffer>(
-        reinterpret_cast<char*>(output_buf.data()));
+    auto wrapped_buf = base::MakeRefCounted<net::WrappedIOBuffer>(output_buf);
 
     auto split_callback = base::SplitOnceCallback(base::BindOnce(
         [](mojo_base::BigBuffer output_buf, ReadSideDataCallback callback,
@@ -216,7 +217,7 @@ int CacheStorageCacheEntryHandler::DiskCacheBlobEntry::GetSize(
 
 void CacheStorageCacheEntryHandler::DiskCacheBlobEntry::Invalidate() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  cache_handle_ = absl::nullopt;
+  cache_handle_ = std::nullopt;
   entry_handler_ = nullptr;
   disk_cache_entry_ = nullptr;
 }
@@ -337,9 +338,11 @@ void CacheStorageCacheEntryHandler::InvalidateDiskCacheBlobEntrys() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // Calling Invalidate() can cause the CacheStorageCacheEntryHandler to be
   // destroyed. Be careful not to touch |this| after calling Invalidate().
-  std::set<DiskCacheBlobEntry*> entries = std::move(blob_entries_);
-  for (auto* entry : entries)
+  std::set<raw_ptr<DiskCacheBlobEntry, SetExperimental>> entries =
+      std::move(blob_entries_);
+  for (DiskCacheBlobEntry* entry : entries) {
     entry->Invalidate();
+  }
 }
 
 void CacheStorageCacheEntryHandler::EraseDiskCacheBlobEntry(
@@ -381,7 +384,7 @@ CacheStorageCacheEntryHandler::CreateBlobWithSideData(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   auto blob = blink::mojom::SerializedBlob::New();
   blob->size = blob_entry->GetSize(disk_cache_index);
-  blob->uuid = base::GenerateGUID();
+  blob->uuid = base::Uuid::GenerateRandomV4().AsLowercaseString();
 
   auto element = storage::mojom::BlobDataItem::New();
   element->size = blob_entry->GetSize(disk_cache_index);

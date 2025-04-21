@@ -1,11 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <assert.h>
 #include <stdlib.h>
+
 #include <string>
 
+#include "base/strings/string_number_conversions.h"
 #include "testing/libfuzzer/proto/url.pb.h"
 
 namespace url_proto {
@@ -62,7 +64,7 @@ std::string Convert(const url_proto::Url& url) {
     // that it is preceded by the host and then ":".
     if (url.has_port())
       // Convert url.port() from an unsigned 32 bit int before appending it.
-      url_string += ":" + std::to_string(url.port());
+      url_string += ":" + base::NumberToString(url.port());
   }
 
   // Append the path segments to the url, with each segment separated by

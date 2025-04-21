@@ -26,8 +26,11 @@
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
 
 #include <iterator>
+#include <map>
 #include <memory>
+#include <unordered_map>
 
+#include "base/containers/flat_map.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/scoped_refptr.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -87,39 +90,6 @@ TEST(HashMapTest, Iteration) {
   EXPECT_EQ((1 << 10) - 1, encountered_keys);
 }
 
-struct TestDoubleHashTraits : HashTraits<double> {
-  static const unsigned kMinimumTableSize = 8;
-};
-
-using DoubleHashMap =
-    HashMap<double, int64_t, DefaultHash<double>::Hash, TestDoubleHashTraits>;
-
-int BucketForKey(double key) {
-  return DefaultHash<double>::Hash::GetHash(key) &
-         (TestDoubleHashTraits::kMinimumTableSize - 1);
-}
-
-TEST(HashMapTest, DoubleHashCollisions) {
-  // The "clobber" key here is one that ends up stealing the bucket that the -0
-  // key originally wants to be in. This makes the 0 and -0 keys collide and
-  // the test then fails unless the FloatHash::equals() implementation can
-  // distinguish them.
-  const double kClobberKey = 6;
-  const double kZeroKey = 0;
-  const double kNegativeZeroKey = -kZeroKey;
-
-  DoubleHashMap map;
-
-  map.insert(kClobberKey, 1);
-  map.insert(kZeroKey, 2);
-  map.insert(kNegativeZeroKey, 3);
-
-  EXPECT_EQ(BucketForKey(kClobberKey), BucketForKey(kNegativeZeroKey));
-  EXPECT_EQ(1, map.at(kClobberKey));
-  EXPECT_EQ(2, map.at(kZeroKey));
-  EXPECT_EQ(3, map.at(kNegativeZeroKey));
-}
-
 using OwnPtrHashMap = HashMap<int, std::unique_ptr<DestructCounter>>;
 
 TEST(HashMapTest, OwnPtrAsValue) {
@@ -157,30 +127,30 @@ TEST(HashMapTest, OwnPtrAsValue) {
 TEST(HashMapTest, RefPtrAsKey) {
   bool is_deleted = false;
   DummyRefCounted::ref_invokes_count_ = 0;
-  scoped_refptr<DummyRefCounted> ptr =
+  scoped_refptr<DummyRefCounted> object =
       base::AdoptRef(new DummyRefCounted(is_deleted));
   EXPECT_EQ(0, DummyRefCounted::ref_invokes_count_);
   HashMap<scoped_refptr<DummyRefCounted>, int> map;
-  map.insert(ptr, 1);
+  map.insert(object, 1);
   // Referenced only once (to store a copy in the container).
   EXPECT_EQ(1, DummyRefCounted::ref_invokes_count_);
-  EXPECT_EQ(1, map.at(ptr));
+  EXPECT_EQ(1, map.at(object));
 
-  DummyRefCounted* raw_ptr = ptr.get();
+  DummyRefCounted* ptr = object.get();
 
-  EXPECT_TRUE(map.Contains(raw_ptr));
-  EXPECT_NE(map.end(), map.find(raw_ptr));
   EXPECT_TRUE(map.Contains(ptr));
   EXPECT_NE(map.end(), map.find(ptr));
+  EXPECT_TRUE(map.Contains(object));
+  EXPECT_NE(map.end(), map.find(object));
   EXPECT_EQ(1, DummyRefCounted::ref_invokes_count_);
 
-  ptr = nullptr;
+  object = nullptr;
   EXPECT_FALSE(is_deleted);
 
-  map.erase(raw_ptr);
+  map.erase(ptr);
   EXPECT_EQ(1, DummyRefCounted::ref_invokes_count_);
   EXPECT_TRUE(is_deleted);
-  EXPECT_TRUE(map.IsEmpty());
+  EXPECT_TRUE(map.empty());
 }
 
 TEST(HashMaptest, RemoveAdd) {
@@ -190,22 +160,22 @@ TEST(HashMaptest, RemoveAdd) {
   typedef HashMap<int, scoped_refptr<DummyRefCounted>> Map;
   Map map;
 
-  scoped_refptr<DummyRefCounted> ptr =
+  scoped_refptr<DummyRefCounted> object =
       base::AdoptRef(new DummyRefCounted(is_deleted));
   EXPECT_EQ(0, DummyRefCounted::ref_invokes_count_);
 
-  map.insert(1, ptr);
+  map.insert(1, object);
   // Referenced only once (to store a copy in the container).
   EXPECT_EQ(1, DummyRefCounted::ref_invokes_count_);
-  EXPECT_EQ(ptr, map.at(1));
+  EXPECT_EQ(object, map.at(1));
 
-  ptr = nullptr;
+  object = nullptr;
   EXPECT_FALSE(is_deleted);
 
   map.erase(1);
   EXPECT_EQ(1, DummyRefCounted::ref_invokes_count_);
   EXPECT_TRUE(is_deleted);
-  EXPECT_TRUE(map.IsEmpty());
+  EXPECT_TRUE(map.empty());
 
   // Add and remove until the deleted slot is reused.
   for (int i = 1; i < 100; i++) {
@@ -582,7 +552,7 @@ HashMap<int, int> ReturnOneTwoThreeMap() {
 
 TEST(HashMapTest, InitializerList) {
   HashMap<int, int> empty({});
-  EXPECT_TRUE(empty.IsEmpty());
+  EXPECT_TRUE(empty.empty());
 
   HashMap<int, int> one({{1, 11}});
   EXPECT_EQ(one.size(), 1u);
@@ -604,7 +574,7 @@ TEST(HashMapTest, InitializerList) {
   one_two_three.insert(9999, 99999);
 
   empty = {};
-  EXPECT_TRUE(empty.IsEmpty());
+  EXPECT_TRUE(empty.empty());
 
   one = {{1, 11}};
   EXPECT_EQ(one.size(), 1u);
@@ -627,16 +597,16 @@ TEST(HashMapTest, InitializerList) {
 }
 
 TEST(HashMapTest, IsValidKey) {
-  static_assert(DefaultHash<int>::Hash::safe_to_compare_to_empty_or_deleted,
+  static_assert(HashTraits<int>::kSafeToCompareToEmptyOrDeleted,
                 "type should be comparable to empty or deleted");
-  static_assert(DefaultHash<int*>::Hash::safe_to_compare_to_empty_or_deleted,
-                "type should be comparable to empty or deleted");
-  static_assert(DefaultHash<scoped_refptr<DummyRefCounted>>::Hash::
-                    safe_to_compare_to_empty_or_deleted,
+  static_assert(HashTraits<int*>::kSafeToCompareToEmptyOrDeleted,
                 "type should be comparable to empty or deleted");
   static_assert(
-      !DefaultHash<AtomicString>::Hash::safe_to_compare_to_empty_or_deleted,
-      "type should not be comparable to empty or deleted");
+      HashTraits<
+          scoped_refptr<DummyRefCounted>>::kSafeToCompareToEmptyOrDeleted,
+      "type should be comparable to empty or deleted");
+  static_assert(!HashTraits<AtomicString>::kSafeToCompareToEmptyOrDeleted,
+                "type should not be comparable to empty or deleted");
 
   EXPECT_FALSE((HashMap<int, int>::IsValidKey(0)));
   EXPECT_FALSE((HashMap<int, int>::IsValidKey(-1)));
@@ -654,6 +624,52 @@ TEST(HashMapTest, IsValidKey) {
   // Test IsValidKey() on a type that is NOT comparable to empty or deleted.
   EXPECT_TRUE((HashMap<AtomicString, int>::IsValidKey(AtomicString("foo"))));
   EXPECT_FALSE((HashMap<AtomicString, int>::IsValidKey(AtomicString())));
+}
+
+TEST(HashMapTest, EraseIf) {
+  HashMap<int, int> map{{1, 1}, {2, 3}, {5, 8}, {13, 21}, {34, 56}};
+  map.erase(2);
+  int num_buckets_seen = 0;
+  map.erase_if([&num_buckets_seen](const WTF::KeyValuePair<int, int>& bucket) {
+    auto [key, value] = bucket;
+    ++num_buckets_seen;
+    EXPECT_TRUE(key == 1 || key == 5 || key == 13 || key == 34)
+        << "Saw unexpected bucket " << key;
+    return key == 5 || value == 56;
+  });
+  EXPECT_EQ(num_buckets_seen, 4) << "Should see all buckets";
+  EXPECT_EQ(map.size(), 2u);
+
+  EXPECT_TRUE(map.Contains(1));
+  EXPECT_FALSE(map.Contains(2));
+  EXPECT_FALSE(map.Contains(5));
+  EXPECT_TRUE(map.Contains(13));
+  EXPECT_FALSE(map.Contains(34));
+}
+
+TEST(HashMapTest, ConstructFromOtherContainerIterators) {
+  auto convert_and_verify = [](const auto& container, const char* label) {
+    SCOPED_TRACE(label);
+    HashMap<int, bool> hash_map(std::begin(container), std::end(container));
+    EXPECT_EQ(hash_map.size(), 3u);
+    EXPECT_EQ(hash_map.at(3), true);
+    EXPECT_EQ(hash_map.at(7), false);
+    EXPECT_EQ(hash_map.at(11), false);
+  };
+
+  std::map<int, bool> std_map = {{3, true}, {7, false}, {11, false}};
+  convert_and_verify(std_map, "std::map");
+
+  std::unordered_map<int, bool> unordered_map = {
+      {3, true}, {7, false}, {11, false}};
+  convert_and_verify(unordered_map, "std::unordered_map");
+
+  base::flat_map<int, bool> flat_map = {{3, true}, {7, false}, {11, false}};
+  convert_and_verify(flat_map, "base::flat_map");
+
+  constexpr std::pair<int, bool> kArray[] = {
+      {3, true}, {7, false}, {11, false}};
+  convert_and_verify(base::span(kArray), "span");
 }
 
 static_assert(!IsTraceable<HashMap<int, int>>::value,

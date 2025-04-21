@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 
 #include "base/environment.h"
 #include "base/nix/xdg_util.h"
-#include "base/strings/string_piece.h"
 #include "base/values.h"
 #include "ui/display/util/gpu_info_util.h"
 

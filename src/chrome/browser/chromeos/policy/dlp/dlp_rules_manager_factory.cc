@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,6 @@
 #include "chrome/browser/policy/profile_policy_connector.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/prefs/pref_service.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -52,8 +51,8 @@ Profile* GetMainProfile() {
   if (!profile_manager)
     return nullptr;
   auto profiles = profile_manager->GetLoadedProfiles();
-  const auto profile_it = base::ranges::find_if(
-      profiles, [](Profile* profile) { return profile->IsMainProfile(); });
+  const auto profile_it =
+      base::ranges::find_if(profiles, &Profile::IsMainProfile);
   if (profile_it == profiles.end())
     return nullptr;
   return *profile_it;
@@ -83,9 +82,17 @@ DlpRulesManager* DlpRulesManagerFactory::GetForPrimaryProfile() {
 }
 
 DlpRulesManagerFactory::DlpRulesManagerFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "DlpRulesManager",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/40257657): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/41488885): Check if this service is needed for
+              // Ash Internals.
+              .WithAshInternals(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
 bool DlpRulesManagerFactory::ServiceIsCreatedWithBrowserContext() const {
   // We have to create the instance immediately because it's responsible for
@@ -95,7 +102,8 @@ bool DlpRulesManagerFactory::ServiceIsCreatedWithBrowserContext() const {
   return true;
 }
 
-KeyedService* DlpRulesManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+DlpRulesManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
   if (!CanBuildServiceForProfile(profile))
@@ -106,6 +114,6 @@ KeyedService* DlpRulesManagerFactory::BuildServiceInstanceFor(
   if (!local_state)
     return nullptr;
 
-  return new DlpRulesManagerImpl(local_state);
+  return std::make_unique<DlpRulesManagerImpl>(local_state, profile);
 }
 }  // namespace policy

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -93,7 +93,7 @@ bool TransportDIB::Map() {
   return true;
 }
 
-void* TransportDIB::memory() const {
+const void* TransportDIB::memory() const {
   return shm_mapping_.IsValid() ? shm_mapping_.memory() : nullptr;
 }
 

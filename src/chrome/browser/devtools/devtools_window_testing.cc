@@ -1,13 +1,15 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/devtools/devtools_window_testing.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/lazy_instance.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chrome/browser/browser_features.h"
 #include "chrome/browser/devtools/chrome_devtools_manager_delegate.h"
 #include "chrome/browser/devtools/devtools_window.h"
 #include "chrome/browser/ui/browser.h"
@@ -38,8 +40,8 @@ DevToolsWindowTesting::DevToolsWindowTesting(DevToolsWindow* window)
 DevToolsWindowTesting::~DevToolsWindowTesting() {
   DevToolsWindowTestings* instances =
       g_devtools_window_testing_instances.Pointer();
-  auto it(std::find(instances->begin(), instances->end(), this));
-  DCHECK(it != instances->end());
+  auto it = base::ranges::find(*instances, this);
+  CHECK(it != instances->end());
   instances->erase(it);
   if (!close_callback_.is_null())
     std::move(close_callback_).Run();
@@ -60,14 +62,14 @@ DevToolsWindowTesting* DevToolsWindowTesting::Get(DevToolsWindow* window) {
 // static
 DevToolsWindowTesting* DevToolsWindowTesting::Find(DevToolsWindow* window) {
   if (!g_devtools_window_testing_instances.IsCreated())
-    return NULL;
+    return nullptr;
   DevToolsWindowTestings* instances =
       g_devtools_window_testing_instances.Pointer();
   for (auto it(instances->begin()); it != instances->end(); ++it) {
     if ((*it)->devtools_window_ == window)
       return *it;
   }
-  return NULL;
+  return nullptr;
 }
 
 Browser* DevToolsWindowTesting::browser() {
@@ -103,12 +105,24 @@ void DevToolsWindowTesting::WindowClosed(DevToolsWindow* window) {
 
 // static
 void DevToolsWindowTesting::WaitForDevToolsWindowLoad(DevToolsWindow* window) {
+  if (!window) {
+    return;
+  }
+  auto* main_web_contents = window->main_web_contents_.get();
   if (!window->ready_for_test_) {
     scoped_refptr<content::MessageLoopRunner> runner =
         new content::MessageLoopRunner;
     window->ready_for_test_callback_ = runner->QuitClosure();
     runner->Run();
   }
+
+  // The window might be removed upon creation.
+  // E.g. devtools windows may not be allowed in kiosk mode and killed upon
+  // creation..
+  if (!DevToolsWindow::IsDevToolsWindow(main_web_contents)) {
+    return;
+  }
+
   std::u16string harness = base::UTF8ToUTF16(
       content::DevToolsFrontendHost::GetFrontendResource(kHarnessScript));
   window->main_web_contents_->GetPrimaryMainFrame()->ExecuteJavaScript(
@@ -124,7 +138,7 @@ DevToolsWindow* DevToolsWindowTesting::OpenDevToolsWindowSync(
       "{\"isUnderTest\": true, \"currentDockState\":\"\\\"bottom\\\"\"}" :
       "{\"isUnderTest\": true, \"currentDockState\":\"\\\"undocked\\\"\"}";
   scoped_refptr<content::DevToolsAgentHost> agent(
-      content::DevToolsAgentHost::GetOrCreateFor(inspected_web_contents));
+      content::DevToolsAgentHost::GetOrCreateForTab(inspected_web_contents));
   DevToolsWindow::ToggleDevToolsWindow(inspected_web_contents, profile, true,
                                        DevToolsToggleAction::Show(), settings);
   DevToolsWindow* window = DevToolsWindow::FindDevToolsWindow(agent.get());
@@ -154,7 +168,8 @@ DevToolsWindow* DevToolsWindowTesting::OpenDevToolsWindowSync(
 DevToolsWindow* DevToolsWindowTesting::OpenDevToolsWindowSync(
     Profile* profile,
     scoped_refptr<content::DevToolsAgentHost> agent_host) {
-  DevToolsWindow::OpenDevToolsWindow(agent_host, profile);
+  DevToolsWindow::OpenDevToolsWindow(agent_host, profile,
+                                     DevToolsOpenedByAction::kUnknown);
   DevToolsWindow* window = DevToolsWindow::FindDevToolsWindow(agent_host.get());
   WaitForDevToolsWindowLoad(window);
   return window;
@@ -163,7 +178,8 @@ DevToolsWindow* DevToolsWindowTesting::OpenDevToolsWindowSync(
 // static
 DevToolsWindow* DevToolsWindowTesting::OpenDiscoveryDevToolsWindowSync(
     Profile* profile) {
-  DevToolsWindow* window = DevToolsWindow::OpenNodeFrontendWindow(profile);
+  DevToolsWindow* window = DevToolsWindow::OpenNodeFrontendWindow(
+      profile, DevToolsOpenedByAction::kUnknown);
   WaitForDevToolsWindowLoad(window);
   return window;
 }

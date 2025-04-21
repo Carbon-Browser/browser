@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread.h"
@@ -17,8 +17,7 @@
 #include "remoting/protocol/session_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 namespace {
 
@@ -34,15 +33,16 @@ class FakeAudioConsumer : public AudioStub {
 
   ~FakeAudioConsumer() override = default;
 
-  base::WeakPtr<FakeAudioConsumer> GetWeakPtr(){
+  base::WeakPtr<FakeAudioConsumer> GetWeakPtr() {
     return weak_factory_.GetWeakPtr();
   }
 
   // AudioStub implementation.
   void ProcessAudioPacket(std::unique_ptr<AudioPacket> packet,
                           base::OnceClosure done) override {
-    if (!done.is_null())
+    if (!done.is_null()) {
       std::move(done).Run();
+    }
   }
 
  private:
@@ -124,9 +124,8 @@ TEST_F(AudioDecodeSchedulerTest, Shutdown) {
 
   audio_scheduler.reset();
   audio_consumer.reset();
-  // TODO(nicholss): This test does not really test anything. Add a way to get
-  // a count of the calls to AddAudioPacket.
+  // TODO(nicholss): This test does not really test anything. Add a way to get a
+  // count of the calls to AddAudioPacket.
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

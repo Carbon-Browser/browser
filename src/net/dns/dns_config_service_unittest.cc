@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,21 +6,20 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/cancelable_callback.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool/thread_pool_instance.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_timeouts.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/base/address_family.h"
 #include "net/base/ip_address.h"
 #include "net/dns/dns_hosts.h"
@@ -173,11 +172,11 @@ MockHostsParserFactory::GetFactory() {
       });
 }
 
-DnsHosts::value_type CreateHostsEntry(base::StringPiece name,
+DnsHosts::value_type CreateHostsEntry(std::string_view name,
                                       AddressFamily family,
                                       IPAddress address) {
-  DnsHostsKey key = std::make_pair(std::string(name), family);
-  return std::make_pair(std::move(key), address);
+  DnsHostsKey key = std::pair(std::string(name), family);
+  return std::pair(std::move(key), address);
 }
 
 }  // namespace

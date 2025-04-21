@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,8 +43,11 @@ class COMPONENT_EXPORT(CHROMEOS_UI_FRAME) ImmersiveFullscreenControllerTestApi {
 
   bool IsTopEdgeHoverTimerRunning() const;
 
+  void EndAnimation();
+
  private:
-  raw_ptr<ImmersiveFullscreenController> immersive_fullscreen_controller_;
+  raw_ptr<ImmersiveFullscreenController, DanglingUntriaged>
+      immersive_fullscreen_controller_;
 };
 
 }  // namespace chromeos

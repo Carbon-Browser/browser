@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@
 #include <utility>
 
 #include "base/check_op.h"
+#include "base/compiler_specific.h"
 #include "base/memory/ptr_util.h"
-#include "base/stl_util.h"
+#include "base/types/cxx23_to_underlying.h"
 
 namespace base {
 namespace internal {
@@ -41,7 +42,7 @@ class PriorityQueue::TaskSourceAndSortKey {
   // call.
   RegisteredTaskSource take_task_source() {
     DCHECK(task_source_);
-    task_source_->ClearHeapHandle();
+    task_source_->ClearImmediateHeapHandle();
     return std::move(task_source_);
   }
 
@@ -54,28 +55,32 @@ class PriorityQueue::TaskSourceAndSortKey {
   // Required by IntrusiveHeap.
   void SetHeapHandle(const HeapHandle& handle) {
     DCHECK(task_source_);
-    task_source_->SetHeapHandle(handle);
+    task_source_->SetImmediateHeapHandle(handle);
   }
 
   // Required by IntrusiveHeap.
   void ClearHeapHandle() {
     // Ensure |task_source_| is not nullptr, which may be the case if
     // take_task_source() was called before this.
-    if (task_source_)
-      task_source_->ClearHeapHandle();
+    if (task_source_) {
+      task_source_->ClearImmediateHeapHandle();
+    }
   }
 
   // Required by IntrusiveHeap.
   HeapHandle GetHeapHandle() const {
-    if (task_source_)
-      return task_source_->GetHeapHandle();
+    if (task_source_) {
+      return task_source_->GetImmediateHeapHandle();
+    }
     return HeapHandle::Invalid();
   }
 
-  const RegisteredTaskSource& task_source() const { return task_source_; }
-  RegisteredTaskSource& task_source() { return task_source_; }
+  const RegisteredTaskSource& task_source() const LIFETIME_BOUND {
+    return task_source_;
+  }
+  RegisteredTaskSource& task_source() LIFETIME_BOUND { return task_source_; }
 
-  const TaskSourceSortKey& sort_key() const { return sort_key_; }
+  const TaskSourceSortKey& sort_key() const LIFETIME_BOUND { return sort_key_; }
 
  private:
   RegisteredTaskSource task_source_;
@@ -85,13 +90,16 @@ class PriorityQueue::TaskSourceAndSortKey {
 PriorityQueue::PriorityQueue() = default;
 
 PriorityQueue::~PriorityQueue() {
-  if (!is_flush_task_sources_on_destroy_enabled_)
+  if (!is_flush_task_sources_on_destroy_enabled_) {
     return;
+  }
 
   while (!container_.empty()) {
     auto task_source = PopTaskSource();
     auto task = task_source.Clear();
-    std::move(task.task).Run();
+    if (task) {
+      std::move(task->task).Run();
+    }
   }
 }
 
@@ -137,12 +145,14 @@ RegisteredTaskSource PriorityQueue::PopTaskSource() {
 
 RegisteredTaskSource PriorityQueue::RemoveTaskSource(
     const TaskSource& task_source) {
-  if (IsEmpty())
+  if (IsEmpty()) {
     return nullptr;
+  }
 
-  const HeapHandle heap_handle = task_source.heap_handle();
-  if (!heap_handle.IsValid())
+  const HeapHandle heap_handle = task_source.immediate_heap_handle();
+  if (!heap_handle.IsValid()) {
     return nullptr;
+  }
 
   TaskSourceAndSortKey& task_source_and_sort_key =
       const_cast<PriorityQueue::TaskSourceAndSortKey&>(
@@ -159,12 +169,14 @@ RegisteredTaskSource PriorityQueue::RemoveTaskSource(
 
 void PriorityQueue::UpdateSortKey(const TaskSource& task_source,
                                   TaskSourceSortKey sort_key) {
-  if (IsEmpty())
+  if (IsEmpty()) {
     return;
+  }
 
-  const HeapHandle heap_handle = task_source.heap_handle();
-  if (!heap_handle.IsValid())
+  const HeapHandle heap_handle = task_source.immediate_heap_handle();
+  if (!heap_handle.IsValid()) {
     return;
+  }
 
   auto old_sort_key = container_.at(heap_handle).sort_key();
   auto registered_task_source =
@@ -191,6 +203,13 @@ size_t PriorityQueue::Size() const {
 void PriorityQueue::EnableFlushTaskSourcesOnDestroyForTesting() {
   DCHECK(!is_flush_task_sources_on_destroy_enabled_);
   is_flush_task_sources_on_destroy_enabled_ = true;
+}
+
+void PriorityQueue::swap(PriorityQueue& other) {
+  container_.swap(other.container_);
+  num_task_sources_per_priority_.swap(other.num_task_sources_per_priority_);
+  std::swap(is_flush_task_sources_on_destroy_enabled_,
+            other.is_flush_task_sources_on_destroy_enabled_);
 }
 
 void PriorityQueue::DecrementNumTaskSourcesForPriority(TaskPriority priority) {

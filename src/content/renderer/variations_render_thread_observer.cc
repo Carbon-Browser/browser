@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 
 #include "base/no_destructor.h"
 #include "base/synchronization/lock.h"
-#include "components/variations/net/omnibox_url_loader_throttle.h"
 #include "components/variations/net/variations_url_loader_throttle.h"
 #include "content/public/renderer/render_thread.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_registry.h"
@@ -55,7 +54,6 @@ VariationsRenderThreadObserver::~VariationsRenderThreadObserver() = default;
 void VariationsRenderThreadObserver::AppendThrottleIfNeeded(
     const url::Origin& top_frame_origin,
     std::vector<std::unique_ptr<blink::URLLoaderThrottle>>* throttles) {
-  variations::OmniboxURLLoaderThrottle::AppendThrottleIfNeeded(throttles);
 
   variations::mojom::VariationsHeadersPtr variations_headers =
       GetVariationsData()->GetVariationsHeaders();
@@ -69,7 +67,8 @@ void VariationsRenderThreadObserver::AppendThrottleIfNeeded(
 
 void VariationsRenderThreadObserver::RegisterMojoInterfaces(
     blink::AssociatedInterfaceRegistry* associated_interfaces) {
-  associated_interfaces->AddInterface(base::BindRepeating(
+  associated_interfaces->AddInterface<
+      mojom::RendererVariationsConfiguration>(base::BindRepeating(
       &VariationsRenderThreadObserver::OnRendererConfigurationAssociatedRequest,
       base::Unretained(this)));
 }

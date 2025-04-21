@@ -1,11 +1,10 @@
-// Copyright (c) 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/test/chromedriver/chrome/download_directory_override_manager.h"
 
 #include "base/values.h"
-#include "chrome/test/chromedriver/chrome/browser_info.h"
 #include "chrome/test/chromedriver/chrome/devtools_client.h"
 #include "chrome/test/chromedriver/chrome/status.h"
 
@@ -33,8 +32,8 @@ Status DownloadDirectoryOverrideManager::OnConnected(DevToolsClient* client) {
 }
 
 Status DownloadDirectoryOverrideManager::ApplyOverride() {
-  base::DictionaryValue params;
-  params.SetString("behavior", "allow");
-  params.SetString("downloadPath", *download_directory_);
+  base::Value::Dict params;
+  params.Set("behavior", "allow");
+  params.Set("downloadPath", *download_directory_);
   return client_->SendCommand("Browser.setDownloadBehavior", params);
 }

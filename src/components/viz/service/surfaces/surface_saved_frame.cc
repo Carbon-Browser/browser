@@ -1,25 +1,37 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/viz/service/surfaces/surface_saved_frame.h"
 
+#include <GLES2/gl2.h>
+
 #include <algorithm>
 #include <iterator>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/flat_set.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/types/pass_key.h"
+#include "components/viz/common/color_space_utils.h"
+#include "components/viz/common/features.h"
+#include "components/viz/common/frame_sinks/blit_request.h"
 #include "components/viz/common/frame_sinks/copy_output_request.h"
 #include "components/viz/common/quads/compositor_frame_transition_directive.h"
 #include "components/viz/common/quads/compositor_render_pass.h"
 #include "components/viz/common/quads/compositor_render_pass_draw_quad.h"
 #include "components/viz/common/quads/draw_quad.h"
+#include "components/viz/common/resources/shared_image_format_utils.h"
 #include "components/viz/common/transition_utils.h"
 #include "components/viz/service/surfaces/surface.h"
+#include "gpu/command_buffer/client/client_shared_image.h"
+#include "gpu/command_buffer/client/shared_image_interface.h"
+#include "gpu/command_buffer/common/shared_image_usage.h"
+#include "gpu/ipc/common/surface_handle.h"
 #include "services/viz/public/mojom/compositing/compositor_render_pass_id.mojom.h"
 #include "third_party/skia/include/core/SkBitmap.h"
+#include "ui/gfx/buffer_types.h"
 #include "ui/gfx/geometry/point.h"
 
 namespace viz {
@@ -30,14 +42,6 @@ constexpr gfx::Size kDefaultTextureSizeForTesting = gfx::Size(20, 20);
 constexpr auto kResultFormat = CopyOutputRequest::ResultFormat::RGBA;
 constexpr auto kResultDestination =
     CopyOutputRequest::ResultDestination::kNativeTextures;
-
-SurfaceSavedFrame::RenderPassDrawData GetRootRenderPassDrawData(
-    Surface* surface) {
-  const auto& frame = surface->GetActiveFrame();
-  DCHECK(!frame.render_pass_list.empty());
-  const auto& root_render_pass = frame.render_pass_list.back();
-  return {*root_render_pass, 1.f};
-}
 
 // Returns the index of |render_pass_id| in |shared_elements| if the id
 // corresponds to an element in the given list. Otherwise returns the size of
@@ -59,226 +63,167 @@ size_t GetSharedPassIndex(
 
 }  // namespace
 
+// static
+std::unique_ptr<SurfaceSavedFrame> SurfaceSavedFrame::CreateForTesting(
+    CompositorFrameTransitionDirective directive) {
+  return base::WrapUnique(new SurfaceSavedFrame(
+      base::PassKey<SurfaceSavedFrame>(), std::move(directive)));
+}
+
 SurfaceSavedFrame::SurfaceSavedFrame(
     CompositorFrameTransitionDirective directive,
-    TransitionDirectiveCompleteCallback directive_finished_callback)
+    gpu::SharedImageInterface* shared_image_interface)
     : directive_(std::move(directive)),
-      directive_finished_callback_(std::move(directive_finished_callback)) {
+      shared_image_interface_(shared_image_interface),
+      use_blit_requests_(base::FeatureList::IsEnabled(
+          features::kBlitRequestsForViewTransition)) {
+  // If we're using BlitRequests, then we better have a shared image interface.
+  CHECK(!use_blit_requests_ || shared_image_interface_);
+
   // We should only be constructing a saved frame from a save directive.
   DCHECK_EQ(directive_.type(), CompositorFrameTransitionDirective::Type::kSave);
 }
 
-SurfaceSavedFrame::~SurfaceSavedFrame() {
-  if (directive_finished_callback_)
-    std::move(directive_finished_callback_).Run(directive_.sequence_id());
+SurfaceSavedFrame::SurfaceSavedFrame(
+    base::PassKey<SurfaceSavedFrame>,
+    CompositorFrameTransitionDirective directive)
+    : directive_(std::move(directive)), use_blit_requests_(true) {
+  frame_result_.emplace();
 }
 
-base::flat_set<SharedElementResourceId> SurfaceSavedFrame::GetEmptyResourceIds()
-    const {
-  base::flat_set<SharedElementResourceId> result;
+SurfaceSavedFrame::~SurfaceSavedFrame() {
+  if (directive_finished_callback_)
+    std::move(directive_finished_callback_).Run(directive_);
+}
+
+base::flat_set<ViewTransitionElementResourceId>
+SurfaceSavedFrame::GetEmptyResourceIds() const {
+  base::flat_set<ViewTransitionElementResourceId> result;
   for (auto& shared_element : directive_.shared_elements())
     if (shared_element.render_pass_id.is_null())
-      result.insert(shared_element.shared_element_resource_id);
+      result.insert(shared_element.view_transition_element_resource_id);
   return result;
 }
 
 bool SurfaceSavedFrame::IsValid() const {
-  bool result = valid_result_count_ == ExpectedResultCount();
-  // If this saved frame is valid, then we should have a frame result.
-  DCHECK(!result || frame_result_);
-  return result;
+  return frame_result_ &&
+         (valid_result_count_ == ExpectedResultCount() || use_blit_requests_);
 }
 
-void SurfaceSavedFrame::RequestCopyOfOutput(Surface* surface) {
+void SurfaceSavedFrame::RequestCopyOfOutput(
+    Surface* surface,
+    CopyFinishedCallback finished_callback) {
+  CHECK(!directive_finished_callback_);
+  directive_finished_callback_ = std::move(finished_callback);
+
   DCHECK(surface->HasActiveFrame());
 
-  if (directive_.is_renderer_driven_animation()) {
-    // TODO(khushalsagar) : This should be the only mode once renderer based SET
-    // lands.
-    copy_root_render_pass_ = false;
-    CopyUsingOriginalFrame(surface);
-  } else {
-    CopyUsingCleanFrame(surface);
-  }
-
-  DCHECK_EQ(copy_request_count_, ExpectedResultCount());
-}
-
-void SurfaceSavedFrame::CopyUsingCleanFrame(Surface* surface) {
-  const auto& root_draw_data = GetRootRenderPassDrawData(surface);
-  // Bind kRoot and root geometry information to the callback.
-  auto root_request = std::make_unique<CopyOutputRequest>(
-      kResultFormat, kResultDestination,
-      base::BindOnce(&SurfaceSavedFrame::NotifyCopyOfOutputComplete,
-                     weak_factory_.GetWeakPtr(), ResultType::kRoot, 0,
-                     root_draw_data));
-  root_request->set_result_task_runner(base::ThreadTaskRunnerHandle::Get());
-  copy_request_count_ = 0;
-
-  // Only one copy request implies only the root element needs to be copied so
-  // the frame must not have any shared element render passes.
-  if (ExpectedResultCount() == 1) {
-    surface->RequestCopyOfOutputOnRootRenderPass(std::move(root_request));
-    copy_request_count_++;
-    return;
-  }
-
-  // If the directive includes shared elements then we need to create a new
-  // CompositorFrame with render passes that remove these elements. The strategy
-  // is as follows :
-  //
-  // 1) For each render pass create a deep copy with identical content that will
-  //    draw (directly or indirectly) to the onscreen buffer.
-  //
-  // 2) If a render pass is a shared element or is "tainted" (includes content
-  //    from a shared element), create a new "clean" render pass with the
-  //    following modifications :
-  //
-  //    - RenderPassDrawQuads which are 1:1 with a shared element are removed.
-  //
-  //    - RenderPassDrawQuads which are tainted are replaced with the equivalent
-  //      clean render pass.
-  //
-  //    The new clean render passes are only used to issue copy requests and
-  //    never drawn to the onscreen buffer.
   const auto& active_frame = surface->GetActiveFrame();
-  CompositorRenderPassId max_id = CompositorRenderPassId(0);
-  base::flat_map<CompositorRenderPassId, CompositorRenderPassId>
-      tainted_to_clean_pass_ids;
-  PrepareForCopy(active_frame.render_pass_list, max_id,
-                 tainted_to_clean_pass_ids);
-
-  TransitionUtils::FilterCallback filter_callback = base::BindRepeating(
-      &SurfaceSavedFrame::FilterSharedElementAndTaintedQuads,
-      base::Unretained(this), base::Unretained(&tainted_to_clean_pass_ids));
-
-  CompositorFrame clean_frame;
-  clean_frame.metadata = active_frame.metadata.Clone();
-  clean_frame.resource_list = active_frame.resource_list;
-
-  for (auto& render_pass : active_frame.render_pass_list) {
-    const auto original_render_pass_id = render_pass->id;
-    CompositorRenderPass* pass_for_clean_copy = nullptr;
-
-    auto it = tainted_to_clean_pass_ids.find(original_render_pass_id);
-    if (it != tainted_to_clean_pass_ids.end()) {
-      auto clean_pass = TransitionUtils::CopyPassWithQuadFiltering(
-          *render_pass, filter_callback);
-      it->second = max_id = clean_pass->id =
-          TransitionUtils::NextRenderPassId(max_id);
-      pass_for_clean_copy = clean_pass.get();
-      clean_frame.render_pass_list.push_back(std::move(clean_pass));
-    }
-
-    // Deep copy of the original pass propagating copy requests.
-    auto copy_requests = std::move(render_pass->copy_requests);
-    auto duplicate_pass = render_pass->DeepCopy();
-    duplicate_pass->copy_requests = std::move(copy_requests);
-    if (!pass_for_clean_copy)
-      pass_for_clean_copy = duplicate_pass.get();
-    clean_frame.render_pass_list.push_back(std::move(duplicate_pass));
-
-    if (auto request = CreateCopyRequestIfNeeded(
-            *render_pass, active_frame.render_pass_list)) {
-      pass_for_clean_copy->copy_requests.push_back(std::move(request));
-      copy_request_count_++;
-    }
-
-    bool is_root_pass =
-        original_render_pass_id == active_frame.render_pass_list.back()->id;
-    if (is_root_pass) {
-      DCHECK(root_request);
-      pass_for_clean_copy->copy_requests.push_back(std::move(root_request));
-      copy_request_count_++;
-    }
-  }
-
-  clean_surface_.emplace(surface, std::move(clean_frame));
-}
-
-void SurfaceSavedFrame::CopyUsingOriginalFrame(Surface* surface) {
-  const auto& active_frame = surface->GetActiveFrame();
+  bool is_software = active_frame.metadata.is_software;
   for (const auto& render_pass : active_frame.render_pass_list) {
+    if (active_frame.render_pass_list.back() == render_pass) {
+      continue;
+    }
+
     if (auto request = CreateCopyRequestIfNeeded(
-            *render_pass, active_frame.render_pass_list)) {
+            *render_pass, is_software,
+            active_frame.metadata.content_color_usage)) {
       surface->RequestCopyOfOutputOnActiveFrameRenderPassId(std::move(request),
                                                             render_pass->id);
       copy_request_count_++;
     }
   }
+
+  DCHECK_EQ(copy_request_count_, ExpectedResultCount());
+
+  frame_result_.emplace();
+  frame_result_->empty_resource_ids = GetEmptyResourceIds();
+  frame_result_->shared_results.resize(directive_.shared_elements().size());
+
+  // If we're using BlitRequests, then we need to create the result bundle
+  // immediately, since it can be imported before the copy output results
+  // arrive.
+  if (use_blit_requests_) {
+    for (auto& [index, shared_image] : blit_shared_images_) {
+      OutputCopyResult* slot = &frame_result_->shared_results[index].emplace();
+
+      slot->is_software = is_software;
+      slot->sync_token = shared_image->creation_sync_token();
+      slot->shared_image = shared_image;
+      slot->draw_data = draw_data_[index];
+      slot->release_callback = base::BindOnce(
+          [](scoped_refptr<gpu::ClientSharedImage> image,
+             const gpu::SyncToken& sync_token, bool is_lost) {
+            image->UpdateDestructionSyncToken(sync_token);
+          },
+          std::move(shared_image));
+    }
+  }
+
+  if (copy_request_count_ == 0) {
+    DispatchCopyDoneCallback();
+  }
+}
+
+void SurfaceSavedFrame::DispatchCopyDoneCallback() {
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE,
+      base::BindOnce(std::move(directive_finished_callback_), directive_));
 }
 
 std::unique_ptr<CopyOutputRequest> SurfaceSavedFrame::CreateCopyRequestIfNeeded(
     const CompositorRenderPass& render_pass,
-    const CompositorRenderPassList& render_pass_list) const {
-  auto shared_pass_index =
+    bool is_software,
+    gfx::ContentColorUsage content_color_usage) {
+  size_t shared_pass_index =
       GetSharedPassIndex(directive_.shared_elements(), render_pass.id);
   if (shared_pass_index >= directive_.shared_elements().size())
     return nullptr;
 
-  RenderPassDrawData draw_data(
-      render_pass, TransitionUtils::ComputeAccumulatedOpacity(render_pass_list,
-                                                              render_pass.id));
+  RenderPassDrawData draw_data(render_pass);
+  draw_data_[shared_pass_index] = draw_data;
+
   auto request = std::make_unique<CopyOutputRequest>(
       kResultFormat, kResultDestination,
       base::BindOnce(&SurfaceSavedFrame::NotifyCopyOfOutputComplete,
-                     weak_factory_.GetWeakPtr(), ResultType::kShared,
-                     shared_pass_index, draw_data));
-  request->set_result_task_runner(base::ThreadTaskRunnerHandle::Get());
-  return request;
-}
+                     weak_factory_.GetMutableWeakPtr(), shared_pass_index));
+  request->set_result_task_runner(
+      base::SingleThreadTaskRunner::GetCurrentDefault());
+  if (use_blit_requests_) {
+    scoped_refptr<gpu::ClientSharedImage>& shared_image =
+        blit_shared_images_[shared_pass_index];
 
-void SurfaceSavedFrame::ReleaseSurface() {
-  clean_surface_.reset();
-}
+    const auto& display_color_spaces = directive_.display_color_spaces();
+    bool has_transparent_background = render_pass.has_transparent_background;
 
-void SurfaceSavedFrame::PrepareForCopy(
-    const CompositorRenderPassList& render_passes,
-    CompositorRenderPassId& max_id,
-    base::flat_map<CompositorRenderPassId, CompositorRenderPassId>&
-        tainted_to_clean_pass_ids) const {
-  for (const auto& pass : render_passes) {
-    max_id = std::max(max_id, pass->id);
+    auto image_format =
+        GetSharedImageFormat(display_color_spaces.GetOutputBufferFormat(
+            content_color_usage, has_transparent_background));
+    auto color_space = ColorSpaceUtils::CompositingColorSpace(
+        display_color_spaces, content_color_usage, has_transparent_background);
 
-    for (auto it = pass->quad_list.BackToFrontBegin();
-         it != pass->quad_list.BackToFrontEnd(); ++it) {
-      const DrawQuad* quad = *it;
-      if (quad->material != DrawQuad::Material::kCompositorRenderPass)
-        continue;
-
-      auto quad_pass_id =
-          CompositorRenderPassDrawQuad::MaterialCast(quad)->render_pass_id;
-      if (IsSharedElementRenderPass(quad_pass_id) ||
-          tainted_to_clean_pass_ids.contains(quad_pass_id)) {
-        tainted_to_clean_pass_ids[pass->id] = CompositorRenderPassId(0);
-        break;
-      }
+    if (is_software) {
+      gpu::SharedImageUsageSet flags = gpu::SHARED_IMAGE_USAGE_CPU_WRITE_ONLY;
+      shared_image =
+          shared_image_interface_
+              ->CreateSharedImage({image_format, draw_data.size, color_space,
+                                   flags, "ViewTransitionTexture"})
+              .shared_image;
+    } else {
+      gpu::SharedImageUsageSet flags = gpu::SHARED_IMAGE_USAGE_DISPLAY_READ |
+                                       gpu::SHARED_IMAGE_USAGE_DISPLAY_WRITE;
+      shared_image = shared_image_interface_->CreateSharedImage(
+          {image_format, draw_data.size, color_space, flags,
+           "ViewTransitionTexture"},
+          gpu::kNullSurfaceHandle);
     }
+    request->set_result_selection(gfx::Rect(draw_data.size));
+    request->set_blit_request(BlitRequest(
+        gfx::Point(), LetterboxingBehavior::kDoNotLetterbox,
+        shared_image->mailbox(), shared_image->creation_sync_token(),
+        /*populates_gpu_memory_buffer=*/false));
   }
-}
-
-bool SurfaceSavedFrame::FilterSharedElementAndTaintedQuads(
-    const base::flat_map<CompositorRenderPassId, CompositorRenderPassId>*
-        tainted_to_clean_pass_ids,
-    const DrawQuad& quad,
-    CompositorRenderPass& copy_pass) const {
-  if (quad.material != DrawQuad::Material::kCompositorRenderPass)
-    return false;
-  const auto& pass_quad = *CompositorRenderPassDrawQuad::MaterialCast(&quad);
-
-  // Skip drawing shared elements embedded inside render passes.
-  if (IsSharedElementRenderPass(pass_quad.render_pass_id))
-    return true;
-
-  // Replace tainted quads with equivalent clean render passes.
-  auto it = tainted_to_clean_pass_ids->find(pass_quad.render_pass_id);
-  if (it != tainted_to_clean_pass_ids->end()) {
-    DCHECK_NE(it->second, CompositorRenderPassId(0));
-    copy_pass.CopyFromAndAppendRenderPassDrawQuad(&pass_quad, it->second);
-    return true;
-  }
-
-  return false;
+  return request;
 }
 
 bool SurfaceSavedFrame::IsSharedElementRenderPass(
@@ -289,24 +234,21 @@ bool SurfaceSavedFrame::IsSharedElementRenderPass(
 
 size_t SurfaceSavedFrame::ExpectedResultCount() const {
   base::flat_set<CompositorRenderPassId> ids;
-  for (auto& shared_element : directive_.shared_elements())
+  for (auto& shared_element : directive_.shared_elements()) {
     if (!shared_element.render_pass_id.is_null())
       ids.insert(shared_element.render_pass_id);
-  // Add 1 if we need to copy root render pass.
-  return ids.size() + copy_root_render_pass_;
+  }
+  return ids.size();
 }
 
 void SurfaceSavedFrame::NotifyCopyOfOutputComplete(
-    ResultType type,
     size_t shared_index,
-    const RenderPassDrawData& data,
     std::unique_ptr<CopyOutputResult> output_copy) {
   DCHECK_GT(copy_request_count_, 0u);
   // Even if we early out, we update the count since we are no longer waiting
   // for this result.
   if (--copy_request_count_ == 0) {
-    std::move(directive_finished_callback_).Run(directive_.sequence_id());
-    clean_surface_.reset();
+    DispatchCopyDoneCallback();
   }
 
   // Return if the result is empty.
@@ -317,21 +259,19 @@ void SurfaceSavedFrame::NotifyCopyOfOutputComplete(
   }
 
   ++valid_result_count_;
-  if (!frame_result_) {
-    frame_result_.emplace();
-    // Resize to the number of shared elements, even if some will be nullopts.
-    frame_result_->shared_results.resize(directive_.shared_elements().size());
+  // We imported this when we created copy output requests, so there's nothing
+  // to do other than bookkeeping here.
+  if (use_blit_requests_) {
+    return;
   }
 
-  OutputCopyResult* slot = nullptr;
-  if (type == ResultType::kRoot) {
-    slot = &frame_result_->root_result;
-  } else {
-    DCHECK(type == ResultType::kShared);
-    CHECK_LT(shared_index, frame_result_->shared_results.size());
-    DCHECK(!frame_result_->shared_results[shared_index]);
-    slot = &frame_result_->shared_results[shared_index].emplace();
-  }
+  CHECK(frame_result_);
+  CHECK_LT(shared_index, frame_result_->shared_results.size());
+  DCHECK(!frame_result_->shared_results[shared_index]);
+  OutputCopyResult* slot =
+      &frame_result_->shared_results[shared_index].emplace();
+
+  const RenderPassDrawData& data = draw_data_[shared_index];
 
   DCHECK(slot);
   DCHECK_EQ(output_copy->size(), data.size);
@@ -342,23 +282,28 @@ void SurfaceSavedFrame::NotifyCopyOfOutputComplete(
     slot->is_software = true;
   } else {
     auto output_copy_texture = *output_copy->GetTextureResult();
-    slot->mailbox = output_copy_texture.planes[0].mailbox;
-    slot->sync_token = output_copy_texture.planes[0].sync_token;
+    slot->mailbox = output_copy_texture.mailbox;
+    slot->sync_token = gpu::SyncToken();
     slot->color_space = output_copy_texture.color_space;
+    slot->is_software = false;
 
     CopyOutputResult::ReleaseCallbacks release_callbacks =
         output_copy->TakeTextureOwnership();
+
     // CopyOutputResults carrying RGBA format contain a single texture, there
     // should be only one release callback:
     DCHECK_EQ(1u, release_callbacks.size());
     slot->release_callback = std::move(release_callbacks[0]);
-    slot->is_software = false;
   }
+
   slot->draw_data = data;
 }
 
-absl::optional<SurfaceSavedFrame::FrameResult> SurfaceSavedFrame::TakeResult() {
-  return std::exchange(frame_result_, absl::nullopt);
+SurfaceSavedFrame::FrameResult SurfaceSavedFrame::TakeResult() {
+  CHECK(frame_result_);
+  auto result = std::move(*frame_result_);
+  frame_result_.reset();
+  return result;
 }
 
 void SurfaceSavedFrame::CompleteSavedFrameForTesting() {
@@ -367,14 +312,14 @@ void SurfaceSavedFrame::CompleteSavedFrameForTesting() {
       SkImageInfo::MakeN32Premul(kDefaultTextureSizeForTesting.width(),
                                  kDefaultTextureSizeForTesting.height()));
 
-  frame_result_.emplace();
-  frame_result_->root_result.bitmap = std::move(bitmap);
-  frame_result_->root_result.draw_data.size = kDefaultTextureSizeForTesting;
-  frame_result_->root_result.draw_data.target_transform.MakeIdentity();
-  frame_result_->root_result.draw_data.opacity = 1.f;
-  frame_result_->root_result.is_software = true;
-
   frame_result_->shared_results.resize(directive_.shared_elements().size());
+  for (auto& result : frame_result_->shared_results) {
+    result.emplace();
+    result->bitmap = std::move(bitmap);
+    result->draw_data.size = kDefaultTextureSizeForTesting;
+    result->is_software = true;
+  }
+
   copy_request_count_ = 0;
   valid_result_count_ = ExpectedResultCount();
   weak_factory_.InvalidateWeakPtrs();
@@ -383,17 +328,8 @@ void SurfaceSavedFrame::CompleteSavedFrameForTesting() {
 
 SurfaceSavedFrame::RenderPassDrawData::RenderPassDrawData() = default;
 SurfaceSavedFrame::RenderPassDrawData::RenderPassDrawData(
-    const CompositorRenderPass& render_pass,
-    float opacity)
-    : opacity(opacity) {
-  // During copy request, the origin for |render_pass|'s output_rect is mapped
-  // to the origin of the texture in the result. We account for that here.
-  size = render_pass.output_rect.size();
-
-  target_transform = render_pass.transform_to_root_target;
-  target_transform.Translate(render_pass.output_rect.x(),
-                             render_pass.output_rect.y());
-}
+    const CompositorRenderPass& render_pass)
+    : size(render_pass.output_rect.size()) {}
 
 SurfaceSavedFrame::OutputCopyResult::OutputCopyResult() = default;
 SurfaceSavedFrame::OutputCopyResult::OutputCopyResult(
@@ -402,8 +338,9 @@ SurfaceSavedFrame::OutputCopyResult::OutputCopyResult(
 }
 
 SurfaceSavedFrame::OutputCopyResult::~OutputCopyResult() {
-  if (release_callback)
+  if (release_callback) {
     std::move(release_callback).Run(sync_token, /*is_lost=*/false);
+  }
 }
 
 SurfaceSavedFrame::OutputCopyResult&
@@ -419,6 +356,8 @@ SurfaceSavedFrame::OutputCopyResult::operator=(OutputCopyResult&& other) {
 
   bitmap = std::move(other.bitmap);
   other.bitmap = SkBitmap();
+
+  shared_image = std::move(other.shared_image);
 
   draw_data = std::move(other.draw_data);
 
@@ -438,16 +377,5 @@ SurfaceSavedFrame::FrameResult::~FrameResult() = default;
 
 SurfaceSavedFrame::FrameResult& SurfaceSavedFrame::FrameResult::operator=(
     FrameResult&& other) = default;
-
-SurfaceSavedFrame::ScopedCleanSurface::ScopedCleanSurface(
-    Surface* surface,
-    CompositorFrame clean_frame)
-    : surface_(surface) {
-  surface_->SetInterpolatedFrame(std::move(clean_frame));
-}
-
-SurfaceSavedFrame::ScopedCleanSurface::~ScopedCleanSurface() {
-  surface_->ResetInterpolatedFrame();
-}
 
 }  // namespace viz

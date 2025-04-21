@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/metrics/histogram_functions.h"
 
 namespace safe_browsing {
 
@@ -33,6 +34,8 @@ void AllowlistCheckerClient::StartCheckCsdAllowlist(
   }
 
   AsyncMatch match = database_manager->CheckCsdAllowlistUrl(url, client.get());
+  base::UmaHistogramEnumeration(
+      "SafeBrowsing.ClientSidePhishingDetection.AllowlistMatchResult", match);
   InvokeCallbackOrRelease(match, std::move(client));
 }
 
@@ -80,7 +83,8 @@ AllowlistCheckerClient::AllowlistCheckerClient(
     base::OnceCallback<void(bool)> callback_for_result,
     scoped_refptr<SafeBrowsingDatabaseManager> database_manager,
     bool default_does_match_allowlist)
-    : callback_for_result_(std::move(callback_for_result)),
+    : SafeBrowsingDatabaseManager::Client(GetPassKey()),
+      callback_for_result_(std::move(callback_for_result)),
       database_manager_(database_manager),
       default_does_match_allowlist_(default_does_match_allowlist) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -99,11 +103,6 @@ AllowlistCheckerClient::~AllowlistCheckerClient() {
 
 // SafeBrowsingDatabaseMananger::Client impl
 void AllowlistCheckerClient::OnCheckAllowlistUrlResult(
-    bool did_match_allowlist) {
-  OnCheckUrlResult(did_match_allowlist);
-}
-
-void AllowlistCheckerClient::OnCheckUrlForHighConfidenceAllowlist(
     bool did_match_allowlist) {
   OnCheckUrlResult(did_match_allowlist);
 }

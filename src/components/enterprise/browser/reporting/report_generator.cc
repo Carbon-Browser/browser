@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "components/enterprise/browser/reporting/browser_report_generator.h"
 #include "components/enterprise/browser/reporting/os_report_generator.h"
 #include "components/enterprise/browser/reporting/report_type.h"
@@ -41,7 +40,7 @@ void ReportGenerator::CreateBasicRequest(
     std::unique_ptr<ReportRequest> basic_request,
     ReportType report_type,
     ReportCallback callback) {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   delegate_->SetAndroidAppInfos(basic_request.get());
 #else
   basic_request->GetDeviceReportRequest().set_computer_name(
@@ -53,7 +52,7 @@ void ReportGenerator::CreateBasicRequest(
   basic_request->GetDeviceReportRequest()
       .set_allocated_browser_device_identifier(
           policy::GetBrowserDeviceIdentifier().release());
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 #if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_IOS)
   // 1. Async function base::SysInfo::SetHardwareInfo is called.

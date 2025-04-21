@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <stddef.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "base/containers/flat_set.h"
@@ -17,7 +18,8 @@
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "base/values.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chrome/browser/profiles/profile_avatar_icon_util.h"
+#include "google_apis/gaia/gaia_id.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/image/image.h"
 
@@ -25,6 +27,8 @@ class PrefRegistrySimple;
 class PrefService;
 class ProfileAttributesStorage;
 struct ProfileThemeColors;
+
+inline constexpr int kDefaultSizeForPlaceholderAvatar = 74;
 
 enum class SigninState {
   kNotSignedIn,
@@ -38,7 +42,50 @@ enum class NameForm {
   kGaiaAndLocalName,
 };
 
-enum class AccountCategory { kConsumer, kEnterprise };
+// TODO(381117479): Currently we support two different OIDC enrollment flows:
+// 1. by sending both Auth and ID token through URL param and
+// 2. by sending encrypted user information in the auth header
+// Method 1 is completed but it will be deprecated once we completely implement,
+// test and rollout method 2.
+struct ProfileManagementOidcTokens {
+  ProfileManagementOidcTokens();
+  ProfileManagementOidcTokens(const std::string& auth_token,
+                              const std::string& id_token,
+                              const std::u16string& identity_name);
+  ProfileManagementOidcTokens(const std::string& auth_token,
+                              const std::string& id_token,
+                              const std::string& state);
+  // This will be the new format of the `ProfileManagementOidcTokens` struct,
+  // after we fully migrate.
+  explicit ProfileManagementOidcTokens(const std::string& encrypted_user_info);
+
+  ProfileManagementOidcTokens(const ProfileManagementOidcTokens& other);
+  ProfileManagementOidcTokens& operator=(
+      const ProfileManagementOidcTokens& other);
+
+  ProfileManagementOidcTokens(ProfileManagementOidcTokens&& other);
+  ProfileManagementOidcTokens& operator=(ProfileManagementOidcTokens&& other);
+  ~ProfileManagementOidcTokens();
+
+  // Authorization token from the authorization response.
+  std::string auth_token;
+
+  // ID token from the authorization response or the encrypted user information.
+  // Field will be renamed to encrypted_user_information once we fully migrate.
+  std::string id_token;
+
+  // Identity name of the profile. This is only relevant after the completion of
+  // profile registration.
+  std::u16string identity_name;
+
+  // OIDC configuration state. This is only relevant during profile
+  // registration.
+  std::string state;
+
+  // Whether the passing ID token/user info is encrypted. This field will be
+  // removed after we fully migrate.
+  bool is_token_encrypted = false;
+};
 
 class ProfileAttributesEntry {
  public:
@@ -75,25 +122,29 @@ class ProfileAttributesEntry {
   // Gets the icon used as this profile's avatar. High res icon are downloaded
   // only if `download_high_res` is true, otherwise a low-res fallback is
   // returned.
-  // TODO(crbug.com/1100835): Rename |size_for_placeholder_avatar| to |size| and
-  // make this function resize all avatars appropriately. Remove the default
+  // TODO(crbug.com/40138086): Rename |size_for_placeholder_avatar| to |size|
+  // and make this function resize all avatars appropriately. Remove the default
   // value of |size_for_placeholder_avatar| when all callsites pass some value.
   // Consider adding a |shape| parameter and get rid of
   // profiles::GetSizedAvatarIcon().
-  gfx::Image GetAvatarIcon(int size_for_placeholder_avatar = 74,
-                           bool use_high_res_file = true) const;
+  gfx::Image GetAvatarIcon(
+      int size_for_placeholder_avatar = kDefaultSizeForPlaceholderAvatar,
+      bool use_high_res_file = true,
+      const profiles::PlaceholderAvatarIconParams& icon_params = {}) const;
   // Returns true if the profile is currently running any background apps. Note
   // that a return value of false could mean an error in collection or that
   // there are currently no background apps running. However, the action which
   // results is the same in both cases (thus far).
   bool GetBackgroundStatus() const;
   // Gets the GAIA full name associated with this profile if it's signed in.
+  // If GAIA full name is empty, gets the full name from the 3P identity
+  // associated with this profile, currently only available for OIDC profiles.
   std::u16string GetGAIAName() const;
   // Gets the GAIA given name associated with this profile if it's signed in.
   std::u16string GetGAIAGivenName() const;
   // Gets the opaque string representation of the profile's GAIA ID if it's
   // signed in.
-  std::string GetGAIAId() const;
+  GaiaId GetGAIAId() const;
   // Returns the GAIA picture for the given profile. This may return NULL
   // if the profile does not have a GAIA picture or if the picture must be
   // loaded from disk.
@@ -107,8 +158,6 @@ class ProfileAttributesEntry {
   std::string GetLastDownloadedGAIAPictureUrlWithSize() const;
   // Returns true if the profile is signed in as a supervised user.
   bool IsSupervised() const;
-  // Returns true if the profile is signed in as a child account.
-  bool IsChild() const;
   // Returns true if the profile should not be displayed to the user in the
   // list of profiles.
   bool IsOmitted() const;
@@ -135,6 +184,9 @@ class ProfileAttributesEntry {
   bool IsUsingDefaultAvatar() const;
   // Indicates that profile was signed in through native OS credential provider.
   bool IsSignedInWithCredentialProvider() const;
+  // Returns true if the profile is managed by a third party identity that is
+  // not sync-ed to Google (i.e dasher-based).
+  bool IsDasherlessManagement() const;
   // Returns the index of the default icon used by the profile.
   size_t GetAvatarIconIndex() const;
   // Returns the colors specified by the profile theme, or default colors if no
@@ -142,17 +194,30 @@ class ProfileAttributesEntry {
   ProfileThemeColors GetProfileThemeColors() const;
   // Returns the colors specified by the profile theme, or empty if no theme is
   // set for the profile.
-  absl::optional<ProfileThemeColors> GetProfileThemeColorsIfSet() const;
+  std::optional<ProfileThemeColors> GetProfileThemeColorsIfSet() const;
   // Returns the metrics bucket this profile should be recorded in.
   // Note: The bucket index is assigned once and remains the same all time. 0 is
   // reserved for the guest profile.
   size_t GetMetricsBucketIndex();
   // Returns the hosted domain for the current signed-in account. Returns empty
-  // string if there is no signed-in account and returns |kNoHostedDomainFound|
-  // if the signed-in account has no hosted domain (such as when it is a
-  // standard gmail.com account). Unlike for other string getters, the returned
-  // value is UTF8 encoded.
+  // string if there is no signed-in account and returns
+  // |signin::constants::kNoHostedDomainFound| if the signed-in account has no
+  // hosted domain (such as when it is a standard gmail.com account). Unlike
+  // for other string getters, the returned value is UTF8 encoded.
   std::string GetHostedDomain() const;
+
+  // Returns the enrollment token to get policies for a profile.
+  std::string GetProfileManagementEnrollmentToken() const;
+
+  // Returns the Oauth token and Id token from the OIDC authentication response
+  // that created the profile. The existence of these tokens are also used to
+  // check whether the profile is created by an OIDC authentication response.
+  ProfileManagementOidcTokens GetProfileManagementOidcTokens() const;
+
+  // Returns the signin id for a profile managed by a token. This may be empty
+  // even if there is an enrollment token.
+  std::string GetProfileManagementId() const;
+
   // Returns an account id key of the user of the profile. Empty if the profile
   // doesn't have any associated `user_manager::User`.
   std::string GetAccountIdKey() const;
@@ -177,6 +242,7 @@ class ProfileAttributesEntry {
   void SetLastDownloadedGAIAPictureUrlWithSize(
       const std::string& image_url_with_size);
   void SetSignedInWithCredentialProvider(bool value);
+  void SetDasherlessManagement(bool value);
   // Only non-omitted profiles can be set as non-ephemeral. It's the
   // responsibility of the caller to make sure that the entry is set as
   // non-ephemeral only if prefs::kForceEphemeralProfiles is false.
@@ -185,36 +251,36 @@ class ProfileAttributesEntry {
   bool UserAcceptedAccountManagement() const;
   void SetIsUsingDefaultAvatar(bool value);
   void SetAvatarIconIndex(size_t icon_index);
-  // absl::nullopt resets colors to default.
-  void SetProfileThemeColors(const absl::optional<ProfileThemeColors>& colors);
+  // std::nullopt resets colors to default.
+  void SetProfileThemeColors(const std::optional<ProfileThemeColors>& colors);
 
   // Unlike for other string setters, the argument is expected to be UTF8
   // encoded.
   void SetHostedDomain(std::string hosted_domain);
 
-  void SetAuthInfo(const std::string& gaia_id,
+  void SetProfileManagementEnrollmentToken(const std::string& enrollment_token);
+  void SetProfileManagementOidcTokens(
+      const ProfileManagementOidcTokens& oidc_tokens);
+  void SetProfileManagementId(const std::string& id);
+
+  void SetAuthInfo(const GaiaId& gaia_id,
                    const std::u16string& user_name,
                    bool is_consented_primary_account);
 
   // Update info about accounts. These functions are idempotent, only the first
   // call for a given input matters.
   void AddAccountName(const std::string& name);
-  void AddAccountCategory(AccountCategory category);
 
   // Clears info about all accounts that have been added in the past via
-  // AddAccountName() and AddAccountCategory().
+  // AddAccountName().
   void ClearAccountNames();
-  void ClearAccountCategories();
 
   // Lock/Unlock the profile, should be called only if force-sign-in is enabled.
   void LockForceSigninProfile(bool is_lock);
 
-  // Records aggregate metrics about all accounts used in this profile (added
-  // via AddAccount* functions).
-  void RecordAccountMetrics() const;
+  // Records aggregate metrics about all accounts used in this profile.
+  void RecordAccountNamesMetric() const;
 
-  // TODO(crbug/1155729): Check it is not used anymore for deprecated supervised
-  // users and remove it.
   static const char kSupervisedUserId[];
   static const char kAvatarIconKey[];
   static const char kBackgroundAppsKey[];
@@ -230,7 +296,6 @@ class ProfileAttributesEntry {
 
  private:
   friend class ProfileAttributesStorage;
-  friend class ProfileThemeUpdateServiceBrowserTest;
   FRIEND_TEST_ALL_PREFIXES(ProfileAttributesStorageTest,
                            EntryInternalAccessors);
   FRIEND_TEST_ALL_PREFIXES(ProfileAttributesStorageTest, ProfileActiveTime);
@@ -269,22 +334,17 @@ class ProfileAttributesEntry {
   const gfx::Image* GetHighResAvatar() const;
 
   // Generates the colored placeholder avatar icon for the given |size|.
-  gfx::Image GetPlaceholderAvatarIcon(int size) const;
+  gfx::Image GetPlaceholderAvatarIcon(
+      int size,
+      const profiles::PlaceholderAvatarIconParams& icon_params) const;
 
   // Returns if this profile has accounts (signed-in or signed-out) with
   // different account names. This is approximate as only a short hash of an
   // account name is stored so there can be false negatives.
   bool HasMultipleAccountNames() const;
-  // Returns if this profile has both consumer and enterprise accounts
-  // (regarding both signed-in and signed-out accounts).
-  bool HasBothAccountCategories() const;
-
-  // Records aggregate metrics about all accounts used in this profile.
-  void RecordAccountCategoriesMetric() const;
-  void RecordAccountNamesMetric() const;
 
   // Loads and saves the data to the local state.
-  const base::Value* GetEntryData() const;
+  const base::Value::Dict* GetEntryData() const;
 
   // Internal getter that returns a base::Value*, or nullptr if the key is not
   // present.
@@ -301,8 +361,8 @@ class ProfileAttributesEntry {
   int GetInteger(const char* key) const;
 
   // Internal getter that returns one of the profile theme colors or
-  // absl::nullopt if the key is not present.
-  absl::optional<SkColor> GetProfileThemeColor(const char* key) const;
+  // std::nullopt if the key is not present.
+  std::optional<SkColor> GetProfileThemeColor(const char* key) const;
 
   // Type checking. Only IsDouble is implemented because others do not have
   // callsites.

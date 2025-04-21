@@ -1,10 +1,17 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "cc/test/fake_paint_image_generator.h"
 
 #include <utility>
+
+#include "base/containers/contains.h"
 
 namespace cc {
 
@@ -41,28 +48,33 @@ sk_sp<SkData> FakePaintImageGenerator::GetEncodedData() const {
   return SkData::MakeEmpty();
 }
 
-bool FakePaintImageGenerator::GetPixels(const SkImageInfo& info,
-                                        void* pixels,
-                                        size_t row_bytes,
+bool FakePaintImageGenerator::GetPixels(SkPixmap dst_pixmap,
                                         size_t frame_index,
                                         PaintImage::GeneratorClientId client_id,
                                         uint32_t lazy_pixel_ref) {
+  base::AutoLock lock(lock_);
+
+  if (force_fail_decode_) {
+    return false;
+  }
+
   CHECK(!is_yuv_ || expect_fallback_to_rgb_);
+  const SkImageInfo& dst_info = dst_pixmap.info();
   if (image_backing_memory_.empty())
     return false;
   if (expect_fallback_to_rgb_) {
-    image_backing_memory_.resize(info.computeMinByteSize(), 0);
-    image_pixmap_ =
-        SkPixmap(info, image_backing_memory_.data(), info.minRowBytes());
+    image_backing_memory_.resize(dst_info.computeMinByteSize(), 0);
+    image_pixmap_ = SkPixmap(dst_info, image_backing_memory_.data(),
+                             dst_info.minRowBytes());
   }
-  if (frames_decoded_count_.find(frame_index) == frames_decoded_count_.end())
+  if (!base::Contains(frames_decoded_count_, frame_index)) {
     frames_decoded_count_[frame_index] = 1;
-  else
+  } else {
     frames_decoded_count_[frame_index]++;
-  SkPixmap dst(info, pixels, row_bytes);
+  }
   CHECK(image_pixmap_.scalePixels(
-      dst, {SkFilterMode::kLinear, SkMipmapMode::kNearest}));
-  decode_infos_.push_back(info);
+      dst_pixmap, {SkFilterMode::kLinear, SkMipmapMode::kNearest}));
+  decode_infos_.push_back(dst_info);
   return true;
 }
 
@@ -81,6 +93,12 @@ bool FakePaintImageGenerator::GetYUVAPlanes(
     size_t frame_index,
     uint32_t lazy_pixel_ref,
     PaintImage::GeneratorClientId client_id) {
+  base::AutoLock lock(lock_);
+
+  if (force_fail_decode_) {
+    return false;
+  }
+
   CHECK(is_yuv_);
   CHECK(!expect_fallback_to_rgb_);
   if (image_backing_memory_.empty())
@@ -93,10 +111,11 @@ bool FakePaintImageGenerator::GetYUVAPlanes(
     memcpy(pixmaps.plane(i).writable_addr(), src_plane_memory, plane_sizes[i]);
     src_plane_memory += plane_sizes[i];
   }
-  if (frames_decoded_count_.find(frame_index) == frames_decoded_count_.end())
+  if (!base::Contains(frames_decoded_count_, frame_index)) {
     frames_decoded_count_[frame_index] = 1;
-  else
+  } else {
     frames_decoded_count_[frame_index]++;
+  }
   return true;
 }
 

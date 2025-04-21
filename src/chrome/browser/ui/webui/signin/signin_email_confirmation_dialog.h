@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "chrome/browser/ui/signin_view_controller_delegate.h"
-#include "chrome/browser/ui/webui/constrained_web_dialog_ui.h"
+#include "chrome/browser/ui/signin/signin_view_controller_delegate.h"
 #include "ui/web_dialogs/web_dialog_delegate.h"
 #include "ui/web_dialogs/web_dialog_ui.h"
 
@@ -20,10 +19,9 @@ class Profile;
 
 namespace content {
 class WebContents;
-class WebUIMessageHandler;
 }
 
-// A tab-modal dialog to ask the user to confirm his email before signing in.
+// A tab-modal dialog to ask the user to confirm their email before signing in.
 class SigninEmailConfirmationDialog : public ui::WebDialogDelegate,
                                       public SigninViewControllerDelegate {
  public:
@@ -68,17 +66,7 @@ class SigninEmailConfirmationDialog : public ui::WebDialogDelegate,
                                 Callback callback);
 
   // WebDialogDelegate implementation.
-  ui::ModalType GetDialogModalType() const override;
-  std::u16string GetDialogTitle() const override;
-  GURL GetDialogContentURL() const override;
-  void GetWebUIMessageHandlers(
-      std::vector<content::WebUIMessageHandler*>* handlers) const override;
-  void GetDialogSize(gfx::Size* size) const override;
-  std::string GetDialogArgs() const override;
   void OnDialogClosed(const std::string& json_retval) override;
-  void OnCloseContents(content::WebContents* source,
-                       bool* out_close_dialog) override;
-  bool ShouldShowDialogTitle() const override;
 
   // SigninViewControllerDelegate:
   void CloseModalSignin() override;
@@ -104,8 +92,6 @@ class SigninEmailConfirmationDialog : public ui::WebDialogDelegate,
   const raw_ptr<content::WebContents> web_contents_;
   const raw_ptr<Profile> profile_;
 
-  const std::string last_email_;
-  const std::string new_email_;
   Callback callback_;
 
   // Observer for lifecycle events of the web contents of the dialog.

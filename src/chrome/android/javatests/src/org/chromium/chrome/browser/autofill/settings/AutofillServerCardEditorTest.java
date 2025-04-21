@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,15 @@ package org.chromium.chrome.browser.autofill.settings;
 import static androidx.test.espresso.Espresso.onView;
 import static androidx.test.espresso.action.ViewActions.click;
 import static androidx.test.espresso.assertion.ViewAssertions.matches;
+import static androidx.test.espresso.matcher.RootMatchers.isDialog;
 import static androidx.test.espresso.matcher.ViewMatchers.isDisplayed;
 import static androidx.test.espresso.matcher.ViewMatchers.isEnabled;
 import static androidx.test.espresso.matcher.ViewMatchers.withEffectiveVisibility;
 import static androidx.test.espresso.matcher.ViewMatchers.withId;
 import static androidx.test.espresso.matcher.ViewMatchers.withText;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
@@ -22,9 +23,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.app.Activity;
-import android.graphics.Bitmap;
 import android.os.Bundle;
-import android.support.test.runner.lifecycle.Stage;
 import android.text.Spanned;
 import android.text.style.ClickableSpan;
 import android.view.View;
@@ -36,6 +35,7 @@ import androidx.test.espresso.UiController;
 import androidx.test.espresso.ViewAction;
 import androidx.test.espresso.matcher.ViewMatchers.Visibility;
 import androidx.test.filters.MediumTest;
+import androidx.test.runner.lifecycle.Stage;
 
 import org.hamcrest.Matcher;
 import org.hamcrest.Matchers;
@@ -44,7 +44,6 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.TestRule;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
@@ -53,88 +52,131 @@ import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
 import org.chromium.base.Callback;
-import org.chromium.base.test.metrics.HistogramTestRule;
+import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.util.ApplicationTestUtils;
-import org.chromium.base.test.util.Batch;
-import org.chromium.base.test.util.JniMocker;
-import org.chromium.chrome.R;
+import org.chromium.base.test.util.CommandLineFlags;
+import org.chromium.base.test.util.DisabledTest;
+import org.chromium.base.test.util.HistogramWatcher;
+import org.chromium.chrome.browser.autofill.AutofillEditorBase;
 import org.chromium.chrome.browser.autofill.AutofillTestHelper;
-import org.chromium.chrome.browser.autofill.LegalMessageLine;
 import org.chromium.chrome.browser.autofill.PersonalDataManager.CreditCard;
-import org.chromium.chrome.browser.flags.ChromeFeatureList;
+import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.settings.SettingsActivity;
 import org.chromium.chrome.browser.settings.SettingsActivityTestRule;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
-import org.chromium.chrome.test.util.browser.Features;
+import org.chromium.chrome.test.R;
 import org.chromium.components.autofill.VirtualCardEnrollmentLinkType;
 import org.chromium.components.autofill.VirtualCardEnrollmentState;
-import org.chromium.content_public.browser.test.util.TestThreadUtils;
+import org.chromium.components.autofill.payments.LegalMessageLine;
+import org.chromium.url.GURL;
 
 import java.util.concurrent.TimeoutException;
 
-/**
- * Instrumentation tests for AutofillServerCardEditor.
- */
+/** Instrumentation tests for AutofillServerCardEditor. */
 @RunWith(ChromeJUnit4ClassRunner.class)
-@Batch(Batch.PER_CLASS)
 public class AutofillServerCardEditorTest {
-    @Rule
-    public MockitoRule mMockitoRule = MockitoJUnit.rule();
-    @Rule
-    public JniMocker mMocker = new JniMocker();
-    @Rule
-    public TestRule mFeaturesProcessorRule = new Features.JUnitProcessor();
-    @Rule
-    public final AutofillTestRule rule = new AutofillTestRule();
+    @Rule public MockitoRule mMockitoRule = MockitoJUnit.rule();
+    @Rule public final AutofillTestRule rule = new AutofillTestRule();
+
     @Rule
     public final SettingsActivityTestRule<AutofillServerCardEditor> mSettingsActivityTestRule =
             new SettingsActivityTestRule<>(AutofillServerCardEditor.class);
-    @Rule
-    public HistogramTestRule mHistogramTester = new HistogramTestRule();
 
     private static final long NATIVE_AUTOFILL_PAYMENTS_METHODS_DELEGATE = 100L;
 
-    private static final CreditCard SAMPLE_VIRTUAL_CARD_ENROLLED_CARD = new CreditCard(
-            /* guid= */ "1", /* origin= */ "", /* isLocal= */ false, /* isCached= */ true,
-            /* name= */ "John Doe", /* number= */ "4444333322221111", /* obfuscatedNumber= */ "",
-            /* month= */ "5", AutofillTestHelper.nextYear(), /* basicCardIssuerNetwork = */ "visa",
-            /* issuerIconDrawableId= */ 0, /* billingAddressId= */ "", /* serverId= */ "",
-            /* instrumentId= */ 123, /* cardLabel= */ "", /* nickname= */ "",
-            /* cardArtUrl= */ null,
-            /* virtualCardEnrollmentState= */ VirtualCardEnrollmentState.ENROLLED,
-            /* productDescription= */ "");
+    private static final CreditCard SAMPLE_VIRTUAL_CARD_ENROLLED_CARD =
+            new CreditCard(
+                    /* guid= */ "1",
+                    /* origin= */ "",
+                    /* isLocal= */ false,
+                    /* isVirtual= */ false,
+                    /* name= */ "John Doe",
+                    /* number= */ "4444333322221111",
+                    /* obfuscatedNumber= */ "",
+                    /* month= */ "5",
+                    AutofillTestHelper.nextYear(),
+                    /* basicCardIssuerNetwork= */ "visa",
+                    /* issuerIconDrawableId= */ 0,
+                    /* billingAddressId= */ "",
+                    /* serverId= */ "",
+                    /* instrumentId= */ 123,
+                    /* cardLabel= */ "",
+                    /* nickname= */ "",
+                    /* cardArtUrl= */ null,
+                    /* virtualCardEnrollmentState= */ VirtualCardEnrollmentState.ENROLLED,
+                    /* productDescription= */ "",
+                    /* cardNameForAutofillDisplay= */ "",
+                    /* obfuscatedLastFourDigits= */ "",
+                    /* cvc= */ "",
+                    /* issuerId= */ "",
+                    /* productTermsUrl= */ null);
 
     private static final CreditCard SAMPLE_VIRTUAL_CARD_UNENROLLED_AND_ELIGIBLE_CARD =
-            new CreditCard(/* guid= */ "2", /* origin= */ "", /* isLocal= */ false,
-                    /* isCached= */ true, /* name= */ "John Doe", /* number= */ "4444333322221111",
-                    /* obfuscatedNumber= */ "", /* month= */ "5", AutofillTestHelper.nextYear(),
-                    /* basicCardIssuerNetwork = */ "visa", /* issuerIconDrawableId= */ 0,
-                    /* billingAddressId= */ "", /* serverId= */ "", /* instrumentId= */ 234,
-                    /* cardLabel= */ "", /* nickname= */ "", /* cardArtUrl= */ null,
-                    /* virtualCardEnrollmentState= */
-                    VirtualCardEnrollmentState.UNENROLLED_AND_ELIGIBLE,
-                    /* productDescription= */ "");
+            new CreditCard(
+                    /* guid= */ "2",
+                    /* origin= */ "",
+                    /* isLocal= */ false,
+                    /* isVirtual= */ false,
+                    /* name= */ "John Doe",
+                    /* number= */ "4444333322221111",
+                    /* obfuscatedNumber= */ "",
+                    /* month= */ "5",
+                    AutofillTestHelper.nextYear(),
+                    /* basicCardIssuerNetwork= */ "visa",
+                    /* issuerIconDrawableId= */ 0,
+                    /* billingAddressId= */ "",
+                    /* serverId= */ "",
+                    /* instrumentId= */ 234,
+                    /* cardLabel= */ "",
+                    /* nickname= */ "",
+                    /* cardArtUrl= */ null,
+                    /* virtualCardEnrollmentState= */ VirtualCardEnrollmentState
+                            .UNENROLLED_AND_ELIGIBLE,
+                    /* productDescription= */ "",
+                    /* cardNameForAutofillDisplay= */ "",
+                    /* obfuscatedLastFourDigits= */ "",
+                    /* cvc= */ "",
+                    /* issuerId= */ "",
+                    /* productTermsUrl= */ null);
 
     private static final CreditCard SAMPLE_VIRTUAL_CARD_UNENROLLED_AND_NOT_ELIGIBLE_CARD =
-            new CreditCard(/* guid= */ "3", /* origin= */ "", /* isLocal= */ false,
-                    /* isCached= */ true, /* name= */ "John Doe", /* number= */ "4444333322221111",
-                    /* obfuscatedNumber= */ "", /* month= */ "5", AutofillTestHelper.nextYear(),
-                    /* basicCardIssuerNetwork = */ "visa", /* issuerIconDrawableId= */ 0,
-                    /* billingAddressId= */ "", /* serverId= */ "", /* instrumentId= */ 345,
-                    /* cardLabel= */ "", /* nickname= */ "", /* cardArtUrl= */ null,
-                    /* virtualCardEnrollmentState= */
-                    VirtualCardEnrollmentState.UNENROLLED_AND_NOT_ELIGIBLE,
-                    /* productDescription= */ "");
+            new CreditCard(
+                    /* guid= */ "3",
+                    /* origin= */ "",
+                    /* isLocal= */ false,
+                    /* isVirtual= */ false,
+                    /* name= */ "John Doe",
+                    /* number= */ "4444333322221111",
+                    /* obfuscatedNumber= */ "",
+                    /* month= */ "5",
+                    AutofillTestHelper.nextYear(),
+                    /* basicCardIssuerNetwork= */ "visa",
+                    /* issuerIconDrawableId= */ 0,
+                    /* billingAddressId= */ "",
+                    /* serverId= */ "",
+                    /* instrumentId= */ 345,
+                    /* cardLabel= */ "",
+                    /* nickname= */ "",
+                    /* cardArtUrl= */ null,
+                    /* virtualCardEnrollmentState= */ VirtualCardEnrollmentState
+                            .UNENROLLED_AND_NOT_ELIGIBLE,
+                    /* productDescription= */ "",
+                    /* cardNameForAutofillDisplay= */ "",
+                    /* obfuscatedLastFourDigits= */ "",
+                    /* cvc= */ "",
+                    /* issuerId= */ "",
+                    /* productTermsUrl= */ null);
 
-    @Mock
-    private AutofillPaymentMethodsDelegate.Natives mNativeMock;
+    @Mock private AutofillPaymentMethodsDelegate.Natives mNativeMock;
+    @Mock private Callback<String> mServerCardEditLinkOpenerCallback;
+
     private AutofillTestHelper mAutofillTestHelper;
 
     @Before
     public void setUp() {
         reset(mNativeMock);
-        mMocker.mock(AutofillPaymentMethodsDelegateJni.TEST_HOOKS, mNativeMock);
+        AutofillPaymentMethodsDelegateJni.setInstanceForTesting(mNativeMock);
         when(mNativeMock.init(any(Profile.class)))
                 .thenReturn(NATIVE_AUTOFILL_PAYMENTS_METHODS_DELEGATE);
         mAutofillTestHelper = new AutofillTestHelper();
@@ -153,47 +195,54 @@ public class AutofillServerCardEditorTest {
 
     @Test
     @MediumTest
-    @Features.EnableFeatures({ChromeFeatureList.AUTOFILL_ENABLE_UPDATE_VIRTUAL_CARD_ENROLLMENT})
     public void virtualCardEnrolled_virtualCardRemoveButtonShown() throws Exception {
         mAutofillTestHelper.addServerCreditCard(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD);
 
-        SettingsActivity activity = mSettingsActivityTestRule.startSettingsActivity(
-                fragmentArgs(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD.getGUID()));
+        SettingsActivity activity =
+                mSettingsActivityTestRule.startSettingsActivity(
+                        fragmentArgs(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD.getGUID()));
 
         onView(withId(R.id.virtual_card_ui)).check(matches(isDisplayed()));
         onView(withId(R.id.virtual_card_enrollment_button))
-                .check(matches(withText(
-                        R.string.autofill_card_editor_virtual_card_turn_off_button_label)));
+                .check(
+                        matches(
+                                withText(
+                                        R.string
+                                                .autofill_card_editor_virtual_card_turn_off_button_label)));
         // Ensure the activity is cleaned up.
         finishAndWaitForActivity(activity);
     }
 
     @Test
     @MediumTest
-    @Features.EnableFeatures({ChromeFeatureList.AUTOFILL_ENABLE_UPDATE_VIRTUAL_CARD_ENROLLMENT})
     public void virtualCardUnenrolledAndEligible_virtualCardAddButtonShown() throws Exception {
         mAutofillTestHelper.addServerCreditCard(SAMPLE_VIRTUAL_CARD_UNENROLLED_AND_ELIGIBLE_CARD);
 
-        SettingsActivity activity = mSettingsActivityTestRule.startSettingsActivity(
-                fragmentArgs(SAMPLE_VIRTUAL_CARD_UNENROLLED_AND_ELIGIBLE_CARD.getGUID()));
+        SettingsActivity activity =
+                mSettingsActivityTestRule.startSettingsActivity(
+                        fragmentArgs(SAMPLE_VIRTUAL_CARD_UNENROLLED_AND_ELIGIBLE_CARD.getGUID()));
 
         onView(withId(R.id.virtual_card_ui)).check(matches(isDisplayed()));
         onView(withId(R.id.virtual_card_enrollment_button))
-                .check(matches(
-                        withText(R.string.autofill_card_editor_virtual_card_turn_on_button_label)));
+                .check(
+                        matches(
+                                withText(
+                                        R.string
+                                                .autofill_card_editor_virtual_card_turn_on_button_label)));
         // Ensure that the native delegate is cleaned up when the test has finished.
         finishAndWaitForActivity(activity);
     }
 
     @Test
     @MediumTest
-    @Features.EnableFeatures({ChromeFeatureList.AUTOFILL_ENABLE_UPDATE_VIRTUAL_CARD_ENROLLMENT})
     public void virtualCardUnenrolledAndNotEligible_virtualCardLayoutNotShown() throws Exception {
         mAutofillTestHelper.addServerCreditCard(
                 SAMPLE_VIRTUAL_CARD_UNENROLLED_AND_NOT_ELIGIBLE_CARD);
 
-        SettingsActivity activity = mSettingsActivityTestRule.startSettingsActivity(
-                fragmentArgs(SAMPLE_VIRTUAL_CARD_UNENROLLED_AND_NOT_ELIGIBLE_CARD.getGUID()));
+        SettingsActivity activity =
+                mSettingsActivityTestRule.startSettingsActivity(
+                        fragmentArgs(
+                                SAMPLE_VIRTUAL_CARD_UNENROLLED_AND_NOT_ELIGIBLE_CARD.getGUID()));
 
         onView(withId(R.id.virtual_card_ui))
                 .check(matches(withEffectiveVisibility(Visibility.GONE)));
@@ -203,51 +252,44 @@ public class AutofillServerCardEditorTest {
 
     @Test
     @MediumTest
-    @Features.DisableFeatures({ChromeFeatureList.AUTOFILL_ENABLE_UPDATE_VIRTUAL_CARD_ENROLLMENT})
-    public void updateEnrollmentFeatureDisabled_virtualCardLayoutNotShown() throws Exception {
-        mAutofillTestHelper.addServerCreditCard(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD);
-
-        SettingsActivity activity = mSettingsActivityTestRule.startSettingsActivity(
-                fragmentArgs(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD.getGUID()));
-
-        onView(withId(R.id.virtual_card_ui))
-                .check(matches(withEffectiveVisibility(Visibility.GONE)));
-        // Ensure that the native delegate is cleaned up when the test has finished.
-        finishAndWaitForActivity(activity);
-    }
-
-    @Test
-    @MediumTest
-    @Features.EnableFeatures({ChromeFeatureList.AUTOFILL_ENABLE_UPDATE_VIRTUAL_CARD_ENROLLMENT})
+    @DisabledTest(message = "https://crbug.com/342333311")
     public void
-    virtualCardUnenrolledAndEligible_virtualCardAddButtonClicked_enrollAccepted_enrollmentSuccessful()
-            throws Exception {
+            virtualCardUnenrolledAndEligible_virtualCardAddButtonClicked_enrollAccepted_enrollmentSuccessful()
+                    throws Exception {
         mAutofillTestHelper.addServerCreditCard(SAMPLE_VIRTUAL_CARD_UNENROLLED_AND_ELIGIBLE_CARD);
 
-        SettingsActivity activity = mSettingsActivityTestRule.startSettingsActivity(
-                fragmentArgs(SAMPLE_VIRTUAL_CARD_UNENROLLED_AND_ELIGIBLE_CARD.getGUID()));
+        SettingsActivity activity =
+                mSettingsActivityTestRule.startSettingsActivity(
+                        fragmentArgs(SAMPLE_VIRTUAL_CARD_UNENROLLED_AND_ELIGIBLE_CARD.getGUID()));
         // Verify that the native delegate was initialized properly.
         verify(mNativeMock).init(any(Profile.class));
 
         // Verify that the Virtual Card enrollment button is shown and allows enrollment.
         onView(withId(R.id.virtual_card_ui)).check(matches(isDisplayed()));
         onView(withId(R.id.virtual_card_enrollment_button))
-                .check(matches(
-                        withText(R.string.autofill_card_editor_virtual_card_turn_on_button_label)))
+                .check(
+                        matches(
+                                withText(
+                                        R.string
+                                                .autofill_card_editor_virtual_card_turn_on_button_label)))
                 .check(matches(isEnabled()));
 
         // Press the enrollment button.
-        onView(withId(R.id.virtual_card_enrollment_button)).perform(click());
         // Verify that enrollment button click is recorded.
-        Assert.assertEquals(1,
-                mHistogramTester.getHistogramValueCount(
-                        "Autofill.SettingsPage.ButtonClicked.VirtualCard.VirtualCardEnroll",
-                        /* true */ 1));
+        var histogram =
+                HistogramWatcher.newSingleRecordWatcher(
+                        "Autofill.SettingsPage.ButtonClicked.VirtualCard.VirtualCardEnroll", true);
+        onView(withId(R.id.virtual_card_enrollment_button)).perform(click());
+        histogram.assertExpected();
+
         // Verify that the Virtual Card enrollment button still shows text for enrollment and that
         // the button is disabled.
         onView(withId(R.id.virtual_card_enrollment_button))
-                .check(matches(
-                        withText(R.string.autofill_card_editor_virtual_card_turn_on_button_label)))
+                .check(
+                        matches(
+                                withText(
+                                        R.string
+                                                .autofill_card_editor_virtual_card_turn_on_button_label)))
                 .check(matches(Matchers.not(isEnabled())));
 
         // Verify that the native enroll method was called with the correct parameters.
@@ -256,44 +298,51 @@ public class AutofillServerCardEditorTest {
         verify(mNativeMock)
                 .initVirtualCardEnrollment(
                         ArgumentMatchers.eq(NATIVE_AUTOFILL_PAYMENTS_METHODS_DELEGATE),
-                        ArgumentMatchers.eq(234L), callbackArgumentCaptor.capture());
+                        ArgumentMatchers.eq(234L),
+                        callbackArgumentCaptor.capture());
         // Return VirtualCardEnrollmentFields via the callback to show the dialog.
         Callback<VirtualCardEnrollmentFields> virtualCardEnrollmentFieldsCallback =
                 callbackArgumentCaptor.getValue();
         VirtualCardEnrollmentFields fakeVirtualCardEnrollmentFields =
-                VirtualCardEnrollmentFields.create(
-                        "Visa 1234", Bitmap.createBitmap(10, 20, Bitmap.Config.ALPHA_8));
+                VirtualCardEnrollmentFields.create("Visa", "1234", 0, new GURL(""));
         fakeVirtualCardEnrollmentFields.mGoogleLegalMessages.add(new LegalMessageLine("google"));
         fakeVirtualCardEnrollmentFields.mIssuerLegalMessages.add(new LegalMessageLine("issuer"));
-        TestThreadUtils.runOnUiThreadBlocking(
-                ()
-                        -> virtualCardEnrollmentFieldsCallback.onResult(
+        ThreadUtils.runOnUiThreadBlocking(
+                () ->
+                        virtualCardEnrollmentFieldsCallback.onResult(
                                 fakeVirtualCardEnrollmentFields));
 
         // Verify that the dialog was displayed.
-        onView(withId(R.id.dialog_title)).check(matches(isDisplayed()));
+        onView(withId(R.id.dialog_title)).inRoot(isDialog()).check(matches(isDisplayed()));
 
         // Click on the education link.
-        onView(withId(R.id.virtual_card_education)).perform(clickLink());
         // Verify that education text link click is recorded.
-        Assert.assertEquals(1,
-                mHistogramTester.getHistogramValueCount(
+        histogram =
+                HistogramWatcher.newSingleRecordWatcher(
                         "Autofill.VirtualCard.SettingsPageEnrollment.LinkClicked",
-                        VirtualCardEnrollmentLinkType.VIRTUAL_CARD_ENROLLMENT_LEARN_MORE_LINK));
+                        VirtualCardEnrollmentLinkType.VIRTUAL_CARD_ENROLLMENT_LEARN_MORE_LINK);
+        onView(withId(R.id.virtual_card_education)).perform(clickLink());
+        histogram.assertExpected();
+
         // Go back to the settings page.
         Espresso.pressBack();
 
         // Click positive button on enrollment dialog.
-        onView(withId(R.id.positive_button)).perform(click());
         // Verify that enrollment dialog acceptance is recorded.
-        Assert.assertEquals(1,
-                mHistogramTester.getHistogramValueCount(
-                        "Autofill.VirtualCard.SettingsPageEnrollment", /* true */ 1));
+        histogram =
+                HistogramWatcher.newSingleRecordWatcher(
+                        "Autofill.VirtualCard.SettingsPageEnrollment", true);
+        onView(withId(R.id.positive_button)).perform(click());
+        histogram.assertExpected();
+
         // Verify that the Virtual Card enrollment button still shows text for enrollment and that
         // the button is disabled while waiting for server response.
         onView(withId(R.id.virtual_card_enrollment_button))
-                .check(matches(
-                        withText(R.string.autofill_card_editor_virtual_card_turn_on_button_label)))
+                .check(
+                        matches(
+                                withText(
+                                        R.string
+                                                .autofill_card_editor_virtual_card_turn_on_button_label)))
                 .check(matches(Matchers.not(isEnabled())));
 
         // Verify that enrollment is called with the correct parameters when the user clicks the
@@ -307,13 +356,16 @@ public class AutofillServerCardEditorTest {
         // Return enrollment update status "successful" via the callback.
         Callback<Boolean> virtualCardEnrollmentUpdateResponseCallback =
                 booleanCallbackArgumentCaptor.getValue();
-        TestThreadUtils.runOnUiThreadBlocking(
+        ThreadUtils.runOnUiThreadBlocking(
                 () -> virtualCardEnrollmentUpdateResponseCallback.onResult(true));
 
         // Verify that the Virtual Card enrollment button now allows unenrollment.
         onView(withId(R.id.virtual_card_enrollment_button))
-                .check(matches(
-                        withText(R.string.autofill_card_editor_virtual_card_turn_off_button_label)))
+                .check(
+                        matches(
+                                withText(
+                                        R.string
+                                                .autofill_card_editor_virtual_card_turn_off_button_label)))
                 .check(matches(isEnabled()));
 
         // Ensure that the native delegate is cleaned up when the test has finished.
@@ -322,22 +374,25 @@ public class AutofillServerCardEditorTest {
 
     @Test
     @MediumTest
-    @Features.EnableFeatures({ChromeFeatureList.AUTOFILL_ENABLE_UPDATE_VIRTUAL_CARD_ENROLLMENT})
     public void
-    virtualCardUnenrolledAndEligible_virtualCardAddButtonClicked_enrollAccepted_enrollmentFailure()
-            throws Exception {
+            virtualCardUnenrolledAndEligible_virtualCardAddButtonClicked_enrollAccepted_enrollmentFailure()
+                    throws Exception {
         mAutofillTestHelper.addServerCreditCard(SAMPLE_VIRTUAL_CARD_UNENROLLED_AND_ELIGIBLE_CARD);
 
-        SettingsActivity activity = mSettingsActivityTestRule.startSettingsActivity(
-                fragmentArgs(SAMPLE_VIRTUAL_CARD_UNENROLLED_AND_ELIGIBLE_CARD.getGUID()));
+        SettingsActivity activity =
+                mSettingsActivityTestRule.startSettingsActivity(
+                        fragmentArgs(SAMPLE_VIRTUAL_CARD_UNENROLLED_AND_ELIGIBLE_CARD.getGUID()));
         // Verify that the native delegate was initialized properly.
         verify(mNativeMock).init(any(Profile.class));
 
         // Verify that the Virtual Card enrollment button is shown and allows enrollment.
         onView(withId(R.id.virtual_card_ui)).check(matches(isDisplayed()));
         onView(withId(R.id.virtual_card_enrollment_button))
-                .check(matches(
-                        withText(R.string.autofill_card_editor_virtual_card_turn_on_button_label)))
+                .check(
+                        matches(
+                                withText(
+                                        R.string
+                                                .autofill_card_editor_virtual_card_turn_on_button_label)))
                 .check(matches(isEnabled()));
 
         // Press the enrollment button.
@@ -345,8 +400,11 @@ public class AutofillServerCardEditorTest {
         // Verify that the Virtual Card enrollment button still shows text for enrollment and that
         // the button is disabled.
         onView(withId(R.id.virtual_card_enrollment_button))
-                .check(matches(
-                        withText(R.string.autofill_card_editor_virtual_card_turn_on_button_label)))
+                .check(
+                        matches(
+                                withText(
+                                        R.string
+                                                .autofill_card_editor_virtual_card_turn_on_button_label)))
                 .check(matches(Matchers.not(isEnabled())));
 
         // Verify that the native enroll method was called with the correct parameters.
@@ -355,22 +413,22 @@ public class AutofillServerCardEditorTest {
         verify(mNativeMock)
                 .initVirtualCardEnrollment(
                         ArgumentMatchers.eq(NATIVE_AUTOFILL_PAYMENTS_METHODS_DELEGATE),
-                        ArgumentMatchers.eq(234L), callbackArgumentCaptor.capture());
+                        ArgumentMatchers.eq(234L),
+                        callbackArgumentCaptor.capture());
         // Return VirtualCardEnrollmentFields via the callback to show the dialog.
         Callback<VirtualCardEnrollmentFields> virtualCardEnrollmentFieldsCallback =
                 callbackArgumentCaptor.getValue();
         VirtualCardEnrollmentFields fakeVirtualCardEnrollmentFields =
-                VirtualCardEnrollmentFields.create(
-                        "Visa 1234", Bitmap.createBitmap(10, 20, Bitmap.Config.ALPHA_8));
+                VirtualCardEnrollmentFields.create("Visa", "1234", 0, new GURL(""));
         fakeVirtualCardEnrollmentFields.mGoogleLegalMessages.add(new LegalMessageLine("google"));
         fakeVirtualCardEnrollmentFields.mIssuerLegalMessages.add(new LegalMessageLine("issuer"));
-        TestThreadUtils.runOnUiThreadBlocking(
-                ()
-                        -> virtualCardEnrollmentFieldsCallback.onResult(
+        ThreadUtils.runOnUiThreadBlocking(
+                () ->
+                        virtualCardEnrollmentFieldsCallback.onResult(
                                 fakeVirtualCardEnrollmentFields));
 
         // Verify that the dialog was displayed.
-        onView(withId(R.id.dialog_title)).check(matches(isDisplayed()));
+        onView(withId(R.id.dialog_title)).inRoot(isDialog()).check(matches(isDisplayed()));
 
         // Click positive button on enrollment dialog.
         onView(withId(R.id.positive_button)).perform(click());
@@ -386,13 +444,16 @@ public class AutofillServerCardEditorTest {
         // Return enrollment update status "failure" via the callback.
         Callback<Boolean> virtualCardEnrollmentUpdateResponseCallback =
                 booleanCallbackArgumentCaptor.getValue();
-        TestThreadUtils.runOnUiThreadBlocking(
+        ThreadUtils.runOnUiThreadBlocking(
                 () -> virtualCardEnrollmentUpdateResponseCallback.onResult(false));
 
         // Verify that the Virtual Card enrollment button again allows enrollment.
         onView(withId(R.id.virtual_card_enrollment_button))
-                .check(matches(
-                        withText(R.string.autofill_card_editor_virtual_card_turn_on_button_label)))
+                .check(
+                        matches(
+                                withText(
+                                        R.string
+                                                .autofill_card_editor_virtual_card_turn_on_button_label)))
                 .check(matches(isEnabled()));
 
         // Ensure that the native delegate is cleaned up when the test has finished.
@@ -401,21 +462,24 @@ public class AutofillServerCardEditorTest {
 
     @Test
     @MediumTest
-    @Features.EnableFeatures({ChromeFeatureList.AUTOFILL_ENABLE_UPDATE_VIRTUAL_CARD_ENROLLMENT})
     public void virtualCardUnenrolledAndEligible_virtualCardAddButtonClicked_enrollRejected()
             throws Exception {
         mAutofillTestHelper.addServerCreditCard(SAMPLE_VIRTUAL_CARD_UNENROLLED_AND_ELIGIBLE_CARD);
 
-        SettingsActivity activity = mSettingsActivityTestRule.startSettingsActivity(
-                fragmentArgs(SAMPLE_VIRTUAL_CARD_UNENROLLED_AND_ELIGIBLE_CARD.getGUID()));
+        SettingsActivity activity =
+                mSettingsActivityTestRule.startSettingsActivity(
+                        fragmentArgs(SAMPLE_VIRTUAL_CARD_UNENROLLED_AND_ELIGIBLE_CARD.getGUID()));
         // Verify that the native delegate was initialized properly.
         verify(mNativeMock).init(any(Profile.class));
 
         // Verify that the Virtual Card enrollment button is shown and allows enrollment.
         onView(withId(R.id.virtual_card_ui)).check(matches(isDisplayed()));
         onView(withId(R.id.virtual_card_enrollment_button))
-                .check(matches(
-                        withText(R.string.autofill_card_editor_virtual_card_turn_on_button_label)))
+                .check(
+                        matches(
+                                withText(
+                                        R.string
+                                                .autofill_card_editor_virtual_card_turn_on_button_label)))
                 .check(matches(isEnabled()));
 
         // Press the enrollment button.
@@ -423,8 +487,11 @@ public class AutofillServerCardEditorTest {
         // Verify that the Virtual Card enrollment button still shows text for enrollment and that
         // the button is disabled.
         onView(withId(R.id.virtual_card_enrollment_button))
-                .check(matches(
-                        withText(R.string.autofill_card_editor_virtual_card_turn_on_button_label)))
+                .check(
+                        matches(
+                                withText(
+                                        R.string
+                                                .autofill_card_editor_virtual_card_turn_on_button_label)))
                 .check(matches(Matchers.not(isEnabled())));
 
         // Verify that the native enroll method was called with the correct parameters.
@@ -433,34 +500,38 @@ public class AutofillServerCardEditorTest {
         verify(mNativeMock)
                 .initVirtualCardEnrollment(
                         ArgumentMatchers.eq(NATIVE_AUTOFILL_PAYMENTS_METHODS_DELEGATE),
-                        ArgumentMatchers.eq(234L), callbackArgumentCaptor.capture());
+                        ArgumentMatchers.eq(234L),
+                        callbackArgumentCaptor.capture());
         // Return VirtualCardEnrollmentFields via the callback to show the dialog.
         Callback<VirtualCardEnrollmentFields> virtualCardEnrollmentFieldsCallback =
                 callbackArgumentCaptor.getValue();
         VirtualCardEnrollmentFields fakeVirtualCardEnrollmentFields =
-                VirtualCardEnrollmentFields.create(
-                        "Visa 1234", Bitmap.createBitmap(10, 20, Bitmap.Config.ALPHA_8));
+                VirtualCardEnrollmentFields.create("Visa", "1234", 0, new GURL(""));
         fakeVirtualCardEnrollmentFields.mGoogleLegalMessages.add(new LegalMessageLine("google"));
         fakeVirtualCardEnrollmentFields.mIssuerLegalMessages.add(new LegalMessageLine("issuer"));
-        TestThreadUtils.runOnUiThreadBlocking(
-                ()
-                        -> virtualCardEnrollmentFieldsCallback.onResult(
+        ThreadUtils.runOnUiThreadBlocking(
+                () ->
+                        virtualCardEnrollmentFieldsCallback.onResult(
                                 fakeVirtualCardEnrollmentFields));
 
         // Verify that the dialog was displayed.
-        onView(withId(R.id.dialog_title)).check(matches(isDisplayed()));
+        onView(withId(R.id.dialog_title)).inRoot(isDialog()).check(matches(isDisplayed()));
 
         // Click negative button on enrollment dialog.
-        onView(withId(R.id.negative_button)).perform(click());
         // Verify that enrollment dialog rejection is recorded.
-        Assert.assertEquals(1,
-                mHistogramTester.getHistogramValueCount(
-                        "Autofill.VirtualCard.SettingsPageEnrollment", /* false */ 0));
+        var histogram =
+                HistogramWatcher.newSingleRecordWatcher(
+                        "Autofill.VirtualCard.SettingsPageEnrollment", false);
+        onView(withId(R.id.negative_button)).perform(click());
+        histogram.assertExpected();
 
         // Verify that the Virtual Card enrollment button again allows enrollment.
         onView(withId(R.id.virtual_card_enrollment_button))
-                .check(matches(
-                        withText(R.string.autofill_card_editor_virtual_card_turn_on_button_label)))
+                .check(
+                        matches(
+                                withText(
+                                        R.string
+                                                .autofill_card_editor_virtual_card_turn_on_button_label)))
                 .check(matches(isEnabled()));
         // Verify that enrollment is not called when the user does not click the positive button on
         // the dialog.
@@ -474,22 +545,26 @@ public class AutofillServerCardEditorTest {
 
     @Test
     @MediumTest
-    @Features.EnableFeatures({ChromeFeatureList.AUTOFILL_ENABLE_UPDATE_VIRTUAL_CARD_ENROLLMENT})
+    @DisabledTest(message = "https://crbug.com/1368548")
     public void
-    virtualCardUnenrolledAndEligible_virtualCardAddButtonClicked_enrollAccepted_editorExited()
-            throws Exception {
+            virtualCardUnenrolledAndEligible_virtualCardAddButtonClicked_enrollAccepted_editorExited()
+                    throws Exception {
         mAutofillTestHelper.addServerCreditCard(SAMPLE_VIRTUAL_CARD_UNENROLLED_AND_ELIGIBLE_CARD);
 
-        SettingsActivity activity = mSettingsActivityTestRule.startSettingsActivity(
-                fragmentArgs(SAMPLE_VIRTUAL_CARD_UNENROLLED_AND_ELIGIBLE_CARD.getGUID()));
+        SettingsActivity activity =
+                mSettingsActivityTestRule.startSettingsActivity(
+                        fragmentArgs(SAMPLE_VIRTUAL_CARD_UNENROLLED_AND_ELIGIBLE_CARD.getGUID()));
         // Verify that the native delegate was initialized properly.
         verify(mNativeMock).init(any(Profile.class));
 
         // Verify that the Virtual Card enrollment button is shown and allows enrollment.
         onView(withId(R.id.virtual_card_ui)).check(matches(isDisplayed()));
         onView(withId(R.id.virtual_card_enrollment_button))
-                .check(matches(
-                        withText(R.string.autofill_card_editor_virtual_card_turn_on_button_label)))
+                .check(
+                        matches(
+                                withText(
+                                        R.string
+                                                .autofill_card_editor_virtual_card_turn_on_button_label)))
                 .check(matches(isEnabled()));
 
         // Press the enrollment button.
@@ -501,22 +576,22 @@ public class AutofillServerCardEditorTest {
         verify(mNativeMock)
                 .initVirtualCardEnrollment(
                         ArgumentMatchers.eq(NATIVE_AUTOFILL_PAYMENTS_METHODS_DELEGATE),
-                        ArgumentMatchers.eq(234L), callbackArgumentCaptor.capture());
+                        ArgumentMatchers.eq(234L),
+                        callbackArgumentCaptor.capture());
         // Return VirtualCardEnrollmentFields via the callback to show the dialog.
         Callback<VirtualCardEnrollmentFields> virtualCardEnrollmentFieldsCallback =
                 callbackArgumentCaptor.getValue();
         VirtualCardEnrollmentFields fakeVirtualCardEnrollmentFields =
-                VirtualCardEnrollmentFields.create(
-                        "Visa 1234", Bitmap.createBitmap(10, 20, Bitmap.Config.ALPHA_8));
+                VirtualCardEnrollmentFields.create("Visa", "1234", 0, new GURL(""));
         fakeVirtualCardEnrollmentFields.mGoogleLegalMessages.add(new LegalMessageLine("google"));
         fakeVirtualCardEnrollmentFields.mIssuerLegalMessages.add(new LegalMessageLine("issuer"));
-        TestThreadUtils.runOnUiThreadBlocking(
-                ()
-                        -> virtualCardEnrollmentFieldsCallback.onResult(
+        ThreadUtils.runOnUiThreadBlocking(
+                () ->
+                        virtualCardEnrollmentFieldsCallback.onResult(
                                 fakeVirtualCardEnrollmentFields));
 
         // Verify that the dialog was displayed.
-        onView(withId(R.id.dialog_title)).check(matches(isDisplayed()));
+        onView(withId(R.id.dialog_title)).inRoot(isDialog()).check(matches(isDisplayed()));
 
         // Click positive button on enrollment dialog.
         onView(withId(R.id.positive_button)).perform(click());
@@ -538,7 +613,7 @@ public class AutofillServerCardEditorTest {
         // Return enrollment update status "successful" via the callback.
         Callback<Boolean> virtualCardEnrollmentUpdateResponseCallback =
                 booleanCallbackArgumentCaptor.getValue();
-        TestThreadUtils.runOnUiThreadBlocking(
+        ThreadUtils.runOnUiThreadBlocking(
                 () -> virtualCardEnrollmentUpdateResponseCallback.onResult(true));
 
         // Ensure that the callback is run after receiving the server response and that the native
@@ -548,18 +623,21 @@ public class AutofillServerCardEditorTest {
 
     @Test
     @MediumTest
-    @Features.EnableFeatures({ChromeFeatureList.AUTOFILL_ENABLE_UPDATE_VIRTUAL_CARD_ENROLLMENT})
     public void virtualCardEnrolled_virtualCardRemoveButtonClicked_dialogShown() throws Exception {
         mAutofillTestHelper.addServerCreditCard(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD);
 
-        SettingsActivity activity = mSettingsActivityTestRule.startSettingsActivity(
-                fragmentArgs(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD.getGUID()));
+        SettingsActivity activity =
+                mSettingsActivityTestRule.startSettingsActivity(
+                        fragmentArgs(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD.getGUID()));
 
         // Verify that the Virtual Card enrollment button is shown and allows unenrollment.
         onView(withId(R.id.virtual_card_ui)).check(matches(isDisplayed()));
         onView(withId(R.id.virtual_card_enrollment_button))
-                .check(matches(
-                        withText(R.string.autofill_card_editor_virtual_card_turn_off_button_label)))
+                .check(
+                        matches(
+                                withText(
+                                        R.string
+                                                .autofill_card_editor_virtual_card_turn_off_button_label)))
                 .check(matches(isEnabled()));
 
         // Press the unenrollment button.
@@ -573,44 +651,52 @@ public class AutofillServerCardEditorTest {
 
     @Test
     @MediumTest
-    @Features.EnableFeatures({ChromeFeatureList.AUTOFILL_ENABLE_UPDATE_VIRTUAL_CARD_ENROLLMENT})
     public void virtualCardEnrolled_virtualCardRemoveButtonClicked_unenrollCancelled()
             throws Exception {
         mAutofillTestHelper.addServerCreditCard(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD);
 
-        SettingsActivity activity = mSettingsActivityTestRule.startSettingsActivity(
-                fragmentArgs(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD.getGUID()));
+        SettingsActivity activity =
+                mSettingsActivityTestRule.startSettingsActivity(
+                        fragmentArgs(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD.getGUID()));
 
         // Verify that the Virtual Card enrollment button is shown and allows unenrollment.
         onView(withId(R.id.virtual_card_ui)).check(matches(isDisplayed()));
         onView(withId(R.id.virtual_card_enrollment_button))
-                .check(matches(
-                        withText(R.string.autofill_card_editor_virtual_card_turn_off_button_label)))
+                .check(
+                        matches(
+                                withText(
+                                        R.string
+                                                .autofill_card_editor_virtual_card_turn_off_button_label)))
                 .check(matches(isEnabled()));
 
         // Press the unenrollment button.
-        onView(withId(R.id.virtual_card_enrollment_button)).perform(click());
         // Verify that unenrollment button click is recorded.
-        Assert.assertEquals(1,
-                mHistogramTester.getHistogramValueCount(
+        var histogram =
+                HistogramWatcher.newSingleRecordWatcher(
                         "Autofill.SettingsPage.ButtonClicked.VirtualCard.VirtualCardUnenroll",
-                        /* true */ 1));
+                        true);
+        onView(withId(R.id.virtual_card_enrollment_button)).perform(click());
+        histogram.assertExpected();
 
         // Verify that the unenroll dialog is shown.
         onView(withText(R.string.autofill_credit_card_editor_virtual_card_unenroll_dialog_title))
                 .check(matches(isDisplayed()));
 
         // Click the Cancel button.
-        onView(withText(android.R.string.cancel)).perform(click());
         // Verify that unenrollment dialog rejection is recorded.
-        Assert.assertEquals(1,
-                mHistogramTester.getHistogramValueCount(
-                        "Autofill.VirtualCard.SettingsPageUnenrollment", /* false */ 0));
+        histogram =
+                HistogramWatcher.newSingleRecordWatcher(
+                        "Autofill.VirtualCard.SettingsPageUnenrollment", false);
+        onView(withText(android.R.string.cancel)).perform(click());
+        histogram.assertExpected();
 
         // Verify that the Virtual card enrollment button still allows unenrollment.
         onView(withId(R.id.virtual_card_enrollment_button))
-                .check(matches(
-                        withText(R.string.autofill_card_editor_virtual_card_turn_off_button_label)))
+                .check(
+                        matches(
+                                withText(
+                                        R.string
+                                                .autofill_card_editor_virtual_card_turn_off_button_label)))
                 .check(matches(isEnabled()));
 
         // Ensure that the native delegate is cleaned up when the test has finished.
@@ -619,14 +705,14 @@ public class AutofillServerCardEditorTest {
 
     @Test
     @MediumTest
-    @Features.EnableFeatures({ChromeFeatureList.AUTOFILL_ENABLE_UPDATE_VIRTUAL_CARD_ENROLLMENT})
     public void
-    virtualCardEnrolled_virtualCardRemoveButtonClicked_unenrollAccepted_unenrollmentSuccessful()
-            throws Exception {
+            virtualCardEnrolled_virtualCardRemoveButtonClicked_unenrollAccepted_unenrollmentSuccessful()
+                    throws Exception {
         mAutofillTestHelper.addServerCreditCard(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD);
 
-        SettingsActivity activity = mSettingsActivityTestRule.startSettingsActivity(
-                fragmentArgs(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD.getGUID()));
+        SettingsActivity activity =
+                mSettingsActivityTestRule.startSettingsActivity(
+                        fragmentArgs(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD.getGUID()));
 
         // Verify that the native delegate was initialized properly.
         verify(mNativeMock).init(any(Profile.class));
@@ -634,8 +720,11 @@ public class AutofillServerCardEditorTest {
         // Verify that the Virtual Card enrollment button is shown and allows unenrollment.
         onView(withId(R.id.virtual_card_ui)).check(matches(isDisplayed()));
         onView(withId(R.id.virtual_card_enrollment_button))
-                .check(matches(
-                        withText(R.string.autofill_card_editor_virtual_card_turn_off_button_label)))
+                .check(
+                        matches(
+                                withText(
+                                        R.string
+                                                .autofill_card_editor_virtual_card_turn_off_button_label)))
                 .check(matches(isEnabled()));
 
         // Press the unenrollment button.
@@ -646,18 +735,25 @@ public class AutofillServerCardEditorTest {
                 .check(matches(isDisplayed()));
 
         // Click the positive button on unenrollment dialog.
-        onView(withText(
-                       R.string.autofill_credit_card_editor_virtual_card_unenroll_dialog_positive_button_label))
-                .perform(click());
         // Verify that unenrollment dialog acceptance is recorded.
-        Assert.assertEquals(1,
-                mHistogramTester.getHistogramValueCount(
-                        "Autofill.VirtualCard.SettingsPageUnenrollment", /* true */ 1));
+        var histogram =
+                HistogramWatcher.newSingleRecordWatcher(
+                        "Autofill.VirtualCard.SettingsPageUnenrollment", true);
+        onView(
+                        withText(
+                                R.string
+                                        .autofill_credit_card_editor_virtual_card_unenroll_dialog_positive_button_label))
+                .perform(click());
+        histogram.assertExpected();
+
         // Verify that the Virtual Card enrollment button still shows text for unenrollment and that
         // the button is disabled while waiting for server response.
         onView(withId(R.id.virtual_card_enrollment_button))
-                .check(matches(
-                        withText(R.string.autofill_card_editor_virtual_card_turn_off_button_label)))
+                .check(
+                        matches(
+                                withText(
+                                        R.string
+                                                .autofill_card_editor_virtual_card_turn_off_button_label)))
                 .check(matches(Matchers.not(isEnabled())));
 
         // Verify that native unenroll method is called with the correct parameters when the user
@@ -665,18 +761,23 @@ public class AutofillServerCardEditorTest {
         ArgumentCaptor<Callback<Boolean>> booleanCallbackArgumentCaptor =
                 ArgumentCaptor.forClass(Callback.class);
         verify(mNativeMock)
-                .unenrollVirtualCard(ArgumentMatchers.eq(NATIVE_AUTOFILL_PAYMENTS_METHODS_DELEGATE),
-                        ArgumentMatchers.eq(123L), booleanCallbackArgumentCaptor.capture());
+                .unenrollVirtualCard(
+                        ArgumentMatchers.eq(NATIVE_AUTOFILL_PAYMENTS_METHODS_DELEGATE),
+                        ArgumentMatchers.eq(123L),
+                        booleanCallbackArgumentCaptor.capture());
         // Return enrollment update status "successful" via the callback.
         Callback<Boolean> virtualCardEnrollmentUpdateResponseCallback =
                 booleanCallbackArgumentCaptor.getValue();
-        TestThreadUtils.runOnUiThreadBlocking(
+        ThreadUtils.runOnUiThreadBlocking(
                 () -> virtualCardEnrollmentUpdateResponseCallback.onResult(true));
 
         // Verify that the Virtual Card enrollment button now allows enrollment.
         onView(withId(R.id.virtual_card_enrollment_button))
-                .check(matches(
-                        withText(R.string.autofill_card_editor_virtual_card_turn_on_button_label)))
+                .check(
+                        matches(
+                                withText(
+                                        R.string
+                                                .autofill_card_editor_virtual_card_turn_on_button_label)))
                 .check(matches(isEnabled()));
 
         // Ensure that the native delegate is cleaned up when the test has finished.
@@ -685,14 +786,14 @@ public class AutofillServerCardEditorTest {
 
     @Test
     @MediumTest
-    @Features.EnableFeatures({ChromeFeatureList.AUTOFILL_ENABLE_UPDATE_VIRTUAL_CARD_ENROLLMENT})
     public void
-    virtualCardEnrolled_virtualCardRemoveButtonClicked_unenrollAccepted_unenrollmentFailure()
-            throws Exception {
+            virtualCardEnrolled_virtualCardRemoveButtonClicked_unenrollAccepted_unenrollmentFailure()
+                    throws Exception {
         mAutofillTestHelper.addServerCreditCard(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD);
 
-        SettingsActivity activity = mSettingsActivityTestRule.startSettingsActivity(
-                fragmentArgs(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD.getGUID()));
+        SettingsActivity activity =
+                mSettingsActivityTestRule.startSettingsActivity(
+                        fragmentArgs(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD.getGUID()));
 
         // Verify that the native delegate was initialized properly.
         verify(mNativeMock).init(any(Profile.class));
@@ -700,8 +801,11 @@ public class AutofillServerCardEditorTest {
         // Verify that the Virtual Card enrollment button is shown and allows unenrollment.
         onView(withId(R.id.virtual_card_ui)).check(matches(isDisplayed()));
         onView(withId(R.id.virtual_card_enrollment_button))
-                .check(matches(
-                        withText(R.string.autofill_card_editor_virtual_card_turn_off_button_label)))
+                .check(
+                        matches(
+                                withText(
+                                        R.string
+                                                .autofill_card_editor_virtual_card_turn_off_button_label)))
                 .check(matches(isEnabled()));
 
         // Press the unenrollment button.
@@ -712,8 +816,10 @@ public class AutofillServerCardEditorTest {
                 .check(matches(isDisplayed()));
 
         // Click the positive button on unenrollment dialog.
-        onView(withText(
-                       R.string.autofill_credit_card_editor_virtual_card_unenroll_dialog_positive_button_label))
+        onView(
+                        withText(
+                                R.string
+                                        .autofill_credit_card_editor_virtual_card_unenroll_dialog_positive_button_label))
                 .perform(click());
 
         // Verify that native unenroll method is called with the correct parameters when the user
@@ -721,18 +827,23 @@ public class AutofillServerCardEditorTest {
         ArgumentCaptor<Callback<Boolean>> booleanCallbackArgumentCaptor =
                 ArgumentCaptor.forClass(Callback.class);
         verify(mNativeMock)
-                .unenrollVirtualCard(ArgumentMatchers.eq(NATIVE_AUTOFILL_PAYMENTS_METHODS_DELEGATE),
-                        ArgumentMatchers.eq(123L), booleanCallbackArgumentCaptor.capture());
+                .unenrollVirtualCard(
+                        ArgumentMatchers.eq(NATIVE_AUTOFILL_PAYMENTS_METHODS_DELEGATE),
+                        ArgumentMatchers.eq(123L),
+                        booleanCallbackArgumentCaptor.capture());
         // Return enrollment update status "failure" via the callback.
         Callback<Boolean> virtualCardEnrollmentUpdateResponseCallback =
                 booleanCallbackArgumentCaptor.getValue();
-        TestThreadUtils.runOnUiThreadBlocking(
+        ThreadUtils.runOnUiThreadBlocking(
                 () -> virtualCardEnrollmentUpdateResponseCallback.onResult(false));
 
         // Verify that the Virtual Card enrollment button still allows unenrollment.
         onView(withId(R.id.virtual_card_enrollment_button))
-                .check(matches(
-                        withText(R.string.autofill_card_editor_virtual_card_turn_off_button_label)))
+                .check(
+                        matches(
+                                withText(
+                                        R.string
+                                                .autofill_card_editor_virtual_card_turn_off_button_label)))
                 .check(matches(isEnabled()));
 
         // Ensure that the native delegate is cleaned up when the test has finished.
@@ -741,13 +852,13 @@ public class AutofillServerCardEditorTest {
 
     @Test
     @MediumTest
-    @Features.EnableFeatures({ChromeFeatureList.AUTOFILL_ENABLE_UPDATE_VIRTUAL_CARD_ENROLLMENT})
     public void virtualCardEnrolled_virtualCardRemoveButtonClicked_unenrollAccepted_editorExited()
             throws Exception {
         mAutofillTestHelper.addServerCreditCard(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD);
 
-        SettingsActivity activity = mSettingsActivityTestRule.startSettingsActivity(
-                fragmentArgs(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD.getGUID()));
+        SettingsActivity activity =
+                mSettingsActivityTestRule.startSettingsActivity(
+                        fragmentArgs(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD.getGUID()));
 
         // Verify that the native delegate was initialized properly.
         verify(mNativeMock).init(any(Profile.class));
@@ -755,8 +866,11 @@ public class AutofillServerCardEditorTest {
         // Verify that the Virtual Card enrollment button is shown and allows unenrollment.
         onView(withId(R.id.virtual_card_ui)).check(matches(isDisplayed()));
         onView(withId(R.id.virtual_card_enrollment_button))
-                .check(matches(
-                        withText(R.string.autofill_card_editor_virtual_card_turn_off_button_label)))
+                .check(
+                        matches(
+                                withText(
+                                        R.string
+                                                .autofill_card_editor_virtual_card_turn_off_button_label)))
                 .check(matches(isEnabled()));
 
         // Press the unenrollment button.
@@ -767,8 +881,10 @@ public class AutofillServerCardEditorTest {
                 .check(matches(isDisplayed()));
 
         // Click the positive button on unenrollment dialog.
-        onView(withText(
-                       R.string.autofill_credit_card_editor_virtual_card_unenroll_dialog_positive_button_label))
+        onView(
+                        withText(
+                                R.string
+                                        .autofill_credit_card_editor_virtual_card_unenroll_dialog_positive_button_label))
                 .perform(click());
 
         // Exit the editor.
@@ -782,12 +898,14 @@ public class AutofillServerCardEditorTest {
         ArgumentCaptor<Callback<Boolean>> booleanCallbackArgumentCaptor =
                 ArgumentCaptor.forClass(Callback.class);
         verify(mNativeMock)
-                .unenrollVirtualCard(ArgumentMatchers.eq(NATIVE_AUTOFILL_PAYMENTS_METHODS_DELEGATE),
-                        ArgumentMatchers.eq(123L), booleanCallbackArgumentCaptor.capture());
+                .unenrollVirtualCard(
+                        ArgumentMatchers.eq(NATIVE_AUTOFILL_PAYMENTS_METHODS_DELEGATE),
+                        ArgumentMatchers.eq(123L),
+                        booleanCallbackArgumentCaptor.capture());
         // Return enrollment update status "successful" via the callback.
         Callback<Boolean> virtualCardEnrollmentUpdateResponseCallback =
                 booleanCallbackArgumentCaptor.getValue();
-        TestThreadUtils.runOnUiThreadBlocking(
+        ThreadUtils.runOnUiThreadBlocking(
                 () -> virtualCardEnrollmentUpdateResponseCallback.onResult(true));
 
         // Ensure that the callback is run after receiving the server response and that the native
@@ -797,12 +915,12 @@ public class AutofillServerCardEditorTest {
 
     @Test
     @MediumTest
-    @Features.EnableFeatures({ChromeFeatureList.AUTOFILL_ENABLE_UPDATE_VIRTUAL_CARD_ENROLLMENT})
     public void testAutofillPaymentMethodsDelegateLifecycleEvents() throws Exception {
         mAutofillTestHelper.addServerCreditCard(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD);
 
-        SettingsActivity activity = mSettingsActivityTestRule.startSettingsActivity(
-                fragmentArgs(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD.getGUID()));
+        SettingsActivity activity =
+                mSettingsActivityTestRule.startSettingsActivity(
+                        fragmentArgs(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD.getGUID()));
 
         // Verify that the native delegate was initialized properly.
         verify(mNativeMock).init(any(Profile.class));
@@ -811,6 +929,68 @@ public class AutofillServerCardEditorTest {
 
         // Ensure that the native delegate is cleaned up when the test has finished.
         verify(mNativeMock).cleanup(NATIVE_AUTOFILL_PAYMENTS_METHODS_DELEGATE);
+    }
+
+    @Test
+    @MediumTest
+    public void testCustomUrlForServerCardEditPage() throws Exception {
+        mAutofillTestHelper.addServerCreditCard(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD);
+
+        SettingsActivity activity =
+                mSettingsActivityTestRule.startSettingsActivity(
+                        fragmentArgs(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD.getGUID()));
+        mSettingsActivityTestRule
+                .getFragment()
+                .setServerCardEditLinkOpenerCallbackForTesting(mServerCardEditLinkOpenerCallback);
+
+        // Verify that the edit card button is shown and enabled.
+        onView(withId(R.id.edit_server_card)).check(matches(isDisplayed()));
+        onView(withId(R.id.edit_server_card)).check(matches(isEnabled()));
+
+        // Click the server card edit button.
+        onView(withId(R.id.edit_server_card)).perform(click());
+
+        // Verify that the callback to open the custom tab for editing card was called with the
+        // expected URL.
+        verify(mServerCardEditLinkOpenerCallback)
+                .onResult(
+                        eq(
+                                "https://pay.google.com/pay?p=paymentmethods&utm_source=chrome&utm_medium=settings&utm_campaign=payment_methods&id="
+                                        + SAMPLE_VIRTUAL_CARD_ENROLLED_CARD.getInstrumentId()));
+
+        // Ensure that the native delegate is cleaned up when the test has finished.
+        finishAndWaitForActivity(activity);
+    }
+
+    @Test
+    @MediumTest
+    @CommandLineFlags.Add({ChromeSwitches.USE_SANDBOX_WALLET_ENVIRONMENT})
+    public void testCustomUrlForServerCardEditPage_sandboxEnabled() throws Exception {
+        mAutofillTestHelper.addServerCreditCard(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD);
+
+        SettingsActivity activity =
+                mSettingsActivityTestRule.startSettingsActivity(
+                        fragmentArgs(SAMPLE_VIRTUAL_CARD_ENROLLED_CARD.getGUID()));
+        mSettingsActivityTestRule
+                .getFragment()
+                .setServerCardEditLinkOpenerCallbackForTesting(mServerCardEditLinkOpenerCallback);
+
+        // Verify that the edit card button is shown and enabled.
+        onView(withId(R.id.edit_server_card)).check(matches(isDisplayed()));
+        onView(withId(R.id.edit_server_card)).check(matches(isEnabled()));
+
+        // Click the server card edit button.
+        onView(withId(R.id.edit_server_card)).perform(click());
+
+        String kExpectedUrl =
+                "https://pay.sandbox.google.com/pay?p=paymentmethods&utm_source=chrome&utm_medium=settings&utm_campaign=payment_methods&id=";
+        // Verify that the callback to open the custom tab for editing card was called with the
+        // expected URL.
+        verify(mServerCardEditLinkOpenerCallback)
+                .onResult(eq(kExpectedUrl + SAMPLE_VIRTUAL_CARD_ENROLLED_CARD.getInstrumentId()));
+
+        // Ensure that the native delegate is cleaned up when the test has finished.
+        finishAndWaitForActivity(activity);
     }
 
     private void finishAndWaitForActivity(Activity activity) {

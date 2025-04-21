@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "ash/ash_export.h"
 #include "ash/system/phonehub/phone_hub_content_view.h"
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 
@@ -23,9 +24,9 @@ class ConnectionScheduler;
 // An interstitial view represeting that connection to the phone has been
 // interrupted.
 class ASH_EXPORT PhoneDisconnectedView : public PhoneHubContentView {
- public:
-  METADATA_HEADER(PhoneDisconnectedView);
+  METADATA_HEADER(PhoneDisconnectedView, PhoneHubContentView)
 
+ public:
   explicit PhoneDisconnectedView(
       phonehub::ConnectionScheduler* connection_scheduler);
   PhoneDisconnectedView(const PhoneDisconnectedView&) = delete;
@@ -39,9 +40,9 @@ class ASH_EXPORT PhoneDisconnectedView : public PhoneHubContentView {
   void ButtonPressed(phone_hub_metrics::InterstitialScreenEvent event,
                      base::RepeatingClosure callback);
 
-  phonehub::ConnectionScheduler* connection_scheduler_ = nullptr;
+  raw_ptr<phonehub::ConnectionScheduler> connection_scheduler_ = nullptr;
 
-  PhoneHubInterstitialView* content_view_ = nullptr;
+  raw_ptr<PhoneHubInterstitialView> content_view_ = nullptr;
 };
 
 }  // namespace ash

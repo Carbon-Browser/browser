@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,9 +55,9 @@ class TestContextURLRequestContextGetter : public net::URLRequestContextGetter {
 // static
 const char FakeBrowserState::kCorsExemptTestHeaderName[] = "ExemptTest";
 
-FakeBrowserState::FakeBrowserState() : is_off_the_record_(false) {}
+FakeBrowserState::FakeBrowserState() = default;
 
-FakeBrowserState::~FakeBrowserState() {}
+FakeBrowserState::~FakeBrowserState() = default;
 
 bool FakeBrowserState::IsOffTheRecord() const {
   return is_off_the_record_;
@@ -101,6 +101,14 @@ FakeBrowserState::GetSharedURLLoaderFactory() {
 void FakeBrowserState::SetSharedURLLoaderFactory(
     scoped_refptr<network::SharedURLLoaderFactory> shared_url_loader_factory) {
   test_shared_url_loader_factory_ = std::move(shared_url_loader_factory);
+}
+
+const base::Uuid& FakeBrowserState::GetWebKitStorageID() const {
+  return storage_uuid_;
+}
+
+void FakeBrowserState::SetWebKitStorageID(base::Uuid uuid) {
+  storage_uuid_ = std::move(uuid);
 }
 
 }  // namespace web

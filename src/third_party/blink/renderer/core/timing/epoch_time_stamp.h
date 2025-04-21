@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@ namespace blink {
 typedef uint64_t EpochTimeStamp;
 
 inline EpochTimeStamp ConvertTimeToEpochTimeStamp(base::Time time) {
-  return static_cast<EpochTimeStamp>(time.ToDoubleT() * 1000.0);
+  return static_cast<EpochTimeStamp>(time.InMillisecondsSinceUnixEpoch());
 }
 
 }  // namespace blink

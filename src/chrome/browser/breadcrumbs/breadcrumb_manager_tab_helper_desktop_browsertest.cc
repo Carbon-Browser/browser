@@ -1,21 +1,20 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
-
-#include "base/memory/raw_ptr.h"
+#include "base/containers/adapters.h"
+#include "base/containers/circular_deque.h"
+#include "build/build_config.h"
 #include "chrome/browser/breadcrumbs/breadcrumb_manager_tab_helper.h"
-
-#include "chrome/browser/breadcrumbs/breadcrumb_manager_keyed_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ssl/cert_verifier_browser_test.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
-#include "components/breadcrumbs/core/breadcrumb_manager_keyed_service.h"
+#include "components/breadcrumbs/core/breadcrumb_manager.h"
 #include "components/breadcrumbs/core/breadcrumb_manager_tab_helper.h"
+#include "components/breadcrumbs/core/breadcrumbs_status.h"
 #include "content/public/test/browser_test.h"
-#include "content/public/test/download_test_observer.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 
 namespace {
@@ -40,6 +39,22 @@ class SecurityStyleTestObserver : public content::WebContentsObserver {
   base::RunLoop run_loop_;
 };
 
+const base::circular_deque<std::string>& GetEvents() {
+  return breadcrumbs::BreadcrumbManager::GetInstance().GetEvents();
+}
+
+// Returns the latest breadcrumb event containing substring `str.` If no logged
+// breadcrumb event contains `str`, returns `std::nullopt`.
+const std::optional<std::string> FindEventContaining(const std::string& str) {
+  const auto& events_new_to_old = base::Reversed(GetEvents());
+  for (const auto& event : events_new_to_old) {
+    if (event.find(str) != std::string::npos) {
+      return event;
+    }
+  }
+  return std::nullopt;
+}
+
 }  // namespace
 
 // Test fixture for BreadcrumbManagerTabHelper class.
@@ -48,35 +63,29 @@ class BreadcrumbManagerTabHelperBrowserTest : public InProcessBrowserTest {
   void SetUpOnMainThread() override {
     BreadcrumbManagerTabHelper::CreateForWebContents(
         browser()->tab_strip_model()->GetActiveWebContents());
-    breadcrumb_service_ =
-        BreadcrumbManagerKeyedServiceFactory::GetForBrowserContext(
-            browser()->profile());
   }
 
-  raw_ptr<breadcrumbs::BreadcrumbManagerKeyedService> breadcrumb_service_;
+ private:
+  breadcrumbs::ScopedEnableBreadcrumbsForTesting enable_breadcrumbs_;
 };
 
 // Tests download navigation.
 IN_PROC_BROWSER_TEST_F(BreadcrumbManagerTabHelperBrowserTest, Download) {
-  const size_t num_startup_breadcrumbs =
-      breadcrumb_service_->GetEvents(/*event_count_limit=*/0).size();
-
   const GURL url =
       ui_test_utils::GetTestUrl(base::FilePath().AppendASCII("downloads"),
                                 base::FilePath().AppendASCII("a_zip_file.zip"));
   ui_test_utils::DownloadURL(browser(), url);
 
-  const std::list<std::string> events =
-      breadcrumb_service_->GetEvents(/*event_count_limit=*/0);
   // Breadcrumbs should have been logged for starting and finishing the
   // navigation, and the navigation should be labeled as a download.
-  ASSERT_EQ(2ul, events.size() - num_startup_breadcrumbs);
+  EXPECT_NE(std::nullopt,
+            FindEventContaining(breadcrumbs::kBreadcrumbDidStartNavigation));
+
+  const auto finish_nav_event =
+      FindEventContaining(breadcrumbs::kBreadcrumbDidFinishNavigation);
+  EXPECT_NE(std::nullopt, finish_nav_event);
   EXPECT_NE(std::string::npos,
-            events.back().find(breadcrumbs::kBreadcrumbDidFinishNavigation))
-      << events.back();
-  EXPECT_NE(std::string::npos,
-            events.back().find(breadcrumbs::kBreadcrumbDownload))
-      << events.back();
+            finish_nav_event->find(breadcrumbs::kBreadcrumbDownload));
 }
 
 // Tests changes in security states.
@@ -95,9 +104,6 @@ class BreadcrumbManagerTabHelperSecurityStateBrowserTest
   void SetUpOnMainThread() override {
     BreadcrumbManagerTabHelper::CreateForWebContents(
         browser()->tab_strip_model()->GetActiveWebContents());
-    breadcrumb_service_ =
-        BreadcrumbManagerKeyedServiceFactory::GetForBrowserContext(
-            browser()->profile());
     ASSERT_TRUE(https_server_.Start());
   }
 
@@ -112,8 +118,10 @@ class BreadcrumbManagerTabHelperSecurityStateBrowserTest
     mock_cert_verifier()->AddResultForCert(cert, verify_result, net_result);
   }
 
-  raw_ptr<breadcrumbs::BreadcrumbManagerKeyedService> breadcrumb_service_;
   net::EmbeddedTestServer https_server_{net::EmbeddedTestServer::TYPE_HTTPS};
+
+ private:
+  breadcrumbs::ScopedEnableBreadcrumbsForTesting enable_breadcrumbs_;
 };
 
 // Broken authentication.
@@ -125,17 +133,15 @@ IN_PROC_BROWSER_TEST_F(BreadcrumbManagerTabHelperSecurityStateBrowserTest,
       browser(), https_server_.GetURL("/ssl/google.html")));
 
   // The breadcrumb event for broken authentication should have been logged.
-  auto events = breadcrumb_service_->GetEvents(/*event_count_limit=*/0);
+  const auto security_change_event = FindEventContaining(
+      breadcrumbs::kBreadcrumbDidChangeVisibleSecurityState);
+  EXPECT_NE(std::nullopt, security_change_event);
   EXPECT_NE(std::string::npos,
-            events.back().find(breadcrumbs::kBreadcrumbPageLoaded));
-  events.pop_back();
-  EXPECT_NE(std::string::npos,
-            events.back().find(
-                breadcrumbs::kBreadcrumbDidChangeVisibleSecurityState));
-  EXPECT_NE(std::string::npos,
-            events.back().find(breadcrumbs::kBreadcrumbAuthenticationBroken))
-      << events.back();
+            security_change_event->find(
+                breadcrumbs::kBreadcrumbAuthenticationBroken));
   EXPECT_EQ(std::string::npos,
-            events.back().find(breadcrumbs::kBreadcrumbMixedContent))
-      << events.back();
+            security_change_event->find(breadcrumbs::kBreadcrumbMixedContent));
+
+  EXPECT_NE(std::nullopt,
+            FindEventContaining(breadcrumbs::kBreadcrumbPageLoaded));
 }

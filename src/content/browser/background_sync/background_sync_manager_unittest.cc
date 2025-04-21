@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,10 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check.h"
-#include "base/containers/cxx20_erase.h"
+#include "base/check_deref.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/field_trial.h"
@@ -22,7 +22,6 @@
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/mock_entropy_provider.h"
 #include "base/test/simple_test_clock.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "content/browser/background_sync/background_sync_launcher.h"
 #include "content/browser/background_sync/background_sync_network_observer.h"
@@ -134,8 +133,8 @@ class BackgroundSyncManagerTest
     ON_CALL(*mock_permission_manager,
             GetPermissionStatusForWorker(PermissionType::NOTIFICATIONS, _, _))
         .WillByDefault(Return(blink::mojom::PermissionStatus::DENIED));
-    helper_->browser_context()->SetPermissionControllerDelegate(
-        std::move(mock_permission_manager));
+    TestBrowserContext::FromBrowserContext(helper_->browser_context())
+        ->SetPermissionControllerDelegate(std::move(mock_permission_manager));
 
     // Create a StoragePartition with the correct BrowserContext so that the
     // BackgroundSyncManager can find the BrowserContext through it.
@@ -172,23 +171,27 @@ class BackgroundSyncManagerTest
     bool called_2 = false;
     blink::mojom::ServiceWorkerRegistrationOptions options1;
     options1.scope = GURL(kScope1);
-    blink::StorageKey key1(url::Origin::Create(GURL(kScope1)));
+    const blink::StorageKey key1 =
+        blink::StorageKey::CreateFirstParty(url::Origin::Create(GURL(kScope1)));
     blink::mojom::ServiceWorkerRegistrationOptions options2;
     options2.scope = GURL(kScope2);
-    blink::StorageKey key2(url::Origin::Create(GURL(kScope2)));
+    const blink::StorageKey key2 =
+        blink::StorageKey::CreateFirstParty(url::Origin::Create(GURL(kScope2)));
     helper_->context()->RegisterServiceWorker(
         GURL(kScript1), key1, options1,
         blink::mojom::FetchClientSettingsObject::New(),
         base::BindOnce(&RegisterServiceWorkerCallback, &called_1,
                        &sw_registration_id_1_),
-        /*requesting_frame_id=*/GlobalRenderFrameHostId());
+        /*requesting_frame_id=*/GlobalRenderFrameHostId(),
+        PolicyContainerPolicies());
 
     helper_->context()->RegisterServiceWorker(
         GURL(kScript2), key2, options2,
         blink::mojom::FetchClientSettingsObject::New(),
         base::BindOnce(&RegisterServiceWorkerCallback, &called_2,
                        &sw_registration_id_2_),
-        /*requesting_frame_id=*/GlobalRenderFrameHostId());
+        /*requesting_frame_id=*/GlobalRenderFrameHostId(),
+        PolicyContainerPolicies());
     base::RunLoop().RunUntilIdle();
     EXPECT_TRUE(called_1);
     EXPECT_TRUE(called_2);
@@ -309,8 +312,8 @@ class BackgroundSyncManagerTest
         base::MakeRefCounted<TestBackgroundSyncContext>();
     background_sync_context_->Init(
         helper_->context_wrapper(),
-        static_cast<DevToolsBackgroundServicesContextImpl*>(
-            storage_partition_impl_->GetDevToolsBackgroundServicesContext()));
+        CHECK_DEREF(static_cast<DevToolsBackgroundServicesContextImpl*>(
+            storage_partition_impl_->GetDevToolsBackgroundServicesContext())));
     base::RunLoop().RunUntilIdle();
 
     storage_partition_impl_->ShutdownBackgroundSyncContextForTesting();
@@ -375,14 +378,14 @@ class BackgroundSyncManagerTest
     if (GetBackgroundSyncType(options) ==
         blink::mojom::BackgroundSyncType::ONE_SHOT) {
       test_background_sync_manager()->Register(
-          sw_registration_id, render_process_host_->GetID(), options,
+          sw_registration_id, render_process_host_->GetDeprecatedID(), options,
           base::BindOnce(&BackgroundSyncManagerTest::
                              StatusAndOneShotSyncRegistrationCallback,
                          base::Unretained(this), &was_called));
       callback_status = &one_shot_sync_callback_status_;
     } else {
       test_background_sync_manager()->Register(
-          sw_registration_id, render_process_host_->GetID(), options,
+          sw_registration_id, render_process_host_->GetDeprecatedID(), options,
           base::BindOnce(&BackgroundSyncManagerTest::
                              StatusAndPeriodicSyncRegistrationCallback,
                          base::Unretained(this), &was_called));
@@ -463,8 +466,8 @@ class BackgroundSyncManagerTest
           // |callback_one_shot_sync_registration_| for testing.
           callback_one_shot_sync_registration_ =
               std::move(one_shot_sync_registration);
-          base::Erase(callback_one_shot_sync_registrations_,
-                      one_shot_sync_registration);
+          std::erase(callback_one_shot_sync_registrations_,
+                     one_shot_sync_registration);
           return true;
         }
       }
@@ -495,8 +498,8 @@ class BackgroundSyncManagerTest
           // |callback_periodic_sync_registration_| for testing.
           callback_periodic_sync_registration_ =
               std::move(periodic_sync_registration);
-          base::Erase(callback_periodic_sync_registrations_,
-                      periodic_sync_registration);
+          std::erase(callback_periodic_sync_registrations_,
+                     periodic_sync_registration);
           return true;
         }
       }
@@ -548,7 +551,7 @@ class BackgroundSyncManagerTest
     bool called = false;
     const GURL scope = ScopeForSWId(sw_registration_id);
     helper_->context()->UnregisterServiceWorker(
-        scope, blink::StorageKey(url::Origin::Create(scope)),
+        scope, blink::StorageKey::CreateFirstParty(url::Origin::Create(scope)),
         /*is_immediate=*/false,
         base::BindOnce(&UnregisterServiceWorkerCallback, &called));
     base::RunLoop().RunUntilIdle();
@@ -848,7 +851,8 @@ TEST_F(BackgroundSyncManagerTest, RegisterAndWaitToFireUntilResolved) {
   InitSyncEventTest();
   bool was_called = false;
   test_background_sync_manager()->Register(
-      sw_registration_id_1_, render_process_host_->GetID(), sync_options_1_,
+      sw_registration_id_1_, render_process_host_->GetDeprecatedID(),
+      sync_options_1_,
       base::BindOnce(
           &BackgroundSyncManagerTest::StatusAndOneShotSyncRegistrationCallback,
           base::Unretained(this), &was_called));
@@ -871,7 +875,8 @@ TEST_F(BackgroundSyncManagerTest, ResolveInvalidRegistration) {
   InitSyncEventTest();
   bool was_called = false;
   test_background_sync_manager()->Register(
-      sw_registration_id_1_, render_process_host_->GetID(), sync_options_1_,
+      sw_registration_id_1_, render_process_host_->GetDeprecatedID(),
+      sync_options_1_,
       base::BindOnce(
           &BackgroundSyncManagerTest::StatusAndOneShotSyncRegistrationCallback,
           base::Unretained(this), &was_called));
@@ -911,7 +916,9 @@ TEST_F(BackgroundSyncManagerTest, RegisterWithoutLiveSWRegistration) {
   ASSERT_TRUE(worker_host);
 
   // Remove the registration object host.
-  worker_host->container_host()->registration_object_hosts_.clear();
+  worker_host->container_host()
+      ->registration_object_manager()
+      .registration_object_hosts_.clear();
 
   // Ensure |sw_registration_1_| is the last reference to the registration.
   ASSERT_TRUE(sw_registration_1_->HasOneRef());
@@ -1163,7 +1170,8 @@ TEST_F(BackgroundSyncManagerTest, SequentialOperations) {
   bool register_called = false;
   bool get_registrations_called = false;
   test_background_sync_manager()->Register(
-      sw_registration_id_1_, render_process_host_->GetID(), sync_options_1_,
+      sw_registration_id_1_, render_process_host_->GetDeprecatedID(),
+      sync_options_1_,
       base::BindOnce(
           &BackgroundSyncManagerTest::StatusAndOneShotSyncRegistrationCallback,
           base::Unretained(this), &register_called));
@@ -1206,7 +1214,8 @@ TEST_F(BackgroundSyncManagerTest,
   test_background_sync_manager()->set_delay_backend(true);
   bool callback_called = false;
   test_background_sync_manager()->Register(
-      sw_registration_id_1_, render_process_host_->GetID(), sync_options_2_,
+      sw_registration_id_1_, render_process_host_->GetDeprecatedID(),
+      sync_options_2_,
       base::BindOnce(
           &BackgroundSyncManagerTest::StatusAndPeriodicSyncRegistrationCallback,
           base::Unretained(this), &callback_called));
@@ -1768,8 +1777,8 @@ TEST_F(BackgroundSyncManagerTest, NotifyBackgroundSyncRegistered) {
             GetController()->registration_origin());
 }
 
-// TODO(crbug.com/996166): Update and enable when browser wake up logic has been
-// updated to not schedule a wakeup with delay of 0.
+// TODO(crbug.com/40641360): Update and enable when browser wake up logic has
+// been updated to not schedule a wakeup with delay of 0.
 TEST_F(BackgroundSyncManagerTest, DISABLED_WakeBrowserCalledForOneShotSync) {
   SetupBackgroundSyncManager();
   InitDelayedSyncEventTest();

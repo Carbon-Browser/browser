@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,18 +19,15 @@ DesktopScreenOzone::~DesktopScreenOzone() = default;
 
 gfx::NativeWindow DesktopScreenOzone::GetNativeWindowFromAcceleratedWidget(
     gfx::AcceleratedWidget widget) const {
-  if (!widget)
+  if (!widget) {
     return nullptr;
+  }
   return views::DesktopWindowTreeHostPlatform::GetContentWindowForWidget(
       widget);
 }
 
-#if !BUILDFLAG(IS_LINUX)
 std::unique_ptr<display::Screen> CreateDesktopScreen() {
-  auto screen = std::make_unique<DesktopScreenOzone>();
-  screen->Initialize();
-  return screen;
+  return std::make_unique<DesktopScreenOzone>();
 }
-#endif
 
 }  // namespace views

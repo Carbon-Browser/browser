@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include <map>
 #include <memory>
 
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/time/time.h"
 #include "media/base/media_export.h"
 #include "media/base/stream_parser_buffer.h"
@@ -247,7 +247,8 @@ class MEDIA_EXPORT SourceBufferRange {
                          base::TimeDelta end,
                          BufferQueue* buffers) const;
 
-  size_t size_in_bytes() const { return size_in_bytes_; }
+  // Returns the memory usage of the buffered data in bytes.
+  size_t GetMemoryUsage() const { return memory_usage_in_bytes_; }
 
  private:
   // Friend of private is only for IsNextInPresentationSequence testing.
@@ -263,8 +264,8 @@ class MEDIA_EXPORT SourceBufferRange {
   void AdjustEstimatedDurationForNewAppend(const BufferQueue& new_buffers);
 
   // Frees the buffers in |buffers_| from [|start_point|,|ending_point|) and
-  // updates the |size_in_bytes_| accordingly. Note, this does not update
-  // |keyframe_map_|.
+  // updates the |memory_usage_in_bytes_| accordingly. Note, this does not
+  // update |keyframe_map_|.
   void FreeBufferRange(const BufferQueue::const_iterator& starting_point,
                        const BufferQueue::const_iterator& ending_point);
 
@@ -373,8 +374,8 @@ class MEDIA_EXPORT SourceBufferRange {
   // Called to get the largest interbuffer distance seen so far in the stream.
   InterbufferDistanceCB interbuffer_distance_cb_;
 
-  // Stores the amount of memory taken up by the data in |buffers_|.
-  size_t size_in_bytes_;
+  // Stores the amount of memory taken up to store |buffers_|.
+  size_t memory_usage_in_bytes_ = 0;
 
   // If the first buffer in this range is the beginning of a coded frame group,
   // |range_start_pts_| is the presentation time when the coded frame group

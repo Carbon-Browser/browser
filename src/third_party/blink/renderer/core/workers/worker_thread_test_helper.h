@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,6 @@
 #include "services/metrics/public/cpp/ukm_source_id.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "third_party/blink/public/mojom/v8_cache_options.mojom-blink.h"
-#include "third_party/blink/renderer/bindings/core/v8/source_location.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_gc_controller.h"
 #include "third_party/blink/renderer/bindings/core/v8/worker_or_worklet_script_controller.h"
 #include "third_party/blink/renderer/core/event_target_names.h"
@@ -29,6 +28,7 @@
 #include "third_party/blink/renderer/core/workers/worker_global_scope.h"
 #include "third_party/blink/renderer/core/workers/worker_reporting_proxy.h"
 #include "third_party/blink/renderer/core/workers/worker_thread.h"
+#include "third_party/blink/renderer/platform/bindings/source_location.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/network/content_security_policy_parsers.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
@@ -39,6 +39,10 @@
 
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "v8/include/v8.h"
+
+#include "mojo/public/cpp/bindings/receiver.h"
+#include "mojo/public/cpp/bindings/receiver_set.h"
+#include "third_party/blink/renderer/platform/testing/scoped_fake_ukm_recorder.h"
 
 namespace blink {
 
@@ -52,9 +56,20 @@ class FakeWorkerGlobalScope : public WorkerGlobalScope {
                           base::TimeTicks::Now(),
                           false) {
     ReadyToRunWorkerScript();
+    GetBrowserInterfaceBroker().SetBinderForTesting(
+        ukm::mojom::UkmRecorderFactory::Name_,
+        WTF::BindRepeating(
+            [](ScopedFakeUkmRecorder* interface,
+               mojo::ScopedMessagePipeHandle handle) {
+              interface->SetHandle(std::move(handle));
+            },
+            WTF::Unretained(&scoped_fake_ukm_recorder_)));
   }
 
-  ~FakeWorkerGlobalScope() override = default;
+  ~FakeWorkerGlobalScope() override {
+    GetBrowserInterfaceBroker().SetBinderForTesting(
+        ukm::mojom::UkmRecorderInterface::Name_, {});
+  }
 
   // EventTarget
   const AtomicString& InterfaceName() const override {
@@ -107,10 +122,12 @@ class FakeWorkerGlobalScope : public WorkerGlobalScope {
   // Returns a token uniquely identifying this fake worker.
   WorkerToken GetWorkerToken() const final { return token_; }
   bool CrossOriginIsolatedCapability() const final { return false; }
-  bool IsolatedApplicationCapability() const final { return false; }
+  bool IsIsolatedContext() const final { return false; }
   ExecutionContextToken GetExecutionContextToken() const final {
     return token_;
   }
+
+  ScopedFakeUkmRecorder scoped_fake_ukm_recorder_;
 
  private:
   SharedWorkerToken token_;
@@ -129,7 +146,6 @@ class WorkerThreadForTest : public WorkerThread {
   WorkerBackingThread& GetWorkerBackingThread() override {
     return *worker_backing_thread_;
   }
-  void ClearWorkerBackingThread() override { worker_backing_thread_.reset(); }
 
   void StartWithSourceCode(const SecurityOrigin* security_origin,
                            const String& source,

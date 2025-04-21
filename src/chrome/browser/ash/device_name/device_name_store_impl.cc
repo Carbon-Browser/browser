@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,7 +34,7 @@ DeviceNameStoreImpl::DeviceNameStoreImpl(
     : prefs_(prefs),
       handler_(handler),
       device_name_applier_(std::move(device_name_applier)) {
-  policy_handler_observation_.Observe(handler_);
+  policy_handler_observation_.Observe(handler_.get());
 
   if (g_browser_process->profile_manager())
     profile_manager_observer_.Observe(g_browser_process->profile_manager());

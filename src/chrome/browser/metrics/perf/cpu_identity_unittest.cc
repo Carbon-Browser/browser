@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -67,6 +67,26 @@ TEST(CpuIdentityTest, DefaultCommandsBasedOnUarch_Excavator) {
   cpuid.model = 0x70;  // Excavator
   cpuid.model_name = "";
   EXPECT_EQ("Excavator", GetCpuUarch(cpuid));
+}
+
+TEST(CpuIdentityTest, DefaultCommandsBasedOnUarch_Zen) {
+  CPUIdentity cpuid;
+  cpuid.arch = "x86_64";
+  cpuid.vendor = "AuthenticAMD";
+  cpuid.family = 0x17;
+  cpuid.model = 0x01;
+  cpuid.model_name = "";
+  EXPECT_EQ("Zen", GetCpuUarch(cpuid));
+}
+
+TEST(CpuIdentityTest, DefaultCommandsBasedOnUarch_Zen2) {
+  CPUIdentity cpuid;
+  cpuid.arch = "x86_64";
+  cpuid.vendor = "AuthenticAMD";
+  cpuid.family = 0x17;
+  cpuid.model = 0x60;
+  cpuid.model_name = "";
+  EXPECT_EQ("Zen2", GetCpuUarch(cpuid));
 }
 
 TEST(CpuIdentityTest, DefaultCommandsBasedOnArch_x86_32) {

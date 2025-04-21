@@ -1,9 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_BROWSER_SWITCHER_BROWSER_SWITCHER_SITELIST_H_
 #define CHROME_BROWSER_BROWSER_SWITCHER_BROWSER_SWITCHER_SITELIST_H_
+
+#include <string_view>
 
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/browser_switcher/browser_switcher_prefs.h"
@@ -20,7 +22,7 @@ class BrowserSwitcherPrefs;
 // |parsing_mode|.
 //
 // Returns nullptr if |original_rule| is not a valid rule.
-std::unique_ptr<Rule> CanonicalizeRule(base::StringPiece original_rule,
+std::unique_ptr<Rule> CanonicalizeRule(std::string_view original_rule,
                                        ParsingMode parsing_mode);
 
 enum Action {

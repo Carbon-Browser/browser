@@ -1,12 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.privacy_sandbox;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JniType;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.Callback;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.NativeMethods;
+import org.chromium.chrome.browser.profiles.Profile;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -14,106 +17,180 @@ import java.util.List;
 
 /** Bridge, providing access to the native-side Privacy Sandbox configuration. */
 public class PrivacySandboxBridge {
-    public static boolean isPrivacySandboxEnabled() {
-        return PrivacySandboxBridgeJni.get().isPrivacySandboxEnabled();
+
+    private final Profile mProfile;
+
+    public PrivacySandboxBridge(Profile profile) {
+        mProfile = profile;
     }
 
-    public static boolean isPrivacySandboxManaged() {
-        return PrivacySandboxBridgeJni.get().isPrivacySandboxManaged();
+    public boolean isPrivacySandboxRestricted() {
+        return PrivacySandboxBridgeJni.get().isPrivacySandboxRestricted(mProfile);
     }
 
-    public static boolean isPrivacySandboxRestricted() {
-        return PrivacySandboxBridgeJni.get().isPrivacySandboxRestricted();
+    public boolean isRestrictedNoticeEnabled() {
+        return PrivacySandboxBridgeJni.get().isRestrictedNoticeEnabled(mProfile);
     }
 
-    public static void setPrivacySandboxEnabled(boolean enabled) {
-        PrivacySandboxBridgeJni.get().setPrivacySandboxEnabled(enabled);
+    public List<Topic> getCurrentTopTopics() {
+        return sortTopics(PrivacySandboxBridgeJni.get().getCurrentTopTopics(mProfile));
     }
 
-    public static String getFlocStatusString() {
-        return PrivacySandboxBridgeJni.get().getFlocStatusString();
+    public List<Topic> getBlockedTopics() {
+        return sortTopics(PrivacySandboxBridgeJni.get().getBlockedTopics(mProfile));
     }
 
-    public static String getFlocGroupString() {
-        return PrivacySandboxBridgeJni.get().getFlocGroupString();
+    public List<Topic> getFirstLevelTopics() {
+        return sortTopics(PrivacySandboxBridgeJni.get().getFirstLevelTopics(mProfile));
     }
 
-    public static String getFlocUpdateString() {
-        return PrivacySandboxBridgeJni.get().getFlocUpdateString();
+    public List<Topic> getChildTopicsCurrentlyAssigned(Topic topic) {
+        return sortTopics(
+                PrivacySandboxBridgeJni.get()
+                        .getChildTopicsCurrentlyAssigned(
+                                mProfile, topic.getTopicId(), topic.getTaxonomyVersion()));
     }
 
-    public static String getFlocDescriptionString() {
-        return PrivacySandboxBridgeJni.get().getFlocDescriptionString();
-    }
-
-    public static String getFlocResetExplanationString() {
-        return PrivacySandboxBridgeJni.get().getFlocResetExplanationString();
-    }
-
-    public static List<Topic> getCurrentTopTopics() {
-        return sortTopics(Arrays.asList(PrivacySandboxBridgeJni.get().getCurrentTopTopics()));
-    }
-
-    public static List<Topic> getBlockedTopics() {
-        return sortTopics(Arrays.asList(PrivacySandboxBridgeJni.get().getBlockedTopics()));
-    }
-
-    public static void setTopicAllowed(Topic topic, boolean allowed) {
-        PrivacySandboxBridgeJni.get().setTopicAllowed(
-                topic.getTopicId(), topic.getTaxonomyVersion(), allowed);
+    public void setTopicAllowed(Topic topic, boolean allowed) {
+        PrivacySandboxBridgeJni.get()
+                .setTopicAllowed(mProfile, topic.getTopicId(), topic.getTaxonomyVersion(), allowed);
     }
 
     @CalledByNative
-    private static Topic createTopic(int topicId, int taxonomyVersion, String name) {
-        return new Topic(topicId, taxonomyVersion, name);
+    private static Topic createTopic(
+            int topicId, int taxonomyVersion, String name, String description) {
+        return new Topic(topicId, taxonomyVersion, name, description);
     }
 
     private static List<Topic> sortTopics(List<Topic> topics) {
-        Collections.sort(topics, (o1, o2) -> { return o1.getName().compareTo(o2.getName()); });
+        Collections.sort(
+                topics,
+                (o1, o2) -> {
+                    return ((Topic) o1).getName().compareTo(((Topic) o2).getName());
+                });
         return topics;
     }
 
-    public static void getFledgeJoiningEtldPlusOneForDisplay(Callback<List<String>> callback) {
+    public void getFledgeJoiningEtldPlusOneForDisplay(Callback<List<String>> callback) {
         Callback<String[]> arrayCallback =
                 (String[] domains) -> callback.onResult(Arrays.asList(domains));
-        PrivacySandboxBridgeJni.get().getFledgeJoiningEtldPlusOneForDisplay(arrayCallback);
+        PrivacySandboxBridgeJni.get()
+                .getFledgeJoiningEtldPlusOneForDisplay(mProfile, arrayCallback);
     }
 
-    public static List<String> getBlockedFledgeJoiningTopFramesForDisplay() {
-        return Arrays.asList(
-                PrivacySandboxBridgeJni.get().getBlockedFledgeJoiningTopFramesForDisplay());
+    public List<String> getBlockedFledgeJoiningTopFramesForDisplay() {
+        return PrivacySandboxBridgeJni.get().getBlockedFledgeJoiningTopFramesForDisplay(mProfile);
     }
 
-    public static void setFledgeJoiningAllowed(String topFrameEtldPlus1, boolean allowed) {
-        PrivacySandboxBridgeJni.get().setFledgeJoiningAllowed(topFrameEtldPlus1, allowed);
+    public void setFledgeJoiningAllowed(String topFrameEtldPlus1, boolean allowed) {
+        PrivacySandboxBridgeJni.get().setFledgeJoiningAllowed(mProfile, topFrameEtldPlus1, allowed);
     }
 
-    public static @PromptType int getRequiredPromptType() {
-        return PrivacySandboxBridgeJni.get().getRequiredPromptType();
+    public @PromptType int getRequiredPromptType(@SurfaceType int surfaceType) {
+        return PrivacySandboxBridgeJni.get().getRequiredPromptType(mProfile, surfaceType);
     }
 
-    public static void promptActionOccurred(@PromptAction int action) {
-        PrivacySandboxBridgeJni.get().promptActionOccurred(action);
+    public void promptActionOccurred(@PromptAction int action, @SurfaceType int surfaceType) {
+        PrivacySandboxBridgeJni.get().promptActionOccurred(mProfile, action, surfaceType);
+    }
+
+    public boolean isRelatedWebsiteSetsDataAccessEnabled() {
+        return PrivacySandboxBridgeJni.get().isRelatedWebsiteSetsDataAccessEnabled(mProfile);
+    }
+
+    public boolean isRelatedWebsiteSetsDataAccessManaged() {
+        return PrivacySandboxBridgeJni.get().isRelatedWebsiteSetsDataAccessManaged(mProfile);
+    }
+
+    public boolean isPartOfManagedRelatedWebsiteSet(String origin) {
+        return PrivacySandboxBridgeJni.get().isPartOfManagedRelatedWebsiteSet(mProfile, origin);
+    }
+
+    public void setRelatedWebsiteSetsDataAccessEnabled(boolean enabled) {
+        PrivacySandboxBridgeJni.get().setRelatedWebsiteSetsDataAccessEnabled(mProfile, enabled);
+    }
+
+    /**
+     * Gets the Related Website Sets owner hostname given a RWS member origin.
+     *
+     * @param memberOrigin RWS member origin.
+     * @return A string containing the owner hostname, null if it doesn't exist.
+     */
+    public String getRelatedWebsiteSetOwner(String memberOrigin) {
+        return PrivacySandboxBridgeJni.get().getRelatedWebsiteSetOwner(mProfile, memberOrigin);
+    }
+
+    public void topicsToggleChanged(boolean newValue) {
+        PrivacySandboxBridgeJni.get().topicsToggleChanged(mProfile, newValue);
+    }
+
+    public void setAllPrivacySandboxAllowedForTesting() {
+        PrivacySandboxBridgeJni.get().setAllPrivacySandboxAllowedForTesting(mProfile); // IN-TEST
+    }
+
+    public void recordActivityType(@PrivacySandboxStorageActivityType int activityType) {
+        PrivacySandboxBridgeJni.get().recordActivityType(mProfile, activityType);
+    }
+
+    public boolean privacySandboxPrivacyGuideShouldShowAdTopicsCard() {
+        return PrivacySandboxBridgeJni.get()
+                .privacySandboxPrivacyGuideShouldShowAdTopicsCard(mProfile);
+    }
+
+    public boolean shouldUsePrivacyPolicyChinaDomain() {
+        return PrivacySandboxBridgeJni.get().shouldUsePrivacyPolicyChinaDomain(mProfile);
     }
 
     @NativeMethods
     public interface Natives {
-        boolean isPrivacySandboxEnabled();
-        boolean isPrivacySandboxManaged();
-        boolean isPrivacySandboxRestricted();
-        void setPrivacySandboxEnabled(boolean enabled);
-        String getFlocStatusString();
-        String getFlocGroupString();
-        String getFlocUpdateString();
-        String getFlocDescriptionString();
-        String getFlocResetExplanationString();
-        Topic[] getCurrentTopTopics();
-        Topic[] getBlockedTopics();
-        void setTopicAllowed(int topicId, int taxonomyVersion, boolean allowed);
-        void getFledgeJoiningEtldPlusOneForDisplay(Callback<String[]> callback);
-        String[] getBlockedFledgeJoiningTopFramesForDisplay();
-        void setFledgeJoiningAllowed(String topFrameEtldPlus1, boolean allowed);
-        int getRequiredPromptType();
-        void promptActionOccurred(int action);
+        boolean isPrivacySandboxRestricted(Profile profile);
+
+        boolean isRestrictedNoticeEnabled(Profile profile);
+
+        boolean isRelatedWebsiteSetsDataAccessEnabled(Profile profile);
+
+        boolean isRelatedWebsiteSetsDataAccessManaged(Profile profile);
+
+        boolean isPartOfManagedRelatedWebsiteSet(Profile profile, String origin);
+
+        void setRelatedWebsiteSetsDataAccessEnabled(Profile profile, boolean enabled);
+
+        String getRelatedWebsiteSetOwner(Profile profile, String memberOrigin);
+
+        @JniType("std::vector")
+        List<Topic> getCurrentTopTopics(Profile profile);
+
+        @JniType("std::vector")
+        List<Topic> getBlockedTopics(Profile profile);
+
+        @JniType("std::vector")
+        List<Topic> getFirstLevelTopics(Profile profile);
+
+        @JniType("std::vector")
+        List<Topic> getChildTopicsCurrentlyAssigned(
+                Profile profile, int topicId, int taxonomyVersion);
+
+        void setTopicAllowed(Profile profile, int topicId, int taxonomyVersion, boolean allowed);
+
+        void getFledgeJoiningEtldPlusOneForDisplay(Profile profile, Callback<String[]> callback);
+
+        @JniType("std::vector<std::string>")
+        List<String> getBlockedFledgeJoiningTopFramesForDisplay(Profile profile);
+
+        void setFledgeJoiningAllowed(Profile profile, String topFrameEtldPlus1, boolean allowed);
+
+        int getRequiredPromptType(Profile profile, int surfaceType);
+
+        void promptActionOccurred(Profile profile, int action, int surfaceType);
+
+        void topicsToggleChanged(Profile profile, boolean newValue);
+
+        void setAllPrivacySandboxAllowedForTesting(Profile profile); // IN-TEST
+
+        void recordActivityType(Profile profile, int activityType);
+
+        boolean privacySandboxPrivacyGuideShouldShowAdTopicsCard(Profile profile);
+
+        boolean shouldUsePrivacyPolicyChinaDomain(Profile profile);
     }
 }

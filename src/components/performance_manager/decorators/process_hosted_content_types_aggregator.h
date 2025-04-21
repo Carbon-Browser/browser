@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,11 +14,10 @@ namespace performance_manager {
 
 // Aggregates the type of content hosted inside a process and populates the
 // |hosted_content_types()| property.
-class ProcessHostedContentTypesAggregator
-    : public GraphOwnedDefaultImpl,
-      public PageNode::ObserverDefaultImpl,
-      public FrameNode::ObserverDefaultImpl,
-      public WorkerNode::ObserverDefaultImpl {
+class ProcessHostedContentTypesAggregator : public GraphOwnedDefaultImpl,
+                                            public PageNodeObserver,
+                                            public FrameNodeObserver,
+                                            public WorkerNodeObserver {
  public:
   ProcessHostedContentTypesAggregator();
   ~ProcessHostedContentTypesAggregator() override;
@@ -33,7 +32,8 @@ class ProcessHostedContentTypesAggregator
   void OnTakenFromGraph(Graph* graph) override;
 
   // PageNodeObserver:
-  void OnTypeChanged(const PageNode* page_node) override;
+  void OnTypeChanged(const PageNode* page_node,
+                     PageType previous_type) override;
 
   // FrameNodeObserver:
   void OnFrameNodeAdded(const FrameNode* frame_node) override;

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@ class DesktopWindowTreeHost;
 namespace internal {
 class NativeWidgetDelegate;
 }
-}
+}  // namespace views
 
 // Interface to a platform specific browser frame implementation. The object
 // implementing this interface will also implement views::DesktopWindowTreeHost.
@@ -35,6 +35,5 @@ class BrowserDesktopWindowTreeHost {
   // false means BrowserFrame handles showing the system menu.
   virtual bool UsesNativeSystemMenu() const = 0;
 };
-
 
 #endif  // CHROME_BROWSER_UI_VIEWS_FRAME_BROWSER_DESKTOP_WINDOW_TREE_HOST_H_

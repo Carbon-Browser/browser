@@ -1,27 +1,28 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_HISTORY_CLUSTERS_CORE_CLUSTERING_TEST_UTILS_H_
 #define COMPONENTS_HISTORY_CLUSTERS_CORE_CLUSTERING_TEST_UTILS_H_
 
+#include <cstdint>
 #include <ostream>
 #include <vector>
 
 #include "base/time/time.h"
 #include "components/history/core/browser/history_types.h"
 
-namespace history_clusters {
-namespace testing {
+namespace history_clusters::testing {
 
 // A helper object that contains the elements to validate that
 // the result visits of clusters are correct.
 class VisitResult {
  public:
-  VisitResult(int visit_id,
-              float score,
-              const std::vector<VisitResult>& duplicate_visits = {},
-              std::u16string search_terms = u"");
+  VisitResult(
+      int visit_id,
+      float score,
+      const std::vector<history::DuplicateClusterVisit>& duplicate_visits = {},
+      std::u16string search_terms = u"");
   explicit VisitResult(const history::ClusterVisit& visit);
   VisitResult(const VisitResult& other);
   ~VisitResult();
@@ -35,7 +36,7 @@ class VisitResult {
 
   const int visit_id_;
   const float score_;
-  std::vector<VisitResult> duplicate_visits_;
+  std::vector<history::DuplicateClusterVisit> duplicate_visits_;
   const std::u16string search_terms_;
 };
 
@@ -56,10 +57,18 @@ history::AnnotatedVisit CreateDefaultAnnotatedVisit(
 // will use the URL contained in the AnnotatedVisit.
 history::ClusterVisit CreateClusterVisit(
     const history::AnnotatedVisit& annotated_visit,
-    absl::optional<GURL> normalized_url = absl::nullopt,
-    float score = 1.0);
+    std::optional<GURL> normalized_url = std::nullopt,
+    float score = 1.0,
+    history::ClusterVisit::InteractionState interaction_state =
+        history::ClusterVisit::InteractionState::kDefault);
 
-}  // namespace testing
-}  // namespace history_clusters
+history::DuplicateClusterVisit ClusterVisitToDuplicateClusterVisit(
+    history::ClusterVisit cluster_visit);
+
+// Creates a Cluster from |cluster_visits|.
+history::Cluster CreateCluster(
+    std::vector<history::ClusterVisit>& cluster_visits);
+
+}  // namespace history_clusters::testing
 
 #endif  // COMPONENTS_HISTORY_CLUSTERS_CORE_CLUSTERING_TEST_UTILS_H_

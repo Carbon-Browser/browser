@@ -1,8 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/views/view_targeter.h"
+
+#include <memory>
+#include <utility>
 
 #include "ui/events/event_target.h"
 #include "ui/views/focus/focus_manager.h"
@@ -13,6 +16,11 @@ namespace views {
 
 ViewTargeter::ViewTargeter(ViewTargeterDelegate* delegate)
     : delegate_(delegate) {
+  DCHECK(delegate_);
+}
+
+ViewTargeter::ViewTargeter(std::unique_ptr<ViewTargeterDelegate> delegate)
+    : owned_delegate_(std::move(delegate)), delegate_(owned_delegate_.get()) {
   DCHECK(delegate_);
 }
 
@@ -29,30 +37,31 @@ View* ViewTargeter::TargetForRect(View* root, const gfx::Rect& rect) const {
 
 ui::EventTarget* ViewTargeter::FindTargetForEvent(ui::EventTarget* root,
                                                   ui::Event* event) {
-  View* view = static_cast<View*>(root);
+  View* const view = static_cast<View*>(root);
 
-  if (event->IsKeyEvent())
+  if (event->IsKeyEvent()) {
     return FindTargetForKeyEvent(view, *event->AsKeyEvent());
-
-  if (event->IsScrollEvent())
-    return FindTargetForScrollEvent(view, *event->AsScrollEvent());
-
-  if (event->IsGestureEvent()) {
-    ui::GestureEvent* gesture = event->AsGestureEvent();
-    View* gesture_target = FindTargetForGestureEvent(view, *gesture);
-    root->ConvertEventToTarget(gesture_target, gesture);
-    return gesture_target;
   }
 
-  NOTREACHED() << "ViewTargeter does not yet support this event type.";
-  return nullptr;
+  if (event->IsScrollEvent()) {
+    return FindTargetForScrollEvent(view, *event->AsScrollEvent());
+  }
+
+  CHECK(event->IsGestureEvent())
+      << "ViewTargeter does not yet support this event type.";
+
+  ui::GestureEvent* gesture = event->AsGestureEvent();
+  View* gesture_target = FindTargetForGestureEvent(view, *gesture);
+  root->ConvertEventToTarget(gesture_target, gesture);
+  return gesture_target;
 }
 
 ui::EventTarget* ViewTargeter::FindNextBestTarget(
     ui::EventTarget* previous_target,
     ui::Event* event) {
-  if (!previous_target)
+  if (!previous_target) {
     return nullptr;
+  }
 
   if (event->IsGestureEvent()) {
     ui::GestureEvent* gesture = event->AsGestureEvent();
@@ -66,8 +75,9 @@ ui::EventTarget* ViewTargeter::FindNextBestTarget(
 }
 
 View* ViewTargeter::FindTargetForKeyEvent(View* root, const ui::KeyEvent& key) {
-  if (root->GetFocusManager())
+  if (root->GetFocusManager()) {
     return root->GetFocusManager()->GetFocusedView();
+  }
   return nullptr;
 }
 
@@ -85,14 +95,12 @@ View* ViewTargeter::FindTargetForGestureEvent(View* root,
   //                   here if we need to be able to perform gesture targeting
   //                   starting at an arbitrary node in a Views tree.
   NOTREACHED();
-  return nullptr;
 }
 
 ui::EventTarget* ViewTargeter::FindNextBestTargetForGestureEvent(
     ui::EventTarget* previous_target,
     const ui::GestureEvent& gesture) {
   NOTREACHED();
-  return nullptr;
 }
 
 }  // namespace views

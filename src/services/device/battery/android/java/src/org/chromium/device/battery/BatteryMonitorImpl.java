@@ -1,10 +1,13 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.device.battery;
 
 import org.chromium.base.Log;
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
+import org.chromium.build.annotations.RequiresNonNull;
 import org.chromium.device.mojom.BatteryMonitor;
 import org.chromium.device.mojom.BatteryStatus;
 import org.chromium.mojo.system.MojoException;
@@ -13,13 +16,14 @@ import org.chromium.mojo.system.MojoException;
  * Android implementation of the battery monitor interface defined in
  * services/device/public/mojom/battery_monitor.mojom.
  */
+@NullMarked
 public class BatteryMonitorImpl implements BatteryMonitor {
     private static final String TAG = "BatteryMonitorImpl";
 
     // Factory that created this instance and notifies it about battery status changes.
     private final BatteryMonitorFactory mFactory;
-    private QueryNextStatus_Response mCallback;
-    private BatteryStatus mStatus;
+    private @Nullable QueryNextStatus_Response mCallback;
+    private @Nullable BatteryStatus mStatus;
     private boolean mHasStatusToReport;
     private boolean mSubscribed;
 
@@ -61,7 +65,7 @@ public class BatteryMonitorImpl implements BatteryMonitor {
         }
     }
 
-    void didChange(BatteryStatus batteryStatus) {
+    void didChange(@Nullable BatteryStatus batteryStatus) {
         mStatus = batteryStatus;
         mHasStatusToReport = true;
 
@@ -70,6 +74,7 @@ public class BatteryMonitorImpl implements BatteryMonitor {
         }
     }
 
+    @RequiresNonNull("mCallback")
     void reportStatus() {
         mCallback.call(mStatus);
         mCallback = null;

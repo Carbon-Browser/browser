@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,139 +7,150 @@
  * semantic parser.
  */
 
-import {InputController} from '../input_controller.js';
+import {InputController} from '/common/action_fulfillment/input_controller.js';
+import {DeletePrevSentMacro} from '/common/action_fulfillment/macros/delete_prev_sent_macro.js';
+import {InputTextViewMacro} from '/common/action_fulfillment/macros/input_text_view_macro.js';
+import {Macro} from '/common/action_fulfillment/macros/macro.js';
+import {MacroName} from '/common/action_fulfillment/macros/macro_names.js';
+import {NavNextSentMacro, NavPrevSentMacro} from '/common/action_fulfillment/macros/nav_sent_macro.js';
+import {RepeatMacro} from '/common/action_fulfillment/macros/repeat_macro.js';
+import * as RepeatableKeyPressMacro from '/common/action_fulfillment/macros/repeatable_key_press_macro.js';
+import {SmartDeletePhraseMacro} from '/common/action_fulfillment/macros/smart_delete_phrase_macro.js';
+import {SmartInsertBeforeMacro} from '/common/action_fulfillment/macros/smart_insert_before_macro.js';
+import {SmartReplacePhraseMacro} from '/common/action_fulfillment/macros/smart_replace_phrase_macro.js';
+import {SmartSelectBetweenMacro} from '/common/action_fulfillment/macros/smart_select_between_macro.js';
+
+import {ToggleDictationMacro} from '../../../common/action_fulfillment/macros/toggle_dictation_macro.js';
 import {LocaleInfo} from '../locale_info.js';
-import {InputTextViewMacro} from '../macros/input_text_view_macro.js';
 import {ListCommandsMacro} from '../macros/list_commands_macro.js';
-import {Macro} from '../macros/macro.js';
-import {MacroName} from '../macros/macro_names.js';
-import * as RepeatableKeyPressMacro from '../macros/repeatable_key_press_macro.js';
 
 import {ParseStrategy} from './parse_strategy.js';
-// PumpkinAvailability is based on the gn argument enable_pumpkin_for_dictation,
-// and pumpkin_availability.js is copied from either include_pumpkin.js
-// or exclude_pumpkin.js in the BUILD rule.
-import {PumpkinAvailability} from './pumpkin/pumpkin_availability.js';
+import * as PumpkinConstants from './pumpkin/pumpkin_constants.js';
 
 /** A parsing strategy that utilizes the Pumpkin semantic parser. */
 export class PumpkinParseStrategy extends ParseStrategy {
-  /**
-   * @param {!InputController} inputController
-   * @return {!Promise<!PumpkinParseStrategy>}
-   */
-  static async create(inputController) {
-    const locale = LocaleInfo.locale;
-    const instance = new PumpkinParseStrategy(inputController);
-    if (PumpkinAvailability.usePumpkin(locale)) {
-      await instance.initPumpkin_(PumpkinAvailability.LOCALES[locale]);
-    }
-
-    return instance;
-  }
-
-  /**
-   * @param {!InputController} inputController
-   * @private
-   */
+  /** @param {!InputController} inputController */
   constructor(inputController) {
     super(inputController);
+    /** @private {?PumpkinConstants.PumpkinData} */
+    this.pumpkinData_ = null;
+    /** @private {boolean} */
+    this.pumpkinTaggerReady_ = false;
+    /** @private {Function} */
+    this.tagResolver_ = null;
+    /** @private {?Worker} */
+    this.worker_ = null;
+    /** @private {?PumpkinConstants.PumpkinLocale} */
+    this.locale_ = null;
+    /** @private {boolean} */
+    this.requestedPumpkinInstall_ = false;
 
-    /** @private {speech.pumpkin.api.js.PumpkinTagger.PumpkinTagger} */
-    this.pumpkinTagger_ = null;
+    /** @private {?function(): void} */
+    this.onPumpkinTaggerReadyChangedForTesting_ = null;
 
-    /** @private {?Promise} */
-    this.pumpkinLoadingPromise_ = null;
+    this.init_();
   }
 
-  /**
-   * Initializes Pumpkin by loading the required scripts and creating the
-   * PumpkinTagger object.
-   * @param {string} locale The locale in which to init Pumpkin actions.
-   * @return {!Promise<undefined>}
-   * @private
-   */
-  async initPumpkin_(locale) {
-    if (this.pumpkinLoadingPromise_) {
-      // Already initializing.
+  /** @private */
+  init_() {
+    this.refreshLocale_();
+    if (!this.locale_) {
       return;
     }
 
-    this.pumpkinLoadingPromise_ =
-        new Promise(async (pumpkinLoadResolve, pumpkinLoadReject) => {
-          // Check for objects defined by the Pumpkin WASM.
-          if (!goog || !goog['global'] || !goog['global']['Module']) {
-            await this.loadPumpkinScripts_();
-          }
-          const success = await this.createPumpkinTagger_(locale);
-          if (success) {
-            pumpkinLoadResolve();
-          } else {
-            pumpkinLoadReject();
-          }
-        });
+    this.requestedPumpkinInstall_ = true;
+    chrome.accessibilityPrivate.installPumpkinForDictation(data => {
+      // TODO(crbug.comg/1258190): Consider retrying installation at a later
+      // time if it failed.
+      this.onPumpkinInstalled_(data);
+    });
   }
 
   /**
-   * Creates a PumpkinTagger from a config and action frame file for a
-   * particular locale.
-   * @param {string} locale The locale in which to init Pumpkin actions.
-   * @return {!Promise<boolean>} Whether the tagger was created successfully.
+   * @param {PumpkinConstants.PumpkinData} data
    * @private
    */
-  async createPumpkinTagger_(locale) {
-    const pumpkinTagger =
-        new speech.pumpkin.api.js.PumpkinTagger.PumpkinTagger();
-    try {
-      const path = `${PumpkinParseStrategy.PUMPKIN_DIR}${locale}/`;
-      let success = await pumpkinTagger.initializeFromPumpkinConfig(
-          `${path}${PumpkinParseStrategy.PUMPKIN_CONFIG_PROTO_SRC}`);
-      if (!success) {
-        console.warn('Failed to load PumpkinTagger from PumpkinConfig.');
-        return false;
-      }
-      success = await pumpkinTagger.loadActionFrame(
-          `${path}${PumpkinParseStrategy.PUMPKIN_ACTION_CONFIG_PROTO_SRC}`);
-      if (!success) {
-        console.warn('Failed to load Pumpkin ActionConfig.');
-        return false;
-      }
-    } catch (e) {
-      console.warn('Error initializing PumpkinTagger', e);
-      return false;
+  onPumpkinInstalled_(data) {
+    if (!data) {
+      console.warn('Pumpkin installed, but data is empty');
+      return;
     }
-    this.pumpkinTagger_ = pumpkinTagger;
-    return true;
+
+    for (const [key, value] of Object.entries(data)) {
+      if (!value || value.byteLength === 0) {
+        throw new Error(`Pumpkin data incomplete, missing data for ${key}`);
+      }
+    }
+
+    this.refreshLocale_();
+    if (!this.locale_ || !this.isEnabled()) {
+      return;
+    }
+
+    // Create SandboxedPumpkinTagger.
+    this.setPumpkinTaggerReady_(false);
+    this.pumpkinData_ = data;
+
+    this.worker_ = new Worker(
+        PumpkinConstants.SANDBOXED_PUMPKIN_TAGGER_JS_FILE, {type: 'module'});
+    this.worker_.onmessage = (message) => this.onMessage_(message);
   }
 
   /**
-   * Loads the Pumpkin scripts javascript in to the document.
-   * @return {!Promise<undefined>}
+   * Called when the SandboxedPumpkinTagger posts a message to the background
+   * context.
+   * @param {!Event} message
    * @private
    */
-  async loadPumpkinScripts_() {
-    const pumpkinTaggerScript =
-        /** @type {!HTMLScriptElement} */ (document.createElement('script'));
-    pumpkinTaggerScript.src = PumpkinParseStrategy.PUMPKIN_TAGGER_SRC;
-    const taggerLoadPromise = new Promise((resolve, reject) => {
-      pumpkinTaggerScript.addEventListener('load', () => {
-        resolve();
-      });
-    });
-    document.head.appendChild(pumpkinTaggerScript);
-    await taggerLoadPromise;
+  onMessage_(message) {
+    const command =
+        /** @type {!PumpkinConstants.FromPumpkinTagger} */ (message.data);
+    switch (command.type) {
+      case PumpkinConstants.FromPumpkinTaggerCommand.READY:
+        this.refreshLocale_();
+        if (!this.locale_) {
+          throw new Error(
+              `Can't load SandboxedPumpkinTagger in an unsupported locale ${
+                  LocaleInfo.locale}`);
+        }
 
-    const wasmModuleScript =
-        /** @type {!HTMLScriptElement} */ (document.createElement('script'));
-    wasmModuleScript.src = PumpkinParseStrategy.PUMPKIN_WASM_SRC;
-    const moduleLoadPromise = new Promise((resolve, reject) => {
-      goog['global']['Module'] = {
-        onRuntimeInitialized() {
-          resolve();
-        },
-      };
-    });
-    document.head.appendChild(wasmModuleScript);
-    await moduleLoadPromise;
+        this.sendToSandboxedPumpkinTagger_({
+          type: PumpkinConstants.ToPumpkinTaggerCommand.LOAD,
+          locale: this.locale_,
+          pumpkinData: this.pumpkinData_,
+        });
+        this.pumpkinData_ = null;
+        return;
+      case PumpkinConstants.FromPumpkinTaggerCommand.FULLY_INITIALIZED:
+        this.setPumpkinTaggerReady_(true);
+        this.maybeRefresh_();
+        return;
+      case PumpkinConstants.FromPumpkinTaggerCommand.TAG_RESULTS:
+        this.tagResolver_(command.results);
+        return;
+      case PumpkinConstants.FromPumpkinTaggerCommand.REFRESHED:
+        this.setPumpkinTaggerReady_(true);
+        this.maybeRefresh_();
+        return;
+    }
+
+    throw new Error(
+        `Unrecognized message received from SandboxedPumpkinTagger: ${
+            command.type}`);
+  }
+
+  /**
+   * @param {!PumpkinConstants.ToPumpkinTagger} command
+   * @private
+   */
+  sendToSandboxedPumpkinTagger_(command) {
+    if (!this.worker_) {
+      throw new Error(
+          `Worker not ready, cannot send command to SandboxedPumpkinTagger: ${
+              command.type}`);
+    }
+
+    this.worker_.postMessage(command);
   }
 
   /**
@@ -157,51 +168,128 @@ export class PumpkinParseStrategy extends ParseStrategy {
     let repeat = 1;
     let text = '';
     let tag = '';
+    let beginPhrase = '';
+    let endPhrase = '';
     for (let i = 0; i < numArgs; i++) {
       const argument = hypothesis.actionArgumentList[i];
       // See Variable Argument Placeholders in voiceaccess.patterns_template.
-      if (argument.name ===
-          PumpkinParseStrategy.HypothesisArgumentName.SEM_TAG) {
-        tag = MacroName[argument.value];
+      if (argument.name === PumpkinConstants.HypothesisArgumentName.SEM_TAG) {
+        // Map Pumpkin's STOP_LISTENING to generic TOGGLE_DICTATION macro.
+        // When this is run by Dictation, it always stops.
+        if (argument.value === 'STOP_LISTENING') {
+          tag = MacroName.TOGGLE_DICTATION;
+        } else {
+          tag = MacroName[argument.value];
+        }
       } else if (
-          argument.name ===
-          PumpkinParseStrategy.HypothesisArgumentName.NUM_ARG) {
+          argument.name === PumpkinConstants.HypothesisArgumentName.NUM_ARG) {
         repeat = argument.value;
       } else if (
           argument.name ===
-          PumpkinParseStrategy.HypothesisArgumentName.OPEN_ENDED_TEXT) {
+          PumpkinConstants.HypothesisArgumentName.OPEN_ENDED_TEXT) {
         text = argument.value;
+      } else if (
+          argument.name ===
+          PumpkinConstants.HypothesisArgumentName.BEGIN_PHRASE) {
+        beginPhrase = argument.value;
+      } else if (
+          argument.name ===
+          PumpkinConstants.HypothesisArgumentName.END_PHRASE) {
+        endPhrase = argument.value;
       }
     }
+
     switch (tag) {
       case MacroName.INPUT_TEXT_VIEW:
         return new InputTextViewMacro(text, this.getInputController());
       case MacroName.DELETE_PREV_CHAR:
-        return new RepeatableKeyPressMacro.DeletePreviousCharacterMacro(repeat);
+        return new RepeatableKeyPressMacro.DeletePreviousCharacterMacro(
+            this.getInputController(), repeat);
       case MacroName.NAV_PREV_CHAR:
-        return new RepeatableKeyPressMacro.NavPreviousCharMacro(repeat);
+        return new RepeatableKeyPressMacro.NavPreviousCharMacro(
+            this.getInputController(), LocaleInfo.isRTLLocale(), repeat);
       case MacroName.NAV_NEXT_CHAR:
-        return new RepeatableKeyPressMacro.NavNextCharMacro(repeat);
+        return new RepeatableKeyPressMacro.NavNextCharMacro(
+            this.getInputController(), LocaleInfo.isRTLLocale(), repeat);
       case MacroName.NAV_PREV_LINE:
-        return new RepeatableKeyPressMacro.NavPreviousLineMacro(repeat);
+        return new RepeatableKeyPressMacro.NavPreviousLineMacro(
+            this.getInputController(), repeat);
       case MacroName.NAV_NEXT_LINE:
-        return new RepeatableKeyPressMacro.NavNextLineMacro(repeat);
+        return new RepeatableKeyPressMacro.NavNextLineMacro(
+            this.getInputController(), repeat);
       case MacroName.COPY_SELECTED_TEXT:
-        return new RepeatableKeyPressMacro.CopySelectedTextMacro();
+        return new RepeatableKeyPressMacro.CopySelectedTextMacro(
+            this.getInputController());
       case MacroName.PASTE_TEXT:
         return new RepeatableKeyPressMacro.PasteTextMacro();
       case MacroName.CUT_SELECTED_TEXT:
-        return new RepeatableKeyPressMacro.CutSelectedTextMacro();
+        return new RepeatableKeyPressMacro.CutSelectedTextMacro(
+            this.getInputController());
       case MacroName.UNDO_TEXT_EDIT:
         return new RepeatableKeyPressMacro.UndoTextEditMacro();
       case MacroName.REDO_ACTION:
         return new RepeatableKeyPressMacro.RedoActionMacro();
       case MacroName.SELECT_ALL_TEXT:
-        return new RepeatableKeyPressMacro.SelectAllTextMacro();
+        return new RepeatableKeyPressMacro.SelectAllTextMacro(
+            this.getInputController());
       case MacroName.UNSELECT_TEXT:
-        return new RepeatableKeyPressMacro.UnselectTextMacro();
+        return new RepeatableKeyPressMacro.UnselectTextMacro(
+            this.getInputController(),
+            LocaleInfo.isRTLLocale(),
+        );
       case MacroName.LIST_COMMANDS:
         return new ListCommandsMacro();
+      case MacroName.TOGGLE_DICTATION:
+        return new ToggleDictationMacro();
+      case MacroName.DELETE_PREV_WORD:
+        return new RepeatableKeyPressMacro.DeletePrevWordMacro(
+            this.getInputController(), repeat);
+      case MacroName.DELETE_PREV_SENT:
+        return new DeletePrevSentMacro(this.getInputController());
+      case MacroName.NAV_NEXT_WORD:
+        return new RepeatableKeyPressMacro.NavNextWordMacro(
+            this.getInputController(), LocaleInfo.isRTLLocale(), repeat);
+      case MacroName.NAV_PREV_WORD:
+        return new RepeatableKeyPressMacro.NavPrevWordMacro(
+            this.getInputController(), LocaleInfo.isRTLLocale(), repeat);
+      case MacroName.SMART_DELETE_PHRASE:
+        return new SmartDeletePhraseMacro(this.getInputController(), text);
+      case MacroName.SMART_REPLACE_PHRASE:
+        return new SmartReplacePhraseMacro(
+            this.getInputController(), beginPhrase, text);
+      case MacroName.SMART_INSERT_BEFORE:
+        return new SmartInsertBeforeMacro(
+            this.getInputController(), text, endPhrase);
+      case MacroName.SMART_SELECT_BTWN_INCL:
+        return new SmartSelectBetweenMacro(
+            this.getInputController(), beginPhrase, endPhrase);
+      case MacroName.NAV_NEXT_SENT:
+        return new NavNextSentMacro(this.getInputController());
+      case MacroName.NAV_PREV_SENT:
+        return new NavPrevSentMacro(this.getInputController());
+      case MacroName.DELETE_ALL_TEXT:
+        return new RepeatableKeyPressMacro.DeleteAllText(
+            this.getInputController());
+      case MacroName.NAV_START_TEXT:
+        return new RepeatableKeyPressMacro.NavStartText(
+            this.getInputController());
+      case MacroName.NAV_END_TEXT:
+        return new RepeatableKeyPressMacro.NavEndText(
+            this.getInputController());
+      case MacroName.SELECT_PREV_WORD:
+        return new RepeatableKeyPressMacro.SelectPrevWord(
+            this.getInputController(), repeat);
+      case MacroName.SELECT_NEXT_WORD:
+        return new RepeatableKeyPressMacro.SelectNextWord(
+            this.getInputController(), repeat);
+      case MacroName.SELECT_NEXT_CHAR:
+        return new RepeatableKeyPressMacro.SelectNextChar(
+            this.getInputController(), repeat);
+      case MacroName.SELECT_PREV_CHAR:
+        return new RepeatableKeyPressMacro.SelectPrevChar(
+            this.getInputController(), repeat);
+      case MacroName.REPEAT:
+        return new RepeatMacro();
       default:
         // Every hypothesis is guaranteed to include a semantic tag due to the
         // way Voice Access set up its grammars. Not all tags are supported in
@@ -211,83 +299,84 @@ export class PumpkinParseStrategy extends ParseStrategy {
     }
   }
 
+  /** @private */
+  refreshLocale_() {
+    this.locale_ =
+        PumpkinConstants.SUPPORTED_LOCALES[LocaleInfo.locale] || null;
+  }
+
+  /**
+   * Refreshes SandboxedPumpkinTagger if the Dictation locale differs from
+   * the pumpkin locale.
+   * @private
+   */
+  maybeRefresh_() {
+    const dictationLocale =
+        PumpkinConstants.SUPPORTED_LOCALES[LocaleInfo.locale];
+    if (dictationLocale !== this.locale_) {
+      this.refresh();
+    }
+  }
+
+  /** @override */
+  refresh() {
+    this.refreshLocale_();
+    this.enabled = Boolean(this.locale_) && LocaleInfo.areCommandsSupported();
+    if (!this.requestedPumpkinInstall_) {
+      this.init_();
+      return;
+    }
+
+    if (!this.isEnabled() || !this.locale_ || !this.pumpkinTaggerReady_) {
+      return;
+    }
+
+    this.setPumpkinTaggerReady_(false);
+    this.sendToSandboxedPumpkinTagger_({
+      type: PumpkinConstants.ToPumpkinTaggerCommand.REFRESH,
+      locale: this.locale_,
+    });
+  }
+
   /** @override */
   async parse(text) {
-    // Pumpkin load requires several async calls. If the request to parse
-    // comes before load is complete, wait for load. This happens during
-    // browser tests which may be fast enough to start sending speech text
-    // before callbacks with user prefs have completed.
-    if (this.pumpkinLoadingPromise_) {
-      await this.pumpkinLoadingPromise_;
+    if (!this.isEnabled() || !this.pumpkinTaggerReady_) {
+      return null;
     }
 
-    // Try to get results from Pumpkin.
+    this.tagResolver_ = null;
+    // Get results from Pumpkin.
     // TODO(crbug.com/1264544): Could increase the hypotheses count from 1
     // when we are ready to implement disambiguation.
-    if (this.pumpkinTagger_) {
-      // Try to get results from Pumpkin.
-      // TODO(crbug.com/1264544): Could increase the hypotheses count from 1
-      // when we are ready to implement disambiguation.
-      const taggerResults =
-          this.pumpkinTagger_.tagAndGetNBestHypotheses(text, 1);
-      if (taggerResults && taggerResults.hypothesisList.length > 0) {
-        const macro =
-            this.macroFromPumpkinHypothesis_(taggerResults.hypothesisList[0]);
-        if (macro) {
-          return macro;
-        }
-      }
+    this.sendToSandboxedPumpkinTagger_({
+      type: PumpkinConstants.ToPumpkinTaggerCommand.TAG,
+      text,
+      numResults: 1,
+    });
+    const taggerResults = await new Promise(resolve => {
+      this.tagResolver_ = resolve;
+    });
+
+    if (!taggerResults || taggerResults.hypothesisList.length === 0) {
+      return null;
     }
 
-    return null;
+    return this.macroFromPumpkinHypothesis_(taggerResults.hypothesisList[0]);
+  }
+
+  /** @override */
+  isEnabled() {
+    return this.enabled;
+  }
+
+  /**
+   * @param {boolean} ready
+   * @private
+   */
+  setPumpkinTaggerReady_(ready) {
+    this.pumpkinTaggerReady_ = ready;
+    if (this.onPumpkinTaggerReadyChangedForTesting_) {
+      this.onPumpkinTaggerReadyChangedForTesting_();
+    }
   }
 }
-
-/**
- * PumpkinTagger Hypothesis argument names. These should match the variable
- * argument placeholders in voiceaccess.patterns_template and the static strings
- * defined in voiceaccess/utils/PumpkinUtils.java in google3.
- * @enum {string}
- */
-PumpkinParseStrategy.HypothesisArgumentName = {
-  SEM_TAG: 'SEM_TAG',
-  NUM_ARG: 'NUM_ARG',
-  OPEN_ENDED_TEXT: 'OPEN_ENDED_TEXT',
-};
-
-/**
- * The pumpkin/ directory, relative to the accessibility common base directory.
- * @type {string}
- * @const
- */
-PumpkinParseStrategy.PUMPKIN_DIR = 'dictation/parse/pumpkin/';
-
-/**
- * The path to the pumpkin tagger source file.
- * @type {string}
- * @const
- */
-PumpkinParseStrategy.PUMPKIN_TAGGER_SRC =
-    PumpkinParseStrategy.PUMPKIN_DIR + 'js_pumpkin_tagger_bin.js';
-
-/**
- * The path to the pumpkin web assembly module source file.
- * @type {string}
- * @const
- */
-PumpkinParseStrategy.PUMPKIN_WASM_SRC =
-    PumpkinParseStrategy.PUMPKIN_DIR + 'tagger_wasm_main.js';
-
-/**
- * The name of the pumpkin config binary proto file.
- * @type {string}
- * @const
- */
-PumpkinParseStrategy.PUMPKIN_CONFIG_PROTO_SRC = 'pumpkin_config.binarypb';
-
-/**
- * The name of the pumpkin action config binary proto file.
- * @type {string}
- * @const
- */
-PumpkinParseStrategy.PUMPKIN_ACTION_CONFIG_PROTO_SRC = 'action_config.binarypb';

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 
 #include <memory>
 
-#include "ash/constants/app_types.h"
 #include "ash/public/cpp/window_properties.h"
 #include "ash/shell.h"
 #include "ash/shell_delegate.h"
@@ -14,12 +13,16 @@
 #include "ash/wm/window_state.h"
 #include "ash/wm/window_state_delegate.h"
 #include "ash/wm/window_util.h"
+#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "chrome/browser/lifetime/browser_shutdown.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/views/frame/browser_frame.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
+#include "chrome/browser/ui/web_applications/app_browser_controller.h"
+#include "chromeos/ui/base/app_types.h"
+#include "chromeos/ui/base/window_properties.h"
 #include "chromeos/ui/base/window_state_type.h"
 #include "components/app_restore/app_restore_info.h"
 #include "components/app_restore/app_restore_utils.h"
@@ -28,6 +31,7 @@
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_observer.h"
+#include "ui/base/mojom/window_show_state.mojom.h"
 #include "ui/views/view.h"
 
 namespace {
@@ -44,26 +48,26 @@ class BrowserWindowStateDelegate : public ash::WindowStateDelegate {
   BrowserWindowStateDelegate& operator=(const BrowserWindowStateDelegate&) =
       delete;
 
-  ~BrowserWindowStateDelegate() override {}
+  ~BrowserWindowStateDelegate() override = default;
 
   // Overridden from ash::WindowStateDelegate.
   bool ToggleFullscreen(ash::WindowState* window_state) override {
-    DCHECK(window_state->IsFullscreen() || window_state->CanMaximize());
-    // Windows which cannot be maximized should not be fullscreened.
-    if (!window_state->IsFullscreen() && !window_state->CanMaximize())
+    DCHECK(window_state->IsFullscreen() || window_state->CanFullscreen());
+    if (!window_state->IsFullscreen() && !window_state->CanFullscreen()) {
       return true;
-    chrome::ToggleFullscreenMode(browser_);
+    }
+    chrome::ToggleFullscreenMode(browser_, /*user_initiated=*/true);
     return true;
   }
 
   // Overridden from ash::WindowStateDelegate.
   void ToggleLockedFullscreen(ash::WindowState* window_state) override {
     ash::Shell::Get()->shell_delegate()->SetUpEnvironmentForLockedFullscreen(
-        window_state->IsPinned());
+        *window_state);
   }
 
  private:
-  Browser* browser_;  // not owned.
+  raw_ptr<Browser> browser_;  // not owned.
 };
 
 }  // namespace
@@ -81,11 +85,12 @@ BrowserFrameAsh::BrowserFrameAsh(BrowserFrame* browser_frame,
 
   // Turn on auto window management if we don't need an explicit bounds.
   // This way the requested bounds are honored.
-  if (!browser->bounds_overridden() && !browser->is_session_restore())
+  if (!browser->bounds_overridden() && !browser->is_session_restore()) {
     SetWindowAutoManaged();
+  }
 }
 
-BrowserFrameAsh::~BrowserFrameAsh() {}
+BrowserFrameAsh::~BrowserFrameAsh() = default;
 
 ///////////////////////////////////////////////////////////////////////////////
 // BrowserFrameAsh, views::NativeWidgetAura overrides:
@@ -123,7 +128,7 @@ bool BrowserFrameAsh::ShouldSaveWindowPlacement() const {
 
 void BrowserFrameAsh::GetWindowPlacement(
     gfx::Rect* bounds,
-    ui::WindowShowState* show_state) const {
+    ui::mojom::WindowShowState* show_state) const {
   aura::Window* window = GetWidget()->GetNativeWindow();
   gfx::Rect* override_bounds =
       window->GetProperty(ash::kRestoreBoundsOverrideKey);
@@ -150,31 +155,33 @@ void BrowserFrameAsh::GetWindowPlacement(
       }
     }
 
-    if (!used_window_state_restore_bounds)
+    if (!used_window_state_restore_bounds) {
       *bounds = GetWidget()->GetRestoredBounds();
+    }
     *show_state = window->GetProperty(aura::client::kShowStateKey);
   }
 
   // Session restore might be unable to correctly restore other states.
   // For the record, https://crbug.com/396272
-  if (*show_state != ui::SHOW_STATE_MAXIMIZED &&
-      *show_state != ui::SHOW_STATE_MINIMIZED) {
-    *show_state = ui::SHOW_STATE_NORMAL;
+  if (*show_state != ui::mojom::WindowShowState::kMaximized &&
+      *show_state != ui::mojom::WindowShowState::kMinimized) {
+    *show_state = ui::mojom::WindowShowState::kNormal;
   }
 }
 
 content::KeyboardEventProcessingResult BrowserFrameAsh::PreHandleKeyboardEvent(
-    const content::NativeWebKeyboardEvent& event) {
+    const input::NativeWebKeyboardEvent& event) {
   return content::KeyboardEventProcessingResult::NOT_HANDLED;
 }
 
 bool BrowserFrameAsh::HandleKeyboardEvent(
-    const content::NativeWebKeyboardEvent& event) {
+    const input::NativeWebKeyboardEvent& event) {
   return false;
 }
 
 views::Widget::InitParams BrowserFrameAsh::GetWidgetParams() {
-  views::Widget::InitParams params;
+  views::Widget::InitParams params(
+      views::Widget::InitParams::NATIVE_WIDGET_OWNS_WIDGET);
   params.native_widget = this;
   params.context = ash::Shell::GetPrimaryRootWindow();
 
@@ -191,18 +198,28 @@ views::Widget::InitParams BrowserFrameAsh::GetWidgetParams() {
 
   params.init_properties_container.SetProperty(app_restore::kBrowserAppNameKey,
                                                browser->app_name());
-
-  // This is only needed for ash. For lacros, Exo tags the associated
-  // ShellSurface as being of AppType::LACROS.
-  bool is_app = browser->is_type_app() || browser->is_type_app_popup();
   params.init_properties_container.SetProperty(
-      aura::client::kAppType, static_cast<int>(is_app ? ash::AppType::CHROME_APP
-                                                      : ash::AppType::BROWSER));
+      chromeos::kShouldHaveHighlightBorderOverlay, true);
+
+  bool is_app = browser->is_type_app() || browser->is_type_app_popup();
+  web_app::AppBrowserController* controller = browser->app_controller();
+  if (controller && controller->system_app()) {
+    params.init_properties_container.SetProperty(chromeos::kAppTypeKey,
+                                                 chromeos::AppType::SYSTEM_APP);
+  } else {
+    params.init_properties_container.SetProperty(
+        chromeos::kAppTypeKey,
+        is_app ? chromeos::AppType::CHROME_APP : chromeos::AppType::BROWSER);
+  }
 
   app_restore::ModifyWidgetParams(restore_id, &params);
   // Override session restore bounds with Full Restore bounds if they exist.
-  if (!params.bounds.IsEmpty())
+  if (!params.bounds.IsEmpty()) {
     browser->set_override_bounds(params.bounds);
+  } else {
+    params.bounds = browser->create_params().initial_bounds;
+  }
+  params.display_id = browser->create_params().display_id;
 
   return params;
 }
@@ -224,7 +241,12 @@ bool BrowserFrameAsh::ShouldRestorePreviousBrowserWidgetState() const {
   // restore.
   const int32_t restore_id =
       browser_view_->browser()->create_params().restore_id;
-  return !app_restore::HasWindowInfo(restore_id);
+  // Don't restore unresizable browser apps, because they can get stuck at a
+  // broken size, or the browser being dragged because it should use the
+  // specified bounds.
+  return !app_restore::HasWindowInfo(restore_id) &&
+         browser_view_->browser()->create_params().can_resize &&
+         !browser_view_->browser()->create_params().in_tab_dragging;
 }
 
 bool BrowserFrameAsh::ShouldUseInitialVisibleOnAllWorkspaces() const {
@@ -237,6 +259,7 @@ bool BrowserFrameAsh::ShouldUseInitialVisibleOnAllWorkspaces() const {
 void BrowserFrameAsh::SetWindowAutoManaged() {
   // For browser window in Chrome OS, we should only enable the auto window
   // management logic for tabbed browser.
-  if (browser_view_->browser()->is_type_normal())
+  if (browser_view_->browser()->is_type_normal()) {
     GetNativeWindow()->SetProperty(ash::kWindowPositionManagedTypeKey, true);
+  }
 }

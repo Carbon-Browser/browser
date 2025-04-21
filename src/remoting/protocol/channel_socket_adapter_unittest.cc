@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/test/task_environment.h"
 #include "net/base/io_buffer.h"
@@ -17,22 +17,29 @@
 #include "net/socket/socket.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/webrtc/api/array_view.h"
 #include "third_party/webrtc/p2p/base/mock_ice_transport.h"
+#include "third_party/webrtc/rtc_base/network/received_packet.h"
 
-using net::IOBuffer;
+using net::IOBufferWithSize;
 
 using testing::_;
 using testing::Return;
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 namespace {
 const int kBufferSize = 4096;
-const char kTestData[] = "data";
+const uint8_t kTestData[] = "data";
 const int kTestDataSize = 4;
 const int kTestError = -32123;
 }  // namespace
+
+class IceTransportForTest : public cricket::MockIceTransport {
+ public:
+  // Exposed for testing.
+  using rtc::PacketTransportInternal::NotifyPacketReceived;
+};
 
 class TransportChannelSocketAdapterTest : public testing::Test {
  public:
@@ -47,11 +54,9 @@ class TransportChannelSocketAdapterTest : public testing::Test {
     target_ = std::make_unique<TransportChannelSocketAdapter>(&channel_);
   }
 
-  void Callback(int result) {
-    callback_result_ = result;
-  }
+  void Callback(int result) { callback_result_ = result; }
 
-  cricket::MockIceTransport channel_;
+  IceTransportForTest channel_;
   std::unique_ptr<TransportChannelSocketAdapter> target_;
   net::CompletionRepeatingCallback callback_;
   int callback_result_;
@@ -61,20 +66,18 @@ class TransportChannelSocketAdapterTest : public testing::Test {
 
 // Verify that Read() returns net::ERR_IO_PENDING.
 TEST_F(TransportChannelSocketAdapterTest, Read) {
-  scoped_refptr<IOBuffer> buffer = base::MakeRefCounted<IOBuffer>(kBufferSize);
-
+  auto buffer = base::MakeRefCounted<IOBufferWithSize>(kBufferSize);
   int result = target_->Recv(buffer.get(), kBufferSize, callback_);
   ASSERT_EQ(net::ERR_IO_PENDING, result);
 
-  channel_.SignalReadPacket(&channel_, kTestData, kTestDataSize,
-                            rtc::TimeMicros(), 0);
+  channel_.NotifyPacketReceived(rtc::ReceivedPacket(
+      rtc::MakeArrayView(kTestData, kTestDataSize), rtc::SocketAddress()));
   EXPECT_EQ(kTestDataSize, callback_result_);
 }
 
 // Verify that Read() after Close() returns error.
 TEST_F(TransportChannelSocketAdapterTest, ReadClose) {
-  scoped_refptr<IOBuffer> buffer = base::MakeRefCounted<IOBuffer>(kBufferSize);
-
+  auto buffer = base::MakeRefCounted<IOBufferWithSize>(kBufferSize);
   int result = target_->Recv(buffer.get(), kBufferSize, callback_);
   ASSERT_EQ(net::ERR_IO_PENDING, result);
 
@@ -87,8 +90,7 @@ TEST_F(TransportChannelSocketAdapterTest, ReadClose) {
 
 // Verify that Send sends the packet and returns correct result.
 TEST_F(TransportChannelSocketAdapterTest, Send) {
-  scoped_refptr<IOBuffer> buffer =
-      base::MakeRefCounted<IOBuffer>(kTestDataSize);
+  auto buffer = base::MakeRefCounted<IOBufferWithSize>(kTestDataSize);
 
   EXPECT_CALL(channel_, SendPacket(buffer->data(), kTestDataSize, _, 0))
       .WillOnce(Return(kTestDataSize));
@@ -100,19 +102,16 @@ TEST_F(TransportChannelSocketAdapterTest, Send) {
 // Verify that the message is still sent if Send() is called while
 // socket is not open yet. The result is the packet is lost.
 TEST_F(TransportChannelSocketAdapterTest, SendPending) {
-  scoped_refptr<IOBuffer> buffer =
-      base::MakeRefCounted<IOBuffer>(kTestDataSize);
+  auto buffer = base::MakeRefCounted<IOBufferWithSize>(kTestDataSize);
 
   EXPECT_CALL(channel_, SendPacket(buffer->data(), kTestDataSize, _, 0))
       .Times(1)
       .WillOnce(Return(SOCKET_ERROR));
 
-  EXPECT_CALL(channel_, GetError())
-      .WillOnce(Return(EWOULDBLOCK));
+  EXPECT_CALL(channel_, GetError()).WillOnce(Return(EWOULDBLOCK));
 
   int result = target_->Send(buffer.get(), kTestDataSize, callback_);
   ASSERT_EQ(net::OK, result);
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

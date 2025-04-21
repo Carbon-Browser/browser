@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@
 #include <limits>
 
 #include "base/feature_list.h"
+#include "base/not_fatal_until.h"
 #include "base/numerics/clamped_math.h"
-#include "content/public/common/content_features.h"
+#include "content/common/features.h"
 #include "net/base/url_util.h"
 
 namespace content {
@@ -46,13 +47,13 @@ SimpleLruCache::Value& SimpleLruCache::Value::operator=(Value&&) = default;
 SimpleLruCache::SimpleLruCache(uint64_t capacity) : capacity_(capacity) {}
 SimpleLruCache::~SimpleLruCache() = default;
 
-absl::optional<GetResult> SimpleLruCache::Get(const std::string& key) {
+std::optional<GetResult> SimpleLruCache::Get(const std::string& key) {
   base::Time response_time;
   mojo_base::BigBuffer data;
   if (!GetInternal(key, &response_time, &data)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
-  return absl::make_optional<GetResult>(response_time, std::move(data));
+  return std::make_optional<GetResult>(response_time, std::move(data));
 }
 
 bool SimpleLruCache::Has(const std::string& key) {
@@ -129,7 +130,7 @@ bool SimpleLruCache::GetInternal(const std::string& key,
 void SimpleLruCache::Evict() {
   while (capacity_ < size_) {
     auto it = access_list_.begin();
-    DCHECK(it != access_list_.end());
+    CHECK(it != access_list_.end(), base::NotFatalUntil::M130);
     DCHECK(entries_.find(it->second) != entries_.end());
 
     Delete(it->second);

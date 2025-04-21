@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <map>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/types/strong_alias.h"
 #include "url/origin.h"
 
@@ -19,7 +20,7 @@ struct PasswordForm;
 // This class caches and provides credential stores for different origins.
 class CredentialCache {
  public:
-  // TODO(crbug.com/1051553): Consider reusing this alias for other password
+  // TODO(crbug.com/40673832): Consider reusing this alias for other password
   // manager code as well.
   using IsOriginBlocklisted =
       base::StrongAlias<class IsOriginBlocklistedTag, bool>;
@@ -31,7 +32,7 @@ class CredentialCache {
   // Saves credentials and blocklisted status for an origin so that they can be
   // used in the sheet.
   void SaveCredentialsAndBlocklistedForOrigin(
-      const std::vector<const PasswordForm*>& matches,
+      base::span<const PasswordForm> matches,
       IsOriginBlocklisted is_blocklisted,
       const url::Origin& origin);
 

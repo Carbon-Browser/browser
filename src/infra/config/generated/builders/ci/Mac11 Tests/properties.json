@@ -7,7 +7,7 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "Mac Builder",
-              "project": "chromium"
+              "project": "chromium-m133"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-mac-archive",
@@ -15,16 +15,17 @@
               "execution_mode": "COMPILE_AND_TEST",
               "legacy_chromium_config": {
                 "apply_configs": [
-                  "mb",
-                  "goma_use_local"
+                  "mb"
                 ],
                 "build_config": "Release",
                 "config": "chromium",
+                "target_arch": "intel",
                 "target_bits": 64,
                 "target_platform": "mac"
               },
               "legacy_gclient_config": {
                 "apply_configs": [
+                  "chromium_with_telemetry_dependencies",
                   "use_clang_coverage"
                 ],
                 "config": "chromium"
@@ -35,15 +36,14 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "Mac11 Tests",
-              "project": "chromium"
+              "project": "chromium-m133"
             },
             "builder_spec": {
               "builder_group": "chromium.mac",
               "execution_mode": "TEST",
               "legacy_chromium_config": {
                 "apply_configs": [
-                  "mb",
-                  "goma_use_local"
+                  "mb"
                 ],
                 "build_config": "Release",
                 "config": "chromium",
@@ -56,7 +56,7 @@
               "parent": {
                 "bucket": "ci",
                 "builder": "Mac Builder",
-                "project": "chromium"
+                "project": "chromium-m133"
               }
             }
           }
@@ -66,9 +66,17 @@
         {
           "bucket": "ci",
           "builder": "Mac11 Tests",
-          "project": "chromium"
+          "project": "chromium-m133"
         }
-      ]
+      ],
+      "mirroring_builder_group_and_names": [
+        {
+          "builder": "mac_chromium_11.0_rel_ng",
+          "group": "tryserver.chromium.mac"
+        }
+      ],
+      "retry_failed_shards": true,
+      "targets_spec_directory": "src/infra/config/generated/builders/ci/Mac11 Tests/targets"
     }
   },
   "$recipe_engine/resultdb/test_presentation": {
@@ -79,6 +87,9 @@
     ]
   },
   "builder_group": "chromium.mac",
+  "gardener_rotations": [
+    "chrome_browser_release"
+  ],
   "recipe": "chromium",
   "sheriff_rotations": [
     "chrome_browser_release"

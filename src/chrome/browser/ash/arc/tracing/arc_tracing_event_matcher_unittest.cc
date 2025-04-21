@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,19 +54,18 @@ TEST_F(ArcTracingEventMatcherTest, CategoryNamePrefixMatch) {
 TEST_F(ArcTracingEventMatcherTest, CategoryNamePrefixAndroidInt64) {
   ArcTracingEventMatcher matcher("android:ARC_VSYNC|*");
 
-  EXPECT_EQ(absl::nullopt, matcher.ReadAndroidEventInt64(
-                               MakeEvent(R"({"name":"ARC_VSYNC"})")));
-  EXPECT_EQ(absl::nullopt, matcher.ReadAndroidEventInt64(
-                               MakeEvent(R"({"name":"ARC_VSYNC|"})")));
-  EXPECT_EQ(absl::nullopt, matcher.ReadAndroidEventInt64(
-                               MakeEvent(R"({"name":"ARC_VSYNC|abc"})")));
-  EXPECT_EQ(
-      absl::make_optional(0),
-      matcher.ReadAndroidEventInt64(MakeEvent(R"({"name":"ARC_VSYNC|0"})")));
-  EXPECT_EQ(absl::make_optional(777777777777LL),
+  EXPECT_EQ(std::nullopt, matcher.ReadAndroidEventInt64(
+                              MakeEvent(R"({"name":"ARC_VSYNC"})")));
+  EXPECT_EQ(std::nullopt, matcher.ReadAndroidEventInt64(
+                              MakeEvent(R"({"name":"ARC_VSYNC|"})")));
+  EXPECT_EQ(std::nullopt, matcher.ReadAndroidEventInt64(
+                              MakeEvent(R"({"name":"ARC_VSYNC|abc"})")));
+  EXPECT_EQ(std::make_optional(0), matcher.ReadAndroidEventInt64(
+                                       MakeEvent(R"({"name":"ARC_VSYNC|0"})")));
+  EXPECT_EQ(std::make_optional(777777777777LL),
             matcher.ReadAndroidEventInt64(
                 MakeEvent(R"({"name":"ARC_VSYNC|777777777777"})")));
-  EXPECT_EQ(absl::make_optional(-777777777777LL),
+  EXPECT_EQ(std::make_optional(-777777777777LL),
             matcher.ReadAndroidEventInt64(
                 MakeEvent(R"({"name":"ARC_VSYNC|-777777777777"})")));
 }

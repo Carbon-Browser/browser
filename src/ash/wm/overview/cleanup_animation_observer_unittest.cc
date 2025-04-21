@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 
 #include "ash/test/ash_test_base.h"
 #include "ash/wm/overview/overview_delegate.h"
-#include "base/containers/cxx20_erase.h"
 #include "base/containers/unique_ptr_adapters.h"
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/window.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_animation_observer.h"
@@ -45,7 +45,7 @@ class TestOverviewDelegate : public OverviewDelegate {
   }
   void RemoveAndDestroyExitAnimationObserver(
       DelayedAnimationObserver* animation_observer) override {
-    base::EraseIf(observers_, base::MatchesUniquePtr(animation_observer));
+    std::erase_if(observers_, base::MatchesUniquePtr(animation_observer));
   }
   void AddEnterAnimationObserver(
       std::unique_ptr<DelayedAnimationObserver> animation_observer) override {}
@@ -76,10 +76,10 @@ class CleanupAnimationObserverTest : public AshTestBase,
   // views::Widget::GetWidgetForNativeView(window)->Close().
   std::unique_ptr<views::Widget> CreateWindowWidget(const gfx::Rect& bounds) {
     auto widget = std::make_unique<views::Widget>();
-    views::Widget::InitParams params;
+    views::Widget::InitParams params(
+        views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET,
+        views::Widget::InitParams::TYPE_WINDOW);
     params.bounds = bounds;
-    params.type = views::Widget::InitParams::TYPE_WINDOW;
-    params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
     params.context = GetContext();
     widget->Init(std::move(params));
     widget->Show();
@@ -97,7 +97,7 @@ class CleanupAnimationObserverTest : public AshTestBase,
       widget_ = nullptr;
   }
 
-  views::Widget* widget_ = nullptr;
+  raw_ptr<views::Widget> widget_ = nullptr;
 };
 
 }  // namespace

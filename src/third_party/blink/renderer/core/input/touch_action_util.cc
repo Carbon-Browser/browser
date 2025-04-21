@@ -1,20 +1,19 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/input/touch_action_util.h"
 
 #include "third_party/blink/renderer/core/dom/node.h"
-#include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/layout/layout_box.h"
 
 namespace blink {
 namespace touch_action_util {
 
 TouchAction ComputeEffectiveTouchAction(const Node& node) {
-  if (node.GetComputedStyle())
-    return node.GetComputedStyle()->GetEffectiveTouchAction();
-
+  if (LayoutObject* layout_object = node.GetLayoutObject()) {
+    return layout_object->StyleRef().EffectiveTouchAction();
+  }
   return TouchAction::kAuto;
 }
 

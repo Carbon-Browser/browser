@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,7 +52,7 @@ void RecordForeignLayer(GraphicsContext& context,
   PaintController& paint_controller = context.GetPaintController();
   // This is like ScopedPaintChunkProperties but uses null id because foreign
   // layer chunk doesn't need an id nor a client.
-  absl::optional<PropertyTreeStateOrAlias> previous_properties;
+  std::optional<PropertyTreeStateOrAlias> previous_properties;
   if (properties) {
     previous_properties.emplace(paint_controller.CurrentPaintChunkProperties());
     paint_controller.UpdateCurrentPaintChunkProperties(*properties);
@@ -61,7 +61,6 @@ void RecordForeignLayer(GraphicsContext& context,
       client, type, std::move(layer), origin,
       client.VisualRectOutsetForRasterEffects(),
       client.GetPaintInvalidationReason());
-  paint_controller.RecordDebugInfo(client);
   if (properties) {
     paint_controller.UpdateCurrentPaintChunkProperties(*previous_properties);
   }

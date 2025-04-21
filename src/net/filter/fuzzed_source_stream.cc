@@ -1,6 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "net/filter/fuzzed_source_stream.h"
 
@@ -10,8 +15,9 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/ranges/algorithm.h"
+#include "base/task/single_thread_task_runner.h"
 #include "net/base/io_buffer.h"
 #include "net/base/net_errors.h"
 
@@ -48,7 +54,7 @@ int FuzzedSourceStream::Read(IOBuffer* buf,
 
   if (sync) {
     if (result > 0) {
-      std::copy(data.data(), data.data() + data.size(), buf->data());
+      base::ranges::copy(data, buf->data());
     } else {
       end_returned_ = true;
     }
@@ -59,7 +65,7 @@ int FuzzedSourceStream::Read(IOBuffer* buf,
 
   read_pending_ = true;
   // |this| is owned by the caller so use base::Unretained is safe.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(&FuzzedSourceStream::OnReadComplete,
                                 base::Unretained(this), std::move(callback),
                                 data, pending_read_buf, result));

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,9 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_PUBLIC_PAGE_SCHEDULER_H_
 
 #include <memory>
-#include "third_party/blink/public/platform/blame_context.h"
 #include "third_party/blink/public/platform/scheduler/web_scoped_virtual_time_pauser.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/scheduler/public/frame_scheduler.h"
-#include "third_party/blink/renderer/platform/scheduler/public/page_lifecycle_state.h"
 #include "third_party/blink/renderer/platform/scheduler/public/scheduling_policy.h"
 #include "third_party/blink/renderer/platform/scheduler/public/virtual_time_controller.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
@@ -18,8 +16,9 @@
 
 namespace blink {
 
+class AgentGroupScheduler;
+
 namespace scheduler {
-class WebAgentGroupScheduler;
 class WidgetScheduler;
 }  // namespace scheduler
 
@@ -31,14 +30,10 @@ class PLATFORM_EXPORT PageScheduler {
 
     // An "ordinary" page is a fully-featured page owned by a web view.
     virtual bool IsOrdinary() const = 0;
-    virtual void ReportIntervention(const WTF::String& message) = 0;
     // Returns true if the request has been succcessfully relayed to the
     // compositor.
     virtual bool RequestBeginMainFrameNotExpected(bool new_state) = 0;
     virtual void OnSetPageFrozen(bool is_frozen) = 0;
-    // Returns true iff the network is idle for the local main frame.
-    // Always returns false if the main frame is remote.
-    virtual bool LocalMainFrameNetworkIsAlmostIdle() const { return true; }
   };
 
   virtual ~PageScheduler() = default;
@@ -48,6 +43,15 @@ class PLATFORM_EXPORT PageScheduler {
   virtual void OnTitleOrFaviconUpdated() = 0;
   // The scheduler may throttle tasks associated with background pages.
   virtual void SetPageVisible(bool) = 0;
+  // Return whether the page is visible or not.  Note that learning
+  // `!IsPageVisible()` does not tell you if the page should continue to paint
+  // or not.  There are two hidden states, `kHidden` and `kHiddenButPainting`
+  // which both correspond to a page that's not visible to the user.  The latter
+  // indicates that the page's content is still meaningful in some other way,
+  // such as if it's being captured.
+  // TODO(https://crbug.com/1495854): add `IsPagePainting()` to make it easy to
+  // tell the difference.
+  virtual bool IsPageVisible() const = 0;
   // The scheduler transitions app to and from FROZEN state in background.
   virtual void SetPageFrozen(bool) = 0;
   // Handles operations required for storing the page in the back-forward cache.
@@ -59,11 +63,9 @@ class PLATFORM_EXPORT PageScheduler {
   virtual bool IsInBackForwardCache() const = 0;
 
   // Creates a new FrameScheduler. The caller is responsible for deleting
-  // it. All tasks executed by the frame scheduler will be attributed to
-  // |blame_context|.
+  // it.
   virtual std::unique_ptr<FrameScheduler> CreateFrameScheduler(
       FrameScheduler::Delegate* delegate,
-      BlameContext*,
       bool is_in_embedded_frame_tree,
       FrameScheduler::FrameType) = 0;
 
@@ -81,8 +83,8 @@ class PLATFORM_EXPORT PageScheduler {
   // compositor.
   virtual bool RequestBeginMainFrameNotExpected(bool new_state) = 0;
 
-  // Returns WebAgentGroupScheduler
-  virtual scheduler::WebAgentGroupScheduler& GetAgentGroupScheduler() = 0;
+  // Returns AgentGroupScheduler
+  virtual AgentGroupScheduler& GetAgentGroupScheduler() = 0;
 
   // Guaranteed to be non-null for real PageScheduler implementation, but may
   // be null in unit tests.

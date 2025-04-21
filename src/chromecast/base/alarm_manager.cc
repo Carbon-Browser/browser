@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/clock.h"
 #include "base/time/default_clock.h"
 
@@ -34,6 +33,9 @@ void VerifyHandleCallback(base::OnceClosure task,
   std::move(task).Run();
 }
 }  // namespace
+
+AlarmHandle::AlarmHandle() = default;
+AlarmHandle::~AlarmHandle() = default;
 
 AlarmManager::AlarmInfo::AlarmInfo(
     base::OnceClosure task,
@@ -66,7 +68,7 @@ AlarmManager::AlarmManager(
 
 AlarmManager::AlarmManager()
     : AlarmManager(base::DefaultClock::GetInstance(),
-                   base::ThreadTaskRunnerHandle::Get()) {}
+                   base::SingleThreadTaskRunner::GetCurrentDefault()) {}
 
 AlarmManager::~AlarmManager() {}
 
@@ -76,7 +78,7 @@ std::unique_ptr<AlarmHandle> AlarmManager::PostAlarmTask(base::OnceClosure task,
   std::unique_ptr<AlarmHandle> handle = std::make_unique<AlarmHandle>();
   AddAlarm(base::BindOnce(&VerifyHandleCallback, std::move(task),
                           handle->AsWeakPtr()),
-           time, base::ThreadTaskRunnerHandle::Get());
+           time, base::SingleThreadTaskRunner::GetCurrentDefault());
   return handle;
 }
 

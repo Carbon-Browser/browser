@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@ CompositorCommitData::ScrollUpdateInfo::ScrollUpdateInfo() = default;
 CompositorCommitData::ScrollUpdateInfo::ScrollUpdateInfo(
     ElementId id,
     gfx::Vector2dF delta,
-    absl::optional<TargetSnapAreaElementIds> snap_target_ids)
+    std::optional<TargetSnapAreaElementIds> snap_target_ids)
     : element_id(id),
       scroll_delta(delta),
       snap_target_element_ids(snap_target_ids) {}
@@ -28,5 +28,8 @@ CompositorCommitData::ScrollUpdateInfo::ScrollUpdateInfo(
 CompositorCommitData::ScrollUpdateInfo&
 CompositorCommitData::ScrollUpdateInfo::operator=(
     const ScrollUpdateInfo& other) = default;
+
+CompositorCommitData::ScrollEndInfo::ScrollEndInfo() = default;
+CompositorCommitData::ScrollEndInfo::~ScrollEndInfo() = default;
 
 }  // namespace cc

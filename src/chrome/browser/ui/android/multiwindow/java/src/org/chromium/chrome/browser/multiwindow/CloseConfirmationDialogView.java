@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,12 @@ package org.chromium.chrome.browser.multiwindow;
 import android.content.Context;
 import android.content.res.Resources;
 import android.util.AttributeSet;
-import android.widget.LinearLayout;
+import android.widget.ScrollView;
 
 import androidx.annotation.Nullable;
 
 /** Content view class for close confirmation dialog. */
-public class CloseConfirmationDialogView extends LinearLayout {
+public class CloseConfirmationDialogView extends ScrollView {
     public CloseConfirmationDialogView(Context context) {
         super(context);
     }

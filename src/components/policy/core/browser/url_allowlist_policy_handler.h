@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,7 @@ class POLICY_EXPORT URLAllowlistPolicyHandler
 
   // Validates that policy follows official pattern
   // https://www.chromium.org/administrators/url-blocklist-filter-format
-  bool ValidatePolicy(const std::string& policy);
+  bool ValidatePolicy(const std::string& url_pattern);
 
   // ConfigurationPolicyHandler methods:
   bool CheckPolicySettings(const PolicyMap& policies,

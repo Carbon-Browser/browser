@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "chrome/browser/ash/policy/external_data/device_local_account_external_data_manager.h"
 #include "chromeos/dbus/power/power_policy_controller.h"
@@ -24,7 +24,7 @@ namespace policy {
 DeviceLocalAccountPolicyProvider::DeviceLocalAccountPolicyProvider(
     const std::string& user_id,
     DeviceLocalAccountPolicyService* service,
-    DeviceLocalAccount::Type type)
+    DeviceLocalAccountType type)
     : user_id_(user_id),
       service_(service),
       type_(type),
@@ -44,15 +44,13 @@ DeviceLocalAccountPolicyProvider::Create(
     const std::string& user_id,
     DeviceLocalAccountPolicyService* device_local_account_policy_service,
     bool force_immediate_load) {
-  DeviceLocalAccount::Type type;
-  if (!device_local_account_policy_service ||
-      !IsDeviceLocalAccountUser(user_id, &type)) {
+  auto type = GetDeviceLocalAccountType(user_id);
+  if (!device_local_account_policy_service || !type.has_value()) {
     return nullptr;
   }
 
-  std::unique_ptr<DeviceLocalAccountPolicyProvider> provider(
-      new DeviceLocalAccountPolicyProvider(
-          user_id, device_local_account_policy_service, type));
+  auto provider = std::make_unique<DeviceLocalAccountPolicyProvider>(
+      user_id, device_local_account_policy_service, type.value());
   // In case of restore-after-restart broker should already be initialized.
   if (force_immediate_load && provider->GetBroker())
     provider->GetBroker()->LoadImmediately();
@@ -75,13 +73,15 @@ bool DeviceLocalAccountPolicyProvider::IsFirstPolicyLoadComplete(
   return IsInitializationComplete(domain);
 }
 
-void DeviceLocalAccountPolicyProvider::RefreshPolicies() {
+void DeviceLocalAccountPolicyProvider::RefreshPolicies(
+    PolicyFetchReason reason) {
   DeviceLocalAccountPolicyBroker* broker = GetBroker();
   if (broker && broker->core()->service()) {
     waiting_for_policy_refresh_ = true;
     broker->core()->service()->RefreshPolicy(
         base::BindOnce(&DeviceLocalAccountPolicyProvider::ReportPolicyRefresh,
-                       weak_factory_.GetWeakPtr()));
+                       weak_factory_.GetWeakPtr()),
+        reason);
   } else {
     UpdateFromBroker();
   }
@@ -109,17 +109,17 @@ void DeviceLocalAccountPolicyProvider::ReportPolicyRefresh(bool success) {
 
 void DeviceLocalAccountPolicyProvider::UpdateFromBroker() {
   DeviceLocalAccountPolicyBroker* broker = GetBroker();
-  std::unique_ptr<PolicyBundle> bundle(new PolicyBundle());
+  PolicyBundle bundle;
   if (broker) {
     store_initialized_ |= broker->core()->store()->is_initialized();
     if (!waiting_for_policy_refresh_) {
       // Copy policy from the broker.
-      bundle->Get(PolicyNamespace(POLICY_DOMAIN_CHROME, std::string())) =
+      bundle.Get(PolicyNamespace(POLICY_DOMAIN_CHROME, std::string())) =
           broker->core()->store()->policy_map().Clone();
       external_data_manager_ = broker->external_data_manager();
 
       if (broker->component_policy_service())
-        bundle->MergeFrom(broker->component_policy_service()->policy());
+        bundle.MergeFrom(broker->component_policy_service()->policy());
     } else {
       // Wait for the refresh to finish.
       return;
@@ -128,40 +128,51 @@ void DeviceLocalAccountPolicyProvider::UpdateFromBroker() {
     // Keep existing policy, but do send an update.
     waiting_for_policy_refresh_ = false;
     weak_factory_.InvalidateWeakPtrs();
-    bundle->CopyFrom(policies());
+    bundle = policies().Clone();
   }
 
   PolicyMap& chrome_policy =
-      bundle->Get(PolicyNamespace(POLICY_DOMAIN_CHROME, std::string()));
+      bundle.Get(PolicyNamespace(POLICY_DOMAIN_CHROME, std::string()));
   // Apply the defaults for policies that haven't been configured by the
   // administrator given that this is an enterprise user.
   SetEnterpriseUsersDefaults(&chrome_policy);
 
-  // Apply managed guest session specific default values if no value is fetched
-  // from the cloud.
-  if (type_ == DeviceLocalAccount::TYPE_PUBLIC_SESSION) {
-    if (!chrome_policy.IsPolicySet(key::kShelfAutoHideBehavior)) {
-      // Force the |ShelfAutoHideBehavior| policy to |Never|, ensuring that the
-      // ash shelf does not auto-hide.
-      chrome_policy.Set(key::kShelfAutoHideBehavior, POLICY_LEVEL_MANDATORY,
-                        POLICY_SCOPE_MACHINE, POLICY_SOURCE_ENTERPRISE_DEFAULT,
-                        base::Value("Never"), nullptr);
+  switch (type_) {
+    case DeviceLocalAccountType::kPublicSession: {
+      // Apply managed guest session specific default values if no value is
+      // fetched from the cloud.
+
+      if (!chrome_policy.IsPolicySet(key::kShelfAutoHideBehavior)) {
+        // Force the |ShelfAutoHideBehavior| policy to |Never|, ensuring that
+        // the ash shelf does not auto-hide.
+        chrome_policy.Set(key::kShelfAutoHideBehavior, POLICY_LEVEL_MANDATORY,
+                          POLICY_SCOPE_MACHINE,
+                          POLICY_SOURCE_ENTERPRISE_DEFAULT,
+                          base::Value("Never"), nullptr);
+      }
+
+      if (!chrome_policy.IsPolicySet(key::kShowLogoutButtonInTray)) {
+        // Force the |ShowLogoutButtonInTray| policy to |true|, ensuring that a
+        // big, red logout button is shown in the ash system tray.
+        chrome_policy.Set(key::kShowLogoutButtonInTray, POLICY_LEVEL_MANDATORY,
+                          POLICY_SCOPE_MACHINE,
+                          POLICY_SOURCE_ENTERPRISE_DEFAULT, base::Value(true),
+                          nullptr);
+      }
+      break;
     }
 
-    if (!chrome_policy.IsPolicySet(key::kShowLogoutButtonInTray)) {
-      // Force the |ShowLogoutButtonInTray| policy to |true|, ensuring that a
-      // big, red logout button is shown in the ash system tray.
-      chrome_policy.Set(key::kShowLogoutButtonInTray, POLICY_LEVEL_MANDATORY,
-                        POLICY_SCOPE_MACHINE, POLICY_SOURCE_ENTERPRISE_DEFAULT,
-                        base::Value(true), nullptr);
-    }
-  }
-
-  // Disable translation functionality in Web Kiosk Mode.
-  if (type_ == DeviceLocalAccount::TYPE_WEB_KIOSK_APP) {
-    chrome_policy.Set(key::kTranslateEnabled, POLICY_LEVEL_MANDATORY,
-                      POLICY_SCOPE_USER, POLICY_SOURCE_ENTERPRISE_DEFAULT,
-                      base::Value(false), nullptr);
+    case DeviceLocalAccountType::kWebKioskApp:
+    case DeviceLocalAccountType::kKioskIsolatedWebApp:
+      // Disable translation functionality in Web Kiosk Mode.
+      chrome_policy.Set(key::kTranslateEnabled, POLICY_LEVEL_MANDATORY,
+                        POLICY_SCOPE_USER, POLICY_SOURCE_ENTERPRISE_DEFAULT,
+                        base::Value(false), nullptr);
+      break;
+    case DeviceLocalAccountType::kSamlPublicSession:
+    case DeviceLocalAccountType::kKioskApp:
+      // Do nothing.
+      break;
   }
 
   UpdatePolicy(std::move(bundle));

@@ -1,16 +1,15 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/settings/about_flags.h"
 
-#include "ash/components/cryptohome/cryptohome_parameters.h"
-#include "ash/components/settings/cros_settings_names.h"
+#include <string_view>
+
 #include "base/check.h"
 #include "base/command_line.h"
 #include "base/json/json_reader.h"
 #include "base/logging.h"
-#include "base/strings/string_piece.h"
 #include "base/values.h"
 #include "chrome/browser/about_flags.h"
 #include "chrome/browser/ash/crosapi/browser_util.h"
@@ -18,7 +17,9 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/site_isolation/about_flags.h"
 #include "chrome/common/pref_names.h"
+#include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
 #include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
 #include "components/account_id/account_id.h"
 #include "components/flags_ui/flags_storage.h"
 #include "components/flags_ui/flags_ui_pref_names.h"
@@ -47,7 +48,7 @@ std::set<std::string> ParseFlagsFromCommandLine(
     return flags;
   }
 
-  for (const auto& flag : flags_list.value().GetListDeprecated()) {
+  for (const auto& flag : flags_list.value().GetList()) {
     if (!flag.is_string()) {
       LOG(WARNING) << "Invalid entry in encoded feature flags";
       continue;
@@ -72,7 +73,7 @@ std::map<std::string, std::string> ParseOriginListFlagsFromCommmandLine(
     return origin_list_flags;
   }
 
-  for (const auto entry : origin_list_flags_dict->DictItems()) {
+  for (const auto entry : origin_list_flags_dict->GetDict()) {
     if (!entry.second.is_string()) {
       LOG(WARNING) << "Invalid entry in encoded origin list flags";
       continue;
@@ -90,7 +91,7 @@ OwnerFlagsStorage::OwnerFlagsStorage(
     : flags_ui::PrefServiceFlagsStorage(prefs),
       owner_settings_service_(owner_settings_service) {}
 
-OwnerFlagsStorage::~OwnerFlagsStorage() {}
+OwnerFlagsStorage::~OwnerFlagsStorage() = default;
 
 bool OwnerFlagsStorage::SetFlags(const std::set<std::string>& flags) {
   // Write the flags configuration to profile preferences, which are used to
@@ -141,6 +142,14 @@ void ReadOnlyFlagsStorage::SetOriginListFlag(
     const std::string& internal_entry_name,
     const std::string& origin_list_value) {}
 
+std::string ReadOnlyFlagsStorage::GetStringFlag(
+    const std::string& internal_entry_name) const {
+  return GetOriginListFlag(internal_entry_name);
+}
+
+void ReadOnlyFlagsStorage::SetStringFlag(const std::string& internal_entry_name,
+                                         const std::string& string_value) {}
+
 FeatureFlagsUpdate::FeatureFlagsUpdate(
     const ::flags_ui::FlagsStorage& flags_storage,
     PrefService* profile_prefs) {
@@ -170,9 +179,8 @@ bool FeatureFlagsUpdate::DiffersFromCommandLine(
   auto lookup = [](const std::map<std::string, std::string>& origin_list_flags,
                    const std::string& key) {
     const auto entry = origin_list_flags.find(key);
-    return entry == origin_list_flags.end()
-               ? absl::nullopt
-               : absl::make_optional(entry->second);
+    return entry == origin_list_flags.end() ? std::nullopt
+                                            : std::make_optional(entry->second);
   };
   const auto cmdline_origin_list_flags =
       ParseOriginListFlagsFromCommmandLine(cmdline);
@@ -196,43 +204,10 @@ void FeatureFlagsUpdate::UpdateSessionManager() {
   if (!primary_user || primary_user != user_manager->GetActiveUser())
     return;
 
-  std::set<std::string> flags = flags_;
-
-  // If LacrosAvailability policy is set, inject it into the feature flag,
-  // so that the value is preserved on restarting the Chrome.
-  // This is a kind of pseudo feature flag, so do not apply it in
-  // ApplyUserPolicyToFlags to store in |flags_|, otherwise the value will
-  // be used to decide whether or not to reboot to apply feature flags.
-  const PrefService::Preference* lacros_launch_switch_pref =
-      g_browser_process->local_state()->FindPreference(
-          ::prefs::kLacrosLaunchSwitch);
-  if (lacros_launch_switch_pref->IsManaged()) {
-    // If there's the value, convert it into the feature name.
-    base::StringPiece value =
-        crosapi::browser_util::GetLacrosAvailabilityPolicyName(
-            static_cast<crosapi::browser_util::LacrosAvailability>(
-                lacros_launch_switch_pref->GetValue()->GetInt()));
-    DCHECK(!value.empty())
-        << "The unexpect value is set to LacrosAvailability: "
-        << lacros_launch_switch_pref->GetValue()->GetInt();
-    auto* entry = ::about_flags::GetCurrentFlagsState()->FindFeatureEntryByName(
-        crosapi::browser_util::kLacrosAvailabilityPolicyInternalName);
-    DCHECK(entry);
-    int index;
-    for (index = 0; index < entry->NumOptions(); ++index) {
-      if (value == entry->ChoiceForOption(index).command_line_value)
-        break;
-    }
-    if (static_cast<size_t>(index) != entry->choices.size()) {
-      LOG(ERROR) << "Updating the lacros_availability: " << index;
-      flags.insert(entry->NameForOption(index));
-    }
-  }
-
   auto account_id = cryptohome::CreateAccountIdentifierFromAccountId(
       primary_user->GetAccountId());
   SessionManagerClient::Get()->SetFeatureFlagsForUser(
-      account_id, {flags.begin(), flags.end()}, origin_list_flags_);
+      account_id, {flags_.begin(), flags_.end()}, origin_list_flags_);
 }
 
 // static

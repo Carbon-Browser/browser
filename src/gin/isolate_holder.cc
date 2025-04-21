@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,13 @@
 #include <string.h>
 
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "base/check_op.h"
 #include "base/system/sys_info.h"
 #include "base/task/current_thread.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "gin/debug_impl.h"
 #include "gin/function_template.h"
@@ -24,6 +24,7 @@
 #include "gin/v8_isolate_memory_dump_provider.h"
 #include "gin/v8_shared_memory_dump_provider.h"
 #include "v8/include/v8-isolate.h"
+#include "v8/include/v8-locker.h"
 #include "v8/include/v8-snapshot.h"
 
 namespace gin {
@@ -73,22 +74,28 @@ IsolateHolder::IsolateHolder(
     IsolateType isolate_type,
     IsolateCreationMode isolate_creation_mode,
     v8::CreateHistogramCallback create_histogram_callback,
-    v8::AddHistogramSampleCallback add_histogram_sample_callback)
-    : IsolateHolder(task_runner,
+    v8::AddHistogramSampleCallback add_histogram_sample_callback,
+    scoped_refptr<base::SingleThreadTaskRunner> user_visible_task_runner,
+    scoped_refptr<base::SingleThreadTaskRunner> best_effort_task_runner)
+    : IsolateHolder(std::move(task_runner),
                     access_mode,
                     isolate_type,
                     getModifiedIsolateParams(getDefaultIsolateParams(),
                                              atomics_wait_mode,
                                              create_histogram_callback,
                                              add_histogram_sample_callback),
-                    isolate_creation_mode) {}
+                    isolate_creation_mode,
+                    std::move(user_visible_task_runner),
+                    std::move(best_effort_task_runner)) {}
 
 IsolateHolder::IsolateHolder(
     scoped_refptr<base::SingleThreadTaskRunner> task_runner,
     AccessMode access_mode,
     IsolateType isolate_type,
     std::unique_ptr<v8::Isolate::CreateParams> params,
-    IsolateCreationMode isolate_creation_mode)
+    IsolateCreationMode isolate_creation_mode,
+    scoped_refptr<base::SingleThreadTaskRunner> user_visible_task_runner,
+    scoped_refptr<base::SingleThreadTaskRunner> best_effort_task_runner)
     : access_mode_(access_mode), isolate_type_(isolate_type) {
   CHECK(Initialized())
       << "You need to invoke gin::IsolateHolder::Initialize first";
@@ -100,9 +107,10 @@ IsolateHolder::IsolateHolder(
   DCHECK(allocator);
 
   isolate_ = v8::Isolate::Allocate();
-  isolate_data_ = std::make_unique<PerIsolateData>(isolate_, allocator,
-                                                   access_mode_, task_runner);
-  //  TODO(https://crbug.com/1347092): Refactor such that caller need not
+  isolate_data_ = std::make_unique<PerIsolateData>(
+      isolate_, allocator, access_mode_, task_runner,
+      std::move(user_visible_task_runner), std::move(best_effort_task_runner));
+  //  TODO(crbug.com/40854483): Refactor such that caller need not
   //  provide params when creating a snapshot.
   if (isolate_creation_mode == IsolateCreationMode::kCreateSnapshot) {
     // This branch is called when creating a V8 snapshot for Blink.
@@ -124,9 +132,18 @@ IsolateHolder::IsolateHolder(
 
 IsolateHolder::~IsolateHolder() {
   isolate_memory_dump_provider_.reset();
+  {
+    std::optional<v8::Locker> locker;
+    if (access_mode_ == AccessMode::kUseLocker) {
+      locker.emplace(isolate_);
+    }
+    v8::Isolate::Scope isolate_scope(isolate_);
+    isolate_data_->NotifyBeforeDispose();
+  }
   // Calling Isolate::Dispose makes sure all threads which might access
   // PerIsolateData are finished.
   isolate_->Dispose();
+  isolate_data_->NotifyDisposed();
   isolate_data_.reset();
   isolate_ = nullptr;
 }
@@ -166,7 +183,6 @@ IsolateHolder::getDefaultIsolateParams() {
   params->array_buffer_allocator = g_array_buffer_allocator;
   params->allow_atomics_wait = true;
   params->external_references = g_reference_table;
-  params->only_terminate_in_safe_scope = true;
   params->embedder_wrapper_type_index = kWrapperInfoIndex;
   params->embedder_wrapper_object_index = kEncodedValueIndex;
   params->fatal_error_callback = g_fatal_error_callback;

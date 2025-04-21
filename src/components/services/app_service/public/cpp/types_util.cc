@@ -1,26 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/services/app_service/public/cpp/types_util.h"
 
-namespace apps_util {
+#include "base/notreached.h"
+#include "components/services/app_service/public/cpp/app_launch_util.h"
 
-bool IsInstalled(apps::mojom::Readiness readiness) {
-  switch (readiness) {
-    case apps::mojom::Readiness::kReady:
-    case apps::mojom::Readiness::kDisabledByBlocklist:
-    case apps::mojom::Readiness::kDisabledByPolicy:
-    case apps::mojom::Readiness::kDisabledByUser:
-    case apps::mojom::Readiness::kTerminated:
-      return true;
-    case apps::mojom::Readiness::kUninstalledByUser:
-    case apps::mojom::Readiness::kUninstalledByMigration:
-    case apps::mojom::Readiness::kRemoved:
-    case apps::mojom::Readiness::kUnknown:
-      return false;
-  }
-}
+namespace apps_util {
 
 bool IsInstalled(apps::Readiness readiness) {
   switch (readiness) {
@@ -29,9 +16,27 @@ bool IsInstalled(apps::Readiness readiness) {
     case apps::Readiness::kDisabledByPolicy:
     case apps::Readiness::kDisabledByUser:
     case apps::Readiness::kTerminated:
+    case apps::Readiness::kDisabledByLocalSettings:
       return true;
     case apps::Readiness::kUninstalledByUser:
-    case apps::Readiness::kUninstalledByMigration:
+    case apps::Readiness::kUninstalledByNonUser:
+    case apps::Readiness::kRemoved:
+    case apps::Readiness::kUnknown:
+      return false;
+  }
+}
+
+bool IsDisabled(apps::Readiness readiness) {
+  switch (readiness) {
+    case apps::Readiness::kDisabledByPolicy:
+    case apps::Readiness::kDisabledByLocalSettings:
+      return true;
+    case apps::Readiness::kReady:
+    case apps::Readiness::kDisabledByBlocklist:
+    case apps::Readiness::kDisabledByUser:
+    case apps::Readiness::kTerminated:
+    case apps::Readiness::kUninstalledByUser:
+    case apps::Readiness::kUninstalledByNonUser:
     case apps::Readiness::kRemoved:
     case apps::Readiness::kUnknown:
       return false;
@@ -60,6 +65,16 @@ bool IsHumanLaunch(apps::LaunchSource launch_source) {
     case apps::LaunchSource::kFromSmartTextContextMenu:
     case apps::LaunchSource::kFromDiscoverTabNotification:
     case apps::LaunchSource::kFromCommandLine:
+    case apps::LaunchSource::kFromLockScreen:
+    case apps::LaunchSource::kFromAppHomePage:
+    case apps::LaunchSource::kFromReparenting:
+    case apps::LaunchSource::kFromProfileMenu:
+    case apps::LaunchSource::kFromSysTrayCalendar:
+    case apps::LaunchSource::kFromInstaller:
+    case apps::LaunchSource::kFromWelcomeTour:
+    case apps::LaunchSource::kFromFocusMode:
+    case apps::LaunchSource::kFromNavigationCapturing:
+    case apps::LaunchSource::kFromWebInstallApi:
       return true;
     case apps::LaunchSource::kUnknown:
     case apps::LaunchSource::kFromChromeInternal:
@@ -73,6 +88,8 @@ bool IsHumanLaunch(apps::LaunchSource launch_source) {
     case apps::LaunchSource::kFromOsLogin:
     case apps::LaunchSource::kFromProtocolHandler:
     case apps::LaunchSource::kFromUrlHandler:
+    case apps::LaunchSource::kFromFirstRun:
+    case apps::LaunchSource::kFromSparky:
       return false;
   }
   NOTREACHED();
@@ -87,15 +104,11 @@ bool AppTypeUsesWebContents(apps::AppType app_type) {
       return true;
     case apps::AppType::kUnknown:
     case apps::AppType::kArc:
-    case apps::AppType::kBuiltIn:
     case apps::AppType::kCrostini:
-    case apps::AppType::kMacOs:
     case apps::AppType::kPluginVm:
-    case apps::AppType::kStandaloneBrowser:
     case apps::AppType::kRemote:
     case apps::AppType::kBorealis:
-    case apps::AppType::kStandaloneBrowserChromeApp:
-    case apps::AppType::kStandaloneBrowserExtension:
+    case apps::AppType::kBruschetta:
       return false;
   }
   NOTREACHED();

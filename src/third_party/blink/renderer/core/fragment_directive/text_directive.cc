@@ -1,9 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/fragment_directive/text_directive.h"
 
+#include "third_party/blink/renderer/bindings/core/v8/v8_directive_type.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_text_directive_options.h"
 #include "third_party/blink/renderer/core/fragment_directive/text_fragment_finder.h"
 
@@ -45,8 +46,8 @@ TextDirective* TextDirective::Create(TextDirectiveOptions* options) {
 
   TextFragmentSelector::SelectorType type = TextFragmentSelector::kInvalid;
 
-  if (!textStart.IsEmpty()) {
-    if (!textEnd.IsEmpty())
+  if (!textStart.empty()) {
+    if (!textEnd.empty())
       type = TextFragmentSelector::kRange;
     else
       type = TextFragmentSelector::kExact;
@@ -77,7 +78,7 @@ void TextDirective::Trace(Visitor* visitor) const {
 }
 
 String TextDirective::ToStringImpl() const {
-  return type() + "=" + selector_.ToString();
+  return type().AsString() + "=" + selector_.ToString();
 }
 
 }  // namespace blink

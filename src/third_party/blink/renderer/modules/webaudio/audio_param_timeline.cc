@@ -23,6 +23,11 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "third_party/blink/renderer/modules/webaudio/audio_param_timeline.h"
 
 #include <algorithm>
@@ -101,7 +106,7 @@ bool HasSetTargetConverged(float value,
     return true;
   }
 
-  // If `target` is not zero, converged if relative difference betwenn `value`
+  // If `target` is not zero, converged if relative difference between `value`
   // and `target` is small.  That is |`target`-`value`|/|`value`| <
   // `kSetTargetThreshold`.
   if (target != 0 && fabs(target - value) < kSetTargetThreshold * fabs(value)) {
@@ -148,7 +153,6 @@ String AudioParamTimeline::EventToString(const ParamEvent& event) const {
     // `kCancelValues` or `kSetValueCurveEnd` event.
     case ParamEvent::kLastType:
       NOTREACHED();
-      break;
   };
 
   return s + "(" + args + ")";
@@ -589,7 +593,7 @@ void AudioParamTimeline::InsertEvent(std::unique_ptr<ParamEvent> event,
     new_events_.insert(events_[0].get());
   }
 
-  if (events_.IsEmpty()) {
+  if (events_.empty()) {
     events_.insert(0, std::move(event));
     new_events_.insert(events_[0].get());
     return;
@@ -602,7 +606,7 @@ void AudioParamTimeline::InsertEvent(std::unique_ptr<ParamEvent> event,
   DCHECK_GT(insertion_idx, wtf_size_t{0});
   wtf_size_t ub = insertion_idx - 1;  // upper bound of events that can overlap.
   if (events_.back()->Time() > insert_time) {
-    auto* it = std::upper_bound(
+    auto it = std::upper_bound(
         events_.begin(), events_.end(), insert_time,
         [](const double value, const std::unique_ptr<ParamEvent>& entry) {
           return value < entry->Time();
@@ -765,7 +769,6 @@ bool AudioParamTimeline::HasValues(size_t current_frame,
       }
       case ParamEvent::kLastType:
         NOTREACHED();
-        return true;
     }
   }
 
@@ -929,7 +932,6 @@ void AudioParamTimeline::CancelAndHoldAtTime(double cancel_time,
       break;
     case ParamEvent::kLastType:
       NOTREACHED();
-      break;
   }
 
   // Now remove all the following events from the timeline.
@@ -1188,7 +1190,6 @@ float AudioParamTimeline::ValuesForFrameRangeImpl(
         }
         case ParamEvent::kLastType:
           NOTREACHED();
-          break;
       }
     }
   }
@@ -1263,7 +1264,7 @@ bool AudioParamTimeline::IsEventCurrent(const ParamEvent* event,
   // frames to be processed should be zero in this case.
   if (next_event && next_event->Time() < current_frame / sample_rate) {
     // But if the current event is a SetValue event and the event time is
-    // between currentFrame - 1 and curentFrame (in time). we don't want to
+    // between currentFrame - 1 and currentFrame (in time). we don't want to
     // skip it.  If we do skip it, the SetValue event is completely skipped
     // and not applied, which is wrong.  Other events don't have this problem.
     // (Because currentFrame is unsigned, we do the time check in this funny,
@@ -1347,7 +1348,6 @@ bool AudioParamTimeline::HandleAllEventsInThePast(
     // timeline events too because `default_value` has the expected
     // value.
     FillWithDefault(values, default_value, number_of_values, 0);
-    smoothed_value_ = default_value;
     RemoveOldEvents(events_.size());
 
     return true;
@@ -1480,11 +1480,9 @@ AudioParamTimeline::HandleCancelValues(const ParamEvent* current_event,
               // SetTarget, CancelValues) or cancelScheduledValues()
               // doesn't create such an event (SetValueCurve).
               NOTREACHED();
-              break;
             case ParamEvent::kLastType:
               // Illegal event type.
               NOTREACHED();
-              break;
           }
 
           // Cache the new value so we don't keep computing it over and over.
@@ -1501,7 +1499,6 @@ AudioParamTimeline::HandleCancelValues(const ParamEvent* current_event,
         break;
       case ParamEvent::kLastType:
         NOTREACHED();
-        break;
     }
   }
 
@@ -1632,21 +1629,18 @@ std::tuple<size_t, float, unsigned> AudioParamTimeline::ProcessExponentialRamp(
     //   m = (v2/v1)^(1/(F*(t2-t1)))
 
     // Compute the per-sample multiplier.
-    float multiplier = fdlibm::powf(value2 / value1, 1 / num_sample_frames);
+    double multiplier = fdlibm::pow(value2 / value1, 1.0 / num_sample_frames);
     // Set the starting value of the exponential ramp.  Do not attempt
     // to optimize pow to powf.  See crbug.com/771306.
     value = value1 *
             fdlibm::pow(value2 / static_cast<double>(value1),
                         (current_frame / sample_rate - time1) / delta_time);
-    for (; write_index < fill_to_frame; ++write_index) {
+    for (double accumulator = value; write_index < fill_to_frame;
+         ++write_index) {
+      value = accumulator;
       values[write_index] = value;
-      value *= multiplier;
+      accumulator *= multiplier;
       ++current_frame;
-    }
-    // `value` got updated one extra time in the above loop.  Restore it to
-    // the last computed value.
-    if (write_index >= 1) {
-      value /= multiplier;
     }
 
     // Due to roundoff it's possible that value exceeds value2.  Clip value
@@ -1674,7 +1668,7 @@ std::tuple<size_t, float, unsigned> AudioParamTimeline::ProcessSetTarget(
   auto sample_rate = current_state.sample_rate;
   auto control_rate = current_state.control_rate;
   auto fill_to_end_frame = current_state.fill_to_end_frame;
-  auto* event = current_state.event;
+  auto* event = current_state.event.get();
 
   // Exponential approach to target value with given time constant.
   //
@@ -1785,7 +1779,7 @@ std::tuple<size_t, float, unsigned> AudioParamTimeline::ProcessSetValueCurve(
   auto start_frame = current_state.start_frame;
   auto end_frame = current_state.end_frame;
   auto fill_to_end_frame = current_state.fill_to_end_frame;
-  auto* event = current_state.event;
+  auto* event = current_state.event.get();
 
   const Vector<float> curve = event->Curve();
   const float* curve_data = curve.data();
@@ -1977,7 +1971,7 @@ std::tuple<size_t, float, unsigned> AudioParamTimeline::ProcessCancelValues(
   auto sample_rate = current_state.sample_rate;
   auto control_rate = current_state.control_rate;
   auto fill_to_end_frame = current_state.fill_to_end_frame;
-  auto* event = current_state.event;
+  auto* event = current_state.event.get();
   auto event_index = current_state.event_index;
 
   // If the previous event was a SetTarget or ExponentialRamp

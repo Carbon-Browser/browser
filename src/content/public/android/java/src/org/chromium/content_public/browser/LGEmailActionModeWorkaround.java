@@ -1,9 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.content_public.browser;
 
+import org.chromium.build.annotations.NullMarked;
 import org.chromium.content.browser.selection.LGEmailActionModeWorkaroundImpl;
 
 /**
@@ -13,6 +14,7 @@ import org.chromium.content.browser.selection.LGEmailActionModeWorkaroundImpl;
  * a system update. However, LG Email team is committed to fixing this in the near future.
  * This is a version code limited workaround to avoid crashes in the app.
  */
+@NullMarked
 public final class LGEmailActionModeWorkaround {
     private LGEmailActionModeWorkaround() {}
 

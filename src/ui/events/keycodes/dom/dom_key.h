@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,11 @@
 
 #include <stdint.h>
 
+#include <optional>
 #include <ostream>
 
 #include "base/check.h"
 #include "build/build_config.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace ui {
 
@@ -38,7 +38,7 @@ namespace ui {
 //
 class DomKey {
  public:
-  using Base = int32_t;
+  using Base = uint32_t;
 
  private:
   // Integer representation of DomKey. This is arranged so that DomKey encoded
@@ -82,16 +82,20 @@ class DomKey {
   // Following block is a technique to add inlined constant with C++14
   // compatible way. These can be replaced with inline constexpr after
   // C++17 support.
-  enum InvalidKey : Base { NONE = 0 };
+  enum : Base { NONE = 0 };
 // |dom_key_data.inc| describes the non-printable DomKey values, and is
 // included here to create constants for them in the DomKey:: scope.
-#define DOM_KEY_MAP_DECLARATION enum Key : Base
-#define DOM_KEY_UNI(key, id, value) id = (TYPE_UNICODE | (value))
-#define DOM_KEY_MAP(key, id, value) id = (TYPE_NON_UNICODE | (value))
+#define DOM_KEY_MAP_DECLARATION_START enum Key : Base {
+#define DOM_KEY_UNI(key, id, value) id = (TYPE_UNICODE | (value)),
+#define DOM_KEY_MAP(key, id, value) id = (TYPE_NON_UNICODE | (value)),
+#define DOM_KEY_MAP_DECLARATION_END \
+  }                                 \
+  ;
 #include "ui/events/keycodes/dom/dom_key_data.inc"
-#undef DOM_KEY_MAP_DECLARATION
+#undef DOM_KEY_MAP_DECLARATION_START
 #undef DOM_KEY_MAP
 #undef DOM_KEY_UNI
+#undef DOM_KEY_MAP_DECLARATION_END
 
   // Create a DomKey, with the undefined-value sentinel DomKey::NONE.
   constexpr DomKey() = default;
@@ -105,14 +109,14 @@ class DomKey {
 
   // Factory that returns a DomKey for the specified value. Returns nullopt if
   // |value| is not a valid value (or NONE).
-  static absl::optional<DomKey> FromBase(Base value) {
+  static std::optional<DomKey> FromBase(Base value) {
     if (value != 0 && !IsValidValue(value))
-      return absl::nullopt;
+      return std::nullopt;
     return Base(value);
   }
 
   // Obtain the encoded integer representation of the DomKey.
-  operator Base() const { return value_; }
+  constexpr operator Base() const { return value_; }
 
   // True if the value is a valid DomKey (which excludes DomKey::NONE and
   // integers not following the DomKey format).
@@ -129,40 +133,30 @@ class DomKey {
 
   // Returns the Unicode code point for a Unicode key.
   // It is incorrect to call this for other kinds of key.
-  int32_t ToCharacter() const {
+  uint32_t ToCharacter() const {
     DCHECK(IsCharacter()) << value_;
     return value_ & VALUE_MASK;
   }
 
   // Returns the associated combining code point for a dead key.
   // It is incorrect to call this for other kinds of key.
-  int32_t ToDeadKeyCombiningCharacter() const {
+  uint32_t ToDeadKeyCombiningCharacter() const {
     DCHECK(IsDeadKey()) << value_;
     return value_ & VALUE_MASK;
   }
 
   // Returns a DomKey for the given Unicode character.
-  static DomKey FromCharacter(int32_t character) {
-    DCHECK(character >= 0 && character <= 0x10FFFF);
+  constexpr static DomKey FromCharacter(uint32_t character) {
+    DCHECK(character <= 0x10FFFF);
     return DomKey(TYPE_UNICODE | character);
   }
 
   // Returns a dead-key DomKey for the given combining character.
-  static DomKey DeadKeyFromCombiningCharacter(int32_t combining_character) {
-    DCHECK(combining_character >= 0 && combining_character <= 0x10FFFF);
+  constexpr static DomKey DeadKeyFromCombiningCharacter(
+      uint32_t combining_character) {
+    DCHECK(combining_character <= 0x10FFFF);
     return DomKey(TYPE_DEAD | combining_character);
   }
-
-  // Provide means to generate constant DomKey::Base values, primarily to
-  // allow conversion tables to be constant, without startup construction.
-  // In the future (cue the theremin) this can be replaced with constexpr
-  // functions.
-  template<Base C> struct Constant {
-    enum : Base {
-      Character = TYPE_UNICODE | C,
-      Dead = TYPE_DEAD | C,
-    };
-  };
 
  private:
   static bool IsValidValue(Base value) { return (value & TYPE_MASK) != 0; }

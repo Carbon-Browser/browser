@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 #define MOJO_CORE_EMBEDDER_SCOPED_IPC_SUPPORT_H_
 
 #include "base/component_export.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 
 namespace base {
 class SingleThreadTaskRunner;
@@ -22,6 +22,9 @@ class COMPONENT_EXPORT(MOJO_CORE_EMBEDDER) ScopedIPCSupport {
  public:
   // ShutdownPolicy is a type for specifying the desired Mojo IPC support
   // shutdown behavior used during ScopedIPCSupport destruction.
+  //
+  // It only has an effect if BUILDFLAG(MOJO_SUPPORT_LEGACY_CORE),
+  // which currently is on ChromeOS and in fuzzer builds.
   //
   // What follows is a quick overview of why shutdown behavior is interesting
   // and how you might decide which behavior is right for your use case.

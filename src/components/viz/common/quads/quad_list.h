@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <stddef.h>
 
+#include "base/containers/adapters.h"
 #include "cc/base/list_container.h"
 #include "components/viz/common/quads/draw_quad.h"
 
@@ -23,8 +24,10 @@ class VIZ_COMMON_EXPORT QuadList : public cc::ListContainer<DrawQuad> {
   using BackToFrontIterator = QuadList::ReverseIterator;
   using ConstBackToFrontIterator = QuadList::ConstReverseIterator;
 
+  inline auto BackToFront() { return base::Reversed(*this); }
   inline BackToFrontIterator BackToFrontBegin() { return rbegin(); }
   inline BackToFrontIterator BackToFrontEnd() { return rend(); }
+  inline auto BackToFront() const { return base::Reversed(*this); }
   inline ConstBackToFrontIterator BackToFrontBegin() const { return rbegin(); }
   inline ConstBackToFrontIterator BackToFrontEnd() const { return rend(); }
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,9 @@
 // and have each line read.
 // TODO(dfried): merge functionality into views::Label.
 class AppInfoLabel : public views::Label {
- public:
-  METADATA_HEADER(AppInfoLabel);
+  METADATA_HEADER(AppInfoLabel, views::Label)
 
+ public:
   explicit AppInfoLabel(const std::u16string& text);
   ~AppInfoLabel() override;
 

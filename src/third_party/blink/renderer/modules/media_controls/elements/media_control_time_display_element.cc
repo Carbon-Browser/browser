@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,21 +24,24 @@ constexpr int kDefaultTimeDisplayHeight = 48;
 namespace blink {
 
 MediaControlTimeDisplayElement::MediaControlTimeDisplayElement(
-    MediaControlsImpl& media_controls,
-    int localized_resource_id)
-    : MediaControlDivElement(media_controls),
-      localized_resource_id_(localized_resource_id) {
-  SetAriaLabel();
+    MediaControlsImpl& media_controls)
+    : MediaControlDivElement(media_controls) {
+  // Will hide from accessibility tree, because the information is redundant
+  // with the info provided on the media scrubber.
+  setAttribute(html_names::kAriaHiddenAttr, AtomicString("true"));
 }
 
 void MediaControlTimeDisplayElement::SetCurrentValue(double time) {
+  if (current_value_ == time) {
+    return;
+  }
   current_value_ = time;
-  SetAriaLabel();
-  setInnerText(FormatTime(), ASSERT_NO_EXCEPTION);
+  String formatted_time = FormatTime();
+  setInnerText(formatted_time);
 }
 
 double MediaControlTimeDisplayElement::CurrentValue() const {
-  return current_value_;
+  return current_value_.value_or(0);
 }
 
 gfx::Size MediaControlTimeDisplayElement::GetSizeOrDefault() const {
@@ -54,13 +57,7 @@ int MediaControlTimeDisplayElement::EstimateElementWidth() const {
 }
 
 String MediaControlTimeDisplayElement::FormatTime() const {
-  return MediaControlsSharedHelpers::FormatTime(current_value_);
-}
-
-void MediaControlTimeDisplayElement::SetAriaLabel() {
-  String aria_label =
-      GetLocale().QueryString(localized_resource_id_, FormatTime());
-  setAttribute(html_names::kAriaLabelAttr, AtomicString(aria_label));
+  return MediaControlsSharedHelpers::FormatTime(CurrentValue());
 }
 
 }  // namespace blink

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,10 +16,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/rand_util.h"

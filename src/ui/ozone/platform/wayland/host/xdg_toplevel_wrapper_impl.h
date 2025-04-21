@@ -1,13 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_OZONE_PLATFORM_WAYLAND_HOST_XDG_TOPLEVEL_WRAPPER_IMPL_H_
 #define UI_OZONE_PLATFORM_WAYLAND_HOST_XDG_TOPLEVEL_WRAPPER_IMPL_H_
 
+#include <xdg-shell-client-protocol.h>
 #include <memory>
 
-#include "base/memory/raw_ptr.h"
 #include "ui/ozone/platform/wayland/host/shell_toplevel_wrapper.h"
 
 namespace ui {
@@ -30,7 +30,7 @@ class XDGToplevelWrapperImpl : public ShellToplevelWrapper {
   bool Initialize() override;
   void SetMaximized() override;
   void UnSetMaximized() override;
-  void SetFullscreen() override;
+  void SetFullscreen(WaylandOutput* wayland_output) override;
   void UnSetFullscreen() override;
   void SetMinimized() override;
   void SurfaceMove(WaylandConnection* connection) override;
@@ -43,51 +43,43 @@ class XDGToplevelWrapperImpl : public ShellToplevelWrapper {
   void SetMaxSize(int32_t width, int32_t height) override;
   void SetAppId(const std::string& app_id) override;
   void SetDecoration(DecorationMode decoration) override;
-  void Lock(WaylandOrientationLockType lock_type) override;
-  void Unlock() override;
-  void RequestWindowBounds(const gfx::Rect& bounds) override;
-  void SetRestoreInfo(int32_t, int32_t) override;
-  void SetRestoreInfoWithWindowIdSource(int32_t, const std::string&) override;
   void SetSystemModal(bool modal) override;
-  bool SupportsScreenCoordinates() const override;
-  void EnableScreenCoordinates() override;
+  void SetIcon(const gfx::ImageSkia& icon) override;
+
+  XDGToplevelWrapperImpl* AsXDGToplevelWrapper() override;
 
   XDGSurfaceWrapperImpl* xdg_surface_wrapper() const;
 
  private:
-  // xdg_toplevel_listener
-  static void ConfigureTopLevel(void* data,
-                                struct xdg_toplevel* xdg_toplevel,
+  friend class WaylandWindowDragController;
+  // xdg_toplevel_listener callbacks:
+  static void OnToplevelConfigure(void* data,
+                                  xdg_toplevel* toplevel,
+                                  int32_t width,
+                                  int32_t height,
+                                  wl_array* states);
+  static void OnToplevelClose(void* data, xdg_toplevel* toplevel);
+  static void OnConfigureBounds(void* data,
+                                xdg_toplevel* toplevel,
                                 int32_t width,
-                                int32_t height,
-                                struct wl_array* states);
-  static void CloseTopLevel(void* data, struct xdg_toplevel* xdg_toplevel);
+                                int32_t height);
+  static void OnWmCapabilities(void* data,
+                               xdg_toplevel* toplevel,
+                               wl_array* capabilities);
 
-  // zxdg_decoration_listener
-  static void ConfigureDecoration(
-      void* data,
-      struct zxdg_toplevel_decoration_v1* decoration,
-      uint32_t mode);
-
-  // aura_toplevel_listener
-  static void ConfigureAuraTopLevel(void* data,
-                                    struct zaura_toplevel* zaura_toplevel,
-                                    int32_t x,
-                                    int32_t y,
-                                    int32_t width,
-                                    int32_t height,
-                                    struct wl_array* states);
-
-  static void OnOriginChange(void* data,
-                             struct zaura_toplevel* zaura_toplevel,
-                             int32_t x,
-                             int32_t y);
+  // zxdg_decoration_listener callbacks:
+  static void OnDecorationConfigure(void* data,
+                                    zxdg_toplevel_decoration_v1* decoration,
+                                    uint32_t mode);
 
   // Send request to wayland compositor to enable a requested decoration mode.
   void SetTopLevelDecorationMode(DecorationMode requested_mode);
 
   // Initializes the xdg-decoration protocol extension, if available.
   void InitializeXdgDecoration();
+
+  // Creates a wl_region from `shape_rects`.
+  wl::Object<wl_region> CreateAndAddRegion(const ShapeRects& shape_rects);
 
   // Ground surface for this toplevel wrapper.
   std::unique_ptr<XDGSurfaceWrapperImpl> xdg_surface_wrapper_;
@@ -98,8 +90,6 @@ class XDGToplevelWrapperImpl : public ShellToplevelWrapper {
 
   // XDG Shell Stable object.
   wl::Object<xdg_toplevel> xdg_toplevel_;
-  // Aura shell toplevel addons.
-  wl::Object<zaura_toplevel> aura_toplevel_;
 
   wl::Object<zxdg_toplevel_decoration_v1> zxdg_toplevel_decoration_;
 

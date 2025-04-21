@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,14 @@
 
 #include "ui/gfx/gpu_fence.h"
 #include "ui/gfx/native_widget_types.h"
-#include "ui/gl/gl_image.h"
 
 namespace gl {
 
 GLSurfaceOverlay::GLSurfaceOverlay(
-    GLImage* image,
+    scoped_refptr<gfx::NativePixmap> pixmap,
     std::unique_ptr<gfx::GpuFence> gpu_fence,
     const gfx::OverlayPlaneData& overlay_plane_data)
-    : image_(image),
+    : pixmap_(std::move(pixmap)),
       gpu_fence_(std::move(gpu_fence)),
       overlay_plane_data_(overlay_plane_data) {}
 
@@ -27,14 +26,9 @@ bool GLSurfaceOverlay::ScheduleOverlayPlane(gfx::AcceleratedWidget widget) {
   if (gpu_fence_)
     acquire_fences.push_back(std::move(*gpu_fence_));
 
-  auto pixmap = image_->GetNativePixmap();
-  DCHECK(pixmap);
-  return pixmap->ScheduleOverlayPlane(widget, overlay_plane_data_,
-                                      std::move(acquire_fences), {});
-}
-
-void GLSurfaceOverlay::Flush() const {
-  return image_->Flush();
+  DCHECK(pixmap_);
+  return pixmap_->ScheduleOverlayPlane(widget, overlay_plane_data_,
+                                       std::move(acquire_fences), {});
 }
 
 }  // namespace gl

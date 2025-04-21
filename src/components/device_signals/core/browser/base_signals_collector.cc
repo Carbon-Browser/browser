@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,13 @@
 #include <unordered_set>
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/device_signals/core/browser/signals_types.h"
 
 namespace device_signals {
 
 BaseSignalsCollector::BaseSignalsCollector(
-    const std::unordered_map<const SignalName, GetSignalCallback>
+    std::unordered_map<const SignalName, GetSignalCallback>
         signals_collection_map)
     : signals_collection_map_(std::move(signals_collection_map)) {
   DCHECK(!signals_collection_map_.empty());

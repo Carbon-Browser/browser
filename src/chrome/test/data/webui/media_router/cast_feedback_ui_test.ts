@@ -1,11 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {FeedbackEvent, FeedbackUiBrowserProxy, FeedbackUiBrowserProxyImpl, FeedbackUiElement} from 'chrome://cast-feedback/cast_feedback_ui.js';
-import {PromiseResolver} from 'chrome://resources/js/promise_resolver.m.js';
+import type {CastFeedbackUiElement, FeedbackUiBrowserProxy} from 'chrome://cast-feedback/cast_feedback_ui.js';
+import {FeedbackEvent, FeedbackUiBrowserProxyImpl} from 'chrome://cast-feedback/cast_feedback_ui.js';
+import type {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import {PromiseResolver} from 'chrome://resources/js/promise_resolver.js';
 import {assertDeepEquals, assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
+import {microtasksFinished} from 'chrome://webui-test/test_util.js';
 
 class TestFeedbackUiBrowserProxy extends TestBrowserProxy implements
     FeedbackUiBrowserProxy {
@@ -25,32 +28,36 @@ class TestFeedbackUiBrowserProxy extends TestBrowserProxy implements
 
   sendFeedback(info: chrome.feedbackPrivate.FeedbackInfo) {
     this.methodCalled('sendFeedback', info);
-    return Promise.resolve(
-        this.getCallCount('sendFeedback') > this.timesToFail ?
-            chrome.feedbackPrivate.Status.SUCCESS :
-            chrome.feedbackPrivate.Status.DELAYED);
+    return Promise.resolve({
+      status: this.getCallCount('sendFeedback') > this.timesToFail ?
+          chrome.feedbackPrivate.Status.SUCCESS :
+          chrome.feedbackPrivate.Status.DELAYED,
+      landingPageType: chrome.feedbackPrivate.LandingPageType.NORMAL,
+    });
   }
 }
 
 suite('Suite', function() {
   let browserProxy: TestFeedbackUiBrowserProxy;
-  let ui: FeedbackUiElement;
+  let ui: CastFeedbackUiElement;
   const TEST_COMMENT: string = 'test comment';
 
-  function submit() {
+  async function submit() {
     const textArea = ui.shadowRoot!.querySelector('textarea');
     assertTrue(!!textArea);
     textArea.value = TEST_COMMENT;
     textArea.dispatchEvent(new CustomEvent('input'));
+    await microtasksFinished();
 
     const submitButton =
-        ui.shadowRoot!.querySelector<HTMLElement>('.action-button');
+        ui.shadowRoot!.querySelector<CrButtonElement>('.action-button');
     assertTrue(!!submitButton);
+    assertFalse(submitButton.disabled);
     submitButton.click();
   }
 
   setup(function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     browserProxy = new TestFeedbackUiBrowserProxy();
     FeedbackUiBrowserProxyImpl.setInstance(browserProxy);
     ui = document.createElement('feedback-ui');
@@ -61,7 +68,7 @@ suite('Suite', function() {
     browserProxy.timesToFail = 1;
     ui.resendDelayMs = 50;
     ui.maxResendAttempts = 2;
-    submit();
+    await submit();
     await browserProxy.resolver.promise;
     assertEquals(2, browserProxy.getCallCount('sendFeedback'));
     assertDeepEquals(
@@ -83,7 +90,7 @@ suite('Suite', function() {
     browserProxy.timesToFail = 3;
     ui.resendDelayMs = 50;
     ui.maxResendAttempts = 2;
-    submit();
+    await submit();
     await browserProxy.resolver.promise;
     assertEquals(3, browserProxy.getCallCount('sendFeedback'));
     assertDeepEquals(

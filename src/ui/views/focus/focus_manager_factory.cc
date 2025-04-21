@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,15 +36,17 @@ FocusManagerFactory::~FocusManagerFactory() = default;
 
 // static
 std::unique_ptr<FocusManager> FocusManagerFactory::Create(Widget* widget) {
-  if (!g_focus_manager_factory)
+  if (!g_focus_manager_factory) {
     g_focus_manager_factory = new DefaultFocusManagerFactory();
+  }
   return g_focus_manager_factory->CreateFocusManager(widget);
 }
 
 // static
 void FocusManagerFactory::Install(FocusManagerFactory* f) {
-  if (f == g_focus_manager_factory)
+  if (f == g_focus_manager_factory) {
     return;
+  }
   delete g_focus_manager_factory;
   g_focus_manager_factory = f ? f : new DefaultFocusManagerFactory();
 }

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,10 +44,12 @@ RequestHandlerForCheckAndroidManagement::HandleRequest(
 
   em::DeviceManagementResponse response;
   response.mutable_check_android_management_response();
-  if (oauth_token == kManagedAuthToken)
-    return CreateHttpResponse(net::HTTP_CONFLICT, response.SerializeAsString());
-  if (oauth_token == kUnmanagedAuthToken)
-    return CreateHttpResponse(net::HTTP_OK, response.SerializeAsString());
+  if (oauth_token == kManagedAuthToken) {
+    return CreateHttpResponse(net::HTTP_CONFLICT, response);
+  }
+  if (oauth_token == kUnmanagedAuthToken) {
+    return CreateHttpResponse(net::HTTP_OK, response);
+  }
   return CreateHttpResponse(net::HTTP_FORBIDDEN, "Invalid OAuth token");
 }
 

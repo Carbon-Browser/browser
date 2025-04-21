@@ -1,16 +1,16 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef DEVICE_BLUETOOTH_BLUETOOTH_ADVERTISEMENT_MAC_H_
 #define DEVICE_BLUETOOTH_BLUETOOTH_ADVERTISEMENT_MAC_H_
 
-#include "base/memory/raw_ptr.h"
-
 #import <CoreBluetooth/CoreBluetooth.h>
 
-#include <memory>
+#include <optional>
 
+#include "base/memory/raw_ptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "dbus/object_path.h"
 #include "device/bluetooth/bluetooth_adapter.h"
 #include "device/bluetooth/bluetooth_advertisement.h"
@@ -34,7 +34,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothAdvertisementMac
   };
 
   BluetoothAdvertisementMac(
-      std::unique_ptr<BluetoothAdvertisement::UUIDList> service_uuids,
+      std::optional<BluetoothAdvertisement::UUIDList> service_uuids,
       BluetoothAdapter::CreateAdvertisementCallback callback,
       BluetoothAdapter::AdvertisementErrorCallback error_callback,
       BluetoothLowEnergyAdvertisementManagerMac* advertisement_manager);
@@ -55,7 +55,9 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothAdvertisementMac
 
   bool is_advertisement_pending() { return status_ == ADVERTISEMENT_PENDING; }
 
-  BluetoothAdvertisement::UUIDList service_uuids() { return *service_uuids_; }
+  const BluetoothAdvertisement::UUIDList& service_uuids() {
+    return *service_uuids_;
+  }
 
  private:
   friend class BluetoothLowEnergyAdvertisementManagerMac;
@@ -72,7 +74,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothAdvertisementMac
 
   void InvokeSuccessCallback();
 
-  std::unique_ptr<BluetoothAdvertisement::UUIDList> service_uuids_;
+  std::optional<BluetoothAdvertisement::UUIDList> service_uuids_;
   BluetoothAdapter::CreateAdvertisementCallback success_callback_;
   BluetoothAdapter::AdvertisementErrorCallback error_callback_;
   raw_ptr<BluetoothLowEnergyAdvertisementManagerMac> advertisement_manager_;

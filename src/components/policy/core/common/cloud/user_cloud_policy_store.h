@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -86,6 +86,12 @@ class POLICY_EXPORT DesktopCloudPolicyStore : public UserCloudPolicyStoreBase {
   // CloudPolicyStore implementation.
   void Load() override;
   void Store(const enterprise_management::PolicyFetchResponse& policy) override;
+
+  // Reset `persisted_policy_key_` so that we can update signing key in the next
+  // policy fetch request. Not touching other signing key cache to reduce impact
+  // before key is updated.
+  // virtual for testing.
+  virtual void ResetPolicyKey();
 
  protected:
   // Loads cloud policies that have been written on the disk at |policy_path|

@@ -1,10 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_RESOURCE_COORDINATOR_LIFECYCLE_UNIT_BASE_H_
 #define CHROME_BROWSER_RESOURCE_COORDINATOR_LIFECYCLE_UNIT_BASE_H_
 
+#include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/time/time.h"
@@ -43,7 +44,6 @@ class LifecycleUnitBase : public LifecycleUnit {
   size_t GetDiscardCount() const override;
   void AddObserver(LifecycleUnitObserver* observer) override;
   void RemoveObserver(LifecycleUnitObserver* observer) override;
-  ukm::SourceId GetUkmSourceId() const override;
 
   void SetDiscardCountForTesting(size_t discard_count);
 

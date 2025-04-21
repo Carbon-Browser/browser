@@ -1,16 +1,20 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/network/public/cpp/resource_request.h"
 
-#include "base/stl_util.h"
+#include "base/notreached.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/trace_event/typed_macros.h"
+#include "base/types/optional_util.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "net/base/load_flags.h"
 #include "net/log/net_log_source.h"
 #include "services/network/public/mojom/cookie_access_observer.mojom.h"
+#include "services/network/public/mojom/device_bound_sessions.mojom.h"
 #include "services/network/public/mojom/devtools_observer.mojom.h"
+#include "services/network/public/mojom/trust_token_access_observer.mojom.h"
 #include "services/network/public/mojom/url_request.mojom.h"
 #include "services/network/public/mojom/web_bundle_handle.mojom.h"
 
@@ -20,8 +24,9 @@ namespace {
 
 mojo::PendingRemote<mojom::CookieAccessObserver> Clone(
     mojo::PendingRemote<mojom::CookieAccessObserver>* observer) {
-  if (!*observer)
+  if (!*observer) {
     return mojo::NullRemote();
+  }
   mojo::Remote<mojom::CookieAccessObserver> remote(std::move(*observer));
   mojo::PendingRemote<mojom::CookieAccessObserver> new_remote;
   remote->Clone(new_remote.InitWithNewPipeAndPassReceiver());
@@ -29,10 +34,23 @@ mojo::PendingRemote<mojom::CookieAccessObserver> Clone(
   return new_remote;
 }
 
+mojo::PendingRemote<mojom::TrustTokenAccessObserver> Clone(
+    mojo::PendingRemote<mojom::TrustTokenAccessObserver>* observer) {
+  if (!*observer) {
+    return mojo::NullRemote();
+  }
+  mojo::Remote<mojom::TrustTokenAccessObserver> remote(std::move(*observer));
+  mojo::PendingRemote<mojom::TrustTokenAccessObserver> new_remote;
+  remote->Clone(new_remote.InitWithNewPipeAndPassReceiver());
+  *observer = remote.Unbind();
+  return new_remote;
+}
+
 mojo::PendingRemote<mojom::URLLoaderNetworkServiceObserver> Clone(
     mojo::PendingRemote<mojom::URLLoaderNetworkServiceObserver>* observer) {
-  if (!*observer)
+  if (!*observer) {
     return mojo::NullRemote();
+  }
   mojo::Remote<mojom::URLLoaderNetworkServiceObserver> remote(
       std::move(*observer));
   mojo::PendingRemote<mojom::URLLoaderNetworkServiceObserver> new_remote;
@@ -43,8 +61,9 @@ mojo::PendingRemote<mojom::URLLoaderNetworkServiceObserver> Clone(
 
 mojo::PendingRemote<mojom::DevToolsObserver> Clone(
     mojo::PendingRemote<mojom::DevToolsObserver>* observer) {
-  if (!*observer)
+  if (!*observer) {
     return mojo::NullRemote();
+  }
   mojo::Remote<mojom::DevToolsObserver> remote(std::move(*observer));
   mojo::PendingRemote<mojom::DevToolsObserver> new_remote;
   remote->Clone(new_remote.InitWithNewPipeAndPassReceiver());
@@ -52,37 +71,65 @@ mojo::PendingRemote<mojom::DevToolsObserver> Clone(
   return new_remote;
 }
 
+mojo::PendingRemote<mojom::DeviceBoundSessionAccessObserver> Clone(
+    mojo::PendingRemote<mojom::DeviceBoundSessionAccessObserver>* observer) {
+  if (!*observer) {
+    return mojo::NullRemote();
+  }
+  mojo::Remote<mojom::DeviceBoundSessionAccessObserver> remote(
+      std::move(*observer));
+  mojo::PendingRemote<mojom::DeviceBoundSessionAccessObserver> new_remote;
+  remote->Clone(new_remote.InitWithNewPipeAndPassReceiver());
+  *observer = remote.Unbind();
+  return new_remote;
+}
+
 mojo::PendingRemote<mojom::AcceptCHFrameObserver> Clone(
     mojo::PendingRemote<mojom::AcceptCHFrameObserver>& observer) {
-  if (!observer)
+  if (!observer) {
     return mojo::NullRemote();
+  }
   mojo::Remote<mojom::AcceptCHFrameObserver> remote(std::move(observer));
   mojo::PendingRemote<mojom::AcceptCHFrameObserver> new_remote;
   remote->Clone(new_remote.InitWithNewPipeAndPassReceiver());
   observer = remote.Unbind();
   return new_remote;
 }
+
+mojo::PendingRemote<mojom::SharedDictionaryAccessObserver> Clone(
+    mojo::PendingRemote<mojom::SharedDictionaryAccessObserver>& observer) {
+  if (!observer) {
+    return mojo::NullRemote();
+  }
+  mojo::Remote<mojom::SharedDictionaryAccessObserver> remote(
+      std::move(observer));
+  mojo::PendingRemote<mojom::SharedDictionaryAccessObserver> new_remote;
+  remote->Clone(new_remote.InitWithNewPipeAndPassReceiver());
+  observer = remote.Unbind();
+  return new_remote;
+}
+
 // Returns true iff either holds true:
 //
 //  - both |lhs| and |rhs| are nullopt, or
 //  - neither is nullopt and they both contain equal values
 //
 bool OptionalTrustedParamsEqualsForTesting(
-    const absl::optional<ResourceRequest::TrustedParams>& lhs,
-    const absl::optional<ResourceRequest::TrustedParams>& rhs) {
+    const std::optional<ResourceRequest::TrustedParams>& lhs,
+    const std::optional<ResourceRequest::TrustedParams>& rhs) {
   return (!lhs && !rhs) || (lhs && rhs && lhs->EqualsForTesting(*rhs));
 }
 
 bool OptionalWebBundleTokenParamsEqualsForTesting(  // IN-TEST
-    const absl::optional<ResourceRequest::WebBundleTokenParams>& lhs,
-    const absl::optional<ResourceRequest::WebBundleTokenParams>& rhs) {
+    const std::optional<ResourceRequest::WebBundleTokenParams>& lhs,
+    const std::optional<ResourceRequest::WebBundleTokenParams>& rhs) {
   return (!lhs && !rhs) ||
          (lhs && rhs && lhs->EqualsForTesting(*rhs));  // IN-TEST
 }
 
 bool OptionalNetLogInfoEqualsForTesting(
-    const absl::optional<net::NetLogSource>& lhs,
-    const absl::optional<net::NetLogSource>& rhs) {
+    const std::optional<net::NetLogSource>& lhs,
+    const std::optional<net::NetLogSource>& rhs) {
   bool equal_members = lhs && rhs && lhs.value() == rhs.value();
   return (!lhs && !rhs) || equal_members;
 }
@@ -116,30 +163,51 @@ ResourceRequest::TrustedParams::TrustedParams(const TrustedParams& other) {
 
 ResourceRequest::TrustedParams& ResourceRequest::TrustedParams::operator=(
     const TrustedParams& other) {
+  TRACE_EVENT("loading", "ResourceRequest::TrustedParams.copy");
   isolation_info = other.isolation_info;
   disable_secure_dns = other.disable_secure_dns;
   has_user_activation = other.has_user_activation;
+  allow_cookies_from_browser = other.allow_cookies_from_browser;
+  include_request_cookies_with_response =
+      other.include_request_cookies_with_response;
   cookie_observer =
       Clone(&const_cast<mojo::PendingRemote<mojom::CookieAccessObserver>&>(
           other.cookie_observer));
+  trust_token_observer =
+      Clone(&const_cast<mojo::PendingRemote<mojom::TrustTokenAccessObserver>&>(
+          other.trust_token_observer));
   url_loader_network_observer = Clone(
       &const_cast<mojo::PendingRemote<mojom::URLLoaderNetworkServiceObserver>&>(
           other.url_loader_network_observer));
   devtools_observer =
       Clone(&const_cast<mojo::PendingRemote<mojom::DevToolsObserver>&>(
           other.devtools_observer));
+  device_bound_session_observer =
+      Clone(&const_cast<
+            mojo::PendingRemote<mojom::DeviceBoundSessionAccessObserver>&>(
+          other.device_bound_session_observer));
   client_security_state = other.client_security_state.Clone();
   accept_ch_frame_observer =
       Clone(const_cast<mojo::PendingRemote<mojom::AcceptCHFrameObserver>&>(
           other.accept_ch_frame_observer));
+  shared_dictionary_observer = Clone(
+      const_cast<mojo::PendingRemote<mojom::SharedDictionaryAccessObserver>&>(
+          other.shared_dictionary_observer));
   return *this;
 }
+
+ResourceRequest::TrustedParams::TrustedParams(TrustedParams&& other) = default;
+ResourceRequest::TrustedParams& ResourceRequest::TrustedParams::operator=(
+    TrustedParams&& other) = default;
 
 bool ResourceRequest::TrustedParams::EqualsForTesting(
     const TrustedParams& other) const {
   return isolation_info.IsEqualForTesting(other.isolation_info) &&
          disable_secure_dns == other.disable_secure_dns &&
          has_user_activation == other.has_user_activation &&
+         allow_cookies_from_browser == other.allow_cookies_from_browser &&
+         include_request_cookies_with_response ==
+             other.include_request_cookies_with_response &&
          client_security_state == other.client_security_state;
 }
 
@@ -197,7 +265,15 @@ ResourceRequest::WebBundleTokenParams::CloneHandle() const {
 }
 
 ResourceRequest::ResourceRequest() = default;
-ResourceRequest::ResourceRequest(const ResourceRequest& request) = default;
+ResourceRequest::ResourceRequest(const ResourceRequest& request) {
+  TRACE_EVENT(TRACE_DISABLED_BY_DEFAULT("loading"),
+              "ResourceRequest::ResourceRequest.copy_constructor");
+  *this = request;
+}
+ResourceRequest& ResourceRequest::operator=(const ResourceRequest& other) =
+    default;
+ResourceRequest::ResourceRequest(ResourceRequest&& other) = default;
+ResourceRequest& ResourceRequest::operator=(ResourceRequest&& other) = default;
 ResourceRequest::~ResourceRequest() = default;
 
 bool ResourceRequest::EqualsForTesting(const ResourceRequest& request) const {
@@ -215,19 +291,23 @@ bool ResourceRequest::EqualsForTesting(const ResourceRequest& request) const {
          load_flags == request.load_flags &&
          resource_type == request.resource_type &&
          priority == request.priority &&
+         priority_incremental == request.priority_incremental &&
          devtools_stack_id == request.devtools_stack_id &&
          cors_preflight_policy == request.cors_preflight_policy &&
          originated_from_service_worker ==
              request.originated_from_service_worker &&
          skip_service_worker == request.skip_service_worker &&
-         corb_detachable == request.corb_detachable && mode == request.mode &&
-         target_address_space == request.target_address_space &&
+         mode == request.mode &&
+         required_ip_address_space == request.required_ip_address_space &&
          credentials_mode == request.credentials_mode &&
          redirect_mode == request.redirect_mode &&
          fetch_integrity == request.fetch_integrity &&
+         expected_signatures == request.expected_signatures &&
          destination == request.destination &&
          request_body == request.request_body &&
          keepalive == request.keepalive &&
+         shared_storage_writable_eligible ==
+             request.shared_storage_writable_eligible &&
          has_user_gesture == request.has_user_gesture &&
          enable_load_timing == request.enable_load_timing &&
          enable_upload_progress == request.enable_upload_progress &&
@@ -244,9 +324,8 @@ bool ResourceRequest::EqualsForTesting(const ResourceRequest& request) const {
              request.custom_proxy_post_cache_headers.ToString() &&
          fetch_window_id == request.fetch_window_id &&
          devtools_request_id == request.devtools_request_id &&
-         is_signed_exchange_prefetch_cache_enabled ==
-             request.is_signed_exchange_prefetch_cache_enabled &&
          is_fetch_like_api == request.is_fetch_like_api &&
+         is_fetch_later_api == request.is_fetch_later_api &&
          is_favicon == request.is_favicon &&
          recursive_prefetch_token == request.recursive_prefetch_token &&
          OptionalTrustedParamsEqualsForTesting(trusted_params,
@@ -260,7 +339,10 @@ bool ResourceRequest::EqualsForTesting(const ResourceRequest& request) const {
                                             request.net_log_create_info) &&
          OptionalNetLogInfoEqualsForTesting(net_log_reference_info,
                                             request.net_log_reference_info) &&
-         target_ip_address_space == request.target_ip_address_space;
+         target_ip_address_space == request.target_ip_address_space &&
+         shared_dictionary_writer_enabled ==
+             request.shared_dictionary_writer_enabled &&
+         socket_tag == request.socket_tag;
 }
 
 bool ResourceRequest::SendsCookies() const {
@@ -291,13 +373,11 @@ net::ReferrerPolicy ReferrerPolicyForUrlRequest(
       return net::ReferrerPolicy::
           ORIGIN_CLEAR_ON_TRANSITION_FROM_SECURE_TO_INSECURE;
     case mojom::ReferrerPolicy::kDefault:
-      CHECK(false);
-      return net::ReferrerPolicy::NO_REFERRER;
+      NOTREACHED();
     case mojom::ReferrerPolicy::kStrictOriginWhenCrossOrigin:
       return net::ReferrerPolicy::REDUCE_GRANULARITY_ON_TRANSITION_CROSS_ORIGIN;
   }
   NOTREACHED();
-  return net::ReferrerPolicy::CLEAR_ON_TRANSITION_FROM_SECURE_TO_INSECURE;
 }
 
 namespace debug {
@@ -306,7 +386,7 @@ ScopedResourceRequestCrashKeys::ScopedResourceRequestCrashKeys(
     const network::ResourceRequest& request)
     : url_(GetRequestUrlCrashKey(), request.url.possibly_invalid_spec()),
       request_initiator_(GetRequestInitiatorCrashKey(),
-                         base::OptionalOrNullptr(request.request_initiator)),
+                         base::OptionalToPtr(request.request_initiator)),
       resource_type_(GetRequestResourceTypeCrashKey(),
                      base::NumberToString(request.resource_type)) {}
 

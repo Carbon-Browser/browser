@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 #include <stdint.h>
 
-#include "base/callback.h"
 #include "base/files/file.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "storage/browser/file_system/async_file_util.h"
 #include "storage/browser/file_system/watcher_manager.h"
@@ -206,7 +206,7 @@ class MTPDeviceAsyncDelegate {
 
  protected:
   // Always destruct this object via CancelPendingTasksAndDeleteDelegate().
-  virtual ~MTPDeviceAsyncDelegate() {}
+  virtual ~MTPDeviceAsyncDelegate() = default;
 };
 
 typedef base::OnceCallback<void(MTPDeviceAsyncDelegate*)>

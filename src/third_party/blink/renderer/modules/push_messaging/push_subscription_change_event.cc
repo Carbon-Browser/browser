@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,11 +30,11 @@ PushSubscriptionChangeEvent::PushSubscriptionChangeEvent(
 PushSubscriptionChangeEvent::~PushSubscriptionChangeEvent() = default;
 
 PushSubscription* PushSubscriptionChangeEvent::newSubscription() const {
-  return new_subscription_;
+  return new_subscription_.Get();
 }
 
 PushSubscription* PushSubscriptionChangeEvent::oldSubscription() const {
-  return old_subscription_;
+  return old_subscription_.Get();
 }
 
 void PushSubscriptionChangeEvent::Trace(Visitor* visitor) const {

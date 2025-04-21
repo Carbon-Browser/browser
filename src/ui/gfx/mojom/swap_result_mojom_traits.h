@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,11 +22,12 @@ struct EnumTraits<gfx::mojom::SwapResult, gfx::SwapResult> {
         return gfx::mojom::SwapResult::FAILED;
       case gfx::SwapResult::SWAP_SKIPPED:
         return gfx::mojom::SwapResult::SKIPPED;
+      case gfx::SwapResult::SWAP_NON_SIMPLE_OVERLAYS_FAILED:
+        return gfx::mojom::SwapResult::NON_SIMPLE_OVERLAYS_FAILED;
       case gfx::SwapResult::SWAP_NAK_RECREATE_BUFFERS:
         return gfx::mojom::SwapResult::NAK_RECREATE_BUFFERS;
     }
     NOTREACHED();
-    return gfx::mojom::SwapResult::FAILED;
   }
 
   static bool FromMojom(gfx::mojom::SwapResult input, gfx::SwapResult* out) {
@@ -40,12 +41,14 @@ struct EnumTraits<gfx::mojom::SwapResult, gfx::SwapResult> {
       case gfx::mojom::SwapResult::SKIPPED:
         *out = gfx::SwapResult::SWAP_SKIPPED;
         return true;
+      case gfx::mojom::SwapResult::NON_SIMPLE_OVERLAYS_FAILED:
+        *out = gfx::SwapResult::SWAP_NON_SIMPLE_OVERLAYS_FAILED;
+        return true;
       case gfx::mojom::SwapResult::NAK_RECREATE_BUFFERS:
         *out = gfx::SwapResult::SWAP_NAK_RECREATE_BUFFERS;
         return true;
     }
     NOTREACHED();
-    return false;
   }
 };
 

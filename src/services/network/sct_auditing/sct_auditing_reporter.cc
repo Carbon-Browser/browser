@@ -1,13 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/network/sct_auditing/sct_auditing_reporter.h"
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/feature_list.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/json/json_reader.h"
 #include "base/json/values_util.h"
 #include "base/metrics/histogram_functions.h"
@@ -15,6 +15,7 @@
 #include "base/strings/escape.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "net/base/load_flags.h"
 #include "net/base/net_errors.h"
@@ -22,7 +23,6 @@
 #include "net/http/http_status_code.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/network_context.h"
-#include "services/network/public/cpp/features.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/simple_url_loader.h"
 #include "services/network/public/mojom/network_service.mojom.h"
@@ -59,7 +59,7 @@ constexpr char kStatusOK[] = "OK";
 
 // Overrides the initial retry delay in SCTAuditingReporter::kBackoffPolicy if
 // not nullopt.
-absl::optional<base::TimeDelta> g_retry_delay_for_testing = absl::nullopt;
+std::optional<base::TimeDelta> g_retry_delay_for_testing = std::nullopt;
 
 void RecordLookupQueryResult(SCTAuditingReporter::LookupQueryResult result) {
   base::UmaHistogramEnumeration("Security.SCTAuditing.OptOut.LookupQueryResult",
@@ -144,33 +144,33 @@ const net::BackoffEntry::Policy SCTAuditingReporter::kDefaultBackoffPolicy = {
 constexpr int kMaxRetries = 15;
 
 // static
-absl::optional<SCTAuditingReporter::SCTHashdanceMetadata>
+std::optional<SCTAuditingReporter::SCTHashdanceMetadata>
 SCTAuditingReporter::SCTHashdanceMetadata::FromValue(const base::Value& value) {
   const base::Value::Dict* dict = value.GetIfDict();
   if (!dict) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   const std::string* encoded_leaf_hash = dict->FindString(kLeafHashKey);
-  const absl::optional<base::Time> issued =
+  const std::optional<base::Time> issued =
       base::ValueToTime(dict->Find(kIssuedKey));
   const std::string* encoded_log_id = dict->FindString(kLogIdKey);
-  const absl::optional<base::TimeDelta> log_mmd =
+  const std::optional<base::TimeDelta> log_mmd =
       base::ValueToTimeDelta(dict->Find(kLogMMDKey));
-  const absl::optional<base::Time> certificate_expiry =
+  const std::optional<base::Time> certificate_expiry =
       base::ValueToTime(dict->Find(kCertificateExpiry));
   if (!encoded_leaf_hash || !encoded_log_id || !log_mmd || !issued ||
       !certificate_expiry) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   SCTAuditingReporter::SCTHashdanceMetadata sct_hashdance_metadata;
   if (!base::Base64Decode(*encoded_leaf_hash,
                           &sct_hashdance_metadata.leaf_hash)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   if (!base::Base64Decode(*encoded_log_id, &sct_hashdance_metadata.log_id)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   sct_hashdance_metadata.log_mmd = std::move(*log_mmd);
   sct_hashdance_metadata.issued = std::move(*issued);
@@ -187,20 +187,19 @@ SCTAuditingReporter::SCTHashdanceMetadata::operator=(SCTHashdanceMetadata&&) =
     default;
 
 base::Value SCTAuditingReporter::SCTHashdanceMetadata::ToValue() const {
-  base::Value::Dict dict;
-  dict.Set(kLeafHashKey,
-           base::Base64Encode(base::as_bytes(base::make_span(leaf_hash))));
-  dict.Set(kIssuedKey, base::TimeToValue(issued));
-  dict.Set(kLogIdKey,
-           base::Base64Encode(base::as_bytes(base::make_span(log_id))));
-  dict.Set(kLogMMDKey, base::TimeDeltaToValue(log_mmd));
-  dict.Set(kCertificateExpiry, base::TimeToValue(certificate_expiry));
+  auto dict =
+      base::Value::Dict()
+          .Set(kLeafHashKey, base::Base64Encode(base::as_byte_span(leaf_hash)))
+          .Set(kIssuedKey, base::TimeToValue(issued))
+          .Set(kLogIdKey, base::Base64Encode(base::as_byte_span(log_id)))
+          .Set(kLogMMDKey, base::TimeDeltaToValue(log_mmd))
+          .Set(kCertificateExpiry, base::TimeToValue(certificate_expiry));
   return base::Value(std::move(dict));
 }
 
 // static
 void SCTAuditingReporter::SetRetryDelayForTesting(
-    absl::optional<base::TimeDelta> delay) {
+    std::optional<base::TimeDelta> delay) {
   g_retry_delay_for_testing = delay;
 }
 
@@ -209,7 +208,7 @@ SCTAuditingReporter::SCTAuditingReporter(
     net::HashValue reporter_key,
     std::unique_ptr<sct_auditing::SCTClientReport> report,
     bool is_hashdance,
-    absl::optional<SCTHashdanceMetadata> sct_hashdance_metadata,
+    std::optional<SCTHashdanceMetadata> sct_hashdance_metadata,
     mojom::SCTAuditingConfigurationPtr configuration,
     mojom::URLLoaderFactory* url_loader_factory,
     ReporterUpdatedCallback update_callback,
@@ -292,8 +291,10 @@ void SCTAuditingReporter::OnCheckReportAllowedStatusComplete(bool allowed) {
 
   // Calculate an estimated minimum delay after which the log is expected to
   // have been ingested by the server.
-  base::TimeDelta random_delay = base::Seconds(base::RandInt(
-      0, configuration_->log_max_ingestion_random_delay.InSeconds()));
+  const auto max_delay = configuration_->log_max_ingestion_random_delay;
+  const base::TimeDelta random_delay = max_delay.is_positive()
+                                           ? base::RandTimeDeltaUpTo(max_delay)
+                                           : base::TimeDelta();
   base::TimeDelta delay = sct_hashdance_metadata_->issued +
                           sct_hashdance_metadata_->log_mmd +
                           configuration_->log_expected_ingestion_delay +
@@ -306,14 +307,13 @@ void SCTAuditingReporter::OnCheckReportAllowedStatusComplete(bool allowed) {
 
 void SCTAuditingReporter::ScheduleRequestWithBackoff(base::OnceClosure request,
                                                      base::TimeDelta delay) {
-  if (base::FeatureList::IsEnabled(features::kSCTAuditingRetryReports) &&
-      backoff_entry_->ShouldRejectRequest()) {
+  if (backoff_entry_->ShouldRejectRequest()) {
     delay = std::max(backoff_entry_->GetTimeUntilRelease(), delay);
   }
   if (delay.is_positive()) {
-    // TODO(crbug.com/1199827): Investigate if explicit task traits should be
+    // TODO(crbug.com/40761454): Investigate if explicit task traits should be
     // used for these tasks (e.g., BEST_EFFORT and SKIP_ON_SHUTDOWN).
-    base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, std::move(request), delay);
     return;
   }
@@ -332,7 +332,7 @@ void SCTAuditingReporter::SendLookupQuery() {
       configuration_->hashdance_lookup_uri.spec(),
       {
           base::NumberToString(kHashdanceHashPrefixLength),
-          base::HexEncode(base::as_bytes(base::make_span(hash_prefix))),
+          base::HexEncode(base::as_byte_span(hash_prefix)),
       },
       /*offsets=*/nullptr));
   report_request->method = "GET";
@@ -370,7 +370,7 @@ void SCTAuditingReporter::OnSendLookupQueryComplete(
     return;
   }
 
-  absl::optional<base::Value> result = base::JSONReader::Read(*response_body);
+  std::optional<base::Value> result = base::JSONReader::Read(*response_body);
   if (!result || !result->is_dict()) {
     RecordLookupQueryResult(LookupQueryResult::kInvalidJson);
     MaybeRetryRequest();
@@ -484,13 +484,11 @@ void SCTAuditingReporter::OnSendLookupQueryComplete(
   // comparison without having to convert every value in the |suffix_value|.
   std::string hash_suffix = TruncateSuffix(sct_hashdance_metadata_->leaf_hash,
                                            kHashdanceHashPrefixLength);
-  hash_suffix =
-      base::Base64Encode(base::as_bytes(base::make_span(hash_suffix)));
+  hash_suffix = base::Base64Encode(base::as_byte_span(hash_suffix));
   base::Value hash_suffix_value(std::move(hash_suffix));
   // TODO(nsatragno): it would be neat if the backend returned a sorted list and
   // we could binary search it instead.
-  if (std::find(suffix_value->begin(), suffix_value->end(),
-                hash_suffix_value) != suffix_value->end()) {
+  if (base::Contains(*suffix_value, hash_suffix_value)) {
     // Found the SCT in the suffix list, all done.
     RecordLookupQueryResult(LookupQueryResult::kSCTSuffixFound);
     std::move(done_callback_).Run(reporter_key_);
@@ -530,7 +528,7 @@ void SCTAuditingReporter::SendReport() {
   url_loader_->SetRetryOptions(0, SimpleURLLoader::RETRY_NEVER);
 
   // Serialize the report and attach it to the loader.
-  // TODO(crbug.com/1199566): Should we store the serialized report instead, so
+  // TODO(crbug.com/40761306): Should we store the serialized report instead, so
   // we don't serialize on every retry?
   std::string report_data;
   bool ok = report_->SerializeToString(&report_data);
@@ -574,32 +572,24 @@ void SCTAuditingReporter::OnSendReportComplete(
   // Notify the Cache that this Reporter is done. This will delete |this|,
   // so do not add code after this point.
   std::move(done_callback_).Run(reporter_key_);
-  return;
 }
 
 void SCTAuditingReporter::MaybeRetryRequest() {
-  if (base::FeatureList::IsEnabled(features::kSCTAuditingRetryReports)) {
-    if (backoff_entry_->failure_count() >= max_retries_) {
-      // Retry limit reached.
-      ReportSCTAuditingCompletionStatusMetrics(
-          CompletionStatus::kRetriesExhausted);
+  if (backoff_entry_->failure_count() >= max_retries_) {
+    // Retry limit reached.
+    ReportSCTAuditingCompletionStatusMetrics(
+        CompletionStatus::kRetriesExhausted);
 
-      // Notify the Cache that this Reporter is done. This will delete |this|,
-      // so do not add code after this point.
-      std::move(done_callback_).Run(reporter_key_);
-      return;
-    }
-    // Schedule a retry and alert the SCTAuditingHandler to trigger a write so
-    // it can persist the updated backoff entry.
-    backoff_entry_->InformOfRequest(false);
-    update_callback_.Run();
-    Start();
+    // Notify the Cache that this Reporter is done. This will delete |this|,
+    // so do not add code after this point.
+    std::move(done_callback_).Run(reporter_key_);
     return;
   }
-  // Notify the Cache that this Reporter is done. This will delete |this|,
-  // so do not add code after this point.
-  std::move(done_callback_).Run(reporter_key_);
-  return;
+  // Schedule a retry and alert the SCTAuditingHandler to trigger a write so
+  // it can persist the updated backoff entry.
+  backoff_entry_->InformOfRequest(false);
+  update_callback_.Run();
+  Start();
 }
 
 }  // namespace network

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -113,7 +113,7 @@ class PageImplPrerenderBrowserTest : public PageImplTest {
                                 base::Unretained(this))) {}
 
   void SetUp() override {
-    prerender_helper_.SetUp(embedded_test_server());
+    prerender_helper_.RegisterServerRequestMonitor(embedded_test_server());
     PageImplTest::SetUp();
   }
 
@@ -310,13 +310,13 @@ IN_PROC_BROWSER_TEST_F(PageImplTest, PageObjectBeforeAndAfterCommit) {
   // 2) Start navigation to B, but don't commit yet.
   TestNavigationManager manager(shell()->web_contents(), url_b);
   shell()->LoadURL(url_b);
-  EXPECT_TRUE(manager.WaitForRequestStart());
+  manager.WaitForSpeculativeRenderFrameHostCreation();
 
   FrameTreeNode* root = web_contents()->GetPrimaryFrameTree().root();
   RenderFrameHostImpl* pending_rfh =
       root->render_manager()->speculative_frame_host();
   NavigationRequest* navigation_request = root->navigation_request();
-  EXPECT_EQ(navigation_request->associated_rfh_type(),
+  EXPECT_EQ(navigation_request->GetAssociatedRFHType(),
             NavigationRequest::AssociatedRenderFrameHostType::SPECULATIVE);
   EXPECT_TRUE(pending_rfh);
 
@@ -332,7 +332,7 @@ IN_PROC_BROWSER_TEST_F(PageImplTest, PageObjectBeforeAndAfterCommit) {
   EXPECT_NE(data_before_commit.get()->unique_id(), data_a.get()->unique_id());
 
   // 4) Let the navigation finish and make sure it has succeeded.
-  manager.WaitForNavigationFinished();
+  ASSERT_TRUE(manager.WaitForNavigationFinished());
   EXPECT_EQ(url_b,
             web_contents()->GetPrimaryMainFrame()->GetLastCommittedURL());
 
@@ -426,8 +426,8 @@ IN_PROC_BROWSER_TEST_F(PageImplTest, SameSiteSameRenderFrameHostNavigation) {
             main_rfh_a1.get() != main_rfh_a2.get());
   PageImpl& page_a2 = main_rfh_a2.get()->GetPage();
 
-  if (IsSameSiteBackForwardCacheEnabled()) {
-    // 3a) With same-site bfcache enabled, both Page objects should be in
+  if (IsBackForwardCacheEnabled()) {
+    // 3a) With back/forward cache enabled, both Page objects should be in
     // existence at the same time.
     EXPECT_TRUE(page_a1);
     EXPECT_NE(page_a1.get(), &page_a2);
@@ -528,13 +528,9 @@ class PageImplWithBackForwardCacheTest : public PageImplTest {
  public:
   PageImplWithBackForwardCacheTest() {
     scoped_feature_list_.InitWithFeaturesAndParameters(
-        {{features::kBackForwardCache,
-          // Set a very long TTL before expiration (longer than the test
-          // timeout) so tests that are expecting deletion don't pass when
-          // they shouldn't.
-          {{"TimeToLiveInBackForwardCacheInSeconds", "3600"}}}},
-        // Allow BackForwardCache for all devices regardless of their memory.
-        {features::kBackForwardCacheMemoryControls});
+        GetDefaultEnabledBackForwardCacheFeaturesForTesting(
+            /*ignore_outstanding_network_request=*/false),
+        GetDefaultDisabledBackForwardCacheFeaturesForTesting());
   }
 
  private:
@@ -608,7 +604,8 @@ IN_PROC_BROWSER_TEST_F(PageImplPrerenderBrowserTest, IsPrimary) {
   // Prerender to another site.
   GURL prerender_url = embedded_test_server()->GetURL("/title2.html");
   prerender_helper_.AddPrerender(prerender_url);
-  int host_id = prerender_test_helper().GetHostForUrl(prerender_url);
+  FrameTreeNodeId host_id =
+      prerender_test_helper().GetHostForUrl(prerender_url);
   content::test::PrerenderHostObserver host_observer(*web_contents(), host_id);
   content::RenderFrameHost* prerender_frame =
       prerender_test_helper().GetPrerenderedMainFrameHost(host_id);

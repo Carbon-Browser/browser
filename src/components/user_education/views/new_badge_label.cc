@@ -1,14 +1,16 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/user_education/views/new_badge_label.h"
 
 #include "ui/accessibility/ax_node_data.h"
+#include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/text_utils.h"
+#include "ui/views/accessibility/view_accessibility.h"
+#include "ui/views/badge_painter.h"
 #include "ui/views/border.h"
-#include "ui/views/controls/menu/new_badge.h"
 #include "ui/views/metadata/type_conversion.h"
 #include "ui/views/view.h"
 #include "ui/views/view_class_properties.h"
@@ -22,16 +24,26 @@ NewBadgeLabel::NewBadgeLabel(const std::u16string& text,
                              gfx::DirectionalityMode directionality_mode)
     : Label(text, text_context, text_style, directionality_mode) {
   UpdatePaddingForNewBadge();
+  UpdateAccessibleName();
 }
 
 NewBadgeLabel::NewBadgeLabel(const std::u16string& text, const CustomFont& font)
     : Label(text, font) {
   UpdatePaddingForNewBadge();
+  UpdateAccessibleName();
 }
 
 NewBadgeLabel::~NewBadgeLabel() = default;
 
-void NewBadgeLabel::SetDisplayNewBadge(bool display_new_badge) {
+void NewBadgeLabel::SetDisplayNewBadge(DisplayNewBadge display_new_badge) {
+  SetDisplayNewBadgeImpl(display_new_badge);
+}
+
+void NewBadgeLabel::SetDisplayNewBadgeForTesting(bool display_new_badge) {
+  SetDisplayNewBadgeImpl(display_new_badge);
+}
+
+void NewBadgeLabel::SetDisplayNewBadgeImpl(bool display_new_badge) {
   DCHECK(!GetWidget() || !GetVisible() || !GetWidget()->IsVisible())
       << "New badge display should not be toggled while this element is "
          "visible.";
@@ -39,6 +51,7 @@ void NewBadgeLabel::SetDisplayNewBadge(bool display_new_badge) {
     return;
 
   display_new_badge_ = display_new_badge;
+  UpdateAccessibleName();
 
   // At this point we know the display setting has changed, so we must add or
   // remove the relevant padding and insets.
@@ -73,37 +86,19 @@ void NewBadgeLabel::SetBadgePlacement(BadgePlacement badge_placement) {
   OnPropertyChanged(&badge_placement_, views::kPropertyEffectsPaint);
 }
 
-void NewBadgeLabel::GetAccessibleNodeData(ui::AXNodeData* node_data) {
-  Label::GetAccessibleNodeData(node_data);
-  std::u16string accessible_name = GetText();
-  if (display_new_badge_) {
-    accessible_name.push_back(' ');
-    accessible_name.append(views::NewBadge::GetNewBadgeAccessibleDescription());
-  }
-  node_data->SetName(accessible_name);
-}
-
-gfx::Size NewBadgeLabel::CalculatePreferredSize() const {
-  gfx::Size size = Label::CalculatePreferredSize();
+gfx::Size NewBadgeLabel::CalculatePreferredSize(
+    const views::SizeBounds& available_size) const {
+  gfx::Size size = Label::CalculatePreferredSize(available_size);
   if (display_new_badge_)
-    size.SetToMax(views::NewBadge::GetNewBadgeSize(font_list()));
+    size.SetToMax(GetNewBadgeSize());
   return size;
 }
 
 gfx::Size NewBadgeLabel::GetMinimumSize() const {
   gfx::Size size = Label::GetMinimumSize();
   if (display_new_badge_)
-    size.SetToMax(views::NewBadge::GetNewBadgeSize(font_list()));
+    size.SetToMax(GetNewBadgeSize());
   return size;
-}
-
-int NewBadgeLabel::GetHeightForWidth(int w) const {
-  int height = Label::GetHeightForWidth(w);
-  if (display_new_badge_) {
-    height = std::max(height,
-                      views::NewBadge::GetNewBadgeSize(font_list()).height());
-  }
-  return height;
 }
 
 void NewBadgeLabel::OnDeviceScaleFactorChanged(float old_device_scale_factor,
@@ -118,13 +113,20 @@ void NewBadgeLabel::OnPaint(gfx::Canvas* canvas) {
   const gfx::Rect contents_bounds = GetContentsBounds();
   int extra_width = 0;
   if (badge_placement_ == BadgePlacement::kImmediatelyAfterText)
-    extra_width = std::max(0, width() - GetPreferredSize().width());
-  const int badge_x = views::NewBadge::kNewBadgeHorizontalMargin - extra_width +
+    extra_width = std::max(
+        0, width() - GetPreferredSize(views::SizeBounds(width(), {})).width());
+  const int badge_x = views::BadgePainter::kBadgeHorizontalMargin -
+                      extra_width +
                       (base::i18n::IsRTL() ? width() - contents_bounds.x()
                                            : contents_bounds.right());
 
-  views::NewBadge::DrawNewBadge(canvas, this, badge_x, GetFontListY(),
-                                font_list());
+  views::BadgePainter::PaintBadge(canvas, this, badge_x, GetFontListY(),
+                                  new_badge_text_, font_list());
+}
+
+void NewBadgeLabel::SetText(const std::u16string& text) {
+  views::Label::SetText(text);
+  UpdateAccessibleName();
 }
 
 void NewBadgeLabel::UpdatePaddingForNewBadge() {
@@ -132,19 +134,19 @@ void NewBadgeLabel::UpdatePaddingForNewBadge() {
     return;
 
   // Calculate the width required for the badge plus separation from the text.
-  int width = views::NewBadge::GetNewBadgeSize(font_list()).width();
+  int width = GetNewBadgeSize().width();
   int right_padding = 0;
   if (pad_after_new_badge_) {
-    width += 2 * views::NewBadge::kNewBadgeHorizontalMargin;
-    right_padding = views::NewBadge::kNewBadgeHorizontalMargin;
+    width += 2 * views::BadgePainter::kBadgeHorizontalMargin;
+    right_padding = views::BadgePainter::kBadgeHorizontalMargin;
   } else {
-    width += views::NewBadge::kNewBadgeHorizontalMargin;
+    width += views::BadgePainter::kBadgeHorizontalMargin;
   }
 
   // Reserve adequate space above and below the label so that the badge will fit
   // vertically, and to the right to actually hold the badge.
   gfx::Insets border = gfx::AdjustVisualBorderForFont(
-      font_list(), gfx::Insets(views::NewBadge::kNewBadgeInternalPadding));
+      font_list(), gfx::Insets(views::BadgePainter::kBadgeInternalPadding));
   if (base::i18n::IsRTL()) {
     border.set_left(width);
     border.set_right(0);
@@ -160,12 +162,28 @@ void NewBadgeLabel::UpdatePaddingForNewBadge() {
               gfx::Insets::TLBR(0, 0, 0, right_padding));
 }
 
+gfx::Size NewBadgeLabel::GetNewBadgeSize() const {
+  return views::BadgePainter::GetBadgeSize(new_badge_text_, font_list());
+}
+
+std::u16string NewBadgeLabel::GetAccessibleDescription() const {
+  return l10n_util::GetStringUTF16(IDS_NEW_BADGE_SCREEN_READER_MESSAGE);
+}
+
 void NewBadgeLabel::SetBorder(std::unique_ptr<views::Border> b) {
   NOTREACHED() << "Calling SetBorder() externally is currently not allowed.";
 }
 
-BEGIN_METADATA(NewBadgeLabel, views::Label)
-ADD_PROPERTY_METADATA(bool, DisplayNewBadge)
+void NewBadgeLabel::UpdateAccessibleName() {
+  std::u16string accessible_name = GetText();
+  if (display_new_badge_) {
+    accessible_name.push_back(' ');
+    accessible_name.append(GetAccessibleDescription());
+    GetViewAccessibility().SetName(accessible_name);
+  }
+}
+
+BEGIN_METADATA(NewBadgeLabel)
 ADD_PROPERTY_METADATA(NewBadgeLabel::BadgePlacement, BadgePlacement)
 ADD_PROPERTY_METADATA(bool, PadAfterNewBadge)
 END_METADATA

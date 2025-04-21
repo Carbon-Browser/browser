@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,7 @@ bool StructTraits<media::mojom::TimingInformationDataView,
          media::TimingInformation* out) {
   base::TimeDelta audio_start_time = kZeroTime;
   base::TimeDelta audio_end_time = kZeroTime;
-  absl::optional<std::vector<media::HypothesisParts>> hypothesis_parts;
+  std::optional<std::vector<media::HypothesisParts>> hypothesis_parts;
 
   if (!data.ReadAudioStartTime(&audio_start_time) ||
       !data.ReadAudioEndTime(&audio_end_time) ||
@@ -70,7 +70,7 @@ bool StructTraits<media::mojom::SpeechRecognitionResultDataView,
     Read(media::mojom::SpeechRecognitionResultDataView data,
          media::SpeechRecognitionResult* out) {
   std::string transcription;
-  absl::optional<media::TimingInformation> timing_information;
+  std::optional<media::TimingInformation> timing_information;
 
   if (!data.ReadTranscription(&transcription) ||
       !data.ReadTimingInformation(&timing_information)) {

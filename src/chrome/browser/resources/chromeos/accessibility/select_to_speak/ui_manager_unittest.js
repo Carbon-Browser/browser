@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -81,15 +81,20 @@ class MockPrefsManager {
  * Test fixture for ui_manager.js.
  */
 SelectToSpeakUiManagerUnitTest = class extends SelectToSpeakE2ETest {
+  constructor() {
+    super();
+    this.mockAccessibilityPrivate = new MockAccessibilityPrivate();
+    chrome.accessibilityPrivate = this.mockAccessibilityPrivate;
+
+    this.mockPrefsManager = null;
+    this.mockListener = null;
+    this.uiManager = null;
+  }
+
   /** @override */
   async setUpDeferred() {
     await super.setUpDeferred();
-    await importModule('UiManager', '/select_to_speak/ui_manager.js');
-    await importModule('PrefsManager', '/select_to_speak/prefs_manager.js');
-    await importModule('ParagraphUtils', '/select_to_speak/paragraph_utils.js');
 
-    this.mockAccessibilityPrivate = MockAccessibilityPrivate;
-    chrome.accessibilityPrivate = this.mockAccessibilityPrivate;
     this.mockPrefsManager = new MockPrefsManager();
     this.mockListener = new MockUiListener();
     this.uiManager = new UiManager(this.mockPrefsManager, this.mockListener);
@@ -213,6 +218,50 @@ AX_TEST_F('SelectToSpeakUiManagerUnitTest', 'UpdatesUi', function() {
   assertEquals(0, highlightRects.length);
 });
 
+// This represents how Google Docs renders Canvas accessibility as of
+// October 24 2022.
+AX_TEST_F(
+    'SelectToSpeakUiManagerUnitTest', 'UpdatesUiMultipleNodesInBlock',
+    function() {
+      const root = {
+        role: 'svgRoot',
+        location: {left: 0, top: 0, width: 500, height: 50},
+      };
+      const group = {
+        role: 'paragraph',
+        parent: root,
+        display: 'inline',
+        location: {left: 20, top: 10, width: 200, height: 10},
+      };
+      const text1 = {
+        role: 'inlineTextBox',
+        name: '1973',
+        parent: group,
+        location: {left: 20, top: 10, width: 100, height: 10},
+      };
+      const text2 = {
+        role: 'inlineTextBox',
+        name: 'Roe',
+        parent: group,
+        location: {left: 120, top: 10, width: 100, height: 10},
+      };
+      const nodeGroup = ParagraphUtils.buildNodeGroup(
+          [text1, text2], /*index=*/ 0, {splitOnLanguage: false});
+
+      assertEquals(group, nodeGroup.blockParent);
+
+      this.uiManager.update(
+          nodeGroup, text1, null,
+          {showPanel: true, paused: false, speechRateMultiplier: 1});
+
+      // When there are multiple nodes in a group, the parent should be
+      // highlighted instead of the individual node.
+      focusRings = this.mockAccessibilityPrivate.getFocusRings();
+      assertEquals(1, focusRings.length);
+      assertEquals(1, focusRings[0].rects.length);
+      assertEquals(group.location, focusRings[0].rects[0]);
+    });
+
 AX_TEST_F('SelectToSpeakUiManagerUnitTest', 'UpdatesUiNoPanel', function() {
   const textNode = {
     role: 'staticText',
@@ -272,6 +321,27 @@ AX_TEST_F(
       assertEquals(wordBounds, highlightRects[0]);
       assertEquals(
           HIGHLIGHT_COLOR, this.mockAccessibilityPrivate.getHighlightColor());
+
+      // AccessibilityPrivate informed of change.
+      assertEquals(
+          wordBounds, this.mockAccessibilityPrivate.getSelectToSpeakFocus());
+
+      // Reset mockAccessibilityPrivate.
+      this.mockAccessibilityPrivate.clearHighlightRects();
+      this.mockAccessibilityPrivate.clearSelectToSpeakFocus();
+
+      // When paused, AccessibilityPrivate is not informed of the change, but
+      // highlights are still drawn visually.
+      this.uiManager.update(
+          nodeGroup, textNode, {start: 0, end: 5},
+          {showPanel: true, paused: true, speechRateMultiplier: 1});
+
+      highlightRects = this.mockAccessibilityPrivate.getHighlightRects();
+      assertEquals(1, highlightRects.length);
+      assertEquals(wordBounds, highlightRects[0]);
+      assertEquals(
+          HIGHLIGHT_COLOR, this.mockAccessibilityPrivate.getHighlightColor());
+      assertEquals(null, this.mockAccessibilityPrivate.getSelectToSpeakFocus());
     });
 
 AX_TEST_F('SelectToSpeakUiManagerUnitTest', 'ClearsUI', function() {

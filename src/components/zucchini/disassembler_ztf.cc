@@ -1,6 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "components/zucchini/disassembler_ztf.h"
 
@@ -11,6 +16,7 @@
 #include <numeric>
 
 #include "base/check_op.h"
+#include "base/memory/raw_ref.h"
 #include "base/numerics/checked_math.h"
 #include "base/numerics/safe_conversions.h"
 #include "components/zucchini/algorithm.h"
@@ -292,7 +298,7 @@ class ZtfReferenceReader : public ReferenceReader {
 
   // Walks |offset_| from |lo| to |hi_| running |parser_|. If any matches are
   // found they are returned.
-  absl::optional<Reference> GetNext() override {
+  std::optional<Reference> GetNext() override {
     T line_col;
     for (; offset_ < hi_; ++offset_) {
       if (!parser_.MatchAtOffset(offset_, &line_col))
@@ -306,29 +312,29 @@ class ZtfReferenceReader : public ReferenceReader {
       offset_ += config_.Width(line_col);
       return Reference{location, target};
     }
-    return absl::nullopt;
+    return std::nullopt;
   }
 
  private:
   // Converts |lc| (an absolute reference) to an offset using |translator_|.
   offset_t ConvertToTargetOffset(offset_t /* location */,
                                  ztf::LineCol lc) const {
-    return translator_.LineColToOffset(lc);
+    return translator_->LineColToOffset(lc);
   }
 
   // Converts |dlc| (a relative reference) to an offset using |translator_|.
   // This requires converting the |dlc| to a ztf::LineCol to find the offset.
   offset_t ConvertToTargetOffset(offset_t location,
                                  ztf::DeltaLineCol dlc) const {
-    auto lc = translator_.OffsetToLineCol(location);
+    auto lc = translator_->OffsetToLineCol(location);
     if (!lc.has_value())
       return kInvalidOffset;
-    return translator_.LineColToOffset(lc.value() + dlc);
+    return translator_->LineColToOffset(lc.value() + dlc);
   }
 
   offset_t offset_;
   const offset_t hi_;
-  const ZtfTranslator& translator_;
+  const raw_ref<const ZtfTranslator> translator_;
   const ZtfConfig config_;
   ZtfParser parser_;
 };
@@ -354,8 +360,8 @@ class ZtfReferenceWriter : public ReferenceWriter {
   // Converts |reference| to an absolute reference to be stored in |out_lc|.
   // Returns true on success.
   bool ConvertToTargetLineCol(Reference reference, ztf::LineCol* out_lc) {
-    auto temp_lc = translator_.OffsetToLineCol(reference.target);
-    if (!temp_lc.has_value() || !translator_.IsValid(temp_lc.value()))
+    auto temp_lc = translator_->OffsetToLineCol(reference.target);
+    if (!temp_lc.has_value() || !translator_->IsValid(temp_lc.value()))
       return false;
 
     *out_lc = temp_lc.value();
@@ -365,19 +371,19 @@ class ZtfReferenceWriter : public ReferenceWriter {
   // Converts |reference| to a relative reference to be stored in |out_dlc|.
   // Will return true on success.
   bool ConvertToTargetLineCol(Reference reference, ztf::DeltaLineCol* out_dlc) {
-    auto location_lc = translator_.OffsetToLineCol(reference.location);
+    auto location_lc = translator_->OffsetToLineCol(reference.location);
     if (!location_lc.has_value())
       return false;
 
-    auto target_lc = translator_.OffsetToLineCol(reference.target);
+    auto target_lc = translator_->OffsetToLineCol(reference.target);
     if (!target_lc.has_value())
       return false;
 
     *out_dlc = target_lc.value() - location_lc.value();
-    return translator_.IsValid(reference.location, *out_dlc);
+    return translator_->IsValid(reference.location, *out_dlc);
   }
 
-  const ZtfTranslator& translator_;
+  const raw_ref<const ZtfTranslator> translator_;
   ZtfWriter writer_;
 };
 
@@ -397,7 +403,7 @@ bool ReadZtfHeader(ConstBufferView image) {
 
 /******** ZtfTranslator ********/
 
-ZtfTranslator::ZtfTranslator() {}
+ZtfTranslator::ZtfTranslator() = default;
 
 ZtfTranslator::~ZtfTranslator() = default;
 
@@ -458,12 +464,12 @@ offset_t ZtfTranslator::LineColToOffset(ztf::LineCol lc) const {
   return target;
 }
 
-absl::optional<ztf::LineCol> ZtfTranslator::OffsetToLineCol(
+std::optional<ztf::LineCol> ZtfTranslator::OffsetToLineCol(
     offset_t offset) const {
   DCHECK(!line_starts_.empty());
   // Don't place a target outside the image.
   if (offset >= line_starts_.back())
-    return absl::nullopt;
+    return std::nullopt;
   auto it = SearchForRange(offset);
   ztf::LineCol lc;
   lc.line = std::distance(line_starts_.cbegin(), it) + 1;

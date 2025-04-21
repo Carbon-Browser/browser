@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,8 @@ namespace blink {
 namespace internal {
 
 NOINLINE void CrashIntentionally() {
-  // NOTE(shess): Crash directly rather than using NOTREACHED() so
-  // that the signature is easier to triage in crash reports.
+  // NOTE(shess): Crash directly rather than using NOTREACHED() so that the
+  // signature is easier to triage in crash reports.
   //
   // Linker's ICF feature may merge this function with other functions with the
   // same definition and it may confuse the crash report processing system.

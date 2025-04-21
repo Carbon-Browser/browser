@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,9 @@ class BASE_EXPORT ScopedProcessInformation {
  public:
   ScopedProcessInformation();
   explicit ScopedProcessInformation(const PROCESS_INFORMATION& process_info);
+
+  ScopedProcessInformation(ScopedProcessInformation&&);
+  ScopedProcessInformation& operator=(ScopedProcessInformation&&);
 
   ScopedProcessInformation(const ScopedProcessInformation&) = delete;
   ScopedProcessInformation& operator=(const ScopedProcessInformation&) = delete;

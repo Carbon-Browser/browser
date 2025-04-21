@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,20 +13,25 @@
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/json/json_file_value_serializer.h"
+#include "base/not_fatal_until.h"
+#include "base/values.h"
+#include "extensions/browser/api/declarative_net_request/composite_matcher.h"
 #include "extensions/browser/api/declarative_net_request/file_backed_ruleset_source.h"
 #include "extensions/browser/api/declarative_net_request/indexed_rule.h"
-#include "extensions/browser/api/declarative_net_request/rules_count_pair.h"
+#include "extensions/browser/api/declarative_net_request/prefs_helper.h"
+#include "extensions/browser/api/declarative_net_request/request_params.h"
+#include "extensions/browser/api/declarative_net_request/rule_counts.h"
 #include "extensions/browser/api/declarative_net_request/ruleset_matcher.h"
 #include "extensions/browser/api/declarative_net_request/ruleset_source.h"
 #include "extensions/browser/api/web_request/web_request_info.h"
 #include "extensions/browser/extension_prefs.h"
+#include "extensions/common/api/declarative_net_request.h"
 #include "extensions/common/api/declarative_net_request/test_utils.h"
 #include "extensions/common/extension.h"
-#include "extensions/common/value_builder.h"
+#include "net/http/http_response_headers.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace extensions {
-namespace declarative_net_request {
+namespace extensions::declarative_net_request {
 
 namespace dnr_api = api::declarative_net_request;
 
@@ -39,17 +44,17 @@ RequestAction CreateRequestActionForTesting(RequestAction::Type type,
     switch (type) {
       case RequestAction::Type::BLOCK:
       case RequestAction::Type::COLLAPSE:
-        return dnr_api::RULE_ACTION_TYPE_BLOCK;
+        return dnr_api::RuleActionType::kBlock;
       case RequestAction::Type::ALLOW:
-        return dnr_api::RULE_ACTION_TYPE_ALLOW;
+        return dnr_api::RuleActionType::kAllow;
       case RequestAction::Type::REDIRECT:
-        return dnr_api::RULE_ACTION_TYPE_REDIRECT;
+        return dnr_api::RuleActionType::kRedirect;
       case RequestAction::Type::UPGRADE:
-        return dnr_api::RULE_ACTION_TYPE_UPGRADESCHEME;
+        return dnr_api::RuleActionType::kUpgradeScheme;
       case RequestAction::Type::ALLOW_ALL_REQUESTS:
-        return dnr_api::RULE_ACTION_TYPE_ALLOWALLREQUESTS;
+        return dnr_api::RuleActionType::kAllowAllRequests;
       case RequestAction::Type::MODIFY_HEADERS:
-        return dnr_api::RULE_ACTION_TYPE_MODIFYHEADERS;
+        return dnr_api::RuleActionType::kModifyHeaders;
     }
   }();
   return RequestAction(type, rule_id,
@@ -154,9 +159,10 @@ std::ostream& operator<<(std::ostream& output, const RequestAction& action) {
 }
 
 std::ostream& operator<<(std::ostream& output,
-                         const absl::optional<RequestAction>& action) {
-  if (!action)
+                         const std::optional<RequestAction>& action) {
+  if (!action) {
     return output << "empty Optional<RequestAction>";
+  }
   return output << *action;
 }
 
@@ -287,20 +293,20 @@ std::ostream& operator<<(std::ostream& output, const ParseResult& result) {
     case ParseResult::ERROR_INVALID_ALLOW_ALL_REQUESTS_RESOURCE_TYPE:
       output << "ERROR_INVALID_ALLOW_ALL_REQUESTS_RESOURCE_TYPE";
       break;
-    case ParseResult::ERROR_NO_HEADERS_SPECIFIED:
-      output << "ERROR_NO_HEADERS_SPECIFIED";
+    case ParseResult::ERROR_NO_HEADERS_TO_MODIFY_SPECIFIED:
+      output << "ERROR_NO_HEADERS_TO_MODIFY_SPECIFIED";
       break;
-    case ParseResult::ERROR_EMPTY_REQUEST_HEADERS_LIST:
-      output << "ERROR_EMPTY_REQUEST_HEADERS_LIST";
+    case ParseResult::ERROR_EMPTY_MODIFY_REQUEST_HEADERS_LIST:
+      output << "ERROR_EMPTY_MODIFY_REQUEST_HEADERS_LIST";
       break;
-    case ParseResult::ERROR_EMPTY_RESPONSE_HEADERS_LIST:
-      output << "ERROR_EMPTY_RESPONSE_HEADERS_LIST";
+    case ParseResult::ERROR_EMPTY_MODIFY_RESPONSE_HEADERS_LIST:
+      output << "ERROR_EMPTY_MODIFY_RESPONSE_HEADERS_LIST";
       break;
-    case ParseResult::ERROR_INVALID_HEADER_NAME:
-      output << "ERROR_INVALID_HEADER_NAME";
+    case ParseResult::ERROR_INVALID_HEADER_TO_MODIFY_NAME:
+      output << "ERROR_INVALID_HEADER_TO_MODIFY_NAME";
       break;
-    case ParseResult::ERROR_INVALID_HEADER_VALUE:
-      output << "ERROR_INVALID_HEADER_VALUE";
+    case ParseResult::ERROR_INVALID_HEADER_TO_MODIFY_VALUE:
+      output << "ERROR_INVALID_HEADER_TO_MODIFY_VALUE";
       break;
     case ParseResult::ERROR_HEADER_VALUE_NOT_SPECIFIED:
       output << "ERROR_HEADER_VALUE_NOT_SPECIFIED";
@@ -308,8 +314,8 @@ std::ostream& operator<<(std::ostream& output, const ParseResult& result) {
     case ParseResult::ERROR_HEADER_VALUE_PRESENT:
       output << "ERROR_HEADER_VALUE_PRESENT";
       break;
-    case ParseResult::ERROR_APPEND_REQUEST_HEADER_UNSUPPORTED:
-      output << "ERROR_APPEND_REQUEST_HEADER_UNSUPPORTED";
+    case ParseResult::ERROR_APPEND_INVALID_REQUEST_HEADER:
+      output << "ERROR_APPEND_INVALID_REQUEST_HEADER";
       break;
     case ParseResult::ERROR_EMPTY_TAB_IDS_LIST:
       output << "ERROR_EMPTY_TAB_IDS_LIST";
@@ -319,6 +325,27 @@ std::ostream& operator<<(std::ostream& output, const ParseResult& result) {
       break;
     case ParseResult::ERROR_TAB_ID_DUPLICATED:
       output << "ERROR_TAB_ID_DUPLICATED";
+      break;
+    case ParseResult::ERROR_EMPTY_RESPONSE_HEADER_MATCHING_LIST:
+      output << "ERROR_EMPTY_RESPONSE_HEADER_MATCHING_LIST";
+      break;
+    case ParseResult::ERROR_EMPTY_EXCLUDED_RESPONSE_HEADER_MATCHING_LIST:
+      output << "ERROR_EMPTY_EXCLUDED_RESPONSE_HEADER_MATCHING_LIST";
+      break;
+    case ParseResult::ERROR_INVALID_MATCHING_RESPONSE_HEADER_NAME:
+      output << "ERROR_INVALID_MATCHING_RESPONSE_HEADER_NAME";
+      break;
+    case ParseResult::ERROR_INVALID_MATCHING_EXCLUDED_RESPONSE_HEADER_NAME:
+      output << "ERROR_INVALID_MATCHING_EXCLUDED_RESPONSE_HEADER_NAME";
+      break;
+    case ParseResult::ERROR_INVALID_MATCHING_RESPONSE_HEADER_VALUE:
+      output << "ERROR_INVALID_MATCHING_RESPONSE_HEADER_VALUE";
+      break;
+    case ParseResult::ERROR_MATCHING_RESPONSE_HEADER_DUPLICATED:
+      output << "ERROR_MATCHING_RESPONSE_HEADER_DUPLICATED";
+      break;
+    case ParseResult::ERROR_RESPONSE_HEADER_RULE_CANNOT_MODIFY_REQUEST_HEADERS:
+      output << "ERROR_RESPONSE_HEADER_RULE_CANNOT_MODIFY_REQUEST_HEADERS";
       break;
   }
   return output;
@@ -348,9 +375,12 @@ std::ostream& operator<<(std::ostream& output, LoadRulesetResult result) {
   return output;
 }
 
-std::ostream& operator<<(std::ostream& output, const RulesCountPair& count) {
-  output << "\nRulesCountPair\n";
+std::ostream& operator<<(std::ostream& output, const RuleCounts& count) {
+  output << "\nRuleCounts\n";
   output << "|rule_count| " << count.rule_count << "\n";
+  if (count.unsafe_rule_count.has_value()) {
+    output << "|unsafe_rule_count| " << *(count.unsafe_rule_count) << "\n";
+  }
   output << "|regex_rule_count| " << count.regex_rule_count << "\n";
   return output;
 }
@@ -362,14 +392,17 @@ bool AreAllIndexedStaticRulesetsValid(
   std::vector<FileBackedRulesetSource> sources =
       FileBackedRulesetSource::CreateStatic(extension, ruleset_filter);
 
-  const ExtensionPrefs* prefs = ExtensionPrefs::Get(browser_context);
+  ExtensionPrefs* prefs = ExtensionPrefs::Get(browser_context);
+  PrefsHelper helper(*prefs);
+
   for (const auto& source : sources) {
-    if (prefs->ShouldIgnoreDNRRuleset(extension.id(), source.id()))
+    if (helper.ShouldIgnoreRuleset(extension.id(), source.id())) {
       continue;
+    }
 
     int expected_checksum = -1;
-    if (!prefs->GetDNRStaticRulesetChecksum(extension.id(), source.id(),
-                                            &expected_checksum)) {
+    if (!helper.GetStaticRulesetChecksum(extension.id(), source.id(),
+                                         expected_checksum)) {
       return false;
     }
 
@@ -390,10 +423,11 @@ bool CreateVerifiedMatcher(const std::vector<TestRule>& rules,
   using IndexStatus = IndexAndPersistJSONRulesetResult::Status;
 
   // Serialize |rules|.
-  ListBuilder builder;
-  for (const auto& rule : rules)
+  base::Value::List builder;
+  for (const auto& rule : rules) {
     builder.Append(rule.ToValue());
-  JSONFileValueSerializer(source.json_path()).Serialize(*builder.Build());
+  }
+  JSONFileValueSerializer(source.json_path()).Serialize(std::move(builder));
 
   // Index ruleset.
   auto parse_flags = FileBackedRulesetSource::kRaiseErrorOnInvalidRules |
@@ -405,12 +439,14 @@ bool CreateVerifiedMatcher(const std::vector<TestRule>& rules,
     return false;
   }
 
-  if (!result.warnings.empty())
+  if (!result.warnings.empty()) {
     return false;
+  }
 
   DCHECK_EQ(IndexStatus::kSuccess, result.status);
-  if (expected_checksum)
+  if (expected_checksum) {
     *expected_checksum = result.ruleset_checksum;
+  }
 
   LoadRulesetResult load_result =
       source.CreateVerifiedMatcher(result.ruleset_checksum, matcher);
@@ -430,14 +466,18 @@ FileBackedRulesetSource CreateTemporarySource(RulesetID id,
 dnr_api::ModifyHeaderInfo CreateModifyHeaderInfo(
     dnr_api::HeaderOperation operation,
     std::string header,
-    absl::optional<std::string> value) {
+    std::optional<std::string> value,
+    std::optional<std::string> regex_filter,
+    std::optional<std::string> regex_substitution,
+    std::optional<dnr_api::HeaderRegexOptions> regex_options) {
   dnr_api::ModifyHeaderInfo header_info;
 
-  header_info.operation = operation;
-  header_info.header = header;
-
-  if (value)
-    header_info.value = std::make_unique<std::string>(*value);
+  header_info.operation = std::move(operation);
+  header_info.header = std::move(header);
+  header_info.value = std::move(value);
+  header_info.regex_filter = std::move(regex_filter);
+  header_info.regex_substitution = std::move(regex_substitution);
+  header_info.regex_options = std::move(regex_options);
 
   return header_info;
 }
@@ -448,6 +488,19 @@ bool EqualsForTesting(const dnr_api::ModifyHeaderInfo& lhs,
                                                  : lhs.value == rhs.value;
   return lhs.operation == rhs.operation && lhs.header == rhs.header &&
          are_values_equal;
+}
+
+dnr_api::HeaderInfo CreateHeaderInfo(
+    std::string header,
+    std::optional<std::vector<std::string>> values,
+    std::optional<std::vector<std::string>> excluded_values) {
+  dnr_api::HeaderInfo header_info;
+
+  header_info.header = std::move(header);
+  header_info.values = std::move(values);
+  header_info.excluded_values = std::move(excluded_values);
+
+  return header_info;
 }
 
 RulesetManagerObserver::RulesetManagerObserver(RulesetManager* manager)
@@ -469,8 +522,9 @@ std::vector<GURL> RulesetManagerObserver::GetAndResetRequestSeen() {
 void RulesetManagerObserver::WaitForExtensionsWithRulesetsCount(size_t count) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   ASSERT_FALSE(expected_count_);
-  if (current_count_ == count)
+  if (current_count_ == count) {
     return;
+  }
 
   expected_count_ = count;
   run_loop_ = std::make_unique<base::RunLoop>();
@@ -480,8 +534,9 @@ void RulesetManagerObserver::WaitForExtensionsWithRulesetsCount(size_t count) {
 void RulesetManagerObserver::OnRulesetCountChanged(size_t count) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   current_count_ = count;
-  if (expected_count_ != count)
+  if (expected_count_ != count) {
     return;
+  }
 
   ASSERT_TRUE(run_loop_.get());
 
@@ -509,11 +564,42 @@ void WarningServiceObserver::WaitForWarning() {
 
 void WarningServiceObserver::ExtensionWarningsChanged(
     const ExtensionIdSet& affected_extensions) {
-  if (!base::Contains(affected_extensions, extension_id_))
+  if (!base::Contains(affected_extensions, extension_id_)) {
     return;
+  }
 
   run_loop_.Quit();
 }
 
-}  // namespace declarative_net_request
-}  // namespace extensions
+base::flat_set<int> GetDisabledRuleIdsFromMatcherForTesting(
+    const RulesetManager& ruleset_manager,
+    const Extension& extension,
+    const std::string& ruleset_id_string) {
+  const DNRManifestData::ManifestIDToRulesetMap& public_id_map =
+      DNRManifestData::GetManifestIDToRulesetMap(extension);
+  auto it = public_id_map.find(ruleset_id_string);
+  CHECK(public_id_map.end() != it, base::NotFatalUntil::M130);
+  RulesetID ruleset_id = it->second->id;
+
+  const CompositeMatcher* composite_matcher =
+      ruleset_manager.GetMatcherForExtension(extension.id());
+  DCHECK(composite_matcher);
+
+  for (const auto& matcher : composite_matcher->matchers()) {
+    if (ruleset_id != matcher->id()) {
+      continue;
+    }
+
+    return matcher->GetDisabledRuleIdsForTesting();
+  }
+  return {};
+}
+
+RequestParams CreateRequestWithResponseHeaders(
+    const GURL& url,
+    const net::HttpResponseHeaders* headers) {
+  return RequestParams(url, url::Origin(), dnr_api::ResourceType::kSubFrame,
+                       dnr_api::RequestMethod::kGet, -1, headers);
+}
+
+}  // namespace extensions::declarative_net_request

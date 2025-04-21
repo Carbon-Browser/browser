@@ -1,6 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "components/nacl/loader/nacl_ipc_adapter.h"
 
@@ -12,10 +17,10 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
 #include "base/threading/platform_thread.h"
 #include "base/threading/simple_thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "ipc/ipc_test_sink.h"
 #include "native_client/src/public/nacl_desc_custom.h"
 #include "native_client/src/trusted/service_runtime/include/sys/fcntl.h"
@@ -26,7 +31,7 @@ namespace {
 
 class NaClIPCAdapterTest : public testing::Test {
  public:
-  NaClIPCAdapterTest() {}
+  NaClIPCAdapterTest() = default;
 
   // testing::Test implementation.
   void SetUp() override {
@@ -35,8 +40,9 @@ class NaClIPCAdapterTest : public testing::Test {
     // Takes ownership of the sink_ pointer. Note we provide the current message
     // loop instead of using a real IO thread. This should work OK since we do
     // not need real IPC for the tests.
-    adapter_ = new NaClIPCAdapter(std::unique_ptr<IPC::Channel>(sink_),
-                                  base::ThreadTaskRunnerHandle::Get().get());
+    adapter_ = new NaClIPCAdapter(
+        std::unique_ptr<IPC::Channel>(sink_),
+        base::SingleThreadTaskRunner::GetCurrentDefault().get());
   }
   void TearDown() override {
     sink_ = nullptr;  // This pointer is actually owned by the IPCAdapter.
@@ -118,7 +124,7 @@ TEST_F(NaClIPCAdapterTest, SendRewriting) {
 
   // Send a message with one int inside it.
   const int buf_size = sizeof(NaClIPCAdapter::NaClMessageHeader) + sizeof(int);
-  char buf[buf_size] = {0};
+  char buf[buf_size] = {};
 
   NaClIPCAdapter::NaClMessageHeader* header =
       reinterpret_cast<NaClIPCAdapter::NaClMessageHeader*>(buf);
@@ -236,7 +242,7 @@ TEST_F(NaClIPCAdapterTest, SendOverflow) {
   // we can test what happens when we send too much data.
   const int buf_size = sizeof(NaClIPCAdapter::NaClMessageHeader) + sizeof(int);
   const int big_buf_size = buf_size + 4;
-  char buf[big_buf_size] = {0};
+  char buf[big_buf_size] = {};
 
   NaClIPCAdapter::NaClMessageHeader* header =
       reinterpret_cast<NaClIPCAdapter::NaClMessageHeader*>(buf);

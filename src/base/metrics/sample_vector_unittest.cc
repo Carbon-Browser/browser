@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,9 +23,8 @@ namespace base {
 // non-public methods and fields.
 class SampleVectorTest : public testing::Test {
  public:
-  const HistogramBase::AtomicCount* GetSamplesCounts(
-      const SampleVectorBase& samples) {
-    return samples.counts();
+  bool HasSamplesCounts(const SampleVectorBase& samples) {
+    return samples.counts().has_value();
   }
 };
 
@@ -169,7 +168,7 @@ TEST_F(SampleVectorTest, BucketIndexDeath) {
   EXPECT_DEATH_IF_SUPPORTED(samples2.Accumulate(10, 100), "");
 }
 
-TEST_F(SampleVectorTest, AddSubtractBucketNotMatchDeath) {
+TEST_F(SampleVectorTest, AddSubtractBucketNotMatch) {
   // Custom buckets 1: [1, 3) [3, 5)
   BucketRanges ranges1(3);
   ranges1.set_range(0, 1);
@@ -187,27 +186,27 @@ TEST_F(SampleVectorTest, AddSubtractBucketNotMatchDeath) {
   SampleVector samples2(2, &ranges2);
 
   samples2.Accumulate(1, 100);
-  samples1.Add(samples2);
-  EXPECT_EQ(100, samples1.GetCountAtIndex(0));
+  // Despite [1, 3) matching in both samples, we expect AddSubtractImpl to fail
+  // as it requires perfect alignment of buckets.
+  EXPECT_FALSE(samples1.Add(samples2));
 
-  // Extra bucket in the beginning. These should CHECK in GetBucketIndex.
+  // Extra bucket in the beginning. These should cause AddSubtractImpl to fail.
   samples2.Accumulate(0, 100);
-  EXPECT_DEATH_IF_SUPPORTED(samples1.Add(samples2), "");
-  EXPECT_DEATH_IF_SUPPORTED(samples1.Subtract(samples2), "");
+  EXPECT_FALSE(samples1.Add(samples2));
+  EXPECT_FALSE(samples1.Subtract(samples2));
 
-  // Extra bucket in the end. These should cause AddSubtractImpl to fail, and
-  // Add to DCHECK as a result.
+  // Extra bucket in the end. These should cause AddSubtractImpl to fail.
   samples2.Accumulate(0, -100);
   samples2.Accumulate(6, 100);
-  EXPECT_DCHECK_DEATH(samples1.Add(samples2));
-  EXPECT_DCHECK_DEATH(samples1.Subtract(samples2));
+  EXPECT_FALSE(samples1.Add(samples2));
+  EXPECT_FALSE(samples1.Subtract(samples2));
 
   // Bucket not match: [3, 5) VS [3, 6). These should cause AddSubtractImpl to
-  // DCHECK.
+  // fail.
   samples2.Accumulate(6, -100);
   samples2.Accumulate(3, 100);
-  EXPECT_DCHECK_DEATH(samples1.Add(samples2));
-  EXPECT_DCHECK_DEATH(samples1.Subtract(samples2));
+  EXPECT_FALSE(samples1.Add(samples2));
+  EXPECT_FALSE(samples1.Subtract(samples2));
 }
 
 TEST_F(SampleVectorTest, Iterate) {
@@ -218,55 +217,102 @@ TEST_F(SampleVectorTest, Iterate) {
   ranges.set_range(3, 3);
   ranges.set_range(4, 4);
 
-  std::vector<HistogramBase::Count> counts(3);
-  counts[0] = 1;
-  counts[1] = 0;  // Iterator will bypass this empty bucket.
-  counts[2] = 2;
-
-  // BucketRanges can have larger size than counts.
-  SampleVectorIterator it(&counts, &ranges);
-  size_t index;
-
-  HistogramBase::Sample min;
-  int64_t max;
-  HistogramBase::Count count;
-  it.Get(&min, &max, &count);
-  EXPECT_EQ(0, min);
-  EXPECT_EQ(1, max);
-  EXPECT_EQ(1, count);
-  EXPECT_TRUE(it.GetBucketIndex(&index));
-  EXPECT_EQ(0u, index);
-
-  it.Next();
-  it.Get(&min, &max, &count);
-  EXPECT_EQ(2, min);
-  EXPECT_EQ(3, max);
-  EXPECT_EQ(2, count);
-  EXPECT_TRUE(it.GetBucketIndex(&index));
-  EXPECT_EQ(2u, index);
-
-  it.Next();
-  EXPECT_TRUE(it.Done());
-
   // Create iterator from SampleVector.
   SampleVector samples(1, &ranges);
-  samples.Accumulate(0, 0);
+  samples.Accumulate(0, 0);  // Iterator will bypass this empty bucket.
   samples.Accumulate(1, 1);
   samples.Accumulate(2, 2);
   samples.Accumulate(3, 3);
-  std::unique_ptr<SampleCountIterator> it2 = samples.Iterator();
+  std::unique_ptr<SampleCountIterator> it = samples.Iterator();
 
   int i;
-  for (i = 1; !it2->Done(); i++, it2->Next()) {
-    it2->Get(&min, &max, &count);
+  size_t index;
+  HistogramBase::Sample min;
+  int64_t max;
+  HistogramBase::Count count;
+  for (i = 1; !it->Done(); i++, it->Next()) {
+    it->Get(&min, &max, &count);
     EXPECT_EQ(i, min);
     EXPECT_EQ(i + 1, max);
     EXPECT_EQ(i, count);
 
-    EXPECT_TRUE(it2->GetBucketIndex(&index));
+    EXPECT_TRUE(it->GetBucketIndex(&index));
     EXPECT_EQ(static_cast<size_t>(i), index);
   }
   EXPECT_EQ(4, i);
+}
+
+TEST_F(SampleVectorTest, Iterator_InvalidSingleSample) {
+  // Create 3 buckets: [0, 1), [1, 2), [2, INT_MAX).
+  BucketRanges ranges(4);
+  ranges.set_range(0, 0);
+  ranges.set_range(1, 1);
+  ranges.set_range(2, 2);
+  ranges.set_range(3, HistogramBase::kSampleType_MAX);
+
+  // Create an invalid SingleSample.
+  HistogramSamples::AtomicSingleSample invalid_single_sample;
+  invalid_single_sample.Accumulate(/*bucket=*/4, /*count=*/1);
+
+  // Create a SampleVector and set its SingleSample to the invalid one.
+  SampleVector samples(&ranges);
+  *samples.SingleSampleForTesting() = invalid_single_sample;
+
+  // Create an iterator and verify that it is empty (the sample is ignored).
+  std::unique_ptr<SampleCountIterator> it = samples.Iterator();
+  ASSERT_TRUE(it->Done());
+
+  // Add some valid samples. SampleVector should now use a counts storage.
+  samples.Accumulate(/*value=*/0, /*count=*/1);
+  samples.Accumulate(/*value=*/1, /*count=*/1);
+
+  // Create an iterator. Verify that the new samples are returned, and that the
+  // invalid sample is not (it was discarded).
+  HistogramBase::Sample min;
+  int64_t max;
+  HistogramBase::Count count;
+  it = samples.Iterator();
+  ASSERT_FALSE(it->Done());
+  it->Get(&min, &max, &count);
+  EXPECT_EQ(min, 0);
+  EXPECT_EQ(max, 1);
+  EXPECT_EQ(count, 1);
+  it->Next();
+  ASSERT_FALSE(it->Done());
+  it->Get(&min, &max, &count);
+  EXPECT_EQ(min, 1);
+  EXPECT_EQ(max, 2);
+  EXPECT_EQ(count, 1);
+  it->Next();
+  EXPECT_TRUE(it->Done());
+}
+
+TEST_F(SampleVectorTest, ExtractingIterator_InvalidSingleSample) {
+  // Create 3 buckets: [0, 1), [1, 2), and [2, INT_MAX).
+  BucketRanges ranges(4);
+  ranges.set_range(0, 0);
+  ranges.set_range(1, 1);
+  ranges.set_range(2, 2);
+  ranges.set_range(3, HistogramBase::kSampleType_MAX);
+
+  // Create an invalid SingleSample.
+  HistogramSamples::AtomicSingleSample invalid_single_sample;
+  invalid_single_sample.Accumulate(/*bucket=*/4, /*count=*/1);
+
+  // Create a SampleVector and set its SingleSample to the invalid one.
+  SampleVector samples(&ranges);
+  *samples.SingleSampleForTesting() = invalid_single_sample;
+
+  // Create an extracting iterator and verify that it is empty (the sample is
+  // ignored).
+  std::unique_ptr<SampleCountIterator> it = samples.ExtractingIterator();
+  ASSERT_TRUE(it->Done());
+
+  // Verify that the invalid sample was extracted.
+  HistogramSamples::SingleSample current_single_sample =
+      samples.SingleSampleForTesting()->Load();
+  EXPECT_EQ(current_single_sample.bucket, 0);
+  EXPECT_EQ(current_single_sample.count, 0);
 }
 
 TEST_F(SampleVectorTest, IterateDoneDeath) {
@@ -303,13 +349,13 @@ TEST_F(SampleVectorTest, SingleSample) {
   SampleVector samples(&ranges);
 
   // Ensure that a single value accumulates correctly.
-  EXPECT_FALSE(GetSamplesCounts(samples));
+  EXPECT_FALSE(HasSamplesCounts(samples));
   samples.Accumulate(3, 200);
   EXPECT_EQ(200, samples.GetCount(3));
-  EXPECT_FALSE(GetSamplesCounts(samples));
+  EXPECT_FALSE(HasSamplesCounts(samples));
   samples.Accumulate(3, 400);
   EXPECT_EQ(600, samples.GetCount(3));
-  EXPECT_FALSE(GetSamplesCounts(samples));
+  EXPECT_FALSE(HasSamplesCounts(samples));
   EXPECT_EQ(3 * 600, samples.sum());
   EXPECT_EQ(600, samples.TotalCount());
   EXPECT_EQ(600, samples.redundant_count());
@@ -330,14 +376,14 @@ TEST_F(SampleVectorTest, SingleSample) {
   // Ensure that it can be merged to another single-sample vector.
   SampleVector samples_copy(&ranges);
   samples_copy.Add(samples);
-  EXPECT_FALSE(GetSamplesCounts(samples_copy));
+  EXPECT_FALSE(HasSamplesCounts(samples_copy));
   EXPECT_EQ(3 * 600, samples_copy.sum());
   EXPECT_EQ(600, samples_copy.TotalCount());
   EXPECT_EQ(600, samples_copy.redundant_count());
 
   // A different value should cause creation of the counts array.
   samples.Accumulate(8, 100);
-  EXPECT_TRUE(GetSamplesCounts(samples));
+  EXPECT_TRUE(HasSamplesCounts(samples));
   EXPECT_EQ(600, samples.GetCount(3));
   EXPECT_EQ(100, samples.GetCount(8));
   EXPECT_EQ(3 * 600 + 8 * 100, samples.sum());
@@ -362,7 +408,7 @@ TEST_F(SampleVectorTest, SingleSample) {
 
   // Ensure that it can merged to a single-sample vector.
   samples_copy.Add(samples);
-  EXPECT_TRUE(GetSamplesCounts(samples_copy));
+  EXPECT_TRUE(HasSamplesCounts(samples_copy));
   EXPECT_EQ(3 * 1200 + 8 * 100, samples_copy.sum());
   EXPECT_EQ(1200 + 100, samples_copy.TotalCount());
   EXPECT_EQ(1200 + 100, samples_copy.redundant_count());
@@ -388,16 +434,16 @@ TEST_F(SampleVectorTest, PersistentSampleVector) {
                                                counts_bytes, false);
 
   PersistentSampleVector samples1(0, &ranges, &samples_meta, allocation);
-  EXPECT_FALSE(GetSamplesCounts(samples1));
+  EXPECT_FALSE(HasSamplesCounts(samples1));
   samples1.Accumulate(3, 200);
   EXPECT_EQ(200, samples1.GetCount(3));
-  EXPECT_FALSE(GetSamplesCounts(samples1));
+  EXPECT_FALSE(HasSamplesCounts(samples1));
   EXPECT_EQ(0, samples1.GetCount(8));
-  EXPECT_FALSE(GetSamplesCounts(samples1));
+  EXPECT_FALSE(HasSamplesCounts(samples1));
 
   PersistentSampleVector samples2(0, &ranges, &samples_meta, allocation);
   EXPECT_EQ(200, samples2.GetCount(3));
-  EXPECT_FALSE(GetSamplesCounts(samples2));
+  EXPECT_FALSE(HasSamplesCounts(samples2));
 
   HistogramBase::Sample min;
   int64_t max;
@@ -412,12 +458,12 @@ TEST_F(SampleVectorTest, PersistentSampleVector) {
   EXPECT_TRUE(it->Done());
 
   samples1.Accumulate(8, 100);
-  EXPECT_TRUE(GetSamplesCounts(samples1));
+  EXPECT_TRUE(HasSamplesCounts(samples1));
 
-  EXPECT_FALSE(GetSamplesCounts(samples2));
+  EXPECT_FALSE(HasSamplesCounts(samples2));
   EXPECT_EQ(200, samples2.GetCount(3));
   EXPECT_EQ(100, samples2.GetCount(8));
-  EXPECT_TRUE(GetSamplesCounts(samples2));
+  EXPECT_TRUE(HasSamplesCounts(samples2));
   EXPECT_EQ(3 * 200 + 8 * 100, samples2.sum());
   EXPECT_EQ(300, samples2.TotalCount());
   EXPECT_EQ(300, samples2.redundant_count());
@@ -438,7 +484,7 @@ TEST_F(SampleVectorTest, PersistentSampleVector) {
   EXPECT_TRUE(it->Done());
 
   PersistentSampleVector samples3(0, &ranges, &samples_meta, allocation);
-  EXPECT_TRUE(GetSamplesCounts(samples2));
+  EXPECT_TRUE(HasSamplesCounts(samples2));
   EXPECT_EQ(200, samples3.GetCount(3));
   EXPECT_EQ(100, samples3.GetCount(8));
   EXPECT_EQ(3 * 200 + 8 * 100, samples3.sum());
@@ -481,18 +527,18 @@ TEST_F(SampleVectorTest, PersistentSampleVectorTestWithOutsideAlloc) {
                                                counts_bytes, false);
 
   PersistentSampleVector samples1(0, &ranges, &samples_meta, allocation);
-  EXPECT_FALSE(GetSamplesCounts(samples1));
+  EXPECT_FALSE(HasSamplesCounts(samples1));
   samples1.Accumulate(3, 200);
   EXPECT_EQ(200, samples1.GetCount(3));
-  EXPECT_FALSE(GetSamplesCounts(samples1));
+  EXPECT_FALSE(HasSamplesCounts(samples1));
 
   // Because the delayed allocation can be shared with other objects (the
   // |offset| parameter allows concatinating multiple data blocks into the
   // same allocation), it's possible that the allocation gets realized from
   // the outside even though the data block being accessed is all zero.
-  allocation.Get();
+  allocation.Get<uint8_t>();
   EXPECT_EQ(200, samples1.GetCount(3));
-  EXPECT_FALSE(GetSamplesCounts(samples1));
+  EXPECT_FALSE(HasSamplesCounts(samples1));
 
   HistogramBase::Sample min;
   int64_t max;
@@ -529,7 +575,7 @@ TEST_F(SampleVectorTest, PersistentSampleVectorTestWithOutsideAlloc) {
   EXPECT_TRUE(it->Done());
 
   samples1.Accumulate(8, 100);
-  EXPECT_TRUE(GetSamplesCounts(samples1));
+  EXPECT_TRUE(HasSamplesCounts(samples1));
   EXPECT_EQ(300, samples1.GetCount(3));
   EXPECT_EQ(300, samples2.GetCount(3));
   EXPECT_EQ(100, samples1.GetCount(8));

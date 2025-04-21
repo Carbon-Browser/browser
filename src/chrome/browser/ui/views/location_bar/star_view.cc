@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
@@ -38,6 +38,7 @@
 #include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/gfx/color_utils.h"
 #include "ui/gfx/paint_vector_icon.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/animation/ink_drop.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
 #include "ui/views/view_class_properties.h"
@@ -49,17 +50,19 @@ StarView::StarView(CommandUpdater* command_updater,
     : PageActionIconView(command_updater,
                          IDC_BOOKMARK_THIS_TAB,
                          icon_label_bubble_delegate,
-                         page_action_icon_delegate),
-      browser_(browser) {
-  DCHECK(browser_);
+                         page_action_icon_delegate,
+                         "BookmarksStar",
+                         false) {
+  DCHECK(browser);
 
   edit_bookmarks_enabled_.Init(
-      bookmarks::prefs::kEditBookmarksEnabled, browser_->profile()->GetPrefs(),
+      bookmarks::prefs::kEditBookmarksEnabled, browser->profile()->GetPrefs(),
       base::BindRepeating(&StarView::EditBookmarksPrefUpdated,
                           base::Unretained(this)));
   SetID(VIEW_ID_STAR_BUTTON);
   SetProperty(views::kElementIdentifierKey, kBookmarkStarViewElementId);
   SetActive(false);
+  GetViewAccessibility().SetName(l10n_util::GetStringUTF16(IDS_TOOLTIP_STAR));
 }
 
 StarView::~StarView() = default;
@@ -84,25 +87,19 @@ void StarView::UpdateImpl() {
 }
 
 void StarView::OnExecuting(PageActionIconView::ExecuteSource execute_source) {
-  BookmarkEntryPoint entry_point = BOOKMARK_ENTRY_POINT_STAR_MOUSE;
+  BookmarkEntryPoint entry_point = BookmarkEntryPoint::kStarMouse;
   switch (execute_source) {
     case EXECUTE_SOURCE_MOUSE:
-      entry_point = BOOKMARK_ENTRY_POINT_STAR_MOUSE;
+      entry_point = BookmarkEntryPoint::kStarMouse;
       break;
     case EXECUTE_SOURCE_KEYBOARD:
-      entry_point = BOOKMARK_ENTRY_POINT_STAR_KEY;
+      entry_point = BookmarkEntryPoint::kStarKey;
       break;
     case EXECUTE_SOURCE_GESTURE:
-      entry_point = BOOKMARK_ENTRY_POINT_STAR_GESTURE;
+      entry_point = BookmarkEntryPoint::kStarGesture;
       break;
   }
-  UMA_HISTOGRAM_ENUMERATION("Bookmarks.EntryPoint", entry_point,
-                            BOOKMARK_ENTRY_POINT_LIMIT);
-}
-
-void StarView::ExecuteCommand(ExecuteSource source) {
-  OnExecuting(source);
-  chrome::BookmarkCurrentTab(browser_);
+  UMA_HISTOGRAM_ENUMERATION("Bookmarks.EntryPoint", entry_point);
 }
 
 views::BubbleDialogDelegate* StarView::GetBubble() const {
@@ -110,7 +107,8 @@ views::BubbleDialogDelegate* StarView::GetBubble() const {
 }
 
 const gfx::VectorIcon& StarView::GetVectorIcon() const {
-  return GetActive() ? omnibox::kStarActiveIcon : omnibox::kStarIcon;
+  return GetActive() ? omnibox::kStarActiveChromeRefreshIcon
+                     : omnibox::kStarChromeRefreshIcon;
 }
 
 std::u16string StarView::GetTextForTooltipAndAccessibleName() const {
@@ -122,5 +120,5 @@ void StarView::EditBookmarksPrefUpdated() {
   Update();
 }
 
-BEGIN_METADATA(StarView, PageActionIconView)
+BEGIN_METADATA(StarView)
 END_METADATA

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include "base/test/mock_callback.h"
 #include "base/test/task_environment.h"
-#include "components/sync/driver/test_sync_service.h"
+#include "components/sync/test/test_sync_service.h"
 #include "google_apis/gaia/google_service_auth_error.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -20,8 +20,7 @@ namespace {
 class SyncStartupTrackerTest : public testing::Test {
  public:
   void SetupNonInitializedSyncService() {
-    sync_service_.SetDisableReasons(syncer::SyncService::DisableReasonSet());
-    sync_service_.SetTransportState(
+    sync_service_.SetMaxTransportState(
         syncer::SyncService::TransportState::INITIALIZING);
   }
 
@@ -34,8 +33,8 @@ class SyncStartupTrackerTest : public testing::Test {
 };
 
 TEST_F(SyncStartupTrackerTest, SyncAlreadyInitialized) {
-  sync_service_.SetDisableReasons(syncer::SyncService::DisableReasonSet());
-  sync_service_.SetTransportState(syncer::SyncService::TransportState::ACTIVE);
+  sync_service_.SetMaxTransportState(
+      syncer::SyncService::TransportState::ACTIVE);
   EXPECT_CALL(callback_,
               Run(SyncStartupTracker::ServiceStartupState::kComplete));
   SyncStartupTracker tracker(&sync_service_, callback_.Get());
@@ -44,10 +43,7 @@ TEST_F(SyncStartupTrackerTest, SyncAlreadyInitialized) {
 TEST_F(SyncStartupTrackerTest, SyncNotSignedIn) {
   // Make sure that we get a SyncStartupFailed() callback if sync is not logged
   // in.
-  sync_service_.SetDisableReasons(
-      syncer::SyncService::DISABLE_REASON_NOT_SIGNED_IN);
-  sync_service_.SetTransportState(
-      syncer::SyncService::TransportState::DISABLED);
+  sync_service_.SetSignedOut();
   EXPECT_CALL(callback_, Run(SyncStartupTracker::ServiceStartupState::kError));
   SyncStartupTracker tracker(&sync_service_, callback_.Get());
 }
@@ -55,11 +51,7 @@ TEST_F(SyncStartupTrackerTest, SyncNotSignedIn) {
 TEST_F(SyncStartupTrackerTest, SyncAuthError) {
   // Make sure that we get a SyncStartupFailed() callback if sync gets an auth
   // error.
-  sync_service_.SetDisableReasons(syncer::SyncService::DisableReasonSet());
-  sync_service_.SetTransportState(
-      syncer::SyncService::TransportState::INITIALIZING);
-  sync_service_.SetAuthError(
-      GoogleServiceAuthError(GoogleServiceAuthError::INVALID_GAIA_CREDENTIALS));
+  sync_service_.SetPersistentAuthError();
   EXPECT_CALL(callback_, Run(SyncStartupTracker::ServiceStartupState::kError));
   SyncStartupTracker tracker(&sync_service_, callback_.Get());
 }
@@ -71,7 +63,8 @@ TEST_F(SyncStartupTrackerTest, SyncDelayedInitialization) {
   SyncStartupTracker tracker(&sync_service_, callback_.Get());
   Mock::VerifyAndClearExpectations(&callback_);
   // Now, mark the Sync Service as initialized.
-  sync_service_.SetTransportState(syncer::SyncService::TransportState::ACTIVE);
+  sync_service_.SetMaxTransportState(
+      syncer::SyncService::TransportState::ACTIVE);
   EXPECT_CALL(callback_,
               Run(SyncStartupTracker::ServiceStartupState::kComplete));
   tracker.OnStateChanged(&sync_service_);
@@ -86,11 +79,7 @@ TEST_F(SyncStartupTrackerTest, SyncDelayedAuthError) {
   Mock::VerifyAndClearExpectations(&sync_service_);
 
   // Now, mark the Sync Service as having an auth error.
-  sync_service_.SetDisableReasons(syncer::SyncService::DisableReasonSet());
-  sync_service_.SetTransportState(
-      syncer::SyncService::TransportState::INITIALIZING);
-  sync_service_.SetAuthError(
-      GoogleServiceAuthError(GoogleServiceAuthError::INVALID_GAIA_CREDENTIALS));
+  sync_service_.SetPersistentAuthError();
   EXPECT_CALL(callback_, Run(SyncStartupTracker::ServiceStartupState::kError));
   tracker.OnStateChanged(&sync_service_);
 }
@@ -104,10 +93,7 @@ TEST_F(SyncStartupTrackerTest, SyncDelayedUnrecoverableError) {
   Mock::VerifyAndClearExpectations(&sync_service_);
 
   // Now, mark the Sync Service as having an unrecoverable error.
-  sync_service_.SetDisableReasons(
-      syncer::SyncService::DISABLE_REASON_UNRECOVERABLE_ERROR);
-  sync_service_.SetTransportState(
-      syncer::SyncService::TransportState::DISABLED);
+  sync_service_.SetHasUnrecoverableError(true);
   EXPECT_CALL(callback_, Run(SyncStartupTracker::ServiceStartupState::kError));
   tracker.OnStateChanged(&sync_service_);
 }

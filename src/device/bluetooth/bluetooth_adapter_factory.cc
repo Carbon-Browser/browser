@@ -1,14 +1,15 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "device/bluetooth/bluetooth_adapter_factory.h"
 
+#include <memory>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
@@ -16,11 +17,10 @@
 #include "build/build_config.h"
 #include "device/bluetooth/bluetooth_adapter.h"
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
 #include "base/mac/mac_util.h"
 #endif
 #if BUILDFLAG(IS_WIN)
-#include "base/win/windows_version.h"
 #include "device/bluetooth/bluetooth_adapter_win.h"
 #endif
 
@@ -43,7 +43,7 @@ bool BluetoothAdapterFactory::IsBluetoothSupported() {
   if (Get()->adapter_)
     return true;
 #if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX) || \
-    BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_MAC)
+    BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_APPLE)
   return true;
 #else
   return false;
@@ -51,18 +51,13 @@ bool BluetoothAdapterFactory::IsBluetoothSupported() {
 }
 
 bool BluetoothAdapterFactory::IsLowEnergySupported() {
-  if (values_for_testing_) {
-    return values_for_testing_->GetLESupported();
+  if (override_values_) {
+    return override_values_->GetLESupported();
   }
 
 #if BUILDFLAG(IS_ANDROID) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_LINUX) || \
-    BUILDFLAG(IS_MAC)
+    BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_WIN)
   return true;
-#elif BUILDFLAG(IS_WIN)
-  // Windows 8 supports Low Energy GATT operations but it does not support
-  // scanning, initiating connections and GATT Server. To keep the API
-  // consistent we consider Windows 8 as lacking Low Energy support.
-  return base::win::GetVersion() >= base::win::Version::WIN10;
 #else
   return false;
 #endif
@@ -92,12 +87,6 @@ void BluetoothAdapterFactory::GetAdapter(AdapterCallback callback) {
 void BluetoothAdapterFactory::GetClassicAdapter(AdapterCallback callback) {
 #if BUILDFLAG(IS_WIN)
   DCHECK(IsBluetoothSupported());
-
-  if (base::win::GetVersion() < base::win::Version::WIN10) {
-    // Prior to Win10, the default adapter will support Bluetooth classic.
-    GetAdapter(std::move(callback));
-    return;
-  }
 
   if (!classic_adapter_) {
     classic_adapter_callbacks_.push_back(std::move(callback));
@@ -161,21 +150,20 @@ BluetoothAdapterFactory::GetBleScanParserCallback() {
 }
 #endif  // BUILDFLAG(IS_CHROMEOS)
 
-BluetoothAdapterFactory::GlobalValuesForTesting::GlobalValuesForTesting() =
+BluetoothAdapterFactory::GlobalOverrideValues::GlobalOverrideValues() = default;
+
+BluetoothAdapterFactory::GlobalOverrideValues::~GlobalOverrideValues() =
     default;
 
-BluetoothAdapterFactory::GlobalValuesForTesting::~GlobalValuesForTesting() =
-    default;
-
-base::WeakPtr<BluetoothAdapterFactory::GlobalValuesForTesting>
-BluetoothAdapterFactory::GlobalValuesForTesting::GetWeakPtr() {
+base::WeakPtr<BluetoothAdapterFactory::GlobalOverrideValues>
+BluetoothAdapterFactory::GlobalOverrideValues::GetWeakPtr() {
   return weak_ptr_factory_.GetWeakPtr();
 }
 
-std::unique_ptr<BluetoothAdapterFactory::GlobalValuesForTesting>
-BluetoothAdapterFactory::InitGlobalValuesForTesting() {
-  auto v = std::make_unique<BluetoothAdapterFactory::GlobalValuesForTesting>();
-  values_for_testing_ = v->GetWeakPtr();
+std::unique_ptr<BluetoothAdapterFactory::GlobalOverrideValues>
+BluetoothAdapterFactory::InitGlobalOverrideValues() {
+  auto v = std::make_unique<BluetoothAdapterFactory::GlobalOverrideValues>();
+  override_values_ = v->GetWeakPtr();
   return v;
 }
 

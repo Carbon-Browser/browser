@@ -1,13 +1,12 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//build/config/chromeos/ui_mode.gni")
 import("//build/config/ui.gni")
 import("//media/gpu/args.gni")
 import("//testing/test.gni")
 
-assert(is_chromeos_ash)
+assert(is_chromeos)
 
 source_set("jpeg_encode_accelerator") {
   sources = [
@@ -64,7 +63,7 @@ source_set("utils") {
   ]
 }
 
-# TODO(crbug.com/960243): Don't compile these codes for build without vaapi/v4l2
+# TODO(crbug.com/41457144): Don't compile these codes for build without vaapi/v4l2
 # supported.
 source_set("jpeg_encode_accelerator_service") {
   sources = [
@@ -164,7 +163,6 @@ if (use_v4l2_codec || use_vaapi) {
       "//media/gpu/test:helpers",
       "//media/gpu/test:local_gpu_memory_buffer_manager",
       "//media/gpu/test:test_helpers",
-      "//media/parsers",
       "//mojo/core/embedder",
       "//testing/gtest",
       "//third_party:jpeg",
@@ -193,13 +191,13 @@ test("jpeg_decode_accelerator_unittest") {
     ":mjpeg_decode_accelerator",
     ":mjpeg_decode_accelerator_service",
     "//base",
+    "//base/test:test_support",
     "//media:test_support",
     "//media/gpu",
     "//media/gpu:buildflags",
     "//media/gpu/test:helpers",
     "//media/gpu/test:local_gpu_memory_buffer_manager",
     "//media/gpu/test:test_helpers",
-    "//media/parsers",
     "//mojo/core/embedder",
     "//testing/gtest",
     "//third_party/libyuv",

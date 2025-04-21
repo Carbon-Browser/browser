@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,14 @@
 #include "ash/public/cpp/shelf_types.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/shelf/shelf.h"
+#include "ash/style/ash_color_id.h"
+#include "ash/style/ash_color_provider.h"
+#include "ash/style/typography.h"
 #include "ash/system/tray/tray_constants.h"
 #include "ash/wm/collision_detection/collision_detection_utils.h"
 #include "ui/aura/window.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
 #include "ui/gfx/color_palette.h"
@@ -37,7 +42,6 @@ ContextualNudge::ContextualNudge(views::View* anchor,
                                  Position position,
                                  const gfx::Insets& margins,
                                  const std::u16string& text,
-                                 SkColor text_color,
                                  const base::RepeatingClosure& tap_callback)
     : views::BubbleDialogDelegateView(anchor,
                                       GetArrowForPosition(position),
@@ -52,7 +56,7 @@ ContextualNudge::ContextualNudge(views::View* anchor,
   set_accept_events(!tap_callback.is_null());
   SetCanActivate(false);
   set_shadow(views::BubbleBorder::NO_SHADOW);
-  SetButtons(ui::DIALOG_BUTTON_NONE);
+  SetButtons(static_cast<int>(ui::mojom::DialogButton::kNone));
 
   if (parent_window) {
     set_parent_window(parent_window);
@@ -68,9 +72,11 @@ ContextualNudge::ContextualNudge(views::View* anchor,
   label_->SetPaintToLayer();
   label_->layer()->SetFillsBoundsOpaquely(false);
   label_->SetHorizontalAlignment(gfx::ALIGN_CENTER);
-  label_->SetEnabledColor(text_color);
   label_->SetBackgroundColor(SK_ColorTRANSPARENT);
   label_->SetBorder(views::CreateEmptyBorder(margins));
+  label_->SetEnabledColorId(cros_tokens::kCrosSysSecondary);
+  TypographyProvider::Get()->StyleLabel(TypographyToken::kCrosAnnotation1,
+                                        *label_);
 
   views::BubbleDialogDelegateView::CreateBubble(this);
 
@@ -96,7 +102,7 @@ ui::LayerType ContextualNudge::GetLayerType() const {
 }
 
 void ContextualNudge::OnGestureEvent(ui::GestureEvent* event) {
-  if (event->type() == ui::ET_GESTURE_TAP && tap_callback_) {
+  if (event->type() == ui::EventType::kGestureTap && tap_callback_) {
     event->StopPropagation();
     tap_callback_.Run();
     return;

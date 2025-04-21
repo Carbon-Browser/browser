@@ -1,10 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/nearby_sharing/network_traversal_ice_config_fetcher.h"
 
-#include "base/bind.h"
+#include <optional>
+
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/strings/strcat.h"
 #include "chrome/services/sharing/public/cpp/sharing_webrtc_metrics.h"
@@ -14,7 +16,6 @@
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/simple_url_loader.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace {
 
@@ -79,36 +80,39 @@ bool IsLoaderSuccessful(const network::SimpleURLLoader* loader) {
   return is_successful_response_code;
 }
 
-std::vector<sharing::mojom::IceServerPtr> GetDefaultIceServers() {
-  sharing::mojom::IceServerPtr ice_server(sharing::mojom::IceServer::New());
+std::vector<::sharing::mojom::IceServerPtr> GetDefaultIceServers() {
+  ::sharing::mojom::IceServerPtr ice_server(::sharing::mojom::IceServer::New());
   ice_server->urls.emplace_back("stun:stun.l.google.com:19302");
   ice_server->urls.emplace_back("stun:stun1.l.google.com:19302");
   ice_server->urls.emplace_back("stun:stun2.l.google.com:19302");
   ice_server->urls.emplace_back("stun:stun3.l.google.com:19302");
   ice_server->urls.emplace_back("stun:stun4.l.google.com:19302");
 
-  std::vector<sharing::mojom::IceServerPtr> default_servers;
+  std::vector<::sharing::mojom::IceServerPtr> default_servers;
   default_servers.push_back(std::move(ice_server));
   return default_servers;
 }
 
-std::vector<sharing::mojom::IceServerPtr> ParseIceConfigJson(std::string json) {
-  std::vector<sharing::mojom::IceServerPtr> ice_servers;
-  absl::optional<base::Value> response = base::JSONReader::Read(json);
+std::vector<::sharing::mojom::IceServerPtr> ParseIceConfigJson(
+    std::string json) {
+  std::vector<::sharing::mojom::IceServerPtr> ice_servers;
+  std::optional<base::Value> response = base::JSONReader::Read(json);
   if (!response)
     return ice_servers;
 
-  base::Value* ice_servers_json = response->FindListKey("iceServers");
+  base::Value::List* ice_servers_json =
+      response->GetDict().FindList("iceServers");
   if (!ice_servers_json)
     return ice_servers;
 
-  for (base::Value& server : ice_servers_json->GetListDeprecated()) {
-    const base::Value* urls_json = server.FindListKey("urls");
+  for (base::Value& server : *ice_servers_json) {
+    base::Value::Dict& server_dict = server.GetDict();
+    const base::Value::List* urls_json = server_dict.FindList("urls");
     if (!urls_json)
       continue;
 
     std::vector<GURL> urls;
-    for (const base::Value& url_json : urls_json->GetListDeprecated()) {
+    for (const base::Value& url_json : *urls_json) {
       const std::string* url = url_json.GetIfString();
       if (!url)
         continue;
@@ -119,14 +123,15 @@ std::vector<sharing::mojom::IceServerPtr> ParseIceConfigJson(std::string json) {
     if (urls.empty())
       continue;
 
-    sharing::mojom::IceServerPtr ice_server(sharing::mojom::IceServer::New());
+    ::sharing::mojom::IceServerPtr ice_server(
+        ::sharing::mojom::IceServer::New());
     ice_server->urls = std::move(urls);
 
-    std::string* retrieved_username = server.FindStringKey("username");
+    std::string* retrieved_username = server_dict.FindString("username");
     if (retrieved_username)
       ice_server->username.emplace(std::move(*retrieved_username));
 
-    std::string* retrieved_credential = server.FindStringKey("credential");
+    std::string* retrieved_credential = server_dict.FindString("credential");
     if (retrieved_credential)
       ice_server->credential.emplace(std::move(*retrieved_credential));
 
@@ -137,10 +142,10 @@ std::vector<sharing::mojom::IceServerPtr> ParseIceConfigJson(std::string json) {
 }
 
 void OnIceServersResponse(
-    sharing::mojom::IceConfigFetcher::GetIceServersCallback callback,
+    ::sharing::mojom::IceConfigFetcher::GetIceServersCallback callback,
     std::unique_ptr<network::SimpleURLLoader> url_loader,
     std::unique_ptr<std::string> response_body) {
-  std::vector<sharing::mojom::IceServerPtr> ice_servers;
+  std::vector<::sharing::mojom::IceServerPtr> ice_servers;
 
   if (IsLoaderSuccessful(url_loader.get()) && response_body)
     ice_servers = ParseIceConfigJson(*response_body);

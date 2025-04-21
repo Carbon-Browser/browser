@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,12 +28,11 @@ bool MockInvalidation::IsUnknownVersion() const {
 }
 
 const std::string& MockInvalidation::GetPayload() const {
-  DCHECK(!is_unknown_version_);
   return payload_;
 }
 
 int64_t MockInvalidation::GetVersion() const {
-  DCHECK(!is_unknown_version_);
+  CHECK(!is_unknown_version_);
   return version_;
 }
 

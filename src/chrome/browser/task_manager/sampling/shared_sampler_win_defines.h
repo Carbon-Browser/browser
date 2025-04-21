@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_TASK_MANAGER_SAMPLING_SHARED_SAMPLER_WIN_DEFINES_H_
 
 #include <windows.h>
+
 #include <winternl.h>
 
 #include "build/build_config.h"

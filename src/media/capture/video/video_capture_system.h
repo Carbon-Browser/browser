@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 namespace media {
 
 // GetDeviceInfosAsync() should be called at least once before calling
-// CreateDevice(), because otherwise CreateDevice() will allways return nullptr.
+// CreateDevice(), because otherwise CreateDevice() will always return nullptr.
 class CAPTURE_EXPORT VideoCaptureSystem {
  public:
   using DeviceInfoCallback =

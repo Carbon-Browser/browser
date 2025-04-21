@@ -1,39 +1,22 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "google_apis/gaia/gaia_auth_consumer.h"
-
-GaiaAuthConsumer::ClientLoginResult::ClientLoginResult() = default;
-
-GaiaAuthConsumer::ClientLoginResult::ClientLoginResult(
-    const std::string& new_sid,
-    const std::string& new_lsid,
-    const std::string& new_token,
-    const std::string& new_data)
-    : sid(new_sid), lsid(new_lsid), token(new_token), data(new_data) {}
-
-GaiaAuthConsumer::ClientLoginResult::ClientLoginResult(
-    const ClientLoginResult& other) = default;
-
-GaiaAuthConsumer::ClientLoginResult::~ClientLoginResult() {}
-
-bool GaiaAuthConsumer::ClientLoginResult::operator==(
-    const ClientLoginResult &b) const {
-  return sid == b.sid && lsid == b.lsid && token == b.token && data == b.data;
-}
 
 GaiaAuthConsumer::ClientOAuthResult::ClientOAuthResult(
     const std::string& new_refresh_token,
     const std::string& new_access_token,
     int new_expires_in_secs,
     bool new_is_child_account,
-    bool new_is_under_advanced_protection)
+    bool new_is_under_advanced_protection,
+    bool new_is_bound_to_key)
     : refresh_token(new_refresh_token),
       access_token(new_access_token),
       expires_in_secs(new_expires_in_secs),
       is_child_account(new_is_child_account),
-      is_under_advanced_protection(new_is_under_advanced_protection) {}
+      is_under_advanced_protection(new_is_under_advanced_protection),
+      is_bound_to_key(new_is_bound_to_key) {}
 
 GaiaAuthConsumer::ClientOAuthResult::ClientOAuthResult(
     const ClientOAuthResult& other) = default;

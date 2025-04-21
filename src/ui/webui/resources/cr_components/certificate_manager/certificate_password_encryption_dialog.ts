@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,16 @@
  * @fileoverview A dialog prompting the user to encrypt a personal certificate
  * before it is exported to disk.
  */
-import '../../cr_elements/cr_button/cr_button.m.js';
-import '../../cr_elements/cr_dialog/cr_dialog.m.js';
-import '../../cr_elements/cr_input/cr_input.m.js';
-import '../../cr_elements/shared_vars_css.m.js';
+import '//resources/cr_elements/cr_button/cr_button.js';
+import '//resources/cr_elements/cr_dialog/cr_dialog.js';
+import '//resources/cr_elements/cr_input/cr_input.js';
+import '//resources/cr_elements/cr_shared_vars.css.js';
 import './certificate_shared.css.js';
 
-import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-
-import {CrButtonElement} from '../../cr_elements/cr_button/cr_button.m.js';
-import {CrDialogElement} from '../../cr_elements/cr_dialog/cr_dialog.m.js';
-import {I18nMixin} from '../../js/i18n_mixin.js';
+import type {CrButtonElement} from '//resources/cr_elements/cr_button/cr_button.js';
+import type {CrDialogElement} from '//resources/cr_elements/cr_dialog/cr_dialog.js';
+import {I18nMixin} from '//resources/cr_elements/i18n_mixin.js';
+import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {getTemplate} from './certificate_password_encryption_dialog.html.js';
 import {CertificatesBrowserProxyImpl} from './certificates_browser_proxy.js';
@@ -63,11 +62,11 @@ export class CertificatePasswordEncryptionDialogElement extends
     this.$.dialog.showModal();
   }
 
-  private onCancelTap_() {
+  private onCancelClick_() {
     this.$.dialog.close();
   }
 
-  private onOkTap_() {
+  private onOkClick_() {
     CertificatesBrowserProxyImpl.getInstance()
         .exportPersonalCertificatePasswordSelected(this.password_)
         .then(

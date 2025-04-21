@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -96,7 +96,7 @@ void XRCanvasInputProvider::OnPointerUp(PointerEvent* event) {
 }
 
 XRInputSource* XRCanvasInputProvider::GetInputSource() {
-  return input_source_;
+  return input_source_.Get();
 }
 
 void XRCanvasInputProvider::UpdateInputSource(PointerEvent* event) {
@@ -120,8 +120,9 @@ void XRCanvasInputProvider::UpdateInputSource(PointerEvent* event) {
   // position of the screen interaction and shoves it backwards through the
   // projection matrix to get a 3D point in space, which is then returned in
   // matrix form so we can use it as an XRInputSource's pointerMatrix.
-  XRViewData* view = session_->views()[0];
-  TransformationMatrix viewer_from_pointer = view->UnprojectPointer(
+  XRViewData* view =
+      session_->ViewDataForEye(device::mojom::blink::XREye::kNone);
+  gfx::Transform viewer_from_pointer = view->UnprojectPointer(
       element_x, element_y, canvas_->OffsetWidth(), canvas_->OffsetHeight());
 
   // Update the pointer pose in input space. For screen tapping, input

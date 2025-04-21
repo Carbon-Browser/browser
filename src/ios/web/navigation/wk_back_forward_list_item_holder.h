@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,19 +26,19 @@ class WKBackForwardListItemHolder : public base::SupportsUserData::Data {
 
   ~WKBackForwardListItemHolder() override;
 
-  // Returns the WKBackForwardListItemHolder for the NavigationItem |item|.
-  // Lazily attaches one if it does not exist. |item| cannot be null.
+  // Returns the WKBackForwardListItemHolder for the NavigationItem `item`.
+  // Lazily attaches one if it does not exist. `item` cannot be null.
   static web::WKBackForwardListItemHolder* FromNavigationItem(
       NavigationItem* item);
 
-  // Accessors for |item_|. Use these to get/set the association between a
+  // Accessors for `item_`. Use these to get/set the association between a
   // NavigationItem and a WKBackForwardListItem. Note that
-  // |back_forward_list_item| may return nil (f.e. when the
+  // `back_forward_list_item` may return nil (f.e. when the
   // parent WKBackForwardList is deallocated).
   WKBackForwardListItem* back_forward_list_item() const { return item_; }
   void set_back_forward_list_item(WKBackForwardListItem* item) { item_ = item; }
 
-  // Accessors for |navigation_type_|. Use these to get/set the association
+  // Accessors for `navigation_type_`. Use these to get/set the association
   // between a NavigationItem and a WKNavigationType.
   WKNavigationType navigation_type() const { return navigation_type_; }
   void set_navigation_type(WKNavigationType type) { navigation_type_ = type; }
@@ -66,8 +66,11 @@ class WKBackForwardListItemHolder : public base::SupportsUserData::Data {
   // HTTP request method.
   NSString* http_method_;
 
-  // The MIME type of the page content.
-  NSString* mime_type_;
+  // The MIME type of the page content. Default to HTML, to handle same-
+  // document navigations that don't trigger any WebKit navigation callbacks.
+  // Initial navigations to non-HTML content always trigger navigation
+  // callbacks, which will lead to the correct value being stored here.
+  NSString* mime_type_ = @"text/html";
 };
 
 }  // namespace web

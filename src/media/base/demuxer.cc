@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,5 +11,9 @@ DemuxerHost::~DemuxerHost() = default;
 Demuxer::Demuxer() = default;
 
 Demuxer::~Demuxer() = default;
+
+// Most Demuxer implementations don't need to disable canChangeType.
+// Do nothing by default.
+void Demuxer::DisableCanChangeType() {}
 
 }  // namespace media

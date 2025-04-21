@@ -1,29 +1,29 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import os
 import sys
-import typing
+from typing import Any, List, Optional, Union
 import unittest
 
-import six
+import dataclasses  # Built-in, but pylint gives an ordering false positive.
 
 from gpu_tests import common_typing as ct
+from gpu_tests import constants
 from gpu_tests import gpu_integration_test
+from gpu_tests import overlay_support
+from gpu_tests.util import host_information
 
 from telemetry.internal.platform import gpu_info as gi
 
 
+@dataclasses.dataclass
 class InfoCollectionTestArgs():
   """Struct-like class for passing args to an InfoCollection test."""
-
-  def __init__(self,
-               expected_vendor_id_str: typing.Optional[str] = None,
-               expected_device_id_strs: typing.Optional[str] = None):
-    self.gpu: typing.Optional[gi.GPUInfo] = None
-    self.expected_vendor_id_str = expected_vendor_id_str
-    self.expected_device_id_strs = expected_device_id_strs
+  expected_vendor_id_str: Optional[str] = None
+  expected_device_id_strs: Optional[List[str]] = None
+  gpu: Optional[gi.GPUInfo] = None
 
 
 class InfoCollectionTest(gpu_integration_test.GpuIntegrationTest):
@@ -34,13 +34,13 @@ class InfoCollectionTest(gpu_integration_test.GpuIntegrationTest):
   @classmethod
   def AddCommandlineArgs(cls, parser: ct.CmdArgParser) -> None:
     super(InfoCollectionTest, cls).AddCommandlineArgs(parser)
-    parser.add_option(
+    parser.add_argument(
         '--expected-device-id',
         action='append',
         dest='expected_device_ids',
         default=[],
         help='The expected device id. Can be specified multiple times.')
-    parser.add_option('--expected-vendor-id', help='The expected vendor id')
+    parser.add_argument('--expected-vendor-id', help='The expected vendor id')
 
   @classmethod
   def GenerateGpuTests(cls, options: ct.ParsedCmdArgs) -> ct.TestGenerator:
@@ -58,6 +58,15 @@ class InfoCollectionTest(gpu_integration_test.GpuIntegrationTest):
             InfoCollectionTestArgs()])
     yield ('InfoCollection_asan_info_surfaced', '_',
            ['_RunAsanInfoTest', InfoCollectionTestArgs()])
+    yield ('InfoCollection_clang_coverage_info_surfaced', '_',
+           ['_RunClangCoverageInfoTest',
+            InfoCollectionTestArgs()])
+    yield ('InfoCollection_host_information_matches_browser', '_', [
+        '_RunHostInformationTest',
+        InfoCollectionTestArgs(
+            expected_vendor_id_str=options.expected_vendor_id,
+            expected_device_id_strs=options.expected_device_ids)
+    ])
 
   @classmethod
   def SetUpProcess(cls) -> None:
@@ -78,7 +87,6 @@ class InfoCollectionTest(gpu_integration_test.GpuIntegrationTest):
     assert len(args) == 2
     test_func = args[0]
     test_args = args[1]
-    assert test_args.gpu is None
     test_args.gpu = system_info.gpu
     getattr(self, test_func)(test_args)
 
@@ -116,11 +124,19 @@ class InfoCollectionTest(gpu_integration_test.GpuIntegrationTest):
                                 test_args: InfoCollectionTestArgs) -> None:
     os_name = self.browser.platform.GetOSName()
     if os_name and os_name.lower() == 'win':
-      overlay_bot_config = self.GetOverlayBotConfig()
+      overlay_bot_config = overlay_support.GetOverlayConfigForGpu(
+          test_args.gpu.devices[0])
       aux_attributes = test_args.gpu.aux_attributes
       if not aux_attributes:
         self.fail('GPU info does not have aux_attributes.')
-      for field, expected in overlay_bot_config.items():
+      expected_values = {
+          'direct_composition': overlay_bot_config.direct_composition,
+          'supports_overlays': overlay_bot_config.supports_overlays,
+          'nv12_overlay_support': overlay_bot_config.nv12_overlay_support,
+          'yuy2_overlay_support': overlay_bot_config.yuy2_overlay_support,
+          'bgra8_overlay_support': overlay_bot_config.bgra8_overlay_support,
+      }
+      for field, expected in expected_values.items():
         detected = aux_attributes.get(field, 'NONE')
         if expected != detected:
           self.fail(
@@ -143,7 +159,7 @@ class InfoCollectionTest(gpu_integration_test.GpuIntegrationTest):
       if not aux_attributes:
         self.fail('GPU info does not have aux_attributes.')
 
-      dx12_vulkan_bot_config = self.GetDx12VulkanBotConfig()
+      dx12_vulkan_bot_config = self._GetDx12VulkanBotConfig()
       for field, expected in dx12_vulkan_bot_config.items():
         detected = aux_attributes.get(field)
         if expected != detected:
@@ -155,9 +171,51 @@ class InfoCollectionTest(gpu_integration_test.GpuIntegrationTest):
     gpu_info = self.browser.GetSystemInfo().gpu
     self.assertIn('is_asan', gpu_info.aux_attributes)
 
+  def _RunClangCoverageInfoTest(self, _: InfoCollectionTestArgs) -> None:
+    gpu_info = self.browser.GetSystemInfo().gpu
+    self.assertIn('is_clang_coverage', gpu_info.aux_attributes)
+
+  def _RunHostInformationTest(self, test_args: InfoCollectionTestArgs) -> None:
+    # This is used to verify that the functions in host_information align with
+    # the information we pull from the browser.
+    tags = self.GetPlatformTags(self.browser)
+    if any(os_tag in tags for os_tag in ('android', 'chromeos', 'fuchsia')):
+      self.skipTest('Test does not support remote platforms')
+
+    if 'win' in tags:
+      self.assertTrue(host_information.IsWindows())
+    elif 'linux' in tags:
+      self.assertTrue(host_information.IsLinux())
+    elif 'mac' in tags:
+      self.assertTrue(host_information.IsMac())
+    else:
+      self.fail('Running on unknown platform')
+
+    expected_vendor_id = int(test_args.expected_vendor_id_str, 16)
+    if expected_vendor_id == constants.GpuVendor.QUALCOMM:
+      self.assertTrue(host_information.IsArmCpu())
+      self.assertFalse(host_information.Isx86Cpu())
+      self.assertTrue(host_information.IsQualcommGpu())
+    elif expected_vendor_id == constants.GpuVendor.APPLE:
+      self.assertTrue(host_information.IsArmCpu())
+      self.assertFalse(host_information.Isx86Cpu())
+      self.assertTrue(host_information.IsAppleGpu())
+    else:
+      self.assertTrue(host_information.Isx86Cpu())
+      self.assertFalse(host_information.IsArmCpu())
+      if expected_vendor_id == constants.GpuVendor.AMD:
+        self.assertTrue(host_information.IsAmdGpu())
+      elif expected_vendor_id == constants.GpuVendor.INTEL:
+        self.assertTrue(host_information.IsIntelGpu())
+      elif expected_vendor_id == constants.GpuVendor.NVIDIA:
+        self.assertTrue(host_information.IsNvidiaGpu())
+      else:
+        self.fail('Running with unknown GPU vendor')
+
+
   @staticmethod
-  def _ValueToStr(value: typing.Union[str, bool]) -> str:
-    if isinstance(value, six.string_types):
+  def _ValueToStr(value: Union[str, bool]) -> str:
+    if isinstance(value, str):
       return value
     if isinstance(value, bool):
       return 'supported' if value else 'unsupported'
@@ -165,14 +223,14 @@ class InfoCollectionTest(gpu_integration_test.GpuIntegrationTest):
     return False
 
   @classmethod
-  def ExpectationsFiles(cls) -> typing.List[str]:
+  def ExpectationsFiles(cls) -> List[str]:
     return [
         os.path.join(os.path.dirname(os.path.abspath(__file__)),
                      'test_expectations', 'info_collection_expectations.txt')
     ]
 
 
-def load_tests(loader: unittest.TestLoader, tests: typing.Any,
-               pattern: typing.Any) -> unittest.TestSuite:
+def load_tests(loader: unittest.TestLoader, tests: Any,
+               pattern: Any) -> unittest.TestSuite:
   del loader, tests, pattern  # Unused.
   return gpu_integration_test.LoadAllTestsInModule(sys.modules[__name__])

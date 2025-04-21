@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include "base/trace_event/traced_value.h"
 #include "cc/base/math_util.h"
 #include "cc/trees/layer_tree_impl.h"
+#include "components/viz/client/client_resource_provider.h"
 #include "components/viz/common/quads/compositor_render_pass.h"
 #include "components/viz/common/quads/texture_draw_quad.h"
 #include "ui/gfx/geometry/rect_conversions.h"
@@ -20,11 +21,11 @@ namespace {
 const int kMaxOcclusionPatches = 12;
 const int kMaxPatches = 9;
 
-gfx::RectF BoundsToRect(int x1, int y1, int x2, int y2) {
-  return gfx::RectF(x1, y1, x2 - x1, y2 - y1);
+gfx::Rect BoundsToRect(int x1, int y1, int x2, int y2) {
+  return gfx::Rect(x1, y1, x2 - x1, y2 - y1);
 }
 
-gfx::RectF NormalizedRect(const gfx::RectF& rect,
+gfx::RectF NormalizedRect(const gfx::Rect& rect,
                           float total_width,
                           float total_height) {
   return gfx::RectF(rect.x() / total_width, rect.y() / total_height,
@@ -33,9 +34,9 @@ gfx::RectF NormalizedRect(const gfx::RectF& rect,
 
 }  // namespace
 
-NinePatchGenerator::Patch::Patch(const gfx::RectF& image_rect,
+NinePatchGenerator::Patch::Patch(const gfx::Rect& image_rect,
                                  const gfx::Size& total_image_bounds,
-                                 const gfx::RectF& output_rect)
+                                 const gfx::Rect& output_rect)
     : image_rect(image_rect),
       normalized_image_rect(NormalizedRect(image_rect,
                                            total_image_bounds.width(),
@@ -105,6 +106,57 @@ NinePatchGenerator::ComputeQuadsWithoutOcclusion() const {
   gfx::RectF output_aperture(border_.x(), border_.y(),
                              output_width - border_.width(),
                              output_height - border_.height());
+
+  if (fill_center_) {
+    bool match_horizontally =
+        output_aperture.x() == image_aperture_.x() &&
+        output_aperture.width() == image_aperture_.width() &&
+        output_width == image_width;
+    bool match_vertically =
+        output_aperture.y() == image_aperture_.y() &&
+        output_aperture.height() == image_aperture_.height() &&
+        output_height == image_height;
+
+    if (match_horizontally) {
+      if (match_vertically) {
+        // Only need 1 patch.
+        return {Patch(gfx::Rect(image_bounds_), image_bounds_,
+                      gfx::Rect(image_bounds_))};
+      }
+
+      // Only need 3 vertical patches.
+      return {Patch(BoundsToRect(0, 0, image_width, image_aperture_.y()),
+                    image_bounds_,
+                    BoundsToRect(0, 0, image_width, output_aperture.y())),
+              Patch(BoundsToRect(0, image_aperture_.y(), image_width,
+                                 image_aperture_.bottom()),
+                    image_bounds_,
+                    BoundsToRect(0, output_aperture.y(), image_width,
+                                 output_aperture.bottom())),
+              Patch(BoundsToRect(0, image_aperture_.bottom(), image_width,
+                                 image_height),
+                    image_bounds_,
+                    BoundsToRect(0, output_aperture.bottom(), image_width,
+                                 output_height))};
+    }
+
+    if (match_vertically) {
+      // Only need 3 horizontal patches.
+      return {Patch(BoundsToRect(0, 0, image_aperture_.x(), image_height),
+                    image_bounds_,
+                    BoundsToRect(0, 0, output_aperture.x(), image_height)),
+              Patch(BoundsToRect(image_aperture_.x(), 0,
+                                 image_aperture_.right(), image_height),
+                    image_bounds_,
+                    BoundsToRect(output_aperture.x(), 0,
+                                 output_aperture.right(), image_height)),
+              Patch(BoundsToRect(image_aperture_.right(), 0, image_width,
+                                 image_height),
+                    image_bounds_,
+                    BoundsToRect(output_aperture.right(), 0, output_width,
+                                 image_height))};
+    }
+  }
 
   std::vector<Patch> patches;
   patches.reserve(kMaxPatches);
@@ -330,31 +382,56 @@ std::vector<NinePatchGenerator::Patch> NinePatchGenerator::GeneratePatches()
   return patches;
 }
 
-void NinePatchGenerator::AppendQuads(LayerImpl* layer_impl,
-                                     UIResourceId ui_resource_id,
-                                     viz::CompositorRenderPass* render_pass,
-                                     viz::SharedQuadState* shared_quad_state,
-                                     const std::vector<Patch>& patches) {
-  if (!ui_resource_id)
+void NinePatchGenerator::AppendQuadsForCc(
+    LayerImpl* layer_impl,
+    UIResourceId ui_resource_id,
+    viz::CompositorRenderPass* render_pass,
+    viz::SharedQuadState* shared_quad_state,
+    const std::vector<Patch>& patches,
+    const gfx::Vector2d& offset) {
+  if (!ui_resource_id) {
     return;
+  }
 
   viz::ResourceId resource =
       layer_impl->layer_tree_impl()->ResourceIdForUIResource(ui_resource_id);
-
-  if (!resource)
+  if (!resource) {
     return;
+  }
 
-  const float vertex_opacity[] = {1.0f, 1.0f, 1.0f, 1.0f};
   const bool opaque =
       layer_impl->layer_tree_impl()->IsUIResourceOpaque(ui_resource_id);
-  constexpr bool flipped = false;
+  AppendQuads(
+      resource, opaque,
+      [layer_impl](const gfx::Rect& rect) {
+        return layer_impl->draw_properties()
+            .occlusion_in_content_space.GetUnoccludedContentRect(rect);
+      },
+      layer_impl->layer_tree_impl()->resource_provider(), render_pass,
+      shared_quad_state, patches, offset);
+}
+
+void NinePatchGenerator::AppendQuads(
+    viz::ResourceId resource,
+    bool opaque,
+    base::FunctionRef<gfx::Rect(const gfx::Rect&)> clip_visible_rect,
+    viz::ClientResourceProvider* client_resource_provider,
+    viz::CompositorRenderPass* render_pass,
+    viz::SharedQuadState* shared_quad_state,
+    const std::vector<Patch>& patches,
+    const gfx::Vector2d& offset) {
+  if (!resource) {
+    return;
+  }
+#if DCHECK_IS_ON()
+  client_resource_provider->ValidateResource(resource);
+#endif
+
   constexpr bool premultiplied_alpha = true;
 
   for (const auto& patch : patches) {
-    gfx::Rect output_rect = gfx::ToEnclosingRect(patch.output_rect);
-    gfx::Rect visible_rect =
-        layer_impl->draw_properties()
-            .occlusion_in_content_space.GetUnoccludedContentRect(output_rect);
+    gfx::Rect output_rect = patch.output_rect + offset;
+    gfx::Rect visible_rect = clip_visible_rect(output_rect);
     bool needs_blending = !opaque;
     if (!visible_rect.IsEmpty()) {
       gfx::RectF image_rect = patch.normalized_image_rect;
@@ -362,10 +439,8 @@ void NinePatchGenerator::AppendQuads(LayerImpl* layer_impl,
       quad->SetNew(shared_quad_state, output_rect, visible_rect, needs_blending,
                    resource, premultiplied_alpha, image_rect.origin(),
                    image_rect.bottom_right(), SkColors::kTransparent,
-                   vertex_opacity, flipped, nearest_neighbor_,
-                   /*secure_output_only=*/false,
-                   gfx::ProtectedVideoType::kClear);
-      layer_impl->ValidateQuadResources(quad);
+                   nearest_neighbor_,
+                   /*secure_output=*/false, gfx::ProtectedVideoType::kClear);
     }
   }
 }

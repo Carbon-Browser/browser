@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/not_fatal_until.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -106,9 +107,10 @@ void FakeSerialPortManager::AddPort(mojom::SerialPortInfoPtr port) {
 
 void FakeSerialPortManager::RemovePort(base::UnguessableToken token) {
   auto it = ports_.find(token);
-  DCHECK(it != ports_.end());
+  CHECK(it != ports_.end(), base::NotFatalUntil::M130);
   mojom::SerialPortInfoPtr info = std::move(it->second);
   ports_.erase(it);
+  info->connected = false;
 
   for (auto& client : clients_)
     client->OnPortRemoved(info.Clone());

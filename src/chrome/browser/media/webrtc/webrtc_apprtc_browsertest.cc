@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,7 +34,7 @@ const char kIsApprtcCallUpJavascript[] =
     "var remoteVideoActive ="
     "    remoteVideo != null &&"
     "    remoteVideo.classList.contains('active');"
-    "window.domAutomationController.send(remoteVideoActive.toString());";
+    "remoteVideoActive.toString();";
 
 // WebRTC-AppRTC integration test. Requires a real webcam and microphone
 // on the running system. This test is not meant to run in the main browser
@@ -42,21 +42,20 @@ const char kIsApprtcCallUpJavascript[] =
 //
 // This test will bring up a AppRTC instance on localhost and verify that the
 // call gets up when connecting to the same room from two tabs in a browser.
+//
+// TODO(b/246519185) - Py3 incompatible, decide if to keep test.
 class WebRtcApprtcBrowserTest : public WebRtcTestBase {
  public:
-  WebRtcApprtcBrowserTest() {}
+  WebRtcApprtcBrowserTest() = default;
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
     EXPECT_FALSE(command_line->HasSwitch(switches::kUseFakeUIForMediaStream));
 
     // The video playback will not work without a GPU, so force its use here.
     command_line->AppendSwitch(switches::kUseGpuInTests);
-    // This test fails on some Mac bots if no default devices are specified on
-    // the command line.
     command_line->RemoveSwitch(switches::kUseFakeDeviceForMediaStream);
-    base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
-        switches::kUseFakeDeviceForMediaStream,
-        "audio-input-default-id=default,video-input-default-id=default");
+    base::CommandLine::ForCurrentProcess()->AppendSwitch(
+        switches::kUseFakeDeviceForMediaStream);
   }
 
   void TearDown() override {
@@ -98,7 +97,7 @@ class WebRtcApprtcBrowserTest : public WebRtcTestBase {
     }
 
     base::CommandLine command_line(base::CommandLine::NO_PROGRAM);
-    EXPECT_TRUE(GetPythonCommand(&command_line));
+    EXPECT_TRUE(GetPython3Command(&command_line));
 
     command_line.AppendArgPath(appengine_dev_appserver);
     command_line.AppendArgPath(apprtc_dir);
@@ -148,14 +147,9 @@ class WebRtcApprtcBrowserTest : public WebRtcTestBase {
         ui_test_utils::NavigateToURL(browser(), GURL("http://localhost:9998")));
     content::WebContents* tab_contents =
         browser()->tab_strip_model()->GetActiveWebContents();
-    std::string javascript =
-        "window.domAutomationController.send(document.title)";
-    std::string result;
-    if (!content::ExecuteScriptAndExtractString(tab_contents, javascript,
-                                                &result))
-      return false;
-
-    return result == kTitlePageOfAppEngineAdminPage;
+    std::string javascript = "document.title";
+    return content::EvalJs(tab_contents, javascript) ==
+           kTitlePageOfAppEngineAdminPage;
   }
 
   bool WaitForCallToComeUp(content::WebContents* tab_contents) {
@@ -171,7 +165,7 @@ class WebRtcApprtcBrowserTest : public WebRtcTestBase {
       return false;
     }
 
-    if (!content::ExecuteScript(tab_contents, javascript)) {
+    if (!content::ExecJs(tab_contents, javascript)) {
       LOG(ERROR) << "Failed to execute the following javascript: " <<
           javascript;
       return false;
@@ -205,7 +199,7 @@ class WebRtcApprtcBrowserTest : public WebRtcTestBase {
 
   base::FilePath GetSourceDir() {
     base::FilePath source_dir;
-    base::PathService::Get(base::DIR_SOURCE_ROOT, &source_dir);
+    base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &source_dir);
     return source_dir;
   }
 

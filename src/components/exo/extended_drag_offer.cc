@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,18 +23,6 @@ ExtendedDragOffer::ExtendedDragOffer(DataOffer* offer, Delegate* delegate)
 
 ExtendedDragOffer::~ExtendedDragOffer() {
   delegate_->OnDataOfferDestroying();
-}
-
-// TODO(crbug.com/1099418): Implement extended-drag Wayland extension.
-void ExtendedDragOffer::Swallow(uint32_t serial, const std::string& mime_type) {
-  NOTIMPLEMENTED();
-}
-
-// TODO(crbug.com/1099418): Implement extended-drag Wayland extension.
-void ExtendedDragOffer::Unswallow(uint32_t serial,
-                                  const std::string& mime_type,
-                                  const gfx::Vector2d& offset) {
-  NOTIMPLEMENTED();
 }
 
 void ExtendedDragOffer::OnDataOfferDestroying(DataOffer* offer) {

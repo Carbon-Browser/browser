@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 #include "base/no_destructor.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/net/nss_service.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
 #include "chrome/browser/lacros/cert/cert_db_initializer_factory.h"
@@ -20,9 +19,18 @@ NssService* NssServiceFactory::GetForContext(
 }
 
 NssServiceFactory::NssServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "NssServiceFactory",
-          BrowserContextDependencyManager::GetInstance()) {
+          // Create separate service for incognito profiles.
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/40257657): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/41488885): Check if this service is needed for
+              // Ash Internals.
+              .WithAshInternals(ProfileSelection::kOwnInstance)
+              .Build()) {
 #if BUILDFLAG(IS_CHROMEOS_LACROS)
   DependsOn(CertDbInitializerFactory::GetInstance());
 #endif  // BUILDFLAG(IS_CHROMEOS_LACROS)
@@ -35,13 +43,8 @@ NssServiceFactory* NssServiceFactory::GetInstance() {
   return instance.get();
 }
 
-KeyedService* NssServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+NssServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new NssService(context);
-}
-
-content::BrowserContext* NssServiceFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  // Create separate service for incognito profiles.
-  return context;
+  return std::make_unique<NssService>(context);
 }

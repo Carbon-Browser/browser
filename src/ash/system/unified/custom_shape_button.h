@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,9 @@ namespace ash {
 // Abstract base class of buttons that have custom shape with Material Design
 // ink drop.
 class CustomShapeButton : public views::ImageButton {
+  METADATA_HEADER(CustomShapeButton, views::ImageButton)
+
  public:
-  METADATA_HEADER(CustomShapeButton);
   explicit CustomShapeButton(PressedCallback callback);
 
   CustomShapeButton(const CustomShapeButton&) = delete;

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,9 +18,9 @@ class BubbleDialogDelegateView;
 
 // The location bar icon to show the sharing features bubble.
 class SharingIconView : public PageActionIconView {
- public:
-  METADATA_HEADER(SharingIconView);
+  METADATA_HEADER(SharingIconView, PageActionIconView)
 
+ public:
   using GetControllerCallback =
       base::RepeatingCallback<SharingUiController*(content::WebContents*)>;
 
@@ -46,7 +46,6 @@ class SharingIconView : public PageActionIconView {
   views::BubbleDialogDelegate* GetBubble() const override;
   void UpdateImpl() override;
   const gfx::VectorIcon& GetVectorIcon() const override;
-  std::u16string GetTextForTooltipAndAccessibleName() const override;
 
   // gfx::AnimationDelegate:
   void AnimationProgressed(const gfx::Animation* animation) override;
@@ -58,7 +57,9 @@ class SharingIconView : public PageActionIconView {
   void UpdateOpacity();
 
  private:
-  raw_ptr<SharingUiController> last_controller_ = nullptr;
+  void SetAccessibleIsIgnoredIfNeeded();
+  raw_ptr<SharingUiController, AcrossTasksDanglingUntriaged> last_controller_ =
+      nullptr;
   bool loading_animation_ = false;
   bool should_show_error_ = false;
   GetControllerCallback get_controller_callback_;

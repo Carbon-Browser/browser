@@ -1,15 +1,14 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://webui-test/mojo_webui_test_support.js';
-
 import {BackgroundManager} from 'chrome://new-tab-page/new_tab_page.js';
+import {NtpBackgroundImageSource} from 'chrome://new-tab-page/new_tab_page.mojom-webui.js';
 import {assertEquals, assertFalse, assertNotReached, assertTrue} from 'chrome://webui-test/chai_assert.js';
 
 import {createBackgroundImage} from './test_support.js';
 
-class FakeIFrameElement extends HTMLIFrameElement {
+class FakeIframeElement extends HTMLIFrameElement {
   url: string|null = null;
 
   override get contentWindow() {
@@ -18,11 +17,11 @@ class FakeIFrameElement extends HTMLIFrameElement {
   }
 }
 
-customElements.define('fake-iframe', FakeIFrameElement, {extends: 'iframe'});
+customElements.define('fake-iframe', FakeIframeElement, {extends: 'iframe'});
 
 suite('NewTabPageBackgroundManagerTest', () => {
   let backgroundManager: BackgroundManager;
-  let backgroundImage: FakeIFrameElement;
+  let backgroundImage: FakeIframeElement;
 
   function wrapImageUrl(url: string): string {
     return `chrome-untrusted://new-tab-page/custom_background_image?url=${
@@ -30,9 +29,9 @@ suite('NewTabPageBackgroundManagerTest', () => {
   }
 
   setup(() => {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
 
-    backgroundImage = new FakeIFrameElement();
+    backgroundImage = new FakeIframeElement();
     backgroundImage.id = 'backgroundImage';
     document.body.appendChild(backgroundImage);
 
@@ -83,6 +82,7 @@ suite('NewTabPageBackgroundManagerTest', () => {
   test('setting custom style updates src', () => {
     // Act.
     backgroundManager.setBackgroundImage({
+      attributionUrl: null,
       url: {url: 'https://example.com'},
       url2x: {url: 'https://example2x.com'},
       size: 'cover',
@@ -90,8 +90,7 @@ suite('NewTabPageBackgroundManagerTest', () => {
       repeatY: 'repeat',
       positionX: 'left',
       positionY: 'top',
-      scrimDisplay: 'none',
-      attributionUrl: undefined,
+      imageSource: NtpBackgroundImageSource.kFirstPartyThemeWithoutDailyRefresh,
     });
 
     // Assert.
@@ -100,7 +99,7 @@ suite('NewTabPageBackgroundManagerTest', () => {
         `url=${encodeURIComponent('https://example.com')}&` +
         `url2x=${encodeURIComponent('https://example2x.com')}&` +
         'size=cover&repeatX=no-repeat&repeatY=repeat&positionX=left&' +
-        'positionY=top&scrimDisplay=none';
+        'positionY=top';
     assertEquals(expected, backgroundImage.url);
   });
 

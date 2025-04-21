@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,13 @@
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/heap/forward.h"
+#include "third_party/blink/renderer/platform/mojo/heap_mojo_remote.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
 namespace blink {
-
+class ItemDetails;
+class PurchaseDetails;
 class ScriptState;
 
 class DigitalGoodsService final : public ScriptWrappable {
@@ -23,19 +25,23 @@ class DigitalGoodsService final : public ScriptWrappable {
 
  public:
   explicit DigitalGoodsService(
+      ExecutionContext* context,
       mojo::PendingRemote<payments::mojom::blink::DigitalGoods> pending_remote);
   ~DigitalGoodsService() override;
 
   // IDL Interface:
-  ScriptPromise getDetails(ScriptState*, const Vector<String>& item_ids);
-  ScriptPromise listPurchases(ScriptState*);
-  ScriptPromise listPurchaseHistory(ScriptState*);
-  ScriptPromise consume(ScriptState*, const String& purchase_token);
+  ScriptPromise<IDLSequence<ItemDetails>> getDetails(
+      ScriptState*,
+      const Vector<String>& item_ids);
+  ScriptPromise<IDLSequence<PurchaseDetails>> listPurchases(ScriptState*);
+  ScriptPromise<IDLSequence<PurchaseDetails>> listPurchaseHistory(ScriptState*);
+  ScriptPromise<IDLUndefined> consume(ScriptState*,
+                                      const String& purchase_token);
 
   void Trace(Visitor* visitor) const override;
 
  private:
-  mojo::Remote<payments::mojom::blink::DigitalGoods> mojo_service_;
+  HeapMojoRemote<payments::mojom::blink::DigitalGoods> mojo_service_;
 };
 
 }  // namespace blink

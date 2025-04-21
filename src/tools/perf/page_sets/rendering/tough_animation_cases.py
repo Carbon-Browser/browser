@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 from telemetry.page import shared_page_state
@@ -604,7 +604,7 @@ class OffscreenAnimationNoDamagePage(ToughAnimationPage):
   BASE_NAME = 'offscreen_animation_no_damage'
   URL = 'file://../tough_animation_cases/offscreen_animation_no_damage.html'
 
-# TODO(crbug.com/760553):remove this class after
+# TODO(crbug.com/40537750):remove this class after
 # smoothness.tough_animation_cases benchmark is completely
 # replaced by rendering benchmarks
 class ToughAnimationCasesPageSet(story.StorySet):

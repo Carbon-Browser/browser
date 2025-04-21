@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "base/callback.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback.h"
 #include "base/i18n/icu_string_conversions.h"
 #include "base/strings/escape.h"
 #include "base/strings/string_number_conversions.h"
@@ -70,11 +70,14 @@ void DataURLToFaviconUsage(const GURL& link_url,
       data.empty())
     return;
 
-  favicon_base::FaviconUsageData usage;
-  if (!importer::ReencodeFavicon(
-          reinterpret_cast<const unsigned char*>(&data[0]),
-          data.size(), &usage.png_data))
+  std::optional<std::vector<uint8_t>> png_data =
+      importer::ReencodeFavicon(base::as_byte_span(data));
+  if (!png_data) {
     return;  // Unable to decode.
+  }
+
+  favicon_base::FaviconUsageData usage;
+  usage.png_data = std::move(png_data).value();
 
   // We need to make up a URL for the favicon. We use a version of the page's
   // URL so that we can be sure it will not collide.
@@ -194,7 +197,6 @@ void ImportBookmarksFile(
         (valid_url_callback.is_null() || valid_url_callback.Run(url))) {
       if (toolbar_folder_index > path.size() && !path.empty()) {
         NOTREACHED();  // error in parsing.
-        break;
       }
 
       ImportedBookmarkEntry entry;

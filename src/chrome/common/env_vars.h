@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,10 +13,6 @@ extern const char kHeadless[];
 extern const char kLogFileName[];
 extern const char kMetroConnected[];
 extern const char kSessionLogDir[];
-extern const char kShowRestart[];
-extern const char kRestartInfo[];
-extern const char kRtlLocale[];
-extern const char kLtrLocale[];
 
 }  // namespace env_vars
 

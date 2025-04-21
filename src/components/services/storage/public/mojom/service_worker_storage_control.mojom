@@ -1,15 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 module storage.mojom;
 
-import "components/services/storage/public/mojom/storage_policy_update.mojom";
 import "components/services/storage/public/mojom/service_worker_database.mojom";
-import "third_party/blink/public/mojom/storage_key/storage_key.mojom";
+import "components/services/storage/public/mojom/storage_policy_update.mojom";
 import "mojo/public/mojom/base/big_buffer.mojom";
+import "mojo/public/mojom/base/byte_string.mojom";
 import "mojo/public/mojom/base/time.mojom";
 import "services/network/public/mojom/url_response_head.mojom";
+import "third_party/blink/public/mojom/service_worker/service_worker_fetch_handler_type.mojom";
+import "third_party/blink/public/mojom/storage_key/storage_key.mojom";
 import "url/mojom/url.mojom";
 
 // An interface that is used to keep track of which service worker versions are
@@ -61,18 +63,22 @@ enum ServiceWorkerStorageStorageKeyState {
   kDelete,
 };
 
-// A notifier interface for ServiceWorkerResourceReader::ReadData().
-interface ServiceWorkerDataPipeStateNotifier {
-  // Called when ReadData() completes. On success, |status| is the number of
-  // bytes written. On failure, |status| is a //net error, which is a negative
-  // number.
-  OnComplete(int32 status);
-};
-
 // An interface that reads a service worker script (resource) to storage.
-// A valid use of this interface is that exactly one call to
-// ReadResponseHead(), followed by possibly multiple ReadData() calls. Each call
-// must not be overlapped.
+// This is hosted in the browser process and should be only used from the
+// browser process, and relies on the callers to satisfy the calling order
+// invariant below.
+//
+// A valid use of this interface is that
+// 1. Exactly one call to ReadResponseHead().
+// 2. A call to PrepareReadData() followed by a call to ReadData().
+// Step 2 can be repeated multiple times.
+// Each call must not be overlapped.
+//
+// TODO(crbug.com/40858529): Clarify whether we should really support multiple
+// `PrepareReadData()` calls.
+//
+// TODO(crbug.com/40858529): Enforce the calling order requirement. See
+// https://chromium-review.googlesource.com/c/chromium/src/+/3823684/comments/fd5170e2_19c5fb5e
 interface ServiceWorkerResourceReader {
   // Reads the response head of the resource associated with this reader.
   // |status| is the number of bytes read, or a //net error.
@@ -81,11 +87,17 @@ interface ServiceWorkerResourceReader {
       (int32 status,
        network.mojom.URLResponseHead? response_head,
        mojo_base.mojom.BigBuffer? metadata);
-  // Reads the content of the resource associated with this reader. `pipe`
-  // can be empty when creating a data pipe fails.
-  ReadData(int64 size,
-           pending_remote<ServiceWorkerDataPipeStateNotifier> notifier) =>
+
+  // Prepare for reading the content of the resource associated with this
+  // reader. `pipe` can be empty when creating a data pipe fails.
+  // TODO(crbug.com/40858529): Clarify the meaning of `size` parameter.
+  PrepareReadData(int64 size) =>
       (handle<data_pipe_consumer>? pipe);
+
+  // Actually reads the content, and returns when finished.
+  // On success, |status| is the number of bytes written.
+  // On failure, |status| is a //net error, which is a negative number.
+  ReadData() => (int32 status);
 };
 
 // An interface that writes a service worker script (resource) to storage.
@@ -111,13 +123,13 @@ interface ServiceWorkerResourceMetadataWriter {
 };
 
 // Represents an entry of user data which is stored with a service worker
-// registration. An entry of user data is an arbitrary key-vaule pair. The
+// registration. An entry of user data is an arbitrary key-value pair. The
 // lifetime of user data is tied up with the registration.
 // It will be deleted when the corresponding registration is deleted.
 struct ServiceWorkerUserData {
   int64 registration_id;
   string key;
-  string value;
+  mojo_base.mojom.ByteString value;
 };
 
 // Controls the state of service worker storage within a partition. This is a
@@ -142,11 +154,22 @@ interface ServiceWorkerStorageControl {
   // Returns all StorageKeys which have service worker registrations.
   GetRegisteredStorageKeys() => (array<blink.mojom.StorageKey> keys);
 
-  // Reads a stored registration for `client_url` that is associated with `key`.
+  // Reads a stored registration for `client_url` that is associated
+  // with `key`.  `scopes` contains all of the service worker's
+  // registration scopes that are relevant to the `key` so that we can
+  // cache scope URLs in the UI thread. The 'scopes' is valid only when
+  // the status is `kOk` or `kErrorNotFound`. The `scopes` must be
+  // optional because `scopes` can be empty if the scope count exceeds
+  // the threshold even when there are scopes in DB so that we can avoid
+  // sending too large information via mojo API. When this API returns
+  // null for `scopes`, the caller of this API can't cache the
+  // scopes. This means that the caller needs to fall back to the slow
+  // code path that queries the registration from the DB.
   FindRegistrationForClientUrl(url.mojom.Url client_url,
                                blink.mojom.StorageKey key) =>
       (ServiceWorkerDatabaseStatus status,
-       ServiceWorkerFindRegistrationResult? result);
+       ServiceWorkerFindRegistrationResult? result,
+       array<url.mojom.Url>? scopes);
   // Reads a stored registration for `scope` that is associated with `key`.
   FindRegistrationForScope(url.mojom.Url scope, blink.mojom.StorageKey key) =>
       (ServiceWorkerDatabaseStatus status,
@@ -208,7 +231,16 @@ interface ServiceWorkerStorageControl {
                                 blink.mojom.StorageKey key,
                                 string value) =>
       (ServiceWorkerDatabaseStatus status);
-
+  // Updates the fetch handler type in storage.
+  UpdateFetchHandlerType(int64 registration_id,
+                         blink.mojom.StorageKey key,
+                         blink.mojom.ServiceWorkerFetchHandlerType type) =>
+      (ServiceWorkerDatabaseStatus status);
+  // Updates sha256 checksum fields in resource records.
+  UpdateResourceSha256Checksums(int64 registratation_id,
+                                blink.mojom.StorageKey key,
+                                map<int64, string> updated_sha256_checksums) =>
+      (ServiceWorkerDatabaseStatus status);
   // Returns a new registration id which is guaranteed to be unique in the
   // storage. Returns blink::mojom::kInvalidServiceWorkerRegistrationId if the
   // storage is disabled.
@@ -253,7 +285,8 @@ interface ServiceWorkerStorageControl {
   // Succeeds only when all keys are found. On success, the size and the order
   // of |values| are the same as |keys|.
   GetUserData(int64 registration_id, array<string> keys) =>
-      (ServiceWorkerDatabaseStatus status, array<string> values);
+      (ServiceWorkerDatabaseStatus status,
+       array<mojo_base.mojom.ByteString> values);
   // Stores `user_data` on persistent storage.
   StoreUserData(int64 registration_id,
                 blink.mojom.StorageKey key,
@@ -266,11 +299,13 @@ interface ServiceWorkerStorageControl {
   // Gets user data values associated with the given |registration_id|
   // filtered by |key_prefix|.
   GetUserDataByKeyPrefix(int64 registration_id, string key_prefix) =>
-      (ServiceWorkerDatabaseStatus status, array<string> values);
+      (ServiceWorkerDatabaseStatus status,
+       array<mojo_base.mojom.ByteString> values);
   // Gets user data associated with the given |registration_id| filtered by
   // |key_prefix|. Returns user data as key-value pairs.
   GetUserKeysAndDataByKeyPrefix(int64 registration_id, string key_prefix) =>
-      (ServiceWorkerDatabaseStatus status, map<string, string> user_data);
+      (ServiceWorkerDatabaseStatus status,
+       map<string, mojo_base.mojom.ByteString> user_data);
   // Clears user data associated with the given |registration_id| filtered by
   // |key_prefix|.
   ClearUserDataByKeyPrefixes(int64 registratation_id,

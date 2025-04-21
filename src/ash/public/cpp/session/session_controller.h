@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 
 #include "ash/public/cpp/ash_public_export.h"
 #include "ash/public/cpp/session/session_types.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/time/time.h"
 
 class AccountId;
@@ -125,6 +125,17 @@ class ASH_PUBLIC_EXPORT SessionController {
 
   // Returns true if the screen is currently locked.
   virtual bool IsScreenLocked() const = 0;
+
+  // Return the number of users that have previously logged in on the device.
+  // Returns nullopt in the event where we cannot query the number of existing
+  // users, for instance, when `UserManager` is uninitialized.
+  virtual std::optional<int> GetExistingUsersCount() const = 0;
+
+  // Notifies the first user session has finished post login works.
+  virtual void NotifyFirstSessionReady() = 0;
+
+  // Notifies the user specified by `account_id` is going to be removed soon.
+  virtual void NotifyUserToBeRemoved(const AccountId& account_id) = 0;
 
  protected:
   SessionController();

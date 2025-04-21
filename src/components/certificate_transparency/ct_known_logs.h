@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,7 @@
 #include <vector>
 
 #include "base/component_export.h"
-#include "base/memory/ref_counted.h"
-#include "base/strings/string_piece.h"
+#include "base/memory/raw_ptr_exclusion.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 
@@ -23,6 +22,12 @@ struct PreviousOperatorEntry {
   const base::Time end_time;
 };
 
+enum class LogType {
+  kUnspecified = 0,
+  kRFC6962 = 1,
+  kStaticCTAPI = 2,
+};
+
 struct CTLogInfo {
   // The DER-encoded SubjectPublicKeyInfo for the log.  Note that this is not
   // the same as a "log ID": a log ID is the SHA-256 hash of this value.
@@ -32,10 +37,17 @@ struct CTLogInfo {
   // The user-friendly log name.
   // Note: This will not be translated.
   const char* const log_name;
+
+  // Spec type of the log.
+  LogType log_type;
+
   // The current operator of the log.
   const char* const current_operator;
   // Previous operators (if any) of the log, ordered in chronological order.
-  const PreviousOperatorEntry* previous_operators;
+  // This field is not a raw_ptr<> because it only ever points at statically-
+  // allocated memory (in log_list-inc.cc) which is never freed, and hence
+  // the pointer can never dangle.
+  RAW_PTR_EXCLUSION const PreviousOperatorEntry* previous_operators;
   const size_t previous_operators_length;
 };
 
@@ -48,11 +60,6 @@ COMPONENT_EXPORT(CERTIFICATE_TRANSPARENCY) base::Time GetLogListTimestamp();
 // (via its log ID), use |GetDisqualifiedLogs()|.
 COMPONENT_EXPORT(CERTIFICATE_TRANSPARENCY)
 std::vector<CTLogInfo> GetKnownLogs();
-
-// Returns the log IDs of all logs that are operated by Google, sorted.  The log
-// ID is the SHA-256 hash of the log's |log_key|.
-COMPONENT_EXPORT(CERTIFICATE_TRANSPARENCY)
-std::vector<std::string> GetLogsOperatedByGoogle();
 
 // Returns pairs of (log ID, disqualification date) for all disqualified logs,
 // where the log ID is the SHA-256 hash of the log's |log_key|).  The list is

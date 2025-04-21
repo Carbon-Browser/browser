@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include "base/callback_list.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/weak_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/observer_list_types.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "url/gurl.h"
@@ -53,8 +53,9 @@ class SCTReportingService : public KeyedService {
  private:
   void OnPreferenceChanged();
 
-  raw_ptr<safe_browsing::SafeBrowsingService> safe_browsing_service_;
-  const PrefService& pref_service_;
+  raw_ptr<safe_browsing::SafeBrowsingService, DanglingUntriaged>
+      safe_browsing_service_;
+  const raw_ref<const PrefService> pref_service_;
   raw_ptr<Profile> profile_;
   base::CallbackListSubscription safe_browsing_state_subscription_;
 };

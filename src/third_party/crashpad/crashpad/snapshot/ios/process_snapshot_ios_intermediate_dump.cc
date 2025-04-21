@@ -1,4 +1,4 @@
-// Copyright 2020 The Crashpad Authors. All rights reserved.
+// Copyright 2020 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -121,6 +121,9 @@ bool ProcessSnapshotIOSIntermediateDump::InitializeWithFileInterface(
     return false;
   }
   system_.Initialize(system_info);
+
+  annotations_simple_map_["crashpad_uptime_ns"] =
+      std::to_string(system_.CrashpadUptime());
 
   // Threads
   const IOSIntermediateDumpList* thread_list =

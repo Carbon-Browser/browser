@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,10 @@
 
 #import <Foundation/Foundation.h>
 
-#include "base/memory/ptr_util.h"
-#include "ios/web/common/features.h"
+#import "base/memory/ptr_util.h"
+#import "ios/web/common/features.h"
 #import "ios/web/navigation/navigation_item_impl.h"
-#include "net/http/http_response_headers.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "net/http/http_response_headers.h"
 
 namespace web {
 
@@ -48,7 +44,7 @@ NSString* NavigationContextImpl::GetDescription() const {
       stringWithFormat:
           @"web::WebState: %ld, url: %s, "
            "is_same_document: %@, error: %@ is_loading_error_page: %@",
-          reinterpret_cast<long>(web_state_), url_.spec().c_str(),
+          reinterpret_cast<long>(web_state_.get()), url_.spec().c_str(),
           is_same_document_ ? @"true" : @"false", error_,
           is_loading_error_page_ ? @"true" : @"false"];
 }
@@ -191,7 +187,7 @@ std::unique_ptr<NavigationItemImpl> NavigationContextImpl::ReleaseItem() {
 void NavigationContextImpl::SetItem(std::unique_ptr<NavigationItemImpl> item) {
   DCHECK(!item_);
   if (item) {
-    // |item| can be null for same-docuemnt navigations and reloads, where
+    // `item` can be null for same-docuemnt navigations and reloads, where
     // navigation item is committed and should not be stored in
     // NavigationContext.
     DCHECK_EQ(GetNavigationItemUniqueID(), item->GetUniqueID());
@@ -201,6 +197,10 @@ void NavigationContextImpl::SetItem(std::unique_ptr<NavigationItemImpl> item) {
 
 base::TimeDelta NavigationContextImpl::GetElapsedTimeSinceCreation() const {
   return elapsed_timer_.Elapsed();
+}
+
+base::WeakPtr<NavigationContextImpl> NavigationContextImpl::GetWeakPtr() {
+  return weak_factory_.GetWeakPtr();
 }
 
 NavigationContextImpl::NavigationContextImpl(WebState* web_state,

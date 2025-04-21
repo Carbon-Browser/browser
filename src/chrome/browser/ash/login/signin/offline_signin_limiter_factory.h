@@ -1,12 +1,12 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_LOGIN_SIGNIN_OFFLINE_SIGNIN_LIMITER_FACTORY_H_
 #define CHROME_BROWSER_ASH_LOGIN_SIGNIN_OFFLINE_SIGNIN_LIMITER_FACTORY_H_
 
-#include "base/memory/singleton.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
+#include "base/no_destructor.h"
+#include "chrome/browser/profiles/profile_keyed_service_factory.h"
 
 class Profile;
 
@@ -20,7 +20,7 @@ class OfflineSigninLimiter;
 
 // Singleton that owns all OfflineSigninLimiters and associates them with
 // Profiles.
-class OfflineSigninLimiterFactory : public BrowserContextKeyedServiceFactory {
+class OfflineSigninLimiterFactory : public ProfileKeyedServiceFactory {
  public:
   static OfflineSigninLimiterFactory* GetInstance();
 
@@ -35,13 +35,13 @@ class OfflineSigninLimiterFactory : public BrowserContextKeyedServiceFactory {
   static void SetClockForTesting(base::Clock* clock);
 
  private:
-  friend struct base::DefaultSingletonTraits<OfflineSigninLimiterFactory>;
+  friend base::NoDestructor<OfflineSigninLimiterFactory>;
 
   OfflineSigninLimiterFactory();
   ~OfflineSigninLimiterFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
 
   static base::Clock* clock_for_testing_;

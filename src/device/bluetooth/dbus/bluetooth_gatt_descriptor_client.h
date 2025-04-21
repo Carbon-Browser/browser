@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,16 +7,16 @@
 
 #include <stdint.h>
 
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "dbus/object_path.h"
 #include "dbus/property.h"
 #include "device/bluetooth/bluetooth_export.h"
 #include "device/bluetooth/bluetooth_gatt_service.h"
 #include "device/bluetooth/dbus/bluez_dbus_client.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace bluez {
 
@@ -70,7 +70,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothGattDescriptorClient
       base::OnceCallback<void(const std::string& error_name,
                               const std::string& error_message)>;
   using ValueCallback = base::OnceCallback<void(
-      absl::optional<device::BluetoothGattService::GattErrorCode> error_code,
+      std::optional<device::BluetoothGattService::GattErrorCode> error_code,
       const std::vector<uint8_t>& value)>;
 
   BluetoothGattDescriptorClient(const BluetoothGattDescriptorClient&) = delete;
@@ -103,7 +103,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothGattDescriptorClient
   // |object_path| with value |value|. Invokes |callback| on success and
   // |error_callback| on failure.
   virtual void WriteValue(const dbus::ObjectPath& object_path,
-                          const std::vector<uint8_t>& value,
+                          base::span<const uint8_t> value,
                           base::OnceClosure callback,
                           ErrorCallback error_callback) = 0;
 

@@ -26,7 +26,8 @@
 #include "third_party/blink/renderer/core/editing/position.h"
 
 #include <stdio.h>
-#include <ostream>  // NOLINT
+
+#include <ostream>
 
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/editing/editing_utilities.h"
@@ -95,9 +96,7 @@ PositionTemplate<Strategy> PositionTemplate<Strategy>::EditingPositionOf(
 template <typename Strategy>
 PositionTemplate<Strategy>::PositionTemplate(const Node* anchor_node,
                                              PositionAnchorType anchor_type)
-    : anchor_node_(const_cast<Node*>(anchor_node)),
-      offset_(0),
-      anchor_type_(anchor_type) {
+    : anchor_node_(const_cast<Node*>(anchor_node)), anchor_type_(anchor_type) {
 #if DCHECK_IS_ON()
   DCHECK(anchor_node_);
   DCHECK_NE(anchor_type_, PositionAnchorType::kOffsetInAnchor);
@@ -123,9 +122,7 @@ PositionTemplate<Strategy>::PositionTemplate(const Node* anchor_node,
 template <typename Strategy>
 PositionTemplate<Strategy>::PositionTemplate(const Node* anchor_node,
                                              int offset)
-    : anchor_node_(const_cast<Node*>(anchor_node)),
-      offset_(offset),
-      anchor_type_(PositionAnchorType::kOffsetInAnchor) {
+    : anchor_node_(const_cast<Node*>(anchor_node)), offset_(offset) {
 #if DCHECK_IS_ON()
   DCHECK(CanBeAnchorNode<Strategy>(anchor_node_.Get())) << anchor_node_;
   if (!anchor_node_) {
@@ -148,6 +145,9 @@ template <typename Strategy>
 PositionTemplate<Strategy>::PositionTemplate(const Node& anchor_node,
                                              int offset)
     : PositionTemplate(&anchor_node, offset) {}
+
+template <typename Strategy>
+PositionTemplate<Strategy>::PositionTemplate() = default;
 
 template <typename Strategy>
 PositionTemplate<Strategy>::PositionTemplate(const PositionTemplate&) = default;
@@ -195,7 +195,6 @@ Node* PositionTemplate<Strategy>::ComputeContainerNode() const {
     }
   }
   NOTREACHED();
-  return nullptr;
 }
 
 template <typename Strategy>
@@ -227,7 +226,6 @@ int PositionTemplate<Strategy>::ComputeOffsetInContainerNode() const {
       return Strategy::Index(*anchor_node_) + 1;
   }
   NOTREACHED();
-  return 0;
 }
 
 // Neighbor-anchored positions are invalid DOM positions, so they need to be
@@ -292,7 +290,6 @@ Node* PositionTemplate<Strategy>::ComputeNodeBeforePosition() const {
       return anchor_node_.Get();
   }
   NOTREACHED();
-  return nullptr;
 }
 
 template <typename Strategy>
@@ -311,7 +308,6 @@ Node* PositionTemplate<Strategy>::ComputeNodeAfterPosition() const {
       return Strategy::NextSibling(*anchor_node_);
   }
   NOTREACHED();
-  return nullptr;
 }
 
 // An implementation of |Range::firstNode()|.
@@ -395,19 +391,6 @@ bool PositionTemplate<Strategy>::IsValidFor(const Document& document) const {
          OffsetInContainerNode() <= LastOffsetInNode(*AnchorNode());
 }
 
-int16_t ComparePositions(const PositionInFlatTree& position_a,
-                         const PositionInFlatTree& position_b) {
-  DCHECK(position_a.IsNotNull());
-  DCHECK(position_b.IsNotNull());
-
-  Node* container_a = position_a.ComputeContainerNode();
-  Node* container_b = position_b.ComputeContainerNode();
-  int offset_a = position_a.ComputeOffsetInContainerNode();
-  int offset_b = position_b.ComputeOffsetInContainerNode();
-  return ComparePositionsInFlatTree(container_a, offset_a, container_b,
-                                    offset_b);
-}
-
 template <typename Strategy>
 int16_t PositionTemplate<Strategy>::CompareTo(
     const PositionTemplate<Strategy>& other) const {
@@ -466,7 +449,6 @@ bool PositionTemplate<Strategy>::AtFirstEditingPositionForNode() const {
       return !EditingStrategy::LastOffsetForEditing(AnchorNode());
   }
   NOTREACHED();
-  return false;
 }
 
 template <typename Strategy>
@@ -486,17 +468,7 @@ template <typename Strategy>
 bool PositionTemplate<Strategy>::AtStartOfTree() const {
   if (IsNull())
     return true;
-  return !Strategy::Parent(*AnchorNode()) && offset_ == 0;
-}
-
-template <typename Strategy>
-bool PositionTemplate<Strategy>::AtEndOfTree() const {
-  if (IsNull())
-    return true;
-  // TODO(yosin) We should use |Strategy::lastOffsetForEditing()| instead of
-  // DOM tree version.
-  return !Strategy::Parent(*AnchorNode()) &&
-         offset_ >= EditingStrategy::LastOffsetForEditing(AnchorNode());
+  return !Strategy::Parent(*AnchorNode()) && !ComputeNodeBeforePosition();
 }
 
 // static
@@ -577,8 +549,9 @@ PositionTemplate<Strategy>::FirstPositionInOrBeforeNode(const Node& node) {
 template <typename Strategy>
 PositionTemplate<Strategy>
 PositionTemplate<Strategy>::LastPositionInOrAfterNode(const Node& node) {
-  return EditingIgnoresContent(node) ? AfterNode(node)
-                                     : LastPositionInNode(node);
+  return EditingIgnoresContent(node) && Strategy::Parent(node)
+             ? AfterNode(node)
+             : LastPositionInNode(node);
 }
 
 PositionInFlatTree ToPositionInFlatTree(const Position& pos) {
@@ -671,7 +644,6 @@ Position ToPositionInDOMTree(const PositionInFlatTree& position) {
     }
     default:
       NOTREACHED();
-      return Position();
   }
 }
 
@@ -693,7 +665,6 @@ String PositionTemplate<Strategy>::ToAnchorTypeAndOffsetString() const {
       return "afterAnchor";
   }
   NOTREACHED();
-  return g_empty_string;
 }
 
 #if DCHECK_IS_ON()
@@ -744,7 +715,6 @@ std::ostream& operator<<(std::ostream& ostream,
       return ostream << "offsetInAnchor";
   }
   NOTREACHED();
-  return ostream << "anchorType=" << static_cast<int>(anchor_type);
 }
 
 std::ostream& operator<<(std::ostream& ostream, const Position& position) {

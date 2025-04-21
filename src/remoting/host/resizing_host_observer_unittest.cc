@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "base/containers/contains.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
+#include "base/notreached.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/simple_test_tick_clock.h"
@@ -26,8 +27,8 @@ using Monitors = std::map<webrtc::ScreenId, ScreenResolution>;
 
 std::ostream& operator<<(std::ostream& os, const ScreenResolution& resolution) {
   return os << resolution.dimensions().width() << "x"
-            << resolution.dimensions().height() << " @ "
-            << resolution.dpi().x() << "x" << resolution.dpi().y();
+            << resolution.dimensions().height() << " @ " << resolution.dpi().x()
+            << "x" << resolution.dpi().y();
 }
 
 bool operator==(const ScreenResolution& a, const ScreenResolution& b) {
@@ -113,6 +114,9 @@ class FakeDesktopResizer : public DesktopResizer {
     (*monitors_)[screen_id] = resolution;
     ++call_counts_->restore_resolution;
   }
+  void SetVideoLayout(const protocol::VideoLayout& layout) override {
+    NOTIMPLEMENTED();
+  }
 
  private:
   // Fails the unittest if |screen_id| is not a valid monitor ID.
@@ -153,16 +157,18 @@ class ResizingHostObserverTest : public testing::Test {
   }
 
   void SetScreenResolution(const ScreenResolution& client_size) {
-    resizing_host_observer_->SetScreenResolution(client_size, absl::nullopt);
-    if (auto_advance_clock_)
+    resizing_host_observer_->SetScreenResolution(client_size, std::nullopt);
+    if (auto_advance_clock_) {
       clock_.Advance(base::Seconds(1));
+    }
   }
 
   void SetScreenResolution(const ScreenResolution& client_size,
                            webrtc::ScreenId id) {
     resizing_host_observer_->SetScreenResolution(client_size, id);
-    if (auto_advance_clock_)
+    if (auto_advance_clock_) {
       clock_.Advance(base::Seconds(1));
+    }
   }
 
   // Should be used only for single-monitor tests.
@@ -265,11 +271,10 @@ TEST_F(ResizingHostObserverTest, SelectExactSize) {
   InitDesktopResizer({{123, MakeResolution(640, 480)}}, true,
                      std::vector<ScreenResolution>(), true);
   NotifyDisplayInfo();
-  std::vector<ScreenResolution> client_sizes = {MakeResolution(200, 100),
-                                                MakeResolution(100, 200),
-                                                MakeResolution(640, 480),
-                                                MakeResolution(480, 640),
-                                                MakeResolution(1280, 1024)};
+  std::vector<ScreenResolution> client_sizes = {
+      MakeResolution(200, 100), MakeResolution(100, 200),
+      MakeResolution(640, 480), MakeResolution(480, 640),
+      MakeResolution(1280, 1024)};
   VerifySizes(client_sizes, client_sizes);
   resizing_host_observer_.reset();
   EXPECT_EQ(1, call_counts_.restore_resolution);
@@ -283,13 +288,9 @@ TEST_F(ResizingHostObserverTest, SelectBestSmallerSize) {
   InitDesktopResizer({{123, MakeResolution(640, 480)}}, false, supported_sizes,
                      true);
   NotifyDisplayInfo();
-  VerifySizes({MakeResolution(639, 479),
-               MakeResolution(640, 480),
-               MakeResolution(641, 481),
-               MakeResolution(999, 999)},
-              {supported_sizes[0],
-               supported_sizes[1],
-               supported_sizes[1],
+  VerifySizes({MakeResolution(639, 479), MakeResolution(640, 480),
+               MakeResolution(641, 481), MakeResolution(999, 999)},
+              {supported_sizes[0], supported_sizes[1], supported_sizes[1],
                supported_sizes[1]});
 }
 
@@ -301,12 +302,9 @@ TEST_F(ResizingHostObserverTest, SelectBestScaleFactor) {
   InitDesktopResizer({{123, MakeResolution(200, 100)}}, false, supported_sizes,
                      true);
   NotifyDisplayInfo();
-  VerifySizes({MakeResolution(1, 1),
-               MakeResolution(99, 99),
-               MakeResolution(199, 99)},
-              {supported_sizes[0],
-               supported_sizes[0],
-               supported_sizes[1]});
+  VerifySizes(
+      {MakeResolution(1, 1), MakeResolution(99, 99), MakeResolution(199, 99)},
+      {supported_sizes[0], supported_sizes[0], supported_sizes[1]});
 }
 
 // Check that if the implementation supports two sizes that have the same
@@ -317,16 +315,11 @@ TEST_F(ResizingHostObserverTest, SelectWidest) {
   InitDesktopResizer({{123, MakeResolution(480, 640)}}, false, supported_sizes,
                      true);
   NotifyDisplayInfo();
-  VerifySizes({MakeResolution(100, 100),
-               MakeResolution(480, 480),
-               MakeResolution(500, 500),
-               MakeResolution(640, 640),
+  VerifySizes({MakeResolution(100, 100), MakeResolution(480, 480),
+               MakeResolution(500, 500), MakeResolution(640, 640),
                MakeResolution(1000, 1000)},
-              {supported_sizes[0],
-               supported_sizes[0],
-               supported_sizes[0],
-               supported_sizes[0],
-               supported_sizes[0]});
+              {supported_sizes[0], supported_sizes[0], supported_sizes[0],
+               supported_sizes[0], supported_sizes[0]});
 }
 
 // Check that if the best match for the client size doesn't change, then we
@@ -337,12 +330,9 @@ TEST_F(ResizingHostObserverTest, NoSetSizeForSameSize) {
   InitDesktopResizer({{123, MakeResolution(480, 640)}}, false, supported_sizes,
                      true);
   NotifyDisplayInfo();
-  VerifySizes({MakeResolution(640, 640),
-               MakeResolution(1024, 768),
+  VerifySizes({MakeResolution(640, 640), MakeResolution(1024, 768),
                MakeResolution(640, 480)},
-              {supported_sizes[0],
-               supported_sizes[0],
-               supported_sizes[0]});
+              {supported_sizes[0], supported_sizes[0], supported_sizes[0]});
   EXPECT_EQ(1, call_counts_.set_resolution);
 }
 

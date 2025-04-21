@@ -1,10 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/net/net_error_tab_helper.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "chrome/browser/net/dns_probe_service.h"
 #include "chrome/browser/net/dns_probe_service_factory.h"
@@ -31,6 +31,11 @@
 #include "components/offline_pages/core/client_namespace_constants.h"
 #endif  // BUILDFLAG(ENABLE_OFFLINE_PAGES)
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ash/constants/ash_features.h"
+#include "chrome/browser/ui/ash/network/network_portal_signin_controller.h"
+#endif
+
 using content::BrowserContext;
 using content::BrowserThread;
 using content::WebContents;
@@ -48,8 +53,7 @@ static NetErrorTabHelper::TestingState testing_state_ =
 
 }  // namespace
 
-NetErrorTabHelper::~NetErrorTabHelper() {
-}
+NetErrorTabHelper::~NetErrorTabHelper() = default;
 
 // static
 void NetErrorTabHelper::BindNetErrorPageSupport(
@@ -158,6 +162,16 @@ void NetErrorTabHelper::SetIsShowingDownloadButtonInErrorPage(
   is_showing_download_button_in_error_page_ = showing_download_button;
 }
 #endif  // BUILDFLAG(ENABLE_OFFLINE_PAGES)
+
+#if BUILDFLAG(IS_CHROMEOS)
+void NetErrorTabHelper::ShowPortalSignin() {
+  // TODO(b/247618374): Lacros implementation.
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  ash::NetworkPortalSigninController::Get()->ShowSignin(
+      ash::NetworkPortalSigninController::SigninSource::kErrorPage);
+#endif
+}
+#endif
 
 NetErrorTabHelper::NetErrorTabHelper(WebContents* contents)
     : WebContentsObserver(contents),
@@ -279,8 +293,8 @@ void NetErrorTabHelper::RunNetworkDiagnosticsHelper(
   if (!CanShowNetworkDiagnosticsDialog(web_contents()))
     return;
 
-  if (network_diagnostics_receivers_.GetCurrentTargetFrame() !=
-      web_contents()->GetPrimaryMainFrame()) {
+  if (!network_diagnostics_receivers_.GetCurrentTargetFrame()
+           ->IsInPrimaryMainFrame()) {
     return;
   }
 

@@ -1,8 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {DangerType, IconLoader, MojomData, PageCallbackRouter, PageHandlerInterface, PageRemote, States} from 'chrome://downloads/downloads.js';
+import type {IconLoader, MojomData, PageHandlerInterface, PageRemote} from 'chrome://downloads/downloads.js';
+import {DangerType, PageCallbackRouter, SafeBrowsingState, State, TailoredWarningType} from 'chrome://downloads/downloads.js';
+import {stringToMojoString16, stringToMojoUrl} from 'chrome://resources/js/mojo_type_util.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 
 export class TestDownloadsProxy {
@@ -21,16 +23,51 @@ export class TestDownloadsProxy {
 }
 
 class FakePageHandler implements PageHandlerInterface {
+  private eligibleForEsbPromo_: boolean = false;
   private callbackRouterRemote_: PageRemote;
-  private callTracker_: TestBrowserProxy = new TestBrowserProxy(['remove']);
+  private callTracker_: TestBrowserProxy = new TestBrowserProxy([
+    'discardDangerous',
+    'isEligibleForEsbPromo',
+    'logEsbPromotionRowViewed',
+    'openEsbSettings',
+    'recordCancelBypassWarningDialog',
+    'recordCancelBypassWarningInterstitial',
+    'recordOpenBypassWarningDialog',
+    'recordOpenBypassWarningInterstitial',
+    'recordOpenSurveyOnDangerousInterstitial',
+    'remove',
+    'saveDangerousFromDialogRequiringGesture',
+    'saveDangerousFromInterstitialNeedGesture',
+    'saveSuspiciousRequiringGesture',
+  ]);
 
   constructor(callbackRouterRemote: PageRemote) {
     this.callbackRouterRemote_ = callbackRouterRemote;
-    this.callTracker_ = new TestBrowserProxy(['remove']);
   }
 
   whenCalled(methodName: string): Promise<void> {
     return this.callTracker_.whenCalled(methodName);
+  }
+
+  recordCancelBypassWarningDialog(id: string) {
+    this.callTracker_.methodCalled('recordCancelBypassWarningDialog', id);
+  }
+
+  recordCancelBypassWarningInterstitial(id: string) {
+    this.callTracker_.methodCalled('recordCancelBypassWarningInterstitial', id);
+  }
+
+  recordOpenBypassWarningDialog(id: string) {
+    this.callTracker_.methodCalled('recordOpenBypassWarningDialog', id);
+  }
+
+  recordOpenBypassWarningInterstitial(id: string) {
+    this.callTracker_.methodCalled('recordOpenBypassWarningInterstitial', id);
+  }
+
+  recordOpenSurveyOnDangerousInterstitial(id: string) {
+    this.callTracker_.methodCalled(
+        'recordOpenSurveyOnDangerousInterstitial', id);
   }
 
   async remove(id: string) {
@@ -39,12 +76,35 @@ class FakePageHandler implements PageHandlerInterface {
     this.callTracker_.methodCalled('remove', id);
   }
 
+  discardDangerous(id: string) {
+    this.callTracker_.methodCalled('discardDangerous', id);
+  }
+
+  saveDangerousFromDialogRequiringGesture(id: string) {
+    this.callTracker_.methodCalled(
+        'saveDangerousFromDialogRequiringGesture', id);
+  }
+
+  saveDangerousFromInterstitialNeedGesture(id: string) {
+    this.callTracker_.methodCalled(
+        'saveDangerousFromInterstitialNeedGesture', id);
+  }
+
+  saveSuspiciousRequiringGesture(id: string) {
+    this.callTracker_.methodCalled('saveSuspiciousRequiringGesture', id);
+  }
+
+  openEsbSettings() {
+    this.callTracker_.methodCalled('openEsbSettings');
+  }
+
+  logEsbPromotionRowViewed() {
+    this.callTracker_.methodCalled('logEsbPromotionRowViewed');
+  }
+
   getDownloads(_searchTerms: string[]) {}
   openFileRequiringGesture(_id: string) {}
   drag(_id: string) {}
-  saveDangerousRequiringGesture(_id: string) {}
-  acceptIncognitoWarning(_id: string) {}
-  discardDangerous(_id: string) {}
   retryDownload(_id: string) {}
   show(_id: string) {}
   pause(_id: string) {}
@@ -55,6 +115,15 @@ class FakePageHandler implements PageHandlerInterface {
   openDownloadsFolderRequiringGesture() {}
   openDuringScanningRequiringGesture(_id: string) {}
   reviewDangerousRequiringGesture(_id: string) {}
+  deepScan(_id: string) {}
+  bypassDeepScanRequiringGesture(_id: string) {}
+  async isEligibleForEsbPromo(): Promise<{result: boolean}> {
+    this.callTracker_.methodCalled('isEligibleForEsbPromo');
+    return {result: this.eligibleForEsbPromo_};
+  }
+  setEligbleForEsbPromo(eligible: boolean) {
+    this.eligibleForEsbPromo_ = eligible;
+  }
 }
 
 export class TestIconLoader extends TestBrowserProxy implements IconLoader {
@@ -77,9 +146,10 @@ export class TestIconLoader extends TestBrowserProxy implements IconLoader {
 export function createDownload(config?: Partial<MojomData>): MojomData {
   return Object.assign(
       {
+        accountEmail: '',
         byExtId: '',
         byExtName: '',
-        dangerType: DangerType.NOT_DANGEROUS,
+        dangerType: DangerType.kNoApplicableDangerType,
         dateString: '',
         fileExternallyRemoved: false,
         fileName: 'download 1',
@@ -88,7 +158,7 @@ export function createDownload(config?: Partial<MojomData>): MojomData {
         hideDate: false,
         id: '123',
         isDangerous: false,
-        isMixedContent: false,
+        isInsecure: false,
         isReviewable: false,
         lastReasonText: '',
         otr: false,
@@ -101,9 +171,16 @@ export function createDownload(config?: Partial<MojomData>): MojomData {
         showInFolderText: '',
         sinceString: 'Today',
         started: Date.now() - 10000,
-        state: States.COMPLETE,
+        state: State.kComplete,
+        tailoredWarningType:
+            TailoredWarningType.kNoApplicableTailoredWarningType,
         total: -1,
-        url: 'http://permission.site',
+        url: stringToMojoUrl('http://permission.site'),
+        displayUrl: stringToMojoString16('http://permission.site'),
+        referrerUrl: stringToMojoUrl('http://permission.site'),
+        displayReferrerUrl: stringToMojoString16('http://permission.site'),
+        safeBrowsingState: SafeBrowsingState.kStandardProtection,
+        hasSafeBrowsingVerdict: true,
       },
       config || {});
 }

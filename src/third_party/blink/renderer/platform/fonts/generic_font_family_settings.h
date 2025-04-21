@@ -31,6 +31,7 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_FONTS_GENERIC_FONT_FAMILY_SETTINGS_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_FONTS_GENERIC_FONT_FAMILY_SETTINGS_H_
 
+#include "base/feature_list.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
@@ -41,6 +42,8 @@
 #include <unicode/uscript.h>
 
 namespace blink {
+
+PLATFORM_EXPORT BASE_DECLARE_FEATURE(kGenericFontSettingCache);
 
 class PLATFORM_EXPORT GenericFontFamilySettings {
   DISALLOW_NEW();
@@ -53,6 +56,8 @@ class PLATFORM_EXPORT GenericFontFamilySettings {
   bool UpdateStandard(const AtomicString&, UScriptCode = USCRIPT_COMMON);
   const AtomicString& Standard(UScriptCode = USCRIPT_COMMON) const;
 
+  // crbug.com/40535332. In the argument of UpdateFixed(), Osaka font should
+  // be represented as "Osaka", and Fixed() returns "Osaka-Mono" for it.
   bool UpdateFixed(const AtomicString&, UScriptCode = USCRIPT_COMMON);
   const AtomicString& Fixed(UScriptCode = USCRIPT_COMMON) const;
 
@@ -76,41 +81,27 @@ class PLATFORM_EXPORT GenericFontFamilySettings {
 
   GenericFontFamilySettings& operator=(const GenericFontFamilySettings&);
 
-  // Returns a new instance with String instead of AtomicString objects.
-  // This allows GenericFontFamilySettings to be sent from one thread to
-  // another, since AtomicStrings can't be shared cross-threads.
-  // Before using it, call it MakeAtomic() on the final thread, to bring back
-  // the AtomicStrings.
-  void IsolatedCopyTo(GenericFontFamilySettings& dest) const;
-
-  bool IsIsolated() const { return isolated_copy_.get(); }
-
-  // Transform an IsolatedCopy GenericFontFamilySettings into a regular
-  // GenericFontFamilySettings.
-  void MakeAtomic();
-
  private:
   // UScriptCode uses -1 and 0 for UScriptInvalidCode and UScriptCommon.
   // We need to use -2 and -3 for empty value and deleted value.
-  struct UScriptCodeHashTraits : WTF::GenericHashTraits<int> {
-    STATIC_ONLY(UScriptCodeHashTraits);
-    static const bool kEmptyValueIsZero = false;
-    static int EmptyValue() { return -2; }
-    static void ConstructDeletedValue(int& slot, bool) { slot = -3; }
-    static bool IsDeletedValue(int value) { return value == -3; }
-  };
+  using UScriptCodeHashTraits = IntHashTraits<int, -1, -3>;
 
-  typedef HashMap<int,
-                  AtomicString,
-                  DefaultHash<int>::Hash,
-                  UScriptCodeHashTraits>
-      ScriptFontFamilyMap;
+  typedef HashMap<int, AtomicString, UScriptCodeHashTraits> ScriptFontFamilyMap;
 
   void SetGenericFontFamilyMap(ScriptFontFamilyMap&,
                                const AtomicString&,
                                UScriptCode);
+
+  // Warning: Calling this method might result in a synchronous IPC call, which
+  // waits until the browser process to load a font and blocks the current
+  // thread.
   const AtomicString& GenericFontFamilyForScript(const ScriptFontFamilyMap&,
                                                  UScriptCode) const;
+
+  // Returns true if the first available font of `new_family` could be different
+  // from `old_first_available_family`.
+  bool ShouldUpdateFontFamily(const AtomicString& old_first_available_family,
+                              const AtomicString& new_family) const;
 
   ScriptFontFamilyMap standard_font_family_map_;
   ScriptFontFamilyMap serif_font_family_map_;
@@ -120,8 +111,12 @@ class PLATFORM_EXPORT GenericFontFamilySettings {
   ScriptFontFamilyMap fantasy_font_family_map_;
   ScriptFontFamilyMap math_font_family_map_;
 
-  typedef Vector<std::pair<int, String>> IsolatedCopyVector;
-  std::unique_ptr<IsolatedCopyVector[]> isolated_copy_;
+  // For the given font families, caches the first available font. If none of
+  // them is available, the value will be the first font of the given
+  // families. To save memory, the key should contain more than one font, in
+  // the format of ",font1, font2, ...".
+  mutable HashMap<AtomicString, AtomicString>
+      first_available_font_for_families_;
 };
 
 }  // namespace blink

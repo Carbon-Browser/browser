@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,9 +11,7 @@ import android.os.IBinder;
 
 import org.chromium.webapk.lib.runtime_library.WebApkServiceImpl;
 
-/**
- * Simple service which uses {@link WebApkServiceImpl} for testing.
- */
+/** Simple service which uses {@link WebApkServiceImpl} for testing. */
 public class TestWebApkServiceImplWrapper extends Service {
     @Override
     public IBinder onBind(Intent intent) {

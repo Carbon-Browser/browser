@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,24 +7,37 @@
 
 #include <string>
 
+#include "ui/display/types/display_constants.h"
 #include "ui/ozone/platform/wayland/common/wayland_object.h"
 #include "ui/platform_window/extensions/wayland_extension.h"
 
 namespace gfx {
+class ImageSkia;
 class Rect;
 }
 
 namespace ui {
 
 class WaylandConnection;
+class WaylandOutput;
+class XDGToplevelWrapperImpl;
+enum class ZOrderLevel;
 
-// A wrapper around different versions of xdg toplevels. Allows
-// WaylandToplevelWindow to set window-like properties such as maximize,
+// Wrapper interface for shell top level windows.
+//
+// This is one of three wrapper classes: Shell{Surface,Toplevel,Popup}Wrapper.
+// It has the only sub-class in Chromium, but should not be removed because it
+// eases downstream implementations.
+// See https://crbug.com/1402672
+//
+// Allows WaylandToplevelWindow to set window-like properties such as maximize,
 // fullscreen, and minimize, set application-specific metadata like title and
 // id, as well as trigger user interactive operations such as interactive resize
 // and move.
 class ShellToplevelWrapper {
  public:
+  using ShapeRects = std::vector<gfx::Rect>;
+
   enum class DecorationMode {
     // Initial mode that the surface has till the first configure event.
     kNone,
@@ -51,8 +64,9 @@ class ShellToplevelWrapper {
   // Unsets a native window from maximized state.
   virtual void UnSetMaximized() = 0;
 
-  // Sets a native window to fullscreen state.
-  virtual void SetFullscreen() = 0;
+  // Sets a native window to fullscreen state. If the `wayland_output` is a
+  // `nullptr`, the current output will be used, otherwise the requested one.
+  virtual void SetFullscreen(WaylandOutput* wayland_output) = 0;
 
   // Unsets a native window from fullscreen state.
   virtual void UnSetFullscreen() = 0;
@@ -80,10 +94,6 @@ class ShellToplevelWrapper {
   // the content area of the surface.
   virtual void SetWindowGeometry(const gfx::Rect& bounds) = 0;
 
-  // Requests a desired window position and size in global screen coordinates.
-  // The compositor may or may not filfill the request.
-  virtual void RequestWindowBounds(const gfx::Rect& bounds) = 0;
-
   // Sets the minimum size for the top level.
   virtual void SetMinSize(int32_t width, int32_t height) = 0;
 
@@ -101,35 +111,16 @@ class ShellToplevelWrapper {
   // with this top level window.
   virtual void SetDecoration(DecorationMode decoration) = 0;
 
-  // Set session id and restore id for the top level.
-  virtual void SetRestoreInfo(int32_t restore_session_id,
-                              int32_t restore_window_id) = 0;
-
-  virtual void SetRestoreInfoWithWindowIdSource(
-      int32_t restore_session_id,
-      const std::string& restore_window_id_source) = 0;
-
-  // Request that the server set the orientation lock to the provided lock type.
-  // This is only accepted if the requesting window is running in immersive
-  // fullscreen mode and in a tablet configuration.
-  virtual void Lock(WaylandOrientationLockType lock_type) = 0;
-
-  // Request that the server remove the applied orientation lock.
-  virtual void Unlock() = 0;
-
   // Request that the window be made a system modal.
   virtual void SetSystemModal(bool modal) = 0;
 
-  // Checks if the server supports chrome to control the window position in
-  // screen coordinates.
-  virtual bool SupportsScreenCoordinates() const = 0;
+  virtual void SetIcon(const gfx::ImageSkia& icon) = 0;
 
-  // Enables screen coordinates support. This is no-op if the server does not
-  // support the screen coordinates.
-  virtual void EnableScreenCoordinates() = 0;
+  // Casts `this` to XDGToplevelWrapperImpl, if it is of that type.
+  virtual XDGToplevelWrapperImpl* AsXDGToplevelWrapper();
 };
 
-// Look for |value| in |wl_array| in C++ style.
+// Look for `value` in `wl_array` in C++ style.
 bool CheckIfWlArrayHasValue(struct wl_array* wl_array, uint32_t value);
 
 }  // namespace ui

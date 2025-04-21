@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <iterator>
 
+#include "base/memory/stack_allocated.h"
 #include "chrome/browser/ui/browser_list.h"
 
 namespace content {
@@ -33,6 +34,8 @@ class WebContents;
 class AllTabContentsesList {
  public:
   class Iterator {
+    STACK_ALLOCATED();
+
    public:
     using iterator_category = std::forward_iterator_tag;
     using value_type = content::WebContents*;

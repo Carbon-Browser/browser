@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,8 +23,6 @@
 namespace content {
 class RenderFrameHost;
 }  // namespace content
-
-class HidChooserContext;
 
 // HidChooserController provides data for the WebHID API permission prompt.
 class HidChooserController : public permissions::ChooserController,
@@ -112,10 +110,7 @@ class HidChooserController : public permissions::ChooserController,
   // in the chooser.
   std::vector<std::string> items_;
 
-  base::ScopedObservation<HidChooserContext,
-                          HidChooserContext::DeviceObserver,
-                          &HidChooserContext::AddDeviceObserver,
-                          &HidChooserContext::RemoveDeviceObserver>
+  base::ScopedObservation<HidChooserContext, HidChooserContext::DeviceObserver>
       observation_{this};
 
   base::WeakPtrFactory<HidChooserController> weak_factory_{this};

@@ -1,12 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef DEVICE_BLUETOOTH_BLUETOOTH_LOW_ENERGY_SCAN_SESSION_H_
 #define DEVICE_BLUETOOTH_BLUETOOTH_LOW_ENERGY_SCAN_SESSION_H_
 
+#include <optional>
+
 #include "device/bluetooth/bluetooth_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace device {
 
@@ -28,8 +29,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothLowEnergyScanSession {
     // the session failed to start.
     virtual void OnSessionStarted(
         BluetoothLowEnergyScanSession* scan_session,
-        absl::optional<BluetoothLowEnergyScanSession::ErrorCode>
-            error_code) = 0;
+        std::optional<BluetoothLowEnergyScanSession::ErrorCode> error_code) = 0;
 
     // Notifies that a device matching the filter criteria has been found.
     virtual void OnDeviceFound(BluetoothLowEnergyScanSession* scan_session,

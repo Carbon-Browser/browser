@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -48,6 +48,14 @@ static_library("utf") {
     "src/utf/utfrune.c",
     "src/utf/utftab.c",
     "src/utf/utfutf.c",
+  ]
+
+  deps = [
+    # Several UTF functions, e.g. `chartorune` are declared in `utf.h`
+    # and implemented in both `utf` and `libphonenumber`. They have
+    # been removed from `utf`. We add a dep on `libphonenumber` so
+    # that this target contains an implementation of them.
+    "//third_party/libphonenumber",
   ]
 
   public_deps = [ ":utf-headers" ]

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@
 #include "ui/display/display.h"
 #include "ui/display/display_switches.h"
 #include "ui/display/manager/display_layout_store.h"
-#include "ui/display/manager/display_manager_utilities.h"
+#include "ui/display/manager/util/display_manager_util.h"
 #include "ui/display/types/display_constants.h"
 #include "ui/display/util/display_util.h"
 
@@ -79,10 +79,6 @@ void DisplayLayoutStore::RegisterLayoutForDisplayIdList(
     NOTREACHED() << "Attempting to register an invalid layout: ids="
                  << DisplayIdListToString(list)
                  << ", layout=" << layout->ToString();
-    // We never allow to register an invalid layout, instead, we revert back to
-    // a default layout.
-    CreateDefaultDisplayLayout(list);
-    return;
   }
 
   layouts_[list] = std::move(layout);

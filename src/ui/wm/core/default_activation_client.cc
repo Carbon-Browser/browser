@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,7 +35,7 @@ class DefaultActivationClient::Deleter : public aura::WindowObserver {
     delete this;
   }
 
-  raw_ptr<DefaultActivationClient> client_;
+  raw_ptr<DefaultActivationClient, DanglingUntriaged> client_;
   raw_ptr<aura::Window> root_window_;
 };
 
@@ -72,8 +72,8 @@ void DefaultActivationClient::ActivateWindowImpl(
   if (last_active == window)
     return;
 
-  for (auto& observer : observers_)
-    observer.OnWindowActivating(reason, window, last_active);
+  observers_.Notify(&ActivationChangeObserver::OnWindowActivating, reason,
+                    window, last_active);
 
   last_active_ = last_active;
   if (window) {
@@ -85,8 +85,8 @@ void DefaultActivationClient::ActivateWindowImpl(
     ClearActiveWindows();
   }
 
-  for (auto& observer : observers_)
-    observer.OnWindowActivated(reason, window, last_active);
+  observers_.Notify(&ActivationChangeObserver::OnWindowActivated, reason,
+                    window, last_active);
 
   if (window) {
     ActivationChangeObserver* observer =

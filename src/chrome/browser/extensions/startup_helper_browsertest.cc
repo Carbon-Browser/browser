@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,12 +17,12 @@
 
 class StartupHelperBrowserTest : public InProcessBrowserTest {
  public:
-  StartupHelperBrowserTest() {}
+  StartupHelperBrowserTest() = default;
 
   StartupHelperBrowserTest(const StartupHelperBrowserTest&) = delete;
   StartupHelperBrowserTest& operator=(const StartupHelperBrowserTest&) = delete;
 
-  ~StartupHelperBrowserTest() override {}
+  ~StartupHelperBrowserTest() override = default;
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
     command_line->AppendSwitch(switches::kNoStartupWindow);

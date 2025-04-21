@@ -24,6 +24,7 @@ import android.content.Intent;
 import android.app.role.RoleManager;
 import android.provider.Settings;
 import android.os.Build;
+import org.chromium.chrome.browser.firstrun.FirstRunFragment;
 
 /** A {@link Fragment} that presents a set of search engines for the user to choose from. */
 public class DefaultBrowserOnboardingMessageFragment extends Fragment implements FirstRunFragment {

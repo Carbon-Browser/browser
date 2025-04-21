@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,9 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
+#include "base/memory/scoped_refptr.h"
 #include "services/device/public/mojom/usb_device.mojom.h"
 
 namespace device {
@@ -27,8 +28,8 @@ struct CombinedInterfaceInfo {
 
   bool IsValid() const;
 
-  const mojom::UsbInterfaceInfo* interface = nullptr;
-  const mojom::UsbAlternateInterfaceInfo* alternate = nullptr;
+  raw_ptr<const mojom::UsbInterfaceInfo> interface = nullptr;
+  raw_ptr<const mojom::UsbAlternateInterfaceInfo> alternate = nullptr;
 };
 
 struct UsbDeviceDescriptor {
@@ -54,7 +55,7 @@ void ReadUsbDescriptors(
     scoped_refptr<UsbDeviceHandle> device_handle,
     base::OnceCallback<void(std::unique_ptr<UsbDeviceDescriptor>)> callback);
 
-bool ParseUsbStringDescriptor(const std::vector<uint8_t>& descriptor,
+bool ParseUsbStringDescriptor(base::span<const uint8_t> descriptor,
                               std::u16string* output);
 
 void ReadUsbStringDescriptors(

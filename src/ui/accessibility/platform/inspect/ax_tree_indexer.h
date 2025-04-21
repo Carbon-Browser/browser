@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <map>
 #include <string>
 
+#include "base/component_export.h"
 #include "base/strings/string_number_conversions.h"
-#include "ui/accessibility/ax_export.h"
 
 namespace ui {
 
@@ -27,7 +27,7 @@ template <typename AccessibilityObject,
           typename ChildrenContainer,
           ChildrenContainer (*GetChildren)(const AccessibilityObject),
           typename Compare = std::less<AccessibilityObject>>
-class AX_EXPORT AXTreeIndexer final {
+class COMPONENT_EXPORT(AX_PLATFORM) AXTreeIndexer {
  public:
   explicit AXTreeIndexer(const AccessibilityObject node) {
     int counter = 0;
@@ -36,7 +36,7 @@ class AX_EXPORT AXTreeIndexer final {
   virtual ~AXTreeIndexer() {}
 
   // Returns a line index in the formatted tree the node is placed at.
-  std::string IndexBy(const AccessibilityObject node) const {
+  virtual std::string IndexBy(const AccessibilityObject node) const {
     std::string line_index = ":unknown";
     auto iter = node_to_identifier_.find(node);
     if (iter != node_to_identifier_.end()) {

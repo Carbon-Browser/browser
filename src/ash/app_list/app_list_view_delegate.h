@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,17 +12,18 @@
 
 #include "ash/app_list/app_list_metrics.h"
 #include "ash/assistant/ui/assistant_view_delegate.h"
+#include "ash/public/cpp/app_list/app_list_client.h"
 #include "ash/public/cpp/app_list/app_list_types.h"
 #include "ash/public/cpp/ash_public_export.h"
-#include "base/callback_forward.h"
-#include "third_party/skia/include/core/SkColor.h"
-#include "ui/base/ui_base_types.h"
-#include "ui/events/event_constants.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/weak_ptr.h"
+#include "chromeos/ash/services/assistant/public/cpp/assistant_enums.h"
+#include "ui/base/mojom/menu_source_type.mojom-forward.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/rect.h"
+#include "url/gurl.h"
 
 namespace ui {
-class ImplicitAnimationObserver;
 class SimpleMenuModel;
 }  // namespace ui
 
@@ -42,8 +43,24 @@ class ASH_PUBLIC_EXPORT AppListViewDelegate {
   // delegate.
   virtual AppListNotifier* GetNotifier() = 0;
 
+  // Creates a `ScopedIphSession` for interacting with LauncherSearchHelpUi
+  // feature. A caller must show an IPH UI after this returns a session. This
+  // returns nullptr if `feature_engagement::Tracker::ShouldTriggerHelpUI`
+  // returns false.
+  virtual std::unique_ptr<ScopedIphSession>
+  CreateLauncherSearchIphSession() = 0;
+
   // Invoked to start a new Google Assistant session.
-  virtual void StartAssistant() = 0;
+  virtual void StartAssistant(assistant::AssistantEntryPoint entry_point) = 0;
+
+  // Invoked to end a Google Assistant session.
+  virtual void EndAssistant(assistant::AssistantExitPoint exit_point) = 0;
+
+  // Returns the search categories that are available for users to choose if
+  // they want to have the results in the categories displayed in launcher
+  // search.
+  virtual std::vector<AppListSearchControlCategory> GetToggleableCategories()
+      const = 0;
 
   // Invoked to start a new search. This collects a list of search results
   // matching the raw query, which is an unhandled string typed into the search
@@ -60,12 +77,9 @@ class ASH_PUBLIC_EXPORT AppListViewDelegate {
   // Invoked to open the search result and log a click. If the result is
   // represented by a SuggestedChipView or is a zero state result,
   // |suggested_index| is the index of the view in the list of suggestions.
-  // |launched_from| values must match the LaunchedFrom enum in
-  // chrome/browser/ui/app_list/app_launch_event_logger.proto. |launch_type| is
-  // either kAppSearchResult or kSearchResult and is used to determine which
-  // histograms to log to.
-  // |launch_as_default|: True if the result is launched as the default result
-  // by user pressing ENTER key.
+  // |launch_type| is either kAppSearchResult or kSearchResult and is used to
+  // determine which histograms to log to. |launch_as_default|: True if the
+  // result is launched as the default result by user pressing ENTER key.
   virtual void OpenSearchResult(const std::string& result_id,
                                 int event_flags,
                                 AppListLaunchedFrom launched_from,
@@ -82,9 +96,6 @@ class ASH_PUBLIC_EXPORT AppListViewDelegate {
   // Note the returned menu model is owned by that result.
   using GetContextMenuModelCallback =
       base::OnceCallback<void(std::unique_ptr<ui::SimpleMenuModel>)>;
-  virtual void GetSearchResultContextMenuModel(
-      const std::string& result_id,
-      GetContextMenuModelCallback callback) = 0;
 
   // Invoked when the app list is shown.
   virtual void ViewShown(int64_t display_id) = 0;
@@ -96,13 +107,11 @@ class ASH_PUBLIC_EXPORT AppListViewDelegate {
   // Invoked when the app list is closing.
   virtual void ViewClosing() = 0;
 
-  // Gets the wallpaper prominent colors.
-  virtual const std::vector<SkColor>& GetWallpaperProminentColors() = 0;
-
   // Activates (opens) the item.
   virtual void ActivateItem(const std::string& id,
                             int event_flags,
-                            AppListLaunchedFrom launched_from) = 0;
+                            AppListLaunchedFrom launched_from,
+                            bool is_app_above_the_fold) = 0;
 
   // Returns the context menu model for a ChromeAppListItem with |id|, or
   // nullptr if there is currently no menu for the item (e.g. during install).
@@ -112,14 +121,10 @@ class ASH_PUBLIC_EXPORT AppListViewDelegate {
                                    AppListItemContext item_context,
                                    GetContextMenuModelCallback callback) = 0;
 
-  // Returns an animation observer if the |target_state| is interesting to the
-  // delegate.
-  virtual ui::ImplicitAnimationObserver* GetAnimationObserver(
-      AppListViewState target_state) = 0;
-
   // Show wallpaper context menu from the specified onscreen location.
-  virtual void ShowWallpaperContextMenu(const gfx::Point& onscreen_location,
-                                        ui::MenuSourceType source_type) = 0;
+  virtual void ShowWallpaperContextMenu(
+      const gfx::Point& onscreen_location,
+      ui::mojom::MenuSourceType source_type) = 0;
 
   // Returns True if the last event passing through app list was a key event.
   // This is stored in the controller and managed by the presenter.
@@ -134,10 +139,6 @@ class ASH_PUBLIC_EXPORT AppListViewDelegate {
   // doesn't appear in the screenshot.
   virtual bool ShouldDismissImmediately() = 0;
 
-  // Gets the ideal y position for the close animation, which depends on
-  // autohide state.
-  virtual int GetTargetYForAppListHide(aura::Window* root_window) = 0;
-
   // Returns the AssistantViewDelegate.
   virtual AssistantViewDelegate* GetAssistantViewDelegate() = 0;
 
@@ -146,19 +147,8 @@ class ASH_PUBLIC_EXPORT AppListViewDelegate {
   virtual void OnSearchResultVisibilityChanged(const std::string& id,
                                                bool visibility) = 0;
 
-  // If the |prefs::kSuggestedContentInfoShownInLauncher| value is in the range
-  // of allowed values, we will increment it.
-  virtual void MaybeIncreaseSuggestedContentInfoShownCount() = 0;
-
   // Returns true if the Assistant feature is allowed and enabled.
   virtual bool IsAssistantAllowedAndEnabled() const = 0;
-
-  // Returns true if the Suggested Content privacy info view should be shown.
-  virtual bool ShouldShowSuggestedContentInfo() const = 0;
-
-  // Called when close button in the Suggested Content privacy info view is
-  // pressed to indicate not to show the view any more.
-  virtual void MarkSuggestedContentInfoDismissed() = 0;
 
   // Gets the app list page currently shown in the fullscreen app list, as
   // reported from the app list view using `OnAppListPageChanged()`.
@@ -195,12 +185,11 @@ class ASH_PUBLIC_EXPORT AppListViewDelegate {
   // ShelfConfig.
   virtual int GetShelfSize() = 0;
 
-  // Returns whether tablet mode is currently enabled.
-  virtual bool IsInTabletMode() = 0;
+  // Gets the tablet mode shelf insets from the ShelfConfig.
+  virtual int GetSystemShelfInsetsInTabletMode() = 0;
 
-  // Adjust scrolls that happen in the view. This needs to be delegated because
-  // it depends on the active user's preferences.
-  virtual int AdjustAppListViewScrollOffset(int offset, ui::EventType type) = 0;
+  // Returns whether tablet mode is currently enabled.
+  virtual bool IsInTabletMode() const = 0;
 
   // Loads the icon of an app item identified by `app_id`.
   virtual void LoadIcon(const std::string& app_id) = 0;
@@ -217,8 +206,20 @@ class ASH_PUBLIC_EXPORT AppListViewDelegate {
   // Used by productivity launcher only.
   virtual void SetHideContinueSection(bool hide) = 0;
 
-  // Commits the app list item positions under the temporary sort order.
-  virtual void CommitTemporarySortOrder() = 0;
+  // Returns whether the search category `category` is enabled.
+  virtual bool IsCategoryEnabled(AppListSearchControlCategory category) = 0;
+
+  // Sets the preference of displaying `category` to users to `enabled`.
+  virtual void SetCategoryEnabled(AppListSearchControlCategory category,
+                                  bool enabled) = 0;
+
+  // Records metrics regarding the apps visibiity from the launcher's default
+  // state. For example, for scrollable apps grid view, an item view would be
+  // above the fold if it is visible without scrolling.
+  virtual void RecordAppsDefaultVisibility(
+      const std::vector<std::string>& apps_above_the_fold,
+      const std::vector<std::string>& apps_below_the_fold,
+      bool is_apps_collections_page) = 0;
 };
 
 }  // namespace ash

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 
 #include <bitset>
 #include <memory>
+#include <optional>
 #include <unordered_map>
 
 #include "base/atomicops.h"
@@ -21,7 +22,6 @@
 #include "base/memory/raw_ptr.h"
 #include "gles2_impl_export.h"
 #include "gpu/command_buffer/common/gles2_cmd_format.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace gpu {
 
@@ -41,7 +41,7 @@ class GLES2_IMPL_EXPORT QuerySyncManager {
 
     void FreePendingSyncs();
 
-    raw_ptr<QuerySync> syncs;
+    raw_ptr<QuerySync, AllowPtrArithmetic> syncs;
     int32_t shm_id;
     uint32_t base_shm_offset;
     std::bitset<kSyncsPerBucket> in_use_query_syncs;
@@ -58,10 +58,11 @@ class GLES2_IMPL_EXPORT QuerySyncManager {
         : bucket(bucket), sync(bucket->syncs + index) {}
     QueryInfo() = default;
 
-    uint32_t index() const { return sync - bucket->syncs; }
+    uint32_t index() const { return sync - bucket->syncs.get(); }
 
-    Bucket* bucket = nullptr;
-    QuerySync* sync = nullptr;
+    raw_ptr<Bucket, DanglingUntriaged> bucket = nullptr;
+    // AllowPtrArithmetic because it is assigned an AllowPtrArithmetic pointer.
+    raw_ptr<QuerySync, DanglingUntriaged | AllowPtrArithmetic> sync = nullptr;
     int32_t submit_count = 0;
   };
 
@@ -200,7 +201,7 @@ class GLES2_IMPL_EXPORT QueryTracker {
     uint64_t client_begin_time_us_;  // Only used for latency query target.
     uint64_t result_;
 
-    absl::optional<base::OnceClosure> on_completed_callback_;
+    std::optional<base::OnceClosure> on_completed_callback_;
   };
 
   explicit QueryTracker(MappedMemoryManager* manager);

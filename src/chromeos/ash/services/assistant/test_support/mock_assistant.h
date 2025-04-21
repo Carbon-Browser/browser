@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,7 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "ui/accessibility/mojom/ax_assistant_structure.mojom.h"
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 class MockAssistant : public Assistant {
  public:
@@ -25,10 +24,6 @@ class MockAssistant : public Assistant {
   ~MockAssistant() override;
 
   MOCK_METHOD1(StartEditReminderInteraction, void(const std::string&));
-
-  MOCK_METHOD(void,
-              StartScreenContextInteraction,
-              (const std::vector<uint8_t>&));
 
   MOCK_METHOD(void,
               StartTextInteraction,
@@ -56,7 +51,6 @@ class MockAssistant : public Assistant {
   MOCK_METHOD1(CreateTimer, void(base::TimeDelta));
 };
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant
 
 #endif  // CHROMEOS_ASH_SERVICES_ASSISTANT_TEST_SUPPORT_MOCK_ASSISTANT_H_

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -214,7 +214,7 @@ void EsAdapterVideo::ReplaceDiscardedFrames(
 
   for (int i = 0; i < discarded_frame_count_; i++) {
     scoped_refptr<StreamParserBuffer> frame = StreamParserBuffer::CopyFrom(
-        stream_parser_buffer.data(), stream_parser_buffer.data_size(),
+        stream_parser_buffer.data(), stream_parser_buffer.size(),
         stream_parser_buffer.is_key_frame(), stream_parser_buffer.type(),
         stream_parser_buffer.track_id());
     frame->SetDecodeTimestamp(dts);

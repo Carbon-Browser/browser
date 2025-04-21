@@ -1,8 +1,9 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {BrowserProxy, IncognitoAvailability} from 'chrome://bookmarks/bookmarks.js';
+import type {BrowserProxy} from 'chrome://bookmarks/bookmarks.js';
+import {IncognitoAvailability} from 'chrome://bookmarks/bookmarks.js';
 import {TestBrowserProxy} from 'chrome://webui-test/test_browser_proxy.js';
 
 /**
@@ -15,6 +16,7 @@ export class TestBookmarksBrowserProxy extends TestBrowserProxy implements
       'getIncognitoAvailability',
       'getCanEditBookmarks',
       'recordInHistogram',
+      'showBookmarkEditorForCurrentUrl',
     ]);
   }
 
@@ -30,5 +32,9 @@ export class TestBookmarksBrowserProxy extends TestBrowserProxy implements
 
   recordInHistogram(histogram: string, bucket: number, maxBucket: number) {
     this.methodCalled('recordInHistogram', [histogram, bucket, maxBucket]);
+  }
+
+  showBookmarkEditorForCurrentUrl() {
+    this.methodCalled('showBookmarkEditorForCurrentUrl');
   }
 }

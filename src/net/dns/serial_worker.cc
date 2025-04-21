@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,12 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/notreached.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/sequenced_task_runner_handle.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/timer/timer.h"
 #include "net/base/backoff_entry.h"
 
@@ -163,6 +161,11 @@ const BackoffEntry& SerialWorker::GetBackoffEntryForTesting() const {
 const base::OneShotTimer& SerialWorker::GetRetryTimerForTesting() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   return retry_timer_;
+}
+
+int SerialWorker::GetFailureCount() const {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  return backoff_entry_.failure_count();
 }
 
 base::WeakPtr<SerialWorker> SerialWorker::AsWeakPtr() {

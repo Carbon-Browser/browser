@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/tab_modal_confirm_dialog.h"
+#include "chrome/browser/ui/tabs/public/tab_interface.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "components/javascript_dialogs/app_modal_dialog_manager.h"
 #include "components/javascript_dialogs/tab_modal_dialog_manager.h"
@@ -53,7 +54,7 @@ void JavaScriptTabModalDialogManagerDelegateDesktop::DidCloseDialog() {
 
 void JavaScriptTabModalDialogManagerDelegateDesktop::SetTabNeedsAttention(
     bool attention) {
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents_);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents_);
   if (!browser) {
     // It's possible that the WebContents is no longer in the tab strip. If so,
     // just give up. https://crbug.com/786178
@@ -79,8 +80,13 @@ bool JavaScriptTabModalDialogManagerDelegateDesktop::IsWebContentsForemost() {
 }
 
 bool JavaScriptTabModalDialogManagerDelegateDesktop::IsApp() {
-  Browser* browser = chrome::FindBrowserWithWebContents(web_contents_);
+  Browser* browser = chrome::FindBrowserWithTab(web_contents_);
   return browser && (browser->is_type_app() || browser->is_type_app_popup());
+}
+
+bool JavaScriptTabModalDialogManagerDelegateDesktop::CanShowModalUI() {
+  tabs::TabInterface* tab = tabs::TabInterface::GetFromContents(web_contents_);
+  return tab && tab->CanShowModalUI();
 }
 
 void JavaScriptTabModalDialogManagerDelegateDesktop::OnBrowserSetLastActive(

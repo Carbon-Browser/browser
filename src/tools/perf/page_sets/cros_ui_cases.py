@@ -1,4 +1,4 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 import logging
@@ -7,7 +7,7 @@ from telemetry.page import page as page_module
 from telemetry.page import shared_page_state
 from telemetry import story
 
-# TODO(crbug.com/944954): Move story_tags to a location outside system_health.
+# TODO(crbug.com/41448507): Move story_tags to a location outside system_health.
 from page_sets.system_health import story_tags
 
 

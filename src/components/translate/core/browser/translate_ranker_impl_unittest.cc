@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,8 +41,8 @@ class TranslateRankerImplTest : public ::testing::Test {
   TranslateRankerImplTest& operator=(const TranslateRankerImplTest&) = delete;
 
   // Initializes the explicitly |enabled| and |disabled| features for this test.
-  void InitFeatures(const std::initializer_list<base::Feature>& enabled,
-                    const std::initializer_list<base::Feature>& disabled);
+  void InitFeatures(const std::vector<base::test::FeatureRef>& enabled,
+                    const std::vector<base::test::FeatureRef>& disabled);
 
   // Returns a TranslateRankerImpl object with |threshold| for testing. The
   // returned ranker is configured with an empty cache path and URL and will not
@@ -85,8 +85,8 @@ class TranslateRankerImplTest : public ::testing::Test {
 TranslateRankerImplTest::TranslateRankerImplTest() = default;
 
 void TranslateRankerImplTest::InitFeatures(
-    const std::initializer_list<base::Feature>& enabled,
-    const std::initializer_list<base::Feature>& disabled) {
+    const std::vector<base::test::FeatureRef>& enabled,
+    const std::vector<base::test::FeatureRef>& disabled) {
   scoped_feature_list_.InitWithFeatures(enabled, disabled);
 }
 
@@ -416,7 +416,7 @@ TEST_F(TranslateRankerImplTest, RecordAndFlushEvents) {
   EXPECT_EQ(2u, entries.size());
   bool has_kUkmSourceId0 = false;
   bool has_kUkmSourceId1 = false;
-  for (const auto* entry : entries) {
+  for (const ukm::mojom::UkmEntry* entry : entries) {
     if (entry->source_id == kUkmSourceId0)
       has_kUkmSourceId0 = true;
     if (entry->source_id == kUkmSourceId1)

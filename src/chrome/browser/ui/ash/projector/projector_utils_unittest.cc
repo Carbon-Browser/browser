@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,13 @@
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
 #include "base/command_line.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/prefs/browser_prefs.h"
+#include "chrome/test/base/fake_gaia_mixin.h"
+#include "chrome/test/base/scoped_testing_local_state.h"
+#include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/account_id/account_id.h"
 #include "components/prefs/pref_service.h"
@@ -33,49 +36,34 @@ namespace {
 
 constexpr char kTestGaiaId[] = "1234567890";
 
-class FakeUserManagerWithLocalState : public ash::FakeChromeUserManager {
- public:
-  FakeUserManagerWithLocalState()
-      : test_local_state_(std::make_unique<TestingPrefServiceSimple>()) {
-    RegisterPrefs(test_local_state_->registry());
-  }
-
-  FakeUserManagerWithLocalState(const FakeUserManagerWithLocalState&) = delete;
-  FakeUserManagerWithLocalState& operator=(
-      const FakeUserManagerWithLocalState&) = delete;
-
- private:
-  std::unique_ptr<TestingPrefServiceSimple> test_local_state_;
-};
-
 class ScopedLogIn {
  public:
   ScopedLogIn(
-      FakeUserManagerWithLocalState* fake_user_manager,
+      ash::FakeChromeUserManager* fake_user_manager,
       const AccountId& account_id,
-      user_manager::UserType user_type = user_manager::USER_TYPE_REGULAR)
+      user_manager::UserType user_type = user_manager::UserType::kRegular)
       : fake_user_manager_(fake_user_manager), account_id_(account_id) {
     // Prevent access to DBus. This switch is reset in case set from test SetUp
     // due massive usage of InitFromArgv.
     base::CommandLine& command_line = *base::CommandLine::ForCurrentProcess();
-    if (!command_line.HasSwitch(switches::kTestType))
+    if (!command_line.HasSwitch(switches::kTestType)) {
       command_line.AppendSwitch(switches::kTestType);
+    }
 
     switch (user_type) {
-      case user_manager::USER_TYPE_REGULAR:  // fallthrough
-      case user_manager::USER_TYPE_ACTIVE_DIRECTORY:
+      case user_manager::UserType::kRegular:  // fallthrough
         LogIn();
         break;
-      case user_manager::USER_TYPE_PUBLIC_ACCOUNT:
+      case user_manager::UserType::kPublicAccount:
         LogInAsPublicAccount();
         break;
-      case user_manager::USER_TYPE_ARC_KIOSK_APP:
-        LogInArcKioskApp();
+      case user_manager::UserType::kWebKioskApp:
+        LogInWebKioskApp();
         break;
-      case user_manager::USER_TYPE_CHILD:
+      case user_manager::UserType::kChild:
         LogInChildUser();
         return;
-      case user_manager::USER_TYPE_GUEST:
+      case user_manager::UserType::kGuest:
         LogInGuestUser();
         return;
       default:
@@ -99,8 +87,8 @@ class ScopedLogIn {
     fake_user_manager_->LoginUser(account_id_);
   }
 
-  void LogInArcKioskApp() {
-    fake_user_manager_->AddArcKioskAppUser(account_id_);
+  void LogInWebKioskApp() {
+    fake_user_manager_->AddWebKioskAppUser(account_id_);
     fake_user_manager_->LoginUser(account_id_);
   }
 
@@ -114,7 +102,7 @@ class ScopedLogIn {
     fake_user_manager_->LoginUser(account_id_);
   }
 
-  FakeUserManagerWithLocalState* fake_user_manager_;
+  raw_ptr<ash::FakeChromeUserManager> fake_user_manager_;
   const AccountId account_id_;
 };
 
@@ -122,7 +110,7 @@ class ScopedLogIn {
 
 class ProjectorUtilsTest : public testing::Test {
  public:
-  ProjectorUtilsTest() : scoped_feature_list_(features::kProjector) {}
+  ProjectorUtilsTest() = default;
   ProjectorUtilsTest(const ProjectorUtilsTest&) = delete;
   ProjectorUtilsTest& operator=(const ProjectorUtilsTest&) = delete;
   ~ProjectorUtilsTest() override = default;
@@ -130,32 +118,31 @@ class ProjectorUtilsTest : public testing::Test {
   void SetUp() override {
     ASSERT_TRUE(data_dir_.CreateUniqueTempDir());
 
-    user_manager_enabler_ = std::make_unique<user_manager::ScopedUserManager>(
-        std::make_unique<FakeUserManagerWithLocalState>());
+    user_manager_.Reset(std::make_unique<ash::FakeChromeUserManager>());
 
     std::unique_ptr<sync_preferences::TestingPrefServiceSyncable> prefs =
         std::make_unique<sync_preferences::TestingPrefServiceSyncable>();
     RegisterUserProfilePrefs(prefs->registry());
     TestingProfile::Builder builder;
     builder.SetPrefService(std::move(prefs));
-    if (is_child())
+    if (is_child()) {
       builder.SetIsSupervisedProfile();
+    }
     builder.OverridePolicyConnectorIsManagedForTesting(is_managed());
     profile_ = builder.Build();
   }
 
   void TearDown() override {
     ui::DeviceDataManager::DeleteInstance();
-    user_manager_enabler_.reset();
+    user_manager_.Reset();
     profile_.reset();
   }
 
   TestingProfile* profile() { return profile_.get(); }
   PrefService* GetPrefs() { return profile_->GetPrefs(); }
 
-  FakeUserManagerWithLocalState* GetFakeUserManager() const {
-    return static_cast<FakeUserManagerWithLocalState*>(
-        user_manager::UserManager::Get());
+  ash::FakeChromeUserManager* GetFakeUserManager() const {
+    return user_manager_.Get();
   }
 
   virtual bool is_child() const { return false; }
@@ -163,11 +150,12 @@ class ProjectorUtilsTest : public testing::Test {
   virtual bool is_managed() const { return false; }
 
  private:
+  ScopedTestingLocalState local_state_{TestingBrowserProcess::GetGlobal()};
   content::BrowserTaskEnvironment task_environment_;
   base::ScopedTempDir data_dir_;
-  std::unique_ptr<user_manager::ScopedUserManager> user_manager_enabler_;
+  user_manager::TypedScopedUserManager<ash::FakeChromeUserManager>
+      user_manager_;
   std::unique_ptr<TestingProfile> profile_;
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 class ProjectorUtilsChildTest : public ProjectorUtilsTest {
@@ -209,40 +197,31 @@ TEST_F(ProjectorUtilsManagedTest, IsProjectorAllowedForProfile_ManagedAccount) {
   EXPECT_TRUE(IsProjectorAllowedForProfile(profile()));
 }
 
-TEST_F(ProjectorUtilsTest, IsProjectorAllowedForProfile_ActiveDirectory) {
-  ScopedLogIn login(GetFakeUserManager(),
-                    AccountId::AdFromUserEmailObjGuid(
-                        profile()->GetProfileUserName(), "<obj_guid>"),
-                    user_manager::USER_TYPE_ACTIVE_DIRECTORY);
-  EXPECT_FALSE(IsProjectorAllowedForProfile(profile()));
-}
-
 TEST_F(ProjectorUtilsChildTest, IsProjectorAllowedForProfile_ChildUser) {
   ScopedLogIn login(GetFakeUserManager(),
                     AccountId::FromUserEmailGaiaId(
                         profile()->GetProfileUserName(), kTestGaiaId),
-                    user_manager::USER_TYPE_CHILD);
+                    user_manager::UserType::kChild);
 
   EXPECT_TRUE(IsProjectorAllowedForProfile(profile()));
 }
 
 TEST_F(ProjectorUtilsTest, IsProjectorAllowedForProfile_GuestAccount) {
-  ScopedLogIn login(GetFakeUserManager(),
-                    GetFakeUserManager()->GetGuestAccountId(),
-                    user_manager::USER_TYPE_GUEST);
+  ScopedLogIn login(GetFakeUserManager(), user_manager::GuestAccountId(),
+                    user_manager::UserType::kGuest);
   EXPECT_FALSE(IsProjectorAllowedForProfile(profile()));
 }
 
 TEST_F(ProjectorUtilsTest, IsProjectorAllowedForProfile_DemoAccount) {
   ScopedLogIn login(GetFakeUserManager(), user_manager::DemoAccountId(),
-                    user_manager::USER_TYPE_PUBLIC_ACCOUNT);
+                    user_manager::UserType::kPublicAccount);
   EXPECT_FALSE(IsProjectorAllowedForProfile(profile()));
 }
 
 TEST_F(ProjectorUtilsTest, IsProjectorAllowedForProfile_KioskAppAccount) {
   ScopedLogIn login(GetFakeUserManager(),
                     AccountId::FromUserEmail(profile()->GetProfileUserName()),
-                    user_manager::USER_TYPE_ARC_KIOSK_APP);
+                    user_manager::UserType::kWebKioskApp);
   EXPECT_FALSE(IsProjectorAllowedForProfile(profile()));
 }
 
@@ -261,40 +240,31 @@ TEST_F(ProjectorUtilsManagedTest, IsProjectorAppEnabled_ManagedAccount) {
   EXPECT_TRUE(IsProjectorAppEnabled(profile()));
 }
 
-TEST_F(ProjectorUtilsTest, IsProjectorAppEnabled_ActiveDirectory) {
-  ScopedLogIn login(GetFakeUserManager(),
-                    AccountId::AdFromUserEmailObjGuid(
-                        profile()->GetProfileUserName(), "<obj_guid>"),
-                    user_manager::USER_TYPE_ACTIVE_DIRECTORY);
-  EXPECT_FALSE(IsProjectorAppEnabled(profile()));
-}
-
 TEST_F(ProjectorUtilsChildTest, IsProjectorAppEnabled_ChildUser) {
   ScopedLogIn login(GetFakeUserManager(),
                     AccountId::FromUserEmailGaiaId(
                         profile()->GetProfileUserName(), kTestGaiaId),
-                    user_manager::USER_TYPE_CHILD);
+                    user_manager::UserType::kChild);
 
   EXPECT_TRUE(IsProjectorAppEnabled(profile()));
 }
 
 TEST_F(ProjectorUtilsTest, IsProjectorAppEnabled_GuestAccount) {
-  ScopedLogIn login(GetFakeUserManager(),
-                    GetFakeUserManager()->GetGuestAccountId(),
-                    user_manager::USER_TYPE_GUEST);
+  ScopedLogIn login(GetFakeUserManager(), user_manager::GuestAccountId(),
+                    user_manager::UserType::kGuest);
   EXPECT_FALSE(IsProjectorAppEnabled(profile()));
 }
 
 TEST_F(ProjectorUtilsTest, IsProjectorAppEnabled_DemoAccount) {
   ScopedLogIn login(GetFakeUserManager(), user_manager::DemoAccountId(),
-                    user_manager::USER_TYPE_PUBLIC_ACCOUNT);
+                    user_manager::UserType::kPublicAccount);
   EXPECT_FALSE(IsProjectorAppEnabled(profile()));
 }
 
 TEST_F(ProjectorUtilsTest, IsProjectorAppEnabled_KioskAppAccount) {
   ScopedLogIn login(GetFakeUserManager(),
                     AccountId::FromUserEmail(profile()->GetProfileUserName()),
-                    user_manager::USER_TYPE_ARC_KIOSK_APP);
+                    user_manager::UserType::kWebKioskApp);
   EXPECT_FALSE(IsProjectorAppEnabled(profile()));
 }
 

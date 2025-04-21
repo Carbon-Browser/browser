@@ -28,7 +28,6 @@
 <translation id="2329392777730037872">සේවාලාභියා මත <ph name="URL" /> විවෘත කිරීම අසාර්ථක විය.</translation>
 <translation id="2359808026110333948">කරගෙන යන්න</translation>
 <translation id="2366718077645204424">අනුග්‍රාහක වෙත ළඟා විය නොහැකි විය. මීට හේතු විය හැක්කේ ඔබ භාවිතා කරන ජාලයේ වින්‍යාසකරණය වේ.</translation>
-<translation id="2370754117186920852"><ph name="OPTIONAL_OFFLINE_REASON" />  අවසන් වරට සබැඳිව දැක්කේ <ph name="RELATIVE_TIMESTAMP" />.</translation>
 <translation id="2504109125669302160"><ph name="PRODUCT_NAME" /> ට 'ප්‍රවේශ්‍යතා' අවසර දෙන්න</translation>
 <translation id="2509394361235492552"><ph name="HOSTNAME" /> වෙත සම්බන්ධ විය</translation>
 <translation id="2540992418118313681">මෙම පරිගණකය බැලීමට හා පාලනයට වෙනත් පරිශීලකයකු හා බෙදාගැනීමට කැමතිද?</translation>
@@ -36,7 +35,6 @@
 <translation id="2599300881200251572">මෙම සේවාව Chrome දුරස්ථ වැඩතල සේවාලාභින්ගෙන් එන සබැඳුම් සබල කරයි.</translation>
 <translation id="2647232381348739934">Chromoting සේවය</translation>
 <translation id="2676780859508944670">සිදුවෙමින් පවතී…</translation>
-<translation id="2692522824157224199">ප්‍රකාශන හිමිකම 2022 Google LLC. සියලු හිමිකම් ඇවිරිණි.</translation>
 <translation id="2699970397166997657">Chromoting</translation>
 <translation id="2758123043070977469">සත්‍යාපනය කිරීමේ ගැටලුවක් විය, නැවත පුරන්න.</translation>
 <translation id="2803375539583399270">PIN අංකය ඇතුළත් කරන්න</translation>
@@ -54,7 +52,6 @@
 <translation id="3423542133075182604">ආරක්ෂිත යතුරු දුරස්ථකරණ ක්‍රියාවලිය</translation>
 <translation id="3581045510967524389">ජාලය වෙත සම්බන්ධ කළ නොහැකි විය. උපාංගය ඔන්ලයින් තිබේදැයි පරීක්ෂා කරන්න.</translation>
 <translation id="3596628256176442606">මෙම සේවාව Chromoting සේවාලාභීන් වෙතින් ලැබෙන සබඳතා සක්‍රීය කරයි.</translation>
-<translation id="369442766917958684">නොබැඳි</translation>
 <translation id="3695446226812920698">කෙසේදැයි දැන ගන්න</translation>
 <translation id="3776024066357219166">ඔබේ  Chrome දුරස්ථ වැඩබිම් වාරය අවසන් විය.</translation>
 <translation id="3858860766373142691">නම</translation>
@@ -73,7 +70,6 @@
 <translation id="4257751272692708833"><ph name="PRODUCT_NAME" /> URL යොමු කරන්නා</translation>
 <translation id="4277736576214464567">ප්‍රවේශ කේතය වැරදියි. නැවත උත්සාහ කරන්න.</translation>
 <translation id="4281844954008187215">සේවා කොන්දේසි</translation>
-<translation id="4372650392690220936">ප්‍රකාශන හිමිකම 2022 Chromium කර්තෘවරුන්. සියලු හිමිකම් ඇවිරිණි.</translation>
 <translation id="4405930547258349619">ප්‍රධාන පුස්තකාලය</translation>
 <translation id="443560535555262820">ප්‍රවේශ්‍යතා මනාප විවෘත කරන්න</translation>
 <translation id="4450893287417543264">නැවත නොපෙන්වන්න</translation>
@@ -107,7 +103,6 @@
 <translation id="5601503069213153581">PIN</translation>
 <translation id="5690427481109656848">Google LLC</translation>
 <translation id="5708869785009007625">ඔබේ වැඩබිම දැනට <ph name="USER" /> සමඟ බෙදාගෙන ඇත.</translation>
-<translation id="5750083143895808682"><ph name="EMAIL_ADDRESS" /> ලෙස පුරනය වී ඇත.</translation>
 <translation id="579702532610384533">නැවත සම්බන්ධ කරන්න</translation>
 <translation id="5810269635982033450">තිරය ​​ට්‍රැක්පැඩයක් මෙන් ක්‍රියා කරයි</translation>
 <translation id="5823554426827907568"><ph name="CLIENT_USERNAME" /> ඔබගේ තිරය දැකීමට සහ ඔබගේ යතුරුපුවරුව සහ මූසිකය පාලනය කිරීමට ප්‍රවේශය ඉල්ලා ඇත. ඔබ මෙම ඉල්ලීම බලාපොරොත්තු නොවන්නේ නම් ''<ph name="IDS_SHARE_CONFIRM_DIALOG_DECLINE" />'' ඔබන්න. එසේ නැතිනම් සූදානම් විට සම්බන්ධතාව ඉඩ දීමට ''<ph name="IDS_SHARE_CONFIRM_DIALOG_CONFIRM" />'' තෝරන්න.</translation>
@@ -154,6 +149,7 @@
 <translation id="7693372326588366043">සත්කාරක ලැයිස්තුව නැවුම් කරන්න</translation>
 <translation id="7714222945760997814">මෙය වාර්තා කරන්න</translation>
 <translation id="7868137160098754906">දුරස්ත පරිගණකය සඳහා කරුණාකර PIN ඇතුළු කරන්න.</translation>
+<translation id="7881455334687220899">ප්‍රකාශන හිමිකම 2024 Chromium කර්තෘවරුන්. සියලු හිමිකම් ඇවිරිණි.</translation>
 <translation id="7895403300744144251">දුරස්ථ පරිගණකය මත ආරක්ෂක ප්‍රතිපත්ති ඔබේ ගිණුම වෙතින් වන සබැඳුම් සඳහා ඉඩ නොදේ.</translation>
 <translation id="7936528439960309876">දකුණට ඈඳන්න</translation>
 <translation id="7970576581263377361">තහවුරු කර ගැනීම අසාර්ථක විය. කරුණාකර නැවත Chromium වෙත පුරන්න.</translation>
@@ -185,6 +181,7 @@
 <translation id="8747048596626351634">සැසිවාරය බිඳ වැටුණි හෝ ඇරඹීමට අසමත් විය. ~/.chrome-remote-desktop-session දුරස්ථ පරිගණකයේ පවතී නම්, එය ඩෙස්ක්ටොප් පරිසරයක් හෝ කවුළු කළමනාකරු වැනි දිගු-ධාවන පෙරබිම් ක්‍රියාවලියක් අරඹන බවට වග බලා ගන්න.</translation>
 <translation id="8804164990146287819">පුද්ගලිකත්ව ප්‍රතිපත්තිය</translation>
 <translation id="8906511416443321782">ශ්‍රව්‍ය ග්‍රහණය කර එය Chrome දුරස්ථ ඩෙස්ක්ටොප් සේවාලාභියා වෙත ප්‍රවාහ කිරීමට මයික්‍රෆෝන ප්‍රවේශය අවශ්‍ය වේ.</translation>
+<translation id="9042277333359847053">ප්‍රකාශන හිමිකම 2024 Google LLC. සියලු හිමිකම් ඇවිරිණි.</translation>
 <translation id="9111855907838866522">ඔබ ඔබේ දුරස්ථ උපාංගයට සම්බන්ධ වී ඇත. මෙනුව විවෘත කිරීම සඳහා, ඇඟිලි හතරකින් තිරය තට්ටු කරන්න.</translation>
 <translation id="9126115402994542723">මෙම ධාරකය සඳහා මෙම උපාංගය සබඳ වීමේදී මින්පසු PIN අංකය නොවිමසන්න.</translation>
 <translation id="916856682307586697">පෙරනිමි XSession දියත් කරන්න</translation>

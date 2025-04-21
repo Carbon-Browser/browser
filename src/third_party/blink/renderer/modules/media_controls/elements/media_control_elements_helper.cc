@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -93,7 +93,7 @@ gfx::Size MediaControlElementsHelper::GetSizeOrDefault(
 
   float zoom_factor = 1.0f;
   if (const LocalFrame* frame = element.GetDocument().GetFrame())
-    zoom_factor = frame->PageZoomFactor();
+    zoom_factor = frame->LayoutZoomFactor();
   return gfx::Size(round(box->LogicalWidth() / zoom_factor),
                    round(box->LogicalHeight() / zoom_factor));
 }
@@ -104,7 +104,7 @@ HTMLDivElement* MediaControlElementsHelper::CreateDivWithId(
     ContainerNode* parent) {
   DCHECK(parent);
   auto* element = MakeGarbageCollected<HTMLDivElement>(parent->GetDocument());
-  element->setAttribute("id", id);
+  element->SetIdAttribute(id);
   parent->ParserAppendChild(element);
   return element;
 }

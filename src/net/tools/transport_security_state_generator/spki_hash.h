@@ -1,13 +1,14 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef NET_TOOLS_TRANSPORT_SECURITY_STATE_GENERATOR_SPKI_HASH_H_
 #define NET_TOOLS_TRANSPORT_SECURITY_STATE_GENERATOR_SPKI_HASH_H_
 
+#include <stddef.h>
 #include <stdint.h>
 
-#include "base/strings/string_piece.h"
+#include <string_view>
 
 namespace net::transport_security_state {
 
@@ -22,7 +23,7 @@ class SPKIHash {
   // SPKI hashes are SHA256. Other algorithms are not supported. Returns true
   // on success and copies the decoded bytes to |data_|. Returns false on
   // failure.
-  bool FromString(base::StringPiece hash_string);
+  bool FromString(std::string_view hash_string);
 
   // Calculates the SHA256 digest over |*input| and copies the result to
   // |data_|.

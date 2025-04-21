@@ -44,13 +44,8 @@ import random
 import signal
 import sys
 import time
-import traceback
-
-from six.moves import range
 
 from blinkpy.common import exit_codes
-from blinkpy.common import path_finder
-from blinkpy.common.net.file_uploader import FileUploader
 from blinkpy.common.path_finder import PathFinder
 from blinkpy.tool import grammar
 from blinkpy.web_tests.controllers.test_result_sink import CreateTestResultSink
@@ -168,17 +163,7 @@ class Manager(object):
         should_retry_failures = self._options.num_retries > 0
 
         try:
-            if not self._port.host.platform.is_win():
-                _pid = os.getpid()
-                def sighandler(signum, frame):
-                    self._printer.write_update("Received SIGTERM in %d" % os.getpid())
-                    message = ''.join(traceback.format_stack(frame))
-                    self._printer.write_update(message)
-                    if os.getpid() == _pid:
-                        os.killpg(os.getpgrp(), signal.SIGINT)
-                    else:
-                        os.kill(os.getpid(), signal.SIGINT)
-                signal.signal(signal.SIGTERM, sighandler)
+            self._register_termination_handler()
             self._start_servers(tests_to_run)
             if self._options.watch:
                 run_results = self._run_test_loop(tests_to_run, tests_to_skip)
@@ -204,13 +189,18 @@ class Manager(object):
 
         self._printer.write_update('Summarizing results ...')
         summarized_full_results = test_run_results.summarize_results(
-            self._port, self._expectations, initial_results, all_retry_results)
+            self._port, self._options, self._expectations, initial_results,
+            all_retry_results)
         summarized_failing_results = test_run_results.summarize_results(
             self._port,
+            self._options,
             self._expectations,
             initial_results,
             all_retry_results,
             only_include_failing=True)
+        run_histories = test_run_results.test_run_histories(
+            self._options, self._expectations, initial_results,
+            all_retry_results)
 
         exit_code = summarized_failing_results['num_regressions']
         if exit_code > exit_codes.MAX_FAILURES_EXIT_STATUS:
@@ -221,13 +211,12 @@ class Manager(object):
         if not self._options.dry_run:
             self._write_json_files(summarized_full_results,
                                    summarized_failing_results, initial_results,
-                                   running_all_tests)
-
-            self._upload_json_files()
+                                   running_all_tests, run_histories)
 
             self._copy_results_html_file(self._artifacts_directory,
                                          'results.html')
-            if initial_results.keyboard_interrupted:
+            if (initial_results.interrupt_reason is
+                    test_run_results.InterruptReason.EXTERNAL_SIGNAL):
                 exit_code = exit_codes.INTERRUPTED_EXIT_STATUS
             else:
                 if initial_results.interrupted:
@@ -243,6 +232,19 @@ class Manager(object):
         return test_run_results.RunDetails(exit_code, summarized_full_results,
                                            summarized_failing_results,
                                            initial_results, all_retry_results)
+
+    def _register_termination_handler(self):
+        if self._port.host.platform.is_win():
+            signum = signal.SIGBREAK
+        else:
+            signum = signal.SIGTERM
+        signal.signal(signum, self._on_termination)
+
+    def _on_termination(self, signum, _frame):
+        self._printer.write_update(
+            'Received signal "%s" (%d) in %d' %
+            (signal.strsignal(signum), signum, os.getpid()))
+        raise KeyboardInterrupt
 
     def _run_test_loop(self, tests_to_run, tests_to_skip):
         # Don't show results in a new browser window because we're already
@@ -279,9 +281,8 @@ class Manager(object):
             self._options.iterations, num_workers)
 
         # Don't retry failures when interrupted by user or failures limit exception.
-        should_retry_failures = should_retry_failures and not (
-            initial_results.interrupted
-            or initial_results.keyboard_interrupted)
+        should_retry_failures = (should_retry_failures
+                                 and not initial_results.interrupted)
 
         tests_to_retry = self._tests_to_retry(initial_results)
         all_retry_results = []
@@ -322,7 +323,10 @@ class Manager(object):
     def _collect_tests(self, args):
         return self._finder.find_tests(
             args,
-            filter_files=self._options.test_list,
+            test_lists=self._options.test_list,
+            filter_files=self._options.isolated_script_test_filter_file,
+            inverted_filter_files=self._options.
+            inverted_test_launcher_filter_file,
             fastest_percentile=self._options.fastest,
             filters=self._options.isolated_script_test_filter)
 
@@ -382,48 +386,6 @@ class Manager(object):
         return any(
             self._is_http_test(test_name) for test_name in test_names)
 
-    def _rename_results_folder(self):
-        try:
-            timestamp = time.strftime(
-                "%Y-%m-%d-%H-%M-%S",
-                time.localtime(
-                    self._filesystem.mtime(
-                        self._filesystem.join(self._artifacts_directory,
-                                              'results.html'))))
-        except (IOError, OSError) as error:
-            # It might be possible that results.html was not generated in previous run, because the test
-            # run was interrupted even before testing started. In those cases, don't archive the folder.
-            # Simply override the current folder contents with new results.
-            import errno
-            if error.errno in (errno.EEXIST, errno.ENOENT):
-                self._printer.write_update(
-                    'No results.html file found in previous run, skipping it.')
-            return None
-        archived_name = ''.join((self._filesystem.basename(
-            self._artifacts_directory), '_', timestamp))
-        archived_path = self._filesystem.join(
-            self._filesystem.dirname(self._artifacts_directory), archived_name)
-        self._filesystem.move(self._artifacts_directory, archived_path)
-
-    def _delete_dirs(self, dir_list):
-        for dir_path in dir_list:
-            self._filesystem.rmtree(dir_path)
-
-    def _limit_archived_results_count(self):
-        results_directory_path = self._filesystem.dirname(
-            self._artifacts_directory)
-        file_list = self._filesystem.listdir(results_directory_path)
-        results_directories = []
-        for name in file_list:
-            file_path = self._filesystem.join(results_directory_path, name)
-            if (self._filesystem.isdir(file_path)
-                    and self._artifacts_directory in file_path):
-                results_directories.append(file_path)
-        results_directories.sort(key=self._filesystem.mtime)
-        self._printer.write_update('Clobbering excess archived results in %s' %
-                                   results_directory_path)
-        self._delete_dirs(results_directories[:-self.ARCHIVED_RESULTS_LIMIT])
-
     def _set_up_run(self, test_names):
         self._printer.write_update('Checking build ...')
         if self._options.build:
@@ -434,11 +396,11 @@ class Manager(object):
                 return exit_code
 
         if self._options.clobber_old_results:
-            self._clobber_old_results()
+            self._port.clobber_old_results()
         elif self._filesystem.exists(self._artifacts_directory):
-            self._limit_archived_results_count()
+            self._port.limit_archived_results_count()
             # Rename the existing results folder for archiving.
-            self._rename_results_folder()
+            self._port.rename_results_folder()
 
         # Create the output directory if it doesn't already exist.
         self._port.host.filesystem.maybe_make_directory(
@@ -581,25 +543,6 @@ class Manager(object):
             test_to_crash_failure[test].create_artifacts(
                 test_result.artifacts, force_overwrite=True)
 
-    def _clobber_old_results(self):
-        dir_above_results_path = self._filesystem.dirname(
-            self._artifacts_directory)
-        self._printer.write_update(
-            'Clobbering old results in %s.' % dir_above_results_path)
-        if not self._filesystem.exists(dir_above_results_path):
-            return
-        file_list = self._filesystem.listdir(dir_above_results_path)
-        results_directories = []
-        for name in file_list:
-            file_path = self._filesystem.join(dir_above_results_path, name)
-            if (self._filesystem.isdir(file_path)
-                    and self._artifacts_directory in file_path):
-                results_directories.append(file_path)
-        self._delete_dirs(results_directories)
-
-        # Port specific clean-up.
-        self._port.clobber_old_port_specific_results()
-
     def _tests_to_retry(self, run_results):
         # TODO(ojan): This should also check that result.type != test_expectations.MISSING
         # since retrying missing expectations is silly. But that's a bit tricky since we
@@ -612,7 +555,7 @@ class Manager(object):
 
     def _write_json_files(self, summarized_full_results,
                           summarized_failing_results, initial_results,
-                          running_all_tests):
+                          running_all_tests, run_histories):
         _log.debug("Writing JSON files in %s.", self._artifacts_directory)
 
         # FIXME: Upload stats.json to the server and delete times_ms.
@@ -648,82 +591,40 @@ class Manager(object):
             summarized_full_results,
             full_results_jsonp_path,
             callback='ADD_FULL_RESULTS')
-        full_results_path = self._filesystem.join(self._artifacts_directory,
-                                                  'failing_results.json')
+        failing_results_path = self._filesystem.join(self._artifacts_directory,
+                                                     'failing_results.json')
         # We write failing_results.json out as jsonp because we need to load it
         # from a file url for results.html and Chromium doesn't allow that.
         json_results_generator.write_json(
             self._filesystem,
             summarized_failing_results,
-            full_results_path,
+            failing_results_path,
             callback='ADD_RESULTS')
 
-        # Write out the JSON files suitable for other tools to process.
-        # As the output can be quite large (as there are 60k+ tests) we also
-        # support only outputting the failing results.
-        if self._options.json_failing_test_results:
-            # FIXME(tansell): Make sure this includes an *unexpected* results
-            # (IE Passing when expected to be failing.)
-            json_results_generator.write_json(
-                self._filesystem, summarized_failing_results,
-                self._options.json_failing_test_results)
         if self._options.json_test_results:
             json_results_generator.write_json(self._filesystem,
                                               summarized_full_results,
                                               self._options.json_test_results)
+        if self._options.write_run_histories_to:
+            json_results_generator.write_json(
+                self._filesystem, run_histories,
+                self._options.write_run_histories_to)
 
         _log.debug('Finished writing JSON files.')
 
-    def _upload_json_files(self):
-        if not self._options.test_results_server:
-            return
-
-        if not self._options.master_name:
-            _log.error(
-                '--test-results-server was set, but --master-name was not.  Not uploading JSON files.'
-            )
-            return
-
-        _log.debug('Uploading JSON files for builder: %s',
-                   self._options.builder_name)
-        attrs = [('builder', self._options.builder_name),
-                 ('testtype', self._options.step_name),
-                 ('master', self._options.master_name)]
-
-        files = [
-            (name, self._filesystem.join(self._artifacts_directory, name))
-            for name in
-            ['failing_results.json', 'full_results.json', 'times_ms.json']
-        ]
-
-        url = 'https://%s/testfile/upload' % self._options.test_results_server
-        # Set uploading timeout in case appengine server is having problems.
-        # 120 seconds are more than enough to upload test results.
-        uploader = FileUploader(url, 120)
-        try:
-            response = uploader.upload_as_multipart_form_data(
-                self._filesystem, files, attrs)
-            if response:
-                if response.code == 200:
-                    _log.debug('JSON uploaded.')
-                else:
-                    _log.debug('JSON upload failed, %d: "%s"', response.code,
-                               response.read())
-            else:
-                _log.error('JSON upload failed; no response returned')
-        except IOError as err:
-            _log.error('Upload failed: %s', err)
-
     def _copy_results_html_file(self, destination_dir, filename):
         """Copies a file from the template directory to the results directory."""
-        template_dir = self._path_finder.path_from_web_tests('fast', 'harness')
-        source_path = self._filesystem.join(template_dir, filename)
-        destination_path = self._filesystem.join(destination_dir, filename)
-        # Note that the results.html template file won't exist when
-        # we're using a MockFileSystem during unit tests, so make sure
-        # it exists before we try to copy it.
-        if self._filesystem.exists(source_path):
-            self._filesystem.copyfile(source_path, destination_path)
+        files_to_copy = [filename, filename + ".version"]
+        template_dir = self._path_finder.path_from_blink_tools(
+            'blinkpy', 'web_tests')
+        for filename in files_to_copy:
+            source_path = self._filesystem.join(template_dir, filename)
+            destination_path = self._filesystem.join(destination_dir, filename)
+            # Note that the results.html template file won't exist when
+            # we're using a MockFileSystem during unit tests, so make sure
+            # it exists before we try to copy it.
+            if self._filesystem.exists(source_path):
+                self._filesystem.copyfile(source_path, destination_path)
 
     def _stats_trie(self, initial_results):
         def _worker_number(worker_name):

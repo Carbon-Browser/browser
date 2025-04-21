@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,22 +6,20 @@
 
 #include "base/metrics/histogram_macros.h"
 #include "chromeos/ash/components/network/managed_network_configuration_handler.h"
-#include "chromeos/ash/components/network/network_event_log.h"
 #include "chromeos/ash/components/network/network_state_handler.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace {
 
 // Checks whether the current logged in user type is an owner or regular.
-bool IsLoggedInUserOwnerOrRegular() {
+bool IsLoggedInUserRegular() {
   if (!LoginState::IsInitialized())
     return false;
 
   LoginState::LoggedInUserType user_type =
       LoginState::Get()->GetLoggedInUserType();
-  return user_type == LoginState::LoggedInUserType::LOGGED_IN_USER_OWNER ||
-         user_type == LoginState::LoggedInUserType::LOGGED_IN_USER_REGULAR;
+  return user_type == LoginState::LoggedInUserType::LOGGED_IN_USER_REGULAR;
 }
 
 void LogBlockNonManagedCellularHistogram(bool allow_only_managed_cellular) {
@@ -64,11 +62,6 @@ void ESimPolicyLoginMetricsLogger::RecordBlockNonManagedCellularBehavior(
 ESimPolicyLoginMetricsLogger::ESimPolicyLoginMetricsLogger() = default;
 
 ESimPolicyLoginMetricsLogger::~ESimPolicyLoginMetricsLogger() {
-  if (network_state_handler_) {
-    network_state_handler_->RemoveObserver(this, FROM_HERE);
-    network_state_handler_ = nullptr;
-  }
-
   if (initialized_ && LoginState::IsInitialized()) {
     LoginState::Get()->RemoveObserver(this);
   }
@@ -80,7 +73,7 @@ void ESimPolicyLoginMetricsLogger::Init(
   network_state_handler_ = network_state_handler;
   managed_network_configuration_handler_ =
       managed_network_configuration_handler;
-  network_state_handler_->AddObserver(this, FROM_HERE);
+  network_state_handler_observer_.Observe(network_state_handler_.get());
 
   if (LoginState::IsInitialized())
     LoginState::Get()->AddObserver(this);
@@ -92,8 +85,9 @@ void ESimPolicyLoginMetricsLogger::Init(
 }
 
 void ESimPolicyLoginMetricsLogger::LoggedInStateChanged() {
-  if (!IsLoggedInUserOwnerOrRegular())
+  if (!IsLoggedInUserRegular()) {
     return;
+  }
 
   is_metrics_logged_ = false;
   if (is_cellular_available_)
@@ -107,8 +101,9 @@ void ESimPolicyLoginMetricsLogger::LogESimPolicyStatusAtLogin() {
   // Only collect the metrics on cellular capable device.
   is_cellular_available_ = !device_list.empty();
   if (!is_cellular_available_ || is_metrics_logged_ ||
-      !IsLoggedInUserOwnerOrRegular() || !is_enterprise_managed_)
+      !IsLoggedInUserRegular() || !is_enterprise_managed_) {
     return;
+  }
 
   LogBlockNonManagedCellularHistogram(managed_network_configuration_handler_
                                           ->AllowOnlyPolicyCellularNetworks());
@@ -148,6 +143,10 @@ void ESimPolicyLoginMetricsLogger::DeviceListChanged() {
       &ESimPolicyLoginMetricsLogger::LogESimPolicyStatusAtLogin);
 }
 
+void ESimPolicyLoginMetricsLogger::OnShuttingDown() {
+  network_state_handler_observer_.Reset();
+}
+
 void ESimPolicyLoginMetricsLogger::SetIsEnterpriseManaged(
     bool is_enterprise_managed) {
   is_enterprise_managed_ = is_enterprise_managed;
@@ -173,4 +172,4 @@ ESimPolicyLoginMetricsLogger::GetESimPolicyStatusAtLogin(
   return ESimPolicyStatusAtLogin::kNoCellularNetworks;
 }
 
-}  // namespace chromeos
+}  // namespace ash

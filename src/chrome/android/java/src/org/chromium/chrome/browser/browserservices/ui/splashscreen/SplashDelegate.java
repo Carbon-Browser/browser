@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,9 +15,9 @@ public interface SplashDelegate {
 
     /**
      * Called when splash screen has been hidden.
-     * @param tab
+     *
      * @param startTimestamp Time that the splash screen was shown.
-     * @param endTimestap Time that the splash screen was hidden.
+     * @param endTimestamp Time that the splash screen was hidden.
      */
     void onSplashHidden(Tab tab, long startTimestamp, long endTimestamp);
 

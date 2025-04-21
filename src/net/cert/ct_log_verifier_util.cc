@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,9 +20,8 @@ std::string HashNodes(const std::string& lh, const std::string& rh) {
   hash->Update(lh.data(), lh.size());
   hash->Update(rh.data(), rh.size());
 
-  std::string result;
-  hash->Finish(base::WriteInto(&result, crypto::kSHA256Length + 1),
-               crypto::kSHA256Length);
+  std::string result(crypto::kSHA256Length, '\0');
+  hash->Finish(result.data(), result.size());
   return result;
 }
 

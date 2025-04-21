@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -74,7 +74,7 @@ class TestViewsDelegate : public ViewsDelegate {
   std::unique_ptr<LayoutProvider> layout_provider_ =
       std::make_unique<LayoutProvider>();
 #if BUILDFLAG(IS_CHROMEOS)
-  gfx::NativeWindow context_ = nullptr;
+  gfx::NativeWindow context_ = gfx::NativeWindow();
 #endif
 };
 

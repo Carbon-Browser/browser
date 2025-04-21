@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,33 +22,32 @@ Vector<String> WorkerInternalsFetch::getInternalResponseURLList(
   if (!response)
     return Vector<String>();
   Vector<String> url_list;
-  url_list.ReserveCapacity(response->InternalURLList().size());
+  url_list.reserve(response->InternalURLList().size());
   for (const auto& url : response->InternalURLList())
     url_list.push_back(url);
   return url_list;
 }
 
-ScriptPromise WorkerInternalsFetch::getInitialResourcePriority(
+ScriptPromise<IDLLong> WorkerInternalsFetch::getInitialResourcePriority(
     ScriptState* script_state,
     WorkerInternals& internals,
     const String& url,
     WorkerGlobalScope* worker_global) {
-  ScriptPromiseResolver* resolver =
-      MakeGarbageCollected<ScriptPromiseResolver>(script_state);
-  ScriptPromise promise = resolver->Promise();
+  auto* resolver =
+      MakeGarbageCollected<ScriptPromiseResolver<IDLLong>>(script_state);
+  auto promise = resolver->Promise();
   KURL resource_url = url_test_helpers::ToKURL(url.Utf8());
-  DCHECK(worker_global);
 
-  auto callback = WTF::Bind(&WorkerInternalsFetch::ResolveResourcePriority,
-                            WrapPersistent(resolver));
-  ResourceFetcher::AddPriorityObserverForTesting(resource_url,
-                                                 std::move(callback));
+  auto callback = WTF::BindOnce(&WorkerInternalsFetch::ResolveResourcePriority,
+                                WrapPersistent(resolver));
+  worker_global->Fetcher()->AddPriorityObserverForTesting(resource_url,
+                                                          std::move(callback));
 
   return promise;
 }
 
 void WorkerInternalsFetch::ResolveResourcePriority(
-    ScriptPromiseResolver* resolver,
+    ScriptPromiseResolver<IDLLong>* resolver,
     int resource_load_priority) {
   resolver->Resolve(resource_load_priority);
 }

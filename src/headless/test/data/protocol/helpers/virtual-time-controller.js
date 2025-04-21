@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -76,6 +76,13 @@
    */
   currentFrameTime() {
     return this.virtualTimeBase_ + this.totalElapsedTime_;
+  }
+
+  /**
+   * @return {number} Total virtual time elapsed.
+   */
+  elapsedTime() {
+    return this.totalElapsedTime_;
   }
 
   /**

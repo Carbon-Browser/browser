@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,16 @@
 
 #include <string>
 
-#include "ash/public/cpp/ash_public_export.h"
+#include "ash/ash_export.h"
+
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 
 class SystemTrayClient;
+enum class DeferredUpdateState;
 enum class NotificationStyle;
 enum class UpdateSeverity;
-enum class UpdateType;
 struct DeviceEnterpriseInfo;
 struct LocaleInfo;
 struct RelaunchNotificationState;
@@ -24,7 +26,7 @@ class PhoneHubManager;
 }
 
 // Public interface to control the system tray bubble in ash.
-class ASH_PUBLIC_EXPORT SystemTray {
+class ASH_EXPORT SystemTray {
  public:
   static SystemTray* Get();
 
@@ -78,8 +80,7 @@ class ASH_PUBLIC_EXPORT SystemTray {
   // tooltip or the notification.
   virtual void ShowUpdateIcon(UpdateSeverity severity,
                               bool factory_reset_required,
-                              bool rollback,
-                              UpdateType update_type) = 0;
+                              bool rollback) = 0;
 
   // Changes the update notification in the unified system menu,
   // according to different policies, when there is an update available
@@ -94,12 +95,23 @@ class ASH_PUBLIC_EXPORT SystemTray {
   // when a new update starts before the current update is applied.
   virtual void ResetUpdateState() = 0;
 
+  // Set deferred update state to be either showing a dialog or showing an icon
+  // in the system tray to indicate that a update is downloaded but deferred.
+  virtual void SetUpdateDeferred(DeferredUpdateState state) = 0;
+
   // If |visible| is true, shows an icon in the system tray which indicates that
   // a software update is available but user's agreement is required as current
   // connection is cellular. If |visible| is false, hides the icon because the
   // user's one time permission on update over cellular connection has been
   // granted.
   virtual void SetUpdateOverCellularAvailableIconVisible(bool visible) = 0;
+
+  // Sets whether end of life notice should be shown in quick settings.
+  virtual void SetShowEolNotice(bool show) = 0;
+
+  // Sets whether the extended updates support notice should be shown
+  // in quick settings.
+  virtual void SetShowExtendedUpdatesNotice(bool show) = 0;
 
   // Shows the volume slider bubble shown at the right bottom of screen.
   virtual void ShowVolumeSliderBubble() = 0;
@@ -113,8 +125,8 @@ class ASH_PUBLIC_EXPORT SystemTray {
       phonehub::PhoneHubManager* phone_hub_manager) = 0;
 
  protected:
-  SystemTray();
-  virtual ~SystemTray();
+  SystemTray() = default;
+  virtual ~SystemTray() = default;
 };
 
 }  // namespace ash

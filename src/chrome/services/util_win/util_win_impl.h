@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,6 +45,7 @@ class UtilWinImpl : public chrome::mojom::UtilWin {
                      InspectModuleCallback callback) override;
   void GetAntiVirusProducts(bool report_full_names,
                             GetAntiVirusProductsCallback callback) override;
+  void GetTpmIdentifier(GetTpmIdentifierCallback callback) override;
 
   mojo::Receiver<chrome::mojom::UtilWin> receiver_;
 };

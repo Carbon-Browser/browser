@@ -25,13 +25,41 @@
 
 #include "third_party/blink/renderer/platform/geometry/length.h"
 
+#include <array>
+
 #include "third_party/blink/renderer/platform/geometry/blend.h"
 #include "third_party/blink/renderer/platform/geometry/calculation_value.h"
+#include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
 #include "third_party/blink/renderer/platform/wtf/size_assertions.h"
+#include "third_party/blink/renderer/platform/wtf/static_constructors.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
 namespace blink {
+
+PLATFORM_EXPORT DEFINE_GLOBAL(Length, g_auto_length);
+PLATFORM_EXPORT DEFINE_GLOBAL(Length, g_fill_available_length);
+PLATFORM_EXPORT DEFINE_GLOBAL(Length, g_stretch_length);
+PLATFORM_EXPORT DEFINE_GLOBAL(Length, g_fit_content_length);
+PLATFORM_EXPORT DEFINE_GLOBAL(Length, g_max_content_length);
+PLATFORM_EXPORT DEFINE_GLOBAL(Length, g_min_content_length);
+PLATFORM_EXPORT DEFINE_GLOBAL(Length, g_min_intrinsic_length);
+
+// static
+void Length::Initialize() {
+  new (WTF::NotNullTag::kNotNull, (void*)&g_auto_length) Length(kAuto);
+  new (WTF::NotNullTag::kNotNull, (void*)&g_fill_available_length)
+      Length(kFillAvailable);
+  new (WTF::NotNullTag::kNotNull, (void*)&g_stretch_length) Length(kStretch);
+  new (WTF::NotNullTag::kNotNull, (void*)&g_fit_content_length)
+      Length(kFitContent);
+  new (WTF::NotNullTag::kNotNull, (void*)&g_max_content_length)
+      Length(kMaxContent);
+  new (WTF::NotNullTag::kNotNull, (void*)&g_min_content_length)
+      Length(kMinContent);
+  new (WTF::NotNullTag::kNotNull, (void*)&g_min_intrinsic_length)
+      Length(kMinIntrinsic);
+}
 
 class CalculationValueHandleMap {
   USING_FAST_MALLOC(CalculationValueHandleMap);
@@ -67,14 +95,15 @@ class CalculationValueHandleMap {
 
   void DecrementRef(int index) {
     DCHECK(map_.Contains(index));
-    const CalculationValue* value = map_.at(index);
-    if (value->HasOneRef()) {
+    auto iter = map_.find(index);
+    if (iter->value->HasOneRef()) {
       // Force the CalculationValue destructor early to avoid a potential
       // recursive call inside HashMap remove().
-      map_.Set(index, nullptr);
+      iter->value = nullptr;
+      // |iter| may be invalidated during the CalculationValue destructor.
       map_.erase(index);
     } else {
-      value->Release();
+      iter->value->Release();
     }
   }
 
@@ -89,8 +118,8 @@ static CalculationValueHandleMap& CalcHandles() {
 }
 
 Length::Length(scoped_refptr<const CalculationValue> calc)
-    : quirk_(false), type_(kCalculated), is_float_(false) {
-  int_value_ = CalcHandles().insert(std::move(calc));
+    : quirk_(false), type_(kCalculated) {
+  calculation_handle_ = CalcHandles().insert(std::move(calc));
 }
 
 Length Length::BlendMixedTypes(const Length& from,
@@ -118,14 +147,14 @@ Length Length::BlendSameTypes(const Length& from,
 PixelsAndPercent Length::GetPixelsAndPercent() const {
   switch (GetType()) {
     case kFixed:
-      return PixelsAndPercent(Value(), 0);
+      return PixelsAndPercent(Value());
     case kPercent:
-      return PixelsAndPercent(0, Value());
+      return PixelsAndPercent(0.0f, Value(), /*has_explicit_pixels=*/false,
+                              /*has_explicit_percent=*/true);
     case kCalculated:
       return GetCalculationValue().GetPixelsAndPercent();
     default:
       NOTREACHED();
-      return PixelsAndPercent(0, 0);
   }
 }
 
@@ -139,15 +168,18 @@ Length Length::SubtractFromOneHundredPercent() const {
   if (IsPercent())
     return Length::Percent(100 - Value());
   DCHECK(IsSpecified());
-  scoped_refptr<const CalculationValue> result =
-      AsCalculationValue()->SubtractFromOneHundredPercent();
-  if (result->IsExpression() ||
-      (result->Pixels() != 0 && result->Percent() != 0)) {
-    return Length(std::move(result));
+  return Length(AsCalculationValue()->SubtractFromOneHundredPercent());
+}
+
+Length Length::Add(const Length& other) const {
+  CHECK(IsSpecified());
+  if (IsFixed() && other.IsFixed()) {
+    return Length::Fixed(Pixels() + other.Pixels());
   }
-  if (result->Percent())
-    return Length::Percent(result->Percent());
-  return Length::Fixed(result->Pixels());
+  if (IsPercent() && other.IsPercent()) {
+    return Length::Percent(Percent() + other.Percent());
+  }
+  return Length(AsCalculationValue()->Add(*other.AsCalculationValue()));
 }
 
 Length Length::Zoom(double factor) const {
@@ -176,15 +208,79 @@ void Length::DecrementCalculatedRef() const {
   CalcHandles().DecrementRef(CalculationHandle());
 }
 
-float Length::NonNanCalculatedValue(
-    LayoutUnit max_value,
-    const AnchorEvaluator* anchor_evaluator) const {
+float Length::NonNanCalculatedValue(float max_value,
+                                    const EvaluationInput& input) const {
   DCHECK(IsCalculated());
-  float result =
-      GetCalculationValue().Evaluate(max_value.ToFloat(), anchor_evaluator);
+  float result = GetCalculationValue().Evaluate(max_value, input);
   if (std::isnan(result))
     return 0;
   return result;
+}
+
+bool Length::HasAuto() const {
+  if (GetType() == kCalculated) {
+    return GetCalculationValue().HasAuto();
+  }
+  return GetType() == kAuto;
+}
+
+bool Length::HasContentOrIntrinsic() const {
+  if (GetType() == kCalculated) {
+    return GetCalculationValue().HasContentOrIntrinsicSize();
+  }
+  return GetType() == kMinContent || GetType() == kMaxContent ||
+         GetType() == kFitContent || GetType() == kMinIntrinsic ||
+         GetType() == kContent;
+}
+
+bool Length::HasAutoOrContentOrIntrinsic() const {
+  if (GetType() == kCalculated) {
+    return GetCalculationValue().HasAutoOrContentOrIntrinsicSize();
+  }
+  return GetType() == kAuto || HasContentOrIntrinsic();
+}
+
+bool Length::HasPercent() const {
+  if (GetType() == kCalculated) {
+    return GetCalculationValue().HasPercent();
+  }
+  return GetType() == kPercent;
+}
+
+bool Length::HasPercentOrStretch() const {
+  if (GetType() == kCalculated) {
+    return GetCalculationValue().HasPercentOrStretch();
+  }
+  return GetType() == kPercent || GetType() == kStretch ||
+         GetType() == kFillAvailable;
+}
+
+bool Length::HasStretch() const {
+  if (GetType() == kCalculated) {
+    return GetCalculationValue().HasStretch();
+  }
+  return GetType() == kStretch || GetType() == kFillAvailable;
+}
+
+bool Length::HasMinContent() const {
+  if (GetType() == kCalculated) {
+    return GetCalculationValue().HasMinContent();
+  }
+  return GetType() == kMinContent;
+}
+
+bool Length::HasMaxContent() const {
+  if (GetType() == kCalculated) {
+    return GetCalculationValue().HasMaxContent();
+  }
+  return GetType() == kMaxContent;
+}
+
+bool Length::HasFitContent() const {
+  if (GetType() == kCalculated) {
+    return GetCalculationValue().HasFitContent();
+  }
+  return GetType() == kFitContent;
 }
 
 bool Length::IsCalculatedEqual(const Length& o) const {
@@ -193,39 +289,23 @@ bool Length::IsCalculatedEqual(const Length& o) const {
           GetCalculationValue() == o.GetCalculationValue());
 }
 
-absl::optional<LayoutUnit> Length::AnchorEvaluator::EvaluateAnchor(
-    const AtomicString& anchor_name,
-    AnchorValue anchor_value) const {
-  return absl::nullopt;
-}
-
-absl::optional<LayoutUnit> Length::AnchorEvaluator::EvaluateAnchorSize(
-    const AtomicString& anchor_name,
-    AnchorSizeValue anchor_size_value) const {
-  return absl::nullopt;
-}
-
-bool Length::HasAnchorQueries() const {
-  return IsCalculated() && GetCalculationValue().HasAnchorQueries();
-}
-
 String Length::ToString() const {
   StringBuilder builder;
   builder.Append("Length(");
-  static const char* const kTypeNames[] = {
-      "Auto",       "Percent",      "Fixed",         "MinContent",
-      "MaxContent", "MinIntrinsic", "FillAvailable", "FitContent",
-      "Calculated", "ExtendToZoom", "DeviceWidth",   "DeviceHeight",
-      "None",       "Content"};
+  static const auto kTypeNames = std::to_array<const char* const>(
+      {"Auto", "Percent", "Fixed", "MinContent", "MaxContent", "MinIntrinsic",
+       "FillAvailable", "Stretch", "FitContent", "Calculated", "Flex",
+       "ExtendToZoom", "DeviceWidth", "DeviceHeight", "None", "Content"});
   if (type_ < std::size(kTypeNames))
     builder.Append(kTypeNames[type_]);
   else
     builder.Append("?");
   builder.Append(", ");
-  if (is_float_)
-    builder.AppendNumber(float_value_);
-  else
-    builder.AppendNumber(int_value_);
+  if (IsCalculated()) {
+    builder.AppendNumber(calculation_handle_);
+  } else {
+    builder.AppendNumber(value_);
+  }
   if (quirk_)
     builder.Append(", Quirk");
   builder.Append(")");

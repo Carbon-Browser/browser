@@ -1,15 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_WEBUI_SIGNIN_TURN_SYNC_ON_HELPER_DELEGATE_IMPL_H_
 #define CHROME_BROWSER_UI_WEBUI_SIGNIN_TURN_SYNC_ON_HELPER_DELEGATE_IMPL_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "chrome/browser/ui/browser_list_observer.h"
-#include "chrome/browser/ui/sync/profile_signin_confirmation_helper.h"
 #include "chrome/browser/ui/webui/signin/login_ui_service.h"
 #include "chrome/browser/ui/webui/signin/turn_sync_on_helper.h"
 
@@ -19,15 +18,16 @@ class SigninUIError;
 struct AccountInfo;
 
 namespace policy {
+class ProfileSeparationPolicies;
 class UserCloudSigninRestrictionPolicyFetcher;
-}
+}  // namespace policy
 
 // Default implementation for TurnSyncOnHelper::Delegate.
 class TurnSyncOnHelperDelegateImpl : public TurnSyncOnHelper::Delegate,
                                      public BrowserListObserver,
                                      public LoginUIService::Observer {
  public:
-  explicit TurnSyncOnHelperDelegateImpl(Browser* browser);
+  explicit TurnSyncOnHelperDelegateImpl(Browser* browser, bool is_sync_promo);
 
   TurnSyncOnHelperDelegateImpl(const TurnSyncOnHelperDelegateImpl&) = delete;
   TurnSyncOnHelperDelegateImpl& operator=(const TurnSyncOnHelperDelegateImpl&) =
@@ -45,6 +45,7 @@ class TurnSyncOnHelperDelegateImpl : public TurnSyncOnHelper::Delegate,
 
  private:
   // TurnSyncOnHelper::Delegate:
+  bool IsProfileCreationRequiredByPolicy() const override;
   void ShowLoginError(const SigninUIError& error) override;
   void ShowMergeSyncDataConfirmation(
       const std::string& previous_email,
@@ -71,7 +72,7 @@ class TurnSyncOnHelperDelegateImpl : public TurnSyncOnHelper::Delegate,
   void OnProfileSigninRestrictionsFetched(
       const AccountInfo& account_info,
       signin::SigninChoiceCallback callback,
-      const std::string& signin_restriction);
+      const policy::ProfileSeparationPolicies& profile_separation_policies);
 #endif  //! BUILDFLAG(IS_CHROMEOS_LACROS)
 
   void OnProfileCheckComplete(const AccountInfo& account_info,
@@ -92,6 +93,8 @@ class TurnSyncOnHelperDelegateImpl : public TurnSyncOnHelper::Delegate,
       sync_confirmation_callback_;
   base::ScopedObservation<LoginUIService, LoginUIService::Observer>
       scoped_login_ui_service_observation_{this};
+  const bool is_sync_promo_;
+  bool profile_creation_required_by_policy_ = false;
 
   base::WeakPtrFactory<TurnSyncOnHelperDelegateImpl> weak_ptr_factory_{this};
 };

@@ -1,44 +1,46 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/wm/splitview/split_view_drag_indicators.h"
 
 #include <utility>
-#include <vector>
 
 #include "ash/display/screen_orientation_controller.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/public/cpp/window_animation_types.h"
+#include "ash/root_window_controller.h"
 #include "ash/screen_util.h"
 #include "ash/shelf/shelf.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
-#include "ash/style/ash_color_provider.h"
-#include "ash/style/default_color_constants.h"
-#include "ash/style/default_colors.h"
-#include "ash/utility/haptics_util.h"
 #include "ash/wm/overview/overview_controller.h"
+#include "ash/wm/overview/overview_session.h"
 #include "ash/wm/overview/overview_window_drag_controller.h"
 #include "ash/wm/splitview/split_view_constants.h"
+#include "ash/wm/splitview/split_view_controller.h"
 #include "ash/wm/splitview/split_view_highlight_view.h"
+#include "ash/wm/splitview/split_view_overview_session.h"
+#include "ash/wm/splitview/split_view_types.h"
 #include "ash/wm/splitview/split_view_utils.h"
 #include "ash/wm/window_animations.h"
 #include "ash/wm/window_util.h"
 #include "base/i18n/rtl.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chromeos/ui/frame/caption_buttons/snap_controller.h"
+#include "chromeos/utils/haptics_util.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_observer.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_type.h"
-#include "ui/compositor/scoped_layer_animation_settings.h"
-#include "ui/display/display_observer.h"
 #include "ui/events/devices/haptic_touchpad_effects.h"
 #include "ui/views/background.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/highlight_border.h"
-#include "ui/views/layout/box_layout.h"
+#include "ui/views/layout/box_layout_view.h"
 #include "ui/views/view.h"
 #include "ui/views/widget/widget.h"
 #include "ui/wm/core/coordinate_conversion.h"
@@ -55,9 +57,9 @@ constexpr float kOtherHighlightScreenPrimaryAxisRatio = 0.03f;
 // Creates the widget responsible for displaying the indicators.
 std::unique_ptr<views::Widget> CreateWidget(aura::Window* root_window) {
   auto widget = std::make_unique<views::Widget>();
-  views::Widget::InitParams params;
-  params.type = views::Widget::InitParams::TYPE_POPUP;
-  params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
+  views::Widget::InitParams params(
+      views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET,
+      views::Widget::InitParams::TYPE_POPUP);
   params.opacity = views::Widget::InitParams::WindowOpacity::kTranslucent;
   params.accept_events = false;
   params.layer_type = ui::LAYER_NOT_DRAWN;
@@ -86,7 +88,7 @@ gfx::Rect GetWorkAreaBoundsNoOverlapWithShelf(aura::Window* root_window) {
   aura::Window* window =
       root_window->GetChildById(kShellWindowId_OverlayContainer);
   gfx::Rect bounds = screen_util::GetDisplayWorkAreaBoundsInParent(window);
-  ::wm::ConvertRectToScreen(root_window, &bounds);
+  wm::ConvertRectToScreen(root_window, &bounds);
 
   bounds.Subtract(Shelf::ForWindow(root_window)->GetIdealBounds());
   return bounds;
@@ -95,15 +97,15 @@ gfx::Rect GetWorkAreaBoundsNoOverlapWithShelf(aura::Window* root_window) {
 }  // namespace
 
 // static
-SplitViewController::SnapPosition SplitViewDragIndicators::GetSnapPosition(
+SnapPosition SplitViewDragIndicators::GetSnapPosition(
     WindowDraggingState window_dragging_state) {
   switch (window_dragging_state) {
-    case WindowDraggingState::kToSnapLeft:
-      return SplitViewController::LEFT;
-    case WindowDraggingState::kToSnapRight:
-      return SplitViewController::RIGHT;
+    case WindowDraggingState::kToSnapPrimary:
+      return SnapPosition::kPrimary;
+    case WindowDraggingState::kToSnapSecondary:
+      return SnapPosition::kSecondary;
     default:
-      return SplitViewController::NONE;
+      return SnapPosition::kNone;
   }
 }
 
@@ -112,61 +114,53 @@ SplitViewDragIndicators::WindowDraggingState
 SplitViewDragIndicators::ComputeWindowDraggingState(
     bool is_dragging,
     WindowDraggingState non_snap_state,
-    SplitViewController::SnapPosition snap_position) {
+    SnapPosition snap_position) {
   if (!is_dragging || !ShouldAllowSplitView())
     return WindowDraggingState::kNoDrag;
   switch (snap_position) {
-    case SplitViewController::NONE:
+    case SnapPosition::kNone:
       return non_snap_state;
-    case SplitViewController::LEFT:
-      return WindowDraggingState::kToSnapLeft;
-    case SplitViewController::RIGHT:
-      return WindowDraggingState::kToSnapRight;
+    case SnapPosition::kPrimary:
+      return WindowDraggingState::kToSnapPrimary;
+    case SnapPosition::kSecondary:
+      return WindowDraggingState::kToSnapSecondary;
   }
 }
 
-// View which contains a label and can be rotated. Used by and rotated by
-// SplitViewDragIndicatorsView.
-class SplitViewDragIndicators::RotatedImageLabelView : public views::View {
+// View which contains a label and is meant to be rotated. Used by and rotated
+// by `SplitViewDragIndicatorsView`.
+class SplitViewDragIndicators::RotatedImageLabelView
+    : public views::BoxLayoutView {
+  METADATA_HEADER(RotatedImageLabelView, views::BoxLayoutView)
+
  public:
   explicit RotatedImageLabelView(bool is_right_or_bottom)
       : is_right_or_bottom_(is_right_or_bottom) {
-    // TODO(sammiequon): Remove this extra intermediate layer.
-    SetPaintToLayer(ui::LAYER_NOT_DRAWN);
+    SetOrientation(views::BoxLayout::Orientation::kVertical);
+    SetInsideBorderInsets(gfx::Insets::VH(kSplitviewLabelVerticalInsetDp,
+                                          kSplitviewLabelHorizontalInsetDp));
+    SetPaintToLayer();
     layer()->SetFillsBoundsOpaquely(false);
 
-    // Use |label_parent_| to add padding and rounded edges to the text. Create
-    // this extra view so that we can rotate the label, while having a slide
-    // animation at times on the whole thing.
-    label_parent_ = AddChildView(std::make_unique<views::View>());
-    label_parent_->SetPaintToLayer(ui::LAYER_TEXTURED);
-    label_parent_->layer()->SetFillsBoundsOpaquely(false);
-    label_parent_->SetLayoutManager(std::make_unique<views::BoxLayout>(
-        views::BoxLayout::Orientation::kVertical,
-        gfx::Insets::VH(kSplitviewLabelVerticalInsetDp,
-                        kSplitviewLabelHorizontalInsetDp)));
+    SetBackground(views::CreateThemedRoundedRectBackground(
+        cros_tokens::kCrosSysSystemBaseElevated,
+        kSplitviewLabelRoundRectRadiusDp));
 
-    label_ = label_parent_->AddChildView(std::make_unique<views::Label>(
+    SetBorder(std::make_unique<views::HighlightBorder>(
+        /*corner_radius=*/kSplitviewLabelRoundRectRadiusDp,
+        views::HighlightBorder::Type::kHighlightBorder1));
+
+    label_ = AddChildView(std::make_unique<views::Label>(
         std::u16string(), views::style::CONTEXT_LABEL));
     label_->SetFontList(views::Label::GetDefaultFontList().Derive(
         2, gfx::Font::FontStyle::NORMAL, gfx::Font::Weight::NORMAL));
+    label_->SetEnabledColorId(cros_tokens::kCrosSysOnSurface);
   }
 
   RotatedImageLabelView(const RotatedImageLabelView&) = delete;
   RotatedImageLabelView& operator=(const RotatedImageLabelView&) = delete;
 
   ~RotatedImageLabelView() override = default;
-
-  void SetLabelText(const std::u16string& text) { label_->SetText(text); }
-
-  // Called when the view's bounds are altered. Rotates the view by |angle|
-  // degrees.
-  void OnBoundsUpdated(const gfx::Rect& bounds, double angle) {
-    SetBoundsRect(bounds);
-    label_parent_->SetBoundsRect(gfx::Rect(bounds.size()));
-    label_parent_->SetTransform(
-        ComputeRotateAroundCenterTransform(bounds, angle));
-  }
 
   // Called to update the opacity of the labels view on |indicator_state|.
   void OnWindowDraggingStateChanged(
@@ -189,13 +183,13 @@ class SplitViewDragIndicators::RotatedImageLabelView : public views::View {
     }
 
     // When a snap preview is shown, any label that is showing shall fade out.
-    if (GetSnapPosition(window_dragging_state) != SplitViewController::NONE) {
+    if (GetSnapPosition(window_dragging_state) != SnapPosition::kNone) {
       DoSplitviewOpacityAnimation(layer(), SPLITVIEW_ANIMATION_TEXT_FADE_OUT);
       return;
     }
 
     // Set the text according to |can_dragged_window_be_snapped|.
-    SetLabelText(l10n_util::GetStringUTF16(
+    label_->SetText(l10n_util::GetStringUTF16(
         can_dragged_window_be_snapped ? IDS_ASH_SPLIT_VIEW_GUIDANCE
                                       : IDS_ASH_SPLIT_VIEW_CANNOT_SNAP));
 
@@ -210,41 +204,10 @@ class SplitViewDragIndicators::RotatedImageLabelView : public views::View {
 
     // If a snap preview was shown, the labels shall now fade in.
     if (GetSnapPosition(previous_window_dragging_state) !=
-        SplitViewController::NONE) {
+        SnapPosition::kNone) {
       DoSplitviewOpacityAnimation(layer(), SPLITVIEW_ANIMATION_TEXT_FADE_IN);
       return;
     }
-  }
-
-  // views:View:
-  void OnThemeChanged() override {
-    views::View::OnThemeChanged();
-    label_parent_->SetBackground(views::CreateRoundedRectBackground(
-        AshColorProvider::Get()->GetBaseLayerColor(
-            AshColorProvider::BaseLayerType::kTransparent80),
-        kSplitviewLabelRoundRectRadiusDp));
-    // TODO(crbug/1258983): Add blur background. This requires fixing a bug
-    // that `SetRoundedCornerRadius()` does not work with transform or find a
-    // solution to work around.
-    label_->SetEnabledColor(DeprecatedGetContentLayerColor(
-        AshColorProvider::ContentLayerType::kTextColorPrimary,
-        kSplitviewLabelEnabledColor));
-    label_->SetBackgroundColor(AshColorProvider::Get()->GetBaseLayerColor(
-        AshColorProvider::BaseLayerType::kTransparent80));
-    label_->SetFontList(views::Label::GetDefaultFontList().Derive(
-        2, gfx::Font::FontStyle::NORMAL, gfx::Font::Weight::NORMAL));
-
-    if (chromeos::features::IsDarkLightModeEnabled()) {
-      label_parent_->SetBorder(std::make_unique<views::HighlightBorder>(
-          /*corner_radius=*/kSplitviewLabelRoundRectRadiusDp,
-          views::HighlightBorder::Type::kHighlightBorder1,
-          /*use_light_colors=*/false));
-    }
-  }
-
- protected:
-  gfx::Size CalculatePreferredSize() const override {
-    return label_parent_->GetPreferredSize();
   }
 
  private:
@@ -252,9 +215,11 @@ class SplitViewDragIndicators::RotatedImageLabelView : public views::View {
   // left/top one.
   const bool is_right_or_bottom_;
 
-  views::View* label_parent_ = nullptr;
-  views::Label* label_ = nullptr;
+  raw_ptr<views::Label> label_ = nullptr;
 };
+
+BEGIN_METADATA(SplitViewDragIndicators, RotatedImageLabelView)
+END_METADATA
 
 // View which contains two highlights on each side indicator where a user should
 // drag a selected window in order to initiate splitview. Each highlight has a
@@ -266,6 +231,8 @@ class SplitViewDragIndicators::RotatedImageLabelView : public views::View {
 class SplitViewDragIndicators::SplitViewDragIndicatorsView
     : public views::View,
       public aura::WindowObserver {
+  METADATA_HEADER(SplitViewDragIndicatorsView, views::View)
+
  public:
   SplitViewDragIndicatorsView() {
     left_highlight_view_ = AddChildView(
@@ -294,7 +261,12 @@ class SplitViewDragIndicators::SplitViewDragIndicatorsView
       dragged_window_->RemoveObserver(this);
   }
 
-  SplitViewHighlightView* left_highlight_view() { return left_highlight_view_; }
+  const SplitViewHighlightView* left_highlight_view() const {
+    return left_highlight_view_;
+  }
+  const SplitViewHighlightView* right_highlight_view() const {
+    return right_highlight_view_;
+  }
 
   // Called by parent widget when the state machine changes. Handles setting the
   // opacity and bounds of the highlights and labels.
@@ -308,10 +280,11 @@ class SplitViewDragIndicators::SplitViewDragIndicatorsView
     const bool previews_only =
         window_dragging_state == WindowDraggingState::kFromShelf ||
         window_dragging_state == WindowDraggingState::kFromTop ||
+        window_dragging_state == WindowDraggingState::kFromFloat ||
         split_view_controller->InSplitViewMode();
     const bool can_dragged_window_be_snapped =
-        dragged_window_ &&
-        split_view_controller->CanSnapWindow(dragged_window_);
+        dragged_window_ && split_view_controller->CanSnapWindow(
+                               dragged_window_, chromeos::kDefaultSnapRatio);
     if (!previews_only) {
       left_rotated_view_->OnWindowDraggingStateChanged(
           window_dragging_state, previous_window_dragging_state_,
@@ -329,7 +302,7 @@ class SplitViewDragIndicators::SplitViewDragIndicatorsView
 
     if (window_dragging_state != WindowDraggingState::kNoDrag ||
         GetSnapPosition(previous_window_dragging_state_) !=
-            SplitViewController::NONE) {
+            SnapPosition::kNone) {
       Layout(previous_window_dragging_state_ != WindowDraggingState::kNoDrag);
     }
   }
@@ -345,9 +318,6 @@ class SplitViewDragIndicators::SplitViewDragIndicatorsView
       case IndicatorType::kRightText:
         return right_rotated_view_;
     }
-
-    NOTREACHED();
-    return nullptr;
   }
 
   void SetDraggedWindow(aura::Window* dragged_window) {
@@ -359,7 +329,7 @@ class SplitViewDragIndicators::SplitViewDragIndicatorsView
   }
 
   // views::View:
-  void Layout() override { Layout(/*animate=*/false); }
+  void Layout(PassKey) override { Layout(/*animate=*/false); }
 
   // aura::WindowObserver:
   void OnWindowDestroyed(aura::Window* window) override {
@@ -372,9 +342,12 @@ class SplitViewDragIndicators::SplitViewDragIndicatorsView
   // animate when changing states, but not when bounds or orientation is
   // changed.
   void Layout(bool animate) {
-    // TODO(xdai|afakhry): Attempt to simplify this logic.
-    const bool horizontal =
-        SplitViewController::IsLayoutHorizontal(GetWidget()->GetNativeWindow());
+    if (!dragged_window_) {
+      // This can be called during test teardown.
+      return;
+    }
+    // TODO(b/252514604): Attempt to simplify this logic.
+    const bool horizontal = IsLayoutHorizontal(GetWidget()->GetNativeWindow());
     const int display_width = horizontal ? width() : height();
     const int display_height = horizontal ? height() : width();
     // Calculate the bounds of the two highlight regions.
@@ -408,36 +381,51 @@ class SplitViewDragIndicators::SplitViewDragIndicatorsView
     // actually becomes snapped.
     const bool drag_ending_in_snap =
         window_dragging_state_ == WindowDraggingState::kNoDrag &&
-        GetSnapPosition(previous_window_dragging_state_) !=
-            SplitViewController::NONE;
+        GetSnapPosition(previous_window_dragging_state_) != SnapPosition::kNone;
 
-    SplitViewController::SnapPosition snap_position =
-        GetSnapPosition(window_dragging_state_);
-    if (snap_position == SplitViewController::NONE)
+    SnapPosition snap_position = GetSnapPosition(window_dragging_state_);
+    if (snap_position == SnapPosition::kNone) {
       snap_position = GetSnapPosition(previous_window_dragging_state_);
+    }
 
     gfx::Rect preview_area_bounds;
-    absl::optional<SplitviewAnimationType> left_highlight_animation_type;
-    absl::optional<SplitviewAnimationType> right_highlight_animation_type;
-    if (GetSnapPosition(window_dragging_state_) != SplitViewController::NONE ||
+    std::optional<SplitviewAnimationType> left_highlight_animation_type;
+    std::optional<SplitviewAnimationType> right_highlight_animation_type;
+    if (GetSnapPosition(window_dragging_state_) != SnapPosition::kNone ||
         drag_ending_in_snap) {
-      // Get the preview area bounds from the split view controller.
+      // When we drag to snap, we should attempt to preview the size of the
+      // window snapped in split view below if there is any, but respect the
+      // minimum size of `dragged_window_`. See crbug/1017464.
+      aura::Window* root_window = GetWidget()->GetNativeWindow();
+      // Use `chromeos::kDefaultSnapRatio` to calculate the default divider
+      // position. If there is a snapped window in `SplitViewOverviewSession`,
+      // calculate the divider position based on the snapped window bounds as it
+      // can be resized to an arbitrary location.
+      // Note `dragged_window_` may not be on the same root as `root_window`.
+      // Check the partial overview session on `root_window`, the root it's
+      // being dragged to.
+      // TODO(b/309856199): Consolidate the divider position calculation.
+      SplitViewOverviewSession* split_view_overview_session =
+          RootWindowController::ForWindow(root_window)
+              ->split_view_overview_session();
+      const bool should_consider_divider =
+          SplitViewController::Get(root_window)->ShouldConsiderDivider();
+      const int divider_position =
+          split_view_overview_session
+              ? GetEquivalentDividerPosition(
+                    split_view_overview_session->window(),
+                    should_consider_divider)
+              : CalculateDividerPosition(root_window, snap_position,
+                                         chromeos::kDefaultSnapRatio,
+                                         should_consider_divider);
       preview_area_bounds =
-          SplitViewController::Get(GetWidget()->GetNativeWindow())
-              ->GetSnappedWindowBoundsInScreen(snap_position, dragged_window_);
+          gfx::Rect(CalculateSnappedWindowBoundsInScreen(
+                        snap_position, root_window,
+                        /*window_for_minimum_size=*/dragged_window_,
+                        should_consider_divider, divider_position,
+                        /*is_resizing_with_divider=*/false)
+                        .size());
 
-      aura::Window* root_window =
-          GetWidget()->GetNativeWindow()->GetRootWindow();
-      wm::ConvertRectFromScreen(root_window, &preview_area_bounds);
-
-      // Preview area should have no overlap with the shelf.
-      preview_area_bounds.Subtract(
-          Shelf::ForWindow(root_window)->GetIdealBounds());
-
-      gfx::Rect work_area_bounds =
-          GetWorkAreaBoundsNoOverlapWithShelf(root_window);
-      wm::ConvertRectFromScreen(root_window, &work_area_bounds);
-      preview_area_bounds.set_y(preview_area_bounds.y() - work_area_bounds.y());
       if (!drag_ending_in_snap)
         preview_area_bounds.Inset(kHighlightScreenEdgePaddingDp);
 
@@ -451,8 +439,7 @@ class SplitViewDragIndicators::SplitViewDragIndicatorsView
       if (!horizontal)
         other_bounds.Transpose();
 
-      if (SplitViewController::IsPhysicalLeftOrTop(snap_position,
-                                                   dragged_window_)) {
+      if (IsPhysicallyLeftOrTop(snap_position, dragged_window_)) {
         left_highlight_bounds = preview_area_bounds;
         right_highlight_bounds = other_bounds;
         if (animate) {
@@ -467,6 +454,11 @@ class SplitViewDragIndicators::SplitViewDragIndicatorsView
           }
         }
       } else {
+        preview_area_bounds.set_origin(
+            gfx::Point(width() - kHighlightScreenEdgePaddingDp -
+                           preview_area_bounds.width(),
+                       height() - kHighlightScreenEdgePaddingDp -
+                           preview_area_bounds.height()));
         other_bounds.set_origin(highlight_padding_point);
         left_highlight_bounds = other_bounds;
         right_highlight_bounds = preview_area_bounds;
@@ -483,10 +475,9 @@ class SplitViewDragIndicators::SplitViewDragIndicatorsView
         }
       }
     } else if (GetSnapPosition(previous_window_dragging_state_) !=
-                   SplitViewController::NONE &&
+                   SnapPosition::kNone &&
                animate) {
-      if (SplitViewController::IsPhysicalLeftOrTop(snap_position,
-                                                   dragged_window_)) {
+      if (IsPhysicallyLeftOrTop(snap_position, dragged_window_)) {
         left_highlight_animation_type =
             SPLITVIEW_ANIMATION_PREVIEW_AREA_SLIDE_OUT;
         right_highlight_animation_type =
@@ -532,68 +523,77 @@ class SplitViewDragIndicators::SplitViewDragIndicatorsView
     if (horizontal)
       left_rotation_angle = 90.0 * (base::i18n::IsRTL() ? 1 : -1);
 
-    left_rotated_view_->OnBoundsUpdated(left_rotated_bounds,
-                                        /*angle=*/left_rotation_angle);
-    right_rotated_view_->OnBoundsUpdated(right_rotated_bounds,
-                                         /*angle=*/-left_rotation_angle);
+    const gfx::Transform left_rotation = ComputeRotateAroundCenterTransform(
+        left_rotated_bounds, left_rotation_angle);
+    const gfx::Transform right_rotation = ComputeRotateAroundCenterTransform(
+        right_rotated_bounds, -left_rotation_angle);
+
+    left_rotated_view_->SetBoundsRect(left_rotated_bounds);
+    right_rotated_view_->SetBoundsRect(right_rotated_bounds);
 
     if (drag_ending_in_snap) {
-      // Reset the label transforms, in preparation for the next drag (if any).
-      left_rotated_view_->layer()->SetTransform(gfx::Transform());
-      right_rotated_view_->layer()->SetTransform(gfx::Transform());
+      left_rotated_view_->layer()->SetTransform(left_rotation);
+      right_rotated_view_->layer()->SetTransform(right_rotation);
       return;
     }
 
-    ui::Layer* preview_label_layer;
-    ui::Layer* other_highlight_label_layer;
-    if (snap_position == SplitViewController::NONE) {
+    // If we want to display a window can be snapped, one side will show a
+    // preview that is half the work area of what the window size would be; that
+    // is the `preview_label_layer`. The other side would fade and slide out;
+    // that is the `other_highlight_label_layer`.
+    ui::Layer *preview_label_layer;
+    ui::Layer *other_highlight_label_layer;
+    gfx::Transform preview_label_transform;
+    gfx::Transform other_highlight_label_transform;
+    if (snap_position == SnapPosition::kNone) {
       preview_label_layer = nullptr;
       other_highlight_label_layer = nullptr;
-    } else if (SplitViewController::IsPhysicalLeftOrTop(snap_position,
-                                                        dragged_window_)) {
+    } else if (IsPhysicallyLeftOrTop(snap_position, dragged_window_)) {
       preview_label_layer = left_rotated_view_->layer();
       other_highlight_label_layer = right_rotated_view_->layer();
+      preview_label_transform = left_rotation;
+      other_highlight_label_transform = right_rotation;
     } else {
       preview_label_layer = right_rotated_view_->layer();
       other_highlight_label_layer = left_rotated_view_->layer();
+      preview_label_transform = right_rotation;
+      other_highlight_label_transform = left_rotation;
     }
 
     // Slide out the labels when a snap preview appears. This code also adjusts
     // the label transforms for things like display rotation while there is a
     // snap preview.
-    if (GetSnapPosition(window_dragging_state_) != SplitViewController::NONE) {
+    if (GetSnapPosition(window_dragging_state_) != SnapPosition::kNone) {
       // How far each label shall slide to stay centered in the corresponding
       // highlight as it expands/contracts. Include distance traveled with zero
       // opacity (whence a label still slides, not only for simplicity in
       // calculating the values below, but also to facilitate that the label
       // transform and the highlight transform have matching easing).
-      const float preview_label_distance =
+      float preview_label_delta =
           0.5f * (preview_area_bounds.width() - highlight_width);
-      const float other_highlight_label_distance =
+      float other_highlight_label_delta =
           0.5f * (highlight_width - other_highlight_width);
 
-      // Positive for right or down; negative for left or up.
-      float preview_label_delta, other_highlight_label_delta;
-      if (SplitViewController::IsPhysicalLeftOrTop(snap_position,
-                                                   dragged_window_)) {
-        preview_label_delta = preview_label_distance;
-        other_highlight_label_delta = other_highlight_label_distance;
-      } else {
-        preview_label_delta = -preview_label_distance;
-        other_highlight_label_delta = -other_highlight_label_distance;
+      // Positive (unchanged) for left or up; negative for right or down.
+      if (!IsPhysicallyLeftOrTop(snap_position, dragged_window_)) {
+        preview_label_delta = -preview_label_delta;
+        other_highlight_label_delta = -other_highlight_label_delta;
       }
 
-      // x-axis if |horizontal|; else y-axis.
-      gfx::Transform preview_label_transform, other_highlight_label_transform;
-      if (horizontal) {
-        preview_label_transform.Translate(preview_label_delta, 0.f);
-        other_highlight_label_transform.Translate(other_highlight_label_delta,
-                                                  0.f);
-      } else {
-        preview_label_transform.Translate(0.f, preview_label_delta);
-        other_highlight_label_transform.Translate(0.f,
-                                                  other_highlight_label_delta);
+      // x-axis if `horizontal`; else y-axis.
+      gfx::Vector2dF preview_label_translation(preview_label_delta, 0.f);
+      gfx::Vector2dF other_highlight_label_translation(
+          other_highlight_label_delta, 0.f);
+      if (!horizontal) {
+        preview_label_translation.Transpose();
+        other_highlight_label_translation.Transpose();
       }
+
+      // Append the translation to the end of the current transform, which may
+      // have rotated the label.
+      preview_label_transform.PostTranslate(preview_label_translation);
+      other_highlight_label_transform.PostTranslate(
+          other_highlight_label_translation);
 
       if (animate) {
         // Animate the labels sliding out.
@@ -606,7 +606,6 @@ class SplitViewDragIndicators::SplitViewDragIndicatorsView
             SPLITVIEW_ANIMATION_OTHER_HIGHLIGHT_TEXT_SLIDE_OUT,
             other_highlight_label_transform, /*animation_observers=*/{});
       } else {
-        // Put the labels where they belong.
         preview_label_layer->SetTransform(preview_label_transform);
         other_highlight_label_layer->SetTransform(
             other_highlight_label_transform);
@@ -618,46 +617,52 @@ class SplitViewDragIndicators::SplitViewDragIndicatorsView
     // inward. (Having reached this code, we know that the window is not
     // becoming snapped, because that case is handled earlier and we bail out.)
     if (GetSnapPosition(previous_window_dragging_state_) !=
-        SplitViewController::NONE) {
+        SnapPosition::kNone) {
       if (animate) {
         // Animate the labels sliding in.
         DoSplitviewTransformAnimation(
             preview_label_layer, SPLITVIEW_ANIMATION_PREVIEW_AREA_TEXT_SLIDE_IN,
-            gfx::Transform(), /*animation_observers=*/{});
+            preview_label_transform, /*animation_observers=*/{});
         DoSplitviewTransformAnimation(
             other_highlight_label_layer,
-            SPLITVIEW_ANIMATION_OTHER_HIGHLIGHT_TEXT_SLIDE_IN, gfx::Transform(),
+            SPLITVIEW_ANIMATION_OTHER_HIGHLIGHT_TEXT_SLIDE_IN,
+            other_highlight_label_transform,
             /*animation_observers=*/{});
       } else {
-        // Put the labels where they belong.
-        preview_label_layer->SetTransform(gfx::Transform());
-        other_highlight_label_layer->SetTransform(gfx::Transform());
+        preview_label_layer->SetTransform(preview_label_transform);
+        other_highlight_label_layer->SetTransform(
+            other_highlight_label_transform);
       }
       return;
     }
+
+    // Set a rotation without animation for the default cases.
+    left_rotated_view_->layer()->SetTransform(left_rotation);
+    right_rotated_view_->layer()->SetTransform(right_rotation);
   }
 
-  SplitViewHighlightView* left_highlight_view_ = nullptr;
-  SplitViewHighlightView* right_highlight_view_ = nullptr;
-  RotatedImageLabelView* left_rotated_view_ = nullptr;
-  RotatedImageLabelView* right_rotated_view_ = nullptr;
+  raw_ptr<SplitViewHighlightView> left_highlight_view_ = nullptr;
+  raw_ptr<SplitViewHighlightView> right_highlight_view_ = nullptr;
+  raw_ptr<RotatedImageLabelView> left_rotated_view_ = nullptr;
+  raw_ptr<RotatedImageLabelView> right_rotated_view_ = nullptr;
 
   WindowDraggingState window_dragging_state_ = WindowDraggingState::kNoDrag;
   WindowDraggingState previous_window_dragging_state_ =
       WindowDraggingState::kNoDrag;
 
-  aura::Window* dragged_window_ = nullptr;
+  raw_ptr<aura::Window> dragged_window_ = nullptr;
 };
 
-SplitViewDragIndicators::SplitViewDragIndicators(aura::Window* root_window) {
-  widget_ = CreateWidget(root_window);
-  widget_->SetBounds(GetWorkAreaBoundsNoOverlapWithShelf(root_window));
-  indicators_view_ =
-      widget_->SetContentsView(std::make_unique<SplitViewDragIndicatorsView>());
-  widget_->Show();
-}
+BEGIN_METADATA(SplitViewDragIndicators, SplitViewDragIndicatorsView)
+END_METADATA
+
+SplitViewDragIndicators::SplitViewDragIndicators(aura::Window* root_window)
+    : root_window_(root_window) {}
 
 SplitViewDragIndicators::~SplitViewDragIndicators() {
+  if (!widget_) {
+    return;
+  }
   // Allow some extra time for animations to finish.
   aura::Window* window = widget_->GetNativeWindow();
   if (window == nullptr)
@@ -669,7 +674,7 @@ SplitViewDragIndicators::~SplitViewDragIndicators() {
 
 void SplitViewDragIndicators::SetDraggedWindow(aura::Window* dragged_window) {
   DCHECK_EQ(WindowDraggingState::kNoDrag, current_window_dragging_state_);
-  indicators_view_->SetDraggedWindow(dragged_window);
+  GetOrCreateIndicatorsView().SetDraggedWindow(dragged_window);
 }
 
 void SplitViewDragIndicators::SetWindowDraggingState(
@@ -678,7 +683,7 @@ void SplitViewDragIndicators::SetWindowDraggingState(
     return;
 
   // Fire a haptic event if necessary.
-  if (GetSnapPosition(window_dragging_state) != SplitViewController::NONE) {
+  if (GetSnapPosition(window_dragging_state) != SnapPosition::kNone) {
     OverviewController* overview_controller =
         Shell::Get()->overview_controller();
     if (overview_controller->InOverviewSession() &&
@@ -686,29 +691,58 @@ void SplitViewDragIndicators::SetWindowDraggingState(
         !overview_controller->overview_session()
              ->window_drag_controller()
              ->is_touch_dragging()) {
-      haptics_util::PlayHapticTouchpadEffect(
+      chromeos::haptics_util::PlayHapticTouchpadEffect(
           ui::HapticTouchpadEffect::kSnap,
           ui::HapticTouchpadEffectStrength::kMedium);
     }
   }
 
   current_window_dragging_state_ = window_dragging_state;
-  indicators_view_->OnWindowDraggingStateChanged(window_dragging_state);
+  GetOrCreateIndicatorsView().OnWindowDraggingStateChanged(
+      window_dragging_state);
 }
 
 void SplitViewDragIndicators::OnDisplayBoundsChanged() {
-  aura::Window* root_window = widget_->GetNativeView()->GetRootWindow();
-  widget_->SetBounds(GetWorkAreaBoundsNoOverlapWithShelf(root_window));
+  if (widget_) {
+    widget_->SetBounds(GetWorkAreaBoundsNoOverlapWithShelf(root_window_));
+  }
+}
+
+gfx::Rect SplitViewDragIndicators::GetLeftHighlightViewBounds() const {
+  return indicators_view_ ? indicators_view_->left_highlight_view()->bounds()
+                          : gfx::Rect();
+}
+
+void SplitViewDragIndicators::InitWidget() {
+  if (widget_) {
+    return;
+  }
+  widget_ = CreateWidget(root_window_);
+  widget_->SetBounds(GetWorkAreaBoundsNoOverlapWithShelf(root_window_));
+  CHECK(!indicators_view_);
+  indicators_view_ =
+      widget_->SetContentsView(std::make_unique<SplitViewDragIndicatorsView>());
+  widget_->Show();
+}
+
+gfx::Rect SplitViewDragIndicators::GetRightHighlightViewBoundsForTesting()
+    const {
+  return indicators_view_ ? indicators_view_->right_highlight_view()->bounds()
+                          : gfx::Rect();
 }
 
 bool SplitViewDragIndicators::GetIndicatorTypeVisibilityForTesting(
     IndicatorType type) const {
-  return indicators_view_->GetViewForIndicatorType(type)->layer()->opacity() >
-         0.f;
+  return indicators_view_ ? indicators_view_->GetViewForIndicatorType(type)
+                                    ->layer()
+                                    ->opacity() > 0.f
+                          : false;
 }
 
-gfx::Rect SplitViewDragIndicators::GetLeftHighlightViewBounds() const {
-  return indicators_view_->left_highlight_view()->bounds();
+SplitViewDragIndicators::SplitViewDragIndicatorsView&
+SplitViewDragIndicators::GetOrCreateIndicatorsView() {
+  InitWidget();
+  return *indicators_view_;
 }
 
 }  // namespace ash

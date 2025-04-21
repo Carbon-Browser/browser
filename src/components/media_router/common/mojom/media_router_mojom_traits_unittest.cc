@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ class MediaRouterStructTraitsTest
     : public testing::Test,
       public media_router::mojom::MediaRouterTraitsTestService {
  public:
-  MediaRouterStructTraitsTest() {}
+  MediaRouterStructTraitsTest() = default;
 
   MediaRouterStructTraitsTest(const MediaRouterStructTraitsTest&) = delete;
   MediaRouterStructTraitsTest& operator=(const MediaRouterStructTraitsTest&) =
@@ -80,7 +80,7 @@ TEST_F(MediaRouterStructTraitsTest, CastMediaSink) {
   CastSinkExtraData extra_data;
   extra_data.ip_endpoint = net::IPEndPoint(net::IPAddress(192, 168, 1, 2), 0);
   extra_data.model_name = model_name;
-  extra_data.capabilities = 2;
+  extra_data.capabilities = {cast_channel::CastDeviceCapability::kVideoOut};
   extra_data.cast_channel_id = 3;
 
   MediaSinkInternal cast_sink(sink, extra_data);

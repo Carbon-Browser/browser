@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,7 @@ struct SERVICE_MANAGER_PUBLIC_CPP_TYPES_EXPORT BindSourceInfo {
   CapabilitySet required_capabilities;
 };
 
-// TODO(https://crbug.com/939141): Rename BindSourceInfo and delete this alias.
+// TODO(crbug.com/41445392): Rename BindSourceInfo and delete this alias.
 using ConnectSourceInfo = BindSourceInfo;
 
 }  // namespace service_manager

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,8 +44,8 @@ struct NOTIFYITEM {
 class __declspec(uuid("D782CCBA-AFB0-43F1-94DB-FDA3779EACCB")) INotificationCB
     : public IUnknown {
  public:
-  virtual HRESULT STDMETHODCALLTYPE
-      Notify(ULONG event, NOTIFYITEM* notify_item) = 0;
+  virtual HRESULT STDMETHODCALLTYPE Notify(ULONG event,
+                                           NOTIFYITEM* notify_item) = 0;
 };
 
 // A class that is capable of reading and writing the state of the notification

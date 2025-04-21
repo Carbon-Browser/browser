@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,6 +35,8 @@ class HistoryClustersServiceTestApi {
     options.duplicate_policy = history::QueryOptions::KEEP_ALL_DUPLICATES;
     history_service_->GetAnnotatedVisits(
         options,
+        /*compute_redirect_chain_start_properties=*/true,
+        /*get_unclustered_visits_only=*/false,
         base::BindLambdaForTesting(
             [&](std::vector<history::AnnotatedVisit> visits) {
               annotated_visits = std::move(visits);
@@ -58,12 +60,12 @@ class HistoryClustersServiceTestApi {
     history_clusters_service_->short_keyword_cache_timestamp_ = time;
   }
 
-  void SetAllKeywordsCache(HistoryClustersService::KeywordMap cache) {
-    history_clusters_service_->all_keywords_cache_ = cache;
+  void SetShortKeywordCache(HistoryClustersService::KeywordMap cache) {
+    history_clusters_service_->short_keyword_cache_ = cache;
   }
 
-  void SetAllUrlKeywordsCache(HistoryClustersService::URLKeywordSet cache) {
-    history_clusters_service_->all_url_keywords_cache_ = cache;
+  void SetAllKeywordsCache(HistoryClustersService::KeywordMap cache) {
+    history_clusters_service_->all_keywords_cache_ = cache;
   }
 
   HistoryClustersService* const history_clusters_service_;

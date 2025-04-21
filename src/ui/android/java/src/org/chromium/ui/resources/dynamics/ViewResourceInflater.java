@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,10 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
+
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.NullUnmarked;
+import org.chromium.build.annotations.Nullable;
 
 /**
  * ViewResourceInflater is a utility class that facilitates using an Android View as a dynamic
@@ -32,80 +36,59 @@ import android.view.ViewTreeObserver;
  * It's possible to specify custom size constraints by overriding the methods
  * {@link #getWidthMeasureSpec()} and {@link #getHeightMeasureSpec()}.
  */
+@NullMarked
 public class ViewResourceInflater {
 
-    /**
-     * The id of the XML Layout that describes the View.
-     */
+    /** The id of the XML Layout that describes the View. */
     private int mLayoutId;
 
-    /**
-     * The id of the View being inflated, which must be the root of the given Layout.
-     */
+    /** The id of the View being inflated, which must be the root of the given Layout. */
     private int mViewId;
 
-    /**
-     * The Context used to inflate the View.
-     */
-    private Context mContext;
+    /** The Context used to inflate the View. */
+    private @Nullable Context mContext;
 
-    /**
-     * The ViewGroup container used to inflate the View.
-     */
+    /** The ViewGroup container used to inflate the View. */
     private ViewGroup mContainer;
 
-    /**
-     * The DynamicResourceLoader used to manage resources generated dynamically.
-     */
-    private DynamicResourceLoader mResourceLoader;
+    /** The DynamicResourceLoader used to manage resources generated dynamically. */
+    private @Nullable DynamicResourceLoader mResourceLoader;
 
-    /**
-     * The ViewResourceAdapter used to capture snapshots of the View.
-     */
-    private ViewResourceAdapter mResourceAdapter;
+    /** The ViewResourceAdapter used to capture snapshots of the View. */
+    private @Nullable ViewResourceAdapter mResourceAdapter;
 
-    /**
-     * The inflated View.
-     */
+    /** The inflated View. */
+    @SuppressWarnings("NullAway.Init")
     private View mView;
 
-    /**
-     * Whether the View needs a layout update.
-     */
+    /** Whether the View needs a layout update. */
     private boolean mNeedsLayoutUpdate;
 
-    /**
-     * Whether the View is invalided.
-     */
+    /** Whether the View is invalided. */
     private boolean mIsInvalidated;
 
-    /**
-     * Whether the View is attached to the hierarchy.
-     */
+    /** Whether the View is attached to the hierarchy. */
     private boolean mIsAttached;
 
-    /**
-     * The ViewInflaterOnDrawListener used to track changes in the View when attached.
-     */
-    private ViewInflaterOnDrawListener mOnDrawListener;
+    /** The ViewInflaterOnDrawListener used to track changes in the View when attached. */
+    private @Nullable ViewInflaterOnDrawListener mOnDrawListener;
 
-    /**
-     * The invalid ID.
-     */
+    /** The invalid ID. */
     private static final int INVALID_ID = -1;
 
     /**
-     * @param layoutId          The XML Layout that declares the View.
-     * @param viewId            The id of the root View of the Layout.
-     * @param context           The Android Context used to inflate the View.
-     * @param container         The container View used to inflate the View.
-     * @param resourceLoader    The resource loader that will handle the snapshot capturing.
+     * @param layoutId The XML Layout that declares the View.
+     * @param viewId The id of the root View of the Layout.
+     * @param context The Android Context used to inflate the View.
+     * @param container The container View used to inflate the View.
+     * @param resourceLoader The resource loader that will handle the snapshot capturing.
      */
-    public ViewResourceInflater(int layoutId,
-                                int viewId,
-                                Context context,
-                                ViewGroup container,
-                                DynamicResourceLoader resourceLoader) {
+    public ViewResourceInflater(
+            int layoutId,
+            int viewId,
+            Context context,
+            ViewGroup container,
+            DynamicResourceLoader resourceLoader) {
         mLayoutId = layoutId;
         mViewId = viewId;
         mContext = context;
@@ -113,9 +96,7 @@ public class ViewResourceInflater {
         mResourceLoader = resourceLoader;
     }
 
-    /**
-     * Inflate the layout.
-     */
+    /** Inflate the layout. */
     public void inflate() {
         if (mView != null) return;
 
@@ -134,9 +115,7 @@ public class ViewResourceInflater {
         mNeedsLayoutUpdate = true;
     }
 
-    /**
-     * Invalidate the inflated View, causing a snapshot of the View to be captured.
-     */
+    /** Invalidate the inflated View, causing a snapshot of the View to be captured. */
     public void invalidate() {
         invalidate(false);
     }
@@ -178,9 +157,8 @@ public class ViewResourceInflater {
         mNeedsLayoutUpdate = false;
     }
 
-    /**
-     * Destroy the instance.
-     */
+    /** Destroy the instance. */
+    @NullUnmarked
     public void destroy() {
         if (mView == null) return;
 
@@ -188,11 +166,12 @@ public class ViewResourceInflater {
 
         // Ensure the view isn't detached in the middle of a layout pass by posting. See
         // https://crbug.com/1234713 for details.
-        mView.post(() -> {
-            detachView();
-            mView = null;
-            mContainer = null;
-        });
+        mView.post(
+                () -> {
+                    detachView();
+                    mView = null;
+                    mContainer = null;
+                });
 
         mLayoutId = INVALID_ID;
         mViewId = INVALID_ID;
@@ -269,9 +248,7 @@ public class ViewResourceInflater {
         return getUnspecifiedMeasureSpec();
     }
 
-    /**
-     * Lays out the View.
-     */
+    /** Lays out the View. */
     protected void layout() {
         mView.measure(getWidthMeasureSpec(), getHeightMeasureSpec());
         mView.layout(0, 0, getMeasuredWidth(), getMeasuredHeight());
@@ -287,13 +264,11 @@ public class ViewResourceInflater {
     /**
      * @return The Context used to inflate the View.
      */
-    protected Context getContext() {
+    protected @Nullable Context getContext() {
         return mContext;
     }
 
-    /**
-     * Attach the View to the hierarchy.
-     */
+    /** Attach the View to the hierarchy. */
     private void attachView() {
         if (!mIsAttached) {
             assert mView.getParent() == null;
@@ -309,9 +284,7 @@ public class ViewResourceInflater {
         }
     }
 
-    /**
-     * Detach the View from the hierarchy.
-     */
+    /** Detach the View from the hierarchy. */
     private void detachView() {
         if (mIsAttached) {
             if (mOnDrawListener != null) {
@@ -325,9 +298,7 @@ public class ViewResourceInflater {
         }
     }
 
-    /**
-     * Lay out the view according to the current width and height measure specs.
-     */
+    /** Lay out the view according to the current width and height measure specs. */
     private void updateLayoutParams() {
         // View must be inflated at this point.
         assert mView != null;
@@ -358,9 +329,7 @@ public class ViewResourceInflater {
         return View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
     }
 
-    /**
-     * Register the resource and creates an adapter for it.
-     */
+    /** Register the resource and creates an adapter for it. */
     private void registerResource() {
         if (mResourceAdapter == null) {
             mResourceAdapter = new ViewInflaterAdapter(mView.findViewById(mViewId));
@@ -371,9 +340,7 @@ public class ViewResourceInflater {
         }
     }
 
-    /**
-     * Unregister the resource and destroys the adapter.
-     */
+    /** Unregister the resource and destroys the adapter. */
     private void unregisterResource() {
         if (mResourceLoader != null) {
             mResourceLoader.unregisterResource(mViewId);
@@ -382,9 +349,7 @@ public class ViewResourceInflater {
         mResourceAdapter = null;
     }
 
-    /**
-     * Invalidate the resource, which will cause a new snapshot to be captured.
-     */
+    /** Invalidate the resource, which will cause a new snapshot to be captured. */
     private void invalidateResource() {
         if (mIsInvalidated && mView != null && mResourceAdapter != null) {
             mIsInvalidated = false;
@@ -392,9 +357,7 @@ public class ViewResourceInflater {
         }
     }
 
-    /**
-     * A custom {@link ViewResourceAdapter} that calls the method {@link #onCaptureEnd()}.
-     */
+    /** A custom {@link ViewResourceAdapter} that calls the method {@link #onCaptureEnd()}. */
     private class ViewInflaterAdapter extends ViewResourceAdapter {
         public ViewInflaterAdapter(View view) {
             super(view);
@@ -406,9 +369,7 @@ public class ViewResourceInflater {
         }
     }
 
-    /**
-     * Called when a snapshot is captured.
-     */
+    /** Called when a snapshot is captured. */
     protected void onCaptureEnd() {
         if (shouldDetachViewAfterCapturing()) {
             detachView();

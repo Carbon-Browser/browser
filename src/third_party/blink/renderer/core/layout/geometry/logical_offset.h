@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,10 @@
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/platform/geometry/layout_unit.h"
 #include "third_party/blink/renderer/platform/text/writing_direction_mode.h"
+
+namespace WTF {
+class String;
+}  // namespace WTF
 
 namespace blink {
 
@@ -93,7 +97,7 @@ struct CORE_EXPORT LogicalOffset {
            block_offset <= other.block_offset;
   }
 
-  String ToString() const;
+  WTF::String ToString() const;
 };
 
 CORE_EXPORT std::ostream& operator<<(std::ostream&, const LogicalOffset&);

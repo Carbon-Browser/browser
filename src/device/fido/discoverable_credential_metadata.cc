@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,12 @@
 namespace device {
 
 DiscoverableCredentialMetadata::DiscoverableCredentialMetadata(
+    AuthenticatorType source_in,
     std::string rp_id_in,
     std::vector<uint8_t> cred_id_in,
     PublicKeyCredentialUserEntity user_in)
-    : rp_id(std::move(rp_id_in)),
+    : source(source_in),
+      rp_id(std::move(rp_id_in)),
       cred_id(std::move(cred_id_in)),
       user(std::move(user_in)) {}
 

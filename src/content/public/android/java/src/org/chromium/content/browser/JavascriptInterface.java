@@ -1,8 +1,10 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.content.browser;
+
+import org.chromium.build.annotations.NullMarked;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -17,4 +19,5 @@ import java.lang.annotation.Target;
 @SuppressWarnings("javadoc")
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.METHOD})
+@NullMarked
 public @interface JavascriptInterface {}

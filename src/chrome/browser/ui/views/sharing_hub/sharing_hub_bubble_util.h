@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,8 +16,9 @@ namespace sharing_hub {
 // Defines a title view with a back button and a label. Used by first party
 // action dialogs for the sharing hub (e.g. qr code, send tab to self).
 class TitleWithBackButtonView : public views::TableLayoutView {
+  METADATA_HEADER(TitleWithBackButtonView, views::TableLayoutView)
+
  public:
-  METADATA_HEADER(TitleWithBackButtonView);
   explicit TitleWithBackButtonView(views::Button::PressedCallback callback,
                                    const std::u16string& window_title);
   ~TitleWithBackButtonView() override;

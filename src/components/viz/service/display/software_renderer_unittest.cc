@@ -1,16 +1,17 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/viz/service/display/software_renderer.h"
 
 #include <stdint.h>
+
 #include <memory>
 #include <unordered_map>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/read_only_shared_memory_region.h"
 #include "base/memory/shared_memory_mapping.h"
 #include "base/run_loop.h"
@@ -20,6 +21,7 @@
 #include "cc/test/render_pass_test_utils.h"
 #include "cc/test/resource_provider_test_utils.h"
 #include "components/viz/client/client_resource_provider.h"
+#include "components/viz/common/features.h"
 #include "components/viz/common/frame_sinks/copy_output_request.h"
 #include "components/viz/common/frame_sinks/copy_output_result.h"
 #include "components/viz/common/quads/compositor_frame_metadata.h"
@@ -28,12 +30,15 @@
 #include "components/viz/common/quads/debug_border_draw_quad.h"
 #include "components/viz/common/quads/solid_color_draw_quad.h"
 #include "components/viz/common/quads/tile_draw_quad.h"
-#include "components/viz/common/resources/bitmap_allocation.h"
-#include "components/viz/common/resources/shared_bitmap.h"
 #include "components/viz/service/display/display_resource_provider_software.h"
 #include "components/viz/service/display/software_output_device.h"
+#include "components/viz/service/gl/gpu_service_impl.h"
 #include "components/viz/test/fake_output_surface.h"
-#include "components/viz/test/test_shared_bitmap_manager.h"
+#include "components/viz/test/test_in_process_context_provider.h"
+#include "gpu/command_buffer/client/client_shared_image.h"
+#include "gpu/command_buffer/client/shared_image_interface.h"
+#include "gpu/command_buffer/service/scheduler.h"
+#include "gpu/command_buffer/service/shared_image/shared_image_manager.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/skia/include/core/SkCanvas.h"
@@ -42,6 +47,11 @@
 
 namespace viz {
 namespace {
+void DeleteSharedImage(scoped_refptr<gpu::ClientSharedImage> shared_image,
+                       const gpu::SyncToken& sync_token,
+                       bool is_lost) {
+  shared_image->UpdateDestructionSyncToken(sync_token);
+}
 
 class SoftwareRendererTest : public testing::Test {
  public:
@@ -51,9 +61,17 @@ class SoftwareRendererTest : public testing::Test {
         std::move(software_output_device));
     output_surface_->BindToClient(&output_surface_client_);
 
-    shared_bitmap_manager_ = std::make_unique<TestSharedBitmapManager>();
+    auto context_provider = base::MakeRefCounted<TestInProcessContextProvider>(
+        TestContextType::kSoftwareRaster, /*support_locking=*/false);
+    gpu::ContextResult result = context_provider->BindToCurrentSequence();
+    CHECK_EQ(result, gpu::ContextResult::kSuccess);
+    auto* gpu_service = context_provider->GpuService();
+    child_context_provider_ = std::move(context_provider);
+
     resource_provider_ = std::make_unique<DisplayResourceProviderSoftware>(
-        shared_bitmap_manager_.get());
+        /*shared_bitmap_manager=*/nullptr, gpu_service->shared_image_manager(),
+        gpu_service->gpu_scheduler());
+
     renderer_ = std::make_unique<SoftwareRenderer>(
         &settings_, &debug_settings_, output_surface_.get(),
         resource_provider(), nullptr);
@@ -81,20 +99,26 @@ class SoftwareRendererTest : public testing::Test {
 
   ResourceId AllocateAndFillSoftwareResource(const gfx::Size& size,
                                              const SkBitmap& source) {
-    base::MappedReadOnlyRegion shm =
-        bitmap_allocation::AllocateSharedBitmap(size, RGBA_8888);
+    auto shared_image =
+        shared_image_interface()->CreateSharedImageForSoftwareCompositor(
+            {SinglePlaneFormat::kBGRA_8888, size, gfx::ColorSpace(),
+             gpu::SHARED_IMAGE_USAGE_CPU_WRITE_ONLY,
+             "SoftwareRendererTestSharedBitmap"});
+    auto mapping = shared_image->Map();
+
     SkImageInfo info = SkImageInfo::MakeN32Premul(size.width(), size.height());
-    source.readPixels(info, shm.mapping.memory(), info.minRowBytes(), 0, 0);
+    source.readPixels(info, mapping->GetMemoryForPlane(0).data(),
+                      info.minRowBytes(), 0, 0);
 
-    // Registers the SharedBitmapId in the display compositor.
-    SharedBitmapId shared_bitmap_id = SharedBitmap::GenerateId();
-    shared_bitmap_manager_->ChildAllocatedSharedBitmap(shm.region.Map(),
-                                                       shared_bitmap_id);
+    auto transferable_resource = TransferableResource::MakeSoftwareSharedImage(
+        shared_image, shared_image_interface()->GenVerifiedSyncToken(), size,
+        SinglePlaneFormat::kBGRA_8888,
+        TransferableResource::ResourceSource::kTileRasterTask);
+    auto release_callback =
+        base::BindOnce(&DeleteSharedImage, std::move(shared_image));
 
-    // Makes a resource id that refers to the registered SharedBitmapId.
     return child_resource_provider_->ImportResource(
-        TransferableResource::MakeSoftware(shared_bitmap_id, size, RGBA_8888),
-        base::DoNothing());
+        std::move(transferable_resource), std::move(release_callback));
   }
 
   std::unique_ptr<SkBitmap> DrawAndCopyOutput(AggregatedRenderPassList* list,
@@ -131,15 +155,19 @@ class SoftwareRendererTest : public testing::Test {
     std::move(quit_closure).Run();
   }
 
+  gpu::SharedImageInterface* shared_image_interface() {
+    return child_context_provider_->SharedImageInterface();
+  }
+
  protected:
   RendererSettings settings_;
   DebugRendererSettings debug_settings_;
   cc::FakeOutputSurfaceClient output_surface_client_;
   std::unique_ptr<FakeSoftwareOutputSurface> output_surface_;
-  std::unique_ptr<SharedBitmapManager> shared_bitmap_manager_;
   std::unique_ptr<DisplayResourceProviderSoftware> resource_provider_;
   std::unique_ptr<ClientResourceProvider> child_resource_provider_;
   std::unique_ptr<SoftwareRenderer> renderer_;
+  scoped_refptr<RasterContextProvider> child_context_provider_;
 };
 
 TEST_F(SoftwareRendererTest, SolidColorQuad) {
@@ -158,8 +186,10 @@ TEST_F(SoftwareRendererTest, SolidColorQuad) {
   SharedQuadState* shared_quad_state =
       root_render_pass->CreateAndAppendSharedQuadState();
   shared_quad_state->SetAll(gfx::Transform(), outer_rect, outer_rect,
-                            gfx::MaskFilterInfo(), absl::nullopt, true, 1.0,
-                            SkBlendMode::kSrcOver, 0);
+                            gfx::MaskFilterInfo(), /*clip=*/std::nullopt,
+                            /*contents_opaque=*/true, /*opacity_f=*/1.0,
+                            SkBlendMode::kSrcOver, /*sorting_context=*/0,
+                            /*layer_id=*/0u, /*fast_rounded_corner=*/false);
   auto* inner_quad =
       root_render_pass->CreateAndAppendDrawQuad<SolidColorDrawQuad>();
   inner_quad->SetNew(shared_quad_state, inner_rect, inner_rect, SkColors::kCyan,
@@ -206,8 +236,10 @@ TEST_F(SoftwareRendererTest, DebugBorderDrawQuad) {
   SharedQuadState* shared_quad_state =
       root_render_pass->CreateAndAppendSharedQuadState();
   shared_quad_state->SetAll(gfx::Transform(), screen_rect, screen_rect,
-                            gfx::MaskFilterInfo(), absl::nullopt, true, 1.0,
-                            SkBlendMode::kSrcOver, 0);
+                            gfx::MaskFilterInfo(), /*clip=*/std::nullopt,
+                            /*contents_opaque=*/true, /*opacity_f=*/1.0,
+                            SkBlendMode::kSrcOver, /*sorting_context=*/0,
+                            /*layer_id=*/0u, /*fast_rounded_corner=*/false);
 
   auto* quad_1 =
       root_render_pass->CreateAndAppendDrawQuad<DebugBorderDrawQuad>();
@@ -221,7 +253,7 @@ TEST_F(SoftwareRendererTest, DebugBorderDrawQuad) {
   quad_3->SetNew(shared_quad_state, rect_3, rect_3, SkColors::kYellow, false);
 
   // Test one non-opaque color.
-  // TODO(crbug.com/1308932): Colors clearly get transformed into ints at some
+  // TODO(crbug.com/40219248): Colors clearly get transformed into ints at some
   // point in the pipeline, so we need to use values n/255 for now.
   SkColor4f semi_transparent_white =
       SkColor4f{1.0f, 1.0f, 1.0f, 128.0 / 255.0f};
@@ -262,6 +294,7 @@ TEST_F(SoftwareRendererTest, DebugBorderDrawQuad) {
             output->getColor4f(rect_size.width() + 2, rect_size.height() + 3));
 }
 
+#if !BUILDFLAG(IS_ANDROID)
 TEST_F(SoftwareRendererTest, TileQuad) {
   gfx::Size outer_size(100, 100);
   gfx::Size inner_size(98, 98);
@@ -300,8 +333,10 @@ TEST_F(SoftwareRendererTest, TileQuad) {
   SharedQuadState* shared_quad_state =
       root_render_pass->CreateAndAppendSharedQuadState();
   shared_quad_state->SetAll(gfx::Transform(), outer_rect, outer_rect,
-                            gfx::MaskFilterInfo(), absl::nullopt, true, 1.0,
-                            SkBlendMode::kSrcOver, 0);
+                            gfx::MaskFilterInfo(), /*clip=*/std::nullopt,
+                            /*contents_opaque=*/true, /*opacity_f=*/1.0,
+                            SkBlendMode::kSrcOver, /*sorting_context=*/0,
+                            /*layer_id=*/0u, /*fast_rounded_corner=*/false);
   auto* inner_quad = root_render_pass->CreateAndAppendDrawQuad<TileDrawQuad>();
   inner_quad->SetNew(shared_quad_state, inner_rect, inner_rect, needs_blending,
                      mapped_resource_cyan, gfx::RectF(gfx::SizeF(inner_size)),
@@ -362,8 +397,10 @@ TEST_F(SoftwareRendererTest, TileQuadVisibleRect) {
   SharedQuadState* shared_quad_state =
       root_render_pass->CreateAndAppendSharedQuadState();
   shared_quad_state->SetAll(gfx::Transform(), tile_rect, tile_rect,
-                            gfx::MaskFilterInfo(), absl::nullopt, true, 1.0,
-                            SkBlendMode::kSrcOver, 0);
+                            gfx::MaskFilterInfo(), /*clip=*/std::nullopt,
+                            /*contents_opaque=*/true, /*opacity_f=*/1.0,
+                            SkBlendMode::kSrcOver, /*sorting_context=*/0,
+                            /*layer_id=*/0u, /*fast_rounded_corner=*/false);
   auto* quad = root_render_pass->CreateAndAppendDrawQuad<TileDrawQuad>();
   quad->SetNew(shared_quad_state, tile_rect, tile_rect, needs_blending,
                mapped_resource_cyan, gfx::RectF(gfx::SizeF(tile_size)),
@@ -396,6 +433,7 @@ TEST_F(SoftwareRendererTest, TileQuadVisibleRect) {
   EXPECT_EQ(SK_ColorYELLOW, output->getColor(visible_rect.right() - 1,
                                              visible_rect.bottom() - 1));
 }
+#endif  // BUILDFLAG(IS_ANDROID)
 
 TEST_F(SoftwareRendererTest, ShouldClearRootRenderPass) {
   float device_scale_factor = 1.f;
@@ -412,8 +450,6 @@ TEST_F(SoftwareRendererTest, ShouldClearRootRenderPass) {
       cc::AddRenderPass(&list, root_clear_pass_id, gfx::Rect(viewport_size),
                         gfx::Transform(), cc::FilterOperations());
   cc::AddQuad(root_clear_pass, gfx::Rect(viewport_size), SkColors::kGreen);
-
-  renderer()->DecideRenderPassAllocationsForFrame(list);
 
   std::unique_ptr<SkBitmap> output =
       DrawAndCopyOutput(&list, device_scale_factor, viewport_size);
@@ -435,8 +471,6 @@ TEST_F(SoftwareRendererTest, ShouldClearRootRenderPass) {
       cc::AddRenderPass(&list, root_smaller_pass_id, gfx::Rect(viewport_size),
                         gfx::Transform(), cc::FilterOperations());
   cc::AddQuad(root_smaller_pass, smaller_rect, SkColors::kMagenta);
-
-  renderer()->DecideRenderPassAllocationsForFrame(list);
 
   output = DrawAndCopyOutput(&list, device_scale_factor, viewport_size);
   EXPECT_EQ(viewport_size.width(), output->info().width());
@@ -480,8 +514,6 @@ TEST_F(SoftwareRendererTest, RenderPassVisibleRect) {
   gfx::Rect interior_visible_rect(30, 30, 40, 40);
   root_clear_pass->quad_list.front()->visible_rect = interior_visible_rect;
 
-  renderer()->DecideRenderPassAllocationsForFrame(list);
-
   std::unique_ptr<SkBitmap> output =
       DrawAndCopyOutput(&list, device_scale_factor, viewport_size);
   EXPECT_EQ(viewport_size.width(), output->info().width());
@@ -524,7 +556,9 @@ TEST_F(SoftwareRendererTest, ClipRoundRect) {
         root_pass->CreateAndAppendSharedQuadState();
     shared_quad_state->SetAll(gfx::Transform(), outer_rect, outer_rect,
                               gfx::MaskFilterInfo(), gfx::Rect(1, 1, 30, 30),
-                              true, 1.0, SkBlendMode::kSrcOver, 0);
+                              /*contents_opaque=*/true, /*opacity_f=*/1.0,
+                              SkBlendMode::kSrcOver, /*sorting_context=*/0,
+                              /*layer_id=*/0u, /*fast_rounded_corner=*/false);
     auto* outer_quad = root_pass->CreateAndAppendDrawQuad<SolidColorDrawQuad>();
     outer_quad->SetNew(shared_quad_state, outer_rect, outer_rect,
                        SkColors::kGreen, false);
@@ -540,13 +574,13 @@ TEST_F(SoftwareRendererTest, ClipRoundRect) {
     shared_quad_state->SetAll(
         gfx::Transform(), inner_rect, inner_rect,
         gfx::MaskFilterInfo(gfx::RRectF(gfx::RectF(5, 5, 10, 10), 2)),
-        absl::nullopt, true, 1.0, SkBlendMode::kSrcOver, 0);
+        /*clip=*/std::nullopt, /*contents_opaque=*/true, /*opacity_f=*/1.0,
+        SkBlendMode::kSrcOver, /*sorting_context=*/0,
+        /*layer_id=*/0u, /*fast_rounded_corner=*/false);
     auto* inner_quad = root_pass->CreateAndAppendDrawQuad<SolidColorDrawQuad>();
     inner_quad->SetNew(shared_quad_state, inner_rect, inner_rect,
                        SkColors::kRed, false);
   }
-
-  renderer()->DecideRenderPassAllocationsForFrame(list);
 
   std::unique_ptr<SkBitmap> output =
       DrawAndCopyOutput(&list, device_scale_factor, viewport_size);
@@ -619,7 +653,6 @@ TEST_F(SoftwareRendererTest, PartialSwap) {
     // partial swap is enabled.
     root_pass->damage_rect = gfx::Rect(viewport_size);
 
-    renderer()->DecideRenderPassAllocationsForFrame(list);
     renderer()->DrawFrame(&list, device_scale_factor, viewport_size,
                           gfx::DisplayColorSpaces(),
                           std::move(surface_damage_rect_list));
@@ -637,7 +670,6 @@ TEST_F(SoftwareRendererTest, PartialSwap) {
     // partial swap is enabled.
     root_pass->damage_rect = gfx::Rect(2, 2, 3, 3);
 
-    renderer()->DecideRenderPassAllocationsForFrame(list);
     renderer()->DrawFrame(&list, device_scale_factor, viewport_size,
                           gfx::DisplayColorSpaces(),
                           std::move(surface_damage_rect_list));

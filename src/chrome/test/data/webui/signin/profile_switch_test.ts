@@ -1,16 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://profile-picker/lazy_load.js';
 
-import {ProfileSwitchElement} from 'chrome://profile-picker/lazy_load.js';
-
-import {ManageProfilesBrowserProxyImpl, ProfileState} from 'chrome://profile-picker/profile_picker.js';
-import {PromiseResolver} from 'chrome://resources/js/promise_resolver.m.js';
-
+import type {ProfileSwitchElement} from 'chrome://profile-picker/lazy_load.js';
+import type {ProfileState} from 'chrome://profile-picker/profile_picker.js';
+import {ManageProfilesBrowserProxyImpl} from 'chrome://profile-picker/profile_picker.js';
+import {PromiseResolver} from 'chrome://resources/js/promise_resolver.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {waitBeforeNextRender} from 'chrome://webui-test/test_util.js';
+import {microtasksFinished} from 'chrome://webui-test/test_util.js';
 
 import {TestManageProfilesBrowserProxy} from './test_manage_profiles_browser_proxy.js';
 
@@ -25,10 +24,9 @@ suite('ProfileSwitchTest', function() {
     getSwitchProfilePromiseResolver = new PromiseResolver();
     browserProxy.setGetSwitchProfilePromise(
         getSwitchProfilePromiseResolver.promise);
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     profileSwitchElement = document.createElement('profile-switch');
     document.body.appendChild(profileSwitchElement);
-    return waitBeforeNextRender(profileSwitchElement);
   });
 
   test('getSwitchProfile', async function() {
@@ -36,6 +34,7 @@ suite('ProfileSwitchTest', function() {
 
     getSwitchProfilePromiseResolver.resolve(browserProxy.profileSample);
     await browserProxy.whenCalled('getSwitchProfile');
+    await microtasksFinished();
 
     assertFalse(profileSwitchElement.$.switchButton.disabled);
     assertEquals(
@@ -52,10 +51,11 @@ suite('ProfileSwitchTest', function() {
   test('getSwitchProfile_managed', async function() {
     const profileState: ProfileState =
         Object.assign({}, browserProxy.profileSample);
-    profileState.isManaged = true;
+    profileState.avatarBadge = 'cr:domain';
 
     getSwitchProfilePromiseResolver.resolve(profileState);
     await browserProxy.whenCalled('getSwitchProfile');
+    await microtasksFinished();
 
     assertFalse(profileSwitchElement.$.iconContainer.hidden);
   });
@@ -63,6 +63,7 @@ suite('ProfileSwitchTest', function() {
   test('confirmSwitch', async function() {
     getSwitchProfilePromiseResolver.resolve(browserProxy.profileSample);
     await browserProxy.whenCalled('getSwitchProfile');
+    await microtasksFinished();
 
     assertFalse(profileSwitchElement.$.switchButton.disabled);
     profileSwitchElement.$.switchButton.click();
@@ -79,6 +80,7 @@ suite('ProfileSwitchTest', function() {
   test('cancelSwitch_afterGetSwitchProfile', async function() {
     getSwitchProfilePromiseResolver.resolve(browserProxy.profileSample);
     await browserProxy.whenCalled('getSwitchProfile');
+    await microtasksFinished();
 
     assertFalse(profileSwitchElement.$.cancelButton.disabled);
     profileSwitchElement.$.cancelButton.click();

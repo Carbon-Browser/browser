@@ -1,10 +1,12 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/ui_devtools/views/dom_agent_aura.h"
 
-#include "base/containers/cxx20_erase.h"
+#include <vector>
+
+#include "base/ranges/algorithm.h"
 #include "components/ui_devtools/views/widget_element.h"
 #include "components/ui_devtools/views/window_element.h"
 #include "ui/aura/env.h"
@@ -24,8 +26,10 @@ DOMAgentAura::DOMAgentAura() {
   DCHECK(!dom_agent_aura_);
   dom_agent_aura_ = this;
   aura::Env::GetInstance()->AddObserver(this);
-  for (auto* window_tree_host : aura::Env::GetInstance()->window_tree_hosts())
+  for (aura::WindowTreeHost* window_tree_host :
+       aura::Env::GetInstance()->window_tree_hosts()) {
     OnHostInitialized(window_tree_host);
+  }
 }
 
 DOMAgentAura::~DOMAgentAura() {
@@ -48,13 +52,11 @@ void DOMAgentAura::OnHostInitialized(aura::WindowTreeHost* host) {
 }
 
 void DOMAgentAura::OnWindowDestroying(aura::Window* window) {
-  base::Erase(roots_, window);
+  std::erase(roots_, window);
 
   if (element_root() && !element_root()->is_updating()) {
     const auto& children = element_root()->children();
-    auto iter = std::find_if(
-        children.begin(), children.end(),
-        [window](UIElement* e) { return WindowElement::From(e) == window; });
+    auto iter = base::ranges::find(children, window, &WindowElement::From);
     if (iter != children.end()) {
       UIElement* child_element = *iter;
       element_root()->RemoveChild(child_element);

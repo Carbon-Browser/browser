@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -41,7 +41,8 @@ class ShellContentRendererClient : public content::ContentRendererClient {
       const base::FilePath& plugin_path) override;
   void WillSendRequest(blink::WebLocalFrame* frame,
                        ui::PageTransition transition_type,
-                       const blink::WebURL& url,
+                       const blink::WebURL& upstream_url,
+                       const blink::WebURL& target_url,
                        const net::SiteForCookies& site_for_cookies,
                        const url::Origin* initiator_origin,
                        GURL* new_url) override;

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -457,7 +457,9 @@ void VideoCaptureDeviceDeckLinkMac::OnIncomingCapturedData(
   if (!client_)
     return;
   client_->OnIncomingCapturedData(data, length, frame_format, color_space,
-                                  rotation, flip_y, reference_time, timestamp);
+                                  rotation, flip_y, reference_time, timestamp,
+                                  /*capture_begin_timestamp=*/std::nullopt,
+                                  /*metadata=*/std::nullopt);
 }
 
 void VideoCaptureDeviceDeckLinkMac::SendErrorString(

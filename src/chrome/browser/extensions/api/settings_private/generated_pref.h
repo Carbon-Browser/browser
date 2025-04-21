@@ -1,11 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_EXTENSIONS_API_SETTINGS_PRIVATE_GENERATED_PREF_H_
 #define CHROME_BROWSER_EXTENSIONS_API_SETTINGS_PRIVATE_GENERATED_PREF_H_
 
-#include <memory>
 #include <string>
 #include "base/observer_list.h"
 #include "chrome/browser/extensions/api/settings_private/prefs_util_enums.h"
@@ -51,8 +50,7 @@ class GeneratedPref {
   virtual ~GeneratedPref();
 
   // Returns fully populated PrefObject.
-  virtual std::unique_ptr<api::settings_private::PrefObject> GetPrefObject()
-      const = 0;
+  virtual api::settings_private::PrefObject GetPrefObject() const = 0;
 
   // Updates "preference" value.
   virtual SetPrefResult SetPref(const base::Value* value) = 0;

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,25 +9,30 @@
 #include <utility>
 #include <vector>
 
-#include "base/guid.h"
 #include "base/memory/ptr_util.h"
+#include "base/not_fatal_until.h"
 #include "base/path_service.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/keyed_service/core/simple_key_map.h"
+#include "components/origin_trials/browser/leveldb_persistence_provider.h"
+#include "components/origin_trials/browser/origin_trials.h"
 #include "components/profile_metrics/browser_profile_type.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/render_process_host.h"
 #include "content/public/browser/storage_partition.h"
 #include "headless/lib/browser/headless_browser_context_options.h"
 #include "headless/lib/browser/headless_browser_impl.h"
 #include "headless/lib/browser/headless_browser_main_parts.h"
+#include "headless/lib/browser/headless_client_hints_controller_delegate.h"
 #include "headless/lib/browser/headless_permission_manager.h"
 #include "headless/lib/browser/headless_web_contents_impl.h"
+#include "third_party/blink/public/common/origin_trials/trial_token_validator.h"
 #include "ui/base/resource/resource_bundle.h"
 
 #if defined(HEADLESS_USE_POLICY)
 #include "components/user_prefs/user_prefs.h"  // nogncheck
-#endif
+#endif                                         // defined(HEADLESS_USE_POLICY)
 
 namespace headless {
 
@@ -59,7 +64,9 @@ HeadlessBrowserContextImpl::HeadlessBrowserContextImpl(
     : browser_(browser),
       context_options_(std::move(context_options)),
       permission_controller_delegate_(
-          std::make_unique<HeadlessPermissionManager>(this)) {
+          std::make_unique<HeadlessPermissionManager>()),
+      hints_delegate_(
+          std::make_unique<HeadlessClientHintsControllerDelegate>()) {
   BrowserContextDependencyManager::GetInstance()->MarkBrowserContextLive(this);
   InitWhileIOAllowed();
   simple_factory_key_ =
@@ -77,7 +84,11 @@ HeadlessBrowserContextImpl::HeadlessBrowserContextImpl(
 #if defined(HEADLESS_USE_POLICY)
   if (PrefService* pref_service = browser->GetPrefs())
     user_prefs::UserPrefs::Set(this, pref_service);
-#endif
+#endif  // defined(HEADLESS_USE_POLICY)
+
+  // Ensure the delegate is initialized early to give it time to load its
+  // persistence.
+  GetOriginTrialsControllerDelegate();
 }
 
 HeadlessBrowserContextImpl::~HeadlessBrowserContextImpl() {
@@ -85,8 +96,14 @@ HeadlessBrowserContextImpl::~HeadlessBrowserContextImpl() {
   SimpleKeyMap::GetInstance()->Dissociate(this);
   NotifyWillBeDestroyed();
 
-  // Destroy all web contents before shutting down storage partitions.
+  // Destroy all web contents before shutting down in process renderer and
+  // storage partitions.
   web_contents_map_.clear();
+
+  // In single process mode we can only have one browser context, so it's
+  // safe to shutdown the in-process renderer here.
+  if (content::RenderProcessHost::run_renderer_in_process())
+    content::RenderProcessHost::ShutDownInProcessRenderer();
 
   if (request_context_manager_) {
     content::GetIOThreadTaskRunner({})->DeleteSoon(
@@ -138,50 +155,6 @@ HeadlessBrowserContextImpl::GetAllWebContents() {
   return result;
 }
 
-void HeadlessBrowserContextImpl::SetDevToolsFrameToken(
-    int render_process_id,
-    int render_frame_routing_id,
-    const base::UnguessableToken& devtools_frame_token,
-    int frame_tree_node_id) {
-  base::AutoLock lock(devtools_frame_token_map_lock_);
-  devtools_frame_token_map_[content::GlobalRenderFrameHostId(
-      render_process_id, render_frame_routing_id)] = devtools_frame_token;
-  frame_tree_node_id_to_devtools_frame_token_map_[frame_tree_node_id] =
-      devtools_frame_token;
-}
-
-void HeadlessBrowserContextImpl::RemoveDevToolsFrameToken(
-    int render_process_id,
-    int render_frame_routing_id,
-    int frame_tree_node_id) {
-  base::AutoLock lock(devtools_frame_token_map_lock_);
-  devtools_frame_token_map_.erase(content::GlobalRenderFrameHostId(
-      render_process_id, render_frame_routing_id));
-  frame_tree_node_id_to_devtools_frame_token_map_.erase(frame_tree_node_id);
-}
-
-const base::UnguessableToken* HeadlessBrowserContextImpl::GetDevToolsFrameToken(
-    int render_process_id,
-    int render_frame_id) const {
-  base::AutoLock lock(devtools_frame_token_map_lock_);
-  const auto& find_it = devtools_frame_token_map_.find(
-      content::GlobalRenderFrameHostId(render_process_id, render_frame_id));
-  if (find_it == devtools_frame_token_map_.end())
-    return nullptr;
-  return &find_it->second;
-}
-
-const base::UnguessableToken*
-HeadlessBrowserContextImpl::GetDevToolsFrameTokenForFrameTreeNodeId(
-    int frame_tree_node_id) const {
-  base::AutoLock lock(devtools_frame_token_map_lock_);
-  const auto& find_it =
-      frame_tree_node_id_to_devtools_frame_token_map_.find(frame_tree_node_id);
-  if (find_it == frame_tree_node_id_to_devtools_frame_token_map_.end())
-    return nullptr;
-  return &find_it->second;
-}
-
 void HeadlessBrowserContextImpl::Close() {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   browser_->DestroyBrowserContext(this);
@@ -213,10 +186,6 @@ base::FilePath HeadlessBrowserContextImpl::GetPath() {
 
 bool HeadlessBrowserContextImpl::IsOffTheRecord() {
   return context_options_->incognito_mode();
-}
-
-content::ResourceContext* HeadlessBrowserContextImpl::GetResourceContext() {
-  return request_context_manager_->GetResourceContext();
 }
 
 content::DownloadManagerDelegate*
@@ -261,7 +230,7 @@ HeadlessBrowserContextImpl::GetPermissionControllerDelegate() {
 
 content::ClientHintsControllerDelegate*
 HeadlessBrowserContextImpl::GetClientHintsControllerDelegate() {
-  return nullptr;
+  return hints_delegate_.get();
 }
 
 content::BackgroundFetchDelegate*
@@ -277,6 +246,24 @@ HeadlessBrowserContextImpl::GetBackgroundSyncController() {
 content::BrowsingDataRemoverDelegate*
 HeadlessBrowserContextImpl::GetBrowsingDataRemoverDelegate() {
   return nullptr;
+}
+
+content::ReduceAcceptLanguageControllerDelegate*
+HeadlessBrowserContextImpl::GetReduceAcceptLanguageControllerDelegate() {
+  return nullptr;
+}
+
+content::OriginTrialsControllerDelegate*
+HeadlessBrowserContextImpl::GetOriginTrialsControllerDelegate() {
+  if (!origin_trials_controller_delegate_) {
+    origin_trials_controller_delegate_ =
+        std::make_unique<origin_trials::OriginTrials>(
+            std::make_unique<origin_trials::LevelDbPersistenceProvider>(
+                GetPath(),
+                GetDefaultStoragePartition()->GetProtoDatabaseProvider()),
+            std::make_unique<blink::TrialTokenValidator>());
+  }
+  return origin_trials_controller_delegate_.get();
 }
 
 HeadlessWebContents* HeadlessBrowserContextImpl::CreateWebContents(
@@ -299,25 +286,30 @@ HeadlessWebContents* HeadlessBrowserContextImpl::CreateWebContents(
 
 void HeadlessBrowserContextImpl::RegisterWebContents(
     std::unique_ptr<HeadlessWebContentsImpl> web_contents) {
-  DCHECK(web_contents);
-  web_contents_map_[web_contents->GetDevToolsAgentHostId()] =
-      std::move(web_contents);
+  CHECK(web_contents);
+  const uintptr_t key =
+      reinterpret_cast<uintptr_t>(web_contents->web_contents());
+  CHECK(key);
+  const bool inserted =
+      web_contents_map_.insert({key, std::move(web_contents)}).second;
+  CHECK(inserted);
 }
 
 void HeadlessBrowserContextImpl::DestroyWebContents(
     HeadlessWebContentsImpl* web_contents) {
-  auto it = web_contents_map_.find(web_contents->GetDevToolsAgentHostId());
-  DCHECK(it != web_contents_map_.end());
-  web_contents_map_.erase(it);
+  CHECK(web_contents);
+  const uintptr_t key =
+      reinterpret_cast<uintptr_t>(web_contents->web_contents());
+  CHECK(key);
+  size_t erased = web_contents_map_.erase(key);
+  CHECK(erased);
 }
 
-HeadlessWebContents*
-HeadlessBrowserContextImpl::GetWebContentsForDevToolsAgentHostId(
-    const std::string& devtools_agent_host_id) {
-  auto find_it = web_contents_map_.find(devtools_agent_host_id);
-  if (find_it == web_contents_map_.end())
-    return nullptr;
-  return find_it->second.get();
+HeadlessWebContentsImpl* HeadlessBrowserContextImpl::GetHeadlessWebContents(
+    const content::WebContents* web_contents) {
+  const uintptr_t key = reinterpret_cast<uintptr_t>(web_contents);
+  auto find_it = web_contents_map_.find(key);
+  return find_it == web_contents_map_.end() ? nullptr : find_it->second.get();
 }
 
 HeadlessBrowserImpl* HeadlessBrowserContextImpl::browser() const {
@@ -351,13 +343,6 @@ HeadlessBrowserContext::Builder::Builder(HeadlessBrowserImpl* browser)
 HeadlessBrowserContext::Builder::~Builder() = default;
 
 HeadlessBrowserContext::Builder::Builder(Builder&&) = default;
-
-HeadlessBrowserContext::Builder&
-HeadlessBrowserContext::Builder::SetProductNameAndVersion(
-    const std::string& product_name_and_version) {
-  options_->product_name_and_version_ = product_name_and_version;
-  return *this;
-}
 
 HeadlessBrowserContext::Builder& HeadlessBrowserContext::Builder::SetUserAgent(
     const std::string& user_agent) {
@@ -393,6 +378,13 @@ HeadlessBrowserContext::Builder::SetUserDataDir(
 }
 
 HeadlessBrowserContext::Builder&
+HeadlessBrowserContext::Builder::SetDiskCacheDir(
+    const base::FilePath& disk_cache_dir) {
+  options_->disk_cache_dir_ = disk_cache_dir;
+  return *this;
+}
+
+HeadlessBrowserContext::Builder&
 HeadlessBrowserContext::Builder::SetIncognitoMode(bool incognito_mode) {
   options_->incognito_mode_ = incognito_mode;
   return *this;
@@ -405,24 +397,8 @@ HeadlessBrowserContext::Builder::SetBlockNewWebContents(
   return *this;
 }
 
-HeadlessBrowserContext::Builder&
-HeadlessBrowserContext::Builder::SetOverrideWebPreferencesCallback(
-    base::RepeatingCallback<void(blink::web_pref::WebPreferences*)> callback) {
-  options_->override_web_preferences_callback_ = std::move(callback);
-  return *this;
-}
-
 HeadlessBrowserContext* HeadlessBrowserContext::Builder::Build() {
   return browser_->CreateBrowserContext(this);
 }
-
-HeadlessBrowserContext::Builder::MojoBindings::MojoBindings() = default;
-
-HeadlessBrowserContext::Builder::MojoBindings::MojoBindings(
-    const std::string& mojom_name,
-    const std::string& js_bindings)
-    : mojom_name(mojom_name), js_bindings(js_bindings) {}
-
-HeadlessBrowserContext::Builder::MojoBindings::~MojoBindings() = default;
 
 }  // namespace headless

@@ -6,8 +6,8 @@
 
 The templated `base::{Once, Repeating}Callback<>` classes are generalized
 function objects. Together with the `base::Bind{Once, Repeating}()` functions in
-base/bind.h, they provide a type-safe method for performing partial application
-of functions.
+base/functional/bind.h, they provide a type-safe method for performing partial
+application of functions.
 
 Partial application is the process of binding a subset of a function's arguments
 to produce another function that takes fewer arguments. This can be used to pass
@@ -17,7 +17,7 @@ different MessageLoops.
 
 A callback with no unbound input parameters (`base::OnceCallback<void()>`) is
 called a `base::OnceClosure`. The same pattern exists for
-base::RepeatingCallback, as base::RepeatingClosure. Note that this is NOT the
+base::RepeatingCallback, as `base::RepeatingClosure`. Note that this is NOT the
 same as what other languages refer to as a closure -- it does not retain a
 reference to its enclosing environment.
 
@@ -201,7 +201,7 @@ base::OnceCallback<int()> compute_result_cb = base::BindOnce(&ComputeResult);
 
 // Task runner for the current thread.
 scoped_refptr<base::SequencedTaskRunner> current_task_runner =
-    base::SequencedTaskRunnerHandle::Get();
+    base::SequencedTaskRunner::GetCurrentDefault();
 
 // A function to accept the result, except it can only be run safely from the
 // current thread.
@@ -304,7 +304,7 @@ void Collect(base::OnceCallback<void(Data)> collect_and_merge) {
 
 CollectAndMerge() {
   const auto collect_and_merge =
-      base::BarrierCallback<Image>(sources_.size(), base::BindOnce(&Merge));
+      base::BarrierCallback<Data>(sources_.size(), base::BindOnce(&Merge));
   for (const auto& source : sources_) {
     // Copy the barrier callback for asynchronous data collection.
     // Once all sources have called `collect_and_merge` with their respective
@@ -382,6 +382,25 @@ By default the object must support RefCounted or you will get a compiler
 error. If you're passing between threads, be sure it's RefCountedThreadSafe! See
 "Advanced binding of member functions" below if you don't want to use reference
 counting.
+
+Binding a non-const method with a const object is not allowed, for example:
+
+```cpp
+class MyClass {
+ public:
+  base::OnceClosure GetCallback() const {
+    base::BindOnce(
+        // A template error will prevent the non-const method from being bound
+        // to the the WeakPtr<const MyClass>.
+        &MyClass::OnCallback,
+        weak_factory_.GetWeakPtr());
+  }
+
+ private:
+  void OnCallback(); // non-const
+  base::WeakPtrFactory<MyClass> weak_factory_{this};
+}
+```
 
 ### Running A Callback
 
@@ -577,53 +596,78 @@ base::BindRepeating(&Foo, base::Passed(std::move(p))); // Ok, but subtle.
 
 ### Binding A Class Method With Weak Pointers
 
-If `MyClass` has a `base::WeakPtr<MyClass> weak_this_` member (see below)
-then a class method can be bound with:
+Callbacks to a class method may be bound using a weak pointer as the receiver.
+A callback bound using a weak pointer receiver will be automatically cancelled
+(calling `Run()` becomes a no-op) if the weak pointer is invalidated, e.g. its
+associated class instance is destroyed.
 
-```cpp
-base::BindOnce(&MyClass::Foo, weak_this_);
-```
-
-The callback will not be run if the object has already been destroyed.
-
-Note that class method callbacks bound to `base::WeakPtr`s may only be
-run on the same sequence on which the object will be destroyed, since otherwise
-execution of the callback might race with the object's deletion.
-
-To use `base::WeakPtr` with `base::Bind{Once, Repeating}()` as the `this`
-pointer to a method bound in a callback, `MyClass` will typically look like:
+The most common way to use this pattern is by embedding a `base::WeakPtrFactory`
+field, e.g.:
 
 ```cpp
 class MyClass {
-public:
-  MyClass() {
-    weak_this_ = weak_factory_.GetWeakPtr();
-  }
-private:
-  base::WeakPtr<MyClass> weak_this_;
-  // MyClass member variables go here.
+ public:
+  MyClass();
+
+  void Foo();
+
+ private:
+  std::string data_;
+
+  // Chrome's compiler toolchain enforces that any `WeakPtrFactory`
+  // fields are declared last, to avoid destruction ordering issues.
   base::WeakPtrFactory<MyClass> weak_factory_{this};
 };
 ```
 
-`weak_factory_` is the last member variable in `MyClass` so that it is
-destroyed first. This ensures that if any class methods bound to `weak_this_`
-are `Run()` during teardown, then they will not actually be executed.
+Then use `base::WeakPtrFactory<T>::GetWeakPtr()` as the receiver when
+binding a callback:
 
-If `MyClass` only ever binds and executes callbacks on the same sequence, then
-it is generally safe to call `weak_factory_.GetWeakPtr()` at the
-`base::Bind{Once, Repeating}()` call, rather than taking a separate `weak_this_`
-during construction.
+```cpp
+base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+    FROM_HERE,
+    base::BindOnce(&MyClass::Foo, weak_factory_.GetWeakPtr());
+```
+
+If `this` is destroyed before the posted callback runs, the callback will
+simply become a no-op when run, rather than being a use-after-free bug on
+the destroyed `MyClass` instance.
+
+**Sequence safety**
+
+Class method callbacks bound to `base::WeakPtr`s must be run on the same
+sequence on which the object will be destroyed to avoid potential races
+between object destruction and callback execution. The same caveat applies if
+a class manually invalidates live `base::WeakPtr`s with
+`base::WeakPtrFactory<T>::InvalidateWeakPtrs()`.
 
 ### Binding A Class Method With Manual Lifetime Management
 
+If a callback bound to a class method does not need cancel-on-destroy
+semantics (because there is some external guarantee that the class instance will
+always be live when running the callback), then use:
+
 ```cpp
-base::BindOnce(&MyClass::Foo, base::Unretained(this));
+// base::Unretained() is safe since `this` joins `background_thread_` in the
+// destructor.
+background_thread_->PostTask(
+    FROM_HERE, base::BindOnce(&MyClass::Foo, base::Unretained(this)));
 ```
 
-This disables all lifetime management on the object. You're responsible for
-making sure the object is alive at the time of the call. You break it, you own
-it!
+It is often a good idea to add a brief comment to explain why
+`base::Unretained()` is safe in this context; if nothing else, for future code
+archaeologists trying to fix a use-after-free bug.
+
+An alternative is `base::WeakPtrFactory<T>::GetSafeRef()`:
+
+```cpp
+background_thread_->PostTask(
+    FROM_HERE, base::BindOnce(&MyClass::Foo, weak_factory_.GetSafeRef());
+```
+
+Similar to `base::Unretained()`, this disables cancel-on-destroy semantics;
+unlike `base::Unretained()`, this is guaranteed to terminate safely if the
+lifetime expectations are violated.
 
 ### Binding A Class Method And Having The Callback Own The Class
 
@@ -663,6 +707,38 @@ place that expects a void return type.
 ```cpp
 base::RepeatingCallback<int()> cb = base::BindRepeating([](){ return 5; });
 base::RepeatingClosure void_cb = base::BindRepeating(base::IgnoreResult(cb));
+```
+
+### Ignoring Arguments Values
+
+Sometimes you want to use a function that takes fewer arguments than the
+designated callback type expects. The extra arguments can be ignored as long
+as they are leading.
+
+```cpp
+bool LogError(char* error_message) {
+  if (error_message) {
+    cout << "Log: " << error_message << endl;
+    return false;
+  }
+  return true;
+}
+base::RepeatingCallback<bool(int, char*)> cb =
+    base::IgnoreArgs<int>(base::BindRepeating(&LogError));
+CHECK_EQ(true, cb.Run(42, nullptr));
+```
+
+Note in the example above that the type(s) passed to `IgnoreArgs` represent
+the additional prepended parameters (those which will be "ignored"). The other
+arguments to `cb` are inferred from the callback that is being wrapped.
+
+`IgnoreArgs` can be used to adapt a closure to a callback, ignoring all the
+arguments that are eventually passed:
+
+```cpp
+base::OnceClosure closure = base::BindOnce([](){ cout << "Hello!" << endl; });
+base::OnceCallback<void(int)> int_cb =
+    base::IgnoreArgs<int>(std::move(closure));
 ```
 
 ## Quick reference for binding parameters to BindOnce() and BindRepeating()
@@ -800,12 +876,10 @@ of its implementation.
 namespace base {
 
 template <typename Receiver>
-struct IsWeakReceiver {
-  static constexpr bool value = false;
-};
+struct IsWeakReceiver : std::false_type {};
 
 template <typename Obj>
-struct UnwrapTraits {
+struct BindUnwrapTraits {
   template <typename T>
   T&& Unwrap(T&& obj) {
     return std::forward<T>(obj);
@@ -820,7 +894,7 @@ If `base::IsWeakReceiver<Receiver>::value` is true on a receiver of a method,
 if it's evaluated to false. You can specialize `base::IsWeakReceiver` to make
 an external smart pointer as a weak pointer.
 
-`base::UnwrapTraits<BoundObject>::Unwrap()` is called for each bound argument
+`base::BindUnwrapTraits<BoundObject>::Unwrap()` is called for each bound argument
 right before the callback calls the target function. You can specialize this to
 define an argument wrapper such as `base::Unretained`, `base::Owned`,
 `base::RetainedRef` and `base::Passed`.
@@ -869,7 +943,7 @@ references. (Binding to non-const references is forbidden, see bind.h.)
 To change this behavior, we introduce a set of argument wrappers (e.g.,
 `base::Unretained()`).  These are simple container templates that are passed by
 value, and wrap a pointer to argument.  Each helper has a comment describing it
-in base/bind.h.
+in base/functional/bind.h.
 
 These types are passed to the `Unwrap()` functions to modify the behavior of
 `base::Bind{Once, Repeating}()`.  The `Unwrap()` functions change behavior by doing partial
@@ -893,5 +967,6 @@ void Foo(int x, bool y);
 base::BindOnce(&Foo, _1, false); // _1 is a placeholder.
 ```
 
-If you are thinking of forward declaring `base::{Once, Repeating}Callback` in your own header
-file, please include "base/callback_forward.h" instead.
+If you are thinking of forward declaring `base::{Once, Repeating}Callback` in
+your own header file, please include "base/functional/callback_forward.h"
+instead.

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 #define UI_GFX_GEOMETRY_OUTSETS_H_
 
 #include "base/numerics/clamped_math.h"
-#include "ui/gfx/geometry/geometry_export.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/insets_outsets_base.h"
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 
 #include "base/component_export.h"
+#include "base/containers/flat_map.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -44,8 +45,7 @@ class COMPONENT_EXPORT(EVDEV) InputControllerEvdev : public InputController {
   void set_has_pointing_stick(bool has_pointing_stick);
   void set_has_touchpad(bool has_touchpad);
   void set_has_haptic_touchpad(bool has_haptic_touchpad);
-
-  void SetInputDevicesEnabled(bool enabled);
+  void set_any_keys_pressed(bool any);
 
   // InputController:
   bool HasMouse() override;
@@ -61,39 +61,56 @@ class COMPONENT_EXPORT(EVDEV) InputControllerEvdev : public InputController {
                          const base::TimeDelta& interval) override;
   void GetAutoRepeatRate(base::TimeDelta* delay,
                          base::TimeDelta* interval) override;
-  void SetCurrentLayoutByName(const std::string& layout_name) override;
+  void SetSlowKeysEnabled(bool enabled) override;
+  bool IsSlowKeysEnabled() const override;
+  void SetSlowKeysDelay(base::TimeDelta delay) override;
+  void SetCurrentLayoutByName(const std::string& layout_name,
+                              base::OnceCallback<void(bool)> callback) override;
   void SetKeyboardKeyBitsMapping(
       base::flat_map<int, std::vector<uint64_t>> key_bits_mapping) override;
   std::vector<uint64_t> GetKeyboardKeyBits(int id) override;
   void SetTouchEventLoggingEnabled(bool enabled) override;
-  void SetTouchpadSensitivity(int value) override;
-  void SetTouchpadScrollSensitivity(int value) override;
-  void SetTouchpadHapticFeedback(bool enabled) override;
-  void SetTouchpadHapticClickSensitivity(int value) override;
-  void SetTapToClick(bool enabled) override;
   void SetThreeFingerClick(bool enabled) override;
-  void SetTapDragging(bool enabled) override;
-  void SetNaturalScroll(bool enabled) override;
-  void SetMouseSensitivity(int value) override;
-  void SetMouseScrollSensitivity(int value) override;
-  void SetPrimaryButtonRight(bool right) override;
-  void SetMouseReverseScroll(bool enabled) override;
-  void SetMouseAcceleration(bool enabled) override;
+  void SetTouchpadSensitivity(std::optional<int> device_id, int value) override;
+  void SetTouchpadScrollSensitivity(std::optional<int> device_id,
+                                    int value) override;
+  void SetTouchpadHapticFeedback(std::optional<int> device_id,
+                                 bool enabled) override;
+  void SetTouchpadHapticClickSensitivity(std::optional<int> device_id,
+                                         int value) override;
+  void SetTapToClick(std::optional<int> device_id, bool enabled) override;
+  void SetTapDragging(std::optional<int> device_id, bool enabled) override;
+  void SetNaturalScroll(std::optional<int> device_id, bool enabled) override;
+  void SetMouseSensitivity(std::optional<int> device_id, int value) override;
+  void SetMouseScrollSensitivity(std::optional<int> device_id,
+                                 int value) override;
+  void SetMouseReverseScroll(std::optional<int> device_id,
+                             bool enabled) override;
+  void SetMouseAcceleration(std::optional<int> device_id,
+                            bool enabled) override;
+  void SetMouseScrollAcceleration(std::optional<int> device_id,
+                                  bool enabled) override;
+  void SetPointingStickSensitivity(std::optional<int> device_id,
+                                   int value) override;
+  void SetPointingStickAcceleration(std::optional<int> device_id,
+                                    bool enabled) override;
+  void SetTouchpadAcceleration(std::optional<int> device_id,
+                               bool enabled) override;
+  void SetTouchpadScrollAcceleration(std::optional<int> device_id,
+                                     bool enabled) override;
+  void SetPrimaryButtonRight(std::optional<int> device_id, bool right) override;
+  void SetPointingStickPrimaryButtonRight(std::optional<int> device_id,
+                                          bool right) override;
   void SuspendMouseAcceleration() override;
   void EndMouseAccelerationSuspension() override;
-  void SetMouseScrollAcceleration(bool enabled) override;
-  void SetPointingStickSensitivity(int value) override;
-  void SetPointingStickPrimaryButtonRight(bool right) override;
-  void SetPointingStickAcceleration(bool enabled) override;
   void SetGamepadKeyBitsMapping(
       base::flat_map<int, std::vector<uint64_t>> key_bits_mapping) override;
   std::vector<uint64_t> GetGamepadKeyBits(int id) override;
-  void SetTouchpadAcceleration(bool enabled) override;
-  void SetTouchpadScrollAcceleration(bool enabled) override;
   void SetTapToClickPaused(bool state) override;
   void GetTouchDeviceStatus(GetTouchDeviceStatusReply reply) override;
   void GetTouchEventLog(const base::FilePath& out_dir,
                         GetTouchEventLogReply reply) override;
+  void DescribeForLog(DescribeForLogReply reply) const override;
   void GetStylusSwitchState(GetStylusSwitchStateReply reply) override;
   void SetInternalTouchpadEnabled(bool enabled) override;
   bool IsInternalTouchpadEnabled() const override;
@@ -112,16 +129,24 @@ class COMPONENT_EXPORT(EVDEV) InputControllerEvdev : public InputController {
   void SetHapticTouchpadEffectForNextButtonRelease(
       HapticTouchpadEffect effect,
       HapticTouchpadEffectStrength strength) override;
+  bool AreAnyKeysPressed() override;
+  void BlockModifiersOnDevices(std::vector<int> device_ids) override;
+  bool AreInputDevicesEnabled() const override;
+  std::unique_ptr<ScopedDisableInputDevices> DisableInputDevices() override;
+  void DisableKeyboardImposterCheck() override;
+
+  // Notifies the controller to delete any data for the given `device_id`.
+  void OnInputDeviceRemoved(int device_id);
+
+  // Configuration that needs to be passed on to InputDeviceFactory.
+  InputDeviceSettingsEvdev GetInputDeviceSettings() const;
 
  private:
-  FRIEND_TEST_ALL_PREFIXES(InputControllerEvdevTest, AccelerationSuspension);
-  FRIEND_TEST_ALL_PREFIXES(InputControllerEvdevTest,
-                           AccelerationChangeDuringSuspension);
+  class ScopedDisableInputDevicesImpl;
 
-  struct StoredAccelerationSettings {
-    bool mouse = false;
-    bool pointing_stick = false;
-  };
+  // Called by `ScopedDisableInputDevicesImpl` when they are created/destroyed.
+  void OnScopedDisableInputDevicesCreated();
+  void OnScopedDisableInputDevicesDestroyed();
 
   // Post task to update settings.
   void ScheduleUpdateDeviceSettings();
@@ -132,17 +157,11 @@ class COMPONENT_EXPORT(EVDEV) InputControllerEvdev : public InputController {
   // Send caps lock update to input_device_factory_.
   void UpdateCapsLockLed();
 
-  // Indicates whether the mouse acceleration is turned off for PointerLock.
-  bool is_mouse_acceleration_suspended() {
-    return stored_acceleration_settings_.get() != nullptr;
-  }
-
   // Configuration that needs to be passed on to InputDeviceFactory.
   InputDeviceSettingsEvdev input_device_settings_;
 
-  // Holds acceleration settings while suspended. Should only be considered
-  // valid while |mouse_acceleration_suspended| is true.
-  std::unique_ptr<StoredAccelerationSettings> stored_acceleration_settings_;
+  // Amount of `ScopedDisableInputDevicesImpl` currently alive.
+  int num_scoped_input_devices_disablers_ = 0;
 
   // Task to update config from input_device_settings_ is pending.
   bool settings_update_pending_ = false;
@@ -171,6 +190,8 @@ class COMPONENT_EXPORT(EVDEV) InputControllerEvdev : public InputController {
   bool has_touchpad_ = false;
   // if has_haptic_touchpad_ is true, then has_touchpad_ is also true.
   bool has_haptic_touchpad_ = false;
+
+  bool any_keys_are_pressed_ = false;
 
   // LED state.
   bool caps_lock_led_state_ = false;

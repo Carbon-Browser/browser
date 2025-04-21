@@ -1,18 +1,15 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/policy/core/common/cloud/cloud_policy_refresh_scheduler.h"
 
 #include <algorithm>
-#include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/cxx17_backports.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
-#include "base/metrics/histogram_macros.h"
-#include "base/no_destructor.h"
 #include "base/rand_util.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/clock.h"
@@ -22,10 +19,17 @@
 #include "build/build_config.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/policy/core/common/cloud/cloud_policy_service.h"
+#include "components/policy/core/common/cloud/user_cloud_policy_store.h"
 
 namespace policy {
 
 namespace {
+
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+BASE_FEATURE(kRetryWithKeyReset,
+             "RetryWithKeyReset",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+#endif
 
 base::Clock* clock_for_testing_ = nullptr;
 
@@ -102,8 +106,7 @@ CloudPolicyRefreshScheduler::CloudPolicyRefreshScheduler(
       refresh_delay_ms_(kDefaultRefreshDelayMs),
       refresh_delay_salt_ms_(static_cast<int64_t>(
           base::RandGenerator(kRandomSaltDelayMaxValueMs))),
-      invalidations_available_(false),
-      creation_time_(GetClock()->Now()) {
+      invalidations_available_(false) {
   client_->AddObserver(this);
   store_->AddObserver(this);
   network_connection_tracker_->AddNetworkConnectionObserver(this);
@@ -124,7 +127,7 @@ CloudPolicyRefreshScheduler::~CloudPolicyRefreshScheduler() {
 void CloudPolicyRefreshScheduler::SetDesiredRefreshDelay(
     int64_t refresh_delay) {
   refresh_delay_ms_ =
-      base::clamp(refresh_delay, kRefreshDelayMinMs, kRefreshDelayMaxMs);
+      std::clamp(refresh_delay, kRefreshDelayMinMs, kRefreshDelayMaxMs);
   ScheduleRefresh();
 }
 
@@ -141,24 +144,17 @@ int64_t CloudPolicyRefreshScheduler::GetActualRefreshDelay() const {
   }
 }
 
-void CloudPolicyRefreshScheduler::RefreshSoon() {
+void CloudPolicyRefreshScheduler::RefreshSoon(PolicyFetchReason reason) {
   // If the client isn't registered, there is nothing to do.
   if (!client_->is_registered())
     return;
 
   is_scheduled_for_soon_ = true;
-  RefreshAfter(0);
+  RefreshAfter(0, reason);
 }
 
 void CloudPolicyRefreshScheduler::SetInvalidationServiceAvailability(
     bool is_available) {
-  if (!creation_time_.is_null()) {
-    base::TimeDelta elapsed = GetClock()->Now() - creation_time_;
-    UMA_HISTOGRAM_MEDIUM_TIMES("Enterprise.PolicyInvalidationsStartupTime",
-                               elapsed);
-    creation_time_ = base::Time();
-  }
-
   if (is_available == invalidations_available_) {
     // No change in state.
     return;
@@ -187,12 +183,12 @@ void CloudPolicyRefreshScheduler::OnRegistrationStateChanged(
 
   // The client has registered, so trigger an immediate refresh.
   error_retry_delay_ms_ = kInitialErrorRetryDelayMs;
-  RefreshSoon();
+  RefreshSoon(PolicyFetchReason::kRegistrationChanged);
 }
 
 void CloudPolicyRefreshScheduler::OnClientError(CloudPolicyClient* client) {
   // Save the status for below.
-  DeviceManagementStatus status = client_->status();
+  DeviceManagementStatus status = client_->last_dm_status();
 
   // Schedule an error retry if applicable.
   UpdateLastRefresh();
@@ -209,6 +205,9 @@ void CloudPolicyRefreshScheduler::OnClientError(CloudPolicyClient* client) {
 }
 
 void CloudPolicyRefreshScheduler::OnStoreLoaded(CloudPolicyStore* store) {
+  // Load successfully, reset flag in case we failed again.
+  has_retried_with_key_reset_ = false;
+
   UpdateLastRefreshFromPolicy();
 
   // Re-schedule the next refresh in case the is_managed bit changed.
@@ -220,6 +219,24 @@ void CloudPolicyRefreshScheduler::OnStoreError(CloudPolicyStore* store) {
   // The best guess in that situation is to assume is_managed didn't change and
   // continue using the stale information. Thus, no specific response to a store
   // error is required. NB: Changes to is_managed fire OnStoreLoaded().
+
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+  // Client is registered means we have successfully get policy key once. However,
+  // a following policy fetch request is failed because we can't verified
+  // signature. Delete the policy key so that we can get it again with next
+  // policy fetch response.
+  if (base::FeatureList::IsEnabled(kRetryWithKeyReset) &&
+      client_->is_registered() &&
+      store->status() == CloudPolicyStore::STATUS_VALIDATION_ERROR &&
+      store->validation_status() ==
+          CloudPolicyValidatorBase::VALIDATION_BAD_SIGNATURE &&
+      !has_retried_with_key_reset_) {
+    has_retried_with_key_reset_ = true;
+    static_cast<DesktopCloudPolicyStore*>(store)->ResetPolicyKey();
+    client_->clear_public_key_version();
+    RefreshSoon(PolicyFetchReason::kRetry);
+  }
+#endif
 }
 
 void CloudPolicyRefreshScheduler::OnConnectionChanged(
@@ -227,8 +244,8 @@ void CloudPolicyRefreshScheduler::OnConnectionChanged(
   if (type == network::mojom::ConnectionType::CONNECTION_NONE)
     return;
 
-  if (client_->status() == DM_STATUS_REQUEST_FAILED) {
-    RefreshSoon();
+  if (client_->last_dm_status() == DM_STATUS_REQUEST_FAILED) {
+    RefreshSoon(PolicyFetchReason::kRetryAfterStatusRequestFailed);
     return;
   }
 
@@ -249,7 +266,7 @@ void CloudPolicyRefreshScheduler::OnConnectionChanged(
   const base::TimeDelta ticks_delta =
       last_refresh_ticks_ + refresh_delay - GetTickClock()->NowTicks();
   if (ticks_delta > system_delta)
-    RefreshAfter(system_delta.InMilliseconds());
+    RefreshAfter(system_delta.InMilliseconds(), PolicyFetchReason::kScheduled);
 }
 
 void CloudPolicyRefreshScheduler::UpdateLastRefreshFromPolicy() {
@@ -259,7 +276,7 @@ void CloudPolicyRefreshScheduler::UpdateLastRefreshFromPolicy() {
   // If the client has already fetched policy, assume that happened recently. If
   // that assumption ever breaks, the proper thing to do probably is to move the
   // |last_refresh_| bookkeeping to CloudPolicyClient.
-  if (!client_->responses().empty()) {
+  if (!client_->last_policy_fetch_responses().empty()) {
     UpdateLastRefresh();
     return;
   }
@@ -274,7 +291,8 @@ void CloudPolicyRefreshScheduler::UpdateLastRefreshFromPolicy() {
 
   if (store_->has_policy() && store_->policy()->has_timestamp() &&
       should_update) {
-    last_refresh_ = base::Time::FromJavaTime(store_->policy()->timestamp());
+    last_refresh_ = base::Time::FromMillisecondsSinceUnixEpoch(
+        store_->policy()->timestamp());
     last_refresh_ticks_ =
         GetTickClock()->NowTicks() + (last_refresh_ - GetClock()->Now());
   }
@@ -289,36 +307,67 @@ void CloudPolicyRefreshScheduler::ScheduleRefresh() {
 
   // Ignore the refresh request if there's a request scheduled for soon.
   if (is_scheduled_for_soon_) {
-    DCHECK(!refresh_callback_.IsCancelled());
+    DCHECK(refresh_weak_factory_.HasWeakPtrs());
     return;
   }
 
   // If there is a registration, go by the client's status. That will tell us
   // what the appropriate refresh delay should be.
-  switch (client_->status()) {
+  switch (client_->last_dm_status()) {
     case DM_STATUS_SUCCESS:
       if (store_->is_managed())
-        RefreshAfter(GetActualRefreshDelay());
+        RefreshAfter(GetActualRefreshDelay(), PolicyFetchReason::kScheduled);
       else
-        RefreshAfter(kUnmanagedRefreshDelayMs);
+        RefreshAfter(kUnmanagedRefreshDelayMs, PolicyFetchReason::kScheduled);
       return;
+
+      // Try again after `GetActualRefreshDelay()`:
     case DM_STATUS_SERVICE_ACTIVATION_PENDING:
+      return RefreshAfter(
+          GetActualRefreshDelay(),
+          PolicyFetchReason::kRetryAfterStatusServiceActivationPending);
     case DM_STATUS_SERVICE_POLICY_NOT_FOUND:
+      return RefreshAfter(
+          GetActualRefreshDelay(),
+          PolicyFetchReason::kRetryAfterStatusServicePolicyNotFound);
     case DM_STATUS_SERVICE_TOO_MANY_REQUESTS:
-      RefreshAfter(GetActualRefreshDelay());
-      return;
+      return RefreshAfter(
+          GetActualRefreshDelay(),
+          PolicyFetchReason::kRetryAfterStatusServiceTooManyRequests);
+
+      // Try again after `error_retry_delay_ms_`
     case DM_STATUS_REQUEST_FAILED:
+      return RefreshAfter(error_retry_delay_ms_,
+                          PolicyFetchReason::kRetryAfterStatusRequestFailed);
     case DM_STATUS_TEMPORARY_UNAVAILABLE:
+      return RefreshAfter(
+          error_retry_delay_ms_,
+          PolicyFetchReason::kRetryAfterStatusTemporaryUnavailable);
     case DM_STATUS_CANNOT_SIGN_REQUEST:
-      RefreshAfter(error_retry_delay_ms_);
-      return;
+      return RefreshAfter(
+          error_retry_delay_ms_,
+          PolicyFetchReason::kRetryAfterStatusCannotSignRequest);
+
+      // Try again after `kUnmanagedRefreshDelay.
     case DM_STATUS_REQUEST_INVALID:
+      return RefreshAfter(kUnmanagedRefreshDelayMs,
+                          PolicyFetchReason::kRetryAfterStatusRequestInvalid);
     case DM_STATUS_HTTP_STATUS_ERROR:
+      return RefreshAfter(kUnmanagedRefreshDelayMs,
+                          PolicyFetchReason::kRetryAfterStatusHttpStatusError);
     case DM_STATUS_RESPONSE_DECODING_ERROR:
+      return RefreshAfter(
+          kUnmanagedRefreshDelayMs,
+          PolicyFetchReason::kRetryAfterStatusResponseDecodingError);
     case DM_STATUS_SERVICE_MANAGEMENT_NOT_SUPPORTED:
+      return RefreshAfter(
+          kUnmanagedRefreshDelayMs,
+          PolicyFetchReason::kRetryAfterStatusServiceManagementNotSupported);
     case DM_STATUS_REQUEST_TOO_LARGE:
-      RefreshAfter(kUnmanagedRefreshDelayMs);
-      return;
+      return RefreshAfter(kUnmanagedRefreshDelayMs,
+                          PolicyFetchReason::kRetryAfterStatusRequestTooLarge);
+
+      // No retry
     case DM_STATUS_SERVICE_MANAGEMENT_TOKEN_INVALID:
     case DM_STATUS_SERVICE_DEVICE_NOT_FOUND:
     case DM_STATUS_SERVICE_INVALID_SERIAL_NUMBER:
@@ -331,6 +380,7 @@ void CloudPolicyRefreshScheduler::ScheduleRefresh() {
     case DM_STATUS_SERVICE_ENTERPRISE_ACCOUNT_IS_NOT_ELIGIBLE_TO_ENROLL:
     case DM_STATUS_SERVICE_ENTERPRISE_TOS_HAS_NOT_BEEN_ACCEPTED:
     case DM_STATUS_SERVICE_ILLEGAL_ACCOUNT_FOR_PACKAGED_EDU_LICENSE:
+    case DM_STATUS_SERVICE_INVALID_PACKAGED_DEVICE_FOR_KIOSK:
       // Need a re-registration, no use in retrying.
       CancelRefresh();
       return;
@@ -339,11 +389,10 @@ void CloudPolicyRefreshScheduler::ScheduleRefresh() {
       return;
   }
 
-  NOTREACHED() << "Invalid client status " << client_->status();
-  RefreshAfter(kUnmanagedRefreshDelayMs);
+  NOTREACHED() << "Invalid client status " << client_->last_dm_status();
 }
 
-void CloudPolicyRefreshScheduler::PerformRefresh() {
+void CloudPolicyRefreshScheduler::PerformRefresh(PolicyFetchReason reason) {
   CancelRefresh();
 
   if (client_->is_registered()) {
@@ -355,7 +404,8 @@ void CloudPolicyRefreshScheduler::PerformRefresh() {
     // OnPolicyFetched().
     service_->RefreshPolicy(
         base::BindOnce(&CloudPolicyRefreshScheduler::OnPolicyRefreshed,
-                       base::Unretained(this)));
+                       weak_factory_.GetWeakPtr()),
+        reason);
     return;
   }
 
@@ -364,7 +414,8 @@ void CloudPolicyRefreshScheduler::PerformRefresh() {
   NOTREACHED();
 }
 
-void CloudPolicyRefreshScheduler::RefreshAfter(int delta_ms) {
+void CloudPolicyRefreshScheduler::RefreshAfter(int delta_ms,
+                                               PolicyFetchReason reason) {
   const base::TimeDelta delta(base::Milliseconds(delta_ms));
 
   // Schedule the callback, calculating the delay based on both, system time
@@ -383,13 +434,16 @@ void CloudPolicyRefreshScheduler::RefreshAfter(int delta_ms) {
   if (!delay.is_zero())
     delay += base::Milliseconds(refresh_delay_salt_ms_);
 
-  refresh_callback_.Reset(base::BindOnce(
-      &CloudPolicyRefreshScheduler::PerformRefresh, base::Unretained(this)));
-  task_runner_->PostDelayedTask(FROM_HERE, refresh_callback_.callback(), delay);
+  refresh_weak_factory_.InvalidateWeakPtrs();
+  task_runner_->PostDelayedTask(
+      FROM_HERE,
+      base::BindOnce(&CloudPolicyRefreshScheduler::PerformRefresh,
+                     refresh_weak_factory_.GetWeakPtr(), reason),
+      delay);
 }
 
 void CloudPolicyRefreshScheduler::CancelRefresh() {
-  refresh_callback_.Cancel();
+  refresh_weak_factory_.InvalidateWeakPtrs();
   is_scheduled_for_soon_ = false;
 }
 

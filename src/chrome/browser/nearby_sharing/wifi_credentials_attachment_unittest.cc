@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@ namespace {
 const char kTestSsid[] = "test_SSID";
 const char kTestPassword[] = "T35t_P@ssw0rd";
 const WifiCredentialsAttachment::SecurityType kTestSecurityType =
-    sharing::mojom::WifiCredentialsMetadata::SecurityType::kWpaPsk;
+    ::sharing::mojom::WifiCredentialsMetadata::SecurityType::kWpaPsk;
 
 }  // namespace
 TEST(WifiCredentialsAttachmentTest, WifiCredentialsAttachmentTest) {

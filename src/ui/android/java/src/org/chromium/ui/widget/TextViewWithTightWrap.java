@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,16 @@ import android.text.Layout;
 import android.util.AttributeSet;
 import android.widget.TextView;
 
+import org.chromium.build.annotations.NullMarked;
+
 /**
  * A TextView with an accurate width calculation support for multilines.
  * This is used when we want no extra padding on a multiline TextView. The class perform the width
  * calculation in the overwritten OnMeasure() method.
  */
+@NullMarked
 public class TextViewWithTightWrap extends TextView {
-    /**
-     * Constructing TextViewWithTightWrap programmatically is similar to a normal TextView.
-     */
+    /** Constructing TextViewWithTightWrap programmatically is similar to a normal TextView. */
     public TextViewWithTightWrap(Context context) {
         super(context);
     }
@@ -40,7 +41,6 @@ public class TextViewWithTightWrap extends TextView {
         if (layout != null && layout.getLineCount() > 1) {
             int width =
                     getMaxLineWidth(layout) + getCompoundPaddingLeft() + getCompoundPaddingRight();
-            int height = getMeasuredHeight();
             if (width < getMeasuredWidth()) {
                 super.onMeasure(
                         MeasureSpec.makeMeasureSpec(width, MeasureSpec.AT_MOST), heightMeasureSpec);

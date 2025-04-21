@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@ namespace ios_web_view {
 
 // Returns a configurator for updating components.
 // See similar implementation at
-// //ios/chrome/browser/component_updater/ios_component_updater_configurator.h
+// //ios/chrome/browser/component_updater/model/ios_component_updater_configurator.h
 scoped_refptr<update_client::Configurator> MakeComponentUpdaterConfigurator(
     const base::CommandLine* cmdline);
 

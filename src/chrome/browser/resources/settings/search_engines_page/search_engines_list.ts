@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,15 @@
  * @fileoverview 'settings-search-engines-list' is a component for showing a
  * list of search engines.
  */
-import 'chrome://resources/cr_elements/shared_vars_css.m.js';
+import 'chrome://resources/cr_elements/cr_shared_vars.css.js';
+import 'chrome://resources/cr_elements/cr_collapse/cr_collapse.js';
 import '../settings_shared.css.js';
 import '../settings_vars.css.js';
 import './search_engine_entry.js';
 
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {SearchEngine} from './search_engines_browser_proxy.js';
+import type {SearchEngine} from './search_engines_browser_proxy.js';
 import {getTemplate} from './search_engines_list.html.js';
 
 export class SettingsSearchEnginesListElement extends PolymerElement {
@@ -28,11 +29,6 @@ export class SettingsSearchEnginesListElement extends PolymerElement {
   static get properties() {
     return {
       engines: Array,
-
-      /**
-       * Whether the active search engines feature flag is enabled.
-       */
-      isActiveSearchEnginesFlagEnabled: Boolean,
 
       showShortcut: {
         type: Boolean,
@@ -52,14 +48,8 @@ export class SettingsSearchEnginesListElement extends PolymerElement {
         reflectToAttribute: true,
       },
 
-      nameColumnHeader: {
-        type: String,
-        reflectToAttribute: true,
-      },
-
       /**
        * The number of engines visible when the list is collapsed.
-       * This is currently gated behind the #omnibox-active-search-engines-flag.
        */
       visibleEnginesSize: {
         type: Number,
@@ -69,8 +59,7 @@ export class SettingsSearchEnginesListElement extends PolymerElement {
       /**
        * An array of the first 'visibleEnginesSize' engines in the `engines`
        * array.  These engines are visible even when 'collapsedEngines' is
-       * collapsed. This is currently gated behind the
-       * #omnibox-active-search-engines flag.
+       * collapsed.
        */
       visibleEngines:
           {type: Array, computed: 'computeVisibleEngines_(engines)'},
@@ -78,8 +67,7 @@ export class SettingsSearchEnginesListElement extends PolymerElement {
       /**
        * An array of all remaining engines not in the `visibleEngines` array.
        * These engines' visibility can be toggled by expanding or collapsing the
-       * engines list. This is currently gated behind the
-       * #omnibox-active-search-engines flag.
+       * engines list.
        */
       collapsedEngines:
           {type: Array, computed: 'computeCollapsedEngines_(engines)'},
@@ -112,7 +100,6 @@ export class SettingsSearchEnginesListElement extends PolymerElement {
   showShortcut: boolean;
   showQueryUrl: boolean;
   collapseList: boolean;
-  nameColumnHeader: string;
   expandListText: string;
   private lastFocused_: HTMLElement;
   private listBlurred_: boolean;

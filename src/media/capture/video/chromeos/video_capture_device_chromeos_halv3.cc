@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,9 @@ VideoCaptureDeviceChromeOSHalv3::VideoCaptureDeviceChromeOSHalv3(
 }
 
 VideoCaptureDeviceChromeOSHalv3::~VideoCaptureDeviceChromeOSHalv3() {
-  vcd_delegate_->Shutdown();
+  // TODO(b/335574894) : Self deleting object is kind of a dangerous pattern.
+  // Refine the pattern when refactoring.
+  vcd_delegate_.ExtractAsDangling()->Shutdown();
 }
 
 // VideoCaptureDevice implementation.

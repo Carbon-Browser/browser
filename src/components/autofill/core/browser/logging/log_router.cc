@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,10 +15,12 @@ namespace autofill {
 
 LogRouter::LogRouter() = default;
 
-LogRouter::~LogRouter() = default;
+LogRouter::~LogRouter() {
+  receivers_.RemoveObserver(&text_log_receiver_);
+}
 
 // static
-base::Value LogRouter::CreateEntryForText(const std::string& text) {
+base::Value::Dict LogRouter::CreateEntryForText(const std::string& text) {
   LogBuffer buffer(LogBuffer::IsActive(true));
   buffer << Tag{"div"};
   for (const auto& line : base::SplitStringPiece(
@@ -26,36 +28,46 @@ base::Value LogRouter::CreateEntryForText(const std::string& text) {
     buffer << line << Br{};
   }
   buffer << CTag{};
-  return buffer.RetrieveResult();
+  return *buffer.RetrieveResult();
+}
+
+void LogRouter::LogToTerminal() {
+  if (!receivers_.HasObserver(&text_log_receiver_)) {
+    receivers_.AddObserver(&text_log_receiver_);
+  }
+}
+
+bool LogRouter::HasReceivers() const {
+  return !receivers_.empty();
 }
 
 void LogRouter::ProcessLog(const std::string& text) {
   ProcessLog(CreateEntryForText(text));
 }
 
-void LogRouter::ProcessLog(const base::Value& node) {
+void LogRouter::ProcessLog(const base::Value::Dict& node) {
   // This may not be called when there are no receivers (i.e., the router is
   // inactive), because in that case the logs cannot be displayed.
-  DCHECK(!receivers_.empty());
+  DCHECK(HasReceivers());
   for (LogReceiver& receiver : receivers_)
     receiver.LogEntry(node);
 }
 
-bool LogRouter::RegisterManager(LogManager* manager) {
+bool LogRouter::RegisterManager(RoutingLogManager* manager) {
   DCHECK(manager);
   managers_.AddObserver(manager);
-  return !receivers_.empty();
+  return HasReceivers();
 }
 
-void LogRouter::UnregisterManager(LogManager* manager) {
+void LogRouter::UnregisterManager(RoutingLogManager* manager) {
   DCHECK(managers_.HasObserver(manager));
   managers_.RemoveObserver(manager);
 }
 
 void LogRouter::RegisterReceiver(LogReceiver* receiver) {
   DCHECK(receiver);
-  if (receivers_.empty()) {
-    for (LogManager& manager : managers_)
+  if (!HasReceivers()) {
+    for (RoutingLogManager& manager : managers_)
       manager.OnLogRouterAvailabilityChanged(true);
   }
   receivers_.AddObserver(receiver);
@@ -64,8 +76,8 @@ void LogRouter::RegisterReceiver(LogReceiver* receiver) {
 void LogRouter::UnregisterReceiver(LogReceiver* receiver) {
   DCHECK(receivers_.HasObserver(receiver));
   receivers_.RemoveObserver(receiver);
-  if (receivers_.empty()) {
-    for (LogManager& manager : managers_)
+  if (!HasReceivers()) {
+    for (RoutingLogManager& manager : managers_)
       manager.OnLogRouterAvailabilityChanged(false);
   }
 }

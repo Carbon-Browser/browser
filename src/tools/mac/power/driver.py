@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -11,6 +11,7 @@ import pandas as pd
 import signal
 import subprocess
 import sys
+import datetime
 import time
 import typing
 
@@ -165,63 +166,60 @@ class DriverContext:
                                        "powermetrics.plist")
     power_sampler_output = os.path.join(self._output_dir, scenario_driver.name,
                                         "power_sampler.json")
-    power_sampler_battery_output = os.path.join(self._output_dir,
-                                                scenario_driver.name,
-                                                "power_sampler_battery.json")
 
     powermetrics_process = None
     power_sampler_process = None
-    power_sampler_battery_process = None
     browser_process = None
+
+    cycle_length_in_secs = scenario_driver.CycleDuration().total_seconds()
+    if cycle_length_in_secs < 60:
+      raise ValueError("Cycle length must be more than 60 seconds!")
+    elif cycle_length_in_secs % 60 != 0:
+      logging.warning("Cycle has a duration not divisible by 60 secs."
+                      "This is suboptimal for measurment variance.")
     try:
       scenario_driver.Launch()
       if hasattr(scenario_driver, 'browser'):
         browser_process = scenario_driver.browser.browser_process
 
+      # "-i 60000" to emit a sample every minute. This is the same frequency as
+      # power_sampler, which emits a sample on IOPMPowerSource notification,
+      # which happens every minute.
       powermetrics_args = [
           "sudo", "powermetrics", "-f", "plist", "--samplers",
           "tasks,cpu_power,gpu_power,thermal,disk,network",
           "--show-process-coalition", "--show-process-gpu",
-          "--show-process-energy", "-i", "10000", "--output-file",
+          "--show-process-energy", "-i", "60000", "--output-file",
           powermetrics_output
       ]
-      powermetrics_process = subprocess.Popen(powermetrics_args,
-                                              stdout=subprocess.PIPE,
-                                              stdin=subprocess.PIPE)
-      power_sampler_battery_args = [
-          self._power_sample_path, "--sample-on-notification",
-          "--samplers=battery",
-          f"--timeout={int(scenario_driver.duration.total_seconds())}",
-          f"--json-output-file={power_sampler_battery_output}"
-      ]
-      power_sampler_battery_process = subprocess.Popen(
-          power_sampler_battery_args,
-          stdout=subprocess.PIPE,
-          stdin=subprocess.PIPE)
+
+      powermetrics_process = subprocess.Popen(powermetrics_args)
 
       power_sampler_args = [
-          self._power_sample_path, "--sample-interval=10",
-          "--samplers=smc,user_idle_level,main_display",
+          self._power_sample_path, f"--sample-on-notification",
+          f"--initial-sample",
+          "--samplers=battery,smc,user_idle_level,main_display",
           f"--timeout={int(scenario_driver.duration.total_seconds())}",
           f"--json-output-file={power_sampler_output}"
       ]
+
       if browser_process is not None:
         power_sampler_args += [
             f"--resource-coalition-pid={browser_process.pid}"
         ]
-      power_sampler_process = subprocess.Popen(power_sampler_args,
-                                               stdout=subprocess.PIPE,
-                                               stdin=subprocess.PIPE)
+      power_sampler_process = subprocess.Popen(power_sampler_args)
+
       scenario_driver.Wait()
+
+      logging.debug("Waiting for power_sampler to exit")
       power_sampler_process.wait()
-      power_sampler_battery_process.wait()
+      logging.debug(
+          f"power_sampler returned {power_sampler_process.returncode}")
 
     finally:
       scenario_driver.TearDown()
       if power_sampler_process:
         utils.TerminateProcess(power_sampler_process)
-      if power_sampler_battery_process:
-        utils.TerminateProcess(power_sampler_battery_process)
       if powermetrics_process:
         # Force powermetrics to flush data.
         utils.SendSignalToRootProcess(powermetrics_process, signal.SIGIO)
@@ -249,7 +247,7 @@ class DriverContext:
     self.WriteScenarioSummary(scenario_driver)
 
     dtraces_output_dir = os.path.join(self._output_dir, scenario_driver.name,
-                                      "dtraces_stacks")
+                                      f"dtraces_{profile_mode}")
     os.makedirs(dtraces_output_dir, exist_ok=True)
     scenario_driver.Launch()
     browser_process = scenario_driver.browser.browser_process
@@ -270,26 +268,37 @@ class DriverContext:
           script = os.path.join(scripts_dir, "profile.d")
 
         pid = browser_process.pid
-        output_filename = os.path.join(dtraces_output_dir, f"{pid}.txt")
+        iteration = 1
 
-        dtrace_args = [
-            'sudo', 'dtrace', '-p', f"{pid}", "-o", output_filename, '-s',
-            script, f"{pid}"
-        ]
+        # Capture until the scenario is done running.
+        while True:
+          output_filename = os.path.join(dtraces_output_dir,
+                                         f"{pid}_{iteration}.txt")
+          dtrace_args = [
+              'sudo', 'dtrace', '-p', f"{pid}", "-o", output_filename, '-s',
+              script, f"{pid}"
+          ]
 
-        # No need to add |dtrace_process| to |self._started_processeds| as it's
-        # explicitly waited on later.
-        dtrace_process = subprocess.Popen(dtrace_args,
-                                          env=dtrace_env,
-                                          stdout=dtrace_log,
-                                          stderr=dtrace_log)
-      scenario_driver.Wait()
+          dtrace_process = subprocess.Popen(dtrace_args,
+                                            env=dtrace_env,
+                                            stdout=dtrace_log,
+                                            stderr=dtrace_log)
+
+          # This timeout was chosen experimentally to on an M1 MBA to avoid
+          # running for too long and losing samples (because of suspected
+          #  bug in Dtrace) and running too little and thus having too much
+          # overhead.
+          time.sleep(7.199)
+          utils.TerminateRootProcess(dtrace_process)
+          iteration = iteration + 1
+
+          if scenario_driver.script_process.poll() is not None:
+            break
 
     finally:
       scenario_driver.TearDown()
 
     logging.debug(f"Waiting for dtrace to exit")
-    dtrace_process.wait(30)
 
   def Trace(self, scenario_driver: scenarios.ScenarioOSADriver):
     self.WriteScenarioSummary(scenario_driver)

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,17 @@
 #include "base/android/jni_android.h"
 #include "base/android/jni_string.h"
 #include "base/android/scoped_java_ref.h"
-#include "chrome/browser/ui/messages/android/jni_headers/SimpleConfirmInfoBarBuilder_jni.h"
 #include "components/infobars/android/confirm_infobar.h"
 #include "components/infobars/content/content_infobar_manager.h"
 #include "components/infobars/core/confirm_infobar_delegate.h"
 #include "components/infobars/core/infobar.h"
 #include "content/public/browser/web_contents.h"
+#include "ui/base/models/image_model.h"
 #include "ui/gfx/android/java_bitmap.h"
 #include "ui/gfx/image/image.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "chrome/browser/ui/messages/android/jni_headers/SimpleConfirmInfoBarBuilder_jni.h"
 
 using base::android::JavaParamRef;
 
@@ -82,8 +85,7 @@ SimpleConfirmInfoBarDelegate::SimpleConfirmInfoBarDelegate(
   java_listener_.Reset(j_listener);
 }
 
-SimpleConfirmInfoBarDelegate::~SimpleConfirmInfoBarDelegate() {
-}
+SimpleConfirmInfoBarDelegate::~SimpleConfirmInfoBarDelegate() = default;
 
 infobars::InfoBarDelegate::InfoBarIdentifier
 SimpleConfirmInfoBarDelegate::GetIdentifier() const {
@@ -121,7 +123,7 @@ std::u16string SimpleConfirmInfoBarDelegate::GetMessageText() const {
 
 int SimpleConfirmInfoBarDelegate::GetButtons() const {
   return (primary_str_.empty() ? 0 : BUTTON_OK) |
-      (secondary_str_.empty() ? 0 : BUTTON_CANCEL);
+         (secondary_str_.empty() ? 0 : BUTTON_CANCEL);
 }
 
 std::u16string SimpleConfirmInfoBarDelegate::GetButtonLabel(

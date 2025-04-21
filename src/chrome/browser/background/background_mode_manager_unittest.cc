@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,16 +10,15 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
+#include "base/ranges/algorithm.h"
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/test_simple_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/extensions/extension_function_test_utils.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/test_extension_system.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
@@ -48,8 +47,12 @@
 #include "ui/message_center/public/cpp/notifier_id.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ash/login/users/scoped_test_user_manager.h"
+#include "chrome/browser/ash/login/users/user_manager_delegate_impl.h"
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
+#include "chrome/browser/browser_process.h"
+#include "chromeos/ash/components/settings/cros_settings.h"
+#include "components/user_manager/scoped_user_manager.h"
+#include "components/user_manager/user_manager_impl.h"
 #endif
 
 using extensions::mojom::ManifestLocation;
@@ -146,16 +149,16 @@ class AdvancedTestBackgroundModeManager : public TestBackgroundModeManager {
 
   // TestBackgroundModeManager:
   bool HasPersistentBackgroundClient() const override {
-    return std::find_if(profile_app_counts_.begin(), profile_app_counts_.end(),
-                        [](const auto& profile_count_pair) {
-                          return profile_count_pair.second.persistent > 0;
-                        }) != profile_app_counts_.end();
+    return base::ranges::any_of(
+        profile_app_counts_, [](const auto& profile_count_pair) {
+          return profile_count_pair.second.persistent > 0;
+        });
   }
   bool HasAnyBackgroundClient() const override {
-    return std::find_if(profile_app_counts_.begin(), profile_app_counts_.end(),
-                        [](const auto& profile_count_pair) {
-                          return profile_count_pair.second.any > 0;
-                        }) != profile_app_counts_.end();
+    return base::ranges::any_of(profile_app_counts_,
+                                [](const auto& profile_count_pair) {
+                                  return profile_count_pair.second.any > 0;
+                                });
   }
   bool HasPersistentBackgroundClientForProfile(
       const Profile* profile) const override {
@@ -207,11 +210,13 @@ class BackgroundModeManagerTest : public testing::Test {
         std::make_unique<base::CommandLine>(base::CommandLine::NO_PROGRAM);
 
     auto policy_service = std::make_unique<policy::PolicyServiceImpl>(
-        std::vector<policy::ConfigurationPolicyProvider*>{&policy_provider_});
+        std::vector<
+            raw_ptr<policy::ConfigurationPolicyProvider, VectorExperimental>>{
+            &policy_provider_});
     profile_manager_ = CreateTestingProfileManager();
     profile_ = profile_manager_->CreateTestingProfile(
         "p1", nullptr, u"p1", 0, TestingProfile::TestingFactories(),
-        /*is_supervised_profile=*/false, absl::nullopt,
+        /*is_supervised_profile=*/false, std::nullopt,
         std::move(policy_service));
   }
 
@@ -293,7 +298,7 @@ class BackgroundModeManagerWithExtensionsTest : public testing::Test {
 
   std::unique_ptr<TestingProfileManager> profile_manager_;
   // Test profile used by all tests - this is owned by profile_manager_.
-  raw_ptr<TestingProfile> profile_;
+  raw_ptr<TestingProfile, DanglingUntriaged> profile_;
 
  private:
   // Required for extension service.
@@ -308,7 +313,11 @@ class BackgroundModeManagerWithExtensionsTest : public testing::Test {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // ChromeOS needs extra services to run in the following order.
   ash::ScopedCrosSettingsTestHelper cros_settings_test_helper_;
-  ash::ScopedTestUserManager test_user_manager_;
+  user_manager::ScopedUserManager user_manager_{
+      std::make_unique<user_manager::UserManagerImpl>(
+          std::make_unique<UserManagerDelegateImpl>(),
+          g_browser_process->local_state(),
+          CrosSettings::Get())};
 #endif
 };
 
@@ -640,26 +649,26 @@ TEST_F(BackgroundModeManagerWithExtensionsTest, BackgroundMenuGeneration) {
   scoped_refptr<const extensions::Extension> component_extension =
       extensions::ExtensionBuilder("Component Extension")
           .SetLocation(ManifestLocation::kComponent)
-          .AddPermission("background")
+          .AddAPIPermission("background")
           .Build();
 
   scoped_refptr<const extensions::Extension> component_extension_with_options =
       extensions::ExtensionBuilder("Component Extension with Options")
           .SetLocation(ManifestLocation::kComponent)
-          .AddPermission("background")
+          .AddAPIPermission("background")
           .SetManifestKey("options_page", "test.html")
           .Build();
 
   scoped_refptr<const extensions::Extension> regular_extension =
       extensions::ExtensionBuilder("Regular Extension")
           .SetLocation(ManifestLocation::kCommandLine)
-          .AddPermission("background")
+          .AddAPIPermission("background")
           .Build();
 
   scoped_refptr<const extensions::Extension> regular_extension_with_options =
       extensions::ExtensionBuilder("Regular Extension with Options")
           .SetLocation(ManifestLocation::kCommandLine)
-          .AddPermission("background")
+          .AddAPIPermission("background")
           .SetManifestKey("options_page", "test.html")
           .Build();
 
@@ -704,26 +713,26 @@ TEST_F(BackgroundModeManagerWithExtensionsTest,
   auto build_component_extension = []() {
     return extensions::ExtensionBuilder("Component Extension")
         .SetLocation(ManifestLocation::kComponent)
-        .AddPermission("background")
+        .AddAPIPermission("background")
         .Build();
   };
   auto build_component_extension_with_options = []() {
     return extensions::ExtensionBuilder("Component Extension with Options")
         .SetLocation(ManifestLocation::kComponent)
-        .AddPermission("background")
+        .AddAPIPermission("background")
         .SetManifestKey("options_page", "test.html")
         .Build();
   };
   auto build_regular_extension = []() {
     return extensions::ExtensionBuilder("Regular Extension")
         .SetLocation(ManifestLocation::kCommandLine)
-        .AddPermission("background")
+        .AddAPIPermission("background")
         .Build();
   };
   auto build_regular_extension_with_options = []() {
     return extensions::ExtensionBuilder("Regular Extension with Options")
         .SetLocation(ManifestLocation::kCommandLine)
-        .AddPermission("background")
+        .AddAPIPermission("background")
         .SetManifestKey("options_page", "test.html")
         .Build();
   };
@@ -844,14 +853,14 @@ TEST_F(BackgroundModeManagerWithExtensionsTest, BalloonDisplay) {
       extensions::ExtensionBuilder("Background Extension")
           .SetVersion("1.0")
           .SetLocation(ManifestLocation::kCommandLine)
-          .AddPermission("background")
+          .AddAPIPermission("background")
           .Build();
 
   scoped_refptr<const extensions::Extension> upgraded_bg_ext =
       extensions::ExtensionBuilder("Background Extension")
           .SetVersion("2.0")
           .SetLocation(ManifestLocation::kCommandLine)
-          .AddPermission("background")
+          .AddAPIPermission("background")
           .Build();
 
   scoped_refptr<const extensions::Extension> no_bg_ext =
@@ -864,7 +873,7 @@ TEST_F(BackgroundModeManagerWithExtensionsTest, BalloonDisplay) {
       extensions::ExtensionBuilder("Regular Extension")
           .SetVersion("1.0")
           .SetLocation(ManifestLocation::kCommandLine)
-          .AddPermission("background")
+          .AddAPIPermission("background")
           .Build();
 
   static_cast<extensions::TestExtensionSystem*>(
@@ -899,7 +908,7 @@ TEST_F(BackgroundModeManagerWithExtensionsTest, BalloonDisplay) {
 
   // Upgrading an extension that has background should not reshow the balloon.
   {
-    // TODO(crbug.com/438376): Fix crbug.com/438376 and remove these checks.
+    // TODO(crbug.com/41145854): Fix crbug.com/438376 and remove these checks.
     InSequence expected_call_sequence;
     EXPECT_CALL(*manager_, EnableLaunchOnStartup(false)).Times(Exactly(1));
     EXPECT_CALL(*manager_, EnableLaunchOnStartup(true)).Times(Exactly(1));
@@ -1077,6 +1086,40 @@ TEST_F(BackgroundModeManagerTest, ForceInstalledExtensionsKeepAlive) {
   }));
 
   manager.GetBackgroundModeData(profile_)->OnForceInstalledExtensionsReady();
+  base::RunLoop().RunUntilIdle();
+  EXPECT_FALSE(keep_alive_registry->IsKeepingAlive());
+}
+
+TEST_F(BackgroundModeManagerTest,
+       ForceInstalledExtensionsKeepAliveReleasedOnAppTerminating) {
+  const auto* keep_alive_registry = KeepAliveRegistry::GetInstance();
+  EXPECT_FALSE(keep_alive_registry->IsKeepingAlive());
+
+  base::CommandLine command_line(base::CommandLine::NO_PROGRAM);
+  command_line.AppendSwitch(switches::kNoStartupWindow);
+  TestBackgroundModeManager manager(
+      command_line, profile_manager_->profile_attributes_storage());
+
+  manager.RegisterProfile(profile_);
+  EXPECT_TRUE(keep_alive_registry->IsKeepingAlive());
+  EXPECT_TRUE(keep_alive_registry->WouldRestartWithout({
+      KeepAliveOrigin::BACKGROUND_MODE_MANAGER_STARTUP,
+      KeepAliveOrigin::BACKGROUND_MODE_MANAGER_FORCE_INSTALLED_EXTENSIONS,
+  }));
+
+  static_cast<extensions::TestExtensionSystem*>(
+      extensions::ExtensionSystem::Get(profile_))
+      ->CreateExtensionService(&command_line, base::FilePath(), false);
+  static_cast<extensions::TestExtensionSystem*>(
+      extensions::ExtensionSystem::Get(profile_))
+      ->SetReady();
+  base::RunLoop().RunUntilIdle();
+  EXPECT_TRUE(keep_alive_registry->IsKeepingAlive());
+  EXPECT_TRUE(keep_alive_registry->WouldRestartWithout({
+      KeepAliveOrigin::BACKGROUND_MODE_MANAGER_FORCE_INSTALLED_EXTENSIONS,
+  }));
+
+  manager.OnAppTerminating();
   base::RunLoop().RunUntilIdle();
   EXPECT_FALSE(keep_alive_registry->IsKeepingAlive());
 }

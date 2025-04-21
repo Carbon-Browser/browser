@@ -1,6 +1,8 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "chrome/browser/ui/views/extensions/extension_installed_bubble_view.h"
 
 #include <string>
 
@@ -8,40 +10,42 @@
 #include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
+#include "chrome/browser/extensions/account_extension_tracker.h"
+#include "chrome/browser/extensions/extension_sync_util.h"
+#include "chrome/browser/extensions/extension_util.h"
 #include "chrome/browser/platform_util.h"
 #include "chrome/browser/signin/signin_ui_util.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_navigator.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/chrome_pages.h"
-#include "chrome/browser/ui/extensions/extension_install_ui_default.h"
+#include "chrome/browser/ui/extensions/extension_install_ui.h"
 #include "chrome/browser/ui/extensions/extension_installed_bubble_model.h"
 #include "chrome/browser/ui/extensions/extension_installed_waiter.h"
+#include "chrome/browser/ui/signin/bubble_signin_promo_delegate.h"
 #include "chrome/browser/ui/singleton_tabs.h"
-#include "chrome/browser/ui/sync/bubble_sync_promo_delegate.h"
-#include "chrome/browser/ui/sync/sync_promo_ui.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/browser/ui/views/extensions/extensions_toolbar_button.h"
 #include "chrome/browser/ui/views/extensions/extensions_toolbar_container.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
 #include "chrome/common/url_constants.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/signin/public/identity_manager/account_info.h"
 #include "extensions/common/extension.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/views/bubble/bubble_dialog_delegate_view.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/link.h"
 #include "ui/views/layout/box_layout.h"
 
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ui/views/sync/bubble_sync_promo_view.h"
+#if !BUILDFLAG(IS_CHROMEOS)
+#include "chrome/browser/ui/views/promos/bubble_signin_promo_view.h"
 #endif
 
 namespace {
@@ -66,8 +70,9 @@ views::View* AnchorViewForBrowser(const ExtensionInstalledBubbleModel* model,
     ExtensionsToolbarContainer* const container =
         browser_view->toolbar_button_provider()
             ->GetExtensionsToolbarContainer();
-    if (container)
+    if (container) {
       reference_view = container->GetViewForId(model->extension_id());
+    }
   } else if (model->anchor_to_omnibox()) {
     reference_view = browser_view->GetLocationBarView()->location_icon_view();
   }
@@ -80,61 +85,23 @@ views::View* AnchorViewForBrowser(const ExtensionInstalledBubbleModel* model,
   return reference_view;
 }
 
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
+#if !BUILDFLAG(IS_CHROMEOS)
 std::unique_ptr<views::View> CreateSigninPromoView(
     Profile* profile,
-    BubbleSyncPromoDelegate* delegate) {
-  return std::make_unique<BubbleSyncPromoView>(
+    BubbleSignInPromoDelegate* delegate) {
+  int promo_message_id =
+      extensions::sync_util::IsExtensionsExplicitSigninEnabled()
+          ? IDS_EXTENSION_INSTALLED_PROMO_EXPLICIT_SIGNIN_MESSAGE
+          : IDS_EXTENSION_INSTALLED_DICE_PROMO_SYNC_MESSAGE;
+
+  return std::make_unique<BubbleSignInPromoView>(
       profile, delegate,
       signin_metrics::AccessPoint::ACCESS_POINT_EXTENSION_INSTALL_BUBBLE,
-      IDS_EXTENSION_INSTALLED_DICE_PROMO_SYNC_MESSAGE,
-      /*dice_signin_button_prominent=*/true);
+      promo_message_id, ui::ButtonStyle::kProminent);
 }
 #endif
 
 }  // namespace
-
-// Provides feedback to the user upon successful installation of an
-// extension. Depending on the type of extension, the Bubble will
-// point to:
-//    OMNIBOX_KEYWORD-> The omnibox.
-//    BROWSER_ACTION -> The browserAction icon in the toolbar.
-//    PAGE_ACTION    -> A preview of the pageAction icon in the location
-//                      bar which is shown while the Bubble is shown.
-//    GENERIC        -> The app menu. This case includes pageActions that don't
-//                      specify a default icon.
-class ExtensionInstalledBubbleView : public BubbleSyncPromoDelegate,
-                                     public views::BubbleDialogDelegateView {
- public:
-  METADATA_HEADER(ExtensionInstalledBubbleView);
-  ExtensionInstalledBubbleView(
-      Browser* browser,
-      std::unique_ptr<ExtensionInstalledBubbleModel> model);
-  ExtensionInstalledBubbleView(const ExtensionInstalledBubbleView&) = delete;
-  ExtensionInstalledBubbleView& operator=(const ExtensionInstalledBubbleView&) =
-      delete;
-  ~ExtensionInstalledBubbleView() override;
-
-  static void Show(Browser* browser,
-                   std::unique_ptr<ExtensionInstalledBubbleModel> model);
-
-  // Recalculate the anchor position for this bubble.
-  void UpdateAnchorView();
-
-  const ExtensionInstalledBubbleModel* model() const { return model_.get(); }
-
- private:
-  // views::BubbleDialogDelegateView:
-  void Init() override;
-
-  // BubbleSyncPromoDelegate:
-  void OnEnableSync(const AccountInfo& account_info) override;
-
-  void LinkClicked();
-
-  const raw_ptr<Browser> browser_;
-  const std::unique_ptr<ExtensionInstalledBubbleModel> model_;
-};
 
 // static
 void ExtensionInstalledBubbleView::Show(
@@ -168,17 +135,19 @@ ExtensionInstalledBubbleView::ExtensionInstalledBubbleView(
                                    : views::BubbleBorder::TOP_RIGHT),
       browser_(browser),
       model_(std::move(model)) {
-  SetButtons(ui::DIALOG_BUTTON_NONE);
+  SetButtons(static_cast<int>(ui::mojom::DialogButton::kNone));
   if (model_->show_sign_in_promo()) {
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
+#if !BUILDFLAG(IS_CHROMEOS)
     SetFootnoteView(CreateSigninPromoView(browser->profile(), this));
 #endif
   }
-  SetIcon(model_->MakeIconOfSize(kMaxIconSize));
+  SetIcon(ui::ImageModel::FromImageSkia(model_->MakeIconOfSize(kMaxIconSize)));
   SetShowIcon(true);
   SetShowCloseButton(true);
 
-  std::u16string extension_name = base::UTF8ToUTF16(model_->extension_name());
+  std::u16string extension_name =
+      extensions::util::GetFixupExtensionNameForUIDisplay(
+          model_->extension_name());
   base::i18n::AdjustStringForLocaleDirection(&extension_name);
   SetTitle(l10n_util::GetStringFUTF16(IDS_EXTENSION_INSTALLED_HEADING,
                                       extension_name));
@@ -190,6 +159,11 @@ void ExtensionInstalledBubbleView::UpdateAnchorView() {
   views::View* reference_view = AnchorViewForBrowser(model_.get(), browser_);
   DCHECK(reference_view);
   SetAnchorView(reference_view);
+}
+
+void ExtensionInstalledBubbleView::SignInForTesting(
+    const AccountInfo& account_info) {
+  OnSignIn(account_info);
 }
 
 void ExtensionInstalledBubbleView::Init() {
@@ -218,17 +192,19 @@ void ExtensionInstalledBubbleView::Init() {
       provider->GetDistanceMetric(views::DISTANCE_RELATED_CONTROL_VERTICAL));
   layout->set_minimum_cross_axis_size(kRightColumnWidth);
   // Indent by the size of the icon.
-  layout->set_inside_border_insets(gfx::Insets::TLBR(
-      0,
-      GetWindowIcon().Size().width() +
-          provider->GetDistanceMetric(DISTANCE_UNRELATED_CONTROL_HORIZONTAL),
-      0, 0));
+  layout->set_inside_border_insets(
+      gfx::Insets::TLBR(0,
+                        GetWindowIcon().Size().width() +
+                            provider->GetDistanceMetric(
+                                views::DISTANCE_UNRELATED_CONTROL_HORIZONTAL),
+                        0, 0));
   layout->set_cross_axis_alignment(
       views::BoxLayout::CrossAxisAlignment::kStart);
   SetLayoutManager(std::move(layout));
 
-  if (model_->show_how_to_use())
+  if (model_->show_how_to_use()) {
     AddChildView(CreateLabel(model_->GetHowToUseText()));
+  }
 
   if (model_->show_key_binding()) {
     auto* manage_shortcut = AddChildView(std::make_unique<views::Link>(
@@ -243,10 +219,20 @@ void ExtensionInstalledBubbleView::Init() {
   }
 }
 
-void ExtensionInstalledBubbleView::OnEnableSync(const AccountInfo& account) {
-  signin_ui_util::EnableSyncFromSingleAccountPromo(
-      browser_->profile(), account,
-      signin_metrics::AccessPoint::ACCESS_POINT_EXTENSION_INSTALL_BUBBLE);
+void ExtensionInstalledBubbleView::OnSignIn(const AccountInfo& account) {
+  // Sign the user into transport mode (sync not enabled) if extensions sync in
+  // transport mode is supported. Otherwise, sign in with sync enabled.
+  if (extensions::sync_util::IsExtensionsExplicitSigninEnabled()) {
+    signin_ui_util::SignInFromSingleAccountPromo(
+        browser_->profile(), account,
+        signin_metrics::AccessPoint::ACCESS_POINT_EXTENSION_INSTALL_BUBBLE);
+    extensions::AccountExtensionTracker::Get(browser_->profile())
+        ->OnSignInInitiatedFromExtensionPromo(model_->extension_id());
+  } else {
+    signin_ui_util::EnableSyncFromSingleAccountPromo(
+        browser_->profile(), account,
+        signin_metrics::AccessPoint::ACCESS_POINT_EXTENSION_INSTALL_BUBBLE);
+  }
   GetWidget()->Close();
 }
 
@@ -258,7 +244,7 @@ void ExtensionInstalledBubbleView::LinkClicked() {
   GetWidget()->Close();
 }
 
-BEGIN_METADATA(ExtensionInstalledBubbleView, views::BubbleDialogDelegateView)
+BEGIN_METADATA(ExtensionInstalledBubbleView)
 END_METADATA
 
 void ShowUiOnToolbarMenu(scoped_refptr<const extensions::Extension> extension,
@@ -269,7 +255,7 @@ void ShowUiOnToolbarMenu(scoped_refptr<const extensions::Extension> extension,
                    browser->profile(), extension.get(), icon));
 }
 
-void ExtensionInstallUIDefault::ShowPlatformBubble(
+void ExtensionInstallUI::ShowBubble(
     scoped_refptr<const extensions::Extension> extension,
     Browser* browser,
     const SkBitmap& icon) {

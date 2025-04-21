@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,7 @@ class PasswordGenerationPopupView {
   virtual void UpdateState() = 0;
 
   // The password was edited, the popup should show the new value.
-  virtual void UpdatePasswordValue() {}
+  virtual void UpdateGeneratedPasswordValue() {}
 
   // Updates layout information from the controller and performs the layout.
   // Returns |true| in case of success popup redraw, |false| otherwise.
@@ -36,6 +36,10 @@ class PasswordGenerationPopupView {
 
   // Called when the password selection state has changed.
   virtual void PasswordSelectionUpdated() = 0;
+
+  // Called when the nudge password selection state has changed.
+  // TODO(crbug.com/41492898): Clean up this method after experiment.
+  virtual void NudgePasswordSelectionUpdated() = 0;
 
   // Note that PasswordGenerationPopupView owns itself, and will only be deleted
   // when Hide() is called.

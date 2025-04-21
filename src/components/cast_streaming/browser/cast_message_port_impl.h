@@ -1,13 +1,15 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
-// TODO(crbug.com/1207718): Delete this file.
+// TODO(crbug.com/40181416): Delete this file.
 
 #ifndef COMPONENTS_CAST_STREAMING_BROWSER_CAST_MESSAGE_PORT_IMPL_H_
 #define COMPONENTS_CAST_STREAMING_BROWSER_CAST_MESSAGE_PORT_IMPL_H_
 
-#include "base/callback.h"
+#include <string_view>
+
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "components/cast/message_port/message_port.h"
 #include "third_party/openscreen/src/cast/common/public/message_port.h"
@@ -29,7 +31,7 @@ class CastMessagePortImpl final
   CastMessagePortImpl& operator=(const CastMessagePortImpl&) = delete;
 
   // openscreen::cast::MessagePort implementation.
-  void SetClient(Client* client, std::string client_sender_id) override;
+  void SetClient(Client& client) override;
   void ResetClient() override;
   void PostMessage(const std::string& sender_id,
                    const std::string& message_namespace,
@@ -51,7 +53,7 @@ class CastMessagePortImpl final
                           const std::string& message);
 
   // cast_api_bindings::MessagePort::Receiver implementation.
-  bool OnMessage(base::StringPiece message,
+  bool OnMessage(std::string_view message,
                  std::vector<std::unique_ptr<cast_api_bindings::MessagePort>>
                      ports) override;
   void OnPipeError() override;

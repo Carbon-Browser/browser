@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,11 +9,13 @@
 
 #include "base/time/time.h"
 #include "content/common/content_export.h"
+#include "content/public/browser/preloading.h"
 #include "url/gurl.h"
 
 namespace content {
 
 class BrowserContext;
+class WebContents;
 
 // Allows embedders to control certain aspects of |PrefetchService|.
 class CONTENT_EXPORT PrefetchServiceDelegate {
@@ -36,6 +38,10 @@ class CONTENT_EXPORT PrefetchServiceDelegate {
   // Gets API key for making prefetching requests.
   virtual std::string GetAPIKey() = 0;
 
+  // Gets the default URLs used in the DNS and TLS canary checks.
+  virtual GURL GetDefaultDNSCanaryCheckURL() = 0;
+  virtual GURL GetDefaultTLSCanaryCheckURL() = 0;
+
   // Reports that a 503 response with a "Retry-After" header was received from
   // |url|. Indicates that we shouldn't send new prefetch requests to that
   // origin for |retry_after| amount of time.
@@ -55,11 +61,22 @@ class CONTENT_EXPORT PrefetchServiceDelegate {
   virtual bool DisableDecoysBasedOnUserSettings() = 0;
 
   // Get the state of the user's preloading settings.
-  virtual bool IsSomePreloadingEnabled() = 0;
+  virtual PreloadingEligibility IsSomePreloadingEnabled() = 0;
   virtual bool IsExtendedPreloadingEnabled() = 0;
+  virtual bool IsPreloadingPrefEnabled() = 0;
+  virtual bool IsDataSaverEnabled() = 0;
+  virtual bool IsBatterySaverEnabled() = 0;
 
   // Checks if the referring page is in the allow list to make prefetches.
   virtual bool IsDomainInPrefetchAllowList(const GURL& referring_url) = 0;
+
+  // Determines whether a referring URL is reasonably trusted to proceed without
+  // delay when processing cross-site prefetches.
+  virtual bool IsContaminationExempt(const GURL& referring_url) = 0;
+
+  virtual void OnPrefetchLikely(WebContents* web_contents) = 0;
+
+  virtual void SetAcceptLanguageHeader(std::string accept_language_header) = 0;
 };
 
 }  // namespace content

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/script_source_location_type.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
 #include "third_party/blink/renderer/core/origin_trials/origin_trial_context.h"
+#include "third_party/blink/renderer/core/probe/core_probes.h"
 #include "third_party/blink/renderer/core/workers/worker_global_scope.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/loader/fetch/fetch_client_settings_object.h"
@@ -56,10 +57,9 @@ void WorkerModuleScriptFetcher::Fetch(
     DCHECK_EQ(level_, ModuleGraphLevel::kTopLevelModuleFetch);
 
     auto identifier = CreateUniqueIdentifier();
-    if (global_scope_->IsServiceWorkerGlobalScope()) {
-      global_scope_->SetMainResoureIdentifier(identifier);
-    }
-
+    global_scope_->SetMainResoureIdentifier(identifier);
+    probe::WillSendWorkerMainRequest(global_scope_.Get(), identifier,
+                                     fetch_params.Url());
     fetch_params.MutableResourceRequest().SetInspectorId(identifier);
     worker_main_script_loader_ = MakeGarbageCollected<WorkerMainScriptLoader>();
     worker_main_script_loader_->Start(
@@ -79,8 +79,17 @@ void WorkerModuleScriptFetcher::Fetch(
   // <spec step="12.2">Fetch request, and asynchronously wait to run the
   // remaining steps as part of fetch's process response for the response
   // response.</spec>
+
+  // If streaming is not allowed, no compile hints are needed either.
+  constexpr v8_compile_hints::V8CrowdsourcedCompileHintsProducer*
+      kNoCompileHintsProducer = nullptr;
+  constexpr v8_compile_hints::V8CrowdsourcedCompileHintsConsumer*
+      kNoCompileHintsConsumer = nullptr;
   ScriptResource::Fetch(fetch_params, fetch_client_settings_object_fetcher,
-                        this, ScriptResource::kNoStreaming);
+                        this, global_scope_->GetIsolate(),
+                        ScriptResource::kNoStreaming, kNoCompileHintsProducer,
+                        kNoCompileHintsConsumer,
+                        v8_compile_hints::MagicCommentMode::kNever);
 }
 
 void WorkerModuleScriptFetcher::Trace(Visitor* visitor) const {
@@ -116,10 +125,20 @@ void WorkerModuleScriptFetcher::NotifyClient(
     ModuleType module_type,
     const ParkableString& source_text,
     const ResourceResponse& response,
-    SingleCachedMetadataHandler* cache_handler) {
+    CachedMetadataHandler* cache_handler) {
   HeapVector<Member<ConsoleMessage>> error_messages;
 
   const KURL response_url = response.ResponseUrl();
+
+  network::mojom::ReferrerPolicy response_referrer_policy =
+      network::mojom::ReferrerPolicy::kDefault;
+  const String response_referrer_policy_header =
+      response.HttpHeaderField(http_names::kReferrerPolicy);
+  if (!response_referrer_policy_header.IsNull()) {
+    SecurityPolicy::ReferrerPolicyFromHeaderValue(
+        response_referrer_policy_header,
+        kDoNotSupportReferrerPolicyLegacyKeywords, &response_referrer_policy);
+  }
 
   if (level_ == ModuleGraphLevel::kTopLevelModuleFetch) {
     // TODO(nhiroki, hiroshige): Access to WorkerGlobalScope in module loaders
@@ -159,15 +178,6 @@ void WorkerModuleScriptFetcher::NotifyClient(
       return;
     }
 
-    auto response_referrer_policy = network::mojom::ReferrerPolicy::kDefault;
-    const String response_referrer_policy_header =
-        response.HttpHeaderField(http_names::kReferrerPolicy);
-    if (!response_referrer_policy_header.IsNull()) {
-      SecurityPolicy::ReferrerPolicyFromHeaderValue(
-          response_referrer_policy_header,
-          kDoNotSupportReferrerPolicyLegacyKeywords, &response_referrer_policy);
-    }
-
     std::unique_ptr<Vector<String>> response_origin_trial_tokens =
         OriginTrialContext::ParseHeaderValue(
             response.HttpHeaderField(http_names::kOriginTrial));
@@ -187,21 +197,23 @@ void WorkerModuleScriptFetcher::NotifyClient(
   client_->NotifyFetchFinishedSuccess(ModuleScriptCreationParams(
       /*source_url=*/response_url, /*base_url=*/response_url,
       ScriptSourceLocationType::kExternalFile, module_type, source_text,
-      cache_handler));
+      cache_handler, response_referrer_policy));
 }
 
-void WorkerModuleScriptFetcher::DidReceiveData(base::span<const char> span) {
+void WorkerModuleScriptFetcher::DidReceiveDataWorkerMainScript(
+    base::span<const char> span) {
   if (!decoder_) {
     decoder_ = std::make_unique<TextResourceDecoder>(TextResourceDecoderOptions(
         TextResourceDecoderOptions::kPlainTextContent,
         worker_main_script_loader_->GetScriptEncoding()));
   }
-  if (!span.size())
+  if (!span.size()) {
     return;
-  source_text_.Append(decoder_->Decode(span.data(), span.size()));
+  }
+  source_text_.Append(decoder_->Decode(span));
 }
 
-void WorkerModuleScriptFetcher::OnStartLoadingBody(
+void WorkerModuleScriptFetcher::OnStartLoadingBodyWorkerMainScript(
     const ResourceResponse& resource_response) {
   if (!MIMETypeRegistry::IsSupportedJavaScriptMIMEType(
           resource_response.HttpContentType())) {

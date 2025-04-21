@@ -1,13 +1,13 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.content_public.browser;
 
-import androidx.annotation.Nullable;
-
 import org.chromium.base.Callback;
 import org.chromium.blink.mojom.AuthenticatorStatus;
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 import org.chromium.mojo.bindings.Interface;
 import org.chromium.url.GURL;
 import org.chromium.url.Origin;
@@ -17,6 +17,7 @@ import java.util.List;
 /**
  * The RenderFrameHost Java wrapper to allow communicating with the native RenderFrameHost object.
  */
+@NullMarked
 public interface RenderFrameHost {
     /** The results of {@link #GetAssertionWebAuthSecurityChecks}. */
     final class WebAuthSecurityChecksResults {
@@ -56,6 +57,24 @@ public interface RenderFrameHost {
     Origin getLastCommittedOrigin();
 
     /**
+     * Returns the eldest parent of this RenderFrameHost.
+     *
+     * <p>Will only be {@code null} if this (callee) {@code RenderFrameHost} is no longer associated
+     * with a native object, due to it being or having been destroyed. Note that if this method
+     * returns {@code null}, this does not necessarily mean that any original parent frame or frames
+     * have been destroyed.
+     *
+     * <p>If the callee frame is the eldest in the frame ancestry, it will return itself (if it has
+     * not been destroyed).
+     *
+     * @see
+     *     https://crsrc.org/c/content/public/browser/render_frame_host.h?q=symbol:%5Cbcontent::RenderFrameHost::GetMainFrame%5Cb%20case:yes
+     * @return The eldest parent frame or null when this frame is being destroyed.
+     */
+    @Nullable
+    RenderFrameHost getMainFrame();
+
+    /**
      * Fetch the canonical URL associated with the fame.
      *
      * @param callback The callback to be notified once the canonical URL has been fetched.
@@ -67,7 +86,7 @@ public interface RenderFrameHost {
      *
      * @return A list of RenderFramesHosts including the current frame and all descendents.
      */
-    public List<RenderFrameHost> getAllRenderFrameHosts();
+    public @Nullable List<RenderFrameHost> getAllRenderFrameHosts();
 
     /**
      * Returns whether the feature policy allows the feature in this frame.
@@ -87,25 +106,28 @@ public interface RenderFrameHost {
      * trying to make a mojo connection to it. This can be done via
      * isRenderFrameLive() if the caller is not inside the call-stack of an
      * IPC form the renderer (which would guarantee its existence at that time).
-     *
-     * @param pipe The message pipe to be connected to the renderer. If it fails
-     * to make the connection, the pipe will be closed.
      */
-    <I extends Interface, P extends Interface.Proxy> P getInterfaceToRendererFrame(
+    <I extends Interface, P extends Interface.Proxy> @Nullable P getInterfaceToRendererFrame(
             Interface.Manager<I, P> manager);
 
     /**
      * Kills the renderer process when it is detected to be misbehaving and has
      * made a bad request.
      *
-     * @param reason The BadMessageReason code from content::BadMessageReasons.
+     * @param reason The BadMessageReason code from content::bad_message::BadMessageReason.
      */
     void terminateRendererDueToBadMessage(int reason);
 
-    /**
-     * Notifies the native RenderFrameHost about a user activation from the browser side.
-     */
+    /** Notifies the native RenderFrameHost about a user activation from the browser side. */
     void notifyUserActivation();
+
+    /** Notifies the native RenderFrameHost about a successful WebAuthn assertion request. */
+    void notifyWebAuthnAssertionRequestSucceeded();
+
+    /**
+     * @return Whether this frame has an active CloseWatcher in javascript.
+     */
+    boolean isCloseWatcherActive();
 
     /**
      * If a CloseWatcher is active in this RenderFrameHost, signal it to close.
@@ -133,34 +155,40 @@ public interface RenderFrameHost {
     boolean areInputEventsIgnored();
 
     /**
-     * Runs security checks associated with a Web Authentication GetAssertion request for the
-     * the given relying party ID and an effective origin. If the request originated from a render
-     * process, then the effective origin is the same as the last committed origin. However, if the
-     * request originated from an internal request from the browser process (e.g. Payments
-     * Autofill), then the relying party ID would not match the renderer's origin, and will
-     * therefore have to provide its own effective origin. `isPaymentCredentialGetAssertion`
-     * indicates whether the security check is done for getting an assertion for Secure Payment
-     * Confirmation (SPC). The return value is a code corresponding to the AuthenticatorStatus
-     * mojo enum.
+     * Runs security checks associated with a Web Authentication GetAssertion request for the given
+     * relying party ID and an effective origin. If the request originated from a render process,
+     * then the effective origin is the same as the last committed origin. However, if the request
+     * originated from an internal request from the browser process (e.g. Payments Autofill), then
+     * the relying party ID would not match the renderer's origin, and will therefore have to
+     * provide its own effective origin. `isPaymentCredentialGetAssertion` indicates whether the
+     * security check is done for getting an assertion for Secure Payment Confirmation (SPC).
      *
-     * @return An object containing (1) the status code indicating the result of the GetAssertion
-     *         request security checks. (2) whether the effectiveOrigin is a cross-origin with any
-     *         frame in this frame's ancestor chain.
+     * <p>This operation may trigger network fetches and thus it takes a `Callback`. The argument to
+     * the callback is an object containing (1) the status code indicating the result of the
+     * GetAssertion request security checks, and (2) whether the effectiveOrigin is a cross-origin
+     * with any frame in this frame's ancestor chain.
      */
-    WebAuthSecurityChecksResults performGetAssertionWebAuthSecurityChecks(
-            String relyingPartyId, Origin effectiveOrigin, boolean isPaymentCredentialGetAssertion);
+    void performGetAssertionWebAuthSecurityChecks(
+            String relyingPartyId,
+            Origin effectiveOrigin,
+            boolean isPaymentCredentialGetAssertion,
+            Callback<WebAuthSecurityChecksResults> callback);
 
     /**
-     * Runs security checks associated with a Web Authentication MakeCredential request for the
-     * the given relying party ID, an effective origin and whether MakeCredential is making the
-     * payment credential. See
-     * performGetAssertionWebAuthSecurityChecks for more on |effectiveOrigin|. The return value is a
-     * code corresponding to the AuthenticatorStatus mojo enum.
+     * Runs security checks associated with a Web Authentication MakeCredential request for the the
+     * given relying party ID, an effective origin and whether MakeCredential is making the payment
+     * credential. See performGetAssertionWebAuthSecurityChecks for more on |effectiveOrigin|.
      *
-     * @return Status code indicating the result of the MakeCredential request security checks.
+     * <p>This operation may trigger network fetches and thus it takes a `Callback`. The argument to
+     * the callback is an object containing (1) the status code indicating the result of the
+     * GetAssertion request security checks, and (2) whether the effectiveOrigin is a cross-origin
+     * with any frame in this frame's ancestor chain.
      */
-    int performMakeCredentialWebAuthSecurityChecks(
-            String relyingPartyId, Origin effectiveOrigin, boolean isPaymentCredentialCreation);
+    void performMakeCredentialWebAuthSecurityChecks(
+            String relyingPartyId,
+            Origin effectiveOrigin,
+            boolean isPaymentCredentialCreation,
+            Callback<WebAuthSecurityChecksResults> callback);
 
     /**
      * @return An identifier for this RenderFrameHost.
@@ -177,4 +205,37 @@ public interface RenderFrameHost {
      */
     @LifecycleState
     int getLifecycleState();
+
+    /**
+     * Inserts a VisualStateCallback that's resolved once a visual update has been processed.
+     *
+     * The VisualStateCallback will be inserted in Blink and will be invoked when the contents of
+     * the DOM tree at the moment that the callback was inserted (or later) are submitted to the
+     * compositor in a CompositorFrame. In other words, the following events need to happen before
+     * the callback is invoked:
+     * 1. The DOM tree is committed becoming the pending tree - see ThreadProxy::BeginMainFrame
+     * 2. The pending tree is activated becoming the active tree
+     * 3. The compositor calls Draw and submits a new CompositorFrame to the Viz process.
+     * The callback is synchronously invoked if this is called while being destroyed.
+     *
+     * @param callback the callback to be inserted. The callback takes a single Boolean parameter
+     *     which will be true if the visual state update was successful or false if it was aborted.
+     */
+    void insertVisualStateCallback(Callback<Boolean> callback);
+
+    /**
+     * Injects the passed Javascript code in the current page and evaluates it in an
+     * isolated world. If a result is required, pass in a callback.
+     * The caller should ensure the frame host hasn't been destroyed on the native side
+     * before calling this method.
+     *
+     * @param script   The Javascript to execute.
+     * @param worldId  Id of the isolated world.
+     * @param callback The callback to be fired off when a result is ready. The
+     *                 script's result will be json encoded and passed as the
+     *                 parameter, and the call will be made on the main thread.
+     *                 If no result is required, pass null.
+     */
+    void executeJavaScriptInIsolatedWorld(
+            String script, int worldId, @Nullable JavaScriptCallback callback);
 }

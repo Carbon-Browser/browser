@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ IntersectionObservation* ElementIntersectionObserverData::GetObservationFor(
   auto i = observations_.find(&observer);
   if (i == observations_.end())
     return nullptr;
-  return i->value;
+  return i->value.Get();
 }
 
 void ElementIntersectionObserverData::AddObservation(
@@ -59,15 +59,11 @@ void ElementIntersectionObserverData::StopTrackingWithController(
     controller.RemoveTrackedObserver(*observer);
 }
 
-bool ElementIntersectionObserverData::ComputeIntersectionsForTarget(
-    unsigned flags) {
-  bool needs_occlusion_tracking = false;
-  absl::optional<base::TimeTicks> monotonic_time;
-  for (auto& entry : observations_) {
-    needs_occlusion_tracking |= entry.key->NeedsOcclusionTracking();
-    entry.value->ComputeIntersection(flags, monotonic_time);
+void ElementIntersectionObserverData::ComputeIntersectionsForTarget() {
+  ComputeIntersectionsContext context;
+  for (auto& [observer, observation] : observations_) {
+    observation->ComputeIntersectionImmediately(context);
   }
-  return needs_occlusion_tracking;
 }
 
 bool ElementIntersectionObserverData::NeedsOcclusionTracking() const {
@@ -78,16 +74,10 @@ bool ElementIntersectionObserverData::NeedsOcclusionTracking() const {
   return false;
 }
 
-void ElementIntersectionObserverData::InvalidateCachedRects() {
-  for (auto& observer : observers_)
-    observer->InvalidateCachedRects();
-  for (auto& entry : observations_)
-    entry.value->InvalidateCachedRects();
-}
-
 void ElementIntersectionObserverData::Trace(Visitor* visitor) const {
   visitor->Trace(observations_);
   visitor->Trace(observers_);
+  ElementRareDataField::Trace(visitor);
 }
 
 }  // namespace blink

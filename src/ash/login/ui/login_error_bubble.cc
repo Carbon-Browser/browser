@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,10 @@
 #include "ash/shell.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
-#include "ui/gfx/paint_vector_icon.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/models/image_model.h"
+#include "ui/chromeos/styles/cros_tokens_color_mappings.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/controls/image_view.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/layout/box_layout.h"
@@ -27,17 +30,23 @@ constexpr int kAlertIconSizeDp = 20;
 LoginErrorBubble::LoginErrorBubble()
     : LoginErrorBubble(nullptr /*anchor_view*/) {}
 
-LoginErrorBubble::LoginErrorBubble(views::View* anchor_view)
-    : LoginBaseBubbleView(anchor_view) {
+LoginErrorBubble::LoginErrorBubble(base::WeakPtr<views::View> anchor_view)
+    : LoginBaseBubbleView(std::move(anchor_view)) {
   alert_icon_ = AddChildView(std::make_unique<views::ImageView>());
-  alert_icon_->SetPreferredSize(gfx::Size(kAlertIconSizeDp, kAlertIconSizeDp));
+  alert_icon_->SetImage(ui::ImageModel::FromVectorIcon(
+      kLockScreenAlertIcon,
+      static_cast<ui::ColorId>(cros_tokens::kCrosSysOnSurface),
+      kAlertIconSizeDp));
+
+  GetViewAccessibility().SetRole(ax::mojom::Role::kAlertDialog);
 }
 
 LoginErrorBubble::~LoginErrorBubble() = default;
 
 void LoginErrorBubble::SetContent(std::unique_ptr<views::View> content) {
-  if (content_)
-    RemoveChildViewT(content_);
+  if (content_) {
+    RemoveChildViewT(content_.get());
+  }
   content_ = AddChildView(std::move(content));
 }
 
@@ -50,26 +59,7 @@ void LoginErrorBubble::SetTextContent(const std::u16string& message) {
   SetContent(login_views_utils::CreateBubbleLabel(message, this));
 }
 
-const char* LoginErrorBubble::GetClassName() const {
-  return "LoginErrorBubble";
-}
-
-void LoginErrorBubble::GetAccessibleNodeData(ui::AXNodeData* node_data) {
-  node_data->role = ax::mojom::Role::kAlertDialog;
-  node_data->SetName(accessible_name_);
-}
-
-void LoginErrorBubble::OnThemeChanged() {
-  LoginBaseBubbleView::OnThemeChanged();
-  alert_icon_->SetImage(gfx::CreateVectorIcon(
-      kLockScreenAlertIcon,
-      AshColorProvider::Get()->GetContentLayerColor(
-          AshColorProvider::ContentLayerType::kIconColorPrimary)));
-  // It is assumed that we will not have an external call to SetTextContent
-  // followed by a call to SetContent (in such a case, the content would be
-  // erased on theme changed and replaced with the prior message).
-  if (!message_.empty())
-    SetTextContent(message_);
-}
+BEGIN_METADATA(LoginErrorBubble)
+END_METADATA
 
 }  // namespace ash

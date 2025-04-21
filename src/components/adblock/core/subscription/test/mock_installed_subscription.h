@@ -23,9 +23,11 @@
 
 #include "testing/gmock/include/gmock/gmock.h"
 
+using testing::NiceMock;
+
 namespace adblock {
 
-class MockInstalledSubscription : public InstalledSubscription {
+class MockInstalledSubscription : public NiceMock<InstalledSubscription> {
  public:
   MockInstalledSubscription();
   MOCK_METHOD(GURL, GetSourceUrl, (), (override, const));
@@ -45,7 +47,7 @@ class MockInstalledSubscription : public InstalledSubscription {
   MOCK_METHOD(bool,
               HasPopupFilter,
               (const GURL& url,
-               const GURL& opener_url,
+               const std::string& document_domain,
                const SiteKey& sitekey,
                FilterCategory category),
               (override, const));
@@ -56,14 +58,15 @@ class MockInstalledSubscription : public InstalledSubscription {
                const std::string& document_domain,
                const SiteKey& sitekey),
               (override, const));
-  MOCK_METHOD(absl::optional<base::StringPiece>,
-              FindCspFilter,
+  MOCK_METHOD(void,
+              FindCspFilters,
               (const GURL& url,
                const std::string& document_domain,
-               FilterCategory category),
+               FilterCategory category,
+               std::set<std::string_view>& results),
               (override, const));
-  MOCK_METHOD(absl::optional<base::StringPiece>,
-              FindRewriteFilter,
+  MOCK_METHOD(std::set<std::string_view>,
+              FindRewriteFilters,
               (const GURL& url,
                const std::string& document_domain,
                FilterCategory category),
@@ -76,12 +79,12 @@ class MockInstalledSubscription : public InstalledSubscription {
                FilterCategory category,
                std::set<HeaderFilterData>& results),
               (override, const));
-  MOCK_METHOD(Selectors,
-              GetElemhideSelectors,
+  MOCK_METHOD(ContentFiltersData,
+              GetElemhideData,
               (const GURL& url, bool domain_specific),
               (override, const));
-  MOCK_METHOD(Selectors,
-              GetElemhideEmulationSelectors,
+  MOCK_METHOD(ContentFiltersData,
+              GetElemhideEmulationData,
               (const GURL& url),
               (override, const));
   MOCK_METHOD(std::vector<Snippet>,

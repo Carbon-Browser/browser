@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "services/network/public/cpp/is_potentially_trustworthy.h"
 #include "third_party/blink/public/common/client_hints/enabled_client_hints.h"
 #include "url/origin.h"
@@ -16,13 +16,9 @@ namespace client_hints {
 InMemoryClientHintsControllerDelegate::InMemoryClientHintsControllerDelegate(
     network::NetworkQualityTracker* network_quality_tracker,
     base::RepeatingCallback<bool(const GURL&)> is_javascript_allowed_callback,
-    base::RepeatingCallback<bool(const GURL&)>
-        are_third_party_cookies_blocked_callback,
     blink::UserAgentMetadata user_agent_metadata)
     : network_quality_tracker_(network_quality_tracker),
       is_javascript_allowed_callback_(is_javascript_allowed_callback),
-      are_third_party_cookies_blocked_callback_(
-          are_third_party_cookies_blocked_callback),
       user_agent_metadata_(user_agent_metadata) {}
 
 InMemoryClientHintsControllerDelegate::
@@ -57,7 +53,9 @@ void InMemoryClientHintsControllerDelegate::GetAllowedClientHintsFromSource(
     blink::EnabledClientHints* client_hints) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(client_hints);
-  DCHECK(network::IsOriginPotentiallyTrustworthy(origin));
+  if (!network::IsOriginPotentiallyTrustworthy(origin)) {
+    return;
+  }
 
   const auto& it = accept_ch_cache_.find(origin);
   if (it != accept_ch_cache_.end()) {
@@ -90,14 +88,19 @@ bool InMemoryClientHintsControllerDelegate::IsJavaScriptAllowed(
   return is_javascript_allowed_callback_.Run(url);
 }
 
-bool InMemoryClientHintsControllerDelegate::AreThirdPartyCookiesBlocked(
-    const GURL& url) {
-  return are_third_party_cookies_blocked_callback_.Run(url);
-}
-
 blink::UserAgentMetadata
 InMemoryClientHintsControllerDelegate::GetUserAgentMetadata() {
   return user_agent_metadata_;
+}
+
+void InMemoryClientHintsControllerDelegate::SetMostRecentMainFrameViewportSize(
+    const gfx::Size& viewport_size) {
+  viewport_size_ = viewport_size;
+}
+
+gfx::Size
+InMemoryClientHintsControllerDelegate::GetMostRecentMainFrameViewportSize() {
+  return viewport_size_;
 }
 
 }  // namespace client_hints

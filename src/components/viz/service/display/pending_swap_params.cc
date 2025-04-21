@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,8 @@ PendingSwapParams& PendingSwapParams::operator=(PendingSwapParams&&) = default;
 
 int PendingSwapParams::GetMax() {
   int ret = max_pending_swaps;
+  if (max_pending_swaps_72hz)
+    ret = std::max(ret, max_pending_swaps_72hz.value());
   if (max_pending_swaps_90hz)
     ret = std::max(ret, max_pending_swaps_90hz.value());
   if (max_pending_swaps_120hz)

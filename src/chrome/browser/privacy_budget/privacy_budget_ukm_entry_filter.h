@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,8 @@ class PrivacyBudgetUkmEntryFilter : public ukm::UkmEntryFilter {
   void OnStoreRecordingsInReport() final;
 
  private:
-  const raw_ptr<IdentifiabilityStudyState> identifiability_study_state_;
+  const raw_ptr<IdentifiabilityStudyState, DanglingUntriaged>
+      identifiability_study_state_;
 
   // Keeps track of whether Privacy Budget metadata was reported. This flag is
   // reset each time the UKM service constructs a new UKM report. The goal being

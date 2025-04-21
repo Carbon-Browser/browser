@@ -4,10 +4,10 @@
             "blink_perf.shadow_dom": {
                 "abridged": false
             },
-            "blink_perf.accessibility": {
+            "ad_frames.fencedframe": {
                 "abridged": false
             },
-            "blink_perf.bindings": {
+            "blink_perf.accessibility": {
                 "end": 14,
                 "abridged": false
             },
@@ -15,6 +15,9 @@
                 "abridged": false
             },
             "speedometer2": {
+                "abridged": false
+            },
+            "speedometer3": {
                 "abridged": false
             }
         },
@@ -33,8 +36,32 @@
             "blink_perf.shadow_dom": {
                 "abridged": false
             },
-            "blink_perf.bindings": {
+            "blink_perf.accessibility": {
                 "begin": 14,
+                "abridged": false
+            },
+            "blink_perf.bindings": {
+                "end": 29,
+                "abridged": false
+            },
+            "jetstream2": {
+                "abridged": false
+            },
+            "speedometer2": {
+                "abridged": false
+            },
+            "speedometer3": {
+                "abridged": false
+            }
+        }
+    },
+    "2": {
+        "benchmarks": {
+            "blink_perf.shadow_dom": {
+                "abridged": false
+            },
+            "blink_perf.bindings": {
+                "begin": 29,
                 "abridged": false
             },
             "blink_perf.css": {
@@ -46,32 +73,8 @@
             },
             "speedometer2": {
                 "abridged": false
-            }
-        }
-    },
-    "2": {
-        "benchmarks": {
-            "blink_perf.shadow_dom": {
-                "abridged": false
             },
-            "blink_perf.css": {
-                "begin": 16,
-                "abridged": false
-            },
-            "blink_perf.dom": {
-                "abridged": false
-            },
-            "blink_perf.events": {
-                "abridged": false
-            },
-            "blink_perf.image_decoder": {
-                "end": 1,
-                "abridged": false
-            },
-            "jetstream2": {
-                "abridged": false
-            },
-            "speedometer2": {
+            "speedometer3": {
                 "abridged": false
             }
         }
@@ -81,18 +84,18 @@
             "blink_perf.shadow_dom": {
                 "abridged": false
             },
-            "blink_perf.image_decoder": {
-                "begin": 1,
-                "abridged": false
-            },
-            "blink_perf.layout": {
-                "end": 44,
+            "blink_perf.css": {
+                "begin": 16,
+                "end": 56,
                 "abridged": false
             },
             "jetstream2": {
                 "abridged": false
             },
             "speedometer2": {
+                "abridged": false
+            },
+            "speedometer3": {
                 "abridged": false
             }
         }
@@ -102,15 +105,21 @@
             "blink_perf.shadow_dom": {
                 "abridged": false
             },
-            "blink_perf.layout": {
-                "begin": 44,
-                "end": 98,
+            "blink_perf.css": {
+                "begin": 56,
+                "abridged": false
+            },
+            "blink_perf.dom": {
+                "end": 22,
                 "abridged": false
             },
             "jetstream2": {
                 "abridged": false
             },
             "speedometer2": {
+                "abridged": false
+            },
+            "speedometer3": {
                 "abridged": false
             }
         }
@@ -120,24 +129,27 @@
             "blink_perf.shadow_dom": {
                 "abridged": false
             },
+            "blink_perf.dom": {
+                "begin": 22,
+                "abridged": false
+            },
+            "blink_perf.events": {
+                "abridged": false
+            },
+            "blink_perf.image_decoder": {
+                "abridged": false
+            },
             "blink_perf.layout": {
-                "begin": 98,
-                "abridged": false
-            },
-            "blink_perf.owp_storage": {
-                "abridged": false
-            },
-            "blink_perf.paint": {
-                "abridged": false
-            },
-            "blink_perf.parser": {
-                "end": 24,
+                "end": 23,
                 "abridged": false
             },
             "jetstream2": {
                 "abridged": false
             },
             "speedometer2": {
+                "abridged": false
+            },
+            "speedometer3": {
                 "abridged": false
             }
         }
@@ -147,14 +159,104 @@
             "blink_perf.shadow_dom": {
                 "abridged": false
             },
-            "blink_perf.parser": {
-                "begin": 24,
+            "blink_perf.layout": {
+                "begin": 23,
+                "end": 63,
                 "abridged": false
             },
-            "blink_perf.sanitizer-api": {
+            "jetstream2": {
+                "abridged": false
+            },
+            "speedometer2": {
+                "abridged": false
+            },
+            "speedometer3": {
+                "abridged": false
+            }
+        }
+    },
+    "7": {
+        "benchmarks": {
+            "blink_perf.shadow_dom": {
+                "abridged": false
+            },
+            "blink_perf.layout": {
+                "begin": 63,
+                "end": 103,
+                "abridged": false
+            },
+            "jetstream2": {
+                "abridged": false
+            },
+            "speedometer2": {
+                "abridged": false
+            },
+            "speedometer3": {
+                "abridged": false
+            }
+        }
+    },
+    "8": {
+        "benchmarks": {
+            "blink_perf.shadow_dom": {
+                "abridged": false
+            },
+            "blink_perf.layout": {
+                "begin": 103,
+                "abridged": false
+            },
+            "blink_perf.owp_storage": {
+                "abridged": false
+            },
+            "blink_perf.paint": {
+                "abridged": false
+            },
+            "blink_perf.parser": {
+                "end": 2,
+                "abridged": false
+            },
+            "jetstream2": {
+                "abridged": false
+            },
+            "speedometer2": {
+                "abridged": false
+            },
+            "speedometer3": {
+                "abridged": false
+            }
+        }
+    },
+    "9": {
+        "benchmarks": {
+            "blink_perf.shadow_dom": {
+                "abridged": false
+            },
+            "blink_perf.parser": {
+                "begin": 2,
                 "abridged": false
             },
             "blink_perf.svg": {
+                "end": 12,
+                "abridged": false
+            },
+            "jetstream2": {
+                "abridged": false
+            },
+            "speedometer2": {
+                "abridged": false
+            },
+            "speedometer3": {
+                "abridged": false
+            }
+        }
+    },
+    "10": {
+        "benchmarks": {
+            "blink_perf.shadow_dom": {
+                "abridged": false
+            },
+            "blink_perf.svg": {
+                "begin": 12,
                 "abridged": false
             },
             "blink_perf.webaudio": {
@@ -167,27 +269,27 @@
                 "abridged": false
             },
             "blink_perf.webgl_fast_call": {
-                "end": 1,
                 "abridged": false
             },
-            "jetstream2": {
+            "desktop_ui": {
+                "end": 1,
                 "abridged": false
             },
             "speedometer2": {
                 "abridged": false
+            },
+            "speedometer3": {
+                "abridged": false
             }
         }
     },
-    "7": {
+    "11": {
         "benchmarks": {
             "blink_perf.shadow_dom": {
                 "abridged": false
             },
-            "blink_perf.webgl_fast_call": {
-                "begin": 1,
-                "abridged": false
-            },
             "desktop_ui": {
+                "begin": 1,
                 "abridged": false
             },
             "dummy_benchmark.noisy_benchmark_1": {
@@ -196,20 +298,17 @@
             "dummy_benchmark.stable_benchmark_1": {
                 "abridged": false
             },
-            "jetstream": {
-                "abridged": false
-            },
             "jetstream2": {
                 "abridged": false
             },
-            "kraken": {
-                "abridged": false
-            },
-            "loading.desktop": {
-                "end": 11,
+            "media.desktop": {
+                "end": 19,
                 "abridged": false
             },
             "speedometer2": {
+                "abridged": false
+            },
+            "speedometer3": {
                 "abridged": false
             }
         },
@@ -219,52 +318,13 @@
             }
         }
     },
-    "8": {
-        "benchmarks": {
-            "blink_perf.shadow_dom": {
-                "abridged": false
-            },
-            "loading.desktop": {
-                "begin": 11,
-                "end": 65,
-                "abridged": false
-            },
-            "jetstream2": {
-                "abridged": false
-            },
-            "speedometer2": {
-                "abridged": false
-            }
-        }
-    },
-    "9": {
-        "benchmarks": {
-            "blink_perf.shadow_dom": {
-                "abridged": false
-            },
-            "loading.desktop": {
-                "begin": 65,
-                "abridged": false
-            },
-            "media.desktop": {
-                "end": 14,
-                "abridged": false
-            },
-            "jetstream2": {
-                "abridged": false
-            },
-            "speedometer2": {
-                "abridged": false
-            }
-        }
-    },
-    "10": {
+    "12": {
         "benchmarks": {
             "blink_perf.shadow_dom": {
                 "abridged": false
             },
             "media.desktop": {
-                "begin": 14,
+                "begin": 19,
                 "abridged": false
             },
             "memory.desktop": {
@@ -277,57 +337,13 @@
                 "abridged": false
             },
             "rasterize_and_record_micro.top_25": {
-                "end": 2,
+                "end": 10,
                 "abridged": false
             },
             "speedometer2": {
                 "abridged": false
-            }
-        },
-        "executables": {
-            "performance_browser_tests": {
-                "arguments": [
-                    "--full-performance-run",
-                    "--test-launcher-jobs=1",
-                    "--test-launcher-retry-limit=0",
-                    "--ui-test-action-timeout=60000",
-                    "--ui-test-action-max-timeout=60000",
-                    "--test-launcher-timeout=60000",
-                    "--gtest_filter=*/TabCapturePerformanceTest.*:*/CastV2PerformanceTest.*"
-                ],
-                "path": "browser_tests"
-            }
-        }
-    },
-    "11": {
-        "benchmarks": {
-            "blink_perf.shadow_dom": {
-                "abridged": false
             },
-            "rasterize_and_record_micro.top_25": {
-                "begin": 2,
-                "abridged": false
-            },
-            "rendering.desktop": {
-                "end": 32,
-                "abridged": false
-            },
-            "speedometer2": {
-                "abridged": false
-            }
-        }
-    },
-    "12": {
-        "benchmarks": {
-            "blink_perf.shadow_dom": {
-                "abridged": false
-            },
-            "rendering.desktop": {
-                "begin": 32,
-                "end": 86,
-                "abridged": false
-            },
-            "speedometer2": {
+            "speedometer3": {
                 "abridged": false
             }
         }
@@ -337,12 +353,18 @@
             "blink_perf.shadow_dom": {
                 "abridged": false
             },
+            "rasterize_and_record_micro.top_25": {
+                "begin": 10,
+                "abridged": false
+            },
             "rendering.desktop": {
-                "begin": 86,
-                "end": 141,
+                "end": 26,
                 "abridged": false
             },
             "speedometer2": {
+                "abridged": false
+            },
+            "speedometer3": {
                 "abridged": false
             }
         }
@@ -353,11 +375,14 @@
                 "abridged": false
             },
             "rendering.desktop": {
-                "begin": 141,
-                "end": 195,
+                "begin": 26,
+                "end": 67,
                 "abridged": false
             },
             "speedometer2": {
+                "abridged": false
+            },
+            "speedometer3": {
                 "abridged": false
             }
         }
@@ -368,11 +393,14 @@
                 "abridged": false
             },
             "rendering.desktop": {
-                "begin": 195,
-                "end": 250,
+                "begin": 67,
+                "end": 108,
                 "abridged": false
             },
             "speedometer2": {
+                "abridged": false
+            },
+            "speedometer3": {
                 "abridged": false
             }
         }
@@ -383,11 +411,14 @@
                 "abridged": false
             },
             "rendering.desktop": {
-                "begin": 250,
-                "end": 304,
+                "begin": 108,
+                "end": 149,
                 "abridged": false
             },
             "speedometer2": {
+                "abridged": false
+            },
+            "speedometer3": {
                 "abridged": false
             }
         }
@@ -398,14 +429,14 @@
                 "abridged": false
             },
             "rendering.desktop": {
-                "begin": 304,
-                "abridged": false
-            },
-            "rendering.desktop.notracing": {
-                "end": 30,
+                "begin": 149,
+                "end": 191,
                 "abridged": false
             },
             "speedometer2": {
+                "abridged": false
+            },
+            "speedometer3": {
                 "abridged": false
             }
         }
@@ -415,12 +446,15 @@
             "blink_perf.shadow_dom": {
                 "abridged": false
             },
-            "rendering.desktop.notracing": {
-                "begin": 30,
-                "end": 84,
+            "rendering.desktop": {
+                "begin": 191,
+                "end": 232,
                 "abridged": false
             },
             "speedometer2": {
+                "abridged": false
+            },
+            "speedometer3": {
                 "abridged": false
             }
         }
@@ -430,12 +464,15 @@
             "blink_perf.shadow_dom": {
                 "abridged": false
             },
-            "rendering.desktop.notracing": {
-                "begin": 84,
-                "end": 139,
+            "rendering.desktop": {
+                "begin": 232,
+                "end": 274,
                 "abridged": false
             },
             "speedometer2": {
+                "abridged": false
+            },
+            "speedometer3": {
                 "abridged": false
             }
         }
@@ -445,12 +482,15 @@
             "blink_perf.shadow_dom": {
                 "abridged": false
             },
-            "rendering.desktop.notracing": {
-                "begin": 139,
-                "end": 193,
+            "rendering.desktop": {
+                "begin": 274,
+                "end": 315,
                 "abridged": false
             },
             "speedometer2": {
+                "abridged": false
+            },
+            "speedometer3": {
                 "abridged": false
             }
         }
@@ -460,38 +500,11 @@
             "blink_perf.shadow_dom": {
                 "abridged": false
             },
-            "rendering.desktop.notracing": {
-                "begin": 193,
-                "end": 248,
-                "abridged": false
-            },
-            "speedometer2": {
-                "abridged": false
-            }
-        }
-    },
-    "22": {
-        "benchmarks": {
-            "blink_perf.shadow_dom": {
+            "rendering.desktop": {
+                "begin": 315,
                 "abridged": false
             },
             "rendering.desktop.notracing": {
-                "begin": 248,
-                "end": 302,
-                "abridged": false
-            },
-            "speedometer2": {
-                "abridged": false
-            }
-        }
-    },
-    "23": {
-        "benchmarks": {
-            "blink_perf.shadow_dom": {
-                "abridged": false
-            },
-            "rendering.desktop.notracing": {
-                "begin": 302,
                 "abridged": false
             },
             "speedometer": {
@@ -506,11 +519,53 @@
             "speedometer2-future": {
                 "abridged": false
             },
-            "speedometer2-pcscan": {
+            "speedometer3": {
+                "abridged": false
+            },
+            "speedometer3-future": {
                 "abridged": false
             },
             "system_health.common_desktop": {
-                "end": 31,
+                "end": 3,
+                "abridged": false
+            }
+        }
+    },
+    "22": {
+        "benchmarks": {
+            "blink_perf.shadow_dom": {
+                "abridged": false
+            },
+            "system_health.common_desktop": {
+                "begin": 3,
+                "end": 44,
+                "abridged": false
+            },
+            "speedometer2": {
+                "abridged": false
+            },
+            "speedometer3": {
+                "abridged": false
+            }
+        }
+    },
+    "23": {
+        "benchmarks": {
+            "blink_perf.shadow_dom": {
+                "abridged": false
+            },
+            "system_health.common_desktop": {
+                "begin": 44,
+                "abridged": false
+            },
+            "system_health.memory_desktop": {
+                "end": 7,
+                "abridged": false
+            },
+            "speedometer2": {
+                "abridged": false
+            },
+            "speedometer3": {
                 "abridged": false
             }
         }
@@ -520,15 +575,15 @@
             "blink_perf.shadow_dom": {
                 "abridged": false
             },
-            "system_health.common_desktop": {
-                "begin": 31,
-                "abridged": false
-            },
             "system_health.memory_desktop": {
-                "end": 4,
+                "begin": 7,
+                "end": 48,
                 "abridged": false
             },
             "speedometer2": {
+                "abridged": false
+            },
+            "speedometer3": {
                 "abridged": false
             }
         }
@@ -539,12 +594,22 @@
                 "abridged": false
             },
             "system_health.memory_desktop": {
-                "begin": 4,
-                "end": 59,
+                "begin": 48,
                 "abridged": false
             },
             "speedometer2": {
                 "abridged": false
+            },
+            "speedometer3": {
+                "abridged": false
+            }
+        },
+        "executables": {
+            "tint_benchmark": {
+                "arguments": [
+                    "--use-chrome-perf-format"
+                ],
+                "path": "tint_benchmark"
             }
         }
     },
@@ -553,24 +618,17 @@
             "blink_perf.shadow_dom": {
                 "abridged": false
             },
-            "system_health.memory_desktop": {
-                "begin": 59,
-                "abridged": false
-            },
-            "system_health.pcscan": {
-                "abridged": false
-            },
-            "tab_switching.typical_25": {
-                "abridged": false
-            },
-            "tracing.tracing_with_background_memory_infra": {
-                "abridged": false
-            },
             "v8.browsing_desktop": {
-                "end": 21,
+                "abridged": false
+            },
+            "v8.browsing_desktop-future": {
+                "end": 8,
                 "abridged": false
             },
             "speedometer2": {
+                "abridged": false
+            },
+            "speedometer3": {
                 "abridged": false
             }
         },
@@ -585,11 +643,8 @@
             "blink_perf.shadow_dom": {
                 "abridged": false
             },
-            "v8.browsing_desktop": {
-                "begin": 21,
-                "abridged": false
-            },
             "v8.browsing_desktop-future": {
+                "begin": 8,
                 "abridged": false
             },
             "wasmpspdfkit": {
@@ -600,42 +655,45 @@
             },
             "speedometer2": {
                 "abridged": false
+            },
+            "speedometer3": {
+                "abridged": false
             }
         }
     },
     "extra_infos": {
-        "num_stories": 2612,
-        "predicted_min_shard_time": 940.0,
-        "predicted_min_shard_index": 0,
-        "predicted_max_shard_time": 950,
-        "predicted_max_shard_index": 2,
-        "shard #0": 940.0,
-        "shard #1": 940,
-        "shard #2": 950,
-        "shard #3": 940,
-        "shard #4": 950,
-        "shard #5": 940,
-        "shard #6": 950,
-        "shard #7": 943.0,
-        "shard #8": 950,
-        "shard #9": 940,
-        "shard #10": 945.0,
-        "shard #11": 950,
-        "shard #12": 940,
-        "shard #13": 950,
-        "shard #14": 940,
-        "shard #15": 950,
-        "shard #16": 940,
-        "shard #17": 950,
-        "shard #18": 940,
-        "shard #19": 950,
-        "shard #20": 940,
-        "shard #21": 950,
-        "shard #22": 940,
-        "shard #23": 950,
-        "shard #24": 940,
-        "shard #25": 950,
-        "shard #26": 945.0,
-        "shard #27": 940
+        "num_stories": 2267,
+        "predicted_min_shard_time": 785.0,
+        "predicted_min_shard_index": 26,
+        "predicted_max_shard_time": 900.0,
+        "predicted_max_shard_index": 25,
+        "shard #0": 820.0,
+        "shard #1": 820,
+        "shard #2": 820,
+        "shard #3": 820,
+        "shard #4": 820,
+        "shard #5": 820,
+        "shard #6": 820,
+        "shard #7": 820,
+        "shard #8": 820,
+        "shard #9": 820,
+        "shard #10": 820,
+        "shard #11": 823.0,
+        "shard #12": 820,
+        "shard #13": 820,
+        "shard #14": 820,
+        "shard #15": 820,
+        "shard #16": 820,
+        "shard #17": 830,
+        "shard #18": 820,
+        "shard #19": 830,
+        "shard #20": 820,
+        "shard #21": 830,
+        "shard #22": 820,
+        "shard #23": 830,
+        "shard #24": 820,
+        "shard #25": 900.0,
+        "shard #26": 785.0,
+        "shard #27": 800
     }
 }

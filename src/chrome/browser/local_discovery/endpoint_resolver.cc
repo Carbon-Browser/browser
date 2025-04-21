@@ -1,12 +1,12 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/local_discovery/endpoint_resolver.h"
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/debug/dump_without_crashing.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "chrome/browser/local_discovery/service_discovery_shared_client.h"
 #include "chrome/common/chrome_switches.h"
@@ -19,17 +19,15 @@ EndpointResolver::EndpointResolver() {
   service_discovery_client_ = ServiceDiscoverySharedClient::GetInstance();
 }
 
-EndpointResolver::~EndpointResolver() {}
+EndpointResolver::~EndpointResolver() = default;
 
 void EndpointResolver::Start(const net::HostPortPair& address,
                              ResultCallback callback) {
 #if BUILDFLAG(IS_MAC)
   net::IPAddress ip_address;
   if (!ip_address.AssignFromIPLiteral(address.host())) {
-    NOTREACHED() << address.ToString();
     // Unexpected, but could be a reason for crbug.com/513505
-    base::debug::DumpWithoutCrashing();
-    return std::move(callback).Run(net::IPEndPoint());
+    NOTREACHED() << address.ToString();
   }
 
   // OSX already has IP there.

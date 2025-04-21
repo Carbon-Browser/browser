@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/webui/shimless_rma/backend/version_updater.h"
 
 #include "ash/constants/ash_features.h"
+#include "base/containers/contains.h"
 #include "base/logging.h"
 #include "chromeos/ash/components/dbus/update_engine/update_engine.pb.h"
 #include "chromeos/ash/components/dbus/update_engine/update_engine_client.h"
@@ -16,6 +17,18 @@ namespace ash {
 namespace shimless_rma {
 
 namespace {
+
+// The list of operations signifying the UpdateEngine is not active. Denotes
+// it's safe to perform other actions.
+const update_engine::Operation kIdleUpdateOperations[] = {
+    update_engine::Operation::IDLE,
+    update_engine::Operation::CHECKING_FOR_UPDATE,
+    update_engine::Operation::UPDATE_AVAILABLE,
+    update_engine::Operation::DISABLED,
+    update_engine::Operation::NEED_PERMISSION_TO_UPDATE,
+    update_engine::Operation::CLEANUP_PREVIOUS_UPDATE,
+    update_engine::Operation::UPDATED_BUT_DEFERRED,
+    update_engine::Operation::ERROR};
 
 void ReportUpdateFailure(const VersionUpdater::OsUpdateStatusCallback& callback,
                          update_engine::Operation operation,
@@ -29,10 +42,9 @@ void ReportUpdateFailure(const VersionUpdater::OsUpdateStatusCallback& callback,
 // the appropriate status. |interactive| indicates whether the user is actively
 // checking for updates.
 bool IsUpdateAllowed() {
-  chromeos::NetworkStateHandler* network_state_handler =
-      chromeos::NetworkHandler::Get()->network_state_handler();
-  const chromeos::NetworkState* network =
-      network_state_handler->DefaultNetwork();
+  NetworkStateHandler* network_state_handler =
+      NetworkHandler::Get()->network_state_handler();
+  const NetworkState* network = network_state_handler->DefaultNetwork();
   // Don't allow an update if device is currently offline or connected
   // to a network for which data is metered.
   if (!network || !network->IsConnectedState()) {
@@ -75,7 +87,7 @@ void VersionUpdater::SetOsUpdateStatusCallback(
 // so that the update messages are the same as normal Chrome updates.
 // See
 // chrome/browser/ui/webui/help/version_updater_chromeos.cc:271
-// chrome/browser/resources/settings/chromeos/os_about_page/os_about_page.js:418
+// chrome/browser/resources/ash/settings/os_about_page/os_about_page.js:418
 // chrome/browser/ui/webui/settings/settings_localized_strings_provider.cc:261
 // chrome/app/shared_settings_strings.grdp:378
 // chrome/app/os_settings_strings.grdp:66
@@ -149,8 +161,9 @@ bool VersionUpdater::UpdateOs() {
 }
 
 bool VersionUpdater::IsUpdateEngineIdle() {
-  return UpdateEngineClient::Get()->GetLastStatus().current_operation() ==
-         update_engine::Operation::IDLE;
+  return base::Contains(
+      kIdleUpdateOperations,
+      UpdateEngineClient::Get()->GetLastStatus().current_operation());
 }
 
 void VersionUpdater::UpdateStatusChanged(
@@ -191,12 +204,13 @@ void VersionUpdater::UpdateStatusChanged(
     case update_engine::Operation::NEED_PERMISSION_TO_UPDATE:
     case update_engine::Operation::UPDATED_NEED_REBOOT:
     case update_engine::Operation::VERIFYING:
+    case update_engine::Operation::CLEANUP_PREVIOUS_UPDATE:
+    case update_engine::Operation::UPDATED_BUT_DEFERRED:
       break;
     // Added to avoid lint error
     case update_engine::Operation::Operation_INT_MIN_SENTINEL_DO_NOT_USE_:
     case update_engine::Operation::Operation_INT_MAX_SENTINEL_DO_NOT_USE_:
       NOTREACHED();
-      break;
   }
 
   status_callback_.Run(

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -66,6 +66,34 @@ chrome.test.runTests([
         'baz'  : 'qux',
         'hello': 'world'
       }, settings);
+      this.succeed();
+    }
+    test(stage0);
+  },
+
+  function getKeysWhenEmpty() {
+    function stage0() {
+      this.getKeys(stage1.bind(this));
+    }
+    function stage1(settings) {
+      assertEq([], settings);
+      this.succeed();
+    }
+    test(stage0);
+  },
+
+  function getKeysWhenNonEmpty() {
+    function stage0() {
+      this.set({
+        'foo'  : 'bar',
+        'baz'  : 'qux'
+      }, stage1.bind(this));
+    }
+    function stage1() {
+      this.getKeys(stage2.bind(this));
+    }
+    function stage2(settings) {
+      assertEq(['baz', 'foo'], settings.sort());
       this.succeed();
     }
     test(stage0);

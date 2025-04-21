@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,17 @@
 
 #include "ash/constants/ash_pref_names.h"
 #include "ash/shell.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
 #include "ui/aura/window.h"
 #include "ui/display/screen.h"
 #include "ui/events/base_event_utils.h"
+#include "ui/events/types/event_type.h"
 #include "ui/views/widget/widget.h"
 #include "ui/wm/core/coordinate_conversion.h"
 
-namespace fast_ink {
+namespace ash {
 namespace {
 
 // The amount of time used to estimate time from VSYNC event to when
@@ -26,7 +27,7 @@ const int kPresentationDelayMs = 18;
 
 FastInkPointerController::FastInkPointerController()
     : presentation_delay_(base::Milliseconds(kPresentationDelayMs)) {
-  auto* local_state = ash::Shell::Get()->local_state();
+  auto* local_state = Shell::Get()->local_state();
   // |local_state| could be null in tests.
   if (!local_state)
     return;
@@ -34,7 +35,7 @@ FastInkPointerController::FastInkPointerController()
   pref_change_registrar_local_ = std::make_unique<PrefChangeRegistrar>();
   pref_change_registrar_local_->Init(local_state);
   pref_change_registrar_local_->Add(
-      ash::prefs::kHasSeenStylus,
+      prefs::kHasSeenStylus,
       base::BindRepeating(&FastInkPointerController::OnHasSeenStylusPrefChanged,
                           base::Unretained(this)));
 
@@ -65,8 +66,8 @@ bool FastInkPointerController::CanStartNewGesture(ui::LocatedEvent* event) {
   // (most likely because the preceding press event was consumed by another
   // handler).
   bool can_start_on_touch_event =
-      event->type() == ui::ET_TOUCH_PRESSED ||
-      (event->type() == ui::ET_TOUCH_MOVED && !GetPointerView());
+      event->type() == ui::EventType::kTouchPressed ||
+      (event->type() == ui::EventType::kTouchMoved && !GetPointerView());
   if (can_start_on_touch_event)
     return true;
 
@@ -75,8 +76,8 @@ bool FastInkPointerController::CanStartNewGesture(ui::LocatedEvent* event) {
   // (most likely because the preceding press event was consumed by another
   // handler).
   bool can_start_on_mouse_event =
-      event->type() == ui::ET_MOUSE_PRESSED ||
-      (event->type() == ui::ET_MOUSE_MOVED && !GetPointerView());
+      event->type() == ui::EventType::kMousePressed ||
+      (event->type() == ui::EventType::kMouseMoved && !GetPointerView());
   if (can_start_on_mouse_event)
     return true;
 
@@ -84,12 +85,13 @@ bool FastInkPointerController::CanStartNewGesture(ui::LocatedEvent* event) {
 }
 
 bool FastInkPointerController::ShouldProcessEvent(ui::LocatedEvent* event) {
-  return event->type() == ui::ET_TOUCH_RELEASED ||
-         event->type() == ui::ET_TOUCH_MOVED ||
-         event->type() == ui::ET_TOUCH_PRESSED ||
-         event->type() == ui::ET_MOUSE_PRESSED ||
-         event->type() == ui::ET_MOUSE_RELEASED ||
-         event->type() == ui::ET_MOUSE_MOVED;
+  return event->type() == ui::EventType::kTouchReleased ||
+         event->type() == ui::EventType::kTouchMoved ||
+         event->type() == ui::EventType::kTouchPressed ||
+         event->type() == ui::EventType::kTouchCancelled ||
+         event->type() == ui::EventType::kMousePressed ||
+         event->type() == ui::EventType::kMouseReleased ||
+         event->type() == ui::EventType::kMouseMoved;
 }
 
 bool FastInkPointerController::IsEnabledForMouseEvent() const {
@@ -102,7 +104,7 @@ bool FastInkPointerController::IsPointerInExcludedWindows(
   aura::Window* event_target = static_cast<aura::Window*>(event->target());
   wm::ConvertPointToScreen(event_target, &screen_location);
 
-  for (const auto* excluded_window : excluded_windows_.windows()) {
+  for (const aura::Window* excluded_window : excluded_windows_.windows()) {
     if (excluded_window->GetBoundsInScreen().Contains(screen_location)) {
       return true;
     }
@@ -138,10 +140,11 @@ bool FastInkPointerController::MaybeCreatePointerView(
 void FastInkPointerController::OnTouchEvent(ui::TouchEvent* event) {
   const int touch_id = event->pointer_details().id;
   // Keep track of touch point count.
-  if (event->type() == ui::ET_TOUCH_PRESSED)
+  if (event->type() == ui::EventType::kTouchPressed) {
     touch_ids_.insert(touch_id);
-  if (event->type() == ui::ET_TOUCH_RELEASED ||
-      event->type() == ui::ET_TOUCH_CANCELLED) {
+  }
+  if (event->type() == ui::EventType::kTouchReleased ||
+      event->type() == ui::EventType::kTouchCancelled) {
     auto iter = touch_ids_.find(touch_id);
 
     // Can happen if this object is constructed while fingers were down.
@@ -192,7 +195,7 @@ void FastInkPointerController::OnMouseEvent(ui::MouseEvent* event) {
 void FastInkPointerController::OnHasSeenStylusPrefChanged() {
   auto* local_state = pref_change_registrar_local_->prefs();
   has_seen_stylus_ =
-      local_state && local_state->GetBoolean(ash::prefs::kHasSeenStylus);
+      local_state && local_state->GetBoolean(prefs::kHasSeenStylus);
 }
 
-}  // namespace fast_ink
+}  // namespace ash

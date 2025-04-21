@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,8 @@ namespace autofill {
 
 class AutofillOfferData;
 
-// Per-tab controller to control the offer notification infobar / message
-// displayed on mobile.
+// Per-tab controller to control the offer notification message displayed on
+// mobile.
 class OfferNotificationControllerAndroid
     : public content::WebContentsUserData<OfferNotificationControllerAndroid> {
  public:
@@ -29,18 +29,15 @@ class OfferNotificationControllerAndroid
   OfferNotificationControllerAndroid& operator=(
       const OfferNotificationControllerAndroid&) = delete;
 
-  // Show the infobar / message unless it was already shown in the same tab with
-  // the same origin.
+  // Show the message unless it was already shown in the same tab with the same
+  // origin.
   void ShowIfNecessary(const AutofillOfferData* offer, const CreditCard* card);
 
-  // Dismiss the infobar / message if it is visible.
+  // Dismiss the message if it is visible.
   void Dismiss();
 
  private:
   friend class content::WebContentsUserData<OfferNotificationControllerAndroid>;
-
-  // Dismiss the message if it is visible.
-  void DismissMessage();
 
   // Callbacks for user selection on offer notification message.
   void HandleMessageAction(const GURL& url);

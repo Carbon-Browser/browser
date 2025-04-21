@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@
 #define BASE_FUCHSIA_INTL_PROFILE_WATCHER_H_
 
 #include <fuchsia/intl/cpp/fidl.h>
+
 #include <string>
 
 #include "base/base_export.h"
-#include "base/callback.h"
-#include "base/strings/string_piece_forward.h"
+#include "base/functional/callback.h"
 
 namespace base {
 

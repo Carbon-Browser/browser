@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,7 @@ namespace net::websockets {
 extern const char kHttpProtocolVersion[];
 
 // The Sec-WebSockey-Key challenge is 16 random bytes, base64 encoded.
-extern const size_t kRawChallengeLength;
+inline constexpr size_t kRawChallengeLength = 16;
 
 // "Sec-WebSocket-Protocol"
 extern const char kSecWebSocketProtocol[];

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,11 @@
 #include <utility>
 
 #include "ash/components/arc/arc_util.h"
+#include "ash/components/arc/metrics/arc_metrics_service.h"
 #include "ash/components/arc/session/connection_observer.h"
-#include "chrome/browser/ash/throttle_observer.h"
-#include "chrome/browser/ash/throttle_service.h"
+#include "base/memory/raw_ptr.h"
+#include "chromeos/ash/components/throttle/throttle_observer.h"
+#include "chromeos/ash/components/throttle/throttle_service.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 namespace base {
@@ -36,7 +38,8 @@ class PowerInstance;
 // throttling state of the ARC container on a change in conditions.
 class ArcInstanceThrottle : public KeyedService,
                             public ash::ThrottleService,
-                            public ConnectionObserver<mojom::PowerInstance> {
+                            public ConnectionObserver<mojom::PowerInstance>,
+                            public ArcMetricsService::BootTypeObserver {
  public:
   // The name of the observer which monitors chrome://arc-power-control.
   static const char kChromeArcPowerControlPageObserver[];
@@ -80,6 +83,11 @@ class ArcInstanceThrottle : public KeyedService,
     delegate_ = std::move(delegate);
   }
 
+  // ArcMetricsService::BootTypeObserver
+  void OnBootTypeRetrieved(mojom::BootType boot_type) override;
+
+  static void EnsureFactoryBuilt();
+
  private:
   // ash::ThrottleService:
   void ThrottleInstance(bool should_throttle) override;
@@ -92,12 +100,19 @@ class ArcInstanceThrottle : public KeyedService,
   ArcBootPhaseThrottleObserver* GetBootObserver();
 
   std::unique_ptr<Delegate> delegate_;
+
   // True if CPU_RESTRICTION_BACKGROUND_WITH_CFS_QUOTA_ENFORCED should never be
-  // used.
+  // used. By default, CPU quota enforcement is allowed (see the default value
+  // below), but once one of the following conditions is met, the variable turns
+  // `true` to completely disable the enforcement feature:
+  //
+  // * ARC is unthrottled by a user action (vs for faster boot or ANR
+  //   prevention.)
+  // * ARC's boot type is 'regular boot' (vs first boot or first boot after AU.)
   bool never_enforce_quota_ = false;
 
   // Owned by ArcServiceManager.
-  ArcBridgeService* const bridge_;
+  const raw_ptr<ArcBridgeService> bridge_;
 };
 
 }  // namespace arc

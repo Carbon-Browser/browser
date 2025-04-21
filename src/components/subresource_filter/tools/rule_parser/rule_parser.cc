@@ -1,14 +1,18 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/subresource_filter/tools/rule_parser/rule_parser.h"
 
 #include <map>
+#include <string_view>
 #include <utility>
 #include <vector>
 
+#include "base/check.h"
+#include "base/check_op.h"
 #include "base/logging.h"
+#include "base/not_fatal_until.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "components/subresource_filter/tools/rule_parser/rule_options.h"
@@ -67,8 +71,8 @@ class KeywordMap {
 
     // Creates a generic option.
     OptionDetails(OptionType type, int flags) : type(type), flags(flags) {
-      DCHECK_NE(type, OPTION_ELEMENT_TYPE);
-      DCHECK_NE(type, OPTION_ACTIVATION_TYPE);
+      CHECK_NE(type, OPTION_ELEMENT_TYPE, base::NotFatalUntil::M129);
+      CHECK_NE(type, OPTION_ACTIVATION_TYPE, base::NotFatalUntil::M129);
     }
 
     bool requires_value() const { return flags & FLAG_REQUIRES_VALUE; }
@@ -103,11 +107,11 @@ class KeywordMap {
 
   // Returns detailed information associated with the provided |name| option.
   // Returns nullptr on unknown options.
-  const OptionDetails* Lookup(base::StringPiece name) const;
+  const OptionDetails* Lookup(std::string_view name) const;
 
  private:
   // Associates |details| with a specified option |name|.
-  void AddOption(base::StringPiece name, const OptionDetails& details);
+  void AddOption(std::string_view name, const OptionDetails& details);
 
   std::map<std::string, OptionDetails> options_;
 };
@@ -155,16 +159,16 @@ KeywordMap::KeywordMap() {
 KeywordMap::~KeywordMap() = default;
 
 const KeywordMap::OptionDetails* KeywordMap::Lookup(
-    base::StringPiece name) const {
+    std::string_view name) const {
   // TODO(pkalinnikov): Avoid std::string allocation.
   auto iterator = options_.find(std::string(name));
   return iterator != options_.end() ? &iterator->second : nullptr;
 }
 
-void KeywordMap::AddOption(base::StringPiece name,
+void KeywordMap::AddOption(std::string_view name,
                            const OptionDetails& details) {
   auto inserted = options_.insert(std::make_pair(std::string(name), details));
-  DCHECK(inserted.second);
+  CHECK(inserted.second, base::NotFatalUntil::M129);
 }
 
 KeywordMap* GetKeywordsMapSingleton() {
@@ -214,17 +218,17 @@ const char* RuleParser::GetParseErrorCodeDescription(
 }
 
 // TODO(pkalinnikov): Refactor parsing approach to use a FSM.
-RuleType RuleParser::Parse(base::StringPiece line) {
+RuleType RuleParser::Parse(std::string_view line) {
   rule_type_ = url_pattern_index::proto::RULE_TYPE_UNSPECIFIED;
   parse_error_ = ParseError();
 
   // Strip all leading and trailing whitespaces.
-  base::StringPiece part = line;
+  std::string_view part = line;
   part = base::TrimWhitespaceASCII(part, base::TRIM_ALL);
   // Check whether it's a trivial rule.
   if (part.empty()) {
     // Note: cannot use part.data() here because it is flaky to rely on *which*
-    // empty StringPiece StripWhitespace will return.
+    // empty std::string_view StripWhitespace will return.
     SetParseError(ParseError::EMPTY_RULE, line, line.data());
     return url_pattern_index::proto::RULE_TYPE_UNSPECIFIED;
   }
@@ -238,10 +242,10 @@ RuleType RuleParser::Parse(base::StringPiece line) {
   // Suppose it is a CSS rule if a CSS-selector separator character ('#') is
   // present, followed by '#' or '@'.
   size_t css_separator_pos = part.find('#');
-  for (; css_separator_pos != base::StringPiece::npos;
+  for (; css_separator_pos != std::string_view::npos;
        css_separator_pos = part.find('#', css_separator_pos + 1)) {
     if (css_separator_pos + 1 == part.size()) {
-      css_separator_pos = base::StringPiece::npos;
+      css_separator_pos = std::string_view::npos;
       break;
     }
     const char next_char = part[css_separator_pos + 1];
@@ -249,15 +253,15 @@ RuleType RuleParser::Parse(base::StringPiece line) {
       break;
   }
 
-  if (css_separator_pos != base::StringPiece::npos) {
+  if (css_separator_pos != std::string_view::npos) {
     return rule_type_ = ParseCssRule(line, part, css_separator_pos);
   }
   // Else assume we read a URL filtering rule.
   return rule_type_ = ParseUrlRule(line, part);
 }
 
-RuleType RuleParser::ParseUrlRule(base::StringPiece origin,
-                                  base::StringPiece part) {
+RuleType RuleParser::ParseUrlRule(std::string_view origin,
+                                  std::string_view part) {
   CHECK(!part.empty() && part.data() >= origin.data());
   url_rule_ = UrlRule();
 
@@ -277,11 +281,12 @@ RuleType RuleParser::ParseUrlRule(base::StringPiece origin,
   // pointing to a character inside the pattern. This can happen for those rules
   // which don't have options at all, e.g., "/.*substring$/". All such rules end
   // with '/', therefore the following code can detect them to work around.
-  if (options_start != base::StringPiece::npos && part.back() == '/')
-    options_start = base::StringPiece::npos;
+  if (options_start != std::string_view::npos && part.back() == '/') {
+    options_start = std::string_view::npos;
+  }
 
-  if (options_start != base::StringPiece::npos) {
-    const base::StringPiece options = part.substr(options_start + 1);
+  if (options_start != std::string_view::npos) {
+    const std::string_view options = part.substr(options_start + 1);
     if (!ParseUrlRuleOptions(origin, options))
       return url_pattern_index::proto::RULE_TYPE_UNSPECIFIED;
     part.remove_suffix(part.size() - options_start);
@@ -312,14 +317,14 @@ RuleType RuleParser::ParseUrlRule(base::StringPiece origin,
   return url_pattern_index::proto::RULE_TYPE_URL;
 }
 
-bool RuleParser::ParseUrlRuleOptions(base::StringPiece origin,
-                                     base::StringPiece options) {
+bool RuleParser::ParseUrlRuleOptions(std::string_view origin,
+                                     std::string_view options) {
   CHECK_GE(options.data(), origin.data());
 
   bool has_seen_element_or_activation_type = false;
-  for (base::StringPiece piece : base::SplitStringPiece(
+  for (std::string_view piece : base::SplitStringPiece(
            options, ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY)) {
-    DCHECK(!piece.empty());
+    CHECK(!piece.empty(), base::NotFatalUntil::M129);
 
     TriState tri_state = TriState::YES;
     if (base::StartsWith(piece, "~", base::CompareCase::SENSITIVE)) {
@@ -328,7 +333,7 @@ bool RuleParser::ParseUrlRuleOptions(base::StringPiece origin,
     }
 
     size_t option_name_end = piece.find('=');
-    base::StringPiece option_name = piece.substr(0, option_name_end);
+    std::string_view option_name = piece.substr(0, option_name_end);
 
     const auto* option_details = GetKeywordsMapSingleton()->Lookup(option_name);
     if (!option_details) {
@@ -344,7 +349,7 @@ bool RuleParser::ParseUrlRuleOptions(base::StringPiece origin,
     }
 
     if (option_details->requires_value() &&
-        option_name_end == base::StringPiece::npos) {
+        option_name_end == std::string_view::npos) {
       SetParseError(ParseError::NO_VALUE_PROVIDED, origin, option_name.data());
       return false;
     }
@@ -381,7 +386,7 @@ bool RuleParser::ParseUrlRuleOptions(base::StringPiece origin,
             url_rule_.type_mask = 0;
           url_rule_.type_mask |= type_mask_for(option_details->element_type);
         } else {
-          DCHECK(tri_state == TriState::NO);
+          CHECK(tri_state == TriState::NO, base::NotFatalUntil::M129);
           url_rule_.type_mask &= ~type_mask_for(option_details->element_type);
         }
         has_seen_element_or_activation_type = true;
@@ -412,20 +417,21 @@ bool RuleParser::ParseUrlRuleOptions(base::StringPiece origin,
   return true;
 }
 
-RuleType RuleParser::ParseCssRule(base::StringPiece origin,
-                                  base::StringPiece part,
+RuleType RuleParser::ParseCssRule(std::string_view origin,
+                                  std::string_view part,
                                   size_t css_section_start) {
   CHECK(part.data() >= origin.data());
   css_rule_ = CssRule();
 
   // Check for a list of domains.
   if (css_section_start) {
-    DCHECK(css_section_start != base::StringPiece::npos);
+    CHECK(css_section_start != std::string_view::npos,
+          base::NotFatalUntil::M129);
     auto pieces = base::SplitStringPiece(part.substr(0, css_section_start), ",",
                                          base::TRIM_WHITESPACE,
                                          base::SPLIT_WANT_NONEMPTY);
-    for (base::StringPiece domain : pieces) {
-      DCHECK(!domain.empty());
+    for (std::string_view domain : pieces) {
+      CHECK(!domain.empty(), base::NotFatalUntil::M129);
       css_rule_.domains.push_back(std::string(domain));
     }
   }
@@ -456,10 +462,10 @@ RuleType RuleParser::ParseCssRule(base::StringPiece origin,
 }
 
 void RuleParser::SetParseError(ParseError::ErrorCode code,
-                               base::StringPiece origin,
+                               std::string_view origin,
                                const char* error_begin) {
-  DCHECK(code != ParseError::NONE);
-  DCHECK(error_begin >= origin.data());
+  CHECK(code != ParseError::NONE, base::NotFatalUntil::M129);
+  CHECK(error_begin >= origin.data(), base::NotFatalUntil::M129);
 
   parse_error_.error_code = code;
   parse_error_.line = std::string(origin);

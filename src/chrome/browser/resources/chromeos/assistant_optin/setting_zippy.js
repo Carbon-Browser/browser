@@ -1,18 +1,25 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-/* #js_imports_placeholder */
+import '//resources/ash/common/cr_elements/cr_toggle/cr_toggle.js';
+import '../components/common_styles/oobe_common_styles.css.js';
+import './assistant_common_styles.css.js';
 
-/**
- * @polymer
- */
-class SettingZippy extends Polymer.Element {
+import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {getTemplate} from './setting_zippy.html.js';
+import {AssistantNativeIconType} from './utils.js';
+
+/** @polymer */
+class SettingZippy extends PolymerElement {
   static get is() {
     return 'setting-zippy';
   }
 
-  /* #html_template_placeholder */
+  static get template() {
+    return getTemplate();
+  }
 
   static get properties() {
     return {

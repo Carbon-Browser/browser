@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/compiler_specific.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "ui/events/event.h"
 #include "ui/events/event_observer.h"
 #include "ui/events/event_utils.h"
@@ -32,8 +31,8 @@ class MouseWatcher::Observer : public ui::EventObserver {
       : mouse_watcher_(mouse_watcher) {
     event_monitor_ = EventMonitor::CreateApplicationMonitor(
         this, window,
-        {ui::ET_MOUSE_PRESSED, ui::ET_MOUSE_MOVED, ui::ET_MOUSE_EXITED,
-         ui::ET_MOUSE_DRAGGED});
+        {ui::EventType::kMousePressed, ui::EventType::kMouseMoved,
+         ui::EventType::kMouseExited, ui::EventType::kMouseDragged});
   }
 
   Observer(const Observer&) = delete;
@@ -43,19 +42,18 @@ class MouseWatcher::Observer : public ui::EventObserver {
   void OnEvent(const ui::Event& event) override {
     using EventType = MouseWatcherHost::EventType;
     switch (event.type()) {
-      case ui::ET_MOUSE_MOVED:
-      case ui::ET_MOUSE_DRAGGED:
+      case ui::EventType::kMouseMoved:
+      case ui::EventType::kMouseDragged:
         HandleMouseEvent(EventType::kMove);
         break;
-      case ui::ET_MOUSE_EXITED:
+      case ui::EventType::kMouseExited:
         HandleMouseEvent(EventType::kExit);
         break;
-      case ui::ET_MOUSE_PRESSED:
+      case ui::EventType::kMousePressed:
         HandleMouseEvent(EventType::kPress);
         break;
       default:
         NOTREACHED();
-        break;
     }
   }
 
@@ -72,7 +70,7 @@ class MouseWatcher::Observer : public ui::EventObserver {
       } else if (!notify_listener_factory_.HasWeakPtrs()) {
         // Mouse moved outside the host's zone, start a timer to notify the
         // listener.
-        base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
             FROM_HERE,
             base::BindOnce(&Observer::NotifyListener,
                            notify_listener_factory_.GetWeakPtr()),
@@ -113,8 +111,9 @@ MouseWatcher::MouseWatcher(std::unique_ptr<MouseWatcherHost> host,
 MouseWatcher::~MouseWatcher() = default;
 
 void MouseWatcher::Start(gfx::NativeWindow window) {
-  if (!is_observing())
+  if (!is_observing()) {
     observer_ = std::make_unique<Observer>(this, window);
+  }
 }
 
 void MouseWatcher::Stop() {

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <utility>
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/views/layout/flex_layout_types.h"
 #include "ui/views/layout/layout_types.h"
 #include "ui/views/layout/normalized_geometry.h"
@@ -16,12 +17,12 @@
 
 namespace {
 
-absl::optional<gfx::Size> GetSizeFromFlexRule(const views::View* view,
-                                              const views::SizeBounds& bounds) {
+std::optional<gfx::Size> GetSizeFromFlexRule(const views::View* view,
+                                             const views::SizeBounds& bounds) {
   const views::FlexSpecification* const spec =
       view->GetProperty(views::kFlexBehaviorKey);
-  return spec ? absl::make_optional(spec->rule().Run(view, bounds))
-              : absl::nullopt;
+  return spec ? std::make_optional(spec->rule().Run(view, bounds))
+              : std::nullopt;
 }
 
 gfx::Size GetSizeFromFlexRuleOrDefault(const views::View* view,
@@ -38,29 +39,44 @@ gfx::Size GetSizeFromFlexRuleOrDefault(const views::View* view,
 }  // namespace
 
 OverflowView::OverflowView(std::unique_ptr<views::View> primary_view,
-                           std::unique_ptr<views::View> indicator_view) {
+                           std::unique_ptr<views::View> postfix_indicator_view)
+    : OverflowView(std::move(primary_view),
+                   nullptr,
+                   std::move(postfix_indicator_view)) {}
+
+OverflowView::OverflowView(
+    std::unique_ptr<views::View> primary_view,
+    std::unique_ptr<views::View> prefix_indicator_view,
+    std::unique_ptr<views::View> postfix_indicator_view) {
+  if (prefix_indicator_view) {
+    prefix_indicator_view_ = AddChildView(std::move(prefix_indicator_view));
+  }
   primary_view_ = AddChildView(std::move(primary_view));
-  indicator_view_ = AddChildView(std::move(indicator_view));
+  if (postfix_indicator_view) {
+    postfix_indicator_view_ = AddChildView(std::move(postfix_indicator_view));
+  }
 }
 
 OverflowView::~OverflowView() = default;
 
 void OverflowView::SetOrientation(views::LayoutOrientation orientation) {
-  if (orientation == orientation_)
+  if (orientation == orientation_) {
     return;
+  }
   orientation_ = orientation;
   InvalidateLayout();
 }
 
 void OverflowView::SetCrossAxisAlignment(
     views::LayoutAlignment cross_axis_alignment) {
-  if (cross_axis_alignment == cross_axis_alignment_)
+  if (cross_axis_alignment == cross_axis_alignment_) {
     return;
+  }
   cross_axis_alignment_ = cross_axis_alignment;
   InvalidateLayout();
 }
 
-void OverflowView::Layout() {
+void OverflowView::Layout(PassKey) {
   const gfx::Size available_size = size();
   const gfx::Size primary_size =
       GetSizeFromFlexRuleOrDefault(primary_view_, available_size);
@@ -71,31 +87,67 @@ void OverflowView::Layout() {
 
   // Determine the size that the overflow indicator will take up if it is
   // needed.
-  views::NormalizedRect indicator_bounds;
-  const auto rule_size =
-      GetSizeFromFlexRule(indicator_view_, views::SizeBounds(available_size));
-  if (rule_size.has_value()) {
-    indicator_bounds = Normalize(orientation_, gfx::Rect(rule_size.value()));
-  } else {
-    indicator_bounds.set_size(Normalize(
-        orientation_,
-        GetSizeFromFlexRuleOrDefault(indicator_view_, available_size)));
+  views::NormalizedRect prefix_indicator_bounds;
+  if (prefix_indicator_view_) {
+    const auto prefix_rule_size = GetSizeFromFlexRule(
+        prefix_indicator_view_, views::SizeBounds(available_size));
+    if (prefix_rule_size.has_value()) {
+      prefix_indicator_bounds =
+          Normalize(orientation_, gfx::Rect(prefix_rule_size.value()));
+    } else {
+      prefix_indicator_bounds.set_size(
+          Normalize(orientation_, GetSizeFromFlexRuleOrDefault(
+                                      prefix_indicator_view_, available_size)));
+    }
+  }
+
+  views::NormalizedRect postfix_indicator_bounds;
+  if (postfix_indicator_view_) {
+    const auto postfix_rule_size = GetSizeFromFlexRule(
+        postfix_indicator_view_, views::SizeBounds(available_size));
+    if (postfix_rule_size.has_value()) {
+      postfix_indicator_bounds =
+          Normalize(orientation_, gfx::Rect(postfix_rule_size.value()));
+    } else {
+      postfix_indicator_bounds.set_size(Normalize(
+          orientation_, GetSizeFromFlexRuleOrDefault(postfix_indicator_view_,
+                                                     available_size)));
+    }
   }
 
   // Determine if overflow is occurring and show/size and position the
   // overflow indicator if it is.
   if (primary_bounds.size_main() <= normalized_size.main()) {
-    indicator_view_->SetVisible(false);
+    if (prefix_indicator_view_) {
+      prefix_indicator_view_->SetVisible(false);
+    }
+    if (postfix_indicator_view_) {
+      postfix_indicator_view_->SetVisible(false);
+    }
   } else {
-    indicator_view_->SetVisible(true);
-    indicator_bounds.set_origin_main(normalized_size.main() -
-                                     indicator_bounds.size_main());
-    indicator_bounds.AlignCross(views::Span(0, normalized_size.cross()),
-                                cross_axis_alignment_);
-    indicator_view_->SetBoundsRect(Denormalize(orientation_, indicator_bounds));
+    if (prefix_indicator_view_) {
+      prefix_indicator_view_->SetVisible(true);
+      prefix_indicator_bounds.set_origin_main(0);
+      prefix_indicator_bounds.AlignCross(
+          views::Span(0, normalized_size.cross()), cross_axis_alignment_);
+      prefix_indicator_view_->SetBoundsRect(
+          Denormalize(orientation_, prefix_indicator_bounds));
+    }
+    if (postfix_indicator_view_) {
+      postfix_indicator_view_->SetVisible(true);
+      postfix_indicator_bounds.set_origin_main(
+          normalized_size.main() - postfix_indicator_bounds.size_main());
+      postfix_indicator_bounds.AlignCross(
+          views::Span(0, normalized_size.cross()), cross_axis_alignment_);
+      postfix_indicator_view_->SetBoundsRect(
+          Denormalize(orientation_, postfix_indicator_bounds));
+    }
 
     // Also shrink the primary view by the size of the indicator.
-    primary_bounds.set_size_main(std::max(0, indicator_bounds.origin_main()));
+    primary_bounds.set_origin_main(prefix_indicator_bounds.size_main());
+    primary_bounds.set_size_main(std::max(
+        0, normalized_size.main() - prefix_indicator_bounds.size_main() -
+               postfix_indicator_bounds.size_main()));
   }
 
   // Hide/show and size the primary view.
@@ -113,11 +165,13 @@ views::SizeBounds OverflowView::GetAvailableSize(
     const views::View* child) const {
   DCHECK_EQ(this, child->parent());
 
-  if (!parent())
+  if (!parent()) {
     return views::SizeBounds();
+  }
 
   const views::SizeBounds available = parent()->GetAvailableSize(this);
-  if (child != primary_view_ || !indicator_view_) {
+  if (child != primary_view_ ||
+      (!prefix_indicator_view_ && !postfix_indicator_view_)) {
     // Give the overflow view as much space as it needs; all other views are
     // unmanaged and have no additional space constraints. The primary view is
     // given all available space when there is no overflow view.
@@ -128,26 +182,41 @@ views::SizeBounds OverflowView::GetAvailableSize(
   // but only if the overflow view would be shown.
   const gfx::Size required_size =
       GetSizeFromFlexRule(child, available).value_or(child->GetMinimumSize());
-  const gfx::Size indicator_size =
-      GetSizeFromFlexRule(indicator_view_, views::SizeBounds())
-          .value_or(indicator_view_->GetPreferredSize());
+
+  gfx::Size prefix_indicator_size;
+  if (prefix_indicator_view_) {
+    prefix_indicator_size =
+        GetSizeFromFlexRule(prefix_indicator_view_, views::SizeBounds())
+            .value_or(prefix_indicator_view_->GetPreferredSize());
+  }
+
+  gfx::Size postfix_indicator_size;
+  if (postfix_indicator_view_) {
+    postfix_indicator_size =
+        GetSizeFromFlexRule(postfix_indicator_view_, views::SizeBounds())
+            .value_or(postfix_indicator_view_->GetPreferredSize());
+  }
+
   switch (orientation_) {
     case views::LayoutOrientation::kHorizontal:
       if (!available.width().is_bounded() ||
           available.width().value() >= required_size.width()) {
         return available;
       }
-      return views::SizeBounds(
-          std::max(0, available.width().value() - indicator_size.width()),
-          available.height());
+      return views::SizeBounds(std::max(0, available.width().value() -
+                                               prefix_indicator_size.width() -
+                                               postfix_indicator_size.width()),
+                               available.height());
+
     case views::LayoutOrientation::kVertical:
       if (!available.height().is_bounded() ||
           available.height().value() >= required_size.height()) {
         return available;
       }
       return views::SizeBounds(
-          available.width(),
-          std::max(0, available.height().value() - indicator_size.height()));
+          available.width(), std::max(0, available.height().value() -
+                                             prefix_indicator_size.height() -
+                                             postfix_indicator_size.height()));
   }
 }
 
@@ -155,9 +224,18 @@ gfx::Size OverflowView::GetMinimumSize() const {
   const gfx::Size primary_minimum =
       GetSizeFromFlexRule(primary_view_, views::SizeBounds(0, 0))
           .value_or(primary_view_->GetMinimumSize());
-  const gfx::Size indicator_minimum =
-      GetSizeFromFlexRule(indicator_view_, views::SizeBounds(0, 0))
-          .value_or(indicator_view_->GetMinimumSize());
+  gfx::Size prefix_indicator_minimum;
+  if (prefix_indicator_view_) {
+    prefix_indicator_minimum =
+        GetSizeFromFlexRule(prefix_indicator_view_, views::SizeBounds(0, 0))
+            .value_or(prefix_indicator_view_->GetMinimumSize());
+  }
+  gfx::Size postfix_indicator_minimum;
+  if (postfix_indicator_view_) {
+    postfix_indicator_minimum =
+        GetSizeFromFlexRule(postfix_indicator_view_, views::SizeBounds(0, 0))
+            .value_or(postfix_indicator_view_->GetMinimumSize());
+  }
 
   // Minimum width on the main axis and the Minimum height on the cross axis
   // is the minimum of the indicator's minimum size and primary's minimum size.
@@ -165,17 +243,24 @@ gfx::Size OverflowView::GetMinimumSize() const {
   // size, the overflow minimum size can be shrinked down to the primary.
   switch (orientation_) {
     case views::LayoutOrientation::kHorizontal:
-      return gfx::Size(
-          std::min(indicator_minimum.width(), primary_minimum.width()),
-          std::max(indicator_minimum.height(), primary_minimum.height()));
+      return gfx::Size(std::min(prefix_indicator_minimum.width() +
+                                    postfix_indicator_minimum.width(),
+                                primary_minimum.width()),
+                       std::max({prefix_indicator_minimum.height(),
+                                 postfix_indicator_minimum.height(),
+                                 primary_minimum.height()}));
     case views::LayoutOrientation::kVertical:
-      return gfx::Size(
-          std::max(indicator_minimum.width(), primary_minimum.width()),
-          std::min(indicator_minimum.height(), primary_minimum.height()));
+      return gfx::Size(std::max({prefix_indicator_minimum.width(),
+                                 postfix_indicator_minimum.width(),
+                                 primary_minimum.width()}),
+                       std::min(prefix_indicator_minimum.height() +
+                                    postfix_indicator_minimum.height(),
+                                primary_minimum.height()));
   }
 }
 
-gfx::Size OverflowView::CalculatePreferredSize() const {
+gfx::Size OverflowView::CalculatePreferredSize(
+    const views::SizeBounds& available_size) const {
   // Preferred size is the preferred size of the primary as the overflow
   // view wants to show the primary by itself if it can.
   gfx::Size result = GetSizeFromFlexRule(primary_view_, views::SizeBounds())
@@ -183,15 +268,5 @@ gfx::Size OverflowView::CalculatePreferredSize() const {
   return result;
 }
 
-int OverflowView::GetHeightForWidth(int width) const {
-  const auto primary_size = GetSizeFromFlexRule(
-      primary_view_, views::SizeBounds(width, views::SizeBound()));
-  int primary_height = primary_size ? primary_size->height()
-                                    : primary_view_->GetHeightForWidth(width);
-  const auto indicator_size = GetSizeFromFlexRule(
-      indicator_view_, views::SizeBounds(width, views::SizeBound()));
-  const int indicator_height = indicator_size
-                                   ? indicator_size->height()
-                                   : indicator_view_->GetHeightForWidth(width);
-  return std::max(primary_height, indicator_height);
-}
+BEGIN_METADATA(OverflowView)
+END_METADATA

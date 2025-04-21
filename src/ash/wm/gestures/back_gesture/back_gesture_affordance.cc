@@ -1,29 +1,27 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/wm/gestures/back_gesture/back_gesture_affordance.h"
 
+#include <algorithm>
+
 #include "ash/display/screen_orientation_controller.h"
 #include "ash/public/cpp/shell_window_ids.h"
-#include "ash/public/cpp/style/scoped_light_mode_as_default.h"
-#include "ash/style/ash_color_provider.h"
-#include "ash/style/default_color_constants.h"
-#include "ash/style/default_colors.h"
+#include "ash/style/ash_color_id.h"
+#include "ash/style/color_util.h"
 #include "ash/wm/gestures/back_gesture/back_gesture_util.h"
 #include "ash/wm/splitview/split_view_controller.h"
 #include "ash/wm/splitview/split_view_divider.h"
+#include "ash/wm/splitview/split_view_types.h"
 #include "ash/wm/window_util.h"
-#include "base/cxx17_backports.h"
 #include "base/i18n/rtl.h"
-#include "chromeos/constants/chromeos_features.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/aura/window.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/paint_recorder.h"
 #include "ui/display/screen.h"
 #include "ui/events/event.h"
-#include "ui/gfx/animation/animation_delegate.h"
 #include "ui/gfx/animation/tween.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/color_palette.h"
@@ -46,16 +44,6 @@ constexpr int kDistanceFromArrowToTouchPoint = 64;
 
 constexpr int kArrowSize = 20;
 constexpr int kBackgroundRadius = 20;
-
-// The background shadow for the circle.
-// TODO(michelefan@): Clean up the shadows after the
-// `chromeos::features::IsDarkLightModeEnabled()` is enabled by default.
-constexpr int kBackNudgeShadowOffsetY1 = 1;
-constexpr int kBackNudgeShadowBlurRadius1 = 2;
-constexpr SkColor kBackNudgeShadowColor1 = SkColorSetA(SK_ColorBLACK, 0x4D);
-constexpr int kBackNudgeShadowOffsetY2 = 2;
-constexpr int kBackNudgeShadowBlurRadius2 = 6;
-constexpr SkColor kBackNudgeShadowColor2 = SkColorSetA(SK_ColorBLACK, 0x26);
 
 // Radius of the ripple while x-axis movement of the affordance achieves
 // |kDistanceForFullRadius|.
@@ -128,11 +116,8 @@ class AffordanceView : public views::View {
     cc::PaintFlags ripple_flags;
     ripple_flags.setAntiAlias(true);
     ripple_flags.setStyle(cc::PaintFlags::kFill_Style);
-    ScopedLightModeAsDefault scoped_light_mode_as_default;
-    ripple_flags.setColor(AshColorProvider::GetSecondToneColor(
-        AshColorProvider::Get()->GetControlsLayerColor(
-            AshColorProvider::ControlsLayerType::
-                kControlBackgroundColorActive)));
+    ripple_flags.setColor(ColorUtil::GetSecondToneColor(
+        GetColorProvider()->GetColor(kColorAshControlBackgroundColorActive)));
 
     float ripple_radius = 0.f;
     if (state_ == BackGestureAffordance::State::COMPLETING) {
@@ -157,34 +142,18 @@ class AffordanceView : public views::View {
         x_offset_ >= kDistanceForFullRadius ||
         state_ == BackGestureAffordance::State::COMPLETING;
 
-    if (chromeos::features::IsDarkLightModeEnabled())
-      // Draw highlight border circles.
-      DrawCircleHighlightBorder(canvas, center_point, kBackgroundRadius);
+    // Draw highlight border circles.
+    DrawCircleHighlightBorder(this, canvas, center_point, kBackgroundRadius);
 
     // Draw the arrow background circle.
     cc::PaintFlags bg_flags;
     bg_flags.setAntiAlias(true);
     bg_flags.setStyle(cc::PaintFlags::kFill_Style);
 
-    if (!chromeos::features::IsDarkLightModeEnabled()) {
-      gfx::ShadowValues shadows;
-      shadows.push_back(gfx::ShadowValue(
-          gfx::Vector2d(0, kBackNudgeShadowOffsetY1),
-          kBackNudgeShadowBlurRadius1, kBackNudgeShadowColor1));
-      shadows.push_back(gfx::ShadowValue(
-          gfx::Vector2d(0, kBackNudgeShadowOffsetY2),
-          kBackNudgeShadowBlurRadius2, kBackNudgeShadowColor2));
-      bg_flags.setLooper(gfx::CreateShadowDrawLooper(shadows));
-    }
-
-    bg_flags.setColor(is_activated
-                          ? DeprecatedGetControlsLayerColor(
-                                AshColorProvider::ControlsLayerType::
-                                    kControlBackgroundColorActive,
-                                kBackgroundColorAfterActivated)
-                          : DeprecatedGetBaseLayerColor(
-                                AshColorProvider::BaseLayerType::kOpaque,
-                                kBackgroundColorBeforeActivated));
+    const auto* color_provider = GetColorProvider();
+    bg_flags.setColor(color_provider->GetColor(
+        is_activated ? kColorAshControlBackgroundColorActive
+                     : kColorAshShieldAndBaseOpaque));
     canvas->DrawCircle(center_point, kBackgroundRadius, bg_flags);
 
     // Draw the arrow.
@@ -197,19 +166,14 @@ class AffordanceView : public views::View {
               is_rtl ? vector_icons::kForwardArrowIcon
                      : vector_icons::kBackArrowIcon,
               kArrowSize,
-              DeprecatedGetContentLayerColor(
-                  AshColorProvider::ContentLayerType::kButtonIconColorPrimary,
-                  kArrowColorAfterActivated)),
+              color_provider->GetColor(kColorAshButtonIconColorPrimary)),
           static_cast<int>(arrow_x), static_cast<int>(arrow_y));
     } else {
       canvas->DrawImageInt(
           gfx::CreateVectorIcon(
               is_rtl ? vector_icons::kForwardArrowIcon
                      : vector_icons::kBackArrowIcon,
-              kArrowSize,
-              DeprecatedGetContentLayerColor(
-                  AshColorProvider::ContentLayerType::kButtonIconColor,
-                  kArrowColorBeforeActivated)),
+              kArrowSize, color_provider->GetColor(kColorAshButtonIconColor)),
           static_cast<int>(arrow_x), static_cast<int>(arrow_y));
     }
   }
@@ -241,9 +205,10 @@ bool AboveBottomOfSplitViewDivider(const gfx::Point& location, int origin_y) {
 
   const gfx::Rect bounds_of_bottom_snapped_window =
       split_view_controller->GetSnappedWindowBoundsInScreen(
-          IsCurrentScreenOrientationPrimary() ? SplitViewController::RIGHT
-                                              : SplitViewController::LEFT,
-          /*window_for_minimum_size=*/nullptr);
+          IsCurrentScreenOrientationPrimary() ? SnapPosition::kSecondary
+                                              : SnapPosition::kPrimary,
+          /*window_for_minimum_size=*/nullptr, chromeos::kDefaultSnapRatio,
+          /*account_for_divider_width=*/true);
   return bounds_of_bottom_snapped_window.Contains(location) &&
          origin_y < GetSplitViewDividerBoundsInScreen(location).bottom();
 }
@@ -321,7 +286,7 @@ void BackGestureAffordance::Update(int x_drag_amount,
                    kBackgroundRadius;
 
   float y_progress = y_drag_amount / kDistanceForFullYProgress;
-  y_drag_progress_ = base::clamp(y_progress, -1.0f, 1.0f);
+  y_drag_progress_ = std::clamp(y_progress, -1.0f, 1.0f);
 
   during_reverse_dragging_ = during_reverse_dragging;
 
@@ -342,7 +307,7 @@ void BackGestureAffordance::Abort() {
 }
 
 void BackGestureAffordance::Complete() {
-  DCHECK_EQ(State::DRAGGING, state_);
+  CHECK_EQ(State::DRAGGING, state_);
   state_ = State::COMPLETING;
 
   animation_ = std::make_unique<gfx::LinearAnimation>(
@@ -358,10 +323,10 @@ bool BackGestureAffordance::IsActivated() const {
 void BackGestureAffordance::CreateAffordanceWidget(const gfx::Point& location) {
   affordance_widget_ = std::make_unique<views::Widget>();
   views::Widget::InitParams params(
+      views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET,
       views::Widget::InitParams::TYPE_WINDOW_FRAMELESS);
   params.opacity = views::Widget::InitParams::WindowOpacity::kTranslucent;
   params.accept_events = true;
-  params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
   params.name = "BackGestureAffordance";
   params.activatable = views::Widget::InitParams::Activatable::kNo;
   params.parent = window_util::GetRootWindowAt(location)->GetChildById(
@@ -509,7 +474,6 @@ void BackGestureAffordance::AnimationProgressed(
   switch (state_) {
     case State::DRAGGING:
       NOTREACHED();
-      break;
     case State::ABORTING:
       SetAbortProgress(animation->GetCurrentValue());
       break;

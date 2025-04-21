@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ class TemplateURLServiceObserver : public base::CheckedObserver {
   virtual void OnTemplateURLServiceShuttingDown() {}
 
  protected:
-  ~TemplateURLServiceObserver() override {}
+  ~TemplateURLServiceObserver() override = default;
 };
 
 #endif  // COMPONENTS_SEARCH_ENGINES_TEMPLATE_URL_SERVICE_OBSERVER_H_

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,6 +31,8 @@ class ScopedCurrentChannel {
   ScopedCurrentChannel& operator=(const ScopedCurrentChannel&) = delete;
 
   ~ScopedCurrentChannel();
+
+  const version_info::Channel& channel() { return channel_; }
 
  private:
   const version_info::Channel channel_;

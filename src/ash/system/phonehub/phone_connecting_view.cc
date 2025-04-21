@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,7 +45,7 @@ phone_hub_metrics::Screen PhoneConnectingView::GetScreenForMetrics() const {
   return Screen::kPhoneConnecting;
 }
 
-BEGIN_METADATA(PhoneConnectingView, views::View)
+BEGIN_METADATA(PhoneConnectingView)
 END_METADATA
 
 }  // namespace ash

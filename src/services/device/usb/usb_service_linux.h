@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 
 #include "base/memory/weak_ptr.h"
 #include "base/threading/sequence_bound.h"
-#include "build/chromeos_buildflags.h"
 #include "services/device/usb/usb_service.h"
 
 namespace device {
@@ -40,7 +39,7 @@ class UsbServiceLinux final : public UsbService {
 
   void OnDeviceAdded(const std::string& device_path,
                      std::unique_ptr<UsbDeviceDescriptor> descriptor);
-  void DeviceReady(scoped_refptr<UsbDeviceLinux> device, bool success);
+  void DeviceReady(scoped_refptr<UsbDeviceLinux> device);
   void OnDeviceRemoved(const std::string& device_path);
   void HelperStarted();
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,9 @@
 
 namespace blink {
 
-CSSTransitionData::CSSTransitionData() {
+CSSTransitionData::CSSTransitionData() : CSSTimingData(InitialDuration()) {
   property_list_.push_back(InitialProperty());
+  behavior_list_.push_back(InitialBehavior());
 }
 
 CSSTransitionData::CSSTransitionData(const CSSTransitionData& other) = default;

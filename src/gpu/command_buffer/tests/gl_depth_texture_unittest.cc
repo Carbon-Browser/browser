@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
@@ -181,9 +186,7 @@ TEST_F(DepthTextureTest, RenderTo) {
       continue;
     }
 
-    uint8_t actual_pixels[kResolution * kResolution * 4] = {
-        0,
-    };
+    uint8_t actual_pixels[kResolution * kResolution * 4] = {};
     glReadPixels(
         0, 0, kResolution, kResolution, GL_RGBA, GL_UNSIGNED_BYTE,
         actual_pixels);

@@ -31,6 +31,7 @@
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
+#include "third_party/blink/renderer/core/html/canvas/html_canvas_element.h"
 #include "third_party/blink/renderer/core/html/html_frame_element_base.h"
 #include "third_party/blink/renderer/core/html/media/html_media_element.h"
 #include "third_party/blink/renderer/core/input/input_device_capabilities.h"
@@ -50,14 +51,13 @@ namespace blink {
 
 namespace {
 
-float PageZoomFactor(const UIEvent* event) {
-  auto* local_dom_window = DynamicTo<LocalDOMWindow>(event->view());
+float LayoutZoomFactor(const LocalDOMWindow* local_dom_window) {
   if (!local_dom_window)
-    return 1;
+    return 1.f;
   LocalFrame* frame = local_dom_window->GetFrame();
   if (!frame)
-    return 1;
-  return frame->PageZoomFactor();
+    return 1.f;
+  return frame->LayoutZoomFactor();
 }
 
 const LayoutObject* FindTargetLayoutObject(Node*& target_node) {
@@ -98,12 +98,25 @@ unsigned ButtonsToWebInputEventModifiers(uint16_t buttons) {
 MouseEvent* MouseEvent::Create(ScriptState* script_state,
                                const AtomicString& type,
                                const MouseEventInit* initializer) {
-  if (script_state && script_state->World().IsIsolatedWorld()) {
-    UIEventWithKeyState::DidCreateEventInIsolatedWorld(
-        initializer->ctrlKey(), initializer->altKey(), initializer->shiftKey(),
-        initializer->metaKey());
+  LocalDOMWindow* fallback_dom_window = nullptr;
+  if (script_state) {
+    if (script_state->World().IsIsolatedWorld()) {
+      UIEventWithKeyState::DidCreateEventInIsolatedWorld(
+          initializer->ctrlKey(), initializer->altKey(),
+          initializer->shiftKey(), initializer->metaKey());
+    }
+    // If we don't have a view, we'll have to get a fallback dom window in
+    // order to properly account for device scale factor.
+    if (!initializer || !initializer->view()) {
+      if (auto* execution_context = ExecutionContext::From(script_state);
+          execution_context && execution_context->IsWindow()) {
+        fallback_dom_window = static_cast<LocalDOMWindow*>(execution_context);
+      }
+    }
   }
-  return MakeGarbageCollected<MouseEvent>(type, initializer);
+  return MakeGarbageCollected<MouseEvent>(
+      type, initializer, base::TimeTicks::Now(), kRealOrIndistinguishable,
+      kMenuSourceNone, fallback_dom_window);
 }
 
 MouseEvent* MouseEvent::Create(const AtomicString& event_type,
@@ -127,7 +140,8 @@ MouseEvent::MouseEvent(const AtomicString& event_type,
                        const MouseEventInit* initializer,
                        base::TimeTicks platform_time_stamp,
                        SyntheticEventType synthetic_event_type,
-                       WebMenuSourceType menu_source_type)
+                       WebMenuSourceType menu_source_type,
+                       LocalDOMWindow* fallback_dom_window)
     : UIEventWithKeyState(event_type, initializer, platform_time_stamp),
       screen_x_(initializer->screenX()),
       screen_y_(initializer->screenY()),
@@ -140,28 +154,35 @@ MouseEvent::MouseEvent(const AtomicString& event_type,
       related_target_(initializer->relatedTarget()),
       synthetic_event_type_(synthetic_event_type),
       menu_source_type_(menu_source_type) {
-  InitCoordinates(initializer->clientX(), initializer->clientY());
+  InitCoordinates(initializer->clientX(), initializer->clientY(),
+                  fallback_dom_window);
   modifiers_ |= ButtonsToWebInputEventModifiers(buttons_);
 }
 
-void MouseEvent::InitCoordinates(const double client_x, const double client_y) {
+void MouseEvent::InitCoordinates(const double client_x,
+                                 const double client_y,
+                                 const LocalDOMWindow* fallback_dom_window) {
   client_x_ = page_x_ = client_x;
   client_y_ = page_y_ = client_y;
   absolute_location_ = gfx::PointF(client_x, client_y);
 
-  if (auto* local_dom_window = DynamicTo<LocalDOMWindow>(view())) {
+  auto* local_dom_window = DynamicTo<LocalDOMWindow>(view());
+  float zoom_factor = LayoutZoomFactor(local_dom_window ? local_dom_window
+                                                        : fallback_dom_window);
+
+  if (local_dom_window) {
     if (LocalFrame* frame = local_dom_window->GetFrame()) {
-      float zoom_factor = frame->PageZoomFactor();
       // Adjust page_x_ and page_y_ by layout viewport scroll offset.
       if (ScrollableArea* scrollable_area = frame->View()->LayoutViewport()) {
         gfx::Vector2d scroll_offset = scrollable_area->ScrollOffsetInt();
         page_x_ += scroll_offset.x() / zoom_factor;
         page_y_ += scroll_offset.y() / zoom_factor;
       }
-      // absolute_location_ is not an API value. It's in zoomed CSS pixels.
-      absolute_location_.Scale(zoom_factor);
     }
   }
+
+  // absolute_location_ is not an API value. It's in layout space.
+  absolute_location_.Scale(zoom_factor);
 
   // Correct values of the following are computed lazily, see
   // ComputeRelativePosition().
@@ -191,7 +212,7 @@ void MouseEvent::SetCoordinatesFromWebPointerProperties(
     }
     gfx::PointF frame_point =
         frame->View()->ConvertFromRootFrame(root_frame_point);
-    inverse_zoom_factor = 1.0f / frame->PageZoomFactor();
+    inverse_zoom_factor = 1.0f / frame->LayoutZoomFactor();
     client_point = gfx::ScalePoint(frame_point, inverse_zoom_factor);
   }
 
@@ -202,8 +223,7 @@ void MouseEvent::SetCoordinatesFromWebPointerProperties(
 
   // TODO(crbug.com/982379): We need to merge the code path of raw movement
   // events and regular events so that we can remove the block below.
-  if (web_pointer_properties.is_raw_movement_event ||
-      !RuntimeEnabledFeatures::ConsolidatedMovementXYEnabled()) {
+  if (web_pointer_properties.is_raw_movement_event) {
     // TODO(nzolghadr): We need to scale movement attrinutes as well. But if we
     // do that here and round it to the int again it causes inconsistencies
     // between screenX/Y and cumulative movementX/Y.
@@ -321,6 +341,10 @@ int16_t MouseEvent::button() const {
   return button_;
 }
 
+bool MouseEvent::IsLeftButton() const {
+  return button() == static_cast<int16_t>(WebPointerProperties::Button::kLeft);
+}
+
 unsigned MouseEvent::which() const {
   // For the DOM, the return values for left, middle and right mouse buttons are
   // 0, 1, 2, respectively.
@@ -356,36 +380,21 @@ void MouseEvent::Trace(Visitor* visitor) const {
 }
 
 DispatchEventResult MouseEvent::DispatchEvent(EventDispatcher& dispatcher) {
+  // TODO(mustaq): Move click-specific code to `PointerEvent::DispatchEvent`.
   GetEventPath().AdjustForRelatedTarget(dispatcher.GetNode(), relatedTarget());
 
   bool is_click = type() == event_type_names::kClick;
-  bool send_to_disabled_form_controls =
-      RuntimeEnabledFeatures::SendMouseEventsDisabledFormControlsEnabled();
-
-  if (send_to_disabled_form_controls && is_click &&
-      GetEventPath().DisabledFormControlExistsInPath()) {
-    return DispatchEventResult::kCanceledBeforeDispatch;
-  }
 
   if (!isTrusted())
     return dispatcher.Dispatch();
 
-  if (!send_to_disabled_form_controls &&
-      IsDisabledFormControl(&dispatcher.GetNode())) {
-    if (GetEventPath().HasEventListenersInPath(type())) {
-      UseCounter::Count(dispatcher.GetNode().GetDocument(),
-                        WebFeature::kDispatchMouseEventOnDisabledFormControl);
-      if (type() == event_type_names::kMousedown ||
-          type() == event_type_names::kMouseup) {
-        UseCounter::Count(
-            dispatcher.GetNode().GetDocument(),
-            WebFeature::kDispatchMouseUpDownEventOnDisabledFormControl);
-      }
-    }
-    return DispatchEventResult::kCanceledBeforeDispatch;
+  if (is_click || type() == event_type_names::kMousedown ||
+      type() == event_type_names::kMouseup ||
+      type() == event_type_names::kDblclick) {
+    GetEventPath().AdjustForDisabledFormControl();
   }
 
-  if (type().IsEmpty())
+  if (type().empty())
     return DispatchEventResult::kNotCanceled;  // Shouldn't happen.
 
   if (is_click) {
@@ -447,7 +456,13 @@ void MouseEvent::ComputeRelativePosition() {
   offset_x_ = page_x_;
   offset_y_ = page_y_;
   layer_location_ = gfx::PointF(page_x_, page_y_);
-  float zoom_factor = PageZoomFactor(this);
+
+  LocalDOMWindow* dom_window_for_zoom_factor =
+      DynamicTo<LocalDOMWindow>(view());
+  if (!dom_window_for_zoom_factor)
+    dom_window_for_zoom_factor = target_node->GetDocument().domWindow();
+
+  float zoom_factor = LayoutZoomFactor(dom_window_for_zoom_factor);
   float inverse_zoom_factor = 1 / zoom_factor;
 
   // Must have an updated layout tree for this math to work correctly.
@@ -492,8 +507,9 @@ void MouseEvent::ComputeRelativePosition() {
     PaintLayer* layer = n->GetLayoutObject()->EnclosingLayer();
     layer = layer->EnclosingSelfPaintingLayer();
 
-    PhysicalOffset physical_offset;
-    layer->ConvertToLayerCoords(nullptr, physical_offset);
+    PhysicalOffset physical_offset =
+        layer->GetLayoutObject().LocalToAbsolutePoint(PhysicalOffset(),
+                                                      kIgnoreTransforms);
     layer_location_ -= gfx::Vector2dF(physical_offset);
 
     layer_location_.Scale(inverse_zoom_factor);

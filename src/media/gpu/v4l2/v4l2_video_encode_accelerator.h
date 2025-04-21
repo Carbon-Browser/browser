@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/containers/circular_deque.h"
@@ -18,15 +19,17 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
-#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
 #include "base/time/time.h"
 #include "media/gpu/chromeos/image_processor.h"
 #include "media/gpu/media_gpu_export.h"
 #include "media/gpu/v4l2/v4l2_device.h"
 #include "media/video/video_encode_accelerator.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gfx/geometry/size.h"
+
+namespace base {
+class SequencedTaskRunner;
+}  // namespace base
 
 namespace media {
 class BitstreamBuffer;
@@ -56,8 +59,14 @@ class MEDIA_GPU_EXPORT V4L2VideoEncodeAccelerator
                   std::unique_ptr<MediaLog> media_log) override;
   void Encode(scoped_refptr<VideoFrame> frame, bool force_keyframe) override;
   void UseOutputBitstreamBuffer(BitstreamBuffer buffer) override;
-  void RequestEncodingParametersChange(const Bitrate& bitrate,
-                                       uint32_t framerate) override;
+  void RequestEncodingParametersChange(
+      const Bitrate& bitrate,
+      uint32_t framerate,
+      const std::optional<gfx::Size>& size) override;
+  void RequestEncodingParametersChange(
+      const VideoBitrateAllocation& bitrate_allocation,
+      uint32_t framerate,
+      const std::optional<gfx::Size>& size) override;
   void Destroy() override;
   void Flush(FlushCallback flush_callback) override;
   bool IsFlushSupported() override;
@@ -76,7 +85,7 @@ class MEDIA_GPU_EXPORT V4L2VideoEncodeAccelerator
 
     // This is valid only if image processor is used. The buffer associated with
     // this index can be reused in Dequeue().
-    absl::optional<size_t> ip_output_buffer_index;
+    std::optional<size_t> ip_output_buffer_index;
   };
 
   // Store all the information of input frame passed to Encode().
@@ -93,7 +102,7 @@ class MEDIA_GPU_EXPORT V4L2VideoEncodeAccelerator
 
     // This is valid only if image processor is used. This info needs to be
     // propagated to InputRecord.
-    absl::optional<size_t> ip_output_buffer_index;
+    std::optional<size_t> ip_output_buffer_index;
   };
 
   enum {
@@ -106,7 +115,8 @@ class MEDIA_GPU_EXPORT V4L2VideoEncodeAccelerator
   // Internal state of the encoder.
   enum State {
     kUninitialized,  // Initialize() not yet called.
-    kInitialized,    // Initialize() returned true; ready to start encoding.
+    kInitialized,    // Initialize() returned true. The encoding is ready after
+                     // InitializeTask() completes successfully.
     kEncoding,       // Encoding frames.
     kFlushing,       // Flushing frames.
     kError,          // Error in encoder state.
@@ -172,11 +182,8 @@ class MEDIA_GPU_EXPORT V4L2VideoEncodeAccelerator
   // Safe from any thread.
   //
 
-  // Error notification (using PostTask() to child thread, if necessary).
-  void NotifyError(Error error);
-
   // Set the encoder_state_ to kError and notify the client (if necessary).
-  void SetErrorState(Error error);
+  void SetErrorState(EncoderStatus status);
 
   //
   // Other utility functions.  Called on the |encoder_task_runner_|.
@@ -196,8 +203,10 @@ class MEDIA_GPU_EXPORT V4L2VideoEncodeAccelerator
   void MaybeFlushImageProcessor();
 
   // Change encoding parameters.
-  void RequestEncodingParametersChangeTask(const Bitrate& bitrate,
-                                           uint32_t framerate);
+  void RequestEncodingParametersChangeTask(
+      const VideoBitrateAllocation& bitrate_allocation,
+      uint32_t framerate,
+      const std::optional<gfx::Size>& size);
 
   // Do several initializations (e.g. set up format) on |encoder_task_runner_|.
   void InitializeTask(const Config& config);
@@ -213,9 +222,9 @@ class MEDIA_GPU_EXPORT V4L2VideoEncodeAccelerator
   // Try to set up the device to the input format we were Initialized() with,
   // or if the device doesn't support it, use one it can support, so that we
   // can later instantiate an ImageProcessor to convert to it. Return
-  // absl::nullopt if no format is supported, otherwise return v4l2_format
+  // std::nullopt if no format is supported, otherwise return v4l2_format
   // adjusted by the driver.
-  absl::optional<struct v4l2_format> NegotiateInputFormat(
+  std::optional<struct v4l2_format> NegotiateInputFormat(
       VideoPixelFormat input_format,
       const gfx::Size& frame_size);
 
@@ -249,6 +258,12 @@ class MEDIA_GPU_EXPORT V4L2VideoEncodeAccelerator
   // Recycle output buffer of image processor with |output_buffer_index|.
   void ReuseImageProcessorOutputBuffer(size_t output_buffer_index);
 
+  // Chrome specific metadata about the encoded frame.
+  BitstreamBufferMetadata GetMetadata(const uint8_t* data,
+                                      size_t data_size_bytes,
+                                      bool key_frame,
+                                      base::TimeDelta timestamp);
+
   // Copy encoded stream data from an output V4L2 buffer at |bitstream_data|
   // of size |bitstream_size| into a BitstreamBuffer referenced by |buffer_ref|,
   // injecting stream headers if required. Return the size in bytes of the
@@ -268,8 +283,10 @@ class MEDIA_GPU_EXPORT V4L2VideoEncodeAccelerator
   static base::AtomicRefCount num_instances_;
   const bool can_use_encoder_;
 
-  // Our original calling task runner for the child thread and its checker.
-  const scoped_refptr<base::SingleThreadTaskRunner> child_task_runner_;
+  std::string driver_name_;
+
+  // Our original calling task runner for the child sequence  and its checker.
+  const scoped_refptr<base::SequencedTaskRunner> child_task_runner_;
   SEQUENCE_CHECKER(child_sequence_checker_);
 
   // A coded_size() of VideoFrame on VEA::Encode(). This is updated on the first
@@ -286,7 +303,7 @@ class MEDIA_GPU_EXPORT V4L2VideoEncodeAccelerator
   gfx::Rect encoder_input_visible_rect_;
 
   // Layout of device accepted input VideoFrame.
-  absl::optional<VideoFrameLayout> device_input_layout_;
+  std::optional<VideoFrameLayout> device_input_layout_;
 
   // Stands for whether an input buffer is native graphic buffer.
   bool native_input_mode_;
@@ -294,7 +311,7 @@ class MEDIA_GPU_EXPORT V4L2VideoEncodeAccelerator
   size_t output_buffer_byte_size_;
   uint32_t output_format_fourcc_;
 
-  Bitrate current_bitrate_;
+  VideoBitrateAllocation current_bitrate_allocation_;
   size_t current_framerate_;
 
   // Encoder state, owned and operated by |encoder_task_runner_|.
@@ -347,15 +364,18 @@ class MEDIA_GPU_EXPORT V4L2VideoEncodeAccelerator
   // Video frames for image processor output / VideoEncodeAccelerator input.
   // Only accessed on child thread.
   std::vector<scoped_refptr<VideoFrame>> image_processor_output_buffers_;
-  // Indexes of free image processor output buffers. Only accessed on child
-  // thread.
+  // Indexes of free image processor output buffers. Only accessed on
+  // |child_task_runner_|.
   std::vector<size_t> free_image_processor_output_buffer_indices_;
-  // Video frames ready to be processed. Only accessed on child thread.
+  // Video frames ready to be processed. Only accessed on |child_task_runner_|.
   base::queue<InputFrameInfo> image_processor_input_queue_;
   // The number of frames that are being processed by |image_processor_|.
   size_t num_frames_in_image_processor_ = 0;
 
-  const scoped_refptr<base::SingleThreadTaskRunner> encoder_task_runner_;
+  // Indicates whether V4L2VideoEncodeAccelerator runs in L1T2 or not.
+  bool h264_l1t2_enabled_ = false;
+
+  const scoped_refptr<base::SequencedTaskRunner> encoder_task_runner_;
   SEQUENCE_CHECKER(encoder_sequence_checker_);
 
   // The device polling thread handles notifications of V4L2 device changes.

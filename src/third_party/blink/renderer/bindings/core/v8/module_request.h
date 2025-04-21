@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,34 +11,36 @@
 
 namespace blink {
 
-// An import assertion key/value pair per spec:
-// https://tc39.es/proposal-import-assertions/
-struct ImportAssertion {
+// An import attribute key/value pair per spec:
+// https://tc39.es/proposal-import-attributes/
+struct ImportAttribute {
   String key;
   String value;
   TextPosition position;
-  ImportAssertion(const String& key,
+  ImportAttribute(const String& key,
                   const String& value,
                   const TextPosition& position)
       : key(key), value(value), position(position) {}
 };
 
 // An instance of a ModuleRequest record:
-// https://tc39.es/proposal-import-assertions/#sec-modulerequest-record
+// https://tc39.es/proposal-import-attributes/#sec-modulerequest-record
 // Represents a module script's request to import a module given a specifier and
-// list of import assertions.
+// list of import attributes.
 struct CORE_EXPORT ModuleRequest {
   String specifier;
   TextPosition position;
-  Vector<ImportAssertion> import_assertions;
+  Vector<ImportAttribute> import_attributes;
   ModuleRequest(const String& specifier,
                 const TextPosition& position,
-                const Vector<ImportAssertion>& import_assertions)
+                const Vector<ImportAttribute>& import_attributes)
       : specifier(specifier),
         position(position),
-        import_assertions(import_assertions) {}
+        import_attributes(import_attributes) {}
 
   String GetModuleTypeString() const;
+
+  bool HasInvalidImportAttributeKey(String* invalid_key) const;
 };
 
 }  // namespace blink

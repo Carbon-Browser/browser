@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,6 @@ struct EnumTraits<gfx::mojom::SubpixelRendering,
         return gfx::mojom::SubpixelRendering::kVBGR;
     }
     NOTREACHED();
-    return gfx::mojom::SubpixelRendering::kNone;
   }
 
   static bool FromMojom(gfx::mojom::SubpixelRendering input,
@@ -70,7 +69,6 @@ struct EnumTraits<gfx::mojom::Hinting, gfx::FontRenderParams::Hinting> {
         return gfx::mojom::Hinting::kFull;
     }
     NOTREACHED();
-    return gfx::mojom::Hinting::kNone;
   }
 
   static bool FromMojom(gfx::mojom::Hinting input,
@@ -90,7 +88,6 @@ struct EnumTraits<gfx::mojom::Hinting, gfx::FontRenderParams::Hinting> {
         return true;
     }
     NOTREACHED();
-    return false;
   }
 };
 

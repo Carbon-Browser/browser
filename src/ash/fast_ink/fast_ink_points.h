@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/rect_f.h"
 
-namespace fast_ink {
+namespace ash {
 
 // FastInkPoints is a helper class used for displaying low-latency palette
 // tools. It contains a collection of points representing one or more
@@ -87,6 +87,6 @@ class ASH_EXPORT FastInkPoints {
   base::TimeTicks collection_latest_time_;
 };
 
-}  // namespace fast_ink
+}  // namespace ash
 
 #endif  // ASH_FAST_INK_FAST_INK_POINTS_H_

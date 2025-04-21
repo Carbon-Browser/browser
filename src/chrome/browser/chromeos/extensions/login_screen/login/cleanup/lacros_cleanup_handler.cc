@@ -1,19 +1,18 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/chromeos/extensions/login_screen/login/cleanup/lacros_cleanup_handler.h"
 
+#include <optional>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_util.h"
 #include "chrome/browser/ash/crosapi/crosapi_ash.h"
 #include "chrome/browser/ash/crosapi/crosapi_manager.h"
 #include "chrome/browser/ash/crosapi/login_ash.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_manager.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace chromeos {
 
@@ -70,7 +69,7 @@ void LacrosCleanupHandler::OnDisconnect(mojo::RemoteSetElementId id) {
 
 void LacrosCleanupHandler::OnObserverDone(
     mojo::RemoteSetElementId id,
-    const absl::optional<std::string>& error) {
+    const std::optional<std::string>& error) {
   // Sanity check - observers should have flushed pending messages before
   // disconnecting.
   if (pending_observers_.find(id) == pending_observers_.end())
@@ -86,7 +85,7 @@ void LacrosCleanupHandler::OnObserverDone(
 
 void LacrosCleanupHandler::OnAllObserversDone() {
   if (errors_.empty()) {
-    std::move(callback_).Run(absl::nullopt);
+    std::move(callback_).Run(std::nullopt);
     return;
   }
 

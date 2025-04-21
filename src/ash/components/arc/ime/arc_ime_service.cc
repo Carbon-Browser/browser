@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,6 +16,7 @@
 #include "ash/public/cpp/app_types_util.h"
 #include "ash/public/cpp/external_arc/message_center/arc_notification_content_view.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/singleton.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/string_util.h"
@@ -25,11 +26,9 @@
 #include "ui/aura/env.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_tree_host.h"
-#include "ui/base/ime/ash/extension_ime_util.h"
-#include "ui/base/ime/ash/input_method_manager.h"
 #include "ui/base/ime/constants.h"
+#include "ui/base/ime/ime_key_event_dispatcher.h"
 #include "ui/base/ime/input_method.h"
-#include "ui/base/ime/input_method_delegate.h"
 #include "ui/base/ime/text_input_flags.h"
 #include "ui/display/screen.h"
 #include "ui/events/base_event_utils.h"
@@ -44,8 +43,8 @@ namespace arc {
 
 namespace {
 
-absl::optional<double> g_override_default_device_scale_factor;
-absl::optional<gfx::Point> g_override_display_origin;
+std::optional<double> g_override_default_device_scale_factor;
+std::optional<gfx::Point> g_override_display_origin;
 
 // Return true when a rich text editing is available on a text field with the
 // given type.
@@ -59,7 +58,7 @@ bool IsCharacterKeyEvent(const ui::KeyEvent* event) {
 }
 
 // Return true if the given key event is used for language switching by IME.
-// Please refer to ui::InputMethodAsh::DispatchKeyEvent for details.
+// Please refer to `ash::InputMethodAsh::DispatchKeyEvent` for details.
 bool IsLanguageInputKey(const ui::KeyEvent* event) {
   switch (event->key_code()) {
     case ui::VKEY_CONVERT:
@@ -93,10 +92,9 @@ class ArcWindowDelegateImpl : public ArcImeService::ArcWindowDelegate {
   ~ArcWindowDelegateImpl() override = default;
 
   bool IsInArcAppWindow(const aura::Window* window) const override {
-    // WMHelper is not craeted in browser_tests.
+    // WMHelper is not created in browser_tests.
     if (!exo::WMHelper::HasInstance())
       return false;
-    aura::Window* active = exo::WMHelper::GetInstance()->GetActiveWindow();
     for (; window; window = window->parent()) {
       if (ash::IsArcWindow(window))
         return true;
@@ -106,16 +104,6 @@ class ArcWindowDelegateImpl : public ArcImeService::ArcWindowDelegate {
       // have kSkipImeProcessing.
       if (window->GetProperty(aura::client::kSkipImeProcessing))
         return true;
-
-      // IsArcAppWindow returns false for a window of ARC++ Kiosk app, so we
-      // have to check application id of the active window to cover that case.
-      // TODO(yhanada): Make IsArcAppWindow support a window of ARC++ Kiosk.
-      // Specifically, a window of ARC++ Kiosk should have ash::AppType::ARC_APP
-      // property. Please see implementation of IsArcAppWindow().
-      if (window == active && IsArcKioskMode() &&
-          GetWindowTaskId(window).has_value()) {
-        return true;
-      }
     }
     return false;
   }
@@ -129,7 +117,7 @@ class ArcWindowDelegateImpl : public ArcImeService::ArcWindowDelegate {
 
   void UnregisterFocusObserver() override {
     // If WMHelper is already destroyed, do nothing.
-    // TODO(crbug.com/748380): Fix shutdown order.
+    // TODO(crbug.com/40531599): Fix shutdown order.
     if (!exo::WMHelper::HasInstance())
       return;
     exo::WMHelper::GetInstance()->RemoveFocusObserver(ime_service_);
@@ -143,7 +131,7 @@ class ArcWindowDelegateImpl : public ArcImeService::ArcWindowDelegate {
   }
 
  private:
-  ArcImeService* const ime_service_;
+  const raw_ptr<ArcImeService> ime_service_;
 };
 
 // Singleton factory for ArcImeService.
@@ -319,9 +307,6 @@ void ArcImeService::OnTextInputTypeChanged(
     ui::TextInputType type,
     bool is_personalized_learning_allowed,
     int flags) {
-  if (!ShouldSendUpdateToInputMethod())
-    return;
-
   if (ime_type_ == type &&
       is_personalized_learning_allowed_ == is_personalized_learning_allowed &&
       ime_flags_ == flags) {
@@ -330,6 +315,9 @@ void ArcImeService::OnTextInputTypeChanged(
   ime_type_ = type;
   is_personalized_learning_allowed_ = is_personalized_learning_allowed;
   ime_flags_ = flags;
+
+  if (!ShouldSendUpdateToInputMethod())
+    return;
 
   ui::InputMethod* const input_method = GetInputMethod();
   if (input_method)
@@ -417,6 +405,10 @@ void ArcImeService::SendKeyEvent(std::unique_ptr<ui::KeyEvent> key_event,
 // Overridden from ash::KeyboardControllerObserver
 void ArcImeService::OnKeyboardAppearanceChanged(
     const ash::KeyboardStateDescriptor& state) {
+  if (state.is_temporary) {
+    return;
+  }
+
   gfx::Rect new_bounds = state.occluded_bounds_in_screen;
   // Multiply by the scale factor. To convert from Chrome DIP to Android pixels.
   gfx::Rect bounds_in_px =
@@ -428,13 +420,17 @@ void ArcImeService::OnKeyboardAppearanceChanged(
 ////////////////////////////////////////////////////////////////////////////////
 // Overridden from ui::TextInputClient:
 
+base::WeakPtr<ui::TextInputClient> ArcImeService::AsWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
+}
+
 void ArcImeService::SetCompositionText(const ui::CompositionText& composition) {
   InvalidateSurroundingTextAndSelectionRange();
   has_composition_text_ = !composition.text.empty();
   ime_bridge_->SendSetCompositionText(composition);
 }
 
-uint32_t ArcImeService::ConfirmCompositionText(bool keep_selection) {
+size_t ArcImeService::ConfirmCompositionText(bool keep_selection) {
   if (!keep_selection) {
     InvalidateSurroundingTextAndSelectionRange();
   }
@@ -442,7 +438,7 @@ uint32_t ArcImeService::ConfirmCompositionText(bool keep_selection) {
   // Note: SendConfirmCompositonText() will commit the text and
   // keep the selection unchanged
   ime_bridge_->SendConfirmCompositionText();
-  return UINT32_MAX;
+  return std::numeric_limits<size_t>::max();
 }
 
 void ArcImeService::ClearCompositionText() {
@@ -472,7 +468,7 @@ void ArcImeService::InsertChar(const ui::KeyEvent& event) {
 
   if (IsCharacterKeyEvent(&event)) {
     has_composition_text_ = false;
-    ime_bridge_->SendInsertText(std::u16string(1, event.GetText()),
+    ime_bridge_->SendInsertText(std::u16string(1, event.GetCharacter()),
                                 /*new_cursor_position=*/1);
   }
 }
@@ -548,7 +544,7 @@ bool ArcImeService::CanComposeInline() const {
   return true;
 }
 
-bool ArcImeService::GetCompositionCharacterBounds(uint32_t index,
+bool ArcImeService::GetCompositionCharacterBounds(size_t index,
                                                   gfx::Rect* rect) const {
   return false;
 }
@@ -611,12 +607,12 @@ bool ArcImeService::SetCompositionFromExistingText(
 }
 
 gfx::Range ArcImeService::GetAutocorrectRange() const {
-  // TODO(https://crbug.com/1091088): Implement this method.
+  // TODO(crbug.com/40134032): Implement this method.
   return gfx::Range();
 }
 
 gfx::Rect ArcImeService::GetAutocorrectCharacterBounds() const {
-  // TODO(https://crbug.com/952757): Implement this method.
+  // TODO(crbug.com/40623107): Implement this method.
   NOTIMPLEMENTED_LOG_ONCE();
   return gfx::Rect();
 }
@@ -625,39 +621,32 @@ bool ArcImeService::SetAutocorrectRange(const gfx::Range& range) {
   if (!range.is_empty()) {
     base::UmaHistogramEnumeration("InputMethod.Assistive.Autocorrect.Count",
                                   TextInputClient::SubClass::kArcImeService);
-
-    auto* input_method_manager = ash::input_method::InputMethodManager::Get();
-    if (input_method_manager &&
-        ash::extension_ime_util::IsExperimentalMultilingual(
-            input_method_manager->GetActiveIMEState()
-                ->GetCurrentInputMethod()
-                .id())) {
-      base::UmaHistogramEnumeration(
-          "InputMethod.MultilingualExperiment.Autocorrect.Count",
-          TextInputClient::SubClass::kArcImeService);
-    }
   }
-  // TODO(https://crbug.com/1091088): Implement this method.
+  // TODO(crbug.com/40134032): Implement this method.
   NOTIMPLEMENTED_LOG_ONCE();
   return false;
 }
 
-absl::optional<ui::GrammarFragment> ArcImeService::GetGrammarFragmentAtCursor()
+std::optional<ui::GrammarFragment> ArcImeService::GetGrammarFragmentAtCursor()
     const {
-  // TODO(https://crbug.com/1201454): Implement this method.
+  // TODO(crbug.com/40178699): Implement this method.
   NOTIMPLEMENTED_LOG_ONCE();
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 bool ArcImeService::ClearGrammarFragments(const gfx::Range& range) {
-  // TODO(https://crbug.com/1201454): Implement this method.
+  // TODO(crbug.com/40178699): Implement this method.
   NOTIMPLEMENTED_LOG_ONCE();
   return false;
 }
 
 bool ArcImeService::AddGrammarFragments(
     const std::vector<ui::GrammarFragment>& fragments) {
-  // TODO(https://crbug.com/1201454): Implement this method.
+  if (!fragments.empty()) {
+    base::UmaHistogramEnumeration("InputMethod.Assistive.Grammar.Count",
+                                  TextInputClient::SubClass::kArcImeService);
+  }
+  // TODO(crbug.com/40178699): Implement this method.
   NOTIMPLEMENTED_LOG_ONCE();
   return false;
 }
@@ -670,7 +659,7 @@ void ArcImeService::OnDispatchingKeyEventPostIME(ui::KeyEvent* event) {
 
   // Do not forward the key event from virtual keyboard if it's sent via
   // InsertChar(). By the special logic in
-  // `ui::InputMethodAsh::DispatchKeyEvent`, both of InsertChar() and
+  // `ash::InputMethodAsh::DispatchKeyEvent`, both of InsertChar() and
   // DispatchKeyEventPostIME() are called for a key event injected by the
   // virtual keyboard. The below logic stops key event propagation through
   // DispatchKeyEventPostIME() to prevent from inputting two characters.
@@ -681,7 +670,7 @@ void ArcImeService::OnDispatchingKeyEventPostIME(ui::KeyEvent* event) {
     event->SetHandled();
 
   // Do not forward the language input key event from virtual keyboard because
-  // it's already handled by ui::InputMethodAsh.
+  // it's already handled by `ash::InputMethodAsh`.
   if (from_vk && IsLanguageInputKey(event))
     event->SetHandled();
 
@@ -695,13 +684,13 @@ void ArcImeService::OnDispatchingKeyEventPostIME(ui::KeyEvent* event) {
 
 // static
 void ArcImeService::SetOverrideDefaultDeviceScaleFactorForTesting(
-    absl::optional<double> scale_factor) {
+    std::optional<double> scale_factor) {
   g_override_default_device_scale_factor = scale_factor;
 }
 
 // static
 void ArcImeService::SetOverrideDisplayOriginForTesting(
-    absl::optional<gfx::Point> origin) {
+    std::optional<gfx::Point> origin) {
   g_override_display_origin = origin;
 }
 
@@ -805,7 +794,7 @@ double ArcImeService::GetDefaultDeviceScaleFactor() const {
     return g_override_default_device_scale_factor.value();
   if (!exo::WMHelper::HasInstance())
     return 1.0;
-  return exo::WMHelper::GetInstance()->GetDefaultDeviceScaleFactor();
+  return exo::GetDefaultDeviceScaleFactor();
 }
 
 gfx::Point ArcImeService::GetDisplayOriginForFocusedWindow() const {
@@ -816,6 +805,11 @@ gfx::Point ArcImeService::GetDisplayOriginForFocusedWindow() const {
       ->GetDisplayNearestWindow(focused_arc_window_)
       .bounds()
       .origin();
+}
+
+// static
+void ArcImeService::EnsureFactoryBuilt() {
+  ArcImeServiceFactory::GetInstance();
 }
 
 }  // namespace arc

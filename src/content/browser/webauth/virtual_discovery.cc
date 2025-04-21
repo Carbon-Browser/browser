@@ -1,18 +1,18 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/webauth/virtual_discovery.h"
 
 #include <memory>
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/memory/weak_ptr.h"
-#include "base/strings/string_piece.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "device/fido/fido_device.h"
 #include "device/fido/fido_device_discovery.h"
 #include "device/fido/fido_transport_protocol.h"
@@ -40,7 +40,7 @@ void VirtualFidoDiscovery::AddVirtualDevice(
   }
 }
 
-bool VirtualFidoDiscovery::RemoveVirtualDevice(base::StringPiece device_id) {
+bool VirtualFidoDiscovery::RemoveVirtualDevice(std::string_view device_id) {
   DCHECK(is_start_requested());
   return ::device::FidoDeviceDiscovery::RemoveDevice(device_id);
 }
@@ -54,9 +54,10 @@ void VirtualFidoDiscovery::StartInternal() {
   }
   devices_pending_discovery_start_.clear();
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE, base::BindOnce(&VirtualFidoDiscovery::NotifyDiscoveryStarted,
-                                AsWeakPtr(), true /* success */));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE,
+      base::BindOnce(&VirtualFidoDiscovery::NotifyDiscoveryStarted,
+                     weak_ptr_factory_.GetWeakPtr(), /*success=*/true));
 }
 
 }  // namespace content

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/views/test/view_event_test_base.h"
 #include "ui/accessibility/ax_enums.mojom.h"
@@ -18,7 +18,7 @@
 namespace views {
 class MenuItemView;
 class MenuRunner;
-}
+}  // namespace views
 
 // This is a convenience base class for menu related tests to provide some
 // common functionality.
@@ -54,13 +54,9 @@ class MenuTestBase : public ViewEventTestBase,
   // Generate a keypress and run |next| once the event has been processed.
   void KeyPress(ui::KeyboardCode keycode, base::OnceClosure next);
 
-  views::MenuItemView* menu() {
-    return menu_;
-  }
+  views::MenuItemView* menu() { return menu_; }
 
-  int last_command() const {
-    return last_command_;
-  }
+  int last_command() const { return last_command_; }
 
  protected:
   views::MenuRunner* menu_runner() { return menu_runner_.get(); }
@@ -91,8 +87,9 @@ class MenuTestBase : public ViewEventTestBase,
   void ButtonPressed();
 
   raw_ptr<views::MenuButton> button_ = nullptr;
-  raw_ptr<views::MenuItemView> menu_ = nullptr;
   std::unique_ptr<views::MenuRunner> menu_runner_;
+  // Owned by `menu_runner_`.
+  raw_ptr<views::MenuItemView> menu_ = nullptr;
 
   // The command id of the last pressed menu item since the menu was opened.
   int last_command_;

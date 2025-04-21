@@ -1,13 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/bindings/core/v8/native_value_traits_impl.h"
 
-#include "third_party/blink/renderer/bindings/core/v8/custom/v8_custom_xpath_ns_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/js_event_handler.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_ctype_traits.h"
-#include "third_party/blink/renderer/bindings/core/v8/v8_xpath_ns_resolver.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/platform/bindings/exception_messages.h"
 #include "v8/include/v8-fast-api-calls.h"
@@ -96,87 +94,20 @@ EventListener* NativeValueTraits<IDLOnErrorEventHandler>::NativeValue(
       value, JSEventHandler::HandlerType::kOnErrorEventHandler);
 }
 
-// Workaround https://crbug.com/345529
-XPathNSResolver* NativeValueTraits<XPathNSResolver>::NativeValue(
-    v8::Isolate* isolate,
-    v8::Local<v8::Value> value,
-    ExceptionState& exception_state) {
-  if (XPathNSResolver* xpath_ns_resolver =
-          V8XPathNSResolver::ToImplWithTypeCheck(isolate, value)) {
-    return xpath_ns_resolver;
-  }
-  if (value->IsObject()) {
-    ScriptState* script_state = ScriptState::From(isolate->GetCurrentContext());
-    return MakeGarbageCollected<V8CustomXPathNSResolver>(
-        script_state, value.As<v8::Object>());
-  }
+namespace bindings::internal {
 
-  exception_state.ThrowTypeError(
-      ExceptionMessages::FailedToConvertJSValue("XPathNSResolver"));
-  return nullptr;
+ByteSpanWithInlineStorage& ByteSpanWithInlineStorage::operator=(
+    const ByteSpanWithInlineStorage& r) {
+  if (r.span_.data() == r.inline_storage_) {
+    auto span = base::span(inline_storage_);
+    span.copy_from(base::span(r.inline_storage_));
+    span_ = span.first(r.span_.size());
+  } else {
+    span_ = r.span_;
+  }
+  return *this;
 }
 
-XPathNSResolver* NativeValueTraits<XPathNSResolver>::ArgumentValue(
-    v8::Isolate* isolate,
-    int argument_index,
-    v8::Local<v8::Value> value,
-    ExceptionState& exception_state) {
-  if (XPathNSResolver* xpath_ns_resolver =
-          V8XPathNSResolver::ToImplWithTypeCheck(isolate, value)) {
-    return xpath_ns_resolver;
-  }
-  if (value->IsObject()) {
-    ScriptState* script_state = ScriptState::From(isolate->GetCurrentContext());
-    return MakeGarbageCollected<V8CustomXPathNSResolver>(
-        script_state, value.As<v8::Object>());
-  }
-
-  exception_state.ThrowTypeError(
-      ExceptionMessages::ArgumentNotOfType(argument_index, "XPathNSResolver"));
-  return nullptr;
-}
-
-XPathNSResolver* NativeValueTraits<IDLNullable<XPathNSResolver>>::NativeValue(
-    v8::Isolate* isolate,
-    v8::Local<v8::Value> value,
-    ExceptionState& exception_state) {
-  if (XPathNSResolver* xpath_ns_resolver =
-          V8XPathNSResolver::ToImplWithTypeCheck(isolate, value)) {
-    return xpath_ns_resolver;
-  }
-  if (value->IsObject()) {
-    ScriptState* script_state = ScriptState::From(isolate->GetCurrentContext());
-    return MakeGarbageCollected<V8CustomXPathNSResolver>(
-        script_state, value.As<v8::Object>());
-  }
-  if (value->IsNullOrUndefined())
-    return nullptr;
-
-  exception_state.ThrowTypeError(
-      ExceptionMessages::FailedToConvertJSValue("XPathNSResolver"));
-  return nullptr;
-}
-
-XPathNSResolver* NativeValueTraits<IDLNullable<XPathNSResolver>>::ArgumentValue(
-    v8::Isolate* isolate,
-    int argument_index,
-    v8::Local<v8::Value> value,
-    ExceptionState& exception_state) {
-  if (XPathNSResolver* xpath_ns_resolver =
-          V8XPathNSResolver::ToImplWithTypeCheck(isolate, value)) {
-    return xpath_ns_resolver;
-  }
-  if (value->IsObject()) {
-    ScriptState* script_state = ScriptState::From(isolate->GetCurrentContext());
-    return MakeGarbageCollected<V8CustomXPathNSResolver>(
-        script_state, value.As<v8::Object>());
-  }
-  if (value->IsNullOrUndefined())
-    return nullptr;
-
-  exception_state.ThrowTypeError(
-      ExceptionMessages::ArgumentNotOfType(argument_index, "XPathNSResolver"));
-  return nullptr;
-}
+}  // namespace bindings::internal
 
 }  // namespace blink

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 
 namespace blink {
 
-class CSSCustomPropertyDeclaration;
 class ComputedStyle;
 class PropertyRegistration;
 class StyleResolverState;
@@ -49,20 +48,7 @@ class CORE_EXPORT CSSInterpolationType : public InterpolationType {
     // abstract declaration so the return type can be changed to
     // const CSSValue&.
     NOTREACHED();
-    return nullptr;
   }
-
- protected:
-  CSSInterpolationType(PropertyHandle, const PropertyRegistration* = nullptr);
-
-  const CSSProperty& CssProperty() const {
-    return GetProperty().GetCSSProperty();
-  }
-
-  InterpolationValue MaybeConvertSingle(const PropertySpecificKeyframe&,
-                                        const InterpolationEnvironment&,
-                                        const InterpolationValue& underlying,
-                                        ConversionCheckers&) const final;
 
   // The interpolation stack has an optimization where we perform compositing
   // after interpolation. This is against spec, but it works for simple addition
@@ -80,8 +66,21 @@ class CORE_EXPORT CSSInterpolationType : public InterpolationType {
     return value;
   }
 
+ protected:
+  explicit CSSInterpolationType(PropertyHandle,
+                                const PropertyRegistration* = nullptr);
+
+  const CSSProperty& CssProperty() const {
+    return GetProperty().GetCSSProperty();
+  }
+
+  InterpolationValue MaybeConvertSingle(const PropertySpecificKeyframe&,
+                                        const InterpolationEnvironment&,
+                                        const InterpolationValue& underlying,
+                                        ConversionCheckers&) const final;
+
   InterpolationValue MaybeConvertUnderlyingValue(
-      const InterpolationEnvironment&) const final;
+      const InterpolationEnvironment&) const override;
   virtual InterpolationValue MaybeConvertStandardPropertyUnderlyingValue(
       const ComputedStyle&) const = 0;
 
@@ -100,7 +99,7 @@ class CORE_EXPORT CSSInterpolationType : public InterpolationType {
       ConversionCheckers&) const;
 
   InterpolationValue MaybeConvertCustomPropertyDeclaration(
-      const CSSCustomPropertyDeclaration&,
+      const CSSValue&,
       const InterpolationEnvironment&,
       ConversionCheckers&) const;
 

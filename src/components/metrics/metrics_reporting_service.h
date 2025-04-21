@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include <stdint.h>
 
 #include <string>
+#include <string_view>
 
 #include "components/metrics/metrics_log_store.h"
 #include "components/metrics/reporting_service.h"
@@ -26,12 +27,15 @@ class MetricsServiceClient;
 // endpoint, and logs some histograms with the UMA prefix.
 class MetricsReportingService : public ReportingService {
  public:
-  // Creates a ReportingService with the given |client|, |local_state|.
-  // Does not take ownership of the parameters; instead it stores a weak
-  // pointer to each. Caller should ensure that the parameters are valid for
-  // the lifetime of this class.
+  // Creates a ReportingService with the given |client|, |local_state|, and
+  // |logs_event_manager_|. Does not take ownership of the parameters; instead
+  // it stores a weak pointer to each. Caller should ensure that the parameters
+  // are valid for the lifetime of this class. |logs_event_manager| is used to
+  // notify observers of log events. Can be set to null if observing the events
+  // is not necessary.
   MetricsReportingService(MetricsServiceClient* client,
-                          PrefService* local_state);
+                          PrefService* local_state,
+                          MetricsLogsEventManager* logs_event_manager_);
 
   MetricsReportingService(const MetricsReportingService&) = delete;
   MetricsReportingService& operator=(const MetricsReportingService&) = delete;
@@ -51,7 +55,7 @@ class MetricsReportingService : public ReportingService {
   LogStore* log_store() override;
   GURL GetUploadUrl() const override;
   GURL GetInsecureUploadUrl() const override;
-  base::StringPiece upload_mime_type() const override;
+  std::string_view upload_mime_type() const override;
   MetricsLogUploader::MetricServiceType service_type() const override;
   void LogActualUploadInterval(base::TimeDelta interval) override;
   void LogCellularConstraint(bool upload_canceled) override;

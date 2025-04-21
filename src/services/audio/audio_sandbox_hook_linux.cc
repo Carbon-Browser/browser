@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <dlfcn.h>
 #include <unistd.h>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/environment.h"
@@ -14,7 +15,6 @@
 #include "base/files/file_util.h"
 #include "base/logging.h"
 #include "base/path_service.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/stringprintf.h"
 #include "sandbox/linux/syscall_broker/broker_command.h"
 #include "sandbox/linux/syscall_broker/broker_file_permission.h"
@@ -57,7 +57,7 @@ void AddAlsaFilePermissions(std::vector<BrokerFilePermission>* permissions) {
 // are specified through environment variables. |recursive_only| is used to
 // determine if the path itself should be allowed access or only its content.
 void AllowAccessToEnvSpecifiedPath(
-    base::StringPiece variable_name,
+    std::string_view variable_name,
     std::vector<BrokerFilePermission>* permissions,
     bool recursive_only) {
   std::unique_ptr<base::Environment> env(base::Environment::Create());
@@ -178,20 +178,18 @@ bool AudioPreSandboxHook(sandbox::policy::SandboxLinux::Options options) {
   LoadAudioLibraries();
   auto* instance = sandbox::policy::SandboxLinux::GetInstance();
   instance->StartBrokerProcess(MakeBrokerCommandSet({
-                                 sandbox::syscall_broker::COMMAND_ACCESS,
+                                   sandbox::syscall_broker::COMMAND_ACCESS,
 #if defined(USE_PULSEAUDIO)
-                                     sandbox::syscall_broker::COMMAND_MKDIR,
+                                   sandbox::syscall_broker::COMMAND_MKDIR,
 #endif
-                                     sandbox::syscall_broker::COMMAND_OPEN,
-                                     sandbox::syscall_broker::COMMAND_READLINK,
-                                     sandbox::syscall_broker::COMMAND_STAT,
-                                     sandbox::syscall_broker::COMMAND_UNLINK,
+                                   sandbox::syscall_broker::COMMAND_OPEN,
+                                   sandbox::syscall_broker::COMMAND_READLINK,
+                                   sandbox::syscall_broker::COMMAND_STAT,
+                                   sandbox::syscall_broker::COMMAND_UNLINK,
                                }),
-                               GetAudioFilePermissions(),
-                               sandbox::policy::SandboxLinux::PreSandboxHook(),
-                               options);
+                               GetAudioFilePermissions(), options);
 
-  // TODO(https://crbug.com/850878) enable namespace sandbox. Currently, if
+  // TODO(crbug.com/40579955) enable namespace sandbox. Currently, if
   // enabled, connect() on pulse native socket fails with ENOENT (called from
   // pa_context_connect).
 

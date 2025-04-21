@@ -1,12 +1,14 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/drive/service/dummy_drive_service.h"
 
 #include <memory>
+#include <optional>
+#include <string_view>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 
 using google_apis::AboutResourceCallback;
 using google_apis::AuthStatusCallback;
@@ -233,6 +235,7 @@ CancelCallbackOnce DummyDriveService::GetUploadStatus(
 
 CancelCallbackOnce DummyDriveService::MultipartUploadNewFile(
     const std::string& content_type,
+    std::optional<std::string_view> converted_mime_type,
     int64_t content_length,
     const std::string& parent_resource_id,
     const std::string& title,

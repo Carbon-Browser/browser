@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,19 +8,25 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 
 #include "ash/ash_export.h"
 #include "ash/public/cpp/app_list/app_list_types.h"
 #include "ash/public/cpp/shelf_types.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-#include "ui/aura/client/focus_change_observer.h"
+#include "base/scoped_observation.h"
 #include "ui/display/display_observer.h"
 #include "ui/views/widget/widget_observer.h"
+#include "ui/wm/public/activation_change_observer.h"
 
 namespace aura {
 class Window;
 }  // namespace aura
+
+namespace ui {
+class LocatedEvent;
+}  // namespace ui
 
 namespace ash {
 
@@ -32,10 +38,9 @@ enum class AppListSortOrder;
 // Manages the UI for the bubble launcher used in clamshell mode. Handles
 // showing and hiding the UI, as well as bounds computations. Only one bubble
 // can be visible at a time, across all displays.
-class ASH_EXPORT AppListBubblePresenter
-    : public views::WidgetObserver,
-      public aura::client::FocusChangeObserver,
-      public display::DisplayObserver {
+class ASH_EXPORT AppListBubblePresenter : public views::WidgetObserver,
+                                          public wm::ActivationChangeObserver,
+                                          public display::DisplayObserver {
  public:
   explicit AppListBubblePresenter(AppListControllerImpl* controller);
   AppListBubblePresenter(const AppListBubblePresenter&) = delete;
@@ -77,20 +82,27 @@ class ASH_EXPORT AppListBubblePresenter
   // Handles `AppListController::UpdateAppListWithNewSortingOrder()` for the
   // bubble launcher.
   void UpdateForNewSortingOrder(
-      const absl::optional<AppListSortOrder>& new_order,
+      const std::optional<AppListSortOrder>& new_order,
       bool animate,
       base::OnceClosure update_position_closure);
 
   // views::WidgetObserver:
   void OnWidgetDestroying(views::Widget* widget) override;
 
-  // aura::client::FocusChangeObserver:
-  void OnWindowFocused(aura::Window* gained_focus,
-                       aura::Window* lost_focus) override;
+  // wm::ActivationChangeObserver:
+  void OnWindowActivating(ActivationReason reason,
+                          aura::Window* gaining_active,
+                          aura::Window* losing_active) override {}
+  void OnWindowActivated(ActivationReason reason,
+                         aura::Window* gained_active,
+                         aura::Window* lost_active) override;
 
   // DisplayObserver:
   void OnDisplayMetricsChanged(const display::Display& display,
                                uint32_t changed_metrics) override;
+
+  // Returns the preferred width for the bubble launcher for the |root_window|.
+  int GetPreferredBubbleWidth(aura::Window* root_window) const;
 
   views::Widget* bubble_widget_for_test() { return bubble_widget_; }
   AppListBubbleView* bubble_view_for_test() { return bubble_view_; }
@@ -102,7 +114,7 @@ class ASH_EXPORT AppListBubblePresenter
 
   // Callback for AppListBubbleEventFilter, used to notify this of presses
   // outside the bubble.
-  void OnPressOutsideBubble();
+  void OnPressOutsideBubble(const ui::LocatedEvent& event);
 
   // Gets the display id for the display `bubble_widget_` is shown on. Returns
   // kInvalidDisplayId if not shown.
@@ -111,7 +123,7 @@ class ASH_EXPORT AppListBubblePresenter
   // Callback for the hide animation.
   void OnHideAnimationEnded();
 
-  AppListControllerImpl* const controller_;
+  const raw_ptr<AppListControllerImpl> controller_;
 
   // Whether the view is showing or animating to show. Note that the
   // `bubble_widget_` may be null during the zero state search called in
@@ -119,10 +131,10 @@ class ASH_EXPORT AppListBubblePresenter
   bool is_target_visibility_show_ = false;
 
   // Owned by native widget.
-  views::Widget* bubble_widget_ = nullptr;
+  raw_ptr<views::Widget> bubble_widget_ = nullptr;
 
   // Owned by views.
-  AppListBubbleView* bubble_view_ = nullptr;
+  raw_ptr<AppListBubbleView> bubble_view_ = nullptr;
 
   // The page to show after the views are constructed.
   AppListBubblePage target_page_ = AppListBubblePage::kApps;

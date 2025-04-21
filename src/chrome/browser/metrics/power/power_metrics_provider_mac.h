@@ -1,14 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_METRICS_POWER_POWER_METRICS_PROVIDER_MAC_H_
 #define CHROME_BROWSER_METRICS_POWER_POWER_METRICS_PROVIDER_MAC_H_
 
-#include "components/metrics/metrics_provider.h"
+#include <optional>
 
 #include "base/threading/sequence_bound.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "components/metrics/metrics_provider.h"
 
 class PowerMetricsProvider : public metrics::MetricsProvider {
  public:
@@ -25,7 +25,7 @@ class PowerMetricsProvider : public metrics::MetricsProvider {
  private:
   // Records metrics from the ThreadPool.
   class Impl;
-  absl::optional<base::SequenceBound<Impl>> impl_;
+  std::optional<base::SequenceBound<Impl>> impl_;
 };
 
 #endif  // CHROME_BROWSER_METRICS_POWER_POWER_METRICS_PROVIDER_MAC_H_

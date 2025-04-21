@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,6 @@
 #include <string>
 
 #include "base/files/file_path.h"
-#include "base/memory/ref_counted.h"
 #include "build/build_config.h"
 #include "components/download/public/common/download_file.h"
 #include "components/download/public/common/input_stream.h"
@@ -47,14 +46,16 @@ class MockDownloadFile : public DownloadFile {
   MOCK_METHOD2(RenameAndUniquify,
                void(const base::FilePath& full_path,
                     RenameCompletionCallback callback));
-  MOCK_METHOD6(
+  MOCK_METHOD(
+      void,
       RenameAndAnnotate,
-      void(const base::FilePath& full_path,
-           const std::string& client_guid,
-           const GURL& source_url,
-           const GURL& referrer_url,
-           mojo::PendingRemote<quarantine::mojom::Quarantine> remote_quarantine,
-           RenameCompletionCallback callback));
+      (const base::FilePath& full_path,
+       const std::string& client_guid,
+       const GURL& source_url,
+       const GURL& referrer_url,
+       const std::optional<url::Origin>& request_initiator,
+       mojo::PendingRemote<quarantine::mojom::Quarantine> remote_quarantine,
+       RenameCompletionCallback callback));
   MOCK_METHOD0(Detach, void());
   MOCK_METHOD0(Cancel, void());
   MOCK_METHOD1(SetPotentialFileLength, void(int64_t length));

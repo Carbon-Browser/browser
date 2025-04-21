@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,10 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "tools/android/forwarder2/command.h"
 #include "tools/android/forwarder2/forwarder.h"
 #include "tools/android/forwarder2/socket.h"
@@ -83,7 +83,7 @@ HostController::HostController(
       adb_port_(adb_port),
       adb_control_socket_(std::move(adb_control_socket)),
       delete_controller_notifier_(std::move(delete_controller_notifier)),
-      deletion_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      deletion_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       thread_("HostControllerThread") {}
 
 void HostController::ReadNextCommandSoon() {

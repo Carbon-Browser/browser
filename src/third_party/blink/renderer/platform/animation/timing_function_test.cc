@@ -34,8 +34,8 @@
 #include <string>
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
+#include "ui/gfx/animation/keyframe/timing_function.h"
 
 namespace blink {
 
@@ -63,6 +63,10 @@ class TimingFunctionTest : public testing::Test {
 TEST_F(TimingFunctionTest, LinearToString) {
   scoped_refptr<TimingFunction> linear_timing = LinearTimingFunction::Shared();
   EXPECT_EQ(linear_timing->ToString(), "linear");
+  std::vector<gfx::LinearEasingPoint> points{{0, 1}, {50, 2}, {100, 3}};
+  scoped_refptr<TimingFunction> linear_timing_complex =
+      LinearTimingFunction::Create(points);
+  EXPECT_EQ(linear_timing_complex->ToString(), "linear(1 0%, 2 50%, 3 100%)");
 }
 
 TEST_F(TimingFunctionTest, CubicToString) {
@@ -133,6 +137,17 @@ TEST_F(TimingFunctionTest, LinearOperatorEq) {
   scoped_refptr<TimingFunction> linear_timing2 = LinearTimingFunction::Shared();
   EXPECT_EQ(*linear_timing1, *linear_timing1);
   EXPECT_EQ(*linear_timing1, *linear_timing2);
+  std::vector<gfx::LinearEasingPoint> points3{{0, 1}, {100, 1}};
+  const auto& linear_timing3 = LinearTimingFunction::Create(points3);
+  const auto& linear_timing4 = LinearTimingFunction::Create(std::move(points3));
+  std::vector<gfx::LinearEasingPoint> points5{{0, 1.1}, {100, 1}};
+  const auto& linear_timing5 = LinearTimingFunction::Create(std::move(points5));
+  std::vector<gfx::LinearEasingPoint> points6{{0, 1}, {50, .5}, {100, 1}};
+  const auto& linear_timing6 = LinearTimingFunction::Create(std::move(points6));
+  EXPECT_NE(*linear_timing1, *linear_timing3);
+  EXPECT_EQ(*linear_timing3, *linear_timing4);
+  EXPECT_NE(*linear_timing4, *linear_timing5);
+  EXPECT_NE(*linear_timing5, *linear_timing6);
 }
 
 TEST_F(TimingFunctionTest, CubicOperatorEq) {
@@ -245,11 +260,26 @@ TEST_F(TimingFunctionTest, StepsOperatorEqPreset) {
 }
 
 TEST_F(TimingFunctionTest, LinearEvaluate) {
-  scoped_refptr<TimingFunction> linear_timing = LinearTimingFunction::Shared();
+  scoped_refptr<LinearTimingFunction> linear_timing =
+      LinearTimingFunction::Shared();
   EXPECT_EQ(0.2, linear_timing->Evaluate(0.2));
   EXPECT_EQ(0.6, linear_timing->Evaluate(0.6));
   EXPECT_EQ(-0.2, linear_timing->Evaluate(-0.2));
   EXPECT_EQ(1.6, linear_timing->Evaluate(1.6));
+  std::vector<gfx::LinearEasingPoint> points{{0, 0}, {100, 1}};
+  scoped_refptr<LinearTimingFunction> linear_timing_trivial =
+      LinearTimingFunction::Create(std::move(points));
+  EXPECT_EQ(0.2, linear_timing_trivial->Evaluate(0.2));
+  EXPECT_EQ(0.6, linear_timing_trivial->Evaluate(0.6));
+  EXPECT_EQ(-0.2, linear_timing_trivial->Evaluate(-0.2));
+  EXPECT_EQ(1.6, linear_timing_trivial->Evaluate(1.6));
+  points = {{0, 0}, {50, 1}, {60, .5}, {100, 1}};
+  scoped_refptr<LinearTimingFunction> linear_timing_complex =
+      LinearTimingFunction::Create(std::move(points));
+  EXPECT_EQ(.5, linear_timing_complex->Evaluate(.25));
+  EXPECT_EQ(.5, linear_timing_complex->Evaluate(.6));
+  EXPECT_EQ(.75, linear_timing_complex->Evaluate(.80));
+  EXPECT_EQ(-.5, linear_timing_complex->Evaluate(-.25));
 }
 
 TEST_F(TimingFunctionTest, LinearRange) {
@@ -259,11 +289,21 @@ TEST_F(TimingFunctionTest, LinearRange) {
   linear_timing->Range(&start, &end);
   EXPECT_NEAR(0, start, 0.01);
   EXPECT_NEAR(1, end, 0.01);
-  start = -1;
-  end = 10;
-  linear_timing->Range(&start, &end);
-  EXPECT_NEAR(-1, start, 0.01);
-  EXPECT_NEAR(10, end, 0.01);
+  std::vector<gfx::LinearEasingPoint> points{{0, 0}, {50, 1}, {100, 0}};
+  scoped_refptr<TimingFunction> linear_timing_complex =
+      LinearTimingFunction::Create(std::move(points));
+  start = .25;
+  end = .75;
+  linear_timing_complex->Range(&start, &end);
+  EXPECT_NEAR(.5, start, 0.01);
+  EXPECT_NEAR(1, end, 0.01);
+  points = {{0, 0}, {50, .75}, {60, 0.1}, {100, 1}};
+  linear_timing_complex = LinearTimingFunction::Create(std::move(points));
+  start = .5;
+  end = .75;
+  linear_timing_complex->Range(&start, &end);
+  EXPECT_NEAR(.1, start, 0.01);
+  EXPECT_NEAR(.75, end, 0.01);
 }
 
 TEST_F(TimingFunctionTest, StepRange) {
@@ -359,35 +399,35 @@ TEST_F(TimingFunctionTest, CubicRange) {
 
 TEST_F(TimingFunctionTest, CubicEvaluate) {
   double tolerance = 0.01;
-  scoped_refptr<TimingFunction> cubic_ease_timing =
+  scoped_refptr<CubicBezierTimingFunction> cubic_ease_timing =
       CubicBezierTimingFunction::Preset(
           CubicBezierTimingFunction::EaseType::EASE);
   EXPECT_NEAR(0.409, cubic_ease_timing->Evaluate(0.25), tolerance);
   EXPECT_NEAR(0.802, cubic_ease_timing->Evaluate(0.50), tolerance);
   EXPECT_NEAR(0.960, cubic_ease_timing->Evaluate(0.75), tolerance);
 
-  scoped_refptr<TimingFunction> cubic_ease_in_timing =
+  scoped_refptr<CubicBezierTimingFunction> cubic_ease_in_timing =
       CubicBezierTimingFunction::Preset(
           CubicBezierTimingFunction::EaseType::EASE_IN);
   EXPECT_NEAR(0.093, cubic_ease_in_timing->Evaluate(0.25), tolerance);
   EXPECT_NEAR(0.315, cubic_ease_in_timing->Evaluate(0.50), tolerance);
   EXPECT_NEAR(0.622, cubic_ease_in_timing->Evaluate(0.75), tolerance);
 
-  scoped_refptr<TimingFunction> cubic_ease_out_timing =
+  scoped_refptr<CubicBezierTimingFunction> cubic_ease_out_timing =
       CubicBezierTimingFunction::Preset(
           CubicBezierTimingFunction::EaseType::EASE_OUT);
   EXPECT_NEAR(0.378, cubic_ease_out_timing->Evaluate(0.25), tolerance);
   EXPECT_NEAR(0.685, cubic_ease_out_timing->Evaluate(0.50), tolerance);
   EXPECT_NEAR(0.907, cubic_ease_out_timing->Evaluate(0.75), tolerance);
 
-  scoped_refptr<TimingFunction> cubic_ease_in_out_timing =
+  scoped_refptr<CubicBezierTimingFunction> cubic_ease_in_out_timing =
       CubicBezierTimingFunction::Preset(
           CubicBezierTimingFunction::EaseType::EASE_IN_OUT);
   EXPECT_NEAR(0.129, cubic_ease_in_out_timing->Evaluate(0.25), tolerance);
   EXPECT_NEAR(0.500, cubic_ease_in_out_timing->Evaluate(0.50), tolerance);
   EXPECT_NEAR(0.871, cubic_ease_in_out_timing->Evaluate(0.75), tolerance);
 
-  scoped_refptr<TimingFunction> cubic_custom_timing =
+  scoped_refptr<CubicBezierTimingFunction> cubic_custom_timing =
       CubicBezierTimingFunction::Create(0.17, 0.67, 1, -1.73);
   EXPECT_NEAR(0.034, cubic_custom_timing->Evaluate(0.25), tolerance);
   EXPECT_NEAR(-0.217, cubic_custom_timing->Evaluate(0.50), tolerance);

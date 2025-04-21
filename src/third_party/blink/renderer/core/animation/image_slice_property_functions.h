@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,29 +33,28 @@ class ImageSlicePropertyFunctions {
   static ImageSlice GetImageSlice(const CSSProperty& property,
                                   const ComputedStyle& style) {
     switch (property.PropertyID()) {
-      default:
-        NOTREACHED();
-        [[fallthrough]];
       case CSSPropertyID::kBorderImageSlice:
         return ImageSlice(style.BorderImageSlices(),
                           style.BorderImageSlicesFill());
       case CSSPropertyID::kWebkitMaskBoxImageSlice:
         return ImageSlice(style.MaskBoxImageSlices(),
                           style.MaskBoxImageSlicesFill());
+      default:
+        NOTREACHED();
     }
   }
 
   static void SetImageSlice(const CSSProperty& property,
-                            ComputedStyle& style,
+                            ComputedStyleBuilder& builder,
                             const ImageSlice& slice) {
     switch (property.PropertyID()) {
       case CSSPropertyID::kBorderImageSlice:
-        style.SetBorderImageSlices(slice.slices);
-        style.SetBorderImageSlicesFill(slice.fill);
+        builder.SetBorderImageSlices(slice.slices);
+        builder.SetBorderImageSlicesFill(slice.fill);
         break;
       case CSSPropertyID::kWebkitMaskBoxImageSlice:
-        style.SetMaskBoxImageSlices(slice.slices);
-        style.SetMaskBoxImageSlicesFill(slice.fill);
+        builder.SetMaskBoxImageSlices(slice.slices);
+        builder.SetMaskBoxImageSlicesFill(slice.fill);
         break;
       default:
         NOTREACHED();

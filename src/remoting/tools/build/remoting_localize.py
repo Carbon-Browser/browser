@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2013 The Chromium Authors. All rights reserved.
+# Copyright 2013 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -688,7 +688,8 @@ def Localize(source, locales, options):
       jinja2_path = os.path.normpath(
           os.path.join(os.path.abspath(__file__),
                        '../../../../third_party/jinja2'))
-    sys.path.append(os.path.split(jinja2_path)[0])
+    # Insert after main module and before system modules.
+    sys.path.insert(1, os.path.dirname(jinja2_path))
     from jinja2 import Environment, FileSystemLoader
 
     # Create jinja2 environment.

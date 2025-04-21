@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,11 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/observer_list.h"
 #include "dbus/object_path.h"
 #include "dbus/property.h"
@@ -20,7 +21,6 @@
 #include "device/bluetooth/dbus/bluetooth_agent_service_provider.h"
 #include "device/bluetooth/dbus/bluetooth_device_client.h"
 #include "device/bluetooth/dbus/bluetooth_profile_service_provider.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace bluez {
 
@@ -179,7 +179,7 @@ class DEVICE_BLUETOOTH_EXPORT FakeBluetoothDeviceClient
   // Create a test Bluetooth device with the given properties.
   void CreateTestDevice(
       const dbus::ObjectPath& adapter_path,
-      const absl::optional<std::string> name,
+      const std::optional<std::string> name,
       const std::string alias,
       const std::string device_address,
       const std::vector<std::string>& service_uuids,
@@ -210,7 +210,7 @@ class DEVICE_BLUETOOTH_EXPORT FakeBluetoothDeviceClient
 
   // Adds a pending prepare write request to |object_path|.
   void AddPrepareWriteRequest(const dbus::ObjectPath& object_path,
-                              const std::vector<uint8_t>& value);
+                              base::span<const uint8_t> value);
 
   static const char kTestPinCode[];
   static const int kTestPassKey;

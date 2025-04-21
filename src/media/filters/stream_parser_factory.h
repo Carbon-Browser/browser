@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,30 +7,42 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/containers/span.h"
 #include "media/base/media_export.h"
 #include "media/base/media_log.h"
 #include "media/base/mime_util.h"
+#include "media/base/stream_parser.h"
 
 namespace media {
 
 class AudioDecoderConfig;
-class StreamParser;
 class VideoDecoderConfig;
+
+// These entries represent mime types which can be created with a "relaxed"
+// parser, which is one which does not verify expected codecs, and instead
+// discovered all available ones.
+enum class RelaxedParserSupportedType {
+  kMP2T,
+  kMP4,
+  kAAC,
+};
 
 class MEDIA_EXPORT StreamParserFactory {
  public:
+  // Types of parsers supported for non-strict parsing.
+
   // Checks to see if the specified |type| and |codecs| list are supported.
   // Returns one of the following SupportsType values:
-  // IsNotSupported indicates definitive lack of support.
-  // IsSupported indicates the mime type is supported, any non-empty codecs
+  // kNotSupported indicates definitive lack of support.
+  // kSupported indicates the mime type is supported, any non-empty codecs
   // requirement is met for the mime type, and all of the passed codecs are
   // supported for the mime type.
-  // MayBeSupported indicates the mime type is supported, but the mime type
+  // kMaybeSupported indicates the mime type is supported, but the mime type
   // requires a codecs parameter that is missing.
-  static SupportsType IsTypeSupported(const std::string& type,
+  static SupportsType IsTypeSupported(std::string_view type,
                                       base::span<const std::string> codecs);
 
   // Creates a new StreamParser object if the specified |type| and |codecs| list
@@ -54,13 +66,23 @@ class MEDIA_EXPORT StreamParserFactory {
   // error should occur for unsupported or invalid decoder configs during
   // attempted decode.
   static std::unique_ptr<StreamParser> Create(
-      const std::string& type,
+      std::string_view type,
       base::span<const std::string> codecs,
       MediaLog* media_log);
   static std::unique_ptr<StreamParser> Create(
       std::unique_ptr<AudioDecoderConfig> audio_config);
   static std::unique_ptr<StreamParser> Create(
       std::unique_ptr<VideoDecoderConfig> video_config);
+
+  // Creates a parser used for determining which codecs are present in a media
+  // file. This parser won't log to media log because failure to parse is not
+  // itself an error in hls media playback. This function may return null if
+  // the mime type isn't supported.
+
+#if BUILDFLAG(ENABLE_HLS_DEMUXER)
+  static std::unique_ptr<StreamParser> CreateRelaxedParser(
+      RelaxedParserSupportedType mime);
+#endif
 };
 
 }  // namespace media

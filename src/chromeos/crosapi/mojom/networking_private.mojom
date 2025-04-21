@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@ module crosapi.mojom;
 
 import "mojo/public/mojom/base/values.mojom";
 
-[Stable]
 union StringSuccessOrErrorReturn {
   // If provided, an error has occurred.
   string error;
@@ -15,34 +14,31 @@ union StringSuccessOrErrorReturn {
   string success_result;
 };
 
-[Stable]
 union DictionarySuccessOrErrorReturn {
   // If provided, an error has occurred.
   string error;
 
-  // If provided, the call was a success and the result is this string.
-  mojo_base.mojom.DeprecatedDictionaryValue success_result;
+  // If provided, the call was a success and the result is this dictionary.
+  mojo_base.mojom.DictionaryValue success_result;
 };
 
-[Stable]
 union ListValueSuccessOrErrorReturn {
   // If provided, an error has occurred.
   string error;
 
-  // If provided, the call was a success and the result is this string.
+  // If provided, the call was a success and the result is this list.
   mojo_base.mojom.ListValue success_result;
 };
 
-[Stable]
 union PropertiesSuccessOrErrorReturn {
   // If provided, an error has occurred.
   string error;
 
-  // If provided, the call was a success and the result is this string.
+  // If provided, the call was a success and the result is this value.
   mojo_base.mojom.Value success_result;
 };
 
-[Stable, Extensible]
+[Extensible]
 enum CaptivePortalStatus {
   // The netwok state is unknown.
   [Default] kUnknown = 0,
@@ -62,7 +58,7 @@ enum CaptivePortalStatus {
 // This interface mirrors NetworkingPrivateDelegateObserver. It allows Ash
 // to notify lacros of such events. Lacros, on its turn, will then forward
 // those notifications to its local observers.
-[Stable, Uuid="67b08eef-7f47-43cd-8bf6-ad64f05af13c"]
+[Uuid="67b08eef-7f47-43cd-8bf6-ad64f05af13c"]
 interface NetworkingPrivateDelegateObserver {
   // Notifies observers when properties may have changed for the networks listed
   // in |network_guids|.
@@ -93,7 +89,7 @@ interface NetworkingPrivateDelegateObserver {
 // that this API is stable since years and will rather be deprecated than
 // changed. As such the API does reflect the state as is.
 // Furthermore this API will only be called for the primary profile user.
-[Stable, Uuid="30ea6c34-8a25-4fd5-86d5-887e166d2b01"]
+[Uuid="30ea6c34-8a25-4fd5-86d5-887e166d2b01"]
 interface NetworkingPrivate {
   // Called to retrieve a list of properties for the network identified by
   // |guid| whereas |guid| gets returned by GetNetworks or CreateNetwork.
@@ -110,7 +106,7 @@ interface NetworkingPrivate {
   // Called to set the |properties| for the network identified by |guid|
   // accordingly. Whereas |guid| gets returned by GetNetworks or CreateNetwork.
   SetProperties@3(string guid,
-                  mojo_base.mojom.DeprecatedDictionaryValue properties,
+                  mojo_base.mojom.DictionaryValue properties,
                   bool allow_set_shared_config)
                   => (string error_or_empty);
 
@@ -181,17 +177,17 @@ interface NetworkingPrivate {
 
   // Returns a list of DeviceStateProperties.
   GetDeviceStateList@15()
-      => (array<mojo_base.mojom.DeprecatedDictionaryValue?>? device_list);
+      => (array<mojo_base.mojom.DictionaryValue?>? device_list);
 
   // Returns a dictionary of global policy values (may be empty). Note: the
   // dictionary is expected to be a superset of the networkingPrivate
   // GlobalPolicy dictionary. Any properties not in GlobalPolicy will be
   // ignored.
-  GetGlobalPolicy@16() => (mojo_base.mojom.DeprecatedDictionaryValue? policies);
+  GetGlobalPolicy@16() => (mojo_base.mojom.DictionaryValue? policies);
 
   // Returns a dictionary of certificate lists.
   GetCertificateLists@17()
-      => (mojo_base.mojom.DeprecatedDictionaryValue? certificates);
+      => (mojo_base.mojom.DictionaryValue certificates);
 
   // Returns true if the ONC network type |type| is enabled.
   EnableNetworkType@18(string type) => (bool enabled);

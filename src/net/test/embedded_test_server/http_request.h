@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,12 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
 
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "net/ssl/ssl_info.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace net {
@@ -41,10 +41,10 @@ enum HttpMethod {
 // examine a HTTP request.
 struct HttpRequest {
   struct CaseInsensitiveStringComparator {
-    // Allow using StringPiece instead of string for `find()`.
+    // Allow using std::string_view instead of string for `find()`.
     using is_transparent = void;
 
-    bool operator()(base::StringPiece left, base::StringPiece right) const {
+    bool operator()(std::string_view left, std::string_view right) const {
       return base::CompareCaseInsensitiveASCII(left, right) < 0;
     }
   };
@@ -59,15 +59,21 @@ struct HttpRequest {
   // Returns a GURL as a convenience to extract the path and query strings.
   GURL GetURL() const;
 
-  std::string relative_url;  // Starts with '/'. Example: "/test?query=foo"
+  // The request target. For most methods, this will start with '/', e.g.,
+  // "/test?query=foo". If `method` is `METHOD_OPTIONS`, it may also be "*". If
+  // `method` is `METHOD_CONNECT`, it will instead be a string like
+  // "example.com:443".
+  std::string relative_url;
   GURL base_url;
+  // The HTTP method. If unknown, this will be `METHOD_UNKNOWN` and the actual
+  // method will be in `method_string`.
   HttpMethod method = METHOD_UNKNOWN;
   std::string method_string;
   std::string all_headers;
   HeaderMap headers;
   std::string content;
   bool has_content = false;
-  absl::optional<SSLInfo> ssl_info;
+  std::optional<SSLInfo> ssl_info;
 };
 
 // Parses the input data and produces a valid HttpRequest object. If there is
@@ -104,7 +110,7 @@ class HttpRequestParser {
   ~HttpRequestParser();
 
   // Adds chunk of data into the internal buffer.
-  void ProcessChunk(const base::StringPiece& data);
+  void ProcessChunk(std::string_view data);
 
   // Parses the http request (including data - if provided).
   // If returns ACCEPTED, then it means that the whole request has been found
@@ -117,7 +123,9 @@ class HttpRequestParser {
   // another request.
   std::unique_ptr<HttpRequest> GetRequest();
 
-  static HttpMethod GetMethodType(const std::string& token);
+  // Returns `METHOD_UNKNOWN` if `token` is not a recognized method. Methods are
+  // case-sensitive.
+  static HttpMethod GetMethodType(std::string_view token);
 
  private:
   // Parses headers and returns ACCEPTED if whole request was parsed. Otherwise

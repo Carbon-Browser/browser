@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,7 +43,8 @@ class AccessibilityTest : public RenderingTest {
   // Returns the object with the accessibility focus.
   AXObject* GetAXFocusedObject() const;
 
-  AXObject* GetAXObjectByElementId(const char* id) const;
+  AXObject* GetAXObjectByElementId(const char* id,
+                                   PseudoId = kPseudoIdNone) const;
 
   std::string PrintAXTree() const;
 
@@ -55,24 +56,9 @@ class AccessibilityTest : public RenderingTest {
                                         const AXObject* root,
                                         size_t level) const;
 
-  ScopedAccessibilityExposeHTMLElementForTest expose_html_element{true};
   ScopedAccessibilityUseAXPositionForDocumentMarkersForTest use_ax_position{
       true};
 };
-
-class ParameterizedAccessibilityTest : public testing::WithParamInterface<bool>,
-                                       private ScopedLayoutNGForTest,
-                                       public AccessibilityTest {
- public:
-  ParameterizedAccessibilityTest() : ScopedLayoutNGForTest(GetParam()) {}
-
- protected:
-  bool LayoutNGEnabled() const {
-    return RuntimeEnabledFeatures::LayoutNGEnabled();
-  }
-};
-
-INSTANTIATE_TEST_SUITE_P(All, ParameterizedAccessibilityTest, testing::Bool());
 
 }  // namespace blink
 

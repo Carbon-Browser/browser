@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <iterator>
 #include <ostream>
 
-#include <base/callback_helpers.h>
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/strings/stringprintf.h"
 #include "dbus/property.h"
@@ -25,8 +25,8 @@ namespace bluez {
 
 namespace {
 
-// Stream operator for logging vector<uint8_t>.
-std::ostream& operator<<(std::ostream& out, const std::vector<uint8_t> bytes) {
+// Stream operator for logging span<uint8_t>.
+std::ostream& operator<<(std::ostream& out, base::span<const uint8_t> bytes) {
   out << "[";
   for (auto iter = bytes.begin(); iter != bytes.end(); ++iter) {
     out << base::StringPrintf("%02X", *iter);
@@ -96,7 +96,7 @@ void BluetoothRemoteGattDescriptorBlueZ::ReadRemoteDescriptor(
 }
 
 void BluetoothRemoteGattDescriptorBlueZ::WriteRemoteDescriptor(
-    const std::vector<uint8_t>& new_value,
+    base::span<const uint8_t> new_value,
     base::OnceClosure callback,
     ErrorCallback error_callback) {
   DVLOG(1) << "Sending GATT characteristic descriptor write request to "

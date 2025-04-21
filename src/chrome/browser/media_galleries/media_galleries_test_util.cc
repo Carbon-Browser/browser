@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,12 +29,13 @@
 #include "testing/gtest/include/gtest/gtest.h"
 
 #if BUILDFLAG(IS_MAC)
-#include "base/mac/foundation_util.h"
+#include "base/apple/foundation_util.h"
 #include "base/strings/sys_string_conversions.h"
 #endif  // BUILDFLAG(IS_MAC)
 
 #if BUILDFLAG(IS_WIN)
 #include <windows.h>
+
 #include "base/test/test_reg_util_win.h"
 #include "base/win/registry.h"
 #endif  // BUILDFLAG(IS_WIN)
@@ -43,14 +44,15 @@ scoped_refptr<extensions::Extension> AddMediaGalleriesApp(
     const std::string& name,
     const std::vector<std::string>& media_galleries_permissions,
     Profile* profile) {
-  auto manifest = std::make_unique<base::DictionaryValue>();
-  manifest->SetString(extensions::manifest_keys::kName, name);
-  manifest->SetString(extensions::manifest_keys::kVersion, "0.1");
-  manifest->SetInteger(extensions::manifest_keys::kManifestVersion, 2);
-  auto background_script_list = std::make_unique<base::ListValue>();
-  background_script_list->Append("background.js");
-  manifest->Set(extensions::manifest_keys::kPlatformAppBackgroundScripts,
-                std::move(background_script_list));
+  base::Value::Dict manifest;
+  manifest.Set(extensions::manifest_keys::kName, name);
+  manifest.Set(extensions::manifest_keys::kVersion, "0.1");
+  manifest.Set(extensions::manifest_keys::kManifestVersion, 2);
+  base::Value::List background_script_list;
+  background_script_list.Append("background.js");
+  manifest.SetByDottedPath(
+      extensions::manifest_keys::kPlatformAppBackgroundScripts,
+      std::move(background_script_list));
 
   base::Value::List permission_detail_list;
   for (const auto& permission : media_galleries_permissions)
@@ -60,8 +62,8 @@ scoped_refptr<extensions::Extension> AddMediaGalleriesApp(
                                  std::move(permission_detail_list));
   base::Value::List permission_list;
   permission_list.Append(std::move(media_galleries_permission));
-  manifest->GetDict().Set(extensions::manifest_keys::kPermissions,
-                          std::move(permission_list));
+  manifest.Set(extensions::manifest_keys::kPermissions,
+               std::move(permission_list));
 
   extensions::ExtensionPrefs* extension_prefs =
       extensions::ExtensionPrefs::Get(profile);
@@ -69,7 +71,7 @@ scoped_refptr<extensions::Extension> AddMediaGalleriesApp(
   std::string errors;
   scoped_refptr<extensions::Extension> extension =
       extensions::Extension::Create(
-          path, extensions::mojom::ManifestLocation::kInternal, *manifest.get(),
+          path, extensions::mojom::ManifestLocation::kInternal, manifest,
           extensions::Extension::NO_FLAGS, &errors);
   EXPECT_TRUE(extension.get() != nullptr) << errors;
   EXPECT_TRUE(crx_file::id_util::IdIsValid(extension->id()));
@@ -158,7 +160,7 @@ void EnsureMediaDirectoriesExists::Init() {
 base::FilePath MakeMediaGalleriesTestingPath(const std::string& dir) {
 #if BUILDFLAG(IS_WIN)
   return base::FilePath(FILE_PATH_LITERAL("C:\\")).AppendASCII(dir);
-#elif BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
+#elif BUILDFLAG(IS_POSIX)
   return base::FilePath(FILE_PATH_LITERAL("/")).Append(dir);
 #else
 #error Unknown platform.

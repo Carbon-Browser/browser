@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,8 @@ namespace {
 void HashSpecifics(const sync_pb::EntitySpecifics& specifics,
                    std::string* hash) {
   DCHECK_GT(specifics.ByteSize(), 0);
-  base::Base64Encode(base::SHA1HashString(specifics.SerializeAsString()), hash);
+  *hash =
+      base::Base64Encode(base::SHA1HashString(specifics.SerializeAsString()));
 }
 
 }  // namespace

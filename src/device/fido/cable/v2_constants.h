@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -65,14 +65,53 @@ constexpr auto kTunnelServer = tunnelserver::KnownDomainID(0);
 // to the post-handshake message. This should be sufficiently large to pad away
 // all information about the contents of this message.
 constexpr size_t kPostHandshakeMsgPaddingGranularity = 512;
+// kMaxSyncInfoDaysForConsumer is the maximum age, in days, of sync info that
+// consumers (i.e. desktops) will accept. Information in Sync's DeviceInfo
+// records that is older than this will be ignored. This should be smaller than
+// `kMaxSyncInfoDaysForProducer` so that the phone will always accept a
+// connection.
+constexpr unsigned kMaxSyncInfoDaysForConsumer = 31;
+// kMaxSyncInfoDaysForProducer is the maximum age, in days, of sync info that
+// producers (i.e. phones) will accept. If a desktop tries to connect using
+// information that was published before this time, the request will be
+// rejected. This should be larger than `kMaxSyncInfoDaysForConsumer` so that
+// this doesn't happen with honest clients.
+constexpr unsigned kMaxSyncInfoDaysForProducer =
+    kMaxSyncInfoDaysForConsumer + 7;
 
 // MessageType enumerates the types of caBLEv2 messages on the wire.
 enum class MessageType : uint8_t {
   kShutdown = 0,
   kCTAP = 1,
   kUpdate = 2,
+  kJSON = 3,
 
-  kMaxValue = 2,
+  kMaxValue = 3,
+};
+
+enum class Event {
+  // kPhoneConnected means that the phone has connected to the tunnel server
+  // and started BLE advertising.
+  kPhoneConnected,
+  // kBLEAdvertReceived means that a matching BLE advert has been
+  // received and a corresponding "device" has been discovered.
+  kBLEAdvertReceived,
+  // kReady means that the device is ready to receive a CTAP-level message.
+  kReady,
+};
+
+// PayloadType enumerates the types of application-level payloads carried over a
+// hybrid connection.
+enum class PayloadType {
+  kCTAP,
+  kJSON,
+};
+
+// Feature enumerates the features that a hybrid device can support.
+enum class Feature {
+  kCTAP,
+  // Digital identity requests, e.g. mobile driver's licenses.
+  kDigitialIdentities,
 };
 
 }  // namespace cablev2

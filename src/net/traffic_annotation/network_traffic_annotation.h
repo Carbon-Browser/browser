@@ -1,6 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #ifndef NET_TRAFFIC_ANNOTATION_NETWORK_TRAFFIC_ANNOTATION_H_
 #define NET_TRAFFIC_ANNOTATION_NETWORK_TRAFFIC_ANNOTATION_H_
@@ -21,8 +26,9 @@ namespace {
 // Recursively compute hash code of the given string as a constant expression.
 template <int N>
 constexpr uint32_t recursive_hash(const char* str) {
-  return static_cast<uint32_t>((recursive_hash<N - 1>(str) * 31 + str[N - 1]) %
-                               138003713);
+  return (recursive_hash<N - 1>(str) * 31u +
+          static_cast<uint32_t>(str[N - 1])) %
+         138003713u;
 }
 
 // Recursion stopper for the above function. Note that string of size 0 will
@@ -52,10 +58,7 @@ struct NetworkTrafficAnnotationTag {
     return unique_id_hash_code == other.unique_id_hash_code;
   }
 
-  static NetworkTrafficAnnotationTag NotReached() {
-    NOTREACHED();
-    return net::NetworkTrafficAnnotationTag(TRAFFIC_ANNOTATION_UNINITIALIZED);
-  }
+  static NetworkTrafficAnnotationTag NotReached() { NOTREACHED(); }
 
   // These functions are wrappers around the (private) constructor, so we can
   // easily find the constructor's call-sites with a script.
@@ -146,7 +149,7 @@ struct PartialNetworkTrafficAnnotationTag {
 //
 // An empty and a sample template for the text-encoded protobuf can be found in
 // tools/traffic_annotation/sample_traffic_annotation.cc.
-// TODO(crbug.com/690323): Add tools to check annotation text's format during
+// TODO(crbug.com/40505662): Add tools to check annotation text's format during
 // presubmit checks.
 template <size_t N1, size_t N2>
 constexpr NetworkTrafficAnnotationTag DefineNetworkTrafficAnnotation(
@@ -383,7 +386,7 @@ struct MutablePartialNetworkTrafficAnnotationTag {
 //
 // On Linux and Windows, use MISSING_TRAFFIC_ANNOTATION or
 // TRAFFIC_ANNOTATION_FOR_TESTS.
-// TODO(crbug.com/1052397): Revisit once build flag switch of lacros-chrome is
+// TODO(crbug.com/40118868): Revisit once build flag switch of lacros-chrome is
 // complete.
 #if !BUILDFLAG(IS_WIN) && \
     !(BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS))

@@ -1,14 +1,15 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/toolbar/test_toolbar_actions_bar_bubble_delegate.h"
 
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/threading/thread_restrictions.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
 
 class TestToolbarActionsBarBubbleDelegate::DelegateImpl
     : public ToolbarActionsBarBubbleDelegate {
@@ -19,28 +20,25 @@ class TestToolbarActionsBarBubbleDelegate::DelegateImpl
   DelegateImpl(const DelegateImpl&) = delete;
   DelegateImpl& operator=(const DelegateImpl&) = delete;
 
-  ~DelegateImpl() override {}
+  ~DelegateImpl() override = default;
 
  private:
   bool ShouldShow() override { return !parent_->shown_; }
-  bool ShouldCloseOnDeactivate() override {
-    return parent_->close_on_deactivate_;
-  }
   std::u16string GetHeadingText() override { return parent_->heading_; }
   std::u16string GetBodyText(bool anchored_to_action) override {
     return parent_->body_;
   }
-  std::u16string GetItemListText() override { return parent_->item_list_; }
   std::u16string GetActionButtonText() override { return parent_->action_; }
   std::u16string GetDismissButtonText() override { return parent_->dismiss_; }
-  ui::DialogButton GetDefaultDialogButton() override {
+  ui::mojom::DialogButton GetDefaultDialogButton() override {
     return parent_->default_button_;
   }
   std::unique_ptr<ToolbarActionsBarBubbleDelegate::ExtraViewInfo>
   GetExtraViewInfo() override {
-    if (parent_->info_)
+    if (parent_->info_) {
       return std::make_unique<ToolbarActionsBarBubbleDelegate::ExtraViewInfo>(
           *parent_->info_);
+    }
     return nullptr;
   }
   std::string GetAnchorActionId() override { return parent_->action_id_; }
@@ -66,8 +64,7 @@ TestToolbarActionsBarBubbleDelegate::TestToolbarActionsBarBubbleDelegate(
       body_(body),
       action_(action),
       dismiss_(dismiss),
-      default_button_(ui::DIALOG_BUTTON_NONE),
-      close_on_deactivate_(true) {}
+      default_button_(ui::mojom::DialogButton::kNone) {}
 
 TestToolbarActionsBarBubbleDelegate::~TestToolbarActionsBarBubbleDelegate() {
   // If the bubble didn't close, it means that it still owns the DelegateImpl,

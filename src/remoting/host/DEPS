@@ -1,6 +1,7 @@
 include_rules = [
   "+ash",
   "+cc/output",
+  "+components/named_mojo_ipc_server",
   "+components/policy/core/common",
   "+components/viz/common",
   "+components/webrtc",
@@ -21,13 +22,13 @@ include_rules = [
   "+services/device/public",
   "+services/device/wake_lock/power_save_blocker",
   "+services/network",
-  "+third_party/google_toolbox_for_mac",
   "+third_party/grpc",
   "+third_party/jsoncpp",
   "+third_party/skia",
   "+third_party/webrtc",
   "+third_party/libjingle_xmpp/xmpp",
   "+ui/aura",
+  "+ui/accessibility/platform",
   "+ui/base",
   "+ui/compositor",
   "+ui/events",
@@ -37,9 +38,18 @@ include_rules = [
 
 specific_include_rules = {
   ".*unittest\.cc": [
+    "+chromeos/ash/components/test",
     "+mojo/core/test",
+    "+ui/display/manager",
+    "+ui/display/test",
   ],
-  ".*chromeos\.cc": [
+  ".*chromeos.*\.cc": [
     "+ui/ozone/public",
+  ],
+  ".*wayland.*\.(h|cc)": [
+    "+third_party/wayland-protocols",
+  ],
+  "it2me_desktop_environment*": [
+    "+components/user_manager"
   ],
 }

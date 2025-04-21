@@ -14,7 +14,7 @@ interstitial).
 
 ## High Level Description
 At a high level, the component uses a memory mapped file of filtering rules to
-filter subresource requests in Blink, as well as subframe navigations in the
+filter subresource requests in Blink, as well as child frame navigations in the
 browser process.
 
 For historical reasons (intention to support iOS), code is split into two
@@ -61,6 +61,12 @@ In the renderer, ownership looks like:
 `DocumentLoader`=>`SubresourceFilter`=>`WebDocumentSubresourceFilterImpl`=>`DocumentSubresourceFilter`
 
 ### [content](/components/subresource_filter/content)
+#### [content/shared](/components/subresource_filter/content/shared/)
+The code in content/shared is not specific to Safe Browsing, but still depends
+on content/. This will allow other subresource filtering use cases to be built
+on top of the shared code, such as the [Fingerprinting Protection component]
+(/components/fingerprinting_protection_filter/).
+
 #### [content/browser](/components/subresource_filter/content/browser)
 The content/browser code generally orchestrates the whole component.
 
@@ -71,7 +77,7 @@ class that encapsulates that logic is the
 
 `SubresourceFilterSafeBrowsingActivationThrottle`=>`SubresourceFilterSafeBrowsingClient`=>`SubresourceFilterSafeBrowsingClientRequest`
 The Safe Browsing client owns multiple Safe Browsing requests, and lives on the
-IO thread.
+UI thread.
 
 Currently, the `SubresourceFilterSafeBrowsingActivationThrottle` checks every
 redirect URL speculatively, but makes an activation decision based on the last
@@ -90,15 +96,21 @@ This logic is Handled by the `ActivationStateComputingNavigationThrottle`.
 This ownership is passed to the `ContentSubresourceFilterThrottleManager` at
 `ReadyToCommitNavigation` time.
 
-##### Subframe filtering
-This component also needs to filter subframes that match the ruleset. This is
-done by the `SubframeNavigationFilteringThrottle`, which consults its parent
+##### Child frame filtering
+This component also needs to filter child frames that match the ruleset. This is
+done by the `ChildFrameNavigationFilteringThrottle`, which consults its parent
 frame's `AsyncDocumentSubresourceFilter`.
+
+The code uses "root frame" and "child frame" terminology distinguish from the
+FrameTree-centric "main frame" and "subframe". Frame trees may be embedded so
+that a single "tab" may have multiple "main frames". An embedded main frame
+(fenced frame) is treated by the filter like a subframe; a main frame in a
+fenced frame is thus a subresource filter "child frame".
 
 ##### Throttle management
 The `ContentSubresourceFilterThrottleManager` is a `WebContentsObserver`, and manages both the
 `ActivationStateComputingNavigationThrottle` and the
-`SubframeNavigationFilteringThrottle`. It maintains a map of all the activated
+`ChildFrameNavigationFilteringThrottle`. It maintains a map of all the activated
 frames in the frame tree, along with that frame's current
 `AsyncDocumentSubresourceFilter`, taken from the
 `ActivationStateComputingNavigationThrottle`.
@@ -124,4 +136,3 @@ the `RenderFrameObserver` that communicates with the
 `ContentSubresourceFilterThrottleManager`.
 
 `SubresourceFilterAgent`~>`WebDocumentSubresourceFilterImpl`
-

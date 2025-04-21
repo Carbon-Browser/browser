@@ -1,12 +1,13 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.password_manager;
 
+import static androidx.test.espresso.matcher.ViewMatchers.assertThat;
+
 import static org.hamcrest.Matchers.sameInstance;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
 import static org.mockito.Mockito.mock;
 
 import org.junit.Test;

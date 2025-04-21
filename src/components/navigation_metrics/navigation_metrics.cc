@@ -1,22 +1,36 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "components/navigation_metrics/navigation_metrics.h"
+
+#include <iterator>
 
 #include "base/i18n/rtl.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/metrics/user_metrics.h"
+#include "base/strings/string_util.h"
+#include "base/strings/utf_string_conversions.h"
 #include "components/dom_distiller/core/url_constants.h"
 #include "components/profile_metrics/browser_profile_type.h"
 #include "components/url_formatter/url_formatter.h"
+#include "net/base/url_util.h"
 #include "url/gurl.h"
+#include "url/url_canon.h"
 
 namespace navigation_metrics {
 
 const char kMainFrameScheme[] = "Navigation.MainFrameScheme2";
 const char kMainFrameSchemeDifferentPage[] =
     "Navigation.MainFrameSchemeDifferentPage2";
+// Same as kMainFrameSchemeDifferentPage, but only recorded if the hostname is
+// non-unique (e.g. http://site.test):
+const char kMainFrameSchemeDifferentPageNonUniqueHostname[] =
+    "Navigation.MainFrameSchemeDifferentPage2NonUniqueHostname";
 const char kMainFrameSchemeOTR[] = "Navigation.MainFrameSchemeOTR2";
 const char kMainFrameSchemeDifferentPageOTR[] =
     "Navigation.MainFrameSchemeDifferentPageOTR2";
@@ -46,6 +60,7 @@ const char* const kSchemeNames[] = {
     "chrome-extension",
     "view-source",
     "externalfile",
+    "isolated-app",
 };
 
 static_assert(std::size(kSchemeNames) == static_cast<int>(Scheme::COUNT),
@@ -70,26 +85,30 @@ void RecordPrimaryMainFrameNavigation(
   Scheme scheme = GetScheme(url);
   UMA_HISTOGRAM_ENUMERATION(kMainFrameScheme, scheme, Scheme::COUNT);
   if (!is_same_document) {
-    UMA_HISTOGRAM_ENUMERATION("Navigation.MainFrameSchemeDifferentPage2",
-                              scheme, Scheme::COUNT);
-    UMA_HISTOGRAM_BOOLEAN("Navigation.MainFrameHasRTLDomainDifferentPage2",
+    UMA_HISTOGRAM_ENUMERATION(kMainFrameSchemeDifferentPage, scheme,
+                              Scheme::COUNT);
+    UMA_HISTOGRAM_BOOLEAN(kMainFrameHasRTLDomainDifferentPage,
                           base::i18n::StringContainsStrongRTLChars(
                               url_formatter::IDNToUnicode(url.host())));
+
+    if (net::IsHostnameNonUnique(url.host())) {
+      UMA_HISTOGRAM_ENUMERATION(kMainFrameSchemeDifferentPageNonUniqueHostname,
+                                scheme, Scheme::COUNT);
+    }
   }
 
-  UMA_HISTOGRAM_BOOLEAN("Navigation.MainFrameHasRTLDomain2",
+  UMA_HISTOGRAM_BOOLEAN(kMainFrameHasRTLDomain,
                         base::i18n::StringContainsStrongRTLChars(
                             url_formatter::IDNToUnicode(url.host())));
 
   if (is_off_the_record) {
-    UMA_HISTOGRAM_ENUMERATION("Navigation.MainFrameSchemeOTR2", scheme,
-                              Scheme::COUNT);
+    UMA_HISTOGRAM_ENUMERATION(kMainFrameSchemeOTR, scheme, Scheme::COUNT);
     if (!is_same_document) {
-      UMA_HISTOGRAM_ENUMERATION("Navigation.MainFrameSchemeDifferentPageOTR2",
-                                scheme, Scheme::COUNT);
+      UMA_HISTOGRAM_ENUMERATION(kMainFrameSchemeDifferentPageOTR, scheme,
+                                Scheme::COUNT);
     }
   }
-  UMA_HISTOGRAM_ENUMERATION("Navigation.MainFrameProfileType2", profile_type);
+  UMA_HISTOGRAM_ENUMERATION(kMainFrameProfileType, profile_type);
 }
 
 void RecordOmniboxURLNavigation(const GURL& url) {

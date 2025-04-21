@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,10 +8,6 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.os.IBinder;
-
-import androidx.annotation.VisibleForTesting;
-
-import org.chromium.base.BundleUtils;
 
 /**
  * Service base class which will call through to the given {@link Impl}. This class must be present
@@ -26,11 +22,13 @@ public class SplitCompatService extends Service {
     }
 
     @Override
-    protected void attachBaseContext(Context context) {
-        context = SplitCompatApplication.createChromeContext(context);
-        mImpl = (Impl) BundleUtils.newInstance(context, mServiceClassName);
+    protected void attachBaseContext(Context baseContext) {
+        mImpl =
+                (Impl)
+                        SplitCompatUtils.loadClassAndAdjustContextChrome(
+                                baseContext, mServiceClassName);
         mImpl.setService(this);
-        super.attachBaseContext(context);
+        super.attachBaseContext(baseContext);
     }
 
     @Override
@@ -80,15 +78,12 @@ public class SplitCompatService extends Service {
         return super.onUnbind(intent);
     }
 
-    @VisibleForTesting
     public void attachBaseContextForTesting(Context context, Impl impl) {
         mImpl = impl;
         super.attachBaseContext(context);
     }
 
-    /**
-     * Holds the implementation of service logic. Will be called by {@link SplitCompatService}.
-     */
+    /** Holds the implementation of service logic. Will be called by {@link SplitCompatService}. */
     public abstract static class Impl {
         private SplitCompatService mService;
 

@@ -1,10 +1,13 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/loader/fetch/url_loader/navigation_body_loader.h"
 
-#include "base/bind.h"
+#include <string_view>
+
+#include "base/containers/span.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
@@ -15,6 +18,7 @@
 #include "net/test/cert_test_util.h"
 #include "services/network/public/cpp/url_loader_completion_status.h"
 #include "services/network/public/mojom/fetch_api.mojom.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/navigation/navigation_params.h"
@@ -23,54 +27,26 @@
 #include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
 #include "third_party/blink/public/platform/web_navigation_body_loader.h"
 #include "third_party/blink/public/web/web_navigation_params.h"
+#include "third_party/blink/renderer/platform/loader/fetch/body_text_decoder.h"
 #include "third_party/blink/renderer/platform/loader/fetch/code_cache_host.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_response.h"
 #include "third_party/blink/renderer/platform/weborigin/referrer.h"
+#include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 
 namespace blink {
 
 namespace {
 
-class FakeCodeCacheHost : public mojom::CodeCacheHost {
- public:
-  FakeCodeCacheHost()
-      : code_cache_host_(mojo::Remote<mojom::CodeCacheHost>(
-            receiver_.BindNewPipeAndPassRemote())) {}
+using ::testing::ElementsAre;
 
-  // blink::mojom::CodeCacheHost implementation.
-  void DidGenerateCacheableMetadata(blink::mojom::CodeCacheType cache_type,
-                                    const GURL& url,
-                                    base::Time expected_response_time,
-                                    mojo_base::BigBuffer data) override {}
-  void FetchCachedCode(blink::mojom::CodeCacheType cache_type,
-                       const GURL& url,
-                       FetchCachedCodeCallback callback) override {
-    if (run_loop_.running())
-      run_loop_.Quit();
-    callback_ = std::move(callback);
-  }
-  void ClearCodeCacheEntry(blink::mojom::CodeCacheType cache_type,
-                           const GURL& url) override {}
-  void DidGenerateCacheableMetadataInCacheStorage(
-      const GURL& url,
-      base::Time expected_response_time,
-      mojo_base::BigBuffer data,
-      const url::Origin& cache_storage_origin,
-      const std::string& cache_storage_cache_name) override {}
-
-  blink::CodeCacheHost* GetCodeCacheHost() { return &code_cache_host_; }
-
-  void FinishFetch() {
-    if (!callback_)
-      run_loop_.Run();
-    std::move(callback_).Run(base::Time(), std::vector<uint8_t>());
+class UppercaseDecoder : public BodyTextDecoder {
+  String Decode(base::span<const char> data) override {
+    return String(data).UpperASCII();
   }
 
- private:
-  FetchCachedCodeCallback callback_;
-  mojo::Receiver<mojom::CodeCacheHost> receiver_{this};
-  blink::CodeCacheHost code_cache_host_;
-  base::RunLoop run_loop_;
+  String Flush() override { return String(); }
+
+  WebEncodingData GetEncodingData() const override { return WebEncodingData(); }
 };
 
 class NavigationBodyLoaderTest : public ::testing::Test,
@@ -110,20 +86,34 @@ class NavigationBodyLoaderTest : public ::testing::Test,
         std::move(endpoints), scheduler::GetSingleThreadTaskRunnerForTesting(),
         std::make_unique<ResourceLoadInfoNotifierWrapper>(
             /*resource_load_info_notifier=*/nullptr),
-        /*is_main_frame=*/true, &navigation_params);
+        /*is_main_frame=*/true, &navigation_params, /*is_ad_frame=*/false);
     loader_ = std::move(navigation_params.body_loader);
   }
 
-  void StartLoading(CodeCacheHost* code_cache_host = nullptr) {
-    loader_->StartLoadingBody(this, code_cache_host);
+  void StartLoading() {
+    loader_->StartLoadingBody(this);
+    base::RunLoop().RunUntilIdle();
+  }
+
+  void StartLoadingInBackground() {
+    To<NavigationBodyLoader>(loader_.get())
+        ->StartLoadingBodyInBackground(std::make_unique<UppercaseDecoder>(),
+                                       false);
     base::RunLoop().RunUntilIdle();
   }
 
   void Write(const std::string& buffer) {
-    uint32_t size = static_cast<uint32_t>(buffer.size());
-    MojoResult result = writer_->WriteData(buffer.c_str(), &size, kNone);
+    size_t actually_written_bytes = 0;
+    MojoResult result = writer_->WriteData(base::as_byte_span(buffer), kNone,
+                                           actually_written_bytes);
     ASSERT_EQ(MOJO_RESULT_OK, result);
-    ASSERT_EQ(buffer.size(), size);
+    ASSERT_EQ(buffer.size(), actually_written_bytes);
+  }
+
+  void WriteAndFlush(const std::string& buffer) {
+    Write(buffer);
+    To<NavigationBodyLoader>(loader_.get())
+        ->FlushOffThreadBodyReaderForTesting();
   }
 
   void Complete(int net_error) {
@@ -131,17 +121,24 @@ class NavigationBodyLoaderTest : public ::testing::Test,
     base::RunLoop().RunUntilIdle();
   }
 
-  void BodyCodeCacheReceived(mojo_base::BigBuffer data) override {
-    ASSERT_TRUE(expecting_code_cache_received_);
-    did_receive_code_cache_ = true;
+  void BodyDataReceived(base::span<const char> data) override {
+    ASSERT_FALSE(did_receive_decoded_data_);
+    ASSERT_TRUE(expecting_data_received_);
+    did_receive_data_ = true;
+    data_received_ += std::string(data.data(), data.size());
+    TakeActions();
     if (run_loop_)
       run_loop_->Quit();
   }
 
-  void BodyDataReceived(base::span<const char> data) override {
-    ASSERT_TRUE(expecting_data_received_);
-    did_receive_data_ = true;
-    data_received_ += std::string(data.data(), data.size());
+  void DecodedBodyDataReceived(
+      const WebString& data,
+      const WebEncodingData& encoding_data,
+      base::SpanOrSize<const char> encoded_data) override {
+    ASSERT_FALSE(did_receive_data_);
+    ASSERT_TRUE(expecting_decoded_data_received_);
+    did_receive_decoded_data_ = true;
+    data_received_ += data.Ascii();
     TakeActions();
     if (run_loop_)
       run_loop_->Quit();
@@ -151,14 +148,17 @@ class NavigationBodyLoaderTest : public ::testing::Test,
                            int64_t total_encoded_data_length,
                            int64_t total_encoded_body_length,
                            int64_t total_decoded_body_length,
-                           bool should_report_corb_blocking,
-                           const absl::optional<WebURLError>& error) override {
+                           const std::optional<WebURLError>& error) override {
     ASSERT_TRUE(expecting_finished_);
     did_finish_ = true;
     error_ = error;
     TakeActions();
     if (run_loop_)
       run_loop_->Quit();
+  }
+
+  ProcessBackgroundDataCallback TakeProcessBackgroundDataCallback() override {
+    return std::move(process_background_data_callback_);
   }
 
   void TakeActions() {
@@ -179,14 +179,14 @@ class NavigationBodyLoaderTest : public ::testing::Test,
     }
   }
 
-  void ExpectCodeCacheReceived() {
-    expecting_code_cache_received_ = true;
-    did_receive_code_cache_ = false;
-  }
-
   void ExpectDataReceived() {
     expecting_data_received_ = true;
     did_receive_data_ = false;
+  }
+
+  void ExpectDecodedDataReceived() {
+    expecting_decoded_data_received_ = true;
+    did_receive_decoded_data_ = false;
   }
 
   void ExpectFinished() {
@@ -201,17 +201,17 @@ class NavigationBodyLoaderTest : public ::testing::Test,
   }
 
   void Wait() {
-    if (expecting_code_cache_received_) {
-      if (!did_receive_code_cache_)
-        WaitForRunLoop();
-      ASSERT_TRUE(did_receive_code_cache_);
-      expecting_code_cache_received_ = false;
-    }
     if (expecting_data_received_) {
       if (!did_receive_data_)
         WaitForRunLoop();
       ASSERT_TRUE(did_receive_data_);
       expecting_data_received_ = false;
+    }
+    if (expecting_decoded_data_received_) {
+      if (!did_receive_decoded_data_)
+        WaitForRunLoop();
+      ASSERT_TRUE(did_receive_decoded_data_);
+      expecting_decoded_data_received_ = false;
     }
     if (expecting_finished_) {
       if (!did_finish_)
@@ -236,16 +236,16 @@ class NavigationBodyLoaderTest : public ::testing::Test,
   std::unique_ptr<base::RunLoop> run_loop_;
   bool expecting_data_received_ = false;
   bool did_receive_data_ = false;
+  bool expecting_decoded_data_received_ = false;
+  bool did_receive_decoded_data_ = false;
   bool expecting_finished_ = false;
   bool did_finish_ = false;
-  // Code cache is always called by default.
-  bool expecting_code_cache_received_ = true;
-  bool did_receive_code_cache_ = false;
   std::string buffer_to_write_;
   bool toggle_defers_loading_ = false;
   bool destroy_loader_ = false;
   std::string data_received_;
-  absl::optional<WebURLError> error_;
+  std::optional<WebURLError> error_;
+  ProcessBackgroundDataCallback process_background_data_callback_;
 };
 
 TEST_F(NavigationBodyLoaderTest, SetDefersBeforeStart) {
@@ -253,6 +253,50 @@ TEST_F(NavigationBodyLoaderTest, SetDefersBeforeStart) {
   loader_->SetDefersLoading(WebLoaderFreezeMode::kStrict);
   loader_->SetDefersLoading(WebLoaderFreezeMode::kNone);
   // Should not crash.
+}
+
+TEST_F(NavigationBodyLoaderTest, DecodedDataReceived) {
+  CreateBodyLoader();
+  StartLoadingInBackground();
+  StartLoading();
+  ExpectDecodedDataReceived();
+  Write("hello");
+  Wait();
+  EXPECT_EQ("HELLO", TakeDataReceived());
+}
+
+TEST_F(NavigationBodyLoaderTest, ProcessBackgroundData) {
+  CreateBodyLoader();
+  StartLoadingInBackground();
+  // First flush data to the off thread reader. The background data callback
+  // should not see this since it is not set yet.
+  WriteAndFlush("hello");
+
+  String background_data = "";
+  process_background_data_callback_ = CrossThreadBindRepeating(
+      [](String* background_data, const WebString& data) {
+        *background_data = *background_data + String(data);
+      },
+      CrossThreadUnretained(&background_data));
+
+  ExpectDecodedDataReceived();
+  StartLoading();
+  Wait();
+  EXPECT_EQ("HELLO", TakeDataReceived());
+  EXPECT_EQ("", background_data);
+
+  // Now write more data with the background data callback set.
+  ExpectDecodedDataReceived();
+  Write("hello2");
+  Wait();
+  EXPECT_EQ("HELLO2", TakeDataReceived());
+  EXPECT_EQ("HELLO2", background_data);
+
+  ExpectDecodedDataReceived();
+  Write("hello3");
+  Wait();
+  EXPECT_EQ("HELLO3", TakeDataReceived());
+  EXPECT_EQ("HELLO2HELLO3", background_data);
 }
 
 TEST_F(NavigationBodyLoaderTest, DataReceived) {
@@ -390,9 +434,9 @@ TEST_F(NavigationBodyLoaderTest, FillResponseWithSecurityDetails) {
       {"subjectAltName_sanity_check.pem", "root_ca_cert.pem"}, &certs));
   ASSERT_EQ(2U, certs.size());
 
-  base::StringPiece cert0_der =
+  std::string_view cert0_der =
       net::x509_util::CryptoBufferAsStringPiece(certs[0]->cert_buffer());
-  base::StringPiece cert1_der =
+  std::string_view cert1_der =
       net::x509_util::CryptoBufferAsStringPiece(certs[1]->cert_buffer());
 
   response->ssl_info->cert =
@@ -419,7 +463,7 @@ TEST_F(NavigationBodyLoaderTest, FillResponseWithSecurityDetails) {
       scheduler::GetSingleThreadTaskRunnerForTesting(),
       std::make_unique<ResourceLoadInfoNotifierWrapper>(
           /*resource_load_info_notifier=*/nullptr),
-      /*is_main_frame=*/true, &navigation_params);
+      /*is_main_frame=*/true, &navigation_params, /*is_ad_frame=*/false);
   EXPECT_TRUE(
       navigation_params.response.ToResourceResponse().GetSSLInfo().has_value());
 }
@@ -468,7 +512,7 @@ TEST_F(NavigationBodyLoaderTest, FillResponseReferrerRedirects) {
       scheduler::GetSingleThreadTaskRunnerForTesting(),
       std::make_unique<ResourceLoadInfoNotifierWrapper>(
           /*resource_load_info_notifier=*/nullptr),
-      /*is_main_frame=*/true, &navigation_params);
+      /*is_main_frame=*/true, &navigation_params, /*is_ad_frame=*/false);
   ASSERT_EQ(navigation_params.redirects.size(), 2u);
   ASSERT_EQ(navigation_params.redirects[0].new_referrer,
             WebString(Referrer::NoReferrer()));
@@ -476,37 +520,93 @@ TEST_F(NavigationBodyLoaderTest, FillResponseReferrerRedirects) {
             WebString::FromUTF8(second_redirect_url.spec()));
 }
 
-TEST_F(NavigationBodyLoaderTest, CodeCache) {
-  FakeCodeCacheHost code_cache_host;
-  CreateBodyLoader();
-  StartLoading(code_cache_host.GetCodeCacheHost());
-  code_cache_host.FinishFetch();
-  ExpectDataReceived();
-  Write("hello");
-  Wait();
-  EXPECT_EQ("hello", TakeDataReceived());
-}
+// A loader client which keeps track of chunks of data that are received in a
+// single PostTask.
+class ChunkingLoaderClient : public WebNavigationBodyLoader::Client {
+ public:
+  void BodyDataReceived(base::span<const char> data) override { NOTREACHED(); }
+  void DecodedBodyDataReceived(
+      const WebString& data,
+      const WebEncodingData& encoding_data,
+      base::SpanOrSize<const char> encoded_data) override {
+    scheduler::GetSingleThreadTaskRunnerForTesting()->PostTask(
+        FROM_HERE, base::BindOnce(&ChunkingLoaderClient::CreateNewChunk,
+                                  base::Unretained(this)));
+    chunks_.back() += data.Ascii();
+  }
+  void BodyLoadingFinished(base::TimeTicks completion_time,
+                           int64_t total_encoded_data_length,
+                           int64_t total_encoded_body_length,
+                           int64_t total_decoded_body_length,
+                           const std::optional<WebURLError>& error) override {
+    scheduler::GetSingleThreadTaskRunnerForTesting()->PostTask(
+        FROM_HERE, run_loop_.QuitClosure());
+  }
 
-TEST_F(NavigationBodyLoaderTest, CodeCacheInParallelWithEarlyBodyLoad) {
-  base::test::ScopedFeatureList feature_list(features::kEarlyBodyLoad);
-  FakeCodeCacheHost code_cache_host;
-  CreateBodyLoader();
-  StartLoading(code_cache_host.GetCodeCacheHost());
+  void CreateNewChunk() {
+    if (!chunks_.back().empty())
+      chunks_.push_back("");
+  }
 
-  // We should be able to receive data without receiving the code cache.
-  expecting_code_cache_received_ = false;
-  ExpectDataReceived();
-  Write("hello");
+  std::vector<std::string> TakeChunks() {
+    run_loop_.Run();
+    return std::move(chunks_);
+  }
+
+ private:
+  base::RunLoop run_loop_;
+  std::vector<std::string> chunks_{""};
+};
+
+TEST_F(NavigationBodyLoaderTest, MaxDataSize1) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeatureWithParameters(
+      features::kThreadedBodyLoader, {{"max-data-to-process", "1"}});
+  CreateBodyLoader();
+  StartLoadingInBackground();
+  for (const char* s : {"a", "b", "c", "d", "e", "f", "g", "h"})
+    WriteAndFlush(std::string(s));
+
+  ChunkingLoaderClient client;
+  loader_->StartLoadingBody(&client);
   Complete(net::OK);
   writer_.reset();
-  Wait();
-  EXPECT_EQ("hello", TakeDataReceived());
+  // First chunk is doubled since we can't catch the first PostTask.
+  EXPECT_THAT(client.TakeChunks(),
+              ElementsAre("AB", "C", "D", "E", "F", "G", "H", ""));
+}
 
-  // Now wait for the code cache, and loading should finish.
-  ExpectCodeCacheReceived();
-  ExpectFinished();
-  code_cache_host.FinishFetch();
-  Wait();
+TEST_F(NavigationBodyLoaderTest, MaxDataSize2) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeatureWithParameters(
+      features::kThreadedBodyLoader, {{"max-data-to-process", "2"}});
+  CreateBodyLoader();
+  StartLoadingInBackground();
+  for (const char* s : {"a", "b", "c", "d", "e", "f", "g", "h"})
+    WriteAndFlush(std::string(s));
+
+  ChunkingLoaderClient client;
+  loader_->StartLoadingBody(&client);
+  Complete(net::OK);
+  writer_.reset();
+  // First chunk is doubled since we can't catch the first PostTask.
+  EXPECT_THAT(client.TakeChunks(), ElementsAre("ABCD", "EF", "GH", ""));
+}
+
+TEST_F(NavigationBodyLoaderTest, MaxDataSizeAll) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeatureWithParameters(
+      features::kThreadedBodyLoader, {{"max-data-to-process", "0"}});
+  CreateBodyLoader();
+  StartLoadingInBackground();
+  for (const char* s : {"a", "b", "c", "d", "e", "f", "g", "h"})
+    WriteAndFlush(std::string(s));
+
+  ChunkingLoaderClient client;
+  loader_->StartLoadingBody(&client);
+  Complete(net::OK);
+  writer_.reset();
+  EXPECT_THAT(client.TakeChunks(), ElementsAre("ABCDEFGH", ""));
 }
 
 }  // namespace

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,21 +9,16 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "ipcz/ipcz.h"
 #include "test/test_base.h"
+#include "test_buildflags.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "testing/multiprocess_func_list.h"
 #include "third_party/abseil-cpp/absl/base/macros.h"
 #include "third_party/abseil-cpp/absl/types/span.h"
-#include "third_party/abseil-cpp/absl/types/variant.h"
-#include "third_party/ipcz/src/test_buildflags.h"
 #include "util/ref_counted.h"
-
-#if BUILDFLAG(ENABLE_IPCZ_MULTIPROCESS_TESTS)
-#include "test/test_child_launcher.h"
-#endif
 
 namespace ipcz::test {
 
@@ -32,78 +27,49 @@ class TestNode;
 template <typename TestNodeType>
 class MultinodeTest;
 
-// Selects which driver will be used by test nodes. Interconnecting nodes must
-// always use the same driver.
-//
-// Multinode tests are parameterized over these modes to provide coverage of
-// various interesting constraints encountered in production. Some platforms
-// require driver objects to be relayed through a broker. Some environments
-// prevent nodes from allocating their own shared memory regions.
-//
-// Incongruity between synchronous and asynchronous test failures generally
-// indicates race conditions within ipcz, but many bugs will cause failures in
-// all driver modes. The synchronous version is generally easier to debug in
-// such cases.
-enum class DriverMode {
-  // Use the synchronous, single-process reference driver. This driver does not
-  // create any background threads and all ipcz operations (e.g. message
-  // delivery, portal transfer, proxy elimination, etc) complete synchronously
-  // from end-to-end. Each test node runs its test body on a dedicated thread
-  // within the test process.
-  kSync,
-
-  // Use the asynchronous single-process reference driver. Transport messages
-  // are received asynchronously, similar to how most production drivers are
-  // likely to operate in practice. Such asynchrony gives rise to
-  // non-determinism throughout ipcz proper and provides good coverage of
-  // potential race conditions.
-  //
-  // As with the kSync driver, each test node runs its test body on a dedicated
-  // thread within the test process.
-  kAsync,
-
-  // Use the same driver as kAsync, but non-broker nodes are forced to delegate
-  // shared memory allocation to their broker. This simulates the production
-  // constraints of some sandbox environments and exercises additional
-  // asynchrony in ipcz proper.
-  kAsyncDelegatedAlloc,
-
-  // Use the same driver as kAsync, but driver objects cannot be transmitted
-  // directly between non-brokers and must instead be relayed by a broker. This
-  // simulates the production constraints of some sandbox environments and
-  // exercises additional asynchrony in ipcz proper.
-  kAsyncObjectBrokering,
-
-  // Use the same driver as kAsync, imposing the additional constraints of both
-  // kAsyncDelegatedAlloc and kAsyncObjectBrokering as described above.
-  kAsyncObjectBrokeringAndDelegatedAlloc,
-
-#if BUILDFLAG(ENABLE_IPCZ_MULTIPROCESS_TESTS)
-  // Use a multiprocess-capable driver (Linux only for now), with each test node
-  // running in its own isolated child process.
-  kMultiprocess,
-#endif
-};
-
 namespace internal {
-
-using TestNodeFactory = std::unique_ptr<TestNode> (*)();
 
 template <typename TestNodeType>
 std::unique_ptr<TestNode> MakeTestNode() {
   return std::make_unique<TestNodeType>();
 }
 
-// Type used to package metadata about a MULTINODE_TEST_NODE() invocation.
-struct TestNodeDetails {
-  const std::string_view name;
-  const TestNodeFactory factory;
-};
-
 template <typename T>
 static constexpr bool IsValidTestNodeType = std::is_base_of_v<TestNode, T>;
 
+extern const char kSyncTestDriverName[];
+extern const char kAsyncTestDriverName[];
+extern const char kAsyncDelegatedAllocTestDriverName[];
+extern const char kAsyncForcedBrokeringTestDriverName[];
+extern const char kAsyncDelegatedAllocAndForcedBrokeringTestDriverName[];
+extern const char kMultiprocessTestDriverName[];
+
 }  // namespace internal
+
+class TestDriver;
+
+using TestNodeFactory = std::unique_ptr<TestNode> (*)();
+
+struct TransportPair {
+  IpczDriverHandle ours;
+  IpczDriverHandle theirs;
+};
+
+// Type used to package metadata about a MULTINODE_TEST_NODE() or
+// MULTINODE_TEST() invocation.
+struct TestNodeDetails {
+  // A unique display name for the defined node body.
+  const std::string_view name;
+
+  // A factory function which can be used to instantiate the TestNode. Null for
+  // main MULTINODE_TEST() invocations.
+  const TestNodeFactory factory;
+
+  // Indicates whether the node is defined as a broker or non-broker node. By
+  // default, all nodes on non-brokers except for those emitted by main
+  // MULTINODE_TEST() invocations.
+  const bool is_broker;
+};
 
 // Base class to support tests which exercise behavior across multiple ipcz
 // nodes. These may be single-process on a synchronous driver, single-process on
@@ -115,22 +81,33 @@ static constexpr bool IsValidTestNodeType = std::is_base_of_v<TestNode, T>;
 // GTest's Test class is not compatible with that behavior.
 //
 // Instead, while MULTINODE_TEST_NODE() invocations should be based directly on
-// TestNode or a derivative thereof. TEST_P() invocations for multinode tests
-// should be based on derivatives of MultinodeTest<T> (see below this class),
-// where T itself is a TestNode or some derivative thereof.
+// TestNode or a derivative thereof. MULTINODE_TEST() invocations for multinode
+// tests should be based on derivatives of MultinodeTest<T> (see below this
+// class), where T itself is a TestNode or some derivative thereof.
 //
 // This arrangement allows the main test body and its related
 // MULTINODE_TEST_NODE() invocations to be based on the same essential type,
 // making multinode tests easier to read and write.
 class TestNode : public internal::TestBase {
  public:
+  using TransportPair = ::ipcz::test::TransportPair;
+
   // Exposes interaction with one node spawned by another.
-  class TestNodeController : public RefCounted {
+  class TestNodeController : public RefCounted<TestNodeController> {
    public:
     // Blocks until the spawned node has terminated. Returns true if the node
     // executed and terminated cleanly, or false if it encountered at least one
     // test expectation failure while running.
     virtual bool WaitForShutdown() = 0;
+
+    // Creates a new pair of transports suitable for connecting the calling
+    // node with the TestNode controlled by this object.
+    virtual TransportPair CreateNewTransports() = 0;
+
+   protected:
+    friend class RefCounted<TestNodeController>;
+
+    virtual ~TestNodeController() = default;
   };
 
   virtual ~TestNode();
@@ -142,6 +119,9 @@ class TestNode : public internal::TestBase {
   // ConnectToBroker() hasn't been called yet.
   IpczDriverHandle transport() const { return transport_; }
 
+  // Returns metadata regarding the definition of this TestNode type.
+  virtual const TestNodeDetails& GetDetails() const = 0;
+
   // Releases transport() to the caller. After calling this, it is no longer
   // valid to call either transport() or ConnectToBroker(), and this fixture
   // will not automatically close the transport on destruction.
@@ -149,37 +129,63 @@ class TestNode : public internal::TestBase {
     return std::exchange(transport_, IPCZ_INVALID_DRIVER_HANDLE);
   }
 
-  // The driver currently in use. Selected by test parameter.
+  // The active TestDriver implementation.
+  TestDriver* GetTestDriver() { return test_driver_; }
+
+  // The ipcz driver currently in use, as specified by the active TestDriver.
   const IpczDriver& GetDriver() const;
 
   // One-time initialization. Called internally during test setup. Should never
   // be called by individual test code.
-  void Initialize(DriverMode driver_mode,
-                  IpczCreateNodeFlags create_node_flags);
+  void Initialize(TestDriver* test_driver, const std::string& feature_set);
 
-  // May be called at most once by the TestNode body, to connect initial
-  // `portals` to the broker.
+  // May be called at most once by the TestNode body to connect initial
+  // `portals` to the node that spawned this one. Extra `flags` may be passed to
+  // the corresponding ConnectNode() call.
+  void ConnectToParent(absl::Span<IpczHandle> portals,
+                       IpczConnectNodeFlags flags = IPCZ_NO_FLAGS);
+
+  // May be called instead of ConnectToParent() when the portal that spawned
+  // this one is a broker.
   void ConnectToBroker(absl::Span<IpczHandle> portals);
 
   // Shorthand for the above, for the common case with only one initial portal.
+  IpczHandle ConnectToParent(IpczConnectNodeFlags flags = IPCZ_NO_FLAGS);
   IpczHandle ConnectToBroker();
 
   // Opens a new portal pair on this node.
   std::pair<IpczHandle, IpczHandle> OpenPortals();
 
+  // Creates a new driver memory object populated with `contents`, boxes it, and
+  // returns a handle to the new box.
+  IpczHandle BoxBlob(std::string_view contents);
+
+  // Extracts the string contents of a boxed driver memory object.
+  std::string UnboxBlob(IpczHandle box);
+
   // Spawns a new test node of TestNodeType and populates `portals` with a set
   // of initial portals connected to the node, via a new transport.
   template <typename TestNodeType>
-  Ref<TestNodeController> SpawnTestNode(absl::Span<IpczHandle> portals) {
-    return SpawnTestNodeImpl(node_, TestNodeType::kDetails, portals);
+  Ref<TestNodeController> SpawnTestNode(
+      absl::Span<IpczHandle> portals,
+      IpczConnectNodeFlags flags = IPCZ_NO_FLAGS) {
+    IpczDriverHandle our_transport;
+    auto controller = SpawnTestNodeImpl(TestNodeType::kDetails, our_transport);
+    if (TestNodeType::kDetails.is_broker) {
+      flags |= IPCZ_CONNECT_NODE_TO_BROKER;
+    }
+    const IpczResult result = ipcz().ConnectNode(
+        node(), our_transport, portals.size(), flags, nullptr, portals.data());
+    ABSL_ASSERT(result == IPCZ_RESULT_OK);
+    return controller;
   }
 
   // Shorthand for the above, for the common case with only one initial portal
   // and no need for the test body to retain a controller for the node.
   template <typename TestNodeType>
-  IpczHandle SpawnTestNode() {
+  IpczHandle SpawnTestNode(IpczConnectNodeFlags flags = IPCZ_NO_FLAGS) {
     IpczHandle portal;
-    SpawnTestNode<TestNodeType>({&portal, 1});
+    SpawnTestNode<TestNodeType>({&portal, 1}, flags);
     return portal;
   }
 
@@ -187,8 +193,8 @@ class TestNode : public internal::TestBase {
   // its broker connection. The caller is resposible for the other end of that
   // connection.
   template <typename TestNodeType>
-  Ref<TestNodeController> SpawnTestNode(IpczDriverHandle transport) {
-    return SpawnTestNodeImpl(node_, TestNodeType::kDetails, transport);
+  Ref<TestNodeController> SpawnTestNodeNoConnect(IpczDriverHandle& transport) {
+    return SpawnTestNodeImpl(TestNodeType::kDetails, transport);
   }
 
   // Forcibly closes this Node, severing all links to other nodes and implicitly
@@ -196,118 +202,222 @@ class TestNode : public internal::TestBase {
   void CloseThisNode();
 
   // The TestNode body provided by a MULTINODE_TEST_NODE() invocation. For main
-  // test definitions via TEST_P() with a MultinodeTest<T> fixture, this is
-  // unused in favor of TestBody().
+  // test definitions via MULTINODE_TEST() with a MultinodeTest<T> fixture, this
+  // is unused in favor of TestBody().
   virtual void NodeBody() {}
 
   // Creates a pair of transports appropriate for connecting this (broker or
   // non-broker) node to another non-broker node. Most tests should not use this
   // directly, but should instead connect to other nodes using the more
   // convenient helpers ConnectToBroker() or SpawnTestNode().
-  struct TransportPair {
-    IpczDriverHandle ours;
-    IpczDriverHandle theirs;
-  };
   TransportPair CreateTransports();
 
-  // Helper used to support multiprocess TestNode invocation.
-  int RunAsChild();
+  // Creates a pair of transport appropriate for connecting two broker nodes
+  // together.
+  TransportPair CreateBrokerToBrokerTransports();
 
- private:
+  // Helper used to support multiprocess TestNode invocation.
+  int RunAsChild(TestDriver* test_driver, const std::string& feature_set);
+
   // Sets the transport to use when connecting to a broker via ConnectBroker.
   // Must only be called once.
   void SetTransport(IpczDriverHandle transport);
 
+ private:
   // Spawns a new node using an appropriate configuration for the current
   // driver. Returns a controller which can be used to interact with the node
-  // outside of ipcz (e.g. to wait on its termination). `factory` is a function
-  // which can produce an in-process instance of the TestNode; `test_node_name`
-  // is a string which can be used to run the same TestNode subclass in a child
-  // process.
-  //
-  // If `portals_or_transport` is a span of IpczHandles, this creates a new
-  // pair of transports. One is given to the new node for connection back to us,
-  // and the other is connected immediately by the broker, filling in the
-  // handles with initial portals for the connection.
-  //
-  // Otherwise it's assumed to be a transport that will be given to the new
-  // node for connecting back to us. In this case the caller is responsible for
-  // the transport's peer.
-  using PortalsOrTransport =
-      absl::variant<absl::Span<IpczHandle>, IpczDriverHandle>;
-  Ref<TestNodeController> SpawnTestNodeImpl(
-      IpczHandle from_node,
-      const internal::TestNodeDetails& details,
-      PortalsOrTransport portals_or_transport);
+  // outside of ipcz (e.g. to wait on its termination). `details` describes the
+  // node to be launched, and `our_transport` on output receives a locally owned
+  // transport to the spawned node.
+  Ref<TestNodeController> SpawnTestNodeImpl(const TestNodeDetails& details,
+                                            IpczDriverHandle& our_transport);
 
-  DriverMode driver_mode_ = DriverMode::kSync;
+  TestDriver* test_driver_ = nullptr;
+  std::string feature_set_{"Default"};
   IpczHandle node_ = IPCZ_INVALID_HANDLE;
   IpczDriverHandle transport_ = IPCZ_INVALID_DRIVER_HANDLE;
   std::vector<Ref<TestNodeController>> spawned_nodes_;
-
-#if BUILDFLAG(ENABLE_IPCZ_MULTIPROCESS_TESTS)
-  TestChildLauncher child_launcher_;
-#endif
 };
 
 // Actual parameterized GTest Test fixture for multinode tests. This or a
-// subclass of it is required for TEST_P() invocations to function as proper
-// multinode tests.
+// subclass of it is required for MULTINODE_TEST() invocations to function as
+// proper multinode tests.
 template <typename TestNodeType = TestNode>
-class MultinodeTest : public TestNodeType,
-                      public ::testing::Test,
-                      public ::testing::WithParamInterface<DriverMode> {
+class MultinodeTest : public TestNodeType, public ::testing::Test {
  public:
   static_assert(internal::IsValidTestNodeType<TestNodeType>,
                 "MultinodeTest<T> requires T to be a subclass of TestNode.");
-  MultinodeTest() {
-    TestNode::Initialize(GetParam(), IPCZ_CREATE_NODE_AS_BROKER);
+};
+
+// TestDriver specifies an IpczDriver implementation to use for multinode tests.
+// It also implements launching and joining of other test nodes. A TestDriver
+// can be registered by statically initializing a corresponding
+// TestDriverRegistration. All multinode tests are run against all registered
+// TestDrivers.
+class TestDriver {
+ public:
+  // A reference to the actual IpczDriver implementation used by this
+  // TestDriver.
+  virtual const IpczDriver& GetIpczDriver() const = 0;
+
+  // A unique name for this test driver.
+  virtual const char* GetName() const = 0;
+
+  // Creates a new pair of transports suitable for connecting a broker node to
+  // another node. Called by `source`, who will adopt `ours` from the returned
+  // pair and pass `theirs` to some newly spawned test node. If
+  // `for_broker_target` is true, `theirs` will be suitable for passing to a
+  // broker node; otherwise it must be passed to a non-broker.
+  virtual TransportPair CreateTransports(TestNode& source,
+                                         bool for_broker_target) const = 0;
+
+  // Spawns a new TestNode instance for a TestNode described by `details`,
+  // passing `their_transport` to the new node so it can establish a connection.
+  // `our_transport` is the local driver transport endpoint that will be used to
+  // connect to the new node.
+  virtual Ref<TestNode::TestNodeController> SpawnTestNode(
+      TestNode& source,
+      const TestNodeDetails& details,
+      const std::string& feature_set,
+      IpczDriverHandle our_transport,
+      IpczDriverHandle their_transport) = 0;
+
+  // Returns any extra flags to be provided to ConnectNode() when connecting to
+  // the main test node from a node spawned by the test.
+  virtual IpczConnectNodeFlags GetExtraClientConnectNodeFlags() const = 0;
+
+  // If the test driver launches test nodes in a separate subprocess, this is
+  // called to retrieve the driver transport which the test node should use to
+  // connect to the broker.
+  virtual IpczDriverHandle GetClientTestNodeTransport() = 0;
+};
+
+// Registers a TestDriver globally so that all MULTINODE_TEST() invocations are
+// parameterized over it.
+class TestDriverRegistrationImpl {
+ public:
+  explicit TestDriverRegistrationImpl(TestDriver& driver);
+};
+
+template <typename TestDriverType>
+class TestDriverRegistration {
+ public:
+  template <typename... Args>
+  explicit TestDriverRegistration(Args&&... args)
+      : driver(std::forward<Args>(args)...) {}
+
+  TestDriverType driver;
+  TestDriverRegistrationImpl registration{driver};
+};
+
+void RegisterMultinodeTestNode(std::string_view node_name,
+                               TestNodeFactory factory);
+
+template <typename NodeType>
+class MultinodeTestNodeRegistration {
+ public:
+  MultinodeTestNodeRegistration() {
+    RegisterMultinodeTestNode(NodeType::kDetails.name,
+                              NodeType::kDetails.factory);
   }
 };
 
-}  // namespace ipcz::test
+using MultinodeTestFactory =
+    std::function<testing::Test*(TestDriver*, const std::string& feature_set)>;
+void RegisterMultinodeTest(const char* test_suite_name,
+                           const char* test_name,
+                           const char* filename,
+                           int line,
+                           MultinodeTestFactory factory);
 
-#define MULTINODE_TEST_CHILD_MAIN_HELPER(func, node_name) \
-  MULTIPROCESS_TEST_MAIN(func) {                          \
-    node_name node;                                       \
-    return node.RunAsChild();                             \
+// Registers a MULTINODE_TEST() test to be run when all tests are run. This
+// registers a unique instance of the test for each registered test driver.
+template <typename Test>
+class MultinodeTestRegistration {
+ public:
+  MultinodeTestRegistration(const char* test_suite_name,
+                            const char* test_name,
+                            const char* filename,
+                            int line) {
+    RegisterMultinodeTest(
+        test_suite_name, test_name, filename, line,
+        [](TestDriver* driver, const std::string& feature_set) {
+          return new Test(driver, feature_set);
+        });
   }
+};
 
-#define MULTINODE_TEST_CHILD_MAIN(fixture, node_name) \
-  MULTINODE_TEST_CHILD_MAIN_HELPER(fixture##_##node_name##_Node, node_name)
+// Must be called before RUN_ALL_TESTS() is invoked in order for any defined
+// multinode tests to be run.
+void RegisterMultinodeTests();
+
+}  // namespace ipcz::test
 
 // Defines the main body of a non-broker test node for a multinode test. The
 // named node can be spawned by another node using SpawnTestNode<T> where T is
 // the unique name given by `node_name` here. `fixture` must be
 /// ipcz::test::TestNode or a subclass thereof.
-#define MULTINODE_TEST_NODE(fixture, node_name)                            \
+#define MULTINODE_TEST_NODE_IMPL(fixture, node_name, is_broker_value)      \
   class node_name : public fixture {                                       \
     static_assert(::ipcz::test::internal::IsValidTestNodeType<fixture>,    \
                   "MULTINODE_TEST_NODE() requires a fixture derived from " \
                   "ipcz::test::TestNode.");                                \
                                                                            \
    public:                                                                 \
-    static constexpr ::ipcz::test::internal::TestNodeDetails kDetails = {  \
+    static constexpr ::ipcz::test::TestNodeDetails kDetails = {            \
         .name = #fixture "_" #node_name "_Node",                           \
         .factory = &::ipcz::test::internal::MakeTestNode<node_name>,       \
+        .is_broker = is_broker_value,                                      \
     };                                                                     \
+    const ::ipcz::test::TestNodeDetails& GetDetails() const override {     \
+      return kDetails;                                                     \
+    }                                                                      \
     void NodeBody() override;                                              \
   };                                                                       \
-  MULTINODE_TEST_CHILD_MAIN(fixture, node_name);                           \
+  ::ipcz::test::MultinodeTestNodeRegistration<node_name>                   \
+      kRegister_##node_name;                                               \
   void node_name::NodeBody()
 
-#if BUILDFLAG(ENABLE_IPCZ_MULTIPROCESS_TESTS)
-#define IPCZ_EXTRA_DRIVER_MODES , ipcz::test::DriverMode::kMultiprocess
-#else
-#define IPCZ_EXTRA_DRIVER_MODES
-#endif
+#define MULTINODE_TEST_NODE(fixture, node_name) \
+  MULTINODE_TEST_NODE_IMPL(fixture, node_name, /*is_broker=*/false)
 
-// TODO: Add other DriverMode enumerators here as support is landed.
-#define INSTANTIATE_MULTINODE_TEST_SUITE_P(suite) \
-  INSTANTIATE_TEST_SUITE_P(                       \
-      , suite,                                    \
-      ::testing::Values(                          \
-          ipcz::test::DriverMode::kSync,          \
-          ipcz::test::DriverMode::kAsync IPCZ_EXTRA_DRIVER_MODES))
+#define MULTINODE_TEST_BROKER_NODE(fixture, node_name) \
+  MULTINODE_TEST_NODE_IMPL(fixture, node_name, /*is_broker=*/true)
+
+#define MULTINODE_TEST_NAME(name) #name
+#define MULTINODE_TEST_CLASS_NAME(name) name##_Test
+#define MULTINODE_TEST_REGISTRATION_NAME(name) kRegister_##name##_Test
+
+#define MULTINODE_TEST(fixture, test_name)                                 \
+  class MULTINODE_TEST_CLASS_NAME(test_name) : public fixture {            \
+   public:                                                                 \
+    static constexpr ::ipcz::test::TestNodeDetails kDetails = {            \
+        .name = #fixture "_" #test_name "_Node",                           \
+        .factory = nullptr,                                                \
+        .is_broker = true,                                                 \
+    };                                                                     \
+    explicit MULTINODE_TEST_CLASS_NAME(test_name)(                         \
+        ::ipcz::test::TestDriver * test_driver,                            \
+        const std::string& feature_set) {                                  \
+      TestNode::Initialize(test_driver, feature_set);                      \
+    }                                                                      \
+    ~MULTINODE_TEST_CLASS_NAME(test_name)() override = default;            \
+    MULTINODE_TEST_CLASS_NAME(test_name)                                   \
+    (const MULTINODE_TEST_CLASS_NAME(test_name) &) = delete;               \
+    void operator=(const MULTINODE_TEST_CLASS_NAME(test_name) &) = delete; \
+    const ::ipcz::test::TestNodeDetails& GetDetails() const override {     \
+      return kDetails;                                                     \
+    }                                                                      \
+                                                                           \
+   private:                                                                \
+    void TestBody() override;                                              \
+  };                                                                       \
+  namespace {                                                              \
+  ::ipcz::test::MultinodeTestRegistration<                                 \
+      MULTINODE_TEST_CLASS_NAME(test_name)>                                \
+      MULTINODE_TEST_REGISTRATION_NAME(test_name){                         \
+          #fixture, MULTINODE_TEST_NAME(test_name), __FILE__, __LINE__};   \
+  }                                                                        \
+  void MULTINODE_TEST_CLASS_NAME(test_name)::TestBody()
 
 #endif  // IPCZ_SRC_TEST_MULTINODE_TEST_H_

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <string>
 
+#include "components/metrics/metrics_log.h"
 #include "components/metrics/metrics_log_uploader.h"
 
 namespace metrics {
@@ -28,12 +29,16 @@ class AndroidMetricsLogUploader : public MetricsLogUploader {
   // server. This uploader uses a Java logging mechanism that ignores these
   // fields.
   void UploadLog(const std::string& compressed_log_data,
+                 const LogMetadata& log_metadata,
                  const std::string& log_hash,
                  const std::string& log_signature,
                  const ReportingInfo& reporting_info) override;
 
  private:
   const MetricsLogUploader::UploadCallback on_upload_complete_;
+  base::WeakPtrFactory<AndroidMetricsLogUploader> weak_factory_{this};
+
+  void OnUploadComplete(const int32_t status);
 };
 
 }  // namespace metrics

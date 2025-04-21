@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,7 @@ public class MessageDispatcherProvider {
      * MessageDispatcher has not been ready yet, such as when activity is being recreated or
      * destroyed.
      *
-     * TODO(crbug.com/1217749): Fix NPE and remove Nullable annotation.
+     * <p>TODO(crbug.com/40771260): Fix NPE and remove Nullable annotation.
      *
      * @param windowAndroid The window to retrieve MessageDispatcher from.
      * @return An instance of MessageDispatcher associated with the window.

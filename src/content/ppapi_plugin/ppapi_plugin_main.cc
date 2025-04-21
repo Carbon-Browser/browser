@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "base/files/file_path.h"
 #include "base/i18n/rtl.h"
 #include "base/path_service.h"
+#include "base/process/current_process.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task/single_thread_task_executor.h"
@@ -25,8 +26,6 @@
 #include "ipc/ipc_sender.h"
 #include "ppapi/proxy/plugin_globals.h"
 #include "services/tracing/public/cpp/trace_startup.h"
-#include "third_party/icu/source/common/unicode/unistr.h"
-#include "third_party/icu/source/i18n/unicode/timezone.h"
 #include "ui/base/ui_base_switches.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -57,6 +56,10 @@
 #include <stdlib.h>
 #endif
 
+#if BUILDFLAG(IS_MAC)
+#include "base/system/sys_info.h"
+#endif
+
 #if BUILDFLAG(IS_WIN)
 sandbox::TargetServices* g_target_services = NULL;
 #else
@@ -68,6 +71,14 @@ namespace content {
 // Main function for starting the PPAPI plugin process.
 int PpapiPluginMain(MainFunctionParams parameters) {
   const base::CommandLine& command_line = *parameters.command_line;
+
+#if BUILDFLAG(IS_MAC)
+  // Declare that this process has CPU security mitigations enabled (see
+  // PpapiPluginSandboxedProcessLauncherDelegate::EnableCpuSecurityMitigations).
+  // This must be done before the first call to
+  // base::SysInfo::NumberOfProcessors().
+  base::SysInfo::SetCpuSecurityMitigationsEnabled();
+#endif
 
 #if BUILDFLAG(IS_WIN)
   // https://crbug.com/1139752 Premature unload of shell32 caused process to
@@ -111,13 +122,6 @@ int PpapiPluginMain(MainFunctionParams parameters) {
 #endif
   }
 
-  if (command_line.HasSwitch(switches::kTimeZoneForTesting)) {
-    std::string time_zone =
-        command_line.GetSwitchValueASCII(switches::kTimeZoneForTesting);
-    icu::TimeZone::adoptDefault(
-        icu::TimeZone::createTimeZone(icu::UnicodeString(time_zone.c_str())));
-  }
-
 #if BUILDFLAG(IS_CHROMEOS)
   // Specifies $HOME explicitly because some plugins rely on $HOME but
   // no other part of Chrome OS uses that.  See crbug.com/335290.
@@ -128,7 +132,8 @@ int PpapiPluginMain(MainFunctionParams parameters) {
 
   base::SingleThreadTaskExecutor main_thread_task_executor;
   base::PlatformThread::SetName("CrPPAPIMain");
-  base::trace_event::TraceLog::GetInstance()->set_process_name("PPAPI Process");
+  base::CurrentProcess::GetInstance().SetProcessType(
+      base::CurrentProcessType::PROCESS_PPAPI_PLUGIN);
   base::trace_event::TraceLog::GetInstance()->SetProcessSortIndex(
       kTraceEventPpapiProcessSortIndex);
 
@@ -148,14 +153,12 @@ int PpapiPluginMain(MainFunctionParams parameters) {
   ppapi_process.set_main_thread(
       new PpapiThread(run_loop.QuitClosure(), command_line));
 
-#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_MAC)
-  // Startup tracing is usually enabled earlier, but if we forked from a zygote,
-  // we can only enable it after mojo IPC support is brought up by PpapiThread,
-  // because the mojo broker has to create the tracing SMB on our behalf due to
-  // the zygote sandbox.
-  if (parameters.zygote_child)
+  // Mojo IPC support is brought up by PpapiThread, so startup tracing is
+  // enabled here if it needs to start after mojo init (normally so the mojo
+  // broker can bypass the sandbox to allocate startup tracing's SMB).
+  if (parameters.needs_startup_tracing_after_mojo_init) {
     tracing::EnableStartupTracingIfNeeded();
-#endif  // BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_MAC)
+  }
 
 #if BUILDFLAG(IS_WIN)
   if (!base::win::IsUser32AndGdi32Available())

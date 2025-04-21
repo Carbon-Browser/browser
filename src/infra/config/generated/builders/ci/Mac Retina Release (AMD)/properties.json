@@ -7,7 +7,7 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "GPU Mac Builder",
-              "project": "chromium"
+              "project": "chromium-m133"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-gpu-archive",
@@ -15,16 +15,17 @@
               "execution_mode": "COMPILE_AND_TEST",
               "legacy_chromium_config": {
                 "apply_configs": [
-                  "mb",
-                  "goma_use_local"
+                  "mb"
                 ],
                 "build_config": "Release",
                 "config": "chromium",
+                "target_arch": "intel",
                 "target_bits": 64,
                 "target_platform": "mac"
               },
               "legacy_gclient_config": {
                 "apply_configs": [
+                  "chromium_with_telemetry_dependencies",
                   "use_clang_coverage"
                 ],
                 "config": "chromium"
@@ -35,7 +36,7 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "Mac Retina Release (AMD)",
-              "project": "chromium"
+              "project": "chromium-m133"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-gpu-archive",
@@ -43,8 +44,7 @@
               "execution_mode": "TEST",
               "legacy_chromium_config": {
                 "apply_configs": [
-                  "mb",
-                  "goma_use_local"
+                  "mb"
                 ],
                 "build_config": "Release",
                 "config": "chromium",
@@ -57,7 +57,7 @@
               "parent": {
                 "bucket": "ci",
                 "builder": "GPU Mac Builder",
-                "project": "chromium"
+                "project": "chromium-m133"
               }
             }
           }
@@ -67,7 +67,7 @@
         {
           "bucket": "ci",
           "builder": "Mac Retina Release (AMD)",
-          "project": "chromium"
+          "project": "chromium-m133"
         }
       ],
       "mirroring_builder_group_and_names": [
@@ -75,7 +75,8 @@
           "builder": "mac-rel",
           "group": "tryserver.chromium.mac"
         }
-      ]
+      ],
+      "targets_spec_directory": "src/infra/config/generated/builders/ci/Mac Retina Release (AMD)/targets"
     }
   },
   "$recipe_engine/resultdb/test_presentation": {
@@ -86,6 +87,9 @@
     ]
   },
   "builder_group": "chromium.gpu",
+  "gardener_rotations": [
+    "chrome_browser_release"
+  ],
   "recipe": "chromium",
   "sheriff_rotations": [
     "chrome_browser_release"

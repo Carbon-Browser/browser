@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <string>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/path_service.h"
 #include "build/build_config.h"
@@ -17,6 +17,7 @@
 #include "chromecast/chromecast_buildflags.h"
 #include "components/cdm/browser/media_drm_storage_impl.h"
 #include "components/prefs/json_pref_store.h"
+#include "components/prefs/pref_name_set.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service_factory.h"
 #include "components/prefs/pref_store.h"
@@ -55,7 +56,7 @@ scoped_refptr<PersistentPrefStore> MakePrefStore(ProcessType process_type) {
   auto default_pref_store =
       base::MakeRefCounted<JsonPrefStore>(GetConfigPath(process_type));
 
-  std::set<std::string> selected_pref_names;
+  PrefNameSet selected_pref_names;
   if (PrefServiceHelper::LargePrefNames) {
     selected_pref_names = PrefServiceHelper::LargePrefNames();
   }
@@ -74,8 +75,7 @@ scoped_refptr<PersistentPrefStore> MakePrefStore(ProcessType process_type) {
       if (!large_pref_store->GetValue(pref_name, &pref_value)) {
         // Copy from default prefs, if possible.
         if (default_pref_store->GetValue(pref_name, &pref_value)) {
-          large_pref_store->SetValue(
-              pref_name, std::make_unique<base::Value>(pref_value->Clone()), 0);
+          large_pref_store->SetValue(pref_name, pref_value->Clone(), 0);
         }
       }
       default_pref_store->RemoveValue(pref_name, 0);
@@ -97,12 +97,13 @@ std::unique_ptr<PrefService> PrefServiceHelper::CreatePrefService(
   DVLOG(1) << "Loading config from " << config_path.value();
 
   registry->RegisterBooleanPref(prefs::kMetricsIsNewClientID, false);
+  registry->RegisterBooleanPref(prefs::kTosAccepted, false);
   // Opt-in stats default to true to handle two different cases:
-  //  1) Any crashes or UMA logs are recorded prior to setup completing
-  //     successfully (even though we can't send them yet).  Unless the user
-  //     ends up actually opting out, we don't want to lose this data once
-  //     we get network connectivity and are able to send it.  If the user
-  //     opts out, nothing further will be sent (honoring the user's setting).
+  //  1) Any crashes or UMA logs recorded after accepting Terms of Service.
+  //     Unless the user ends up actually opting out, we don't want to lose
+  //     this data once we get network connectivity and are able to send it.
+  //     If the user opts out, nothing further will be sent (honoring the
+  //     user's setting).
   //  2) Dogfood users (see dogfood agreement).
   registry->RegisterBooleanPref(prefs::kOptInStats, true);
   registry->RegisterListPref(prefs::kActiveDCSExperiments);

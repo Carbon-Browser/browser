@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,10 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/apdu/apdu_response.h"
 #include "components/device_event_log/device_event_log.h"
 #include "device/fido/authenticator_make_credential_response.h"
@@ -52,7 +52,7 @@ void U2fRegisterOperation::WinkAndTrySign() {
 }
 
 void U2fRegisterOperation::TrySign() {
-  absl::optional<std::vector<uint8_t>> sign_command;
+  std::optional<std::vector<uint8_t>> sign_command;
   if (probing_alternative_rp_id_) {
     CtapMakeCredentialRequest sign_request(request());
     sign_request.rp.id = *request().app_id_exclude;
@@ -70,7 +70,7 @@ void U2fRegisterOperation::TrySign() {
 }
 
 void U2fRegisterOperation::OnCheckForExcludedKeyHandle(
-    absl::optional<std::vector<uint8_t>> device_response) {
+    std::optional<std::vector<uint8_t>> device_response) {
   if (canceled_) {
     return;
   }
@@ -97,12 +97,12 @@ void U2fRegisterOperation::OnCheckForExcludedKeyHandle(
       // user-presence.
       std::move(callback())
           .Run(CtapDeviceResponseCode::kCtap2ErrCredentialExcluded,
-               absl::nullopt);
+               std::nullopt);
       break;
 
     case apdu::ApduResponse::Status::SW_CONDITIONS_NOT_SATISFIED:
       // Duplicate registration found. Waiting for user touch.
-      base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
           FROM_HERE,
           base::BindOnce(&U2fRegisterOperation::WinkAndTrySign,
                          weak_factory_.GetWeakPtr()),
@@ -135,7 +135,7 @@ void U2fRegisterOperation::OnCheckForExcludedKeyHandle(
       FIDO_LOG(ERROR) << "Unexpected status " << static_cast<int>(result)
                       << " from U2F device";
       std::move(callback())
-          .Run(CtapDeviceResponseCode::kCtap2ErrOther, absl::nullopt);
+          .Run(CtapDeviceResponseCode::kCtap2ErrOther, std::nullopt);
       break;
   }
 }
@@ -153,7 +153,7 @@ void U2fRegisterOperation::TryRegistration() {
 }
 
 void U2fRegisterOperation::OnRegisterResponseReceived(
-    absl::optional<std::vector<uint8_t>> device_response) {
+    std::optional<std::vector<uint8_t>> device_response) {
   if (canceled_) {
     return;
   }
@@ -162,7 +162,7 @@ void U2fRegisterOperation::OnRegisterResponseReceived(
   const auto apdu_response =
       device_response
           ? apdu::ApduResponse::CreateFromMessage(std::move(*device_response))
-          : absl::nullopt;
+          : std::nullopt;
   if (apdu_response) {
     result = apdu_response->status();
   }
@@ -171,8 +171,7 @@ void U2fRegisterOperation::OnRegisterResponseReceived(
     case apdu::ApduResponse::Status::SW_NO_ERROR: {
       FIDO_LOG(DEBUG)
           << "Received successful U2F register response from authenticator: "
-          << base::HexEncode(apdu_response->data().data(),
-                             apdu_response->data().size());
+          << base::HexEncode(apdu_response->data());
       auto response =
           AuthenticatorMakeCredentialResponse::CreateFromU2fRegisterResponse(
               device()->DeviceTransport(),
@@ -185,7 +184,7 @@ void U2fRegisterOperation::OnRegisterResponseReceived(
 
     case apdu::ApduResponse::Status::SW_CONDITIONS_NOT_SATISFIED:
       // Waiting for user touch, retry after delay.
-      base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
           FROM_HERE,
           base::BindOnce(&U2fRegisterOperation::WinkAndTryRegistration,
                          weak_factory_.GetWeakPtr()),
@@ -197,7 +196,7 @@ void U2fRegisterOperation::OnRegisterResponseReceived(
       FIDO_LOG(ERROR) << "Unexpected status " << static_cast<int>(result)
                       << " from U2F device";
       std::move(callback())
-          .Run(CtapDeviceResponseCode::kCtap2ErrOther, absl::nullopt);
+          .Run(CtapDeviceResponseCode::kCtap2ErrOther, std::nullopt);
       break;
   }
 }

@@ -1,18 +1,23 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/metrics/histogram_samples.h"
 
 #include <limits>
+#include <string_view>
+#include <utility>
 
 #include "base/compiler_specific.h"
 #include "base/memory/raw_ptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/numerics/clamped_math.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/numerics/safe_math.h"
 #include "base/pickle.h"
+#include "base/strings/strcat.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 
 namespace base {
@@ -37,7 +42,7 @@ class SampleCountPickleIterator : public SampleCountIterator {
   void Next() override;
   void Get(HistogramBase::Sample* min,
            int64_t* max,
-           HistogramBase::Count* count) const override;
+           HistogramBase::Count* count) override;
 
  private:
   const raw_ptr<PickleIterator> iter_;
@@ -49,8 +54,7 @@ class SampleCountPickleIterator : public SampleCountIterator {
 };
 
 SampleCountPickleIterator::SampleCountPickleIterator(PickleIterator* iter)
-    : iter_(iter),
-      is_done_(false) {
+    : iter_(iter), is_done_(false) {
   Next();
 }
 
@@ -68,7 +72,7 @@ void SampleCountPickleIterator::Next() {
 
 void SampleCountPickleIterator::Get(HistogramBase::Sample* min,
                                     int64_t* max,
-                                    HistogramBase::Count* count) const {
+                                    HistogramBase::Count* count) {
   DCHECK(!Done());
   *min = min_;
   *max = max_;
@@ -83,29 +87,67 @@ static_assert(sizeof(HistogramSamples::AtomicSingleSample) ==
 
 HistogramSamples::SingleSample HistogramSamples::AtomicSingleSample::Load()
     const {
-  AtomicSingleSample single_sample = subtle::Acquire_Load(&as_atomic);
+  AtomicSingleSample single_sample(subtle::Acquire_Load(&as_atomic));
 
   // If the sample was extracted/disabled, it's still zero to the outside.
-  if (single_sample.as_atomic == kDisabledSingleSample)
+  if (single_sample.as_atomic == kDisabledSingleSample) {
     single_sample.as_atomic = 0;
+  }
 
   return single_sample.as_parts;
 }
 
 HistogramSamples::SingleSample HistogramSamples::AtomicSingleSample::Extract(
-    bool disable) {
-  AtomicSingleSample single_sample = subtle::NoBarrier_AtomicExchange(
-      &as_atomic, disable ? kDisabledSingleSample : 0);
-  if (single_sample.as_atomic == kDisabledSingleSample)
-    single_sample.as_atomic = 0;
-  return single_sample.as_parts;
+    AtomicSingleSample new_value) {
+  DCHECK(new_value.as_atomic != kDisabledSingleSample)
+      << "Disabling an AtomicSingleSample should be done through "
+         "ExtractAndDisable().";
+
+  AtomicSingleSample old_value;
+
+  // Because a concurrent call may modify and/or disable this object as we are
+  // trying to extract its value, a compare-and-swap loop must be done to ensure
+  // that the value was not changed between the reading and writing (and to
+  // prevent accidentally re-enabling this object).
+  while (true) {
+    old_value.as_atomic = subtle::Acquire_Load(&as_atomic);
+
+    // If this object was already disabled, return an empty sample and keep it
+    // disabled.
+    if (old_value.as_atomic == kDisabledSingleSample) {
+      old_value.as_atomic = 0;
+      return old_value.as_parts;
+    }
+
+    // Extract the single-sample from memory. |existing| is what was in that
+    // memory location at the time of the call; if it doesn't match |original|
+    // (i.e., the single-sample was concurrently modified during this
+    // iteration), then the swap did not happen, so try again.
+    subtle::Atomic32 existing = subtle::Release_CompareAndSwap(
+        &as_atomic, old_value.as_atomic, new_value.as_atomic);
+    if (existing == old_value.as_atomic) {
+      return old_value.as_parts;
+    }
+  }
+}
+
+HistogramSamples::SingleSample
+HistogramSamples::AtomicSingleSample::ExtractAndDisable() {
+  AtomicSingleSample old_value(
+      subtle::NoBarrier_AtomicExchange(&as_atomic, kDisabledSingleSample));
+  // If this object was already disabled, return an empty sample.
+  if (old_value.as_atomic == kDisabledSingleSample) {
+    old_value.as_atomic = 0;
+  }
+  return old_value.as_parts;
 }
 
 bool HistogramSamples::AtomicSingleSample::Accumulate(
     size_t bucket,
     HistogramBase::Count count) {
-  if (count == 0)
+  if (count == 0) {
     return true;
+  }
 
   // Convert the parameters to 16-bit variables because it's all 16-bit below.
   // To support decrements/subtractions, divide the |count| into sign/value and
@@ -129,14 +171,16 @@ bool HistogramSamples::AtomicSingleSample::Accumulate(
   bool sample_updated;
   do {
     subtle::Atomic32 original = subtle::Acquire_Load(&as_atomic);
-    if (original == kDisabledSingleSample)
+    if (original == kDisabledSingleSample) {
       return false;
+    }
     single_sample.as_atomic = original;
     if (single_sample.as_atomic != 0) {
       // Only the same bucket (parameter and stored) can be counted multiple
       // times.
-      if (single_sample.as_parts.bucket != bucket16)
+      if (single_sample.as_parts.bucket != bucket16) {
         return false;
+      }
     } else {
       // The |single_ sample| was zero so becomes the |bucket| parameter, the
       // contents of which were checked above to fit in 16 bits.
@@ -145,16 +189,19 @@ bool HistogramSamples::AtomicSingleSample::Accumulate(
 
     // Update count, making sure that it doesn't overflow.
     CheckedNumeric<uint16_t> new_count(single_sample.as_parts.count);
-    if (count_is_negative)
+    if (count_is_negative) {
       new_count -= count16;
-    else
+    } else {
       new_count += count16;
-    if (!new_count.AssignIfValid(&single_sample.as_parts.count))
+    }
+    if (!new_count.AssignIfValid(&single_sample.as_parts.count)) {
       return false;
+    }
 
     // Don't let this become equivalent to the "disabled" value.
-    if (single_sample.as_atomic == kDisabledSingleSample)
+    if (single_sample.as_atomic == kDisabledSingleSample) {
       return false;
+    }
 
     // Store the updated single-sample back into memory. |existing| is what
     // was in that memory location at the time of the call; if it doesn't
@@ -177,14 +224,14 @@ HistogramSamples::LocalMetadata::LocalMetadata() {
   memset(this, 0, sizeof(*this));
 }
 
-HistogramSamples::HistogramSamples(uint64_t id, Metadata* meta)
-    : meta_(meta) {
+HistogramSamples::HistogramSamples(uint64_t id, Metadata* meta) : meta_(meta) {
   DCHECK(meta_->id == 0 || meta_->id == id);
 
   // It's possible that |meta| is contained in initialized, read-only memory
   // so it's essential that no write be done in that case.
-  if (!meta_->id)
+  if (!meta_->id) {
     meta_->id = id;
+  }
 }
 
 HistogramSamples::HistogramSamples(uint64_t id, std::unique_ptr<Metadata> meta)
@@ -196,19 +243,19 @@ HistogramSamples::HistogramSamples(uint64_t id, std::unique_ptr<Metadata> meta)
 // be invalid by the time this dtor gets called.
 HistogramSamples::~HistogramSamples() = default;
 
-void HistogramSamples::Add(const HistogramSamples& other) {
+bool HistogramSamples::Add(const HistogramSamples& other) {
   IncreaseSumAndCount(other.sum(), other.redundant_count());
   std::unique_ptr<SampleCountIterator> it = other.Iterator();
-  bool success = AddSubtractImpl(it.get(), ADD);
-  DCHECK(success);
+  return AddSubtractImpl(it.get(), ADD);
 }
 
 bool HistogramSamples::AddFromPickle(PickleIterator* iter) {
   int64_t sum;
   HistogramBase::Count redundant_count;
 
-  if (!iter->ReadInt64(&sum) || !iter->ReadInt(&redundant_count))
+  if (!iter->ReadInt64(&sum) || !iter->ReadInt(&redundant_count)) {
     return false;
+  }
 
   IncreaseSumAndCount(sum, redundant_count);
 
@@ -216,11 +263,47 @@ bool HistogramSamples::AddFromPickle(PickleIterator* iter) {
   return AddSubtractImpl(&pickle_iter, ADD);
 }
 
-void HistogramSamples::Subtract(const HistogramSamples& other) {
+bool HistogramSamples::Subtract(const HistogramSamples& other) {
   IncreaseSumAndCount(-other.sum(), -other.redundant_count());
   std::unique_ptr<SampleCountIterator> it = other.Iterator();
-  bool success = AddSubtractImpl(it.get(), SUBTRACT);
-  DCHECK(success);
+  return AddSubtractImpl(it.get(), SUBTRACT);
+}
+
+bool HistogramSamples::Extract(HistogramSamples& other) {
+  static_assert(sizeof(other.meta_->sum) == 8);
+
+#ifdef ARCH_CPU_64_BITS
+  // NoBarrier_AtomicExchange() is only defined for 64-bit types if
+  // the ARCH_CPU_64_BITS macro is set.
+  subtle::Atomic64 other_sum =
+      subtle::NoBarrier_AtomicExchange(&other.meta_->sum, 0);
+#else
+  // |sum| is only atomic on 64 bit archs. Make |other_sum| volatile so that
+  // the following code is not optimized or rearranged to be something like:
+  //     IncreaseSumAndCount(other.meta_->sum, ...);
+  //     other.meta_->sum = 0;
+  // Or:
+  //     int64_t other_sum = other.meta_->sum;
+  //     other.meta_->sum = 0;
+  //     IncreaseSumAndCount(other_sum, ...);
+  // Which do not guarantee eventual consistency anymore (other.meta_->sum may
+  // be modified concurrently at any time). However, despite this, eventual
+  // consistency is still not guaranteed here because performing 64-bit
+  // operations (loading, storing, adding, etc.) on a 32-bit machine cannot be
+  // done atomically, but this at least reduces the odds of inconsistencies, at
+  // the cost of a few extra instructions.
+  volatile int64_t other_sum = other.meta_->sum;
+  other.meta_->sum -= other_sum;
+#endif  // ARCH_CPU_64_BITS
+  HistogramBase::AtomicCount other_redundant_count =
+      subtle::NoBarrier_AtomicExchange(&other.meta_->redundant_count, 0);
+  IncreaseSumAndCount(other_sum, other_redundant_count);
+  std::unique_ptr<SampleCountIterator> it = other.ExtractingIterator();
+  return AddSubtractImpl(it.get(), ADD);
+}
+
+bool HistogramSamples::IsDefinitelyEmpty() const {
+  return sum() == 0 && redundant_count() == 0;
 }
 
 void HistogramSamples::Serialize(Pickle* pickle) const {
@@ -270,7 +353,7 @@ void HistogramSamples::RecordNegativeSample(NegativeSampleReason reason,
                      static_cast<int32_t>(id()));
 }
 
-base::Value::Dict HistogramSamples::ToGraphDict(StringPiece histogram_name,
+base::Value::Dict HistogramSamples::ToGraphDict(std::string_view histogram_name,
                                                 int32_t flags) const {
   base::Value::Dict dict;
   dict.Set("name", histogram_name);
@@ -279,14 +362,14 @@ base::Value::Dict HistogramSamples::ToGraphDict(StringPiece histogram_name,
   return dict;
 }
 
-std::string HistogramSamples::GetAsciiHeader(StringPiece histogram_name,
+std::string HistogramSamples::GetAsciiHeader(std::string_view histogram_name,
                                              int32_t flags) const {
   std::string output;
-  StringAppendF(&output, "Histogram: %.*s recorded %d samples",
-                static_cast<int>(histogram_name.size()), histogram_name.data(),
-                TotalCount());
-  if (flags)
+  StrAppend(&output, {"Histogram: ", histogram_name, " recorded ",
+                      NumberToString(TotalCount()), " samples"});
+  if (flags) {
     StringAppendF(&output, " (flags = 0x%x)", flags);
+  }
   return output;
 }
 
@@ -306,18 +389,21 @@ std::string HistogramSamples::GetAsciiBody() const {
     int64_t max;
     HistogramBase::Count count;
     it->Get(&min, &max, &count);
-    if (min > largest_sample)
+    if (min > largest_sample) {
       largest_sample = min;
-    if (count > largest_count)
+    }
+    if (count > largest_count) {
       largest_count = count;
+    }
     it->Next();
   }
   // Scale histogram bucket counts to take at most 72 characters.
   // Note: Keep in sync w/ kLineLength sample_vector.cc
   const double kLineLength = 72;
   double scaling_factor = 1;
-  if (largest_count > kLineLength)
+  if (largest_count > kLineLength) {
     scaling_factor = kLineLength / largest_count;
+  }
   size_t print_width = GetSimpleAsciiBucketRange(largest_sample).size() + 1;
 
   // iterate over each item and display them
@@ -332,27 +418,30 @@ std::string HistogramSamples::GetAsciiBody() const {
     // value is min, so display it
     std::string range = GetSimpleAsciiBucketRange(min);
     output.append(range);
-    for (size_t j = 0; range.size() + j < print_width + 1; ++j)
-      output.push_back(' ');
+    if (const auto range_size = range.size(); print_width >= range_size) {
+      output.append(print_width + 1 - range_size, ' ');
+    }
     HistogramBase::Count current_size = round(count * scaling_factor);
     WriteAsciiBucketGraph(current_size, kLineLength, &output);
     WriteAsciiBucketValue(count, scaled_total_count, &output);
-    StringAppendF(&output, "\n");
+    output.append(1, '\n');
     it->Next();
   }
   return output;
 }
 
+// static
 void HistogramSamples::WriteAsciiBucketGraph(double x_count,
                                              int line_length,
-                                             std::string* output) const {
-  int x_remainder = line_length - x_count;
+                                             std::string* output) {
+  output->reserve(ClampAdd(output->size(), ClampAdd(line_length, 1)));
 
-  while (0 < x_count--)
-    output->append("-");
-  output->append("O");
-  while (0 < x_remainder--)
-    output->append(" ");
+  const size_t count = ClampRound<size_t>(x_count);
+  output->append(count, '-');
+  output->append(1, 'O');
+  if (const auto len = as_unsigned(line_length); count < len) {
+    output->append(len - count, ' ');
+  }
 }
 
 void HistogramSamples::WriteAsciiBucketValue(HistogramBase::Count current,
@@ -375,16 +464,22 @@ bool SampleCountIterator::GetBucketIndex(size_t* index) const {
 
 SingleSampleIterator::SingleSampleIterator(HistogramBase::Sample min,
                                            int64_t max,
-                                           HistogramBase::Count count)
-    : SingleSampleIterator(min, max, count, kSizeMax) {}
-
-SingleSampleIterator::SingleSampleIterator(HistogramBase::Sample min,
-                                           int64_t max,
                                            HistogramBase::Count count,
-                                           size_t bucket_index)
-    : min_(min), max_(max), bucket_index_(bucket_index), count_(count) {}
+                                           size_t bucket_index,
+                                           bool value_was_extracted)
+    : min_(min),
+      max_(max),
+      bucket_index_(bucket_index),
+      count_(count),
+      value_was_extracted_(value_was_extracted) {}
 
-SingleSampleIterator::~SingleSampleIterator() = default;
+SingleSampleIterator::~SingleSampleIterator() {
+  // Because this object may have been instantiated in such a way that the
+  // samples it is holding were already extracted from the underlying data, we
+  // add a DCHECK to ensure that in those cases, users of this iterator read the
+  // samples, otherwise they may be lost.
+  DCHECK(!value_was_extracted_ || Done());
+}
 
 bool SingleSampleIterator::Done() const {
   return count_ == 0;
@@ -397,20 +492,18 @@ void SingleSampleIterator::Next() {
 
 void SingleSampleIterator::Get(HistogramBase::Sample* min,
                                int64_t* max,
-                               HistogramBase::Count* count) const {
+                               HistogramBase::Count* count) {
   DCHECK(!Done());
-  if (min != nullptr)
-    *min = min_;
-  if (max != nullptr)
-    *max = max_;
-  if (count != nullptr)
-    *count = count_;
+  *min = min_;
+  *max = max_;
+  *count = count_;
 }
 
 bool SingleSampleIterator::GetBucketIndex(size_t* index) const {
   DCHECK(!Done());
-  if (bucket_index_ == kSizeMax)
+  if (bucket_index_ == kSizeMax) {
     return false;
+  }
   *index = bucket_index_;
   return true;
 }

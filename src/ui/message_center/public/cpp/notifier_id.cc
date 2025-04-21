@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,9 +15,9 @@ NotifierId::NotifierId()
       catalog_name(ash::NotificationCatalogName::kNone) {}
 #else
 NotifierId::NotifierId() : type(NotifierType::SYSTEM_COMPONENT) {}
-#endif  // IS_CHROMEOS
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 NotifierId::NotifierId(NotifierType type,
                        const std::string& id,
                        ash::NotificationCatalogName catalog_name)
@@ -35,13 +35,24 @@ NotifierId::NotifierId(NotifierType type, const std::string& id)
   DCHECK_NE(type, NotifierType::WEB_PAGE);
   DCHECK(!id.empty());
 }
-#endif  // IS_CHROMEOS_ASH
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 NotifierId::NotifierId(const GURL& origin)
-    : NotifierId(origin, /*title=*/absl::nullopt) {}
+    : NotifierId(origin,
+                 /*title=*/std::nullopt,
+                 /*web_app_id=*/std::nullopt) {}
 
-NotifierId::NotifierId(const GURL& url, absl::optional<std::u16string> title)
-    : type(NotifierType::WEB_PAGE), url(url), title(title) {}
+NotifierId::NotifierId(const GURL& url,
+                       std::optional<std::u16string> title,
+                       std::optional<std::string> web_app_id)
+    : type(NotifierType::WEB_PAGE),
+#if BUILDFLAG(IS_CHROMEOS)
+      catalog_name(ash::NotificationCatalogName::kNone),
+#endif  // BUILDFLAG(IS_CHROMEOS)
+      url(url),
+      title(std::move(title)),
+      web_app_id(std::move(web_app_id)) {
+}
 
 NotifierId::NotifierId(const NotifierId& other) = default;
 
@@ -54,15 +65,20 @@ bool NotifierId::operator==(const NotifierId& other) const {
   if (profile_id != other.profile_id)
     return false;
 
-  if (type == NotifierType::WEB_PAGE)
-    return url == other.url;
+  if (type == NotifierType::WEB_PAGE) {
+    return std::tie(url, web_app_id) == std::tie(other.url, other.web_app_id);
+  }
+
+  if (type == NotifierType::ARC_APPLICATION) {
+    return std::tie(id, group_key) == std::tie(other.id, other.group_key);
+  }
 
 #if BUILDFLAG(IS_CHROMEOS)
   if (type == NotifierType::SYSTEM_COMPONENT &&
       catalog_name != other.catalog_name) {
     return false;
   }
-#endif
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
   return id == other.id;
 }
@@ -74,8 +90,13 @@ bool NotifierId::operator<(const NotifierId& other) const {
   if (profile_id != other.profile_id)
     return profile_id < other.profile_id;
 
-  if (type == NotifierType::WEB_PAGE)
-    return url < other.url;
+  if (type == NotifierType::WEB_PAGE) {
+    return std::tie(url, web_app_id) < std::tie(other.url, other.web_app_id);
+  }
+
+  if (type == NotifierType::ARC_APPLICATION) {
+    return std::tie(id, group_key) < std::tie(other.id, other.group_key);
+  }
 
   return id < other.id;
 }

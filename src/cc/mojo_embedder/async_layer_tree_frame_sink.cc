@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,26 +6,45 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/task/current_thread.h"
 #include "base/threading/platform_thread.h"
 #include "base/trace_event/trace_event.h"
+#include "base/trace_event/typed_macros.h"
 #include "build/build_config.h"
 #include "cc/base/histograms.h"
+#include "cc/mojo_embedder/viz_layer_context.h"
 #include "cc/trees/layer_tree_frame_sink_client.h"
-#include "components/power_scheduler/power_mode.h"
-#include "components/power_scheduler/power_mode_arbiter.h"
-#include "components/power_scheduler/power_mode_voter.h"
 #include "components/viz/common/features.h"
 #include "components/viz/common/frame_sinks/begin_frame_args.h"
 #include "components/viz/common/hit_test/hit_test_region_list.h"
 #include "components/viz/common/quads/compositor_frame.h"
+#include "services/viz/public/mojom/compositing/thread.mojom.h"
 
 namespace cc {
 namespace mojo_embedder {
 
+namespace {
+auto to_proto_enum(FrameSkippedReason reason) {
+  using ProtoReason =
+      ::perfetto::protos::pbzero::ChromeGraphicsPipeline::FrameSkippedReason;
+  switch (reason) {
+    case FrameSkippedReason::kRecoverLatency:
+      return ProtoReason::SKIPPED_REASON_RECOVER_LATENCY;
+    case FrameSkippedReason::kNoDamage:
+      return ProtoReason::SKIPPED_REASON_NO_DAMAGE;
+    case FrameSkippedReason::kWaitingOnMain:
+      return ProtoReason::SKIPPED_REASON_WAITING_ON_MAIN;
+    case FrameSkippedReason::kDrawThrottled:
+      return ProtoReason::SKIPPED_REASON_DRAW_THROTTLED;
+    default:
+      return ProtoReason::SKIPPED_REASON_UNKNOWN;
+  }
+}
+}  // namespace
 AsyncLayerTreeFrameSink::InitParams::InitParams() = default;
 AsyncLayerTreeFrameSink::InitParams::~InitParams() = default;
 
@@ -42,21 +61,28 @@ AsyncLayerTreeFrameSink::UnboundMessagePipes::UnboundMessagePipes(
     UnboundMessagePipes&& other) = default;
 
 AsyncLayerTreeFrameSink::AsyncLayerTreeFrameSink(
-    scoped_refptr<viz::ContextProvider> context_provider,
-    scoped_refptr<viz::RasterContextProvider> worker_context_provider,
+    scoped_refptr<viz::RasterContextProvider> context_provider,
+    scoped_refptr<RasterContextProviderWrapper> worker_context_provider_wrapper,
+    scoped_refptr<gpu::ClientSharedImageInterface> shared_image_interface,
     InitParams* params)
     : LayerTreeFrameSink(std::move(context_provider),
-                         std::move(worker_context_provider),
+                         std::move(worker_context_provider_wrapper),
                          std::move(params->compositor_task_runner),
-                         params->gpu_memory_buffer_manager),
+                         params->gpu_memory_buffer_manager,
+                         std::move(shared_image_interface)),
+      use_direct_client_receiver_(params->use_direct_client_receiver),
       synthetic_begin_frame_source_(
           std::move(params->synthetic_begin_frame_source)),
 #if BUILDFLAG(IS_ANDROID)
       io_thread_id_(params->io_thread_id),
+      main_thread_id_(params->main_thread_id),
 #endif
       pipes_(std::move(params->pipes)),
       wants_animate_only_begin_frames_(params->wants_animate_only_begin_frames),
-      power_mode_voter_("PowerModeVoter.Animation") {
+      auto_needs_begin_frame_(params->auto_needs_begin_frame),
+      wants_begin_frame_acks_(params->wants_begin_frame_acks),
+      use_begin_frame_presentation_feedback_(
+          params->use_begin_frame_presentation_feedback) {
   DETACH_FROM_THREAD(thread_checker_);
 }
 
@@ -83,8 +109,15 @@ bool AsyncLayerTreeFrameSink::BindToClient(LayerTreeFrameSinkClient* client) {
                        weak_factory_.GetWeakPtr()));
     compositor_frame_sink_ptr_ = compositor_frame_sink_associated_.get();
   }
-  client_receiver_.Bind(std::move(pipes_.client_receiver),
-                        compositor_task_runner_);
+
+  if (use_direct_client_receiver_ && base::CurrentIOThread::IsSet()) {
+    auto& receiver = client_receiver_.emplace<DirectClientReceiver>(
+        mojo::DirectReceiverKey{}, this);
+    receiver.Bind(std::move(pipes_.client_receiver));
+  } else {
+    auto& receiver = client_receiver_.emplace<ClientReceiver>(this);
+    receiver.Bind(std::move(pipes_.client_receiver), compositor_task_runner_);
+  }
 
   if (synthetic_begin_frame_source_) {
     client->SetBeginFrameSource(synthetic_begin_frame_source_.get());
@@ -94,18 +127,29 @@ bool AsyncLayerTreeFrameSink::BindToClient(LayerTreeFrameSinkClient* client) {
     client->SetBeginFrameSource(begin_frame_source_.get());
   }
 
-  if (wants_animate_only_begin_frames_)
+  if (wants_animate_only_begin_frames_) {
     compositor_frame_sink_->SetWantsAnimateOnlyBeginFrames();
+  }
+  if (wants_begin_frame_acks_) {
+    compositor_frame_sink_ptr_->SetWantsBeginFrameAcks();
+  }
+  if (auto_needs_begin_frame_) {
+    compositor_frame_sink_ptr_->SetAutoNeedsBeginFrame();
+  }
 
   compositor_frame_sink_ptr_->InitializeCompositorFrameSinkType(
       viz::mojom::CompositorFrameSinkType::kLayerTree);
 
 #if BUILDFLAG(IS_ANDROID)
-  std::vector<int32_t> thread_ids;
-  thread_ids.push_back(base::PlatformThread::CurrentId());
+  std::vector<viz::Thread> threads;
+  threads.push_back(
+      {base::PlatformThread::CurrentId(), viz::Thread::Type::kCompositor});
   if (io_thread_id_ != base::kInvalidThreadId)
-    thread_ids.push_back(io_thread_id_);
-  compositor_frame_sink_ptr_->SetThreadIds(thread_ids);
+    threads.push_back({io_thread_id_, viz::Thread::Type::kIO});
+  if (main_thread_id_ != base::kInvalidThreadId) {
+    threads.push_back({main_thread_id_, viz::Thread::Type::kMain});
+  }
+  compositor_frame_sink_ptr_->SetThreads(threads);
 #endif
 
   return true;
@@ -116,10 +160,12 @@ void AsyncLayerTreeFrameSink::DetachFromClient() {
   client_->SetBeginFrameSource(nullptr);
   begin_frame_source_.reset();
   synthetic_begin_frame_source_.reset();
-  client_receiver_.reset();
+  client_receiver_ = absl::monostate{};
+  // `compositor_frame_sink_ptr_` points to either `compositor_frame_sink_` or
+  // `compositor_frame_sink_associated_`, so it must be set to nullptr first.
+  compositor_frame_sink_ptr_ = nullptr;
   compositor_frame_sink_.reset();
   compositor_frame_sink_associated_.reset();
-  compositor_frame_sink_ptr_ = nullptr;
   LayerTreeFrameSink::DetachFromClient();
 }
 
@@ -138,12 +184,9 @@ void AsyncLayerTreeFrameSink::SubmitCompositorFrame(
   DCHECK(frame.metadata.begin_frame_ack.has_damage);
   DCHECK(frame.metadata.begin_frame_ack.frame_id.IsSequenceValid());
 
-  TRACE_EVENT_WITH_FLOW2(
-      "viz,benchmark", "Graphics.Pipeline",
-      TRACE_ID_GLOBAL(frame.metadata.begin_frame_ack.trace_id),
-      TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT, "step",
-      "SubmitCompositorFrame", "local_surface_id",
-      local_surface_id_.ToString());
+  if (auto_needs_begin_frame_ && !needs_begin_frames_) {
+    UpdateNeedsBeginFramesInternal(/*needs_begin_frames=*/true);
+  }
 
   if (local_surface_id_ == last_submitted_local_surface_id_) {
     DCHECK_EQ(last_submitted_device_scale_factor_, frame.device_scale_factor());
@@ -153,7 +196,7 @@ void AsyncLayerTreeFrameSink::SubmitCompositorFrame(
               frame.size_in_pixels().width());
   }
 
-  absl::optional<viz::HitTestRegionList> hit_test_region_list =
+  std::optional<viz::HitTestRegionList> hit_test_region_list =
       client_->BuildHitTestData();
 
   // If |hit_test_data_changed| was set or local_surface_id has been updated,
@@ -167,13 +210,10 @@ void AsyncLayerTreeFrameSink::SubmitCompositorFrame(
                                         last_hit_test_data_)) {
       DCHECK(!viz::HitTestRegionList::IsEqual(*hit_test_region_list,
                                               viz::HitTestRegionList()));
-      hit_test_region_list = absl::nullopt;
+      hit_test_region_list = std::nullopt;
     } else {
       last_hit_test_data_ = *hit_test_region_list;
     }
-
-    UMA_HISTOGRAM_BOOLEAN("Event.VizHitTest.HitTestDataIsEqualAccuracy",
-                          !hit_test_region_list);
   } else {
     last_hit_test_data_ = *hit_test_region_list;
   }
@@ -203,15 +243,23 @@ void AsyncLayerTreeFrameSink::SubmitCompositorFrame(
 
   // The trace_id is negated in order to keep the Graphics.Pipeline and
   // Event.Pipeline flows separated.
-  const int64_t trace_id = ~frame.metadata.begin_frame_ack.trace_id;
+  const int64_t trace_id = frame.metadata.begin_frame_ack.trace_id;
+  const int64_t negated_trace_id = ~trace_id;
   TRACE_EVENT_WITH_FLOW1(TRACE_DISABLED_BY_DEFAULT("viz.hit_testing_flow"),
-                         "Event.Pipeline", TRACE_ID_GLOBAL(trace_id),
+                         "Event.Pipeline", TRACE_ID_GLOBAL(negated_trace_id),
                          TRACE_EVENT_FLAG_FLOW_OUT, "step",
                          "SubmitHitTestData");
 
-  power_mode_voter_.OnFrameProduced(frame.render_pass_list.back()->damage_rect,
-                                    frame.device_scale_factor());
-
+  TRACE_EVENT(
+      "graphics.pipeline", "Graphics.Pipeline",
+      perfetto::Flow::Global(trace_id), [&](perfetto::EventContext ctx) {
+        auto* event = ctx.event<perfetto::protos::pbzero::ChromeTrackEvent>();
+        auto* data = event->set_chrome_graphics_pipeline();
+        data->set_step(
+            perfetto::protos::pbzero::ChromeGraphicsPipeline::StepName::
+                STEP_SEND_SUBMIT_COMPOSITOR_FRAME_MOJO_MESSAGE);
+        data->set_surface_frame_trace_id(trace_id);
+      });
   compositor_frame_sink_ptr_->SubmitCompositorFrame(
       local_surface_id_, std::move(frame), std::move(hit_test_region_list), 0);
 }
@@ -221,14 +269,25 @@ void AsyncLayerTreeFrameSink::DidNotProduceFrame(const viz::BeginFrameAck& ack,
   DCHECK(compositor_frame_sink_ptr_);
   DCHECK(!ack.has_damage);
   DCHECK(ack.frame_id.IsSequenceValid());
-  TRACE_EVENT_WITH_FLOW2("viz,benchmark", "Graphics.Pipeline",
-                         TRACE_ID_GLOBAL(ack.trace_id),
-                         TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT,
-                         "step", "DidNotProduceFrame", "reason", reason);
-  bool frame_completed = reason == FrameSkippedReason::kNoDamage;
-  bool waiting_on_main = reason == FrameSkippedReason::kWaitingOnMain;
-  power_mode_voter_.OnFrameSkipped(frame_completed, waiting_on_main);
+  TRACE_EVENT(
+      "viz,benchmark,graphics.pipeline", "Graphics.Pipeline",
+      perfetto::Flow::Global(ack.trace_id), [&](perfetto::EventContext ctx) {
+        base::TaskAnnotator::EmitTaskTimingDetails(ctx);
+        auto* event = ctx.event<perfetto::protos::pbzero::ChromeTrackEvent>();
+        auto* data = event->set_chrome_graphics_pipeline();
+        data->set_step(perfetto::protos::pbzero::ChromeGraphicsPipeline::
+                           StepName::STEP_DID_NOT_PRODUCE_COMPOSITOR_FRAME);
+        data->set_frame_skipped_reason(to_proto_enum(reason));
+        data->set_surface_frame_trace_id(ack.trace_id);
+      });
   compositor_frame_sink_ptr_->DidNotProduceFrame(ack);
+}
+
+std::unique_ptr<LayerContext> AsyncLayerTreeFrameSink::CreateLayerContext(
+    LayerTreeHostImpl& host_impl) {
+  CHECK(compositor_frame_sink_ptr_);
+  return std::make_unique<VizLayerContext>(*compositor_frame_sink_ptr_,
+                                           host_impl);
 }
 
 void AsyncLayerTreeFrameSink::DidAllocateSharedBitmap(
@@ -253,30 +312,59 @@ void AsyncLayerTreeFrameSink::DidReceiveCompositorFrameAck(
 
 void AsyncLayerTreeFrameSink::OnBeginFrame(
     const viz::BeginFrameArgs& args,
-    const viz::FrameTimingDetailsMap& timing_details) {
+    const viz::FrameTimingDetailsMap& timing_details,
+    bool frame_ack,
+    std::vector<viz::ReturnedResource> resources) {
+  viz::BeginFrameArgs adjusted_args = args;
+  adjusted_args.client_arrival_time = base::TimeTicks::Now();
+
+  TRACE_EVENT(
+      "viz,benchmark,graphics.pipeline", "Graphics.Pipeline",
+      perfetto::Flow::Global(adjusted_args.trace_id),
+      [&](perfetto::EventContext ctx) {
+        base::TaskAnnotator::EmitTaskTimingDetails(ctx);
+        auto* event = ctx.event<perfetto::protos::pbzero::ChromeTrackEvent>();
+        auto* data = event->set_chrome_graphics_pipeline();
+        data->set_step(needs_begin_frames_
+                           ? perfetto::protos::pbzero::ChromeGraphicsPipeline::
+                                 StepName::STEP_RECEIVE_BEGIN_FRAME
+                           : perfetto::protos::pbzero::ChromeGraphicsPipeline::
+                                 StepName::STEP_RECEIVE_BEGIN_FRAME_DISCARD);
+        if (needs_begin_frames_) {
+          data->set_frame_sequence(adjusted_args.frame_id.sequence_number);
+        }
+        data->set_surface_frame_trace_id(adjusted_args.trace_id);
+      });
+
+  if (features::IsOnBeginFrameAcksEnabled()) {
+    if (frame_ack) {
+      DidReceiveCompositorFrameAck(std::move(resources));
+    } else if (!resources.empty()) {
+      ReclaimResources(std::move(resources));
+    }
+  }
+
   for (const auto& pair : timing_details) {
     client_->DidPresentCompositorFrame(pair.first, pair.second);
+    if (synthetic_begin_frame_source_ &&
+        use_begin_frame_presentation_feedback_) {
+      const auto& feedback = pair.second.presentation_feedback;
+      synthetic_begin_frame_source_->OnUpdateVSyncParameters(feedback.timestamp,
+                                                             feedback.interval);
+    }
   }
 
   if (!needs_begin_frames_) {
-    TRACE_EVENT_WITH_FLOW1("viz,benchmark", "Graphics.Pipeline",
-                           TRACE_ID_GLOBAL(args.trace_id),
-                           TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT,
-                           "step", "ReceiveBeginFrameDiscard");
     // We had a race with SetNeedsBeginFrame(false) and still need to let the
     // sink know that we didn't use this BeginFrame. OnBeginFrame() can also be
     // called to deliver presentation feedback.
-    DidNotProduceFrame(viz::BeginFrameAck(args, false),
+    DidNotProduceFrame(viz::BeginFrameAck(adjusted_args, false),
                        FrameSkippedReason::kNoDamage);
     return;
   }
-  TRACE_EVENT_WITH_FLOW1("viz,benchmark", "Graphics.Pipeline",
-                         TRACE_ID_GLOBAL(args.trace_id),
-                         TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT,
-                         "step", "ReceiveBeginFrame");
 
   if (begin_frame_source_)
-    begin_frame_source_->OnBeginFrame(args);
+    begin_frame_source_->OnBeginFrame(adjusted_args);
 }
 
 void AsyncLayerTreeFrameSink::OnBeginFramePausedChanged(bool paused) {
@@ -296,18 +384,23 @@ void AsyncLayerTreeFrameSink::OnCompositorFrameTransitionDirectiveProcessed(
   client_->OnCompositorFrameTransitionDirectiveProcessed(sequence_id);
 }
 
+void AsyncLayerTreeFrameSink::OnSurfaceEvicted(
+    const viz::LocalSurfaceId& local_surface_id) {
+  client_->OnSurfaceEvicted(local_surface_id);
+}
+
 void AsyncLayerTreeFrameSink::OnNeedsBeginFrames(bool needs_begin_frames) {
   DCHECK(compositor_frame_sink_ptr_);
-  if (needs_begin_frames_ != needs_begin_frames) {
-    if (needs_begin_frames) {
-      TRACE_EVENT_NESTABLE_ASYNC_BEGIN0("cc,benchmark", "NeedsBeginFrames",
-                                        this);
-    } else {
-      TRACE_EVENT_NESTABLE_ASYNC_END0("cc,benchmark", "NeedsBeginFrames", this);
-    }
-    power_mode_voter_.OnNeedsBeginFramesChanged(needs_begin_frames);
+
+  // If `auto_needs_begin_frame_` is set to true, rely on unsolicited frames
+  // instead of SetNeedsBeginFrame(true) to indicate that the client needs
+  // BeginFrame requests.
+  if (auto_needs_begin_frame_ && needs_begin_frames) {
+    return;
   }
-  needs_begin_frames_ = needs_begin_frames;
+
+  UpdateNeedsBeginFramesInternal(needs_begin_frames);
+
   compositor_frame_sink_ptr_->SetNeedsBeginFrame(needs_begin_frames);
 }
 
@@ -319,6 +412,20 @@ void AsyncLayerTreeFrameSink::OnMojoConnectionError(
     DLOG(ERROR) << description;
   if (client_)
     client_->DidLoseLayerTreeFrameSink();
+}
+
+void AsyncLayerTreeFrameSink::UpdateNeedsBeginFramesInternal(
+    bool needs_begin_frames) {
+  if (needs_begin_frames_ == needs_begin_frames) {
+    return;
+  }
+
+  if (needs_begin_frames) {
+    TRACE_EVENT_NESTABLE_ASYNC_BEGIN0("cc,benchmark", "NeedsBeginFrames", this);
+  } else {
+    TRACE_EVENT_NESTABLE_ASYNC_END0("cc,benchmark", "NeedsBeginFrames", this);
+  }
+  needs_begin_frames_ = needs_begin_frames;
 }
 
 }  // namespace mojo_embedder

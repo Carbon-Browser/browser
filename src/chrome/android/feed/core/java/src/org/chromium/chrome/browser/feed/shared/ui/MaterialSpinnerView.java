@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,14 +50,14 @@ public class MaterialSpinnerView extends AppCompatImageView {
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-        updateAnimationState(/*isAttached=*/true);
+        updateAnimationState(/* isAttached= */ true);
     }
 
     @Override
     protected void onDetachedFromWindow() {
         // isAttachedToWindow() doesn't turn false during onDetachedFromWindow(), so we pass the new
         // attachment state into updateAnimationState() here explicitly.
-        updateAnimationState(/*isAttached=*/false);
+        updateAnimationState(/* isAttached= */ false);
         super.onDetachedFromWindow();
     }
 

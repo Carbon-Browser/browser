@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,7 +51,12 @@ enum COMPONENT_EXPORT(EVDEV) KeyboardType {
   IN_BLOCKLIST,
   STYLUS_BUTTON_DEVICE,
   VALID_KEYBOARD,
+  IN_ALLOWLIST,
 };
+
+std::ostream& operator<<(std::ostream& os, const KeyboardType value);
+
+std::ostream& operator<<(std::ostream& os, const EventDeviceType value);
 
 // Device information for Linux input devices
 //
@@ -182,6 +187,9 @@ class COMPONENT_EXPORT(EVDEV) EventDeviceInfo {
   // Determine whether horizontal and vertical resolutions are reported by the
   // device.
   bool HasValidMTAbsXY() const;
+
+  // Determine whether this device supports heatmap.
+  bool SupportsHeatmap() const;
 
   // Determine whether the device supports rumble.
   bool SupportsRumble() const;

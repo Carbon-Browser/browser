@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,16 @@
 #include <memory>
 #include <string>
 
-#include "base/threading/thread_checker.h"
-#include "ios/chrome/browser/application_context.h"
+#include "base/memory/raw_ptr.h"
+#include "base/sequence_checker.h"
+#include "ios/chrome/browser/shared/model/application_context/application_context.h"
 
 namespace network {
 class TestNetworkConnectionTracker;
 class TestURLLoaderFactory;
 }  // namespace network
+
+class MockPromosManager;
 
 class TestingApplicationContext : public ApplicationContext {
  public:
@@ -36,12 +39,35 @@ class TestingApplicationContext : public ApplicationContext {
   // Sets the last shutdown "clean" state.
   void SetLastShutdownClean(bool clean);
 
-  // Sets the ChromeBrowserStateManager.
-  void SetChromeBrowserStateManager(ios::ChromeBrowserStateManager* manager);
+  // Sets the ProfileManager and the AccountProfileMapper. If this isn't called,
+  // GetProfileManager() will return null, and GetAccountProfileMapper() will
+  // return a default instance.
+  // Since the real AccountProfileMapper depends on the ProfileManagerIOS, a
+  // ProfileManagerIOS should always be set together with a corresponding
+  // AccountProfileMapper.
+  // This must be called before GetAccountProfileMapper(), i.e. before creating
+  // a TestProfileIOS.
+  void SetProfileManagerAndAccountProfileMapper(ProfileManagerIOS* manager,
+                                                AccountProfileMapper* mapper);
+
+  // Sets the VariationsService.
+  void SetVariationsService(variations::VariationsService* variations_service);
+
+  // Sets the SystemIdentityManager.
+  // Must be set before `GetSystemIdentityManager` is called (i.e. before
+  // creating a TestProfileIOS).
+  void SetSystemIdentityManager(
+      std::unique_ptr<SystemIdentityManager> system_identity_manager);
+
+  // Sets the IOSChromeIOThread.
+  void SetIOSChromeIOThread(IOSChromeIOThread* ios_chrome_io_thread);
 
   // ApplicationContext implementation.
   void OnAppEnterForeground() override;
   void OnAppEnterBackground() override;
+  void OnAppStartedBackgroundProcessing() override;
+  void OnAppFinishedBackgroundProcessing() override;
+
   bool WasLastShutdownClean() override;
 
   PrefService* GetLocalState() override;
@@ -50,10 +76,13 @@ class TestingApplicationContext : public ApplicationContext {
       override;
   network::mojom::NetworkContext* GetSystemNetworkContext() override;
   const std::string& GetApplicationLocale() override;
-  ios::ChromeBrowserStateManager* GetChromeBrowserStateManager() override;
+  const std::string& GetApplicationCountry() override;
+  ProfileManagerIOS* GetProfileManager() override;
   metrics_services_manager::MetricsServicesManager* GetMetricsServicesManager()
       override;
   metrics::MetricsService* GetMetricsService() override;
+  signin::ActivePrimaryAccountsMetricsRecorder*
+  GetActivePrimaryAccountsMetricsRecorder() override;
   ukm::UkmRecorder* GetUkmRecorder() override;
   variations::VariationsService* GetVariationsService() override;
   net::NetLog* GetNetLog() override;
@@ -66,24 +95,35 @@ class TestingApplicationContext : public ApplicationContext {
   SafeBrowsingService* GetSafeBrowsingService() override;
   network::NetworkConnectionTracker* GetNetworkConnectionTracker() override;
   BrowserPolicyConnectorIOS* GetBrowserPolicyConnector() override;
-  breadcrumbs::BreadcrumbPersistentStorageManager*
-  GetBreadcrumbPersistentStorageManager() override;
-  id<SingleSignOnService> GetSSOService() override;
-  segmentation_platform::OTRWebStateObserver*
-  GetSegmentationOTRWebStateObserver() override;
+  id<SingleSignOnService> GetSingleSignOnService() override;
+  SystemIdentityManager* GetSystemIdentityManager() override;
+  AccountProfileMapper* GetAccountProfileMapper() override;
+  IncognitoSessionTracker* GetIncognitoSessionTracker() override;
+  PushNotificationService* GetPushNotificationService() override;
+  os_crypt_async::OSCryptAsync* GetOSCryptAsync() override;
+  AdditionalFeaturesController* GetAdditionalFeaturesController() override;
+#if BUILDFLAG(BUILD_WITH_INTERNAL_OPTIMIZATION_GUIDE)
+  optimization_guide::OnDeviceModelServiceController*
+  GetOnDeviceModelServiceController(
+      base::WeakPtr<optimization_guide::OnDeviceModelComponentStateManager>
+          on_device_component_manager) override;
+#endif  // BUILD_WITH_INTERNAL_OPTIMIZATION_GUIDE
 
  private:
-  base::ThreadChecker thread_checker_;
+  SEQUENCE_CHECKER(sequence_checker_);
   std::string application_locale_;
-  PrefService* local_state_;
+  std::string application_country_;
+  raw_ptr<PrefService> local_state_;
 
-  // Must be destroyed after |local_state_|. BrowserStatePolicyConnector isn't a
+  // Must be destroyed after `local_state_`. profilePolicyConnector isn't a
   // keyed service because the pref service, which isn't a keyed service, has a
   // hard dependency on the policy infrastructure. In order to outlive the pref
   // service, the policy connector must live outside the keyed services.
   std::unique_ptr<BrowserPolicyConnectorIOS> browser_policy_connector_;
+  std::unique_ptr<MockPromosManager> promos_manager_;
 
-  ios::ChromeBrowserStateManager* chrome_browser_state_manager_;
+  raw_ptr<ProfileManagerIOS> profile_manager_;
+  raw_ptr<AccountProfileMapper> custom_account_profile_mapper_;
   std::unique_ptr<network_time::NetworkTimeTracker> network_time_tracker_;
   bool was_last_shutdown_clean_;
   std::unique_ptr<network::TestURLLoaderFactory> test_url_loader_factory_;
@@ -91,6 +131,13 @@ class TestingApplicationContext : public ApplicationContext {
   std::unique_ptr<network::TestNetworkConnectionTracker>
       test_network_connection_tracker_;
   __strong id<SingleSignOnService> single_sign_on_service_ = nil;
+  std::unique_ptr<SystemIdentityManager> system_identity_manager_;
+  std::unique_ptr<AccountProfileMapper> default_account_profile_mapper_;
+  std::unique_ptr<PushNotificationService> push_notification_service_;
+  raw_ptr<variations::VariationsService> variations_service_;
+  std::unique_ptr<os_crypt_async::OSCryptAsync> os_crypt_async_;
+  std::unique_ptr<AdditionalFeaturesController> additional_features_controller_;
+  raw_ptr<IOSChromeIOThread> ios_chrome_io_thread_;
 };
 
 #endif  // IOS_CHROME_TEST_TESTING_APPLICATION_CONTEXT_H_

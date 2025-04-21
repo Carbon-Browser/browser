@@ -1,25 +1,29 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_PUBLIC_PLATFORM_WEB_NAVIGATION_BODY_LOADER_H_
 #define THIRD_PARTY_BLINK_PUBLIC_PLATFORM_WEB_NAVIGATION_BODY_LOADER_H_
 
+#include <optional>
+#include <variant>
+
 #include "base/containers/span.h"
+#include "base/containers/span_or_size.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
-#include "mojo/public/cpp/base/big_buffer.h"
 #include "services/network/public/mojom/url_loader.mojom-forward.h"
 #include "services/network/public/mojom/url_response_head.mojom-forward.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/navigation/navigation_params.mojom-forward.h"
 #include "third_party/blink/public/platform/web_common.h"
 #include "third_party/blink/public/platform/web_loader_freeze_mode.h"
 #include "third_party/blink/public/platform/web_url_error.h"
+#include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
 
-class CodeCacheHost;
 class ResourceLoadInfoNotifierWrapper;
+struct WebEncodingData;
 struct WebNavigationParams;
 
 // This class is used to load the body of main resource during navigation.
@@ -31,13 +35,21 @@ class BLINK_EXPORT WebNavigationBodyLoader {
    public:
     virtual ~Client() {}
 
-    // Notifies about code cache if available. This method will
-    // be called zero or one time.
-    virtual void BodyCodeCacheReceived(mojo_base::BigBuffer data) = 0;
-
     // Notifies about more data available. Called multiple times.
-    // If main resource is empty, can be not called at all.
+    // If main resource is empty, can be not called at all. This will not be
+    // called if DecodedBodyDataReceived() has been called.
     virtual void BodyDataReceived(base::span<const char> data) = 0;
+
+    // Called with decoded data. This will be called instead of
+    // BodyDataReceived() if the data is able to be decoded off thread.
+    // |encoded_data| will contain the original data if
+    // |should_keep_encoded_data| was passed to StartLoadingBodyInBackground().
+    virtual void DecodedBodyDataReceived(
+        const WebString& data,
+        const WebEncodingData& encoding_data,
+        base::SpanOrSize<const char> encoded_data) {
+      NOTREACHED();
+    }
 
     // Called once at the end. If something went wrong, |error| will be set.
     // No more calls are issued after this one.
@@ -46,8 +58,17 @@ class BLINK_EXPORT WebNavigationBodyLoader {
         int64_t total_encoded_data_length,
         int64_t total_encoded_body_length,
         int64_t total_decoded_body_length,
-        bool should_report_corb_blocking,
-        const absl::optional<WebURLError>& error) = 0;
+        const std::optional<WebURLError>& error) = 0;
+
+    // The client can return a ProcessBackgroundDataCallback which will be
+    // called on a background thread with the decoded data. The returned
+    // callback will be called on a background thread with the same decoded data
+    // which will be given to DecodedBodyDataReceived().
+    using ProcessBackgroundDataCallback =
+        WTF::CrossThreadRepeatingFunction<void(const WebString&)>;
+    virtual ProcessBackgroundDataCallback TakeProcessBackgroundDataCallback() {
+      return ProcessBackgroundDataCallback();
+    }
   };
 
   // This method fills navigation params related to the navigation request,
@@ -63,7 +84,8 @@ class BLINK_EXPORT WebNavigationBodyLoader {
       std::unique_ptr<ResourceLoadInfoNotifierWrapper>
           resource_load_info_notifier_wrapper,
       bool is_main_frame,
-      WebNavigationParams* navigation_params);
+      WebNavigationParams* navigation_params,
+      bool is_ad_frame);
 
   // It should be safe to destroy WebNavigationBodyLoader at any moment,
   // including from inside any client notification.
@@ -74,12 +96,15 @@ class BLINK_EXPORT WebNavigationBodyLoader {
   // redirects. This method can be called multiple times at any moment.
   virtual void SetDefersLoading(WebLoaderFreezeMode mode) = 0;
 
-  // Starts loading the body. Client must be non-null, and will receive
-  // the body, code cache and final result.
-  virtual void StartLoadingBody(Client*, CodeCacheHost* code_cache_host) = 0;
+  // Starts loading the body. Client must be non-null, and will receive the
+  // body, and final result.
+  virtual void StartLoadingBody(Client*) = 0;
 
-  // Starts loading the code cache.
-  virtual void StartLoadingCodeCache(CodeCacheHost* code_cache_host) = 0;
+  enum class BodyLoaderType {
+    kStatic,
+    kNetwork,
+  };
+  virtual BodyLoaderType GetType() const = 0;
 };
 
 }  // namespace blink

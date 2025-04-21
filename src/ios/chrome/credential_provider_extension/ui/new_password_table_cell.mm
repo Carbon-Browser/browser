@@ -1,14 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/chrome/credential_provider_extension/ui/new_password_table_cell.h"
 
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -41,7 +37,7 @@ const CGFloat kButtonSpacing = 8;
 @property(nonatomic, strong) UIButton* hidePasswordButton;
 
 // Vertical margin for the cell content. This allows the margin to be increased
-// when the |preferredContentSizeCategory| changes.
+// when the `preferredContentSizeCategory` changes.
 @property(nonatomic, strong)
     NSLayoutConstraint* contentVerticalMarginConstraint;
 
@@ -74,7 +70,7 @@ const CGFloat kButtonSpacing = 8;
 
 - (instancetype)initWithStyle:(UITableViewCellStyle)style
               reuseIdentifier:(NSString*)reuseIdentifier {
-  if (self = [super initWithStyle:style reuseIdentifier:reuseIdentifier]) {
+  if ((self = [super initWithStyle:style reuseIdentifier:reuseIdentifier])) {
     _titleLabel = [[UILabel alloc] init];
     _titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
     _titleLabel.textColor = [UIColor colorNamed:kTextPrimaryColor];
@@ -98,6 +94,7 @@ const CGFloat kButtonSpacing = 8;
     [_textField addTarget:self
                    action:@selector(textFieldDidChange:)
          forControlEvents:UIControlEventEditingChanged];
+    _textField.autocorrectionType = UITextAutocorrectionTypeNo;
 
     _hidePasswordButton = [UIButton buttonWithType:UIButtonTypeSystem];
     _hidePasswordButton.translatesAutoresizingMaskIntoConstraints = NO;
@@ -167,7 +164,7 @@ const CGFloat kButtonSpacing = 8;
                                               .preferredContentSizeCategory];
 }
 
-// Updates the values that change based on the given |contentSizeCategory|.
+// Updates the values that change based on the given `contentSizeCategory`.
 - (void)updateViewsForContentSizeCategory:
     (UIContentSizeCategory)contentSizeCategory {
   BOOL sizeCategoryIsLarge =
@@ -181,13 +178,13 @@ const CGFloat kButtonSpacing = 8;
       (sizeCategoryIsLarge) ? NSTextAlignmentLeft : NSTextAlignmentRight;
 
   // The actual UITableViewCell uses a scaling vertical margin based on the
-  // |contentSizeCategory|. This is close enough and doesn't require unique
+  // `contentSizeCategory`. This is close enough and doesn't require unique
   // margins for each different size.
   self.contentVerticalMarginConstraint.constant =
       (sizeCategoryIsLarge) ? kVerticalMarginLarge : kVerticalMarginSmall;
 }
 
-// Sets the placeholder text for the text field using |attributedPlaceholder| to
+// Sets the placeholder text for the text field using `attributedPlaceholder` to
 // control the color to meet accessibility contrast standards.
 - (void)setTextFieldPlaceholderText:(NSString*)placeholderText {
   UIColor* placeholderColor = [UIColor colorNamed:kTextSecondaryColor];
@@ -245,7 +242,7 @@ const CGFloat kButtonSpacing = 8;
                 @"Hide Password");
 }
 
-// After |-prepareForReuse|, all views in the stack view are hidden. This method
+// After `-prepareForReuse`, all views in the stack view are hidden. This method
 // prepares the stack view contents to display the correct cell type.
 - (void)setCellType:(NewPasswordTableCellType)cellType {
   _cellType = cellType;

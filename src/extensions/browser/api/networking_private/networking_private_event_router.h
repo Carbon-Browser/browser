@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,9 +17,8 @@ namespace extensions {
 // This is an event router that will broadcast chrome.networkingPrivate
 // events when there are listeners to them in the Javascript side.
 //
-// On Ash-chrome it means forwarding events from the NetworkStateHandler.
-// Elsewhere (including Lacros-chrome) it means forwarding events from the
-// NetworkingPrivateDelegate.
+// On ChromeOS it means forwarding events from the NetworkStateHandler.
+// Elsewhere it means forwarding events from the NetworkingPrivateDelegate.
 class NetworkingPrivateEventRouter : public KeyedService,
                                      public EventRouter::Observer {
  public:
@@ -27,11 +26,11 @@ class NetworkingPrivateEventRouter : public KeyedService,
   NetworkingPrivateEventRouter& operator=(const NetworkingPrivateEventRouter&) =
       delete;
 
-  static NetworkingPrivateEventRouter* Create(
+  static std::unique_ptr<NetworkingPrivateEventRouter> Create(
       content::BrowserContext* browser_context);
 
  protected:
-  NetworkingPrivateEventRouter() {}
+  NetworkingPrivateEventRouter() = default;
 };
 
 }  // namespace extensions

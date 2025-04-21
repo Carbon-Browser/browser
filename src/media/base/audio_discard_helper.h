@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 
 #include <stddef.h>
 
-#include "base/memory/ref_counted.h"
 #include "base/time/time.h"
 #include "media/base/audio_timestamp_helper.h"
 #include "media/base/decoder_buffer.h"
@@ -70,7 +69,7 @@ class MEDIA_EXPORT AudioDiscardHelper {
 
   // Whether any buffers have been processed.
   bool initialized() const {
-    return timestamp_helper_.base_timestamp() != kNoTimestamp;
+    return timestamp_helper_.base_timestamp().has_value();
   }
 
   size_t decoder_delay() const { return decoder_delay_; }

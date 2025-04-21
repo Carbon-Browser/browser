@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,14 +8,12 @@
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <optional>
 #include <random>
 #include <set>
+#include <stack>
 #include <vector>
 
-#include "base/allocator/partition_allocator/address_pool_manager.h"
-#include "base/allocator/partition_allocator/partition_address_space.h"
-#include "base/allocator/partition_allocator/partition_alloc_config.h"
-#include "base/allocator/partition_allocator/partition_alloc_constants.h"
 #include "base/feature_list.h"
 #include "base/files/file_util.h"
 #include "base/memory/page_size.h"
@@ -23,7 +21,6 @@
 #include "base/process/process_handle.h"
 #include "base/rand_util.h"
 #include "base/ranges/algorithm.h"
-#include "base/template_util.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "chromeos/ash/components/memory/aligned_memory.h"
@@ -34,8 +31,11 @@
 #include "chromeos/ash/components/memory/userspace_swap/userspace_swap.mojom-forward.h"
 #include "chromeos/ash/components/memory/userspace_swap/userspace_swap.mojom.h"
 #include "mojo/public/cpp/bindings/remote.h"
+#include "partition_alloc/address_pool_manager.h"
+#include "partition_alloc/buildflags.h"
+#include "partition_alloc/partition_address_space.h"
+#include "partition_alloc/partition_alloc_constants.h"
 #include "services/resource_coordinator/public/cpp/memory_instrumentation/os_metrics.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/abseil-cpp/absl/utility/utility.h"
 
 namespace ash {
@@ -48,8 +48,9 @@ using memory_instrumentation::mojom::VmRegion;
 
 // NOTE: Descriptions for these feature params can be found in the userspace
 // swap header file for the UserspaceSwapConfig struct.
-const base::Feature kUserspaceSwap{"UserspaceSwapEnabled",
-                                   base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kUserspaceSwap,
+             "UserspaceSwapEnabled",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 const base::FeatureParam<int> kUserspaceSwapPagesPerRegion = {
     &kUserspaceSwap, "UserspaceSwapPagesPerRegion", 16};
 const base::FeatureParam<bool> kUserspaceSwapCompressedSwapFile = {
@@ -82,14 +83,14 @@ const base::FeatureParam<bool> kUserspaceSwapShuffleMapsOrder = {
 // g_global_disk_usage is the sum of all |written_to_disk| values from each
 // renderer. We keep track of this number because we need to enforce the global
 // total swap limit. This value is safe to be fetched from any sequence.
-std::atomic<uint64_t> g_global_disk_usage_bytes = ATOMIC_VAR_INIT(0);
+std::atomic<uint64_t> g_global_disk_usage_bytes{0};
 
 // This is the sum of all |reclaimed_bytes| values from each renderer. This
 // value is safe to be fetched from any sequence.
-std::atomic<uint64_t> g_global_reclaimed_bytes = ATOMIC_VAR_INIT(0);
+std::atomic<uint64_t> g_global_reclaimed_bytes{0};
 
 // This is our global swap kill switch.
-std::atomic<bool> g_global_swap_allowed = ATOMIC_VAR_INIT(true);
+std::atomic<bool> g_global_swap_allowed{true};
 
 class RendererSwapDataImpl : public RendererSwapData {
  public:
@@ -137,7 +138,7 @@ class RendererSwapDataImpl : public RendererSwapData {
   // for a call to MovePTEs. This makes swapping easier, because now we just
   // wait to observe the remap event as our indicator that we can read the
   // memory from the process.
-  absl::optional<Region> AllocFromSwapRegion();
+  std::optional<Region> AllocFromSwapRegion();
   void DeallocFromSwapRegion(const Region& region);
 
   // Swap at most |size_limit| bytes worth of memory on this renderer.
@@ -165,7 +166,7 @@ class RendererSwapDataImpl : public RendererSwapData {
   uint64_t reclaimed_bytes_ = 0;
 
   // Areas which can be used for moving PTEs.
-  std::stack<const Region> free_swap_dest_areas_;
+  std::stack<Region> free_swap_dest_areas_;
 
   std::unique_ptr<UserfaultFD> uffd_;
   std::unique_ptr<SwapFile> swap_file_;
@@ -241,9 +242,9 @@ void RendererSwapDataImpl::UnaccountSwapSpace(int64_t reclaimed,
   AccountSwapSpace(-reclaimed, -swap_size);
 }
 
-absl::optional<Region> RendererSwapDataImpl::AllocFromSwapRegion() {
+std::optional<Region> RendererSwapDataImpl::AllocFromSwapRegion() {
   if (free_swap_dest_areas_.empty()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   Region r = free_swap_dest_areas_.top();
@@ -414,9 +415,9 @@ std::ostream& operator<<(std::ostream& out, const UserspaceSwapConfig& c) {
 // KernelSupportsUserspaceSwap will test for all features necessary to enable
 // userspace swap.
 COMPONENT_EXPORT(USERSPACE_SWAP) bool KernelSupportsUserspaceSwap() {
-#if !BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) || \
-    !defined(PA_HAS_64_BITS_POINTERS)
-  // We currently only support 64bit partition alloc.
+#if !PA_BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) || \
+    !PA_BUILDFLAG(HAS_64_BIT_POINTERS)
+  // We currently only support 64bit PartitionAlloc.
   return false;
 #else
   static bool userfault_fd_supported = UserfaultFD::KernelSupportsUserfaultFD();
@@ -447,8 +448,8 @@ COMPONENT_EXPORT(USERSPACE_SWAP) bool KernelSupportsUserspaceSwap() {
   }();
 
   return userfault_fd_supported && mremap_dontunmap_supported;
-#endif  // !BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) ||
-        // !defined(PA_HAS_64_BITS_POINTERS)
+#endif  // !PA_BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) ||
+        // !PA_BUILDFLAG(HAS_64_BIT_POINTERS)
 }
 
 RendererSwapData::RendererSwapData() = default;
@@ -486,8 +487,8 @@ bool GetPartitionAllocSuperPagesInUse(
     int32_t max_superpages,
     std::vector<::userspace_swap::mojom::MemoryRegionPtr>& regions) {
   regions.clear();
-#if !BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) || \
-    !defined(PA_HAS_64_BITS_POINTERS)
+#if !PA_BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) || \
+    !PA_BUILDFLAG(HAS_64_BIT_POINTERS)
   return false;
 #else
 
@@ -498,8 +499,8 @@ bool GetPartitionAllocSuperPagesInUse(
       partition_alloc::internal::AddressPoolManager::GetInstance();
 
   for (partition_alloc::internal::pool_handle ph :
-       {partition_alloc::internal::PartitionAddressSpace::GetRegularPool(),
-        partition_alloc::internal::PartitionAddressSpace::GetBRPPool()}) {
+       {partition_alloc::internal::kRegularPoolHandle,
+        partition_alloc::internal::kBRPPoolHandle}) {
     uintptr_t pool_base = pool_manager.GetPoolBaseAddress(ph);
     DCHECK(pool_base);
 
@@ -519,7 +520,7 @@ bool GetPartitionAllocSuperPagesInUse(
         current_area_length += partition_alloc::kSuperPageSize;
       } else {
         if (current_area) {
-          regions.emplace_back(absl::in_place, current_area,
+          regions.emplace_back(std::in_place, current_area,
                                current_area_length);
           current_area = 0;
           current_area_length = 0;
@@ -528,7 +529,7 @@ bool GetPartitionAllocSuperPagesInUse(
     }
 
     if (current_area) {
-      regions.emplace_back(absl::in_place, current_area, current_area_length);
+      regions.emplace_back(std::in_place, current_area, current_area_length);
     }
 
     if (!superpages_remaining)
@@ -536,8 +537,8 @@ bool GetPartitionAllocSuperPagesInUse(
   }
 
   return true;
-#endif  // !BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) ||
-        // !defined(PA_HAS_64_BITS_POINTERS)
+#endif  // !PA_BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC) ||
+        // !PA_BUILDFLAG(HAS_64_BIT_POINTERS)
 }
 
 COMPONENT_EXPORT(USERSPACE_SWAP) uint64_t GetGlobalMemoryReclaimed() {

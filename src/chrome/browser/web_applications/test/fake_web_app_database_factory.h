@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,20 +10,20 @@
 #include <vector>
 
 #include "chrome/browser/web_applications/web_app_database_factory.h"
-#include "chrome/browser/web_applications/web_app_id.h"
 #include "chrome/browser/web_applications/web_app_registrar.h"
+#include "components/webapps/common/web_app_id.h"
 
 namespace syncer {
-class ModelTypeStore;
+class DataTypeStore;
 }  // namespace syncer
-
 namespace web_app {
+
+namespace proto {
+class DatabaseMetadata;
+}  // namespace proto
 
 class WebAppProto;
 
-// Requires base::MessageLoop message_loop_ in test fixture. Reason:
-// InMemoryStore needs a SequencedTaskRunner.
-// MessageLoop ctor calls MessageLoop::SetThreadTaskRunnerHandle().
 class FakeWebAppDatabaseFactory : public AbstractWebAppDatabaseFactory {
  public:
   FakeWebAppDatabaseFactory();
@@ -32,20 +32,27 @@ class FakeWebAppDatabaseFactory : public AbstractWebAppDatabaseFactory {
       delete;
   ~FakeWebAppDatabaseFactory() override;
 
+  syncer::DataTypeStore* GetStore();
+
   // AbstractWebAppDatabaseFactory interface implementation.
-  syncer::OnceModelTypeStoreFactory GetStoreFactory() override;
+  syncer::OnceDataTypeStoreFactory GetStoreFactory() override;
+  bool IsSyncingApps() override;
 
-  syncer::ModelTypeStore* store() { return store_.get(); }
+  proto::DatabaseMetadata ReadMetadata();
+  Registry ReadRegistry();
 
-  Registry ReadRegistry() const;
-
-  std::set<AppId> ReadAllAppIds() const;
+  std::set<webapps::AppId> ReadAllAppIds();
 
   void WriteProtos(const std::vector<std::unique_ptr<WebAppProto>>& protos);
   void WriteRegistry(const Registry& registry);
 
+  void set_is_syncing_apps(bool is_syncing_apps) {
+    is_syncing_apps_ = is_syncing_apps;
+  }
+
  private:
-  std::unique_ptr<syncer::ModelTypeStore> store_;
+  std::unique_ptr<syncer::DataTypeStore> store_;
+  bool is_syncing_apps_ = true;
 };
 
 }  // namespace web_app

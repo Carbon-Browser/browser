@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,8 +36,7 @@ TEST_F(ScriptWrappableV8GCIntegrationTest, V8ReportsLiveObjectsDuringFullGc) {
     observer.Observe(object);
 
     holder.Reset(GetIsolate(), ToV8Traits<DeathAwareScriptWrappable>::ToV8(
-                                   scope.GetScriptState(), object)
-                                   .ToLocalChecked());
+                                   scope.GetScriptState(), object));
   }
 
   RunV8MinorGC();
@@ -60,8 +59,7 @@ TEST_F(ScriptWrappableV8GCIntegrationTest,
 
     // Creates new V8 wrapper and associates it with global scope
     holder.Reset(GetIsolate(), ToV8Traits<DeathAwareScriptWrappable>::ToV8(
-                                   scope.GetScriptState(), object)
-                                   .ToLocalChecked());
+                                   scope.GetScriptState(), object));
   }
 
   RunV8MinorGC();
@@ -85,7 +83,7 @@ TEST_F(ScriptWrappableV8GCIntegrationTest,
 
     // Creates new V8 wrapper and associates it with global scope
     ToV8Traits<DeathAwareScriptWrappable>::ToV8(scope.GetScriptState(), object)
-        .ToLocalChecked();
+        .IsEmpty();
   }
 
   RunV8MinorGC();

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/i18n/rtl.h"
 #include "base/json/json_writer.h"
 #include "base/memory/scoped_refptr.h"
@@ -16,10 +16,12 @@
 #include "base/values.h"
 #include "components/omnibox/browser/document_provider.h"
 #include "components/omnibox/common/omnibox_features.h"
+#include "components/signin/public/identity_manager/account_capabilities.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/signin/public/identity_manager/primary_account_access_token_fetcher.h"
 #include "components/signin/public/identity_manager/scope_set.h"
 #include "components/variations/net/variations_http_headers.h"
+#include "google_apis/gaia/gaia_constants.h"
 #include "net/base/load_flags.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/public/cpp/resource_request.h"
@@ -43,35 +45,26 @@ constexpr int chromeOmniboxClientId = 6;
 //            searchApplicationId: "searchapplications/chrome",
 //            clientId: 6,
 //            languageCode: "|locale|",
-//            debugOptions: {
-//              optsParams: "enable_aso_search:|ASO enabled|"
-//            }
 //       }
 //     }
-std::string BuildDocumentSuggestionRequest(const std::u16string& query,
-                                           bool enable_aso_search) {
-  base::Value root(base::Value::Type::DICTIONARY);
-  root.SetKey("query", base::Value(query));
+std::string BuildDocumentSuggestionRequest(const std::u16string& query) {
+  base::Value::Dict root;
+  root.Set("query", base::Value(query));
   // The API supports pagination. We're always concerned with the first N
   // results on the first page.
-  root.SetKey("start", base::Value(0));
-  root.SetKey("pageSize", base::Value(10));
+  root.Set("start", base::Value(0));
+  root.Set("pageSize", base::Value(10));
 
-  base::Value request_options(base::Value::Type::DICTIONARY);
-  request_options.SetKey("searchApplicationId",
-                         base::Value("searchapplications/chrome"));
+  base::Value::Dict request_options;
+  request_options.Set("searchApplicationId",
+                      base::Value("searchapplications/chrome"));
   // While the searchApplicationId is a specific config being used by a client
   // and can be shared among multiple clients in some instances, clientId
   // identifies a client uniquely.
-  request_options.SetKey("clientId", base::Value(chromeOmniboxClientId));
-  request_options.SetKey("languageCode",
-                         base::Value(base::i18n::GetConfiguredLocale()));
-  base::Value debug_options(base::Value::Type::DICTIONARY);
-  debug_options.SetStringKey(
-      "optsParams", base::StringPrintf("enable_aso_search:%s",
-                                       enable_aso_search ? "true" : "false"));
-  request_options.SetKey("debugOptions", std::move(debug_options));
-  root.SetKey("requestOptions", std::move(request_options));
+  request_options.Set("clientId", base::Value(chromeOmniboxClientId));
+  request_options.Set("languageCode",
+                      base::Value(base::i18n::GetConfiguredLocale()));
+  root.Set("requestOptions", std::move(request_options));
 
   std::string result;
   base::JSONWriter::Write(root, &result);
@@ -85,15 +78,25 @@ DocumentSuggestionsService::DocumentSuggestionsService(
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory)
     : url_loader_factory_(url_loader_factory),
       identity_manager_(identity_manager),
+      account_is_subject_to_enterprise_policies_(
+          IsAccountSubjectToEnterprisePolicies()),
       token_fetcher_(nullptr) {
-  DCHECK(url_loader_factory);
+  if (identity_manager_) {
+    identity_manager_observation_.Observe(identity_manager_);
+  }
 }
 
-DocumentSuggestionsService::~DocumentSuggestionsService() {}
+DocumentSuggestionsService::~DocumentSuggestionsService() = default;
+
+bool DocumentSuggestionsService::HasPrimaryAccount() {
+  return identity_manager_ &&
+         identity_manager_->HasPrimaryAccount(signin::ConsentLevel::kSignin);
+}
 
 void DocumentSuggestionsService::CreateDocumentSuggestionsRequest(
     const std::u16string& query,
     bool is_incognito,
+    CreationCallback creation_callback,
     StartCallback start_callback,
     CompletionCallback completion_callback) {
   std::string endpoint = base::GetFieldTrialParamValueByFeature(
@@ -130,9 +133,10 @@ void DocumentSuggestionsService::CreateDocumentSuggestionsRequest(
   auto request = std::make_unique<network::ResourceRequest>();
   request->url = suggest_url;
   request->method = "POST";
-  std::string request_body = BuildDocumentSuggestionRequest(
-      query, base::FeatureList::IsEnabled(omnibox::kDocumentProviderAso));
+  std::string request_body = BuildDocumentSuggestionRequest(query);
   request->load_flags = net::LOAD_DO_NOT_SAVE_COOKIES;
+  // Set the SiteForCookies to the request URL's site to avoid cookie blocking.
+  request->site_for_cookies = net::SiteForCookies::FromUrl(suggest_url);
   // It is expected that the user is signed in here. But we only care about
   // experiment IDs from the variations server, which do not require the
   // signed-in version of this method.
@@ -142,22 +146,36 @@ void DocumentSuggestionsService::CreateDocumentSuggestionsRequest(
                    : variations::InIncognito::kNo,
       request.get());
 
+  std::move(creation_callback).Run(request.get());
+
   // Create and fetch an OAuth2 token.
-  std::string scope = "https://www.googleapis.com/auth/cloud_search.query";
   signin::ScopeSet scopes;
-  scopes.insert(scope);
+  scopes.insert(GaiaConstants::kCloudSearchQueryOAuth2Scope);
   token_fetcher_ = std::make_unique<signin::PrimaryAccountAccessTokenFetcher>(
       "document_suggestions_service", identity_manager_, scopes,
       base::BindOnce(&DocumentSuggestionsService::AccessTokenAvailable,
                      base::Unretained(this), std::move(request),
                      std::move(request_body), traffic_annotation,
                      std::move(start_callback), std::move(completion_callback)),
-      signin::PrimaryAccountAccessTokenFetcher::Mode::kWaitUntilAvailable);
+      signin::PrimaryAccountAccessTokenFetcher::Mode::kWaitUntilAvailable,
+      signin::ConsentLevel::kSignin);
 }
 
 void DocumentSuggestionsService::StopCreatingDocumentSuggestionsRequest() {
   std::unique_ptr<signin::PrimaryAccountAccessTokenFetcher>
       token_fetcher_deleter(std::move(token_fetcher_));
+}
+
+signin::Tribool
+DocumentSuggestionsService::IsAccountSubjectToEnterprisePolicies() {
+  if (!HasPrimaryAccount()) {
+    return signin::Tribool::kFalse;
+  }
+  const auto& account_id =
+      identity_manager_->GetPrimaryAccountId(signin::ConsentLevel::kSignin);
+  const auto& account_info =
+      identity_manager_->FindExtendedAccountInfoByAccountId(account_id);
+  return account_info.capabilities.is_subject_to_enterprise_policies();
 }
 
 void DocumentSuggestionsService::AccessTokenAvailable(
@@ -191,6 +209,11 @@ void DocumentSuggestionsService::StartDownloadAndTransferLoader(
     net::NetworkTrafficAnnotationTag traffic_annotation,
     StartCallback start_callback,
     CompletionCallback completion_callback) {
+  // Loader factory may be null in tests.
+  if (!url_loader_factory_) {
+    return;
+  }
+
   std::unique_ptr<network::SimpleURLLoader> loader =
       network::SimpleURLLoader::Create(std::move(request), traffic_annotation);
   if (!request_body.empty()) {
@@ -200,5 +223,23 @@ void DocumentSuggestionsService::StartDownloadAndTransferLoader(
       url_loader_factory_.get(),
       base::BindOnce(std::move(completion_callback), loader.get()));
 
-  std::move(start_callback).Run(std::move(loader));
+  std::move(start_callback).Run(std::move(loader), request_body);
+}
+
+void DocumentSuggestionsService::OnPrimaryAccountChanged(
+    const signin::PrimaryAccountChangeEvent& event_details) {
+  account_is_subject_to_enterprise_policies_ =
+      IsAccountSubjectToEnterprisePolicies();
+}
+
+void DocumentSuggestionsService::OnExtendedAccountInfoUpdated(
+    const AccountInfo& account_info) {
+  account_is_subject_to_enterprise_policies_ =
+      account_info.capabilities.is_subject_to_enterprise_policies();
+}
+
+void DocumentSuggestionsService::OnIdentityManagerShutdown(
+    signin::IdentityManager* identity_manager) {
+  identity_manager_observation_.Reset();
+  identity_manager_ = nullptr;
 }

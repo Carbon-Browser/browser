@@ -20,8 +20,8 @@
 
 #include "third_party/blink/renderer/core/svg/svg_path_element.h"
 
-#include "third_party/blink/renderer/core/dom/node_computed_style.h"
-#include "third_party/blink/renderer/core/layout/layout_object.h"
+#include "third_party/blink/renderer/core/dom/document.h"
+#include "third_party/blink/renderer/core/style/computed_style.h"
 #include "third_party/blink/renderer/core/svg/svg_animated_path.h"
 #include "third_party/blink/renderer/core/svg/svg_mpath_element.h"
 #include "third_party/blink/renderer/core/svg/svg_path_query.h"
@@ -35,9 +35,7 @@ SVGPathElement::SVGPathElement(Document& document)
     : SVGGeometryElement(svg_names::kPathTag, document),
       path_(MakeGarbageCollected<SVGAnimatedPath>(this,
                                                   svg_names::kDAttr,
-                                                  CSSPropertyID::kD)) {
-  AddToPropertyMap(path_);
-}
+                                                  CSSPropertyID::kD)) {}
 
 void SVGPathElement::Trace(Visitor* visitor) const {
   visitor->Trace(path_);
@@ -106,29 +104,11 @@ void SVGPathElement::SvgAttributeChanged(
   const QualifiedName& attr_name = params.name;
   if (attr_name == svg_names::kDAttr) {
     InvalidateMPathDependencies();
-    GeometryPresentationAttributeChanged(attr_name);
+    GeometryPresentationAttributeChanged(params.property);
     return;
   }
 
   SVGGeometryElement::SvgAttributeChanged(params);
-}
-
-void SVGPathElement::CollectStyleForPresentationAttribute(
-    const QualifiedName& name,
-    const AtomicString& value,
-    MutableCSSPropertyValueSet* style) {
-  SVGAnimatedPropertyBase* property = PropertyFromAttribute(name);
-  if (property == path_) {
-    SVGAnimatedPath* path = GetPath();
-    // If this is a <use> instance, return the referenced path to maximize
-    // geometry sharing.
-    if (const SVGElement* element = CorrespondingElement())
-      path = To<SVGPathElement>(element)->GetPath();
-    AddPropertyToPresentationAttributeStyle(style, property->CssPropertyId(),
-                                            path->CssValue());
-    return;
-  }
-  SVGGeometryElement::CollectStyleForPresentationAttribute(name, value, style);
 }
 
 void SVGPathElement::InvalidateMPathDependencies() {
@@ -158,6 +138,27 @@ void SVGPathElement::RemovedFrom(ContainerNode& root_parent) {
 gfx::RectF SVGPathElement::GetBBox() {
   // We want the exact bounds.
   return SVGPathElement::AsPath().TightBoundingRect();
+}
+
+SVGAnimatedPropertyBase* SVGPathElement::PropertyFromAttribute(
+    const QualifiedName& attribute_name) const {
+  if (attribute_name == svg_names::kDAttr) {
+    return path_.Get();
+  } else {
+    return SVGGeometryElement::PropertyFromAttribute(attribute_name);
+  }
+}
+
+void SVGPathElement::SynchronizeAllSVGAttributes() const {
+  SVGAnimatedPropertyBase* attrs[]{path_.Get()};
+  SynchronizeListOfSVGAttributes(attrs);
+  SVGGeometryElement::SynchronizeAllSVGAttributes();
+}
+
+void SVGPathElement::CollectExtraStyleForPresentationAttribute(
+    MutableCSSPropertyValueSet* style) {
+  AddAnimatedPropertyToPresentationAttributeStyle(*path_, style);
+  SVGGeometryElement::CollectExtraStyleForPresentationAttribute(style);
 }
 
 }  // namespace blink

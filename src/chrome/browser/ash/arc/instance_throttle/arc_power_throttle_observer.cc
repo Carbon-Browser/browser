@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,17 +35,14 @@ void ArcPowerThrottleObserver::StartObserving(
   auto* const power_bridge = ArcPowerBridge::GetForBrowserContext(context);
   // Could be nullptr in unit tests.
   if (power_bridge)
-    power_bridge->AddObserver(this);
+    powerbridge_observation_.Observe(power_bridge);
 }
 
 void ArcPowerThrottleObserver::StopObserving() {
   // Make sure |timer_| is not fired after stopping observing.
   timer_.Stop();
 
-  auto* const power_bridge = ArcPowerBridge::GetForBrowserContext(context());
-  // Could be nullptr in unit tests.
-  if (power_bridge)
-    power_bridge->RemoveObserver(this);
+  powerbridge_observation_.Reset();
 
   ThrottleObserver::StopObserving();
 }
@@ -83,6 +80,11 @@ void ArcPowerThrottleObserver::OnPreAnr(mojom::AnrType type) {
                  base::BindOnce(&ArcPowerThrottleObserver::SetActive,
                                 base::Unretained(this), false));
   }
+}
+
+void ArcPowerThrottleObserver::OnWillDestroyArcPowerBridge() {
+  // No more notifications about VM resumed.
+  powerbridge_observation_.Reset();
 }
 
 }  // namespace arc

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,11 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "remoting/protocol/authenticator.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 // This authenticator class provides a way to check the validity of a connection
 // as it is being established through an asynchronous callback.  The validation
@@ -27,7 +25,8 @@ class ValidatingAuthenticator : public Authenticator {
     ERROR_INVALID_CREDENTIALS,
     ERROR_INVALID_ACCOUNT,
     ERROR_REJECTED_BY_USER,
-    ERROR_TOO_MANY_CONNECTIONS
+    ERROR_TOO_MANY_CONNECTIONS,
+    ERROR_UNAUTHORIZED_ACCOUNT
   };
 
   typedef base::OnceCallback<void(Result validation_result)> ResultCallback;
@@ -46,10 +45,14 @@ class ValidatingAuthenticator : public Authenticator {
   ~ValidatingAuthenticator() override;
 
   // Authenticator interface.
+  CredentialsType credentials_type() const override;
+  const Authenticator& implementing_authenticator() const override;
   State state() const override;
   bool started() const override;
   RejectionReason rejection_reason() const override;
+  RejectionDetails rejection_details() const override;
   const std::string& GetAuthKey() const override;
+  const SessionPolicies* GetSessionPolicies() const override;
   std::unique_ptr<ChannelAuthenticator> CreateChannelAuthenticator()
       const override;
   void ProcessMessage(const jingle_xmpp::XmlElement* message,
@@ -65,6 +68,8 @@ class ValidatingAuthenticator : public Authenticator {
   // |resume_callback| is called after the state is updated.
   void UpdateState(base::OnceClosure resume_callback);
 
+  void NotifyStateChangeAfterAccepted() override;
+
   // The JID of the remote user.
   std::string remote_jid_;
 
@@ -75,7 +80,9 @@ class ValidatingAuthenticator : public Authenticator {
   State state_ = Authenticator::WAITING_MESSAGE;
 
   // Returns the rejection reason. Can be called only when in REJECTED state.
-  RejectionReason rejection_reason_ = Authenticator::INVALID_CREDENTIALS;
+  RejectionReason rejection_reason_ =
+      Authenticator::RejectionReason::INVALID_CREDENTIALS;
+  RejectionDetails rejection_details_;
 
   std::unique_ptr<Authenticator> current_authenticator_;
 
@@ -84,7 +91,6 @@ class ValidatingAuthenticator : public Authenticator {
   base::WeakPtrFactory<ValidatingAuthenticator> weak_factory_{this};
 };
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol
 
 #endif  // REMOTING_PROTOCOL_VALIDATING_AUTHENTICATOR_H_

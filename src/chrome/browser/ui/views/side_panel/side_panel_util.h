@@ -1,13 +1,18 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_VIEWS_SIDE_PANEL_SIDE_PANEL_UTIL_H_
 #define CHROME_BROWSER_UI_VIEWS_SIDE_PANEL_SIDE_PANEL_UTIL_H_
 
+#include <optional>
+#include <type_traits>
+
 #include "base/time/time.h"
 #include "chrome/browser/ui/views/side_panel/side_panel_entry.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chrome/browser/ui/views/side_panel/side_panel_entry_id.h"
+#include "chrome/browser/ui/views/side_panel/side_panel_enums.h"
+#include "ui/base/class_property.h"
 
 class Browser;
 class SidePanelRegistry;
@@ -19,18 +24,8 @@ class View;
 
 class SidePanelUtil {
  public:
-  // These values are persisted to logs. Entries should not be renumbered and
-  // numeric values should never be reused.
-  enum class SidePanelOpenTrigger {
-    kToolbarButton = 0,
-    kLensContextMenu = 1,
-    kSideSearchPageAction = 2,
-    kNotesInPageContextMenu = 3,
-    kComboboxSelected = 4,
-    kTabChanged = 5,
-    kSidePanelEntryDeregistered = 6,
-    kMaxValue = kSidePanelEntryDeregistered,
-  };
+  using SidePanelOpenTrigger = ::SidePanelOpenTrigger;
+  using SidePanelContentState = ::SidePanelContentState;
 
   static void PopulateGlobalEntries(Browser* browser,
                                     SidePanelRegistry* global_registry);
@@ -40,14 +35,26 @@ class SidePanelUtil {
   static SidePanelContentProxy* GetSidePanelContentProxy(
       views::View* content_view);
 
-  static void RecordSidePanelOpen(absl::optional<SidePanelOpenTrigger> trigger);
+  static void RecordNewTabButtonClicked(SidePanelEntry::Id id);
+  static void RecordSidePanelOpen(std::optional<SidePanelOpenTrigger> trigger);
+  static void RecordSidePanelShowOrChangeEntryTrigger(
+      std::optional<SidePanelOpenTrigger> trigger);
   static void RecordSidePanelClosed(base::TimeTicks opened_timestamp);
-  static void RecordEntryShownMetrics(SidePanelEntry::Id id);
+  static void RecordSidePanelResizeMetrics(SidePanelEntry::Id id,
+                                           int side_panel_contents_width,
+                                           int browser_window_width);
+  static void RecordEntryShownMetrics(SidePanelEntry::Id id,
+                                      base::TimeTicks load_started_timestamp);
   static void RecordEntryHiddenMetrics(SidePanelEntry::Id id,
                                        base::TimeTicks shown_timestamp);
   static void RecordEntryShowTriggeredMetrics(
+      Browser* browser,
       SidePanelEntry::Id id,
-      absl::optional<SidePanelOpenTrigger> trigger);
+      std::optional<SidePanelOpenTrigger> trigger);
+  static void RecordComboboxShown();
+  static void RecordPinnedButtonClicked(SidePanelEntry::Id id, bool is_pinned);
+  static void RecordSidePanelAnimationMetrics(
+      base::TimeDelta largest_step_time);
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_SIDE_PANEL_SIDE_PANEL_UTIL_H_

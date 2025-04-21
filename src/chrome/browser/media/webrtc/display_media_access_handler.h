@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,7 +46,7 @@ class DisplayMediaAccessHandler : public CaptureAccessHandlerBase,
                           const extensions::Extension* extension) override;
   bool CheckMediaAccessPermission(
       content::RenderFrameHost* render_frame_host,
-      const GURL& security_origin,
+      const url::Origin& security_origin,
       blink::mojom::MediaStreamType type,
       const extensions::Extension* extension) override;
   void HandleRequest(content::WebContents* web_contents,
@@ -61,6 +61,14 @@ class DisplayMediaAccessHandler : public CaptureAccessHandlerBase,
 
  private:
   friend class DisplayMediaAccessHandlerTest;
+
+  void ShowMediaSelectionDialog(content::WebContents* web_contents,
+                                const content::MediaStreamRequest& request,
+                                content::MediaResponseCallback callback);
+
+  void BypassMediaSelectionDialog(content::WebContents* web_contents,
+                                  const content::MediaStreamRequest& request,
+                                  content::MediaResponseCallback callback);
 
   void ProcessChangeSourceRequest(content::WebContents* web_contents,
                                   const content::MediaStreamRequest& request,
@@ -92,8 +100,9 @@ class DisplayMediaAccessHandler : public CaptureAccessHandlerBase,
   // Called back after the user chooses one of the possible desktop media
   // sources for the request that's currently being processed. If no |media_id|
   // is given, the request was rejected, either by the browser or by the user.
-  void OnDisplaySurfaceSelected(content::WebContents* web_contents,
-                                content::DesktopMediaID media_id);
+  void OnDisplaySurfaceSelected(
+      base::WeakPtr<content::WebContents> web_contents,
+      content::DesktopMediaID media_id);
 
 #if BUILDFLAG(IS_CHROMEOS)
   // Called back after checking Data Leak Prevention (DLP) restrictions.

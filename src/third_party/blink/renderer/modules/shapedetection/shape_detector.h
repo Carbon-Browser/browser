@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,19 +19,19 @@ class MODULES_EXPORT ShapeDetector : public ScriptWrappable {
  public:
   ~ShapeDetector() override = default;
 
-  ScriptPromise detect(ScriptState* script_state,
-                       const V8ImageBitmapSource* image_source,
-                       ExceptionState&);
+ protected:
+  std::optional<SkBitmap> GetBitmapFromSource(
+      ScriptState* script_state,
+      const V8ImageBitmapSource* image_source,
+      ExceptionState&);
 
  private:
-  ScriptPromise DetectShapesOnImageData(ScriptState*,
-                                        ImageData*,
-                                        ExceptionState&);
-  ScriptPromise DetectShapesOnImageElement(ScriptState*,
-                                           const HTMLImageElement*,
-                                           ExceptionState&);
-
-  virtual ScriptPromise DoDetect(ScriptState*, SkBitmap, ExceptionState&) = 0;
+  std::optional<SkBitmap> GetBitmapFromImageData(ScriptState*,
+                                                 ImageData*,
+                                                 ExceptionState&);
+  std::optional<SkBitmap> GetBitmapFromImageElement(ScriptState*,
+                                                    const HTMLImageElement*,
+                                                    ExceptionState&);
 };
 
 }  // namespace blink

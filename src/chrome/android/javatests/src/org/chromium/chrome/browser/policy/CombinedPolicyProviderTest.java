@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.base.test.util.Feature;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
@@ -20,7 +21,6 @@ import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
 import org.chromium.components.policy.CombinedPolicyProvider;
 import org.chromium.components.policy.PolicyProvider;
-import org.chromium.content_public.browser.test.util.TestThreadUtils;
 
 /** Instrumentation tests for {@link CombinedPolicyProvider} */
 @RunWith(ChromeJUnit4ClassRunner.class)
@@ -53,12 +53,15 @@ public class CombinedPolicyProviderTest {
         Assert.assertEquals(2, incognitoTabModel.getCount());
 
         final CombinedPolicyProvider provider = CombinedPolicyProvider.get();
-        TestThreadUtils.runOnUiThreadBlocking(() -> provider.registerProvider(new PolicyProvider() {
-            @Override
-            public void refresh() {
-                terminateIncognitoSession();
-            }
-        }));
+        ThreadUtils.runOnUiThreadBlocking(
+                () ->
+                        provider.registerProvider(
+                                new PolicyProvider() {
+                                    @Override
+                                    public void refresh() {
+                                        terminateIncognitoSession();
+                                    }
+                                }));
 
         Assert.assertEquals(0, incognitoTabModel.getCount());
     }

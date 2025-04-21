@@ -1,11 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.toolbar.menu_button;
 
-import static junit.framework.Assert.assertEquals;
-
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.robolectric.Shadows.shadowOf;
@@ -37,14 +36,11 @@ import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.chrome.browser.toolbar.R;
 import org.chromium.chrome.browser.ui.theme.BrandedColorScheme;
 
-/**
- * Unit tests for MenuButton.
- */
+/** Unit tests for MenuButton. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class MenuButtonTest {
-    @Mock
-    private ColorStateList mColorStateList;
+    @Mock private ColorStateList mColorStateList;
 
     private Activity mActivity;
     private MenuButton mMenuButton;
@@ -54,10 +50,15 @@ public class MenuButtonTest {
     public void setUp() {
         MockitoAnnotations.initMocks(this);
         mActivity = Robolectric.buildActivity(Activity.class).setup().get();
-        mActivity.setTheme(org.chromium.chrome.R.style.Theme_MaterialComponents);
-        mMenuButton = (MenuButton) ((ViewGroup) LayoutInflater.from(mActivity).inflate(
-                                            R.layout.menu_button, new LinearLayout(mActivity)))
-                              .getChildAt(0);
+        mActivity.setTheme(R.style.Theme_MaterialComponents);
+        mMenuButton =
+                (MenuButton)
+                        ((ViewGroup)
+                                        LayoutInflater.from(mActivity)
+                                                .inflate(
+                                                        R.layout.menu_button,
+                                                        new LinearLayout(mActivity)))
+                                .getChildAt(0);
 
         mMenuUiState = new MenuUiState();
         mMenuUiState.buttonState = new MenuButtonState();
@@ -86,17 +87,22 @@ public class MenuButtonTest {
         // The underlying image resource for the badged MenuButton is selected at runtime, so we
         // need to check that the drawn Drawable refers to the same resource id as the one specified
         // by UpdateMenuItemHelper.
-        ShadowDrawable lightDrawable = shadowOf(ApiCompatibilityUtils.getDrawable(
-                mActivity.getResources(), mMenuUiState.buttonState.lightBadgeIcon));
-        ShadowDrawable darkDrawable = shadowOf(ApiCompatibilityUtils.getDrawable(
-                mActivity.getResources(), mMenuUiState.buttonState.darkBadgeIcon));
+        ShadowDrawable lightDrawable =
+                shadowOf(
+                        ApiCompatibilityUtils.getDrawable(
+                                mActivity.getResources(), mMenuUiState.buttonState.lightBadgeIcon));
+        ShadowDrawable darkDrawable =
+                shadowOf(
+                        ApiCompatibilityUtils.getDrawable(
+                                mActivity.getResources(), mMenuUiState.buttonState.darkBadgeIcon));
 
         mMenuButton.showAppMenuUpdateBadge(false);
         ShadowDrawable drawnDrawable = shadowOf(mMenuButton.getTabSwitcherAnimationDrawable());
         assertEquals(drawnDrawable.getCreatedFromResId(), darkDrawable.getCreatedFromResId());
         assertNotEquals(drawnDrawable.getCreatedFromResId(), lightDrawable.getCreatedFromResId());
 
-        mMenuButton.onTintChanged(mColorStateList, BrandedColorScheme.DARK_BRANDED_THEME);
+        mMenuButton.onTintChanged(
+                mColorStateList, mColorStateList, BrandedColorScheme.DARK_BRANDED_THEME);
         drawnDrawable = shadowOf(mMenuButton.getTabSwitcherAnimationDrawable());
         assertEquals(drawnDrawable.getCreatedFromResId(), lightDrawable.getCreatedFromResId());
         assertNotEquals(drawnDrawable.getCreatedFromResId(), darkDrawable.getCreatedFromResId());
@@ -116,7 +122,8 @@ public class MenuButtonTest {
     @Test
     public void testDrawTabSwitcherAnimationOverlay_correctBoundsAfterThemeChange() {
         mMenuButton.removeAppMenuUpdateBadge(false);
-        mMenuButton.onTintChanged(mColorStateList, BrandedColorScheme.DARK_BRANDED_THEME);
+        mMenuButton.onTintChanged(
+                mColorStateList, mColorStateList, BrandedColorScheme.DARK_BRANDED_THEME);
 
         // Run a manual layout pass so that mMenuButton's children get assigned sizes.
         mMenuButton.measure(MeasureSpec.UNSPECIFIED, MeasureSpec.UNSPECIFIED);

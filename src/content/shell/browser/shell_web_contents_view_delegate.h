@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,11 +14,13 @@
 #include "content/public/browser/web_contents_view_delegate.h"
 
 #if defined(SHELL_USE_TOOLKIT_VIEWS)
-#include "ui/base/models/simple_menu_model.h"    // nogncheck
+#include "ui/menus/simple_menu_model.h"          // nogncheck
 #include "ui/views/controls/menu/menu_runner.h"  // nogncheck
 #endif
 
 namespace content {
+
+class ShellWebContentsUIButtonHolder;
 
 class ShellWebContentsViewDelegate : public WebContentsViewDelegate {
  public:
@@ -36,7 +38,7 @@ class ShellWebContentsViewDelegate : public WebContentsViewDelegate {
 
 #if BUILDFLAG(IS_MAC)
   void ActionPerformed(int id);
-  NSObject<RenderWidgetHostViewMacDelegate>* CreateRenderWidgetHostViewDelegate(
+  NSObject<RenderWidgetHostViewMacDelegate>* GetDelegateForHost(
       content::RenderWidgetHost* render_widget_host,
       bool is_popup) override;
 #endif
@@ -45,6 +47,11 @@ class ShellWebContentsViewDelegate : public WebContentsViewDelegate {
   raw_ptr<WebContents> web_contents_;
 #if BUILDFLAG(IS_MAC)
   ContextMenuParams params_;
+#endif
+
+#if BUILDFLAG(IS_IOS)
+  // A hidden button used for displaying context menus.
+  std::unique_ptr<ShellWebContentsUIButtonHolder> hidden_button_;
 #endif
 
 #if defined(SHELL_USE_TOOLKIT_VIEWS)

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,32 +8,70 @@
 #import <Foundation/Foundation.h>
 
 // Contains the data for a Credential that can be used with iOS AutoFill.
+// Implementations must provide hash and equality methods.
 @protocol Credential <NSObject>
 
-// Associated favicon name.
+// Associated favicon name. Used by passwords and passkeys.
 @property(nonatomic, readonly) NSString* favicon;
 
-// Identifier used to look up the secret in the Keychain.
-@property(nonatomic, readonly) NSString* keychainIdentifier;
-
-// Importance ranking of this credential.
-@property(nonatomic, readonly) int64_t rank;
-
-// Identifier to use with ASCredentialIdentityStore.
+// Identifier to use with ASCredentialIdentityStore. Used by passwords and
+// passkeys.
 @property(nonatomic, readonly) NSString* recordIdentifier;
 
+// User's account identifier. Used by passwords and passkeys.
+@property(nonatomic, readonly) NSString* gaia;
+
+// Username of the service. Used by passwords and passkeys.
+@property(nonatomic, readonly) NSString* username;
+
+// Plain text password. Used by passwords only.
+@property(nonatomic, readonly) NSString* password;
+
+// Importance ranking of this credential. Used by passwords only.
+@property(nonatomic, readonly) int64_t rank;
+
 // Service identifier of this credential. Should match
-// ASCredentialServiceIdentifier.
+// ASCredentialServiceIdentifier. Used by passwords only.
 @property(nonatomic, readonly) NSString* serviceIdentifier;
 
-// Human readable name of the associated service.
+// Human readable name of the associated service. Used by passwords only.
 @property(nonatomic, readonly) NSString* serviceName;
 
-// Username of the service.
-@property(nonatomic, readonly) NSString* user;
+// Attached note to the credential. Used by passwords only.
+@property(nonatomic, readonly) NSString* note;
 
-// ID to validate the credential before providing it to the system.
-@property(nonatomic, readonly) NSString* validationIdentifier;
+// Passkey sync id. Used by passkeys only.
+@property(nonatomic, readonly) NSData* syncId;
+
+// Passkey user display name. Used by passkeys only.
+@property(nonatomic, readonly) NSString* userDisplayName;
+
+// Passkey user id. Used by passkeys only.
+@property(nonatomic, readonly) NSData* userId;
+
+// Passkey credential id. Used by passkeys only.
+@property(nonatomic, readonly) NSData* credentialId;
+
+// Passkey rp id. Used by passkeys only.
+@property(nonatomic, readonly) NSString* rpId;
+
+// Passkey private key. Used by passkeys only.
+@property(nonatomic, readonly) NSData* privateKey;
+
+// Passkey encrypted. Used by passkeys only.
+@property(nonatomic, readonly) NSData* encrypted;
+
+// Passkey creation time in milliseconds. Used by passkeys only.
+@property(nonatomic, readonly) int64_t creationTime;
+
+// Passkey last used time in microseconds. Used by passkeys only.
+@property(nonatomic, assign) int64_t lastUsedTime;
+
+// Whether the credential is a passkey.
+- (BOOL)isPasskey;
+
+// Converts and returns the creation time as an NSDate.
+- (NSDate*)creationDate;
 
 @end
 

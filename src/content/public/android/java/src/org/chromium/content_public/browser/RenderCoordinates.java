@@ -1,14 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.content_public.browser;
 
+import org.chromium.build.annotations.NullMarked;
 import org.chromium.content.browser.RenderCoordinatesImpl;
 
-/**
- * Provides dimension/coordinate information of the view rendered by content layer.
- */
+/** Provides dimension/coordinate information of the view rendered by content layer. */
+@NullMarked
 public interface RenderCoordinates {
     /**
      * @return {@link Coord} instance associated with the given {@link WebContents}.

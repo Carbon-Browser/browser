@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 #define CHROME_COMMON_CHROMEOS_EXTENSIONS_CHROMEOS_SYSTEM_EXTENSIONS_API_PROVIDER_H_
 
 #include <string>
+#include <string_view>
 
 #include "base/memory/raw_ptr.h"
-#include "base/strings/string_piece_forward.h"
 #include "extensions/common/extensions_api_provider.h"
 
 namespace extensions {
@@ -39,7 +39,7 @@ class ChromeOSSystemExtensionsAPIProvider
   void AddAPIJSONSources(
       extensions::JSONFeatureProviderSource* json_source) override;
   bool IsAPISchemaGenerated(const std::string& name) override;
-  base::StringPiece GetAPISchema(const std::string& name) override;
+  std::string_view GetAPISchema(const std::string& name) override;
   void RegisterPermissions(
       extensions::PermissionsInfo* permissions_info) override;
   void RegisterManifestHandlers() override;

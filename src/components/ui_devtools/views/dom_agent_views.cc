@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,8 +24,8 @@ using ui_devtools::protocol::DOM::Node;
 
 }  // namespace
 
-DOMAgentViews::DOMAgentViews() {}
-DOMAgentViews::~DOMAgentViews() {}
+DOMAgentViews::DOMAgentViews() = default;
+DOMAgentViews::~DOMAgentViews() = default;
 
 std::unique_ptr<Node> DOMAgentViews::BuildTreeForUIElement(
     UIElement* ui_element) {
@@ -66,7 +66,7 @@ std::unique_ptr<Node> DOMAgentViews::BuildTreeForView(UIElement* view_element) {
       UIElement::GetBackingElement<views::View, ViewElement>(view_element);
   auto children = std::make_unique<protocol::Array<Node>>();
 
-  for (auto* child : view->GetChildrenInZOrder()) {
+  for (views::View* child : view->GetChildrenInZOrder()) {
     // When building the subtree, a particular view could be visited multiple
     // times because for each view of the subtree, we would call
     // BuildTreeForView(..) on that view which causes the subtree with that view

@@ -1,24 +1,22 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ipc/ipc_message.h"
-
-#include "build/build_config.h"
-
-// ipc_message.h is a widely included header and its size can impact build time.
-// Try not to raise this limit unless necessary. See
-// https://chromium.googlesource.com/chromium/src/+/HEAD/docs/wmax_tokens.md
-#ifndef NACL_TC_REV
-#pragma clang max_tokens_here 600000
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
 #endif
+
+#include "ipc/ipc_message.h"
 
 #include <limits.h>
 #include <stddef.h>
 #include <stdint.h>
 
 #include "base/atomic_sequence_num.h"
+#include "base/containers/span.h"
 #include "base/logging.h"
+#include "base/pickle.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "ipc/ipc_message_attachment.h"
@@ -79,8 +77,9 @@ Message::Message(int32_t routing_id, uint32_t type, PriorityValue priority)
   Init();
 }
 
-Message::Message(const char* data, int data_len)
-    : base::Pickle(data, data_len) {
+Message::Message(const char* data, size_t data_len)
+    : base::Pickle(base::Pickle::kUnownedData,
+                   base::as_bytes(base::span(data, data_len))) {
   Init();
 }
 

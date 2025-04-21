@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #import "ios/chrome/credential_provider_extension/ui/new_password_view_controller.h"
 
 @class ASCredentialServiceIdentifier;
-@class ASCredentialProviderExtensionContext;
+@protocol CredentialResponseHandler;
 @protocol CredentialStore;
 @protocol NewPasswordUIHandler;
 
@@ -18,8 +18,8 @@
 // consumer.
 @interface NewPasswordMediator : NSObject <NewCredentialHandler>
 
-// Initializes a new object, using |userDefaults| as the user defaults location
-// to store new credentials to and |serviceIdentifier| as the current service to
+// Initializes a new object, using `userDefaults` as the user defaults location
+// to store new credentials to and `serviceIdentifier` as the current service to
 // store new credentials for.
 - (instancetype)initWithUserDefaults:(NSUserDefaults*)userDefaults
                    serviceIdentifier:
@@ -35,8 +35,9 @@
 // UI handler to allow this mediator to ask the UI for any necessary updates.
 @property(nonatomic, weak) id<NewPasswordUIHandler> uiHandler;
 
-// The extension context for the credential provider.
-@property(nonatomic, weak) ASCredentialProviderExtensionContext* context;
+// The handler to use when a credential is selected or cancelled.
+@property(nonatomic, weak) id<CredentialResponseHandler>
+    credentialResponseHandler;
 
 @end
 

@@ -1,16 +1,16 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_NATIVE_THEME_CAPTION_STYLE_H_
 #define UI_NATIVE_THEME_CAPTION_STYLE_H_
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
+#include <string>
+
 #include "third_party/skia/include/core/SkColor.h"
 #include "third_party/skia/include/core/SkScalar.h"
 #include "ui/native_theme/native_theme_export.h"
-
-#include <string>
 
 namespace ui {
 
@@ -24,10 +24,10 @@ struct NATIVE_THEME_EXPORT CaptionStyle {
   // variable types. See the body of this method for details. This is used to
   // parse the value of the "--force-caption-style" command-line argument and
   // for testing.
-  static absl::optional<CaptionStyle> FromSpec(const std::string& spec);
+  static std::optional<CaptionStyle> FromSpec(const std::string& spec);
 
   // Returns a CaptionStyle populated from the System's Settings.
-  static absl::optional<CaptionStyle> FromSystemSettings();
+  static std::optional<CaptionStyle> FromSystemSettings();
 
   // Some or all of these property strings can be empty.
   // For example, on Win10 in Settings when a property is set to Default, the
@@ -42,7 +42,6 @@ struct NATIVE_THEME_EXPORT CaptionStyle {
   std::string font_family;
   std::string font_variant;
   std::string window_color;
-  std::string window_padding;
   std::string window_radius;
 };
 

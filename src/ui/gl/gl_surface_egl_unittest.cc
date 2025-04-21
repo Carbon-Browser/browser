@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,12 +18,6 @@
 #include "ui/platform_window/platform_window_delegate.h"
 #include "ui/platform_window/win/win_window.h"
 #endif
-// TODO(crbug.com/969798): Fix memory leaks in tests and re-enable on LSAN.
-#ifdef LEAK_SANITIZER
-#define MAYBE_SurfaceFormatTest DISABLED_SurfaceFormatTest
-#else
-#define MAYBE_SurfaceFormatTest SurfaceFormatTest
-#endif
 
 namespace gl {
 
@@ -32,47 +26,25 @@ namespace {
 class GLSurfaceEGLTest : public testing::Test {
  protected:
   void SetUp() override {
-#if BUILDFLAG(IS_WIN)
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_IOS)
     display_ = GLSurfaceTestSupport::InitializeOneOffImplementation(
-        GLImplementationParts(kGLImplementationEGLANGLE), true);
+        GLImplementationParts(kGLImplementationEGLANGLE));
 #else
     display_ = GLSurfaceTestSupport::InitializeOneOffImplementation(
-        GLImplementationParts(kGLImplementationEGLGLES2), true);
+        GLImplementationParts(kGLImplementationEGLGLES2));
 #endif
   }
 
   void TearDown() override { GLSurfaceTestSupport::ShutdownGL(display_); }
 
+  GLDisplay* GetTestDisplay() {
+    EXPECT_NE(display_, nullptr);
+    return display_;
+  }
+
  private:
   raw_ptr<GLDisplay> display_ = nullptr;
 };
-
-#if !defined(MEMORY_SANITIZER)
-// Fails under MSAN: crbug.com/886995
-TEST_F(GLSurfaceEGLTest, MAYBE_SurfaceFormatTest) {
-  GLSurfaceFormat surface_format = GLSurfaceFormat();
-  surface_format.SetDepthBits(24);
-  surface_format.SetStencilBits(8);
-  surface_format.SetSamples(0);
-  scoped_refptr<GLSurface> surface =
-      init::CreateOffscreenGLSurfaceWithFormat(gfx::Size(1, 1), surface_format);
-  EGLConfig config = surface->GetConfig();
-  EXPECT_TRUE(config);
-
-  EGLint attrib;
-  eglGetConfigAttrib(surface->GetGLDisplay()->GetDisplay(), config,
-                     EGL_DEPTH_SIZE, &attrib);
-  EXPECT_LE(24, attrib);
-
-  eglGetConfigAttrib(surface->GetGLDisplay()->GetDisplay(), config,
-                     EGL_STENCIL_SIZE, &attrib);
-  EXPECT_LE(8, attrib);
-
-  eglGetConfigAttrib(surface->GetGLDisplay()->GetDisplay(), config, EGL_SAMPLES,
-                     &attrib);
-  EXPECT_EQ(0, attrib);
-}
-#endif
 
 #if BUILDFLAG(IS_WIN)
 

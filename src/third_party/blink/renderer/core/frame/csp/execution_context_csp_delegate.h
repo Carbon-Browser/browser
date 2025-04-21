@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,7 @@ class ExecutionContextCSPDelegate final
   void SetRequireTrustedTypes() override;
   void AddInsecureRequestPolicy(mojom::blink::InsecureRequestPolicy) override;
   std::unique_ptr<SourceLocation> GetSourceLocation() override;
-  absl::optional<uint16_t> GetStatusCode() override;
+  std::optional<uint16_t> GetStatusCode() override;
   String GetDocumentReferrer() override;
   void DispatchViolationEvent(const SecurityPolicyViolationEventInit&,
                               Element*) override;

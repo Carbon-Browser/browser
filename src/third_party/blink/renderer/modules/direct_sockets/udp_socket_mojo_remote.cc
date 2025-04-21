@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,9 +15,6 @@ UDPSocketMojoRemote::UDPSocketMojoRemote(ExecutionContext* execution_context)
 UDPSocketMojoRemote::~UDPSocketMojoRemote() = default;
 
 void UDPSocketMojoRemote::Close() {
-  if (udp_socket_.is_bound()) {
-    udp_socket_->Close();
-  }
   udp_socket_.reset();
 }
 

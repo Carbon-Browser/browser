@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,8 @@ class BLINK_PLATFORM_EXPORT WeakWrapperResourceLoadInfoNotifier
       int64_t request_id,
       const url::SchemeHostPort& final_response_url,
       network::mojom::URLResponseHeadPtr response_head,
-      network::mojom::RequestDestination request_destination) override;
+      network::mojom::RequestDestination request_destination,
+      bool is_ad_resource) override;
   void NotifyResourceTransferSizeUpdated(int64_t request_id,
                                          int32_t transfer_size_diff) override;
   void NotifyResourceLoadCompleted(

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,9 @@
 
 // Base class for menu hosting buttons used on the bookmark bar.
 class BookmarkMenuButtonBase : public views::MenuButton {
+  METADATA_HEADER(BookmarkMenuButtonBase, views::MenuButton)
+
  public:
-  METADATA_HEADER(BookmarkMenuButtonBase);
   explicit BookmarkMenuButtonBase(
       PressedCallback callback,
       const std::u16string& title = std::u16string());

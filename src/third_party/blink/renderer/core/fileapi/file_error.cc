@@ -102,7 +102,6 @@ DOMExceptionCode ErrorCodeToExceptionCode(FileErrorCode code) {
       return DOMExceptionCode::kPathExistsError;
     default:
       NOTREACHED();
-      return DOMExceptionCode::kUnknownError;
   }
 }
 
@@ -138,7 +137,6 @@ const char* ErrorCodeToMessage(FileErrorCode code) {
       return kPathExistsErrorMessage;
     default:
       NOTREACHED();
-      return nullptr;
   }
 }
 
@@ -178,10 +176,8 @@ DOMExceptionCode FileErrorToExceptionCode(base::File::Error code) {
       return DOMExceptionCode::kNotReadableError;
     case base::File::FILE_ERROR_MAX:
       NOTREACHED();
-      return DOMExceptionCode::kUnknownError;
   }
   NOTREACHED();
-  return DOMExceptionCode::kUnknownError;
 }
 
 const char* FileErrorToMessage(base::File::Error code) {
@@ -220,10 +216,8 @@ const char* FileErrorToMessage(base::File::Error code) {
       return nullptr;
     case base::File::FILE_ERROR_MAX:
       NOTREACHED();
-      return nullptr;
   }
   NOTREACHED();
-  return nullptr;
 }
 
 }  // namespace

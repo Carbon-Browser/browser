@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,6 @@
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "cc/animation/animation_host.h"
 #include "cc/layers/solid_color_layer.h"
@@ -61,7 +60,7 @@ class SurfaceLayerTest : public testing::Test {
 
  protected:
   void SetUp() override {
-    animation_host_ = AnimationHost::CreateForTesting(ThreadInstance::MAIN);
+    animation_host_ = AnimationHost::CreateForTesting(ThreadInstance::kMain);
     layer_tree_host_ = FakeLayerTreeHost::Create(
         &fake_client_, &task_graph_runner_, animation_host_.get());
     layer_tree_host_->SetViewportRectAndScale(gfx::Rect(10, 10), 1.f,

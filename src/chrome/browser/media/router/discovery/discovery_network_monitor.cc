@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,9 @@
 #include "base/lazy_instance.h"
 #include "base/memory/ptr_util.h"
 #include "base/observer_list.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/time/default_tick_clock.h"
@@ -30,10 +30,8 @@ std::string ComputeNetworkId(
   if (network_info_list.empty()) {
     return DiscoveryNetworkMonitor::kNetworkIdDisconnected;
   }
-  if (std::find_if(network_info_list.begin(), network_info_list.end(),
-                   [](const DiscoveryNetworkInfo& network_info) {
-                     return !network_info.network_id.empty();
-                   }) == network_info_list.end()) {
+  if (base::ranges::all_of(network_info_list, &std::string::empty,
+                           &DiscoveryNetworkInfo::network_id)) {
     return DiscoveryNetworkMonitor::kNetworkIdUnknown;
   }
 
@@ -42,11 +40,12 @@ std::string ComputeNetworkId(
     combined_ids = combined_ids + "!" + network_info.network_id;
   }
 
-  std::string hash = base::SHA1HashString(combined_ids);
-  return base::ToLowerASCII(base::HexEncode(hash.data(), hash.length()));
+  auto hash = base::SHA1Hash(base::as_byte_span(combined_ids));
+  return base::ToLowerASCII(base::HexEncode(hash));
 }
 
-base::LazyInstance<DiscoveryNetworkMonitor>::Leaky g_discovery_monitor;
+base::LazyInstance<DiscoveryNetworkMonitor>::Leaky g_discovery_monitor =
+    LAZY_INSTANCE_INITIALIZER;
 
 }  // namespace
 
@@ -75,16 +74,16 @@ void DiscoveryNetworkMonitor::RemoveObserver(Observer* const observer) {
 }
 
 void DiscoveryNetworkMonitor::Refresh(NetworkIdCallback callback) {
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE,
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&DiscoveryNetworkMonitor::UpdateNetworkInfo,
                      base::Unretained(this)),
       std::move(callback));
 }
 
 void DiscoveryNetworkMonitor::GetNetworkId(NetworkIdCallback callback) {
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE,
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(&DiscoveryNetworkMonitor::GetNetworkIdOnSequence,
                      base::Unretained(this)),
       std::move(callback));
@@ -103,8 +102,8 @@ DiscoveryNetworkMonitor::DiscoveryNetworkMonitor(NetworkInfoFunction strategy)
       network_info_function_(strategy) {
   DETACH_FROM_SEQUENCE(sequence_checker_);
 
-  content::GetNetworkConnectionTracker()
-      ->AddLeakyNetworkConnectionObserver(this);
+  content::GetNetworkConnectionTracker()->AddLeakyNetworkConnectionObserver(
+      this);
 
   // If the current connection type is available, call UpdateNetworkInfo,
   // otherwise let OnConnectionChanged call it when the connection type is

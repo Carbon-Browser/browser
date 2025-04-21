@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,14 +21,10 @@ public class PasswordGenerationPopupAdapter extends BaseAdapter {
     private final Context mContext;
     private final String mExplanationText;
 
-    /**
-     * UI shows an explanation about storing passwords in Chrome.
-     */
+    /** UI shows an explanation about storing passwords in Chrome. */
     private static final int EXPLANATION = 0;
 
-    /**
-     * There is only one type of view: EXPLANATION.
-     */
+    /** There is only one type of view: EXPLANATION. */
     private static final int VIEW_TYPE_COUNT = 1;
 
     /**
@@ -50,8 +46,9 @@ public class PasswordGenerationPopupAdapter extends BaseAdapter {
     }
 
     private View createExplanationView() {
-        View view = LayoutInflater.from(mContext).inflate(
-                R.layout.password_generation_popup_explanation, null);
+        View view =
+                LayoutInflater.from(mContext)
+                        .inflate(R.layout.password_generation_popup_explanation, null);
         TextView explanation = view.findViewById(R.id.password_generation_explanation);
         explanation.setText(mExplanationText);
         return view;
@@ -61,6 +58,7 @@ public class PasswordGenerationPopupAdapter extends BaseAdapter {
     public Object getItem(int position) {
         return null;
     }
+
     @Override
     public long getItemId(int position) {
         return 0;

@@ -1,22 +1,27 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ui/ozone/platform/wayland/test/test_selection_device_manager.h"
 
 #include <wayland-server-core.h>
 
 #include <cstdint>
+#include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/notreached.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "ui/ozone/platform/wayland/test/server_object.h"
@@ -29,10 +34,11 @@ std::vector<uint8_t> ReadDataOnWorkerThread(base::ScopedFD fd) {
   constexpr size_t kChunkSize = 1024;
   std::vector<uint8_t> bytes;
   while (true) {
-    uint8_t chunk[kChunkSize];
-    ssize_t bytes_read = HANDLE_EINTR(read(fd.get(), chunk, kChunkSize));
+    std::array<uint8_t, kChunkSize> chunk;
+    ssize_t bytes_read =
+        HANDLE_EINTR(read(fd.get(), chunk.data(), chunk.size()));
     if (bytes_read > 0) {
-      bytes.insert(bytes.end(), chunk, chunk + bytes_read);
+      bytes.insert(bytes.end(), chunk.begin(), chunk.begin() + bytes_read);
       continue;
     }
     if (bytes_read < 0) {
@@ -46,7 +52,7 @@ std::vector<uint8_t> ReadDataOnWorkerThread(base::ScopedFD fd) {
 
 void WriteDataOnWorkerThread(base::ScopedFD fd,
                              ui::PlatformClipboard::Data data) {
-  if (!base::WriteFileDescriptor(fd.get(), data->data())) {
+  if (!base::WriteFileDescriptor(fd.get(), data->as_vector())) {
     LOG(ERROR) << "Failed to write selection data to clipboard.";
   }
 }
@@ -55,15 +61,13 @@ void WriteDataOnWorkerThread(base::ScopedFD fd,
 
 // TestSelectionOffer implementation.
 TestSelectionOffer::TestSelectionOffer(wl_resource* resource,
-                                       Delegate* delegate)
+                                       std::unique_ptr<Delegate> delegate)
     : ServerObject(resource),
-      delegate_(delegate),
+      delegate_(std::move(delegate)),
       task_runner_(
           base::ThreadPool::CreateSequencedTaskRunner({base::MayBlock()})) {}
 
-TestSelectionOffer::~TestSelectionOffer() {
-  delegate_->OnDestroying();
-}
+TestSelectionOffer::~TestSelectionOffer() = default;
 
 void TestSelectionOffer::OnOffer(const std::string& mime_type,
                                  ui::PlatformClipboard::Data data) {
@@ -84,9 +88,9 @@ void TestSelectionOffer::Receive(wl_client* client,
 
 // TestSelectionSource implementation.
 TestSelectionSource::TestSelectionSource(wl_resource* resource,
-                                         Delegate* delegate)
+                                         std::unique_ptr<Delegate> delegate)
     : ServerObject(resource),
-      delegate_(delegate),
+      delegate_(std::move(delegate)),
       task_runner_(
           base::ThreadPool::CreateSequencedTaskRunner({base::MayBlock()})) {}
 
@@ -104,9 +108,8 @@ void TestSelectionSource::ReadData(const std::string& mime_type,
 
   // 2. Schedule the ReadDataOnWorkerThread task. The result of read
   // operation will be then passed in to the callback requested by the caller.
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE,
-      base::BindOnce(&ReadDataOnWorkerThread, std::move(read_fd)),
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&ReadDataOnWorkerThread, std::move(read_fd)),
       std::move(callback));
 }
 
@@ -120,6 +123,14 @@ void TestSelectionSource::OnCancelled() {
   mime_types_.clear();
 }
 
+void TestSelectionSource::OnDndAction(uint32_t action) {
+  delegate_->SendDndAction(action);
+}
+
+void TestSelectionSource::OnDndDropPerformed() {
+  delegate_->SendDndDropPerformed();
+}
+
 void TestSelectionSource::Offer(struct wl_client* client,
                                 struct wl_resource* resource,
                                 const char* mime_type) {
@@ -130,12 +141,10 @@ void TestSelectionSource::Offer(struct wl_client* client,
 
 // TestSelectionDevice implementation.
 TestSelectionDevice::TestSelectionDevice(wl_resource* resource,
-                                         Delegate* delegate)
-    : ServerObject(resource), delegate_(delegate) {}
+                                         std::unique_ptr<Delegate> delegate)
+    : ServerObject(resource), delegate_(std::move(delegate)) {}
 
-TestSelectionDevice::~TestSelectionDevice() {
-  delegate_->OnDestroying();
-}
+TestSelectionDevice::~TestSelectionDevice() = default;
 
 TestSelectionOffer* TestSelectionDevice::OnDataOffer() {
   return delegate_->CreateAndSendOffer();
@@ -160,13 +169,11 @@ void TestSelectionDevice::SetSelection(struct wl_client* client,
 
 TestSelectionDeviceManager::TestSelectionDeviceManager(
     const InterfaceInfo& info,
-    Delegate* delegate)
+    std::unique_ptr<Delegate> delegate)
     : GlobalObject(info.interface, info.implementation, info.version),
-      delegate_(delegate) {}
+      delegate_(std::move(delegate)) {}
 
-TestSelectionDeviceManager::~TestSelectionDeviceManager() {
-  delegate_->OnDestroying();
-}
+TestSelectionDeviceManager::~TestSelectionDeviceManager() = default;
 
 void TestSelectionDeviceManager::CreateSource(wl_client* client,
                                               wl_resource* manager_resource,

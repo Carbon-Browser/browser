@@ -1,15 +1,18 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/mediastream/track_audio_renderer.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/threading/thread.h"
 #include "base/threading/thread_checker.h"
 #include "base/unguessable_token.h"
+#include "media/base/audio_glitch_info.h"
 #include "media/base/channel_layout.h"
 #include "media/base/fake_audio_renderer_sink.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -20,6 +23,7 @@
 #include "third_party/blink/renderer/platform/mediastream/media_stream_component_impl.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_source.h"
 #include "third_party/blink/renderer/platform/testing/io_task_runner_testing_platform_support.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
 namespace blink {
@@ -33,7 +37,7 @@ constexpr int kChannels = 2;
 constexpr int kAltChannels = 1;
 const media::AudioParameters kDefaultFormat(
     media::AudioParameters::Format::AUDIO_PCM_LINEAR,
-    media::ChannelLayout::CHANNEL_LAYOUT_STEREO,
+    media::ChannelLayoutConfig::Stereo(),
     kSampleRate,
     kFrames);
 
@@ -72,9 +76,9 @@ class FakeMediaStreamAudioSource final : public MediaStreamAudioSource {
   ~FakeMediaStreamAudioSource() override = default;
 
   void PushData(const media::AudioBus& data, base::TimeTicks reference_time) {
-    media::ChannelLayout layout =
-        data.channels() == 2 ? media::ChannelLayout::CHANNEL_LAYOUT_STEREO
-                             : media::ChannelLayout::CHANNEL_LAYOUT_MONO;
+    media::ChannelLayoutConfig layout =
+        data.channels() == 2 ? media::ChannelLayoutConfig::Stereo()
+                             : media::ChannelLayoutConfig::Mono();
 
     media::AudioParameters format(
         media::AudioParameters::Format::AUDIO_PCM_LINEAR, layout, kSampleRate,
@@ -86,7 +90,7 @@ class FakeMediaStreamAudioSource final : public MediaStreamAudioSource {
       last_format_ = format;
     }
 
-    MediaStreamAudioSource::DeliverDataToTracks(data, reference_time);
+    MediaStreamAudioSource::DeliverDataToTracks(data, reference_time, {});
   }
 
  private:
@@ -118,8 +122,7 @@ class TrackAudioRendererTest : public testing::TestWithParam<bool> {
         ->ConnectToInitializedTrack(audio_component);
 
     track_renderer_ = base::MakeRefCounted<TrackAudioRenderer>(
-        audio_component, dummy_page_.GetFrame(), base::UnguessableToken::Null(),
-        String(),
+        audio_component, dummy_page_.GetFrame(), String(),
         base::BindRepeating(&TrackAudioRendererTest::OnRenderError,
                             base::Unretained(this)));
   }
@@ -198,12 +201,13 @@ class TrackAudioRendererTest : public testing::TestWithParam<bool> {
     }
     {
       base::RunLoop loop;
-      base::SequencedTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                       loop.QuitClosure());
+      scheduler::GetSequencedTaskRunnerForTesting()->PostTask(
+          FROM_HERE, loop.QuitClosure());
       loop.Run();
     }
   }
 
+  test::TaskEnvironment task_environment_;
   scoped_refptr<TrackAudioRenderer> track_renderer_;
 
  private:
@@ -233,7 +237,7 @@ class TrackAudioRendererTest : public testing::TestWithParam<bool> {
   int total_frames_captured_ = 0;
   int frames_captured_since_last_reconfig_ = 0;
 
-  FakeMediaStreamAudioSource* fake_source_;
+  raw_ptr<FakeMediaStreamAudioSource> fake_source_;
 };
 
 TEST_P(TrackAudioRendererTest, SingleCapture) {

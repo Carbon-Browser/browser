@@ -1,11 +1,13 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_EXO_TOUCH_H_
 #define COMPONENTS_EXO_TOUCH_H_
 
+#include "ash/shell_observer.h"
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "components/exo/surface_observer.h"
 #include "ui/events/event_handler.h"
 #include "ui/gfx/geometry/point_f.h"
@@ -22,7 +24,9 @@ class TouchStylusDelegate;
 
 // This class implements a client touch device that represents one or more
 // touch devices.
-class Touch : public ui::EventHandler, public SurfaceObserver {
+class Touch : public ui::EventHandler,
+              public SurfaceObserver,
+              public ash::ShellObserver {
  public:
   Touch(TouchDelegate* delegate, Seat* seat);
 
@@ -43,6 +47,10 @@ class Touch : public ui::EventHandler, public SurfaceObserver {
   // Overridden from SurfaceObserver:
   void OnSurfaceDestroying(Surface* surface) override;
 
+  // ash::ShellObserver:
+  void OnRootWindowAdded(aura::Window* root_window) override;
+  void OnRootWindowWillShutdown(aura::Window* root_window) override;
+
  private:
   // Returns the effective target for |event|.
   Surface* GetEffectiveTargetForEvent(ui::LocatedEvent* event) const;
@@ -51,15 +59,16 @@ class Touch : public ui::EventHandler, public SurfaceObserver {
   void CancelAllTouches();
 
   // The delegate instance that all events are dispatched to.
-  TouchDelegate* const delegate_;
+  const raw_ptr<TouchDelegate, DanglingUntriaged> delegate_;
 
-  Seat* const seat_;
+  const raw_ptr<Seat> seat_;
 
   // The delegate instance that all stylus related events are dispatched to.
-  TouchStylusDelegate* stylus_delegate_ = nullptr;
+  raw_ptr<TouchStylusDelegate> stylus_delegate_ = nullptr;
 
   // Map of touch points to its focus surface.
-  base::flat_map<int, Surface*> touch_points_surface_map_;
+  base::flat_map<int, raw_ptr<Surface, CtnExperimental>>
+      touch_points_surface_map_;
 
   // Map of a touched surface to the count of touch pointers on that surface.
   base::flat_map<Surface*, int> surface_touch_count_map_;

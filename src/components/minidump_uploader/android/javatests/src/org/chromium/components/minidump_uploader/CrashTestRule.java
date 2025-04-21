@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,9 +17,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 
-/**
- * TestRule for Crash upload related tests.
- */
+/** TestRule for Crash upload related tests. */
 public class CrashTestRule implements TestRule {
     private static final String TAG = "CrashTestRule";
 
@@ -127,7 +125,7 @@ public class CrashTestRule implements TestRule {
         public MockCrashReportingPermissionManager() {}
 
         @Override
-        public boolean isClientInMetricsSample() {
+        public boolean isClientInSampleForCrashes() {
             return mIsInSample;
         }
 

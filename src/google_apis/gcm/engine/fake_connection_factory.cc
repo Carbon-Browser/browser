@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,8 +28,9 @@ void FakeConnectionFactory::Initialize(
     const ConnectionHandler::ProtoReceivedCallback& read_callback,
     const ConnectionHandler::ProtoSentCallback& write_callback) {
   request_builder_ = request_builder;
-  connection_handler_ =
-      std::make_unique<FakeConnectionHandler>(read_callback, write_callback);
+  connection_handler_ = std::make_unique<FakeConnectionHandler>(
+      read_callback, write_callback,
+      ConnectionHandler::ConnectionChangedCallback());
 }
 
 ConnectionHandler* FakeConnectionFactory::GetConnectionHandler() const {

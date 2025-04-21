@@ -1,12 +1,16 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import {TestRunner} from 'test_runner';
+import {SourcesTestRunner} from 'sources_test_runner';
+import {ElementsTestRunner} from 'elements_test_runner';
+import {BindingsTestRunner} from 'bindings_test_runner';
+
+import * as Workspace from 'devtools/models/workspace/workspace.js';
+
 (async function() {
   TestRunner.addResult(`Tests file system project mappings.\n`);
-  await TestRunner.loadLegacyModule('sources'); await TestRunner.loadTestModule('sources_test_runner');
-  await TestRunner.loadLegacyModule('elements'); await TestRunner.loadTestModule('elements_test_runner');
-  await TestRunner.loadTestModule('bindings_test_runner');
   await TestRunner.showPanel('elements');
   await TestRunner.loadHTML(`
       <style>#inspected {
@@ -32,13 +36,13 @@
     await ElementsTestRunner.dumpSelectedElementStyles(true);
     TestRunner.addResult('Editing styles from elements panel:');
     var treeElement = ElementsTestRunner.getMatchedStylePropertyTreeItem('color');
-    treeElement.startEditing();
+    treeElement.startEditingName();
     treeElement.nameElement.textContent = 'color';
     treeElement.nameElement.dispatchEvent(TestRunner.createKeyEvent('Enter'));
 
     // Commit editing.
     treeElement.valueElement.textContent = 'green';
-    treeElement.valueElement.firstChild.select();
+    TestRunner.selectTextInTextNode(treeElement.valueElement.firstChild);
     treeElement.valueElement.dispatchEvent(TestRunner.createKeyEvent('Enter'));
     uiSourceCode.addEventListener(Workspace.UISourceCode.Events.WorkingCopyCommitted, stylesEdited, this);
   }

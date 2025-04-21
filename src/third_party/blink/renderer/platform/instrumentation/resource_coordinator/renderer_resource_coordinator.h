@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,6 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_INSTRUMENTATION_RESOURCE_COORDINATOR_RENDERER_RESOURCE_COORDINATOR_H_
 
 #include "third_party/blink/renderer/platform/platform_export.h"
-
-namespace WTF {
-class String;
-}  // namespace WTF
 
 namespace blink {
 
@@ -64,12 +60,6 @@ class PLATFORM_EXPORT RendererResourceCoordinator {
   virtual void OnBeforeContentFrameDetached(
       const Frame& frame,
       const HTMLFrameOwnerElement& owner) = 0;
-
-  // Used to fire a named tracing trigger from a renderer. This is a nop unless
-  // the tracing machinery has been appropriately configured in the browser
-  // process.
-  virtual void FireBackgroundTracingTrigger(
-      const WTF::String& trigger_name) = 0;
 };
 
 }  // namespace blink

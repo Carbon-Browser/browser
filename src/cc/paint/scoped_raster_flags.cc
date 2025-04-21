@@ -1,8 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "cc/paint/scoped_raster_flags.h"
+
+#include <utility>
 
 #include "cc/paint/image_provider.h"
 #include "cc/paint/image_transfer_cache_entry.h"
@@ -10,35 +12,6 @@
 #include "cc/paint/paint_image_builder.h"
 
 namespace cc {
-ScopedRasterFlags::ScopedRasterFlags(const PaintFlags* flags,
-                                     ImageProvider* image_provider,
-                                     const SkMatrix& ctm,
-                                     int max_texture_size,
-                                     uint8_t alpha)
-    : original_flags_(flags) {
-  if (image_provider) {
-    decode_stashing_image_provider_.emplace(image_provider);
-
-    // We skip the op if any images fail to decode.
-    DecodeImageShader(ctm);
-    if (decode_failed_)
-      return;
-    DecodeRecordShader(ctm, max_texture_size);
-    if (decode_failed_)
-      return;
-    DecodeFilter();
-    if (decode_failed_)
-      return;
-  }
-
-  if (alpha != 255) {
-    DCHECK(flags->SupportsFoldingAlpha());
-    MutableFlags()->setAlpha(SkMulDiv255Round(flags->getAlpha(), alpha));
-  }
-
-  AdjustStrokeIfNeeded(ctm);
-}
-
 ScopedRasterFlags::~ScopedRasterFlags() = default;
 
 void ScopedRasterFlags::DecodeImageShader(const SkMatrix& ctm) {
@@ -50,12 +23,12 @@ void ScopedRasterFlags::DecodeImageShader(const SkMatrix& ctm) {
   if (image.IsPaintWorklet()) {
     ImageProvider::ScopedResult result =
         decode_stashing_image_provider_->GetRasterContent(DrawImage(image));
-    if (result && result.paint_record()) {
+    if (result && result.has_paint_record()) {
       const PaintShader* shader = flags()->getShader();
       SkMatrix local_matrix = shader->GetLocalMatrix();
       auto decoded_shader = PaintShader::MakePaintRecord(
-          sk_ref_sp<PaintRecord>(result.paint_record()), shader->tile(),
-          shader->tx(), shader->tx(), &local_matrix);
+          result.ReleaseAsRecord(), shader->tile(), shader->tx(), shader->tx(),
+          &local_matrix);
       MutableFlags()->setShader(decoded_shader);
     } else {
       decode_failed_ = true;
@@ -146,8 +119,8 @@ void ScopedRasterFlags::AdjustStrokeIfNeeded(const SkMatrix& ctm) {
     // Use modulated hairline when possible, as it is faster and produces
     // results closer to the original intent.
     MutableFlags()->setStrokeWidth(0);
-    MutableFlags()->setAlpha(std::round(
-        flags()->getAlpha() * std::sqrt(stroke_vec.x() * stroke_vec.y())));
+    MutableFlags()->setAlphaf(flags()->getAlphaf() *
+                              std::sqrt(stroke_vec.x() * stroke_vec.y()));
     return;
   }
 

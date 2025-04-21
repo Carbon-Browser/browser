@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,13 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/task/single_thread_task_runner.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/mojom/media/renderer_audio_output_stream_factory.mojom-blink.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/modules/media/audio/mojo_audio_output_ipc.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
@@ -32,7 +32,7 @@ class AudioOutputIPCFactory::Impl {
   Impl(const Impl&) = delete;
   Impl& operator=(const Impl&) = delete;
 
-  ~Impl() { DCHECK(factory_remotes_.IsEmpty()); }
+  ~Impl() { DCHECK(factory_remotes_.empty()); }
 
   mojom::blink::RendererAudioOutputStreamFactory* GetRemoteFactory(
       const blink::LocalFrameToken& frame_token) const;
@@ -75,10 +75,10 @@ AudioOutputIPCFactory::CreateAudioOutputIPC(
 
 void AudioOutputIPCFactory::RegisterRemoteFactory(
     const blink::LocalFrameToken& frame_token,
-    blink::BrowserInterfaceBrokerProxy* interface_broker) {
+    const blink::BrowserInterfaceBrokerProxy& interface_broker) {
   mojo::PendingRemote<mojom::blink::RendererAudioOutputStreamFactory>
       factory_remote;
-  interface_broker->GetInterface(
+  interface_broker.GetInterface(
       factory_remote.InitWithNewPipeAndPassReceiver());
   // Unretained is safe due to the contract at the top of the header file.
   // It's safe to pass the |factory_remote| PendingRemote between threads.

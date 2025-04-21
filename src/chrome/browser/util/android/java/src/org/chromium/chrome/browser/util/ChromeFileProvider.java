@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,22 +38,24 @@ public class ChromeFileProvider extends FileProvider {
     private static boolean sIsFileReady;
     private static Uri sCurrentBlockingUri;
     private static Uri sFileUri;
+    private static Uri sGeneratedUriForTesting;
 
     /**
      * Returns an unique uri to identify the file to be shared and block access to it till
      * notifyFileReady is called.
      *
-     * This function clobbers any uri that was previously created and the client application
+     * <p>This function clobbers any uri that was previously created and the client application
      * accessing those uri will get a null file descriptor.
      */
     public static Uri generateUriAndBlockAccess() {
         String authority = getAuthority();
         String fileName = BLOCKED_FILE_PREFIX + String.valueOf(System.nanoTime());
-        Uri blockingUri = new Uri.Builder()
-                                  .scheme(UrlConstants.CONTENT_SCHEME)
-                                  .authority(authority)
-                                  .path(fileName)
-                                  .build();
+        Uri blockingUri =
+                new Uri.Builder()
+                        .scheme(UrlConstants.CONTENT_SCHEME)
+                        .authority(authority)
+                        .path(fileName)
+                        .build();
         synchronized (sLock) {
             sCurrentBlockingUri = blockingUri;
             sFileUri = null;
@@ -66,10 +68,18 @@ public class ChromeFileProvider extends FileProvider {
 
     /**
      * Returns an unique uri to identify the file to be shared.
+     *
      * @param file File for which the Uri is generated.
      */
     public static Uri generateUri(File file) throws IllegalArgumentException {
+        if (sGeneratedUriForTesting != null) {
+            return sGeneratedUriForTesting;
+        }
         return getUriForFile(ContextUtils.getApplicationContext(), getAuthority(), file);
+    }
+
+    public static void setGeneratedUriForTesting(Uri uri) {
+        sGeneratedUriForTesting = uri;
     }
 
     /**
@@ -94,7 +104,11 @@ public class ChromeFileProvider extends FileProvider {
     }
 
     @Override
-    public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs,
+    public Cursor query(
+            Uri uri,
+            String[] projection,
+            String selection,
+            String[] selectionArgs,
             String sortOrder) {
         Uri fileUri = getFileUriWhenReady(uri);
         if (fileUri == null) return null;
@@ -181,9 +195,7 @@ public class ChromeFileProvider extends FileProvider {
         return null;
     }
 
-    /**
-     * Gets the authority string for content URI generation.
-     */
+    /** Gets the authority string for content URI generation. */
     private static String getAuthority() {
         return ContextUtils.getApplicationContext().getPackageName() + AUTHORITY_SUFFIX;
     }

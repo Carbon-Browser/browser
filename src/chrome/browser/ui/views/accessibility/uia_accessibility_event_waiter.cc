@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/win/scoped_bstr.h"
 #include "base/win/scoped_com_initializer.h"
 #include "base/win/scoped_variant.h"
@@ -28,7 +28,7 @@ UiaAccessibilityEventWaiter::UiaAccessibilityEventWaiter(
   initialization_loop.Run();
 }
 
-UiaAccessibilityEventWaiter::~UiaAccessibilityEventWaiter() {}
+UiaAccessibilityEventWaiter::~UiaAccessibilityEventWaiter() = default;
 
 void UiaAccessibilityEventWaiter::Wait() {
   // Pump messages via |shutdown_loop_| until the thread is complete.
@@ -38,15 +38,15 @@ void UiaAccessibilityEventWaiter::Wait() {
 
 void UiaAccessibilityEventWaiter::WaitWithTimeout(base::TimeDelta timeout) {
   // Pump messages via |shutdown_loop_| until the thread is complete.
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, shutdown_loop_.QuitClosure(), timeout);
   shutdown_loop_.Run();
   base::PlatformThread::Join(thread_handle_);
 }
 
-UiaAccessibilityEventWaiter::Thread::Thread() {}
+UiaAccessibilityEventWaiter::Thread::Thread() = default;
 
-UiaAccessibilityEventWaiter::Thread::~Thread() {}
+UiaAccessibilityEventWaiter::Thread::~Thread() = default;
 
 void UiaAccessibilityEventWaiter::Thread::SendShutdownSignal() {
   shutdown_signal_.Signal();
@@ -152,9 +152,9 @@ void UiaAccessibilityEventWaiter::Thread::ThreadMain() {
   std::move(shutdown_complete_).Run();
 }
 
-UiaAccessibilityEventWaiter::Thread::EventHandler::EventHandler() {}
+UiaAccessibilityEventWaiter::Thread::EventHandler::EventHandler() = default;
 
-UiaAccessibilityEventWaiter::Thread::EventHandler::~EventHandler() {}
+UiaAccessibilityEventWaiter::Thread::EventHandler::~EventHandler() = default;
 
 void UiaAccessibilityEventWaiter::Thread::EventHandler::Init(
     UiaAccessibilityEventWaiter::Thread* owner,

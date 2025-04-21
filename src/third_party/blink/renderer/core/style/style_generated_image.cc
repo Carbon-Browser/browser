@@ -26,7 +26,6 @@
 #include "third_party/blink/renderer/core/css/css_gradient_value.h"
 #include "third_party/blink/renderer/core/css/css_image_generator_value.h"
 #include "third_party/blink/renderer/core/css/css_paint_value.h"
-#include "third_party/blink/renderer/platform/geometry/layout_size.h"
 #include "third_party/blink/renderer/platform/graphics/image.h"
 #include "ui/gfx/geometry/size_f.h"
 
@@ -37,16 +36,19 @@ StyleGeneratedImage::StyleGeneratedImage(const CSSImageGeneratorValue& value,
     : image_generator_value_(const_cast<CSSImageGeneratorValue*>(&value)),
       container_sizes_(container_sizes) {
   is_generated_image_ = true;
-  if (value.IsPaintValue())
+  if (value.IsPaintValue()) {
     is_paint_image_ = true;
+  }
 }
 
 bool StyleGeneratedImage::IsEqual(const StyleImage& other) const {
-  if (!other.IsGeneratedImage())
+  if (!other.IsGeneratedImage()) {
     return false;
+  }
   const auto& other_generated = To<StyleGeneratedImage>(other);
-  if (!container_sizes_.SizesEqual(other_generated.container_sizes_))
+  if (!container_sizes_.SizesEqual(other_generated.container_sizes_)) {
     return false;
+  }
   return image_generator_value_ == other_generated.image_generator_value_;
 }
 
@@ -56,13 +58,21 @@ CSSValue* StyleGeneratedImage::CssValue() const {
 
 CSSValue* StyleGeneratedImage::ComputedCSSValue(
     const ComputedStyle& style,
-    bool allow_visited_style) const {
+    bool allow_visited_style,
+    CSSValuePhase value_phase) const {
   if (auto* image_gradient_value =
           DynamicTo<cssvalue::CSSGradientValue>(image_generator_value_.Get())) {
-    return image_gradient_value->ComputedCSSValue(style, allow_visited_style);
+    return image_gradient_value->ComputedCSSValue(style, allow_visited_style,
+                                                  value_phase);
   }
   DCHECK(IsA<CSSPaintValue>(image_generator_value_.Get()));
-  return image_generator_value_;
+  return image_generator_value_.Get();
+}
+
+IntrinsicSizingInfo StyleGeneratedImage::GetNaturalSizingInfo(
+    float multiplier,
+    RespectImageOrientationEnum respect_orientation) const {
+  return IntrinsicSizingInfo::None();
 }
 
 gfx::SizeF StyleGeneratedImage::ImageSize(float multiplier,

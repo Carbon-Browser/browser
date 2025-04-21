@@ -1,25 +1,27 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/offline_pages/offline_page_utils.h"
 
 #include <stdint.h>
+
+#include <optional>
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/simple_test_clock.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "chrome/browser/offline_pages/offline_page_model_factory.h"
@@ -44,7 +46,6 @@
 #include "content/public/test/browser_task_environment.h"
 #include "net/base/filename_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 #if BUILDFLAG(IS_ANDROID)
@@ -66,17 +67,15 @@ const char* kTestPage4ClientId = "42";
 
 void RunTasksForDuration(base::TimeDelta delta) {
   base::RunLoop run_loop;
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, run_loop.QuitClosure(), delta);
   run_loop.Run();
 }
 
 }  // namespace
 
-class OfflinePageUtilsTest
-    : public testing::Test,
-      public OfflinePageTestArchiver::Observer,
-      public base::SupportsWeakPtr<OfflinePageUtilsTest> {
+class OfflinePageUtilsTest : public testing::Test,
+                             public OfflinePageTestArchiver::Observer {
  public:
   OfflinePageUtilsTest();
   ~OfflinePageUtilsTest() override;
@@ -123,7 +122,7 @@ class OfflinePageUtilsTest
     return result;
   }
 
-  absl::optional<int64_t> GetCachedOfflinePageSizeBetween(
+  std::optional<int64_t> GetCachedOfflinePageSizeBetween(
       const base::Time& begin_time,
       const base::Time& end_time) {
     int64_t result;
@@ -136,7 +135,7 @@ class OfflinePageUtilsTest
     if (!OfflinePageUtils::GetCachedOfflinePageSizeBetween(
             profile(), base::BindLambdaForTesting(on_done), begin_time,
             end_time)) {
-      return absl::nullopt;
+      return std::nullopt;
     }
     run_loop.Run();
     return result;
@@ -184,7 +183,7 @@ class OfflinePageUtilsTest
   std::unique_ptr<content::WebContents> web_contents_;
   base::test::ScopedFeatureList scoped_feature_list_;
 #if BUILDFLAG(IS_ANDROID)
-  chrome::android::MockDownloadController download_controller_;
+  android::MockDownloadController download_controller_;
   // OfflinePageTabHelper instantiates PrefetchService which in turn requests a
   // fresh GCM token automatically. This causes the request to be done
   // synchronously instead of with a posted task.
@@ -195,7 +194,7 @@ class OfflinePageUtilsTest
 
 OfflinePageUtilsTest::OfflinePageUtilsTest() = default;
 
-OfflinePageUtilsTest::~OfflinePageUtilsTest() {}
+OfflinePageUtilsTest::~OfflinePageUtilsTest() = default;
 
 void OfflinePageUtilsTest::SetUp() {
   // Create a test web contents.
@@ -318,7 +317,7 @@ std::unique_ptr<OfflinePageTestArchiver> OfflinePageUtilsTest::BuildArchiver(
   std::unique_ptr<OfflinePageTestArchiver> archiver(new OfflinePageTestArchiver(
       this, url, OfflinePageArchiver::ArchiverResult::SUCCESSFULLY_CREATED,
       std::u16string(), kTestFileSize, std::string(),
-      base::ThreadTaskRunnerHandle::Get()));
+      base::SingleThreadTaskRunner::GetCurrentDefault()));
   archiver->set_filename(file_name);
   return archiver;
 }
@@ -413,7 +412,7 @@ TEST_F(OfflinePageUtilsTest, TestGetCachedOfflinePageSizeBetween) {
 
 TEST_F(OfflinePageUtilsTest, TestGetCachedOfflinePageSizeNoPageInModel) {
 #if BUILDFLAG(IS_ANDROID)
-  // TODO(https://crbug.com/1002762): Fix this test to run in < action_timeout()
+  // TODO(crbug.com/40646823): Fix this test to run in < action_timeout()
   // on the Android bots.
   const base::test::ScopedRunLoopTimeout increased_run_timeout(
       FROM_HERE, TestTimeouts::action_max_timeout());

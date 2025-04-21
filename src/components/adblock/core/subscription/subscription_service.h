@@ -19,10 +19,13 @@
 #define COMPONENTS_ADBLOCK_CORE_SUBSCRIPTION_SUBSCRIPTION_SERVICE_H_
 
 #include <memory>
+#include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/observer_list_types.h"
+#include "components/adblock/core/configuration/filtering_configuration.h"
 #include "components/adblock/core/subscription/subscription.h"
 #include "components/adblock/core/subscription/subscription_collection.h"
 #include "components/adblock/core/subscription/subscription_persistent_metadata.h"
@@ -31,49 +34,57 @@
 
 namespace adblock {
 
-// Maintains a state of available Subscriptions on the UI thread and
-// synchronizes it with disk-based storage. Allows adding, removing and querying
-// Subscriptions.
+// Maintains a state of available Subscriptions needed for all installed
+// FilteringConfigurations.
 class SubscriptionService : public KeyedService {
  public:
-  using InstallationCallback = base::OnceCallback<void(bool success)>;
-  using PingCallback = base::OnceCallback<void(bool success)>;
-  // Subscriptions need to be loaded from storage, this is an asynchronous
-  // operation. The service is considered not initialized until the first load
-  // completes.
-  virtual bool IsInitialized() const = 0;
-  // Lets callers execute |task| shortly after the service becomes initialized.
-  // The tasks are executed in FIFO order.
-  virtual void RunWhenInitialized(base::OnceClosure task) = 0;
-  // Returns currently available subscriptions. Includes subscriptions that are
-  // still being downloaded.
-  // Service must be initialized.
-  virtual std::vector<scoped_refptr<Subscription>> GetCurrentSubscriptions()
-      const = 0;
+  using Snapshot = std::vector<std::unique_ptr<SubscriptionCollection>>;
+  class SubscriptionObserver : public base::CheckedObserver {
+   public:
+    // Called only on successful installation or update of a subscription.
+    // TODO(mpawlowski) add error reporting.
+    virtual void OnSubscriptionInstalled(const GURL& subscription_url) {}
+    // Called on installation of new filtering configuration
+    virtual void OnFilteringConfigurationInstalled(
+        FilteringConfiguration* config) {}
+    virtual void OnFilteringConfigurationUninstalled(
+        std::string_view config_name) {}
+  };
+  // Returns currently available subscriptions installed for |configuration|.
+  // Includes subscriptions that are still being downloaded.
+  virtual std::vector<scoped_refptr<Subscription>> GetCurrentSubscriptions(
+      FilteringConfiguration* configuration) const = 0;
+  // Subscriptions and filters demanded by |configuration| will be installed and
+  // will become part of future Snapshots. SubscriptionService will maintain
+  // subscriptions required by the configuration, download and remove filter
+  // lists as needed.
+  virtual void InstallFilteringConfiguration(
+      std::unique_ptr<FilteringConfiguration> configuration) = 0;
+  // Removes configuration from the list of known configurations and reset its
+  // all persistent data. Use it only when configuration is no longer needed,
+  // otherwise prefer to disable configuration via FilteringConfiguration API.
+  // IMPORTANT: After calling this method any pointer pointing to uninstalled
+  // configuration becomes invalid.
+  virtual void UninstallFilteringConfiguration(
+      std::string_view configuration_name) = 0;
+  // Returns a list of FilteringConfigurations previously installed via
+  // InstallFilteringConfiguration.
+  virtual std::vector<FilteringConfiguration*>
+  GetInstalledFilteringConfigurations() = 0;
+  // Gets a filtering configuration by name.
+  virtual FilteringConfiguration* GetFilteringConfiguration(
+      std::string_view configuration_name) const = 0;
   // Returns a snapshot of subscriptions as present at the time of calling the
   // function that can be used to query filters.
   // The result may be passed between threads, even called
-  // concurrently, and future changes to the installed subscriptions (ex.
-  // AddInstalledSubscription, RemoveInstalledSubscription) will not impact it.
-  // Service must be initialized.
-  virtual std::unique_ptr<SubscriptionCollection> GetCurrentSnapshot()
-      const = 0;
-  // Downloads a subscription from |subscription_url| and installs it or updates
-  // an existing one with the downloaded data. The subscription is stored
-  // persistently. |on_finished| is called when installation finishes, providing
-  // a status.
-  virtual void DownloadAndInstallSubscription(
-      const GURL& subscription_url,
-      InstallationCallback on_finished) = 0;
-  // Does an HEAD request on acceptable ads subscription with last known version
-  // and stores received version
-  // TODO(mpawlowski): Remove in DPD-1154.
-  virtual void PingAcceptableAds(PingCallback on_finished) = 0;
-  // Removes a previously installed subscription with GetSourceUrl() ==
-  // |subscription_url| both from in-memory state and from persistent storage.
-  virtual void UninstallSubscription(const GURL& subscription_url) = 0;
-  // Assign custom filter list
-  virtual void SetCustomFilters(const std::vector<std::string>& filters) = 0;
+  // concurrently, and future changes to the installed subscriptions will not
+  // impact it.
+  virtual Snapshot GetCurrentSnapshot() const = 0;
+  virtual void SetAutoInstallEnabled(bool enabled) = 0;
+  virtual bool IsAutoInstallEnabled() const = 0;
+
+  virtual void AddObserver(SubscriptionObserver*) = 0;
+  virtual void RemoveObserver(SubscriptionObserver*) = 0;
 };
 
 }  // namespace adblock

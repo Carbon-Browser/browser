@@ -1,8 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/downgrade/user_data_downgrade.h"
+
+#include <optional>
 
 #include "base/containers/flat_set.h"
 #include "base/files/file.h"
@@ -14,7 +16,6 @@
 #include "chrome/common/chrome_constants.h"
 #include "content/public/browser/browsing_data_remover.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace downgrade {
 
@@ -82,7 +83,7 @@ TEST(UserDataDowngradeTests, GetSnapshotToRestore) {
   }
 
   EXPECT_EQ(GetSnapshotToRestore(base::Version("9"), user_data_dir.GetPath()),
-            absl::nullopt);
+            std::nullopt);
   EXPECT_EQ(
       *GetSnapshotToRestore(base::Version("10.1.0"), user_data_dir.GetPath()),
       base::Version("10.0.0"));

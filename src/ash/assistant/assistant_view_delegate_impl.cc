@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,10 +18,10 @@
 #include "ash/public/cpp/session/user_info.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
-#include "ash/wm/tablet_mode/tablet_mode_controller.h"
 #include "base/command_line.h"
 #include "chromeos/ash/services/assistant/public/cpp/features.h"
 #include "chromeos/ash/services/assistant/public/cpp/switches.h"
+#include "ui/display/screen.h"
 
 namespace ash {
 
@@ -79,7 +79,7 @@ aura::Window* AssistantViewDelegateImpl::GetRootWindowForNewWindows() {
 }
 
 bool AssistantViewDelegateImpl::IsTabletMode() const {
-  return Shell::Get()->tablet_mode_controller()->InTabletMode();
+  return display::Screen::GetScreen()->InTabletMode();
 }
 
 void AssistantViewDelegateImpl::OnDialogPlateButtonPressed(
@@ -98,7 +98,7 @@ void AssistantViewDelegateImpl::OnNotificationButtonPressed(
     const std::string& notification_id,
     int notification_button_index) {
   assistant_controller_->notification_controller()->OnNotificationClicked(
-      notification_id, notification_button_index, /*reply=*/absl::nullopt);
+      notification_id, notification_button_index, /*reply=*/std::nullopt);
 }
 
 void AssistantViewDelegateImpl::OnOnboardingShown() {
@@ -120,8 +120,12 @@ void AssistantViewDelegateImpl::OnSuggestionPressed(
 bool AssistantViewDelegateImpl::ShouldShowOnboarding() const {
   // UI developers need to be able to force the onboarding flow.
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-          chromeos::assistant::switches::kForceAssistantOnboarding)) {
+          assistant::switches::kForceAssistantOnboarding)) {
     return true;
+  }
+
+  if (!assistant::features::IsOnboardingEnabled()) {
+    return false;
   }
 
   // Once a user has had an interaction with Assistant, we will no longer show
@@ -151,6 +155,13 @@ bool AssistantViewDelegateImpl::ShouldShowOnboarding() const {
   // who haven't had an interaction with Assistant in the last 28 days.
   return interaction_controller->GetTimeDeltaSinceLastInteraction() >=
          base::Days(28);
+}
+
+void AssistantViewDelegateImpl::OnLauncherSearchChipPressed(
+    const std::u16string& query) {
+  for (auto& observer : view_delegate_observers_) {
+    observer.OnLauncherSearchChipPressed(query);
+  }
 }
 
 }  // namespace ash

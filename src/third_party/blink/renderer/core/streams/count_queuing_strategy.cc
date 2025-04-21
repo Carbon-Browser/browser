@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,17 +18,16 @@ namespace {
 
 static const V8PrivateProperty::SymbolKey kCountQueuingStrategySizeFunction;
 
-class CountQueuingStrategySizeFunction final : public ScriptFunction::Callable {
+class CountQueuingStrategySizeFunction final : public ScriptFunction {
  public:
   static v8::Local<v8::Function> CreateFunction(ScriptState* script_state) {
-    auto* self = MakeGarbageCollected<ScriptFunction>(
-        script_state, MakeGarbageCollected<CountQueuingStrategySizeFunction>());
+    auto* self = MakeGarbageCollected<CountQueuingStrategySizeFunction>();
 
     // https://streams.spec.whatwg.org/#count-queuing-strategy-size-function
     // 2. Let F be ! CreateBuiltinFunction(steps, « », globalObject’s relevant
     //    Realm).
     // 4. Perform ! SetFunctionLength(F, 0).
-    v8::Local<v8::Function> function = self->V8Function();
+    v8::Local<v8::Function> function = self->ToV8Function(script_state);
 
     // 3. Perform ! SetFunctionName(F, "size").
     function->SetName(V8String(script_state->GetIsolate(), "size"));

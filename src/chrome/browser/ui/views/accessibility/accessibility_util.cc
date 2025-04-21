@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,10 @@
 
 void AnnounceInActiveBrowser(const std::u16string& message) {
   Browser* const browser = BrowserList::GetInstance()->GetLastActive();
-  if (!browser || !browser->is_type_normal() || !browser->window()->IsActive())
+  if (!browser || !browser->is_type_normal() ||
+      !browser->window()->IsActive()) {
     return;
+  }
 
   BrowserView::GetBrowserViewForBrowser(browser)
       ->GetViewAccessibility()

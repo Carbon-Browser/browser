@@ -357,18 +357,54 @@ need to be translated for each locale.-->
                {YEARS, plural, =1 {1 year ago} other {# years ago}}
       </message>
 
+      <message name="IDS_TIME_TITLE_CASE_ELAPSED_LONG_SECS"
+               desc="Relative time in browsing history or file list, in title case. [ICU Syntax]">
+               {SECONDS, plural, =1 {1 Second Ago} other {# Seconds Ago}}
+      </message>
+
+      <message name="IDS_TIME_TITLE_CASE_ELAPSED_LONG_MINS"
+               desc="Relative time in browsing history or file list, in title case. [ICU Syntax]">
+               {SECONDS, plural, =1 {1 Minute Ago} other {# Minutes Ago}}
+      </message>
+
+      <message name="IDS_TIME_TITLE_CASE_ELAPSED_HOURS"
+               desc="Relative time in browsing history or file list, in title case. [ICU Syntax]">
+               {HOURS, plural, =1 {1 Hour Ago} other {# Hours Ago}}
+      </message>
+
+      <message name="IDS_TIME_TITLE_CASE_ELAPSED_DAYS"
+               desc="Relative time in browsing history or file list, in title case. [ICU Syntax]">
+               {DAYS, plural, =1 {1 Day Ago} other {# Days Ago}}
+      </message>
+
+      <message name="IDS_TIME_TITLE_CASE_ELAPSED_MONTHS"
+               desc="Relative time in browsing history or file list, in title case. [ICU Syntax]">
+               {MONTHS, plural, =1 {1 Month Ago} other {# Months Ago}}
+      </message>
+
+      <message name="IDS_TIME_TITLE_CASE_ELAPSED_YEARS"
+               desc="Relative time in browsing history or file list, in title case. [ICU Syntax]">
+               {YEARS, plural, =1 {1 Year Ago} other {# Years Ago}}
+      </message>
+
       <message name="IDS_PAST_TIME_TODAY" desc="Relative day today">
         Today
       </message>
       <message name="IDS_PAST_TIME_YESTERDAY" desc="Relative day yesterday">
         Yesterday
       </message>
+      <message name="IDS_TIME_TOMORROW" desc="Relative day tomorrow">
+        Tomorrow
+      </message>
 
       <!-- Menus -->
       <message name="IDS_APP_MENU_EMPTY_SUBMENU" desc="Used when a submenu has no entries">
         (empty)
       </message>
-        <message name="IDS_CLIPBOARD_MENU_HTML" desc="Used when HTML is stored in the clipboard history">
+      <message name="IDS_APP_MENU_AX_ANNOUNCE_EMPTY_SUBMENU" is_accessibility_with_no_ui="true" desc="Screen reader announcement when a submenu that has been opened has no entries">
+        Empty
+      </message>
+      <message name="IDS_CLIPBOARD_MENU_HTML" desc="Used when HTML is stored in the clipboard history">
         HTML Content
       </message>
       <message name="IDS_CLIPBOARD_MENU_IMAGE" desc="Used when an image is stored in the clipboard history">
@@ -394,8 +430,8 @@ need to be translated for each locale.-->
       </message>
 
       <!-- New Badge (user education) -->
-      <message name="IDS_NEW_BADGE" desc="Appears as a badge on UI elements like menus, denoting new features">
-        New
+      <message name="IDS_NEW_BADGE" desc="Appears as a badge on UI elements like menus, denoting new features, in uppercase">
+        NEW
       </message>
       <message name="IDS_NEW_BADGE_SCREEN_READER_MESSAGE"
                desc="Message appended to screen reader description of UI elements which have the 'New' badge">
@@ -408,6 +444,9 @@ need to be translated for each locale.-->
       </message>
       <message name="IDS_CONCAT_TWO_STRINGS_WITH_COMMA" desc="This string concatenates two other strings. In the English language, this particular concatenation is done via a comma and a whitespace in between the other strings. For example: '1 compromised password, 2 weak passwords'">
         <ph name="TYPE_1">$1<ex>2 compromised passwords</ex></ph>, <ph name="TYPE_2">$2<ex>7 weak passwords</ex></ph>
+      </message>
+      <message name="IDS_CONCAT_THREE_STRINGS_WITH_COMMA" desc="This string concatenates three other strings. In the English language, this particular concatenation is done via a comma and a whitespace in between the other strings. For example: '1 compromised password, 2 weak passwords, 3 reused passwords'">
+        <ph name="TYPE_1">$1<ex>2 compromised passwords</ex></ph>, <ph name="TYPE_2">$2<ex>7 weak passwords</ex></ph>, <ph name="TYPE_3">$3<ex>3 reused passwords</ex></ph>
       </message>
       <message name="IDS_CONCAT_TWO_STRINGS_WITH_PERIODS" desc="This string concatenates two other strings. In the English language, this particular concatenation is done via a period and a whitespace after the first string, and a period after the second string. For example: '1 compromised password. 2 weak passwords.'">
         <ph name="TYPE_1">$1<ex>2 compromised passwords</ex></ph>. <ph name="TYPE_2">$2<ex>7 weak passwords</ex></ph>.
@@ -519,23 +558,8 @@ need to be translated for each locale.-->
       <message name="IDS_APP_ACCNAME_MENU" desc="The accessible name for the Menu button.">
         Menu
       </message>
-      <message name="IDS_APP_ACCNAME_FLOAT" desc="The accessible name for the Floating button.">
-        Float
-      </message>
       <message name="IDS_APP_ACCNAME_COLOR_CHOOSER_HEX_INPUT" desc="The accessible name for the color chooser hexadecimal input field">
         Hex color value
-      </message>
-      <message name="IDS_APP_ACCNAME_HALF" desc="The accessible name for the Half button on Multitask Menu">
-        Half
-      </message>
-      <message name="IDS_APP_ACCNAME_PARTIAL" desc="The accessible name for the Partial button on the Multitask Menu">
-        Partial
-      </message>
-      <message name="IDS_APP_ACCNAME_FULL" desc="The accessible name for the Full button on the Multitask Menu">
-        Full
-      </message>
-      <message name="IDS_APP_ACCNAME_FLOAT_ON_TOP" desc="The accessible name for the Float on top button on the Multitask Menu">
-        Float on top
       </message>
 
       <!-- Scroll Bar Context Menu Labels -->
@@ -610,6 +634,9 @@ need to be translated for each locale.-->
           Select &amp;All
         </message>
       </if>
+      <message name="IDS_APP_SELECT" desc="The text label of the Select menu item">
+        &amp;Select
+      </message>
       <if expr="not is_macosx">
         <message name="IDS_CONTENT_CONTEXT_EMOJI" desc="The context menu item to display the OS-provided emoji picker.">
           Emoji
@@ -620,9 +647,12 @@ need to be translated for each locale.-->
           Emoji &amp;&amp; Symbols
         </message>
       </if>
-      <if expr="chromeos_ash">
+      <if expr="is_chromeos">
         <message name="IDS_APP_SHOW_CLIPBOARD_HISTORY" desc="The context menu item to show the clipboard history menu.">
           Clipboard
+        </message>
+        <message name="IDS_APP_PASTE_FROM_CLIPBOARD" desc="The context menu item to show the submenu of clipboard history items the user can paste.">
+          Paste from clipboard
         </message>
       </if>
 
@@ -636,12 +666,15 @@ need to be translated for each locale.-->
       <message name="IDS_APP_CLOSE" desc="A generic term for Close on buttons and menus.">
         Close
       </message>
+      <message name="IDS_APP_CONTINUE" desc="A generic term for Continue on buttons.">
+        Continue
+      </message>
 
       <!-- Key names -->
       <message name="IDS_APP_ESC_KEY" desc="Escape key">
         Esc
       </message>
-      <message name="IDS_APP_TAB_KEY" desc="Tab key" meaning="Tab key">
+      <message name="IDS_APP_TAB_KEY" desc="Tab key" meaning="Tab key on the keyboard">
         Tab
       </message>
       <message name="IDS_APP_INSERT_KEY" desc="Insert key">
@@ -734,7 +767,12 @@ need to be translated for each locale.-->
           Win
         </message>
       </if>
-      <if expr="chromeos_ash">
+      <if expr="is_linux">
+        <message name="IDS_APP_SUPER_KEY" desc="Windows key on Windows keyboards, and Command key on Mac keyboards.">
+          Super
+        </message>
+      </if>
+      <if expr="is_chromeos">
         <message name="IDS_APP_META_KEY" desc="External Meta key (Search key on ChromeOS keyboards, Windows key on Windows keyboards, and Command key on Mac keyboards)">
           Meta
         </message>
@@ -812,13 +850,16 @@ need to be translated for each locale.-->
         +<ph name="NUMBER">$1<ex>3</ex></ph> more
       </message>
       <message name="IDS_MESSAGE_CENTER_NOTIFICATION_PROGRESS_PERCENTAGE" desc="The summary text in a notification that is shown with progress bar.">
-        <ph name="NUMBER">$1<ex>75</ex></ph> %
+        <ph name="NUMBER">$1<ex>75</ex></ph>%
       </message>
       <message name="IDS_MESSAGE_CENTER_NOTIFICATION_CHROMEOS_SYSTEM" desc="The label to describe the notification comes from ChromeOS system.">
         <ph name="IDS_SHORT_PRODUCT_OS_NAME">$1<ex>ChromeOS</ex></ph> system
       </message>
       <message name="IDS_MESSAGE_CENTER_NOTIFICATION_INLINE_REPLY_PLACEHOLDER" desc="The default placeholder text for notification inline reply.">
         Send message
+      </message>
+      <message name="IDS_MESSAGE_CENTER_NOTIFICATION_INLINE_REPLY_ACCESSIBLE_NAME" desc="The default accessible name for notification inline reply button.">
+        Send reply
       </message>
       <message name="IDS_MESSAGE_NOTIFICATION_NOW_STRING_SHORTEST" desc="A string denoting the current point in time that should be as short as possible. Should be same as AndroidPlatform msgId 8912796667087856402. (frameworks/base/core/res/res/values/strings.xml:string:now_string_shortest)">
         now
@@ -889,7 +930,7 @@ need to be translated for each locale.-->
       <message name="IDS_MESSAGE_NOTIFICATION_SEND_TAB_TO_SELF_CONFIRMATION_FAILURE_MESSAGE" desc="The message text for the comformation notification when the user failed to share a tab to other devices.">
         Please try again
       </message>
-      <if expr="chromeos_ash">
+      <if expr="is_chromeos">
         <message name="IDS_MESSAGE_CENTER_NOTIFIER_HATS_NAME" desc="The name of hats notifier that is a system component">
           Survey
         </message>
@@ -905,16 +946,25 @@ need to be translated for each locale.-->
       <message name="IDS_CLIPBOARD_HISTORY_MENU_TITLE" desc="The title of the clipboard history menu which shows the history of the clipboard data">
         Clipboard history
       </message>
-      <message name="IDS_CLIPBOARD_HISTORY_DELETE_BUTTON" desc="Accessibility name of the button which functions to delete a clipboard history menu entry">
-        Remove from clipboard.
+      <message name="IDS_CLIPBOARD_HISTORY_DELETE_ITEM_TEXT" is_accessibility_with_no_ui="true" desc="Accessibility name of the button used to delete an item from the clipboard history menu. Spoken by screen readers when an item's delete button gets focus but not visually rendered.">
+        Remove <ph name="ITEM_TEXT">$1<ex>text showing on menu item</ex></ph>.
+      </message>
+      <message name="IDS_CLIPBOARD_HISTORY_DELETE_BUTTON_HOVER_TEXT" desc="Message displayed when hovering over the button to delete a clipboard history menu entry">
+        Remove
       </message>
       <message name="IDS_CLIPBOARD_HISTORY_ITEM_DELETION" desc="Accessibility text when a clipboard history menu entry is deleted">
         Removed.
       </message>
 
       <!-- Strings describing the touch calibration UX -->
-      <message name="IDS_DISPLAY_TOUCH_CALIBRATION_EXIT_LABEL" desc="A message to notify the user about using the escape key to exit the calibration mode.">
+      <message name="IDS_DISPLAY_TOUCH_CALIBRATION_EXIT_LABEL" translateable="false" desc="A message to notify the user about using the escape key to exit the calibration mode.">
         To exit calibration press Esc.
+      </message>
+      <message name="IDS_DISPLAY_TOUCH_CALIBRATION_SECONDARY_SKIP_LABEL" translateable="false" desc="A message to notify the user about using the escape key to exit the calibration mode.">
+        If the current display is not a touchscreen, press Esc.
+      </message>
+      <message name="IDS_DISPLAY_TOUCH_CALIBRATION_PRIMARY_SKIP_LABEL" translateable="false" desc="A message to notify the user about using the escape key to exit the calibration mode.">
+        If this display is not a touchscreen, press Esc.
       </message>
       <message name="IDS_DISPLAY_TOUCH_CALIBRATION_HINT_LABEL_TEXT" desc="Title of the hint message to inform the user what the next step is in touch calibration is">
        Calibrate your touchscreen
@@ -983,11 +1033,11 @@ need to be translated for each locale.-->
       </message>
 
       <!-- Sharing content types -->
-      <message name="IDS_BROWSER_SHARING_CONTENT_TYPE_TEXT" desc="The label used to describe that the content type being shared is a text.">
-        Text
+      <message name="IDS_BROWSER_SHARING_CONTENT_TYPE_TEXT" desc="This will be used as a placeholder in the message 'Can't share [content type].' so it should be lower-case unless this is a language where nouns are upper case." meaning="text as placeholder">
+        text
       </message>
-      <message name="IDS_BROWSER_SHARING_CONTENT_TYPE_NUMBER" desc="The label used to describe that the content type being shared is a number.">
-        Number
+      <message name="IDS_BROWSER_SHARING_CONTENT_TYPE_NUMBER" desc="This references a phone number and will be used as a placeholder in the message 'Can't share [content type].' so it should be lower-case unless this is a language where nouns are upper case." meaning="phone number as placeholder">
+        number
       </message>
 
       <!-- Sharing dialog error messages -->
@@ -1040,6 +1090,11 @@ need to be translated for each locale.-->
       <!-- Table View -->
       <message name="IDS_TABLE_VIEW_AX_ANNOUNCE_ROW_SELECTED" desc="Screenreader announcement that a row is selected">
         <ph name="ROW_NAME">$1<ex>A row in the table</ex></ph> is selected.
+      </message>
+
+      <!-- Clipboard -->
+      <message name="IDS_LINK_COPIED" desc="Notification telling the user that the url has been copied to clipboard. [CHAR_LIMIT=32]">
+        Link copied
       </message>
     </messages>
   </release>

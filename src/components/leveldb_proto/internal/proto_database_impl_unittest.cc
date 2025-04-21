@@ -1,12 +1,13 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/leveldb_proto/internal/proto_database_impl.h"
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
@@ -22,12 +23,11 @@ namespace leveldb_proto {
 namespace {
 
 const std::string kDefaultClientName = "client";
-const std::string kDefaultClientName2 = "client_2";
 
 // Example struct defined by clients that can be used instead of protos.
 struct ClientStruct {
  public:
-  ClientStruct() {}
+  ClientStruct() = default;
   ClientStruct(ClientStruct&& other) {
     id_ = std::move(other.id_);
     data_ = std::move(other.data_);
@@ -99,7 +99,7 @@ class TestSharedProtoDatabase : public SharedProtoDatabase {
   }
 
  private:
-  ~TestSharedProtoDatabase() override {}
+  ~TestSharedProtoDatabase() override = default;
 
   Enums::InitStatus use_status_;
 };
@@ -237,7 +237,7 @@ class ProtoDatabaseImplTest : public testing::Test {
   std::unique_ptr<TestSharedProtoDatabaseProvider> CreateSharedProvider(
       TestProtoDatabaseProvider* db_provider) {
     return std::make_unique<TestSharedProtoDatabaseProvider>(
-        base::SequencedTaskRunnerHandle::Get(),
+        base::SequencedTaskRunner::GetCurrentDefault(),
         db_provider->weak_factory_.GetWeakPtr());
   }
 

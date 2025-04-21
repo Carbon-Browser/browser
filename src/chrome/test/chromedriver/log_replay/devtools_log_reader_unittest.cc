@@ -1,28 +1,41 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "chrome/test/chromedriver/log_replay/devtools_log_reader.h"
+
+#include <array>
 
 #include "base/base_paths.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/path_service.h"
-
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace {
 // Log files to test the reader against
-const char* const kTestDataPath[] = {"chrome", "test", "chromedriver",
-                                     "log_replay", "test_data"};
+const auto kTestDataPath = std::to_array<const char*>({
+    "chrome",
+    "test",
+    "chromedriver",
+    "log_replay",
+    "test_data",
+});
 const char kTestGetTitlePath[] = "testGetTitle_simple.log";
 const char kOneEntryPath[] = "oneDevToolsEntry.log";
+const char kBrowserEntryPath[] = "oneDevToolsBrowserEntry.log";
 const char kTruncatedJSONPath[] = "truncatedJSON.log";
 const char kReadableTimestampPathLinux[] = "testReadableTimestampLinux.log";
 const char kReadableTimestampPathWin[] = "testReadableTimestampWindows.log";
 
 base::FilePath GetLogFileFromLiteral(const char literal[]) {
   base::FilePath root_dir;
-  CHECK(base::PathService::Get(base::DIR_SOURCE_ROOT, &root_dir));
+  CHECK(base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &root_dir));
   for (int i = 0; i < 5; i++)
     root_dir = root_dir.AppendASCII(kTestDataPath[i]);
   base::FilePath result = root_dir.AppendASCII(literal);
@@ -91,6 +104,18 @@ TEST(DevToolsLogReaderTest, EndOfFile) {
   EXPECT_TRUE(next == nullptr);
 }
 
+TEST(DevToolsLogReaderTest, WebSocketBrowser) {
+  base::FilePath path = GetLogFileFromLiteral(kBrowserEntryPath);
+  DevToolsLogReader reader(path);
+  std::unique_ptr<LogEntry> next = reader.GetNext(LogEntry::kWebSocket);
+  EXPECT_TRUE(next != nullptr);
+  EXPECT_EQ(next->protocol_type, LogEntry::kWebSocket);
+  EXPECT_EQ(next->event_type, LogEntry::kRequest);
+  EXPECT_EQ(next->command_name, "Log.enable");
+  EXPECT_EQ(next->session_id, "");
+  EXPECT_EQ(next->id, 1);
+}
+
 TEST(DevToolsLogReaderTest, WebSocketBasic) {
   base::FilePath path = GetLogFileFromLiteral(kTestGetTitlePath);
   DevToolsLogReader reader(path);
@@ -99,6 +124,7 @@ TEST(DevToolsLogReaderTest, WebSocketBasic) {
   EXPECT_EQ(next->protocol_type, LogEntry::kWebSocket);
   EXPECT_EQ(next->event_type, LogEntry::kRequest);
   EXPECT_EQ(next->command_name, "Log.enable");
+  EXPECT_EQ(next->session_id, "AQUA");
   EXPECT_EQ(next->id, 1);
 }
 
@@ -110,6 +136,7 @@ TEST(DevToolsLogReaderTest, WebSocketMultiple) {
   EXPECT_TRUE(next != nullptr);
   EXPECT_EQ(next->event_type, LogEntry::kRequest);
   EXPECT_EQ(next->command_name, "DOM.getDocument");
+  EXPECT_EQ(next->session_id, "AQUA");
   EXPECT_EQ(next->id, 2);
 }
 
@@ -122,6 +149,7 @@ TEST(DevToolsLogReaderTest, WebSocketPayload) {
   EXPECT_TRUE(next != nullptr);
   EXPECT_EQ(next->command_name, "Target.setAutoAttach");
   EXPECT_EQ(next->id, 3);
+  EXPECT_EQ(next->session_id, "AQUA");
   EXPECT_EQ(
       next->payload,
       "{\n   \"autoAttach\": true,\n   \"waitForDebuggerOnStart\": false\n}\n");

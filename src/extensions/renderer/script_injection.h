@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,17 +8,17 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "extensions/common/mojom/host_id.mojom-forward.h"
 #include "extensions/common/mojom/run_location.mojom-shared.h"
 #include "extensions/common/user_script.h"
 #include "extensions/renderer/injection_host.h"
 #include "extensions/renderer/script_injector.h"
-#include "services/metrics/public/cpp/ukm_source_id.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "v8/include/v8-forward.h"
 
 namespace content {
@@ -93,8 +93,8 @@ class ScriptInjection {
 
   // Called when JS injection for the given frame has been completed or
   // cancelled.
-  void OnJsInjectionCompleted(const std::vector<v8::Local<v8::Value>>& results,
-                              absl::optional<base::TimeDelta> elapsed);
+  void OnJsInjectionCompleted(std::optional<base::Value> value,
+                              base::TimeTicks start_time);
 
  private:
   class FrameWatcher;
@@ -128,7 +128,7 @@ class ScriptInjection {
   std::unique_ptr<ScriptInjector> injector_;
 
   // The RenderFrame into which this should inject the script.
-  content::RenderFrame* render_frame_;
+  raw_ptr<content::RenderFrame, DanglingUntriaged> render_frame_;
 
   // The associated injection host.
   std::unique_ptr<const InjectionHost> injection_host_;
@@ -139,9 +139,6 @@ class ScriptInjection {
   // This injection's request id. This will be -1 unless the injection is
   // currently waiting on permission.
   int64_t request_id_;
-
-  // Identifies the frame we're injecting into.
-  ukm::SourceIdObj ukm_source_id_;
 
   // Whether or not the injection is complete, either via injecting the script
   // or because it will never complete.
@@ -154,7 +151,7 @@ class ScriptInjection {
   bool log_activity_;
 
   // Results storage.
-  std::unique_ptr<base::Value> execution_result_;
+  std::optional<base::Value> execution_result_;
 
   // The callback to run upon the status updated asynchronously. It's used for
   // the reply of the permission handling or script injection completion.

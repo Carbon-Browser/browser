@@ -1,59 +1,24 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/crostini/crostini_package_service.h"
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/ash/crostini/crostini_features.h"
-#include "chrome/browser/ash/crostini/crostini_manager_factory.h"
 #include "chrome/browser/ash/file_manager/path_util.h"
 #include "chrome/browser/ash/guest_os/guest_os_registry_service_factory.h"
 #include "chrome/browser/ash/guest_os/guest_os_share_path.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
-#include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 
 namespace crostini {
 
 namespace {
-
-class CrostiniPackageServiceFactory : public BrowserContextKeyedServiceFactory {
- public:
-  static CrostiniPackageService* GetForProfile(Profile* profile) {
-    return static_cast<CrostiniPackageService*>(
-        GetInstance()->GetServiceForBrowserContext(profile, true));
-  }
-
-  static CrostiniPackageServiceFactory* GetInstance() {
-    static base::NoDestructor<CrostiniPackageServiceFactory> factory;
-    return factory.get();
-  }
-
- private:
-  friend class base::NoDestructor<CrostiniPackageServiceFactory>;
-
-  CrostiniPackageServiceFactory()
-      : BrowserContextKeyedServiceFactory(
-            "CrostiniPackageService",
-            BrowserContextDependencyManager::GetInstance()) {
-    DependsOn(CrostiniManagerFactory::GetInstance());
-  }
-
-  ~CrostiniPackageServiceFactory() override = default;
-
-  // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
-      content::BrowserContext* context) const override {
-    Profile* profile = Profile::FromBrowserContext(context);
-    return new CrostiniPackageService(profile);
-  }
-};
 
 PackageOperationStatus InstallStatusToOperationStatus(
     InstallLinuxPackageProgressStatus status) {
@@ -116,11 +81,6 @@ struct CrostiniPackageService::QueuedUninstall {
   std::unique_ptr<CrostiniPackageNotification> notification;
 };
 
-CrostiniPackageService* CrostiniPackageService::GetForProfile(
-    Profile* profile) {
-  return CrostiniPackageServiceFactory::GetForProfile(profile);
-}
-
 CrostiniPackageService::CrostiniPackageService(Profile* profile)
     : profile_(profile) {
   CrostiniManager* manager = CrostiniManager::GetForProfile(profile);
@@ -181,15 +141,19 @@ void CrostiniPackageService::GetLinuxPackageInfo(
   // Share path if it is not in crostini.
   if (package_url.mount_filesystem_id() !=
       file_manager::util::GetCrostiniMountPointName(profile_)) {
-    guest_os::GuestOsSharePath::GetForProfile(profile_)->SharePaths(
-        container_id.vm_name, {package_url.path()}, /*persist=*/false,
-        base::BindOnce(
-            &CrostiniPackageService::OnSharePathForGetLinuxPackageInfo,
-            weak_ptr_factory_.GetWeakPtr(), container_id, package_url, path,
-            std::move(callback)));
+    CrostiniManager::RestartOptions options;
+    options.share_paths.push_back(package_url.path());
+    restart_id_for_testing_ =
+        CrostiniManager::GetForProfile(profile_)->RestartCrostiniWithOptions(
+            container_id, std::move(options),
+            base::BindOnce(
+                &CrostiniPackageService::OnSharePathForGetLinuxPackageInfo,
+                weak_ptr_factory_.GetWeakPtr(), container_id, package_url, path,
+                std::move(callback)));
   } else {
     OnSharePathForGetLinuxPackageInfo(container_id, package_url, path,
-                                      std::move(callback), true, "");
+                                      std::move(callback),
+                                      CrostiniResult::SUCCESS);
   }
 }
 
@@ -198,13 +162,12 @@ void CrostiniPackageService::OnSharePathForGetLinuxPackageInfo(
     const storage::FileSystemURL& package_url,
     const base::FilePath& package_path,
     CrostiniManager::GetLinuxPackageInfoCallback callback,
-    bool share_success,
-    const std::string& share_failure_reason) {
-  if (!share_success) {
+    CrostiniResult result) {
+  if (result != CrostiniResult::SUCCESS) {
     LinuxPackageInfo info;
     info.success = false;
     info.failure_reason = "Error sharing package " + package_url.DebugString() +
-                          ": " + share_failure_reason;
+                          ": " + CrostiniResultString(result);
     return std::move(callback).Run(info);
   }
   CrostiniManager::GetForProfile(profile_)->GetLinuxPackageInfo(
@@ -253,8 +216,9 @@ void CrostiniPackageService::OnInstallLinuxPackageProgress(
   // map to a single progess percentage amount by dividing the range in half --
   // 0-50% for the downloading phase, 51-100% for the installing phase.
   int display_progress = progress_percent / 2;
-  if (status == InstallLinuxPackageProgressStatus::INSTALLING)
+  if (status == InstallLinuxPackageProgressStatus::INSTALLING) {
     display_progress += 50;  // Second phase
+  }
 
   UpdatePackageOperationStatus(container_id,
                                InstallStatusToOperationStatus(status),
@@ -602,6 +566,10 @@ void CrostiniPackageService::StartQueuedOperation(
 std::string CrostiniPackageService::GetUniqueNotificationId() {
   return base::StringPrintf("crostini_package_operation_%d",
                             next_notification_id_++);
+}
+
+CrostiniManager::RestartId CrostiniPackageService::GetRestartIdForTesting() {
+  return restart_id_for_testing_;
 }
 
 }  // namespace crostini

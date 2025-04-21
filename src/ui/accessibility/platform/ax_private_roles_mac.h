@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 
 #import <Cocoa/Cocoa.h>
 
-#include "ui/accessibility/ax_export.h"
+#include "base/component_export.h"
 
 // Private WebKit accessibility roles.
-AX_EXPORT constexpr NSString* const NSAccessibilityWebAreaRole = @"AXWebArea";
+COMPONENT_EXPORT(AX_PLATFORM)
+constexpr NSString* const NSAccessibilityWebAreaRole = @"AXWebArea";
 
 #endif  // UI_ACCESSIBILITY_PLATFORM_AX_PRIVATE_ROLES_MAC_H_

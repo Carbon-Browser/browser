@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,7 +30,6 @@ struct EnumTraits<chrome::mojom::ImportedPasswordForm::Scheme,
         break;
     }
     NOTREACHED();
-    return chrome::mojom::ImportedPasswordForm::Scheme::kHtml;
   }
 
   static bool FromMojom(chrome::mojom::ImportedPasswordForm::Scheme input,
@@ -44,7 +43,6 @@ struct EnumTraits<chrome::mojom::ImportedPasswordForm::Scheme,
         return true;
     }
     NOTREACHED();
-    return false;
   }
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,16 +8,15 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/task/task_runner_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/thread_pool.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/default_clock.h"
 #include "build/build_config.h"
 #include "components/image_fetcher/core/image_decoder.h"
@@ -62,7 +61,7 @@ class ImageDecodedHandlerWithTimeout {
       base::OnceCallback<void(const SkBitmap&)> image_decoded_callback) {
     auto* handler =
         new ImageDecodedHandlerWithTimeout(std::move(image_decoded_callback));
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&ImageDecodedHandlerWithTimeout::OnImageDecoded,
                        handler->weak_ptr_factory_.GetWeakPtr(), gfx::Image()),
@@ -88,15 +87,12 @@ class ImageDecodedHandlerWithTimeout {
 void ObserverOnLogoAvailable(LogoObserver* observer,
                              bool from_cache,
                              LogoCallbackReason type,
-                             const absl::optional<Logo>& logo) {
+                             const std::optional<Logo>& logo) {
   switch (type) {
     case LogoCallbackReason::DISABLED:
     case LogoCallbackReason::CANCELED:
     case LogoCallbackReason::FAILED:
-      break;
-
     case LogoCallbackReason::REVALIDATED:
-      observer->OnCachedLogoRevalidated();
       break;
 
     case LogoCallbackReason::DETERMINED:
@@ -111,19 +107,19 @@ void ObserverOnLogoAvailable(LogoObserver* observer,
 void RunCallbacksWithDisabled(LogoCallbacks callbacks) {
   if (callbacks.on_cached_encoded_logo_available) {
     std::move(callbacks.on_cached_encoded_logo_available)
-        .Run(LogoCallbackReason::DISABLED, absl::nullopt);
+        .Run(LogoCallbackReason::DISABLED, std::nullopt);
   }
   if (callbacks.on_cached_decoded_logo_available) {
     std::move(callbacks.on_cached_decoded_logo_available)
-        .Run(LogoCallbackReason::DISABLED, absl::nullopt);
+        .Run(LogoCallbackReason::DISABLED, std::nullopt);
   }
   if (callbacks.on_fresh_encoded_logo_available) {
     std::move(callbacks.on_fresh_encoded_logo_available)
-        .Run(LogoCallbackReason::DISABLED, absl::nullopt);
+        .Run(LogoCallbackReason::DISABLED, std::nullopt);
   }
   if (callbacks.on_fresh_decoded_logo_available) {
     std::move(callbacks.on_fresh_decoded_logo_available)
-        .Run(LogoCallbackReason::DISABLED, absl::nullopt);
+        .Run(LogoCallbackReason::DISABLED, std::nullopt);
   }
 }
 
@@ -163,14 +159,14 @@ void NotifyAndClear(std::vector<EncodedLogoCallback>* encoded_callbacks,
                     const EncodedLogo* encoded_logo,
                     const Logo* decoded_logo) {
   auto opt_encoded_logo =
-      encoded_logo ? absl::optional<EncodedLogo>(*encoded_logo) : absl::nullopt;
+      encoded_logo ? std::optional<EncodedLogo>(*encoded_logo) : std::nullopt;
   for (EncodedLogoCallback& callback : *encoded_callbacks) {
     std::move(callback).Run(type, opt_encoded_logo);
   }
   encoded_callbacks->clear();
 
   auto opt_decoded_logo =
-      decoded_logo ? absl::optional<Logo>(*decoded_logo) : absl::nullopt;
+      decoded_logo ? std::optional<Logo>(*decoded_logo) : std::nullopt;
   for (LogoCallback& callback : *decoded_callbacks) {
     std::move(callback).Run(type, opt_decoded_logo);
   }
@@ -321,8 +317,8 @@ void LogoServiceImpl::GetLogo(LogoCallbacks callbacks, bool for_webui_ntp) {
   if (is_idle_) {
     is_idle_ = false;
 
-    base::PostTaskAndReplyWithResult(
-        cache_task_runner_.get(), FROM_HERE,
+    cache_task_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE,
         base::BindOnce(&GetLogoFromCacheOnFileThread,
                        base::Unretained(logo_cache_.get()), logo_url_,
                        clock_->Now()),
@@ -395,13 +391,13 @@ void LogoServiceImpl::OnCachedLogoRead(
   DCHECK(!is_idle_);
 
   if (cached_logo && cached_logo->encoded_image) {
-    // Store the value of logo->encoded_image for use below. This ensures that
-    // logo->encoded_image is evaluated before base::Passed(&logo), which sets
-    // logo to NULL.
+    // Store the value of cached_logo->encoded_image for use below. This ensures
+    // that cached_logo->encoded_image is evaluated before
+    // std::move(cached_logo), which sets cached_logo to nullptr.
     scoped_refptr<base::RefCountedString> encoded_image =
         cached_logo->encoded_image;
     image_decoder_->DecodeImage(
-        encoded_image->data(), gfx::Size(),  // No particular size desired.
+        encoded_image->as_string(), gfx::Size(),  // No particular size desired.
         /*data_decoder=*/nullptr,
         ImageDecodedHandlerWithTimeout::Wrap(base::BindOnce(
             &LogoServiceImpl::OnLightCachedImageDecoded,
@@ -434,14 +430,15 @@ void LogoServiceImpl::OnLightCachedImageDecoded(
     return;
   }
 
-  // Store the value of logo->dark_encoded_image for use below. This ensures
-  // that logo->dark_encoded_image is evaluated before base::Passed(&logo),
-  // which sets logo to NULL.
+  // Store the value of cached_logo->dark_encoded_image for use below. This
+  // ensures that cached_logo->dark_encoded_image is evaluated before
+  // std::move(cached_logo), which sets cached_logo to nullptr.
   scoped_refptr<base::RefCountedString> dark_encoded_image =
       cached_logo->dark_encoded_image;
 
   image_decoder_->DecodeImage(
-      dark_encoded_image->data(), gfx::Size(),  // No particular size desired.
+      dark_encoded_image->as_string(),
+      gfx::Size(),  // No particular size desired.
       /*data_decoder=*/nullptr,
       ImageDecodedHandlerWithTimeout::Wrap(base::BindOnce(
           &LogoServiceImpl::OnCachedLogoAvailable,
@@ -531,12 +528,12 @@ void LogoServiceImpl::OnFreshLogoParsed(bool* parsing_failed,
                          SkBitmap());
   } else {
     // Store the value of logo->encoded_image for use below. This ensures that
-    // logo->encoded_image is evaluated before base::Passed(&logo), which sets
-    // logo to NULL.
+    // logo->encoded_image is evaluated before std::move(logo), which sets logo
+    // to nullptr.
     scoped_refptr<base::RefCountedString> encoded_image = logo->encoded_image;
 
     image_decoder_->DecodeImage(
-        encoded_image->data(), gfx::Size(),  // No particular size desired.
+        encoded_image->as_string(), gfx::Size(),  // No particular size desired.
         /*data_decoder=*/nullptr,
         ImageDecodedHandlerWithTimeout::Wrap(base::BindOnce(
             &LogoServiceImpl::OnLightFreshImageDecoded,
@@ -558,13 +555,14 @@ void LogoServiceImpl::OnLightFreshImageDecoded(
   }
 
   // Store the value of logo->dark_encoded_image for use below. This ensures
-  // that logo->encoded_image is evaluated before base::Passed(&logo), which
-  // sets logo to NULL.
+  // that logo->encoded_image is evaluated before std::move(logo), which sets
+  // logo to nullptr.
   scoped_refptr<base::RefCountedString> dark_encoded_image =
       logo->dark_encoded_image;
 
   image_decoder_->DecodeImage(
-      dark_encoded_image->data(), gfx::Size(),  // No particular size desired.
+      dark_encoded_image->as_string(),
+      gfx::Size(),  // No particular size desired.
       /*data_decoder=*/nullptr,
       ImageDecodedHandlerWithTimeout::Wrap(base::BindOnce(
           &LogoServiceImpl::OnFreshLogoAvailable,
@@ -681,7 +679,6 @@ void LogoServiceImpl::OnFreshLogoAvailable(
 
     case DOWNLOAD_OUTCOME_COUNT:
       NOTREACHED();
-      return;
   }
 
   NotifyAndClear(&on_fresh_encoded_logo_, &on_fresh_decoded_logo_,

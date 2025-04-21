@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/notreached.h"
 #include "base/run_loop.h"
@@ -154,7 +154,8 @@ class FtlMessagingClientTest : public testing::Test {
 
  protected:
   ProtobufHttpTestResponder test_responder_;
-  FakeOAuthTokenGetter token_getter_{OAuthTokenGetter::Status::SUCCESS, "", ""};
+  FakeOAuthTokenGetter token_getter_{OAuthTokenGetter::Status::SUCCESS,
+                                     OAuthTokenInfo()};
   std::unique_ptr<FtlMessagingClient> messaging_client_;
   raw_ptr<MockMessageReceptionChannel> mock_message_reception_channel_;
 
@@ -176,6 +177,7 @@ void FtlMessagingClientTest::SetUp() {
 }
 
 void FtlMessagingClientTest::TearDown() {
+  mock_message_reception_channel_ = nullptr;
   messaging_client_.reset();
 }
 

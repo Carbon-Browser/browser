@@ -1,8 +1,9 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.shape_detection;
+import org.chromium.build.annotations.NullMarked;
 
 import android.graphics.Point;
 import android.graphics.Rect;
@@ -20,10 +21,10 @@ import org.chromium.gms.ChromiumPlayServicesAvailability;
 import org.chromium.mojo.system.MojoException;
 import org.chromium.shape_detection.mojom.TextDetection;
 import org.chromium.shape_detection.mojom.TextDetectionResult;
+import org.chromium.build.annotations.Nullable;
 
-/**
- * Implementation of mojo TextDetection, using Google Play Services vision package.
- */
+/** Implementation of mojo TextDetection, using Google Play Services vision package. */
+@NullMarked
 public class TextDetectionImpl implements TextDetection {
     private static final String TAG = "TextDetectionImpl";
 
@@ -86,9 +87,9 @@ public class TextDetectionImpl implements TextDetection {
         close();
     }
 
-    public static TextDetection create() {
+    public static @Nullable TextDetection create() {
         if (!ChromiumPlayServicesAvailability.isGooglePlayServicesAvailable(
-                    ContextUtils.getApplicationContext())) {
+                ContextUtils.getApplicationContext())) {
             Log.e(TAG, "Google Play Services not available");
             return null;
         }

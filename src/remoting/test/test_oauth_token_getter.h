@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback_forward.h"
 #include "base/containers/queue.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "remoting/base/oauth_token_getter.h"
@@ -56,10 +56,6 @@ class TestOAuthTokenGetter final : public OAuthTokenGetter {
   base::WeakPtr<TestOAuthTokenGetter> GetWeakPtr();
 
  private:
-  std::unique_ptr<OAuthTokenGetter> CreateFromIntermediateCredentials(
-      const std::string& auth_code,
-      const OAuthTokenGetter::CredentialsUpdatedCallback&
-          on_credentials_update);
   std::unique_ptr<OAuthTokenGetter> CreateWithRefreshToken(
       const std::string& refresh_token,
       const std::string& email);
@@ -69,7 +65,8 @@ class TestOAuthTokenGetter final : public OAuthTokenGetter {
 
   void OnAccessToken(OAuthTokenGetter::Status status,
                      const std::string& user_email,
-                     const std::string& access_token);
+                     const std::string& access_token,
+                     const std::string& scopes);
 
   void RunAuthenticationDoneCallbacks();
 

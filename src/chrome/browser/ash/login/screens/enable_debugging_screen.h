@@ -1,4 +1,4 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,10 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ash/login/screens/base_screen.h"
-#include "chrome/browser/ui/webui/chromeos/login/enable_debugging_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/enable_debugging_screen_handler.h"
 
 namespace ash {
 
@@ -69,11 +69,5 @@ class EnableDebuggingScreen : public BaseScreen {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::EnableDebuggingScreen;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SCREENS_ENABLE_DEBUGGING_SCREEN_H_

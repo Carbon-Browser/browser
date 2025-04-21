@@ -7,7 +7,7 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "Linux Builder (Wayland)",
-              "project": "chromium"
+              "project": "chromium-m133"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-linux-archive",
@@ -19,12 +19,12 @@
                 ],
                 "build_config": "Release",
                 "config": "chromium",
-                "target_bits": 64
+                "target_bits": 64,
+                "target_platform": "linux"
               },
               "legacy_gclient_config": {
                 "apply_configs": [
-                  "use_clang_coverage",
-                  "enable_reclient"
+                  "use_clang_coverage"
                 ],
                 "config": "chromium"
               }
@@ -34,7 +34,7 @@
             "builder_id": {
               "bucket": "ci",
               "builder": "Linux Tests (Wayland)",
-              "project": "chromium"
+              "project": "chromium-m133"
             },
             "builder_spec": {
               "build_gs_bucket": "chromium-linux-archive",
@@ -46,19 +46,19 @@
                 ],
                 "build_config": "Release",
                 "config": "chromium",
-                "target_bits": 64
+                "target_bits": 64,
+                "target_platform": "linux"
               },
               "legacy_gclient_config": {
                 "apply_configs": [
-                  "use_clang_coverage",
-                  "enable_reclient"
+                  "use_clang_coverage"
                 ],
                 "config": "chromium"
               },
               "parent": {
                 "bucket": "ci",
                 "builder": "Linux Builder (Wayland)",
-                "project": "chromium"
+                "project": "chromium-m133"
               }
             }
           }
@@ -68,7 +68,7 @@
         {
           "bucket": "ci",
           "builder": "Linux Tests (Wayland)",
-          "project": "chromium"
+          "project": "chromium-m133"
         }
       ],
       "mirroring_builder_group_and_names": [
@@ -76,7 +76,9 @@
           "builder": "linux-wayland-rel",
           "group": "tryserver.chromium.linux"
         }
-      ]
+      ],
+      "retry_failed_shards": true,
+      "targets_spec_directory": "src/infra/config/generated/builders/ci/Linux Tests (Wayland)/targets"
     }
   },
   "$recipe_engine/resultdb/test_presentation": {
@@ -87,6 +89,9 @@
     ]
   },
   "builder_group": "chromium.linux",
+  "gardener_rotations": [
+    "chrome_browser_release"
+  ],
   "recipe": "chromium",
   "sheriff_rotations": [
     "chrome_browser_release"

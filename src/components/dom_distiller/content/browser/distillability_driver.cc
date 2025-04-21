@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,11 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/observer_list.h"
 #include "build/build_config.h"
 #include "content/public/browser/navigation_handle.h"
+#include "content/public/browser/page_user_data.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_observer.h"
@@ -18,6 +19,30 @@
 #include "mojo/public/cpp/bindings/self_owned_receiver.h"
 
 namespace dom_distiller {
+namespace {
+class DistillabilityResultPageData
+    : public content::PageUserData<DistillabilityResultPageData> {
+ public:
+  explicit DistillabilityResultPageData(content::Page& page);
+
+  DistillabilityResultPageData(const DistillabilityResultPageData&) = delete;
+  DistillabilityResultPageData& operator=(const DistillabilityResultPageData&) =
+      delete;
+
+  ~DistillabilityResultPageData() override;
+
+  DistillabilityResult distillability_result;
+
+  PAGE_USER_DATA_KEY_DECL();
+};
+
+DistillabilityResultPageData::DistillabilityResultPageData(content::Page& page)
+    : PageUserData<DistillabilityResultPageData>(page) {}
+DistillabilityResultPageData::~DistillabilityResultPageData() = default;
+
+PAGE_USER_DATA_KEY_IMPL(DistillabilityResultPageData);
+
+}  // namespace
 
 // Implementation of the Mojo DistillabilityService. This is called by the
 // renderer to notify the browser that a page is distillable.
@@ -31,12 +56,14 @@ class DistillabilityServiceImpl : public mojom::DistillabilityService {
 
   void NotifyIsDistillable(bool is_distillable,
                            bool is_last_update,
+                           bool is_long_article,
                            bool is_mobile_friendly) override {
     if (!distillability_driver_)
       return;
     DistillabilityResult result;
     result.is_distillable = is_distillable;
     result.is_last = is_last_update;
+    result.is_long_article = is_long_article;
     result.is_mobile_friendly = is_mobile_friendly;
     DVLOG(1) << "Notifying observers of distillability service result: "
              << result;
@@ -48,7 +75,8 @@ class DistillabilityServiceImpl : public mojom::DistillabilityService {
 };
 
 DistillabilityDriver::DistillabilityDriver(content::WebContents* web_contents)
-    : content::WebContentsUserData<DistillabilityDriver>(*web_contents) {}
+    : content::WebContentsUserData<DistillabilityDriver>(*web_contents),
+      content::WebContentsObserver(web_contents) {}
 
 DistillabilityDriver::~DistillabilityDriver() = default;
 
@@ -64,6 +92,14 @@ void DistillabilityDriver::SetIsSecureCallback(
   is_secure_check_ = std::move(is_secure_check);
 }
 
+void DistillabilityDriver::PrimaryPageChanged(content::Page& page) {
+  DistillabilityResultPageData* page_data =
+      DistillabilityResultPageData::GetForPage(page);
+  if (page_data) {
+    OnDistillability(page_data->distillability_result);
+  }
+}
+
 void DistillabilityDriver::OnDistillability(
     const DistillabilityResult& result) {
 #if !BUILDFLAG(IS_ANDROID)
@@ -72,6 +108,7 @@ void DistillabilityDriver::OnDistillability(
       DistillabilityResult not_distillable;
       not_distillable.is_distillable = false;
       not_distillable.is_last = result.is_last;
+      not_distillable.is_long_article = result.is_long_article;
       not_distillable.is_mobile_friendly = result.is_mobile_friendly;
       latest_result_ = not_distillable;
       for (auto& observer : observers_)
@@ -80,6 +117,13 @@ void DistillabilityDriver::OnDistillability(
     }
   }
 #endif  // !BUILDFLAG(IS_ANDROID)
+
+  DistillabilityResultPageData::CreateForPage(
+      GetWebContents().GetPrimaryPage());
+  DistillabilityResultPageData* page_data =
+      DistillabilityResultPageData::GetForPage(
+          GetWebContents().GetPrimaryPage());
+  page_data->distillability_result = result;
   latest_result_ = result;
   for (auto& observer : observers_)
     observer.OnResult(result);

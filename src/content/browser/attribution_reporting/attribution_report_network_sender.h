@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,25 +7,36 @@
 
 #include <list>
 #include <memory>
+#include <string>
 
-#include "base/callback_forward.h"
-#include "base/memory/raw_ptr.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/scoped_refptr.h"
+#include "build/buildflag.h"
 #include "content/browser/attribution_reporting/attribution_report_sender.h"
 #include "content/common/content_export.h"
-#include "services/network/public/cpp/shared_url_loader_factory.h"
+
+#if BUILDFLAG(IS_ANDROID)
+#include "base/android/application_status_listener.h"
+#endif
+
+class GURL;
 
 namespace net {
 class HttpResponseHeaders;
 }  // namespace net
 
 namespace network {
+class SharedURLLoaderFactory;
 class SimpleURLLoader;
 }  // namespace network
+
+namespace url {
+class Origin;
+}  // namespace url
 
 namespace content {
 
 class AttributionReport;
-class StoragePartition;
 
 // Issues POST requests containing attribution reports. Maintains a set of all
 // ongoing UrlLoaders used for posting reports. Created and owned by
@@ -33,7 +44,8 @@ class StoragePartition;
 class CONTENT_EXPORT AttributionReportNetworkSender
     : public AttributionReportSender {
  public:
-  explicit AttributionReportNetworkSender(StoragePartition* storage_partition);
+  explicit AttributionReportNetworkSender(
+      scoped_refptr<network::SharedURLLoaderFactory>);
   AttributionReportNetworkSender(const AttributionReportNetworkSender&) =
       delete;
   AttributionReportNetworkSender& operator=(
@@ -44,33 +56,69 @@ class CONTENT_EXPORT AttributionReportNetworkSender
   ~AttributionReportNetworkSender() override;
 
   // AttributionReportSender:
+  void SetInFirstBatch(bool in_first_batch) override;
+
   void SendReport(AttributionReport report,
                   bool is_debug_report,
                   ReportSentCallback sent_callback) override;
+  void SendReport(AttributionDebugReport report,
+                  DebugReportSentCallback) override;
 
-  // Tests inject a TestURLLoaderFactory so they can mock the network response.
-  void SetURLLoaderFactoryForTesting(
-      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory);
+  void SendReport(AggregatableDebugReport,
+                  base::Value::Dict report_body,
+                  AggregatableDebugReportSentCallback) override;
 
  private:
   // This is a std::list so that iterators remain valid during modifications.
   using UrlLoaderList = std::list<std::unique_ptr<network::SimpleURLLoader>>;
 
+  using UrlLoaderCallback =
+      base::OnceCallback<void(UrlLoaderList::iterator it,
+                              scoped_refptr<net::HttpResponseHeaders>)>;
+
+  void SendReport(GURL url,
+                  url::Origin origin,
+                  std::string body,
+                  UrlLoaderCallback callback);
+
   // Called when headers are available for a sent report.
-  void OnReportSent(UrlLoaderList::iterator it,
-                    AttributionReport report,
+  void OnReportSent(const AttributionReport&,
                     bool is_debug_report,
                     ReportSentCallback sent_callback,
+                    UrlLoaderList::iterator it,
                     scoped_refptr<net::HttpResponseHeaders> headers);
+
+  // Called when headers are available for a sent verbose debug report.
+  void OnVerboseDebugReportSent(
+      base::OnceCallback<void(int status)> callback,
+      UrlLoaderList::iterator it,
+      scoped_refptr<net::HttpResponseHeaders> headers);
+
+  void OnAggregatableDebugReportSent(
+      base::OnceCallback<void(int status)> callback,
+      UrlLoaderList::iterator,
+      scoped_refptr<net::HttpResponseHeaders>);
 
   // Reports that are actively being sent.
   UrlLoaderList loaders_in_progress_;
 
-  // Must outlive |this|.
-  raw_ptr<StoragePartition> storage_partition_;
-
-  // Lazily accessed URLLoaderFactory used for network requests.
+  // Used for network requests.
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
+
+  // Used for metric logging.
+  bool in_first_batch_ = true;
+
+#if BUILDFLAG(IS_ANDROID)
+  // Callback invoked when the application state changes.
+  void OnApplicationStateChanged(base::android::ApplicationState state);
+
+  // Listener for changes in application state, unregisters itself when
+  // destroyed.
+  const std::unique_ptr<base::android::ApplicationStatusListener>
+      application_status_listener_;
+
+  base::android::ApplicationState app_state_;
+#endif
 };
 
 }  // namespace content

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,6 @@ unsigned SyntheticPointerActionParams::GetWebMouseEventModifier(
       return blink::WebMouseEvent::kNoModifiers;
   }
   NOTREACHED();
-  return blink::WebMouseEvent::kNoModifiers;
 }
 
 // static
@@ -59,7 +58,6 @@ SyntheticPointerActionParams::GetWebMouseEventButton(
       return blink::WebMouseEvent::Button::kNoButton;
   }
   NOTREACHED();
-  return blink::WebMouseEvent::Button::kNoButton;
 }
 
 // static

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -61,24 +61,22 @@ TEST_F(EnterpriseHardwarePlatformAPITest, GetHardwarePlatformInfoAllowed) {
       prefs::kEnterpriseHardwarePlatformAPIEnabled,
       std::make_unique<base::Value>(true));
 
-  std::unique_ptr<base::Value> result =
+  std::optional<base::Value> result =
       api_test_utils::RunFunctionAndReturnSingleResult(function(), "[]",
                                                        browser_context());
   ASSERT_TRUE(result);
   ASSERT_TRUE(result->is_dict());
-  ASSERT_EQ(result->DictSize(), 2u);
+  const base::Value::Dict& result_dict = result->GetDict();
+  ASSERT_EQ(result_dict.size(), 2u);
 
-  const base::Value* val =
-      result->FindKeyOfType("manufacturer", base::Value::Type::STRING);
-  ASSERT_TRUE(val);
-  const std::string& manufacturer = val->GetString();
+  const std::string* manufacturer = result_dict.FindString("manufacturer");
+  ASSERT_TRUE(manufacturer);
 
-  val = result->FindKeyOfType("model", base::Value::Type::STRING);
-  ASSERT_TRUE(val);
-  const std::string& model = val->GetString();
+  const std::string* model = result_dict.FindString("model");
+  ASSERT_TRUE(model);
 
-  EXPECT_FALSE(manufacturer.empty());
-  EXPECT_FALSE(model.empty());
+  EXPECT_FALSE(manufacturer->empty());
+  EXPECT_FALSE(model->empty());
 }
 
 TEST_F(EnterpriseHardwarePlatformAPITest,

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <utility>
 
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/models/combobox_model.h"
 
 namespace payments {
@@ -31,8 +32,9 @@ void ValidatingCombobox::OnBlur() {
 
 void ValidatingCombobox::ViewHierarchyChanged(
     const views::ViewHierarchyChangedDetails& details) {
-  if (details.child == this && !details.is_add)
+  if (details.child == this && !details.is_add) {
     being_removed_ = true;
+  }
 }
 
 void ValidatingCombobox::OnContentsChanged() {
@@ -53,5 +55,8 @@ void ValidatingCombobox::Validate() {
   // ComboboxValueChanged may have side-effects, such as displaying errors.
   SetInvalid(!delegate_->ComboboxValueChanged(this));
 }
+
+BEGIN_METADATA(ValidatingCombobox)
+END_METADATA
 
 }  // namespace payments

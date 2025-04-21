@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -63,8 +63,9 @@ bool WaitForEventWithTimeout(const FilePath& signal_dir,
                              const base::TimeDelta& timeout) {
   const base::Time finish_by = base::Time::Now() + timeout;
   while (!CheckEvent(signal_dir, signal_file)) {
-    if (base::Time::Now() > finish_by)
+    if (base::Time::Now() > finish_by) {
       return false;
+    }
     base::PlatformThread::Sleep(base::Milliseconds(10));
   }
   return true;

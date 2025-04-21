@@ -47,7 +47,6 @@ SVGPoint* SVGPoint::Clone() const {
 SVGPropertyBase* SVGPoint::CloneForAnimation(const String& value) const {
   // SVGPoint is not animated by itself.
   NOTREACHED();
-  return nullptr;
 }
 
 String SVGPoint::ValueAsString() const {
@@ -79,7 +78,6 @@ float SVGPoint::CalculateDistance(const SVGPropertyBase* to,
                                   const SVGElement* context_element) const {
   // SVGPoint is not animated by itself.
   NOTREACHED();
-  return 0.0f;
 }
 
 }  // namespace blink

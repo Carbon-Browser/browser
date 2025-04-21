@@ -36,6 +36,7 @@ class FlatbufferData {
 
   virtual const uint8_t* data() const = 0;
   virtual size_t size() const = 0;
+  virtual const base::span<const uint8_t> span() const = 0;
 
   // Schedules permanent removal of the data source of this flatbuffer when
   // |this| is destroyed. This can mean removing a file from disk or removing
@@ -49,8 +50,10 @@ class InMemoryFlatbufferData : public FlatbufferData {
  public:
   explicit InMemoryFlatbufferData(std::string data);
   ~InMemoryFlatbufferData() override;
+
   const uint8_t* data() const override;
   size_t size() const override;
+  const base::span<const uint8_t> span() const override;
 
  private:
   std::string data_;
@@ -65,8 +68,10 @@ class MemoryMappedFlatbufferData : public FlatbufferData {
   // Ctor should be called on blocking task runner, performs file I/O/
   explicit MemoryMappedFlatbufferData(base::FilePath path);
   ~MemoryMappedFlatbufferData() override;
+
   const uint8_t* data() const override;
   size_t size() const override;
+  const base::span<const uint8_t> span() const override;
 
   // Post cleanup of the mapped file to blocking task runner during destruction.
   void PermanentlyRemoveSourceOnDestruction() final;

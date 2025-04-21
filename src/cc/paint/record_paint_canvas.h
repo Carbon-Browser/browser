@@ -1,76 +1,105 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CC_PAINT_RECORD_PAINT_CANVAS_H_
 #define CC_PAINT_RECORD_PAINT_CANVAS_H_
 
+#include <optional>
+
 #include "base/compiler_specific.h"
+#include "base/containers/span.h"
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "cc/paint/paint_canvas.h"
 #include "cc/paint/paint_flags.h"
+#include "cc/paint/paint_op_buffer.h"
 #include "cc/paint/paint_record.h"
 #include "cc/paint/skottie_color_map.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/skia/include/core/SkRect.h"
+#include "third_party/skia/include/core/SkRefCnt.h"
 #include "third_party/skia/include/utils/SkNoDrawCanvas.h"
 
 namespace cc {
 
-class DisplayItemList;
-class PaintFlags;
+class PaintFilter;
 
+// This implementation of PaintCanvas records paint operations into the given
+// PaintOpBuffer. The methods that inspect the current clip or CTM are not
+// implemented (DCHECK will fail if called). Use InspectableRecordPaintCanvas
+// instead if the client needs to call those methods.
 class CC_PAINT_EXPORT RecordPaintCanvas : public PaintCanvas {
  public:
-  RecordPaintCanvas(DisplayItemList* list, const SkRect& bounds);
-  RecordPaintCanvas(const RecordPaintCanvas&) = delete;
+  RecordPaintCanvas();
   ~RecordPaintCanvas() override;
 
+  RecordPaintCanvas(const RecordPaintCanvas&) = delete;
   RecordPaintCanvas& operator=(const RecordPaintCanvas&) = delete;
 
-  SkImageInfo imageInfo() const override;
+  // Returns the set of paint ops recorded so far and clears it from the
+  // internal buffer maintained by the canvas.
+  virtual PaintRecord ReleaseAsRecord();
+  // Returns the set of paint ops recorded so far without clearing it from the
+  // internal buffer.
+  virtual PaintRecord CopyAsRecord();
+
+  // See comments around `maybe_draw_lines_as_paths_` for details.
+  void DisableLineDrawingAsPaths();
+
+  bool HasRecordedDrawOps() const { return buffer_.has_draw_ops(); }
+  size_t TotalOpCount() const { return buffer_.total_op_count(); }
+  size_t OpBytesUsed() const { return buffer_.paint_ops_size(); }
 
   void* accessTopLayerPixels(SkImageInfo* info,
                              size_t* rowBytes,
                              SkIPoint* origin = nullptr) override;
 
   void flush() override;
+  bool NeedsFlush() const override;
 
   int save() override;
-  int saveLayer(const SkRect* bounds, const PaintFlags* flags) override;
-  int saveLayerAlpha(const SkRect* bounds, uint8_t alpha) override;
-
+  int saveLayer(const PaintFlags& flags) override;
+  int saveLayer(const SkRect& bounds, const PaintFlags& flags) override;
+  int saveLayerAlphaf(float alpha) override;
+  int saveLayerAlphaf(const SkRect& bounds, float alpha) override;
+  int saveLayerFilters(base::span<const sk_sp<PaintFilter>> filters,
+                       const PaintFlags& flags) override;
   void restore() override;
-  int getSaveCount() const override;
+  int getSaveCount() const final;
   void restoreToCount(int save_count) override;
+
   void translate(SkScalar dx, SkScalar dy) override;
   void scale(SkScalar sx, SkScalar sy) override;
   void rotate(SkScalar degrees) override;
-  // TODO(crbug.com/1167153): The concat and setMatrix methods that take an
-  // SkMatrix should be removed in favor of the SkM44 versions.
-  void concat(const SkMatrix& matrix) override;
-  void setMatrix(const SkMatrix& matrix) override;
   void concat(const SkM44& matrix) override;
   void setMatrix(const SkM44& matrix) override;
 
   void clipRect(const SkRect& rect, SkClipOp op, bool antialias) override;
-  void clipRRect(const SkRRect& rrect, SkClipOp op, bool antialias) override;
+  void clipRRect(const SkRRect& rrect, SkClipOp op, bool antialias) final;
   void clipPath(const SkPath& path,
                 SkClipOp op,
                 bool antialias,
-                UsePaintCache use_paint_cache) override;
-  SkRect getLocalClipBounds() const override;
+                UsePaintCache use_paint_cache) final;
+
+  // These state-query functions can be called only if `size` is not empty in
+  // the constructor. With this restriction, we don't need to create
+  // SkNoDrawCanvas for clients that only need recording.
+  SkImageInfo imageInfo() const override;
   bool getLocalClipBounds(SkRect* bounds) const override;
-  SkIRect getDeviceClipBounds() const override;
   bool getDeviceClipBounds(SkIRect* bounds) const override;
+  SkM44 getLocalToDevice() const override;
+
   void drawColor(SkColor4f color, SkBlendMode mode) override;
   void clear(SkColor4f color) override;
-
   void drawLine(SkScalar x0,
                 SkScalar y0,
                 SkScalar x1,
                 SkScalar y1,
                 const PaintFlags& flags) override;
+  void drawArc(const SkRect& oval,
+               SkScalar start_angle_degrees,
+               SkScalar sweep_angle_degrees,
+               const PaintFlags& flags) override;
   void drawRect(const SkRect& rect, const PaintFlags& flags) override;
   void drawIRect(const SkIRect& rect, const PaintFlags& flags) override;
   void drawOval(const SkRect& oval, const PaintFlags& flags) override;
@@ -96,6 +125,10 @@ class CC_PAINT_EXPORT RecordPaintCanvas : public PaintCanvas {
                      const SkSamplingOptions&,
                      const PaintFlags* flags,
                      SkCanvas::SrcRectConstraint constraint) override;
+  void drawVertices(scoped_refptr<RefCountedBuffer<SkPoint>> vertices,
+                    scoped_refptr<RefCountedBuffer<SkPoint>> uvs,
+                    scoped_refptr<RefCountedBuffer<uint16_t>> indices,
+                    const PaintFlags& flags) override;
   void drawSkottie(scoped_refptr<SkottieWrapper> skottie,
                    const SkRect& dst,
                    float t,
@@ -111,12 +144,8 @@ class CC_PAINT_EXPORT RecordPaintCanvas : public PaintCanvas {
                     SkScalar y,
                     NodeId node_id,
                     const PaintFlags& flags) override;
-
-  void drawPicture(sk_sp<const PaintRecord> record) override;
-
-  bool isClipEmpty() const override;
-  SkMatrix getTotalMatrix() const override;
-  SkM44 getLocalToDevice() const override;
+  void drawPicture(PaintRecord record) override;
+  void drawPicture(PaintRecord record, bool local_ctm) override;
 
   void Annotate(AnnotationType type,
                 const SkRect& rect,
@@ -124,14 +153,13 @@ class CC_PAINT_EXPORT RecordPaintCanvas : public PaintCanvas {
   void recordCustomData(uint32_t id) override;
   void setNodeId(int) override;
 
-  bool NeedsFlush() const override;
-
   // Don't shadow non-virtual helper functions.
+  using PaintCanvas::clipPath;
   using PaintCanvas::clipRect;
   using PaintCanvas::clipRRect;
-  using PaintCanvas::clipPath;
   using PaintCanvas::drawColor;
   using PaintCanvas::drawImage;
+  using PaintCanvas::drawPath;
   using PaintCanvas::drawPicture;
 
 #if DCHECK_IS_ON()
@@ -170,31 +198,95 @@ class CC_PAINT_EXPORT RecordPaintCanvas : public PaintCanvas {
 #endif
   };
 
+ protected:
+  virtual void clipRRectInternal(const SkRRect& rrect,
+                                 SkClipOp op,
+                                 bool antialias);
+  virtual void clipPathInternal(const SkPath& path,
+                                SkClipOp op,
+                                bool antialias,
+                                UsePaintCache use_paint_cache);
+
+  bool IsDrawLinesAsPathsEnabled() const { return maybe_draw_lines_as_paths_; }
+
  private:
   template <typename T, typename... Args>
-  size_t push(Args&&... args);
+  void push(Args&&... args);
 
-  const SkNoDrawCanvas* GetCanvas() const;
-  SkNoDrawCanvas* GetCanvas();
+  PaintOpBuffer buffer_;
+  int save_count_ = 1;
 
-  bool InitializedWithRecordingBounds() const;
-
-  DisplayItemList* list_;
-
-  // TODO(enne): Although RecordPaintCanvas is mostly a write-only interface
-  // where paint commands are stored, occasionally users of PaintCanvas want
-  // to ask stateful questions mid-stream of clip and transform state.
-  // To avoid duplicating all this code (for now?), just forward to an SkCanvas
-  // that's not backed by anything but can answer these questions.
-  //
-  // This is mutable so that const functions (e.g. quickReject) that may
-  // lazy initialize the canvas can still be const.
-  mutable absl::optional<SkNoDrawCanvas> canvas_;
-  SkRect recording_bounds_;
   bool needs_flush_ = false;
 #if DCHECK_IS_ON()
   unsigned disable_flush_check_scope_ = 0;
 #endif
+  // These fields are used to determine if lines should be rastered as paths.
+  // Rasterization may batch operations, and that batching may be disabled if
+  // drawLine() is used instead of drawPath(). These members are used to
+  // determine is a drawLine() should be rastered as a drawPath().
+  // TODO(crbug.com/40045234): figure out better heurstics.
+  bool maybe_draw_lines_as_paths_ = true;
+  uint32_t draw_path_count_ = 0;
+  uint32_t draw_line_count_ = 0;
+};
+
+// Besides the recording functions, this implementation of PaintCanvas allows
+// inspection of the current clip and CTM during recording.
+class CC_PAINT_EXPORT InspectableRecordPaintCanvas : public RecordPaintCanvas {
+ public:
+  explicit InspectableRecordPaintCanvas(const gfx::Size& size);
+  ~InspectableRecordPaintCanvas() override;
+
+  int save() override;
+  int saveLayer(const PaintFlags& flags) override;
+  int saveLayer(const SkRect& bounds, const PaintFlags& flags) override;
+  int saveLayerAlphaf(float alpha) override;
+  int saveLayerAlphaf(const SkRect& bounds, float alpha) override;
+  int saveLayerFilters(base::span<const sk_sp<PaintFilter>> filters,
+                       const PaintFlags& flags) override;
+  void restore() override;
+
+  void translate(SkScalar dx, SkScalar dy) override;
+  void scale(SkScalar sx, SkScalar sy) override;
+  void rotate(SkScalar degrees) override;
+  void concat(const SkM44& matrix) override;
+  void setMatrix(const SkM44& matrix) override;
+
+  void clipRect(const SkRect& rect, SkClipOp op, bool antialias) override;
+
+  SkImageInfo imageInfo() const override;
+  bool getLocalClipBounds(SkRect* bounds) const override;
+  bool getDeviceClipBounds(SkIRect* bounds) const override;
+  SkM44 getLocalToDevice() const override;
+
+  // Don't shadow non-virtual helper functions.
+  using RecordPaintCanvas::clipRect;
+
+ protected:
+  // Creates a child canvas that has the same transform matrix and size as
+  // `parent`. `CreateChildCanvasTag` is used to differentiate this from a copy
+  // constructor.
+  struct CreateChildCanvasTag {};
+  InspectableRecordPaintCanvas(CreateChildCanvasTag,
+                               const InspectableRecordPaintCanvas& parent);
+
+ private:
+  void clipRRectInternal(const SkRRect& rrect,
+                         SkClipOp op,
+                         bool antialias) override;
+  void clipPathInternal(const SkPath& path,
+                        SkClipOp op,
+                        bool antialias,
+                        UsePaintCache use_paint_cache) override;
+
+  int CheckSaveCount(int super_prev_save_count, int canvas_prev_save_count);
+
+  SkNoDrawCanvas canvas_;
+
+  // Cached value of `canvas.getDeviceClipBounds()`. Cached as this value is
+  // used in every fill/stroke operation and calculating is on the expensive
+  // side.
+  mutable std::optional<SkIRect> device_clip_bounds_;
 };
 
 }  // namespace cc

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,6 +26,8 @@ class PlatformSensorProviderLinux : public PlatformSensorProviderLinuxBase,
 
   ~PlatformSensorProviderLinux() override;
 
+  base::WeakPtr<PlatformSensorProvider> AsWeakPtr() override;
+
   // Sets another service provided by tests.
   void SetSensorDeviceManagerForTesting(
       std::unique_ptr<SensorDeviceManager> sensor_device_manager);
@@ -33,7 +35,6 @@ class PlatformSensorProviderLinux : public PlatformSensorProviderLinuxBase,
  protected:
   // PlatformSensorProviderLinuxBase overrides:
   void CreateSensorInternal(mojom::SensorType type,
-                            SensorReadingSharedBuffer* reading_buffer,
                             CreateSensorCallback callback) override;
   void FreeResources() override;
   bool IsSensorTypeAvailable(mojom::SensorType type) const override;
@@ -54,30 +55,14 @@ class PlatformSensorProviderLinux : public PlatformSensorProviderLinuxBase,
   // enumeration is ready.
   SensorInfoLinux* GetSensorDevice(mojom::SensorType type) const;
 
-  // Processed stored requests in |request_map_|.
-  void ProcessStoredRequests();
-
-  // Called when sensors are created asynchronously after enumeration is done.
-  void CreateSensorAndNotify(mojom::SensorType type,
-                             SensorInfoLinux* sensor_device);
+  void DidEnumerateSensors(mojom::SensorType type,
+                           CreateSensorCallback callback);
 
   // SensorDeviceManager::Delegate overrides:
-  void OnSensorNodesEnumerated() override;
   void OnDeviceAdded(mojom::SensorType type,
                      std::unique_ptr<SensorInfoLinux> sensor_device) override;
   void OnDeviceRemoved(mojom::SensorType type,
                        const std::string& device_node) override;
-
-  enum class SensorEnumerationState : uint8_t {
-    // Original state.
-    kNotEnumerated,
-
-    // |sensor_device_manager_| has started to enumerate sensors.
-    kEnumerationStarted,
-
-    // Sensor enumeration has finished.
-    kEnumerationFinished
-  } enumeration_status_ = SensorEnumerationState::kNotEnumerated;
 
   // Stores all available sensor devices by type.
   SensorDeviceMap sensor_devices_by_type_;

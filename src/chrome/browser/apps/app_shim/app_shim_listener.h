@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,7 +49,7 @@ class AppShimListener : public apps::MachBootstrapAcceptor::Delegate,
 
   // MachBootstrapAcceptor::Delegate:
   void OnClientConnected(mojo::PlatformChannelEndpoint endpoint,
-                         base::ProcessId peer_pid) override;
+                         audit_token_t audit_token) override;
   void OnServerChannelCreateError() override;
 
   // The |acceptor_| must be created on a thread which allows blocking I/O.

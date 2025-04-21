@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <algorithm>
 
-#include "base/callback.h"
 #include "base/check.h"
+#include "base/functional/callback.h"
 
 namespace media {
 
@@ -39,7 +39,7 @@ void MemoryDataSource::Read(int64_t position,
 
   if (clamped_size > 0) {
     DCHECK(data);
-    memcpy(data, data_ + position, clamped_size);
+    memcpy(data, data_ + base::checked_cast<size_t>(position), clamped_size);
   }
 
   std::move(read_cb).Run(clamped_size);
@@ -61,5 +61,15 @@ bool MemoryDataSource::IsStreaming() {
 }
 
 void MemoryDataSource::SetBitrate(int bitrate) {}
+
+bool MemoryDataSource::PassedTimingAllowOriginCheck() {
+  // There are no HTTP responses, so this can safely return true.
+  return true;
+}
+
+bool MemoryDataSource::WouldTaintOrigin() {
+  // There are no HTTP responses, so this can safely return false.
+  return false;
+}
 
 }  // namespace media

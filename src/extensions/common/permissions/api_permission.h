@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/values.h"
 #include "extensions/common/mojom/api_permission_id.mojom-shared.h"
@@ -150,7 +150,7 @@ class APIPermissionInfo {
   using APIPermissionConstructor =
       std::unique_ptr<APIPermission> (*)(const APIPermissionInfo*);
 
-  typedef std::set<mojom::APIPermissionID> IDSet;
+  using IDSet = std::set<mojom::APIPermissionID>;
 
   // This exists to allow aggregate initialization, so that default values
   // for flags, etc. can be omitted.

@@ -1,11 +1,12 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "tools/mac/power/power_sampler/smc_sampler.h"
 
+#include <string_view>
+
 #include "base/memory/ptr_util.h"
-#include "base/strings/string_piece.h"
 #include "components/power_metrics/smc_mac.h"
 
 namespace power_sampler {
@@ -13,8 +14,8 @@ namespace power_sampler {
 namespace {
 
 void MaybeAddToSample(Sampler::Sample* sample,
-                      base::StringPiece name,
-                      absl::optional<double> val) {
+                      std::string_view name,
+                      std::optional<double> val) {
   if (val.has_value())
     sample->emplace(name, val.value());
 }

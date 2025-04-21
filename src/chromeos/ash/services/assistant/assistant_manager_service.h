@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,11 @@
 #include "base/component_export.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_service.h"
 #include "chromeos/ash/services/assistant/public/cpp/assistant_settings.h"
-#include "chromeos/services/libassistant/public/mojom/authentication_state_observer.mojom.h"
+#include "chromeos/ash/services/libassistant/public/mojom/authentication_state_observer.mojom.h"
+#include "google_apis/gaia/gaia_id.h"
 #include "services/media_session/public/mojom/media_session.mojom-shared.h"
 
-namespace chromeos {
-namespace assistant {
+namespace ash::assistant {
 
 class AuthenticationStateObserver;
 
@@ -26,13 +26,18 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AssistantManagerService
   class StateObserver;
 
   struct UserInfo {
-    UserInfo(const std::string& gaia_id, const std::string& access_token)
+    UserInfo(const GaiaId& gaia_id, const std::string& access_token)
         : gaia_id(gaia_id), access_token(access_token) {}
 
-    std::string gaia_id;
+    GaiaId gaia_id;
     std::string access_token;
   };
 
+  // These values are persisted to logs. Entries should not be renumbered and
+  // numeric values should never be reused.
+  // If any value is added, please update enums.xml
+  // `AssistantServiceState`.
+  // Enumeration of possible assistant manager service states.
   enum State {
     // Initial state, the service is created but not started yet.
     STOPPED = 0,
@@ -40,13 +45,21 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AssistantManagerService
     // Calling |assistant_manager()| will still return a nullptr.
     // TODO(b/171748795): I think we no longer need this state once
     // Libassistant has migrated to a mojom service (in fact, we should be able
-    // to remove this enum and use chromeos::libassistant::mojom::ServiceState).
+    // to remove this enum and use ash::libassistant::mojom::ServiceState).
     STARTING = 1,
     // The service is started, libassistant has been created, but libassistant
     // is not ready yet to take requests.
     STARTED = 2,
     // The service is fully running and ready to take requests.
-    RUNNING = 3
+    RUNNING = 3,
+    // Stop has been called but `assistant_manager` has not been destroyed. It
+    // is possible that some functions will call back to the browser thread,
+    // e.g. the audio output.
+    STOPPING = 4,
+    // The libassistant mojom service is disconnected, e.g. process crashes.
+    DISCONNECTED = 5,
+
+    kMaxValue = DISCONNECTED
   };
 
   ~AssistantManagerService() override = default;
@@ -55,7 +68,7 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AssistantManagerService
   // If the user is nullopt, the service will be started in signed-out mode.
   // If you want to know when the service is started, use
   // |AddAndFireStateObserver| to add an observer.
-  virtual void Start(const absl::optional<UserInfo>& user,
+  virtual void Start(const std::optional<UserInfo>& user,
                      bool enable_hotword) = 0;
 
   // Stop the Assistant.
@@ -67,7 +80,7 @@ class COMPONENT_EXPORT(ASSISTANT_SERVICE) AssistantManagerService
   // Set user information for Assistant. Passing a nullopt will reconfigure
   // Libassistant to run in signed-out mode, and passing a valid non-empty value
   // will switch the mode back to normal.
-  virtual void SetUser(const absl::optional<UserInfo>& user) = 0;
+  virtual void SetUser(const std::optional<UserInfo>& user) = 0;
 
   // Turn on / off all listening, including hotword and voice query.
   virtual void EnableListening(bool enable) = 0;
@@ -112,21 +125,20 @@ class AssistantManagerService::StateObserver : public base::CheckedObserver {
 };
 
 class AuthenticationStateObserver
-    : public ::chromeos::libassistant::mojom::AuthenticationStateObserver {
+    : public libassistant::mojom::AuthenticationStateObserver {
  public:
   AuthenticationStateObserver();
   ~AuthenticationStateObserver() override;
 
-  mojo::PendingRemote<
-      ::chromeos::libassistant::mojom::AuthenticationStateObserver>
+  mojo::PendingRemote<libassistant::mojom::AuthenticationStateObserver>
   BindNewPipeAndPassRemote();
+  void ResetAuthenticationStateObserver();
 
  private:
-  mojo::Receiver<::chromeos::libassistant::mojom::AuthenticationStateObserver>
-      receiver_{this};
+  mojo::Receiver<libassistant::mojom::AuthenticationStateObserver> receiver_{
+      this};
 };
 
-}  // namespace assistant
-}  // namespace chromeos
+}  // namespace ash::assistant
 
 #endif  // CHROMEOS_ASH_SERVICES_ASSISTANT_ASSISTANT_MANAGER_SERVICE_H_

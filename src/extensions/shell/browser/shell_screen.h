@@ -1,10 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef EXTENSIONS_SHELL_BROWSER_SHELL_SCREEN_H_
 #define EXTENSIONS_SHELL_BROWSER_SHELL_SCREEN_H_
 
+#include "base/memory/raw_ptr.h"
 #include "ui/aura/window_tree_host_observer.h"
 #include "ui/display/display.h"
 #include "ui/display/screen_base.h"
@@ -46,7 +47,7 @@ class ShellScreen : public display::ScreenBase,
       gfx::NativeWindow window) const override;
 
  private:
-  ShellDesktopControllerAura* const desktop_controller_;
+  const raw_ptr<ShellDesktopControllerAura> desktop_controller_;
 };
 
 }  // namespace extensions

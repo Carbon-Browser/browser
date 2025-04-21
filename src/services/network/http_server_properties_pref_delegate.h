@@ -1,12 +1,13 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef SERVICES_NETWORK_HTTP_SERVER_PROPERTIES_PREF_DELEGATE_H_
 #define SERVICES_NETWORK_HTTP_SERVER_PROPERTIES_PREF_DELEGATE_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
+#include "base/values.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "net/http/http_server_properties.h"
 
@@ -31,8 +32,8 @@ class HttpServerPropertiesPrefDelegate
   static void RegisterPrefs(PrefRegistrySimple* pref_registry);
 
   // net::HttpServerProperties::PrefDelegate implementation.
-  const base::Value* GetServerProperties() const override;
-  void SetServerProperties(const base::Value& value,
+  const base::Value::Dict& GetServerProperties() const override;
+  void SetServerProperties(base::Value::Dict dict,
                            base::OnceClosure callback) override;
   void WaitForPrefLoad(base::OnceClosure callback) override;
 

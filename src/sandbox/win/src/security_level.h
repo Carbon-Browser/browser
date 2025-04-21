@@ -1,4 +1,4 @@
-// Copyright (c) 2006-2008 The Chromium Authors. All rights reserved.
+// Copyright 2006-2008 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,8 +43,6 @@ enum IntegrityLevel {
 // ----------------------------|--------------|----------------|----------|
 // USER_LOCKDOWN               | Null Sid     | All            | None     |
 // ----------------------------|--------------|----------------|----------|
-// USER_RESTRICTED             | RESTRICTED   | All            | Traverse |
-// ----------------------------|--------------|----------------|----------|
 // USER_LIMITED                | Users        | All except:    | Traverse |
 //                             | Everyone     | Users          |          |
 //                             | RESTRICTED   | Everyone       |          |
@@ -76,14 +74,12 @@ enum IntegrityLevel {
 // applied to the target process depends both on the token level selected
 // and on the broker token itself.
 //
-//  The LOCKDOWN and RESTRICTED are designed to allow access to almost
-//  nothing that has security associated with and they are the recommended
-//  levels to run sandboxed code specially if there is a chance that the
-//  broker is process might be started by a user that belongs to the Admins
-//  or power users groups.
+// The LOCKDOWN level is designed to allow access to almost nothing that has
+// security associated with and they are the recommended levels to run sandboxed
+// code specially if there is a chance that the broker is process might be
+// started by a user that belongs to the Admins or power users groups.
 enum TokenLevel {
   USER_LOCKDOWN = 0,
-  USER_RESTRICTED,
   USER_LIMITED,
   USER_INTERACTIVE,
   USER_RESTRICTED_NON_ADMIN,
@@ -98,9 +94,6 @@ enum TokenLevel {
 //
 //  JobLevel        |General                            |Quota               |
 //                  |restrictions                       |restrictions        |
-// -----------------|---------------------------------- |--------------------|
-// kNone            | No job is assigned to the         | None               |
-//                  | sandboxed process.                |                    |
 // -----------------|---------------------------------- |--------------------|
 // kUnprotected     | None                              | *Kill on Job close.|
 // -----------------|---------------------------------- |--------------------|
@@ -127,13 +120,7 @@ enum TokenLevel {
 // In the context of the above table, 'user handles' refers to the handles of
 // windows, bitmaps, menus, etc. Files, treads and registry handles are kernel
 // handles and are not affected by the job level settings.
-enum class JobLevel {
-  kLockdown = 0,
-  kLimitedUser,
-  kInteractive,
-  kUnprotected,
-  kNone
-};
+enum class JobLevel { kLockdown = 0, kLimitedUser, kInteractive, kUnprotected };
 
 // These flags correspond to various process-level mitigations (eg. ASLR and
 // DEP). Most are implemented via UpdateProcThreadAttribute() plus flags for
@@ -294,6 +281,16 @@ const MitigationFlags MITIGATION_CET_ALLOW_DYNAMIC_APIS = 0x01000000;
 // include third party code. Corresponds to
 // PROCESS_CREATION_MITIGATION_POLICY2_CET_USER_SHADOW_STACKS_STRICT_MODE.
 const MitigationFlags MITIGATION_CET_STRICT_MODE = 0x02000000;
+
+// Prevents application from sending FSCTL* control codes to NtFsControlFile,
+// with a few exceptions for named pipes as documented on MSDN. Corresponds to
+// PROCESS_CREATION_MITIGATION_POLICY2_FSCTL_SYSTEM_CALL_DISABLE_ALWAYS_ON.
+const MitigationFlags MITIGATION_FSCTL_DISABLED = 0x04000000;
+
+// Restrict a process thread to never share a CPU core with another process
+// thread outside of its security domain. Corresponds to
+// PROCESS_CREATION_MITIGATION_POLICY2_RESTRICT_CORE_SHARING_ALWAYS_ON.
+const MitigationFlags MITIGATION_RESTRICT_CORE_SHARING = 0x08000000;
 
 }  // namespace sandbox
 

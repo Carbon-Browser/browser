@@ -1,14 +1,12 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/frame/browser_non_client_frame_view.h"
 
-#include "base/bind.h"
-#include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "chrome/browser/themes/theme_properties.h"
 #include "chrome/browser/themes/theme_service.h"
 #include "chrome/browser/themes/theme_service_factory.h"
@@ -24,7 +22,7 @@
 class BrowserNonClientFrameViewTest : public TestWithBrowserView {
  public:
   explicit BrowserNonClientFrameViewTest(Browser::Type type)
-      : TestWithBrowserView(type), frame_view_(nullptr) {}
+      : TestWithBrowserView(type) {}
 
   BrowserNonClientFrameViewTest(const BrowserNonClientFrameViewTest&) = delete;
   BrowserNonClientFrameViewTest& operator=(
@@ -32,11 +30,6 @@ class BrowserNonClientFrameViewTest : public TestWithBrowserView {
 
   // TestWithBrowserView override:
   void SetUp() override {
-#if BUILDFLAG(IS_WIN)
-    // Use opaque frame.
-    base::CommandLine::ForCurrentProcess()->AppendSwitch(
-        switches::kDisableDwmComposition);
-#endif
     TestWithBrowserView::SetUp();
     views::Widget* widget = browser_view()->GetWidget();
     frame_view_ = static_cast<BrowserNonClientFrameView*>(
@@ -45,7 +38,7 @@ class BrowserNonClientFrameViewTest : public TestWithBrowserView {
 
  protected:
   // Owned by the browser view.
-  raw_ptr<BrowserNonClientFrameView> frame_view_;
+  raw_ptr<BrowserNonClientFrameView, DanglingUntriaged> frame_view_ = nullptr;
 };
 
 class BrowserNonClientFrameViewPopupTest
@@ -55,7 +48,7 @@ class BrowserNonClientFrameViewPopupTest
       : BrowserNonClientFrameViewTest(Browser::TYPE_POPUP) {}
 };
 
-// TODO(crbug.com/998369): Flaky on Linux TSAN and ASAN.
+// TODO(crbug.com/41478509): Flaky on Linux TSAN and ASAN.
 #if (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)) && \
     (defined(ADDRESS_SANITIZER) || defined(THREAD_SANITIZER))
 #define MAYBE_HitTestPopupTopChrome DISABLED_HitTestPopupTopChrome
@@ -81,7 +74,7 @@ class BrowserNonClientFrameViewTabbedTest
       : BrowserNonClientFrameViewTest(Browser::TYPE_NORMAL) {}
 };
 
-// TODO(crbug.com/1011339): Flaky on Linux TSAN.
+// TODO(crbug.com/40101869): Flaky on Linux TSAN.
 #if (BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)) && defined(THREAD_SANITIZER)
 #define MAYBE_HitTestTabstrip DISABLED_HitTestTabstrip
 #else

@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 
 #include "ash/display/display_configuration_controller.h"
 #include "ash/shell.h"
-#include "chrome/browser/ash/login/ui/login_display_host.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/lifetime/application_lifetime.h"
+#include "chrome/browser/ui/ash/login/login_display_host.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
 #include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
 #include "components/policy/proto/chrome_device_policy.pb.h"
@@ -103,7 +104,7 @@ void DeviceDisplayPolicyCrosBrowserTest::SetUpInProcessBrowserTestFixture() {
 void DeviceDisplayPolicyCrosBrowserTest::TearDownOnMainThread() {
   // If the login display is still showing, exit gracefully.
   if (ash::LoginDisplayHost::default_host()) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&chrome::AttemptExit));
     RunUntilBrowserProcessQuits();
   }

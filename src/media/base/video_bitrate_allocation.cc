@@ -1,6 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "video_bitrate_allocation.h"
 
@@ -23,6 +28,8 @@ static media::Bitrate MakeReplacementBitrate(const media::Bitrate& old,
       return media::Bitrate::ConstantBitrate(target_bps);
     case media::Bitrate::Mode::kVariable:
       return media::Bitrate::VariableBitrate(target_bps, peak_bps);
+    case media::Bitrate::Mode::kExternal:
+      return media::Bitrate::ExternalRateControl();
   }
 }
 
@@ -42,6 +49,11 @@ VideoBitrateAllocation::VideoBitrateAllocation(Bitrate::Mode mode) {
       // For variable bitrates, the peak must not be zero as enforced by
       // Bitrate.
       sum_bitrate_ = Bitrate::VariableBitrate(0u, 1u);
+      break;
+    case Bitrate::Mode::kExternal:
+      // For variable bitrates, the peak must not be zero as enforced by
+      // Bitrate.
+      sum_bitrate_ = Bitrate::ExternalRateControl();
       break;
   }
 }
@@ -92,6 +104,10 @@ uint32_t VideoBitrateAllocation::GetBitrateBps(size_t spatial_index,
 
 uint32_t VideoBitrateAllocation::GetSumBps() const {
   return sum_bitrate_.target_bps();
+}
+
+uint32_t VideoBitrateAllocation::GetPeakBps() const {
+  return sum_bitrate_.peak_bps();
 }
 
 const Bitrate VideoBitrateAllocation::GetSumBitrate() const {
@@ -146,6 +162,9 @@ std::string VideoBitrateAllocation::ToString() const {
       break;
     case Bitrate::Mode::kVariable:
       ss << "VBR with peak bps " << sum_bitrate_.peak_bps();
+      break;
+    case Bitrate::Mode::kExternal:
+      ss << "External rate control";
       break;
   }
   return ss.str();

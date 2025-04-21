@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,7 @@ class SystemLogsMemoryHandler : public MemoryDetails {
   }
 
  private:
-  ~SystemLogsMemoryHandler() override {}
+  ~SystemLogsMemoryHandler() override = default;
   SysLogsSourceCallback callback_;
 };
 
@@ -41,8 +41,7 @@ MemoryDetailsLogSource::MemoryDetailsLogSource()
     : SystemLogsSource("MemoryDetails") {
 }
 
-MemoryDetailsLogSource::~MemoryDetailsLogSource() {
-}
+MemoryDetailsLogSource::~MemoryDetailsLogSource() = default;
 
 void MemoryDetailsLogSource::Fetch(SysLogsSourceCallback callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);

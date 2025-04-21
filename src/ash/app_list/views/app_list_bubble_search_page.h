@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define ASH_APP_LIST_VIEWS_APP_LIST_BUBBLE_SEARCH_PAGE_H_
 
 #include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/view.h"
@@ -17,7 +18,7 @@ class Layer;
 namespace ash {
 
 class AppListViewDelegate;
-class ProductivityLauncherSearchView;
+class AppListSearchView;
 class SearchBoxView;
 class SearchResultPageDialogController;
 
@@ -25,9 +26,9 @@ class SearchResultPageDialogController;
 // Contains a scrolling list of search results. Does not include the search box,
 // which is owned by a parent view.
 class ASH_EXPORT AppListBubbleSearchPage : public views::View {
- public:
-  METADATA_HEADER(AppListBubbleSearchPage);
+  METADATA_HEADER(AppListBubbleSearchPage, views::View)
 
+ public:
   AppListBubbleSearchPage(AppListViewDelegate* view_delegate,
                           SearchResultPageDialogController* dialog_controller,
                           SearchBoxView* search_box_view);
@@ -44,14 +45,14 @@ class ASH_EXPORT AppListBubbleSearchPage : public views::View {
   // Aborts all layer animations.
   void AbortAllAnimations();
 
-  ProductivityLauncherSearchView* search_view() { return search_view_; }
+  AppListSearchView* search_view() { return search_view_; }
 
   // Which layer animates is an implementation detail.
   ui::Layer* GetPageAnimationLayerForTest();
 
  private:
   // Owned by view hierarchy.
-  ProductivityLauncherSearchView* search_view_ = nullptr;
+  raw_ptr<AppListSearchView> search_view_ = nullptr;
 
   base::WeakPtrFactory<AppListBubbleSearchPage> weak_factory_{this};
 };

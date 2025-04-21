@@ -1,16 +1,17 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_GPU_VAAPI_TEST_H264_VAAPI_WRAPPER_H_
 #define MEDIA_GPU_VAAPI_TEST_H264_VAAPI_WRAPPER_H_
 
+#include "base/memory/raw_ref.h"
 #include "base/sequence_checker.h"
 #include "media/gpu/vaapi/test/h264_dpb.h"
 #include "media/gpu/vaapi/test/scoped_va_config.h"
 #include "media/gpu/vaapi/test/scoped_va_context.h"
 #include "media/gpu/vaapi/test/vaapi_device.h"
-#include "media/video/h264_parser.h"
+#include "media/parsers/h264_parser.h"
 
 namespace media::vaapi_test {
 
@@ -45,7 +46,7 @@ class H264VaapiWrapper {
   void SubmitDecode(scoped_refptr<H264Picture> pic);
 
  private:
-  const VaapiDevice& va_device_;
+  const raw_ref<const VaapiDevice> va_device_;
 
   std::unique_ptr<ScopedVAConfig> va_config_;
   std::unique_ptr<ScopedVAContext> va_context_;

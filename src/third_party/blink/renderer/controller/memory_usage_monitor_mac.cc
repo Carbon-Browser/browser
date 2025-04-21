@@ -1,11 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/controller/memory_usage_monitor_mac.h"
 
 #include <mach/mach.h>
-#include <mach/mach_vm.h>
 
 #include "base/mac/mac_util.h"
 #include "third_party/blink/public/platform/platform.h"

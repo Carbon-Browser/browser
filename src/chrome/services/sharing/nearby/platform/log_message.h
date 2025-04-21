@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,7 @@
 #include "base/logging.h"
 #include "third_party/nearby/src/internal/platform/implementation/log_message.h"
 
-namespace location {
-namespace nearby {
-namespace chrome {
+namespace nearby::chrome {
 
 // Concrete LogMessage implementation
 class LogMessage : public api::LogMessage {
@@ -29,8 +27,6 @@ class LogMessage : public api::LogMessage {
   logging::LogMessage log_message_;
 };
 
-}  // namespace chrome
-}  // namespace nearby
-}  // namespace location
+}  // namespace nearby::chrome
 
 #endif  // CHROME_SERVICES_SHARING_NEARBY_PLATFORM_LOG_MESSAGE_H_

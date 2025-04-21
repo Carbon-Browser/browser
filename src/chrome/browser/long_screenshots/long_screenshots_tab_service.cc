@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,17 +10,18 @@
 #include "base/android/jni_android.h"
 #include "base/android/jni_array.h"
 #include "base/android/jni_string.h"
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/memory_pressure_listener.h"
 #include "base/memory/memory_pressure_monitor.h"
 #include "components/google/core/common/google_util.h"
 #include "components/paint_preview/browser/file_manager.h"
 #include "content/public/browser/global_routing_id.h"
-
-#include "chrome/browser/share/android/jni_headers/LongScreenshotsTabService_jni.h"
 #include "content/public/browser/render_frame_host.h"
 #include "url/android/gurl_android.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "chrome/android/chrome_jni_headers/LongScreenshotsTabService_jni.h"
 
 namespace long_screenshots {
 
@@ -82,10 +83,11 @@ LongScreenshotsTabService::~LongScreenshotsTabService() {
   JNIEnv* env = base::android::AttachCurrentThread();
   Java_LongScreenshotsTabService_onNativeDestroyed(env, java_ref_);
   java_ref_.Reset();
+  capture_handle_.RunAndReset();
 }
 
 void LongScreenshotsTabService::CaptureTab(int tab_id,
-                                           std::unique_ptr<GURL> url,
+                                           const GURL& url,
                                            content::WebContents* contents,
                                            int clip_x,
                                            int clip_y,
@@ -106,15 +108,15 @@ void LongScreenshotsTabService::CaptureTab(int tab_id,
   // Mark |contents| as being captured so that the renderer doesn't go away
   // until the capture is finished. This is done even before a file is created
   // to ensure the renderer doesn't go away while that happens.
-  capture_handle_ =
-      contents->IncrementCapturerCount(gfx::Size(), /*stay_hidden=*/true,
-                                       /*stay_awake=*/true);
+  capture_handle_ = contents->IncrementCapturerCount(
+      gfx::Size(), /*stay_hidden=*/true,
+      /*stay_awake=*/true, /*is_activity=*/true);
   content::RenderFrameHost* rfh =
-      GetRootRenderFrameHost(contents->GetPrimaryMainFrame(), *url);
+      GetRootRenderFrameHost(contents->GetPrimaryMainFrame(), url);
   if (in_memory) {
     CaptureTabInternal(tab_id, rfh->GetFrameTreeNodeId(), rfh->GetGlobalId(),
                        clip_x, clip_y, clip_width, clip_height, in_memory,
-                       absl::nullopt);
+                       std::nullopt);
     return;
   }
 
@@ -132,14 +134,14 @@ void LongScreenshotsTabService::CaptureTab(int tab_id,
 
 void LongScreenshotsTabService::CaptureTabInternal(
     int tab_id,
-    int frame_tree_node_id,
+    content::FrameTreeNodeId frame_tree_node_id,
     content::GlobalRenderFrameHostId frame_routing_id,
     int clip_x,
     int clip_y,
     int clip_width,
     int clip_height,
     bool in_memory,
-    const absl::optional<base::FilePath>& file_path) {
+    const std::optional<base::FilePath>& file_path) {
   if (!in_memory && !file_path.has_value()) {
     JNIEnv* env = base::android::AttachCurrentThread();
     Java_LongScreenshotsTabService_processCaptureTabStatus(
@@ -206,18 +208,16 @@ content::RenderFrameHost* LongScreenshotsTabService::GetRootRenderFrameHost(
   }
 
   std::vector<content::RenderFrameHost*> child_frames;
-  main_frame->ForEachRenderFrameHost(base::BindRepeating(
-      [](std::vector<content::RenderFrameHost*>* child_frames,
-         content::RenderFrameHost* main_frame, content::RenderFrameHost* rfh) {
+  main_frame->ForEachRenderFrameHostWithAction(
+      [main_frame, &child_frames](content::RenderFrameHost* rfh) {
         // All frames get traversed in breadth-first order.
         // If a direct child is found, skip traversing its children.
         if (rfh->GetParent() == main_frame) {
-          child_frames->push_back(rfh);
+          child_frames.push_back(rfh);
           return content::RenderFrameHost::FrameIterationAction::kSkipChildren;
         }
         return content::RenderFrameHost::FrameIterationAction::kContinue;
-      },
-      &child_frames, main_frame));
+      });
 
   // In AMP pages the main frame should have exactly one child subframe.
   if (child_frames.size() != 1) {
@@ -272,9 +272,9 @@ void LongScreenshotsTabService::CaptureTabAndroid(
     jboolean in_memory) {
   content::WebContents* web_contents =
       content::WebContents::FromJavaWebContents(j_web_contents);
-  std::unique_ptr<GURL> url = url::GURLAndroid::ToNativeGURL(env, j_gurl);
+  GURL url = url::GURLAndroid::ToNativeGURL(env, j_gurl);
 
-  CaptureTab(static_cast<int>(j_tab_id), std::move(url), web_contents,
+  CaptureTab(static_cast<int>(j_tab_id), url, web_contents,
              static_cast<int>(clip_x), static_cast<int>(clip_y),
              static_cast<int>(clip_width), static_cast<int>(clip_height),
              static_cast<bool>(in_memory));

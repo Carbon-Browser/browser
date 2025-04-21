@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,10 +22,6 @@ struct GpuPreferences;
 enum class IntelGpuSeriesType;
 enum class IntelGpuGeneration;
 
-// Set GPU feature status if hardware acceleration is disabled.
-GPU_EXPORT GpuFeatureInfo
-ComputeGpuFeatureInfoWithHardwareAccelerationDisabled();
-
 // Set GPU feature status if GPU is blocked.
 GPU_EXPORT GpuFeatureInfo ComputeGpuFeatureInfoWithNoGpu();
 
@@ -44,6 +40,7 @@ ComputeGpuFeatureInfo(const GPUInfo& gpu_info,
 
 GPU_EXPORT void SetKeysForCrashLogging(const GPUInfo& gpu_info);
 
+#if BUILDFLAG(IS_ANDROID)
 // Cache GPUInfo so it can be accessed later.
 GPU_EXPORT void CacheGPUInfo(const GPUInfo& gpu_info);
 
@@ -58,7 +55,6 @@ GPU_EXPORT void CacheGpuFeatureInfo(const GpuFeatureInfo& gpu_feature_info);
 // return true; otherwise, return false;
 GPU_EXPORT bool PopGpuFeatureInfoCache(GpuFeatureInfo* gpu_feature_info);
 
-#if BUILDFLAG(IS_ANDROID)
 // Check if GL bindings are initialized. If not, initializes GL
 // bindings, create a GL context, collects GPUInfo, make blocklist and
 // GPU driver bug workaround decisions. This is intended to be called
@@ -99,6 +95,8 @@ GPU_EXPORT void RecordDevicePerfInfoHistograms();
 GPU_EXPORT void RecordDiscreteGpuHistograms(const GPUInfo& gpu_info);
 
 #if BUILDFLAG(IS_WIN)
+GPU_EXPORT std::string DirectMLFeatureLevelToString(
+    uint32_t directml_feature_level);
 GPU_EXPORT std::string D3DFeatureLevelToString(uint32_t d3d_feature_level);
 GPU_EXPORT std::string VulkanVersionToString(uint32_t vulkan_version);
 #endif  // BUILDFLAG(IS_WIN)

@@ -37,7 +37,7 @@
 #include "third_party/blink/renderer/core/typed_arrays/array_buffer_view_helpers.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_typed_array.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
-#include "third_party/blink/renderer/platform/graphics/canvas_color_params.h"
+#include "third_party/blink/renderer/platform/graphics/graphics_types.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/skia/include/core/SkPixmap.h"
@@ -47,6 +47,8 @@ namespace blink {
 
 class ExceptionState;
 class ImageBitmapOptions;
+class V8ImageDataStorageFormat;
+class V8PredefinedColorSpace;
 
 class CORE_EXPORT ImageData final : public ScriptWrappable,
                                     public ImageBitmapSource {
@@ -57,14 +59,14 @@ class CORE_EXPORT ImageData final : public ScriptWrappable,
   static ImageData* Create(unsigned width,
                            unsigned height,
                            ExceptionState& exception_state) {
-    return ValidateAndCreate(width, height, absl::nullopt, /*settings=*/nullptr,
+    return ValidateAndCreate(width, height, std::nullopt, /*settings=*/nullptr,
                              ValidateAndCreateParams(), exception_state);
   }
   static ImageData* Create(unsigned width,
                            unsigned height,
                            const ImageDataSettings* settings,
                            ExceptionState& exception_state) {
-    return ValidateAndCreate(width, height, absl::nullopt, settings,
+    return ValidateAndCreate(width, height, std::nullopt, settings,
                              ValidateAndCreateParams(), exception_state);
   }
 
@@ -73,7 +75,7 @@ class CORE_EXPORT ImageData final : public ScriptWrappable,
   static ImageData* Create(NotShared<DOMUint8ClampedArray> data,
                            unsigned width,
                            ExceptionState& exception_state) {
-    return ValidateAndCreate(width, absl::nullopt, data, nullptr,
+    return ValidateAndCreate(width, std::nullopt, data, nullptr,
                              ValidateAndCreateParams(), exception_state);
   }
   static ImageData* Create(NotShared<DOMUint8ClampedArray> data,
@@ -98,8 +100,8 @@ class CORE_EXPORT ImageData final : public ScriptWrappable,
                            unsigned width,
                            ExceptionState& exception_state) {
     ValidateAndCreateParams params;
-    params.require_canvas_color_management_v2 = true;
-    return ValidateAndCreate(width, absl::nullopt, data, nullptr, params,
+    params.require_canvas_floating_point = true;
+    return ValidateAndCreate(width, std::nullopt, data, nullptr, params,
                              exception_state);
   }
   static ImageData* Create(NotShared<DOMUint16Array> data,
@@ -108,7 +110,7 @@ class CORE_EXPORT ImageData final : public ScriptWrappable,
                            const ImageDataSettings* settings,
                            ExceptionState& exception_state) {
     ValidateAndCreateParams params;
-    params.require_canvas_color_management_v2 = true;
+    params.require_canvas_floating_point = true;
     return ValidateAndCreate(width, height, data, settings, params,
                              exception_state);
   }
@@ -119,8 +121,8 @@ class CORE_EXPORT ImageData final : public ScriptWrappable,
                            unsigned width,
                            ExceptionState& exception_state) {
     ValidateAndCreateParams params;
-    params.require_canvas_color_management_v2 = true;
-    return ValidateAndCreate(width, absl::nullopt, data, nullptr, params,
+    params.require_canvas_floating_point = true;
+    return ValidateAndCreate(width, std::nullopt, data, nullptr, params,
                              exception_state);
   }
   static ImageData* Create(NotShared<DOMFloat32Array> data,
@@ -129,7 +131,7 @@ class CORE_EXPORT ImageData final : public ScriptWrappable,
                            const ImageDataSettings* settings,
                            ExceptionState& exception_state) {
     ValidateAndCreateParams params;
-    params.require_canvas_color_management_v2 = true;
+    params.require_canvas_floating_point = true;
     return ValidateAndCreate(width, height, data, settings, params,
                              exception_state);
   }
@@ -145,8 +147,8 @@ class CORE_EXPORT ImageData final : public ScriptWrappable,
     bool context_2d_error_mode = false;
     // Constructors in IDL files cannot specify RuntimeEnabled restrictions.
     // This argument is passed by Create functions that should require that the
-    // CanvasColorManagementV2 feature be enabled.
-    bool require_canvas_color_management_v2 = false;
+    // CanvasFloatingPoint feature be enabled.
+    bool require_canvas_floating_point = false;
     // If the caller is guaranteed to write over the result in its entirety,
     // then this flag may be used to skip initialization of the result's
     // data.
@@ -157,13 +159,13 @@ class CORE_EXPORT ImageData final : public ScriptWrappable,
   };
   static ImageData* ValidateAndCreate(
       unsigned width,
-      absl::optional<unsigned> height,
-      absl::optional<NotShared<DOMArrayBufferView>> data,
+      std::optional<unsigned> height,
+      std::optional<NotShared<DOMArrayBufferView>> data,
       const ImageDataSettings* settings,
       ValidateAndCreateParams params,
       ExceptionState& exception_state);
   // TODO(https://crbug.com/1198606): Remove this.
-  ImageDataSettings* getSettings() { return settings_; }
+  ImageDataSettings* getSettings() { return settings_.Get(); }
 
   static ImageData* CreateForTest(const gfx::Size&);
   static ImageData* CreateForTest(const gfx::Size&,
@@ -179,13 +181,13 @@ class CORE_EXPORT ImageData final : public ScriptWrappable,
   gfx::Size Size() const { return size_; }
   int width() const { return size_.width(); }
   int height() const { return size_.height(); }
-  String colorSpace() const;
-  String storageFormat() const;
+  V8PredefinedColorSpace colorSpace() const;
+  V8ImageDataStorageFormat storageFormat() const;
 
   // TODO(https://crbug.com/1198606): Remove this.
   ImageDataSettings* getSettings() const;
 
-  const V8ImageDataArray* data() const { return data_; }
+  const V8ImageDataArray* data() const { return data_.Get(); }
 
   bool IsBufferBaseDetached() const;
   PredefinedColorSpace GetPredefinedColorSpace() const;
@@ -196,10 +198,11 @@ class CORE_EXPORT ImageData final : public ScriptWrappable,
 
   // ImageBitmapSource implementation
   gfx::Size BitmapSourceSize() const override { return size_; }
-  ScriptPromise CreateImageBitmap(ScriptState*,
-                                  absl::optional<gfx::Rect> crop_rect,
-                                  const ImageBitmapOptions*,
-                                  ExceptionState&) override;
+  ScriptPromise<ImageBitmap> CreateImageBitmap(
+      ScriptState*,
+      std::optional<gfx::Rect> crop_rect,
+      const ImageBitmapOptions*,
+      ExceptionState&) override;
 
   void Trace(Visitor*) const override;
 

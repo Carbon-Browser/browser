@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,18 +6,19 @@
 
 #include <memory>
 
-#include "ash/components/login/auth/public/user_context.h"
-#include "ash/components/tpm/stub_install_attributes.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/time/time.h"
 #include "chrome/browser/ash/login/demo_mode/demo_session.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
+#include "chromeos/ash/components/install_attributes/stub_install_attributes.h"
+#include "chromeos/ash/components/login/auth/public/user_context.h"
 #include "components/account_id/account_id.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace ash {
+
 namespace {
 
 AccountId GetAccountId() {
@@ -94,7 +95,7 @@ TEST_F(EnterpriseUserSessionMetricsTest, RecordSignInEvent2) {
     SCOPED_TRACE("");
     base::HistogramTester histogram_tester;
     enterprise_user_session_metrics::RecordSignInEvent(
-        UserContext(user_manager::USER_TYPE_REGULAR, GetAccountId()),
+        UserContext(user_manager::UserType::kRegular, GetAccountId()),
         false /* is_auto_login */);
     histogram_tester.ExpectUniqueSample(
         "Enterprise.UserSession.Logins",
@@ -106,7 +107,7 @@ TEST_F(EnterpriseUserSessionMetricsTest, RecordSignInEvent2) {
     SCOPED_TRACE("");
     base::HistogramTester histogram_tester;
     enterprise_user_session_metrics::RecordSignInEvent(
-        UserContext(user_manager::USER_TYPE_PUBLIC_ACCOUNT, GetAccountId()),
+        UserContext(user_manager::UserType::kPublicAccount, GetAccountId()),
         false /* is_auto_login */);
     histogram_tester.ExpectUniqueSample(
         "Enterprise.UserSession.Logins",
@@ -118,7 +119,7 @@ TEST_F(EnterpriseUserSessionMetricsTest, RecordSignInEvent2) {
     SCOPED_TRACE("");
     base::HistogramTester histogram_tester;
     enterprise_user_session_metrics::RecordSignInEvent(
-        UserContext(user_manager::USER_TYPE_PUBLIC_ACCOUNT, GetAccountId()),
+        UserContext(user_manager::UserType::kPublicAccount, GetAccountId()),
         true /* is_auto_login */);
     histogram_tester.ExpectUniqueSample(
         "Enterprise.UserSession.Logins",
@@ -134,7 +135,7 @@ TEST_F(EnterpriseUserSessionMetricsTest, RecordSessionLength) {
     SCOPED_TRACE("");
     base::HistogramTester histogram_tester;
     enterprise_user_session_metrics::StoreSessionLength(
-        user_manager::UserType::USER_TYPE_PUBLIC_ACCOUNT, base::Minutes(25));
+        user_manager::UserType::kPublicAccount, base::Minutes(25));
     enterprise_user_session_metrics::RecordStoredSessionLength();
 
     // Time is rounded down to the nearest 10.
@@ -151,7 +152,7 @@ TEST_F(EnterpriseUserSessionMetricsTest, RecordSessionLength) {
     // Test with a regular user session.
     base::HistogramTester histogram_tester;
     enterprise_user_session_metrics::StoreSessionLength(
-        user_manager::UserType::USER_TYPE_REGULAR, base::Minutes(149));
+        user_manager::UserType::kRegular, base::Minutes(149));
     enterprise_user_session_metrics::RecordStoredSessionLength();
     histogram_tester.ExpectUniqueSample(
         "Enterprise.RegularUserSession.SessionLength", 140, 1);
@@ -165,7 +166,7 @@ TEST_F(EnterpriseUserSessionMetricsTest, RecordSessionLength) {
     SCOPED_TRACE("");
     base::HistogramTester histogram_tester;
     enterprise_user_session_metrics::StoreSessionLength(
-        user_manager::UserType::USER_TYPE_REGULAR, base::Days(10));
+        user_manager::UserType::kRegular, base::Days(10));
     enterprise_user_session_metrics::RecordStoredSessionLength();
 
     // Reported length is capped at 24 hours.
@@ -195,13 +196,12 @@ TEST_F(EnterpriseUserSessionMetricsTest, RecordSessionLength) {
 // Tests recording session length in demo sessions, which includes an additional
 // metric with tighter bucket spacing.
 TEST_F(EnterpriseUserSessionMetricsTest, RecordDemoSessionLength) {
-  DemoSession::SetDemoConfigForTesting(DemoSession::DemoModeConfig::kOnline);
+  install_attributes_->Get()->SetDemoMode();
   {
     SCOPED_TRACE("");
     base::HistogramTester histogram_tester;
     enterprise_user_session_metrics::StoreSessionLength(
-        user_manager::UserType::USER_TYPE_PUBLIC_ACCOUNT,
-        base::Seconds(25 * 60 + 59));
+        user_manager::UserType::kPublicAccount, base::Seconds(25 * 60 + 59));
     enterprise_user_session_metrics::RecordStoredSessionLength();
 
     // Time is rounded down to the nearest 10 minutes.
@@ -216,7 +216,7 @@ TEST_F(EnterpriseUserSessionMetricsTest, RecordDemoSessionLength) {
     SCOPED_TRACE("");
     base::HistogramTester histogram_tester;
     enterprise_user_session_metrics::StoreSessionLength(
-        user_manager::UserType::USER_TYPE_PUBLIC_ACCOUNT, base::Days(10));
+        user_manager::UserType::kPublicAccount, base::Days(10));
     enterprise_user_session_metrics::RecordStoredSessionLength();
 
     // Reported length is capped at 24 hours.

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,13 @@
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_WEBAUDIO_OSCILLATOR_HANDLER_H_
 
 #include "base/memory/scoped_refptr.h"
+#include "base/memory/weak_ptr.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_oscillator_options.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_oscillator_type.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_param.h"
 #include "third_party/blink/renderer/modules/webaudio/audio_scheduled_source_node.h"
 #include "third_party/blink/renderer/platform/audio/audio_bus.h"
+#include "third_party/blink/renderer/platform/heap/cross_thread_persistent.h"
 #include "third_party/blink/renderer/platform/wtf/threading.h"
 
 namespace blink {
@@ -48,8 +51,8 @@ class OscillatorHandler final : public AudioScheduledSourceHandler {
   // AudioHandler
   void Process(uint32_t frames_to_process) override;
 
-  String GetType() const;
-  void SetType(const String&, ExceptionState&);
+  V8OscillatorType::Enum GetType() const;
+  void SetType(V8OscillatorType::Enum, ExceptionState&);
 
   void SetPeriodicWave(PeriodicWaveImpl*);
 
@@ -62,12 +65,15 @@ class OscillatorHandler final : public AudioScheduledSourceHandler {
                     PeriodicWaveImpl* wave_table,
                     AudioParamHandler& frequency,
                     AudioParamHandler& detune);
+
   bool SetType(uint8_t);  // Returns true on success.
 
   // Returns true if there are sample-accurate timeline parameter changes.
   bool CalculateSampleAccuratePhaseIncrements(uint32_t frames_to_process);
 
   bool PropagatesSilence() const override;
+
+  base::WeakPtr<AudioScheduledSourceHandler> AsWeakPtr() override;
 
   // Compute the output for k-rate AudioParams
   double ProcessKRate(int n, float* dest_p, double virtual_read_index) const;
@@ -176,6 +182,8 @@ class OscillatorHandler final : public AudioScheduledSourceHandler {
   // PeriodicWaveImpl cannot cause cycles with OscillatorNode as it is not
   // scriptable.
   CrossThreadPersistent<PeriodicWaveImpl> periodic_wave_;
+
+  base::WeakPtrFactory<AudioScheduledSourceHandler> weak_ptr_factory_{this};
 };
 
 }  // namespace blink

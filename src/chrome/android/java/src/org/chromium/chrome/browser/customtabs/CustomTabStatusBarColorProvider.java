@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,24 +10,18 @@ import static org.chromium.chrome.browser.ui.system.StatusBarColorController.UND
 import org.chromium.chrome.browser.browserservices.intents.BrowserServicesIntentDataProvider;
 import org.chromium.chrome.browser.customtabs.features.toolbar.CustomTabToolbarColorController;
 import org.chromium.chrome.browser.customtabs.features.toolbar.CustomTabToolbarColorController.ToolbarColorType;
-import org.chromium.chrome.browser.dependency_injection.ActivityScope;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.ui.system.StatusBarColorController;
 
-import javax.inject.Inject;
-
-/**
- * Manages the status bar color for a CustomTabActivity.
- */
-@ActivityScope
+/** Manages the status bar color for a CustomTabActivity. */
 public class CustomTabStatusBarColorProvider {
     private final BrowserServicesIntentDataProvider mIntentDataProvider;
     private final StatusBarColorController mStatusBarColorController;
 
     private boolean mUseTabThemeColor;
 
-    @Inject
-    public CustomTabStatusBarColorProvider(BrowserServicesIntentDataProvider intentDataProvider,
+    public CustomTabStatusBarColorProvider(
+            BrowserServicesIntentDataProvider intentDataProvider,
             StatusBarColorController statusBarColorController) {
         mIntentDataProvider = intentDataProvider;
         mStatusBarColorController = statusBarColorController;
@@ -46,16 +40,16 @@ public class CustomTabStatusBarColorProvider {
 
     int getBaseStatusBarColor(Tab tab) {
         @ToolbarColorType
-        int toolbarColorType = CustomTabToolbarColorController.computeToolbarColorType(
-                mIntentDataProvider, mUseTabThemeColor, tab);
-        switch (toolbarColorType) {
-            case ToolbarColorType.THEME_COLOR:
-                return UNDEFINED_STATUS_BAR_COLOR;
-            case ToolbarColorType.DEFAULT_COLOR:
-                return DEFAULT_STATUS_BAR_COLOR;
-            case ToolbarColorType.INTENT_TOOLBAR_COLOR:
-                return mIntentDataProvider.getColorProvider().getToolbarColor();
-        }
-        return DEFAULT_STATUS_BAR_COLOR;
+        int toolbarColorType =
+                CustomTabToolbarColorController.computeToolbarColorType(
+                        mIntentDataProvider, mUseTabThemeColor, tab);
+        return switch (toolbarColorType) {
+            case ToolbarColorType.THEME_COLOR -> UNDEFINED_STATUS_BAR_COLOR;
+            case ToolbarColorType.DEFAULT_COLOR -> DEFAULT_STATUS_BAR_COLOR;
+            case ToolbarColorType.INTENT_TOOLBAR_COLOR -> mIntentDataProvider
+                    .getColorProvider()
+                    .getToolbarColor();
+            default -> DEFAULT_STATUS_BAR_COLOR;
+        };
     }
 }

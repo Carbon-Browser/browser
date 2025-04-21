@@ -1,11 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ui/base/test/menu_test_observer.h"
 
 #include "base/check_op.h"
-#import "base/mac/objc_release_properties.h"
 
 @implementation MenuTestObserver
 
@@ -19,7 +18,7 @@
   if ((self = [super init])) {
     _menu = menu;
 
-    NSNotificationCenter* center = [NSNotificationCenter defaultCenter];
+    NSNotificationCenter* center = NSNotificationCenter.defaultCenter;
     [center addObserver:self
                selector:@selector(menuDidBeginTracking:)
                    name:NSMenuDidBeginTrackingNotification
@@ -33,9 +32,7 @@
 }
 
 - (void)dealloc {
-  [[NSNotificationCenter defaultCenter] removeObserver:self];
-  base::mac::ReleaseProperties(self);
-  [super dealloc];
+  [NSNotificationCenter.defaultCenter removeObserver:self];
 }
 
 - (void)menuDidBeginTracking:(NSNotification*)notif {

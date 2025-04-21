@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,29 +10,28 @@
 namespace blink {
 
 class BluetoothServiceDataMapIterationSource final
-    : public PairIterable<String, IDLString, Member<DOMDataView>, DOMDataView>::
-          IterationSource {
+    : public PairSyncIterable<BluetoothServiceDataMap>::IterationSource {
  public:
-  BluetoothServiceDataMapIterationSource(const BluetoothServiceDataMap& map)
+  explicit BluetoothServiceDataMapIterationSource(
+      const BluetoothServiceDataMap& map)
       : map_(map), iterator_(map_->Map().begin()) {}
 
-  bool Next(ScriptState* script_state,
-            String& map_key,
-            Member<DOMDataView>& map_value,
-            ExceptionState&) override {
+  bool FetchNextItem(ScriptState* script_state,
+                     String& map_key,
+                     NotShared<DOMDataView>& map_value,
+                     ExceptionState&) override {
     if (iterator_ == map_->Map().end())
       return false;
     map_key = iterator_->key;
-    map_value =
-        BluetoothRemoteGATTUtils::ConvertWTFVectorToDataView(iterator_->value);
+    map_value = NotShared<DOMDataView>(
+        BluetoothRemoteGATTUtils::ConvertSpanToDataView(iterator_->value));
     ++iterator_;
     return true;
   }
 
   void Trace(Visitor* visitor) const override {
     visitor->Trace(map_);
-    PairIterable<String, IDLString, Member<DOMDataView>,
-                 DOMDataView>::IterationSource::Trace(visitor);
+    PairSyncIterable<BluetoothServiceDataMap>::IterationSource::Trace(visitor);
   }
 
  private:
@@ -47,24 +46,20 @@ BluetoothServiceDataMap::BluetoothServiceDataMap(
 
 BluetoothServiceDataMap::~BluetoothServiceDataMap() {}
 
-PairIterable<String, IDLString, Member<DOMDataView>, DOMDataView>::
-    IterationSource*
-    BluetoothServiceDataMap::StartIteration(ScriptState*, ExceptionState&) {
+PairSyncIterable<BluetoothServiceDataMap>::IterationSource*
+BluetoothServiceDataMap::CreateIterationSource(ScriptState*, ExceptionState&) {
   return MakeGarbageCollected<BluetoothServiceDataMapIterationSource>(*this);
 }
 
 bool BluetoothServiceDataMap::GetMapEntry(ScriptState*,
                                           const String& key,
-                                          Member<DOMDataView>& value,
+                                          NotShared<DOMDataView>& value,
                                           ExceptionState&) {
   auto it = parameter_map_.find(key);
   if (it == parameter_map_.end())
     return false;
 
-  DOMDataView* dom_data_view =
-      BluetoothRemoteGATTUtils::ConvertWTFVectorToDataView(it->value);
-
-  value = dom_data_view;
+  value = BluetoothRemoteGATTUtils::ConvertSpanToDataView(it->value);
   return true;
 }
 

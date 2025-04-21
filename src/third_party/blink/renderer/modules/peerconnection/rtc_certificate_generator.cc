@@ -1,4 +1,4 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/modules/peerconnection/peer_connection_dependency_factory.h"
@@ -36,7 +36,7 @@ class RTCCertificateGeneratorRequest
 
   void GenerateCertificateAsync(
       const rtc::KeyParams& key_params,
-      const absl::optional<uint64_t>& expires_ms,
+      const std::optional<uint64_t>& expires_ms,
       blink::RTCCertificateCallback completion_callback) {
     DCHECK(main_thread_->BelongsToCurrentThread());
     DCHECK(completion_callback);
@@ -54,7 +54,7 @@ class RTCCertificateGeneratorRequest
 
   void GenerateCertificateOnWorkerThread(
       const rtc::KeyParams key_params,
-      const absl::optional<uint64_t> expires_ms,
+      const std::optional<uint64_t> expires_ms,
       blink::RTCCertificateCallback completion_callback) {
     DCHECK(worker_thread_->BelongsToCurrentThread());
 
@@ -84,7 +84,7 @@ class RTCCertificateGeneratorRequest
 
 void GenerateCertificateWithOptionalExpiration(
     const rtc::KeyParams& key_params,
-    const absl::optional<uint64_t>& expires_ms,
+    const std::optional<uint64_t>& expires_ms,
     blink::RTCCertificateCallback completion_callback,
     ExecutionContext& context,
     scoped_refptr<base::SingleThreadTaskRunner> task_runner) {
@@ -115,7 +115,7 @@ void RTCCertificateGenerator::GenerateCertificate(
     blink::RTCCertificateCallback completion_callback,
     ExecutionContext& context,
     scoped_refptr<base::SingleThreadTaskRunner> task_runner) {
-  GenerateCertificateWithOptionalExpiration(key_params, absl::nullopt,
+  GenerateCertificateWithOptionalExpiration(key_params, std::nullopt,
                                             std::move(completion_callback),
                                             context, task_runner);
 }

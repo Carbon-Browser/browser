@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include "ash/webui/help_app_ui/search/search_handler.h"
 #include "ash/webui/help_app_ui/search/search_tag_registry.h"
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "content/public/browser/web_ui_data_source.h"
 
 namespace ash {

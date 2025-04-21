@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/message_loop/message_pump_type.h"
 #include "base/no_destructor.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "ui/base/buildflags.h"
 #include "ui/base/cursor/cursor_factory.h"
@@ -29,27 +30,32 @@
 #include "ui/gfx/buffer_format_util.h"
 #include "ui/gfx/linux/client_native_pixmap_dmabuf.h"
 #include "ui/gfx/native_widget_types.h"
+#include "ui/ozone/common/base_keyboard_hook.h"
 #include "ui/ozone/common/features.h"
+#include "ui/ozone/platform/wayland/common/drm_render_node_handle.h"
 #include "ui/ozone/platform/wayland/common/wayland_util.h"
-#include "ui/ozone/platform/wayland/gpu/drm_render_node_path_finder.h"
 #include "ui/ozone/platform/wayland/gpu/wayland_buffer_manager_gpu.h"
 #include "ui/ozone/platform/wayland/gpu/wayland_gl_egl_utility.h"
 #include "ui/ozone/platform/wayland/gpu/wayland_overlay_manager.h"
 #include "ui/ozone/platform/wayland/gpu/wayland_surface_factory.h"
+#include "ui/ozone/platform/wayland/host/drm_syncobj_ioctl_wrapper.h"
 #include "ui/ozone/platform/wayland/host/wayland_buffer_manager_connector.h"
 #include "ui/ozone/platform/wayland/host/wayland_buffer_manager_host.h"
 #include "ui/ozone/platform/wayland/host/wayland_connection.h"
 #include "ui/ozone/platform/wayland/host/wayland_event_source.h"
 #include "ui/ozone/platform/wayland/host/wayland_exchange_data_provider.h"
-#include "ui/ozone/platform/wayland/host/wayland_input_controller.h"
 #include "ui/ozone/platform/wayland/host/wayland_input_method_context.h"
 #include "ui/ozone/platform/wayland/host/wayland_menu_utils.h"
 #include "ui/ozone/platform/wayland/host/wayland_output_manager.h"
+#include "ui/ozone/platform/wayland/host/wayland_seat.h"
 #include "ui/ozone/platform/wayland/host/wayland_window.h"
+#include "ui/ozone/platform/wayland/host/wayland_window_manager.h"
 #include "ui/ozone/platform/wayland/wayland_utils.h"
 #include "ui/ozone/public/gpu_platform_support_host.h"
+#include "ui/ozone/public/input_controller.h"
 #include "ui/ozone/public/ozone_platform.h"
 #include "ui/ozone/public/platform_menu_utils.h"
+#include "ui/ozone/public/stub_input_controller.h"
 #include "ui/ozone/public/system_input_injector.h"
 #include "ui/platform_window/platform_window_init_properties.h"
 
@@ -60,14 +66,20 @@
 #include "ui/events/ozone/layout/stub/stub_keyboard_layout_engine.h"
 #endif
 
-#if BUILDFLAG(USE_GTK)
-#include "ui/ozone/platform/wayland/host/linux_ui_delegate_wayland.h"  // nogncheck
+#if BUILDFLAG(IS_LINUX)
+#include "ui/ozone/platform/wayland/host/wayland_cursor_factory.h"
+#else
+#include "ui/ozone/common/bitmap_cursor_factory.h"
 #endif
 
-#if BUILDFLAG(IS_CHROMEOS)
-#include "ui/ozone/common/bitmap_cursor_factory.h"
-#else
-#include "ui/ozone/platform/wayland/host/wayland_cursor_factory.h"
+#if BUILDFLAG(IS_LINUX)
+#include "ui/ozone/platform/wayland/host/linux_ui_delegate_wayland.h"
+#endif
+
+#if defined(WAYLAND_GBM)
+#include "ui/gfx/linux/drm_util_linux.h"
+#include "ui/gfx/linux/gbm_device.h"
+#include "ui/ozone/platform/wayland/common/drm_render_node_path_finder.h"
 #endif
 
 namespace ui {
@@ -168,9 +180,9 @@ class OzonePlatformWayland : public OzonePlatform,
   }
 
   std::unique_ptr<InputMethod> CreateInputMethod(
-      internal::InputMethodDelegate* delegate,
+      ImeKeyEventDispatcher* ime_key_event_dispatcher,
       gfx::AcceleratedWidget widget) override {
-    return std::make_unique<InputMethodAuraLinux>(delegate);
+    return std::make_unique<InputMethodAuraLinux>(ime_key_event_dispatcher);
   }
 
   PlatformMenuUtils* GetPlatformMenuUtils() override {
@@ -181,18 +193,45 @@ class OzonePlatformWayland : public OzonePlatform,
 
   bool IsNativePixmapConfigSupported(gfx::BufferFormat format,
                                      gfx::BufferUsage usage) const override {
+#if defined(WAYLAND_GBM)
     // If there is no drm render node device available, native pixmaps are not
     // supported.
     if (path_finder_.GetDrmRenderNodePath().empty())
       return false;
 
-    if (supported_buffer_formats_.find(format) ==
-        supported_buffer_formats_.end()) {
-      return false;
+    // When OzonePlatform instance is called from GPU process,
+    // |supported_buffer_formats_| is empty. Supported buffer formats are sent
+    // to |buffer_manager_| via IPC after gpu service init in that case.
+    if (buffer_manager_) {
+      if (!buffer_manager_->SupportsFormat(format)) {
+        return false;
+      }
+      // Return false here if creating buffers for certain formats is not
+      // possible (e.g. YUV formats are not supported by linux system libgbm
+      // gbm_bo_create) even though |buffer_manager_| may indicate it can be
+      // imported as wl_buffer.
+      auto* gbm_device = buffer_manager_->GetGbmDevice();
+      if (!gbm_device || !gbm_device->CanCreateBufferForFormat(
+                             GetFourCCFormatFromBufferFormat(format))) {
+        return false;
+      }
+    } else {
+      if (supported_buffer_formats_.find(format) ==
+          supported_buffer_formats_.end()) {
+        return false;
+      }
     }
 
     return gfx::ClientNativePixmapDmaBuf::IsConfigurationSupported(format,
                                                                    usage);
+#else
+    return false;
+#endif
+  }
+
+  bool IsWindowCompositingSupported() const override {
+    // Wayland always supports compositing.
+    return true;
   }
 
   bool ShouldUseCustomFrame() override {
@@ -216,49 +255,83 @@ class OzonePlatformWayland : public OzonePlatform,
     KeyboardLayoutEngineManager::SetKeyboardLayoutEngine(
         keyboard_layout_engine_.get());
     connection_ = std::make_unique<WaylandConnection>();
-    if (!connection_->Initialize()) {
+
+    // wl_egl requires single_process and it needs to watch wayland event on gpu
+    // thread. In this case we need thread polling event watcher on browser
+    // process since watching wayland event with glib on ui thread can cause
+    // incomplete state of reading (wl_display_prepare_read is called but
+    // wl_display_cancel_read or wl_display_read_events is not called). This
+    // incomplete state can cause deadlock from gpu thread reading wayland
+    // event.
+    bool use_threaded_polling = args.single_process;
+
+    base::ScopedFD drm_render_node_fd;
+#if defined(WAYLAND_GBM)
+    DrmRenderNodeHandle drm_render_node;
+    base::FilePath drm_node_path = path_finder_.GetDrmRenderNodePath();
+    if (drm_node_path.empty() || !drm_render_node.Initialize(drm_node_path)) {
+      LOG(WARNING) << "Failed to initialize drm render node handle.";
+    } else {
+      drm_render_node_fd = drm_render_node.PassFD();
+    }
+    if (use_threaded_polling) {
+      // If gbm is used, wl_egl is not used so threaded polling is not required.
+      use_threaded_polling = drm_node_path.empty();
+    }
+#endif
+    if (!connection_->Initialize(use_threaded_polling)) {
       LOG(ERROR) << "Failed to initialize Wayland platform";
       return false;
     }
 
+    if (drm_render_node_fd.is_valid()) {
+      connection_->buffer_manager_host()->SetDrmSyncobjWrapper(
+          std::make_unique<DrmSyncobjIoctlWrapper>(
+              std::move(drm_render_node_fd)));
+    }
+
     buffer_manager_connector_ = std::make_unique<WaylandBufferManagerConnector>(
         connection_->buffer_manager_host());
-#if BUILDFLAG(IS_CHROMEOS)
-    cursor_factory_ = std::make_unique<BitmapCursorFactory>();
-#else
+#if BUILDFLAG(IS_LINUX)
     cursor_factory_ = std::make_unique<WaylandCursorFactory>(connection_.get());
+#else
+    cursor_factory_ = std::make_unique<BitmapCursorFactory>();
 #endif
-    input_controller_ = CreateWaylandInputController(connection_.get());
+    input_controller_ = std::make_unique<StubInputController>();
     gpu_platform_support_host_.reset(CreateStubGpuPlatformSupportHost());
 
     supported_buffer_formats_ =
         connection_->buffer_manager_host()->GetSupportedBufferFormats();
-#if BUILDFLAG(USE_GTK)
-    gtk_ui_platform_ =
+#if BUILDFLAG(IS_LINUX)
+    linux_ui_delegate_ =
         std::make_unique<LinuxUiDelegateWayland>(connection_.get());
 #endif
 
     menu_utils_ = std::make_unique<WaylandMenuUtils>(connection_.get());
     wayland_utils_ = std::make_unique<WaylandUtils>(connection_.get());
 
-    if (connection_->text_input_manager_v1()) {
-      GetInputMethodContextFactoryForOzone() = base::BindRepeating(
-          [](WaylandConnection* connection,
-             WaylandKeyboard::Delegate* key_delegate,
-             LinuxInputMethodContextDelegate* ime_delegate)
-              -> std::unique_ptr<LinuxInputMethodContext> {
-            return std::make_unique<WaylandInputMethodContext>(
-                connection, key_delegate, ime_delegate);
-          },
-          base::Unretained(connection_.get()),
-          base::Unretained(connection_->event_source()));
-    }
+    GetInputMethodContextFactoryForOzone() = base::BindRepeating(
+        [](WaylandConnection* connection,
+           WaylandKeyboard::Delegate* key_delegate,
+           LinuxInputMethodContextDelegate* ime_delegate)
+            -> std::unique_ptr<LinuxInputMethodContext> {
+          return std::make_unique<WaylandInputMethodContext>(
+              connection, key_delegate, ime_delegate);
+        },
+        base::Unretained(connection_.get()),
+        base::Unretained(connection_->event_source()));
 
     return true;
   }
 
   void InitializeGPU(const InitParams& args) override {
-    buffer_manager_ = std::make_unique<WaylandBufferManagerGpu>();
+    base::FilePath drm_node_path;
+#if defined(WAYLAND_GBM)
+    drm_node_path = path_finder_.GetDrmRenderNodePath();
+    if (drm_node_path.empty())
+      LOG(WARNING) << "Failed to find drm render node path.";
+#endif
+    buffer_manager_ = std::make_unique<WaylandBufferManagerGpu>(drm_node_path);
     surface_factory_ = std::make_unique<WaylandSurfaceFactory>(
         connection_.get(), buffer_manager_.get());
     overlay_manager_ =
@@ -276,8 +349,6 @@ class OzonePlatformWayland : public OzonePlatform,
       // be able to enable the system frame.
       properties->custom_frame_pref_default = true;
 
-      properties->uses_external_vulkan_image_factory = true;
-
       // Wayland uses sub-surfaces to show tooltips, and sub-surfaces must be
       // bound to their root surfaces always, but finding the correct root
       // surface at the moment of creating the tooltip is not always possible
@@ -294,8 +365,12 @@ class OzonePlatformWayland : public OzonePlatform,
       // their parents. As for toplevel surfaces, clients simply don't know
       // their position on screens and always assume they are located at some
       // arbitrary position.
-      properties->supports_global_screen_coordinates =
-          features::IsWaylandScreenCoordinatesEnabled();
+      properties->supports_global_screen_coordinates = false;
+
+      // TODO(crbug.com/40800718): Revisit (and maybe remove) once proper
+      // support, probably backed by org.freedesktop.portal.Screenshot.PickColor
+      // API is implemented.
+      properties->supports_color_picker_dialog = false;
 
       initialised = true;
     }
@@ -304,10 +379,13 @@ class OzonePlatformWayland : public OzonePlatform,
   }
 
   const PlatformRuntimeProperties& GetPlatformRuntimeProperties() override {
-    using SupportsSsdForTest =
-        OzonePlatform::PlatformRuntimeProperties::SupportsSsdForTest;
+    using SupportsForTest =
+        OzonePlatform::PlatformRuntimeProperties::SupportsForTest;
     const auto& override_supports_ssd_for_test = OzonePlatform::
         PlatformRuntimeProperties::override_supports_ssd_for_test;
+    const auto& override_supports_per_window_scaling_for_test =
+        OzonePlatform::PlatformRuntimeProperties::
+            override_supports_per_window_scaling_for_test;
 
     static OzonePlatform::PlatformRuntimeProperties properties;
     if (connection_) {
@@ -315,23 +393,29 @@ class OzonePlatformWayland : public OzonePlatform,
       // These properties are set when GetPlatformRuntimeProperties is called on
       // the browser process side.
       properties.supports_server_side_window_decorations =
-          override_supports_ssd_for_test == SupportsSsdForTest::kNotSet
-              ? (connection_->xdg_decoration_manager_v1() != nullptr)
-              : (override_supports_ssd_for_test == SupportsSsdForTest::kNo
-                     ? false
-                     : true);
+          (connection_->xdg_decoration_manager_v1() != nullptr &&
+           override_supports_ssd_for_test == SupportsForTest::kNotSet) ||
+          override_supports_ssd_for_test == SupportsForTest::kYes;
       properties.supports_overlays =
-          ui::IsWaylandOverlayDelegationEnabled() && connection_->viewporter();
-      properties.supports_non_backed_solid_color_buffers =
+          connection_->ShouldUseOverlayDelegation() &&
+          connection_->viewporter();
+      properties.supports_single_pixel_buffer =
           ui::IsWaylandOverlayDelegationEnabled() &&
-          connection_->buffer_manager_host()
-              ->SupportsNonBackedSolidColorBuffers();
+          connection_->buffer_manager_host()->SupportsSinglePixelBuffer();
       // Primary planes can be transluscent due to underlay strategy. As a
       // result Wayland server draws contents occluded by an accelerated widget.
       // To prevent this, an opaque background image is stacked below the
       // accelerated widget to occlude contents below.
       properties.needs_background_image =
-          ui::IsWaylandOverlayDelegationEnabled() && connection_->viewporter();
+          connection_->ShouldUseOverlayDelegation() &&
+          connection_->viewporter();
+      properties.supports_subwindows_as_accelerated_widgets = true;
+      properties.supports_per_window_scaling =
+          (connection_->UsePerSurfaceScaling() &&
+           override_supports_per_window_scaling_for_test ==
+               SupportsForTest::kNotSet) ||
+          (override_supports_per_window_scaling_for_test ==
+           SupportsForTest::kYes);
 
       if (surface_factory_) {
         DCHECK(has_initialized_gpu());
@@ -342,12 +426,12 @@ class OzonePlatformWayland : public OzonePlatform,
       DCHECK(has_initialized_gpu());
       // These properties are set when the GetPlatformRuntimeProperties is
       // called on the gpu process side.
-      properties.supports_non_backed_solid_color_buffers =
+      properties.supports_single_pixel_buffer =
           ui::IsWaylandOverlayDelegationEnabled() &&
-          buffer_manager_->supports_non_backed_solid_color_buffers();
+          buffer_manager_->supports_single_pixel_buffer();
       // See the comment above.
       properties.needs_background_image =
-          ui::IsWaylandOverlayDelegationEnabled() &&
+          buffer_manager_->supports_overlays() &&
           buffer_manager_->supports_viewporter();
       properties.supports_native_pixmaps =
           surface_factory_->SupportsNativePixmaps();
@@ -365,7 +449,7 @@ class OzonePlatformWayland : public OzonePlatform,
     // Please note this call happens on the gpu.
     auto gpu_task_runner = buffer_manager_->gpu_thread_runner();
     if (!gpu_task_runner)
-      gpu_task_runner = base::ThreadTaskRunnerHandle::Get();
+      gpu_task_runner = base::SingleThreadTaskRunner::GetCurrentDefault();
 
     binders->Add<ozone::mojom::WaylandBufferManagerGpu>(
         base::BindRepeating(
@@ -374,15 +458,50 @@ class OzonePlatformWayland : public OzonePlatform,
         gpu_task_runner);
   }
 
+  void DumpState(std::ostream& out) const override {
+    if (connection_) {
+      connection_->DumpState(out);
+    }
+  }
+
   void CreateWaylandBufferManagerGpuBinding(
       mojo::PendingReceiver<ozone::mojom::WaylandBufferManagerGpu> receiver) {
     buffer_manager_->AddBindingWaylandBufferManagerGpu(std::move(receiver));
   }
 
   void PostCreateMainMessageLoop(
-      base::OnceCallback<void()> shutdown_cb) override {
+      base::OnceCallback<void()> shutdown_cb,
+      scoped_refptr<base::SingleThreadTaskRunner>) override {
     DCHECK(connection_);
     connection_->SetShutdownCb(std::move(shutdown_cb));
+  }
+
+  void PostMainMessageLoopRun() override {
+    // TODO(b/324294360): This will cause a lot of dangling pointers, which
+    // breaks linux wayland bot. Fix them and enable on linux as well.
+#if BUILDFLAG(IS_CHROMEOS) || !PA_BUILDFLAG(ENABLE_DANGLING_RAW_PTR_CHECKS)
+    connection_.reset();
+#endif
+  }
+
+  std::unique_ptr<PlatformKeyboardHook> CreateKeyboardHook(
+      PlatformKeyboardHookTypes type,
+      base::RepeatingCallback<void(KeyEvent* event)> callback,
+      std::optional<base::flat_set<DomCode>> dom_codes,
+      gfx::AcceleratedWidget accelerated_widget) override {
+    DCHECK(connection_);
+    auto* seat = connection_->seat();
+    auto* window = connection_->window_manager()->GetWindow(accelerated_widget);
+    if (!seat || !seat->keyboard() || !window) {
+      return nullptr;
+    }
+    switch (type) {
+      case PlatformKeyboardHookTypes::kModifier:
+        return seat->keyboard()->CreateKeyboardHook(
+            window, std::move(dom_codes), std::move(callback));
+      case PlatformKeyboardHookTypes::kMedia:
+        return nullptr;
+    }
   }
 
   // OSExchangeDataProviderFactoryOzone:
@@ -418,12 +537,14 @@ class OzonePlatformWayland : public OzonePlatform,
   // framework.
   wl::BufferFormatsWithModifiersMap supported_buffer_formats_;
 
+#if defined(WAYLAND_GBM)
   // This is used both in the gpu and browser processes to find out if a drm
   // render node is available.
   DrmRenderNodePathFinder path_finder_;
+#endif
 
-#if BUILDFLAG(USE_GTK)
-  std::unique_ptr<LinuxUiDelegateWayland> gtk_ui_platform_;
+#if BUILDFLAG(IS_LINUX)
+  std::unique_ptr<LinuxUiDelegateWayland> linux_ui_delegate_;
 #endif
 };
 

@@ -1,11 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_NEARBY_SHARING_CERTIFICATES_NEARBY_SHARE_PRIVATE_CERTIFICATE_H_
 #define CHROME_BROWSER_NEARBY_SHARING_CERTIFICATES_NEARBY_SHARE_PRIVATE_CERTIFICATE_H_
 
+#include <array>
 #include <memory>
+#include <optional>
 #include <set>
 #include <vector>
 
@@ -14,11 +16,11 @@
 #include "base/gtest_prod_util.h"
 #include "base/time/time.h"
 #include "base/values.h"
+#include "chrome/browser/nearby_sharing/certificates/constants.h"
 #include "chrome/browser/nearby_sharing/certificates/nearby_share_encrypted_metadata_key.h"
-#include "chrome/browser/nearby_sharing/proto/encrypted_metadata.pb.h"
-#include "chrome/browser/nearby_sharing/proto/rpc_resources.pb.h"
-#include "chrome/browser/ui/webui/nearby_share/public/mojom/nearby_share_settings.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chromeos/ash/services/nearby/public/mojom/nearby_share_settings.mojom.h"
+#include "third_party/nearby/sharing/proto/encrypted_metadata.pb.h"
+#include "third_party/nearby/sharing/proto/rpc_resources.pb.h"
 
 namespace crypto {
 class ECPrivateKey;
@@ -33,10 +35,10 @@ class SymmetricKey;
 // metadata encryption key, which can then be advertised.
 class NearbySharePrivateCertificate {
  public:
-  // Inverse operation of ToDictionary(). Returns absl::nullopt if the
+  // Inverse operation of ToDictionary(). Returns std::nullopt if the
   // conversion is not successful
-  static absl::optional<NearbySharePrivateCertificate> FromDictionary(
-      const base::Value& dict);
+  static std::optional<NearbySharePrivateCertificate> FromDictionary(
+      const base::Value::Dict& dict);
 
   // Generates a random EC key pair, secret key, and metadata encryption
   // key. Derives the certificate ID from the secret key. Derives the
@@ -45,7 +47,7 @@ class NearbySharePrivateCertificate {
   NearbySharePrivateCertificate(
       nearby_share::mojom::Visibility visibility,
       base::Time not_before,
-      nearbyshare::proto::EncryptedMetadata unencrypted_metadata);
+      nearby::sharing::proto::EncryptedMetadata unencrypted_metadata);
 
   NearbySharePrivateCertificate(
       nearby_share::mojom::Visibility visibility,
@@ -53,10 +55,13 @@ class NearbySharePrivateCertificate {
       base::Time not_after,
       std::unique_ptr<crypto::ECPrivateKey> key_pair,
       std::unique_ptr<crypto::SymmetricKey> secret_key,
-      std::vector<uint8_t> metadata_encryption_key,
+      base::span<const uint8_t, kNearbyShareNumBytesMetadataEncryptionKey>
+          metadata_encryption_key,
       std::vector<uint8_t> id,
-      nearbyshare::proto::EncryptedMetadata unencrypted_metadata,
-      std::set<std::vector<uint8_t>> consumed_salts);
+      nearby::sharing::proto::EncryptedMetadata unencrypted_metadata,
+      std::set<
+          std::array<uint8_t, kNearbyShareNumBytesMetadataEncryptionKeySalt>>
+          consumed_salts);
 
   NearbySharePrivateCertificate(const NearbySharePrivateCertificate& other);
   NearbySharePrivateCertificate& operator=(
@@ -71,57 +76,62 @@ class NearbySharePrivateCertificate {
   nearby_share::mojom::Visibility visibility() const { return visibility_; }
   base::Time not_before() const { return not_before_; }
   base::Time not_after() const { return not_after_; }
-  const nearbyshare::proto::EncryptedMetadata& unencrypted_metadata() const {
+  const nearby::sharing::proto::EncryptedMetadata& unencrypted_metadata()
+      const {
     return unencrypted_metadata_;
   }
 
   // Encrypts |metadata_encryption_key_| with the |secret_key_|, using a
   // randomly generated 2-byte salt that has not already been consumed. Returns
-  // absl::nullopt if the encryption failed or if there are no remaining salts.
+  // std::nullopt if the encryption failed or if there are no remaining salts.
   // Note: Due to the generation and storage of an unconsumed salt, this method
   // is not thread safe.
-  absl::optional<NearbyShareEncryptedMetadataKey> EncryptMetadataKey();
+  std::optional<NearbyShareEncryptedMetadataKey> EncryptMetadataKey();
 
   // Signs the input |payload| with the private key from |key_pair_|. Returns
-  // absl::nullopt if the signing was unsuccessful.
-  absl::optional<std::vector<uint8_t>> Sign(
+  // std::nullopt if the signing was unsuccessful.
+  std::optional<std::vector<uint8_t>> Sign(
       base::span<const uint8_t> payload) const;
 
   // Creates a hash of the |authentication_token|, using |secret_key_|. The use
   // of HKDF and the output vector size is part of the Nearby Share protocol and
   // conforms with the GmsCore implementation.
-  std::vector<uint8_t> HashAuthenticationToken(
-      base::span<const uint8_t> authentication_token) const;
+  std::array<uint8_t, kNearbyShareNumBytesAuthenticationTokenHash>
+  HashAuthenticationToken(base::span<const uint8_t> authentication_token) const;
 
   // Converts this private certificate to a public certificate proto that can be
-  // shared with select contacts. Returns absl::nullopt if the conversion was
+  // shared with select contacts. Returns std::nullopt if the conversion was
   // unsuccessful.
-  absl::optional<nearbyshare::proto::PublicCertificate> ToPublicCertificate()
+  std::optional<nearby::sharing::proto::PublicCertificate> ToPublicCertificate()
       const;
 
   // Converts this private certificate to a dictionary value for storage
   // in Prefs.
-  base::Value ToDictionary() const;
+  base::Value::Dict ToDictionary() const;
 
   // For testing only.
-  base::queue<std::vector<uint8_t>>& next_salts_for_testing() {
+  base::queue<
+      std::array<uint8_t, kNearbyShareNumBytesMetadataEncryptionKeySalt>>&
+  next_salts_for_testing() {
     return next_salts_for_testing_;
   }
-  absl::optional<base::TimeDelta>& offset_for_testing() {
+  std::optional<base::TimeDelta>& offset_for_testing() {
     return offset_for_testing_;
   }
 
  private:
   // Generates a random 2-byte salt used for encrypting the metadata encryption
-  // key. Adds returned salt to |consumed_salts_|. Returns absl::nullopt if the
+  // key. Adds returned salt to |consumed_salts_|. Returns std::nullopt if the
   // maximum number of salts have been exhausted or if an unconsumed salt cannot
   // be found in a fixed number of attempts, though this is highly improbably.
   // Note: This function is not thread safe.
-  absl::optional<std::vector<uint8_t>> GenerateUnusedSalt();
+  std::optional<
+      std::array<uint8_t, kNearbyShareNumBytesMetadataEncryptionKeySalt>>
+  GenerateUnusedSalt();
 
   // Encrypts |unencrypted_metadata_| with the |metadata_encryption_key_|, using
   // the |secret_key_| as salt.
-  absl::optional<std::vector<uint8_t>> EncryptMetadata() const;
+  std::optional<std::vector<uint8_t>> EncryptMetadata() const;
 
   // Specifies which contacts can receive the public certificate corresponding
   // to this private certificate.
@@ -146,21 +156,25 @@ class NearbySharePrivateCertificate {
 
   // A 14-byte symmetric key used to encrypt |unencrypted_metadata_|. Not
   // included in public certificate.
-  std::vector<uint8_t> metadata_encryption_key_;
+  std::array<uint8_t, kNearbyShareNumBytesMetadataEncryptionKey>
+      metadata_encryption_key_;
 
   // An ID for the certificate, generated from the secret key.
   std::vector<uint8_t> id_;
 
   // Unencrypted device metadata. The proto name is misleading; it holds data
   // that will eventually be serialized and encrypted.
-  nearbyshare::proto::EncryptedMetadata unencrypted_metadata_;
+  nearby::sharing::proto::EncryptedMetadata unencrypted_metadata_;
 
   // The set of 2-byte salts already used to encrypt the metadata key.
-  std::set<std::vector<uint8_t>> consumed_salts_;
+  std::set<std::array<uint8_t, kNearbyShareNumBytesMetadataEncryptionKeySalt>>
+      consumed_salts_;
 
   // For testing only.
-  base::queue<std::vector<uint8_t>> next_salts_for_testing_;
-  absl::optional<base::TimeDelta> offset_for_testing_;
+  base::queue<
+      std::array<uint8_t, kNearbyShareNumBytesMetadataEncryptionKeySalt>>
+      next_salts_for_testing_;
+  std::optional<base::TimeDelta> offset_for_testing_;
 
   FRIEND_TEST_ALL_PREFIXES(NearbySharePrivateCertificateTest, ToFromDictionary);
 };

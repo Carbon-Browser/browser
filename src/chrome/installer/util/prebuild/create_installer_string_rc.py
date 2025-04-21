@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 STRING_IDS = [
   'IDS_ABOUT_VERSION_COMPANY_NAME',
   'IDS_APP_SHORTCUTS_SUBDIR_NAME',
+  'IDS_ELEVATION_SERVICE_DESCRIPTION',
   'IDS_INBOUND_MDNS_RULE_DESCRIPTION',
   'IDS_INBOUND_MDNS_RULE_NAME',
   'IDS_INSTALL_EXISTING_VERSION_LAUNCHED',
@@ -29,6 +30,7 @@ STRING_IDS = [
   'IDS_SETUP_PATCH_FAILED',
   'IDS_SHORTCUT_NEW_WINDOW',
   'IDS_SHORTCUT_TOOLTIP',
+  'IDS_TRACING_SERVICE_DESCRIPTION',
 ]
 
 # Certain strings are conditional on a brand's install mode (see

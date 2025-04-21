@@ -1,8 +1,8 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "chrome/browser/vr/test/multi_class_browser_test.h"
 #include "chrome/browser/vr/test/ui_utils.h"
@@ -32,18 +32,17 @@ WEBXR_VR_ALL_RUNTIMES_BROWSER_TEST_F(
   // to change that as we want anything necessary to request a session to get
   // granted. However, we want no action to be taken now so that the prompt for
   // location comes up and does not get dismissed.
-  t->GetPermissionRequestManager()->set_auto_response_for_test(
-      permissions::PermissionRequestManager::NONE);
+  t->SetPermissionAutoResponse(permissions::PermissionRequestManager::NONE);
   t->RunJavaScriptOrFail(
       "navigator.geolocation.getCurrentPosition( ()=>{}, ()=>{} )");
   base::RunLoop().RunUntilIdle();
   auto utils = UiUtils::Create();
-  utils->PerformActionAndWaitForVisibilityStatus(
+  utils->WaitForVisibilityStatus(
       UserFriendlyElementName::kWebXrExternalPromptNotification,
-      true /* visible */, base::DoNothing());
+      true /* visible */);
 }
 
-// TODO(https://crbug.com/920697): Add tests verifying the notification
+// TODO(crbug.com/41434932): Add tests verifying the notification
 // disappears when the permission is accepted/denied once we can query element
 // visibility at any time using PermissionRequestManagerTestApi.
 

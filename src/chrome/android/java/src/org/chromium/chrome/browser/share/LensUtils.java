@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,30 +6,21 @@ package org.chromium.chrome.browser.share;
 
 import android.content.Context;
 import android.os.Build;
-import android.text.TextUtils;
 
+import org.chromium.base.ResettersForTesting;
 import org.chromium.chrome.browser.IntentHandler;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
-import org.chromium.chrome.browser.gsa.GSAState;
-import org.chromium.chrome.browser.lens.LensController;
+import org.chromium.chrome.browser.gsa.GSAUtils;
 import org.chromium.components.externalauth.ExternalAuthUtils;
 
-/**
- * This class provides utilities for intenting into Google Lens.
- */
-// TODO(crbug/1157496): Consolidate param-checks into a single function.
+/** This class provides utilities for intenting into Google Lens. */
+// TODO(crbug.com/40160855): Consolidate param-checks into a single function.
 public class LensUtils {
-    private static final String MIN_AGSA_VERSION_FEATURE_PARAM_NAME = "minAgsaVersionName";
     private static final String LOG_UKM_PARAM_NAME = "logUkm";
-    private static final String ENABLE_ON_TABLET_PARAM_NAME = "enableContextMenuSearchOnTablet";
-    private static final String DISABLE_ON_INCOGNITO_PARAM_NAME = "disableOnIncognito";
-    private static final String ORDER_SHARE_IMAGE_BEFORE_LENS_PARAM_NAME =
-            "orderShareImageBeforeLens";
+
     private static final String MIN_AGSA_VERSION_NAME_FOR_LENS_POSTCAPTURE = "10.65";
 
-    /**
-     * See function for details.
-     */
+    /** See function for details. */
     private static boolean sFakePassableLensEnvironmentForTesting;
 
     /*
@@ -40,6 +31,7 @@ public class LensUtils {
      */
     public static void setFakePassableLensEnvironmentForTesting(final boolean shouldFake) {
         sFakePassableLensEnvironmentForTesting = shouldFake;
+        ResettersForTesting.register(() -> sFakePassableLensEnvironmentForTesting = false);
     }
 
     /**
@@ -51,13 +43,13 @@ public class LensUtils {
      *         available.
      */
     public static String getLensActivityVersionNameIfAvailable(final Context context) {
-        if (Boolean.TRUE.equals(sFakePassableLensEnvironmentForTesting)) {
+        if (sFakePassableLensEnvironmentForTesting) {
             return MIN_AGSA_VERSION_NAME_FOR_LENS_POSTCAPTURE;
         } else {
             if (context == null) {
                 return "";
             }
-            String agsaVersion = GSAState.getInstance(context).getAgsaVersionName();
+            String agsaVersion = GSAUtils.getAgsaVersionName();
             if (agsaVersion == null) {
                 return "";
             } else {
@@ -76,20 +68,7 @@ public class LensUtils {
      * @return The minimum version name string or an empty string if not available.
      */
     public static String getMinimumAgsaVersionForLensSupport() {
-        if (ChromeFeatureList.isEnabled(ChromeFeatureList.CONTEXT_MENU_SEARCH_WITH_GOOGLE_LENS)) {
-            final String serverProvidedMinAgsaVersion =
-                    ChromeFeatureList.getFieldTrialParamByFeature(
-                            ChromeFeatureList.CONTEXT_MENU_SEARCH_WITH_GOOGLE_LENS,
-                            MIN_AGSA_VERSION_FEATURE_PARAM_NAME);
-            if (TextUtils.isEmpty(serverProvidedMinAgsaVersion)) {
-                // Falls into this block if the user enabled the feature using chrome://flags
-                // and the param was not set by the server.
-                return MIN_AGSA_VERSION_NAME_FOR_LENS_POSTCAPTURE;
-            }
-            return serverProvidedMinAgsaVersion;
-        }
-        // The feature is disabled so no need to return a minimum version.
-        return "";
+        return MIN_AGSA_VERSION_NAME_FOR_LENS_POSTCAPTURE;
     }
 
     /**
@@ -108,75 +87,24 @@ public class LensUtils {
     }
 
     /**
-     * Checks whether the GSA package on the device is guaranteed to be an official
-     * GSA build.
+     * Checks whether the GSA package on the device is guaranteed to be an official GSA build.
      *
      * @return Whether the package is valid.
      */
-    public static boolean isValidAgsaPackage(final ExternalAuthUtils externalAuthUtils) {
+    public static boolean isValidAgsaPackage() {
         if (sFakePassableLensEnvironmentForTesting) {
             return true;
         }
 
-        return externalAuthUtils.isGoogleSigned(IntentHandler.PACKAGE_GSA);
-    }
-
-    /**
-     * Start an early Lens AGSA connection if feature parameter is enabled and client is not
-     * incognito. Eligibity checks happen in LensController.
-     *
-     * @param isIncognito Whether the client is incognito
-     */
-    public static void startLensConnectionIfNecessary(boolean isIncognito) {
-        // TODO(crbug/1157543): Pass isIncognito through to LensController.
-        if (!isIncognito) {
-            LensController.getInstance().startLensConnection();
-        }
-    }
-
-    /**
-     * Terminate an early Lens AGSA connection if feature parameter is enabled and client is not
-     * incognito. Eligibity checks happen in LensController.
-     *
-     * @param isIncognito Whether the client is incognito
-     */
-    public static void terminateLensConnectionsIfNecessary(boolean isIncognito) {
-        // TODO(crbug/1157543): Pass isIncognito through to LensController.
-        if (!isIncognito) {
-            LensController.getInstance().terminateLensConnections();
-        }
+        return ExternalAuthUtils.getInstance().isGoogleSigned(IntentHandler.PACKAGE_GSA);
     }
 
     public static boolean isGoogleLensFeatureEnabled(boolean isIncognito) {
-        return ChromeFeatureList.isEnabled(ChromeFeatureList.CONTEXT_MENU_SEARCH_WITH_GOOGLE_LENS)
-                && !(isIncognito
-                        && ChromeFeatureList.getFieldTrialParamByFeatureAsBoolean(
-                                ChromeFeatureList.CONTEXT_MENU_SEARCH_WITH_GOOGLE_LENS,
-                                DISABLE_ON_INCOGNITO_PARAM_NAME, true));
-    }
-
-    public static boolean isGoogleLensFeatureEnabledOnTablet() {
-        return ChromeFeatureList.getFieldTrialParamByFeatureAsBoolean(
-                ChromeFeatureList.CONTEXT_MENU_SEARCH_WITH_GOOGLE_LENS, ENABLE_ON_TABLET_PARAM_NAME,
-                false);
-    }
-
-    /**
-     * Adjust chip ordering slightly. The image chip feature changes the context menu height
-     * which can result  in the final image menu items being hidden in certain contexts.
-     * @return Whether to list 'Share Image' above 'Search with Google Lens'.
-     */
-    public static boolean orderShareImageBeforeLens() {
-        return ChromeFeatureList.getFieldTrialParamByFeatureAsBoolean(
-                ChromeFeatureList.CONTEXT_MENU_GOOGLE_LENS_CHIP,
-                ORDER_SHARE_IMAGE_BEFORE_LENS_PARAM_NAME, false);
+        return !isIncognito;
     }
 
     public static boolean shouldLogUkmForLensContextMenuFeatures() {
-        return shouldLogUkmByFeature(ChromeFeatureList.CONTEXT_MENU_SEARCH_WITH_GOOGLE_LENS)
-                || shouldLogUkmByFeature(ChromeFeatureList.CONTEXT_MENU_SHOP_WITH_GOOGLE_LENS)
-                || shouldLogUkmByFeature(ChromeFeatureList.CONTEXT_MENU_GOOGLE_LENS_CHIP)
-                || shouldLogUkmByFeature(ChromeFeatureList.CONTEXT_MENU_TRANSLATE_WITH_GOOGLE_LENS);
+        return shouldLogUkmByFeature(ChromeFeatureList.CONTEXT_MENU_TRANSLATE_WITH_GOOGLE_LENS);
     }
 
     /*

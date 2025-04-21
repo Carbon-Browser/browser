@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "ui/base/base_window.h"
+#include "ui/base/mojom/window_show_state.mojom-forward.h"
 
 namespace extensions {
 
@@ -33,7 +34,7 @@ class AppBaseWindow : public ui::BaseWindow {
   bool IsFullscreen() const override;
   gfx::NativeWindow GetNativeWindow() const override;
   gfx::Rect GetRestoredBounds() const override;
-  ui::WindowShowState GetRestoredState() const override;
+  ui::mojom::WindowShowState GetRestoredState() const override;
   gfx::Rect GetBounds() const override;
   void Show() override;
   void Hide() override;

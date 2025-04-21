@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,6 @@
 #include "base/path_service.h"
 #include "base/strings/string_tokenizer.h"
 #include "build/build_config.h"
-#include "components/services/app_service/public/mojom/types.mojom-shared.h"
 #include "extensions/common/switches.h"
 #include "extensions/shell/browser/shell_extension_system.h"
 

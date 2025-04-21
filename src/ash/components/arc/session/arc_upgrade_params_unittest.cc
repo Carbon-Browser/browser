@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,13 +25,6 @@ TEST(ArcUpgradeParamsTest, Constructor_WithTtsCacheDisableSwitch) {
 TEST(ArcUpgradeParamsTest, Constructor_DefaultTtsState) {
   UpgradeParams upgradeParams;
   EXPECT_FALSE(upgradeParams.skip_tts_cache);
-}
-
-TEST(ArcUpgradeParamsTest, Constructor_WithTtsCacheSetupFeatureDisabled) {
-  base::test::ScopedFeatureList feature_list;
-  feature_list.InitWithFeatureState(arc::kEnableTTSCacheSetup, false);
-  UpgradeParams upgradeParams;
-  EXPECT_TRUE(upgradeParams.skip_tts_cache);
 }
 
 }  // namespace

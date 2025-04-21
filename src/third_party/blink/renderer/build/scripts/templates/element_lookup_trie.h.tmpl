@@ -6,12 +6,24 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_{{namespace|upper}}_ELEMENT_LOOKUP_TRIE_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_{{namespace|upper}}_ELEMENT_LOOKUP_TRIE_H_
 
+#include "base/containers/span.h"
 #include "third_party/blink/renderer/core/core_export.h"
-#include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
+#include "third_party/blink/renderer/platform/wtf/text/wtf_uchar.h"
 
 namespace blink {
+namespace {{namespace|lower}}_names {
+enum class HTMLTag;
+}
 
-CORE_EXPORT const AtomicString& lookup{{namespace}}Tag(const UChar* data, unsigned length);
+// Returns the tag for the supplied string. If the string matches a valid tag,
+// `tag` is set and true is returned, otherwise this returns false.
+CORE_EXPORT {{namespace|lower}}_names::HTMLTag Lookup{{namespace|title}}Tag(
+    base::span<const UChar> span);
+
+// Returns the tag for the supplied string. If the string matches a valid tag,
+// `tag` is set and true is returned, otherwise this returns false.
+CORE_EXPORT {{namespace|lower}}_names::HTMLTag Lookup{{namespace|title}}Tag(
+    base::span<const LChar> span);
 
 }  // namespace blink
 

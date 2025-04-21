@@ -1,17 +1,20 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.content_public.browser.test.mock;
 
 import android.annotation.SuppressLint;
+import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.os.Handler;
 import android.os.Parcel;
 
 import androidx.annotation.Nullable;
 
+import org.chromium.base.Callback;
 import org.chromium.blink_public.input.SelectionGranularity;
+import org.chromium.cc.input.BrowserControlsOffsetTagsInfo;
 import org.chromium.content_public.browser.GlobalRenderFrameHostId;
 import org.chromium.content_public.browser.ImageDownloadCallback;
 import org.chromium.content_public.browser.JavaScriptCallback;
@@ -21,30 +24,31 @@ import org.chromium.content_public.browser.NavigationController;
 import org.chromium.content_public.browser.RenderFrameHost;
 import org.chromium.content_public.browser.RenderWidgetHostView;
 import org.chromium.content_public.browser.StylusWritingHandler;
+import org.chromium.content_public.browser.StylusWritingImeCallback;
 import org.chromium.content_public.browser.ViewEventSink;
 import org.chromium.content_public.browser.Visibility;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.content_public.browser.WebContentsObserver;
+import org.chromium.content_public.browser.back_forward_transition.AnimationStage;
 import org.chromium.ui.OverscrollRefreshHandler;
 import org.chromium.ui.base.EventForwarder;
 import org.chromium.ui.base.ViewAndroidDelegate;
 import org.chromium.ui.base.WindowAndroid;
+import org.chromium.ui.mojom.VirtualKeyboardMode;
 import org.chromium.url.GURL;
 
-import java.util.Collections;
-import java.util.List;
-
-/**
- * Mock class for {@link WebContents}.
- */
+/** Mock class for {@link WebContents}. */
 @SuppressLint("ParcelCreator")
 public class MockWebContents implements WebContents {
     public RenderFrameHost renderFrameHost;
     private GURL mLastCommittedUrl;
 
     @Override
-    public void initialize(String productVersion, ViewAndroidDelegate viewDelegate,
-            ViewEventSink.InternalAccessDelegate accessDelegate, WindowAndroid windowAndroid,
+    public void setDelegates(
+            String productVersion,
+            ViewAndroidDelegate viewDelegate,
+            ViewEventSink.InternalAccessDelegate accessDelegate,
+            WindowAndroid windowAndroid,
             WebContents.InternalsHolder internalsHolder) {}
 
     @Override
@@ -98,6 +102,11 @@ public class MockWebContents implements WebContents {
     }
 
     @Override
+    public boolean isFocusedElementEditable() {
+        return false;
+    }
+
+    @Override
     public RenderFrameHost getRenderFrameHostFromId(GlobalRenderFrameHostId id) {
         return null;
     }
@@ -109,14 +118,12 @@ public class MockWebContents implements WebContents {
     }
 
     @Override
-    public List<? extends WebContents> getInnerWebContents() {
-        return Collections.emptyList();
-    }
-
-    @Override
     public @Visibility int getVisibility() {
         return Visibility.VISIBLE;
     }
+
+    @Override
+    public void updateWebContentsVisibility(@Visibility int visibility) {}
 
     @Override
     public String getTitle() {
@@ -126,6 +133,12 @@ public class MockWebContents implements WebContents {
     @Override
     public GURL getVisibleUrl() {
         return GURL.emptyGURL();
+    }
+
+    @Override
+    @VirtualKeyboardMode.EnumType
+    public int getVirtualKeyboardMode() {
+        return VirtualKeyboardMode.UNSET;
     }
 
     @Override
@@ -144,16 +157,15 @@ public class MockWebContents implements WebContents {
     }
 
     @Override
+    public boolean hasUncommittedNavigationInPrimaryMainFrame() {
+        return false;
+    }
+
+    @Override
     public void dispatchBeforeUnload(boolean autoCancel) {}
 
     @Override
     public void stop() {}
-
-    @Override
-    public void onHide() {}
-
-    @Override
-    public void onShow() {}
 
     @Override
     public void setImportance(int importance) {}
@@ -163,6 +175,9 @@ public class MockWebContents implements WebContents {
 
     @Override
     public void setAudioMuted(boolean mute) {}
+
+    @Override
+    public boolean isAudioMuted() { return false; }
 
     @Override
     public boolean focusLocationBarByDefault() {
@@ -184,8 +199,13 @@ public class MockWebContents implements WebContents {
     public void scrollFocusedEditableNodeIntoView() {}
 
     @Override
-    public void selectAroundCaret(@SelectionGranularity int granularity, boolean shouldShowHandle,
-            boolean shouldShowContextMenu) {}
+    public void selectAroundCaret(
+            @SelectionGranularity int granularity,
+            boolean shouldShowHandle,
+            boolean shouldShowContextMenu,
+            int startOffset,
+            int endOffset,
+            int surroundingTextLength) {}
 
     @Override
     public void adjustSelectionByCharacterOffset(
@@ -218,8 +238,11 @@ public class MockWebContents implements WebContents {
     public void addMessageToDevToolsConsole(int level, String message) {}
 
     @Override
-    public void postMessageToMainFrame(MessagePayload messagePayload, String sourceOrigin,
-            String targetOrigin, MessagePort[] ports) {}
+    public void postMessageToMainFrame(
+            MessagePayload messagePayload,
+            String sourceOrigin,
+            String targetOrigin,
+            MessagePort[] ports) {}
 
     @Override
     public MessagePort[] createMessageChannel() {
@@ -232,7 +255,17 @@ public class MockWebContents implements WebContents {
     }
 
     @Override
+    public boolean hasViewTransitionOptIn() {
+        return false;
+    }
+
+    @Override
     public int getThemeColor() {
+        return 0;
+    }
+
+    @Override
+    public int getBackgroundColor() {
         return 0;
     }
 
@@ -249,6 +282,11 @@ public class MockWebContents implements WebContents {
 
     @Override
     public void setStylusWritingHandler(StylusWritingHandler stylusWritingHandler) {}
+
+    @Override
+    public StylusWritingImeCallback getStylusWritingImeCallback() {
+        return null;
+    }
 
     @Override
     public EventForwarder getEventForwarder() {
@@ -268,7 +306,11 @@ public class MockWebContents implements WebContents {
     public void setSpatialNavigationDisabled(boolean disabled) {}
 
     @Override
-    public int downloadImage(GURL url, boolean isFavicon, int maxBitmapSize, boolean bypassCache,
+    public int downloadImage(
+            GURL url,
+            boolean isFavicon,
+            int maxBitmapSize,
+            boolean bypassCache,
             ImageDownloadCallback callback) {
         return 0;
     }
@@ -312,4 +354,34 @@ public class MockWebContents implements WebContents {
 
     @Override
     public void notifyBrowserControlsHeightChanged() {}
+
+    @Override
+    public void tearDownDialogOverlays() {}
+
+    @Override
+    public boolean needToFireBeforeUnloadOrUnloadEvents() {
+        return false;
+    }
+
+    @Override
+    public void onContentForNavigationEntryShown() {}
+
+    @Override
+    public int getCurrentBackForwardTransitionStage() {
+        return AnimationStage.NONE;
+    }
+
+    @Override
+    public void captureContentAsBitmapForTesting(Callback<Bitmap> callback) {}
+
+    @Override
+    public void setLongPressLinkSelectText(boolean enabled) {}
+
+    @Override
+    public void notifyControlsConstraintsChanged(
+            BrowserControlsOffsetTagsInfo oldOffsetTagsInfo,
+            BrowserControlsOffsetTagsInfo offsetTagsInfo) {}
+
+    @Override
+    public void disconnectFileSelectListenerIfAny() {}
 }

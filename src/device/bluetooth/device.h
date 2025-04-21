@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "device/bluetooth/bluetooth_adapter.h"
 #include "device/bluetooth/bluetooth_device.h"
@@ -91,7 +91,7 @@ class Device : public mojom::Device, public device::BluetoothAdapter::Observer {
 
   void OnReadRemoteCharacteristic(
       ReadValueForCharacteristicCallback callback,
-      absl::optional<device::BluetoothGattService::GattErrorCode> error_code,
+      std::optional<device::BluetoothGattService::GattErrorCode> error_code,
       const std::vector<uint8_t>& value);
 
   void OnWriteRemoteCharacteristic(
@@ -103,7 +103,7 @@ class Device : public mojom::Device, public device::BluetoothAdapter::Observer {
 
   void OnReadRemoteDescriptor(
       ReadValueForDescriptorCallback callback,
-      absl::optional<device::BluetoothGattService::GattErrorCode> error_code,
+      std::optional<device::BluetoothGattService::GattErrorCode> error_code,
       const std::vector<uint8_t>& value);
 
   void OnWriteRemoteDescriptor(WriteValueForDescriptorCallback callback);

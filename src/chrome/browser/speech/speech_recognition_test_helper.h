@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,12 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
+#include "base/test/scoped_feature_list.h"
+#include "chrome/browser/speech/fake_speech_recognition_service.h"
+
 class KeyedService;
 class Profile;
-
-namespace base {
-struct Feature;
-}  // namespace base
 
 namespace content {
 class BrowserContext;
@@ -22,7 +22,7 @@ class FakeSpeechRecognitionManager;
 }  // namespace content
 
 namespace speech {
-class FakeSpeechRecognitionService;
+class FakeSpeechRecognizer;
 enum class SpeechRecognitionType;
 }  // namespace speech
 
@@ -37,10 +37,13 @@ enum class SpeechRecognitionType;
 //
 // For examples, please see SpeechRecognitionPrivateBaseTest or
 // DictationBaseTest.
-class SpeechRecognitionTestHelper {
+class SpeechRecognitionTestHelper
+    : public speech::FakeSpeechRecognitionService::Observer {
  public:
-  explicit SpeechRecognitionTestHelper(speech::SpeechRecognitionType type);
-  ~SpeechRecognitionTestHelper();
+  explicit SpeechRecognitionTestHelper(
+      speech::SpeechRecognitionType type,
+      media::mojom::RecognizerClientType client_type);
+  ~SpeechRecognitionTestHelper() override;
   SpeechRecognitionTestHelper(const SpeechRecognitionTestHelper&) = delete;
   SpeechRecognitionTestHelper& operator=(const SpeechRecognitionTestHelper&) =
       delete;
@@ -59,9 +62,13 @@ class SpeechRecognitionTestHelper {
   // Sends a fake speech recognition error and waits for tasks to finish.
   void SendErrorAndWait();
   // Returns a list of features that should be enabled.
-  std::vector<base::Feature> GetEnabledFeatures();
+  std::vector<base::test::FeatureRef> GetEnabledFeatures();
   // Returns a list of features that should be disabled.
-  std::vector<base::Feature> GetDisabledFeatures();
+  std::vector<base::test::FeatureRef> GetDisabledFeatures();
+
+  // FakeSpeechRecognitionService::Observer
+  void OnRecognizerBound(
+      speech::FakeSpeechRecognizer* bound_recognizer) override;
 
  private:
   // Methods for setup.
@@ -74,12 +81,20 @@ class SpeechRecognitionTestHelper {
   void SendFakeSpeechResultAndWait(const std::string& transcript,
                                    bool is_final);
 
+  // Represents the feature under test, we use this to identify the correct
+  // FakeSpeechRecognizer when it becomes bound.
+  media::mojom::RecognizerClientType feature_under_test_;
+
   speech::SpeechRecognitionType type_;
   // For network recognition.
   std::unique_ptr<content::FakeSpeechRecognitionManager>
       fake_speech_recognition_manager_;
   // For on-device recognition. KeyedService owned by the test profile.
-  speech::FakeSpeechRecognitionService* fake_service_;
+  raw_ptr<speech::FakeSpeechRecognitionService, DanglingUntriaged>
+      fake_service_;
+  // For on-device recognition, this is the fakeSpeechRecognizer passed to the
+  // fake service, used for checking session status and assertions.
+  base::WeakPtr<speech::FakeSpeechRecognizer> fake_recognizer_;
 };
 
 #endif  // CHROME_BROWSER_SPEECH_SPEECH_RECOGNITION_TEST_HELPER_H_

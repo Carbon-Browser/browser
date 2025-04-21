@@ -1,7 +1,8 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ash/guest_os/guest_os_registry_service.h"
 
 #include <stddef.h>
@@ -18,8 +19,8 @@
 #include "chromeos/ash/components/dbus/cicerone/cicerone_service.pb.h"
 #include "chromeos/ash/components/dbus/cicerone/fake_cicerone_client.h"
 #include "chromeos/ash/components/dbus/concierge/fake_concierge_client.h"
+#include "chromeos/ash/components/dbus/dbus_thread_manager.h"
 #include "chromeos/ash/components/dbus/seneschal/seneschal_client.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
 #include "content/public/test/browser_test.h"
 
 using vm_tools::apps::ApplicationList;
@@ -130,7 +131,7 @@ class GuestOsRegistryServiceIconTest : public InProcessBrowserTest {
   }
 
  protected:
-  ash::FakeCiceroneClient* fake_cicerone_client_;
+  raw_ptr<ash::FakeCiceroneClient, DanglingUntriaged> fake_cicerone_client_;
   static constexpr char kSvgData[] =
       "<svg width='20px' height='20px' viewBox='0 0 24 24' "
       "fill='rgb(95,99,104)' "

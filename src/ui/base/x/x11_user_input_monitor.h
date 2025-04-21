@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,12 +21,12 @@ namespace ui {
 // This is the actual implementation of event monitoring. It's separated from
 // UserInputMonitorLinux since it needs to be deleted on the IO thread.
 class COMPONENT_EXPORT(UI_BASE_X) XUserInputMonitor
-    : public base::SupportsWeakPtr<XUserInputMonitor>,
-      public base::CurrentThread::DestructionObserver,
+    : public base::CurrentThread::DestructionObserver,
       public x11::EventObserver {
  public:
-  using WriteKeyPressCallback = base::RepeatingCallback<
-      void(const base::WritableSharedMemoryMapping& shmem, uint32_t count)>;
+  using WriteKeyPressCallback =
+      base::RepeatingCallback<void(base::WritableSharedMemoryMapping& shmem,
+                                   uint32_t count)>;
 
   explicit XUserInputMonitor(
       const scoped_refptr<base::SingleThreadTaskRunner>& io_task_runner);

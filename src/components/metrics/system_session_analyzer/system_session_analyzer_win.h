@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define COMPONENTS_METRICS_SYSTEM_SESSION_ANALYZER_SYSTEM_SESSION_ANALYZER_WIN_H_
 
 #include <windows.h>
+
 #include <winevt.h>
 
 #include <map>

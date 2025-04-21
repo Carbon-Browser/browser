@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/webauthn/ring_progress_bar.h"
 
-#include "base/cxx17_backports.h"
+#include <algorithm>
+
 #include "cc/paint/paint_flags.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
 #include "third_party/skia/include/core/SkPath.h"
@@ -17,6 +18,7 @@
 #include "ui/gfx/color_utils.h"
 #include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/native_theme/native_theme.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/controls/progress_ring_utils.h"
 
 namespace {
@@ -24,19 +26,18 @@ constexpr float kStrokeWidth = 4;
 constexpr base::TimeDelta kAnimationDuration = base::Milliseconds(200);
 }  // namespace
 
-RingProgressBar::RingProgressBar() = default;
+RingProgressBar::RingProgressBar() {
+  GetViewAccessibility().SetRole(ax::mojom::Role::kProgressIndicator);
+}
+
 RingProgressBar::~RingProgressBar() = default;
 
 void RingProgressBar::SetValue(double initial, double target) {
-  initial_ = base::clamp(initial, 0., 1.);
-  target_ = base::clamp(target, 0., 1.);
+  initial_ = std::clamp(initial, 0., 1.);
+  target_ = std::clamp(target, 0., 1.);
   animation_ = std::make_unique<gfx::LinearAnimation>(this);
   animation_->SetDuration(kAnimationDuration);
   animation_->Start();
-}
-
-void RingProgressBar::GetAccessibleNodeData(ui::AXNodeData* node_data) {
-  node_data->role = ax::mojom::Role::kProgressIndicator;
 }
 
 void RingProgressBar::OnPaint(gfx::Canvas* canvas) {
@@ -64,5 +65,5 @@ void RingProgressBar::AnimationProgressed(const gfx::Animation* animation) {
   SchedulePaint();
 }
 
-BEGIN_METADATA(RingProgressBar, views::View)
+BEGIN_METADATA(RingProgressBar)
 END_METADATA

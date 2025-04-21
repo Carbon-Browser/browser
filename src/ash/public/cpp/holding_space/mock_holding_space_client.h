@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <vector>
 
 #include "ash/public/cpp/holding_space/holding_space_client.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
 namespace ash {
@@ -23,21 +23,9 @@ class MockHoldingSpaceClient : public HoldingSpaceClient {
   ~MockHoldingSpaceClient() override;
 
   // HoldingSpaceClient:
-  MOCK_METHOD(void,
-              AddDiagnosticsLog,
-              (const base::FilePath& file_path),
-              (override));
-  MOCK_METHOD(void,
-              AddScreenshot,
-              (const base::FilePath& file_path),
-              (override));
-  MOCK_METHOD(void,
-              AddScreenRecording,
-              (const base::FilePath& file_path),
-              (override));
-  MOCK_METHOD(void,
-              CancelItems,
-              (const std::vector<const HoldingSpaceItem*>& items),
+  MOCK_METHOD(const std::string&,
+              AddItemOfType,
+              (HoldingSpaceItem::Type type, const base::FilePath& file_path),
               (override));
   MOCK_METHOD(void,
               CopyImageToClipboard,
@@ -47,6 +35,7 @@ class MockHoldingSpaceClient : public HoldingSpaceClient {
               CrackFileSystemUrl,
               (const GURL& file_system_url),
               (const, override));
+  MOCK_METHOD(bool, IsDriveDisabled, (), (const, override));
   MOCK_METHOD(void, OpenDownloads, (SuccessCallback callback), (override));
   MOCK_METHOD(void, OpenMyFiles, (SuccessCallback callback), (override));
   MOCK_METHOD(void,
@@ -55,24 +44,22 @@ class MockHoldingSpaceClient : public HoldingSpaceClient {
                SuccessCallback callback),
               (override));
   MOCK_METHOD(void,
-              PauseItems,
-              (const std::vector<const HoldingSpaceItem*>& items),
-              (override));
-  MOCK_METHOD(void,
               PinFiles,
               (const std::vector<base::FilePath>& file_paths),
+              (override));
+  MOCK_METHOD(void, RefreshSuggestions, (), (override));
+  MOCK_METHOD(void,
+              RemoveSuggestions,
+              (const std::vector<base::FilePath>& absolute_file_paths),
               (override));
   MOCK_METHOD(void,
               PinItems,
               (const std::vector<const HoldingSpaceItem*>& items),
               (override));
   MOCK_METHOD(void,
-              ResumeItems,
-              (const std::vector<const HoldingSpaceItem*>& items),
-              (override));
-  MOCK_METHOD(void,
               ShowItemInFolder,
-              (const HoldingSpaceItem& item, SuccessCallback callback),
+              (const HoldingSpaceItem& item,
+               SuccessCallback callback),
               (override));
   MOCK_METHOD(void,
               UnpinItems,

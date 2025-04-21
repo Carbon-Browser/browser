@@ -29,12 +29,15 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "third_party/blink/renderer/core/html/parser/html_srcset_parser.h"
 
 #include <algorithm>
 
-#include "third_party/blink/public/common/features.h"
-#include "third_party/blink/public/platform/web_network_state_notifier.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/frame/frame_console.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
@@ -87,8 +90,9 @@ struct DescriptorToken {
       }
       ++position;
     }
-    return CharactersToInt(attribute + start, length_excluding_descriptor,
-                           WTF::NumberParsingOptions::kNone, &is_valid);
+    return CharactersToInt(base::span<const CharType>(
+                               attribute + start, length_excluding_descriptor),
+                           WTF::NumberParsingOptions(), &is_valid);
   }
 
   template <typename CharType>
@@ -101,7 +105,7 @@ struct DescriptorToken {
       return 0;
     }
     Decimal result = ParseToDecimalForNumberType(
-        String(attribute + start, length_excluding_descriptor));
+        String(base::span(attribute + start, length_excluding_descriptor)));
     is_valid = result.IsFinite();
     if (!is_valid)
       return 0;
@@ -277,10 +281,9 @@ static bool ParseDescriptors(const String& attribute,
                              DescriptorParsingResult& result,
                              Document* document) {
   // FIXME: See if StringView can't be extended to replace DescriptorToken here.
-  return WTF::VisitCharacters(
-      attribute, [&](const auto* chars, unsigned length) {
-        return ParseDescriptors(chars, descriptors, result, document);
-      });
+  return WTF::VisitCharacters(attribute, [&](auto chars) {
+    return ParseDescriptors(chars.data(), descriptors, result, document);
+  });
 }
 
 // http://picture.responsiveimages.org/#parse-srcset-attr
@@ -338,10 +341,8 @@ static void ParseImageCandidatesFromSrcsetAttribute(
                     mojom::ConsoleMessageSource::kOther,
                     mojom::ConsoleMessageLevel::kWarning,
                     String("Dropped srcset candidate ") +
-                        JSONValue::QuoteString(
-                            String(image_url_start,
-                                   static_cast<wtf_size_t>(image_url_end -
-                                                           image_url_start)))));
+                        JSONValue::QuoteString(String(
+                            base::span(image_url_start, image_url_end)))));
           }
         }
         continue;
@@ -380,8 +381,17 @@ static void ParseImageCandidatesFromSrcsetAttribute(
 
 static unsigned SelectionLogic(Vector<ImageCandidate*>& image_candidates,
                                float device_scale_factor) {
-  unsigned i = 0;
+  if (RuntimeEnabledFeatures::SrcsetSelectionMatchesImageSetEnabled()) {
+    unsigned i = 0;
+    for (; i < image_candidates.size() - 1; ++i) {
+      if (image_candidates[i]->Density() >= device_scale_factor) {
+        return i;
+      }
+    }
+    return i;
+  }
 
+  unsigned i = 0;
   for (; i < image_candidates.size() - 1; ++i) {
     unsigned next = i + 1;
     float next_density;
@@ -396,8 +406,9 @@ static unsigned SelectionLogic(Vector<ImageCandidate*>& image_candidates,
     geometric_mean = sqrt(current_density * next_density);
     if (((device_scale_factor <= 1.0) &&
          (device_scale_factor > current_density)) ||
-        (device_scale_factor >= geometric_mean))
+        (device_scale_factor >= geometric_mean)) {
       return next;
+    }
     break;
   }
   return i;
@@ -412,10 +423,18 @@ static unsigned AvoidDownloadIfHigherDensityResourceIsInCache(
   for (unsigned i = image_candidates.size() - 1; i > winner; --i) {
     KURL url = document->CompleteURL(
         StripLeadingAndTrailingHTMLSpaces(image_candidates[i]->Url()));
-    if (GetMemoryCache()->ResourceForURL(
-            url, document->Fetcher()->GetCacheIdentifier(url)) ||
-        url.ProtocolIsData())
+    auto* resource = MemoryCache::Get()->ResourceForURL(
+        url,
+        document->Fetcher()->GetCacheIdentifier(url,
+                                                /*skip_service_worker=*/false));
+    if (resource && resource->IsLoaded()) {
+      UseCounter::Count(document,
+                        WebFeature::kSrcSetUsedHigherDensityImageFromCache);
       return i;
+    }
+    if (url.ProtocolIsData()) {
+      return i;
+    }
   }
   return winner;
 }
@@ -426,19 +445,9 @@ static ImageCandidate PickBestImageCandidate(
     Vector<ImageCandidate>& image_candidates,
     Document* document = nullptr) {
   const float kDefaultDensityValue = 1.0;
-  // The srcset image source selection mechanism is user-agent specific:
-  // https://html.spec.whatwg.org/multipage/images.html#selecting-an-image-source
-  //
-  // Setting max density value based on https://github.com/whatwg/html/pull/5901
-  const float kMaxDensity = 2.2;
   bool ignore_src = false;
-  if (image_candidates.IsEmpty())
+  if (image_candidates.empty())
     return ImageCandidate();
-
-  if (RuntimeEnabledFeatures::SrcsetMaxDensityEnabled() &&
-      device_scale_factor > kMaxDensity) {
-    device_scale_factor = kMaxDensity;
-  }
 
   // http://picture.responsiveimages.org/#normalize-source-densities
   for (ImageCandidate& image : image_candidates) {
@@ -462,10 +471,7 @@ static ImageCandidate PickBestImageCandidate(
   }
 
   unsigned winner =
-      blink::WebNetworkStateNotifier::SaveDataEnabled() &&
-              base::FeatureList::IsEnabled(blink::features::kSaveDataImgSrcset)
-          ? 0
-          : SelectionLogic(de_duped_image_candidates, device_scale_factor);
+      SelectionLogic(de_duped_image_candidates, device_scale_factor);
   DCHECK_LT(winner, de_duped_image_candidates.size());
   winner = AvoidDownloadIfHigherDensityResourceIsInCache(
       de_duped_image_candidates, winner, document);
@@ -512,7 +518,7 @@ ImageCandidate BestFitSourceForImageAttributes(float device_scale_factor,
   ParseImageCandidatesFromSrcsetAttribute(srcset_attribute, image_candidates,
                                           document);
 
-  if (!src_attribute.IsEmpty())
+  if (!src_attribute.empty())
     image_candidates.push_back(
         ImageCandidate(src_attribute, 0, src_attribute.length(),
                        DescriptorParsingResult(), ImageCandidate::kSrcOrigin));
@@ -531,7 +537,7 @@ String BestFitSourceForImageAttributes(float device_scale_factor,
   Vector<ImageCandidate> image_candidates;
   image_candidates.push_back(srcset_image_candidate);
 
-  if (!src_attribute.IsEmpty())
+  if (!src_attribute.empty())
     image_candidates.push_back(
         ImageCandidate(src_attribute, 0, src_attribute.length(),
                        DescriptorParsingResult(), ImageCandidate::kSrcOrigin));

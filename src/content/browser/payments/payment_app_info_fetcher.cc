@@ -1,15 +1,17 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/payments/payment_app_info_fetcher.h"
 
 #include <limits>
+#include <string_view>
 #include <utility>
 
 #include "base/base64.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/payments/content/icon/icon_size.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
@@ -19,7 +21,6 @@
 #include "content/public/browser/global_routing_id.h"
 #include "content/public/browser/manifest_icon_downloader.h"
 #include "content/public/browser/page.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/manifest/manifest_icon_selector.h"
 #include "third_party/blink/public/common/manifest/manifest_util.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
@@ -42,7 +43,8 @@ void PaymentAppInfoFetcher::Start(
 
   std::unique_ptr<std::vector<GlobalRenderFrameHostId>> frame_routing_ids =
       service_worker_context->GetWindowClientFrameRoutingIds(
-          blink::StorageKey(url::Origin::Create(context_url)));
+          blink::StorageKey::CreateFirstParty(
+              url::Origin::Create(context_url)));
 
   SelfDeleteFetcher* fetcher = new SelfDeleteFetcher(std::move(callback));
   fetcher->Start(context_url, std::move(frame_routing_ids));
@@ -77,7 +79,7 @@ void PaymentAppInfoFetcher::SelfDeleteFetcher::Start(
   }
 
   for (const auto& frame : *frame_routing_ids) {
-    // Find out the render frame host registering the payment app. Although a
+    // Find out the RenderFrameHost registering the payment app. Although a
     // service worker can manage instruments, the first instrument must be set
     // on a page that has a link to a web app manifest, so it can be fetched
     // here.
@@ -146,13 +148,14 @@ void PaymentAppInfoFetcher::SelfDeleteFetcher::Start(
 void PaymentAppInfoFetcher::SelfDeleteFetcher::RunCallbackAndDestroy() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback_),
                                 std::move(fetched_payment_app_info_)));
   delete this;
 }
 
 void PaymentAppInfoFetcher::SelfDeleteFetcher::FetchPaymentAppManifestCallback(
+    blink::mojom::ManifestRequestResult result,
     const GURL& url,
     blink::mojom::ManifestPtr manifest) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
@@ -169,7 +172,8 @@ void PaymentAppInfoFetcher::SelfDeleteFetcher::FetchPaymentAppManifestCallback(
     return;
   }
 
-  if (blink::IsEmptyManifest(manifest)) {
+  if (blink::IsEmptyManifest(manifest) ||
+      result != blink::mojom::ManifestRequestResult::kSuccess) {
     WarnIfPossible(
         "Unable to download a valid payment handler web app manifest from \"" +
         manifest_url_.spec() +
@@ -284,13 +288,9 @@ void PaymentAppInfoFetcher::SelfDeleteFetcher::OnIconFetched(
     return;
   }
 
-  std::vector<unsigned char> bitmap_data;
-  bool success = gfx::PNGCodec::EncodeBGRASkBitmap(icon, false, &bitmap_data);
-  DCHECK(success);
-  base::Base64Encode(
-      base::StringPiece(reinterpret_cast<const char*>(&bitmap_data[0]),
-                        bitmap_data.size()),
-      &(fetched_payment_app_info_->icon));
+  std::optional<std::vector<uint8_t>> bitmap_data =
+      gfx::PNGCodec::EncodeBGRASkBitmap(icon, /*discard_transparency=*/false);
+  fetched_payment_app_info_->icon = base::Base64Encode(bitmap_data.value());
   RunCallbackAndDestroy();
 }
 

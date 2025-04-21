@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,11 +26,8 @@ void OnChangeNodeUsing(content::GlobalRenderFrameHostId id,
       frame_node->SetIsHoldingWebLock(is_using);
       return;
 
-    // TODO(https://crbug.com/980533): Rename
-    // FrameNodeImpl::SetIsHoldingIndexedDBLock() to
-    // SetIsHoldingIndexedDBConnections().
-    case blink::mojom::ObservedFeatureType::kIndexedDBConnection:
-      frame_node->SetIsHoldingIndexedDBLock(is_using);
+    case blink::mojom::ObservedFeatureType::kBlockingIndexedDBLock:
+      frame_node->SetIsHoldingBlockingIndexedDBLock(is_using);
       return;
   }
 

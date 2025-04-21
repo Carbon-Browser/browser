@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include <map>
 #include <set>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/extensions/api/web_navigation/frame_navigation_state.h"
 #include "chrome/browser/profiles/profile.h"
@@ -182,14 +182,14 @@ class WebNavigationEventRouter : public TabStripModelObserver,
 
 // API function that returns the state of a given frame.
 class WebNavigationGetFrameFunction : public ExtensionFunction {
-  ~WebNavigationGetFrameFunction() override {}
+  ~WebNavigationGetFrameFunction() override = default;
   ResponseAction Run() override;
   DECLARE_EXTENSION_FUNCTION("webNavigation.getFrame", WEBNAVIGATION_GETFRAME)
 };
 
 // API function that returns the states of all frames in a given tab.
 class WebNavigationGetAllFramesFunction : public ExtensionFunction {
-  ~WebNavigationGetAllFramesFunction() override {}
+  ~WebNavigationGetAllFramesFunction() override = default;
   ResponseAction Run() override;
   DECLARE_EXTENSION_FUNCTION("webNavigation.getAllFrames",
                              WEBNAVIGATION_GETALLFRAMES)

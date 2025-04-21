@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,18 +30,18 @@ using extensions::mojom::APIPermissionID;
 namespace extensions {
 namespace {
 
-std::unique_ptr<GURL> CreateManifestURL(const std::string& url) {
-  std::unique_ptr<GURL> manifest_url(new GURL(url));
+std::optional<GURL> CreateManifestURL(const std::string& url) {
+  std::optional<GURL> manifest_url(std::in_place, url);
   if (!manifest_url->is_valid() || !manifest_url->SchemeIsHTTPOrHTTPS())
-    return nullptr;
+    return std::nullopt;
   return manifest_url;
 }
 
-std::unique_ptr<GURL> ParseHomepage(const ChromeSettingsOverrides& overrides,
-                                    std::u16string* error) {
+std::optional<GURL> ParseHomepage(const ChromeSettingsOverrides& overrides,
+                                  std::u16string* error) {
   if (!overrides.homepage)
-    return nullptr;
-  std::unique_ptr<GURL> manifest_url = CreateManifestURL(*overrides.homepage);
+    return std::nullopt;
+  std::optional<GURL> manifest_url = CreateManifestURL(*overrides.homepage);
   if (!manifest_url) {
     *error = extensions::ErrorUtils::FormatErrorMessageUTF16(
         manifest_errors::kInvalidHomepageOverrideURL, *overrides.homepage);
@@ -58,31 +58,30 @@ std::vector<GURL> ParseStartupPage(const ChromeSettingsOverrides& overrides,
   for (std::vector<std::string>::const_iterator i =
        overrides.startup_pages->begin(); i != overrides.startup_pages->end();
        ++i) {
-    std::unique_ptr<GURL> manifest_url = CreateManifestURL(*i);
+    std::optional<GURL> manifest_url = CreateManifestURL(*i);
     if (!manifest_url) {
       *error = extensions::ErrorUtils::FormatErrorMessageUTF16(
           manifest_errors::kInvalidStartupOverrideURL, *i);
     } else {
-      urls.push_back(GURL());
-      urls.back().Swap(manifest_url.get());
+      urls.push_back(std::move(*manifest_url));
     }
   }
   return urls;
 }
 
-std::unique_ptr<ChromeSettingsOverrides::SearchProvider> ParseSearchEngine(
+std::optional<ChromeSettingsOverrides::SearchProvider> ParseSearchEngine(
     ChromeSettingsOverrides* overrides,
     std::u16string* error) {
   if (!overrides->search_provider)
-    return nullptr;
+    return std::nullopt;
   if (!CreateManifestURL(overrides->search_provider->search_url)) {
     *error = extensions::ErrorUtils::FormatErrorMessageUTF16(
         manifest_errors::kInvalidSearchEngineURL,
         overrides->search_provider->search_url);
-    return nullptr;
+    return std::nullopt;
   }
   if (overrides->search_provider->prepopulated_id)
-    return std::move(overrides->search_provider);
+    return std::move(*overrides->search_provider);
 
   auto get_missing_key_error = [](const char* missing_key) {
     return extensions::ErrorUtils::FormatErrorMessageUTF16(
@@ -91,27 +90,27 @@ std::unique_ptr<ChromeSettingsOverrides::SearchProvider> ParseSearchEngine(
 
   if (!overrides->search_provider->name) {
     *error = get_missing_key_error("name");
-    return nullptr;
+    return std::nullopt;
   }
   if (!overrides->search_provider->keyword) {
     *error = get_missing_key_error("keyword");
-    return nullptr;
+    return std::nullopt;
   }
   if (!overrides->search_provider->encoding) {
     *error = get_missing_key_error("encoding");
-    return nullptr;
+    return std::nullopt;
   }
   if (!overrides->search_provider->favicon_url) {
     *error = get_missing_key_error("favicon_url");
-    return nullptr;
+    return std::nullopt;
   }
   if (!CreateManifestURL(*overrides->search_provider->favicon_url)) {
     *error = extensions::ErrorUtils::FormatErrorMessageUTF16(
         manifest_errors::kInvalidSearchEngineURL,
         *overrides->search_provider->favicon_url);
-    return nullptr;
+    return std::nullopt;
   }
-  return std::move(overrides->search_provider);
+  return std::move(*overrides->search_provider);
 }
 
 std::string FormatUrlForDisplay(const GURL& url) {
@@ -122,9 +121,9 @@ std::string FormatUrlForDisplay(const GURL& url) {
 
 }  // namespace
 
-SettingsOverrides::SettingsOverrides() {}
+SettingsOverrides::SettingsOverrides() = default;
 
-SettingsOverrides::~SettingsOverrides() {}
+SettingsOverrides::~SettingsOverrides() = default;
 
 // static
 const SettingsOverrides* SettingsOverrides::Get(
@@ -133,28 +132,30 @@ const SettingsOverrides* SettingsOverrides::Get(
       extension->GetManifestData(manifest_keys::kSettingsOverride));
 }
 
-SettingsOverridesHandler::SettingsOverridesHandler() {}
+SettingsOverridesHandler::SettingsOverridesHandler() = default;
 
-SettingsOverridesHandler::~SettingsOverridesHandler() {}
+SettingsOverridesHandler::~SettingsOverridesHandler() = default;
 
 bool SettingsOverridesHandler::Parse(Extension* extension,
                                      std::u16string* error) {
-  const base::Value* dict =
-      extension->manifest()->FindPath(manifest_keys::kSettingsOverride);
+  const base::Value::Dict* dict =
+      extension->manifest()->FindDictPath(manifest_keys::kSettingsOverride);
   CHECK(dict != nullptr);
-  std::unique_ptr<ChromeSettingsOverrides> settings(
-      ChromeSettingsOverrides::FromValue(*dict, error));
-  if (!settings)
+  auto settings = ChromeSettingsOverrides::FromValue(*dict);
+  if (!settings.has_value()) {
+    *error = settings.error();
     return false;
+  }
 
-  // TODO(crbug.com/1101130): Any of {homepage, search_engine, startup_pages}'s
+  // TODO(crbug.com/40703390): Any of {homepage, search_engine, startup_pages}'s
   // parse failure should result in hard error. Currently, Parse fails only when
   // all of these fail to parse.
   auto info = std::make_unique<SettingsOverrides>();
   std::u16string homepage_error;
   info->homepage = ParseHomepage(*settings, &homepage_error);
   std::u16string search_engine_error;
-  info->search_engine = ParseSearchEngine(settings.get(), &search_engine_error);
+  info->search_engine =
+      ParseSearchEngine(&settings.value(), &search_engine_error);
   std::u16string startup_pages_error;
   info->startup_pages = ParseStartupPage(*settings, &startup_pages_error);
   if (!info->homepage && !info->search_engine && info->startup_pages.empty()) {

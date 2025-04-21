@@ -1,4 +1,4 @@
-# Copyright 2013 The Chromium Authors. All rights reserved.
+# Copyright 2013 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -8,7 +8,6 @@ See http://dev.chromium.org/developers/how-tos/depottools/presubmit-scripts
 for more details on the presubmit API built into depot_tools.
 """
 
-USE_PYTHON3 = True
 
 import sys
 
@@ -33,9 +32,7 @@ def CommonChecks(input_api, output_api):
           input_api,
           output_api,
           input_api.os_path.join(input_api.PresubmitLocalPath(), 'tests'),
-          files_to_check=[r'.+_tests\.py$'],
-          run_on_python2=False,
-          skip_shebang_check=True))
+          files_to_check=[r'.+_tests\.py$']))
   return output
 
 

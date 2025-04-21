@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,17 +9,17 @@
 
 #include "base/memory/scoped_refptr.h"
 #include "base/task/current_thread.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
 #include "base/trace_event/trace_event.h"
-#include "build/chromeos_buildflags.h"
 #include "ui/base/cursor/mojom/cursor_type.mojom.h"
 #include "ui/gfx/geometry/point_conversions.h"
 #include "ui/ozone/common/bitmap_cursor.h"
 #include "ui/ozone/platform/drm/host/drm_window_host.h"
 #include "ui/ozone/platform/drm/host/drm_window_host_manager.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 #include "ui/events/ozone/chromeos/cursor_controller.h"
 #endif
 
@@ -39,7 +39,7 @@ class NullProxy : public DrmCursorProxy {
 
   void CursorSet(gfx::AcceleratedWidget window,
                  const std::vector<SkBitmap>& bitmaps,
-                 const gfx::Point& point,
+                 const std::optional<gfx::Point>& point,
                  base::TimeDelta frame_delay) override {}
   void Move(gfx::AcceleratedWidget window, const gfx::Point& point) override {}
   void InitializeOnEvdevIfNecessary() override {}
@@ -48,7 +48,7 @@ class NullProxy : public DrmCursorProxy {
 }  // namespace
 
 DrmCursor::DrmCursor(DrmWindowHostManager* window_manager)
-    : ui_thread_(base::ThreadTaskRunnerHandle::Get()),
+    : ui_thread_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       window_(gfx::kNullAcceleratedWidget),
       window_manager_(window_manager),
       proxy_(new NullProxy()) {
@@ -230,7 +230,7 @@ void DrmCursor::MoveCursor(const gfx::Vector2dF& delta) {
   if (window_ == gfx::kNullAcceleratedWidget)
     return;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   gfx::Vector2dF transformed_delta = delta;
   ui::CursorController::GetInstance()->ApplyCursorConfigForWindow(
       window_, &transformed_delta);
@@ -271,7 +271,7 @@ void DrmCursor::SetCursorLocationLocked(const gfx::PointF& location)
       gfx::PointF(confined_bounds_.right() - 1, confined_bounds_.bottom() - 1));
 
   location_ = clamped_location;
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   ui::CursorController::GetInstance()->SetCursorLocation(location_);
 #endif
 }
@@ -287,7 +287,7 @@ void DrmCursor::SendCursorShowLocked() EXCLUSIVE_LOCKS_REQUIRED(lock_) {
 }
 
 void DrmCursor::SendCursorHideLocked() EXCLUSIVE_LOCKS_REQUIRED(lock_) {
-  CursorSetLockTested(window_, std::vector<SkBitmap>(), gfx::Point(),
+  CursorSetLockTested(window_, std::vector<SkBitmap>(), std::nullopt,
                       base::TimeDelta());
 }
 
@@ -301,7 +301,7 @@ void DrmCursor::SendCursorMoveLocked() EXCLUSIVE_LOCKS_REQUIRED(lock_) {
 // Lock-testing helpers.
 void DrmCursor::CursorSetLockTested(gfx::AcceleratedWidget window,
                                     const std::vector<SkBitmap>& bitmaps,
-                                    const gfx::Point& point,
+                                    const std::optional<gfx::Point>& point,
                                     base::TimeDelta frame_delay) {
   lock_.AssertAcquired();
   proxy_->CursorSet(window, bitmaps, point, frame_delay);

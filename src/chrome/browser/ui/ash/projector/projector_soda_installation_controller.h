@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 
 #include "ash/public/cpp/locale_update_controller.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "components/soda/soda_installer.h"
 
@@ -20,8 +21,10 @@ namespace speech {
 enum class LanguageCode;
 }  // namespace speech
 
-// Class owned by ProjectorAppClientImpl used to control the installation of
-// SODA and the language pack requested by the user.
+// Class owned by ProjectorClientImpl used to control the installation of
+// SODA and the language pack requested by the user. The main purpose
+// of this class is to observe SODA installer and notify Projector App and
+// Projector Controller on installation status.
 class ProjectorSodaInstallationController
     : public speech::SodaInstaller::Observer,
       public ash::LocaleChangeObserver {
@@ -37,28 +40,29 @@ class ProjectorSodaInstallationController
 
   // Installs the SODA binary and the the corresponding language if it is not
   // present.
-  void InstallSoda(const std::string& language);
+  static void InstallSoda(const std::string& language);
 
   // Checks if the device is eligible to install SODA and language pack for the
   // `language` provided.
-  bool ShouldDownloadSoda(speech::LanguageCode language) const;
+  static bool ShouldDownloadSoda(speech::LanguageCode language);
 
   // Checks if SODA binary and the requested `language` is downloaded and
   // available on device.
-  bool IsSodaAvailable(speech::LanguageCode language) const;
+  static bool IsSodaAvailable(speech::LanguageCode language);
 
  protected:
   // speech::SodaInstaller::Observer:
   void OnSodaInstalled(speech::LanguageCode language_code) override;
-  void OnSodaError(speech::LanguageCode language_code) override;
+  void OnSodaInstallError(speech::LanguageCode language_code,
+                          speech::SodaInstaller::ErrorCode error_code) override;
   void OnSodaProgress(speech::LanguageCode language_code,
                       int progress) override;
 
   // ash::LocaleChangeObserver:
   void OnLocaleChanged() override;
 
-  ash::ProjectorAppClient* const app_client_;
-  ash::ProjectorController* const projector_controller_;
+  const raw_ptr<ash::ProjectorAppClient> app_client_;
+  const raw_ptr<ash::ProjectorController> projector_controller_;
 
  private:
   base::ScopedObservation<speech::SodaInstaller,

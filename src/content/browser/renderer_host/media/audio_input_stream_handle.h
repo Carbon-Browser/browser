@@ -1,11 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_BROWSER_RENDERER_HOST_MEDIA_AUDIO_INPUT_STREAM_HANDLE_H_
 #define CONTENT_BROWSER_RENDERER_HOST_MEDIA_AUDIO_INPUT_STREAM_HANDLE_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/sequence_checker.h"
 #include "content/common/content_export.h"
 #include "media/mojo/mojom/audio_data_pipe.mojom.h"
@@ -44,7 +44,7 @@ class CONTENT_EXPORT AudioInputStreamHandle {
   void SetOutputDeviceForAec(const std::string& raw_output_device_id);
 
  private:
-  void OnCreated(media::mojom::ReadOnlyAudioDataPipePtr, bool initially_muted);
+  void OnCreated(media::mojom::ReadWriteAudioDataPipePtr, bool initially_muted);
 
   void CallDeleter();
 

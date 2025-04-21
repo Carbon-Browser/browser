@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/breakout_box/media_stream_video_track_underlying_source.h"
 
 #include "base/feature_list.h"
+#include "base/task/sequenced_task_runner.h"
 #include "media/capture/video/video_capture_buffer_pool_util.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
@@ -23,15 +24,10 @@ constexpr char kScreenPrefix[] = "screen:";
 constexpr char kWindowPrefix[] = "window:";
 
 bool IsScreenOrWindowCapture(const std::string& device_id) {
-  return base::StartsWith(device_id, kScreenPrefix,
-                          base::CompareCase::SENSITIVE) ||
-         base::StartsWith(device_id, kWindowPrefix,
-                          base::CompareCase::SENSITIVE);
+  return device_id.starts_with(kScreenPrefix) ||
+         device_id.starts_with(kWindowPrefix);
 }
 }  // namespace
-
-const base::Feature kBreakoutBoxFrameLimiter{"BreakoutBoxFrameLimiter",
-                                             base::FEATURE_ENABLED_BY_DEFAULT};
 
 const int MediaStreamVideoTrackUnderlyingSource::kMaxMonitoredFrameCount = 20;
 const int MediaStreamVideoTrackUnderlyingSource::kMinMonitoredFrameCount = 2;
@@ -66,27 +62,23 @@ MediaStreamVideoTrackUnderlyingSource::GetStreamTransferOptimizer() {
       this, GetRealmRunner(), MaxQueueSize(),
       CrossThreadBindOnce(
           &MediaStreamVideoTrackUnderlyingSource::OnSourceTransferStarted,
+          WrapCrossThreadWeakPersistent(this)),
+      CrossThreadBindOnce(
+          &MediaStreamVideoTrackUnderlyingSource::ClearTransferredSource,
           WrapCrossThreadWeakPersistent(this)));
-}
-
-scoped_refptr<base::SequencedTaskRunner>
-MediaStreamVideoTrackUnderlyingSource::GetIOTaskRunner() {
-  return Platform::Current()->GetIOTaskRunner();
 }
 
 void MediaStreamVideoTrackUnderlyingSource::OnSourceTransferStarted(
     scoped_refptr<base::SequencedTaskRunner> transferred_runner,
-    TransferredVideoFrameQueueUnderlyingSource* source) {
+    CrossThreadPersistent<TransferredVideoFrameQueueUnderlyingSource> source) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  TransferSource(source);
+  TransferSource(std::move(source));
   RecordBreakoutBoxUsage(BreakoutBoxUsage::kReadableVideoWorker);
 }
 
 void MediaStreamVideoTrackUnderlyingSource::OnFrameFromTrack(
     scoped_refptr<media::VideoFrame> media_frame,
-    std::vector<scoped_refptr<media::VideoFrame>> /*scaled_media_frames*/,
     base::TimeTicks estimated_capture_time) {
-  DCHECK(GetIOTaskRunner()->RunsTasksInCurrentSequence());
   // The scaled video frames are currently ignored.
   QueueFrame(std::move(media_frame));
 }
@@ -117,9 +109,6 @@ void MediaStreamVideoTrackUnderlyingSource::StopFrameDelivery() {
 // static
 std::string MediaStreamVideoTrackUnderlyingSource::GetDeviceIdForMonitoring(
     const MediaStreamDevice& device) {
-  if (!base::FeatureList::IsEnabled(kBreakoutBoxFrameLimiter))
-    return std::string();
-
   switch (device.type) {
     case mojom::MediaStreamType::DEVICE_VIDEO_CAPTURE:
       return device.id;

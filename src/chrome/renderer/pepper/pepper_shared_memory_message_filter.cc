@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ PepperSharedMemoryMessageFilter::PepperSharedMemoryMessageFilter(
     content::RendererPpapiHost* host)
     : InstanceMessageFilter(host->GetPpapiHost()), host_(host) {}
 
-PepperSharedMemoryMessageFilter::~PepperSharedMemoryMessageFilter() {}
+PepperSharedMemoryMessageFilter::~PepperSharedMemoryMessageFilter() = default;
 
 bool PepperSharedMemoryMessageFilter::OnInstanceMessageReceived(
     const IPC::Message& msg) {

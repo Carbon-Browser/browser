@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,22 +6,22 @@
 
 #include <stddef.h>
 
-#include <algorithm>
 #include <map>
 #include <memory>
 #include <set>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/stack.h"
-#include "base/json/json_reader.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/ranges/algorithm.h"
+#include "base/strings/escape.h"
 #include "base/strings/stringprintf.h"
 #include "base/task/thread_pool.h"
 #include "base/test/bind.h"
+#include "base/test/test_future.h"
 #include "base/test/test_timeouts.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "content/browser/preloading/prerender/prerender_host_registry.h"
 #include "content/browser/renderer_host/delegated_frame_host.h"
@@ -30,8 +30,10 @@
 #include "content/browser/renderer_host/navigator.h"
 #include "content/browser/renderer_host/render_frame_host_delegate.h"
 #include "content/browser/renderer_host/render_frame_proxy_host.h"
+#include "content/browser/renderer_host/render_widget_host_factory.h"
 #include "content/browser/site_instance_impl.h"
 #include "content/browser/web_contents/web_contents_impl.h"
+#include "content/common/frame_messages.mojom.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/file_select_listener.h"
@@ -45,6 +47,9 @@
 #include "content/public/test/test_navigation_observer.h"
 #include "content/shell/browser/shell.h"
 #include "content/shell/browser/shell_javascript_dialog_manager.h"
+#include "net/test/embedded_test_server/http_request.h"
+#include "net/test/embedded_test_server/http_response.h"
+#include "net/test/embedded_test_server/request_handler_util.h"
 #include "third_party/blink/public/common/frame/frame_visual_properties.h"
 
 namespace content {
@@ -54,7 +59,7 @@ bool NavigateFrameToURL(FrameTreeNode* node, const GURL& url) {
   NavigationController::LoadURLParams params(url);
   params.transition_type = ui::PAGE_TRANSITION_LINK;
   params.frame_tree_node_id = node->frame_tree_node_id();
-  FrameTree* frame_tree = node->frame_tree();
+  FrameTree& frame_tree = node->frame_tree();
 
   node->navigator().controller().LoadURLWithParams(params);
   observer.Wait();
@@ -66,7 +71,7 @@ bool NavigateFrameToURL(FrameTreeNode* node, const GURL& url) {
 
   // It's possible for JS handlers triggered during the navigation to remove
   // the node, so retrieve it by ID again to check if that occurred.
-  node = frame_tree->FindByID(params.frame_tree_node_id);
+  node = frame_tree.FindByID(params.frame_tree_node_id);
 
   if (node && url != node->current_url()) {
     DLOG(WARNING) << "Expected URL " << url << " but observed "
@@ -118,10 +123,23 @@ bool NavigateToURLInSameBrowsingInstance(Shell* window, const GURL& url) {
 bool IsExpectedSubframeErrorTransition(SiteInstance* start_site_instance,
                                        SiteInstance* end_site_instance) {
   bool site_instances_are_equal = (start_site_instance == end_site_instance);
+
+  // AgentClusterKey mismatch will trigger a SiteInstance switch.
+  if (static_cast<SiteInstanceImpl*>(start_site_instance)
+              ->GetSiteInfo()
+              .agent_cluster_key() !=
+          static_cast<SiteInstanceImpl*>(end_site_instance)
+              ->GetSiteInfo()
+              .agent_cluster_key() &&
+      !site_instances_are_equal) {
+    return true;
+  }
+
   bool is_error_page_site_instance =
       (static_cast<SiteInstanceImpl*>(end_site_instance)
            ->GetSiteInfo()
            .is_error_page());
+
   if (!SiteIsolationPolicy::IsErrorPageIsolationEnabled(
           /*in_main_frame=*/false)) {
     return site_instances_are_equal && !is_error_page_site_instance;
@@ -134,36 +152,54 @@ RenderFrameHost* CreateSubframe(WebContentsImpl* web_contents,
                                 std::string frame_id,
                                 const GURL& url,
                                 bool wait_for_navigation) {
+  return CreateSubframe(
+      web_contents->GetPrimaryFrameTree().root()->current_frame_host(),
+      frame_id, url, wait_for_navigation, {});
+}
+
+RenderFrameHost* CreateSubframe(RenderFrameHost* parent,
+                                std::string frame_id,
+                                const GURL& url,
+                                bool wait_for_navigation) {
+  return CreateSubframe(parent, frame_id, url, wait_for_navigation, {});
+}
+
+RenderFrameHost* CreateSubframe(RenderFrameHost* parent,
+                                std::string frame_id,
+                                const GURL& url,
+                                bool wait_for_navigation,
+                                ExtraParams extra_params) {
+  WebContents* web_contents = WebContents::FromRenderFrameHost(parent);
   RenderFrameHostCreatedObserver subframe_created_observer(web_contents);
   TestNavigationObserver subframe_nav_observer(web_contents);
-  if (url.is_empty()) {
-    EXPECT_TRUE(ExecJs(web_contents, JsReplace(R"(
-          var iframe = document.createElement('iframe');
-          iframe.id = $1;
-          document.body.appendChild(iframe);
-      )",
-                                               frame_id)));
-  } else {
-    EXPECT_TRUE(ExecJs(web_contents, JsReplace(R"(
-          var iframe = document.createElement('iframe');
-          iframe.id = $1;
-          iframe.src = $2;
-          document.body.appendChild(iframe);
-      )",
-                                               frame_id, url)));
-  }
+
+  EXPECT_TRUE(
+      ExecJs(parent, JsReplace(R"(
+    var iframe = document.createElement('iframe');
+    iframe.id = $1; //frame_id
+    if ($2) {
+      iframe.src = $2; // url
+    }
+    if ($3) {
+      iframe.sandbox = $3; // extra_params.sandbox_flags
+    }
+    document.body.appendChild(iframe);
+  )",
+                               frame_id, url, extra_params.sandbox_flags)));
+
   subframe_created_observer.Wait();
   if (wait_for_navigation)
     subframe_nav_observer.Wait();
-  FrameTreeNode* root = web_contents->GetPrimaryFrameTree().root();
+  FrameTreeNode* root =
+      static_cast<RenderFrameHostImpl*>(parent)->frame_tree_node();
   return root->child_at(root->child_count() - 1)->current_frame_host();
 }
 
 std::vector<RenderFrameHostImpl*> CollectAllRenderFrameHosts(
     RenderFrameHostImpl* starting_rfh) {
   std::vector<RenderFrameHostImpl*> visited_frames;
-  starting_rfh->ForEachRenderFrameHost(base::BindLambdaForTesting(
-      [&](RenderFrameHostImpl* rfh) { visited_frames.push_back(rfh); }));
+  starting_rfh->ForEachRenderFrameHostImpl(
+      [&](RenderFrameHostImpl* rfh) { visited_frames.push_back(rfh); });
   return visited_frames;
 }
 
@@ -171,26 +207,24 @@ std::vector<RenderFrameHostImpl*>
 CollectAllRenderFrameHostsIncludingSpeculative(
     RenderFrameHostImpl* starting_rfh) {
   std::vector<RenderFrameHostImpl*> visited_frames;
-  starting_rfh->ForEachRenderFrameHostIncludingSpeculative(
-      base::BindLambdaForTesting(
-          [&](RenderFrameHostImpl* rfh) { visited_frames.push_back(rfh); }));
+  starting_rfh->ForEachRenderFrameHostImplIncludingSpeculative(
+      [&](RenderFrameHostImpl* rfh) { visited_frames.push_back(rfh); });
   return visited_frames;
 }
 
 std::vector<RenderFrameHostImpl*> CollectAllRenderFrameHosts(
     WebContentsImpl* web_contents) {
   std::vector<RenderFrameHostImpl*> visited_frames;
-  web_contents->ForEachRenderFrameHost(base::BindLambdaForTesting(
-      [&](RenderFrameHostImpl* rfh) { visited_frames.push_back(rfh); }));
+  web_contents->ForEachRenderFrameHostImpl(
+      [&](RenderFrameHostImpl* rfh) { visited_frames.push_back(rfh); });
   return visited_frames;
 }
 
 std::vector<RenderFrameHostImpl*>
 CollectAllRenderFrameHostsIncludingSpeculative(WebContentsImpl* web_contents) {
   std::vector<RenderFrameHostImpl*> visited_frames;
-  web_contents->ForEachRenderFrameHostIncludingSpeculative(
-      base::BindLambdaForTesting(
-          [&](RenderFrameHostImpl* rfh) { visited_frames.push_back(rfh); }));
+  web_contents->ForEachRenderFrameHostImplIncludingSpeculative(
+      [&](RenderFrameHostImpl* rfh) { visited_frames.push_back(rfh); });
   return visited_frames;
 }
 
@@ -200,15 +234,11 @@ Shell* OpenBlankWindow(WebContentsImpl* web_contents) {
   EXPECT_TRUE(ExecJs(root, "last_opened_window = window.open()"));
   Shell* new_shell = new_shell_observer.GetShell();
   EXPECT_NE(new_shell->web_contents(), web_contents);
-  if (blink::features::IsInitialNavigationEntryEnabled()) {
-    EXPECT_TRUE(new_shell->web_contents()
-                    ->GetController()
-                    .GetLastCommittedEntry()
-                    ->IsInitialEntry());
-    EXPECT_EQ(1, new_shell->web_contents()->GetController().GetEntryCount());
-  } else {
-    EXPECT_EQ(0, new_shell->web_contents()->GetController().GetEntryCount());
-  }
+  EXPECT_TRUE(new_shell->web_contents()
+                  ->GetController()
+                  .GetLastCommittedEntry()
+                  ->IsInitialEntry());
+  EXPECT_EQ(1, new_shell->web_contents()->GetController().GetEntryCount());
   return new_shell;
 }
 
@@ -260,8 +290,10 @@ std::string FrameTreeVisualizer::DepictFrameTree(FrameTreeNode* root) {
       legend[GetName(spec->GetSiteInstance())] = spec->GetSiteInstance();
   }
 
-  // Traversal 3: Assign names to the proxies and add them to |legend| too.
-  // Typically, only openers should have their names assigned this way.
+  // Traversal 3: Assign names to the SiteInstances within each group's proxies
+  // (which are associated with SiteInstanceGroups instead of SiteInstances) and
+  // add them to |legend| too. Typically, only openers should have their names
+  // assigned this way.
   for (to_explore.push(root); !to_explore.empty();) {
     FrameTreeNode* node = to_explore.top();
     to_explore.pop();
@@ -269,11 +301,15 @@ std::string FrameTreeVisualizer::DepictFrameTree(FrameTreeNode* root) {
       to_explore.push(node->child_at(i));
     }
 
-    // Sort the proxies by SiteInstance ID to avoid unordered_map ordering.
+    // Sort the proxies by SiteInstanceGroup ID to avoid unordered_map ordering.
     std::vector<SiteInstance*> site_instances;
     for (const auto& proxy_pair :
          node->render_manager()->GetAllProxyHostsForTesting()) {
-      site_instances.push_back(proxy_pair.second->GetSiteInstance());
+      SiteInstanceGroup* group = proxy_pair.second->site_instance_group();
+      for (raw_ptr<SiteInstanceImpl> instance :
+           group->site_instances_for_testing()) {
+        site_instances.push_back(instance);
+      }
     }
     std::sort(site_instances.begin(), site_instances.end(),
               [](SiteInstance* lhs, SiteInstance* rhs) {
@@ -365,7 +401,7 @@ std::string FrameTreeVisualizer::DepictFrameTree(FrameTreeNode* root) {
       std::vector<std::string> sorted_proxy_hosts;
       for (const auto& proxy_pair : proxy_host_map) {
         sorted_proxy_hosts.push_back(
-            GetName(proxy_pair.second->GetSiteInstance()));
+            GetGroupName(proxy_pair.second->site_instance_group()));
       }
       std::sort(sorted_proxy_hosts.begin(), sorted_proxy_hosts.end());
       for (std::string& proxy_name : sorted_proxy_hosts) {
@@ -382,10 +418,24 @@ std::string FrameTreeVisualizer::DepictFrameTree(FrameTreeNode* root) {
   for (auto& legend_entry : legend) {
     SiteInstanceImpl* site_instance =
         static_cast<SiteInstanceImpl*>(legend_entry.second);
-    std::string description = site_instance->GetSiteURL().spec();
+    std::string description =
+        GetUrlWithoutPort(site_instance->GetSiteURL()).spec();
+
+    // data: URLs have site URLs of the form data:nonce, where the nonce is an
+    // UnguessableToken. Make these deterministic for testing by using the
+    // abbreviated letter for the site in the nonce. For example,
+    // "data:nonce_A".
+    if (site_instance->GetSiteURL().SchemeIs(url::kDataScheme)) {
+      description =
+          base::StringPrintf("data:nonce_%s", legend_entry.first.c_str());
+    }
+
     base::StringAppendF(&result, "\n%s%s = %s", prefix,
                         legend_entry.first.c_str(), description.c_str());
     // Highlight some exceptionable conditions.
+    if (site_instance->GetSiteInfo().is_sandboxed()) {
+      result.append(" (sandboxed)");
+    }
     if (site_instance->group()->active_frame_count() == 0)
       result.append(" (active_frame_count == 0)");
     if (!site_instance->GetProcess()->IsInitializedAndNotDead())
@@ -398,8 +448,7 @@ std::string FrameTreeVisualizer::DepictFrameTree(FrameTreeNode* root) {
 std::string FrameTreeVisualizer::GetName(SiteInstance* site_instance) {
   // Indices into the vector correspond to letters of the alphabet.
   size_t index =
-      std::find(seen_site_instance_ids_.begin(), seen_site_instance_ids_.end(),
-                site_instance->GetId()) -
+      base::ranges::find(seen_site_instance_ids_, site_instance->GetId()) -
       seen_site_instance_ids_.begin();
   if (index == seen_site_instance_ids_.size())
     seen_site_instance_ids_.push_back(site_instance->GetId());
@@ -409,6 +458,39 @@ std::string FrameTreeVisualizer::GetName(SiteInstance* site_instance) {
     return base::StringPrintf("%c", 'A' + static_cast<char>(index));
   else
     return base::StringPrintf("Z%d", static_cast<int>(index - 25));
+}
+
+std::string FrameTreeVisualizer::GetGroupName(SiteInstanceGroup* group) {
+  // If there's only one SiteInstance in `group`, get the name of the
+  // SiteInstance directly. This preserves test expectations for DepictFrameTree
+  // uses that predate SiteInstanceGroup.
+  if (group->site_instances_for_testing().size() == 1) {
+    return GetName(*group->site_instances_for_testing().begin());
+  }
+
+  // Alphabetically sort the SiteInstances within the group.
+  std::vector<std::string> sorted_instance_names;
+  for (auto& site_instance : group->site_instances_for_testing()) {
+    sorted_instance_names.push_back(GetName(site_instance));
+  }
+  std::sort(sorted_instance_names.begin(), sorted_instance_names.end());
+
+  // Name the group using set notation.
+  CHECK(sorted_instance_names.size() >= 1u);
+  std::string result = "{";
+  for (auto& site_instance_name : sorted_instance_names) {
+    base::StringAppendF(&result, "%s,", site_instance_name.c_str());
+  }
+  result.resize(result.length() - 1);
+  result.append("}");
+
+  return result;
+}
+
+GURL FrameTreeVisualizer::GetUrlWithoutPort(const GURL& url) {
+  GURL::Replacements replacements;
+  replacements.ClearPort();
+  return url.ReplaceComponents(replacements);
 }
 
 std::string DepictFrameTree(FrameTreeNode& root) {
@@ -447,9 +529,18 @@ Shell* OpenPopup(const ToRenderFrameHost& opener,
   return new_shell_observer.GetShell();
 }
 
+FileChooserDelegate::FileChooserDelegate(std::vector<base::FilePath> files,
+                                         const base::FilePath& base_dir,
+                                         base::OnceClosure callback)
+    : files_(std::move(files)),
+      base_dir_(base_dir),
+      callback_(std::move(callback)) {}
+
 FileChooserDelegate::FileChooserDelegate(const base::FilePath& file,
                                          base::OnceClosure callback)
-    : file_(file), callback_(std::move(callback)) {}
+    : FileChooserDelegate(std::vector<base::FilePath>(1, file),
+                          base::FilePath(),
+                          std::move(callback)) {}
 
 FileChooserDelegate::~FileChooserDelegate() = default;
 
@@ -457,20 +548,26 @@ void FileChooserDelegate::RunFileChooser(
     RenderFrameHost* render_frame_host,
     scoped_refptr<content::FileSelectListener> listener,
     const blink::mojom::FileChooserParams& params) {
-  // Send the selected file to the renderer process.
-  auto file_info = blink::mojom::FileChooserFileInfo::NewNativeFile(
-      blink::mojom::NativeFileInfo::New(file_, std::u16string()));
+  // |base_dir_| should be set for and only for |kUploadFolder| mode.
+  DCHECK(base_dir_.empty() ==
+         (params.mode != blink::mojom::FileChooserParams::Mode::kUploadFolder));
+  // Send the selected files to the renderer process.
   std::vector<blink::mojom::FileChooserFileInfoPtr> files;
-  files.push_back(std::move(file_info));
-  listener->FileSelected(std::move(files), base::FilePath(),
-                         blink::mojom::FileChooserParams::Mode::kOpen);
+  for (const auto& file : files_) {
+    auto file_info = blink::mojom::FileChooserFileInfo::NewNativeFile(
+        blink::mojom::NativeFileInfo::New(file, std::u16string(),
+                                          std::vector<std::u16string>()));
+    files.push_back(std::move(file_info));
+  }
+  listener->FileSelected(std::move(files), base_dir_, params.mode);
 
   params_ = params.Clone();
-  std::move(callback_).Run();
+  if (callback_)
+    std::move(callback_).Run();
 }
 
 FrameTestNavigationManager::FrameTestNavigationManager(
-    int filtering_frame_tree_node_id,
+    FrameTreeNodeId filtering_frame_tree_node_id,
     WebContents* web_contents,
     const GURL& url)
     : TestNavigationManager(web_contents, url),
@@ -510,24 +607,127 @@ RenderProcessHostBadIpcMessageWaiter::RenderProcessHostBadIpcMessageWaiter(
     : internal_waiter_(render_process_host,
                        "Stability.BadMessageTerminated.Content") {}
 
-absl::optional<bad_message::BadMessageReason>
+std::optional<bad_message::BadMessageReason>
 RenderProcessHostBadIpcMessageWaiter::Wait() {
-  absl::optional<int> internal_result = internal_waiter_.Wait();
+  std::optional<int> internal_result = internal_waiter_.Wait();
   if (!internal_result.has_value())
-    return absl::nullopt;
+    return std::nullopt;
   return static_cast<bad_message::BadMessageReason>(internal_result.value());
 }
 
+CreateNewPopupWidgetInterceptor::CreateNewPopupWidgetInterceptor(
+    RenderFrameHostImpl* rfh,
+    base::OnceCallback<void(RenderWidgetHostImpl*)> did_create_callback)
+    : swapped_impl_(rfh->local_frame_host_receiver_for_testing(), this),
+      did_create_callback_(std::move(did_create_callback)) {}
+
+CreateNewPopupWidgetInterceptor::~CreateNewPopupWidgetInterceptor() = default;
+
+void CreateNewPopupWidgetInterceptor::CreateNewPopupWidget(
+    mojo::PendingAssociatedReceiver<blink::mojom::PopupWidgetHost>
+        blink_popup_widget_host,
+    mojo::PendingAssociatedReceiver<blink::mojom::WidgetHost> blink_widget_host,
+    mojo::PendingAssociatedRemote<blink::mojom::Widget> blink_widget) {
+  class PopupWidgetCreationObserver : public RenderWidgetHostFactory {
+   public:
+    PopupWidgetCreationObserver() { RegisterFactory(this); }
+
+    ~PopupWidgetCreationObserver() override { UnregisterFactory(); }
+
+    // RenderWidgetHostFactory overrides:
+    RenderWidgetHostImpl* CreateSelfOwnedRenderWidgetHost(
+        FrameTree* frame_tree,
+        RenderWidgetHostDelegate* delegate,
+        base::SafeRef<SiteInstanceGroup> site_instance_group,
+        int32_t routing_id,
+        bool hidden) override {
+      CHECK(!last_created_widget_);
+      last_created_widget_ =
+          RenderWidgetHostFactory::CreateSelfOwnedRenderWidgetHost(
+              frame_tree, delegate, std::move(site_instance_group), routing_id,
+              hidden);
+      return last_created_widget_;
+    }
+
+    RenderWidgetHostImpl* TakeLastCreatedWidget() {
+      return std::exchange(last_created_widget_, nullptr);
+    }
+
+   private:
+    raw_ptr<RenderWidgetHostImpl> last_created_widget_;
+  };
+
+  PopupWidgetCreationObserver creation_observer;
+
+  GetForwardingInterface()->CreateNewPopupWidget(
+      std::move(blink_popup_widget_host), std::move(blink_widget_host),
+      std::move(blink_widget));
+
+  if (!did_create_callback_) {
+    return;
+  }
+
+  if (auto* widget = creation_observer.TakeLastCreatedWidget(); widget) {
+    std::move(did_create_callback_).Run(widget);
+  }
+}
+
+blink::mojom::LocalFrameHost*
+CreateNewPopupWidgetInterceptor::GetForwardingInterface() {
+  return swapped_impl_.old_impl();
+}
+
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_ANDROID)
+ShowPopupWidgetWaiter::ShowPopupMenuInterceptor::ShowPopupMenuInterceptor(
+    RenderFrameHostImpl* rfh,
+    base::OnceCallback<void(const gfx::Rect&)> did_show_popup_menu_callback)
+    : swapped_impl_(rfh->local_frame_host_receiver_for_testing(), this),
+      did_show_popup_menu_callback_(std::move(did_show_popup_menu_callback)) {}
+
+ShowPopupWidgetWaiter::ShowPopupMenuInterceptor::~ShowPopupMenuInterceptor() =
+    default;
+
+void ShowPopupWidgetWaiter::ShowPopupMenuInterceptor::ShowPopupMenu(
+    mojo::PendingRemote<blink::mojom::PopupMenuClient> popup_client,
+    const gfx::Rect& bounds,
+    int32_t item_height,
+    double font_size,
+    int32_t selected_item,
+    std::vector<blink::mojom::MenuItemPtr> menu_items,
+    bool right_aligned,
+    bool allow_multiple_selection) {
+  if (did_show_popup_menu_callback_) {
+    std::move(did_show_popup_menu_callback_).Run(bounds);
+    mojo::Remote<blink::mojom::PopupMenuClient>(std::move(popup_client))
+        ->DidCancel();
+    return;
+  }
+
+  GetForwardingInterface()->ShowPopupMenu(
+      std::move(popup_client), bounds, item_height, font_size, selected_item,
+      std::move(menu_items), right_aligned, allow_multiple_selection);
+}
+
+blink::mojom::LocalFrameHost*
+ShowPopupWidgetWaiter::ShowPopupMenuInterceptor::GetForwardingInterface() {
+  return swapped_impl_.old_impl();
+}
+#endif
+
 ShowPopupWidgetWaiter::ShowPopupWidgetWaiter(WebContentsImpl* web_contents,
                                              RenderFrameHostImpl* frame_host)
-    : frame_host_(frame_host) {
+    : create_new_popup_widget_interceptor_(
+          frame_host,
+          base::BindOnce(&ShowPopupWidgetWaiter::DidCreatePopupWidget,
+                         base::Unretained(this))),
 #if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_ANDROID)
-  web_contents_ = web_contents;
-  web_contents_->set_show_popup_menu_callback_for_testing(base::BindOnce(
-      &ShowPopupWidgetWaiter::ShowPopupMenu, base::Unretained(this)));
+      show_popup_menu_interceptor_(
+          frame_host,
+          base::BindOnce(&ShowPopupWidgetWaiter::DidShowPopupMenu,
+                         base::Unretained(this))),
 #endif
-  frame_host_->SetCreateNewPopupCallbackForTesting(base::BindRepeating(
-      &ShowPopupWidgetWaiter::DidCreatePopupWidget, base::Unretained(this)));
+
+      frame_host_(frame_host) {
 }
 
 ShowPopupWidgetWaiter::~ShowPopupWidgetWaiter() {
@@ -535,20 +735,10 @@ ShowPopupWidgetWaiter::~ShowPopupWidgetWaiter() {
     std::ignore =
         rwhi->popup_widget_host_receiver_for_testing().SwapImplForTesting(rwhi);
   }
-  if (frame_host_)
-    frame_host_->SetCreateNewPopupCallbackForTesting(base::NullCallback());
 }
 
 void ShowPopupWidgetWaiter::Wait() {
   run_loop_.Run();
-}
-
-void ShowPopupWidgetWaiter::Stop() {
-#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_ANDROID)
-  web_contents_->set_show_popup_menu_callback_for_testing(base::NullCallback());
-#endif
-  frame_host_->SetCreateNewPopupCallbackForTesting(base::NullCallback());
-  frame_host_ = nullptr;
 }
 
 blink::mojom::PopupWidgetHost* ShowPopupWidgetWaiter::GetForwardingInterface() {
@@ -567,7 +757,7 @@ void ShowPopupWidgetWaiter::ShowPopup(const gfx::Rect& initial_rect,
 
 void ShowPopupWidgetWaiter::DidCreatePopupWidget(
     RenderWidgetHostImpl* render_widget_host) {
-  process_id_ = render_widget_host->GetProcess()->GetID();
+  process_id_ = render_widget_host->GetProcess()->GetDeprecatedID();
   routing_id_ = render_widget_host->GetRoutingID();
   // Swapped back in destructor from process_id_ and routing_id_ lookup.
   std::ignore = render_widget_host->popup_widget_host_receiver_for_testing()
@@ -575,51 +765,11 @@ void ShowPopupWidgetWaiter::DidCreatePopupWidget(
 }
 
 #if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_ANDROID)
-void ShowPopupWidgetWaiter::ShowPopupMenu(const gfx::Rect& bounds) {
+void ShowPopupWidgetWaiter::DidShowPopupMenu(const gfx::Rect& bounds) {
   initial_rect_ = bounds;
   run_loop_.Quit();
 }
 #endif
-
-DropMessageFilter::DropMessageFilter(uint32_t message_class,
-                                     uint32_t drop_message_id)
-    : BrowserMessageFilter(message_class), drop_message_id_(drop_message_id) {}
-
-DropMessageFilter::~DropMessageFilter() = default;
-
-bool DropMessageFilter::OnMessageReceived(const IPC::Message& message) {
-  return message.type() == drop_message_id_;
-}
-
-ObserveMessageFilter::ObserveMessageFilter(uint32_t message_class,
-                                           uint32_t watch_message_id)
-    : BrowserMessageFilter(message_class),
-      watch_message_id_(watch_message_id) {}
-
-ObserveMessageFilter::~ObserveMessageFilter() = default;
-
-void ObserveMessageFilter::Wait() {
-  base::RunLoop loop;
-  quit_closure_ = loop.QuitClosure();
-  loop.Run();
-}
-
-bool ObserveMessageFilter::OnMessageReceived(const IPC::Message& message) {
-  if (message.type() == watch_message_id_) {
-    // Exit the Wait() method if it's being used, but in a fresh stack once the
-    // message is actually handled.
-    if (quit_closure_ && !received_) {
-      base::ThreadPool::PostTask(
-          FROM_HERE, base::BindOnce(&ObserveMessageFilter::QuitWait, this));
-    }
-    received_ = true;
-  }
-  return false;
-}
-
-void ObserveMessageFilter::QuitWait() {
-  std::move(quit_closure_).Run();
-}
 
 UnresponsiveRendererObserver::UnresponsiveRendererObserver(
     WebContents* web_contents)
@@ -654,7 +804,6 @@ BeforeUnloadBlockingDelegate::~BeforeUnloadBlockingDelegate() {
     std::move(callback_).Run(true, std::u16string());
 
   web_contents_->SetDelegate(nullptr);
-  web_contents_->SetJavaScriptDialogManagerForTesting(nullptr);
 }
 
 void BeforeUnloadBlockingDelegate::Wait() {
@@ -665,6 +814,11 @@ void BeforeUnloadBlockingDelegate::Wait() {
 JavaScriptDialogManager*
 BeforeUnloadBlockingDelegate::GetJavaScriptDialogManager(WebContents* source) {
   return this;
+}
+
+bool BeforeUnloadBlockingDelegate::IsBackForwardCacheSupported(
+    WebContents& web_contents) {
+  return true;
 }
 
 void BeforeUnloadBlockingDelegate::RunJavaScriptDialog(
@@ -692,69 +846,6 @@ bool BeforeUnloadBlockingDelegate::HandleJavaScriptDialog(
     bool accept,
     const std::u16string* prompt_override) {
   NOTREACHED();
-  return true;
-}
-
-namespace {
-static constexpr int kEnableLogMessageId = 0;
-static constexpr char kEnableLogMessage[] = R"({"id":0,"method":"Log.enable"})";
-static constexpr int kDisableLogMessageId = 1;
-static constexpr char kDisableLogMessage[] =
-    R"({"id":1,"method":"Log.disable"})";
-}  // namespace
-
-DevToolsInspectorLogWatcher::DevToolsInspectorLogWatcher(
-    WebContents* web_contents) {
-  host_ = DevToolsAgentHost::GetOrCreateFor(web_contents);
-  host_->AttachClient(this);
-
-  host_->DispatchProtocolMessage(
-      this, base::as_bytes(
-                base::make_span(kEnableLogMessage, strlen(kEnableLogMessage))));
-
-  run_loop_enable_log_.Run();
-}
-
-DevToolsInspectorLogWatcher::~DevToolsInspectorLogWatcher() {
-  host_->DetachClient(this);
-}
-
-void DevToolsInspectorLogWatcher::DispatchProtocolMessage(
-    DevToolsAgentHost* host,
-    base::span<const uint8_t> message) {
-  base::StringPiece message_str(reinterpret_cast<const char*>(message.data()),
-                                message.size());
-  auto parsed_message = base::JSONReader::Read(message_str);
-  absl::optional<int> command_id = parsed_message->FindIntPath("id");
-  if (command_id.has_value()) {
-    switch (command_id.value()) {
-      case kEnableLogMessageId:
-        run_loop_enable_log_.Quit();
-        break;
-      case kDisableLogMessageId:
-        run_loop_disable_log_.Quit();
-        break;
-      default:
-        NOTREACHED();
-    }
-    return;
-  }
-
-  std::string* notification = parsed_message->FindStringPath("method");
-  if (notification && *notification == "Log.entryAdded") {
-    std::string* text = parsed_message->FindStringPath("params.entry.text");
-    DCHECK(text);
-    last_message_ = *text;
-  }
-}
-
-void DevToolsInspectorLogWatcher::AgentHostClosed(DevToolsAgentHost* host) {}
-
-void DevToolsInspectorLogWatcher::FlushAndStopWatching() {
-  host_->DispatchProtocolMessage(
-      this, base::as_bytes(base::make_span(kDisableLogMessage,
-                                           strlen(kDisableLogMessage))));
-  run_loop_disable_log_.Run();
 }
 
 FrameNavigateParamsCapturer::FrameNavigateParamsCapturer(WebContents* contents)
@@ -841,8 +932,8 @@ void RenderFrameHostCreatedObserver::RenderFrameCreated(
 BackForwardCache::DisabledReason RenderFrameHostDisabledForTestingReason() {
   static const BackForwardCache::DisabledReason reason =
       BackForwardCache::DisabledReason(
-          {BackForwardCache::DisabledSource::kTesting, 0,
-           "disabled for testing"});
+          BackForwardCache::DisabledSource::kTesting, 0, "disabled for testing",
+          /*context=*/"", "disabled");
   return reason;
 }
 
@@ -894,11 +985,9 @@ void InactiveRenderFrameHostDeletionObserver::Wait() {
       ->GetController()
       .GetBackForwardCache()
       .Flush();
-  if (blink::features::IsPrerender2Enabled()) {
-    static_cast<WebContentsImpl*>(web_contents())
-        ->GetPrerenderHostRegistry()
-        ->CancelAllHostsForTesting();
-  }
+  static_cast<WebContentsImpl*>(web_contents())
+      ->GetPrerenderHostRegistry()
+      ->CancelAllHostsForTesting();
 
   for (RenderFrameHost* rfh : CollectAllRenderFrameHosts(web_contents())) {
     // Keep track of all currently inactive RenderFrameHosts so that we can wait
@@ -922,6 +1011,178 @@ void InactiveRenderFrameHostDeletionObserver::RenderFrameDeleted(
 void InactiveRenderFrameHostDeletionObserver::CheckCondition() {
   if (loop_ && inactive_rfhs_.empty())
     loop_->Quit();
+}
+
+void TestNavigationObserverInternal::OnDidFinishNavigation(
+    NavigationHandle* navigation_handle) {
+  last_navigation_type_ =
+      navigation_handle->HasCommitted()
+          ? static_cast<NavigationRequest*>(navigation_handle)
+                ->navigation_type()
+          : NAVIGATION_TYPE_UNKNOWN;
+  TestNavigationObserver::OnDidFinishNavigation(navigation_handle);
+}
+
+RenderFrameHostImpl* DescendantRenderFrameHostAtInternal(
+    RenderFrameHostImpl* rfh,
+    std::string path,
+    std::vector<size_t>& descendant_indices) {
+  if (descendant_indices.size() == 0)
+    return rfh;
+  size_t index = descendant_indices[0];
+  descendant_indices.erase(descendant_indices.begin());
+  CHECK_LT(index, rfh->child_count()) << path;
+  FrameTreeNode* node = rfh->child_at(index);
+  path = base::StringPrintf("%s[%zu]", path.c_str(), index);
+  return DescendantRenderFrameHostAtInternal(node->current_frame_host(), path,
+                                             descendant_indices);
+}
+
+RenderFrameHostImpl* DescendantRenderFrameHostImplAt(
+    const ToRenderFrameHost& adapter,
+    std::vector<size_t> descendant_indices) {
+  return DescendantRenderFrameHostAtInternal(
+      static_cast<RenderFrameHostImpl*>(adapter.render_frame_host()), "rfh",
+      descendant_indices);
+}
+
+EffectiveURLContentBrowserTestContentBrowserClient::
+    EffectiveURLContentBrowserTestContentBrowserClient(
+        bool requires_dedicated_process)
+    : helper_(requires_dedicated_process) {}
+
+EffectiveURLContentBrowserTestContentBrowserClient::
+    EffectiveURLContentBrowserTestContentBrowserClient(
+        const GURL& url_to_modify,
+        const GURL& url_to_return,
+        bool requires_dedicated_process)
+    : helper_(requires_dedicated_process) {
+  AddTranslation(url_to_modify, url_to_return);
+}
+
+EffectiveURLContentBrowserTestContentBrowserClient::
+    ~EffectiveURLContentBrowserTestContentBrowserClient() = default;
+
+void EffectiveURLContentBrowserTestContentBrowserClient::AddTranslation(
+    const GURL& url_to_modify,
+    const GURL& url_to_return) {
+  helper_.AddTranslation(url_to_modify, url_to_return);
+}
+
+GURL EffectiveURLContentBrowserTestContentBrowserClient::GetEffectiveURL(
+    BrowserContext* browser_context,
+    const GURL& url) {
+  return helper_.GetEffectiveURL(url);
+}
+
+bool EffectiveURLContentBrowserTestContentBrowserClient::
+    DoesSiteRequireDedicatedProcess(BrowserContext* browser_context,
+                                    const GURL& effective_site_url) {
+  return helper_.DoesSiteRequireDedicatedProcess(browser_context,
+                                                 effective_site_url);
+}
+
+CustomStoragePartitionBrowserClient::CustomStoragePartitionBrowserClient(
+    const GURL& site_to_isolate)
+    : site_to_isolate_(site_to_isolate) {}
+
+StoragePartitionConfig
+CustomStoragePartitionBrowserClient::GetStoragePartitionConfigForSite(
+    BrowserContext* browser_context,
+    const GURL& site) {
+  // Override for |site_to_isolate_|.
+  if (site == site_to_isolate_) {
+    return StoragePartitionConfig::Create(
+        browser_context, "blah_isolated_storage", "blah_isolated_storage",
+        false /* in_memory */);
+  }
+
+  return StoragePartitionConfig::CreateDefault(browser_context);
+}
+
+CommitNavigationPauser::CommitNavigationPauser(RenderFrameHostImpl* rfh) {
+  rfh->SetCommitCallbackInterceptorForTesting(this);
+}
+
+CommitNavigationPauser::~CommitNavigationPauser() = default;
+
+void CommitNavigationPauser::WaitForCommitAndPause() {
+  loop_.Run();
+}
+
+void CommitNavigationPauser::ResumePausedCommit() {
+  // The caller is responsible for ensuring the paused request is still alive
+  // and not discarded.
+  DCHECK(paused_request_);
+  paused_request_->GetRenderFrameHost()->DidCommitNavigation(
+      paused_request_.get(), std::move(paused_params_),
+      std::move(paused_interface_params_));
+}
+
+bool CommitNavigationPauser::WillProcessDidCommitNavigation(
+    NavigationRequest* request,
+    mojom::DidCommitProvisionalLoadParamsPtr* params,
+    mojom::DidCommitProvisionalLoadInterfaceParamsPtr* interface_params) {
+  request->GetRenderFrameHost()->SetCommitCallbackInterceptorForTesting(
+      nullptr);
+
+  paused_request_ = request->GetWeakPtr();
+  paused_params_ = std::move(*params);
+  paused_interface_params_ = std::move(*interface_params);
+
+  loop_.Quit();
+
+  // Ignore the commit message.
+  return false;
+}
+
+// TODO(crbug.com/40278950): Use
+// `WebFrameWidgetImpl::NotifySwapAndPresentationTime` instead.
+void WaitForCopyableViewInWebContents(WebContents* web_contents) {
+  WaitForCopyableViewInFrame(web_contents->GetPrimaryMainFrame());
+}
+
+void WaitForCopyableViewInFrame(RenderFrameHost* render_frame_host) {
+  base::test::TestFuture<void> future;
+  NotifyCopyableViewInFrame(render_frame_host, future.GetCallback());
+  CHECK(future.Wait());
+}
+
+namespace {
+
+// Helper to return a 200 OK non-cacheable response for a first request, and
+// redirect the second request to the URL indicated in the query param.
+std::unique_ptr<net::test_server::HttpResponse>
+RedirectToTargetOnSecondNavigation(
+    unsigned int& navigation_counter,
+    const net::test_server::HttpRequest& request) {
+  ++navigation_counter;
+  if (navigation_counter == 1) {
+    auto http_response =
+        std::make_unique<net::test_server::BasicHttpResponse>();
+    http_response->set_code(net::HttpStatusCode::HTTP_OK);
+    http_response->AddCustomHeader("Cache-Control",
+                                   "no-store, must-revalidate");
+    return http_response;
+  }
+
+  std::string url_from_query =
+      base::UnescapeBinaryURLComponent(request.GetURL().query_piece());
+  auto http_response = std::make_unique<net::test_server::BasicHttpResponse>();
+  http_response->set_code(net::HttpStatusCode::HTTP_FOUND);
+  http_response->AddCustomHeader("Location", url_from_query);
+  return http_response;
+}
+
+}  // namespace
+
+void AddRedirectOnSecondNavigationHandler(net::EmbeddedTestServer* server) {
+  unsigned int navigation_counter = 0;
+  server->RegisterDefaultHandler(base::BindRepeating(
+      &net::test_server::HandlePrefixedRequest,
+      "/redirect-on-second-navigation",
+      base::BindRepeating(&RedirectToTargetOnSecondNavigation,
+                          base::OwnedRef(navigation_counter))));
 }
 
 }  // namespace content

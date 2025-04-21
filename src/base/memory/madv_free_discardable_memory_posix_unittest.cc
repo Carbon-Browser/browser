@@ -1,19 +1,20 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/memory/madv_free_discardable_memory_posix.h"
+
 #include <fcntl.h>
 #include <stdint.h>
-
 #include <sys/mman.h>
+
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/files/scoped_file.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/madv_free_discardable_memory_allocator_posix.h"
-#include "base/memory/madv_free_discardable_memory_posix.h"
 #include "base/memory/page_size.h"
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -45,8 +46,8 @@ class MadvFreeDiscardableMemoryPosixTester
 
 class MadvFreeDiscardableMemoryTest : public ::testing::Test {
  protected:
-  MadvFreeDiscardableMemoryTest() {}
-  ~MadvFreeDiscardableMemoryTest() override {}
+  MadvFreeDiscardableMemoryTest() = default;
+  ~MadvFreeDiscardableMemoryTest() override = default;
 
   const size_t kPageSize = base::GetPageSize();
 

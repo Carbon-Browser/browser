@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,7 +52,7 @@ TEST_F(VisibleUnitsParagraphTest, endOfParagraphFirstLetter) {
       "<style>div::first-letter { color: red }</style><div "
       "id=sample>1ab\nde</div>");
 
-  Node* sample = GetDocument().getElementById("sample");
+  Node* sample = GetDocument().getElementById(AtomicString("sample"));
   Node* text = sample->firstChild();
 
   EXPECT_EQ(Position(text, 6),
@@ -83,7 +83,7 @@ TEST_F(VisibleUnitsParagraphTest, endOfParagraphFirstLetterPre) {
       "<style>pre::first-letter { color: red }</style><pre "
       "id=sample>1ab\nde</pre>");
 
-  Node* sample = GetDocument().getElementById("sample");
+  Node* sample = GetDocument().getElementById(AtomicString("sample"));
   Node* text = sample->firstChild();
 
   EXPECT_EQ(Position(text, 3),
@@ -118,9 +118,9 @@ TEST_F(VisibleUnitsParagraphTest, endOfParagraphShadow) {
   SetBodyContent(body_content);
   SetShadowContent(shadow_content, "host");
 
-  Element* one = GetDocument().getElementById("one");
-  Element* two = GetDocument().getElementById("two");
-  Element* three = GetDocument().getElementById("three");
+  Element* one = GetDocument().getElementById(AtomicString("one"));
+  Element* two = GetDocument().getElementById(AtomicString("two"));
+  Element* three = GetDocument().getElementById(AtomicString("three"));
 
   EXPECT_EQ(
       Position(three->firstChild(), 3),
@@ -144,7 +144,7 @@ TEST_F(VisibleUnitsParagraphTest, endOfParagraphShadow) {
 TEST_F(VisibleUnitsParagraphTest, endOfParagraphSimple) {
   SetBodyContent("<div id=sample>1ab\nde</div>");
 
-  Node* sample = GetDocument().getElementById("sample");
+  Node* sample = GetDocument().getElementById(AtomicString("sample"));
   Node* text = sample->firstChild();
 
   EXPECT_EQ(Position(text, 6),
@@ -173,7 +173,7 @@ TEST_F(VisibleUnitsParagraphTest, endOfParagraphSimple) {
 TEST_F(VisibleUnitsParagraphTest, endOfParagraphSimplePre) {
   SetBodyContent("<pre id=sample>1ab\nde</pre>");
 
-  Node* sample = GetDocument().getElementById("sample");
+  Node* sample = GetDocument().getElementById(AtomicString("sample"));
   Node* text = sample->firstChild();
 
   EXPECT_EQ(Position(text, 3),
@@ -208,9 +208,10 @@ TEST_F(VisibleUnitsParagraphTest, isEndOfParagraph) {
   SetBodyContent(body_content);
   SetShadowContent(shadow_content, "host");
 
-  Node* one = GetDocument().getElementById("one")->firstChild();
-  Node* two = GetDocument().getElementById("two")->firstChild();
-  Node* three = GetDocument().getElementById("three")->firstChild();
+  Node* one = GetDocument().getElementById(AtomicString("one"))->firstChild();
+  Node* two = GetDocument().getElementById(AtomicString("two"))->firstChild();
+  Node* three =
+      GetDocument().getElementById(AtomicString("three"))->firstChild();
 
   EXPECT_FALSE(IsEndOfParagraph(CreateVisiblePositionInDOMTree(*one, 0)));
   EXPECT_FALSE(IsEndOfParagraph(CreateVisiblePositionInFlatTree(*one, 0)));
@@ -237,10 +238,11 @@ TEST_F(VisibleUnitsParagraphTest, isStartOfParagraph) {
   SetBodyContent(body_content);
   SetShadowContent(shadow_content, "host");
 
-  Node* zero = GetDocument().getElementById("zero")->firstChild();
-  Node* one = GetDocument().getElementById("one")->firstChild();
-  Node* two = GetDocument().getElementById("two")->firstChild();
-  Node* three = GetDocument().getElementById("three")->firstChild();
+  Node* zero = GetDocument().getElementById(AtomicString("zero"))->firstChild();
+  Node* one = GetDocument().getElementById(AtomicString("one"))->firstChild();
+  Node* two = GetDocument().getElementById(AtomicString("two"))->firstChild();
+  Node* three =
+      GetDocument().getElementById(AtomicString("three"))->firstChild();
 
   EXPECT_TRUE(IsStartOfParagraph(CreateVisiblePositionInDOMTree(*zero, 0)));
   EXPECT_TRUE(IsStartOfParagraph(CreateVisiblePositionInFlatTree(*zero, 0)));
@@ -264,9 +266,9 @@ TEST_F(VisibleUnitsParagraphTest, StartOfNextParagraphAfterTableCell) {
       "maxlength='100'><select>");
 
   const Position& input =
-      Position::BeforeNode(*GetDocument().QuerySelector("input"));
-  const Position& select =
-      Position::BeforeNode(*GetDocument().QuerySelector("select"));
+      Position::BeforeNode(*GetDocument().QuerySelector(AtomicString("input")));
+  const Position& select = Position::BeforeNode(
+      *GetDocument().QuerySelector(AtomicString("select")));
 
   const VisiblePosition& input_position = CreateVisiblePosition(input);
   const VisiblePosition& after_input =
@@ -287,7 +289,7 @@ TEST_F(VisibleUnitsParagraphTest,
   const Position& text_end =
       Position::LastPositionInNode(*GetDocument().body()->firstChild());
   const Position& before_div =
-      Position::BeforeNode(*GetDocument().QuerySelector("div"));
+      Position::BeforeNode(*GetDocument().QuerySelector(AtomicString("div")));
   const VisiblePosition& upstream =
       CreateVisiblePosition(before_div, TextAffinity::kUpstream);
   const VisiblePosition& downstream =
@@ -308,7 +310,7 @@ TEST_F(VisibleUnitsParagraphTest, endOfParagraphCannotBeBeforePosition) {
   SetBodyContent(
       "<span contenteditable>x<br contenteditable=false>"
       "<br contenteditable=false></span>");
-  Element* span = GetDocument().QuerySelector("span");
+  Element* span = GetDocument().QuerySelector(AtomicString("span"));
   const Position& p1 = Position(span, 2);
   const Position& p2 = Position::LastPositionInNode(*span);
   const Position& p3 = Position::AfterNode(*span);
@@ -336,11 +338,37 @@ TEST_F(VisibleUnitsParagraphTest, endOfParagraphCannotBeBeforePosition) {
   EXPECT_EQ(p2, end2.DeepEquivalent());
 }
 
+TEST_F(VisibleUnitsParagraphTest, endOfParagraphCannotCrossEditingRoot) {
+  SetBodyContent(
+      "<div><span contenteditable id=span>this </span>"
+      "<a contenteditable=false>link</a>"
+      "<span contenteditable> after</span></div>");
+
+  Element* span = GetElementById("span");
+  const Position& p1 = Position(span->firstChild(), 2);
+  const Position& p2 = Position(span->firstChild(), 5);
+  const VisiblePosition& vp1 = CreateVisiblePosition(p1);
+  const VisiblePosition& vp2 = CreateVisiblePosition(p2);
+
+  EXPECT_EQ(p1, vp1.DeepEquivalent());
+  EXPECT_EQ(p2, vp2.DeepEquivalent());
+
+  const VisiblePosition& end1 = EndOfParagraph(vp1);
+  const VisiblePosition& end2 = EndOfParagraph(
+      vp1, EditingBoundaryCrossingRule::kCanSkipOverEditingBoundary);
+
+  EXPECT_LE(vp1.DeepEquivalent(), end1.DeepEquivalent());
+  EXPECT_LE(vp1.DeepEquivalent(), end2.DeepEquivalent());
+
+  EXPECT_EQ(p2, end1.DeepEquivalent());
+  EXPECT_EQ(p2, end2.DeepEquivalent());
+}
+
 TEST_F(VisibleUnitsParagraphTest, startOfParagraphCannotBeAfterPosition) {
   SetBodyContent(
       "<span contenteditable><br contenteditable=false>"
       "<br contenteditable=false>x</span>");
-  Element* span = GetDocument().QuerySelector("span");
+  Element* span = GetDocument().QuerySelector(AtomicString("span"));
   const Position& p1 = Position(span, 1);
   const Position& p2 = Position::FirstPositionInNode(*span);
   const Position& p3 = Position::BeforeNode(*span);

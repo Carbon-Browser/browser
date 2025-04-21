@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/observer_list.h"
 #include "dbus/object_path.h"
 #include "dbus/property.h"
@@ -69,7 +69,7 @@ class DEVICE_BLUETOOTH_EXPORT FakeBluetoothAdapterClient
                            ErrorCallback error_callback) override;
   void ConnectDevice(const dbus::ObjectPath& object_path,
                      const std::string& address,
-                     const absl::optional<AddressType>& address_type,
+                     const std::optional<AddressType>& address_type,
                      ConnectDeviceCallback callback,
                      ErrorCallback error_callback) override;
 
@@ -97,7 +97,10 @@ class DEVICE_BLUETOOTH_EXPORT FakeBluetoothAdapterClient
   void SetSecondUUIDs(const std::vector<std::string>& uuids);
 
   // Set discoverable timeout
-  void SetDiscoverableTimeout(uint32_t timeout);
+  void SetDiscoverableTimeout(base::TimeDelta timeout);
+
+  // Set adapter roles
+  void SetRoles(const std::vector<std::string>& roles);
 
   // Object path, name and addresses of the adapters we emulate.
   static const char kAdapterPath[];

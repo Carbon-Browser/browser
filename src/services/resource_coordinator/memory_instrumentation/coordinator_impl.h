@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,11 @@
 
 #include <list>
 #include <map>
+#include <optional>
 #include <set>
 #include <string>
 
 #include "base/gtest_prod_util.h"
-#include "base/memory/ref_counted.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
 #include "base/trace_event/memory_dump_request_args.h"
@@ -22,7 +22,6 @@
 #include "services/resource_coordinator/public/cpp/memory_instrumentation/registry.h"
 #include "services/resource_coordinator/public/cpp/memory_instrumentation/tracing_observer.h"
 #include "services/resource_coordinator/public/mojom/memory_instrumentation/memory_instrumentation.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace memory_instrumentation {
 
@@ -55,7 +54,7 @@ class CoordinatorImpl : public Registry,
       mojo::PendingRemote<mojom::ClientProcess> client_process,
       mojom::ProcessType process_type,
       base::ProcessId process_id,
-      const absl::optional<std::string>& service_name) override;
+      const std::optional<std::string>& service_name) override;
 
   // mojom::Coordinator implementation.
   void RequestGlobalMemoryDump(
@@ -97,12 +96,12 @@ class CoordinatorImpl : public Registry,
   struct ClientInfo {
     ClientInfo(mojo::Remote<mojom::ClientProcess> client,
                mojom::ProcessType,
-               absl::optional<std::string> service_name);
+               std::optional<std::string> service_name);
     ~ClientInfo();
 
     const mojo::Remote<mojom::ClientProcess> client;
     const mojom::ProcessType process_type;
-    const absl::optional<std::string> service_name;
+    const std::optional<std::string> service_name;
   };
 
   void UnregisterClientProcess(base::ProcessId);
@@ -183,7 +182,6 @@ class CoordinatorImpl : public Registry,
 
   // Dump IDs are unique across both heap dump and memory dump requests.
   uint64_t next_dump_id_;
-  std::unique_ptr<TracingObserver> tracing_observer_;
 
   // Timeout for registered client processes to respond to dump requests.
   base::TimeDelta client_process_timeout_;
@@ -193,7 +191,6 @@ class CoordinatorImpl : public Registry,
   mojo::Receiver<mojom::HeapProfilerHelper> heap_profiler_helper_receiver_{
       this};
 
-  const bool use_proto_writer_;
   const bool write_proto_heap_profile_;
 
   THREAD_CHECKER(thread_checker_);

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 #include <string>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
@@ -18,8 +18,8 @@
 #include "dbus/exported_object.h"
 #include "dbus/message.h"
 #include "dbus/object_proxy.h"
-#include "ui/base/models/simple_menu_model.h"
 #include "ui/linux/status_icon_linux.h"
+#include "ui/menus/simple_menu_model.h"
 #include "ui/views/controls/menu/menu_runner.h"
 
 namespace gfx {
@@ -65,18 +65,21 @@ class StatusIconLinuxDbus : public ui::StatusIconLinux,
   // registered.
   void OnHostRegisteredResponse(dbus::Response* response);
 
-  // Step 3: register a StatusNotifierItem service.
-  void OnOwnership(const std::string& service_name, bool success);
-
-  // Step 4: export methods for the StatusNotifierItem and the properties
+  // Step 3: export methods for the StatusNotifierItem and the properties
   // interface.
   void OnExported(const std::string& interface_name,
                   const std::string& method_name,
                   bool success);
   void OnInitialized(bool success);
+  void RegisterStatusNotifierItem();
 
   // Step 5: register the StatusNotifierItem with the StatusNotifierWatcher.
   void OnRegistered(dbus::Response* response);
+
+  // Called when the name owner of StatusNotifierWatcher has changed, which
+  // can happen when lock/unlock screen.
+  void OnNameOwnerChangedReceived(const std::string& old_owner,
+                                  const std::string& new_owner);
 
   // DBus methods.
   // Action       -> KDE behavior:
@@ -104,8 +107,8 @@ class StatusIconLinuxDbus : public ui::StatusIconLinux,
   scoped_refptr<dbus::Bus> bus_;
 
   int service_id_ = 0;
-  raw_ptr<dbus::ObjectProxy> watcher_ = nullptr;
-  raw_ptr<dbus::ExportedObject> item_ = nullptr;
+  raw_ptr<dbus::ObjectProxy, DanglingUntriaged> watcher_ = nullptr;
+  raw_ptr<dbus::ExportedObject, DanglingUntriaged> item_ = nullptr;
 
   base::RepeatingCallback<void(bool)> barrier_;
 

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,11 @@
 #define CHROME_BROWSER_UI_VIEWS_MEDIA_ROUTER_CAST_TOOLBAR_BUTTON_H_
 
 #include "base/memory/raw_ptr.h"
-#include "chrome/browser/ui/toolbar/media_router_action_controller.h"
-#include "chrome/browser/ui/toolbar/media_router_contextual_menu.h"
+#include "chrome/browser/ui/toolbar/cast/cast_contextual_menu.h"
+#include "chrome/browser/ui/toolbar/cast/cast_toolbar_button_controller.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_button.h"
 #include "components/media_router/browser/issues_observer.h"
+#include "components/media_router/browser/mirroring_media_controller_host.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/events/event.h"
 
@@ -27,22 +28,23 @@ class LoggerImpl;
 // - There is an active local cast session.
 // - There is an outstanding issue.
 class CastToolbarButton : public ToolbarButton,
-                          public MediaRouterActionController::Observer,
+                          public CastToolbarButtonController::Observer,
                           public IssuesObserver,
-                          public MediaRoutesObserver {
- public:
-  METADATA_HEADER(CastToolbarButton);
+                          public MediaRoutesObserver,
+                          public MirroringMediaControllerHost::Observer {
+  METADATA_HEADER(CastToolbarButton, ToolbarButton)
 
+ public:
   static std::unique_ptr<CastToolbarButton> Create(Browser* browser);
 
   CastToolbarButton(Browser* browser,
                     MediaRouter* media_router,
-                    std::unique_ptr<MediaRouterContextualMenu> context_menu);
+                    std::unique_ptr<CastContextualMenu> context_menu);
   CastToolbarButton(const CastToolbarButton&) = delete;
   CastToolbarButton& operator=(const CastToolbarButton&) = delete;
   ~CastToolbarButton() override;
 
-  // MediaRouterActionController::Observer:
+  // CastToolbarButtonController::Observer:
   void ShowIcon() override;
   void HideIcon() override;
   void ActivateIcon() override;
@@ -56,6 +58,9 @@ class CastToolbarButton : public ToolbarButton,
   void OnRoutesUpdated(
       const std::vector<media_router::MediaRoute>& routes) override;
 
+  // MirroringMediaControllerHost::Observer:
+  void OnFreezeInfoChanged() override;
+
   // ToolbarButton:
   bool OnMousePressed(const ui::MouseEvent& event) override;
   void OnMouseReleased(const ui::MouseEvent& event) override;
@@ -63,33 +68,33 @@ class CastToolbarButton : public ToolbarButton,
   void OnThemeChanged() override;
   void UpdateIcon() override;
 
-  MediaRouterContextualMenu* context_menu_for_test() {
-    return context_menu_.get();
-  }
+  CastContextualMenu* context_menu_for_test() { return context_menu_.get(); }
 
  private:
-  MediaRouterActionController* GetActionController() const;
-
-  // Updates insets per touch ui mode.
-  void UpdateLayoutInsetDelta();
+  CastToolbarButtonController* GetActionController() const;
 
   void ButtonPressed();
 
   void LogIconChange(const gfx::VectorIcon* icon);
 
+  void StopObservingMirroringMediaControllerHosts();
+
   const raw_ptr<Browser> browser_;
   const raw_ptr<Profile> profile_;
 
   // This value is set only when there is an outstanding issue.
-  std::unique_ptr<media_router::IssueInfo> current_issue_;
+  std::optional<media_router::IssueInfo::Severity> issue_severity_;
 
-  std::unique_ptr<MediaRouterContextualMenu> context_menu_;
+  std::unique_ptr<CastContextualMenu> context_menu_;
 
   bool has_local_route_ = false;
 
   raw_ptr<const gfx::VectorIcon> icon_ = nullptr;
 
   const raw_ptr<LoggerImpl> logger_;
+
+  // The list of routes we are observing to see if mirroring pauses.
+  std::vector<MediaRoute::Id> tracked_mirroring_routes_;
 };
 
 }  // namespace media_router

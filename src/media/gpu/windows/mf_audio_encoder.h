@@ -1,22 +1,21 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_GPU_WINDOWS_MF_AUDIO_ENCODER_H_
 #define MEDIA_GPU_WINDOWS_MF_AUDIO_ENCODER_H_
 
-#include <wrl/client.h>
-
 #include <memory>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "media/base/audio_encoder.h"
 #include "media/base/audio_timestamp_helper.h"
 #include "media/gpu/media_gpu_export.h"
+#include "media/gpu/windows/d3d_com_defs.h"
 
 namespace base {
 class SequencedTaskRunner;
@@ -52,11 +51,6 @@ class AudioParameters;
 // number of samples have been provided. This resets when `Flush()` is called.
 class MEDIA_GPU_EXPORT MFAudioEncoder : public AudioEncoder {
  public:
-  // Loads the necessary DLLs for the correct version of Windows. Will return
-  // false on Windows N SKUs. Subsequent calls to `Initialize()` will return
-  // errors if this fails.
-  static bool PreSandboxInitialization();
-
   explicit MFAudioEncoder(scoped_refptr<base::SequencedTaskRunner> task_runner);
   MFAudioEncoder(const MFAudioEncoder&) = delete;
   MFAudioEncoder& operator=(const MFAudioEncoder&) = delete;
@@ -78,6 +72,10 @@ class MEDIA_GPU_EXPORT MFAudioEncoder : public AudioEncoder {
   // it fails. It is an error to call `Flush()` before the `done_cb` from a
   // previous call to `Flush()` has been run.
   void Flush(EncoderStatusCB done_cb) override;
+
+  // Clamp given audio bits per second to the value that Media Foundation
+  // supports.
+  static uint32_t ClampAccCodecBitrate(uint32_t bitrate);
 
  private:
   // This class has six states.
@@ -105,12 +103,12 @@ class MEDIA_GPU_EXPORT MFAudioEncoder : public AudioEncoder {
 
   // Used for `input_queue_`.
   struct InputData {
-    InputData(Microsoft::WRL::ComPtr<IMFSample>&& sample,
+    InputData(ComMFSample&& sample,
               const int sample_count,
               EncoderStatusCB&& done_cb);
     InputData(InputData&&);
     ~InputData();
-    Microsoft::WRL::ComPtr<IMFSample> sample;
+    ComMFSample sample;
     const int sample_count;
     EncoderStatusCB done_cb;
   };
@@ -177,7 +175,7 @@ class MEDIA_GPU_EXPORT MFAudioEncoder : public AudioEncoder {
   // are thread safe.
   // The AAC encoder is a synchronous MFT, which means it does not send events
   // (e.g. when output is ready), so we must continually check.
-  Microsoft::WRL::ComPtr<IMFTransform> mf_encoder_;
+  ComMFTransform mf_encoder_;
 
   // No conversion is done, so the input and output params are the same.
   AudioParameters audio_params_;
@@ -186,6 +184,7 @@ class MEDIA_GPU_EXPORT MFAudioEncoder : public AudioEncoder {
   int input_buffer_alignment_;
   int output_buffer_alignment_;
   bool initialized_ = false;
+  std::vector<uint8_t> codec_desc_;
 
   // We can't produce output until at least `kMinSamplesForOutput` have been
   // provided. Until then, `output_cb_` will not be run.
@@ -208,8 +207,7 @@ class MEDIA_GPU_EXPORT MFAudioEncoder : public AudioEncoder {
       EncoderState::kIdle;
   base::circular_deque<InputData> input_queue_
       GUARDED_BY_CONTEXT(sequence_checker_);
-  Microsoft::WRL::ComPtr<IMFSample> output_sample_
-      GUARDED_BY_CONTEXT(sequence_checker_);
+  ComMFSample output_sample_ GUARDED_BY_CONTEXT(sequence_checker_);
   std::unique_ptr<AudioTimestampHelper> input_timestamp_tracker_
       GUARDED_BY_CONTEXT(sequence_checker_);
   std::unique_ptr<AudioTimestampHelper> output_timestamp_tracker_

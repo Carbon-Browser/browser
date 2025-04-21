@@ -1,17 +1,19 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "chromeos/components/onc/onc_validator.h"
 
 #include <stddef.h>
 #include <stdint.h>
 
+#include <optional>
+#include <string_view>
+
 #include "base/json/json_reader.h"
 #include "base/logging.h"
-#include "base/strings/string_piece.h"
 #include "base/values.h"
 #include "chromeos/components/onc/onc_signature.h"
-#include "chromeos/components/onc/onc_validator.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace chromeos {
 namespace onc {
@@ -22,7 +24,7 @@ namespace {
 struct Environment {
   Environment() {
     // Prevent spamming stdout with ONC validation errors.
-    logging::SetMinLogLevel(logging::LOG_FATAL);
+    logging::SetMinLogLevel(logging::LOGGING_FATAL);
   }
 };
 
@@ -32,8 +34,8 @@ struct Environment {
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
   static Environment env;
 
-  absl::optional<base::Value> parsed_json = base::JSONReader::Read(
-      base::StringPiece(reinterpret_cast<const char*>(data), size));
+  std::optional<base::Value> parsed_json = base::JSONReader::Read(
+      std::string_view(reinterpret_cast<const char*>(data), size));
   if (!parsed_json || !parsed_json->is_dict())
     return 0;
 
@@ -46,7 +48,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
               error_on_missing_field, managed_onc, /*log_warnings=*/false);
           Validator::Result validation_result;
           validator.ValidateAndRepairObject(&kNetworkConfigurationSignature,
-                                            *parsed_json, &validation_result);
+                                            parsed_json->GetDict(),
+                                            &validation_result);
         }
       }
     }

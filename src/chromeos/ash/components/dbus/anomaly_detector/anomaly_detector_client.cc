@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "chromeos/ash/components/dbus/anomaly_detector/fake_anomaly_detector_client.h"
 #include "dbus/bus.h"
@@ -89,7 +90,7 @@ class AnomalyDetectorClientImpl : public AnomalyDetectorClient {
     }
   }
 
-  dbus::ObjectProxy* anomaly_detector_proxy_ = nullptr;
+  raw_ptr<dbus::ObjectProxy> anomaly_detector_proxy_ = nullptr;
 
   base::ObserverList<Observer> observer_list_;
 

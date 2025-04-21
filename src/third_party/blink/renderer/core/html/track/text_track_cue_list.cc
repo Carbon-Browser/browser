@@ -65,7 +65,7 @@ bool TextTrackCueList::Add(TextTrackCue* cue) {
   wtf_size_t index = FindInsertionIndex(cue);
 
   // FIXME: The cue should not exist in the list in the first place.
-  if (!list_.IsEmpty() && (index > 0) && (list_[index - 1].Get() == cue))
+  if (!list_.empty() && (index > 0) && (list_[index - 1].Get() == cue))
     return false;
 
   list_.insert(index, cue);
@@ -83,7 +83,7 @@ static bool CueIsBefore(const TextTrackCue* cue, TextTrackCue* other_cue) {
 
 wtf_size_t TextTrackCueList::FindInsertionIndex(
     const TextTrackCue* cue_to_insert) const {
-  auto* it =
+  auto it =
       std::upper_bound(list_.begin(), list_.end(), cue_to_insert, CueIsBefore);
   wtf_size_t index = base::checked_cast<wtf_size_t>(it - list_.begin());
   SECURITY_DCHECK(index <= list_.size());
@@ -102,7 +102,7 @@ bool TextTrackCueList::Remove(TextTrackCue* cue) {
 }
 
 void TextTrackCueList::RemoveAll() {
-  if (list_.IsEmpty())
+  if (list_.empty())
     return;
 
   first_invalid_index_ = 0;

@@ -1,17 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 GEN_INCLUDE(['dictation_test_base.js']);
 
 DictationFocusHandlerTest = class extends DictationE2ETestBase {
-  /** @override */
-  async setUpDeferred() {
-    await super.setUpDeferred();
-    await importModule(
-        'FocusHandler', '/accessibility_common/dictation/focus_handler.js');
-  }
-
   /** @return {!FocusHandler} */
   getFocusHandler() {
     return accessibilityCommon.dictation_.focusHandler_;
@@ -29,13 +22,24 @@ DictationFocusHandlerTest = class extends DictationE2ETestBase {
    * @return {!Promise}
    */
   async waitForFocusHandlerActive(active) {
-    return new Promise(resolve => {
-      const intervalId = setInterval(() => {
-        if (this.getFocusHandler().active_ === active) {
-          clearInterval(intervalId);
+    const focusHandler = this.getFocusHandler();
+    const activeOk = () => {
+      return focusHandler.active_ === active;
+    };
+
+    if (activeOk()) {
+      return;
+    }
+
+    await new Promise(resolve => {
+      const onActiveChanged = () => {
+        if (activeOk()) {
+          focusHandler.onActiveChangedForTesting_ = null;
           resolve();
         }
-      }, 100);
+      };
+
+      focusHandler.onActiveChangedForTesting_ = onActiveChanged;
     });
   }
 
@@ -44,13 +48,24 @@ DictationFocusHandlerTest = class extends DictationE2ETestBase {
    * @return {!Promise}
    */
   async waitForFocus(target) {
-    return new Promise(resolve => {
-      const intervalId = setInterval(() => {
-        if (this.getFocusHandler().editableNode_ === target) {
-          clearInterval(intervalId);
+    const focusHandler = this.getFocusHandler();
+    const isTargetFocused = () => {
+      return focusHandler.editableNode_ === target;
+    };
+
+    if (isTargetFocused()) {
+      return;
+    }
+
+    await new Promise(resolve => {
+      const onFocusChanged = () => {
+        if (isTargetFocused()) {
+          focusHandler.onFocusChangedForTesting_ = null;
           resolve();
         }
-      }, 100);
+      };
+
+      focusHandler.onFocusChangedForTesting_ = onFocusChanged;
     });
   }
 

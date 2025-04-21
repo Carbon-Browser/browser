@@ -48,13 +48,6 @@ class CORE_EXPORT SharedWorkerThread : public WorkerThread {
   WorkerBackingThread& GetWorkerBackingThread() override {
     return *worker_backing_thread_;
   }
-  void ClearWorkerBackingThread() override;
-
-  // TODO(https://crbug.com/780031): Remove this once shared workers always use
-  // `GlobalScopeCreationParams::starter_secure_context` instead.
-  void SetIsConstructorOriginSecure(bool is_constructor_origin_secure) {
-    is_constructor_origin_secure_ = is_constructor_origin_secure;
-  }
 
  private:
   WorkerOrWorkletGlobalScope* CreateWorkerGlobalScope(
@@ -66,7 +59,6 @@ class CORE_EXPORT SharedWorkerThread : public WorkerThread {
 
   std::unique_ptr<WorkerBackingThread> worker_backing_thread_;
   const SharedWorkerToken token_;
-  bool is_constructor_origin_secure_ = false;
 };
 
 }  // namespace blink

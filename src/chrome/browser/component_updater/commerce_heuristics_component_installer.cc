@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,10 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/task/thread_pool.h"
 #include "components/commerce/core/commerce_heuristics_data.h"
@@ -66,8 +66,9 @@ base::FilePath GetCommerceCartExtractionScriptInstalledPath(
 
 void LoadHeuristicFilesFromDisk(const base::Version& version,
                                 const base::FilePath& install_dir) {
-  if (install_dir.empty())
+  if (install_dir.empty()) {
     return;
+  }
 
   const base::FilePath& commerce_hint_file_path =
       GetCommerceHintHeuristicsInstalledPath(install_dir);
@@ -137,7 +138,7 @@ bool CommerceHeuristicsInstallerPolicy::RequiresNetworkEncryption() const {
 
 update_client::CrxInstaller::Result
 CommerceHeuristicsInstallerPolicy::OnCustomInstall(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) {
   return update_client::CrxInstaller::Result(0);  // Nothing custom here.
 }
@@ -147,7 +148,7 @@ void CommerceHeuristicsInstallerPolicy::OnCustomUninstall() {}
 void CommerceHeuristicsInstallerPolicy::ComponentReady(
     const base::Version& version,
     const base::FilePath& install_dir,
-    base::Value manifest) {
+    base::Value::Dict manifest) {
   VLOG(1) << "Component ready, version " << version.GetString() << " in "
           << install_dir.value();
 
@@ -158,7 +159,7 @@ void CommerceHeuristicsInstallerPolicy::ComponentReady(
 
 // Called during startup and installation before ComponentReady().
 bool CommerceHeuristicsInstallerPolicy::VerifyInstallation(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     const base::FilePath& install_dir) const {
   return base::PathExists(
              GetCommerceGlobalHeuristicsInstalledPath(install_dir)) &&
@@ -188,10 +189,9 @@ CommerceHeuristicsInstallerPolicy::GetInstallerAttributes() const {
 void RegisterCommerceHeuristicsComponent(
     component_updater::ComponentUpdateService* cus) {
 #if !BUILDFLAG(IS_ANDROID)
-  if (IsCartModuleEnabled()) {
-#else
-  if (base::FeatureList::IsEnabled(commerce::kCommerceHintAndroid)) {
+  if (IsCartModuleEnabled())
 #endif
+  {
     VLOG(1) << "Registering Commerce Heuristics component.";
     auto installer = base::MakeRefCounted<ComponentInstaller>(
         std::make_unique<CommerceHeuristicsInstallerPolicy>());

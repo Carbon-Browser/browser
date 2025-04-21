@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,11 @@
 #define EXTENSIONS_BROWSER_API_DIAGNOSTICS_DIAGNOSTICS_API_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "extensions/browser/extension_function.h"
 #include "extensions/common/api/diagnostics.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace extensions {
 
@@ -27,7 +27,7 @@ class DiagnosticsSendPacketFunction : public ExtensionFunction {
   ResponseAction Run() override;
 
  private:
-  void OnTestICMPCompleted(absl::optional<std::string> status);
+  void OnTestICMPCompleted(std::optional<std::string> status);
 };
 
 }  // namespace extensions

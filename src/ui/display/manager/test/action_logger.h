@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,7 @@
 
 #include <string>
 
-namespace display {
-namespace test {
+namespace display::test {
 
 class ActionLogger {
  public:
@@ -30,7 +29,6 @@ class ActionLogger {
   std::string actions_;
 };
 
-}  // namespace test
-}  // namespace display
+}  // namespace display::test
 
 #endif  // UI_DISPLAY_MANAGER_TEST_ACTION_LOGGER_H_

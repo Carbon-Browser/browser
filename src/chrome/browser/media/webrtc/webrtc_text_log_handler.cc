@@ -1,25 +1,33 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/media/webrtc/webrtc_text_log_handler.h"
 
 #include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check_op.h"
 #include "base/cpu.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/i18n/time_formatting.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/notreached.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/system/sys_info.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -53,7 +61,7 @@
 #endif
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chromeos/system/statistics_provider.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #endif
 
 using base::NumberToString;
@@ -73,14 +81,11 @@ std::string Format(const std::string& message,
                    base::Time start_time) {
   int32_t interval_ms =
       static_cast<int32_t>((timestamp - start_time).InMilliseconds());
-  // Log start time (current time). We don't use base/i18n/time_formatting.h
-  // here because we don't want the format of the current locale.
-  base::Time::Exploded now = {0};
-  base::Time::Now().LocalExplode(&now);
-  return base::StringPrintf("[%03d:%03d, %02d:%02d:%02d.%03d] %s",
-                            interval_ms / 1000, interval_ms % 1000, now.hour,
-                            now.minute, now.second, now.millisecond,
-                            message.c_str());
+  // Log start time (current time).
+  const std::string now =
+      base::UnlocalizedTimeFormatWithPattern(base::Time::Now(), "HH:mm:ss.SSS");
+  return base::StringPrintf("[%03d:%03d, %s] %s", interval_ms / 1000,
+                            interval_ms % 1000, now.c_str(), message.c_str());
 }
 
 std::string FormatMetaDataAsLogMessage(const WebRtcLogMetaDataMap& meta_data) {
@@ -128,6 +133,21 @@ std::string IPAddressToSensitiveString(const net::IPAddress& address) {
 #else
   return address.ToString();
 #endif
+}
+
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+enum class StartError {
+  kRendererClosing = 0,
+  kLogAlreadyOpen = 1,
+  kApplyForStartFailed = 2,
+  kCancelled = 3,
+  kRendererClosingInStartDone = 4,
+  kMaxValue = kRendererClosingInStartDone,
+};
+
+void RecordStartError(StartError error) {
+  base::UmaHistogramEnumeration("WebRtcTextLogging.StartError", error);
 }
 
 }  // namespace
@@ -188,27 +208,31 @@ void WebRtcTextLogHandler::SetMetaData(
   FireGenericDoneCallback(std::move(callback), true, "");
 }
 
-bool WebRtcTextLogHandler::StartLogging(WebRtcLogUploader* log_uploader,
-                                        GenericDoneCallback callback) {
+bool WebRtcTextLogHandler::StartLogging(GenericDoneCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!callback.is_null());
+  base::UmaHistogramBoolean("WebRtcTextLogging.StartCalled", true);
 
   if (channel_is_closing_) {
     FireGenericDoneCallback(std::move(callback), false,
                             "The renderer is closing.");
+    RecordStartError(StartError::kRendererClosing);
     return false;
   }
 
   if (logging_state_ != CLOSED) {
     FireGenericDoneCallback(std::move(callback), false,
                             "A log is already open.");
+    RecordStartError(StartError::kLogAlreadyOpen);
     return false;
   }
 
+  WebRtcLogUploader* log_uploader = WebRtcLogUploader::GetInstance();
   if (!log_uploader->ApplyForStartLogging()) {
     FireGenericDoneCallback(std::move(callback), false,
                             "Cannot start, maybe the maximum number of "
                             "simultaneuos logs has been reached.");
+    RecordStartError(StartError::kApplyForStartFailed);
     return false;
   }
 
@@ -233,12 +257,13 @@ void WebRtcTextLogHandler::StartDone(GenericDoneCallback callback) {
   if (channel_is_closing_) {
     FireGenericDoneCallback(std::move(callback), false,
                             "Failed to start log. Renderer is closing.");
+    RecordStartError(StartError::kRendererClosingInStartDone);
     return;
   }
 
   DCHECK_EQ(STARTING, logging_state_);
 
-  base::UmaHistogramSparse("WebRtcTextLogging.Start", web_app_id_);
+  base::UmaHistogramSparse("WebRtcTextLogging.Started", web_app_id_);
 
   logging_started_time_ = base::Time::Now();
   logging_state_ = STARTED;
@@ -324,7 +349,7 @@ void WebRtcTextLogHandler::ReleaseLog(
 
   // Checking log_buffer_ here due to seeing some crashes out in the wild.
   // See crbug/699960 for more details.
-  // TODO(crbug/807547): Remove if condition.
+  // TODO(crbug.com/41368009): Remove if condition.
   if (log_buffer_) {
     log_buffer_->SetComplete();
     *log_buffer = std::move(log_buffer_);
@@ -379,7 +404,7 @@ void WebRtcTextLogHandler::FireGenericDoneCallback(
 
   if (error_message.empty()) {
     DCHECK(success);
-    base::SequencedTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(std::move(callback), success, error_message));
     return;
   }
@@ -401,14 +426,13 @@ void WebRtcTextLogHandler::FireGenericDoneCallback(
         return "stopped";
     }
     NOTREACHED();
-    return "";
   };
 
   std::string error_message_with_state =
       base::StrCat({error_message, ". State=", state_string(), ". Channel is ",
                     channel_is_closing_ ? "" : "not ", "closing."});
 
-  base::SequencedTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), success, error_message_with_state));
 }
@@ -420,7 +444,7 @@ void WebRtcTextLogHandler::SetWebAppId(int web_app_id) {
 
 void WebRtcTextLogHandler::OnGetNetworkInterfaceList(
     GenericDoneCallback callback,
-    const absl::optional<net::NetworkInterfaceList>& networks) {
+    const std::optional<net::NetworkInterfaceList>& networks) {
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   // Hop to a background thread to get the distro string, which can block.
   base::ThreadPool::PostTaskAndReplyWithResult(
@@ -435,22 +459,19 @@ void WebRtcTextLogHandler::OnGetNetworkInterfaceList(
 
 void WebRtcTextLogHandler::OnGetNetworkInterfaceListFinish(
     GenericDoneCallback callback,
-    const absl::optional<net::NetworkInterfaceList>& networks,
+    const std::optional<net::NetworkInterfaceList>& networks,
     const std::string& linux_distro) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (logging_state_ != STARTING || channel_is_closing_) {
     FireGenericDoneCallback(std::move(callback), false, "Logging cancelled.");
+    RecordStartError(StartError::kCancelled);
     return;
   }
 
-  // Log start time (current time). We don't use base/i18n/time_formatting.h
-  // here because we don't want the format of the current locale.
-  base::Time::Exploded now = {0};
-  base::Time::Now().LocalExplode(&now);
-  LogToCircularBuffer(base::StringPrintf("Start %d-%02d-%02d %02d:%02d:%02d",
-                                         now.year, now.month, now.day_of_month,
-                                         now.hour, now.minute, now.second));
+  // Log start time (current time).
+  LogToCircularBuffer(base::UnlocalizedTimeFormatWithPattern(
+      base::Time::Now(), "'Start 'y-MM-dd HH:mm:ss"));
 
   // Write metadata if received before logging started.
   if (meta_data_ && !meta_data_->empty()) {
@@ -459,9 +480,9 @@ void WebRtcTextLogHandler::OnGetNetworkInterfaceListFinish(
   }
 
   // Chrome version
-  LogToCircularBuffer("Chrome version: " + version_info::GetVersionNumber() +
-                      " " +
-                      chrome::GetChannelName(chrome::WithExtendedStable(true)));
+  LogToCircularBuffer(
+      base::StrCat({"Chrome version: ", version_info::GetVersionNumber(), " ",
+                    chrome::GetChannelName(chrome::WithExtendedStable(true))}));
 
   // OS
   LogToCircularBuffer(base::SysInfo::OperatingSystemName() + " " +
@@ -483,10 +504,13 @@ void WebRtcTextLogHandler::OnGetNetworkInterfaceListFinish(
   // Computer model
   std::string computer_model = "Not available";
 #if BUILDFLAG(IS_MAC)
-  computer_model = base::mac::GetModelIdentifier();
+  computer_model = base::SysInfo::HardwareModelName();
 #elif BUILDFLAG(IS_CHROMEOS_ASH)
-  chromeos::system::StatisticsProvider::GetInstance()->GetMachineStatistic(
-      chromeos::system::kHardwareClassKey, &computer_model);
+  if (const std::optional<std::string_view> computer_model_statistic =
+          ash::system::StatisticsProvider::GetInstance()->GetMachineStatistic(
+              ash::system::kHardwareClassKey)) {
+    computer_model = std::string(computer_model_statistic.value());
+  }
 #endif
   LogToCircularBuffer("Computer model: " + computer_model);
 
@@ -521,21 +545,10 @@ void WebRtcTextLogHandler::OnGetNetworkInterfaceListFinish(
        enabled_or_disabled_bool_string(IsAudioServiceSandboxEnabled())}));
 
 #if BUILDFLAG(CHROME_WIDE_ECHO_CANCELLATION)
-  if (media::IsChromeWideEchoCancellationEnabled()) {
-    LogToCircularBuffer(base::StrCat(
-        {"ChromeWideEchoCancellation : Enabled", ", processing_fifo_size = ",
-         NumberToString(
-             media::kChromeWideEchoCancellationProcessingFifoSize.Get()),
-         ", minimize_resampling = ",
-         media::kChromeWideEchoCancellationMinimizeResampling.Get() ? "true"
-                                                                    : "false",
-         ", allow_all_sample_rates = ",
-         media::kChromeWideEchoCancellationAllowAllSampleRates.Get()
-             ? "true"
-             : "false"}));
-  } else {
-    LogToCircularBuffer("ChromeWideEchoCancellation : Disabled");
-  }
+  LogToCircularBuffer(
+      base::StrCat({"ChromeWideEchoCancellation : ",
+                    enabled_or_disabled_bool_string(
+                        media::IsChromeWideEchoCancellationEnabled())}));
 #endif
 
   // Audio manager
@@ -572,10 +585,11 @@ void WebRtcTextLogHandler::OnGetNetworkInterfaceListFinish(
 
   // TODO(darin): Change SetLogMessageCallback to run on the UI thread.
 
-  auto log_message_callback = base::BindRepeating(
-      &ForwardMessageViaTaskRunner, base::SequencedTaskRunnerHandle::Get(),
-      base::BindRepeating(&WebRtcTextLogHandler::LogMessage,
-                          weak_factory_.GetWeakPtr()));
+  auto log_message_callback =
+      base::BindRepeating(&ForwardMessageViaTaskRunner,
+                          base::SequencedTaskRunner::GetCurrentDefault(),
+                          base::BindRepeating(&WebRtcTextLogHandler::LogMessage,
+                                              weak_factory_.GetWeakPtr()));
   content::GetIOThreadTaskRunner({})->PostTask(
       FROM_HERE,
       base::BindOnce(&content::WebRtcLog::SetLogMessageCallback,

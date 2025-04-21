@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,30 +7,31 @@
  * dialog for viewing and erasing credentials stored on a security key.
  */
 
-import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
-import 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
-import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
+import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
+import 'chrome://resources/cr_elements/cr_input/cr_input.js';
+import 'chrome://resources/cr_elements/cr_page_selector/cr_page_selector.js';
+import 'chrome://resources/cr_elements/cr_spinner_style.css.js';
 import 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
-import 'chrome://resources/polymer/v3_0/iron-pages/iron-pages.js';
-import 'chrome://resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
 import '../settings_shared.css.js';
 import '../site_favicon.js';
 import '../i18n_setup.js';
 import './security_keys_pin_field.js';
 
-import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import {CrIconButtonElement} from 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
-import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
-import {assert, assertNotReached} from 'chrome://resources/js/assert_ts.js';
-import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
-import {WebUIListenerMixin} from 'chrome://resources/js/web_ui_listener_mixin.js';
-import {IronListElement} from 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
+import type {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import type {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import type {CrIconButtonElement} from 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.js';
+import type {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
+import {WebUiListenerMixin} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js';
+import {assert, assertNotReached} from 'chrome://resources/js/assert.js';
+import type {IronListElement} from 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {Credential, SecurityKeysCredentialBrowserProxy, SecurityKeysCredentialBrowserProxyImpl, StartCredentialManagementResponse} from './security_keys_browser_proxy.js';
+import type {Credential, SecurityKeysCredentialBrowserProxy, StartCredentialManagementResponse} from './security_keys_browser_proxy.js';
+import {SecurityKeysCredentialBrowserProxyImpl} from './security_keys_browser_proxy.js';
 import {getTemplate} from './security_keys_credential_management_dialog.html.js';
-import {SettingsSecurityKeysPinFieldElement} from './security_keys_pin_field.js';
+import type {SettingsSecurityKeysPinFieldElement} from './security_keys_pin_field.js';
 
 export enum CredentialManagementDialogPage {
   INITIAL = 'initial',
@@ -59,7 +60,7 @@ export interface SettingsSecurityKeysCredentialManagementDialogElement {
 }
 
 const SettingsSecurityKeysCredentialManagementDialogElementBase =
-    WebUIListenerMixin(I18nMixin(PolymerElement));
+    WebUiListenerMixin(I18nMixin(PolymerElement));
 
 const MAX_INPUT_LENGTH: number = 62;
 
@@ -142,7 +143,7 @@ export class SettingsSecurityKeysCredentialManagementDialogElement extends
     super.connectedCallback();
 
     this.$.dialog.showModal();
-    this.addWebUIListener(
+    this.addWebUiListener(
         'security-keys-credential-management-finished',
         (error: string, requiresPINChange = false) =>
             this.onPinError_(error, requiresPINChange));
@@ -165,11 +166,11 @@ export class SettingsSecurityKeysCredentialManagementDialogElement extends
     this.dialogPage_ = CredentialManagementDialogPage.ERROR;
   }
 
-  private submitPIN_() {
+  private submitPin_() {
     // Disable the confirm button to prevent concurrent submissions.
     this.confirmButtonDisabled_ = true;
 
-    this.$.pin.trySubmit(pin => this.browserProxy_.providePIN(pin))
+    this.$.pin.trySubmit(pin => this.browserProxy_.providePin(pin))
         .then(
             () => {
               // Leave confirm button disabled while enumerating credentials.
@@ -263,7 +264,7 @@ export class SettingsSecurityKeysCredentialManagementDialogElement extends
   private onConfirmButtonClick_() {
     switch (this.dialogPage_) {
       case CredentialManagementDialogPage.PIN_PROMPT:
-        this.submitPIN_();
+        this.submitPin_();
         break;
       case CredentialManagementDialogPage.PIN_ERROR:
         this.$.dialog.close();
@@ -321,6 +322,9 @@ export class SettingsSecurityKeysCredentialManagementDialogElement extends
     // Prevent this event from bubbling since it is unnecessarily triggering
     // the listener within settings-animated-pages.
     e.stopPropagation();
+
+    // Asynchronously notify the iron-list of the possible resize.
+    setTimeout(() => this.$.credentialList.notifyResize(), 0);
   }
 
   private onDeleteButtonClick_(e: Event) {

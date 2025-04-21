@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <limits>
 
 #include "base/check_op.h"
-#include "ui/gfx/geometry/angle_conversions.h"
+#include "base/numerics/angle_conversions.h"
 #include "ui/gfx/geometry/point3_f.h"
 #include "ui/gfx/geometry/point_f.h"
 #include "ui/gfx/geometry/transform.h"
@@ -31,12 +31,11 @@ float QuadraticEquation(bool use_plus, float a, float b, float c) {
 float AngleOfPointInNewCoordinates(const gfx::PointF& origin,
                                    const gfx::Vector2dF& direction,
                                    const gfx::PointF& point) {
-  double angle_degrees = gfx::RadToDeg(atan2(direction.y(), direction.x()));
+  double angle_degrees = base::RadToDeg(atan2(direction.y(), direction.x()));
   gfx::Transform transform;
   transform.Rotate(-angle_degrees);
   transform.Translate(-origin.x(), -origin.y());
-  gfx::Point3F point_to_transform(point.x(), point.y(), 0.0f);
-  transform.TransformPoint(&point_to_transform);
+  gfx::PointF point_to_transform = transform.MapPoint(point);
   return atan2(point_to_transform.y(), point_to_transform.x());
 }
 

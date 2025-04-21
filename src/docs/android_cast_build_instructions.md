@@ -13,8 +13,8 @@ Are you a Google employee? See
 
 ## System requirements
 
-* A 64-bit Intel machine running Linux with at least 8GB of RAM. More
-  than 16GB is highly recommended.
+* An x86-64 machine running Linux with at least 8GB of RAM. More than 16GB is
+  highly recommended.
 * At least 100GB of free disk space.
 * You must have Git and Python installed already.
 
@@ -91,7 +91,7 @@ $ gclient sync
 Once you have checked out the code, run
 
 ```shell
-$ build/install-build-deps-android.sh
+$ build/install-build-deps.sh --android
 ```
 
 to get all of the dependencies you need to build on Linux, *plus* all of the
@@ -139,18 +139,40 @@ $ gn gen --args='target_os="android" is_cast_android=true' out/Default
 Also be aware that some scripts (e.g. `tombstones.py`, `adb_gdb.py`)
 require you to set `CHROMIUM_OUTPUT_DIR=out/Default`.
 
+### Faster builds
+
+This section contains some things you can change to speed up your builds,
+sorted so that the things that make the biggest difference are first.
+
+#### Use Reclient
+
+*** note
+**Warning:** If you are a Google employee, do not follow the instructions below.
+See
+[go/building-android-chrome#initialize-remote-execution-distributed-builds](https://goto.google.com/building-android-chrome#initialize-remote-execution-distributed-builds)
+instead.
+***
+
+Chromium's build can be sped up significantly by using a remote execution system
+compatible with [REAPI](https://github.com/bazelbuild/remote-apis). This allows
+you to benefit from remote caching and executing many build actions in parallel
+on a shared cluster of workers.
+
+To use Reclient, follow the corresponding
+[Linux build instructions](linux/build_instructions.md#use-reclient).
+
 ## Build cast\_shell\_apk
 
-Build `cast_shell_apk` with Ninja using the command:
+Build `cast_browser_apk` with Ninja using the command:
 
 ```shell
-$ autoninja -C out/Default cast_shell_apk
+$ autoninja -C out/Default cast_browser_apk
 ```
 
 (`autoninja` is a wrapper that automatically provides optimal values for the
 arguments passed to `ninja`.)
 
-## Installing and Running `cast_shell_apk` on a device
+## Installing and Running `cast_browser_apk` on a device
 
 ### Plug in your Android device
 
@@ -179,15 +201,15 @@ unplugging and reattaching your device.
 ### Build the APK
 
 ```shell
-autoninja -C out/Release cast_shell_apk
+autoninja -C out/Release cast_browser_apk
 ```
 
 And deploy it to your Android device:
 
 ```shell
-out/Default/bin/cast_shell_apk install
+out/Default/bin/cast_browser_apk install
 # Or to install and run:
-out/Default/bin/cast_shell_apk run "http://google.com"
+out/Default/bin/cast_browser_apk run "http://google.com"
 ```
 
 The app will appear on the device as "Chromium".

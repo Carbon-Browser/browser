@@ -1,10 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/offline_pages/core/background/mark_attempt_aborted_task.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 
 namespace offline_pages {
 
@@ -14,7 +14,7 @@ MarkAttemptAbortedTask::MarkAttemptAbortedTask(
     RequestQueueStore::UpdateCallback callback)
     : UpdateRequestTask(store, request_id, std::move(callback)) {}
 
-MarkAttemptAbortedTask::~MarkAttemptAbortedTask() {}
+MarkAttemptAbortedTask::~MarkAttemptAbortedTask() = default;
 
 void MarkAttemptAbortedTask::UpdateRequestImpl(
     UpdateRequestsResult read_result) {

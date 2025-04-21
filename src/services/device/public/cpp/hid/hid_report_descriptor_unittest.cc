@@ -1,4 +1,4 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,10 @@
 #include <unordered_map>
 #include <utility>
 
-#include "services/device/hid/test_report_descriptors.h"
 #include "services/device/public/cpp/hid/hid_report_descriptor.h"
-#include "services/device/public/cpp/hid/hid_usage_and_page.h"
+#include "services/device/public/cpp/hid/hid_report_type.h"
+#include "services/device/public/cpp/hid/hid_report_utils.h"
+#include "services/device/public/cpp/test/test_report_descriptors.h"
 #include "services/device/public/mojom/hid.mojom.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -469,7 +470,9 @@ class HidReportDescriptorTest : public testing::Test {
 TEST_F(HidReportDescriptorTest, ValidateDetails_Digitizer) {
   auto digitizer = HidCollectionInfo::New();
   digitizer->usage = HidUsageAndPage::New(0x01, mojom::kPageDigitizer);
-  ASSERT_FALSE(IsAlwaysProtected(*digitizer->usage));
+  ASSERT_FALSE(IsAlwaysProtected(*digitizer->usage, HidReportType::kInput));
+  ASSERT_FALSE(IsAlwaysProtected(*digitizer->usage, HidReportType::kOutput));
+  ASSERT_FALSE(IsAlwaysProtected(*digitizer->usage, HidReportType::kFeature));
   digitizer->report_ids = {0x01, 0x02, 0x03};
   AddTopCollectionInfo(std::move(digitizer));
   ValidateDetails(true, 6, 0, 0, TestReportDescriptors::Digitizer());
@@ -538,7 +541,9 @@ TEST_F(HidReportDescriptorTest, ValidateDetails_Keyboard) {
   auto keyboard = HidCollectionInfo::New();
   keyboard->usage = HidUsageAndPage::New(mojom::kGenericDesktopKeyboard,
                                          mojom::kPageGenericDesktop);
-  ASSERT_TRUE(IsAlwaysProtected(*keyboard->usage));
+  ASSERT_TRUE(IsAlwaysProtected(*keyboard->usage, HidReportType::kInput));
+  ASSERT_TRUE(IsAlwaysProtected(*keyboard->usage, HidReportType::kOutput));
+  ASSERT_FALSE(IsAlwaysProtected(*keyboard->usage, HidReportType::kFeature));
   AddTopCollectionInfo(std::move(keyboard));
   ValidateDetails(false, 8, 1, 0, TestReportDescriptors::Keyboard());
 }
@@ -567,7 +572,9 @@ TEST_F(HidReportDescriptorTest, ValidateCollections_Keyboard) {
 TEST_F(HidReportDescriptorTest, ValidateDetails_Monitor) {
   auto monitor = HidCollectionInfo::New();
   monitor->usage = HidUsageAndPage::New(0x01, mojom::kPageMonitor0);
-  ASSERT_FALSE(IsAlwaysProtected(*monitor->usage));
+  ASSERT_FALSE(IsAlwaysProtected(*monitor->usage, HidReportType::kInput));
+  ASSERT_FALSE(IsAlwaysProtected(*monitor->usage, HidReportType::kOutput));
+  ASSERT_FALSE(IsAlwaysProtected(*monitor->usage, HidReportType::kFeature));
   monitor->report_ids = {0x01, 0x02, 0x03, 0x04, 0x05};
   AddTopCollectionInfo(std::move(monitor));
   ValidateDetails(true, 0, 0, 243, TestReportDescriptors::Monitor());
@@ -611,7 +618,9 @@ TEST_F(HidReportDescriptorTest, ValidateDetails_Mouse) {
   auto mouse = HidCollectionInfo::New();
   mouse->usage = HidUsageAndPage::New(mojom::kGenericDesktopMouse,
                                       mojom::kPageGenericDesktop);
-  ASSERT_TRUE(IsAlwaysProtected(*mouse->usage));
+  ASSERT_TRUE(IsAlwaysProtected(*mouse->usage, HidReportType::kInput));
+  ASSERT_TRUE(IsAlwaysProtected(*mouse->usage, HidReportType::kOutput));
+  ASSERT_FALSE(IsAlwaysProtected(*mouse->usage, HidReportType::kFeature));
   AddTopCollectionInfo(std::move(mouse));
   ValidateDetails(false, 3, 0, 0, TestReportDescriptors::Mouse());
 }
@@ -637,15 +646,21 @@ TEST_F(HidReportDescriptorTest, ValidateCollections_Mouse) {
 TEST_F(HidReportDescriptorTest, ValidateDetails_LogitechUnifyingReceiver) {
   auto hidpp_short = HidCollectionInfo::New();
   hidpp_short->usage = HidUsageAndPage::New(0x01, mojom::kPageVendor);
-  ASSERT_FALSE(IsAlwaysProtected(*hidpp_short->usage));
+  ASSERT_FALSE(IsAlwaysProtected(*hidpp_short->usage, HidReportType::kInput));
+  ASSERT_FALSE(IsAlwaysProtected(*hidpp_short->usage, HidReportType::kOutput));
+  ASSERT_FALSE(IsAlwaysProtected(*hidpp_short->usage, HidReportType::kFeature));
   hidpp_short->report_ids = {0x10};
   auto hidpp_long = HidCollectionInfo::New();
   hidpp_long->usage = HidUsageAndPage::New(0x02, mojom::kPageVendor);
-  ASSERT_FALSE(IsAlwaysProtected(*hidpp_long->usage));
+  ASSERT_FALSE(IsAlwaysProtected(*hidpp_long->usage, HidReportType::kInput));
+  ASSERT_FALSE(IsAlwaysProtected(*hidpp_long->usage, HidReportType::kOutput));
+  ASSERT_FALSE(IsAlwaysProtected(*hidpp_long->usage, HidReportType::kFeature));
   hidpp_long->report_ids = {0x11};
   auto hidpp_dj = HidCollectionInfo::New();
   hidpp_dj->usage = HidUsageAndPage::New(0x04, mojom::kPageVendor);
-  ASSERT_FALSE(IsAlwaysProtected(*hidpp_dj->usage));
+  ASSERT_FALSE(IsAlwaysProtected(*hidpp_dj->usage, HidReportType::kInput));
+  ASSERT_FALSE(IsAlwaysProtected(*hidpp_dj->usage, HidReportType::kOutput));
+  ASSERT_FALSE(IsAlwaysProtected(*hidpp_dj->usage, HidReportType::kFeature));
   hidpp_dj->report_ids = {0x20, 0x21};
   AddTopCollectionInfo(std::move(hidpp_short));
   AddTopCollectionInfo(std::move(hidpp_long));
@@ -693,7 +708,9 @@ TEST_F(HidReportDescriptorTest, ValidateDetails_SonyDualshock3) {
   auto top_info = HidCollectionInfo::New();
   top_info->usage = HidUsageAndPage::New(mojom::kGenericDesktopJoystick,
                                          mojom::kPageGenericDesktop);
-  ASSERT_FALSE(IsAlwaysProtected(*top_info->usage));
+  ASSERT_FALSE(IsAlwaysProtected(*top_info->usage, HidReportType::kInput));
+  ASSERT_FALSE(IsAlwaysProtected(*top_info->usage, HidReportType::kOutput));
+  ASSERT_FALSE(IsAlwaysProtected(*top_info->usage, HidReportType::kFeature));
   top_info->report_ids = {0x01, 0x02, 0xee, 0xef};
   AddTopCollectionInfo(std::move(top_info));
   ValidateDetails(true, 48, 48, 48, TestReportDescriptors::SonyDualshock3Usb());
@@ -750,7 +767,9 @@ TEST_F(HidReportDescriptorTest, ValidateDetails_SonyDualshock4) {
   auto top_info = HidCollectionInfo::New();
   top_info->usage = HidUsageAndPage::New(mojom::kGenericDesktopGamePad,
                                          mojom::kPageGenericDesktop);
-  ASSERT_FALSE(IsAlwaysProtected(*top_info->usage));
+  ASSERT_FALSE(IsAlwaysProtected(*top_info->usage, HidReportType::kInput));
+  ASSERT_FALSE(IsAlwaysProtected(*top_info->usage, HidReportType::kOutput));
+  ASSERT_FALSE(IsAlwaysProtected(*top_info->usage, HidReportType::kFeature));
   top_info->report_ids = {0x01, 0x05, 0x04, 0x02, 0x08, 0x10, 0x11, 0x12, 0x13,
                           0x14, 0x15, 0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86,
                           0x87, 0x88, 0x89, 0x90, 0x91, 0x92, 0x93, 0xa0, 0xa1,
@@ -918,7 +937,9 @@ TEST_F(HidReportDescriptorTest, ValidateDetails_XboxWirelessController) {
   auto top_info = HidCollectionInfo::New();
   top_info->usage = HidUsageAndPage::New(mojom::kGenericDesktopGamePad,
                                          mojom::kPageGenericDesktop);
-  ASSERT_FALSE(IsAlwaysProtected(*top_info->usage));
+  ASSERT_FALSE(IsAlwaysProtected(*top_info->usage, HidReportType::kInput));
+  ASSERT_FALSE(IsAlwaysProtected(*top_info->usage, HidReportType::kOutput));
+  ASSERT_FALSE(IsAlwaysProtected(*top_info->usage, HidReportType::kFeature));
   top_info->report_ids = {0x01, 0x02, 0x03, 0x04};
   AddTopCollectionInfo(std::move(top_info));
   ValidateDetails(
@@ -1012,7 +1033,9 @@ TEST_F(HidReportDescriptorTest, ValidateDetails_NintendoSwitchProController) {
   auto top_info = HidCollectionInfo::New();
   top_info->usage = HidUsageAndPage::New(mojom::kGenericDesktopJoystick,
                                          mojom::kPageGenericDesktop);
-  ASSERT_FALSE(IsAlwaysProtected(*top_info->usage));
+  ASSERT_FALSE(IsAlwaysProtected(*top_info->usage, HidReportType::kInput));
+  ASSERT_FALSE(IsAlwaysProtected(*top_info->usage, HidReportType::kOutput));
+  ASSERT_FALSE(IsAlwaysProtected(*top_info->usage, HidReportType::kFeature));
   top_info->report_ids = {0x30, 0x21, 0x81, 0x01, 0x10, 0x80, 0x82};
   AddTopCollectionInfo(std::move(top_info));
   ValidateDetails(true, 63, 63, 0,
@@ -1072,13 +1095,19 @@ TEST_F(HidReportDescriptorTest, ValidateDetails_XboxAdaptiveController) {
   auto gamepad_info = HidCollectionInfo::New();
   gamepad_info->usage = HidUsageAndPage::New(mojom::kGenericDesktopGamePad,
                                              mojom::kPageGenericDesktop);
-  ASSERT_FALSE(IsAlwaysProtected(*gamepad_info->usage));
+  ASSERT_FALSE(IsAlwaysProtected(*gamepad_info->usage, HidReportType::kInput));
+  ASSERT_FALSE(IsAlwaysProtected(*gamepad_info->usage, HidReportType::kOutput));
+  ASSERT_FALSE(
+      IsAlwaysProtected(*gamepad_info->usage, HidReportType::kFeature));
   gamepad_info->report_ids = {0x01, 0x02, 0x03, 0x04, 0x06,
                               0x07, 0x08, 0x09, 0x0a, 0x0b};
   auto keyboard_info = HidCollectionInfo::New();
   keyboard_info->usage = HidUsageAndPage::New(mojom::kGenericDesktopKeyboard,
                                               mojom::kPageGenericDesktop);
-  ASSERT_TRUE(IsAlwaysProtected(*keyboard_info->usage));
+  ASSERT_TRUE(IsAlwaysProtected(*keyboard_info->usage, HidReportType::kInput));
+  ASSERT_TRUE(IsAlwaysProtected(*keyboard_info->usage, HidReportType::kOutput));
+  ASSERT_FALSE(
+      IsAlwaysProtected(*keyboard_info->usage, HidReportType::kFeature));
   keyboard_info->report_ids = {0x05};
   AddTopCollectionInfo(std::move(gamepad_info));
   AddTopCollectionInfo(std::move(keyboard_info));
@@ -1368,12 +1397,17 @@ TEST_F(HidReportDescriptorTest, ValidateDetails_NexusPlayerController) {
   auto gamepad_info = HidCollectionInfo::New();
   gamepad_info->usage = HidUsageAndPage::New(mojom::kGenericDesktopGamePad,
                                              mojom::kPageGenericDesktop);
-  ASSERT_FALSE(IsAlwaysProtected(*gamepad_info->usage));
+  ASSERT_FALSE(IsAlwaysProtected(*gamepad_info->usage, HidReportType::kInput));
+  ASSERT_FALSE(IsAlwaysProtected(*gamepad_info->usage, HidReportType::kOutput));
+  ASSERT_FALSE(
+      IsAlwaysProtected(*gamepad_info->usage, HidReportType::kFeature));
   gamepad_info->report_ids = {0x01, 0x02};
   auto status_info = HidCollectionInfo::New();
   status_info->usage = HidUsageAndPage::New(mojom::kGenericDesktopGamePad,
                                             mojom::kPageGenericDesktop);
-  ASSERT_FALSE(IsAlwaysProtected(*status_info->usage));
+  ASSERT_FALSE(IsAlwaysProtected(*status_info->usage, HidReportType::kInput));
+  ASSERT_FALSE(IsAlwaysProtected(*status_info->usage, HidReportType::kOutput));
+  ASSERT_FALSE(IsAlwaysProtected(*status_info->usage, HidReportType::kFeature));
   status_info->report_ids = {0x03};
   AddTopCollectionInfo(std::move(gamepad_info));
   AddTopCollectionInfo(std::move(status_info));
@@ -1432,7 +1466,9 @@ TEST_F(HidReportDescriptorTest, ValidateDetails_SteamControllerKeyboard) {
   auto info = HidCollectionInfo::New();
   info->usage = HidUsageAndPage::New(mojom::kGenericDesktopKeyboard,
                                      mojom::kPageGenericDesktop);
-  ASSERT_TRUE(IsAlwaysProtected(*info->usage));
+  ASSERT_TRUE(IsAlwaysProtected(*info->usage, HidReportType::kInput));
+  ASSERT_TRUE(IsAlwaysProtected(*info->usage, HidReportType::kOutput));
+  ASSERT_FALSE(IsAlwaysProtected(*info->usage, HidReportType::kFeature));
   AddTopCollectionInfo(std::move(info));
   ValidateDetails(false, 8, 1, 0,
                   TestReportDescriptors::SteamControllerKeyboard());
@@ -1463,7 +1499,9 @@ TEST_F(HidReportDescriptorTest, ValidateDetails_SteamControllerMouse) {
   auto info = HidCollectionInfo::New();
   info->usage = HidUsageAndPage::New(mojom::kGenericDesktopMouse,
                                      mojom::kPageGenericDesktop);
-  ASSERT_TRUE(IsAlwaysProtected(*info->usage));
+  ASSERT_TRUE(IsAlwaysProtected(*info->usage, HidReportType::kInput));
+  ASSERT_TRUE(IsAlwaysProtected(*info->usage, HidReportType::kOutput));
+  ASSERT_FALSE(IsAlwaysProtected(*info->usage, HidReportType::kFeature));
   AddTopCollectionInfo(std::move(info));
   ValidateDetails(false, 4, 0, 0,
                   TestReportDescriptors::SteamControllerMouse());
@@ -1491,7 +1529,9 @@ TEST_F(HidReportDescriptorTest, ValidateCollections_SteamControllerMouse) {
 TEST_F(HidReportDescriptorTest, ValidateDetails_SteamControllerVendor) {
   auto info = HidCollectionInfo::New();
   info->usage = HidUsageAndPage::New(0x01, mojom::kPageVendor);
-  ASSERT_FALSE(IsAlwaysProtected(*info->usage));
+  ASSERT_FALSE(IsAlwaysProtected(*info->usage, HidReportType::kInput));
+  ASSERT_FALSE(IsAlwaysProtected(*info->usage, HidReportType::kOutput));
+  ASSERT_FALSE(IsAlwaysProtected(*info->usage, HidReportType::kFeature));
   AddTopCollectionInfo(std::move(info));
   ValidateDetails(false, 64, 64, 64,
                   TestReportDescriptors::SteamControllerVendor());
@@ -1511,7 +1551,9 @@ TEST_F(HidReportDescriptorTest, ValidateDetails_XSkillsUsbAdapter) {
   auto info = HidCollectionInfo::New();
   info->usage = HidUsageAndPage::New(mojom::kGenericDesktopJoystick,
                                      mojom::kPageGenericDesktop);
-  ASSERT_FALSE(IsAlwaysProtected(*info->usage));
+  ASSERT_FALSE(IsAlwaysProtected(*info->usage, HidReportType::kInput));
+  ASSERT_FALSE(IsAlwaysProtected(*info->usage, HidReportType::kOutput));
+  ASSERT_FALSE(IsAlwaysProtected(*info->usage, HidReportType::kFeature));
   AddTopCollectionInfo(std::move(info));
   ValidateDetails(false, 7, 4, 0, TestReportDescriptors::XSkillsUsbAdapter());
 }
@@ -1544,7 +1586,9 @@ TEST_F(HidReportDescriptorTest, ValidateDetails_BelkinNostromoKeyboard) {
   auto info = HidCollectionInfo::New();
   info->usage = HidUsageAndPage::New(mojom::kGenericDesktopKeyboard,
                                      mojom::kPageGenericDesktop);
-  ASSERT_TRUE(IsAlwaysProtected(*info->usage));
+  ASSERT_TRUE(IsAlwaysProtected(*info->usage, HidReportType::kInput));
+  ASSERT_TRUE(IsAlwaysProtected(*info->usage, HidReportType::kOutput));
+  ASSERT_FALSE(IsAlwaysProtected(*info->usage, HidReportType::kFeature));
   AddTopCollectionInfo(std::move(info));
   ValidateDetails(false, 8, 0, 0,
                   TestReportDescriptors::BelkinNostromoKeyboard());
@@ -1570,7 +1614,9 @@ TEST_F(HidReportDescriptorTest, ValidateDetails_BelkinNostromoMouseAndExtra) {
   auto info = HidCollectionInfo::New();
   info->usage = HidUsageAndPage::New(mojom::kGenericDesktopMouse,
                                      mojom::kPageGenericDesktop);
-  ASSERT_TRUE(IsAlwaysProtected(*info->usage));
+  ASSERT_TRUE(IsAlwaysProtected(*info->usage, HidReportType::kInput));
+  ASSERT_TRUE(IsAlwaysProtected(*info->usage, HidReportType::kOutput));
+  ASSERT_FALSE(IsAlwaysProtected(*info->usage, HidReportType::kFeature));
   AddTopCollectionInfo(std::move(info));
   ValidateDetails(false, 4, 1, 0,
                   TestReportDescriptors::BelkinNostromoMouseAndExtra());
@@ -1605,15 +1651,26 @@ TEST_F(HidReportDescriptorTest,
 TEST_F(HidReportDescriptorTest, ValidateDetails_JabraLink380c) {
   auto telephony_info = HidCollectionInfo::New();
   telephony_info->usage = HidUsageAndPage::New(0x05, mojom::kPageTelephony);
-  ASSERT_FALSE(IsAlwaysProtected(*telephony_info->usage));
+  ASSERT_FALSE(
+      IsAlwaysProtected(*telephony_info->usage, HidReportType::kInput));
+  ASSERT_FALSE(
+      IsAlwaysProtected(*telephony_info->usage, HidReportType::kOutput));
+  ASSERT_FALSE(
+      IsAlwaysProtected(*telephony_info->usage, HidReportType::kFeature));
   telephony_info->report_ids = {0x02};
   auto vendor_info = HidCollectionInfo::New();
   vendor_info->usage = HidUsageAndPage::New(0x01, mojom::kPageVendor);
-  ASSERT_FALSE(IsAlwaysProtected(*vendor_info->usage));
+  ASSERT_FALSE(IsAlwaysProtected(*vendor_info->usage, HidReportType::kInput));
+  ASSERT_FALSE(IsAlwaysProtected(*vendor_info->usage, HidReportType::kOutput));
+  ASSERT_FALSE(IsAlwaysProtected(*vendor_info->usage, HidReportType::kFeature));
   vendor_info->report_ids = {0x05, 0x04};
   auto consumer_info = HidCollectionInfo::New();
   consumer_info->usage = HidUsageAndPage::New(0x01, mojom::kPageConsumer);
-  ASSERT_FALSE(IsAlwaysProtected(*consumer_info->usage));
+  ASSERT_FALSE(IsAlwaysProtected(*consumer_info->usage, HidReportType::kInput));
+  ASSERT_FALSE(
+      IsAlwaysProtected(*consumer_info->usage, HidReportType::kOutput));
+  ASSERT_FALSE(
+      IsAlwaysProtected(*consumer_info->usage, HidReportType::kFeature));
   consumer_info->report_ids = {0x01};
   AddTopCollectionInfo(std::move(telephony_info));
   AddTopCollectionInfo(std::move(vendor_info));
@@ -1717,27 +1774,28 @@ TEST_F(HidReportDescriptorTest, ValidateCollections_JabraLink380c) {
   ValidateCollections(TestReportDescriptors::JabraLink380c());
 }
 
-TEST_F(HidReportDescriptorTest, InvalidReportSizeIgnored) {
-  // Report size can be at most 32 bits. Make sure a report item with invalid
-  // size does not affect the maximum report size. The descriptor below
-  // describes a report with one 64-bit constant field.
+TEST_F(HidReportDescriptorTest, InvalidReportSizePermitted) {
+  // Report size can be at most 32 bits. However, some devices specify larger
+  // sizes. Make sure an invalid report is still reflected in the maximum
+  // report size. The descriptor below describes a report with one 128-bit
+  // constant field.
   static const uint8_t kInvalidReportSizeDescriptor[] = {
       0xA0,        // Collection
       0x95, 0x01,  //   Report Count (1)
-      0x75, 0x40,  //   Report Size (64)
+      0x75, 0x80,  //   Report Size (128)
       0x90         //   Output
   };
-  auto report_descriptor_data = base::make_span(kInvalidReportSizeDescriptor);
+  auto report_descriptor_data = base::span(kInvalidReportSizeDescriptor);
   auto info = HidCollectionInfo::New();
   info->usage = HidUsageAndPage::New(0, 0);
   AddTopCollectionInfo(std::move(info));
-  // Maximum report sizes should not be affected by the invalid report item.
-  ValidateDetails(false, 0, 0, 0, report_descriptor_data);
+  // Maximum report sizes should include the invalid report.
+  ValidateDetails(false, 0, 16, 0, report_descriptor_data);
 
   // The report item with invalid size should still be included in the
   // collection info.
   auto* top = AddTopCollection(0, kCollectionTypePhysical);
-  SetReportSizeAndCount(64, 1);
+  SetReportSizeAndCount(128, 1);
   AddReportConstant(top, kOutput, kNonNullableArray);
   ValidateCollections(report_descriptor_data);
 }
@@ -1752,8 +1810,7 @@ TEST_F(HidReportDescriptorTest, ReasonablyHugeReportNotIgnored) {
       0x75, 0x08,        //   Report Size (8)
       0x90               //   Output
   };
-  auto report_descriptor_data =
-      base::make_span(kReasonablyHugeReportDescriptor);
+  auto report_descriptor_data = base::span(kReasonablyHugeReportDescriptor);
   auto info = HidCollectionInfo::New();
   info->usage = HidUsageAndPage::New(0, 0);
   AddTopCollectionInfo(std::move(info));
@@ -1776,8 +1833,7 @@ TEST_F(HidReportDescriptorTest, UnreasonablyHugeReportIgnored) {
       0x75, 0x08,                    //   Report Size (8)
       0x90                           //   Output
   };
-  auto report_descriptor_data =
-      base::make_span(kUnreasonablyHugeReportDescriptor);
+  auto report_descriptor_data = base::span(kUnreasonablyHugeReportDescriptor);
   auto info = HidCollectionInfo::New();
   info->usage = HidUsageAndPage::New(0, 0);
   AddTopCollectionInfo(std::move(info));
@@ -1807,7 +1863,7 @@ TEST_F(HidReportDescriptorTest, HighlyNestedReportLimitsDepth) {
       0x75, 0x08,  // Report Size (8)
       0x90         // Output
   };
-  auto report_descriptor_data = base::make_span(kHighlyNestedReportDescriptor);
+  auto report_descriptor_data = base::span(kHighlyNestedReportDescriptor);
   auto info = HidCollectionInfo::New();
   info->usage = HidUsageAndPage::New(0, 0);
   AddTopCollectionInfo(std::move(info));
@@ -1846,7 +1902,7 @@ TEST_F(HidReportDescriptorTest, ExtraEndCollectionIgnored) {
   auto* parent = AddTopCollection(0, kCollectionTypePhysical);
   for (size_t i = 1; i < 50; ++i)
     parent = AddChild(parent, 0, kCollectionTypePhysical);
-  ValidateCollections(base::make_span(kExtraEndCollectionDescriptor));
+  ValidateCollections(base::span(kExtraEndCollectionDescriptor));
 }
 
 TEST_F(HidReportDescriptorTest, ZeroByteLogicalMinMax) {
@@ -1871,7 +1927,7 @@ TEST_F(HidReportDescriptorTest, ZeroByteLogicalMinMax) {
   SetReportSizeAndCount(8, 1);
   SetLogicalAndPhysicalBounds(0, 0, 0, 0);
   AddReportItem(top, kInput, kAbsoluteVariable, {kUsageGenericDesktopX});
-  ValidateCollections(base::make_span(kZeroByteLogicalMinMaxDescriptor));
+  ValidateCollections(base::span(kZeroByteLogicalMinMaxDescriptor));
 }
 
 TEST_F(HidReportDescriptorTest, OneByteLogicalMinMax) {
@@ -1896,7 +1952,7 @@ TEST_F(HidReportDescriptorTest, OneByteLogicalMinMax) {
   SetReportSizeAndCount(8, 1);
   SetLogicalAndPhysicalBounds(-127, 127, -127, 127);
   AddReportItem(top, kInput, kAbsoluteVariable, {kUsageGenericDesktopX});
-  ValidateCollections(base::make_span(kOneByteLogicalMinMaxDescriptor));
+  ValidateCollections(base::span(kOneByteLogicalMinMaxDescriptor));
 }
 
 TEST_F(HidReportDescriptorTest, TwoByteLogicalMinMax) {
@@ -1921,7 +1977,7 @@ TEST_F(HidReportDescriptorTest, TwoByteLogicalMinMax) {
   SetReportSizeAndCount(16, 1);
   SetLogicalAndPhysicalBounds(-32767, 32767, -32767, 32767);
   AddReportItem(top, kInput, kAbsoluteVariable, {kUsageGenericDesktopX});
-  ValidateCollections(base::make_span(kTwoByteLogicalMinMaxDescriptor));
+  ValidateCollections(base::span(kTwoByteLogicalMinMaxDescriptor));
 }
 
 TEST_F(HidReportDescriptorTest, FourByteLogicalMinMax) {
@@ -1946,7 +2002,7 @@ TEST_F(HidReportDescriptorTest, FourByteLogicalMinMax) {
   SetReportSizeAndCount(32, 1);
   SetLogicalAndPhysicalBounds(-2147483647, 2147483647, -2147483647, 2147483647);
   AddReportItem(top, kInput, kAbsoluteVariable, {kUsageGenericDesktopX});
-  ValidateCollections(base::make_span(kFourByteLogicalMinMaxDescriptor));
+  ValidateCollections(base::span(kFourByteLogicalMinMaxDescriptor));
 }
 
 }  // namespace device

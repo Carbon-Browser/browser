@@ -18,31 +18,29 @@
 #include "components/adblock/core/common/adblock_prefs.h"
 
 #include "base/logging.h"
-#include "components/adblock/core/common/allowed_connection_type.h"
 #include "components/prefs/pref_registry_simple.h"
 
-namespace adblock::prefs {
+namespace adblock::common::prefs {
 
-// Whether to block ads
-const char kEnableAdblock[] = "adblock.enable";
+// Legacy: Whether to block ads
+const char kEnableAdblockLegacy[] = "adblock.enable";
 
-// Whether to allow acceptable ads or block them all
-const char kEnableAcceptableAds[] = "adblock.aa_enable";
+// Legacy: Whether to allow acceptable ads or block them all.
+// Used now just to map CLI switch. Otherwise use kAdblockSubscriptionsLegacy.
+const char kEnableAcceptableAdsLegacy[] = "adblock.aa_enable";
 
-// List of domains ad blocking will be disabled for
-const char kAdblockAllowedDomains[] = "adblock.allowed_domains";
+// Legacy: List of domains ad blocking will be disabled for
+const char kAdblockAllowedDomainsLegacy[] = "adblock.allowed_domains";
 
-// List of custom filters added explicitly by the user
-const char kAdblockCustomFilters[] = "adblock.custom_filters";
+// Legacy: List of custom filters added explicitly by the user
+const char kAdblockCustomFiltersLegacy[] = "adblock.custom_filters";
 
-// List of recommended subscriptions
-const char kAdblockSubscriptions[] = "adblock.subscriptions";
+// Legacy: List of recommended subscriptions
+const char kAdblockSubscriptionsLegacy[] = "adblock.subscriptions";
 
-// List of custom (user defined) subscriptions
-const char kAdblockCustomSubscriptions[] = "adblock.custom_subscriptions";
-
-// Connection type allowed to be used for updates
-const char kAdblockAllowedConnectionType[] = "adblock.allowed_connection_type";
+// Legacy: List of custom (user defined) subscriptions.
+// Use just kAdblockSubscriptionsLegacy.
+const char kAdblockCustomSubscriptionsLegacy[] = "adblock.custom_subscriptions";
 
 // Whether more options item is enabled in the UI
 const char kAdblockMoreOptionsEnabled[] = "adblock.more_options";
@@ -96,32 +94,74 @@ const char kTelemetryFirstPingTime[] =
 const char kTelemetryNextPingTime[] =
     "adblock.telemetry.activeping.next_ping_time";
 
+// FilteringConfiguration data
+const char kConfigurationsPrefsPath[] = "filtering.configurations";
+
+// Last time recommended subscriptions were updated
+const char kEnableAutoInstalledSubscriptions[] =
+    "adblock.auto_installed_subscriptions.enable";
+
+// Last time recommended subscriptions were updated
+const char kAutoInstalledSubscriptionsNextUpdateTime[] =
+    "adblock.auto_installed_subscriptions.last_update_time";
+
+// Dict containing stats about acceptable ads page views
+const char kTelemetryPageViewStats[] = "adblock.telemetry.page_view_stats";
+
 void RegisterTelemetryPrefs(PrefRegistrySimple* registry) {
   registry->RegisterStringPref(kTelemetryLastPingTag, "");
   registry->RegisterStringPref(kTelemetryLastPingTime, "");
   registry->RegisterStringPref(kTelemetryPreviousLastPingTime, "");
   registry->RegisterStringPref(kTelemetryFirstPingTime, "");
   registry->RegisterTimePref(kTelemetryNextPingTime, base::Time());
+  registry->RegisterDictionaryPref(kTelemetryPageViewStats);
 }
 
 void RegisterProfilePrefs(PrefRegistrySimple* registry) {
-  registry->RegisterBooleanPref(kEnableAdblock, true);
-  registry->RegisterBooleanPref(kEnableAcceptableAds, true);
+  registry->RegisterBooleanPref(kEnableAdblockLegacy, true);
+  registry->RegisterBooleanPref(kEnableAcceptableAdsLegacy, true);
   registry->RegisterBooleanPref(kAdblockMoreOptionsEnabled, false);
-  registry->RegisterListPref(kAdblockAllowedDomains, {});
-  registry->RegisterListPref(kAdblockCustomFilters, {});
-  registry->RegisterListPref(kAdblockSubscriptions, {});
-  registry->RegisterListPref(kAdblockCustomSubscriptions, {});
-  registry->RegisterStringPref(
-      kAdblockAllowedConnectionType,
-      AllowedConnectionTypeToString(AllowedConnectionType::kDefault));
+  registry->RegisterListPref(kAdblockAllowedDomainsLegacy, {});
+  registry->RegisterListPref(kAdblockCustomFiltersLegacy, {});
+  registry->RegisterListPref(kAdblockSubscriptionsLegacy, {});
+  registry->RegisterListPref(kAdblockCustomSubscriptionsLegacy, {});
   registry->RegisterBooleanPref(kInstallFirstStartSubscriptions, true);
   registry->RegisterDictionaryPref(kSubscriptionSignatures);
   registry->RegisterStringPref(kLastUsedSchemaVersion, "");
   registry->RegisterDictionaryPref(kSubscriptionMetadata);
+  registry->RegisterDictionaryPref(kConfigurationsPrefsPath);
+  registry->RegisterBooleanPref(kEnableAutoInstalledSubscriptions, true);
+  // Set to |now| so the first update happens ASAP
+  registry->RegisterTimePref(kAutoInstalledSubscriptionsNextUpdateTime,
+                             base::Time::Now());
   RegisterTelemetryPrefs(registry);
 
   VLOG(3) << "[eyeo] Registered prefs";
 }
 
-}  // namespace adblock::prefs
+std::vector<std::string_view> GetPrefs() {
+  static std::vector<std::string_view> prefs = {
+      kEnableAdblockLegacy,
+      kEnableAcceptableAdsLegacy,
+      kAdblockMoreOptionsEnabled,
+      kAdblockAllowedDomainsLegacy,
+      kAdblockCustomFiltersLegacy,
+      kAdblockSubscriptionsLegacy,
+      kAdblockCustomSubscriptionsLegacy,
+      kInstallFirstStartSubscriptions,
+      kSubscriptionSignatures,
+      kLastUsedSchemaVersion,
+      kSubscriptionMetadata,
+      kTelemetryLastPingTag,
+      kTelemetryLastPingTime,
+      kTelemetryPreviousLastPingTime,
+      kTelemetryFirstPingTime,
+      kTelemetryNextPingTime,
+      kTelemetryPageViewStats,
+      kConfigurationsPrefsPath,
+      kEnableAutoInstalledSubscriptions,
+      kAutoInstalledSubscriptionsNextUpdateTime};
+  return prefs;
+}
+
+}  // namespace adblock::common::prefs

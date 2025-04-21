@@ -42,22 +42,19 @@ namespace blink {
 
 RTCSessionDescriptionRequestImpl* RTCSessionDescriptionRequestImpl::Create(
     ExecutionContext* context,
-    RTCCreateSessionDescriptionOperation operation,
     RTCPeerConnection* requester,
     V8RTCSessionDescriptionCallback* success_callback,
     V8RTCPeerConnectionErrorCallback* error_callback) {
   return MakeGarbageCollected<RTCSessionDescriptionRequestImpl>(
-      context, operation, requester, success_callback, error_callback);
+      context, requester, success_callback, error_callback);
 }
 
 RTCSessionDescriptionRequestImpl::RTCSessionDescriptionRequestImpl(
     ExecutionContext* context,
-    RTCCreateSessionDescriptionOperation operation,
     RTCPeerConnection* requester,
     V8RTCSessionDescriptionCallback* success_callback,
     V8RTCPeerConnectionErrorCallback* error_callback)
     : ExecutionContextLifecycleObserver(context),
-      operation_(operation),
       success_callback_(success_callback),
       error_callback_(error_callback),
       requester_(requester) {
@@ -71,15 +68,13 @@ void RTCSessionDescriptionRequestImpl::RequestSucceeded(
   bool should_fire_callback =
       requester_ ? requester_->ShouldFireDefaultCallbacks() : false;
   if (should_fire_callback && success_callback_) {
-    requester_->NoteSessionDescriptionRequestCompleted(operation_, true);
     RTCSessionDescriptionInit* description =
         RTCSessionDescriptionInit::Create();
     if (description_platform->GetType())
       description->setType(description_platform->GetType());
     description->setSdp(description_platform->Sdp());
 
-    requester_->NoteSdpCreated(
-        *RTCSessionDescription::Create(description_platform));
+    requester_->NoteSdpCreated(*description);
     success_callback_->InvokeAndReportException(nullptr, description);
   }
   Clear();
@@ -90,7 +85,6 @@ void RTCSessionDescriptionRequestImpl::RequestFailed(
   bool should_fire_callback =
       requester_ ? requester_->ShouldFireDefaultCallbacks() : false;
   if (should_fire_callback && error_callback_) {
-    requester_->NoteSessionDescriptionRequestCompleted(operation_, false);
     error_callback_->InvokeAndReportException(
         nullptr, CreateDOMExceptionFromRTCError(error));
   }

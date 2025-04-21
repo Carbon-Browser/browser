@@ -1,16 +1,19 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "mojo/public/cpp/system/message_pipe.h"
 
 #include <stddef.h>
 #include <stdint.h>
 
+#include <array>
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/perf_time_logger.h"
 #include "base/threading/thread.h"
@@ -19,7 +22,6 @@
 #include "mojo/core/test/mojo_test_base.h"
 #include "mojo/core/test/test_utils.h"
 #include "mojo/public/c/system/functions.h"
-#include "mojo/public/cpp/system/message_pipe.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace mojo {
@@ -79,8 +81,8 @@ class MessagePipePerfTest : public test::MojoTestBase {
  protected:
   void RunPingPongServer(MojoHandle mp) {
     // This values are set to align with one at ipc_pertests.cc for comparison.
-    const size_t kMsgSize[5] = {12, 144, 1728, 20736, 248832};
-    const int kMessageCount[5] = {50000, 50000, 50000, 12000, 1000};
+    const std::array<size_t, 5> kMsgSize = {12, 144, 1728, 20736, 248832};
+    const std::array<int, 5> kMessageCount = {50000, 50000, 50000, 12000, 1000};
 
     for (size_t i = 0; i < 5; i++) {
       SetUpMeasurement(kMessageCount[i], kMsgSize[i]);

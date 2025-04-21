@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,10 @@
 
 #include <algorithm>
 #include <utility>
+#include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/rand_util.h"
 #include "base/stl_util.h"
 #include "base/strings/sys_string_conversions.h"
@@ -19,6 +20,7 @@
 #include "components/search_engines/template_url.h"
 #include "components/search_engines/template_url_service.h"
 #include "net/base/net_errors.h"
+#include "net/base/url_util.h"
 #include "net/http/http_status_code.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/public/cpp/resource_request.h"
@@ -37,10 +39,14 @@ StartSuggestService::StartSuggestService(
     TemplateURLService* template_url_service,
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     std::unique_ptr<AutocompleteSchemeClassifier> scheme_classifier,
+    const std::string& application_country,
+    const std::string& application_locale,
     const GURL& request_initiator_url)
     : template_url_service_(template_url_service),
       url_loader_factory_(url_loader_factory),
       scheme_classifier_(std::move(scheme_classifier)),
+      application_country_(application_country),
+      application_locale_(application_locale),
       request_initiator_url_(request_initiator_url),
       search_provider_observer_(std::make_unique<SearchProviderObserver>(
           template_url_service_,
@@ -128,19 +134,35 @@ void StartSuggestService::SearchProviderChanged() {
 
 GURL StartSuggestService::GetRequestURL(
     const TemplateURLRef::SearchTermsArgs& search_terms_args) {
+  const TemplateURL* default_provider =
+      template_url_service_->GetDefaultSearchProvider();
+  DCHECK(default_provider);
   const TemplateURLRef& suggestion_url_ref =
-      template_url_service_->GetDefaultSearchProvider()->suggestions_url_ref();
+      default_provider->suggestions_url_ref();
   const SearchTermsData& search_terms_data =
       template_url_service_->search_terms_data();
   DCHECK(suggestion_url_ref.SupportsReplacement(search_terms_data));
-  return GURL(suggestion_url_ref.ReplaceSearchTerms(search_terms_args,
-                                                    search_terms_data));
+  GURL url = GURL(suggestion_url_ref.ReplaceSearchTerms(search_terms_args,
+                                                        search_terms_data));
+  if (!application_country_.empty()) {
+    // Trending Queries are country-based, so passing this helps determine
+    // locale.
+    url = net::AppendQueryParameter(url, "gl", application_country_);
+  }
+  if (!application_locale_.empty()) {
+    // Language is also used in addition to country to rank suggestions,
+    // ensuring that there can be separate ranks for different languages in the
+    // same country (i.e. fr-ca and en-ca.
+    url = net::AppendQueryParameter(url, "hl", application_locale_);
+  }
+  return url;
 }
 
 GURL StartSuggestService::GetQueryDestinationURL(
     const std::u16string& query,
     const TemplateURL* search_provider) {
   TemplateURLRef::SearchTermsArgs search_terms_args(query);
+  DCHECK(search_provider);
   const TemplateURLRef& search_url_ref = search_provider->url_ref();
   const SearchTermsData& search_terms_data =
       template_url_service_->search_terms_data();
@@ -160,7 +182,7 @@ void StartSuggestService::SuggestResponseLoaded(
   // Ensure the request succeeded and that the provider used is still available.
   // A verbatim match cannot be generated without this provider, causing errors.
   const bool request_succeeded = response && loader->NetError() == net::OK;
-  base::EraseIf(loaders_, [loader](const auto& loader_ptr) {
+  std::erase_if(loaders_, [loader](const auto& loader_ptr) {
     return loader == loader_ptr.get();
   });
   if (!request_succeeded) {
@@ -182,28 +204,27 @@ void StartSuggestService::SuggestResponseLoaded(
 void StartSuggestService::SuggestionsParsed(
     SuggestResultCallback callback,
     data_decoder::DataDecoder::ValueOrError result) {
-  if (!result.has_value()) {
-    std::move(callback).Run(QuerySuggestions());
-    return;
-  }
-
-  SearchSuggestionParser::Results results;
-  AutocompleteInput input;
-  const bool results_parsed = SearchSuggestionParser::ParseSuggestResults(
-      *result, input, *scheme_classifier_, -1, false, &results);
-  if (!results_parsed) {
-    std::move(callback).Run(QuerySuggestions());
-    return;
-  }
-  QuerySuggestions query_suggestions;
-  for (SearchSuggestionParser::SuggestResult suggest :
-       results.suggest_results) {
-    QuerySuggestion query;
-    query.query = suggest.suggestion();
-    query.destination_url = GetQueryDestinationURL(
-        query.query, template_url_service_->GetDefaultSearchProvider());
-    query_suggestions.push_back(query);
-  }
-  suggestions_cache_[kTrendingQuerySuggestionCachedResults] = query_suggestions;
-  std::move(callback).Run(std::move(query_suggestions));
+  std::move(callback).Run([&] {
+    QuerySuggestions query_suggestions;
+    if (result.has_value() && result.value().is_list()) {
+      SearchSuggestionParser::Results results;
+      AutocompleteInput input;
+      if (SearchSuggestionParser::ParseSuggestResults(
+              result->GetList(), input, *scheme_classifier_,
+              /*default_result_relevance=*/-1, /*is_keyword_result=*/false,
+              &results)) {
+        for (SearchSuggestionParser::SuggestResult suggest :
+             results.suggest_results) {
+          QuerySuggestion query;
+          query.query = suggest.suggestion();
+          query.destination_url = GetQueryDestinationURL(
+              query.query, template_url_service_->GetDefaultSearchProvider());
+          query_suggestions.push_back(std::move(query));
+        }
+        suggestions_cache_[kTrendingQuerySuggestionCachedResults] =
+            query_suggestions;
+      }
+    }
+    return query_suggestions;
+  }());
 }

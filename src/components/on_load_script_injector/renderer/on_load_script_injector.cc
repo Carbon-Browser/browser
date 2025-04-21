@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "content/public/renderer/render_frame.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_registry.h"
@@ -16,12 +16,14 @@ namespace on_load_script_injector {
 
 OnLoadScriptInjector::OnLoadScriptInjector(content::RenderFrame* frame)
     : RenderFrameObserver(frame), weak_ptr_factory_(this) {
-  render_frame()->GetAssociatedInterfaceRegistry()->AddInterface(
-      base::BindRepeating(&OnLoadScriptInjector::BindToReceiver,
-                          weak_ptr_factory_.GetWeakPtr()));
+  render_frame()
+      ->GetAssociatedInterfaceRegistry()
+      ->AddInterface<mojom::OnLoadScriptInjector>(
+          base::BindRepeating(&OnLoadScriptInjector::BindToReceiver,
+                              weak_ptr_factory_.GetWeakPtr()));
 }
 
-OnLoadScriptInjector::~OnLoadScriptInjector() {}
+OnLoadScriptInjector::~OnLoadScriptInjector() = default;
 
 void OnLoadScriptInjector::BindToReceiver(
     mojo::PendingAssociatedReceiver<mojom::OnLoadScriptInjector> receiver) {

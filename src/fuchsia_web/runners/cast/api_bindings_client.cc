@@ -1,14 +1,15 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "fuchsia_web/runners/cast/api_bindings_client.h"
 
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/fuchsia/fuchsia_logging.h"
-#include "base/strings/string_piece.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "components/cast/message_port/fuchsia/message_port_fuchsia.h"
 
 namespace {
@@ -51,13 +52,17 @@ void ApiBindingsClient::AttachToFrame(
   DCHECK(!frame_) << "AttachToFrame() was called twice.";
   DCHECK(frame);
   DCHECK(connector);
-  DCHECK(bindings_)
-      << "AttachToFrame() was called before bindings were received.";
 
   if (!bindings_service_) {
-    std::move(on_error_callback).Run();
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+        FROM_HERE, base::BindOnce(&ApiBindingsClient::CallOnErrorCallback,
+                                  weak_ptr_factory_.GetWeakPtr(),
+                                  std::move(on_error_callback)));
     return;
   }
+
+  DCHECK(bindings_)
+      << "AttachToFrame() was called before bindings were received.";
 
   connector_ = connector;
   frame_ = frame;
@@ -95,7 +100,7 @@ bool ApiBindingsClient::HasBindings() const {
 }
 
 bool ApiBindingsClient::OnPortConnected(
-    base::StringPiece port_name,
+    std::string_view port_name,
     std::unique_ptr<cast_api_bindings::MessagePort> port) {
   if (!bindings_service_)
     return false;
@@ -112,4 +117,9 @@ void ApiBindingsClient::OnBindingsReceived(
   bindings_ = std::move(bindings);
   bindings_service_.set_error_handler(nullptr);
   std::move(on_initialization_complete_).Run();
+}
+
+void ApiBindingsClient::CallOnErrorCallback(
+    base::OnceClosure on_error_callback) {
+  std::move(on_error_callback).Run();
 }

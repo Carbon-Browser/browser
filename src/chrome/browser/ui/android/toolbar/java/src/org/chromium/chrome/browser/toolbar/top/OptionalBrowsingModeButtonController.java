@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@ import org.chromium.base.supplier.Supplier;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.toolbar.ButtonData;
 import org.chromium.chrome.browser.toolbar.ButtonDataProvider;
+import org.chromium.chrome.browser.toolbar.adaptive.AdaptiveToolbarButtonVariant;
 import org.chromium.chrome.browser.user_education.UserEducationHelper;
 
 import java.util.HashMap;
@@ -35,8 +36,10 @@ public class OptionalBrowsingModeButtonController {
      * @param userEducationHelper Helper for displaying in-product help on a button.
      * @param toolbarLayout Toolbar layout where buttons will be displayed.
      */
-    OptionalBrowsingModeButtonController(List<ButtonDataProvider> buttonDataProviders,
-            UserEducationHelper userEducationHelper, ToolbarLayout toolbarLayout,
+    OptionalBrowsingModeButtonController(
+            List<ButtonDataProvider> buttonDataProviders,
+            UserEducationHelper userEducationHelper,
+            ToolbarLayout toolbarLayout,
             Supplier<Tab> tabSupplier) {
         mButtonDataProviders = buttonDataProviders;
         mUserEducationHelper = userEducationHelper;
@@ -60,8 +63,27 @@ public class OptionalBrowsingModeButtonController {
         mObserverMap.clear();
     }
 
+    /**
+     * Gets the {@link AdaptiveToolbarButtonVariant} of the currently shown button. {@code
+     * AdaptiveToolbarButtonVariant.NONE} is returned if there's no visible button.
+     * @return A value from {@link AdaptiveToolbarButtonVariant}.
+     */
+    public @AdaptiveToolbarButtonVariant int getCurrentButtonVariant() {
+        if (mCurrentProvider == null || mTabSupplier == null) {
+            return AdaptiveToolbarButtonVariant.NONE;
+        }
+
+        ButtonData currentButton = mCurrentProvider.get(mTabSupplier.get());
+
+        if (currentButton == null || !currentButton.canShow()) {
+            return AdaptiveToolbarButtonVariant.NONE;
+        }
+
+        return AdaptiveToolbarButtonVariant.NONE;
+    }
+
     void updateButtonVisibility() {
-        showHighestPrecedenceOptionalButton();
+        // showHighestPrecedenceOptionalButton();
     }
 
     @VisibleForTesting
@@ -87,16 +109,16 @@ public class OptionalBrowsingModeButtonController {
      */
     private void showHighestPrecedenceOptionalButton() {
         if (mButtonDataProviders == null) return;
-        for (ButtonDataProvider provider : mButtonDataProviders) {
-            ButtonData buttonData = provider.get(mTabSupplier.get());
-            if (buttonData != null && buttonData.canShow()) {
-                // Same-provider updates are handled in updateCurrentOptionalButton; the below check
-                // prevents us from pointlessly updating with the same button data.
-                if (provider == mCurrentProvider) return;
-                setCurrentOptionalButton(provider, buttonData);
-                return;
-            }
-        }
+        // for (ButtonDataProvider provider : mButtonDataProviders) {
+        //     ButtonData buttonData = provider.get(mTabSupplier.get());
+        //     if (buttonData != null && buttonData.canShow()) {
+        //         // Same-provider updates are handled in updateCurrentOptionalButton; the below check
+        //         // prevents us from pointlessly updating with the same button data.
+        //         if (provider == mCurrentProvider) return;
+        //         setCurrentOptionalButton(provider, buttonData);
+        //         return;
+        //     }
+        // }
 
         // If no buttons can show, hide the currently showing button.
         hideCurrentOptionalButton();
@@ -111,10 +133,10 @@ public class OptionalBrowsingModeButtonController {
         mToolbarLayout.updateOptionalButton(buttonData);
         // ToolbarPhone's optional button has animated transitions and it takes care of showing IPH
         // on its own.
-        if (buttonData.getButtonSpec().getIPHCommandBuilder() != null
+        if (buttonData.getButtonSpec().getIphCommandBuilder() != null
                 && !(mToolbarLayout instanceof ToolbarPhone)) {
-            mUserEducationHelper.requestShowIPH(
-                    buttonData.getButtonSpec().getIPHCommandBuilder().build());
+            mUserEducationHelper.requestShowIph(
+                    buttonData.getButtonSpec().getIphCommandBuilder().build());
         }
     }
 
@@ -138,7 +160,6 @@ public class OptionalBrowsingModeButtonController {
     }
 
     /** Returns the list of {@link ButtonDataProvider}s. */
-    @VisibleForTesting
     public List<ButtonDataProvider> getButtonDataProvidersForTesting() {
         return mButtonDataProviders;
     }

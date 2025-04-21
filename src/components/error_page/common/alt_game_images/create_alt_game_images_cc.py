@@ -1,5 +1,5 @@
 #!/usr/bin/env python/2/3
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -78,7 +78,7 @@ def CreateAltGameImagesCc(images_1x, images_2x, script_dir):
                                _TEMPLATE_FILE_NAME,
                                readme_file=_README_FILE)
 
-    with open(os.path.join(script_dir, '../alt_game_images.cc'),
+    with open(os.path.join(script_dir, '../alt_game_image_data.cc'),
               'w') as out_file:
         out_file.write(rendered)
 

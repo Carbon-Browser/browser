@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,16 +7,15 @@ package org.chromium.chrome.browser.app.download.home;
 import android.app.Activity;
 import android.os.Bundle;
 
-import org.chromium.chrome.browser.BackPressHelper;
 import org.chromium.chrome.browser.SnackbarActivity;
+import org.chromium.chrome.browser.back_press.BackPressHelper;
+import org.chromium.chrome.browser.back_press.SecondaryActivityBackPressUma.SecondaryActivity;
 import org.chromium.chrome.browser.download.DownloadUtils;
 import org.chromium.chrome.browser.download.home.DownloadManagerCoordinator;
 import org.chromium.chrome.browser.download.home.DownloadManagerUiConfig;
 import org.chromium.chrome.browser.download.home.DownloadManagerUiConfigHelper;
 import org.chromium.chrome.browser.download.items.OfflineContentAggregatorNotificationBridgeUiFactory;
-import org.chromium.chrome.browser.incognito.IncognitoUtils;
-import org.chromium.chrome.browser.profiles.OTRProfileID;
-import org.chromium.chrome.browser.profiles.ProfileKey;
+import org.chromium.chrome.browser.profiles.OtrProfileId;
 import org.chromium.components.browser_ui.modaldialog.AppModalPresenter;
 import org.chromium.components.embedder_support.util.UrlConstants;
 import org.chromium.ui.modaldialog.ModalDialogManager;
@@ -26,9 +25,7 @@ import org.chromium.ui.permissions.AndroidPermissionDelegate;
 
 import java.lang.ref.WeakReference;
 
-/**
- * Activity for managing downloads handled through Chrome.
- */
+/** Activity for managing downloads handled through Chrome. */
 public class DownloadActivity extends SnackbarActivity implements ModalDialogManagerHolder {
     private static final String BUNDLE_KEY_CURRENT_URL = "current_url";
 
@@ -46,40 +43,53 @@ public class DownloadActivity extends SnackbarActivity implements ModalDialogMan
                     mCurrentUrl = url;
                 }
             };
-    private OTRProfileID mOtrProfileID;
+    private OtrProfileId mOtrProfileId;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        mCurrentUrl = savedInstanceState == null
-                ? UrlConstants.DOWNLOADS_URL
-                : savedInstanceState.getString(BUNDLE_KEY_CURRENT_URL);
+        // If the profile doesn't exist, then do not perform any action.
+        if (!DownloadUtils.doesProfileExistFromIntent(getIntent())) {
+            finish();
+            return;
+        }
+
+        mCurrentUrl =
+                savedInstanceState == null
+                        ? UrlConstants.DOWNLOADS_URL
+                        : savedInstanceState.getString(BUNDLE_KEY_CURRENT_URL);
 
         // Loads offline pages and prefetch downloads.
         OfflineContentAggregatorNotificationBridgeUiFactory.instance();
-        boolean showPrefetchContent = DownloadUtils.shouldShowPrefetchContent(getIntent());
+        boolean showPrefetchContent =
+                DownloadActivityLauncher.shouldShowPrefetchContent(getIntent());
         mPermissionDelegate =
                 new ActivityAndroidPermissionDelegate(new WeakReference<Activity>(this));
-        mOtrProfileID = DownloadUtils.getOTRProfileIDFromIntent(getIntent());
+        mOtrProfileId = DownloadUtils.getOtrProfileIdFromIntent(getIntent());
 
         DownloadManagerUiConfig config =
                 DownloadManagerUiConfigHelper.fromFlags()
-                        .setOTRProfileID(mOtrProfileID)
+                        .setOtrProfileId(mOtrProfileId)
                         .setIsSeparateActivity(true)
                         .setShowPaginationHeaders(DownloadUtils.shouldShowPaginationHeaders())
                         .setStartWithPrefetchedContent(showPrefetchContent)
                         .build();
 
-        mModalDialogManager = new ModalDialogManager(
-                new AppModalPresenter(this), ModalDialogManager.ModalDialogType.APP);
-        mDownloadCoordinator = DownloadManagerCoordinatorFactoryHelper.create(
-                this, config, getSnackbarManager(), mModalDialogManager);
+        mModalDialogManager =
+                new ModalDialogManager(
+                        new AppModalPresenter(this), ModalDialogManager.ModalDialogType.APP);
+        mDownloadCoordinator =
+                DownloadManagerCoordinatorFactoryHelper.create(
+                        this, config, getSnackbarManager(), mModalDialogManager);
         setContentView(mDownloadCoordinator.getView());
         if (!showPrefetchContent) mDownloadCoordinator.updateForUrl(mCurrentUrl);
         mDownloadCoordinator.addObserver(mUiObserver);
         BackPressHelper.create(
-                this, getOnBackPressedDispatcher(), mDownloadCoordinator::onBackPressed);
+                this,
+                getOnBackPressedDispatcher(),
+                mDownloadCoordinator.getBackPressHandlers(),
+                SecondaryActivity.DOWNLOAD);
     }
 
     @Override
@@ -89,27 +99,18 @@ public class DownloadActivity extends SnackbarActivity implements ModalDialogMan
     }
 
     @Override
-    public void onResume() {
-        super.onResume();
-        ProfileKey profileKey = IncognitoUtils.getProfileKeyFromOTRProfileID(mOtrProfileID);
-        DownloadUtils.checkForExternallyRemovedDownloads(profileKey);
-    }
-
-    @Override
     protected void onDestroy() {
-        mDownloadCoordinator.removeObserver(mUiObserver);
-        mDownloadCoordinator.destroy();
-        mModalDialogManager.destroy();
+        if (mDownloadCoordinator != null) {
+            mDownloadCoordinator.removeObserver(mUiObserver);
+            mDownloadCoordinator.destroy();
+            mModalDialogManager.destroy();
+        }
         super.onDestroy();
     }
 
     @Override
     public ModalDialogManager getModalDialogManager() {
         return mModalDialogManager;
-    }
-
-    public AndroidPermissionDelegate getAndroidPermissionDelegate() {
-        return mPermissionDelegate;
     }
 
     @Override

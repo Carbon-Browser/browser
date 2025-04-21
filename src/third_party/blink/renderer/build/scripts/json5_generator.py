@@ -1,4 +1,4 @@
-# Copyright (c) 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Generic generator for configuration files in JSON5 format.
@@ -55,28 +55,13 @@ default_metadata or an exception raised.
 """
 
 import argparse
-import ast
 import copy
+import json5
 import os
 import os.path
 import re
-import sys
 
 from blinkbuild.name_style_converter import NameStyleConverter
-
-
-def _json5_load(lines):
-    # Use json5.loads when json5 is available. Currently we use simple
-    # regexs to convert well-formed JSON5 to PYL format.
-    # Strip away comments and quote unquoted keys.
-    re_comment = re.compile(r"^\s*//.*$|//+ .*$", re.MULTILINE)
-    re_map_keys = re.compile(r"^\s*([$A-Za-z_][\w]*)\s*:", re.MULTILINE)
-    pyl = re.sub(re_map_keys, r"'\1':", re.sub(re_comment, "", lines))
-    # Convert map values of true/false to Python version True/False.
-    re_true = re.compile(r":\s*true\b")
-    re_false = re.compile(r":\s*false\b")
-    pyl = re.sub(re_true, ":True", re.sub(re_false, ":False", pyl))
-    return ast.literal_eval(pyl)
 
 
 def _merge_doc(doc, doc2):
@@ -131,8 +116,8 @@ class Json5File(object):
         merged_doc = dict()
         for path in file_paths:
             assert path.endswith(".json5")
-            with open(os.path.abspath(path)) as json5_file:
-                doc = _json5_load(json5_file.read())
+            with open(os.path.abspath(path), encoding='utf-8') as json5_file:
+                doc = json5.loads(json5_file.read())
                 if not merged_doc:
                     merged_doc = doc
                 else:
@@ -332,9 +317,16 @@ class Maker(object):
 
         parser.add_argument("--gperf", default="gperf")
         parser.add_argument("--output_dir", default=os.getcwd())
+        parser.add_argument("--generate_tag_enum",
+                            default=False,
+                            action='store_true')
         args = parser.parse_args()
 
-        writer = self._writer_class(args.files, args.output_dir)
+        if args.generate_tag_enum:
+            writer = self._writer_class(args.files, args.output_dir,
+                                        args.generate_tag_enum)
+        else:
+            writer = self._writer_class(args.files, args.output_dir)
         writer.set_gperf_path(args.gperf)
         writer.write_files(args.output_dir)
         writer.cleanup_files(args.output_dir)

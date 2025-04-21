@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include "android_webview/common/url_constants.h"
 #include "base/check_op.h"
 #include "net/base/load_flags.h"
+#include "net/http/http_request_headers.h"
 #include "url/gurl.h"
 
 namespace android_webview {
@@ -74,10 +75,18 @@ bool ShouldBlockURL(const GURL& url, AwContentsIoThreadClient* client) {
   if (url.SchemeIs(url::kContentScheme) && client->ShouldBlockContentUrls())
     return true;
 
-  // Part of implementation of WebSettings.allowFileAccess.
-  if (url.SchemeIsFile() && client->ShouldBlockFileUrls()) {
-    // Application's assets and resources are always available.
-    return !IsAndroidSpecialFileUrl(url);
+  if (url.SchemeIsFile()) {
+    bool is_special_file_url = IsAndroidSpecialFileUrl(url);
+
+    if (is_special_file_url && client->ShouldBlockSpecialFileUrls()) {
+      return true;
+    }
+
+    // Part of implementation of WebSettings.allowFileAccess.
+    if (client->ShouldBlockFileUrls()) {
+      // Application's assets and resources are always available.
+      return !is_special_file_url;
+    }
   }
 
   return client->ShouldBlockNetworkLoads() && url.SchemeIs(url::kFtpScheme);
@@ -88,6 +97,18 @@ int GetHttpCacheSize() {
   // size dynamically, since Android provides better support on newer versions
   // (http://crbug.com/893318).
   return 20 * 1024 * 1024;  // 20M
+}
+
+void ConvertRequestHeadersToVectors(const net::HttpRequestHeaders& headers,
+                                    std::vector<std::string>* header_names,
+                                    std::vector<std::string>* header_values) {
+  DCHECK(header_names->empty());
+  DCHECK(header_values->empty());
+  net::HttpRequestHeaders::Iterator headers_iterator(headers);
+  while (headers_iterator.GetNext()) {
+    header_names->push_back(headers_iterator.name());
+    header_values->push_back(headers_iterator.value());
+  }
 }
 
 }  // namespace android_webview

@@ -1,72 +1,36 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/network/test/test_dns_util.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
+#include "base/test/test_future.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "net/base/host_port_pair.h"
 #include "net/base/net_errors.h"
-#include "net/base/network_isolation_key.h"
+#include "net/base/network_anonymization_key.h"
+#include "net/dns/public/host_resolver_results.h"
+#include "net/dns/public/resolve_error_info.h"
+#include "services/network/public/cpp/simple_host_resolver.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 
 namespace network {
 
-namespace {
+DnsLookupResult::DnsLookupResult(
+    int32_t error,
+    net::ResolveErrorInfo resolve_error_info,
+    std::optional<net::AddressList> resolved_addresses,
+    std::optional<net::HostResolverEndpointResults>
+        endpoint_results_with_metadata)
+    : error(error),
+      resolve_error_info(std::move(resolve_error_info)),
+      resolved_addresses(std::move(resolved_addresses)),
+      endpoint_results_with_metadata(
+          std::move(endpoint_results_with_metadata)) {}
 
-// Utility class that waits until a DNS resolve completes, and returns the
-// resulting net::Error code. Expects there to only be one result on success.
-class DnsLookupClient : public network::mojom::ResolveHostClient {
- public:
-  explicit DnsLookupClient(
-      mojo::PendingReceiver<network::mojom::ResolveHostClient> receiver)
-      : receiver_(this, std::move(receiver)) {
-    receiver_.set_disconnect_handler(base::BindOnce(
-        &DnsLookupClient::OnComplete, base::Unretained(this), net::ERR_FAILED,
-        net::ResolveErrorInfo(net::ERR_FAILED), absl::nullopt));
-  }
-  ~DnsLookupClient() override = default;
-
-  DnsLookupClient(const DnsLookupClient&) = delete;
-  DnsLookupClient& operator=(const DnsLookupClient&) = delete;
-
-  DnsLookupResult WaitForResult() {
-    run_loop_.Run();
-    return dns_lookup_result_;
-  }
-
- private:
-  // network::mojom::ResolveHostClient:
-  void OnComplete(
-      int32_t error,
-      const net::ResolveErrorInfo& resolve_error_info,
-      const absl::optional<net::AddressList>& resolved_addresses) override {
-    receiver_.reset();
-    dns_lookup_result_.error = error;
-    dns_lookup_result_.resolve_error_info = resolve_error_info;
-    dns_lookup_result_.resolved_addresses = resolved_addresses;
-    run_loop_.Quit();
-  }
-  void OnTextResults(const std::vector<std::string>& text_results) override {
-    NOTREACHED();
-  }
-  void OnHostnameResults(const std::vector<net::HostPortPair>& hosts) override {
-    NOTREACHED();
-  }
-
- private:
-  DnsLookupResult dns_lookup_result_;
-
-  mojo::Receiver<network::mojom::ResolveHostClient> receiver_;
-  base::RunLoop run_loop_;
-};
-
-}  // namespace
-
-DnsLookupResult::DnsLookupResult() = default;
 DnsLookupResult::DnsLookupResult(const DnsLookupResult& dns_lookup_result) =
     default;
 DnsLookupResult::~DnsLookupResult() = default;
@@ -75,12 +39,22 @@ DnsLookupResult BlockingDnsLookup(
     mojom::NetworkContext* network_context,
     const net::HostPortPair& host_port_pair,
     network::mojom::ResolveHostParametersPtr params,
-    const net::NetworkIsolationKey& network_isolation_key) {
-  mojo::PendingRemote<network::mojom::ResolveHostClient> client;
-  DnsLookupClient dns_lookup_client(client.InitWithNewPipeAndPassReceiver());
-  network_context->ResolveHost(host_port_pair, network_isolation_key,
-                               std::move(params), std::move(client));
-  return dns_lookup_client.WaitForResult();
+    const net::NetworkAnonymizationKey& network_anonymization_key) {
+  base::test::TestFuture<int32_t, const net::ResolveErrorInfo&,
+                         const std::optional<net::AddressList>&,
+                         const std::optional<net::HostResolverEndpointResults>&>
+      future;
+  auto resolver = SimpleHostResolver::Create(network_context);
+  // TODO(crbug.com/40235854): Consider passing a SchemeHostPort to trigger
+  // HTTPS DNS resource record query.
+  resolver->ResolveHost(
+      mojom::HostResolverHost::NewHostPortPair(host_port_pair),
+      network_anonymization_key, std::move(params), future.GetCallback());
+  auto [error, resolve_error_info, resolved_addresses,
+        endpoint_results_with_metadata] = future.Take();
+  return DnsLookupResult(error, std::move(resolve_error_info),
+                         std::move(resolved_addresses),
+                         std::move(endpoint_results_with_metadata));
 }
 
 }  // namespace network

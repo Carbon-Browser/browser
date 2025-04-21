@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,29 +9,20 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/platform/json/json_parser.h"
 #include "third_party/blink/renderer/platform/json/json_values.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
-namespace blink {
-namespace internal {
+namespace blink::internal {
 namespace {
 
 network::mojom::blink::TrustTokenParamsPtr NetworkParamsToBlinkParams(
     network::mojom::TrustTokenParamsPtr params) {
   auto ret = network::mojom::blink::TrustTokenParams::New();
-  ret->type = params->type;
+  ret->operation = params->operation;
   ret->refresh_policy = params->refresh_policy;
-  ret->sign_request_data = params->sign_request_data;
-  ret->include_timestamp_header = params->include_timestamp_header;
   for (const url::Origin& issuer : params->issuers) {
     ret->issuers.push_back(SecurityOrigin::CreateFromUrlOrigin(issuer));
-  }
-  for (const std::string& header : params->additional_signed_headers) {
-    ret->additional_signed_headers.push_back(String::FromUTF8(header));
-  }
-  if (params->possibly_unsafe_additional_signing_data) {
-    ret->possibly_unsafe_additional_signing_data =
-        String::FromUTF8(*params->possibly_unsafe_additional_signing_data);
   }
   return ret;
 }
@@ -81,11 +72,8 @@ TEST_P(TrustTokenAttributeParsingSuccess, Roundtrip) {
   // well with the "issuers" field's members' type of
   // scoped_refptr<blink::SecurityOrigin>: in particular, the method does an
   // address-to-address comparison of the pointers.
-  EXPECT_EQ(result->type, expectation->type);
+  EXPECT_EQ(result->operation, expectation->operation);
   EXPECT_EQ(result->refresh_policy, expectation->refresh_policy);
-  EXPECT_EQ(result->sign_request_data, expectation->sign_request_data);
-  EXPECT_EQ(result->include_timestamp_header,
-            expectation->include_timestamp_header);
 
   EXPECT_EQ(result->issuers.size(), expectation->issuers.size());
   for (wtf_size_t i = 0; i < result->issuers.size(); ++i) {
@@ -95,15 +83,10 @@ TEST_P(TrustTokenAttributeParsingSuccess, Roundtrip) {
                 expectation->issuers.at(i)->ToString());
     }
   }
-
-  EXPECT_EQ(result->additional_signed_headers,
-            expectation->additional_signed_headers);
-
-  EXPECT_EQ(result->possibly_unsafe_additional_signing_data,
-            expectation->possibly_unsafe_additional_signing_data);
 }
 
 TEST(TrustTokenAttributeParsing, NotADictionary) {
+  test::TaskEnvironment task_environment;
   auto json = ParseJSON(R"(
     3
   )");
@@ -111,33 +94,79 @@ TEST(TrustTokenAttributeParsing, NotADictionary) {
   ASSERT_FALSE(TrustTokenParamsFromJson(std::move(json)));
 }
 
-TEST(TrustTokenAttributeParsing, MissingType) {
+TEST(TrustTokenAttributeParsing, MissingVersion) {
+  test::TaskEnvironment task_environment;
   auto json = ParseJSON(R"(
-    { }
+    { "operation" : "token-request" }
   )");
   ASSERT_TRUE(json);
   ASSERT_FALSE(TrustTokenParamsFromJson(std::move(json)));
 }
 
-TEST(TrustTokenAttributeParsing, TypeUnsafeType) {
+TEST(TrustTokenAttributeParsing, MissingOperation) {
+  test::TaskEnvironment task_environment;
   auto json = ParseJSON(R"(
-    { "type": 3 }
+    { "version": 1 }
   )");
   ASSERT_TRUE(json);
   ASSERT_FALSE(TrustTokenParamsFromJson(std::move(json)));
 }
 
-TEST(TrustTokenAttributeParsing, InvalidType) {
+TEST(TrustTokenAttributeParsing, TypeUnsafeVersion) {
+  test::TaskEnvironment task_environment;
   auto json = ParseJSON(R"(
-    { "type": "not a valid type" }
+    { "operation": "token-request",
+      "version": "unsafe-version" }
+  )");
+  ASSERT_TRUE(json);
+  ASSERT_FALSE(TrustTokenParamsFromJson(std::move(json)));
+}
+
+TEST(TrustTokenAttributeParsing, TypeUnsafeOperation) {
+  test::TaskEnvironment task_environment;
+  auto json = ParseJSON(R"(
+    { "version": 1,
+      "operation": 3 }
+  )");
+  ASSERT_TRUE(json);
+  ASSERT_FALSE(TrustTokenParamsFromJson(std::move(json)));
+}
+
+TEST(TrustTokenAttributeParsing, InvalidVersion) {
+  test::TaskEnvironment task_environment;
+  auto json = ParseJSON(R"(
+    { "version": 2,
+      "operation": "token-request" }
+  )");
+  ASSERT_TRUE(json);
+  ASSERT_FALSE(TrustTokenParamsFromJson(std::move(json)));
+}
+
+TEST(TrustTokenAttributeParsing, NegativeVersionNumber) {
+  test::TaskEnvironment task_environment;
+  auto json = ParseJSON(R"(
+    { "version": -1,
+      "operation": "token-request" }
+  )");
+  ASSERT_TRUE(json);
+  ASSERT_FALSE(TrustTokenParamsFromJson(std::move(json)));
+}
+
+TEST(TrustTokenAttributeParsing, InvalidOperation) {
+  test::TaskEnvironment task_environment;
+  auto json = ParseJSON(R"(
+    { "version": 1,
+      "operation": "not a valid type" }
   )");
   ASSERT_TRUE(json);
   ASSERT_FALSE(TrustTokenParamsFromJson(std::move(json)));
 }
 
 TEST(TrustTokenAttributeParsing, TypeUnsafeRefreshPolicy) {
+  test::TaskEnvironment task_environment;
   auto json = ParseJSON(R"(
-    { "type": "token-request",
+    { "version": 1,
+      "operation": "token-request",
       "refreshPolicy": 3 }
   )");
   ASSERT_TRUE(json);
@@ -145,44 +174,21 @@ TEST(TrustTokenAttributeParsing, TypeUnsafeRefreshPolicy) {
 }
 
 TEST(TrustTokenAttributeParsing, InvalidRefreshPolicy) {
+  test::TaskEnvironment task_environment;
   auto json = ParseJSON(R"(
-    { "type": "token-request",
+    { "version": 1,
+      "operation": "token-request",
       "refreshPolicy": "not a valid refresh policy" }
   )");
   ASSERT_TRUE(json);
   ASSERT_FALSE(TrustTokenParamsFromJson(std::move(json)));
 }
 
-TEST(TrustTokenAttributeParsing, TypeUnsafeSignRequestData) {
-  auto json = ParseJSON(R"(
-    { "type": "token-request",
-      "signRequestData": 3 }
-  )");
-  ASSERT_TRUE(json);
-  ASSERT_FALSE(TrustTokenParamsFromJson(std::move(json)));
-}
-
-TEST(TrustTokenAttributeParsing, InvalidSignRequestData) {
-  auto json = ParseJSON(R"(
-    { "type": "token-request",
-      "signRequestData": "not a member of the signRequestData enum" }
-  )");
-  ASSERT_TRUE(json);
-  ASSERT_FALSE(TrustTokenParamsFromJson(std::move(json)));
-}
-
-TEST(TrustTokenAttributeParsing, TypeUnsafeIncludeTimestampHeader) {
-  auto json = ParseJSON(R"(
-    { "type": "token-request",
-      "includeTimestampHeader": 3 }
-  )");
-  ASSERT_TRUE(json);
-  ASSERT_FALSE(TrustTokenParamsFromJson(std::move(json)));
-}
-
 TEST(TrustTokenAttributeParsing, NonListIssuers) {
+  test::TaskEnvironment task_environment;
   auto json = ParseJSON(R"(
-    { "type": "token-request",
+    { "version": 1,
+      "operation": "token-request",
       "issuers": 3 }
   )");
   ASSERT_TRUE(json);
@@ -190,8 +196,10 @@ TEST(TrustTokenAttributeParsing, NonListIssuers) {
 }
 
 TEST(TrustTokenAttributeParsing, EmptyIssuers) {
+  test::TaskEnvironment task_environment;
   auto json = ParseJSON(R"(
-    { "type": "token-request",
+    { "version": 1,
+      "operation": "token-request",
       "issuers": [] }
   )");
   ASSERT_TRUE(json);
@@ -199,9 +207,11 @@ TEST(TrustTokenAttributeParsing, EmptyIssuers) {
 }
 
 TEST(TrustTokenAttributeParsing, WrongListTypeIssuers) {
+  test::TaskEnvironment task_environment;
   JSONParseError err;
   auto json = ParseJSON(R"(
-    { "type": "token-request",
+    { "version": 1,
+      "operation": "token-request",
       "issuers": [1995] }
   )",
                         &err);
@@ -211,9 +221,11 @@ TEST(TrustTokenAttributeParsing, WrongListTypeIssuers) {
 
 // Test that the parser requires each member of |issuers| be a valid origin.
 TEST(TrustTokenAttributeParsing, NonUrlIssuer) {
+  test::TaskEnvironment task_environment;
   JSONParseError err;
   auto json = ParseJSON(R"(
-    { "type": "token-request",
+    { "version": 1,
+      "operation": "token-request",
       "issuers": ["https://ok.test", "not a URL"] }
   )",
                         &err);
@@ -224,8 +236,10 @@ TEST(TrustTokenAttributeParsing, NonUrlIssuer) {
 // Test that the parser requires that each member of |issuers| be a potentially
 // trustworthy origin.
 TEST(TrustTokenAttributeParsing, InsecureIssuer) {
+  test::TaskEnvironment task_environment;
   auto json = ParseJSON(R"(
-    { "type": "token-request",
+    { "version": 1,
+      "operation": "token-request",
       "issuers": ["https://trustworthy.example",
                   "http://not-potentially-trustworthy.example"] }
   )");
@@ -236,43 +250,14 @@ TEST(TrustTokenAttributeParsing, InsecureIssuer) {
 // Test that the parser requires that each member of |issuers| be a HTTP or
 // HTTPS origin.
 TEST(TrustTokenAttributeParsing, NonHttpNonHttpsIssuer) {
+  test::TaskEnvironment task_environment;
   auto json = ParseJSON(R"(
-    { "type": "token-request",
+    { "version": 1,
+      "operation": "token-request",
       "issuers": ["https://ok.test", "file:///"] }
   )");
   ASSERT_TRUE(json);
   ASSERT_FALSE(TrustTokenParamsFromJson(std::move(json)));
 }
 
-TEST(TrustTokenAttributeParsing, TypeUnsafeAdditionalSignedHeaders) {
-  auto json = ParseJSON(R"(
-    { "type": "token-request",
-      "additionalSignedHeaders": 3}
-  )");
-  ASSERT_TRUE(json);
-  ASSERT_FALSE(TrustTokenParamsFromJson(std::move(json)));
-}
-
-// Test that the parser requires that all members of the additionalSignedHeaders
-// be strings.
-TEST(TrustTokenAttributeParsing, TypeUnsafeAdditionalSignedHeader) {
-  auto json = ParseJSON(R"(
-    { "type": "token-request",
-      "additionalSignedHeaders": ["plausible header", 17] }
-  )");
-  ASSERT_TRUE(json);
-  ASSERT_FALSE(TrustTokenParamsFromJson(std::move(json)));
-}
-
-// Test that the parser requires that additionalSigningData be a string.
-TEST(TrustTokenAttributeParsing, TypeUnsafeAdditionalSigningData) {
-  auto json = ParseJSON(R"(
-    { "type": "token-request",
-      "additionalSigningData": 15 }
-  )");
-  ASSERT_TRUE(json);
-  ASSERT_FALSE(TrustTokenParamsFromJson(std::move(json)));
-}
-
-}  // namespace internal
-}  // namespace blink
+}  // namespace blink::internal

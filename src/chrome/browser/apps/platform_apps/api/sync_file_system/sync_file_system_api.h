@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,28 +23,13 @@ class FileSystemContext;
 namespace chrome_apps {
 namespace api {
 
-class SyncFileSystemDeleteFileSystemFunction : public ExtensionFunction {
- public:
-  // TODO(kinuko,calvinlo): Uncomment this or delete this class when
-  // we decide if we want to revive this function.
-  // DECLARE_EXTENSION_FUNCTION("syncFileSystem.deleteFileSystem",
-  //                            SYNCFILESYSTEM_DELETEFILESYSTEM)
-
- protected:
-  ~SyncFileSystemDeleteFileSystemFunction() override {}
-  ResponseAction Run() override;
-
- private:
-  void DidDeleteFileSystem(base::File::Error error);
-};
-
 class SyncFileSystemGetFileStatusFunction : public ExtensionFunction {
  public:
   DECLARE_EXTENSION_FUNCTION("syncFileSystem.getFileStatus",
                              SYNCFILESYSTEM_GETFILESYNCSTATUS)
 
  protected:
-  ~SyncFileSystemGetFileStatusFunction() override {}
+  ~SyncFileSystemGetFileStatusFunction() override = default;
   ResponseAction Run() override;
 
  private:
@@ -87,7 +72,7 @@ class SyncFileSystemGetUsageAndQuotaFunction : public ExtensionFunction {
                              SYNCFILESYSTEM_GETUSAGEANDQUOTA)
 
  protected:
-  ~SyncFileSystemGetUsageAndQuotaFunction() override {}
+  ~SyncFileSystemGetUsageAndQuotaFunction() override = default;
   ResponseAction Run() override;
 
  private:
@@ -102,7 +87,7 @@ class SyncFileSystemRequestFileSystemFunction : public ExtensionFunction {
                              SYNCFILESYSTEM_REQUESTFILESYSTEM)
 
  protected:
-  ~SyncFileSystemRequestFileSystemFunction() override {}
+  ~SyncFileSystemRequestFileSystemFunction() override = default;
   ResponseAction Run() override;
 
  private:
@@ -123,7 +108,7 @@ class SyncFileSystemSetConflictResolutionPolicyFunction
                              SYNCFILESYSTEM_SETCONFLICTRESOLUTIONPOLICY)
 
  protected:
-  ~SyncFileSystemSetConflictResolutionPolicyFunction() override {}
+  ~SyncFileSystemSetConflictResolutionPolicyFunction() override = default;
   ResponseAction Run() override;
 };
 
@@ -134,7 +119,7 @@ class SyncFileSystemGetConflictResolutionPolicyFunction
                              SYNCFILESYSTEM_GETCONFLICTRESOLUTIONPOLICY)
 
  protected:
-  ~SyncFileSystemGetConflictResolutionPolicyFunction() override {}
+  ~SyncFileSystemGetConflictResolutionPolicyFunction() override = default;
   ResponseAction Run() override;
 };
 
@@ -144,7 +129,7 @@ class SyncFileSystemGetServiceStatusFunction : public ExtensionFunction {
                              SYNCFILESYSTEM_GETSERVICESTATUS)
 
  protected:
-  ~SyncFileSystemGetServiceStatusFunction() override {}
+  ~SyncFileSystemGetServiceStatusFunction() override = default;
   ResponseAction Run() override;
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
@@ -15,6 +15,7 @@
 #include "media/base/media_util.h"
 #include "media/base/mock_filters.h"
 #include "media/base/mock_media_log.h"
+#include "media/base/stream_parser.h"
 #include "media/base/test_helpers.h"
 #include "media/filters/chunk_demuxer.h"
 #include "media/filters/frame_processor.h"
@@ -24,7 +25,9 @@ namespace media {
 
 using base::test::RunClosure;
 using testing::_;
+using testing::DoAll;
 using testing::InvokeWithoutArgs;
+using testing::Return;
 using testing::SaveArg;
 
 namespace {
@@ -46,13 +49,14 @@ VideoDecoderConfig CreateVideoConfig(VideoCodec codec, int w, int h) {
 }
 
 void AddAudioTrack(std::unique_ptr<MediaTracks>& t, AudioCodec codec, int id) {
-  t->AddAudioTrack(CreateAudioConfig(codec), id, MediaTrack::Kind(),
+  t->AddAudioTrack(CreateAudioConfig(codec), true, id, MediaTrack::Kind(),
                    MediaTrack::Label(), MediaTrack::Language());
 }
 
 void AddVideoTrack(std::unique_ptr<MediaTracks>& t, VideoCodec codec, int id) {
-  t->AddVideoTrack(CreateVideoConfig(codec, 16, 16), id, MediaTrack::Kind(),
-                   MediaTrack::Label(), MediaTrack::Language());
+  t->AddVideoTrack(CreateVideoConfig(codec, 16, 16), true, id,
+                   MediaTrack::Kind(), MediaTrack::Label(),
+                   MediaTrack::Language());
 }
 
 }  // namespace
@@ -81,20 +85,17 @@ class SourceBufferStateTest : public ::testing::Test {
     // Instead of using SaveArg<> to update |new_config_cb_| when mocked Init is
     // called, we use a lambda because SaveArg<> doesn't work if any of the
     // mocked method's arguments are move-only type.
-    EXPECT_CALL(*mock_stream_parser_, Init(_, _, _, _, _, _, _, _))
+    EXPECT_CALL(*mock_stream_parser_, Init(_, _, _, _, _, _, _))
         .WillOnce([&](auto init_cb, auto config_cb, auto new_buffers_cb,
-                      auto ignore_text_track, auto encrypted_media_init_data_cb,
-                      auto new_segment_cb, auto end_of_segment_cb,
+                      auto encrypted_media_init_data_cb, auto new_segment_cb,
+                      auto end_of_segment_cb,
                       auto media_log) { new_config_cb_ = config_cb; });
-    sbs->Init(
-        base::BindOnce(&SourceBufferStateTest::SourceInitDone,
-                       base::Unretained(this)),
-        expected_codecs,
-        base::BindRepeating(
-            &SourceBufferStateTest::StreamParserEncryptedInitData,
-            base::Unretained(this)),
-        base::BindRepeating(&SourceBufferStateTest::StreamParserNewTextTrack,
-                            base::Unretained(this)));
+    sbs->Init(base::BindOnce(&SourceBufferStateTest::SourceInitDone,
+                             base::Unretained(this)),
+              expected_codecs,
+              base::BindRepeating(
+                  &SourceBufferStateTest::StreamParserEncryptedInitData,
+                  base::Unretained(this)));
 
     sbs->SetTracksWatcher(base::BindRepeating(
         &SourceBufferStateTest::OnMediaTracksUpdated, base::Unretained(this)));
@@ -108,23 +109,35 @@ class SourceBufferStateTest : public ::testing::Test {
     return sbs;
   }
 
-  // Emulates appending some data to the SourceBufferState, since OnNewConfigs
-  // can only be invoked when append is in progress.
+  // Emulates appending and parsing some data to the SourceBufferState, since
+  // OnNewConfigs can only be invoked when parse is in progress.
   bool AppendDataAndReportTracks(const std::unique_ptr<SourceBufferState>& sbs,
                                  std::unique_ptr<MediaTracks> tracks) {
-    const uint8_t stream_data[] = "stream_data";
-    const int data_size = sizeof(stream_data);
+    const uint8_t kStreamData[] = "stream_data";
+    base::span<const uint8_t> stream_data = base::span(kStreamData);
     base::TimeDelta t;
-    StreamParser::TextTrackConfigMap text_track_config_map;
+
+    // Ensure `stream_data` fits within one StreamParser::Parse() call.
+    CHECK_GT(StreamParser::kMaxPendingBytesPerParse,
+             static_cast<int>(stream_data.size_bytes()));
 
     bool new_configs_result = false;
-    EXPECT_CALL(*mock_stream_parser_, Parse(stream_data, data_size))
-        .WillOnce(InvokeWithoutArgs([&] {
-          new_configs_result =
-              new_config_cb_.Run(std::move(tracks), text_track_config_map);
-          return true;
-        }));
-    sbs->Append(stream_data, data_size, t, t, &t);
+
+    EXPECT_CALL(*mock_stream_parser_, AppendToParseBuffer(stream_data))
+        .WillOnce(Return(true));
+    EXPECT_CALL(*mock_stream_parser_,
+                Parse(StreamParser::kMaxPendingBytesPerParse))
+        .WillOnce(
+            DoAll(InvokeWithoutArgs([&] {
+                    new_configs_result = new_config_cb_.Run(std::move(tracks));
+                  }),
+                  /* Indicate successful parse with no uninspected data. */
+                  Return(StreamParser::ParseStatus::kSuccess)));
+
+    EXPECT_TRUE(sbs->AppendToParseBuffer(stream_data));
+    EXPECT_EQ(StreamParser::ParseStatus::kSuccess,
+              sbs->RunSegmentParserLoop(t, t, &t));
+
     return new_configs_result;
   }
 
@@ -134,8 +147,6 @@ class SourceBufferStateTest : public ::testing::Test {
   MOCK_METHOD1(SourceInitDone, void(const StreamParser::InitParameters&));
   MOCK_METHOD2(StreamParserEncryptedInitData,
                void(EmeInitDataType, const std::vector<uint8_t>&));
-  MOCK_METHOD2(StreamParserNewTextTrack,
-               void(ChunkDemuxerStream*, const TextTrackConfig&));
 
   MOCK_METHOD1(MediaTracksUpdatedMock, void(std::unique_ptr<MediaTracks>&));
   void OnMediaTracksUpdated(std::unique_ptr<MediaTracks> tracks) {
@@ -151,9 +162,40 @@ class SourceBufferStateTest : public ::testing::Test {
 
   testing::StrictMock<MockMediaLog> media_log_;
   std::vector<std::unique_ptr<ChunkDemuxerStream>> demuxer_streams_;
-  raw_ptr<MockStreamParser> mock_stream_parser_;
+  raw_ptr<MockStreamParser, DanglingUntriaged> mock_stream_parser_;
   StreamParser::NewConfigCB new_config_cb_;
 };
+
+TEST_F(SourceBufferStateTest, InitSourceBufferWithRelaxedCodecChecks) {
+  std::unique_ptr<SourceBufferState> sbs = CreateSourceBufferState();
+  EXPECT_CALL(*mock_stream_parser_, Init(_, _, _, _, _, _, _))
+      .WillOnce([&](auto init_cb, auto config_cb, auto new_buffers_cb,
+                    auto encrypted_media_init_data_cb, auto new_segment_cb,
+                    auto end_of_segment_cb,
+                    auto media_log) { new_config_cb_ = config_cb; });
+
+  sbs->Init(
+      base::BindOnce(&SourceBufferStateTest::SourceInitDone,
+                     base::Unretained(this)),
+      std::nullopt,
+      base::BindRepeating(&SourceBufferStateTest::StreamParserEncryptedInitData,
+                          base::Unretained(this)));
+
+  sbs->SetTracksWatcher(base::BindRepeating(
+      &SourceBufferStateTest::OnMediaTracksUpdated, base::Unretained(this)));
+
+  EXPECT_CALL(*this, OnParseWarningMock(_)).Times(0);
+
+  sbs->SetParseWarningCallback(base::BindRepeating(
+      &SourceBufferStateTest::OnParseWarningMock, base::Unretained(this)));
+
+  std::unique_ptr<MediaTracks> tracks(new MediaTracks());
+  AddAudioTrack(tracks, AudioCodec::kVorbis, 1);
+
+  EXPECT_FOUND_CODEC_NAME(Audio, "vorbis");
+  EXPECT_CALL(*this, MediaTracksUpdatedMock(_));
+  EXPECT_TRUE(AppendDataAndReportTracks(sbs, std::move(tracks)));
+}
 
 TEST_F(SourceBufferStateTest, InitSingleAudioTrack) {
   std::unique_ptr<SourceBufferState> sbs =
@@ -229,7 +271,7 @@ TEST_F(SourceBufferStateTest, MissingExpectedVideoStream) {
   std::unique_ptr<SourceBufferState> sbs =
       CreateAndInitSourceBufferState("opus,vp9");
   std::unique_ptr<MediaTracks> tracks(new MediaTracks());
-  tracks->AddAudioTrack(CreateAudioConfig(AudioCodec::kOpus), 1,
+  tracks->AddAudioTrack(CreateAudioConfig(AudioCodec::kOpus), true, 1,
                         MediaTrack::Kind(), MediaTrack::Label(),
                         MediaTrack::Language());
   EXPECT_FOUND_CODEC_NAME(Audio, "opus");

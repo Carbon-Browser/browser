@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <utility>
 
 #include "services/metrics/public/cpp/ukm_builders.h"
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/mojom/installedapp/related_application.mojom-blink.h"
 #include "third_party/blink/public/mojom/manifest/manifest.mojom-blink.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
@@ -34,8 +34,8 @@ void InstalledAppController::GetInstalledRelatedApps(
   // Upon returning, filter the result list to those apps that are installed.
   ManifestManager::From(*GetSupplementable())
       ->RequestManifest(
-          WTF::Bind(&InstalledAppController::OnGetManifestForRelatedApps,
-                    WrapPersistent(this), std::move(callbacks)));
+          WTF::BindOnce(&InstalledAppController::OnGetManifestForRelatedApps,
+                        WrapPersistent(this), std::move(callbacks)));
 }
 
 InstalledAppController* InstalledAppController::From(LocalDOMWindow& window) {
@@ -57,6 +57,7 @@ InstalledAppController::InstalledAppController(LocalDOMWindow& window)
 
 void InstalledAppController::OnGetManifestForRelatedApps(
     std::unique_ptr<AppInstalledCallbacks> callbacks,
+    mojom::blink::ManifestRequestResult result,
     const KURL& url,
     mojom::blink::ManifestPtr manifest) {
   if (!GetSupplementable()->GetFrame()) {
@@ -86,8 +87,8 @@ void InstalledAppController::OnGetManifestForRelatedApps(
 
   provider_->FilterInstalledApps(
       std::move(mojo_related_apps), url,
-      WTF::Bind(&InstalledAppController::OnFilterInstalledApps,
-                WrapPersistent(this), std::move(callbacks)));
+      WTF::BindOnce(&InstalledAppController::OnFilterInstalledApps,
+                    WrapPersistent(this), std::move(callbacks)));
 }
 
 void InstalledAppController::OnFilterInstalledApps(

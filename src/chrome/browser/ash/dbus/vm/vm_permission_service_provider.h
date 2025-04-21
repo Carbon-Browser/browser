@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -108,7 +108,7 @@ class VmPermissionServiceProvider
 
  private:
   struct VmInfo {
-    enum VmType { CrostiniVm = 0, PluginVm = 1, Borealis = 2 };
+    enum VmType { CrostiniVm = 0, PluginVm = 1, Borealis = 2, Bruschetta = 3 };
     enum PermissionType { PermissionCamera = 0, PermissionMicrophone = 1 };
 
     const std::string owner_id;
@@ -146,6 +146,9 @@ class VmPermissionServiceProvider
   void UpdateVmPermissions(VmInfo* vm);
   void UpdatePluginVmPermissions(VmInfo* vm);
   void UpdateBorealisPermissions(VmInfo* vm);
+  void UpdateBruschettaPermissions(VmInfo* vm);
+
+  void SetCameraPermission(base::UnguessableToken token, bool enabled);
 
   // Returns an iterator to a vm with given |owner_id| and |name|).
   VmMap::iterator FindVm(const std::string& owner_id, const std::string& name);
@@ -160,10 +163,5 @@ class VmPermissionServiceProvider
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-using ::ash::VmPermissionServiceProvider;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_DBUS_VM_VM_PERMISSION_SERVICE_PROVIDER_H_

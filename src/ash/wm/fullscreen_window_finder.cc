@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,7 +40,7 @@ aura::Window* GetTopMostWindowInContainer(aura::Window* container) {
   DCHECK(container);
   DCHECK(IsSwitchableContainer(container));
 
-  for (auto* child : base::Reversed(container->children())) {
+  for (aura::Window* child : base::Reversed(container->children())) {
     // `child` may be type `aura::client::WINDOW_TYPE_CONTROL` which has no
     // WindowState.
     if (WindowState::Get(child) &&

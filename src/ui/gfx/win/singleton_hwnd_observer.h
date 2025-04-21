@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 
 #include <windows.h>
 
-#include "base/callback.h"
-#include "ui/gfx/gfx_export.h"
+#include "base/component_export.h"
+#include "base/functional/callback.h"
 
 namespace gfx {
 
@@ -18,7 +18,7 @@ class SingletonHwnd;
 // cleanup if either the SingletonHwnd or forwarded object is destroyed first.
 // Note that if you want to register a hot key on the SingletonHwnd, you need to
 // use a SingletonHwndHotKeyObserver instead for each hot key.
-class GFX_EXPORT SingletonHwndObserver {
+class COMPONENT_EXPORT(GFX) SingletonHwndObserver {
  public:
   using WndProc = base::RepeatingCallback<void(HWND, UINT, WPARAM, LPARAM)>;
 

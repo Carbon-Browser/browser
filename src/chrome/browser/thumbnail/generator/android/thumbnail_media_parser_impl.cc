@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,15 @@
 
 #include <tuple>
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/numerics/safe_conversions.h"
-#include "base/task/task_runner_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "cc/paint/skia_paint_canvas.h"
-#include "chrome/browser/thumbnail/generator/android/local_media_data_source_factory.h"
+#include "chrome/services/media_gallery_util/public/cpp/local_media_data_source_factory.h"
 #include "content/public/browser/android/gpu_video_accelerator_factories_provider.h"
 #include "content/public/browser/media_service.h"
 #include "media/base/overlay_info.h"
@@ -47,13 +47,6 @@ void OnRequestOverlayInfo(bool decoder_requires_restart_for_overlay,
     std::move(overlay_info_cb).Run(media::OverlayInfo());
 }
 
-int64_t GetFileSize(const base::FilePath& file_path) {
-  int64_t size = 0;
-  if (!base::GetFileSize(file_path, &size))
-    return -1;
-  return size;
-}
-
 }  // namespace
 
 ThumbnailMediaParserImpl::ThumbnailMediaParserImpl(
@@ -82,20 +75,20 @@ void ThumbnailMediaParserImpl::Start(ParseCompleteCB parse_complete_cb) {
   }
 
   // Get the size of the file if needed.
-  base::PostTaskAndReplyWithResult(
-      file_task_runner_.get(), FROM_HERE,
-      base::BindOnce(&GetFileSize, file_path_),
+  file_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::GetFileSizeCallback(file_path_),
       base::BindOnce(&ThumbnailMediaParserImpl::OnReadFileSize,
                      weak_factory_.GetWeakPtr()));
 }
 
-void ThumbnailMediaParserImpl::OnReadFileSize(int64_t file_size) {
-  if (file_size < 0) {
+void ThumbnailMediaParserImpl::OnReadFileSize(
+    std::optional<int64_t> file_size) {
+  if (!file_size.has_value()) {
     OnError(MediaParserEvent::kReadFileError);
     return;
   }
 
-  size_ = file_size;
+  size_ = file_size.value();
   RetrieveMediaParser();
 }
 
@@ -143,7 +136,7 @@ void ThumbnailMediaParserImpl::OnMediaMetadataParsed(
                           base::CompareCase::INSENSITIVE_ASCII));
 
   // Start to retrieve video thumbnail.
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(&ThumbnailMediaParserImpl::RetrieveEncodedVideoFrame,
                      weak_factory_.GetWeakPtr()));
@@ -219,8 +212,8 @@ void ThumbnailMediaParserImpl::DecodeVideoFrame() {
   // Build and config the decoder.
   DCHECK(gpu_factories_);
   auto mojo_decoder = std::make_unique<media::MojoVideoDecoder>(
-      base::ThreadTaskRunnerHandle::Get(), gpu_factories_.get(), this,
-      std::move(video_decoder_remote),
+      base::SingleThreadTaskRunner::GetCurrentDefault(), gpu_factories_.get(),
+      this, std::move(video_decoder_remote),
       base::BindRepeating(&OnRequestOverlayInfo), gfx::ColorSpace());
 
   decoder_ = std::make_unique<media::VideoThumbnailDecoder>(
@@ -240,7 +233,7 @@ void ThumbnailMediaParserImpl::OnVideoFrameDecoded(
     return;
   }
 
-  DCHECK(frame->HasTextures());
+  DCHECK(frame->HasSharedImage());
   decode_done_ = true;
 
   RenderVideoFrame(std::move(frame));
@@ -289,10 +282,11 @@ void ThumbnailMediaParserImpl::OnDecoderConnectionError() {
 
 void ThumbnailMediaParserImpl::OnMediaDataReady(
     chrome::mojom::MediaDataSource::ReadCallback callback,
-    std::unique_ptr<std::string> data) {
+    std::string data) {
   // TODO(xingliu): Change media_parser.mojom to move the data instead of copy.
-  if (media_parser())
-    std::move(callback).Run(std::vector<uint8_t>(data->begin(), data->end()));
+  if (media_parser()) {
+    std::move(callback).Run(std::vector<uint8_t>(data.begin(), data.end()));
+  }
 }
 
 void ThumbnailMediaParserImpl::NotifyComplete(SkBitmap bitmap) {

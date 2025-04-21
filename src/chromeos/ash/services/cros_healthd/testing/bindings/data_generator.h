@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CHROMEOS_ASH_SERVICES_CROS_HEALTHD_TESTING_BINDINGS_DATA_GENERATOR_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -13,11 +14,8 @@
 #include "base/containers/flat_map.h"
 #include "chromeos/ash/services/cros_healthd/testing/bindings/context.h"
 #include "mojo/public/cpp/system/handle.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
-namespace chromeos {
-namespace cros_healthd {
-namespace connectivity {
+namespace ash::cros_healthd::connectivity {
 
 template <typename T>
 class DataGeneratorInterface {
@@ -71,7 +69,7 @@ class DataGenerator : public DataGeneratorInterface<T> {
 // Generator for optional types.
 template <typename GeneratorType>
 class OptionalGenerator : public DataGeneratorInterface<
-                              absl::optional<typename GeneratorType::Type>> {
+                              std::optional<typename GeneratorType::Type>> {
  public:
   OptionalGenerator(const OptionalGenerator&) = delete;
   OptionalGenerator& operator=(const OptionalGenerator&) = delete;
@@ -84,11 +82,11 @@ class OptionalGenerator : public DataGeneratorInterface<
 
  public:
   // DataGeneratorInterface overrides.
-  absl::optional<typename GeneratorType::Type> Generate() override {
+  std::optional<typename GeneratorType::Type> Generate() override {
     if (generator_->HasNext())
       return generator_->Generate();
     returned_null_ = true;
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   bool HasNext() override { return !returned_null_ || generator_->HasNext(); }
@@ -237,8 +235,6 @@ class HandleDataGenerator
   bool has_next_ = true;
 };
 
-}  // namespace connectivity
-}  // namespace cros_healthd
-}  // namespace chromeos
+}  // namespace ash::cros_healthd::connectivity
 
 #endif  // CHROMEOS_ASH_SERVICES_CROS_HEALTHD_TESTING_BINDINGS_DATA_GENERATOR_H_

@@ -1,10 +1,8 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/enterprise/reporting/browser_report_generator_desktop.h"
-
-#include <utility>
 
 #include "base/files/file_path.h"
 #include "base/path_service.h"
@@ -20,19 +18,14 @@
 #include "components/policy/core/common/cloud/cloud_policy_util.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "components/version_info/version_info.h"
-#include "ppapi/buildflags/buildflags.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
-#if BUILDFLAG(ENABLE_PLUGINS)
-#include "content/public/browser/plugin_service.h"
-#endif
-
 namespace em = ::enterprise_management;
 
-// TODO(crbug.com/1102047): Move Chrome OS code to its own delegate
+// TODO(crbug.com/40703888): Move Chrome OS code to its own delegate
 namespace enterprise_reporting {
 
 BrowserReportGeneratorDesktop::BrowserReportGeneratorDesktop() = default;
@@ -58,8 +51,7 @@ BrowserReportGeneratorDesktop::GetReportedProfiles() {
                                .GetAllProfilesAttributes()) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
     // Skip sign-in and lock screen app profile on Chrome OS.
-    if (!ash::ProfileHelper::IsRegularProfilePath(
-            entry->GetPath().BaseName())) {
+    if (!ash::ProfileHelper::IsUserProfilePath(entry->GetPath().BaseName())) {
       continue;
     }
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
@@ -85,35 +77,6 @@ void BrowserReportGeneratorDesktop::GenerateBuildStateInfo(
     if (installed_version)
       report->set_installed_browser_version(installed_version->GetString());
   }
-}
-
-void BrowserReportGeneratorDesktop::GeneratePluginsIfNeeded(
-    ReportCallback callback,
-    std::unique_ptr<em::BrowserReport> report) {
-#if BUILDFLAG(IS_CHROMEOS_ASH) || !BUILDFLAG(ENABLE_PLUGINS)
-  std::move(callback).Run(std::move(report));
-#else
-  content::PluginService::GetInstance()->GetPlugins(base::BindOnce(
-      &BrowserReportGeneratorDesktop::OnPluginsReady,
-      weak_ptr_factory_.GetWeakPtr(), std::move(callback), std::move(report)));
-#endif
-}
-
-void BrowserReportGeneratorDesktop::OnPluginsReady(
-    ReportCallback callback,
-    std::unique_ptr<em::BrowserReport> report,
-    const std::vector<content::WebPluginInfo>& plugins) {
-#if BUILDFLAG(ENABLE_PLUGINS)
-  for (const content::WebPluginInfo& plugin : plugins) {
-    em::Plugin* plugin_info = report->add_plugins();
-    plugin_info->set_name(base::UTF16ToUTF8(plugin.name));
-    plugin_info->set_version(base::UTF16ToUTF8(plugin.version));
-    plugin_info->set_filename(plugin.path.BaseName().AsUTF8Unsafe());
-    plugin_info->set_description(base::UTF16ToUTF8(plugin.desc));
-  }
-#endif  // BUILDFLAG(ENABLE_PLUGINS)
-
-  std::move(callback).Run(std::move(report));
 }
 
 }  // namespace enterprise_reporting

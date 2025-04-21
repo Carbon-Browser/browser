@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/user_metrics_action.h"
-#include "third_party/blink/public/strings/grit/blink_strings.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
 #include "third_party/blink/renderer/core/dom/shadow_root.h"
 #include "third_party/blink/renderer/core/events/gesture_event.h"
@@ -16,6 +15,7 @@
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/html/html_div_element.h"
 #include "third_party/blink/renderer/core/html/media/html_media_element.h"
+#include "third_party/blink/renderer/core/html/media/html_video_element.h"
 #include "third_party/blink/renderer/core/html/shadow/shadow_element_names.h"
 #include "third_party/blink/renderer/core/html/time_ranges.h"
 #include "third_party/blink/renderer/core/html_names.h"
@@ -32,6 +32,7 @@
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/text/platform_locale.h"
 #include "ui/display/screen_info.h"
+#include "ui/strings/grit/ax_strings.h"
 
 namespace {
 
@@ -71,24 +72,37 @@ bool MediaControlTimelineElement::WillRespondToMouseClickEvents() {
 }
 
 void MediaControlTimelineElement::UpdateAria() {
-  String aria_label =
-      GetLocale().QueryString(IsA<HTMLVideoElement>(MediaElement())
-                                  ? IDS_AX_MEDIA_VIDEO_SLIDER_HELP
-                                  : IDS_AX_MEDIA_AUDIO_SLIDER_HELP) +
-      " " + GetMediaControls().CurrentTimeDisplay().textContent(true) + " " +
-      GetMediaControls().RemainingTimeDisplay().textContent(true);
+  String aria_label = GetLocale().QueryString(
+      IsA<HTMLVideoElement>(MediaElement()) ? IDS_AX_MEDIA_VIDEO_SLIDER_HELP
+                                            : IDS_AX_MEDIA_AUDIO_SLIDER_HELP);
   setAttribute(html_names::kAriaLabelAttr, AtomicString(aria_label));
 
+  // The aria-valuetext is a human-friendly description of the current value
+  // of the slider, as opposed to the natural slider value which will be read
+  // out as a percentage.
   setAttribute(html_names::kAriaValuetextAttr,
                AtomicString(GetLocale().QueryString(
                    IDS_AX_MEDIA_CURRENT_TIME_DISPLAY,
-                   GetMediaControls().CurrentTimeDisplay().textContent(true))));
+                   GetMediaControls().CurrentTimeDisplay().FormatTime())));
+
+  // The total time is exposed as aria-description, which will be read after the
+  // aria-label and aria-valuetext. Unfortunately, aria-valuenow will not work,
+  // because it must be numeric. ARIA and platform APIs do not provide a means
+  // of setting a friendly max value, similar to aria-valuetext. Note:
+  // IDS_AX_MEDIA_TIME_REMAINING_DISPLAY is a misnomer and refers to the total
+  // time.
+  setAttribute(html_names::kAriaDescriptionAttr,
+               AtomicString(GetLocale().QueryString(
+                   IDS_AX_MEDIA_TIME_REMAINING_DISPLAY,
+                   GetMediaControls()
+                       .RemainingTimeDisplay()
+                       .MediaControlTimeDisplayElement::FormatTime())));
 }
 
 void MediaControlTimelineElement::SetPosition(double current_time,
                                               bool suppress_aria) {
   if (is_live_ && !live_anchor_time_ && current_time != 0) {
-    live_anchor_time_.emplace();
+    live_anchor_time_.emplace(LiveAnchorTime());
     live_anchor_time_->clock_time_ = base::TimeTicks::Now();
     live_anchor_time_->media_time_ = MediaElement().currentTime();
   }
@@ -249,8 +263,7 @@ void MediaControlTimelineElement::RenderBarSegments() {
                GetFloatingPointAttribute(html_names::kMinAttr);
   }
 
-  if (std::isnan(duration) || std::isinf(duration) || !duration ||
-      std::isnan(current_time)) {
+  if (!std::isfinite(duration) || !duration || std::isnan(current_time)) {
     SetBeforeSegmentPosition(MediaControlSliderElement::Position(0, 0));
     SetAfterSegmentPosition(MediaControlSliderElement::Position(0, 0));
     return;
@@ -276,7 +289,7 @@ void MediaControlTimelineElement::RenderBarSegments() {
   // the current time.
   before_segment.width = current_position;
 
-  absl::optional<unsigned> current_buffered_time_range =
+  std::optional<unsigned> current_buffered_time_range =
       MediaControlsSharedHelpers::GetCurrentBufferedTimeRange(MediaElement());
 
   if (current_buffered_time_range) {

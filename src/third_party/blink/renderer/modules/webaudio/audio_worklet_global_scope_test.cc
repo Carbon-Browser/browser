@@ -1,6 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "third_party/blink/renderer/modules/webaudio/audio_worklet_global_scope.h"
 
@@ -14,7 +19,6 @@
 #include "third_party/blink/renderer/bindings/core/v8/module_record.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
 #include "third_party/blink/renderer/bindings/core/v8/serialization/serialized_script_value.h"
-#include "third_party/blink/renderer/bindings/core/v8/source_location.h"
 #include "third_party/blink/renderer/bindings/core/v8/to_v8_traits.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_testing.h"
@@ -41,6 +45,7 @@
 #include "third_party/blink/renderer/modules/webaudio/offline_audio_worklet_thread.h"
 #include "third_party/blink/renderer/platform/audio/audio_bus.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
+#include "third_party/blink/renderer/platform/bindings/source_location.h"
 #include "third_party/blink/renderer/platform/bindings/v8_binding_macros.h"
 #include "third_party/blink/renderer/platform/bindings/v8_object_constructor.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_loader_options.h"
@@ -92,10 +97,11 @@ class AudioWorkletGlobalScopeTest : public PageTestBase, public ModuleTestBase {
             MakeGarbageCollected<WorkletModuleResponsesMap>(),
             mojo::NullRemote() /* browser_interface_broker */,
             window->GetFrame()->Loader().CreateWorkerCodeCacheHost(),
+            window->GetFrame()->GetBlobUrlStorePendingRemote(),
             BeginFrameProviderParams(), nullptr /* parent_permissions_policy */,
             window->GetAgentClusterID(), ukm::kInvalidSourceId,
             window->GetExecutionContextToken()),
-        absl::nullopt, std::make_unique<WorkerDevToolsParams>());
+        std::nullopt, std::make_unique<WorkerDevToolsParams>());
     return thread;
   }
 
@@ -164,9 +170,9 @@ class AudioWorkletGlobalScopeTest : public PageTestBase, public ModuleTestBase {
                                       js_url)
             ->RunScriptOnScriptStateAndReturnValue(script_state);
     if (expect_success) {
-      EXPECT_FALSE(GetResult(script_state, result).IsEmpty());
+      EXPECT_FALSE(GetResult(script_state, std::move(result)).IsEmpty());
     } else {
-      EXPECT_FALSE(GetException(script_state, result).IsEmpty());
+      EXPECT_FALSE(GetException(script_state, std::move(result)).IsEmpty());
     }
   }
 
@@ -213,8 +219,7 @@ class AudioWorkletGlobalScopeTest : public PageTestBase, public ModuleTestBase {
     EXPECT_TRUE(processor);
     EXPECT_EQ(processor->Name(), "testProcessor");
     v8::Local<v8::Value> processor_value =
-        ToV8Traits<AudioWorkletProcessor>::ToV8(script_state, processor)
-            .ToLocalChecked();
+        ToV8Traits<AudioWorkletProcessor>::ToV8(script_state, processor);
     EXPECT_TRUE(processor_value->IsObject());
 
     wait_event->Signal();
@@ -288,7 +293,8 @@ class AudioWorkletGlobalScopeTest : public PageTestBase, public ModuleTestBase {
     v8::Isolate* isolate = script_state->GetIsolate();
     EXPECT_TRUE(isolate);
     v8::MicrotasksScope microtasks_scope(
-        isolate, v8::MicrotasksScope::kDoNotRunMicrotasks);
+        isolate, ToMicrotaskQueue(script_state),
+        v8::MicrotasksScope::kDoNotRunMicrotasks);
 
     String source_code =
         R"JS(

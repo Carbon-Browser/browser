@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,20 @@
 
 namespace storage {
 
+// TODO(b/329523214): remove this placeholder implementation.
+base::File::Error FileSystemFileUtil::AbstractFileEnumerator::GetError() {
+  return base::File::FILE_OK;
+}
+
 base::FilePath FileSystemFileUtil::EmptyFileEnumerator::Next() {
+  return base::FilePath();
+}
+
+base::File::Error FileSystemFileUtil::EmptyFileEnumerator::GetError() {
+  return base::File::FILE_OK;
+}
+
+base::FilePath FileSystemFileUtil::EmptyFileEnumerator::GetName() {
   return base::FilePath();
 }
 

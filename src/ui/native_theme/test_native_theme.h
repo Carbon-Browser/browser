@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,8 @@ class TestNativeTheme : public NativeTheme {
              const gfx::Rect& rect,
              const ExtraParams& extra,
              ColorScheme color_scheme,
-             const absl::optional<SkColor>& accent_color) const override;
+             bool in_forced_colors,
+             const std::optional<SkColor>& accent_color) const override;
   bool SupportsNinePatch(Part part) const override;
   gfx::Size GetNinePatchCanvasSize(Part part) const override;
   gfx::Rect GetNinePatchAperture(Part part) const override;

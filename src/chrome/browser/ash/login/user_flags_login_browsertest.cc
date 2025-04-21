@@ -1,20 +1,20 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ash/components/cryptohome/cryptohome_parameters.h"
-#include "ash/components/login/auth/public/user_context.h"
 #include "base/command_line.h"
 #include "base/test/bind.h"
 #include "chrome/browser/about_flags.h"
 #include "chrome/browser/ash/login/session/user_session_manager_test_api.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/ash/login/test/session_manager_state_waiter.h"
-#include "chrome/browser/ash/login/ui/user_adding_screen.h"
 #include "chrome/browser/ash/settings/about_flags.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/ui/ash/login/user_adding_screen.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
+#include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
 #include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
+#include "chromeos/ash/components/login/auth/public/user_context.h"
 #include "components/flags_ui/feature_entry_macros.h"
 #include "components/flags_ui/flags_state.h"
 #include "components/flags_ui/pref_service_flags_storage.h"
@@ -81,7 +81,7 @@ IN_PROC_BROWSER_TEST_F(UserFlagsLoginTest, PRE_RestartToApplyFlags) {
         waiter.OnUserSessionStarted(true);
         restart_requested = true;
       }));
-
+  login_manager_.set_should_wait_for_profile(false);
   login_manager_.LoginWithDefaultContext(login_manager_.users()[0]);
   waiter.Wait();
   EXPECT_TRUE(restart_requested);

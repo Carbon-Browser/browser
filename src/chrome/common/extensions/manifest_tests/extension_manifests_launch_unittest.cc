@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,7 @@ namespace extensions {
 namespace errors = manifest_errors;
 namespace keys = manifest_keys;
 
-class AppLaunchManifestTest : public ChromeManifestTest {
-};
+using AppLaunchManifestTest = ChromeManifestTest;
 
 TEST_F(AppLaunchManifestTest, AppLaunchContainer) {
   scoped_refptr<Extension> extension = LoadAndExpectSuccess("launch_tab.json");

@@ -1,85 +1,84 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// This source code is a part of eyeo Chromium SDK.
-// Use of this source code is governed by the GPLv3 that can be found in the
-// components/adblock/LICENSE file.
-
-import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
+import {loadTimeData} from './i18n_setup.js';
 
 /**
  * Specifies page visibility based on incognito status and Chrome OS guest mode.
  */
-export type PageVisibility = {
-  a11y?: boolean,
-  adblock?: boolean,
-  advancedSettings?: boolean,
-  appearance?: boolean|AppearancePageVisibility,
-  autofill?: boolean,
-  defaultBrowser?: boolean,
-  downloads?: boolean,
-  extensions?: boolean,
-  languages?: boolean,
-  onStartup?: boolean,
-  people?: boolean,
-  privacy?: boolean|PrivacyPageVisibility,
-  reset?: boolean,
-  safetyCheck?: boolean,
-  system?: boolean,
-};
+export interface PageVisibility {
+  a11y?: boolean;
+  advancedSettings?: boolean;
+  ai?: boolean;
+  appearance?: boolean|AppearancePageVisibility;
+  autofill?: boolean;
+  defaultBrowser?: boolean;
+  downloads?: boolean;
+  extensions?: boolean;
+  glic?: boolean;
+  languages?: boolean;
+  onStartup?: boolean;
+  people?: boolean;
+  performance?: boolean;
+  privacy?: boolean|PrivacyPageVisibility;
+  reset?: boolean;
+  safetyHub?: boolean;
+  system?: boolean;
+}
 
-export type AppearancePageVisibility = {
-  bookmarksBar: boolean,
-  homeButton: boolean,
-  pageZoom: boolean,
-  setTheme: boolean,
-  sidePanel: boolean,
-};
+export interface AppearancePageVisibility {
+  bookmarksBar: boolean;
+  homeButton: boolean;
+  hoverCard: boolean;
+  pageZoom: boolean;
+  setTheme: boolean;
+  sidePanel: boolean;
+}
 
-export type PrivacyPageVisibility = {
-  networkPrediction: boolean,
-  searchPrediction: boolean,
-};
+export interface PrivacyPageVisibility {
+  networkPrediction: boolean;
+  searchPrediction: boolean;
+}
 
-/**
- * Dictionary defining page visibility.
- */
-export let pageVisibility: PageVisibility;
+function createPageVisibility(): PageVisibility|undefined {
+  if (!loadTimeData.getBoolean('isGuest')) {
+    return undefined;
+  }
 
-if (loadTimeData.getBoolean('isGuest')) {
-  // "if not chromeos" and "if chromeos" in two completely separate blocks
-  // to work around closure compiler.
-  // <if expr="not (chromeos_ash or chromeos_lacros)">
-  pageVisibility = {
+  // <if expr="not is_chromeos">
+  const pageVisibility = {
     a11y: false,
-    adblock: true,
     advancedSettings: false,
+    ai: false,
     appearance: false,
     autofill: false,
     defaultBrowser: false,
     downloads: false,
     extensions: false,
+    glic: false,
     languages: false,
     onStartup: false,
     people: false,
+    performance: false,
     privacy: false,
     reset: false,
-    safetyCheck: false,
+    safetyHub: false,
     system: false,
   };
   // </if>
-  // <if expr="chromeos_ash or chromeos_lacros">
-  pageVisibility = {
-    adblock: true,
+  // <if expr="is_chromeos">
+  const pageVisibility = {
+    ai: false,
     autofill: false,
     people: false,
     onStartup: false,
     reset: false,
-    safetyCheck: false,
+    safetyHub: false,
     appearance: {
       setTheme: false,
       homeButton: false,
+      hoverCard: false,
       bookmarksBar: false,
       pageZoom: false,
       sidePanel: false,
@@ -92,11 +91,21 @@ if (loadTimeData.getBoolean('isGuest')) {
     downloads: true,
     a11y: true,
     extensions: false,
+    glic: false,
     languages: true,
+    performance: false,
   };
   // </if>
+
+  return pageVisibility;
 }
 
-export function setPageVisibilityForTesting(testVisibility: PageVisibility) {
+/**
+ * Dictionary defining page visibility.
+ */
+export let pageVisibility: PageVisibility|undefined = createPageVisibility();
+
+export function resetPageVisibilityForTesting(
+    testVisibility: PageVisibility|undefined = createPageVisibility()) {
   pageVisibility = testVisibility;
 }

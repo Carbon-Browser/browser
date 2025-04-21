@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,14 +14,14 @@ import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
-import android.support.test.InstrumentationRegistry;
+import android.os.Build;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 
 import androidx.test.filters.SmallTest;
+import androidx.test.platform.app.InstrumentationRegistry;
 
-import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.ClassRule;
@@ -30,19 +30,23 @@ import org.junit.runner.RunWith;
 import org.mockito.MockitoAnnotations;
 
 import org.chromium.base.ContextUtils;
+import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.util.Batch;
 import org.chromium.base.test.util.CommandLineFlags;
+import org.chromium.base.test.util.DisableIf;
 import org.chromium.base.test.util.PackageManagerWrapper;
-import org.chromium.chrome.R;
+import org.chromium.base.test.util.Restriction;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.chrome.browser.share.ShareHistoryBridge;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
+import org.chromium.chrome.test.R;
 import org.chromium.chrome.test.util.MenuUtils;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetTestSupport;
-import org.chromium.content_public.browser.test.util.TestThreadUtils;
+import org.chromium.ui.test.util.DeviceRestriction;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -51,8 +55,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The fixture for share sheet tests, which sets up mock system state and
- * implements some utility methods for writing these tests.
+ * The fixture for share sheet tests, which sets up mock system state and implements some utility
+ * methods for writing these tests.
  */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add(ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE)
@@ -63,7 +67,6 @@ public class ShareSheetTest {
             new ChromeTabbedActivityTestRule();
 
     private Profile mProfile;
-    private Context mContextToRestore;
     private List<ResolveInfo> mAvailableResolveInfos;
 
     // foo.bar.baz -> baz
@@ -125,9 +128,8 @@ public class ShareSheetTest {
     }
 
     /**
-     * Configure the sharesheet to use hardcoded layout constants so that the
-     * results of this test don't depend on the screen size or DPI of the device
-     * it's being run on.
+     * Configure the sharesheet to use hardcoded layout constants so that the results of this test
+     * don't depend on the screen size or DPI of the device it's being run on.
      */
     private void setUpLayoutConstants() {
         final int kTileWidth = 64;
@@ -144,30 +146,30 @@ public class ShareSheetTest {
     public void setUp() throws Exception {
         setUpLayoutConstants();
 
-        mContextToRestore = ContextUtils.getApplicationContext();
         ContextUtils.initApplicationContextForTests(
-                new PackageManagerReplacingContext(mContextToRestore, this));
+                new PackageManagerReplacingContext(ContextUtils.getApplicationContext(), this));
 
         MockitoAnnotations.initMocks(this);
         sActivityTestRule.startMainActivityOnBlankPage();
-        TestThreadUtils.runOnUiThreadBlocking(
-                () -> { mProfile = Profile.getLastUsedRegularProfile(); });
-    }
-
-    @After
-    public void tearDown() throws Exception {
-        ContextUtils.initApplicationContextForTests(mContextToRestore);
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    mProfile = ProfileManager.getLastUsedRegularProfile();
+                });
     }
 
     // Open the share sheet from the menu and wait for its open animation to
     // have completed.
     private void openShareSheet() {
-        MenuUtils.invokeCustomMenuActionSync(InstrumentationRegistry.getInstrumentation(),
-                sActivityTestRule.getActivity(), R.id.share_menu_id);
+        MenuUtils.invokeCustomMenuActionSync(
+                InstrumentationRegistry.getInstrumentation(),
+                sActivityTestRule.getActivity(),
+                R.id.share_menu_id);
 
-        BottomSheetController controller = sActivityTestRule.getActivity()
-                                                   .getRootUiCoordinatorForTesting()
-                                                   .getBottomSheetController();
+        BottomSheetController controller =
+                sActivityTestRule
+                        .getActivity()
+                        .getRootUiCoordinatorForTesting()
+                        .getBottomSheetController();
         BottomSheetTestSupport.waitForState(controller, BottomSheetController.SheetState.FULL);
 
         Assert.assertEquals(BottomSheetController.SheetState.FULL, controller.getSheetState());
@@ -175,27 +177,15 @@ public class ShareSheetTest {
 
     // Replace the recent share history with the supplied map of usage counts.
     private void replaceRecentShareHistory(Map<String, Integer> recent) {
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            ShareHistoryBridge.clear(mProfile);
-            for (Map.Entry<String, Integer> e : recent.entrySet()) {
-                for (int i = 0; i < e.getValue(); i++) {
-                    ShareHistoryBridge.addShareEntry(mProfile, e.getKey());
-                }
-            }
-        });
-    }
-
-    private void replaceAllShareHistory(Map<String, Integer> all) {
-        // Not implemented yet. This method will require a new JNI interface
-        // via ShareHistoryBridge, since there's currently no way to add
-        // historical data, because production code never needs to do this.
-        // TODO(https://crbug.com/1249571): Implement.
-    }
-
-    private void replaceStoredRanking(String type, List<String> apps) {
-        // Not implemented yet. There's no JNI interface for replacing the stored
-        // ranking, but there will be in the future.
-        // TODO(https://crbug.com/1249571): Implement.
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    ShareHistoryBridge.clear(mProfile);
+                    for (Map.Entry<String, Integer> e : recent.entrySet()) {
+                        for (int i = 0; i < e.getValue(); i++) {
+                            ShareHistoryBridge.addShareEntry(mProfile, e.getKey());
+                        }
+                    }
+                });
     }
 
     private void replaceSystemApps(List<String> apps) {
@@ -207,12 +197,12 @@ public class ShareSheetTest {
     }
 
     /**
-     * This class wraps a Context, replacing its PackageManager with a shim
-     * PackageManager that returns a configurable list of packages as available
-     * for ACTION_SEND type intents.
+     * This class wraps a Context, replacing its PackageManager with a shim PackageManager that
+     * returns a configurable list of packages as available for ACTION_SEND type intents.
      */
     private class PackageManagerReplacingContext extends ContextWrapper {
         private ShareSheetTest mTest;
+
         public PackageManagerReplacingContext(Context baseContext, ShareSheetTest test) {
             super(baseContext);
             mTest = test;
@@ -226,7 +216,8 @@ public class ShareSheetTest {
                     if (intent.getAction().equals(Intent.ACTION_SEND)) {
                         return mTest.availableResolveInfos();
                     }
-                    return PackageManagerReplacingContext.super.getPackageManager()
+                    return PackageManagerReplacingContext.super
+                            .getPackageManager()
                             .queryIntentActivities(intent, flags);
                 }
             };
@@ -234,13 +225,15 @@ public class ShareSheetTest {
     }
 
     /**
-     * Returns the list of names of targets shown in the third party row of
-     * the sharing hub, including targets that are off-screen.
+     * Returns the list of names of targets shown in the third party row of the sharing hub,
+     * including targets that are off-screen.
      */
     private List<String> getShown3PTargets() {
-        BottomSheetController controller = sActivityTestRule.getActivity()
-                                                   .getRootUiCoordinatorForTesting()
-                                                   .getBottomSheetController();
+        BottomSheetController controller =
+                sActivityTestRule
+                        .getActivity()
+                        .getRootUiCoordinatorForTesting()
+                        .getBottomSheetController();
         View sheetView = controller.getCurrentSheetContent().getContentView();
         View thirdPartyRow = sheetView.findViewById(R.id.share_sheet_other_apps);
 
@@ -256,9 +249,9 @@ public class ShareSheetTest {
     }
 
     /**
-     * Creates a default test history, which is a map from history names
-     * (which are package + '/' + activity) to usage counts. The generated map
-     * here is: { 'a': 10, 'b': 9, 'c': 8, ..., 'j': 1 }.
+     * Creates a default test history, which is a map from history names (which are package + '/' +
+     * activity) to usage counts. The generated map here is: { 'a': 10, 'b': 9, 'c': 8, ..., 'j': 1
+     * }.
      */
     private Map<String, Integer> defaultTestHistory() {
         char suffix = 'a';
@@ -273,8 +266,8 @@ public class ShareSheetTest {
     }
 
     /**
-     * Creates a default set of available apps. This is a list of package names,
-     * which defaults to { 'a', 'b', 'c', 'd', 'e' }.
+     * Creates a default set of available apps. This is a list of package names, which defaults to {
+     * 'a', 'b', 'c', 'd', 'e' }.
      */
     private List<String> defaultTestSystemApps() {
         List<String> apps = new ArrayList<String>();
@@ -286,6 +279,11 @@ public class ShareSheetTest {
 
     @Test
     @SmallTest
+    // 3P share sheet is not supported on auto.
+    @Restriction(DeviceRestriction.RESTRICTION_TYPE_NON_AUTO)
+    @DisableIf.Build(
+            sdk_is_greater_than = Build.VERSION_CODES.TIRAMISU,
+            message = "crbug.com/351025215")
     public void nothingFromDefaultRankingAvailable() {
         replaceRecentShareHistory(defaultTestHistory());
         replaceSystemApps(defaultTestSystemApps());

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,11 @@
 #include "ash/test/ash_test_base.h"
 #include "ash/test/test_window_builder.h"
 #include "ash/wm/desks/desks_util.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ref_counted.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/test_mock_time_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/tick_clock.h"
 #include "components/prefs/pref_service.h"
 #include "components/session_manager/session_manager_types.h"
@@ -44,7 +44,8 @@ class LogoutConfirmationControllerTest : public testing::Test {
   bool log_out_called_;
 
   scoped_refptr<base::TestMockTimeTaskRunner> runner_;
-  base::ThreadTaskRunnerHandle runner_handle_;
+  base::SingleThreadTaskRunner::CurrentDefaultHandle
+      runner_current_default_handle_;
 
   LogoutConfirmationController controller_;
 };
@@ -52,7 +53,7 @@ class LogoutConfirmationControllerTest : public testing::Test {
 LogoutConfirmationControllerTest::LogoutConfirmationControllerTest()
     : log_out_called_(false),
       runner_(new base::TestMockTimeTaskRunner),
-      runner_handle_(runner_) {
+      runner_current_default_handle_(runner_) {
   controller_.SetClockForTesting(runner_->GetMockTickClock());
   controller_.SetLogoutCallbackForTesting(base::BindRepeating(
       &LogoutConfirmationControllerTest::LogOut, base::Unretained(this)));
@@ -194,7 +195,7 @@ class LastWindowClosedTest : public NoSessionAshTestBase {
   void StartManagedGuestSession() {
     TestSessionControllerClient* session = GetSessionControllerClient();
     session->Reset();
-    session->AddUserSession(kUserEmail, user_manager::USER_TYPE_PUBLIC_ACCOUNT);
+    session->AddUserSession(kUserEmail, user_manager::UserType::kPublicAccount);
     session->SetSessionState(session_manager::SessionState::ACTIVE);
   }
 
@@ -220,7 +221,7 @@ TEST_F(LastWindowClosedTest, RegularSession) {
   EXPECT_FALSE(controller->dialog_for_testing());
 
   // Dialog is not visible after login.
-  CreateUserSessions(1);
+  SimulateUserLogin(kDefaultUserEmail);
   EXPECT_FALSE(controller->dialog_for_testing());
 
   // Creating and closing a window does not show the dialog because this is not
@@ -257,8 +258,10 @@ TEST_F(LastWindowClosedTest, ManagedGuestSession) {
   EXPECT_FALSE(controller->dialog_for_testing());
 
   // Opening windows does not show the dialog.
-  std::unique_ptr<views::Widget> widget1 = CreateTestWidget();
-  std::unique_ptr<views::Widget> widget2 = CreateTestWidget();
+  std::unique_ptr<views::Widget> widget1 =
+      CreateTestWidget(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET);
+  std::unique_ptr<views::Widget> widget2 =
+      CreateTestWidget(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET);
   EXPECT_FALSE(controller->dialog_for_testing());
 
   // Closing the last window shows the dialog.
@@ -279,8 +282,10 @@ TEST_F(LastWindowClosedTest, SuggestLogoutAfterClosingLastWindowPolicy) {
   EXPECT_FALSE(controller->dialog_for_testing());
 
   // Opening windows does not show the dialog.
-  std::unique_ptr<views::Widget> widget1 = CreateTestWidget();
-  std::unique_ptr<views::Widget> widget2 = CreateTestWidget();
+  std::unique_ptr<views::Widget> widget1 =
+      CreateTestWidget(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET);
+  std::unique_ptr<views::Widget> widget2 =
+      CreateTestWidget(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET);
   EXPECT_FALSE(controller->dialog_for_testing());
 
   // Closing the last window does not show the dialog because the
@@ -322,7 +327,8 @@ TEST_F(LastWindowClosedTest, AlwaysOnTop) {
   StartManagedGuestSession();
 
   // The new widget starts in the default window container.
-  std::unique_ptr<views::Widget> widget = CreateTestWidget();
+  std::unique_ptr<views::Widget> widget =
+      CreateTestWidget(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET);
 
   // Moving the widget to the always-on-top container does not trigger the
   // dialog because the window didn't close.
@@ -340,8 +346,10 @@ TEST_F(LastWindowClosedTest, MultipleContainers) {
   StartManagedGuestSession();
 
   // Create two windows in different containers.
-  std::unique_ptr<views::Widget> normal_widget = CreateTestWidget();
-  std::unique_ptr<views::Widget> always_on_top_widget = CreateTestWidget();
+  std::unique_ptr<views::Widget> normal_widget =
+      CreateTestWidget(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET);
+  std::unique_ptr<views::Widget> always_on_top_widget =
+      CreateTestWidget(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET);
   always_on_top_widget->SetZOrderLevel(ui::ZOrderLevel::kFloatingWindow);
 
   // Closing the last window shows the dialog.

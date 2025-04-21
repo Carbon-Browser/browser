@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,8 +44,9 @@ EphemeralRange CurrentWordIfTypingInPartialWord(const Element& editable) {
       frame.Selection().GetSelectionInDOMTree();
   if (!selection.IsCaret())
     return EphemeralRange();
-  if (RootEditableElementOf(selection.Base()) != &editable)
+  if (RootEditableElementOf(selection.Anchor()) != &editable) {
     return EphemeralRange();
+  }
 
   CompositeEditCommand* last_command = frame.GetEditor().LastEditCommand();
   if (!last_command || !last_command->IsTypingCommand())
@@ -54,7 +55,7 @@ EphemeralRange CurrentWordIfTypingInPartialWord(const Element& editable) {
     return EphemeralRange();
   if (last_command->EndingSelection().AsSelection() != selection)
     return EphemeralRange();
-  return AdjacentWordIfExists(selection.Base());
+  return AdjacentWordIfExists(selection.Anchor());
 }
 
 EphemeralRange CalculateHotModeCheckingRange(const Element& editable,

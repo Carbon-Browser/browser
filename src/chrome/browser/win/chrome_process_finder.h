@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,9 +13,7 @@ namespace base {
 class FilePath;
 }
 
-namespace chrome {
-
-enum NotifyChromeResult {
+enum class NotifyChromeResult {
   NOTIFY_SUCCESS,
   NOTIFY_FAILED,
   NOTIFY_WINDOW_HUNG,
@@ -31,7 +29,5 @@ NotifyChromeResult AttemptToNotifyRunningChrome(HWND remote_window);
 
 // Changes the notification timeout to |new_timeout|, returns the old timeout.
 base::TimeDelta SetNotificationTimeoutForTesting(base::TimeDelta new_timeout);
-
-}  // namespace chrome
 
 #endif  // CHROME_BROWSER_WIN_CHROME_PROCESS_FINDER_H_

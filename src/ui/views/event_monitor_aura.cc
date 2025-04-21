@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -72,9 +72,8 @@ std::unique_ptr<EventMonitor> EventMonitor::CreateWindowMonitor(
 EventMonitorAura::EventMonitorAura(ui::EventObserver* event_observer,
                                    ui::EventTarget* event_target,
                                    const std::set<ui::EventType>& types)
-    : event_observer_(event_observer), event_target_(event_target) {
+    : event_observer_(event_observer) {
   DCHECK(event_observer_);
-  DCHECK(event_target_);
   aura::Env::GetInstance()->AddEventObserver(event_observer_, event_target,
                                              types);
 }
@@ -88,8 +87,9 @@ gfx::Point EventMonitorAura::GetLastMouseLocation() {
 }
 
 void EventMonitorAura::TearDown() {
-  if (event_observer_)
+  if (event_observer_) {
     aura::Env::GetInstance()->RemoveEventObserver(event_observer_);
+  }
   event_observer_ = nullptr;
 }
 

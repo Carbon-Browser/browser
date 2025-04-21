@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,18 +6,22 @@
 #define FUCHSIA_WEB_WEBENGINE_CONTEXT_PROVIDER_IMPL_H_
 
 #include <fuchsia/web/cpp/fidl.h>
-#include <lib/fidl/cpp/interface_ptr_set.h>
 
-#include "base/callback.h"
-#include "base/values.h"
 #include "fuchsia_web/webengine/web_engine_export.h"
 #include "fuchsia_web/webinstance_host/web_instance_host.h"
 
+namespace sys {
+class OutgoingDirectory;
+}  // namespace sys
+
 class WEB_ENGINE_EXPORT ContextProviderImpl
-    : public fuchsia::web::ContextProvider,
-      public fuchsia::web::Debug {
+    : public fuchsia::web::ContextProvider {
  public:
-  ContextProviderImpl();
+  // The impl will offer capabilities to child instances via
+  // `outgoing_directory`. ContextProviderImpl owners must serve the directory
+  // before creating web instances, and must ensure that the directory outlives
+  // the ContextProviderImpl instance.
+  explicit ContextProviderImpl(sys::OutgoingDirectory& outgoing_directory);
   ~ContextProviderImpl() override;
 
   ContextProviderImpl(const ContextProviderImpl&) = delete;
@@ -28,20 +32,14 @@ class WEB_ENGINE_EXPORT ContextProviderImpl
       fuchsia::web::CreateContextParams params,
       fidl::InterfaceRequest<fuchsia::web::Context> context_request) override;
 
-  // Sets a config to use for the test, instead of looking for the config file.
-  void set_config_for_test(base::Value config);
+  // Exposes the fuchsia.web.Debug API to offer to clients.
+  fuchsia::web::Debug* debug_api();
 
  private:
-  // fuchsia::web::Debug implementation.
-  void EnableDevTools(
-      fidl::InterfaceHandle<fuchsia::web::DevToolsListener> listener,
-      EnableDevToolsCallback callback) override;
-
-  // The DevToolsListeners registered via the Debug interface.
-  fidl::InterfacePtrSet<fuchsia::web::DevToolsListener> devtools_listeners_;
-
   // Manages an isolated Environment, and the web instances hosted within it.
-  WebInstanceHost web_instance_host_;
+  // Services for each web instance are provided by the Service Directory
+  // provided in the Create() call.
+  WebInstanceHostWithoutServices web_instance_host_;
 };
 
 #endif  // FUCHSIA_WEB_WEBENGINE_CONTEXT_PROVIDER_IMPL_H_

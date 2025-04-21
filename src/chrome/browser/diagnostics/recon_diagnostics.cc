@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,7 +48,7 @@ const int64_t kOneKilobyte = 1024;
 const int64_t kOneMegabyte = 1024 * kOneKilobyte;
 
 class InstallTypeTest;
-InstallTypeTest* g_install_type = 0;
+InstallTypeTest* g_install_type = nullptr;
 
 // Check that the disk space in the volume where the user data directory
 // normally lives is not dangerously low.
@@ -140,14 +140,14 @@ class JSONTest : public DiagnosticsTest {
       }
       return true;
     }
-    int64_t file_size;
-    if (!base::GetFileSize(path_, &file_size)) {
+    std::optional<int64_t> file_size = base::GetFileSize(path_);
+    if (!file_size.has_value()) {
       RecordFailure(DIAG_RECON_CANNOT_OBTAIN_FILE_SIZE,
                     "Cannot obtain file size");
       return true;
     }
 
-    if (file_size > max_file_size_) {
+    if (file_size.value() > max_file_size_) {
       RecordFailure(DIAG_RECON_FILE_TOO_BIG, "File too big");
       return true;
     }
@@ -248,11 +248,11 @@ class PathTest : public DiagnosticsTest {
       return true;
     }
 
-    int64_t dir_or_file_size = 0;
+    int64_t dir_or_file_size;
     if (path_info_.is_directory) {
       dir_or_file_size = base::ComputeDirectorySize(dir_or_file);
     } else {
-      base::GetFileSize(dir_or_file, &dir_or_file_size);
+      dir_or_file_size = base::GetFileSize(dir_or_file).value_or(0);
     }
     if (!dir_or_file_size && !path_info_.is_optional) {
       RecordFailure(DIAG_RECON_CANNOT_OBTAIN_SIZE,
@@ -297,7 +297,7 @@ class VersionTest : public DiagnosticsTest {
   VersionTest& operator=(const VersionTest&) = delete;
 
   bool ExecuteImpl(DiagnosticsModel::Observer* observer) override {
-    std::string current_version = version_info::GetVersionNumber();
+    std::string current_version(version_info::GetVersionNumber());
     if (current_version.empty()) {
       RecordFailure(DIAG_RECON_EMPTY_VERSION, "Empty Version");
       return true;
@@ -324,9 +324,16 @@ std::unique_ptr<DiagnosticsTest> MakeInstallTypeTest() {
   return std::make_unique<InstallTypeTest>();
 }
 
-std::unique_ptr<DiagnosticsTest> MakeBookMarksTest() {
+std::unique_ptr<DiagnosticsTest> MakeLocalOrSyncableBookmarksTest() {
   base::FilePath path = DiagnosticsTest::GetUserDefaultProfileDir();
-  path = path.Append(bookmarks::kBookmarksFileName);
+  path = path.Append(bookmarks::kLocalOrSyncableBookmarksFileName);
+  return std::make_unique<JSONTest>(path, DIAGNOSTICS_JSON_BOOKMARKS_TEST,
+                                    2 * kOneMegabyte, JSONTest::NON_CRITICAL);
+}
+
+std::unique_ptr<DiagnosticsTest> MakeAccountBookmarksTest() {
+  base::FilePath path = DiagnosticsTest::GetUserDefaultProfileDir();
+  path = path.Append(bookmarks::kAccountBookmarksFileName);
   return std::make_unique<JSONTest>(path, DIAGNOSTICS_JSON_BOOKMARKS_TEST,
                                     2 * kOneMegabyte, JSONTest::NON_CRITICAL);
 }

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/tabs/public/tab_interface.h"
 #include "components/javascript_dialogs/tab_modal_dialog_view.h"
 #include "content/public/browser/javascript_dialog_manager.h"
 #include "ui/base/metadata/metadata_header_macros.h"
@@ -24,8 +25,9 @@ class MessageBoxView;
 class JavaScriptTabModalDialogViewViews
     : public javascript_dialogs::TabModalDialogView,
       public views::DialogDelegateView {
+  METADATA_HEADER(JavaScriptTabModalDialogViewViews, views::DialogDelegateView)
+
  public:
-  METADATA_HEADER(JavaScriptTabModalDialogViewViews);
   JavaScriptTabModalDialogViewViews(const JavaScriptTabModalDialogViewViews&) =
       delete;
   JavaScriptTabModalDialogViewViews& operator=(
@@ -46,7 +48,7 @@ class JavaScriptTabModalDialogViewViews
   // views::View:
   void AddedToWidget() override;
 
-  // TODO(crbug.com/1330353): We cannot use unique_ptr because ownership of
+  // TODO(crbug.com/40843165): We cannot use unique_ptr because ownership of
   // this object gets passed to Views.
   static JavaScriptTabModalDialogViewViews* CreateAlertDialogForTesting(
       Browser* browser,
@@ -57,6 +59,9 @@ class JavaScriptTabModalDialogViewViews
   friend class JavaScriptDialog;
   friend class JavaScriptTabModalDialogManagerDelegateDesktop;
 
+  // For a Modal Dialog to be shown, there must not be another Modal Dialog
+  // showing. The caller is responsible for checking this and not constructing
+  // this dialog if another is showing.
   JavaScriptTabModalDialogViewViews(
       content::WebContents* parent_web_contents,
       content::WebContents* alerting_web_contents,
@@ -75,6 +80,10 @@ class JavaScriptTabModalDialogViewViews
 
   // The message box view whose commands we handle.
   raw_ptr<views::MessageBoxView> message_box_view_;
+
+  // Prevents other features from showing tab-modal UI. Connected to the
+  // lifetime of this dialog.
+  std::unique_ptr<tabs::ScopedTabModalUI> scoped_tab_modal_ui_;
 
   base::WeakPtrFactory<JavaScriptTabModalDialogViewViews> weak_factory_{this};
 };

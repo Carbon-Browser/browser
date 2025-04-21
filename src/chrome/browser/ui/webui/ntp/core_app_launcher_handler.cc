@@ -1,10 +1,10 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/webui/ntp/core_app_launcher_handler.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/extensions/extension_metrics.h"
 #include "chrome/common/pref_names.h"
@@ -16,16 +16,9 @@
 #include "extensions/common/manifest.h"
 #include "url/gurl.h"
 
-CoreAppLauncherHandler::CoreAppLauncherHandler() {}
+CoreAppLauncherHandler::CoreAppLauncherHandler() = default;
 
-CoreAppLauncherHandler::~CoreAppLauncherHandler() {}
-
-// static
-void CoreAppLauncherHandler::RegisterProfilePrefs(
-    user_prefs::PrefRegistrySyncable* registry) {
-  registry->RegisterListPref(prefs::kNtpAppPageNames,
-                             user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
-}
+CoreAppLauncherHandler::~CoreAppLauncherHandler() = default;
 
 void CoreAppLauncherHandler::HandleRecordAppLaunchByUrl(
     const base::Value::List& args) {

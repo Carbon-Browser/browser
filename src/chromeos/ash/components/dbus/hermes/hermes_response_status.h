@@ -1,14 +1,15 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROMEOS_ASH_COMPONENTS_DBUS_HERMES_HERMES_RESPONSE_STATUS_H_
 #define CHROMEOS_ASH_COMPONENTS_DBUS_HERMES_HERMES_RESPONSE_STATUS_H_
 
+#include <array>
 #include <ostream>
 #include <string>
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 
 namespace ash {
 
@@ -37,8 +38,16 @@ enum class HermesResponseStatus {
   kErrorPendingProfile = 18,
   kErrorSendApduFailure = 19,
   kErrorSendHttpsFailure = 20,
-  kMaxValue = kErrorSendHttpsFailure
+  kErrorUnexpectedModemManagerState = 21,
+  kErrorModemMessageProcessing = 22,
+  kErrorEmptyResponse = 23,
+  kErrorUnknownResponse = 24,
+  kMaxValue = kErrorUnknownResponse
 };
+
+// Hermes codes returned that are possibly a result of user error.
+extern const std::array<HermesResponseStatus, 4> COMPONENT_EXPORT(HERMES_CLIENT)
+    kHermesUserErrorCodes;
 
 // Callback that receives only a HermesResponseStatus.
 using HermesResponseCallback =
@@ -53,10 +62,5 @@ std::ostream& COMPONENT_EXPORT(HERMES_CLIENT) operator<<(
     std::ostream& stream,
     HermesResponseStatus status);
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::HermesResponseStatus;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_DBUS_HERMES_HERMES_RESPONSE_STATUS_H_

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,6 @@
 
 #include <cstdint>
 
-#include "third_party/x11proto/keysymdef.h"
+#include "third_party/x11proto/keysymdef.h"  // IWYU pragma: export
 
 #endif  // UI_GFX_X_KEYSYMS_KEYSYMS_H_

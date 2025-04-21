@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,7 @@
 #include "ui/color/color_provider.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/geometry/insets.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/textfield/textfield.h"
@@ -27,6 +28,8 @@
 namespace {
 
 class PinTextfield : public views::Textfield {
+  METADATA_HEADER(PinTextfield, views::Textfield)
+
  public:
   PinTextfield(views::TextfieldController* controller, views::View* label) {
     SetTextInputType(ui::TextInputType::TEXT_INPUT_TYPE_PASSWORD);
@@ -34,7 +37,7 @@ class PinTextfield : public views::Textfield {
     SetDefaultWidthInChars(20);
 
     set_controller(controller);
-    SetAssociatedLabel(label);
+    GetViewAccessibility().SetName(*label);
   }
   PinTextfield(const PinTextfield&) = delete;
   PinTextfield& operator=(const PinTextfield&) = delete;
@@ -48,6 +51,9 @@ class PinTextfield : public views::Textfield {
         GetColorProvider()->GetColor(kColorWebAuthnPinTextfieldBottomBorder)));
   }
 };
+
+BEGIN_METADATA(PinTextfield)
+END_METADATA
 
 }  // namespace
 
@@ -89,8 +95,8 @@ AuthenticatorClientPinEntryView::AuthenticatorClientPinEntryView(
 
   if (show_confirmation_text_field_) {
     DCHECK(confirmation_label_);
-    confirmation_text_field_ = AddChildView(
-        std::make_unique<PinTextfield>(this, confirmation_label_));
+    confirmation_text_field_ =
+        AddChildView(std::make_unique<PinTextfield>(this, confirmation_label_));
   } else {
     AddChildView(std::make_unique<views::View>());
   }
@@ -107,8 +113,9 @@ void AuthenticatorClientPinEntryView::OnThemeChanged() {
   const auto* const color_provider = GetColorProvider();
   const SkColor label_color = color_provider->GetColor(ui::kColorAccent);
   pin_label_->SetEnabledColor(label_color);
-  if (confirmation_label_)
+  if (confirmation_label_) {
     confirmation_label_->SetEnabledColor(label_color);
+  }
 }
 
 void AuthenticatorClientPinEntryView::ContentsChanged(
@@ -131,5 +138,5 @@ bool AuthenticatorClientPinEntryView::HandleKeyEvent(
   return false;
 }
 
-BEGIN_METADATA(AuthenticatorClientPinEntryView, views::View)
+BEGIN_METADATA(AuthenticatorClientPinEntryView)
 END_METADATA

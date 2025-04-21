@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,10 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
 #include "base/component_export.h"
+#include "base/functional/bind.h"
 #include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/leveldb_proto/internal/proto_leveldb_wrapper.h"
 #include "components/leveldb_proto/public/proto_database.h"
 

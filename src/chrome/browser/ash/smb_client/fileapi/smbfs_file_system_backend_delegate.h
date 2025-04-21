@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,17 +7,15 @@
 
 #include <memory>
 
-#include "chrome/browser/chromeos/fileapi/file_system_backend_delegate.h"
+#include "chrome/browser/ash/fileapi/file_system_backend_delegate.h"
 
 class Profile;
 
-namespace ash {
-namespace smb_client {
+namespace ash::smb_client {
 
 class SmbFsAsyncFileUtil;
 
-class SmbFsFileSystemBackendDelegate
-    : public chromeos::FileSystemBackendDelegate {
+class SmbFsFileSystemBackendDelegate : public FileSystemBackendDelegate {
  public:
   explicit SmbFsFileSystemBackendDelegate(Profile* profile);
   ~SmbFsFileSystemBackendDelegate() override;
@@ -37,14 +35,11 @@ class SmbFsFileSystemBackendDelegate
       storage::FileSystemContext* context) override;
   storage::WatcherManager* GetWatcherManager(
       storage::FileSystemType type) override;
-  void GetRedirectURLForContents(const storage::FileSystemURL& url,
-                                 storage::URLCallback callback) override;
 
  private:
   std::unique_ptr<SmbFsAsyncFileUtil> async_file_util_;
 };
 
-}  // namespace smb_client
-}  // namespace ash
+}  // namespace ash::smb_client
 
 #endif  // CHROME_BROWSER_ASH_SMB_CLIENT_FILEAPI_SMBFS_FILE_SYSTEM_BACKEND_DELEGATE_H_

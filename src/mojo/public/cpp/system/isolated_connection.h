@@ -1,10 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MOJO_PUBLIC_CPP_SYSTEM_ISOLATED_CONNECTION_H_
 #define MOJO_PUBLIC_CPP_SYSTEM_ISOLATED_CONNECTION_H_
 
+#include "base/process/process.h"
 #include "base/unguessable_token.h"
 #include "mojo/public/cpp/platform/platform_channel_endpoint.h"
 #include "mojo/public/cpp/platform/platform_channel_server_endpoint.h"
@@ -47,6 +48,13 @@ class MOJO_CPP_SYSTEM_EXPORT IsolatedConnection {
   // message pipe that can be used for Mojo IPC. The connection
   // will be connected to a corresponding peer pipe in the remote process.
   ScopedMessagePipeHandle Connect(PlatformChannelEndpoint endpoint);
+
+  // Connects to a process at the other end of the channel. Returns a primordial
+  // message pipe that can be used for Mojo IPC. The connection
+  // will be connected to a corresponding peer pipe in the remote process.
+  // `process` identifies the remote process.
+  ScopedMessagePipeHandle Connect(PlatformChannelEndpoint endpoint,
+                                  base::Process process);
 
   // Same as above but works with a server endpoint. The corresponding client
   // could use the above signature with NamedPlatformChannel::ConnectToServer.

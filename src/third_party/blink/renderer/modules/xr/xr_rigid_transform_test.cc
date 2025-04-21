@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,8 @@
 #include "third_party/blink/renderer/modules/xr/xr_test_utils.h"
 #include "third_party/blink/renderer/modules/xr/xr_utils.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 
 namespace blink {
 namespace {
@@ -26,8 +28,8 @@ static void AssertDOMPointsEqualForTest(const DOMPointReadOnly* a,
   ASSERT_NEAR(a->w(), b->w(), kEpsilon);
 }
 
-static void AssertMatricesEqualForTest(const TransformationMatrix& a,
-                                       const TransformationMatrix& b) {
+static void AssertMatricesEqualForTest(const gfx::Transform& a,
+                                       const gfx::Transform& b) {
   const Vector<double> a_data = GetMatrixDataForTest(a);
   const Vector<double> b_data = GetMatrixDataForTest(b);
   for (int i = 0; i < 16; ++i) {
@@ -35,17 +37,19 @@ static void AssertMatricesEqualForTest(const TransformationMatrix& a,
   }
 }
 
-static void AssertTransformsEqualForTest(XRRigidTransform& a,
-                                         XRRigidTransform& b) {
-  AssertDOMPointsEqualForTest(a.position(), b.position());
-  AssertDOMPointsEqualForTest(a.orientation(), b.orientation());
-  AssertMatricesEqualForTest(a.TransformMatrix(), b.TransformMatrix());
+static void AssertTransformsEqualForTest(XRRigidTransform* a,
+                                         XRRigidTransform* b) {
+  AssertDOMPointsEqualForTest(a->position(), b->position());
+  AssertDOMPointsEqualForTest(a->orientation(), b->orientation());
+  AssertMatricesEqualForTest(a->TransformMatrix(), b->TransformMatrix());
 }
 
 static void TestComposeDecompose(DOMPointInit* position,
                                  DOMPointInit* orientation) {
-  XRRigidTransform transform_1(position, orientation);
-  XRRigidTransform transform_2(transform_1.TransformMatrix());
+  XRRigidTransform* transform_1 =
+      MakeGarbageCollected<XRRigidTransform>(position, orientation);
+  XRRigidTransform* transform_2 =
+      MakeGarbageCollected<XRRigidTransform>(transform_1->TransformMatrix());
   AssertTransformsEqualForTest(transform_1, transform_2);
 }
 
@@ -58,15 +62,17 @@ static void TestDoubleInverse(DOMPointInit* position,
   XRRigidTransform* inverse_inverse_transform =
       MakeGarbageCollected<XRRigidTransform>(
           inverse_transform->InverseTransformMatrix());
-  AssertTransformsEqualForTest(*transform, *inverse_inverse_transform);
+  AssertTransformsEqualForTest(transform, inverse_inverse_transform);
 }
 
 TEST(XRRigidTransformTest, Compose) {
+  test::TaskEnvironment task_environment;
   DOMPointInit* position = MakePointForTest(1.0, 2.0, 3.0, 1.0);
   DOMPointInit* orientation = MakePointForTest(0.7071068, 0.0, 0.0, 0.7071068);
-  XRRigidTransform transform(position, orientation);
+  XRRigidTransform* transform =
+      MakeGarbageCollected<XRRigidTransform>(position, orientation);
   const Vector<double> actual_matrix =
-      GetMatrixDataForTest(transform.TransformMatrix());
+      GetMatrixDataForTest(transform->TransformMatrix());
   const Vector<double> expected_matrix{1.0, 0.0,  0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
                                        0.0, -1.0, 0.0, 0.0, 1.0, 2.0, 3.0, 1.0};
   for (int i = 0; i < 16; ++i) {
@@ -75,21 +81,27 @@ TEST(XRRigidTransformTest, Compose) {
 }
 
 TEST(XRRigidTransformTest, Decompose) {
-  TransformationMatrix matrix(1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0,
-                              0.0, 0.0, 1.0, 2.0, 3.0, 1.0);
-  XRRigidTransform transform(matrix);
-  const DOMPointReadOnly expected_position(1.0, 2.0, 3.0, 1.0);
-  const DOMPointReadOnly expected_orientation(0.7071068, 0.0, 0.0, 0.7071068);
-  AssertDOMPointsEqualForTest(transform.position(), &expected_position);
-  AssertDOMPointsEqualForTest(transform.orientation(), &expected_orientation);
+  test::TaskEnvironment task_environment;
+  auto matrix =
+      gfx::Transform::ColMajor(1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0,
+                               -1.0, 0.0, 0.0, 1.0, 2.0, 3.0, 1.0);
+  XRRigidTransform* transform = MakeGarbageCollected<XRRigidTransform>(matrix);
+  const DOMPointReadOnly* expected_position =
+      MakeGarbageCollected<DOMPointReadOnly>(1.0, 2.0, 3.0, 1.0);
+  const DOMPointReadOnly* expected_orientation =
+      MakeGarbageCollected<DOMPointReadOnly>(0.7071068, 0.0, 0.0, 0.7071068);
+  AssertDOMPointsEqualForTest(transform->position(), expected_position);
+  AssertDOMPointsEqualForTest(transform->orientation(), expected_orientation);
 }
 
 TEST(XRRigidTransformTest, ComposeDecompose) {
+  test::TaskEnvironment task_environment;
   TestComposeDecompose(MakePointForTest(1.0, -1.0, 4.0, 1.0),
                        MakePointForTest(1.0, 0.0, 0.0, 1.0));
 }
 
 TEST(XRRigidTransformTest, ComposeDecompose2) {
+  test::TaskEnvironment task_environment;
   TestComposeDecompose(
       MakePointForTest(1.0, -1.0, 4.0, 1.0),
       MakePointForTest(0.3701005885691383, -0.5678993882056005,
@@ -97,17 +109,20 @@ TEST(XRRigidTransformTest, ComposeDecompose2) {
 }
 
 TEST(XRRigidTransformTest, DoubleInverse) {
+  test::TaskEnvironment task_environment;
   TestDoubleInverse(MakePointForTest(1.0, -1.0, 4.0, 1.0),
                     MakePointForTest(1.0, 0.0, 0.0, 1.0));
 }
 
 TEST(XRRigidTransformTest, DoubleInverse2) {
+  test::TaskEnvironment task_environment;
   TestDoubleInverse(MakePointForTest(1.0, -1.0, 4.0, 1.0),
                     MakePointForTest(0.3701005885691383, -0.5678993882056005,
                                      0.31680366148754113, 0.663438979322567));
 }
 
 TEST(XRRigidTransformTest, InverseObjectEquality) {
+  test::TaskEnvironment task_environment;
   XRRigidTransform* transform = MakeGarbageCollected<XRRigidTransform>(
       MakePointForTest(1.0, 2.0, 3.0, 4.0),
       MakePointForTest(1.0, 0.0, 0.0, 1.0));

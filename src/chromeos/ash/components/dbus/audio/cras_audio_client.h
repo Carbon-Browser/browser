@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,12 +11,13 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "chromeos/ash/components/dbus/audio/audio_node.h"
+#include "chromeos/ash/components/dbus/audio/voice_isolation_ui_appearance.h"
 #include "chromeos/ash/components/dbus/audio/volume_state.h"
-#include "chromeos/dbus/common/dbus_method_call_status.h"
+#include "chromeos/dbus/common/dbus_callback.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
 namespace dbus {
@@ -53,6 +54,9 @@ class COMPONENT_EXPORT(DBUS_AUDIO) CrasAudioClient {
     // Called when output node's volume changed.
     virtual void OutputNodeVolumeChanged(uint64_t node_id, int volume);
 
+    // Called when input node's gain changed.
+    virtual void InputNodeGainChanged(uint64_t node_id, int volume);
+
     // Called when hotword is triggered.
     virtual void HotwordTriggered(uint64_t tv_sec, uint64_t tv_nsec);
 
@@ -72,6 +76,29 @@ class COMPONENT_EXPORT(DBUS_AUDIO) CrasAudioClient {
     virtual void SurveyTriggered(
         const base::flat_map<std::string, std::string>& survey_specific_data);
 
+    // Called when a new speak-on-mute signal is detected.
+    virtual void SpeakOnMuteDetected();
+
+    // Called when ewma power reported by cras.
+    virtual void EwmaPowerReported(double power);
+
+    // Called when NumberOfNonChromeOutputStreamsChanged is detected.
+    virtual void NumberOfNonChromeOutputStreamsChanged();
+
+    // Called when num-stream-ignore-ui-gains is changed.
+    virtual void NumStreamIgnoreUiGains(int32_t num);
+
+    // Called when NumberOfArcStreamsChanged is detected.
+    virtual void NumberOfArcStreamsChanged();
+
+    // Called when there is a new active node to indicate whether sidetone is
+    // supported.
+    virtual void SidetoneSupportedChanged(bool supported);
+
+    // Called when there is a new audio effect ui appearance to render.
+    virtual void AudioEffectUIAppearanceChanged(
+        VoiceIsolationUIAppearance appearance);
+
    protected:
     virtual ~Observer();
   };
@@ -79,7 +106,15 @@ class COMPONENT_EXPORT(DBUS_AUDIO) CrasAudioClient {
   // Creates and initializes the global instance. |bus| must not be null.
   static void Initialize(dbus::Bus* bus);
 
-  // Creates and initializes a fake global instance if not already created.
+  // Creates and initializes a fake global instance.
+  //
+  // Note:
+  // `InitializeFake` does not shutdown `CrasAudioClient` automatically and it
+  // can cause an unexpected side effect for other tests in automated tests.
+  //
+  // e.g.
+  // A test leaves a client without shutdown. A following test expect that a
+  // client does not exist.
   static void InitializeFake();
 
   // Destroys the global instance which must have been initialized.
@@ -98,38 +133,48 @@ class COMPONENT_EXPORT(DBUS_AUDIO) CrasAudioClient {
   virtual bool HasObserver(const Observer* observer) const = 0;
 
   // Gets the volume state, asynchronously.
-  virtual void GetVolumeState(DBusMethodCallback<VolumeState> callback) = 0;
+  virtual void GetVolumeState(
+      chromeos::DBusMethodCallback<VolumeState> callback) = 0;
 
   // Gets the default output buffer size in frames.
-  virtual void GetDefaultOutputBufferSize(DBusMethodCallback<int> callback) = 0;
+  virtual void GetDefaultOutputBufferSize(
+      chromeos::DBusMethodCallback<int> callback) = 0;
 
   // Gets if system AEC is supported.
-  virtual void GetSystemAecSupported(DBusMethodCallback<bool> callback) = 0;
+  virtual void GetSystemAecSupported(
+      chromeos::DBusMethodCallback<bool> callback) = 0;
 
   // Gets any available group ID for the system AEC
-  virtual void GetSystemAecGroupId(DBusMethodCallback<int32_t> callback) = 0;
+  virtual void GetSystemAecGroupId(
+      chromeos::DBusMethodCallback<int32_t> callback) = 0;
 
   // Gets if system NS is supported.
-  virtual void GetSystemNsSupported(DBusMethodCallback<bool> callback) = 0;
+  virtual void GetSystemNsSupported(
+      chromeos::DBusMethodCallback<bool> callback) = 0;
 
   // Gets if system AGC is supported.
-  virtual void GetSystemAgcSupported(DBusMethodCallback<bool> callback) = 0;
+  virtual void GetSystemAgcSupported(
+      chromeos::DBusMethodCallback<bool> callback) = 0;
 
   // Gets an array of audio input and output nodes.
-  virtual void GetNodes(DBusMethodCallback<AudioNodeList> callback) = 0;
+  virtual void GetNodes(
+      chromeos::DBusMethodCallback<AudioNodeList> callback) = 0;
 
   // Gets the number of active output streams.
   virtual void GetNumberOfActiveOutputStreams(
-      DBusMethodCallback<int> callback) = 0;
+      chromeos::DBusMethodCallback<int> callback) = 0;
 
   // Gets the number of input streams with permission per client type.
   virtual void GetNumberOfInputStreamsWithPermission(
-      DBusMethodCallback<base::flat_map<std::string, uint32_t>>) = 0;
+      chromeos::DBusMethodCallback<base::flat_map<std::string, uint32_t>>) = 0;
 
-  // Gets the DeprioritzeBtWbsMic flag. On a few platforms CRAS may
-  // report to deprioritize Bluetooth WBS mic's node priority because
-  // WBS feature is still working to be stabilized.
-  virtual void GetDeprioritizeBtWbsMic(DBusMethodCallback<bool> callback) = 0;
+  // Get the number of active non-chrome output streams.
+  virtual void GetNumberOfNonChromeOutputStreams(
+      chromeos::DBusMethodCallback<int32_t> callback) = 0;
+
+  // Gets if speak-on-mute detection is enabled.
+  virtual void GetSpeakOnMuteDetectionEnabled(
+      chromeos::DBusMethodCallback<bool> callback) = 0;
 
   // Sets output volume of the given |node_id| to |volume|, in the rage of
   // [0, 100].
@@ -145,12 +190,33 @@ class COMPONENT_EXPORT(DBUS_AUDIO) CrasAudioClient {
   // Sets input mute state to |mute_on| value.
   virtual void SetInputMute(bool mute_on) = 0;
 
+  // Gets the DLC IDs of the audio effects supported by the device.
+  virtual void GetAudioEffectDlcs(
+      chromeos::DBusMethodCallback<std::string> callback) = 0;
+
+  // Gets the appearance of the voice isolation UI.
+  virtual void GetVoiceIsolationUIAppearance(
+      chromeos::DBusMethodCallback<VoiceIsolationUIAppearance> callback) = 0;
+
+  // Sets input voice isolation state to |voice_isolation_on| value.
+  virtual void SetVoiceIsolationUIEnabled(bool voice_isolation_on) = 0;
+
+  // Sets the preferred effect mode of voice isolation.
+  virtual void SetVoiceIsolationUIPreferredEffect(uint32_t effect_mode) = 0;
+
   // Sets input noise cancellation state to |noise_cancellation_on| value.
   virtual void SetNoiseCancellationEnabled(bool noise_cancellation_on) = 0;
 
   // Gets if Noise Cancellation is supported.
   virtual void GetNoiseCancellationSupported(
-      DBusMethodCallback<bool> callback) = 0;
+      chromeos::DBusMethodCallback<bool> callback) = 0;
+
+  // Sets input style transfer state to |style_transfer_on| value.
+  virtual void SetStyleTransferEnabled(bool style_transfer_on) = 0;
+
+  // Gets if style transfer is supported.
+  virtual void GetStyleTransferSupported(
+      chromeos::DBusMethodCallback<bool> callback) = 0;
 
   // Sets the active output node to |node_id|.
   virtual void SetActiveOutputNode(uint64_t node_id) = 0;
@@ -165,13 +231,24 @@ class COMPONENT_EXPORT(DBUS_AUDIO) CrasAudioClient {
   // successfully set.
   virtual void SetHotwordModel(uint64_t node_id,
                                const std::string& hotword_model,
-                               VoidDBusMethodCallback callback) = 0;
+                               chromeos::VoidDBusMethodCallback callback) = 0;
 
   // Enables or disables the usage of fixed A2DP packet size in CRAS.
   virtual void SetFixA2dpPacketSize(bool enabled) = 0;
 
   // Enables or disables CRAS to use Floss as the Bluetooth stack.
   virtual void SetFlossEnabled(bool enabled) = 0;
+
+  // Enables or disables CRAS to use speak-on-mute detection.
+  virtual void SetSpeakOnMuteDetection(bool enabled) = 0;
+
+  virtual void SetEwmaPowerReportEnabled(bool enabled) = 0;
+
+  virtual void SetSidetoneEnabled(bool enabled) = 0;
+
+  // Gets the number of active output streams.
+  virtual void GetSidetoneSupported(
+      chromeos::DBusMethodCallback<bool> callback) = 0;
 
   // Adds input node |node_id| to the active input list. This is used to add
   // an additional active input node besides the one set by SetActiveInputNode.
@@ -234,7 +311,32 @@ class COMPONENT_EXPORT(DBUS_AUDIO) CrasAudioClient {
 
   // Runs the callback as soon as the service becomes available.
   virtual void WaitForServiceToBeAvailable(
-      WaitForServiceToBeAvailableCallback callback) = 0;
+      chromeos::WaitForServiceToBeAvailableCallback callback) = 0;
+
+  // Sets input force respect ui gains state to |force_repsect_ui_gains| value.
+  virtual void SetForceRespectUiGains(bool force_respect_ui_gains) = 0;
+
+  // Gets the number of streams ignoring UI Gains.
+  virtual void GetNumStreamIgnoreUiGains(
+      chromeos::DBusMethodCallback<int> callback) = 0;
+
+  // Sets hfp_mic_sr state to |hfp_mic_sr_on| value.
+  virtual void SetHfpMicSrEnabled(bool hfp_mic_sr_on) = 0;
+
+  // Gets if hfp_mic_sr is supported.
+  virtual void GetHfpMicSrSupported(
+      chromeos::DBusMethodCallback<bool> callback) = 0;
+
+  // Gets the number of active ARC streams.
+  virtual void GetNumberOfArcStreams(
+      chromeos::DBusMethodCallback<int32_t> callback) = 0;
+
+  // Sets spatial audio state to |spatial_audio| value.
+  virtual void SetSpatialAudio(bool spatial_audio) = 0;
+
+  // Gets if spatial audio is supported.
+  virtual void GetSpatialAudioSupported(
+      chromeos::DBusMethodCallback<bool> callback) = 0;
 
  protected:
   friend class CrasAudioClientTest;
@@ -244,10 +346,5 @@ class COMPONENT_EXPORT(DBUS_AUDIO) CrasAudioClient {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when the migration is finished.
-namespace chromeos {
-using ::ash::CrasAudioClient;
-}
 
 #endif  // CHROMEOS_ASH_COMPONENTS_DBUS_AUDIO_CRAS_AUDIO_CLIENT_H_

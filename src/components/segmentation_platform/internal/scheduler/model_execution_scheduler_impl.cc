@@ -1,30 +1,31 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/segmentation_platform/internal/scheduler/model_execution_scheduler_impl.h"
 
+#include <optional>
+
 #include "base/logging.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/clock.h"
-#include "base/time/time.h"
 #include "components/segmentation_platform/internal/database/segment_info_database.h"
 #include "components/segmentation_platform/internal/database/signal_storage_config.h"
 #include "components/segmentation_platform/internal/execution/execution_request.h"
-#include "components/segmentation_platform/internal/execution/model_execution_manager_impl.h"
+#include "components/segmentation_platform/internal/execution/model_manager_impl.h"
 #include "components/segmentation_platform/internal/metadata/metadata_utils.h"
 #include "components/segmentation_platform/internal/platform_options.h"
 #include "components/segmentation_platform/internal/stats.h"
 #include "components/segmentation_platform/public/model_provider.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "components/segmentation_platform/public/proto/segmentation_platform.pb.h"
 
 namespace segmentation_platform {
 
 ModelExecutionSchedulerImpl::ModelExecutionSchedulerImpl(
-    std::vector<Observer*>&& observers,
+    std::vector<raw_ptr<Observer, VectorExperimental>>&& observers,
     SegmentInfoDatabase* segment_database,
     SignalStorageConfig* signal_storage_config,
-    ModelExecutionManager* model_execution_manager,
+    ModelManager* model_manager,
     ModelExecutor* model_executor,
     base::flat_set<proto::SegmentId> segment_ids,
     base::Clock* clock,
@@ -32,9 +33,9 @@ ModelExecutionSchedulerImpl::ModelExecutionSchedulerImpl(
     : observers_(observers),
       segment_database_(segment_database),
       signal_storage_config_(signal_storage_config),
-      model_execution_manager_(model_execution_manager),
+      model_manager_(model_manager),
       model_executor_(model_executor),
-      all_segment_ids_(segment_ids),
+      legacy_output_segment_ids_(std::move(segment_ids)),
       clock_(clock),
       platform_options_(platform_options) {}
 
@@ -59,10 +60,8 @@ void ModelExecutionSchedulerImpl::OnNewModelInfoReady(
 
 void ModelExecutionSchedulerImpl::RequestModelExecutionForEligibleSegments(
     bool expired_only) {
-  std::vector<SegmentId> segment_ids(all_segment_ids_.begin(),
-                                     all_segment_ids_.end());
   segment_database_->GetSegmentInfoForSegments(
-      segment_ids,
+      legacy_output_segment_ids_,
       base::BindOnce(&ModelExecutionSchedulerImpl::FilterEligibleSegments,
                      weak_ptr_factory_.GetWeakPtr(), expired_only));
 }
@@ -74,33 +73,34 @@ void ModelExecutionSchedulerImpl::RequestModelExecution(
   outstanding_requests_.insert(std::make_pair(
       segment_id,
       base::BindOnce(&ModelExecutionSchedulerImpl::OnModelExecutionCompleted,
-                     weak_ptr_factory_.GetWeakPtr(), segment_id)));
+                     weak_ptr_factory_.GetWeakPtr(), segment_info)));
   auto request = std::make_unique<ExecutionRequest>();
-  request->model_provider =
-      model_execution_manager_->GetProvider(segment_info.segment_id());
+  request->segment_id = segment_info.segment_id();
+  request->model_source = proto::ModelSource::SERVER_MODEL_SOURCE;
+  request->model_provider = model_manager_->GetModelProvider(
+      segment_info.segment_id(), proto::ModelSource::SERVER_MODEL_SOURCE);
   DCHECK(request->model_provider);
-  request->segment_info = &segment_info;
   request->callback = outstanding_requests_[segment_id].callback();
-  request->record_metrics_for_default = false;
   model_executor_->ExecuteModel(std::move(request));
 }
 
 void ModelExecutionSchedulerImpl::OnModelExecutionCompleted(
-    SegmentId segment_id,
-    const std::pair<float, ModelExecutionStatus>& result) {
+    const proto::SegmentInfo& segment_info,
+    std::unique_ptr<ModelExecutionResult> result) {
   // TODO(shaktisahu): Check ModelExecutionStatus and handle failure cases.
   // Should we save it to DB?
+  SegmentId segment_id = segment_info.segment_id();
   proto::PredictionResult segment_result;
-  bool success = result.second == ModelExecutionStatus::kSuccess;
+  bool success = result->status == ModelExecutionStatus::kSuccess;
   if (success) {
-    segment_result.set_result(result.first);
-    segment_result.set_timestamp_us(
-        clock_->Now().ToDeltaSinceWindowsEpoch().InMicroseconds());
-    stats::RecordModelScore(segment_id, result.first);
+    segment_result = metadata_utils::CreatePredictionResult(
+        result->scores, segment_info.model_metadata().output_config(),
+        clock_->Now(), segment_info.model_version());
   }
 
   segment_database_->SaveSegmentResult(
-      segment_id, success ? absl::make_optional(segment_result) : absl::nullopt,
+      segment_id, proto::ModelSource::SERVER_MODEL_SOURCE,
+      success ? std::make_optional(segment_result) : std::nullopt,
       base::BindOnce(&ModelExecutionSchedulerImpl::OnResultSaved,
                      weak_ptr_factory_.GetWeakPtr(), segment_id));
 }
@@ -111,7 +111,7 @@ void ModelExecutionSchedulerImpl::FilterEligibleSegments(
   std::vector<const proto::SegmentInfo*> models_to_run;
   for (const auto& pair : *all_segments) {
     SegmentId segment_id = pair.first;
-    const proto::SegmentInfo& segment_info = pair.second;
+    const proto::SegmentInfo& segment_info = *pair.second;
     if (!ShouldExecuteSegment(expired_only, segment_info)) {
       VLOG(1) << "Segmentation scheduler: Skipped executed segment "
               << proto::SegmentId_Name(segment_id);

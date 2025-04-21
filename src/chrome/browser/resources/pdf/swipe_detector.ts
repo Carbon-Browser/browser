@@ -1,6 +1,8 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+import {assert} from 'chrome://resources/js/assert.js';
 
 /**
  * The longest period of time in milliseconds for a horizontal touch movement to
@@ -14,10 +16,10 @@ const SWIPE_X_DIST_MIN: number = 150;
 /* The maximum travel distance on the y axis for a swipe. */
 const SWIPE_Y_DIST_MAX: number = 100;
 
-export type SwipeEvent = {
-  type: string,
-  detail: SwipeDirection,
-};
+export interface SwipeEvent {
+  type: string;
+  detail: SwipeDirection;
+}
 
 /** Enumeration of swipe directions. */
 export enum SwipeDirection {
@@ -121,7 +123,9 @@ export class SwipeDetector {
         this.elapsedTimeForTesting_ :
         event.timeStamp - this.swipeStartEvent_.timeStamp;
     const swipeStartObj = this.swipeStartEvent_.changedTouches[0];
+    assert(swipeStartObj);
     const swipeEndObj = event.changedTouches[0];
+    assert(swipeEndObj);
     const distX = swipeEndObj.pageX - swipeStartObj.pageX;
     const distY = swipeEndObj.pageY - swipeStartObj.pageY;
 

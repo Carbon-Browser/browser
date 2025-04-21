@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,8 +57,6 @@ class VIZ_SERVICE_EXPORT DisplayResourceProviderSkia
     ExternalUseClient::ImageContext* LockResource(
         ResourceId resource_id,
         bool maybe_concurrent_reads,
-        bool is_video_plane,
-        sk_sp<SkColorSpace> override_color_space = nullptr,
         bool raw_draw_if_possible = false);
 
     // Unlock all locked resources with a |sync_token|.  The |sync_token| should
@@ -68,9 +66,23 @@ class VIZ_SERVICE_EXPORT DisplayResourceProviderSkia
     void UnlockResources(const gpu::SyncToken& sync_token);
 
    private:
-    DisplayResourceProviderSkia* const resource_provider_;
+    const raw_ptr<DisplayResourceProviderSkia, DanglingUntriaged>
+        resource_provider_;
     std::vector<std::pair<ResourceId, ChildResource*>> resources_;
   };
+
+  // Sets the current read fence. If a resource is locked for read
+  // and has read fences enabled, the resource will not allow writes
+  // until this fence has passed. This is used if a client uses
+  // TransferableResource::SynchronizationType::kGpuCommandsCompleted.
+  void SetGpuCommandsCompletedFence(ResourceFence* fence) {
+    current_gpu_commands_completed_fence_ = fence;
+  }
+  // Sets the current release fence. If a client uses
+  // TransferableResource::SynchronizationType::kReleaseFence, resources must be
+  // returned only after a release fence is stored in this resource fence.
+  // Returned only when gpu commands and the gpu fence are submitted.
+  void SetReleaseFence(ResourceFence* fence) { current_release_fence_ = fence; }
 
  private:
   // DisplayResourceProvider overrides:
@@ -81,6 +93,9 @@ class VIZ_SERVICE_EXPORT DisplayResourceProviderSkia
 
   // Used to release resources held by an external consumer.
   raw_ptr<ExternalUseClient> external_use_client_ = nullptr;
+
+  scoped_refptr<ResourceFence> current_gpu_commands_completed_fence_;
+  scoped_refptr<ResourceFence> current_release_fence_;
 };
 
 }  // namespace viz

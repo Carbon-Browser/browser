@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -44,7 +44,7 @@ class GPU_EXPORT TransferBufferManager
   typedef base::flat_map<int32_t, scoped_refptr<Buffer>> BufferMap;
   BufferMap registered_buffers_;
   size_t shared_memory_bytes_allocated_;
-  raw_ptr<MemoryTracker, DanglingUntriaged> memory_tracker_;
+  raw_ptr<MemoryTracker, AcrossTasksDanglingUntriaged> memory_tracker_;
 };
 
 }  // namespace gpu

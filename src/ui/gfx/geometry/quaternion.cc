@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 
-#include "base/numerics/math_constants.h"
 #include "base/strings/stringprintf.h"
 #include "ui/gfx/geometry/vector3d_f.h"
 
@@ -26,7 +26,7 @@ Quaternion::Quaternion(const Vector3dF& axis, double theta) {
     return;
 
   Vector3dF normalized = axis;
-  normalized.Scale(1.0 / length);
+  normalized.InvScale(length);
 
   theta *= 0.5;
   double s = sin(theta);
@@ -126,7 +126,7 @@ std::string Quaternion::ToString() const {
   v.Scale(scale);
   return base::StringPrintf("[%f %f %f %f], v:", x_, y_, z_, w_) +
          v.ToString() +
-         base::StringPrintf(", θ:%fπ", abs_theta / base::kPiFloat);
+         base::StringPrintf(", θ:%fπ", abs_theta / std::numbers::pi_v<float>);
 }
 
 }  // namespace gfx

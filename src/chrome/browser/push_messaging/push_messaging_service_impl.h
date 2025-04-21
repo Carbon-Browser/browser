@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,17 @@
 #define CHROME_BROWSER_PUSH_MESSAGING_PUSH_MESSAGING_SERVICE_IMPL_H_
 
 #include <stdint.h>
+
 #include <memory>
+#include <optional>
 #include <queue>
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/callback_list.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -31,20 +33,22 @@
 #include "components/gcm_driver/gcm_client.h"
 #include "components/gcm_driver/instance_id/instance_id.h"
 #include "components/keyed_service/core/keyed_service.h"
+#include "content/public/browser/child_process_host.h"
 #include "content/public/browser/push_messaging_service.h"
-#include "content/public/common/child_process_host.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/push_messaging/push_messaging.mojom-forward.h"
 
 class GURL;
 class PrefRegistrySimple;
-class PrefService;
 class Profile;
 class PushMessagingAppIdentifier;
 class PushMessagingServiceTest;
 class FCMRevocationTest;
 class ScopedKeepAlive;
 class ScopedProfileKeepAlive;
+
+#if BUILDFLAG(IS_ANDROID)
+class PrefService;
+#endif
 
 namespace blink {
 namespace mojom {
@@ -66,6 +70,7 @@ class InstanceIDDriver;
 }  // namespace instance_id
 
 namespace {
+
 struct PendingMessage {
   PendingMessage(std::string app_id, gcm::IncomingMessage message);
   PendingMessage(const PendingMessage& other);
@@ -106,6 +111,11 @@ class PushMessagingServiceImpl : public content::PushMessagingService,
 #if BUILDFLAG(IS_ANDROID)
   // Registers Local State prefs used by this class.
   static void RegisterPrefs(PrefRegistrySimple* registry);
+
+  static void RevokePermissionIfPossible(GURL origin,
+                                         bool app_level_notifications_enabled,
+                                         PrefService* prefs,
+                                         Profile* profile);
 #endif
 
   // gcm::GCMAppHandler implementation.
@@ -195,12 +205,6 @@ class PushMessagingServiceImpl : public content::PushMessagingService,
       base::RepeatingClosure callback);
   void SetRemoveExpiredSubscriptionsCallbackForTesting(
       base::OnceClosure closure);
-  void set_enabled_app_level_notification_permission_for_testing(bool enabled) {
-    enabled_app_level_notification_permission_for_testing_ = enabled;
-  }
-  void set_prefs_for_testing(PrefService* prefs_for_testing) {
-    prefs_for_testing_ = prefs_for_testing;
-  }
 
  private:
   friend class PushMessagingBrowserTestBase;
@@ -252,17 +256,6 @@ class PushMessagingServiceImpl : public content::PushMessagingService,
 
   void CheckOriginAndDispatchNextMessage();
 
-#if BUILDFLAG(IS_ANDROID)
-  //  Verifies if Chrome has Android app-level Notifications permission. If
-  //  app-level permission is missing, `message` will be ignored, and site-level
-  //  Notifications permission and FCM will be revoked.
-  //
-  //  Returns true if `message` should be ignored, returns false otherwise.
-  bool CheckAndRevokeNotificationPermissionIfNeeded(
-      const std::string& app_id,
-      const gcm::IncomingMessage& message,
-      const PushMessagingAppIdentifier& app_identifier);
-#endif
   // Subscribe methods ---------------------------------------------------------
 
   void DoSubscribe(PushMessagingAppIdentifier app_identifier,
@@ -275,7 +268,7 @@ class PushMessagingServiceImpl : public content::PushMessagingService,
   void SubscribeEnd(RegisterCallback callback,
                     const std::string& subscription_id,
                     const GURL& endpoint,
-                    const absl::optional<base::Time>& expiration_time,
+                    const std::optional<base::Time>& expiration_time,
                     const std::vector<uint8_t>& p256dh,
                     const std::vector<uint8_t>& auth,
                     blink::mojom::PushRegistrationStatus status);
@@ -299,16 +292,15 @@ class PushMessagingServiceImpl : public content::PushMessagingService,
 
   // GetSubscriptionInfo methods -----------------------------------------------
 
-  void DidValidateSubscription(
-      const std::string& app_id,
-      const std::string& sender_id,
-      const GURL& endpoint,
-      const absl::optional<base::Time>& expiration_time,
-      SubscriptionInfoCallback callback,
-      bool is_valid);
+  void DidValidateSubscription(const std::string& app_id,
+                               const std::string& sender_id,
+                               const GURL& endpoint,
+                               const std::optional<base::Time>& expiration_time,
+                               SubscriptionInfoCallback callback,
+                               bool is_valid);
 
   void DidGetEncryptionInfo(const GURL& endpoint,
-                            const absl::optional<base::Time>& expiration_time,
+                            const std::optional<base::Time>& expiration_time,
                             SubscriptionInfoCallback callback,
                             std::string p256dh,
                             std::string auth_secret) const;
@@ -355,7 +347,7 @@ class PushMessagingServiceImpl : public content::PushMessagingService,
       const std::string& sender_id,
       bool is_valid,
       const GURL& endpoint,
-      const absl::optional<base::Time>& expiration_time,
+      const std::optional<base::Time>& expiration_time,
       const std::vector<uint8_t>& p256dh,
       const std::vector<uint8_t>& auth);
 
@@ -384,7 +376,7 @@ class PushMessagingServiceImpl : public content::PushMessagingService,
                              const std::string& sender_id,
                              const std::string& registration_id,
                              const GURL& endpoint,
-                             const absl::optional<base::Time>& expiration_time,
+                             const std::optional<base::Time>& expiration_time,
                              const std::vector<uint8_t>& p256dh,
                              const std::vector<uint8_t>& auth,
                              blink::mojom::PushRegistrationStatus status);
@@ -412,7 +404,14 @@ class PushMessagingServiceImpl : public content::PushMessagingService,
       blink::mojom::PushEventStatus status);
 
   // Checks if a given origin is allowed to use Push.
-  bool IsPermissionSet(const GURL& origin, bool user_visible = true);
+  //
+  // `user_visible` is the userVisibleOnly value provided to the push
+  // registration.
+  //
+  // For most origins this checks if the origin has the notifications
+  // permission. An exception is for extensions that use service workers where
+  // `user_visible` is false.
+  bool IsPermissionSet(const GURL& origin, bool user_visible);
 
   // Wrapper around {GCMDriver, InstanceID}::GetEncryptionInfo.
   void GetEncryptionInfoForAppId(
@@ -435,7 +434,7 @@ class PushMessagingServiceImpl : public content::PushMessagingService,
       base::RepeatingCallback<void(const std::string& app_id,
                                    const GURL& origin,
                                    int64_t service_worker_registration_id,
-                                   absl::optional<std::string> payload,
+                                   std::optional<std::string> payload,
                                    PushEventCallback callback)>;
 
   // Callback to be invoked when a message has been dispatched. Enables tests to
@@ -499,8 +498,10 @@ class PushMessagingServiceImpl : public content::PushMessagingService,
 
   int render_process_id_ = content::ChildProcessHost::kInvalidUniqueID;
 
-  absl::optional<bool> enabled_app_level_notification_permission_for_testing_;
-  absl::optional<PrefService*> prefs_for_testing_;
+  // Tracks those that are attempting to bypass the user visible
+  // requirement on push notifications. E.g. they set userVisibleOnly to false
+  // on push registration.
+  std::set<GURL> origins_requesting_user_visible_requirement_bypass;
 
   base::WeakPtrFactory<PushMessagingServiceImpl> weak_factory_{this};
 };

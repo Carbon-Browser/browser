@@ -1,4 +1,4 @@
-// Copyright (c) 2009 The Chromium Authors. All rights reserved.
+// Copyright 2009 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -7,15 +7,16 @@
 // the basic mock features.
 
 #include "testing/gmock/include/gmock/gmock.h"
+
 #include "testing/gtest/include/gtest/gtest.h"
 
 // Gmock matchers and actions that we use below.
+using testing::_;
 using testing::AnyOf;
 using testing::Eq;
 using testing::Return;
 using testing::SetArgPointee;
 using testing::WithArg;
-using testing::_;
 
 namespace {
 
@@ -26,19 +27,13 @@ class SampleClass {
   SampleClass() = default;
   virtual ~SampleClass() = default;
 
-  virtual int ReturnSomething() {
-    return -1;
-  }
+  virtual int ReturnSomething() { return -1; }
 
-  virtual void ReturnNothingConstly() const {
-  }
+  virtual void ReturnNothingConstly() const {}
 
-  virtual void OutputParam(int* a) {
-  }
+  virtual void OutputParam(int* a) {}
 
-  virtual int ReturnSecond(int a, int b) {
-    return b;
-  }
+  virtual int ReturnSecond(int a, int b) { return b; }
 };
 
 // Declare a mock for the class.

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 // Needed for <uiautomation.h>
 #include <objbase.h>
 
-#include <uiautomation.h>
 #include <wrl/client.h>
 
 #include <utility>
@@ -16,6 +15,8 @@
 #include "base/win/com_init_util.h"
 #include "base/win/scoped_bstr.h"
 #include "base/win/scoped_variant.h"
+
+#include <uiautomation.h>
 
 namespace {
 

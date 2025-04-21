@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,8 +20,9 @@ const int kNotifyIntervalSec = 5;
 // Returns a UserActivityType describing |event|.
 power_manager::UserActivityType GetUserActivityTypeForEvent(
     const Event* event) {
-  if (!event || event->type() != ET_KEY_PRESSED)
+  if (!event || event->type() != EventType::kKeyPressed) {
     return power_manager::USER_ACTIVITY_OTHER;
+  }
 
   switch (static_cast<const KeyEvent*>(event)->key_code()) {
     case VKEY_BRIGHTNESS_DOWN:
@@ -81,6 +82,9 @@ void UserActivityPowerManagerNotifier::OnAuthScanDone(
 void UserActivityPowerManagerNotifier::OnSessionFailed() {}
 
 void UserActivityPowerManagerNotifier::OnRestarted() {}
+
+void UserActivityPowerManagerNotifier::OnStatusChanged(
+    device::mojom::BiometricsManagerStatus status) {}
 
 void UserActivityPowerManagerNotifier::OnEnrollScanDone(
     device::mojom::ScanResult scan_result,

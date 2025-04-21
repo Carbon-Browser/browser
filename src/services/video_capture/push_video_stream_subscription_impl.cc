@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/video_capture/push_video_stream_subscription_impl.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "services/video_capture/broadcasting_receiver.h"
 
 namespace video_capture {
@@ -16,18 +16,14 @@ PushVideoStreamSubscriptionImpl::PushVideoStreamSubscriptionImpl(
     mojo::PendingRemote<mojom::VideoFrameHandler> subscriber,
     const media::VideoCaptureParams& requested_settings,
     mojom::VideoSource::CreatePushSubscriptionCallback creation_callback,
-    BroadcastingReceiver* broadcaster,
-    mojo::Remote<mojom::Device>* device)
+    BroadcastingReceiver* broadcaster)
     : receiver_(this, std::move(subscription_receiver)),
       subscriber_(std::move(subscriber)),
       requested_settings_(requested_settings),
       creation_callback_(std::move(creation_callback)),
       broadcaster_(broadcaster),
-      device_(device),
-      status_(Status::kCreationCallbackNotYetRun),
       broadcaster_client_id_(0) {
   DCHECK(broadcaster_);
-  DCHECK(device_);
 }
 
 PushVideoStreamSubscriptionImpl::~PushVideoStreamSubscriptionImpl() = default;
@@ -41,7 +37,9 @@ void PushVideoStreamSubscriptionImpl::SetOnClosedHandler(
 }
 
 void PushVideoStreamSubscriptionImpl::OnDeviceStartSucceededWithSettings(
-    const media::VideoCaptureParams& settings) {
+    const media::VideoCaptureParams& settings,
+    Device* device) {
+  device_ = device;
   if (status_ != Status::kCreationCallbackNotYetRun) {
     // Creation callback has already been run from a previous device start.
     return;
@@ -82,9 +80,10 @@ void PushVideoStreamSubscriptionImpl::Activate() {
 }
 
 void PushVideoStreamSubscriptionImpl::Suspend(SuspendCallback callback) {
-  if (status_ != Status::kActive)
+  if (status_ != Status::kActive) {
+    std::move(callback).Run();
     return;
-
+  }
   broadcaster_->SuspendClient(broadcaster_client_id_);
   status_ = Status::kSuspended;
   std::move(callback).Run();
@@ -107,7 +106,7 @@ void PushVideoStreamSubscriptionImpl::GetPhotoState(
     case Status::kNotYetActivated:  // Fall through.
     case Status::kActive:           // Fall through.
     case Status::kSuspended:
-      (*device_)->GetPhotoState(std::move(callback));
+      device_->GetPhotoState(std::move(callback));
       return;
   }
 }
@@ -123,7 +122,7 @@ void PushVideoStreamSubscriptionImpl::SetPhotoOptions(
     case Status::kNotYetActivated:  // Fall through.
     case Status::kActive:           // Fall through.
     case Status::kSuspended:
-      (*device_)->SetPhotoOptions(std::move(settings), std::move(callback));
+      device_->SetPhotoOptions(std::move(settings), std::move(callback));
       return;
   }
 }
@@ -137,7 +136,7 @@ void PushVideoStreamSubscriptionImpl::TakePhoto(TakePhotoCallback callback) {
     case Status::kNotYetActivated:  // Fall through.
     case Status::kActive:           // Fall through.
     case Status::kSuspended:
-      (*device_)->TakePhoto(std::move(callback));
+      device_->TakePhoto(std::move(callback));
       return;
   }
 }
@@ -178,7 +177,7 @@ void PushVideoStreamSubscriptionImpl::ProcessFeedback(
     case Status::kNotYetActivated:  // Fall through.
     case Status::kActive:           // Fall through.
     case Status::kSuspended:
-      (*device_)->ProcessFeedback(feedback);
+      device_->ProcessFeedback(feedback);
       return;
   }
 }

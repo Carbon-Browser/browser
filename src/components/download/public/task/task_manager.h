@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,8 @@
 
 #include <stdint.h>
 
-#include "base/callback.h"
+#include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "components/download/public/task/download_task_types.h"
 
 namespace download {
@@ -19,10 +20,10 @@ using TaskFinishedCallback = base::OnceCallback<void(bool)>;
 // independently of each other as long as they have different |task_type|.
 // Scheduling another task of same |task_type| before the task is started will
 // overwrite the params of the scheduled task.
-class TaskManager {
+class COMPONENT_EXPORT(COMPONENTS_DOWNLOAD_PUBLIC_TASK) TaskManager {
  public:
   // Params used when scheduling a task through TaskScheduler::ScheduleTask().
-  struct TaskParams {
+  struct COMPONENT_EXPORT(COMPONENTS_DOWNLOAD_PUBLIC_TASK) TaskParams {
     TaskParams();
     ~TaskParams() = default;
     bool operator==(const TaskParams& other) const;

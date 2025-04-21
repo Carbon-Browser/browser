@@ -1,28 +1,27 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/content_index/content_index_database.h"
 
+#include <optional>
 #include <set>
 #include <string>
+#include <vector>
 
 #include "base/barrier_closure.h"
-#include "base/containers/cxx20_erase.h"
 #include "base/memory/ptr_util.h"
 #include "base/time/time.h"
 #include "content/browser/background_fetch/storage/image_helpers.h"
 #include "content/browser/content_index/content_index.pb.h"
-#include "content/browser/content_index/content_index_metrics.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
-// TODO(crbug.com/973844): Move image utility functions to common library.
+// TODO(crbug.com/40631965): Move image utility functions to common library.
 using content::background_fetch::DeserializeIcon;
 using content::background_fetch::SerializeIcon;
 
@@ -105,16 +104,16 @@ blink::mojom::ContentDescriptionPtr DescriptionFromProto(
   return result;
 }
 
-absl::optional<ContentIndexEntry> EntryFromSerializedProto(
+std::optional<ContentIndexEntry> EntryFromSerializedProto(
     int64_t service_worker_registration_id,
     const std::string& serialized_proto) {
   proto::ContentEntry entry_proto;
   if (!entry_proto.ParseFromString(serialized_proto))
-    return absl::nullopt;
+    return std::nullopt;
 
   GURL launch_url(entry_proto.launch_url());
   if (!launch_url.is_valid())
-    return absl::nullopt;
+    return std::nullopt;
 
   auto description = DescriptionFromProto(entry_proto.description());
   base::Time registration_time = base::Time::FromDeltaSinceWindowsEpoch(
@@ -149,9 +148,8 @@ void ContentIndexDatabase::AddEntry(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (blocked_origins_.count(origin)) {
-    // TODO(crbug.com/973844): Does this need a more specific error?
+    // TODO(crbug.com/40631965): Does this need a more specific error?
     std::move(callback).Run(blink::mojom::ContentIndexError::STORAGE_ERROR);
-    content_index::RecordRegistrationBlocked(description->category);
     return;
   }
 
@@ -214,7 +212,8 @@ void ContentIndexDatabase::DidSerializeIcons(
                           is_top_level_context);
 
   service_worker_context_->StoreRegistrationUserData(
-      service_worker_registration_id, blink::StorageKey(origin),
+      service_worker_registration_id,
+      blink::StorageKey::CreateFirstParty(origin),
       {{std::move(entry_key), std::move(entry_value)},
        {std::move(icon_key), std::move(icons_value)}},
       base::BindOnce(&ContentIndexDatabase::DidAddEntry,
@@ -227,7 +226,6 @@ void ContentIndexDatabase::DidAddEntry(
     ContentIndexEntry entry,
     blink::ServiceWorkerStatusCode status) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  content_index::RecordDatabaseOperationStatus("Add", status);
 
   if (status != blink::ServiceWorkerStatusCode::kOk) {
     std::move(callback).Run(blink::mojom::ContentIndexError::STORAGE_ERROR);
@@ -283,7 +281,6 @@ void ContentIndexDatabase::DidDeleteEntry(
     blink::mojom::ContentIndexService::DeleteCallback callback,
     blink::ServiceWorkerStatusCode status) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  content_index::RecordDatabaseOperationStatus("Delete", status);
 
   if (status != blink::ServiceWorkerStatusCode::kOk) {
     std::move(callback).Run(blink::mojom::ContentIndexError::STORAGE_ERROR);
@@ -325,7 +322,6 @@ void ContentIndexDatabase::DidGetDescriptions(
     const std::vector<std::string>& data,
     blink::ServiceWorkerStatusCode status) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  content_index::RecordDatabaseOperationStatus("GetDescriptions", status);
 
   if (status == blink::ServiceWorkerStatusCode::kErrorNotFound) {
     std::move(callback).Run(blink::mojom::ContentIndexError::NONE,
@@ -356,8 +352,7 @@ void ContentIndexDatabase::DidGetDescriptions(
           service_worker_registration_id,
           {EntryKey(entry.description().id()),
            IconsKey(entry.description().id())},
-          base::BindOnce(&content_index::RecordDatabaseOperationStatus,
-                         "ClearCorruptedData"));
+          base::DoNothing());
       continue;
     }
 
@@ -387,8 +382,6 @@ void ContentIndexDatabase::DidGetSerializedIcons(
     const std::vector<std::string>& data,
     blink::ServiceWorkerStatusCode status) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  content_index::RecordDatabaseOperationStatus("GetIcon", status);
 
   if (status != blink::ServiceWorkerStatusCode::kOk || data.empty()) {
     std::move(callback).Run({});
@@ -452,7 +445,6 @@ void ContentIndexDatabase::DidGetEntries(
     const std::vector<std::pair<int64_t, std::string>>& user_data,
     blink::ServiceWorkerStatusCode status) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  content_index::RecordDatabaseOperationStatus("GetAllEntries", status);
 
   if (status != blink::ServiceWorkerStatusCode::kOk) {
     std::move(callback).Run(blink::mojom::ContentIndexError::STORAGE_ERROR,
@@ -482,7 +474,7 @@ void ContentIndexDatabase::DidGetEntries(
 
   if (!corrupted_sw_ids.empty()) {
     // Remove soon-to-be-deleted entries.
-    base::EraseIf(entries, [&corrupted_sw_ids](const auto& entry) {
+    std::erase_if(entries, [&corrupted_sw_ids](const auto& entry) {
       return corrupted_sw_ids.count(entry.service_worker_registration_id);
     });
 
@@ -513,10 +505,9 @@ void ContentIndexDatabase::DidGetEntry(
     const std::vector<std::string>& data,
     blink::ServiceWorkerStatusCode status) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  content_index::RecordDatabaseOperationStatus("GetEntry", status);
 
   if (status != blink::ServiceWorkerStatusCode::kOk) {
-    std::move(callback).Run(absl::nullopt);
+    std::move(callback).Run(std::nullopt);
     return;
   }
 
@@ -531,8 +522,7 @@ void ContentIndexDatabase::ClearServiceWorkerDataOnCorruption(
 
   service_worker_context_->ClearRegistrationUserDataByKeyPrefixes(
       service_worker_registration_id, {kEntryPrefix, kIconPrefix},
-      base::BindOnce(&content_index::RecordDatabaseOperationStatus,
-                     "ClearCorruptedData"));
+      base::DoNothing());
 }
 
 void ContentIndexDatabase::DeleteItem(int64_t service_worker_registration_id,
@@ -558,7 +548,8 @@ void ContentIndexDatabase::DidDeleteItem(
     return;
 
   service_worker_context_->FindReadyRegistrationForId(
-      service_worker_registration_id, blink::StorageKey(origin),
+      service_worker_registration_id,
+      blink::StorageKey::CreateFirstParty(origin),
       base::BindOnce(&ContentIndexDatabase::StartActiveWorkerForDispatch,
                      weak_ptr_factory_.GetWeakPtr(), description_id));
 }
@@ -568,8 +559,6 @@ void ContentIndexDatabase::StartActiveWorkerForDispatch(
     blink::ServiceWorkerStatusCode service_worker_status,
     scoped_refptr<ServiceWorkerRegistration> registration) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  content_index::RecordDisptachStatus("Find", service_worker_status);
 
   if (service_worker_status != blink::ServiceWorkerStatusCode::kOk)
     return;
@@ -591,8 +580,6 @@ void ContentIndexDatabase::DeliverMessageToWorker(
     const std::string& description_id,
     blink::ServiceWorkerStatusCode service_worker_status) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  content_index::RecordDisptachStatus("Start", service_worker_status);
 
   if (service_worker_status != blink::ServiceWorkerStatusCode::kOk)
     return;
@@ -616,7 +603,6 @@ void ContentIndexDatabase::DidDispatchEvent(
     blink::ServiceWorkerStatusCode service_worker_status) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  content_index::RecordDisptachStatus("Dispatch", service_worker_status);
   UnblockOrigin(origin);
 }
 
@@ -627,12 +613,13 @@ void ContentIndexDatabase::BlockOrigin(const url::Origin& origin) {
 
 void ContentIndexDatabase::UnblockOrigin(const url::Origin& origin) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  DCHECK(blocked_origins_.count(origin));
   auto it = blocked_origins_.find(origin);
-  if (it->second == 1)
+  CHECK(it != blocked_origins_.end());
+  if (it->second == 1) {
     blocked_origins_.erase(it);
-  else
+  } else {
     it->second--;
+  }
 }
 
 void ContentIndexDatabase::Shutdown() {

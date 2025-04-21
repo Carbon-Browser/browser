@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include "base/synchronization/waitable_event.h"
 #include "third_party/leveldatabase/src/include/leveldb/env.h"
 
-namespace content {
+namespace content::indexed_db {
 
 // static
 scoped_refptr<LevelDBState> LevelDBState::CreateForDiskDB(
@@ -68,4 +68,4 @@ LevelDBState::~LevelDBState() {
     signal_on_destruction_->Signal();
 }
 
-}  // namespace content
+}  // namespace content::indexed_db

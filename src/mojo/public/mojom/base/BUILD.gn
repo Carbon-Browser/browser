@@ -1,13 +1,18 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//build/config/chromeos/ui_mode.gni")
 import("//mojo/public/tools/bindings/mojom.gni")
+import("//third_party/protobuf/proto_library.gni")
 
 mojom_component("base") {
   generate_java = true
+  generate_rust = true
   sources = [
+    "absl_status.mojom",
     "application_state.mojom",
+    "battery_power_status.mojom",
     "big_buffer.mojom",
     "big_string.mojom",
     "binder.mojom",
@@ -23,8 +28,8 @@ mojom_component("base") {
     "memory_pressure_level.mojom",
     "message_pump_type.mojom",
     "process_id.mojom",
+    "process_priority.mojom",
     "read_only_buffer.mojom",
-    "read_only_file.mojom",
     "ref_counted_memory.mojom",
     "safe_base_name.mojom",
     "shared_memory.mojom",
@@ -34,7 +39,9 @@ mojom_component("base") {
     "time.mojom",
     "token.mojom",
     "unguessable_token.mojom",
+    "uuid.mojom",
     "values.mojom",
+    "version.mojom",
   ]
 
   if (is_win) {
@@ -51,6 +58,16 @@ mojom_component("base") {
   }
 
   webui_module_path = "chrome://resources/mojo/mojo/public/mojom/base"
+
+  # Still widely used by Closure Compiler targets on ChromeOS, so generate
+  # WebUI bindings in JavaScript for that platform.
+  if (is_chromeos_ash) {
+    generate_webui_js_bindings = true
+  }
+
+  # Always generate legacy bindings since this target is used by Blink, fuzzers,
+  # etc and not just by WebUI.
+  generate_legacy_js_bindings = true
 
   output_prefix = "mojo_base_mojom"
   macro_prefix = "MOJO_BASE_MOJOM"
@@ -127,6 +144,10 @@ mojom_component("base") {
       types = [
         {
           mojom = "mojo_base.mojom.FilePath"
+          cpp = "::base::FilePath"
+        },
+        {
+          mojom = "mojo_base.mojom.RelativeFilePath"
           cpp = "::base::FilePath"
         },
       ]
@@ -264,6 +285,11 @@ mojom_component("base") {
           copyable_pass_by_value = true
         },
         {
+          mojom = "mojo_base.mojom.JSTime"
+          cpp = "::base::Time"
+          copyable_pass_by_value = true
+        },
+        {
           mojom = "mojo_base.mojom.TimeDelta"
           cpp = "::base::TimeDelta"
           copyable_pass_by_value = true
@@ -311,6 +337,19 @@ mojom_component("base") {
     {
       types = [
         {
+          mojom = "mojo_base.mojom.Uuid"
+          cpp = "::base::Uuid"
+        },
+      ]
+      traits_headers = [ "//mojo/public/cpp/base/uuid_mojom_traits.h" ]
+      traits_public_deps = [
+        "//base",
+        "//mojo/public/cpp/base:shared_typemap_traits",
+      ]
+    },
+    {
+      types = [
+        {
           mojom = "mojo_base.mojom.Value"
           cpp = "::base::Value"
           move_only = true
@@ -323,16 +362,6 @@ mojom_component("base") {
         {
           mojom = "mojo_base.mojom.ListValue"
           cpp = "::base::Value::List"
-          move_only = true
-        },
-        {
-          mojom = "mojo_base.mojom.DeprecatedDictionaryValue"
-          cpp = "::base::Value"
-          move_only = true
-        },
-        {
-          mojom = "mojo_base.mojom.DeprecatedListValue"
-          cpp = "::base::Value"
           move_only = true
         },
       ]
@@ -372,6 +401,19 @@ mojom_component("base") {
       traits_public_deps = [
         "//mojo/public/cpp/base:shared_typemap_traits",
         "//third_party/abseil-cpp:absl",
+      ]
+    },
+    {
+      types = [
+        {
+          mojom = "mojo_base.mojom.Version"
+          cpp = "::base::Version"
+        },
+      ]
+      traits_headers = [ "//mojo/public/cpp/base/version_mojom_traits.h" ]
+      traits_public_deps = [
+        "//base",
+        "//mojo/public/cpp/base:shared_typemap_traits",
       ]
     },
   ]
@@ -435,6 +477,20 @@ mojom_component("base") {
     {
       types = [
         {
+          mojom = "mojo_base.mojom.ProcessPriority"
+          cpp = "::base::Process::Priority"
+        },
+      ]
+      traits_headers =
+          [ "//mojo/public/cpp/base/process_priority_mojom_traits.h" ]
+      traits_public_deps = [
+        "//base",
+        "//mojo/public/cpp/base:typemap_traits",
+      ]
+    },
+    {
+      types = [
+        {
           mojom = "mojo_base.mojom.RefCountedMemory"
           cpp = "::scoped_refptr<::base::RefCountedMemory>"
           copyable_pass_by_value = true
@@ -487,6 +543,20 @@ mojom_component("base") {
         },
       ]
       traits_headers = [ "//mojo/public/cpp/base/thread_type_mojom_traits.h" ]
+      traits_public_deps = [
+        "//base",
+        "//mojo/public/cpp/base:typemap_traits",
+      ]
+    },
+    {
+      types = [
+        {
+          mojom = "mojo_base.mojom.BatteryPowerStatus"
+          cpp = "::base::PowerStateObserver::BatteryPowerStatus"
+        },
+      ]
+      traits_headers =
+          [ "//mojo/public/cpp/base/battery_power_status_traits.h" ]
       traits_public_deps = [
         "//base",
         "//mojo/public/cpp/base:typemap_traits",
@@ -584,4 +654,37 @@ mojom_component("base") {
       ]
     },
   ]
+}
+
+mojom_component("protobuf_support") {
+  sources = [ "proto_wrapper.mojom" ]
+  generate_java = true
+  webui_module_path = "chrome://resources/mojo/mojo/public/mojom/base"
+  if (is_chromeos_ash) {
+    generate_webui_js_bindings = true
+  }
+  generate_legacy_js_bindings = true
+  output_prefix = "mojo_base_mojom_protobuf_support"
+  macro_prefix = "MOJO_BASE_MOJOM_PROTOBUF_SUPPORT"
+  cpp_typemaps = [
+    {
+      types = [
+        {
+          mojom = "mojo_base.mojom.ProtoWrapper"
+          cpp = "::mojo_base::ProtoWrapper"
+          move_only = true
+          default_constructible = false
+        },
+      ]
+      traits_headers = [ "//mojo/public/cpp/base/proto_wrapper_mojom_traits.h" ]
+      traits_public_deps = [
+        ":base",
+        "//base",
+        "//mojo/public/cpp/base:protobuf_support_traits",
+        "//mojo/public/cpp/base:shared_typemap_traits",
+      ]
+    },
+  ]
+  blink_cpp_typemaps = cpp_typemaps
+  public_deps = [ ":base" ]
 }

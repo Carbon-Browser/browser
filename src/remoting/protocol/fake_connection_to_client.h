@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,18 +7,19 @@
 
 #include <stdint.h>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/single_thread_task_runner.h"
 #include "remoting/protocol/connection_to_client.h"
+#include "remoting/protocol/desktop_capturer.h"
+#include "remoting/protocol/network_settings.h"
 #include "remoting/protocol/video_feedback_stub.h"
 #include "remoting/protocol/video_stream.h"
 #include "remoting/protocol/video_stub.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 class FakeVideoStream : public protocol::VideoStream {
  public:
@@ -33,10 +34,13 @@ class FakeVideoStream : public protocol::VideoStream {
   void SetEventTimestampsSource(scoped_refptr<InputEventTimestampsSource>
                                     event_timestamps_source) override;
   void Pause(bool pause) override;
-  void SetLosslessEncode(bool want_lossless) override;
-  void SetLosslessColor(bool want_lossless) override;
   void SetObserver(Observer* observer) override;
   void SelectSource(webrtc::ScreenId id) override;
+  void SetComposeEnabled(bool enabled) override;
+  void SetMouseCursor(
+      std::unique_ptr<webrtc::MouseCursor> mouse_cursor) override;
+  void SetMouseCursorPosition(const webrtc::DesktopVector& position) override;
+  void SetTargetFramerate(int framerate) override;
 
   webrtc::ScreenId selected_source() const;
 
@@ -62,10 +66,11 @@ class FakeConnectionToClient : public ConnectionToClient {
   ~FakeConnectionToClient() override;
 
   void SetEventHandler(EventHandler* event_handler) override;
+  void ApplyNetworkSettings(const NetworkSettings& settings) override;
 
   std::unique_ptr<VideoStream> StartVideoStream(
-      const std::string& stream_name,
-      std::unique_ptr<webrtc::DesktopCapturer> desktop_capturer) override;
+      webrtc::ScreenId screen_id,
+      std::unique_ptr<DesktopCapturer> desktop_capturer) override;
   std::unique_ptr<AudioStream> StartAudioStream(
       std::unique_ptr<AudioSource> audio_source) override;
 
@@ -101,12 +106,13 @@ class FakeConnectionToClient : public ConnectionToClient {
 
   bool is_connected() { return is_connected_; }
   ErrorCode disconnect_error() { return disconnect_error_; }
+  const NetworkSettings& network_settings() const { return network_settings_; }
 
  private:
-  // TODO(crbug.com/1043325): Remove the requirement that ConnectionToClient
+  // TODO(crbug.com/40115219): Remove the requirement that ConnectionToClient
   // retains a pointer to the capturer if the relative pointer experiment is
   // a success.
-  std::unique_ptr<webrtc::DesktopCapturer> desktop_capturer_;
+  std::unique_ptr<DesktopCapturer> desktop_capturer_;
   std::unique_ptr<Session> session_;
   raw_ptr<EventHandler> event_handler_ = nullptr;
 
@@ -123,10 +129,10 @@ class FakeConnectionToClient : public ConnectionToClient {
   scoped_refptr<base::SingleThreadTaskRunner> video_encode_task_runner_;
 
   bool is_connected_ = true;
-  ErrorCode disconnect_error_ = OK;
+  ErrorCode disconnect_error_ = ErrorCode::OK;
+  NetworkSettings network_settings_;
 };
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol
 
 #endif  // REMOTING_PROTOCOL_FAKE_CONNECTION_TO_CLIENT_H_

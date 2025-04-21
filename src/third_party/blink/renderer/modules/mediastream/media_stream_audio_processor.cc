@@ -1,17 +1,17 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/mediastream/media_stream_audio_processor.h"
 
 #include <memory>
+#include <optional>
+#include <string_view>
 
-#include "base/feature_list.h"
+#include "base/memory/raw_ptr.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "media/base/audio_parameters.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/platform/modules/webrtc/webrtc_logging.h"
 #include "third_party/blink/renderer/modules/webrtc/webrtc_audio_device_impl.h"
 #include "third_party/blink/renderer/platform/mediastream/aec_dump_agent_impl.h"
@@ -19,7 +19,7 @@
 
 namespace blink {
 namespace {
-void WebRtcLogStringPiece(base::StringPiece message) {
+void WebRtcLogStringPiece(std::string_view message) {
   WebRtcLogMessage(std::string{message});
 }
 }  // namespace
@@ -41,7 +41,7 @@ class MediaStreamAudioProcessor::PlayoutListener {
  private:
   // TODO(crbug.com/704136): Replace with Member at some point.
   scoped_refptr<WebRtcAudioDeviceImpl> const playout_data_source_;
-  WebRtcPlayoutDataSource::Sink* const sink_;
+  const raw_ptr<WebRtcPlayoutDataSource::Sink> sink_;
 };
 
 MediaStreamAudioProcessor::MediaStreamAudioProcessor(
@@ -58,13 +58,13 @@ MediaStreamAudioProcessor::MediaStreamAudioProcessor(
           media::AudioProcessor::GetDefaultOutputFormat(
               capture_data_source_params,
               settings))),
-      main_thread_runner_(base::ThreadTaskRunnerHandle::Get()),
+      main_thread_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
       aec_dump_agent_impl_(AecDumpAgentImpl::Create(this)),
       stopped_(false) {
   DCHECK(main_thread_runner_);
   // Register as a listener for the playout reference signal. Used for e.g. echo
   // cancellation.
-  if (settings.NeedPlayoutReference() && playout_data_source) {
+  if (audio_processor_->needs_playout_reference() && playout_data_source) {
     playout_listener_ =
         std::make_unique<PlayoutListener>(std::move(playout_data_source), this);
   }
@@ -81,12 +81,10 @@ void MediaStreamAudioProcessor::ProcessCapturedAudio(
     const media::AudioBus& audio_source,
     base::TimeTicks audio_capture_time,
     int num_preferred_channels,
-    double volume,
-    bool key_pressed) {
+    double volume) {
   DCHECK_CALLED_ON_VALID_THREAD(capture_thread_checker_);
   audio_processor_->ProcessCapturedAudio(audio_source, audio_capture_time,
-                                         num_preferred_channels, volume,
-                                         key_pressed);
+                                         num_preferred_channels, volume);
 }
 
 void MediaStreamAudioProcessor::Stop() {
@@ -130,12 +128,12 @@ bool MediaStreamAudioProcessor::WouldModifyAudio(
   }
 
 #if !BUILDFLAG(IS_IOS)
-  if (properties.goog_auto_gain_control) {
+  if (properties.auto_gain_control) {
     return true;
   }
 #endif
 
-  if (properties.goog_noise_suppression) {
+  if (properties.noise_suppression) {
     return true;
   }
 

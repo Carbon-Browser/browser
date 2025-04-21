@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2017 The Chromium Authors. All rights reserved.
+# Copyright 2017 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Uploads test results artifacts.
@@ -14,8 +14,6 @@ The script, by default, uploads every artifact stored on the local disk (a URI
 with the 'file' scheme) to google storage.
 """
 
-from __future__ import print_function
-
 import argparse
 import copy
 import json
@@ -27,6 +25,8 @@ import tempfile
 
 root_dir = os.path.abspath(
     os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+
+# //build/android imports.
 sys.path.append(os.path.join(root_dir, 'build', 'android'))
 from pylib.utils import google_storage_helper
 
@@ -75,7 +75,7 @@ def get_tests(test_trie):
   file a bug with crbug.com/new and cc martiniss@.
   """
   if not isinstance(test_trie, dict):
-    raise ValueError("expected %s to be a dict" % test_trie)
+    raise ValueError('expected %s to be a dict' % test_trie)
 
   tests = {}
 

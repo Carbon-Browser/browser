@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,18 +11,17 @@
 #include "ash/ash_export.h"
 #include "ash/system/bluetooth/bluetooth_device_list_controller.h"
 #include "base/containers/flat_map.h"
-#include "chromeos/services/bluetooth_config/public/mojom/cros_bluetooth_config.mojom.h"
+#include "base/memory/raw_ptr.h"
+#include "chromeos/ash/services/bluetooth_config/public/mojom/cros_bluetooth_config.mojom.h"
 
 namespace views {
-class Separator;
+class View;
 }  // namespace views
 
 namespace ash {
 
 class BluetoothDetailedView;
-
 class BluetoothDeviceListItemView;
-class TriView;
 
 // BluetoothDeviceListController implementation.
 class ASH_EXPORT BluetoothDeviceListControllerImpl
@@ -49,29 +48,31 @@ class ASH_EXPORT BluetoothDeviceListControllerImpl
   // |sub_header| is |nullptr|, otherwise uses the provided |sub_header|. The
   // used sub-header is then moved to index |index| within the device list and
   // returned.
-  TriView* CreateSubHeaderIfMissingAndReorder(TriView* sub_header,
-                                              int text_id,
-                                              int index);
+  views::View* CreateSubHeaderIfMissingAndReorder(views::View* sub_header,
+                                                  int text_id,
+                                                  size_t index);
 
   // Creates and initializes a view for each of the device properties within
   // |device_property_list| if a view does not already exist, otherwise re-using
   // the existing view to avoid disrupting a11y. Each view will be reordered to
   // start at |index| and will be removed from |previous_views|. The index of
   // the position after the final view that was added is returned.
-  int CreateViewsIfMissingAndReorder(
+  size_t CreateViewsIfMissingAndReorder(
       const PairedBluetoothDevicePropertiesPtrs& device_property_list,
-      base::flat_map<std::string, BluetoothDeviceListItemView*>* previous_views,
-      int index);
+      base::flat_map<std::string,
+                     raw_ptr<BluetoothDeviceListItemView, CtnExperimental>>*
+          previous_views,
+      size_t index);
 
-  BluetoothDetailedView* const bluetooth_detailed_view_;
+  const raw_ptr<BluetoothDetailedView> bluetooth_detailed_view_;
 
   bool is_bluetooth_enabled_ = false;
-  base::flat_map<std::string, BluetoothDeviceListItemView*>
+  base::flat_map<std::string,
+                 raw_ptr<BluetoothDeviceListItemView, CtnExperimental>>
       device_id_to_view_map_;
-  views::Separator* device_list_separator_ = nullptr;
-  TriView* connected_sub_header_ = nullptr;
-  TriView* no_device_connected_sub_header_ = nullptr;
-  TriView* previously_connected_sub_header_ = nullptr;
+  raw_ptr<views::View> connected_sub_header_ = nullptr;
+  raw_ptr<views::View> no_device_connected_sub_header_ = nullptr;
+  raw_ptr<views::View> previously_connected_sub_header_ = nullptr;
 };
 
 }  // namespace ash

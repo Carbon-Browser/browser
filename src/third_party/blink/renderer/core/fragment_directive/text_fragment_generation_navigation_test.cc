@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include "components/shared_highlighting/core/common/shared_highlighting_data_driven_test.h"
 #include "components/shared_highlighting/core/common/shared_highlighting_data_driven_test_results.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
 #include "third_party/blink/renderer/core/annotation/annotation_agent_container_impl.h"
 #include "third_party/blink/renderer/core/annotation/annotation_agent_impl.h"
 #include "third_party/blink/renderer/core/editing/iterators/text_iterator.h"
@@ -20,6 +19,8 @@
 #include "third_party/blink/renderer/core/html/html_element.h"
 #include "third_party/blink/renderer/core/testing/sim/sim_request.h"
 #include "third_party/blink/renderer/core/testing/sim/sim_test.h"
+#include "third_party/blink/renderer/platform/scheduler/public/main_thread_scheduler.h"
+#include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
@@ -45,10 +46,10 @@ class TextFragmentGenerationNavigationTest
   GenerateAndNavigate(std::string html_content,
                       std::string* start_parent_id,
                       int start_offset_in_parent,
-                      absl::optional<int> start_text_offset,
+                      std::optional<int> start_text_offset,
                       std::string* end_parent_id,
                       int end_offset_in_parent,
-                      absl::optional<int> end_text_offset,
+                      std::optional<int> end_text_offset,
                       std::string selected_text,
                       std::string* highlight_text) override;
 
@@ -56,10 +57,10 @@ class TextFragmentGenerationNavigationTest
 
   RangeInFlatTree* GetSelectionRange(std::string* start_parent_id,
                                      int start_offset_in_parent,
-                                     absl::optional<int> start_text_offset,
+                                     std::optional<int> start_text_offset,
                                      std::string* end_parent_id,
                                      int end_offset_in_parent,
-                                     absl::optional<int> end_text_offset);
+                                     std::optional<int> end_text_offset);
 
   String GenerateSelector(const RangeInFlatTree& selection_range);
 
@@ -74,8 +75,9 @@ void TextFragmentGenerationNavigationTest::SetUp() {
 }
 
 void TextFragmentGenerationNavigationTest::RunAsyncMatchingTasks() {
-  auto* scheduler = blink::scheduler::WebThreadScheduler::MainThreadScheduler();
-  blink::scheduler::RunIdleTasksForTesting(scheduler, base::BindOnce([]() {}));
+  ThreadScheduler::Current()
+      ->ToMainThreadScheduler()
+      ->StartIdlePeriodForTesting();
   RunPendingTasks();
 }
 
@@ -99,23 +101,23 @@ void TextFragmentGenerationNavigationTest::LoadHTML(String url,
 RangeInFlatTree* TextFragmentGenerationNavigationTest::GetSelectionRange(
     std::string* start_parent_id,
     int start_offset_in_parent,
-    absl::optional<int> start_text_offset,
+    std::optional<int> start_text_offset,
     std::string* end_parent_id,
     int end_offset_in_parent,
-    absl::optional<int> end_text_offset) {
+    std::optional<int> end_text_offset) {
   // Parent of start node will be the node with `start_parent_id` id
   // or the DOM body if no `start_parent_id`.
-  Node* start_parent_node =
-      start_parent_id == nullptr
-          ? GetDocument().body()
-          : GetDocument().getElementById(start_parent_id->c_str());
+  Node* start_parent_node = start_parent_id == nullptr
+                                ? GetDocument().body()
+                                : GetDocument().getElementById(
+                                      AtomicString(start_parent_id->c_str()));
 
   // Parent of end node will be the node with `end_parent_id` id
   // or the DOM body if no `end_parent_id`.
   Node* end_parent_node =
       end_parent_id == nullptr
           ? GetDocument().body()
-          : GetDocument().getElementById(end_parent_id->c_str());
+          : GetDocument().getElementById(AtomicString(end_parent_id->c_str()));
 
   const Node* start_node =
       start_parent_node->childNodes()->item(start_offset_in_parent);
@@ -140,7 +142,7 @@ String TextFragmentGenerationNavigationTest::GenerateSelector(
                    shared_highlighting::LinkGenerationError error) {
     selector = generated_selector.ToString();
   };
-  auto callback = WTF::Bind(lambda, std::ref(selector));
+  auto callback = WTF::BindOnce(lambda, std::ref(selector));
 
   MakeGarbageCollected<TextFragmentSelectorGenerator>(GetDocument().GetFrame())
       ->Generate(selection_range, std::move(callback));
@@ -149,7 +151,7 @@ String TextFragmentGenerationNavigationTest::GenerateSelector(
 }
 
 String TextFragmentGenerationNavigationTest::GetHighlightedText() {
-  auto* container = AnnotationAgentContainerImpl::From(GetDocument());
+  auto* container = AnnotationAgentContainerImpl::CreateIfNeeded(GetDocument());
   // Returns a null string, distinguishable from an empty string.
   if (!container)
     return String();
@@ -169,10 +171,10 @@ TextFragmentGenerationNavigationTest::GenerateAndNavigate(
     std::string html_content,
     std::string* start_parent_id,
     int start_offset_in_parent,
-    absl::optional<int> start_text_offset,
+    std::optional<int> start_text_offset,
     std::string* end_parent_id,
     int end_offset_in_parent,
-    absl::optional<int> end_text_offset,
+    std::optional<int> end_text_offset,
     std::string selected_text,
     std::string* highlight_text) {
   String base_url = "https://example.com/test.html";
@@ -186,7 +188,7 @@ TextFragmentGenerationNavigationTest::GenerateAndNavigate(
   // Generate text fragment selector.
   String selector = GenerateSelector(*selection_range);
 
-  if (selector.IsEmpty()) {
+  if (selector.empty()) {
     return shared_highlighting::SharedHighlightingDataDrivenTestResults();
   }
 

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,7 +29,6 @@ std::string EntryStateToHistogramSuffix(Entry::State state) {
       break;
   }
   NOTREACHED();
-  return std::string();
 }
 
 // Helper method to log the number of entries under a particular state.

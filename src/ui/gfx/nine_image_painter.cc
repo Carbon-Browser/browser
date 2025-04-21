@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/354829279): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ui/gfx/nine_image_painter.h"
 
@@ -156,7 +161,7 @@ void NineImagePainter::Paint(Canvas* canvas,
   int i4h = std::max(height_in_pixels - i4y - std::min({i6h, i7h, i8h}), 0);
 
   cc::PaintFlags flags;
-  flags.setAlpha(alpha);
+  flags.setAlphaf(alpha / 255.0f);
 
   Fill(canvas, image_reps[4], i4x, i4y, i4w, i4h, flags);
   Fill(canvas, image_reps[0], 0, 0, i0w, i0h, flags);

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@ namespace error_page {
 const char Error::kNetErrorDomain[] = "net";
 const char Error::kHttpErrorDomain[] = "http";
 const char Error::kDnsProbeErrorDomain[] = "dnsprobe";
+const char Error::kLinkPreviewErrorDomain[] = "link-preview";
 
 Error Error::NetError(const GURL& url,
                       int reason,
@@ -31,6 +32,12 @@ Error Error::DnsProbeError(const GURL& url,
                            bool stale_copy_in_cache) {
   return Error(url, kDnsProbeErrorDomain, status, 0,
                net::ResolveErrorInfo(net::OK), stale_copy_in_cache);
+}
+
+Error Error::LinkPreviewError(const GURL& url,
+                              LinkPreviewErrorCode error_code) {
+  return Error(url, kLinkPreviewErrorDomain, static_cast<int>(error_code), 0,
+               net::ResolveErrorInfo(net::OK), false);
 }
 
 Error::~Error() = default;

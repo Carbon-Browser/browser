@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,8 +23,9 @@ __declspec(dllexport) void ExportFunc2() {
 
   // Call into shell32.dll.
   PWSTR path = nullptr;
-  if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Public, 0, nullptr, &path)))
+  if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Public, 0, nullptr, &path))) {
     CoTaskMemFree(path);
+  }
 
   // Call into kernel32.dll.
   HANDLE h = CreateEvent(nullptr, FALSE, FALSE, nullptr);

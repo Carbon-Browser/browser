@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,7 +34,7 @@ QuickUnlockStorage::QuickUnlockStorage(Profile* profile)
   pin_storage_prefs_ = std::make_unique<PinStoragePrefs>(profile->GetPrefs());
 }
 
-QuickUnlockStorage::~QuickUnlockStorage() {}
+QuickUnlockStorage::~QuickUnlockStorage() = default;
 
 void QuickUnlockStorage::SetClockForTesting(base::Clock* test_clock) {
   clock_ = test_clock;
@@ -73,24 +73,31 @@ bool QuickUnlockStorage::TryAuthenticatePin(const Key& key, Purpose purpose) {
          pin_storage_prefs()->TryAuthenticatePin(key, purpose);
 }
 
-std::string QuickUnlockStorage::CreateAuthToken(
-    const UserContext& user_context) {
-  auth_token_ = std::make_unique<AuthToken>(user_context);
-  DCHECK(auth_token_->Identifier().has_value());
-  return *auth_token_->Identifier();
-}
-
 AuthToken* QuickUnlockStorage::GetAuthToken() {
   if (!auth_token_ || !auth_token_->Identifier().has_value())
     return nullptr;
   return auth_token_.get();
 }
 
-const UserContext* QuickUnlockStorage::GetUserContext(
-    const std::string& auth_token) {
-  if (GetAuthToken() && GetAuthToken()->Identifier() != auth_token)
+UserContext* QuickUnlockStorage::GetUserContext(const std::string& auth_token) {
+  if (!auth_token_ || auth_token_->Identifier() != auth_token)
     return nullptr;
+
   return auth_token_->user_context();
+}
+
+void QuickUnlockStorage::ReplaceUserContext(
+    const std::string& auth_token,
+    std::unique_ptr<UserContext> user_context) {
+  if (!auth_token_ || auth_token_->Identifier() != auth_token) {
+    // See the comment in `AuthToken::ReplaceUserContext` for a situation in
+    // which this might happen.
+    LOG(WARNING)
+        << "Replacement user context is ignored because auth token is gone";
+    return;
+  }
+
+  auth_token_->ReplaceUserContext(std::move(user_context));
 }
 
 FingerprintState QuickUnlockStorage::GetFingerprintState(Purpose purpose) {

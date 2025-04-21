@@ -1,14 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/services/sharing/nearby/platform/input_stream_impl.h"
 
+#include "base/containers/span.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/task/sequenced_task_runner.h"
+#include "mojo/public/c/system/data_pipe.h"
 
-namespace location {
-namespace nearby {
-namespace chrome {
+namespace nearby::chrome {
 
 namespace {
 
@@ -32,6 +33,7 @@ void LogReadResult(connections::mojom::Medium medium, bool success) {
     case connections::mojom::Medium::kWebRtc:
     case connections::mojom::Medium::kBleL2Cap:
     case connections::mojom::Medium::kUsb:
+    case connections::mojom::Medium::kWebRtcNonCellular:
       break;
   }
 }
@@ -79,12 +81,15 @@ ExceptionOr<ByteArray> InputStreamImpl::Read(std::int64_t size) {
   pending_read_buffer_ = std::make_unique<ByteArray>(size);
   pending_read_buffer_pos_ = 0;
 
-  read_waitable_event_.emplace();
+  // Signal and reset the WaitableEvent in case another thread is already
+  // waiting on a Read().
+  read_waitable_event_.Signal();
+  read_waitable_event_.Reset();
+
   task_runner_->PostTask(
       FROM_HERE, base::BindOnce(&mojo::SimpleWatcher::ArmOrNotify,
                                 base::Unretained(&receive_stream_watcher_)));
-  read_waitable_event_->Wait();
-  read_waitable_event_.reset();
+  read_waitable_event_.Wait();
 
   pending_read_buffer_.reset();
   pending_read_buffer_pos_ = 0;
@@ -124,22 +129,23 @@ void InputStreamImpl::ReceiveMore(MojoResult result,
   DCHECK(!IsClosed());
   DCHECK(pending_read_buffer_);
   DCHECK_LT(pending_read_buffer_pos_, pending_read_buffer_->size());
-  DCHECK(read_waitable_event_);
 
   if (state.peer_closed()) {
     exception_or_received_byte_array_ = ExceptionOr<ByteArray>(Exception::kIo);
-    read_waitable_event_->Signal();
+    read_waitable_event_.Signal();
     return;
   }
 
   if (result == MOJO_RESULT_OK) {
-    uint32_t num_bytes = static_cast<uint32_t>(pending_read_buffer_->size() -
-                                               pending_read_buffer_pos_);
-    result = receive_stream_->ReadData(
-        pending_read_buffer_->data() + pending_read_buffer_pos_, &num_bytes,
-        MOJO_READ_DATA_FLAG_NONE);
-    if (result == MOJO_RESULT_OK)
-      pending_read_buffer_pos_ += num_bytes;
+    base::span<uint8_t> buffer =
+        base::as_writable_byte_span(*pending_read_buffer_)
+            .subspan(pending_read_buffer_pos_);
+    size_t bytes_read = 0;
+    result =
+        receive_stream_->ReadData(MOJO_READ_DATA_FLAG_NONE, buffer, bytes_read);
+    if (result == MOJO_RESULT_OK) {
+      pending_read_buffer_pos_ += bytes_read;
+    }
   }
 
   if (result == MOJO_RESULT_SHOULD_WAIT ||
@@ -154,7 +160,7 @@ void InputStreamImpl::ReceiveMore(MojoResult result,
   } else {
     exception_or_received_byte_array_ = ExceptionOr<ByteArray>(Exception::kIo);
   }
-  read_waitable_event_->Signal();
+  read_waitable_event_.Signal();
 }
 
 bool InputStreamImpl::IsClosed() const {
@@ -175,14 +181,11 @@ void InputStreamImpl::DoClose(base::WaitableEvent* task_run_waitable_event) {
     // cancel the stream watcher, the Read() call will block forever. We
     // trigger the event manually here, which will cause an IO exception to be
     // returned from Read().
-    if (read_waitable_event_)
-      read_waitable_event_->Signal();
+    read_waitable_event_.Signal();
   }
 
   if (task_run_waitable_event)
     task_run_waitable_event->Signal();
 }
 
-}  // namespace chrome
-}  // namespace nearby
-}  // namespace location
+}  // namespace nearby::chrome

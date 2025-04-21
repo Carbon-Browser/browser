@@ -1,4 +1,4 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 #define ASH_SHELF_TEST_HOTSEAT_STATE_WATCHER_H_
 
 #include "ash/shelf/shelf_layout_manager.h"
+#include "base/memory/raw_ptr.h"
+#include "base/run_loop.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace ash {
@@ -24,7 +26,7 @@ class HotseatStateWatcher : public ShelfLayoutManagerObserver {
   void WaitUntilStateChanged();
 
  private:
-  ShelfLayoutManager* shelf_layout_manager_;
+  raw_ptr<ShelfLayoutManager> shelf_layout_manager_;
   std::vector<HotseatState> state_changes_;
   base::RunLoop run_loop_;
 };

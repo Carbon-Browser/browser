@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,13 +20,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Tests to validate correctness of the PropertyListModel. Mainly that sub-observers are
- * added and removed at the correct times.
+ * Tests to validate correctness of the PropertyListModel. Mainly that sub-observers are added and
+ * removed at the correct times.
  */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class PropertyListModelTest implements ListObservable.ListObserver<PropertyKey> {
-    private static final int METHOD_COUNT = 35;
+    private static final int METHOD_COUNT = 36;
     private static final PropertyModel.WritableIntPropertyKey INTEGER_KEY =
             new PropertyModel.WritableIntPropertyKey();
 
@@ -59,7 +59,10 @@ public class PropertyListModelTest implements ListObservable.ListObserver<Proper
     }
 
     @Override
-    public void onItemRangeChanged(ListObservable<PropertyKey> source, int index, int count,
+    public void onItemRangeChanged(
+            ListObservable<PropertyKey> source,
+            int index,
+            int count,
             @Nullable PropertyKey payload) {
         mIndex = index;
         mCount = count;

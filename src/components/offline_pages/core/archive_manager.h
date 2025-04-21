@@ -1,12 +1,12 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_OFFLINE_PAGES_CORE_ARCHIVE_MANAGER_H_
 #define COMPONENTS_OFFLINE_PAGES_CORE_ARCHIVE_MANAGER_H_
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
 
 namespace base {

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,11 @@ class CORE_EXPORT CompositorKeyframeTransform final
                                        double zoom)
       : transform_(transform), zoom_(zoom) {}
   ~CompositorKeyframeTransform() override = default;
+
+  void Trace(Visitor* visitor) const final {
+    CompositorKeyframeValue::Trace(visitor);
+    visitor->Trace(transform_);
+  }
 
   const TransformOperations& GetTransformOperations() const {
     return transform_;

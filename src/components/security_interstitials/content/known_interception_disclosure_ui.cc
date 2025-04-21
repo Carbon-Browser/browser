@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,16 +12,24 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_data_source.h"
+#include "content/public/common/url_constants.h"
 #include "net/base/net_errors.h"
 #include "ui/base/l10n/l10n_util.h"
 
 namespace security_interstitials {
 
+KnownInterceptionDisclosureUIConfig::KnownInterceptionDisclosureUIConfig()
+    : DefaultWebUIConfig(
+          content::kChromeUIScheme,
+          security_interstitials::kChromeUIConnectionMonitoringDetectedHost) {}
+
 KnownInterceptionDisclosureUI::KnownInterceptionDisclosureUI(
     content::WebUI* web_ui)
     : content::WebUIController(web_ui) {
-  content::WebUIDataSource* html_source = content::WebUIDataSource::Create(
-      kChromeUIConnectionMonitoringDetectedHost);
+  content::WebUIDataSource* html_source =
+      content::WebUIDataSource::CreateAndAdd(
+          web_ui->GetWebContents()->GetBrowserContext(),
+          kChromeUIConnectionMonitoringDetectedHost);
 
   html_source->AddLocalizedString("title", IDS_KNOWN_INTERCEPTION_TITLE);
   html_source->AddLocalizedString("pageHeader", IDS_KNOWN_INTERCEPTION_HEADER);
@@ -39,10 +47,6 @@ KnownInterceptionDisclosureUI::KnownInterceptionDisclosureUI(
   html_source->AddResourcePath("images/2x/triangle_red.png",
                                IDR_KNOWN_INTERCEPTION_ICON_2X_PNG);
   html_source->SetDefaultResource(IDR_KNOWN_INTERCEPTION_HTML);
-
-  content::BrowserContext* browser_context =
-      web_ui->GetWebContents()->GetBrowserContext();
-  content::WebUIDataSource::Add(browser_context, html_source);
 }
 
 KnownInterceptionDisclosureUI::~KnownInterceptionDisclosureUI() = default;

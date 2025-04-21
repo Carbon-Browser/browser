@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,6 +27,11 @@ class PrintDialogLinuxInterface {
   // Updates the dialog to use `settings`. Only used when printing without the
   // system print dialog. E.g. for Print Preview.
   virtual void UpdateSettings(std::unique_ptr<PrintSettings> settings) = 0;
+
+#if BUILDFLAG(ENABLE_OOP_PRINTING_NO_OOP_BASIC_PRINT_DIALOG)
+  // Updates the dialog to use system print dialog settings saved in `settings`.
+  virtual void LoadPrintSettings(const PrintSettings& settings) = 0;
+#endif
 
   // Shows the dialog and handles the response with `callback`. Only used when
   // printing with the native print dialog.

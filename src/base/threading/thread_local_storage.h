@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,8 +35,7 @@ class ThreadLocalStorageTestInternal;
 // WARNING: You should *NOT* use this class directly.
 // PlatformThreadLocalStorage is a low-level abstraction of the OS's TLS
 // interface. Instead, you should use one of the following:
-// * ThreadLocalBoolean (from thread_local.h) for booleans.
-// * ThreadLocalPointer (from thread_local.h) for pointers.
+// * ThreadLocalOwnedPointer (from thread_local.h) for unique_ptrs.
 // * ThreadLocalStorage::StaticSlot/Slot for more direct control of the slot.
 class BASE_EXPORT PlatformThreadLocalStorage {
  public:

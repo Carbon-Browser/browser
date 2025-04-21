@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "components/enterprise/browser/reporting/os_report_generator.h"
 #include "components/enterprise/browser/reporting/report_type.h"
 #include "components/enterprise/browser/reporting/reporting_delegate_factory.h"
@@ -22,7 +22,9 @@ ChromeProfileRequestGenerator::ChromeProfileRequestGenerator(
     : profile_path_(profile_path),
       profile_name_(profile_name),
       browser_report_generator_(delegate_factory),
-      profile_report_generator_(delegate_factory) {}
+      profile_report_generator_(delegate_factory) {
+  profile_report_generator_.set_is_machine_scope(false);
+}
 
 ChromeProfileRequestGenerator::~ChromeProfileRequestGenerator() = default;
 
@@ -35,6 +37,11 @@ void ChromeProfileRequestGenerator::Generate(ReportCallback callback) {
       base::BindOnce(&ChromeProfileRequestGenerator::OnBrowserReportReady,
                      weak_ptr_factory_.GetWeakPtr(), std::move(request),
                      std::move(callback)));
+}
+
+void ChromeProfileRequestGenerator::ToggleExtensionReport(
+    ProfileReportGenerator::ExtensionsEnabledCallback callback) {
+  profile_report_generator_.SetExtensionsEnabledCallback(std::move(callback));
 }
 
 void ChromeProfileRequestGenerator::OnBrowserReportReady(

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,20 @@ package org.chromium.device.usb;
 
 import android.hardware.usb.UsbDeviceConnection;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+
 import org.chromium.base.Log;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
+import org.chromium.build.annotations.NullMarked;
 
 /**
  * Exposes android.hardware.usb.UsbDeviceConnection as necessary for C++
  * device::UsbDeviceHandleAndroid.
  *
- * Lifetime is controlled by device::UsbDeviceHandleAndroid.
+ * <p>Lifetime is controlled by device::UsbDeviceHandleAndroid.
  */
 @JNINamespace("device")
+@NullMarked
 class ChromeUsbConnection {
     private static final String TAG = "Usb";
 

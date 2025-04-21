@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ struct StructTraits<media::mojom::MediaFoundationCdmDataDataView,
     return input->origin_id;
   }
 
-  static const absl::optional<std::vector<uint8_t>>& client_token(
+  static const std::optional<std::vector<uint8_t>>& client_token(
       const std::unique_ptr<media::MediaFoundationCdmData>& input) {
     return input->client_token;
   }

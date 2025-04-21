@@ -1,19 +1,17 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SUBRESOURCE_FILTER_CORE_BROWSER_SUBRESOURCE_FILTER_CONSTANTS_H_
 #define COMPONENTS_SUBRESOURCE_FILTER_CORE_BROWSER_SUBRESOURCE_FILTER_CONSTANTS_H_
 
+#include <string_view>
+
 #include "base/files/file_path.h"
 
 namespace subresource_filter {
 
-// The name of the top-level directory under the user data directory that
-// contains all files and subdirectories related to the subresource filter.
-extern const base::FilePath::CharType kTopLevelDirectoryName[];
-
-// Paths under |kTopLevelDirectoryName|
+// Paths under the top level directory
 // ------------------------------------
 
 // The name of the subdirectory under the top-level directory that stores
@@ -47,6 +45,9 @@ extern const base::FilePath::CharType kUnindexedRulesetLicenseFileName[];
 // The name of the file that stores the unindexed filtering rules.
 extern const base::FilePath::CharType kUnindexedRulesetDataFileName[];
 
+// The name of the filter. This is used for metrics logging.
+inline constexpr std::string_view kUmaFilterTag = "SubresourceFilter";
+
 // Console message to be displayed on activation.
 constexpr char kActivationConsoleMessage[] =
     "Chrome is blocking ads on this site because this site tends to show ads "
@@ -63,7 +64,7 @@ constexpr char kActivationWarningConsoleMessage[] =
     "https://www.chromestatus.com/feature/5738264052891648";
 
 // Console message to be displayed on disallowing subframe.
-constexpr char kDisallowSubframeConsoleMessageFormat[] =
+constexpr char kDisallowChildFrameConsoleMessageFormat[] =
     "Chrome blocked resource %s on this site because this site tends to show "
     "ads that interrupt, distract, mislead, or prevent user control. Learn "
     "more at https://www.chromestatus.com/feature/5738264052891648";

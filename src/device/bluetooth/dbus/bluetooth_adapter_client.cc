@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
@@ -121,7 +121,7 @@ BluetoothAdapterClient::Error ErrorResponseToError(
 void OnResponseAdapter(
     base::OnceClosure callback,
     BluetoothAdapterClient::ErrorCallback error_callback,
-    const absl::optional<BluetoothAdapterClient::Error>& error) {
+    const std::optional<BluetoothAdapterClient::Error>& error) {
   if (!error) {
     std::move(callback).Run();
     return;
@@ -187,6 +187,7 @@ BluetoothAdapterClient::Properties::Properties(
   RegisterProperty(bluetooth_adapter::kDiscoveringProperty, &discovering);
   RegisterProperty(bluetooth_adapter::kUUIDsProperty, &uuids);
   RegisterProperty(bluetooth_adapter::kModaliasProperty, &modalias);
+  RegisterProperty(bluetooth_adapter::kRolesProperty, &roles);
 }
 
 BluetoothAdapterClient::Properties::~Properties() = default;
@@ -457,15 +458,15 @@ class BluetoothAdapterClientImpl : public BluetoothAdapterClient,
   // BluetoothAdapterClient override.
   void ConnectDevice(const dbus::ObjectPath& object_path,
                      const std::string& address,
-                     const absl::optional<AddressType>& address_type,
+                     const std::optional<AddressType>& address_type,
                      ConnectDeviceCallback callback,
                      ErrorCallback error_callback) override {
     dbus::MethodCall method_call(bluetooth_adapter::kBluetoothAdapterInterface,
                                  bluetooth_adapter::kConnectDevice);
 
     dbus::MessageWriter writer(&method_call);
-    base::DictionaryValue dict;
-    dict.SetStringKey(bluetooth_device::kAddressProperty, address);
+    base::Value::Dict dict;
+    dict.Set(bluetooth_device::kAddressProperty, address);
     if (address_type) {
       std::string address_type_value;
       switch (*address_type) {
@@ -477,10 +478,8 @@ class BluetoothAdapterClientImpl : public BluetoothAdapterClient,
           break;
         default:
           NOTREACHED();
-          break;
       };
-      dict.SetStringKey(bluetooth_device::kAddressTypeProperty,
-                        address_type_value);
+      dict.Set(bluetooth_device::kAddressTypeProperty, address_type_value);
     }
     dbus::AppendValueData(&writer, dict);
 
@@ -564,7 +563,7 @@ class BluetoothAdapterClientImpl : public BluetoothAdapterClient,
                   dbus::Response* response,
                   dbus::ErrorResponse* error_response) {
     if (response) {
-      std::move(callback).Run(absl::nullopt);
+      std::move(callback).Run(std::nullopt);
       return;
     }
 

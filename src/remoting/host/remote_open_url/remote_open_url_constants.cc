@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,6 @@ const wchar_t kUrlForwarderProgId[] = L"ChromotingUrlForwarder";
 
 const wchar_t kUndecidedProgId[] = L"Undecided";
 
-#endif  // defined (OS_WIN)
+#endif  // BUILDFLAG(IS_WIN)
 
 }  // namespace remoting

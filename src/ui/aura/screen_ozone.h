@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,10 @@
 #define UI_AURA_SCREEN_OZONE_H_
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/values.h"
-#include "build/chromeos_buildflags.h"
 #include "ui/aura/aura_export.h"
 #include "ui/display/screen.h"
 #include "ui/ozone/public/platform_screen.h"
@@ -26,8 +26,6 @@ class AURA_EXPORT ScreenOzone : public display::Screen {
   ScreenOzone& operator=(const ScreenOzone&) = delete;
 
   ~ScreenOzone() override;
-
-  void Initialize();
 
   // display::Screen interface.
   gfx::Point GetCursorScreenPoint() override;
@@ -46,10 +44,10 @@ class AURA_EXPORT ScreenOzone : public display::Screen {
   display::Display GetDisplayMatching(
       const gfx::Rect& match_rect) const override;
   display::Display GetPrimaryDisplay() const override;
-#if BUILDFLAG(IS_CHROMEOS_LACROS) || BUILDFLAG(IS_LINUX)
+#if BUILDFLAG(IS_LINUX)
   std::unique_ptr<display::Screen::ScreenSaverSuspender> SuspendScreenSaver()
       override;
-#endif  // BUILDFLAG(IS_CHROMEOS_LACROS) || BUILDFLAG(IS_LINUX)
+#endif  // BUILDFLAG(IS_LINUX)
   bool IsScreenSaverActive() const override;
   base::TimeDelta CalculateIdleTime() const override;
   void AddObserver(display::DisplayObserver* observer) override;
@@ -57,6 +55,8 @@ class AURA_EXPORT ScreenOzone : public display::Screen {
   std::string GetCurrentWorkspace() override;
   base::Value::List GetGpuExtraInfo(
       const gfx::GpuExtraInfo& gpu_extra_info) override;
+  std::optional<float> GetPreferredScaleFactorForWindow(
+      gfx::NativeWindow window) const override;
 
   // Returns the NativeWindow associated with the AcceleratedWidget.
   virtual gfx::NativeWindow GetNativeWindowFromAcceleratedWidget(
@@ -68,7 +68,7 @@ class AURA_EXPORT ScreenOzone : public display::Screen {
   ui::PlatformScreen* platform_screen() { return platform_screen_.get(); }
 
  private:
-#if BUILDFLAG(IS_CHROMEOS_LACROS) || BUILDFLAG(IS_LINUX)
+#if BUILDFLAG(IS_LINUX)
   class ScreenSaverSuspenderOzone
       : public display::Screen::ScreenSaverSuspender {
    public:
@@ -86,27 +86,12 @@ class AURA_EXPORT ScreenOzone : public display::Screen {
     std::unique_ptr<ui::PlatformScreen::PlatformScreenSaverSuspender>
         suspender_;
   };
-#endif  // BUILDFLAG(IS_CHROMEOS_LACROS) || BUILDFLAG(IS_LINUX)
+#endif  // BUILDFLAG(IS_LINUX)
 
   gfx::AcceleratedWidget GetAcceleratedWidgetForWindow(
       aura::Window* window) const;
 
-  virtual void OnBeforePlatformScreenInit();
-
   std::unique_ptr<ui::PlatformScreen> platform_screen_;
-};
-
-// ScopedScreenOzone creates a ScreenOzone instead of NativeScreen
-// (created by `CreateNativeScreen()`) if the screen hasn't been set.
-class AURA_EXPORT ScopedScreenOzone : public display::ScopedNativeScreen {
- public:
-  explicit ScopedScreenOzone(const base::Location& location = FROM_HERE);
-  ScopedScreenOzone(const ScopedScreenOzone&) = delete;
-  ScopedScreenOzone operator=(const ScopedScreenOzone&) = delete;
-  ~ScopedScreenOzone() override;
-
- private:
-  display::Screen* CreateScreen() override;
 };
 
 }  // namespace aura

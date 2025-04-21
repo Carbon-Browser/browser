@@ -1,8 +1,8 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {$} from 'chrome://resources/js/util.m.js';
+import {$, getRequiredElement} from 'chrome://resources/js/util.js';
 
 import {DevicePage} from './device_page.js';
 import {FeedbackPage} from './feedback_page.js';
@@ -32,10 +32,10 @@ function initialize() {
     pageNavigator.showPage(devicePage.pageName);
   }
 
-  $('output-btn').addEventListener('click', function() {
+  getRequiredElement('output-btn').addEventListener('click', function() {
     pageNavigator.showPage(outputPage.pageName);
   });
-  $('input-btn').addEventListener('click', function() {
+  getRequiredElement('input-btn').addEventListener('click', function() {
     pageNavigator.showPage(inputPage.pageName);
   });
   pageNavigator.showPage(window.location.hash.substr(1));

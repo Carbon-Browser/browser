@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,19 +7,27 @@
 #include <vector>
 
 #include "ui/display/display.h"
+#include "ui/gfx/native_widget_types.h"
 
-namespace display {
-namespace test {
+#if BUILDFLAG(IS_CHROMEOS)
+#include "ui/display/display_list.h"
+#include "ui/display/display_observer.h"
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
+namespace display::test {
 namespace {
 TestScreen* test_screen = nullptr;
-}
+}  // namespace
 
 // static
 constexpr gfx::Rect TestScreen::kDefaultScreenBounds;
 
-TestScreen::TestScreen(bool create_display) {
+TestScreen::TestScreen(bool create_display, bool register_screen)
+    : register_screen_(register_screen) {
   DCHECK(!test_screen);
   test_screen = this;
+  if (register_screen_)
+    Screen::SetScreenInstance(this);
 
   if (!create_display)
     return;
@@ -29,6 +37,10 @@ TestScreen::TestScreen(bool create_display) {
 
 TestScreen::~TestScreen() {
   DCHECK_EQ(test_screen, this);
+  if (register_screen_) {
+    DCHECK_EQ(Screen::GetScreen(), this);
+    Screen::SetScreenInstance(nullptr);
+  }
   test_screen = nullptr;
 }
 
@@ -51,7 +63,7 @@ bool TestScreen::IsWindowUnderCursor(gfx::NativeWindow window) {
 }
 
 gfx::NativeWindow TestScreen::GetWindowAtScreenPoint(const gfx::Point& point) {
-  return nullptr;
+  return gfx::NativeWindow();
 }
 
 Display TestScreen::GetDisplayNearestWindow(gfx::NativeWindow window) const {
@@ -62,5 +74,21 @@ void TestScreen::SetCursorScreenPointForTesting(const gfx::Point& point) {
   cursor_screen_point_ = point;
 }
 
-}  // namespace test
-}  // namespace display
+#if BUILDFLAG(IS_CHROMEOS)
+TabletState TestScreen::GetTabletState() const {
+  return state_;
+}
+
+void TestScreen::OverrideTabletStateForTesting(TabletState state) {
+  if (state_ == state) {
+    return;
+  }
+
+  state_ = state;
+
+  display_list().observers()->Notify(
+      &DisplayObserver::OnDisplayTabletStateChanged, state);
+}
+#endif  // BUILDFLAG(IS_CHROMEOS)
+
+}  // namespace display::test

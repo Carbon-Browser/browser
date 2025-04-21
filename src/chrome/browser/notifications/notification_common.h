@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,6 +35,7 @@ struct PersistentNotificationMetadata : public NotificationCommon::Metadata {
   static const PersistentNotificationMetadata* From(const Metadata* metadata);
 
   GURL service_worker_scope;
+  bool is_suspicious = false;
 };
 
 // Metadata for NON_PERSISTENT notifications.

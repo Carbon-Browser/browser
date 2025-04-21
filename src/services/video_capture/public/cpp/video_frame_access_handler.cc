@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,7 +40,6 @@ void ScopedAccessPermissionMap::EraseAccessPermission(int32_t buffer_id) {
   auto it = scoped_access_permissions_by_buffer_id_.find(buffer_id);
   if (it == scoped_access_permissions_by_buffer_id_.end()) {
     NOTREACHED();
-    return;
   }
   scoped_access_permissions_by_buffer_id_.erase(it);
 }

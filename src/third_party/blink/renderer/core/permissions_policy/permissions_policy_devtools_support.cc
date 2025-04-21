@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,17 +12,17 @@
 
 namespace blink {
 
-absl::optional<PermissionsPolicyBlockLocator> TracePermissionsPolicyBlockSource(
+std::optional<PermissionsPolicyBlockLocator> TracePermissionsPolicyBlockSource(
     Frame* frame,
     mojom::PermissionsPolicyFeature feature) {
   const PermissionsPolicy* current_policy =
       frame->GetSecurityContext()->GetPermissionsPolicy();
   DCHECK(current_policy);
   if (current_policy->IsFeatureEnabled(feature))
-    return absl::nullopt;
+    return std::nullopt;
 
   // All permissions are disabled by default for fenced frames, irrespective of
-  // headers (see PermissionsPolicy::CreateForFencedFrame).
+  // headers (see PermissionsPolicy::CreateFixedForFencedFrame).
   if (frame->IsInFencedFrameTree()) {
     return PermissionsPolicyBlockLocator{
         IdentifiersFactory::FrameId(frame),

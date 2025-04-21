@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,12 +13,9 @@ import org.chromium.chrome.browser.browserservices.intents.WebappInfo;
 import org.chromium.components.webapps.ShortcutSource;
 import org.chromium.components.webapps.WebApkDistributor;
 
-/**
- * LaunchCauseMetrics for WebappActivity.
- */
+/** LaunchCauseMetrics for WebappActivity. */
 public class WebappLaunchCauseMetrics extends LaunchCauseMetrics {
-    @Nullable
-    private WebappInfo mWebappInfo;
+    @Nullable private WebappInfo mWebappInfo;
 
     public WebappLaunchCauseMetrics(Activity activity, @Nullable WebappInfo info) {
         super(activity);
@@ -46,10 +43,6 @@ public class WebappLaunchCauseMetrics extends LaunchCauseMetrics {
             return LaunchCause.EXTERNAL_VIEW_INTENT;
         }
 
-        // EXTERNAL_INTENT_FROM_CHROME is used when Chrome chooses to launch a WebApk for a
-        // navigation, which doesn't count as a launch since Chrome was already in the
-        // foreground.
-        assert mWebappInfo.source() != ShortcutSource.EXTERNAL_INTENT_FROM_CHROME;
         return LaunchCause.OTHER;
     }
 }

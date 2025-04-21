@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,8 @@ class ComponentsInfoHolder {
   static ComponentsInfoHolder* GetInstance();
 
   void AddComponent(const std::string& component_id,
-                    const base::Version& version);
+                    const base::Version& version,
+                    const std::string& cohort_id);
 
   std::vector<ComponentInfo> GetComponents() const;
 
@@ -42,7 +43,7 @@ class ComponentsInfoHolder {
 
   SEQUENCE_CHECKER(sequence_checker_);
 
-  base::flat_map<std::string, base::Version> components_;
+  std::vector<ComponentInfo> components_;
 };
 
 }  // namespace component_updater

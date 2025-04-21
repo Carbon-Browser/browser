@@ -1,11 +1,13 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef NET_SSL_CLIENT_CERT_STORE_WIN_H_
 #define NET_SSL_CLIENT_CERT_STORE_WIN_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/win/wincrypt_shim.h"
 #include "crypto/scoped_capi_types.h"
 #include "net/base/net_export.h"
@@ -32,7 +34,7 @@ class NET_EXPORT ClientCertStoreWin : public ClientCertStore {
   // If a cert store has been provided at construction time GetClientCerts
   // will use that. Otherwise it will use the current user's "MY" cert store
   // instead.
-  void GetClientCerts(const SSLCertRequestInfo& cert_request_info,
+  void GetClientCerts(scoped_refptr<const SSLCertRequestInfo> cert_request_info,
                       ClientCertListCallback callback) override;
 
  private:
@@ -40,7 +42,7 @@ class NET_EXPORT ClientCertStoreWin : public ClientCertStore {
 
   // Opens the cert store and uses it to lookup the client certs.
   static ClientCertIdentityList GetClientCertsWithCertStore(
-      const SSLCertRequestInfo& request,
+      scoped_refptr<const SSLCertRequestInfo> request,
       const base::RepeatingCallback<crypto::ScopedHCERTSTORE()>&
           cert_store_callback);
 
@@ -52,7 +54,12 @@ class NET_EXPORT ClientCertStoreWin : public ClientCertStore {
                                    const SSLCertRequestInfo& cert_request_info,
                                    ClientCertIdentityList* selected_identities);
 
+  void OnClientCertsResponse(ClientCertListCallback callback,
+                             ClientCertIdentityList identities);
+
   base::RepeatingCallback<crypto::ScopedHCERTSTORE()> cert_store_callback_;
+
+  base::WeakPtrFactory<ClientCertStoreWin> weak_factory_{this};
 };
 
 }  // namespace net

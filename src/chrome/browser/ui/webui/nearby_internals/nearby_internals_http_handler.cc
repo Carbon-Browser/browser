@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/time/time.h"
 #include "base/values.h"
@@ -14,15 +14,15 @@
 #include "chrome/browser/nearby_sharing/client/nearby_share_http_notifier.h"
 #include "chrome/browser/nearby_sharing/contacts/nearby_share_contact_manager.h"
 #include "chrome/browser/nearby_sharing/local_device_data/nearby_share_local_device_data_manager.h"
-#include "chrome/browser/nearby_sharing/logging/logging.h"
 #include "chrome/browser/nearby_sharing/logging/proto_to_dictionary_conversion.h"
 #include "chrome/browser/nearby_sharing/nearby_sharing_service.h"
 #include "chrome/browser/nearby_sharing/nearby_sharing_service_factory.h"
+#include "components/cross_device/logging/logging.h"
 
 namespace {
 
 // This enum class needs to stay in sync with the Rpc definition in
-// chrome/browser/resources/nearby_internals/types.js.
+// chrome/browser/resources/chromeos/nearby_internals/types.ts
 enum class Rpc {
   kCertificate = 0,
   kContact = 1,
@@ -31,10 +31,10 @@ enum class Rpc {
 };
 
 // This enum class needs to stay in sync with the Direction definition in
-// chrome/browser/resources/nearby_internals/types.js.
+// chrome/browser/resources/chromeos/nearby_internals/types.ts
 enum class Direction { kRequest = 0, kResponse = 1 };
 
-std::string FormatAsJSON(const base::Value& value) {
+std::string FormatAsJSON(const base::Value::Dict& value) {
   std::string json;
   base::JSONWriter::WriteWithOptions(
       value, base::JSONWriter::OPTIONS_PRETTY_PRINT, &json);
@@ -42,7 +42,8 @@ std::string FormatAsJSON(const base::Value& value) {
 }
 
 base::Value GetJavascriptTimestamp() {
-  return base::Value(base::Time::Now().ToJsTimeIgnoringNull());
+  return base::Value(
+      base::Time::Now().InMillisecondsFSinceUnixEpochIgnoringNull());
 }
 
 // FireWebUIListener message to notify the JavaScript of HTTP message addition.
@@ -56,15 +57,15 @@ const char kHttpMessageDirectionKey[] = "direction";
 
 // Converts a RPC request/response to a raw dictionary value used as a
 // JSON argument to JavaScript functions.
-base::Value HttpMessageToDictionary(const base::Value& message,
-                                    Direction dir,
-                                    Rpc rpc) {
+base::Value::Dict HttpMessageToDictionary(const base::Value::Dict& message,
+                                          Direction dir,
+                                          Rpc rpc) {
   base::Value::Dict dictionary;
   dictionary.Set(kHttpMessageBodyKey, FormatAsJSON(message));
   dictionary.Set(kHttpMessageTimeKey, GetJavascriptTimestamp());
   dictionary.Set(kHttpMessageRpcKey, static_cast<int>(rpc));
   dictionary.Set(kHttpMessageDirectionKey, static_cast<int>(dir));
-  return base::Value(std::move(dictionary));
+  return dictionary;
 }
 
 }  // namespace
@@ -100,7 +101,7 @@ void NearbyInternalsHttpHandler::OnJavascriptAllowed() {
   if (service_) {
     observation_.Observe(service_->GetHttpNotifier());
   } else {
-    NS_LOG(ERROR) << "No NearbyShareService instance to call.";
+    CD_LOG(ERROR, Feature::NS) << "No NearbyShareService instance to call.";
   }
 }
 
@@ -119,7 +120,7 @@ void NearbyInternalsHttpHandler::UpdateDevice(const base::Value::List& args) {
   if (service_) {
     service_->GetLocalDeviceDataManager()->DownloadDeviceData();
   } else {
-    NS_LOG(ERROR) << "No NearbyShareService instance to call.";
+    CD_LOG(ERROR, Feature::NS) << "No NearbyShareService instance to call.";
   }
 }
 
@@ -130,7 +131,7 @@ void NearbyInternalsHttpHandler::ListPublicCertificates(
   if (service_) {
     service_->GetCertificateManager()->DownloadPublicCertificates();
   } else {
-    NS_LOG(ERROR) << "No NearbyShareService instance to call.";
+    CD_LOG(ERROR, Feature::NS) << "No NearbyShareService instance to call.";
   }
 }
 
@@ -141,12 +142,12 @@ void NearbyInternalsHttpHandler::ListContactPeople(
   if (service_) {
     service_->GetContactManager()->DownloadContacts();
   } else {
-    NS_LOG(ERROR) << "No NearbyShareService instance to call.";
+    CD_LOG(ERROR, Feature::NS) << "No NearbyShareService instance to call.";
   }
 }
 
 void NearbyInternalsHttpHandler::OnUpdateDeviceRequest(
-    const nearbyshare::proto::UpdateDeviceRequest& request) {
+    const nearby::sharing::proto::UpdateDeviceRequest& request) {
   FireWebUIListener(
       kHttpMessageAdded,
       HttpMessageToDictionary(UpdateDeviceRequestToReadableDictionary(request),
@@ -154,7 +155,7 @@ void NearbyInternalsHttpHandler::OnUpdateDeviceRequest(
 }
 
 void NearbyInternalsHttpHandler::OnUpdateDeviceResponse(
-    const nearbyshare::proto::UpdateDeviceResponse& response) {
+    const nearby::sharing::proto::UpdateDeviceResponse& response) {
   FireWebUIListener(kHttpMessageAdded,
                     HttpMessageToDictionary(
                         UpdateDeviceResponseToReadableDictionary(response),
@@ -162,7 +163,7 @@ void NearbyInternalsHttpHandler::OnUpdateDeviceResponse(
 }
 
 void NearbyInternalsHttpHandler::OnListContactPeopleRequest(
-    const nearbyshare::proto::ListContactPeopleRequest& request) {
+    const nearby::sharing::proto::ListContactPeopleRequest& request) {
   FireWebUIListener(kHttpMessageAdded,
                     HttpMessageToDictionary(
                         ListContactPeopleRequestToReadableDictionary(request),
@@ -170,7 +171,7 @@ void NearbyInternalsHttpHandler::OnListContactPeopleRequest(
 }
 
 void NearbyInternalsHttpHandler::OnListContactPeopleResponse(
-    const nearbyshare::proto::ListContactPeopleResponse& response) {
+    const nearby::sharing::proto::ListContactPeopleResponse& response) {
   FireWebUIListener(kHttpMessageAdded,
                     HttpMessageToDictionary(
                         ListContactPeopleResponseToReadableDictionary(response),
@@ -178,7 +179,7 @@ void NearbyInternalsHttpHandler::OnListContactPeopleResponse(
 }
 
 void NearbyInternalsHttpHandler::OnListPublicCertificatesRequest(
-    const nearbyshare::proto::ListPublicCertificatesRequest& request) {
+    const nearby::sharing::proto::ListPublicCertificatesRequest& request) {
   FireWebUIListener(
       kHttpMessageAdded,
       HttpMessageToDictionary(
@@ -187,7 +188,7 @@ void NearbyInternalsHttpHandler::OnListPublicCertificatesRequest(
 }
 
 void NearbyInternalsHttpHandler::OnListPublicCertificatesResponse(
-    const nearbyshare::proto::ListPublicCertificatesResponse& response) {
+    const nearby::sharing::proto::ListPublicCertificatesResponse& response) {
   FireWebUIListener(
       kHttpMessageAdded,
       HttpMessageToDictionary(

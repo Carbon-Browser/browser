@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,7 @@
 #include "build/chromeos_buildflags.h"
 #include "extensions/browser/extensions_browser_client.h"
 #include "extensions/browser/kiosk/kiosk_delegate.h"
+#include "extensions/common/extension_id.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "services/network/public/mojom/fetch_api.mojom.h"
@@ -41,7 +42,7 @@ class ShellExtensionsBrowserClient : public ExtensionsBrowserClient {
   bool IsShuttingDown() override;
   bool AreExtensionsDisabled(const base::CommandLine& command_line,
                              content::BrowserContext* context) override;
-  bool IsValidContext(content::BrowserContext* context) override;
+  bool IsValidContext(void* context) override;
   bool IsSameContext(content::BrowserContext* first,
                      content::BrowserContext* second) override;
   bool HasOffTheRecordContext(content::BrowserContext* context) override;
@@ -49,16 +50,21 @@ class ShellExtensionsBrowserClient : public ExtensionsBrowserClient {
       content::BrowserContext* context) override;
   content::BrowserContext* GetOriginalContext(
       content::BrowserContext* context) override;
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+  content::BrowserContext* GetContextRedirectedToOriginal(
+      content::BrowserContext* context) override;
+  content::BrowserContext* GetContextOwnInstance(
+      content::BrowserContext* context) override;
+  content::BrowserContext* GetContextForOriginalOnly(
+      content::BrowserContext* context) override;
+  bool AreExtensionsDisabledForContext(
+      content::BrowserContext* context) override;
+#if BUILDFLAG(IS_CHROMEOS)
   std::string GetUserIdHashFromContext(
       content::BrowserContext* context) override;
 #endif
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  bool IsFromMainProfile(content::BrowserContext* context) override;
-#endif
   bool IsGuestSession(content::BrowserContext* context) const override;
   bool IsExtensionIncognitoEnabled(
-      const std::string& extension_id,
+      const ExtensionId& extension_id,
       content::BrowserContext* context) const override;
   bool CanExtensionCrossIncognito(
       const Extension* extension,
@@ -82,13 +88,19 @@ class ShellExtensionsBrowserClient : public ExtensionsBrowserClient {
       bool is_incognito,
       const Extension* extension,
       const ExtensionSet& extensions,
-      const ProcessMap& process_map) override;
+      const ProcessMap& process_map,
+      const GURL& upstream_url) override;
   PrefService* GetPrefServiceForContext(
       content::BrowserContext* context) override;
   void GetEarlyExtensionPrefsObservers(
       content::BrowserContext* context,
       std::vector<EarlyExtensionPrefsObserver*>* observers) const override;
   ProcessManagerDelegate* GetProcessManagerDelegate() const override;
+  mojo::PendingRemote<network::mojom::URLLoaderFactory>
+  GetControlledFrameEmbedderURLLoader(
+      const url::Origin& app_origin,
+      content::FrameTreeNodeId frame_tree_node_id,
+      content::BrowserContext* browser_context) override;
   std::unique_ptr<ExtensionHostDelegate> CreateExtensionHostDelegate() override;
   bool DidVersionUpdate(content::BrowserContext* context) override;
   void PermitExternalProtocolHandler() override;
@@ -114,10 +126,11 @@ class ShellExtensionsBrowserClient : public ExtensionsBrowserClient {
   ExtensionCache* GetExtensionCache() override;
   bool IsBackgroundUpdateAllowed() override;
   bool IsMinBrowserVersionSupported(const std::string& min_version) override;
+  void CreateExtensionWebContentsObserver(
+      content::WebContents* web_contents) override;
   ExtensionWebContentsObserver* GetExtensionWebContentsObserver(
       content::WebContents* web_contents) override;
   KioskDelegate* GetKioskDelegate() override;
-  bool IsLockScreenContext(content::BrowserContext* context) override;
   std::string GetApplicationLocale() override;
   std::string GetUserAgent() const override;
 
@@ -132,11 +145,12 @@ class ShellExtensionsBrowserClient : public ExtensionsBrowserClient {
  private:
   // The single BrowserContext for app_shell. Not owned. Must be initialized
   // when ready by calling InitWithBrowserContext().
-  raw_ptr<content::BrowserContext> browser_context_ = nullptr;
+  raw_ptr<content::BrowserContext, DanglingUntriaged> browser_context_ =
+      nullptr;
 
   // The PrefService for |browser_context_|. Not owned. Must be initialized when
   // ready by calling InitWithBrowserContext().
-  raw_ptr<PrefService> pref_service_ = nullptr;
+  raw_ptr<PrefService, DanglingUntriaged> pref_service_ = nullptr;
 
   // Support for extension APIs.
   std::unique_ptr<ExtensionsAPIClient> api_client_;

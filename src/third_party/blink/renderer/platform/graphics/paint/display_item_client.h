@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -54,14 +54,9 @@ class PLATFORM_EXPORT DisplayItemClient : public GarbageCollectedMixin {
   // cached display items without calling this method.
   // See PaintController::ClientCacheIsValid() for more details.
   void Invalidate(
-      PaintInvalidationReason reason = PaintInvalidationReason::kFull) const {
-    // If a full invalidation reason is already set, do not overwrite it with
-    // a new reason.
-    if (IsFullPaintInvalidationReason(GetPaintInvalidationReason()) &&
-        // However, kUncacheable overwrites any other reason.
-        reason != PaintInvalidationReason::kUncacheable)
-      return;
-    paint_invalidation_reason_ = static_cast<uint8_t>(reason);
+      PaintInvalidationReason reason = PaintInvalidationReason::kLayout) const {
+    if (reason > GetPaintInvalidationReason())
+      paint_invalidation_reason_ = static_cast<uint8_t>(reason);
   }
 
   PaintInvalidationReason GetPaintInvalidationReason() const {
@@ -110,14 +105,32 @@ class PLATFORM_EXPORT DisplayItemClient : public GarbageCollectedMixin {
   mutable uint8_t marked_for_validation_ : 1;
 };
 
-inline bool operator==(const DisplayItemClient& client1,
-                       const DisplayItemClient& client2) {
-  return &client1 == &client2;
-}
-inline bool operator!=(const DisplayItemClient& client1,
-                       const DisplayItemClient& client2) {
-  return &client1 != &client2;
-}
+class StaticDisplayItemClient
+    : public GarbageCollected<StaticDisplayItemClient>,
+      public DisplayItemClient {
+ public:
+  explicit StaticDisplayItemClient(const char* name) : name_(name) {}
+
+  String DebugName() const override { return name_; }
+  void Trace(Visitor* visitor) const override {
+    DisplayItemClient::Trace(visitor);
+  }
+
+ private:
+  const char* name_;
+};
+
+// Defines a StaticDisplayItemClient instance which can be used where a
+// DisplayItemClient is needed but DisplayItem::Id uniqueness is guaranteed
+// or not required, e.g.
+// - when recording a a foreign layer,
+// - when recording a DisplayItem that appears only once in the painted result,
+// - when painting with a transient PaintController.
+// Note: debug_name must be a literal string.
+#define DEFINE_STATIC_DISPLAY_ITEM_CLIENT(name, debug_name) \
+  DEFINE_STATIC_LOCAL(                                      \
+      Persistent<StaticDisplayItemClient>, name,            \
+      (MakeGarbageCollected<StaticDisplayItemClient>(debug_name)))
 
 PLATFORM_EXPORT std::ostream& operator<<(std::ostream&,
                                          const DisplayItemClient*);

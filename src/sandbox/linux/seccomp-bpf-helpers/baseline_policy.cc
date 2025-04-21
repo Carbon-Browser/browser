@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,7 +49,6 @@ bool IsBaselinePolicyAllowed(int sysno) {
          SyscallSets::IsAllowedFileSystemAccessViaFd(sysno) ||
          SyscallSets::IsAllowedFutex(sysno) ||
          SyscallSets::IsAllowedGeneralIo(sysno) ||
-         SyscallSets::IsAllowedGetOrModifySocket(sysno) ||
          SyscallSets::IsAllowedGettime(sysno) ||
          SyscallSets::IsAllowedProcessStartOrDeath(sysno) ||
          SyscallSets::IsAllowedSignalHandling(sysno) ||
@@ -112,10 +111,6 @@ ResultExpr EvaluateSyscallImpl(int fs_denied_errno,
   // TCGETS is required by the sanitizers on failure.
   if (sysno == __NR_ioctl) {
     return RestrictIoctl();
-  }
-
-  if (sysno == __NR_sched_getaffinity) {
-    return Allow();
   }
 
   // Used when RSS limiting is enabled in sanitizers.
@@ -229,6 +224,13 @@ ResultExpr EvaluateSyscallImpl(int fs_denied_errno,
 
   if (sysno == __NR_getpriority || sysno ==__NR_setpriority)
     return RestrictGetSetpriority(current_pid);
+
+  // The scheduling syscalls are used in threading libraries and also heavily in
+  // abseil. See for example https://crbug.com/1370394.
+  if (sysno == __NR_sched_getaffinity || sysno == __NR_sched_getparam ||
+      sysno == __NR_sched_getscheduler || sysno == __NR_sched_setscheduler) {
+    return RestrictSchedTarget(current_pid, sysno);
+  }
 
   if (sysno == __NR_getrandom) {
     return RestrictGetRandom();
@@ -359,6 +361,18 @@ ResultExpr EvaluateSyscallImpl(int fs_denied_errno,
     const Arg<pid_t> tgid(0);
     return If(tgid == current_pid, Allow())
            .Else(Error(EPERM));
+  }
+
+  // Allow creating pipes, but don't allow weird flags to pipe2().
+  // O_NOTIFICATION_PIPE (== O_EXCL) can be used to create
+  // "notification pipes", which are rarely used.
+#if !defined(__aarch64__)
+  if (sysno == __NR_pipe) {
+    return Allow();
+  }
+#endif
+  if (sysno == __NR_pipe2) {
+    return RestrictPipe2();
   }
 
   if (IsBaselinePolicyWatched(sysno)) {

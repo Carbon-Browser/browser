@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,10 +20,10 @@ ImpressionTestData::ImpressionTestData(
     SchedulerClientType type,
     size_t current_max_daily_show,
     std::vector<Impression> impressions,
-    absl::optional<SuppressionInfo> suppression_info,
+    std::optional<SuppressionInfo> suppression_info,
     size_t negative_events_count,
-    absl::optional<base::Time> last_negative_event_ts,
-    absl::optional<base::Time> last_shown_ts)
+    std::optional<base::Time> last_negative_event_ts,
+    std::optional<base::Time> last_shown_ts)
     : type(type),
       current_max_daily_show(current_max_daily_show),
       impressions(std::move(impressions)),

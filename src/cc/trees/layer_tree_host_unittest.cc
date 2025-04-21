@@ -1,6 +1,11 @@
-// Copyright 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "cc/trees/layer_tree_host.h"
 
@@ -11,22 +16,20 @@
 #include <memory>
 
 #include "base/auto_reset.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/test/simple_test_tick_clock.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
+#include "base/unguessable_token.h"
 #include "build/build_config.h"
 #include "cc/animation/animation_host.h"
-#include "cc/document_transition/document_transition_request.h"
 #include "cc/input/scroll_elasticity_helper.h"
 #include "cc/layers/content_layer_client.h"
 #include "cc/layers/heads_up_display_layer.h"
@@ -35,6 +38,8 @@
 #include "cc/layers/picture_layer.h"
 #include "cc/layers/solid_color_layer.h"
 #include "cc/layers/video_layer.h"
+#include "cc/layers/view_transition_content_layer.h"
+#include "cc/metrics/begin_main_frame_metrics.h"
 #include "cc/metrics/events_metrics_manager.h"
 #include "cc/metrics/ukm_smoothness_data.h"
 #include "cc/paint/image_animation_count.h"
@@ -43,12 +48,12 @@
 #include "cc/test/fake_frame_info.h"
 #include "cc/test/fake_layer_tree_host_client.h"
 #include "cc/test/fake_paint_image_generator.h"
-#include "cc/test/fake_painted_scrollbar_layer.h"
 #include "cc/test/fake_picture_layer.h"
 #include "cc/test/fake_picture_layer_impl.h"
 #include "cc/test/fake_proxy.h"
 #include "cc/test/fake_recording_source.h"
 #include "cc/test/fake_scoped_ui_resource.h"
+#include "cc/test/fake_scrollbar_layer.h"
 #include "cc/test/fake_video_frame_provider.h"
 #include "cc/test/layer_test_common.h"
 #include "cc/test/layer_tree_test.h"
@@ -57,6 +62,7 @@
 #include "cc/test/push_properties_counting_layer_impl.h"
 #include "cc/test/render_pass_test_utils.h"
 #include "cc/test/skia_common.h"
+#include "cc/test/stub_input_handler_client.h"
 #include "cc/test/test_layer_tree_frame_sink.h"
 #include "cc/trees/clip_node.h"
 #include "cc/trees/compositor_commit_data.h"
@@ -69,6 +75,7 @@
 #include "cc/trees/swap_promise.h"
 #include "cc/trees/swap_promise_manager.h"
 #include "cc/trees/transform_node.h"
+#include "cc/view_transition/view_transition_request.h"
 #include "components/ukm/test_ukm_recorder.h"
 #include "components/viz/common/features.h"
 #include "components/viz/common/frame_sinks/begin_frame_args.h"
@@ -82,14 +89,11 @@
 #include "components/viz/service/display/skia_output_surface.h"
 #include "components/viz/test/begin_frame_args_test.h"
 #include "components/viz/test/fake_output_surface.h"
-#include "components/viz/test/test_gles2_interface.h"
 #include "components/viz/test/test_raster_interface.h"
-#include "gpu/GLES2/gl2extchromium.h"
 #include "testing/gmock/include/gmock/gmock.h"
-#include "third_party/khronos/GLES2/gl2.h"
-#include "third_party/khronos/GLES2/gl2ext.h"
+#include "third_party/skia/include/core/SkImage.h"
 #include "third_party/skia/include/core/SkPicture.h"
-#include "third_party/skia/include/gpu/GrDirectContext.h"
+#include "third_party/skia/include/gpu/ganesh/GrDirectContext.h"
 #include "ui/gfx/animation/keyframe/timing_function.h"
 #include "ui/gfx/geometry/point_conversions.h"
 #include "ui/gfx/geometry/size_conversions.h"
@@ -359,10 +363,10 @@ class LayerTreeHostTestReadyToActivateEmpty : public LayerTreeHostTest {
   void BeginTest() override { PostSetNeedsCommitToMainThread(); }
 
   void CommitCompleteOnThread(LayerTreeHostImpl* impl) override {
-    const std::vector<PictureLayerImpl*>& layers =
+    const std::vector<raw_ptr<PictureLayerImpl, VectorExperimental>>& layers =
         impl->sync_tree()->picture_layers();
     required_for_activation_count_ = 0;
-    for (auto* layer : layers) {
+    for (PictureLayerImpl* layer : layers) {
       FakePictureLayerImpl* fake_layer =
           static_cast<FakePictureLayerImpl*>(layer);
       required_for_activation_count_ +=
@@ -436,11 +440,11 @@ class LayerTreeHostTestReadyToDrawEmpty : public LayerTreeHostTest {
 
   void NotifyReadyToDrawOnThread(LayerTreeHostImpl* impl) override {
     did_notify_ready_to_draw_ = true;
-    const std::vector<PictureLayerImpl*>& layers =
+    const std::vector<raw_ptr<PictureLayerImpl, VectorExperimental>>& layers =
         impl->active_tree()->picture_layers();
     all_tiles_required_for_draw_are_ready_to_draw_ =
         impl->tile_manager()->IsReadyToDraw();
-    for (auto* layer : layers) {
+    for (PictureLayerImpl* layer : layers) {
       FakePictureLayerImpl* fake_layer =
           static_cast<FakePictureLayerImpl*>(layer);
       required_for_draw_count_ += fake_layer->CountTilesRequiredForDraw();
@@ -587,16 +591,16 @@ class LayerTreeHostContextCacheTest : public LayerTreeHostTest {
   std::unique_ptr<TestLayerTreeFrameSink> CreateLayerTreeFrameSink(
       const viz::RendererSettings& renderer_settings,
       double refresh_rate,
-      scoped_refptr<viz::ContextProvider> compositor_context_provider,
+      scoped_refptr<viz::RasterContextProvider> compositor_context_provider,
       scoped_refptr<viz::RasterContextProvider> worker_context_provider)
       override {
-    // Create the main viz::ContextProvider with a MockContextSupport.
+    // Create the main viz::RasterContextProvider with a MockContextSupport.
     auto main_support = std::make_unique<MockContextSupport>();
     mock_main_context_support_ = main_support.get();
     auto test_main_context_provider =
-        viz::TestContextProvider::Create(std::move(main_support));
+        viz::TestContextProvider::CreateRaster(std::move(main_support));
 
-    // Create the main viz::ContextProvider with a MockContextSupport.
+    // Create the main viz::RasterContextProvider with a MockContextSupport.
     auto worker_support = std::make_unique<MockContextSupport>();
     mock_worker_context_support_ = worker_support.get();
     auto test_worker_context_provider =
@@ -624,8 +628,10 @@ class LayerTreeHostContextCacheTest : public LayerTreeHostTest {
                  void(bool aggressively_free_resources));
   };
 
-  raw_ptr<MockContextSupport> mock_main_context_support_;
-  raw_ptr<MockContextSupport> mock_worker_context_support_;
+  raw_ptr<MockContextSupport, AcrossTasksDanglingUntriaged>
+      mock_main_context_support_;
+  raw_ptr<MockContextSupport, AcrossTasksDanglingUntriaged>
+      mock_worker_context_support_;
 };
 
 // Test if the LTH successfully frees resources on the main/worker
@@ -985,7 +991,6 @@ class LayerTreeHostTestInvisibleLayersSkipRenderPass
     switch (index_) {
       case kAllInvisible:
         NOTREACHED();
-        break;
       case kOneVisible:
         child1_->SetHideLayerAndSubtree(false);
         break;
@@ -1173,13 +1178,12 @@ class LayerTreeHostTestPushElementIdToNodeIdMap : public LayerTreeHostTest {
     switch (layer_tree_host()->SourceFrameNumber()) {
       case 1:
         child_->SetForceRenderSurfaceForTesting(true);
-        // Add a non-fast region to ensure a scroll node is created.
-        child_->SetNonFastScrollableRegion(Region(gfx::Rect(50, 50, 50, 50)));
+        child_->SetScrollable(gfx::Size(100, 100));
         break;
       case 2:
-        child_->SetForceRenderSurfaceForTesting(false);
-        // Remove the non-fast region to ensure a scroll node is removed.
-        child_->SetNonFastScrollableRegion(Region());
+        child_->RemoveFromParent();
+        child_ = Layer::Create();
+        root_->AddChild(child_);
         break;
     }
   }
@@ -1496,7 +1500,7 @@ class LayerTreeHostTestLayerListSurfaceDamage : public LayerTreeHostTest {
   }
 
  private:
-  raw_ptr<Layer> root_;
+  raw_ptr<Layer, DanglingUntriaged> root_;
   scoped_refptr<Layer> child_a_;
   scoped_refptr<Layer> child_b_;
   scoped_refptr<Layer> child_c_;
@@ -1587,7 +1591,7 @@ class LayerTreeHostTestNoDamageCausesNoInvalidate : public LayerTreeHostTest {
 
 // This behavior is specific to Android WebView, which only uses
 // multi-threaded compositor.
-// TODO(https://crbug.com/1345000): Flaky.
+// TODO(crbug.com/40853271): Flaky.
 // MULTI_THREAD_TEST_F(LayerTreeHostTestNoDamageCausesNoInvalidate);
 
 // When settings->enable_early_damage_check is true, verify that the early
@@ -1684,7 +1688,7 @@ class LayerTreeHostTestEarlyDamageCheckStops : public LayerTreeHostTest {
 
 // This behavior is specific to Android WebView, which only uses
 // multi-threaded compositor.
-// TODO(crbug.com/1043900): Disabled because test is flaky on Mac10.13.
+// TODO(crbug.com/40669342): Disabled because test is flaky on Mac10.13.
 // MULTI_THREAD_TEST_F(LayerTreeHostTestEarlyDamageCheckStops);
 
 // When settings->enable_early_damage_check is true, verifies that PrepareTiles
@@ -2147,10 +2151,12 @@ class LayerTreeHostTestEffectTreeSync : public LayerTreeHostTest {
         PostSetNeedsCommitToMainThread();
         break;
       case 1:
+        impl->sync_tree()->SetOpacityMutated(root->element_id(), 0.75f);
         EXPECT_EQ(node->opacity, 0.75f);
         PostSetNeedsCommitToMainThread();
         break;
       case 2:
+        impl->sync_tree()->SetOpacityMutated(root->element_id(), 0.75f);
         EXPECT_EQ(node->opacity, 0.75f);
         impl->sync_tree()->SetOpacityMutated(root->element_id(), 0.75f);
         PostSetNeedsCommitToMainThread();
@@ -2166,13 +2172,15 @@ class LayerTreeHostTestEffectTreeSync : public LayerTreeHostTest {
         PostSetNeedsCommitToMainThread();
         break;
       case 5:
+        impl->sync_tree()->SetFilterMutated(root->element_id(),
+                                            brightness_filter_);
         EXPECT_EQ(node->filters, brightness_filter_);
         PostSetNeedsCommitToMainThread();
         break;
       case 6:
-        EXPECT_EQ(node->filters, brightness_filter_);
         impl->sync_tree()->SetFilterMutated(root->element_id(),
                                             brightness_filter_);
+        EXPECT_EQ(node->filters, brightness_filter_);
         PostSetNeedsCommitToMainThread();
         break;
       case 7:
@@ -2256,12 +2264,13 @@ class LayerTreeHostTestTransformTreeSync : public LayerTreeHostTest {
         PostSetNeedsCommitToMainThread();
         break;
       case 1:
+        impl->sync_tree()->SetTransformMutated(layer->element_id(), rotate20);
         EXPECT_EQ(node->local, rotate20);
         PostSetNeedsCommitToMainThread();
         break;
       case 2:
-        EXPECT_EQ(node->local, rotate20);
         impl->sync_tree()->SetTransformMutated(layer->element_id(), rotate20);
+        EXPECT_EQ(node->local, rotate20);
         PostSetNeedsCommitToMainThread();
         break;
       case 3:
@@ -2499,7 +2508,7 @@ class LayerTreeHostTestSetNeedsRedrawRect : public LayerTreeHostTest {
   DrawResult PrepareToDrawOnThread(LayerTreeHostImpl* host_impl,
                                    LayerTreeHostImpl::FrameData* frame_data,
                                    DrawResult draw_result) override {
-    EXPECT_EQ(DRAW_SUCCESS, draw_result);
+    EXPECT_EQ(DrawResult::kSuccess, draw_result);
 
     gfx::Rect root_damage_rect;
     if (!frame_data->render_passes.empty())
@@ -2568,7 +2577,7 @@ class LayerTreeHostTestGpuRasterDeviceSizeChanged : public LayerTreeHostTest {
   void SetUpUnboundContextProviders(
       viz::TestContextProvider* context_provider,
       viz::TestContextProvider* worker_provider) override {
-    context_provider->UnboundTestContextGL()->set_gpu_rasterization(true);
+    context_provider->UnboundTestRasterInterface()->set_gpu_rasterization(true);
     worker_provider->UnboundTestRasterInterface()->set_gpu_rasterization(true);
   }
 
@@ -2675,10 +2684,11 @@ class LayerTreeHostTestNoExtraCommitFromScrollbarInvalidate
     root_layer_ = Layer::Create();
     root_layer_->SetBounds(gfx::Size(10, 20));
 
-    bool paint_scrollbar = true;
-    bool has_thumb = false;
-    scrollbar_ = FakePaintedScrollbarLayer::Create(paint_scrollbar, has_thumb,
-                                                   root_layer_->element_id());
+    auto scrollbar = FakePaintedScrollbarLayer::CreateScrollbar();
+    scrollbar->set_should_paint(true);
+    scrollbar->set_has_thumb(false);
+    scrollbar_ = base::MakeRefCounted<FakePaintedScrollbarLayer>(
+        root_layer_->element_id());
     scrollbar_->SetPosition(gfx::PointF(0.f, 10.f));
     scrollbar_->SetBounds(gfx::Size(10, 10));
 
@@ -2719,9 +2729,10 @@ class LayerTreeHostTestNoExtraCommitFromScrollbarInvalidate
   scoped_refptr<FakePaintedScrollbarLayer> scrollbar_;
 };
 
-// TODO(crbug.com/1292184): Flaky failures.
+// TODO(crbug.com/40819189): Flaky failures.
 // SINGLE_AND_MULTI_THREAD_TEST_F(
-//     LayerTreeHostTestNoExtraCommitFromScrollbarInvalidate);
+//    LayerTreeHostTestNoExtraCommitFromScrollbarInvalidate);
+
 class LayerTreeHostTestDeviceScaleFactorChange : public LayerTreeHostTest {
  public:
   void SetupTree() override {
@@ -2781,7 +2792,7 @@ class LayerTreeHostTestDeviceScaleFactorChange : public LayerTreeHostTest {
   scoped_refptr<Layer> child_layer_;
 };
 
-// TODO(crbug.com/1295115): Flaky on ChromeOS and Linux.
+// TODO(crbug.com/40820956): Flaky on ChromeOS and Linux.
 // SINGLE_AND_MULTI_THREAD_TEST_F(LayerTreeHostTestDeviceScaleFactorChange);
 
 class LayerTreeHostTestRasterColorSpaceChange : public LayerTreeHostTest {
@@ -2789,6 +2800,8 @@ class LayerTreeHostTestRasterColorSpaceChange : public LayerTreeHostTest {
   void SetupTree() override {
     space1_ = gfx::DisplayColorSpaces(gfx::ColorSpace::CreateXYZD50());
     space2_ = gfx::DisplayColorSpaces(gfx::ColorSpace::CreateSRGB());
+    space2_with_hdr_ = space2_;
+    space2_with_hdr_.SetHDRMaxLuminanceRelative(2.f);
 
     root_layer_ = Layer::Create();
     root_layer_->SetBounds(gfx::Size(10, 20));
@@ -2808,9 +2821,10 @@ class LayerTreeHostTestRasterColorSpaceChange : public LayerTreeHostTest {
   DrawResult PrepareToDrawOnThread(LayerTreeHostImpl* host_impl,
                                    LayerTreeHostImpl::FrameData* frame_data,
                                    DrawResult draw_result) override {
-    EXPECT_EQ(DRAW_SUCCESS, draw_result);
+    EXPECT_EQ(DrawResult::kSuccess, draw_result);
 
     int source_frame = host_impl->active_tree()->source_frame_number();
+    gfx::Rect expected_root_damage_rect;
     switch (source_frame) {
       case 0:
         // The first frame will have full damage, and should be in the initial
@@ -2818,6 +2832,8 @@ class LayerTreeHostTestRasterColorSpaceChange : public LayerTreeHostTest {
         EXPECT_FALSE(frame_data->has_no_damage);
         EXPECT_TRUE(space1_ ==
                     host_impl->active_tree()->display_color_spaces());
+        expected_root_damage_rect =
+            gfx::Rect(host_impl->active_tree()->root_layer()->bounds());
         break;
       case 1:
         // Empty commit.
@@ -2830,6 +2846,8 @@ class LayerTreeHostTestRasterColorSpaceChange : public LayerTreeHostTest {
         EXPECT_FALSE(frame_data->has_no_damage);
         EXPECT_TRUE(space2_ ==
                     host_impl->active_tree()->display_color_spaces());
+        expected_root_damage_rect =
+            gfx::Rect(host_impl->active_tree()->root_layer()->bounds());
         break;
       case 3:
         // Empty commit with the color space set to space2 redundantly.
@@ -2838,28 +2856,27 @@ class LayerTreeHostTestRasterColorSpaceChange : public LayerTreeHostTest {
                     host_impl->active_tree()->display_color_spaces());
         break;
       case 4:
-        // The change from space2 to space1 should cause full damage.
+        // The change from space2 to space2_with_hdr should cause full damage.
         EXPECT_FALSE(frame_data->has_no_damage);
-        EXPECT_TRUE(space1_ ==
+        EXPECT_TRUE(space2_with_hdr_ ==
                     host_impl->active_tree()->display_color_spaces());
+        expected_root_damage_rect = gfx::Rect(0, 0, 10, 10);
         break;
       case 5:
         // Empty commit.
         EXPECT_TRUE(frame_data->has_no_damage);
-        EXPECT_TRUE(space1_ ==
+        EXPECT_TRUE(space2_with_hdr_ ==
                     host_impl->active_tree()->display_color_spaces());
         EndTest();
         break;
       default:
         NOTREACHED();
-        break;
     }
 
     if (!frame_data->has_no_damage) {
       gfx::Rect root_damage_rect =
           frame_data->render_passes.back()->damage_rect;
-      EXPECT_EQ(gfx::Rect(host_impl->active_tree()->root_layer()->bounds()),
-                root_damage_rect);
+      EXPECT_EQ(expected_root_damage_rect, root_damage_rect);
     }
 
     return draw_result;
@@ -2884,7 +2901,17 @@ class LayerTreeHostTestRasterColorSpaceChange : public LayerTreeHostTest {
         break;
       case 4:
         EXPECT_TRUE(child_layer_->update_rect().IsEmpty());
-        layer_tree_host()->SetDisplayColorSpaces(space1_);
+        // Setting to space2_with_hdr_ should be a no-op, because there is
+        // no HDR content.
+        layer_tree_host()->SetDisplayColorSpaces(space2_with_hdr_);
+        EXPECT_TRUE(child_layer_->update_rect().IsEmpty());
+        // Same with setting back to space2_.
+        layer_tree_host()->SetDisplayColorSpaces(space2_);
+        EXPECT_TRUE(child_layer_->update_rect().IsEmpty());
+        // Now set the content to be HDR, and set to space2_with_hdr. This
+        // should trigger a commit.
+        child_layer_->set_reraster_on_hdr_change(true);
+        layer_tree_host()->SetDisplayColorSpaces(space2_with_hdr_);
         EXPECT_FALSE(child_layer_->update_rect().IsEmpty());
         break;
       case 5:
@@ -2895,16 +2922,16 @@ class LayerTreeHostTestRasterColorSpaceChange : public LayerTreeHostTest {
         break;
       default:
         NOTREACHED();
-        break;
     }
   }
 
  private:
   gfx::DisplayColorSpaces space1_;
   gfx::DisplayColorSpaces space2_;
+  gfx::DisplayColorSpaces space2_with_hdr_;
   FakeContentLayerClient client_;
   scoped_refptr<Layer> root_layer_;
-  scoped_refptr<Layer> child_layer_;
+  scoped_refptr<FakePictureLayer> child_layer_;
 };
 
 SINGLE_AND_MULTI_THREAD_TEST_F(LayerTreeHostTestRasterColorSpaceChange);
@@ -2936,7 +2963,7 @@ class LayerTreeHostTestSetNeedsCommitWithForcedRedraw
   DrawResult PrepareToDrawOnThread(LayerTreeHostImpl* host_impl,
                                    LayerTreeHostImpl::FrameData* frame_data,
                                    DrawResult draw_result) override {
-    EXPECT_EQ(DRAW_SUCCESS, draw_result);
+    EXPECT_EQ(DrawResult::kSuccess, draw_result);
 
     gfx::Rect root_damage_rect;
     if (!frame_data->render_passes.empty())
@@ -3032,7 +3059,7 @@ class LayerTreeHostTestUndrawnLayersDamageLater : public LayerTreeHostTest {
   DrawResult PrepareToDrawOnThread(LayerTreeHostImpl* host_impl,
                                    LayerTreeHostImpl::FrameData* frame_data,
                                    DrawResult draw_result) override {
-    EXPECT_EQ(DRAW_SUCCESS, draw_result);
+    EXPECT_EQ(DrawResult::kSuccess, draw_result);
 
     gfx::Rect root_damage_rect;
     if (!frame_data->render_passes.empty())
@@ -3103,14 +3130,10 @@ class LayerTreeHostTestDamageWithScale : public LayerTreeHostTest {
 
     root_layer_bounds_ = gfx::Size(50, 50);
     child_layer_bounds_ = gfx::Size(25, 25);
-    std::unique_ptr<FakeRecordingSource> recording(new FakeRecordingSource);
-    root_layer_ = FakePictureLayer::CreateWithRecordingSource(
-        &client_, std::move(recording));
+    root_layer_ = FakePictureLayer::Create(&client_);
     root_layer_->SetBounds(root_layer_bounds_);
 
-    recording = std::make_unique<FakeRecordingSource>();
-    child_layer_ = FakePictureLayer::CreateWithRecordingSource(
-        &client_, std::move(recording));
+    child_layer_ = FakePictureLayer::Create(&client_);
     child_layer_->SetBounds(child_layer_bounds_);
     child_layer_->SetIsDrawable(true);
     child_layer_->SetContentsOpaque(true);
@@ -3136,7 +3159,7 @@ class LayerTreeHostTestDamageWithScale : public LayerTreeHostTest {
   DrawResult PrepareToDrawOnThread(LayerTreeHostImpl* host_impl,
                                    LayerTreeHostImpl::FrameData* frame_data,
                                    DrawResult draw_result) override {
-    EXPECT_EQ(DRAW_SUCCESS, draw_result);
+    EXPECT_EQ(DrawResult::kSuccess, draw_result);
 
     gfx::Rect root_damage_rect;
     if (!frame_data->render_passes.empty())
@@ -3363,7 +3386,6 @@ class LayerTreeHostTestStartPageScaleAnimation : public LayerTreeHostTest {
 
     scroll_layer_->SetBounds(gfx::Size(2 * root_layer->bounds().width(),
                                        2 * root_layer->bounds().height()));
-    scroll_layer_->SetScrollOffset(gfx::PointF());
 
     SetupViewport(root_layer, scroll_layer_, root_layer->bounds());
 
@@ -3470,10 +3492,10 @@ class ViewportDeltasAppliedDuringPinch : public LayerTreeHostTest,
   void AfterTest() override { EXPECT_TRUE(sent_gesture_); }
 
   // ScrollCallbacks
-  void DidCompositorScroll(ElementId element_id,
-                           const gfx::PointF& scroll_offset,
-                           const absl::optional<TargetSnapAreaElementIds>&
-                               snap_target_ids) override {
+  void DidCompositorScroll(
+      ElementId element_id,
+      const gfx::PointF& scroll_offset,
+      const std::optional<TargetSnapAreaElementIds>& snap_target_ids) override {
     last_scrolled_element_id_ = element_id;
     last_scrolled_offset_ = scroll_offset;
   }
@@ -3517,7 +3539,7 @@ class LayerTreeHostTestSetVisible : public LayerTreeHostTest {
   int num_draws_;
 };
 
-// TODO(crbug.com/1298939): Test is flaky.
+// TODO(crbug.com/40823253): Test is flaky.
 // MULTI_THREAD_TEST_F(LayerTreeHostTestSetVisible);
 
 class LayerTreeHostTestDeviceScaleFactorScalesViewportAndLayers
@@ -3928,11 +3950,9 @@ class LayerTreeHostTestAnimateOnlyBeginFrames
     // OnNeedsBeginFrames(true) will be called during tree initialization.
   }
 
-  void WillBeginMainFrame() override { ++will_begin_main_frame_count_; }
-
-  void DidSendBeginMainFrameOnThread(LayerTreeHostImpl* host_impl) override {
-    ++sent_begin_main_frame_count_;
-    EXPECT_GE(begin_frame_count_, sent_begin_main_frame_count_);
+  void WillBeginMainFrame() override {
+    ++will_begin_main_frame_count_;
+    EXPECT_GE(begin_frame_count_, will_begin_main_frame_count_);
   }
 
   void WillBeginImplFrameOnThread(LayerTreeHostImpl* host_impl,
@@ -3943,7 +3963,7 @@ class LayerTreeHostTestAnimateOnlyBeginFrames
   }
 
   void DidFinishImplFrameOnThread(LayerTreeHostImpl* host_impl) override {
-    EXPECT_LE(sent_begin_main_frame_count_, begin_frame_count_);
+    EXPECT_LE(will_begin_main_frame_count_, begin_frame_count_);
     if (begin_frame_count_ < 3) {
       // Send another animation_only BeginFrame.
       PostIssueBeginFrame(true);
@@ -3978,7 +3998,7 @@ class LayerTreeHostTestAnimateOnlyBeginFrames
 
     // Fourth BeginMainFrame should lead to commit.
     EXPECT_EQ(5, begin_frame_count_);
-    EXPECT_EQ(3, sent_begin_main_frame_count_);
+    EXPECT_EQ(3, will_begin_main_frame_count_);
 
     EndTest();
   }
@@ -3990,7 +4010,6 @@ class LayerTreeHostTestAnimateOnlyBeginFrames
   void AfterTest() override {
     EXPECT_EQ(2, commit_count_);
     EXPECT_EQ(5, begin_frame_count_);
-    EXPECT_EQ(3, sent_begin_main_frame_count_);
 
     EXPECT_EQ(3, will_begin_main_frame_count_);
     EXPECT_EQ(3, update_layer_tree_host_count_);
@@ -4014,7 +4033,6 @@ class LayerTreeHostTestAnimateOnlyBeginFrames
       viz::BeginFrameArgs::kStartingFrameNumber;
   int commit_count_ = 0;
   int begin_frame_count_ = 0;
-  int sent_begin_main_frame_count_ = 0;
   int will_begin_main_frame_count_ = 0;
   int update_layer_tree_host_count_ = 0;
   int ready_to_commit_count_ = 0;
@@ -4164,7 +4182,7 @@ class LayerTreeHostTestAbortedCommitDoesntStall : public LayerTreeHostTest {
 class OnDrawLayerTreeFrameSink : public TestLayerTreeFrameSink {
  public:
   OnDrawLayerTreeFrameSink(
-      scoped_refptr<viz::ContextProvider> compositor_context_provider,
+      scoped_refptr<viz::RasterContextProvider> compositor_context_provider,
       scoped_refptr<viz::RasterContextProvider> worker_context_provider,
       gpu::GpuMemoryBufferManager* gpu_memory_buffer_manager,
       const viz::RendererSettings& renderer_settings,
@@ -4175,6 +4193,7 @@ class OnDrawLayerTreeFrameSink : public TestLayerTreeFrameSink {
       base::RepeatingClosure invalidate_callback)
       : TestLayerTreeFrameSink(std::move(compositor_context_provider),
                                std::move(worker_context_provider),
+                               /*shared_image_interface=*/nullptr,
                                gpu_memory_buffer_manager,
                                renderer_settings,
                                debug_settings,
@@ -4208,7 +4227,7 @@ class LayerTreeHostTestAbortedCommitDoesntStallSynchronousCompositor
   std::unique_ptr<TestLayerTreeFrameSink> CreateLayerTreeFrameSink(
       const viz::RendererSettings& renderer_settings,
       double refresh_rate,
-      scoped_refptr<viz::ContextProvider> compositor_context_provider,
+      scoped_refptr<viz::RasterContextProvider> compositor_context_provider,
       scoped_refptr<viz::RasterContextProvider> worker_context_provider)
       override {
     auto on_draw_callback = base::BindRepeating(
@@ -4239,7 +4258,7 @@ class LayerTreeHostTestAbortedCommitDoesntStallSynchronousCompositor
   raw_ptr<OnDrawLayerTreeFrameSink> layer_tree_frame_sink_ = nullptr;
 };
 
-// TODO(crbug.com/1121690): Test is flaky.
+// TODO(crbug.com/40146306): Test is flaky.
 // MULTI_THREAD_TEST_F(
 //    LayerTreeHostTestAbortedCommitDoesntStallSynchronousCompositor);
 
@@ -4253,7 +4272,7 @@ class LayerTreeHostTestSynchronousCompositorActivateWithoutDraw
   std::unique_ptr<TestLayerTreeFrameSink> CreateLayerTreeFrameSink(
       const viz::RendererSettings& renderer_settings,
       double refresh_rate,
-      scoped_refptr<viz::ContextProvider> compositor_context_provider,
+      scoped_refptr<viz::RasterContextProvider> compositor_context_provider,
       scoped_refptr<viz::RasterContextProvider> worker_context_provider)
       override {
     // Make |invalidate_callback| do nothing so there is no draw.
@@ -4307,7 +4326,7 @@ class LayerTreeHostTestUninvertibleTransformDoesNotBlockActivation
     LayerTreeHostTest::SetupTree();
 
     scoped_refptr<Layer> layer = PictureLayer::Create(&client_);
-    layer->SetTransform(gfx::Transform(0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
+    layer->SetTransform(gfx::Transform::MakeScale(0, 0));
     layer->SetBounds(gfx::Size(10, 10));
     layer_tree_host()->root_layer()->AddChild(layer);
     client_.set_bounds(layer->bounds());
@@ -4324,52 +4343,6 @@ class LayerTreeHostTestUninvertibleTransformDoesNotBlockActivation
 
 SINGLE_AND_MULTI_THREAD_TEST_F(
     LayerTreeHostTestUninvertibleTransformDoesNotBlockActivation);
-
-class LayerTreeHostTestNumFramesPending : public LayerTreeHostTest {
- public:
-  void BeginTest() override {
-    frame_ = 0;
-    PostSetNeedsCommitToMainThread();
-  }
-
-  // Round 1: commit + draw
-  // Round 2: commit only (no draw/swap)
-  // Round 3: draw only (no commit)
-
-  void DidCommit() override {
-    int commit = layer_tree_host()->SourceFrameNumber();
-    switch (commit) {
-      case 2:
-        // Round 2 done.
-        EXPECT_EQ(1, frame_);
-        layer_tree_host()->SetNeedsRedrawRect(
-            layer_tree_host()->device_viewport_rect());
-        break;
-    }
-  }
-
-  void DidReceiveCompositorFrameAck() override {
-    int commit = layer_tree_host()->SourceFrameNumber();
-    ++frame_;
-    switch (frame_) {
-      case 1:
-        // Round 1 done.
-        EXPECT_EQ(1, commit);
-        layer_tree_host()->SetNeedsCommit();
-        break;
-      case 2:
-        // Round 3 done.
-        EXPECT_EQ(2, commit);
-        EndTest();
-        break;
-    }
-  }
-
- protected:
-  int frame_;
-};
-
-SINGLE_AND_MULTI_THREAD_TEST_F(LayerTreeHostTestNumFramesPending);
 
 // Test for UI Resource management.
 class LayerTreeHostTestUIResource : public LayerTreeHostTest {
@@ -4882,12 +4855,14 @@ class LayerTreeHostTestPropertyChangesDuringUpdateArePushed
 
   void SetupTree() override {
     root_ = Layer::Create();
-    root_->SetBounds(gfx::Size(1, 1));
+    root_->SetBounds(gfx::Size(30, 30));
 
-    bool paint_scrollbar = true;
-    bool has_thumb = false;
-    scrollbar_layer_ = FakePaintedScrollbarLayer::Create(
-        paint_scrollbar, has_thumb, root_->element_id());
+    auto scrollbar = FakePaintedScrollbarLayer::CreateScrollbar();
+    scrollbar->set_should_paint(true);
+    scrollbar->set_has_thumb(false);
+    scrollbar_layer_ =
+        base::MakeRefCounted<FakePaintedScrollbarLayer>(root_->element_id());
+    scrollbar_layer_->SetBounds(gfx::Size(23, 100));
 
     root_->AddChild(scrollbar_layer_);
 
@@ -5892,18 +5867,20 @@ class LayerTreeHostTestElasticOverscroll : public LayerTreeHostTest {
   }
 
   void SetupTree() override {
+    SetInitialRootBounds(gfx::Size(100, 100));
     LayerTreeHostTest::SetupTree();
     root_layer_ = layer_tree_host()->root_layer();
     SetupViewport(root_layer_, root_layer_->bounds(), root_layer_->bounds());
 
     scoped_refptr<Layer> content_layer = FakePictureLayer::Create(&client_);
     content_layer_id_ = content_layer->id();
-    content_layer->SetBounds(gfx::Size(10, 10));
+    content_layer->SetBounds(gfx::Size(100, 100));
     CopyProperties(layer_tree_host()->OuterViewportScrollLayerForTesting(),
                    content_layer.get());
     root_layer_->AddChild(content_layer);
 
     client_.set_bounds(content_layer->bounds());
+    client_.set_fill_with_nonsolid_color(true);
   }
 
   void BeginTest() override { PostSetNeedsCommitToMainThread(); }
@@ -5939,8 +5916,18 @@ class LayerTreeHostTestElasticOverscroll : public LayerTreeHostTest {
 
   void DrawLayersOnThread(LayerTreeHostImpl* host_impl) override {
     num_draws_++;
-    LayerImpl* content_layer_impl =
-        host_impl->active_tree()->LayerById(content_layer_id_);
+    FakePictureLayerImpl* content_layer_impl =
+        static_cast<FakePictureLayerImpl*>(
+            host_impl->active_tree()->LayerById(content_layer_id_));
+
+#if BUILDFLAG(IS_ANDROID)
+    // Elastic overscroll should not cause tilings with new scale to be created.
+    EXPECT_EQ(1u, content_layer_impl->tilings()->num_tilings())
+        << "num_draws:" << num_draws_;
+    EXPECT_EQ(1.f, content_layer_impl->tilings()->GetMaximumContentsScale())
+        << "num_draws_:" << num_draws_;
+#endif  // BUILDFLAG(IS_ANDROID)
+
     switch (num_draws_) {
       case 1:
         // Initially, there's no overscroll.
@@ -5975,8 +5962,9 @@ class LayerTreeHostTestElasticOverscroll : public LayerTreeHostTest {
 
  private:
   FakeContentLayerClient client_;
-  raw_ptr<Layer> root_layer_;
-  raw_ptr<ScrollElasticityHelper> scroll_elasticity_helper_;
+  raw_ptr<Layer, DanglingUntriaged> root_layer_;
+  raw_ptr<ScrollElasticityHelper, AcrossTasksDanglingUntriaged>
+      scroll_elasticity_helper_;
   int content_layer_id_;
   int num_draws_;
 };
@@ -6027,7 +6015,8 @@ class TestSwapPromise : public SwapPromise {
 
   void DidSwap() override {}
 
-  DidNotSwapAction DidNotSwap(DidNotSwapReason reason) override {
+  DidNotSwapAction DidNotSwap(DidNotSwapReason reason,
+                              base::TimeTicks ts) override {
     base::AutoLock lock(result_->lock);
     EXPECT_FALSE(result_->did_swap_called);
     EXPECT_FALSE(result_->did_not_swap_called);
@@ -6223,7 +6212,6 @@ class LayerTreeHostTestKeepSwapPromise : public LayerTreeHostTest {
         break;
       default:
         NOTREACHED();
-        break;
     }
   }
 
@@ -6339,7 +6327,6 @@ class LayerTreeHostTestKeepSwapPromiseMFBA : public LayerTreeHostTest {
         break;
       default:
         NOTREACHED();
-        break;
     }
   }
 
@@ -6610,9 +6597,6 @@ class LayerTreeHostTestGpuRasterizationDisabled : public LayerTreeHostTest {
       viz::TestContextProvider* context_provider,
       viz::TestContextProvider* worker_provider) override {
     // The test contexts have gpu raster disabled by default.
-    gpu::Capabilities caps =
-        context_provider->UnboundTestContextGL()->test_capabilities();
-    EXPECT_FALSE(caps.gpu_rasterization);
     gpu::Capabilities worker_caps =
         worker_provider->UnboundTestRasterInterface()->capabilities();
     EXPECT_FALSE(worker_caps.gpu_rasterization);
@@ -6621,13 +6605,8 @@ class LayerTreeHostTestGpuRasterizationDisabled : public LayerTreeHostTest {
   void SetupTree() override {
     LayerTreeHostTest::SetupTree();
 
-    std::unique_ptr<FakeRecordingSource> recording_source(
-        new FakeRecordingSource);
-    recording_source_ = recording_source.get();
-
     scoped_refptr<FakePictureLayer> layer =
-        FakePictureLayer::CreateWithRecordingSource(
-            &layer_client_, std::move(recording_source));
+        FakePictureLayer::Create(&layer_client_);
     layer_ = layer.get();
     layer->SetBounds(gfx::Size(10, 10));
     layer->SetIsDrawable(true);
@@ -6651,8 +6630,7 @@ class LayerTreeHostTestGpuRasterizationDisabled : public LayerTreeHostTest {
   }
 
   FakeContentLayerClient layer_client_;
-  raw_ptr<FakePictureLayer> layer_;
-  raw_ptr<FakeRecordingSource> recording_source_;
+  raw_ptr<FakePictureLayer, DanglingUntriaged> layer_;
 };
 
 MULTI_THREAD_TEST_F(LayerTreeHostTestGpuRasterizationDisabled);
@@ -6663,7 +6641,7 @@ class LayerTreeHostTestGpuRasterizationSupportedButDisabled
   void SetUpUnboundContextProviders(
       viz::TestContextProvider* context_provider,
       viz::TestContextProvider* worker_provider) override {
-    context_provider->UnboundTestContextGL()->set_gpu_rasterization(true);
+    context_provider->UnboundTestRasterInterface()->set_gpu_rasterization(true);
     worker_provider->UnboundTestRasterInterface()->set_gpu_rasterization(true);
   }
 
@@ -6674,13 +6652,8 @@ class LayerTreeHostTestGpuRasterizationSupportedButDisabled
   void SetupTree() override {
     LayerTreeHostTest::SetupTree();
 
-    std::unique_ptr<FakeRecordingSource> recording_source(
-        new FakeRecordingSource);
-    recording_source_ = recording_source.get();
-
     scoped_refptr<FakePictureLayer> layer =
-        FakePictureLayer::CreateWithRecordingSource(
-            &layer_client_, std::move(recording_source));
+        FakePictureLayer::Create(&layer_client_);
     layer_ = layer.get();
 
     layer->SetBounds(gfx::Size(10, 10));
@@ -6703,8 +6676,7 @@ class LayerTreeHostTestGpuRasterizationSupportedButDisabled
   }
 
   FakeContentLayerClient layer_client_;
-  raw_ptr<FakePictureLayer> layer_;
-  raw_ptr<FakeRecordingSource> recording_source_;
+  raw_ptr<FakePictureLayer, DanglingUntriaged> layer_;
 };
 
 MULTI_THREAD_TEST_F(LayerTreeHostTestGpuRasterizationSupportedButDisabled);
@@ -6714,20 +6686,15 @@ class LayerTreeHostTestGpuRasterizationEnabled : public LayerTreeHostTest {
   void SetUpUnboundContextProviders(
       viz::TestContextProvider* context_provider,
       viz::TestContextProvider* worker_provider) override {
-    context_provider->UnboundTestContextGL()->set_gpu_rasterization(true);
+    context_provider->UnboundTestRasterInterface()->set_gpu_rasterization(true);
     worker_provider->UnboundTestRasterInterface()->set_gpu_rasterization(true);
   }
 
   void SetupTree() override {
     LayerTreeHostTest::SetupTree();
 
-    std::unique_ptr<FakeRecordingSource> recording_source(
-        new FakeRecordingSource);
-    recording_source_ = recording_source.get();
-
     scoped_refptr<FakePictureLayer> layer =
-        FakePictureLayer::CreateWithRecordingSource(
-            &layer_client_, std::move(recording_source));
+        FakePictureLayer::Create(&layer_client_);
     layer_ = layer.get();
 
     layer->SetBounds(gfx::Size(10, 10));
@@ -6752,8 +6719,7 @@ class LayerTreeHostTestGpuRasterizationEnabled : public LayerTreeHostTest {
   }
 
   FakeContentLayerClient layer_client_;
-  raw_ptr<FakePictureLayer> layer_;
-  raw_ptr<FakeRecordingSource> recording_source_;
+  raw_ptr<FakePictureLayer, DanglingUntriaged> layer_;
 };
 
 SINGLE_AND_MULTI_THREAD_TEST_F(LayerTreeHostTestGpuRasterizationEnabled);
@@ -6763,12 +6729,10 @@ class LayerTreeHostTestGpuRasterizationEnabledWithMSAA : public LayerTreeTest {
   void SetUpUnboundContextProviders(
       viz::TestContextProvider* context_provider,
       viz::TestContextProvider* worker_provider) override {
-    viz::TestGLES2Interface* gl = context_provider->UnboundTestContextGL();
-    gl->set_gpu_rasterization(true);
-    gl->set_support_multisample_compatibility(false);
+    auto* compositor = context_provider->UnboundTestRasterInterface();
+    compositor->set_gpu_rasterization(true);
     auto* worker = worker_provider->UnboundTestRasterInterface();
     worker->set_gpu_rasterization(true);
-    worker->set_multisample_compatibility(false);
   }
 
   void InitializeSettings(LayerTreeSettings* settings) override {
@@ -6780,12 +6744,8 @@ class LayerTreeHostTestGpuRasterizationEnabledWithMSAA : public LayerTreeTest {
   void SetupTree() override {
     LayerTreeHostTest::SetupTree();
 
-    auto recording_source = std::make_unique<FakeRecordingSource>();
-    recording_source_ = recording_source.get();
-
     scoped_refptr<FakePictureLayer> layer =
-        FakePictureLayer::CreateWithRecordingSource(
-            &layer_client_, std::move(recording_source));
+        FakePictureLayer::Create(&layer_client_);
     layer_ = layer.get();
     layer->SetBounds(gfx::Size(10, 10));
     layer->SetIsDrawable(true);
@@ -6810,7 +6770,7 @@ class LayerTreeHostTestGpuRasterizationEnabledWithMSAA : public LayerTreeTest {
                               host_impl->sync_tree()->LayerById(layer_->id()))
                               ->GetRasterSource();
     EXPECT_GT(host_impl->GetMSAASampleCountForRaster(
-                  raster_source->GetDisplayItemList()),
+                  *raster_source->GetDisplayItemList()),
               0);
     EXPECT_TRUE(host_impl->pending_tree()->use_gpu_rasterization());
     EXPECT_TRUE(host_impl->use_gpu_rasterization());
@@ -6818,8 +6778,7 @@ class LayerTreeHostTestGpuRasterizationEnabledWithMSAA : public LayerTreeTest {
   }
 
   FakeContentLayerClient layer_client_;
-  raw_ptr<FakePictureLayer> layer_;
-  raw_ptr<FakeRecordingSource> recording_source_;
+  raw_ptr<FakePictureLayer, DanglingUntriaged> layer_;
 };
 
 MULTI_THREAD_TEST_F(LayerTreeHostTestGpuRasterizationEnabledWithMSAA);
@@ -6869,7 +6828,7 @@ class LayerTreeHostTestWillBeginImplFrameHasDidFinishImplFrame
   int did_finish_impl_frame_count_;
 };
 
-// TODO(crbug.com/842038): Disabled as flaky.
+// TODO(crbug.com/41388437): Disabled as flaky.
 // SINGLE_AND_MULTI_THREAD_TEST_F(
 //     LayerTreeHostTestWillBeginImplFrameHasDidFinishImplFrame);
 
@@ -7084,7 +7043,7 @@ class LayerTreeHostTestSynchronousCompositeSwapPromise
   std::unique_ptr<TestLayerTreeFrameSink> CreateLayerTreeFrameSink(
       const viz::RendererSettings& renderer_settings,
       double refresh_rate,
-      scoped_refptr<viz::ContextProvider> compositor_context_provider,
+      scoped_refptr<viz::RasterContextProvider> compositor_context_provider,
       scoped_refptr<viz::RasterContextProvider> worker_context_provider)
       override {
     constexpr bool disable_display_vsync = false;
@@ -7093,9 +7052,9 @@ class LayerTreeHostTestSynchronousCompositeSwapPromise
         !layer_tree_host()->GetSettings().single_thread_proxy_scheduler;
     return std::make_unique<TestLayerTreeFrameSink>(
         compositor_context_provider, std::move(worker_context_provider),
-        gpu_memory_buffer_manager(), renderer_settings, &debug_settings_,
-        task_runner_provider(), synchronous_composite, disable_display_vsync,
-        refresh_rate);
+        /*shared_image_interface=*/nullptr, gpu_memory_buffer_manager(),
+        renderer_settings, &debug_settings_, task_runner_provider(),
+        synchronous_composite, disable_display_vsync, refresh_rate);
   }
 
   void BeginTest() override {
@@ -7105,7 +7064,8 @@ class LayerTreeHostTestSynchronousCompositeSwapPromise
         new TestSwapPromise(&swap_promise_result_[0]));
     layer_tree_host()->GetSwapPromiseManager()->QueueSwapPromise(
         std::move(swap_promise0));
-    layer_tree_host()->CompositeForTest(base::TimeTicks::Now(), raster);
+    layer_tree_host()->CompositeForTest(base::TimeTicks::Now(), raster,
+                                        base::OnceClosure());
 
     // Fail to swap (no damage) if not reclaiming resources from the Display.
     std::unique_ptr<SwapPromise> swap_promise1(
@@ -7113,7 +7073,8 @@ class LayerTreeHostTestSynchronousCompositeSwapPromise
     layer_tree_host()->GetSwapPromiseManager()->QueueSwapPromise(
         std::move(swap_promise1));
     layer_tree_host()->SetNeedsCommit();
-    layer_tree_host()->CompositeForTest(base::TimeTicks::Now(), raster);
+    layer_tree_host()->CompositeForTest(base::TimeTicks::Now(), raster,
+                                        base::OnceClosure());
 
     // Fail to draw (not visible).
     std::unique_ptr<SwapPromise> swap_promise2(
@@ -7122,7 +7083,8 @@ class LayerTreeHostTestSynchronousCompositeSwapPromise
         std::move(swap_promise2));
     layer_tree_host()->SetNeedsDisplayOnAllLayers();
     layer_tree_host()->SetVisible(false);
-    layer_tree_host()->CompositeForTest(base::TimeTicks::Now(), raster);
+    layer_tree_host()->CompositeForTest(base::TimeTicks::Now(), raster,
+                                        base::OnceClosure());
 
     EndTest();
   }
@@ -7210,6 +7172,27 @@ class LayerTreeHostAcceptsDeltasFromImplWithoutRootLayer
 
 MULTI_THREAD_TEST_F(LayerTreeHostAcceptsDeltasFromImplWithoutRootLayer);
 
+// Make sure we don't block waiting for commit to finish if there are no
+// compositor changes to apply.
+class NoOpApplyCompositorChangesDoesNotBlock : public LayerTreeHostTest {
+ public:
+  void BeginTest() override { PostSetNeedsCommitToMainThread(); }
+
+  void WillApplyCompositorChanges() override {
+    num_blocking_calls_ = NumCallsToWaitForProtectedSequenceCompletion();
+  }
+
+  void BeginMainFrame(const viz::BeginFrameArgs& args) override {
+    EXPECT_EQ(num_blocking_calls_,
+              NumCallsToWaitForProtectedSequenceCompletion());
+    EndTest();
+  }
+
+  size_t num_blocking_calls_ = 0u;
+};
+
+MULTI_THREAD_TEST_F(NoOpApplyCompositorChangesDoesNotBlock);
+
 class LayerTreeHostTestCrispUpAfterPinchEnds : public LayerTreeHostTest {
  protected:
   LayerTreeHostTestCrispUpAfterPinchEnds()
@@ -7228,11 +7211,8 @@ class LayerTreeHostTestCrispUpAfterPinchEnds : public LayerTreeHostTest {
     Layer* root = layer_tree_host()->root_layer();
     SetupViewport(root, root->bounds(), root->bounds());
 
-    std::unique_ptr<FakeRecordingSource> recording(new FakeRecordingSource);
-    recording->SetPlaybackAllowedEvent(&playback_allowed_event_);
-    scoped_refptr<FakePictureLayer> layer =
-        FakePictureLayer::CreateWithRecordingSource(&client_,
-                                                    std::move(recording));
+    scoped_refptr<FakePictureLayer> layer = FakePictureLayer::Create(&client_);
+    layer->set_playback_allowed_event(&playback_allowed_event_);
     layer->SetBounds(gfx::Size(500, 500));
     layer->SetContentsOpaque(true);
     // Avoid LCD text on the layer so we don't cause extra commits when we
@@ -7262,7 +7242,7 @@ class LayerTreeHostTestCrispUpAfterPinchEnds : public LayerTreeHostTest {
       float quad_scale =
           quad->tex_coord_rect.width() / static_cast<float>(quad->rect.width());
       float transform_scale = SkScalarToFloat(
-          quad->shared_quad_state->quad_to_target_transform.matrix().rc(0, 0));
+          quad->shared_quad_state->quad_to_target_transform.rc(0, 0));
       float scale = quad_scale / transform_scale;
       if (frame_scale != 0.f && frame_scale != scale)
         return 0.f;
@@ -7404,7 +7384,7 @@ class RasterizeWithGpuRasterizationCreatesResources : public LayerTreeHostTest {
   void SetUpUnboundContextProviders(
       viz::TestContextProvider* context_provider,
       viz::TestContextProvider* worker_provider) override {
-    context_provider->UnboundTestContextGL()->set_gpu_rasterization(true);
+    context_provider->UnboundTestRasterInterface()->set_gpu_rasterization(true);
     worker_provider->UnboundTestRasterInterface()->set_gpu_rasterization(true);
   }
 
@@ -7415,10 +7395,7 @@ class RasterizeWithGpuRasterizationCreatesResources : public LayerTreeHostTest {
     root->SetBounds(gfx::Size(500, 500));
     client_.set_bounds(root->bounds());
 
-    std::unique_ptr<FakeRecordingSource> recording(new FakeRecordingSource);
-    scoped_refptr<FakePictureLayer> layer =
-        FakePictureLayer::CreateWithRecordingSource(&client_,
-                                                    std::move(recording));
+    scoped_refptr<FakePictureLayer> layer = FakePictureLayer::Create(&client_);
     layer->SetBounds(gfx::Size(500, 500));
     layer->SetContentsOpaque(true);
     root->AddChild(layer);
@@ -7450,17 +7427,14 @@ class GpuRasterizationRasterizesBorderTiles : public LayerTreeHostTest {
   void SetUpUnboundContextProviders(
       viz::TestContextProvider* context_provider,
       viz::TestContextProvider* worker_provider) override {
-    context_provider->UnboundTestContextGL()->set_gpu_rasterization(true);
+    context_provider->UnboundTestRasterInterface()->set_gpu_rasterization(true);
     worker_provider->UnboundTestRasterInterface()->set_gpu_rasterization(true);
   }
 
   void SetupTree() override {
     client_.set_fill_with_nonsolid_color(true);
 
-    std::unique_ptr<FakeRecordingSource> recording(new FakeRecordingSource);
-    scoped_refptr<FakePictureLayer> root =
-        FakePictureLayer::CreateWithRecordingSource(&client_,
-                                                    std::move(recording));
+    scoped_refptr<FakePictureLayer> root = FakePictureLayer::Create(&client_);
     root->SetBounds(gfx::Size(10000, 10000));
     client_.set_bounds(root->bounds());
     root->SetContentsOpaque(true);
@@ -7509,11 +7483,8 @@ class LayerTreeHostTestContinuousDrawWhenCreatingVisibleTiles
     Layer* root = layer_tree_host()->root_layer();
     SetupViewport(root, root->bounds(), root->bounds());
 
-    std::unique_ptr<FakeRecordingSource> recording(new FakeRecordingSource);
-    recording->SetPlaybackAllowedEvent(&playback_allowed_event_);
-    scoped_refptr<FakePictureLayer> layer =
-        FakePictureLayer::CreateWithRecordingSource(&client_,
-                                                    std::move(recording));
+    scoped_refptr<FakePictureLayer> layer = FakePictureLayer::Create(&client_);
+    layer->set_playback_allowed_event(&playback_allowed_event_);
     layer->SetBounds(gfx::Size(500, 500));
     layer->SetContentsOpaque(true);
     CopyProperties(layer_tree_host()->InnerViewportScrollLayerForTesting(),
@@ -7538,7 +7509,7 @@ class LayerTreeHostTestContinuousDrawWhenCreatingVisibleTiles
       float quad_scale =
           quad->tex_coord_rect.width() / static_cast<float>(quad->rect.width());
       float transform_scale = SkScalarToFloat(
-          quad->shared_quad_state->quad_to_target_transform.matrix().rc(0, 0));
+          quad->shared_quad_state->quad_to_target_transform.rc(0, 0));
       float scale = quad_scale / transform_scale;
       if (frame_scale != 0.f && frame_scale != scale)
         return 0.f;
@@ -7589,7 +7560,6 @@ class LayerTreeHostTestContinuousDrawWhenCreatingVisibleTiles
         break;
       case 7:
         NOTREACHED() << "No draws should happen once we have a complete frame.";
-        break;
     }
     return draw_result;
   }
@@ -7762,8 +7732,7 @@ class LayerTreeHostTestNoTasksBetweenWillAndDidCommit
     // The entire purpose of Non-Blocking Commit is to allow the main thread to
     // continue doing work while commit is running on the impl thread, making
     // this test obsolete.
-    if (base::FeatureList::IsEnabled(features::kNonBlockingCommit) &&
-        layer_tree_host()->IsThreaded()) {
+    if (layer_tree_host()->IsThreaded()) {
       DidCommit();
       EndTest();
     } else {
@@ -7937,7 +7906,7 @@ class LayerTreeHostTestPaintedDeviceScaleFactor : public LayerTreeHostTest {
   DrawResult PrepareToDrawOnThread(LayerTreeHostImpl* host_impl,
                                    LayerTreeHostImpl::FrameData* frame_data,
                                    DrawResult draw_result) override {
-    EXPECT_EQ(DRAW_SUCCESS, draw_result);
+    EXPECT_EQ(DrawResult::kSuccess, draw_result);
     EXPECT_EQ(2.0f, host_impl->active_tree()->painted_device_scale_factor());
     EXPECT_EQ(1.0f, host_impl->active_tree()->device_scale_factor());
     return draw_result;
@@ -7986,7 +7955,7 @@ class LayerTreeHostTestLocalSurfaceId : public LayerTreeHostTest {
   DrawResult PrepareToDrawOnThread(LayerTreeHostImpl* host_impl,
                                    LayerTreeHostImpl::FrameData* frame_data,
                                    DrawResult draw_result) override {
-    EXPECT_EQ(DRAW_SUCCESS, draw_result);
+    EXPECT_EQ(DrawResult::kSuccess, draw_result);
     EXPECT_EQ(GetCurrentLocalSurfaceId(),
               host_impl->active_tree()->local_surface_id_from_parent());
     return draw_result;
@@ -8011,7 +7980,7 @@ class LayerTreeHostTestLocalSurfaceIdSkipChildNum : public LayerTreeHostTest {
   DrawResult PrepareToDrawOnThread(LayerTreeHostImpl* host_impl,
                                    LayerTreeHostImpl::FrameData* frame_data,
                                    DrawResult draw_result) override {
-    EXPECT_EQ(DRAW_SUCCESS, draw_result);
+    EXPECT_EQ(DrawResult::kSuccess, draw_result);
     // We should not be picking up the newer |child_local_surface_id_|.
     EXPECT_EQ(GetCurrentLocalSurfaceId(),
               host_impl->active_tree()->local_surface_id_from_parent());
@@ -8057,7 +8026,7 @@ class LayerTreeHostTestRequestNewLocalSurfaceId : public LayerTreeHostTest {
   DrawResult PrepareToDrawOnThread(LayerTreeHostImpl* host_impl,
                                    LayerTreeHostImpl::FrameData* frame_data,
                                    DrawResult draw_result) override {
-    EXPECT_EQ(DRAW_SUCCESS, draw_result);
+    EXPECT_EQ(DrawResult::kSuccess, draw_result);
     EXPECT_EQ(GetCurrentLocalSurfaceId(),
               host_impl->active_tree()->local_surface_id_from_parent());
     return draw_result;
@@ -8101,7 +8070,7 @@ class GpuRasterizationSucceedsWithLargeImage : public LayerTreeHostTest {
   void SetUpUnboundContextProviders(
       viz::TestContextProvider* context_provider,
       viz::TestContextProvider* worker_provider) override {
-    context_provider->UnboundTestContextGL()->set_gpu_rasterization(true);
+    context_provider->UnboundTestRasterInterface()->set_gpu_rasterization(true);
     worker_provider->UnboundTestRasterInterface()->set_gpu_rasterization(true);
   }
 
@@ -8112,18 +8081,9 @@ class GpuRasterizationSucceedsWithLargeImage : public LayerTreeHostTest {
 
   void SetupTree() override {
     client_.set_fill_with_nonsolid_color(true);
-
-    std::unique_ptr<FakeRecordingSource> recording =
-        FakeRecordingSource::CreateFilledRecordingSource(
-            gfx::Size(10000, 10000));
-
-    recording->add_draw_image(CreateDiscardablePaintImage(large_image_size_),
-                              gfx::Point(0, 0));
-    recording->Rerecord();
-
-    scoped_refptr<FakePictureLayer> root =
-        FakePictureLayer::CreateWithRecordingSource(&client_,
-                                                    std::move(recording));
+    client_.add_draw_image(CreateDiscardablePaintImage(large_image_size_),
+                           gfx::Point(0, 0));
+    scoped_refptr<FakePictureLayer> root = FakePictureLayer::Create(&client_);
     root->SetBounds(gfx::Size(10000, 10000));
     client_.set_bounds(root->bounds());
     root->SetContentsOpaque(true);
@@ -8141,13 +8101,12 @@ class GpuRasterizationSucceedsWithLargeImage : public LayerTreeHostTest {
     // this here to ensure that our otuput surface exists.
 
     // Retrieve max texture size from Skia.
-    viz::ContextProvider* context_provider =
+    viz::RasterContextProvider* context_provider =
         host_impl->layer_tree_frame_sink()->context_provider();
     ASSERT_TRUE(context_provider);
 
-    auto* gr_context = context_provider->GrContext();
-    ASSERT_TRUE(gr_context);
-    const uint32_t max_texture_size = gr_context->maxTextureSize();
+    const uint32_t max_texture_size =
+        context_provider->ContextCapabilities().max_texture_size;
     ASSERT_GT(static_cast<uint32_t>(large_image_size_.width()),
               max_texture_size);
   }
@@ -8174,7 +8133,7 @@ class LayerTreeHostTestSubmitFrameMetadata : public LayerTreeHostTest {
   DrawResult PrepareToDrawOnThread(LayerTreeHostImpl* host_impl,
                                    LayerTreeHostImpl::FrameData* frame_data,
                                    DrawResult draw_result) override {
-    EXPECT_EQ(DRAW_SUCCESS, draw_result);
+    EXPECT_EQ(DrawResult::kSuccess, draw_result);
     EXPECT_EQ(0, num_swaps_);
     drawn_viewport_ = host_impl->active_tree()->GetDeviceViewport();
     return draw_result;
@@ -8203,14 +8162,11 @@ class LayerTreeHostTestSubmitFrameResources : public LayerTreeHostTest {
   std::unique_ptr<TestLayerTreeFrameSink> CreateLayerTreeFrameSink(
       const viz::RendererSettings& renderer_settings,
       double refresh_rate,
-      scoped_refptr<viz::ContextProvider> compositor_context_provider,
+      scoped_refptr<viz::RasterContextProvider> compositor_context_provider,
       scoped_refptr<viz::RasterContextProvider> worker_context_provider)
       override {
-    auto gl = std::make_unique<viz::TestGLES2Interface>();
-    gl->set_have_extension_egl_image(true);
-    auto provider = viz::TestContextProvider::Create(std::move(gl));
     return LayerTreeTest::CreateLayerTreeFrameSink(
-        renderer_settings, refresh_rate, std::move(provider),
+        renderer_settings, refresh_rate, std::move(compositor_context_provider),
         std::move(worker_context_provider));
   }
 
@@ -8223,14 +8179,14 @@ class LayerTreeHostTestSubmitFrameResources : public LayerTreeHostTest {
 
     viz::CompositorRenderPass* child_pass = AddRenderPass(
         &frame->render_passes, viz::CompositorRenderPassId{2},
-        gfx::Rect(3, 3, 10, 10), gfx::Transform(), FilterOperations());
+        gfx::Rect(3, 3, 100, 100), gfx::Transform(), FilterOperations());
     std::vector<viz::ResourceId> child_resources =
         AddOneOfEveryQuadType(child_pass, host_impl->resource_provider(),
                               viz::CompositorRenderPassId{0});
 
     viz::CompositorRenderPass* pass = AddRenderPass(
         &frame->render_passes, viz::CompositorRenderPassId{1},
-        gfx::Rect(3, 3, 10, 10), gfx::Transform(), FilterOperations());
+        gfx::Rect(3, 3, 100, 100), gfx::Transform(), FilterOperations());
     std::vector<viz::ResourceId> root_resources = AddOneOfEveryQuadType(
         pass, host_impl->resource_provider(), child_pass->id);
 
@@ -8254,11 +8210,11 @@ class LayerTreeHostTestSubmitFrameResources : public LayerTreeHostTest {
   void DisplayReceivedCompositorFrameOnThread(
       const viz::CompositorFrame& frame) override {
     EXPECT_EQ(2u, frame.render_pass_list.size());
-    // Each render pass has 10 resources in it. And the root render pass has a
-    // mask resource used when drawing the child render pass. The number 10 may
+    // Each render pass has 6 resources in it. And the root render pass has a
+    // mask resource used when drawing the child render pass. The number 6 may
     // change if AppendOneOfEveryQuadType() is updated, and the value here
     // should be updated accordingly.
-    EXPECT_EQ(21u, frame.resource_list.size());
+    EXPECT_EQ(13u, frame.resource_list.size());
 
     EndTest();
   }
@@ -8341,8 +8297,8 @@ class LayerTreeHostTestQueueImageDecode : public LayerTreeHostTest {
         &LayerTreeHostTestQueueImageDecode::ImageDecodeFinished,
         base::Unretained(this));
     // Schedule the decode twice for the same image.
-    layer_tree_host()->QueueImageDecode(image_.paint_image(), callback);
-    layer_tree_host()->QueueImageDecode(image_.paint_image(), callback);
+    layer_tree_host()->QueueImageDecode(image_, callback);
+    layer_tree_host()->QueueImageDecode(image_, callback);
   }
 
   void ReadyToCommitOnThread(LayerTreeHostImpl* impl) override {
@@ -8389,13 +8345,18 @@ class LayerTreeHostTestQueueImageDecodeNonLazy : public LayerTreeHostTest {
     bitmap_.allocN32Pixels(10, 10);
     PaintImage image = PaintImageBuilder::WithDefault()
                            .set_id(PaintImage::GetNextId())
-                           .set_image(SkImage::MakeFromBitmap(bitmap_),
+                           .set_image(SkImages::RasterFromBitmap(bitmap_),
                                       PaintImage::GetNextContentId())
                            .TakePaintImage();
     auto callback = base::BindOnce(
         &LayerTreeHostTestQueueImageDecodeNonLazy::ImageDecodeFinished,
         base::Unretained(this));
-    layer_tree_host()->QueueImageDecode(image, std::move(callback));
+    layer_tree_host()->QueueImageDecode(
+        DrawImage(image,
+                  /*use_dark_mode=*/false,
+                  SkIRect::MakeWH(image.width(), image.height()),
+                  PaintFlags::FilterQuality::kNone, SkM44()),
+        std::move(callback));
   }
 
   void ImageDecodeFinished(bool decode_succeeded) {
@@ -8439,85 +8400,6 @@ class LayerTreeHostTestHudLayerWithLayerLists : public LayerTreeHostTest {
 
 SINGLE_AND_MULTI_THREAD_TEST_F(LayerTreeHostTestHudLayerWithLayerLists);
 
-// Verifies that LayerTreeHostClient does not receive frame acks from a released
-// LayerTreeFrameSink.
-class LayerTreeHostTestDiscardAckAfterRelease : public LayerTreeHostTest {
- protected:
-  void SetupTree() override {
-    scoped_refptr<Layer> root = Layer::Create();
-    root->SetBounds(gfx::Size(10, 10));
-    layer_tree_host()->SetRootLayer(std::move(root));
-    LayerTreeHostTest::SetupTree();
-  }
-
-  void BeginTest() override { PostSetNeedsCommitToMainThread(); }
-
-  void WillReceiveCompositorFrameAckOnThread(
-      LayerTreeHostImpl* host_impl) override {
-    // This method is called before ack is posted to main thread. This ensures
-    // that WillReceiveCompositorFrameAck which we PostTask below will be called
-    // before DidReceiveCompositorFrameAck.
-    MainThreadTaskRunner()->PostTask(
-        FROM_HERE, base::BindOnce(&LayerTreeHostTestDiscardAckAfterRelease::
-                                      WillReceiveCompositorFrameAck,
-                                  base::Unretained(this)));
-  }
-
-  void WillReceiveCompositorFrameAck() {
-    switch (layer_tree_host()->SourceFrameNumber()) {
-      case 1:
-        // For the first commit, don't release the LayerTreeFrameSink. We must
-        // receive the ack later on.
-        break;
-      case 2:
-        // Release the LayerTreeFrameSink for the second commit. We'll later
-        // check that the ack is discarded.
-        layer_tree_host()->SetVisible(false);
-        layer_tree_host()->ReleaseLayerTreeFrameSink();
-        break;
-      default:
-        NOTREACHED();
-    }
-  }
-
-  void DidReceiveCompositorFrameAckOnThread(
-      LayerTreeHostImpl* host_impl) override {
-    // Since this method is called after ack is posted to main thread, we can be
-    // sure that if the ack is not discarded, it will be definitely received
-    // before we are in CheckFrameAck.
-    MainThreadTaskRunner()->PostTask(
-        FROM_HERE,
-        base::BindOnce(&LayerTreeHostTestDiscardAckAfterRelease::CheckFrameAck,
-                       base::Unretained(this)));
-  }
-
-  void DidReceiveCompositorFrameAck() override { received_ack_ = true; }
-
-  void CheckFrameAck() {
-    switch (layer_tree_host()->SourceFrameNumber()) {
-      case 1:
-        // LayerTreeFrameSink was not released. We must receive the ack.
-        EXPECT_TRUE(received_ack_);
-        // Cause damage so that we draw and swap.
-        layer_tree_host()->root_layer()->SetBackgroundColor(SkColors::kGreen);
-        break;
-      case 2:
-        // LayerTreeFrameSink was released. The ack must be discarded.
-        EXPECT_FALSE(received_ack_);
-        EndTest();
-        break;
-      default:
-        NOTREACHED();
-    }
-    received_ack_ = false;
-  }
-
- private:
-  bool received_ack_ = false;
-};
-
-SINGLE_AND_MULTI_THREAD_TEST_F(LayerTreeHostTestDiscardAckAfterRelease);
-
 class LayerTreeHostTestImageAnimation : public LayerTreeHostTest {
  public:
   explicit LayerTreeHostTestImageAnimation(
@@ -8541,7 +8423,7 @@ class LayerTreeHostTestImageAnimation : public LayerTreeHostTest {
         PaintImageBuilder::WithDefault()
             .set_id(PaintImage::GetNextId())
             .set_paint_image_generator(generator_)
-            .set_animation_type(PaintImage::AnimationType::ANIMATED)
+            .set_animation_type(PaintImage::AnimationType::kAnimated)
             .set_repetition_count(kAnimationLoopOnce)
             .TakePaintImage();
     AddImageOp(image);
@@ -8571,12 +8453,16 @@ class LayerTreeHostTestImageAnimation : public LayerTreeHostTest {
         EXPECT_EQ(layer->update_rect(), image_rect);
         EXPECT_EQ(generator_->frames_decoded().size(), 2u);
         EXPECT_EQ(generator_->frames_decoded().count(1u), 1u);
+        EXPECT_EQ(layer->GetDamageReasons(),
+                  DamageReasonSet{DamageReason::kAnimatedImage});
         break;
       case 3:
         EXPECT_EQ(layer->InvalidationForTesting().bounds(), image_rect);
         EXPECT_EQ(layer->update_rect(), image_rect);
         EXPECT_EQ(generator_->frames_decoded().size(), 3u);
         EXPECT_EQ(generator_->frames_decoded().count(2u), 1u);
+        EXPECT_EQ(layer->GetDamageReasons(),
+                  DamageReasonSet{DamageReason::kAnimatedImage});
         break;
       default:
         // Only 3 draws should happen for 3 frames of the animate image.
@@ -8585,6 +8471,37 @@ class LayerTreeHostTestImageAnimation : public LayerTreeHostTest {
 
     if (draw_count_ == 3)
       EndTest();
+  }
+
+  void WillSubmitCompositorFrame(LayerTreeHostImpl* host_impl,
+                                 const viz::CompositorFrame& frame) override {
+    const viz::FrameIntervalInputs& inputs =
+        frame.metadata.frame_interval_inputs;
+
+    // `draw_count_` matches `WillPrepareToDrawOnThread`
+    switch (draw_count_) {
+      case 1:
+        // Very first frame is set directly, without calling
+        // PictureLayerImpl::InvalidateRegionForImages.
+        EXPECT_FALSE(inputs.has_only_content_frame_interval_updates);
+        break;
+      case 2:
+        // Second frame contains damage from animating image only.
+        ASSERT_EQ(inputs.content_interval_info.size(), 1u);
+        EXPECT_EQ(inputs.content_interval_info[0].type,
+                  viz::ContentFrameIntervalType::kAnimatingImage);
+        EXPECT_EQ(inputs.content_interval_info[0].frame_interval,
+                  base::Seconds(1));
+        EXPECT_TRUE(inputs.has_only_content_frame_interval_updates);
+        break;
+      case 3:
+        // Because the image isn't repeating, it's no longer considered
+        // animating at the very last frame.
+        EXPECT_FALSE(inputs.has_only_content_frame_interval_updates);
+        break;
+      default:
+        NOTREACHED();
+    }
   }
 
   void AfterTest() override {
@@ -8627,11 +8544,11 @@ MULTI_THREAD_TEST_F(LayerTreeHostTestImageAnimationDrawImageShader);
 class LayerTreeHostTestImageAnimationDrawRecordShader
     : public LayerTreeHostTestImageAnimation {
   void AddImageOp(const PaintImage& image) override {
-    auto record = sk_make_sp<PaintOpBuffer>();
-    record->push<DrawImageOp>(image, 0.f, 0.f);
+    PaintOpBuffer buffer;
+    buffer.push<DrawImageOp>(image, 0.f, 0.f);
     PaintFlags flags;
     flags.setShader(PaintShader::MakePaintRecord(
-        record, SkRect::MakeWH(500, 500), SkTileMode::kClamp,
+        buffer.ReleaseAsRecord(), SkRect::MakeWH(500, 500), SkTileMode::kClamp,
         SkTileMode::kClamp, nullptr));
     content_layer_client_.add_draw_rect(gfx::Rect(500, 500), flags);
   }
@@ -8642,11 +8559,11 @@ MULTI_THREAD_TEST_F(LayerTreeHostTestImageAnimationDrawRecordShader);
 class LayerTreeHostTestImageAnimationPaintFilter
     : public LayerTreeHostTestImageAnimation {
   void AddImageOp(const PaintImage& image) override {
-    auto record = sk_make_sp<PaintOpBuffer>();
-    record->push<DrawImageOp>(image, 0.f, 0.f);
+    PaintOpBuffer buffer;
+    buffer.push<DrawImageOp>(image, 0.f, 0.f);
     PaintFlags flags;
-    flags.setImageFilter(
-        sk_make_sp<RecordPaintFilter>(record, SkRect::MakeWH(500, 500)));
+    flags.setImageFilter(sk_make_sp<RecordPaintFilter>(
+        buffer.ReleaseAsRecord(), SkRect::MakeWH(500, 500)));
     content_layer_client_.add_draw_rect(gfx::Rect(500, 500), flags);
   }
 };
@@ -8685,7 +8602,7 @@ class LayerTreeHostTestImageAnimationSynchronousSchedulingSoftwareDraw
   }
 };
 
-// TODO(crbug.com/1092110): Flaky on TSan bot.
+// TODO(crbug.com/40698130): Flaky on TSan bot.
 // MULTI_THREAD_TEST_F(
 //     LayerTreeHostTestImageAnimationSynchronousSchedulingSoftwareDraw);
 
@@ -8796,10 +8713,10 @@ class DontUpdateLayersWithEmptyBounds : public LayerTreeTest {
         break;
       case 2: {
         scoped_refptr<RasterSource> child_raster =
-            child_->GetRecordingSourceForTesting()->CreateRasterSource();
+            child_->GetRecordingSourceForTesting().CreateRasterSource();
         EXPECT_FALSE(child_raster->IsSolidColor());
         scoped_refptr<RasterSource> mask_raster =
-            mask_->GetRecordingSourceForTesting()->CreateRasterSource();
+            mask_->GetRecordingSourceForTesting().CreateRasterSource();
         EXPECT_FALSE(mask_raster->IsSolidColor());
       }
 
@@ -8834,8 +8751,9 @@ class LayerTreeHostTestNewLocalSurfaceIdForcesDraw : public LayerTreeHostTest {
     layer_tree_host()->root_layer()->SetBounds(gfx::Size(10, 10));
   }
 
-  void DidReceiveCompositorFrameAck() override {
-    switch (layer_tree_host()->SourceFrameNumber()) {
+  void WillSubmitCompositorFrame(LayerTreeHostImpl* host_impl,
+                                 const viz::CompositorFrame& frame) override {
+    switch (frame.metadata.frame_token) {
       case 1:
         GenerateNewLocalSurfaceId();
         PostSetLocalSurfaceIdToMainThread(GetCurrentLocalSurfaceId());
@@ -8850,39 +8768,6 @@ class LayerTreeHostTestNewLocalSurfaceIdForcesDraw : public LayerTreeHostTest {
 };
 
 SINGLE_AND_MULTI_THREAD_TEST_F(LayerTreeHostTestNewLocalSurfaceIdForcesDraw);
-
-// Verifies that DidReceiveCompositorFrameAck does not get sent with PostTask
-// when not needed.
-class DidReceiveCompositorFrameAckNotSentWhenNotNeeded
-    : public LayerTreeHostTest {
- public:
-  DidReceiveCompositorFrameAckNotSentWhenNotNeeded() {}
-
-  void InitializeSettings(LayerTreeSettings* settings) override {
-    settings->send_compositor_frame_ack = false;
-  }
-
-  void BeginTest() override { PostSetNeedsCommitToMainThread(); }
-
-  void DidReceiveCompositorFrameAck() override { ADD_FAILURE(); }
-
-  // DrawLayersOnThread gets called after the conditional call to
-  // DidReceiveCompositorFrameAck, so we wait for it to end the test.
-  void DrawLayersOnThread(LayerTreeHostImpl* impl) override {
-    if (!received_first_frame_) {
-      received_first_frame_ = true;
-      PostSetNeedsCommitToMainThread();
-    } else {
-      EndTest();
-    }
-  }
-
- private:
-  bool received_first_frame_ = false;
-};
-
-SINGLE_AND_MULTI_THREAD_TEST_F(
-    DidReceiveCompositorFrameAckNotSentWhenNotNeeded);
 
 // Confirms that requests to force send RFM are forwarded once (and exactly
 // once) to the RFM observer. Does this by drawing 3 frames and requesting
@@ -8901,7 +8786,7 @@ class LayerTreeHostTestRequestForceSendMetadata
         : target_(target) {}
 
     // RenderFrameMetadataObserver implementation.
-    void BindToCurrentThread() override { target_->BindToCurrentThread(); }
+    void BindToCurrentSequence() override { target_->BindToCurrentSequence(); }
     void OnRenderFrameSubmission(
         const RenderFrameMetadata& render_frame_metadata,
         viz::CompositorFrameMetadata* compositor_frame_metadata,
@@ -8909,6 +8794,9 @@ class LayerTreeHostTestRequestForceSendMetadata
       target_->OnRenderFrameSubmission(render_frame_metadata,
                                        compositor_frame_metadata, force_send);
     }
+#if BUILDFLAG(IS_ANDROID)
+    void DidEndScroll() override { target_->DidEndScroll(); }
+#endif
 
    private:
     raw_ptr<RenderFrameMetadataObserver> target_ = nullptr;
@@ -8953,7 +8841,7 @@ class LayerTreeHostTestRequestForceSendMetadata
   void AfterTest() override { EXPECT_EQ(1, num_force_sends_); }
 
   // RenderFrameMetadataObserver implementation. Called on thread.
-  void BindToCurrentThread() override {}
+  void BindToCurrentSequence() override {}
   void OnRenderFrameSubmission(
       const RenderFrameMetadata& render_frame_metadata,
       viz::CompositorFrameMetadata* compositor_frame_metadata,
@@ -8961,6 +8849,9 @@ class LayerTreeHostTestRequestForceSendMetadata
     if (force_send)
       num_force_sends_++;
   }
+#if BUILDFLAG(IS_ANDROID)
+  void DidEndScroll() override {}
+#endif
 
  private:
   FakeContentLayerClient client_;
@@ -9084,11 +8975,18 @@ class LayerTreeHostTopControlsDeltaTriggersViewportUpdate
 
 MULTI_THREAD_TEST_F(LayerTreeHostTopControlsDeltaTriggersViewportUpdate);
 
-// Tests that custom sequence throughput tracking result is reported to
+#if BUILDFLAG(IS_CHROMEOS)
+// Tests that custom sequence metrics tracking result is reported to
 // LayerTreeHostClient.
 constexpr MutatorHost::TrackedAnimationSequenceId kSequenceId = 1u;
-class LayerTreeHostCustomThroughputTrackerTest : public LayerTreeHostTest {
+class LayerTreeHostCustomMetricsTrackerTest : public LayerTreeHostTest {
  public:
+  // Custom sequences are only supported for ChromeOS UI, which is
+  // Single-Threaded.
+  void InitializeSettings(LayerTreeSettings* settings) override {
+    settings->is_layer_tree_for_ui = true;
+  }
+
   void BeginTest() override { PostSetNeedsCommitToMainThread(); }
 
   void DidCommit() override {
@@ -9096,10 +8994,10 @@ class LayerTreeHostCustomThroughputTrackerTest : public LayerTreeHostTest {
     //   e(2,2)b(3)B(0,3)E(3)s(3)S(3)e(3,3)P(3)b(4)B(3,4)E(4)s(4)S(4)e(4,4)P(4)
     switch (layer_tree_host()->SourceFrameNumber()) {
       case 1:
-        animation_host()->StartThroughputTracking(kSequenceId);
+        animation_host()->StartCompositorMetricsTracking(kSequenceId);
         break;
       case 3:
-        animation_host()->StopThroughputTracking(kSequenceId);
+        animation_host()->StopCompositorMetricsTracking(kSequenceId);
         break;
       default:
         break;
@@ -9109,7 +9007,8 @@ class LayerTreeHostCustomThroughputTrackerTest : public LayerTreeHostTest {
       PostSetNeedsCommitWithForcedRedrawToMainThread();
   }
 
-  void NotifyThroughputTrackerResults(CustomTrackerResults results) override {
+  void NotifyCompositorMetricsTrackerResults(
+      CustomTrackerResults results) override {
     // Check that data for kSequenceId is captured. Ideally, we should get
     // 2 frame_expected and 2 frame_produced. But on slow bots, it is difficult
     // to infer the correct numbers. Both frame_expected and frame_produced
@@ -9118,14 +9017,20 @@ class LayerTreeHostCustomThroughputTrackerTest : public LayerTreeHostTest {
 
     EndTest();
   }
+
+  // FrameSorter only tracks for BeginMainFrame which have provided metrics.
+  std::unique_ptr<BeginMainFrameMetrics> GetBeginMainFrameMetrics() override {
+    std::unique_ptr<BeginMainFrameMetrics> metrics =
+        std::make_unique<BeginMainFrameMetrics>();
+    metrics->should_measure_smoothness = true;
+    return metrics;
+  }
 };
 
-SINGLE_AND_MULTI_THREAD_TEST_F(LayerTreeHostCustomThroughputTrackerTest);
+SINGLE_THREAD_TEST_F(LayerTreeHostCustomMetricsTrackerTest);
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
-// Confirm that DelegatedInkMetadata set on the LTH propagates to the
-// CompositorFrameMetadata and RenderFrameMetadata, and then both are correctly
-// reset when another frame is drawn without DelegatedInkMetadata.
-class LayerTreeHostTestDelegatedInkMetadataOnAndOff
+class LayerTreeHostTestDelegatedInkMetadataBase
     : public LayerTreeHostTest,
       public RenderFrameMetadataObserver {
  public:
@@ -9139,7 +9044,7 @@ class LayerTreeHostTestDelegatedInkMetadataOnAndOff
         : target_(target) {}
 
     // RenderFrameMetadataObserver implementation.
-    void BindToCurrentThread() override { target_->BindToCurrentThread(); }
+    void BindToCurrentSequence() override { target_->BindToCurrentSequence(); }
     void OnRenderFrameSubmission(
         const RenderFrameMetadata& render_frame_metadata,
         viz::CompositorFrameMetadata* compositor_frame_metadata,
@@ -9147,16 +9052,19 @@ class LayerTreeHostTestDelegatedInkMetadataOnAndOff
       target_->OnRenderFrameSubmission(render_frame_metadata,
                                        compositor_frame_metadata, force_send);
     }
+#if BUILDFLAG(IS_ANDROID)
+    void DidEndScroll() override { target_->DidEndScroll(); }
+#endif
 
    private:
     raw_ptr<RenderFrameMetadataObserver> target_ = nullptr;
   };
 
+  // LayerTreeHostTest implementation:
   void BeginTest() override {
     // Set up a basic render frame observer for the LTH/LTHI to forward to.
     layer_tree_host()->SetRenderFrameObserver(
         std::make_unique<ForwardingRenderFrameMetadataObserver>(this));
-
     // Setting up a basic frame that can be redrawn.
     layer_tree_host()->SetViewportRectAndScale(gfx::Rect(10, 10), 1.f,
                                                viz::LocalSurfaceId());
@@ -9165,40 +9073,28 @@ class LayerTreeHostTestDelegatedInkMetadataOnAndOff
     layer_tree_host()->root_layer()->AddChild(layer_);
     client_.set_bounds(layer_->bounds());
 
-    // Values chosen arbitrarily
+    // Create DelegatedInkMetadata. Values chosen arbitrarily.
     SkColor color = SK_ColorDKGRAY;
     double diameter = 1.000002;
     gfx::PointF point = gfx::PointF(135, 45);
     gfx::RectF area = gfx::RectF(173, 438);
     base::TimeTicks timestamp = base::TimeTicks::Now();
     bool is_hovering = true;
-
     expected_metadata_ = gfx::DelegatedInkMetadata(
         point, diameter, color, timestamp, area, is_hovering);
+
+    // Send the initial delegated ink metadata so it can be passed to
+    // CompositorFrameMetadata.
     layer_tree_host()->SetDelegatedInkMetadata(
         std::make_unique<gfx::DelegatedInkMetadata>(
             expected_metadata_.value()));
   }
 
-  void DidCommitAndDrawFrame() override {
-    // Cause a redraw to occur.
-    if (set_needs_display_) {
-      layer_->SetNeedsDisplay();
-      set_needs_display_ = false;
-    }
-  }
-
-  void DrawLayersOnThread(LayerTreeHostImpl* impl) override {
-    if (expected_metadata_.has_value()) {
-      EXPECT_EQ(metadata_frame_time_, impl->CurrentBeginFrameArgs().frame_time);
-      // Now try again with no metadata to confirm everything is cleared out.
-      expected_metadata_.reset();
-    }
-  }
-
-  void ExpectMetadata(absl::optional<DelegatedInkBrowserMetadata>
-                          browser_delegated_ink_metadata,
-                      gfx::DelegatedInkMetadata* actual_metadata) {
+  // Check DelegatedInkMetadata on the CompositorFrameMetadata when the
+  // compositor frame is submitted.
+  void ExpectMetadata(
+      std::optional<DelegatedInkBrowserMetadata> browser_delegated_ink_metadata,
+      gfx::DelegatedInkMetadata* actual_metadata) {
     if (expected_metadata_.has_value()) {
       EXPECT_TRUE(browser_delegated_ink_metadata.has_value());
       EXPECT_TRUE(actual_metadata);
@@ -9225,7 +9121,7 @@ class LayerTreeHostTestDelegatedInkMetadataOnAndOff
   }
 
   // RenderFrameMetadataObserver implementation.
-  void BindToCurrentThread() override {}
+  void BindToCurrentSequence() override {}
   void OnRenderFrameSubmission(
       const RenderFrameMetadata& render_frame_metadata,
       viz::CompositorFrameMetadata* compositor_frame_metadata,
@@ -9233,16 +9129,170 @@ class LayerTreeHostTestDelegatedInkMetadataOnAndOff
     ExpectMetadata(render_frame_metadata.delegated_ink_metadata,
                    compositor_frame_metadata->delegated_ink_metadata.get());
   }
+#if BUILDFLAG(IS_ANDROID)
+  void DidEndScroll() override {}
+#endif
 
- private:
-  absl::optional<gfx::DelegatedInkMetadata> expected_metadata_;
+ protected:
+  std::optional<gfx::DelegatedInkMetadata> expected_metadata_;
+  base::TimeTicks metadata_frame_time_;
   FakeContentLayerClient client_;
   scoped_refptr<Layer> layer_;
+};
+
+// Confirm that DelegatedInkMetadata set on the LTH propagates to the
+// CompositorFrameMetadata and RenderFrameMetadata, and then both are correctly
+// reset when another frame is drawn without DelegatedInkMetadata.
+class LayerTreeHostTestDelegatedInkMetadataOnAndOff
+    : public LayerTreeHostTestDelegatedInkMetadataBase {
+ public:
+  void DidCommitAndDrawFrame() override {
+    // Cause a redraw to occur.
+    if (set_needs_display_) {
+      layer_->SetNeedsDisplay();
+      set_needs_display_ = false;
+    }
+  }
+
+  void DrawLayersOnThread(LayerTreeHostImpl* impl) override {
+    if (expected_metadata_.has_value()) {
+      EXPECT_EQ(metadata_frame_time_, impl->CurrentBeginFrameArgs().frame_time);
+      // Now try again with no metadata to confirm everything is cleared out.
+      expected_metadata_.reset();
+    }
+  }
+
+ private:
   bool set_needs_display_ = true;
-  base::TimeTicks metadata_frame_time_;
 };
 
 SINGLE_AND_MULTI_THREAD_TEST_F(LayerTreeHostTestDelegatedInkMetadataOnAndOff);
+
+// Confirm that DelegatedInkMetadata set on the LTH propagates to the
+// CompositorFrameMetadata and RenderFrameMetadata. Also confirm that the
+// DelegatedInkMetadata persists on the active tree and is present in the
+// CompositorFrameMetadata until a new main frame is complete with no
+// DelegatedInkMetadata present in commit data.
+// This test does the following:
+//
+// 1) Set DelegatedInkMetadata on LayerTreeHost (BeginTest() in
+//    LayerTreeHostTestDelegatedInkMetadataBase)
+// 3) Confirm it gets passed down to CompositorFrameMetadata in first frame
+// 4) Issue some animation-only BeginFrames so that compositor-only frames are
+//    generated.
+// 5) Commit+Activate without new DelegatedInkMetadata and confirm that the
+//    metadata is erased from all relevant data structures.
+class LayerTreeHostTestDelegatedInkMetadataCompositorOnlyFrame
+    : public viz::ExternalBeginFrameSourceClient,
+      public LayerTreeHostTestDelegatedInkMetadataBase {
+ public:
+  LayerTreeHostTestDelegatedInkMetadataCompositorOnlyFrame()
+      : external_begin_frame_source_(this) {
+    UseBeginFrameSource(&external_begin_frame_source_);
+  }
+
+  // Once the first Impl frame is finished, send some more that are animation
+  // only so that there is no main frame. Once each compositor-only frame
+  // is generated and sent, the DelegatedInkMetadata is assessed on the
+  // frame's associated CompositorFrameMetadata.
+  // Once the frame count has reached 3 (arbitrarily chosen), SetNeedsCommit
+  // so that the DelegatedInkMetadata can be reset.
+  void DidFinishImplFrameOnThread(LayerTreeHostImpl* host_impl) override {
+    if (begin_frame_count_ < 3) {
+      // Send another animation_only BeginFrame.
+      PostIssueBeginFrame(true);
+    } else if (begin_frame_count_ == 3) {
+      // Trigger second commit.
+      MainThreadTaskRunner()->PostTaskAndReply(
+          FROM_HERE,
+          base::BindOnce(
+              &LayerTreeHostTestDelegatedInkMetadataCompositorOnlyFrame::
+                  SetNeedsCommitOnMainThread,
+              base::Unretained(this)),
+          base::BindOnce(
+              &LayerTreeHostTestDelegatedInkMetadataCompositorOnlyFrame::
+                  IssueBeginFrame,
+              base::Unretained(this), true));
+    } else if (begin_frame_count_ == 4) {
+      PostIssueBeginFrame(false);
+    }
+    host_impl->SetNeedsRedraw();
+    host_impl->SetViewportDamage(gfx::Rect(1, 1));
+  }
+
+  void SetNeedsCommitOnMainThread() { layer_tree_host()->SetNeedsCommit(); }
+
+  void CommitCompleteOnThread(LayerTreeHostImpl* host_impl) override {
+    ++commit_count_;
+    // First commit is due to first frame having `animate_only` forced to false
+    // in order to create the surface.
+    if (commit_count_ == 1)
+      return;
+    // Reset the expected metadata on the second commit complete as a signal
+    // for ExpectMetadata to know that there should be no actual metadata
+    // received.
+    expected_metadata_.reset();
+  }
+
+  void AfterTest() override {
+    EXPECT_EQ(2, commit_count_);
+    EXPECT_EQ(5, begin_frame_count_);
+  }
+
+  // The following code is necessary to issue BeginFrames.
+  // Initialize BeginFrameArgs.
+  void IssueBeginFrame(bool animate_only) {
+    ++begin_frame_count_;
+
+    last_begin_frame_time_ += viz::BeginFrameArgs::DefaultInterval();
+    uint64_t sequence_number = next_begin_frame_sequence_number_++;
+
+    auto args = viz::BeginFrameArgs::Create(
+        BEGINFRAME_FROM_HERE, viz::BeginFrameArgs::kManualSourceId,
+        sequence_number, last_begin_frame_time_,
+        last_begin_frame_time_ + viz::BeginFrameArgs::DefaultInterval(),
+        viz::BeginFrameArgs::DefaultInterval(), viz::BeginFrameArgs::NORMAL);
+    args.animate_only = animate_only;
+
+    external_begin_frame_source_.OnBeginFrame(args);
+  }
+
+  void PostIssueBeginFrame(bool animate_only) {
+    // Post a new task so that BeginFrame is not issued within same callstack.
+    ImplThreadTaskRunner()->PostTask(
+        FROM_HERE,
+        base::BindOnce(
+            &LayerTreeHostTestDelegatedInkMetadataCompositorOnlyFrame::
+                IssueBeginFrame,
+            base::Unretained(this), animate_only));
+  }
+
+  // viz::ExternalBeginFrameSourceClient implementation:
+  void OnNeedsBeginFrames(bool needs_begin_frames) override {
+    if (needs_begin_frames) {
+      EXPECT_EQ(0, begin_frame_count_);
+      // Send a first animation_only BeginFrame.
+      PostIssueBeginFrame(true);
+    }
+  }
+
+ private:
+  viz::ExternalBeginFrameSource external_begin_frame_source_;
+
+  base::TimeTicks last_begin_frame_time_ = base::TimeTicks::Now();
+  uint64_t next_begin_frame_sequence_number_ =
+      viz::BeginFrameArgs::kStartingFrameNumber;
+  int commit_count_ = 0;
+  int begin_frame_count_ = 0;
+  scoped_refptr<Layer> layer_;
+  FakeContentLayerClient client_;
+};
+
+// TODO(crbug.com/40265182): flaky on win-asan.
+#if !(BUILDFLAG(IS_WIN) && defined(ADDRESS_SANITIZER))
+SINGLE_AND_MULTI_THREAD_TEST_F(
+    LayerTreeHostTestDelegatedInkMetadataCompositorOnlyFrame);
+#endif
 
 // Base class for EventMetrics-related tests.
 class LayerTreeHostTestEventsMetrics : public LayerTreeHostTest {
@@ -9279,12 +9329,15 @@ class LayerTreeHostTestEventsMetrics : public LayerTreeHostTest {
     tick_clock.Advance(base::Microseconds(10));
     base::TimeTicks event_time = tick_clock.NowTicks();
     tick_clock.Advance(base::Microseconds(10));
+    base::TimeTicks arrived_in_browser_main_timestamp = tick_clock.NowTicks();
+    tick_clock.Advance(base::Microseconds(10));
     std::unique_ptr<EventMetrics> metrics =
         ScrollUpdateEventMetrics::CreateForTesting(
-            ui::ET_GESTURE_SCROLL_UPDATE, ui::ScrollInputType::kWheel,
+            ui::EventType::kGestureScrollUpdate, ui::ScrollInputType::kWheel,
             /*is_inertial=*/false,
             ScrollUpdateEventMetrics::ScrollUpdateType::kContinued,
-            /*delta=*/10.0f, event_time, &tick_clock);
+            /*delta=*/10.0f, event_time, arrived_in_browser_main_timestamp,
+            &tick_clock, std::nullopt);
     DCHECK_NE(metrics, nullptr);
     {
       tick_clock.Advance(base::Microseconds(10));
@@ -9316,8 +9369,8 @@ class LayerTreeHostTestEventsMetrics : public LayerTreeHostTest {
 };
 
 // Verifies that if the commit is aborted (deferred) due to LayerTreeHost being
-// hidden, events metrics are not thrown away to be used when it becomes
-// visible.
+// hidden, events metrics are discarded to prevent reporting arbitrarily large
+// latencies when the frame becomes visible again.
 class LayerTreeHostTestKeepEventsMetricsForVisibility
     : public LayerTreeHostTestEventsMetrics {
  protected:
@@ -9346,22 +9399,23 @@ class LayerTreeHostTestKeepEventsMetricsForVisibility
       LayerTreeHostImpl* impl,
       CommitEarlyOutReason reason,
       bool /* did_sync_scroll_and_viewport */) override {
-    EXPECT_EQ(reason, CommitEarlyOutReason::ABORTED_NOT_VISIBLE);
+    EXPECT_EQ(reason, CommitEarlyOutReason::kAbortedNotVisible);
 
     // Since the main frame is aborted due to invisibility, events metrics
-    // should not have been thrown away.
-    PostVerifyMainSavedEventsMetricsCount(1);
+    // should be discarded.
+    PostVerifyMainSavedEventsMetricsCount(0);
 
-    // Make layer tree host visible so that the deferred commit is completed,
-    // causing events metrics being passed to the impl thread.
+    // Make layer tree host visible so that the deferred commit is completed.
+    // Note that there is no events metrics to be passed to the impl thread.
     PostSetLayerTreeHostVisible(true);
   }
 
   void DidActivateTreeOnThread(LayerTreeHostImpl* impl) override {
-    // Now that a commit is completed and activated, events metrics from main
-    // thread should have been moved to the impl thread.
+    // Now a commit is completed and activated, but events metrics from main are
+    // already discarded, so there is no events metrics to be moved to the impl
+    // thread.
     PostVerifyMainSavedEventsMetricsCount(0);
-    EXPECT_SCOPED(VerifyImplEventsMetricsFromMainCount(impl, 1));
+    EXPECT_SCOPED(VerifyImplEventsMetricsFromMainCount(impl, 0));
 
     EndTest();
   }
@@ -9415,7 +9469,7 @@ class LayerTreeHostTestKeepEventsMetricsForDeferredMainFrameUpdate
       LayerTreeHostImpl* impl,
       CommitEarlyOutReason reason,
       bool /* did_sync_scroll_and_viewport */) override {
-    EXPECT_EQ(reason, CommitEarlyOutReason::ABORTED_DEFERRED_MAIN_FRAME_UPDATE);
+    EXPECT_EQ(reason, CommitEarlyOutReason::kAbortedDeferredMainFrameUpdate);
 
     // Since the main frame is aborted due to deferred main frame updates,
     // events metrics should not have been thrown away.
@@ -9498,7 +9552,7 @@ class LayerTreeHostTestKeepEventsMetricsForDeferredCommit
       LayerTreeHostImpl* impl,
       CommitEarlyOutReason reason,
       bool /* did_sync_scroll_and_viewport */) override {
-    EXPECT_EQ(reason, CommitEarlyOutReason::ABORTED_DEFERRED_COMMIT);
+    EXPECT_EQ(reason, CommitEarlyOutReason::kAbortedDeferredCommit);
 
     // Since the main frame is aborted due to deferred commits, events metrics
     // should not have been thrown away.
@@ -9577,7 +9631,7 @@ class LayerTreeHostTestIgnoreEventsMetricsForNoUpdate
       LayerTreeHostImpl* impl,
       CommitEarlyOutReason reason,
       bool /* did_sync_scroll_and_viewport */) override {
-    EXPECT_EQ(reason, CommitEarlyOutReason::FINISHED_NO_UPDATES);
+    EXPECT_EQ(reason, CommitEarlyOutReason::kFinishedNoUpdates);
 
     // We should reach here only for the second frame.
     EXPECT_EQ(state_, State::kReceivedSecondFrameBeginImpl);
@@ -9627,7 +9681,7 @@ class LayerTreeHostTestIgnoreEventsMetricsForNoUpdate
   State state_ = State::kWaitingForFirstFrameActivation;
 };
 
-// TODO(crbug.com/1191878): Disabled because test is flaky on Linux and CrOS.
+// TODO(crbug.com/40756887): Disabled because test is flaky on Linux and CrOS.
 // MULTI_THREAD_TEST_F(LayerTreeHostTestIgnoreEventsMetricsForNoUpdate);
 
 class LayerTreeHostUkmSmoothnessMetric : public LayerTreeTest {
@@ -9664,7 +9718,7 @@ class LayerTreeHostUkmSmoothnessMetric : public LayerTreeTest {
                                   bool has_damage) override {
     last_args_ = args;
     if (!fcp_sent_) {
-      host_impl->dropped_frame_counter()->OnFcpReceived();
+      host_impl->dropped_frame_counter()->OnFirstContentfulPaintReceived();
       fcp_sent_ = true;
     }
   }
@@ -9717,7 +9771,7 @@ class LayerTreeHostUkmSmoothnessMemoryOwnership : public LayerTreeTest {
                                   bool has_damage) override {
     last_args_ = args;
     if (!fcp_sent_) {
-      host_impl->dropped_frame_counter()->OnFcpReceived();
+      host_impl->dropped_frame_counter()->OnFirstContentfulPaintReceived();
       fcp_sent_ = true;
     }
     host_impl->SetNeedsCommit();
@@ -9756,7 +9810,7 @@ class LayerTreeHostUkmSmoothnessMemoryOwnership : public LayerTreeTest {
 
 MULTI_THREAD_TEST_F(LayerTreeHostUkmSmoothnessMemoryOwnership);
 
-class LayerTreeHostTestDocumentTransitionsPropagatedToMetadata
+class LayerTreeHostTestViewTransitionsPropagatedToMetadata
     : public LayerTreeHostTest {
  protected:
   void SetupTree() override {
@@ -9765,10 +9819,13 @@ class LayerTreeHostTestDocumentTransitionsPropagatedToMetadata
   }
 
   void BeginTest() override {
-    layer_tree_host()->AddDocumentTransitionRequest(
-        DocumentTransitionRequest::CreateCapture(
-            /*document_tag=*/0, /*shared_element_count=*/0, {},
-            base::BindLambdaForTesting([this]() { CommitLambdaCalled(); })));
+    layer_tree_host()->AddViewTransitionRequest(
+        ViewTransitionRequest::CreateCapture(
+            blink::ViewTransitionToken(), /*maybe_cross_frame_sink=*/false, {},
+            base::BindLambdaForTesting(
+                [this](const viz::ViewTransitionElementResourceRects&) {
+                  CommitLambdaCalled();
+                })));
   }
 
   void CommitLambdaCalled() { ++num_lambda_calls_; }
@@ -9777,26 +9834,28 @@ class LayerTreeHostTestDocumentTransitionsPropagatedToMetadata
       const viz::CompositorFrame& frame) override {
     ASSERT_EQ(1u, frame.metadata.transition_directives.size());
     const auto& save = frame.metadata.transition_directives[0];
-    submitted_sequence_ids_.push_back(save.sequence_id());
+    submitted_sequence_id_ = save.sequence_id();
 
     EXPECT_EQ(save.type(),
               viz::CompositorFrameTransitionDirective::Type::kSave);
   }
 
-  void DidReceiveCompositorFrameAck() override {
-    layer_tree_host()->NotifyTransitionRequestsFinished(
-        submitted_sequence_ids_);
+  void DidPresentCompositorFrame(
+      uint32_t frame_token,
+      const viz::FrameTimingDetails& frame_timing_details) override {
+    layer_tree_host()->NotifyTransitionRequestsFinished(submitted_sequence_id_,
+                                                        {});
     EndTest();
   }
 
   void AfterTest() override { EXPECT_EQ(1, num_lambda_calls_); }
 
-  std::vector<uint32_t> submitted_sequence_ids_;
+  uint32_t submitted_sequence_id_;
   int num_lambda_calls_ = 0;
 };
 
 SINGLE_AND_MULTI_THREAD_TEST_F(
-    LayerTreeHostTestDocumentTransitionsPropagatedToMetadata);
+    LayerTreeHostTestViewTransitionsPropagatedToMetadata);
 
 class LayerTreeHostTestDebugStateDowngrade : public LayerTreeHostTest {
   void InitializeSettings(LayerTreeSettings* settings) override {
@@ -9853,14 +9912,9 @@ class LayerTreeHostTestWithHelper : public LayerTreeHostTest {
       Layer* parent = nullptr) {
     if (!parent)
       parent = layer_tree_host()->root_layer();
-    std::unique_ptr<FakeRecordingSource> recording_source =
-        FakeRecordingSource::CreateFilledRecordingSource(size);
-    recording_source->set_fill_with_nonsolid_color(true);
-    recording_source->set_has_draw_text_op();
-    recording_source->Rerecord();
-    scoped_refptr<FakePictureLayer> picture_layer =
-        FakePictureLayer::CreateWithRecordingSource(
-            &client_, std::move(recording_source));
+    client_.set_fill_with_nonsolid_color(true);
+    client_.set_has_draw_text_op();
+    auto picture_layer = FakePictureLayer::Create(&client_);
     picture_layer->SetBounds(size);
     picture_layer->SetIsDrawable(true);
     parent->AddChild(picture_layer);
@@ -10176,7 +10230,6 @@ class LayerTreeHostTestDelayRecreateTiling
         break;
       case 3:
         NOTREACHED() << "We shouldn't see another commit in this test";
-        break;
     }
   }
 
@@ -10381,21 +10434,21 @@ class LayerTreeHostTestDidCommitAndDrawFrame : public LayerTreeHostTest {
 
   void DidCommitAndDrawFrame() override { EXPECT_EQ(0, num_draws_); }
 
-  void DidReceiveCompositorFrameAck() override {
+  void DidReceivePresentationTimeOnThread(
+      LayerTreeHostImpl* host_impl,
+      uint32_t frame_token,
+      const gfx::PresentationFeedback& feedback) override {
     ++num_draws_;
     if (num_draws_ == 2) {
       EndTest();
+    } else {
+      host_impl->SetViewportDamage(gfx::Rect(1, 1));
+      host_impl->RequestImplSideInvalidationForRerasterTiling();
     }
   }
 
   void DidActivateTreeOnThread(LayerTreeHostImpl* host_impl) override {
     EXPECT_EQ(0, host_impl->active_tree()->source_frame_number());
-  }
-
-  void DidReceiveCompositorFrameAckOnThread(
-      LayerTreeHostImpl* host_impl) override {
-    host_impl->SetViewportDamage(gfx::Rect(1, 1));
-    host_impl->RequestImplSideInvalidationForRerasterTiling();
   }
 
  protected:
@@ -10463,7 +10516,7 @@ class LayerTreeHostTestBeginFramePausedChanged : public LayerTreeHostTest {
   std::unique_ptr<TestLayerTreeFrameSink> CreateLayerTreeFrameSink(
       const viz::RendererSettings& renderer_settings,
       double refresh_rate,
-      scoped_refptr<viz::ContextProvider> compositor_context_provider,
+      scoped_refptr<viz::RasterContextProvider> compositor_context_provider,
       scoped_refptr<viz::RasterContextProvider> worker_context_provider)
       override {
     std::unique_ptr<TestLayerTreeFrameSink> frame_sink =
@@ -10476,9 +10529,546 @@ class LayerTreeHostTestBeginFramePausedChanged : public LayerTreeHostTest {
   }
 
  private:
-  TestLayerTreeFrameSink* layer_tree_frame_sink_;
+  raw_ptr<TestLayerTreeFrameSink, DanglingUntriaged> layer_tree_frame_sink_;
 };
 MULTI_THREAD_TEST_F(LayerTreeHostTestBeginFramePausedChanged);
+
+class LayerTreeHostUpdateViewportContainerSize : public LayerTreeHostTest {
+ public:
+  LayerTreeHostUpdateViewportContainerSize() { SetUseLayerLists(); }
+
+  void BeginTest() override { PostSetNeedsCommitToMainThread(); }
+
+  void SetupTree() override {
+    LayerTreeHostTest::SetupTree();
+    Layer* root_layer = layer_tree_host()->root_layer();
+    // Set up scrollable root.
+    root_layer->SetBounds(gfx::Size(100, 100));
+    SetupViewport(root_layer, gfx::Size(50, 50), root_layer->bounds());
+    layer_tree_host()->SetPageScaleFactorAndLimits(1.f, 1.f, 1.f);
+    layer_tree_host()->SetBrowserControlsParams(
+        {kTopControlsHeight, 0, kBottomControlsHeight, 0, false /* animate */,
+         true /* shrink */});
+    top_shown_ratio_ = 1.f;
+    bottom_shown_ratio_ = 1.f;
+    layer_tree_host()->SetBrowserControlsShownRatio(top_shown_ratio_,
+                                                    bottom_shown_ratio_);
+  }
+
+  void CommitCompleteOnThread(LayerTreeHostImpl* host_impl) override {
+    // The propertytree in main does not compute the bounds_delta, so main
+    // always copy 0 to bounds_delta. Let's check if bounds_delta is computed
+    // correctly in pending by UpdateViewportContainerSize().
+    gfx::Vector2dF pending_bounds_delta =
+        host_impl->pending_tree()
+            ->property_trees()
+            ->inner_viewport_container_bounds_delta();
+    gfx::Vector2dF active_bounds_delta =
+        host_impl->active_tree()
+            ->property_trees()
+            ->inner_viewport_container_bounds_delta();
+    switch (host_impl->pending_tree()->source_frame_number()) {
+      case 1:
+      case 2:
+      case 3:
+      case 4:
+        EXPECT_EQ(pending_bounds_delta, active_bounds_delta);
+        if (host_impl->pending_tree()->source_frame_number() == 4)
+          EndTest();
+        break;
+    }
+  }
+
+  void DidActivateTreeOnThread(LayerTreeHostImpl* host_impl) override {
+    // change the shownratio in active and check if it's applied to pending
+    switch (host_impl->active_tree()->source_frame_number()) {
+      case 0:
+        host_impl->SetCurrentBrowserControlsShownRatio(0.5f, 0.5f);
+        break;
+      case 1:
+        host_impl->SetCurrentBrowserControlsShownRatio(0.f, 0.f);
+        break;
+      case 2:
+        host_impl->SetCurrentBrowserControlsShownRatio(0.3f, 0.3f);
+        break;
+      case 3:
+        host_impl->SetCurrentBrowserControlsShownRatio(1.f, 1.f);
+        break;
+    }
+    PostSetNeedsCommitToMainThread();
+  }
+
+  void ApplyViewportChanges(const ApplyViewportChangesArgs& args) override {
+    top_shown_ratio_ += args.top_controls_delta;
+    bottom_shown_ratio_ += args.bottom_controls_delta;
+    layer_tree_host()->SetBrowserControlsShownRatio(top_shown_ratio_,
+                                                    bottom_shown_ratio_);
+  }
+  static constexpr float kTopControlsHeight = 10.0f;
+  static constexpr float kBottomControlsHeight = 10.0f;
+  float top_shown_ratio_;
+  float bottom_shown_ratio_;
+};
+
+MULTI_THREAD_TEST_F(LayerTreeHostUpdateViewportContainerSize);
+
+// Ensures that a change in LCD text status forces tilings to be recreated on
+// the pending tree even during accelerated gestures (scrolling and pinch zoom)
+// and animations.
+class LayerTreeHostTestForceRecreateTilingForLCDText
+    : public LayerTreeHostTestWithHelper {
+ public:
+  LayerTreeHostTestForceRecreateTilingForLCDText() {}
+
+  void SetupTree() override {
+    client_.set_fill_with_nonsolid_color(true);
+    client_.set_has_draw_text_op();
+
+    scoped_refptr<FakePictureLayer> root_layer =
+        FakePictureLayer::Create(&client_);
+    root_layer->SetBounds(gfx::Size(150, 150));
+    root_layer->SetIsDrawable(true);
+
+    layer_on_main_ =
+        CreateAndAddFakePictureLayer(gfx::Size(30, 30), root_layer.get());
+
+    layer_tree_host()->SetRootLayer(root_layer);
+    LayerTreeHostTest::SetupTree();
+    client_.set_bounds(root_layer->bounds());
+
+    layer_id_ = layer_on_main_->id();
+  }
+
+  void OnCommitRequested() override {
+    switch (layer_tree_host()->SourceFrameNumber()) {
+      case 0:
+        // First frame enables LCD text by marking the layer opaque.
+        layer_on_main_->SetContentsOpaque(true);
+        layer_on_main_->SetBackgroundColor(SkColor4f::FromColor(SK_ColorBLACK));
+        break;
+      case 1:
+        // Now mark the layer non-opaque to disable LCD text.
+        layer_on_main_->SetContentsOpaque(false);
+        break;
+      case 2:
+        // Back to LCD text.
+        layer_on_main_->SetContentsOpaque(true);
+        break;
+      case 3:
+        // Disable LCD text from non-opaque background.
+        layer_on_main_->SetContentsOpaque(false);
+        layer_on_main_->SetBackgroundColor(
+            SkColor4f::FromColor(SK_ColorTRANSPARENT));
+        break;
+    }
+  }
+
+  void BeginTest() override { PostSetNeedsCommitToMainThread(); }
+
+  void CommitCompleteOnThread(LayerTreeHostImpl* host_impl) override {
+    FakePictureLayerImpl* layer_impl = static_cast<FakePictureLayerImpl*>(
+        host_impl->pending_tree()->LayerById(layer_id_));
+
+    switch (host_impl->pending_tree()->source_frame_number()) {
+      case 0:
+        ASSERT_FALSE(host_impl->IsPinchGestureActive());
+        EXPECT_TRUE(layer_impl->can_use_lcd_text());
+        EXPECT_TRUE(layer_impl->HighResTiling()->can_use_lcd_text());
+        host_impl->GetInputHandler().PinchGestureBegin(
+            gfx::Point(1, 1), ui::ScrollInputType::kWheel);
+        PostSetNeedsCommitToMainThread();
+        break;
+      case 1:
+        ASSERT_TRUE(host_impl->IsPinchGestureActive());
+        EXPECT_FALSE(layer_impl->can_use_lcd_text());
+        EXPECT_EQ(layer_impl->lcd_text_disallowed_reason(),
+                  LCDTextDisallowedReason::kContentsNotOpaque);
+        EXPECT_FALSE(layer_impl->HighResTiling()->can_use_lcd_text());
+        host_impl->GetInputHandler().PinchGestureEnd(gfx::Point(1, 1));
+        PostSetNeedsCommitToMainThread();
+        break;
+      case 2:
+        ASSERT_FALSE(host_impl->IsPinchGestureActive());
+        EXPECT_TRUE(layer_impl->can_use_lcd_text());
+        EXPECT_TRUE(layer_impl->HighResTiling()->can_use_lcd_text());
+        host_impl->GetInputHandler().PinchGestureBegin(
+            gfx::Point(1, 1), ui::ScrollInputType::kWheel);
+        PostSetNeedsCommitToMainThread();
+        break;
+      case 3:
+        ASSERT_TRUE(host_impl->IsPinchGestureActive());
+        EXPECT_FALSE(layer_impl->can_use_lcd_text());
+        EXPECT_EQ(layer_impl->lcd_text_disallowed_reason(),
+                  LCDTextDisallowedReason::kBackgroundColorNotOpaque);
+        EXPECT_FALSE(layer_impl->HighResTiling()->can_use_lcd_text());
+        EndTest();
+        break;
+    }
+  }
+
+ protected:
+  // main and impl thread.
+  int layer_id_;
+
+  // main thread only
+  FakeContentLayerClient client_;
+  scoped_refptr<FakePictureLayer> layer_on_main_;
+};
+MULTI_THREAD_TEST_F(LayerTreeHostTestForceRecreateTilingForLCDText);
+
+class LayerTreeHostTestDamagePropagatesFromViewTransitionSurface
+    : public LayerTreeHostTest {
+ public:
+  LayerTreeHostTestDamagePropagatesFromViewTransitionSurface() {
+    SetUseLayerLists();
+  }
+
+  void BeginMainFrame(const viz::BeginFrameArgs& args) override {
+    switch (layer_tree_host()->SourceFrameNumber()) {
+      case 0:
+        break;
+      case 1:
+        // Damage unrelated layer and ensure that no other content is damaged.
+        unrelated_layer_->SetNeedsDisplayRect(gfx::Rect(0, 0, 5, 5));
+        break;
+      case 2:
+        // Damage view transition layer, ensure that the contributing VT pass
+        // is not redrawn.
+        view_transition_layer_->SetNeedsDisplayRect(gfx::Rect(0, 0, 5, 5));
+        break;
+      case 3:
+        // Damage layer which generates VT content. Ensure it propagates to VT
+        // layer's target.
+        layer_with_view_transition_content_->SetNeedsDisplayRect(
+            gfx::Rect(0, 0, 5, 5));
+    }
+  }
+
+  void SetupTree() override {
+    SetInitialRootBounds(root_rect_.size());
+    LayerTreeHostTest::SetupTree();
+    auto* root = layer_tree_host()->root_layer();
+
+    layer_with_view_transition_content_ = SolidColorLayer::Create();
+    CopyProperties(root, layer_with_view_transition_content_.get());
+    layer_with_view_transition_content_->SetIsDrawable(true);
+    layer_with_view_transition_content_->SetBackgroundColor(
+        SkColor4f::FromColor(SK_ColorBLUE));
+    layer_with_view_transition_content_->SetBounds(
+        layer_with_view_transition_content_rect_.size());
+    layer_with_view_transition_content_->SetOffsetToTransformParent(
+        layer_with_view_transition_content_rect_.OffsetFromOrigin());
+    root->AddChild(layer_with_view_transition_content_);
+
+    blink::ViewTransitionToken transition_token;
+    resource_id_ = viz::ViewTransitionElementResourceId(transition_token, 1);
+    view_transition_layer_ = ViewTransitionContentLayer::Create(
+        resource_id_, /*is_live_content_layer=*/true);
+    CopyProperties(root, view_transition_layer_.get());
+    view_transition_layer_->SetIsDrawable(true);
+    view_transition_layer_->SetBounds(view_transition_layer_rect_.size());
+    view_transition_layer_->SetOffsetToTransformParent(
+        view_transition_layer_rect_.OffsetFromOrigin());
+    root->AddChild(view_transition_layer_);
+
+    unrelated_layer_ = SolidColorLayer::Create();
+    CopyProperties(root, unrelated_layer_.get());
+    unrelated_layer_->SetIsDrawable(true);
+    unrelated_layer_->SetBounds(unrelated_layer_rect_.size());
+    unrelated_layer_->SetOffsetToTransformParent(
+        unrelated_layer_rect_.OffsetFromOrigin());
+    unrelated_layer_->SetBackgroundColor(SkColor4f::FromColor(SK_ColorRED));
+    root->AddChild(unrelated_layer_);
+
+    auto& layer_with_view_transition_content_node = CreateEffectNode(
+        layer_with_view_transition_content_.get(), kContentsRootPropertyNodeId);
+    layer_with_view_transition_content_->SetEffectTreeIndex(
+        layer_with_view_transition_content_node.id);
+    layer_with_view_transition_content_node
+        .view_transition_element_resource_id = resource_id_;
+    layer_with_view_transition_content_node.render_surface_reason =
+        RenderSurfaceReason::kViewTransitionParticipant;
+
+    auto& view_transition_layer_node = CreateEffectNode(
+        view_transition_layer_.get(), kContentsRootPropertyNodeId);
+    view_transition_layer_->SetEffectTreeIndex(view_transition_layer_node.id);
+    view_transition_layer_node.render_surface_reason =
+        RenderSurfaceReason::kBlendMode;
+  }
+
+  void BeginTest() override { layer_tree_host()->SetNeedsCommit(); }
+
+  void WillSubmitCompositorFrame(LayerTreeHostImpl* host_impl,
+                                 const viz::CompositorFrame& frame) override {
+    switch (host_impl->active_tree()->source_frame_number()) {
+      case 0: {
+        // First frame draws the entire tree with full damage.
+        ASSERT_EQ(frame.render_pass_list.size(), 3u);
+
+        const auto& vt_content_pass = frame.render_pass_list.at(0);
+        EXPECT_EQ(vt_content_pass->view_transition_element_resource_id,
+                  resource_id_);
+        EXPECT_EQ(vt_content_pass->output_rect,
+                  layer_with_view_transition_content_rect_);
+        EXPECT_TRUE(vt_content_pass->has_damage_from_contributing_content);
+
+        const auto& vt_layer_pass = frame.render_pass_list.at(1);
+        EXPECT_FALSE(
+            vt_layer_pass->view_transition_element_resource_id.IsValid());
+        EXPECT_EQ(vt_layer_pass->output_rect, view_transition_layer_rect_);
+        EXPECT_TRUE(vt_layer_pass->has_damage_from_contributing_content);
+
+        const auto& root_pass = frame.render_pass_list.back();
+        EXPECT_EQ(root_pass->damage_rect, root_rect_);
+        PostSetNeedsCommitToMainThread();
+        break;
+      }
+
+      case 1: {
+        // Second frame only damages unrelated layer.
+        ASSERT_EQ(frame.render_pass_list.size(), 3u);
+
+        const auto& vt_content_pass = frame.render_pass_list.at(0);
+        EXPECT_EQ(vt_content_pass->view_transition_element_resource_id,
+                  resource_id_);
+        EXPECT_EQ(vt_content_pass->output_rect,
+                  layer_with_view_transition_content_rect_);
+        EXPECT_FALSE(vt_content_pass->has_damage_from_contributing_content);
+
+        const auto& vt_layer_pass = frame.render_pass_list.at(1);
+        EXPECT_EQ(vt_layer_pass->output_rect, view_transition_layer_rect_);
+        EXPECT_FALSE(vt_layer_pass->has_damage_from_contributing_content);
+
+        const auto& root_pass = frame.render_pass_list.back();
+        EXPECT_EQ(root_pass->damage_rect,
+                  gfx::Rect(unrelated_layer_rect_.origin(), gfx::Size(5, 5)));
+        PostSetNeedsCommitToMainThread();
+        break;
+      }
+
+      case 2: {
+        // Third frame only damages the VT layer.
+        ASSERT_EQ(frame.render_pass_list.size(), 3u);
+
+        const auto& vt_content_pass = frame.render_pass_list.at(0);
+        EXPECT_EQ(vt_content_pass->view_transition_element_resource_id,
+                  resource_id_);
+        EXPECT_EQ(vt_content_pass->output_rect,
+                  layer_with_view_transition_content_rect_);
+        EXPECT_FALSE(vt_content_pass->has_damage_from_contributing_content);
+
+        const auto& vt_layer_pass = frame.render_pass_list.at(1);
+        EXPECT_EQ(vt_layer_pass->output_rect, view_transition_layer_rect_);
+        EXPECT_TRUE(vt_layer_pass->has_damage_from_contributing_content);
+
+        const auto& root_pass = frame.render_pass_list.back();
+        EXPECT_EQ(
+            root_pass->damage_rect,
+            gfx::Rect(view_transition_layer_rect_.origin(), gfx::Size(5, 5)));
+        PostSetNeedsCommitToMainThread();
+        break;
+      }
+
+      case 3: {
+        // Last frame damages the layer contributing to VT.
+        ASSERT_EQ(frame.render_pass_list.size(), 3u);
+
+        const auto& vt_content_pass = frame.render_pass_list.at(0);
+        EXPECT_EQ(vt_content_pass->view_transition_element_resource_id,
+                  resource_id_);
+        EXPECT_EQ(vt_content_pass->output_rect,
+                  layer_with_view_transition_content_rect_);
+        EXPECT_TRUE(vt_content_pass->has_damage_from_contributing_content);
+
+        const auto& vt_layer_pass = frame.render_pass_list.at(1);
+        EXPECT_EQ(vt_layer_pass->output_rect, view_transition_layer_rect_);
+        EXPECT_TRUE(vt_layer_pass->has_damage_from_contributing_content);
+
+        const auto& root_pass = frame.render_pass_list.back();
+
+        // TODO(khushalsagar): We shouldn't be damaging the area where
+        // layer_with_view_transition_content_ draws since the content is
+        // is instead drawn by view_transition_layer_.
+        gfx::Rect total_damage(
+            layer_with_view_transition_content_rect_.origin(), gfx::Size(5, 5));
+        total_damage.Union(
+            gfx::Rect(view_transition_layer_rect_.origin(), gfx::Size(5, 5)));
+        EXPECT_EQ(root_pass->damage_rect, total_damage);
+        EndTest();
+        break;
+      }
+
+      default:
+        break;
+    }
+  }
+
+ private:
+  scoped_refptr<SolidColorLayer> unrelated_layer_;
+  viz::ViewTransitionElementResourceId resource_id_;
+  scoped_refptr<ViewTransitionContentLayer> view_transition_layer_;
+  scoped_refptr<SolidColorLayer> layer_with_view_transition_content_;
+
+  // All rects are in the root coordinate space.
+  const gfx::Rect root_rect_ = gfx::Rect(0, 0, 50, 50);
+  const gfx::Rect layer_with_view_transition_content_rect_ =
+      gfx::Rect(0, 0, 10, 10);
+  const gfx::Rect view_transition_layer_rect_ = gfx::Rect(20, 20, 10, 10);
+  const gfx::Rect unrelated_layer_rect_ = gfx::Rect(40, 40, 10, 10);
+};
+MULTI_THREAD_TEST_F(LayerTreeHostTestDamagePropagatesFromViewTransitionSurface);
+
+class LayerTreeHostTestBlockOnCommitAfterInputEvent : public LayerTreeHostTest {
+ protected:
+  void BeginTest() override { PostSetNeedsCommitToMainThread(); }
+  void WillBeginMainFrame() override { ++main_frame_num_; }
+  void DidBeginMainFrame() override {
+    EXPECT_EQ(main_frame_num_ % 2 != 0,
+              layer_tree_host()->MustWaitForCommitForTesting());
+  }
+  void DidCommit() override {
+    if (main_frame_num_ < 5) {
+      layer_tree_host()->SetNeedsCommit();
+      if (main_frame_num_ % 2) {
+        layer_tree_host()->proxy()->SetInputResponsePending();
+      }
+    } else {
+      EndTest();
+    }
+  }
+
+ private:
+  uint32_t main_frame_num_ = 0u;
+};
+MULTI_THREAD_TEST_F(LayerTreeHostTestBlockOnCommitAfterInputEvent);
+
+class LayerTreeHostTestDetachInputDelegateAndRenderFrameObserver
+    : public LayerTreeTest,
+      StubInputHandlerClient {
+ public:
+  void BeginTest() override {
+    impl_task_runner_ =
+        layer_tree_host()->GetTaskRunnerProvider()->ImplThreadTaskRunner();
+
+    layer_tree_host()->SetRenderFrameObserver(
+        std::make_unique<FakeRenderFrameMetadataObserver>(this));
+
+    CompletionEvent event;
+    impl_task_runner_->PostTask(
+        FROM_HERE,
+        base::BindOnce(
+            &LayerTreeHostTestDetachInputDelegateAndRenderFrameObserver::
+                SetUpInputHandlerOnImpl,
+            base::Unretained(this), base::Unretained(&event),
+            layer_tree_host()->GetDelegateForInput()));
+    event.Wait();
+
+    PostSetNeedsCommitToMainThread();
+  }
+
+  void DidCommit() override {
+    layer_tree_host()->DetachInputDelegateAndRenderFrameObserver();
+
+    CompletionEvent event;
+    impl_task_runner_->PostTask(
+        FROM_HERE,
+        base::BindOnce(
+            &LayerTreeHostTestDetachInputDelegateAndRenderFrameObserver::
+                AssertDestroyedOnImpl,
+            base::Unretained(this), base::Unretained(&event)));
+    event.Wait();
+
+    EndTest();
+  }
+
+ private:
+  class FakeRenderFrameMetadataObserver : public RenderFrameMetadataObserver {
+   public:
+    FakeRenderFrameMetadataObserver(
+        LayerTreeHostTestDetachInputDelegateAndRenderFrameObserver* test)
+        : test_(test) {}
+
+    ~FakeRenderFrameMetadataObserver() override {
+      CHECK(is_bound_);
+      CHECK(!test_->did_shutdown_render_frame_observer_);
+      test_->did_shutdown_render_frame_observer_ = true;
+    }
+
+    void BindToCurrentSequence() override {
+      CHECK(!is_bound_);
+      is_bound_ = true;
+    }
+    void OnRenderFrameSubmission(
+        const RenderFrameMetadata& render_frame_metadata,
+        viz::CompositorFrameMetadata* compositor_frame_metadata,
+        bool force_send) override {}
+#if BUILDFLAG(IS_ANDROID)
+    void DidEndScroll() override {}
+#endif
+
+   private:
+    raw_ptr<LayerTreeHostTestDetachInputDelegateAndRenderFrameObserver> test_;
+    bool is_bound_ = false;
+  };
+
+  // InputHandlerClient implementation, invoked on impl thread.
+  void WillShutdown() override {
+    CHECK(impl_task_runner_->BelongsToCurrentThread());
+    EXPECT_FALSE(did_shutdown_input_handler_);
+    did_shutdown_input_handler_ = true;
+  }
+
+  void SetUpInputHandlerOnImpl(
+      CompletionEvent* event,
+      base::WeakPtr<CompositorDelegateForInput> compositor_delegate) {
+    CHECK(compositor_delegate);
+    base::WeakPtr<InputHandler> input_handler =
+        InputHandler::Create(*compositor_delegate);
+    CHECK(input_handler);
+    input_handler->BindToClient(this);
+    event->Signal();
+  }
+
+  void AssertDestroyedOnImpl(CompletionEvent* event) {
+    EXPECT_TRUE(did_shutdown_input_handler_);
+    EXPECT_TRUE(did_shutdown_render_frame_observer_);
+    event->Signal();
+  }
+
+  // Can be accessed on both threads.
+  scoped_refptr<base::SingleThreadTaskRunner> impl_task_runner_;
+
+  // Accessed only on the impl thread.
+  bool did_shutdown_input_handler_ = false;
+  bool did_shutdown_render_frame_observer_ = false;
+};
+MULTI_THREAD_TEST_F(LayerTreeHostTestDetachInputDelegateAndRenderFrameObserver);
+
+class LayerTreeHostTestSetMaxSafeAreaInsets : public LayerTreeHostTest {
+ public:
+  LayerTreeHostTestSetMaxSafeAreaInsets() : LayerTreeHostTest() {}
+
+  void BeginTest() override { PostSetNeedsCommitToMainThread(); }
+
+  void SetupTree() override {
+    LayerTreeHostTest::SetupTree();
+
+    gfx::InsetsF insets(10);
+    insets.set_bottom(20);
+    layer_tree_host()->SetMaxSafeAreaInsets(insets);
+  }
+
+  void CommitCompleteOnThread(LayerTreeHostImpl* host_impl) override {
+    EXPECT_EQ(20, host_impl->pending_tree()->max_safe_area_inset_bottom());
+
+    host_impl->pending_tree()->PushPropertiesTo(host_impl->active_tree());
+    EXPECT_EQ(20, host_impl->active_tree()->max_safe_area_inset_bottom());
+
+    EndTest();
+  }
+};
+
+MULTI_THREAD_TEST_F(LayerTreeHostTestSetMaxSafeAreaInsets);
 
 }  // namespace
 }  // namespace cc

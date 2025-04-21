@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define ASH_COMPONENTS_ARC_SESSION_ARC_SESSION_RUNNER_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "ash/components/arc/session/arc_client_adapter.h"
@@ -13,13 +14,13 @@
 #include "ash/components/arc/session/arc_session.h"
 #include "ash/components/arc/session/arc_stop_reason.h"
 #include "ash/components/arc/session/arc_upgrade_params.h"
-#include "ash/components/cryptohome/cryptohome_parameters.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
+#include "base/observer_list_types.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
 
 namespace arc {
 
@@ -47,7 +48,7 @@ enum class ArcContainerLifetimeEvent {
 class ArcSessionRunner : public ArcSession::Observer {
  public:
   // Observer to notify events across multiple ARC session runs.
-  class Observer {
+  class Observer : public base::CheckedObserver {
    public:
     // Called when ARC instance is stopped. If |restarting| is true, another
     // ARC session is being restarted (practically after certain delay).
@@ -62,7 +63,7 @@ class ArcSessionRunner : public ArcSession::Observer {
     virtual void OnSessionRestarting() = 0;
 
    protected:
-    virtual ~Observer() = default;
+    ~Observer() override = default;
   };
 
   // This is the factory interface to inject ArcSession instance
@@ -123,6 +124,14 @@ class ArcSessionRunner : public ArcSession::Observer {
     default_device_scale_factor_ = scale_factor;
   }
 
+  bool use_virtio_blk_data() const { return use_virtio_blk_data_; }
+  void set_use_virtio_blk_data(bool use_virtio_blk_data) {
+    use_virtio_blk_data_ = use_virtio_blk_data;
+  }
+
+  bool arc_signed_in() const { return arc_signed_in_; }
+  void set_arc_signed_in(bool arc_signed_in) { arc_signed_in_ = arc_signed_in; }
+
   // Returns the current ArcSession instance for testing purpose.
   ArcSession* GetArcSessionForTesting() { return arc_session_.get(); }
 
@@ -156,11 +165,11 @@ class ArcSessionRunner : public ArcSession::Observer {
   THREAD_CHECKER(thread_checker_);
 
   // Observers for the ARC instance state change events.
-  base::ObserverList<Observer>::Unchecked observer_list_;
+  base::ObserverList<Observer> observer_list_;
 
   // Target ARC instance running mode. If nullopt, it means the ARC instance
   // should stop eventually.
-  absl::optional<ArcInstanceMode> target_mode_;
+  std::optional<ArcInstanceMode> target_mode_;
 
   // Instead of immediately trying to restart the container, give it some time
   // to finish tearing down in case it is still in the process of stopping.
@@ -188,6 +197,11 @@ class ArcSessionRunner : public ArcSession::Observer {
   bool resumed_ = false;
 
   float default_device_scale_factor_ = 1.0f;
+
+  // Whether ARCVM uses virtio-blk for /data.
+  bool use_virtio_blk_data_ = false;
+
+  bool arc_signed_in_ = false;
 
   // DemoModeDelegate to be used by ArcSession.
   std::unique_ptr<ArcClientAdapter::DemoModeDelegate> demo_mode_delegate_;

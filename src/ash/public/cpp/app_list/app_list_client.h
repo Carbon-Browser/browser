@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,10 +13,12 @@
 
 #include "ash/public/cpp/app_list/app_list_types.h"
 #include "ash/public/cpp/ash_public_export.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/time/time.h"
+#include "components/account_id/account_id.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
-#include "ui/base/models/simple_menu_model.h"
+#include "ui/menus/simple_menu_model.h"
+#include "url/gurl.h"
 
 namespace ash {
 
@@ -40,6 +42,12 @@ class ASH_PUBLIC_EXPORT AppListClient {
 
   //////////////////////////////////////////////////////////////////////////////
   // Interfaces on searching:
+
+  // Returns the search categories that are available for users to choose if
+  // they want to have the results in the categories displayed in launcher
+  // search.
+  virtual std::vector<AppListSearchControlCategory> GetToggleableCategories()
+      const = 0;
 
   // Refreshes the search zero-state suggestions and invokes `on_done` when
   // complete. The client must run `on_done` before `timeout` because this
@@ -73,20 +81,9 @@ class ASH_PUBLIC_EXPORT AppListClient {
   // Invokes a custom action |action| on a result with |result_id|.
   virtual void InvokeSearchResultAction(const std::string& result_id,
                                         SearchResultActionType action) = 0;
-  // Returns the context menu model for the search result with |result_id|, or
-  // an empty array if there is currently no menu for the result.
-  using GetSearchResultContextMenuModelCallback =
-      base::OnceCallback<void(std::unique_ptr<ui::SimpleMenuModel>)>;
-  virtual void GetSearchResultContextMenuModel(
-      const std::string& result_id,
-      GetSearchResultContextMenuModelCallback callback) = 0;
 
   //////////////////////////////////////////////////////////////////////////////
   // Interfaces on the app list UI:
-  // Invoked when the app list is shown in the display with |display_id|.
-  virtual void ViewShown(int64_t display_id) = 0;
-  // Invoked when the app list is closed.
-  virtual void ViewClosing() = 0;
   // Notifies target visibility changes of the app list.
   virtual void OnAppListVisibilityWillChange(bool visible) = 0;
   // Notifies visibility changes of the app list.
@@ -100,7 +97,8 @@ class ASH_PUBLIC_EXPORT AppListClient {
   virtual void ActivateItem(int profile_id,
                             const std::string& id,
                             int event_flags,
-                            ash::AppListLaunchedFrom launched_from) = 0;
+                            ash::AppListLaunchedFrom launched_from,
+                            bool is_above_the_fold) = 0;
   // Returns the context menu model for the item with |id|, or an empty array if
   // there is currently no menu for the item (e.g. during install).
   // `item_context` is where the item is being shown (e.g. apps grid or recent
@@ -124,6 +122,16 @@ class ASH_PUBLIC_EXPORT AppListClient {
   // implementation, this can return nullptr.
   virtual AppListNotifier* GetNotifier() = 0;
 
+  // Recalculate whether launcher search IPH should be shown and update
+  // SearchBoxModel.
+  virtual void RecalculateWouldTriggerLauncherSearchIph() = 0;
+
+  // `feature_engagement::Tracker` needs to be initialized before this method
+  // gets called. Call `WouldTriggerLauncherSearchIph` to initialize it. This
+  // returns false if the tracker is not initialized yet.
+  virtual std::unique_ptr<ScopedIphSession>
+  CreateLauncherSearchIphSession() = 0;
+
   // Invoked to load an icon of the app identified by `app_id`.
   virtual void LoadIcon(int profile_id, const std::string& app_id) = 0;
 
@@ -131,8 +139,32 @@ class ASH_PUBLIC_EXPORT AppListClient {
   // among synced devices.
   virtual ash::AppListSortOrder GetPermanentSortingOrder() const = 0;
 
-  // Invoked to commit the app list temporary sort order.
-  virtual void CommitTemporarySortOrder() = 0;
+  // If present, indicates whether the user associated with the given
+  // `account_id` is considered new across all ChromeOS devices (i,e, it is the
+  // first device the user has ever logged into). A user is considered new if
+  // the first app list sync in the session was the first sync ever across all
+  // ChromeOS devices and sessions for the given user. As such, this value is
+  // absent until the first app list sync of the session is completed. NOTE:
+  // Currently only the primary user profile is supported.
+  virtual std::optional<bool> IsNewUser(const AccountId& account_id) const = 0;
+
+  // Record metrics regarding the current visibility of apps in the launcher.
+  virtual void RecordAppsDefaultVisibility(
+      const std::vector<std::string>& apps_above_the_fold,
+      const std::vector<std::string>& apps_below_the_fold,
+      bool is_apps_collections_page) = 0;
+
+  // Whether the app list was reordered locally.
+  virtual bool HasReordered() = 0;
+
+  // Callback for reading Assistant new entry point eligibility.
+  using GetAssistantNewEntryPointEligibilityCallback =
+      base::OnceCallback<void(bool)>;
+
+  // Read Assistant new entry point eligibility from Assistant delegate as an
+  // async operation.
+  virtual void GetAssistantNewEntryPointEligibility(
+      GetAssistantNewEntryPointEligibilityCallback callback) = 0;
 
  protected:
   virtual ~AppListClient() = default;

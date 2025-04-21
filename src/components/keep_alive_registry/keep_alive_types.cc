@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,10 +16,12 @@ std::ostream& operator<<(std::ostream& out, const KeepAliveOrigin& origin) {
       return out << "BROWSER_PROCESS_CHROMEOS";
     case KeepAliveOrigin::BROWSER_PROCESS_FUCHSIA:
       return out << "BROWSER_PROCESS_FUCHSIA";
-    case KeepAliveOrigin::BROWSER_PROCESS_LACROS:
-      return out << "BROWSER_PROCESS_LACROS";
     case KeepAliveOrigin::SESSION_RESTORE:
       return out << "SESSION_RESTORE";
+    case KeepAliveOrigin::HEADLESS_COMMAND:
+      return out << "HEADLESS_COMMAND";
+    case KeepAliveOrigin::APP_LAUNCH:
+      return out << "APP_LAUNCH";
     case KeepAliveOrigin::BACKGROUND_MODE_MANAGER:
       return out << "BACKGROUND_MODE_MANAGER";
     case KeepAliveOrigin::BACKGROUND_MODE_MANAGER_STARTUP:
@@ -40,6 +42,8 @@ std::ostream& operator<<(std::ostream& out, const KeepAliveOrigin& origin) {
       return out << "DEVTOOLS_WINDOW";
     case KeepAliveOrigin::NATIVE_MESSAGING_HOST_ERROR_REPORT:
       return out << "NATIVE_MESSAGING_HOST_ERROR_REPORT";
+    case KeepAliveOrigin::GLIC_LAUNCHER:
+      return out << "GLIC_LAUNCHER";
     case KeepAliveOrigin::NOTIFICATION:
       return out << "NOTIFICATION";
     case KeepAliveOrigin::PENDING_NOTIFICATION_CLICK_EVENT:
@@ -76,12 +80,19 @@ std::ostream& operator<<(std::ostream& out, const KeepAliveOrigin& origin) {
       return out << "APP_START_URL_MIGRATION";
     case KeepAliveOrigin::APP_GET_INFO:
       return out << "APP_GET_INFO";
+    case KeepAliveOrigin::WEB_APP_LAUNCH:
+      return out << "WEB_APP_LAUNCH";
+    case KeepAliveOrigin::ISOLATED_WEB_APP_INSTALL:
+      return out << "ISOLATED_WEB_APP_INSTALL";
+    case KeepAliveOrigin::ISOLATED_WEB_APP_UPDATE:
+      return out << "ISOLATED_WEB_APP_UPDATE";
     case KeepAliveOrigin::SESSION_DATA_DELETER:
       return out << "SESSION_DATA_DELETER";
+    case KeepAliveOrigin::UMA_LOG:
+      return out << "UMA_LOG";
   }
 
-  NOTREACHED();
-  return out << static_cast<int>(origin);
+  NOTREACHED() << static_cast<int>(origin);
 }
 
 std::ostream& operator<<(std::ostream& out,
@@ -93,6 +104,5 @@ std::ostream& operator<<(std::ostream& out,
       return out << "ENABLED";
   }
 
-  NOTREACHED();
-  return out << static_cast<int>(restart);
+  NOTREACHED() << static_cast<int>(restart);
 }

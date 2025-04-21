@@ -1,16 +1,16 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef DEVICE_FIDO_ATTESTATION_STATEMENT_H_
 #define DEVICE_FIDO_ATTESTATION_STATEMENT_H_
 
+#include <optional>
 #include <string>
 
 #include "base/component_export.h"
 #include "base/containers/span.h"
 #include "components/cbor/values.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace device {
 
@@ -35,6 +35,9 @@ class COMPONENT_EXPORT(DEVICE_FIDO) AttestationStatement {
   // nested within another CBOR object and encoded then.
   virtual cbor::Value AsCBOR() const = 0;
 
+  // Returns true if the attestation is a "none" attestation.
+  virtual bool IsNoneAttestation() const = 0;
+
   // Returns true if the attestation is a "self" attestation, i.e. is just the
   // private key signing itself to show that it is fresh.
   virtual bool IsSelfAttestation() const = 0;
@@ -46,7 +49,7 @@ class COMPONENT_EXPORT(DEVICE_FIDO) AttestationStatement {
   virtual bool IsAttestationCertificateInappropriatelyIdentifying() const = 0;
 
   // Return the DER bytes of the leaf X.509 certificate, if any.
-  virtual absl::optional<base::span<const uint8_t>> GetLeafCertificate()
+  virtual std::optional<base::span<const uint8_t>> GetLeafCertificate()
       const = 0;
 
   const std::string& format_name() const { return format_; }
@@ -70,9 +73,10 @@ class COMPONENT_EXPORT(DEVICE_FIDO) NoneAttestationStatement
   ~NoneAttestationStatement() override;
 
   cbor::Value AsCBOR() const override;
+  bool IsNoneAttestation() const override;
   bool IsSelfAttestation() const override;
   bool IsAttestationCertificateInappropriatelyIdentifying() const override;
-  absl::optional<base::span<const uint8_t>> GetLeafCertificate() const override;
+  std::optional<base::span<const uint8_t>> GetLeafCertificate() const override;
 };
 
 COMPONENT_EXPORT(DEVICE_FIDO)

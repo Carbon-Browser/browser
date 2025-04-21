@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@ inline WifiData CreateDefaultUniqueWifiData() {
   return CreateUniqueWifiData(10);
 }
 
-mojom::Geoposition CreateGeoposition(int offset);
+mojom::GeopositionPtr CreateGeoposition(int offset);
 
 }  // namespace testing
 }  // namespace device

@@ -1,31 +1,44 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/xr/xr_input_sources_change_event.h"
+
+#include "third_party/blink/renderer/bindings/core/v8/frozen_array.h"
 
 namespace blink {
 
 XRInputSourcesChangeEvent::XRInputSourcesChangeEvent(
     const AtomicString& type,
     XRSession* session,
-    const HeapVector<Member<XRInputSource>>& added,
-    const HeapVector<Member<XRInputSource>>& removed)
+    HeapVector<Member<XRInputSource>> added,
+    HeapVector<Member<XRInputSource>> removed)
     : Event(type, Bubbles::kYes, Cancelable::kNo),
       session_(session),
-      added_(added),
-      removed_(removed) {}
+      added_(
+          MakeGarbageCollected<FrozenArray<XRInputSource>>(std::move(added))),
+      removed_(MakeGarbageCollected<FrozenArray<XRInputSource>>(
+          std::move(removed))) {}
 
 XRInputSourcesChangeEvent::XRInputSourcesChangeEvent(
     const AtomicString& type,
     const XRInputSourcesChangeEventInit* initializer)
     : Event(type, initializer) {
-  if (initializer->hasSession())
+  if (initializer->hasSession()) {
     session_ = initializer->session();
-  if (initializer->hasAdded())
-    added_ = initializer->added();
-  if (initializer->hasRemoved())
-    removed_ = initializer->removed();
+  }
+  if (initializer->hasAdded()) {
+    added_ =
+        MakeGarbageCollected<FrozenArray<XRInputSource>>(initializer->added());
+  } else {
+    added_ = MakeGarbageCollected<FrozenArray<XRInputSource>>();
+  }
+  if (initializer->hasRemoved()) {
+    removed_ = MakeGarbageCollected<FrozenArray<XRInputSource>>(
+        initializer->removed());
+  } else {
+    removed_ = MakeGarbageCollected<FrozenArray<XRInputSource>>();
+  }
 }
 
 XRInputSourcesChangeEvent::~XRInputSourcesChangeEvent() = default;

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,21 +7,23 @@
 #include <string.h>
 
 #include <ostream>
+#include <string_view>
 
-#include "base/big_endian.h"
+#include "base/numerics/byte_conversions.h"
 
 namespace web_package {
 
 namespace {
 
-cbor::Value CreateByteString(base::StringPiece s) {
-  return cbor::Value(base::as_bytes(base::make_span(s)));
+cbor::Value CreateByteString(std::string_view s) {
+  return cbor::Value(base::as_byte_span(s));
 }
 
 cbor::Value CreateHeaderMap(const WebBundleBuilder::Headers& headers) {
   cbor::Value::MapValue map;
-  for (const auto& pair : headers)
+  for (const auto& pair : headers) {
     map.insert({CreateByteString(pair.first), CreateByteString(pair.second)});
+  }
   return cbor::Value(std::move(map));
 }
 
@@ -51,22 +53,28 @@ WebBundleBuilder::WebBundleBuilder(BundleVersion version,
 }
 WebBundleBuilder::~WebBundleBuilder() = default;
 
-cbor::Value WebBundleBuilder::GetCborValueOfURL(base::StringPiece url) {
+cbor::Value WebBundleBuilder::GetCborValueOfURL(std::string_view url) {
   if (writer_config_.allow_invalid_utf8_for_testing) {
     return cbor::Value::InvalidUTF8StringValueForTesting(url);
   }
   return cbor::Value(url);
 }
 
-void WebBundleBuilder::AddExchange(base::StringPiece url,
+void WebBundleBuilder::AddExchange(const GURL& url,
                                    const Headers& response_headers,
-                                   base::StringPiece payload) {
+                                   std::string_view payload) {
+  AddExchange(url.spec(), response_headers, payload);
+}
+
+void WebBundleBuilder::AddExchange(std::string_view url,
+                                   const Headers& response_headers,
+                                   std::string_view payload) {
   AddIndexEntry(url, AddResponse(response_headers, payload));
 }
 
 WebBundleBuilder::ResponseLocation WebBundleBuilder::AddResponse(
     const Headers& headers,
-    base::StringPiece payload) {
+    std::string_view payload) {
   cbor::Value::ArrayValue response_array;
   response_array.emplace_back(Encode(CreateHeaderMap(headers)));
   response_array.emplace_back(CreateByteString(payload));
@@ -79,26 +87,28 @@ WebBundleBuilder::ResponseLocation WebBundleBuilder::AddResponse(
 }
 
 void WebBundleBuilder::AddIndexEntry(
-    base::StringPiece url,
+    const GURL& url,
+    const ResponseLocation& response_location) {
+  AddIndexEntry(url.spec(), response_location);
+}
+
+void WebBundleBuilder::AddIndexEntry(
+    std::string_view url,
     const ResponseLocation& response_location) {
   delayed_index_.insert({std::string{url}, response_location});
 }
 
-void WebBundleBuilder::AddSection(base::StringPiece name, cbor::Value section) {
+void WebBundleBuilder::AddSection(std::string_view name, cbor::Value section) {
   section_lengths_.emplace_back(name);
   section_lengths_.emplace_back(EncodedLength(section));
   sections_.emplace_back(std::move(section));
 }
 
-void WebBundleBuilder::AddAuthority(cbor::Value::MapValue authority) {
-  authorities_.emplace_back(std::move(authority));
+void WebBundleBuilder::AddPrimaryURL(const GURL& url) {
+  AddPrimaryURL(url.spec());
 }
 
-void WebBundleBuilder::AddVouchedSubset(cbor::Value::MapValue vouched_subset) {
-  vouched_subsets_.emplace_back(std::move(vouched_subset));
-}
-
-void WebBundleBuilder::AddPrimaryURL(base::StringPiece url) {
+void WebBundleBuilder::AddPrimaryURL(std::string_view url) {
   AddSection("primary", GetCborValueOfURL(url));
 }
 
@@ -118,55 +128,22 @@ std::vector<uint8_t> WebBundleBuilder::CreateBundle() {
         {GetCborValueOfURL(entry.first), cbor::Value(index_value_array)});
   }
   AddSection("index", cbor::Value(index));
-  if (!authorities_.empty() || !vouched_subsets_.empty()) {
-    cbor::Value::ArrayValue signatures_section;
-    signatures_section.emplace_back(std::move(authorities_));
-    signatures_section.emplace_back(std::move(vouched_subsets_));
-    AddSection("signatures", cbor::Value(std::move(signatures_section)));
-  }
   AddSection("responses", cbor::Value(responses_));
   return CreateTopLevel();
-}
-
-cbor::Value WebBundleBuilder::CreateEncodedSigned(
-    base::StringPiece validity_url,
-    base::StringPiece auth_sha256,
-    int64_t date,
-    int64_t expires,
-    base::StringPiece url,
-    base::StringPiece header_sha256,
-    base::StringPiece payload_integrity_header) {
-  cbor::Value::ArrayValue subset_hash_value;
-  subset_hash_value.emplace_back(CreateByteString(""));  // variants-value
-  subset_hash_value.emplace_back(CreateByteString(header_sha256));
-  subset_hash_value.emplace_back(payload_integrity_header);
-
-  cbor::Value::MapValue subset_hashes;
-  subset_hashes.emplace(GetCborValueOfURL(url), std::move(subset_hash_value));
-
-  cbor::Value::MapValue signed_subset;
-  signed_subset.emplace("validity-url", validity_url);
-  signed_subset.emplace("auth-sha256", CreateByteString(auth_sha256));
-  signed_subset.emplace("date", date);
-  signed_subset.emplace("expires", expires);
-  signed_subset.emplace("subset-hashes", std::move(subset_hashes));
-  return cbor::Value(Encode(cbor::Value(signed_subset)));
 }
 
 std::vector<uint8_t> WebBundleBuilder::CreateTopLevel() {
   cbor::Value::ArrayValue toplevel_array;
   toplevel_array.emplace_back(CreateByteString("🌐📦"));
-  toplevel_array.emplace_back(CreateByteString(base::StringPiece("b2\0\0", 4)));
+  toplevel_array.emplace_back(CreateByteString(std::string_view("b2\0\0", 4)));
   toplevel_array.emplace_back(Encode(cbor::Value(section_lengths_)));
   toplevel_array.emplace_back(sections_);
   // Put a dummy 8-byte bytestring.
   toplevel_array.emplace_back(cbor::Value::BinaryValue(8, 0));
 
   std::vector<uint8_t> bundle = Encode(cbor::Value(toplevel_array));
-  char encoded[8];
-  base::WriteBigEndian(encoded, static_cast<uint64_t>(bundle.size()));
   // Overwrite the dummy bytestring with the actual size.
-  memcpy(bundle.data() + bundle.size() - 8, encoded, 8);
+  base::span(bundle).last(8u).copy_from(base::U64ToBigEndian(bundle.size()));
   return bundle;
 }
 

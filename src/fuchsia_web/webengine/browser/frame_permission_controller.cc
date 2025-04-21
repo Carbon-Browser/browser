@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,7 @@ const url::Origin& GetCanonicalOrigin(PermissionType permission,
   // WebEngine (AUDIO_CAPTURE, VIDEO_CAPTURE, PROTECTED_MEDIA_IDENTIFIER,
   // DURABLE_STORAGE).
   //
-  // TODO(crbug.com/1063094): Update this function when other permissions are
+  // TODO(crbug.com/40680523): Update this function when other permissions are
   // added.
   return embedding_origin;
 }
@@ -66,7 +66,7 @@ void FramePermissionController::SetPermissionState(PermissionType permission,
   // Currently only the following permissions are supported by WebEngine. Others
   // may not be handled correctly by this class.
   //
-  // TODO(crbug.com/1063094): This check is necessary mainly because
+  // TODO(crbug.com/40680523): This check is necessary mainly because
   // GetCanonicalOrigin() may not work correctly for other permission. See
   // comemnts in GetCanonicalOrigin(). Remove it once that issue is resolved.
   DCHECK(permission == PermissionType::AUDIO_CAPTURE ||
@@ -114,7 +114,6 @@ PermissionStatus FramePermissionController::GetPermissionState(
 void FramePermissionController::RequestPermissions(
     const std::vector<PermissionType>& permissions,
     const url::Origin& requesting_origin,
-    bool user_gesture,
     base::OnceCallback<void(const std::vector<PermissionStatus>&)> callback) {
   std::vector<PermissionStatus> result;
   result.reserve(permissions.size());

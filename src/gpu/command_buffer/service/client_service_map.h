@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,8 +40,7 @@ class ClientServiceMap {
       DCHECK(client_to_service_array_[client_id] == invalid_service_id());
       client_to_service_array_[client_id] = service_id;
     } else {
-      DCHECK(client_to_service_map_.find(client_id) ==
-             client_to_service_map_.end());
+      DCHECK(client_to_service_map_.count(client_id) == 0);
       client_to_service_map_[client_id] = service_id;
     }
   }

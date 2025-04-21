@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #import <Cocoa/Cocoa.h>
 
 #include "chrome/browser/renderer_context_menu/render_view_context_menu.h"
-#include "ui/base/cocoa/text_services_context_menu.h"
+#include "ui/menus/cocoa/text_services_context_menu.h"
 
 // Mac implementation of the context menu display code. Uses a Cocoa NSMenu
 // to display the context menu. Internally uses an obj-c object as the
@@ -43,6 +43,16 @@ class RenderViewContextMenuMac : public RenderViewContextMenu,
   void InitToolkitMenu();
 
  protected:
+  friend class ToolkitDelegateMacCocoa;
+
+  // Cancels the menu.
+  virtual void CancelToolkitMenu() {}
+  // Updates the status and text of the specified context-menu item.
+  virtual void UpdateToolkitMenuItem(int command_id,
+                                     bool enabled,
+                                     bool hidden,
+                                     const std::u16string& title) {}
+
   // RenderViewContextMenu:
   void AppendPlatformEditableItems() override;
 

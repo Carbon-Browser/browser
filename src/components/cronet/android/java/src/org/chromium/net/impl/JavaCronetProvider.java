@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,6 +57,6 @@ public class JavaCronetProvider extends CronetProvider {
     public boolean equals(Object other) {
         return other == this
                 || (other instanceof JavaCronetProvider
-                           && this.mContext.equals(((JavaCronetProvider) other).mContext));
+                        && this.mContext.equals(((JavaCronetProvider) other).mContext));
     }
 }

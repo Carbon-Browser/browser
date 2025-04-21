@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,14 +6,14 @@
 
 #import <WebKit/WebKit.h>
 
-#include "base/check_op.h"
-#include "base/feature_list.h"
-#include "base/i18n/i18n_constants.h"
+#import "base/check_op.h"
+#import "base/feature_list.h"
+#import "base/i18n/i18n_constants.h"
 #import "base/ios/block_types.h"
-#include "base/metrics/histogram_macros.h"
-#include "base/strings/sys_string_conversions.h"
-#include "ios/web/common/features.h"
-#include "ios/web/common/referrer_util.h"
+#import "base/metrics/histogram_macros.h"
+#import "base/strings/sys_string_conversions.h"
+#import "ios/web/common/features.h"
+#import "ios/web/common/referrer_util.h"
 #import "ios/web/navigation/crw_navigation_item_holder.h"
 #import "ios/web/navigation/crw_pending_navigation_info.h"
 #import "ios/web/navigation/crw_wk_navigation_handler.h"
@@ -27,16 +27,9 @@
 #import "ios/web/public/web_state.h"
 #import "ios/web/web_state/user_interaction_state.h"
 #import "ios/web/web_state/web_state_impl.h"
-#import "net/base/mac/url_conversions.h"
-#include "net/base/url_util.h"
+#import "net/base/apple/url_conversions.h"
+#import "net/base/url_util.h"
 
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-using web::wk_navigation_util::ExtractTargetURL;
-using web::wk_navigation_util::IsRestoreSessionUrl;
-using web::wk_navigation_util::IsWKInternalUrl;
 using web::wk_navigation_util::kReferrerHeaderName;
 using web::wk_navigation_util::URLNeedsUserAgentType;
 
@@ -65,6 +58,10 @@ enum class BackForwardNavigationType {
 // Returns The WKNavigationDelegate handler class from delegate.
 @property(nonatomic, readonly) CRWWKNavigationHandler* navigationHandler;
 
+// The URL for the currently loading securitu scoped resource. Non-null only
+// between starting to load a security scoped file URL and the load completion.
+@property(nonatomic, strong) NSURL* securityScopedResourceURL;
+
 @end
 
 @implementation CRWWebRequestController
@@ -82,7 +79,7 @@ enum class BackForwardNavigationType {
   }
 
   web::NavigationItem* item = self.currentNavItem;
-  const GURL currentURL = item ? item->GetURL() : GURL::EmptyGURL();
+  const GURL currentURL = item ? item->GetURL() : GURL();
   const bool isCurrentURLAppSpecific =
       web::GetWebClient()->IsAppSpecificURL(currentURL);
   // If it's a chrome URL, but not a native one, create the WebUI instance.
@@ -128,9 +125,9 @@ enum class BackForwardNavigationType {
       web::NavigationInitiationType::BROWSER_INITIATED);
 
   // The load data call will replace the current navigation and the webView URL
-  // of the navigation will be replaced by |URL|. Set the URL of the
+  // of the navigation will be replaced by `URL`. Set the URL of the
   // navigationItem to keep them synced.
-  // Note: it is possible that the URL in item already match |url|. But item can
+  // Note: it is possible that the URL in item already match `url`. But item can
   // also contain a placeholder URL intended to be replaced.
   item->SetURL(URL);
   navigationContext->SetMimeType(MIMEType);
@@ -169,7 +166,7 @@ enum class BackForwardNavigationType {
   const ui::PageTransition loadHTMLTransition =
       ui::PageTransition::PAGE_TRANSITION_TYPED;
   if (self.webState->HasWebUI()) {
-    // WebUI uses |loadHTML:forURL:| to feed the content to web view. This
+    // WebUI uses `loadHTML:forURL:` to feed the content to web view. This
     // should not be treated as a navigation, but WKNavigationDelegate callbacks
     // still expect a valid context.
     context = web::NavigationContextImpl::CreateNavigationContext(
@@ -238,24 +235,13 @@ enum class BackForwardNavigationType {
       [self.navigationHandler pageTransitionFromNavigationType:navigationType];
 
   WKBackForwardListItem* currentItem = self.webView.backForwardList.currentItem;
-  if (currentItem) {
-    // Target redirect pages should default to a RELOAD transition, because
-    // transition state is not persisted on restore.
-    GURL targetURL;
-    if (navigationType == WKNavigationTypeOther &&
-        IsRestoreSessionUrl(net::GURLWithNSURL(currentItem.URL)) &&
-        ExtractTargetURL(net::GURLWithNSURL(currentItem.URL), &targetURL) &&
-        targetURL == URL) {
-      DCHECK(ui::PageTransitionIsRedirect(transition));
-      transition = ui::PAGE_TRANSITION_RELOAD;
-    } else if (navigationType == WKNavigationTypeBackForward) {
-      web::NavigationItem* currentItem = [[CRWNavigationItemHolder
-          holderForBackForwardListItem:self.webView.backForwardList.currentItem]
-          navigationItem];
-      if (currentItem) {
-        transition = ui::PageTransitionFromInt(
-            transition | currentItem->GetTransitionType());
-      }
+  if (currentItem && navigationType == WKNavigationTypeBackForward) {
+    web::NavigationItem* navigationItem = [[CRWNavigationItemHolder
+        holderForBackForwardListItem:self.webView.backForwardList.currentItem]
+        navigationItem];
+    if (navigationItem) {
+      transition = ui::PageTransitionFromInt(
+          transition | navigationItem->GetTransitionType());
     }
   }
 
@@ -286,8 +272,7 @@ enum class BackForwardNavigationType {
 
   // Add or update pending item before any WebStateObserver callbacks.
   // See https://crbug.com/842151 for a scenario where this is important.
-  web::NavigationItem* item =
-      self.navigationManagerImpl->GetPendingItemInCurrentOrRestoredSession();
+  web::NavigationItem* item = self.navigationManagerImpl->GetPendingItem();
   if (item) {
     // Update the existing pending entry.
     // Typically on PAGE_TRANSITION_CLIENT_REDIRECT.
@@ -305,14 +290,14 @@ enum class BackForwardNavigationType {
   } else {
     BOOL isPostNavigation =
         [self.navigationHandler.pendingNavigationInfo.HTTPMethod
-            isEqual:@"POST"];
+            isEqualToString:@"POST"];
     self.navigationManagerImpl->AddPendingItem(
         requestURL, referrer, transition,
         rendererInitiated ? web::NavigationInitiationType::RENDERER_INITIATED
                           : web::NavigationInitiationType::BROWSER_INITIATED,
-        isPostNavigation, web::HttpsUpgradeType::kNone);
-    item =
-        self.navigationManagerImpl->GetPendingItemInCurrentOrRestoredSession();
+        isPostNavigation, /*is_error_navigation=*/false,
+        web::HttpsUpgradeType::kNone);
+    item = self.navigationManagerImpl->GetPendingItem();
   }
 
   bool redirect = transition & ui::PAGE_TRANSITION_IS_REDIRECT_MASK;
@@ -337,7 +322,7 @@ enum class BackForwardNavigationType {
   // If WKWebView.loading is used for WebState::IsLoading, do not set it for
   // renderer-initated navigation otherwise WebState::IsLoading will remain true
   // after hash change in the web page.
-  if (!IsWKInternalUrl(requestURL) && !rendererInitiated) {
+  if (!rendererInitiated) {
     self.webState->SetIsLoading(true);
   }
 
@@ -358,17 +343,16 @@ enum class BackForwardNavigationType {
                  context:(nullable const web::NavigationContextImpl*)context {
   DCHECK_EQ(web::WKNavigationState::FINISHED,
             self.navigationHandler.navigationState);
+
+  if (self.securityScopedResourceURL) {
+    [self.securityScopedResourceURL stopAccessingSecurityScopedResource];
+    self.securityScopedResourceURL = nil;
+  }
+
   // Placeholder and restore session URLs are implementation details so should
-  // not notify WebStateObservers. If |context| is nullptr, don't skip
+  // not notify WebStateObservers. If `context` is nullptr, don't skip
   // placeholder URLs because this may be the only opportunity to update
-  // |isLoading| for native view reload.
-
-
-  if (context && IsRestoreSessionUrl(context->GetUrl()))
-    return;
-
-  if (IsRestoreSessionUrl(net::GURLWithNSURL(self.webView.URL)))
-    return;
+  // `isLoading` for native view reload.
 
   if (context && context->IsLoadingErrorPage())
     return;
@@ -383,11 +367,13 @@ enum class BackForwardNavigationType {
 
   if (context) {
     if (context->IsRendererInitiated()) {
-      UMA_HISTOGRAM_MEDIUM_TIMES("PLT.iOS.RendererInitiatedPageLoadTime2",
-                                 context->GetElapsedTimeSinceCreation());
+      DEPRECATED_UMA_HISTOGRAM_MEDIUM_TIMES(
+          "PLT.iOS.RendererInitiatedPageLoadTime2",
+          context->GetElapsedTimeSinceCreation());
     } else {
-      UMA_HISTOGRAM_MEDIUM_TIMES("PLT.iOS.BrowserInitiatedPageLoadTime2",
-                                 context->GetElapsedTimeSinceCreation());
+      DEPRECATED_UMA_HISTOGRAM_MEDIUM_TIMES(
+          "PLT.iOS.BrowserInitiatedPageLoadTime2",
+          context->GetElapsedTimeSinceCreation());
     }
 
     // Use the Session Restoration User Agent as it is the only way to know if
@@ -430,7 +416,7 @@ enum class BackForwardNavigationType {
 
 // The HTTP headers associated with the current navigation item. These are nil
 // unless the request was a POST.
-- (NSDictionary*)currentHTTPHeaders {
+- (NSDictionary<NSString*, NSString*>*)currentHTTPHeaders {
   web::NavigationItem* currentItem = self.currentNavItem;
   return currentItem ? currentItem->GetHttpRequestHeaders() : nil;
 }
@@ -438,8 +424,8 @@ enum class BackForwardNavigationType {
 #pragma mark - WebUI
 
 - (void)createWebUIForURL:(const GURL&)URL {
-  // |CreateWebUI| will do nothing if |URL| is not a WebUI URL and then
-  // |HasWebUI| will return false.
+  // `CreateWebUI` will do nothing if `URL` is not a WebUI URL and then
+  // `HasWebUI` will return false.
   self.webState->CreateWebUI(URL);
 }
 
@@ -450,12 +436,12 @@ enum class BackForwardNavigationType {
 #pragma mark - Private methods
 
 // Checks if a load request of the current navigation item should proceed. If
-// this returns |YES|, caller should create a webView and call
-// |loadRequestForCurrentNavigationItem|. Otherwise this will set the request
-// state to finished and call |didFinishWithURL| with failure.
+// this returns `YES`, caller should create a webView and call
+// `loadRequestForCurrentNavigationItem`. Otherwise this will set the request
+// state to finished and call `didFinishWithURL` with failure.
 - (BOOL)maybeLoadRequestForCurrentNavigationItem {
   web::NavigationItem* item = self.currentNavItem;
-  GURL targetURL = item ? item->GetVirtualURL() : GURL::EmptyGURL();
+  GURL targetURL = item ? item->GetVirtualURL() : GURL();
   // Load the url. The UIWebView delegate callbacks take care of updating the
   // session history and UI.
   if (!targetURL.is_valid()) {
@@ -476,19 +462,18 @@ enum class BackForwardNavigationType {
 - (void)defaultNavigationInternal:(NSMutableURLRequest*)request
            sameDocumentNavigation:(BOOL)sameDocumentNavigation {
   web::NavigationItem* item = self.currentNavItem;
-  GURL navigationURL = item ? item->GetURL() : GURL::EmptyGURL();
-  GURL virtualURL = item ? item->GetVirtualURL() : GURL::EmptyGURL();
+  GURL navigationURL = item ? item->GetURL() : GURL();
+  GURL virtualURL = item ? item->GetVirtualURL() : GURL();
 
   // Do not attempt to navigate to file URLs that are typed into the
   // omnibox.
   if (navigationURL.SchemeIsFile() &&
-      !web::GetWebClient()->IsAppSpecificURL(virtualURL) &&
-      !IsRestoreSessionUrl(navigationURL)) {
+      !web::GetWebClient()->IsAppSpecificURL(virtualURL)) {
     [self.delegate webRequestControllerStopLoading:self];
     return;
   }
 
-  // Set |item| to nullptr here to avoid any use-after-free issues, as it can
+  // Set `item` to nullptr here to avoid any use-after-free issues, as it can
   // be cleared by the call to -registerLoadRequestForURL below.
   item = nullptr;
   std::unique_ptr<web::NavigationContextImpl> navigationContext =
@@ -499,45 +484,19 @@ enum class BackForwardNavigationType {
                        hasUserGesture:YES
                     rendererInitiated:NO];
 
-  if (self.navigationManagerImpl->IsRestoreSessionInProgress()) {
-    if (self.navigationManagerImpl->RestoreNativeSession(navigationURL)) {
-      // Return early if the session was restored via native API.
-      return;
-    }
-    [self.delegate
-        webRequestControllerDisableNavigationGesturesUntilFinishNavigation:
-            self];
-  }
-
   WKNavigation* navigation = nil;
-#if defined(__IPHONE_15_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_15_0
-  if (@available(iOS 15, *)) {
-    if (base::FeatureList::IsEnabled(web::features::kSetRequestAttribution)) {
-      request.attribution = NSURLRequestAttributionUser;
-    }
+  if (base::FeatureList::IsEnabled(web::features::kSetRequestAttribution)) {
+    request.attribution = NSURLRequestAttributionUser;
   }
-#endif
 
   if (navigationURL.SchemeIsFile() &&
       web::GetWebClient()->IsAppSpecificURL(virtualURL)) {
     // file:// URL navigations are allowed for app-specific URLs, which
     // already have elevated privileges.
-    // TODO(crbug.com/1267899): Remove this #if once Xcode 13 is required for
-    // building iOS-related code.
-#if defined(__IPHONE_15_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_15_0
-    if (@available(iOS 15, *)) {
-      navigation = [self.webView loadFileRequest:request
-                         allowingReadAccessToURL:request.URL];
-    } else {
-      NSURL* navigationNSURL = net::NSURLWithGURL(navigationURL);
-      navigation = [self.webView loadFileURL:navigationNSURL
-                     allowingReadAccessToURL:navigationNSURL];
-    }
-#else
-    NSURL* navigationNSURL = net::NSURLWithGURL(navigationURL);
-    navigation = [self.webView loadFileURL:navigationNSURL
-                   allowingReadAccessToURL:navigationNSURL];
-#endif
+    self.securityScopedResourceURL = request.URL;
+    [request.URL startAccessingSecurityScopedResource];
+    navigation = [self.webView loadFileRequest:request
+                       allowingReadAccessToURL:request.URL];
   } else {
     navigation = [self.webView loadRequest:request];
   }
@@ -553,11 +512,11 @@ enum class BackForwardNavigationType {
 - (void)webViewNavigationInternal:(web::WKBackForwardListItemHolder*)holder
            sameDocumentNavigation:(BOOL)sameDocumentNavigation {
   // If the current navigation URL is the same as the URL of the visible
-  // page, that means the user requested a reload. |goToBackForwardListItem|
+  // page, that means the user requested a reload. `goToBackForwardListItem`
   // will be a no-op when it is passed the current back forward list item,
-  // so |reload| must be explicitly called.
+  // so `reload` must be explicitly called.
   web::NavigationItem* item = self.currentNavItem;
-  GURL navigationURL = item ? item->GetURL() : GURL::EmptyGURL();
+  GURL navigationURL = item ? item->GetURL() : GURL();
   std::unique_ptr<web::NavigationContextImpl> navigationContext =
       [self registerLoadRequestForURL:navigationURL
                              referrer:self.currentNavItemReferrer
@@ -569,7 +528,7 @@ enum class BackForwardNavigationType {
   if (navigationURL == net::GURLWithNSURL(self.webView.URL)) {
     navigation = [self.webView reload];
   } else {
-    // |didCommitNavigation:| may not be called for fast navigation, so update
+    // `didCommitNavigation:` may not be called for fast navigation, so update
     // the navigation type now as it is already known.
     navigationContext->SetWKNavigationType(WKNavigationTypeBackForward);
     navigationContext->SetMimeType(holder->mime_type());
@@ -587,7 +546,7 @@ enum class BackForwardNavigationType {
 
 // Loads request for the URL of the current navigation item. Subclasses may
 // choose to build a new NSURLRequest and call
-// |loadRequestForCurrentNavigationItem| on the underlying web view, or use
+// `loadRequestForCurrentNavigationItem` on the underlying web view, or use
 // native web view navigation where possible (for example, going back and
 // forward through the history stack).
 - (void)loadRequestForCurrentNavigationItem {
@@ -604,7 +563,7 @@ enum class BackForwardNavigationType {
       self.navigationHandler.currentBackForwardListItemHolder;
 
   BOOL repostedForm =
-      [holder->http_method() isEqual:@"POST"] &&
+      [holder->http_method() isEqualToString:@"POST"] &&
       (holder->navigation_type() == WKNavigationTypeFormResubmitted ||
        holder->navigation_type() == WKNavigationTypeFormSubmitted);
   web::NavigationItemImpl* currentItem = self.currentNavItem;
@@ -632,7 +591,6 @@ enum class BackForwardNavigationType {
     return;
   }
 
-  DCHECK(!repostedForm || currentItem->ShouldSkipRepostFormConfirmation());
   [self webViewNavigationInternal:holder
            sameDocumentNavigation:sameDocumentNavigation];
 }
@@ -640,7 +598,7 @@ enum class BackForwardNavigationType {
 // Returns a NSMutableURLRequest that represents the current NavigationItem.
 - (NSMutableURLRequest*)requestForCurrentNavigationItem {
   web::NavigationItem* item = self.currentNavItem;
-  const GURL currentNavigationURL = item ? item->GetURL() : GURL::EmptyGURL();
+  const GURL currentNavigationURL = item ? item->GetURL() : GURL();
   NSMutableURLRequest* request = [NSMutableURLRequest
       requestWithURL:net::NSURLWithGURL(currentNavigationURL)];
   const web::Referrer referrer(self.currentNavItemReferrer);
@@ -653,10 +611,10 @@ enum class BackForwardNavigationType {
     }
   }
 
-  // If there are headers in the current session entry add them to |request|.
-  // Headers that would overwrite fields already present in |request| are
+  // If there are headers in the current session entry add them to `request`.
+  // Headers that would overwrite fields already present in `request` are
   // skipped.
-  NSDictionary* headers = self.currentHTTPHeaders;
+  NSDictionary<NSString*, NSString*>* headers = self.currentHTTPHeaders;
   for (NSString* headerName in headers) {
     if (![request valueForHTTPHeaderField:headerName]) {
       [request setValue:[headers objectForKey:headerName]
@@ -676,6 +634,14 @@ enum class BackForwardNavigationType {
   return list.currentItem == item ||
          [list.forwardList indexOfObject:item] != NSNotFound ||
          [list.backList indexOfObject:item] != NSNotFound;
+}
+
+- (void)close {
+  if (self.securityScopedResourceURL) {
+    [self.securityScopedResourceURL stopAccessingSecurityScopedResource];
+    self.securityScopedResourceURL = nil;
+  }
+  [super close];
 }
 
 #pragma mark - Private properties

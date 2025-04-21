@@ -1,21 +1,23 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromeos/ash/services/federated/public/cpp/service_connection.h"
 
-#include "base/bind.h"
+#include "base/component_export.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "base/sequence_checker.h"
 #include "chromeos/ash/components/dbus/federated/federated_client.h"
 #include "chromeos/ash/services/federated/public/mojom/federated_service.mojom.h"
+#include "mojo/core/configuration.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/platform/platform_channel.h"
 #include "mojo/public/cpp/system/invitation.h"
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
-namespace ash {
-namespace federated {
+namespace ash::federated {
 
 namespace {
 
@@ -77,6 +79,9 @@ void ServiceConnectionImpl::BindFederatedServiceIfNeeded() {
   // Include an initial Mojo pipe in the invitation.
   mojo::ScopedMessagePipeHandle pipe = invitation.AttachMessagePipe(
       ::federated::kBootstrapMojoConnectionChannelToken);
+  if (!mojo::core::GetConfiguration().is_broker_process) {
+    invitation.set_extra_flags(MOJO_SEND_INVITATION_FLAG_SHARE_BROKER);
+  }
   mojo::OutgoingInvitation::Send(std::move(invitation),
                                  base::kNullProcessHandle,
                                  platform_channel.TakeLocalEndpoint());
@@ -133,5 +138,4 @@ ScopedFakeServiceConnectionForTest::~ScopedFakeServiceConnectionForTest() {
   g_fake_service_connection_for_testing = nullptr;
 }
 
-}  // namespace federated
-}  // namespace ash
+}  // namespace ash::federated

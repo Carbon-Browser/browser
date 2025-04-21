@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <string>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "chrome/browser/platform_util.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
@@ -44,8 +44,9 @@ class HungRendererDialogViewBrowserTest : public DialogBrowserTest {
     model->tab_observers_.push_back(
         std::make_unique<HungPagesTableModel::WebContentsObserverImpl>(
             model, web_contents));
-    if (model->observer_)
+    if (model->observer_) {
       model->observer_->OnModelChanged();
+    }
     dialog->UpdateLabels();
   }
 

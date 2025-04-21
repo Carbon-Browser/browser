@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,12 +8,16 @@
 #include <tuple>
 #include <utility>
 
+#include "ash/constants/ash_constants.h"
 #include "ash/constants/ash_features.h"
 #include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/notification_utils.h"
 #include "ash/public/cpp/vm_camera_mic_constants.h"
-#include "base/bind.h"
+#include "ash/system/privacy/privacy_indicators_controller.h"
+#include "ash/webui/settings/public/constants/routes.mojom.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
 #include "base/system/sys_info.h"
@@ -23,11 +27,12 @@
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/ash/borealis/borealis_util.h"
 #include "chrome/browser/ash/plugin_vm/plugin_vm_util.h"
+#include "chrome/browser/ash/video_conference/video_conference_ash_feature_client.h"
 #include "chrome/browser/notifications/notification_display_service.h"
+#include "chrome/browser/notifications/notification_display_service_factory.h"
 #include "chrome/browser/ui/chrome_pages.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
-#include "chrome/browser/ui/webui/settings/ash/app_management/app_management_uma.h"
-#include "chrome/browser/ui/webui/settings/chromeos/constants/routes.mojom-forward.h"
+#include "chrome/browser/ui/webui/ash/settings/app_management/app_management_uma.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/vector_icons/vector_icons.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -41,6 +46,7 @@
 #include "ui/message_center/public/cpp/notification_types.h"
 
 namespace ash {
+
 namespace {
 
 const char kNotificationIdPrefix[] = "vm_camera_mic_manager";
@@ -105,9 +111,9 @@ constexpr base::TimeDelta VmCameraMicManager::kDebounceTime;
 // `OnDeviceUpdated()`, which also starts/stops the debounce timer if necessary.
 //
 // When `active == stage == target`, we are "stable" --- we don't need to do
-// anything (until the next device update). And `SyncNotification()` is normally
-// what brings us to stable. It is called when the timer expired. This is what
-// it does:
+// anything (until the next device update). And
+// `SyncNotificationAndIndicators()` is normally what brings us to stable. It is
+// called when the timer expired. This is what it does:
 //
 // * If `active != stage`, we set `active = stage`. Timer is reset if we are
 //   still not stable.
@@ -122,10 +128,12 @@ constexpr base::TimeDelta VmCameraMicManager::kDebounceTime;
 // 2: 00-01-01  # Mic turning on, debounce timer is started.
 // 3: 00-11-11  # Camera turning on, still in debounce period.
 // 4: 00-11-01  # Camera turning off, still in debounce period.
-// 5: 11-11-01  # Timer expired. `SyncNotification()` sets `active=stage` (shows
-//              # "camera and mic" notification). Reset the timer.
-// 6: 01-01-01  # Timer expired. `SyncNotification()` sets `active=stage=target`
-//              # (shows mic notification).  We are stable now.
+// 5: 11-11-01  # Timer expired. `SyncNotificationAndIndicators()` sets
+//              # `active=stage` (shows "camera and mic" notification). Reset
+//              # the timer.
+// 6: 01-01-01  # Timer expired. `SyncNotificationAndIndicators()` sets
+//              # `active=stage=target` (shows mic notification).  We are stable
+//              # now.
 // 7: 01-01-00  # Mic turning off, debounce timer is started.
 // 8: 00-00-00  # Timer expired. Same as 6, but no notification is shown now.
 //              # Reach stable again.
@@ -139,23 +147,50 @@ class VmCameraMicManager::VmInfo : public message_center::NotificationObserver {
         vm_type_(vm_type),
         name_id_(name_id),
         notification_changed_callback_(on_notification_changed),
-        debounce_timer_(FROM_HERE,
-                        kDebounceTime,
-                        base::BindRepeating(&VmInfo::SyncNotification,
-                                            // Unretained because the timer
-                                            // cannot outlive the parent.
-                                            base::Unretained(this))) {}
+        debounce_timer_(
+            FROM_HERE,
+            kDebounceTime,
+            base::BindRepeating(&VmInfo::SyncNotificationAndIndicators,
+                                // Unretained because the timer
+                                // cannot outlive the parent.
+                                base::Unretained(this))) {}
   ~VmInfo() = default;
 
   VmType vm_type() const { return vm_type_; }
   int name_id() const { return name_id_; }
   NotificationType notification_type() const { return notifications_.active; }
 
-  void SetMicActive(bool active) { OnDeviceUpdated(DeviceType::kMic, active); }
+  void SetMicActive(bool active) {
+    OnDeviceUpdated(DeviceType::kMic, active);
+
+    if (features::IsVideoConferenceEnabled()) {
+      VideoConferenceAshFeatureClient* vc_ash_feature_client =
+          VideoConferenceAshFeatureClient::Get();
+      // Only calls `OnVmDeviceUpdated()` if `VideoConferenceAshFeatureClient`
+      // has initialized, otherwise it will be handled at
+      // `VideoConferenceAshFeatureClient` initialization.
+      if (vc_ash_feature_client) {
+        vc_ash_feature_client->OnVmDeviceUpdated(vm_type_, DeviceType::kMic,
+                                                 active);
+      }
+    }
+  }
 
   void SetCameraAccessing(bool accessing) {
     camera_accessing_ = accessing;
     OnCameraUpdated();
+
+    if (features::IsVideoConferenceEnabled()) {
+      VideoConferenceAshFeatureClient* vc_ash_feature_client =
+          VideoConferenceAshFeatureClient::Get();
+      // Only calls `OnVmDeviceUpdated()` if `VideoConferenceAshFeatureClient`
+      // has initialized, otherwise it will be handled at
+      // `VideoConferenceAshFeatureClient` initialization.
+      if (vc_ash_feature_client) {
+        vc_ash_feature_client->OnVmDeviceUpdated(vm_type_, DeviceType::kCamera,
+                                                 accessing);
+      }
+    }
   }
   void SetCameraPrivacyIsOn(bool on) {
     camera_privacy_is_on_ = on;
@@ -197,23 +232,53 @@ class VmCameraMicManager::VmInfo : public message_center::NotificationObserver {
     }
   }
 
-  void UpdateActiveNotification(NotificationType new_notification) {
+  void UpdateActiveNotificationAndIndicators(
+      NotificationType new_notification) {
     DCHECK_NE(notifications_.active, new_notification);
 
+    auto app_name = l10n_util::GetStringUTF16(name_id_);
+    auto delegate = base::MakeRefCounted<PrivacyIndicatorsNotificationDelegate>(
+        /*launch_settings=*/base::BindRepeating(
+            &VmCameraMicManager::VmInfo::OpenSettings,
+            weak_ptr_factory_.GetWeakPtr()));
+
+    // Privacy indicators is only enabled when Video Conference is disabled.
+    bool privacy_indicators_enabled = !features::IsVideoConferenceEnabled();
+
     if (notifications_.active != kNoNotification) {
-      CloseNotification(notifications_.active);
+      if (privacy_indicators_enabled) {
+        PrivacyIndicatorsController::Get()->UpdatePrivacyIndicators(
+            /*app_id=*/GetNotificationId(vm_type_, notifications_.active),
+            app_name, /*is_camera_used=*/false, /*is_microphone_used=*/false,
+            delegate, PrivacyIndicatorsSource::kLinuxVm);
+      } else {
+        CloseNotification(notifications_.active);
+      }
     }
+
     if (new_notification != kNoNotification) {
-      OpenNotification(new_notification);
+      // Privacy indicator is only enabled when Video Conference is disabled.
+      if (privacy_indicators_enabled) {
+        PrivacyIndicatorsController::Get()->UpdatePrivacyIndicators(
+            /*app_id=*/GetNotificationId(vm_type_, new_notification), app_name,
+            /*is_camera_used=*/
+            new_notification[static_cast<size_t>(DeviceType::kCamera)],
+            /*is_microphone_used=*/
+            new_notification[static_cast<size_t>(DeviceType::kMic)], delegate,
+            PrivacyIndicatorsSource::kLinuxVm);
+      } else {
+        OpenNotification(new_notification);
+      }
     }
+
     notifications_.active = new_notification;
     notification_changed_callback_.Run();
   }
 
   // See document at the beginning of class.
-  void SyncNotification() {
+  void SyncNotificationAndIndicators() {
     if (notifications_.active != notifications_.stage) {
-      UpdateActiveNotification(notifications_.stage);
+      UpdateActiveNotificationAndIndicators(notifications_.stage);
       SyncTimer();
 
       VLOG(1) << "sync from stage. vm_type=" << static_cast<int>(vm_type_)
@@ -225,7 +290,7 @@ class VmCameraMicManager::VmInfo : public message_center::NotificationObserver {
     // Only target notification is different.
     DCHECK_NE(notifications_.active, notifications_.target);
     notifications_.stage = notifications_.target;
-    UpdateActiveNotification(notifications_.target);
+    UpdateActiveNotificationAndIndicators(notifications_.target);
     VLOG(1) << "sync from target. vm_type=" << static_cast<int>(vm_type_)
             << " state: " << notifications_.active << "-"
             << notifications_.stage << "-" << notifications_.target;
@@ -234,7 +299,8 @@ class VmCameraMicManager::VmInfo : public message_center::NotificationObserver {
   }
 
   void OpenNotification(NotificationType type) const {
-    DCHECK_NE(type, kNoNotification);
+    CHECK(features::IsVideoConferenceEnabled());
+    CHECK_NE(type, kNoNotification);
 
     const gfx::VectorIcon* source_icon = nullptr;
     int message_id;
@@ -272,20 +338,21 @@ class VmCameraMicManager::VmInfo : public message_center::NotificationObserver {
         /*origin_url=*/GURL(),
         message_center::NotifierId(
             message_center::NotifierType::SYSTEM_COMPONENT,
-            ash::kVmCameraMicNotifierId, NotificationCatalogName::kVMCameraMic),
+            kVmCameraMicNotifierId, NotificationCatalogName::kVMCameraMic),
         rich_notification_data,
         base::MakeRefCounted<message_center::ThunkNotificationDelegate>(
-            weak_ptr_factory_.GetWeakPtr()));
+            weak_ptr_factory_.GetMutableWeakPtr()));
 
-    NotificationDisplayService::GetForProfile(profile_)->Display(
+    NotificationDisplayServiceFactory::GetForProfile(profile_)->Display(
         NotificationHandler::Type::TRANSIENT, notification,
         /*metadata=*/nullptr);
   }
 
   void CloseNotification(NotificationType type) const {
-    DCHECK_NE(type, kNoNotification);
+    CHECK(features::IsVideoConferenceEnabled());
+    CHECK_NE(type, kNoNotification);
 
-    NotificationDisplayService::GetForProfile(profile_)->Close(
+    NotificationDisplayServiceFactory::GetForProfile(profile_)->Close(
         NotificationHandler::Type::TRANSIENT,
         GetNotificationId(vm_type_, type));
   }
@@ -293,8 +360,13 @@ class VmCameraMicManager::VmInfo : public message_center::NotificationObserver {
   // message_center::NotificationObserver:
   //
   // This open the settings page if the button is clicked on the notification.
-  void Click(const absl::optional<int>& button_index,
-             const absl::optional<std::u16string>& reply) override {
+  void Click(const std::optional<int>& button_index,
+             const std::optional<std::u16string>& reply) override {
+    OpenSettings();
+  }
+
+  // Opens the settings page.
+  void OpenSettings() const {
     switch (vm_type_) {
       case VmType::kCrostiniVm:
         chrome::SettingsWindowManager::GetInstance()->ShowOSSettings(
@@ -313,7 +385,7 @@ class VmCameraMicManager::VmInfo : public message_center::NotificationObserver {
     }
   }
 
-  Profile* const profile_;
+  const raw_ptr<Profile, LeakedDanglingUntriaged> profile_;
   const VmType vm_type_;
   const int name_id_;
   base::RepeatingClosure notification_changed_callback_;
@@ -378,8 +450,8 @@ void VmCameraMicManager::OnPrimaryUserSessionStarted(Profile* primary_profile) {
   }
 }
 
-// The class is supposed to be used as a singleton with `base::NoDestructor`, so
-// we do not do clean up (e.g. deregister as observers) here.
+// The class is supposed to be used as a singleton with `base::NoDestructor`,
+// so we do not do clean up (e.g. deregister as observers) here.
 VmCameraMicManager::~VmCameraMicManager() = default;
 
 void VmCameraMicManager::MaybeSubscribeToCameraService(
@@ -394,8 +466,22 @@ void VmCameraMicManager::MaybeSubscribeToCameraService(
   // OnActiveClientChange() will be called automatically after the
   // subscription, so there is no need to get the current status here.
   camera->AddActiveClientObserver(this);
-  OnCameraPrivacySwitchStatusChanged(
-      camera->AddCameraPrivacySwitchObserver(this));
+  auto privacy_switch_state = cros::mojom::CameraPrivacySwitchState::UNKNOWN;
+  auto device_id_to_privacy_switch_state =
+      camera->AddCameraPrivacySwitchObserver(this);
+  // TODO(b/255249223): Handle multiple cameras with privacy controls
+  // properly.
+  for (const auto& it : device_id_to_privacy_switch_state) {
+    cros::mojom::CameraPrivacySwitchState state = it.second;
+    if (state == cros::mojom::CameraPrivacySwitchState::ON) {
+      privacy_switch_state = state;
+      break;
+    } else if (state == cros::mojom::CameraPrivacySwitchState::OFF) {
+      privacy_switch_state = state;
+    }
+  }
+  OnCameraHWPrivacySwitchStateChanged(
+      /*device_id=*/std::string(), privacy_switch_state);
 }
 
 void VmCameraMicManager::UpdateVmInfo(VmType vm,
@@ -419,6 +505,18 @@ bool VmCameraMicManager::IsDeviceActive(DeviceType device) const {
   return false;
 }
 
+bool VmCameraMicManager::IsDeviceActive(VmType vm, DeviceType device) const {
+  auto it = vm_info_map_.find(vm);
+  if (it == vm_info_map_.end()) {
+    return false;
+  }
+  const NotificationType& notification_type = it->second.notification_type();
+  if (notification_type[static_cast<size_t>(device)]) {
+    return true;
+  }
+  return false;
+}
+
 bool VmCameraMicManager::IsNotificationActive(
     NotificationType notification) const {
   for (const auto& vm_info : vm_info_map_) {
@@ -431,14 +529,18 @@ bool VmCameraMicManager::IsNotificationActive(
 
 void VmCameraMicManager::OnActiveClientChange(
     cros::mojom::CameraClientType type,
-    bool is_active) {
+    bool is_new_active_client,
+    const base::flat_set<std::string>& active_device_ids) {
   // Crostini does not support camera yet.
+  bool client_active_state_changed =
+      is_new_active_client || active_device_ids.empty();
 
-  if (type == cros::mojom::CameraClientType::PLUGINVM) {
+  if (client_active_state_changed &&
+      type == cros::mojom::CameraClientType::PLUGINVM) {
     content::GetUIThreadTaskRunner({})->PostTask(
-        FROM_HERE,
-        base::BindOnce(&VmCameraMicManager::SetCameraAccessing,
-                       base::Unretained(this), VmType::kPluginVm, is_active));
+        FROM_HERE, base::BindOnce(&VmCameraMicManager::SetCameraAccessing,
+                                  base::Unretained(this), VmType::kPluginVm,
+                                  !active_device_ids.empty()));
   }
 }
 
@@ -446,7 +548,8 @@ void VmCameraMicManager::SetCameraAccessing(VmType vm, bool accessing) {
   UpdateVmInfo(vm, &VmInfo::SetCameraAccessing, accessing);
 }
 
-void VmCameraMicManager::OnCameraPrivacySwitchStatusChanged(
+void VmCameraMicManager::OnCameraHWPrivacySwitchStateChanged(
+    const std::string& device_id,
     cros::mojom::CameraPrivacySwitchState state) {
   using cros::mojom::CameraPrivacySwitchState;
   bool is_on;

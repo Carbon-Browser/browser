@@ -1,5 +1,16 @@
 # -Wmax-tokens
 
+**Update 2022-08-02** The -Wmax-tokens experiment was [retired](https://chromium-review.googlesource.com/c/chromium/src/+/3804719)
+as the downsides (annoyance to developers) were determined to outweigh the
+benefits (preventing include bloat), especially in the face of
+[libc++ rolls](https://crbug.com/1348349).  We now have better
+[include graph analysis](https://commondatastorage.googleapis.com/chromium-browser-clang/chrome_includes-index.html)
+and [tracking of total build size over time](https://commondatastorage.googleapis.com/chromium-browser-clang/chrome_includes-index.html).
+The goal is to have a [Gerrit warning for flagging include bloat
+growth](https://crbug.com/1229609) in the future.
+
+---
+
 This is an experiment that uses the compiler to limit the size of certain header
 files as a way of tackling #include bloat.
 
@@ -35,9 +46,7 @@ There are two common scenarios for hitting the pragma:
    using techniques such as forward declarations to avoid increasing the header
    size. Even complex classes may have forward declarations available, see for
    example
-   [https://source.chromium.org/chromium/chromium/src/+/HEAD:base/callback_forward.h](callback_forward.h)
-   and
-   [https://source.chromium.org/chromium/chromium/src/+/HEAD:base/strings/string_piece_forward.h](string_piece_forward.h).
+   [https://source.chromium.org/chromium/chromium/src/+/HEAD:base/functional/callback_forward.h](callback_forward.h).
    Many types defined in .mojom.h files have forward declarations in a
    corresponding .mojom-forward.h file. If the size increase is unavoidable,
    raise the limit.

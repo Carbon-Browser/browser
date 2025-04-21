@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -17,11 +18,11 @@
 #include "base/files/scoped_file.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/sequence_checker.h"
+#include "base/values.h"
 #include "components/component_updater/android/component_loader_policy_forward.h"
 
 namespace base {
 class Version;
-class DictionaryValue;
 }  // namespace base
 
 namespace component_updater {
@@ -41,6 +42,15 @@ enum class ComponentLoadResult {
   kInvalidVersion = 6,
   kMaxValue = kInvalidVersion,
 };
+
+inline constexpr char kManifestFileName[] = "manifest.json";
+inline constexpr char kMetadataFileName[] = "aw_extra_component_metadata.json";
+
+inline constexpr char kMetadataFileCohortIdKey[] = "cohortId";
+
+inline constexpr char kComponentsCrashKeyName[] = "crx-components";
+inline constexpr char kCohortHashCrashKeyName[] =
+    "crx-components-cohort-hashes";
 
 // Components should use `AndroidComponentLoaderPolicy` by defining a class that
 // implements the members of `ComponentLoaderPolicy`, and then registering a
@@ -76,7 +86,7 @@ class ComponentLoaderPolicy {
   virtual void ComponentLoaded(
       const base::Version& version,
       base::flat_map<std::string, base::ScopedFD>& fd_map,
-      std::unique_ptr<base::DictionaryValue> manifest) = 0;
+      base::Value::Dict manifest) = 0;
 
   // Called if connection to the service fails, components files are not found
   // or if the manifest file is missing or invalid.
@@ -136,8 +146,10 @@ class AndroidComponentLoaderPolicy {
 
   std::string GetComponentId() const;
 
-  void NotifyNewVersion(base::flat_map<std::string, base::ScopedFD>& fd_map,
-                        std::unique_ptr<base::DictionaryValue> manifest);
+  void NotifyNewVersion(
+      base::flat_map<std::string, base::ScopedFD>& fd_map,
+      std::pair<std::optional<base::Value::Dict>,
+                std::optional<base::Value::Dict>> component_files);
 
   void ComponentLoadFailedInternal(ComponentLoadResult error);
 

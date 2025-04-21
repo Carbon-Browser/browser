@@ -1,14 +1,16 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/crostini/crostini_expired_container_warning_view.h"
 
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
-#include "chrome/browser/ui/webui/chromeos/crostini_upgrader/crostini_upgrader_dialog.h"
+#include "chrome/browser/ui/webui/ash/crostini_upgrader/crostini_upgrader_dialog.h"
 #include "chrome/grit/generated_resources.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
+#include "ui/base/mojom/ui_base_types.mojom-shared.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/layout/layout_provider.h"
@@ -45,14 +47,15 @@ CrostiniExpiredContainerWarningView::CrostiniExpiredContainerWarningView(
   callbacks_.push_back(std::move(callback));
 
   // Make the dialog modal to force the user to make a decision.
-  SetModalType(ui::MODAL_TYPE_SYSTEM);
+  SetModalType(ui::mojom::ModalType::kSystem);
 
   SetTitle(IDS_CROSTINI_EXPIRED_CONTAINER_WARNING_TITLE);
-  SetButtons(ui::DIALOG_BUTTON_OK | ui::DIALOG_BUTTON_CANCEL);
-  SetButtonLabel(ui::DIALOG_BUTTON_CANCEL,
+  SetButtons(static_cast<int>(ui::mojom::DialogButton::kOk) |
+             static_cast<int>(ui::mojom::DialogButton::kCancel));
+  SetButtonLabel(ui::mojom::DialogButton::kCancel,
                  l10n_util::GetStringUTF16(
                      IDS_CROSTINI_EXPIRED_CONTAINER_WARNING_CONTINUE_BUTTON));
-  SetButtonLabel(ui::DIALOG_BUTTON_OK,
+  SetButtonLabel(ui::mojom::DialogButton::kOk,
                  l10n_util::GetStringUTF16(
                      IDS_CROSTINI_EXPIRED_CONTAINER_WARNING_UPGRADE_BUTTON));
   SetShowCloseButton(false);
@@ -60,7 +63,7 @@ CrostiniExpiredContainerWarningView::CrostiniExpiredContainerWarningView(
   // Show upgrade dialog on accept, and pass in the callback.
   SetAcceptCallback(base::BindOnce(
       [](base::WeakPtr<CrostiniExpiredContainerWarningView> weak_this) {
-        chromeos::CrostiniUpgraderDialog::Show(
+        ash::CrostiniUpgraderDialog::Show(
             weak_this->profile_,
             base::BindOnce(
                 [](std::vector<base::OnceClosure> callbacks) {
@@ -102,6 +105,5 @@ CrostiniExpiredContainerWarningView::~CrostiniExpiredContainerWarningView() {
   g_crostini_expired_container_warning_view = nullptr;
 }
 
-BEGIN_METADATA(CrostiniExpiredContainerWarningView,
-               views::BubbleDialogDelegateView)
+BEGIN_METADATA(CrostiniExpiredContainerWarningView)
 END_METADATA

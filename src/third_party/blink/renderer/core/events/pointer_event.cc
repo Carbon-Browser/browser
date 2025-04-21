@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,8 @@ PointerEvent::PointerEvent(const AtomicString& type,
                            const PointerEventInit* initializer,
                            base::TimeTicks platform_time_stamp,
                            MouseEvent::SyntheticEventType synthetic_event_type,
-                           WebMenuSourceType menu_source_type)
+                           WebMenuSourceType menu_source_type,
+                           bool prevent_counting_as_interaction)
     : MouseEvent(type,
                  initializer,
                  platform_time_stamp,
@@ -38,7 +39,9 @@ PointerEvent::PointerEvent(const AtomicString& type,
       twist_(0),
       is_primary_(false),
       coalesced_events_targets_dirty_(false),
-      predicted_events_targets_dirty_(false) {
+      predicted_events_targets_dirty_(false),
+      persistent_device_id_(0),
+      prevent_counting_as_interaction_(prevent_counting_as_interaction) {
   if (initializer->hasPointerId())
     pointer_id_ = initializer->pointerId();
   if (initializer->hasWidth())
@@ -89,13 +92,15 @@ PointerEvent::PointerEvent(const AtomicString& type,
         PointerEventUtil::TransformToAzimuthInValidRange(azimuth_angle_),
         PointerEventUtil::TransformToAltitudeInValidRange(altitude_angle_));
   }
+  if (initializer->hasPersistentDeviceId()) {
+    persistent_device_id_ = initializer->persistentDeviceId();
+  }
 }
 
 bool PointerEvent::IsMouseEvent() const {
-  if (RuntimeEnabledFeatures::ClickPointerEventEnabled() &&
-      (type() == event_type_names::kClick ||
-       type() == event_type_names::kAuxclick ||
-       type() == event_type_names::kContextmenu)) {
+  if (type() == event_type_names::kClick ||
+      type() == event_type_names::kAuxclick ||
+      type() == event_type_names::kContextmenu) {
     return true;
   }
 
@@ -136,8 +141,10 @@ double PointerEvent::offsetY() const {
 }
 
 void PointerEvent::ReceivedTarget() {
-  coalesced_events_targets_dirty_ = true;
-  predicted_events_targets_dirty_ = true;
+  if (!RuntimeEnabledFeatures::PointerEventTargetsInEventListsEnabled()) {
+    coalesced_events_targets_dirty_ = true;
+    predicted_events_targets_dirty_ = true;
+  }
   MouseEvent::ReceivedTarget();
 }
 
@@ -150,7 +157,16 @@ Node* PointerEvent::fromElement() const {
 }
 
 HeapVector<Member<PointerEvent>> PointerEvent::getCoalescedEvents() {
+  if (auto* local_dom_window = DynamicTo<LocalDOMWindow>(view())) {
+    auto* document = local_dom_window->document();
+    if (document && !local_dom_window->IsSecureContext()) {
+      UseCounter::Count(document,
+                        WebFeature::kGetCoalescedEventsInInsecureContext);
+    }
+  }
+
   if (coalesced_events_targets_dirty_) {
+    CHECK(!RuntimeEnabledFeatures::PointerEventTargetsInEventListsEnabled());
     for (auto coalesced_event : coalesced_events_)
       coalesced_event->SetTarget(target());
     coalesced_events_targets_dirty_ = false;
@@ -160,6 +176,7 @@ HeapVector<Member<PointerEvent>> PointerEvent::getCoalescedEvents() {
 
 HeapVector<Member<PointerEvent>> PointerEvent::getPredictedEvents() {
   if (predicted_events_targets_dirty_) {
+    CHECK(!RuntimeEnabledFeatures::PointerEventTargetsInEventListsEnabled());
     for (auto predicted_event : predicted_events_)
       predicted_event->SetTarget(target());
     predicted_events_targets_dirty_ = false;
@@ -182,13 +199,23 @@ void PointerEvent::Trace(Visitor* visitor) const {
 }
 
 DispatchEventResult PointerEvent::DispatchEvent(EventDispatcher& dispatcher) {
-  if (type().IsEmpty())
+  if (type().empty())
     return DispatchEventResult::kNotCanceled;  // Shouldn't happen.
 
-  if (RuntimeEnabledFeatures::ClickPointerEventEnabled() &&
-      type() == event_type_names::kClick) {
-    // The MouseEvent::DispatchEvent will take care of sending dblclick event if
-    // needed.
+  if (isTrusted() &&
+      RuntimeEnabledFeatures::PointerEventTargetsInEventListsEnabled()) {
+    // TODO(mustaq@chromium.org): When the RTE flag is removed, get rid of
+    // `coalesced_events_targets_dirty_` and `predicted_events_targets_dirty_`.
+
+    for (auto coalesced_event : coalesced_events_) {
+      coalesced_event->SetTarget(&dispatcher.GetNode());
+    }
+    for (auto predicted_event : predicted_events_) {
+      predicted_event->SetTarget(&dispatcher.GetNode());
+    }
+  }
+
+  if (type() == event_type_names::kClick) {
     return MouseEvent::DispatchEvent(dispatcher);
   }
 
@@ -200,9 +227,15 @@ DispatchEventResult PointerEvent::DispatchEvent(EventDispatcher& dispatcher) {
 }
 
 PointerId PointerEvent::pointerIdForBindings() const {
-  if (auto* local_dom_window = DynamicTo<LocalDOMWindow>(view()))
-    UseCounter::Count(local_dom_window->document(), WebFeature::kPointerId);
+  if (auto* document = GetDocument())
+    UseCounter::Count(document, WebFeature::kPointerId);
   return pointerId();
+}
+
+Document* PointerEvent::GetDocument() const {
+  if (auto* local_dom_window = DynamicTo<LocalDOMWindow>(view()))
+    return local_dom_window->document();
+  return nullptr;
 }
 
 }  // namespace blink

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,54 +13,55 @@ namespace remoting {
 
 bool ParseNativeMessageJson(const std::string& message,
                             std::string& message_type,
-                            base::Value& dictionary_value) {
+                            base::Value::Dict& parsed_message) {
   auto opt_message = base::JSONReader::Read(message);
   if (!opt_message.has_value()) {
     LOG(ERROR) << "Received a message that's not valid JSON.";
     return false;
   }
 
-  auto message_value = std::move(opt_message.value());
+  auto message_value = std::move(*opt_message);
   if (!message_value.is_dict()) {
     LOG(ERROR) << "Received a message that's not a dictionary.";
     return false;
   }
 
   const std::string* message_type_value =
-      message_value.FindStringKey(kMessageType);
+      message_value.GetDict().FindString(kMessageType);
   if (message_type_value) {
     message_type = *message_type_value;
   }
 
-  dictionary_value = std::move(message_value);
+  parsed_message = std::move(message_value).TakeDict();
 
   return true;
 }
 
-base::Value CreateNativeMessageResponse(const base::Value& request) {
-  const std::string* type = request.FindStringKey(kMessageType);
+std::optional<base::Value::Dict> CreateNativeMessageResponse(
+    const base::Value::Dict& request) {
+  const std::string* type = request.FindString(kMessageType);
   if (!type) {
     LOG(ERROR) << "'" << kMessageType << "' not found in request.";
-    return base::Value();
+    return std::nullopt;
   }
 
-  base::Value response(base::Value::Type::DICTIONARY);
-  response.SetStringKey(kMessageType, *type + "Response");
+  base::Value::Dict response;
+  response.Set(kMessageType, *type + "Response");
 
   // If the client supplies an ID, it will expect it in the response. This
   // might be a string or a number, so cope with both.
-  const base::Value* id = request.FindKey(kMessageId);
+  const base::Value* id = request.Find(kMessageId);
   if (id) {
-    response.SetKey(kMessageId, id->Clone());
+    response.Set(kMessageId, id->Clone());
   }
   return response;
 }
 
-void ProcessNativeMessageHelloResponse(base::Value& response,
-                                       base::Value supported_features) {
-  response.SetStringKey(kHostVersion, STRINGIZE(VERSION));
-  if (!supported_features.is_none()) {
-    response.SetKey(kSupportedFeatures, std::move(supported_features));
+void ProcessNativeMessageHelloResponse(base::Value::Dict& response,
+                                       base::Value::List supported_features) {
+  response.Set(kHostVersion, STRINGIZE(VERSION));
+  if (!supported_features.empty()) {
+    response.Set(kSupportedFeatures, std::move(supported_features));
   }
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <stdint.h>
 #include <string>
 
-#include "base/callback.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_forward.h"
 #include "device/bluetooth/bluetooth_export.h"
 #include "device/bluetooth/bluetooth_gatt_service.h"
 #include "device/bluetooth/public/cpp/bluetooth_uuid.h"
@@ -79,7 +79,7 @@ class DEVICE_BLUETOOTH_EXPORT BluetoothGattCharacteristic {
   typedef uint32_t Permissions;
 
   // Bluetooth Spec Vol 3, Part G, 3.3.3.3 Client Characteristic Configuration.
-  enum class NotificationType { kNotification = 1, kIndication };
+  enum class NotificationType : uint16_t { kNone, kNotification, kIndication };
 
   // The ErrorCallback is used by methods to asynchronously report errors.
   using ErrorCallback =

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 The Chromium Authors. All rights reserved.
+ * Copyright 2017 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
@@ -49,14 +49,6 @@ function showPaymentRequest(pr) {
 }
 
 /**
- * Show a basic-card PaymentRequest that requests a shipping address, but has no
- * listeners.
- */
-function buyWithoutListeners() { // eslint-disable-line no-unused-vars
-  buyWithoutListenersWithMethods([{supportedMethods: 'basic-card'}]);
-}
-
-/**
  * Show a PaymentRequest using methodData that requests a shipping address, but
  * has no listeners.
  * @param {sequence<PaymentMethodData>} methodData An array of payment method
@@ -64,14 +56,6 @@ function buyWithoutListeners() { // eslint-disable-line no-unused-vars
  */
  function buyWithoutListenersWithMethods(methodData) {
   showPaymentRequest(buildPaymentRequest(methodData));
-}
-
-/**
- * Show a basic-card PaymentRequest that requests a shipping address, but
- * listeners don't call updateWith().
- */
-function buyWithoutCallingUpdateWith() { // eslint-disable-line no-unused-vars
-  buyWithoutCallingUpdateWithWithMethods([{supportedMethods: 'basic-card'}]);
 }
 
 /**
@@ -89,14 +73,6 @@ function buyWithoutCallingUpdateWith() { // eslint-disable-line no-unused-vars
     print('shippingoptionchange');
   });
   showPaymentRequest(pr);
-}
-
-/**
- * Show a basic-card PaymentRequest that requests a shipping address, but
- * listeners don't use promises to update the UI.
- */
-function buyWithoutPromises() { // eslint-disable-line no-unused-vars
-  buyWithoutPromisesWithMethods([{supportedMethods: 'basic-card'}]);
 }
 
 /**

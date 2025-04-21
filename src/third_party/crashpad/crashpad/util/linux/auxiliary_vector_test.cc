@@ -1,4 +1,4 @@
-// Copyright 2017 The Crashpad Authors. All rights reserved.
+// Copyright 2017 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -96,10 +96,15 @@ void TestAgainstCloneOrSelf(pid_t pid) {
 
   ProcessMemoryLinux memory(&connection);
 
+// AT_PLATFORM is null for RISC-V:
+// https://elixir.bootlin.com/linux/v6.4-rc4/C/ident/ELF_PLATFORM
+#if !defined(ARCH_CPU_RISCV64)
   LinuxVMAddress platform_addr;
   ASSERT_TRUE(aux.GetValue(AT_PLATFORM, &platform_addr));
   std::string platform;
   ASSERT_TRUE(memory.ReadCStringSizeLimited(platform_addr, 10, &platform));
+#endif  // ARCH_CPU_RISCV64
+
 #if defined(ARCH_CPU_X86)
   EXPECT_STREQ(platform.c_str(), "i686");
 #elif defined(ARCH_CPU_X86_64)
@@ -143,7 +148,8 @@ void TestAgainstCloneOrSelf(pid_t pid) {
   EXPECT_EQ(big_dest.lo, phdrs);
 }
 
-TEST(AuxiliaryVector, ReadSelf) {
+// This test is flaky: https://crbug.com/331863512
+TEST(AuxiliaryVector, DISABLED_ReadSelf) {
   TestAgainstCloneOrSelf(getpid());
 }
 

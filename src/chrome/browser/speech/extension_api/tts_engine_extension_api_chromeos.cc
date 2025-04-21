@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/speech/extension_api/tts_engine_extension_observer_chromeos.h"
+#include "chrome/browser/speech/extension_api/tts_engine_extension_observer_chromeos_factory.h"
 #include "chrome/browser/speech/extension_api/tts_extension_api_constants.h"
 #include "chrome/common/extensions/api/speech/tts_engine_manifest_handler.h"
 #include "chrome/common/extensions/extension_constants.h"
@@ -58,7 +59,7 @@ void TtsExtensionEngineChromeOS::Speak(content::TtsUtterance* utterance,
     current_utterance_profile_observer_.Observe(profile);
   }
 
-  std::unique_ptr<base::ListValue> args = BuildSpeakArgs(utterance, voice);
+  base::Value::List args = BuildSpeakArgs(utterance, voice);
   if (!RefreshAudioStreamOptionsForExtension(engine_id, profile) &&
       playback_tts_stream_) {
     Play(std::move(args), engine_id, profile);
@@ -69,13 +70,12 @@ void TtsExtensionEngineChromeOS::Speak(content::TtsUtterance* utterance,
   // audio params.
   playback_tts_stream_.reset();
 
-  TtsEngineExtensionObserverChromeOS::GetInstance(profile)
+  TtsEngineExtensionObserverChromeOSFactory::GetForProfile(profile)
       ->BindPlaybackTtsStream(
           playback_tts_stream_.BindNewPipeAndPassReceiver(),
           audio_parameters_.Clone(),
           base::BindOnce(
-              [](extensions::EventRouter* event_router,
-                 std::unique_ptr<base::ListValue> args,
+              [](extensions::EventRouter* event_router, base::Value::List args,
                  const std::string& engine_id, Profile* profile,
                  TtsExtensionEngineChromeOS* owner,
                  chromeos::tts::mojom::AudioParametersPtr audio_parameters) {
@@ -213,7 +213,7 @@ bool TtsExtensionEngineChromeOS::RefreshAudioStreamOptionsForExtension(
   return true;
 }
 
-void TtsExtensionEngineChromeOS::Play(std::unique_ptr<base::ListValue> args,
+void TtsExtensionEngineChromeOS::Play(base::Value::List args,
                                       const std::string& engine_id,
                                       Profile* profile) {
   // This function can be called from a callback where args are bound, so the
@@ -231,7 +231,7 @@ void TtsExtensionEngineChromeOS::Play(std::unique_ptr<base::ListValue> args,
                            audio_parameters_->sample_rate);
   audio_stream_options.Set(tts_extension_api_constants::kBufferSizeKey,
                            audio_parameters_->buffer_size);
-  args->GetList().Append(std::move(audio_stream_options));
+  args.Append(std::move(audio_stream_options));
 
   // Disconnect any previous receivers.
   tts_event_observer_receiver_set_.Clear();
@@ -254,5 +254,5 @@ void TtsExtensionEngineChromeOS::Play(std::unique_ptr<base::ListValue> args,
       engine_id, std::make_unique<extensions::Event>(
                      extensions::events::TTS_ENGINE_ON_SPEAK_WITH_AUDIO_STREAM,
                      tts_engine_events::kOnSpeakWithAudioStream,
-                     std::move(args->GetList()), profile));
+                     std::move(args), profile));
 }

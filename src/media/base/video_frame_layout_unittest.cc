@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ namespace media {
 
 namespace {
 
-std::vector<ColorPlaneLayout> CreatePlanes(const std::vector<int32_t>& strides,
+std::vector<ColorPlaneLayout> CreatePlanes(const std::vector<size_t>& strides,
                                            const std::vector<size_t>& offsets,
                                            const std::vector<size_t>& sizes) {
   LOG_ASSERT(strides.size() == offsets.size());
@@ -54,7 +54,7 @@ TEST(VideoFrameLayout, CreateI420) {
   EXPECT_EQ(layout->num_planes(), num_of_planes);
   EXPECT_EQ(layout->is_multi_planar(), false);
   for (size_t i = 0; i < num_of_planes; ++i) {
-    EXPECT_EQ(layout->planes()[i].stride, 0);
+    EXPECT_EQ(layout->planes()[i].stride, 0u);
     EXPECT_EQ(layout->planes()[i].offset, 0u);
     EXPECT_EQ(layout->planes()[i].size, 0u);
   }
@@ -71,7 +71,7 @@ TEST(VideoFrameLayout, CreateNV12) {
   EXPECT_EQ(layout->num_planes(), num_of_planes);
   EXPECT_EQ(layout->is_multi_planar(), false);
   for (size_t i = 0; i < num_of_planes; ++i) {
-    EXPECT_EQ(layout->planes()[i].stride, 0);
+    EXPECT_EQ(layout->planes()[i].stride, 0u);
     EXPECT_EQ(layout->planes()[i].offset, 0u);
     EXPECT_EQ(layout->planes()[i].size, 0u);
   }
@@ -79,7 +79,7 @@ TEST(VideoFrameLayout, CreateNV12) {
 
 TEST(VideoFrameLayout, CreateWithStrides) {
   gfx::Size coded_size = gfx::Size(320, 180);
-  std::vector<int32_t> strides = {384, 192, 192};
+  std::vector<size_t> strides = {384, 192, 192};
   auto layout = VideoFrameLayout::CreateWithStrides(PIXEL_FORMAT_I420,
                                                     coded_size, strides);
   ASSERT_TRUE(layout.has_value());
@@ -91,13 +91,15 @@ TEST(VideoFrameLayout, CreateWithStrides) {
   for (size_t i = 0; i < 3; ++i) {
     EXPECT_EQ(layout->planes()[i].stride, strides[i]);
     EXPECT_EQ(layout->planes()[i].offset, 0u);
-    EXPECT_EQ(layout->planes()[i].size, 0u);
+    size_t size =
+        strides[i] * (i > 0 ? coded_size.height() / 2 : coded_size.height());
+    EXPECT_EQ(layout->planes()[i].size, size);
   }
 }
 
 TEST(VideoFrameLayout, CreateWithPlanes) {
   gfx::Size coded_size = gfx::Size(320, 180);
-  std::vector<int32_t> strides = {384, 192, 192};
+  std::vector<size_t> strides = {384, 192, 192};
   std::vector<size_t> offsets = {0, 0, 200};
   std::vector<size_t> sizes = {200, 100, 100};
   auto layout = VideoFrameLayout::CreateWithPlanes(
@@ -117,7 +119,7 @@ TEST(VideoFrameLayout, CreateWithPlanes) {
 
 TEST(VideoFrameLayout, CreateMultiPlanar) {
   gfx::Size coded_size = gfx::Size(320, 180);
-  std::vector<int32_t> strides = {384, 192, 192};
+  std::vector<size_t> strides = {384, 192, 192};
   std::vector<size_t> offsets = {0, 100, 200};
   std::vector<size_t> sizes = {90, 40, 40};
   auto layout = VideoFrameLayout::CreateMultiPlanar(
@@ -137,7 +139,7 @@ TEST(VideoFrameLayout, CreateMultiPlanar) {
 
 TEST(VideoFrameLayout, CopyConstructor) {
   gfx::Size coded_size = gfx::Size(320, 180);
-  std::vector<int32_t> strides = {384, 192, 192};
+  std::vector<size_t> strides = {384, 192, 192};
   std::vector<size_t> offsets = {0, 0, 200};
   std::vector<size_t> sizes = {200, 100, 100};
   auto layout = VideoFrameLayout::CreateMultiPlanar(
@@ -158,7 +160,7 @@ TEST(VideoFrameLayout, CopyConstructor) {
 
 TEST(VideoFrameLayout, CopyAssignmentOperator) {
   gfx::Size coded_size = gfx::Size(320, 180);
-  std::vector<int32_t> strides = {384, 192, 192};
+  std::vector<size_t> strides = {384, 192, 192};
   std::vector<size_t> offsets = {0, 100, 200};
   std::vector<size_t> sizes = {90, 45, 45};
   auto layout = VideoFrameLayout::CreateMultiPlanar(
@@ -179,7 +181,7 @@ TEST(VideoFrameLayout, CopyAssignmentOperator) {
 
 TEST(VideoFrameLayout, MoveConstructor) {
   gfx::Size coded_size = gfx::Size(320, 180);
-  std::vector<int32_t> strides = {384, 192, 192};
+  std::vector<size_t> strides = {384, 192, 192};
   std::vector<size_t> offsets = {0, 0, 100};
   std::vector<size_t> sizes = {90, 45, 45};
   auto layout = VideoFrameLayout::CreateMultiPlanar(
@@ -206,7 +208,7 @@ TEST(VideoFrameLayout, MoveConstructor) {
 
 TEST(VideoFrameLayout, ToStringWithPlanes) {
   gfx::Size coded_size = gfx::Size(320, 180);
-  std::vector<int32_t> strides = {384, 192, 192};
+  std::vector<size_t> strides = {384, 192, 192};
   auto layout = VideoFrameLayout::CreateWithStrides(PIXEL_FORMAT_I420,
                                                     coded_size, strides);
   ASSERT_TRUE(layout.has_value());
@@ -217,15 +219,15 @@ TEST(VideoFrameLayout, ToStringWithPlanes) {
       ModifierToHexString(gfx::NativePixmapHandle::kNoModifier);
   EXPECT_EQ(ostream.str(),
             "VideoFrameLayout(format: PIXEL_FORMAT_I420, coded_size: 320x180, "
-            "planes (stride, offset, size): [(384, 0, 0), (192, 0, 0), "
-            "(192, 0, 0)], is_multi_planar: 0, buffer_addr_align: 32, "
+            "planes (stride, offset, size): [(384, 0, 69120), (192, 0, 17280), "
+            "(192, 0, 17280)], is_multi_planar: 0, buffer_addr_align: 32, "
             "modifier: " +
                 kNoModifier + ")");
 }
 
 TEST(VideoFrameLayout, ToStringMultiPlanar) {
   gfx::Size coded_size = gfx::Size(320, 180);
-  std::vector<int32_t> strides = {384, 192};
+  std::vector<size_t> strides = {384, 192};
   std::vector<size_t> offsets = {0, 100};
   std::vector<size_t> sizes = {100, 100};
   auto layout = VideoFrameLayout::CreateMultiPlanar(
@@ -263,7 +265,7 @@ TEST(VideoFrameLayout, ToString) {
 
 TEST(VideoFrameLayout, EqualOperator) {
   gfx::Size coded_size = gfx::Size(320, 180);
-  std::vector<int32_t> strides = {384, 192, 192};
+  std::vector<size_t> strides = {384, 192, 192};
   std::vector<size_t> offsets = {0, 200, 300};
   std::vector<size_t> sizes = {200, 100, 100};
   const size_t align = VideoFrameLayout::kBufferAddressAlignment;
@@ -306,6 +308,52 @@ TEST(VideoFrameLayout, EqualOperator) {
       align, another_modifier);
   ASSERT_TRUE(different_layout.has_value());
   EXPECT_NE(*layout, *different_layout);
+}
+
+TEST(VideoFrameLayout, FitsInContiguousBufferOfSize) {
+  auto coded_size = gfx::Size(320, 180);
+
+  std::vector<size_t> strides = {384, 192, 192};
+  std::vector<size_t> offsets = {0, 200, 300};
+  std::vector<size_t> sizes = {200, 100, 100};
+  std::vector<ColorPlaneLayout> planes(strides.size());
+  for (size_t i = 0; i < strides.size(); i++) {
+    planes[i].stride = strides[i];
+    planes[i].offset = offsets[i];
+    planes[i].size = sizes[i];
+  }
+
+  auto layout =
+      VideoFrameLayout::CreateWithPlanes(PIXEL_FORMAT_I420, coded_size, planes);
+  ASSERT_TRUE(layout.has_value());
+
+  EXPECT_TRUE(
+      layout->FitsInContiguousBufferOfSize(sizes[0] + sizes[1] + sizes[2]));
+
+  // Validate single plane size exceeds data size.
+  EXPECT_FALSE(layout->FitsInContiguousBufferOfSize(1));
+
+  // Validate sum of planes exceeds data size.
+  EXPECT_FALSE(layout->FitsInContiguousBufferOfSize(sizes[0] + sizes[1]));
+
+  // Validate offset exceeds plane size.
+  planes[2].offset = 301;
+  layout =
+      VideoFrameLayout::CreateWithPlanes(PIXEL_FORMAT_I420, coded_size, planes);
+  ASSERT_TRUE(layout.has_value());
+  EXPECT_TRUE(
+      layout->FitsInContiguousBufferOfSize(sizes[0] + sizes[1] + sizes[2] + 1));
+  EXPECT_FALSE(layout->FitsInContiguousBufferOfSize(sizes[0]));
+
+  // Validate overflow.
+  planes[0].offset = std::numeric_limits<size_t>::max() / 2 + 2;
+  planes[0].size = planes[1].size = planes[2].size =
+      std::numeric_limits<size_t>::max() / 2;
+  layout =
+      VideoFrameLayout::CreateWithPlanes(PIXEL_FORMAT_I420, coded_size, planes);
+  ASSERT_TRUE(layout.has_value());
+  EXPECT_FALSE(
+      layout->FitsInContiguousBufferOfSize(std::numeric_limits<size_t>::max()));
 }
 
 }  // namespace media

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,7 @@ void DisplayItemRasterInvalidator::Generate() {
     // Union of visual rects of all new display items of the client.
     gfx::Rect new_visual_rect;
     PaintInvalidationReason reason = PaintInvalidationReason::kNone;
+    DISALLOW_NEW();
   };
   HashMap<DisplayItemClientId, OldAndNewDisplayItems> clients_to_invalidate;
 
@@ -133,11 +134,7 @@ void DisplayItemRasterInvalidator::AddRasterInvalidation(
     PaintInvalidationReason reason,
     RasterInvalidator::ClientIsOldOrNew old_or_new) {
   gfx::Rect r = invalidator_.ClipByLayerBounds(mapper_.MapVisualRect(rect));
-  if (r.IsEmpty())
-    return;
-
-  invalidator_.AddRasterInvalidation(raster_invalidation_function_, r,
-                                     client_id, reason, old_or_new);
+  invalidator_.AddRasterInvalidation(r, client_id, reason, old_or_new);
 }
 
 void DisplayItemRasterInvalidator::GenerateRasterInvalidation(
@@ -172,7 +169,7 @@ void DisplayItemRasterInvalidator::GenerateRasterInvalidation(
 
   if (!IsFullPaintInvalidationReason(reason) &&
       old_visual_rect.origin() != new_visual_rect.origin())
-    reason = PaintInvalidationReason::kGeometry;
+    reason = PaintInvalidationReason::kLayout;
 
   if (IsFullPaintInvalidationReason(reason)) {
     GenerateFullRasterInvalidation(client_id, old_visual_rect, new_visual_rect,

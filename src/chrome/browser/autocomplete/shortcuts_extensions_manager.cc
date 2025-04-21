@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@ ShortcutsExtensionsManager::ShortcutsExtensionsManager(Profile* profile)
   registry_observation_.Observe(extensions::ExtensionRegistry::Get(profile_));
 }
 
-ShortcutsExtensionsManager::~ShortcutsExtensionsManager() {}
+ShortcutsExtensionsManager::~ShortcutsExtensionsManager() = default;
 
 void ShortcutsExtensionsManager::OnExtensionUnloaded(
     content::BrowserContext* browser_context,

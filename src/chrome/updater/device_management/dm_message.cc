@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,10 @@
 #include <memory>
 #include <utility>
 
+#include "base/containers/contains.h"
 #include "base/containers/fixed_flat_map.h"
 #include "base/logging.h"
+#include "chrome/enterprise_companion/device_management_storage/dm_storage.h"
 #include "chrome/updater/device_management/dm_response_validator.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/policy/core/common/cloud/cloud_policy_util.h"
@@ -57,7 +59,7 @@ TranslatePolicyValidationResultStatus(PolicyValidationResult::Status status) {
        Report::VALIDATION_RESULT_TYPE_VALUE_ERROR},
   });
 
-  const auto* mapped_status = kValidationStatusMap.find(status);
+  const auto mapped_status = kValidationStatusMap.find(status);
   return mapped_status == kValidationStatusMap.end()
              ? Report::VALIDATION_RESULT_TYPE_ERROR_UNSPECIFIED
              : mapped_status->second;
@@ -80,7 +82,7 @@ TranslatePolicyValidationResultSeverity(
 std::string GetRegisterBrowserRequestData() {
   enterprise_management::DeviceManagementRequest dm_request;
 
-  ::enterprise_management::RegisterBrowserRequest* request =
+  enterprise_management::RegisterBrowserRequest* request =
       dm_request.mutable_register_browser_request();
   request->set_machine_name(policy::GetMachineName());
   request->set_os_platform(policy::GetOSPlatform());
@@ -91,12 +93,17 @@ std::string GetRegisterBrowserRequestData() {
   return dm_request.SerializeAsString();
 }
 
-std::string GetPolicyFetchRequestData(const std::string& policy_type,
-                                      const CachedPolicyInfo& policy_info) {
+std::string GetPolicyFetchRequestData(
+    const std::string& policy_type,
+    const device_management_storage::CachedPolicyInfo& policy_info) {
   enterprise_management::DeviceManagementRequest dm_request;
+  enterprise_management::DevicePolicyRequest* device_policy_request =
+      dm_request.mutable_policy_request();
+  device_policy_request->set_reason(
+      enterprise_management::DevicePolicyRequest::SCHEDULED);
 
   enterprise_management::PolicyFetchRequest* policy_fetch_request =
-      dm_request.mutable_policy_request()->add_requests();
+      device_policy_request->add_requests();
   policy_fetch_request->set_policy_type(policy_type);
   policy_fetch_request->set_signature_type(
       enterprise_management::PolicyFetchRequest::SHA256_RSA);
@@ -176,16 +183,14 @@ std::string ParseDeviceRegistrationResponse(const std::string& response_data) {
 bool ShouldDeleteDmToken(const std::string& response_data) {
   enterprise_management::DeviceManagementResponse dm_response;
   return dm_response.ParseFromString(response_data) &&
-         std::find(dm_response.error_detail().begin(),
-                   dm_response.error_detail().end(),
-                   enterprise_management::
-                       CBCM_DELETION_POLICY_PREFERENCE_DELETE_TOKEN) !=
-             dm_response.error_detail().end();
+         base::Contains(dm_response.error_detail(),
+                        enterprise_management::
+                            CBCM_DELETION_POLICY_PREFERENCE_DELETE_TOKEN);
 }
 
 DMPolicyMap ParsePolicyFetchResponse(
     const std::string& response_data,
-    const CachedPolicyInfo& policy_info,
+    const device_management_storage::CachedPolicyInfo& policy_info,
     const std::string& expected_dm_token,
     const std::string& expected_device_id,
     std::vector<PolicyValidationResult>& validation_results) {

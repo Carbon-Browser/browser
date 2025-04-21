@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 
 namespace media {
 
@@ -30,8 +31,9 @@ MediaResourceShim::~MediaResourceShim() = default;
 std::vector<DemuxerStream*> MediaResourceShim::GetAllStreams() {
   DCHECK(!demuxer_ready_cb_);
   std::vector<DemuxerStream*> result;
-  for (auto& stream : streams_)
+  for (auto& stream : streams_) {
     result.push_back(stream.get());
+  }
   return result;
 }
 

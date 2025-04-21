@@ -1,10 +1,11 @@
-// Copyright (c) 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/apps/app_service/app_notifications.h"
 
 #include "base/containers/contains.h"
+#include "base/not_fatal_until.h"
 
 namespace apps {
 
@@ -20,7 +21,7 @@ void AppNotifications::AddNotification(const std::string& app_id,
 
 void AppNotifications::RemoveNotification(const std::string& notification_id) {
   auto it = notification_id_to_app_ids_.find(notification_id);
-  DCHECK(it != notification_id_to_app_ids_.end());
+  CHECK(it != notification_id_to_app_ids_.end(), base::NotFatalUntil::M130);
 
   for (const auto& app_id : it->second) {
     auto app_id_it = app_id_to_notification_ids_.find(app_id);
@@ -66,18 +67,6 @@ AppPtr AppNotifications::CreateAppWithHasBadgeStatus(
     const std::string& app_id) {
   auto app = std::make_unique<App>(app_type, app_id);
   app->has_badge = HasNotification(app_id);
-  return app;
-}
-
-apps::mojom::AppPtr AppNotifications::GetAppWithHasBadgeStatus(
-    apps::mojom::AppType app_type,
-    const std::string& app_id) {
-  apps::mojom::AppPtr app = apps::mojom::App::New();
-  app->app_type = app_type;
-  app->app_id = app_id;
-  app->has_badge = (HasNotification(app_id))
-                       ? apps::mojom::OptionalBool::kTrue
-                       : apps::mojom::OptionalBool::kFalse;
   return app;
 }
 

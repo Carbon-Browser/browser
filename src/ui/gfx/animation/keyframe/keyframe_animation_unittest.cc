@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -438,7 +438,8 @@ TEST(KeyframeAnimationTest, TransformTransitions) {
   EXPECT_GT(to.at(0).translate.x, target.operations().at(0).translate.x);
 
   animator.Tick(start_time + MicrosecondsToDelta(10000));
-  EXPECT_TRUE(to.ApproximatelyEqual(target.operations(), tolerance));
+  EXPECT_TRUE(
+      to.Apply().ApproximatelyEqual(target.operations().Apply(), tolerance));
 }
 
 TEST(KeyframeAnimationTest, ReversedTransformTransitions) {
@@ -475,11 +476,12 @@ TEST(KeyframeAnimationTest, ReversedTransformTransitions) {
       &target, start_time + MicrosecondsToDelta(1000), kTransformPropertyId,
       target.operations(), from);
   animator.Tick(start_time + MicrosecondsToDelta(1000));
-  EXPECT_TRUE(value_before_reversing.ApproximatelyEqual(target.operations(),
-                                                        tolerance));
+  EXPECT_TRUE(value_before_reversing.Apply().ApproximatelyEqual(
+      target.operations().Apply(), tolerance));
 
   animator.Tick(start_time + MicrosecondsToDelta(2000));
-  EXPECT_TRUE(from.ApproximatelyEqual(target.operations(), tolerance));
+  EXPECT_TRUE(
+      from.Apply().ApproximatelyEqual(target.operations().Apply(), tolerance));
 }
 
 TEST(KeyframeAnimationTest, RetargetTransformTransition) {

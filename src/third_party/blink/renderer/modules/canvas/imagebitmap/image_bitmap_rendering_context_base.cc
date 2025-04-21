@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,9 @@ ImageBitmapRenderingContextBase::ImageBitmapRenderingContextBase(
     const CanvasContextCreationAttributesCore& attrs)
     : CanvasRenderingContext(host, attrs, CanvasRenderingAPI::kBitmaprenderer),
       image_layer_bridge_(MakeGarbageCollected<ImageLayerBridge>(
-          attrs.alpha ? kNonOpaque : kOpaque)) {}
+          attrs.alpha ? kNonOpaque : kOpaque)) {
+  host->InitializeLayerWithCSSProperties(image_layer_bridge_->CcLayer());
+}
 
 ImageBitmapRenderingContextBase::~ImageBitmapRenderingContextBase() = default;
 
@@ -35,6 +37,12 @@ ImageBitmapRenderingContextBase::getHTMLOrOffscreenCanvas() const {
   }
   return MakeGarbageCollected<V8UnionHTMLCanvasElementOrOffscreenCanvas>(
       static_cast<HTMLCanvasElement*>(Host()));
+}
+
+void ImageBitmapRenderingContextBase::Reset() {
+  CHECK(Host());
+  CHECK(Host()->IsOffscreenCanvas());
+  Host()->DiscardResourceProvider();
 }
 
 void ImageBitmapRenderingContextBase::Stop() {
@@ -52,7 +60,7 @@ void ImageBitmapRenderingContextBase::ResetInternalBitmapToBlackTransparent(
   SkBitmap black_bitmap;
   if (black_bitmap.tryAllocN32Pixels(width, height)) {
     black_bitmap.eraseARGB(0, 0, 0, 0);
-    auto image = SkImage::MakeFromBitmap(black_bitmap);
+    auto image = SkImages::RasterFromBitmap(black_bitmap);
     if (image) {
       image_layer_bridge_->SetImage(
           UnacceleratedStaticBitmapImage::Create(image));
@@ -76,7 +84,8 @@ void ImageBitmapRenderingContextBase::SetImage(ImageBitmap* image_bitmap) {
     image_bitmap->close();
 }
 
-scoped_refptr<StaticBitmapImage> ImageBitmapRenderingContextBase::GetImage() {
+scoped_refptr<StaticBitmapImage> ImageBitmapRenderingContextBase::GetImage(
+    FlushReason) {
   return image_layer_bridge_->GetImage();
 }
 
@@ -110,10 +119,6 @@ void ImageBitmapRenderingContextBase::Trace(Visitor* visitor) const {
   CanvasRenderingContext::Trace(visitor);
 }
 
-bool ImageBitmapRenderingContextBase::IsAccelerated() const {
-  return image_layer_bridge_->IsAccelerated();
-}
-
 bool ImageBitmapRenderingContextBase::CanCreateCanvas2dResourceProvider()
     const {
   DCHECK(Host());
@@ -133,22 +138,17 @@ bool ImageBitmapRenderingContextBase::PushFrame() {
   }
   cc::PaintFlags paint_flags;
   paint_flags.setBlendMode(SkBlendMode::kSrc);
-  Host()->ResourceProvider()->Canvas()->drawImage(
+  Host()->ResourceProvider()->Canvas().drawImage(
       image->PaintImageForCurrentFrame(), 0, 0, SkSamplingOptions(),
       &paint_flags);
   scoped_refptr<CanvasResource> resource =
-      Host()->ResourceProvider()->ProduceCanvasResource();
+      Host()->ResourceProvider()->ProduceCanvasResource(
+          FlushReason::kNon2DCanvas);
   Host()->PushFrame(
       std::move(resource),
       SkIRect::MakeWH(image_layer_bridge_->GetImage()->Size().width(),
                       image_layer_bridge_->GetImage()->Size().height()));
   return true;
-}
-
-bool ImageBitmapRenderingContextBase::IsOriginTopLeft() const {
-  if (Host()->IsOffscreenCanvas())
-    return false;
-  return IsAccelerated();
 }
 
 }  // namespace blink

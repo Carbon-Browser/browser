@@ -1,12 +1,15 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_PASSWORD_MANAGER_CONTENT_BROWSER_FORM_META_DATA_H_
 #define COMPONENTS_PASSWORD_MANAGER_CONTENT_BROWSER_FORM_META_DATA_H_
 
-#include "components/autofill/core/common/form_data.h"
 #include "url/gurl.h"
+
+namespace autofill {
+class FormData;
+}
 
 namespace content {
 class RenderFrameHost;

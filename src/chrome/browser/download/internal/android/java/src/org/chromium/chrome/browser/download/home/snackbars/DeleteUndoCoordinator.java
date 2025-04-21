@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,12 +42,14 @@ public class DeleteUndoCoordinator {
     public void showSnackbar(Collection<OfflineItem> itemsSelected, Callback<Boolean> callback) {
         assert !itemsSelected.isEmpty();
 
-        Snackbar snackbar = Snackbar.make(UndoUiUtils.getTitleFor(itemsSelected), mController,
-                Snackbar.TYPE_ACTION, Snackbar.UMA_DOWNLOAD_DELETE_UNDO);
+        Snackbar snackbar =
+                Snackbar.make(
+                        UndoUiUtils.getTitleFor(itemsSelected),
+                        mController,
+                        Snackbar.TYPE_ACTION,
+                        Snackbar.UMA_DOWNLOAD_DELETE_UNDO);
         snackbar.setAction(ContextUtils.getApplicationContext().getString(R.string.undo), callback);
         snackbar.setTemplateText(UndoUiUtils.getTemplateTextFor(itemsSelected));
-        snackbar.setActionAccessibilityAnnouncement(
-                UndoUiUtils.getAccessibilityActionAnnouncementTextFor(itemsSelected));
         mView.showSnackbar(snackbar);
     }
 

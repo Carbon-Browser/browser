@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "base/component_export.h"
 #include "base/containers/flat_set.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "chromeos/ash/components/network/cellular_esim_profile_handler.h"
@@ -16,13 +17,10 @@
 class PrefService;
 class PrefRegistrySimple;
 
-namespace chromeos {
-
+namespace ash {
 namespace network_ui {
-
 class NetworkConfigMessageHandler;
-
-}  // namespace network_ui
+}
 
 // CellularESimProfileHandler implementation which utilizes the local state
 // PrefService to track eSIM profiles.
@@ -37,8 +35,9 @@ class NetworkConfigMessageHandler;
 //
 // Additionally, this class tracks all known EUICC paths. If it detects a new
 // EUICC which it previously had not known about, it automatically refreshes
-// profile metadata from that slot. This ensures that after a powerwash, we
-// still expose information about installed profiles.
+// profile metadata from that slot. This ensures that after a powerwash, since
+// all local data will be erased and we will no longer have information on which
+// slots we have metadata for, we will refresh the metadata for all slots.
 class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularESimProfileHandlerImpl
     : public CellularESimProfileHandler,
       public NetworkStateHandlerObserver {
@@ -95,10 +94,9 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularESimProfileHandlerImpl
       HermesResponseStatus status);
 
   // Initialized to null and set once SetDevicePrefs() is called.
-  PrefService* device_prefs_ = nullptr;
+  raw_ptr<PrefService> device_prefs_ = nullptr;
 
-  base::ScopedObservation<chromeos::NetworkStateHandler,
-                          chromeos::NetworkStateHandlerObserver>
+  base::ScopedObservation<NetworkStateHandler, NetworkStateHandlerObserver>
       network_state_handler_observer_{this};
 
   base::flat_set<std::string> paths_pending_auto_refresh_;
@@ -106,6 +104,6 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) CellularESimProfileHandlerImpl
   base::WeakPtrFactory<CellularESimProfileHandlerImpl> weak_ptr_factory_{this};
 };
 
-}  // namespace chromeos
+}  // namespace ash
 
 #endif  // CHROMEOS_ASH_COMPONENTS_NETWORK_CELLULAR_ESIM_PROFILE_HANDLER_IMPL_H_

@@ -1,24 +1,28 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/signin/internal/identity_manager/account_capabilities_fetcher_android.h"
 
 #include "base/android/jni_android.h"
-#include "base/callback.h"
-#include "components/signin/public/android/jni_headers/AccountCapabilitiesFetcher_jni.h"
+#include "base/functional/callback.h"
 #include "components/signin/public/identity_manager/account_capabilities.h"
 #include "components/signin/public/identity_manager/account_info.h"
 
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "components/signin/public/android/jni_headers/AccountCapabilitiesFetcher_jni.h"
+
 namespace {
 using OnAccountCapabilitiesFetchedCallback =
-    base::OnceCallback<void(const absl::optional<AccountCapabilities>&)>;
+    base::OnceCallback<void(const std::optional<AccountCapabilities>&)>;
 }
 
 AccountCapabilitiesFetcherAndroid::AccountCapabilitiesFetcherAndroid(
     const CoreAccountInfo& account_info,
+    AccountCapabilitiesFetcher::FetchPriority fetch_priority,
     AccountCapabilitiesFetcher::OnCompleteCallback on_complete_callback)
     : AccountCapabilitiesFetcher(account_info,
+                                 fetch_priority,
                                  std::move(on_complete_callback)) {
   JNIEnv* env = base::android::AttachCurrentThread();
 

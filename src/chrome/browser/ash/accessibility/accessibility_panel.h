@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 
+#include "base/memory/raw_ptr.h"
 #include "content/public/browser/web_contents_delegate.h"
 #include "ui/views/widget/widget_delegate.h"
 
@@ -28,8 +29,8 @@ class AccessibilityPanel : public views::WidgetDelegate,
                            public content::WebContentsDelegate {
  public:
   explicit AccessibilityPanel(content::BrowserContext* browser_context,
-                              std::string content_url,
-                              std::string widget_name);
+                              const std::string& content_url,
+                              const std::string& widget_name);
 
   AccessibilityPanel(const AccessibilityPanel&) = delete;
   AccessibilityPanel& operator=(const AccessibilityPanel&) = delete;
@@ -61,10 +62,10 @@ class AccessibilityPanel : public views::WidgetDelegate,
   // Indirectly invoked by the component extension.
   void DidFirstVisuallyNonEmptyPaint();
 
-  content::WebContents* web_contents_;
+  raw_ptr<content::WebContents> web_contents_;
   std::unique_ptr<AccessibilityPanelWebContentsObserver> web_contents_observer_;
-  views::Widget* widget_ = nullptr;
-  views::View* web_view_ = nullptr;
+  raw_ptr<views::Widget> widget_ = nullptr;
+  raw_ptr<views::View> web_view_ = nullptr;
 };
 
 }  // namespace ash

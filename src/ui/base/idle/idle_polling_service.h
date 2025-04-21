@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,6 +29,8 @@ class COMPONENT_EXPORT(UI_BASE_IDLE) IdlePollingService {
  public:
   static IdlePollingService* GetInstance();
 
+  static constexpr base::TimeDelta kPollInterval = base::Seconds(15);
+
   struct State {
     bool locked;
     base::TimeDelta idle_time;
@@ -48,6 +50,7 @@ class COMPONENT_EXPORT(UI_BASE_IDLE) IdlePollingService {
   const State& GetIdleState();
 
   void SetProviderForTest(std::unique_ptr<IdleTimeProvider> provider);
+  void SetPollIntervalForTest(base::TimeDelta interval);
   bool IsPollingForTest();
   void SetTaskRunnerForTest(
       scoped_refptr<base::SequencedTaskRunner> task_runner);
@@ -60,6 +63,7 @@ class COMPONENT_EXPORT(UI_BASE_IDLE) IdlePollingService {
 
   void PollIdleState();
 
+  base::TimeDelta poll_interval_;
   base::RepeatingTimer timer_;
   std::unique_ptr<IdleTimeProvider> provider_;
   State last_state_;

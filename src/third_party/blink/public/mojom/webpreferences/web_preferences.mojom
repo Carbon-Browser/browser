@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@ import "third_party/blink/public/mojom/css/preferred_color_scheme.mojom";
 import "third_party/blink/public/mojom/css/preferred_contrast.mojom";
 import "third_party/blink/public/mojom/v8_cache_options.mojom";
 import "url/mojom/url.mojom";
-import "url/mojom/origin.mojom";
 import "mojo/public/mojom/base/string16.mojom";
 
 enum PointerType {
@@ -22,6 +21,15 @@ enum HoverType {
   kHoverNone                                 = 1,            // 1 << 0
   kHoverFirstType                            = kHoverNone,
   kHoverHoverType                            = 2             // 1 << 1
+};
+
+// For media feature update, indicating the update ability of the output display,
+// once renering is done:
+// Slow - e-ink screens, underpowered devices.
+// Fast - regular computer screen.
+enum OutputDeviceUpdateAbilityType {
+  kSlowType,
+  kFastType
 };
 
 // There are multiple editing details that are different on Windows than
@@ -123,7 +131,6 @@ struct WebPreferences {
   bool allow_scripts_to_close_windows;
   bool remote_fonts_enabled;
   bool javascript_can_access_clipboard;
-  bool xslt_enabled;
   // We don't use dns_prefetching_enabled to disable DNS prefetching.  Instead,
   // we disable the feature at a lower layer so that we catch non-WebKit uses
   // of DNS prefetch as well.
@@ -144,6 +151,7 @@ struct WebPreferences {
   bool privileged_webgl_extensions_enabled;
   bool webgl_errors_to_console_enabled;
   bool hide_scrollbars;
+  bool prefers_default_scrollbar_styles;
   bool accelerated_2d_canvas_enabled;
   bool canvas_2d_layers_enabled;
   bool antialiased_2d_canvas_disabled;
@@ -170,12 +178,14 @@ struct WebPreferences {
   bool password_echo_enabled;
   bool should_clear_document_background;
   bool enable_scroll_animator;
-  bool threaded_scrolling_enabled;
   bool prefers_reduced_motion;
+  bool prefers_reduced_transparency;
+  bool inverted_colors;
   bool touch_event_feature_detection_enabled;
   int32 pointer_events_max_touch_points;
   int32 available_pointer_types;
   PointerType primary_pointer_type;
+  OutputDeviceUpdateAbilityType output_device_update_ability_type;
   int32 available_hover_types;
   HoverType primary_hover_type;
   bool dont_send_key_events_to_javascript;
@@ -201,8 +211,6 @@ struct WebPreferences {
   bool initialize_at_minimum_page_scale;
   bool smart_insert_delete_enabled;
   bool spatial_navigation_enabled;
-  bool navigate_on_drag_drop;
-  bool fake_no_alloc_direct_call_for_testing_enabled;
   V8CacheOptions v8_cache_options;
   bool record_whole_document;
 
@@ -246,8 +254,6 @@ struct WebPreferences {
   // around WebVTT text tracks.
   // Window color can be any legal CSS color descriptor.
   string text_track_window_color;
-  // Window padding is in em.
-  string text_track_window_padding;
   // Window radius is in pixels.
   string text_track_window_radius;
 
@@ -271,6 +277,12 @@ struct WebPreferences {
   float font_scale_factor;
 
   [EnableIf=is_android]
+  int32 font_weight_adjustment;
+
+  [EnableIf=is_android]
+  int32 text_size_contrast_factor;
+
+  [EnableIf=is_android]
   float device_scale_adjustment;
 
   [EnableIf=is_android]
@@ -281,9 +293,6 @@ struct WebPreferences {
 
   [EnableIf=is_android]
   bool support_deprecated_target_density_dpi;
-
-  [EnableIf=is_android]
-  bool use_legacy_background_size_shorthand_behavior;
 
   [EnableIf=is_android]
   bool wide_viewport_quirk;
@@ -350,8 +359,16 @@ struct WebPreferences {
   bool disable_accelerated_small_canvases;
 
   [EnableIf=is_android]
-  // Disable the Web Authentication (WebAuthn) API. Only enabled on Android
-  // because the only context where it might be disabled is WebView/WebLayer.
+  // Long press on links selects text instead of triggering context menu.
+  bool long_press_link_select_text;
+
+  // Disable the Web Authentication (WebAuthn) API.
+  // TODO(crbug.com/1284805): Remove once WebView supports WebAuthn.
+  [EnableIf=is_android]
+  bool disable_webauthn;
+  // TODO(crbug.com/1382970): Remove once all Content embedders on Fuchsia
+  // support WebAuthn.
+  [EnableIf=is_fuchsia]
   bool disable_webauthn;
 
   // Enable forcibly modifying content rendering to result in a light on dark
@@ -381,6 +398,37 @@ struct WebPreferences {
 
   // Defines the current autoplay policy.
   AutoplayPolicy autoplay_policy;
+
+  // `getDisplayMedia()`'s transient activation requirement can be bypassed via
+  // `ScreenCaptureWithoutGestureAllowedForOrigins` policy.
+  bool require_transient_activation_for_get_display_media;
+
+  // `show{OpenFile|SaveFile|Directory}Picker()`'s user activation requirement
+  // can be bypassed via `FileOrDirectoryPickerWithoutGestureAllowedForOrigins`
+  // policy.
+  bool require_transient_activation_for_show_file_or_directory_picker;
+
+  // `navigator.subApps.{add|remove|list}()`'s user gesture and authorization
+  // can be bypassed via
+  // `SubAppsAPIsAllowedWithoutGestureAndAuthorizationForOrigins` policy.
+  bool require_transient_activation_and_user_confirmation_for_subapps_api;
+
+  // The forced colors state for the web content. The forced colors state
+  // is used to evaluate the forced-colors media query, as well as determining
+  // when to apply system color overrides to author specified styles.
+  bool in_forced_colors;
+
+  // Indicates if Forced Colors mode should be disabled for this page.
+  // This allows users opt out of forced colors on specific sites.
+  // Forced colors are disabled for sites in the `kPageColorsBlockList` pref.
+  bool is_forced_colors_disabled;
+
+  // The preferred color scheme set by the user's browser settings. The variable
+  // follows the browser's color mode setting unless a browser theme (custom or
+  // not) is defined, in which case the color scheme is set to the default
+  // value. This value is used to evaluate the used color scheme in non overlay
+  // root scrollbars.
+  PreferredColorScheme preferred_root_scrollbar_color_scheme;
 
   // The preferred color scheme for the web content. The scheme is used to
   // evaluate the prefers-color-scheme media query and resolve UA color scheme
@@ -414,15 +462,6 @@ struct WebPreferences {
   // Whether lazy loading of frames and images is enabled.
   bool lazy_load_enabled;
 
-  // Specifies how close a lazily loaded iframe or image should be from the
-  // viewport before it should start being loaded in, depending on the effective
-  // connection type of the current network. Blink will use the default distance
-  // threshold for effective connection types that aren't specified here.
-  map<EffectiveConnectionType, int32>
-      lazy_frame_loading_distance_thresholds_px;
-  map<EffectiveConnectionType, int32>
-      lazy_image_loading_distance_thresholds_px;
-
   // Setting to false disables upgrades to HTTPS for HTTP resources in HTTPS
   // sites.
   bool allow_mixed_content_upgrades;
@@ -437,4 +476,20 @@ struct WebPreferences {
 
   // Controls whether WebXR's immersive-ar is allowed.
   bool webxr_immersive_ar_allowed;
+
+  // Whether lookup of frames in the associated WebView (e.g. lookup via
+  // window.open or via <a target=...>) should be renderer-wide (i.e. going
+  // beyond the usual opener-relationship-based BrowsingInstance boundaries).
+  bool renderer_wide_named_frame_lookup;
+
+  bool strict_mime_type_check_for_worker_scripts_enabled = true;
+
+  // Whether modal context menu is used. A modal context menu meaning it is
+  // blocking user's access to the background web content.
+  bool modal_context_menu = true;
+
+  // Whether the safe-area-insets should be changed dynamically based on
+  // browser controls shown ratio. This value is used in web settings only
+  // when feature DynamicSafeAreaInsets is enabled.
+  bool dynamic_safe_area_insets_enabled = false;
 };

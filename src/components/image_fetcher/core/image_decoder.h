@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 
 namespace data_decoder {
 class DataDecoder;
@@ -27,12 +27,12 @@ using ImageDecodedCallback = base::OnceCallback<void(const gfx::Image&)>;
 // sure to decode safely.
 class ImageDecoder {
  public:
-  ImageDecoder() {}
+  ImageDecoder() = default;
 
   ImageDecoder(const ImageDecoder&) = delete;
   ImageDecoder& operator=(const ImageDecoder&) = delete;
 
-  virtual ~ImageDecoder() {}
+  virtual ~ImageDecoder() = default;
 
   // Decodes the passed |image_data| and runs the given callback. The callback
   // is run even if decoding the image fails. In case an error occured during

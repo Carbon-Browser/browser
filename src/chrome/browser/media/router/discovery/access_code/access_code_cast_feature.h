@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,17 @@
 #include "build/build_config.h"
 
 class PrefRegistrySimple;
-class PrefService;
+class Profile;
 
 namespace base {
 class TimeDelta;
 }
 
 namespace features {
-extern const base::Feature kAccessCodeCastRememberDevices;
-}
+BASE_DECLARE_FEATURE(kAccessCodeCastRememberDevices);
+BASE_DECLARE_FEATURE(kAccessCodeCastTabSwitchingUI);
+BASE_DECLARE_FEATURE(kAccessCodeCastFreezeUI);
+}  // namespace features
 
 namespace media_router {
 
@@ -54,13 +56,21 @@ constexpr char kAccessCodeCastDeviceAdditionTime[] =
 // |registry|.
 void RegisterAccessCodeProfilePrefs(PrefRegistrySimple* registry);
 
-// Returns true if this user is allowed to use Access Codes & QR codes to
+// Returns true if this user is allowed to use Access Codes to
 // discover cast devices.
-bool GetAccessCodeCastEnabledPref(PrefService* pref_service);
+bool GetAccessCodeCastEnabledPref(Profile* profile);
 
 // Returns the duration that a scanned cast device is allowed to remain
 // in the cast list.
-base::TimeDelta GetAccessCodeDeviceDurationPref(PrefService* pref_service);
+base::TimeDelta GetAccessCodeDeviceDurationPref(Profile* profile);
+
+// Returns true if this user is allowed to use Access Codes to
+// discover cast devices, and AccessCodeCastTabSwitchingUI flag is enabled.
+bool IsAccessCodeCastTabSwitchingUiEnabled(Profile* profile);
+
+// Returns true if this user is allowed to use Access Codes to
+// discover cast devices, and AccessCodeCastFreezeUI flag is enabled.
+bool IsAccessCodeCastFreezeUiEnabled(Profile* profile);
 
 #endif  // !BUILDFLAG(IS_ANDROID)
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,7 +53,6 @@ void IOSSerializedNavigationDriver::Sanitize(
   } else {
     if (referrer.policy < 0 || referrer.policy > web::ReferrerPolicyLast) {
       NOTREACHED();
-      referrer.policy = web::ReferrerPolicyNever;
     }
     referrer.url = GURL(
         ReferrerHeaderValueForNavigation(navigation->virtual_url_, referrer));

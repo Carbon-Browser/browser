@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,29 +7,35 @@
 #include <string>
 
 #include "base/metrics/histogram_functions.h"
+#include "base/strings/stringprintf.h"
 
 namespace enterprise_connectors {
 
-void RecordRotationStatus(const std::string& nonce, RotationStatus status) {
-  if (nonce.empty()) {
-    base::UmaHistogramEnumeration(
-        "Enterprise.DeviceTrust.RotateSigningKey.NoNonce.Status", status);
-  } else {
-    base::UmaHistogramEnumeration(
-        "Enterprise.DeviceTrust.RotateSigningKey.WithNonce.Status", status);
-  }
+namespace {
+
+constexpr char kWithNonceVariant[] = "WithNonce";
+constexpr char kNoNonceVariant[] = "NoNonce";
+
+const char* GetVariant(bool is_rotation) {
+  return is_rotation ? kWithNonceVariant : kNoNonceVariant;
 }
 
-void RecordUploadCode(const std::string& nonce, int status_code) {
-  if (nonce.empty()) {
-    base::UmaHistogramSparse(
-        "Enterprise.DeviceTrust.RotateSigningKey.NoNonce.UploadCode",
-        status_code);
-  } else {
-    base::UmaHistogramSparse(
-        "Enterprise.DeviceTrust.RotateSigningKey.WithNonce.UploadCode",
-        status_code);
-  }
+}  // namespace
+
+void RecordRotationStatus(bool is_rotation, RotationStatus status) {
+  static constexpr char kStatusHistogramFormat[] =
+      "Enterprise.DeviceTrust.RotateSigningKey.%s.Status";
+  base::UmaHistogramEnumeration(
+      base::StringPrintf(kStatusHistogramFormat, GetVariant(is_rotation)),
+      status);
+}
+
+void RecordUploadCode(bool is_rotation, int status_code) {
+  static constexpr char kUploadCodeHistogramFormat[] =
+      "Enterprise.DeviceTrust.RotateSigningKey.%s.UploadCode";
+  base::UmaHistogramSparse(
+      base::StringPrintf(kUploadCodeHistogramFormat, GetVariant(is_rotation)),
+      status_code);
 }
 
 }  // namespace enterprise_connectors

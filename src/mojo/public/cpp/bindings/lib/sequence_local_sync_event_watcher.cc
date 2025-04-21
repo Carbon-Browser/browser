@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <memory>
 #include <set>
 
-#include "base/bind.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
@@ -17,7 +17,6 @@
 #include "base/synchronization/lock.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/threading/sequence_local_storage_slot.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "mojo/public/cpp/bindings/sync_event_watcher.h"
 
 namespace mojo {
@@ -174,7 +173,10 @@ class SequenceLocalSyncEventWatcher::SequenceLocalState {
   }
 
  private:
-  using StorageSlotType = base::SequenceLocalStorageSlot<SequenceLocalState>;
+  // GenericSequenceLocalStorageSlot needs to be specified since
+  // SequenceLocalStorageSlot doesn't support forward declared types.
+  using StorageSlotType =
+      base::GenericSequenceLocalStorageSlot<SequenceLocalState>;
   static StorageSlotType& GetStorageSlot() {
     static StorageSlotType storage;
     return storage;
@@ -197,14 +199,17 @@ class SequenceLocalSyncEventWatcher::SequenceLocalState {
   // Set of all SequenceLocalSyncEventWatchers in a signaled state, guarded by
   // a lock for sequence-safe signaling.
   base::Lock ready_watchers_lock_;
-  base::flat_set<const SequenceLocalSyncEventWatcher*> ready_watchers_;
+  base::flat_set<raw_ptr<const SequenceLocalSyncEventWatcher, CtnExperimental>>
+      ready_watchers_;
 
   base::WeakPtrFactory<SequenceLocalState> weak_ptr_factory_{this};
 };
 
 void SequenceLocalSyncEventWatcher::SequenceLocalState::OnEventSignaled() {
   for (;;) {
-    base::flat_set<const SequenceLocalSyncEventWatcher*> ready_watchers;
+    base::flat_set<
+        raw_ptr<const SequenceLocalSyncEventWatcher, CtnExperimental>>
+        ready_watchers;
     {
       base::AutoLock lock(ready_watchers_lock_);
       std::swap(ready_watchers_, ready_watchers);
@@ -215,7 +220,7 @@ void SequenceLocalSyncEventWatcher::SequenceLocalState::OnEventSignaled() {
     }
 
     auto weak_self = weak_ptr_factory_.GetWeakPtr();
-    for (auto* watcher : ready_watchers) {
+    for (const SequenceLocalSyncEventWatcher* watcher : ready_watchers) {
       if (top_watcher_ == watcher || watcher->can_wake_up_during_any_watch_) {
         watcher->callback_.Run();
 
@@ -259,7 +264,7 @@ class SequenceLocalSyncEventWatcher::Registration {
 
  private:
   const base::WeakPtr<SequenceLocalState> weak_shared_state_;
-  const raw_ptr<SequenceLocalState, DanglingUntriaged> shared_state_;
+  const raw_ptr<SequenceLocalState, AcrossTasksDanglingUntriaged> shared_state_;
   WatcherStateMap::iterator watcher_state_iterator_;
   const scoped_refptr<WatcherState> watcher_state_;
 };

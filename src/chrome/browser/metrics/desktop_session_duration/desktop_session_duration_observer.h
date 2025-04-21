@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,16 +39,17 @@ class DesktopSessionDurationObserver
  private:
   friend class content::WebContentsUserData<DesktopSessionDurationObserver>;
 
-  // Register / Unregister input event callback to given RenderViewHost
-  void RegisterInputEventObserver(content::RenderViewHost* host);
-  void UnregisterInputEventObserver(content::RenderViewHost* host);
+  // Register / Unregister input event callback to given RenderFrameHost
+  void RegisterInputEventObserver(content::RenderFrameHost* host);
+  void UnregisterInputEventObserver(content::RenderFrameHost* host);
 
   // content::RenderWidgetHost::InputEventObserver:
-  void OnInputEvent(const blink::WebInputEvent& event) override;
+  void OnInputEvent(const content::RenderWidgetHost& widget,
+                    const blink::WebInputEvent& event) override;
 
   // content::WebContentsObserver:
-  void RenderViewHostChanged(content::RenderViewHost* old_host,
-                             content::RenderViewHost* new_host) override;
+  void RenderFrameHostChanged(content::RenderFrameHost* old_host,
+                              content::RenderFrameHost* new_host) override;
 
   raw_ptr<DesktopSessionDurationTracker> service_;
 

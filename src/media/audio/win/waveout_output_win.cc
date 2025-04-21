@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/audio/win/waveout_output_win.h"
 
@@ -335,8 +340,8 @@ void PCMWaveOutAudioOutputStream::QueueNextPacket(WAVEHDR *buffer) {
   const base::TimeDelta delay =
       base::Microseconds(pending_bytes_ * base::Time::kMicrosecondsPerSecond /
                          format_.Format.nAvgBytesPerSec);
-  int frames_filled =
-      callback_->OnMoreData(delay, base::TimeTicks::Now(), 0, audio_bus_.get());
+  int frames_filled = callback_->OnMoreData(delay, base::TimeTicks::Now(), {},
+                                            audio_bus_.get());
   uint32_t used = frames_filled * audio_bus_->channels() *
                   format_.Format.wBitsPerSample / 8;
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,13 @@
 #include <memory>
 #include <string>
 
+#include "base/memory/raw_ptr.h"
 #include "base/process/process.h"
 #include "base/scoped_native_library.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "content/child/child_thread_impl.h"
-#include "content/public/common/pepper_plugin_info.h"
+#include "content/public/common/content_plugin_info.h"
 #include "ppapi/c/pp_module.h"
 #include "ppapi/proxy/connection.h"
 #include "ppapi/proxy/plugin_dispatcher.h"
@@ -122,7 +124,7 @@ class PpapiThread : public ChildThreadImpl,
   ppapi::proxy::PluginGlobals plugin_globals_;
 
   // Storage for plugin entry points.
-  PepperPluginInfo::EntryPoints plugin_entry_points_;
+  ContentPluginInfo::EntryPoints plugin_entry_points_;
 
   // Local concept of the module ID. Some functions take this. It's necessary
   // for the in-process PPAPI to handle this properly, but for proxied it's
@@ -136,7 +138,8 @@ class PpapiThread : public ChildThreadImpl,
   std::set<PP_Instance> globally_seen_instance_ids_;
 
   // The PluginDispatcher instances contained in the map are not owned by it.
-  std::map<uint32_t, ppapi::proxy::PluginDispatcher*> plugin_dispatchers_;
+  std::map<uint32_t, raw_ptr<ppapi::proxy::PluginDispatcher, CtnExperimental>>
+      plugin_dispatchers_;
   uint32_t next_plugin_dispatcher_id_;
 
   // The BlinkPlatformImpl implementation.

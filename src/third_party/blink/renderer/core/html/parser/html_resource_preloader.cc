@@ -114,6 +114,8 @@ bool HTMLResourcePreloader::AllowPreloadRequest(PreloadRequest* preload) const {
     case ResourceType::kMock:
       return !GetFieldTrialParamByFeatureAsBool(
           features::kLightweightNoStatePrefetch, "skip_other", true);
+    case ResourceType::kSpeculationRules:
+      return false;
     case ResourceType::kImage:
       return false;
     case ResourceType::kCSSStyleSheet:
@@ -132,6 +134,8 @@ bool HTMLResourcePreloader::AllowPreloadRequest(PreloadRequest* preload) const {
                  features::kLightweightNoStatePrefetch, "skip_async_script",
                  true) ||
              preload->DeferOption() == FetchParameters::DeferOption::kNoDefer;
+    case ResourceType::kDictionary:
+      return false;
   }
 }
 

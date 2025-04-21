@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,8 @@
 
 namespace chrome_pdf {
 
-// Initializes a Linux-specific font mapper.
+// Initializes a Linux-specific font mapper that sends font requests to Blink.
 // This is necessary because font loading does not work in the sandbox on Linux.
-// Depending on how this process is initialized, it either:
-// a) sends font requests to Blink.
-// b) proxies font requests via PPAPI.
 void InitializeLinuxFontMapper();
 
 }  // namespace chrome_pdf

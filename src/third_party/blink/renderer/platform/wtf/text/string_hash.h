@@ -25,68 +25,80 @@
 #include "base/check_op.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/hash_traits.h"
-#include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_hasher.h"
+#include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
 namespace WTF {
 
-inline bool HashTraits<String>::IsEmptyValue(const String& value) {
-  return value.IsNull();
-}
+// The GetHash() functions in below HashTraits do not support null strings.
+// find(), Contains(), and insert() on HashMap<String,...> cause a null-pointer
+// dereference when passed null strings.
 
-inline bool HashTraits<String>::IsDeletedValue(const String& value) {
-  return HashTraits<scoped_refptr<StringImpl>>::IsDeletedValue(value.impl_);
-}
-
-inline void HashTraits<String>::ConstructDeletedValue(String& slot,
-                                                      bool zero_value) {
-  HashTraits<scoped_refptr<StringImpl>>::ConstructDeletedValue(slot.impl_,
-                                                               zero_value);
-}
-
-// The GetHash() functions on StringHash do not support null strings. find(),
-// Contains(), and insert() on HashMap<String,..., StringHash> cause a
-// null-pointer dereference when passed null strings.
-struct StringHash {
-  STATIC_ONLY(StringHash);
-  static unsigned GetHash(StringImpl* key) { return key->GetHash(); }
+template <>
+struct HashTraits<StringImpl*> : GenericHashTraits<StringImpl*> {
+  static unsigned GetHash(const StringImpl* key) { return key->GetHash(); }
   static inline bool Equal(const StringImpl* a, const StringImpl* b) {
     return EqualNonNull(a, b);
   }
+  static constexpr bool kSafeToCompareToEmptyOrDeleted = false;
+  static constexpr int x = 10;
+};
 
+template <>
+struct HashTraits<scoped_refptr<StringImpl>>
+    : GenericHashTraits<scoped_refptr<StringImpl>> {
   static unsigned GetHash(const scoped_refptr<StringImpl>& key) {
     return key->GetHash();
   }
   static bool Equal(const scoped_refptr<StringImpl>& a,
                     const scoped_refptr<StringImpl>& b) {
-    return Equal(a.get(), b.get());
+    return EqualNonNull(a.get(), b.get());
   }
-
-  static unsigned GetHash(const String& key) { return key.Impl()->GetHash(); }
-  static bool Equal(const String& a, const String& b) {
-    return Equal(a.Impl(), b.Impl());
-  }
-
-  static const bool safe_to_compare_to_empty_or_deleted = false;
+  static constexpr bool kSafeToCompareToEmptyOrDeleted = false;
 };
 
-// This hash can be used in cases where the key is a hash of a string, but we
-// don't want to store the string. It's not really specific to string hashing,
-// but all our current uses of it are for strings.
-struct AlreadyHashed : IntHash<unsigned> {
-  STATIC_ONLY(AlreadyHashed);
-  static unsigned GetHash(unsigned key) { return key; }
+template <>
+struct HashTraits<String> : SimpleClassHashTraits<String> {
+  static unsigned GetHash(const String& key) { return key.Impl()->GetHash(); }
+  static bool Equal(const String& a, const String& b) {
+    return EqualNonNull(a.Impl(), b.Impl());
+  }
 
-  // To use a hash value as a key for a hash table, we need to eliminate the
-  // "deleted" value, which is negative one. That could be done by changing
-  // the string hash function to never generate negative one, but this works
-  // and is still relatively efficient.
-  static unsigned AvoidDeletedValue(unsigned hash) {
-    DCHECK(hash);
-    unsigned new_hash = hash | (!(hash + 1) << 31);
-    DCHECK(new_hash);
-    DCHECK_NE(new_hash, 0xFFFFFFFF);
-    return new_hash;
+  // Avoid implicit conversion to String just to hash or compare.
+  // We would like to add overloads for StringView and AtomicString too,
+  // but there are classes (e.g. WebString, V8StringResource) with
+  // implicit conversion operators both to String and one of the others,
+  // which would cause ambiguous overloads.
+  static unsigned GetHash(const char* key) {
+    return StringHasher::ComputeHashAndMaskTop8Bits(key, strlen(key));
+  }
+  static unsigned GetHash(const LChar* key) {
+    return GetHash(reinterpret_cast<const char*>(key));
+  }
+  static unsigned GetHash(const UChar* key) {
+    return ComputeHashForWideString(key, LengthOfNullTerminatedString(key));
+  }
+
+  static bool Equal(const String& a, const char* b) { return a == b; }
+  static bool Equal(const char* a, const String& b) { return a == b; }
+  static bool Equal(const String& a, const LChar* b) {
+    return a == reinterpret_cast<const char*>(b);
+  }
+  static bool Equal(const LChar* a, const String& b) {
+    return reinterpret_cast<const char*>(a) == b;
+  }
+  static bool Equal(const String& a, const UChar* b) { return a == b; }
+  static bool Equal(const UChar* a, const String& b) { return a == b; }
+  // NOTE: There are no String == StringView overloads, so we also make no
+  // Equal() for them.
+
+  static constexpr bool kSafeToCompareToEmptyOrDeleted = false;
+  static bool IsEmptyValue(const String& s) { return s.IsNull(); }
+  static bool IsDeletedValue(const String& s) {
+    return HashTraits<scoped_refptr<StringImpl>>::IsDeletedValue(s.impl_);
+  }
+  static void ConstructDeletedValue(String& slot) {
+    HashTraits<scoped_refptr<StringImpl>>::ConstructDeletedValue(slot.impl_);
   }
 };
 
@@ -96,12 +108,9 @@ namespace std {
 template <>
 struct hash<WTF::String> {
   size_t operator()(const WTF::String& string) const {
-    return WTF::StringHash::GetHash(string);
+    return WTF::GetHash(string);
   }
 };
 }  // namespace std
-
-using WTF::AlreadyHashed;
-using WTF::StringHash;
 
 #endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_WTF_TEXT_STRING_HASH_H_

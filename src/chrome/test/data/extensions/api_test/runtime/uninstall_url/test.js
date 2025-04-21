@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 // browser_tests.exe --gtest_filter=ExtensionApiTest.ChromeRuntimeUninstallURL
 
 var pass = chrome.test.callbackPass;
-var uninstall_url = 'http://www.google.com/';
+var uninstall_url = 'https://www.google.com/';
 var sets_uninstall_url = 'Sets Uninstall Url';
 var uninstalled = false;
 chrome.test.runTests([

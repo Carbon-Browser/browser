@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <map>
 
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 
 class AccountId;
 
@@ -44,7 +45,8 @@ class COMPONENT_EXPORT(APP_UPDATE) AppCapabilityAccessCacheWrapper {
   void RemoveAppCapabilityAccessCache(AppCapabilityAccessCache* cache);
 
  private:
-  std::map<AccountId, AppCapabilityAccessCache*> app_capability_access_caches_;
+  std::map<AccountId, raw_ptr<AppCapabilityAccessCache, CtnExperimental>>
+      app_capability_access_caches_;
 };
 
 }  // namespace apps

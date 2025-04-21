@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,18 @@
 
 #include <string.h>
 
+#include <optional>
 #include <sstream>
+#include <string_view>
 
 #include "base/json/json_writer.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/escape.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "components/shared_highlighting/core/common/fragment_directives_constants.h"
 #include "components/shared_highlighting/core/common/text_fragment.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace shared_highlighting {
 
@@ -26,16 +28,16 @@ base::Value ParseTextFragments(const GURL& url) {
   if (fragments.empty())
     return {};
 
-  base::Value parsed(base::Value::Type::LIST);
+  base::Value::List parsed;
   for (const std::string& fragment : fragments) {
-    absl::optional<TextFragment> opt_frag =
+    std::optional<TextFragment> opt_frag =
         TextFragment::FromEscapedString(fragment);
     if (opt_frag.has_value()) {
       parsed.Append(opt_frag->ToValue());
     }
   }
 
-  return parsed;
+  return base::Value(std::move(parsed));
 }
 
 bool SplitUrlTextFragmentDirective(const std::string& full_url,
@@ -88,7 +90,7 @@ std::vector<std::string> ExtractTextFragments(std::string ref_string) {
 }
 
 GURL RemoveFragmentSelectorDirectives(const GURL& url) {
-  const std::vector<base::StringPiece> directive_parameter_names{
+  const std::vector<std::string_view> directive_parameter_names{
       kTextDirectiveParameterName, kSelectorDirectiveParameterName};
   size_t start_pos = url.ref().find(kFragmentsUrlDelimiter);
   if (start_pos == std::string::npos)
@@ -105,9 +107,9 @@ GURL RemoveFragmentSelectorDirectives(const GURL& url) {
   for (const std::string& directive :
        base::SplitString(fragment_directive, kSelectorJoinDelimeter,
                          base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL)) {
-    if (std::none_of(
-            directive_parameter_names.begin(), directive_parameter_names.end(),
-            [&directive](const base::StringPiece& directive_parameter_name) {
+    if (base::ranges::none_of(
+            directive_parameter_names,
+            [&directive](std::string_view directive_parameter_name) {
               return base::StartsWith(directive, directive_parameter_name);
             })) {
       should_keep_directives.push_back(directive);

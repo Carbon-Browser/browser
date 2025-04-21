@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,15 +6,18 @@
 
 #include <utility>
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
+#include "base/test/gtest_util.h"
 #include "components/performance_manager/graph/frame_node_impl.h"
 #include "components/performance_manager/graph/page_node_impl.h"
 #include "components/performance_manager/graph/process_node_impl.h"
+#include "components/performance_manager/public/render_process_host_id.h"
 #include "components/performance_manager/public/render_process_host_proxy.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/common/process_type.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
@@ -23,13 +26,13 @@ namespace performance_manager {
 
 class PerformanceManagerImplTest : public testing::Test {
  public:
-  PerformanceManagerImplTest() {}
+  PerformanceManagerImplTest() = default;
 
   PerformanceManagerImplTest(const PerformanceManagerImplTest&) = delete;
   PerformanceManagerImplTest& operator=(const PerformanceManagerImplTest&) =
       delete;
 
-  ~PerformanceManagerImplTest() override {}
+  ~PerformanceManagerImplTest() override = default;
 
   void SetUp() override {
     EXPECT_FALSE(PerformanceManagerImpl::IsAvailable());
@@ -51,25 +54,30 @@ class PerformanceManagerImplTest : public testing::Test {
   content::BrowserTaskEnvironment task_environment_;
 };
 
+using PerformanceManagerImplDeathTest = PerformanceManagerImplTest;
+
 TEST_F(PerformanceManagerImplTest, InstantiateNodes) {
+  const auto render_process_host_id = RenderProcessHostId(1);
   int next_render_frame_id = 0;
 
   std::unique_ptr<ProcessNodeImpl> process_node =
-      PerformanceManagerImpl::CreateProcessNode(content::PROCESS_TYPE_RENDERER,
-                                                RenderProcessHostProxy());
+      PerformanceManagerImpl::CreateProcessNode(
+          RenderProcessHostProxy::CreateForTesting(render_process_host_id),
+          base::TaskPriority::HIGHEST);
   EXPECT_NE(nullptr, process_node.get());
   std::unique_ptr<PageNodeImpl> page_node =
-      PerformanceManagerImpl::CreatePageNode(
-          WebContentsProxy(), std::string(), GURL(), false, false,
-          base::TimeTicks::Now(), PageNode::PageState::kActive);
+      PerformanceManagerImpl::CreatePageNode(nullptr, std::string(), GURL(),
+                                             PagePropertyFlags{},
+                                             base::TimeTicks::Now());
   EXPECT_NE(nullptr, page_node.get());
 
   // Create a node of each type.
   std::unique_ptr<FrameNodeImpl> frame_node =
       PerformanceManagerImpl::CreateFrameNode(
-          process_node.get(), page_node.get(), nullptr, ++next_render_frame_id,
+          process_node.get(), page_node.get(), /*parent_frame_node=*/nullptr,
+          /*outer_document_for_fenced_frame*/ nullptr, ++next_render_frame_id,
           blink::LocalFrameToken(), content::BrowsingInstanceId(0),
-          content::SiteInstanceId(0));
+          content::SiteInstanceGroupId(0), /*is_current=*/true);
   EXPECT_NE(nullptr, frame_node.get());
 
   PerformanceManagerImpl::DeleteNode(std::move(frame_node));
@@ -77,49 +85,75 @@ TEST_F(PerformanceManagerImplTest, InstantiateNodes) {
   PerformanceManagerImpl::DeleteNode(std::move(process_node));
 }
 
+TEST_F(PerformanceManagerImplDeathTest, InvalidProcessHostProxies) {
+  const auto browser_child_process_host_id = BrowserChildProcessHostId(1);
+  EXPECT_CHECK_DEATH(PerformanceManagerImpl::CreateProcessNode(
+      RenderProcessHostProxy(), base::TaskPriority::HIGHEST));
+  EXPECT_CHECK_DEATH(PerformanceManagerImpl::CreateProcessNode(
+      content::PROCESS_TYPE_UTILITY, BrowserChildProcessHostProxy()));
+
+  // Valid proxy, wrong process type.
+  EXPECT_CHECK_DEATH(PerformanceManagerImpl::CreateProcessNode(
+      content::PROCESS_TYPE_BROWSER,
+      BrowserChildProcessHostProxy::CreateForTesting(
+          browser_child_process_host_id)));
+  EXPECT_CHECK_DEATH(PerformanceManagerImpl::CreateProcessNode(
+      content::PROCESS_TYPE_RENDERER,
+      BrowserChildProcessHostProxy::CreateForTesting(
+          browser_child_process_host_id)));
+}
+
 TEST_F(PerformanceManagerImplTest, BatchDeleteNodes) {
+  const auto render_process_host_id = RenderProcessHostId(1);
   int next_render_frame_id = 0;
   // Create a page node and a small hierarchy of frames.
   std::unique_ptr<ProcessNodeImpl> process_node =
-      PerformanceManagerImpl::CreateProcessNode(content::PROCESS_TYPE_RENDERER,
-                                                RenderProcessHostProxy());
+      PerformanceManagerImpl::CreateProcessNode(
+          RenderProcessHostProxy::CreateForTesting(render_process_host_id),
+          base::TaskPriority::HIGHEST);
   std::unique_ptr<PageNodeImpl> page_node =
-      PerformanceManagerImpl::CreatePageNode(
-          WebContentsProxy(), std::string(), GURL(), false, false,
-          base::TimeTicks::Now(), PageNode::PageState::kActive);
+      PerformanceManagerImpl::CreatePageNode(nullptr, std::string(), GURL(),
+                                             PagePropertyFlags{},
+                                             base::TimeTicks::Now());
 
   std::unique_ptr<FrameNodeImpl> parent1_frame =
       PerformanceManagerImpl::CreateFrameNode(
-          process_node.get(), page_node.get(), nullptr, ++next_render_frame_id,
+          process_node.get(), page_node.get(), /*parent_frame_node=*/nullptr,
+          /*outer_document_for_fenced_frame*/ nullptr, ++next_render_frame_id,
           blink::LocalFrameToken(), content::BrowsingInstanceId(0),
-          content::SiteInstanceId(0));
+          content::SiteInstanceGroupId(0), /*is_current*/ true);
   std::unique_ptr<FrameNodeImpl> parent2_frame =
       PerformanceManagerImpl::CreateFrameNode(
-          process_node.get(), page_node.get(), nullptr, ++next_render_frame_id,
+          process_node.get(), page_node.get(), /*parent_frame_node=*/nullptr,
+          /*outer_document_for_fenced_frame*/ nullptr, ++next_render_frame_id,
           blink::LocalFrameToken(), content::BrowsingInstanceId(0),
-          content::SiteInstanceId(0));
+          content::SiteInstanceGroupId(0), /*is_current*/ true);
 
   std::unique_ptr<FrameNodeImpl> child1_frame =
       PerformanceManagerImpl::CreateFrameNode(
           process_node.get(), page_node.get(), parent1_frame.get(),
-          ++next_render_frame_id, blink::LocalFrameToken(),
-          content::BrowsingInstanceId(0), content::SiteInstanceId(0));
+          /*outer_document_for_fenced_frame*/ nullptr, ++next_render_frame_id,
+          blink::LocalFrameToken(), content::BrowsingInstanceId(0),
+          content::SiteInstanceGroupId(0), /*is_current*/ true);
   std::unique_ptr<FrameNodeImpl> child2_frame =
       PerformanceManagerImpl::CreateFrameNode(
           process_node.get(), page_node.get(), parent2_frame.get(),
-          ++next_render_frame_id, blink::LocalFrameToken(),
-          content::BrowsingInstanceId(0), content::SiteInstanceId(0));
+          /*outer_document_for_fenced_frame*/ nullptr, ++next_render_frame_id,
+          blink::LocalFrameToken(), content::BrowsingInstanceId(0),
+          content::SiteInstanceGroupId(0), /*is_current*/ true);
 
   std::vector<std::unique_ptr<NodeBase>> nodes;
   for (size_t i = 0; i < 10; ++i) {
     nodes.push_back(PerformanceManagerImpl::CreateFrameNode(
         process_node.get(), page_node.get(), child1_frame.get(),
-        ++next_render_frame_id, blink::LocalFrameToken(),
-        content::BrowsingInstanceId(0), content::SiteInstanceId(0)));
+        /*outer_document_for_fenced_frame*/ nullptr, ++next_render_frame_id,
+        blink::LocalFrameToken(), content::BrowsingInstanceId(0),
+        content::SiteInstanceGroupId(0), /*is_current*/ true));
     nodes.push_back(PerformanceManagerImpl::CreateFrameNode(
         process_node.get(), page_node.get(), child1_frame.get(),
-        ++next_render_frame_id, blink::LocalFrameToken(),
-        content::BrowsingInstanceId(0), content::SiteInstanceId(0)));
+        /*outer_document_for_fenced_frame*/ nullptr, ++next_render_frame_id,
+        blink::LocalFrameToken(), content::BrowsingInstanceId(0),
+        content::SiteInstanceGroupId(0), /*is_current*/ true));
   }
 
   nodes.push_back(std::move(process_node));
@@ -135,9 +169,9 @@ TEST_F(PerformanceManagerImplTest, BatchDeleteNodes) {
 TEST_F(PerformanceManagerImplTest, CallOnGraphImpl) {
   // Create a page node for something to target.
   std::unique_ptr<PageNodeImpl> page_node =
-      PerformanceManagerImpl::CreatePageNode(
-          WebContentsProxy(), std::string(), GURL(), false, false,
-          base::TimeTicks::Now(), PageNode::PageState::kActive);
+      PerformanceManagerImpl::CreatePageNode(nullptr, std::string(), GURL(),
+                                             PagePropertyFlags{},
+                                             base::TimeTicks::Now());
   base::RunLoop run_loop;
   base::OnceClosure quit_closure = run_loop.QuitClosure();
   EXPECT_TRUE(content::BrowserThread::CurrentlyOn(content::BrowserThread::UI));
@@ -157,9 +191,9 @@ TEST_F(PerformanceManagerImplTest, CallOnGraphImpl) {
 TEST_F(PerformanceManagerImplTest, CallOnGraphAndReplyWithResult) {
   // Create a page node for something to target.
   std::unique_ptr<PageNodeImpl> page_node =
-      PerformanceManagerImpl::CreatePageNode(
-          WebContentsProxy(), std::string(), GURL(), false, false,
-          base::TimeTicks::Now(), PageNode::PageState::kActive);
+      PerformanceManagerImpl::CreatePageNode(nullptr, std::string(), GURL(),
+                                             PagePropertyFlags{},
+                                             base::TimeTicks::Now());
   base::RunLoop run_loop;
 
   EXPECT_TRUE(content::BrowserThread::CurrentlyOn(content::BrowserThread::UI));

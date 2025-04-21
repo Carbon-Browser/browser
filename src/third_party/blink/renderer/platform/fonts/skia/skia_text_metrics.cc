@@ -1,10 +1,16 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "third_party/blink/renderer/platform/fonts/skia/skia_text_metrics.h"
 
 #include "build/build_config.h"
+#include "third_party/blink/renderer/platform/fonts/shaping/harfbuzz_face.h"
 #include "third_party/blink/renderer/platform/wtf/math_extras.h"
 #include "third_party/skia/include/core/SkFont.h"
 #include "third_party/skia/include/core/SkPath.h"
@@ -29,6 +35,12 @@ const T* advance_by_byte_size(const T* p, unsigned byte_size) {
 void SkFontGetGlyphWidthForHarfBuzz(const SkFont& font,
                                     hb_codepoint_t codepoint,
                                     hb_position_t* width) {
+  // We don't want to compute glyph extents for kUnmatchedVSGlyphId
+  // cases yet. Since we will do that during the second shaping pass,
+  // when VariationSelectorMode is set to kIgnoreVariationSelector.
+  if (codepoint == kUnmatchedVSGlyphId) {
+    return;
+  }
   DCHECK_LE(codepoint, 0xFFFFu);
   CHECK(width);
 
@@ -79,13 +91,19 @@ void SkFontGetGlyphWidthForHarfBuzz(const SkFont& font,
 void SkFontGetGlyphExtentsForHarfBuzz(const SkFont& font,
                                       hb_codepoint_t codepoint,
                                       hb_glyph_extents_t* extents) {
+  // We don't want to compute glyph extents for kUnmatchedVSGlyphId
+  // cases yet. Since we will do that during the second shaping pass,
+  // when VariationSelectorMode is set to kIgnoreVariationSelector.
+  if (codepoint == kUnmatchedVSGlyphId) {
+    return;
+  }
   DCHECK_LE(codepoint, 0xFFFFu);
   CHECK(extents);
 
   SkRect sk_bounds;
   uint16_t glyph = codepoint;
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
   // TODO(drott): Remove this once we have better metrics bounds
   // on Mac, https://bugs.chromium.org/p/skia/issues/detail?id=5328
   SkPath path;
@@ -112,7 +130,7 @@ void SkFontGetGlyphExtentsForHarfBuzz(const SkFont& font,
 }
 
 void SkFontGetBoundsForGlyph(const SkFont& font, Glyph glyph, SkRect* bounds) {
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
   // TODO(drott): Remove this once we have better metrics bounds
   // on Mac, https://bugs.chromium.org/p/skia/issues/detail?id=5328
   SkPath path;
@@ -136,7 +154,7 @@ void SkFontGetBoundsForGlyph(const SkFont& font, Glyph glyph, SkRect* bounds) {
 void SkFontGetBoundsForGlyphs(const SkFont& font,
                               const Vector<Glyph, 256>& glyphs,
                               SkRect* bounds) {
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
   for (unsigned i = 0; i < glyphs.size(); i++) {
     SkFontGetBoundsForGlyph(font, glyphs[i], &bounds[i]);
   }

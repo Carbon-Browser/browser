@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,17 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
 #include "base/time/time.h"
-#include "components/sync/base/model_type.h"
+#include "components/sync/base/deletion_origin.h"
 #include "components/sync/protocol/entity_metadata.pb.h"
 
 namespace sync_pb {
 class EntitySpecifics;
+class UniquePosition;
 }  // namespace sync_pb
 
 namespace syncer {
@@ -28,7 +30,7 @@ struct CommitRequestData;
 struct CommitResponseData;
 struct UpdateResponseData;
 
-// This class is used by the ClientTagBasedModelTypeProcessor to track the state
+// This class is used by the ClientTagBasedDataTypeProcessor to track the state
 // of each entity with its type. It can be considered a helper class internal to
 // the processor. It manages the metadata for its entity and caches entity data
 // upon a local change until commit confirmation is received.
@@ -68,32 +70,41 @@ class ProcessorEntity {
   bool RequiresCommitData() const;
 
   // Whether it's safe to clear the metadata for this entity. This means that
-  // the entity is deleted and either knowledge of this entity has never left
-  // this client or it is up to date with the server.
+  // the entity is deleted and it is up to date with the server (i.e. is *not*
+  // unsynced).
   bool CanClearMetadata() const;
 
-  // Returns true if the specified update version does not contain new data.
-  bool UpdateIsReflection(int64_t update_version) const;
+  // Returns true if the specified `update_version` is already known, i.e. is
+  // small or equal to the last known server version.
+  // This is the case for reflections, but can also be true in some other edge
+  // cases (e.g. updates were received out of order).
+  bool IsVersionAlreadyKnown(int64_t update_version) const;
 
   // Records that an update from the server was received but ignores its data.
   void RecordIgnoredRemoteUpdate(const UpdateResponseData& response_data);
 
   // Records an update from the server assuming its data is the new data for
   // this entity.
-  void RecordAcceptedRemoteUpdate(const UpdateResponseData& response_data,
-                                  sync_pb::EntitySpecifics trimmed_specifics);
+  void RecordAcceptedRemoteUpdate(
+      const UpdateResponseData& response_data,
+      sync_pb::EntitySpecifics trimmed_specifics,
+      std::optional<sync_pb::UniquePosition> unique_position);
 
   // Squashes a pending commit with an update from the server.
-  void RecordForcedRemoteUpdate(const UpdateResponseData& response_data,
-                                sync_pb::EntitySpecifics trimmed_specifics);
+  void RecordForcedRemoteUpdate(
+      const UpdateResponseData& response_data,
+      sync_pb::EntitySpecifics trimmed_specifics,
+      std::optional<sync_pb::UniquePosition> unique_position);
 
   // Applies a local change to this item.
-  void RecordLocalUpdate(std::unique_ptr<EntityData> data,
-                         sync_pb::EntitySpecifics trimmed_specifics);
+  void RecordLocalUpdate(
+      std::unique_ptr<EntityData> data,
+      sync_pb::EntitySpecifics trimmed_specifics,
+      std::optional<sync_pb::UniquePosition> unique_position);
 
   // Applies a local deletion to this item. Returns true if entity was
   // previously committed to server and tombstone should be sent.
-  bool RecordLocalDeletion();
+  bool RecordLocalDeletion(const DeletionOrigin& origin);
 
   // Initializes a message representing this item's uncommitted state
   // and assumes that it is forwarded to the sync engine for commiting.
@@ -128,14 +139,14 @@ class ProcessorEntity {
   // Check if the instance has cached commit data.
   bool HasCommitData() const;
 
-  // Check whether |data| matches the stored specifics hash.
+  // Check whether `data` matches the stored specifics hash.
   bool MatchesData(const EntityData& data) const;
 
   // Check whether the current metadata of an unsynced entity matches the stored
   // base specifics hash.
   bool MatchesOwnBaseData() const;
 
-  // Check whether |data| matches the stored base specifics hash.
+  // Check whether `data` matches the stored base specifics hash.
   bool MatchesBaseData(const EntityData& data) const;
 
   // Increment sequence number in the metadata. This will also update the
@@ -152,7 +163,7 @@ class ProcessorEntity {
   ProcessorEntity(const std::string& storage_key,
                   sync_pb::EntityMetadata metadata);
 
-  // Check whether |specifics| matches the stored specifics_hash.
+  // Check whether `specifics` matches the stored specifics_hash.
   bool MatchesSpecificsHash(const sync_pb::EntitySpecifics& specifics) const;
 
   // Update hash string for EntitySpecifics in the metadata.

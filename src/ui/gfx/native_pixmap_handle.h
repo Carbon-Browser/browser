@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,24 +10,26 @@
 
 #include <vector>
 
-#include "base/unguessable_token.h"
+#include "base/component_export.h"
 #include "build/build_config.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-#include "ui/gfx/gfx_export.h"
+#include "ui/gfx/buffer_types.h"
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
 #include "base/files/scoped_file.h"
 #endif
 
 #if BUILDFLAG(IS_FUCHSIA)
+#include <lib/zx/eventpair.h>
 #include <lib/zx/vmo.h>
 #endif
 
 namespace gfx {
 
+class Size;
+
 // NativePixmapPlane is used to carry the plane related information for GBM
 // buffer. More fields can be added if they are plane specific.
-struct GFX_EXPORT NativePixmapPlane {
+struct COMPONENT_EXPORT(GFX) NativePixmapPlane {
   NativePixmapPlane();
   NativePixmapPlane(int stride,
                     int offset,
@@ -61,13 +63,7 @@ struct GFX_EXPORT NativePixmapPlane {
 #endif
 };
 
-#if BUILDFLAG(IS_FUCHSIA)
-// Buffer collection ID is used to identify sysmem buffer collections across
-// processes.
-using SysmemBufferCollectionId = base::UnguessableToken;
-#endif
-
-struct GFX_EXPORT NativePixmapHandle {
+struct COMPONENT_EXPORT(GFX) NativePixmapHandle {
   // This is the same value as DRM_FORMAT_MOD_INVALID, which is not a valid
   // modifier. We use this to indicate that layout information
   // (tiling/compression) if any will be communicated out of band.
@@ -93,7 +89,11 @@ struct GFX_EXPORT NativePixmapHandle {
 #endif
 
 #if BUILDFLAG(IS_FUCHSIA)
-  absl::optional<SysmemBufferCollectionId> buffer_collection_id;
+  // Sysmem buffer collection handle. The other end of the eventpair is owned
+  // by the SysmemBufferCollection instance in the GPU process. It will destroy
+  // itself when all handles for the collection are dropped. Eventpair is used
+  // here because they are dupable, nun-fungible and unique.
+  zx::eventpair buffer_collection_handle;
   uint32_t buffer_index = 0;
 
   // Set to true for sysmem buffers which are initialized with RAM coherency
@@ -106,9 +106,32 @@ struct GFX_EXPORT NativePixmapHandle {
 // Returns an instance of |handle| which can be sent over IPC. This duplicates
 // the file-handles, so that the IPC code take ownership of them, without
 // invalidating |handle|.
-GFX_EXPORT NativePixmapHandle
-CloneHandleForIPC(const NativePixmapHandle& handle);
+COMPONENT_EXPORT(GFX)
+NativePixmapHandle CloneHandleForIPC(const NativePixmapHandle& handle);
 
+// Returns true iff the plane metadata (number of planes, plane size, offset,
+// and stride) in |handle| corresponds to a buffer that can store an image of
+// |size| and |format|. This function does not check the plane handles, so even
+// if this function returns true, it's not guaranteed that the memory objects
+// referenced by |handle| are consistent with the plane metadata. If
+// |assume_single_memory_object| is true, this function assumes that all planes
+// in |handle| reference the same memory object and that all planes are
+// contained in the range [0, last plane's offset + last plane's size) (and the
+// plane metadata is validated against this assumption).
+//
+// If this function returns true, the caller may make the following additional
+// assumptions:
+//
+// - The stride of each plane can fit in an int (and also in a size_t).
+// - If |assume_single_memory_object| is true:
+//   - The offset and size of each plane can fit in a size_t.
+//   - The result of offset + size for each plane does not overflow and can fit
+//     in a size_t.
+COMPONENT_EXPORT(GFX)
+bool CanFitImageForSizeAndFormat(const gfx::NativePixmapHandle& handle,
+                                 const gfx::Size& size,
+                                 gfx::BufferFormat format,
+                                 bool assume_single_memory_object);
 }  // namespace gfx
 
 #endif  // UI_GFX_NATIVE_PIXMAP_HANDLE_H_

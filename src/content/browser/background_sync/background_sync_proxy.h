@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <set>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/sequence_checker.h"
 #include "base/time/time.h"
 #include "content/common/content_export.h"
@@ -25,7 +25,7 @@ class ServiceWorkerContextWrapper;
 // on BackgroundSyncController. It is owned by the BackgroundSyncManager and
 // lives on the UI thread.
 //
-// TODO(crbug.com/824858): This class was previously needed because
+// TODO(crbug.com/40568315): This class was previously needed because
 // BackgroundSyncManager and BackgroundSyncController were on different threads.
 // It should no longer be needed.
 class CONTENT_EXPORT BackgroundSyncProxy {

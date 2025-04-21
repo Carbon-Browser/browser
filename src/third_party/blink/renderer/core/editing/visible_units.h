@@ -29,13 +29,13 @@
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/editing/editing_boundary.h"
 #include "third_party/blink/renderer/core/editing/forward.h"
-#include "third_party/blink/renderer/platform/geometry/layout_rect.h"
 #include "third_party/blink/renderer/platform/text/text_direction.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_uchar.h"
 
 namespace gfx {
 class Point;
 class Rect;
+class RectF;
 }  // namespace gfx
 
 namespace blink {
@@ -135,6 +135,9 @@ CORE_EXPORT Position StartOfWordPosition(const Position&,
 CORE_EXPORT PositionInFlatTree
 StartOfWordPosition(const PositionInFlatTree&,
                     WordSide = kNextWordIfOnBoundary);
+CORE_EXPORT Position MiddleOfWordPosition(const Position&, const Position&);
+CORE_EXPORT PositionInFlatTree MiddleOfWordPosition(const PositionInFlatTree&,
+                                                    const PositionInFlatTree&);
 CORE_EXPORT Position EndOfWordPosition(const Position&,
                                        WordSide = kNextWordIfOnBoundary);
 CORE_EXPORT PositionInFlatTree
@@ -278,7 +281,7 @@ gfx::Rect ComputeTextRect(const EphemeralRangeInFlatTree&);
 gfx::RectF ComputeTextRectF(const EphemeralRange&);
 
 // |FirstRectForRange| requires up-to-date layout.
-gfx::Rect FirstRectForRange(const EphemeralRange&);
+CORE_EXPORT gfx::Rect FirstRectForRange(const EphemeralRange&);
 
 CORE_EXPORT PositionWithAffinity
 AdjustForwardPositionToAvoidCrossingEditingBoundaries(

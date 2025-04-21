@@ -1,11 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "remoting/host/remote_open_url/remote_open_url_client.h"
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/notreached.h"
 #include "base/strings/utf_string_conversions.h"
@@ -37,7 +37,6 @@ std::unique_ptr<RemoteOpenUrlClient::Delegate> CreateDelegate() {
   return std::make_unique<RemoteOpenUrlClientDelegateWin>();
 #else
   NOTREACHED();
-  return nullptr;
 #endif
 }
 
@@ -123,7 +122,7 @@ void RemoteOpenUrlClient::Open(const base::CommandLine::StringType& arg,
 }
 
 void RemoteOpenUrlClient::OnOpenUrlResponse(mojom::OpenUrlResult result) {
-  timeout_timer_.AbandonAndStop();
+  timeout_timer_.Stop();
   switch (result) {
     case mojom::OpenUrlResult::SUCCESS:
       HOST_LOG << "The URL is successfully opened on the client.";

@@ -1,14 +1,23 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/354829279): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ui/gfx/icon_util.h"
 
 #include "base/check_op.h"
+#include "base/compiler_specific.h"
+#include "base/containers/heap_array.h"
+#include "base/containers/span.h"
 #include "base/files/file_util.h"
 #include "base/files/important_file_writer.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/notreached.h"
+#include "base/ranges/algorithm.h"
 #include "base/scoped_generic.h"
 #include "base/trace_event/trace_event.h"
 #include "base/win/resource_util.h"
@@ -199,21 +208,19 @@ base::win::ScopedHICON IconUtil::CreateHICONFromSkBitmap(
       PixelsHaveAlpha(static_cast<const uint32_t*>(bitmap.getPixels()),
                       bitmap.width() * bitmap.height());
 
-  std::unique_ptr<uint8_t[]> mask_bits;
+  base::HeapArray<uint8_t> mask_bits;
   if (!bitmap_has_alpha_channel) {
     // Bytes per line with paddings to make it word alignment.
     size_t bytes_per_line = (bitmap.width() + 0xF) / 16 * 2;
     size_t mask_bits_size = bytes_per_line * bitmap.height();
 
-    mask_bits = std::make_unique<uint8_t[]>(mask_bits_size);
-    DCHECK(mask_bits.get());
-
-    // Make all pixels transparent.
-    memset(mask_bits.get(), 0xFF, mask_bits_size);
+    mask_bits = base::HeapArray<uint8_t>::Uninit(mask_bits_size);
+    // Make all pixels transparent:
+    base::ranges::fill(mask_bits.as_span(), 0xFF);
   }
 
   base::win::ScopedBitmap mono_bitmap(
-      ::CreateBitmap(bitmap.width(), bitmap.height(), 1, 1, mask_bits.get()));
+      ::CreateBitmap(bitmap.width(), bitmap.height(), 1, 1, mask_bits.data()));
   DCHECK(mono_bitmap.is_valid());
 
   ICONINFO icon_info;
@@ -282,7 +289,8 @@ std::unique_ptr<gfx::ImageFamily> IconUtil::CreateImageFamilyFromIconResource(
       DCHECK_EQ(png_size, entry->dwBytesInRes);
 
       result->Add(gfx::Image::CreateFrom1xPNGBytes(
-          new base::RefCountedStaticMemory(png_data, png_size)));
+          new base::RefCountedStaticMemory(UNSAFE_TODO(
+              base::span(static_cast<uint8_t*>(png_data), png_size)))));
     }
   }
   return result;
@@ -416,7 +424,7 @@ SkBitmap IconUtil::CreateSkBitmapFromHICONHelper(HICON icon,
 
   // Capture boolean opacity. We may not use it if we find out the bitmap has
   // an alpha channel.
-  std::unique_ptr<bool[]> opaque(new bool[num_pixels]);
+  auto opaque = base::HeapArray<bool>::Uninit(num_pixels);
   for (size_t i = 0; i < num_pixels; ++i)
     opaque[i] = !static_cast<uint32_t*>(bits)[i];
 

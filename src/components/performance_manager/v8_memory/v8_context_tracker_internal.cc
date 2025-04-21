@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "base/check.h"
+#include "base/not_fatal_until.h"
 #include "components/performance_manager/v8_memory/v8_context_tracker_helpers.h"
 
 namespace performance_manager {
@@ -110,7 +111,11 @@ RemoteFrameData::~RemoteFrameData() {
   // scope on their own.
   if (execution_context_data_->ClearRemoteFrameData(PassKey()) &&
       execution_context_data_->IsTracked()) {
-    process_data_->data_store()->Destroy(execution_context_data_->GetToken());
+    // Reset `execution_context_data_` to nullptr because it will be destroyed
+    // using the token below.
+    blink::ExecutionContextToken token = execution_context_data_->GetToken();
+    execution_context_data_ = nullptr;
+    process_data_->data_store()->Destroy(token);
   }
 }
 
@@ -131,7 +136,7 @@ V8ContextData::V8ContextData(ProcessData* process_data,
             static_cast<bool>(description.execution_context_token));
   if (execution_context_data) {
     DCHECK_EQ(execution_context_data->GetToken(),
-              description.execution_context_token.value());
+              *description.execution_context_token);
 
     // These must be same process.
     DCHECK_EQ(process_data, execution_context_data->process_data());
@@ -149,9 +154,15 @@ V8ContextData::~V8ContextData() {
   // If this is the last reference keeping alive a tracked ExecutionContextData,
   // then clean it up as well. Untracked ExecutionContextDatas will go out of
   // scope on their own.
-  if (auto* ecd = GetExecutionContextData()) {
-    if (ecd->DecrementV8ContextCount(PassKey()) && ecd->IsTracked())
-      process_data_->data_store()->Destroy(ecd->GetToken());
+  auto* execution_context_data = GetExecutionContextData();
+  if (execution_context_data &&
+      execution_context_data->DecrementV8ContextCount(PassKey()) &&
+      execution_context_data->IsTracked()) {
+    // Reset the execution_context_state to nullptr because it will be
+    // destroyed using the token below.
+    blink::ExecutionContextToken token = execution_context_data->GetToken();
+    execution_context_state = nullptr;
+    process_data_->data_store()->Destroy(token);
   }
 }
 
@@ -407,7 +418,7 @@ bool V8ContextTrackerDataStore::MarkDetached(V8ContextData* v8_data) {
 void V8ContextTrackerDataStore::Destroy(
     const blink::ExecutionContextToken& token) {
   auto it = global_execution_context_datas_.find(token);
-  DCHECK(it != global_execution_context_datas_.end());
+  CHECK(it != global_execution_context_datas_.end(), base::NotFatalUntil::M130);
   auto* ec_data = it->get();
   if (ec_data->destroyed) {
     DCHECK_LT(0u, destroyed_execution_context_count_);
@@ -422,7 +433,7 @@ void V8ContextTrackerDataStore::Destroy(
 
 void V8ContextTrackerDataStore::Destroy(const blink::RemoteFrameToken& token) {
   auto it = global_remote_frame_datas_.find(token);
-  DCHECK(it != global_remote_frame_datas_.end());
+  CHECK(it != global_remote_frame_datas_.end(), base::NotFatalUntil::M130);
   auto* rf_data = it->get();
   rf_data->process_data()->Remove(PassKey(), rf_data);
   global_remote_frame_datas_.erase(it);
@@ -430,7 +441,7 @@ void V8ContextTrackerDataStore::Destroy(const blink::RemoteFrameToken& token) {
 
 void V8ContextTrackerDataStore::Destroy(const blink::V8ContextToken& token) {
   auto it = global_v8_context_datas_.find(token);
-  DCHECK(it != global_v8_context_datas_.end());
+  CHECK(it != global_v8_context_datas_.end(), base::NotFatalUntil::M130);
   auto* v8_data = it->get();
   if (v8_data->detached) {
     DCHECK_LT(0u, detached_v8_context_count_);

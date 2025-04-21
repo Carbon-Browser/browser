@@ -1,17 +1,22 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <stddef.h>
 
 #include <map>
 
 #include "base/metrics/field_trial.h"
+#include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/statistics_recorder.h"
 #include "base/test/metrics/user_action_tester.h"
 #include "chrome/browser/extensions/extension_apitest.h"
-#include "components/variations/variations_associated_data.h"
 #include "content/public/test/browser_test.h"
 
 namespace extensions {
@@ -83,8 +88,7 @@ void ValidateUserActions(const base::UserActionTester& user_action_tester,
 void ValidateSparseHistogramSamples(
     const std::string& name,
     const base::HistogramSamples& samples) {
-  for (unsigned int i = 0; i < std::size(g_sparse_histograms); ++i) {
-    const SparseHistogram& sparse_histogram = g_sparse_histograms[i];
+  for (const auto& sparse_histogram : g_sparse_histograms) {
     if (std::string(name) == sparse_histogram.name) {
       for (int j = 0; j < sparse_histogram.bucket_count; ++j) {
         const Bucket& bucket = sparse_histogram.buckets[j];
@@ -130,7 +134,7 @@ void ValidateHistograms(const RecordedHistogram* recorded,
 
 }  // namespace
 
-using ContextType = ExtensionBrowserTest::ContextType;
+using ContextType = extensions::browser_test_util::ContextType;
 
 class ExtensionMetricsApiTest
     : public ExtensionApiTest,
@@ -155,8 +159,8 @@ IN_PROC_BROWSER_TEST_P(ExtensionMetricsApiTest, Metrics) {
 
   base::FieldTrialList::CreateFieldTrial("apitestfieldtrial2", "group1");
 
-  ASSERT_TRUE(variations::AssociateVariationParams(
-      "apitestfieldtrial2", "group1", {{"a", "aa"}, {"b", "bb"}}));
+  ASSERT_TRUE(base::AssociateFieldTrialParams("apitestfieldtrial2", "group1",
+                                              {{"a", "aa"}, {"b", "bb"}}));
 
   ASSERT_TRUE(RunExtensionTest("metrics", {}, {.load_as_component = true}))
       << message_;

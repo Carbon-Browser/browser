@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,9 @@ struct HistoryMatch {
   HistoryMatch();
 
   static bool EqualsGURL(const HistoryMatch& h, const GURL& url);
+
+  // True if the url contains only a host, e.g. "http://www.google.com/".
+  static bool IsHostOnly(const GURL& gurl);
 
   // Returns true if url in this HistoryMatch is just a host
   // (e.g. "http://www.google.com/") and not some other subpage

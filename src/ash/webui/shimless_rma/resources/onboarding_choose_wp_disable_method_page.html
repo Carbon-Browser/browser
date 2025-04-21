@@ -3,28 +3,26 @@
 
 <base-page left-pane-only>
   <div slot="left-pane">
-    <h1>[[i18n('chooseWpDisableMethodPageTitleText')]]</h1>
+    <h1 tabindex="-1">[[i18n('chooseWpDisableMethodPageTitleText')]]</h1>
     <cr-radio-group
         id="hwwpDisableMethod" disabled="[[allButtonsDisabled]]"
-        on-selected-changed="onHwwpDisableMethodSelectionChanged_">
+        on-selected-changed="onHwwpDisableMethodSelectionChanged">
       <cr-radio-button
           name="hwwpDisableMethodManual"
           id="hwwpDisableMethodManual"
-          aria-label="[[i18n('manualWpDisableMethodOptionText')]]">
-          [[i18n('manualWpDisableMethodOptionText')]]
+          label="[[i18n('manualWpDisableMethodOptionText')]]">
+        <div class="indented-description" aria-hidden="true">
+          [[i18n('manualWpDisableMethodDescriptionText')]]
+        </div>
       </cr-radio-button>
-      <div class="indented-description">
-        [[i18n('manualWpDisableMethodDescriptionText')]]
-      </div>
       <cr-radio-button
           name="hwwpDisableMethodRsu"
           id="hwwpDisableMethodRsu"
-          aria-label="[[i18n('rsuWpDisableMethodOptionText')]]">
-          [[i18n('rsuWpDisableMethodOptionText')]]
+          label="[[i18n('rsuWpDisableMethodOptionText')]]">
+        <div class="indented-description" aria-hidden>
+          [[i18n('rsuWpDisableMethodDescriptionText')]]
+        </div>
       </cr-radio-button>
-      <div class="indented-description">
-        [[i18n('rsuWpDisableMethodDescriptionText')]]
-      </div>
     </cr-radio-group>
   </div>
 </base-page>

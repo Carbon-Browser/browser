@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,10 +16,6 @@
 #include "extensions/browser/api/messaging/native_message_host.h"
 #include "extensions/browser/api/messaging/native_messaging_channel.h"
 #include "remoting/host/win/launch_native_messaging_host_process.h"
-
-namespace base {
-class Value;
-}  // namespace base
 
 namespace remoting {
 
@@ -41,7 +37,7 @@ class ElevatedNativeMessagingHost
   ~ElevatedNativeMessagingHost() override;
 
   // extensions::NativeMessagingChannel::EventHandle implementation.
-  void OnMessage(std::unique_ptr<base::Value> message) override;
+  void OnMessage(const base::Value& message) override;
   void OnDisconnect() override;
 
   // Create and connect to an elevated host process if necessary.
@@ -50,7 +46,7 @@ class ElevatedNativeMessagingHost
   ProcessLaunchResult EnsureElevatedHostCreated();
 
   // Send |message| to the elevated host.
-  void SendMessage(std::unique_ptr<base::Value> message);
+  void SendMessage(const base::Value::Dict& message);
 
  private:
   // Disconnect and shut down the elevated host.

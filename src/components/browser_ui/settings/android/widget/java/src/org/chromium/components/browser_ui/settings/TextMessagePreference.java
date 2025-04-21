@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,16 +12,14 @@ import android.widget.TextView;
 
 import androidx.preference.PreferenceViewHolder;
 
-/**
- * A preference that displays informational text, and a summary which can contain a link.
- */
+/** A preference that displays informational text, and a summary which can contain a link. */
 public class TextMessagePreference extends ChromeBasePreference {
+    private TextView mTitleView;
     private TextView mSummaryView;
     private MovementMethod mMovementMethod = LinkMovementMethod.getInstance();
+    private Integer mLiveRegionMode;
 
-    /**
-     * Constructor for inflating from XML.
-     */
+    /** Constructor for inflating from XML. */
     public TextMessagePreference(Context context, AttributeSet attrs) {
         super(context, attrs);
         setSelectable(false);
@@ -32,8 +30,12 @@ public class TextMessagePreference extends ChromeBasePreference {
     public void onBindViewHolder(PreferenceViewHolder holder) {
         super.onBindViewHolder(holder);
 
+        mTitleView = (TextView) holder.findViewById(android.R.id.title);
         mSummaryView = (TextView) holder.findViewById(android.R.id.summary);
         setSummaryMovementMethod(mMovementMethod);
+        if (mLiveRegionMode != null) {
+            setAccessibilityLiveRegion(mLiveRegionMode);
+        }
     }
 
     /**
@@ -43,6 +45,21 @@ public class TextMessagePreference extends ChromeBasePreference {
         mMovementMethod = movementMethod;
         if (mSummaryView != null) {
             mSummaryView.setMovementMethod(movementMethod);
+        }
+    }
+
+    /**
+     * Sets the accessibility live region property on the views related to this preference.
+     *
+     * @param liveRegionMode One of View.ACCESSIBILITY_LIVE_REGION_NONE, POLITE, or ASSERTIVE.
+     */
+    public void setAccessibilityLiveRegion(int liveRegionMode) {
+        mLiveRegionMode = liveRegionMode;
+        if (mTitleView != null) {
+            mTitleView.setAccessibilityLiveRegion(liveRegionMode);
+        }
+        if (mSummaryView != null) {
+            mSummaryView.setAccessibilityLiveRegion(liveRegionMode);
         }
     }
 }

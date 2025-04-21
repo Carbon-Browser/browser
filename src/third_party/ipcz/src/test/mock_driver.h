@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,13 +26,13 @@ class MockDriver {
                IpczDriverHandle,
                uint32_t,
                const void*,
-               void*,
+               volatile void*,
                size_t*,
                IpczDriverHandle*,
                size_t*));
   MOCK_METHOD(IpczResult,
               Deserialize,
-              (const void*,
+              (const volatile void*,
                size_t,
                const IpczDriverHandle*,
                size_t,
@@ -68,6 +68,9 @@ class MockDriver {
                uint32_t,
                const void*));
   MOCK_METHOD(IpczResult,
+              ReportBadTransportActivity,
+              (IpczDriverHandle, uintptr_t, uint32_t, const void*));
+  MOCK_METHOD(IpczResult,
               AllocateSharedMemory,
               (size_t, uint32_t, const void*, IpczDriverHandle*));
   MOCK_METHOD(IpczResult,
@@ -76,10 +79,13 @@ class MockDriver {
   MOCK_METHOD(IpczResult,
               DuplicateSharedMemory,
               (IpczDriverHandle, uint32_t, const void*, IpczDriverHandle*));
-  MOCK_METHOD(
-      IpczResult,
-      MapSharedMemory,
-      (IpczDriverHandle, uint32_t, const void*, void**, IpczDriverHandle*));
+  MOCK_METHOD(IpczResult,
+              MapSharedMemory,
+              (IpczDriverHandle,
+               uint32_t,
+               const void*,
+               volatile void**,
+               IpczDriverHandle*));
   MOCK_METHOD(IpczResult,
               GenerateRandomBytes,
               (size_t, uint32_t, const void*, void*));

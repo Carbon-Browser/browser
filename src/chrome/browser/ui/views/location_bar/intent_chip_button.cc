@@ -1,14 +1,15 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/location_bar/intent_chip_button.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/check.h"
+#include "base/check_is_test.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "build/build_config.h"
-#include "chrome/browser/apps/intent_helper/intent_picker_helpers.h"
-#include "chrome/browser/feature_engagement/tracker_factory.h"
+#include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_element_identifiers.h"
@@ -17,16 +18,12 @@
 #include "chrome/browser/ui/views/intent_picker_bubble_view.h"
 #include "chrome/browser/ui/views/location_bar/omnibox_chip_button.h"
 #include "chrome/grit/generated_resources.h"
-#include "components/feature_engagement/public/feature_constants.h"
-#include "components/user_education/common/feature_promo_specification.h"
-#include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/models/image_model.h"
+#include "ui/base/ui_base_features.h"
+#include "ui/views/style/platform_style.h"
 #include "ui/views/view_class_properties.h"
-
-#if BUILDFLAG(IS_CHROMEOS)
-#include "ui/chromeos/devicetype_utils.h"
-#endif
 
 IntentChipButton::IntentChipButton(Browser* browser,
                                    PageActionIconView::Delegate* delegate)
@@ -34,10 +31,13 @@ IntentChipButton::IntentChipButton(Browser* browser,
                                             base::Unretained(this))),
       browser_(browser),
       delegate_(delegate) {
+  DCHECK(browser);
+  SetIcon(kOpenInNewChromeRefreshIcon);
   SetText(l10n_util::GetStringUTF16(IDS_INTENT_CHIP_OPEN_IN_APP));
-  SetFocusBehavior(views::View::FocusBehavior::ACCESSIBLE_ONLY);
+  SetFocusBehavior(views::PlatformStyle::kDefaultFocusBehavior);
   SetTooltipText(l10n_util::GetStringUTF16(IDS_INTENT_CHIP_OPEN_IN_APP));
   SetProperty(views::kElementIdentifierKey, kIntentChipElementId);
+  label()->SetTextStyle(views::style::STYLE_BODY_3_EMPHASIS);
 }
 
 IntentChipButton::~IntentChipButton() = default;
@@ -49,44 +49,38 @@ void IntentChipButton::Update() {
 
   if (is_visible) {
     bool expanded = GetChipExpanded();
-    ResetAnimation(expanded);
     SetTheme(expanded ? OmniboxChipTheme::kLowVisibility
                       : OmniboxChipTheme::kIconStyle);
-    UpdateIconAndColors();
-  }
-  if (browser_->window()) {
-    if (is_visible && !was_visible) {
-#if BUILDFLAG(IS_CHROMEOS)
-      user_education::FeaturePromoSpecification::StringReplacements
-          replacements = {ui::GetChromeOSDeviceName()};
-#else
-      user_education::FeaturePromoSpecification::StringReplacements
-          replacements = {};
-#endif
-      browser_->window()->MaybeShowFeaturePromo(
-          feature_engagement::kIPHIntentChipFeature, replacements);
-    } else if (was_visible && !is_visible) {
-      IntentPickerBubbleView::CloseCurrentBubble();
-      browser_->window()->CloseFeaturePromo(
-          feature_engagement::kIPHIntentChipFeature);
+    // TODO(pkasting): This should animate in the way other OmniboxChipButtons
+    // are instructed to do (e.g. with non-zero duration when first expanding),
+    // but simply passing a non-zero duration here would animate even when
+    // that's undesirable (e.g. when switching tabs). In the meantime, we can't
+    // simply use ResetAnimation() here because that won't trigger
+    // end-of-animation updates like PreferredSizeChanged(). This should be
+    // refactored to use common logic with other chips. Note that if this begins
+    // to animate in some cases, the browsertests will likely need updates to
+    // disable those animations.
+    static constexpr auto kAnimationDuration = base::TimeDelta();
+    if (expanded) {
+      AnimateExpand(kAnimationDuration);
+    } else {
+      AnimateCollapse(kAnimationDuration);
     }
   }
+  if (browser_->window() && was_visible && !is_visible) {
+    IntentPickerBubbleView::CloseCurrentBubble();
+  }
 }
 
-ui::ImageModel IntentChipButton::GetIconImageModel() const {
-  auto icon = GetAppIcon();
-  if (icon.IsEmpty())
-    return OmniboxChipButton::GetIconImageModel();
-  return icon;
-}
-
-const gfx::VectorIcon& IntentChipButton::GetIcon() const {
-  return vector_icons::kOpenInNewIcon;
+ui::ImageModel IntentChipButton::GetAppIconForTesting() const {
+  CHECK_IS_TEST();
+  return GetAppIcon();
 }
 
 bool IntentChipButton::GetShowChip() const {
-  if (delegate_->ShouldHidePageActionIcons())
+  if (delegate_->ShouldHidePageActionIcons()) {
     return false;
+  }
 
   auto* tab_helper = GetTabHelper();
   return tab_helper && tab_helper->should_show_icon();
@@ -98,31 +92,51 @@ bool IntentChipButton::GetChipExpanded() const {
 }
 
 ui::ImageModel IntentChipButton::GetAppIcon() const {
-  if (auto* tab_helper = GetTabHelper())
+  if (auto* tab_helper = GetTabHelper()) {
     return tab_helper->app_icon();
+  }
   return ui::ImageModel();
 }
 
 void IntentChipButton::HandlePressed() {
-  browser_->window()->CloseFeaturePromo(
-      feature_engagement::kIPHIntentChipFeature);
   content::WebContents* web_contents =
       delegate_->GetWebContentsForPageActionIconView();
   const GURL& url = web_contents->GetURL();
-  apps::ShowIntentPickerOrLaunchApp(web_contents, url);
+  GetTabHelper()->ShowIntentPickerBubbleOrLaunchApp(url);
 }
 
 IntentPickerTabHelper* IntentChipButton::GetTabHelper() const {
-  if (browser_->profile()->IsOffTheRecord())
+  if (browser_->profile()->IsOffTheRecord()) {
     return nullptr;
+  }
 
   content::WebContents* web_contents =
       delegate_->GetWebContentsForPageActionIconView();
-  if (!web_contents)
+  if (!web_contents) {
     return nullptr;
+  }
 
   return IntentPickerTabHelper::FromWebContents(web_contents);
 }
 
-BEGIN_METADATA(IntentChipButton, OmniboxChipButton)
+ui::ImageModel IntentChipButton::GetIconImageModel() const {
+  auto icon = GetAppIcon();
+  if (icon.IsEmpty()) {
+    return OmniboxChipButton::GetIconImageModel();
+  }
+  return icon;
+}
+
+ui::ColorId IntentChipButton::GetBackgroundColorId() const {
+  DCHECK(GetOmniboxChipTheme() != OmniboxChipTheme::kIconStyle);
+  return kColorOmniboxIntentChipBackground;
+}
+
+ui::ColorId IntentChipButton::GetForegroundColorId() const {
+  return GetOmniboxChipTheme() == OmniboxChipTheme::kIconStyle
+             ? kColorOmniboxResultsIcon
+             : kColorOmniboxIntentChipIcon;
+}
+
+BEGIN_METADATA(IntentChipButton)
 END_METADATA

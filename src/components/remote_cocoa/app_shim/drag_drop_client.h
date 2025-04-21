@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@ namespace remote_cocoa {
 // drag-drop behavior does not work in RemoteMacViews).
 class REMOTE_COCOA_APP_SHIM_EXPORT DragDropClient {
  public:
-  virtual ~DragDropClient() {}
+  virtual ~DragDropClient() = default;
 
   // Called when mouse is dragged during a drag and drop.
   virtual NSDragOperation DragUpdate(id<NSDraggingInfo>) = 0;

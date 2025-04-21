@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,9 +28,6 @@ extern const int kNetErrorCodeForSafeBrowsing;
 // The name of the histogram that records whether Safe Browsing is enabled.
 extern const char kSafeBrowsingEnabledHistogramName[];
 
-// Command-line flag for caching an artificial PhishGuard unsafe verdict.
-extern const char kArtificialCachedPhishGuardVerdictFlag[];
-
 // Countries that has no endpoint for Safe Browsing.
 const std::vector<std::string> GetExcludedCountries();
 
@@ -43,6 +40,20 @@ enum class CredentialPhishedStatus {
   kSiteMarkedAsLegitimate = 1,
   kMaxValue = kSiteMarkedAsLegitimate,
 };
-}
+
+// Product Specific (String) Data field name for the URL that triggered the
+// warning.
+extern const char kFlaggedUrl[];
+
+// Product Specific (String) Data field name for the main frame URL.
+extern const char kMainFrameUrl[];
+
+// Product Specific (String) Data field name for the referrer URL.
+extern const char kReferrerUrl[];
+
+// Product Specific (String) Data field name for user activity.
+extern const char kUserActivityWithUrls[];
+
+}  // namespace safe_browsing
 
 #endif  // COMPONENTS_SAFE_BROWSING_CORE_COMMON_SAFEBROWSING_CONSTANTS_H_

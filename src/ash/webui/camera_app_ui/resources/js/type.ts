@@ -1,8 +1,9 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import {assertExists, assertInstanceof} from './assert.js';
+import {WaitableEvent} from './waitable_event.js';
 
 /**
  * Photo or video resolution.
@@ -50,7 +51,6 @@ export class Resolution {
    * Compares width/height of resolutions, see if they are equal or not.
    *
    * @param resolution Resolution to be compared with.
-   * @return Whether width/height of resolutions are equal.
    */
   equals(resolution: Resolution|null): boolean {
     if (resolution === null) {
@@ -64,7 +64,6 @@ export class Resolution {
    * returns true if the resolution is rotated.
    *
    * @param resolution Resolution to be compared with.
-   * @return Whether width/height of resolutions are equal.
    */
   equalsWithRotation(resolution: Resolution): boolean {
     return (this.width === resolution.width &&
@@ -76,7 +75,6 @@ export class Resolution {
    * Compares aspect ratio of resolutions, see if they are equal or not.
    *
    * @param resolution Resolution to be compared with.
-   * @return Whether aspect ratio of resolutions are equal.
    */
   aspectRatioEquals(resolution: Resolution): boolean {
     return this.aspectRatio === resolution.aspectRatio;
@@ -111,33 +109,31 @@ export enum MimeType {
  */
 export enum Mode {
   PHOTO = 'photo',
-  VIDEO = 'video',
   PORTRAIT = 'portrait',
   SCAN = 'scan',
+  VIDEO = 'video',
 }
 
 /**
  * Camera facings.
  */
 export enum Facing {
-  USER = 'user',
   ENVIRONMENT = 'environment',
   EXTERNAL = 'external',
+  USER = 'user',
   // VIRTUAL_{facing} is for labeling video device for configuring extra stream
   // from corresponding {facing} video device.
-  VIRTUAL_USER = 'virtual_user',
   VIRTUAL_ENV = 'virtual_environment',
   VIRTUAL_EXT = 'virtual_external',
-  UNKNOWN = 'unknown',
+  VIRTUAL_USER = 'virtual_user',
 }
 
 export enum ViewName {
   CAMERA = 'view-camera',
-  CROP_DOCUMENT = 'view-crop-document',
-  DOCUMENT_MODE_DIALOG = 'view-document-mode-dialog',
+  DOCUMENT_REVIEW = 'view-document-review',
   EXPERT_SETTINGS = 'view-expert-settings',
   FLASH = 'view-flash',
-  MESSAGE_DIALOG = 'view-message-dialog',
+  LOW_STORAGE_DIALOG = 'view-low-storage-dialog',
   OPTION_PANEL = 'view-option-panel',
   PHOTO_ASPECT_RATIO_SETTINGS = 'view-photo-aspect-ratio-settings',
   PHOTO_RESOLUTION_SETTINGS = 'view-photo-resolution-settings',
@@ -150,8 +146,8 @@ export enum ViewName {
 }
 
 export enum VideoType {
-  MP4 = 'mp4',
   GIF = 'gif',
+  MP4 = 'mp4',
 }
 
 export enum PhotoResolutionLevel {
@@ -160,15 +156,20 @@ export enum PhotoResolutionLevel {
   UNKNOWN = 'unknown',
 }
 
+/* eslint-disable cca/string-enum-order */
 export enum VideoResolutionLevel {
-  FULL = 'full',
-  MEDIUM = 'medium',
   FOUR_K = '4K',
   QUAD_HD = 'Quad HD',
   FULL_HD = 'Full HD',
   HD = 'HD',
+  THREE_SIXTY_P = '360p',
+
+  FULL = 'full',
+  MEDIUM = 'medium',
+
   UNKNOWN = 'unknown',
 }
+/* eslint-enable cca/string-enum-order */
 
 export enum AspectRatioSet {
   RATIO_4_3 = 1.3333,
@@ -177,18 +178,16 @@ export enum AspectRatioSet {
   RATIO_SQUARE = 1.0000,
 }
 
-export const NON_CROP_ASPECT_RATIO_SETS = [
-  AspectRatioSet.RATIO_4_3,
-  AspectRatioSet.RATIO_16_9,
-  AspectRatioSet.RATIO_OTHER,
-];
-
 export enum Rotation {
   ANGLE_0 = 0,
   ANGLE_90 = 90,
   ANGLE_180 = 180,
   ANGLE_270 = 270,
 }
+// `ROTATION_ORDER` is used for document scanning fix mode to show/crop images.
+// The length must be fixed at 4.
+export const ROTATION_ORDER =
+    Object.values(Rotation).filter((r): r is Rotation => typeof r === 'number');
 
 export interface VideoConfig {
   width: number;
@@ -222,18 +221,65 @@ export type FpsRangeList = FpsRange[];
  * Type for performance event.
  */
 export enum PerfEvent {
+  // In all modes, the duration between the camera switch button being clicked
+  // and the preview stream being updated.
   CAMERA_SWITCHING = 'camera-switching',
+  // In Doc Scan mode, the duration between a shutter sound playing and the
+  // image appearing in the review page.
+  DOCUMENT_CAPTURE_POST_PROCESSING = 'document-capture-post-processing',
+  // In Doc Scan mode, the duration between "Save as PDF" button being clicked
+  // and the review page closing.
+  DOCUMENT_PDF_SAVING = 'document-pdf-saving',
+  // In GIF mode, the duration between GIF recording stopping and the temporal
+  // GIF appearing in the review page.
   GIF_CAPTURE_POST_PROCESSING = 'gif-capture-post-processing',
+  // In GIF mode, the duration between "Save" button being clicked and the
+  // result file saving finished.
+  GIF_CAPTURE_SAVING = 'gif-capture-saving',
+  // Used for testing. The duration between app window being created and the app
+  // being launched.
   LAUNCHING_FROM_LAUNCH_APP_COLD = 'launching-from-launch-app-cold',
+  // Used for testing. The duration between app window being created and the app
+  // being launched.
   LAUNCHING_FROM_LAUNCH_APP_WARM = 'launching-from-launch-app-warm',
+  // The duration between CCA window being created and the preview stream
+  // appearing.
   LAUNCHING_FROM_WINDOW_CREATION = 'launching-from-window-creation',
+  // In all modes, the duration between the mode switch button being clicked and
+  // the preview stream being updated.
   MODE_SWITCHING = 'mode-switching',
-  PHOTO_CAPTURE_POST_PROCESSING = 'photo-capture-post-processing',
+  // In Photo mode, the duration between a snapshot of the preview being scanned
+  // by OCR(automatically, with 500ms intervals) and the scanned result
+  // appearing in the preview. The result might not be shown if it is empty or
+  // if other scanners have detected results.
+  OCR_SCANNING = 'ocr-scanning',
+  // In Photo mode, the duration between a shutter sound playing and the
+  // result file saving finished.
+  PHOTO_CAPTURE_POST_PROCESSING_SAVING = 'photo-capture-post-processing-saving',
+  // In Photo, Doc Scan and Portrait mode, the duration between the shutter
+  // button being clicked or a timer expiring and a shutter sound playing.
   PHOTO_CAPTURE_SHUTTER = 'photo-capture-shutter',
-  PHOTO_TAKING = 'photo-taking',
-  PORTRAIT_MODE_CAPTURE_POST_PROCESSING =
-      'portrait-mode-capture-post-processing',
-  VIDEO_CAPTURE_POST_PROCESSING = 'video-capture-post-processing',
+  // In Portrait mode, the duration between a shutter sound playing and the
+  // two result files saving finished.
+  PORTRAIT_MODE_CAPTURE_POST_PROCESSING_SAVING =
+      'portrait-mode-capture-post-processing-saving',
+  // In Video mode, the duration between the video snapshot button being clicked
+  // and the result file saving finished.
+  SNAPSHOT_TAKING = 'snapshot-taking',
+  // In Time lapse mode, the duration between a shutter sound playing and
+  // the result file saving finished.
+  TIME_LAPSE_CAPTURE_POST_PROCESSING_SAVING =
+      'time-lapse-capture-post-processing-saving',
+  // In Video mode, the duration between the shutter button being clicked to
+  // stop recording and the result file saving finished.
+  VIDEO_CAPTURE_POST_PROCESSING_SAVING = 'video-capture-post-processing-saving',
+}
+
+export enum Pressure {
+  NOMINAL,
+  FAIR,
+  SERIOUS,
+  CRITICAL,
 }
 
 export interface ImageBlob {
@@ -249,12 +295,14 @@ export interface PerfInformation {
   hasError?: boolean;
   resolution?: Resolution;
   facing?: Facing;
+  pageCount?: number;  // Only for DOCUMENT_PDF_SAVING
+  pressure?: Pressure;
 }
 
 export interface PerfEntry {
   event: PerfEvent;
   duration: number;
-  perfInfo?: PerfInformation;
+  perfInfo: PerfInformation;
 }
 
 export interface VideoTrackSettings {
@@ -289,15 +337,8 @@ export function getVideoTrackSettings(videoTrack: MediaStreamTrack):
  * stream is expired.
  */
 export class PreviewVideo {
-  private expired = false;
-
   constructor(
-      readonly video: HTMLVideoElement, readonly onExpired: Promise<void>) {
-    (async () => {
-      await this.onExpired;
-      this.expired = true;
-    })();
-  }
+      readonly video: HTMLVideoElement, readonly onExpired: WaitableEvent) {}
 
   getStream(): MediaStream {
     return assertInstanceof(this.video.srcObject, MediaStream);
@@ -312,7 +353,7 @@ export class PreviewVideo {
   }
 
   isExpired(): boolean {
-    return this.expired;
+    return this.onExpired.isSignaled();
   }
 }
 
@@ -331,26 +372,31 @@ export interface ErrorInfo {
  * Types of error used in ERROR metrics.
  */
 export enum ErrorType {
+  BIG_BUFFER_FAILURE = 'big-buffer-failure',
   BROKEN_THUMBNAIL = 'broken-thumbnail',
+  CHECK_COVER_FAILURE = 'check-cover-failed',
   DEVICE_INFO_UPDATE_FAILURE = 'device-info-update-failure',
   DEVICE_NOT_EXIST = 'device-not-exist',
   EMPTY_FILE = 'empty-file',
   FILE_SYSTEM_FAILURE = 'file-system-failure',
   FRAME_ROTATION_NOT_DISABLED = 'frame-rotation-not-disabled',
   HANDLE_CAMERA_RESULT_FAILURE = 'handle-camera-result-failure',
-  IDLE_DETECTOR_FAILURE = 'idle-detector-failure',
   INVALID_REVIEW_UI_STATE = 'invalid-review-ui-state',
   METADATA_MAPPING_FAILURE = 'metadata-mapping-failure',
+  MULTI_WINDOW_HANDLING_FAILURE = 'multi-window-handling-failure',
   MULTIPLE_STREAMS_FAILURE = 'multiple-streams-failure',
   NO_AVAILABLE_LEVEL = 'no-available-level',
   PERF_METRICS_FAILURE = 'perf-metrics-failure',
   PRELOAD_IMAGE_FAILURE = 'preload-image-failure',
+  RESUME_CAMERA_FAILURE = 'resume-camera-failure',
+  RESUME_PAUSE_FAILURE = 'resume-pause-failure',
   SET_FPS_RANGE_FAILURE = 'set-fps-range-failure',
   START_CAMERA_FAILURE = 'start-camera-failure',
   START_CAPTURE_FAILURE = 'start-capture-failure',
   STOP_CAPTURE_FAILURE = 'stop-capture-failure',
+  SUSPEND_CAMERA_FAILURE = 'suspend-camera-failure',
+  UNCAUGHT_ERROR = 'uncaught-error',
   UNCAUGHT_PROMISE = 'uncaught-promise',
-  UNKNOWN_FACING = 'unknown-facing',
   UNSAFE_INTEGER = 'unsafe-integer',
   UNSUPPORTED_PROTOCOL = 'unsupported-protocol',
 }
@@ -359,8 +405,8 @@ export enum ErrorType {
  * Error level used in ERROR metrics.
  */
 export enum ErrorLevel {
-  WARNING = 'WARNING',
   ERROR = 'ERROR',
+  WARNING = 'WARNING',
 }
 
 /**
@@ -423,6 +469,14 @@ export class EmptyThumbnailError extends Error {
   }
 }
 
+export class LowStorageError extends Error {
+  constructor() {
+    const message = 'Cannot start recording due to low storage.';
+    super(message);
+    this.name = this.constructor.name;
+  }
+}
+
 /**
  * Throws when the recording is ended with no chunk returned.
  */
@@ -434,10 +488,37 @@ export class NoChunkError extends Error {
 }
 
 /**
+ * Throws when the GIF or time lapse recording is ended with no frame captured.
+ */
+export class NoFrameError extends Error {
+  constructor(message = 'No frames captured during the recording') {
+    super(message);
+    this.name = this.constructor.name;
+  }
+}
+
+/**
  * Throws when the portrait mode fails to detect a human face.
  */
-export class PortraitModeProcessError extends Error {
+export class PortraitErrorNoFaceDetected extends Error {
   constructor(message = 'No human face detected in the scene') {
+    super(message);
+    this.name = this.constructor.name;
+  }
+}
+
+/**
+ * Throws when the camera is suspended while camera effects are ongoing.
+ */
+export class CameraSuspendError extends Error {
+  constructor(message = 'Camera suspended') {
+    super(message);
+    this.name = this.constructor.name;
+  }
+}
+
+export class NoCameraError extends Error {
+  constructor(message = 'No available cameras') {
     super(message);
     this.name = this.constructor.name;
   }
@@ -448,14 +529,15 @@ export class PortraitModeProcessError extends Error {
  */
 export enum LocalStorageKey {
   CUSTOM_VIDEO_PARAMETERS = 'customVideoParameters',
-  DOC_MODE_DIALOG_SHOWN = 'isDocModeDialogShown',
-  DOC_MODE_TOAST_SHOWN = 'isDocModeToastShown',
   ENABLE_FPS_PICKER = 'enableFPSPicker',
   ENABLE_FULL_SIZED_VIDEO_SNAPSHOT = 'enableFullSizedVideoSnapshot',
-  ENABLE_MULTISTREAM_RECORDING = 'enableMultistreamRecording',
+  ENABLE_PREVIEW_OCR = 'enablePreviewOcr',
   ENABLE_PTZ_FOR_BUILTIN = 'enablePTZForBuiltin',
   EXPERT_MODE = 'expert',
+  FIRST_OPENING = 'firstOpening',
+  GA_ID_REFRESH_TIME = 'gaIdRefreshTime',
   GA_USER_ID = 'google-analytics.analytics.user-id',
+  GA4_CLIENT_ID = 'ga4ClientId',
   MIRRORING_TOGGLES = 'mirroringToggles',
   PREF_DEVICE_PHOTO_ASPECT_RATIO_SET = 'devicePhotoAspectRatioSet',
   PREF_DEVICE_PHOTO_RESOLUTION_EXPERT = 'devicePhotoResolutionExpert',
@@ -463,10 +545,31 @@ export enum LocalStorageKey {
   PREF_DEVICE_VIDEO_RESOLUTION_EXPERT = 'deviceVideoResolutionExpert',
   PREF_DEVICE_VIDEO_RESOLUTION_FPS = 'deviceVideoResolutionFps',
   PREF_DEVICE_VIDEO_RESOLUTION_LEVEL = 'deviceVideoResolutionLevel',
+  PREVIEW_OCR_TOAST_SHOWN = 'previewOcrToastShown',
   PRINT_PERFORMANCE_LOGS = 'printPerformanceLogs',
-  PTZ_TOAST_SHOWN = 'isPTZToastShown',
   SAVE_METADATA = 'saveMetadata',
   SHOW_ALL_RESOLUTIONS = 'showAllResolutions',
   SHOW_METADATA = 'showMetadata',
   TOGGLE_MIC = 'toggleMic',
 }
+
+/**
+ * Type of low storage dialog.
+ */
+export enum LowStorageDialogType {
+  AUTO_STOP = 'auto-stop',
+  CANNOT_START = 'cannot-start',
+}
+
+/**
+ * A rectangle representing a crop region with size (width, height) and having
+ * the top-left coordinate at (x, y).
+ */
+export interface CropRegionRect {
+  height: number;
+  width: number;
+  x: number;
+  y: number;
+}
+
+export type Awaitable<T> = PromiseLike<T>|T;

@@ -1,10 +1,7 @@
-# (in PST)
-alemate@chromium.org
+file://ash/login/OOBE_WEBUI_OWNERS
 
-# (in CET)
-antrim@chromium.org
-rsorokin@chromium.org
-raleksandrov@google.com
-rrsilva@google.com
+per-file ...gaia_dialog.*=file://ash/login/SAML_INTEGRATION_OWNERS
+per-file ...gaia_signin.*=file://ash/login/SAML_INTEGRATION_OWNERS
+per-file *security_token*=file://chrome/browser/certificate_provider/OWNERS
 
-per-file *security_token*=emaxx@chromium.org
+per-file ...quick_start.*=file://chrome/browser/ash/login/oobe_quick_start/QUICKSTART_OWNERS

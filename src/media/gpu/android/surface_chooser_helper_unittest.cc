@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "media/gpu/android/mock_android_video_surface_chooser.h"
@@ -52,7 +52,7 @@ class SurfaceChooserHelperTest : public testing::Test {
   // Convenience function.
   void UpdateChooserState() {
     EXPECT_CALL(*chooser_, MockUpdateState());
-    helper_->UpdateChooserState(absl::optional<AndroidOverlayFactoryCB>());
+    helper_->UpdateChooserState(std::optional<AndroidOverlayFactoryCB>());
   }
 
   base::SimpleTestTickClock tick_clock_;

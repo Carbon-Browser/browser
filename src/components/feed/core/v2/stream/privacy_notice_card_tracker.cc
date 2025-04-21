@@ -1,8 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/feed/core/v2/stream/privacy_notice_card_tracker.h"
+
+#include <string_view>
 
 #include "base/time/time.h"
 #include "components/feed/core/common/pref_names.h"
@@ -24,7 +26,7 @@ bool IsPrivacyNoticeCard(const feedwire::ContentId& id) {
   // the server to continue serving the notice card with this domain (and not
   // serving other types of cards with this domain). See the bug for the
   // suggested improvement.
-  constexpr base::StringPiece kNoticeCardDomain = "privacynoticecard.f";
+  constexpr std::string_view kNoticeCardDomain = "privacynoticecard.f";
   return id.content_domain() == kNoticeCardDomain;
 }
 

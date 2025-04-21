@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "extensions/browser/api/file_system/file_system_delegate.h"
 #include "ui/shell_dialogs/select_file_dialog.h"
@@ -45,18 +45,10 @@ class FileEntryPicker : public ui::SelectFileDialog::Listener {
   ~FileEntryPicker() override;  // FileEntryPicker deletes itself.
 
   // ui::SelectFileDialog::Listener implementation.
-  void FileSelected(const base::FilePath& path,
-                    int index,
-                    void* params) override;
-  void FileSelectedWithExtraInfo(const ui::SelectedFileInfo& file,
-                                 int index,
-                                 void* params) override;
-  void MultiFilesSelected(const std::vector<base::FilePath>& files,
-                          void* params) override;
-  void MultiFilesSelectedWithExtraInfo(
-      const std::vector<ui::SelectedFileInfo>& files,
-      void* params) override;
-  void FileSelectionCanceled(void* params) override;
+  void FileSelected(const ui::SelectedFileInfo& file, int index) override;
+  void MultiFilesSelected(
+      const std::vector<ui::SelectedFileInfo>& files) override;
+  void FileSelectionCanceled() override;
 
   FileSystemDelegate::FilesSelectedCallback files_selected_callback_;
   base::OnceClosure file_selection_canceled_callback_;

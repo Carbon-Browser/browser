@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "base/logging.h"
 #include "base/memory/aligned_memory.h"
+#include "base/numerics/safe_conversions.h"
 #include "chromecast/media/audio/mixer_service/mixer_service_transport.pb.h"
 #include "chromecast/media/audio/net/common.pb.h"
 #include "chromecast/media/audio/net/conversions.h"
@@ -201,7 +202,8 @@ void OutputStreamConnection::OnConnected(std::unique_ptr<MixerSocket> socket) {
   }
   socket_->SendProto(kInitial, message);
   delegate_->FillNextBuffer(
-      audio_buffer_->data() + MixerSocket::kAudioMessageHeaderSize,
+      audio_buffer_->span().subspan(
+          base::checked_cast<size_t>(MixerSocket::kAudioMessageHeaderSize)),
       fill_size_frames_, std::numeric_limits<int64_t>::min(), 0);
 }
 
@@ -222,7 +224,8 @@ bool OutputStreamConnection::HandleMetadata(const Generic& message) {
 
   if (message.has_push_result() && !sent_eos_) {
     delegate_->FillNextBuffer(
-        audio_buffer_->data() + MixerSocket::kAudioMessageHeaderSize,
+        audio_buffer_->span().subspan(
+            base::checked_cast<size_t>(MixerSocket::kAudioMessageHeaderSize)),
         fill_size_frames_, message.push_result().delay_timestamp(),
         message.push_result().delay());
   }

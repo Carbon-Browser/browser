@@ -1,9 +1,10 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/renderer/bindings/api_binding_bridge.h"
 
+#include "extensions/common/extension_id.h"
 #include "extensions/renderer/bindings/api_binding_hooks.h"
 #include "extensions/renderer/bindings/api_binding_test.h"
 #include "extensions/renderer/bindings/api_binding_test_util.h"
@@ -18,7 +19,7 @@ TEST_F(APIBindingBridgeTest, TestUseAfterContextInvalidation) {
   v8::Local<v8::Context> context = MainContext();
   v8::Context::Scope context_scope(context);
 
-  std::string extension_id(32, 'a');
+  ExtensionId extension_id = std::string(32, 'a');
   std::string context_type = "context type";
   v8::Local<v8::Object> api_object = v8::Object::New(isolate());
 

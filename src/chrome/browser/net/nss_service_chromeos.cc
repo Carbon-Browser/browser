@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,11 @@
 #include <memory>
 #include <utility>
 
-#include "ash/components/settings/cros_settings_names.h"
-#include "ash/components/tpm/tpm_token_info_getter.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/callback_list.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "base/memory/weak_ptr.h"
 #include "base/supports_user_data.h"
@@ -25,8 +23,11 @@
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chromeos/ash/components/dbus/dbus_thread_manager.h"
 #include "chromeos/ash/components/dbus/userdataauth/cryptohome_pkcs11_client.h"
-#include "chromeos/dbus/dbus_thread_manager.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
+#include "chromeos/ash/components/tpm/tpm_token_info_getter.h"
+#include "chromeos/components/kiosk/kiosk_utils.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
 #include "content/public/browser/browser_context.h"
@@ -79,7 +80,7 @@ namespace {
 void DidGetTPMInfoForUserOnUIThread(
     std::unique_ptr<ash::TPMTokenInfoGetter> getter,
     const std::string& username_hash,
-    absl::optional<user_data_auth::TpmTokenInfo> token_info) {
+    std::optional<user_data_auth::TpmTokenInfo> token_info) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   if (token_info.has_value() && token_info->slot() != -1) {
     DVLOG(1) << "Got TPM slot for " << username_hash << ": "
@@ -100,7 +101,7 @@ void GetTPMInfoForUserOnUIThread(const AccountId& account_id,
   std::unique_ptr<ash::TPMTokenInfoGetter> scoped_token_info_getter =
       ash::TPMTokenInfoGetter::CreateForUserToken(
           account_id, ash::CryptohomePkcs11Client::Get(),
-          base::ThreadTaskRunnerHandle::Get());
+          base::SingleThreadTaskRunner::GetCurrentDefault());
   ash::TPMTokenInfoGetter* token_info_getter = scoped_token_info_getter.get();
 
   // Bind |token_info_getter| to the callback to ensure it does not go away
@@ -127,13 +128,25 @@ void StartTPMSlotInitializationOnIOThread(const AccountId& account_id,
 
 void StartNSSInitOnIOThread(const AccountId& account_id,
                             const std::string& username_hash,
-                            const base::FilePath& path) {
+                            const base::FilePath& path,
+                            bool is_kiosk) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
   DVLOG(1) << "Starting NSS init for " << account_id.Serialize()
            << "  hash:" << username_hash;
 
   // Make sure NSS is initialized for the user.
-  crypto::InitializeNSSForChromeOSUser(username_hash, path);
+  if (is_kiosk) {
+    // Kiosk sessions don't have the UI that could result in interactions with
+    // the public slot. Kiosk users are also not owner users and can't have
+    // the owner key in the public slot. So the public slot is not used in
+    // Kiosk sessions and can be replaced by the internal slot. This is done
+    // mainly because Chrome sometimes fails to load the public slot and has
+    // to crash because of that.
+    crypto::InitializeNSSForChromeOSUserWithSlot(
+        username_hash, crypto::ScopedPK11Slot(PK11_GetInternalKeySlot()));
+  } else {
+    crypto::InitializeNSSForChromeOSUser(username_hash, path);
+  }
 
   // Check if it's OK to initialize TPM for the user before continuing. This
   // may not be the case if the TPM slot initialization was previously
@@ -146,12 +159,13 @@ void StartNSSInitOnIOThread(const AccountId& account_id,
       &StartTPMSlotInitializationOnIOThread, account_id, username_hash));
 }
 
-void NotifyCertsChangedInAshOnUIThread() {
+void NotifyCertsChangedInAshOnUIThread(
+    crosapi::mojom::CertDatabaseChangeType change_type) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   crosapi::CrosapiManager::Get()
       ->crosapi_ash()
       ->cert_database_ash()
-      ->NotifyCertsChangedInAsh();
+      ->NotifyCertsChangedInAsh(change_type);
 }
 
 }  // namespace
@@ -205,9 +219,18 @@ class NssService::NSSCertDatabaseChromeOSManager
   }
 
   // net::NSSCertDatabase::Observer
-  void OnCertDBChanged() override {
+  void OnTrustStoreChanged() override {
     content::GetUIThreadTaskRunner({})->PostTask(
-        FROM_HERE, base::BindOnce(&NotifyCertsChangedInAshOnUIThread));
+        FROM_HERE,
+        base::BindOnce(&NotifyCertsChangedInAshOnUIThread,
+                       crosapi::mojom::CertDatabaseChangeType::kTrustStore));
+  }
+  void OnClientCertStoreChanged() override {
+    content::GetUIThreadTaskRunner({})->PostTask(
+        FROM_HERE,
+        base::BindOnce(
+            &NotifyCertsChangedInAshOnUIThread,
+            crosapi::mojom::CertDatabaseChangeType::kClientCertStore));
   }
 
  private:
@@ -241,6 +264,16 @@ class NssService::NSSCertDatabaseChromeOSManager
     DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
 
     auto public_slot = crypto::GetPublicSlotForChromeOSUser(username_hash_);
+
+#if BUILDFLAG(IS_CHROMEOS) && !BUILDFLAG(IS_CHROMEOS_DEVICE)
+    if (!public_slot) {
+      // This is a "for testing" branch. The code below will intentionally crash
+      // when the public slot fails to load. By default prevent this from
+      // happening in tests that simply don't properly fake NSS. Consider using
+      // FakeNssService if a specific NSS behavior is required in tests.
+      public_slot = crypto::ScopedPK11Slot(PK11_GetInternalKeySlot());
+    }
+#endif
 
     // TODO(crbug.com/1163303): Remove when the bug is fixed.
     if (!public_slot) {
@@ -289,7 +322,8 @@ NssService::NssService(content::BrowserContext* context) {
     DCHECK(!username_hash.empty());
     content::GetIOThreadTaskRunner({})->PostTask(
         FROM_HERE, base::BindOnce(&StartNSSInitOnIOThread, user->GetAccountId(),
-                                  username_hash, profile->GetPath()));
+                                  username_hash, profile->GetPath(),
+                                  chromeos::IsKioskSession()));
 
     enable_system_slot = user->IsAffiliated();
   }

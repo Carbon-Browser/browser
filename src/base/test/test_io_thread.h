@@ -1,12 +1,12 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef BASE_TEST_TEST_IO_THREAD_H_
 #define BASE_TEST_TEST_IO_THREAD_H_
 
-#include "base/callback_forward.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/ref_counted.h"
 #include "base/task/task_runner.h"
 #include "base/threading/thread.h"

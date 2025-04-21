@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@ bool StructTraits<
   output->max = data.max();
   output->max_avg = data.max_avg();
   output->min = data.min();
+  output->supported_eotf_mask = data.supported_eotf_mask();
   return true;
 }
 

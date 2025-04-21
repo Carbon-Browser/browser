@@ -1,9 +1,9 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 function assertContains(string, substring, error) {
-  chrome.test.assertTrue(string.indexOf(substring) != -1, error);
+  chrome.test.assertNe(-1, string.indexOf(substring), error);
 }
 
 chrome.test.runTests([

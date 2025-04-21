@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ class MockBytesProvider : public blink::mojom::BytesProvider {
       size_t* reply_request_count = nullptr,
       size_t* stream_request_count = nullptr,
       size_t* file_request_count = nullptr,
-      absl::optional<base::Time> file_modification_time = base::Time());
+      std::optional<base::Time> file_modification_time = base::Time());
   ~MockBytesProvider() override;
 
   // BytesProvider implementation:
@@ -39,7 +39,7 @@ class MockBytesProvider : public blink::mojom::BytesProvider {
   raw_ptr<size_t> reply_request_count_;
   raw_ptr<size_t> stream_request_count_;
   raw_ptr<size_t> file_request_count_;
-  absl::optional<base::Time> file_modification_time_;
+  std::optional<base::Time> file_modification_time_;
 };
 
 }  // namespace storage

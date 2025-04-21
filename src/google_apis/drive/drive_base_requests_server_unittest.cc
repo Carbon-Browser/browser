@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "google_apis/common/dummy_auth_service.h"
@@ -63,7 +63,7 @@ class BaseRequestsServerTest : public testing::Test {
     network::mojom::URLLoaderFactoryParamsPtr params =
         network::mojom::URLLoaderFactoryParams::New();
     params->process_id = network::mojom::kBrowserProcessId;
-    params->is_corb_enabled = false;
+    params->is_orb_enabled = false;
     network_context_->CreateURLLoaderFactory(
         url_loader_factory_.BindNewPipeAndPassReceiver(), std::move(params));
     test_shared_loader_factory_ =
@@ -94,12 +94,12 @@ class BaseRequestsServerTest : public testing::Test {
   base::test::TaskEnvironment task_environment_{
       base::test::TaskEnvironment::MainThreadType::IO};
   net::EmbeddedTestServer test_server_;
-  std::unique_ptr<RequestSender> request_sender_;
   std::unique_ptr<network::mojom::NetworkService> network_service_;
   mojo::Remote<network::mojom::NetworkContext> network_context_;
   mojo::Remote<network::mojom::URLLoaderFactory> url_loader_factory_;
   scoped_refptr<network::WeakWrapperSharedURLLoaderFactory>
       test_shared_loader_factory_;
+  std::unique_ptr<RequestSender> request_sender_;
   base::ScopedTempDir temp_dir_;
 
   // The incoming HTTP request is saved so tests can verify the request

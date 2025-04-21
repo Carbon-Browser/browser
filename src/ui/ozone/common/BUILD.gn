@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -9,6 +9,8 @@ assert(use_ozone)
 
 source_set("common") {
   sources = [
+    "base_keyboard_hook.cc",
+    "base_keyboard_hook.h",
     "bitmap_cursor.cc",
     "bitmap_cursor.h",
     "bitmap_cursor_factory.cc",
@@ -37,13 +39,12 @@ source_set("common") {
   ]
 
   deps = [
-    "//build:chromeos_buildflags",
     "//ui/gfx/ipc/color",
     "//ui/gl",
     "//ui/gl:buildflags",
   ]
 
-  data_deps = [ "//third_party/mesa_headers" ]
+  data_deps = [ "//third_party/angle:includes" ]
 
   visibility = [
     ":*",
@@ -59,7 +60,6 @@ source_set("unittests") {
   sources = [ "bitmap_cursor_factory_unittest.cc" ]
   deps = [
     ":common",
-    "//build:chromeos_buildflags",
     "//testing/gtest",
     "//ui/base/cursor",
     "//ui/base/cursor/mojom:cursor_type_shared",

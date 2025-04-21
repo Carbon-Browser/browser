@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <map>
 #include <set>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/extensions/api/identity/extension_token_key.h"
 
 namespace extensions {
@@ -35,7 +36,7 @@ class IdentityMintRequestQueue {
 
   class Request {
    public:
-    virtual ~Request() {}
+    virtual ~Request() = default;
     virtual void StartMintToken(IdentityMintRequestQueue::MintType type) = 0;
   };
 
@@ -56,7 +57,8 @@ class IdentityMintRequestQueue {
              const ExtensionTokenKey& key);
 
  private:
-  typedef std::list<IdentityMintRequestQueue::Request*> RequestQueue;
+  typedef std::list<raw_ptr<IdentityMintRequestQueue::Request, CtnExperimental>>
+      RequestQueue;
   typedef std::map<const ExtensionTokenKey, RequestQueue> RequestQueueMap;
 
   RequestQueueMap& GetRequestQueueMap(IdentityMintRequestQueue::MintType type);

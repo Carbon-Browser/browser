@@ -17,7 +17,7 @@
             .add("versionchange1", 1)
             .addEventListener("success", log("versionchange_add.success"))
 
-        assert_throws_dom('InvalidStateError', function() { db.transaction("store") })
+        assert_throws_dom('InvalidStateError', function() { db.transaction("store", "readonly") })
 
         e.target.transaction
             .objectStore("store")
@@ -34,7 +34,7 @@
         open_rq.transaction.oncomplete = function(e) {
             log("versionchange_txn.complete")(e)
 
-            db.transaction("store")
+            db.transaction("store", "readonly")
                 .objectStore("store")
                 .count()
                 .addEventListener("success", log("complete_count.success"))

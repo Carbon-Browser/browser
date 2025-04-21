@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "base/feature_list.h"
 #include "base/memory/weak_ptr.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -28,7 +29,7 @@
 #include "components/metrics/demographics/demographic_metrics_test_utils.h"
 #include "components/metrics/metrics_switches.h"
 #include "components/metrics_services_manager/metrics_services_manager.h"
-#include "components/sync/driver/sync_user_settings.h"
+#include "components/sync/service/sync_user_settings.h"
 #include "content/public/test/browser_test.h"
 #include "testing/gmock/include/gmock/gmock-matchers.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -47,8 +48,7 @@ class MetricsServiceUserDemographicsBrowserTest
       // Enable UMA and reporting of the synced user's birth year and gender.
       scoped_feature_list_.InitWithFeatures(
           // enabled_features =
-          {internal::kMetricsReportingFeature,
-           DemographicMetricsProvider::kDemographicMetricsReporting},
+          {internal::kMetricsReportingFeature, kDemographicMetricsReporting},
           // disabled_features =
           {});
     } else {
@@ -56,7 +56,7 @@ class MetricsServiceUserDemographicsBrowserTest
           // enabled_features =
           {internal::kMetricsReportingFeature},
           // disabled_features =
-          {DemographicMetricsProvider::kDemographicMetricsReporting});
+          {kDemographicMetricsReporting});
     }
   }
 
@@ -78,6 +78,8 @@ class MetricsServiceUserDemographicsBrowserTest
     SyncTest::SetUp();
   }
 
+  PrefService* local_state() { return g_browser_process->local_state(); }
+
   // Forces a log record to be generated. Returns a copy of the record on
   // success; otherwise, returns nullptr.
   std::unique_ptr<ChromeUserMetricsExtension> GenerateLogRecord() {
@@ -96,7 +98,7 @@ class MetricsServiceUserDemographicsBrowserTest
   base::test::ScopedFeatureList scoped_feature_list_;
 };
 
-// TODO(crbug/1016118): Add the remaining test cases.
+// TODO(crbug.com/40103988): Add the remaining test cases.
 // Keep this test in sync with testUMADemographicsReportingWithFeatureEnabled
 // and testUMADemographicsReportingWithFeatureDisabled in
 // ios/chrome/browser/metrics/demographics_egtest.mm.
@@ -117,15 +119,15 @@ IN_PROC_BROWSER_TEST_P(MetricsServiceUserDemographicsBrowserTest,
   test::AddUserBirthYearAndGenderToSyncServer(GetFakeServer()->AsWeakPtr(),
                                               test_birth_year, test_gender);
 
-  // TODO(crbug/1076461): Try to replace the below set-up code with functions
-  // from SyncTest.
+  // TODO(crbug.com/40688248): Try to replace the below set-up code with
+  // functions from SyncTest.
   Profile* test_profile = ProfileManager::GetLastUsedProfileIfLoaded();
 
   // Enable sync for the test profile.
   std::unique_ptr<SyncServiceImplHarness> harness =
       test::InitializeProfileForSync(test_profile,
                                      GetFakeServer()->AsWeakPtr());
-  harness->SetupSync();
+  ASSERT_TRUE(harness->SetupSync());
 
   // Make sure that there is only one Profile to allow reporting the user's
   // birth year and gender.
@@ -137,9 +139,8 @@ IN_PROC_BROWSER_TEST_P(MetricsServiceUserDemographicsBrowserTest,
 
   // Check log content and the histogram.
   if (param.expect_reported_demographics) {
-    EXPECT_EQ(
-        test::GetNoisedBirthYear(*test_profile->GetPrefs(), test_birth_year),
-        uma_proto->user_demographics().birth_year());
+    EXPECT_EQ(test::GetNoisedBirthYear(local_state(), test_birth_year),
+              uma_proto->user_demographics().birth_year());
     EXPECT_EQ(test_gender, uma_proto->user_demographics().gender());
     histogram.ExpectUniqueSample("UMA.UserDemographics.Status",
                                  UserDemographicsStatus::kSuccess, 1);

@@ -1,11 +1,11 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "device/bluetooth/dbus/bluetooth_le_advertising_manager_client.h"
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "dbus/bus.h"
@@ -15,6 +15,17 @@
 #include "third_party/cros_system_api/dbus/service_constants.h"
 
 namespace bluez {
+
+BluetoothLEAdvertisingManagerClient::Properties::Properties(
+    dbus::ObjectProxy* object_proxy,
+    const std::string& interface_name,
+    const PropertyChangedCallback& callback)
+    : dbus::PropertySet(object_proxy, interface_name, callback) {
+  RegisterProperty(bluetooth_advertising_manager::kSupportedFeatures,
+                   &supported_features);
+}
+
+BluetoothLEAdvertisingManagerClient::Properties::~Properties() = default;
 
 const char BluetoothLEAdvertisingManagerClient::kNoResponseError[] =
     "org.chromium.Error.NoResponse";
@@ -57,8 +68,14 @@ class BluetoothAdvertisementManagerClientImpl
       dbus::ObjectProxy* object_proxy,
       const dbus::ObjectPath& object_path,
       const std::string& interface_name) override {
-    return new dbus::PropertySet(object_proxy, interface_name,
-                                 dbus::PropertySet::PropertyChangedCallback());
+    return new Properties(object_proxy, interface_name, base::DoNothing());
+  }
+
+  // BluetoothAdvertisementManagerClient override.
+  Properties* GetProperties(const dbus::ObjectPath& object_path) override {
+    return static_cast<Properties*>(object_manager_->GetProperties(
+        object_path,
+        bluetooth_advertising_manager::kBluetoothAdvertisingManagerInterface));
   }
 
   // BluetoothAdvertisementManagerClient override.

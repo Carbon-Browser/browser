@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -42,10 +42,10 @@ void VideoFrameRequestCallbackCollection::CancelFrameCallback(CallbackId id) {
 
 void VideoFrameRequestCallbackCollection::ExecuteFrameCallbacks(
     double high_res_now_ms,
-    const VideoFrameMetadata* metadata) {
+    const VideoFrameCallbackMetadata* metadata) {
   // First, generate a list of callbacks to consider. Callbacks registered from
   // this point on are considered only for the "next" frame, not this one.
-  DCHECK(callbacks_to_invoke_.IsEmpty());
+  DCHECK(callbacks_to_invoke_.empty());
   std::swap(callbacks_to_invoke_, frame_callbacks_);
 
   for (const auto& callback : callbacks_to_invoke_) {
@@ -85,7 +85,7 @@ void VideoFrameRequestCallbackCollection::V8VideoFrameCallback::Trace(
 
 void VideoFrameRequestCallbackCollection::V8VideoFrameCallback::Invoke(
     double highResTime,
-    const VideoFrameMetadata* metadata) {
+    const VideoFrameCallbackMetadata* metadata) {
   callback_->InvokeAndReportException(nullptr, highResTime, metadata);
 }
 

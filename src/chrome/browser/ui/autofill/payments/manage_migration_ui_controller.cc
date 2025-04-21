@@ -1,48 +1,72 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/autofill/payments/manage_migration_ui_controller.h"
 
 #include "chrome/browser/ui/autofill/autofill_bubble_base.h"
+#include "chrome/browser/ui/autofill/payments/local_card_migration_controller_observer.h"
 #include "chrome/browser/ui/autofill/payments/local_card_migration_dialog.h"
 #include "components/autofill/core/browser/payments/local_card_migration_manager.h"
+#include "components/autofill/core/browser/ui/payments/local_card_migration_dialog_controller.h"
 
 namespace autofill {
 
 ManageMigrationUiController::ManageMigrationUiController(
     content::WebContents* web_contents)
     : content::WebContentsUserData<ManageMigrationUiController>(*web_contents) {
-  autofill::LocalCardMigrationBubbleControllerImpl::CreateForWebContents(
-      web_contents);
-  bubble_controller_ =
-      autofill::LocalCardMigrationBubbleControllerImpl::FromWebContents(
-          web_contents);
-  bubble_controller_->AddObserver(this);
+  LocalCardMigrationBubbleControllerImpl::CreateForWebContents(web_contents);
+  bubble_controller_observation_.Observe(GetBubbleController());
 
-  autofill::LocalCardMigrationDialogControllerImpl::CreateForWebContents(
-      web_contents);
-  dialog_controller_ =
-      autofill::LocalCardMigrationDialogControllerImpl::FromWebContents(
-          web_contents);
-  dialog_controller_->AddObserver(this);
+  LocalCardMigrationDialogControllerImpl::CreateForWebContents(web_contents);
+  dialog_controller_observation_.Observe(GetDialogController());
 }
 
-ManageMigrationUiController::~ManageMigrationUiController() {}
+ManageMigrationUiController::~ManageMigrationUiController() = default;
+
+LocalCardMigrationBubbleControllerImpl*
+ManageMigrationUiController::GetBubbleController() {
+  return LocalCardMigrationBubbleControllerImpl::FromWebContents(
+      &GetWebContents());
+}
+
+LocalCardMigrationDialogControllerImpl*
+ManageMigrationUiController::GetDialogController() {
+  return LocalCardMigrationDialogControllerImpl::FromWebContents(
+      &GetWebContents());
+}
+
+void ManageMigrationUiController::OnSourceDestruction(
+    LocalCardMigrationControllerSource source) {
+  switch (source) {
+    case LocalCardMigrationControllerSource::kBubbleController:
+      CHECK(bubble_controller_observation_.IsObserving());
+      bubble_controller_observation_.Reset();
+      return;
+    case LocalCardMigrationControllerSource::kDialogContoller:
+      CHECK(dialog_controller_observation_.IsObserving());
+      dialog_controller_observation_.Reset();
+      return;
+  }
+  NOTREACHED();
+}
 
 void ManageMigrationUiController::ShowBubble(
     base::OnceClosure show_migration_dialog_closure) {
   flow_step_ = LocalCardMigrationFlowStep::PROMO_BUBBLE;
-  bubble_controller_->ShowBubble(std::move(show_migration_dialog_closure));
+  DCHECK(GetBubbleController());
+  GetBubbleController()->ShowBubble(std::move(show_migration_dialog_closure));
 }
 
 void ManageMigrationUiController::ShowOfferDialog(
     const LegalMessageLines& legal_message_lines,
     const std::string& user_email,
     const std::vector<MigratableCreditCard>& migratable_credit_cards,
-    AutofillClient::LocalCardMigrationCallback start_migrating_cards_callback) {
+    payments::PaymentsAutofillClient::LocalCardMigrationCallback
+        start_migrating_cards_callback) {
   flow_step_ = LocalCardMigrationFlowStep::OFFER_DIALOG;
-  dialog_controller_->ShowOfferDialog(
+  DCHECK(GetDialogController());
+  GetDialogController()->ShowOfferDialog(
       legal_message_lines, user_email, migratable_credit_cards,
       std::move(start_migrating_cards_callback));
 }
@@ -51,9 +75,11 @@ void ManageMigrationUiController::UpdateCreditCardIcon(
     const bool has_server_error,
     const std::u16string& tip_message,
     const std::vector<MigratableCreditCard>& migratable_credit_cards,
-    AutofillClient::MigrationDeleteCardCallback delete_local_card_callback) {
-  if (!dialog_controller_)
+    payments::PaymentsAutofillClient::MigrationDeleteCardCallback
+        delete_local_card_callback) {
+  if (!GetDialogController()) {
     return;
+  }
 
   DCHECK_EQ(flow_step_, LocalCardMigrationFlowStep::MIGRATION_RESULT_PENDING);
   flow_step_ = LocalCardMigrationFlowStep::MIGRATION_FINISHED;
@@ -64,15 +90,16 @@ void ManageMigrationUiController::UpdateCreditCardIcon(
       break;
     }
   }
-  if (has_server_error)
+  if (has_server_error) {
     flow_step_ = LocalCardMigrationFlowStep::MIGRATION_FAILED;
+  }
 
   // Show error dialog when |has_server_error| is true, which indicates
   // Payments Rpc failure.
   show_error_dialog_ = has_server_error;
 
-  dialog_controller_->UpdateCreditCardIcon(tip_message, migratable_credit_cards,
-                                           delete_local_card_callback);
+  GetDialogController()->UpdateCreditCardIcon(
+      tip_message, migratable_credit_cards, delete_local_card_callback);
 }
 
 void ManageMigrationUiController::OnUserClickedCreditCardIcon() {
@@ -104,18 +131,14 @@ bool ManageMigrationUiController::IsIconVisible() const {
   return flow_step_ != LocalCardMigrationFlowStep::NOT_SHOWN;
 }
 
-AutofillBubbleBase* ManageMigrationUiController::GetBubbleView() const {
-  if (!bubble_controller_)
-    return nullptr;
-
-  return bubble_controller_->local_card_migration_bubble_view();
+AutofillBubbleBase* ManageMigrationUiController::GetBubbleView() {
+  LocalCardMigrationBubbleControllerImpl* controller = GetBubbleController();
+  return controller ? controller->local_card_migration_bubble_view() : nullptr;
 }
 
-LocalCardMigrationDialog* ManageMigrationUiController::GetDialogView() const {
-  if (!dialog_controller_)
-    return nullptr;
-
-  return dialog_controller_->local_card_migration_dialog_view();
+LocalCardMigrationDialog* ManageMigrationUiController::GetDialogView() {
+  LocalCardMigrationDialogControllerImpl* controller = GetDialogController();
+  return controller ? controller->local_card_migration_dialog_view() : nullptr;
 }
 
 void ManageMigrationUiController::OnMigrationNoLongerAvailable() {
@@ -127,30 +150,33 @@ void ManageMigrationUiController::OnMigrationStarted() {
 }
 
 void ManageMigrationUiController::ReshowBubble() {
-  if (!bubble_controller_)
+  if (!GetBubbleController()) {
     return;
+  }
 
   DCHECK_EQ(flow_step_, LocalCardMigrationFlowStep::PROMO_BUBBLE);
-  bubble_controller_->ReshowBubble();
+  GetBubbleController()->ReshowBubble();
 }
 
 void ManageMigrationUiController::ShowErrorDialog() {
-  if (!dialog_controller_)
+  if (!GetDialogController()) {
     return;
+  }
 
   DCHECK_EQ(flow_step_, LocalCardMigrationFlowStep::MIGRATION_FINISHED);
   flow_step_ = LocalCardMigrationFlowStep::ERROR_DIALOG;
-  dialog_controller_->ShowErrorDialog();
+  GetDialogController()->ShowErrorDialog();
 }
 
 void ManageMigrationUiController::ShowFeedbackDialog() {
-  if (!dialog_controller_)
+  if (!GetDialogController()) {
     return;
+  }
 
   DCHECK(flow_step_ == LocalCardMigrationFlowStep::MIGRATION_FINISHED ||
          flow_step_ == LocalCardMigrationFlowStep::MIGRATION_FAILED);
   flow_step_ = LocalCardMigrationFlowStep::FEEDBACK_DIALOG;
-  dialog_controller_->ShowFeedbackDialog();
+  GetDialogController()->ShowFeedbackDialog();
 }
 
 WEB_CONTENTS_USER_DATA_KEY_IMPL(ManageMigrationUiController);

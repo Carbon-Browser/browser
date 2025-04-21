@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/sequence_checker.h"
 #include "components/services/storage/public/cpp/buckets/bucket_locator.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
@@ -53,7 +53,7 @@ void ServiceWorkerQuotaClient::GetBucketUsage(
 
   // Skip non-default buckets until Storage Buckets are supported for
   // ServiceWorkers.
-  // TODO(crbug.com/1293510): Integrate ServiceWorkers with StorageBuckets.
+  // TODO(crbug.com/40213545): Integrate ServiceWorkers with StorageBuckets.
   if (!bucket.is_default) {
     std::move(callback).Run(0);
     return;
@@ -79,7 +79,7 @@ void ServiceWorkerQuotaClient::DeleteBucketData(
 
   // Skip non-default buckets until Storage Buckets are supported for
   // ServiceWorkers.
-  // TODO(crbug.com/1293510): Integrate ServiceWorkers with StorageBuckets.
+  // TODO(crbug.com/40213545): Integrate ServiceWorkers with StorageBuckets.
   if (!bucket.is_default) {
     std::move(callback).Run(blink::mojom::QuotaStatusCode::kOk);
     return;

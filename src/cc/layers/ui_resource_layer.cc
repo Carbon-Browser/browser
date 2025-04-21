@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,8 +19,6 @@ scoped_refptr<UIResourceLayer> UIResourceLayer::Create() {
 
 UIResourceLayer::UIResourceLayer()
     : resource_id_(0), uv_top_left_(0.f, 0.f), uv_bottom_right_(1.f, 1.f) {
-  auto& vo = vertex_opacity_.Write(*this);
-  vo[0] = vo[1] = vo[2] = vo[3] = 1.0f;
 }
 
 UIResourceLayer::~UIResourceLayer() = default;
@@ -40,27 +38,6 @@ void UIResourceLayer::SetUV(const gfx::PointF& top_left,
   SetNeedsCommit();
 }
 
-void UIResourceLayer::SetVertexOpacity(float bottom_left,
-                                       float top_left,
-                                       float top_right,
-                                       float bottom_right) {
-  // Indexing according to the quad vertex generation:
-  // 1--2
-  // |  |
-  // 0--3
-  const auto& old_vertex_opacity = vertex_opacity_.Read(*this);
-  if (old_vertex_opacity[0] == bottom_left &&
-      old_vertex_opacity[1] == top_left && old_vertex_opacity[2] == top_right &&
-      old_vertex_opacity[3] == bottom_right)
-    return;
-  auto& vertex_opacity = vertex_opacity_.Write(*this);
-  vertex_opacity[0] = bottom_left;
-  vertex_opacity[1] = top_left;
-  vertex_opacity[2] = top_right;
-  vertex_opacity[3] = bottom_right;
-  SetNeedsCommit();
-}
-
 void UIResourceLayer::SetLayerTreeHost(LayerTreeHost* host) {
   if (host == layer_tree_host())
     return;
@@ -70,7 +47,7 @@ void UIResourceLayer::SetLayerTreeHost(LayerTreeHost* host) {
   // Recreate the resource held against the new LTH.
   RecreateUIResourceIdFromBitmap();
 
-  SetDrawsContent(HasDrawableContent());
+  UpdateDrawsContent();
 }
 
 void UIResourceLayer::SetBitmap(const SkBitmap& bitmap) {
@@ -95,24 +72,27 @@ bool UIResourceLayer::HasDrawableContent() const {
   return resource_id_.Read(*this) && Layer::HasDrawableContent();
 }
 
-void UIResourceLayer::PushPropertiesTo(
+void UIResourceLayer::PushDirtyPropertiesTo(
     LayerImpl* layer,
+    uint8_t dirty_flag,
     const CommitState& commit_state,
     const ThreadUnsafeCommitState& unsafe_state) {
-  Layer::PushPropertiesTo(layer, commit_state, unsafe_state);
-  TRACE_EVENT0("cc", "UIResourceLayer::PushPropertiesTo");
-  UIResourceLayerImpl* layer_impl = static_cast<UIResourceLayerImpl*>(layer);
+  Layer::PushDirtyPropertiesTo(layer, dirty_flag, commit_state, unsafe_state);
 
-  UIResourceId resource_id = resource_id_.Read(*this);
-  layer_impl->SetUIResourceId(resource_id);
-  if (resource_id) {
-    auto iter = commit_state.ui_resource_sizes.find(resource_id);
-    gfx::Size image_bounds = (iter == commit_state.ui_resource_sizes.end())
-                                 ? gfx::Size()
-                                 : iter->second;
-    layer_impl->SetImageBounds(image_bounds);
-    layer_impl->SetUV(uv_top_left_.Read(*this), uv_bottom_right_.Read(*this));
-    layer_impl->SetVertexOpacity(vertex_opacity_.Read(*this));
+  if (dirty_flag & kChangedGeneralProperty) {
+    TRACE_EVENT0("cc", "UIResourceLayer::PushPropertiesTo");
+    UIResourceLayerImpl* layer_impl = static_cast<UIResourceLayerImpl*>(layer);
+
+    UIResourceId resource_id = resource_id_.Read(*this);
+    layer_impl->SetUIResourceId(resource_id);
+    if (resource_id) {
+      auto iter = commit_state.ui_resource_sizes.find(resource_id);
+      gfx::Size image_bounds = (iter == commit_state.ui_resource_sizes.end())
+                                   ? gfx::Size()
+                                   : iter->second;
+      layer_impl->SetImageBounds(image_bounds);
+      layer_impl->SetUV(uv_top_left_.Read(*this), uv_bottom_right_.Read(*this));
+    }
   }
 }
 
@@ -123,7 +103,7 @@ void UIResourceLayer::RecreateUIResourceIdFromBitmap() {
 
 void UIResourceLayer::SetUIResourceIdInternal(UIResourceId resource_id) {
   resource_id_.Write(*this) = resource_id;
-  SetDrawsContent(HasDrawableContent());
+  UpdateDrawsContent();
   SetNeedsCommit();
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,11 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "base/callback.h"
-#include "base/memory/ref_counted.h"
+#include "base/functional/callback.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
@@ -101,7 +102,7 @@ class MOJO_SYSTEM_IMPL_EXPORT Core {
   // connections.
   void ConnectIsolated(ConnectionParams connection_params,
                        const ports::PortRef& port,
-                       base::StringPiece connection_name);
+                       std::string_view connection_name);
 
   MojoHandle AddDispatcher(scoped_refptr<Dispatcher> dispatcher);
 
@@ -174,6 +175,9 @@ class MOJO_SYSTEM_IMPL_EXPORT Core {
   MojoResult DestroyMessage(MojoMessageHandle message_handle);
   MojoResult SerializeMessage(MojoMessageHandle message_handle,
                               const MojoSerializeMessageOptions* options);
+  MojoResult ReserveMessageCapacity(MojoMessageHandle message_handle,
+                                    uint32_t payload_buffer_size,
+                                    uint32_t* buffer_size);
   MojoResult AppendMessageData(MojoMessageHandle message_handle,
                                uint32_t additional_payload_size,
                                const MojoHandle* handles,

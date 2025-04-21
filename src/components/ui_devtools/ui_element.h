@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "components/ui_devtools/devtools_export.h"
 #include "components/ui_devtools/dom.h"
 #include "ui/base/interaction/element_identifier.h"
@@ -48,7 +49,7 @@ class UI_DEVTOOLS_EXPORT UIElement {
     int line_;
   };
 
-  using UIElements = std::vector<UIElement*>;
+  using UIElements = std::vector<raw_ptr<UIElement, VectorExperimental>>;
 
   UIElement(const UIElement&) = delete;
   UIElement& operator=(const UIElement&) = delete;
@@ -157,8 +158,8 @@ class UI_DEVTOOLS_EXPORT UIElement {
   const int node_id_;
   const UIElementType type_;
   UIElements children_;
-  UIElement* parent_;
-  UIElementDelegate* delegate_;
+  raw_ptr<UIElement, DanglingUntriaged> parent_;
+  raw_ptr<UIElementDelegate, DanglingUntriaged> delegate_;
   bool is_updating_ = false;
   int base_stylesheet_id_;
   bool header_sent_ = false;

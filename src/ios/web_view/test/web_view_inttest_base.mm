@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #import <Foundation/Foundation.h>
 
 #include "base/base64.h"
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #import "base/memory/ptr_util.h"
 #include "base/strings/stringprintf.h"
 #import "ios/web/common/uikit_ui_util.h"
@@ -18,10 +18,6 @@
 #include "net/test/embedded_test_server/http_request.h"
 #include "net/test/embedded_test_server/http_response.h"
 #include "testing/gtest/include/gtest/gtest.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 namespace {
 
@@ -51,9 +47,7 @@ bool StartsWith(std::string string, std::string prefix) {
 
 // Encodes the |string| for use as the value of a url parameter.
 std::string EncodeQueryParamValue(std::string string) {
-  std::string encoded_string;
-  base::Base64Encode(string, &encoded_string);
-  return encoded_string;
+  return base::Base64Encode(string);
 }
 
 // Decodes the |encoded_string|. Undoes the encoding performed by

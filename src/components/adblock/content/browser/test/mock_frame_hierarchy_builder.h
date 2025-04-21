@@ -19,6 +19,7 @@
 #define COMPONENTS_ADBLOCK_CONTENT_BROWSER_TEST_MOCK_FRAME_HIERARCHY_BUILDER_H_
 
 #include "components/adblock/content/browser/frame_hierarchy_builder.h"
+#include "components/adblock/content/browser/request_initiator.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "url/gurl.h"
 
@@ -30,13 +31,9 @@ class MockFrameHierarchyBuilder
   MockFrameHierarchyBuilder();
   ~MockFrameHierarchyBuilder() override;
 
-  MOCK_METHOD(content::RenderFrameHost*,
-              FindRenderFrameHost,
-              (int32_t, int32_t),
-              (const, override));
   MOCK_METHOD(std::vector<GURL>,
               BuildFrameHierarchy,
-              (content::RenderFrameHost*),
+              (const RequestInitiator&),
               (const, override));
   MOCK_METHOD(GURL,
               FindUrlForFrame,

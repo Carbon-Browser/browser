@@ -1,6 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "media/formats/common/offset_byte_queue.h"
 
@@ -19,10 +24,15 @@ void OffsetByteQueue::Reset() {
   head_ = 0;
 }
 
-void OffsetByteQueue::Push(const uint8_t* buf, int size) {
-  queue_.Push(buf, size);
+bool OffsetByteQueue::Push(base::span<const uint8_t> buf) {
+  if (!queue_.Push(buf)) {
+    DVLOG(4) << "Failed to push buf of size " << buf.size();
+    Sync();
+    return false;
+  }
   Sync();
   DVLOG(4) << "Buffer pushed. head=" << head() << " tail=" << tail();
+  return true;
 }
 
 void OffsetByteQueue::Peek(const uint8_t** buf, int* size) {
@@ -58,7 +68,7 @@ bool OffsetByteQueue::Trim(int64_t max_offset) {
 }
 
 void OffsetByteQueue::Sync() {
-  queue_.Peek(&buf_, &size_);
+  queue_.Peek(&buf_.AsEphemeralRawAddr(), &size_);
 }
 
 }  // namespace media

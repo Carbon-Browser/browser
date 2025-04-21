@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,6 +29,11 @@ struct COMPONENT_EXPORT(DEVICE_FIDO) P256PublicKey {
 
   // Parse a public key encoded in ANSI X9.62 uncompressed format.
   static std::unique_ptr<PublicKey> ParseX962Uncompressed(
+      int32_t algorithm,
+      base::span<const uint8_t> input);
+
+  // Parse a public key from a DER-encoded X.509 SubjectPublicKeyInfo.
+  static std::unique_ptr<PublicKey> ParseSpkiDer(
       int32_t algorithm,
       base::span<const uint8_t> input);
 };

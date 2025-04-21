@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include <string>
 
 #include "base/compiler_specific.h"
-#include "base/memory/ref_counted.h"
 #include "base/threading/thread.h"
 #include "media/audio/audio_manager_base.h"
 
@@ -76,6 +75,10 @@ class MEDIA_EXPORT AudioManagerAlsa : public AudioManagerBase {
   // Checks if the specific ALSA device is available.
   static bool IsAlsaDeviceAvailable(StreamType type,
                                     const char* device_name);
+
+  // Adds the switch-specified ALSA device if not present in device list.
+  static void AddAlsaDeviceFromSwitch(const char* switch_name,
+                                      AudioDeviceNames* device_names);
 
   static const char* UnwantedDeviceTypeWhenEnumerating(
       StreamType wanted_type);

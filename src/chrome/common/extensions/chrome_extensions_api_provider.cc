@@ -1,8 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/common/extensions/chrome_extensions_api_provider.h"
+
+#include <string_view>
 
 #include "chrome/common/extensions/api/api_features.h"
 #include "chrome/common/extensions/api/generated_schemas.h"
@@ -16,7 +18,7 @@
 
 namespace extensions {
 
-ChromeExtensionsAPIProvider::ChromeExtensionsAPIProvider() {}
+ChromeExtensionsAPIProvider::ChromeExtensionsAPIProvider() = default;
 ChromeExtensionsAPIProvider::~ChromeExtensionsAPIProvider() = default;
 
 void ChromeExtensionsAPIProvider::AddAPIFeatures(FeatureProvider* provider) {
@@ -48,7 +50,7 @@ bool ChromeExtensionsAPIProvider::IsAPISchemaGenerated(
   return api::ChromeGeneratedSchemas::IsGenerated(name);
 }
 
-base::StringPiece ChromeExtensionsAPIProvider::GetAPISchema(
+std::string_view ChromeExtensionsAPIProvider::GetAPISchema(
     const std::string& name) {
   return api::ChromeGeneratedSchemas::Get(name);
 }

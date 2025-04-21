@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,6 +35,11 @@ int ViewsContentClientMainParts::PreMainMessageLoopRun() {
   run_loop_ = std::make_unique<base::RunLoop>();
   views_content_client()->set_quit_closure(run_loop_->QuitClosure());
   return content::RESULT_CODE_NORMAL_EXIT;
+}
+
+void ViewsContentClientMainParts::WillRunMainMessageLoop(
+    std::unique_ptr<base::RunLoop>& run_loop) {
+  run_loop = std::move(run_loop_);
 }
 
 void ViewsContentClientMainParts::PostMainMessageLoopRun() {

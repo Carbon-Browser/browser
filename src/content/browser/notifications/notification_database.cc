@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include <string>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
@@ -150,12 +150,12 @@ NotificationDatabase::NotificationDatabase(const base::FilePath& path,
     : path_(path), record_notification_to_ukm_callback_(std::move(callback)) {}
 
 NotificationDatabase::~NotificationDatabase() {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 }
 
 NotificationDatabase::Status NotificationDatabase::Open(
     bool create_if_missing) {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK_EQ(State::UNINITIALIZED, state_);
 
   if (!create_if_missing) {
@@ -189,7 +189,7 @@ NotificationDatabase::Status NotificationDatabase::ReadNotificationData(
     const std::string& notification_id,
     const GURL& origin,
     NotificationDatabaseData* notification_database_data) const {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK_EQ(State::INITIALIZED, state_);
   DCHECK(!notification_id.empty());
   DCHECK(origin.is_valid());
@@ -211,7 +211,7 @@ NotificationDatabase::Status NotificationDatabase::ReadNotificationResources(
     const std::string& notification_id,
     const GURL& origin,
     blink::NotificationResources* notification_resources) const {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK_EQ(State::INITIALIZED, state_);
   DCHECK(!notification_id.empty());
   DCHECK(origin.is_valid());
@@ -260,19 +260,14 @@ NotificationDatabase::ReadNotificationDataAndRecordInteraction(
       break;
   }
 
-  // Write the changed values to the database.
-  status = WriteNotificationData(origin, *notification_database_data);
-  UMA_HISTOGRAM_ENUMERATION(
-      "Notifications.Database.ReadResultRecordInteraction", status,
-      NotificationDatabase::STATUS_COUNT);
-  return status;
+  return WriteNotificationData(origin, *notification_database_data);
 }
 
 NotificationDatabase::Status NotificationDatabase::ForEachNotificationData(
     ReadAllNotificationsCallback callback) const {
   return ForEachNotificationDataInternal(
       GURL() /* origin */, blink::mojom::kInvalidServiceWorkerRegistrationId,
-      absl::nullopt /* is_shown_by_browser */, std::move(callback));
+      std::nullopt /* is_shown_by_browser */, std::move(callback));
 }
 
 NotificationDatabase::Status
@@ -280,9 +275,9 @@ NotificationDatabase::ForEachNotificationDataForServiceWorkerRegistration(
     const GURL& origin,
     int64_t service_worker_registration_id,
     ReadAllNotificationsCallback callback) const {
-  return ForEachNotificationDataInternal(
-      origin, service_worker_registration_id,
-      absl::nullopt /* is_shown_by_browser */, std::move(callback));
+  return ForEachNotificationDataInternal(origin, service_worker_registration_id,
+                                         std::nullopt /* is_shown_by_browser */,
+                                         std::move(callback));
 }
 
 NotificationDatabase::Status
@@ -291,14 +286,14 @@ NotificationDatabase::ReadAllNotificationDataForOrigin(
     std::vector<NotificationDatabaseData>* notification_data_vector) const {
   return ReadAllNotificationDataInternal(
       origin, blink::mojom::kInvalidServiceWorkerRegistrationId,
-      absl::nullopt /* is_shown_by_browser */, notification_data_vector);
+      std::nullopt /* is_shown_by_browser */, notification_data_vector);
 }
 
 NotificationDatabase::Status
 NotificationDatabase::ReadAllNotificationDataForServiceWorkerRegistration(
     const GURL& origin,
     int64_t service_worker_registration_id,
-    absl::optional<bool> is_shown_by_browser,
+    std::optional<bool> is_shown_by_browser,
     std::vector<NotificationDatabaseData>* notification_data_vector) const {
   return ReadAllNotificationDataInternal(origin, service_worker_registration_id,
                                          is_shown_by_browser,
@@ -308,7 +303,7 @@ NotificationDatabase::ReadAllNotificationDataForServiceWorkerRegistration(
 NotificationDatabase::Status NotificationDatabase::WriteNotificationData(
     const GURL& origin,
     const NotificationDatabaseData& notification_data) {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK_EQ(State::INITIALIZED, state_);
   DCHECK(origin.is_valid());
 
@@ -346,7 +341,7 @@ NotificationDatabase::Status NotificationDatabase::WriteNotificationData(
 NotificationDatabase::Status NotificationDatabase::DeleteNotificationData(
     const std::string& notification_id,
     const GURL& origin) {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK_EQ(State::INITIALIZED, state_);
   DCHECK(!notification_id.empty());
   DCHECK(origin.is_valid());
@@ -369,7 +364,7 @@ NotificationDatabase::Status NotificationDatabase::DeleteNotificationData(
 NotificationDatabase::Status NotificationDatabase::DeleteNotificationResources(
     const std::string& notification_id,
     const GURL& origin) {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK_EQ(State::INITIALIZED, state_);
   DCHECK(!notification_id.empty());
   DCHECK(origin.is_valid());
@@ -383,7 +378,7 @@ NotificationDatabase::Status
 NotificationDatabase::DeleteAllNotificationDataForOrigin(
     const GURL& origin,
     const std::string& tag,
-    absl::optional<bool> is_shown_by_browser,
+    std::optional<bool> is_shown_by_browser,
     std::set<std::string>* deleted_notification_ids) {
   return DeleteAllNotificationDataInternal(
       origin, tag, is_shown_by_browser,
@@ -397,12 +392,12 @@ NotificationDatabase::DeleteAllNotificationDataForServiceWorkerRegistration(
     int64_t service_worker_registration_id,
     std::set<std::string>* deleted_notification_ids) {
   return DeleteAllNotificationDataInternal(
-      origin, "" /* tag */, absl::nullopt /* is_shown_by_browser */,
+      origin, "" /* tag */, std::nullopt /* is_shown_by_browser */,
       service_worker_registration_id, deleted_notification_ids);
 }
 
 NotificationDatabase::Status NotificationDatabase::Destroy() {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   leveldb_env::Options options;
   if (IsInMemoryDatabase()) {
@@ -423,9 +418,9 @@ NotificationDatabase::Status
 NotificationDatabase::ReadAllNotificationDataInternal(
     const GURL& origin,
     int64_t service_worker_registration_id,
-    absl::optional<bool> is_shown_by_browser,
+    std::optional<bool> is_shown_by_browser,
     std::vector<NotificationDatabaseData>* notification_data_vector) const {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(notification_data_vector);
 
   return ForEachNotificationDataInternal(
@@ -440,9 +435,9 @@ NotificationDatabase::Status
 NotificationDatabase::ForEachNotificationDataInternal(
     const GURL& origin,
     int64_t service_worker_registration_id,
-    absl::optional<bool> is_shown_by_browser,
+    std::optional<bool> is_shown_by_browser,
     ReadAllNotificationsCallback callback) const {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   const std::string prefix = CreateDataPrefix(origin);
 
@@ -482,10 +477,10 @@ NotificationDatabase::Status
 NotificationDatabase::DeleteAllNotificationDataInternal(
     const GURL& origin,
     const std::string& tag,
-    absl::optional<bool> is_shown_by_browser,
+    std::optional<bool> is_shown_by_browser,
     int64_t service_worker_registration_id,
     std::set<std::string>* deleted_notification_ids) {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(deleted_notification_ids);
   DCHECK(origin.is_valid());
 

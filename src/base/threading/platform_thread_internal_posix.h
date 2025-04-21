@@ -1,14 +1,15 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef BASE_THREADING_PLATFORM_THREAD_INTERNAL_POSIX_H_
 #define BASE_THREADING_PLATFORM_THREAD_INTERNAL_POSIX_H_
 
+#include <optional>
+
 #include "base/base_export.h"
 #include "base/threading/platform_thread.h"
 #include "build/build_config.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 
@@ -27,13 +28,13 @@ struct ThreadPriorityToNiceValuePairForTest {
 // The elements must be listed in the order of increasing priority (lowest
 // priority first), that is, in the order of decreasing nice values (highest
 // nice value first).
-extern const ThreadTypeToNiceValuePair kThreadTypeToNiceValueMap[5];
+extern const ThreadTypeToNiceValuePair kThreadTypeToNiceValueMap[7];
 
 // The elements must be listed in the order of decreasing priority (highest
 // priority first), that is, in the order of increasing nice values (lowest nice
 // value first).
 extern const ThreadPriorityToNiceValuePairForTest
-    kThreadPriorityToNiceValueMapForTest[4];
+    kThreadPriorityToNiceValueMapForTest[7];
 
 // Returns the nice value matching |priority| based on the platform-specific
 // implementation of kThreadTypeToNiceValueMap.
@@ -63,7 +64,7 @@ BASE_EXPORT void InvalidateTidCache();
 // platform-specific implementation of kThreadPriorityToNiceValueMapForTest.
 ThreadPriorityForTest NiceValueToThreadPriorityForTest(int nice_value);
 
-absl::optional<ThreadPriorityForTest>
+std::optional<ThreadPriorityForTest>
 GetCurrentThreadPriorityForPlatformForTest();
 
 int GetCurrentThreadNiceValue();

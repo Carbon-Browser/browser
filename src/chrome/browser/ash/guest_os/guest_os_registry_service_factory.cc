@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,16 +25,22 @@ GuestOsRegistryServiceFactory* GuestOsRegistryServiceFactory::GetInstance() {
 }
 
 GuestOsRegistryServiceFactory::GuestOsRegistryServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "GuestOsRegistryService",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kRedirectedToOriginal)
+              .WithGuest(ProfileSelection::kNone)
+              .WithAshInternals(ProfileSelection::kNone)
+              .WithSystem(ProfileSelection::kNone)
+              .Build()) {}
 
 GuestOsRegistryServiceFactory::~GuestOsRegistryServiceFactory() = default;
 
-KeyedService* GuestOsRegistryServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+GuestOsRegistryServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
-  return new GuestOsRegistryService(profile);
+  return std::make_unique<GuestOsRegistryService>(profile);
 }
 
 }  // namespace guest_os

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_UI_WEBUI_EXTENSIONS_EXTENSION_ICON_SOURCE_H_
 
 #include <map>
+#include <memory>
 #include <string>
 
 #include "base/memory/raw_ptr.h"
@@ -13,8 +14,8 @@
 #include "base/task/cancelable_task_tracker.h"
 #include "components/favicon/core/favicon_service.h"
 #include "content/public/browser/url_data_source.h"
-#include "extensions/common/extension_icon_set.h"
 #include "extensions/common/extension_resource.h"
+#include "extensions/common/icons/extension_icon_set.h"
 
 class ExtensionIconSet;
 class Profile;
@@ -34,23 +35,22 @@ class Extension;
 //    <icon_size>     = the size of the icon, as the integer value of the
 //                      corresponding Extension:Icons enum.
 //    <match_type>    = the fallback matching policy, as the integer value of
-//                      the corresponding ExtensionIconSet::MatchType enum.
+//                      the corresponding ExtensionIconSet::Match enum.
 //    [options]       = Optional transformations to apply. Supported options:
 //                        grayscale=true to desaturate the image.
 //
 // Examples:
 //   chrome-extension://gbmgkahjioeacddebbnengilkgbkhodg/32/1?grayscale=true
-//     (ICON_SMALL, MATCH_BIGGER, grayscale)
+//     (ICON_SMALL, kBigger, grayscale)
 //   chrome-extension://gbmgkahjioeacddebbnengilkgbkhodg/128/0
-//     (ICON_LARGE, MATCH_EXACTLY)
+//     (ICON_LARGE, kExactly)
 //
 // We attempt to load icons from the following sources in order:
 //  1) The icons as listed in the extension / app manifests.
 //  2) If a 16px icon was requested, the favicon for extension's launch URL.
 //  3) The default extension / application icon if there are still no matches.
 //
-class ExtensionIconSource : public content::URLDataSource,
-                            public base::SupportsWeakPtr<ExtensionIconSource> {
+class ExtensionIconSource : public content::URLDataSource {
  public:
   explicit ExtensionIconSource(Profile* profile);
 
@@ -64,20 +64,20 @@ class ExtensionIconSource : public content::URLDataSource,
   // desaturated version of the icon.
   static GURL GetIconURL(const Extension* extension,
                          int icon_size,
-                         ExtensionIconSet::MatchType match,
+                         ExtensionIconSet::Match match,
                          bool grayscale);
   static GURL GetIconURL(const std::string& extension_id,
                          int icon_size,
-                         ExtensionIconSet::MatchType match,
+                         ExtensionIconSet::Match match,
                          bool grayscale);
 
   // A public utility function for accessing the bitmap of the image specified
   // by |resource_id|.
-  static SkBitmap* LoadImageByResourceId(int resource_id);
+  static std::unique_ptr<SkBitmap> LoadImageByResourceId(int resource_id);
 
   // content::URLDataSource implementation.
   std::string GetSource() override;
-  std::string GetMimeType(const std::string&) override;
+  std::string GetMimeType(const GURL&) override;
   void StartDataRequest(
       const GURL& url,
       const content::WebContents::Getter& wc_getter,
@@ -104,8 +104,7 @@ class ExtensionIconSource : public content::URLDataSource,
 
   // Loads the extension's |icon| for the given |request_id| and returns the
   // image to the client.
-  void LoadExtensionImage(const ExtensionResource& icon,
-                          int request_id);
+  void LoadExtensionImage(const ExtensionResource& icon, int request_id);
 
   // Loads the favicon image for the app associated with the |request_id|. If
   // the image does not exist, we fall back to the default image.
@@ -140,7 +139,7 @@ class ExtensionIconSource : public content::URLDataSource,
                const Extension* extension,
                bool grayscale,
                int size,
-               ExtensionIconSet::MatchType match);
+               ExtensionIconSet::Match match);
 
   // Returns the ExtensionIconRequest for the given |request_id|.
   ExtensionIconRequest* GetData(int request_id);
@@ -148,7 +147,7 @@ class ExtensionIconSource : public content::URLDataSource,
   // Removes temporary data associated with |request_id|.
   void ClearData(int request_id);
 
-  raw_ptr<Profile> profile_;
+  raw_ptr<Profile, FlakyDanglingUntriaged> profile_;
 
   // Maps tracker ids to request ids.
   std::map<int, int> tracker_map_;
@@ -161,6 +160,8 @@ class ExtensionIconSource : public content::URLDataSource,
   std::unique_ptr<SkBitmap> default_extension_data_;
 
   base::CancelableTaskTracker cancelable_task_tracker_;
+
+  base::WeakPtrFactory<ExtensionIconSource> weak_ptr_factory_{this};
 };
 
 }  // namespace extensions

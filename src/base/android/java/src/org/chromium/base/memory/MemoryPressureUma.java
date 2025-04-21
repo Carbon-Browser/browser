@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,19 +12,26 @@ import androidx.annotation.IntDef;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.metrics.RecordHistogram;
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
-/**
- * Centralizes UMA data collection for Android-specific memory conditions.
- */
+/** Centralizes UMA data collection for Android-specific memory conditions. */
+@NullMarked
 public class MemoryPressureUma implements ComponentCallbacks2 {
-    @IntDef({Notification.UNKNOWN_TRIM_LEVEL, Notification.TRIM_MEMORY_COMPLETE,
-            Notification.TRIM_MEMORY_MODERATE, Notification.TRIM_MEMORY_BACKGROUND,
-            Notification.TRIM_MEMORY_UI_HIDDEN, Notification.TRIM_MEMORY_RUNNING_CRITICAL,
-            Notification.TRIM_MEMORY_RUNNING_LOW, Notification.TRIM_MEMORY_RUNNING_MODERATE,
-            Notification.ON_LOW_MEMORY})
+    @IntDef({
+        Notification.UNKNOWN_TRIM_LEVEL,
+        Notification.TRIM_MEMORY_COMPLETE,
+        Notification.TRIM_MEMORY_MODERATE,
+        Notification.TRIM_MEMORY_BACKGROUND,
+        Notification.TRIM_MEMORY_UI_HIDDEN,
+        Notification.TRIM_MEMORY_RUNNING_CRITICAL,
+        Notification.TRIM_MEMORY_RUNNING_LOW,
+        Notification.TRIM_MEMORY_RUNNING_MODERATE,
+        Notification.ON_LOW_MEMORY
+    })
     @Retention(RetentionPolicy.SOURCE)
     private @interface Notification {
         // WARNING: These values are persisted to logs. Entries should not be
@@ -46,7 +53,7 @@ public class MemoryPressureUma implements ComponentCallbacks2 {
 
     private final String mHistogramName;
 
-    private static MemoryPressureUma sInstance;
+    private static @Nullable MemoryPressureUma sInstance;
 
     public static void initializeForBrowser() {
         initializeInstance("Browser");

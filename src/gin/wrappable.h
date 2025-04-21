@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -105,14 +105,6 @@ class Wrappable : public WrappableBase {
  protected:
   Wrappable() = default;
   ~Wrappable() override = default;
-};
-
-template <typename T>
-struct ToV8ReturnsMaybe<
-    T*,
-    typename std::enable_if<
-        std::is_convertible<T*, WrappableBase*>::value>::type> {
-  static const bool value = true;
 };
 
 // This converter handles any subclass of Wrappable.

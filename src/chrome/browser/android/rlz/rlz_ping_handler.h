@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,8 @@
 #include "base/android/scoped_java_ref.h"
 #include "base/memory/ref_counted.h"
 
+class Profile;
+
 namespace network {
 class SimpleURLLoader;
 class SharedURLLoaderFactory;
@@ -23,7 +25,7 @@ namespace android {
 // JNI bridge for   RlzPingHandler.java
 class RlzPingHandler {
  public:
-  explicit RlzPingHandler(const base::android::JavaRef<jobject>& jprofile);
+  explicit RlzPingHandler(Profile* profile);
 
   RlzPingHandler(const RlzPingHandler&) = delete;
   RlzPingHandler& operator=(const RlzPingHandler&) = delete;

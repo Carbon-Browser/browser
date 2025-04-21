@@ -1,10 +1,15 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "components/payments/core/payments_validators.h"
 
-#include <ostream>  // NOLINT
+#include <ostream>
 
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -14,7 +19,7 @@ namespace {
 struct CurrencyCodeTestCase {
   CurrencyCodeTestCase(const char* code, bool expected_valid)
       : code(code), expected_valid(expected_valid) {}
-  ~CurrencyCodeTestCase() {}
+  ~CurrencyCodeTestCase() = default;
 
   const char* code;
   bool expected_valid;
@@ -68,7 +73,7 @@ INSTANTIATE_TEST_SUITE_P(
 struct TestCase {
   TestCase(const char* input, bool expected_valid)
       : input(input), expected_valid(expected_valid) {}
-  ~TestCase() {}
+  ~TestCase() = default;
 
   const char* input;
   bool expected_valid;

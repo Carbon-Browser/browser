@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,14 +25,14 @@ class AXAuraObjCache;
 class AXAuraObjWrapper;
 
 // This class exposes the views hierarchy as an accessibility tree permitting
-// use with other accessibility classes. Subclasses must implement GetRoot().
-// The root can be an existing object in the Widget/View hierarchy or a new node
-// (for example to create the "desktop" node for the extension API call
-// chrome.automation.getDesktop()).
+// use with other accessibility classes. The root can be an existing object in
+// the Widget/View hierarchy or a new node (for example to create the "desktop"
+// node for the extension API call chrome.automation.getDesktop()).
 class VIEWS_EXPORT AXTreeSourceViews
-    : public ui::AXTreeSource<AXAuraObjWrapper*> {
+    : public ui::
+          AXTreeSource<AXAuraObjWrapper*, ui::AXTreeData*, ui::AXNodeData> {
  public:
-  AXTreeSourceViews(AXAuraObjWrapper* root,
+  AXTreeSourceViews(ui::AXNodeID root_id,
                     const ui::AXTreeID& tree_id,
                     AXAuraObjCache* cache);
   AXTreeSourceViews(const AXTreeSourceViews&) = delete;
@@ -47,11 +47,12 @@ class VIEWS_EXPORT AXTreeSourceViews
   AXAuraObjWrapper* GetRoot() const override;
   AXAuraObjWrapper* GetFromId(int32_t id) const override;
   int32_t GetId(AXAuraObjWrapper* node) const override;
-  void GetChildren(AXAuraObjWrapper* node,
-                   std::vector<AXAuraObjWrapper*>* out_children) const override;
+  void CacheChildrenIfNeeded(AXAuraObjWrapper*) override;
+  size_t GetChildCount(AXAuraObjWrapper* node) const override;
+  void ClearChildCache(AXAuraObjWrapper*) override;
+  AXAuraObjWrapper* ChildAt(AXAuraObjWrapper* node, size_t) const override;
   AXAuraObjWrapper* GetParent(AXAuraObjWrapper* node) const override;
   bool IsIgnored(AXAuraObjWrapper* node) const override;
-  bool IsValid(AXAuraObjWrapper* node) const override;
   bool IsEqual(AXAuraObjWrapper* node1, AXAuraObjWrapper* node2) const override;
   AXAuraObjWrapper* GetNull() const override;
   std::string GetDebugString(AXAuraObjWrapper* node) const override;
@@ -64,13 +65,13 @@ class VIEWS_EXPORT AXTreeSourceViews
   const ui::AXTreeID tree_id() const { return tree_id_; }
 
  private:
-  // The top-level object to use for the AX tree. See class comment.
-  const raw_ptr<AXAuraObjWrapper> root_ = nullptr;
+  // The ID of the top-level object to use for the AX tree.
+  const ui::AXNodeID root_id_;
 
   // ID to use for the AX tree.
   const ui::AXTreeID tree_id_;
 
-  raw_ptr<views::AXAuraObjCache> cache_;
+  const raw_ptr<views::AXAuraObjCache> cache_;
 };
 
 }  // namespace views

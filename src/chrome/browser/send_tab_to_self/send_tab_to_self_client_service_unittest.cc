@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ namespace {
 class TestReceivingUiHandler : public ReceivingUiHandler {
  public:
   TestReceivingUiHandler() = default;
-  ~TestReceivingUiHandler() override {}
+  ~TestReceivingUiHandler() override = default;
 
   void DisplayNewEntries(
       const std::vector<const SendTabToSelfEntry*>& new_entries) override {

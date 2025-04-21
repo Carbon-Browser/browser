@@ -1,6 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ash/webui/eche_app_ui/untrusted_eche_app_ui.h"
 
@@ -19,15 +24,10 @@ namespace ash {
 namespace eche_app {
 
 UntrustedEcheAppUIConfig::UntrustedEcheAppUIConfig()
-    : WebUIConfig(content::kChromeUIUntrustedScheme,
-                  kChromeUIEcheAppGuestHost) {}
+    : DefaultWebUIConfig(content::kChromeUIUntrustedScheme,
+                         kChromeUIEcheAppGuestHost) {}
 
 UntrustedEcheAppUIConfig::~UntrustedEcheAppUIConfig() = default;
-
-std::unique_ptr<content::WebUIController>
-UntrustedEcheAppUIConfig::CreateWebUIController(content::WebUI* web_ui) {
-  return std::make_unique<UntrustedEcheAppUI>(web_ui);
-}
 
 UntrustedEcheAppUI::UntrustedEcheAppUI(content::WebUI* web_ui)
     : ui::UntrustedWebUIController(web_ui) {
@@ -41,15 +41,13 @@ UntrustedEcheAppUI::UntrustedEcheAppUI(content::WebUI* web_ui)
   html_source->AddResourcePath("js/app_bundle.js", IDR_ASH_ECHE_APP_BUNDLE_JS);
   html_source->AddResourcePath("assets/app_bundle.css",
                                IDR_ASH_ECHE_APP_BUNDLE_CSS);
-  html_source->AddResourcePath(
-      "message_pipe.js",
-      IDR_ASH_ECHE_APP_______SYSTEM_APPS_PUBLIC_JS_MESSAGE_PIPE_JS);
+  html_source->AddResourcePath("message_pipe.js",
+                               IDR_ASH_ECHE_APP_MESSAGE_PIPE_JS);
   html_source->AddResourcePath("message_types.js",
                                IDR_ASH_ECHE_APP_MESSAGE_TYPES_JS);
   html_source->AddResourcePath("receiver.js", IDR_ASH_ECHE_APP_RECEIVER_JS);
 
-  html_source->AddResourcePaths(
-      base::make_span(kAshEcheBundleResources, kAshEcheBundleResourcesSize));
+  html_source->AddResourcePaths(kAshEcheBundleResources);
 
   html_source->AddFrameAncestor(GURL(kChromeUIEcheAppURL));
 

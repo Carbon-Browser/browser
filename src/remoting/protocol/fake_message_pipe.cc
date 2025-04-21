@@ -1,21 +1,21 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "remoting/protocol/fake_message_pipe.h"
 
+#include <algorithm>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "remoting/base/compound_buffer.h"
 #include "remoting/protocol/fake_message_pipe_wrapper.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/protobuf/src/google/protobuf/message_lite.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 FakeMessagePipe::FakeMessagePipe(bool asynchronous)
     : asynchronous_(asynchronous) {}
@@ -23,7 +23,9 @@ FakeMessagePipe::FakeMessagePipe(bool asynchronous)
 FakeMessagePipe::~FakeMessagePipe() = default;
 
 std::unique_ptr<FakeMessagePipeWrapper> FakeMessagePipe::Wrap() {
-  return std::make_unique<FakeMessagePipeWrapper>(this);
+  auto wrapper = std::make_unique<FakeMessagePipeWrapper>(this);
+  wrappers_.push_back(wrapper->GetWeakPtr());
+  return wrapper;
 }
 
 void FakeMessagePipe::Start(EventHandler* event_handler) {
@@ -35,7 +37,7 @@ void FakeMessagePipe::Start(EventHandler* event_handler) {
 void FakeMessagePipe::Send(google::protobuf::MessageLite* message,
                            base::OnceClosure done) {
   if (asynchronous_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(
             [](FakeMessagePipe* me, google::protobuf::MessageLite* message,
@@ -51,7 +53,7 @@ void FakeMessagePipe::Send(google::protobuf::MessageLite* message,
 
 void FakeMessagePipe::Receive(std::unique_ptr<CompoundBuffer> message) {
   if (asynchronous_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce(
             [](FakeMessagePipe* me, std::unique_ptr<CompoundBuffer> message) {
@@ -74,7 +76,7 @@ void FakeMessagePipe::ReceiveProtobufMessage(
 
 void FakeMessagePipe::OpenPipe() {
   if (asynchronous_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce([](FakeMessagePipe* me) { me->OpenPipeImpl(); },
                        base::Unretained(this)));
@@ -86,7 +88,7 @@ void FakeMessagePipe::OpenPipe() {
 
 void FakeMessagePipe::ClosePipe() {
   if (asynchronous_) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE,
         base::BindOnce([](FakeMessagePipe* me) { me->ClosePipeImpl(); },
                        base::Unretained(this)));
@@ -94,6 +96,18 @@ void FakeMessagePipe::ClosePipe() {
   }
 
   ClosePipeImpl();
+}
+
+bool FakeMessagePipe::HasWrappers() const {
+  auto* wrappers =
+      const_cast<std::vector<base::WeakPtr<FakeMessagePipeWrapper>>*>(
+          &wrappers_);
+  wrappers->erase(std::remove_if(wrappers->begin(), wrappers->end(),
+                                 [](const auto& weak_ptr) {
+                                   return weak_ptr.get() == nullptr;
+                                 }),
+                  wrappers->end());
+  return !wrappers->empty();
 }
 
 void FakeMessagePipe::SendImpl(google::protobuf::MessageLite* message,
@@ -132,5 +146,4 @@ void FakeMessagePipe::ClosePipeImpl() {
   event_handler_->OnMessagePipeClosed();
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

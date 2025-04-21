@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -57,6 +57,15 @@ void WebThemeEngineHelper::DidUpdateRendererPreferences(
       renderer_prefs.arrow_bitmap_height_vertical_scroll_bar_in_dips,
       renderer_prefs.arrow_bitmap_width_horizontal_scroll_bar_in_dips);
 #endif
+}
+
+const WebThemeEngine::ScrollbarStyle&
+WebThemeEngineHelper::AndroidScrollbarStyle() {
+  DEFINE_STATIC_LOCAL(WebThemeEngine::ScrollbarStyle, style,
+                      ({/*thumb_thickness=*/4,
+                        /*scrollbar_margin=*/0,
+                        /*color=*/{0.5f, 0.5f, 0.5f, 0.5f}}));
+  return style;
 }
 
 }  // namespace blink

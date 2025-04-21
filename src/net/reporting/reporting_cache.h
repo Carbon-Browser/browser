@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,15 @@
 #define NET_REPORTING_REPORTING_CACHE_H_
 
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "base/unguessable_token.h"
 #include "base/values.h"
@@ -20,7 +22,7 @@
 #include "net/reporting/reporting_endpoint.h"
 #include "net/reporting/reporting_header_parser.h"
 #include "net/reporting/reporting_report.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "net/reporting/reporting_target_type.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
@@ -28,6 +30,7 @@ namespace net {
 
 class ReportingContext;
 class IsolationInfo;
+class NetworkAnonymizationKey;
 
 // The cache holds undelivered reports and clients (per-origin endpoint
 // configurations) in memory. (It is not responsible for persisting them.)
@@ -53,21 +56,23 @@ class NET_EXPORT ReportingCache {
  public:
   class PersistentReportingStore;
 
-  static std::unique_ptr<ReportingCache> Create(ReportingContext* context);
+  static std::unique_ptr<ReportingCache> Create(
+      ReportingContext* context,
+      const base::flat_map<std::string, GURL>& enterprise_reporting_endpoints);
 
   virtual ~ReportingCache();
 
   // Adds a report to the cache.
   //
-  // |reporting_source| and |network_isolation_key| will be used when the
+  // |reporting_source| and |network_anonymization_key| will be used when the
   // report is delivered, to determine which endpoints are eligible to receive
   // this report, and which other reports this report can be batched with.
   //
   // All other parameters correspond to the desired values for the relevant
   // fields in ReportingReport.
   virtual void AddReport(
-      const absl::optional<base::UnguessableToken>& reporting_source,
-      const NetworkIsolationKey& network_isolation_key,
+      const std::optional<base::UnguessableToken>& reporting_source,
+      const NetworkAnonymizationKey& network_anonymization_key,
       const GURL& url,
       const std::string& user_agent,
       const std::string& group_name,
@@ -75,7 +80,8 @@ class NET_EXPORT ReportingCache {
       base::Value::Dict body,
       int depth,
       base::TimeTicks queued,
-      int attempts) = 0;
+      int attempts,
+      ReportingTargetType target_type) = 0;
 
   // Gets all reports in the cache. The returned pointers are valid as long as
   // either no calls to |RemoveReports| have happened or the reports' |pending|
@@ -84,7 +90,8 @@ class NET_EXPORT ReportingCache {
   //
   // (Clears any existing data in |*reports_out|.)
   virtual void GetReports(
-      std::vector<const ReportingReport*>* reports_out) const = 0;
+      std::vector<raw_ptr<const ReportingReport, VectorExperimental>>*
+          reports_out) const = 0;
 
   // Gets all reports in the cache, including pending and doomed reports, as a
   // base::Value.
@@ -94,7 +101,8 @@ class NET_EXPORT ReportingCache {
   // eligible for delivery), and marks returned reports as pending in
   // preparation for a delivery attempt. The returned pointers are valid as long
   // as the reports are still pending.
-  virtual std::vector<const ReportingReport*> GetReportsToDeliver() = 0;
+  virtual std::vector<raw_ptr<const ReportingReport, VectorExperimental>>
+  GetReportsToDeliver() = 0;
 
   // Gets all reports in the cache which are eligible for delivery, which were
   // queued for a single `reporting_source`, and marks returned reports as
@@ -102,17 +110,20 @@ class NET_EXPORT ReportingCache {
   // valid as long as the reports are still pending. This method is used when a
   // reporting source is being destroyed, to trigger delivery of any remaining
   // outstanding reports.
-  virtual std::vector<const ReportingReport*> GetReportsToDeliverForSource(
+  virtual std::vector<raw_ptr<const ReportingReport, VectorExperimental>>
+  GetReportsToDeliverForSource(
       const base::UnguessableToken& reporting_source) = 0;
 
   // Unmarks a set of reports as pending. |reports| must be previously marked as
   // pending.
   virtual void ClearReportsPending(
-      const std::vector<const ReportingReport*>& reports) = 0;
+      const std::vector<raw_ptr<const ReportingReport, VectorExperimental>>&
+          reports) = 0;
 
   // Increments |attempts| on a set of reports.
   virtual void IncrementReportsAttempts(
-      const std::vector<const ReportingReport*>& reports) = 0;
+      const std::vector<raw_ptr<const ReportingReport, VectorExperimental>>&
+          reports) = 0;
 
   // Records that we attempted (and possibly succeeded at) delivering
   // |reports_delivered| reports to the specified endpoint.
@@ -137,9 +148,12 @@ class NET_EXPORT ReportingCache {
   // immediately, but rather marked doomed and removed once they are no longer
   // pending.
   virtual void RemoveReports(
-      const std::vector<const ReportingReport*>& reports) = 0;
-  virtual void RemoveReports(const std::vector<const ReportingReport*>& reports,
-                             bool delivery_success) = 0;
+      const std::vector<raw_ptr<const ReportingReport, VectorExperimental>>&
+          reports) = 0;
+  virtual void RemoveReports(
+      const std::vector<raw_ptr<const ReportingReport, VectorExperimental>>&
+          reports,
+      bool delivery_success) = 0;
 
   // Removes all reports. Like |RemoveReports()|, pending reports are doomed
   // until no longer pending.
@@ -166,7 +180,7 @@ class NET_EXPORT ReportingCache {
   // to match the new header. All values are assumed to be valid as they have
   // passed through the ReportingHeaderParser.
   virtual void OnParsedHeader(
-      const NetworkIsolationKey& network_isolation_key,
+      const NetworkAnonymizationKey& network_anonymization_key,
       const url::Origin& origin,
       std::vector<ReportingEndpointGroup> parsed_header) = 0;
 
@@ -181,13 +195,19 @@ class NET_EXPORT ReportingCache {
       const IsolationInfo& isolation_info,
       std::vector<ReportingEndpoint> parsed_header) = 0;
 
+  // Sets reporting endpoints configured by the ReportingEndpoints enterprise
+  // policy in the cache.
+  virtual void SetEnterpriseReportingEndpoints(
+      const base::flat_map<std::string, GURL>& endpoints) = 0;
+
   // Gets all the origins of clients in the cache.
   virtual std::set<url::Origin> GetAllOrigins() const = 0;
 
-  // Remove client for the given (NIK, origin) pair, if it exists in the cache.
+  // Remove client for the given (NAK, origin) pair, if it exists in the cache.
   // All endpoint groups and endpoints for that client are also removed.
-  virtual void RemoveClient(const NetworkIsolationKey& network_isolation_key,
-                            const url::Origin& origin) = 0;
+  virtual void RemoveClient(
+      const NetworkAnonymizationKey& network_anonymization_key,
+      const url::Origin& origin) = 0;
 
   // Remove all clients for the given |origin|, if any exists in the cache.
   // All endpoint groups and endpoints for |origin| are also removed.
@@ -273,6 +293,10 @@ class NET_EXPORT ReportingCache {
       const ReportingEndpointGroupKey& group_key,
       const GURL& url) const = 0;
 
+  // Returns all enterprise endpoints in the cache.
+  virtual std::vector<ReportingEndpoint> GetEnterpriseEndpointsForTesting()
+      const = 0;
+
   // Returns whether an endpoint group with exactly the given properties exists
   // in the cache. If |expires| is base::Time(), it will not be checked.
   virtual bool EndpointGroupExistsForTesting(
@@ -280,9 +304,9 @@ class NET_EXPORT ReportingCache {
       OriginSubdomains include_subdomains,
       base::Time expires) const = 0;
 
-  // Returns whether a client for the given (NIK, Origin) exists.
+  // Returns whether a client for the given (NAK, Origin) exists.
   virtual bool ClientExistsForTesting(
-      const NetworkIsolationKey& network_isolation_key,
+      const NetworkAnonymizationKey& network_anonymization_key,
       const url::Origin& origin) const = 0;
 
   // Returns number of endpoint groups.
@@ -316,6 +340,11 @@ class NET_EXPORT ReportingCache {
       const ReportingEndpointGroupKey& group_key,
       const base::UnguessableToken& reporting_source,
       const IsolationInfo& isolation_info,
+      const GURL& url) = 0;
+
+  // Sets an enterprise endpoint.
+  virtual void SetEnterpriseEndpointForTesting(
+      const ReportingEndpointGroupKey& group_key,
       const GURL& url) = 0;
 
   // Gets the isolation info associated with `reporting_source`, used when

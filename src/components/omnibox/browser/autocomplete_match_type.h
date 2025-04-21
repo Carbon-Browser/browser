@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,7 @@ struct AutocompleteMatchType {
   // and cannot be renumbered.
   //
   // Automatically generate a corresponding Java enum:
-  // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.chrome.browser.omnibox
+  // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.components.omnibox
   // GENERATED_JAVA_CLASS_NAME_OVERRIDE: OmniboxSuggestionType
   // clang-format off
   //
@@ -25,6 +25,13 @@ struct AutocompleteMatchType {
   // numeric values should never be reused. The values should remain
   // synchronized with the enum AutocompleteMatchType in
   // //tools/metrics/histograms/enums.xml.
+  //
+  // Any changes to this enum also requires an update to:
+  //  - `AutocompleteMatch::GetOmniboxEventResultType()`
+  //  - `AutocompleteMatch::GetVectorIcon()`
+  //  - `GetClientSummarizedResultType()`
+  //  - `AutocompleteMatchType::ToString()`
+  //  - `AutocompleteMatchType::GetAccessibilityBaseLabel()`
   enum Type {
     URL_WHAT_YOU_TYPED    = 0,  // The input as a URL.
     HISTORY_URL           = 1,  // A past page whose URL contains the input.
@@ -67,9 +74,7 @@ struct AutocompleteMatchType {
     TAB_SEARCH_DEPRECATED       = 23,  // A suggested open tab, based on its
                                        // URL or title, via HQP (deprecated).
     DOCUMENT_SUGGESTION         = 24,  // A suggested document.
-    PEDAL_DEPRECATED            = 25,  // An omnibox pedal match (deprecated).
-                                       // Pedals are now just action buttons
-                                       // attached to search matches.
+    PEDAL                       = 25,  // An omnibox pedal match.
     CLIPBOARD_TEXT              = 26,  // Text based on the clipboard.
     CLIPBOARD_IMAGE             = 27,  // An image based on the clipboard.
     TILE_SUGGESTION             = 28,  // A suggestion containing query tiles.
@@ -77,6 +82,22 @@ struct AutocompleteMatchType {
     OPEN_TAB                    = 30,  // A URL match amongst the currently open
                                        // tabs.
     HISTORY_CLUSTER             = 31,  // A history cluster suggestion.
+    NULL_RESULT_MESSAGE         = 32,  // A suggestion whose purpose is only to
+                                       // deliver a message. This suggestion
+                                       // cannot be opened or acted upon.
+    STARTER_PACK                = 33,  // A URL suggestion that a starter pack
+                                       // keyword mode chip attaches to.
+    TILE_MOST_VISITED_SITE      = 34,  // Most Visited Site, shown in a
+                                       // Horizontal Render Group.
+                                       // Different from TILE_NAVSUGGEST which
+                                       // is an aggregate type by itself.
+    TILE_REPEATABLE_QUERY       = 35,  // Organic Repeatable Query, shown in a
+                                       // Horizontal Render Group.
+    HISTORY_EMBEDDINGS          = 36,  // A past page whose contents have
+                                       // similar embeddings to the query.
+    FEATURED_ENTERPRISE_SEARCH  = 37,  // Site search engines featured by
+                                       // Enterprise policy.
+    HISTORY_EMBEDDINGS_ANSWER = 38,
     NUM_TYPES,
   };
   // clang-format on

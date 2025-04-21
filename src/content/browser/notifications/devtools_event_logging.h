@@ -1,14 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_BROWSER_NOTIFICATIONS_DEVTOOLS_EVENT_LOGGING_H_
 #define CONTENT_BROWSER_NOTIFICATIONS_DEVTOOLS_EVENT_LOGGING_H_
 
+#include <optional>
 #include <string>
 
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class GURL;
 
@@ -37,8 +37,8 @@ void LogNotificationScheduledEventToDevTools(
 void LogNotificationClickedEventToDevTools(
     BrowserContext* browser_context,
     const NotificationDatabaseData& data,
-    const absl::optional<int>& action_index,
-    const absl::optional<std::u16string>& reply);
+    const std::optional<int>& action_index,
+    const std::optional<std::u16string>& reply);
 
 }  // namespace notifications
 }  // namespace content

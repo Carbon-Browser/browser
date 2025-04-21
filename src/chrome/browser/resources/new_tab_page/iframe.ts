@@ -1,11 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {assert} from 'chrome://resources/js/assert.m.js';
-import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
-import {getTemplate} from './iframe.html.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import {CrLitElement} from 'chrome://resources/lit/v3_0/lit.rollup.js';
 
+import {getCss} from './iframe.css.js';
+import {getHtml} from './iframe.html.js';
 import {strictQuery} from './utils.js';
 import {WindowProxy} from './window_proxy.js';
 
@@ -14,47 +15,45 @@ import {WindowProxy} from './window_proxy.js';
  * and postMessaging in tests.
  */
 
-export class IframeElement extends PolymerElement {
+export class IframeElement extends CrLitElement {
   static get is() {
     return 'ntp-iframe';
   }
 
-  static get template() {
-    return getTemplate();
+  static override get styles() {
+    return getCss();
   }
 
-  static get properties() {
+  override render() {
+    return getHtml.bind(this)();
+  }
+
+  static override get properties() {
     return {
       allow: {
-        reflectToAttribute: true,
+        reflect: true,
         type: String,
       },
 
       src: {
-        reflectToAttribute: true,
+        reflect: true,
         type: String,
-      },
-
-      src_: {
-        type: String,
-        computed: 'computeSrc_(src)',
       },
     };
   }
 
   allow: string;
   src: string;
-  private src_: string;
 
   // Sends message to iframe.
   postMessage(message: any) {
     assert(this.shadowRoot);
     WindowProxy.getInstance().postMessage(
-        strictQuery(this.shadowRoot!, '#iframe', HTMLIFrameElement), message,
+        strictQuery(this.shadowRoot, '#iframe', HTMLIFrameElement), message,
         new URL(this.src).origin);
   }
 
-  private computeSrc_(): string {
+  protected getSrc_(): string {
     return WindowProxy.getInstance().createIframeSrc(this.src);
   }
 }

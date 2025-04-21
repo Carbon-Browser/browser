@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,14 @@
 #define CONTENT_PUBLIC_APP_CONTENT_MAIN_DELEGATE_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
+#include "base/notreached.h"
 #include "build/build_config.h"
 #include "content/common/content_export.h"
 #include "content/public/common/main_function_params.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
 
 namespace variations {
@@ -56,7 +57,7 @@ class CONTENT_EXPORT ContentMainDelegate {
   // embedder to do the things that must happen at the start. Most of its
   // startup code should be in the methods below, handling of early exit
   // command-line switches can wait until PreBrowserMain at the latest.
-  virtual absl::optional<int> BasicStartupComplete();
+  virtual std::optional<int> BasicStartupComplete();
 
   // This is where the embedder puts all of its startup code that needs to run
   // before the sandbox is engaged.
@@ -74,7 +75,10 @@ class CONTENT_EXPORT ContentMainDelegate {
       const std::string& process_type,
       MainFunctionParams main_function_params);
 
-  // Called right before the process exits.
+  // Called right before the process exits. Note: an empty process_type must not
+  // be assumed to be an exclusive browser process, processes that exit early
+  // (e.g. attempt and fail to be the browser process) will also go through this
+  // path.
   virtual void ProcessExiting(const std::string& process_type) {}
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
@@ -90,7 +94,7 @@ class CONTENT_EXPORT ContentMainDelegate {
 
   // Fatal errors during initialization are reported by this function, so that
   // the embedder can implement graceful exit by displaying some message and
-  // returning initialization error code. Default behavior is CHECK(false).
+  // returning initialization error code. Default behavior is NOTREACHED().
   virtual int TerminateForFatalInitializationError();
 
   // Allows the embedder to prevent locking the scheme registry. The scheme
@@ -112,7 +116,7 @@ class CONTENT_EXPORT ContentMainDelegate {
   // BrowserMainParts, etc. are created). Return an error code if the process
   // should exit afterwards. This is the place for embedder to do the things
   // that can shortcut browser execution (i.e. command-line switches).
-  virtual absl::optional<int> PreBrowserMain();
+  virtual std::optional<int> PreBrowserMain();
 
   // Returns true if content should create field trials and initialize the
   // FeatureList instance for this process. Default implementation returns true.
@@ -120,10 +124,26 @@ class CONTENT_EXPORT ContentMainDelegate {
   // created should override and return false.
   virtual bool ShouldCreateFeatureList(InvokedIn invoked_in);
 
+  // Returns true if content should initialize Mojo before calling
+  // PostEarlyInitialization(). Returns true by default. If this returns false,
+  // the embedder must initialize Mojo. Embedders may wish to override this to
+  // control when Mojo is initialized; for example, Mojo needs to be initialized
+  // after FeatureList, so embedders who delay FeatureList setup must also delay
+  // Mojo setup.
+  virtual bool ShouldInitializeMojo(InvokedIn invoked_in);
+
   // Creates and returns the VariationsIdsProvider. If null is returned,
   // a VariationsIdsProvider is created with a mode of `kUseSignedInState`.
   // VariationsIdsProvider is a singleton.
   virtual variations::VariationsIdsProvider* CreateVariationsIdsProvider();
+
+  // Called when it's time to create a base::ThreadPoolInstance for the
+  // browser process. This is not exposed in ContentBrowserClient
+  // because it needs to happen before ContentBrowserClient is created.
+  //
+  // Note: The embedder must *not* start the created ThreadPoolInstance. That
+  // will be done by //content when appropriate.
+  virtual void CreateThreadPool(std::string_view name);
 
   // Allows the embedder to perform its own initialization after early content
   // initialization.
@@ -132,16 +152,16 @@ class CONTENT_EXPORT ContentMainDelegate {
   // won't run until base::ThreadPoolInstance::Start() is called.
   //
   // It is also possible to post tasks to the main thread loop via
-  // base::ThreadTaskRunnerHandle. These tasks won't run until
-  // base::RunLoop::Run() is called on the main thread, which happens after all
-  // ContentMainDelegate entry points.
+  // base::SingleThreadTaskRunner::CurrentDefaultHandle. These tasks won't run
+  // until base::RunLoop::Run() is called on the main thread, which happens
+  // after all ContentMainDelegate entry points.
   //
   // If ShouldCreateFeatureList() returns true for `invoked_in`, the
   // field trials and FeatureList have been initialized. Otherwise, the
   // implementation must initialize the field trials and FeatureList before
   // returning from PostEarlyInitialization. Return an error code if the process
   // should exit afterwards.
-  virtual absl::optional<int> PostEarlyInitialization(InvokedIn invoked_in);
+  virtual std::optional<int> PostEarlyInitialization(InvokedIn invoked_in);
 
 #if BUILDFLAG(IS_WIN)
   // Allows the embedder to indicate that console control events (e.g., Ctrl-C,

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,13 @@
 #define THIRD_PARTY_BLINK_PUBLIC_WEB_MODULES_MEDIASTREAM_MEDIA_STREAM_VIDEO_SOURCE_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
@@ -19,8 +21,8 @@
 #include "media/base/video_frame.h"
 #include "media/capture/mojom/video_capture_types.mojom-shared.h"
 #include "media/capture/video_capture_types.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/media/video_capture.h"
+#include "third_party/blink/public/mojom/mediastream/media_devices.mojom-shared.h"
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom-shared.h"
 #include "third_party/blink/public/platform/modules/mediastream/media_stream_types.h"
 #include "third_party/blink/public/platform/modules/mediastream/secure_display_link_tracker.h"
@@ -65,20 +67,20 @@ class BLINK_MODULES_EXPORT MediaStreamVideoSource
   // RestartCallback is used for both the StopForRestart and Restart operations.
   using RestartCallback = base::OnceCallback<void(RestartResult)>;
 
+  // Callback for starting the source. It is used for video source only now, but
+  // can be extend to the audio source in the future.
+  using SourceStartCallback =
+      base::OnceCallback<void(WebPlatformMediaStreamSource* source,
+                              mojom::MediaStreamRequestResult result)>;
+
   explicit MediaStreamVideoSource(
       scoped_refptr<base::SingleThreadTaskRunner> main_task_runner);
   MediaStreamVideoSource(const MediaStreamVideoSource&) = delete;
   MediaStreamVideoSource& operator=(const MediaStreamVideoSource&) = delete;
   ~MediaStreamVideoSource() override;
 
-  // Returns the MediaStreamVideoSource object owned by |source|.
-  //
-  // TODO(https://crbug.com/714136): Replace uses of this method in favor of
-  // the variant below.
-  static MediaStreamVideoSource* GetVideoSource(
-      const WebMediaStreamSource& source);
-
 #if INSIDE_BLINK
+  // Returns the MediaStreamVideoSource object owned by |source|.
   static MediaStreamVideoSource* GetVideoSource(MediaStreamSource* source);
 #endif
 
@@ -88,7 +90,8 @@ class BLINK_MODULES_EXPORT MediaStreamVideoSource
                 const VideoCaptureDeliverFrameCB& frame_callback,
                 const VideoCaptureNotifyFrameDroppedCB& dropped_callback,
                 const EncodedVideoFrameCB& encoded_frame_callback,
-                const VideoCaptureCropVersionCB& crop_version_callback,
+                const VideoCaptureSubCaptureTargetVersionCB&
+                    sub_capture_target_version_callback,
                 const VideoTrackSettingsCallback& settings_callback,
                 const VideoTrackFormatCallback& format_callback,
                 ConstraintsOnceCallback callback);
@@ -142,15 +145,16 @@ class BLINK_MODULES_EXPORT MediaStreamVideoSource
 
   void UpdateCapturingLinkSecure(MediaStreamVideoTrack* track, bool is_secure);
 
-  // Indicate that the capturer can discard its alpha channel (if it has one).
-  virtual void SetCanDiscardAlpha(bool can_discard_alpha) {}
+  // Called whenever we might need to reevaluate whether the source can discard
+  // an alpha channel, due to a change in an attached track.
+  void UpdateCanDiscardAlpha();
+
+  // Request underlying source to request a key frame, if applicable (sources
+  // that can provide encoded video frames only).
+  virtual void RequestKeyFrame() {}
 
   // Request underlying source to capture a new frame.
   virtual void RequestRefreshFrame() {}
-
-  // Optionally overridden by subclasses to implement handling frame drop
-  // events.
-  virtual void OnFrameDropped(media::VideoCaptureFrameDropReason reason) {}
 
   // Optionally overridden by subclasses to implement handling log messages.
   virtual void OnLog(const std::string& message) {}
@@ -159,61 +163,63 @@ class BLINK_MODULES_EXPORT MediaStreamVideoSource
   void SetDeviceRotationDetection(bool enabled);
 
   // Returns the task runner where video frames will be delivered on.
-  base::SingleThreadTaskRunner* io_task_runner() const;
+  base::SequencedTaskRunner* video_task_runner() const;
 
   // Implementations must return the capture format if available.
   // Implementations supporting devices of type MEDIA_DEVICE_VIDEO_CAPTURE
   // must return a value.
-  virtual absl::optional<media::VideoCaptureFormat> GetCurrentFormat() const;
-
-  // Implementations must return the capture parameters if available.
-  // Implementations supporting devices of type MEDIA_DEVICE_VIDEO_CAPTURE
-  // must return a value. The format in the returned VideoCaptureParams must
-  // coincide with the value returned by GetCurrentFormat().
-  virtual absl::optional<media::VideoCaptureParams> GetCurrentCaptureParams()
-      const;
+  virtual std::optional<media::VideoCaptureFormat> GetCurrentFormat() const;
 
   // Returns true if encoded output can be enabled in the source.
   virtual bool SupportsEncodedOutput() const;
 
 #if !BUILDFLAG(IS_ANDROID)
-  // Start/stop cropping a video track.
+  // Start/stop cropping or restricting the video track.
   //
-  // Non-empty |crop_id| sets (or changes) the crop-target.
-  // Empty |crop_id| reverts the capture to its original, uncropped state.
+  // Non-empty |sub_capture_target_id| sets (or changes) the target.
+  // Empty |sub_capture_target_id| reverts the capture to its original state.
   //
-  // |crop_version| is plumbed down to Viz, which associates that value with
-  // all subsequent frames.
-  // For a given device, new calls to Crop() must be with a |crop_version| that
-  // is greater than the value from the previous call, but not necessarily by
-  // exactly one. (If a call to cropTo is rejected earlier in the pipeline,
-  // the crop-version can increase in Blink, and later calls to cropTo()
-  // can appear over this mojom pipe with a higher version.)
+  // |sub_capture_target_version| is plumbed down to Viz, which associates that
+  // value with all subsequent frames.
+  //
+  // For a given device, new calls to ApplySubCaptureTarget() must be with a
+  // |sub_capture_target_version| that is greater than the value from the
+  // previous call, but not necessarily by exactly one.
+  // (If a call to cropTo or restrictTo is rejected earlier in the pipeline,
+  // the sub-capture-target-version can increase in Blink, and later calls to
+  // cropTo() or restrictTo() can appear over this mojom pipe with
+  // a higher version.)
   //
   // The callback reports success/failure.
-  virtual void Crop(
-      const base::Token& crop_id,
-      uint32_t crop_version,
-      base::OnceCallback<void(media::mojom::CropRequestResult)> callback);
+  virtual void ApplySubCaptureTarget(
+      media::mojom::SubCaptureTargetType type,
+      const base::Token& sub_capture_target,
+      uint32_t sub_capture_target_version,
+      base::OnceCallback<void(media::mojom::ApplySubCaptureTargetResult)>
+          callback);
 
-  // If a new |crop_version| can be assigned, returns it.
+  // If a new |sub_capture_target_version| can be assigned, returns it.
   // Otherwise, returns nullopt. (Can happen if the source does not support
-  // cropping, or if a change of crop-target is not possible at this time,
-  // due to technical limitations, e.g. if clones exist.)
+  // cropping/restriction, or if a change of target is not possible at this
+  // time due to technical limitations, e.g. if clones exist.)
   //
-  // For an explanation of what a |crop_version| is, see Crop().
+  // For an explanation of what a |sub_capture_target_version| is,
+  // see ApplySubCaptureTarget().
   //
-  // TODO(crbug.com/1332628): Make the crop-version an implementation detail
-  // that is not exposed to the entity calling Crop().
-  virtual absl::optional<uint32_t> GetNextCropVersion();
+  // TODO(crbug.com/1332628): Make the sub-capture-target-version an
+  // implementation detail that is not exposed to the entity
+  // calling ApplySubCaptureTarget().
+  virtual std::optional<uint32_t> GetNextSubCaptureTargetVersion();
 #endif
 
-  // Returns the current crop version.
-  // For an explanation of what a |crop_version| is, see Crop().
-  // The initial crop version is zero. On platforms where cropping is not
-  // supported (Android), and for sources that don't support cropping (audio),
-  // the crop version never goes over 0.
-  virtual uint32_t GetCropVersion() const;
+  // Returns the current sub-capture-target version.
+  // For an explanation of what a |sub_capture_target_version| is,
+  // see ApplySubCaptureTarget().
+  // The initial sub-capture-target version is zero. On platforms where cropping
+  // and restriction are not supported (Android), and for sources that don't
+  // support cropping and restriction (audio), the sub-capture-target version
+  // never goes over 0.
+  virtual uint32_t GetSubCaptureTargetVersion() const;
 
   // Notifies the source about that the number of encoded sinks have been
   // updated. Note: Can only be called if the number of encoded sinks have
@@ -229,12 +235,16 @@ class BLINK_MODULES_EXPORT MediaStreamVideoSource
   // The returned callback can be called on any thread.
   virtual VideoCaptureFeedbackCB GetFeedbackCallback() const;
 
-  size_t NumTracks() const {
+  size_t NumTracks() const override {
     DCHECK(GetTaskRunner()->BelongsToCurrentThread());
     return tracks_.size();
   }
 
-  virtual base::WeakPtr<MediaStreamVideoSource> GetWeakPtr() const = 0;
+  void SetStartCallback(SourceStartCallback callback);
+
+  using WebPlatformMediaStreamSource::GetTaskRunner;
+
+  virtual base::WeakPtr<MediaStreamVideoSource> GetWeakPtr() = 0;
 
  protected:
   // MediaStreamSource implementation.
@@ -253,13 +263,17 @@ class BLINK_MODULES_EXPORT MediaStreamVideoSource
   // * |frame_callback| with the captured frames.
   // * |encoded_frame_callback| with encoded frames if supported and enabled
   //   via OnEncodedSinkEnabled.
-  // * |crop_version_callback| whenever it is guaranteed that all subsequent
+  // * |sub_capture_target_version_callback| whenever it is guaranteed that all
+  // subsequent
   //   frames that |frame_callback| will be called for, will have either
-  //   the given crop version or higher.
+  //   the given sub-capture-target version or higher.
+  // * |frame_dropped_callback| will be called when a frame was dropped prior to
+  //   delivery (i.e. |frame_callback| was not called for this frame).
   virtual void StartSourceImpl(
       VideoCaptureDeliverFrameCB frame_callback,
       EncodedVideoFrameCB encoded_frame_callback,
-      VideoCaptureCropVersionCB crop_version_callback) = 0;
+      VideoCaptureSubCaptureTargetVersionCB sub_capture_target_version_callback,
+      VideoCaptureNotifyFrameDroppedCB frame_dropped_callback) = 0;
   void OnStartDone(mojom::MediaStreamRequestResult result);
 
   // A subclass that supports restart must override this method such that it
@@ -338,6 +352,10 @@ class BLINK_MODULES_EXPORT MediaStreamVideoSource
   // The method is called when the last encoded sink has been removed.
   virtual void OnEncodedSinkDisabled() {}
 
+  // Optionally overridden by subclasses to be notified whether all attached
+  // tracks allow alpha to be dropped.
+  virtual void OnSourceCanDiscardAlpha(bool can_discard_alpha) {}
+
   enum State {
     NEW,
     STARTING,
@@ -372,11 +390,11 @@ class BLINK_MODULES_EXPORT MediaStreamVideoSource
   State state_;
 
   struct PendingTrackInfo {
-    MediaStreamVideoTrack* track;
+    raw_ptr<MediaStreamVideoTrack> track;
     VideoCaptureDeliverFrameCB frame_callback;
     VideoCaptureNotifyFrameDroppedCB notify_frame_dropped_callback;
     EncodedVideoFrameCB encoded_frame_callback;
-    VideoCaptureCropVersionCB crop_version_callback;
+    VideoCaptureSubCaptureTargetVersionCB sub_capture_target_version_callback;
     VideoTrackSettingsCallback settings_callback;
     VideoTrackFormatCallback format_callback;
     // TODO(guidou): Make |adapter_settings| a regular field instead of a
@@ -407,6 +425,11 @@ class BLINK_MODULES_EXPORT MediaStreamVideoSource
   // This flag enables a heuristic to detect device rotation based on frame
   // size.
   bool enable_device_rotation_detection_ = false;
+
+  // Callback that needs to trigger after starting the source. It is an
+  // optional callback so the client doesn't have to set if not interested in
+  // source start.
+  SourceStartCallback start_callback_;
 
   // Callback that needs to trigger after removing the track. If this object
   // died before this callback is resolved, we still need to trigger the

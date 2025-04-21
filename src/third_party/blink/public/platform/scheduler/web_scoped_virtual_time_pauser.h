@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 
 namespace blink {
 namespace scheduler {
-class ThreadSchedulerImpl;
+class ThreadSchedulerBase;
 }  // namespace scheduler
 
 // VirtualTime is a headless feature which is intended to make renders (more)
@@ -36,7 +36,7 @@ class BLINK_PLATFORM_EXPORT WebScopedVirtualTimePauser {
   // non-existent resource and it has an error handler which always fetches
   // another non-existent resource, then there is a risk that virtual time will
   // be blocked forever unless we use VirtualTaskDuration::kNonInstant).
-  WebScopedVirtualTimePauser(scheduler::ThreadSchedulerImpl*,
+  WebScopedVirtualTimePauser(scheduler::ThreadSchedulerBase*,
                              VirtualTaskDuration,
                              const WebString& debug_name);
 
@@ -63,7 +63,8 @@ class BLINK_PLATFORM_EXPORT WebScopedVirtualTimePauser {
   bool paused_ = false;
   bool virtual_time_enabled_when_paused_ = false;
   VirtualTaskDuration duration_ = VirtualTaskDuration::kInstant;
-  raw_ptr<scheduler::ThreadSchedulerImpl> scheduler_;  // NOT OWNED
+  raw_ptr<scheduler::ThreadSchedulerBase, DanglingUntriaged>
+      scheduler_;  // NOT OWNED
   WebString debug_name_;
   intptr_t trace_id_;
 };

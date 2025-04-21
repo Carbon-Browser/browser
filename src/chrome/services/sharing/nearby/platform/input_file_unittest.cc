@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,9 +13,7 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/platform_test.h"
 
-namespace location {
-namespace nearby {
-namespace chrome {
+namespace nearby::chrome {
 
 namespace {
 
@@ -77,7 +75,7 @@ class InputFileTest : public PlatformTest {
       if (byte_array.Empty())
         break;
 
-      file_data.append(byte_array.data(), byte_array.size());
+      file_data.append(byte_array.AsStringView());
     }
 
     EXPECT_EQ(expected_data_, file_data);
@@ -101,7 +99,7 @@ TEST_F(InputFileTest, TestRead_Valid) {
   VerifyRead(kChunkSize);
 }
 
-// TODO(crbug.com/1126971): Fix these tests from crashing on Windows.
+// TODO(crbug.com/40148372): Fix these tests from crashing on Windows.
 #if !BUILDFLAG(IS_WIN)
 TEST_F(InputFileTest, TestRead_Valid_ChunkLargerThanFileSize) {
   VerifyRead(kTestDataSize * 2);
@@ -140,6 +138,4 @@ TEST_F(InputFileTest, TestExtractUnderlyingFile_Invalid) {
   EXPECT_FALSE(file.IsValid());
 }
 
-}  // namespace chrome
-}  // namespace nearby
-}  // namespace location
+}  // namespace nearby::chrome

@@ -1,6 +1,8 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "base/containers/span.h"
 
 class MyClass {
   // Lambdas are backed by a class that may have (depending on what the lambda
@@ -18,9 +20,14 @@ class MyClass {
     // |isLambda|, rather than |hasAncestor|.
     auto lambda = [&]() -> int {
       struct NestedStruct {
+        NestedStruct(int& n) : ref_field(n) {}
         // Expected rewrite: raw_ptr<int> ptr_field;
         int* ptr_field;
-      } var;
+        // Expected rewrite: const raw_ref<int> ref_field;
+        int& ref_field;
+        // Expected rewrite: base::raw_span<int> span_field;
+        base::span<int> span_field;
+      } var(x);
       var.ptr_field = &x;
 
       return x;

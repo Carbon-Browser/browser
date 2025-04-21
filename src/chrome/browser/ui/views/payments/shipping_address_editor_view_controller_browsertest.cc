@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,14 +12,17 @@
 #include "chrome/browser/ui/views/payments/payment_request_browsertest_base.h"
 #include "chrome/browser/ui/views/payments/payment_request_dialog_view_ids.h"
 #include "chrome/browser/ui/views/payments/validating_textfield.h"
-#include "components/autofill/core/browser/autofill_test_utils.h"
+#include "components/autofill/core/browser/country_type.h"
+#include "components/autofill/core/browser/data_manager/addresses/address_data_manager.h"
+#include "components/autofill/core/browser/data_manager/personal_data_manager.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
 #include "components/autofill/core/browser/geo/autofill_country.h"
 #include "components/autofill/core/browser/geo/test_region_data_loader.h"
-#include "components/autofill/core/browser/personal_data_manager.h"
+#include "components/autofill/core/browser/test_utils/autofill_test_utils.h"
 #include "components/autofill/core/browser/ui/country_combobox_model.h"
 #include "components/autofill/core/browser/ui/region_combobox_model.h"
 #include "components/payments/content/payment_request_spec.h"
+#include "components/web_modal/web_contents_modal_dialog_manager.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -27,8 +30,6 @@
 #include "third_party/libaddressinput/src/cpp/include/libaddressinput/source.h"
 #include "ui/views/controls/combobox/combobox.h"
 #include "ui/views/controls/label.h"
-
-#include "components/web_modal/web_contents_modal_dialog_manager.h"
 
 namespace payments {
 
@@ -48,7 +49,8 @@ const char16_t kCountryWithoutStates[] = u"Albania";
 const char16_t kCountryWithoutStatesCode[] = u"AL";
 const char16_t kCountryWithoutStatesPhoneNumber[] = u"+35542223446";
 
-const base::Time kJanuary2017 = base::Time::FromDoubleT(1484505871);
+const base::Time kJanuary2017 =
+    base::Time::FromSecondsSinceUnixEpoch(1484505871);
 
 }  // namespace
 
@@ -59,7 +61,7 @@ class DISABLED_PaymentRequestShippingAddressEditorTest
  protected:
   DISABLED_PaymentRequestShippingAddressEditorTest() = default;
 
-  void SetFieldTestValue(autofill::ServerFieldType type) {
+  void SetFieldTestValue(autofill::FieldType type) {
     std::u16string textfield_text;
     switch (type) {
       case (autofill::NAME_FULL): {
@@ -102,15 +104,17 @@ class DISABLED_PaymentRequestShippingAddressEditorTest
 
   // First check if the requested field of |type| exists, if so, set its value
   // in |textfield_text| if it's not null, and return true.
-  bool GetEditorTextfieldValueIfExists(autofill::ServerFieldType type,
+  bool GetEditorTextfieldValueIfExists(autofill::FieldType type,
                                        std::u16string* textfield_text) {
     ValidatingTextfield* textfield =
         static_cast<ValidatingTextfield*>(dialog_view()->GetViewByID(
             EditorViewController::GetInputFieldViewId(type)));
-    if (!textfield)
+    if (!textfield) {
       return false;
-    if (textfield_text)
+    }
+    if (textfield_text) {
       *textfield_text = textfield->GetText();
+    }
     return true;
   }
 
@@ -118,9 +122,8 @@ class DISABLED_PaymentRequestShippingAddressEditorTest
   // get their type added to it, so that the caller can tell which types are not
   // set for a given country. |accept_empty_phone_number| can be set to true to
   // accept a phone type field set to empty, and mark it as unset.
-  void ExpectExistingRequiredFields(
-      std::set<autofill::ServerFieldType>* unset_types,
-      bool accept_empty_phone_number) {
+  void ExpectExistingRequiredFields(std::set<autofill::FieldType>* unset_types,
+                                    bool accept_empty_phone_number) {
     std::u16string textfield_text;
     if (GetEditorTextfieldValueIfExists(autofill::NAME_FULL, &textfield_text)) {
       EXPECT_EQ(kNameFull, textfield_text);
@@ -156,8 +159,9 @@ class DISABLED_PaymentRequestShippingAddressEditorTest
       if (!accept_empty_phone_number) {
         EXPECT_EQ(u"+1 575-555-5555", textfield_text);
       } else if (textfield_text.empty()) {
-        if (unset_types)
+        if (unset_types) {
           unset_types->insert(autofill::PHONE_HOME_WHOLE_NUMBER);
+        }
       }
     } else if (unset_types) {
       unset_types->insert(autofill::PHONE_HOME_WHOLE_NUMBER);
@@ -189,12 +193,13 @@ class DISABLED_PaymentRequestShippingAddressEditorTest
             country_combobox->GetModel());
     size_t i = 0;
     for (; i < country_model->GetItemCount(); i++) {
-      if (country_model->GetItemAt(i) == country_name)
+      if (country_model->GetItemAt(i) == country_name) {
         break;
+      }
     }
     country_combobox->SetSelectedRow(i);
     country_combobox->OnBlur();
-    WaitForObservedEvent();
+    ASSERT_TRUE(WaitForObservedEvent());
   }
 
   PersonalDataLoadedObserverMock personal_data_observer_;
@@ -237,8 +242,10 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
   data_loop.Run();
 
   personal_data_manager->RemoveObserver(&personal_data_observer_);
-  ASSERT_EQ(1UL, personal_data_manager->GetProfiles().size());
-  autofill::AutofillProfile* profile = personal_data_manager->GetProfiles()[0];
+  ASSERT_EQ(1UL,
+            personal_data_manager->address_data_manager().GetProfiles().size());
+  const autofill::AutofillProfile* profile =
+      personal_data_manager->address_data_manager().GetProfiles()[0];
   DCHECK(profile);
   EXPECT_EQ(country_code, profile->GetRawInfo(autofill::ADDRESS_HOME_COUNTRY));
   EXPECT_EQ(kAnyState16, profile->GetRawInfo(autofill::ADDRESS_HOME_STATE));
@@ -281,13 +288,15 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
       .WillOnce(QuitMessageLoop(&data_loop));
   views::View* editor_sheet = dialog_view()->GetViewByID(
       static_cast<int>(DialogViewID::SHIPPING_ADDRESS_EDITOR_SHEET));
-  editor_sheet->AcceleratorPressed(
-      ui::Accelerator(ui::VKEY_RETURN, ui::EF_NONE));
+  EXPECT_TRUE(editor_sheet->AcceleratorPressed(
+      ui::Accelerator(ui::VKEY_RETURN, ui::EF_NONE)));
   data_loop.Run();
 
   personal_data_manager->RemoveObserver(&personal_data_observer_);
-  ASSERT_EQ(1UL, personal_data_manager->GetProfiles().size());
-  autofill::AutofillProfile* profile = personal_data_manager->GetProfiles()[0];
+  ASSERT_EQ(1UL,
+            personal_data_manager->address_data_manager().GetProfiles().size());
+  const autofill::AutofillProfile* profile =
+      personal_data_manager->address_data_manager().GetProfiles()[0];
   DCHECK(profile);
   EXPECT_EQ(country_code, profile->GetRawInfo(autofill::ADDRESS_HOME_COUNTRY));
   EXPECT_EQ(kAnyState16, profile->GetRawInfo(autofill::ADDRESS_HOME_STATE));
@@ -295,7 +304,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
                                /*accept_empty_phone_number=*/false);
 }
 
-// TODO(crbug.com/1150496): flaky.
+// TODO(crbug.com/40732468): flaky.
 IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
                        DISABLED_AsyncData) {
   NavigateTo("/payment_request_dynamic_shipping_test.html");
@@ -306,7 +315,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
   OpenShippingAddressEditorScreen();
   // Complete the async fetch of region data.
   std::vector<std::pair<std::string, std::string>> regions;
-  regions.push_back(std::make_pair(kAnyStateCode, kAnyState));
+  regions.emplace_back(kAnyStateCode, kAnyState);
   test_region_data_loader_.SendAsynchronousData(regions);
 
   SetCommonFields();
@@ -331,8 +340,10 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
   data_loop.Run();
 
   personal_data_manager->RemoveObserver(&personal_data_observer_);
-  ASSERT_EQ(1UL, personal_data_manager->GetProfiles().size());
-  autofill::AutofillProfile* profile = personal_data_manager->GetProfiles()[0];
+  ASSERT_EQ(1UL,
+            personal_data_manager->address_data_manager().GetProfiles().size());
+  const autofill::AutofillProfile* profile =
+      personal_data_manager->address_data_manager().GetProfiles()[0];
   DCHECK(profile);
   EXPECT_EQ(country_code, profile->GetRawInfo(autofill::ADDRESS_HOME_COUNTRY));
   EXPECT_EQ(kAnyState16, profile->GetRawInfo(autofill::ADDRESS_HOME_STATE));
@@ -355,7 +366,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
   test_region_data_loader_.set_synchronous_callback(false);
   OpenShippingAddressEditorScreen();
   std::vector<std::pair<std::string, std::string>> regions1;
-  regions1.push_back(std::make_pair("1a", "region1a"));
+  regions1.emplace_back("1a", "region1a");
   test_region_data_loader_.SendAsynchronousData(regions1);
 
   SetCommonFields();
@@ -373,9 +384,9 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
 
   bool use_regions1 = true;
   std::vector<std::pair<std::string, std::string>> regions2;
-  regions2.push_back(std::make_pair("2a", "region2a"));
-  regions2.push_back(std::make_pair("2b", "region2b"));
-  std::set<autofill::ServerFieldType> unset_types;
+  regions2.emplace_back("2a", "region2a");
+  regions2.emplace_back("2b", "region2b");
+  std::set<autofill::FieldType> unset_types;
   for (size_t country_index = 10; country_index < num_countries;
        country_index += num_countries / 10) {
     // The editor updates asynchronously when the country changes.
@@ -409,11 +420,11 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
     country_combobox = nullptr;
     country_model = nullptr;
     region_combobox = nullptr;
-    WaitForObservedEvent();
+    ASSERT_TRUE(WaitForObservedEvent());
 
     // Some types could have been lost in previous countries and may now
     // available in this country.
-    std::set<autofill::ServerFieldType> set_types;
+    std::set<autofill::FieldType> set_types;
     for (auto type : unset_types) {
       ValidatingTextfield* textfield =
           static_cast<ValidatingTextfield*>(dialog_view()->GetViewByID(
@@ -485,8 +496,10 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
   data_loop.Run();
 
   personal_data_manager->RemoveObserver(&personal_data_observer_);
-  ASSERT_EQ(1UL, personal_data_manager->GetProfiles().size());
-  autofill::AutofillProfile* profile = personal_data_manager->GetProfiles()[0];
+  ASSERT_EQ(1UL,
+            personal_data_manager->address_data_manager().GetProfiles().size());
+  const autofill::AutofillProfile* profile =
+      personal_data_manager->address_data_manager().GetProfiles()[0];
   DCHECK(profile);
 
   EXPECT_EQ(kAnyState16, profile->GetRawInfo(autofill::ADDRESS_HOME_STATE));
@@ -507,7 +520,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
   ResetEventWaiter(DialogEvent::EDITOR_VIEW_UPDATED);
   test_region_data_loader_.SendAsynchronousData(
       std::vector<std::pair<std::string, std::string>>());
-  WaitForObservedEvent();
+  ASSERT_TRUE(WaitForObservedEvent());
 
   // Now any textual value can be set for the ADDRESS_HOME_STATE.
   SetFieldTestValue(autofill::ADDRESS_HOME_STATE);
@@ -528,8 +541,10 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
   data_loop.Run();
 
   personal_data_manager->RemoveObserver(&personal_data_observer_);
-  ASSERT_EQ(1UL, personal_data_manager->GetProfiles().size());
-  autofill::AutofillProfile* profile = personal_data_manager->GetProfiles()[0];
+  ASSERT_EQ(1UL,
+            personal_data_manager->address_data_manager().GetProfiles().size());
+  const autofill::AutofillProfile* profile =
+      personal_data_manager->address_data_manager().GetProfiles()[0];
   DCHECK(profile);
 
   EXPECT_EQ(kAnyState16, profile->GetRawInfo(autofill::ADDRESS_HOME_STATE));
@@ -541,11 +556,9 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
                        SelectingIncompleteAddress) {
   NavigateTo("/payment_request_dynamic_shipping_test.html");
   // Add incomplete address.
-  autofill::AutofillProfile profile;
+  autofill::AutofillProfile profile(
+      AddressCountryCode(base::UTF16ToUTF8(kCountryWithoutStatesCode)));
   profile.SetInfo(autofill::NAME_FULL, kNameFull, kLocale);
-  // Also set non-default country, to make sure proper fields will be used.
-  profile.SetInfo(autofill::ADDRESS_HOME_COUNTRY, kCountryWithoutStates,
-                  kLocale);
   AddAutofillProfile(profile);
 
   InvokePaymentRequestUI();
@@ -560,7 +573,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
   OpenShippingAddressSectionScreen();
 
   ResetEventWaiter(DialogEvent::SHIPPING_ADDRESS_EDITOR_OPENED);
-  ClickOnChildInListViewAndWait(/*child_index=*/0, /*num_children=*/1,
+  ClickOnChildInListViewAndWait(/*child_index=*/0, /*total_num_children=*/1,
                                 DialogViewID::SHIPPING_ADDRESS_SHEET_LIST_VIEW);
 
   EXPECT_EQ(kNameFull, GetEditorTextfieldValue(autofill::NAME_FULL));
@@ -591,9 +604,10 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
   data_loop.Run();
 
   personal_data_manager->RemoveObserver(&personal_data_observer_);
-  ASSERT_EQ(1UL, personal_data_manager->GetProfiles().size());
-  autofill::AutofillProfile* saved_profile =
-      personal_data_manager->GetProfiles()[0];
+  ASSERT_EQ(1UL,
+            personal_data_manager->address_data_manager().GetProfiles().size());
+  const autofill::AutofillProfile* saved_profile =
+      personal_data_manager->address_data_manager().GetProfiles()[0];
   DCHECK(saved_profile);
   EXPECT_EQ(kCountryWithoutStates,
             saved_profile->GetInfo(autofill::ADDRESS_HOME_COUNTRY, kLocale));
@@ -609,7 +623,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
 }
 
 // Flaky on ozone: https://crbug.com/1216184
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #define MAYBE_FocusFirstField_Name DISABLED_FocusFirstField_Name
 #else
 #define MAYBE_FocusFirstField_Name FocusFirstField_Name
@@ -638,7 +652,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
 }
 
 // Flaky on ozone: https://crbug.com/1216184
-#if defined(USE_OZONE)
+#if BUILDFLAG(IS_OZONE)
 #define MAYBE_FocusFirstInvalidField_NotName \
   DISABLED_FocusFirstInvalidField_NotName
 #else
@@ -648,7 +662,8 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
                        MAYBE_FocusFirstInvalidField_NotName) {
   NavigateTo("/payment_request_dynamic_shipping_test.html");
   // Add address with only the name set, so that another view takes focus.
-  autofill::AutofillProfile profile;
+  autofill::AutofillProfile profile(
+      autofill::i18n_model_definition::kLegacyHierarchyCountryCode);
   profile.SetInfo(autofill::NAME_FULL, kNameFull, "fr_CA");
   AddAutofillProfile(profile);
 
@@ -657,7 +672,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
   test_region_data_loader_.set_synchronous_callback(true);
   OpenShippingAddressSectionScreen();
   ResetEventWaiter(DialogEvent::SHIPPING_ADDRESS_EDITOR_OPENED);
-  ClickOnChildInListViewAndWait(/*child_index=*/0, /*num_children=*/1,
+  ClickOnChildInListViewAndWait(/*child_index=*/0, /*total_num_children=*/1,
                                 DialogViewID::SHIPPING_ADDRESS_SHEET_LIST_VIEW);
 
   views::Textfield* textfield =
@@ -682,8 +697,8 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
   SetRegionDataLoader(&test_region_data_loader_);
   test_region_data_loader_.set_synchronous_callback(true);
   std::vector<std::pair<std::string, std::string>> regions1;
-  regions1.push_back(std::make_pair("AL", "Alabama"));
-  regions1.push_back(std::make_pair("CA", "California"));
+  regions1.emplace_back("AL", "Alabama");
+  regions1.emplace_back("CA", "California");
   test_region_data_loader_.SetRegionData(regions1);
   OpenShippingAddressEditorScreen();
 
@@ -746,8 +761,8 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
   SetRegionDataLoader(&test_region_data_loader_);
   test_region_data_loader_.set_synchronous_callback(true);
   std::vector<std::pair<std::string, std::string>> regions;
-  regions.push_back(std::make_pair("AK", "Alaska"));
-  regions.push_back(std::make_pair("CA", "California"));
+  regions.emplace_back("AK", "Alaska");
+  regions.emplace_back("CA", "California");
   test_region_data_loader_.SetRegionData(regions);
   OpenShippingAddressSectionScreen();
 
@@ -784,8 +799,10 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
   data_loop.Run();
 
   personal_data_manager->RemoveObserver(&personal_data_observer_);
-  ASSERT_EQ(1UL, personal_data_manager->GetProfiles().size());
-  autofill::AutofillProfile* profile = personal_data_manager->GetProfiles()[0];
+  ASSERT_EQ(1UL,
+            personal_data_manager->address_data_manager().GetProfiles().size());
+  const autofill::AutofillProfile* profile =
+      personal_data_manager->address_data_manager().GetProfiles()[0];
   DCHECK(profile);
   // Use GetRawInfo to get the country code.
   EXPECT_EQ(kCountryWithoutStatesCode,
@@ -890,11 +907,11 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
             static_cast<views::Label*>(error_label)->GetText());
 
   ResetEventWaiter(DialogEvent::SHIPPING_ADDRESS_EDITOR_OPENED);
-  ClickOnChildInListViewAndWait(/*child_index=*/0, /*num_children=*/1,
+  ClickOnChildInListViewAndWait(/*child_index=*/0, /*total_num_children=*/1,
                                 DialogViewID::SHIPPING_ADDRESS_SHEET_LIST_VIEW);
   std::vector<std::pair<std::string, std::string>> regions1;
-  regions1.push_back(std::make_pair("AL", "Alabama"));
-  regions1.push_back(std::make_pair("CA", "California"));
+  regions1.emplace_back("AL", "Alabama");
+  regions1.emplace_back("CA", "California");
   test_region_data_loader_.SendAsynchronousData(regions1);
   // Expect that the country is set correctly.
   EXPECT_EQ(u"United States", GetComboboxValue(autofill::ADDRESS_HOME_COUNTRY));
@@ -908,7 +925,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
   EXPECT_FALSE(save_button->GetEnabled());
 }
 
-// TODO(crbug.com/730652): This address should be invalid.
+// TODO(crbug.com/40524578): This address should be invalid.
 // Tests that if the a profile has a country and an invalid state for the
 // country, the address is considered valid.
 IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
@@ -960,11 +977,11 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
             static_cast<views::Label*>(error_label)->GetText());
 
   ResetEventWaiter(DialogEvent::SHIPPING_ADDRESS_EDITOR_OPENED);
-  ClickOnChildInListViewAndWait(/*child_index=*/0, /*num_children=*/1,
+  ClickOnChildInListViewAndWait(/*child_index=*/0, /*total_num_children=*/1,
                                 DialogViewID::SHIPPING_ADDRESS_SHEET_LIST_VIEW);
   std::vector<std::pair<std::string, std::string>> regions1;
-  regions1.push_back(std::make_pair("AL", "Alabama"));
-  regions1.push_back(std::make_pair("CA", "California"));
+  regions1.emplace_back("AL", "Alabama");
+  regions1.emplace_back("CA", "California");
   test_region_data_loader_.SendAsynchronousData(regions1);
 
   // Expect that the default country was selected.
@@ -1007,11 +1024,11 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
             static_cast<views::Label*>(error_label)->GetText());
 
   ResetEventWaiter(DialogEvent::SHIPPING_ADDRESS_EDITOR_OPENED);
-  ClickOnChildInListViewAndWait(/*child_index=*/0, /*num_children=*/1,
+  ClickOnChildInListViewAndWait(/*child_index=*/0, /*total_num_children=*/1,
                                 DialogViewID::SHIPPING_ADDRESS_SHEET_LIST_VIEW);
   std::vector<std::pair<std::string, std::string>> regions1;
-  regions1.push_back(std::make_pair("AL", "Alabama"));
-  regions1.push_back(std::make_pair("CA", "California"));
+  regions1.emplace_back("AL", "Alabama");
+  regions1.emplace_back("CA", "California");
   test_region_data_loader_.SendAsynchronousData(regions1);
 
   // Expect that the default country was selected.
@@ -1026,7 +1043,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
   EXPECT_FALSE(save_button->GetEnabled());
 }
 
-// TODO(crbug.com/730165): The profile should be considered valid.
+// TODO(crbug.com/40524404): The profile should be considered valid.
 // Tests that if the a profile has no country but has a valid state for the
 // default country, the editor sets the country and the state for the user.
 // This should also enable the "Done" button.
@@ -1044,8 +1061,8 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
 
   test_region_data_loader_.set_synchronous_callback(true);
   std::vector<std::pair<std::string, std::string>> regions;
-  regions.push_back(std::make_pair("AL", "Alabama"));
-  regions.push_back(std::make_pair("CA", "California"));
+  regions.emplace_back("AL", "Alabama");
+  regions.emplace_back("CA", "California");
   test_region_data_loader_.SetRegionData(regions);
   OpenShippingAddressSectionScreen();
 
@@ -1059,7 +1076,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
             static_cast<views::Label*>(error_label)->GetText());
 
   ResetEventWaiter(DialogEvent::SHIPPING_ADDRESS_EDITOR_OPENED);
-  ClickOnChildInListViewAndWait(/*child_index=*/0, /*num_children=*/1,
+  ClickOnChildInListViewAndWait(/*child_index=*/0, /*total_num_children=*/1,
                                 DialogViewID::SHIPPING_ADDRESS_SHEET_LIST_VIEW);
 
   // Expect that the default country was selected.
@@ -1074,7 +1091,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
   EXPECT_TRUE(save_button->GetEnabled());
 }
 
-// TODO(crbug.com/730165): The profile should be considered valid.
+// TODO(crbug.com/40524404): The profile should be considered valid.
 // Tests that if the a profile has no country but has a valid state for the
 // default country, the editor sets the country and the state for the user.
 // This should also enable the "Done" button.
@@ -1103,13 +1120,13 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
             static_cast<views::Label*>(error_label)->GetText());
 
   ResetEventWaiter(DialogEvent::SHIPPING_ADDRESS_EDITOR_OPENED);
-  ClickOnChildInListViewAndWait(/*child_index=*/0, /*num_children=*/1,
+  ClickOnChildInListViewAndWait(/*child_index=*/0, /*total_num_children=*/1,
                                 DialogViewID::SHIPPING_ADDRESS_SHEET_LIST_VIEW);
 
   // Send the region data.
   std::vector<std::pair<std::string, std::string>> regions;
-  regions.push_back(std::make_pair("AL", "Alabama"));
-  regions.push_back(std::make_pair("CA", "California"));
+  regions.emplace_back("AL", "Alabama");
+  regions.emplace_back("CA", "California");
   test_region_data_loader_.SendAsynchronousData(regions);
 
   // Expect that the default country was selected.
@@ -1140,13 +1157,13 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
 
   test_region_data_loader_.set_synchronous_callback(true);
   std::vector<std::pair<std::string, std::string>> regions;
-  regions.push_back(std::make_pair("AL", "Alabama"));
-  regions.push_back(std::make_pair("CA", "California"));
+  regions.emplace_back("AL", "Alabama");
+  regions.emplace_back("CA", "California");
   test_region_data_loader_.SetRegionData(regions);
   OpenShippingAddressSectionScreen();
 
   ResetEventWaiter(DialogEvent::SHIPPING_ADDRESS_EDITOR_OPENED);
-  ClickOnChildInListViewAndWait(/*child_index=*/0, /*num_children=*/1,
+  ClickOnChildInListViewAndWait(/*child_index=*/0, /*total_num_children=*/1,
                                 DialogViewID::SHIPPING_ADDRESS_SHEET_LIST_VIEW);
 
   // Expect that the state was selected.
@@ -1169,13 +1186,13 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
 
   test_region_data_loader_.set_synchronous_callback(true);
   std::vector<std::pair<std::string, std::string>> regions;
-  regions.push_back(std::make_pair("AL", "Alabama"));
-  regions.push_back(std::make_pair("CA", "California"));
+  regions.emplace_back("AL", "Alabama");
+  regions.emplace_back("CA", "California");
   test_region_data_loader_.SetRegionData(regions);
   OpenShippingAddressSectionScreen();
 
   ResetEventWaiter(DialogEvent::SHIPPING_ADDRESS_EDITOR_OPENED);
-  ClickOnChildInListViewAndWait(/*child_index=*/0, /*num_children=*/1,
+  ClickOnChildInListViewAndWait(/*child_index=*/0, /*total_num_children=*/1,
                                 DialogViewID::SHIPPING_ADDRESS_SHEET_LIST_VIEW);
 
   // Expect that the state was selected.
@@ -1195,7 +1212,7 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
   OpenShippingAddressSectionScreen();
 
   ResetEventWaiter(DialogEvent::SHIPPING_ADDRESS_EDITOR_OPENED);
-  ClickOnChildInListViewAndWait(/*child_index=*/0, /*num_children=*/1,
+  ClickOnChildInListViewAndWait(/*child_index=*/0, /*total_num_children=*/1,
                                 DialogViewID::SHIPPING_ADDRESS_SHEET_LIST_VIEW);
 
   ClickOnBackArrow();
@@ -1239,7 +1256,8 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
   personal_data_manager->RemoveObserver(&personal_data_observer_);
   // In incognito, the profile should be available in shipping_profiles but it
   // shouldn't be saved to the PersonalDataManager.
-  ASSERT_EQ(0UL, personal_data_manager->GetProfiles().size());
+  ASSERT_EQ(0UL,
+            personal_data_manager->address_data_manager().GetProfiles().size());
 
   ASSERT_EQ(1UL, request->state()->shipping_profiles().size());
   autofill::AutofillProfile* profile =
@@ -1359,9 +1377,9 @@ IN_PROC_BROWSER_TEST_F(DISABLED_PaymentRequestShippingAddressEditorTest,
                                DialogEvent::PROCESSING_SPINNER_HIDDEN,
                                DialogEvent::SPEC_DONE_UPDATING,
                                DialogEvent::SHIPPING_ADDRESS_EDITOR_OPENED});
-  ClickOnChildInListViewAndWait(/*child_index=*/0, /*num_children=*/1,
+  ClickOnChildInListViewAndWait(/*child_index=*/0, /*total_num_children=*/1,
                                 DialogViewID::SHIPPING_ADDRESS_SHEET_LIST_VIEW);
-  WaitForObservedEvent();
+  ASSERT_TRUE(WaitForObservedEvent());
 
   EXPECT_EQ(u"ADDRESS LINE ERROR",
             GetErrorLabelForType(autofill::ADDRESS_HOME_STREET_ADDRESS));

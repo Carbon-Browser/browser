@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,45 +20,54 @@
 
 namespace blink {
 
+namespace {
+
+String GetReducedNavigatorPlatform() {
+#if BUILDFLAG(IS_ANDROID)
+  return "Linux armv81";
+#elif BUILDFLAG(IS_MAC)
+  return "MacIntel";
+#elif BUILDFLAG(IS_WIN)
+  return "Win32";
+#elif BUILDFLAG(IS_FUCHSIA)
+  return "";
+#elif BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
+  return "Linux x86_64";
+#elif BUILDFLAG(IS_IOS)
+  return "iPhone";
+#else
+#error Unsupported platform
+#endif
+}
+
+}  // namespace
+
 NavigatorBase::NavigatorBase(ExecutionContext* context)
     : NavigatorLanguage(context), ExecutionContextClient(context) {}
 
 String NavigatorBase::userAgent() const {
   ExecutionContext* execution_context = GetExecutionContext();
-  if (!execution_context)
-    return String();
-
-  execution_context->ReportNavigatorUserAgentAccess();
-  return execution_context->UserAgent();
+  return execution_context ? execution_context->UserAgent() : String();
 }
 
 String NavigatorBase::platform() const {
   ExecutionContext* execution_context = GetExecutionContext();
-  // Report as user agent access
-  if (execution_context)
-    execution_context->ReportNavigatorUserAgentAccess();
 
-  // If the User-Agent string is opted into the SendFullUserAgentAfterReduction,
-  // platform should be a full value.
-  if (RuntimeEnabledFeatures::SendFullUserAgentAfterReductionEnabled(
-          execution_context)) {
-    return NavigatorID::platform();
-  }
-
-  // If the User-Agent string is frozen, platform should be a value
-  // matching the frozen string per https://github.com/WICG/ua-client-hints.
-  // See content::frozen_user_agent_strings.
-  if (RuntimeEnabledFeatures::UserAgentReductionEnabled(execution_context)) {
 #if BUILDFLAG(IS_ANDROID)
-    return "Linux armv81";
-#elif BUILDFLAG(IS_MAC)
-    return "MacIntel";
-#elif BUILDFLAG(IS_WIN)
-    return "Win32";
-#else
-    return "Linux x86_64";
-#endif
+  // For user-agent reduction phase 6, Android platform should be frozen
+  // string, see https://www.chromium.org/updates/ua-reduction/.
+  if (RuntimeEnabledFeatures::ReduceUserAgentAndroidVersionDeviceModelEnabled(
+          execution_context)) {
+    return GetReducedNavigatorPlatform();
   }
+#else
+  // For user-agent reduction phase 5, all desktop platform should be frozen
+  // string, see https://www.chromium.org/updates/ua-reduction/.
+  if (RuntimeEnabledFeatures::ReduceUserAgentPlatformOsCpuEnabled(
+          execution_context)) {
+    return GetReducedNavigatorPlatform();
+  }
+#endif
 
   return NavigatorID::platform();
 }

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,10 +29,12 @@ MenuPreTargetHandlerMac::~MenuPreTargetHandlerMac() = default;
 void MenuPreTargetHandlerMac::NativeWidgetMacEventMonitorOnEvent(
     ui::Event* ui_event,
     bool* was_handled) {
-  if (*was_handled)
+  if (*was_handled) {
     return;
-  if (!ui_event->IsKeyEvent())
+  }
+  if (!ui_event->IsKeyEvent()) {
     return;
+  }
   *was_handled = controller_->OnWillDispatchKeyEvent(ui_event->AsKeyEvent()) !=
                  ui::POST_DISPATCH_PERFORM_DEFAULT;
 }

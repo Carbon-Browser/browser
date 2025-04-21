@@ -1,21 +1,19 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/gcm/gcm_profile_service_factory.h"
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "build/build_config.h"
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_key.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "components/gcm_driver/gcm_profile_service.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/offline_pages/buildflags/buildflags.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -33,11 +31,7 @@
 #endif
 
 #if BUILDFLAG(ENABLE_OFFLINE_PAGES)
-#include "chrome/browser/offline_pages/prefetch/prefetch_service_factory.h"
-#include "components/gcm_driver/gcm_driver.h"
-#include "components/offline_pages/core/offline_page_feature.h"
-#include "components/offline_pages/core/prefetch/prefetch_gcm_app_handler.h"
-#include "components/offline_pages/core/prefetch/prefetch_service.h"
+#include "chrome/browser/image_fetcher/image_fetcher_service_factory.h"
 #endif
 
 namespace gcm {
@@ -49,11 +43,11 @@ namespace {
 // of GCMProfileService is needed to detect when the KeyedService shuts down,
 // and avoid calling into |profile| which might have also been destroyed.
 void RequestProxyResolvingSocketFactoryOnUIThread(
-    Profile* profile,
+    base::WeakPtr<Profile> profile,
     base::WeakPtr<GCMProfileService> service,
     mojo::PendingReceiver<network::mojom::ProxyResolvingSocketFactory>
         receiver) {
-  if (!service)
+  if (!service || !profile)
     return;
   network::mojom::NetworkContext* network_context =
       profile->GetDefaultStoragePartition()->GetNetworkContext();
@@ -62,19 +56,19 @@ void RequestProxyResolvingSocketFactoryOnUIThread(
 
 // A thread-safe wrapper to request a ProxyResolvingSocketFactory.
 void RequestProxyResolvingSocketFactory(
-    Profile* profile,
+    base::WeakPtr<Profile> profile,
     base::WeakPtr<GCMProfileService> service,
     mojo::PendingReceiver<network::mojom::ProxyResolvingSocketFactory>
         receiver) {
   content::GetUIThreadTaskRunner({})->PostTask(
-      FROM_HERE,
-      base::BindOnce(&RequestProxyResolvingSocketFactoryOnUIThread, profile,
-                     std::move(service), std::move(receiver)));
+      FROM_HERE, base::BindOnce(&RequestProxyResolvingSocketFactoryOnUIThread,
+                                std::move(profile), std::move(service),
+                                std::move(receiver)));
 }
 #endif
 
-BrowserContextKeyedServiceFactory::TestingFactory& GetTestingFactory() {
-  static base::NoDestructor<BrowserContextKeyedServiceFactory::TestingFactory>
+GCMProfileServiceFactory::GlobalTestingFactory& GetTestingFactory() {
+  static base::NoDestructor<GCMProfileServiceFactory::GlobalTestingFactory>
       testing_factory;
   return *testing_factory;
 }
@@ -82,22 +76,32 @@ BrowserContextKeyedServiceFactory::TestingFactory& GetTestingFactory() {
 }  // namespace
 
 GCMProfileServiceFactory::ScopedTestingFactoryInstaller::
-    ScopedTestingFactoryInstaller(TestingFactory testing_factory) {
+    ScopedTestingFactoryInstaller(GlobalTestingFactory testing_factory) {
   DCHECK(!GetTestingFactory());
   GetTestingFactory() = std::move(testing_factory);
 }
 
 GCMProfileServiceFactory::ScopedTestingFactoryInstaller::
     ~ScopedTestingFactoryInstaller() {
-  GetTestingFactory() = BrowserContextKeyedServiceFactory::TestingFactory();
+  GetTestingFactory() = GlobalTestingFactory();
 }
 
 // static
 GCMProfileService* GCMProfileServiceFactory::GetForProfile(
     content::BrowserContext* profile) {
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+  // On desktop, incognito profiles are checked with IsIncognitoProfile().
+  // It's possible for non-incognito profiles to also be off-the-record.
+  bool is_profile_supported =
+      !Profile::FromBrowserContext(profile)->IsIncognitoProfile();
+#else
+  bool is_profile_supported = !profile->IsOffTheRecord();
+#endif
+
   // GCM is not supported in incognito mode.
-  if (profile->IsOffTheRecord())
-    return NULL;
+  if (!is_profile_supported) {
+    return nullptr;
+  }
 
   return static_cast<GCMProfileService*>(
       GetInstance()->GetServiceForBrowserContext(profile, true));
@@ -110,26 +114,33 @@ GCMProfileServiceFactory* GCMProfileServiceFactory::GetInstance() {
 }
 
 GCMProfileServiceFactory::GCMProfileServiceFactory()
-    : BrowserContextKeyedServiceFactory(
-        "GCMProfileService",
-        BrowserContextDependencyManager::GetInstance()) {
+    : ProfileKeyedServiceFactory(
+          "GCMProfileService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              .WithGuest(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/41488885): Check if this service is needed for
+              // Ash Internals.
+              .WithAshInternals(ProfileSelection::kOwnInstance)
+              .Build()) {
   DependsOn(IdentityManagerFactory::GetInstance());
-#if BUILDFLAG(ENABLE_OFFLINE_PAGES)
-  DependsOn(offline_pages::PrefetchServiceFactory::GetInstance());
-#endif  // BUILDFLAG(ENABLE_OFFLINE_PAGES)
 }
 
-GCMProfileServiceFactory::~GCMProfileServiceFactory() {
-}
+GCMProfileServiceFactory::~GCMProfileServiceFactory() = default;
 
-KeyedService* GCMProfileServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+GCMProfileServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_MAC) || BUILDFLAG(IS_LINUX)
+  DCHECK(!profile->IsIncognitoProfile());
+#else
   DCHECK(!profile->IsOffTheRecord());
+#endif
 
-  TestingFactory& testing_factory = GetTestingFactory();
-  if (testing_factory)
-    return testing_factory.Run(context).release();
+  if (GlobalTestingFactory& testing_factory = GetTestingFactory()) {
+    return testing_factory.Run(context);
+  }
 
   scoped_refptr<base::SequencedTaskRunner> blocking_task_runner(
       base::ThreadPool::CreateSequencedTaskRunner(
@@ -142,7 +153,8 @@ KeyedService* GCMProfileServiceFactory::BuildServiceInstanceFor(
 #else
   service = std::make_unique<GCMProfileService>(
       profile->GetPrefs(), profile->GetPath(),
-      base::BindRepeating(&RequestProxyResolvingSocketFactory, profile),
+      base::BindRepeating(&RequestProxyResolvingSocketFactory,
+                          profile->GetWeakPtr()),
       profile->GetDefaultStoragePartition()
           ->GetURLLoaderFactoryForBrowserProcess(),
       content::GetNetworkConnectionTracker(), chrome::GetChannel(),
@@ -152,23 +164,16 @@ KeyedService* GCMProfileServiceFactory::BuildServiceInstanceFor(
       content::GetIOThreadTaskRunner({}), blocking_task_runner);
 #endif
 #if BUILDFLAG(ENABLE_OFFLINE_PAGES)
-  offline_pages::PrefetchService* prefetch_service =
-      offline_pages::PrefetchServiceFactory::GetForKey(
-          profile->GetProfileKey());
-  if (prefetch_service != nullptr) {
-    offline_pages::PrefetchGCMHandler* prefetch_gcm_handler =
-        prefetch_service->GetPrefetchGCMHandler();
-    service->driver()->AddAppHandler(prefetch_gcm_handler->GetAppId(),
-                                     prefetch_gcm_handler->AsGCMAppHandler());
-  }
+  // TODO(crbug.com/40260641): Removing image fetcher references here breaks
+  // tests: org.chromium.chrome.browser.ImageFetcherIntegrationTest Users of
+  // image fetcher may be depending on this service to initialize the image
+  // fetcher factory. [FATAL:scoped_refptr.h(291)] Check failed: ptr_.
+  // ...
+  // image_fetcher::GetImageFetcherService()
+  ImageFetcherServiceFactory::GetForKey(profile->GetProfileKey());
 #endif  // BUILDFLAG(ENABLE_OFFLINE_PAGES)
 
-  return service.release();
-}
-
-content::BrowserContext* GCMProfileServiceFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextOwnInstanceInIncognito(context);
+  return service;
 }
 
 }  // namespace gcm

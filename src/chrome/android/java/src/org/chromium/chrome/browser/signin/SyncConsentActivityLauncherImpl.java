@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 package org.chromium.chrome.browser.signin;
@@ -8,8 +8,9 @@ import android.content.Intent;
 import android.os.Bundle;
 
 import androidx.annotation.Nullable;
-import androidx.annotation.VisibleForTesting;
 
+import org.chromium.base.ResettersForTesting;
+import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
 import org.chromium.chrome.browser.signin.services.SigninManager;
@@ -19,39 +20,44 @@ import org.chromium.components.browser_ui.settings.ManagedPreferencesUtils;
 import org.chromium.components.signin.metrics.SigninAccessPoint;
 
 /**
- * SyncConsentActivityLauncher creates the proper intent and then launches the
- * {@link SyncConsentActivity} in different scenarios.
+ * SyncConsentActivityLauncher creates the proper intent and then launches the {@link
+ * SyncConsentActivity} in different scenarios.
  */
 public final class SyncConsentActivityLauncherImpl implements SyncConsentActivityLauncher {
-    private static SyncConsentActivityLauncher sLauncher;
+    private static SyncConsentActivityLauncher sLauncherForTest;
+    private final Profile mProfile;
 
-    /**
-     * Singleton instance getter
-     */
-    public static SyncConsentActivityLauncher get() {
-        if (sLauncher == null) {
-            sLauncher = new SyncConsentActivityLauncherImpl();
+    /** Get a {@link SyncConsentActivityLauncher} associated with a given profile. */
+    public static SyncConsentActivityLauncher getForProfile(Profile profile) {
+        if (sLauncherForTest != null) {
+            return sLauncherForTest;
         }
-        return sLauncher;
+        return new SyncConsentActivityLauncherImpl(profile);
     }
 
-    @VisibleForTesting
     public static void setLauncherForTest(@Nullable SyncConsentActivityLauncher launcher) {
-        sLauncher = launcher;
+        var oldValue = sLauncherForTest;
+        sLauncherForTest = launcher;
+        ResettersForTesting.register(() -> sLauncherForTest = oldValue);
     }
 
-    private SyncConsentActivityLauncherImpl() {}
+    private SyncConsentActivityLauncherImpl(Profile profile) {
+        assert !profile.isOffTheRecord();
+        mProfile = profile;
+    }
 
     /**
      * Launches the {@link SyncConsentActivity} with default sign-in flow from personalized sign-in
      * promo.
+     *
      * @param accessPoint {@link SigninAccessPoint} for starting sign-in flow.
      * @param accountName The account to preselect or null to preselect the default account.
      */
     @Override
     public void launchActivityForPromoDefaultFlow(
             Context context, @SigninAccessPoint int accessPoint, String accountName) {
-        launchInternal(context,
+        launchInternal(
+                context,
                 SyncConsentFragment.createArgumentsForPromoDefaultFlow(accessPoint, accountName));
     }
 
@@ -64,7 +70,8 @@ public final class SyncConsentActivityLauncherImpl implements SyncConsentActivit
     @Override
     public void launchActivityForPromoChooseAccountFlow(
             Context context, @SigninAccessPoint int accessPoint, String accountName) {
-        launchInternal(context,
+        launchInternal(
+                context,
                 SyncConsentFragment.createArgumentsForPromoChooseAccountFlow(
                         accessPoint, accountName));
     }
@@ -83,19 +90,21 @@ public final class SyncConsentActivityLauncherImpl implements SyncConsentActivit
 
     /**
      * Launches the {@link SyncConsentActivity} if signin is allowed.
+     *
      * @param context A {@link Context} object.
      * @param accessPoint {@link SigninAccessPoint} for starting sign-in flow.
      * @return a boolean indicating if the {@link SyncConsentActivity} is launched.
      */
     @Override
     public boolean launchActivityIfAllowed(Context context, @SigninAccessPoint int accessPoint) {
-        SigninManager signinManager = IdentityServicesProvider.get().getSigninManager(
-                Profile.getLastUsedRegularProfile());
+        SigninManager signinManager = IdentityServicesProvider.get().getSigninManager(mProfile);
         if (signinManager.isSyncOptInAllowed()) {
             launchInternal(context, SyncConsentFragmentBase.createArguments(accessPoint, null));
             return true;
         }
         if (signinManager.isSigninDisabledByPolicy()) {
+            RecordHistogram.recordEnumeratedHistogram(
+                    "Signin.SyncDisabledNotificationShown", accessPoint, SigninAccessPoint.MAX);
             ManagedPreferencesUtils.showManagedByAdministratorToast(context);
         }
         return false;

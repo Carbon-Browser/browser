@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <memory>
 #include <string>
 
+#include "base/functional/callback_helpers.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "components/reporting/client/report_queue.h"
@@ -43,12 +44,16 @@ class MetricReportQueue {
   virtual ~MetricReportQueue();
 
   // Enqueue the metric data.
-  virtual void Enqueue(std::unique_ptr<const MetricData> metric_data,
-                       ReportQueue::EnqueueCallback callback);
+  virtual void Enqueue(
+      MetricData metric_data,
+      ReportQueue::EnqueueCallback callback = base::DoNothing());
 
   // Initiate manual upload of records with `priority_` and restart timer if
   // exists.
   void Upload();
+
+  // Retrieves the reporting destination configured with the `report_queue_`.
+  virtual Destination GetDestination() const;
 
  private:
   // Initiate upload of records with `priority_`.

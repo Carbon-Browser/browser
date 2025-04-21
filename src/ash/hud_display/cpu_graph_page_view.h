@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,9 +13,9 @@ namespace hud_display {
 
 // Draws CPU graphs;
 class CpuGraphPageView : public GraphPageViewBase {
- public:
-  METADATA_HEADER(CpuGraphPageView);
+  METADATA_HEADER(CpuGraphPageView, GraphPageViewBase)
 
+ public:
   explicit CpuGraphPageView(const base::TimeDelta refresh_interval);
   CpuGraphPageView(const CpuGraphPageView&) = delete;
   CpuGraphPageView& operator=(const CpuGraphPageView&) = delete;

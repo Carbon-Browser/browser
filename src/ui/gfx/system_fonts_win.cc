@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "base/containers/flat_map.h"
 #include "base/logging.h"
 #include "base/no_destructor.h"
+#include "base/not_fatal_until.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/trace_event/trace_event.h"
@@ -29,7 +30,7 @@ class SystemFonts {
       Initialize();
 
     auto it = system_fonts_.find(system_font);
-    DCHECK(it != system_fonts_.end())
+    CHECK(it != system_fonts_.end(), base::NotFatalUntil::M130)
         << "System font #" << static_cast<int>(system_font) << " not found!";
     return it->second;
   }
@@ -178,7 +179,7 @@ class SystemFonts {
     // we don't have to).
     FontAdjustment font_adjustment;
     if (adjust_font_callback_) {
-      adjust_font_callback_(&font_adjustment);
+      adjust_font_callback_(font_adjustment);
     }
 
     // Factor out system DPI scale that Windows will include in reported font
@@ -266,22 +267,6 @@ const Font& GetDefaultSystemFont() {
 
 const Font& GetSystemFont(SystemFont system_font) {
   return SystemFonts::Instance()->GetFont(system_font);
-}
-
-NativeFont AdjustExistingSystemFont(NativeFont existing_font,
-                                    const FontAdjustment& font_adjustment) {
-  LOGFONT logfont;
-  auto result = GetObject(existing_font, sizeof(logfont), &logfont);
-  DCHECK(result);
-
-  // Make the necessary adjustments.
-  SystemFonts::AdjustLOGFONT(font_adjustment, &logfont);
-
-  // Cap at minimum font size.
-  logfont.lfHeight = SystemFonts::AdjustFontSize(logfont.lfHeight, 0);
-
-  // Create the Font object.
-  return ::CreateFontIndirect(&logfont);
 }
 
 int AdjustFontSize(int lf_height, int size_delta) {

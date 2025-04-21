@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,13 @@
 #define MEDIA_GPU_CHROMEOS_FOURCC_H_
 
 #include <stdint.h>
+
+#include <optional>
 #include <string>
 
 #include "media/base/video_types.h"
 #include "media/gpu/buildflags.h"
 #include "media/gpu/media_gpu_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace media {
 
@@ -92,7 +93,26 @@ class MEDIA_GPU_EXPORT Fourcc {
     // Two-plane 10-bit YUV 4:2:0. Each sample is a two-byte little-endian value
     // with the bottom six bits ignored.
     P010 = ComposeFourcc('P', '0', '1', '0'),
+
+    // Two-plane Mediatek variant of P010. See
+    // https://tinyurl.com/mtk-10bit-video-format for details.
+    MT2T = ComposeFourcc('M', 'T', '2', 'T'),
+
+    // Single plane 8-bit little-endian ARGB (bytes in reverse B-G-R-A order).
+    AR24 = ComposeFourcc('A', 'R', '2', '4'),
+    // V4L2 proprietary format.
+    // https://linuxtv.org/downloads/v4l-dvb-apis-new/userspace-api/v4l/pixfmt-reserved.html
+    // Opaque format that can only be scanned out as an overlay or composited by
+    // the gpu.
+    // Maps to V4L2_PIX_FMT_QC08C.
+    Q08C = ComposeFourcc('Q', '0', '8', 'C'),
+    // Maps to V4L2_PIX_FMT_QC10C.
+    Q10C = ComposeFourcc('Q', '1', '0', 'C'),
+
+    UNDEFINED = ComposeFourcc(0, 0, 0, 0),
   };
+
+  constexpr Fourcc() = default;
 
   explicit constexpr Fourcc(Fourcc::Value fourcc) : value_(fourcc) {}
 
@@ -102,24 +122,23 @@ class MEDIA_GPU_EXPORT Fourcc {
 
   // Builds a Fourcc from a given fourcc code. This will return a valid
   // Fourcc if the argument is part of the |Value| enum, or nullopt otherwise.
-  static absl::optional<Fourcc> FromUint32(uint32_t fourcc);
+  static std::optional<Fourcc> FromUint32(uint32_t fourcc);
 
   // Converts a VideoPixelFormat to Fourcc.
   // Returns nullopt for invalid input.
   // Note that a VideoPixelFormat may have two Fourcc counterparts. Caller has
   // to specify if it is for single-planar or multi-planar format.
-  static absl::optional<Fourcc> FromVideoPixelFormat(
+  static std::optional<Fourcc> FromVideoPixelFormat(
       VideoPixelFormat pixel_format,
       bool single_planar = true);
 #if BUILDFLAG(USE_V4L2_CODEC)
   // Converts a V4L2PixFmt to Fourcc.
   // Returns nullopt for invalid input.
-  static absl::optional<Fourcc> FromV4L2PixFmt(uint32_t v4l2_pix_fmt);
-#endif  // BUILDFLAG(USE_V4L2_CODEC)
-#if BUILDFLAG(USE_VAAPI)
+  static std::optional<Fourcc> FromV4L2PixFmt(uint32_t v4l2_pix_fmt);
+#elif BUILDFLAG(USE_VAAPI)
   // Converts a VAFourCC to Fourcc.
   // Returns nullopt for invalid input.
-  static absl::optional<Fourcc> FromVAFourCC(uint32_t va_fourcc);
+  static std::optional<Fourcc> FromVAFourCC(uint32_t va_fourcc);
 #endif  // BUILDFLAG(USE_VAAPI)
 
   // Value getters:
@@ -130,16 +149,17 @@ class MEDIA_GPU_EXPORT Fourcc {
   // Returns the V4L2PixFmt counterpart of the value.
   // Returns 0 if no mapping is found.
   uint32_t ToV4L2PixFmt() const;
-#endif  // BUILDFLAG(USE_V4L2_CODEC)
-#if BUILDFLAG(USE_VAAPI)
+#elif BUILDFLAG(USE_VAAPI)
   // Returns the VAFourCC counterpart of the value.
   // Returns nullopt if no mapping is found.
-  absl::optional<uint32_t> ToVAFourCC() const;
+  std::optional<uint32_t> ToVAFourCC() const;
 #endif  // BUILDFLAG(USE_VAAPI)
 
   // Returns the single-planar Fourcc of the value. If value is a single-planar,
-  // returns the same Fourcc. Returns nullopt if no mapping is found.
-  absl::optional<Fourcc> ToSinglePlanar() const;
+  // returns the same Fourcc. Returns nullopt if the value is neither
+  // single-planar nor multi-planar or if the value is multi-planar but does not
+  // have a single-planar equivalent.
+  std::optional<Fourcc> ToSinglePlanar() const;
 
   // Returns whether |value_| is multi planar format.
   bool IsMultiPlanar() const;
@@ -148,7 +168,7 @@ class MEDIA_GPU_EXPORT Fourcc {
   std::string ToString() const;
 
  private:
-  Value value_;
+  Value value_ = Fourcc::Value::UNDEFINED;
 };
 
 MEDIA_GPU_EXPORT bool operator!=(const Fourcc& lhs, const Fourcc& rhs);

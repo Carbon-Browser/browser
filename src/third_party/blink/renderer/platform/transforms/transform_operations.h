@@ -25,10 +25,10 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_TRANSFORMS_TRANSFORM_OPERATIONS_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_TRANSFORMS_TRANSFORM_OPERATIONS_H_
 
-#include "base/memory/scoped_refptr.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
+#include "third_party/blink/renderer/platform/heap/member.h"
 #include "third_party/blink/renderer/platform/transforms/transform_operation.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
-#include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "ui/gfx/geometry/size_f.h"
 
 namespace gfx {
@@ -48,12 +48,14 @@ class PLATFORM_EXPORT TransformOperations {
   TransformOperations() = default;
   TransformOperations(const EmptyTransformOperations&) {}
 
+  void Trace(Visitor* visitor) const { visitor->Trace(operations_); }
+
   bool operator==(const TransformOperations& o) const;
   bool operator!=(const TransformOperations& o) const { return !(*this == o); }
 
   // Constructs a transformation matrix from the operations. The parameter
   // |border_box_size| is used when computing styles that are size-dependent.
-  void Apply(const gfx::SizeF& border_box_size, TransformationMatrix& t) const {
+  void Apply(const gfx::SizeF& border_box_size, gfx::Transform& t) const {
     for (auto& operation : operations_)
       operation->Apply(t, border_box_size);
   }
@@ -64,7 +66,7 @@ class PLATFORM_EXPORT TransformOperations {
   // |border_box_size| is used when computing styles that are size-dependent.
   void ApplyRemaining(const gfx::SizeF& border_box_size,
                       wtf_size_t start,
-                      TransformationMatrix& t) const;
+                      gfx::Transform& t) const;
 
   // Return true if any of the operation types are 3D operation types (even if
   // the values describe affine transforms)
@@ -127,16 +129,16 @@ class PLATFORM_EXPORT TransformOperations {
 
   void clear() { operations_.clear(); }
 
-  Vector<scoped_refptr<TransformOperation>>& Operations() {
+  HeapVector<Member<TransformOperation>, 2>& Operations() {
     return operations_;
   }
-  const Vector<scoped_refptr<TransformOperation>>& Operations() const {
+  const HeapVector<Member<TransformOperation>, 2>& Operations() const {
     return operations_;
   }
 
   wtf_size_t size() const { return operations_.size(); }
   const TransformOperation* at(wtf_size_t index) const {
-    return index < operations_.size() ? operations_.at(index).get() : nullptr;
+    return index < operations_.size() ? operations_.at(index).Get() : nullptr;
   }
 
   bool BlendedBoundsForBox(const gfx::BoxF&,
@@ -145,13 +147,34 @@ class PLATFORM_EXPORT TransformOperations {
                            const double& max_progress,
                            gfx::BoxF* bounds) const;
 
-  scoped_refptr<TransformOperation> BlendRemainingByUsingMatrixInterpolation(
+  // Registered custom property interpolations cannot currently represent
+  // interpolated values if functions need to be combined into a matrix and
+  // those function values depend on the box size via percentage values, since
+  // percentages need to be converted into numbers and the percentages should
+  // be kept for the computed value. Until there is a standardized mix()
+  // function for representing such transform values, make such interpolations
+  // discrete with BoxSizeDependentMatrixBlending::kDisallow.
+  //
+  // The standard CSS transform property still allows such interpolations, but
+  // the computed value in typed-om incorrectly returns values with percentages
+  // resolved in this case. getComputedStyle().transform returns a resolved
+  // value per spec.
+  enum class BoxSizeDependentMatrixBlending {
+    kAllow,
+    kDisallow,
+  };
+
+  TransformOperation* BlendRemainingByUsingMatrixInterpolation(
       const TransformOperations& from,
       wtf_size_t matching_prefix_length,
-      double progress) const;
+      double progress,
+      BoxSizeDependentMatrixBlending box_size_dependent =
+          BoxSizeDependentMatrixBlending::kAllow) const;
 
   TransformOperations Blend(const TransformOperations& from,
-                            double progress) const;
+                            double progress,
+                            BoxSizeDependentMatrixBlending box_size_dependent =
+                                BoxSizeDependentMatrixBlending::kAllow) const;
   TransformOperations Add(const TransformOperations& addend) const;
   TransformOperations Zoom(double factor) const;
 
@@ -160,7 +183,7 @@ class PLATFORM_EXPORT TransformOperations {
   TransformOperations Accumulate(const TransformOperations& to) const;
 
  private:
-  Vector<scoped_refptr<TransformOperation>> operations_;
+  HeapVector<Member<TransformOperation>, 2> operations_;
 };
 
 }  // namespace blink

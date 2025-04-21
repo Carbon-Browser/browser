@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,10 +21,6 @@ class IdentityClearAllCachedAuthTokensFunction : public ExtensionFunction {
 
   // ExtensionFunction:
   ResponseAction Run() override;
-
-  void OnCookiesDeleted(uint32_t num_deleted);
-
-  size_t cleaned_partitions_ = 0;
 };
 
 }  // namespace extensions

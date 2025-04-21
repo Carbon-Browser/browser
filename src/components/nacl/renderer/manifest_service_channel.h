@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/files/file.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/process/process.h"
 #include "base/synchronization/lock.h"
@@ -35,7 +35,7 @@ class ManifestServiceChannel : public IPC::Listener {
 
   class Delegate {
    public:
-    virtual ~Delegate() {}
+    virtual ~Delegate() = default;
 
     // Called when PPAPI initialization in the NaCl plugin is finished.
     virtual void StartupInitializationComplete() = 0;

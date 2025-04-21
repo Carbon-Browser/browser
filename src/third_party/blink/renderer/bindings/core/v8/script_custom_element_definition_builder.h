@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,16 +32,18 @@ class CORE_EXPORT ScriptCustomElementDefinitionBuilder
 
   ~ScriptCustomElementDefinitionBuilder() = default;
 
+  V8CustomElementConstructor* Constructor() override {
+    return data_.constructor_;
+  }
+
   bool CheckConstructorIntrinsics() override;
   bool CheckConstructorNotRegistered() override;
   bool RememberOriginalProperties() override;
-  CustomElementDefinition* Build(const CustomElementDescriptor&,
-                                 CustomElementDefinition::Id) override;
+  CustomElementDefinition* Build(const CustomElementDescriptor&) override;
 
  private:
   ScriptState* GetScriptState() { return data_.script_state_; }
   v8::Isolate* Isolate();
-  V8CustomElementConstructor* Constructor() { return data_.constructor_; }
 
   ExceptionState& exception_state_;
   ScriptCustomElementDefinitionData data_;
@@ -50,6 +52,7 @@ class CORE_EXPORT ScriptCustomElementDefinitionBuilder
   // available.
   v8::Local<v8::Value> v8_connected_callback_;
   v8::Local<v8::Value> v8_disconnected_callback_;
+  v8::Local<v8::Value> v8_connected_move_callback_;
   v8::Local<v8::Value> v8_adopted_callback_;
   v8::Local<v8::Value> v8_attribute_changed_callback_;
   v8::Local<v8::Value> v8_form_associated_callback_;

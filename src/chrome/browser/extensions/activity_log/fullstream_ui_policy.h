@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,7 +55,6 @@ class FullStreamUIPolicy : public ActivityLogDatabasePolicy {
   void DeleteDatabase() override;
 
   // Database table schema.
-  static const char kTableName[];
   static const char* const kTableContentFields[];
   static const char* const kTableFieldTypes[];
   static const int kTableFieldCount;

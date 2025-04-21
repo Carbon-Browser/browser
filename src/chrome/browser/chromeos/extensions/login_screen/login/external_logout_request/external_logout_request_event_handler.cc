@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,7 @@ ExternalLogoutRequestEventHandler::ExternalLogoutRequestEventHandler(
   chromeos::LacrosService* lacros_service = chromeos::LacrosService::Get();
   if (chromeos::LacrosService::Get()->IsAvailable<crosapi::mojom::Login>()) {
     int interface_version =
-        lacros_service->GetInterfaceVersion(crosapi::mojom::Login::Uuid_);
+        lacros_service->GetInterfaceVersion<crosapi::mojom::Login>();
     if (interface_version <
         int(crosapi::mojom::Login::
                 kAddExternalLogoutRequestObserverMinVersion)) {

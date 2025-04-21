@@ -1,17 +1,17 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef FUCHSIA_WEB_RUNNERS_CAST_CAST_COMPONENT_H_
 #define FUCHSIA_WEB_RUNNERS_CAST_CAST_COMPONENT_H_
 
-#include <fuchsia/camera3/cpp/fidl.h>
-#include <fuchsia/media/cpp/fidl.h>
+#include <chromium/cast/cpp/fidl.h>
 #include <fuchsia/web/cpp/fidl.h>
-#include <lib/fidl/cpp/binding.h>
 
 #include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -21,24 +21,16 @@
 #include "base/message_loop/message_pump_fuchsia.h"
 #include "fuchsia_web/runners/cast/api_bindings_client.h"
 #include "fuchsia_web/runners/cast/application_controller_impl.h"
-#include "fuchsia_web/runners/cast/fidl/fidl/chromium/cast/cpp/fidl.h"
 #include "fuchsia_web/runners/cast/named_message_port_connector_fuchsia.h"
 #include "fuchsia_web/runners/common/web_component.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-
-namespace fuchsia::legacymetrics {
-class MetricsRecorder;
-}
-
-namespace cr_fuchsia {
-class AgentManager;
-}
 
 FORWARD_DECLARE_TEST(HeadlessCastRunnerIntegrationTest, Headless);
 
 // A specialization of WebComponent which adds Cast-specific services.
-class CastComponent final : public WebComponent,
-                            public base::MessagePumpFuchsia::ZxHandleWatcher {
+class CastComponent final
+    : public WebComponent,
+      public fuchsia::component::runner::ComponentController,
+      public base::MessagePumpFuchsia::ZxHandleWatcher {
  public:
   struct Params {
     Params();
@@ -51,30 +43,35 @@ class CastComponent final : public WebComponent,
 
     // Parameters populated directly from the StartComponent() arguments.
     std::unique_ptr<base::StartupContext> startup_context;
-    fidl::InterfaceRequest<fuchsia::sys::ComponentController>
+    fidl::InterfaceRequest<fuchsia::component::runner::ComponentController>
         controller_request;
 
     // Parameters initialized synchronously.
-    std::unique_ptr<cr_fuchsia::AgentManager> agent_manager;
     chromium::cast::UrlRequestRewriteRulesProviderPtr
         url_rewrite_rules_provider;
 
     // Parameters asynchronously initialized by PendingCastComponent.
     std::unique_ptr<ApiBindingsClient> api_bindings_client;
     chromium::cast::ApplicationConfig application_config;
-    fidl::InterfaceHandle<chromium::cast::ApplicationContext>
-        application_context;
-    absl::optional<std::vector<fuchsia::web::UrlRequestRewriteRule>>
+    fidl::ClientEnd<chromium_cast::ApplicationContext> application_context;
+    std::optional<std::vector<fuchsia::web::UrlRequestRewriteRule>>
         initial_url_rewrite_rules;
-    absl::optional<fuchsia::web::FrameMediaSettings> media_settings;
+    std::optional<fuchsia::web::FrameMediaSettings> media_settings;
+
+    // ID of flow used in the with the Fuchsia Trace API to trace the
+    // application lifetime.
+    uint64_t trace_flow_id;
   };
 
-  // See WebComponent documentation for details of |debug_name| and |runner|.
-  // |params| provides the Cast application configuration to use.
-  // |is_headless| must match the headless setting of the specfied |runner|, to
+  // See WebComponent documentation for details of `debug_name` and `runner`.
+  // `debug_name` will be set on the underlying `Frame`, for use e.g. in log
+  //   tagging.
+  // `runner` must be non-null, and out-live `this`.
+  // `params` provides the Cast application configuration to use.
+  // `is_headless` must match the headless setting of the specified `runner`, to
   //   have CreateView() operations trigger enabling & disabling of off-screen
   //   rendering.
-  CastComponent(base::StringPiece debug_name,
+  CastComponent(std::string_view debug_name,
                 WebContentRunner* runner,
                 Params params,
                 bool is_headless);
@@ -84,24 +81,9 @@ class CastComponent final : public WebComponent,
 
   ~CastComponent() override;
 
-  void SetOnDestroyedCallback(base::OnceClosure on_destroyed);
-
-  void ConnectMetricsRecorder(
-      fidl::InterfaceRequest<fuchsia::legacymetrics::MetricsRecorder> request);
-  void ConnectAudio(fidl::InterfaceRequest<fuchsia::media::Audio> request);
-  void ConnectDeviceWatcher(
-      fidl::InterfaceRequest<fuchsia::camera3::DeviceWatcher> request);
-
-  bool HasWebPermission(fuchsia::web::PermissionType permission_type) const;
-
-  const std::string& agent_url() const {
-    return application_config_.agent_url();
-  }
-
   // WebComponent overrides.
   void StartComponent() override;
-  void DestroyComponent(int64_t termination_exit_code,
-                        fuchsia::sys::TerminationReason reason) override;
+  void DestroyComponent(int64_t exit_code) override;
 
  private:
   void OnRewriteRulesReceived(
@@ -114,24 +96,23 @@ class CastComponent final : public WebComponent,
       OnNavigationStateChangedCallback callback) override;
 
   // fuchsia::ui::app::ViewProvider implementation.
-  void CreateView(
-      zx::eventpair view_token,
-      fidl::InterfaceRequest<fuchsia::sys::ServiceProvider> incoming_services,
-      fidl::InterfaceHandle<fuchsia::sys::ServiceProvider> outgoing_services)
-      override;
   void CreateViewWithViewRef(zx::eventpair view_token,
                              fuchsia::ui::views::ViewRefControl control_ref,
                              fuchsia::ui::views::ViewRef view_ref) override;
   void CreateView2(fuchsia::ui::app::CreateView2Args view_args) override;
+
+  // fuchsia::component::runner::ComponentController implementation.
+  void Kill() override;
+  void Stop() override;
+  void handle_unknown_method(uint64_t ordinal,
+                             bool method_has_response) override;
 
   // base::MessagePumpFuchsia::ZxHandleWatcher implementation.
   // Called when the headless "view" token is disconnected.
   void OnZxHandleSignalled(zx_handle_t handle, zx_signals_t signals) override;
 
   const bool is_headless_;
-  base::OnceClosure on_destroyed_;
 
-  std::unique_ptr<cr_fuchsia::AgentManager> agent_manager_;
   chromium::cast::ApplicationConfig application_config_;
   chromium::cast::UrlRequestRewriteRulesProviderPtr url_rewrite_rules_provider_;
   std::vector<fuchsia::web::UrlRequestRewriteRule> initial_url_rewrite_rules_;
@@ -140,10 +121,17 @@ class CastComponent final : public WebComponent,
   std::unique_ptr<NamedMessagePortConnectorFuchsia> connector_;
   std::unique_ptr<ApiBindingsClient> api_bindings_client_;
   std::unique_ptr<ApplicationControllerImpl> application_controller_;
-  chromium::cast::ApplicationContextPtr application_context_;
+  fidl::Client<chromium_cast::ApplicationContext> application_context_;
   fuchsia::web::FrameMediaSettings media_settings_;
   zx::eventpair headless_view_token_;
+
+  // Used by the Component Framework to control the component's lifetime.
+  fidl::Binding<fuchsia::component::runner::ComponentController>
+      component_controller_{this};
+
   base::MessagePumpForIO::ZxHandleWatchController headless_disconnect_watch_;
+
+  uint64_t trace_flow_id_;
 };
 
 #endif  // FUCHSIA_WEB_RUNNERS_CAST_CAST_COMPONENT_H_

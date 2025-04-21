@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -27,11 +27,18 @@ proto_library("webui_proto") {
 fuzzable_proto_library("realtimeapi_proto") {
   proto_in_dir = "//"
   sources = [ "realtimeapi.proto" ]
-  deps = [ ":csd_proto" ]
+  deps = [
+    ":csd_proto",
+    "//components/enterprise/common/proto:connectors_proto",
+  ]
 }
 
 fuzzable_proto_library("client_model_proto") {
   proto_in_dir = "//"
   sources = [ "client_model.proto" ]
   deps = [ ":csd_proto" ]
+}
+
+proto_library("safebrowsingv5_proto") {
+  sources = [ "safebrowsingv5.proto" ]
 }

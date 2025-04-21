@@ -1,36 +1,39 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "chrome/browser/ash/login/screens/error_screen.h"
 
 #include "ash/constants/ash_switches.h"
 #include "ash/public/cpp/login_screen_test_api.h"
 #include "base/run_loop.h"
 #include "base/strings/strcat.h"
 #include "base/test/bind.h"
-#include "base/time/time.h"
-#include "chrome/browser/ash/login/app_mode/kiosk_launch_controller.h"
+#include "chrome/browser/ash/app_mode/kiosk_test_helper.h"
+#include "chrome/browser/ash/login/app_mode/test/kiosk_apps_mixin.h"
 #include "chrome/browser/ash/login/login_wizard.h"
-#include "chrome/browser/ash/login/screens/error_screen.h"
+#include "chrome/browser/ash/login/startup_utils.h"
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
 #include "chrome/browser/ash/login/test/dialog_window_waiter.h"
 #include "chrome/browser/ash/login/test/embedded_test_server_setup_mixin.h"
 #include "chrome/browser/ash/login/test/js_checker.h"
-#include "chrome/browser/ash/login/test/kiosk_apps_mixin.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/ash/login/test/oobe_screen_waiter.h"
 #include "chrome/browser/ash/login/test/oobe_screens_utils.h"
+#include "chrome/browser/ash/login/test/scoped_policy_update.h"
 #include "chrome/browser/ash/login/wizard_context.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
-#include "chrome/browser/ui/webui/chromeos/login/app_launch_splash_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/error_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/welcome_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/app_launch_splash_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/error_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/welcome_screen_handler.h"
 #include "chrome/grit/generated_resources.h"
+#include "chrome/test/base/fake_gaia_mixin.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/mixin_based_in_process_browser_test.h"
 #include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
 #include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
+#include "chromeos/ash/components/dbus/shill/shill_profile_client.h"
 #include "chromeos/ash/components/network/network_state_test_helper.h"
-#include "chromeos/dbus/shill/shill_profile_client.h"
 #include "components/policy/proto/chrome_device_policy.pb.h"
 #include "components/user_manager/user_manager.h"
 #include "content/public/test/browser_test.h"
@@ -45,8 +48,13 @@ namespace {
 constexpr char kWifiServiceName[] = "stub_wifi";
 constexpr char kWifiNetworkName[] = "wifi-test-network";
 
+const test::UIPath kNetworkBackButton = {"error-message", "backButton"};
+const test::UIPath kNetworkConfigureScreenContinueButton = {"error-message",
+                                                            "continueButton"};
 const test::UIPath kErrorMessageGuestSigninLink = {"error-message",
                                                    "error-guest-signin-link"};
+const test::UIPath kErrorMessageOfflineLoginLink = {"error-message",
+                                                    "error-offline-login-link"};
 
 ErrorScreen* GetScreen() {
   return static_cast<ErrorScreen*>(
@@ -72,7 +80,7 @@ class NetworkErrorScreenTest : public InProcessBrowserTest {
     InProcessBrowserTest::SetUpOnMainThread();
 
     ShowLoginWizard(WelcomeView::kScreenId);
-    OobeScreenWaiter(WelcomeView::kScreenId).Wait();
+    test::WaitForWelcomeScreen();
   }
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
@@ -228,6 +236,12 @@ class GuestErrorScreenTest
     wizard_context_ = std::make_unique<WizardContext>();
   }
 
+  void ShowErrorScreenWithGuestSignin() {
+    GetScreen()->AllowGuestSignin(true);
+    GetScreen()->SetUIState(NetworkError::UI_STATE_UPDATE);
+    GetScreen()->Show(wizard_context_.get());
+  }
+
  protected:
   std::unique_ptr<WizardContext> wizard_context_;
   LoginManagerMixin login_manager_{&mixin_host_};
@@ -235,12 +249,34 @@ class GuestErrorScreenTest
 };
 
 // Test that guest signin option is shown when enabled and that clicking on it
-// starts a guest session.
+// shows the guest tos screen if EULA was not accepted.
 IN_PROC_BROWSER_TEST_P(GuestErrorScreenTest, PRE_GuestLogin) {
-  GetScreen()->AllowGuestSignin(true);
-  GetScreen()->SetUIState(NetworkError::UI_STATE_UPDATE);
-  GetScreen()->Show(wizard_context_.get());
+  ShowErrorScreenWithGuestSignin();
+  OobeScreenWaiter(ErrorScreenView::kScreenId).Wait();
+  test::OobeJS().ExpectVisiblePath(kErrorMessageGuestSigninLink);
 
+  base::RunLoop restart_job_waiter;
+  FakeSessionManagerClient::Get()->set_restart_job_callback(
+      restart_job_waiter.QuitClosure());
+
+  test::OobeJS().ClickOnPath(kErrorMessageGuestSigninLink);
+  test::WaitForGuestTosScreen();
+  test::TapGuestTosAccept();
+
+  restart_job_waiter.Run();
+}
+
+IN_PROC_BROWSER_TEST_P(GuestErrorScreenTest, GuestLogin) {
+  login_manager_.WaitForActiveSession();
+  user_manager::UserManager* user_manager = user_manager::UserManager::Get();
+  EXPECT_TRUE(user_manager->IsLoggedInAsGuest());
+}
+
+// Test that guest signin option is shown when enabled and that clicking on it
+// directly starts a guest session if EULA was already accepted.
+IN_PROC_BROWSER_TEST_P(GuestErrorScreenTest, PRE_GuestLoginWithEulaAccepted) {
+  StartupUtils::MarkEulaAccepted();
+  ShowErrorScreenWithGuestSignin();
   OobeScreenWaiter(ErrorScreenView::kScreenId).Wait();
   test::OobeJS().ExpectVisiblePath(kErrorMessageGuestSigninLink);
 
@@ -252,7 +288,7 @@ IN_PROC_BROWSER_TEST_P(GuestErrorScreenTest, PRE_GuestLogin) {
   restart_job_waiter.Run();
 }
 
-IN_PROC_BROWSER_TEST_P(GuestErrorScreenTest, GuestLogin) {
+IN_PROC_BROWSER_TEST_P(GuestErrorScreenTest, GuestLoginWithEulaAccepted) {
   login_manager_.WaitForActiveSession();
   user_manager::UserManager* user_manager = user_manager::UserManager::Get();
   EXPECT_TRUE(user_manager->IsLoggedInAsGuest());
@@ -278,14 +314,19 @@ class KioskErrorScreenTest : public MixinBasedInProcessBrowserTest {
   void SetUpInProcessBrowserTestFixture() override {
     host_resolver()->AddRule("*", "127.0.0.1");
 
-    skip_splash_wait_override_ =
-        KioskLaunchController::SkipSplashScreenWaitForTesting();
-    network_wait_override_ =
-        KioskLaunchController::SetNetworkWaitForTesting(base::Seconds(0));
-
     AddKioskAppToDevicePolicy();
 
     MixinBasedInProcessBrowserTest::SetUpInProcessBrowserTestFixture();
+  }
+
+  void SetOnline(bool is_online) {
+    network_helper_->SetServiceProperty(kWifiServiceName, shill::kStateProperty,
+                                        is_online
+                                            ? base::Value(shill::kStateOnline)
+                                            : base::Value(shill::kStateIdle));
+    // Network modification notifications are posted asynchronously. Wait until
+    // idle to ensure observers are notified.
+    base::RunLoop().RunUntilIdle();
   }
 
   void SetUpOnMainThread() override {
@@ -294,7 +335,7 @@ class KioskErrorScreenTest : public MixinBasedInProcessBrowserTest {
 
     network_helper_->service_test()->AddService(
         kWifiServiceName, "wifi_guid", kWifiNetworkName, shill::kTypeWifi,
-        shill::kStateOffline, /*visible=*/true);
+        shill::kStateIdle, /*visible=*/true);
 
     MixinBasedInProcessBrowserTest::SetUpOnMainThread();
   }
@@ -303,6 +344,17 @@ class KioskErrorScreenTest : public MixinBasedInProcessBrowserTest {
     network_helper_.reset();
     MixinBasedInProcessBrowserTest::TearDownOnMainThread();
   }
+
+  void SetBlockAppLaunch(bool block) {
+    if (block) {
+      block_app_launch_override_ = KioskTestHelper::BlockAppLaunch();
+    } else {
+      block_app_launch_override_.reset();
+    }
+  }
+
+ protected:
+  LoginManagerMixin login_mixin_{&mixin_host_, {}, &fake_gaia_};
 
  private:
   void AddKioskAppToDevicePolicy() {
@@ -317,8 +369,9 @@ class KioskErrorScreenTest : public MixinBasedInProcessBrowserTest {
 
   std::unique_ptr<NetworkStateTestHelper> network_helper_;
 
-  std::unique_ptr<base::AutoReset<bool>> skip_splash_wait_override_;
-  std::unique_ptr<base::AutoReset<base::TimeDelta>> network_wait_override_;
+  base::AutoReset<bool> skip_splash_wait_override_ =
+      KioskTestHelper::SkipSplashScreenWait();
+  std::optional<base::AutoReset<bool>> block_app_launch_override_;
 
   DeviceStateMixin device_state_{
       &mixin_host_, DeviceStateMixin::State::OOBE_COMPLETED_CLOUD_ENROLLED};
@@ -326,15 +379,14 @@ class KioskErrorScreenTest : public MixinBasedInProcessBrowserTest {
   EmbeddedTestServerSetupMixin embedded_test_server_setup_{
       &mixin_host_, embedded_test_server()};
   KioskAppsMixin kiosk_apps_{&mixin_host_, embedded_test_server()};
-
-  LoginManagerMixin login_manager_{&mixin_host_, {}};
+  FakeGaiaMixin fake_gaia_{&mixin_host_};
 };
 
 // Verify that certificate manager dialog opens.
 IN_PROC_BROWSER_TEST_F(KioskErrorScreenTest, OpenCertificateConfig) {
   KioskAppsMixin::WaitForAppsButton();
   EXPECT_TRUE(LoginScreenTestApi::IsAppsButtonShown());
-  ASSERT_TRUE(LoginScreenTestApi::LaunchApp(KioskAppsMixin::kKioskAppId));
+  ASSERT_TRUE(LoginScreenTestApi::LaunchApp(KioskAppsMixin::kTestChromeAppId));
 
   OobeScreenWaiter(ErrorScreenView::kScreenId).Wait();
   EXPECT_TRUE(LoginScreenTestApi::IsOobeDialogVisible());
@@ -347,6 +399,92 @@ IN_PROC_BROWSER_TEST_F(KioskErrorScreenTest, OpenCertificateConfig) {
   test::OobeJS().ClickOnPath(kCertsButton);
 
   waiter.Wait();
+}
+
+// The existence of user pods in the signin screen can influence
+// the presence of the back button in the network configuration
+// screen. Add a regular user to cover this case.
+IN_PROC_BROWSER_TEST_F(KioskErrorScreenTest,
+                       PRE_NoBackButtonInNetworkConfigureScreenAfterTimeout) {
+  login_mixin_.LoginAsNewRegularUser();
+  login_mixin_.SkipPostLoginScreens();
+  login_mixin_.WaitForActiveSession();
+}
+
+IN_PROC_BROWSER_TEST_F(KioskErrorScreenTest,
+                       NoBackButtonInNetworkConfigureScreenAfterTimeout) {
+  KioskAppsMixin::WaitForAppsButton();
+  EXPECT_TRUE(LoginScreenTestApi::IsAppsButtonShown());
+  ASSERT_TRUE(LoginScreenTestApi::LaunchApp(KioskAppsMixin::kTestChromeAppId));
+  EXPECT_TRUE(LoginScreenTestApi::IsOobeDialogVisible());
+  OobeScreenWaiter(ErrorScreenView::kScreenId).Wait();
+  test::OobeJS().ExpectPathDisplayed(false, kNetworkBackButton);
+  test::OobeJS().ExpectPathDisplayed(false,
+                                     kNetworkConfigureScreenContinueButton);
+}
+
+// The existence of user pods in the signin screen can influence
+// the presence of the back button in the network configuration
+// screen. Add a regular user to cover this case.
+IN_PROC_BROWSER_TEST_F(KioskErrorScreenTest,
+                       PRE_NoBackButtonInNetworkConfigureScreenAfterShortcut) {
+  login_mixin_.LoginAsNewRegularUser();
+  login_mixin_.SkipPostLoginScreens();
+  login_mixin_.WaitForActiveSession();
+}
+
+IN_PROC_BROWSER_TEST_F(KioskErrorScreenTest,
+                       NoBackButtonInNetworkConfigureScreenAfterShortcut) {
+  SetOnline(true);
+  KioskAppsMixin::WaitForAppsButton();
+  EXPECT_TRUE(LoginScreenTestApi::IsAppsButtonShown());
+  ASSERT_TRUE(LoginScreenTestApi::LaunchApp(KioskAppsMixin::kTestChromeAppId));
+  SetBlockAppLaunch(true);
+  OobeScreenWaiter(AppLaunchSplashScreenView::kScreenId).Wait();
+
+  ASSERT_TRUE(LoginScreenTestApi::PressAccelerator(
+      ui::Accelerator(ui::VKEY_N, ui::EF_CONTROL_DOWN | ui::EF_ALT_DOWN)));
+  OobeScreenWaiter(ErrorScreenView::kScreenId).Wait();
+  EXPECT_TRUE(LoginScreenTestApi::IsOobeDialogVisible());
+  test::OobeJS().ExpectPathDisplayed(false, kNetworkBackButton);
+  test::OobeJS().ExpectPathDisplayed(true,
+                                     kNetworkConfigureScreenContinueButton);
+}
+
+// It shouldn't be possible to login as an existing user from the network
+// configuration screen (ErrorScreen) in kiosk mode. Verify that this option
+// is not available.
+IN_PROC_BROWSER_TEST_F(KioskErrorScreenTest,
+                       PRE_NoOfflineLoginInNetworkConfigureScreen) {
+  login_mixin_.LoginAsNewRegularUser();
+  login_mixin_.SkipPostLoginScreens();
+  login_mixin_.WaitForActiveSession();
+}
+
+IN_PROC_BROWSER_TEST_F(KioskErrorScreenTest,
+                       NoOfflineLoginInNetworkConfigureScreen) {
+  // Make ErrorScreen to appear first to verify that the state of the
+  // ErrorScreen is properly updated when it is shown from the kiosk mode.
+  SetOnline(false);
+  EXPECT_TRUE(LoginScreenTestApi::ClickAddUserButton());
+  OobeScreenWaiter(ErrorScreenView::kScreenId).Wait();
+  test::OobeJS().ExpectPathDisplayed(true, kErrorMessageOfflineLoginLink);
+  test::OobeJS().ClickOnPath(kNetworkBackButton);
+
+  // Now start an app.
+  SetOnline(true);
+  KioskAppsMixin::WaitForAppsButton();
+  EXPECT_TRUE(LoginScreenTestApi::IsAppsButtonShown());
+  ASSERT_TRUE(LoginScreenTestApi::LaunchApp(KioskAppsMixin::kTestChromeAppId));
+  SetBlockAppLaunch(true);
+  OobeScreenWaiter(AppLaunchSplashScreenView::kScreenId).Wait();
+
+  ASSERT_TRUE(LoginScreenTestApi::PressAccelerator(
+      ui::Accelerator(ui::VKEY_N, ui::EF_CONTROL_DOWN | ui::EF_ALT_DOWN)));
+  OobeScreenWaiter(ErrorScreenView::kScreenId).Wait();
+  EXPECT_TRUE(LoginScreenTestApi::IsOobeDialogVisible());
+  test::OobeJS().ExpectPathDisplayed(false, kNetworkBackButton);
+  test::OobeJS().ExpectPathDisplayed(false, kErrorMessageOfflineLoginLink);
 }
 
 }  // namespace ash

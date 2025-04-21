@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -123,5 +123,5 @@ TEST_F(RegisterUninstallationViaOsSettingsTest, RegValues) {
   ASSERT_EQ(uninstall_key_.ReadValue(L"DisplayIcon", &value), ERROR_SUCCESS);
   EXPECT_EQ(value, icon_path.value());
 
-  UnregisterUninstallationViaOsSettings(register_key_);
+  EXPECT_TRUE(UnregisterUninstallationViaOsSettings(register_key_));
 }

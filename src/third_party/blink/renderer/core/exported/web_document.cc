@@ -35,7 +35,9 @@
 #include "third_party/blink/public/web/web_document.h"
 
 #include "base/memory/scoped_refptr.h"
+#include "net/storage_access_api/status.h"
 #include "services/network/public/mojom/referrer_policy.mojom-blink.h"
+#include "third_party/blink/public/common/loader/referrer_utils.h"
 #include "third_party/blink/public/platform/web_distillability.h"
 #include "third_party/blink/public/platform/web_url.h"
 #include "third_party/blink/public/web/web_dom_event.h"
@@ -49,13 +51,13 @@
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/document_statistics_collector.h"
 #include "third_party/blink/renderer/core/dom/document_type.h"
-#include "third_party/blink/renderer/core/dom/dom_node_ids.h"
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
 #include "third_party/blink/renderer/core/dom/node.h"
 #include "third_party/blink/renderer/core/editing/ephemeral_range.h"
 #include "third_party/blink/renderer/core/editing/iterators/text_iterator.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
+#include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/visual_viewport.h"
 #include "third_party/blink/renderer/core/frame/web_local_frame_impl.h"
 #include "third_party/blink/renderer/core/html/forms/html_form_control_element.h"
@@ -70,7 +72,7 @@
 #include "third_party/blink/renderer/core/html/plugin_document.h"
 #include "third_party/blink/renderer/core/layout/layout_object.h"
 #include "third_party/blink/renderer/core/page/page.h"
-#include "third_party/blink/renderer/platform/graphics/dom_node_id.h"
+#include "third_party/blink/renderer/core/speculation_rules/document_speculation_rules.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
@@ -85,6 +87,10 @@ static const blink::WebStyleSheetKey GenerateStyleSheetKey() {
 }  // namespace
 
 namespace blink {
+
+const DocumentToken& WebDocument::Token() const {
+  return ConstUnwrap<Document>()->Token();
+}
 
 WebURL WebDocument::Url() const {
   return ConstUnwrap<Document>()->Url();
@@ -118,11 +124,11 @@ WebString WebDocument::GetReferrer() const {
   return ConstUnwrap<Document>()->referrer();
 }
 
-absl::optional<SkColor> WebDocument::ThemeColor() {
-  absl::optional<Color> color = Unwrap<Document>()->ThemeColor();
+std::optional<SkColor> WebDocument::ThemeColor() {
+  std::optional<Color> color = Unwrap<Document>()->ThemeColor();
   if (color)
     return color->Rgb();
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 WebURL WebDocument::OpenSearchDescriptionURL() const {
@@ -156,6 +162,12 @@ ukm::SourceId WebDocument::GetUkmSourceId() const {
 
 net::SiteForCookies WebDocument::SiteForCookies() const {
   return ConstUnwrap<Document>()->SiteForCookies();
+}
+
+net::StorageAccessApiStatus WebDocument::StorageAccessApiStatus() const {
+  return ConstUnwrap<Document>()
+      ->GetExecutionContext()
+      ->GetStorageAccessApiStatus();
 }
 
 WebSecurityOrigin WebDocument::TopFrameOrigin() const {
@@ -207,11 +219,22 @@ WebVector<WebFormElement> WebDocument::Forms() const {
       const_cast<Document*>(ConstUnwrap<Document>())->forms();
 
   Vector<WebFormElement> form_elements;
-  form_elements.ReserveCapacity(forms->length());
+  form_elements.reserve(forms->length());
   for (Element* element : *forms) {
     form_elements.emplace_back(blink::To<HTMLFormElement>(element));
   }
   return form_elements;
+}
+
+WebVector<WebFormElement> WebDocument::GetTopLevelForms() const {
+  Vector<WebFormElement> web_forms;
+  HeapVector<Member<HTMLFormElement>> forms =
+      const_cast<Document*>(ConstUnwrap<Document>())->GetTopLevelForms();
+  web_forms.reserve(forms.size());
+  for (auto& form : forms) {
+    web_forms.push_back(form.Get());
+  }
+  return web_forms;
 }
 
 WebURL WebDocument::CompleteURL(const WebString& partial_url) const {
@@ -249,13 +272,15 @@ WebStyleSheetKey WebDocument::InsertStyleSheet(
 }
 
 bool IsValidAbpRule(StyleRuleBase* rule) {
-  if (!rule->IsStyleRule())
+  if (!rule->IsStyleRule()) {
     return false;
+  }
   const auto& props = blink::To<StyleRule>(rule)->Properties();
-  if (props.PropertyCount() != 1)
+  if (props.PropertyCount() != 1) {
     return false;
+  }
   const auto& ref = props.PropertyAt(0);
-  return ref.Id() == CSSPropertyID::kDisplay && ref.IsImportant();
+  return ref.PropertyID() == CSSPropertyID::kDisplay && ref.IsImportant();
 }
 
 // Should be same as WebDocument::InsertStyleSheet, excluding content
@@ -274,10 +299,10 @@ WebStyleSheetKey WebDocument::InsertAbpElemhideStylesheet(
   // Rule count is not validated because some selectors can be malformed for
   // third-party lists. Checking body is valid for all the rules is enough.
   for (unsigned n = 0; n < parsed_sheet->RuleCount();) {
-    if (IsValidAbpRule(parsed_sheet->RuleAt(n)))
+    if (IsValidAbpRule(parsed_sheet->RuleAt(n))) {
       ++n;
-    else {
-      parsed_sheet->SetMutable();
+    } else {
+      parsed_sheet->StartMutation();
       parsed_sheet->WrapperDeleteRule(n);
       LOG(WARNING) << "[eyeo] Broken rule";
     }
@@ -307,19 +332,18 @@ void WebDocument::WatchCSSSelectors(const WebVector<WebString>& web_selectors) {
   if (!watch && web_selectors.empty())
     return;
   Vector<String> selectors;
-  selectors.Append(web_selectors.data(),
-                   base::checked_cast<wtf_size_t>(web_selectors.size()));
+  selectors.AppendSpan(base::span(web_selectors));
   CSSSelectorWatch::From(*document).WatchCSSSelectors(selectors);
 }
 
 WebVector<WebDraggableRegion> WebDocument::DraggableRegions() const {
   WebVector<WebDraggableRegion> draggable_regions;
   const Document* document = ConstUnwrap<Document>();
-  if (document->HasAnnotatedRegions()) {
-    const Vector<AnnotatedRegionValue>& regions = document->AnnotatedRegions();
+  if (document->HasDraggableRegions()) {
+    const Vector<DraggableRegionValue>& regions = document->DraggableRegions();
     draggable_regions = WebVector<WebDraggableRegion>(regions.size());
     for (wtf_size_t i = 0; i < regions.size(); i++) {
-      const AnnotatedRegionValue& value = regions[i];
+      const DraggableRegionValue& value = regions[i];
       draggable_regions[i].draggable = value.draggable;
       draggable_regions[i].bounds = ToPixelSnappedRect(value.bounds);
     }
@@ -339,12 +363,11 @@ void WebDocument::SetShowBeforeUnloadDialog(bool show_dialog) {
   doc->SetShowBeforeUnloadDialog(show_dialog);
 }
 
-uint64_t WebDocument::GetVisualViewportScrollingElementIdForTesting() {
+cc::ElementId WebDocument::GetVisualViewportScrollingElementIdForTesting() {
   return blink::To<Document>(private_.Get())
       ->GetPage()
       ->GetVisualViewport()
-      .GetScrollElementId()
-      .GetStableId();
+      .GetScrollElementId();
 }
 
 bool WebDocument::IsLoaded() {
@@ -355,8 +378,8 @@ bool WebDocument::IsPrerendering() {
   return ConstUnwrap<Document>()->IsPrerendering();
 }
 
-bool WebDocument::IsAccessibilityEnabled() {
-  return ConstUnwrap<Document>()->IsAccessibilityEnabled();
+bool WebDocument::HasDocumentPictureInPictureWindow() const {
+  return ConstUnwrap<Document>()->HasDocumentPictureInPictureWindow();
 }
 
 void WebDocument::AddPostPrerenderingActivationStep(
@@ -371,15 +394,6 @@ void WebDocument::SetCookieManager(
   Unwrap<Document>()->SetCookieManager(std::move(cookie_manager));
 }
 
-WebElement WebDocument::GetElementByDevToolsNodeId(const int node_id) {
-  Node* node = DOMNodeIds::NodeForId(static_cast<DOMNodeId>(node_id));
-  if (!node || !node->IsElementNode() ||
-      !node->IsDescendantOrShadowDescendantOf(private_.Get())) {
-    return WebElement();
-  }
-  return WebElement(blink::To<Element>(node));
-}
-
 WebDocument::WebDocument(Document* elem) : WebNode(elem) {}
 
 DEFINE_WEB_NODE_TYPE_CASTS(WebDocument, ConstUnwrap<Node>()->IsDocumentNode())
@@ -391,6 +405,34 @@ WebDocument& WebDocument::operator=(Document* elem) {
 
 WebDocument::operator Document*() const {
   return blink::To<Document>(private_.Get());
+}
+
+net::ReferrerPolicy WebDocument::GetReferrerPolicy() const {
+  network::mojom::ReferrerPolicy policy =
+      ConstUnwrap<Document>()->GetExecutionContext()->GetReferrerPolicy();
+  if (policy == network::mojom::ReferrerPolicy::kDefault) {
+    return blink::ReferrerUtils::GetDefaultNetReferrerPolicy();
+  } else {
+    return network::ReferrerPolicyForUrlRequest(policy);
+  }
+}
+
+WebString WebDocument::OutgoingReferrer() const {
+  return WebString(ConstUnwrap<Document>()->domWindow()->OutgoingReferrer());
+}
+
+void WebDocument::InitiatePreview(const WebURL& url) {
+  if (!url.IsValid()) {
+    return;
+  }
+
+  Document* document = blink::To<Document>(private_.Get());
+  if (!document) {
+    return;
+  }
+
+  KURL kurl(url);
+  DocumentSpeculationRules::From(*document).InitiatePreview(kurl);
 }
 
 }  // namespace blink

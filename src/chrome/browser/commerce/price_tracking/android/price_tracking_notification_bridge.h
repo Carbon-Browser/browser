@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,8 @@
 namespace content {
 class BrowserContext;
 }  // namespace content
+
+class Profile;
 
 // JNI bridge that receives the price tracking notification payload from
 // optimization_guide::PushNotificationManager. This class is owned by a browser
@@ -33,7 +35,7 @@ class PriceTrackingNotificationBridge
       const optimization_guide::proto::Any& payload) override;
 
  private:
-  PriceTrackingNotificationBridge();
+  explicit PriceTrackingNotificationBridge(Profile* profile);
 
   // The Java object, owned by the native object.
   base::android::ScopedJavaGlobalRef<jobject> java_obj_;

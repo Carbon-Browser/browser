@@ -1,10 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/upgrade_detector/installed_version_updater_chromeos.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "chrome/browser/upgrade_detector/build_state.h"
@@ -39,7 +39,7 @@ void InstalledVersionUpdater::UpdateStatusChanged(
   // If status changes to `IDLE`, there is no currently available update.
   if (status.current_operation() == update_engine::Operation::IDLE) {
     build_state_->SetUpdate(BuildState::UpdateType::kNone, base::Version(),
-                            absl::nullopt);
+                            std::nullopt);
     return;
   }
 
@@ -76,5 +76,5 @@ void InstalledVersionUpdater::UpdateStatusChanged(
     }
   }
   build_state_->SetUpdate(update_type, base::Version(status.new_version()),
-                          absl::nullopt);
+                          std::nullopt);
 }

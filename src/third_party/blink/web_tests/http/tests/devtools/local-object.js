@@ -1,12 +1,16 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+import {TestRunner} from 'test_runner';
+
+import * as SDK from 'devtools/core/sdk/sdk.js';
 
 (async function() {
   TestRunner.addResult(`Tests callFunction on local remote objects.\n`);
 
   var object = [6, 28, 496];
-  var localObject = SDK.RemoteObject.fromLocalObject(object);
+  var localObject = SDK.RemoteObject.RemoteObject.fromLocalObject(object);
 
   function getItem(index) {
     return this[index];

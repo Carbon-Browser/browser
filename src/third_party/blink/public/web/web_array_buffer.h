@@ -38,7 +38,7 @@ namespace blink {
 
 class DOMArrayBuffer;
 
-class WebArrayBuffer {
+class BLINK_EXPORT WebArrayBuffer {
  public:
   ~WebArrayBuffer() { Reset(); }
 
@@ -49,24 +49,24 @@ class WebArrayBuffer {
     return *this;
   }
 
-  BLINK_EXPORT static WebArrayBuffer Create(unsigned num_elements,
-                                            unsigned element_byte_size);
+  static WebArrayBuffer Create(unsigned num_elements,
+                               unsigned element_byte_size);
 
-  BLINK_EXPORT void Reset();
-  BLINK_EXPORT void Assign(const WebArrayBuffer&);
+  void Reset();
+  void Assign(const WebArrayBuffer&);
 
   bool IsNull() const { return private_.IsNull(); }
-  BLINK_EXPORT void* Data() const;
-  BLINK_EXPORT size_t ByteLength() const;
+  void* Data() const;
+  size_t ByteLength() const;
 
 #if INSIDE_BLINK
-  BLINK_EXPORT WebArrayBuffer(DOMArrayBuffer*);
-  BLINK_EXPORT WebArrayBuffer& operator=(DOMArrayBuffer*);
-  BLINK_EXPORT operator DOMArrayBuffer*() const;
+  WebArrayBuffer(DOMArrayBuffer*);
+  WebArrayBuffer& operator=(DOMArrayBuffer*);
+  operator DOMArrayBuffer*() const;
 #endif
 
  protected:
-  WebPrivatePtr<DOMArrayBuffer> private_;
+  WebPrivatePtrForGC<DOMArrayBuffer> private_;
 };
 
 }  // namespace blink

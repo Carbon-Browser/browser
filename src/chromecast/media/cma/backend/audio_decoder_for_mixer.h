@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "chromecast/media/api/cast_audio_decoder.h"
 #include "chromecast/media/audio/mixer_service/output_stream_connection.h"
 #include "chromecast/public/media/decoder_config.h"
@@ -59,6 +59,7 @@ class AudioDecoderForMixer
   bool SetVolume(float multiplier) override;
   RenderingDelay GetRenderingDelay() override;
   AudioTrackTimestamp GetAudioTrackTimestamp() override;
+  int GetStartThresholdInFrames() override;
 
   // This allows for very small changes in the rate of audio playback that are
   // (supposedly) imperceptible.
@@ -72,7 +73,7 @@ class AudioDecoderForMixer
   friend class AvSyncTest;
 
   // mixer_service::OutputStreamConnection::Delegate implementation:
-  void FillNextBuffer(void* buffer,
+  void FillNextBuffer(base::span<uint8_t> buffer,
                       int frames,
                       int64_t delay_timestamp,
                       int64_t delay) override;

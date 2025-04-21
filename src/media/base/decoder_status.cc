@@ -1,10 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/base/decoder_status.h"
 
 #include <sstream>
+#include <string>
 
 #include "base/trace_event/trace_event.h"
 #include "media/base/status.h"
@@ -41,17 +42,15 @@ const std::string GetDecodeStatusString(const DecoderStatus& status) {
     STRINGIFY(DecoderStatus::Codes::kMissingTimestamp);
     STRINGIFY(DecoderStatus::Codes::kTooManyDecoders);
     STRINGIFY(DecoderStatus::Codes::kMediaFoundationNotAvailable);
+    STRINGIFY(DecoderStatus::Codes::kElidedEndOfStreamForConfigChange);
   }
 #undef STRINGIFY
 }
 
 }  // namespace
 
-// static
-bool ScopedDecodeTrace::IsEnabled() {
-  bool enable_decode_traces = false;
-  TRACE_EVENT_CATEGORY_GROUP_ENABLED("media", &enable_decode_traces);
-  return enable_decode_traces;
+std::ostream& operator<<(std::ostream& os, const DecoderStatus& status) {
+  return os << GetDecodeStatusString(status);
 }
 
 ScopedDecodeTrace::ScopedDecodeTrace(const char* trace_name,
@@ -71,6 +70,13 @@ ScopedDecodeTrace::ScopedDecodeTrace(const char* trace_name,
   TRACE_EVENT_NESTABLE_ASYNC_BEGIN1(
       "media", trace_name_, TRACE_ID_LOCAL(this), "decoder_buffer",
       buffer.AsHumanReadableString(/*verbose=*/true));
+}
+
+ScopedDecodeTrace::ScopedDecodeTrace(const char* trace_name)
+    : trace_name_(trace_name) {
+  DCHECK(trace_name_);
+  TRACE_EVENT_NESTABLE_ASYNC_BEGIN1("media", trace_name_, TRACE_ID_LOCAL(this),
+                                    "decoder_buffer", "EOS");
 }
 
 ScopedDecodeTrace::~ScopedDecodeTrace() {

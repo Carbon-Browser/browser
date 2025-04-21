@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -153,6 +153,17 @@ TEST_F(FilteredGestureProviderTest, TouchMovedBeyondSlopRegion_MultiTouch) {
     EXPECT_TRUE(result.succeeded);
     EXPECT_TRUE(result.moved_beyond_slop_region);
   }
+}
+
+// Extra cancel events should be handled gracefully: https://crbug.com/1407442
+TEST_F(FilteredGestureProviderTest, ExtraCancel) {
+  GestureProvider::Config config;
+  FilteredGestureProvider provider(config, this);
+
+  test::MockMotionEvent event(MotionEvent::Action::CANCEL, base::TimeTicks(), 0,
+                              0);
+  auto result = provider.OnTouchEvent(event);
+  EXPECT_FALSE(result.succeeded);
 }
 
 }  // namespace ui

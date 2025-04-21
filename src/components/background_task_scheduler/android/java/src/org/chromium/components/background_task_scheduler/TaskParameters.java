@@ -1,11 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.components.background_task_scheduler;
 
 import android.content.Context;
-import android.os.Bundle;
+import android.os.PersistableBundle;
 
 import androidx.annotation.NonNull;
 
@@ -16,25 +16,21 @@ import androidx.annotation.NonNull;
  */
 public class TaskParameters {
     private final int mTaskId;
-    private final Bundle mExtras;
+    private final PersistableBundle mExtras;
 
     private TaskParameters(Builder builder) {
         mTaskId = builder.mTaskId;
-        mExtras = builder.mExtras == null ? new Bundle() : builder.mExtras;
+        mExtras = builder.mExtras == null ? new PersistableBundle() : builder.mExtras;
     }
 
-    /**
-     * @return the task ID.
-     */
+    /** @return the task ID. */
     public int getTaskId() {
         return mTaskId;
     }
 
-    /**
-     * @return the extras for this task.
-     */
+    /** @return the extras for this task. */
     @NonNull
-    public Bundle getExtras() {
+    public PersistableBundle getExtras() {
         return mExtras;
     }
 
@@ -46,13 +42,13 @@ public class TaskParameters {
     /** Class for building a task parameters object. Public for testing */
     public static final class Builder {
         private final int mTaskId;
-        private Bundle mExtras;
+        private PersistableBundle mExtras;
 
         Builder(int taskId) {
             mTaskId = taskId;
         }
 
-        public Builder addExtras(Bundle extras) {
+        public Builder addExtras(PersistableBundle extras) {
             mExtras = extras;
             return this;
         }

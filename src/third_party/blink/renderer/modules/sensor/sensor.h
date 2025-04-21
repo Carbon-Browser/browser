@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,7 @@ class DOMException;
 class ExceptionState;
 class ExecutionContext;
 
-class Sensor : public EventTargetWithInlineData,
+class Sensor : public EventTarget,
                public ActiveScriptWrappable<Sensor>,
                public ExecutionContextLifecycleObserver,
                public SensorProxy::Observer {
@@ -52,7 +52,7 @@ class Sensor : public EventTargetWithInlineData,
   // Getters
   bool activated() const;
   bool hasReading() const;
-  absl::optional<DOMHighResTimeStamp> timestamp(ScriptState*) const;
+  std::optional<DOMHighResTimeStamp> timestamp(ScriptState*) const;
 
   DEFINE_ATTRIBUTE_EVENT_LISTENER(error, kError)
   DEFINE_ATTRIBUTE_EVENT_LISTENER(reading, kReading)

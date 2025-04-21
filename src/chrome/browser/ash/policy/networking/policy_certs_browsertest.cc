@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,13 @@
 #include <string>
 
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/json_writer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/task/current_thread.h"
@@ -22,17 +23,15 @@
 #include "chrome/browser/ash/login/existing_user_controller.h"
 #include "chrome/browser/ash/login/helper.h"
 #include "chrome/browser/ash/login/startup_utils.h"
-#include "chrome/browser/ash/login/test/embedded_policy_test_server_mixin.h"
 #include "chrome/browser/ash/login/test/login_or_lock_screen_visible_waiter.h"
 #include "chrome/browser/ash/login/test/oobe_base_test.h"
 #include "chrome/browser/ash/login/test/oobe_screen_waiter.h"
 #include "chrome/browser/ash/login/test/session_manager_state_waiter.h"
-#include "chrome/browser/ash/login/ui/login_display_host.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
-#include "chrome/browser/ash/policy/core/device_local_account.h"
 #include "chrome/browser/ash/policy/core/device_policy_cros_browser_test.h"
 #include "chrome/browser/ash/policy/login/login_policy_test_base.h"
 #include "chrome/browser/ash/policy/login/signin_profile_extensions_policy_test_base.h"
+#include "chrome/browser/ash/policy/test_support/embedded_policy_test_server_mixin.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/net/nss_service.h"
@@ -41,11 +40,10 @@
 #include "chrome/browser/policy/networking/user_network_configuration_updater_factory.h"
 #include "chrome/browser/policy/profile_policy_connector_builder.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/ui/ash/login/login_display_host.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_list.h"
-#include "chrome/browser/ui/webui/chromeos/login/gaia_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/signin_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/gaia_screen_handler.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chromeos/ash/components/network/network_cert_loader.h"
@@ -57,6 +55,7 @@
 #include "components/onc/onc_constants.h"
 #include "components/policy/core/browser/browser_policy_connector.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
+#include "components/policy/core/common/device_local_account_type.h"
 #include "components/policy/core/common/mock_configuration_policy_provider.h"
 #include "components/policy/core/common/policy_switches.h"
 #include "components/policy/policy_constants.h"
@@ -72,7 +71,6 @@
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_utils.h"
 #include "crypto/scoped_test_nss_db.h"
-#include "extensions/browser/extension_host_test_helper.h"
 #include "extensions/browser/extension_registry.h"
 #include "extensions/browser/extension_util.h"
 #include "extensions/browser/test_extension_registry_observer.h"
@@ -119,7 +117,7 @@ const char kSigninScreenExtension2UpdateManifestPath[] =
 // Allows waiting until the list of policy-pushed web-trusted certificates
 // changes.
 class WebTrustedCertsChangedObserver
-    : public chromeos::PolicyCertificateProvider::Observer {
+    : public ash::PolicyCertificateProvider::Observer {
  public:
   WebTrustedCertsChangedObserver() = default;
 
@@ -128,7 +126,7 @@ class WebTrustedCertsChangedObserver
   WebTrustedCertsChangedObserver& operator=(
       const WebTrustedCertsChangedObserver&) = delete;
 
-  // chromeos::PolicyCertificateProvider::Observer
+  // ash::PolicyCertificateProvider::Observer
   void OnPolicyProvidedCertsChanged() override { run_loop_.Quit(); }
 
   void Wait() { run_loop_.Run(); }
@@ -137,17 +135,17 @@ class WebTrustedCertsChangedObserver
   base::RunLoop run_loop_;
 };
 
-// Allows waiting until the |CertDatabase| notifies its observers that it has
-// changd.
+// Allows waiting until the |CertDatabase| notifies its observers that a client
+// cert change has occurred.
 class CertDatabaseChangedObserver : public net::CertDatabase::Observer {
  public:
-  CertDatabaseChangedObserver() {}
+  CertDatabaseChangedObserver() = default;
 
   CertDatabaseChangedObserver(const CertDatabaseChangedObserver&) = delete;
   CertDatabaseChangedObserver& operator=(const CertDatabaseChangedObserver&) =
       delete;
 
-  void OnCertDBChanged() override { run_loop_.Quit(); }
+  void OnClientCertStoreChanged() override { run_loop_.Quit(); }
 
   void Wait() { run_loop_.Run(); }
 
@@ -307,8 +305,9 @@ int VerifyTestServerCert(
 bool HasSubjectCommonName(CERTCertificate* cert_handle,
                           const std::string& subject_common_name) {
   char* nss_text = CERT_GetCommonName(&cert_handle->subject);
-  if (!nss_text)
+  if (!nss_text) {
     return false;
+  }
 
   const bool result = subject_common_name == nss_text;
   PORT_Free(nss_text);
@@ -423,10 +422,9 @@ class PolicyProvidedCertsDeviceLocalAccountTest
 
   ash::EmbeddedPolicyTestServerMixin policy_test_server_mixin_{&mixin_host_};
 
-  const AccountId device_local_account_id_ =
-      AccountId::FromUserEmail(GenerateDeviceLocalAccountUserId(
-          kDeviceLocalAccountId,
-          DeviceLocalAccount::TYPE_PUBLIC_SESSION));
+  const AccountId device_local_account_id_ = AccountId::FromUserEmail(
+      GenerateDeviceLocalAccountUserId(kDeviceLocalAccountId,
+                                       DeviceLocalAccountType::kPublicSession));
 
   MockConfigurationPolicyProvider user_policy_provider_;
   UserPolicyCertsHelper user_policy_certs_helper_;
@@ -464,7 +462,7 @@ class PolicyProvidedCertsPublicSessionTest
     // Login into the public session.
     auto* controller = ash::ExistingUserController::current_controller();
     ASSERT_TRUE(controller);
-    ash::UserContext user_context(user_manager::USER_TYPE_PUBLIC_ACCOUNT,
+    ash::UserContext user_context(user_manager::UserType::kPublicAccount,
                                   device_local_account_id_);
     controller->Login(user_context, ash::SigninSpecifics());
   }
@@ -497,7 +495,7 @@ class PolicyProvidedCertsOnUserSessionInitTest : public LoginPolicyTestBase {
       const PolicyProvidedCertsOnUserSessionInitTest&) = delete;
 
  protected:
-  PolicyProvidedCertsOnUserSessionInitTest() {}
+  PolicyProvidedCertsOnUserSessionInitTest() = default;
 
   void GetPolicySettings(em::CloudPolicySettings* policy) const override {
     std::string user_policy_blob = GetTestCertsFileContents(kRootCaCertOnc);
@@ -534,8 +532,8 @@ IN_PROC_BROWSER_TEST_F(PolicyProvidedCertsOnUserSessionInitTest,
 // Testing policy-provided client cert import.
 class PolicyProvidedClientCertsTest : public DevicePolicyCrosBrowserTest {
  protected:
-  PolicyProvidedClientCertsTest() {}
-  ~PolicyProvidedClientCertsTest() override {}
+  PolicyProvidedClientCertsTest() = default;
+  ~PolicyProvidedClientCertsTest() override = default;
 
   void SetUpInProcessBrowserTestFixture() override {
     // Set up the mock policy provider.
@@ -582,7 +580,7 @@ IN_PROC_BROWSER_TEST_F(PolicyProvidedClientCertsTest, ClientCertsImported) {
       IsCertInNSSDatabase(browser()->profile(), kClientCertSubjectCommonName));
 }
 
-// TODO(https://crbug.com/874937): Add a test case for a kiosk session.
+// TODO(crbug.com/40589684): Add a test case for a kiosk session.
 
 // Class for testing policy-provided extensions in the sign-in profile.
 // Sets a device policy which applies the |kRootCaCert| for
@@ -612,7 +610,7 @@ class PolicyProvidedCertsForSigninExtensionTest
           test_certs_path.AppendASCII(kRootCaCert), &x509_contents));
     }
 
-    base::Value onc_dict = BuildONCForExtensionScopedCertificate(
+    base::Value::Dict onc_dict = BuildONCForExtensionScopedCertificate(
         x509_contents, kSigninScreenExtension1);
     ASSERT_TRUE(base::JSONWriter::Write(
         onc_dict, device_policy()
@@ -638,22 +636,20 @@ class PolicyProvidedCertsForSigninExtensionTest
     signin_profile_ = GetInitialProfile();
     ASSERT_TRUE(ash::ProfileHelper::IsSigninProfile(signin_profile_));
 
-    extensions::ExtensionHostTestHelper extension_1_observer(
-        signin_profile_, kSigninScreenExtension1);
-    extension_1_observer.RestrictToType(
-        extensions::mojom::ViewType::kExtensionBackgroundPage);
-    extensions::ExtensionHostTestHelper extension_2_observer(
-        signin_profile_, kSigninScreenExtension2);
-    extension_2_observer.RestrictToType(
-        extensions::mojom::ViewType::kExtensionBackgroundPage);
+    extensions::ExtensionRegistry* extension_registry =
+        extensions::ExtensionRegistry::Get(signin_profile_);
+    extensions::TestExtensionRegistryObserver extension_1_observer(
+        extension_registry, kSigninScreenExtension1);
+    extensions::TestExtensionRegistryObserver extension_2_observer(
+        extension_registry, kSigninScreenExtension2);
 
     AddExtensionForForceInstallation(kSigninScreenExtension1,
                                      kSigninScreenExtension1UpdateManifestPath);
     AddExtensionForForceInstallation(kSigninScreenExtension2,
                                      kSigninScreenExtension2UpdateManifestPath);
 
-    extension_1_observer.WaitForHostCompletedFirstLoad();
-    extension_2_observer.WaitForHostCompletedFirstLoad();
+    extension_1_observer.WaitForExtensionLoaded();
+    extension_2_observer.WaitForExtensionLoaded();
   }
 
   content::StoragePartition* GetStoragePartitionForSigninExtension(
@@ -662,41 +658,38 @@ class PolicyProvidedCertsForSigninExtensionTest
         extension_id, signin_profile_, /*can_create=*/false);
   }
 
-  Profile* signin_profile_ = nullptr;
+  raw_ptr<Profile, DanglingUntriaged> signin_profile_ = nullptr;
   scoped_refptr<net::X509Certificate> server_cert_;
 
  private:
   // Builds an ONC policy value that specifies exactly one certificate described
   // by |x509_contents| with Web trust to be used for |extension_id|.
-  base::Value BuildONCForExtensionScopedCertificate(
+  base::Value::Dict BuildONCForExtensionScopedCertificate(
       const std::string& x509_contents,
       const std::string& extension_id) {
-    base::Value onc_cert_scope(base::Value::Type::DICTIONARY);
-    onc_cert_scope.SetKey(onc::scope::kType,
-                          base::Value(onc::scope::kExtension));
-    onc_cert_scope.SetKey(onc::scope::kId, base::Value(extension_id));
+    auto onc_cert_scope = base::Value::Dict()
+                              .Set(onc::scope::kType, onc::scope::kExtension)
+                              .Set(onc::scope::kId, extension_id);
 
-    base::Value onc_cert_trust_bits(base::Value::Type::LIST);
-    onc_cert_trust_bits.Append(base::Value(onc::certificate::kWeb));
+    auto onc_cert_trust_bits =
+        base::Value::List().Append(onc::certificate::kWeb);
 
-    base::Value onc_certificate(base::Value::Type::DICTIONARY);
-    onc_certificate.SetKey(onc::certificate::kGUID, base::Value("guid"));
-    onc_certificate.SetKey(onc::certificate::kType,
-                           base::Value(onc::certificate::kAuthority));
-    onc_certificate.SetKey(onc::certificate::kX509, base::Value(x509_contents));
-    onc_certificate.SetKey(onc::certificate::kScope, std::move(onc_cert_scope));
-    onc_certificate.SetKey(onc::certificate::kTrustBits,
-                           std::move(onc_cert_trust_bits));
+    auto onc_certificate =
+        base::Value::Dict()
+            .Set(onc::certificate::kGUID, base::Value("guid"))
+            .Set(onc::certificate::kType, onc::certificate::kAuthority)
+            .Set(onc::certificate::kX509, x509_contents)
+            .Set(onc::certificate::kScope, std::move(onc_cert_scope))
+            .Set(onc::certificate::kTrustBits, std::move(onc_cert_trust_bits));
 
-    base::Value onc_certificates(base::Value::Type::LIST);
-    onc_certificates.Append(std::move(onc_certificate));
+    auto onc_certificates =
+        base::Value::List().Append(std::move(onc_certificate));
 
-    base::Value onc_dict(base::Value::Type::DICTIONARY);
-    onc_dict.SetKey(onc::toplevel_config::kCertificates,
-                    std::move(onc_certificates));
-    onc_dict.SetKey(
-        onc::toplevel_config::kType,
-        base::Value(onc::toplevel_config::kUnencryptedConfiguration));
+    auto onc_dict = base::Value::Dict()
+                        .Set(onc::toplevel_config::kCertificates,
+                             std::move(onc_certificates))
+                        .Set(onc::toplevel_config::kType,
+                             onc::toplevel_config::kUnencryptedConfiguration);
 
     return onc_dict;
   }

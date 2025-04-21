@@ -1,13 +1,15 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "services/resource_coordinator/public/cpp/memory_instrumentation/os_metrics.h"
 
-#include <libproc.h>
 #include <mach/mach.h>
-#include <mach/mach_vm.h>
-#include <mach/shared_region.h>
 #include <sys/param.h>
 
 #include <mach-o/dyld_images.h>
@@ -19,43 +21,29 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 
+#if BUILDFLAG(IS_IOS)
+#include "base/ios/sim_header_shims.h"
+#else
+#include <libproc.h>
+#include <mach/mach_vm.h>
+#include <mach/shared_region.h>
+#endif
+
 namespace memory_instrumentation {
 
 namespace {
 
-// Don't simply use sizeof(task_vm_info) / sizeof(natural_t):
-// In the 10.15 SDK, this structure is 87 32-bit words long, and in
-// mach_types.defs:
-//
-//   type task_info_t    = array[*:87] of integer_t;
-//
-// However in the 10.14 SDK, this structure is 42 32-bit words, and in
-// mach_types.defs:
-//
-//   type task_info_t    = array[*:52] of integer_t;
-//
-// As a result, the 10.15 SDK's task_vm_info won't fit inside the 10.14 SDK's
-// task_info_t, so the *rest of the system* (on 10.14 and earlier) can't handle
-// calls that request the full 10.15 structure. We have to request a prefix of
-// it that 10.14 and earlier can handle by limiting the length we request. The
-// rest of the fields just get ignored, but we don't use them anyway.
-
-constexpr mach_msg_type_number_t ChromeTaskVMInfoCount =
-    TASK_VM_INFO_REV2_COUNT;
-
-// The count field is in units of natural_t, which is the machine's word size
-// (64 bits on all modern machines), but the task_info_t array is in units of
-// integer_t, which is 32 bits.
-constexpr mach_msg_type_number_t MAX_MIG_SIZE_FOR_1014 =
-    52 / (sizeof(natural_t) / sizeof(integer_t));
-static_assert(ChromeTaskVMInfoCount <= MAX_MIG_SIZE_FOR_1014,
-              "task_vm_info must be small enough for 10.14 MIG interfaces");
-
 using VMRegion = mojom::VmRegion;
 
 bool IsAddressInSharedRegion(uint64_t address) {
+#if BUILDFLAG(IS_IOS)
+  return address >= SHARED_REGION_BASE_ARM64 &&
+         address < (SHARED_REGION_BASE_ARM64 + SHARED_REGION_SIZE_ARM64);
+#else
+  // TODO: Need to fix this for ARM64 Mac.
   return address >= SHARED_REGION_BASE_X86_64 &&
          address < (SHARED_REGION_BASE_X86_64 + SHARED_REGION_SIZE_X86_64);
+#endif
 }
 
 bool IsRegionContainedInRegion(const VMRegion& containee,
@@ -160,8 +148,7 @@ bool GetDyldRegions(std::vector<VMRegion>* regions) {
             reinterpret_cast<const uuid_command*>(load_cmd);
         // The ID is comprised of the UUID concatenated with the module's "age"
         // value which is always 0.
-        debug_id =
-            base::HexEncode(&uuid_cmd->uuid, sizeof(uuid_cmd->uuid)) + "0";
+        debug_id = base::HexEncode(uuid_cmd->uuid) + "0";
       }
     }
 
@@ -239,31 +226,42 @@ void AddRegionByteStats(VMRegion* dest, const VMRegion& source) {
 }  // namespace
 
 // static
-bool OSMetrics::FillOSMemoryDump(base::ProcessId pid,
+bool OSMetrics::FillOSMemoryDump(base::ProcessHandle handle,
                                  mojom::RawOSMemDump* dump) {
-  task_vm_info info;
-  mach_msg_type_number_t count = ChromeTaskVMInfoCount;
-  kern_return_t result =
-      task_info(mach_task_self(), TASK_VM_INFO,
-                reinterpret_cast<task_info_t>(&info), &count);
-  if (result != KERN_SUCCESS)
+  auto current_handle = base::GetCurrentProcessHandle();
+  if (handle != base::kNullProcessId && handle != current_handle) {
     return false;
+  }
+  return FillOSMemoryDump(current_handle, nullptr, dump);
+}
 
-  dump->platform_private_footprint->internal_bytes = info.internal;
-  dump->platform_private_footprint->compressed_bytes = info.compressed;
-
-  // The |phys_footprint| field was introduced in 10.11.
-  if (count == ChromeTaskVMInfoCount) {
-    dump->platform_private_footprint->phys_footprint_bytes =
-        info.phys_footprint;
+// static
+bool OSMetrics::FillOSMemoryDump(base::ProcessHandle handle,
+                                 base::PortProvider* port_provider,
+                                 mojom::RawOSMemDump* dump) {
+  auto process_metrics =
+#if BUILDFLAG(IS_IOS)
+      base::ProcessMetrics::CreateProcessMetrics(handle);
+#else
+      base::ProcessMetrics::CreateProcessMetrics(handle, port_provider);
+#endif
+  auto info = process_metrics->GetMemoryInfo();
+  if (!info.has_value()) {
+    return false;
   }
 
+  dump->platform_private_footprint->phys_footprint_bytes =
+      info->physical_footprint_bytes;
+  dump->platform_private_footprint->internal_bytes = info->internal_bytes;
+  dump->platform_private_footprint->compressed_bytes = info->compressed_bytes;
+  dump->resident_set_kb =
+      base::saturated_cast<uint32_t>(info->resident_set_bytes / 1024);
   return true;
 }
 
 // static
 std::vector<mojom::VmRegionPtr> OSMetrics::GetProcessMemoryMaps(
-    base::ProcessId pid) {
+    base::ProcessHandle handle) {
   std::vector<mojom::VmRegionPtr> maps;
 
   std::vector<VMRegion> dyld_regions;
@@ -313,8 +311,9 @@ std::vector<mojom::VmRegionPtr> OSMetrics::GetProcessMemoryMaps(
   return maps;
 }
 
+#if !BUILDFLAG(IS_IOS)
 std::vector<mojom::VmRegionPtr> OSMetrics::GetProcessModules(
-    base::ProcessId pid) {
+    base::ProcessHandle handle) {
   std::vector<mojom::VmRegionPtr> maps;
 
   std::vector<VMRegion> dyld_regions;
@@ -327,5 +326,6 @@ std::vector<mojom::VmRegionPtr> OSMetrics::GetProcessModules(
 
   return maps;
 }
+#endif  // !BUILDFLAG(IS_IOS)
 
 }  // namespace memory_instrumentation

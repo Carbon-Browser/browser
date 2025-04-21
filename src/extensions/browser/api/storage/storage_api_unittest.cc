@@ -1,31 +1,39 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/browser/api/storage/storage_api.h"
 
+#include <stdint.h>
+
+#include <limits>
 #include <memory>
 #include <set>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
 #include "base/strings/stringprintf.h"
+#include "base/test/bind.h"
 #include "components/crx_file/id_util.h"
 #include "components/value_store/leveldb_value_store.h"
 #include "components/value_store/value_store.h"
 #include "components/value_store/value_store_factory_impl.h"
+#include "content/public/test/mock_render_process_host.h"
 #include "content/public/test/test_browser_context.h"
 #include "extensions/browser/api/extensions_api_client.h"
 #include "extensions/browser/api/storage/settings_storage_quota_enforcer.h"
 #include "extensions/browser/api/storage/settings_test_util.h"
 #include "extensions/browser/api/storage/storage_frontend.h"
+#include "extensions/browser/api/storage/value_store_cache.h"
+#include "extensions/browser/api_test_utils.h"
 #include "extensions/browser/api_unittest.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/browser/event_router_factory.h"
+#include "extensions/browser/extension_function.h"
 #include "extensions/browser/test_event_router_observer.h"
 #include "extensions/browser/test_extensions_browser_client.h"
 #include "extensions/common/api/storage.h"
@@ -69,6 +77,18 @@ class StorageApiUnittest : public ApiUnitTest {
     StorageFrontend::GetFactoryInstance()->SetTestingFactory(
         browser_context(),
         base::BindRepeating(&CreateStorageFrontendForTesting));
+
+    render_process_host_ =
+        std::make_unique<content::MockRenderProcessHost>(browser_context());
+  }
+
+  void TearDown() override {
+    render_process_host_.reset();
+    ApiUnitTest::TearDown();
+  }
+
+  content::RenderProcessHost* render_process_host() const {
+    return render_process_host_.get();
   }
 
   // Runs the storage.set() API function with local storage.
@@ -80,26 +100,33 @@ class StorageApiUnittest : public ApiUnitTest {
   }
 
   // Runs the storage.get() API function with the local storage, and populates
-  // |value| with the string result.
+  // |out_value| with the string result.
   testing::AssertionResult RunGetFunction(const std::string& key,
-                                          std::string* value) {
-    std::unique_ptr<base::Value> result = RunFunctionAndReturnValue(
+                                          std::string* out_value) {
+    std::optional<base::Value> result = RunFunctionAndReturnValue(
         new StorageStorageAreaGetFunction(),
         base::StringPrintf("[\"local\", \"%s\"]", key.c_str()));
-    if (!result.get())
+    if (!result) {
       return testing::AssertionFailure() << "No result";
-    base::DictionaryValue* dict = NULL;
-    if (!result->GetAsDictionary(&dict))
-      return testing::AssertionFailure() << result.get()
-                                         << " was not a dictionary.";
-    if (!dict->GetString(key, value)) {
+    }
+
+    const base::Value::Dict* dict = result->GetIfDict();
+    if (!dict) {
+      return testing::AssertionFailure() << *result << " was not a dictionary.";
+    }
+
+    const std::string* dict_value = dict->FindString(key);
+    if (!dict_value) {
       return testing::AssertionFailure() << " could not retrieve a string from"
           << dict << " at " << key;
     }
+    *out_value = *dict_value;
+
     return testing::AssertionSuccess();
   }
 
   ExtensionsAPIClient extensions_api_client_;
+  std::unique_ptr<content::RenderProcessHost> render_process_host_;
 };
 
 TEST_F(StorageApiUnittest, RestoreCorruptedStorage) {
@@ -142,11 +169,10 @@ TEST_F(StorageApiUnittest, StorageAreaOnChanged) {
   TestEventRouterObserver event_observer(EventRouter::Get(browser_context()));
 
   EventRouter* event_router = EventRouter::Get(browser_context());
-  content::RenderProcessHost* process = nullptr;
-  event_router->AddEventListener(api::storage::OnChanged::kEventName, process,
-                                 extension()->id());
-  event_router->AddEventListener("storage.local.onChanged", process,
-                                 extension()->id());
+  event_router->AddEventListener(api::storage::OnChanged::kEventName,
+                                 render_process_host(), extension()->id());
+  event_router->AddEventListener("storage.local.onChanged",
+                                 render_process_host(), extension()->id());
 
   RunSetFunction("key", "value");
   EXPECT_EQ(2u, event_observer.events().size());
@@ -171,13 +197,12 @@ TEST_F(StorageApiUnittest, StorageAreaOnChangedOtherListener) {
   TestEventRouterObserver event_observer(EventRouter::Get(browser_context()));
 
   EventRouter* event_router = EventRouter::Get(browser_context());
-  content::RenderProcessHost* process = nullptr;
   std::string other_listener_id =
       crx_file::id_util::GenerateId("other-listener");
-  event_router->AddEventListener(api::storage::OnChanged::kEventName, process,
-                                 other_listener_id);
-  event_router->AddEventListener("storage.local.onChanged", process,
-                                 other_listener_id);
+  event_router->AddEventListener(api::storage::OnChanged::kEventName,
+                                 render_process_host(), other_listener_id);
+  event_router->AddEventListener("storage.local.onChanged",
+                                 render_process_host(), other_listener_id);
 
   RunSetFunction("key", "value");
   EXPECT_EQ(0u, event_observer.events().size());
@@ -187,15 +212,119 @@ TEST_F(StorageApiUnittest, StorageAreaOnChangedOnlyOneListener) {
   TestEventRouterObserver event_observer(EventRouter::Get(browser_context()));
 
   EventRouter* event_router = EventRouter::Get(browser_context());
-  content::RenderProcessHost* process = nullptr;
-  event_router->AddEventListener(api::storage::OnChanged::kEventName, process,
-                                 extension()->id());
+  event_router->AddEventListener(api::storage::OnChanged::kEventName,
+                                 render_process_host(), extension()->id());
 
   RunSetFunction("key", "value");
   EXPECT_EQ(1u, event_observer.events().size());
 
   EXPECT_TRUE(base::Contains(event_observer.events(),
                              api::storage::OnChanged::kEventName));
+}
+
+// This is a regression test for crbug.com/1483828.
+TEST_F(StorageApiUnittest, GetBytesInUseIntOverflow) {
+  // A fake value store that only implements the overloads of GetBytesInUse().
+  class FakeValueStore : public value_store::ValueStore {
+   public:
+    explicit FakeValueStore(size_t bytes_in_use)
+        : bytes_in_use_(bytes_in_use) {}
+
+    size_t GetBytesInUse(const std::string& key) override {
+      return bytes_in_use_;
+    }
+
+    size_t GetBytesInUse(const std::vector<std::string>& keys) override {
+      return bytes_in_use_;
+    }
+
+    size_t GetBytesInUse() override { return bytes_in_use_; }
+
+    ReadResult Get(const std::string& key) override { NOTREACHED(); }
+
+    ReadResult Get(const std::vector<std::string>& keys) override {
+      NOTREACHED();
+    }
+
+    ReadResult Get() override { NOTREACHED(); }
+
+    WriteResult Set(WriteOptions options,
+                    const std::string& key,
+                    const base::Value& value) override {
+      NOTREACHED();
+    }
+
+    WriteResult Set(WriteOptions options,
+                    const base::Value::Dict& values) override {
+      NOTREACHED();
+    }
+
+    WriteResult Remove(const std::string& key) override { NOTREACHED(); }
+
+    WriteResult Remove(const std::vector<std::string>& keys) override {
+      NOTREACHED();
+    }
+
+    WriteResult Clear() override { NOTREACHED(); }
+
+   private:
+    size_t bytes_in_use_ = 0;
+  };
+
+  // Create a fake ValueStoreCache that we can assign to a storage area in the
+  // StorageFrontend. This allows us to call StorageFrontend using an extension
+  // API and access our mock ValueStore.
+  class FakeValueStoreCache : public ValueStoreCache {
+   public:
+    explicit FakeValueStoreCache(FakeValueStore store) : store_(store) {}
+
+    // ValueStoreCache:
+    void ShutdownOnUI() override {}
+    void RunWithValueStoreForExtension(
+        FakeValueStoreCache::StorageCallback callback,
+        scoped_refptr<const Extension> extension) override {
+      std::move(callback).Run(&store_);
+    }
+    void DeleteStorageSoon(const ExtensionId& extension_id) override {}
+
+   private:
+    FakeValueStore store_;
+  };
+
+  static constexpr struct TestCase {
+    size_t bytes_in_use;
+    double result;
+  } test_cases[] = {
+      {1, 1.0},
+      {std::numeric_limits<int>::max(), std::numeric_limits<int>::max()},
+      // Test the overflow case from the bug. It's enough to have a value
+      // that exceeds the max value that an int can represent.
+      {static_cast<size_t>(std::numeric_limits<int>::max()) + 1,
+       static_cast<size_t>(std::numeric_limits<int>::max()) + 1}};
+
+  StorageFrontend* frontend = StorageFrontend::Get(browser_context());
+
+  for (const auto& test_case : test_cases) {
+    FakeValueStore value_store(test_case.bytes_in_use);
+    frontend->SetCacheForTesting(
+        settings_namespace::Namespace::LOCAL,
+        std::make_unique<FakeValueStoreCache>(value_store));
+
+    auto function =
+        base::MakeRefCounted<StorageStorageAreaGetBytesInUseFunction>();
+
+    function->set_extension(extension());
+
+    std::optional<base::Value> result =
+        api_test_utils::RunFunctionAndReturnSingleResult(
+            function.get(),
+            base::Value::List().Append("local").Append(base::Value()),
+            browser_context());
+    ASSERT_TRUE(result);
+    ASSERT_TRUE(result->is_double());
+    EXPECT_EQ(test_case.result, result->GetDouble());
+    frontend->DisableStorageForTesting(settings_namespace::Namespace::LOCAL);
+  }
 }
 
 }  // namespace extensions

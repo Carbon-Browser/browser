@@ -1,29 +1,26 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/accessibility/platform/ax_platform_node.h"
 
+#include "base/check_deref.h"
 #include "base/debug/crash_logging.h"
 #include "base/lazy_instance.h"
-#include "base/observer_list.h"
 #include "build/build_config.h"
 #include "ui/accessibility/ax_node_data.h"
+#include "ui/accessibility/platform/ax_platform.h"
 #include "ui/accessibility/platform/ax_platform_node_delegate.h"
 #include "ui/base/buildflags.h"
 
 namespace ui {
 
 // static
-base::LazyInstance<base::ObserverList<AXModeObserver>::Unchecked>::Leaky
-    AXPlatformNode::ax_mode_observers_ = LAZY_INSTANCE_INITIALIZER;
-
-// static
 base::LazyInstance<AXPlatformNode::NativeWindowHandlerCallback>::Leaky
     AXPlatformNode::native_window_handler_ = LAZY_INSTANCE_INITIALIZER;
 
 // static
-AXMode AXPlatformNode::ax_mode_;
+bool AXPlatformNode::allow_ax_mode_changes_ = true;
 
 // static
 gfx::NativeViewAccessible AXPlatformNode::popup_focus_override_ = nullptr;
@@ -36,18 +33,23 @@ AXPlatformNode* AXPlatformNode::FromNativeWindow(
   return nullptr;
 }
 
-#if !BUILDFLAG_INTERNAL_HAS_NATIVE_ACCESSIBILITY()
+#if !BUILDFLAG(HAS_NATIVE_ACCESSIBILITY)
 // static
 AXPlatformNode* AXPlatformNode::FromNativeViewAccessible(
     gfx::NativeViewAccessible accessible) {
   return nullptr;
 }
-#endif  // !BUILDFLAG_INTERNAL_HAS_NATIVE_ACCESSIBILITY()
+#endif  // !BUILDFLAG(HAS_NATIVE_ACCESSIBILITY)
 
 // static
 void AXPlatformNode::RegisterNativeWindowHandler(
     AXPlatformNode::NativeWindowHandlerCallback handler) {
   native_window_handler_.Get() = handler;
+}
+
+// static
+void AXPlatformNode::SetAXModeChangeAllowed(bool allow) {
+  allow_ax_mode_changes_ = allow;
 }
 
 AXPlatformNode::AXPlatformNode() = default;
@@ -57,24 +59,16 @@ AXPlatformNode::~AXPlatformNode() = default;
 void AXPlatformNode::Destroy() {
 }
 
-int32_t AXPlatformNode::GetUniqueId() const {
-  DCHECK(GetDelegate()) << "|GetUniqueId| must be called after |Init|.";
-  return GetDelegate() ? GetDelegate()->GetUniqueId().Get() : -1;
+AXPlatformNodeId AXPlatformNode::GetUniqueId() const {
+  // Must not be called before `Init()`.
+  return CHECK_DEREF(GetDelegate()).GetUniqueId();
 }
 
-void AXPlatformNode::SetIsPrimaryWebContentsForWindow(bool is_primary) {
-  is_primary_web_contents_for_window_ = is_primary;
-}
-
-bool AXPlatformNode::IsPrimaryWebContentsForWindow() const {
-  return is_primary_web_contents_for_window_;
-}
-
-std::string AXPlatformNode::ToString() {
+std::string AXPlatformNode::ToString() const {
   return GetDelegate() ? GetDelegate()->ToString() : "No delegate";
 }
 
-std::string AXPlatformNode::SubtreeToString() {
+std::string AXPlatformNode::SubtreeToString() const {
   return GetDelegate() ? GetDelegate()->SubtreeToString() : "No delegate";
 }
 
@@ -83,36 +77,19 @@ std::ostream& operator<<(std::ostream& stream, AXPlatformNode& node) {
 }
 
 // static
-void AXPlatformNode::AddAXModeObserver(AXModeObserver* observer) {
-  ax_mode_observers_.Get().AddObserver(observer);
-}
-
-// static
-void AXPlatformNode::RemoveAXModeObserver(AXModeObserver* observer) {
-  ax_mode_observers_.Get().RemoveObserver(observer);
-}
-
-// static
 void AXPlatformNode::NotifyAddAXModeFlags(AXMode mode_flags) {
-  AXMode new_ax_mode(ax_mode_);
-  new_ax_mode |= mode_flags;
+  if (!allow_ax_mode_changes_) {
+    return;
+  }
 
-  if (new_ax_mode == ax_mode_)
+  auto& ax_platform = AXPlatform::GetInstance();
+  const AXMode old_ax_mode = ax_platform.GetMode();
+  const AXMode new_ax_mode = old_ax_mode | mode_flags;
+  if (new_ax_mode == old_ax_mode) {
     return;  // No change.
+  }
 
-  ax_mode_ = new_ax_mode;
-  for (auto& observer : ax_mode_observers_.Get())
-    observer.OnAXModeAdded(mode_flags);
-}
-
-// static
-void AXPlatformNode::SetAXMode(AXMode new_mode) {
-  ax_mode_ = new_mode;
-}
-
-// static
-void AXPlatformNode::ResetAxModeForTesting() {
-  ax_mode_ = 0;
+  ax_platform.SetMode(new_ax_mode);
 }
 
 // static

@@ -1,16 +1,15 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/policy/handlers/adb_sideloading_allowance_mode_policy_handler.h"
 
+#include <optional>
 #include <utility>
 
-#include "ash/components/settings/cros_settings_names.h"
-#include "ash/components/settings/cros_settings_provider.h"
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "base/values.h"
@@ -19,11 +18,12 @@
 #include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/common/pref_names.h"
 #include "chromeos/ash/components/dbus/session_manager/session_manager_client.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
+#include "chromeos/ash/components/settings/cros_settings_provider.h"
 #include "components/policy/proto/chrome_device_policy.pb.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/user_manager.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace policy {
 
@@ -32,14 +32,14 @@ namespace {
 constexpr base::TimeDelta kAdbSideloadingPlannedNotificationWaitTime =
     base::Days(1);
 
-absl::optional<AdbSideloadingAllowanceMode> GetAdbSideloadingDevicePolicyMode(
+std::optional<AdbSideloadingAllowanceMode> GetAdbSideloadingDevicePolicyMode(
     const ash::CrosSettings* cros_settings,
     const base::RepeatingClosure callback) {
   auto status = cros_settings->PrepareTrustedValues(callback);
 
   // If the policy value is still not trusted, return optional null
   if (status != ash::CrosSettingsProvider::TRUSTED) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   // Get the trusted policy value.
@@ -63,7 +63,7 @@ absl::optional<AdbSideloadingAllowanceMode> GetAdbSideloadingDevicePolicyMode(
     case Mode::ALLOW_FOR_AFFILIATED_USERS:
       return AdbSideloadingAllowanceMode::kAllowForAffiliatedUser;
     default:
-      return absl::nullopt;
+      return std::nullopt;
   }
 }
 
@@ -126,7 +126,7 @@ void AdbSideloadingAllowanceModePolicyHandler::SetNotificationTimerForTesting(
 }
 
 void AdbSideloadingAllowanceModePolicyHandler::MaybeShowNotification() {
-  absl::optional<AdbSideloadingAllowanceMode> mode =
+  std::optional<AdbSideloadingAllowanceMode> mode =
       GetAdbSideloadingDevicePolicyMode(
           cros_settings_,
           base::BindRepeating(
@@ -171,7 +171,7 @@ void AdbSideloadingAllowanceModePolicyHandler::CheckSideloadingStatus(
     base::OnceCallback<void(bool)> callback) {
   // If the feature is not enabled, never show a notification
   if (!base::FeatureList::IsEnabled(
-          chromeos::features::kArcManagedAdbSideloadingSupport)) {
+          ash::features::kArcManagedAdbSideloadingSupport)) {
     std::move(callback).Run(false);
     return;
   }

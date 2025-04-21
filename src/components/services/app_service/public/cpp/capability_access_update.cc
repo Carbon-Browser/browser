@@ -1,16 +1,20 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/services/app_service/public/cpp/capability_access_update.h"
 
+#include <ostream>
+
+#include "base/check.h"
 #include "base/logging.h"
+#include "components/services/app_service/public/cpp/macros.h"
 
 namespace apps {
 
 // static
-void CapabilityAccessUpdate::Merge(apps::mojom::CapabilityAccess* state,
-                                   const apps::mojom::CapabilityAccess* delta) {
+void CapabilityAccessUpdate::Merge(CapabilityAccess* state,
+                                   const CapabilityAccess* delta) {
   DCHECK(state);
   if (!delta) {
     return;
@@ -23,20 +27,16 @@ void CapabilityAccessUpdate::Merge(apps::mojom::CapabilityAccess* state,
     return;
   }
 
-  if (delta->camera != apps::mojom::OptionalBool::kUnknown) {
-    state->camera = delta->camera;
-  }
-  if (delta->microphone != apps::mojom::OptionalBool::kUnknown) {
-    state->microphone = delta->microphone;
-  }
+  SET_OPTIONAL_VALUE(camera);
+  SET_OPTIONAL_VALUE(microphone);
+
   // When adding new fields to the CapabilityAccess Mojo type, this function
   // should also be updated.
 }
 
-CapabilityAccessUpdate::CapabilityAccessUpdate(
-    const apps::mojom::CapabilityAccess* state,
-    const apps::mojom::CapabilityAccess* delta,
-    const ::AccountId& account_id)
+CapabilityAccessUpdate::CapabilityAccessUpdate(const CapabilityAccess* state,
+                                               const CapabilityAccess* delta,
+                                               const ::AccountId& account_id)
     : state_(state), delta_(delta), account_id_(account_id) {
   DCHECK(state_ || delta_);
   if (state_ && delta_) {
@@ -52,39 +52,36 @@ const std::string& CapabilityAccessUpdate::AppId() const {
   return delta_ ? delta_->app_id : state_->app_id;
 }
 
-apps::mojom::OptionalBool CapabilityAccessUpdate::Camera() const {
-  if (delta_ && (delta_->camera != apps::mojom::OptionalBool::kUnknown)) {
-    return delta_->camera;
-  }
-  if (state_) {
-    return state_->camera;
-  }
-  return apps::mojom::OptionalBool::kUnknown;
+std::optional<bool> CapabilityAccessUpdate::Camera() const {
+  GET_VALUE_WITH_FALLBACK(camera, std::nullopt)
 }
 
 bool CapabilityAccessUpdate::CameraChanged() const {
-  return delta_ && (delta_->camera != apps::mojom::OptionalBool::kUnknown) &&
-         (!state_ || (delta_->camera != state_->camera));
-}
+    RETURN_OPTIONAL_VALUE_CHANGED(camera)}
 
-apps::mojom::OptionalBool CapabilityAccessUpdate::Microphone() const {
-  if (delta_ && (delta_->microphone != apps::mojom::OptionalBool::kUnknown)) {
-    return delta_->microphone;
-  }
-  if (state_) {
-    return state_->microphone;
-  }
-  return apps::mojom::OptionalBool::kUnknown;
+std::optional<bool> CapabilityAccessUpdate::Microphone() const {
+  GET_VALUE_WITH_FALLBACK(microphone, std::nullopt)
 }
 
 bool CapabilityAccessUpdate::MicrophoneChanged() const {
-  return delta_ &&
-         (delta_->microphone != apps::mojom::OptionalBool::kUnknown) &&
-         (!state_ || (delta_->microphone != state_->microphone));
+  RETURN_OPTIONAL_VALUE_CHANGED(microphone)
 }
 
 const ::AccountId& CapabilityAccessUpdate::AccountId() const {
-  return account_id_;
+  return *account_id_;
+}
+
+bool CapabilityAccessUpdate::IsAccessingAnyCapability() const {
+  return Camera().value_or(false) || Microphone().value_or(false);
+}
+
+std::ostream& operator<<(std::ostream& out,
+                         const CapabilityAccessUpdate& update) {
+  out << "AppId: " << update.AppId() << std::endl;
+  out << "Camera: " << PRINT_OPTIONAL_BOOL(update.Camera()) << std::endl;
+  out << "Microphone: " << PRINT_OPTIONAL_BOOL(update.Microphone())
+      << std::endl;
+  return out;
 }
 
 }  // namespace apps

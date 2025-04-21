@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/run_loop.h"
+#include "base/task/common/lazy_now.h"
 #include "base/task/sequence_manager/sequence_manager.h"
 #include "base/task/sequence_manager/task_queue.h"
 #include "base/task/sequence_manager/test/sequence_manager_for_test.h"
@@ -21,8 +22,8 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/platform/scheduler/common/scheduler_helper.h"
 #include "third_party/blink/renderer/platform/scheduler/common/single_thread_idle_task_runner.h"
+#include "third_party/blink/renderer/platform/scheduler/public/non_main_thread.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
-#include "third_party/blink/renderer/platform/scheduler/public/thread.h"
 #include "third_party/blink/renderer/platform/scheduler/worker/non_main_thread_scheduler_helper.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_copier_base.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_copier_std.h"
@@ -160,12 +161,12 @@ class IdleHelperForTest : public IdleHelper, public IdleHelper::Delegate {
   explicit IdleHelperForTest(
       SchedulerHelper* scheduler_helper,
       base::TimeDelta required_quiescence_duration_before_long_idle_period,
-      scoped_refptr<TaskQueue> idle_task_runner)
+      TaskQueue* idle_task_queue)
       : IdleHelper(scheduler_helper,
                    this,
                    "TestSchedulerIdlePeriod",
                    required_quiescence_duration_before_long_idle_period,
-                   idle_task_runner) {}
+                   idle_task_queue) {}
 
   ~IdleHelperForTest() override = default;
 
@@ -186,13 +187,17 @@ class BaseIdleHelperTest : public testing::Test {
       base::TimeDelta required_quiescence_duration_before_long_idle_period)
       : test_task_runner_(base::MakeRefCounted<base::TestMockTimeTaskRunner>(
             base::TestMockTimeTaskRunner::Type::kStandalone)) {
+    auto settings = base::sequence_manager::SequenceManager::Settings::Builder()
+                        .SetPrioritySettings(CreatePrioritySettings())
+                        .Build();
     sequence_manager_ = base::sequence_manager::SequenceManagerForTest::Create(
-        nullptr, test_task_runner_, test_task_runner_->GetMockTickClock());
+        nullptr, test_task_runner_, test_task_runner_->GetMockTickClock(),
+        std::move(settings));
     scheduler_helper_ = std::make_unique<NonMainThreadSchedulerHelper>(
         sequence_manager_.get(), nullptr, TaskType::kInternalTest);
     scheduler_helper_->AttachToCurrentThread();
-    idle_helper_queue_ =
-        scheduler_helper_->NewTaskQueue(TaskQueue::Spec("idle_test"));
+    idle_helper_queue_ = scheduler_helper_->NewTaskQueue(
+        TaskQueue::Spec(base::sequence_manager::QueueName::IDLE_TQ));
     idle_helper_ = std::make_unique<IdleHelperForTest>(
         scheduler_helper_.get(),
         required_quiescence_duration_before_long_idle_period,
@@ -220,6 +225,7 @@ class BaseIdleHelperTest : public testing::Test {
   void TearDown() override {
     EXPECT_CALL(*idle_helper_, OnIdlePeriodEnded()).Times(AnyNumber());
     idle_helper_->Shutdown();
+    idle_helper_queue_->ShutdownTaskQueue();
     test_task_runner_->FastForwardUntilNoTasksRemain();
   }
 
@@ -270,9 +276,7 @@ class BaseIdleHelperTest : public testing::Test {
                                idle_helper_->SchedulerIdlePeriodState()));
   }
 
-  const scoped_refptr<TaskQueue>& idle_queue() const {
-    return idle_helper_->idle_queue_;
-  }
+  const TaskQueue* idle_queue() const { return idle_helper_->idle_queue_; }
 
   scoped_refptr<base::TestMockTimeTaskRunner> test_task_runner_;
   std::unique_ptr<SequenceManager> sequence_manager_;
@@ -669,8 +673,7 @@ TEST_F(IdleHelperTest, TestLongIdlePeriodPaused) {
   idle_helper_->EnableLongIdlePeriod();
   CheckIdlePeriodStateIs("in_long_idle_period_paused");
   // There shouldn't be any delayed tasks posted by the idle helper when paused.
-  base::sequence_manager::LazyNow lazy_now_1(
-      test_task_runner_->GetMockTickClock());
+  base::LazyNow lazy_now_1(test_task_runner_->GetMockTickClock());
   EXPECT_FALSE(scheduler_helper_->GetNextWakeUp());
 
   // Posting a task should transition us to the an active state.
@@ -691,8 +694,7 @@ TEST_F(IdleHelperTest, TestLongIdlePeriodPaused) {
 
   // Once all task have been run we should go back to the paused state.
   CheckIdlePeriodStateIs("in_long_idle_period_paused");
-  base::sequence_manager::LazyNow lazy_now_2(
-      test_task_runner_->GetMockTickClock());
+  base::LazyNow lazy_now_2(test_task_runner_->GetMockTickClock());
   EXPECT_FALSE(scheduler_helper_->GetNextWakeUp());
 
   idle_helper_->EndIdlePeriod();
@@ -1100,14 +1102,20 @@ TEST_F(IdleHelperTest, OnPendingTasksChanged_TwoTasksAtTheSameTime) {
 
 class MultiThreadedIdleHelperTest : public IdleHelperTest {
  public:
+#if DCHECK_IS_ON()
+  ~MultiThreadedIdleHelperTest() override {
+    WTF::SetIsBeforeThreadCreatedForTest();
+  }
+#endif
+
   void PostIdleTaskFromNewThread(int* run_count) {
     PostDelayedIdleTaskFromNewThread(base::TimeDelta(), run_count);
   }
 
   void PostDelayedIdleTaskFromNewThread(base::TimeDelta delay, int* run_count) {
-    std::unique_ptr<Thread> thread =
-        Thread::CreateThread(ThreadCreationParams(ThreadType::kTestThread)
-                                 .SetThreadNameForTest("TestBackgroundThread"));
+    std::unique_ptr<NonMainThread> thread = NonMainThread::CreateThread(
+        ThreadCreationParams(ThreadType::kTestThread)
+            .SetThreadNameForTest("TestBackgroundThread"));
     PostCrossThreadTask(
         *thread->GetTaskRunner(), FROM_HERE,
         CrossThreadBindOnce(&PostIdleTaskFromBackgroundThread,

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,10 +9,13 @@
 #include <stdint.h>
 
 #include <map>
+#include <optional>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/process/process_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
@@ -21,7 +24,6 @@
 #include "chrome/browser/task_manager/sampling/task_group_sampler.h"
 #include "chrome/browser/task_manager/task_manager_observer.h"
 #include "components/nacl/common/buildflags.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "chrome/browser/task_manager/sampling/arc_shared_sampler.h"
@@ -94,7 +96,9 @@ class TaskGroup {
   const base::ProcessHandle& process_handle() const { return process_handle_; }
   const base::ProcessId& process_id() const { return process_id_; }
 
-  const std::vector<Task*>& tasks() const { return tasks_; }
+  const std::vector<raw_ptr<Task, VectorExperimental>>& tasks() const {
+    return tasks_;
+  }
   size_t num_tasks() const { return tasks().size(); }
   bool empty() const { return tasks().empty(); }
 
@@ -174,15 +178,15 @@ class TaskGroup {
 
   void OnCpuRefreshDone(double cpu_usage);
   void OnSwappedMemRefreshDone(int64_t swapped_mem_bytes);
-  void OnProcessPriorityDone(bool is_backgrounded);
+  void OnProcessPriorityDone(base::Process::Priority priority);
   void OnIdleWakeupsRefreshDone(int idle_wakeups_per_second);
 
   void OnSamplerRefreshDone(
-      absl::optional<SharedSampler::SamplingResult> results);
+      std::optional<SharedSampler::SamplingResult> results);
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   void OnArcSamplerRefreshDone(
-      absl::optional<ArcSharedSampler::MemoryFootprintBytes> results);
+      std::optional<ArcSharedSampler::MemoryFootprintBytes> results);
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   void OnBackgroundRefreshTypeFinished(int64_t finished_refresh_type);
@@ -201,13 +205,13 @@ class TaskGroup {
   scoped_refptr<SharedSampler> shared_sampler_;
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // Shared sampler that retrieves memory footprint for all ARC processes.
-  ArcSharedSampler* arc_shared_sampler_;           // Not owned
-  CrosapiTaskProviderAsh* crosapi_task_provider_;  // Not owned
+  raw_ptr<ArcSharedSampler> arc_shared_sampler_;           // Not owned
+  raw_ptr<CrosapiTaskProviderAsh> crosapi_task_provider_;  // Not owned
 #endif                                             // BUILDFLAG(IS_CHROMEOS_ASH)
 
   // Lists the Tasks in this TaskGroup.
   // Tasks are not owned by the TaskGroup. They're owned by the TaskProviders.
-  std::vector<Task*> tasks_;
+  std::vector<raw_ptr<Task, VectorExperimental>> tasks_;
 
   // Flags will be used to determine when the background calculations has
   // completed for the enabled refresh types for this TaskGroup.

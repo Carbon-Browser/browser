@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include <map>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "gpu/command_buffer/service/shader_translator.h"
 #include "gpu/config/gpu_preferences.h"
@@ -44,7 +45,7 @@ class GPU_GLES2_EXPORT ShaderTranslatorCache
       ShShaderSpec shader_spec,
       const ShBuiltInResources* resources,
       ShShaderOutput shader_output_language,
-      ShCompileOptions driver_bug_workarounds);
+      const ShCompileOptions& driver_bug_workarounds);
 
  private:
   friend class ShaderTranslatorCacheTest_InitParamComparable_Test;
@@ -61,7 +62,7 @@ class GPU_GLES2_EXPORT ShaderTranslatorCache
                                ShShaderSpec shader_spec,
                                const ShBuiltInResources& resources,
                                ShShaderOutput shader_output_language,
-                               ShCompileOptions driver_bug_workarounds) {
+                               const ShCompileOptions& driver_bug_workarounds) {
       memset(this, 0, sizeof(*this));
       this->shader_type = shader_type;
       this->shader_spec = shader_spec;
@@ -90,7 +91,9 @@ class GPU_GLES2_EXPORT ShaderTranslatorCache
 
   const GpuPreferences gpu_preferences_;
 
-  typedef std::map<ShaderTranslatorInitParams, ShaderTranslator* > Cache;
+  typedef std::map<ShaderTranslatorInitParams,
+                   raw_ptr<ShaderTranslator, CtnExperimental>>
+      Cache;
   Cache cache_;
 };
 

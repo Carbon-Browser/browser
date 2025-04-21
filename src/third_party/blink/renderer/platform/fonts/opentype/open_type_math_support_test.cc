@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,17 +16,10 @@ namespace blink {
 
 class OpenTypeMathSupportTest : public FontTestBase {
  protected:
-  void SetUp() override {
-    font_description.SetComputedSize(10.0);
-    font = Font(font_description);
-  }
-
-  void TearDown() override {}
-
   Font CreateMathFont(const String& name, float size = 1000) {
     FontDescription::VariantLigatures ligatures;
     return blink::test::CreateTestFont(
-        "MathTestFont",
+        AtomicString("MathTestFont"),
         blink::test::BlinkWebTestsFontsTestDataPath(String("math/") + name),
         size, &ligatures);
   }
@@ -36,16 +29,13 @@ class OpenTypeMathSupportTest : public FontTestBase {
         CreateMathFont(name).PrimaryFont()->PlatformData().GetHarfBuzzFace());
   }
 
-  absl::optional<float> MathConstant(
+  std::optional<float> MathConstant(
       const String& name,
       OpenTypeMathSupport::MathConstants constant) {
     Font math = CreateMathFont(name);
     return OpenTypeMathSupport::MathConstant(
         math.PrimaryFont()->PlatformData().GetHarfBuzzFace(), constant);
   }
-
-  FontDescription font_description;
-  Font font;
 };
 
 TEST_F(OpenTypeMathSupportTest, HasMathData) {
@@ -263,7 +253,7 @@ TEST_F(OpenTypeMathSupportTest, MathVariantsWithoutTable) {
     auto parts = OpenTypeMathSupport::GetGlyphPartRecords(
         math.PrimaryFont()->PlatformData().GetHarfBuzzFace(), glyph,
         OpenTypeMathStretchData::StretchAxis::Horizontal);
-    EXPECT_TRUE(parts.IsEmpty());
+    EXPECT_TRUE(parts.empty());
   }
 
   // // Vertical parts.
@@ -271,7 +261,7 @@ TEST_F(OpenTypeMathSupportTest, MathVariantsWithoutTable) {
     auto parts = OpenTypeMathSupport::GetGlyphPartRecords(
         math.PrimaryFont()->PlatformData().GetHarfBuzzFace(), glyph,
         OpenTypeMathStretchData::StretchAxis::Vertical);
-    EXPECT_TRUE(parts.IsEmpty());
+    EXPECT_TRUE(parts.empty());
   }
 }
 
@@ -353,7 +343,7 @@ TEST_F(OpenTypeMathSupportTest, MathVariantsWithTable) {
     auto parts = OpenTypeMathSupport::GetGlyphPartRecords(
         math.PrimaryFont()->PlatformData().GetHarfBuzzFace(), left_brace,
         OpenTypeMathStretchData::StretchAxis::Horizontal);
-    EXPECT_TRUE(parts.IsEmpty());
+    EXPECT_TRUE(parts.empty());
   }
 
   // Horizontal parts for horizontal operator.
@@ -381,7 +371,7 @@ TEST_F(OpenTypeMathSupportTest, MathVariantsWithTable) {
     auto parts = OpenTypeMathSupport::GetGlyphPartRecords(
         math.PrimaryFont()->PlatformData().GetHarfBuzzFace(), over_brace,
         OpenTypeMathStretchData::StretchAxis::Vertical);
-    EXPECT_TRUE(parts.IsEmpty());
+    EXPECT_TRUE(parts.empty());
   }
 }
 
@@ -405,7 +395,7 @@ TEST_F(OpenTypeMathSupportTest, MathItalicCorrection) {
     Glyph glyph_with_italic_correction = variants[2];
 
     // MathItalicCorrection with a value.
-    absl::optional<float> glyph_with_italic_correction_value =
+    std::optional<float> glyph_with_italic_correction_value =
         OpenTypeMathSupport::MathItalicCorrection(
             math.PrimaryFont()->PlatformData().GetHarfBuzzFace(),
             glyph_with_italic_correction);
@@ -419,7 +409,7 @@ TEST_F(OpenTypeMathSupportTest, MathItalicCorrection) {
         OpenTypeMathSupport::GetGlyphPartRecords(
             math.PrimaryFont()->PlatformData().GetHarfBuzzFace(), base_glyph,
             OpenTypeMathStretchData::StretchAxis::Vertical, &italic_correction);
-    EXPECT_TRUE(parts.IsEmpty());
+    EXPECT_TRUE(parts.empty());
     EXPECT_FLOAT_EQ(italic_correction, -1000);
   }
 
@@ -438,6 +428,15 @@ TEST_F(OpenTypeMathSupportTest, MathItalicCorrection) {
     EXPECT_EQ(parts.size(), 3u);
     EXPECT_FLOAT_EQ(italic_correction, 5000);
   }
+}
+
+TEST_F(OpenTypeMathSupportTest, MathItalicCorrectionNullOpt) {
+  // Font without a MATH table.
+  Font math_text = CreateMathFont("math-text.woff");
+  Glyph glyph = math_text.PrimaryFont()->GlyphForCharacter('A');
+  EXPECT_TRUE(glyph);
+  EXPECT_FALSE(OpenTypeMathSupport::MathItalicCorrection(
+      math_text.PrimaryFont()->PlatformData().GetHarfBuzzFace(), glyph));
 }
 
 }  // namespace blink

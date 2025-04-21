@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,10 @@
 #include <stddef.h>
 
 #include "base/check_op.h"
+#import "base/containers/contains.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/time/time.h"
 #include "ios/net/ios_net_buildflags.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
 
 // Key holding the creation-time in NSHTTPCookie properties.
 // This key is undocumented, and its value has type NSNumber.
@@ -27,11 +24,7 @@ base::Time GetCreationTimeFromObject(NSHTTPCookie* cookie) {
   // The "Created" key is not documented.
   // Return a null time if the key is missing.
   id created = [[cookie properties] objectForKey:kHTTPCookieCreated];
-#if !BUILDFLAG(CRONET_BUILD)
-  // In Cronet the cookie store is recreated on startup, so |created| could be
-  // nil.
   DCHECK(created && [created isKindOfClass:[NSNumber class]]);
-#endif
   if (!created || ![created isKindOfClass:[NSNumber class]])
     return base::Time();
   // created is the time from January 1st, 2001 in seconds.
@@ -64,8 +57,8 @@ CookieCreationTimeManager::~CookieCreationTimeManager() {
 void CookieCreationTimeManager::SetCreationTime(
     NSHTTPCookie* cookie,
     const base::Time& creation_time) {
-  DCHECK(thread_checker_.CalledOnValidThread());
-  DCHECK(unique_times_.find(creation_time) == unique_times_.end());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+  DCHECK(!base::Contains(unique_times_, creation_time));
 
   // If the cookie overrides an existing cookie, remove its creation time.
   auto it = creation_times_.find(GetCookieUniqueID(cookie));
@@ -80,7 +73,7 @@ void CookieCreationTimeManager::SetCreationTime(
 
 base::Time CookieCreationTimeManager::MakeUniqueCreationTime(
     const base::Time& creation_time) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   auto it = unique_times_.find(creation_time);
 
   if (it == unique_times_.end())
@@ -100,7 +93,7 @@ base::Time CookieCreationTimeManager::MakeUniqueCreationTime(
 }
 
 base::Time CookieCreationTimeManager::GetCreationTime(NSHTTPCookie* cookie) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   std::unordered_map<std::string, base::Time>::iterator it =
       creation_times_.find(GetCookieUniqueID(cookie));
   if (it != creation_times_.end())
@@ -113,7 +106,7 @@ base::Time CookieCreationTimeManager::GetCreationTime(NSHTTPCookie* cookie) {
 }
 
 void CookieCreationTimeManager::DeleteCreationTime(NSHTTPCookie* cookie) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   auto it = creation_times_.find(GetCookieUniqueID(cookie));
   if (it != creation_times_.end()) {
     size_t erased = unique_times_.erase(it->second);
@@ -123,7 +116,7 @@ void CookieCreationTimeManager::DeleteCreationTime(NSHTTPCookie* cookie) {
 }
 
 void CookieCreationTimeManager::Clear() {
-  DCHECK(thread_checker_.CalledOnValidThread());
+  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   creation_times_.clear();
   unique_times_.clear();
 }

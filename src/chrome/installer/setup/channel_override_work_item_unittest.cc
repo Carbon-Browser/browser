@@ -1,10 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/installer/setup/channel_override_work_item.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "base/test/test_reg_util_win.h"
@@ -12,7 +13,6 @@
 #include "build/build_config.h"
 #include "chrome/install_static/install_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class ChannelOverrideWorkItemTest : public ::testing::Test {
  protected:
@@ -31,7 +31,7 @@ class ChannelOverrideWorkItemTest : public ::testing::Test {
               ERROR_SUCCESS);
   }
 
-  static absl::optional<std::wstring> GetAp() {
+  static std::optional<std::wstring> GetAp() {
     std::wstring value;
     if (base::win::RegKey(HKEY_CURRENT_USER,
                           install_static::GetClientStateKeyPath().c_str(),
@@ -39,7 +39,7 @@ class ChannelOverrideWorkItemTest : public ::testing::Test {
             .ReadValue(L"ap", &value) == ERROR_SUCCESS) {
       return std::move(value);
     }
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   // ::testing::Test:
@@ -51,13 +51,13 @@ class ChannelOverrideWorkItemTest : public ::testing::Test {
   }
 
   static const wchar_t* input(const TestParam& param) { return param.input_ap; }
-  static absl::optional<std::wstring> optional_input(const TestParam& param) {
+  static std::optional<std::wstring> optional_input(const TestParam& param) {
     auto* const input = param.input_ap;
-    return input ? absl::optional<std::wstring>(input) : absl::nullopt;
+    return input ? std::optional<std::wstring>(input) : std::nullopt;
   }
-  static absl::optional<std::wstring> expected(const TestParam& param) {
+  static std::optional<std::wstring> expected(const TestParam& param) {
     auto* const expected = param.expected;
-    return expected ? absl::optional<std::wstring>(expected) : absl::nullopt;
+    return expected ? std::optional<std::wstring>(expected) : std::nullopt;
   }
 
  private:
@@ -66,20 +66,25 @@ class ChannelOverrideWorkItemTest : public ::testing::Test {
 
 TEST_F(ChannelOverrideWorkItemTest, DoAndRollback) {
   static constexpr TestParam kIterations[] = {
-    {L"", L""},
-    {L"1.1-beta", L""},
-    {L"2.0-dev", L""},
-    {L"extended", L""},
+      {L"", L""},
+      {L"1.1-beta", L""},
+      {L"2.0-dev", L""},
+      {L"extended", L""},
 #if defined(ARCH_CPU_X86_64)
-    {L"x64-stable", L"x64-stable"},
-    {L"1.1-beta-arch_x64", L"x64-stable"},
-    {L"2.0-dev-arch_x64", L"x64-stable"},
-    {L"extended-arch_x64", L"x64-stable"},
+      {L"x64-stable", L"x64-stable"},
+      {L"1.1-beta-arch_x64", L"x64-stable"},
+      {L"2.0-dev-arch_x64", L"x64-stable"},
+      {L"extended-arch_x64", L"x64-stable"},
 #elif defined(ARCH_CPU_X86)
-    {L"stable-arch_x86", L"stable-arch_x86"},
-    {L"1.1-beta-arch_x86", L"stable-arch_x86"},
-    {L"2.0-dev-arch_x86", L"stable-arch_x86"},
-    {L"extended-arch_x86", L"stable-arch_x86"},
+      {L"stable-arch_x86", L"stable-arch_x86"},
+      {L"1.1-beta-arch_x86", L"stable-arch_x86"},
+      {L"2.0-dev-arch_x86", L"stable-arch_x86"},
+      {L"extended-arch_x86", L"stable-arch_x86"},
+#elif defined(ARCH_CPU_ARM64)
+      {L"arm64-stable", L"arm64-stable"},
+      {L"1.1-beta-arch_arm64", L"arm64-stable"},
+      {L"2.0-dev-arch_arm64", L"arm64-stable"},
+      {L"extended-arch_arm64", L"arm64-stable"},
 #else
 #error unsupported processor architecture.
 #endif

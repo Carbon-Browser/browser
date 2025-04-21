@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,13 +7,8 @@
 #import "base/test/ios/wait_util.h"
 #import "ios/chrome/common/credential_provider/archivable_credential.h"
 #import "ios/chrome/common/credential_provider/memory_credential_store.h"
-#include "testing/gtest_mac.h"
 #import "testing/gtest_mac.h"
-#include "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "testing/platform_test.h"
 
 namespace {
 
@@ -24,13 +19,14 @@ using MultiStoreCredentialStoreTest = PlatformTest;
 
 ArchivableCredential* TestCredential(NSString* user) {
   return [[ArchivableCredential alloc] initWithFavicon:@"favicon"
-                                    keychainIdentifier:@"keychainIdentifier"
+                                                  gaia:nil
+                                              password:@"qwerty123"
                                                   rank:5
                                       recordIdentifier:@"recordIdentifier"
                                      serviceIdentifier:@"serviceIdentifier"
                                            serviceName:@"serviceName"
-                                                  user:user
-                                  validationIdentifier:@"validationIdentifier"];
+                                              username:user
+                                                  note:@"note"];
 }
 
 NSArray<id<CredentialStore>>* TestStoreArray() {
@@ -59,7 +55,7 @@ TEST_F(MultiStoreCredentialStoreTest, CombineData) {
       TestStoreArray().firstObject.credentials.firstObject;
 
   EXPECT_NSEQ(credentialStore.credentials[0], firstCredential);
-  EXPECT_NSEQ(credentialStore.credentials[0].user, @"store1user");
+  EXPECT_NSEQ(credentialStore.credentials[0].username, @"store1user");
 }
 
 // Tests that MultiStoreCredentialStore don't duplicate data from stores.
@@ -71,7 +67,7 @@ TEST_F(MultiStoreCredentialStoreTest, RetrieveCredential) {
   id<Credential> retrievedCredential = [credentialStore
       credentialWithRecordIdentifier:firstCredential.recordIdentifier];
   EXPECT_NSEQ(retrievedCredential, firstCredential);
-  EXPECT_NSEQ(retrievedCredential.user, @"store1user");
+  EXPECT_NSEQ(retrievedCredential.username, @"store1user");
 }
 
 }

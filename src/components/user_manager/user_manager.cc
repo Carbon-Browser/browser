@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,9 @@
 
 #include "base/logging.h"
 #include "components/account_id/account_id.h"
+#include "components/user_manager/user_names.h"
 
 namespace user_manager {
-
-const char kRegularUsersPref[] = "LoggedInUsers";
 
 UserManager* UserManager::instance = nullptr;
 
@@ -17,11 +16,21 @@ UserManager::Observer::~Observer() = default;
 
 void UserManager::Observer::LocalStateChanged(UserManager* user_manager) {}
 
+void UserManager::Observer::OnUserListLoaded() {}
+
+void UserManager::Observer::OnDeviceLocalUserListUpdated() {}
+
+void UserManager::Observer::OnUserLoggedIn(const User& user) {}
+
 void UserManager::Observer::OnUserImageChanged(const User& user) {}
 
 void UserManager::Observer::OnUserImageIsEnterpriseManagedChanged(
     const User& user,
     bool is_enterprise_managed) {}
+
+void UserManager::Observer::OnUserProfileCreated(const User& user) {}
+
+void UserManager::Observer::OnUserProfileWillBeDestroyed(const User& user) {}
 
 void UserManager::Observer::OnUserProfileImageUpdateFailed(const User& user) {}
 
@@ -31,10 +40,14 @@ void UserManager::Observer::OnUserProfileImageUpdated(
 
 void UserManager::Observer::OnUsersSignInConstraintsChanged() {}
 
+void UserManager::Observer::OnUserAffiliationUpdated(const User& user) {}
+
 void UserManager::Observer::OnUserRemoved(const AccountId& account_id,
                                           UserRemovalReason reason) {}
 
 void UserManager::Observer::OnUserToBeRemoved(const AccountId& account_id) {}
+
+void UserManager::Observer::OnUserNotAllowed(const std::string& user_email) {}
 
 void UserManager::UserSessionStateObserver::ActiveUserChanged(
     User* active_user) {}
@@ -42,10 +55,10 @@ void UserManager::UserSessionStateObserver::ActiveUserChanged(
 void UserManager::UserSessionStateObserver::UserAddedToSession(
     const User* active_user) {}
 
-void UserManager::UserSessionStateObserver::ActiveUserHashChanged(
-    const std::string& hash) {}
+void UserManager::UserSessionStateObserver::OnLoginStateUpdated(
+    const User* active_user) {}
 
-UserManager::UserSessionStateObserver::~UserSessionStateObserver() {}
+UserManager::UserSessionStateObserver::~UserSessionStateObserver() = default;
 
 UserManager::UserAccountData::UserAccountData(
     const std::u16string& display_name,
@@ -53,7 +66,20 @@ UserManager::UserAccountData::UserAccountData(
     const std::string& locale)
     : display_name_(display_name), given_name_(given_name), locale_(locale) {}
 
-UserManager::UserAccountData::~UserAccountData() {}
+UserManager::UserAccountData::~UserAccountData() = default;
+
+UserManager::DeviceLocalAccountInfo::DeviceLocalAccountInfo(std::string user_id,
+                                                            UserType type)
+    : user_id(std::move(user_id)), type(type) {}
+
+UserManager::DeviceLocalAccountInfo::DeviceLocalAccountInfo(
+    const UserManager::DeviceLocalAccountInfo&) = default;
+
+UserManager::DeviceLocalAccountInfo&
+UserManager::DeviceLocalAccountInfo::operator=(
+    const UserManager::DeviceLocalAccountInfo&) = default;
+
+UserManager::DeviceLocalAccountInfo::~DeviceLocalAccountInfo() = default;
 
 void UserManager::Initialize() {
   DCHECK(!UserManager::instance);
@@ -100,21 +126,22 @@ UserType UserManager::CalculateUserType(const AccountId& account_id,
                                         const User* user,
                                         const bool browser_restart,
                                         const bool is_child) const {
-  if (IsGuestAccountId(account_id))
-    return USER_TYPE_GUEST;
+  if (account_id == GuestAccountId()) {
+    return UserType::kGuest;
+  }
 
   // This may happen after browser crash after device account was marked for
   // removal, but before clean exit.
   if (browser_restart && IsDeviceLocalAccountMarkedForRemoval(account_id))
-    return USER_TYPE_PUBLIC_ACCOUNT;
+    return UserType::kPublicAccount;
 
   // If user already exists
   if (user) {
     // This branch works for any other user type, including PUBLIC_ACCOUNT.
     const UserType user_type = user->GetType();
-    if (user_type == USER_TYPE_CHILD || user_type == USER_TYPE_REGULAR) {
+    if (user_type == UserType::kChild || user_type == UserType::kRegular) {
       const UserType new_user_type =
-          is_child ? USER_TYPE_CHILD : USER_TYPE_REGULAR;
+          is_child ? UserType::kChild : UserType::kRegular;
       if (new_user_type != user_type) {
         LOG(WARNING) << "Child user type has changed: " << user_type << " => "
                      << new_user_type;
@@ -126,8 +153,7 @@ UserType UserManager::CalculateUserType(const AccountId& account_id,
 
     // TODO(rsorokin): Check for reverse: account_id AD type should imply
     // AD user type.
-    if (user_type == USER_TYPE_ACTIVE_DIRECTORY &&
-        account_id.GetAccountType() != AccountType::ACTIVE_DIRECTORY) {
+    if (account_id.GetAccountType() == AccountType::ACTIVE_DIRECTORY) {
       LOG(FATAL) << "Incorrect AD user type " << user_type;
     }
 
@@ -136,12 +162,27 @@ UserType UserManager::CalculateUserType(const AccountId& account_id,
 
   // User is new
   if (is_child)
-    return USER_TYPE_CHILD;
+    return UserType::kChild;
 
-  if (account_id.GetAccountType() == AccountType::ACTIVE_DIRECTORY)
-    return USER_TYPE_ACTIVE_DIRECTORY;
+  CHECK(account_id.GetAccountType() != AccountType::ACTIVE_DIRECTORY);
 
-  return USER_TYPE_REGULAR;
+  return UserType::kRegular;
+}
+
+bool UserManager::IsUserAllowed(const user_manager::User& user,
+                                bool is_guest_allowed,
+                                bool is_user_allowlisted) {
+  DCHECK(user.GetType() == UserType::kRegular ||
+         user.GetType() == UserType::kGuest ||
+         user.GetType() == UserType::kChild);
+
+  if (user.GetType() == UserType::kGuest && !is_guest_allowed) {
+    return false;
+  }
+  if (user.HasGaiaAccount() && !is_user_allowlisted) {
+    return false;
+  }
+  return true;
 }
 
 }  // namespace user_manager

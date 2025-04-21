@@ -6,9 +6,10 @@
   "chromium.chromedriver": "ChromiumChromeDriver",
   "chromium.chromiumos": "ChromiumChromiumos",
   "chromium.clang": "ChromiumClang",
+  "chromium.fuchsia": "ChromiumFuchsia",
+  "chromium.fuchsia.fyi": "ChromiumFuchsiaFyi",
   "chromium.fyi": "ChromiumFYI",
   "chromium.gatekeeper": "Gatekeeper",
-  "chromium.goma": "ChromiumGoma",
   "chromium.gpu": "ChromiumGPU",
   "chromium.gpu.fyi": "ChromiumGPUFYI",
   "chromium.infra": "Infra",
@@ -62,6 +63,7 @@
   "tryserver.chromium.android": "TryserverChromiumAndroid",
   "tryserver.chromium.angle": "TryServerANGLE",
   "tryserver.chromium.chromiumos": "TryserverChromiumChromiumOS",
+  "tryserver.chromium.fuchsia": "TryServerChromiumFuchsia",
   "tryserver.chromium.linux": "TryServerChromiumLinux",
   "tryserver.chromium.mac": "TryServerChromiumMac",
   "tryserver.chromium.perf": "ChromiumPerfTryServer",
@@ -74,4 +76,3 @@
   "tryserver.nacl": "NativeClientTryServer",
   "tryserver.webrtc": "WebRTCTryServer"
 }
-

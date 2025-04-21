@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,8 +32,7 @@ scoped_refptr<net::X509Certificate> CreateFakeCert() {
           base::Time::Now() + base::Minutes(5), &unused_key, &cert_der)) {
     return nullptr;
   }
-  return net::X509Certificate::CreateFromBytes(
-      base::as_bytes(base::make_span(cert_der)));
+  return net::X509Certificate::CreateFromBytes(base::as_byte_span(cert_der));
 }
 
 }  // namespace

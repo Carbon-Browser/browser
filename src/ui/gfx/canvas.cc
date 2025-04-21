@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,6 @@
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkPath.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
-#include "third_party/skia/include/effects/SkDashPathEffect.h"
 #include "third_party/skia/include/effects/SkGradientShader.h"
 #include "ui/gfx/font_list.h"
 #include "ui/gfx/geometry/insets_f.h"
@@ -111,16 +110,15 @@ void Canvas::Save() {
 }
 
 void Canvas::SaveLayerAlpha(uint8_t alpha) {
-  canvas_->saveLayerAlpha(NULL, alpha);
+  canvas_->saveLayerAlphaf(alpha / 255.0f);
 }
 
 void Canvas::SaveLayerAlpha(uint8_t alpha, const Rect& layer_bounds) {
-  SkRect bounds(RectToSkRect(layer_bounds));
-  canvas_->saveLayerAlpha(&bounds, alpha);
+  canvas_->saveLayerAlphaf(RectToSkRect(layer_bounds), alpha / 255.0f);
 }
 
 void Canvas::SaveLayerWithFlags(const cc::PaintFlags& flags) {
-  canvas_->saveLayer(nullptr /* bounds */, &flags);
+  canvas_->saveLayer(flags);
 }
 
 void Canvas::Restore() {
@@ -301,7 +299,7 @@ void Canvas::DrawImageInt(const ImageSkia& image, int x, int y) {
 
 void Canvas::DrawImageInt(const ImageSkia& image, int x, int y, uint8_t a) {
   cc::PaintFlags flags;
-  flags.setAlpha(a);
+  flags.setAlphaf(a / 255.0f);
   DrawImageInt(image, x, y, flags);
 }
 
@@ -319,7 +317,7 @@ void Canvas::DrawImageInt(const ImageSkia& image,
                  SkFloatToScalar(1.0f / bitmap_scale));
   canvas_->translate(SkFloatToScalar(std::round(x * bitmap_scale)),
                      SkFloatToScalar(std::round(y * bitmap_scale)));
-  canvas_->saveLayer(nullptr, &flags);
+  canvas_->saveLayer(flags);
   canvas_->drawPicture(image_rep.GetPaintRecord());
   canvas_->restore();
 }
@@ -472,7 +470,7 @@ bool Canvas::InitPaintFlagsForTiling(const ImageSkia& image,
 }
 
 void Canvas::Transform(const gfx::Transform& transform) {
-  canvas_->concat(transform.matrix().asM33());
+  canvas_->concat(TransformToSkM44(transform));
 }
 
 SkBitmap Canvas::GetBitmap() const {
@@ -500,7 +498,8 @@ void Canvas::DrawImageIntHelper(const ImageSkiaRep& image_rep,
   DLOG_ASSERT(src_x + src_w < std::numeric_limits<int16_t>::max() &&
               src_y + src_h < std::numeric_limits<int16_t>::max());
   if (src_w <= 0 || src_h <= 0) {
-    NOTREACHED() << "Attempting to draw bitmap from an empty rect!";
+    DUMP_WILL_BE_NOTREACHED()
+        << "Attempting to draw bitmap from an empty rect!";
     return;
   }
 

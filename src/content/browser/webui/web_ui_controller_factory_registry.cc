@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 
 #include "base/lazy_instance.h"
 #include "content/browser/renderer_host/debug_urls.h"
-#include "content/public/browser/content_browser_client.h"
 #include "content/public/browser/web_ui_controller.h"
 #include "content/public/common/content_client.h"
 #include "content/public/common/url_constants.h"

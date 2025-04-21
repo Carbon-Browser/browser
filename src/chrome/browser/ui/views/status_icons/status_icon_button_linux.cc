@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,12 +11,14 @@
 #include "ui/aura/window.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/mojom/menu_source_type.mojom-forward.h"
 #include "ui/base/wm_role_names_linux.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/transform.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/gfx/scoped_canvas.h"
+#include "ui/ozone/public/ozone_platform.h"
 
 namespace {
 
@@ -52,18 +54,24 @@ void StatusIconButtonLinux::UpdatePlatformContextMenu(ui::MenuModel* model) {
 }
 
 void StatusIconButtonLinux::OnSetDelegate() {
+  if (!ui::OzonePlatform::GetInstance()
+           ->GetPlatformRuntimeProperties()
+           .supports_system_tray_windowing) {
+    return;
+  }
+
   widget_ = std::make_unique<StatusIconWidget>();
 
   const int width = std::max(1, delegate_->GetImage().width());
   const int height = std::max(1, delegate_->GetImage().height());
 
-  views::Widget::InitParams params;
-  params.type = views::Widget::InitParams::TYPE_WINDOW_FRAMELESS;
+  views::Widget::InitParams params(
+      views::Widget::InitParams::CLIENT_OWNS_WIDGET,
+      views::Widget::InitParams::TYPE_WINDOW_FRAMELESS);
   params.opacity = views::Widget::InitParams::WindowOpacity::kTranslucent;
   params.activatable = views::Widget::InitParams::Activatable::kNo;
   params.bounds =
       gfx::Rect(kInitialWindowPos, kInitialWindowPos, width, height);
-  params.ownership = views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
   params.wm_role_name = ui::kStatusIconWmRoleName;
   params.wm_class_name = shell_integration_linux::GetProgramClassName();
   params.wm_class_class = shell_integration_linux::GetProgramClassClass();
@@ -73,10 +81,9 @@ void StatusIconButtonLinux::OnSetDelegate() {
 
   widget_->Init(std::move(params));
 
-  auto* window = widget_->GetNativeWindow();
-  DCHECK(window);
-  host_ = window->GetHost();
-  if (host_->GetAcceleratedWidget() == gfx::kNullAcceleratedWidget) {
+  // The window and host are non-null because the widget was just initialized.
+  auto* host = widget_->GetNativeWindow()->GetHost();
+  if (host->GetAcceleratedWidget() == gfx::kNullAcceleratedWidget) {
     delegate_->OnImplInitializationFailed();
     // |this| might be destroyed.
     return;
@@ -96,10 +103,11 @@ void StatusIconButtonLinux::OnSetDelegate() {
 void StatusIconButtonLinux::ShowContextMenuForViewImpl(
     View* source,
     const gfx::Point& point,
-    ui::MenuSourceType source_type) {
+    ui::mojom::MenuSourceType source_type) {
   ui::MenuModel* menu = delegate_->GetMenuModel();
-  if (!menu)
+  if (!menu) {
     return;
+  }
   menu_runner_ = std::make_unique<views::MenuRunner>(
       menu, views::MenuRunner::HAS_MNEMONICS | views::MenuRunner::CONTEXT_MENU |
                 views::MenuRunner::FIXED_ANCHOR);
@@ -111,7 +119,7 @@ void StatusIconButtonLinux::PaintButtonContents(gfx::Canvas* canvas) {
   gfx::ScopedCanvas scoped_canvas(canvas);
   canvas->UndoDeviceScaleFactor();
 
-  gfx::Rect bounds = host_->GetBoundsInPixels();
+  gfx::Rect bounds = widget_->GetNativeWindow()->GetHost()->GetBoundsInPixels();
   const gfx::ImageSkia& image = delegate_->GetImage();
 
   // If the image fits in the window, center it.  But if it won't fit, downscale
@@ -133,5 +141,5 @@ void StatusIconButtonLinux::PaintButtonContents(gfx::Canvas* canvas) {
                        image.width(), image.height(), true, flags);
 }
 
-BEGIN_METADATA(StatusIconButtonLinux, views::Button)
+BEGIN_METADATA(StatusIconButtonLinux)
 END_METADATA

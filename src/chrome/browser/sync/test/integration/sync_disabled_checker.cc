@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,10 +12,8 @@ SyncDisabledChecker::~SyncDisabledChecker() = default;
 bool SyncDisabledChecker::IsExitConditionSatisfied(std::ostream* os) {
   *os << "Waiting until sync is disabled."
       << " IsSetupInProgress:" << service()->IsSetupInProgress()
-      << " IsFirstSetupComplete:"
-      << service()->GetUserSettings()->IsFirstSetupComplete();
-  return !service()->IsSetupInProgress() &&
-         !service()->GetUserSettings()->IsFirstSetupComplete();
+      << " IsSyncFeatureEnabled: " << service()->IsSyncFeatureEnabled();
+  return !service()->IsSetupInProgress() && !service()->IsSyncFeatureEnabled();
 }
 
 void SyncDisabledChecker::WaitDone() {

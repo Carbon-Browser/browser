@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -76,6 +76,8 @@ class RenderingTest : public testing::Test,
   virtual void OnParentDrawDataUpdated() {}
   void OnViewTreeForceDarkStateChanged(
       bool view_tree_force_dark_state) override {}
+  void SetPreferredFrameInterval(
+      base::TimeDelta preferred_frame_interval) override {}
 
  protected:
   RenderingTest();

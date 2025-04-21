@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
 #include "media/base/feedback_signal_accumulator.h"
 #include "media/capture/capture_export.h"
@@ -92,8 +92,8 @@ class CAPTURE_EXPORT VideoCaptureOracle {
   // the current buffer pool utilization relative to a sustainable maximum (not
   // the absolute maximum).  This method should only be called if the last call
   // to ObserveEventAndDecideCapture() returned true.
-  void RecordCapture(double pool_utilization);
-  void RecordWillNotCapture(double pool_utilization);
+  void RecordCapture(float pool_utilization);
+  void RecordWillNotCapture(float pool_utilization);
 
   // Notify of the completion of a capture, and whether it was successful.
   // Returns true iff the captured frame should be delivered.  |frame_timestamp|
@@ -256,7 +256,7 @@ class CAPTURE_EXPORT VideoCaptureOracle {
 
   // The current capture size.  |resolution_chooser_| may hold an updated value
   // because the oracle prevents this size from changing too frequently.  This
-  // avoids over-stressing consumers (e.g., when a window is being activly
+  // avoids over-stressing consumers (e.g., when a window is being actively
   // drag-resized) and allowing the end-to-end system time to stabilize.
   gfx::Size capture_size_;
 

@@ -1,17 +1,18 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/extensions/extension_apitest.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/common/pref_names.h"
+#include "components/policy/core/common/policy_pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/test/browser_test.h"
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 #include "chromeos/ash/components/dbus/update_engine/fake_update_engine_client.h"
 #include "chromeos/ash/components/dbus/update_engine/update_engine_client.h"
 #endif
@@ -20,14 +21,14 @@ namespace extensions {
 
 IN_PROC_BROWSER_TEST_F(ExtensionApiTest, GetIncognitoModeAvailability) {
   PrefService* pref_service = browser()->profile()->GetPrefs();
-  pref_service->SetInteger(prefs::kIncognitoModeAvailability, 1);
+  pref_service->SetInteger(policy::policy_prefs::kIncognitoModeAvailability, 1);
 
   EXPECT_TRUE(RunExtensionTest("system/get_incognito_mode_availability", {},
                                {.load_as_component = true}))
       << message_;
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 
 class GetUpdateStatusApiTest : public ExtensionApiTest {
  public:
@@ -47,7 +48,8 @@ class GetUpdateStatusApiTest : public ExtensionApiTest {
   }
 
  protected:
-  ash::FakeUpdateEngineClient* fake_update_engine_client_ = nullptr;
+  raw_ptr<ash::FakeUpdateEngineClient, DanglingUntriaged>
+      fake_update_engine_client_ = nullptr;
 };
 
 IN_PROC_BROWSER_TEST_F(GetUpdateStatusApiTest, Progress) {

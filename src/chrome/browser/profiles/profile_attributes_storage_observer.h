@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,6 +49,10 @@ class ProfileAttributesStorageObserver {
   virtual void OnProfileHostedDomainChanged(
       const base::FilePath& profile_path) {}
   virtual void OnProfileUserManagementAcceptanceChanged(
+      const base::FilePath& profile_path) {}
+  virtual void OnProfileManagementEnrollmentTokenChanged(
+      const base::FilePath& profile_path) {}
+  virtual void OnProfileManagementIdChanged(
       const base::FilePath& profile_path) {}
 
  protected:

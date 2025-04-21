@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@
 #include "components/history/core/browser/history_service.h"
 #include "components/history/core/test/history_service_test_util.h"
 #include "components/history_clusters/core/config.h"
+#include "components/history_clusters/core/features.h"
 #include "components/history_clusters/core/history_clusters_prefs.h"
 #include "components/history_clusters/core/history_clusters_service.h"
 #include "components/history_clusters/core/history_clusters_service_test_api.h"
@@ -46,8 +47,8 @@ ACMatches CreateACMatches(std::vector<MatchData> matches_data) {
         match.contents = match_data.contents;
         match.destination_url = GURL(u"https://" + match_data.contents);
         if (match_data.already_has_action) {
-          match.action = base::MakeRefCounted<OmniboxAction>(
-              OmniboxAction::LabelStrings{}, GURL{});
+          match.actions.push_back(base::MakeRefCounted<OmniboxAction>(
+              OmniboxAction::LabelStrings{}, GURL{}));
         }
         return match;
       });
@@ -66,18 +67,15 @@ class HistoryClustersActionTest : public testing::Test {
 
     prefs_enabled_.registry()->RegisterBooleanPref(
         history_clusters::prefs::kVisible, true);
+    prefs_enabled_.registry()->RegisterDictionaryPref(
+        history_clusters::prefs::kShortCache);
+    prefs_enabled_.registry()->RegisterDictionaryPref(
+        history_clusters::prefs::kAllCache);
 
     search_actions_config_.is_journeys_enabled_no_locale_check = true;
     search_actions_config_.omnibox_action = true;
     search_actions_config_.omnibox_action_on_navigation_intents = false;
-    search_actions_config_.omnibox_action_on_urls = false;
     SetConfigForTesting(search_actions_config_);
-
-    url_actions_config_.is_journeys_enabled_no_locale_check = true;
-    url_actions_config_.omnibox_action = true;
-    url_actions_config_.omnibox_action_on_navigation_intents = false;
-    url_actions_config_.omnibox_action_on_urls = true;
-    SetConfigForTesting(url_actions_config_);
   }
 
   // `history_clusters_service_` needs to be initialized repeatedly since it
@@ -87,33 +85,30 @@ class HistoryClustersActionTest : public testing::Test {
 
     history_clusters_service_ = std::make_unique<HistoryClustersService>(
         "en-US", history_service_.get(),
-        /*entity_metadata_provider=*/nullptr,
         /*url_loader_factory=*/nullptr,
         /*engagement_score_provider=*/nullptr,
-        /*optimization_guide_decider=*/nullptr);
+        /*template_url_service=*/nullptr,
+        /*optimization_guide_decider=*/nullptr, &prefs_enabled_);
 
     history_clusters_service_test_api_ =
         std::make_unique<HistoryClustersServiceTestApi>(
             history_clusters_service_.get(), history_service_.get());
     history_clusters_service_test_api_->SetAllKeywordsCache(
         {{u"keyword", history::ClusterKeywordData()}});
-    history_clusters_service_test_api_->SetAllUrlKeywordsCache(
-        {"http://keyword/"});
   }
 
   void TestAttachHistoryClustersActions(std::vector<MatchData> matches_data,
-                                        HistoryClustersService* service,
-                                        TestingPrefServiceSimple* prefs) {
+                                        HistoryClustersService* service) {
     AutocompleteResult result;
     result.AppendMatches(CreateACMatches(matches_data));
 
-    AttachHistoryClustersActions(service, prefs, result);
+    AttachHistoryClustersActions(service, result);
 
     for (size_t i = 0; i < matches_data.size(); ++i) {
       bool has_history_clusters_action =
-          result.match_at(i)->action &&
-          result.match_at(i)->action->GetID() ==
-              static_cast<int32_t>(OmniboxActionId::HISTORY_CLUSTERS);
+          result.match_at(i)->GetActionAt(0u) &&
+          result.match_at(i)->GetActionAt(0u)->ActionId() ==
+              OmniboxActionId::HISTORY_CLUSTERS;
       EXPECT_EQ(has_history_clusters_action,
                 matches_data[i].expect_history_clusters_action);
     }
@@ -125,8 +120,15 @@ class HistoryClustersActionTest : public testing::Test {
   }
 
   void TestAttachHistoryClustersActions(std::vector<MatchData> matches_data) {
-    TestAttachHistoryClustersActions(
-        matches_data, history_clusters_service_.get(), &prefs_enabled_);
+    TestAttachHistoryClustersActions(matches_data,
+                                     history_clusters_service_.get());
+  }
+
+  void SetHistoryClustersVisiblePref(bool value) {
+    prefs_enabled_.SetBoolean(history_clusters::prefs::kVisible, value);
+    // Make the history clusters visible pref managed.
+    prefs_enabled_.SetManagedPref(history_clusters::prefs::kVisible,
+                                  std::make_unique<base::Value>(value));
   }
 
   base::test::TaskEnvironment task_environment_;
@@ -140,15 +142,13 @@ class HistoryClustersActionTest : public testing::Test {
 
   // Commonly used configs & prefs used or derived from in the tests.
   Config search_actions_config_;
-  Config url_actions_config_;
   TestingPrefServiceSimple prefs_enabled_;
 };
 
 TEST_F(HistoryClustersActionTest, AttachHistoryClustersActions) {
   {
     SCOPED_TRACE("Shouldn't add action if history cluster service is nullptr.");
-    SetUpWithConfig(search_actions_config_);
-    TestAttachHistoryClustersActions({{}}, nullptr, &prefs_enabled_);
+    TestAttachHistoryClustersActions({{}}, nullptr);
   }
 
   {
@@ -170,11 +170,10 @@ TEST_F(HistoryClustersActionTest, AttachHistoryClustersActions) {
   {
     SCOPED_TRACE("Shouldn't add action if `kVisible` pref is false.");
     SetUpWithConfig(search_actions_config_);
-    TestingPrefServiceSimple prefs_disabled;
-    prefs_disabled.registry()->RegisterBooleanPref(
-        history_clusters::prefs::kVisible, false);
-    TestAttachHistoryClustersActions({{}}, history_clusters_service_.get(),
-                                     &prefs_disabled);
+    SetHistoryClustersVisiblePref(false);
+    TestAttachHistoryClustersActions({{}}, history_clusters_service_.get());
+    // Reset this back to true for future tests.
+    SetHistoryClustersVisiblePref(true);
   }
 
   {
@@ -207,27 +206,16 @@ TEST_F(HistoryClustersActionTest, AttachHistoryClustersActions) {
 
   {
     SCOPED_TRACE(
-        "Should not add action if an action incompatible (e.g. search entity) "
+        "Should add action if an action is search entity "
         "suggestion matches.");
     SetUpWithConfig(search_actions_config_);
     TestAttachHistoryClustersActions(
-        {{.type = AutocompleteMatchType::Type::SEARCH_SUGGEST_ENTITY}});
-  }
-
-  {
-    SCOPED_TRACE(
-        "Should add action if a navigation suggestion matches and "
-        "`omnibox_action_on_urls` is enabled.");
-    SetUpWithConfig(url_actions_config_);
-    TestAttachHistoryClustersActions(
-        {{.type = AutocompleteMatchType::Type::HISTORY_TITLE,
+        {{.type = AutocompleteMatchType::Type::SEARCH_SUGGEST_ENTITY,
           .expect_history_clusters_action = true}});
   }
 
   {
-    SCOPED_TRACE(
-        "Should not add action if a navigation suggestion matches and "
-        "`omnibox_action_on_urls` is disabled.");
+    SCOPED_TRACE("Should not add action if a navigation suggestion matches.");
     SetUpWithConfig(search_actions_config_);
     TestAttachHistoryClustersActions(
         {{.type = AutocompleteMatchType::Type::HISTORY_TITLE}});
@@ -236,8 +224,8 @@ TEST_F(HistoryClustersActionTest, AttachHistoryClustersActions) {
   {
     SCOPED_TRACE(
         "Should add action if both a search and navigation suggestions "
-        "match and `omnibox_action_on_urls` is disabled. The search suggestion "
-        "should have an action, even if it is ranked & scored lower.");
+        "match. The search suggestion should have an action, even if it is "
+        "ranked & scored lower.");
     SetUpWithConfig(search_actions_config_);
     TestAttachHistoryClustersActions(
         {{.type = AutocompleteMatchType::Type::HISTORY_TITLE},
@@ -271,16 +259,6 @@ TEST_F(HistoryClustersActionTest, AttachHistoryClustersActions) {
 
   {
     SCOPED_TRACE(
-        "Should add action to a top-scoring navigation suggestion, if it is "
-        "not high-scoring.");
-    SetUpWithConfig(url_actions_config_);
-    TestAttachHistoryClustersActions(
-        {{.type = AutocompleteMatchType::Type::HISTORY_TITLE,
-          .expect_history_clusters_action = true}});
-  }
-
-  {
-    SCOPED_TRACE(
         "Should not add action if a search suggestion matches and the top "
         "scoring suggestion is a high score navigation suggestion, even if it "
         "doesn't match.");
@@ -304,20 +282,6 @@ TEST_F(HistoryClustersActionTest, AttachHistoryClustersActions) {
         {{.relevance = 1340,
           .type = AutocompleteMatchType::Type::HISTORY_TITLE},
          {.relevance = 1350, .expect_history_clusters_action = true}});
-  }
-
-  {
-    SCOPED_TRACE(
-        "Should add action to a top scoring, high score navigation "
-        "suggestion if `omnibox_action_on_navigation_intents` is enabled.");
-    Config config = url_actions_config_;
-    config.omnibox_action_on_navigation_intents = true;
-    SetUpWithConfig(config);
-    TestAttachHistoryClustersActions({
-        {.relevance = 1350,
-         .type = AutocompleteMatchType::Type::HISTORY_TITLE,
-         .expect_history_clusters_action = true},
-    });
   }
 }
 

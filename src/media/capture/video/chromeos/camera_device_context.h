@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,12 @@
 #include <string>
 
 #include "base/containers/flat_map.h"
+#include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "base/synchronization/lock.h"
+#include "base/system/sys_info.h"
 #include "media/capture/video/video_capture_device.h"
+#include "ui/gfx/color_space.h"
 
 namespace media {
 
@@ -64,14 +67,14 @@ class CAPTURE_EXPORT CameraDeviceContext {
     //
     //   ConstructDefaultRequestSettings() ->
     //   OnConstructedDefaultRequestSettings() ->
-    //   |stream_buffer_manager_|->StartPreview()
+    //   |request_manager_|->StartPreview()
     //
-    // In the kCapturing state the |stream_buffer_manager_| runs the capture
+    // In the kCapturing state the |request_manager_| runs the capture
     // loop to send capture requests and process capture results.
     kCapturing,
 
     // When the camera device is in the kCapturing state, a capture loop is
-    // constantly running in |stream_buffer_manager_|:
+    // constantly running in |request_manager_|:
     //
     // On the StreamBufferManager side, we register and submit a capture
     // request whenever a free buffer is available:
@@ -160,18 +163,28 @@ class CAPTURE_EXPORT CameraDeviceContext {
   bool IsCameraFrameRotationEnabledAtSource();
 
   // Reserves a video capture buffer from the buffer pool provided by the video
-  // |client_|.  Returns true if the operation succeeds; false otherwise.
+  // |client_|. |require_new_buffer_id| and |retire_old_buffer_id| returns the
+  // new buffer id and retired buffer id in the VCD buffer pool. Returns true if
+  // the operation succeeds; false otherwise.
   bool ReserveVideoCaptureBufferFromPool(
       ClientType client_type,
       gfx::Size size,
       VideoPixelFormat format,
-      VideoCaptureDevice::Client::Buffer* buffer);
+      VideoCaptureDevice::Client::Buffer* buffer,
+      int* require_new_buffer_id = nullptr,
+      int* retire_old_buffer_id = nullptr);
 
   // Returns true if there is a client.
   bool HasClient();
 
+  // Expose MediaStreamTrack configuration changes through
+  // |client_->OnCaptureConfigurationChanged|
+  void OnCaptureConfigurationChanged();
+
  private:
   friend class RequestManagerTest;
+
+  void OnGotHardwareInfo(base::SysInfo::HardwareInfo hardware_info);
 
   SEQUENCE_CHECKER(sequence_checker_);
 
@@ -181,6 +194,8 @@ class CAPTURE_EXPORT CameraDeviceContext {
   // Lock to serialize the access to the various camera rotation state variables
   // since they are access on multiple threads.
   base::Lock rotation_state_lock_;
+
+  std::optional<gfx::ColorSpace> color_space_override_ GUARDED_BY(client_lock_);
 
   // Clockwise angle through which the output image needs to be rotated to be
   // upright on the device screen in its native orientation.  This value should
@@ -199,6 +214,8 @@ class CAPTURE_EXPORT CameraDeviceContext {
   // A map for client type and client instance.
   base::flat_map<ClientType, std::unique_ptr<VideoCaptureDevice::Client>>
       clients_ GUARDED_BY(client_lock_);
+
+  base::WeakPtrFactory<CameraDeviceContext> weak_ptr_factory_{this};
 };
 
 }  // namespace media

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -9,12 +9,13 @@
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
+#include "build/chromeos_buildflags.h"
 #include "google_apis/gaia/gaia_access_token_fetcher.h"
 #include "google_apis/gaia/gaia_urls.h"
 #include "google_apis/gaia/google_service_auth_error.h"
@@ -53,6 +54,20 @@ constexpr char kTokenResponseNoAccessToken[] = R"(
 constexpr char kValidFailureTokenResponse[] = R"(
     {
       "error": "invalid_grant"
+    })";
+
+constexpr char kRaptRequiredErrorResponse[] = R"(
+    {
+      "error": "invalid_grant",
+      "error_subtype": "rapt_required",
+      "error_description": "reauth related error"
+    })";
+
+constexpr char kInvalidRaptErrorResponse[] = R"(
+    {
+      "error": "invalid_grant",
+      "error_subtype": "invalid_rapt",
+      "error_description": "reauth related error"
     })";
 
 class MockOAuth2AccessTokenConsumer : public OAuth2AccessTokenConsumer {
@@ -208,6 +223,20 @@ TEST_F(OAuth2AccessTokenFetcherImplTest, CancelOngoingRequest) {
   base::RunLoop().RunUntilIdle();
 }
 
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+TEST_F(OAuth2AccessTokenFetcherImplTest, GetAccessTokenRaptRequiredFailure) {
+  SetupGetAccessToken(net::OK, net::HTTP_BAD_REQUEST,
+                      kRaptRequiredErrorResponse);
+  EXPECT_CALL(consumer_,
+              OnGetTokenFailure(
+                  GoogleServiceAuthError::FromScopeLimitedUnrecoverableError(
+                      "reauth related error")))
+      .Times(1);
+  fetcher_->Start("client_id", "client_secret", ScopeList());
+  base::RunLoop().RunUntilIdle();
+}
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
 TEST_F(OAuth2AccessTokenFetcherImplTest, MakeGetAccessTokenBodyNoScope) {
   std::string body =
       "client_id=cid1&"
@@ -282,23 +311,46 @@ TEST_F(OAuth2AccessTokenFetcherImplTest, ParseGetAccessTokenResponseSuccess) {
 
 TEST_F(OAuth2AccessTokenFetcherImplTest,
        ParseGetAccessTokenFailureInvalidError) {
-  std::string error;
+  std::string error, error_subtype, error_description;
   EXPECT_FALSE(OAuth2AccessTokenFetcherImpl::ParseGetAccessTokenFailureResponse(
-      kTokenResponseNoAccessToken, &error));
+      kTokenResponseNoAccessToken, &error, &error_subtype, &error_description));
   EXPECT_TRUE(error.empty());
 }
 
 TEST_F(OAuth2AccessTokenFetcherImplTest, ParseGetAccessTokenFailure) {
-  std::string error;
+  std::string error, error_subtype, error_description;
   EXPECT_TRUE(OAuth2AccessTokenFetcherImpl::ParseGetAccessTokenFailureResponse(
-      kValidFailureTokenResponse, &error));
+      kValidFailureTokenResponse, &error, &error_subtype, &error_description));
   EXPECT_EQ("invalid_grant", error);
+  EXPECT_TRUE(error_subtype.empty());
+  EXPECT_TRUE(error_description.empty());
+}
+
+TEST_F(OAuth2AccessTokenFetcherImplTest,
+       ParseGetAccessTokenFailureForMissingRaptError) {
+  std::string error, error_subtype, error_description;
+  EXPECT_TRUE(OAuth2AccessTokenFetcherImpl::ParseGetAccessTokenFailureResponse(
+      kRaptRequiredErrorResponse, &error, &error_subtype, &error_description));
+  EXPECT_EQ("invalid_grant", error);
+  EXPECT_EQ("rapt_required", error_subtype);
+  EXPECT_EQ("reauth related error", error_description);
+}
+
+TEST_F(OAuth2AccessTokenFetcherImplTest,
+       ParseGetAccessTokenFailureForInvalidRaptError) {
+  std::string error, error_subtype, error_description;
+  EXPECT_TRUE(OAuth2AccessTokenFetcherImpl::ParseGetAccessTokenFailureResponse(
+      kInvalidRaptErrorResponse, &error, &error_subtype, &error_description));
+  EXPECT_EQ("invalid_grant", error);
+  EXPECT_EQ("invalid_rapt", error_subtype);
+  EXPECT_EQ("reauth related error", error_description);
 }
 
 struct OAuth2ErrorCodesTestParam {
   const char* error_code;
-  OAuth2AccessTokenFetcherImpl::OAuth2Response expected_sample;
   net::HttpStatusCode httpStatusCode;
+  OAuth2AccessTokenFetcherImpl::OAuth2Response expected_sample;
+  GoogleServiceAuthError::State expected_error_state;
 };
 
 class OAuth2ErrorCodesTest
@@ -309,43 +361,84 @@ class OAuth2ErrorCodesTest
 
   OAuth2ErrorCodesTest(const OAuth2ErrorCodesTest&) = delete;
   OAuth2ErrorCodesTest& operator=(const OAuth2ErrorCodesTest&) = delete;
+
+  GoogleServiceAuthError GetGoogleServiceAuthError(
+      const std::string& error_message) {
+    switch (GetParam().expected_error_state) {
+      case GoogleServiceAuthError::INVALID_GAIA_CREDENTIALS:
+        return GoogleServiceAuthError::FromInvalidGaiaCredentialsReason(
+            GoogleServiceAuthError::InvalidGaiaCredentialsReason::
+                CREDENTIALS_REJECTED_BY_SERVER);
+      case GoogleServiceAuthError::SERVICE_UNAVAILABLE:
+        return GoogleServiceAuthError::FromServiceUnavailable(error_message);
+      case GoogleServiceAuthError::SERVICE_ERROR:
+        return GoogleServiceAuthError::FromServiceError(error_message);
+      case GoogleServiceAuthError::SCOPE_LIMITED_UNRECOVERABLE_ERROR:
+        return GoogleServiceAuthError::FromScopeLimitedUnrecoverableError(
+            error_message);
+
+      case GoogleServiceAuthError::NONE:
+      case GoogleServiceAuthError::USER_NOT_SIGNED_UP:
+      case GoogleServiceAuthError::CONNECTION_FAILED:
+      case GoogleServiceAuthError::UNEXPECTED_SERVICE_RESPONSE:
+      case GoogleServiceAuthError::REQUEST_CANCELED:
+      case GoogleServiceAuthError::CHALLENGE_RESPONSE_REQUIRED:
+      case GoogleServiceAuthError::NUM_STATES:
+        NOTREACHED();
+    }
+  }
 };
 
 const OAuth2ErrorCodesTestParam kOAuth2ErrorCodesTable[] = {
-    {
-        "invalid_request",
-        OAuth2AccessTokenFetcherImpl::kInvalidRequest,
-        net::HTTP_BAD_REQUEST,
-    },
-    {"invalid_client", OAuth2AccessTokenFetcherImpl::kInvalidClient,
-     net::HTTP_UNAUTHORIZED},
-    {"invalid_grant", OAuth2AccessTokenFetcherImpl::kInvalidGrant,
-     net::HTTP_BAD_REQUEST},
-    {"unauthorized_client", OAuth2AccessTokenFetcherImpl::kUnauthorizedClient,
-     net::HTTP_UNAUTHORIZED},
-    {"unsupported_grant_type",
-     OAuth2AccessTokenFetcherImpl::kUnsuportedGrantType, net::HTTP_BAD_REQUEST},
-    {"invalid_scope", OAuth2AccessTokenFetcherImpl::kInvalidScope,
-     net::HTTP_BAD_REQUEST},
-    {"restricted_client", OAuth2AccessTokenFetcherImpl::kRestrictedClient,
-     net::HTTP_FORBIDDEN},
-    {"rate_limit_exceeded", OAuth2AccessTokenFetcherImpl::kRateLimitExceeded,
-     net::HTTP_FORBIDDEN},
-    {"internal_failure", OAuth2AccessTokenFetcherImpl::kInternalFailure,
-     net::HTTP_INTERNAL_SERVER_ERROR},
-    {"unknown_error", OAuth2AccessTokenFetcherImpl::kUnknownError,
-     net::HTTP_BAD_REQUEST},
-    {"", OAuth2AccessTokenFetcherImpl::kErrorUnexpectedFormat,
-     net::HTTP_BAD_REQUEST}};
+    {"invalid_request", net::HTTP_BAD_REQUEST,
+     OAuth2AccessTokenFetcherImpl::kInvalidRequest,
+     GoogleServiceAuthError::SERVICE_ERROR},
+    {"invalid_client", net::HTTP_UNAUTHORIZED,
+     OAuth2AccessTokenFetcherImpl::kInvalidClient,
+     GoogleServiceAuthError::SERVICE_ERROR},
+    {"invalid_grant", net::HTTP_BAD_REQUEST,
+     OAuth2AccessTokenFetcherImpl::kInvalidGrant,
+     GoogleServiceAuthError::INVALID_GAIA_CREDENTIALS},
+    {"unauthorized_client", net::HTTP_UNAUTHORIZED,
+     OAuth2AccessTokenFetcherImpl::kUnauthorizedClient,
+     GoogleServiceAuthError::SERVICE_ERROR},
+    {"unsupported_grant_type", net::HTTP_BAD_REQUEST,
+     OAuth2AccessTokenFetcherImpl::kUnsuportedGrantType,
+     GoogleServiceAuthError::SERVICE_ERROR},
+    {"invalid_scope", net::HTTP_BAD_REQUEST,
+     OAuth2AccessTokenFetcherImpl::kInvalidScope,
+     GoogleServiceAuthError::SCOPE_LIMITED_UNRECOVERABLE_ERROR},
+    {"restricted_client", net::HTTP_FORBIDDEN,
+     OAuth2AccessTokenFetcherImpl::kRestrictedClient,
+     GoogleServiceAuthError::SCOPE_LIMITED_UNRECOVERABLE_ERROR},
+    {"rate_limit_exceeded", net::HTTP_FORBIDDEN,
+     OAuth2AccessTokenFetcherImpl::kRateLimitExceeded,
+     GoogleServiceAuthError::SERVICE_UNAVAILABLE},
+    {"internal_failure", net::HTTP_INTERNAL_SERVER_ERROR,
+     OAuth2AccessTokenFetcherImpl::kInternalFailure,
+     GoogleServiceAuthError::SERVICE_UNAVAILABLE},
+    {"", net::HTTP_BAD_REQUEST,
+     OAuth2AccessTokenFetcherImpl::kErrorUnexpectedFormat,
+     GoogleServiceAuthError::SERVICE_ERROR},
+    {"", net::HTTP_OK, OAuth2AccessTokenFetcherImpl::kOkUnexpectedFormat,
+     GoogleServiceAuthError::SERVICE_UNAVAILABLE},
+    {"unknown_error", net::HTTP_BAD_REQUEST,
+     OAuth2AccessTokenFetcherImpl::kUnknownError,
+     GoogleServiceAuthError::SERVICE_ERROR},
+    {"unknown_error", net::HTTP_INTERNAL_SERVER_ERROR,
+     OAuth2AccessTokenFetcherImpl::kUnknownError,
+     GoogleServiceAuthError::SERVICE_UNAVAILABLE}};
 
 TEST_P(OAuth2ErrorCodesTest, TableRowTest) {
-  SetupGetAccessToken(net::OK, GetParam().httpStatusCode,
-                      base::StringPrintf(R"(
+  std::string response_body = base::StringPrintf(R"(
     {
       "error": "%s"
     })",
-                                         GetParam().error_code));
-  EXPECT_CALL(consumer_, OnGetTokenFailure(_)).Times(1);
+                                                 GetParam().error_code);
+  GoogleServiceAuthError expected_error =
+      GetGoogleServiceAuthError(response_body);
+  SetupGetAccessToken(net::OK, GetParam().httpStatusCode, response_body);
+  EXPECT_CALL(consumer_, OnGetTokenFailure(expected_error)).Times(1);
   fetcher_->Start("client_id", "client_secret", ScopeList());
   base::RunLoop().RunUntilIdle();
   histogram_tester()->ExpectUniqueSample(

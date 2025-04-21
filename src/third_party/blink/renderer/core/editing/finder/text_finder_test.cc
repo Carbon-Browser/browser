@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,6 +32,7 @@
 #include "third_party/blink/renderer/core/testing/sim/sim_request.h"
 #include "third_party/blink/renderer/core/testing/sim/sim_test.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/testing/testing_platform_support.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
@@ -61,6 +62,8 @@ class TextFinderTest : public testing::Test {
                                    int end_offset);
 
  private:
+  test::TaskEnvironment task_environment_;
+
   frame_test_helpers::WebViewHelper web_view_helper_;
   Persistent<Document> document_;
   Persistent<TextFinder> text_finder_;
@@ -104,7 +107,7 @@ TEST_F(TextFinderTest, FindTextSimple) {
   Node* text_node = GetDocument().body()->firstChild();
 
   int identifier = 0;
-  WebString search_text(String("FindMe"));
+  String search_text("FindMe");
   auto find_options =
       mojom::blink::FindOptions::New();  // Default + add testing flag.
   bool wrap_within_frame = true;
@@ -220,7 +223,7 @@ TEST_F(TextFinderTest, FindTextNotFound) {
   GetDocument().UpdateStyleAndLayout(DocumentUpdateReason::kTest);
 
   int identifier = 0;
-  WebString search_text(String("Boo"));
+  String search_text("Boo");
   auto find_options =
       mojom::blink::FindOptions::New();  // Default + add testing flag.
   bool wrap_within_frame = true;
@@ -233,7 +236,7 @@ TEST_F(TextFinderTest, FindTextNotFound) {
 TEST_F(TextFinderTest, FindTextInShadowDOM) {
   GetDocument().body()->setInnerHTML("<b>FOO</b><i slot='bar'>foo</i>");
   ShadowRoot& shadow_root =
-      GetDocument().body()->AttachShadowRootInternal(ShadowRootType::kOpen);
+      GetDocument().body()->AttachShadowRootForTesting(ShadowRootMode::kOpen);
   shadow_root.setInnerHTML("<slot name='bar'></slot><u>Foo</u><slot></slot>");
   Node* text_in_b_element = GetDocument().body()->firstChild()->firstChild();
   Node* text_in_i_element = GetDocument().body()->lastChild()->firstChild();
@@ -241,7 +244,7 @@ TEST_F(TextFinderTest, FindTextInShadowDOM) {
   GetDocument().UpdateStyleAndLayout(DocumentUpdateReason::kTest);
 
   int identifier = 0;
-  WebString search_text(String("foo"));
+  String search_text("foo");
   auto find_options =
       mojom::blink::FindOptions::New();  // Default + add testing flag.
   bool wrap_within_frame = true;
@@ -356,7 +359,8 @@ TEST_F(TextFinderTest, ScopeTextMatchesSimple) {
 
   // Modify the document size and ensure the cached match rects are recomputed
   // to reflect the updated layout.
-  GetDocument().body()->setAttribute(html_names::kStyleAttr, "margin: 2000px");
+  GetDocument().body()->setAttribute(html_names::kStyleAttr,
+                                     AtomicString("margin: 2000px"));
   GetDocument().UpdateStyleAndLayout(DocumentUpdateReason::kTest);
 
   match_rects = GetTextFinder().FindMatchRects();
@@ -395,7 +399,7 @@ TEST_F(TextFinderTest, ScopeTextMatchesRepeated) {
 TEST_F(TextFinderTest, ScopeTextMatchesWithShadowDOM) {
   GetDocument().body()->setInnerHTML("<b>FOO</b><i slot='bar'>foo</i>");
   ShadowRoot& shadow_root =
-      GetDocument().body()->AttachShadowRootInternal(ShadowRootType::kOpen);
+      GetDocument().body()->AttachShadowRootForTesting(ShadowRootMode::kOpen);
   shadow_root.setInnerHTML("<slot name='bar'></slot><u>Foo</u><slot></slot>");
   Node* text_in_b_element = GetDocument().body()->firstChild()->firstChild();
   Node* text_in_i_element = GetDocument().body()->lastChild()->firstChild();
@@ -501,7 +505,7 @@ TEST_F(TextFinderTest, FindTextJavaScriptUpdatesDOM) {
   GetDocument().UpdateStyleAndLayout(DocumentUpdateReason::kTest);
 
   int identifier = 0;
-  WebString search_text(String("FindMe"));
+  String search_text("FindMe");
   auto find_options =
       mojom::blink::FindOptions::New();  // Default + add testing flag.
   find_options->run_synchronously_for_testing = true;
@@ -667,20 +671,21 @@ TEST_F(TextFinderTest, BeforeMatchEvent) {
 
   auto find_options = mojom::blink::FindOptions::New();
   find_options->run_synchronously_for_testing = true;
-  GetTextFinder().Find(/*identifier=*/0, WebString(String("bar")),
-                       *find_options, /*wrap_within_frame=*/false);
+  GetTextFinder().Find(/*identifier=*/0, "bar", *find_options,
+                       /*wrap_within_frame=*/false);
 
   v8::Local<v8::Value> beforematch_fired_on_foo =
       EvalJs("window.beforematchFiredOnFoo");
   ASSERT_TRUE(beforematch_fired_on_foo->IsBoolean());
   EXPECT_FALSE(
-      beforematch_fired_on_foo->ToBoolean(v8::Isolate::GetCurrent())->Value());
+      beforematch_fired_on_foo->ToBoolean(v8_testing_scope.GetIsolate())
+          ->Value());
 
   v8::Local<v8::Value> beforematch_fired_on_bar =
       EvalJs("window.beforematchFiredOnBar");
   ASSERT_TRUE(beforematch_fired_on_bar->IsBoolean());
-  EXPECT_TRUE(
-      beforematch_fired_on_bar->ToBoolean(v8::Isolate::GetCurrent())->Value());
+  EXPECT_TRUE(beforematch_fired_on_bar->ToBoolean(v8_testing_scope.GetIsolate())
+                  ->Value());
 
   // Scrolling should occur after the beforematch event.
   v8::Local<v8::Context> context =
@@ -714,14 +719,14 @@ TEST_F(TextFinderTest, BeforeMatchEventRemoveElement) {
 
   auto find_options = mojom::blink::FindOptions::New();
   find_options->run_synchronously_for_testing = true;
-  GetTextFinder().Find(/*identifier=*/0, WebString(String("foo")),
-                       *find_options, /*wrap_within_frame=*/false);
+  GetTextFinder().Find(/*identifier=*/0, "foo", *find_options,
+                       /*wrap_within_frame=*/false);
 
   v8::Local<v8::Value> beforematch_fired_on_foo =
       EvalJs("window.beforematchFiredOnFoo");
   ASSERT_TRUE(beforematch_fired_on_foo->IsBoolean());
-  EXPECT_TRUE(
-      beforematch_fired_on_foo->ToBoolean(v8::Isolate::GetCurrent())->Value());
+  EXPECT_TRUE(beforematch_fired_on_foo->ToBoolean(v8_testing_scope.GetIsolate())
+                  ->Value());
 
   // TODO(jarhar): Update this test to include checks for scrolling behavior
   // once we decide what the behavior should be. Right now it is just here to
@@ -740,7 +745,7 @@ TEST_F(TextFinderSimTest, BeforeMatchEventAsyncExpandHighlight) {
   )HTML");
   Compositor().BeginFrame();
 
-  GetTextFinder().Find(/*identifier=*/0, WebString(String("hidden")),
+  GetTextFinder().Find(/*identifier=*/0, "hidden",
                        *mojom::blink::FindOptions::New(),
                        /*wrap_within_frame=*/false);
 
@@ -760,20 +765,19 @@ TEST_F(TextFinderSimTest, BeforeMatchExpandedHiddenMatchableUkm) {
     <!DOCTYPE html>
     <div id=hiddenid hidden=until-found>hidden</div>
   )HTML");
+  ukm::TestAutoSetUkmRecorder recorder;
+  GetDocument().View()->ResetUkmAggregatorForTesting();
+
   Compositor().BeginFrame();
+  EXPECT_EQ(recorder.entries_count(), 0u);
 
-  GetDocument().ukm_recorder_ = std::make_unique<ukm::TestUkmRecorder>();
-  auto* recorder =
-      static_cast<ukm::TestUkmRecorder*>(GetDocument().UkmRecorder());
-  EXPECT_EQ(recorder->entries_count(), 0u);
-
-  GetTextFinder().Find(/*identifier=*/0, WebString(String("hidden")),
+  GetTextFinder().Find(/*identifier=*/0, "hidden",
                        *mojom::blink::FindOptions::New(),
                        /*wrap_within_frame=*/false);
 
   Compositor().BeginFrame();
 
-  auto entries = recorder->GetEntriesByName("Blink.FindInPage");
+  auto entries = recorder.GetEntriesByName("Blink.FindInPage");
   // There are two entries because
   // DisplayLockUtilities::ActivateFindInPageMatchRangeIfNeeded followed by
   // DisplayLockContext::CommitForActivationWithSignal sets a
@@ -795,7 +799,7 @@ TEST_F(TextFinderSimTest, BeforeMatchExpandedHiddenMatchableUseCounter) {
   )HTML");
   Compositor().BeginFrame();
 
-  GetTextFinder().Find(/*identifier=*/0, WebString(String("hidden")),
+  GetTextFinder().Find(/*identifier=*/0, "hidden",
                        *mojom::blink::FindOptions::New(),
                        /*wrap_within_frame=*/false);
 
@@ -815,7 +819,7 @@ TEST_F(TextFinderSimTest,
   )HTML");
   Compositor().BeginFrame();
 
-  GetTextFinder().Find(/*identifier=*/0, WebString(String("hidden")),
+  GetTextFinder().Find(/*identifier=*/0, "hidden",
                        *mojom::blink::FindOptions::New(),
                        /*wrap_within_frame=*/false);
 
@@ -831,7 +835,7 @@ TEST_F(TextFinderTest, FindTextAcrossCommentNode) {
   GetDocument().UpdateStyleAndLayout(DocumentUpdateReason::kTest);
 
   int identifier = 0;
-  WebString search_text(String("abcdef"));
+  String search_text("abcdef");
   auto find_options = mojom::blink::FindOptions::New();
   find_options->run_synchronously_for_testing = true;
   bool wrap_within_frame = true;

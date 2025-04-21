@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "remoting/host/host_extension.h"
 
 namespace base {
@@ -23,6 +23,8 @@ class HostExtensionSession;
 // SecurityKeyExtension extends HostExtension to enable Security Key support.
 class SecurityKeyExtension : public HostExtension {
  public:
+  static const char kCapability[];
+
   explicit SecurityKeyExtension(
       scoped_refptr<base::SingleThreadTaskRunner> file_task_runner);
 

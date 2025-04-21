@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,11 @@
 
 #include "ash/ambient/model/ambient_weather_model.h"
 #include "ash/ambient/model/ambient_weather_model_observer.h"
+#include "ash/ash_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "ui/color/color_id.h"
 #include "ui/views/view.h"
 
 namespace views {
@@ -22,14 +25,24 @@ class AmbientViewDelegate;
 class TimeView;
 
 // Container for displaying a glanceable clock and weather info.
-class GlanceableInfoView : public views::View,
-                           public AmbientWeatherModelObserver {
- public:
-  METADATA_HEADER(GlanceableInfoView);
+class ASH_EXPORT GlanceableInfoView : public views::View,
+                                      public AmbientWeatherModelObserver {
+  METADATA_HEADER(GlanceableInfoView, views::View)
 
-  GlanceableInfoView(AmbientViewDelegate* delegate,
-                     int time_font_size_dip,
-                     SkColor time_temperature_font_color);
+ public:
+  class Delegate {
+   public:
+    virtual ~Delegate() = default;
+
+    // Returns the color for time and temperature text in |GlanceableInfoView|.
+    virtual SkColor GetTimeTemperatureFontColor() = 0;
+  };
+
+  GlanceableInfoView(
+      AmbientViewDelegate* delegate,
+      GlanceableInfoView::Delegate* glanceable_info_view_delegate,
+      int time_font_size_dip,
+      bool add_text_shadow);
   GlanceableInfoView(const GlanceableInfoView&) = delete;
   GlanceableInfoView& operator=(const GlanceableInfoView&) = delete;
   ~GlanceableInfoView() override;
@@ -40,7 +53,12 @@ class GlanceableInfoView : public views::View,
   // AmbientWeatherModelObserver:
   void OnWeatherInfoUpdated() override;
 
-  void Show();
+  void ShowWeather();
+
+  int GetTimeFontDescent();
+
+  bool IsWeatherConditionIconSetForTesting() const;
+  bool IsTemperatureSetForTesting() const;
 
  private:
   void InitLayout();
@@ -48,17 +66,21 @@ class GlanceableInfoView : public views::View,
   std::u16string GetTemperatureText() const;
 
   // View for the time info. Owned by the view hierarchy.
-  TimeView* time_view_ = nullptr;
+  raw_ptr<TimeView> time_view_ = nullptr;
 
   // Views for weather icon and temperature.
-  views::ImageView* weather_condition_icon_ = nullptr;
-  views::Label* temperature_ = nullptr;
+  raw_ptr<views::ImageView> weather_condition_icon_ = nullptr;
+  raw_ptr<views::Label> temperature_ = nullptr;
 
   // Owned by |AmbientController|.
-  AmbientViewDelegate* const delegate_ = nullptr;
+  const raw_ptr<AmbientViewDelegate> delegate_ = nullptr;
+
+  // Unowned. Must out live |GlancealeInfoView|.
+  raw_ptr<GlanceableInfoView::Delegate> const glanceable_info_view_delegate_ =
+      nullptr;
 
   const int time_font_size_dip_;
-  const SkColor time_temperature_font_color_;
+  const bool add_text_shadow_;
 
   base::ScopedObservation<AmbientWeatherModel, AmbientWeatherModelObserver>
       scoped_weather_model_observer_{this};

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -360,7 +360,7 @@ TEST_F(BaseFileTest, RenameWhileInProgress) {
 }
 
 #if BUILDFLAG(IS_FUCHSIA)
-// TODO(crbug.com/1314064): Re-enable when RenameWithError works on Fuchsia.
+// TODO(crbug.com/40221266): Re-enable when RenameWithError works on Fuchsia.
 #define MAYBE_RenameWithError DISABLED_RenameWithError
 #else
 #define MAYBE_RenameWithError RenameWithError
@@ -387,7 +387,7 @@ TEST_F(BaseFileTest, MAYBE_RenameWithError) {
 }
 
 #if BUILDFLAG(IS_FUCHSIA)
-// TODO(crbug.com/1314064): Re-enable when RenameWithErrorInProgress works on
+// TODO(crbug.com/40221266): Re-enable when RenameWithErrorInProgress works on
 // Fuchsia.
 #define MAYBE_RenameWithErrorInProgress DISABLED_RenameWithErrorInProgress
 #else
@@ -435,7 +435,7 @@ TEST_F(BaseFileTest, MAYBE_RenameWithErrorInProgress) {
 }
 
 #if BUILDFLAG(IS_FUCHSIA)
-// TODO(crbug.com/1314068): Re-enable when WriteWithError works on Fuchsia.
+// TODO(crbug.com/40221270): Re-enable when WriteWithError works on Fuchsia.
 #define MAYBE_WriteWithError DISABLED_WriteWithError
 #else
 #define MAYBE_WriteWithError WriteWithError
@@ -510,7 +510,7 @@ TEST_F(BaseFileTest, AppendToBaseFile) {
 }
 
 #if BUILDFLAG(IS_FUCHSIA)
-// TODO(crbug.com/1314062): Re-enable when ReadonlyBaseFile works on Fuchsia.
+// TODO(crbug.com/40221265): Re-enable when ReadonlyBaseFile works on Fuchsia.
 #define MAYBE_ReadonlyBaseFile DISABLED_ReadonlyBaseFile
 #else
 #define MAYBE_ReadonlyBaseFile ReadonlyBaseFile
@@ -552,8 +552,7 @@ TEST_F(BaseFileTest, MAYBE_ReadonlyBaseFile) {
 // file is known and matches the existing contents.
 TEST_F(BaseFileTest, ExistingBaseFileKnownHash) {
   base::FilePath file_path = temp_dir_.GetPath().AppendASCII("existing");
-  ASSERT_EQ(kTestDataLength1,
-            base::WriteFile(file_path, kTestData1, kTestDataLength1));
+  ASSERT_TRUE(base::WriteFile(file_path, kTestData1));
 
   std::string hash_so_far(std::begin(kHashOfTestData1),
                           std::end(kHashOfTestData1));
@@ -572,8 +571,7 @@ TEST_F(BaseFileTest, ExistingBaseFileKnownHash) {
 // file is unknown.
 TEST_F(BaseFileTest, ExistingBaseFileUnknownHash) {
   base::FilePath file_path = temp_dir_.GetPath().AppendASCII("existing");
-  ASSERT_EQ(kTestDataLength1,
-            base::WriteFile(file_path, kTestData1, kTestDataLength1));
+  ASSERT_TRUE(base::WriteFile(file_path, kTestData1));
 
   EXPECT_EQ(DOWNLOAD_INTERRUPT_REASON_NONE,
             base_file_->Initialize(file_path, base::FilePath(), base::File(),
@@ -589,8 +587,7 @@ TEST_F(BaseFileTest, ExistingBaseFileUnknownHash) {
 // Open an existing file. The contentsof the file doesn't match the known hash.
 TEST_F(BaseFileTest, ExistingBaseFileIncorrectHash) {
   base::FilePath file_path = temp_dir_.GetPath().AppendASCII("existing");
-  ASSERT_EQ(kTestDataLength2,
-            base::WriteFile(file_path, kTestData2, kTestDataLength2));
+  ASSERT_TRUE(base::WriteFile(file_path, kTestData2));
 
   std::string hash_so_far(std::begin(kHashOfTestData1),
                           std::end(kHashOfTestData1));
@@ -606,8 +603,7 @@ TEST_F(BaseFileTest, ExistingBaseFileIncorrectHash) {
 TEST_F(BaseFileTest, ExistingBaseFileLargeSizeKnownHash) {
   base::FilePath file_path = temp_dir_.GetPath().AppendASCII("existing");
   std::string big_buffer(1024 * 200, 'a');
-  ASSERT_EQ(static_cast<int>(big_buffer.size()),
-            base::WriteFile(file_path, big_buffer.data(), big_buffer.size()));
+  ASSERT_TRUE(base::WriteFile(file_path, big_buffer));
 
   // Hash of partial file (1024*200 * 'a')
   const uint8_t kExpectedPartialHash[] = {
@@ -637,8 +633,7 @@ TEST_F(BaseFileTest, ExistingBaseFileLargeSizeKnownHash) {
 TEST_F(BaseFileTest, ExistingBaseFileLargeSizeIncorrectHash) {
   base::FilePath file_path = temp_dir_.GetPath().AppendASCII("existing");
   std::string big_buffer(1024 * 200, 'a');
-  ASSERT_EQ(static_cast<int>(big_buffer.size()),
-            base::WriteFile(file_path, big_buffer.data(), big_buffer.size()));
+  ASSERT_TRUE(base::WriteFile(file_path, big_buffer));
 
   // Incorrect hash of partial file (1024*200 * 'a')
   const uint8_t kExpectedPartialHash[] = {
@@ -659,8 +654,7 @@ TEST_F(BaseFileTest, ExistingBaseFileLargeSizeIncorrectHash) {
 // Open an existing file. The size of the file is too short.
 TEST_F(BaseFileTest, ExistingBaseFileTooShort) {
   base::FilePath file_path = temp_dir_.GetPath().AppendASCII("existing");
-  ASSERT_EQ(kTestDataLength1,
-            base::WriteFile(file_path, kTestData1, kTestDataLength1));
+  ASSERT_TRUE(base::WriteFile(file_path, kTestData1));
 
   EXPECT_EQ(DOWNLOAD_INTERRUPT_REASON_FILE_TOO_SHORT,
             base_file_->Initialize(file_path, base::FilePath(), base::File(),
@@ -676,8 +670,7 @@ TEST_F(BaseFileTest, ExistingBaseFileKnownHashTooLong) {
   std::string contents;
   contents.append(kTestData1);
   contents.append("Something extra");
-  ASSERT_EQ(static_cast<int>(contents.size()),
-            base::WriteFile(file_path, contents.data(), contents.size()));
+  ASSERT_TRUE(base::WriteFile(file_path, contents));
 
   std::string hash_so_far(std::begin(kHashOfTestData1),
                           std::end(kHashOfTestData1));
@@ -699,8 +692,7 @@ TEST_F(BaseFileTest, ExistingBaseFileUnknownHashTooLong) {
   std::string contents;
   contents.append(kTestData1);
   contents.append("Something extra");
-  ASSERT_EQ(static_cast<int>(contents.size()),
-            base::WriteFile(file_path, contents.data(), contents.size()));
+  ASSERT_TRUE(base::WriteFile(file_path, contents));
 
   EXPECT_EQ(DOWNLOAD_INTERRUPT_REASON_NONE,
             base_file_->Initialize(file_path, base::FilePath(), base::File(),
@@ -723,8 +715,7 @@ TEST_F(BaseFileTest, ExistingBaseFileUnknownHashTooLongForLargeFile) {
   // |contents| is 100 bytes longer than kIntermediateSize. The latter is the
   // expected size.
   std::string contents(kIntermediateSize + 100, 'a');
-  ASSERT_EQ(static_cast<int>(contents.size()),
-            base::WriteFile(file_path, contents.data(), contents.size()));
+  ASSERT_TRUE(base::WriteFile(file_path, contents));
 
   EXPECT_EQ(DOWNLOAD_INTERRUPT_REASON_NONE,
             base_file_->Initialize(file_path, base::FilePath(), base::File(),
@@ -773,8 +764,7 @@ TEST_F(BaseFileTest, NoDoubleDeleteAfterCancel) {
   ASSERT_FALSE(base::PathExists(full_path));
 
   const char kData[] = "hello";
-  const int kDataLength = static_cast<int>(std::size(kData) - 1);
-  ASSERT_EQ(kDataLength, base::WriteFile(full_path, kData, kDataLength));
+  ASSERT_TRUE(base::WriteFile(full_path, kData));
   // The file that we created here should stick around when the BaseFile is
   // destroyed during TearDown.
   expect_file_survives_ = true;
@@ -784,8 +774,7 @@ TEST_F(BaseFileTest, NoDoubleDeleteAfterCancel) {
 TEST_F(BaseFileTest, WriteDataToSparseFile) {
   base::FilePath file_path = temp_dir_.GetPath().AppendASCII("existing");
   std::string contents = kTestData1;
-  ASSERT_EQ(static_cast<int>(contents.size()),
-            base::WriteFile(file_path, contents.data(), contents.size()));
+  ASSERT_TRUE(base::WriteFile(file_path, contents));
 
   base_file_->Initialize(file_path, base::FilePath(), base::File(),
                          kTestDataLength1, std::string(),

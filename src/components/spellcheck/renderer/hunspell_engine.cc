@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -64,15 +64,14 @@ void HunspellEngine::InitializeHunspell() {
   bdict_file_ = std::make_unique<base::MemoryMappedFile>();
 
   if (bdict_file_->Initialize(std::move(file_))) {
-    hunspell_ =
-        std::make_unique<Hunspell>(bdict_file_->data(), bdict_file_->length());
+    hunspell_ = std::make_unique<Hunspell>(bdict_file_->bytes());
   } else {
     NOTREACHED() << "Could not mmap spellchecker dictionary.";
   }
 }
 
 bool HunspellEngine::CheckSpelling(const std::u16string& word_to_check,
-                                   int tag) {
+                                   spellcheck::mojom::SpellCheckHost& host) {
   // Assume all words that cannot be checked are valid. Since Chrome can't
   // offer suggestions on them, either, there's no point in flagging them to
   // the user.
@@ -94,6 +93,7 @@ bool HunspellEngine::CheckSpelling(const std::u16string& word_to_check,
 
 void HunspellEngine::FillSuggestionList(
     const std::u16string& wrong_word,
+    spellcheck::mojom::SpellCheckHost& host,
     std::vector<std::u16string>* optional_suggestions) {
   std::string wrong_word_utf8(base::UTF16ToUTF8(wrong_word));
   if (wrong_word_utf8.length() > kMaxSuggestLen)
@@ -117,10 +117,11 @@ void HunspellEngine::FillSuggestionList(
 
 bool HunspellEngine::InitializeIfNeeded() {
   if (!initialized_ && !dictionary_requested_) {
-    mojo::Remote<spellcheck::mojom::SpellCheckHost> spell_check_host;
+    mojo::Remote<spellcheck::mojom::SpellCheckInitializationHost>
+        spell_check_init_host;
     embedder_provider_->GetInterface(
-        spell_check_host.BindNewPipeAndPassReceiver());
-    spell_check_host->RequestDictionary();
+        spell_check_init_host.BindNewPipeAndPassReceiver());
+    spell_check_init_host->RequestDictionary();
     dictionary_requested_ = true;
     return true;
   }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,10 @@
 
 #include "base/task/single_thread_task_runner.h"
 #include "remoting/host/input_injector.h"
+
+namespace ui {
+class SystemInputInjector;
+}  // namespace ui
 
 namespace remoting {
 
@@ -36,6 +40,11 @@ class InputInjectorChromeos : public InputInjector {
   // InputInjector interface.
   void Start(
       std::unique_ptr<protocol::ClipboardStub> client_clipboard) override;
+
+  // Overload for testing that allows injecting our own system input injector.
+  void StartForTesting(
+      std::unique_ptr<ui::SystemInputInjector> input_injector,
+      std::unique_ptr<protocol::ClipboardStub> client_clipboard);
 
  private:
   class Core;

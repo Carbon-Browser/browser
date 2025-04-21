@@ -1,17 +1,14 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
 #include "base/command_line.h"
-#include "chrome/browser/browser_process.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/extensions/extension_apitest.h"
-#include "components/user_manager/user.h"
-#include "components/user_manager/user_manager.h"
+#include "chrome/browser/profiles/profile.h"
 #include "components/wifi/fake_wifi_service.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_utils.h"
@@ -29,8 +26,8 @@
 // should be kept similar to the ChromeOS (primary) implementation as much as
 // possible. See also crbug.com/460119.
 
-using testing::Return;
 using testing::_;
+using testing::Return;
 
 using extensions::NetworkingPrivateDelegate;
 using extensions::NetworkingPrivateDelegateFactory;
@@ -43,7 +40,7 @@ namespace {
 class NetworkingPrivateServiceClientApiTest
     : public extensions::ExtensionApiTest {
  public:
-  NetworkingPrivateServiceClientApiTest() {}
+  NetworkingPrivateServiceClientApiTest() = default;
 
   NetworkingPrivateServiceClientApiTest(
       const NetworkingPrivateServiceClientApiTest&) = delete;
@@ -51,9 +48,9 @@ class NetworkingPrivateServiceClientApiTest
       const NetworkingPrivateServiceClientApiTest&) = delete;
 
   bool RunNetworkingSubtest(const std::string& subtest) {
-    const std::string page_url = "main.html?" + subtest;
+    const std::string extension_url = "main.html?" + subtest;
     return RunExtensionTest("networking_private/service_client",
-                            {.page_url = page_url.c_str()},
+                            {.extension_url = extension_url.c_str()},
                             {.load_as_component = true});
   }
 
@@ -162,8 +159,9 @@ IN_PROC_BROWSER_TEST_F(NetworkingPrivateServiceClientApiTest,
   EXPECT_TRUE(RunNetworkingSubtest("getManagedProperties")) << message_;
 }
 
+// TODO(b/349276078): This test is flaky.
 IN_PROC_BROWSER_TEST_F(NetworkingPrivateServiceClientApiTest,
-                       OnNetworksChangedEventConnect) {
+                       DISABLED_OnNetworksChangedEventConnect) {
   EXPECT_TRUE(RunNetworkingSubtest("onNetworksChangedEventConnect"))
       << message_;
 }

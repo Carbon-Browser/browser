@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,11 @@
 
 #include <vector>
 
-#include "ash/components/drivefs/mojom/drivefs.mojom-forward.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "chrome/browser/ash/file_manager/file_tasks_observer.h"
+#include "chromeos/ash/components/drivefs/mojom/drivefs.mojom-forward.h"
 #include "components/download/content/public/all_download_item_notifier.h"
 #include "components/drive/file_errors.h"
 #include "components/keyed_service/core/keyed_service.h"
@@ -57,8 +58,6 @@ class FileTasksNotifier : public KeyedService,
 
   ~FileTasksNotifier() override;
 
-  static FileTasksNotifier* GetForProfile(Profile* profile);
-
   void AddObserver(FileTasksObserver*);
   void RemoveObserver(FileTasksObserver*);
 
@@ -95,7 +94,7 @@ class FileTasksNotifier : public KeyedService,
                                     base::FilePath* drive_relative_path);
   virtual bool IsOffline();
 
-  Profile* const profile_;
+  const raw_ptr<Profile> profile_;
   download::AllDownloadItemNotifier download_notifier_;
   base::ObserverList<FileTasksObserver> observers_;
 };

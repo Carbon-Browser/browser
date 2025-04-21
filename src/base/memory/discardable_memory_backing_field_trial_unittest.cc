@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 #include "base/metrics/field_trial.h"
 #include "base/metrics/field_trial_params.h"
 #include "base/test/scoped_feature_list.h"
-#include "base/test/scoped_field_trial_list_resetter.h"
 #include "build/build_config.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -57,8 +56,9 @@ TEST_F(DiscardableMemoryBackingFieldTrialTest,
   std::unique_ptr<test::ScopedFeatureList> scoped_feature =
       GetScopedFeatureListForDiscardableMemoryTrialGroup(
           DiscardableMemoryTrialGroup::kEmulatedSharedMemory);
-  if (!DiscardableMemoryBackingFieldTrialIsEnabled())
+  if (!DiscardableMemoryBackingFieldTrialIsEnabled()) {
     return;
+  }
   DiscardableMemoryBacking backing = GetDiscardableMemoryBacking();
   EXPECT_EQ(backing, DiscardableMemoryBacking::kSharedMemory);
 }
@@ -68,8 +68,9 @@ TEST_F(DiscardableMemoryBackingFieldTrialTest,
   std::unique_ptr<test::ScopedFeatureList> scoped_feature =
       GetScopedFeatureListForDiscardableMemoryTrialGroup(
           DiscardableMemoryTrialGroup::kMadvFree);
-  if (!DiscardableMemoryBackingFieldTrialIsEnabled())
+  if (!DiscardableMemoryBackingFieldTrialIsEnabled()) {
     return;
+  }
   DiscardableMemoryBacking backing = GetDiscardableMemoryBacking();
   EXPECT_EQ(backing, DiscardableMemoryBacking::kMadvFree);
 }
@@ -79,8 +80,9 @@ TEST_F(DiscardableMemoryBackingFieldTrialTest, AshmemBackingMatchesTrialGroup) {
   std::unique_ptr<test::ScopedFeatureList> scoped_feature =
       GetScopedFeatureListForDiscardableMemoryTrialGroup(
           DiscardableMemoryTrialGroup::kAshmem);
-  if (!DiscardableMemoryBackingFieldTrialIsEnabled())
+  if (!DiscardableMemoryBackingFieldTrialIsEnabled()) {
     return;
+  }
   DiscardableMemoryBacking backing = GetDiscardableMemoryBacking();
   EXPECT_EQ(backing, DiscardableMemoryBacking::kSharedMemory);
 }

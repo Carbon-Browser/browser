@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,7 +37,7 @@ void SecureOriginPolicyHandler::ApplyPolicySettings(const PolicyMap& policies,
     return;
 
   std::string pref_string;
-  for (const auto& list_entry : value->GetListDeprecated()) {
+  for (const auto& list_entry : value->GetList()) {
     if (!pref_string.empty())
       pref_string.append(",");
     pref_string.append(list_entry.GetString());

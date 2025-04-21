@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,15 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/platform_thread.h"
 #include "build/build_config.h"
+#include "mojo/public/cpp/bindings/interface_endpoint_client.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/platform/platform.h"
+#include "third_party/blink/renderer/platform/scheduler/public/main_thread.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cross_thread_task.h"
 #include "third_party/blink/renderer/platform/scheduler/worker/compositor_thread.h"
-#include "third_party/blink/renderer/platform/scheduler/worker/compositor_thread_scheduler.h"
-#include "third_party/blink/renderer/platform/scheduler/worker/worker_thread.h"
+#include "third_party/blink/renderer/platform/scheduler/worker/compositor_thread_scheduler_impl.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
-#include "third_party/blink/renderer/platform/wtf/thread_specific.h"
 #include "third_party/blink/renderer/platform/wtf/threading.h"
 
 #if BUILDFLAG(IS_WIN)
@@ -30,20 +30,15 @@ namespace blink {
 
 namespace {
 
-// Thread-local storage for "blink::Thread"s.
-Thread*& ThreadTLSSlot() {
-  DEFINE_THREAD_SAFE_STATIC_LOCAL(WTF::ThreadSpecific<Thread*>, thread_tls_slot,
-                                  ());
-  return *thread_tls_slot;
-}
+constinit thread_local Thread* current_thread = nullptr;
 
-std::unique_ptr<Thread>& GetMainThread() {
-  DEFINE_STATIC_LOCAL(std::unique_ptr<Thread>, main_thread, ());
+std::unique_ptr<MainThread>& GetMainThread() {
+  DEFINE_STATIC_LOCAL(std::unique_ptr<MainThread>, main_thread, ());
   return main_thread;
 }
 
-std::unique_ptr<Thread>& GetCompositorThread() {
-  DEFINE_STATIC_LOCAL(std::unique_ptr<Thread>, compositor_thread, ());
+std::unique_ptr<NonMainThread>& GetCompositorThread() {
+  DEFINE_STATIC_LOCAL(std::unique_ptr<NonMainThread>, compositor_thread, ());
   return compositor_thread;
 }
 
@@ -51,7 +46,7 @@ std::unique_ptr<Thread>& GetCompositorThread() {
 
 // static
 void Thread::UpdateThreadTLS(Thread* thread) {
-  ThreadTLSSlot() = thread;
+  current_thread = thread;
 }
 
 ThreadCreationParams::ThreadCreationParams(ThreadType thread_type)
@@ -77,25 +72,20 @@ ThreadCreationParams& ThreadCreationParams::SetSupportsGC(bool gc_enabled) {
   return *this;
 }
 
-std::unique_ptr<Thread> Thread::CreateThread(
-    const ThreadCreationParams& params) {
-#if DCHECK_IS_ON()
-  WTF::WillCreateThread();
-#endif
-  auto thread = std::make_unique<scheduler::WorkerThread>(params);
-  thread->Init();
-  return std::move(thread);
-}
-
 void Thread::CreateAndSetCompositorThread() {
   DCHECK(!GetCompositorThread());
 
   ThreadCreationParams params(ThreadType::kCompositorThread);
-  params.base_thread_type = base::ThreadType::kCompositing;
+  params.base_thread_type = base::ThreadType::kDisplayCritical;
 
   auto compositor_thread =
       std::make_unique<scheduler::CompositorThread>(params);
   compositor_thread->Init();
+  compositor_thread->GetTaskRunner()->PostTask(
+      FROM_HERE, base::BindOnce([]() {
+        mojo::InterfaceEndpointClient::SetThreadNameSuffixForMetrics(
+            "Compositor");
+      }));
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
   compositor_thread->GetTaskRunner()->PostTaskAndReplyWithResult(
@@ -105,7 +95,7 @@ void Thread::CreateAndSetCompositorThread() {
         // changes. This is not possible inside the sandbox, so ask the
         // browser to do it.
         Platform::Current()->SetThreadType(compositor_thread_id,
-                                           base::ThreadType::kCompositing);
+                                           base::ThreadType::kDisplayCritical);
       }));
 #endif
 
@@ -113,20 +103,20 @@ void Thread::CreateAndSetCompositorThread() {
 }
 
 Thread* Thread::Current() {
-  return ThreadTLSSlot();
+  return current_thread;
 }
 
-Thread* Thread::MainThread() {
+MainThread* Thread::MainThread() {
   return GetMainThread().get();
 }
 
-Thread* Thread::CompositorThread() {
+NonMainThread* Thread::CompositorThread() {
   return GetCompositorThread().get();
 }
 
-std::unique_ptr<Thread> Thread::SetMainThread(
-    std::unique_ptr<Thread> main_thread) {
-  ThreadTLSSlot() = main_thread.get();
+std::unique_ptr<MainThread> MainThread::SetMainThread(
+    std::unique_ptr<MainThread> main_thread) {
+  current_thread = main_thread.get();
   std::swap(GetMainThread(), main_thread);
   return main_thread;
 }
@@ -136,7 +126,7 @@ Thread::Thread() = default;
 Thread::~Thread() = default;
 
 bool Thread::IsCurrentThread() const {
-  return ThreadTLSSlot() == this;
+  return current_thread == this;
 }
 
 void Thread::AddTaskObserver(TaskObserver* task_observer) {

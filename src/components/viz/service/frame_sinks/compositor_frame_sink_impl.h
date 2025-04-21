@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define COMPONENTS_VIZ_SERVICE_FRAME_SINKS_COMPOSITOR_FRAME_SINK_IMPL_H_
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/memory/read_only_shared_memory_region.h"
@@ -19,7 +20,6 @@
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "services/viz/public/mojom/compositing/compositor_frame_sink.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace viz {
 
@@ -32,7 +32,7 @@ class CompositorFrameSinkImpl : public mojom::CompositorFrameSink {
   CompositorFrameSinkImpl(
       FrameSinkManagerImpl* frame_sink_manager,
       const FrameSinkId& frame_sink_id,
-      absl::optional<FrameSinkBundleId> bundle_id,
+      std::optional<FrameSinkBundleId> bundle_id,
       mojo::PendingReceiver<mojom::CompositorFrameSink> receiver,
       mojo::PendingRemote<mojom::CompositorFrameSinkClient> client);
 
@@ -44,15 +44,17 @@ class CompositorFrameSinkImpl : public mojom::CompositorFrameSink {
   // mojom::CompositorFrameSink:
   void SetNeedsBeginFrame(bool needs_begin_frame) override;
   void SetWantsAnimateOnlyBeginFrames() override;
+  void SetWantsBeginFrameAcks() override;
+  void SetAutoNeedsBeginFrame() override;
   void SubmitCompositorFrame(
       const LocalSurfaceId& local_surface_id,
       CompositorFrame frame,
-      absl::optional<HitTestRegionList> hit_test_region_list,
+      std::optional<HitTestRegionList> hit_test_region_list,
       uint64_t submit_time) override;
   void SubmitCompositorFrameSync(
       const LocalSurfaceId& local_surface_id,
       CompositorFrame frame,
-      absl::optional<HitTestRegionList> hit_test_region_list,
+      std::optional<HitTestRegionList> hit_test_region_list,
       uint64_t submit_time,
       SubmitCompositorFrameSyncCallback callback) override;
   void DidNotProduceFrame(const BeginFrameAck& begin_frame_ack) override;
@@ -61,15 +63,16 @@ class CompositorFrameSinkImpl : public mojom::CompositorFrameSink {
   void DidDeleteSharedBitmap(const SharedBitmapId& id) override;
   void InitializeCompositorFrameSinkType(
       mojom::CompositorFrameSinkType type) override;
+  void BindLayerContext(mojom::PendingLayerContextPtr context) override;
 #if BUILDFLAG(IS_ANDROID)
-  void SetThreadIds(const std::vector<int32_t>& thread_ids) override;
+  void SetThreads(const std::vector<Thread>& threads) override;
 #endif
 
  private:
   void SubmitCompositorFrameInternal(
       const LocalSurfaceId& local_surface_id,
       CompositorFrame frame,
-      absl::optional<HitTestRegionList> hit_test_region_list,
+      std::optional<HitTestRegionList> hit_test_region_list,
       uint64_t submit_time,
       mojom::CompositorFrameSink::SubmitCompositorFrameSyncCallback);
 

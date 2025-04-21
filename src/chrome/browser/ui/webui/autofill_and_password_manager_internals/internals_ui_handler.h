@@ -1,17 +1,18 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_WEBUI_AUTOFILL_AND_PASSWORD_MANAGER_INTERNALS_INTERNALS_UI_HANDLER_H_
 #define CHROME_BROWSER_UI_WEBUI_AUTOFILL_AND_PASSWORD_MANAGER_INTERNALS_INTERNALS_UI_HANDLER_H_
 
+#include <optional>
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/memory/raw_ptr.h"
 #include "components/autofill/core/browser/logging/log_receiver.h"
 #include "content/public/browser/browsing_data_remover.h"
 #include "content/public/browser/web_ui_message_handler.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace autofill {
 class LogRouter;
@@ -19,8 +20,9 @@ class LogRouter;
 
 namespace content {
 class BrowserContext;
-class WebUIDataSource;
 }  // namespace content
+
+class Profile;
 
 namespace autofill {
 
@@ -29,8 +31,8 @@ constexpr char kCacheResetDone[] =
     "cache reset.";
 constexpr char kCacheResetAlreadyInProgress[] = "Reset already in progress";
 
-content::WebUIDataSource* CreateInternalsHTMLSource(
-    const std::string& source_name);
+void CreateAndAddInternalsHTMLSource(Profile* profile,
+                                     const std::string& source_name);
 
 // Class that wipes responses from the Autofill server from the HTTP cache.
 class AutofillCacheResetter : public content::BrowsingDataRemover::Observer {
@@ -47,8 +49,7 @@ class AutofillCacheResetter : public content::BrowsingDataRemover::Observer {
  private:
   // Implements content::BrowsingDataRemover::Observer.
   void OnBrowsingDataRemoverDone(uint64_t failed_data_types) override;
-
-  content::BrowsingDataRemover* remover_;
+  raw_ptr<content::BrowsingDataRemover> remover_;
   Callback callback_;
 };
 
@@ -78,7 +79,7 @@ class InternalsUIHandler : public content::WebUIMessageHandler,
   void OnJavascriptDisallowed() override;
 
   // LogReceiver implementation.
-  void LogEntry(const base::Value& entry) override;
+  void LogEntry(const base::Value::Dict& entry) override;
 
   void StartSubscription();
   void EndSubscription();
@@ -87,6 +88,7 @@ class InternalsUIHandler : public content::WebUIMessageHandler,
   void OnLoaded(const base::Value::List& args);
   void OnResetCache(const base::Value::List& args);
   void OnResetUpmEviction(const base::Value::List& args);
+  void OnResetAccountStorageNotice(const base::Value::List& args);
 
   void OnResetCacheDone(const std::string& message);
 
@@ -97,7 +99,7 @@ class InternalsUIHandler : public content::WebUIMessageHandler,
   // Whether |this| is registered as a log receiver with the LogRouter.
   bool registered_with_log_router_ = false;
 
-  absl::optional<AutofillCacheResetter> autofill_cache_resetter_;
+  std::optional<AutofillCacheResetter> autofill_cache_resetter_;
 };
 
 }  // namespace autofill

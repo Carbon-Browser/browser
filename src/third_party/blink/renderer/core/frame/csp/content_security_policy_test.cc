@@ -1,11 +1,13 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/core/frame/csp/content_security_policy.h"
 
 #include "base/test/scoped_feature_list.h"
+#include "base/test/with_feature_override.h"
 #include "services/network/public/cpp/features.h"
+#include "testing/gmock/include/gmock/gmock-matchers.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/security_context/insecure_request_policy.h"
 #include "third_party/blink/public/mojom/fetch/fetch_api_request.mojom-blink.h"
@@ -13,9 +15,11 @@
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/document_init.h"
 #include "third_party/blink/renderer/core/frame/csp/csp_directive_list.h"
+#include "third_party/blink/renderer/core/frame/csp/test_util.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/html/html_script_element.h"
+#include "third_party/blink/renderer/core/inspector/console_message.h"
 #include "third_party/blink/renderer/core/testing/dummy_page_holder.h"
 #include "third_party/blink/renderer/core/testing/null_execution_context.h"
 #include "third_party/blink/renderer/platform/crypto.h"
@@ -24,15 +28,21 @@
 #include "third_party/blink/renderer/platform/loader/fetch/resource_request.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_response.h"
 #include "third_party/blink/renderer/platform/network/content_security_policy_parsers.h"
-#include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
+#include "third_party/blink/renderer/platform/testing/task_environment.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/weborigin/scheme_registry.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 
 namespace blink {
 
+namespace {
+
 using network::mojom::ContentSecurityPolicySource;
 using network::mojom::ContentSecurityPolicyType;
+using testing::Contains;
+using testing::SizeIs;
+
+}  // namespace
 
 class ContentSecurityPolicyTest : public testing::Test {
  public:
@@ -56,6 +66,7 @@ class ContentSecurityPolicyTest : public testing::Test {
         secure_origin);
   }
 
+  test::TaskEnvironment task_environment;
   Persistent<ContentSecurityPolicy> csp;
   KURL secure_url;
   scoped_refptr<SecurityOrigin> secure_origin;
@@ -104,9 +115,10 @@ TEST_F(ContentSecurityPolicyTest, ParseInsecureRequestPolicy) {
         (test.expected_policy &
          mojom::blink::InsecureRequestPolicy::kUpgradeInsecureRequests) !=
         mojom::blink::InsecureRequestPolicy::kLeaveInsecureRequestsAlone;
-    EXPECT_EQ(expect_upgrade,
-              security_context.InsecureNavigationsToUpgrade().Contains(
-                  dummy->GetDocument().Url().Host().Impl()->GetHash()));
+    EXPECT_EQ(
+        expect_upgrade,
+        security_context.InsecureNavigationsToUpgrade().Contains(
+            dummy->GetDocument().Url().Host().ToString().Impl()->GetHash()));
   }
 
   // Report-Only
@@ -144,21 +156,37 @@ TEST_F(ContentSecurityPolicyTest, AddPolicies) {
   const KURL not_example_url("http://not-example.com");
 
   auto* csp2 = MakeGarbageCollected<ContentSecurityPolicy>();
+  TestCSPDelegate* test_delegate = MakeGarbageCollected<TestCSPDelegate>();
+  csp2->BindToDelegate(*test_delegate);
   csp2->AddPolicies(mojo::Clone(csp->GetParsedPolicies()));
-  EXPECT_FALSE(csp2->AllowScriptFromSource(
+
+  EXPECT_TRUE(csp2->AllowScriptFromSource(
       example_url, String(), IntegrityMetadataSet(), kParserInserted,
       example_url, ResourceRequest::RedirectStatus::kNoRedirect,
-      ReportingDisposition::kSuppressReporting,
+      ReportingDisposition::kReport,
       ContentSecurityPolicy::CheckHeaderType::kCheckReportOnly));
+  EXPECT_THAT(
+      test_delegate->console_messages(),
+      Contains(HasConsole("Refused to load the script 'http://example.com/'",
+                          ConsoleMessage::Level::kInfo)));
+
+  test_delegate->console_messages().clear();
   EXPECT_TRUE(csp2->AllowImageFromSource(
       example_url, example_url, ResourceRequest::RedirectStatus::kNoRedirect,
-      ReportingDisposition::kSuppressReporting,
+      ReportingDisposition::kReport,
       ContentSecurityPolicy::CheckHeaderType::kCheckReportOnly));
-  EXPECT_FALSE(csp2->AllowImageFromSource(
+  EXPECT_THAT(test_delegate->console_messages(), SizeIs(0));
+
+  test_delegate->console_messages().clear();
+  EXPECT_TRUE(csp2->AllowImageFromSource(
       not_example_url, not_example_url,
       ResourceRequest::RedirectStatus::kNoRedirect,
-      ReportingDisposition::kSuppressReporting,
+      ReportingDisposition::kReport,
       ContentSecurityPolicy::CheckHeaderType::kCheckReportOnly));
+  EXPECT_THAT(
+      test_delegate->console_messages(),
+      Contains(HasConsole("Refused to load the image 'http://not-example.com/'",
+                          ConsoleMessage::Level::kInfo)));
 }
 
 TEST_F(ContentSecurityPolicyTest, IsActiveForConnectionsWithConnectSrc) {
@@ -567,7 +595,6 @@ TEST_F(ContentSecurityPolicyTest, DirectiveType) {
       {CSPDirectiveName::ImgSrc, "img-src"},
       {CSPDirectiveName::ManifestSrc, "manifest-src"},
       {CSPDirectiveName::MediaSrc, "media-src"},
-      {CSPDirectiveName::NavigateTo, "navigate-to"},
       {CSPDirectiveName::ObjectSrc, "object-src"},
       {CSPDirectiveName::ReportURI, "report-uri"},
       {CSPDirectiveName::Sandbox, "sandbox"},
@@ -1036,7 +1063,7 @@ TEST_F(ContentSecurityPolicyTest, TrustedTypeEnforce) {
   csp->AddPolicies(ParseContentSecurityPolicies(
       "trusted-types one\ntwo\rthree", ContentSecurityPolicyType::kEnforce,
       ContentSecurityPolicySource::kHTTP, *secure_origin));
-  EXPECT_FALSE(csp->IsRequireTrustedTypes());
+  EXPECT_FALSE(csp->TrustedTypesRequired());
   EXPECT_TRUE(csp->AllowTrustedTypeAssignmentFailure("blabla"));
 }
 
@@ -1045,7 +1072,7 @@ TEST_F(ContentSecurityPolicyTest, TrustedTypeReport) {
   csp->AddPolicies(ParseContentSecurityPolicies(
       "trusted-types one\ntwo\rthree", ContentSecurityPolicyType::kReport,
       ContentSecurityPolicySource::kHTTP, *secure_origin));
-  EXPECT_FALSE(csp->IsRequireTrustedTypes());
+  EXPECT_FALSE(csp->TrustedTypesRequired());
   EXPECT_TRUE(csp->AllowTrustedTypeAssignmentFailure("blabla"));
 }
 
@@ -1057,7 +1084,7 @@ TEST_F(ContentSecurityPolicyTest, TrustedTypeReportAndEnforce) {
   csp->AddPolicies(ParseContentSecurityPolicies(
       "trusted-types two", ContentSecurityPolicyType::kEnforce,
       ContentSecurityPolicySource::kHTTP, *secure_origin));
-  EXPECT_FALSE(csp->IsRequireTrustedTypes());
+  EXPECT_FALSE(csp->TrustedTypesRequired());
   EXPECT_TRUE(csp->AllowTrustedTypeAssignmentFailure("blabla"));
 }
 
@@ -1069,7 +1096,7 @@ TEST_F(ContentSecurityPolicyTest, TrustedTypeReportAndNonTTEnforce) {
   csp->AddPolicies(ParseContentSecurityPolicies(
       "script-src none", ContentSecurityPolicyType::kEnforce,
       ContentSecurityPolicySource::kHTTP, *secure_origin));
-  EXPECT_FALSE(csp->IsRequireTrustedTypes());
+  EXPECT_FALSE(csp->TrustedTypesRequired());
   EXPECT_TRUE(csp->AllowTrustedTypeAssignmentFailure("blabla"));
 }
 
@@ -1079,12 +1106,12 @@ TEST_F(ContentSecurityPolicyTest, RequireTrustedTypeForEnforce) {
   csp->AddPolicies(ParseContentSecurityPolicies(
       "require-trusted-types-for ''", ContentSecurityPolicyType::kEnforce,
       ContentSecurityPolicySource::kHTTP, *secure_origin));
-  EXPECT_FALSE(csp->IsRequireTrustedTypes());
+  EXPECT_FALSE(csp->TrustedTypesRequired());
 
   csp->AddPolicies(ParseContentSecurityPolicies(
       "require-trusted-types-for 'script'", ContentSecurityPolicyType::kEnforce,
       ContentSecurityPolicySource::kHTTP, *secure_origin));
-  EXPECT_TRUE(csp->IsRequireTrustedTypes());
+  EXPECT_TRUE(csp->TrustedTypesRequired());
 }
 
 TEST_F(ContentSecurityPolicyTest, RequireTrustedTypeForReport) {
@@ -1093,7 +1120,7 @@ TEST_F(ContentSecurityPolicyTest, RequireTrustedTypeForReport) {
   csp->AddPolicies(ParseContentSecurityPolicies(
       "require-trusted-types-for 'script'", ContentSecurityPolicyType::kReport,
       ContentSecurityPolicySource::kHTTP, *secure_origin));
-  EXPECT_TRUE(csp->IsRequireTrustedTypes());
+  EXPECT_TRUE(csp->TrustedTypesRequired());
 }
 
 TEST_F(ContentSecurityPolicyTest, DefaultPolicy) {
@@ -1154,7 +1181,7 @@ TEST_F(ContentSecurityPolicyTest, EmptyCSPIsNoOp) {
   csp->BindToDelegate(execution_context->GetContentSecurityPolicyDelegate());
 
   const KURL example_url("http://example.com");
-  auto* document = Document::CreateForTest();
+  auto* document = Document::CreateForTest(*execution_context);
   String source;
   String context_url;
   String nonce;
@@ -1180,9 +1207,9 @@ TEST_F(ContentSecurityPolicyTest, EmptyCSPIsNoOp) {
       CSPDirectiveName::FontSrc,       CSPDirectiveName::FormAction,
       CSPDirectiveName::FrameSrc,      CSPDirectiveName::ImgSrc,
       CSPDirectiveName::ManifestSrc,   CSPDirectiveName::MediaSrc,
-      CSPDirectiveName::ObjectSrc,     CSPDirectiveName::PrefetchSrc,
-      CSPDirectiveName::ScriptSrcElem, CSPDirectiveName::StyleSrcElem,
-      CSPDirectiveName::WorkerSrc,     CSPDirectiveName::FencedFrameSrc};
+      CSPDirectiveName::ObjectSrc,     CSPDirectiveName::ScriptSrcElem,
+      CSPDirectiveName::StyleSrcElem,  CSPDirectiveName::WorkerSrc,
+      CSPDirectiveName::FencedFrameSrc};
   for (auto type : types_to_test) {
     EXPECT_TRUE(
         csp->AllowFromSource(type, example_url, example_url,
@@ -1235,49 +1262,17 @@ TEST_F(ContentSecurityPolicyTest, EmptyCSPIsNoOp) {
   EXPECT_FALSE(csp->HasPolicyFromSource(ContentSecurityPolicySource::kHTTP));
 }
 
-// Tests that WasmCSP runtime feature properly governs support for WasmEval.
-TEST_F(ContentSecurityPolicyTest, WasmEvalCSPEnable) {
-  auto test_wasm_eval_enabled = [&](bool enabled) {
-    ScopedWebAssemblyCSPForTest enable_wasp(enabled);
-
-    csp = MakeGarbageCollected<ContentSecurityPolicy>();
-    csp->BindToDelegate(execution_context->GetContentSecurityPolicyDelegate());
-
-    csp->AddPolicies(ParseContentSecurityPolicies(
-        "script-src 'wasm-unsafe-eval'", ContentSecurityPolicyType::kEnforce,
-        ContentSecurityPolicySource::kHTTP, *secure_origin));
-
-    EXPECT_EQ(enabled, csp->AllowWasmCodeGeneration(
-                           ReportingDisposition::kReport,
-                           ContentSecurityPolicy::kWillNotThrowException,
-                           g_empty_string));
-  };
-
-  test_wasm_eval_enabled(true);
-  test_wasm_eval_enabled(false);
-}
-
-// Tests that WasmCSP runtime feature properly governs support for
-// WasmUnsafeEval.
 TEST_F(ContentSecurityPolicyTest, WasmUnsafeEvalCSPEnable) {
-  auto test_wasm_unsafe_eval_enabled = [&](bool enabled) {
-    ScopedWebAssemblyCSPForTest enable_wasp(enabled);
+  csp = MakeGarbageCollected<ContentSecurityPolicy>();
+  csp->BindToDelegate(execution_context->GetContentSecurityPolicyDelegate());
 
-    csp = MakeGarbageCollected<ContentSecurityPolicy>();
-    csp->BindToDelegate(execution_context->GetContentSecurityPolicyDelegate());
+  csp->AddPolicies(ParseContentSecurityPolicies(
+      "script-src 'wasm-unsafe-eval'", ContentSecurityPolicyType::kEnforce,
+      ContentSecurityPolicySource::kHTTP, *secure_origin));
 
-    csp->AddPolicies(ParseContentSecurityPolicies(
-        "script-src 'wasm-unsafe-eval'", ContentSecurityPolicyType::kEnforce,
-        ContentSecurityPolicySource::kHTTP, *secure_origin));
-
-    EXPECT_EQ(enabled, csp->AllowWasmCodeGeneration(
-                           ReportingDisposition::kReport,
-                           ContentSecurityPolicy::kWillNotThrowException,
-                           g_empty_string));
-  };
-
-  test_wasm_unsafe_eval_enabled(true);
-  test_wasm_unsafe_eval_enabled(false);
+  EXPECT_TRUE(csp->AllowWasmCodeGeneration(
+      ReportingDisposition::kReport,
+      ContentSecurityPolicy::kWillNotThrowException, g_empty_string));
 }
 
 TEST_F(ContentSecurityPolicyTest, OpaqueOriginBeforeBind) {
@@ -1324,6 +1319,48 @@ TEST_F(ContentSecurityPolicyTest, SelfForDataMatchesNothing) {
                                  kParserInserted, url,
                                  ResourceRequest::RedirectStatus::kNoRedirect,
                                  ReportingDisposition::kSuppressReporting));
+}
+
+TEST_F(ContentSecurityPolicyTest, IsStrictPolicyEnforced) {
+  // No policy, no strictness.
+  csp = MakeGarbageCollected<ContentSecurityPolicy>();
+  EXPECT_FALSE(csp->IsStrictPolicyEnforced());
+
+  // Strict policy, strictness.
+  const char* strict_policy =
+      "object-src 'none'; "
+      "script-src 'nonce-abc' 'unsafe-inline' 'unsafe-eval' 'strict-dynamic' "
+      "           https: http:;"
+      "base-uri 'none';";
+  csp->AddPolicies(ParseContentSecurityPolicies(
+      strict_policy, ContentSecurityPolicyType::kEnforce,
+      ContentSecurityPolicySource::kHTTP, *secure_origin));
+  EXPECT_TRUE(csp->IsStrictPolicyEnforced());
+
+  // Report-only strict policy, no strictness.
+  csp = MakeGarbageCollected<ContentSecurityPolicy>();
+  csp->AddPolicies(ParseContentSecurityPolicies(
+      strict_policy, ContentSecurityPolicyType::kReport,
+      ContentSecurityPolicySource::kHTTP, *secure_origin));
+  EXPECT_FALSE(csp->IsStrictPolicyEnforced());
+
+  // Composed strict policy, strictness.
+  const char* strict_object = "object-src 'none';";
+  const char* strict_script = "script-src 'none';";
+  const char* strict_base = "base-uri 'none';";
+  csp = MakeGarbageCollected<ContentSecurityPolicy>();
+  csp->AddPolicies(ParseContentSecurityPolicies(
+      strict_object, ContentSecurityPolicyType::kEnforce,
+      ContentSecurityPolicySource::kHTTP, *secure_origin));
+  EXPECT_FALSE(csp->IsStrictPolicyEnforced());
+  csp->AddPolicies(ParseContentSecurityPolicies(
+      strict_script, ContentSecurityPolicyType::kEnforce,
+      ContentSecurityPolicySource::kHTTP, *secure_origin));
+  EXPECT_FALSE(csp->IsStrictPolicyEnforced());
+  csp->AddPolicies(ParseContentSecurityPolicies(
+      strict_base, ContentSecurityPolicyType::kEnforce,
+      ContentSecurityPolicySource::kHTTP, *secure_origin));
+  EXPECT_TRUE(csp->IsStrictPolicyEnforced());
 }
 
 TEST_F(ContentSecurityPolicyTest, ReasonableRestrictionMetrics) {
@@ -1465,5 +1502,68 @@ TEST_F(ContentSecurityPolicyTest, BetterThanReasonableRestrictionMetrics) {
                   WebFeature::kCSPROWithBetterThanReasonableRestrictions));
   }
 }
+
+TEST_F(ContentSecurityPolicyTest, AllowFencedFrameOpaqueURL) {
+  struct TestCase {
+    const char* header;
+    bool expected;
+  } cases[] = {
+      {"fenced-frame-src 'none'", false},
+      {"fenced-frame-src http://", false},
+      {"fenced-frame-src http://*:*", false},
+      {"fenced-frame-src http://*.domain", false},
+      {"fenced-frame-src https://*:80", false},
+      {"fenced-frame-src https://localhost:*", false},
+      {"fenced-frame-src https://localhost:80", false},
+      // "https://*" is not allowed as it could leak data about ports.
+      {"fenced-frame-src https://*", false},
+      {"fenced-frame-src *", true},
+      {"fenced-frame-src https:", true},
+      {"fenced-frame-src https://*:*", true},
+      {"fenced-frame-src https: wss:", true},
+      {"fenced-frame-src https:; fenced-frame-src wss:", true},
+  };
+
+  for (const auto& test : cases) {
+    SCOPED_TRACE(testing::Message() << "Header: `" << test.header << "`");
+    csp = MakeGarbageCollected<ContentSecurityPolicy>();
+    csp->AddPolicies(ParseContentSecurityPolicies(
+        test.header, ContentSecurityPolicyType::kEnforce,
+        ContentSecurityPolicySource::kHTTP, *secure_origin));
+    EXPECT_EQ(test.expected, csp->AllowFencedFrameOpaqueURL());
+  }
+}
+
+class SpeculationRulesHeaderContentSecurityPolicyTest
+    : public base::test::WithFeatureOverride,
+      public ContentSecurityPolicyTest {
+ public:
+  SpeculationRulesHeaderContentSecurityPolicyTest()
+      : base::test::WithFeatureOverride(
+            features::kExemptSpeculationRulesHeaderFromCSP) {}
+};
+
+TEST_P(SpeculationRulesHeaderContentSecurityPolicyTest,
+       ExemptSpeculationRulesFromHeader) {
+  KURL speculation_rules_url("http://example.com/rules.json");
+  csp = MakeGarbageCollected<ContentSecurityPolicy>();
+  csp->BindToDelegate(execution_context->GetContentSecurityPolicyDelegate());
+  csp->AddPolicies(ParseContentSecurityPolicies(
+      "script-src 'strict-dynamic'", ContentSecurityPolicyType::kEnforce,
+      ContentSecurityPolicySource::kHTTP, *secure_origin));
+
+  EXPECT_EQ(
+      base::FeatureList::IsEnabled(
+          features::kExemptSpeculationRulesHeaderFromCSP),
+      csp->AllowRequest(mojom::blink::RequestContextType::SPECULATION_RULES,
+                        network::mojom::RequestDestination::kSpeculationRules,
+                        speculation_rules_url, String(), IntegrityMetadataSet(),
+                        kParserInserted, speculation_rules_url,
+                        ResourceRequest::RedirectStatus::kNoRedirect,
+                        ReportingDisposition::kSuppressReporting));
+}
+
+INSTANTIATE_FEATURE_OVERRIDE_TEST_SUITE(
+    SpeculationRulesHeaderContentSecurityPolicyTest);
 
 }  // namespace blink

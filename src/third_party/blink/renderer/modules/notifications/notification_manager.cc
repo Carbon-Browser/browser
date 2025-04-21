@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,13 @@
 
 #include <utility>
 
-#include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/mojom/notifications/notification.mojom-blink.h"
 #include "third_party/blink/public/mojom/permissions/permission.mojom-blink.h"
 #include "third_party/blink/public/mojom/permissions/permission_status.mojom-blink.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_notification_permission.h"
@@ -75,14 +75,38 @@ mojom::blink::PermissionStatus NotificationManager::GetPermissionStatus() {
       "Blink.NotificationManager.GetPermissionStatusTime");
   mojom::blink::PermissionStatus permission_status;
   if (!GetNotificationService()->GetPermissionStatus(&permission_status)) {
-    NOTREACHED();
+    // The browser-side Mojo connection was closed, disabling notifications.
+    // Hitting this code path means the mojo call is no longer bound to the
+    // browser process.
     return mojom::blink::PermissionStatus::DENIED;
   }
 
   return permission_status;
 }
 
-ScriptPromise NotificationManager::RequestPermission(
+void NotificationManager::GetPermissionStatusAsync(
+    base::OnceCallback<void(mojom::blink::PermissionStatus)> callback) {
+  if (GetSupplementable()->IsContextDestroyed()) {
+    std::move(callback).Run(mojom::blink::PermissionStatus::DENIED);
+    return;
+  }
+
+  // Tentatively have an early return to avoid calling GetNotificationService()
+  // during prerendering. The return value is the same as
+  // `Notification::permission`'s.
+  // TODO(1280155): defer the construction of notification to ensure this method
+  // is not called during prerendering instead.
+  if (auto* window = DynamicTo<LocalDOMWindow>(GetSupplementable())) {
+    if (Document* document = window->document(); document->IsPrerendering()) {
+      std::move(callback).Run(mojom::blink::PermissionStatus::ASK);
+      return;
+    }
+  }
+
+  GetNotificationService()->GetPermissionStatus(std::move(callback));
+}
+
+ScriptPromise<V8NotificationPermission> NotificationManager::RequestPermission(
     ScriptState* script_state,
     V8NotificationPermissionCallback* deprecated_callback) {
   ExecutionContext* context = ExecutionContext::From(script_state);
@@ -95,35 +119,48 @@ ScriptPromise NotificationManager::RequestPermission(
         context,
         permission_service_.BindNewPipeAndPassReceiver(std::move(task_runner)));
     permission_service_.set_disconnect_handler(
-        WTF::Bind(&NotificationManager::OnPermissionServiceConnectionError,
-                  WrapWeakPersistent(this)));
+        WTF::BindOnce(&NotificationManager::OnPermissionServiceConnectionError,
+                      WrapWeakPersistent(this)));
   }
 
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
-  ScriptPromise promise = resolver->Promise();
+  auto* resolver =
+      MakeGarbageCollected<ScriptPromiseResolver<V8NotificationPermission>>(
+          script_state);
+  auto promise = resolver->Promise();
 
   LocalDOMWindow* win = To<LocalDOMWindow>(context);
   permission_service_->RequestPermission(
       CreatePermissionDescriptor(mojom::blink::PermissionName::NOTIFICATIONS),
       LocalFrame::HasTransientUserActivation(win ? win->GetFrame() : nullptr),
-      WTF::Bind(&NotificationManager::OnPermissionRequestComplete,
-                WrapPersistent(this), WrapPersistent(resolver),
-                WrapPersistent(deprecated_callback)));
+      WTF::BindOnce(&NotificationManager::OnPermissionRequestComplete,
+                    WrapPersistent(this), WrapPersistent(resolver),
+                    WrapPersistent(deprecated_callback)));
 
   return promise;
 }
 
+V8NotificationPermission PermissionStatusToEnum(
+    mojom::blink::PermissionStatus permission) {
+  switch (permission) {
+    case mojom::blink::PermissionStatus::GRANTED:
+      return V8NotificationPermission(V8NotificationPermission::Enum::kGranted);
+    case mojom::blink::PermissionStatus::DENIED:
+      return V8NotificationPermission(V8NotificationPermission::Enum::kDenied);
+    case mojom::blink::PermissionStatus::ASK:
+      return V8NotificationPermission(V8NotificationPermission::Enum::kDefault);
+  }
+}
+
 void NotificationManager::OnPermissionRequestComplete(
-    ScriptPromiseResolver* resolver,
+    ScriptPromiseResolver<V8NotificationPermission>* resolver,
     V8NotificationPermissionCallback* deprecated_callback,
     mojom::blink::PermissionStatus status) {
-  String status_string = Notification::PermissionString(status);
+  V8NotificationPermission permission = PermissionStatusToEnum(status);
   if (deprecated_callback) {
-    deprecated_callback->InvokeAndReportException(
-        nullptr, V8NotificationPermission::Create(status_string).value());
+    deprecated_callback->InvokeAndReportException(nullptr, permission);
   }
 
-  resolver->Resolve(status_string);
+  resolver->Resolve(permission);
 }
 
 void NotificationManager::OnNotificationServiceConnectionError() {
@@ -140,7 +177,7 @@ void NotificationManager::DisplayNonPersistentNotification(
     mojom::blink::NotificationResourcesPtr notification_resources,
     mojo::PendingRemote<mojom::blink::NonPersistentNotificationListener>
         event_listener) {
-  DCHECK(!token.IsEmpty());
+  DCHECK(!token.empty());
   DCHECK(notification_resources);
   GetNotificationService()->DisplayNonPersistentNotification(
       token, std::move(notification_data), std::move(notification_resources),
@@ -148,7 +185,7 @@ void NotificationManager::DisplayNonPersistentNotification(
 }
 
 void NotificationManager::CloseNonPersistentNotification(const String& token) {
-  DCHECK(!token.IsEmpty());
+  DCHECK(!token.empty());
   GetNotificationService()->CloseNonPersistentNotification(token);
 }
 
@@ -156,7 +193,7 @@ void NotificationManager::DisplayPersistentNotification(
     int64_t service_worker_registration_id,
     mojom::blink::NotificationDataPtr notification_data,
     mojom::blink::NotificationResourcesPtr notification_resources,
-    ScriptPromiseResolver* resolver) {
+    ScriptPromiseResolver<IDLUndefined>* resolver) {
   DCHECK(notification_data);
   DCHECK(notification_resources);
   DCHECK_EQ(notification_data->actions.has_value()
@@ -177,10 +214,6 @@ void NotificationManager::DisplayPersistentNotification(
   size_t author_data_size =
       notification_data->data.has_value() ? notification_data->data->size() : 0;
 
-  base::UmaHistogramCounts1000(
-      "Notifications.AuthorDataSize",
-      base::saturated_cast<base::HistogramBase::Sample>(author_data_size));
-
   if (author_data_size >
       mojom::blink::NotificationData::kMaximumDeveloperDataSize) {
     RecordPersistentNotificationDisplayResult(
@@ -192,12 +225,12 @@ void NotificationManager::DisplayPersistentNotification(
   GetNotificationService()->DisplayPersistentNotification(
       service_worker_registration_id, std::move(notification_data),
       std::move(notification_resources),
-      WTF::Bind(&NotificationManager::DidDisplayPersistentNotification,
-                WrapPersistent(this), WrapPersistent(resolver)));
+      WTF::BindOnce(&NotificationManager::DidDisplayPersistentNotification,
+                    WrapPersistent(this), WrapPersistent(resolver)));
 }
 
 void NotificationManager::DidDisplayPersistentNotification(
-    ScriptPromiseResolver* resolver,
+    ScriptPromiseResolver<IDLUndefined>* resolver,
     mojom::blink::PersistentNotificationError error) {
   switch (error) {
     case mojom::blink::PersistentNotificationError::NONE:
@@ -229,15 +262,15 @@ void NotificationManager::GetNotifications(
     int64_t service_worker_registration_id,
     const WebString& filter_tag,
     bool include_triggered,
-    ScriptPromiseResolver* resolver) {
+    ScriptPromiseResolver<IDLSequence<Notification>>* resolver) {
   GetNotificationService()->GetNotifications(
       service_worker_registration_id, filter_tag, include_triggered,
-      WTF::Bind(&NotificationManager::DidGetNotifications, WrapPersistent(this),
-                WrapPersistent(resolver)));
+      WTF::BindOnce(&NotificationManager::DidGetNotifications,
+                    WrapPersistent(this), WrapPersistent(resolver)));
 }
 
 void NotificationManager::DidGetNotifications(
-    ScriptPromiseResolver* resolver,
+    ScriptPromiseResolver<IDLSequence<Notification>>* resolver,
     const Vector<String>& notification_ids,
     Vector<mojom::blink::NotificationDataPtr> notification_datas) {
   DCHECK_EQ(notification_ids.size(), notification_datas.size());
@@ -266,9 +299,9 @@ NotificationManager::GetNotificationService() {
     GetSupplementable()->GetBrowserInterfaceBroker().GetInterface(
         notification_service_.BindNewPipeAndPassReceiver(task_runner));
 
-    notification_service_.set_disconnect_handler(
-        WTF::Bind(&NotificationManager::OnNotificationServiceConnectionError,
-                  WrapWeakPersistent(this)));
+    notification_service_.set_disconnect_handler(WTF::BindOnce(
+        &NotificationManager::OnNotificationServiceConnectionError,
+        WrapWeakPersistent(this)));
   }
 
   return notification_service_.get();

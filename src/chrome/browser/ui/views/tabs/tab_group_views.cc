@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,12 @@
 #include <tuple>
 #include <utility>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
-#include "chrome/browser/ui/tabs/tab_style.h"
 #include "chrome/browser/ui/views/frame/browser_non_client_frame_view.h"
 #include "chrome/browser/ui/views/tabs/tab_group_header.h"
 #include "chrome/browser/ui/views/tabs/tab_group_highlight.h"
+#include "chrome/browser/ui/views/tabs/tab_group_style.h"
 #include "chrome/browser/ui/views/tabs/tab_group_underline.h"
 #include "chrome/browser/ui/views/tabs/tab_slot_controller.h"
 #include "chrome/browser/ui/views/tabs/tab_strip.h"
@@ -26,17 +27,22 @@
 
 TabGroupViews::TabGroupViews(views::View* container_view,
                              views::View* drag_container_view,
-                             TabSlotController* tab_slot_controller,
+                             TabSlotController& tab_slot_controller,
                              const tab_groups::TabGroupId& group)
     : tab_slot_controller_(tab_slot_controller), group_(group) {
-  header_ = container_view->AddChildView(
-      std::make_unique<TabGroupHeader>(tab_slot_controller_, group_));
+  style_ = std::make_unique<const TabGroupStyle>(*this);
+  const TabGroupStyle* style = style_.get();
+
+  auto header =
+      std::make_unique<TabGroupHeader>(*tab_slot_controller_, group_, *style);
+  header->Init(group_);
+  header_ = container_view->AddChildView(std::move(header));
   underline_ = container_view->AddChildView(
-      std::make_unique<TabGroupUnderline>(this, group_));
+      std::make_unique<TabGroupUnderline>(this, group_, *style));
   drag_underline_ = drag_container_view->AddChildView(
-      std::make_unique<TabGroupUnderline>(this, group_));
+      std::make_unique<TabGroupUnderline>(this, group_, *style));
   highlight_ = drag_container_view->AddChildView(
-      std::make_unique<TabGroupHighlight>(this, group_));
+      std::make_unique<TabGroupHighlight>(this, group_, *style));
   highlight_->SetVisible(false);
 }
 
@@ -50,8 +56,9 @@ TabGroupViews::~TabGroupViews() {
 
 void TabGroupViews::UpdateBounds() {
   // If we're tearing down we should ignore events.
-  if (InTearDown())
+  if (InTearDown()) {
     return;
+  }
 
   auto [leading_group_view, trailing_group_view] =
       GetLeadingTrailingGroupViews();
@@ -97,8 +104,9 @@ void TabGroupViews::UpdateBounds() {
 void TabGroupViews::OnGroupVisualsChanged() {
   // If we're tearing down we should ignore events. (We can still receive them
   // here if the editor bubble was open when the tab group was closed.)
-  if (InTearDown())
+  if (InTearDown()) {
     return;
+  }
 
   header_->VisualsChanged();
   underline_->SchedulePaint();
@@ -129,27 +137,15 @@ SkColor TabGroupViews::GetGroupColor() const {
       tab_slot_controller_->GetGroupColorId(group_));
 }
 
-SkColor TabGroupViews::GetTabBackgroundColor() const {
-  return tab_slot_controller_->GetTabBackgroundColor(
-      TabActive::kInactive, BrowserFrameActiveState::kUseCurrent);
-}
-
-SkColor TabGroupViews::GetGroupBackgroundColor() const {
-  const SkColor active_color = tab_slot_controller_->GetTabBackgroundColor(
-      TabActive::kActive, BrowserFrameActiveState::kUseCurrent);
-  return SkColorSetA(active_color, gfx::Tween::IntValueBetween(
-                                       TabStyle::kSelectedTabOpacity,
-                                       SK_AlphaTRANSPARENT, SK_AlphaOPAQUE));
-}
-
 bool TabGroupViews::InTearDown() const {
   return !header_ || !header_->GetWidget() || !drag_underline_->GetWidget();
 }
 
-std::tuple<views::View*, views::View*>
+std::tuple<const views::View*, const views::View*>
 TabGroupViews::GetLeadingTrailingGroupViews() const {
-  std::vector<views::View*> children = underline_->parent()->children();
-  std::vector<views::View*> dragged_children =
+  std::vector<raw_ptr<views::View, VectorExperimental>> children =
+      underline_->parent()->children();
+  std::vector<raw_ptr<views::View, VectorExperimental>> dragged_children =
       drag_underline_->parent()->children();
   children.insert(children.end(), dragged_children.begin(),
                   dragged_children.end());
@@ -163,7 +159,7 @@ TabGroupViews::GetLeadingTrailingDraggedGroupViews() const {
 
 std::tuple<views::View*, views::View*>
 TabGroupViews::GetLeadingTrailingGroupViews(
-    std::vector<views::View*> children) const {
+    std::vector<raw_ptr<views::View, VectorExperimental>> children) const {
   // Elements of |children| may be in different coordinate spaces. Canonicalize
   // to widget space for comparison, since they will be in the same widget.
   views::View* leading_child = nullptr;
@@ -175,8 +171,9 @@ TabGroupViews::GetLeadingTrailingGroupViews(
   for (views::View* child : children) {
     TabSlotView* tab_slot_view = views::AsViewClass<TabSlotView>(child);
     if (!tab_slot_view || tab_slot_view->group() != group_ ||
-        !tab_slot_view->GetVisible())
+        !tab_slot_view->GetVisible()) {
       continue;
+    }
 
     gfx::Rect child_widget_bounds =
         child->ConvertRectToWidget(child->GetLocalBounds());

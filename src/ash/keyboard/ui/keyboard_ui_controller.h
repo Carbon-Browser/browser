@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,7 @@
 #include "ash/keyboard/ui/queued_display_change.h"
 #include "ash/public/cpp/keyboard/keyboard_config.h"
 #include "ash/public/cpp/keyboard/keyboard_types.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
 #include "base/time/time.h"
@@ -110,7 +111,7 @@ class KEYBOARD_EXPORT KeyboardUIController
   void Reload();
 
   // Rebuilds the keyboard by disabling and enabling it again.
-  // TODO(https://crbug.com/845780): Can this be replaced with |Reload|?
+  // TODO(crbug.com/40577582): Can this be replaced with |Reload|?
   void RebuildKeyboardIfEnabled();
 
   // Management of the observer list.
@@ -136,9 +137,9 @@ class KEYBOARD_EXPORT KeyboardUIController
 
   // Hide the keyboard because the user has chosen to specifically hide the
   // keyboard, such as pressing the dismiss button.
-  // TODO(https://crbug.com/845780): Rename this to
+  // TODO(crbug.com/40577582): Rename this to
   // HideKeyboardExplicitlyByUser.
-  // TODO(https://crbug.com/845780): Audit and switch callers to
+  // TODO(crbug.com/40577582): Audit and switch callers to
   // HideKeyboardImplicitlyByUser where appropriate.
   void HideKeyboardByUser();
 
@@ -168,6 +169,10 @@ class KEYBOARD_EXPORT KeyboardUIController
   // Force the keyboard to show up in the specific display if not showing and
   // lock the keyboard
   void ShowKeyboardInDisplay(const display::Display& display);
+
+  // Controls whether `ShowKeyboardIfWithinTransientBlurThreshold` should show
+  // the keyboard.
+  void SetShouldShowOnTransientBlur(bool should_show);
 
   // Returns the bounds in root window for the visible portion of the keyboard.
   // An empty rectangle will get returned when the keyboard is hidden.
@@ -371,7 +376,8 @@ class KEYBOARD_EXPORT KeyboardUIController
 
   // Notifies observers that the visual or occluded bounds of the keyboard
   // window are changing.
-  void NotifyKeyboardBoundsChanging(const gfx::Rect& new_bounds_in_root);
+  void NotifyKeyboardBoundsChanging(const gfx::Rect& new_bounds_in_root,
+                                    bool is_temporary = false);
 
   // Called when the keyboard window has loaded. Shows the keyboard if
   // |show_on_keyboard_window_load_| is true.
@@ -405,27 +411,18 @@ class KEYBOARD_EXPORT KeyboardUIController
   // window).
   void EnsureCaretInWorkArea(const gfx::Rect& occluded_bounds_in_screen);
 
-  // Marks that the keyboard load has started. This is used to measure the time
-  // it takes to fully load the keyboard. This should be called before
-  // MarkKeyboardLoadFinished.
-  void MarkKeyboardLoadStarted();
-
-  // Marks that the keyboard load has ended. This finishes measuring that the
-  // keyboard is loaded.
-  void MarkKeyboardLoadFinished();
-
   // Called when the enable flags change. Notifies observers of the change.
   void EnableFlagsChanged();
 
   std::unique_ptr<KeyboardUIFactory> ui_factory_;
   std::unique_ptr<KeyboardUI> ui_;
   std::unique_ptr<ui::VirtualKeyboardController> virtual_keyboard_controller_;
-  KeyboardLayoutDelegate* layout_delegate_ = nullptr;
+  raw_ptr<KeyboardLayoutDelegate, DanglingUntriaged> layout_delegate_ = nullptr;
   base::ScopedObservation<ui::InputMethod, ui::InputMethodObserver>
       ime_observation_{this};
 
   // Container window that the keyboard window is a child of.
-  aura::Window* parent_container_ = nullptr;
+  raw_ptr<aura::Window> parent_container_ = nullptr;
 
   // CallbackAnimationObserver should be destroyed before |ui_| because it uses
   // |ui_|'s animator.
@@ -464,11 +461,9 @@ class KEYBOARD_EXPORT KeyboardUIController
   NotificationManager notification_manager_;
 
   base::Time time_of_last_blur_ = base::Time::UnixEpoch();
+  bool should_show_on_transient_blur_ = true;
 
   DisplayUtil display_util_;
-
-  bool keyboard_load_time_logged_ = false;
-  base::Time keyboard_load_time_start_;
 
   base::WeakPtrFactory<KeyboardUIController>
       weak_factory_report_lingering_state_{this};

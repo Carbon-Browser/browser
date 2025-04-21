@@ -1,9 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/safe_browsing/content/browser/password_protection/password_protection_commit_deferring_condition.h"
 
+#include "base/memory/weak_ptr.h"
 #include "components/safe_browsing/content/browser/password_protection/password_protection_request_content.h"
 #include "content/public/browser/navigation_handle.h"
 
@@ -14,7 +15,7 @@ PasswordProtectionCommitDeferringCondition::
         content::NavigationHandle& navigation_handle,
         PasswordProtectionRequestContent& request)
     : content::CommitDeferringCondition(navigation_handle),
-      request_(request.AsWeakPtr()) {
+      request_(request.AsWeakPtrImpl()) {
   DCHECK(request_);
   request_->AddDeferredNavigation(*this);
 }
@@ -42,6 +43,10 @@ PasswordProtectionCommitDeferringCondition::WillCommitNavigation(
 
   resume_ = std::move(resume);
   return Result::kDefer;
+}
+
+const char* PasswordProtectionCommitDeferringCondition::TraceEventName() const {
+  return "PasswordProtectionCommitDeferringCondition";
 }
 
 void PasswordProtectionCommitDeferringCondition::ResumeNavigation() {

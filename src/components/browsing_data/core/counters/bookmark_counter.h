@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,7 @@ class BookmarkCounter : public browsing_data::BrowsingDataCounter {
   void Count() override;
   void CountBookmarks(const bookmarks::BookmarkModel* bookmark_model);
 
-  raw_ptr<bookmarks::BookmarkModel> bookmark_model_;
+  raw_ptr<bookmarks::BookmarkModel, FlakyDanglingUntriaged> bookmark_model_;
   base::WeakPtrFactory<BookmarkCounter> weak_ptr_factory_{this};
 };
 

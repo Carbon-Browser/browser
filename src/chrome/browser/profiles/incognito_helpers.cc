@@ -1,12 +1,10 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/profiles/incognito_helpers.h"
 
 #include "chrome/browser/profiles/profile.h"
-
-namespace chrome {
 
 content::BrowserContext* GetBrowserContextRedirectedInIncognito(
     content::BrowserContext* context) {
@@ -24,5 +22,3 @@ content::BrowserContext* GetBrowserContextOwnInstanceInIncognito(
     content::BrowserContext* context) {
   return context;
 }
-
-}  // namespace chrome

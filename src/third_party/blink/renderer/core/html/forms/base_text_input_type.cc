@@ -23,11 +23,14 @@
 
 #include "third_party/blink/renderer/core/html/forms/base_text_input_type.h"
 
-#include "third_party/blink/renderer/bindings/core/v8/script_regexp.h"
 #include "third_party/blink/renderer/core/dom/document.h"
+#include "third_party/blink/renderer/core/execution_context/agent.h"
+#include "third_party/blink/renderer/core/frame/web_feature.h"
+#include "third_party/blink/renderer/core/html/forms/email_input_type.h"
 #include "third_party/blink/renderer/core/html/forms/html_input_element.h"
 #include "third_party/blink/renderer/core/html_names.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
+#include "third_party/blink/renderer/platform/bindings/script_regexp.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 
 namespace blink {
@@ -37,8 +40,8 @@ void BaseTextInputType::Trace(Visitor* visitor) const {
   TextFieldInputType::Trace(visitor);
 }
 
-BaseTextInputType::BaseTextInputType(HTMLInputElement& element)
-    : TextFieldInputType(element) {}
+BaseTextInputType::BaseTextInputType(Type type, HTMLInputElement& element)
+    : TextFieldInputType(type, element) {}
 
 BaseTextInputType::~BaseTextInputType() = default;
 
@@ -83,20 +86,34 @@ bool BaseTextInputType::TooShort(
 }
 
 bool BaseTextInputType::PatternMismatch(const String& value) const {
+  if (IsEmailInputType() && GetElement().Multiple()) {
+    Vector<String> values = EmailInputType::ParseMultipleValues(value);
+    for (const auto& val : values) {
+      if (PatternMismatchPerValue(val))
+        return true;
+    }
+    return false;
+  }
+  return PatternMismatchPerValue(value);
+}
+
+bool BaseTextInputType::PatternMismatchPerValue(const String& value) const {
   const AtomicString& raw_pattern =
       GetElement().FastGetAttribute(html_names::kPatternAttr);
-  // Empty values can't be mismatched
-  if (raw_pattern.IsNull() || value.IsEmpty())
+  UnicodeMode unicode_mode = UnicodeMode::kUnicodeSets;
+  // Empty values can't be mismatched.
+  if (raw_pattern.IsNull() || value.empty())
     return false;
   if (!regexp_ || pattern_for_regexp_ != raw_pattern) {
+    v8::Isolate* isolate = GetElement().GetDocument().GetAgent().isolate();
     ScriptRegexp* raw_regexp = MakeGarbageCollected<ScriptRegexp>(
-        raw_pattern, kTextCaseSensitive, kMultilineDisabled,
-        ScriptRegexp::UTF16);
+        isolate, raw_pattern, kTextCaseSensitive,
+        MultilineMode::kMultilineDisabled, unicode_mode);
     if (!raw_regexp->IsValid()) {
       GetElement().GetDocument().AddConsoleMessage(
           MakeGarbageCollected<ConsoleMessage>(
-              mojom::ConsoleMessageSource::kRendering,
-              mojom::ConsoleMessageLevel::kError,
+              mojom::blink::ConsoleMessageSource::kRendering,
+              mojom::blink::ConsoleMessageLevel::kError,
               "Pattern attribute value " + raw_pattern +
                   " is not a valid regular expression: " +
                   raw_regexp->ExceptionMessage()));
@@ -106,7 +123,8 @@ bool BaseTextInputType::PatternMismatch(const String& value) const {
     }
     String pattern = "^(?:" + raw_pattern + ")$";
     regexp_ = MakeGarbageCollected<ScriptRegexp>(
-        pattern, kTextCaseSensitive, kMultilineDisabled, ScriptRegexp::UTF16);
+        isolate, pattern, kTextCaseSensitive, MultilineMode::kMultilineDisabled,
+        unicode_mode);
     pattern_for_regexp_ = raw_pattern;
   } else if (!regexp_->IsValid()) {
     return false;
@@ -124,6 +142,10 @@ bool BaseTextInputType::SupportsPlaceholder() const {
 }
 
 bool BaseTextInputType::SupportsSelectionAPI() const {
+  return true;
+}
+
+bool BaseTextInputType::IsAutoDirectionalityFormAssociated() const {
   return true;
 }
 

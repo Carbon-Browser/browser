@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ VaapiWrapper::VABufferDescriptor CreateVABufferDescriptor() {
 
 class MockVaapiWrapper : public VaapiWrapper {
  public:
-  MockVaapiWrapper() : VaapiWrapper(kVideoProcess) {}
+  MockVaapiWrapper() : VaapiWrapper(VADisplayStateHandle(), kVideoProcess) {}
   MOCK_METHOD1(SubmitBuffer_Locked, bool(const VABufferDescriptor&));
   MOCK_METHOD0(DestroyPendingBuffers_Locked, void());
 
@@ -48,6 +48,8 @@ class VaapiWrapperTest : public testing::Test {
             this, &VaapiWrapperTest::DefaultDestroyPendingBuffers_Locked));
   }
   void TearDown() override {
+    VAAPI_CHECK_CALLED_ON_VALID_SEQUENCE(
+        mock_vaapi_wrapper_->sequence_checker_);
     // The VaapiWrapper destructor calls DestroyPendingBuffers_Locked(). Since
     // MockVaapiWrapper is a derived class,
     // MockVaapiWrapper::DestroyPendingBuffers_Locked() won't get called during
@@ -63,6 +65,8 @@ class VaapiWrapperTest : public testing::Test {
   bool DefaultSubmitBuffer_Locked(
       const VaapiWrapper::VABufferDescriptor& va_buffer)
       EXCLUSIVE_LOCKS_REQUIRED(mock_vaapi_wrapper_->va_lock_) {
+    VAAPI_CHECK_CALLED_ON_VALID_SEQUENCE(
+        mock_vaapi_wrapper_->sequence_checker_);
     if (va_buffer.data) {
       constexpr VABufferID kFakeBufferId = 1234;
       mock_vaapi_wrapper_->pending_va_buffers_.push_back(kFakeBufferId);
@@ -79,10 +83,14 @@ class VaapiWrapperTest : public testing::Test {
 
   void DefaultDestroyPendingBuffers_Locked()
       EXCLUSIVE_LOCKS_REQUIRED(mock_vaapi_wrapper_->va_lock_) {
+    VAAPI_CHECK_CALLED_ON_VALID_SEQUENCE(
+        mock_vaapi_wrapper_->sequence_checker_);
     mock_vaapi_wrapper_->pending_va_buffers_.clear();
   }
 
   size_t GetPendingBuffersSize() const {
+    VAAPI_CHECK_CALLED_ON_VALID_SEQUENCE(
+        mock_vaapi_wrapper_->sequence_checker_);
     return mock_vaapi_wrapper_->pending_va_buffers_.size();
   }
 

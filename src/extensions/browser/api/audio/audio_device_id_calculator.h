@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,7 +49,7 @@ class AudioDeviceIdCalculator {
   std::string GenerateNewStableDeviceId(
       const std::string& audio_service_stable_id);
 
-  raw_ptr<content::BrowserContext> context_;
+  raw_ptr<content::BrowserContext, DanglingUntriaged> context_;
 
   // Maps a stable device ID as exposed by audio service to the associated
   // stable device ID that should be exposed to apps via chrome.audio API.

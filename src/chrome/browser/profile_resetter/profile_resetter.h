@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
@@ -25,6 +25,7 @@
 #include "content/public/browser/browsing_data_remover.h"
 
 class Profile;
+class BrandcodeConfigFetcher;
 
 namespace base {
 class AtomicFlag;
@@ -51,11 +52,31 @@ class ProfileResetter : public content::BrowsingDataRemover::Observer {
     SHORTCUTS = 1 << 7,
     NTP_CUSTOMIZATIONS = 1 << 8,
     LANGUAGES = 1 << 9,
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+    DNS_CONFIGURATIONS = 1 << 10,
+    PROXY_SETTINGS = 1 << 11,
+    KEYBOARD_SETTINGS = 1 << 12,
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
+    // This flag should be used for ResetProfile function, if you intend to add
+    // another reset to the reset profile, please edit this flag.
+    PROFILE_RESETS = DEFAULT_SEARCH_ENGINE | HOMEPAGE | CONTENT_SETTINGS |
+                     COOKIES_AND_SITE_DATA | EXTENSIONS | STARTUP_PAGES |
+                     PINNED_TABS | SHORTCUTS | NTP_CUSTOMIZATIONS | LANGUAGES,
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+    // These flags are used in conjunction with
+    // ResetSettingsHandler::SanitizeSettings, as they are not included by
+    // default in a profile reset and DNS configs are not tied to a specific
+    // user.
+    SANITIZE_RESETS = DNS_CONFIGURATIONS | PROXY_SETTINGS | KEYBOARD_SETTINGS,
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
     // Update ALL if you add new values and check whether the type of
     // ResettableFlags needs to be enlarged.
-    ALL = DEFAULT_SEARCH_ENGINE | HOMEPAGE | CONTENT_SETTINGS |
-          COOKIES_AND_SITE_DATA | EXTENSIONS | STARTUP_PAGES | PINNED_TABS |
-          SHORTCUTS | NTP_CUSTOMIZATIONS | LANGUAGES
+    ALL = PROFILE_RESETS
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+          | SANITIZE_RESETS
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   };
 
   // Bit vector for Resettable enum.
@@ -69,19 +90,42 @@ class ProfileResetter : public content::BrowsingDataRemover::Observer {
   ProfileResetter(const ProfileResetter&) = delete;
   ProfileResetter& operator=(const ProfileResetter&) = delete;
 
-  ~ProfileResetter() override;
+  // Resets the settings that are marked in the resettable flags to the default
+  // value, callback will be called once the reset is complete. This function
+  // will also make sure the resetter is set up properly before calling |Reset|
+  // to reset the flags. If |master_settings| is NULL, the default settings for
+  // the current device will be loaded and used as the default value, if not the
+  // specified defaults will be used for the reset values.
+  virtual void ResetSettings(
+      ProfileResetter::ResettableFlags resettable_flags,
+      std::unique_ptr<BrandcodedDefaultSettings> master_settings,
+      base::OnceClosure callback);
 
-  // Resets |resettable_flags| and calls |callback| on the UI thread on
-  // completion. |default_settings| allows the caller to specify some default
-  // settings. |default_settings| shouldn't be NULL.
-  virtual void Reset(ResettableFlags resettable_flags,
-                     std::unique_ptr<BrandcodedDefaultSettings> master_settings,
-                     base::OnceClosure callback);
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // Call to reset a users's DNS settings.
+  virtual void ResetDnsConfigurations();
+  // Call to reset a users's setting, "Allow proxies for shared networks",
+  // which is a network setting that affects all networks.
+  virtual void ResetProxySettings();
+  // Call to reset a user's keyboard input settings to language and spell
+  // checker defaults using the local browser locale.
+  virtual void ResetKeyboardInputSettings();
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+
+  ~ProfileResetter() override;
 
   virtual bool IsActive() const;
 
  private:
   FRIEND_TEST_ALL_PREFIXES(::ProfileResetterTest, ResetNTPCustomizationsTest);
+
+  // Resets |resettable_flags| and calls |callback| on the UI thread on
+  // completion. |default_settings| allows the caller to specify some default
+  // settings. |default_settings| shouldn't be NULL.
+  void ResetSettingsImpl(
+      ProfileResetter::ResettableFlags resettable_flags,
+      std::unique_ptr<BrandcodedDefaultSettings> master_settings,
+      base::OnceClosure callback);
 
   // Marks |resettable| as done and triggers |callback_| if all pending jobs
   // have completed.
@@ -104,9 +148,12 @@ class ProfileResetter : public content::BrowsingDataRemover::Observer {
   // Callback for when TemplateURLService has loaded.
   void OnTemplateURLServiceLoaded();
 
-  const raw_ptr<Profile> profile_;
+  // Callback to check if the settings is fetched properly.
+  void OnDefaultSettingsFetched();
+
+  const raw_ptr<Profile, DanglingUntriaged> profile_;
   std::unique_ptr<BrandcodedDefaultSettings> master_settings_;
-  raw_ptr<TemplateURLService> template_url_service_;
+  raw_ptr<TemplateURLService, DanglingUntriaged> template_url_service_;
 
   // Flags of a Resetable indicating which reset operations we are still waiting
   // for.
@@ -120,6 +167,11 @@ class ProfileResetter : public content::BrowsingDataRemover::Observer {
   raw_ptr<content::BrowsingDataRemover> cookies_remover_;
 
   base::CallbackListSubscription template_url_service_subscription_;
+
+  // Contains Chrome brand code; empty for organic Chrome.
+  std::string brandcode_;
+
+  std::unique_ptr<BrandcodeConfigFetcher> config_fetcher_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 

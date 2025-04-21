@@ -1,21 +1,24 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/web_apps/file_handler_launch_dialog_view.h"
 
+#include <algorithm>
 #include <memory>
 #include <string>
 
 #include "base/i18n/message_formatter.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
+#include "chrome/browser/ui/web_applications/web_app_dialogs.h"
 #include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_utils.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
 #include "ui/gfx/text_elider.h"
 #include "ui/views/controls/image_view.h"
 #include "ui/views/controls/label.h"
@@ -30,8 +33,8 @@ namespace web_app {
 FileHandlerLaunchDialogView::FileHandlerLaunchDialogView(
     const std::vector<base::FilePath>& file_paths,
     Profile* profile,
-    const AppId& app_id,
-    chrome::WebAppLaunchAcceptanceCallback close_callback)
+    const webapps::AppId& app_id,
+    WebAppLaunchAcceptanceCallback close_callback)
     : LaunchAppUserChoiceDialogView(profile, app_id, std::move(close_callback)),
       file_paths_(file_paths) {
   DCHECK(!file_paths.empty());
@@ -46,10 +49,10 @@ FileHandlerLaunchDialogView::FileHandlerLaunchDialogView(
   set_fixed_width(layout_provider->GetDistanceMetric(
       views::DISTANCE_MODAL_DIALOG_PREFERRED_WIDTH));
   SetButtonLabel(
-      ui::DIALOG_BUTTON_OK,
+      ui::mojom::DialogButton::kOk,
       l10n_util::GetStringUTF16(IDS_WEB_APP_FILE_HANDLING_POSITIVE_BUTTON));
   SetButtonLabel(
-      ui::DIALOG_BUTTON_CANCEL,
+      ui::mojom::DialogButton::kCancel,
       l10n_util::GetStringUTF16(IDS_WEB_APP_FILE_HANDLING_NEGATIVE_BUTTON));
 }
 
@@ -86,8 +89,9 @@ FileHandlerLaunchDialogView::CreateAboveAppInfoView() {
 
 std::unique_ptr<views::View>
 FileHandlerLaunchDialogView::CreateBelowAppInfoView() {
-  if (file_paths_.size() == 1)
+  if (file_paths_.size() == 1) {
     return nullptr;
+  }
 
   auto* layout_provider = views::LayoutProvider::Get();
   auto description_view = std::make_unique<views::View>();
@@ -136,8 +140,9 @@ FileHandlerLaunchDialogView::CreateBelowAppInfoView() {
                                              views::Label::GetDefaultFontList(),
                                              0.95 * available_width);
                  });
-  if (file_paths_.size() > displayed_file_name_count)
-    file_names.emplace_back(std::u16string(gfx::kEllipsisUTF16));
+  if (file_paths_.size() > displayed_file_name_count) {
+    file_names.emplace_back(gfx::kEllipsisUTF16);
+  }
 
   auto* files_label =
       files_view->AddChildView(std::make_unique<views::Label>(base::JoinString(
@@ -159,16 +164,12 @@ std::u16string FileHandlerLaunchDialogView::GetRememberChoiceString() {
       associations);
 }
 
-BEGIN_METADATA(FileHandlerLaunchDialogView, views::DialogDelegateView)
+BEGIN_METADATA(FileHandlerLaunchDialogView)
 END_METADATA
-
-}  // namespace web_app
-
-namespace chrome {
 
 void ShowWebAppFileLaunchDialog(const std::vector<base::FilePath>& file_paths,
                                 Profile* profile,
-                                const web_app::AppId& app_id,
+                                const webapps::AppId& app_id,
                                 WebAppLaunchAcceptanceCallback close_callback) {
   auto view = std::make_unique<web_app::FileHandlerLaunchDialogView>(
       file_paths, profile, app_id, std::move(close_callback));
@@ -179,4 +180,4 @@ void ShowWebAppFileLaunchDialog(const std::vector<base::FilePath>& file_paths,
       ->Show();
 }
 
-}  // namespace chrome
+}  // namespace web_app

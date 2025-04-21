@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,11 +12,11 @@
 
 namespace policy {
 
-SchemaMap::SchemaMap() {}
+SchemaMap::SchemaMap() = default;
 
 SchemaMap::SchemaMap(DomainMap map) : map_(std::move(map)) {}
 
-SchemaMap::~SchemaMap() {}
+SchemaMap::~SchemaMap() = default;
 
 const DomainMap& SchemaMap::GetDomains() const {
   return map_;
@@ -35,9 +35,9 @@ const Schema* SchemaMap::GetSchema(const PolicyNamespace& ns) const {
   return it == map->end() ? nullptr : &it->second;
 }
 
-void SchemaMap::FilterBundle(PolicyBundle* bundle,
+void SchemaMap::FilterBundle(PolicyBundle& bundle,
                              bool drop_invalid_component_policies) const {
-  for (auto& bundle_item : *bundle) {
+  for (auto& bundle_item : bundle) {
     const PolicyNamespace& ns = bundle_item.first;
     PolicyMap& policy_map = bundle_item.second;
 

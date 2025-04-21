@@ -1,6 +1,11 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <mach-o/getsect.h>
 #include <mach-o/ldsyms.h>
@@ -16,7 +21,7 @@
 #include "base/logging.h"
 #include "base/process/launch.h"
 #include "chrome/updater/constants.h"
-#include "chrome/updater/util.h"
+#include "chrome/updater/util/util.h"
 #include "third_party/zlib/google/zip_reader.h"
 
 namespace updater {

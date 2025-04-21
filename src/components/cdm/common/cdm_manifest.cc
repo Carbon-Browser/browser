@@ -1,12 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/cdm/common/cdm_manifest.h"
 
 #include <stddef.h>
+
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/containers/flat_set.h"
@@ -15,15 +17,14 @@
 #include "base/json/json_file_value_serializer.h"
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/values.h"
 #include "base/version.h"
 #include "content/public/common/cdm_info.h"
+#include "media/base/cdm_capability.h"
 #include "media/base/content_decryption_module.h"
 #include "media/base/decrypt_config.h"
 #include "media/base/video_codecs.h"
-#include "media/cdm/cdm_capability.h"
 #include "media/cdm/supported_audio_codecs.h"
 #include "media/cdm/supported_cdm_versions.h"
 #include "media/media_buildflags.h"
@@ -93,12 +94,10 @@ typedef bool (*VersionCheckFunc)(int version);
 // values, each one is checked sequentially, and if any one is supported, this
 // function returns true. If all values in the manifest entry are not supported,
 // then return false.
-bool CheckForCompatibleVersion(const base::Value& manifest,
+bool CheckForCompatibleVersion(const base::Value::Dict& manifest,
                                const std::string version_name,
                                VersionCheckFunc version_check_func) {
-  DCHECK(manifest.is_dict());
-
-  auto* version_string = manifest.FindStringKey(version_name);
+  auto* version_string = manifest.FindString(version_name);
   if (!version_string) {
     DVLOG(1) << "CDM manifest missing " << version_name;
     return false;
@@ -107,7 +106,7 @@ bool CheckForCompatibleVersion(const base::Value& manifest,
   DVLOG_IF(1, version_string->empty())
       << "CDM manifest has empty " << version_name;
 
-  for (const base::StringPiece& ver_str :
+  for (std::string_view ver_str :
        base::SplitStringPiece(*version_string, kCdmValueDelimiter,
                               base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL)) {
     int version = 0;
@@ -127,13 +126,11 @@ bool CheckForCompatibleVersion(const base::Value& manifest,
 // for 'cenc' only. Incorrect types in the manifest entry will log the error and
 // fail. Unrecognized values will be reported but otherwise ignored.
 bool GetEncryptionSchemes(
-    const base::Value& manifest,
+    const base::Value::Dict& manifest,
     base::flat_set<media::EncryptionScheme>* encryption_schemes) {
-  DCHECK(manifest.is_dict());
   DCHECK(encryption_schemes);
 
-  const base::Value* value =
-      manifest.FindKey(kCdmSupportedEncryptionSchemesName);
+  const base::Value* value = manifest.Find(kCdmSupportedEncryptionSchemesName);
   if (!value) {
     // No manifest entry found, so assume only 'cenc' supported for backwards
     // compatibility.
@@ -148,7 +145,7 @@ bool GetEncryptionSchemes(
   }
 
   base::flat_set<media::EncryptionScheme> result;
-  for (const auto& item : value->GetListDeprecated()) {
+  for (const auto& item : value->GetList()) {
     if (!item.is_string()) {
       DLOG(ERROR) << "Unrecognized item type in CDM manifest entry "
                   << kCdmSupportedEncryptionSchemesName;
@@ -177,9 +174,8 @@ bool GetEncryptionSchemes(
 
 // Returns true and updates |audio_codecs| with the full set of audio
 // codecs that support decryption.
-bool GetAudioCodecs(const base::Value& manifest,
-                    std::vector<media::AudioCodec>* audio_codecs) {
-  DCHECK(manifest.is_dict());
+bool GetAudioCodecs(const base::Value::Dict& manifest,
+                    base::flat_set<media::AudioCodec>* audio_codecs) {
   DCHECK(audio_codecs);
 
   // Note that desktop CDMs only support decryption of audio content,
@@ -199,12 +195,11 @@ bool GetAudioCodecs(const base::Value& manifest,
 // Returns true and updates |video_codecs| if the appropriate manifest entry is
 // valid. Returns false and does not modify |video_codecs| if the manifest entry
 // is incorrectly formatted.
-bool GetVideoCodecs(const base::Value& manifest,
+bool GetVideoCodecs(const base::Value::Dict& manifest,
                     media::CdmCapability::VideoCodecMap* video_codecs) {
-  DCHECK(manifest.is_dict());
   DCHECK(video_codecs);
 
-  const base::Value* value = manifest.FindKey(kCdmCodecsListName);
+  const base::Value* value = manifest.Find(kCdmCodecsListName);
   if (!value) {
     DLOG(WARNING) << "CDM manifest is missing codecs.";
     return true;
@@ -222,14 +217,14 @@ bool GetVideoCodecs(const base::Value& manifest,
     return true;
   }
 
-  const std::vector<base::StringPiece> supported_codecs =
+  const std::vector<std::string_view> supported_codecs =
       base::SplitStringPiece(codecs, kCdmValueDelimiter, base::TRIM_WHITESPACE,
                              base::SPLIT_WANT_NONEMPTY);
 
   // As the manifest string does not include profiles, specify {} to indicate
   // that all relevant profiles should be considered supported.
   media::CdmCapability::VideoCodecMap result;
-  const std::vector<media::VideoCodecProfile> kAllProfiles = {};
+  const media::VideoCodecInfo kAllProfiles;
   for (const auto& codec : supported_codecs) {
     if (codec == kCdmSupportedCodecVp8) {
       result.emplace(media::VideoCodec::kVP8, kAllProfiles);
@@ -250,13 +245,12 @@ bool GetVideoCodecs(const base::Value& manifest,
 
 // Returns true and updates |session_types| if the appropriate manifest entry is
 // valid. Returns false if the manifest entry is incorrectly formatted.
-bool GetSessionTypes(const base::Value& manifest,
+bool GetSessionTypes(const base::Value::Dict& manifest,
                      base::flat_set<media::CdmSessionType>* session_types) {
-  DCHECK(manifest.is_dict());
   DCHECK(session_types);
 
   bool is_persistent_license_supported = false;
-  const base::Value* value = manifest.FindKey(kCdmPersistentLicenseSupportName);
+  const base::Value* value = manifest.Find(kCdmPersistentLicenseSupportName);
   if (value) {
     if (!value->is_bool())
       return false;
@@ -272,9 +266,8 @@ bool GetSessionTypes(const base::Value& manifest,
   return true;
 }
 
-bool GetVersion(const base::Value& manifest, base::Version* version) {
-  DCHECK(manifest.is_dict());
-  auto* version_string = manifest.FindStringKey(kCdmVersion);
+bool GetVersion(const base::Value::Dict& manifest, base::Version* version) {
+  auto* version_string = manifest.FindString(kCdmVersion);
   if (!version_string) {
     DLOG(ERROR) << "CDM manifest missing " << kCdmVersion;
     return false;
@@ -291,9 +284,7 @@ bool GetVersion(const base::Value& manifest, base::Version* version) {
 
 }  // namespace
 
-bool IsCdmManifestCompatibleWithChrome(const base::Value& manifest) {
-  DCHECK(manifest.is_dict());
-
+bool IsCdmManifestCompatibleWithChrome(const base::Value::Dict& manifest) {
   return CheckForCompatibleVersion(manifest, kCdmModuleVersionsName,
                                    media::IsSupportedCdmModuleVersion) &&
          CheckForCompatibleVersion(
@@ -303,10 +294,8 @@ bool IsCdmManifestCompatibleWithChrome(const base::Value& manifest) {
                                    media::IsSupportedCdmHostVersion);
 }
 
-bool ParseCdmManifest(const base::Value& manifest,
+bool ParseCdmManifest(const base::Value::Dict& manifest,
                       media::CdmCapability* capability) {
-  DCHECK(manifest.is_dict());
-
   return GetAudioCodecs(manifest, &capability->audio_codecs) &&
          GetVideoCodecs(manifest, &capability->video_codecs) &&
          GetEncryptionSchemes(manifest, &capability->encryption_schemes) &&
@@ -326,8 +315,9 @@ bool ParseCdmManifestFromPath(const base::FilePath& manifest_path,
                 << ". Error: " << error_code << " / " << error_message;
     return false;
   }
+  base::Value::Dict& manifest_dict = manifest->GetDict();
 
-  return IsCdmManifestCompatibleWithChrome(*manifest) &&
-         GetVersion(*manifest, version) &&
-         ParseCdmManifest(*manifest, capability);
+  return IsCdmManifestCompatibleWithChrome(manifest_dict) &&
+         GetVersion(manifest_dict, version) &&
+         ParseCdmManifest(manifest_dict, capability);
 }

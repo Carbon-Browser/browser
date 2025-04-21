@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,11 @@
 #define COMPONENTS_HISTORY_CLUSTERS_CORE_QUERY_CLUSTERS_STATE_H_
 
 #include <string>
+#include <unordered_set>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
+#include "base/gtest_prod_util.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/cancelable_task_tracker.h"
@@ -16,13 +18,17 @@
 #include "base/time/time.h"
 #include "base/timer/elapsed_timer.h"
 #include "components/history/core/browser/history_types.h"
-#include "components/history_clusters/core/history_clusters_service_task_get_most_recent_clusters.h"
 #include "components/history_clusters/core/history_clusters_types.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "components/history_clusters/core/similar_visit.h"
+
+namespace history {
+class HistoryService;
+}  // namespace history
 
 namespace history_clusters {
 
 class HistoryClustersService;
+class HistoryClustersServiceTask;
 
 using LabelCount = std::pair<std::u16string, size_t>;
 
@@ -45,13 +51,20 @@ class QueryClustersState {
                               bool is_continuation)>;
 
   QueryClustersState(base::WeakPtr<HistoryClustersService> service,
-                     const std::string& query);
+                     history::HistoryService* history_service,
+                     const std::string& query,
+                     base::Time begin_time = base::Time(),
+                     bool recluster = false);
   ~QueryClustersState();
 
   QueryClustersState(const QueryClustersState&) = delete;
 
   // Returns the current query the state contains.
   const std::string& query() const { return query_; }
+
+  size_t number_clusters_sent_to_page() const {
+    return number_clusters_sent_to_page_;
+  }
 
   // Used to request another batch of clusters of the same query.
   void LoadNextBatchOfClusters(ResultCallback callback);
@@ -66,35 +79,64 @@ class QueryClustersState {
 
  private:
   friend class QueryClustersStateTest;
+  FRIEND_TEST_ALL_PREFIXES(QueryClustersStateTest, GetUngroupedVisits);
+  FRIEND_TEST_ALL_PREFIXES(QueryClustersStateTest,
+                           GetUngroupedVisitsDoesCrossBatchDeduplication);
 
   // Private class containing state that's only accessed on
   // `post_processing_task_runner`.
   class PostProcessor;
+
+  // Callback to `LoadNextBatchOfClusters()` if there's a search query.
+  void GetUngroupedVisits(
+      base::TimeTicks query_start_time,
+      ResultCallback callback,
+      std::vector<history::Cluster> clusters,
+      QueryClustersContinuationParams new_continuation_params);
+  void OnGotUngroupedVisits(
+      base::TimeTicks query_start_time,
+      ResultCallback callback,
+      std::vector<history::Cluster> clusters,
+      QueryClustersContinuationParams new_continuation_params,
+      std::vector<history::AnnotatedVisit> ungrouped_visits);
 
   // Callback to `LoadNextBatchOfClusters()`.
   void OnGotRawClusters(
       base::TimeTicks query_start_time,
       ResultCallback callback,
       std::vector<history::Cluster> clusters,
-      QueryClustersContinuationParams continuation_params) const;
+      QueryClustersContinuationParams new_continuation_params);
 
-  // Callback to `OnGotRawClusters()`.
+  // Callback to `PostProcessClusters()`.
   void OnGotClusters(base::ElapsedTimer post_processing_timer,
                      size_t clusters_from_backend_count,
                      base::TimeTicks query_start_time,
                      ResultCallback callback,
-                     QueryClustersContinuationParams continuation_params,
+                     QueryClustersContinuationParams new_continuation_params,
                      std::vector<history::Cluster> clusters);
 
   // Updates the internal state of raw labels for this next batch of `clusters`.
   void UpdateUniqueRawLabels(const std::vector<history::Cluster>& clusters);
 
-  // A weak pointer to the service in case we outlive the service.
-  // Never nullptr, except in unit tests.
+  // Weak pointers to services we may outlive. Never nullptr except in tests.
   const base::WeakPtr<HistoryClustersService> service_;
+
+  // Non-owning pointer, but this class always outlives the service.
+  const raw_ptr<history::HistoryService> history_service_;
 
   // The string query the user entered into the searchbox.
   const std::string query_;
+
+  // The beginning of a time range to narrow cluster results by, provided by
+  // the user through specific relative date chips or the URL.
+  base::Time begin_time_;
+
+  // The filter params to use for `query_`.
+  const QueryClustersFilterParams filter_params_;
+
+  // If true, forces reclustering as if `persist_clusters_in_history_db` were
+  // false.
+  bool recluster_;
 
   // The de-duplicated list of raw labels we've seen so far and their number of
   // occurrences, in the same order as the clusters themselves were provided.
@@ -106,12 +148,20 @@ class QueryClustersState {
   // query for the "next page".
   QueryClustersContinuationParams continuation_params_;
 
-  // True for all 'next-page' responses, but false for the first page.
-  bool is_continuation_ = false;
+  // The number of clusters that have already been sent to the page. This is
+  // updated AFTER the callback for each batch.
+  size_t number_clusters_sent_to_page_ = 0;
+
+  // Tracks the visits that we've seen so far. This is only used for when we
+  // are also aggregating ungrouped visits, i.e. when `query_` is non-empty.
+  std::unordered_set<SimilarVisit, SimilarVisit::Hash, SimilarVisit::Equals>
+      seen_visits_for_deduping_ungrouped_visits_;
 
   // Used only to fast-cancel tasks in case we are destroyed.
-  std::unique_ptr<HistoryClustersServiceTaskGetMostRecentClusters>
-      query_clusters_task;
+  std::unique_ptr<HistoryClustersServiceTask> query_clusters_task_;
+
+  // Used to track tasks sent to HistoryService.
+  base::CancelableTaskTracker history_task_tracker_;
 
   // A task runner to run all the post-processing tasks on.
   scoped_refptr<base::SequencedTaskRunner> post_processing_task_runner_;

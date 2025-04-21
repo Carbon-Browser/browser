@@ -1,9 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/media_controls/elements/media_control_cast_button_element.h"
 
+#include "base/metrics/histogram_functions.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/user_metrics_action.h"
 #include "third_party/blink/public/strings/grit/blink_strings.h"
@@ -17,13 +18,14 @@
 #include "third_party/blink/renderer/modules/remoteplayback/remote_playback.h"
 #include "third_party/blink/renderer/modules/remoteplayback/remote_playback_metrics.h"
 #include "third_party/blink/renderer/platform/text/platform_locale.h"
+#include "ui/strings/grit/ax_strings.h"
 
 namespace blink {
 
 namespace {
 
 Element* ElementFromCenter(Element& element) {
-  DOMRect* client_rect = element.getBoundingClientRect();
+  DOMRect* client_rect = element.GetBoundingClientRect();
   int center_x =
       static_cast<int>((client_rect->left() + client_rect->right()) / 2);
   int center_y =
@@ -39,9 +41,9 @@ MediaControlCastButtonElement::MediaControlCastButtonElement(
     bool is_overlay_button)
     : MediaControlInputElement(media_controls),
       is_overlay_button_(is_overlay_button) {
-  SetShadowPseudoId(is_overlay_button
-                        ? "-internal-media-controls-overlay-cast-button"
-                        : "-internal-media-controls-cast-button");
+  SetShadowPseudoId(AtomicString(
+      is_overlay_button ? "-internal-media-controls-overlay-cast-button"
+                        : "-internal-media-controls-cast-button"));
   setType(input_type_names::kButton);
   UpdateDisplayType();
 }
@@ -52,8 +54,10 @@ void MediaControlCastButtonElement::TryShowOverlay() {
   SetIsWanted(true);
   if (ElementFromCenter(*this) != &MediaElement()) {
     SetIsWanted(false);
-    return;
   }
+
+  base::UmaHistogramBoolean("Media.Controls.OverlayCastButtonIsCovered",
+                            !IsWanted());
 }
 
 void MediaControlCastButtonElement::UpdateDisplayType() {
@@ -102,7 +106,7 @@ void MediaControlCastButtonElement::DefaultEventHandler(Event& event) {
 
     RemotePlayback::From(MediaElement()).PromptInternal();
     RemotePlaybackMetrics::RecordRemotePlaybackLocation(
-        RemotePlaybackInitiationLocation::HTML_MEDIA_ELEMENT);
+        RemotePlaybackInitiationLocation::kHTMLMediaElement);
   }
   MediaControlInputElement::DefaultEventHandler(event);
 }

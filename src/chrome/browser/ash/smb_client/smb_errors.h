@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,12 @@
 #include "base/files/file.h"
 #include "chromeos/ash/components/dbus/smbprovider/smb_provider_client.h"
 
-namespace ash {
-namespace smb_client {
+namespace ash::smb_client {
 
 // These values are written to logs. New enum values may be added, but existing
 // enums must never be renumbered or values reused. Must be kept in sync
 // with the SmbMountResult enum in
-// ui/webui/resources/cr_components/chromeos/smb_shares/smb_browser_proxy.js
+// ash/webui/common/resources/smb_shares/smb_browser_proxy.js
 // and the NativeSmbFileShare_MountResult enum in enums.xml.
 enum class SmbMountResult {
   kSuccess = 0,                 // Mount succeeded.
@@ -35,29 +34,9 @@ enum class SmbMountResult {
   kMaxValue = kInvalidUsername  // Max enum value for use in metrics.
 };
 
-// Translates an smbprovider::ErrorType to a base::File::Error. Since
-// smbprovider::ErrorType is a superset of base::File::Error, errors that do not
-// map directly are logged and mapped to the generic failed error.
-base::File::Error TranslateToFileError(smbprovider::ErrorType error);
-
-// Translates a base::File::Error to an smbprovider::ErrorType. There is an
-// explicit smbprovider::ErrorType for each base::File::Error.
-smbprovider::ErrorType TranslateToErrorType(base::File::Error error);
-
 // Translates an smbprovider::ErrorType to an SmbMountResult.
 SmbMountResult TranslateErrorToMountResult(smbprovider::ErrorType error);
 
-// Translates a base::File::Error to an SmbMountResult.
-SmbMountResult TranslateErrorToMountResult(base::File::Error error);
-
-}  // namespace smb_client
-}  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-namespace smb_client {
-using ::ash::smb_client::SmbMountResult;
-}  // namespace smb_client
-}  // namespace chromeos
+}  // namespace ash::smb_client
 
 #endif  // CHROME_BROWSER_ASH_SMB_CLIENT_SMB_ERRORS_H_

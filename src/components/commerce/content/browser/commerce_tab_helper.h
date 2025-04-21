@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include <memory>
 
 #include "base/memory/raw_ptr.h"
-#include "base/memory/weak_ptr.h"
 #include "components/commerce/content/browser/web_contents_wrapper.h"
 #include "components/commerce/core/shopping_service.h"
 #include "components/commerce/core/web_wrapper.h"
@@ -38,12 +37,19 @@ class CommerceTabHelper
   void DidFinishNavigation(
       content::NavigationHandle* navigation_handle) override;
 
+  void DidStopLoading() override;
+
   void DidFinishLoad(content::RenderFrameHost* render_frame_host,
                      const GURL& validated_url) override;
 
+  void OnWebContentsFocused(content::RenderWidgetHost* host) override;
+
   void WebContentsDestroyed() override;
 
+  void SetShoppingServiceForTesting(KeyedService* service);
+
  private:
+  friend class CommerceTabHelperTest;
   friend class content::WebContentsUserData<CommerceTabHelper>;
 
   CommerceTabHelper(content::WebContents* contents,
@@ -55,7 +61,7 @@ class CommerceTabHelper
 
   std::unique_ptr<WebContentsWrapper> web_wrapper_;
 
-  raw_ptr<ShoppingService> shopping_service_;
+  raw_ptr<ShoppingService, DanglingUntriaged> shopping_service_;
 
   // The url from the previous successful main frame navigation. This will be
   // empty if this is the first navigation for this tab or post-restart. We keep

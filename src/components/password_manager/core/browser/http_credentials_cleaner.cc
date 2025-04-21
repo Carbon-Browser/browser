@@ -1,17 +1,18 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/password_manager/core/browser/http_credentials_cleaner.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "components/password_manager/core/browser/http_password_store_migrator.h"
 #include "components/password_manager/core/browser/password_manager_util.h"
+#include "components/password_manager/core/browser/password_store/password_store_interface.h"
 #include "components/password_manager/core/common/password_manager_pref_names.h"
 #include "components/prefs/pref_service.h"
+#include "third_party/abseil-cpp/absl/cleanup/cleanup.h"
 #include "url/gurl.h"
 
 namespace password_manager {
@@ -28,7 +29,7 @@ HttpCredentialCleaner::HttpCredentialCleaner(
 HttpCredentialCleaner::~HttpCredentialCleaner() = default;
 
 bool HttpCredentialCleaner::NeedsCleaning() {
-  auto last = base::Time::FromDoubleT(prefs_->GetDouble(
+  auto last = base::Time::FromSecondsSinceUnixEpoch(prefs_->GetDouble(
       password_manager::prefs::kLastTimeObsoleteHttpCredentialsRemoved));
   return ((base::Time::Now() - last).InDays() >= kCleanUpDelayInDays);
 }
@@ -71,11 +72,11 @@ void HttpCredentialCleaner::OnHSTSQueryResult(
     FormKey key,
     HSTSResult hsts_result) {
   ++processed_results_;
-  base::ScopedClosureRunner report(base::BindOnce(
-      &HttpCredentialCleaner::SetPrefIfDone, base::Unretained(this)));
+  absl::Cleanup report = [this] { SetPrefIfDone(); };
 
-  if (hsts_result == HSTSResult::kError)
+  if (hsts_result == HSTSResult::kError) {
     return;
+  }
 
   bool is_hsts = (hsts_result == HSTSResult::kYes);
 
@@ -83,14 +84,14 @@ void HttpCredentialCleaner::OnHSTSQueryResult(
   if (user_it == https_credentials_map_.end()) {
     // Credentials are not migrated yet.
     base::UmaHistogramEnumeration(
-        "PasswordManager.HttpCredentials",
+        "PasswordManager.HttpCredentials2",
         is_hsts ? HttpCredentialType::kHasNoMatchingHttpsWithHsts
                 : HttpCredentialType::kHasNoMatchingHttpsWithoutHsts);
     if (is_hsts) {
       // Migrate credentials to HTTPS, by moving them.
       store_->AddLogin(
           HttpPasswordStoreMigrator::MigrateHttpFormToHttps(*form));
-      store_->RemoveLogin(*form);
+      store_->RemoveLogin(FROM_HERE, *form);
     }
     return;
   }
@@ -99,27 +100,28 @@ void HttpCredentialCleaner::OnHSTSQueryResult(
     // The password store contains the same credentials (signon_realm, scheme,
     // username and password) on HTTPS version of the form.
     base::UmaHistogramEnumeration(
-        "PasswordManager.HttpCredentials",
+        "PasswordManager.HttpCredentials2",
         is_hsts ? HttpCredentialType::kHasEquivalentHttpsWithHsts
                 : HttpCredentialType::kHasEquivalentHttpsWithoutHsts);
     if (is_hsts) {
       // This HTTP credential is no more used.
-      store_->RemoveLogin(*form);
+      store_->RemoveLogin(FROM_HERE, *form);
     }
   } else {
     base::UmaHistogramEnumeration(
-        "PasswordManager.HttpCredentials",
+        "PasswordManager.HttpCredentials2",
         is_hsts ? HttpCredentialType::kHasConflictingHttpsWithHsts
                 : HttpCredentialType::kHasConflictingHttpsWithoutHsts);
   }
 }
 
 void HttpCredentialCleaner::SetPrefIfDone() {
-  if (processed_results_ != total_http_credentials_)
+  if (processed_results_ != total_http_credentials_) {
     return;
+  }
 
   prefs_->SetDouble(prefs::kLastTimeObsoleteHttpCredentialsRemoved,
-                    base::Time::Now().ToDoubleT());
+                    base::Time::Now().InSecondsFSinceUnixEpoch());
   observer_->CleaningCompleted();
 }
 

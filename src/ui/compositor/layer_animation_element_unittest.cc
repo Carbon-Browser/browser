@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "base/strings/stringprintf.h"
 #include "base/time/time.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/skia/include/core/SkColor.h"
 #include "ui/compositor/layer_animation_delegate.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
 #include "ui/compositor/test/test_layer_animation_delegate.h"
@@ -25,12 +26,13 @@ namespace {
 // correctly assigns values. See www.crbug.com/483134.
 TEST(TargetValueTest, VerifyLayerAnimationDelegateConstructor) {
   const gfx::Rect kBounds(1, 2, 3, 5);
-  const gfx::Transform kTransform(1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f);
+  const auto kTransform =
+      gfx::Transform::Affine(1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f);
   const float kOpacity = 1.235f;
   const bool kVisibility = false;
   const float kBrightness = 2.358f;
   const float kGrayscale = 2.5813f;
-  const SkColor kColor = SK_ColorCYAN;
+  const SkColor4f kColor = SkColors::kCyan;
   const gfx::Rect kClipRect(2, 3, 4, 5);
   const gfx::RoundedCornersF kRoundedCorners(2.0f, 3.0f, 4.0f, 5.0f);
 
@@ -62,7 +64,7 @@ TEST(TargetValueTest, VerifyLayerAnimationDelegateConstructor) {
   EXPECT_EQ(kVisibility, target_value.visibility);
   EXPECT_FLOAT_EQ(kBrightness, target_value.brightness);
   EXPECT_FLOAT_EQ(kGrayscale, target_value.grayscale);
-  EXPECT_EQ(SK_ColorCYAN, target_value.color);
+  EXPECT_EQ(SkColors::kCyan, target_value.color);
   EXPECT_EQ(kClipRect, target_value.clip_rect);
   EXPECT_EQ(kRoundedCorners, target_value.rounded_corners);
 }
@@ -475,9 +477,9 @@ TEST(LayerAnimationElementTest, GradientMaskElement) {
   gfx::LinearGradient start(45);
   start.AddStep(0, 0);
   gfx::LinearGradient target(135);
-  target.AddStep(50, 255);
+  target.AddStep(.5, 255);
   gfx::LinearGradient middle(90);
-  middle.AddStep(25, 127);
+  middle.AddStep(.25, 127);
 
   base::TimeTicks start_time;
   base::TimeDelta delta = base::Seconds(1);

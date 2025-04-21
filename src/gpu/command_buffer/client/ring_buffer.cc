@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <stdint.h>
 
 #include <algorithm>
+#include <ostream>
 
 #include "base/check_op.h"
 #include "base/notreached.h"
@@ -17,16 +18,16 @@
 
 namespace gpu {
 
-RingBuffer::RingBuffer(uint32_t alignment,
+RingBuffer::RingBuffer(scoped_refptr<gpu::Buffer> buffer,
+                       uint32_t alignment,
                        Offset base_offset,
-                       uint32_t size,
-                       CommandBufferHelper* helper,
-                       void* base)
+                       CommandBufferHelper* helper)
     : helper_(helper),
+      buffer_(buffer),
       base_offset_(base_offset),
-      size_(size),
+      size_(buffer->size() - base_offset),
       alignment_(alignment),
-      base_(static_cast<int8_t*>(base) - base_offset) {}
+      base_(static_cast<int8_t*>(buffer->memory())) {}
 
 RingBuffer::~RingBuffer() {
   DCHECK_EQ(num_used_blocks_, 0u);

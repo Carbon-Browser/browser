@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #import <Foundation/Foundation.h>
 
 #import "cwv_export.h"
+#import "cwv_navigation_type.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -19,6 +20,8 @@ CWV_EXPORT
 @property(nonatomic, copy, readonly) NSURLRequest* request;
 // YES if the action was caused by a user action (e.g. link tap).
 @property(nonatomic, readonly, getter=isUserInitiated) BOOL userInitiated;
+// The type of action that triggered the navigation.
+@property(nonatomic, readonly) CWVNavigationType navigationType;
 
 @end
 

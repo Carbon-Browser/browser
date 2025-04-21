@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <memory>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/cancelable_task_tracker.h"
 #include "base/threading/thread_checker.h"
@@ -32,7 +32,7 @@ class HistoryDBTask;
 // DeleteDirectiveHandler sends delete directives created locally to sync
 // engine to propagate to other clients. It also expires local history entries
 // according to given delete directives from server.
-class DeleteDirectiveHandler : public syncer::SyncableService {
+class DeleteDirectiveHandler final : public syncer::SyncableService {
  public:
   // This allows injecting HistoryService::ScheduleDBTask().
   using BackendTaskScheduler =
@@ -64,20 +64,20 @@ class DeleteDirectiveHandler : public syncer::SyncableService {
   //       history entries that match. Caller still needs to call other
   //       interfaces, e.g. HistoryService::ExpireHistoryBetween(), to delete
   //       local history entries.
-  absl::optional<syncer::ModelError> ProcessLocalDeleteDirective(
+  std::optional<syncer::ModelError> ProcessLocalDeleteDirective(
       const sync_pb::HistoryDeleteDirectiveSpecifics& delete_directive);
 
   // syncer::SyncableService implementation.
   void WaitUntilReadyToSync(base::OnceClosure done) override;
-  absl::optional<syncer::ModelError> MergeDataAndStartSyncing(
-      syncer::ModelType type,
+  std::optional<syncer::ModelError> MergeDataAndStartSyncing(
+      syncer::DataType type,
       const syncer::SyncDataList& initial_sync_data,
-      std::unique_ptr<syncer::SyncChangeProcessor> sync_processor,
-      std::unique_ptr<syncer::SyncErrorFactory> error_handler) override;
-  void StopSyncing(syncer::ModelType type) override;
-  absl::optional<syncer::ModelError> ProcessSyncChanges(
+      std::unique_ptr<syncer::SyncChangeProcessor> sync_processor) override;
+  void StopSyncing(syncer::DataType type) override;
+  std::optional<syncer::ModelError> ProcessSyncChanges(
       const base::Location& from_here,
       const syncer::SyncChangeList& change_list) override;
+  base::WeakPtr<SyncableService> AsWeakPtr() override;
 
  private:
   class DeleteDirectiveTask;

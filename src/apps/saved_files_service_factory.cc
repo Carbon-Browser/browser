@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,9 +40,10 @@ SavedFilesServiceFactory::SavedFilesServiceFactory()
 
 SavedFilesServiceFactory::~SavedFilesServiceFactory() = default;
 
-KeyedService* SavedFilesServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+SavedFilesServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new SavedFilesService(context);
+  return std::make_unique<SavedFilesService>(context);
 }
 
 content::BrowserContext* SavedFilesServiceFactory::GetBrowserContextToUse(
@@ -51,8 +52,8 @@ content::BrowserContext* SavedFilesServiceFactory::GetBrowserContextToUse(
   // is to make this service available in guest sessions, where it could be used
   // when apps white-listed in guest sessions attempt to use chrome.fileSystem
   // API.
-  return extensions::ExtensionsBrowserClient::Get()->GetOriginalContext(
-      context);
+  return extensions::ExtensionsBrowserClient::Get()
+      ->GetContextRedirectedToOriginal(context);
 }
 
 }  // namespace apps

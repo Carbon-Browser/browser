@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -116,8 +116,12 @@ public class FakeMostVisitedSites implements MostVisitedSites {
     }
 
     public static SiteSuggestion createSiteSuggestion(String title, String url) {
-        return new SiteSuggestion(title, new GURL(url), TileTitleSource.TITLE_TAG,
-                TileSource.TOP_SITES, TileSectionType.PERSONALIZED);
+        return new SiteSuggestion(
+                title,
+                new GURL(url),
+                TileTitleSource.TITLE_TAG,
+                TileSource.TOP_SITES,
+                TileSectionType.PERSONALIZED);
     }
 
     private void notifyTileSuggestionsAvailable() {

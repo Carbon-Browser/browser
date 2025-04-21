@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,6 +26,7 @@ namespace android_webview {
 class AwBrowserProcess;
 class AwContentBrowserClient;
 
+// Lifetime: Singleton
 class AwBrowserMainParts : public content::BrowserMainParts {
  public:
   explicit AwBrowserMainParts(AwContentBrowserClient* browser_client);
@@ -52,6 +53,8 @@ class AwBrowserMainParts : public content::BrowserMainParts {
   raw_ptr<AwContentBrowserClient> browser_client_;
 
   std::unique_ptr<metrics::MemoryMetricsLogger> metrics_logger_;
+
+  std::unique_ptr<content::SyntheticTrialSyncer> synthetic_trial_syncer_;
 
   std::unique_ptr<AwBrowserProcess> browser_process_;
   std::unique_ptr<crash_reporter::ChildExitObserver> child_exit_observer_;

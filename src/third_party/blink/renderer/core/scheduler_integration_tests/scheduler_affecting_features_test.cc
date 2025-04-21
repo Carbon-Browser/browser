@@ -1,12 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
-// Use of this source code if governed by a BSD-style license that can be
+// Copyright 2017 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
 // found in LICENSE file.
 
 #include "base/run_loop.h"
 #include "base/test/scoped_feature_list.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/features.h"
-#include "third_party/blink/public/platform/web_url_loader_mock_factory.h"
 #include "third_party/blink/public/web/web_script_source.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/frame/web_local_frame_impl.h"
@@ -15,6 +14,8 @@
 #include "third_party/blink/renderer/core/testing/sim/sim_request.h"
 #include "third_party/blink/renderer/core/testing/sim/sim_test.h"
 #include "third_party/blink/renderer/platform/scheduler/public/page_scheduler.h"
+#include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
+#include "third_party/blink/renderer/platform/testing/url_loader_mock_factory.h"
 
 using testing::_;
 
@@ -68,15 +69,18 @@ TEST_F(SchedulingAffectingFeaturesTest, WebSocketIsTracked) {
       "</script>");
 
   EXPECT_FALSE(GetPageScheduler()->OptedOutFromAggressiveThrottlingForTest());
-  EXPECT_THAT(
-      GetNonTrivialMainFrameFeatures(),
-      testing::UnorderedElementsAre(SchedulingPolicy::Feature::kWebSocket));
+  EXPECT_THAT(GetNonTrivialMainFrameFeatures(),
+              testing::UnorderedElementsAre(
+                  SchedulingPolicy::Feature::kWebSocket,
+                  SchedulingPolicy::Feature::kWebSocketSticky));
+  test::RunPendingTasks();
 
   MainFrame().ExecuteScript(WebScriptSource(WebString("socket.close();")));
 
   EXPECT_FALSE(GetPageScheduler()->OptedOutFromAggressiveThrottlingForTest());
   EXPECT_THAT(GetNonTrivialMainFrameFeatures(),
-              testing::UnorderedElementsAre());
+              testing::UnorderedElementsAre(
+                  SchedulingPolicy::Feature::kWebSocketSticky));
 }
 
 TEST_F(SchedulingAffectingFeaturesTest, CacheControl_NoStore) {
@@ -150,8 +154,6 @@ TEST_F(SchedulingAffectingFeaturesTest, CacheControl_Navigation) {
 }
 
 TEST_F(SchedulingAffectingFeaturesTest, Plugins) {
-  scoped_feature_list_.InitAndEnableFeature(
-      features::kBackForwardCacheEnabledForNonPluginEmbed);
   {
     SimRequest main_resource("https://example.com/", "text/html");
     LoadURL("https://example.com/");
@@ -181,8 +183,6 @@ TEST_F(SchedulingAffectingFeaturesTest, Plugins) {
 }
 
 TEST_F(SchedulingAffectingFeaturesTest, NonPlugins) {
-  scoped_feature_list_.InitAndEnableFeature(
-      features::kBackForwardCacheEnabledForNonPluginEmbed);
   {
     SimRequest main_resource("https://example.com/", "text/html");
     LoadURL("https://example.com/");

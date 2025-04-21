@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,16 +10,17 @@
 #include <memory>
 #include <random>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <utility>
 
 #include "base/base_switches.h"
-#include "base/callback_helpers.h"
 #include "base/check.h"
 #include "base/command_line.h"
 #include "base/debug/leak_annotations.h"
-#include "base/guid.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/numerics/safe_conversions.h"
@@ -28,6 +29,7 @@
 #include "base/strings/stringprintf.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/time/time.h"
+#include "base/uuid.h"
 #include "build/branding_buildflags.h"
 #include "build/build_config.h"
 #include "components/metrics/cloned_install_detector.h"
@@ -49,11 +51,6 @@
 
 namespace metrics {
 namespace {
-
-// The argument used to generate a non-identifying entropy source. We want no
-// more than 13 bits of entropy, so use this max to return a number in the range
-// [0, 7999] as the entropy source (12.97 bits of entropy).
-const int kMaxLowEntropySize = 8000;
 
 int64_t ReadEnabledDate(PrefService* local_state) {
   return local_state->GetInt64(prefs::kMetricsReportingEnabledTimestamp);
@@ -182,16 +179,14 @@ class MetricsStateMetricsProvider : public MetricsProvider {
     if (metrics_ids_were_reset_) {
       LogClonedInstall();
       if (!previous_client_id_.empty()) {
+        // NOTE: If you are adding anything here, consider also changing
+        // FileMetricsProvider::ProvideIndependentMetricsOnTaskRunner().
+
         // If we know the previous client id, overwrite the client id for the
         // previous session log so the log contains the client id at the time
         // of the previous session. This allows better attribution of crashes
         // to earlier behavior. If the previous client id is unknown, leave
         // the current client id.
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-        metrics::structured::NeutrinoDevicesLogWithClientId(
-            previous_client_id_, metrics::structured::NeutrinoDevicesLocation::
-                                     kProvidePreviousSessionData);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
         uma_proto->set_client_id(MetricsLog::Hash(previous_client_id_));
       }
     }
@@ -199,8 +194,9 @@ class MetricsStateMetricsProvider : public MetricsProvider {
 
   void ProvideCurrentSessionData(
       ChromeUserMetricsExtension* uma_proto) override {
-    if (cloned_install_detector_.ClonedInstallDetectedInCurrentSession())
+    if (cloned_install_detector_->ClonedInstallDetectedInCurrentSession()) {
       LogClonedInstall();
+    }
     log_normal_metric_state_.LogArtificialNonUniformity();
   }
 
@@ -218,9 +214,17 @@ class MetricsStateMetricsProvider : public MetricsProvider {
   // The client id that was used to randomize field trials. An empty string if
   // the low entropy source was used to do randomization.
   const std::string initial_client_id_;
-  const ClonedInstallDetector& cloned_install_detector_;
+  const raw_ref<const ClonedInstallDetector> cloned_install_detector_;
   LogNormalMetricState log_normal_metric_state_;
 };
+
+bool ShouldEnableBenchmarking(bool force_benchmarking_mode) {
+  // TODO(crbug.com/40792683): See whether it's possible to consolidate the
+  // switches.
+  return force_benchmarking_mode ||
+         base::CommandLine::ForCurrentProcess()->HasSwitch(
+             variations::switches::kEnableBenchmarking);
+}
 
 }  // namespace
 
@@ -235,20 +239,16 @@ MetricsStateManager::MetricsStateManager(
     EnabledStateProvider* enabled_state_provider,
     const std::wstring& backup_registry_key,
     const base::FilePath& user_data_dir,
+    EntropyParams entropy_params,
     StartupVisibility startup_visibility,
-    version_info::Channel channel,
     StoreClientInfoCallback store_client_info,
-    LoadClientInfoCallback retrieve_client_info,
-    base::StringPiece external_client_id)
+    LoadClientInfoCallback retrieve_client_info)
     : local_state_(local_state),
       enabled_state_provider_(enabled_state_provider),
+      entropy_params_(entropy_params),
       store_client_info_(std::move(store_client_info)),
       load_client_info_(std::move(retrieve_client_info)),
-      clean_exit_beacon_(backup_registry_key,
-                         user_data_dir,
-                         local_state,
-                         channel),
-      external_client_id_(external_client_id),
+      clean_exit_beacon_(backup_registry_key, user_data_dir, local_state),
       entropy_state_(local_state),
       entropy_source_returned_(ENTROPY_SOURCE_NONE),
       metrics_ids_were_reset_(false),
@@ -267,11 +267,6 @@ MetricsStateManager::MetricsStateManager(
   }
 
   if (enabled_state_provider_->IsConsentGiven()) {
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-    metrics::structured::NeutrinoDevicesLogWithClientId(
-        client_id_,
-        metrics::structured::NeutrinoDevicesLocation::kMetricsStateManager);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
     ForceClientIdCreation();
   } else {
 #if BUILDFLAG(IS_ANDROID)
@@ -298,21 +293,25 @@ MetricsStateManager::MetricsStateManager(
   // field trial randomization (group assignment) will be different.
   if (ShouldGenerateProvisionalClientId(is_first_run)) {
     local_state_->SetString(prefs::kMetricsProvisionalClientID,
-                            base::GenerateGUID());
+                            base::Uuid::GenerateRandomV4().AsLowercaseString());
   }
 
-  // The |initial_client_id_| should only be set if UMA is enabled or there's a
-  // provisional client id.
-  initial_client_id_ =
-      (client_id_.empty()
-           ? local_state_->GetString(prefs::kMetricsProvisionalClientID)
-           : client_id_);
-  DCHECK(!instance_exists_);
+  // `initial_client_id_` will only be set in the following cases:
+  // 1. UMA is enabled
+  // 2. there is a provisional client id (due to this being a first run)
+  if (!client_id_.empty()) {
+    initial_client_id_ = client_id_;
+  } else {
+    // Note that there is possibly no provisional client ID.
+    initial_client_id_ =
+        local_state_->GetString(prefs::kMetricsProvisionalClientID);
+  }
+  CHECK(!instance_exists_);
   instance_exists_ = true;
 }
 
 MetricsStateManager::~MetricsStateManager() {
-  DCHECK(instance_exists_);
+  CHECK(instance_exists_);
   instance_exists_ = false;
 }
 
@@ -343,42 +342,37 @@ int MetricsStateManager::GetLowEntropySource() {
   return entropy_state_.GetLowEntropySource();
 }
 
-void MetricsStateManager::InstantiateFieldTrialList(
-    const char* enable_gpu_benchmarking_switch,
-    EntropyProviderType entropy_provider_type) {
+int MetricsStateManager::GetOldLowEntropySource() {
+  return entropy_state_.GetOldLowEntropySource();
+}
+
+int MetricsStateManager::GetPseudoLowEntropySource() {
+  return entropy_state_.GetPseudoLowEntropySource();
+}
+
+void MetricsStateManager::InstantiateFieldTrialList() {
   // Instantiate the FieldTrialList to support field trials. If an instance
   // already exists, this is likely a test scenario with a ScopedFeatureList, so
   // use the existing instance so that any overrides are still applied.
   if (!base::FieldTrialList::GetInstance()) {
-    std::unique_ptr<const base::FieldTrial::EntropyProvider> entropy_provider =
-        entropy_provider_type == EntropyProviderType::kLow
-            ? CreateLowEntropyProvider()
-            : CreateDefaultEntropyProvider();
-
     // This is intentionally leaked since it needs to live for the duration of
     // the browser process and there's no benefit in cleaning it up at exit.
-    base::FieldTrialList* leaked_field_trial_list =
-        new base::FieldTrialList(std::move(entropy_provider));
+    base::FieldTrialList* leaked_field_trial_list = new base::FieldTrialList();
     ANNOTATE_LEAKING_OBJECT_PTR(leaked_field_trial_list);
     std::ignore = leaked_field_trial_list;
   }
 
-  // TODO(crbug/1257204): Some FieldTrial-setup-related code is here and some is
-  // in VariationsFieldTrialCreator::SetUpFieldTrials(). It's not ideal that
-  // it's in two places.
-  //
   // When benchmarking is enabled, field trials' default groups are chosen, so
   // see whether benchmarking needs to be enabled here, before any field trials
   // are created.
+  // TODO(crbug.com/40796250): Some FieldTrial-setup-related code is here and
+  // some is in VariationsFieldTrialCreator::SetUpFieldTrials(). It's not ideal
+  // that it's in two places.
+  if (ShouldEnableBenchmarking(entropy_params_.force_benchmarking_mode))
+    base::FieldTrial::EnableBenchmarking();
+
   const base::CommandLine* command_line =
       base::CommandLine::ForCurrentProcess();
-  // TODO(crbug/1251680): See whether it's possible to consolidate the switches.
-  if (command_line->HasSwitch(variations::switches::kEnableBenchmarking) ||
-      (enable_gpu_benchmarking_switch &&
-       command_line->HasSwitch(enable_gpu_benchmarking_switch))) {
-    base::FieldTrial::EnableBenchmarking();
-  }
-
   if (command_line->HasSwitch(variations::switches::kForceFieldTrialParams)) {
     bool result =
         variations::AssociateParamsFromString(command_line->GetSwitchValueASCII(
@@ -425,16 +419,9 @@ void MetricsStateManager::ForceClientIdCreation() {
   // kMetricsRecordingOnly is used by Chromedriver tests.
   DCHECK(enabled_state_provider_->IsConsentGiven() ||
          IsMetricsReportingForceEnabled() || IsMetricsRecordingOnlyEnabled());
-  if (!external_client_id_.empty()) {
-    client_id_ = external_client_id_;
-    base::UmaHistogramEnumeration("UMA.ClientIdSource",
-                                  ClientIdSource::kClientIdFromExternal);
-    local_state_->SetString(prefs::kMetricsClientID, client_id_);
-    return;
-  }
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
   std::string previous_client_id = client_id_;
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+#endif  // BUILDFLAG(IS_CHROMEOS)
   {
     std::string client_id_from_prefs = ReadClientId(local_state_);
     // If client id in prefs matches the cached copy, return early.
@@ -449,11 +436,6 @@ void MetricsStateManager::ForceClientIdCreation() {
   if (!client_id_.empty()) {
     base::UmaHistogramEnumeration("UMA.ClientIdSource",
                                   ClientIdSource::kClientIdFromLocalState);
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-    LogClientIdChanged(
-        metrics::structured::NeutrinoDevicesLocation::kClientIdFromLocalState,
-        previous_client_id);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
     return;
   }
 
@@ -486,11 +468,6 @@ void MetricsStateManager::ForceClientIdCreation() {
                                   ClientIdSource::kClientIdBackupRecovered);
     base::UmaHistogramCounts10000("UMA.ClientIdBackupRecoveredWithAge",
                                   recovered_installation_age.InHours());
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-    LogClientIdChanged(
-        metrics::structured::NeutrinoDevicesLocation::kClientIdBackupRecovered,
-        previous_client_id);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
     // Flush the backup back to persistent storage in case we re-generated
     // missing data above.
@@ -505,24 +482,14 @@ void MetricsStateManager::ForceClientIdCreation() {
   std::string provisional_client_id =
       local_state_->GetString(prefs::kMetricsProvisionalClientID);
   if (provisional_client_id.empty()) {
-    client_id_ = base::GenerateGUID();
+    client_id_ = base::Uuid::GenerateRandomV4().AsLowercaseString();
     base::UmaHistogramEnumeration("UMA.ClientIdSource",
                                   ClientIdSource::kClientIdNew);
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-    LogClientIdChanged(
-        metrics::structured::NeutrinoDevicesLocation::kClientIdNew,
-        previous_client_id);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   } else {
     client_id_ = provisional_client_id;
     local_state_->ClearPref(prefs::kMetricsProvisionalClientID);
     base::UmaHistogramEnumeration("UMA.ClientIdSource",
                                   ClientIdSource::kClientIdFromProvisionalId);
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-    LogClientIdChanged(metrics::structured::NeutrinoDevicesLocation::
-                           kClientIdFromProvisionalId,
-                       previous_client_id);
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
   }
   local_state_->SetString(prefs::kMetricsClientID, client_id_);
 
@@ -533,10 +500,6 @@ void MetricsStateManager::ForceClientIdCreation() {
   BackUpCurrentClientInfo();
 }
 
-void MetricsStateManager::SetExternalClientId(const std::string& id) {
-  external_client_id_ = id;
-}
-
 void MetricsStateManager::CheckForClonedInstall() {
   cloned_install_detector_.CheckForClonedInstall(local_state_);
 }
@@ -545,26 +508,27 @@ bool MetricsStateManager::ShouldResetClientIdsOnClonedInstall() {
   return cloned_install_detector_.ShouldResetClientIds(local_state_);
 }
 
-std::unique_ptr<const base::FieldTrial::EntropyProvider>
-MetricsStateManager::CreateDefaultEntropyProvider() {
-  // |initial_client_id_| should be populated iff (a) we have the client's
-  // consent to enable UMA on startup or (b) it's the first run, in which case
-  // |initial_client_id_| corresponds to |provisional_client_id_|.
-  if (!initial_client_id_.empty()) {
-    UpdateEntropySourceReturnedValue(ENTROPY_SOURCE_HIGH);
-    return std::make_unique<variations::SHA1EntropyProvider>(
-        GetHighEntropySource());
-  }
-
-  UpdateEntropySourceReturnedValue(ENTROPY_SOURCE_LOW);
-  return CreateLowEntropyProvider();
+base::CallbackListSubscription
+MetricsStateManager::AddOnClonedInstallDetectedCallback(
+    base::OnceClosure callback) {
+  return cloned_install_detector_.AddOnClonedInstallDetectedCallback(
+      std::move(callback));
 }
 
-std::unique_ptr<const base::FieldTrial::EntropyProvider>
-MetricsStateManager::CreateLowEntropyProvider() {
-  int source = GetLowEntropySource();
-  return std::make_unique<variations::NormalizedMurmurHashEntropyProvider>(
-      base::checked_cast<uint16_t>(source), kMaxLowEntropySize);
+std::unique_ptr<const variations::EntropyProviders>
+MetricsStateManager::CreateEntropyProviders(bool enable_limited_entropy_mode) {
+  // TODO(crbug.com/40948861): remove `enable_limited_entropy_mode` when it's
+  // true for all callers.
+  auto limited_entropy_randomization_source =
+      enable_limited_entropy_mode ? GetLimitedEntropyRandomizationSource()
+                                  : std::string_view();
+  return std::make_unique<variations::EntropyProviders>(
+      GetHighEntropySource(),
+      variations::ValueInRange{
+          .value = base::checked_cast<uint32_t>(GetLowEntropySource()),
+          .range = EntropyState::kMaxLowEntropySize},
+      limited_entropy_randomization_source,
+      ShouldEnableBenchmarking(entropy_params_.force_benchmarking_mode));
 }
 
 // static
@@ -574,22 +538,20 @@ std::unique_ptr<MetricsStateManager> MetricsStateManager::Create(
     const std::wstring& backup_registry_key,
     const base::FilePath& user_data_dir,
     StartupVisibility startup_visibility,
-    version_info::Channel channel,
+    EntropyParams entropy_params,
     StoreClientInfoCallback store_client_info,
-    LoadClientInfoCallback retrieve_client_info,
-    base::StringPiece external_client_id) {
+    LoadClientInfoCallback retrieve_client_info) {
   std::unique_ptr<MetricsStateManager> result;
   // Note: |instance_exists_| is updated in the constructor and destructor.
   if (!instance_exists_) {
     result.reset(new MetricsStateManager(
         local_state, enabled_state_provider, backup_registry_key, user_data_dir,
-        startup_visibility, channel,
+        entropy_params, startup_visibility,
         store_client_info.is_null() ? base::DoNothing()
                                     : std::move(store_client_info),
         retrieve_client_info.is_null()
             ? base::BindRepeating(&NoOpLoadClientInfoBackup)
-            : std::move(retrieve_client_info),
-        external_client_id));
+            : std::move(retrieve_client_info)));
   }
   return result;
 }
@@ -629,22 +591,37 @@ std::unique_ptr<ClientInfo> MetricsStateManager::LoadClientInfo() {
   // The GUID retrieved should be valid unless retrieval failed.
   // If not, return nullptr. This will result in a new GUID being generated by
   // the calling function ForceClientIdCreation().
-  if (client_info && !base::IsValidGUID(client_info->client_id))
+  if (client_info &&
+      !base::Uuid::ParseCaseInsensitive(client_info->client_id).is_valid()) {
     return nullptr;
+  }
 
   return client_info;
 }
 
-std::string MetricsStateManager::GetHighEntropySource() {
-  // This should only be called if the |initial_client_id_| is not empty. The
-  // user shouldn't be able to enable UMA between the constructor and calling
-  // this, because field trial setup happens at Chrome initialization.
-  DCHECK(!initial_client_id_.empty());
-  return entropy_state_.GetHighEntropySource(initial_client_id_);
+std::string_view MetricsStateManager::GetLimitedEntropyRandomizationSource() {
+  // No limited entropy randomization source will be generated if limited
+  // entropy randomization is not supported in this context (e.g. in Android
+  // Webview).
+  if (entropy_params_.default_entropy_provider_type ==
+      EntropyProviderType::kLow) {
+    return std::string_view();
+  }
+  return entropy_state_.GetLimitedEntropyRandomizationSource();
 }
 
-int MetricsStateManager::GetOldLowEntropySource() {
-  return entropy_state_.GetOldLowEntropySource();
+std::string MetricsStateManager::GetHighEntropySource() {
+  // If high entropy randomization is not supported in this context (e.g. in
+  // Android Webview), or if UMA is not enabled (so there is no client id), then
+  // high entropy randomization is disabled.
+  if (entropy_params_.default_entropy_provider_type ==
+          EntropyProviderType::kLow ||
+      initial_client_id_.empty()) {
+    UpdateEntropySourceReturnedValue(ENTROPY_SOURCE_LOW);
+    return "";
+  }
+  UpdateEntropySourceReturnedValue(ENTROPY_SOURCE_HIGH);
+  return entropy_state_.GetHighEntropySource(initial_client_id_);
 }
 
 void MetricsStateManager::UpdateEntropySourceReturnedValue(
@@ -668,6 +645,7 @@ void MetricsStateManager::ResetMetricsIDsIfNecessary() {
   DCHECK(client_id_.empty());
 
   local_state_->ClearPref(prefs::kMetricsClientID);
+  local_state_->ClearPref(prefs::kMetricsLogRecordId);
   EntropyState::ClearPrefs(local_state_);
 
   ClonedInstallDetector::RecordClonedInstallInfo(local_state_);
@@ -725,15 +703,5 @@ bool MetricsStateManager::ShouldGenerateProvisionalClientId(bool is_first_run) {
   return true;
 #endif  // BUILDFLAG(IS_WIN)
 }
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-void MetricsStateManager::LogClientIdChanged(
-    metrics::structured::NeutrinoDevicesLocation location,
-    std::string previous_client_id) {
-  metrics::structured::NeutrinoDevicesLogClientIdChanged(
-      client_id_, previous_client_id, ReadInstallDate(local_state_),
-      ReadEnabledDate(local_state_), location);
-}
-#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 }  // namespace metrics

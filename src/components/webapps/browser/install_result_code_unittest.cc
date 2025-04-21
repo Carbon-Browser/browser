@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 namespace webapps {
 
 TEST(InstallResultCodeTest, IsSuccess) {
-  // TODO(crbug.com/1296447): Test the rest of the constants.
+  // TODO(crbug.com/40821686): Test the rest of the constants.
   EXPECT_TRUE(IsSuccess(InstallResultCode::kSuccessNewInstall));
   EXPECT_TRUE(IsSuccess(InstallResultCode::kSuccessAlreadyInstalled));
 

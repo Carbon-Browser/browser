@@ -331,14 +331,16 @@ module CommonTests
     l.push :A
     l.push :B
     l.push :C
-    assert l.count == 3
+    l.push :v0
+    assert l.count == 4
     assert_raise RangeError do
       l.push :D
     end
     assert l[0] == :A
+    assert l[3] == :v0
 
-    l.push 4
-    assert l[3] == 4
+    l.push 5
+    assert l[4] == 5
   end
 
   def test_rptfield_initialize
@@ -542,8 +544,8 @@ module CommonTests
     assert m["z"] == :C
     m["z"] = 2
     assert m["z"] == :B
-    m["z"] = 4
-    assert m["z"] == 4
+    m["z"] = 5
+    assert m["z"] == 5
     assert_raise RangeError do
       m["z"] = :Z
     end
@@ -712,14 +714,17 @@ module CommonTests
     assert proto_module::TestEnum::A == 1
     assert proto_module::TestEnum::B == 2
     assert proto_module::TestEnum::C == 3
+    assert proto_module::TestEnum::V0 == 4
 
     assert proto_module::TestEnum::lookup(1) == :A
     assert proto_module::TestEnum::lookup(2) == :B
     assert proto_module::TestEnum::lookup(3) == :C
+    assert proto_module::TestEnum::lookup(4) == :v0
 
     assert proto_module::TestEnum::resolve(:A) == 1
     assert proto_module::TestEnum::resolve(:B) == 2
     assert proto_module::TestEnum::resolve(:C) == 3
+    assert proto_module::TestEnum::resolve(:v0) == 4
   end
 
   def test_enum_const_get_helpers
@@ -788,7 +793,7 @@ module CommonTests
     assert_raise(NoMethodError) { m.a }
     assert_raise(NoMethodError) { m.a_const_const }
   end
-  
+
   def test_repeated_push
     m = proto_module::TestMessage.new
 
@@ -796,7 +801,7 @@ module CommonTests
     m.repeated_string += %w[two three]
     assert_equal %w[one two three], m.repeated_string
 
-    m.repeated_string.push *['four', 'five']
+    m.repeated_string.push( *['four', 'five'] )
     assert_equal %w[one two three four five], m.repeated_string
 
     m.repeated_string.push 'six', 'seven'
@@ -1085,8 +1090,6 @@ module CommonTests
   end
 
   def test_json
-    # TODO: Fix JSON in JRuby version.
-    return if RUBY_PLATFORM == "java"
     m = proto_module::TestMessage.new(:optional_int32 => 1234,
                                       :optional_int64 => -0x1_0000_0000,
                                       :optional_uint32 => 0x8000_0000,
@@ -1288,6 +1291,7 @@ module CommonTests
     m2 = proto_module::Wrapper.decode(m.to_proto)
     run_asserts.call(m2)
     m3 = proto_module::Wrapper.decode_json(m.to_json)
+    run_asserts.call(m3)
   end
 
   def test_wrapper_getters
@@ -1539,8 +1543,6 @@ module CommonTests
       assert_nil m.bytes_as_value
     }
 
-    m = proto_module::Wrapper.new
-
     m2 = proto_module::Wrapper.new(
       double: Google::Protobuf::DoubleValue.new(value: 2.0),
       float: Google::Protobuf::FloatValue.new(value: 4.0),
@@ -1765,7 +1767,7 @@ module CommonTests
     assert_raise(FrozenErrorType) { m.repeated_msg = proto_module::TestMessage2.new }
     assert_raise(FrozenErrorType) { m.repeated_enum = :A }
   end
-  
+
   def test_eq
     m1 = proto_module::TestMessage.new(:optional_string => 'foo', :repeated_string => ['bar1', 'bar2'])
     m2 = proto_module::TestMessage.new(:optional_string => 'foo', :repeated_string => ['bar1', 'bar2'])
@@ -1787,27 +1789,200 @@ module CommonTests
     assert_nil h[m2]
   end
 
+  def cruby_or_jruby_9_3_or_higher?
+    # https://github.com/jruby/jruby/issues/6818 was fixed in JRuby 9.3.0.0
+    match = RUBY_PLATFORM == "java" &&
+      JRUBY_VERSION.match(/^(\d+)\.(\d+)\.\d+\.\d+$/)
+    match && (match[1].to_i > 9 || (match[1].to_i == 9 && match[2].to_i >= 3))
+  end
+
   def test_object_gc
     m = proto_module::TestMessage.new(optional_msg: proto_module::TestMessage2.new)
     m.optional_msg
-    # TODO: Remove the platform check once https://github.com/jruby/jruby/issues/6818 is released in JRuby 9.3.0.0
-    GC.start(full_mark: true, immediate_sweep: true) unless RUBY_PLATFORM == "java"
+    # https://github.com/jruby/jruby/issues/6818 was fixed in JRuby 9.3.0.0
+    GC.start(full_mark: true, immediate_sweep: true) if cruby_or_jruby_9_3_or_higher?
     m.optional_msg.inspect
   end
 
   def test_object_gc_freeze
     m = proto_module::TestMessage.new
     m.repeated_float.freeze
-    # TODO: Remove the platform check once https://github.com/jruby/jruby/issues/6818 is released in JRuby 9.3.0.0
-    GC.start(full_mark: true) unless RUBY_PLATFORM == "java"
+    # https://github.com/jruby/jruby/issues/6818 was fixed in JRuby 9.3.0.0
+    GC.start(full_mark: true) if cruby_or_jruby_9_3_or_higher?
 
     # Make sure we remember that the object is frozen.
     # The wrapper object contains this information, so we need to ensure that
     # the previous GC did not collect it.
     assert m.repeated_float.frozen?
 
-    # TODO: Remove the platform check once https://github.com/jruby/jruby/issues/6818 is released in JRuby 9.3.0.0
-    GC.start(full_mark: true, immediate_sweep: true) unless RUBY_PLATFORM == "java"
+    # https://github.com/jruby/jruby/issues/6818 was fixed in JRuby 9.3.0.0
+    GC.start(full_mark: true, immediate_sweep: true) if cruby_or_jruby_9_3_or_higher?
     assert m.repeated_float.frozen?
+  end
+
+  def test_optional_fields_respond_to? # regression test for issue 9202
+    msg = proto_module::TestMessage.new
+    assert msg.respond_to? :optional_int32=
+    msg.optional_int32 = 42
+
+    assert msg.respond_to? :optional_int32
+    assert_equal 42, msg.optional_int32
+
+    assert msg.respond_to? :clear_optional_int32
+    msg.clear_optional_int32
+    assert_equal 0, msg.optional_int32
+
+    assert msg.respond_to? :has_optional_int32?
+    assert !msg.has_optional_int32?
+
+    assert !msg.respond_to?( :optional_int32_as_value= )
+    assert_raise NoMethodError do
+      msg.optional_int32_as_value = 42
+    end
+
+    assert !msg.respond_to?( :optional_int32_as_value )
+    assert_raise NoMethodError do
+      msg.optional_int32_as_value
+    end
+
+    assert msg.respond_to? :optional_enum_const
+    assert_equal 0, msg.optional_enum_const
+
+    assert !msg.respond_to?( :foo )
+    assert_raise NoMethodError do
+      msg.foo
+    end
+
+    assert !msg.respond_to?( :foo_const )
+    assert_raise NoMethodError do
+      msg.foo_const
+    end
+
+    assert !msg.respond_to?( :optional_int32_const )
+    assert_raise NoMethodError do
+      msg.optional_int32_const
+    end
+  end
+
+  def test_oneof_fields_respond_to? # regression test for issue 9202
+    msg = proto_module::OneofMessage.new
+
+    # names of the elements of a oneof and the oneof itself are valid actions.
+    assert msg.respond_to? :my_oneof
+    assert_nil msg.my_oneof
+    assert msg.respond_to? :a
+    assert_equal "", msg.a
+    assert msg.respond_to? :b
+    assert_equal 0, msg.b
+    assert msg.respond_to? :c
+    assert_nil msg.c
+    assert msg.respond_to? :d
+    assert_equal :Default, msg.d
+
+    # `clear` prefix actions work on elements of a oneof and the oneof itself.
+    assert msg.respond_to? :clear_my_oneof
+    msg.clear_my_oneof
+    # Repeatedly clearing a oneof used to cause a NoMethodError under JRuby
+    msg.clear_my_oneof
+    assert msg.respond_to? :clear_a
+    msg.clear_a
+    assert msg.respond_to? :clear_b
+    msg.clear_b
+    assert msg.respond_to? :clear_c
+    msg.clear_c
+    assert msg.respond_to? :clear_d
+    msg.clear_d
+
+    # `=` suffix actions should work on elements of a oneof but not the oneof itself.
+    assert !msg.respond_to?( :my_oneof= )
+    error = assert_raise RuntimeError do
+      msg.my_oneof = nil
+    end
+    assert_equal "Oneof accessors are read-only.", error.message
+    assert msg.respond_to? :a=
+    msg.a = "foo"
+    assert msg.respond_to? :b=
+    msg.b = 42
+    assert msg.respond_to? :c=
+    msg.c = proto_module::TestMessage2.new
+    assert msg.respond_to? :d=
+    msg.d = :Default
+
+    # `has_` prefix + "?" suffix actions work for oneofs fields.
+    assert msg.respond_to? :has_my_oneof?
+    assert msg.has_my_oneof?
+
+    # `_as_value` suffix actions should only work for wrapped fields.
+    assert !msg.respond_to?( :my_oneof_as_value )
+    assert_raise NoMethodError do
+      msg.my_oneof_as_value
+    end
+    assert !msg.respond_to?( :a_as_value )
+    assert_raise NoMethodError do
+      msg.a_as_value
+    end
+    assert !msg.respond_to?( :b_as_value )
+    assert_raise NoMethodError do
+      msg.b_as_value
+    end
+    assert !msg.respond_to?( :c_as_value )
+    assert_raise NoMethodError do
+      msg.c_as_value
+    end
+    assert !msg.respond_to?( :d_as_value )
+    assert_raise NoMethodError do
+      msg.d_as_value
+    end
+
+    # `_as_value=` suffix actions should only work for wrapped fields.
+    assert !msg.respond_to?( :my_oneof_as_value= )
+    assert_raise NoMethodError do
+      msg.my_oneof_as_value = :boom
+    end
+    assert !msg.respond_to?( :a_as_value= )
+    assert_raise NoMethodError do
+      msg.a_as_value = ""
+    end
+    assert !msg.respond_to?( :b_as_value= )
+    assert_raise NoMethodError do
+      msg.b_as_value = 42
+    end
+    assert !msg.respond_to?( :c_as_value= )
+    assert_raise NoMethodError do
+      msg.c_as_value = proto_module::TestMessage2.new
+    end
+    assert !msg.respond_to?( :d_as_value= )
+    assert_raise NoMethodError do
+      msg.d_as_value = :Default
+    end
+
+    # `_const` suffix actions should only work for enum fields.
+    assert !msg.respond_to?( :my_oneof_const )
+    assert_raise NoMethodError do
+      msg.my_oneof_const
+    end
+    assert !msg.respond_to?( :a_const )
+    assert_raise NoMethodError do
+      msg.a_const
+    end
+    assert !msg.respond_to?( :b_const )
+    assert_raise NoMethodError do
+      msg.b_const
+    end
+    assert !msg.respond_to?( :c_const )
+    assert_raise NoMethodError do
+      msg.c_const
+    end
+    assert msg.respond_to? :d_const
+    assert_equal 0, msg.d_const
+  end
+
+  def test_wrapped_fields_respond_to? # regression test for issue 9202
+    msg = proto_module::Wrapper.new
+    assert msg.respond_to?( :double_as_value= )
+    msg.double_as_value = 42
+    assert msg.respond_to?( :double_as_value )
+    assert_equal 42, msg.double_as_value
+    assert_equal Google::Protobuf::DoubleValue.new(value: 42), msg.double
   end
 end

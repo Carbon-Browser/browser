@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 #include <utility>
 
+#include "base/types/expected_macros.h"
 #include "base/values.h"
 #include "components/policy/core/common/mock_configuration_policy_provider.h"
 #include "components/policy/core/common/policy_bundle.h"
@@ -25,6 +26,8 @@ using testing::_;
 namespace policy {
 
 namespace {
+
+constexpr auto test_reason = PolicyFetchReason::kTest;
 
 const char kTestSchema[] =
     "{"
@@ -52,10 +55,11 @@ class SchemaRegistryTrackingPolicyProviderTest : public testing::Test {
   }
 
   Schema CreateTestSchema() {
-    std::string error;
-    Schema schema = Schema::Parse(kTestSchema, &error);
-    if (!schema.valid())
-      ADD_FAILURE() << error;
+    ASSIGN_OR_RETURN(const auto schema, Schema::Parse(kTestSchema),
+                     [](const auto& e) {
+                       ADD_FAILURE() << e;
+                       return Schema();
+                     });
     return schema;
   }
 
@@ -89,9 +93,8 @@ TEST_F(SchemaRegistryTrackingPolicyProviderTest, PassOnChromePolicy) {
                             nullptr);
 
   EXPECT_CALL(observer_, OnUpdatePolicy(&schema_registry_tracking_provider_));
-  std::unique_ptr<PolicyBundle> delegate_bundle(new PolicyBundle);
-  delegate_bundle->CopyFrom(bundle);
-  delegate_bundle->Get(PolicyNamespace(POLICY_DOMAIN_EXTENSIONS, "xyz"))
+  PolicyBundle delegate_bundle = bundle.Clone();
+  delegate_bundle.Get(PolicyNamespace(POLICY_DOMAIN_EXTENSIONS, "xyz"))
       .Set("foo", POLICY_LEVEL_MANDATORY, POLICY_SCOPE_USER,
            POLICY_SOURCE_CLOUD, base::Value("not visible"), nullptr);
   mock_provider_.UpdatePolicy(std::move(delegate_bundle));
@@ -103,8 +106,8 @@ TEST_F(SchemaRegistryTrackingPolicyProviderTest, PassOnChromePolicy) {
 }
 
 TEST_F(SchemaRegistryTrackingPolicyProviderTest, RefreshPolicies) {
-  EXPECT_CALL(mock_provider_, RefreshPolicies());
-  schema_registry_tracking_provider_.RefreshPolicies();
+  EXPECT_CALL(mock_provider_, RefreshPolicies(test_reason));
+  schema_registry_tracking_provider_.RefreshPolicies(test_reason);
   Mock::VerifyAndClearExpectations(&mock_provider_);
 }
 
@@ -121,21 +124,24 @@ TEST_F(SchemaRegistryTrackingPolicyProviderTest, SchemaReadyWithComponents) {
   PolicyMap policy_map;
   policy_map.Set("foo", POLICY_LEVEL_MANDATORY, POLICY_SCOPE_USER,
                  POLICY_SOURCE_CLOUD, base::Value("omg"), nullptr);
-  std::unique_ptr<PolicyBundle> bundle(new PolicyBundle);
-  bundle->Get(PolicyNamespace(POLICY_DOMAIN_CHROME, "")) = policy_map.Clone();
-  bundle->Get(PolicyNamespace(POLICY_DOMAIN_EXTENSIONS, "xyz")) =
+  PolicyBundle bundle;
+  bundle.Get(PolicyNamespace(POLICY_DOMAIN_CHROME, "")) = policy_map.Clone();
+  bundle.Get(PolicyNamespace(POLICY_DOMAIN_EXTENSIONS, "xyz")) =
       policy_map.Clone();
   EXPECT_CALL(observer_, OnUpdatePolicy(&schema_registry_tracking_provider_));
   mock_provider_.UpdatePolicy(std::move(bundle));
   Mock::VerifyAndClearExpectations(&observer_);
 
-  EXPECT_CALL(mock_provider_, RefreshPolicies()).Times(0);
+  EXPECT_CALL(mock_provider_,
+              RefreshPolicies(PolicyFetchReason::kSchemaUpdated))
+      .Times(0);
   schema_registry_.RegisterComponent(
       PolicyNamespace(POLICY_DOMAIN_EXTENSIONS, "xyz"), CreateTestSchema());
   schema_registry_.SetExtensionsDomainsReady();
   Mock::VerifyAndClearExpectations(&mock_provider_);
 
-  EXPECT_CALL(mock_provider_, RefreshPolicies());
+  EXPECT_CALL(mock_provider_,
+              RefreshPolicies(PolicyFetchReason::kSchemaUpdated));
   schema_registry_.SetDomainReady(POLICY_DOMAIN_CHROME);
   Mock::VerifyAndClearExpectations(&mock_provider_);
 
@@ -174,7 +180,8 @@ TEST_F(SchemaRegistryTrackingPolicyProviderTest, DelegateUpdates) {
   mock_provider_.UpdateChromePolicy(policy_map);
   Mock::VerifyAndClearExpectations(&observer_);
 
-  EXPECT_CALL(mock_provider_, RefreshPolicies());
+  EXPECT_CALL(mock_provider_,
+              RefreshPolicies(PolicyFetchReason::kSchemaUpdated));
   schema_registry_.SetAllDomainsReady();
   EXPECT_TRUE(schema_registry_.IsReady());
   Mock::VerifyAndClearExpectations(&mock_provider_);
@@ -197,7 +204,8 @@ TEST_F(SchemaRegistryTrackingPolicyProviderTest, DelegateUpdates) {
 }
 
 TEST_F(SchemaRegistryTrackingPolicyProviderTest, RemoveAndAddComponent) {
-  EXPECT_CALL(mock_provider_, RefreshPolicies());
+  EXPECT_CALL(mock_provider_,
+              RefreshPolicies(PolicyFetchReason::kSchemaUpdated));
   const PolicyNamespace ns(POLICY_DOMAIN_EXTENSIONS, "xyz");
   schema_registry_.RegisterComponent(ns, CreateTestSchema());
   schema_registry_.SetAllDomainsReady();
@@ -207,8 +215,7 @@ TEST_F(SchemaRegistryTrackingPolicyProviderTest, RemoveAndAddComponent) {
   PolicyBundle platform_policy;
   platform_policy.Get(ns).Set("foo", POLICY_LEVEL_MANDATORY, POLICY_SCOPE_USER,
                               POLICY_SOURCE_CLOUD, base::Value("omg"), nullptr);
-  std::unique_ptr<PolicyBundle> copy(new PolicyBundle);
-  copy->CopyFrom(platform_policy);
+  PolicyBundle copy = platform_policy.Clone();
   EXPECT_CALL(observer_, OnUpdatePolicy(_));
   mock_provider_.UpdatePolicy(std::move(copy));
   Mock::VerifyAndClearExpectations(&observer_);
@@ -224,13 +231,13 @@ TEST_F(SchemaRegistryTrackingPolicyProviderTest, RemoveAndAddComponent) {
 
   // Adding it back should serve the current policies again, even though they
   // haven't changed on the platform provider.
-  EXPECT_CALL(mock_provider_, RefreshPolicies());
+  EXPECT_CALL(mock_provider_,
+              RefreshPolicies(PolicyFetchReason::kSchemaUpdated));
   schema_registry_.RegisterComponent(ns, CreateTestSchema());
   Mock::VerifyAndClearExpectations(&mock_provider_);
 
   EXPECT_CALL(observer_, OnUpdatePolicy(_));
-  copy = std::make_unique<PolicyBundle>();
-  copy->CopyFrom(platform_policy);
+  copy = platform_policy.Clone();
   mock_provider_.UpdatePolicy(std::move(copy));
   Mock::VerifyAndClearExpectations(&observer_);
   EXPECT_TRUE(

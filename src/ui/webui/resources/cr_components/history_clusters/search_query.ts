@@ -1,49 +1,54 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import './history_clusters_shared_style.css.js';
-
-import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import {CrRippleMixin} from '//resources/cr_elements/cr_ripple/cr_ripple_mixin.js';
+import {assert} from '//resources/js/assert.js';
+import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
 
 import {BrowserProxyImpl} from './browser_proxy.js';
-import {RelatedSearchAction, SearchQuery} from './history_clusters.mojom-webui.js';
+import type {SearchQuery} from './history_cluster_types.mojom-webui.js';
+import {RelatedSearchAction} from './history_clusters.mojom-webui.js';
 import {MetricsProxyImpl} from './metrics_proxy.js';
-import {getTemplate} from './search_query.html.js';
+import {getCss} from './search_query.css.js';
+import {getHtml} from './search_query.html.js';
 
 /**
  * @fileoverview This file provides a custom element displaying a search query.
  */
 
-declare global {
-  interface HTMLElementTagNameMap {
-    'search-query': SearchQueryElement;
-  }
+export interface SearchQueryElement {
+  $: {
+    searchQueryLink: HTMLElement,
+  };
 }
 
-class SearchQueryElement extends PolymerElement {
+const SearchQueryElementBase = CrRippleMixin(CrLitElement);
+
+export class SearchQueryElement extends SearchQueryElementBase {
   static get is() {
     return 'search-query';
   }
 
-  static get template() {
-    return getTemplate();
+  static override get styles() {
+    return getCss();
   }
 
-  static get properties() {
+  override render() {
+    return getHtml.bind(this)();
+  }
+
+  static override get properties() {
     return {
       /**
        * The index of the search query pill.
        */
-      index: {
-        type: Number,
-        value: -1,  // Initialized to an invalid value.
-      },
+      index: {type: Number},
 
       /**
        * The search query to display.
        */
-      searchQuery: Object,
+      searchQuery: {type: Object},
     };
   }
 
@@ -51,25 +56,27 @@ class SearchQueryElement extends PolymerElement {
   // Properties
   //============================================================================
 
-  index: number;
-  searchQuery: SearchQuery;
+  index: number = -1;  // Initialized to an invalid value.
+  searchQuery?: SearchQuery;
 
   //============================================================================
   // Event handlers
   //============================================================================
 
-  private onAuxClick_() {
+  override firstUpdated() {
+    this.addEventListener('pointerdown', this.onPointerDown_.bind(this));
+    this.addEventListener('pointercancel', this.onPointerCancel_.bind(this));
+  }
+
+  protected onAuxClick_() {
     MetricsProxyImpl.getInstance().recordRelatedSearchAction(
         RelatedSearchAction.kClicked, this.index);
 
     // Notify the parent <history-cluster> element of this event.
-    this.dispatchEvent(new CustomEvent('related-search-clicked', {
-      bubbles: true,
-      composed: true,
-    }));
+    this.fire('related-search-clicked');
   }
 
-  private onClick_(event: MouseEvent) {
+  protected onClick_(event: MouseEvent) {
     event.preventDefault();  // Prevent default browser action (navigation).
 
     // To record metrics.
@@ -78,20 +85,38 @@ class SearchQueryElement extends PolymerElement {
     this.openUrl_(event);
   }
 
-  private onKeydown_(e: KeyboardEvent) {
+  protected onKeydown_(e: KeyboardEvent) {
+    // Disable ripple on Space.
+    this.noink = e.key === ' ';
+
     // To be consistent with <history-list>, only handle Enter, and not Space.
     if (e.key !== 'Enter') {
       return;
     }
 
+    this.getRipple().uiDownAction();
+
     // To record metrics.
     this.onAuxClick_();
 
     this.openUrl_(e);
+
+    setTimeout(() => this.getRipple().uiUpAction(), 100);
+  }
+
+  private onPointerDown_() {
+    // Ensure ripple is visible.
+    this.noink = false;
+    this.ensureRipple();
+  }
+
+  private onPointerCancel_() {
+    this.getRipple().clear();
   }
 
   private openUrl_(event: MouseEvent|KeyboardEvent) {
-    BrowserProxyImpl.getInstance().handler.openHistoryCluster(
+    assert(this.searchQuery);
+    BrowserProxyImpl.getInstance().handler.openHistoryUrl(
         this.searchQuery.url, {
           middleButton: false,
           altKey: event.altKey,
@@ -99,6 +124,19 @@ class SearchQueryElement extends PolymerElement {
           metaKey: event.metaKey,
           shiftKey: event.shiftKey,
         });
+  }
+
+  // Overridden from CrRippleMixin
+  override createRipple() {
+    this.rippleContainer = this.$.searchQueryLink;
+    const ripple = super.createRipple();
+    return ripple;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'search-query': SearchQueryElement;
   }
 }
 

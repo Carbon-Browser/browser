@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,9 +8,9 @@
 #include "base/check_op.h"
 #include "third_party/blink/renderer/platform/graphics/paint/display_item_list.h"
 #include "third_party/blink/renderer/platform/graphics/paint/paint_chunk.h"
+#include "third_party/blink/renderer/platform/heap/collection_support/heap_vector.h"
+#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
-#include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
-#include "third_party/blink/renderer/platform/wtf/vector.h"
 
 namespace blink {
 
@@ -24,9 +24,8 @@ namespace blink {
 // It represents a particular state of the world, and is immutable (const) and
 // promises to be in a reasonable state (e.g. chunk bounding boxes computed) to
 // all users, except for PaintController and unit tests.
-class PLATFORM_EXPORT PaintArtifact final : public RefCounted<PaintArtifact> {
-  USING_FAST_MALLOC(PaintArtifact);
-
+class PLATFORM_EXPORT PaintArtifact final
+    : public GarbageCollected<PaintArtifact> {
  public:
   PaintArtifact() = default;
   PaintArtifact(const PaintArtifact& other) = delete;
@@ -34,15 +33,17 @@ class PLATFORM_EXPORT PaintArtifact final : public RefCounted<PaintArtifact> {
   PaintArtifact(PaintArtifact&& other) = delete;
   PaintArtifact& operator=(PaintArtifact&& other) = delete;
 
-  bool IsEmpty() const { return chunks_.IsEmpty(); }
+  void Trace(Visitor* visitor) const { visitor->Trace(chunks_); }
+
+  bool IsEmpty() const { return chunks_.empty(); }
 
   DisplayItemList& GetDisplayItemList() { return display_item_list_; }
   const DisplayItemList& GetDisplayItemList() const {
     return display_item_list_;
   }
 
-  Vector<PaintChunk>& PaintChunks() { return chunks_; }
-  const Vector<PaintChunk>& PaintChunks() const { return chunks_; }
+  PaintChunks& GetPaintChunks() { return chunks_; }
+  const PaintChunks& GetPaintChunks() const { return chunks_; }
 
   DisplayItemRange DisplayItemsInChunk(wtf_size_t chunk_index) const {
     DCHECK_LT(chunk_index, chunks_.size());
@@ -54,8 +55,8 @@ class PLATFORM_EXPORT PaintArtifact final : public RefCounted<PaintArtifact> {
   // shared with the embedder after copying to cc::DisplayItemList.
   size_t ApproximateUnsharedMemoryUsage() const;
 
-  sk_sp<PaintRecord> GetPaintRecord(
-      const PropertyTreeState& replay_state) const;
+  PaintRecord GetPaintRecord(const PropertyTreeState& replay_state,
+                             const gfx::Rect* cull_rect = nullptr) const;
 
   void RecordDebugInfo(DisplayItemClientId, const String&, DOMNodeId);
   // Note that ClientDebugName() returns the debug name at the time the client
@@ -67,18 +68,30 @@ class PLATFORM_EXPORT PaintArtifact final : public RefCounted<PaintArtifact> {
   DOMNodeId ClientOwnerNodeId(DisplayItemClientId) const;
   String IdAsString(const DisplayItem::Id& id) const;
 
+  std::unique_ptr<JSONArray> ToJSON() const;
+  void AppendChunksAsJSON(
+      wtf_size_t start_chunk_index,
+      wtf_size_t end_chunk_index,
+      JSONArray&,
+      DisplayItemList::JsonOption = DisplayItemList::kDefault) const;
+
+  void clear();
+
  private:
   struct ClientDebugInfo {
     String name;
     DOMNodeId owner_node_id;
+    DISALLOW_NEW();
   };
 
   using DebugInfo = HashMap<DisplayItemClientId, ClientDebugInfo>;
 
   DisplayItemList display_item_list_;
-  Vector<PaintChunk> chunks_;
+  PaintChunks chunks_;
   DebugInfo debug_info_;
 };
+
+PLATFORM_EXPORT std::ostream& operator<<(std::ostream&, const PaintArtifact&);
 
 }  // namespace blink
 

@@ -1,11 +1,13 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "extensions/renderer/bindings/api_event_handler.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include <optional>
+
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/mock_callback.h"
@@ -19,7 +21,8 @@
 #include "gin/converter.h"
 #include "gin/public/context_holder.h"
 #include "testing/gmock/include/gmock/gmock.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "v8/include/v8-object.h"
+#include "v8/include/v8-primitive.h"
 
 namespace extensions {
 
@@ -45,6 +48,20 @@ void AddListener(v8::Local<v8::Context> context,
   v8::Local<v8::Function> add_listener =
       FunctionFromString(context, kAddListenerFunction);
   v8::Local<v8::Value> argv[] = {event, listener};
+  RunFunction(add_listener, context, std::size(argv), argv);
+}
+
+void AddFilteredListener(v8::Local<v8::Context> context,
+                         v8::Local<v8::Function> listener,
+                         v8::Local<v8::Object> event,
+                         v8::Local<v8::Object> filter) {
+  constexpr char kAddListenerFunction[] =
+      R"((function(event, listener, filter) {
+            event.addListener(listener, filter);
+         }))";
+  v8::Local<v8::Function> add_listener =
+      FunctionFromString(context, kAddListenerFunction);
+  v8::Local<v8::Value> argv[] = {event, listener, filter};
   RunFunction(add_listener, context, std::size(argv), argv);
 }
 
@@ -465,7 +482,7 @@ TEST_F(APIEventHandlerTest, RemovingListenersWhileHandlingEvent) {
       "})();";
 
   // Create and add a bunch of listeners.
-  std::vector<v8::Local<v8::Function>> listeners;
+  v8::LocalVector<v8::Function> listeners(isolate());
   const size_t kNumListeners = 20u;
   listeners.reserve(kNumListeners);
   for (size_t i = 0; i < kNumListeners; ++i)
@@ -709,6 +726,73 @@ TEST_F(APIEventHandlerTest, TestArgumentMassagers) {
       GetStringPropertyFromObject(context->Global(), context, "eventArgs"));
 }
 
+TEST_F(APIEventHandlerTest, TestFilteredEventWithMassager) {
+  v8::HandleScope handle_scope(isolate());
+  v8::Local<v8::Context> context = MainContext();
+
+  context->Global()
+      ->Set(
+          context,
+          v8::String::NewFromUtf8(isolate(), "dispatchCount").ToLocalChecked(),
+          v8::Integer::New(isolate(), 0))
+      .Check();
+
+  const char kEventName[] = "alpha";
+  v8::Local<v8::Object> event = handler()->CreateEventInstance(
+      kEventName, true, true, binding::kNoListenerMax, true, context);
+  ASSERT_FALSE(event.IsEmpty());
+
+  const char kArgumentMassager[] = R"(
+    (function(originalArgs, dispatch) {
+        this.originalArgs = originalArgs;
+        dispatch(['primary', 'secondary']);
+    });
+    )";
+  v8::Local<v8::Function> massager =
+      FunctionFromString(context, kArgumentMassager);
+  handler()->RegisterArgumentMassager(context, kEventName, massager);
+
+  const char kListenerFunction[] = R"(
+        (function() {
+            this.eventArgs = Array.from(arguments);
+            dispatchCount++;
+        })
+        )";
+  v8::Local<v8::Function> listener_function =
+      FunctionFromString(context, kListenerFunction);
+  ASSERT_FALSE(listener_function.IsEmpty());
+  auto filter =
+      V8ValueFromScriptSource(context, "({url: [{hostSuffix: 'test.com'}]})")
+          .As<v8::Object>();
+
+  mojom::EventFilteringInfoPtr matched_filter_info =
+      mojom::EventFilteringInfo::New();
+  matched_filter_info->url = GURL("https://test.com");
+  mojom::EventFilteringInfoPtr unmatched_filter_info =
+      mojom::EventFilteringInfo::New();
+  unmatched_filter_info->url = GURL("https://testfoo.com");
+
+  AddFilteredListener(context, listener_function, event, filter);
+
+  const char kArgs[] = "['first','second']";
+  base::Value::List event_args = ListValueFromString(kArgs);
+
+  handler()->FireEventInContext(kEventName, context, event_args,
+                                std::move(matched_filter_info));
+  handler()->FireEventInContext(kEventName, context, event_args,
+                                std::move(unmatched_filter_info));
+
+  EXPECT_EQ(
+      "[\"first\",\"second\"]",
+      GetStringPropertyFromObject(context->Global(), context, "originalArgs"));
+  EXPECT_EQ(
+      "[\"primary\",\"secondary\"]",
+      GetStringPropertyFromObject(context->Global(), context, "eventArgs"));
+  EXPECT_EQ(1, GetBaseValuePropertyFromObject(context->Global(), context,
+                                              "dispatchCount")
+                   ->GetIfInt());
+}
+
 // Test registering an argument massager for a given event and dispatching
 // asynchronously.
 TEST_F(APIEventHandlerTest, TestArgumentMassagersAsyncDispatch) {
@@ -910,10 +994,10 @@ TEST_F(APIEventHandlerTest, TestUnmanagedEvents) {
   v8::HandleScope handle_scope(isolate());
   v8::Local<v8::Context> context = MainContext();
 
-  auto fail_on_notified =
-      [](const std::string& event_name, binding::EventListenersChanged changed,
-         const base::DictionaryValue* filter, bool was_manual,
-         v8::Local<v8::Context> context) { ADD_FAILURE(); };
+  auto fail_on_notified = [](const std::string& event_name,
+                             binding::EventListenersChanged changed,
+                             const base::Value::Dict* filter, bool was_manual,
+                             v8::Local<v8::Context> context) { ADD_FAILURE(); };
 
   APIEventHandler handler(base::BindRepeating(fail_on_notified),
                           base::BindRepeating(&GetContextOwner), nullptr);

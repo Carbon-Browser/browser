@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <wayland-server-core.h>
 #include <wayland-server-protocol-core.h>
 
+#include "base/memory/raw_ptr.h"
 #include "components/exo/keyboard.h"
 #include "components/exo/pointer.h"
 #include "components/exo/touch.h"
@@ -54,8 +55,8 @@ class WaylandInputTimestamps : public WaylandInputDelegate::Observer {
   }
 
  private:
-  wl_resource* const resource_;
-  WaylandInputDelegate* delegate_;
+  const raw_ptr<wl_resource> resource_;
+  raw_ptr<WaylandInputDelegate> delegate_;
 };
 
 void input_timestamps_destroy(struct wl_client* client,

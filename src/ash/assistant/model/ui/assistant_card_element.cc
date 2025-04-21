@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,10 @@
 
 #include "ash/assistant/ui/assistant_ui_constants.h"
 #include "ash/assistant/ui/assistant_view_ids.h"
+#include "ash/public/cpp/ash_web_view.h"
 #include "ash/public/cpp/ash_web_view_factory.h"
 #include "base/base64.h"
+#include "base/memory/raw_ptr.h"
 
 namespace ash {
 
@@ -32,8 +34,8 @@ class AssistantCardElement::Processor : public AshWebView::Observer {
   }
 
   void Process() {
-    const int width_dip = card_element_->viewport_width() -
-                          2 * assistant::ui::GetHorizontalMargin();
+    const int width_dip =
+        card_element_->viewport_width() - 2 * assistant::ui::kHorizontalMargin;
 
     // Configure parameters for the card. We want to configure the size as:
     // - width: It should be width_dip.
@@ -43,6 +45,7 @@ class AssistantCardElement::Processor : public AshWebView::Observer {
     contents_params.min_size = gfx::Size(width_dip, 1);
     contents_params.max_size = gfx::Size(width_dip, INT_MAX);
     contents_params.suppress_navigation = true;
+    contents_params.fix_zoom_level_to_one = true;
 
     // Create |contents_view_| and retain ownership until it is added to the
     // view hierarchy. If that never happens, it will be still be cleaned up.
@@ -54,8 +57,7 @@ class AssistantCardElement::Processor : public AshWebView::Observer {
     contents_view_->AddObserver(this);
 
     // Encode the html string to be URL-safe.
-    std::string encoded_html;
-    base::Base64Encode(card_element_->html(), &encoded_html);
+    std::string encoded_html = base::Base64Encode(card_element_->html());
 
     // Navigate to the data URL which represents the card.
     constexpr char kDataUriPrefix[] = "data:text/html;base64,";
@@ -74,7 +76,7 @@ class AssistantCardElement::Processor : public AshWebView::Observer {
   }
 
   // |card_element_| should outlive the Processor.
-  AssistantCardElement* const card_element_;
+  const raw_ptr<AssistantCardElement> card_element_;
   ProcessingCallback callback_;
 
   std::unique_ptr<AshWebView> contents_view_;

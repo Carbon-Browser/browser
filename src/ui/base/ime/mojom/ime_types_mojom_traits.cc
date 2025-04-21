@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -130,7 +130,6 @@ EnumTraits<ui::mojom::TextInputType, ui::TextInputType>::ToMojom(
       return ui::mojom::TextInputType::TYPE_NULL;
   }
   NOTREACHED();
-  return ui::mojom::TextInputType::NONE;
 }
 
 #undef UI_TO_MOJO_TYPE_CASE
@@ -214,7 +213,6 @@ EnumTraits<ui::mojom::ImeTextSpanType, ui::ImeTextSpan::Type>::ToMojom(
   }
 
   NOTREACHED();
-  return ui::mojom::ImeTextSpanType::kComposition;
 }
 
 // static
@@ -240,7 +238,6 @@ bool EnumTraits<ui::mojom::ImeTextSpanType, ui::ImeTextSpan::Type>::FromMojom(
   }
 
   NOTREACHED();
-  return false;
 }
 
 // static
@@ -257,7 +254,6 @@ ui::mojom::ImeTextSpanThickness EnumTraits<
   }
 
   NOTREACHED();
-  return ui::mojom::ImeTextSpanThickness::kThin;
 }
 
 // static
@@ -277,7 +273,6 @@ bool EnumTraits<ui::mojom::ImeTextSpanThickness, ui::ImeTextSpan::Thickness>::
   }
 
   NOTREACHED();
-  return false;
 }
 
 // static
@@ -299,7 +294,6 @@ ui::mojom::ImeTextSpanUnderlineStyle EnumTraits<
   }
 
   NOTREACHED();
-  return ui::mojom::ImeTextSpanUnderlineStyle::kSolid;
 }
 
 // static
@@ -326,7 +320,6 @@ bool EnumTraits<ui::mojom::ImeTextSpanUnderlineStyle,
   }
 
   NOTREACHED();
-  return false;
 }
 
 }  // namespace mojo

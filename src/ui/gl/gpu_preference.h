@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,14 @@ enum class GpuPreference {
   kLowPower,
   kHighPerformance,
   kMaxValue = kHighPerformance
+};
+
+// Some clients may need to use the same GPU with a separate EGL display.
+// This enum is used to key individual EGL displays per-GPU.
+enum class DisplayKey {
+  kDefault,
+  kSeparateEGLDisplayForWebGLTesting,
+  kMaxValue = kSeparateEGLDisplayForWebGLTesting,
 };
 
 }  // namespace gl

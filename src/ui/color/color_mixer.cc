@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,9 +34,8 @@ SkColor ColorMixer::GetInputColor(ColorId id) const {
       previous_mixer_getter_ ? previous_mixer_getter_.Run() : nullptr;
   // Don't log transitions to previous mixers unless the logging level is a
   // little higher.
-  DVLOG_IF(3, previous_mixer)
-      << "GetInputColor: ColorId " << ColorIdName(id) << " not found. "
-      << "Checking previous mixer.";
+  DVLOG_IF(3, previous_mixer) << "GetInputColor: ColorId " << ColorIdName(id)
+                              << " not found. " << "Checking previous mixer.";
   // If there's no previous mixer, always log color id misses.
   DVLOG_IF(2, !previous_mixer)
       << "GetInputColor: ColorId " << ColorIdName(id) << " not found. "
@@ -46,13 +45,23 @@ SkColor ColorMixer::GetInputColor(ColorId id) const {
 }
 
 SkColor ColorMixer::GetResultColor(ColorId id) const {
-  const SkColor color = GetInputColor(id);
   const auto i = recipes_.find(id);
+  const bool recipe_in_mixer = i != recipes_.end();
+
+  // GetInputColor() can be expensive if the resulting ColorMixer is not in the
+  // cache, so avoid calling it if we can. Most recipes are invariant so this
+  // can save significant time.
+  const SkColor input_color = (recipe_in_mixer && i->second.Invariant())
+                                  ? gfx::kPlaceholderColor
+                                  : GetInputColor(id);
+
+  if (!recipe_in_mixer) {
+    return input_color;
+  }
+
   const ColorMixer* const mixer =
       input_mixer_getter_ ? input_mixer_getter_.Run() : nullptr;
-  return (i == recipes_.end())
-             ? color
-             : i->second.GenerateResult(color, *(mixer ? mixer : this));
+  return i->second.GenerateResult(input_color, *(mixer ? mixer : this));
 }
 
 std::set<ColorId> ColorMixer::GetDefinedColorIds() const {

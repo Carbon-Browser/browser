@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#import "base/memory/raw_ptr.h"
 #include "ios/web/public/init/web_main_delegate.h"
 
 namespace web {
@@ -26,12 +27,12 @@ struct WebMainParams {
   WebMainParams(WebMainParams&& other);
   WebMainParams& operator=(WebMainParams&& other);
 
-  WebMainDelegate* delegate;
+  raw_ptr<WebMainDelegate> delegate;
 
   bool register_exit_manager;
 
   int argc;
-  const char** argv;
+  raw_ptr<const char*> argv;
 };
 
 // Encapsulates any setup and initialization that is needed by common

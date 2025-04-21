@@ -1,4 +1,4 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -31,18 +31,6 @@ component("chromeos") {
 
   if (is_chromeos_ash) {
     configs += [ ":chromeos_implementation" ]
-    if (is_chromeos_device) {
-      configs += [ "//build/config/compiler:use_orderfile_for_hugepage" ]
-    }
-
-    deps += [
-      ":chromeos_export",
-      "//base",
-    ]
-    sources += [
-      "hugepage_text/hugepage_text.cc",
-      "hugepage_text/hugepage_text.h",
-    ]
     if (current_cpu == "arm" || current_cpu == "x86") {
       defines = [ "BINDER_IPC_32BIT" ]
     }
@@ -76,9 +64,9 @@ source_set("test_support_source_set") {
   ]
   if (is_chromeos_ash) {
     deps += [
+      "//chromeos/ash/components/dbus:test_support",
+      "//chromeos/ash/components/login/login_state:test_support",
       "//chromeos/ash/components/network:test_support",
-      "//chromeos/dbus:test_support",
-      "//chromeos/login/login_state:test_support",
       "//google_apis",
       "//net:test_support",
       "//services/network:test_support",
@@ -98,6 +86,7 @@ test("chromeos_unittests") {
   configs += [ "//build/config/linux/dbus" ]
 
   deps = [
+    "//base",
     "//base/test:test_support",
     "//build:chromeos_buildflags",
     "//mojo/core/embedder",
@@ -105,8 +94,9 @@ test("chromeos_unittests") {
 
   sources = [ "test/run_all_unittests.cc" ]
 
-  # Tests that common to Ash and Lacros.
+  # Tests that are common to Ash and Lacros.
   deps += [
+    "//chromeos/components/firewall_hole:unit_tests",
     "//chromeos/constants:unit_tests",
     "//chromeos/system:unit_tests",
   ]
@@ -114,21 +104,20 @@ test("chromeos_unittests") {
   if (is_chromeos_ash) {
     deps += [
       ":test_support",
+      "//chromeos/ash/components:test_support",
       "//chromeos/ash/components:unit_tests",
+      "//chromeos/ash/components/dbus:test_support",
       "//chromeos/ash/components/network:test_support",
       "//chromeos/ash/services:unit_tests",
       "//chromeos/crosapi/cpp:unit_tests",
       "//chromeos/crosapi/mojom:unit_tests",
-      "//chromeos/dbus:test_support",
       "//chromeos/dbus:unit_tests",
-      "//chromeos/language/language_packs:unit_tests",
-      "//chromeos/login/login_state:unit_tests",
       "//chromeos/printing:unit_tests",
       "//chromeos/process_proxy:unit_tests",
       "//chromeos/services:unit_tests",
-      "//chromeos/startup:unit_tests",
       "//chromeos/ui/base:unit_tests",
       "//chromeos/utils:unit_tests",
+      "//chromeos/version:unit_tests",
       "//components/onc",
       "//components/prefs:test_support",
       "//components/proxy_config",
@@ -140,6 +129,10 @@ test("chromeos_unittests") {
       "//services/network/public/cpp",
       "//url",
     ]
+  }
+
+  if (is_chromeos_lacros) {
+    deps += [ "//chromeos/lacros:unit_tests" ]
   }
 
   data = [ "test/data/" ]
@@ -179,21 +172,65 @@ if (is_chromeos_ash && is_chromeos_device) {
     tast_tests = [ "platform.ReportDiskUsage" ]
   }
 
+  _tast_disabled_tests_on_this_board = []
+  foreach(_test, tast_disabled_tests_from_chrome_all) {
+    _test_name_and_board = []
+    _test_name_and_board = string_split(_test, "@") + [ "" ]
+    _test_name = _test_name_and_board[0]
+    _test_board = _test_name_and_board[1]
+    if (_test_board == "" || _test_board == cros_board) {
+      _tast_disabled_tests_on_this_board += [ _test_name ]
+    }
+  }
+
   # Tast test sources live in the Chromium OS repository.
   # To diagnose tast failures or disable tests, see go/tast-failures
+  # For any builders that run this target, it should also build Lacros.
   tast_test("chrome_all_tast_tests") {
+    tast_attr_expr = "\"group:mainline\" && \"dep:chrome\" && !informational"
+    if (is_skylab) {
+      # TODO(b/284405976): Add a !no_chrome_dcheck condition automatically by reading the build configuration.
+      tast_attr_expr = "($tast_attr_expr && !\"dep:no_chrome_dcheck\")"
+    }
+
     # To disable a specific test, add it to the
     # tast_disabled_tests_from_chrome_all list in "tast_control.gni" and cite
     # a bug.
-    tast_disabled_tests = tast_disabled_tests_from_chrome_all
+    tast_disabled_tests = _tast_disabled_tests_on_this_board
   }
 
   tast_test("chrome_all_tast_tests_informational") {
     enable_tast_informational_tests = true
   }
 
+  tast_test("chrome_criticalstaging_tast_tests") {
+    tast_attr_expr = "\"group:mainline\" && \"dep:chrome\" && !\"dep:lacros\" && \"informational\" && \"group:criticalstaging\""
+    if (is_skylab) {
+      # TODO(b/284405976): Add a !no_chrome_dcheck condition automatically by reading the build configuration.
+      # TODO(b/294489383): Re-enable lacros tests once lacros chrome is deployed to ash skylab builders.
+      tast_attr_expr = "($tast_attr_expr && !\"dep:no_chrome_dcheck\")"
+    }
+
+    tast_disabled_tests = _tast_disabled_tests_on_this_board
+  }
+
+  tast_test("chrome_disabled_tast_tests") {
+    tast_tests = _tast_disabled_tests_on_this_board
+  }
+
   tast_test("chrome_variations_tast_tests") {
     tast_tests = [ "ui.ChromeVariationsSmoke" ]
+  }
+
+  # Test suite to test the CrOS basic functionality (See http://go/cq-medium).
+  tast_test("cq_medium_tast_tests") {
+    tast_attr_expr = "\"group:cq-medium\" && \"dep:chrome\" && \"group:mainline\" && !informational"
+    if (is_skylab) {
+      # TODO(b/284405976): Add a !no_chrome_dcheck condition automatically by reading the build configuration.
+      tast_attr_expr = "($tast_attr_expr && !\"dep:no_chrome_dcheck\")"
+    }
+
+    tast_disabled_tests = _tast_disabled_tests_on_this_board
   }
 
   group("cros_chrome_deploy") {
@@ -203,11 +240,7 @@ if (is_chromeos_ash && is_chromeos_device) {
     # Most of these are copy targets, for which GN doesn't add their outputs
     # as runtime-deps. See the link below for more details:
     # https://chromium.googlesource.com/chromium/src/+/main/tools/gn/docs/reference.md#actions-and-copies
-    data_deps = [
-      "//chrome:xdg_mime",
-      "//mojo/core:shared_library_arc32",
-      "//mojo/core:shared_library_arc64",
-    ]
+    data_deps = [ "//chrome:xdg_mime" ]
 
     # TODO(bpastene): Figure out what's generating resources/chromeos/ and
     # declare it as a dep instead of adding the dir directly.

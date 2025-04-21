@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -103,9 +103,10 @@ class ChromiumDriver(BrowserDriver):
 
   def Launch(self):
     open_args = ["-a", self.process_name]
-    subprocess.call(["open"] + open_args + ["--args"] +
-                    ["--enable-benchmarking", "--disable-stack-profiler"] +
-                    self.extra_args)
+    subprocess.call(["open"] + open_args + ["--args"] + [
+        "--enable-benchmarking", "--disable-stack-profiler", "--no-first-run",
+        "--no-default-browser-check"
+    ] + self.extra_args)
 
     self._EnsureStarted()
 
@@ -167,7 +168,8 @@ def MakeBrowserDriver(browser_name: str,
                       variation: str,
                       chrome_user_dir=None,
                       output_dir=None,
-                      tracing_mode=False) -> BrowserDriver:
+                      tracing_mode=False,
+                      extra_command_line=None) -> BrowserDriver:
   """Creates browser driver by name.
 
   Args:
@@ -194,6 +196,12 @@ def MakeBrowserDriver(browser_name: str,
       chrome_extra_arg += [
           f'--trace-startup-file={os.path.abspath(trace_path)}'
       ]
+
+    if extra_command_line:
+      for command in extra_command_line:
+        # Quotes are needed to avoid to avoid cli replacement.
+        command = command.replace('"', '')
+        chrome_extra_arg += [command]
 
     if browser_name == "chrome":
       return Chrome(variation, extra_args=chrome_extra_arg)

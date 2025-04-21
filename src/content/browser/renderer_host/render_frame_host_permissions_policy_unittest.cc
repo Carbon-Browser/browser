@@ -1,15 +1,17 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <vector>
 
+#include "content/browser/site_instance_impl.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/navigation_simulator.h"
 #include "content/public/test/test_renderer_host.h"
 #include "content/test/test_render_frame_host.h"
 #include "third_party/blink/public/common/frame/frame_policy.h"
+#include "third_party/blink/public/common/permissions_policy/origin_with_possible_wildcards.h"
 #include "third_party/blink/public/common/permissions_policy/permissions_policy.h"
 #include "url/gurl.h"
 #include "url/origin.h"
@@ -67,10 +69,28 @@ class RenderFrameHostPermissionsPolicyTest
                           RenderFrameHost* child,
                           blink::mojom::PermissionsPolicyFeature feature,
                           const std::vector<std::string>& origins) {
+    // If kOriginKeyedProcessesByDefault is enabled, then it's possible that
+    // `parent` and `child` are cross-process to each other even if they're same
+    // site (as some of the tests below assume). In that case, we need to use
+    // the FrameToken from the proxy instead.
+    bool child_uses_proxy =
+        static_cast<SiteInstanceImpl*>(parent->GetSiteInstance())->group() !=
+        static_cast<SiteInstanceImpl*>(child->GetSiteInstance())->group();
+    blink::FrameToken frame_token;
+    // Note: we can't assign from a ternary here since blink::LocalFrameToken
+    // and blink::RemoteFrameToken are incompatible types.
+    if (child_uses_proxy) {
+      frame_token = static_cast<RenderFrameHostImpl*>(child)
+                        ->GetProxyToParent()
+                        ->GetFrameToken();
+    } else {
+      frame_token = child->GetFrameToken();
+    }
     static_cast<TestRenderFrameHost*>(parent)->DidChangeFramePolicy(
-        child->GetFrameToken(), {network::mojom::WebSandboxFlags::kNone,
-                                 CreateFPHeader(feature, origins),
-                                 {} /* required_document_policy */});
+        frame_token, {network::mojom::WebSandboxFlags::kNone,
+                      CreateFPHeader(feature, origins),
+                      {} /* required_document_policy */,
+                      blink::FramePolicy::DeferredFetchPolicy::kDisabled});
   }
 
   void SimulateNavigation(RenderFrameHost** rfh, const GURL& url) {
@@ -86,8 +106,11 @@ class RenderFrameHostPermissionsPolicyTest
       const std::vector<std::string>& origins) {
     blink::ParsedPermissionsPolicy result(1);
     result[0].feature = feature;
-    for (auto const& origin : origins)
-      result[0].allowed_origins.push_back(url::Origin::Create(GURL(origin)));
+    for (auto const& origin : origins) {
+      result[0].allowed_origins.emplace_back(
+          *blink::OriginWithPossibleWildcards::FromOrigin(
+              url::Origin::Create(GURL(origin))));
+    }
     return result;
   }
 };

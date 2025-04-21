@@ -1,14 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/network/test/test_network_context_client.h"
 
+#include <optional>
 #include <utility>
 
 #include "base/threading/thread_restrictions.h"
 #include "net/base/net_errors.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace network {
 

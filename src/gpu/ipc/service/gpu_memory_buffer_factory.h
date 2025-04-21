@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <memory>
 #include <vector>
 
-#include "base/memory/ref_counted.h"
 #include "base/memory/unsafe_shared_memory_region.h"
+#include "base/task/single_thread_task_runner.h"
 #include "gpu/ipc/common/surface_handle.h"
 #include "gpu/ipc/service/gpu_ipc_service_export.h"
 #include "ui/gfx/geometry/size.h"
@@ -21,7 +21,14 @@ class VulkanContextProvider;
 
 namespace gpu {
 
-class ImageFactory;
+// This enums will be used by clients when creating native gmb handles via
+// GpuMemoryBufferFactory::CreateNativeGmbHandle(). This ensure each client uses
+// a unique id.
+enum class MappableSIClientGmbId : int {
+  kGpuChannel = 1,
+  kGmbVideoFramePoolContext = 2,
+  kLast = 2
+};
 
 class GPU_IPC_SERVICE_EXPORT GpuMemoryBufferFactory {
  public:
@@ -33,7 +40,18 @@ class GPU_IPC_SERVICE_EXPORT GpuMemoryBufferFactory {
   // Creates a new factory instance for native GPU memory buffers. Returns null
   // if native buffers are not supported.
   static std::unique_ptr<GpuMemoryBufferFactory> CreateNativeType(
-      viz::VulkanContextProvider* vulkan_context_provider);
+      viz::VulkanContextProvider* vulkan_context_provider,
+      scoped_refptr<base::SingleThreadTaskRunner> io_runner = nullptr);
+
+  // Creates a native GpuMemoryBufferHandle for MappableSI work. Note that
+  // every client should use a different |id| here otherwise it can result in
+  // errors due to multiple clients creating and destroying GMBs with same |id|
+  // from multiple threads. Using MappableSIClientGmbId here ensures that every
+  // client uses unique id assigned to it and also makes it easier to track.
+  gfx::GpuMemoryBufferHandle CreateNativeGmbHandle(MappableSIClientGmbId id,
+                                                   const gfx::Size& size,
+                                                   gfx::BufferFormat format,
+                                                   gfx::BufferUsage usage);
 
   // Creates a new GPU memory buffer instance. A valid handle is returned on
   // success. This method is thread-safe but it should not be called on the IO
@@ -74,9 +92,6 @@ class GPU_IPC_SERVICE_EXPORT GpuMemoryBufferFactory {
   virtual bool FillSharedMemoryRegionWithBufferContents(
       gfx::GpuMemoryBufferHandle buffer_handle,
       base::UnsafeSharedMemoryRegion shared_memory) = 0;
-
-  // Type-checking downcast routine.
-  virtual ImageFactory* AsImageFactory() = 0;
 
  protected:
   GpuMemoryBufferFactory() = default;

@@ -1,16 +1,17 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_METRICS_USERTYPE_BY_DEVICETYPE_METRICS_PROVIDER_H_
 #define CHROME_BROWSER_METRICS_USERTYPE_BY_DEVICETYPE_METRICS_PROVIDER_H_
 
+#include <optional>
+
 #include "base/feature_list.h"
 #include "components/metrics/metrics_provider.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "components/session_manager/core/session_manager_observer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class Profile;
 
@@ -39,6 +40,10 @@ class UserTypeByDeviceTypeMetricsProvider
     kNonProfit = 3,
     // Primary profile is for a user belonging to an enterprise organization.
     kEnterprise = 4,
+    // Primary profile is for a demo session.
+    // This value is not present in MetricsLogSegment and must not collide with
+    // any values found there.
+    kDemoMode = 65533,
     // Primary profile is for a kiosk app.
     // This value is not present in MetricsLogSegment and must not collide with
     // any values found there.
@@ -56,8 +61,7 @@ class UserTypeByDeviceTypeMetricsProvider
   ~UserTypeByDeviceTypeMetricsProvider() override;
 
   // MetricsProvider:
-  void ProvideCurrentSessionData(
-      metrics::ChromeUserMetricsExtension* uma_proto_unused) override;
+  bool ProvideHistograms() override;
 
   // session_manager::SessionManagerObserver:
   void OnUserSessionStarted(bool is_primary_user) override;
@@ -70,8 +74,8 @@ class UserTypeByDeviceTypeMetricsProvider
   static int ConstructUmaValue(UserSegment user, policy::MarketSegment device);
 
  private:
-  absl::optional<UserSegment> user_segment_;
-  absl::optional<policy::MarketSegment> device_segment_;
+  std::optional<UserSegment> user_segment_;
+  std::optional<policy::MarketSegment> device_segment_;
 };
 
 #endif  // CHROME_BROWSER_METRICS_USERTYPE_BY_DEVICETYPE_METRICS_PROVIDER_H_

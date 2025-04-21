@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,25 @@
 #include <vector>
 
 #include "components/autofill/core/browser/data_model/autofill_offer_data.h"
+#include "services/metrics/public/cpp/ukm_source_id.h"
 
 namespace autofill::autofill_metrics {
 
-// Logs the offer data associated with a profile. This should be called each
-// time a Chrome profile is launched.
-void LogStoredOfferMetrics(
-    const std::vector<std::unique_ptr<AutofillOfferData>>& offers);
+// Metrics to track event when the offer notification bubble is closed.
+enum class OfferNotificationBubbleResultMetric {
+  // These values are persisted to logs. Entries should not be renumbered and
+  // numeric values should never be reused.
+
+  // The user explicitly acknowledged the bubble by clicking the ok button.
+  OFFER_NOTIFICATION_BUBBLE_ACKNOWLEDGED = 0,
+  // The user explicitly closed the prompt with the close button or ESC.
+  OFFER_NOTIFICATION_BUBBLE_CLOSED = 1,
+  // The user did not interact with the prompt.
+  OFFER_NOTIFICATION_BUBBLE_NOT_INTERACTED = 2,
+  // The prompt lost focus and was deactivated.
+  OFFER_NOTIFICATION_BUBBLE_LOST_FOCUS = 3,
+  kMaxValue = OFFER_NOTIFICATION_BUBBLE_LOST_FOCUS,
+};
 
 // Metrics to track events related to the offers suggestions popup.
 enum class OffersSuggestionsPopupEvent {
@@ -63,19 +75,51 @@ enum class OffersSuggestionsEvent {
   kMaxValue = kOfferSuggestionSeeOfferDetailsSelectedOnce,
 };
 
-// Log that the offers suggestions popup was shown. If |first_time_being_logged|
+// Logs when the offer notification bubble shows. Records histogram of
+// what type of offer is showing in the bubble and whether the bubble is opened
+// by reshow.
+void LogOfferNotificationBubbleOfferMetric(
+    AutofillOfferData::OfferType offer_type,
+    bool is_reshow);
+
+// Logs when the promo code button is clicked in the offer notification bubble.
+// Records histogram of what type of offer is showing in the bubble that
+// is being clicked.
+void LogOfferNotificationBubblePromoCodeButtonClicked(
+    AutofillOfferData::OfferType offer_type);
+
+// Logs when the offer notification bubble closes. Records histogram of
+// what type of offer is in the bubble that is being closed, and whether the
+// bubble is from reshowing.
+void LogOfferNotificationBubbleResultMetric(
+    AutofillOfferData::OfferType offer_type,
+    OfferNotificationBubbleResultMetric metric,
+    bool is_reshow);
+
+// Logs when the offer notification bubble is suppressed. Records histogram
+// of what type of offer is showing in the bubble that is being
+// suppressed.
+void LogOfferNotificationBubbleSuppressed(
+    AutofillOfferData::OfferType offer_type);
+
+// Log that the offers suggestions popup was shown. If `first_time_being_logged`
 // is true, it represents that it has not been logged yet for the promo code
 // offer field that the user is on, so additional logging is needed for the
 // histogram that denotes showing the offers suggestions popup once for a field.
 void LogOffersSuggestionsPopupShown(bool first_time_being_logged);
 
-// Log the offers suggestions popup |event| for the corresponding |offer_type|.
+// Log the offers suggestions popup `event` for the corresponding `offer_type`.
 void LogIndividualOfferSuggestionEvent(OffersSuggestionsEvent event,
                                        AutofillOfferData::OfferType offer_type);
 
-// Log the presence of the offer notification icon shows on navigation event
-// for |offer_type|.
-void LogPageLoadsWithOfferIconShown(AutofillOfferData::OfferType offer_type);
+// Logs the offer data associated with a profile. This should be called each
+// time a Chrome profile is launched.
+void LogStoredOfferMetrics(
+    const std::vector<std::unique_ptr<AutofillOfferData>>& offers);
+
+// Logs whether the synced autofill offer data is valid.
+void LogSyncedOfferDataBeingValid(bool invalid);
+
 }  // namespace autofill::autofill_metrics
 
 #endif  // COMPONENTS_AUTOFILL_CORE_BROWSER_METRICS_PAYMENTS_OFFERS_METRICS_H_

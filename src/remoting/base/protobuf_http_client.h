@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <list>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "base/memory/raw_ptr.h"
@@ -15,6 +16,7 @@
 #include "base/sequence_checker.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "remoting/base/oauth_token_getter.h"
+#include "remoting/base/url_loader_network_service_observer.h"
 
 namespace network {
 class SharedURLLoaderFactory;
@@ -58,13 +60,13 @@ class ProtobufHttpClient final {
 
   void DoExecuteRequest(std::unique_ptr<ProtobufHttpRequestBase> request,
                         OAuthTokenGetter::Status status,
-                        const std::string& user_email,
-                        const std::string& access_token);
+                        const OAuthTokenInfo& token_info);
 
   void CancelRequest(const PendingRequestListIterator& request_iterator);
 
   std::string server_endpoint_;
   raw_ptr<OAuthTokenGetter> token_getter_;
+  std::optional<UrlLoaderNetworkServiceObserver> service_observer_;
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
   PendingRequestList pending_requests_;
 

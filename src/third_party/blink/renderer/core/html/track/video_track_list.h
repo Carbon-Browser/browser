@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,7 +23,7 @@ class CORE_EXPORT VideoTrackList final : public TrackListBase<VideoTrack> {
   // EventTarget
   const AtomicString& InterfaceName() const override;
 
-  void TrackSelected(WebMediaPlayer::TrackId selected_track_id);
+  void TrackSelected(const String& selected_track_id);
 
   void Trace(Visitor* visitor) const override {
     TrackListBase<VideoTrack>::Trace(visitor);

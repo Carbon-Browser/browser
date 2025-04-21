@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,12 @@
 #include <utility>
 
 #include "ash/constants/ash_features.h"
-#include "base/bind.h"
-#include "base/callback_forward.h"
+#include "ash/constants/web_app_id_constants.h"
 #include "base/check.h"
 #include "base/feature_list.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
@@ -22,12 +23,13 @@
 #include "chrome/browser/apps/app_service/launch_utils.h"
 #include "chrome/browser/ash/drive/drive_integration_service.h"
 #include "chrome/browser/ash/file_manager/path_util.h"
+#include "chrome/browser/ash/scanning/scan_service.h"
+#include "chrome/browser/ash/scanning/scan_service_factory.h"
 #include "chrome/browser/ash/scanning/scanning_file_path_helper.h"
 #include "chrome/browser/platform_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/ash/system_web_apps/system_web_app_ui_utils.h"
 #include "chrome/browser/ui/chrome_select_file_policy.h"
-#include "chrome/browser/web_applications/web_app_id_constants.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_service.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
@@ -125,6 +127,21 @@ void ChromeScanningAppDelegate::ShowFileInFilesApp(
       base::BindOnce(&ChromeScanningAppDelegate::OnPathExists,
                      weak_ptr_factory_.GetWeakPtr(), path_to_file,
                      std::move(callback)));
+}
+
+ChromeScanningAppDelegate::BindScanServiceCallback
+ChromeScanningAppDelegate::GetBindScanServiceCallback(content::WebUI* web_ui) {
+  return base::BindRepeating(
+      [](Profile* profile,
+         mojo::PendingReceiver<ash::scanning::mojom::ScanService>
+             pending_receiver) {
+        ash::ScanService* service =
+            ash::ScanServiceFactory::GetForBrowserContext(profile);
+        if (service) {
+          service->BindInterface(std::move(pending_receiver));
+        }
+      },
+      Profile::FromWebUI(web_ui));
 }
 
 void ChromeScanningAppDelegate::OnPathExists(

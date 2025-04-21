@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/i18n/message_formatter.h"
 #include "base/memory/raw_ptr.h"
 #include "base/strings/string_number_conversions.h"
@@ -27,8 +27,8 @@
 #include "chrome/browser/ui/views/payments/payment_request_row_view.h"
 #include "chrome/browser/ui/views/payments/payment_request_views_util.h"
 #include "chrome/common/url_constants.h"
+#include "components/autofill/core/browser/data_manager/personal_data_manager.h"
 #include "components/autofill/core/browser/field_types.h"
-#include "components/autofill/core/browser/personal_data_manager.h"
 #include "components/payments/content/payment_app.h"
 #include "components/payments/content/payment_request_spec.h"
 #include "components/payments/content/payment_request_state.h"
@@ -71,9 +71,9 @@ namespace {
 // "[preview] and N more" where preview might be elided to allow "and N more" to
 // be always visible.
 class PreviewEliderLabel : public views::Label {
- public:
-  METADATA_HEADER(PreviewEliderLabel);
+  METADATA_HEADER(PreviewEliderLabel, views::Label)
 
+ public:
   // Creates a PreviewEliderLabel where |preview_text| might be elided,
   // |format_string| is the string with format argument numbers in ICU syntax
   // and |n| is the "N more" item count.
@@ -100,12 +100,13 @@ class PreviewEliderLabel : public views::Label {
       std::u16string elided_string =
           base::i18n::MessageFormatter::FormatWithNumberedArgs(
               format_string_, "", elided_preview, n_);
-      if (gfx::GetStringWidth(elided_string, font_list()) <= pixel_width)
+      if (gfx::GetStringWidth(elided_string, font_list()) <= pixel_width) {
         return elided_string;
+      }
     }
 
-    // TODO(crbug.com/714776): Display something meaningful if the preview can't
-    // be elided enough for the string to fit.
+    // TODO(crbug.com/40517112): Display something meaningful if the preview
+    // can't be elided enough for the string to fit.
     return std::u16string();
   }
 
@@ -121,7 +122,7 @@ class PreviewEliderLabel : public views::Label {
   int n_;
 };
 
-BEGIN_METADATA(PreviewEliderLabel, views::Label)
+BEGIN_METADATA(PreviewEliderLabel)
 END_METADATA
 
 std::unique_ptr<PaymentRequestRowView> CreatePaymentSheetRow(
@@ -318,7 +319,7 @@ class PaymentSheetRowBuilder {
       bool button_enabled) {
     auto button = std::make_unique<views::MdTextButton>(GetPressedCallback(),
                                                         button_string);
-    button->SetProminent(true);
+    button->SetStyle(ui::ButtonStyle::kProminent);
     button->SetID(id_);
     button->SetFocusBehavior(views::View::FocusBehavior::ALWAYS);
     button->SetEnabled(button_enabled);
@@ -347,16 +348,25 @@ PaymentSheetViewController::PaymentSheetViewController(
     base::WeakPtr<PaymentRequestSpec> spec,
     base::WeakPtr<PaymentRequestState> state,
     base::WeakPtr<PaymentRequestDialogView> dialog)
-    : PaymentRequestSheetController(spec, state, dialog) {
+    : PaymentRequestSheetController(spec, state, dialog),
+      input_protector_(
+          std::make_unique<views::InputEventActivationProtector>()) {
   DCHECK(spec);
   DCHECK(state);
   spec->AddObserver(this);
   state->AddObserver(this);
+
+  // This class is constructed as the view is being shown, so we mark it as
+  // visible now. The view may become hidden again in the future (if the user
+  // clicks into a sub-view), but we only need to defend the initial showing
+  // against acccidental clicks on [Continue] and so this location suffices.
+  input_protector_->VisibilityChanged(/*is_visible=*/true);
 }
 
 PaymentSheetViewController::~PaymentSheetViewController() {
-  if (spec())
+  if (spec()) {
     spec()->RemoveObserver(this);
+  }
 
   state()->RemoveObserver(this);
 }
@@ -372,8 +382,9 @@ void PaymentSheetViewController::OnSelectedInformationChanged() {
 }
 
 void PaymentSheetViewController::ButtonPressed(base::RepeatingClosure closure) {
-  if (!dialog()->IsInteractive() || !spec())
+  if (!dialog()->IsInteractive() || !spec()) {
     return;
+  }
 
   std::move(closure).Run();
 
@@ -381,6 +392,15 @@ void PaymentSheetViewController::ButtonPressed(base::RepeatingClosure closure) {
     spec()->reset_retry_error_message();
     UpdateContentView();
   }
+}
+
+PaymentRequestSheetController::ButtonCallback
+PaymentSheetViewController::GetPrimaryButtonCallback() {
+  PaymentRequestSheetController::ButtonCallback parent_callback =
+      PaymentRequestSheetController::GetPrimaryButtonCallback();
+  return base::BindRepeating(
+      &PaymentSheetViewController::PossiblyIgnorePrimaryButtonPress,
+      weak_ptr_factory_.GetWeakPtr(), std::move(parent_callback));
 }
 
 std::u16string PaymentSheetViewController::GetSecondaryButtonLabel() {
@@ -396,8 +416,9 @@ std::u16string PaymentSheetViewController::GetSheetTitle() {
 }
 
 void PaymentSheetViewController::FillContentView(views::View* content_view) {
-  if (!spec())
+  if (!spec()) {
     return;
+  }
 
   auto builder = views::Builder<views::View>(content_view)
                      .SetLayoutManager(std::make_unique<views::BoxLayout>(
@@ -411,23 +432,26 @@ void PaymentSheetViewController::FillContentView(views::View* content_view) {
   // The shipping address and contact info rows are optional.
   std::unique_ptr<PaymentRequestRowView> summary_row =
       CreatePaymentSheetSummaryRow();
-  if (!summary_row)
+  if (!summary_row) {
     return std::move(builder).BuildChildren();
+  }
 
   PaymentRequestRowView* previous_row = summary_row.get();
   builder.AddChild(views::Builder<views::View>(std::move(summary_row)));
 
   if (state()->ShouldShowShippingSection()) {
     std::unique_ptr<PaymentRequestRowView> shipping_row = CreateShippingRow();
-    if (!shipping_row)
+    if (!shipping_row) {
       return std::move(builder).BuildChildren();
+    }
 
     shipping_row->set_previous_row(previous_row->AsWeakPtr());
     previous_row = shipping_row.get();
     builder.AddChild(views::Builder<views::View>(std::move(shipping_row)));
     // It's possible for requestShipping to be true and for there to be no
     // shipping options yet (they will come in updateWith).
-    // TODO(crbug.com/707353): Put a better placeholder row, instead of no row.
+    // TODO(crbug.com/40513573): Put a better placeholder row, instead of no
+    // row.
     std::unique_ptr<PaymentRequestRowView> shipping_option_row =
         CreateShippingOptionRow();
     if (shipping_option_row) {
@@ -463,6 +487,16 @@ PaymentSheetViewController::CreateExtraFooterView() {
   return CreateProductLogoFooterView();
 }
 
+bool PaymentSheetViewController::GetSheetId(DialogViewID* sheet_id) {
+  *sheet_id = DialogViewID::PAYMENT_REQUEST_SHEET;
+  return true;
+}
+
+base::WeakPtr<PaymentRequestSheetController>
+PaymentSheetViewController::GetWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
+}
+
 // Creates the Order Summary row, which contains an "Order Summary" label,
 // an inline list of display items, a Total Amount label, and a Chevron. Returns
 // nullptr if WeakPtr<PaymentRequestSpec> has become null.
@@ -474,8 +508,9 @@ PaymentSheetViewController::CreateExtraFooterView() {
 // +----------------------------------------------+
 std::unique_ptr<PaymentRequestRowView>
 PaymentSheetViewController::CreatePaymentSheetSummaryRow() {
-  if (!spec())
+  if (!spec()) {
     return nullptr;
+  }
 
   constexpr int kItemSummaryPriceFixedWidth = 96;
   auto view_builder =
@@ -568,8 +603,9 @@ PaymentSheetViewController::CreateShippingSectionContent(
     std::u16string* accessible_content) {
   DCHECK(accessible_content);
   autofill::AutofillProfile* profile = state()->selected_shipping_profile();
-  if (!profile)
+  if (!profile) {
     return std::make_unique<views::Label>(std::u16string());
+  }
 
   return GetShippingAddressLabelWithMissingInfo(
       AddressStyleType::SUMMARY, state()->GetApplicationLocale(), *profile,
@@ -586,8 +622,9 @@ PaymentSheetViewController::CreateShippingSectionContent(
 // +----------------------------------------------+
 std::unique_ptr<PaymentRequestRowView>
 PaymentSheetViewController::CreateShippingRow() {
-  if (!spec())
+  if (!spec()) {
     return nullptr;
+  }
 
   std::unique_ptr<views::Button> section;
   PaymentSheetRowBuilder builder(
@@ -631,13 +668,12 @@ PaymentSheetViewController::CreateShippingRow() {
                                   /*button_enabled=*/true);
 }
 
-// Creates the Payment Method row, which contains a "Payment" label, the user's
-// masked Credit Card details, the icon for the selected card, and a chevron.
-// If no option is selected or none is available, the Chevron and icon are
-// replaced with a button
+// Creates the Payment Method row, which contains a "Payment" label, the
+// selected Payment Method's name and details, the Payment Method's icon, and a
+// chevron.
 // +----------------------------------------------+
-// | Payment         Visa ****0000                |
-// |                 John Smith        | VISA | > |
+// | Payment         BobBucks                     |
+// |                 bobbucks.dev      | ICON | > |
 // |                                              |
 // +----------------------------------------------+
 std::unique_ptr<PaymentRequestRowView>
@@ -647,58 +683,40 @@ PaymentSheetViewController::CreatePaymentMethodRow() {
   PaymentSheetRowBuilder builder(
       this, l10n_util::GetStringUTF16(
                 IDS_PAYMENT_REQUEST_PAYMENT_METHOD_SECTION_NAME));
-  builder
-      .Id(selected_app
-              ? DialogViewID::PAYMENT_SHEET_PAYMENT_METHOD_SECTION
-              : DialogViewID::PAYMENT_SHEET_PAYMENT_METHOD_SECTION_BUTTON)
-      .Closure(
-          state()->available_apps().empty()
-              ? base::BindRepeating(
-                    &PaymentSheetViewController::AddPaymentMethodButtonPressed,
-                    base::Unretained(this))
-              : base::BindRepeating(
-                    &PaymentRequestDialogView::ShowPaymentMethodSheet,
-                    dialog()));
+  builder.Id(DialogViewID::PAYMENT_SHEET_PAYMENT_METHOD_SECTION)
+      .Closure(base::BindRepeating(
+          &PaymentRequestDialogView::ShowPaymentMethodSheet, dialog()));
 
-  if (selected_app) {
-    auto content_view =
-        views::Builder<views::BoxLayoutView>()
-            .SetOrientation(views::BoxLayout::Orientation::kVertical)
-            .SetCrossAxisAlignment(views::BoxLayout::CrossAxisAlignment::kStart)
-            .SetMainAxisAlignment(views::BoxLayout::MainAxisAlignment::kCenter)
-            .AddChildren(views::Builder<views::Label>()
-                             .SetText(selected_app->GetLabel())
-                             .SetHorizontalAlignment(gfx::ALIGN_LEFT),
-                         views::Builder<views::Label>()
-                             .SetText(selected_app->GetSublabel())
-                             .SetHorizontalAlignment(gfx::ALIGN_LEFT));
+  // This method may be called with either no app pre-selected (e.g., if no app
+  // has a valid icon), or without any apps available at all (e.g., if we have a
+  // ServiceWorker payment app that has not yet been loaded). In those cases, we
+  // render a 'choose' dialog instead of the app details.
+  if (!selected_app) {
+    const std::u16string label = state()->available_apps().empty()
+                                     ? std::u16string()
+                                     : state()->available_apps()[0]->GetLabel();
+    return builder.CreateWithButton(
+        label, l10n_util::GetStringUTF16(IDS_CHOOSE), true);
+  }
 
-    std::unique_ptr<views::ImageView> icon_view = CreateAppIconView(
-        selected_app->icon_resource_id(), selected_app->icon_bitmap(),
-        selected_app->GetLabel());
+  auto content_view =
+      views::Builder<views::BoxLayoutView>()
+          .SetOrientation(views::BoxLayout::Orientation::kVertical)
+          .SetCrossAxisAlignment(views::BoxLayout::CrossAxisAlignment::kStart)
+          .SetMainAxisAlignment(views::BoxLayout::MainAxisAlignment::kCenter)
+          .AddChildren(views::Builder<views::Label>()
+                           .SetText(selected_app->GetLabel())
+                           .SetHorizontalAlignment(gfx::ALIGN_LEFT),
+                       views::Builder<views::Label>()
+                           .SetText(selected_app->GetSublabel())
+                           .SetHorizontalAlignment(gfx::ALIGN_LEFT));
 
-    return builder.AccessibleContent(selected_app->GetLabel())
-        .CreateWithChevron(std::move(content_view).Build(),
-                           std::move(icon_view));
-  }
-  if (state()->available_apps().empty()) {
-    return builder.CreateWithButton(std::u16string(),
-                                    l10n_util::GetStringUTF16(IDS_ADD),
-                                    /*button_enabled=*/true);
-  }
-  const std::u16string label = state()->available_apps()[0]->GetLabel();
-  if (state()->available_apps().size() == 1) {
-    return builder.CreateWithButton(label,
-                                    l10n_util::GetStringUTF16(IDS_CHOOSE),
-                                    /*button_enabled=*/true);
-  }
-  std::u16string format = l10n_util::GetPluralStringFUTF16(
-      IDS_PAYMENT_REQUEST_PAYMENT_METHODS_PREVIEW,
-      state()->available_apps().size() - 1);
-  return builder.CreateWithButton(label, format,
-                                  state()->available_apps().size() - 1,
-                                  l10n_util::GetStringUTF16(IDS_CHOOSE),
-                                  /*button_enabled=*/true);
+  std::unique_ptr<views::ImageView> icon_view =
+      CreateAppIconView(selected_app->icon_resource_id(),
+                        selected_app->icon_bitmap(), selected_app->GetLabel());
+
+  return builder.AccessibleContent(selected_app->GetLabel())
+      .CreateWithChevron(std::move(content_view).Build(), std::move(icon_view));
 }
 
 std::unique_ptr<views::View>
@@ -751,12 +769,12 @@ PaymentSheetViewController::CreateContactInfoRow() {
                                     l10n_util::GetStringUTF16(IDS_ADD),
                                     /*button_enabled=*/true);
   }
-  static constexpr autofill::ServerFieldType kLabelFields[] = {
+  static constexpr autofill::FieldType kLabelFields[] = {
       autofill::NAME_FULL, autofill::PHONE_HOME_WHOLE_NUMBER,
       autofill::EMAIL_ADDRESS};
   const std::u16string preview =
       state()->contact_profiles()[0]->ConstructInferredLabel(
-          kLabelFields, std::size(kLabelFields), std::size(kLabelFields),
+          kLabelFields, std::size(kLabelFields),
           state()->GetApplicationLocale());
   if (state()->contact_profiles().size() == 1) {
     return builder.CreateWithButton(preview,
@@ -904,20 +922,21 @@ void PaymentSheetViewController::AddShippingButtonPressed() {
       nullptr);
 }
 
-void PaymentSheetViewController::AddPaymentMethodButtonPressed() {
-  dialog()->ShowCreditCardEditor(
-      BackNavigationType::kPaymentSheet, base::RepeatingClosure(),
-      base::BindRepeating(&PaymentRequestState::AddAutofillPaymentApp, state(),
-                          true),
-      nullptr);
-}
-
 void PaymentSheetViewController::AddContactInfoButtonPressed() {
   dialog()->ShowContactInfoEditor(
       BackNavigationType::kPaymentSheet, base::RepeatingClosure(),
       base::BindRepeating(&PaymentRequestState::AddAutofillContactProfile,
                           state(), true),
       nullptr);
+}
+
+void PaymentSheetViewController::PossiblyIgnorePrimaryButtonPress(
+    PaymentRequestSheetController::ButtonCallback callback,
+    const ui::Event& event) {
+  if (input_protector_->IsPossiblyUnintendedInteraction(event)) {
+    return;
+  }
+  callback.Run(event);
 }
 
 }  // namespace payments

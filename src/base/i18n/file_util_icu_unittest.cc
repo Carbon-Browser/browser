@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "base/i18n/file_util_icu.h"
 
@@ -19,8 +24,7 @@ namespace i18n {
 
 // file_util winds up using autoreleased objects on the Mac, so this needs
 // to be a PlatformTest
-class FileUtilICUTest : public PlatformTest {
-};
+class FileUtilICUTest : public PlatformTest {};
 
 #if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_APPLE)
 
@@ -29,13 +33,13 @@ static const struct GoodBadPairLinux {
   const char* bad_name;
   const char* good_name;
 } kLinuxIllegalCharacterCases[] = {
-  {"bad*\\/file:name?.jpg", "bad---file-name-.jpg"},
-  {"**********::::.txt", "--------------.txt"},
-  {"\xe9\xf0zzzz.\xff", "\xe9\xf0zzzz.\xff"},
-  {" _ ", "-_-"},
-  {".", "-"},
-  {" .( ). ", "-.( ).-"},
-  {"     ", "-   -"},
+    {"bad*\\/file:name?.jpg", "bad---file-name-.jpg"},
+    {"**********::::.txt", "--------------.txt"},
+    {"\xe9\xf0zzzz.\xff", "\xe9\xf0zzzz.\xff"},
+    {" _ ", "-_-"},
+    {".", "-"},
+    {" .( ). ", "-.( ).-"},
+    {"     ", "-   -"},
 };
 
 TEST_F(FileUtilICUTest, ReplaceIllegalCharactersInPathLinuxTest) {
@@ -83,13 +87,40 @@ static const struct FileUtilICUTestCases {
     {u"(\u200C.\u200D.\u200E.\u200F.\u202A.\u202B.\u202C.\u202D.\u202E.\u206A."
      u"\u206B.\u206C.\u206D.\u206F.\uFEFF)",
      u"(-.-.-.-.-.-.-.-.-.-.-.-.-.-.-)", u"( . . . . . . . . . . . . . . )"},
-    {u"config~1", u"config-1", u"config 1"},
     {u" _ ", u"-_-", u"_"},
     {u" ", u"-", u"_ _"},
     {u"\u2008.(\u2007).\u3000", u"-.(\u2007).-", u"(\u2007)"},
     {u"     ", u"-   -", u"_     _"},
-    {u".    ", u"-   -", u"_.    _"}};
-
+    {u".    ", u"-   -", u"_.    _"},
+#if BUILDFLAG(IS_WIN)
+    // '~' is only invalid on Windows, and only if the file name could possibly
+    // be an 8.3 short name.
+    {u"config~1", u"config-1", u"config 1"},
+    {u"config~1.txt", u"config-1.txt", u"config 1.txt"},
+#else
+    {u"config~1", u"config~1", u"config~1"},
+    {u"config~1.txt", u"config~1.txt", u"config~1.txt"},
+#endif
+    // Tildes are always illegal at ends.
+    {u"~config1.txt", u"-config1.txt", u"config1.txt"},
+    {u"config1.txt~", u"config1.txt-", u"config1.txt"},
+    // Some characters, such as spaces, are not allowed in 8.3 short names.
+    // Don't replace the '~' if these characters are present.
+    {u"conf g~1", u"conf g~1", u"conf g~1"},
+    {u"conf,g~1.txt", u"conf,g~1.txt", u"conf,g~1.txt"},
+    // File names with periods in invalid positions are not legal 8.3 names.
+    {u"conf~1.jpeg", u"conf~1.jpeg", u"conf~1.jpeg"},
+    {u"config~12.md", u"config~12.md", u"config~12.md"},
+    // Short names without a '~' character are allowed.
+    {u"config.txt", u"config.txt", u"config.txt"},
+    // Names long enough to not be short names are allowed.
+    {u"config~12.txt", u"config~12.txt", u"config~12.txt"},
+    {u"config~1VeryLongCannotBeShortNameOK.txt",
+     u"config~1VeryLongCannotBeShortNameOK.txt",
+     u"config~1VeryLongCannotBeShortNameOK.txt"},
+    // Base name is longer than 8 characters, without a dot.
+    {u"config~1txt", u"config~1txt", u"config~1txt"},
+};
 #if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_APPLE) || BUILDFLAG(IS_POSIX)
 
 TEST_F(FileUtilICUTest, ReplaceIllegalCharactersInPathTest) {
@@ -130,8 +161,9 @@ TEST_F(FileUtilICUTest, IsFilenameLegalTest) {
     std::u16string good_name = test_case.good_name_with_dash;
 
     EXPECT_TRUE(IsFilenameLegal(good_name)) << good_name;
-    if (good_name != bad_name)
+    if (good_name != bad_name) {
       EXPECT_FALSE(IsFilenameLegal(bad_name)) << bad_name;
+    }
   }
 }
 
@@ -140,12 +172,11 @@ static const struct normalize_name_encoding_test_cases {
   const char* original_path;
   const char* normalized_path;
 } kNormalizeFileNameEncodingTestCases[] = {
-  { "foo_na\xcc\x88me.foo", "foo_n\xc3\xa4me.foo"},
-  { "foo_dir_na\xcc\x88me/foo_na\xcc\x88me.foo",
-    "foo_dir_na\xcc\x88me/foo_n\xc3\xa4me.foo"},
-  { "", ""},
-  { "foo_dir_na\xcc\x88me/", "foo_dir_n\xc3\xa4me"}
-};
+    {"foo_na\xcc\x88me.foo", "foo_n\xc3\xa4me.foo"},
+    {"foo_dir_na\xcc\x88me/foo_na\xcc\x88me.foo",
+     "foo_dir_na\xcc\x88me/foo_n\xc3\xa4me.foo"},
+    {"", ""},
+    {"foo_dir_na\xcc\x88me/", "foo_dir_n\xc3\xa4me"}};
 
 TEST_F(FileUtilICUTest, NormalizeFileNameEncoding) {
   for (size_t i = 0; i < std::size(kNormalizeFileNameEncodingTestCases); i++) {

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,7 +17,6 @@
 #include "content/public/browser/restore_type.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/referrer.h"
-#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/page_state/page_state.h"
 
 // Reasons for not re-using TabNavigation under chrome/ as of 20121116:
@@ -48,16 +47,10 @@ void WriteToPickle(content::WebContents& web_contents, base::Pickle* pickle) {
   content::NavigationController& controller = web_contents.GetController();
   const int entry_count = controller.GetEntryCount();
   const int selected_entry = controller.GetLastCommittedEntryIndex();
-  if (blink::features::IsInitialNavigationEntryEnabled()) {
-    // When InitialNavigationEntry is enabled, a NavigationEntry will always
-    // exist, so there will always be at least 1 entry.
-    DCHECK_GE(entry_count, 1);
-    DCHECK_GE(selected_entry, 0);
-  } else {
-    // When InitialNavigationEntry is disabled, there might be 0 entries.
-    DCHECK_GE(entry_count, 0);
-    DCHECK_GE(selected_entry, -1);  // -1 is valid
-  }
+  // A NavigationEntry will always exist, so there will always be at least 1
+  // entry.
+  DCHECK_GE(entry_count, 1);
+  DCHECK_GE(selected_entry, 0);
   DCHECK_LT(selected_entry, entry_count);
 
   pickle->WriteInt(entry_count);
@@ -168,17 +161,15 @@ void WriteNavigationEntryToPickle(uint32_t state_version,
   pickle->WriteString(entry.GetBaseURLForDataURL().spec());
 
   if (state_version >= internal::AW_STATE_VERSION_DATA_URL) {
-    const char* data = nullptr;
-    size_t size = 0;
+    std::string_view view;
     const scoped_refptr<const base::RefCountedString>& s =
         entry.GetDataURLAsString();
     if (s) {
-      data = s->front_as<char>();
-      size = s->size();
+      view = base::as_string_view(*s);
     }
     // Even when |entry.GetDataForDataURL()| is null we still need to write a
     // zero-length entry to ensure the fields all line up when read back in.
-    pickle->WriteData(data, size);
+    pickle->WriteData(view.data(), view.size());
   }
 
   pickle->WriteBool(static_cast<int>(entry.GetIsOverridingUserAgent()));
@@ -254,7 +245,7 @@ bool RestoreNavigationEntryFromPickle(
     std::u16string title;
     if (!iterator->ReadString16(&title))
       return false;
-    entry->SetTitle(title);
+    entry->SetTitle(std::move(title));
   }
 
   {
@@ -323,7 +314,7 @@ bool RestoreNavigationEntryFromPickle(
       return false;
     if (size > 0) {
       scoped_refptr<base::RefCountedString> ref = new base::RefCountedString();
-      ref->data().assign(data, size);
+      ref->as_string().assign(data, size);
       entry->SetDataURLAsString(ref);
     }
   }

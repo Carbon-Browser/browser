@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ void MediaLicenseQuotaClient::GetBucketUsage(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   // Media license data does not count against quota.
-  // TODO(crbug.com/1305441): Consider counting this data against quota.
+  // TODO(crbug.com/40218094): Consider counting this data against quota.
   std::move(callback).Run(0);
 }
 

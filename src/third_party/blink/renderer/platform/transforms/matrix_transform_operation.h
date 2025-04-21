@@ -26,67 +26,16 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_TRANSFORMS_MATRIX_TRANSFORM_OPERATION_H_
 
 #include "third_party/blink/renderer/platform/transforms/transform_operation.h"
-#include "third_party/blink/renderer/platform/transforms/transformation_matrix.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
+#include "ui/gfx/geometry/transform.h"
 
 namespace blink {
 
 class PLATFORM_EXPORT MatrixTransformOperation final
     : public TransformOperation {
  public:
-  static scoped_refptr<MatrixTransformOperation> Create(double a,
-                                                        double b,
-                                                        double c,
-                                                        double d,
-                                                        double e,
-                                                        double f) {
-    return base::AdoptRef(new MatrixTransformOperation(a, b, c, d, e, f));
-  }
-
-  static scoped_refptr<MatrixTransformOperation> Create(
-      const TransformationMatrix& t) {
-    return base::AdoptRef(new MatrixTransformOperation(t));
-  }
-
-  TransformationMatrix Matrix() const {
-    return TransformationMatrix(a_, b_, c_, d_, e_, f_);
-  }
-
-  static bool IsMatchingOperationType(OperationType type) {
-    return type == kMatrix;
-  }
-
- protected:
-  bool IsEqualAssumingSameType(const TransformOperation& o) const override {
-    const MatrixTransformOperation* m =
-        static_cast<const MatrixTransformOperation*>(&o);
-    return a_ == m->a_ && b_ == m->b_ && c_ == m->c_ && d_ == m->d_ &&
-           e_ == m->e_ && f_ == m->f_;
-  }
-
- private:
-  OperationType GetType() const override { return kMatrix; }
-
-  void Apply(TransformationMatrix& transform,
-             const gfx::SizeF&) const override {
-    TransformationMatrix matrix(a_, b_, c_, d_, e_, f_);
-    transform.Multiply(matrix);
-  }
-
-  scoped_refptr<TransformOperation> Accumulate(
-      const TransformOperation&) override;
-
-  scoped_refptr<TransformOperation> Blend(
-      const TransformOperation* from,
-      double progress,
-      bool blend_to_identity = false) override;
-  scoped_refptr<TransformOperation> Zoom(double factor) final;
-
-  bool PreservesAxisAlignment() const final {
-    return Matrix().Preserves2dAxisAlignment();
-  }
-  bool IsIdentityOrTranslation() const final {
-    return Matrix().IsIdentityOr2DTranslation();
+  explicit MatrixTransformOperation(const gfx::Transform& t) : matrix_(t) {
+    DCHECK(t.Is2dTransform());
   }
 
   MatrixTransformOperation(double a,
@@ -95,17 +44,43 @@ class PLATFORM_EXPORT MatrixTransformOperation final
                            double d,
                            double e,
                            double f)
-      : a_(a), b_(b), c_(c), d_(d), e_(e), f_(f) {}
+      : matrix_(gfx::Transform::Affine(a, b, c, d, e, f)) {}
 
-  explicit MatrixTransformOperation(const TransformationMatrix& t)
-      : a_(t.A()), b_(t.B()), c_(t.C()), d_(t.D()), e_(t.E()), f_(t.F()) {}
+  const gfx::Transform& Matrix() const { return matrix_; }
 
-  double a_;
-  double b_;
-  double c_;
-  double d_;
-  double e_;
-  double f_;
+  static bool IsMatchingOperationType(OperationType type) {
+    return type == kMatrix;
+  }
+
+ protected:
+  bool IsEqualAssumingSameType(const TransformOperation& o) const override {
+    return matrix_ == static_cast<const MatrixTransformOperation&>(o).matrix_;
+  }
+
+ private:
+  OperationType GetType() const override { return kMatrix; }
+
+  void Apply(gfx::Transform& transform, const gfx::SizeF&) const override {
+    transform.PreConcat(Matrix());
+  }
+
+  TransformOperation* Accumulate(const TransformOperation&) override;
+
+  TransformOperation* Blend(const TransformOperation* from,
+                            double progress,
+                            bool blend_to_identity = false) override;
+  TransformOperation* Zoom(double factor) final;
+
+  bool PreservesAxisAlignment() const final {
+    return Matrix().Preserves2dAxisAlignment();
+  }
+  bool IsIdentityOrTranslation() const final {
+    return Matrix().IsIdentityOr2dTranslation();
+  }
+
+  // TODO(wangxianzhu): Use AffineTransform when we have Decompose2dTransform()
+  // in ui/gfx/geometry/transform_utils.h.
+  gfx::Transform matrix_;
 };
 
 template <>

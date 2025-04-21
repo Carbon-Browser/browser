@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,8 +27,9 @@ PageActionIconLoadingIndicatorView::~PageActionIconLoadingIndicatorView() {
 }
 
 void PageActionIconLoadingIndicatorView::SetAnimating(bool animating) {
-  if (!throbber_start_time_ == !animating)
+  if (!throbber_start_time_ == !animating) {
     return;
+  }
 
   SetVisible(animating);
   if (animating) {
@@ -46,8 +47,9 @@ bool PageActionIconLoadingIndicatorView::GetAnimating() const {
 }
 
 void PageActionIconLoadingIndicatorView::OnPaint(gfx::Canvas* canvas) {
-  if (!throbber_start_time_)
+  if (!throbber_start_time_) {
     return;
+  }
 
   const SkColor color = GetColorProvider()->GetColor(ui::kColorThrobber);
   constexpr int kThrobberStrokeWidth = 2;
@@ -67,6 +69,6 @@ void PageActionIconLoadingIndicatorView::AnimationProgressed(
   SchedulePaint();
 }
 
-BEGIN_METADATA(PageActionIconLoadingIndicatorView, views::View)
+BEGIN_METADATA(PageActionIconLoadingIndicatorView)
 ADD_PROPERTY_METADATA(bool, Animating)
 END_METADATA

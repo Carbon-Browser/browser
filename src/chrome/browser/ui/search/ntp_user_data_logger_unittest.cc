@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -60,7 +60,7 @@ ntp_tiles::NTPTileImpression MakeNTPTileImpression(int index,
 std::vector<base::Bucket> FillImpressions(int numImpressions, int count) {
   std::vector<base::Bucket> impressions;
   for (int i = 0; i < numImpressions; ++i) {
-    impressions.push_back(Bucket(i, count));
+    impressions.emplace_back(i, count);
   }
   return impressions;
 }
@@ -70,7 +70,7 @@ class TestNTPUserDataLogger : public NTPUserDataLogger {
   explicit TestNTPUserDataLogger(const GURL& ntp_url)
       : NTPUserDataLogger(nullptr, ntp_url, base::Time::Now()) {}
 
-  ~TestNTPUserDataLogger() override {}
+  ~TestNTPUserDataLogger() override = default;
 
   bool DefaultSearchProviderIsGoogle() const override { return is_google_; }
 
@@ -564,12 +564,14 @@ TEST_F(NTPUserDataLoggerTest, ShouldNotRecordCustomizationActionFromNTPOther) {
 
   // Attempt to log an event that is only supported when the default search
   // provider is Google.
-  logger.LogEvent(NTP_CUSTOMIZE_CHROME_BACKGROUNDS_CLICKED, delta_tiles_loaded);
+  logger.LogEvent(NTP_CUSTOMIZE_CHROME_BACKGROUND_SELECT_COLLECTION,
+                  delta_tiles_loaded);
 
   EXPECT_THAT(histogram_tester.GetAllSamples("NewTabPage.LoadTime"), SizeIs(1));
   EXPECT_THAT(histogram_tester.GetAllSamples("NewTabPage.LoadTime.WebUINTP"),
               IsEmpty());
 
-  EXPECT_THAT(histogram_tester.GetAllSamples("NewTabPage.CustomizeAction"),
+  EXPECT_THAT(histogram_tester.GetAllSamples(
+                  "NewTabPage.CustomizeChromeBackgroundAction"),
               IsEmpty());
 }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,8 +24,9 @@ class Label;
 // text that will elide to its parent's width. Used by
 // MediaGalleriesDialogViews.
 class MediaGalleryCheckboxView : public views::BoxLayoutView {
+  METADATA_HEADER(MediaGalleryCheckboxView, views::BoxLayoutView)
+
  public:
-  METADATA_HEADER(MediaGalleryCheckboxView);
   MediaGalleryCheckboxView(const MediaGalleryPrefInfo& pref_info,
                            int trailing_vertical_space,
                            views::ContextMenuController* menu_controller);
@@ -37,7 +38,7 @@ class MediaGalleryCheckboxView : public views::BoxLayoutView {
   views::Label* secondary_text() { return secondary_text_; }
 
   // views::View:
-  void Layout() override;
+  void Layout(PassKey) override;
 
  private:
   // Owned by the parent class (views::View).

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,18 @@
 
 namespace gpu {
 
-Capabilities::PerStagePrecisions::PerStagePrecisions() = default;
-
 Capabilities::Capabilities() = default;
 
 Capabilities::Capabilities(const Capabilities& other) = default;
 
 Capabilities::~Capabilities() = default;
+
+GLCapabilities::GLCapabilities() = default;
+
+GLCapabilities::GLCapabilities(const GLCapabilities& other) = default;
+
+GLCapabilities::~GLCapabilities() = default;
+
+GLCapabilities::PerStagePrecisions::PerStagePrecisions() = default;
 
 }  // namespace gpu

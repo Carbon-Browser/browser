@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,10 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/containers/flat_set.h"
+#include "base/functional/bind.h"
 #include "base/lazy_instance.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/singleton.h"
 #include "base/values.h"
 #include "components/storage_monitor/removable_storage_observer.h"
@@ -93,8 +94,10 @@ class SystemInfoEventRouter : public storage_monitor::RemovableStorageObserver {
   // dispatches on-attached/detached events.
   bool is_dispatching_storage_events_ = false;
 
-  base::flat_set<content::BrowserContext*> contexts_with_display_listeners_;
-  base::flat_set<content::BrowserContext*> contexts_with_storage_listeners_;
+  base::flat_set<raw_ptr<content::BrowserContext>>
+      contexts_with_display_listeners_;
+  base::flat_set<raw_ptr<content::BrowserContext>>
+      contexts_with_storage_listeners_;
 };
 
 static base::LazyInstance<SystemInfoEventRouter>::Leaky
@@ -153,14 +156,15 @@ void SystemInfoEventRouter::StartOrStopDisplayEventDispatcherIfNecessary() {
   // Events should be dispatched if and only if at least one browser context has
   // the relevant listeners.
   const bool should_dispatch = !contexts_with_display_listeners_.empty();
+  DisplayInfoProvider* provider = DisplayInfoProvider::Get();
 
-  if (should_dispatch == is_dispatching_display_events_)
+  if (!provider || (should_dispatch == is_dispatching_display_events_))
     return;
 
   if (should_dispatch)
-    DisplayInfoProvider::Get()->StartObserving();
+    provider->StartObserving();
   else
-    DisplayInfoProvider::Get()->StopObserving();
+    provider->StopObserving();
 
   is_dispatching_display_events_ = should_dispatch;
 }
@@ -201,7 +205,7 @@ void SystemInfoEventRouter::OnRemovableStorageAttached(
   StorageUnitInfo unit;
   systeminfo::BuildStorageUnitInfo(info, &unit);
   base::Value::List args;
-  args.Append(base::Value::FromUniquePtrValue(unit.ToValue()));
+  args.Append(unit.ToValue());
 
   DispatchEvent(events::SYSTEM_STORAGE_ON_ATTACHED,
                 system_storage::OnAttached::kEventName, std::move(args));

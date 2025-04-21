@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@ TestLifecycleUnit::TestLifecycleUnit(base::TimeTicks last_focused_time,
                                      base::ProcessHandle process_handle,
                                      bool can_discard)
     : LifecycleUnitBase(nullptr, content::Visibility::VISIBLE, nullptr),
-      last_focused_time_(last_focused_time),
+      last_focused_time_ticks_(last_focused_time),
       process_handle_(process_handle),
       sort_key_(last_focused_time),
       can_discard_(can_discard) {}
@@ -37,7 +37,11 @@ std::u16string TestLifecycleUnit::GetTitle() const {
   return title_;
 }
 
-base::TimeTicks TestLifecycleUnit::GetLastFocusedTime() const {
+base::TimeTicks TestLifecycleUnit::GetLastFocusedTimeTicks() const {
+  return last_focused_time_ticks_;
+}
+
+base::Time TestLifecycleUnit::GetLastFocusedTime() const {
   return last_focused_time_;
 }
 
@@ -62,15 +66,19 @@ bool TestLifecycleUnit::Load() {
 }
 
 int TestLifecycleUnit::GetEstimatedMemoryFreedOnDiscardKB() const {
-  return 0;
+  return estimated_memory_freed_kb_;
 }
 
 bool TestLifecycleUnit::CanDiscard(mojom::LifecycleUnitDiscardReason reason,
                                    DecisionDetails* decision_details) const {
+  if (failure_reason_) {
+    decision_details->AddReason(*failure_reason_);
+  }
   return can_discard_;
 }
 
-bool TestLifecycleUnit::Discard(LifecycleUnitDiscardReason discard_reason) {
+bool TestLifecycleUnit::Discard(LifecycleUnitDiscardReason discard_reason,
+                                uint64_t resident_set_size_estimate) {
   return false;
 }
 

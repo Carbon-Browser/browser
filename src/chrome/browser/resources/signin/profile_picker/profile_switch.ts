@@ -1,16 +1,19 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/icons.m.js';
-import './profile_picker_shared.css.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/cr_icon/cr_icon.js';
+import 'chrome://resources/cr_elements/icons.html.js';
 
-import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import type {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import {CrLitElement} from 'chrome://resources/lit/v3_0/lit.rollup.js';
 
-import {ManageProfilesBrowserProxy, ManageProfilesBrowserProxyImpl, ProfileState} from './manage_profiles_browser_proxy.js';
-import {getTemplate} from './profile_switch.html.js';
+import type {ManageProfilesBrowserProxy, ProfileState} from './manage_profiles_browser_proxy.js';
+import {ManageProfilesBrowserProxyImpl} from './manage_profiles_browser_proxy.js';
+import {createDummyProfileState} from './profile_picker_util.js';
+import {getCss} from './profile_switch.css.js';
+import {getHtml} from './profile_switch.html.js';
 
 export interface ProfileSwitchElement {
   $: {
@@ -22,44 +25,43 @@ export interface ProfileSwitchElement {
   };
 }
 
-export class ProfileSwitchElement extends PolymerElement {
+export class ProfileSwitchElement extends CrLitElement {
   static get is() {
     return 'profile-switch';
   }
 
-  static get template() {
-    return getTemplate();
+  static override get styles() {
+    return getCss();
   }
 
-  static get properties() {
-    return {
-      profileState_: Object,
+  override render() {
+    return getHtml.bind(this)();
+  }
 
-      isProfileStateInitialized_: {
-        type: Boolean,
-        value: false,
-      },
+  static override get properties() {
+    return {
+      profileState_: {type: Object},
+      isProfileStateInitialized_: {type: Boolean},
     };
   }
 
-  private profileState_: ProfileState;
-  private isProfileStateInitialized_: boolean;
+  protected profileState_: ProfileState = createDummyProfileState();
+  protected isProfileStateInitialized_: boolean = false;
   private manageProfilesBrowserProxy_: ManageProfilesBrowserProxy =
       ManageProfilesBrowserProxyImpl.getInstance();
 
-  override ready() {
-    super.ready();
+  override firstUpdated() {
     this.manageProfilesBrowserProxy_.getSwitchProfile().then(profileState => {
       this.profileState_ = profileState;
       this.isProfileStateInitialized_ = true;
     });
   }
 
-  private onCancelClick_() {
+  protected onCancelClick_() {
     this.manageProfilesBrowserProxy_.cancelProfileSwitch();
   }
 
-  private onSwitchClick_() {
+  protected onSwitchClick_() {
     this.manageProfilesBrowserProxy_.confirmProfileSwitch(
         this.profileState_.profilePath);
   }

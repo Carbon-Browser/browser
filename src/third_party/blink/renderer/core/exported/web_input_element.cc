@@ -45,51 +45,14 @@
 
 namespace blink {
 
+using mojom::blink::FormControlType;
+
 bool WebInputElement::IsTextField() const {
   return ConstUnwrap<HTMLInputElement>()->IsTextField();
 }
 
-bool WebInputElement::IsText() const {
-  return ConstUnwrap<HTMLInputElement>()->IsTextField() &&
-         ConstUnwrap<HTMLInputElement>()->type() != input_type_names::kNumber;
-}
-
-bool WebInputElement::IsEmailField() const {
-  return ConstUnwrap<HTMLInputElement>()->type() == input_type_names::kEmail;
-}
-
-bool WebInputElement::IsPasswordField() const {
-  return ConstUnwrap<HTMLInputElement>()->type() == input_type_names::kPassword;
-}
-
 void WebInputElement::SetHasBeenPasswordField() {
   Unwrap<HTMLInputElement>()->SetHasBeenPasswordField();
-}
-
-bool WebInputElement::IsPasswordFieldForAutofill() const {
-  if (ConstUnwrap<HTMLInputElement>()->IsTextField() &&
-      ConstUnwrap<HTMLInputElement>()->HasBeenPasswordField()) {
-    return true;
-  }
-
-  return ConstUnwrap<HTMLInputElement>()->type() == input_type_names::kPassword;
-}
-
-bool WebInputElement::IsImageButton() const {
-  return ConstUnwrap<HTMLInputElement>()->type() == input_type_names::kImage;
-}
-
-bool WebInputElement::IsRadioButton() const {
-  return ConstUnwrap<HTMLInputElement>()->type() == input_type_names::kRadio;
-}
-
-bool WebInputElement::IsCheckbox() const {
-  return ConstUnwrap<HTMLInputElement>()->type() == input_type_names::kCheckbox;
-}
-
-int WebInputElement::MaxLength() const {
-  int max_len = ConstUnwrap<HTMLInputElement>()->maxLength();
-  return max_len == -1 ? DefaultMaxLength() : max_len;
 }
 
 void WebInputElement::SetActivatedSubmit(bool activated) {
@@ -98,10 +61,6 @@ void WebInputElement::SetActivatedSubmit(bool activated) {
 
 int WebInputElement::size() const {
   return ConstUnwrap<HTMLInputElement>()->size();
-}
-
-void WebInputElement::SetEditingValue(const WebString& value) {
-  Unwrap<HTMLInputElement>()->SetEditingValue(value);
 }
 
 bool WebInputElement::IsValidValue(const WebString& value) const {
@@ -136,10 +95,6 @@ WebString WebInputElement::LocalizeValue(
   return ConstUnwrap<HTMLInputElement>()->LocalizeValue(proposed_value);
 }
 
-int WebInputElement::DefaultMaxLength() {
-  return std::numeric_limits<int>::max();
-}
-
 void WebInputElement::SetShouldRevealPassword(bool value) {
   Unwrap<HTMLInputElement>()->SetShouldRevealPassword(value);
 }
@@ -148,7 +103,6 @@ bool WebInputElement::ShouldRevealPassword() const {
   return ConstUnwrap<HTMLInputElement>()->ShouldRevealPassword();
 }
 
-#if BUILDFLAG(IS_ANDROID)
 bool WebInputElement::IsLastInputElementInForm() {
   return Unwrap<HTMLInputElement>()->IsLastInputElementInForm();
 }
@@ -156,7 +110,6 @@ bool WebInputElement::IsLastInputElementInForm() {
 void WebInputElement::DispatchSimulatedEnter() {
   Unwrap<HTMLInputElement>()->DispatchSimulatedEnter();
 }
-#endif
 
 WebInputElement::WebInputElement(HTMLInputElement* elem)
     : WebFormControlElement(elem) {}

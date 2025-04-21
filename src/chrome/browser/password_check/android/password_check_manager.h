@@ -1,29 +1,29 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_PASSWORD_CHECK_ANDROID_PASSWORD_CHECK_MANAGER_H_
 #define CHROME_BROWSER_PASSWORD_CHECK_ANDROID_PASSWORD_CHECK_MANAGER_H_
 
+#include <string_view>
+
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
-#include "base/strings/string_piece_forward.h"
+#include "chrome/browser/affiliations/affiliation_service_factory.h"
 #include "chrome/browser/password_check/android/password_check_ui_status.h"
 #include "chrome/browser/password_entry_edit/android/credential_edit_bridge.h"
+#include "chrome/browser/password_manager/account_password_store_factory.h"
 #include "chrome/browser/password_manager/bulk_leak_check_service_factory.h"
-#include "chrome/browser/password_manager/password_scripts_fetcher_factory.h"
-#include "chrome/browser/password_manager/password_store_factory.h"
+#include "chrome/browser/password_manager/profile_password_store_factory.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/password_manager/core/browser/bulk_leak_check_service.h"
-#include "components/password_manager/core/browser/bulk_leak_check_service_interface.h"
-#include "components/password_manager/core/browser/password_scripts_fetcher.h"
+#include "components/password_manager/core/browser/leak_detection/bulk_leak_check_service.h"
+#include "components/password_manager/core/browser/leak_detection/bulk_leak_check_service_interface.h"
 #include "components/password_manager/core/browser/ui/bulk_leak_check_service_adapter.h"
 #include "components/password_manager/core/browser/ui/credential_ui_entry.h"
 #include "components/password_manager/core/browser/ui/insecure_credentials_manager.h"
 #include "components/password_manager/core/browser/ui/saved_passwords_presenter.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class PasswordCheckManager
     : public password_manager::SavedPasswordsPresenter::Observer,
@@ -56,8 +56,6 @@ class PasswordCheckManager
     std::u16string display_origin;
     std::string package_name;
     std::string change_password_url;
-    bool has_startable_script = false;
-    bool has_auto_change_button = false;
   };
 
   // `observer` must outlive `this`.
@@ -86,24 +84,19 @@ class PasswordCheckManager
 
   // Called by java to update the given compromised `credential` and set its
   // password to `new_password`.
-  void UpdateCredential(const password_manager::CredentialView& credential,
-                        base::StringPiece new_password);
+  void UpdateCredential(const password_manager::CredentialUIEntry& credential,
+                        std::string_view new_password);
 
   // Called by java to launch the edit credential UI for `credential`.
-  void OnEditCredential(
-      const password_manager::CredentialView& credential,
-      const base::android::JavaParamRef<jobject>& context,
-      const base::android::JavaParamRef<jobject>& settings_launcher);
+  void OnEditCredential(const password_manager::CredentialUIEntry& credential,
+                        const base::android::JavaParamRef<jobject>& context);
 
   // Called by java to remove the given compromised `credential` and trigger a
   // UI update on completion.
-  void RemoveCredential(const password_manager::CredentialView& credential);
+  void RemoveCredential(const password_manager::CredentialUIEntry& credential);
 
-  // Invokes `PasswordScriptsFetcher`'s scripts refreshment.
-  void RefreshScripts();
-
-  // Returns if scripts refreshment is finished.
-  bool AreScriptsRefreshed() const;
+  // Checks if user is signed into their account to perform the check.
+  bool HasAccountForRequest();
 
   // Not copyable or movable
   PasswordCheckManager(const PasswordCheckManager&) = delete;
@@ -118,13 +111,10 @@ class PasswordCheckManager
     kNone = 0,
     // Saved passwords can be accessed.
     kSavedPasswordsAvailable = 1 << 0,
-    // Sites with available Scripts are fetched.
-    kScriptsCachePrewarmed = 1 << 1,
     // Already known compromised credentials were loaded.
-    kKnownCredentialsFetched = 1 << 2,
+    kKnownCredentialsFetched = 1 << 1,
     // All preconditions have been fulfilled.
-    kAll = kSavedPasswordsAvailable | kScriptsCachePrewarmed |
-           kKnownCredentialsFetched,
+    kAll = kSavedPasswordsAvailable | kKnownCredentialsFetched,
   };
 
   // Class remembering the state required to update the progress of an ongoing
@@ -139,7 +129,7 @@ class PasswordCheckManager
 
     // Increments the counts corresponding to `password`. Intended to be called
     // for each credential that is passed to the bulk check.
-    void IncrementCounts(const password_manager::PasswordForm& password);
+    void IncrementCounts(const password_manager::CredentialUIEntry& password);
 
     // Updates the counts after a `credential` has been processed by the bulk
     // check.
@@ -163,13 +153,10 @@ class PasswordCheckManager
 
   // password_manager::SavedPasswordsPresenter::Observer:
   void OnSavedPasswordsChanged(
-      password_manager::SavedPasswordsPresenter::SavedPasswordsView passwords)
-      override;
+      const password_manager::PasswordStoreChangeList& changes) override;
 
   // InsecureCredentialsManager::Observer
-  void OnInsecureCredentialsChanged(
-      password_manager::InsecureCredentialsManager::CredentialsView credentials)
-      override;
+  void OnInsecureCredentialsChanged() override;
 
   // BulkLeakCheckServiceInterface::Observer
   void OnStateChanged(
@@ -194,15 +181,6 @@ class PasswordCheckManager
   // in the account if the quota limit was reached.
   bool CanUseAccountCheck() const;
 
-  // Returns true if the password scripts fetching (kPasswordScriptsFetching or
-  // kPasswordDomainCapabilitiesFetching) is enabled. To have precise metrics
-  // about user actions on credentials with scripts, scripts are fetched only
-  // for the users who can start a script, i.e. sync users.
-  bool ShouldFetchPasswordScripts() const;
-
-  // Callback when PasswordScriptsFetcher's cache has been warmed up.
-  void OnScriptsFetched();
-
   // Returns true if the passed |condition| was already met.
   bool IsPreconditionFulfilled(CheckPreconditions condition) const;
 
@@ -225,26 +203,20 @@ class PasswordCheckManager
   // Object storing the progress of a running password check.
   std::unique_ptr<PasswordCheckProgress> progress_;
 
-  // Handle to the password store, powering both `saved_passwords_presenter_`
-  // and `insecure_credentials_manager_`.
-  scoped_refptr<password_manager::PasswordStoreInterface> password_store_ =
-      PasswordStoreFactory::GetForProfile(profile_,
-                                          ServiceAccessType::EXPLICIT_ACCESS);
-
-  // Used to check whether autofill assistant scripts are available for
-  // the specified domain.
-  raw_ptr<password_manager::PasswordScriptsFetcher> password_script_fetcher_ =
-      PasswordScriptsFetcherFactory::GetInstance()->GetForBrowserContext(
-          profile_);
-
   // Used by `insecure_credentials_manager_` to obtain the list of saved
   // passwords.
   password_manager::SavedPasswordsPresenter saved_passwords_presenter_{
-      password_store_};
+      AffiliationServiceFactory::GetForProfile(profile_),
+      ProfilePasswordStoreFactory::GetForProfile(
+          profile_,
+          ServiceAccessType::EXPLICIT_ACCESS),
+      AccountPasswordStoreFactory::GetForProfile(
+          profile_,
+          ServiceAccessType::EXPLICIT_ACCESS)};
 
   // Used to obtain the list of insecure credentials.
   password_manager::InsecureCredentialsManager insecure_credentials_manager_{
-      &saved_passwords_presenter_, password_store_};
+      &saved_passwords_presenter_};
 
   // Adapter used to start, monitor and stop a bulk leak check.
   password_manager::BulkLeakCheckServiceAdapter
@@ -261,11 +233,6 @@ class PasswordCheckManager
 
   // Whether a check is currently running.
   bool is_check_running_ = false;
-
-  // Latest number of changed compromised credentials while script fetching
-  // was running. If `credentials_count_to_notify_` has value, after scripts are
-  // fetched `onCompromisedCredentials` should be called.
-  absl::optional<size_t> credentials_count_to_notify_;
 
   // Used to open the view/edit/delete UI.
   std::unique_ptr<CredentialEditBridge> credential_edit_bridge_;

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/media_router/media_router_ui_service.h"
 #include "chrome/browser/ui/toolbar/toolbar_actions_model_factory.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 using content::BrowserContext;
 
@@ -25,29 +24,35 @@ MediaRouterUIService* MediaRouterUIServiceFactory::GetForBrowserContext(
 
 // static
 MediaRouterUIServiceFactory* MediaRouterUIServiceFactory::GetInstance() {
-  return base::Singleton<MediaRouterUIServiceFactory>::get();
+  static base::NoDestructor<MediaRouterUIServiceFactory> instance;
+  return instance.get();
 }
 
 MediaRouterUIServiceFactory::MediaRouterUIServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "MediaRouterUIService",
-          BrowserContextDependencyManager::GetInstance()) {
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/40257657): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/41488885): Check if this service is needed for
+              // Ash Internals.
+              .WithAshInternals(ProfileSelection::kOwnInstance)
+              .Build()) {
   DependsOn(ChromeMediaRouterFactory::GetInstance());
-  // MediaRouterUIService owns a MediaRouterActionController that depends on
+  // MediaRouterUIService owns a CastToolbarButtonController that depends on
   // ToolbarActionsModel.
   DependsOn(ToolbarActionsModelFactory::GetInstance());
 }
 
-MediaRouterUIServiceFactory::~MediaRouterUIServiceFactory() {}
+MediaRouterUIServiceFactory::~MediaRouterUIServiceFactory() = default;
 
-BrowserContext* MediaRouterUIServiceFactory::GetBrowserContextToUse(
+std::unique_ptr<KeyedService>
+MediaRouterUIServiceFactory::BuildServiceInstanceForBrowserContext(
     BrowserContext* context) const {
-  return context;
-}
-
-KeyedService* MediaRouterUIServiceFactory::BuildServiceInstanceFor(
-    BrowserContext* context) const {
-  return new MediaRouterUIService(Profile::FromBrowserContext(context));
+  return std::make_unique<MediaRouterUIService>(
+      Profile::FromBrowserContext(context));
 }
 
 #if !BUILDFLAG(IS_ANDROID)

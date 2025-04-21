@@ -1,6 +1,13 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
+#include "mojo/core/broker.h"
 
 #include <windows.h>
 
@@ -10,9 +17,8 @@
 #include "base/debug/alias.h"
 #include "base/logging.h"
 #include "base/memory/platform_shared_memory_region.h"
+#include "base/notreached.h"
 #include "base/numerics/safe_conversions.h"
-#include "base/strings/string_piece.h"
-#include "mojo/core/broker.h"
 #include "mojo/core/broker_messages.h"
 #include "mojo/core/channel.h"
 #include "mojo/core/platform_handle_utils.h"
@@ -65,8 +71,7 @@ Channel::MessagePtr WaitForBrokerMessage(HANDLE pipe_handle,
 
     base::debug::Alias(&buffer[0]);
     base::debug::Alias(&bytes_read);
-    CHECK(false);
-    return nullptr;
+    NOTREACHED();
   }
 
   const BrokerMessageHeader* header =
@@ -76,8 +81,7 @@ Channel::MessagePtr WaitForBrokerMessage(HANDLE pipe_handle,
 
     base::debug::Alias(&buffer[0]);
     base::debug::Alias(&bytes_read);
-    CHECK(false);
-    return nullptr;
+    NOTREACHED();
   }
 
   return message;
@@ -150,14 +154,17 @@ base::WritableSharedMemoryRegion Broker::GetWritableSharedMemoryRegion(
     BufferResponseData* data;
     if (!GetBrokerMessageData(response.get(), &data))
       return base::WritableSharedMemoryRegion();
+    std::optional<base::UnguessableToken> guid =
+        base::UnguessableToken::Deserialize(data->guid_high, data->guid_low);
+    if (!guid.has_value()) {
+      return base::WritableSharedMemoryRegion();
+    }
     return base::WritableSharedMemoryRegion::Deserialize(
         base::subtle::PlatformSharedMemoryRegion::Take(
             CreateSharedMemoryRegionHandleFromPlatformHandles(std::move(handle),
                                                               PlatformHandle()),
             base::subtle::PlatformSharedMemoryRegion::Mode::kWritable,
-            num_bytes,
-            base::UnguessableToken::Deserialize(data->guid_high,
-                                                data->guid_low)));
+            num_bytes, guid.value()));
   }
 
   return base::WritableSharedMemoryRegion();

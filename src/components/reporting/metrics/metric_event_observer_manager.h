@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,32 +9,35 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/time/time.h"
 
 namespace reporting {
 
+class EventDrivenTelemetryCollectorPool;
 class MetricData;
 class MetricEventObserver;
 class MetricReportingController;
 class MetricReportQueue;
-class AdditionalSamplersCollector;
 class ReportingSettings;
-class Sampler;
 
 // Class to manage report
 class MetricEventObserverManager {
  public:
+  // Event metric enqueued UMA metrics name.
+  static constexpr char kEventMetricEnqueuedMetricsName[] =
+      "Browser.ERP.MetricsReporting.EventMetricEnqueued";
+
   MetricEventObserverManager(
       std::unique_ptr<MetricEventObserver> event_observer,
       MetricReportQueue* metric_report_queue,
       ReportingSettings* reporting_settings,
       const std::string& enable_setting_path,
       bool setting_enabled_default_value,
-      std::vector<Sampler*> additional_samplers = {});
+      EventDrivenTelemetryCollectorPool* collector_pool,
+      base::TimeDelta init_delay = base::TimeDelta());
 
   MetricEventObserverManager(const MetricEventObserverManager& other) = delete;
   MetricEventObserverManager& operator=(
@@ -43,18 +46,17 @@ class MetricEventObserverManager {
   virtual ~MetricEventObserverManager();
 
  private:
+  void SetReportingControllerCb();
+
   void SetReportingEnabled(bool is_enabled);
 
   void OnEventObserved(MetricData metric_data);
-
-  void Report(absl::optional<MetricData> metric_data);
 
   const std::unique_ptr<MetricEventObserver> event_observer_;
 
   const raw_ptr<MetricReportQueue> metric_report_queue_;
 
-  const std::unique_ptr<AdditionalSamplersCollector>
-      additional_samplers_collector_;
+  const raw_ptr<EventDrivenTelemetryCollectorPool> collector_pool_;
 
   std::unique_ptr<MetricReportingController> reporting_controller_;
 

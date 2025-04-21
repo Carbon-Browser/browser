@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,10 +11,11 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import androidx.annotation.IdRes;
-import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
 import org.chromium.build.BuildConfig;
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 
 import java.lang.ref.WeakReference;
 
@@ -35,25 +36,27 @@ import java.lang.ref.WeakReference;
  *     Use the same way that you would use a normal {@link android.widget.FrameLayout}, but instead
  *     of using {@link #findViewById(int)} to access views, use {@link #fastFindViewById(int)}.
  */
+@NullMarked
 public class ViewLookupCachingFrameLayout extends OptimizedFrameLayout {
     /** A map containing views that have had lookup performed on them for quicker access. */
     private final SparseArray<WeakReference<View>> mCachedViews = new SparseArray<>();
 
     /** The hierarchy listener responsible for notifying the cache that the tree has changed. */
     @VisibleForTesting
-    final OnHierarchyChangeListener mListener = new OnHierarchyChangeListener() {
-        @Override
-        public void onChildViewAdded(View parent, View child) {
-            mCachedViews.remove(child.getId());
-            setHierarchyListenerOnTree(child, this);
-        }
+    final OnHierarchyChangeListener mListener =
+            new OnHierarchyChangeListener() {
+                @Override
+                public void onChildViewAdded(View parent, View child) {
+                    mCachedViews.remove(child.getId());
+                    setHierarchyListenerOnTree(child, this);
+                }
 
-        @Override
-        public void onChildViewRemoved(View parent, View child) {
-            mCachedViews.remove(child.getId());
-            setHierarchyListenerOnTree(child, null);
-        }
-    };
+                @Override
+                public void onChildViewRemoved(View parent, View child) {
+                    mCachedViews.remove(child.getId());
+                    setHierarchyListenerOnTree(child, null);
+                }
+            };
 
     /** Default constructor for use in XML. */
     public ViewLookupCachingFrameLayout(Context context, AttributeSet atts) {
@@ -72,7 +75,8 @@ public class ViewLookupCachingFrameLayout extends OptimizedFrameLayout {
      * @param view The root of the tree to attach listeners to.
      * @param listener The listener to attach (null to unset).
      */
-    private void setHierarchyListenerOnTree(View view, OnHierarchyChangeListener listener) {
+    private void setHierarchyListenerOnTree(
+            View view, @Nullable OnHierarchyChangeListener listener) {
         if (!(view instanceof ViewGroup)) return;
 
         ViewGroup group = (ViewGroup) view;
@@ -89,16 +93,15 @@ public class ViewLookupCachingFrameLayout extends OptimizedFrameLayout {
      * @param id The ID of the view to lookup.
      * @return The view if it exists.
      */
-    @Nullable
-    public View fastFindViewById(@IdRes int id) {
+    public @Nullable View fastFindViewById(@IdRes int id) {
         WeakReference<View> ref = mCachedViews.get(id);
         View view = null;
         if (ref != null) view = ref.get();
         if (view == null) view = findViewById(id);
         if (BuildConfig.ENABLE_ASSERTS) {
             assert view == findViewById(id) : "View caching logic is broken!";
-            assert ref == null
-                    || ref.get() != null : "Cache held reference to garbage collected view!";
+            assert ref == null || ref.get() != null
+                    : "Cache held reference to garbage collected view!";
         }
 
         if (view != null) mCachedViews.put(id, new WeakReference<>(view));

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,7 +53,7 @@ struct SizingParams {
   ResizeEdge resize_edge{};
   float aspect_ratio = 0.0f;
   Size min_size;
-  absl::optional<Size> max_size;
+  std::optional<Size> max_size;
   Rect input_rect;
   Rect expected_output_rect;
 
@@ -73,6 +73,29 @@ TEST_P(ResizeUtilsTest, SizeRectToAspectRatio) {
   SizeRectToAspectRatio(GetParam().resize_edge, GetParam().aspect_ratio,
                         GetParam().min_size, GetParam().max_size, &rect);
   EXPECT_EQ(rect, GetParam().expected_output_rect) << GetParam().ToString();
+}
+
+TEST_P(ResizeUtilsTest, SizeRectToAspectRatioWithExcludedMargin) {
+  Rect rect = GetParam().input_rect;
+  gfx::Size excluded_margin(2, 4);
+  SizeRectToAspectRatioWithExcludedMargin(
+      GetParam().resize_edge, GetParam().aspect_ratio, GetParam().min_size,
+      GetParam().max_size, excluded_margin, rect);
+  // With excluded margin, size should have the same aspect ratio once we remove
+  // the margin.
+  gfx::Size adjusted_size = rect.size() - excluded_margin;
+  const double actual_ratio =
+      static_cast<double>(adjusted_size.width()) / adjusted_size.height();
+  // Note that all of the aspect ratios are exactly representable, so `EQ` is
+  // really expected.
+  EXPECT_EQ(actual_ratio, GetParam().aspect_ratio) << GetParam().ToString();
+  // Also verify min / max.
+  EXPECT_GE(rect.size().width(), GetParam().min_size.width());
+  EXPECT_GE(rect.size().height(), GetParam().min_size.height());
+  if (GetParam().max_size) {
+    EXPECT_LE(rect.size().width(), GetParam().max_size->width());
+    EXPECT_LE(rect.size().height(), GetParam().max_size->height());
+  }
 }
 
 const SizingParams kSizeRectToSquareAspectRatioTestCases[] = {
@@ -124,8 +147,8 @@ const SizingParams kSizeRectToSquareAspectRatioTestCases[] = {
 
     // Dragging the top-left resizer left.
     // No max size specified.
-    {ResizeEdge::kTopLeft, kAspectRatioSquare, kMinSizeHorizontal,
-     absl::nullopt, Rect(102, 100, 22, 24), Rect(102, 102, 22, 22)},
+    {ResizeEdge::kTopLeft, kAspectRatioSquare, kMinSizeHorizontal, std::nullopt,
+     Rect(102, 100, 22, 24), Rect(102, 102, 22, 22)},
 };
 
 const SizingParams kSizeRectToHorizontalAspectRatioTestCases[] = {
@@ -152,7 +175,7 @@ const SizingParams kSizeRectToHorizontalAspectRatioTestCases[] = {
     // Dragging the left resizer left.
     // No max size specified.
     {ResizeEdge::kLeft, kAspectRatioHorizontal, kMinSizeHorizontal,
-     absl::nullopt, Rect(96, 100, 48, 22), Rect(96, 98, 48, 24)},
+     std::nullopt, Rect(96, 100, 48, 22), Rect(96, 98, 48, 24)},
 };
 
 const SizingParams kSizeRectToVerticalAspectRatioTestCases[] = {
@@ -176,7 +199,7 @@ const SizingParams kSizeRectToVerticalAspectRatioTestCases[] = {
 
     // Dragging the right resizer right.
     // No max size specified.
-    {ResizeEdge::kRight, kAspectRatioVertical, kMinSizeVertical, absl::nullopt,
+    {ResizeEdge::kRight, kAspectRatioVertical, kMinSizeVertical, std::nullopt,
      Rect(100, 100, 24, 44), Rect(100, 100, 24, 48)},
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/task/sequenced_task_runner.h"
 #include "components/apdu/apdu_response.h"
 #include "components/device_event_log/device_event_log.h"
 #include "device/fido/authenticator_get_assertion_response.h"
@@ -60,7 +60,7 @@ void U2fSignOperation::TrySign() {
 }
 
 void U2fSignOperation::OnSignResponseReceived(
-    absl::optional<std::vector<uint8_t>> device_response) {
+    std::optional<std::vector<uint8_t>> device_response) {
   if (canceled_) {
     return;
   }
@@ -69,7 +69,7 @@ void U2fSignOperation::OnSignResponseReceived(
   const auto apdu_response =
       device_response
           ? apdu::ApduResponse::CreateFromMessage(std::move(*device_response))
-          : absl::nullopt;
+          : std::nullopt;
   if (apdu_response) {
     result = apdu_response->status();
   }
@@ -90,17 +90,16 @@ void U2fSignOperation::OnSignResponseReceived(
       auto sign_response =
           AuthenticatorGetAssertionResponse::CreateFromU2fSignResponse(
               std::move(application_parameter), apdu_response->data(),
-              key_handle());
+              key_handle(), device()->DeviceTransport());
       if (!sign_response) {
         std::move(callback())
-            .Run(CtapDeviceResponseCode::kCtap2ErrOther, absl::nullopt);
+            .Run(CtapDeviceResponseCode::kCtap2ErrOther, std::nullopt);
         return;
       }
 
       FIDO_LOG(DEBUG)
           << "Received successful U2F sign response from authenticator: "
-          << base::HexEncode(apdu_response->data().data(),
-                             apdu_response->data().size());
+          << base::HexEncode(apdu_response->data());
       std::move(callback())
           .Run(CtapDeviceResponseCode::kSuccess, std::move(sign_response));
       break;
@@ -128,7 +127,7 @@ void U2fSignOperation::OnSignResponseReceived(
 
     case apdu::ApduResponse::Status::SW_CONDITIONS_NOT_SATISFIED:
       // Waiting for user touch. Retry after 200 milliseconds delay.
-      base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
           FROM_HERE,
           base::BindOnce(&U2fSignOperation::WinkAndTrySign,
                          weak_factory_.GetWeakPtr()),
@@ -138,7 +137,7 @@ void U2fSignOperation::OnSignResponseReceived(
     default:
       // Some sort of failure occurred. Abandon this device and move on.
       std::move(callback())
-          .Run(CtapDeviceResponseCode::kCtap2ErrOther, absl::nullopt);
+          .Run(CtapDeviceResponseCode::kCtap2ErrOther, std::nullopt);
       return;
   }
 }
@@ -156,7 +155,7 @@ void U2fSignOperation::TryFakeEnrollment() {
 }
 
 void U2fSignOperation::OnEnrollmentResponseReceived(
-    absl::optional<std::vector<uint8_t>> device_response) {
+    std::optional<std::vector<uint8_t>> device_response) {
   if (canceled_) {
     return;
   }
@@ -173,12 +172,12 @@ void U2fSignOperation::OnEnrollmentResponseReceived(
   switch (result) {
     case apdu::ApduResponse::Status::SW_NO_ERROR:
       std::move(callback())
-          .Run(CtapDeviceResponseCode::kCtap2ErrNoCredentials, absl::nullopt);
+          .Run(CtapDeviceResponseCode::kCtap2ErrNoCredentials, std::nullopt);
       break;
 
     case apdu::ApduResponse::Status::SW_CONDITIONS_NOT_SATISFIED:
       // Waiting for user touch. Retry after 200 milliseconds delay.
-      base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
           FROM_HERE,
           base::BindOnce(&U2fSignOperation::TryFakeEnrollment,
                          weak_factory_.GetWeakPtr()),
@@ -188,7 +187,7 @@ void U2fSignOperation::OnEnrollmentResponseReceived(
     default:
       // Some sort of failure occurred. Abandon this device and move on.
       std::move(callback())
-          .Run(CtapDeviceResponseCode::kCtap2ErrOther, absl::nullopt);
+          .Run(CtapDeviceResponseCode::kCtap2ErrOther, std::nullopt);
       return;
   }
 }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_BINDINGS_CORE_V8_SERIALIZATION_SERIALIZED_SCRIPT_VALUE_FACTORY_H_
 
 #include "base/notreached.h"
+#include "third_party/blink/renderer/bindings/core/v8/serialization/serialization_tag.h"
 #include "third_party/blink/renderer/bindings/core/v8/serialization/serialized_script_value.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
@@ -55,6 +56,9 @@ class CORE_EXPORT SerializedScriptValueFactory {
       v8::Isolate*,
       const SerializedScriptValue::DeserializeOptions&);
 
+  virtual bool ExecutionContextExposesInterface(ExecutionContext*,
+                                                SerializationTag);
+
   // Following methods are expected to be called in
   // SerializedScriptValueFactory{ForModules}.
   SerializedScriptValueFactory() = default;
@@ -63,7 +67,6 @@ class CORE_EXPORT SerializedScriptValueFactory {
   static SerializedScriptValueFactory& Instance() {
     if (!instance_) {
       NOTREACHED();
-      instance_ = new SerializedScriptValueFactory;
     }
     return *instance_;
   }

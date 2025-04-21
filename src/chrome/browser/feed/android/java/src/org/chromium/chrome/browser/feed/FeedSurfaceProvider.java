@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,18 +7,34 @@ package org.chromium.chrome.browser.feed;
 import android.graphics.Canvas;
 import android.view.View;
 
+import androidx.annotation.IntDef;
 import androidx.annotation.Nullable;
 
+import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.chrome.browser.ui.native_page.TouchEnabledDelegate;
 import org.chromium.components.browser_ui.widget.displaystyle.UiConfig;
 
-/**
- * Provides a surface that displays a list of interest feeds.
- */
+/** Provides a surface that displays a list of interest feeds. */
 public interface FeedSurfaceProvider {
+
     /**
-     * Destroys the provider.
+     * The state of restoring process. Will started from {@link #WAITING_TO_RESTORE} to {@link
+     * #RESTORED} if the {@link FeedSurfaceProvider} receives a state to restore otherwise {@link
+     * #NO_STATE_TO_RESTORE} if {@link FeedSurfaceProvider} figures out there is no saved state to
+     * restore.
      */
+    @IntDef({
+        RestoringState.WAITING_TO_RESTORE,
+        RestoringState.RESTORED,
+        RestoringState.NO_STATE_TO_RESTORE
+    })
+    @interface RestoringState {
+        int WAITING_TO_RESTORE = 0;
+        int RESTORED = 1;
+        int NO_STATE_TO_RESTORE = 2;
+    }
+
+    /** Destroys the provider. */
     void destroy();
 
     /**
@@ -46,9 +62,7 @@ public interface FeedSurfaceProvider {
      */
     boolean shouldCaptureThumbnail();
 
-    /**
-     * Captures the contents of this provider into the specified output.
-     */
+    /** Captures the contents of this provider into the specified output. */
     void captureThumbnail(Canvas canvas);
 
     /**
@@ -57,8 +71,9 @@ public interface FeedSurfaceProvider {
     @Nullable
     FeedReliabilityLogger getReliabilityLogger();
 
-    /**
-     * Reloads the contents.
-     */
+    /** Reloads the contents. */
     void reload();
+
+    /** Supplier of the state of the feed stream being restored. See {@link RestoringState}. */
+    ObservableSupplier<Integer> getRestoringStateSupplier();
 }

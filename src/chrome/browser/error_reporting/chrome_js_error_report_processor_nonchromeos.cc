@@ -1,14 +1,20 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/error_reporting/chrome_js_error_report_processor.h"
 
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/containers/span.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_helpers.h"
 #include "base/path_service.h"
 #include "base/strings/escape.h"
 #include "base/strings/strcat.h"
@@ -82,8 +88,7 @@ void ChromeJsErrorReportProcessor::UpdateReportDatabase(
   std::string line = base::StrCat({base::NumberToString(report_time.ToTimeT()),
                                    ",", remote_report_id, "\n"});
   // WriteAtCurrentPos because O_APPEND.
-  if (upload_log.WriteAtCurrentPos(line.c_str(), line.length()) !=
-      static_cast<int>(line.length())) {
+  if (!upload_log.WriteAtCurrentPosAndCheck(base::as_byte_span(line))) {
     DVLOG(1) << "Could not write to upload.log";
     return;
   }
@@ -100,7 +105,7 @@ std::string ChromeJsErrorReportProcessor::GetCrashEndpointStaging() {
 // On non-Chrome OS platforms, send the report directly.
 void ChromeJsErrorReportProcessor::SendReport(
     ParameterMap params,
-    absl::optional<std::string> stack_trace,
+    std::optional<std::string> stack_trace,
     bool send_to_production_servers,
     base::ScopedClosureRunner callback_runner,
     base::Time report_time,
@@ -121,13 +126,14 @@ void ChromeJsErrorReportProcessor::SendReport(
         sender: "JavaScript error reporter"
         description:
           "Chrome can send JavaScript errors that occur within built-in "
-          "component extensions and chrome:// webpages. If enabled, the error "
-          "message, along with information about Chrome and the operating "
-          "system, is sent to Google for debugging."
+          "component extensions, chrome:// webpages and DevTools. If enabled, "
+          "the error message, along with information about Chrome and the "
+          "operating system, is sent to Google for debugging."
         trigger:
           "A JavaScript error occurs in a Chrome component extension (an "
           "extension bundled with the Chrome browser, not downloaded "
-          "separately) or in certain chrome:// webpages."
+          "separately) or in certain chrome:// webpages or "
+          "in Chrome DevTools (devtools:// pages)."
         data:
           "The JavaScript error message, the version and channel of Chrome, "
           "the URL of the extension or webpage, the line and column number of "

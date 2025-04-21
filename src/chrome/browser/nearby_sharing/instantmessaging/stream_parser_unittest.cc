@@ -1,14 +1,15 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/nearby_sharing/instantmessaging/stream_parser.h"
 
+#include <algorithm>
 #include <string>
+#include <string_view>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/cxx17_backports.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/nearby_sharing/instantmessaging/proto/instantmessaging.pb.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -164,7 +165,7 @@ TEST_F(StreamParserTest, TagFailure) {
   EXPECT_EQ(0u, responses.size());
 
   char bytes[2] = {0x0f, 0x00};
-  auto bytes_string = base::StringPiece(bytes);
+  auto bytes_string = std::string_view(bytes);
   EXPECT_EQ(1u, bytes_string.length());
   responses = GetStreamParser().Append(bytes);
   EXPECT_EQ(0u, responses.size());

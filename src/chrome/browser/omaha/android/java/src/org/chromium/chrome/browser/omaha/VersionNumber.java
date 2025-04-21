@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,7 @@ package org.chromium.chrome.browser.omaha;
 
 import java.util.Locale;
 
-/**
- * Utility for dealing with Chrome version numbers.
- */
+/** Utility for dealing with Chrome version numbers. */
 public class VersionNumber {
     private final int[] mVersion = {0, 0, 0, 0};
 

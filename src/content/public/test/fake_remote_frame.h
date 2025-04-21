@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,10 @@
 
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
-#include "third_party/blink/public/mojom/frame/frame.mojom.h"
 #include "third_party/blink/public/mojom/frame/frame_owner_properties.mojom.h"
 #include "third_party/blink/public/mojom/frame/fullscreen.mojom.h"
 #include "third_party/blink/public/mojom/frame/intrinsic_sizing_info.mojom.h"
+#include "third_party/blink/public/mojom/frame/remote_frame.mojom.h"
 #include "third_party/blink/public/mojom/frame/user_activation_update_types.mojom.h"
 #include "third_party/blink/public/mojom/scroll/scroll_into_view_params.mojom.h"
 #include "third_party/blink/public/mojom/security_context/insecure_request_policy.mojom.h"
@@ -47,7 +47,7 @@ class FakeRemoteFrame : public blink::mojom::RemoteFrame {
   void SetReplicatedOrigin(
       const url::Origin& origin,
       bool is_potentially_trustworthy_unique_origin) override;
-  void SetReplicatedIsAdSubframe(bool is_ad_subframe) override;
+  void SetReplicatedIsAdFrame(bool is_ad_frame) override;
   void SetReplicatedName(const std::string& name,
                          const std::string& unique_name) override;
   void DispatchLoadEventForFrameOwner() override;
@@ -64,9 +64,6 @@ class FakeRemoteFrame : public blink::mojom::RemoteFrame {
       const base::UnguessableToken& embedding_token) override;
   void SetPageFocus(bool is_focused) override;
   void RenderFallbackContent() override;
-  void RenderFallbackContentWithResourceTiming(
-      blink::mojom::ResourceTimingInfoPtr,
-      const std::string& server_timing_value) override;
   void AddResourceTimingFromChild(
       blink::mojom::ResourceTimingInfoPtr timing) override;
 
@@ -83,15 +80,30 @@ class FakeRemoteFrame : public blink::mojom::RemoteFrame {
           parsed_permissions_policy) override {}
   void DidUpdateFramePolicy(const blink::FramePolicy& frame_policy) override {}
   void UpdateOpener(
-      const absl::optional<blink::FrameToken>& opener_frame_token) override;
+      const std::optional<blink::FrameToken>& opener_frame_token) override;
   void DetachAndDispose() override;
   void EnableAutoResize(const gfx::Size& min_size,
                         const gfx::Size& max_size) override;
   void DisableAutoResize() override;
   void DidUpdateVisualProperties(
       const cc::RenderFrameMetadata& metadata) override;
-  void SetFrameSinkId(const viz::FrameSinkId& frame_sink_id) override;
+  void SetFrameSinkId(const viz::FrameSinkId& frame_sink_id,
+                      bool allow_paint_holding) override;
   void ChildProcessGone() override;
+  void CreateRemoteChild(
+      const blink::RemoteFrameToken& token,
+      const std::optional<blink::FrameToken>& opener_frame_token,
+      blink::mojom::TreeScopeType tree_scope_type,
+      blink::mojom::FrameReplicationStatePtr replication_state,
+      blink::mojom::FrameOwnerPropertiesPtr owner_properties,
+      bool is_loading,
+      const base::UnguessableToken& devtools_frame_token,
+      blink::mojom::RemoteFrameInterfacesFromBrowserPtr remote_frame_interfaces)
+      override;
+  void CreateRemoteChildren(
+      std::vector<blink::mojom::CreateRemoteChildParamsPtr> params) override;
+  void ForwardFencedFrameEventToEmbedder(
+      const std::string& event_type) override;
 
  private:
   mojo::AssociatedReceiver<blink::mojom::RemoteFrame> receiver_{this};

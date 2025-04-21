@@ -1,4 +1,4 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -18,11 +18,28 @@ import("//third_party/protobuf/proto_library.gni")
 template("fuzzable_proto_library") {
   # Only make the proto library fuzzable if we are doing a build that we can
   # use LPM on (i.e. libFuzzer not on Chrome OS).
-  if (use_libfuzzer && current_toolchain != "//build/toolchain/cros:target") {
+  if (use_fuzzing_engine_with_lpm &&
+      current_toolchain != "//build/toolchain/cros:target") {
     proto_library("proto_library_" + target_name) {
-      forward_variables_from(invoker, "*")
-      assert(current_toolchain == host_toolchain ||
-             (is_ios && target_environment == "catalyst"))
+      forward_variables_from(invoker,
+                             "*",
+                             [
+                               "deps",
+                               "proto_library_deps",
+                             ])
+
+      deps = []
+      if (defined(invoker.deps)) {
+        foreach(dep, invoker.deps) {
+          dep_dir = get_label_info(dep, "dir")
+          dep_name = get_label_info(dep, "name")
+          deps += [ "${dep_dir}:proto_library_${dep_name}" ]
+        }
+      }
+
+      if (defined(invoker.proto_library_deps)) {
+        deps += invoker.proto_library_deps
+      }
 
       # Override LITE_RUNTIME settings in the protobuf files.
       cc_generator_options = "speed"
@@ -54,7 +71,19 @@ template("fuzzable_proto_library") {
     # fuzzable_proto_library should behave like a proto_library when
     # !use_libfuzzer.
     proto_library(target_name) {
-      forward_variables_from(invoker, "*")
+      forward_variables_from(invoker,
+                             "*",
+                             [
+                               "deps",
+                               "proto_library_deps",
+                             ])
+      deps = []
+      if (defined(invoker.deps)) {
+        deps += invoker.deps
+      }
+      if (defined(invoker.proto_library_deps)) {
+        deps += invoker.proto_library_deps
+      }
     }
   }
 }

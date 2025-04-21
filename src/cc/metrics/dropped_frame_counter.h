@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,20 +6,22 @@
 #define CC_METRICS_DROPPED_FRAME_COUNTER_H_
 
 #include <stddef.h>
+
+#include <array>
 #include <map>
+#include <optional>
 #include <queue>
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/containers/ring_buffer.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/time/time.h"
 #include "cc/cc_export.h"
 #include "cc/metrics/frame_info.h"
 #include "cc/metrics/frame_sorter.h"
 #include "cc/metrics/ukm_smoothness_data.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace cc {
 class TotalFrameCounter;
@@ -55,8 +57,8 @@ class CC_EXPORT DroppedFrameCounter {
     uint32_t total_count() const { return total_count_; }
 
    private:
-    uint32_t histogram_bins_[101] = {0};
-    uint32_t smoothness_buckets_[7] = {0};
+    std::array<uint32_t, 101> histogram_bins_ = {0};
+    std::array<uint32_t, 7> smoothness_buckets_ = {0};
     uint32_t total_count_ = 0;
   };
 
@@ -74,28 +76,27 @@ class CC_EXPORT DroppedFrameCounter {
 
   uint32_t GetAverageThroughput() const;
 
-  double GetMostRecentAverageSmoothness() const;
-  double GetMostRecent95PercentileSmoothness() const;
-
   using SortedFrameCallback =
       base::RepeatingCallback<void(const viz::BeginFrameArgs& args,
                                    const FrameInfo&)>;
   void SetSortedFrameCallback(SortedFrameCallback callback);
 
   typedef base::RingBuffer<FrameState, 180> RingBufferType;
-  RingBufferType::Iterator begin() const { return ring_buffer_.Begin(); }
-  RingBufferType::Iterator end() const { return ring_buffer_.End(); }
+  RingBufferType::Iterator Begin() const { return ring_buffer_.Begin(); }
+  // `End()` points to the last `FrameState`, not past it.
+  RingBufferType::Iterator End() const { return ring_buffer_.End(); }
 
   void AddGoodFrame();
   void AddPartialFrame();
   void AddDroppedFrame();
   void ReportFrames();
-  void ReportFramesForUI();
+  void ReportFramesOnEveryFrameForUI();
 
-  void OnBeginFrame(const viz::BeginFrameArgs& args, bool is_scroll_active);
-  void OnEndFrame(const viz::BeginFrameArgs& args, const FrameInfo& frame_info);
+  void OnBeginFrame(const viz::BeginFrameArgs& args);
+  virtual void OnEndFrame(const viz::BeginFrameArgs& args,
+                          const FrameInfo& frame_info);
   void SetUkmSmoothnessDestination(UkmSmoothnessDataShared* smoothness_data);
-  void OnFcpReceived();
+  void OnFirstContentfulPaintReceived();
 
   // Reset is used on navigation, which resets frame statistics as well as
   // frame sorter.
@@ -108,30 +109,31 @@ class CC_EXPORT DroppedFrameCounter {
   void ResetPendingFrames(base::TimeTicks timestamp);
 
   // Enable dropped frame report for ui::Compositor..
-  void EnableReporForUI();
+  void EnableReportForUI();
 
   void set_total_counter(TotalFrameCounter* total_counter) {
     total_counter_ = total_counter;
   }
 
-  void SetTimeFcpReceivedForTesting(base::TimeTicks time_fcp_received) {
-    DCHECK(fcp_received_);
-    time_fcp_received_ = time_fcp_received;
+  void SetTimeFirstContentfulPaintReceivedForTesting(
+      base::TimeTicks time_fcp_received) {
+    DCHECK(first_contentful_paint_received_);
+    time_first_contentful_paint_received_ = time_fcp_received;
   }
 
   double sliding_window_max_percent_dropped() const {
     return sliding_window_max_percent_dropped_;
   }
 
-  absl::optional<double> max_percent_dropped_After_1_sec() const {
+  std::optional<double> max_percent_dropped_After_1_sec() const {
     return sliding_window_max_percent_dropped_After_1_sec_;
   }
 
-  absl::optional<double> max_percent_dropped_After_2_sec() const {
+  std::optional<double> max_percent_dropped_After_2_sec() const {
     return sliding_window_max_percent_dropped_After_2_sec_;
   }
 
-  absl::optional<double> max_percent_dropped_After_5_sec() const {
+  std::optional<double> max_percent_dropped_After_5_sec() const {
     return sliding_window_max_percent_dropped_After_5_sec_;
   }
 
@@ -162,7 +164,7 @@ class CC_EXPORT DroppedFrameCounter {
   }
 
   double sliding_window_current_percent_dropped() const {
-    return sliding_window_current_percent_dropped_;
+    return sliding_window_current_percent_dropped_.value_or(0);
   }
 
  private:
@@ -176,13 +178,12 @@ class CC_EXPORT DroppedFrameCounter {
   // Adds count to dropped_frame_count_in_window_ of each strategy.
   void UpdateDroppedFrameCountInWindow(const FrameInfo& frame_info, int count);
 
-  base::TimeDelta sliding_window_interval_;
   std::queue<std::pair<const viz::BeginFrameArgs, FrameInfo>> sliding_window_;
-  uint32_t dropped_frame_count_in_window_[SmoothnessStrategy::kStrategyCount] =
-      {0};
+  std::array<uint32_t, SmoothnessStrategy::kStrategyCount>
+      dropped_frame_count_in_window_ = {0};
   double total_frames_in_window_ = 60.0;
-  SlidingWindowHistogram
-      sliding_window_histogram_[SmoothnessStrategy::kStrategyCount];
+  std::array<SlidingWindowHistogram, SmoothnessStrategy::kStrategyCount>
+      sliding_window_histogram_;
 
   base::TimeTicks latest_sliding_window_start_;
   base::TimeDelta latest_sliding_window_interval_;
@@ -192,13 +193,12 @@ class CC_EXPORT DroppedFrameCounter {
   size_t total_partial_ = 0;
   size_t total_dropped_ = 0;
   size_t total_smoothness_dropped_ = 0;
-  bool fcp_received_ = false;
+  bool first_contentful_paint_received_ = false;
   double sliding_window_max_percent_dropped_ = 0;
-  absl::optional<double> sliding_window_max_percent_dropped_After_1_sec_;
-  absl::optional<double> sliding_window_max_percent_dropped_After_2_sec_;
-  absl::optional<double> sliding_window_max_percent_dropped_After_5_sec_;
-  base::TimeTicks time_fcp_received_;
-  base::TimeDelta time_max_delta_;
+  std::optional<double> sliding_window_max_percent_dropped_After_1_sec_;
+  std::optional<double> sliding_window_max_percent_dropped_After_2_sec_;
+  std::optional<double> sliding_window_max_percent_dropped_After_5_sec_;
+  base::TimeTicks time_first_contentful_paint_received_;
   raw_ptr<UkmSmoothnessDataShared> ukm_smoothness_data_ = nullptr;
   FrameSorter frame_sorter_;
   raw_ptr<TotalFrameCounter> total_counter_ = nullptr;
@@ -208,20 +208,10 @@ class CC_EXPORT DroppedFrameCounter {
     double p95_window = 0;
   } last_reported_metrics_;
 
-  struct ScrollStartInfo {
-    // The timestamp of when the scroll started.
-    base::TimeTicks timestamp;
-
-    // The vsync corresponding to the scroll-start.
-    viz::BeginFrameId frame_id;
-  };
-  absl::optional<ScrollStartInfo> scroll_start_;
-  std::map<viz::BeginFrameId, ScrollStartInfo> scroll_start_per_frame_;
-
-  absl::optional<SortedFrameCallback> sorted_frame_callback_;
+  SortedFrameCallback sorted_frame_callback_;
 
   bool report_for_ui_ = false;
-  double sliding_window_current_percent_dropped_ = 0.0;
+  std::optional<double> sliding_window_current_percent_dropped_;
 
   // Sets to true on a newly dropped frame and stays true as long as the frames
   // that follow are dropped. Reset when a frame is presented. It is used to

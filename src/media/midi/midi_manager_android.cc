@@ -1,22 +1,24 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/midi/midi_manager_android.h"
 
-#include "base/android/build_info.h"
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/metrics/field_trial_params.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/strings/stringprintf.h"
 #include "media/midi/midi_device_android.h"
-#include "media/midi/midi_jni_headers/MidiManagerAndroid_jni.h"
 #include "media/midi/midi_manager_usb.h"
 #include "media/midi/midi_output_port_android.h"
 #include "media/midi/midi_service.h"
 #include "media/midi/midi_switches.h"
 #include "media/midi/task_service.h"
 #include "media/midi/usb_midi_device_factory_android.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "media/midi/midi_jni_headers/MidiManagerAndroid_jni.h"
 
 using base::android::JavaParamRef;
 using midi::mojom::PortState;
@@ -26,21 +28,33 @@ namespace midi {
 
 namespace {
 
-bool HasSystemFeatureMidi() {
-  // MIDI API was added at Android M.
-  DCHECK_GE(base::android::BuildInfo::GetInstance()->sdk_int(),
-            base::android::SDK_VERSION_MARSHMALLOW);
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused.
+//
+// LINT.IfChange(MidiBackendType)
+enum class BackendType {
+  kAndroidMidi = 0,
+  kAndroidUsb = 1,
+  kMaxValue = kAndroidUsb,
+};
+// LINT.ThenChange(//tools/metrics/histograms/metadata/media/enums.xml:MidiBackendType)
 
+bool HasSystemFeatureMidi() {
   // Check if the MIDI service actually runs on the system.
   return Java_MidiManagerAndroid_hasSystemFeatureMidi(
-      base::android::AttachCurrentThread());
+      jni_zero::AttachCurrentThread());
 }
 
 }  // namespace
 
 MidiManager* MidiManager::Create(MidiService* service) {
-  if (HasSystemFeatureMidi())
+  const BackendType type = HasSystemFeatureMidi() ? BackendType::kAndroidMidi
+                                                  : BackendType::kAndroidUsb;
+  base::UmaHistogramEnumeration("Media.Midi.BackendType", type);
+
+  if (type == BackendType::kAndroidMidi) {
     return new MidiManagerAndroid(service);
+  }
 
   return new MidiManagerUsb(service,
                             std::make_unique<UsbMidiDeviceFactoryAndroid>());
@@ -50,19 +64,21 @@ MidiManagerAndroid::MidiManagerAndroid(MidiService* service)
     : MidiManager(service) {}
 
 MidiManagerAndroid::~MidiManagerAndroid() {
-  if (!service()->task_service()->UnbindInstance())
+  if (!service()->task_service()->UnbindInstance()) {
     return;
+  }
 
   // Finalization steps should be implemented after the UnbindInstance() call.
-  JNIEnv* env = base::android::AttachCurrentThread();
+  JNIEnv* env = jni_zero::AttachCurrentThread();
   Java_MidiManagerAndroid_stop(env, raw_manager_);
 }
 
 void MidiManagerAndroid::StartInitialization() {
-  if (!service()->task_service()->BindInstance())
+  if (!service()->task_service()->BindInstance()) {
     return CompleteInitialization(Result::INITIALIZATION_ERROR);
+  }
 
-  JNIEnv* env = base::android::AttachCurrentThread();
+  JNIEnv* env = jni_zero::AttachCurrentThread();
 
   uintptr_t pointer = reinterpret_cast<uintptr_t>(this);
   raw_manager_.Reset(Java_MidiManagerAndroid_create(env, pointer));

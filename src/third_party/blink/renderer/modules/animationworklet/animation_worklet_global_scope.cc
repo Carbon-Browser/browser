@@ -1,11 +1,12 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/modules/animationworklet/animation_worklet_global_scope.h"
 
+#include <optional>
+
 #include "base/time/time.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/renderer/bindings/core/v8/generated_code_helper.h"
 #include "third_party/blink/renderer/bindings/core/v8/serialization/serialized_script_value.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_function.h"
@@ -24,7 +25,6 @@
 #include "third_party/blink/renderer/platform/bindings/v8_binding_macros.h"
 #include "third_party/blink/renderer/platform/bindings/v8_object_constructor.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
-
 #include "v8/include/v8.h"
 
 namespace blink {
@@ -72,7 +72,7 @@ Animator* AnimationWorkletGlobalScope::CreateAnimatorFor(
     const String& name,
     WorkletAnimationOptions options,
     scoped_refptr<SerializedScriptValue> serialized_state,
-    const Vector<absl::optional<base::TimeDelta>>& local_times,
+    const Vector<std::optional<base::TimeDelta>>& local_times,
     const Vector<Timing>& timings,
     const Vector<Timing::NormalizedTiming>& normalized_timings) {
   DCHECK(!animators_.Contains(animation_id));
@@ -98,8 +98,7 @@ void AnimationWorkletGlobalScope::UpdateAnimatorsList(
   for (const auto& animation : input.added_and_updated_animations) {
     int id = animation.worklet_animation_id.animation_id;
     DCHECK(!animators_.Contains(id));
-    const String name =
-        String::FromUTF8(animation.name.data(), animation.name.size());
+    const String name = String::FromUTF8(animation.name);
 
     WorkletAnimationOptions options(nullptr);
     // Down casting to blink type to access the serialized value.
@@ -118,8 +117,8 @@ void AnimationWorkletGlobalScope::UpdateAnimatorsList(
         effect_timings->GetNormalizedTimings()->data;
     DCHECK_GE(normalized_timings.size(), 1u);
 
-    Vector<absl::optional<base::TimeDelta>> local_times(
-        static_cast<int>(timings.size()), absl::nullopt);
+    Vector<std::optional<base::TimeDelta>> local_times(
+        static_cast<int>(timings.size()), std::nullopt);
 
     CreateAnimatorFor(id, name, options, nullptr /* serialized_state */,
                       local_times, timings, normalized_timings);
@@ -192,7 +191,7 @@ void AnimationWorkletGlobalScope::registerAnimator(
     return;
   }
 
-  if (name.IsEmpty()) {
+  if (name.empty()) {
     exception_state.ThrowTypeError("The empty string is not a valid name.");
     return;
   }
@@ -242,7 +241,7 @@ Animator* AnimationWorkletGlobalScope::CreateInstance(
     const String& name,
     WorkletAnimationOptions options,
     scoped_refptr<SerializedScriptValue> serialized_state,
-    const Vector<absl::optional<base::TimeDelta>>& local_times,
+    const Vector<std::optional<base::TimeDelta>>& local_times,
     const Vector<Timing>& timings,
     const Vector<Timing::NormalizedTiming>& normalized_timings) {
   DCHECK(IsContextThread());
@@ -302,16 +301,14 @@ void AnimationWorkletGlobalScope::MigrateAnimatorsTo(
     Animator* animator = animator_map.value;
     scoped_refptr<SerializedScriptValue> serialized_state;
     if (animator->IsStateful()) {
-      ExceptionState exception_state(script_state->GetIsolate(),
-                                     ExceptionState::kExecutionContext,
-                                     "Animator", "state");
+      v8::TryCatch try_catch(isolate);
       // If an animator state function throws or the state is not
       // serializable, the animator will be removed from the global scope.
       // TODO(crbug.com/1090522): We should post an error message to console in
       // case of exceptions.
-      v8::Local<v8::Value> state = animator->State(isolate, exception_state);
-      if (exception_state.HadException()) {
-        exception_state.ClearException();
+      v8::Local<v8::Value> state =
+          animator->State(isolate, PassThroughException(isolate));
+      if (try_catch.HasCaught()) {
         continue;
       }
 
@@ -320,15 +317,14 @@ void AnimationWorkletGlobalScope::MigrateAnimatorsTo(
       if (!state->IsNullOrUndefined()) {
         serialized_state = SerializedScriptValue::Serialize(
             isolate, state, SerializedScriptValue::SerializeOptions(),
-            exception_state);
-        if (exception_state.HadException()) {
-          exception_state.ClearException();
+            PassThroughException(isolate));
+        if (try_catch.HasCaught()) {
           continue;
         }
       }
     }
 
-    Vector<absl::optional<base::TimeDelta>> local_times;
+    Vector<std::optional<base::TimeDelta>> local_times;
     animator->GetLocalTimes(local_times);
     target_global_scope->CreateAnimatorFor(
         animation_id, animator->name(), animator->options(), serialized_state,
@@ -342,7 +338,7 @@ AnimatorDefinition* AnimationWorkletGlobalScope::FindDefinitionForTest(
     const String& name) {
   auto it = animator_definitions_.find(name);
   if (it != animator_definitions_.end())
-    return it->value;
+    return it->value.Get();
   return nullptr;
 }
 

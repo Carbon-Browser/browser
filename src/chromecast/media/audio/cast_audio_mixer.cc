@@ -1,11 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chromecast/media/audio/cast_audio_mixer.h"
 
-#include "base/bind.h"
 #include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "chromecast/media/audio/cast_audio_manager.h"
 #include "chromecast/media/audio/cast_audio_output_stream.h"
@@ -72,9 +72,10 @@ class CastAudioMixer::MixerProxyStream
    private:
     // ::media::AudioConverter::InputCallback implementation
     double ProvideInput(::media::AudioBus* audio_bus,
-                        uint32_t frames_delayed) override {
+                        uint32_t frames_delayed,
+                        const ::media::AudioGlitchInfo& glitch_info) override {
       DCHECK_CALLED_ON_VALID_THREAD(backend_thread_checker_);
-      resampler_->ConvertWithDelay(frames_delayed, audio_bus);
+      resampler_->ConvertWithInfo(frames_delayed, glitch_info, audio_bus);
       // Volume multiplier has already been applied by |resampler_|.
       return 1.0;
     }
@@ -160,14 +161,16 @@ class CastAudioMixer::MixerProxyStream
 
   // ::media::AudioConverter::InputCallback implementation
   double ProvideInput(::media::AudioBus* audio_bus,
-                      uint32_t frames_delayed) override {
+                      uint32_t frames_delayed,
+                      const ::media::AudioGlitchInfo& glitch_info) override {
     // Called on backend thread. Member variables accessed from both backend
     // and audio thread must be thread-safe.
     DCHECK(source_callback_);
 
     const base::TimeDelta delay = ::media::AudioTimestampHelper::FramesToTime(
         frames_delayed, input_params_.sample_rate());
-    source_callback_->OnMoreData(delay, base::TimeTicks::Now(), 0, audio_bus);
+    source_callback_->OnMoreData(delay, base::TimeTicks::Now(), glitch_info,
+                                 audio_bus);
 
     base::AutoLock auto_lock(volume_lock_);
     return volume_;
@@ -190,7 +193,7 @@ CastAudioMixer::CastAudioMixer(CastAudioManager* audio_manager)
     : audio_manager_(audio_manager), error_(false), output_stream_(nullptr) {
   output_params_ = ::media::AudioParameters(
       ::media::AudioParameters::Format::AUDIO_PCM_LOW_LATENCY,
-      ::media::CHANNEL_LAYOUT_STEREO, kSampleRate, kFramesPerBuffer);
+      ::media::ChannelLayoutConfig::Stereo(), kSampleRate, kFramesPerBuffer);
   mixer_.reset(
       new ::media::AudioConverter(output_params_, output_params_, false));
   DETACH_FROM_THREAD(audio_thread_checker_);
@@ -273,14 +276,14 @@ void CastAudioMixer::RemoveInput(
 
 int CastAudioMixer::OnMoreData(base::TimeDelta delay,
                                base::TimeTicks /* delay_timestamp */,
-                               int /* prior_frames_skipped */,
+                               const ::media::AudioGlitchInfo& glitch_info,
                                ::media::AudioBus* dest) {
   // Called on backend thread.
   uint32_t frames_delayed = ::media::AudioTimestampHelper::TimeToFrames(
       delay, output_params_.sample_rate());
 
   base::AutoLock auto_lock(mixer_lock_);
-  mixer_->ConvertWithDelay(frames_delayed, dest);
+  mixer_->ConvertWithInfo(frames_delayed, glitch_info, dest);
   return dest->frames();
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,26 +10,26 @@
  * circumstances. See triggered_profile_resetter.h for when the triggered
  * variant will be used.
  */
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.m.js';
-import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
+import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import 'chrome://resources/cr_elements/cr_spinner_style.css.js';
 import 'chrome://resources/js/action_link.js';
-import 'chrome://resources/cr_elements/action_link_css.m.js';
-import 'chrome://resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
+import 'chrome://resources/cr_elements/action_link.css.js';
 import '../settings_shared.css.js';
 
-import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import {CrCheckboxElement} from 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.m.js';
-import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
-import {PaperSpinnerLiteElement} from 'chrome://resources/polymer/v3_0/paper-spinner/paper-spinner-lite.js';
+import type {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import type {CrCheckboxElement} from 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.js';
+import type {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import {I18nMixin} from 'chrome://resources/cr_elements/i18n_mixin.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {loadTimeData} from '../i18n_setup.js';
 import {routes} from '../route.js';
 import {Router} from '../router.js';
 
-import {ResetBrowserProxy, ResetBrowserProxyImpl} from './reset_browser_proxy.js';
+import type {ResetBrowserProxy} from './reset_browser_proxy.js';
+import {ResetBrowserProxyImpl} from './reset_browser_proxy.js';
 import {getTemplate} from './reset_profile_dialog.html.js';
 
 export interface SettingsResetProfileDialogElement {
@@ -37,7 +37,6 @@ export interface SettingsResetProfileDialogElement {
     cancel: CrButtonElement,
     dialog: CrDialogElement,
     reset: CrButtonElement,
-    resetSpinner: PaperSpinnerLiteElement,
     sendSettings: CrCheckboxElement,
   };
 }
@@ -85,10 +84,11 @@ export class SettingsResetProfileDialogElement extends
   private browserProxy_: ResetBrowserProxy =
       ResetBrowserProxyImpl.getInstance();
 
-  private getExplanationText_(): string {
+  private getExplanationText_(): TrustedHTML {
     if (this.isTriggered_) {
-      return loadTimeData.getStringF(
-          'triggeredResetPageExplanation', this.triggeredResetToolName_);
+      return this.i18nAdvanced(
+          'triggeredResetPageExplanation',
+          {substitutions: [this.triggeredResetToolName_]});
     }
 
     if (loadTimeData.getBoolean('showExplanationWithBulletPoints')) {
@@ -97,7 +97,7 @@ export class SettingsResetProfileDialogElement extends
       });
     }
 
-    return loadTimeData.getStringF('resetPageExplanation');
+    return this.i18nAdvanced('resetPageExplanation');
   }
 
   private getPageTitle_(): string {
@@ -116,7 +116,7 @@ export class SettingsResetProfileDialogElement extends
     });
 
     this.shadowRoot!.querySelector('cr-checkbox a')!.addEventListener(
-        'click', this.onShowReportedSettingsTap_.bind(this));
+        'click', this.onShowReportedSettingsClick_.bind(this));
   }
 
   private showDialog_() {
@@ -136,18 +136,13 @@ export class SettingsResetProfileDialogElement extends
         this.showDialog_();
       });
     } else {
-      // For the non-triggered reset dialog, a '#cct' hash indicates that the
-      // reset request came from the Chrome Cleanup Tool by launching Chrome
-      // with the startup URL chrome://settings/resetProfileSettings#cct.
-      const origin = window.location.hash.slice(1).toLowerCase() === 'cct' ?
-          'cct' :
-          Router.getInstance().getQueryParameters().get('origin');
-      this.resetRequestOrigin_ = origin || '';
+      this.resetRequestOrigin_ =
+          Router.getInstance().getQueryParameters().get('origin') || '';
       this.showDialog_();
     }
   }
 
-  private onCancelTap_() {
+  private onCancelClick_() {
     this.cancel();
   }
 
@@ -157,7 +152,7 @@ export class SettingsResetProfileDialogElement extends
     }
   }
 
-  private onResetTap_() {
+  private onResetClick_() {
     this.clearingInProgress_ = true;
     this.browserProxy_
         .performResetProfileSettings(
@@ -175,7 +170,7 @@ export class SettingsResetProfileDialogElement extends
   /**
    * Displays the settings that will be reported in a new tab.
    */
-  private onShowReportedSettingsTap_(e: Event) {
+  private onShowReportedSettingsClick_(e: Event) {
     this.browserProxy_.showReportedSettings();
     e.stopPropagation();
   }

@@ -1,20 +1,22 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/eche_app/eche_app_notification_controller.h"
 
-#include "ash/components/multidevice/logging/logging.h"
 #include "ash/constants/notifier_catalogs.h"
 #include "ash/public/cpp/new_window_delegate.h"
 #include "ash/webui/eche_app_ui/eche_alert_generator.h"
+#include "ash/webui/settings/public/constants/routes.mojom.h"
 #include "chrome/browser/notifications/notification_display_service.h"
+#include "chrome/browser/notifications/notification_display_service_factory.h"
 #include "chrome/browser/ui/settings_window_manager_chromeos.h"
-#include "chrome/browser/ui/webui/settings/chromeos/constants/routes.mojom.h"
 #include "chrome/grit/generated_resources.h"
+#include "chromeos/ash/components/multidevice/logging/logging.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/message_center/message_center.h"
+#include "ui/message_center/public/cpp/notification_delegate.h"
 
 namespace ash {
 namespace eche_app {
@@ -29,7 +31,7 @@ std::unique_ptr<message_center::Notification> CreateNotification(
     const std::u16string& message,
     const ui::ImageModel& icon,
     const message_center::RichNotificationData& rich_notification_data,
-    message_center::NotificationDelegate* delegate) {
+    scoped_refptr<message_center::NotificationDelegate> delegate) {
   return std::make_unique<message_center::Notification>(
       message_center::NotificationType::NOTIFICATION_TYPE_SIMPLE, id, title,
       message, icon, std::u16string() /* display_source */,
@@ -46,20 +48,26 @@ EcheAppNotificationController::EcheAppNotificationController(
     const base::RepeatingCallback<void(Profile*)>& relaunch_callback)
     : profile_(profile), relaunch_callback_(relaunch_callback) {}
 
-EcheAppNotificationController::~EcheAppNotificationController() {}
+EcheAppNotificationController::~EcheAppNotificationController() = default;
+
 void EcheAppNotificationController::LaunchSettings() {
-  // TODO(crbug.com/1241352): Wait for UX confirm.
+  // TODO(crbug.com/40785967): Wait for UX confirm.
   chrome::SettingsWindowManager::GetInstance()->ShowOSSettings(
       profile_, chromeos::settings::mojom::kSecurityAndSignInSubpagePathV2);
 }
 
+void EcheAppNotificationController::LaunchNetworkSettings() {
+  chrome::SettingsWindowManager::GetInstance()->ShowOSSettings(
+      profile_, chromeos::settings::mojom::kNetworkSectionPath);
+}
+
 void EcheAppNotificationController::LaunchTryAgain() {
-  relaunch_callback_.Run(profile_);
+  relaunch_callback_.Run(profile_.get());
 }
 
 void EcheAppNotificationController::ShowNotificationFromWebUI(
-    const absl::optional<std::u16string>& title,
-    const absl::optional<std::u16string>& message,
+    const std::optional<std::u16string>& title,
+    const std::optional<std::u16string>& message,
     absl::variant<LaunchAppHelper::NotificationInfo::NotificationType,
                   mojom::WebNotificationType> type) {
   auto web_type = absl::get<mojom::WebNotificationType>(type);
@@ -75,8 +83,10 @@ void EcheAppNotificationController::ShowNotificationFromWebUI(
           kEcheAppRetryConnectionNotifierId,
           NotificationCatalogName::kEcheAppRetryConnection, title.value(),
           message.value(), ui::ImageModel(), rich_notification_data,
-          new NotificationDelegate(kEcheAppRetryConnectionNotifierId,
-                                   weak_ptr_factory_.GetWeakPtr())));
+          base::MakeRefCounted<message_center::HandleNotificationClickDelegate>(
+              base::BindRepeating(
+                  &EcheAppNotificationController::LaunchTryAgain,
+                  weak_ptr_factory_.GetWeakPtr()))));
     } else if (web_type == mojom::WebNotificationType::DEVICE_IDLE) {
       message_center::RichNotificationData rich_notification_data;
       rich_notification_data.buttons.push_back(
@@ -86,8 +96,23 @@ void EcheAppNotificationController::ShowNotificationFromWebUI(
           kEcheAppInactivityNotifierId,
           NotificationCatalogName::kEcheAppInactivity, title.value(),
           message.value(), ui::ImageModel(), rich_notification_data,
-          new NotificationDelegate(kEcheAppInactivityNotifierId,
-                                   weak_ptr_factory_.GetWeakPtr())));
+          base::MakeRefCounted<message_center::HandleNotificationClickDelegate>(
+              base::BindRepeating(
+                  &EcheAppNotificationController::LaunchTryAgain,
+                  weak_ptr_factory_.GetWeakPtr()))));
+    } else if (web_type == mojom::WebNotificationType::WIFI_NOT_READY) {
+      message_center::RichNotificationData rich_notification_data;
+      // Reuse the setting string for Eche's setting button.
+      rich_notification_data.buttons.emplace_back(
+          l10n_util::GetStringUTF16(IDS_ECHE_APP_SCREEN_LOCK_SETTINGS_BUTTON));
+      ShowNotification(CreateNotification(
+          kEcheAppNetworkSettingNotifierId,
+          NotificationCatalogName::kEcheAppNetworkSetting, title.value(),
+          message.value(), ui::ImageModel(), rich_notification_data,
+          base::MakeRefCounted<message_center::HandleNotificationClickDelegate>(
+              base::BindRepeating(
+                  &EcheAppNotificationController::LaunchNetworkSettings,
+                  weak_ptr_factory_.GetWeakPtr()))));
     } else {
       // No need to take the action.
       ShowNotification(CreateNotification(
@@ -95,8 +120,9 @@ void EcheAppNotificationController::ShowNotificationFromWebUI(
           NotificationCatalogName::kEcheAppFromWebWithoutButton, title.value(),
           message.value(), ui::ImageModel(),
           message_center::RichNotificationData(),
-          new NotificationDelegate(kEcheAppFromWebWithoutButtonNotifierId,
-                                   weak_ptr_factory_.GetWeakPtr())));
+          base::MakeRefCounted<message_center::HandleNotificationClickDelegate>(
+              message_center::HandleNotificationClickDelegate::
+                  ButtonClickCallback(base::DoNothing()))));
     }
   } else {
     PA_LOG(ERROR)
@@ -115,61 +141,36 @@ void EcheAppNotificationController::ShowScreenLockNotification(
                                  title),
       l10n_util::GetStringUTF16(IDS_ECHE_APP_SCREEN_LOCK_NOTIFICATION_MESSAGE),
       ui::ImageModel(), rich_notification_data,
-      new NotificationDelegate(kEcheAppScreenLockNotifierId,
-                               weak_ptr_factory_.GetWeakPtr())));
+      base::MakeRefCounted<message_center::HandleNotificationClickDelegate>(
+          base::BindRepeating(&EcheAppNotificationController::LaunchSettings,
+                              weak_ptr_factory_.GetWeakPtr()))));
 }
 
 void EcheAppNotificationController::ShowNotification(
     std::unique_ptr<message_center::Notification> notification) {
   notification->SetSystemPriority();
-  NotificationDisplayService::GetForProfile(profile_)->Display(
+  NotificationDisplayServiceFactory::GetForProfile(profile_)->Display(
       NotificationHandler::Type::TRANSIENT, *notification,
       /*metadata=*/nullptr);
 }
 
 void EcheAppNotificationController::CloseNotification(
     const std::string& notification_id) {
-  NotificationDisplayService::GetForProfile(profile_)->Close(
+  NotificationDisplayServiceFactory::GetForProfile(profile_)->Close(
       NotificationHandler::Type::TRANSIENT, notification_id);
 }
 
 void EcheAppNotificationController::
     CloseConnectionOrLaunchErrorNotifications() {
-  NotificationDisplayService::GetForProfile(profile_)->Close(
+  NotificationDisplayServiceFactory::GetForProfile(profile_)->Close(
       NotificationHandler::Type::TRANSIENT, kEcheAppRetryConnectionNotifierId);
-  NotificationDisplayService::GetForProfile(profile_)->Close(
+  NotificationDisplayServiceFactory::GetForProfile(profile_)->Close(
       NotificationHandler::Type::TRANSIENT, kEcheAppInactivityNotifierId);
-  NotificationDisplayService::GetForProfile(profile_)->Close(
+  NotificationDisplayServiceFactory::GetForProfile(profile_)->Close(
       NotificationHandler::Type::TRANSIENT,
       kEcheAppFromWebWithoutButtonNotifierId);
-}
-
-EcheAppNotificationController::NotificationDelegate::NotificationDelegate(
-    const std::string& notification_id,
-    const base::WeakPtr<EcheAppNotificationController>& notification_controller)
-    : notification_id_(notification_id),
-      notification_controller_(notification_controller) {}
-
-EcheAppNotificationController::NotificationDelegate::~NotificationDelegate() {}
-void EcheAppNotificationController::NotificationDelegate::Click(
-    const absl::optional<int>& button_index,
-    const absl::optional<std::u16string>& reply) {
-  if (!button_index)
-    return;
-
-  if (notification_id_ == kEcheAppScreenLockNotifierId) {
-    if (*button_index == 0) {
-      notification_controller_->LaunchSettings();
-    }
-  } else if (notification_id_ == kEcheAppRetryConnectionNotifierId) {
-    if (*button_index == 0) {
-      notification_controller_->LaunchTryAgain();
-    }
-  } else if (notification_id_ == kEcheAppInactivityNotifierId) {
-    if (*button_index == 0) {
-      notification_controller_->LaunchTryAgain();
-    }
-  }
+  NotificationDisplayServiceFactory::GetForProfile(profile_)->Close(
+      NotificationHandler::Type::TRANSIENT, kEcheAppNetworkSettingNotifierId);
 }
 
 }  // namespace eche_app

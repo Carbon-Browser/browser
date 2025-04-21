@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,8 @@
 #include <stdint.h>
 
 #include <string>
+
+#include "base/memory/raw_ptr.h"
 
 namespace net::extras {
 
@@ -73,7 +75,7 @@ class PreloadDecoder {
     bool Seek(size_t offset);
 
    private:
-    const uint8_t* const bytes_;
+    const raw_ptr<const uint8_t, AllowPtrArithmetic> bytes_;
     const size_t num_bits_;
     const size_t num_bytes_;
     // current_byte_index_ contains the current byte offset in |bytes_|.
@@ -103,7 +105,7 @@ class PreloadDecoder {
     bool Decode(PreloadDecoder::BitReader* reader, char* out) const;
 
    private:
-    const uint8_t* const tree_;
+    const raw_ptr<const uint8_t, AllowPtrArithmetic> tree_;
     const size_t tree_bytes_;
   };
 

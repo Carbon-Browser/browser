@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,6 @@
 // FirstRunDialogViewController is the NSViewController for the first run
 // dialog's content view.
 @interface FirstRunDialogViewController : NSViewController
-
-- (instancetype)initWithStatsCheckboxInitiallyChecked:(BOOL)checked
-                        defaultBrowserCheckboxVisible:(BOOL)visible;
 
 - (NSString*)windowTitle;
 

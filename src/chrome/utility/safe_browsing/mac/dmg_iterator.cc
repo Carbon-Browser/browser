@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,28 +20,22 @@ DMGIterator::DMGIterator(ReadStream* stream)
       hfs_() {
 }
 
-DMGIterator::~DMGIterator() {}
+DMGIterator::~DMGIterator() = default;
 
 bool DMGIterator::Open() {
-  bool udif_success = udif_.Parse();
-  base::UmaHistogramBoolean("SBClientDownload.DmgParsedUdif", udif_success);
-  if (!udif_success)
+  if (!udif_.Parse()) {
     return false;
+  }
 
   // Collect all the HFS partitions up-front. The data are accessed lazily, so
   // this is relatively inexpensive.
-  bool has_apfs = false;
   for (size_t i = 0; i < udif_.GetNumberOfPartitions(); ++i) {
-    if (udif_.GetPartitionType(i) == "Apple_HFS" ||
-        udif_.GetPartitionType(i) == "Apple_HFSX") {
-      partitions_.push_back(udif_.GetPartitionReadStream(i));
-    }
-
-    if (udif_.GetPartitionType(i) == "Apple_APFS") {
-      has_apfs = true;
+    std::unique_ptr<ReadStream> partition = udif_.GetPartitionReadStream(i);
+    HFSIterator hfs(partition.get());
+    if (hfs.Open()) {
+      partitions_.push_back(std::move(partition));
     }
   }
-  base::UmaHistogramBoolean("SBClientDownload.DmgHasAPFS", has_apfs);
 
   return true;
 }

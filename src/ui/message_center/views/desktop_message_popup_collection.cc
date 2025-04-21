@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,11 +26,11 @@ void DesktopMessagePopupCollection::StartObserving() {
   RecomputeAlignment(display);
 }
 
-int DesktopMessagePopupCollection::GetToastOriginX(
-    const gfx::Rect& toast_bounds) const {
+int DesktopMessagePopupCollection::GetPopupOriginX(
+    const gfx::Rect& popup_bounds) const {
   if (IsFromLeft())
     return work_area_.x() + kMarginBetweenPopups;
-  return work_area_.right() - kMarginBetweenPopups - toast_bounds.width();
+  return work_area_.right() - kMarginBetweenPopups - popup_bounds.width();
 }
 
 int DesktopMessagePopupCollection::GetBaseline() const {
@@ -115,9 +115,9 @@ void DesktopMessagePopupCollection::OnDisplayAdded(
   UpdatePrimaryDisplay();
 }
 
-void DesktopMessagePopupCollection::OnDisplayRemoved(
-    const display::Display& removed_display) {
-  // The removed display may have been the primary display.
+void DesktopMessagePopupCollection::OnDisplaysRemoved(
+    const display::Displays& removed_displays) {
+  // One of the removed displays may have been the primary display.
   UpdatePrimaryDisplay();
 }
 

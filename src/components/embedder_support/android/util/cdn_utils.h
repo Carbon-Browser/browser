@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,16 +10,17 @@
 class GURL;
 
 namespace content {
-class Page;
+class RenderFrameHost;
 }
 
 namespace embedder_support {
 
-extern const base::Feature kShowTrustedPublisherURL;
-
-// This should be called from content::WebContentsObserver::PrimaryPageChanged
-// to get a publisher url for the committed navigation, else an empty GURL().
-GURL GetPublisherURL(content::Page& page);
+// Gets the publisher url from |rfh|'s last committed navigation if:
+// * |rfh| is the primary main frame
+// * |rfh|'s committed navigation's url belongs to a trusted CDN
+// * A publisher url is present
+// Otherwise, this returns an empty GURL.
+GURL GetPublisherURL(content::RenderFrameHost* rfh);
 
 }  // namespace embedder_support
 

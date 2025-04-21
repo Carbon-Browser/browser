@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#import "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/task/sequenced_task_runner_helpers.h"
 #include "ios/web/webui/url_data_manager_ios.h"
@@ -33,8 +34,8 @@ class URLDataSourceIOSImpl;
 //
 // To make sure URLDataSourceIOSs are properly deleted URLDataManagerIOS
 // manages deletion of the URLDataSourceIOSs.  When a URLDataSourceIOS is no
-// longer referenced it is added to |data_sources_| and a task is posted to the
-// UI thread to handle the actual deletion. During shutdown |DeleteDataSources|
+// longer referenced it is added to `data_sources_` and a task is posted to the
+// UI thread to handle the actual deletion. During shutdown `DeleteDataSources`
 // is invoked so that all pending URLDataSourceIOSs are properly deleted.
 struct DeleteURLDataSourceIOS {
   static void Destruct(const URLDataSourceIOSImpl* data_source) {
@@ -46,18 +47,18 @@ struct DeleteURLDataSourceIOS {
 // asynchronously. URLDataSourceIOSs are collectively owned with refcounting
 // smart pointers and should never be deleted on the IO thread, since their
 // calls are handled almost always on the UI thread and there's a possibility
-// of a data race.  The |DeleteDataSource| trait above is used to enforce this.
+// of a data race.  The `DeleteDataSource` trait above is used to enforce this.
 class URLDataSourceIOSImpl
     : public base::RefCountedThreadSafe<URLDataSourceIOSImpl,
                                         DeleteURLDataSourceIOS> {
  public:
   // See source_name_ below for docs on that parameter. Takes ownership of
-  // |source|.
+  // `source`.
   URLDataSourceIOSImpl(const std::string& source_name,
                        URLDataSourceIOS* source);
 
-  // Report that a request has resulted in the data |bytes|.
-  // If the request can't be satisfied, pass NULL for |bytes| to indicate
+  // Report that a request has resulted in the data `bytes`.
+  // If the request can't be satisfied, pass NULL for `bytes` to indicate
   // the request is over.
   virtual void SendResponse(int request_id,
                             scoped_refptr<base::RefCountedMemory> bytes);
@@ -98,7 +99,7 @@ class URLDataSourceIOSImpl
   // should only be accessed on the IO thread. This reference can't be via a
   // scoped_refptr else there would be a cycle between the backend and data
   // source.
-  URLDataManagerIOSBackend* backend_;
+  raw_ptr<URLDataManagerIOSBackend> backend_;
 
   std::unique_ptr<URLDataSourceIOS> source_;
 };

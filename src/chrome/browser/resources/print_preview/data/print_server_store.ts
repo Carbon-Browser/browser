@@ -1,10 +1,11 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {NativeLayerCros, NativeLayerCrosImpl, PrintServer, PrintServersConfig} from '../native_layer_cros.js';
+import type {NativeLayerCros, PrintServer, PrintServersConfig} from '../native_layer_cros.js';
+import {NativeLayerCrosImpl} from '../native_layer_cros.js';
 
-import {DestinationStore} from './destination_store.js';
+import type {DestinationStore} from './destination_store.js';
 
 export class PrintServerStore extends EventTarget {
   /**

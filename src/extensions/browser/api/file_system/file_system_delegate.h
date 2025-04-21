@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,18 +9,15 @@
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
-#include "base/memory/ref_counted.h"
+#include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
+#include "base/memory/scoped_refptr.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "extensions/common/api/file_system.h"
 #include "ui/shell_dialogs/select_file_dialog.h"
 
 class ExtensionFunction;
-
-namespace base {
-class FilePath;
-}  // namespace base
 
 namespace content {
 class BrowserContext;
@@ -29,6 +26,7 @@ class WebContents;
 
 namespace extensions {
 
+class ConsentProvider;
 class Extension;
 class SavedFilesServiceInterface;
 
@@ -77,15 +75,12 @@ class FileSystemDelegate {
   // string ID is found.
   virtual int GetDescriptionIdForAcceptType(const std::string& accept_type) = 0;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  // Checks whether the extension can be granted access.
-  virtual bool IsGrantable(content::BrowserContext* browser_context,
-                           const Extension& extension) = 0;
-
+#if BUILDFLAG(IS_CHROMEOS)
   // Grants or denies an extension's request for access to the named file
   // system. May prompt the user for consent.
   virtual void RequestFileSystem(content::BrowserContext* browser_context,
                                  scoped_refptr<ExtensionFunction> requester,
+                                 ConsentProvider* consent_provider,
                                  const Extension& extension,
                                  std::string volume_id,
                                  bool writable,
@@ -96,7 +91,7 @@ class FileSystemDelegate {
   virtual void GetVolumeList(content::BrowserContext* browser_context,
                              VolumeListCallback success_callback,
                              ErrorCallback error_callback) = 0;
-#endif
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
   virtual SavedFilesServiceInterface* GetSavedFilesService(
       content::BrowserContext* browser_context) = 0;

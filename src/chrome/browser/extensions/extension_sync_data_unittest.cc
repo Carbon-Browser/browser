@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -117,8 +117,8 @@ TEST_F(ExtensionSyncDataTest, ExtensionSyncDataForExtension) {
 
 class AppSyncDataTest : public testing::Test {
  public:
-  AppSyncDataTest() {}
-  ~AppSyncDataTest() override {}
+  AppSyncDataTest() = default;
+  ~AppSyncDataTest() override = default;
 
   void SetRequiredExtensionValues(
       sync_pb::ExtensionSpecifics* extension_specifics) {

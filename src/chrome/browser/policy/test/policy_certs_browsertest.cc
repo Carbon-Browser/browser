@@ -1,14 +1,14 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 #include <string>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/json/json_writer.h"
 #include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
@@ -19,11 +19,14 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/net/nss_service.h"
 #include "chrome/browser/net/nss_service_factory.h"
+#include "chrome/browser/policy/networking/policy_cert_service.h"
+#include "chrome/browser/policy/networking/policy_cert_service_factory.h"
 #include "chrome/browser/policy/networking/user_network_configuration_updater_ash.h"
 #include "chrome/browser/policy/networking/user_network_configuration_updater_factory.h"
 #include "chrome/browser/policy/profile_policy_connector_builder.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/browser/profiles/profile_test_util.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/common/chrome_paths.h"
@@ -55,7 +58,14 @@
 #include "testing/gtest/include/gtest/gtest.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
+#include "base/test/scoped_feature_list.h"
+#include "chrome/browser/ash/login/lock/screen_locker_tester.h"
+#include "chrome/browser/ash/login/saml/lockscreen_reauth_dialog_test_helper.h"
+#include "chrome/browser/ash/profiles/profile_helper.h"
+
+using ::testing::NotNull;
 #endif
 
 namespace em = enterprise_management;
@@ -79,7 +89,7 @@ constexpr char kRootCaCert[] = "root_ca_cert.pem";
 // Allows waiting until the list of policy-pushed web-trusted certificates
 // changes.
 class WebTrustedCertsChangedObserver
-    : public chromeos::PolicyCertificateProvider::Observer {
+    : public ash::PolicyCertificateProvider::Observer {
  public:
   WebTrustedCertsChangedObserver() = default;
 
@@ -88,7 +98,7 @@ class WebTrustedCertsChangedObserver
   WebTrustedCertsChangedObserver& operator=(
       const WebTrustedCertsChangedObserver&) = delete;
 
-  // chromeos::PolicyCertificateProvider::Observer
+  // ash::PolicyCertificateProvider::Observer
   void OnPolicyProvidedCertsChanged() override { run_loop_.Quit(); }
 
   void Wait() { run_loop_.Run(); }
@@ -98,11 +108,10 @@ class WebTrustedCertsChangedObserver
 };
 
 // Allows waiting until |NetworkCertLoader| updates its list of certificates.
-class NetworkCertLoaderTestObserver
-    : public chromeos::NetworkCertLoader::Observer {
+class NetworkCertLoaderTestObserver : public ash::NetworkCertLoader::Observer {
  public:
   explicit NetworkCertLoaderTestObserver(
-      chromeos::NetworkCertLoader* network_cert_loader)
+      ash::NetworkCertLoader* network_cert_loader)
       : network_cert_loader_(network_cert_loader) {
     network_cert_loader_->AddObserver(this);
   }
@@ -115,31 +124,13 @@ class NetworkCertLoaderTestObserver
     network_cert_loader_->RemoveObserver(this);
   }
 
-  // chromeos::NetworkCertLoader::Observer
+  // ash::NetworkCertLoader::Observer
   void OnCertificatesLoaded() override { run_loop_.Quit(); }
 
   void Wait() { run_loop_.Run(); }
 
  private:
-  raw_ptr<chromeos::NetworkCertLoader> network_cert_loader_;
-  base::RunLoop run_loop_;
-};
-
-// Allows waiting until the |CertDatabase| notifies its observers that it has
-// changd.
-class CertDatabaseChangedObserver : public net::CertDatabase::Observer {
- public:
-  CertDatabaseChangedObserver() {}
-
-  CertDatabaseChangedObserver(const CertDatabaseChangedObserver&) = delete;
-  CertDatabaseChangedObserver& operator=(const CertDatabaseChangedObserver&) =
-      delete;
-
-  void OnCertDBChanged() override { run_loop_.Quit(); }
-
-  void Wait() { run_loop_.Run(); }
-
- private:
+  raw_ptr<ash::NetworkCertLoader> network_cert_loader_;
   base::RunLoop run_loop_;
 };
 
@@ -261,6 +252,14 @@ class UserPolicyCertsHelper {
     trust_roots_changed_observer.Wait();
     user_network_configuration_updater->RemovePolicyProvidedCertsObserver(
         &trust_roots_changed_observer);
+
+    // The above `trust_roots_changed_observer` only ensures that the
+    // UpdateAdditionalCertificates message has been sent, but not that the
+    // CertVerifierService has received it. Do a FlushForTesting on the loaded
+    // CertVerifierServiceUpdaters for `profile`, to ensure any earlier
+    // messages on the mojo pipes have been processed.
+    profile->ForEachLoadedStoragePartition(
+        &content::StoragePartition::FlushCertVerifierInterfaceForTesting);
   }
 
   // Server Certificate which is signed by authority specified in |kRootCaCert|.
@@ -278,7 +277,7 @@ class UserPolicyCertsHelper {
 
 // A class that allows testing multiple profiles in a browsertest, each having
 // its own MockConfigurationPolicyProvider.
-// TODO(https://crbug.com/1127263): Transform this into a general-purpose mixin.
+// TODO(crbug.com/40718963): Transform this into a general-purpose mixin.
 class MultiProfilePolicyProviderHelper {
  public:
   MultiProfilePolicyProviderHelper() = default;
@@ -332,19 +331,11 @@ class MultiProfilePolicyProviderHelper {
         &policy_for_profile_2_);
 
     ProfileManager* profile_manager = g_browser_process->profile_manager();
-
-    // Create an additional profile.
     base::FilePath path_profile =
         profile_manager->GenerateNextProfileDirectoryPath();
-    base::RunLoop run_loop;
-    profile_manager->CreateProfileAsync(
-        path_profile, base::BindRepeating(&OnProfileInitialized, &profile_2_,
-                                          run_loop.QuitClosure()));
-
-    // Run the message loop to allow profile creation to take place; the loop is
-    // terminated by OnProfileInitialized calling the loop's QuitClosure when
-    // the profile is created.
-    run_loop.Run();
+    // Create an additional profile.
+    profile_2_ =
+        &profiles::testing::CreateProfileSync(profile_manager, path_profile);
 
     // Make sure second profile creation does what we think it does.
     ASSERT_TRUE(profile_1() != profile_2());
@@ -364,19 +355,8 @@ class MultiProfilePolicyProviderHelper {
   }
 
  private:
-  // Called when an additional profile has been created.
-  // The created profile is stored in *|out_created_profile|.
-  static void OnProfileInitialized(Profile** out_created_profile,
-                                   base::OnceClosure closure,
-                                   Profile* profile,
-                                   Profile::CreateStatus status) {
-    if (status == Profile::CREATE_STATUS_INITIALIZED) {
-      *out_created_profile = profile;
-      std::move(closure).Run();
-    }
-  }
-  raw_ptr<Profile> profile_1_ = nullptr;
-  Profile* profile_2_ = nullptr;
+  raw_ptr<Profile, DanglingUntriaged> profile_1_ = nullptr;
+  raw_ptr<Profile, DanglingUntriaged> profile_2_ = nullptr;
 
   testing::NiceMock<MockConfigurationPolicyProvider> policy_for_profile_1_;
   testing::NiceMock<MockConfigurationPolicyProvider> policy_for_profile_2_;
@@ -457,6 +437,19 @@ IN_PROC_BROWSER_TEST_F(PolicyProvidedCertsRegularUserTest, NoTrustAnchor) {
   EXPECT_EQ(net::ERR_CERT_AUTHORITY_INVALID,
             VerifyTestServerCert(multi_profile_policy_helper_.profile_2(),
                                  user_policy_certs_helper_.server_cert()));
+
+  if (PolicyCertServiceFactory::GetForProfile(
+          multi_profile_policy_helper_.profile_1())) {
+    EXPECT_FALSE(PolicyCertServiceFactory::GetForProfile(
+                     multi_profile_policy_helper_.profile_1())
+                     ->UsedPolicyCertificates());
+  }
+  if (PolicyCertServiceFactory::GetForProfile(
+          multi_profile_policy_helper_.profile_2())) {
+    EXPECT_FALSE(PolicyCertServiceFactory::GetForProfile(
+                     multi_profile_policy_helper_.profile_2())
+                     ->UsedPolicyCertificates());
+  }
 }
 
 IN_PROC_BROWSER_TEST_F(PolicyProvidedCertsRegularUserTest, TrustAnchorApplied) {
@@ -466,6 +459,25 @@ IN_PROC_BROWSER_TEST_F(PolicyProvidedCertsRegularUserTest, TrustAnchorApplied) {
   EXPECT_EQ(net::OK,
             VerifyTestServerCert(multi_profile_policy_helper_.profile_1(),
                                  user_policy_certs_helper_.server_cert()));
+
+  EXPECT_TRUE(PolicyCertServiceFactory::GetForProfile(
+                  multi_profile_policy_helper_.profile_1())
+                  ->UsedPolicyCertificates());
+}
+
+// Test that policy provided trust anchors are available in Incognito mode.
+IN_PROC_BROWSER_TEST_F(PolicyProvidedCertsRegularUserTest,
+                       TrustAnchorAppliedInIncognito) {
+  user_policy_certs_helper_.SetRootCertONCUserPolicy(
+      multi_profile_policy_helper_.profile_1(),
+      multi_profile_policy_helper_.policy_for_profile_1());
+
+  Profile* otr_profile =
+      multi_profile_policy_helper_.profile_1()->GetPrimaryOTRProfile(
+          /*create_if_needed=*/true);
+
+  EXPECT_EQ(net::OK, VerifyTestServerCert(
+                         otr_profile, user_policy_certs_helper_.server_cert()));
 }
 
 IN_PROC_BROWSER_TEST_F(PolicyProvidedCertsRegularUserTest,
@@ -481,6 +493,16 @@ IN_PROC_BROWSER_TEST_F(PolicyProvidedCertsRegularUserTest,
   EXPECT_EQ(net::ERR_CERT_AUTHORITY_INVALID,
             VerifyTestServerCert(multi_profile_policy_helper_.profile_2(),
                                  user_policy_certs_helper_.server_cert()));
+
+  EXPECT_TRUE(PolicyCertServiceFactory::GetForProfile(
+                  multi_profile_policy_helper_.profile_1())
+                  ->UsedPolicyCertificates());
+  if (PolicyCertServiceFactory::GetForProfile(
+          multi_profile_policy_helper_.profile_2())) {
+    EXPECT_FALSE(PolicyCertServiceFactory::GetForProfile(
+                     multi_profile_policy_helper_.profile_2())
+                     ->UsedPolicyCertificates());
+  }
 }
 
 IN_PROC_BROWSER_TEST_F(PolicyProvidedCertsRegularUserTest,
@@ -494,7 +516,7 @@ IN_PROC_BROWSER_TEST_F(PolicyProvidedCertsRegularUserTest,
             VerifyTestServerCert(multi_profile_policy_helper_.profile_1(),
                                  user_policy_certs_helper_.server_cert()));
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  // TODO(https://crbug.com/1127263): That the cert from a secondary user's
+  // TODO(crbug.com/40718963): That the cert from a secondary user's
   // policy is used at all is currently an artifact of the test, which reuses
   // the primary user_manager::User for the secondary Profile.
   // Fix that and then expect ERR_CERT_AUTHORITY_INVALID here too, and rename
@@ -540,7 +562,7 @@ IN_PROC_BROWSER_TEST_F(PolicyProvidedCertsRegularUserTest,
 
 bool IsCertInCertificateList(
     const net::X509Certificate* cert,
-    const chromeos::NetworkCertLoader::NetworkCertList& network_cert_list) {
+    const ash::NetworkCertLoader::NetworkCertList& network_cert_list) {
   for (const auto& network_cert : network_cert_list) {
     if (net::x509_util::IsSameCertificate(network_cert.cert(), cert))
       return true;
@@ -554,14 +576,14 @@ IN_PROC_BROWSER_TEST_F(PolicyProvidedCertsRegularUserTest,
   // properly initialized because |UserSessionManager| only sets the primary
   // user's NSS Database in |NetworkCertLoader| if running on ChromeOS according
   // to |base::SysInfo|.
-  ASSERT_TRUE(chromeos::NetworkCertLoader::IsInitialized());
-  chromeos::NetworkCertLoader::Get()->SetUserNSSDB(test_nss_cert_db_.get());
+  ASSERT_TRUE(ash::NetworkCertLoader::IsInitialized());
+  ash::NetworkCertLoader::Get()->SetUserNSSDB(test_nss_cert_db_.get());
 
   EXPECT_FALSE(IsCertInCertificateList(
       user_policy_certs_helper_.root_cert().get(),
-      chromeos::NetworkCertLoader::Get()->authority_certs()));
+      ash::NetworkCertLoader::Get()->authority_certs()));
   NetworkCertLoaderTestObserver network_cert_loader_observer(
-      chromeos::NetworkCertLoader::Get());
+      ash::NetworkCertLoader::Get());
   user_policy_certs_helper_.SetRootCertONCUserPolicy(
       multi_profile_policy_helper_.profile_1(),
       multi_profile_policy_helper_.policy_for_profile_1());
@@ -572,9 +594,61 @@ IN_PROC_BROWSER_TEST_F(PolicyProvidedCertsRegularUserTest,
   // set a policy with a certificate requesting Web Trust here).
   EXPECT_TRUE(IsCertInCertificateList(
       user_policy_certs_helper_.root_cert().get(),
-      chromeos::NetworkCertLoader::Get()->authority_certs()));
+      ash::NetworkCertLoader::Get()->authority_certs()));
 }
 
+// Test that the lock screen profile uses the policy provided custom trusted
+// anchors of the primary profile .
+IN_PROC_BROWSER_TEST_F(PolicyProvidedCertsRegularUserTest,
+                       LockScreenPrimaryProfileCerts) {
+  ash::ScreenLockerTester locker;
+  locker.Lock();
+  // Showing the reauth dialog will create the lock screen profile.
+  ash::LockScreenReauthDialogTestHelper::ShowDialogAndWait();
+  ASSERT_THAT(ash::ProfileHelper::GetLockScreenProfile(), NotNull());
+
+  // Set policy provided trusted anchors on the primary profile.
+  user_policy_certs_helper_.SetRootCertONCUserPolicy(
+      browser()->profile(),
+      multi_profile_policy_helper_.policy_for_profile_1());
+
+  EXPECT_EQ(net::OK,
+            VerifyTestServerCert(browser()->profile(),
+                                 user_policy_certs_helper_.server_cert()));
+  // Verify that the lock screen can access the policy provided certs.
+  EXPECT_EQ(net::OK,
+            VerifyTestServerCert(ash::ProfileHelper::GetLockScreenProfile(),
+                                 user_policy_certs_helper_.server_cert()));
+
+  EXPECT_TRUE(PolicyCertServiceFactory::GetForProfile(browser()->profile())
+                  ->UsedPolicyCertificates());
+  EXPECT_TRUE(PolicyCertServiceFactory::GetForProfile(
+                  ash::ProfileHelper::GetLockScreenProfile())
+                  ->UsedPolicyCertificates());
+}
+
+// Test that the lock screen profile doesn't use the policy provided custom
+// trusted anchors of a secondary profile.
+IN_PROC_BROWSER_TEST_F(PolicyProvidedCertsRegularUserTest,
+                       LockScreenSecondaryProfileCerts) {
+  ash::ScreenLockerTester locker;
+  locker.Lock();
+  // Showing the reauth dialog will create the lock screen profile.
+  ash::LockScreenReauthDialogTestHelper::ShowDialogAndWait();
+  ASSERT_THAT(ash::ProfileHelper::GetLockScreenProfile(), NotNull());
+
+  ASSERT_NO_FATAL_FAILURE(multi_profile_policy_helper_.CreateSecondProfile());
+  user_policy_certs_helper_.SetRootCertONCUserPolicy(
+      multi_profile_policy_helper_.profile_2(),
+      multi_profile_policy_helper_.policy_for_profile_2());
+
+  EXPECT_EQ(net::OK,
+            VerifyTestServerCert(multi_profile_policy_helper_.profile_2(),
+                                 user_policy_certs_helper_.server_cert()));
+  EXPECT_EQ(net::ERR_CERT_AUTHORITY_INVALID,
+            VerifyTestServerCert(ash::ProfileHelper::GetLockScreenProfile(),
+                                 user_policy_certs_helper_.server_cert()));
+}
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 }  // namespace

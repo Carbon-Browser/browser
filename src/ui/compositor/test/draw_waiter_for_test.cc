@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -50,7 +50,7 @@ void DrawWaiterForTest::OnCompositingStarted(Compositor* compositor,
     wait_run_loop_->Quit();
 }
 
-void DrawWaiterForTest::OnCompositingEnded(Compositor* compositor) {
+void DrawWaiterForTest::OnCompositingAckDeprecated(Compositor* compositor) {
   if (wait_event_ == WAIT_FOR_COMPOSITING_ENDED)
     wait_run_loop_->Quit();
 }

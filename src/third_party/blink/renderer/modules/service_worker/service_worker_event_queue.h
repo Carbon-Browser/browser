@@ -1,20 +1,23 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_SERVICE_WORKER_SERVICE_WORKER_EVENT_QUEUE_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_SERVICE_WORKER_SERVICE_WORKER_EVENT_QUEUE_H_
 
+#include <optional>
 #include <set>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker.mojom-blink.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_event_status.mojom-blink-forward.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
+#include "third_party/blink/renderer/platform/allow_discouraged_type.h"
 #include "third_party/blink/renderer/platform/scheduler/public/post_cancellable_task.h"
 #include "third_party/blink/renderer/platform/wtf/deque.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
@@ -94,19 +97,19 @@ class MODULES_EXPORT ServiceWorkerEventQueue {
   void EnqueueNormal(int event_id,
                      StartCallback start_callback,
                      AbortCallback abort_callback,
-                     absl::optional<base::TimeDelta> custom_timeout);
+                     std::optional<base::TimeDelta> custom_timeout);
 
   // Similar to EnqueueNormal(), but enqueues a Pending event.
   void EnqueuePending(int event_id,
                       StartCallback start_callback,
                       AbortCallback abort_callback,
-                      absl::optional<base::TimeDelta> custom_timeout);
+                      std::optional<base::TimeDelta> custom_timeout);
 
   // Similar to EnqueueNormal(), but enqueues an Offline event.
   void EnqueueOffline(int event_id,
                       StartCallback start_callback,
                       AbortCallback abort_callback,
-                      absl::optional<base::TimeDelta> custom_timeout);
+                      std::optional<base::TimeDelta> custom_timeout);
 
   // Returns true if |event_id| was enqueued and hasn't ended.
   bool HasEvent(int event_id) const;
@@ -122,6 +125,13 @@ class MODULES_EXPORT ServiceWorkerEventQueue {
   // based on the new delay if it's now pending.
   // This method must be called after the event queue is started.
   void SetIdleDelay(base::TimeDelta idle_delay);
+
+  // Resets the members for idle timeouts to cancel the idle callback.
+  void ResetIdleTimeout();
+
+  // Checks if the event queue is empty.
+  // Schedules idle timeout callback if there is no ongoing event.
+  void CheckEventQueue();
 
   // Returns true if the event queue thinks no events ran for a while, and has
   // triggered the |idle_callback_| passed to the constructor. It'll be reset to
@@ -165,7 +175,7 @@ class MODULES_EXPORT ServiceWorkerEventQueue {
           Type type,
           StartCallback start_callback,
           AbortCallback abort_callback,
-          absl::optional<base::TimeDelta> custom_timeout);
+          std::optional<base::TimeDelta> custom_timeout);
     ~Event();
     const int event_id;
     Type type;
@@ -176,7 +186,7 @@ class MODULES_EXPORT ServiceWorkerEventQueue {
     // Callback which is run when a started event is aborted.
     AbortCallback abort_callback;
     // The custom timeout value.
-    absl::optional<base::TimeDelta> custom_timeout;
+    std::optional<base::TimeDelta> custom_timeout;
   };
 
   // Represents the type of the currently running events.
@@ -216,9 +226,6 @@ class MODULES_EXPORT ServiceWorkerEventQueue {
   // Processes all events in |queue_|.
   void ProcessEvents();
 
-  // Resets the members for idle timeouts to cancel the idle callback.
-  void ResetIdleTimeout();
-
   // True if the idle callback is scheduled to run.
   bool HasScheduledIdleCallback() const;
 
@@ -255,7 +262,7 @@ class MODULES_EXPORT ServiceWorkerEventQueue {
 
   // For idle timeouts. The time when there's no inflight event. Set to null if
   // there are inflight events.
-  base::TimeTicks last_no_inflight_event_;
+  base::TimeTicks last_no_inflight_event_time_;
 
   // For idle timeouts. The delay until the worker is identified as idle after
   // all inflight events are completed.
@@ -269,12 +276,14 @@ class MODULES_EXPORT ServiceWorkerEventQueue {
   // Event queue to where all online events (normal and pending events) are
   // enqueued. We use std::map as a task queue because it's ordered by the
   // `event_id` and the entries can be effectively erased in random order.
-  std::map<int /* event_id */, std::unique_ptr<Event>> queued_online_events_;
+  std::map<int /* event_id */, std::unique_ptr<Event>> queued_online_events_
+      ALLOW_DISCOURAGED_TYPE("Needs to be ordered by event_id");
 
   // Event queue to where offline events are enqueued. We use std::map as a task
   // queue because it's ordered by the `event_id` and the entries can be
   // effectively erased in random order.
-  std::map<int /* event_id */, std::unique_ptr<Event>> queued_offline_events_;
+  std::map<int /* event_id */, std::unique_ptr<Event>> queued_offline_events_
+      ALLOW_DISCOURAGED_TYPE("Needs to be ordered by event_id");
 
   // Set to true during running ProcessEvents(). This is used for avoiding to
   // invoke |idle_callback_| or to re-enter ProcessEvents() when calling
@@ -291,8 +300,11 @@ class MODULES_EXPORT ServiceWorkerEventQueue {
   // |timer_| invokes UpdateEventStatus() periodically.
   base::RepeatingTimer timer_;
 
+  // If true, this event queue is ready for processing events.
+  bool is_ready_for_processing_events_ = false;
+
   // |tick_clock_| outlives |this|.
-  const base::TickClock* const tick_clock_;
+  const raw_ptr<const base::TickClock> tick_clock_;
 
   // Monotonically increasing number. Event id should not start from zero since
   // HashMap in Blink requires non-zero keys.

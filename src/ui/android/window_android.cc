@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,11 +13,15 @@
 #include "base/android/jni_weak_ref.h"
 #include "base/android/scoped_java_ref.h"
 #include "base/observer_list.h"
+#include "ui/android/color_utils_android.h"
 #include "ui/android/display_android_manager.h"
-#include "ui/android/ui_android_jni_headers/WindowAndroid_jni.h"
 #include "ui/android/window_android_compositor.h"
 #include "ui/android/window_android_observer.h"
 #include "ui/base/ui_base_features.h"
+#include "ui/gfx/display_color_spaces.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "ui/android/ui_android_jni_headers/WindowAndroid_jni.h"
 
 namespace ui {
 
@@ -55,6 +59,13 @@ WindowAndroid::ScopedWindowAndroidForTesting::ScopedWindowAndroidForTesting(
 WindowAndroid::ScopedWindowAndroidForTesting::~ScopedWindowAndroidForTesting() {
   JNIEnv* env = AttachCurrentThread();
   Java_WindowAndroid_destroy(env, window_->GetJavaObject());
+}
+
+void WindowAndroid::ScopedWindowAndroidForTesting::SetModalDialogManager(
+    base::android::ScopedJavaLocalRef<jobject> modal_dialog_manager) {
+  JNIEnv* env = AttachCurrentThread();
+  Java_WindowAndroid_setModalDialogManagerForTesting(  // IN-TEST
+      env, window_->GetJavaObject(), modal_dialog_manager);
 }
 
 // static
@@ -104,11 +115,6 @@ WindowAndroid::CreateForTesting() {
       reinterpret_cast<WindowAndroid*>(native_pointer));
 }
 
-void WindowAndroid::OnCompositingDidCommit() {
-  for (WindowAndroidObserver& observer : observer_list_)
-    observer.OnCompositingDidCommit();
-}
-
 void WindowAndroid::AddObserver(WindowAndroidObserver* observer) {
   if (!observer_list_.HasObserver(observer))
     observer_list_.AddObserver(observer);
@@ -123,22 +129,26 @@ void WindowAndroid::AttachCompositor(WindowAndroidCompositor* compositor) {
     DetachCompositor();
 
   compositor_ = compositor;
-  for (WindowAndroidObserver& observer : observer_list_)
-    observer.OnAttachCompositor();
+  observer_list_.Notify(&WindowAndroidObserver::OnAttachCompositor);
 
   compositor_->SetVSyncPaused(vsync_paused_);
 }
 
 void WindowAndroid::DetachCompositor() {
-  compositor_ = nullptr;
-  for (WindowAndroidObserver& observer : observer_list_)
-    observer.OnDetachCompositor();
+  observer_list_.Notify(&WindowAndroidObserver::OnDetachCompositor);
   observer_list_.Clear();
+  compositor_ = nullptr;
 }
 
 float WindowAndroid::GetRefreshRate() {
   JNIEnv* env = AttachCurrentThread();
   return Java_WindowAndroid_getRefreshRate(env, GetJavaObject());
+}
+
+gfx::OverlayTransform WindowAndroid::GetOverlayTransform() {
+  JNIEnv* env = AttachCurrentThread();
+  return static_cast<gfx::OverlayTransform>(
+      Java_WindowAndroid_getOverlayTransform(env, GetJavaObject()));
 }
 
 std::vector<float> WindowAndroid::GetSupportedRefreshRates() {
@@ -173,27 +183,24 @@ void WindowAndroid::SetNeedsAnimate() {
 }
 
 void WindowAndroid::Animate(base::TimeTicks begin_frame_time) {
-  for (WindowAndroidObserver& observer : observer_list_)
-    observer.OnAnimate(begin_frame_time);
+  observer_list_.Notify(&WindowAndroidObserver::OnAnimate, begin_frame_time);
 }
 
 void WindowAndroid::OnVisibilityChanged(JNIEnv* env,
                                         const JavaParamRef<jobject>& obj,
                                         bool visible) {
-  for (WindowAndroidObserver& observer : observer_list_)
-    observer.OnRootWindowVisibilityChanged(visible);
+  observer_list_.Notify(&WindowAndroidObserver::OnRootWindowVisibilityChanged,
+                        visible);
 }
 
 void WindowAndroid::OnActivityStopped(JNIEnv* env,
                                       const JavaParamRef<jobject>& obj) {
-  for (WindowAndroidObserver& observer : observer_list_)
-    observer.OnActivityStopped();
+  observer_list_.Notify(&WindowAndroidObserver::OnActivityStopped);
 }
 
 void WindowAndroid::OnActivityStarted(JNIEnv* env,
                                       const JavaParamRef<jobject>& obj) {
-  for (WindowAndroidObserver& observer : observer_list_)
-    observer.OnActivityStarted();
+  observer_list_.Notify(&WindowAndroidObserver::OnActivityStarted);
 }
 
 void WindowAndroid::SetVSyncPaused(JNIEnv* env,
@@ -226,6 +233,57 @@ void WindowAndroid::OnSupportedRefreshRatesUpdated(
     compositor_->OnUpdateSupportedRefreshRates(supported_refresh_rates);
 }
 
+void WindowAndroid::OnOverlayTransformUpdated(
+    JNIEnv* env,
+    const base::android::JavaParamRef<jobject>& obj) {
+  if (compositor_)
+    compositor_->OnUpdateOverlayTransform();
+}
+
+void WindowAndroid::SendUnfoldLatencyBeginTimestamp(JNIEnv* env,
+                                                    jlong begin_time) {
+  base::TimeTicks begin_timestamp =
+      base::TimeTicks::FromUptimeMillis(begin_time);
+  observer_list_.Notify(&WindowAndroidObserver::OnUnfoldStarted,
+                        begin_timestamp);
+}
+
+ProgressBarConfig WindowAndroid::GetProgressBarConfig() {
+  if (progress_bar_config_for_testing_) {
+    return *progress_bar_config_for_testing_;
+  }
+
+  JNIEnv* env = AttachCurrentThread();
+  std::vector<int> values;
+  base::android::JavaIntArrayToIntVector(
+      env, Java_WindowAndroid_getProgressBarConfig(env, GetJavaObject()),
+      &values);
+
+  ProgressBarConfig config;
+  config.background_color =
+      SkColor4f::FromColor(*JavaColorToOptionalSkColor(values[0]));
+  config.height_physical = values[1];
+  config.color = SkColor4f::FromColor(*JavaColorToOptionalSkColor(values[2]));
+  config.hairline_height_physical = values[3];
+  config.hairline_color =
+      SkColor4f::FromColor(*JavaColorToOptionalSkColor(values[4]));
+  return config;
+}
+
+ModalDialogManagerBridge* WindowAndroid::GetModalDialogManagerBridge() {
+  JNIEnv* env = AttachCurrentThread();
+  return reinterpret_cast<ModalDialogManagerBridge*>(
+      Java_WindowAndroid_getNativeModalDialogManagerBridge(env,
+                                                           GetJavaObject()));
+}
+
+void WindowAndroid::SetModalDialogManagerForTesting(
+    base::android::ScopedJavaLocalRef<jobject> java_modal_dialog_manager) {
+  JNIEnv* env = base::android::AttachCurrentThread();
+  ui::Java_WindowAndroid_setModalDialogManagerForTesting(
+      env, GetJavaObject(), java_modal_dialog_manager);
+}
+
 void WindowAndroid::SetWideColorEnabled(bool enabled) {
   JNIEnv* env = AttachCurrentThread();
   Java_WindowAndroid_setWideColorEnabled(env, GetJavaObject(), enabled);
@@ -254,9 +312,12 @@ display::Display WindowAndroid::GetDisplayWithWindowColorSpace() {
   display::Display display =
       display::Screen::GetScreen()->GetDisplayNearestWindow(this);
   DisplayAndroidManager::DoUpdateDisplay(
-      &display, display.GetSizeInPixel(), display.device_scale_factor(),
+      &display, display.label(), display.bounds(), display.work_area(),
+      display.GetSizeInPixel(), display.device_scale_factor(),
       display.RotationAsDegree(), display.color_depth(),
-      display.depth_per_component(), window_is_wide_color_gamut_);
+      display.depth_per_component(), window_is_wide_color_gamut_,
+      display.GetColorSpaces().SupportsHDR(),
+      display.GetColorSpaces().GetHDRMaxLuminanceRelative());
   return display;
 }
 

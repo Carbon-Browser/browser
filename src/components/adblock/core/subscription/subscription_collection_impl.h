@@ -18,6 +18,7 @@
 #ifndef COMPONENTS_ADBLOCK_CORE_SUBSCRIPTION_SUBSCRIPTION_COLLECTION_IMPL_H_
 #define COMPONENTS_ADBLOCK_CORE_SUBSCRIPTION_SUBSCRIPTION_COLLECTION_IMPL_H_
 
+#include <string_view>
 #include <vector>
 
 #include "base/containers/span.h"
@@ -29,12 +30,15 @@ namespace adblock {
 class SubscriptionCollectionImpl final : public SubscriptionCollection {
  public:
   explicit SubscriptionCollectionImpl(
-      std::vector<scoped_refptr<InstalledSubscription>> current_state);
+      std::vector<scoped_refptr<InstalledSubscription>> current_state,
+      const std::string& configuration_name);
   ~SubscriptionCollectionImpl() final;
   SubscriptionCollectionImpl(const SubscriptionCollectionImpl&);
   SubscriptionCollectionImpl(SubscriptionCollectionImpl&&);
   SubscriptionCollectionImpl& operator=(const SubscriptionCollectionImpl&);
   SubscriptionCollectionImpl& operator=(SubscriptionCollectionImpl&&);
+
+  const std::string& GetFilteringConfigurationName() const final;
 
   absl::optional<GURL> FindBySubresourceFilter(
       const GURL& request_url,
@@ -43,10 +47,11 @@ class SubscriptionCollectionImpl final : public SubscriptionCollection {
       const SiteKey& sitekey,
       FilterCategory category) const final;
 
-  absl::optional<GURL> FindByPopupFilter(const GURL& popup_url,
-                                         const GURL& opener_url,
-                                         const SiteKey& sitekey,
-                                         FilterCategory category) const final;
+  absl::optional<GURL> FindByPopupFilter(
+      const GURL& popup_url,
+      const std::vector<GURL>& frame_hierarchy,
+      const SiteKey& sitekey,
+      FilterCategory category) const final;
 
   absl::optional<GURL> FindByAllowFilter(
       const GURL& request_url,
@@ -60,21 +65,22 @@ class SubscriptionCollectionImpl final : public SubscriptionCollection {
       const std::vector<GURL>& frame_hierarchy,
       const SiteKey& sitekey) const final;
 
-  std::vector<base::StringPiece> GetElementHideSelectors(
+  InstalledSubscription::ContentFiltersData GetElementHideData(
       const GURL& frame_url,
       const std::vector<GURL>& frame_hierarchy,
       const SiteKey& sitekey) const final;
-  std::vector<base::StringPiece> GetElementHideEmulationSelectors(
+  InstalledSubscription::ContentFiltersData GetElementHideEmulationData(
       const GURL& frame_url) const final;
-  std::string GenerateSnippetsJson(
+  base::Value::List GenerateSnippets(
       const GURL& frame_url,
       const std::vector<GURL>& frame_hierarchy) const final;
-  base::StringPiece GetCspInjection(
+  std::set<std::string_view> GetCspInjections(
       const GURL& request_url,
       const std::vector<GURL>& frame_hierarchy) const final;
-  absl::optional<GURL> GetRewriteUrl(
+  std::set<std::string_view> GetRewriteFilters(
       const GURL& request_url,
-      const std::vector<GURL>& frame_hierarchy) const final;
+      const std::vector<GURL>& frame_hierarchy,
+      FilterCategory category) const final;
 
   std::set<HeaderFilterData> GetHeaderFilters(
       const GURL& request_url,
@@ -84,6 +90,7 @@ class SubscriptionCollectionImpl final : public SubscriptionCollection {
 
  private:
   std::vector<scoped_refptr<InstalledSubscription>> subscriptions_;
+  std::string configuration_name_;
 };
 
 }  // namespace adblock

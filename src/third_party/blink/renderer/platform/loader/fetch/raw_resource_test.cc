@@ -40,7 +40,6 @@
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/loader/fetch/memory_cache.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_fetcher.h"
-#include "third_party/blink/renderer/platform/loader/fetch/resource_timing_info.h"
 #include "third_party/blink/renderer/platform/loader/fetch/response_body_loader.h"
 #include "third_party/blink/renderer/platform/loader/fetch/response_body_loader_client.h"
 #include "third_party/blink/renderer/platform/loader/testing/replaying_bytes_consumer.h"
@@ -79,25 +78,6 @@ class RawResourceTest : public testing::Test {
       platform_;
 };
 
-TEST_F(RawResourceTest, DontIgnoreAcceptForCacheReuse) {
-  scoped_refptr<const SecurityOrigin> source_origin =
-      SecurityOrigin::CreateUniqueOpaque();
-
-  ResourceRequest jpeg_request;
-  jpeg_request.SetHTTPAccept("image/jpeg");
-  jpeg_request.SetRequestorOrigin(source_origin);
-
-  RawResource* jpeg_resource(
-      RawResource::CreateForTest(jpeg_request, ResourceType::kRaw));
-
-  ResourceRequest png_request;
-  png_request.SetHTTPAccept("image/png");
-  png_request.SetRequestorOrigin(source_origin);
-  EXPECT_NE(jpeg_resource->CanReuse(
-                FetchParameters::CreateForTest(std::move(png_request))),
-            Resource::MatchStatus::kOk);
-}
-
 class DummyClient final : public GarbageCollected<DummyClient>,
                           public RawResourceClient {
  public:
@@ -108,8 +88,8 @@ class DummyClient final : public GarbageCollected<DummyClient>,
   void NotifyFinished(Resource* resource) override { called_ = true; }
   String DebugName() const override { return "DummyClient"; }
 
-  void DataReceived(Resource*, const char* data, size_t length) override {
-    data_.Append(data, base::checked_cast<wtf_size_t>(length));
+  void DataReceived(Resource*, base::span<const char> data) override {
+    data_.AppendSpan(data);
   }
 
   bool RedirectReceived(Resource*,
@@ -153,7 +133,7 @@ class AddingClient final : public GarbageCollected<AddingClient>,
     // a callback invocation task queued inside addClient() is scheduled.
     platform->test_task_runner()->PostTask(
         FROM_HERE,
-        WTF::Bind(&AddingClient::RemoveClient, WrapPersistent(this)));
+        WTF::BindOnce(&AddingClient::RemoveClient, WrapPersistent(this)));
     resource->AddClient(dummy_client_, platform->test_task_runner().get());
   }
   String DebugName() const override { return "AddingClient"; }
@@ -264,8 +244,7 @@ TEST_F(RawResourceTest, PreloadWithAsynchronousAddClient) {
   platform_->RunUntilIdle();
 
   EXPECT_TRUE(dummy_client->Called());
-  EXPECT_EQ("hello",
-            String(dummy_client->Data().data(), dummy_client->Data().size()));
+  EXPECT_EQ("hello", String(dummy_client->Data()));
 }
 
 }  // namespace blink

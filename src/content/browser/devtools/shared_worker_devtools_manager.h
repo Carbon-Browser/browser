@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 
 #include "base/containers/flat_set.h"
 #include "base/gtest_prod_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/singleton.h"
 #include "base/unguessable_token.h"
 #include "content/public/browser/devtools_agent_host.h"
@@ -57,7 +58,7 @@ class SharedWorkerDevToolsManager {
       live_hosts_;
   // Clients may retain agent host for the terminated shared worker,
   // and we reconnect them when shared worker is restarted.
-  base::flat_set<SharedWorkerDevToolsAgentHost*> terminated_hosts_;
+  base::flat_set<raw_ptr<SharedWorkerDevToolsAgentHost>> terminated_hosts_;
 };
 
 }  // namespace content

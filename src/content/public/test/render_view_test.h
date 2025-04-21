@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,22 +9,34 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 
 #include "base/command_line.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_io_thread.h"
 #include "build/build_config.h"
-#include "content/public/browser/native_web_keyboard_event.h"
+#include "components/input/native_web_keyboard_event.h"
 #include "content/public/common/main_function_params.h"
 #include "content/public/test/mock_policy_container_host.h"
 #include "content/public/test/mock_render_thread.h"
 #include "mojo/core/embedder/scoped_ipc_support.h"
+#include "mojo/public/cpp/bindings/associated_remote.h"
 #include "mojo/public/cpp/bindings/binder_map.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/page_state/page_state.h"
+#include "third_party/blink/public/mojom/page/page.mojom.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/web/web_frame.h"
+#include "third_party/blink/public/web/web_input_element.h"
+#include "v8/include/v8-forward.h"
+
+#if BUILDFLAG(IS_MAC)
+#include <optional>
+
+#include "base/apple/scoped_nsautorelease_pool.h"
+#include "base/memory/stack_allocated.h"
+#endif
 
 namespace blink {
 class PageState;
@@ -34,7 +46,6 @@ class WebThreadScheduler;
 struct VisualProperties;
 class WebFrameWidget;
 class WebGestureEvent;
-class WebInputElement;
 class WebMouseEvent;
 }
 
@@ -89,10 +100,10 @@ class RenderViewTest : public testing::Test {
   // Returns a pointer to the main frame.
   blink::WebLocalFrame* GetMainFrame();
   RenderFrame* GetMainRenderFrame();
+  v8::Isolate* Isolate();
 
-  // Executes the given JavaScript in the context of the main frame. The input
-  // is a NULL-terminated UTF-8 string.
-  void ExecuteJavaScriptForTests(const char* js);
+  // Executes the given JavaScript in the context of the main frame.
+  void ExecuteJavaScriptForTests(std::string_view js);
 
   // Executes the given JavaScript and sets the int value it evaluates to in
   // |result|.
@@ -110,13 +121,13 @@ class RenderViewTest : public testing::Test {
 
   // Loads |html| into the main frame as a data: URL and blocks until the
   // navigation is committed.
-  void LoadHTML(const char* html);
+  void LoadHTML(std::string_view html);
 
   // Pretends to load |url| into the main frame, but substitutes |html| for the
   // response body (and does not include any response headers). This can be used
   // instead of LoadHTML for tests that cannot use a data: url (for example if
   // document.location needs to be set to something specific.)
-  void LoadHTMLWithUrlOverride(const char* html, const char* url);
+  void LoadHTMLWithUrlOverride(std::string_view html, std::string_view url);
 
   // Returns the current PageState.
   // In OOPIF enabled modes, this returns a PageState object for the main frame.
@@ -128,7 +139,7 @@ class RenderViewTest : public testing::Test {
   void GoForward(const GURL& url, const blink::PageState& state);
 
   // Sends one native key event over IPC.
-  void SendNativeKeyEvent(const NativeWebKeyboardEvent& key_event);
+  void SendNativeKeyEvent(const input::NativeWebKeyboardEvent& key_event);
 
   // Send a raw keyboard event to the renderer.
   void SendWebKeyboardEvent(const blink::WebKeyboardEvent& key_event);
@@ -183,8 +194,13 @@ class RenderViewTest : public testing::Test {
   // Simulates user focusing |input|, erasing all text, and typing the
   // |new_value| instead. Will process input events for autofill. This is a user
   // gesture.
-  void SimulateUserInputChangeForElement(blink::WebInputElement* input,
-                                         const std::string& new_value);
+  void SimulateUserInputChangeForElement(blink::WebInputElement input,
+                                         std::string_view new_value);
+
+  // Same as SimulateUserInputChangeForElement, but takes the element's HTML id
+  // attribute instead of the blink element.
+  void SimulateUserInputChangeForElementById(std::string_view id,
+                                             std::string_view new_value);
 
   // These are all methods from RenderViewImpl that we expose to testing code.
   void OnSameDocumentNavigation(blink::WebLocalFrame* frame,
@@ -207,18 +223,22 @@ class RenderViewTest : public testing::Test {
   void TearDown() override;
 
   // Install a fake URL loader factory for the RenderFrameImpl.
-  void CreateFakeWebURLLoaderFactory();
+  void CreateFakeURLLoaderFactory();
 
   base::test::TaskEnvironment task_environment_;
 
   std::unique_ptr<RenderProcess> process_;
   // `web_view` is owned by the associated `RenderView` (which we do not store).
   // All allocated `RenderView`s will be destroyed in the `TearDown` method.
+  mojo::AssociatedRemote<blink::mojom::PageBroadcast> page_broadcast_;
   raw_ptr<blink::WebView> web_view_ = nullptr;
   RendererBlinkPlatformImplTestOverride blink_platform_impl_;
-  std::unique_ptr<ContentClient> content_client_;
+
+  // These must outlive `content_client_`.
   std::unique_ptr<ContentBrowserClient> content_browser_client_;
   std::unique_ptr<ContentRendererClient> content_renderer_client_;
+
+  std::unique_ptr<ContentClient> content_client_;
   std::unique_ptr<MockRenderThread> render_thread_;
   std::unique_ptr<AgentSchedulingGroup> agent_scheduling_group_;
   std::unique_ptr<FakeRenderWidgetHost> render_widget_host_;
@@ -237,7 +257,8 @@ class RenderViewTest : public testing::Test {
   mojo::BinderMap binders_;
 
 #if BUILDFLAG(IS_MAC)
-  std::unique_ptr<base::mac::ScopedNSAutoreleasePool> autorelease_pool_;
+  STACK_ALLOCATED_IGNORE("https://crbug.com/1424190")
+  std::optional<base::apple::ScopedNSAutoreleasePool> autorelease_pool_;
 #endif
 
  private:

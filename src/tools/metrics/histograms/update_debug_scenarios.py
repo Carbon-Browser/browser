@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """Updates the DebugScenario enums in histograms with values read from the
@@ -20,7 +20,8 @@ if __name__ == '__main__':
     sys.stderr.write(__doc__)
     sys.exit(1)
 
-  UpdateHistogramEnum(histogram_enum_name='DebugScenario',
+  UpdateHistogramEnum('tools/metrics/histograms/metadata/stability/enums.xml',
+                      histogram_enum_name='DebugScenario',
                       source_enum_path='content/common/debug_utils.h',
                       start_marker='^enum class ?DebugScenario {',
                       end_marker='^kMaxValue',

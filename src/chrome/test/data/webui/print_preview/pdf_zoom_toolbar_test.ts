@@ -1,28 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://print/pdf/elements/viewer-zoom-toolbar.js';
-
-import {FittingType} from 'chrome://print/pdf/constants.js';
-import {ViewerZoomButtonElement} from 'chrome://print/pdf/elements/viewer-zoom-button.js';
-import {ViewerZoomToolbarElement} from 'chrome://print/pdf/elements/viewer-zoom-toolbar.js';
-import {CrIconButtonElement} from 'chrome://print/print_preview.js';
-import {assert} from 'chrome://resources/js/assert.m.js';
+import type {CrIconButtonElement, ViewerZoomButtonElement, ViewerZoomToolbarElement} from 'chrome://print/pdf/pdf_print_wrapper.js';
+import {FittingType} from 'chrome://print/pdf/pdf_print_wrapper.js';
 import {assertEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {eventToPromise} from 'chrome://webui-test/test_util.js';
+import {eventToPromise, microtasksFinished} from 'chrome://webui-test/test_util.js';
 
-const pdf_zoom_toolbar_test = {
-  suiteName: 'PdfZoomToolbarTest',
-  TestNames: {
-    Toggle: 'toggle',
-    ForceFitToPage: 'force fit to page',
-  },
-};
-
-Object.assign(window, {pdf_zoom_toolbar_test: pdf_zoom_toolbar_test});
-
-suite(pdf_zoom_toolbar_test.suiteName, function() {
+suite('PdfZoomToolbarTest', function() {
   let zoomToolbar: ViewerZoomToolbarElement;
 
   let fitButton: ViewerZoomButtonElement;
@@ -33,7 +18,7 @@ suite(pdf_zoom_toolbar_test.suiteName, function() {
   const fitPageIcon: string = 'fullscreen-exit';
 
   setup(function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
 
     zoomToolbar = document.createElement('viewer-zoom-toolbar');
     document.body.appendChild(zoomToolbar);
@@ -46,7 +31,7 @@ suite(pdf_zoom_toolbar_test.suiteName, function() {
    * Test that the zoom toolbar toggles between showing the fit-to-page and
    * fit-to-width buttons.
    */
-  test(assert(pdf_zoom_toolbar_test.TestNames.Toggle), async () => {
+  test('Toggle', async () => {
     // Initial: Show fit-to-page.
     assertTrue(button.ironIcon!.endsWith(fitPageIcon));
 
@@ -98,12 +83,13 @@ suite(pdf_zoom_toolbar_test.suiteName, function() {
     assertTrue(button.ironIcon!.endsWith(fitWidthIcon));
   });
 
-  test(assert(pdf_zoom_toolbar_test.TestNames.ForceFitToPage), async () => {
+  test('ForceFitToPage', async () => {
     // Initial: Show fit-to-page.
     assertTrue(button.ironIcon!.endsWith(fitPageIcon));
 
     // Test forceFit(FIT_TO_PAGE) from initial state.
     zoomToolbar.forceFit(FittingType.FIT_TO_PAGE);
+    await microtasksFinished();
     assertTrue(button.ironIcon!.endsWith(fitWidthIcon));
 
     // Tap 1: Fire fit-to-changed(FIT_TO_WIDTH).
@@ -115,10 +101,12 @@ suite(pdf_zoom_toolbar_test.suiteName, function() {
 
     // Test forceFit(FIT_TO_PAGE) from fit-to-width mode.
     zoomToolbar.forceFit(FittingType.FIT_TO_PAGE);
+    await microtasksFinished();
     assertTrue(button.ironIcon!.endsWith(fitWidthIcon));
 
     // Test forceFit(FIT_TO_PAGE) when already in fit-to-page mode.
     zoomToolbar.forceFit(FittingType.FIT_TO_PAGE);
+    await microtasksFinished();
     assertTrue(button.ironIcon!.endsWith(fitWidthIcon));
 
     // Tap 2: Fire fit-to-changed(FIT_TO_WIDTH).

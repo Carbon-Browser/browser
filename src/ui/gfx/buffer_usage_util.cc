@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,8 @@ const char* BufferUsageToString(BufferUsage usage) {
       return "SCANOUT_CPU_READ_WRITE";
     case BufferUsage::SCANOUT_VDA_WRITE:
       return "SCANOUT_VDA_WRITE";
+    case BufferUsage::PROTECTED_SCANOUT:
+      return "PROTECTED_SCANOUT";
     case BufferUsage::PROTECTED_SCANOUT_VDA_WRITE:
       return "PROTECTED_SCANOUT_VDA_WRITE";
     case BufferUsage::GPU_READ_CPU_READ_WRITE:

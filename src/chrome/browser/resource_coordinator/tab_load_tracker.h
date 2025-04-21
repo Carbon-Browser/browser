@@ -1,12 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_RESOURCE_COORDINATOR_TAB_LOAD_TRACKER_H_
 #define CHROME_BROWSER_RESOURCE_COORDINATOR_TAB_LOAD_TRACKER_H_
 
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback.h"
 #include "base/gtest_prod_util.h"
 #include "base/observer_list.h"
 #include "base/process/kill.h"
@@ -21,7 +21,6 @@ namespace resource_coordinator {
 
 class ResourceCoordinatorParts;
 class ResourceCoordinatorTabHelper;
-class TabManagerResourceCoordinatorSignalObserverHelper;
 
 // DEPRECATED. New users must observe PageNode::IsLoading() with a
 // PageNodeObserver. For guidance: //components/performance_manager/OWNERS
@@ -88,18 +87,6 @@ class TabLoadTracker {
   size_t GetLoadingTabCount() const;
   size_t GetLoadedTabCount() const;
 
-  // Returns the total number of UI tabs that are being tracked by this class.
-  // Some WebContents being tracked by this class may not yet be associated with
-  // a UI tab, e.g. prerender contents. To exclude these tabs from counts, use
-  // the Get*UiTabCount() methods.
-  size_t GetUiTabCount() const;
-
-  // Returns the number of UI tabs in each state.
-  size_t GetUiTabCount(LoadingState loading_state) const;
-  size_t GetUnloadedUiTabCount() const;
-  size_t GetLoadingUiTabCount() const;
-  size_t GetLoadedUiTabCount() const;
-
   // Adds/removes an observer. It is up to the observer to ensure their lifetime
   // exceeds that of the TabLoadTracker, as is removed prior to its destruction.
   void AddObserver(Observer* observer);
@@ -109,11 +96,6 @@ class TabLoadTracker {
   void TransitionStateForTesting(content::WebContents* web_contents,
                                  LoadingState loading_state);
 
-  // Called from WebContentsDelegates when |new_contents| is replacing
-  // |old_contents| in a tab.
-  void SwapTabContents(content::WebContents* old_contents,
-                       content::WebContents* new_contents);
-
  protected:
   friend class ResourceCoordinatorParts;
 
@@ -122,9 +104,8 @@ class TabLoadTracker {
 
   // These declarations allows the various bits of TabManager plumbing to
   // forward notifications to the TabLoadTracker.
-  friend class resource_coordinator::ResourceCoordinatorTabHelper;
-  friend class ::resource_coordinator::
-      TabManagerResourceCoordinatorSignalObserverHelper;
+  friend class ResourceCoordinatorTabHelper;
+  friend class TabManagerResourceCoordinatorSignalObserver;
 
   FRIEND_TEST_ALL_PREFIXES(TabLifecycleUnitTest, CannotFreezeAFrozenTab);
 
@@ -148,20 +129,13 @@ class TabLoadTracker {
   // a call to StopTracking(), RenderProcessGone() or OnPageStoppedLoading().
   void PrimaryPageChanged(content::WebContents* web_contents);
   void DidStopLoading(content::WebContents* web_contents);
+  void WasDiscarded(content::WebContents* web_contents);
   void RenderProcessGone(content::WebContents* web_contents,
                          base::TerminationStatus status);
 
   // Notifications to this are driven by the
-  // TabManager::ResourceCoordinatorSignalObserver.
+  // TabManagerResourceCoordinatorSignalObserver.
   void OnPageStoppedLoading(content::WebContents* web_contents);
-
-  // Returns true if |web_contents| is a UI tab and false otherwise. This is
-  // used to filter out cases where tab helpers are attached to a non-UI tab
-  // WebContents, e.g prerender contents.
-  //
-  // This is virtual and protected for unittesting to control when web
-  // contentses are considered ui tabs.
-  virtual bool IsUiTab(content::WebContents* web_contents);
 
  private:
   // For unittesting.
@@ -170,7 +144,6 @@ class TabLoadTracker {
   // Some metadata used to track the current state of the WebContents.
   struct WebContentsData {
     LoadingState loading_state = LoadingState::UNLOADED;
-    bool is_ui_tab = false;
   };
 
   using TabMap = base::flat_map<content::WebContents*, WebContentsData>;
@@ -178,24 +151,23 @@ class TabLoadTracker {
   // Helper function for determining the current state of a |web_contents|.
   LoadingState DetermineLoadingState(content::WebContents* web_contents);
 
+  // Transitions a web contents to the unloaded state, if not already in that
+  // state.
+  void TransitionToUnloaded(content::WebContents* web_contents);
+
   // Transitions a web contents to the given state. This updates the various
   // |state_counts_| and |tabs_| data. Setting |validate_transition| to false
   // means that valid state machine transitions aren't enforced via checks; this
   // is only used by state transitions forced via TransitionStateForTesting.
   void TransitionState(TabMap::iterator it, LoadingState loading_state);
 
-  // The list of known WebContents and their states. This includes both UI and
-  // non-UI tabs.
+  // The list of known WebContents and their states.
   TabMap tabs_;
 
   // The counts of tabs in each state.
-  size_t state_counts_[static_cast<size_t>(LoadingState::kMaxValue) + 1] = {0};
+  size_t state_counts_[static_cast<size_t>(LoadingState::kMaxValue) + 1] = {};
 
-  // The counts of UI tabs in each state.
-  size_t ui_tab_state_counts_[static_cast<size_t>(LoadingState::kMaxValue) +
-                              1] = {0};
-
-  base::ObserverList<Observer>::Unchecked observers_;
+  base::ObserverList<Observer>::UncheckedAndDanglingUntriaged observers_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 };

@@ -1,10 +1,12 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/android/jni_string.h"
-#include "net/net_jni_headers/GURLUtils_jni.h"
 #include "url/gurl.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "net/net_jni_headers/GURLUtils_jni.h"
 
 using base::android::JavaParamRef;
 using base::android::ScopedJavaLocalRef;

@@ -1,18 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_PASSWORD_MANAGER_IOS_PASSWORD_MANAGER_JAVA_SCRIPT_FEATURE_H_
 #define COMPONENTS_PASSWORD_MANAGER_IOS_PASSWORD_MANAGER_JAVA_SCRIPT_FEATURE_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/no_destructor.h"
 #include "components/autofill/core/common/unique_ids.h"
 #import "ios/web/public/js_messaging/java_script_feature.h"
-
-namespace autofill {
-struct PasswordFormFillData;
-}  // namespace autofill
 
 namespace web {
 class WebFrame;
@@ -61,18 +57,7 @@ class PasswordManagerJavaScriptFeature : public web::JavaScriptFeature {
                         BOOL fill_username,
                         const std::string& username,
                         const std::string& password,
-                        base::OnceCallback<void(BOOL)> callback);
-
-  // Fills in the form specified by |fill_data| with the given |username| and
-  // |password|. Assumes JavaScript has been injected previously by calling
-  // |FindPasswordFormsInFrame| or |ExtractForm|. Calls |callback|
-  // with YES if the filling of the password was successful, NO otherwise.
-  // |callback| cannot be null.
-  void FillPasswordForm(web::WebFrame* frame,
-                        const autofill::PasswordFormFillData& fill_data,
-                        const std::string& username,
-                        const std::string& password,
-                        base::OnceCallback<void(BOOL)> callback);
+                        base::OnceCallback<void(const base::Value*)> callback);
 
   // Fills new password field for (optional) |new_password_identifier| and for
   // (optional) confirm password field |confirm_password_identifier| in the form
@@ -96,13 +81,18 @@ class PasswordManagerJavaScriptFeature : public web::JavaScriptFeature {
   PasswordManagerJavaScriptFeature& operator=(
       const PasswordManagerJavaScriptFeature&) = delete;
 
+  // web::JavaScriptFeature
+  std::optional<std::string> GetScriptMessageHandlerName() const override;
+  void ScriptMessageReceived(web::WebState* web_state,
+                             const web::ScriptMessage& message) override;
+
   // Calls the "passwords.fillPasswordForm" JavaScript function to fill the form
   // described by |form_value| with |username| and |password|.
   void FillPasswordForm(web::WebFrame* frame,
                         std::unique_ptr<base::Value> form_value,
                         const std::string& username,
                         const std::string& password,
-                        base::OnceCallback<void(BOOL)> callback);
+                        base::OnceCallback<void(base::Value*)> callback);
 };
 
 }  // namespace password_manager

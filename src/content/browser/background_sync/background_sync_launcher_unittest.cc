@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,9 @@
 #include <map>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
@@ -42,7 +43,7 @@ class TestBrowserClient : public ContentBrowserClient {
       BrowserContext* browser_context,
       const GURL& site) override {
     DCHECK(browser_context);
-    auto partition_num = std::to_string(++partition_count_);
+    auto partition_num = base::NumberToString(++partition_count_);
     return StoragePartitionConfig::Create(
         browser_context, std::string("PartitionDomain") + partition_num,
         std::string("Partition") + partition_num, false /* in_memory */);
@@ -98,17 +99,13 @@ class BackgroundSyncLauncherTest : public testing::Test {
     auto done_closure = base::BindLambdaForTesting(
         [&]() { num_invocations_fire_background_sync_events_++; });
 
-    test_browser_context_.ForEachStoragePartition(
-        base::BindRepeating(
-            [](base::OnceClosure done_closure,
-               StoragePartition* storage_partition) {
-              BackgroundSyncContext* sync_context =
-                  storage_partition->GetBackgroundSyncContext();
-              sync_context->FireBackgroundSyncEvents(
-                  blink::mojom::BackgroundSyncType::ONE_SHOT,
-                  std::move(done_closure));
-            },
-            std::move(done_closure)));
+    test_browser_context_.ForEachLoadedStoragePartition(
+        [&](StoragePartition* storage_partition) {
+          BackgroundSyncContext* sync_context =
+              storage_partition->GetBackgroundSyncContext();
+          sync_context->FireBackgroundSyncEvents(
+              blink::mojom::BackgroundSyncType::ONE_SHOT, done_closure);
+        });
 
     task_environment_.RunUntilIdle();
   }

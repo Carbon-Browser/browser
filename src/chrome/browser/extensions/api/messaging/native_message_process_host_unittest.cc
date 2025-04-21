@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,29 +8,32 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
 #include "base/base_paths.h"
 #include "base/base_switches.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_file.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/memory/page_size.h"
 #include "base/path_service.h"
 #include "base/rand_util.h"
 #include "base/run_loop.h"
-#include "base/strings/stringprintf.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/thread_pool.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_timeouts.h"
 #include "base/threading/platform_thread.h"
 #include "base/time/time.h"
+#include "base/values.h"
 #include "build/build_config.h"
 #include "chrome/browser/extensions/api/messaging/native_messaging_launch_from_native.h"
 #include "chrome/browser/extensions/api/messaging/native_messaging_test_util.h"
@@ -45,6 +48,7 @@
 #include "content/public/test/browser_task_environment.h"
 #include "extensions/common/extension.h"
 #include "extensions/common/features/feature_channel.h"
+#include "net/base/file_stream.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 #if BUILDFLAG(IS_POSIX)
@@ -53,6 +57,7 @@
 
 #if BUILDFLAG(IS_WIN)
 #include <windows.h>
+
 #include "base/win/scoped_handle.h"
 #else
 #include <unistd.h>
@@ -68,9 +73,6 @@ namespace extensions {
 
 class FakeLauncher : public NativeProcessLauncher {
  public:
-  FakeLauncher(base::File read_file, base::File write_file)
-      : read_file_(std::move(read_file)), write_file_(std::move(write_file)) {}
-
   static std::unique_ptr<NativeProcessLauncher> Create(
       base::FilePath read_file,
       base::FilePath write_file) {
@@ -80,9 +82,9 @@ class FakeLauncher : public NativeProcessLauncher {
     read_flags |= base::File::FLAG_ASYNC;
     write_flags |= base::File::FLAG_ASYNC;
 #endif
-    return std::unique_ptr<NativeProcessLauncher>(
-        new FakeLauncher(base::File(read_file, read_flags),
-                         base::File(write_file, write_flags)));
+    return std::unique_ptr<NativeProcessLauncher>(new FakeLauncher(
+        CreateBackgroundTaskRunner(), base::File(read_file, read_flags),
+        base::File(write_file, write_flags)));
   }
 
   static std::unique_ptr<NativeProcessLauncher> CreateWithPipeInput(
@@ -93,31 +95,47 @@ class FakeLauncher : public NativeProcessLauncher {
     write_flags |= base::File::FLAG_ASYNC;
 #endif
 
-    return std::unique_ptr<NativeProcessLauncher>(new FakeLauncher(
-        std::move(read_pipe), base::File(write_file, write_flags)));
+    return std::unique_ptr<NativeProcessLauncher>(
+        new FakeLauncher(CreateBackgroundTaskRunner(), std::move(read_pipe),
+                         base::File(write_file, write_flags)));
   }
 
   void Launch(const GURL& origin,
               const std::string& native_host_name,
               LaunchedCallback callback) const override {
-    std::move(callback).Run(NativeProcessLauncher::RESULT_SUCCESS,
-                            base::Process(), std::move(read_file_),
-                            std::move(write_file_));
+    std::move(callback).Run(
+        NativeProcessLauncher::RESULT_SUCCESS, base::Process(),
+        std::exchange(read_file_, base::kInvalidPlatformFile),
+        std::move(read_stream_), std::move(write_stream_));
   }
 
  private:
-  mutable base::File read_file_;
-  mutable base::File write_file_;
+  FakeLauncher(scoped_refptr<base::TaskRunner> task_runner,
+               base::File read_file,
+               base::File write_file)
+      : read_file_(read_file.GetPlatformFile()),
+        read_stream_(std::make_unique<net::FileStream>(std::move(read_file),
+                                                       task_runner)),
+        write_stream_(std::make_unique<net::FileStream>(std::move(write_file),
+                                                        task_runner)) {}
+
+  static scoped_refptr<base::TaskRunner> CreateBackgroundTaskRunner() {
+    return base::ThreadPool::CreateTaskRunner(
+        {base::TaskPriority::USER_VISIBLE,
+         base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN, base::MayBlock()});
+  }
+
+  mutable base::PlatformFile read_file_;
+  mutable std::unique_ptr<net::FileStream> read_stream_;
+  mutable std::unique_ptr<net::FileStream> write_stream_;
 };
 
 class NativeMessagingTest : public ::testing::Test,
-                            public NativeMessageHost::Client,
-                            public base::SupportsWeakPtr<NativeMessagingTest> {
+                            public NativeMessageHost::Client {
  protected:
   NativeMessagingTest()
       : current_channel_(version_info::Channel::DEV),
-        task_environment_(content::BrowserTaskEnvironment::IO_MAINLOOP),
-        channel_closed_(false) {}
+        task_environment_(content::BrowserTaskEnvironment::IO_MAINLOOP) {}
 
   void SetUp() override { ASSERT_TRUE(temp_dir_.CreateUniqueTempDir()); }
 
@@ -133,13 +151,12 @@ class NativeMessagingTest : public ::testing::Test,
     last_message_ = message;
 
     // Parse the message.
-    std::unique_ptr<base::DictionaryValue> dict_value =
-        base::DictionaryValue::From(base::JSONReader::ReadDeprecated(message));
-    if (dict_value) {
-      last_message_parsed_ = std::move(dict_value);
-    } else {
+    std::optional<base::Value> dict_value = base::JSONReader::Read(message);
+    if (!dict_value || !dict_value->is_dict()) {
       LOG(ERROR) << "Failed to parse " << message;
       last_message_parsed_.reset();
+    } else {
+      last_message_parsed_ = std::move(*dict_value).TakeDict();
     }
 
     if (run_loop_)
@@ -179,8 +196,8 @@ class NativeMessagingTest : public ::testing::Test,
   TestingProfile profile_;
 
   std::string last_message_;
-  std::unique_ptr<base::DictionaryValue> last_message_parsed_;
-  bool channel_closed_;
+  std::optional<base::Value::Dict> last_message_parsed_;
+  bool channel_closed_ = false;
 };
 
 // Read a single message from a local file.
@@ -222,8 +239,8 @@ TEST_F(NativeMessagingTest, SingleSendMessageWrite) {
 
   base::File read_file;
 #if BUILDFLAG(IS_WIN)
-  std::wstring pipe_name = base::StringPrintf(
-      L"\\\\.\\pipe\\chrome.nativeMessaging.out.%llx", base::RandUint64());
+  std::wstring pipe_name = base::ASCIIToWide(base::StringPrintf(
+      "\\\\.\\pipe\\chrome.nativeMessaging.out.%llx", base::RandUint64()));
   base::File write_handle =
       base::File(base::ScopedPlatformFile(CreateNamedPipeW(
                      pipe_name.c_str(),
@@ -290,43 +307,51 @@ TEST_F(NativeMessagingTest, EchoConnect) {
   ASSERT_TRUE(last_message_parsed_);
 
   std::string expected_url = std::string("chrome-extension://") +
-      ScopedTestNativeMessagingHost::kExtensionId + "/";
-  EXPECT_EQ(1, last_message_parsed_->FindIntKey("id"));
-  std::string text;
-  EXPECT_TRUE(last_message_parsed_->GetString("echo.text", &text));
-  EXPECT_EQ("Hello.", text);
-  std::string url;
-  EXPECT_TRUE(last_message_parsed_->GetString("caller_url", &url));
-  EXPECT_EQ(expected_url, url);
+                             ScopedTestNativeMessagingHost::kExtensionId + "/";
+
+  {
+    std::optional<int> id = last_message_parsed_->FindInt("id");
+    ASSERT_TRUE(id);
+    EXPECT_EQ(1, *id);
+    const std::string* text =
+        last_message_parsed_->FindStringByDottedPath("echo.text");
+    ASSERT_TRUE(text);
+    EXPECT_EQ("Hello.", *text);
+    const std::string* url = last_message_parsed_->FindString("caller_url");
+    EXPECT_TRUE(url);
+    EXPECT_EQ(expected_url, *url);
+  }
 
   native_message_host_->OnMessage("{\"foo\": \"bar\"}");
   run_loop_ = std::make_unique<base::RunLoop>();
   run_loop_->Run();
-  EXPECT_EQ(2, last_message_parsed_->FindIntKey("id"));
-  EXPECT_TRUE(last_message_parsed_->GetString("echo.foo", &text));
-  EXPECT_EQ("bar", text);
-  EXPECT_TRUE(last_message_parsed_->GetString("caller_url", &url));
-  EXPECT_EQ(expected_url, url);
 
-  const base::Value* args = nullptr;
-  ASSERT_TRUE(last_message_parsed_->Get("args", &args));
+  {
+    std::optional<int> id = last_message_parsed_->FindInt("id");
+    ASSERT_TRUE(id);
+    EXPECT_EQ(2, *id);
+    const std::string* text =
+        last_message_parsed_->FindStringByDottedPath("echo.foo");
+    ASSERT_TRUE(text);
+    EXPECT_EQ("bar", *text);
+    const std::string* url = last_message_parsed_->FindString("caller_url");
+    ASSERT_TRUE(url);
+    EXPECT_EQ(expected_url, *url);
+  }
+
+  const base::Value* args = last_message_parsed_->Find("args");
+  ASSERT_TRUE(args);
   EXPECT_TRUE(args->is_none());
 
-  const base::Value* connect_id_value = nullptr;
-  ASSERT_TRUE(last_message_parsed_->Get("connect_id", &connect_id_value));
+  const base::Value* connect_id_value =
+      last_message_parsed_->Find("connect_id");
+  ASSERT_TRUE(connect_id_value);
   EXPECT_TRUE(connect_id_value->is_none());
 }
 
 // Test send message with a real client. The args passed when launching the
 // native messaging host should contain reconnect args.
-//
-// TODO(crbug.com/1026121): Fix it. This test is flaky on Win7 bots.
-#if BUILDFLAG(IS_WIN)
-#define MAYBE_ReconnectArgs DISABLED_ReconnectArgs
-#else
-#define MAYBE_ReconnectArgs ReconnectArgs
-#endif
-TEST_F(NativeMessagingTest, MAYBE_ReconnectArgs) {
+TEST_F(NativeMessagingTest, ReconnectArgs) {
   base::test::ScopedFeatureList feature_list;
   feature_list.InitAndEnableFeature(features::kOnConnectNative);
   ScopedAllowNativeAppConnectionForTest allow_native_app_connection(true);
@@ -347,11 +372,11 @@ TEST_F(NativeMessagingTest, MAYBE_ReconnectArgs) {
   ASSERT_FALSE(last_message_.empty());
   ASSERT_TRUE(last_message_parsed_);
 
-  const base::ListValue* args_value = nullptr;
-  ASSERT_TRUE(last_message_parsed_->GetList("args", &args_value));
+  const base::Value::List* args_value = last_message_parsed_->FindList("args");
+  ASSERT_TRUE(args_value);
   std::vector<base::CommandLine::StringType> args;
-  args.reserve(args_value->GetListDeprecated().size());
-  for (auto& arg : args_value->GetListDeprecated()) {
+  args.reserve(args_value->size());
+  for (auto& arg : *args_value) {
     ASSERT_TRUE(arg.is_string());
 #if BUILDFLAG(IS_WIN)
     args.push_back(base::UTF8ToWide(arg.GetString()));
@@ -401,8 +426,8 @@ TEST_F(NativeMessagingTest, ReconnectArgs_Disabled) {
   ASSERT_FALSE(last_message_.empty());
   ASSERT_TRUE(last_message_parsed_);
 
-  const base::Value* args = nullptr;
-  ASSERT_TRUE(last_message_parsed_->Get("args", &args));
+  const base::Value* args = last_message_parsed_->Find("args");
+  ASSERT_TRUE(args);
   EXPECT_TRUE(args->is_none());
 }
 
@@ -429,12 +454,13 @@ TEST_F(NativeMessagingTest, ReconnectArgsIfNativeConnectionDisallowed) {
   ASSERT_FALSE(last_message_.empty());
   ASSERT_TRUE(last_message_parsed_);
 
-  const base::Value* args_value = nullptr;
-  ASSERT_TRUE(last_message_parsed_->Get("args", &args_value));
+  const base::Value* args_value = last_message_parsed_->Find("args");
+  ASSERT_TRUE(args_value);
   EXPECT_TRUE(args_value->is_none());
 
-  const base::Value* connect_id_value = nullptr;
-  ASSERT_TRUE(last_message_parsed_->Get("connect_id", &connect_id_value));
+  const base::Value* connect_id_value =
+      last_message_parsed_->Find("connect_id");
+  ASSERT_TRUE(connect_id_value);
   EXPECT_TRUE(connect_id_value->is_none());
 }
 

@@ -28,13 +28,21 @@
 #include <memory>
 
 #include "base/memory/scoped_refptr.h"
+#include "media/base/content_decryption_module.h"
+#include "media/base/key_systems.h"
+#include "services/metrics/public/cpp/ukm_builders.h"
+#include "services/metrics/public/cpp/ukm_recorder.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/public/platform/web_content_decryption_module.h"
 #include "third_party/blink/public/platform/web_encrypted_media_key_information.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_media_key_session_type.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_media_keys_policy.h"
+#include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
+#include "third_party/blink/renderer/core/frame/local_dom_window.h"
+#include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/html/media/html_media_element.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_array_buffer.h"
 #include "third_party/blink/renderer/modules/encryptedmedia/content_decryption_module_result_promise.h"
@@ -45,6 +53,7 @@
 #include "third_party/blink/renderer/platform/bindings/v8_throw_exception.h"
 #include "third_party/blink/renderer/platform/instrumentation/instance_counters.h"
 #include "third_party/blink/renderer/platform/timer.h"
+#include "third_party/blink/renderer/platform/wtf/casting.h"
 
 #define MEDIA_KEYS_LOG_LEVEL 3
 
@@ -64,7 +73,7 @@ class MediaKeys::PendingAction final
 
   DOMArrayBuffer* Data() const {
     DCHECK_EQ(Type::kSetServerCertificate, type_);
-    return data_;
+    return data_.Get();
   }
 
   const String& StringData() const {
@@ -115,10 +124,10 @@ class MediaKeys::PendingAction final
 class SetCertificateResultPromise
     : public ContentDecryptionModuleResultPromise {
  public:
-  SetCertificateResultPromise(ScriptState* script_state,
+  SetCertificateResultPromise(ScriptPromiseResolver<IDLBoolean>* resolver,
                               const MediaKeysConfig& config,
                               MediaKeys* media_keys)
-      : ContentDecryptionModuleResultPromise(script_state,
+      : ContentDecryptionModuleResultPromise(resolver,
                                              config,
                                              EmeApiType::kSetServerCertificate),
         media_keys_(media_keys) {}
@@ -130,7 +139,7 @@ class SetCertificateResultPromise
     if (!IsValidToFulfillPromise())
       return;
 
-    Resolve(true);
+    Resolve<IDLBoolean>(true);
   }
 
   void CompleteWithError(WebContentDecryptionModuleException exception_code,
@@ -144,7 +153,7 @@ class SetCertificateResultPromise
     // false." So convert any NOTSUPPORTEDERROR into resolving with false.
     if (exception_code ==
         kWebContentDecryptionModuleExceptionNotSupportedError) {
-      Resolve(false);
+      Resolve<IDLBoolean>(false);
       return;
     }
 
@@ -168,13 +177,16 @@ class SetCertificateResultPromise
 class GetStatusForPolicyResultPromise
     : public ContentDecryptionModuleResultPromise {
  public:
-  GetStatusForPolicyResultPromise(ScriptState* script_state,
-                                  const MediaKeysConfig& config,
-                                  MediaKeys* media_keys)
-      : ContentDecryptionModuleResultPromise(script_state,
+  GetStatusForPolicyResultPromise(
+      ScriptPromiseResolver<V8MediaKeyStatus>* resolver,
+      const MediaKeysConfig& config,
+      WebString min_hdcp_version,
+      MediaKeys* media_keys)
+      : ContentDecryptionModuleResultPromise(resolver,
                                              config,
                                              EmeApiType::kGetStatusForPolicy),
-        media_keys_(media_keys) {}
+        media_keys_(media_keys),
+        min_hdcp_version_(min_hdcp_version) {}
 
   ~GetStatusForPolicyResultPromise() override = default;
 
@@ -184,7 +196,34 @@ class GetStatusForPolicyResultPromise
     if (!IsValidToFulfillPromise())
       return;
 
-    Resolve(EncryptedMediaUtils::ConvertKeyStatusToString(key_status));
+    // Report Media.EME.GetStatusForPolicy UKM.
+    auto* execution_context = GetExecutionContext();
+    if (auto* local_dom_window = DynamicTo<LocalDOMWindow>(execution_context)) {
+      Document* document = local_dom_window->document();
+      if (document) {
+        ukm::builders::Media_EME_GetStatusForPolicy builder(
+            document->UkmSourceID());
+        builder.SetKeySystem(media::GetKeySystemIntForUKM(
+            GetMediaKeysConfig().key_system.Ascii()));
+        builder.SetUseHardwareSecureCodecs(
+            static_cast<int>(GetMediaKeysConfig().use_hardware_secure_codecs));
+        std::optional<media::HdcpVersion> hdcp_version;
+        if (min_hdcp_version_.ContainsOnlyASCII()) {
+          hdcp_version =
+              media::MaybeHdcpVersionFromString(min_hdcp_version_.Ascii());
+        }
+        builder.SetMinHdcpVersion(static_cast<int>(
+            hdcp_version.value_or(media::HdcpVersion::kHdcpVersionNone)));
+        LocalFrame* frame = document->GetFrame();
+        if (frame) {
+          builder.SetIsAdFrame(static_cast<int>(frame->IsAdFrame()));
+        }
+        builder.Record(document->UkmRecorder());
+      }
+    }
+
+    Resolve<V8MediaKeyStatus>(
+        EncryptedMediaUtils::ConvertKeyStatusToEnum(key_status));
   }
 
   void Trace(Visitor* visitor) const override {
@@ -196,6 +235,8 @@ class GetStatusForPolicyResultPromise
   // Keeping a reference to MediaKeys to prevent GC from collecting it while
   // the promise is pending.
   Member<MediaKeys> media_keys_;
+
+  WebString min_hdcp_version_;
 };
 
 MediaKeys::MediaKeys(
@@ -203,7 +244,8 @@ MediaKeys::MediaKeys(
     const WebVector<WebEncryptedMediaSessionType>& supported_session_types,
     std::unique_ptr<WebContentDecryptionModule> cdm,
     const MediaKeysConfig& config)
-    : ExecutionContextLifecycleObserver(context),
+    : ActiveScriptWrappable<MediaKeys>({}),
+      ExecutionContextLifecycleObserver(context),
       supported_session_types_(supported_session_types),
       cdm_(std::move(cdm)),
       config_(config),
@@ -221,11 +263,12 @@ MediaKeys::~MediaKeys() {
   InstanceCounters::DecrementCounter(InstanceCounters::kMediaKeysCounter);
 }
 
-MediaKeySession* MediaKeys::createSession(ScriptState* script_state,
-                                          const String& session_type_string,
-                                          ExceptionState& exception_state) {
+MediaKeySession* MediaKeys::createSession(
+    ScriptState* script_state,
+    const V8MediaKeySessionType& v8_session_type,
+    ExceptionState& exception_state) {
   DVLOG(MEDIA_KEYS_LOG_LEVEL)
-      << __func__ << "(" << this << ") " << session_type_string;
+      << __func__ << "(" << this << ") " << v8_session_type.AsCStr();
 
   // If the context for MediaKeys has been destroyed, fail.
   if (!GetExecutionContext()) {
@@ -234,7 +277,7 @@ MediaKeySession* MediaKeys::createSession(ScriptState* script_state,
     return nullptr;
   }
 
-  // From http://w3c.github.io/encrypted-media/#createSession
+  // From https://w3c.github.io/encrypted-media/#dom-mediakeys-createsession
 
   // When this method is invoked, the user agent must run the following steps:
   // 1. If this object's persistent state allowed value is false and
@@ -246,7 +289,7 @@ MediaKeySession* MediaKeys::createSession(ScriptState* script_state,
   //    implementation value does not support sessionType, throw a new
   //    DOMException whose name is NotSupportedError.
   WebEncryptedMediaSessionType session_type =
-      EncryptedMediaUtils::ConvertToSessionType(session_type_string);
+      EncryptedMediaUtils::ConvertToSessionType(v8_session_type.AsString());
   if (!SessionTypeSupported(session_type)) {
     exception_state.ThrowDOMException(DOMExceptionCode::kNotSupportedError,
                                       "Unsupported session type.");
@@ -261,7 +304,7 @@ MediaKeySession* MediaKeys::createSession(ScriptState* script_state,
                                                config_);
 }
 
-ScriptPromise MediaKeys::setServerCertificate(
+ScriptPromise<IDLBoolean> MediaKeys::setServerCertificate(
     ScriptState* script_state,
     const DOMArrayPiece& server_certificate,
     ExceptionState& exception_state) {
@@ -269,10 +312,12 @@ ScriptPromise MediaKeys::setServerCertificate(
   if (!GetExecutionContext()) {
     exception_state.ThrowDOMException(DOMExceptionCode::kInvalidAccessError,
                                       "The context provided is invalid.");
-    return ScriptPromise();
+    return EmptyPromise();
   }
 
-  // From https://w3c.github.io/encrypted-media/#setServerCertificate
+  // From
+  // https://w3c.github.io/encrypted-media/#dom-mediakeys-setservercertificate
+
   // The setServerCertificate(serverCertificate) method provides a server
   // certificate to be used to encrypt messages to the license server.
   // It must run the following steps:
@@ -286,19 +331,21 @@ ScriptPromise MediaKeys::setServerCertificate(
   //    with a new a newly created TypeError.
   if (!server_certificate.ByteLength()) {
     exception_state.ThrowTypeError("The serverCertificate parameter is empty.");
-    return ScriptPromise();
+    return EmptyPromise();
   }
 
   // 3. Let certificate be a copy of the contents of the serverCertificate
   //    parameter.
-  DOMArrayBuffer* server_certificate_buffer = DOMArrayBuffer::Create(
-      server_certificate.Data(), server_certificate.ByteLength());
+  DOMArrayBuffer* server_certificate_buffer =
+      DOMArrayBuffer::Create(server_certificate.ByteSpan());
 
   // 4. Let promise be a new promise.
+  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver<IDLBoolean>>(
+      script_state, exception_state.GetContext());
+  auto promise = resolver->Promise();
   SetCertificateResultPromise* result =
-      MakeGarbageCollected<SetCertificateResultPromise>(script_state, config_,
+      MakeGarbageCollected<SetCertificateResultPromise>(resolver, config_,
                                                         this);
-  ScriptPromise promise = result->Promise();
 
   // 5. Run the following steps asynchronously. See SetServerCertificateTask().
   pending_actions_.push_back(PendingAction::CreatePendingSetServerCertificate(
@@ -338,7 +385,7 @@ void MediaKeys::SetServerCertificateTask(
   // (These are handled by Chromium and the CDM.)
 }
 
-ScriptPromise MediaKeys::getStatusForPolicy(
+ScriptPromise<V8MediaKeyStatus> MediaKeys::getStatusForPolicy(
     ScriptState* script_state,
     const MediaKeysPolicy* media_keys_policy,
     ExceptionState& exception_state) {
@@ -346,7 +393,7 @@ ScriptPromise MediaKeys::getStatusForPolicy(
   if (!GetExecutionContext()) {
     exception_state.ThrowDOMException(DOMExceptionCode::kInvalidAccessError,
                                       "The context provided is invalid.");
-    return ScriptPromise();
+    return EmptyPromise();
   }
 
   // TODO(xhwang): Pass MediaKeysPolicy classes all the way to Chromium when
@@ -354,10 +401,13 @@ ScriptPromise MediaKeys::getStatusForPolicy(
   String min_hdcp_version = media_keys_policy->minHdcpVersion();
 
   // Let promise be a new promise.
+  auto* resolver =
+      MakeGarbageCollected<ScriptPromiseResolver<V8MediaKeyStatus>>(
+          script_state, exception_state.GetContext());
   GetStatusForPolicyResultPromise* result =
-      MakeGarbageCollected<GetStatusForPolicyResultPromise>(script_state,
-                                                            config_, this);
-  ScriptPromise promise = result->Promise();
+      MakeGarbageCollected<GetStatusForPolicyResultPromise>(
+          resolver, config_, min_hdcp_version, this);
+  auto promise = resolver->Promise();
 
   // Run the following steps asynchronously. See GetStatusForPolicyTask().
   pending_actions_.push_back(
@@ -428,7 +478,7 @@ void MediaKeys::TimerFired(TimerBase*) {
   HeapDeque<Member<PendingAction>> pending_actions;
   pending_actions.Swap(pending_actions_);
 
-  while (!pending_actions.IsEmpty()) {
+  while (!pending_actions.empty()) {
     PendingAction* action = pending_actions.TakeFirst();
 
     switch (action->GetType()) {
@@ -471,10 +521,10 @@ bool MediaKeys::HasPendingActivity() const {
   // Remain around if there are pending events.
   DVLOG(MEDIA_KEYS_LOG_LEVEL)
       << __func__ << "(" << this << ")"
-      << (!pending_actions_.IsEmpty() ? " !pending_actions_.isEmpty()" : "")
+      << (!pending_actions_.empty() ? " !pending_actions_.isEmpty()" : "")
       << (reserved_for_media_element_ ? " reserved_for_media_element_" : "");
 
-  return !pending_actions_.IsEmpty() || reserved_for_media_element_;
+  return !pending_actions_.empty() || reserved_for_media_element_;
 }
 
 }  // namespace blink

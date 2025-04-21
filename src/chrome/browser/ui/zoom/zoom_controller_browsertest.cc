@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,14 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/process/kill.h"
+#include "base/scoped_observation.h"
 #include "base/test/bind.h"
 #include "build/build_config.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
+#include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/webui/signin/login_ui_test_utils.h"
 #include "chrome/browser/ui/zoom/chrome_zoom_level_prefs.h"
@@ -42,8 +44,8 @@ using zoom::ZoomObserver;
 
 class ZoomControllerBrowserTest : public InProcessBrowserTest {
  public:
-  ZoomControllerBrowserTest() {}
-  ~ZoomControllerBrowserTest() override {}
+  ZoomControllerBrowserTest() = default;
+  ~ZoomControllerBrowserTest() override = default;
 
   void SetUpOnMainThread() override {
     InProcessBrowserTest::SetUpOnMainThread();
@@ -117,11 +119,8 @@ IN_PROC_BROWSER_TEST_F(ZoomControllerBrowserTest, OnPreferenceChanged) {
   // Since this page uses the default zoom level, the changes to the default
   // zoom level will change the zoom level for this web_contents.
   ZoomController::ZoomChangedEventData zoom_change_data(
-      web_contents,
-      new_default_zoom_level,
-      new_default_zoom_level,
-      ZoomController::ZOOM_MODE_DEFAULT,
-      false);
+      web_contents, new_default_zoom_level, new_default_zoom_level,
+      ZoomController::ZOOM_MODE_DEFAULT, false);
   ZoomChangedWatcher zoom_change_watcher(web_contents, zoom_change_data);
   // TODO(wjmaclean): Convert this to call partition-specific zoom level prefs
   // when they become available.
@@ -175,7 +174,7 @@ IN_PROC_BROWSER_TEST_F(ZoomControllerBrowserTest,
 
     content::WebContentsDestroyedWatcher destroyed_watcher(web_contents);
     tab_strip->CloseWebContentsAt(tab_strip->active_index(),
-                                  TabStripModel::CLOSE_CREATE_HISTORICAL_TAB);
+                                  TabCloseTypes::CLOSE_CREATE_HISTORICAL_TAB);
     destroyed_watcher.Wait();
   }
   EXPECT_EQ(1, tab_strip->count());
@@ -212,9 +211,7 @@ IN_PROC_BROWSER_TEST_F(ZoomControllerBrowserTest, Observe) {
   // When the event is initiated from HostZoomMap, the old zoom level is not
   // available.
   ZoomController::ZoomChangedEventData zoom_change_data(
-      web_contents,
-      new_zoom_level,
-      new_zoom_level,
+      web_contents, new_zoom_level, new_zoom_level,
       ZoomController::ZOOM_MODE_DEFAULT,
       false);  // The ZoomController did not initiate, so this will be 'false'.
   ZoomChangedWatcher zoom_change_watcher(web_contents, zoom_change_data);
@@ -239,11 +236,8 @@ IN_PROC_BROWSER_TEST_F(ZoomControllerBrowserTest, ObserveDisabledModeEvent) {
   zoom_controller->SetZoomLevel(new_zoom_level);
 
   ZoomController::ZoomChangedEventData zoom_change_data(
-      web_contents,
-      new_zoom_level,
-      default_zoom_level,
-      ZoomController::ZOOM_MODE_DISABLED,
-      true);
+      web_contents, new_zoom_level, default_zoom_level,
+      ZoomController::ZOOM_MODE_DISABLED, true);
   ZoomChangedWatcher zoom_change_watcher(web_contents, zoom_change_data);
   zoom_controller->SetZoomMode(ZoomController::ZOOM_MODE_DISABLED);
   zoom_change_watcher.Wait();
@@ -338,7 +332,7 @@ IN_PROC_BROWSER_TEST_F(ZoomControllerBrowserTest,
 }
 #endif  // !BUILDFLAG(IS_MAC)
 
-// TODO(https://crbug.com/1260291): Add support for Lacros.
+// TODO(crbug.com/40201807): Add support for Lacros.
 #if !BUILDFLAG(IS_CHROMEOS)
 // Regression test: crbug.com/438979.
 IN_PROC_BROWSER_TEST_F(ZoomControllerBrowserTest,
@@ -384,9 +378,7 @@ IN_PROC_BROWSER_TEST_F(ZoomControllerBrowserTest,
   double new_zoom_level = old_zoom_level + 0.5;
 
   ZoomController::ZoomChangedEventData zoom_change_data(
-      web_contents,
-      old_zoom_level,
-      new_zoom_level,
+      web_contents, old_zoom_level, new_zoom_level,
       ZoomController::ZOOM_MODE_DEFAULT,
       true);  // We have a non-empty host, so this will be 'true'.
   ZoomChangedWatcher zoom_change_watcher(web_contents, zoom_change_data);
@@ -405,7 +397,7 @@ class ZoomControllerForPrerenderingTest : public ZoomControllerBrowserTest,
   ~ZoomControllerForPrerenderingTest() override = default;
 
   void SetUp() override {
-    prerender_helper_.SetUp(embedded_test_server());
+    prerender_helper_.RegisterServerRequestMonitor(embedded_test_server());
     ZoomControllerBrowserTest::SetUp();
   }
 
@@ -413,13 +405,11 @@ class ZoomControllerForPrerenderingTest : public ZoomControllerBrowserTest,
     host_resolver()->AddRule("*", "127.0.0.1");
     ASSERT_TRUE(embedded_test_server()->Start());
 
-    zoom_controller_ = ZoomController::FromWebContents(GetWebContents());
-    zoom_controller_->AddObserver(this);
+    auto* zoom_controller = ZoomController::FromWebContents(GetWebContents());
+    zoom_observation_.Observe(zoom_controller);
   }
 
-  void TearDownOnMainThread() override {
-    zoom_controller_->RemoveObserver(this);
-  }
+  void TearDownOnMainThread() override { zoom_observation_.Reset(); }
 
   content::test::PrerenderTestHelper& prerender_helper() {
     return prerender_helper_;
@@ -430,6 +420,10 @@ class ZoomControllerForPrerenderingTest : public ZoomControllerBrowserTest,
   }
 
   // ZoomObserver implementation:
+  void OnZoomControllerDestroyed(
+      zoom::ZoomController* zoom_controller) override {
+    zoom_observation_.Reset();
+  }
   void OnZoomChanged(
       const zoom::ZoomController::ZoomChangedEventData& data) override {
     is_on_zoom_changed_called_ = true;
@@ -442,7 +436,8 @@ class ZoomControllerForPrerenderingTest : public ZoomControllerBrowserTest,
   bool is_on_zoom_changed_called_ = false;
 
   content::test::PrerenderTestHelper prerender_helper_;
-  raw_ptr<ZoomController> zoom_controller_;
+  base::ScopedObservation<zoom::ZoomController, zoom::ZoomObserver>
+      zoom_observation_{this};
 };
 
 IN_PROC_BROWSER_TEST_F(ZoomControllerForPrerenderingTest,
@@ -455,7 +450,8 @@ IN_PROC_BROWSER_TEST_F(ZoomControllerForPrerenderingTest,
   // the prerendering.
   reset_is_on_zoom_changed_called();
 
-  int host_id = prerender_helper().AddPrerender(prerender_url);
+  content::FrameTreeNodeId host_id =
+      prerender_helper().AddPrerender(prerender_url);
   content::test::PrerenderHostObserver host_observer(*GetWebContents(),
                                                      host_id);
 

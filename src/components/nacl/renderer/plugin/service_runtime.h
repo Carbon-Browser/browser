@@ -1,9 +1,6 @@
-/* -*- c++ -*- */
-/*
- * Copyright (c) 2012 The Chromium Authors. All rights reserved.
- * Use of this source code is governed by a BSD-style license that can be
- * found in the LICENSE file.
- */
+// Copyright 2012 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
 
 // A class containing information regarding a socket connection to a
 // service runtime instance.
@@ -13,6 +10,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/process/process_handle.h"
 #include "components/nacl/renderer/ppb_nacl_private.h"
 #include "ipc/ipc_sync_channel.h"
@@ -67,7 +65,7 @@ class ServiceRuntime {
   }
 
  private:
-  Plugin* plugin_;
+  raw_ptr<Plugin> plugin_;
   PP_Instance pp_instance_;
   bool main_service_runtime_;
 

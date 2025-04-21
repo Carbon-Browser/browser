@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "remoting/codec/audio_encoder_opus.h"
 
@@ -9,10 +14,10 @@
 
 #include <cmath>
 #include <memory>
+#include <numbers>
 #include <utility>
 
 #include "base/logging.h"
-#include "base/numerics/math_constants.h"
 #include "remoting/codec/audio_decoder_opus.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -26,7 +31,7 @@ const int kMaxSampleValue = 32767;
 const int kChannels = 2;
 
 // Phase shift between left and right channels.
-const double kChannelPhaseShift = 2 * base::kPiDouble / 3;
+const double kChannelPhaseShift = 2 * std::numbers::pi / 3;
 
 // The sampling rate that OPUS uses internally and that we expect to get
 // from the decoder.
@@ -60,7 +65,7 @@ class OpusAudioEncoderTest : public testing::Test {
                                 double pos,
                                 int channel) {
     double angle =
-        pos * 2 * base::kPiDouble * frequency_hz / static_cast<double>(rate) +
+        pos * 2 * std::numbers::pi * frequency_hz / static_cast<double>(rate) +
         kChannelPhaseShift * channel;
     return static_cast<int>(std::sin(angle) * kMaxSampleValue + 0.5);
   }
@@ -96,8 +101,8 @@ class OpusAudioEncoderTest : public testing::Test {
       int16_t this_sample = received_data[i * kChannels];
       int16_t next_sample = received_data[(i + 1) * kChannels];
       if (this_sample < 0 && next_sample > 0) {
-        return
-            i + static_cast<double>(-this_sample) / (next_sample - this_sample);
+        return i +
+               static_cast<double>(-this_sample) / (next_sample - this_sample);
       }
     }
     return 0;
@@ -112,10 +117,10 @@ class OpusAudioEncoderTest : public testing::Test {
                             const std::vector<int16_t>& received_data) {
     double shift = EstimateSignalShift(received_data);
     double diff_sqare_sum = 0;
-    for (size_t i = kSkippedFirstSamples;
-         i < received_data.size() / kChannels; i++) {
+    for (size_t i = kSkippedFirstSamples; i < received_data.size() / kChannels;
+         i++) {
       double d = received_data[i * kChannels] -
-          GetSampleValue(rate, frequency_hz, i - shift, 0);
+                 GetSampleValue(rate, frequency_hz, i - shift, 0);
       diff_sqare_sum += d * d;
       d = received_data[i * kChannels + 1] -
           GetSampleValue(rate, frequency_hz, i - shift, 1);
@@ -128,8 +133,8 @@ class OpusAudioEncoderTest : public testing::Test {
   }
 
   void TestEncodeDecode(int packet_size,
-                          double frequency_hz,
-                          AudioPacket::SamplingRate rate) {
+                        double frequency_hz,
+                        AudioPacket::SamplingRate rate) {
     const int kTotalTestSamples = 24000;
 
     encoder_ = std::make_unique<AudioEncoderOpus>();
@@ -153,7 +158,7 @@ class OpusAudioEncoderTest : public testing::Test {
               received_data.end(), data,
               data + decoded->data(i).size() / sizeof(int16_t));
         }
-        }
+      }
     }
 
     // Verify that at most kMaxLatencyMs worth of samples is buffered inside
@@ -161,8 +166,8 @@ class OpusAudioEncoderTest : public testing::Test {
     EXPECT_GE(static_cast<int>(received_data.size()) / kChannels,
               pos - rate * kMaxLatencyMs / 1000);
 
-    ValidateReceivedData(packet_size, kDefaultSamplingRate,
-                         frequency_hz, received_data);
+    ValidateReceivedData(packet_size, kDefaultSamplingRate, frequency_hz,
+                         received_data);
   }
 
  protected:
@@ -170,8 +175,7 @@ class OpusAudioEncoderTest : public testing::Test {
   std::unique_ptr<AudioDecoderOpus> decoder_;
 };
 
-TEST_F(OpusAudioEncoderTest, CreateAndDestroy) {
-}
+TEST_F(OpusAudioEncoderTest, CreateAndDestroy) {}
 
 TEST_F(OpusAudioEncoderTest, NoResampling) {
   TestEncodeDecode(2000, 50, AudioPacket::SAMPLING_RATE_48000);

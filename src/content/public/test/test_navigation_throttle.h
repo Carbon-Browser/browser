@@ -1,11 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_PUBLIC_TEST_TEST_NAVIGATION_THROTTLE_H_
 #define CONTENT_PUBLIC_TEST_TEST_NAVIGATION_THROTTLE_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "content/public/browser/navigation_throttle.h"
 
@@ -25,6 +25,7 @@ class TestNavigationThrottle : public NavigationThrottle {
     WILL_REDIRECT_REQUEST,
     WILL_FAIL_REQUEST,
     WILL_PROCESS_RESPONSE,
+    WILL_COMMIT_WITHOUT_URL_LOADER,
     NUM_THROTTLE_METHODS
   };
 
@@ -45,6 +46,7 @@ class TestNavigationThrottle : public NavigationThrottle {
   NavigationThrottle::ThrottleCheckResult WillRedirectRequest() override;
   NavigationThrottle::ThrottleCheckResult WillFailRequest() override;
   NavigationThrottle::ThrottleCheckResult WillProcessResponse() override;
+  NavigationThrottle::ThrottleCheckResult WillCommitWithoutUrlLoader() override;
   const char* GetNameForLogging() override;
 
   // Return how often the indicated |method| was called.
@@ -78,11 +80,11 @@ class TestNavigationThrottle : public NavigationThrottle {
   // throttle responds, either by returning synchronously, or by calling
   // CancelDeferredNavigation() asynchronously.
   //
-  // TODO(crbug.com/770292): Support setting a callback instead, and use that to
-  // get rid of the following classes:
+  // TODO(crbug.com/40542516): Support setting a callback instead, and use that
+  // to get rid of the following classes:
   // - ResourceLoadingCancellingThrottle in
   //   ads_page_load_metrics_observer_unittest.cc
-  // - DeletingNavigationThrottle in navigation_request_unittest.cc
+  // - DeletingNavigationThrottle in navigation_throttle_runner_unittest.cc
   void OnWillRespond();
 
  private:

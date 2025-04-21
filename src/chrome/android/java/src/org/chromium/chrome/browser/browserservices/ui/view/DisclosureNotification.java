@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,16 +11,15 @@ import static org.chromium.chrome.browser.browserservices.ui.TrustedWebActivityM
 import static org.chromium.chrome.browser.browserservices.ui.TrustedWebActivityModel.DISCLOSURE_STATE_NOT_SHOWN;
 import static org.chromium.chrome.browser.browserservices.ui.TrustedWebActivityModel.DISCLOSURE_STATE_SHOWN;
 import static org.chromium.chrome.browser.browserservices.ui.TrustedWebActivityModel.PACKAGE_NAME;
-import static org.chromium.chrome.browser.dependency_injection.ChromeCommonQualifiers.APP_CONTEXT;
 import static org.chromium.chrome.browser.notifications.NotificationConstants.NOTIFICATION_ID_TWA_DISCLOSURE_INITIAL;
 import static org.chromium.chrome.browser.notifications.NotificationConstants.NOTIFICATION_ID_TWA_DISCLOSURE_SUBSEQUENT;
 
-import android.content.Context;
 import android.content.res.Resources;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
+import org.chromium.base.ContextUtils;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.browserservices.ui.TrustedWebActivityModel;
 import org.chromium.chrome.browser.browserservices.ui.trustedwebactivity.DisclosureAcceptanceBroadcastReceiver;
@@ -29,7 +28,7 @@ import org.chromium.chrome.browser.lifecycle.StartStopWithNativeObserver;
 import org.chromium.chrome.browser.notifications.NotificationUmaTracker;
 import org.chromium.chrome.browser.notifications.NotificationWrapperBuilderFactory;
 import org.chromium.chrome.browser.notifications.channels.ChromeChannelDefinitions;
-import org.chromium.components.browser_ui.notifications.NotificationManagerProxy;
+import org.chromium.components.browser_ui.notifications.NotificationManagerProxyImpl;
 import org.chromium.components.browser_ui.notifications.NotificationMetadata;
 import org.chromium.components.browser_ui.notifications.NotificationWrapper;
 import org.chromium.components.browser_ui.notifications.PendingIntentProvider;
@@ -37,28 +36,21 @@ import org.chromium.components.url_formatter.UrlFormatter;
 import org.chromium.ui.modelutil.PropertyKey;
 import org.chromium.ui.modelutil.PropertyObservable;
 
-import javax.inject.Inject;
-import javax.inject.Named;
-
 /**
  * Displays a notification when the user is on the verified domain. The first such notification (per
  * TWA) is urgent priority, subsequent ones are low priority.
  */
 public class DisclosureNotification
         implements PropertyObservable.PropertyObserver<PropertyKey>, StartStopWithNativeObserver {
-    private final Context mContext;
     private final Resources mResources;
     private final TrustedWebActivityModel mModel;
-    private final NotificationManagerProxy mNotificationManager;
     private String mCurrentScope;
 
-    @Inject
-    DisclosureNotification(@Named(APP_CONTEXT) Context context, Resources resources,
-            NotificationManagerProxy notificationManager, TrustedWebActivityModel model,
+    public DisclosureNotification(
+            Resources resources,
+            TrustedWebActivityModel model,
             ActivityLifecycleDispatcher lifecycleDispatcher) {
-        mContext = context;
         mResources = resources;
-        mNotificationManager = notificationManager;
         mModel = model;
 
         mModel.addObserver(this);
@@ -72,18 +64,24 @@ public class DisclosureNotification
 
         NotificationWrapper notification =
                 createNotification(firstTime, mCurrentScope, packageName);
-        mNotificationManager.notify(notification);
-        NotificationUmaTracker.getInstance().onNotificationShown(firstTime
-                        ? NotificationUmaTracker.SystemNotificationType.TWA_DISCLOSURE_INITIAL
-                        : NotificationUmaTracker.SystemNotificationType.TWA_DISCLOSURE_SUBSEQUENT,
-                notification.getNotification());
+        NotificationManagerProxyImpl.getInstance().notify(notification);
+        NotificationUmaTracker.getInstance()
+                .onNotificationShown(
+                        firstTime
+                                ? NotificationUmaTracker.SystemNotificationType
+                                        .TWA_DISCLOSURE_INITIAL
+                                : NotificationUmaTracker.SystemNotificationType
+                                        .TWA_DISCLOSURE_SUBSEQUENT,
+                        notification.getNotification());
 
         mModel.get(DISCLOSURE_EVENTS_CALLBACK).onDisclosureShown();
     }
 
     private void dismiss() {
-        mNotificationManager.cancel(mCurrentScope, NOTIFICATION_ID_TWA_DISCLOSURE_INITIAL);
-        mNotificationManager.cancel(mCurrentScope, NOTIFICATION_ID_TWA_DISCLOSURE_SUBSEQUENT);
+        NotificationManagerProxyImpl.getInstance()
+                .cancel(mCurrentScope, NOTIFICATION_ID_TWA_DISCLOSURE_INITIAL);
+        NotificationManagerProxyImpl.getInstance()
+                .cancel(mCurrentScope, NOTIFICATION_ID_TWA_DISCLOSURE_SUBSEQUENT);
         mCurrentScope = null;
     }
 
@@ -114,19 +112,23 @@ public class DisclosureNotification
                 UrlFormatter.formatUrlForDisplayOmitSchemeOmitTrivialSubdomains(scope);
         String text = mResources.getString(R.string.twa_running_in_chrome_v2, scopeForDisplay);
 
-        PendingIntentProvider intent = DisclosureAcceptanceBroadcastReceiver.createPendingIntent(
-                mContext, scope, notificationId, packageName);
+        PendingIntentProvider intent =
+                DisclosureAcceptanceBroadcastReceiver.createPendingIntent(
+                        ContextUtils.getApplicationContext(), scope, notificationId, packageName);
 
         // We don't have an icon to display.
         int icon = 0;
 
-        return NotificationWrapperBuilderFactory
-                .createNotificationWrapperBuilder(channelId, metadata)
+        return NotificationWrapperBuilderFactory.createNotificationWrapperBuilder(
+                        channelId, metadata)
                 .setSmallIcon(R.drawable.ic_chrome)
                 .setContentTitle(title)
                 .setContentText(text)
                 .setContentIntent(intent)
-                .addAction(icon, mResources.getString(R.string.got_it), intent,
+                .addAction(
+                        icon,
+                        mResources.getString(R.string.got_it),
+                        intent,
                         NotificationUmaTracker.ActionType.TWA_NOTIFICATION_ACCEPTANCE)
                 .setShowWhen(false)
                 .setAutoCancel(false)

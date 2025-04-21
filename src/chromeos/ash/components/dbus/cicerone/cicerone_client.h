@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,15 +7,15 @@
 
 #include "base/component_export.h"
 #include "chromeos/ash/components/dbus/cicerone/cicerone_service.pb.h"
+#include "chromeos/dbus/common/dbus_callback.h"
 #include "chromeos/dbus/common/dbus_client.h"
-#include "chromeos/dbus/common/dbus_method_call_status.h"
 #include "dbus/object_proxy.h"
 
 namespace ash {
 
 // CiceroneClient is used to communicate with Cicerone, which is used to
 // communicate with containers running inside VMs.
-class COMPONENT_EXPORT(CICERONE) CiceroneClient : public DBusClient {
+class COMPONENT_EXPORT(CICERONE) CiceroneClient : public chromeos::DBusClient {
  public:
   class Observer {
    public:
@@ -71,11 +71,6 @@ class COMPONENT_EXPORT(CICERONE) CiceroneClient : public DBusClient {
     virtual void OnLxdContainerStarting(
         const vm_tools::cicerone::LxdContainerStartingSignal& signal) {}
 
-    // OnLxdContainerStopping is signaled from Cicerone when async container
-    // stop is used.
-    virtual void OnLxdContainerStopping(
-        const vm_tools::cicerone::LxdContainerStoppingSignal& signal) {}
-
     // OnExportLxdContainerProgress is signalled from Cicerone while a container
     // is being exported via ExportLxdContainer.
     virtual void OnExportLxdContainerProgress(
@@ -113,6 +108,16 @@ class COMPONENT_EXPORT(CICERONE) CiceroneClient : public DBusClient {
     // This is signaled from Cicerone when a container runs into low disk space.
     virtual void OnLowDiskSpaceTriggered(
         const vm_tools::cicerone::LowDiskSpaceTriggeredSignal& signal) {}
+
+    // This is signaled from Cicerone when the VM is requesting to inhibit
+    // sleep.
+    virtual void OnInhibitScreensaver(
+        const vm_tools::cicerone::InhibitScreensaverSignal& signal) {}
+
+    // This is signaled from Cicerone when the VM is requesting to uninhibit
+    // sleep.
+    virtual void OnUninhibitScreensaver(
+        const vm_tools::cicerone::UninhibitScreensaverSignal& signal) {}
 
    protected:
     virtual ~Observer() = default;
@@ -161,9 +166,6 @@ class COMPONENT_EXPORT(CICERONE) CiceroneClient : public DBusClient {
   // This should be true prior to calling StartLxdContainer in async mode.
   virtual bool IsLxdContainerStartingSignalConnected() = 0;
 
-  // This should be true prior to calling StopLxdContainer in async mode.
-  virtual bool IsLxdContainerStoppingSignalConnected() = 0;
-
   // This should be true prior to calling ExportLxdContainer.
   virtual bool IsExportLxdContainerProgressSignalConnected() = 0;
 
@@ -190,40 +192,48 @@ class COMPONENT_EXPORT(CICERONE) CiceroneClient : public DBusClient {
   // LowDiskSpaceTriggeredSignal.
   virtual bool IsLowDiskSpaceTriggeredSignalConnected() = 0;
 
+  // This should be true before expecting to receive
+  // InhibitScreensaverSignal
+  virtual bool IsInhibitScreensaverSignalConencted() = 0;
+
+  // This should be true before expecting to receive
+  // UninhibitScreensaverSignal.
+  virtual bool IsUninhibitScreensaverSignalConencted() = 0;
+
   // Launches an application inside a running Container.
   // |callback| is called after the method call finishes.
   virtual void LaunchContainerApplication(
       const vm_tools::cicerone::LaunchContainerApplicationRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::LaunchContainerApplicationResponse>
-          callback) = 0;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::LaunchContainerApplicationResponse> callback) = 0;
 
   // Gets application icons from inside a Container.
   // |callback| is called after the method call finishes.
   virtual void GetContainerAppIcons(
       const vm_tools::cicerone::ContainerAppIconRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::ContainerAppIconResponse>
+      chromeos::DBusMethodCallback<vm_tools::cicerone::ContainerAppIconResponse>
           callback) = 0;
 
   // Gets information about a Linux package file inside a container.
   // |callback| is called after the method call finishes.
   virtual void GetLinuxPackageInfo(
       const vm_tools::cicerone::LinuxPackageInfoRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::LinuxPackageInfoResponse>
+      chromeos::DBusMethodCallback<vm_tools::cicerone::LinuxPackageInfoResponse>
           callback) = 0;
 
   // Installs a package inside the container.
   // |callback| is called after the method call finishes.
   virtual void InstallLinuxPackage(
       const vm_tools::cicerone::InstallLinuxPackageRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::InstallLinuxPackageResponse>
-          callback) = 0;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::InstallLinuxPackageResponse> callback) = 0;
 
   // Uninstalls the package that owns the indicated .desktop file.
   // |callback| is called after the method call finishes.
   virtual void UninstallPackageOwningFile(
       const vm_tools::cicerone::UninstallPackageOwningFileRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::UninstallPackageOwningFileResponse>
-          callback) = 0;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::UninstallPackageOwningFileResponse> callback) = 0;
 
   // Creates a new Lxd Container.
   // |callback| is called to indicate creation status.
@@ -231,146 +241,168 @@ class COMPONENT_EXPORT(CICERONE) CiceroneClient : public DBusClient {
   // |Observer::OnLxdContainerDownloading| is called to indicate progress.
   virtual void CreateLxdContainer(
       const vm_tools::cicerone::CreateLxdContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::CreateLxdContainerResponse>
-          callback) = 0;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::CreateLxdContainerResponse> callback) = 0;
 
   // Deletes an Lxd Container.
   // |callback| is called to indicate deletion status.
   // |Observer::OnLxdContainerDeleted| will be called on completion.
   virtual void DeleteLxdContainer(
       const vm_tools::cicerone::DeleteLxdContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::DeleteLxdContainerResponse>
-          callback) = 0;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::DeleteLxdContainerResponse> callback) = 0;
 
   // Starts a new Lxd Container.
   // |callback| is called when the method completes.
   virtual void StartLxdContainer(
       const vm_tools::cicerone::StartLxdContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::StartLxdContainerResponse>
-          callback) = 0;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::StartLxdContainerResponse> callback) = 0;
 
   // Stops a running Lxd Container.
   // |callback| is called when the method completes.
   virtual void StopLxdContainer(
       const vm_tools::cicerone::StopLxdContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::StopLxdContainerResponse>
+      chromeos::DBusMethodCallback<vm_tools::cicerone::StopLxdContainerResponse>
           callback) = 0;
 
   // Gets the Lxd container username.
   // |callback| is called when the method completes.
   virtual void GetLxdContainerUsername(
       const vm_tools::cicerone::GetLxdContainerUsernameRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::GetLxdContainerUsernameResponse>
-          callback) = 0;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::GetLxdContainerUsernameResponse> callback) = 0;
 
   // Sets the Lxd container user, creating it if needed.
   // |callback| is called when the method completes.
   virtual void SetUpLxdContainerUser(
       const vm_tools::cicerone::SetUpLxdContainerUserRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::SetUpLxdContainerUserResponse>
-          callback) = 0;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::SetUpLxdContainerUserResponse> callback) = 0;
 
   // Exports the Lxd container.
   // |callback| is called when the method completes.
   virtual void ExportLxdContainer(
       const vm_tools::cicerone::ExportLxdContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::ExportLxdContainerResponse>
-          callback) = 0;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::ExportLxdContainerResponse> callback) = 0;
 
   // Imports the Lxd container.
   // |callback| is called when the method completes.
   virtual void ImportLxdContainer(
       const vm_tools::cicerone::ImportLxdContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::ImportLxdContainerResponse>
-          callback) = 0;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::ImportLxdContainerResponse> callback) = 0;
 
   // Cancels the in progress Lxd container export.
   // |callback| is called when the method completes.
   virtual void CancelExportLxdContainer(
       const vm_tools::cicerone::CancelExportLxdContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::CancelExportLxdContainerResponse>
-          callback) = 0;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::CancelExportLxdContainerResponse> callback) = 0;
 
   // Cancels the in progress Lxd container import.
   // |callback| is called when the method completes.
   virtual void CancelImportLxdContainer(
       const vm_tools::cicerone::CancelImportLxdContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::CancelImportLxdContainerResponse>
-          callback) = 0;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::CancelImportLxdContainerResponse> callback) = 0;
 
   // Applies Ansible playbook.
   // |callback| is called after the method call finishes.
   virtual void ApplyAnsiblePlaybook(
       const vm_tools::cicerone::ApplyAnsiblePlaybookRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::ApplyAnsiblePlaybookResponse>
-          callback) = 0;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::ApplyAnsiblePlaybookResponse> callback) = 0;
 
   // Configure the container to allow sideloading Android apps into Arc.
   // |callback| is called once configuration finishes.
   virtual void ConfigureForArcSideload(
       const vm_tools::cicerone::ConfigureForArcSideloadRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::ConfigureForArcSideloadResponse>
-          callback) = 0;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::ConfigureForArcSideloadResponse> callback) = 0;
 
   // Upgrades the container.
   // |callback| is called when the method completes.
   virtual void UpgradeContainer(
       const vm_tools::cicerone::UpgradeContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::UpgradeContainerResponse>
+      chromeos::DBusMethodCallback<vm_tools::cicerone::UpgradeContainerResponse>
           callback) = 0;
 
   // Cancels the in progress container upgrade.
   // |callback| is called when the method completes.
   virtual void CancelUpgradeContainer(
       const vm_tools::cicerone::CancelUpgradeContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::CancelUpgradeContainerResponse>
-          callback) = 0;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::CancelUpgradeContainerResponse> callback) = 0;
 
   // Starts LXD.
   // |callback| is called when the method completes.
   virtual void StartLxd(
       const vm_tools::cicerone::StartLxdRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::StartLxdResponse> callback) = 0;
+      chromeos::DBusMethodCallback<vm_tools::cicerone::StartLxdResponse>
+          callback) = 0;
 
   // Adds a file watcher.  Used by FilesApp.
   // |callback| is called when the method completes.
   virtual void AddFileWatch(
       const vm_tools::cicerone::AddFileWatchRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::AddFileWatchResponse>
+      chromeos::DBusMethodCallback<vm_tools::cicerone::AddFileWatchResponse>
           callback) = 0;
 
   // Removes a file watch.
   // |callback| is called when the method completes.
   virtual void RemoveFileWatch(
       const vm_tools::cicerone::RemoveFileWatchRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::RemoveFileWatchResponse>
+      chromeos::DBusMethodCallback<vm_tools::cicerone::RemoveFileWatchResponse>
           callback) = 0;
 
   // Looks up vsh session data such as container shell pid.
   // |callback| is called when the method completes.
   virtual void GetVshSession(
       const vm_tools::cicerone::GetVshSessionRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::GetVshSessionResponse>
+      chromeos::DBusMethodCallback<vm_tools::cicerone::GetVshSessionResponse>
           callback) = 0;
 
   // Attaches a USB device to a LXD container.
   // |callback| is called when the method completes.
   virtual void AttachUsbToContainer(
       const vm_tools::cicerone::AttachUsbToContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::AttachUsbToContainerResponse>
-          callback) = 0;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::AttachUsbToContainerResponse> callback) = 0;
 
   // Detaches a USB device from a LXD container.
   // |callback| is called when the method completes.
   virtual void DetachUsbFromContainer(
       const vm_tools::cicerone::DetachUsbFromContainerRequest& request,
-      DBusMethodCallback<vm_tools::cicerone::DetachUsbFromContainerResponse>
-          callback) = 0;
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::DetachUsbFromContainerResponse> callback) = 0;
 
   // Send signal with files user has selected in SelectFile dialog. This is sent
   // in response to VmApplicationsServiceProvider::SelectFile().
   virtual void FileSelected(
       const vm_tools::cicerone::FileSelectedSignal& signal) = 0;
+
+  // Lists the containers Cicerone knows about.
+  // |callback| is called when the method completes.
+  virtual void ListRunningContainers(
+      const vm_tools::cicerone::ListRunningContainersRequest& request,
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::ListRunningContainersResponse> callback) = 0;
+
+  // Queries Garcon for info about the current session.
+  // |callback| is called when the method completes.
+  virtual void GetGarconSessionInfo(
+      const vm_tools::cicerone::GetGarconSessionInfoRequest& request,
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::GetGarconSessionInfoResponse> callback) = 0;
+
+  // Updates the VM devices available for a LXD container.
+  // |callback| is called when the method completes.
+  virtual void UpdateContainerDevices(
+      const vm_tools::cicerone::UpdateContainerDevicesRequest& request,
+      chromeos::DBusMethodCallback<
+          vm_tools::cicerone::UpdateContainerDevicesResponse> callback) = 0;
 
   // Registers |callback| to run when the Cicerone service becomes available.
   // If the service is already available, or if connecting to the name-owner-

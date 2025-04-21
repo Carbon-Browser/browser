@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,12 +23,12 @@ namespace {
 // `name` as parent folders, and `frame_index` padded to 4 digits will be the
 // filename.
 // e.g. <test_data_folder>/render_pass_data/group/name/0001.json
-absl::optional<base::FilePath> MakeTestDataJsonPath(const std::string& group,
-                                                    const std::string& name,
-                                                    size_t frame_index) {
+std::optional<base::FilePath> MakeTestDataJsonPath(const std::string& group,
+                                                   const std::string& name,
+                                                   size_t frame_index) {
   base::FilePath test_data_path;
   if (!base::PathService::Get(Paths::DIR_TEST_DATA, &test_data_path)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return test_data_path.AppendASCII("render_pass_data")
       .AppendASCII(group)
@@ -37,12 +37,12 @@ absl::optional<base::FilePath> MakeTestDataJsonPath(const std::string& group,
           base::StringPrintf("%04d.json", static_cast<int>(frame_index)));
 }
 
-absl::optional<base::Value> ReadValueFromJson(base::FilePath& json_path) {
+std::optional<base::Value> ReadValueFromJson(base::FilePath& json_path) {
   if (!base::PathExists(json_path))
-    return absl::nullopt;
+    return std::nullopt;
   std::string json_text;
   if (!base::ReadFileToString(json_path, &json_text))
-    return absl::nullopt;
+    return std::nullopt;
   return base::JSONReader::Read(json_text);
 }
 
@@ -55,23 +55,23 @@ bool CompositorRenderPassListFromJSON(
     size_t frame_index,
     CompositorRenderPassList* render_pass_list) {
   std::string name = site + "_" + base::NumberToString(year);
-  absl::optional<base::FilePath> json_path =
+  std::optional<base::FilePath> json_path =
       MakeTestDataJsonPath(tag, name, frame_index);
   if (!json_path) {
     return false;
   }
   auto dict = ReadValueFromJson(*json_path);
-  if (!dict) {
+  if (!dict || !dict->is_dict()) {
     return false;
   }
-  return CompositorRenderPassListFromDict(dict.value(), render_pass_list);
+  return CompositorRenderPassListFromDict(dict->GetDict(), render_pass_list);
 }
 
-absl::optional<base::FilePath> UnzipFrameData(const std::string& group,
-                                              const std::string& name) {
+std::optional<base::FilePath> UnzipFrameData(const std::string& group,
+                                             const std::string& name) {
   base::FilePath zip_path;
   if (!base::PathService::Get(Paths::DIR_TEST_DATA, &zip_path)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   zip_path = zip_path.AppendASCII("render_pass_data")
                  .AppendASCII(group)
@@ -80,15 +80,18 @@ absl::optional<base::FilePath> UnzipFrameData(const std::string& group,
 
   base::FilePath out_path;
   if (!base::GetTempDir(&out_path)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   out_path = out_path.AppendASCII("render_pass_data")
                  .AppendASCII(group)
                  .AppendASCII(name);
 
+  // We are dumping the contents of the zip into a folder so we need to clean
+  // out this folder.
+  base::DeletePathRecursively(out_path);
   if (!zip::Unzip(zip_path, out_path)) {
     LOG(ERROR) << "Failed to unzip frame data from: " << zip_path;
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   return out_path;
@@ -97,10 +100,10 @@ absl::optional<base::FilePath> UnzipFrameData(const std::string& group,
 bool FrameDataFromJson(base::FilePath& json_path,
                        std::vector<FrameData>* frame_data_list) {
   auto list = ReadValueFromJson(json_path);
-  if (!list) {
+  if (!list || !list->is_list()) {
     return false;
   }
-  return FrameDataFromList(list.value(), frame_data_list);
+  return FrameDataFromList(list->GetList(), frame_data_list);
 }
 
 namespace {

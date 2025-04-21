@@ -1,13 +1,14 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "components/download/internal/background_service/proto_conversions.h"
 
 #include <memory>
 #include <utility>
 
-#include "base/guid.h"
+#include "base/uuid.h"
 #include "components/download/internal/background_service/entry.h"
-#include "components/download/internal/background_service/proto_conversions.h"
 #include "components/download/internal/background_service/test/entry_utils.h"
 #include "services/network/public/mojom/fetch_api.mojom-shared.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -22,7 +23,7 @@ namespace download {
 
 class ProtoConversionsTest : public testing::Test, public ProtoConversions {
  public:
-  ~ProtoConversionsTest() override {}
+  ~ProtoConversionsTest() override = default;
 };
 
 TEST_F(ProtoConversionsTest, StateConversion) {
@@ -115,11 +116,8 @@ TEST_F(ProtoConversionsTest, RequestParamsWithHeadersConversion) {
   EXPECT_EQ(expected.require_safety_checks, actual.require_safety_checks);
   EXPECT_EQ(expected.credentials_mode, actual.credentials_mode);
 
-  std::string out;
-  actual.request_headers.GetHeader("key1", &out);
-  EXPECT_EQ("value1", out);
-  actual.request_headers.GetHeader("key2", &out);
-  EXPECT_EQ("value2", out);
+  EXPECT_EQ("value1", actual.request_headers.GetHeader("key1"));
+  EXPECT_EQ("value2", actual.request_headers.GetHeader("key2"));
   EXPECT_EQ(expected.request_headers.ToString(),
             actual.request_headers.ToString());
 }
@@ -138,13 +136,14 @@ TEST_F(ProtoConversionsTest, RequestParamsWithMissingCredentialsMode) {
 }
 
 TEST_F(ProtoConversionsTest, EntryConversion) {
-  Entry expected = test::BuildEntry(DownloadClient::TEST, base::GenerateGUID());
+  Entry expected = test::BuildEntry(
+      DownloadClient::TEST, base::Uuid::GenerateRandomV4().AsLowercaseString());
   Entry actual = EntryFromProto(EntryToProto(expected));
   EXPECT_TRUE(test::CompareEntry(&expected, &actual));
 
   expected = test::BuildEntry(
-      DownloadClient::TEST, base::GenerateGUID(), base::Time::Now(),
-      SchedulingParams::NetworkRequirements::OPTIMISTIC,
+      DownloadClient::TEST, base::Uuid::GenerateRandomV4().AsLowercaseString(),
+      base::Time::Now(), SchedulingParams::NetworkRequirements::OPTIMISTIC,
       SchedulingParams::BatteryRequirements::BATTERY_SENSITIVE,
       SchedulingParams::Priority::HIGH, GURL(kTestUrl), "GET",
       Entry::State::ACTIVE, base::FilePath(FILE_PATH_LITERAL("/test/xyz")),
@@ -157,12 +156,14 @@ TEST_F(ProtoConversionsTest, EntryConversion) {
 TEST_F(ProtoConversionsTest, EntryVectorConversion) {
   std::vector<Entry> expected;
   expected.push_back(
-      test::BuildEntry(DownloadClient::TEST, base::GenerateGUID()));
+      test::BuildEntry(DownloadClient::TEST,
+                       base::Uuid::GenerateRandomV4().AsLowercaseString()));
   expected.push_back(
-      test::BuildEntry(DownloadClient::TEST_2, base::GenerateGUID()));
+      test::BuildEntry(DownloadClient::TEST_2,
+                       base::Uuid::GenerateRandomV4().AsLowercaseString()));
   expected.push_back(test::BuildEntry(
-      DownloadClient::TEST, base::GenerateGUID(), base::Time::Now(),
-      SchedulingParams::NetworkRequirements::OPTIMISTIC,
+      DownloadClient::TEST, base::Uuid::GenerateRandomV4().AsLowercaseString(),
+      base::Time::Now(), SchedulingParams::NetworkRequirements::OPTIMISTIC,
       SchedulingParams::BatteryRequirements::BATTERY_SENSITIVE,
       SchedulingParams::Priority::HIGH, GURL(kTestUrl), "GET",
       Entry::State::ACTIVE, base::FilePath(FILE_PATH_LITERAL("/test/xyz")),

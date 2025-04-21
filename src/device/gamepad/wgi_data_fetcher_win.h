@@ -1,26 +1,28 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef DEVICE_GAMEPAD_WGI_DATA_FETCHER_WIN_H_
 #define DEVICE_GAMEPAD_WGI_DATA_FETCHER_WIN_H_
 
-#include "device/gamepad/gamepad_data_fetcher.h"
-
 #include <Windows.Gaming.Input.h>
 #include <wrl/event.h>
 
 #include <memory>
+#include <optional>
+#include <string>
 
-#include "base/callback_forward.h"
 #include "base/containers/flat_map.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/no_destructor.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
+#include "device/gamepad/gamepad_data_fetcher.h"
+#include "device/gamepad/gamepad_id_list.h"
 #include "device/gamepad/public/mojom/gamepad.mojom.h"
 #include "device/gamepad/wgi_gamepad_device.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "device/gamepad/xinput_data_fetcher_win.h"
 
 namespace device {
 
@@ -33,11 +35,10 @@ class DEVICE_GAMEPAD_EXPORT WgiDataFetcherWin final
     kAddGamepadAddedFailed,
     kAddGamepadRemovedFailed,
     kRoGetActivationFactoryFailed,
-    kCoreWinrtStringDelayLoadFailed,
   };
 
   using Factory =
-      GamepadDataFetcherFactoryImpl<WgiDataFetcherWin, GAMEPAD_SOURCE_WIN_WGI>;
+      GamepadDataFetcherFactoryImpl<WgiDataFetcherWin, GamepadSource::kWinWgi>;
 
   // Define test hooks to use a fake WinRT RoGetActivationFactory
   // implementation to avoid dependencies on the OS for WGI testing.
@@ -88,10 +89,19 @@ class DEVICE_GAMEPAD_EXPORT WgiDataFetcherWin final
   void OnGamepadRemoved(IInspectable* /* sender */,
                         ABI::Windows::Gaming::Input::IGamepad* gamepad);
 
+  // WgiDataFetcherWin has its own instance of XInputDataFetcherWin to query for
+  // the meta button state.
+  std::unique_ptr<XInputDataFetcherWin> xinput_data_fetcher_;
+
   static ActivationFactoryFunctionCallback&
   GetActivationFactoryFunctionCallback();
 
   std::u16string GetGamepadDisplayName(
+      ABI::Windows::Gaming::Input::IGamepad* gamepad);
+
+  std::u16string BuildGamepadIdString(
+      GamepadId gamepad_id,
+      const std::u16string& display_name,
       ABI::Windows::Gaming::Input::IGamepad* gamepad);
 
   Microsoft::WRL::ComPtr<ABI::Windows::Gaming::Input::IRawGameController>
@@ -110,8 +120,8 @@ class DEVICE_GAMEPAD_EXPORT WgiDataFetcherWin final
 
   GetActivationFactoryFunction get_activation_factory_function_;
 
-  absl::optional<EventRegistrationToken> added_event_token_;
-  absl::optional<EventRegistrationToken> removed_event_token_;
+  std::optional<EventRegistrationToken> added_event_token_;
+  std::optional<EventRegistrationToken> removed_event_token_;
 
   SEQUENCE_CHECKER(sequence_checker_);
 

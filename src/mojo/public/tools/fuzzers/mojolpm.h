@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,12 +12,13 @@
 
 #include "base/check.h"
 #include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "mojo/public/cpp/platform/platform_handle.h"
-#include "mojo/public/cpp/system/core.h"
+#include "mojo/public/cpp/system/buffer.h"
 #include "mojo/public/cpp/system/data_pipe.h"
 #include "mojo/public/tools/fuzzers/mojolpm.pb.h"
 
@@ -632,7 +633,7 @@ template <typename ProtoTestcase,
 bool Testcase<ProtoTestcase, ProtoAction, kMaxActionCount, kMaxActionSize>::
     IsFinished() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  if (!proto_testcase_.actions_size()) {
+  if (!proto_testcase_.actions_size() || !proto_testcase_.sequences_size()) {
     return true;
   }
 
@@ -684,6 +685,7 @@ void Testcase<ProtoTestcase, ProtoAction, kMaxActionCount, kMaxActionSize>::Run(
       }
     } else {
       next_sequence_idx_++;
+      next_action_idx_ = 0;
       fuzzer_task_runner->PostTask(FROM_HERE, std::move(run_closure));
     }
   }
@@ -757,6 +759,8 @@ void HandleDataPipeRead(const ::mojolpm::DataPipeRead& input);
 void HandleDataPipeWrite(const ::mojolpm::DataPipeWrite& input);
 void HandleDataPipeConsumerClose(const ::mojolpm::DataPipeConsumerClose& input);
 void HandleDataPipeProducerClose(const ::mojolpm::DataPipeProducerClose& input);
+void HandleSharedBufferWrite(const ::mojolpm::SharedBufferWrite& input);
+void HandleSharedBufferRelease(const ::mojolpm::SharedBufferRelease& input);
 }  // namespace mojolpm
 
 #endif  // MOJO_PUBLIC_TOOLS_FUZZERS_MOJOLPM_H_

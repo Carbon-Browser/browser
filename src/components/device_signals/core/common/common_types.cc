@@ -1,8 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/device_signals/core/common/common_types.h"
+
+#include "components/device_signals/core/common/signals_constants.h"
 
 namespace device_signals {
 
@@ -16,7 +18,7 @@ ExecutableMetadata::~ExecutableMetadata() = default;
 
 bool ExecutableMetadata::operator==(const ExecutableMetadata& other) const {
   return is_running == other.is_running &&
-         public_key_sha256 == other.public_key_sha256 &&
+         public_keys_hashes == other.public_keys_hashes &&
          product_name == other.product_name && version == other.version;
 }
 
@@ -46,7 +48,29 @@ bool GetFileSystemInfoOptions::operator==(
     const GetFileSystemInfoOptions& other) const {
   return file_path == other.file_path &&
          compute_sha256 == other.compute_sha256 &&
-         compute_is_executable == other.compute_is_executable;
+         compute_executable_metadata == other.compute_executable_metadata;
+}
+
+std::optional<base::Value> CrowdStrikeSignals::ToValue() const {
+  if (customer_id.empty() && agent_id.empty()) {
+    return std::nullopt;
+  }
+
+  base::Value::Dict dict_value;
+
+  if (!customer_id.empty()) {
+    dict_value.Set(names::kCustomerId, customer_id);
+  }
+
+  if (!agent_id.empty()) {
+    dict_value.Set(names::kAgentId, agent_id);
+  }
+
+  return base::Value(std::move(dict_value));
+}
+
+bool CrowdStrikeSignals::operator==(const CrowdStrikeSignals& other) const {
+  return agent_id == other.agent_id && customer_id == other.customer_id;
 }
 
 }  // namespace device_signals

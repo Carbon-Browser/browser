@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,19 +9,18 @@
 #include <utility>
 #include <vector>
 
+#include "base/feature_list.h"
 #include "base/memory/weak_ptr.h"
-#include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/task/single_thread_task_executor.h"
-#include "base/test/scoped_feature_list.h"
-#include "components/autofill/core/browser/autofill_test_utils.h"
+#include "components/autofill/core/browser/data_manager/addresses/address_data_manager.h"
+#include "components/autofill/core/browser/data_manager/test_personal_data_manager.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
-#include "components/autofill/core/browser/data_model/credit_card.h"
-#include "components/autofill/core/browser/test_personal_data_manager.h"
-#include "components/payments/content/autofill_payment_app.h"
+#include "components/autofill/core/browser/test_utils/autofill_test_utils.h"
+#include "components/autofill/core/common/autofill_features.h"
 #include "components/payments/content/payment_request_spec.h"
+#include "components/payments/content/test_payment_app.h"
 #include "components/payments/core/test_payment_request_delegate.h"
-#include "content/public/common/content_features.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/mojom/payments/payment_request.mojom.h"
 
@@ -33,20 +32,13 @@ class PaymentResponseHelperTest : public testing::Test,
   PaymentResponseHelperTest()
       : test_payment_request_delegate_(
             std::make_unique<base::SingleThreadTaskExecutor>(),
-            &test_personal_data_manager_),
-        address_(autofill::test::GetFullProfile()),
-        billing_addresses_({&address_}) {
-    test_personal_data_manager_.AddProfile(address_);
-
-    // Set up the autofill payment app.
-    visa_card_ = autofill::test::GetCreditCard();
-    visa_card_.set_billing_address_id(address_.guid());
-    visa_card_.set_use_count(5u);
-    autofill_app_ = std::make_unique<AutofillPaymentApp>(
-        "visa", visa_card_, billing_addresses_, "en-US",
-        test_payment_request_delegate_.GetWeakPtr());
+            &test_personal_data_manager_) {
+    address_ = std::make_unique<autofill::AutofillProfile>(
+        autofill::test::GetFullProfile());
+    test_personal_data_manager_.address_data_manager().AddProfile(*address_);
+    test_app_ = std::make_unique<TestPaymentApp>("method-name");
   }
-  ~PaymentResponseHelperTest() override {}
+  ~PaymentResponseHelperTest() override = default;
 
   // PaymentRequestState::Delegate:
   void OnPaymentResponseReady(mojom::PaymentResponsePtr response) override {
@@ -95,9 +87,8 @@ class PaymentResponseHelperTest : public testing::Test,
 
   base::WeakPtr<PaymentRequestSpec> spec() { return spec_->AsWeakPtr(); }
   const mojom::PaymentResponsePtr& response() { return payment_response_; }
-  autofill::AutofillProfile* test_address() { return &address_; }
-  const autofill::CreditCard& test_credit_card() { return visa_card_; }
-  base::WeakPtr<PaymentApp> test_app() { return autofill_app_->AsWeakPtr(); }
+  autofill::AutofillProfile* test_address() { return address_.get(); }
+  base::WeakPtr<PaymentApp> test_app() { return test_app_->AsWeakPtr(); }
   base::WeakPtr<PaymentRequestDelegate> test_payment_request_delegate() {
     return test_payment_request_delegate_.GetWeakPtr();
   }
@@ -113,10 +104,8 @@ class PaymentResponseHelperTest : public testing::Test,
   TestPaymentRequestDelegate test_payment_request_delegate_;
 
   // Test data.
-  autofill::AutofillProfile address_;
-  autofill::CreditCard visa_card_;
-  const std::vector<autofill::AutofillProfile*> billing_addresses_;
-  std::unique_ptr<AutofillPaymentApp> autofill_app_;
+  std::unique_ptr<autofill::AutofillProfile> address_;
+  std::unique_ptr<PaymentApp> test_app_;
 
   base::WeakPtrFactory<PaymentResponseHelperTest> weak_ptr_factory_{this};
 };
@@ -126,35 +115,11 @@ TEST_F(PaymentResponseHelperTest, GeneratePaymentResponse_SupportedMethod) {
   // Default options (no shipping, no contact info).
   RecreateSpecWithOptions(mojom::PaymentOptions::New());
 
-  // "visa" is specified directly in the supportedMethods so it is returned
-  // as the method name.
   PaymentResponseHelper helper("en-US", spec(), test_app(),
                                test_payment_request_delegate(), test_address(),
                                test_address(), GetWeakPtr());
-  EXPECT_EQ("visa", response()->method_name);
-  EXPECT_EQ(
-      base::StringPrintf(
-          "{\"billingAddress\":"
-          "{\"addressLine\":[\"666 Erebus St.\",\"Apt 8\"],"
-          "\"city\":\"Elysium\","
-          "\"country\":\"US\","
-          "\"dependentLocality\":\"\","
-          "\"organization\":\"Underworld\","
-          "\"phone\":\"16502111111\","
-          "\"postalCode\":\"91111\","
-          "\"recipient\":\"John H. Doe\","
-          "\"region\":\"CA\","
-          "\"sortingCode\":\"\"},"
-          "\"cardNumber\":\"4111111111111111\","
-          "\"cardSecurityCode\":\"123\","
-          "\"cardholderName\":\"Test User\","
-          "\"expiryMonth\":\"%s\","
-          "\"expiryYear\":\"%s\"}",
-          base::UTF16ToUTF8(test_credit_card().Expiration2DigitMonthAsString())
-              .c_str(),
-          base::UTF16ToUTF8(test_credit_card().Expiration4DigitYearAsString())
-              .c_str()),
-      response()->stringified_details);
+  EXPECT_EQ("method-name", response()->method_name);
+  EXPECT_EQ("{\"data\":\"details\"}", response()->stringified_details);
 }
 
 // Tests the the generated PaymentResponse has the correct values for the
@@ -248,10 +213,10 @@ TEST_F(PaymentResponseHelperTest,
   EXPECT_EQ("+15152231234", response()->payer->phone.value());
 }
 
-// Tests the the generated PaymentResponse has phone number minimumly formatted
+// Tests the the generated PaymentResponse has phone number minimally formatted
 // (removing non-digit letters), if the number is invalid
 TEST_F(PaymentResponseHelperTest,
-       GeneratePaymentResponse_ContactPhoneIsMinimumlyFormattedWhenInvalid) {
+       GeneratePaymentResponse_ContactPhoneIsMinimallyFormattedWhenInvalid) {
   // Request one contact detail value.
   mojom::PaymentOptionsPtr options = mojom::PaymentOptions::New();
   options->request_payer_phone = true;
@@ -264,68 +229,7 @@ TEST_F(PaymentResponseHelperTest,
                                test_address(), GetWeakPtr());
 
   // Check that the phone was formatted.
-  EXPECT_EQ("5151231234", response()->payer->phone.value());
-}
-
-class PaymentResponseHelperBasicCardEnabledTest
-    : public PaymentResponseHelperTest {
- public:
-  PaymentResponseHelperBasicCardEnabledTest(
-      const PaymentResponseHelperBasicCardEnabledTest&) = delete;
-  PaymentResponseHelperBasicCardEnabledTest& operator=(
-      const PaymentResponseHelperBasicCardEnabledTest&) = delete;
-
- protected:
-  PaymentResponseHelperBasicCardEnabledTest() {
-    feature_list_.InitAndEnableFeature(::features::kPaymentRequestBasicCard);
-  }
-
- private:
-  base::test::ScopedFeatureList feature_list_;
-};
-
-// Test generating a PaymentResponse when the method is specified through
-// "basic-card".
-TEST_F(PaymentResponseHelperBasicCardEnabledTest,
-       GeneratePaymentResponse_BasicCard) {
-  // The method data supports visa through basic-card.
-  mojom::PaymentMethodDataPtr entry = mojom::PaymentMethodData::New();
-  entry->supported_method = "basic-card";
-  entry->supported_networks.push_back(mojom::BasicCardNetwork::VISA);
-  std::vector<mojom::PaymentMethodDataPtr> method_data;
-  method_data.push_back(std::move(entry));
-  RecreateSpecWithOptionsAndDetails(mojom::PaymentOptions::New(),
-                                    mojom::PaymentDetails::New(),
-                                    std::move(method_data));
-
-  // "basic-card" is specified so it is returned as the method name.
-  PaymentResponseHelper helper("en-US", spec(), test_app(),
-                               test_payment_request_delegate(), test_address(),
-                               test_address(), GetWeakPtr());
-  EXPECT_EQ("basic-card", response()->method_name);
-  EXPECT_EQ(
-      base::StringPrintf(
-          "{\"billingAddress\":"
-          "{\"addressLine\":[\"666 Erebus St.\",\"Apt 8\"],"
-          "\"city\":\"Elysium\","
-          "\"country\":\"US\","
-          "\"dependentLocality\":\"\","
-          "\"organization\":\"Underworld\","
-          "\"phone\":\"16502111111\","
-          "\"postalCode\":\"91111\","
-          "\"recipient\":\"John H. Doe\","
-          "\"region\":\"CA\","
-          "\"sortingCode\":\"\"},"
-          "\"cardNumber\":\"4111111111111111\","
-          "\"cardSecurityCode\":\"123\","
-          "\"cardholderName\":\"Test User\","
-          "\"expiryMonth\":\"%s\","
-          "\"expiryYear\":\"%s\"}",
-          base::UTF16ToUTF8(test_credit_card().Expiration2DigitMonthAsString())
-              .c_str(),
-          base::UTF16ToUTF8(test_credit_card().Expiration4DigitYearAsString())
-              .c_str()),
-      response()->stringified_details);
+  EXPECT_EQ("+15151231234", response()->payer->phone.value());
 }
 
 }  // namespace payments

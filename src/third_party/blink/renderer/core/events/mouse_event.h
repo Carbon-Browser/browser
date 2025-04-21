@@ -36,6 +36,7 @@ namespace blink {
 
 class DataTransfer;
 class EventDispatcher;
+class LocalDOMWindow;
 class MouseEventInit;
 class WebPointerProperties;
 
@@ -71,7 +72,8 @@ class CORE_EXPORT MouseEvent : public UIEventWithKeyState {
              const MouseEventInit*,
              base::TimeTicks platform_time_stamp = base::TimeTicks::Now(),
              SyntheticEventType = kRealOrIndistinguishable,
-             WebMenuSourceType = kMenuSourceNone);
+             WebMenuSourceType = kMenuSourceNone,
+             LocalDOMWindow* fallback_dom_window = nullptr);
   MouseEvent();
 
   static uint16_t WebInputEventModifiersToButtons(unsigned modifiers);
@@ -106,6 +108,8 @@ class CORE_EXPORT MouseEvent : public UIEventWithKeyState {
   // WinIE uses 1,4,2 for left/middle/right but not for click (just for
   // mousedown/up, maybe others), but we will match the standard DOM.
   virtual int16_t button() const;
+  // Returns true if |button()| is WebPointerProperties::Button::kLeft.
+  bool IsLeftButton() const;
   uint16_t buttons() const { return buttons_; }
   bool ButtonDown() const { return button_ != -1; }
   EventTarget* relatedTarget() const { return related_target_.Get(); }
@@ -164,14 +168,16 @@ class CORE_EXPORT MouseEvent : public UIEventWithKeyState {
 
   WebMenuSourceType GetMenuSourceType() const { return menu_source_type_; }
 
-  // Page point in "absolute" coordinates (i.e. post-zoomed, page-relative
+  // Page point in layout coordinates (i.e. post-zoomed, page-relative
   // coords, usable with LayoutObject::absoluteToLocal) relative to view(),
   // i.e. the local frame.
   const gfx::PointF& AbsoluteLocation() const { return absolute_location_; }
 
   DispatchEventResult DispatchEvent(EventDispatcher&) override;
 
-  void InitCoordinates(const double client_x, const double client_y);
+  void InitCoordinates(const double client_x,
+                       const double client_y,
+                       const LocalDOMWindow* fallback_dom_window = nullptr);
 
   void Trace(Visitor*) const override;
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,15 @@
 
 #include <memory>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/synchronization/lock.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/time/time.h"
 #include "base/unguessable_token.h"
 #include "media/base/audio_renderer_sink.h"
-#include "third_party/blink/public/platform/modules/mediastream/web_media_stream_audio_renderer.h"
 #include "third_party/blink/public/platform/modules/mediastream/web_media_stream_audio_sink.h"
+#include "third_party/blink/renderer/modules/mediastream/media_stream_audio_renderer.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_component.h"
 #include "third_party/blink/renderer/platform/wtf/deque.h"
@@ -34,7 +34,7 @@ namespace blink {
 
 class LocalFrame;
 
-// TrackAudioRenderer is a WebMediaStreamAudioRenderer for plumbing audio
+// TrackAudioRenderer is a MediaStreamAudioRenderer for plumbing audio
 // data generated from either local or remote (but not
 // PeerConnection/WebRTC-sourced) MediaStreamAudioTracks to an audio output
 // device, reconciling differences in the rates of production and consumption of
@@ -54,7 +54,7 @@ class LocalFrame;
 // and skip audio to maintain time synchronization between the producer and
 // consumer.
 class MODULES_EXPORT TrackAudioRenderer
-    : public WebMediaStreamAudioRenderer,
+    : public MediaStreamAudioRenderer,
       public WebMediaStreamAudioSink,
       public media::AudioRendererSink::RenderCallback {
  public:
@@ -67,14 +67,13 @@ class MODULES_EXPORT TrackAudioRenderer
   // Called on the main thread.
   TrackAudioRenderer(MediaStreamComponent* audio_component,
                      LocalFrame& playout_web_frame,
-                     const base::UnguessableToken& session_id,
                      const String& device_id,
                      base::RepeatingClosure on_render_error_callback);
 
   TrackAudioRenderer(const TrackAudioRenderer&) = delete;
   TrackAudioRenderer& operator=(const TrackAudioRenderer&) = delete;
 
-  // WebMediaStreamAudioRenderer implementation.
+  // MediaStreamAudioRenderer implementation.
   // Called on the main thread.
   void Start() override;
   void Stop() override;
@@ -82,7 +81,6 @@ class MODULES_EXPORT TrackAudioRenderer
   void Pause() override;
   void SetVolume(float volume) override;
   base::TimeDelta GetCurrentRenderTime() override;
-  bool IsLocalRenderer() override;
   void SwitchOutputDevice(const std::string& device_id,
                           media::OutputDeviceStatusCB callback) override;
 
@@ -131,7 +129,7 @@ class MODULES_EXPORT TrackAudioRenderer
   // on the IO thread.
   int Render(base::TimeDelta delay,
              base::TimeTicks delay_timestamp,
-             int prior_frames_skipped,
+             const media::AudioGlitchInfo& glitch_info,
              media::AudioBus* audio_bus) override;
   void OnRenderError() override;
 
@@ -174,7 +172,6 @@ class MODULES_EXPORT TrackAudioRenderer
 
   // The LocalFrame in which the audio is rendered into |sink_|.
   WeakPersistent<LocalFrame> playout_frame_;
-  const base::UnguessableToken session_id_;
 
   // MessageLoop associated with the single thread that performs all control
   // tasks.  Set to the MessageLoop that invoked the ctor.

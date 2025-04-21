@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,15 @@
 
 #include <stddef.h>
 
-#include "base/allocator/partition_allocator/oom.h"
 #include "base/base_export.h"
+#include "base/check.h"
 #include "base/process/process_handle.h"
 #include "build/build_config.h"
+#include "partition_alloc/buildflags.h"
+
+#if PA_BUILDFLAG(USE_PARTITION_ALLOC)
+#include "partition_alloc/oom.h"  // nogncheck
+#endif
 
 namespace base {
 
@@ -21,9 +26,13 @@ BASE_EXPORT void EnableTerminationOnHeapCorruption();
 // Turns on process termination if memory runs out.
 BASE_EXPORT void EnableTerminationOnOutOfMemory();
 
-// The function has been moved to partition_alloc:: namespace. The base:: alias
-// has been provided to avoid changing too many callers.
+#if PA_BUILDFLAG(USE_PARTITION_ALLOC)
 using partition_alloc::TerminateBecauseOutOfMemory;
+#else
+inline void TerminateBecauseOutOfMemory(size_t) {
+  logging::RawCheckFailure("Out of memory");
+}
+#endif
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || BUILDFLAG(IS_ANDROID) || \
     BUILDFLAG(IS_AIX)
@@ -75,8 +84,21 @@ using partition_alloc::win::kOomExceptionCode;
 
 // *Must* be used to free memory allocated with base::UncheckedMalloc() and
 // base::UncheckedCalloc().
-// TODO(crbug.com/1279371): Enforce it, when all callers are converted.
+// TODO(crbug.com/40208525): Enforce it, when all callers are converted.
 BASE_EXPORT void UncheckedFree(void* ptr);
+
+// Function object which invokes 'UncheckedFree' on its parameter, which should
+// be a pointer resulting from UncheckedMalloc or UncheckedCalloc. Can be used
+// to store such pointers in std::unique_ptr:
+//
+// int* foo_ptr = nullptr;
+// if (UncheckedMalloc(sizeof(*foo_ptr), reinterpret_cast<void**>(&foo_ptr))) {
+//   std::unique_ptr<int, base::UncheckedFreeDeleter> unique_foo_ptr(foo_ptr);
+//   ...
+// }
+struct UncheckedFreeDeleter {
+  inline void operator()(void* ptr) const { UncheckedFree(ptr); }
+};
 
 }  // namespace base
 

@@ -1,15 +1,22 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ui/ozone/platform/drm/gpu/hardware_display_plane_manager_legacy.h"
 
 #include <errno.h>
 #include <sync/sync.h>
+
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/containers/contains.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/task/thread_pool.h"
@@ -28,12 +35,35 @@ namespace {
 // We currently wait for the fences serially, but it's possible
 // that merging the fences and waiting on the merged fence fd
 // is more efficient. We should revisit once we have more info.
-ui::DrmOverlayPlaneList WaitForPlaneFences(ui::DrmOverlayPlaneList planes) {
+DrmOverlayPlaneList WaitForPlaneFences(DrmOverlayPlaneList planes) {
   for (const auto& plane : planes) {
     if (plane.gpu_fence)
       plane.gpu_fence->Wait();
   }
   return planes;
+}
+
+bool CommitPendingCrtcProperty(
+    DrmDevice* device,
+    uint32_t crtc_id,
+    DrmWrapper::Property& prop,
+    std::optional<ScopedDrmPropertyBlob>& pending_blob) {
+  if (!pending_blob.has_value()) {
+    return true;
+  }
+  ScopedDrmPropertyBlob blob = std::move(pending_blob.value());
+  pending_blob = std::nullopt;
+  if (!prop.id) {
+    return true;
+  }
+
+  prop.value = blob ? blob->id() : 0;
+  int ret = device->SetObjectProperty(crtc_id, DRM_MODE_OBJECT_CRTC, prop.id,
+                                      prop.value);
+  if (ret < 0) {
+    return false;
+  }
+  return true;
 }
 
 }  // namespace
@@ -53,7 +83,7 @@ bool HardwareDisplayPlaneManagerLegacy::Commit(CommitRequest commit_request,
 
   bool status = true;
   for (const auto& crtc_request : commit_request) {
-    if (crtc_request.should_enable()) {
+    if (crtc_request.should_enable_crtc()) {
       // Overlays are not supported in legacy hence why we're only looking at
       // the primary plane.
       uint32_t fb_id = DrmOverlayPlane::GetPrimaryPlane(crtc_request.overlays())
@@ -119,23 +149,19 @@ bool HardwareDisplayPlaneManagerLegacy::Commit(
   return ret;
 }
 
+bool HardwareDisplayPlaneManagerLegacy::TestSeamlessMode(
+    int32_t crtc_id,
+    const drmModeModeInfo& mode) {
+  return false;
+}
+
 bool HardwareDisplayPlaneManagerLegacy::DisableOverlayPlanes(
     HardwareDisplayPlaneList* plane_list) {
   // We're never going to ship legacy pageflip with overlays enabled.
-  DCHECK(std::find_if(plane_list->old_plane_list.begin(),
-                      plane_list->old_plane_list.end(),
-                      [](HardwareDisplayPlane* plane) {
-                        return plane->type() == DRM_PLANE_TYPE_OVERLAY;
-                      }) == plane_list->old_plane_list.end());
+  DCHECK(!base::Contains(plane_list->old_plane_list,
+                         static_cast<uint32_t>(DRM_PLANE_TYPE_OVERLAY),
+                         &HardwareDisplayPlane::type));
   return true;
-}
-
-bool HardwareDisplayPlaneManagerLegacy::SetColorCorrectionOnAllCrtcPlanes(
-    uint32_t crtc_id,
-    ScopedDrmColorCtmPtr ctm_blob_data) {
-  NOTREACHED()
-      << "HardwareDisplayPlaneManagerLegacy doesn't support per plane CTM";
-  return false;
 }
 
 bool HardwareDisplayPlaneManagerLegacy::ValidatePrimarySize(
@@ -186,6 +212,7 @@ bool HardwareDisplayPlaneManagerLegacy::SetPlaneData(
     HardwareDisplayPlane* hw_plane,
     const DrmOverlayPlane& overlay,
     uint32_t crtc_id,
+    std::optional<gfx::Point>,
     const gfx::Rect& src_rect) {
   // Legacy modesetting rejects transforms.
   if (overlay.plane_transform != gfx::OVERLAY_TRANSFORM_NONE)
@@ -206,7 +233,7 @@ bool HardwareDisplayPlaneManagerLegacy::IsCompatible(
     HardwareDisplayPlane* plane,
     const DrmOverlayPlane& overlay,
     uint32_t crtc_id) const {
-  if (plane->type() == DRM_PLANE_TYPE_CURSOR ||
+  if (plane->in_use() || plane->type() == DRM_PLANE_TYPE_CURSOR ||
       !plane->CanUseForCrtcId(crtc_id))
     return false;
 
@@ -216,39 +243,28 @@ bool HardwareDisplayPlaneManagerLegacy::IsCompatible(
   return plane->IsSupportedFormat(format);
 }
 
-bool HardwareDisplayPlaneManagerLegacy::CommitColorMatrix(
-    const CrtcProperties& crtc_props) {
-  return drm_->SetObjectProperty(crtc_props.id, DRM_MODE_OBJECT_CRTC,
-                                 crtc_props.ctm.id, crtc_props.ctm.value);
-}
+bool HardwareDisplayPlaneManagerLegacy::CommitPendingCrtcState(
+    CrtcState& crtc_state) {
+  CrtcProperties& crtc_props = crtc_state.properties;
+  bool result = true;
 
-bool HardwareDisplayPlaneManagerLegacy::CommitGammaCorrection(
-    const CrtcProperties& crtc_props) {
-  DCHECK(crtc_props.degamma_lut.id || crtc_props.gamma_lut.id);
-
-  if (crtc_props.degamma_lut.id) {
-    int ret = drm_->SetObjectProperty(crtc_props.id, DRM_MODE_OBJECT_CRTC,
-                                      crtc_props.degamma_lut.id,
-                                      crtc_props.degamma_lut.value);
-    if (ret < 0) {
-      LOG(ERROR) << "Failed to set DEGAMMA_LUT property for crtc="
-                 << crtc_props.id;
-      return false;
-    }
+  if (!CommitPendingCrtcProperty(drm_, crtc_props.id, crtc_props.ctm,
+                                 crtc_state.pending_ctm_blob)) {
+    LOG(ERROR) << "Failed to set CTM property for crtc=" << crtc_props.id;
+    result = false;
   }
-
-  if (crtc_props.gamma_lut.id) {
-    int ret = drm_->SetObjectProperty(crtc_props.id, DRM_MODE_OBJECT_CRTC,
-                                      crtc_props.gamma_lut.id,
-                                      crtc_props.gamma_lut.value);
-    if (ret < 0) {
-      LOG(ERROR) << "Failed to set GAMMA_LUT property for crtc="
-                 << crtc_props.id;
-      return false;
-    }
+  if (!CommitPendingCrtcProperty(drm_, crtc_props.id, crtc_props.gamma_lut,
+                                 crtc_state.pending_gamma_lut_blob)) {
+    LOG(ERROR) << "Failed to set GAMMA_LUT property for crtc=" << crtc_props.id;
+    result = false;
   }
-
-  return true;
+  if (!CommitPendingCrtcProperty(drm_, crtc_props.id, crtc_props.degamma_lut,
+                                 crtc_state.pending_degamma_lut_blob)) {
+    LOG(ERROR) << "Failed to set DEGAMMA_LUT property for crtc="
+               << crtc_props.id;
+    result = false;
+  }
+  return result;
 }
 
 }  // namespace ui

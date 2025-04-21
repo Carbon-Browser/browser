@@ -1,13 +1,13 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/ui_devtools/ui_element.h"
 
-#include <algorithm>
-
 #include "base/check_op.h"
+#include "base/not_fatal_until.h"
 #include "base/notreached.h"
+#include "base/ranges/algorithm.h"
 #include "components/ui_devtools/protocol.h"
 #include "components/ui_devtools/ui_element_delegate.h"
 
@@ -56,13 +56,12 @@ std::string UIElement::GetTypeName() const {
       return "Surface";
   }
   NOTREACHED();
-  return std::string();
 }
 
 void UIElement::AddChild(UIElement* child, UIElement* before) {
   if (before) {
-    auto iter = std::find(children_.begin(), children_.end(), before);
-    DCHECK(iter != children_.end());
+    auto iter = base::ranges::find(children_, before);
+    CHECK(iter != children_.end(), base::NotFatalUntil::M130);
     children_.insert(iter, child);
   } else {
     children_.push_back(child);
@@ -81,22 +80,24 @@ void UIElement::AddOrderedChild(UIElement* child,
 }
 
 void UIElement::ClearChildren() {
-  for (auto* child : children_)
+  for (ui_devtools::UIElement* child : children_) {
+    delegate_->OnUIElementRemoved(child);
     delete child;
+  }
   children_.clear();
 }
 
 void UIElement::RemoveChild(UIElement* child, bool notify_delegate) {
   if (notify_delegate)
     delegate_->OnUIElementRemoved(child);
-  auto iter = std::find(children_.begin(), children_.end(), child);
-  DCHECK(iter != children_.end());
+  auto iter = base::ranges::find(children_, child);
+  CHECK(iter != children_.end(), base::NotFatalUntil::M130);
   children_.erase(iter);
 }
 
 void UIElement::ReorderChild(UIElement* child, int index) {
-  auto i = std::find(children_.begin(), children_.end(), child);
-  DCHECK(i != children_.end());
+  auto i = base::ranges::find(children_, child);
+  CHECK(i != children_.end(), base::NotFatalUntil::M130);
   DCHECK_GE(index, 0);
   DCHECK_LT(static_cast<size_t>(index), children_.size());
 
@@ -117,7 +118,6 @@ void UIElement::ReorderChild(UIElement* child, int index) {
 template <class T>
 int UIElement::FindUIElementIdForBackendElement(T* element) const {
   NOTREACHED();
-  return 0;
 }
 
 std::vector<UIElement::ClassProperties>

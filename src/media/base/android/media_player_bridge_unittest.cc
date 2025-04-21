@@ -1,12 +1,13 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/base/android/media_player_bridge.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/test/task_environment.h"
 #include "net/cookies/site_for_cookies.h"
+#include "net/storage_access_api/status.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -35,11 +36,13 @@ class MediaPlayerBridgeTest : public testing::Test {
       : bridge_(GURL(),
                 net::SiteForCookies(),
                 url::Origin(),
+                net::StorageAccessApiStatus::kNone,
                 "",
                 false,
                 &client_,
                 false,
-                false) {}
+                false,
+                base::flat_map<std::string, std::string>{}) {}
 
   MediaPlayerBridgeTest(const MediaPlayerBridgeTest&) = delete;
   MediaPlayerBridgeTest& operator=(const MediaPlayerBridgeTest&) = delete;

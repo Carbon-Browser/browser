@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,6 @@ import org.robolectric.annotation.Config;
 import org.robolectric.shadows.ShadowLog;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
-import org.chromium.base.test.util.JniMocker;
 import org.chromium.chrome.browser.price_tracking.PriceDropNotifier.NotificationData;
 import org.chromium.chrome.browser.price_tracking.proto.Notifications.Action;
 import org.chromium.chrome.browser.price_tracking.proto.Notifications.ChromeMessage;
@@ -34,12 +33,10 @@ import org.chromium.chrome.browser.price_tracking.proto.Notifications.ExpandedVi
 import org.chromium.chrome.browser.price_tracking.proto.Notifications.PriceDropNotificationPayload;
 import org.chromium.components.commerce.PriceTracking.ProductPrice;
 import org.chromium.components.optimization_guide.proto.CommonTypesProto.Any;
-import org.chromium.components.payments.CurrencyFormatter;
-import org.chromium.components.payments.CurrencyFormatterJni;
+import org.chromium.components.payments.ui.CurrencyFormatter;
+import org.chromium.components.payments.ui.CurrencyFormatterJni;
 
-/**
- * Unit test for {@link PriceDropNotifier}.
- */
+/** Unit test for {@link PriceDropNotifier}. */
 @RunWith(BaseRobolectricTestRunner.class)
 @Config(manifest = Config.NONE)
 public class PriceTrackingNotificationBridgeUnitTest {
@@ -55,32 +52,28 @@ public class PriceTrackingNotificationBridgeUnitTest {
     private static final String ACTION_ID_0 = "visit_site";
     private static final String ACTION_ID_1 = "turn_off_alert";
     private static final String ACTION_TEXT_0 = "Visit site";
-    private static final String ACTION_TEXT_1 = "Stop tracking product";
+    private static final String ACTION_TEXT_1 = "Untrack price";
 
     private PriceTrackingNotificationBridge mPriceTrackingNotificationBridge;
 
-    @Rule
-    public MockitoRule mMockitoRule = MockitoJUnit.rule();
-    @Rule
-    public JniMocker mJniMocker = new JniMocker();
+    @Rule public MockitoRule mMockitoRule = MockitoJUnit.rule();
 
-    @Mock
-    PriceDropNotifier mNotifier;
-    @Mock
-    PriceDropNotificationManager mPriceDropNotificationManager;
+    @Mock PriceDropNotifier mNotifier;
+    @Mock PriceDropNotificationManager mPriceDropNotificationManager;
 
-    @Captor
-    ArgumentCaptor<PriceDropNotifier.NotificationData> mNotificationDataCaptor;
+    @Captor ArgumentCaptor<PriceDropNotifier.NotificationData> mNotificationDataCaptor;
 
     @Before
     public void setUp() {
         ShadowLog.stream = System.out;
         CurrencyFormatter.Natives currencyFormatterJniMock =
                 Mockito.mock(CurrencyFormatter.Natives.class);
-        mJniMocker.mock(CurrencyFormatterJni.TEST_HOOKS, currencyFormatterJniMock);
+        CurrencyFormatterJni.setInstanceForTesting(currencyFormatterJniMock);
         Mockito.doReturn("$1.00")
                 .when(currencyFormatterJniMock)
-                .format(Mockito.anyLong(), Mockito.any(CurrencyFormatter.class),
+                .format(
+                        Mockito.anyLong(),
+                        Mockito.any(CurrencyFormatter.class),
                         Mockito.anyString());
         mPriceTrackingNotificationBridge =
                 new PriceTrackingNotificationBridge(0, mNotifier, mPriceDropNotificationManager);
@@ -94,7 +87,8 @@ public class PriceTrackingNotificationBridgeUnitTest {
     }
 
     // Create a ChromeNotification.Builder with specific ChromeMessage.
-    private ChromeNotification.Builder createChromeNotification(ChromeMessage.Builder chromeMessage,
+    private ChromeNotification.Builder createChromeNotification(
+            ChromeMessage.Builder chromeMessage,
             PriceDropNotificationPayload.Builder priceDropNotificationPayload) {
         ChromeNotification.Builder builder = ChromeNotification.newBuilder();
         builder.setNotificationDataType(NotificationDataType.PRICE_DROP_NOTIFICATION);

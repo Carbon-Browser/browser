@@ -1,7 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40284755): Remove this and spanify to fix the errors.
+#pragma allow_unsafe_buffers
+#endif
 
 #ifndef BASE_TRACE_EVENT_TRACE_EVENT_IMPL_H_
 #define BASE_TRACE_EVENT_TRACE_EVENT_IMPL_H_
@@ -12,14 +16,15 @@
 #include <string>
 
 #include "base/base_export.h"
-#include "base/callback.h"
+#include "base/compiler_specific.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "base/process/process_handle.h"
 #include "base/strings/string_util.h"
 #include "base/threading/platform_thread.h"
 #include "base/time/time.h"
 #include "base/trace_event/common/trace_event_common.h"
 #include "base/trace_event/trace_arguments.h"
-#include "base/trace_event/trace_event_memory_overhead.h"
 #include "build/build_config.h"
 
 namespace base {
@@ -47,7 +52,7 @@ struct TraceEventHandle {
 
 class BASE_EXPORT TraceEvent {
  public:
-  // TODO(898794): Remove once all users have been updated.
+  // TODO(crbug.com/40599662): Remove once all users have been updated.
   using TraceValue = base::trace_event::TraceValue;
 
   TraceEvent();
@@ -60,7 +65,6 @@ class BASE_EXPORT TraceEvent {
              const char* name,
              const char* scope,
              unsigned long long id,
-             unsigned long long bind_id,
              TraceArguments* args,
              unsigned int flags);
 
@@ -90,13 +94,10 @@ class BASE_EXPORT TraceEvent {
              const char* name,
              const char* scope,
              unsigned long long id,
-             unsigned long long bind_id,
              TraceArguments* args,
              unsigned int flags);
 
   void UpdateDuration(const TimeTicks& now, const ThreadTicks& thread_now);
-
-  void EstimateTraceMemoryOverhead(TraceEventMemoryOverhead* overhead);
 
   // Serialize event data to JSON
   void AppendAsJSON(
@@ -114,10 +115,9 @@ class BASE_EXPORT TraceEvent {
   const char* scope() const { return scope_; }
   unsigned long long id() const { return id_; }
   unsigned int flags() const { return flags_; }
-  unsigned long long bind_id() const { return bind_id_; }
   // Exposed for unittesting:
 
-  const StringStorage& parameter_copy_storage() const {
+  const StringStorage& parameter_copy_storage() const LIFETIME_BOUND {
     return parameter_copy_storage_;
   }
 
@@ -140,10 +140,6 @@ class BASE_EXPORT TraceEvent {
                : nullptr;
   }
 
-#if BUILDFLAG(IS_ANDROID)
-  void SendToATrace();
-#endif
-
  private:
   void InitArgs(TraceArguments* args);
 
@@ -159,7 +155,7 @@ class BASE_EXPORT TraceEvent {
   // The equivalence is checked with a static_assert() in trace_event_impl.cc.
   const char* scope_ = nullptr;
   unsigned long long id_ = 0u;
-  const unsigned char* category_group_enabled_ = nullptr;
+  raw_ptr<const unsigned char> category_group_enabled_ = nullptr;
   const char* name_ = nullptr;
   StringStorage parameter_copy_storage_;
   TraceArguments args_;
@@ -171,7 +167,6 @@ class BASE_EXPORT TraceEvent {
     ProcessId process_id_;
   };
   unsigned int flags_ = 0;
-  unsigned long long bind_id_ = 0;
   char phase_ = TRACE_EVENT_PHASE_BEGIN;
 };
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,7 +34,7 @@ int InMemoryUrlProtocol::Read(int size, uint8_t* data) {
     size = available_bytes;
 
   if (size > 0) {
-    memcpy(data, data_ + position_, size);
+    memcpy(data, data_ + base::checked_cast<size_t>(position_), size);
     position_ += size;
   }
 

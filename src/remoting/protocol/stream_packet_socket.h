@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,8 +21,7 @@ class StreamSocket;
 
 }  // namespace net
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 class StreamPacketProcessor;
 
@@ -46,8 +45,6 @@ class StreamPacketSocket final : public rtc::AsyncPacketSocket {
   // the initialization succeeds.
   bool InitClientTcp(const rtc::SocketAddress& local_address,
                      const rtc::SocketAddress& remote_address,
-                     const rtc::ProxyInfo& proxy_info,
-                     const std::string& user_agent,
                      const rtc::PacketSocketTcpOptions& tcp_options);
 
   // rtc::AsyncPacketSocket interface.
@@ -117,7 +114,6 @@ class StreamPacketSocket final : public rtc::AsyncPacketSocket {
   int error_ = 0;
 };
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol
 
 #endif  // REMOTING_PROTOCOL_STREAM_PACKET_SOCKET_H_

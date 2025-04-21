@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,24 +21,45 @@ struct RouterLinkState;
 class LocalRouterLink : public RouterLink {
  public:
   // Creates a new pair of LocalRouterLinks linking the given pair of Routers
-  // together. The Routers must not currently have outward links. `type` must
-  // be either kCentral or kBridge, as local links may never be peripheral.
-  static RouterLink::Pair ConnectRouters(LinkType type,
-                                         const Router::Pair& routers);
+  // together. `type` must be either kCentral or kBridge, as local links may
+  // never be peripheral. `initial_state` determines whether the new link starts
+  // in a stable state.
+  //
+  // It is the caller's responsibilty to give the returned links to their
+  // respective Routers.
+  enum InitialState { kUnstable, kStable };
+  static RouterLink::Pair CreatePair(LinkType type,
+                                     const Router::Pair& routers,
+                                     InitialState initial_state = kUnstable);
 
   // RouterLink:
   LinkType GetType() const override;
   RouterLinkState* GetLinkState() const override;
-  bool HasLocalPeer(const Router& router) override;
-  bool IsRemoteLinkTo(const NodeLink& node_link, SublinkId sublink) override;
-  void AcceptParcel(Parcel& parcel) override;
+  void WaitForLinkStateAsync(std::function<void()> callback) override;
+  Ref<Router> GetLocalPeer() override;
+  RemoteRouterLink* AsRemoteRouterLink() override;
+  void AllocateParcelData(size_t num_bytes,
+                          bool allow_partial,
+                          Parcel& parcel) override;
+  void AcceptParcel(std::unique_ptr<Parcel> parcel) override;
   void AcceptRouteClosure(SequenceNumber sequence_length) override;
+  void AcceptRouteDisconnected() override;
   void MarkSideStable() override;
   bool TryLockForBypass(const NodeName& bypass_request_source) override;
   bool TryLockForClosure() override;
   void Unlock() override;
   bool FlushOtherSideIfWaiting() override;
   bool CanNodeRequestBypass(const NodeName& bypass_request_source) override;
+  void BypassPeer(const NodeName& bypass_target_node,
+                  SublinkId bypass_target_sublink) override;
+  void StopProxying(SequenceNumber inbound_sequence_length,
+                    SequenceNumber outbound_sequence_length) override;
+  void ProxyWillStop(SequenceNumber inbound_sequence_length) override;
+  void BypassPeerWithLink(SublinkId new_sublink,
+                          FragmentRef<RouterLinkState> new_link_state,
+                          SequenceNumber inbound_sequence_length) override;
+  void StopProxyingToLocalPeer(
+      SequenceNumber outbound_sequence_length) override;
   void Deactivate() override;
   std::string Describe() const override;
 

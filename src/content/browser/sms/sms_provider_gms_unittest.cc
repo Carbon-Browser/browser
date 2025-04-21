@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,10 +17,12 @@
 #include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/test_renderer_host.h"
-#include "content/test/content_unittests_jni_headers/SmsProviderFakes_jni.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/android/window_android.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "content/test/content_unittests_jni_headers/SmsProviderFakes_jni.h"
 
 using base::android::AttachCurrentThread;
 using ::testing::_;
@@ -60,9 +62,9 @@ class SmsProviderGmsBaseTest : public RenderViewHostTestHarness {
 
  protected:
   SmsProviderGmsBaseTest() = default;
-  virtual ~SmsProviderGmsBaseTest() override = default;
+  ~SmsProviderGmsBaseTest() override = default;
 
-  void SetUp() {
+  void SetUp() override {
     RenderViewHostTestHarness::SetUp();
 
     base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
@@ -81,7 +83,7 @@ class SmsProviderGmsBaseTest : public RenderViewHostTestHarness {
     provider_->AddObserver(&observer_);
   }
 
-  void TearDown() { RenderViewHostTestHarness::TearDown(); }
+  void TearDown() override { RenderViewHostTestHarness::TearDown(); }
 
   void TriggerSms(const std::string& sms) {
     if (GetSwitch() == switches::kWebOtpBackendUserConsent) {

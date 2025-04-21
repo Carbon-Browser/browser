@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,6 +24,7 @@ BeforeInstallPromptEvent::BeforeInstallPromptEvent(
     mojo::PendingReceiver<mojom::blink::AppBannerEvent> event_receiver,
     const Vector<String>& platforms)
     : Event(name, Bubbles::kNo, Cancelable::kYes),
+      ActiveScriptWrappable<BeforeInstallPromptEvent>({}),
       ExecutionContextClient(&context),
       banner_service_remote_(&context),
       receiver_(this, &context),
@@ -44,6 +45,7 @@ BeforeInstallPromptEvent::BeforeInstallPromptEvent(
     const AtomicString& name,
     const BeforeInstallPromptEventInit* init)
     : Event(name, init),
+      ActiveScriptWrappable<BeforeInstallPromptEvent>({}),
       ExecutionContextClient(execution_context),
       banner_service_remote_(execution_context),
       receiver_(this, execution_context) {
@@ -57,7 +59,7 @@ Vector<String> BeforeInstallPromptEvent::platforms() const {
   return platforms_;
 }
 
-ScriptPromise BeforeInstallPromptEvent::userChoice(
+ScriptPromise<AppBannerPromptResult> BeforeInstallPromptEvent::userChoice(
     ScriptState* script_state,
     ExceptionState& exception_state) {
   UseCounter::Count(ExecutionContext::From(script_state),
@@ -69,10 +71,10 @@ ScriptPromise BeforeInstallPromptEvent::userChoice(
   exception_state.ThrowDOMException(
       DOMExceptionCode::kInvalidStateError,
       "userChoice cannot be accessed on this event.");
-  return ScriptPromise();
+  return EmptyPromise();
 }
 
-ScriptPromise BeforeInstallPromptEvent::prompt(
+ScriptPromise<AppBannerPromptResult> BeforeInstallPromptEvent::prompt(
     ScriptState* script_state,
     ExceptionState& exception_state) {
   // |m_bannerService| must be bound to allow us to inform the AppBannerService
@@ -80,7 +82,7 @@ ScriptPromise BeforeInstallPromptEvent::prompt(
   if (!banner_service_remote_.is_bound()) {
     exception_state.ThrowDOMException(DOMExceptionCode::kInvalidStateError,
                                       "The prompt() method cannot be called.");
-    return ScriptPromise();
+    return EmptyPromise();
   }
 
   LocalDOMWindow* window = LocalDOMWindow::From(script_state);
@@ -89,7 +91,7 @@ ScriptPromise BeforeInstallPromptEvent::prompt(
     exception_state.ThrowDOMException(
         DOMExceptionCode::kNotAllowedError,
         "The prompt() method must be called with a user gesture");
-    return ScriptPromise();
+    return EmptyPromise();
   }
 
   UseCounter::Count(window, WebFeature::kBeforeInstallPromptEventPrompt);

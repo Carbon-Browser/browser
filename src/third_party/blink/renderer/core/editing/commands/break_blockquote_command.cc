@@ -36,29 +36,27 @@
 #include "third_party/blink/renderer/core/editing/visible_units.h"
 #include "third_party/blink/renderer/core/html/html_br_element.h"
 #include "third_party/blink/renderer/core/html/html_element.h"
+#include "third_party/blink/renderer/core/html/html_li_element.h"
+#include "third_party/blink/renderer/core/html/html_olist_element.h"
 #include "third_party/blink/renderer/core/html/html_quote_element.h"
 #include "third_party/blink/renderer/core/html_names.h"
-#include "third_party/blink/renderer/core/layout/layout_list_item.h"
-#include "third_party/blink/renderer/core/layout/ng/list/layout_ng_list_item.h"
+#include "third_party/blink/renderer/core/layout/list/layout_list_item.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 
 namespace blink {
 
 namespace {
 
-absl::optional<int> GetListItemNumber(const Node* node) {
+std::optional<int> GetListItemNumber(const Node* node) {
   if (!node)
-    return absl::nullopt;
+    return std::nullopt;
   // Because of elements with "display:list-item" has list item number,
   // we use layout object instead of checking |HTMLLIElement|.
-  const LayoutObject* const layout_object = node->GetLayoutObject();
-  if (!layout_object)
-    return absl::nullopt;
-  if (layout_object->IsLayoutNGListItem())
-    return To<LayoutNGListItem>(layout_object)->Value();
-  if (layout_object->IsListItem())
-    return To<LayoutListItem>(layout_object)->Value();
-  return absl::nullopt;
+  if (const auto* list_item =
+          DynamicTo<LayoutListItem>(node->GetLayoutObject())) {
+    return list_item->Value();
+  }
+  return std::nullopt;
 }
 
 bool IsFirstVisiblePositionInNode(const VisiblePosition& visible_position,
@@ -267,7 +265,7 @@ void BreakBlockquoteCommand::DoApply(EditingState* editing_state) {
   if (editing_state->IsAborted())
     return;
 
-  if (!ancestors.IsEmpty()) {
+  if (!ancestors.empty()) {
     // Split the tree up the ancestor chain until the topBlockquote
     // Throughout this loop, clonedParent is the clone of ancestor's parent.
     // This is so we can clone ancestor's siblings and place the clones

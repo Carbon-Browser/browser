@@ -1,10 +1,10 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "third_party/blink/renderer/platform/wtf/allocator/partition_allocator.h"
 
-#include "base/allocator/partition_allocator/partition_alloc.h"
+#include "partition_alloc/partition_alloc.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/partitions.h"
 
 namespace WTF {

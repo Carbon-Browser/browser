@@ -1,11 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/chrome_typography.h"
 
-#include "build/build_config.h"
 #include "chrome/browser/ui/views/location_bar/location_bar_view.h"
+#include "components/omnibox/browser/omnibox_field_trial.h"
 #include "ui/base/default_style.h"
 #include "ui/base/pointer/touch_ui_controller.h"
 #include "ui/base/resource/resource_bundle.h"
@@ -15,7 +15,8 @@
 int GetFontSizeDeltaBoundedByAvailableHeight(int available_height,
                                              int desired_font_size) {
   int size_delta =
-      GetFontSizeDeltaIgnoringUserOrLocaleSettings(desired_font_size);
+      gfx::PlatformFont::GetFontSizeDeltaIgnoringUserOrLocaleSettings(
+          desired_font_size);
   ui::ResourceBundle& bundle = ui::ResourceBundle::GetSharedInstance();
   gfx::FontList base_font = bundle.GetFontListWithDelta(size_delta);
 
@@ -26,28 +27,6 @@ int GetFontSizeDeltaBoundedByAvailableHeight(int available_height,
       size_delta + gfx::PlatformFont::kDefaultBaseFontSize - desired_font_size;
   base_font = base_font.DeriveWithHeightUpperBound(available_height);
 
-  return base_font.GetFontSize() - gfx::PlatformFont::kDefaultBaseFontSize +
-         user_or_locale_delta;
-}
-
-int GetFontSizeDeltaIgnoringUserOrLocaleSettings(int desired_font_size) {
-  int size_delta = desired_font_size - gfx::PlatformFont::kDefaultBaseFontSize;
-  ui::ResourceBundle& bundle = ui::ResourceBundle::GetSharedInstance();
-  gfx::FontList base_font = bundle.GetFontListWithDelta(size_delta);
-
-  // The ResourceBundle's default font may not actually be kDefaultBaseFontSize
-  // if, for example, the user has changed their system font sizes or the
-  // current locale has been overridden to use a different default font size.
-  // Adjust for the difference in default font sizes.
-  int user_or_locale_delta = 0;
-  if (base_font.GetFontSize() != desired_font_size) {
-    user_or_locale_delta = desired_font_size - base_font.GetFontSize();
-    base_font = bundle.GetFontListWithDelta(size_delta + user_or_locale_delta);
-  }
-  DCHECK_EQ(desired_font_size, base_font.GetFontSize());
-
-  // To ensure a subsequent request from the ResourceBundle ignores the delta
-  // due to user or locale settings, include it here.
   return base_font.GetFontSize() - gfx::PlatformFont::kDefaultBaseFontSize +
          user_or_locale_delta;
 }
@@ -67,48 +46,42 @@ void ApplyCommonFontStyles(int context,
       break;
     }
     case CONTEXT_TAB_COUNTER: {
-      details.size_delta = GetFontSizeDeltaIgnoringUserOrLocaleSettings(14);
+      details.size_delta =
+          gfx::PlatformFont::GetFontSizeDeltaIgnoringUserOrLocaleSettings(14);
       details.weight = gfx::Font::Weight::BOLD;
       break;
     }
+    case CONTEXT_DEEMPHASIZED:
     case CONTEXT_OMNIBOX_PRIMARY:
-    case CONTEXT_OMNIBOX_DEEMPHASIZED: {
+    case CONTEXT_OMNIBOX_POPUP:
+    case CONTEXT_OMNIBOX_SECTION_HEADER:
+    case CONTEXT_OMNIBOX_POPUP_ROW_CHIP: {
+      const bool is_touch_ui = ui::TouchUiController::Get()->touch_ui();
+      int desired_font_size = is_touch_ui ? 15 : 14;
       const int omnibox_primary_delta =
           GetFontSizeDeltaBoundedByAvailableHeight(
-              LocationBarView::GetAvailableTextHeight(),
-              ui::TouchUiController::Get()->touch_ui() ? 15 : 14);
+              LocationBarView::GetAvailableTextHeight(), desired_font_size);
       details.size_delta = omnibox_primary_delta;
-      if (context == CONTEXT_OMNIBOX_DEEMPHASIZED)
+      if (context == CONTEXT_DEEMPHASIZED) {
         --details.size_delta;
+      } else if (context == CONTEXT_OMNIBOX_POPUP_ROW_CHIP) {
+        details.size_delta -= 2;
+      }
       break;
     }
-    case CONTEXT_OMNIBOX_DECORATION: {
-      // Use 11 for both touchable and non-touchable. The touchable spec
-      // specifies 11 explicitly. Historically, non-touchable would take the
-      // primary omnibox font and incrementally reduce its size until it fit.
-      // In default configurations, it would obtain 11. Deriving fonts is slow,
-      // so don't bother starting at 14.
-      const int omnibox_decoration_delta =
-          GetFontSizeDeltaBoundedByAvailableHeight(
-              LocationBarView::GetAvailableDecorationTextHeight(), 11);
-      details.size_delta = omnibox_decoration_delta;
-      break;
-    }
-#if BUILDFLAG(IS_WIN)
-    case CONTEXT_WINDOWS10_NATIVE:
-      // Adjusts default font size up to match Win10 modern UI.
-      details.size_delta = 15 - gfx::PlatformFont::kDefaultBaseFontSize;
-      break;
-#endif
     case CONTEXT_IPH_BUBBLE_TITLE:
-      details.size_delta = GetFontSizeDeltaIgnoringUserOrLocaleSettings(18);
+      details.size_delta =
+          gfx::PlatformFont::GetFontSizeDeltaIgnoringUserOrLocaleSettings(18);
+      details.weight = gfx::Font::Weight::MEDIUM;
       break;
     case CONTEXT_IPH_BUBBLE_BODY:
-      details.size_delta = GetFontSizeDeltaIgnoringUserOrLocaleSettings(14);
+      details.size_delta =
+          gfx::PlatformFont::GetFontSizeDeltaIgnoringUserOrLocaleSettings(14);
       break;
-    case CONTEXT_IPH_BUBBLE_BUTTON:
     case CONTEXT_SIDE_PANEL_TITLE:
-      details.size_delta = GetFontSizeDeltaIgnoringUserOrLocaleSettings(13);
+    case CONTEXT_TOAST_BODY_TEXT:
+      details.size_delta =
+          gfx::PlatformFont::GetFontSizeDeltaIgnoringUserOrLocaleSettings(13);
       break;
   }
 }

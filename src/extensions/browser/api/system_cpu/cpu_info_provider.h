@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,14 @@
 
 #include <vector>
 
-#include "base/cpu.h"
 #include "base/lazy_instance.h"
+#include "build/build_config.h"
 #include "extensions/browser/api/system_info/system_info_provider.h"
 #include "extensions/common/api/system_cpu.h"
+
+#if defined(ARCH_CPU_X86_FAMILY)
+#include "base/cpu.h"
+#endif
 
 namespace extensions {
 
@@ -54,7 +58,9 @@ class CpuInfoProvider : public SystemInfoProvider {
 
   static base::LazyInstance<scoped_refptr<CpuInfoProvider>>::DestructorAtExit
       provider_;
+#if defined(ARCH_CPU_X86_FAMILY)
   base::CPU cpu_;
+#endif
 };
 
 }  // namespace extensions

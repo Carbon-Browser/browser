@@ -1,8 +1,9 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.shape_detection;
+import org.chromium.build.annotations.NullMarked;
 
 import android.graphics.Point;
 import android.graphics.Rect;
@@ -22,9 +23,8 @@ import org.chromium.shape_detection.mojom.BarcodeDetectionResult;
 import org.chromium.shape_detection.mojom.BarcodeDetectorOptions;
 import org.chromium.shape_detection.mojom.BarcodeFormat;
 
-/**
- * Implementation of mojo BarcodeDetection, using Google Play Services vision package.
- */
+/** Implementation of mojo BarcodeDetection, using Google Play Services vision package. */
+@NullMarked
 public class BarcodeDetectionImpl implements BarcodeDetection {
     private static final String TAG = "BarcodeDetectionImpl";
 
@@ -69,9 +69,10 @@ public class BarcodeDetectionImpl implements BarcodeDetection {
                 }
             }
         }
-        mBarcodeDetector = new BarcodeDetector.Builder(ContextUtils.getApplicationContext())
-                                   .setBarcodeFormats(formats)
-                                   .build();
+        mBarcodeDetector =
+                new BarcodeDetector.Builder(ContextUtils.getApplicationContext())
+                        .setBarcodeFormats(formats)
+                        .build();
     }
 
     @Override

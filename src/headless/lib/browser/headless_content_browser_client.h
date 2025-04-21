@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,8 +43,6 @@ class HeadlessContentBrowserClient : public content::ContentBrowserClient {
       blink::AssociatedInterfaceRegistry& associated_registry) override;
   std::unique_ptr<content::DevToolsManagerDelegate>
   CreateDevToolsManagerDelegate() override;
-  scoped_refptr<content::QuotaPermissionContext> CreateQuotaPermissionContext()
-      override;
   content::GeneratedCodeCacheSettings GetGeneratedCodeCacheSettings(
       content::BrowserContext* context) override;
 #if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_MAC)
@@ -67,12 +65,52 @@ class HeadlessContentBrowserClient : public content::ContentBrowserClient {
       base::OnceCallback<void(content::CertificateRequestResultType)> callback)
       override;
   base::OnceClosure SelectClientCertificate(
+      content::BrowserContext* browser_context,
+      int process_id,
       content::WebContents* web_contents,
       net::SSLCertRequestInfo* cert_request_info,
       net::ClientCertIdentityList client_certs,
       std::unique_ptr<content::ClientCertificateDelegate> delegate) override;
   bool ShouldEnableStrictSiteIsolation() override;
+  bool ShouldAllowProcessPerSiteForMultipleMainFrames(
+      content::BrowserContext* context) override;
 
+  // Returns whether |api_origin| on |top_frame_origin| can perform
+  // |operation| within the interest group API.
+  bool IsInterestGroupAPIAllowed(content::BrowserContext* browser_context,
+                                 content::RenderFrameHost* render_frame_host,
+                                 content::InterestGroupApiOperation operation,
+                                 const url::Origin& top_frame_origin,
+                                 const url::Origin& api_origin) override;
+
+  bool IsPrivacySandboxReportingDestinationAttested(
+      content::BrowserContext* browser_context,
+      const url::Origin& destination_origin,
+      content::PrivacySandboxInvokingAPI invoking_api) override;
+
+  bool IsSharedStorageAllowed(
+      content::BrowserContext* browser_context,
+      content::RenderFrameHost* rfh,
+      const url::Origin& top_frame_origin,
+      const url::Origin& accessing_origin,
+      std::string* out_debug_message,
+      bool* out_block_is_site_setting_specific) override;
+  bool IsSharedStorageSelectURLAllowed(
+      content::BrowserContext* browser_context,
+      const url::Origin& top_frame_origin,
+      const url::Origin& accessing_origin,
+      std::string* out_debug_message,
+      bool* out_block_is_site_setting_specific) override;
+  bool IsFencedStorageReadAllowed(content::BrowserContext* browser_context,
+                                  content::RenderFrameHost* rfh,
+                                  const url::Origin& top_frame_origin,
+                                  const url::Origin& accessing_origin) override;
+  bool IsCookieDeprecationLabelAllowed(
+      content::BrowserContext* browser_context) override;
+  bool IsCookieDeprecationLabelAllowedForContext(
+      content::BrowserContext* browser_context,
+      const url::Origin& top_frame_origin,
+      const url::Origin& context_origin) override;
   void ConfigureNetworkContextParams(
       content::BrowserContext* context,
       bool in_memory,
@@ -83,9 +121,14 @@ class HeadlessContentBrowserClient : public content::ContentBrowserClient {
 
   std::string GetProduct() override;
   std::string GetUserAgent() override;
+  blink::UserAgentMetadata GetUserAgentMetadata() override;
 
   bool CanAcceptUntrustedExchangesIfNeeded() override;
-  device::GeolocationManager* GetGeolocationManager() override;
+  device::GeolocationSystemPermissionManager*
+  GetGeolocationSystemPermissionManager() override;
+#if BUILDFLAG(IS_WIN)
+  void SessionEnding(std::optional<DWORD> control_type) override;
+#endif
 
 #if defined(HEADLESS_USE_POLICY)
   std::vector<std::unique_ptr<content::NavigationThrottle>>
@@ -95,6 +138,15 @@ class HeadlessContentBrowserClient : public content::ContentBrowserClient {
   void OnNetworkServiceCreated(
       ::network::mojom::NetworkService* network_service) override;
 
+  void GetHyphenationDictionary(
+      base::OnceCallback<void(const base::FilePath&)> callback) override;
+
+  std::unique_ptr<content::VideoOverlayWindow>
+  CreateWindowForVideoPictureInPicture(
+      content::VideoPictureInPictureWindowController* controller) override;
+
+  bool ShouldSandboxNetworkService() override;
+
  private:
   class StubBadgeService;
 
@@ -102,11 +154,11 @@ class HeadlessContentBrowserClient : public content::ContentBrowserClient {
       content::RenderFrameHost* render_frame_host,
       mojo::PendingReceiver<blink::mojom::BadgeService> receiver);
 
-  raw_ptr<HeadlessBrowserImpl> browser_;  // Not owned.
+  void HandleExplicitlyAllowedPorts(
+      ::network::mojom::NetworkService* network_service);
+  void SetEncryptionKey(::network::mojom::NetworkService* network_service);
 
-  // We store the callback here because we may call it from the I/O thread.
-  HeadlessBrowser::Options::AppendCommandLineFlagsCallback
-      append_command_line_flags_callback_;
+  raw_ptr<HeadlessBrowserImpl> browser_;  // Not owned.
 
   std::unique_ptr<StubBadgeService> stub_badge_service_;
 };

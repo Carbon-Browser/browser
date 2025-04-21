@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,12 @@
 
 #include <stddef.h>
 
+#include <string_view>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/metrics/histogram.h"
@@ -28,15 +29,14 @@
 #include "components/signin/public/identity_manager/scope_set.h"
 #include "components/update_client/update_query_params.h"
 #include "content/public/browser/file_url_loader.h"
-#include "content/public/browser/notification_details.h"
-#include "content/public/browser/notification_service.h"
 #include "content/public/browser/shared_cors_origin_access_list.h"
 #include "extensions/browser/extension_file_task_runner.h"
 #include "extensions/browser/extensions_browser_client.h"
-#include "extensions/browser/notification_types.h"
 #include "extensions/browser/updater/extension_cache.h"
+#include "extensions/browser/updater/extension_downloader_delegate.h"
 #include "extensions/browser/updater/extension_downloader_test_delegate.h"
 #include "extensions/browser/updater/request_queue_impl.h"
+#include "extensions/common/extension_id.h"
 #include "extensions/common/extension_updater_uma.h"
 #include "extensions/common/extension_urls.h"
 #include "extensions/common/verifier_formats.h"
@@ -97,6 +97,7 @@ const char kTokenServiceConsumerId[] = "extension_downloader";
 const char kWebstoreOAuth2Scope[] =
     "https://www.googleapis.com/auth/chromewebstore.readonly";
 
+ExtensionDownloader::TestObserver* g_test_observer = nullptr;
 ExtensionDownloaderTestDelegate* g_test_delegate = nullptr;
 
 #define RETRY_HISTOGRAM(name, retry_count, url)                           \
@@ -142,7 +143,7 @@ bool IncrementAuthUserIndex(GURL* url) {
   std::vector<std::string> new_query_parts;
   url::Component query(0, old_query.length());
   url::Component key, value;
-  while (url::ExtractQueryKeyValue(old_query.c_str(), &query, &key, &value)) {
+  while (url::ExtractQueryKeyValue(old_query, &query, &key, &value)) {
     std::string key_string = old_query.substr(key.begin, key.len);
     std::string value_string = old_query.substr(value.begin, value.len);
     if (key_string == kAuthUserQueryKey) {
@@ -163,6 +164,38 @@ bool IncrementAuthUserIndex(GURL* url) {
   return true;
 }
 
+// This sanitizes update urls used to fetch update manifests for extensions.
+std::optional<GURL> SanitizeUpdateURL(const ExtensionId& extension_id,
+                                      const GURL& update_url) {
+  if (update_url.is_empty()) {
+    // Fill in default update URL.
+    return extension_urls::GetWebstoreUpdateUrl();
+  }
+
+  // Skip extensions with non-empty invalid update URLs.
+  if (!update_url.is_valid()) {
+    DLOG(WARNING) << "Extension " << extension_id << " has invalid update url "
+                  << update_url;
+    return std::nullopt;
+  }
+
+  // Don't handle data URLs, since they don't support query parameters.
+  if (update_url.SchemeIs(url::kDataScheme)) {
+    DLOG(WARNING) << "Extension " << extension_id
+                  << " has unsupported data: URI scheme in update url "
+                  << update_url;
+    return std::nullopt;
+  }
+
+  // Make sure we use SSL for store-hosted extensions.
+  if (extension_urls::IsWebstoreUpdateUrl(update_url) &&
+      !update_url.SchemeIsCryptographic()) {
+    return extension_urls::GetWebstoreUpdateUrl();
+  }
+
+  return update_url;
+}
+
 }  // namespace
 
 const char ExtensionDownloader::kUpdateInteractivityHeader[] =
@@ -180,12 +213,6 @@ DownloadFailure::DownloadFailure(
     : error(error), failure_data(failure_data) {}
 DownloadFailure::DownloadFailure(DownloadFailure&&) = default;
 DownloadFailure::~DownloadFailure() = default;
-
-UpdateDetails::UpdateDetails(const std::string& id,
-                             const base::Version& version)
-    : id(id), version(version) {}
-
-UpdateDetails::~UpdateDetails() = default;
 
 ExtensionDownloader::ExtensionFetch::ExtensionFetch(
     ExtensionDownloaderTask task,
@@ -242,11 +269,11 @@ ExtensionDownloader::ExtensionDownloader(
       url_loader_factory_(std::move(url_loader_factory)),
       profile_path_for_url_loader_factory_(profile_path),
       manifests_queue_(
-          &kDefaultBackoffPolicy,
+          kDefaultBackoffPolicy,
           base::BindRepeating(&ExtensionDownloader::CreateManifestLoader,
                               base::Unretained(this))),
       extensions_queue_(
-          &kDefaultBackoffPolicy,
+          kDefaultBackoffPolicy,
           base::BindRepeating(&ExtensionDownloader::CreateExtensionLoader,
                               base::Unretained(this))),
       extension_cache_(nullptr),
@@ -327,9 +354,6 @@ void ExtensionDownloader::AddToFetches(
 }
 
 void ExtensionDownloader::DoStartAllPending() {
-  ReportStats();
-  url_stats_ = URLStats();
-
   if (g_test_delegate) {
     g_test_delegate->StartUpdateCheck(this, delegate_,
                                       std::move(pending_tasks_));
@@ -356,15 +380,31 @@ void ExtensionDownloader::SetIdentityManager(
   identity_manager_ = identity_manager;
 }
 
+ExtensionDownloader::TestObserver::TestObserver() = default;
+ExtensionDownloader::TestObserver::~TestObserver() = default;
+
+// static
+void ExtensionDownloader::set_test_observer(TestObserver* observer) {
+  g_test_observer = observer;
+}
+
+// static
+ExtensionDownloader::TestObserver* ExtensionDownloader::test_observer() {
+  return g_test_observer;
+}
+
 // static
 void ExtensionDownloader::set_test_delegate(
     ExtensionDownloaderTestDelegate* delegate) {
   g_test_delegate = delegate;
 }
 
-void ExtensionDownloader::SetBackoffPolicyForTesting(
-    const net::BackoffEntry::Policy* backoff_policy) {
-  manifests_queue_.set_backoff_policy(backoff_policy);
+void ExtensionDownloader::SetBackoffPolicy(
+    std::optional<net::BackoffEntry::Policy> backoff_policy) {
+  manifests_queue_.set_backoff_policy(
+      backoff_policy.value_or(kDefaultBackoffPolicy));
+  extensions_queue_.set_backoff_policy(
+      backoff_policy.value_or(kDefaultBackoffPolicy));
 }
 
 bool ExtensionDownloader::HasActiveManifestRequestForTesting() {
@@ -375,52 +415,7 @@ ManifestFetchData* ExtensionDownloader::GetActiveManifestFetchForTesting() {
   return manifests_queue_.active_request();
 }
 
-void ExtensionDownloader::UpdateURLStats(const GURL& update_url,
-                                         Manifest::Type extension_type) {
-  if (update_url.DomainIs(kGoogleDotCom)) {
-    url_stats_.google_url_count++;
-  } else if (update_url.is_empty()) {
-    url_stats_.no_url_count++;
-  } else {
-    url_stats_.other_url_count++;
-  }
-
-  switch (extension_type) {
-    case Manifest::TYPE_THEME:
-      ++url_stats_.theme_count;
-      break;
-    case Manifest::TYPE_EXTENSION:
-    case Manifest::TYPE_USER_SCRIPT:
-      ++url_stats_.extension_count;
-      break;
-    case Manifest::TYPE_HOSTED_APP:
-    case Manifest::TYPE_LEGACY_PACKAGED_APP:
-      ++url_stats_.app_count;
-      break;
-    case Manifest::TYPE_PLATFORM_APP:
-      ++url_stats_.platform_app_count;
-      break;
-    case Manifest::TYPE_UNKNOWN:
-    default:
-      ++url_stats_.pending_count;
-      break;
-  }
-}
-
 bool ExtensionDownloader::AddExtensionData(ExtensionDownloaderTask task) {
-  // Skip extensions with non-empty invalid update URLs.
-  if (!task.update_url.is_empty() && !task.update_url.is_valid()) {
-    DLOG(WARNING) << "Extension " << task.id << " has invalid update url "
-                  << task.update_url;
-    task.OnStageChanged(ExtensionDownloaderDelegate::Stage::FINISHED);
-    return false;
-  }
-
-  // Make sure we use SSL for store-hosted extensions.
-  if (extension_urls::IsWebstoreUpdateUrl(task.update_url) &&
-      !task.update_url.SchemeIsCryptographic())
-    task.update_url = extension_urls::GetWebstoreUpdateUrl();
-
   // Skip extensions with empty IDs.
   if (task.id.empty()) {
     DLOG(WARNING) << "Found extension with empty ID";
@@ -428,11 +423,13 @@ bool ExtensionDownloader::AddExtensionData(ExtensionDownloaderTask task) {
     return false;
   }
 
-  UpdateURLStats(task.update_url, task.type);
-  if (task.update_url.is_empty()) {
-    // Fill in default update URL.
-    task.update_url = extension_urls::GetWebstoreUpdateUrl();
+  std::optional<GURL> sanitized_update_url =
+      SanitizeUpdateURL(task.id, task.update_url);
+  if (!sanitized_update_url) {
+    task.OnStageChanged(ExtensionDownloaderDelegate::Stage::FINISHED);
+    return false;
   }
+  task.update_url = *sanitized_update_url;
 
   DCHECK(!task.update_url.is_empty());
   DCHECK(task.update_url.is_valid());
@@ -440,24 +437,6 @@ bool ExtensionDownloader::AddExtensionData(ExtensionDownloaderTask task) {
   pending_tasks_.push_back(std::move(task));
 
   return true;
-}
-
-void ExtensionDownloader::ReportStats() const {
-  UMA_HISTOGRAM_COUNTS_100("Extensions.UpdateCheckExtension",
-                           url_stats_.extension_count);
-  UMA_HISTOGRAM_COUNTS_100("Extensions.UpdateCheckTheme",
-                           url_stats_.theme_count);
-  UMA_HISTOGRAM_COUNTS_100("Extensions.UpdateCheckApp", url_stats_.app_count);
-  UMA_HISTOGRAM_COUNTS_100("Extensions.UpdateCheckPackagedApp",
-                           url_stats_.platform_app_count);
-  UMA_HISTOGRAM_COUNTS_100("Extensions.UpdateCheckPending",
-                           url_stats_.pending_count);
-  UMA_HISTOGRAM_COUNTS_100("Extensions.UpdateCheckGoogleUrl",
-                           url_stats_.google_url_count);
-  UMA_HISTOGRAM_COUNTS_100("Extensions.UpdateCheckOtherUrl",
-                           url_stats_.other_url_count);
-  UMA_HISTOGRAM_COUNTS_100("Extensions.UpdateCheckNoUrl",
-                           url_stats_.no_url_count);
 }
 
 void ExtensionDownloader::StartUpdateCheck(
@@ -512,8 +491,8 @@ void ExtensionDownloader::CreateManifestLoader() {
   const ExtensionIdSet extension_ids = active_request->GetExtensionIds();
   NotifyExtensionsDownloadStageChanged(
       extension_ids, ExtensionDownloaderDelegate::Stage::DOWNLOADING_MANIFEST);
-  std::vector<base::StringPiece> id_vector(extension_ids.begin(),
-                                           extension_ids.end());
+  std::vector<std::string_view> id_vector(extension_ids.begin(),
+                                          extension_ids.end());
   std::string id_list = base::JoinString(id_vector, ",");
   VLOG(2) << "Fetching " << active_request->full_url() << " for " << id_list;
   VLOG(2) << "Update interactivity: "
@@ -636,34 +615,31 @@ void ExtensionDownloader::ReportManifestFetchFailure(
 
 bool ExtensionDownloader::TryFetchingExtensionsFromCache(
     ManifestFetchData* fetch_data) {
-#if DCHECK_IS_ON()
-  // Ensure that IDs in `fetch_data`'s associated tasks are unique. Should be
-  // true given the way how we associate tasks to the fetch data: fetch data
-  // won't accept a duplicate ID and we won't add a task if extension ID wasn't
-  // added.
-  {
-    ExtensionIdSet ids;
-    for (const ExtensionDownloaderTask& task :
-         fetch_data->GetAssociatedTasks()) {
-      DCHECK(ids.insert(task.id).second)
-          << "ManifestFetchData has tasks with duplicate IDs!";
-    }
-  }
-#endif
   ExtensionIdSet extensions_fetched_from_cache;
   std::vector<ExtensionDownloaderTask> tasks_left;
+  std::map<ExtensionId, std::optional<base::FilePath>> cache_results;
   for (ExtensionDownloaderTask& task : fetch_data->TakeAssociatedTasks()) {
-    // Extension is fetched here only in cases when we fail to fetch the update
-    // manifest or parsing of update manifest failed. In such cases, we don't
-    // have expected version and expected hash. Thus, passing empty hash and
-    // version would not be a problem as we only check for the expected hash and
-    // version if we have them.
-    absl::optional<base::FilePath> cached_crx_path =
-        GetCachedExtension(task.id, /*hash not fetched*/ "",
-                           /*version not fetched*/ base::Version(),
-                           /*manifest_fetch_failed*/ true);
+    // In case when there are multiple requests for the same extension ID (they
+    // could appear in the same fetch due to merging same URLs) ask the cache
+    // only once.
+    if (cache_results.count(task.id) == 0u) {
+      // Extension is fetched here only in cases when we fail to fetch the
+      // update manifest or parsing of update manifest failed. In such cases, we
+      // don't have expected version and expected hash. Thus, passing empty hash
+      // and version would not be a problem as we only check for the expected
+      // hash and version if we have them.
+      cache_results.emplace(
+          task.id, GetCachedExtension(task.id, /*hash not fetched*/ "",
+                                      /*version not fetched*/ base::Version(),
+                                      /*manifest_fetch_failed*/ true));
+    }
+    std::optional<base::FilePath>& cached_crx_path = cache_results[task.id];
     if (cached_crx_path) {
       const ExtensionId id = task.id;
+      // TODO(https://crbug.com/981891#c30) The finished downloading stage will
+      // be reported only once for all download requests for that extension.
+      // Change this when the tracker will care about different requests, not
+      // about extension ID in general.
       delegate_->OnExtensionDownloadStageChanged(
           id, ExtensionDownloaderDelegate::Stage::FINISHED);
       auto extension_fetch_data(std::make_unique<ExtensionFetch>(
@@ -792,7 +768,7 @@ void ExtensionDownloader::OnManifestLoadComplete(
 void ExtensionDownloader::HandleManifestResults(
     std::unique_ptr<ManifestFetchData> fetch_data,
     std::unique_ptr<UpdateManifestResults> results,
-    const absl::optional<ManifestParseFailure>& error) {
+    const std::optional<ManifestParseFailure>& error) {
   if (!results) {
     VLOG(2) << "parsing manifest failed (" << fetch_data->full_url() << ")";
     DCHECK(error.has_value());
@@ -834,10 +810,18 @@ void ExtensionDownloader::HandleManifestResults(
   DetermineUpdates(fetch_data->TakeAssociatedTasks(), *results, &to_update,
                    &failures);
   for (auto& update : to_update) {
-    const std::string& extension_id = update.first.id;
+    const ExtensionId& extension_id = update.first.id;
 
     GURL crx_url = update.second->crx_url;
-    NotifyUpdateFound(extension_id, update.second->version);
+
+    if (g_test_observer) {
+      g_test_observer->OnExtensionUpdateFound(
+          extension_id, fetch_data->request_ids(),
+          base::Version(update.second->version));
+    }
+    delegate_->OnExtensionUpdateFound(extension_id, fetch_data->request_ids(),
+                                      base::Version(update.second->version));
+
     if (fetch_data->is_all_external_policy_download() && crx_url.is_empty()) {
       DCHECK_EQ(fetch_data->fetch_priority(),
                 DownloadFetchPriority::kForeground);
@@ -874,7 +858,7 @@ void ExtensionDownloader::HandleManifestResults(
 
 ExtensionDownloader::UpdateAvailability
 ExtensionDownloader::GetUpdateAvailability(
-    const std::string& extension_id,
+    const ExtensionId& extension_id,
     const std::vector<const UpdateManifestResult*>& possible_candidates,
     UpdateManifestResult** update_result_out) const {
   const bool is_extension_pending = delegate_->IsExtensionPending(extension_id);
@@ -925,8 +909,14 @@ ExtensionDownloader::GetUpdateAvailability(
       if (update_version.CompareTo(existing_version) <= 0) {
         VLOG(2) << extension_id << " version is not older than '"
                 << update_version_str << "'";
-        has_noupdate = true;
-        continue;
+        bool can_rollback =
+            update_version.CompareTo(existing_version) < 0 &&
+            (delegate_->RequestRollback(extension_id) ==
+             ExtensionDownloaderDelegate::RequestRollbackResult::kAllowed);
+        if (!can_rollback) {
+          has_noupdate = true;
+          continue;
+        }
       }
     }
 
@@ -1042,7 +1032,7 @@ void ExtensionDownloader::DetermineUpdates(
   }
 }
 
-absl::optional<base::FilePath> ExtensionDownloader::GetCachedExtension(
+std::optional<base::FilePath> ExtensionDownloader::GetCachedExtension(
     const ExtensionId& id,
     const std::string& package_hash,
     const base::Version& expected_version,
@@ -1050,21 +1040,21 @@ absl::optional<base::FilePath> ExtensionDownloader::GetCachedExtension(
   if (!extension_cache_) {
     delegate_->OnExtensionDownloadCacheStatusRetrieved(
         id, ExtensionDownloaderDelegate::CacheStatus::CACHE_DISABLED);
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   std::string version;
   if (!extension_cache_->GetExtension(id, package_hash, nullptr, &version)) {
     delegate_->OnExtensionDownloadCacheStatusRetrieved(
         id, ExtensionDownloaderDelegate::CacheStatus::CACHE_MISS);
-    return absl::nullopt;
+    return std::nullopt;
   }
   // If manifest fetch is failed, we need not verify the version of the cache as
   // we will try to install the version present in the cache.
   if (!manifest_fetch_failed && expected_version != base::Version(version)) {
     delegate_->OnExtensionDownloadCacheStatusRetrieved(
         id, ExtensionDownloaderDelegate::CacheStatus::CACHE_OUTDATED);
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   delegate_->OnExtensionDownloadCacheStatusRetrieved(
@@ -1085,7 +1075,7 @@ absl::optional<base::FilePath> ExtensionDownloader::GetCachedExtension(
 // Begins (or queues up) download of an updated extension.
 void ExtensionDownloader::FetchUpdatedExtension(
     std::unique_ptr<ExtensionFetch> fetch_data,
-    absl::optional<std::string> info) {
+    std::optional<std::string> info) {
   if (!fetch_data->url.is_valid()) {
     // TODO(asargent): This can sometimes be invalid. See crbug.com/130881.
     DLOG(WARNING) << "Invalid URL: '" << fetch_data->url.possibly_invalid_spec()
@@ -1124,7 +1114,7 @@ void ExtensionDownloader::FetchUpdatedExtension(
   // In case the request with the same URL is already in-flight, we'll merge
   // ours into it in `OnExtensionLoadComplete`.
 
-  absl::optional<base::FilePath> cached_crx_path =
+  std::optional<base::FilePath> cached_crx_path =
       GetCachedExtension(fetch_data->id, fetch_data->package_hash,
                          fetch_data->version, /*manifest_fetch_failed*/ false);
   if (cached_crx_path) {
@@ -1213,7 +1203,8 @@ void ExtensionDownloader::CreateExtensionLoader() {
               kTokenServiceConsumerId, identity_manager_, webstore_scopes,
               base::BindOnce(&ExtensionDownloader::OnAccessTokenFetchComplete,
                              base::Unretained(this)),
-              signin::PrimaryAccountAccessTokenFetcher::Mode::kImmediate);
+              signin::PrimaryAccountAccessTokenFetcher::Mode::kImmediate,
+              signin::ConsentLevel::kSync);
       return;
     }
     extension_loader_resource_request_->headers.SetHeader(
@@ -1425,15 +1416,6 @@ void ExtensionDownloader::NotifyExtensionsDownloadFailedWithList(
   }
 }
 
-void ExtensionDownloader::NotifyUpdateFound(const std::string& id,
-                                            const std::string& version) {
-  UpdateDetails updateInfo(id, base::Version(version));
-  content::NotificationService::current()->Notify(
-      extensions::NOTIFICATION_EXTENSION_UPDATE_FOUND,
-      content::NotificationService::AllBrowserContextsAndSources(),
-      content::Details<UpdateDetails>(&updateInfo));
-}
-
 bool ExtensionDownloader::IterateFetchCredentialsAfterFailure(
     ExtensionFetch* fetch,
     int response_code) {
@@ -1486,8 +1468,6 @@ bool ExtensionDownloader::IterateFetchCredentialsAfterFailure(
     default:
       NOTREACHED();
   }
-  NOTREACHED();
-  return false;
 }
 
 void ExtensionDownloader::OnAccessTokenFetchComplete(

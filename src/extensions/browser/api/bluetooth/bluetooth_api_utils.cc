@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,16 +30,16 @@ bool ConvertVendorIDSourceToApi(const BluetoothDevice::VendorIDSource& input,
                                 bluetooth::VendorIdSource* output) {
   switch (input) {
     case BluetoothDevice::VENDOR_ID_UNKNOWN:
-      *output = bluetooth::VENDOR_ID_SOURCE_NONE;
+      *output = bluetooth::VendorIdSource::kNone;
       return true;
     case BluetoothDevice::VENDOR_ID_BLUETOOTH:
-      *output = bluetooth::VENDOR_ID_SOURCE_BLUETOOTH;
+      *output = bluetooth::VendorIdSource::kBluetooth;
       return true;
     case BluetoothDevice::VENDOR_ID_USB:
-      *output = bluetooth::VENDOR_ID_SOURCE_USB;
+      *output = bluetooth::VendorIdSource::kUsb;
       return true;
     default:
-      NOTREACHED();
+      DUMP_WILL_BE_NOTREACHED();
       return false;
   }
 }
@@ -48,46 +48,46 @@ bool ConvertDeviceTypeToApi(const BluetoothDeviceType& input,
                             bluetooth::DeviceType* output) {
   switch (input) {
     case BluetoothDeviceType::UNKNOWN:
-      *output = bluetooth::DEVICE_TYPE_NONE;
+      *output = bluetooth::DeviceType::kNone;
       return true;
     case BluetoothDeviceType::COMPUTER:
-      *output = bluetooth::DEVICE_TYPE_COMPUTER;
+      *output = bluetooth::DeviceType::kComputer;
       return true;
     case BluetoothDeviceType::PHONE:
-      *output = bluetooth::DEVICE_TYPE_PHONE;
+      *output = bluetooth::DeviceType::kPhone;
       return true;
     case BluetoothDeviceType::MODEM:
-      *output = bluetooth::DEVICE_TYPE_MODEM;
+      *output = bluetooth::DeviceType::kModem;
       return true;
     case BluetoothDeviceType::AUDIO:
-      *output = bluetooth::DEVICE_TYPE_AUDIO;
+      *output = bluetooth::DeviceType::kAudio;
       return true;
     case BluetoothDeviceType::CAR_AUDIO:
-      *output = bluetooth::DEVICE_TYPE_CARAUDIO;
+      *output = bluetooth::DeviceType::kCarAudio;
       return true;
     case BluetoothDeviceType::VIDEO:
-      *output = bluetooth::DEVICE_TYPE_VIDEO;
+      *output = bluetooth::DeviceType::kVideo;
       return true;
     case BluetoothDeviceType::PERIPHERAL:
-      *output = bluetooth::DEVICE_TYPE_PERIPHERAL;
+      *output = bluetooth::DeviceType::kPeripheral;
       return true;
     case BluetoothDeviceType::JOYSTICK:
-      *output = bluetooth::DEVICE_TYPE_JOYSTICK;
+      *output = bluetooth::DeviceType::kJoystick;
       return true;
     case BluetoothDeviceType::GAMEPAD:
-      *output = bluetooth::DEVICE_TYPE_GAMEPAD;
+      *output = bluetooth::DeviceType::kGamepad;
       return true;
     case BluetoothDeviceType::KEYBOARD:
-      *output = bluetooth::DEVICE_TYPE_KEYBOARD;
+      *output = bluetooth::DeviceType::kKeyboard;
       return true;
     case BluetoothDeviceType::MOUSE:
-      *output = bluetooth::DEVICE_TYPE_MOUSE;
+      *output = bluetooth::DeviceType::kMouse;
       return true;
     case BluetoothDeviceType::TABLET:
-      *output = bluetooth::DEVICE_TYPE_TABLET;
+      *output = bluetooth::DeviceType::kTablet;
       return true;
     case BluetoothDeviceType::KEYBOARD_MOUSE_COMBO:
-      *output = bluetooth::DEVICE_TYPE_KEYBOARDMOUSECOMBO;
+      *output = bluetooth::DeviceType::kKeyboardMouseCombo;
       return true;
     default:
       return false;
@@ -99,16 +99,16 @@ bool ConvertTransportToApi(const BluetoothTransport& input,
                            bluetooth::Transport* output) {
   switch (input) {
     case BluetoothTransport::BLUETOOTH_TRANSPORT_INVALID:
-      *output = bluetooth::TRANSPORT_INVALID;
+      *output = bluetooth::Transport::kInvalid;
       return true;
     case BluetoothTransport::BLUETOOTH_TRANSPORT_CLASSIC:
-      *output = bluetooth::TRANSPORT_CLASSIC;
+      *output = bluetooth::Transport::kClassic;
       return true;
     case BluetoothTransport::BLUETOOTH_TRANSPORT_LE:
-      *output = bluetooth::TRANSPORT_LE;
+      *output = bluetooth::Transport::kLe;
       return true;
     case BluetoothTransport::BLUETOOTH_TRANSPORT_DUAL:
-      *output = bluetooth::TRANSPORT_DUAL;
+      *output = bluetooth::Transport::kDual;
       return true;
     default:
       return false;
@@ -125,55 +125,53 @@ namespace bluetooth {
 void BluetoothDeviceToApiDevice(const device::BluetoothDevice& device,
                                 Device* out) {
   out->address = device.GetAddress();
-  out->name = std::make_unique<std::string>(
-      base::UTF16ToUTF8(device.GetNameForDisplay()));
-  out->device_class = std::make_unique<int>(device.GetBluetoothClass());
+  out->name = base::UTF16ToUTF8(device.GetNameForDisplay());
+  out->device_class = device.GetBluetoothClass();
 
   // Only include the Device ID members when one exists for the device, and
   // always include all or none.
   if (ConvertVendorIDSourceToApi(device.GetVendorIDSource(),
                                  &(out->vendor_id_source)) &&
-      out->vendor_id_source != VENDOR_ID_SOURCE_NONE) {
-    out->vendor_id = std::make_unique<int>(device.GetVendorID());
-    out->product_id = std::make_unique<int>(device.GetProductID());
-    out->device_id = std::make_unique<int>(device.GetDeviceID());
+      out->vendor_id_source != VendorIdSource::kNone) {
+    out->vendor_id = device.GetVendorID();
+    out->product_id = device.GetProductID();
+    out->device_id = device.GetDeviceID();
   }
 
   ConvertDeviceTypeToApi(device.GetDeviceType(), &(out->type));
 
-  out->paired = std::make_unique<bool>(device.IsPaired());
-  out->connected = std::make_unique<bool>(device.IsConnected());
-  out->connecting = std::make_unique<bool>(device.IsConnecting());
-  out->connectable = std::make_unique<bool>(device.IsConnectable());
+  out->paired = device.IsPaired();
+  out->connected = device.IsConnected();
+  out->connecting = device.IsConnecting();
+  out->connectable = device.IsConnectable();
 
-  std::vector<std::string>* string_uuids = new std::vector<std::string>();
+  out->uuids.emplace();
   const device::BluetoothDevice::UUIDSet& uuids = device.GetUUIDs();
   for (const auto& uuid : uuids) {
-    string_uuids->push_back(uuid.canonical_value());
+    out->uuids->push_back(uuid.canonical_value());
   }
-  out->uuids.reset(string_uuids);
 
-  if (device.GetInquiryRSSI())
-    out->inquiry_rssi = std::make_unique<int>(device.GetInquiryRSSI().value());
-  else
+  if (device.GetInquiryRSSI()) {
+    out->inquiry_rssi = device.GetInquiryRSSI().value();
+  } else {
     out->inquiry_rssi.reset();
+  }
 
   if (device.GetInquiryTxPower()) {
-    out->inquiry_tx_power =
-        std::make_unique<int>(device.GetInquiryTxPower().value());
+    out->inquiry_tx_power = device.GetInquiryTxPower().value();
   } else {
     out->inquiry_tx_power.reset();
   }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  absl::optional<device::BluetoothDevice::BatteryInfo> battery_info =
+#if BUILDFLAG(IS_CHROMEOS)
+  std::optional<device::BluetoothDevice::BatteryInfo> battery_info =
       device.GetBatteryInfo(device::BluetoothDevice::BatteryType::kDefault);
 
-  if (battery_info && battery_info->percentage.has_value())
-    out->battery_percentage =
-        std::make_unique<int>(battery_info->percentage.value());
-  else
+  if (battery_info && battery_info->percentage.has_value()) {
+    out->battery_percentage = battery_info->percentage.value();
+  } else {
     out->battery_percentage.reset();
+  }
 #endif
 
 #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS)
@@ -190,13 +188,13 @@ void PopulateAdapterState(const device::BluetoothAdapter& adapter,
   out->address = adapter.GetAddress();
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if BUILDFLAG(IS_CHROMEOS)
 device::BluetoothFilterType ToBluetoothDeviceFilterType(FilterType type) {
   switch (type) {
-    case FilterType::FILTER_TYPE_NONE:
-    case FilterType::FILTER_TYPE_ALL:
+    case FilterType::kNone:
+    case FilterType::kAll:
       return device::BluetoothFilterType::ALL;
-    case FilterType::FILTER_TYPE_KNOWN:
+    case FilterType::kKnown:
       return device::BluetoothFilterType::KNOWN;
     default:
       NOTREACHED();

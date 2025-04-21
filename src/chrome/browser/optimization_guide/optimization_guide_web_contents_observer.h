@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -71,8 +71,9 @@ class OptimizationGuideWebContentsObserver
       content::NavigationHandle* navigation_handle) override;
   void DidFinishNavigation(
       content::NavigationHandle* navigation_handle) override;
+  void WebContentsDestroyed() override;
 
-  void PostFetchHintsUsingManager();
+  void DocumentOnLoadCompletedInPrimaryMainFrame() override;
 
   // Ask |hints_manager| to fetch hints for navigations that were predicted for
   // the current page load.

@@ -1,28 +1,35 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//build/config/chromeos/ui_mode.gni")
 import("//build/config/features.gni")
+import("//build/config/linux/pkg_config.gni")
 import("//build/config/sysroot.gni")
 import("//build/config/ui.gni")
 import("//pdf/features.gni")
 import("//printing/buildflags/buildflags.gni")
 import("//testing/test.gni")
-if (is_mac) {
-  import("//build/config/mac/mac_sdk.gni")
-}
 if (is_android) {
   import("//build/config/android/rules.gni")
+  import("//third_party/jni_zero/jni_zero.gni")
 }
 
-assert(enable_basic_printing)
+if (enable_printing_tests) {
+  import("//build/config/ios/bundle_data_from_filelist.gni")
+} else {
+  assert(enable_printing)
+}
 
 if (is_win || enable_print_preview) {
   # Windows basic printing or print preview requires pdf enabled.
   assert(enable_pdf,
          "Windows basic printing or print preview needs pdf: " +
              "set enable_pdf=true.")
+}
+
+config("strict") {
+  configs = [ "//build/config/compiler:wexit_time_destructors" ]
 }
 
 # Lower-dependency base printing files which are needed by both :printing and
@@ -40,6 +47,9 @@ component("printing_base") {
     "units.cc",
     "units.h",
   ]
+
+  configs += [ ":strict" ]
+
   if (use_cups_ipp || is_chromeos) {
     sources += [
       "printer_query_result.h",
@@ -50,6 +60,10 @@ component("printing_base") {
 
   if (use_cups) {
     public_configs = [ ":cups" ]
+    sources += [
+      "print_job_constants_cups.cc",
+      "print_job_constants_cups.h",
+    ]
   }
 
   cflags = []
@@ -58,6 +72,7 @@ component("printing_base") {
   public_deps = [
     "//build:chromeos_buildflags",
     "//printing/buildflags",
+    "//printing/mojom",
   ]
   deps = [
     "//base",
@@ -67,14 +82,43 @@ component("printing_base") {
   ]
 }
 
+component("settings") {
+  sources = [
+    "page_range.cc",
+    "page_range.h",
+    "page_setup.cc",
+    "page_setup.h",
+    "print_settings.cc",
+    "print_settings.h",
+  ]
+
+  public_deps = [ ":printing_base" ]
+
+  deps = [
+    "//base",
+    "//ui/gfx/geometry",
+  ]
+
+  defines = [ "IS_PRINTING_SETTINGS_IMPL" ]
+
+  if (is_chromeos) {
+    deps += [ "//chromeos/crosapi/mojom" ]
+  }
+}
+
 if (enable_oop_printing && (is_linux || is_chromeos)) {
   source_set("printing_sandbox_hook") {
     sources = [
       "sandbox/print_backend_sandbox_hook_linux.cc",
       "sandbox/print_backend_sandbox_hook_linux.h",
     ]
+
+    configs += [ ":strict" ]
+
     deps = [
+      ":printing_base",
       "//base",
+      "//printing/buildflags",
       "//sandbox/linux:sandbox_services",
       "//sandbox/policy",
       "//services/network:network_sandbox_hook",
@@ -93,6 +137,8 @@ if (enable_oop_printing && (is_linux || is_chromeos)) {
 source_set("native_drawing_context") {
   sources = [ "native_drawing_context.h" ]
 
+  configs += [ ":strict" ]
+
   deps = [ "//base" ]
 }
 
@@ -106,6 +152,8 @@ component("metafile") {
     "metafile_skia.h",
   ]
 
+  configs += [ ":strict" ]
+
   defines = [ "IS_PRINTING_METAFILE_IMPL" ]
   public_deps = [
     ":native_drawing_context",
@@ -117,16 +165,20 @@ component("metafile") {
     "//ui/accessibility",
   ]
 
-  if (is_mac) {
+  if (is_apple) {
     sources += [
       "pdf_metafile_cg_mac.cc",
       "pdf_metafile_cg_mac.h",
     ]
 
     frameworks = [
-      "ApplicationServices.framework",
       "CoreFoundation.framework",
+      "CoreGraphics.framework",
     ]
+  }
+
+  if (is_mac) {
+    frameworks += [ "ApplicationServices.framework" ]
   }
 
   if (is_win) {
@@ -134,6 +186,8 @@ component("metafile") {
       "emf_win.cc",
       "emf_win.h",
     ]
+
+    libs = [ "xpsprint.lib" ]
   }
 }
 
@@ -143,14 +197,8 @@ component("printing") {
     "nup_parameters.h",
     "page_number.cc",
     "page_number.h",
-    "page_range.cc",
-    "page_range.h",
-    "page_setup.cc",
-    "page_setup.h",
     "pdf_render_settings.h",
     "print_dialog_linux_interface.h",
-    "print_settings.cc",
-    "print_settings.h",
     "print_settings_conversion.cc",
     "print_settings_conversion.h",
     "printed_document.cc",
@@ -161,6 +209,8 @@ component("printing") {
     "pwg_raster_settings.h",
   ]
 
+  configs += [ ":strict" ]
+
   cflags = []
   defines = [ "IS_PRINTING_IMPL" ]
 
@@ -168,11 +218,11 @@ component("printing") {
     ":metafile",
     ":native_drawing_context",
     ":printing_base",
+    ":settings",
   ]
   deps = [
     "//base",
     "//base:i18n",
-    "//base/third_party/dynamic_annotations",
     "//build:chromeos_buildflags",
     "//printing/mojom",
     "//skia",
@@ -194,22 +244,19 @@ component("printing") {
     ]
   }
 
-  if (is_chromeos) {
+  if (!enable_basic_print_dialog) {
     sources += [
       "printing_context_no_system_dialog.cc",
       "printing_context_no_system_dialog.h",
     ]
   }
 
-  # TODO(crbug.com/1272828): Determine need for Fuchsia-specific implementation.
-  if (is_linux || is_fuchsia) {
+  if (is_linux) {
     sources += [
       "printing_context_linux.cc",
       "printing_context_linux.h",
     ]
-  }
 
-  if (is_linux) {
     deps += [ "//ui/linux:linux_ui" ]
   }
 
@@ -241,6 +288,7 @@ component("printing") {
       "printing_context_system_dialog_win.h",
       "printing_context_win.cc",
       "printing_context_win.h",
+      "windows_types.h",
     ]
 
     deps += [ "//printing/backend" ]
@@ -248,6 +296,20 @@ component("printing") {
 
   if (use_aura) {
     deps += [ "//ui/aura" ]
+  }
+
+  if (is_chromeos) {
+    sources += [
+      "client_info_helpers.cc",
+      "client_info_helpers.h",
+      "print_settings_conversion_chromeos.cc",
+      "print_settings_conversion_chromeos.h",
+    ]
+
+    deps += [
+      "//chromeos/crosapi/mojom",
+      "//third_party/re2",
+    ]
   }
 
   if (use_cups) {
@@ -288,19 +350,12 @@ static_library("test_support") {
     "//skia",
     "//ui/gfx",
   ]
+}
 
-  if (is_android) {
-    sources += [ "image_android.cc" ]
-  }
-
-  if (is_linux || is_chromeos || is_fuchsia) {
-    sources += [ "image_linux.cc" ]
-  }
-  if (is_mac) {
-    sources += [ "image_mac.cc" ]
-  }
-  if (is_win) {
-    sources += [ "image_win.cc" ]
+if (enable_printing_tests) {
+  bundle_data_from_filelist("pdf_metafile_cg_mac_unittest_bundle_data") {
+    testonly = true
+    filelist_name = "test/pdf_metafile_cg_mac_unittest_bundle_data.filelist"
   }
 }
 
@@ -351,23 +406,40 @@ test("printing_unittests") {
     ]
   }
 
-  if (is_mac) {
+  if (is_apple) {
     sources += [ "pdf_metafile_cg_mac_unittest.cc" ]
+  }
 
+  if (is_mac) {
     data = [
       "test/data/pdf_cg/",
       "../pdf/test/data/",
+    ]
+  } else if (enable_printing_tests) {
+    deps += [
+      ":pdf_metafile_cg_mac_unittest_bundle_data",
+      "//pdf:pdf_test_bundle_data",
     ]
   }
 
   if (is_win) {
     sources += [
+      "backend/print_backend_win_unittest.cc",
+      "backend/win_helper_unittest.cc",
+      "backend/xps_utils_win_unittest.cc",
       "emf_win_unittest.cc",
       "printed_page_win_unittest.cc",
       "printing_context_win_unittest.cc",
     ]
 
     data = [ "test/data/emf/" ]
+  }
+
+  if (is_chromeos) {
+    sources += [
+      "client_info_helpers_unittest.cc",
+      "print_settings_conversion_chromeos_unittest.cc",
+    ]
   }
 
   if (use_cups) {
@@ -389,25 +461,29 @@ test("printing_unittests") {
 }
 
 if (use_cups) {
-  config("cups") {
-    defines = [ "USE_CUPS" ]
-
-    if (is_mac) {
-      libs = [ "cups" ]
-      lib_dirs = [ "$mac_sdk_path/usr/lib" ]
-    } else {
-      # rebase_path does not accept an empty string
-      if (use_sysroot) {
-        cups_sysroot = rebase_path(sysroot)
+  if (is_chromeos_device) {
+    pkg_config("cups") {
+      packages = [ "cups" ]
+    }
+  } else {
+    config("cups") {
+      if (is_mac) {
+        libs = [ "cups" ]
+        lib_dirs = [ "$mac_sdk_path/usr/lib" ]
       } else {
-        cups_sysroot = ""
+        # rebase_path does not accept an empty string
+        if (use_sysroot) {
+          cups_sysroot = rebase_path(sysroot)
+        } else {
+          cups_sysroot = ""
+        }
+        libs = exec_script("cups_config_helper.py",
+                           [
+                             "--libs-for-gn",
+                             cups_sysroot,
+                           ],
+                           "value")
       }
-      libs = exec_script("cups_config_helper.py",
-                         [
-                           "--libs-for-gn",
-                           cups_sysroot,
-                         ],
-                         "value")
     }
   }
 }
@@ -420,11 +496,12 @@ if (is_android) {
   android_library("printing_java") {
     deps = [
       "//base:base_java",
-      "//base:jni_java",
       "//build/android:build_java",
       "//third_party/androidx:androidx_annotation_annotation_java",
+      "//third_party/jni_zero:jni_zero_java",
       "//ui/android:ui_java",
     ]
+    srcjar_deps = [ ":printing_jni_headers" ]
     sources = [
       "android/java/src/org/chromium/printing/PrintDocumentAdapterWrapper.java",
       "android/java/src/org/chromium/printing/PrintManagerDelegate.java",
@@ -434,6 +511,5 @@ if (is_android) {
       "android/java/src/org/chromium/printing/PrintingController.java",
       "android/java/src/org/chromium/printing/PrintingControllerImpl.java",
     ]
-    annotation_processor_deps = [ "//base/android/jni_generator:jni_processor" ]
   }
 }

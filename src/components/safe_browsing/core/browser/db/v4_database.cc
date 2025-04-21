@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,20 +7,23 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/debug/crash_logging.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/lazy_instance.h"
 #include "base/memory/ptr_util.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/task/task_runner_util.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/not_fatal_until.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
+#include "components/safe_browsing/core/common/features.h"
 #include "components/safe_browsing/core/common/proto/webui.pb.h"
 
 #if BUILDFLAG(IS_APPLE)
-#include "base/mac/backup_util.h"
+#include "base/apple/backup_util.h"
 #endif
 
 using base::TimeTicks;
@@ -31,6 +34,10 @@ namespace {
 
 const char kV4DatabaseSizeMetric[] = "SafeBrowsing.V4Database.Size";
 const char kV4DatabaseSizeLinearMetric[] = "SafeBrowsing.V4Database.SizeLinear";
+const char kV4DatabaseUpdateLatency[] = "SafeBrowsing.V4Database.UpdateLatency";
+constexpr base::TimeDelta kUmaMinTime = base::Milliseconds(1);
+constexpr base::TimeDelta kUmaMaxTime = base::Hours(5);
+constexpr int kUmaNumBuckets = 50;
 
 // The factory that controls the creation of the V4Database object.
 base::LazyInstance<std::unique_ptr<V4DatabaseFactory>>::Leaky g_db_factory =
@@ -51,6 +58,30 @@ std::vector<ListIdentifier> VerifyChecksums(
     }
   }
   return stores_to_reset;
+}
+
+// Returns hash prefixes matching the collection of stores.
+FullHashToStoreAndHashPrefixesMap CheckStores(
+    const std::vector<FullHashStr>& full_hashes,
+    std::vector<std::pair<ListIdentifier, V4Store*>> stores) {
+  FullHashToStoreAndHashPrefixesMap results;
+  for (const auto& store : stores) {
+    base::TimeTicks start = base::TimeTicks::Now();
+    for (const auto& full_hash : full_hashes) {
+      HashPrefixStr hash_prefix =
+          store.second->GetMatchingHashPrefix(full_hash);
+      if (!hash_prefix.empty()) {
+        results[full_hash].emplace_back(store.first, hash_prefix);
+      }
+    }
+    if (store.first.threat_type() == ThreatType::HIGH_CONFIDENCE_ALLOWLIST) {
+      base::UmaHistogramTimes(
+          "SafeBrowsing.V4Store.DbThread."
+          "CheckHighConfidenceAllowlistStoreDuration",
+          base::TimeTicks::Now() - start);
+    }
+  }
+  return results;
 }
 
 }  // namespace
@@ -75,7 +106,7 @@ void V4Database::Create(
   DCHECK(!list_infos.empty());
 
   const scoped_refptr<base::SequencedTaskRunner> callback_task_runner =
-      base::SequencedTaskRunnerHandle::Get();
+      base::SequencedTaskRunner::GetCurrentDefault();
   db_task_runner->PostTask(
       FROM_HERE, base::BindOnce(&V4Database::CreateOnTaskRunner, db_task_runner,
                                 base_path, list_infos, callback_task_runner,
@@ -94,11 +125,12 @@ void V4Database::CreateOnTaskRunner(
   if (!g_store_factory.Get())
     g_store_factory.Get() = std::make_unique<V4StoreFactory>();
 
-  if (!base::CreateDirectory(base_path))
-    NOTREACHED();
+  if (!base::CreateDirectory(base_path)) {
+    return;
+  }
 
 #if BUILDFLAG(IS_APPLE)
-  base::mac::SetBackupExclusion(base_path);
+  base::apple::SetBackupExclusion(base_path);
 #endif
 
   std::unique_ptr<StoreMap> store_map = std::make_unique<StoreMap>();
@@ -109,8 +141,11 @@ void V4Database::CreateOnTaskRunner(
     }
 
     const base::FilePath store_path = base_path.AppendASCII(it.filename());
-    (*store_map)[it.list_id()] =
+    V4StorePtr store =
         g_store_factory.Get()->CreateV4Store(db_task_runner, store_path);
+    base::UmaHistogramBoolean("SafeBrowsing.V4Store.ReadyOnStartup",
+                              store->HasValidData());
+    store_map->insert({it.list_id(), std::move(store)});
   }
 
   if (!g_db_factory.Get())
@@ -145,22 +180,22 @@ V4Database::V4Database(
       db_task_runner_(db_task_runner),
       pending_store_updates_(0) {
   DCHECK(db_task_runner->RunsTasksInCurrentSequence());
-  // This method executes on the DB sequence, whereas |io_sequence_checker_|
-  // is meant to verify methods that should execute on the IO sequence. Detach
-  // that sequence checker here; it will be bound to the IO sequence in
-  // InitializeOnIOSequence().
-  DETACH_FROM_SEQUENCE(io_sequence_checker_);
+  // This method executes on the DB sequence, whereas
+  // |sequence_checker_| is meant to verify methods that should
+  // execute on the UI sequence. Detach that sequence checker here; it
+  // will be bound to the UI sequence in InitializeOnUIThread().
+  DETACH_FROM_SEQUENCE(sequence_checker_);
 }
 
-void V4Database::InitializeOnIOSequence() {
-  // This invocation serves to bind |io_sequence_checker_| to the IO sequence
+void V4Database::InitializeOnUIThread() {
+  // This invocation serves to bind |sequence_checker_| to the UI sequence
   // after its having been detached from the DB sequence in this object's
   // constructor.
-  DCHECK_CALLED_ON_VALID_SEQUENCE(io_sequence_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 }
 
-void V4Database::StopOnIO() {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(io_sequence_checker_);
+void V4Database::StopOnUIThread() {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   weak_factory_on_io_.InvalidateWeakPtrs();
 }
 
@@ -171,7 +206,7 @@ V4Database::~V4Database() {
 void V4Database::ApplyUpdate(
     std::unique_ptr<ParsedServerResponse> parsed_server_response,
     DatabaseUpdatedCallback db_updated_callback) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(io_sequence_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(!pending_store_updates_);
   DCHECK(db_updated_callback_.is_null());
 
@@ -180,13 +215,13 @@ void V4Database::ApplyUpdate(
   // Post the V4Store update task on the DB sequence but get the callback on the
   // current sequence.
   const scoped_refptr<base::SequencedTaskRunner> current_task_runner =
-      base::SequencedTaskRunnerHandle::Get();
+      base::SequencedTaskRunner::GetCurrentDefault();
   for (std::unique_ptr<ListUpdateResponse>& response :
        *parsed_server_response) {
     ListIdentifier identifier(*response);
     StoreMap::const_iterator iter = store_map_->find(identifier);
     if (iter != store_map_->end()) {
-      const std::unique_ptr<V4Store>& old_store = iter->second;
+      const V4StorePtr& old_store = iter->second;
       if (old_store->state() != response->new_client_state()) {
         // A different state implies there are updates to process.
         pending_store_updates_++;
@@ -207,22 +242,26 @@ void V4Database::ApplyUpdate(
   if (!pending_store_updates_) {
     current_task_runner->PostTask(FROM_HERE, db_updated_callback_);
     db_updated_callback_.Reset();
+    RecordDatabaseUpdateLatency();
+    last_update_ = base::Time::Now();
   }
 }
 
 void V4Database::UpdatedStoreReady(ListIdentifier identifier,
-                                   std::unique_ptr<V4Store> new_store) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(io_sequence_checker_);
+                                   V4StorePtr new_store) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(pending_store_updates_);
   if (new_store) {
-    (*store_map_)[identifier].swap(new_store);
-    // |new_store| now is the store that needs to be destroyed on task runner.
-    V4Store::Destroy(std::move(new_store));
+    if (auto it = store_map_->find(identifier); it != store_map_->end()) {
+      it->second.swap(new_store);
+    }
   }
 
   pending_store_updates_--;
   if (!pending_store_updates_) {
     db_updated_callback_.Run();
+    RecordDatabaseUpdateLatency();
+    last_update_ = base::Time::Now();
     db_updated_callback_.Reset();
   }
 }
@@ -238,7 +277,7 @@ std::unique_ptr<StoreStateMap> V4Database::GetStoreStateMap() {
 
 bool V4Database::AreAnyStoresAvailable(
     const StoresToCheck& stores_to_check) const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(io_sequence_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   for (const ListIdentifier& identifier : stores_to_check) {
     if (IsStoreAvailable(identifier))
       return true;
@@ -248,7 +287,7 @@ bool V4Database::AreAnyStoresAvailable(
 
 bool V4Database::AreAllStoresAvailable(
     const StoresToCheck& stores_to_check) const {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(io_sequence_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   for (const ListIdentifier& identifier : stores_to_check) {
     if (!IsStoreAvailable(identifier))
       return false;
@@ -257,27 +296,34 @@ bool V4Database::AreAllStoresAvailable(
 }
 
 void V4Database::GetStoresMatchingFullHash(
-    const FullHash& full_hash,
+    const std::vector<FullHashStr>& full_hashes,
     const StoresToCheck& stores_to_check,
-    StoreAndHashPrefixes* matched_store_and_hash_prefixes) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(io_sequence_checker_);
-  matched_store_and_hash_prefixes->clear();
+    base::OnceCallback<void(FullHashToStoreAndHashPrefixesMap)> callback) {
+  FullHashToStoreAndHashPrefixesMap results;
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  std::vector<std::pair<ListIdentifier, V4Store*>> stores;
   for (const ListIdentifier& identifier : stores_to_check) {
-    if (!IsStoreAvailable(identifier))
+    if (!IsStoreAvailable(identifier)) {
       continue;
-    const auto& store_pair = store_map_->find(identifier);
-    DCHECK(store_pair != store_map_->end());
-    const std::unique_ptr<V4Store>& store = store_pair->second;
-    HashPrefix hash_prefix = store->GetMatchingHashPrefix(full_hash);
-    if (!hash_prefix.empty()) {
-      matched_store_and_hash_prefixes->emplace_back(identifier, hash_prefix);
     }
+    const auto& store_pair = store_map_->find(identifier);
+    CHECK(store_pair != store_map_->end(), base::NotFatalUntil::M130);
+    stores.emplace_back(identifier, store_pair->second.get());
   }
+
+  auto check_stores =
+      base::BindOnce(CheckStores, full_hashes, std::move(stores));
+
+    // The V4Stores ptrs are guaranteed to be valid because their deletion would
+    // be sequenced on the DB thread, after this posted task is serviced.
+    db_task_runner_->PostTaskAndReplyWithResult(
+        FROM_HERE, std::move(check_stores), std::move(callback));
 }
 
 void V4Database::ResetStores(
     const std::vector<ListIdentifier>& stores_to_reset) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(io_sequence_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   for (const ListIdentifier& identifier : stores_to_reset) {
     store_map_->at(identifier)->Reset();
   }
@@ -285,7 +331,7 @@ void V4Database::ResetStores(
 
 void V4Database::VerifyChecksum(
     DatabaseReadyForUpdatesCallback db_ready_for_updates_callback) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(io_sequence_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   // Make a threadsafe copy of store_map_ w/raw pointers that we can hand to
   // the DB thread. The V4Stores ptrs are guaranteed to be valid because their
@@ -296,9 +342,8 @@ void V4Database::VerifyChecksum(
     stores.push_back(std::make_pair(next_store.first, next_store.second.get()));
   }
 
-  base::PostTaskAndReplyWithResult(
-      db_task_runner_.get(), FROM_HERE,
-      base::BindOnce(&VerifyChecksums, stores),
+  db_task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE, base::BindOnce(&VerifyChecksums, stores),
       base::BindOnce(&V4Database::OnChecksumVerified,
                      weak_factory_on_io_.GetWeakPtr(),
                      std::move(db_ready_for_updates_callback)));
@@ -307,7 +352,7 @@ void V4Database::VerifyChecksum(
 void V4Database::OnChecksumVerified(
     DatabaseReadyForUpdatesCallback db_ready_for_updates_callback,
     const std::vector<ListIdentifier>& stores_to_reset) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(io_sequence_checker_);
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   std::move(db_ready_for_updates_callback).Run(stores_to_reset);
 }
 
@@ -342,6 +387,13 @@ void V4Database::RecordFileSizeHistograms() {
                              50);
 }
 
+void V4Database::RecordDatabaseUpdateLatency() {
+  if (!last_update_.is_null())
+    UmaHistogramCustomTimes(kV4DatabaseUpdateLatency,
+                            base::Time::Now() - last_update_, kUmaMinTime,
+                            kUmaMaxTime, kUmaNumBuckets);
+}
+
 void V4Database::CollectDatabaseInfo(
     DatabaseManagerInfo::DatabaseInfo* database_info) {
   // Records the database size in bytes.
@@ -366,9 +418,9 @@ ListInfo::ListInfo(const bool fetch_updates,
       list_id_(list_id),
       sb_threat_type_(sb_threat_type) {
   DCHECK(!fetch_updates_ || !filename_.empty());
-  DCHECK_NE(SB_THREAT_TYPE_SAFE, sb_threat_type_);
+  DCHECK_NE(SBThreatType::SB_THREAT_TYPE_SAFE, sb_threat_type_);
 }
 
-ListInfo::~ListInfo() {}
+ListInfo::~ListInfo() = default;
 
 }  // namespace safe_browsing

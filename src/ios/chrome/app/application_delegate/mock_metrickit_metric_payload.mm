@@ -1,20 +1,16 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "ios/chrome/app/application_delegate/mock_metrickit_metric_payload.h"
+#import "ios/chrome/app/application_delegate/mock_metrickit_metric_payload.h"
 
 #import <Foundation/Foundation.h>
 #import <MetricKit/MetricKit.h>
 
-#include "base/strings/sys_string_conversions.h"
-#include "components/version_info/version_info.h"
+#import "base/strings/sys_string_conversions.h"
+#import "components/version_info/version_info.h"
 #import "third_party/ocmock/OCMock/OCMock.h"
-#include "third_party/ocmock/gtest_support.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "third_party/ocmock/gtest_support.h"
 
 id MockMXMetadata() {
   id metadata = OCMClassMock([MXMetaData class]);
@@ -95,7 +91,14 @@ id MockMXHistogram(NSDictionary* dictionary, int delta) {
     OCMStub([bucket bucketCount]).andReturn(value.intValue);
     [buckets addObject:bucket];
   }
-  OCMStub([histogram bucketEnumerator]).andReturn(buckets.objectEnumerator);
+
+  // This uses `andDo` rather than `andReturn` since the objectEnumerator it
+  // returns needs to change each time it's called.
+  OCMStub([histogram bucketEnumerator]).andDo(^(NSInvocation* invocation) {
+    NSEnumerator* enumerator = buckets.objectEnumerator;
+    [invocation retainArguments];
+    [invocation setReturnValue:&enumerator];
+  });
   return histogram;
 }
 
@@ -132,7 +135,7 @@ id MockMXAppResponsivenessMetric(NSDictionary* dictionary) {
   return responsiveness;
 }
 
-id MockMXAppExitMetric(NSDictionary* dictionary) API_AVAILABLE(ios(14.0)) {
+id MockMXAppExitMetric(NSDictionary* dictionary) {
   id app_exit_metric = OCMClassMock([MXAppExitMetric class]);
   id foreground = OCMClassMock([MXForegroundExitData class]);
   NSDictionary* foreground_dict = dictionary[@"foregroundExitData"];

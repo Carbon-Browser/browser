@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <string>
 #include <utility>
 
+#include "base/containers/span.h"
 #include "base/run_loop.h"
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
@@ -54,13 +55,14 @@ TEST(MojoDataPumpTest, ReceiveStreamNotReady) {
   base::RunLoop().RunUntilIdle();
   EXPECT_FALSE(callback_called);
 
-  uint32_t num_bytes = data.size();
   // WriteData() completes synchronously because |data| is much smaller than
   // data pipe's internal buffer.
-  MojoResult r = receive_producer_handle->WriteData(data.data(), &num_bytes,
-                                                    MOJO_WRITE_DATA_FLAG_NONE);
+  size_t actually_written_bytes = 0;
+  MojoResult r = receive_producer_handle->WriteData(base::as_byte_span(data),
+                                                    MOJO_WRITE_DATA_FLAG_NONE,
+                                                    actually_written_bytes);
   ASSERT_EQ(MOJO_RESULT_OK, r);
-  ASSERT_EQ(data.size(), num_bytes);
+  ASSERT_EQ(data.size(), actually_written_bytes);
 
   // Now pump->Read() should complete.
   run_loop.Run();

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
 #include "build/build_config.h"
@@ -38,10 +38,15 @@ using testing::IsEmpty;
 namespace content {
 namespace {
 
+constexpr uint32_t kRendererSinkIdStart =
+    uint32_t{std::numeric_limits<int32_t>::max()} + 1;
 constexpr uint32_t kRendererClientId = 3;
-constexpr viz::FrameSinkId kFrameSinkParent(kRendererClientId, 1);
-constexpr viz::FrameSinkId kFrameSinkA(kRendererClientId, 3);
-constexpr viz::FrameSinkId kFrameSinkB(kRendererClientId, 4);
+constexpr viz::FrameSinkId kFrameSinkParent(kRendererClientId,
+                                            kRendererSinkIdStart);
+constexpr viz::FrameSinkId kFrameSinkA(kRendererClientId,
+                                       kRendererSinkIdStart + 2);
+constexpr viz::FrameSinkId kFrameSinkB(kRendererClientId,
+                                       kRendererSinkIdStart + 4);
 
 // Runs RunLoop until |endpoint| encounters a connection error.
 template <class T>
@@ -93,6 +98,7 @@ class StubEmbeddedFrameSinkClient
   void SetLocalSurfaceId(const viz::LocalSurfaceId& local_surface_id) override {
     last_received_local_surface_id_ = local_surface_id;
   }
+  void OnOpacityChanged(bool opacity) override {}
 
   mojo::Receiver<blink::mojom::SurfaceEmbedder> surface_embedder_receiver_{
       this};
@@ -152,7 +158,8 @@ class EmbeddedFrameSinkProviderImplTest : public testing::Test {
         viz::ReportFirstSurfaceActivation::kYes);
   }
   void TearDown() override {
-    host_frame_sink_manager_->InvalidateFrameSinkId(kFrameSinkParent);
+    host_frame_sink_manager_->InvalidateFrameSinkId(kFrameSinkParent,
+                                                    &host_frame_sink_client_);
     provider_.reset();
     host_frame_sink_manager_.reset();
     frame_sink_manager_.reset();
@@ -197,7 +204,7 @@ TEST_F(EmbeddedFrameSinkProviderImplTest,
   // Renderer submits a CompositorFrame with |local_id|.
   const viz::LocalSurfaceId local_id(1, base::UnguessableToken::Create());
   compositor_frame_sink->SubmitCompositorFrame(
-      local_id, viz::MakeDefaultCompositorFrame(), absl::nullopt, 0);
+      local_id, viz::MakeDefaultCompositorFrame(), std::nullopt, 0);
 
   RunUntilIdle();
 

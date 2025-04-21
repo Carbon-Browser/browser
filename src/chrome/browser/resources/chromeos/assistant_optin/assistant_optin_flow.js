@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,24 @@
  *
  */
 
-/* #js_imports_placeholder */
+import '../components/common_styles/oobe_common_styles.css.js';
+import './assistant_common_styles.css.js';
+import './assistant_icons.html.js';
+import './assistant_loading.js';
+import './assistant_related_info.js';
+import './assistant_voice_match.js';
+import './assistant_value_prop.js';
+import './setting_zippy.js';
+
+import {loadTimeData} from '//resources/ash/common/load_time_data.m.js';
+import {PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+
+import {MultiStepMixin} from '../components/mixins/multi_step_mixin.js';
+import {OobeDialogHostMixin} from '../components/mixins/oobe_dialog_host_mixin.js';
+import {OobeI18nMixin} from '../components/mixins/oobe_i18n_mixin.js';
+
+import {getTemplate} from './assistant_optin_flow.html.js';
+import {AssistantOptinFlowType, BrowserProxy, BrowserProxyImpl} from './browser_proxy.js';
 
 /**
  * UI mode for the dialog.
@@ -25,27 +42,31 @@ const AssistantUIState = {
  * @constructor
  * @extends {PolymerElement}
  */
-const AssistantOptInFlowBase = Polymer.mixinBehaviors(
-    [OobeI18nBehavior, OobeDialogHostBehavior, MultiStepBehavior],
-    Polymer.Element);
+const AssistantOptInFlowBase =
+    OobeDialogHostMixin(MultiStepMixin(OobeI18nMixin(PolymerElement)));
 
 /**
  * @polymer
  */
-class AssistantOptInFlow extends AssistantOptInFlowBase {
+export class AssistantOptInFlow extends AssistantOptInFlowBase {
   static get is() {
     return 'assistant-optin-flow-element';
   }
 
-  /* #html_template_placeholder */
+  static get template() {
+    return getTemplate();
+  }
 
   constructor() {
     super();
 
-    this.UI_STEPS = AssistantUIState;
+    /** @private {!BrowserProxy} */
+    this.browserProxy_ = BrowserProxyImpl.getInstance();
+  }
 
-    /** @private {?assistant.BrowserProxy} */
-    this.browserProxy_ = assistant.BrowserProxyImpl.getInstance();
+  /** @override */
+  UI_STEPS() {
+    return AssistantUIState;
   }
 
   /** @override */
@@ -59,20 +80,6 @@ class AssistantOptInFlow extends AssistantOptInFlowBase {
     window.removeEventListener(
         'orientationchange', () => this.onWindowResized_());
     window.removeEventListener('resize', () => this.onWindowResized_());
-  }
-
-  /**
-   * Indicates the type of the opt-in flow.
-   */
-  get FlowType() {
-    return {
-      // The whole consent flow.
-      CONSENT_FLOW: 0,
-      // The voice match enrollment flow.
-      SPEAKER_ID_ENROLLMENT: 1,
-      // The voice match retrain flow.
-      SPEAKER_ID_RETRAIN: 2,
-    };
   }
 
   defaultUIStep() {
@@ -89,17 +96,17 @@ class AssistantOptInFlow extends AssistantOptInFlowBase {
     this.style.setProperty('--caption-bar-height', captionBarHeight);
     this.onWindowResized_();
 
-    type = type ? type : this.FlowType.CONSENT_FLOW.toString();
+    type = type ? type : AssistantOptinFlowType.CONSENT_FLOW.toString();
     const flowType = Number(type);
     switch (flowType) {
-      case this.FlowType.CONSENT_FLOW:
-      case this.FlowType.SPEAKER_ID_ENROLLMENT:
-      case this.FlowType.SPEAKER_ID_RETRAIN:
+      case AssistantOptinFlowType.CONSENT_FLOW:
+      case AssistantOptinFlowType.SPEAKER_ID_ENROLLMENT:
+      case AssistantOptinFlowType.SPEAKER_ID_RETRAIN:
         this.flowType = flowType;
         break;
       default:
         console.error('Invalid flow type, using default.');
-        this.flowType = this.FlowType.CONSENT_FLOW;
+        this.flowType = AssistantOptinFlowType.CONSENT_FLOW;
         break;
     }
 
@@ -111,8 +118,8 @@ class AssistantOptInFlow extends AssistantOptInFlowBase {
     this.$.loading.addEventListener('reload', () => this.onReload());
 
     switch (this.flowType) {
-      case this.FlowType.SPEAKER_ID_ENROLLMENT:
-      case this.FlowType.SPEAKER_ID_RETRAIN:
+      case AssistantOptinFlowType.SPEAKER_ID_ENROLLMENT:
+      case AssistantOptinFlowType.SPEAKER_ID_RETRAIN:
         this.$.voiceMatch.isFirstScreen = true;
         this.showStep(AssistantUIState.VOICE_MATCH);
         break;
@@ -219,7 +226,7 @@ class AssistantOptInFlow extends AssistantOptInFlowBase {
    * @param {AssistantUIState} step The step to be shown.
    */
   showStep(step) {
-    if (this.currentStep == step) {
+    if (this.currentStep === step) {
       return;
     }
     if (this.currentStep) {

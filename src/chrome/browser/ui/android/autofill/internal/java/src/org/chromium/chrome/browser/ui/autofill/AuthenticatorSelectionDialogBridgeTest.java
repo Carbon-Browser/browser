@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,12 +17,10 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
 import org.chromium.base.test.BaseRobolectricTestRunner;
-import org.chromium.base.test.util.JniMocker;
 import org.chromium.chrome.browser.ui.autofill.data.AuthenticatorOption;
 import org.chromium.ui.modaldialog.ModalDialogManager.ModalDialogType;
 import org.chromium.ui.test.util.modaldialog.FakeModalDialogManager;
@@ -30,9 +28,7 @@ import org.chromium.ui.test.util.modaldialog.FakeModalDialogManager;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Unit tests for {@link AuthenticatorSelectionDialogBridge}.
- */
+/** Unit tests for {@link AuthenticatorSelectionDialogBridge}. */
 @RunWith(BaseRobolectricTestRunner.class)
 public class AuthenticatorSelectionDialogBridgeTest {
     // The icon set on the AuthenticatorOption is not important and any icon would do.
@@ -42,6 +38,7 @@ public class AuthenticatorSelectionDialogBridgeTest {
                     .setIdentifier("identifier1")
                     .setDescription("description1")
                     .setIconResId(android.R.drawable.ic_media_pause)
+                    .setType(CardUnmaskChallengeOptionType.SMS_OTP)
                     .build();
 
     private static final AuthenticatorOption OPTION_2 =
@@ -50,6 +47,7 @@ public class AuthenticatorSelectionDialogBridgeTest {
                     .setIdentifier("identifier2")
                     .setDescription("description2")
                     .setIconResId(android.R.drawable.ic_media_play)
+                    .setType(CardUnmaskChallengeOptionType.SMS_OTP)
                     .build();
 
     private static final long NATIVE_AUTHENTICATOR_SELECTION_DIALOG_VIEW = 100L;
@@ -58,24 +56,21 @@ public class AuthenticatorSelectionDialogBridgeTest {
 
     private FakeModalDialogManager mModalDialogManager;
     private AuthenticatorSelectionDialogBridge mAuthenticatorSelectionDialogBridge;
-    @Mock
-    private AuthenticatorSelectionDialogBridge.Natives mNativeMock;
-    @Rule
-    public MockitoRule mMockitoRule = MockitoJUnit.rule();
-    @Rule
-    public JniMocker mMocker = new JniMocker();
+    @Mock private AuthenticatorSelectionDialogBridge.Natives mNativeMock;
+    @Rule public MockitoRule mMockitoRule = MockitoJUnit.rule();
 
     @Before
     public void setUp() {
-        MockitoAnnotations.initMocks(this);
         reset(mNativeMock);
         mOptions.add(OPTION_1);
         mOptions.add(OPTION_2);
         mModalDialogManager = new FakeModalDialogManager(ModalDialogType.TAB);
         mAuthenticatorSelectionDialogBridge =
-                new AuthenticatorSelectionDialogBridge(NATIVE_AUTHENTICATOR_SELECTION_DIALOG_VIEW,
-                        ApplicationProvider.getApplicationContext(), mModalDialogManager);
-        mMocker.mock(AuthenticatorSelectionDialogBridgeJni.TEST_HOOKS, mNativeMock);
+                new AuthenticatorSelectionDialogBridge(
+                        NATIVE_AUTHENTICATOR_SELECTION_DIALOG_VIEW,
+                        ApplicationProvider.getApplicationContext(),
+                        mModalDialogManager);
+        AuthenticatorSelectionDialogBridgeJni.setInstanceForTesting(mNativeMock);
         mAuthenticatorSelectionDialogBridge.show(mOptions);
     }
 

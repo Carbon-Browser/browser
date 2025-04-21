@@ -23,12 +23,11 @@
 Per concedere questa autorizzazione, fai clic su "<ph name="BUTTON_NAME" />" sotto per aprire il riquadro delle preferenze "Registrazione dello schermo", quindi seleziona la casella "<ph name="SERVICE_SCRIPT_NAME" />".
 
 Se la casella "<ph name="SERVICE_SCRIPT_NAME" />" è già selezionata, deselezionala e selezionala di nuovo.</translation>
-<translation id="225614027745146050">Benvenuto</translation>
+<translation id="225614027745146050">Ti diamo il benvenuto</translation>
 <translation id="2320166752086256636">Nascondi tastiera</translation>
 <translation id="2329392777730037872">Impossibile aprire <ph name="URL" /> sul dispositivo client.</translation>
 <translation id="2359808026110333948">Continua</translation>
 <translation id="2366718077645204424">Impossibile raggiungere l'host. Il problema potrebbe essere dovuto alla configurazione della rete in uso.</translation>
-<translation id="2370754117186920852"><ph name="OPTIONAL_OFFLINE_REASON" />  Visto l'ultima volta online <ph name="RELATIVE_TIMESTAMP" />.</translation>
 <translation id="2504109125669302160">Concedi l'autorizzazione "Accessibilità" a <ph name="PRODUCT_NAME" /></translation>
 <translation id="2509394361235492552">Connessione a <ph name="HOSTNAME" /> effettuata</translation>
 <translation id="2540992418118313681">Vuoi condividere questo computer con un altro utente che potrà accedervi e controllarlo?</translation>
@@ -36,7 +35,6 @@ Se la casella "<ph name="SERVICE_SCRIPT_NAME" />" è già selezionata, deselezio
 <translation id="2599300881200251572">Questo servizio consente connessioni in entrata da client Chrome Remote Desktop.</translation>
 <translation id="2647232381348739934">Servizio Chromoting</translation>
 <translation id="2676780859508944670">Operazione in corso...</translation>
-<translation id="2692522824157224199">Copyright 2022 Google LLC. Tutti i diritti riservati.</translation>
 <translation id="2699970397166997657">Chromoting</translation>
 <translation id="2758123043070977469">Si è verificato un problema di autenticazione. Accedi nuovamente.</translation>
 <translation id="2803375539583399270">Inserisci PIN</translation>
@@ -54,7 +52,6 @@ Se la casella "<ph name="SERVICE_SCRIPT_NAME" />" è già selezionata, deselezio
 <translation id="3423542133075182604">Security Key Remoting Process</translation>
 <translation id="3581045510967524389">Impossibile collegarsi alla rete. Controlla che il dispositivo sia online.</translation>
 <translation id="3596628256176442606">Questo servizio consente connessioni in entrata da client Chromoting.</translation>
-<translation id="369442766917958684">Offline.</translation>
 <translation id="3695446226812920698">Scopri come</translation>
 <translation id="3776024066357219166">La sessione Chrome Remote Desktop è terminata.</translation>
 <translation id="3858860766373142691">Nome</translation>
@@ -73,7 +70,6 @@ Se la casella "<ph name="SERVICE_SCRIPT_NAME" />" è già selezionata, deselezio
 <translation id="4257751272692708833"><ph name="PRODUCT_NAME" /> URL Forwarder</translation>
 <translation id="4277736576214464567">Il codice di accesso non è valido. Riprova.</translation>
 <translation id="4281844954008187215">Termini di servizio</translation>
-<translation id="4372650392690220936">Copyright 2022 The Chromium Authors. Tutti i diritti riservati.</translation>
 <translation id="4405930547258349619">Core Library</translation>
 <translation id="443560535555262820">Apri preferenze Accessibilità</translation>
 <translation id="4450893287417543264">Non mostrare più</translation>
@@ -107,7 +103,6 @@ Se la casella "<ph name="SERVICE_SCRIPT_NAME" />" è già selezionata, deselezio
 <translation id="5601503069213153581">PIN</translation>
 <translation id="5690427481109656848">Google LLC</translation>
 <translation id="5708869785009007625">Il tuo desktop è attualmente condiviso con <ph name="USER" />.</translation>
-<translation id="5750083143895808682">Accesso eseguito come <ph name="EMAIL_ADDRESS" />.</translation>
 <translation id="579702532610384533">Riconnetti</translation>
 <translation id="5810269635982033450">Lo schermo funge da trackpad</translation>
 <translation id="5823554426827907568"><ph name="CLIENT_USERNAME" /> ha chiesto di accedere per vedere il tuo schermo e controllare la tastiera e il mouse. Premi ''<ph name="IDS_SHARE_CONFIRM_DIALOG_DECLINE" />'' se questa richiesta non era prevista. Altrimenti seleziona ''<ph name="IDS_SHARE_CONFIRM_DIALOG_CONFIRM" />'' quando vuoi consentire la connessione.</translation>
@@ -154,6 +149,7 @@ Se la casella "<ph name="SERVICE_SCRIPT_NAME" />" è già selezionata, deselezio
 <translation id="7693372326588366043">Aggiorna l'elenco degli host</translation>
 <translation id="7714222945760997814">Segnala errore</translation>
 <translation id="7868137160098754906">Inserisci il codice PIN per il computer remoto.</translation>
+<translation id="7881455334687220899">Copyright 2024 The Chromium Authors. Tutti i diritti riservati.</translation>
 <translation id="7895403300744144251">Le norme di sicurezza del computer remoto non consentono connessioni dal tuo account.</translation>
 <translation id="7936528439960309876">Aggancia a destra</translation>
 <translation id="7970576581263377361">Autenticazione non riuscita. Accedi di nuovo a Chromium.</translation>
@@ -185,6 +181,7 @@ Se la casella "<ph name="SERVICE_SCRIPT_NAME" />" è già selezionata, deselezio
 <translation id="8747048596626351634">La sessione si è arrestata in modo anomalo o non si è avviata. Se sul computer remoto esiste la sessione ~/.chrome-remote-desktop-session, assicurati che avvii un processo in primo piano con esecuzione prolungata come un ambiente desktop o gestione finestre.</translation>
 <translation id="8804164990146287819">Norme sulla privacy</translation>
 <translation id="8906511416443321782">È richiesto l'accesso al microfono per acquisire l'audio e trasmetterlo in streaming al client Chrome Remote Desktop.</translation>
+<translation id="9042277333359847053">Copyright 2024 Google LLC. Tutti i diritti riservati.</translation>
 <translation id="9111855907838866522">Sei connesso al tuo dispositivo remoto. Per aprire il menu, tocca lo schermo con quattro dita.</translation>
 <translation id="9126115402994542723">Non chiedere di nuovo il PIN per il collegamento a questo host da questo dispositivo.</translation>
 <translation id="916856682307586697">Viene avviata la XSession predefinita</translation>

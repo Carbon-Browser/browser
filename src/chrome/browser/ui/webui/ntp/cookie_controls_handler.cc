@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/values.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/cookie_controls/cookie_controls_service.h"
@@ -72,6 +72,7 @@ const char* CookieControlsHandler::GetEnforcementIcon(
       return kExtensionIcon;
     case CookieControlsEnforcement::kEnforcedByCookieSetting:
       return kSettingsIcon;
+    case CookieControlsEnforcement::kEnforcedByTpcdGrant:
     case CookieControlsEnforcement::kNoEnforcement:
       return "";
   }
@@ -86,11 +87,11 @@ void CookieControlsHandler::OnThirdPartyCookieBlockingPolicyChanged() {
 }
 
 void CookieControlsHandler::SendCookieControlsUIChanges() {
-  base::DictionaryValue dict;
-  dict.SetBoolKey("enforced", service_->ShouldEnforceCookieControls());
-  dict.SetBoolKey("checked", service_->GetToggleCheckedValue());
-  dict.SetStringKey(
-      "icon", GetEnforcementIcon(service_->GetCookieControlsEnforcement()));
-  dict.SetStringKey("cookieSettingsUrl", chrome::kChromeUICookieSettingsURL);
+  base::Value::Dict dict;
+  dict.Set("enforced", service_->ShouldEnforceCookieControls());
+  dict.Set("checked", service_->GetToggleCheckedValue());
+  dict.Set("icon",
+           GetEnforcementIcon(service_->GetCookieControlsEnforcement()));
+  dict.Set("cookieSettingsUrl", chrome::kChromeUICookieSettingsURL);
   FireWebUIListener("cookie-controls-changed", dict);
 }

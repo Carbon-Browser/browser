@@ -1,10 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_NOTIFICATIONS_GNUBBY_NOTIFICATION_H_
 #define CHROME_BROWSER_ASH_NOTIFICATIONS_GNUBBY_NOTIFICATION_H_
 
+#include "ash/public/cpp/message_center/oobe_notification_constants.h"
 #include "base/memory/weak_ptr.h"
 #include "base/timer/timer.h"
 #include "chrome/browser/notifications/notification_display_service.h"
@@ -42,7 +43,6 @@ class GnubbyNotification : public GnubbyClient::Observer {
  private:
   std::unique_ptr<message_center::Notification> notification_prompt_;
   std::unique_ptr<base::OneShotTimer> update_dismiss_notification_timer_;
-  const std::string kNotificationID = "gnubby_notification";
   bool notificationActive = false;
 
   base::WeakPtrFactory<GnubbyNotification> weak_ptr_factory_{this};

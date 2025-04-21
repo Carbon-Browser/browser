@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,8 @@ enum class DisabledReasonId : uint16_t {
   kPopupBlockerTabHelper = 1,
   kSafeBrowsingTriggeredPopupBlocker = 2,
   kSafeBrowsingThreatDetails = 3,
-  kAppBannerManager = 4,
+  // Unblocked by https://crbug.com/1276864
+  // kAppBannerManager = 4,
   kDomDistillerViewerSource = 5,
   kDomDistiller_SelfDeletingRequestDelegate = 6,
   kOomInterventionTabHelper = 7,
@@ -39,10 +40,16 @@ enum class DisabledReasonId : uint16_t {
   // - kExtensionSentMessageToCachedFrame: Extensions using long-lived
   //   connections that attempt to send a message to a frame while it is cached
   //   (inactive) are blocklisted.
-  kExtensions = 12,
+  // kExtensions = 12. Removed
   kExtensionMessaging = 13,
-  kExtensionMessagingForOpenPort = 14,
+  // kExtensionMessagingForOpenPort = 14. Removed
   kExtensionSentMessageToCachedFrame = 15,
+  // Android WebView client requested to disable BFCache. See
+  // NavigationWebMessageSender.
+  kRequestedByWebViewClient = 16,
+  // Android WebView client sends postMessage on a JavaScriptReplyProxy that's
+  // associated with a page in BFCache.
+  kPostMessageByWebViewClient = 17,
   // New reasons should be accompanied by a comment as to why BackForwardCache
   // cannot be used in this case and a link to a bug to fix that if it is
   // fixable.

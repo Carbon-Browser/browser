@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,7 @@
 #include "chrome/test/base/testing_profile.h"
 #include "chromeos/ash/components/dbus/system_proxy/system_proxy_client.h"
 #include "chromeos/ash/components/dbus/system_proxy/system_proxy_service.pb.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
 #include "chromeos/ash/components/network/network_handler.h"
 #include "chromeos/ash/components/network/network_handler_test_helper.h"
 #include "components/prefs/pref_service.h"
@@ -85,11 +86,11 @@ network::NetworkService* GetNetworkService() {
 
 void SetManagedProxy(Profile* profile) {
   // Configure a proxy via user policy.
-  base::Value proxy_config(base::Value::Type::DICTIONARY);
-  proxy_config.SetKey("mode",
-                      base::Value(ProxyPrefs::kFixedServersProxyModeName));
-  proxy_config.SetKey("server", base::Value(kProxyAuthUrl));
-  profile->GetPrefs()->Set(proxy_config::prefs::kProxy, proxy_config);
+  auto proxy_config = base::Value::Dict()
+                          .Set("mode", ProxyPrefs::kFixedServersProxyModeName)
+                          .Set("server", kProxyAuthUrl);
+  profile->GetPrefs()->SetDict(proxy_config::prefs::kProxy,
+                               std::move(proxy_config));
   base::RunLoop().RunUntilIdle();
 }
 
@@ -248,7 +249,7 @@ TEST_F(SystemProxyManagerTest, UserCredentialsRequestedFromNetworkService) {
       ->http_auth_cache()
       ->Add(url::SchemeHostPort(GURL(kProxyAuthEmptyPath)),
             net::HttpAuth::AUTH_PROXY, kRealm,
-            net::HttpAuth::AUTH_SCHEME_DIGEST, net::NetworkIsolationKey(),
+            net::HttpAuth::AUTH_SCHEME_DIGEST, net::NetworkAnonymizationKey(),
             kProxyAuthChallenge,
             net::AuthCredentials(kBrowserUsername16, kBrowserPassword16),
             std::string() /* path */);
@@ -355,8 +356,7 @@ TEST_F(SystemProxyManagerTest, CanUsePolicyCredentialsUserType) {
   SetManagedProxy(profile_.get());
 
   LoginState::Get()->SetLoggedInState(
-      LoginState::LOGGED_IN_ACTIVE,
-      LoginState::LOGGED_IN_USER_PUBLIC_ACCOUNT_MANAGED);
+      LoginState::LOGGED_IN_ACTIVE, LoginState::LOGGED_IN_USER_PUBLIC_ACCOUNT);
 
   EXPECT_TRUE(system_proxy_manager_->CanUsePolicyCredentials(
       GetAuthInfo(), /*first_auth_attempt=*/true));
@@ -384,8 +384,7 @@ TEST_F(SystemProxyManagerTest, CanUsePolicyCredentialsOriginServer) {
   net::AuthChallengeInfo auth_info = GetAuthInfo();
   auth_info.is_proxy = false;
   LoginState::Get()->SetLoggedInState(
-      LoginState::LOGGED_IN_ACTIVE,
-      LoginState::LOGGED_IN_USER_PUBLIC_ACCOUNT_MANAGED);
+      LoginState::LOGGED_IN_ACTIVE, LoginState::LOGGED_IN_USER_PUBLIC_ACCOUNT);
 
   EXPECT_FALSE(system_proxy_manager_->CanUsePolicyCredentials(
       auth_info, /*first_auth_attempt=*/true));
@@ -399,8 +398,7 @@ TEST_F(SystemProxyManagerTest, CanUsePolicyCredentialsNoManagedProxy) {
             /*system_services_password=*/kPolicyPassword);
 
   LoginState::Get()->SetLoggedInState(
-      LoginState::LOGGED_IN_ACTIVE,
-      LoginState::LOGGED_IN_USER_PUBLIC_ACCOUNT_MANAGED);
+      LoginState::LOGGED_IN_ACTIVE, LoginState::LOGGED_IN_USER_PUBLIC_ACCOUNT);
 
   EXPECT_FALSE(system_proxy_manager_->CanUsePolicyCredentials(
       GetAuthInfo(), /*first_auth_attempt=*/true));
@@ -415,8 +413,7 @@ TEST_F(SystemProxyManagerTest, NoPolicyCredentials) {
   SetManagedProxy(profile_.get());
 
   LoginState::Get()->SetLoggedInState(
-      LoginState::LOGGED_IN_ACTIVE,
-      LoginState::LOGGED_IN_USER_PUBLIC_ACCOUNT_MANAGED);
+      LoginState::LOGGED_IN_ACTIVE, LoginState::LOGGED_IN_USER_PUBLIC_ACCOUNT);
 
   EXPECT_FALSE(system_proxy_manager_->CanUsePolicyCredentials(
       GetAuthInfo(), /*first_auth_attempt=*/true));
@@ -431,8 +428,7 @@ TEST_F(SystemProxyManagerTest, CanUsePolicyCredentialsMgsMaxTries) {
   SetManagedProxy(profile_.get());
 
   LoginState::Get()->SetLoggedInState(
-      LoginState::LOGGED_IN_ACTIVE,
-      LoginState::LOGGED_IN_USER_PUBLIC_ACCOUNT_MANAGED);
+      LoginState::LOGGED_IN_ACTIVE, LoginState::LOGGED_IN_USER_PUBLIC_ACCOUNT);
   EXPECT_TRUE(system_proxy_manager_->CanUsePolicyCredentials(
       GetAuthInfo(), /*first_auth_attempt=*/true));
   EXPECT_FALSE(system_proxy_manager_->CanUsePolicyCredentials(

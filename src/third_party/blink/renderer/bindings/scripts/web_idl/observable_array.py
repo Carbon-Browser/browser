@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -41,7 +41,7 @@ class ObservableArray(WithIdentifier, WithCodeGeneratorInfo, WithComponent,
                                        code_generator_info,
                                        readonly=True)
         WithComponent.__init__(self, components, readonly=True)
-        WithDebugInfo.__init__(self)
+        WithDebugInfo.__init__(self, idl_type.debug_info)
 
         self._idl_type = idl_type
         self._user_attributes = tuple(attributes)

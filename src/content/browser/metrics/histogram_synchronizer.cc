@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/check_op.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/lazy_instance.h"
 #include "base/location.h"
 #include "base/metrics/histogram_delta_serialization.h"
@@ -16,7 +16,7 @@
 #include "base/pickle.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread.h"
-#include "content/browser/metrics/histogram_controller.h"
+#include "components/metrics/histogram_controller.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/histogram_fetcher.h"
@@ -159,7 +159,7 @@ HistogramSynchronizer::HistogramSynchronizer()
     : lock_(),
       last_used_sequence_number_(kNeverUsableSequenceNumber),
       async_sequence_number_(kNeverUsableSequenceNumber) {
-  HistogramController::GetInstance()->Register(this);
+  metrics::HistogramController::GetInstance()->Register(this);
 }
 
 HistogramSynchronizer::~HistogramSynchronizer() {
@@ -231,7 +231,8 @@ void HistogramSynchronizer::RegisterAndNotifyAllProcesses(
   RequestContext::Register(std::move(callback), sequence_number);
 
   // Get histogram data from renderer and browser child processes.
-  HistogramController::GetInstance()->GetHistogramData(sequence_number);
+  metrics::HistogramController::GetInstance()->GetHistogramData(
+      sequence_number);
 
   // Post a task that would be called after waiting for wait_time.  This acts
   // as a watchdog, to cancel the requests for non-responsive processes.

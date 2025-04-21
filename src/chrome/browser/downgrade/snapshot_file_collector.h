@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,9 +24,9 @@ enum class SnapshotItemId {
   kHistory = 5,
   kFavicons = 6,
   kTopSites = 7,
-  kBookmarks = 8,
-  kLegacyCurrentTabSession = 9,  // TODO(crbug.com/1103458): Remove in M89
-  kLegacyCurrentSession = 10,    // TODO(crbug.com/1103458): Remove in M89
+  kLocalOrSyncableBookmarks = 8,
+  kLegacyCurrentTabSession = 9,  // TODO(crbug.com/40704630): Remove in M89
+  kLegacyCurrentSession = 10,    // TODO(crbug.com/40704630): Remove in M89
   kGAIAPicture = 11,
   kAffiliationDatabase = 12,
   kLoginDataForProfile = 13,
@@ -37,7 +37,8 @@ enum class SnapshotItemId {
   kProfileIcon = 18,
   kLastVersion = 19,
   kSessions = 20,
-  kMaxValue = kSessions
+  kAccountBookmarks = 21,
+  kMaxValue = kAccountBookmarks
 };
 
 struct SnapshotItemDetails {

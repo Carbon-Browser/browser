@@ -40,9 +40,22 @@
 
 namespace blink {
 
-static bool IsHTTPErrorStatusCode(int status_code) {
+namespace {
+
+bool IsPossiblyTextResourceType(InspectorPageAgent::ResourceType type) {
+  return type == InspectorPageAgent::kManifestResource ||
+         type == InspectorPageAgent::kStylesheetResource ||
+         type == InspectorPageAgent::kScriptResource ||
+         type == InspectorPageAgent::kDocumentResource ||
+         type == InspectorPageAgent::kFetchResource ||
+         type == InspectorPageAgent::kXHRResource;
+}
+
+bool IsHTTPErrorStatusCode(int status_code) {
   return status_code >= 400;
 }
+
+}  // namespace
 
 void XHRReplayData::AddHeader(const AtomicString& key,
                               const AtomicString& value) {
@@ -120,7 +133,7 @@ size_t NetworkResourcesData::ResourceData::RemoveResponseContent() {
 size_t NetworkResourcesData::ResourceData::EvictContent() {
   size_t size = ContentSize();
   is_content_evicted_ = true;
-  data_buffer_ = nullptr;
+  data_buffer_ = std::nullopt;
   content_ = String();
   post_data_ = nullptr;
   return size;
@@ -169,24 +182,24 @@ void NetworkResourcesData::ResourceData::FontResourceDataWillBeCleared() {
   network_resources_data_->MaybeDecodeDataToContent(RequestId());
 }
 
-void NetworkResourcesData::ResourceData::AppendData(const char* data,
-                                                    size_t data_length) {
+void NetworkResourcesData::ResourceData::AppendData(
+    base::span<const char> data) {
   DCHECK(!HasContent());
-  if (!data_buffer_)
-    data_buffer_ = SharedBuffer::Create(data, data_length);
-  else
-    data_buffer_->Append(data, data_length);
+  if (!data_buffer_) {
+    data_buffer_ = SegmentedBuffer();
+  }
+  data_buffer_->Append(data);
 }
 
 size_t NetworkResourcesData::ResourceData::DecodeDataToContent() {
   DCHECK(!HasContent());
   DCHECK(HasData());
   size_t data_length = data_buffer_->size();
-  bool success = InspectorPageAgent::SharedBufferContent(
-      data_buffer_, mime_type_, text_encoding_name_, &content_,
-      &base64_encoded_);
+  bool success = InspectorPageAgent::SegmentedBufferContent(
+      data_buffer_ ? &*data_buffer_ : nullptr, mime_type_, text_encoding_name_,
+      &content_, &base64_encoded_);
   DCHECK(success);
-  data_buffer_ = nullptr;
+  data_buffer_ = std::nullopt;
   return content_.CharactersSizeInBytes() - data_length;
 }
 
@@ -226,7 +239,13 @@ void NetworkResourcesData::ResponseReceived(const String& request_id,
     return;
   resource_data->SetFrameId(frame_id);
   resource_data->SetMimeType(response.MimeType());
-  resource_data->SetTextEncodingName(response.TextEncodingName());
+  if (IsPossiblyTextResourceType(resource_data->GetType())) {
+    // ResourceResponse may come with some arbitrary encoding (e.g.
+    // charset=utf-8). Depending on the actual resource type, it may be ignored
+    // in Blink. We should not blindly transfer such resources as text to avoid
+    // data corruption, and instead encode them as base64.
+    resource_data->SetTextEncodingName(response.TextEncodingName());
+  }
   resource_data->SetHTTPStatusCode(response.HttpStatusCode());
   resource_data->SetRawHeaderSize(response.EncodedDataLength());
 }
@@ -301,11 +320,10 @@ NetworkResourcesData::PrepareToAddResourceData(const String& request_id,
 }
 
 void NetworkResourcesData::MaybeAddResourceData(const String& request_id,
-                                                const char* data,
-                                                uint64_t data_length) {
+                                                base::span<const char> data) {
   if (ResourceData* resource_data =
-          PrepareToAddResourceData(request_id, data_length)) {
-    resource_data->AppendData(data, base::checked_cast<size_t>(data_length));
+          PrepareToAddResourceData(request_id, data.size())) {
+    resource_data->AppendData(data);
   }
 }
 
@@ -316,7 +334,7 @@ void NetworkResourcesData::MaybeAddResourceData(
   if (ResourceData* resource_data =
           PrepareToAddResourceData(request_id, data->size())) {
     for (const auto& span : *data)
-      resource_data->AppendData(span.data(), span.size());
+      resource_data->AppendData(span);
   }
 }
 
@@ -404,7 +422,7 @@ void NetworkResourcesData::AddPendingEncodedDataLength(
 }
 
 void NetworkResourcesData::Clear(const String& preserved_loader_id) {
-  if (request_id_to_resource_data_map_.IsEmpty())
+  if (request_id_to_resource_data_map_.empty())
     return;
   request_ids_deque_.clear();
   content_size_ = 0;
@@ -439,7 +457,8 @@ NetworkResourcesData::ResourceDataForRequestId(const String& request_id) const {
   if (request_id.IsNull())
     return nullptr;
   auto it = request_id_to_resource_data_map_.find(request_id);
-  return it != request_id_to_resource_data_map_.end() ? it->value : nullptr;
+  return it != request_id_to_resource_data_map_.end() ? it->value.Get()
+                                                      : nullptr;
 }
 
 void NetworkResourcesData::EnsureNoDataForRequestId(const String& request_id) {

@@ -1,4 +1,4 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@ namespace net::test {
 TEST(QuicSimpleClientTest, Initialize) {
   base::test::TaskEnvironment task_environment;
   quic::QuicSocketAddress server_address(quic::QuicIpAddress::Loopback4(), 80);
-  quic::QuicServerId server_id("hostname", server_address.port(), false);
+  quic::QuicServerId server_id("hostname", server_address.port());
   quic::ParsedQuicVersionVector versions = quic::AllSupportedVersions();
   QuicSimpleClient client(
       server_address, server_id, versions, quic::QuicConfig(),

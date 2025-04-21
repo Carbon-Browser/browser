@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -26,7 +26,7 @@ class FilteredOfflineItemObserver : public OfflineContentProvider::Observer {
     virtual void OnItemRemoved(const ContentId& id) = 0;
     virtual void OnItemUpdated(
         const OfflineItem& item,
-        const absl::optional<UpdateDelta>& update_delta) = 0;
+        const std::optional<UpdateDelta>& update_delta) = 0;
 
    protected:
     virtual ~Observer() = default;
@@ -52,7 +52,7 @@ class FilteredOfflineItemObserver : public OfflineContentProvider::Observer {
       const OfflineContentProvider::OfflineItemList& items) override;
   void OnItemRemoved(const ContentId& id) override;
   void OnItemUpdated(const OfflineItem& item,
-                     const absl::optional<UpdateDelta>& update_delta) override;
+                     const std::optional<UpdateDelta>& update_delta) override;
   void OnContentProviderGoingDown() override;
 
   raw_ptr<OfflineContentProvider> provider_;

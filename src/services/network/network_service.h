@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
@@ -15,23 +16,27 @@
 #include "base/component_export.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
-#include "base/containers/span.h"
 #include "base/containers/unique_ptr_adapters.h"
 #include "base/feature_list.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
+#include "components/ip_protection/common/masked_domain_list_manager.h"
+#include "components/privacy_sandbox/masked_domain_list/masked_domain_list.pb.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 #include "mojo/public/cpp/bindings/remote.h"
+#include "net/base/address_list.h"
 #include "net/base/schemeful_site.h"
 #include "net/dns/host_resolver.h"
+#include "net/dns/host_resolver_manager.h"
 #include "net/dns/public/dns_over_https_config.h"
 #include "net/dns/public/secure_dns_mode.h"
+#include "net/first_party_sets/global_first_party_sets.h"
 #include "net/http/transport_security_state.h"
 #include "net/log/net_log.h"
 #include "net/log/trace_net_log_observer.h"
@@ -44,18 +49,25 @@
 #include "services/network/public/mojom/host_resolver.mojom.h"
 #include "services/network/public/mojom/key_pinning.mojom.h"
 #include "services/network/public/mojom/net_log.mojom.h"
+#include "services/network/public/mojom/network_annotation_monitor.mojom.h"
 #include "services/network/public/mojom/network_change_manager.mojom.h"
 #include "services/network/public/mojom/network_quality_estimator_manager.mojom.h"
 #include "services/network/public/mojom/network_service.mojom.h"
+#include "services/network/public/mojom/system_dns_resolution.mojom.h"
 #include "services/network/public/mojom/trust_tokens.mojom.h"
 #include "services/network/public/mojom/url_loader_network_service_observer.mojom.h"
+#include "services/network/restricted_cookie_manager.h"
+#include "services/network/tpcd/metadata/manager.h"
 #include "services/network/trust_tokens/trust_token_key_commitments.h"
 #include "services/service_manager/public/cpp/binder_registry.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 #if BUILDFLAG(IS_CT_SUPPORTED)
 #include "services/network/public/mojom/ct_log_info.mojom.h"
-#endif
+#endif  // BUILDFLAG(IS_CT_SUPPORTED)
+
+namespace mojo_base {
+class ProtoWrapper;
+}
 
 namespace net {
 class FileNetLogObserver;
@@ -69,8 +81,6 @@ class URLRequestContext;
 
 namespace network {
 
-class CRLSetDistributor;
-class CtLogListDistributor;
 class DnsConfigChangeManager;
 class HttpAuthCacheCopier;
 class NetLogProxySink;
@@ -109,7 +119,8 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkService
   // `net::NetworkChangeNotifier` from future changes to the real configuration,
   // ensuring that our fake configuration will not be clobbered by network
   // changes that occur while tests run.
-  void ReplaceSystemDnsConfigForTesting();
+  // Once this is finished, `replace_cb` will run.
+  void ReplaceSystemDnsConfigForTesting(base::OnceClosure replace_cb);
 
   void SetTestDohConfigForTesting(net::SecureDnsMode secure_dns_mode,
                                   const net::DnsOverHttpsConfig& doh_config);
@@ -125,7 +136,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkService
 
   // These are called by NetworkContexts as they are being created and
   // destroyed.
-  // TODO(mmenke):  Remove once all NetworkContexts are owned by the
+  // TODO(mmenke): Remove once all NetworkContexts are owned by the
   // NetworkService.
   void RegisterNetworkContext(NetworkContext* network_context);
   void DeregisterNetworkContext(NetworkContext* network_context);
@@ -135,12 +146,17 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkService
   void CreateNetLogEntriesForActiveObjects(
       net::NetLog::ThreadSafeObserver* observer);
 
+  void SetNetworkAnnotationMonitor(
+      mojo::PendingRemote<network::mojom::NetworkAnnotationMonitor> remote)
+      override;
+
+  void NotifyNetworkRequestWithAnnotation(
+      net::NetworkTrafficAnnotationTag traffic_annotation);
+
   // mojom::NetworkService implementation:
   void SetParams(mojom::NetworkServiceParamsPtr params) override;
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-  void ReinitializeLogging(mojom::LoggingSettingsPtr settings) override;
-#endif
   void StartNetLog(base::File file,
+                   uint64_t max_total_size,
                    net::NetLogCaptureMode capture_mode,
                    base::Value::Dict constants) override;
   void AttachNetLogProxy(
@@ -162,7 +178,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkService
       mojom::HttpAuthDynamicParamsPtr http_auth_dynamic_params) override;
   void SetRawHeadersAccess(int32_t process_id,
                            const std::vector<url::Origin>& origins) override;
-  void SetMaxConnectionsPerProxy(int32_t max_connections) override;
+  void SetMaxConnectionsPerProxyChain(int32_t max_connections) override;
   void GetNetworkChangeManager(
       mojo::PendingReceiver<mojom::NetworkChangeManager> receiver) override;
   void GetNetworkQualityEstimatorManager(
@@ -173,30 +189,27 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkService
   void GetNetworkList(
       uint32_t policy,
       mojom::NetworkService::GetNetworkListCallback callback) override;
-  void UpdateCRLSet(
-      base::span<const uint8_t> crl_set,
-      mojom::NetworkService::UpdateCRLSetCallback callback) override;
-  void OnCertDBChanged() override;
+  void OnTrustStoreChanged() override;
+  void OnClientCertStoreChanged() override;
   void SetEncryptionKey(const std::string& encryption_key) override;
   void OnMemoryPressure(base::MemoryPressureListener::MemoryPressureLevel
                             memory_pressure_level) override;
   void OnPeerToPeerConnectionsCountChange(uint32_t count) override;
 #if BUILDFLAG(IS_ANDROID)
   void OnApplicationStateChange(base::android::ApplicationState state) override;
-#endif
-  void SetEnvironment(
-      std::vector<mojom::EnvironmentVariablePtr> environment) override;
+#endif  // BUILDFLAG(IS_ANDROID)
   void SetTrustTokenKeyCommitments(const std::string& raw_commitments,
                                    base::OnceClosure done) override;
   void ParseHeaders(const GURL& url,
                     const scoped_refptr<net::HttpResponseHeaders>& headers,
                     ParseHeadersCallback callback) override;
+  void EnableDataUseUpdates(bool enable) override;
+  void SetIPv6ReachabilityOverride(bool reachability_override) override;
 #if BUILDFLAG(IS_CT_SUPPORTED)
   void ClearSCTAuditingCache() override;
   void ConfigureSCTAuditing(
       mojom::SCTAuditingConfigurationPtr configuration) override;
   void UpdateCtLogList(std::vector<mojom::CTLogInfoPtr> log_list,
-                       base::Time update_time,
                        UpdateCtLogListCallback callback) override;
   void UpdateCtKnownPopularSCTs(
       const std::vector<std::vector<uint8_t>>& sct_hashes,
@@ -204,24 +217,56 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkService
   void SetCtEnforcementEnabled(
       bool enabled,
       SetCtEnforcementEnabledCallback callback) override;
-#endif
+#endif  // BUILDFLAG(IS_CT_SUPPORTED)
 
   void UpdateKeyPinsList(mojom::PinListPtr pin_list,
                          base::Time update_time) override;
 
+  void UpdateMaskedDomainList(
+      mojo_base::ProtoWrapper masked_domain_list,
+      const std::vector<std::string>& exclusion_list) override;
+
 #if BUILDFLAG(IS_ANDROID)
   void DumpWithoutCrashing(base::Time dump_request_time) override;
-#endif
-  void BindTestInterface(
+#endif  // BUILDFLAG(IS_ANDROID)
+  void BindTestInterfaceForTesting(
       mojo::PendingReceiver<mojom::NetworkServiceTest> receiver) override;
-  void SetFirstPartySets(
-      const base::flat_map<net::SchemefulSite, net::SchemefulSite>& sets)
-      override;
+  void SetFirstPartySets(net::GlobalFirstPartySets sets) override;
+
+  void SetTpcdMetadataGrants(
+      const std::vector<ContentSettingPatternSource>& settings) override;
+
   void SetExplicitlyAllowedPorts(const std::vector<uint16_t>& ports) override;
+#if BUILDFLAG(IS_LINUX)
+  void SetGssapiLibraryLoadObserver(
+      mojo::PendingRemote<mojom::GssapiLibraryLoadObserver>
+          gssapi_library_load_observer) override;
+#endif  // BUILDFLAG(IS_LINUX)
+  void StartNetLogBounded(base::File file,
+                          uint64_t max_total_size,
+                          net::NetLogCaptureMode capture_mode,
+                          base::Value::Dict client_constants);
+
+  // Called after StartNetLogBounded() finishes creating a scratch dir.
+  void OnStartNetLogBoundedScratchDirectoryCreated(
+      base::File file,
+      uint64_t max_total_size,
+      net::NetLogCaptureMode capture_mode,
+      base::Value::Dict constants,
+      const base::FilePath& in_progress_dir_path);
+
+  void StartNetLogUnbounded(base::File file,
+                            net::NetLogCaptureMode capture_mode,
+                            base::Value::Dict client_constants);
 
   // Returns an HttpAuthHandlerFactory for the given NetworkContext.
   std::unique_ptr<net::HttpAuthHandlerFactory> CreateHttpAuthHandlerFactory(
       NetworkContext* network_context);
+
+#if BUILDFLAG(IS_LINUX)
+  // This is called just before a GSSAPI library may be loaded.
+  void OnBeforeGssapiLibraryLoad();
+#endif  // BUILDFLAG(IS_LINUX)
 
   bool quic_disabled() const { return quic_disabled_; }
   bool HasRawHeadersAccess(int32_t process_id, const GURL& resource_url) const;
@@ -243,18 +288,16 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkService
     return http_auth_cache_copier_.get();
   }
 
-  CRLSetDistributor* crl_set_distributor() {
-    return crl_set_distributor_.get();
-  }
-
-#if BUILDFLAG(IS_CT_SUPPORTED)
-  CtLogListDistributor* ct_log_list_distributor() {
-    return ct_log_list_distributor_.get();
-  }
-#endif
-
   FirstPartySetsManager* first_party_sets_manager() const {
     return first_party_sets_manager_.get();
+  }
+
+  network::tpcd::metadata::Manager* tpcd_metadata_manager() const {
+    return tpcd_metadata_manager_.get();
+  }
+
+  ip_protection::MaskedDomainListManager* masked_domain_list_manager() const {
+    return masked_domain_list_manager_.get();
   }
 
   void set_host_resolver_factory_for_testing(
@@ -279,14 +322,10 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkService
 
   const std::vector<mojom::CTLogInfoPtr>& log_list() const { return log_list_; }
 
-  base::Time ct_log_list_update_time() const {
-    return ct_log_list_update_time_;
-  }
-
   bool is_ct_enforcement_enabled_for_testing() const {
     return ct_enforcement_enabled_;
   }
-#endif
+#endif  // BUILDFLAG(IS_CT_SUPPORTED)
 
   bool pins_list_updated() const { return pins_list_updated_; }
 
@@ -301,8 +340,23 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkService
 
   base::Time pins_list_update_time() const { return pins_list_update_time_; }
 
+  bool data_use_updates_enabled() const { return data_use_updates_enabled_; }
+
+  const mojom::HttpAuthDynamicParamsPtr&
+  http_auth_dynamic_network_service_params_for_testing() const {
+    return http_auth_dynamic_network_service_params_;
+  }
+
   mojom::URLLoaderNetworkServiceObserver*
   GetDefaultURLLoaderNetworkServiceObserver();
+
+  RestrictedCookieManager::UmaMetricsUpdater* metrics_updater() const {
+    return metrics_updater_.get();
+  }
+
+  // For tests to clear the metrics updater to avoid time out due to its poor
+  // interaction with TaskEnvironment::FastForward*() methods with long delays.
+  void ResetMetricsUpdaterForTesting();
 
   static NetworkService* GetNetworkServiceForTesting();
 
@@ -320,6 +374,11 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkService
   // Sets First-Party Set data after having read it from a file.
   void OnReadFirstPartySetsFile(const std::string& raw_sets);
 
+  void SetSystemDnsResolver(
+      mojo::PendingRemote<mojom::SystemDnsResolver> override_remote);
+
+  void SetEnvironment(std::vector<mojom::EnvironmentVariablePtr> environment);
+
   bool initialized_ = false;
 
   enum class FunctionTag : uint8_t {
@@ -328,6 +387,11 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkService
     SetTestDohConfigForTesting,
   };
 
+  mojo::Remote<network::mojom::NetworkAnnotationMonitor>
+      network_annotation_monitor_;
+
+  std::unique_ptr<RestrictedCookieManager::UmaMetricsUpdater> metrics_updater_;
+
   FunctionTag dns_config_overrides_set_by_ = FunctionTag::None;
 
   raw_ptr<net::NetLog> net_log_;
@@ -335,6 +399,10 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkService
   std::unique_ptr<NetLogProxySink> net_log_proxy_sink_;
 
   std::unique_ptr<net::FileNetLogObserver> file_net_log_observer_;
+  // When capturing NetLog events, this keeps a NetworkContext's polled data
+  // on the destruction of the NetworkContext.
+  base::Value::List net_log_polled_data_list_;
+
   net::TraceNetLogObserver trace_net_log_observer_;
 
   KeepaliveStatisticsRecorder keepalive_statistics_recorder_;
@@ -388,7 +456,10 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkService
   // including ones it does not own.
   // TODO(mmenke): Once the NetworkService always owns NetworkContexts, merge
   // this with |owned_network_contexts_|.
-  std::set<NetworkContext*> network_contexts_;
+  std::set<raw_ptr<NetworkContext, SetExperimental>> network_contexts_;
+
+  std::unique_ptr<ip_protection::MaskedDomainListManager>
+      masked_domain_list_manager_;
 
   // A per-process_id map of origins that are white-listed to allow
   // them to request raw headers for resources they request.
@@ -396,8 +467,6 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkService
       raw_headers_access_origins_by_pid_;
 
   bool quic_disabled_ = false;
-
-  std::unique_ptr<CRLSetDistributor> crl_set_distributor_;
 
   // Whether new NetworkContexts will be configured to partition their
   // HttpAuthCaches by NetworkIsolationKey.
@@ -415,12 +484,8 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkService
 
   std::vector<mojom::CTLogInfoPtr> log_list_;
 
-  std::unique_ptr<CtLogListDistributor> ct_log_list_distributor_;
-
-  base::Time ct_log_list_update_time_;
-
   bool ct_enforcement_enabled_ = true;
-#endif
+#endif  // BUILDFLAG(IS_CT_SUPPORTED)
 
   bool pins_list_updated_ = false;
 
@@ -430,9 +495,19 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkService
 
   base::Time pins_list_update_time_;
 
+  bool data_use_updates_enabled_ = false;
+
   // This is used only in tests. It avoids leaky SystemDnsConfigChangeNotifiers
   // leaking stale listeners between tests.
   std::unique_ptr<net::NetworkChangeNotifier> mock_network_change_notifier_;
+
+#if BUILDFLAG(IS_LINUX)
+  mojo::Remote<mojom::GssapiLibraryLoadObserver> gssapi_library_load_observer_;
+#endif  // BUILDFLAG(IS_LINUX)
+
+  std::unique_ptr<network::tpcd::metadata::Manager> tpcd_metadata_manager_;
+
+  base::WeakPtrFactory<NetworkService> weak_factory_{this};
 };
 
 }  // namespace network

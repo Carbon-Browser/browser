@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,7 @@
 
 #include "base/notreached.h"
 #include "third_party/skia/include/core/SkBitmap.h"
-#include "ui/accessibility/ax_node_data.h"
-#include "ui/accessibility/ax_tree_data.h"
+#include "ui/accessibility/ax_node_id_forward.h"
 #include "ui/accessibility/ax_tree_source_observer.h"
 
 namespace ui {
@@ -26,36 +25,41 @@ namespace ui {
 // as an AXNodeData. This is the primary interface to use when
 // an accessibility tree will be sent over an IPC before being
 // consumed.
-template <typename AXNodeSource>
+template <typename AXNodeSource,
+          typename AXTreeDataType,
+          typename AXNodeDataType>
 class AXTreeSource {
  public:
   virtual ~AXTreeSource() = default;
 
   // Get the tree data and returns true if there is any data to copy.
-  virtual bool GetTreeData(AXTreeData* data) const = 0;
+  virtual bool GetTreeData(AXTreeDataType data) const = 0;
 
   // Get the root of the tree.
   virtual AXNodeSource GetRoot() const = 0;
 
   // Get a node by its id. If no node by that id exists in the tree, return a
-  // null node, i.e. one that will return false if you call IsValid on it.
+  // null node.
   virtual AXNodeSource GetFromId(AXNodeID id) const = 0;
+
+  AXNodeSource EnsureGetFromId(AXNodeID id) const {
+    AXNodeSource node = GetFromId(id);
+    DCHECK(node);
+    return node;
+  }
 
   // Return the id of a node. All ids must be positive integers; 0 is not a
   // valid ID. IDs are unique only across the current tree source, not across
   // tree sources.
   virtual AXNodeID GetId(AXNodeSource node) const = 0;
 
-  // Append all children of |node| to |out_children|.
-  virtual void GetChildren(AXNodeSource node,
-                           std::vector<AXNodeSource>* out_children) const = 0;
+  virtual void CacheChildrenIfNeeded(AXNodeSource) = 0;
+  virtual size_t GetChildCount(AXNodeSource) const = 0;
+  virtual AXNodeSource ChildAt(AXNodeSource, size_t) const = 0;
+  virtual void ClearChildCache(AXNodeSource) = 0;
 
   // Get the parent of |node|.
   virtual AXNodeSource GetParent(AXNodeSource node) const = 0;
-
-  // Returns true if |node| is valid, and false if it's a null pointer or a
-  // node object representing the null pointer.
-  virtual bool IsValid(AXNodeSource node) const = 0;
 
   // Returns true if |node| is an ignored node
   virtual bool IsIgnored(AXNodeSource node) const = 0;
@@ -68,31 +72,29 @@ class AXTreeSource {
   virtual AXNodeSource GetNull() const = 0;
 
   // Serialize one node in the tree.
-  virtual void SerializeNode(AXNodeSource node, AXNodeData* out_data) const = 0;
+  virtual void SerializeNode(AXNodeSource node,
+                             AXNodeDataType* out_data) const = 0;
 
   // Return a string useful for debugging a node.
   virtual std::string GetDebugString(AXNodeSource node) const {
-    AXNodeData node_data;
+    AXNodeDataType node_data;
     SerializeNode(node, &node_data);
     return node_data.ToString();
   }
-
-  // This is called by AXTreeSerializer when it serializes a tree and
-  // discovers that a node previously in the tree is no longer part of
-  // the tree. It can be used to allow an AXTreeSource to keep a cache
-  // indexed by node ID and delete nodes when they're no longer needed.
-  virtual void SerializerClearedNode(AXNodeID node_id) {}
 
   // The following methods should be overridden in order to add or remove an
   // `AXTreeSourceObserver`, which is notified when nodes are added, removed or
   // updated in this tree source.
 
-  virtual void AddObserver(ui::AXTreeSourceObserver<AXNodeSource>* observer) {
+  virtual void AddObserver(
+      AXTreeSourceObserver<AXNodeSource, AXTreeDataType, AXNodeDataType>*
+          observer) {
     NOTIMPLEMENTED();
   }
 
   virtual void RemoveObserver(
-      ui::AXTreeSourceObserver<AXNodeSource>* observer) {
+      AXTreeSourceObserver<AXNodeSource, AXTreeDataType, AXNodeDataType>*
+          observer) {
     NOTIMPLEMENTED();
   }
 

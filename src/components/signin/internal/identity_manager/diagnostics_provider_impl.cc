@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,7 +19,7 @@ DiagnosticsProviderImpl::DiagnosticsProviderImpl(
   DCHECK(profile_oauth2_token_service_);
 }
 
-DiagnosticsProviderImpl::~DiagnosticsProviderImpl() {}
+DiagnosticsProviderImpl::~DiagnosticsProviderImpl() = default;
 
 signin::LoadCredentialsState
 DiagnosticsProviderImpl::GetDetailedStateOfLoadingOfRefreshTokens() const {

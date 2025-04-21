@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include "components/viz/common/quads/compositor_frame_transition_directive.h"
 #include "components/viz/common/quads/compositor_render_pass.h"
 #include "services/viz/public/mojom/compositing/compositor_frame_transition_directive.mojom-shared.h"
+#include "ui/gfx/display_color_spaces.h"
 
 namespace mojo {
 
@@ -26,36 +27,6 @@ struct EnumTraits<viz::mojom::CompositorFrameTransitionDirectiveType,
 };
 
 template <>
-struct EnumTraits<viz::mojom::CompositorFrameTransitionDirectiveEffect,
-                  viz::CompositorFrameTransitionDirective::Effect> {
-  static viz::mojom::CompositorFrameTransitionDirectiveEffect ToMojom(
-      viz::CompositorFrameTransitionDirective::Effect type);
-
-  static bool FromMojom(
-      viz::mojom::CompositorFrameTransitionDirectiveEffect input,
-      viz::CompositorFrameTransitionDirective::Effect* out);
-};
-
-template <>
-struct StructTraits<
-    viz::mojom::CompositorFrameTransitionDirectiveConfigDataView,
-    viz::CompositorFrameTransitionDirective::TransitionConfig> {
-  static base::TimeDelta duration(
-      const viz::CompositorFrameTransitionDirective::TransitionConfig& config) {
-    return config.duration;
-  }
-
-  static base::TimeDelta delay(
-      const viz::CompositorFrameTransitionDirective::TransitionConfig& config) {
-    return config.delay;
-  }
-
-  static bool Read(
-      viz::mojom::CompositorFrameTransitionDirectiveConfigDataView data,
-      viz::CompositorFrameTransitionDirective::TransitionConfig* out);
-};
-
-template <>
 struct StructTraits<
     viz::mojom::CompositorFrameTransitionDirectiveSharedElementDataView,
     viz::CompositorFrameTransitionDirective::SharedElement> {
@@ -64,14 +35,10 @@ struct StructTraits<
     return element.render_pass_id;
   }
 
-  static viz::CompositorFrameTransitionDirective::TransitionConfig config(
+  static viz::ViewTransitionElementResourceId
+  view_transition_element_resource_id(
       const viz::CompositorFrameTransitionDirective::SharedElement& element) {
-    return element.config;
-  }
-
-  static viz::SharedElementResourceId shared_element_resource_id(
-      const viz::CompositorFrameTransitionDirective::SharedElement& element) {
-    return element.shared_element_resource_id;
+    return element.view_transition_element_resource_id;
   }
 
   static bool Read(
@@ -92,24 +59,24 @@ struct StructTraits<viz::mojom::CompositorFrameTransitionDirectiveDataView,
     return directive.type();
   }
 
-  static bool is_renderer_driven_animation(
+  static blink::ViewTransitionToken transition_token(
       const viz::CompositorFrameTransitionDirective& directive) {
-    return directive.is_renderer_driven_animation();
+    return directive.transition_token();
   }
 
-  static viz::CompositorFrameTransitionDirective::Effect effect(
+  static bool maybe_cross_frame_sink(
       const viz::CompositorFrameTransitionDirective& directive) {
-    return directive.effect();
-  }
-
-  static const viz::CompositorFrameTransitionDirective::TransitionConfig&
-  root_config(const viz::CompositorFrameTransitionDirective& directive) {
-    return directive.root_config();
+    return directive.maybe_cross_frame_sink();
   }
 
   static std::vector<viz::CompositorFrameTransitionDirective::SharedElement>
   shared_elements(const viz::CompositorFrameTransitionDirective& directive) {
     return directive.shared_elements();
+  }
+
+  static const gfx::DisplayColorSpaces& display_color_spaces(
+      const viz::CompositorFrameTransitionDirective& directive) {
+    return directive.display_color_spaces();
   }
 
   static bool Read(viz::mojom::CompositorFrameTransitionDirectiveDataView data,

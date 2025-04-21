@@ -19,6 +19,11 @@
  *
  */
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "third_party/blink/renderer/platform/transforms/transform_operations.h"
 
 #include <algorithm>
@@ -32,9 +37,9 @@
 namespace blink {
 
 namespace {
-using ApplyCallback = base::RepeatingCallback<scoped_refptr<TransformOperation>(
-    const scoped_refptr<TransformOperation>& from,
-    const scoped_refptr<TransformOperation>& to)>;
+using ApplyCallback =
+    base::RepeatingCallback<TransformOperation*(TransformOperation* from,
+                                                TransformOperation* to)>;
 
 // Applies a given function (|ApplyCallback|) to matching pairs of operations.
 TransformOperations ApplyFunctionToMatchingPrefix(
@@ -53,12 +58,12 @@ TransformOperations ApplyFunctionToMatchingPrefix(
   DCHECK(matching_prefix_length <= std::max(from_size, to_size));
 
   for (wtf_size_t i = 0; i < matching_prefix_length; i++) {
-    scoped_refptr<TransformOperation> from_operation =
-        (i < from_size) ? from.Operations()[i].get() : nullptr;
-    scoped_refptr<TransformOperation> to_operation =
-        (i < to_size) ? to.Operations()[i].get() : nullptr;
+    TransformOperation* from_operation =
+        (i < from_size) ? from.Operations()[i].Get() : nullptr;
+    TransformOperation* to_operation =
+        (i < to_size) ? to.Operations()[i].Get() : nullptr;
 
-    scoped_refptr<TransformOperation> result_operation =
+    TransformOperation* result_operation =
         apply_cb.Run(from_operation, to_operation);
 
     if (result_operation) {
@@ -87,7 +92,7 @@ bool TransformOperations::operator==(const TransformOperations& o) const {
 
 void TransformOperations::ApplyRemaining(const gfx::SizeF& border_box_size,
                                          wtf_size_t start,
-                                         TransformationMatrix& t) const {
+                                         gfx::Transform& t) const {
   for (wtf_size_t i = start; i < operations_.size(); i++) {
     operations_[i]->Apply(t, border_box_size);
   }
@@ -120,23 +125,27 @@ wtf_size_t TransformOperations::MatchingPrefixLength(
   return std::max(Operations().size(), other.Operations().size());
 }
 
-scoped_refptr<TransformOperation>
+TransformOperation*
 TransformOperations::BlendRemainingByUsingMatrixInterpolation(
     const TransformOperations& from,
     wtf_size_t matching_prefix_length,
-    double progress) const {
+    double progress,
+    BoxSizeDependentMatrixBlending box_size_dependent) const {
   // Not safe to use a cached transform if any of the operations are size
   // dependent.
   if (BoxSizeDependencies(matching_prefix_length) ||
       from.BoxSizeDependencies(matching_prefix_length)) {
-    return InterpolatedTransformOperation::Create(
+    if (box_size_dependent == BoxSizeDependentMatrixBlending::kDisallow) {
+      return nullptr;
+    }
+    return MakeGarbageCollected<InterpolatedTransformOperation>(
         from, *this, matching_prefix_length, progress);
   }
 
   // Evaluate blended matrix here to avoid creating a nested data structure of
   // unbounded depth.
-  TransformationMatrix from_transform;
-  TransformationMatrix to_transform;
+  gfx::Transform from_transform;
+  gfx::Transform to_transform;
   from.ApplyRemaining(gfx::SizeF(), matching_prefix_length, from_transform);
   ApplyRemaining(gfx::SizeF(), matching_prefix_length, to_transform);
 
@@ -145,15 +154,19 @@ TransformOperations::BlendRemainingByUsingMatrixInterpolation(
     return nullptr;
   }
 
-  to_transform.Blend(from_transform, progress);
-  return Matrix3DTransformOperation::Create(to_transform);
+  if (!to_transform.Blend(from_transform, progress) && progress < 0.5)
+    to_transform = from_transform;
+
+  return MakeGarbageCollected<Matrix3DTransformOperation>(to_transform);
 }
 
 // https://drafts.csswg.org/css-transforms-1/#interpolation-of-transforms
 // TODO(crbug.com/914397): Consolidate blink and cc implementations of transform
 // interpolation.
-TransformOperations TransformOperations::Blend(const TransformOperations& from,
-                                               double progress) const {
+TransformOperations TransformOperations::Blend(
+    const TransformOperations& from,
+    double progress,
+    BoxSizeDependentMatrixBlending box_size_dependent) const {
   if (from == *this || (!from.size() && !size()))
     return *this;
 
@@ -164,19 +177,18 @@ TransformOperations TransformOperations::Blend(const TransformOperations& from,
   bool success = true;
   TransformOperations result = ApplyFunctionToMatchingPrefix(
       WTF::BindRepeating(
-          [](double progress, const scoped_refptr<TransformOperation>& from,
-             const scoped_refptr<TransformOperation>& to) {
+          [](double progress, TransformOperation* from,
+             TransformOperation* to) {
             // Where the lists matched but one was longer, the shorter list is
             // padded with nullptr that represent matching identity operations.
-            return to ? to->Blend(from.get(), progress)
+            return to ? to->Blend(from, progress)
                       : (from ? from->Blend(nullptr, progress, true) : nullptr);
           },
           progress),
       from, *this, matching_prefix_length, &success);
   if (success && matching_prefix_length < max_path_length) {
-    scoped_refptr<TransformOperation> matrix_op =
-        BlendRemainingByUsingMatrixInterpolation(from, matching_prefix_length,
-                                                 progress);
+    TransformOperation* matrix_op = BlendRemainingByUsingMatrixInterpolation(
+        from, matching_prefix_length, progress, box_size_dependent);
     if (matrix_op)
       result.Operations().push_back(matrix_op);
     else
@@ -200,8 +212,7 @@ TransformOperations TransformOperations::Accumulate(
 
   // Accumulate matching pairs of transform functions.
   TransformOperations result = ApplyFunctionToMatchingPrefix(
-      WTF::BindRepeating([](const scoped_refptr<TransformOperation>& from,
-                            const scoped_refptr<TransformOperation>& to) {
+      WTF::BindRepeating([](TransformOperation* from, TransformOperation* to) {
         if (to && from)
           return from->Accumulate(*to);
         // Where the lists matched but one was longer, the shorter list is
@@ -214,17 +225,16 @@ TransformOperations TransformOperations::Accumulate(
   // Then, if there are leftover non-matching functions, accumulate the
   // remaining matrices.
   if (success && matching_prefix_length < max_path_length) {
-    TransformationMatrix from_transform;
-    TransformationMatrix to_transform;
+    gfx::Transform from_transform;
+    gfx::Transform to_transform;
     ApplyRemaining(gfx::SizeF(), matching_prefix_length, from_transform);
     to.ApplyRemaining(gfx::SizeF(), matching_prefix_length, to_transform);
 
-    scoped_refptr<TransformOperation> from_matrix =
-        Matrix3DTransformOperation::Create(from_transform);
-    scoped_refptr<TransformOperation> to_matrix =
-        Matrix3DTransformOperation::Create(to_transform);
-    scoped_refptr<TransformOperation> matrix_op =
-        from_matrix->Accumulate(*to_matrix);
+    TransformOperation* from_matrix =
+        MakeGarbageCollected<Matrix3DTransformOperation>(from_transform);
+    TransformOperation* to_matrix =
+        MakeGarbageCollected<Matrix3DTransformOperation>(to_transform);
+    TransformOperation* matrix_op = from_matrix->Accumulate(*to_matrix);
 
     if (matrix_op)
       result.Operations().push_back(matrix_op);
@@ -280,12 +290,10 @@ static void BoundingBoxForArc(const gfx::Point3F& point,
   if (from_degrees > to_degrees)
     std::swap(from_degrees, to_degrees);
 
-  TransformationMatrix from_matrix;
-  TransformationMatrix to_matrix;
-  from_matrix.Rotate3d(from_transform.X(), from_transform.Y(),
-                       from_transform.Z(), from_degrees);
-  to_matrix.Rotate3d(from_transform.X(), from_transform.Y(), from_transform.Z(),
-                     to_degrees);
+  gfx::Transform from_matrix;
+  gfx::Transform to_matrix;
+  from_matrix.RotateAbout(from_transform.Axis(), from_degrees);
+  to_matrix.RotateAbout(from_transform.Axis(), to_degrees);
 
   gfx::Point3F from_point = from_matrix.MapPoint(point);
 
@@ -364,8 +372,8 @@ static void BoundingBoxForArc(const gfx::Point3F& point,
     if (radians < min_radians)
       continue;
 
-    TransformationMatrix rotation;
-    rotation.Rotate3d(axis.x(), axis.y(), axis.z(), Rad2deg(radians));
+    gfx::Transform rotation;
+    rotation.RotateAbout(axis, Rad2deg(radians));
     box.ExpandTo(rotation.MapPoint(point));
   }
 }
@@ -381,17 +389,18 @@ bool TransformOperations::BlendedBoundsForBox(const gfx::BoxF& box,
 
   *bounds = box;
   for (int i = size - 1; i >= 0; i--) {
-    scoped_refptr<TransformOperation> from_operation =
+    TransformOperation* from_operation =
         (i < from_size) ? from.Operations()[i] : nullptr;
-    scoped_refptr<TransformOperation> to_operation =
+    TransformOperation* to_operation =
         (i < to_size) ? Operations()[i] : nullptr;
 
     DCHECK(from_operation || to_operation);
     TransformOperation::OperationType interpolation_type =
         to_operation ? to_operation->GetType() : from_operation->GetType();
     if (from_operation && to_operation &&
-        !from_operation->CanBlendWith(*to_operation.get()))
+        !from_operation->CanBlendWith(*to_operation)) {
       return false;
+    }
 
     switch (interpolation_type) {
       case TransformOperation::kTranslate:
@@ -408,29 +417,27 @@ bool TransformOperations::BlendedBoundsForBox(const gfx::BoxF& box,
       case TransformOperation::kSkewX:
       case TransformOperation::kSkewY:
       case TransformOperation::kPerspective: {
-        scoped_refptr<TransformOperation> from_transform;
-        scoped_refptr<TransformOperation> to_transform;
+        TransformOperation* from_transform = nullptr;
+        TransformOperation* to_transform = nullptr;
         if (!to_operation) {
-          from_transform = from_operation->Blend(to_operation.get(),
-                                                 1 - min_progress, false);
-          to_transform = from_operation->Blend(to_operation.get(),
-                                               1 - max_progress, false);
+          from_transform =
+              from_operation->Blend(to_operation, 1 - min_progress, false);
+          to_transform =
+              from_operation->Blend(to_operation, 1 - max_progress, false);
         } else {
           from_transform =
-              to_operation->Blend(from_operation.get(), min_progress, false);
+              to_operation->Blend(from_operation, min_progress, false);
           to_transform =
-              to_operation->Blend(from_operation.get(), max_progress, false);
+              to_operation->Blend(from_operation, max_progress, false);
         }
         if (!from_transform || !to_transform)
           continue;
-        TransformationMatrix from_matrix;
-        TransformationMatrix to_matrix;
+        gfx::Transform from_matrix;
+        gfx::Transform to_matrix;
         from_transform->Apply(from_matrix, gfx::SizeF());
         to_transform->Apply(to_matrix, gfx::SizeF());
-        gfx::BoxF from_box = *bounds;
-        gfx::BoxF to_box = *bounds;
-        from_matrix.TransformBox(from_box);
-        to_matrix.TransformBox(to_box);
+        gfx::BoxF from_box = from_matrix.MapBox(*bounds);
+        gfx::BoxF to_box = to_matrix.MapBox(*bounds);
         *bounds = from_box;
         bounds->ExpandTo(to_box);
         continue;
@@ -440,19 +447,19 @@ bool TransformOperations::BlendedBoundsForBox(const gfx::BoxF& box,
       case TransformOperation::kRotateX:
       case TransformOperation::kRotateY:
       case TransformOperation::kRotateZ: {
-        scoped_refptr<RotateTransformOperation> identity_rotation;
+        RotateTransformOperation* identity_rotation = nullptr;
         const RotateTransformOperation* from_rotation = nullptr;
         const RotateTransformOperation* to_rotation = nullptr;
         if (from_operation) {
-          from_rotation = static_cast<const RotateTransformOperation*>(
-              from_operation.get());
+          from_rotation =
+              static_cast<const RotateTransformOperation*>(from_operation);
           if (from_rotation->Axis().IsZero())
             from_rotation = nullptr;
         }
 
         if (to_operation) {
           to_rotation =
-              static_cast<const RotateTransformOperation*>(to_operation.get());
+              static_cast<const RotateTransformOperation*>(to_operation);
           if (to_rotation->Axis().IsZero())
             to_rotation = nullptr;
         }
@@ -466,20 +473,20 @@ bool TransformOperations::BlendedBoundsForBox(const gfx::BoxF& box,
         }
 
         if (!from_rotation) {
-          identity_rotation = RotateTransformOperation::Create(
+          identity_rotation = MakeGarbageCollected<RotateTransformOperation>(
               axis.x(), axis.y(), axis.z(), 0,
               from_operation ? from_operation->GetType()
                              : to_operation->GetType());
-          from_rotation = identity_rotation.get();
+          from_rotation = identity_rotation;
         }
 
         if (!to_rotation) {
           if (!identity_rotation)
-            identity_rotation = RotateTransformOperation::Create(
+            identity_rotation = MakeGarbageCollected<RotateTransformOperation>(
                 axis.x(), axis.y(), axis.z(), 0,
                 from_operation ? from_operation->GetType()
                                : to_operation->GetType());
-          to_rotation = identity_rotation.get();
+          to_rotation = identity_rotation;
         }
 
         gfx::BoxF from_box = *bounds;

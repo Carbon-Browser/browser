@@ -1,12 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://extensions/extensions.js';
 
-import {ActivityGroup, ActivityLogHistoryItemElement} from 'chrome://extensions/extensions.js';
-import {flush} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
+import type {ActivityGroup, ActivityLogHistoryItemElement} from 'chrome://extensions/extensions.js';
 import {assertEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
+import {microtasksFinished} from 'chrome://webui-test/test_util.js';
 
 import {testVisible} from './test_util.js';
 
@@ -20,7 +20,7 @@ suite('ExtensionsActivityLogHistoryItemTest', function() {
 
   // Initialize an extension activity log item before each test.
   setup(function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     testActivityGroup = {
       activityIds: new Set(['1']),
       key: 'i18n.getUILanguage',
@@ -43,13 +43,11 @@ suite('ExtensionsActivityLogHistoryItemTest', function() {
   });
 
   test('no page URLs shown when activity has no associated page', function() {
-    flush();
-
     boundTestVisible('#activity-item-main-row', true);
     boundTestVisible('#page-url-list', false);
   });
 
-  test('clicking the expand button shows the associated page URL', function() {
+  test('clicking the expand button shows the associated page URL', async () => {
     const countsByUrl = new Map([['google.com', 1]]);
 
     testActivityGroup = {
@@ -61,19 +59,20 @@ suite('ExtensionsActivityLogHistoryItemTest', function() {
           chrome.activityLogPrivate.ExtensionActivityFilter.DOM_ACCESS,
       countsByUrl,
     };
-    activityLogHistoryItem.set('data', testActivityGroup);
+    activityLogHistoryItem.data = testActivityGroup;
 
-    flush();
+    await microtasksFinished();
 
     boundTestVisible('#activity-item-main-row', true);
     boundTestVisible('#page-url-list', false);
 
     activityLogHistoryItem.shadowRoot!
         .querySelector<HTMLElement>('#activity-item-main-row')!.click();
+    await microtasksFinished();
     boundTestVisible('#page-url-list', true);
   });
 
-  test('count not shown when there is only 1 page URL', function() {
+  test('count not shown when there is only 1 page URL', async () => {
     const countsByUrl = new Map([['google.com', 1]]);
 
     testActivityGroup = {
@@ -86,18 +85,19 @@ suite('ExtensionsActivityLogHistoryItemTest', function() {
       countsByUrl,
     };
 
-    activityLogHistoryItem.set('data', testActivityGroup);
+    activityLogHistoryItem.data = testActivityGroup;
+    await microtasksFinished();
     activityLogHistoryItem.shadowRoot!
         .querySelector<HTMLElement>('#activity-item-main-row')!.click();
 
-    flush();
+    await microtasksFinished();
 
     boundTestVisible('#activity-item-main-row', true);
     boundTestVisible('#page-url-list', true);
     boundTestVisible('.page-url-count', false);
   });
 
-  test('count shown in descending order for multiple page URLs', function() {
+  test('count shown in descending order for multiple page URLs', async () => {
     const countsByUrl =
         new Map([['google.com', 5], ['chrome://extensions', 10]]);
 
@@ -110,11 +110,12 @@ suite('ExtensionsActivityLogHistoryItemTest', function() {
           chrome.activityLogPrivate.ExtensionActivityFilter.DOM_ACCESS,
       countsByUrl,
     };
-    activityLogHistoryItem.set('data', testActivityGroup);
+    activityLogHistoryItem.data = testActivityGroup;
+    await microtasksFinished();
     activityLogHistoryItem.shadowRoot!
         .querySelector<HTMLElement>('#activity-item-main-row')!.click();
 
-    flush();
+    await microtasksFinished();
 
     boundTestVisible('#activity-item-main-row', true);
     boundTestVisible('#page-url-list', true);

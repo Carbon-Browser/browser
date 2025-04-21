@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -112,16 +112,17 @@ class V8Top25Story(page_cycler_story.PageCyclerStory):
 
   def RunPageInteractions(self, action_runner):
     if self.should_scroll:
-        action_runner.RepeatableBrowserDrivenScroll(
-          repeat_count=0, x_scroll_distance_ratio = 0,
-          y_scroll_distance_ratio = 4, speed=400)
+      action_runner.RepeatableBrowserDrivenScroll(repeat_count=0,
+                                                  x_scroll_distance_ratio=0,
+                                                  y_scroll_distance_ratio=4,
+                                                  speed=400)
     if self.remaining_warmups == 0:
-        # We wait for 20 seconds to make sure we capture enough information
-        # to calculate the interactive time correctly.
-        action_runner.Wait(20)
+      # We wait for 20 seconds to make sure we capture enough information
+      # to calculate the interactive time correctly.
+      action_runner.Wait(20)
     else:
-        action_runner.Wait(2)
-        self.remaining_warmups -= 1
+      action_runner.Wait(4)
+      self.remaining_warmups -= 1
 
 
 class V8Top25StorySet(story.StorySet):

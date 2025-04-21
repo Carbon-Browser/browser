@@ -1,19 +1,18 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "chrome/browser/ash/dbus/cryptohome_key_delegate_service_provider.h"
 
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "ash/components/cryptohome/cryptohome_parameters.h"
 #include "ash/constants/ash_switches.h"
 #include "base/command_line.h"
 #include "base/run_loop.h"
-#include "base/strings/string_piece.h"
 #include "base/test/bind.h"
-#include "chrome/browser/ash/dbus/cryptohome_key_delegate_service_provider.h"
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/certificate_provider/certificate_provider.h"
@@ -24,10 +23,11 @@
 #include "chrome/browser/policy/extension_force_install_mixin.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
+#include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
+#include "chromeos/ash/components/dbus/constants/cryptohome_key_delegate_constants.h"
+#include "chromeos/ash/components/dbus/cryptohome/key.pb.h"
+#include "chromeos/ash/components/dbus/cryptohome/rpc.pb.h"
 #include "chromeos/ash/components/dbus/services/service_provider_test_helper.h"
-#include "chromeos/dbus/constants/cryptohome_key_delegate_constants.h"
-#include "chromeos/dbus/cryptohome/key.pb.h"
-#include "chromeos/dbus/cryptohome/rpc.pb.h"
 #include "components/account_id/account_id.h"
 #include "components/user_manager/user_names.h"
 #include "content/public/browser/browser_context.h"
@@ -179,11 +179,10 @@ class CryptohomeKeyDelegateServiceProviderTest
     const std::string spki =
         certificate_provider_extension()->GetCertificateSpki();
     crypto::SignatureVerifier verifier;
-    if (!verifier.VerifyInit(algorithm, signature,
-                             base::as_bytes(base::make_span(spki)))) {
+    if (!verifier.VerifyInit(algorithm, signature, base::as_byte_span(spki))) {
       return false;
     }
-    verifier.VerifyUpdate(base::as_bytes(base::make_span(kDataToSign)));
+    verifier.VerifyUpdate(base::as_byte_span(kDataToSign));
     return verifier.VerifyFinal();
   }
 

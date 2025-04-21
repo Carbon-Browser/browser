@@ -29,6 +29,8 @@
 #ifndef THIRD_PARTY_BLINK_PUBLIC_PLATFORM_WEB_AUDIO_DEVICE_H_
 #define THIRD_PARTY_BLINK_PUBLIC_PLATFORM_WEB_AUDIO_DEVICE_H_
 
+#include "media/base/output_device_info.h"
+#include "third_party/blink/public/platform/web_audio_sink_descriptor.h"
 #include "third_party/blink/public/platform/web_common.h"
 #include "third_party/blink/public/platform/web_vector.h"
 
@@ -37,23 +39,6 @@ namespace blink {
 // Abstract interface to the Chromium audio system.
 class WebAudioDevice {
  public:
-  class BLINK_PLATFORM_EXPORT RenderCallback {
-   public:
-    // Note: |delay| and |delay_timestamp| arguments are high-precision
-    // measurements of the state of the system in the recent past. To be clear,
-    // |delay| does *not* represent the point-in-time at which the first
-    // rendered sample will be played out.
-    virtual void Render(const WebVector<float*>& destination_data,
-                        uint32_t number_of_frames,
-                        double delay,            // Output delay in seconds.
-                        double delay_timestamp,  // System timestamp in seconds
-                                                 // when |delay| was obtained.
-                        size_t prior_frames_skipped);
-
-   protected:
-    virtual ~RenderCallback();
-  };
-
   virtual ~WebAudioDevice() = default;
 
   virtual void Start() = 0;
@@ -71,8 +56,15 @@ class WebAudioDevice {
   virtual double SampleRate() = 0;
   virtual int FramesPerBuffer() = 0;
 
+  // The maximum channel count of the current audio sink device.
+  virtual int MaxChannelCount() = 0;
+
   // Sets the detect silence flag for |RendererWebAudioDeviceImpl|.
-  virtual void SetDetectSilence(bool detect_silence) {}
+  virtual void SetDetectSilence(bool detect_silence) = 0;
+
+  // Creates a new sink if one hasn't been created yet, and returns the sink
+  // status.
+  virtual media::OutputDeviceStatus MaybeCreateSinkAndGetStatus() = 0;
 };
 
 }  // namespace blink

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,8 @@
 #include "ash/ash_export.h"
 #include "ash/shelf/shelf_button_delegate.h"
 #include "ash/shelf/shelf_control_button.h"
+#include "ui/accessibility/ax_enums.mojom-forward.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 
 namespace ash {
 
@@ -20,9 +22,9 @@ class ShelfButtonDelegate;
 // in/out of the icon matches the movement of ShelfView's items.
 class ASH_EXPORT BackButton : public ShelfControlButton,
                               public ShelfButtonDelegate {
- public:
-  static const char kViewClassName[];
+  METADATA_HEADER(BackButton, ShelfControlButton)
 
+ public:
   explicit BackButton(Shelf* shelf);
 
   BackButton(const BackButton&) = delete;
@@ -36,8 +38,6 @@ class ASH_EXPORT BackButton : public ShelfControlButton,
 
   // views::Button:
   void PaintButtonContents(gfx::Canvas* canvas) override;
-  const char* GetClassName() const override;
-  std::u16string GetTooltipText(const gfx::Point& p) const override;
 
   // views::View:
   void OnThemeChanged() override;
@@ -49,6 +49,12 @@ class ASH_EXPORT BackButton : public ShelfControlButton,
   void ButtonPressed(views::Button* sender,
                      const ui::Event& event,
                      views::InkDrop* ink_drop) override;
+
+ private:
+  void OnAXNameChanged(ax::mojom::StringAttribute attribute,
+                       const std::optional<std::string>& name);
+
+  base::CallbackListSubscription ax_name_change_subscription_;
 };
 
 }  // namespace ash

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,164 +8,186 @@
 #include "base/feature_list.h"
 #include "base/metrics/field_trial_params.h"
 
-namespace syncer {
-
-// Allows device registration within trusted vault server without having trusted
-// vault key. Effectively disabled if kSyncTrustedVaultPassphraseRecovery
-// is disabled.
-inline constexpr base::Feature kAllowSilentTrustedVaultDeviceRegistration{
-    "AllowSilentTrustedVaultDeviceRegistration",
-    base::FEATURE_ENABLED_BY_DEFAULT};
-
-// If enabled, EntitySpecifics will be cached in EntityMetadata in order to
-// prevent data loss caused by older clients dealing with unknown proto fields
-// (introduced later).
-inline constexpr base::Feature kCacheBaseEntitySpecificsInMetadata{
-    "CacheBaseEntitySpecificsInMetadata", base::FEATURE_DISABLED_BY_DEFAULT};
-
-inline constexpr base::Feature kEnableSyncImmediatelyInFRE{
-    "EnableSyncImmediatelyInFRE", base::FEATURE_DISABLED_BY_DEFAULT};
-
-// Causes Sync to ignore updates encrypted with keys that have been missing for
-// too long from this client; Sync will proceed normally as if those updates
-// didn't exist.
-inline constexpr base::Feature kIgnoreSyncEncryptionKeysLongMissing{
-    "IgnoreSyncEncryptionKeysLongMissing", base::FEATURE_DISABLED_BY_DEFAULT};
-// The threshold for kIgnoreSyncEncryptionKeysLongMissing to start ignoring keys
-// (measured in number of GetUpdatesResponses messages).
-inline constexpr base::FeatureParam<int> kMinGuResponsesToIgnoreKey{
-    &kIgnoreSyncEncryptionKeysLongMissing, "MinGuResponsesToIgnoreKey", 3};
-
-// When enabled, Sync machinery will read and writes password notes to the
-// `encrypted_notes_backup` field inside the PasswordSpecifics proto. Together
-// with the logic on the server. this protects against notes being overwritten
-// by legacy clients not supporting password notes.
-inline constexpr base::Feature kReadWritePasswordNotesBackupField{
-    "ReadWritePasswordNotesBackupField", base::FEATURE_DISABLED_BY_DEFAULT};
-
-// Allows custom passphrase users to receive Wallet data for secondary accounts
-// while in transport-only mode.
-inline constexpr base::Feature
-    kSyncAllowWalletDataInTransportModeWithCustomPassphrase{
-        "SyncAllowAutofillWalletDataInTransportModeWithCustomPassphrase",
-        base::FEATURE_DISABLED_BY_DEFAULT};
-
-#if BUILDFLAG(IS_ANDROID)
-inline constexpr base::Feature kSyncAndroidPromosWithAlternativeTitle{
-    "SyncAndroidPromosWithAlternativeTitle", base::FEATURE_DISABLED_BY_DEFAULT};
-inline constexpr base::Feature kSyncAndroidPromosWithIllustration{
-    "SyncAndroidPromosWithIllustration", base::FEATURE_DISABLED_BY_DEFAULT};
-inline constexpr base::Feature kSyncAndroidPromosWithSingleButton{
-    "SyncAndroidPromosWithSingleButton", base::FEATURE_DISABLED_BY_DEFAULT};
-inline constexpr base::Feature kSyncAndroidPromosWithTitle{
-    "SyncAndroidPromosWithTitle", base::FEATURE_DISABLED_BY_DEFAULT};
-#endif  // BUILDFLAG(IS_ANDROID)
-
-// Causes the sync engine to count a quota for commits of data types that can
-// be committed by extension JS API. If the quota is depleted, an extra long
-// nudge delay is applied to that data type. As a result, more changes are
-// likely to get combined into one commit message.
-inline constexpr base::Feature kSyncExtensionTypesThrottling{
-    "SyncExtensionTypesThrottling", base::FEATURE_ENABLED_BY_DEFAULT};
-
-// Sync requires policies to be loaded before starting.
-inline constexpr base::Feature kSyncRequiresPoliciesLoaded{
-    "SyncRequiresPoliciesLoaded", base::FEATURE_DISABLED_BY_DEFAULT};
-// Max time to delay the sync startup while waiting for policies to load.
-inline constexpr base::FeatureParam<base::TimeDelta> kSyncPolicyLoadTimeout{
-    &kSyncRequiresPoliciesLoaded, "SyncPolicyLoadTimeout", base::Seconds(10)};
-
-inline constexpr base::Feature kSyncResetPollIntervalOnStart{
-    "SyncResetPollIntervalOnStart", base::FEATURE_DISABLED_BY_DEFAULT};
-
-// If enabled, interested data types, excluding Wallet and Offer, will be sent
-// to the Sync Server as part of DeviceInfo.
-inline constexpr base::Feature kSyncSendInterestedDataTypes = {
-    "SyncSendInterestedDataTypes", base::FEATURE_ENABLED_BY_DEFAULT};
-
-#if BUILDFLAG(IS_CHROMEOS)
-// Whether warning should be shown in sync settings page when lacros
-// side-by-side mode is enabled.
-inline constexpr base::Feature kSyncSettingsShowLacrosSideBySideWarning{
-    "SyncSettingsShowLacrosSideBySideWarning",
-    base::FEATURE_ENABLED_BY_DEFAULT};
-
-// Whether explicit passphrase sharing between Ash and Lacros is enabled.
-inline constexpr base::Feature kSyncChromeOSExplicitPassphraseSharing{
-    "SyncChromeOSExplicitPassphraseSharing", base::FEATURE_ENABLED_BY_DEFAULT};
-
-// Whether Apps toggle value is exposed by Ash to Lacros.
-inline constexpr base::Feature kSyncChromeOSAppsToggleSharing{
-    "SyncChromeOSAppsToggleSharing", base::FEATURE_DISABLED_BY_DEFAULT};
-#endif  // BUILDFLAG(IS_CHROMEOS)
-
 #if BUILDFLAG(IS_IOS)
-// Whether RPC is enabled.
-inline constexpr base::Feature kSyncTrustedVaultPassphraseiOSRPC{
-    "SyncTrustedVaultPassphraseiOSRPC", base::FEATURE_ENABLED_BY_DEFAULT};
+#include "components/sync/base/ios_cpe_passkey_buildflag.h"
 #endif  // BUILDFLAG(IS_IOS)
 
-// Whether the entry point to opt in to trusted vault in settings should be
-// shown.
-inline constexpr base::Feature kSyncTrustedVaultPassphrasePromo{
-    "SyncTrustedVaultPassphrasePromo", base::FEATURE_DISABLED_BY_DEFAULT};
+namespace syncer {
 
-// Keep this entry in sync with the equivalent name in
-// ChromeFeatureList.java.
-inline constexpr base::Feature kSyncTrustedVaultPassphraseRecovery{
-    "SyncTrustedVaultPassphraseRecovery", base::FEATURE_ENABLED_BY_DEFAULT};
-// Specifies how long requests to vault service shouldn't be retried after
-// encountering transient error.
-inline constexpr base::FeatureParam<base::TimeDelta>
-    kTrustedVaultServiceThrottlingDuration{
-        &kSyncTrustedVaultPassphraseRecovery,
-        "TrustedVaultServiceThrottlingDuration", base::Days(1)};
+// Customizes the delay of a deferred sync startup.
+// Note from 04/2024: The first attempt to roll this out on 05/2023 ran into
+// performance regressions (go/deferred-startup-experiment-metrics, sorry
+// Googlers only). It might still be possible to launch by investigating and
+// fixing the performance issues. crbug.com/40872516 tracks that.
+BASE_DECLARE_FEATURE(kDeferredSyncStartupCustomDelay);
+inline constexpr base::FeatureParam<int>
+    kDeferredSyncStartupCustomDelayInSeconds{
+        &kDeferredSyncStartupCustomDelay,
+        "DeferredSyncStartupCustomDelayInSeconds", 1};
 
-// Enables logging a UMA metric that requires first communicating with the
-// trusted vault server, in order to verify that the local notion of the device
-// being registered is consistent with the server-side state.
-inline constexpr base::Feature kSyncTrustedVaultVerifyDeviceRegistration{
-    "SyncTrustedVaultVerifyDeviceRegistration",
-    base::FEATURE_DISABLED_BY_DEFAULT};
+#if BUILDFLAG(IS_ANDROID)
+// Controls whether to show a batch upload card in Android unified settings
+// panel.
+BASE_DECLARE_FEATURE(kEnableBatchUploadFromSettings);
 
-// Triggers another device registration attempt if the device was registered
-// before this feature was introduced.
-inline constexpr base::Feature kSyncTrustedVaultRedoDeviceRegistration{
-    "SyncTrustedVaultRedoDeviceRegistration",
-    base::FEATURE_DISABLED_BY_DEFAULT};
+// Flag that controls Uno fast-follow features which are:
+// - Batch upload of left-behind bookmarks from the bookmark manager
+// - Turn on bookmarks and reading list when signing in from bookmark manager
+// - Confirmation dialog when turning off “Allow Chrome sign-in”
+// - Promo for signed-in users with bookmarks toggle off
+BASE_DECLARE_FEATURE(kUnoPhase2FollowUp);
+#endif  // BUILDFLAG(IS_ANDROID)
 
-// If enabled, the device will register with FCM and listen to new
-// invalidations. Also, FCM token will be set in DeviceInfo, which signals to
-// the server that device listens to new invalidations.
-// The device will not subscribe to old invalidations for any data types except
-// Wallet and Offer, since that will be covered by the new system.
-// SyncSendInterestedDataTypes must be enabled for this to take effect.
-inline constexpr base::Feature kUseSyncInvalidations = {
-    "UseSyncInvalidations", base::FEATURE_DISABLED_BY_DEFAULT};
+// Controls whether to enable syncing of Autofill Wallet Usage Data.
+BASE_DECLARE_FEATURE(kSyncAutofillWalletUsageData);
 
-// If enabled, types related to Wallet and Offer will be included in interested
-// data types, and the device will listen to new invalidations for those types
-// (if they are enabled).
-// The device will not register for old invalidations at all.
-// UseSyncInvalidations must be enabled for this to take effect.
-inline constexpr base::Feature kUseSyncInvalidationsForWalletAndOffer = {
-    "UseSyncInvalidationsForWalletAndOffer", base::FEATURE_DISABLED_BY_DEFAULT};
+// Controls whether to enable syncing of Autofill Wallet Credential Data.
+BASE_DECLARE_FEATURE(kSyncAutofillWalletCredentialData);
+
+// Controls if the `PlusAddressSettingSyncBridge`, controlling
+// PLUS_ADDRESS_SETTING should be instantiated.
+// TODO(b/342089839): Cleanup when launched.
+BASE_DECLARE_FEATURE(kSyncPlusAddressSetting);
+
+#if BUILDFLAG(IS_CHROMEOS)
+// Whether Apps toggle value is exposed by Ash to Lacros.
+BASE_DECLARE_FEATURE(kSyncChromeOSAppsToggleSharing);
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 // When enabled, optimization flags (single client and a list of FCM
 // registration tokens) will be disabled if during the current sync cycle
 // DeviceInfo has been updated.
-inline constexpr base::Feature
-    kSkipInvalidationOptimizationsWhenDeviceInfoUpdated = {
-        "SkipInvalidationOptimizationsWhenDeviceInfoUpdated",
-        base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_DECLARE_FEATURE(kSkipInvalidationOptimizationsWhenDeviceInfoUpdated);
+
+BASE_DECLARE_FEATURE(kSyncEnableContactInfoDataTypeInTransportMode);
+BASE_DECLARE_FEATURE(kSyncEnableContactInfoDataTypeForCustomPassphraseUsers);
+BASE_DECLARE_FEATURE(kSyncEnableContactInfoDataTypeForDasherUsers);
+
+// For users who support separate "profile" and "account" password stores -
+// see password_manager::features_util::CanCreateAccountStore() - and have
+// sync-the-feature on, enabling this flag means:
+// - New passwords are saved to the account store if the passwords data type is
+//   "selected", and to the profile store otherwise. When the flag is disabled,
+//   saves always happen to the profile store.
+// - The account store is synced. When the flag is disabled, the profile one is.
+BASE_DECLARE_FEATURE(kEnablePasswordsAccountStorageForSyncingUsers);
+
+// Enables a separate account-scoped storage for preferences, for syncing users.
+// (Note that opposed to other "account storage" features, this one does not
+// have any effect for signed-in non-syncing users!)
+BASE_DECLARE_FEATURE(kEnablePreferencesAccountStorage);
 
 #if BUILDFLAG(IS_IOS)
-// Returns whether RPC is enabled.
-bool IsSyncTrustedVaultPassphraseiOSRPCEnabled();
+// On iOS, Webauthn Credential Sync is controlled by a build-time flag, because
+// these capabilities are linked to the Credential Provider Extension and must
+// be declared in its Info.plist (manifest).
+constexpr bool IsWebauthnCredentialSyncEnabled() {
+#if BUILDFLAG(IOS_PASSKEYS_ENABLED)
+  return true;
+#else
+  return false;
+#endif  // !BUILDFLAG(IOS_PASSKEYS_ENABLED)
+}
 #endif  // BUILDFLAG(IS_IOS)
 
-inline constexpr base::Feature kSyncEnableHistoryDataType = {
-    "SyncEnableHistoryDataType", base::FEATURE_DISABLED_BY_DEFAULT};
+// Wrapper flag to control the nudge delay of the #tab-groups-save feature.
+BASE_DECLARE_FEATURE(kTabGroupsSaveNudgeDelay);
+
+// If enabled, keeps local and account search engines separate.
+BASE_DECLARE_FEATURE(kSeparateLocalAndAccountSearchEngines);
+
+// If provided, changes the amount of time before we send messages to the sync
+// service.
+inline constexpr base::FeatureParam<base::TimeDelta>
+    kTabGroupsSaveCustomNudgeDelay(&kTabGroupsSaveNudgeDelay,
+                                   "TabGroupsSaveCustomNudgeDelay",
+                                   base::Seconds(11));
+
+// Feature flag to replace all sync-related UI with sign-in ones.
+BASE_DECLARE_FEATURE(kReplaceSyncPromosWithSignInPromos);
+
+// This gates the new single-model approach where account bookmarks are stored
+// in separate permanent folders in BookmarkModel. The flag has to be in the
+// sync namespace as it controls whether BOOKMARKS datatype is enabled in the
+// transport mode.
+// TODO(crbug.com/40943550): Remove this.
+BASE_DECLARE_FEATURE(kSyncEnableBookmarksInTransportMode);
+
+// Normally, if kReplaceSyncPromosWithSignInPromos is disabled,
+// UserSelectableType::kBookmarks is disabled by default upon sign-in. This
+// flag makes the type enabled by default, for manual testing.
+BASE_DECLARE_FEATURE(kEnableBookmarksSelectedTypeOnSigninForTesting);
+
+// Feature flag used for enabling sync (transport mode) for signed-in users that
+// haven't turned on full sync.
+#if !BUILDFLAG(IS_IOS)
+BASE_DECLARE_FEATURE(kReadingListEnableSyncTransportModeUponSignIn);
+// Returns whether reading list storage related UI can be enabled, by testing
+// `kReadingListEnableSyncTransportModeUponSignIn`.
+bool IsReadingListAccountStorageEnabled();
+#else
+constexpr bool IsReadingListAccountStorageEnabled() {
+  return true;
+}
+#endif  // !BUILDFLAG(IS_IOS)
+
+// Flag to allow SHARED_TAB_GROUP_DATA to run in transport mode.
+BASE_DECLARE_FEATURE(kSyncSharedTabGroupDataInTransportMode);
+
+// Flags to allow AUTOFILL_WALLET_METADATA and AUTOFILL_WALLET_OFFER,
+// respectively, to run in transport mode.
+BASE_DECLARE_FEATURE(kSyncEnableWalletMetadataInTransportMode);
+BASE_DECLARE_FEATURE(kSyncEnableWalletOfferInTransportMode);
+
+// Flag to enable clean up of password deletions that may be unintentional.
+BASE_DECLARE_FEATURE(kSyncPasswordCleanUpAccidentalBatchDeletions);
+// The minimum number of deletions that can be considered a batch deletion.
+inline constexpr base::FeatureParam<int>
+    kSyncPasswordCleanUpAccidentalBatchDeletionsCountThreshold{
+        &kSyncPasswordCleanUpAccidentalBatchDeletions,
+        "SyncPasswordCleanUpAccidentalBatchDeletionsCountThreshold", 3};
+// The maximum time between earliest and latest deletion to be considered an
+// accidental batch deletion.
+inline constexpr base::FeatureParam<base::TimeDelta>
+    kSyncPasswordCleanUpAccidentalBatchDeletionsTimeThreshold{
+        &kSyncPasswordCleanUpAccidentalBatchDeletions,
+        "SyncPasswordCleanUpAccidentalBatchDeletionsTimeThreshold",
+        base::Milliseconds(100)};
+
+// If enabled, sync-the-transport will auto-start (avoid deferring startup) if
+// sync metadata isn't available (i.e. initial sync never completed).
+BASE_DECLARE_FEATURE(kSyncAlwaysForceImmediateStartIfTransportDataMissing);
+
+#if BUILDFLAG(IS_IOS) || BUILDFLAG(IS_ANDROID)
+// If enabled, holds the account preference values under a dictionary in the
+// main preferences file.
+BASE_DECLARE_FEATURE(kMigrateAccountPrefs);
+#endif  // BUILDFLAG(IS_IOS) || BUILDFLAG(IS_ANDROID)
+
+// If enabled, distinguishes between local and account themes.
+BASE_DECLARE_FEATURE(kSeparateLocalAndAccountThemes);
+
+// If enabled, the local change nudge delays for single-client users are
+// increased by some factor, specified via the FeatureParam below.
+BASE_DECLARE_FEATURE(kSyncIncreaseNudgeDelayForSingleClient);
+
+inline constexpr base::FeatureParam<double>
+    kSyncIncreaseNudgeDelayForSingleClientFactor{
+        &kSyncIncreaseNudgeDelayForSingleClient,
+        "SyncIncreaseNudgeDelayForSingleClientFactor", 2.0};
+
+// If enabled, uses new fields ThemeSpecifics to replace theme prefs, thus
+// avoiding use of preferences to sync themes.
+BASE_DECLARE_FEATURE(kMoveThemePrefsToSpecifics);
+
+#if BUILDFLAG(IS_ANDROID)
+// If enabled, WebAPK data will be synced for Backup&Restore purposes.
+BASE_DECLARE_FEATURE(kWebApkBackupAndRestoreBackend);
+#endif  // BUILDFLAG(IS_ANDROID)
+
+// Enables syncing for extensions when in transport mode (when a user is signed
+// in but has not turned on full sync).
+BASE_DECLARE_FEATURE(kSyncEnableExtensionsInTransportMode);
 
 }  // namespace syncer
 

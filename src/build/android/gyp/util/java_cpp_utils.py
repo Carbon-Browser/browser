@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -65,7 +65,7 @@ def ParseTemplateFile(lines):
   return package, class_name
 
 
-# TODO(crbug.com/937282): Work will be needed if we want to annotate specific
+# TODO(crbug.com/40616187): Work will be needed if we want to annotate specific
 # constants in the file to be parsed.
 class CppConstantParser:
   """Parses C++ constants, retaining their comments.

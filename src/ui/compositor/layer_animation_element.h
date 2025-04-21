@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -64,7 +64,7 @@ class COMPOSITOR_EXPORT LayerAnimationElement {
     bool visibility;
     float brightness;
     float grayscale;
-    SkColor color;
+    SkColor4f color;
     gfx::Rect clip_rect;
     gfx::RoundedCornersF rounded_corners;
     gfx::LinearGradient gradient_mask;
@@ -139,7 +139,7 @@ class COMPOSITOR_EXPORT LayerAnimationElement {
   // Creates an element that transitions to the given color. The caller owns the
   // return value.
   static std::unique_ptr<LayerAnimationElement> CreateColorElement(
-      SkColor color,
+      SkColor4f color,
       base::TimeDelta duration);
 
   // Creates an element that transitions the clip rect of the layer to the given
@@ -229,6 +229,7 @@ class COMPOSITOR_EXPORT LayerAnimationElement {
   std::string ToString() const;
 
  protected:
+  void UpdateKeyframeModelId();
   virtual std::string DebugName() const;
 
   // Called once each time the animation element is run before any call to
@@ -258,7 +259,7 @@ class COMPOSITOR_EXPORT LayerAnimationElement {
   const base::TimeDelta duration_;
   gfx::Tween::Type tween_type_;
 
-  const int keyframe_model_id_;
+  int keyframe_model_id_;
   int animation_group_id_;
 
   double last_progressed_fraction_;

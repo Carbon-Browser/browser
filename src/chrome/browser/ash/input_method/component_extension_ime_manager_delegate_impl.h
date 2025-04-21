@@ -1,22 +1,25 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_ASH_INPUT_METHOD_COMPONENT_EXTENSION_IME_MANAGER_DELEGATE_IMPL_H_
 #define CHROME_BROWSER_ASH_INPUT_METHOD_COMPONENT_EXTENSION_IME_MANAGER_DELEGATE_IMPL_H_
 
+#include <optional>
 #include <set>
+#include <string_view>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/memory/weak_ptr.h"
+#include "base/functional/bind.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/threading/thread_checker.h"
 #include "base/values.h"
 #include "ui/base/ime/ash/component_extension_ime_manager.h"
 #include "ui/base/ime/ash/component_extension_ime_manager_delegate.h"
 
-class Profile;
+namespace content {
+class BrowserContext;
+}
 
 namespace ash {
 namespace input_method {
@@ -36,7 +39,7 @@ class ComponentExtensionIMEManagerDelegateImpl
 
   // ComponentExtensionIMEManagerDelegate overrides:
   std::vector<ComponentExtensionIME> ListIME() override;
-  void Load(Profile* profile,
+  void Load(content::BrowserContext* context,
             const std::string& extension_id,
             const std::string& manifest,
             const base::FilePath& file_path) override;
@@ -50,13 +53,13 @@ class ComponentExtensionIMEManagerDelegateImpl
   static void ReadComponentExtensionsInfo(
       std::vector<ComponentExtensionIME>* out_imes);
 
-  // Parses manifest string to manifest json dictionary value.
-  static std::unique_ptr<base::DictionaryValue> GetManifest(
-      const std::string& manifest_string);
+  // Parses manifest string into dictionary value.
+  static std::optional<base::Value::Dict> ParseManifest(
+      std::string_view manifest_string);
 
   // Reads extension information: description, option page. This function
   // returns true on success, otherwise returns false.
-  static bool ReadExtensionInfo(const base::DictionaryValue& manifest,
+  static bool ReadExtensionInfo(const base::Value::Dict& manifest,
                                 const std::string& extension_id,
                                 ComponentExtensionIME* out);
 
@@ -65,7 +68,7 @@ class ComponentExtensionIMEManagerDelegateImpl
   // otherwise return false. This function must be called on FILE thread.
   static bool ReadEngineComponent(
       const ComponentExtensionIME& component_extension,
-      const base::DictionaryValue& dict,
+      const base::Value::Dict& dict,
       ComponentExtensionEngine* out);
 
   // The list of component extension IME.

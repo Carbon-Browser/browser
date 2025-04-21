@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@ HostFrameSinkManagerTestApi::HostFrameSinkManagerTestApi(
     : host_frame_sink_manager_(host_frame_sink_manager) {}
 
 void HostFrameSinkManagerTestApi::SetDisplayHitTestQuery(
-    HostFrameSinkManager::DisplayHitTestQueryMap map) {
+    DisplayHitTestQueryMap map) {
   host_frame_sink_manager_->display_hit_test_query_.clear();
   host_frame_sink_manager_->display_hit_test_query_ = std::move(map);
 }

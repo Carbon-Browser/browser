@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,52 +12,54 @@ namespace trace_event {
 // static
 const char* MemoryDumpTypeToString(const MemoryDumpType& dump_type) {
   switch (dump_type) {
-    case MemoryDumpType::PERIODIC_INTERVAL:
+    case MemoryDumpType::kPeriodicInterval:
       return "periodic_interval";
-    case MemoryDumpType::EXPLICITLY_TRIGGERED:
+    case MemoryDumpType::kExplicitlyTriggered:
       return "explicitly_triggered";
-    case MemoryDumpType::SUMMARY_ONLY:
+    case MemoryDumpType::kSummaryOnly:
       return "summary_only";
   }
   NOTREACHED();
-  return "unknown";
 }
 
 MemoryDumpType StringToMemoryDumpType(const std::string& str) {
-  if (str == "periodic_interval")
-    return MemoryDumpType::PERIODIC_INTERVAL;
-  if (str == "explicitly_triggered")
-    return MemoryDumpType::EXPLICITLY_TRIGGERED;
-  if (str == "summary_only")
-    return MemoryDumpType::SUMMARY_ONLY;
+  if (str == "periodic_interval") {
+    return MemoryDumpType::kPeriodicInterval;
+  }
+  if (str == "explicitly_triggered") {
+    return MemoryDumpType::kExplicitlyTriggered;
+  }
+  if (str == "summary_only") {
+    return MemoryDumpType::kSummaryOnly;
+  }
   NOTREACHED();
-  return MemoryDumpType::LAST;
 }
 
 const char* MemoryDumpLevelOfDetailToString(
     const MemoryDumpLevelOfDetail& level_of_detail) {
   switch (level_of_detail) {
-    case MemoryDumpLevelOfDetail::BACKGROUND:
+    case MemoryDumpLevelOfDetail::kBackground:
       return "background";
-    case MemoryDumpLevelOfDetail::LIGHT:
+    case MemoryDumpLevelOfDetail::kLight:
       return "light";
-    case MemoryDumpLevelOfDetail::DETAILED:
+    case MemoryDumpLevelOfDetail::kDetailed:
       return "detailed";
   }
   NOTREACHED();
-  return "unknown";
 }
 
 MemoryDumpLevelOfDetail StringToMemoryDumpLevelOfDetail(
     const std::string& str) {
-  if (str == "background")
-    return MemoryDumpLevelOfDetail::BACKGROUND;
-  if (str == "light")
-    return MemoryDumpLevelOfDetail::LIGHT;
-  if (str == "detailed")
-    return MemoryDumpLevelOfDetail::DETAILED;
+  if (str == "background") {
+    return MemoryDumpLevelOfDetail::kBackground;
+  }
+  if (str == "light") {
+    return MemoryDumpLevelOfDetail::kLight;
+  }
+  if (str == "detailed") {
+    return MemoryDumpLevelOfDetail::kDetailed;
+  }
   NOTREACHED();
-  return MemoryDumpLevelOfDetail::LAST;
 }
 
 }  // namespace trace_event

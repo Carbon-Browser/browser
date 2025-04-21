@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define COMPONENTS_VIZ_SERVICE_DISPLAY_EMBEDDER_SKIA_OUTPUT_DEVICE_VULKAN_H_
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/memory/raw_ptr.h"
@@ -15,7 +16,6 @@
 #include "components/viz/service/display_embedder/skia_output_device.h"
 #include "gpu/ipc/common/surface_handle.h"
 #include "gpu/vulkan/vulkan_swap_chain.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace gpu {
 class VulkanSurface;
@@ -50,15 +50,10 @@ class SkiaOutputDeviceVulkan final : public SkiaOutputDevice {
 #endif
   // SkiaOutputDevice implementation:
   void Submit(bool sync_cpu, base::OnceClosure callback) override;
-  bool Reshape(const SkSurfaceCharacterization& characterization,
-               const gfx::ColorSpace& color_space,
-               float device_scale_factor,
-               gfx::OverlayTransform transform) override;
-  void SwapBuffers(BufferPresentedCallback feedback,
-                   OutputSurfaceFrame frame) override;
-  void PostSubBuffer(const gfx::Rect& rect,
-                     BufferPresentedCallback feedback,
-                     OutputSurfaceFrame frame) override;
+  bool Reshape(const ReshapeParams& params) override;
+  void Present(const std::optional<gfx::Rect>& update_rect,
+               BufferPresentedCallback feedback,
+               OutputSurfaceFrame frame) override;
   SkSurface* BeginPaint(
       std::vector<GrBackendSemaphore>* end_semaphores) override;
   void EndPaint() override;
@@ -74,7 +69,8 @@ class SkiaOutputDeviceVulkan final : public SkiaOutputDevice {
   };
 
   bool Initialize();
-  bool RecreateSwapChain(const SkSurfaceCharacterization& characterization,
+  bool RecreateSwapChain(const SkImageInfo& image_info,
+                         int sample_count,
                          gfx::OverlayTransform transform);
   void OnPostSubBufferFinished(OutputSurfaceFrame frame,
                                gfx::SwapResult result);
@@ -84,7 +80,7 @@ class SkiaOutputDeviceVulkan final : public SkiaOutputDevice {
   const gpu::SurfaceHandle surface_handle_;
   std::unique_ptr<gpu::VulkanSurface> vulkan_surface_;
 
-  absl::optional<gpu::VulkanSwapChain::ScopedWrite> scoped_write_;
+  std::optional<gpu::VulkanSwapChain::ScopedWrite> scoped_write_;
 
 #if DCHECK_IS_ON()
   bool image_modified_ = false;

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,11 +6,12 @@
 
 #include <string.h>
 
-#include "base/bind.h"
 #include "base/fuchsia/fuchsia_logging.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/notreached.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/ranges/algorithm.h"
+#include "base/types/fixed_array.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace media {
@@ -43,7 +44,7 @@ void FakeAudioCapturer::SendData(base::TimeTicks timestamp, void* data) {
   EXPECT_TRUE(is_active_);
 
   // Find unused packet.
-  auto it = std::find(packets_usage_.begin(), packets_usage_.end(), false);
+  auto it = base::ranges::find(packets_usage_, false);
 
   // Currently tests don't try to send more than 2 packets and the buffer
   // always will have space for at least 2 packets.
@@ -130,12 +131,12 @@ void FakeAudioCapturer::ProducePackets() {
   if (!binding_.is_bound()) {
     return;
   }
-  char data[GetPacketSize()];
-  memset(data, 0, GetPacketSize());
+  base::FixedArray<char> data(GetPacketSize());
+  memset(data.data(), 0, data.memsize());
   SendData(start_timestamp_ + base::Seconds(1) * packet_index_ *
                                   frames_per_packet_ /
                                   stream_type_->frames_per_second,
-           data);
+           data.data());
   packet_index_++;
   timer_.Start(FROM_HERE,
                start_timestamp_ +

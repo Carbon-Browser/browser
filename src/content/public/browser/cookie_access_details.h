@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include "content/common/content_export.h"
 #include "net/cookies/canonical_cookie.h"
+#include "net/cookies/cookie_setting_override.h"
 #include "services/network/public/mojom/cookie_access_observer.mojom.h"
 #include "url/gurl.h"
 
@@ -16,11 +17,16 @@ struct CONTENT_EXPORT CookieAccessDetails {
   using Type = network::mojom::CookieAccessDetails::Type;
 
   CookieAccessDetails();
-  CookieAccessDetails(Type type,
-                      const GURL& url,
-                      const GURL& first_party_url,
-                      const net::CookieList& list,
-                      bool blocked_by_policy = false);
+  CookieAccessDetails(
+      Type type,
+      const GURL& url,
+      const GURL& first_party_url,
+      const net::CookieAccessResultList& cookie_access_result_list,
+      bool blocked_by_policy = false,
+      bool is_ad_tagged = false,
+      const net::CookieSettingOverrides& cookie_setting_overrides =
+          net::CookieSettingOverrides(),
+      const net::SiteForCookies& site_for_cookies = net::SiteForCookies());
   ~CookieAccessDetails();
 
   CookieAccessDetails(const CookieAccessDetails&);
@@ -29,8 +35,16 @@ struct CONTENT_EXPORT CookieAccessDetails {
   Type type;
   GURL url;
   GURL first_party_url;
-  net::CookieList cookie_list;
+  net::CookieAccessResultList cookie_access_result_list;
   bool blocked_by_policy;
+  bool is_ad_tagged = false;
+  net::CookieSettingOverrides cookie_setting_overrides;
+  // SiteForCookies is propagated to
+  // PageSpecificContentSettings::OnCookiesAccessed which checks if cookies
+  // that are same-site with the top-level frame but are accessed in a context
+  // with a cross-site ancestor (aka ABA embeds) are blocked due to third-party
+  // cookie blocking.
+  net::SiteForCookies site_for_cookies;
 };
 
 }  // namespace content

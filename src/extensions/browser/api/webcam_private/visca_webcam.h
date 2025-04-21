@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,12 +10,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "extensions/browser/api/serial/serial_connection.h"
 #include "extensions/browser/api/webcam_private/webcam.h"
 #include "extensions/common/api/serial.h"
+#include "extensions/common/extension_id.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 
 namespace extensions {
@@ -33,7 +34,7 @@ class ViscaWebcam : public Webcam {
   // steps (in order): 1. Open the serial port; 2. Request address; 3. Clear the
   // command buffer. After these three steps completes, |open_callback| will be
   // called.
-  void Open(const std::string& extension_id,
+  void Open(const ExtensionId& extension_id,
             api::SerialPortManager* port_manager,
             const std::string& path,
             const OpenCompleteCallback& open_callback);

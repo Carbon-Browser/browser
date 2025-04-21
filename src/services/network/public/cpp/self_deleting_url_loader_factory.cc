@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,6 +35,14 @@ void SelfDeletingURLLoaderFactory::Clone(
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
   receivers_.Add(this, std::move(loader));
+}
+
+void SelfDeletingURLLoaderFactory::ReportBadMessage(
+    const std::string& message) {
+  receivers_.ReportBadMessage(message);
+  if (receivers_.empty()) {
+    delete this;
+  }
 }
 
 void SelfDeletingURLLoaderFactory::OnDisconnect() {

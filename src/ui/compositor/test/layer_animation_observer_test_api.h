@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,7 @@ class LayerAnimationObserverTestApi {
 
  private:
   // The instance to provide internal access to.
-  raw_ptr<LayerAnimationObserver> observer_;
+  raw_ptr<LayerAnimationObserver, DanglingUntriaged> observer_;
 };
 
 }  // namespace test

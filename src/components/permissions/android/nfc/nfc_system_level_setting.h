@@ -1,11 +1,11 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_PERMISSIONS_ANDROID_NFC_NFC_SYSTEM_LEVEL_SETTING_H_
 #define COMPONENTS_PERMISSIONS_ANDROID_NFC_NFC_SYSTEM_LEVEL_SETTING_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 
 namespace content {
 class WebContents;
@@ -16,7 +16,7 @@ namespace permissions {
 // This class determines whether NFC is enabled system-wide on the device.
 class NfcSystemLevelSetting {
  public:
-  virtual ~NfcSystemLevelSetting() {}
+  virtual ~NfcSystemLevelSetting() = default;
 
   // Returns true if the NFC system level setting can be enabled.
   virtual bool IsNfcAccessPossible() = 0;

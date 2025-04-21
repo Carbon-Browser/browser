@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,20 +6,20 @@
 
 #include <string>
 
-#include "base/bind.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/functional/bind.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "media/mojo/mojom/content_decryption_module.mojom.h"
 #include "media/mojo/mojom/renderer.mojom.h"
 #include "media/mojo/mojom/renderer_extensions.mojom.h"
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 
 namespace content {
 
 MediaInterfaceFactory::MediaInterfaceFactory(
-    blink::BrowserInterfaceBrokerProxy* interface_broker)
+    const blink::BrowserInterfaceBrokerProxy* interface_broker)
     : interface_broker_(interface_broker) {
-  task_runner_ = base::ThreadTaskRunnerHandle::Get();
+  task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
   weak_this_ = weak_factory_.GetWeakPtr();
 }
 
@@ -71,6 +71,24 @@ void MediaInterfaceFactory::CreateVideoDecoder(
   GetMediaInterfaceFactory()->CreateVideoDecoder(std::move(receiver),
                                                  /*dst_video_decoder=*/{});
 }
+
+#if BUILDFLAG(ALLOW_OOP_VIDEO_DECODER)
+void MediaInterfaceFactory::CreateStableVideoDecoder(
+    mojo::PendingReceiver<media::stable::mojom::StableVideoDecoder>
+        video_decoder) {
+  if (!task_runner_->BelongsToCurrentThread()) {
+    task_runner_->PostTask(
+        FROM_HERE,
+        base::BindOnce(&MediaInterfaceFactory::CreateStableVideoDecoder,
+                       weak_this_, std::move(video_decoder)));
+    return;
+  }
+
+  DVLOG(1) << __func__;
+  GetMediaInterfaceFactory()->CreateStableVideoDecoder(
+      std::move(video_decoder));
+}
+#endif  // BUILDFLAG(ALLOW_OOP_VIDEO_DECODER)
 
 void MediaInterfaceFactory::CreateAudioEncoder(
     mojo::PendingReceiver<media::mojom::AudioEncoder> receiver) {

@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include "base/notreached.h"
 #include "base/values.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 
 namespace permissions {
 
@@ -67,7 +66,6 @@ ClientFeatures_Gesture ConvertToProtoGesture(
   }
 
   NOTREACHED();
-  return permissions::ClientFeatures_Gesture_GESTURE_UNSPECIFIED;
 }
 
 ClientFeatures_GestureEnum ConvertToProtoGestureEnum(
@@ -83,7 +81,6 @@ ClientFeatures_GestureEnum ConvertToProtoGestureEnum(
   }
 
   NOTREACHED();
-  return permissions::ClientFeatures_GestureEnum_GESTURE_UNSPECIFIED_V2;
 }
 
 void FillInStatsFeatures(const PredictionRequestFeatures::ActionCounts& counts,
@@ -127,6 +124,14 @@ std::unique_ptr<GeneratePredictionsRequest> GetPredictionRequestProto(
       NOTREACHED()
           << "CPSS only supports notifications and geolocation at the moment.";
   }
+  if (!entity.url.is_empty()) {
+    SiteFeatures* site_features = proto_request->mutable_site_features();
+    site_features->set_origin(entity.url.spec());
+  }
+
+  ClientFeatures_ExperimentConfig* experiment_config =
+      client_features->mutable_experiment_config();
+  experiment_config->set_experiment_id(entity.experiment_id);
 
   return proto_request;
 }

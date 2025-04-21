@@ -1,8 +1,7 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-from __future__ import print_function
 import argparse
 import codecs
 import contextlib
@@ -13,23 +12,17 @@ import platform
 import subprocess
 import sys
 import tempfile
+import time
 import traceback
 
 logging.basicConfig(level=logging.INFO)
 
-# Add src/testing/ into sys.path for importing xvfb and test_env.
 sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
+# //testing imports.
 import test_env
 if sys.platform.startswith('linux'):
   import xvfb
-
-# Unfortunately we need to copy these variables from ../test_env.py.
-# Importing it and using its get_sandbox_env breaks test runs on Linux
-# (it seems to unset DISPLAY).
-CHROME_SANDBOX_ENV = 'CHROME_DEVEL_SANDBOX'
-CHROME_SANDBOX_PATH = '/opt/chromium/chrome_sandbox'
-
 
 SCRIPT_DIR = os.path.abspath(os.path.dirname(__file__))
 SRC_DIR = os.path.abspath(
@@ -53,10 +46,8 @@ except ImportError:
 # with reserved values from the shell.
 MAX_FAILURES_EXIT_STATUS = 101
 
-
 # Exit code to indicate infrastructure issue.
 INFRA_FAILURE_EXIT_CODE = 87
-
 
 # ACL might be explicitly set or inherited.
 CORRECT_ACL_VARIANTS = [
@@ -91,8 +82,8 @@ def set_lpac_acls(acl_dir, is_test_script=False):
           ['icacls', acl_dir, '/grant', '*S-1-15-2-2:(OI)(CI)(RX)'],
           stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as e:
-      logging.error(
-          'Failed to retrieve existing ACLs for directory %s', acl_dir)
+      logging.error('Failed to retrieve existing ACLs for directory %s',
+                    acl_dir)
       logging.error('Command output: %s', e.output)
       sys.exit(e.returncode)
   if not is_test_script:
@@ -124,12 +115,15 @@ def set_lpac_acls(acl_dir, is_test_script=False):
 
 
 def run_script(argv, funcs):
+
   def parse_json(path):
     with open(path) as f:
       return json.load(f)
+
   parser = argparse.ArgumentParser()
-  # TODO(phajdan.jr): Make build-config-fs required after passing it in recipe.
-  parser.add_argument('--build-config-fs')
+  parser.add_argument('--build-dir',
+                      help='Absolute path to build-dir.',
+                      required=True)
   parser.add_argument('--paths', type=parse_json, default={})
   # Properties describe the environment of the build, and are the same per
   # script invocation.
@@ -141,14 +135,16 @@ def run_script(argv, funcs):
   subparsers = parser.add_subparsers()
 
   run_parser = subparsers.add_parser('run')
-  run_parser.add_argument(
-      '--output', type=argparse.FileType('w'), required=True)
+  run_parser.add_argument('--output',
+                          type=argparse.FileType('w'),
+                          required=True)
   run_parser.add_argument('--filter-file', type=argparse.FileType('r'))
   run_parser.set_defaults(func=funcs['run'])
 
   run_parser = subparsers.add_parser('compile_targets')
-  run_parser.add_argument(
-      '--output', type=argparse.FileType('w'), required=True)
+  run_parser.add_argument('--output',
+                          type=argparse.FileType('w'),
+                          required=True)
   run_parser.set_defaults(func=funcs['compile_targets'])
 
   args = parser.parse_args(argv)
@@ -186,11 +182,9 @@ def record_local_script_results(name, output_fd, failures, valid):
     failures: List of strings representing test failures.
     valid: Whether the results are valid.
   """
-  local_script_results = {
-      'valid': valid,
-      'failures': failures
-  }
-  json.dump(local_script_results, output_fd)
+  local_script_results = {'valid': valid, 'failures': failures}
+  with open(output_fd.name, 'w') as fd:
+    json.dump(local_script_results, fd)
 
   if not result_sink:
     return
@@ -207,6 +201,7 @@ def record_local_script_results(name, output_fd, failures, valid):
 
 
 def parse_common_test_results(json_results, test_separator='/'):
+
   def convert_trie_to_flat_paths(trie, prefix=None):
     # Also see blinkpy.web_tests.layout_package.json_results_generator
     result = {}
@@ -220,12 +215,12 @@ def parse_common_test_results(json_results, test_separator='/'):
     return result
 
   results = {
-    'passes': {},
-    'unexpected_passes': {},
-    'failures': {},
-    'unexpected_failures': {},
-    'flakes': {},
-    'unexpected_flakes': {},
+      'passes': {},
+      'unexpected_passes': {},
+      'failures': {},
+      'unexpected_failures': {},
+      'flakes': {},
+      'unexpected_flakes': {},
   }
 
   # TODO(dpranke): crbug.com/357866 - we should simplify the handling of
@@ -233,8 +228,7 @@ def parse_common_test_results(json_results, test_separator='/'):
 
   passing_statuses = ('PASS', 'SLOW', 'NEEDSREBASELINE')
 
-  for test, result in convert_trie_to_flat_paths(
-      json_results['tests']).items():
+  for test, result in convert_trie_to_flat_paths(json_results['tests']).items():
     key = 'unexpected_' if result.get('is_unexpected') else ''
     data = result['actual']
     actual_results = data.split()
@@ -315,7 +309,20 @@ def extract_filter_list(filter_list):
   return filter_list.split('::')
 
 
-class BaseIsolatedScriptArgsAdapter(object):
+def add_emulator_args(parser):
+  parser.add_argument(
+      '--avd-config',
+      type=os.path.realpath,
+      help=('Path to the avd config. Required for Android products. '
+            '(See //tools/android/avd/proto for message definition '
+            'and existing *.textpb files.)'))
+  parser.add_argument('--emulator-window',
+                      action='store_true',
+                      default=False,
+                      help='Enable graphical window display on the emulator.')
+
+
+class BaseIsolatedScriptArgsAdapter:
   """The base class for all script adapters that need to translate flags
   set by isolated script test contract into the specific test script's flags.
   """
@@ -324,42 +331,43 @@ class BaseIsolatedScriptArgsAdapter(object):
     self._parser = argparse.ArgumentParser()
     self._options = None
     self._rest_args = None
+    self._script_writes_output_json = None
     self._parser.add_argument(
-        '--isolated-outdir', type=str,
+        '--isolated-outdir',
+        type=str,
         required=False,
         help='value of $ISOLATED_OUTDIR from swarming task')
-    self._parser.add_argument(
-        '--isolated-script-test-output', type=str,
-        required=False,
-        help='path to write test results JSON object to')
-    self._parser.add_argument(
-        '--isolated-script-test-filter', type=str,
-        required=False)
-    self._parser.add_argument(
-        '--isolated-script-test-repeat', type=int,
-        required=False)
-    self._parser.add_argument(
-        '--isolated-script-test-launcher-retry-limit', type=int,
-        required=False)
-    self._parser.add_argument(
-        '--isolated-script-test-also-run-disabled-tests',
-        default=False, action='store_true', required=False)
+    self._parser.add_argument('--isolated-script-test-output',
+                              type=os.path.abspath,
+                              required=False,
+                              help='path to write test results JSON object to')
+    self._parser.add_argument('--isolated-script-test-filter',
+                              type=str,
+                              required=False)
+    self._parser.add_argument('--isolated-script-test-repeat',
+                              type=int,
+                              required=False)
+    self._parser.add_argument('--isolated-script-test-launcher-retry-limit',
+                              type=int,
+                              required=False)
+    self._parser.add_argument('--isolated-script-test-also-run-disabled-tests',
+                              default=False,
+                              action='store_true',
+                              required=False)
 
     self._parser.add_argument(
         '--xvfb',
         help='start xvfb. Ignored on unsupported platforms',
         action='store_true')
+    # Used to create the correct subclass.
+    self._parser.add_argument('--script-type',
+                              choices=['isolated', 'typ', 'bare'],
+                              help='Which script adapter to use')
 
-    # This argument is ignored for now.
-    self._parser.add_argument(
-        '--isolated-script-test-chartjson-output', type=str)
-    # This argument is ignored for now.
-    self._parser.add_argument('--isolated-script-test-perf-output', type=str)
-
-    self.add_extra_arguments(self._parser)
-
-  def add_extra_arguments(self, parser):
-    pass
+    # Arguments that are ignored, but added here because it's easier to ignore
+    # them to to update bot configs to not pass them.
+    self._parser.add_argument('--isolated-script-test-chartjson-output')
+    self._parser.add_argument('--isolated-script-test-perf-output')
 
   def parse_args(self, args=None):
     self._options, self._rest_args = self._parser.parse_known_args(args)
@@ -376,38 +384,61 @@ class BaseIsolatedScriptArgsAdapter(object):
   def rest_args(self):
     return self._rest_args
 
+  # Overridden by subclasses.
+  # pylint: disable=no-self-use
   def generate_test_output_args(self, output):
     del output  # unused
-    raise RuntimeError('this method is not yet implemented')
+    return []
+  # pylint: enable=no-self-use
 
+  # Overridden by subclasses.
+  # pylint: disable=no-self-use
   def generate_test_filter_args(self, test_filter_str):
     del test_filter_str  # unused
-    raise RuntimeError('this method is not yet implemented')
+    raise RuntimeError('Flag not supported.')
+  # pylint: enable=no-self-use
 
+  # Overridden by subclasses.
+  # pylint: disable=no-self-use
   def generate_test_repeat_args(self, repeat_count):
     del repeat_count  # unused
-    raise RuntimeError('this method is not yet implemented')
+    raise RuntimeError('Flag not supported.')
+  # pylint: enable=no-self-use
 
+  # Overridden by subclasses.
+  # pylint: disable=no-self-use
   def generate_test_launcher_retry_limit_args(self, retry_limit):
     del retry_limit  # unused
-    raise RuntimeError('this method is not yet implemented')
+    raise RuntimeError('Flag not supported.')
+  # pylint: enable=no-self-use
 
-  def generate_test_also_run_disabled_tests_args(self):
-    raise RuntimeError('this method is not yet implemented')
-
+  # Overridden by subclasses.
+  # pylint: disable=no-self-use
   def generate_sharding_args(self, total_shards, shard_index):
     del total_shards, shard_index  # unused
-    raise RuntimeError('this method is not yet implemented')
+    raise RuntimeError('Flag not supported.')
+  # pylint: enable=no-self-use
 
+  # Overridden by subclasses.
+  # pylint: disable=no-self-use
+  def generate_test_also_run_disabled_tests_args(self):
+    raise RuntimeError('Flag not supported.')
+  # pylint: enable=no-self-use
+
+  # Overridden by subclasses.
+  # pylint: disable=no-self-use
   def select_python_executable(self):
     return sys.executable
+  # pylint: enable=no-self-use
 
   def generate_isolated_script_cmd(self):
-    isolated_script_cmd = [ self.select_python_executable() ] + self.rest_args
+    isolated_script_cmd = [self.select_python_executable()] + self.rest_args
 
     if self.options.isolated_script_test_output:
-      isolated_script_cmd += self.generate_test_output_args(
+      output_args = self.generate_test_output_args(
           self.options.isolated_script_test_output)
+      self._script_writes_output_json = bool(output_args)
+      isolated_script_cmd += output_args
 
     # Augment test filter args if needed
     if self.options.isolated_script_test_filter:
@@ -453,7 +484,36 @@ class BaseIsolatedScriptArgsAdapter(object):
   def do_post_test_run_tasks(self):
     pass
 
-  def run_test(self):
+  def _write_simple_test_results(self, start_time, exit_code):
+    if exit_code is None:
+      failure_type = 'CRASH'
+    elif exit_code == 0:
+      failure_type = 'PASS'
+    else:
+      failure_type = 'FAIL'
+
+    test_name = os.path.basename(self._rest_args[0])
+    # See //docs/testing/json_test_results_format.md
+    results_json = {
+        'version': 3,
+        'interrupted': False,
+        'num_failures_by_type': {
+            failure_type: 1
+        },
+        'path_delimiter': '/',
+        'seconds_since_epoch': start_time,
+        'tests': {
+            test_name: {
+                'expected': 'PASS',
+                'actual': failure_type,
+                'time': time.time() - start_time,
+            },
+        },
+    }
+    with open(self.options.isolated_script_test_output, 'w') as fp:
+      json.dump(results_json, fp)
+
+  def run_test(self, cwd=None):
     self.parse_args()
     cmd = self.generate_isolated_script_cmd()
 
@@ -461,36 +521,26 @@ class BaseIsolatedScriptArgsAdapter(object):
 
     env = os.environ.copy()
 
-    # Assume we want to set up the sandbox environment variables all the
-    # time; doing so is harmless on non-Linux platforms and is needed
-    # all the time on Linux.
-    env[CHROME_SANDBOX_ENV] = CHROME_SANDBOX_PATH
-    valid = True
+    env['CHROME_HEADLESS'] = '1'
+    print('Running command: %s\nwith env: %r' % (' '.join(cmd), env))
+    sys.stdout.flush()
+    start_time = time.time()
     try:
-      env['CHROME_HEADLESS'] = '1'
-      print('Running command: %s\nwith env: %r' % (
-          ' '.join(cmd), env))
-      sys.stdout.flush()
       if self.options.xvfb and sys.platform.startswith('linux'):
-        exit_code = xvfb.run_executable(cmd, env)
+        exit_code = xvfb.run_executable(cmd, env, cwd=cwd)
       else:
-        exit_code = test_env.run_command(cmd, env=env, log=False)
+        exit_code = test_env.run_command(cmd, env=env, cwd=cwd, log=False)
       print('Command returned exit code %d' % exit_code)
       sys.stdout.flush()
       self.do_post_test_run_tasks()
-      return exit_code
-    except Exception:
+    except Exception:  # pylint: disable=broad-except
       traceback.print_exc()
-      valid = False
+      exit_code = None
     finally:
       self.clean_up_after_test_run()
 
-    if not valid:
-      failures = ['(entire test suite)']
-      with open(self.options.isolated_script_test_output, 'w') as fp:
-        json.dump({
-            'valid': valid,
-            'failures': failures,
-        }, fp)
+    if (self.options.isolated_script_test_output
+        and not self._script_writes_output_json):
+      self._write_simple_test_results(start_time, exit_code)
 
-    return 1
+    return exit_code if exit_code is not None else 2

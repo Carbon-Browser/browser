@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,19 +6,19 @@
 #define CHROME_BROWSER_POLICY_CHROME_BROWSER_CLOUD_MANAGEMENT_REGISTER_WATCHER_H_
 
 #include <memory>
+#include <optional>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/time/time.h"
 #include "chrome/browser/ui/enterprise_startup_dialog.h"
 #include "components/enterprise/browser/controller/chrome_browser_cloud_management_controller.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
-
-class ChromeBrowserCloudManagementRegisterWatcherTest;
 
 namespace policy {
+
+class ChromeBrowserCloudManagementRegisterWatcherTest;
 
 // Watches the status of chrome browser cloud management enrollment.
 // Shows the blocking dialog for ongoing enrollment and failed enrollment.
@@ -110,17 +110,17 @@ class ChromeBrowserCloudManagementRegisterWatcher
 
   void DisplayErrorMessage();
 
-  raw_ptr<ChromeBrowserCloudManagementController> controller_;
+  const raw_ptr<ChromeBrowserCloudManagementController> controller_;
+
+  std::optional<bool> register_result_;
+  base::Time visible_start_time_;
 
   base::RunLoop run_loop_;
   std::unique_ptr<EnterpriseStartupDialog> dialog_;
 
   bool is_restart_needed_ = false;
-  absl::optional<bool> register_result_;
 
-  DialogCreationCallback dialog_creation_callback_;
-
-  base::Time visible_start_time_;
+  DialogCreationCallback test_create_dialog_callback_;
 };
 
 }  // namespace policy

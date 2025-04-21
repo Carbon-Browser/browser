@@ -1,10 +1,8 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.safety_check;
-
-import android.content.Context;
 
 import org.chromium.base.Callback;
 import org.chromium.base.task.PostTask;
@@ -12,7 +10,6 @@ import org.chromium.base.task.TaskTraits;
 import org.chromium.chrome.browser.omaha.OmahaBase.UpdateStatus;
 import org.chromium.chrome.browser.omaha.OmahaService;
 import org.chromium.chrome.browser.safety_check.SafetyCheckProperties.UpdatesState;
-import org.chromium.content_public.browser.UiThreadTaskTraits;
 
 import java.lang.ref.WeakReference;
 
@@ -27,12 +24,10 @@ public class SafetyCheckUpdatesDelegateImpl implements SafetyCheckUpdatesDelegat
     private OmahaService mOmaha;
 
     /**
-     * Creates a new instance of the glue class to be passed to
-     * {@link SafetyCheckSettingsFragment}.
-     * @param context A {@link Context} object, used by Omaha.
+     * Creates a new instance of the glue class to be passed to {@link SafetyCheckSettingsFragment}.
      */
-    public SafetyCheckUpdatesDelegateImpl(Context context) {
-        mOmaha = OmahaService.getInstance(context);
+    public SafetyCheckUpdatesDelegateImpl() {
+        mOmaha = OmahaService.getInstance();
     }
 
     /**
@@ -63,16 +58,19 @@ public class SafetyCheckUpdatesDelegateImpl implements SafetyCheckUpdatesDelegat
      */
     @Override
     public void checkForUpdates(WeakReference<Callback<Integer>> statusCallback) {
-        PostTask.postTask(TaskTraits.USER_VISIBLE, () -> {
-            @UpdateStatus
-            int status = mOmaha.checkForUpdates();
-            // Post the results back to the UI thread.
-            PostTask.postTask(UiThreadTaskTraits.DEFAULT, () -> {
-                Callback<Integer> strongRef = statusCallback.get();
-                if (strongRef != null) {
-                    strongRef.onResult(convertOmahaUpdateStatus(status));
-                }
-            });
-        });
+        PostTask.postTask(
+                TaskTraits.USER_VISIBLE,
+                () -> {
+                    @UpdateStatus int status = mOmaha.checkForUpdates();
+                    // Post the results back to the UI thread.
+                    PostTask.postTask(
+                            TaskTraits.UI_DEFAULT,
+                            () -> {
+                                Callback<Integer> strongRef = statusCallback.get();
+                                if (strongRef != null) {
+                                    strongRef.onResult(convertOmahaUpdateStatus(status));
+                                }
+                            });
+                });
     }
 }

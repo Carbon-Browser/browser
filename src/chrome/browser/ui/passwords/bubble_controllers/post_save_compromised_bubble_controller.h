@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,7 +47,6 @@ class PostSaveCompromisedBubbleController
   void ReportInteractions() override;
 
   BubbleType type_;
-  bool checked_clicked_ = false;
   // Link to the settings range in the body text.
   gfx::Range link_range_;
 };

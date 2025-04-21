@@ -1,12 +1,12 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef DEVICE_FIDO_BLE_ADAPTER_MANAGER_H_
 #define DEVICE_FIDO_BLE_ADAPTER_MANAGER_H_
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
@@ -32,8 +32,16 @@ class COMPONENT_EXPORT(DEVICE_FIDO) BleAdapterManager
 
   void SetAdapterPower(bool set_power_on);
 
+  // Queries the OS for the status of the Bluetooth adapter. On macOS, this will
+  // trigger a bluetooth permission prompt if Chrome has never asked before.
+  void RequestBluetoothPermission(
+      FidoRequestHandlerBase::BlePermissionCallback callback);
+
  private:
   friend class FidoBleAdapterManagerTest;
+
+  void OnHaveBluetoothPermission(
+      FidoRequestHandlerBase::BlePermissionCallback callback);
 
   // BluetoothAdapter::Observer:
   void AdapterPoweredChanged(BluetoothAdapter* adapter, bool powered) override;
@@ -42,7 +50,6 @@ class COMPONENT_EXPORT(DEVICE_FIDO) BleAdapterManager
 
   const raw_ptr<FidoRequestHandlerBase> request_handler_;
   scoped_refptr<BluetoothAdapter> adapter_;
-  bool adapter_powered_on_programmatically_ = false;
 
   base::WeakPtrFactory<BleAdapterManager> weak_factory_{this};
 };

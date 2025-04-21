@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,7 +43,7 @@ class MockInvalidation : public SyncInvalidation {
   // The version of this invalidation.  Valid only if !is_unknown_version_.
   const int64_t version_;
 
-  // The payload of this invalidation.  Valid only if !is_unknown_version_.
+  // The payload of this invalidation.
   const std::string payload_;
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "base/containers/span.h"
@@ -37,10 +38,6 @@ class Status;
 //   * The key usages have already been verified. In fact in the case of calls
 //     to Encrypt()/Decrypt() the corresponding key usages may not be present
 //     (when wrapping/unwrapping).
-//
-// An AlgorithmImplementation can also assume that crypto::EnsureOpenSSLInit()
-// will be called before any of its methods are invoked (except the
-// constructor).
 class AlgorithmImplementation {
  public:
   virtual ~AlgorithmImplementation();
@@ -106,20 +103,17 @@ class AlgorithmImplementation {
   // (crypto.subtle.deriveBits() dispatches to this)
   virtual Status DeriveBits(const blink::WebCryptoAlgorithm& algorithm,
                             const blink::WebCryptoKey& base_key,
-                            bool has_optional_length_bits,
-                            unsigned int optional_length_bits,
+                            std::optional<unsigned int> length_bits,
                             std::vector<uint8_t>* derived_bytes) const;
 
   // This is what is run whenever the spec says:
   //    "Let length be the result of executing the get key length algorithm"
   //
   // In the Web Crypto spec the operation returns either "null" or an
-  // "Integer". In this code "null" is represented by setting
-  // |*has_length_bits = false|.
+  // "Integer". In this code "null" is represented with |std::nullopt|.
   virtual Status GetKeyLength(
       const blink::WebCryptoAlgorithm& key_length_algorithm,
-      bool* has_length_bits,
-      unsigned int* length_bits) const;
+      std::optional<unsigned int>* length_bits) const;
 
   // This is what is run whenever the spec says:
   //    "Let result be the result of performing the import key operation"

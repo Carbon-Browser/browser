@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,31 +8,34 @@
 #include <memory>
 #include <string>
 
-#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
-#include "components/autofill/core/browser/autofill_client.h"
 #include "components/autofill/core/browser/payments/card_unmask_delegate.h"
-#include "components/autofill/core/browser/payments/payments_client.h"
+#include "components/autofill/core/browser/payments/payments_autofill_client.h"
+#include "components/autofill/core/browser/payments/payments_request_details.h"
+#include "components/autofill/core/browser/ui/payments/card_unmask_prompt_options.h"
+#include "url/origin.h"
 
 namespace autofill {
 
-class BrowserAutofillManagerTest;
+class AutofillClient;
 class AutofillMetricsTest;
-class CreditCardAccessManagerTest;
-class CreditCardCVCAuthenticatorTest;
 class CreditCard;
-class PersonalDataManager;
+class CreditCardAccessManagerTestBase;
+class CreditCardCvcAuthenticatorTest;
+class FormFillerTest;
+class PaymentsDataManager;
 
-namespace metrics {
+namespace autofill_metrics {
 class AutofillMetricsBaseTest;
 }
 
 namespace payments {
 
 // Retrieves the full card details, including the pan and the cvc.
-// TODO(crbug/1061638): Refactor to use base::WaitableEvent where possible.
+// TODO(crbug.com/40679719): Refactor to use base::WaitableEvent where possible.
 class FullCardRequest final : public CardUnmaskDelegate {
  public:
   // The type of failure.
@@ -68,10 +71,11 @@ class FullCardRequest final : public CardUnmaskDelegate {
    public:
     virtual ~ResultDelegate() = default;
     virtual void OnFullCardRequestSucceeded(
-        const payments::FullCardRequest& full_card_request,
+        const FullCardRequest& full_card_request,
         const CreditCard& card,
         const std::u16string& cvc) = 0;
-    virtual void OnFullCardRequestFailed(FailureType failure_type) = 0;
+    virtual void OnFullCardRequestFailed(CreditCard::RecordType card_type,
+                                         FailureType failure_type) = 0;
   };
 
   // The delegate responsible for displaying the unmask prompt UI.
@@ -80,10 +84,10 @@ class FullCardRequest final : public CardUnmaskDelegate {
     virtual ~UIDelegate() = default;
     virtual void ShowUnmaskPrompt(
         const CreditCard& card,
-        AutofillClient::UnmaskCardReason reason,
+        const CardUnmaskPromptOptions& card_unmask_prompt_options,
         base::WeakPtr<CardUnmaskDelegate> delegate) = 0;
     virtual void OnUnmaskVerificationResult(
-        AutofillClient::PaymentsRpcResult result) = 0;
+        PaymentsAutofillClient::PaymentsRpcResult result) = 0;
 
 #if BUILDFLAG(IS_ANDROID)
     // Returns whether or not the user, while on the CVC prompt, should be
@@ -102,122 +106,138 @@ class FullCardRequest final : public CardUnmaskDelegate {
 #endif
   };
 
-  // The parameters should outlive the FullCardRequest.
-  FullCardRequest(RiskDataLoader* risk_data_loader,
-                  payments::PaymentsClient* payments_client,
-                  PersonalDataManager* personal_data_manager);
+  // `autofill_client` should outlive the `FullCardRequest`.
+  explicit FullCardRequest(AutofillClient* autofill_client);
 
   FullCardRequest(const FullCardRequest&) = delete;
   FullCardRequest& operator=(const FullCardRequest&) = delete;
 
-  ~FullCardRequest();
+  ~FullCardRequest() override;
 
   // Retrieves the pan for |card| after querying the user for CVC and invokes
   // Delegate::OnFullCardRequestSucceeded() or
   // Delegate::OnFullCardRequestFailed(). Only one request should be active at a
-  // time. |last_committed_url_origin| is the full origin of the url where the
-  // card retrieval happens. |last_committed_url_origin| needs to be specified
-  // if the full card request is for a virtual card.
+  // time.
   //
   // If the card is local, has a non-empty GUID, and the user has updated its
   // expiration date, then this function will write the new information to
   // autofill table on disk.
-  void GetFullCard(
+  void GetFullCard(const CreditCard& card,
+                   PaymentsAutofillClient::UnmaskCardReason reason,
+                   base::WeakPtr<ResultDelegate> result_delegate,
+                   base::WeakPtr<UIDelegate> ui_delegate,
+                   std::optional<std::string> context_token = std::nullopt);
+
+  // Refer to the comment above `GetFullCard()` for the high level overview of
+  // how this function works. The additional fields in this function are
+  // Virtual Card specific fields that are required in the UnmaskCardRequest for
+  // unmasking a Virtual Card via CVC authentication.
+  void GetFullVirtualCardViaCVC(
       const CreditCard& card,
-      AutofillClient::UnmaskCardReason reason,
+      PaymentsAutofillClient::UnmaskCardReason reason,
       base::WeakPtr<ResultDelegate> result_delegate,
       base::WeakPtr<UIDelegate> ui_delegate,
-      absl::optional<GURL> last_committed_url_origin = absl::nullopt);
+      const GURL& last_committed_primary_main_frame_origin,
+      const std::string& vcn_context_token,
+      const CardUnmaskChallengeOption& selected_challenge_option);
 
-  // Retrieves the pan for |card| through a FIDO assertion and invokes
+  // Retrieves the pan for `card` through a FIDO assertion and invokes
   // Delegate::OnFullCardRequestSucceeded() or
   // Delegate::OnFullCardRequestFailed(). Only one request should be active at a
-  // time. |last_committed_url_origin| is the full origin of the url where the
-  // card retrieval happens. |context_token| is used for providing context of
-  // the request to the server to link related requests.
-  // |last_committed_url_origin| and |context_token| are populated if the full
-  // card request is for a virtual card.
+  // time. `last_committed_primary_main_frame_origin` is the full origin of the
+  // primary main frame where the card retrieval happens. `context_token` is
+  // used for providing context of the request to the server to link related
+  // requests. `last_committed_primary_main_frame_origin` and `context_token`
+  // are populated if the full card request is for a virtual card.
   //
   // If the card is local, has a non-empty GUID, and the user has updated its
   // expiration date, then this function will write the new information to
   // autofill table on disk.
   void GetFullCardViaFIDO(
       const CreditCard& card,
-      AutofillClient::UnmaskCardReason reason,
+      PaymentsAutofillClient::UnmaskCardReason reason,
       base::WeakPtr<ResultDelegate> result_delegate,
-      base::Value fido_assertion_info,
-      absl::optional<GURL> last_committed_url_origin = absl::nullopt,
-      absl::optional<std::string> context_token = absl::nullopt);
+      base::Value::Dict fido_assertion_info,
+      std::optional<GURL> last_committed_primary_main_frame_origin =
+          std::nullopt,
+      std::optional<std::string> context_token = std::nullopt);
 
-  // Called by the payments client when a card has been unmasked.
-  void OnDidGetRealPan(
-      AutofillClient::PaymentsRpcResult result,
-      payments::PaymentsClient::UnmaskResponseDetails& response_details);
+  // Called by the PaymentsNetworkInterface when a card has been unmasked.
+  void OnDidGetRealPan(PaymentsAutofillClient::PaymentsRpcResult result,
+                       const UnmaskResponseDetails& response_details);
 
   // Called when verification is cancelled. This is used only by
-  // CreditCardFIDOAuthenticator to cancel the flow for opted-in users.
+  // CreditCardFidoAuthenticator to cancel the flow for opted-in users.
   void OnFIDOVerificationCancelled();
 
-  payments::PaymentsClient::UnmaskResponseDetails unmask_response_details()
-      const {
+  UnmaskResponseDetails unmask_response_details() const {
     return unmask_response_details_;
   }
 
- private:
-  friend class autofill::BrowserAutofillManagerTest;
-  friend class autofill::AutofillMetricsTest;
-  friend class autofill::metrics::AutofillMetricsBaseTest;
-  friend class autofill::CreditCardAccessManagerTest;
-  friend class autofill::CreditCardCVCAuthenticatorTest;
+  UnmaskRequestDetails* GetUnmaskRequestDetailsForTesting() const {
+    return request_.get();
+  }
 
-  // Retrieves the pan for |card| and invokes
-  // Delegate::OnFullCardRequestSucceeded() or
-  // Delegate::OnFullCardRequestFailed(). Only one request should be active at a
-  // time.
+  bool GetShouldUnmaskCardForTesting() const { return should_unmask_card_; }
+
+ private:
+  friend class autofill::AutofillMetricsTest;
+  friend class autofill::autofill_metrics::AutofillMetricsBaseTest;
+  friend class autofill::CreditCardAccessManagerTestBase;
+  friend class autofill::CreditCardCvcAuthenticatorTest;
+  friend class autofill::FormFillerTest;
+
+  // Retrieves the pan for `card` and invokes
+  // `Delegate::OnFullCardRequestSucceeded()` or
+  // `Delegate::OnFullCardRequestFailed()`. Only one request should be active at
+  // a time.
   //
-  // If |ui_delegate| is set, then the user is queried for CVC.
-  // Else if |fido_assertion_info| is a dictionary, FIDO verification is used.
-  // |last_committed_url_origin| is the url of the website on which the card is
-  // unmasked. |context_token| is used for providing context of the request to
-  // the server to link related requests. |last_committed_url_origin| and
-  // |context_token| need to be specified if the full card request is for a
-  // virtual card.
+  // If `ui_delegate` is set, then the user is queried for CVC.
+  // Else if `fido_assertion_info` is a dictionary, FIDO verification is used.
+  // `last_committed_primary_main_frame_origin` is the full origin of the
+  // primary main frame on which the card is unmasked. `context_token` is used
+  // for providing context of the request to the server to link related
+  // requests. `selected_challenge_option` is the challenge option that was
+  // selected for authentication when the user was challenged with several
+  // authentication methods. `last_committed_primary_main_frame_origin`,
+  // `context_token`, and `selected_challenge_option` need to be specified if
+  // the full card request is for a virtual card.
   //
   // If the card is local, has a non-empty GUID, and the user has updated its
   // expiration date, then this function will write the new information to
   // autofill table on disk.
-  void GetFullCardImpl(const CreditCard& card,
-                       AutofillClient::UnmaskCardReason reason,
-                       base::WeakPtr<ResultDelegate> result_delegate,
-                       base::WeakPtr<UIDelegate> ui_delegate,
-                       absl::optional<base::Value> fido_assertion_info,
-                       absl::optional<GURL> last_committed_url_origin,
-                       absl::optional<std::string> context_token);
+  void GetFullCardImpl(
+      const CreditCard& card,
+      PaymentsAutofillClient::UnmaskCardReason reason,
+      base::WeakPtr<ResultDelegate> result_delegate,
+      base::WeakPtr<UIDelegate> ui_delegate,
+      std::optional<base::Value::Dict> fido_assertion_info,
+      std::optional<GURL> last_committed_primary_main_frame_origin,
+      std::optional<std::string> context_token,
+      std::optional<CardUnmaskChallengeOption> selected_challenge_option);
 
   // CardUnmaskDelegate:
   void OnUnmaskPromptAccepted(
       const UserProvidedUnmaskDetails& user_response) override;
-  void OnUnmaskPromptClosed() override;
+  void OnUnmaskPromptCancelled() override;
   bool ShouldOfferFidoAuth() const override;
 
   // Called by autofill client when the risk data has been loaded.
   void OnDidGetUnmaskRiskData(const std::string& risk_data);
 
   // Makes final preparations for the unmask request and calls
-  // PaymentsClient::UnmaskCard().
+  // UnmaskCard().
   void SendUnmaskCardRequest();
 
   // Resets the state of the request.
   void Reset();
 
-  // Used to fetch risk data for this request.
-  const raw_ptr<RiskDataLoader> risk_data_loader_;
+  PaymentsDataManager& GetPaymentsDataManager();
 
-  // Responsible for unmasking a masked server card.
-  const raw_ptr<payments::PaymentsClient> payments_client_;
+  PaymentsNetworkInterface* GetPaymentsNetworkInterface();
 
-  // Responsible for updating the server card on disk after it's been unmasked.
-  const raw_ptr<PersonalDataManager> personal_data_manager_;
+  // The associated autofill client.
+  const raw_ref<AutofillClient> autofill_client_;
 
   // Receiver of the full PAN and CVC.
   base::WeakPtr<ResultDelegate> result_delegate_;
@@ -226,17 +246,17 @@ class FullCardRequest final : public CardUnmaskDelegate {
   base::WeakPtr<UIDelegate> ui_delegate_;
 
   // The pending request to get a card's full PAN and CVC.
-  std::unique_ptr<payments::PaymentsClient::UnmaskRequestDetails> request_;
+  std::unique_ptr<UnmaskRequestDetails> request_;
 
   // Whether the card unmask request should be sent to the payment server.
-  bool should_unmask_card_;
+  bool should_unmask_card_ = false;
 
   // The timestamp when the full PAN was requested from a server. For
   // histograms.
   base::TimeTicks real_pan_request_timestamp_;
 
   // Includes all details from GetRealPan response.
-  payments::PaymentsClient::UnmaskResponseDetails unmask_response_details_;
+  UnmaskResponseDetails unmask_response_details_;
 
   // Enables destroying FullCardRequest while CVC prompt is showing or a server
   // communication is pending.

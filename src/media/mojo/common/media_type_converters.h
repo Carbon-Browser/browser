@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 #define MEDIA_MOJO_COMMON_MEDIA_TYPE_CONVERTERS_H_
 
 #include <memory>
+#include <optional>
 
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "media/mojo/mojom/content_decryption_module.mojom.h"
 #include "media/mojo/mojom/media_types.mojom.h"
 #include "mojo/public/cpp/bindings/type_converter.h"
@@ -32,6 +33,20 @@ struct TypeConverter<std::unique_ptr<media::DecryptConfig>,
                      media::mojom::DecryptConfigPtr> {
   static std::unique_ptr<media::DecryptConfig> Convert(
       const media::mojom::DecryptConfigPtr& input);
+};
+
+template <>
+struct TypeConverter<media::mojom::DecoderBufferSideDataPtr,
+                     media::DecoderBufferSideData> {
+  static media::mojom::DecoderBufferSideDataPtr Convert(
+      const media::DecoderBufferSideData& input);
+};
+
+template <>
+struct TypeConverter<std::unique_ptr<media::DecoderBufferSideData>,
+                     media::mojom::DecoderBufferSideDataPtr> {
+  static std::unique_ptr<media::DecoderBufferSideData> Convert(
+      const media::mojom::DecoderBufferSideDataPtr& input);
 };
 
 template <>

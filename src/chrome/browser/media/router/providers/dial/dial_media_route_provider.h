@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,8 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/media/router/discovery/dial/dial_media_sink_service_impl.h"
-#include "chrome/browser/media/router/providers/common/buffered_message_sender.h"
 #include "chrome/browser/media/router/providers/dial/dial_activity_manager.h"
 #include "chrome/browser/media/router/providers/dial/dial_internal_message_util.h"
 #include "components/media_router/common/mojom/media_router.mojom.h"
@@ -72,16 +72,14 @@ class DialMediaRouteProvider : public mojom::MediaRouteProvider,
                    const std::string& sink_id,
                    const std::string& presentation_id,
                    const url::Origin& origin,
-                   int32_t tab_id,
+                   int32_t frame_tree_node_id,
                    base::TimeDelta timeout,
-                   bool incognito,
                    CreateRouteCallback callback) override;
   void JoinRoute(const std::string& media_source,
                  const std::string& presentation_id,
                  const url::Origin& origin,
-                 int32_t tab_id,
+                 int32_t frame_tree_node_id,
                  base::TimeDelta timeout,
-                 bool incognito,
                  JoinRouteCallback callback) override;
   void TerminateRoute(const std::string& route_id,
                       TerminateRouteCallback callback) override;
@@ -92,16 +90,13 @@ class DialMediaRouteProvider : public mojom::MediaRouteProvider,
   void StartObservingMediaSinks(const std::string& media_source) override;
   void StopObservingMediaSinks(const std::string& media_source) override;
   void StartObservingMediaRoutes() override;
-  void StartListeningForRouteMessages(const std::string& route_id) override;
-  void StopListeningForRouteMessages(const std::string& route_id) override;
   void DetachRoute(const std::string& route_id) override;
-  void EnableMdnsDiscovery() override;
-  void UpdateMediaSinks(const std::string& media_source) override;
-  void CreateMediaRouteController(
+  void DiscoverSinksNow() override;
+  void BindMediaController(
       const std::string& route_id,
       mojo::PendingReceiver<mojom::MediaController> media_controller,
       mojo::PendingRemote<mojom::MediaStatusObserver> observer,
-      CreateMediaRouteControllerCallback callback) override;
+      BindMediaControllerCallback callback) override;
   void GetState(GetStateCallback callback) override;
 
   void SetActivityManagerForTest(
@@ -167,7 +162,7 @@ class DialMediaRouteProvider : public mojom::MediaRouteProvider,
                         TerminateRouteCallback callback);
   void HandleStopAppResult(const MediaRoute::Id& route_id,
                            TerminateRouteCallback callback,
-                           const absl::optional<std::string>& message,
+                           const std::optional<std::string>& message,
                            mojom::RouteRequestResultCode result_code);
   void NotifyAllOnRoutesUpdated();
   void NotifyOnRoutesUpdated(const std::vector<MediaRoute>& routes);
@@ -197,7 +192,6 @@ class DialMediaRouteProvider : public mojom::MediaRouteProvider,
   base::flat_set<int> pending_dial_launches_;
 
   std::unique_ptr<DialActivityManager> activity_manager_;
-  std::unique_ptr<BufferedMessageSender> message_sender_;
 
   DialInternalMessageUtil internal_message_util_;
 

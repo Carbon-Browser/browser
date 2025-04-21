@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,6 +20,9 @@ const char kLastUploadVersion[] = "enterprise_reporting.last_upload_version";
 const char kCloudExtensionRequestUploadedIds[] =
     "enterprise_reporting.extension_request.pending.ids";
 
+const char kCloudLegacyTechReportAllowlist[] =
+    "enterprise_reporting.legacy_tech.urls";
+
 const base::TimeDelta kDefaultReportFrequency = base::Hours(24);
 
 void RegisterLocalStatePrefs(PrefRegistrySimple* registry) {
@@ -38,15 +41,17 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
   registry->RegisterTimePref(kLastUploadTimestamp, base::Time());
   registry->RegisterTimePref(kLastUploadSucceededTimestamp, base::Time());
   registry->RegisterStringPref(kLastUploadVersion, std::string());
-  // TODO(crbug.com/1298258): We reuse the report frequency pref for profile
+  // TODO(crbug.com/40215470): We reuse the report frequency pref for profile
   // reporting for now. This might need to be changed in the future.
   registry->RegisterTimeDeltaPref(kCloudReportingUploadFrequency,
                                   kDefaultReportFrequency);
-#if !BUILDFLAG(IS_ANDROID)
+#if BUILDFLAG(ENABLE_EXTENSIONS)
   registry->RegisterBooleanPref(prefs::kCloudExtensionRequestEnabled, false);
   registry->RegisterDictionaryPref(prefs::kCloudExtensionRequestIds);
   registry->RegisterDictionaryPref(kCloudExtensionRequestUploadedIds);
-#endif  // !BUILDFLAG(IS_ANDROID)
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
+
+  registry->RegisterListPref(kCloudLegacyTechReportAllowlist);
 }
 
 }  // namespace enterprise_reporting

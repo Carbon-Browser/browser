@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -36,7 +36,6 @@ class OutputSurfaceUnified : public OutputSurface {
   void DiscardBackbuffer() override {}
   void Reshape(const ReshapeParams& params) override {}
   void SwapBuffers(OutputSurfaceFrame frame) override;
-  bool IsDisplayedAsOverlayPlane() const override;
   void SetUpdateVSyncParametersCallback(
       UpdateVSyncParametersCallback callback) override {}
   void SetDisplayTransformHint(gfx::OverlayTransform transform) override {}

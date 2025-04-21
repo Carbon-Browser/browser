@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,7 +18,7 @@ typedef SearchHostToURLsMap::TemplateURLSet TemplateURLSet;
 // Basic functionality for the SearchHostToURLsMap tests.
 class SearchHostToURLsMapTest : public testing::Test {
  public:
-  SearchHostToURLsMapTest() {}
+  SearchHostToURLsMapTest() = default;
 
   SearchHostToURLsMapTest(const SearchHostToURLsMapTest&) = delete;
   SearchHostToURLsMapTest& operator=(const SearchHostToURLsMapTest&) = delete;
@@ -83,7 +83,7 @@ TEST_F(SearchHostToURLsMapTest, GetsBestTemplateURLForKnownHost) {
   TemplateURLData data;
   data.SetURL("http://" + host_ + "/path1");
   // Make the new TemplateURL "better" by having it created by policy.
-  data.created_by_policy = true;
+  data.policy_origin = TemplateURLData::PolicyOrigin::kDefaultSearchProvider;
 
   TemplateURL new_t_url(data);
   provider_map_->Add(&new_t_url, SearchTermsData());

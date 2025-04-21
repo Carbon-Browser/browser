@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -45,12 +45,9 @@ IN_PROC_BROWSER_TEST_F(ContentSettingImageModelBrowserTest, CreateBubbleModel) {
   // to the same setting.
   static constexpr ContentSettingImageModel::ImageType
       content_settings_to_test[] = {
-          ImageType::COOKIES,
-          ImageType::IMAGES,
-          ImageType::JAVASCRIPT,
-          ImageType::POPUPS,
-          ImageType::MIXEDSCRIPT,
-          ImageType::PROTOCOL_HANDLERS,
+          ImageType::COOKIES,     ImageType::IMAGES,
+          ImageType::JAVASCRIPT,  ImageType::POPUPS,
+          ImageType::MIXEDSCRIPT, ImageType::PROTOCOL_HANDLERS,
           ImageType::MIDI_SYSEX,
       };
 

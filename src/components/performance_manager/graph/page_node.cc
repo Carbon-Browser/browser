@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,8 +15,6 @@ const char* PageNode::ToString(PageNode::EmbeddingType embedding_type) {
       return "kInvalid";
     case PageNode::EmbeddingType::kGuestView:
       return "kGuestView";
-    case PageNode::EmbeddingType::kPortal:
-      return "kPortal";
   }
   NOTREACHED();
 }
@@ -51,27 +49,11 @@ const char* PageNode::ToString(PageNode::LoadingState loading_state) {
   NOTREACHED();
 }
 
-// static
-const char* PageNode::ToString(PageNode::PageState page_state) {
-  switch (page_state) {
-    case PageState::kActive:
-      return "kActive";
-    case PageState::kPrerendering:
-      return "kPrerendering";
-    case PageState::kBackForwardCache:
-      return "kBackForwardCache";
-  }
-  NOTREACHED();
-}
-
 PageNode::PageNode() = default;
 PageNode::~PageNode() = default;
 
 PageNodeObserver::PageNodeObserver() = default;
 PageNodeObserver::~PageNodeObserver() = default;
-
-PageNode::ObserverDefaultImpl::ObserverDefaultImpl() = default;
-PageNode::ObserverDefaultImpl::~ObserverDefaultImpl() = default;
 
 std::ostream& operator<<(
     std::ostream& os,

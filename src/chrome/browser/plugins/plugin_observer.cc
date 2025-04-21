@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,17 +6,12 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
-#include "base/metrics/histogram_macros.h"
 #include "build/build_config.h"
 #include "chrome/app/vector_icons/vector_icons.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/infobars/simple_alert_infobar_creator.h"
-#include "chrome/browser/plugins/plugin_finder.h"
-#include "chrome/browser/plugins/plugin_infobar_delegates.h"
-#include "chrome/browser/plugins/plugin_installer.h"
-#include "chrome/browser/plugins/plugin_installer_observer.h"
 #include "chrome/browser/plugins/plugin_observer_common.h"
 #include "chrome/browser/plugins/reload_plugin_infobar_delegate.h"
 #include "chrome/common/buildflags.h"
@@ -47,31 +42,6 @@ using content::PluginService;
 
 // PluginObserver -------------------------------------------------------------
 
-class PluginObserver::PluginPlaceholderHost : public PluginInstallerObserver {
- public:
-  PluginPlaceholderHost(
-      PluginObserver* observer,
-      std::u16string plugin_name,
-      PluginInstaller* installer,
-      mojo::PendingRemote<chrome::mojom::PluginRenderer> plugin_renderer_remote)
-      : PluginInstallerObserver(installer),
-        observer_(observer),
-        plugin_renderer_remote_(std::move(plugin_renderer_remote)) {
-    plugin_renderer_remote_.set_disconnect_handler(
-        base::BindOnce(&PluginObserver::RemovePluginPlaceholderHost,
-                       base::Unretained(observer_), this));
-    DCHECK(installer);
-  }
-
-  void DownloadFinished() override {
-    plugin_renderer_remote_->FinishedDownloading();
-  }
-
- private:
-  raw_ptr<PluginObserver> observer_;
-  mojo::Remote<chrome::mojom::PluginRenderer> plugin_renderer_remote_;
-};
-
 void PluginObserver::BindPluginHost(
     mojo::PendingAssociatedReceiver<chrome::mojom::PluginHost> receiver,
     content::RenderFrameHost* rfh) {
@@ -89,8 +59,7 @@ PluginObserver::PluginObserver(content::WebContents* web_contents)
       content::WebContentsUserData<PluginObserver>(*web_contents),
       plugin_host_receivers_(web_contents, this) {}
 
-PluginObserver::~PluginObserver() {
-}
+PluginObserver::~PluginObserver() = default;
 
 void PluginObserver::PluginCrashed(const base::FilePath& plugin_path,
                                    base::ProcessId plugin_pid) {
@@ -120,11 +89,9 @@ void PluginObserver::PluginCrashed(const base::FilePath& plugin_path,
   if (is_running) {
     infobar_text = l10n_util::GetStringFUTF16(IDS_PLUGIN_DISCONNECTED_PROMPT,
                                               plugin_name);
-    UMA_HISTOGRAM_COUNTS_1M("Plugin.ShowDisconnectedInfobar", 1);
   } else {
     infobar_text = l10n_util::GetStringFUTF16(IDS_PLUGIN_CRASHED_PROMPT,
                                               plugin_name);
-    UMA_HISTOGRAM_COUNTS_1M("Plugin.ShowCrashedInfobar", 1);
   }
 #else
   // Calling the POSIX version of base::GetTerminationStatus() may affect other
@@ -133,7 +100,6 @@ void PluginObserver::PluginCrashed(const base::FilePath& plugin_path,
   // disconnections from crashes.
   infobar_text = l10n_util::GetStringFUTF16(IDS_PLUGIN_CRASHED_PROMPT,
                                             plugin_name);
-  UMA_HISTOGRAM_COUNTS_1M("Plugin.ShowCrashedInfobar", 1);
 #endif
 
   ReloadPluginInfoBarDelegate::Create(
@@ -153,32 +119,6 @@ void PluginObserver::CreatePluginObserverInfoBar(
                                  plugin_name));
 }
 
-void PluginObserver::BlockedOutdatedPlugin(
-    mojo::PendingRemote<chrome::mojom::PluginRenderer> plugin_renderer,
-    const std::string& identifier) {
-  PluginFinder* finder = PluginFinder::GetInstance();
-  // Find plugin to update.
-  PluginInstaller* installer = NULL;
-  std::unique_ptr<PluginMetadata> plugin;
-  if (finder->FindPluginWithIdentifier(identifier, &installer, &plugin)) {
-    auto plugin_placeholder = std::make_unique<PluginPlaceholderHost>(
-        this, plugin->name(), installer, std::move(plugin_renderer));
-    plugin_placeholders_[plugin_placeholder.get()] =
-        std::move(plugin_placeholder);
-
-    OutdatedPluginInfoBarDelegate::Create(
-        infobars::ContentInfoBarManager::FromWebContents(web_contents()),
-        installer, std::move(plugin));
-  } else {
-    NOTREACHED();
-  }
-}
-
-void PluginObserver::RemovePluginPlaceholderHost(
-    PluginPlaceholderHost* placeholder) {
-  plugin_placeholders_.erase(placeholder);
-}
-
 void PluginObserver::CouldNotLoadPlugin(const base::FilePath& plugin_path) {
   std::u16string plugin_name =
       PluginService::GetInstance()->GetPluginDisplayNameByPath(plugin_path);
@@ -188,12 +128,11 @@ void PluginObserver::CouldNotLoadPlugin(const base::FilePath& plugin_path) {
 }
 
 void PluginObserver::OpenPDF(const GURL& url) {
-  // WebViews should never trigger PDF downloads.
-  if (extensions::WebViewGuest::FromWebContents(web_contents()))
-    return;
-
   content::RenderFrameHost* render_frame_host =
       plugin_host_receivers_.GetCurrentTargetFrame();
+  // WebViews should never trigger PDF downloads.
+  if (extensions::WebViewGuest::FromRenderFrameHost(render_frame_host))
+    return;
 
   content::Referrer referrer;
   if (!CanOpenPdfUrl(render_frame_host, url,
@@ -228,7 +167,10 @@ void PluginObserver::OpenPDF(const GURL& url) {
         })");
   std::unique_ptr<download::DownloadUrlParameters> params =
       std::make_unique<download::DownloadUrlParameters>(
-          url, render_frame_host->GetRenderViewHost()->GetProcess()->GetID(),
+          url,
+          render_frame_host->GetRenderViewHost()
+              ->GetProcess()
+              ->GetDeprecatedID(),
           render_frame_host->GetRoutingID(), traffic_annotation);
   params->set_referrer(referrer.url);
   params->set_referrer_policy(

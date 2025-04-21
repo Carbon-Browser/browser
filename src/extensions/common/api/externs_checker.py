@@ -1,10 +1,10 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 class ExternsChecker(object):
   _UPDATE_MESSAGE = """To update the externs, run:
- src/ $ python tools/json_schema_compiler/compiler.py\
+ src/ $ python3 tools/json_schema_compiler/compiler.py\
  %s --root=. --generator=externs > %s"""
 
   def __init__(self, input_api, output_api, api_pairs=None, api_root=None):

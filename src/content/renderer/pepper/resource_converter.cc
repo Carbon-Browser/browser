@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "content/public/renderer/renderer_ppapi_host.h"
 #include "content/renderer/pepper/pepper_file_system_host.h"
 #include "content/renderer/pepper/pepper_media_stream_audio_track_host.h"
@@ -58,7 +58,6 @@ PP_FileSystemType WebFileSystemTypeToPPAPI(blink::WebFileSystemType type) {
       return PP_FILESYSTEMTYPE_EXTERNAL;
     default:
       NOTREACHED();
-      return PP_FILESYSTEMTYPE_LOCALTEMPORARY;
   }
 }
 
@@ -144,8 +143,7 @@ bool ResourceHostToDOMFileSystem(
   blink::WebDOMFileSystem web_dom_file_system = blink::WebDOMFileSystem::Create(
       frame, blink_type, blink::WebString::FromUTF8(name), root_url,
       blink::WebDOMFileSystem::kSerializableTypeSerializable);
-  *dom_file_system =
-      web_dom_file_system.ToV8Value(context->Global(), context->GetIsolate());
+  *dom_file_system = web_dom_file_system.ToV8Value(context->GetIsolate());
   return true;
 }
 
@@ -219,7 +217,7 @@ bool ResourceConverterImpl::FromV8Value(v8::Local<v8::Object> val,
   *was_resource = false;
 
   blink::WebDOMFileSystem dom_file_system =
-      blink::WebDOMFileSystem::FromV8Value(val);
+      blink::WebDOMFileSystem::FromV8Value(context->GetIsolate(), val);
   if (!dom_file_system.IsNull()) {
     int pending_renderer_id;
     std::unique_ptr<IPC::Message> create_message;
@@ -243,7 +241,7 @@ bool ResourceConverterImpl::FromV8Value(v8::Local<v8::Object> val,
   }
 
   blink::WebDOMMediaStreamTrack dom_media_stream_track =
-      blink::WebDOMMediaStreamTrack::FromV8Value(val);
+      blink::WebDOMMediaStreamTrack::FromV8Value(context->GetIsolate(), val);
   if (!dom_media_stream_track.IsNull()) {
     int pending_renderer_id;
     std::unique_ptr<IPC::Message> create_message;
@@ -293,7 +291,6 @@ bool ResourceConverterImpl::ToV8Value(const PP_Var& var,
   ResourceVar* resource = ResourceVar::FromPPVar(var);
   if (!resource) {
     NOTREACHED();
-    return false;
   }
   PP_Resource resource_id = resource->GetPPResource();
 
@@ -305,7 +302,6 @@ bool ResourceConverterImpl::ToV8Value(const PP_Var& var,
     // and should outlive instances associated with it. However, if it doesn't
     // for some reason, we do not want to crash.
     NOTREACHED();
-    return false;
   }
   ::ppapi::host::PpapiHost* ppapi_host = renderer_ppapi_host->GetPpapiHost();
   ::ppapi::host::ResourceHost* resource_host =

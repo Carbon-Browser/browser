@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,7 @@ class UtilReadIcon : public chrome::mojom::UtilReadIcon {
 
  private:
   // chrome::mojom::UtilReadIcon:
-  void ReadIcon(const base::FilePath& filename,
+  void ReadIcon(base::File file,
                 chrome::mojom::IconSize icon_size,
                 float scale,
                 ReadIconCallback callback) override;

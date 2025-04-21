@@ -1,6 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 // A mini-zygote specifically for Native Client.
 
@@ -23,12 +28,17 @@
 #include <vector>
 
 #include "base/at_exit.h"
+#include "base/base_switches.h"
 #include "base/command_line.h"
 #include "base/environment.h"
 #include "base/files/scoped_file.h"
 #include "base/json/json_reader.h"
 #include "base/logging.h"
 #include "base/message_loop/message_pump_type.h"
+#include "base/metrics/field_trial.h"
+#include "base/metrics/histogram_shared_memory.h"
+#include "base/numerics/safe_conversions.h"
+#include "base/pickle.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/posix/global_descriptors.h"
 #include "base/posix/unix_domain_socket.h"
@@ -71,7 +81,7 @@ std::string GetCommandLineFeatureFlagChoice(
     return "";
   }
 
-  for (const auto& flag : flags_list.value().GetListDeprecated()) {
+  for (const auto& flag : flags_list.value().GetList()) {
     if (!flag.is_string())
       continue;
     std::string flag_string = flag.GetString();
@@ -122,23 +132,37 @@ void AddVerboseLoggingInNaclSwitch(base::CommandLine* command_line) {
 //   if (!child) {
 void BecomeNaClLoader(base::ScopedFD browser_fd,
                       const NaClLoaderSystemInfo& system_info,
-                      nacl::NaClSandbox* nacl_sandbox) {
+                      nacl::NaClSandbox* nacl_sandbox,
+                      const std::vector<std::string>& args) {
   DCHECK(nacl_sandbox);
   VLOG(1) << "NaCl loader: setting up IPC descriptor";
   // Close or shutdown IPC channels that we don't need anymore.
   PCHECK(0 == IGNORE_EINTR(close(kNaClZygoteDescriptor)));
 
-  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
-  if (command_line->HasSwitch(switches::kVerboseLoggingInNacl)) {
+  // Append any passed switches to the forked loader's command line. This is
+  // necessary to get e.g. any field trial handle and feature overrides from
+  // whomever initiated the this fork request.
+  base::CommandLine& command_line = *base::CommandLine::ForCurrentProcess();
+  command_line.AppendArguments(base::CommandLine::FromArgvWithoutProgram(args),
+                               /*include_program=*/false);
+  if (command_line.HasSwitch(switches::kVerboseLoggingInNacl)) {
     base::Environment::Create()->SetVar(
         "NACLVERBOSITY",
-        command_line->GetSwitchValueASCII(switches::kVerboseLoggingInNacl));
+        command_line.GetSwitchValueASCII(switches::kVerboseLoggingInNacl));
   }
 
   // Always ignore SIGPIPE, for consistency with other Chrome processes and
   // because some IPC code, such as sync_socket_posix.cc, requires this.
   // We do this before seccomp-bpf is initialized.
   PCHECK(signal(SIGPIPE, SIG_IGN) != SIG_ERR);
+
+  base::HistogramSharedMemory::InitFromLaunchParameters(command_line);
+
+  base::FieldTrialList field_trial_list;
+  base::FieldTrialList::CreateTrialsInChildProcess(command_line);
+  auto feature_list = std::make_unique<base::FeatureList>();
+  base::FieldTrialList::ApplyFeatureOverridesInChildProcess(feature_list.get());
+  base::FeatureList::SetInstance(std::move(feature_list));
 
   // Finish layer-1 sandbox initialization and initialize the layer-2 sandbox.
   CHECK(!nacl_sandbox->HasOpenDirectory());
@@ -150,6 +174,7 @@ void BecomeNaClLoader(base::ScopedFD browser_fd,
                                               browser_fd.release());
 
   // The Mojo EDK must be initialized before using IPC.
+  mojo::core::InitFeatures();
   mojo::core::Init();
 
   base::SingleThreadTaskExecutor io_task_executor(base::MessagePumpType::IO);
@@ -165,7 +190,8 @@ void BecomeNaClLoader(base::ScopedFD browser_fd,
 void ChildNaClLoaderInit(std::vector<base::ScopedFD> child_fds,
                          const NaClLoaderSystemInfo& system_info,
                          nacl::NaClSandbox* nacl_sandbox,
-                         const std::string& channel_id) {
+                         const std::string& channel_id,
+                         const std::vector<std::string>& args) {
   DCHECK(child_fds.size() >
          std::max(content::ZygoteForkDelegate::kPIDOracleFDIndex,
                   content::ZygoteForkDelegate::kBrowserFDIndex));
@@ -174,12 +200,29 @@ void ChildNaClLoaderInit(std::vector<base::ScopedFD> child_fds,
   CHECK(content::SendZygoteChildPing(
       child_fds[content::ZygoteForkDelegate::kPIDOracleFDIndex].get()));
 
+  // Stash the field trial descriptor in GlobalDescriptors so FieldTrialList
+  // can be initialized later. See BecomeNaClLoader().
+  base::GlobalDescriptors::GetInstance()->Set(
+      kFieldTrialDescriptor,
+      child_fds[content::ZygoteForkDelegate::kFieldTrialFDIndex].release());
+
+  // Stash the histogram descriptor in GlobalDescriptors so the histogram
+  // allocator can be initialized later. See BecomeNaClLoader().
+  // TODO(crbug.com/40109064): Always update mapping once metrics shared memory
+  // region is always passed on startup.
+  if (child_fds.size() > content::ZygoteForkDelegate::kHistogramFDIndex &&
+      child_fds[content::ZygoteForkDelegate::kHistogramFDIndex].is_valid()) {
+    base::GlobalDescriptors::GetInstance()->Set(
+        kHistogramSharedMemoryDescriptor,
+        child_fds[content::ZygoteForkDelegate::kHistogramFDIndex].release());
+  }
+
   // Save the browser socket and close the rest.
   base::ScopedFD browser_fd(
       std::move(child_fds[content::ZygoteForkDelegate::kBrowserFDIndex]));
   child_fds.clear();
 
-  BecomeNaClLoader(std::move(browser_fd), system_info, nacl_sandbox);
+  BecomeNaClLoader(std::move(browser_fd), system_info, nacl_sandbox, args);
   _exit(1);
 }
 
@@ -197,7 +240,28 @@ bool HandleForkRequest(std::vector<base::ScopedFD> child_fds,
     return false;
   }
 
-  if (content::ZygoteForkDelegate::kNumPassedFDs != child_fds.size()) {
+  // Read the args passed by the launcher and prepare to forward them to our own
+  // forked child.
+  int argc;
+  if (!input_iter->ReadInt(&argc) || argc < 0) {
+    LOG(ERROR) << "nacl_helper: Invalid argument list";
+    return false;
+  }
+  std::vector<std::string> args(static_cast<size_t>(argc));
+  for (std::string& arg : args) {
+    if (!input_iter->ReadString(&arg)) {
+      LOG(ERROR) << "nacl_helper: Invalid argument list";
+      return false;
+    }
+  }
+
+  // |child_fds| should contain either kNumPassedFDs or kNumPassedFDs-1 file
+  // descriptors.. The actual size of |child_fds| depends on whether or not the
+  // metrics shared memory region is being passed on startup.
+  // TODO(crbug.com/40109064): Expect a fixed size once passing the metrics
+  // shared memory region on startup has been launched.
+  if (child_fds.size() != content::ZygoteForkDelegate::kNumPassedFDs &&
+      child_fds.size() != content::ZygoteForkDelegate::kNumPassedFDs - 1) {
     LOG(ERROR) << "nacl_helper: unexpected number of fds, got "
         << child_fds.size();
     return false;
@@ -218,7 +282,7 @@ bool HandleForkRequest(std::vector<base::ScopedFD> child_fds,
 
   if (child_pid == 0) {
     ChildNaClLoaderInit(std::move(child_fds), system_info, nacl_sandbox,
-                        channel_id);
+                        channel_id, args);
     NOTREACHED();
   }
 
@@ -306,7 +370,7 @@ bool HandleZygoteRequest(int zygote_ipc_fd,
                          const NaClLoaderSystemInfo& system_info,
                          nacl::NaClSandbox* nacl_sandbox) {
   std::vector<base::ScopedFD> fds;
-  char buf[kNaClMaxIPCMessageLength];
+  uint8_t buf[kNaClMaxIPCMessageLength];
   const ssize_t msglen = base::UnixDomainSocket::RecvMsg(zygote_ipc_fd,
       &buf, sizeof(buf), &fds);
   // If the Zygote has started handling requests, we should be sandboxed via
@@ -325,7 +389,8 @@ bool HandleZygoteRequest(int zygote_ipc_fd,
     return false;
   }
 
-  base::Pickle read_pickle(buf, msglen);
+  base::Pickle read_pickle = base::Pickle::WithUnownedBuffer(
+      base::span(buf, base::checked_cast<size_t>(msglen)));
   base::PickleIterator read_iter(read_pickle);
   int command_type;
   if (!read_iter.ReadInt(&command_type)) {

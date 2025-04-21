@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,9 @@
 #include "third_party/metrics_proto/omnibox_input_type.pb.h"
 #include "url/url_constants.h"
 
-TestSchemeClassifier::TestSchemeClassifier() {}
+TestSchemeClassifier::TestSchemeClassifier() = default;
 
-TestSchemeClassifier::~TestSchemeClassifier() {}
+TestSchemeClassifier::~TestSchemeClassifier() = default;
 
 metrics::OmniboxInputType TestSchemeClassifier::GetInputTypeForScheme(
     const std::string& scheme) const {

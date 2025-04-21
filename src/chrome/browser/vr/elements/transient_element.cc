@@ -1,9 +1,9 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/vr/elements/transient_element.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 
 namespace vr {
 
@@ -12,7 +12,7 @@ TransientElement::TransientElement(const base::TimeDelta& timeout)
   SetVisibleImmediately(false);
 }
 
-TransientElement::~TransientElement() {}
+TransientElement::~TransientElement() = default;
 
 void TransientElement::SetVisible(bool visible) {
   bool will_be_visible = GetTargetOpacity() == opacity_when_visible();
@@ -48,7 +48,7 @@ void TransientElement::Reset() {
 SimpleTransientElement::SimpleTransientElement(const base::TimeDelta& timeout)
     : super(timeout) {}
 
-SimpleTransientElement::~SimpleTransientElement() {}
+SimpleTransientElement::~SimpleTransientElement() = default;
 
 bool SimpleTransientElement::OnBeginFrame(const gfx::Transform& head_pose) {
   // Do nothing if we're not going to be visible.

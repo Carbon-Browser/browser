@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ scoped_refptr<SerializedScriptValue> PostMessageHelper::SerializeMessageByMove(
     const StructuredSerializeOptions* options,
     Transferables& transferables,
     ExceptionState& exception_state) {
-  if (options->hasTransfer() && !options->transfer().IsEmpty()) {
+  if (options->hasTransfer() && !options->transfer().empty()) {
     if (!SerializedScriptValue::ExtractTransferables(
             isolate, options->transfer(), transferables, exception_state)) {
       return nullptr;
@@ -34,8 +34,9 @@ scoped_refptr<SerializedScriptValue> PostMessageHelper::SerializeMessageByMove(
   scoped_refptr<SerializedScriptValue> serialized_message =
       SerializedScriptValue::Serialize(isolate, message.V8Value(),
                                        serialize_options, exception_state);
-  if (exception_state.HadException())
+  if (exception_state.HadException()) {
     return nullptr;
+  }
 
   serialized_message->UnregisterMemoryAllocatedWithCurrentScriptContext();
   return serialized_message;
@@ -47,7 +48,7 @@ scoped_refptr<SerializedScriptValue> PostMessageHelper::SerializeMessageByCopy(
     const StructuredSerializeOptions* options,
     Transferables& transferables,
     ExceptionState& exception_state) {
-  if (options->hasTransfer() && !options->transfer().IsEmpty()) {
+  if (options->hasTransfer() && !options->transfer().empty()) {
     if (!SerializedScriptValue::ExtractTransferables(
             isolate, options->transfer(), transferables, exception_state)) {
       return nullptr;

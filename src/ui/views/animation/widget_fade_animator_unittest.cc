@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,15 +47,17 @@ class WidgetFadeAnimatorTest : public test::WidgetTest {
  public:
   void SetUp() override {
     test::WidgetTest::SetUp();
-    widget_ = CreateTestWidget(Widget::InitParams::Type::TYPE_WINDOW);
+    widget_ = CreateTestWidget(Widget::InitParams::CLIENT_OWNS_WIDGET,
+                               Widget::InitParams::Type::TYPE_WINDOW);
     delegate_ = std::make_unique<TestWidgetFadeAnimator>(widget_.get());
     delegate_->set_fade_in_duration(kFadeDuration);
     delegate_->set_fade_out_duration(kFadeDuration);
   }
 
   void TearDown() override {
-    if (widget_ && !widget_->IsClosed())
+    if (widget_ && !widget_->IsClosed()) {
       widget_->CloseNow();
+    }
     test::WidgetTest::TearDown();
   }
 

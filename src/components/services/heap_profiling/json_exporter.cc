@@ -1,21 +1,29 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "components/services/heap_profiling/json_exporter.h"
 
 #include <inttypes.h>
 
 #include <map>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "base/containers/adapters.h"
+#include "base/files/file_path.h"
 #include "base/json/json_writer.h"
 #include "base/json/string_escape.h"
 #include "base/strings/stringprintf.h"
 #include "base/trace_event/traced_value.h"
 #include "base/values.h"
-#include "services/resource_coordinator/public/cpp/memory_instrumentation/tracing_observer_traced_value.h"
+#include "services/resource_coordinator/public/mojom/memory_instrumentation/memory_instrumentation.mojom.h"
 
 namespace heap_profiling {
 namespace {
@@ -60,7 +68,6 @@ const char* StringForAllocatorType(uint32_t type) {
       return "partition_alloc";
     default:
       NOTREACHED();
-      return "unknown";
   }
 }
 
@@ -69,8 +76,8 @@ const char* StringForAllocatorType(uint32_t type) {
 // placeholder to allow the stack-viewing UI to be shown.
 base::Value::Dict BuildAllocatorsSummary(const AllocationMap& allocations) {
   // Aggregate stats for each allocator type.
-  size_t total_size[kAllocatorCount] = {0};
-  size_t total_count[kAllocatorCount] = {0};
+  size_t total_size[kAllocatorCount] = {};
+  size_t total_count[kAllocatorCount] = {};
   for (const auto& alloc_pair : allocations) {
     int index = static_cast<int>(alloc_pair.first.allocator);
     total_size[index] += alloc_pair.second.size;
@@ -122,10 +129,80 @@ base::Value::Dict BuildAllocatorsSummary(const AllocationMap& allocations) {
   return result;
 }
 
+std::string ApplyPathFiltering(const std::string& file,
+                               bool is_argument_filtering_enabled) {
+  if (is_argument_filtering_enabled) {
+    base::FilePath::StringType path(file.begin(), file.end());
+    return base::FilePath(path).BaseName().AsUTF8Unsafe();
+  }
+  return file;
+}
+
+void MemoryMapsAsValueInto(
+    const std::vector<memory_instrumentation::mojom::VmRegionPtr>& memory_maps,
+    base::trace_event::TracedValue* value,
+    bool is_argument_filtering_enabled) {
+  static const char kHexFmt[] = "%" PRIx64;
+
+  // Refer to the design doc goo.gl/sxfFY8 for the semantics of these fields.
+  value->BeginArray("vm_regions");
+  for (const auto& region : memory_maps) {
+    value->BeginDictionary();
+
+    value->SetString("sa", base::StringPrintf(kHexFmt, region->start_address));
+    value->SetString("sz", base::StringPrintf(kHexFmt, region->size_in_bytes));
+    if (region->module_timestamp) {
+      value->SetString("ts",
+                       base::StringPrintf(kHexFmt, region->module_timestamp));
+    }
+    if (!region->module_debugid.empty()) {
+      value->SetString("id", region->module_debugid);
+    }
+    if (!region->module_debug_path.empty()) {
+      value->SetString("df", ApplyPathFiltering(region->module_debug_path,
+                                                is_argument_filtering_enabled));
+    }
+    value->SetInteger("pf", region->protection_flags);
+
+    // The module path will be the basename when argument filtering is
+    // activated. The allowlisting implemented for filtering string values
+    // doesn't allow rewriting. Therefore, a different path is produced here
+    // when argument filtering is activated.
+    value->SetString("mf", ApplyPathFiltering(region->mapped_file,
+                                              is_argument_filtering_enabled));
+
+// The following stats are only well defined on Linux-derived OSes.
+#if !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_WIN)
+    value->BeginDictionary("bs");  // byte stats
+    value->SetString(
+        "pss",
+        base::StringPrintf(kHexFmt, region->byte_stats_proportional_resident));
+    value->SetString(
+        "pd",
+        base::StringPrintf(kHexFmt, region->byte_stats_private_dirty_resident));
+    value->SetString(
+        "pc",
+        base::StringPrintf(kHexFmt, region->byte_stats_private_clean_resident));
+    value->SetString(
+        "sd",
+        base::StringPrintf(kHexFmt, region->byte_stats_shared_dirty_resident));
+    value->SetString(
+        "sc",
+        base::StringPrintf(kHexFmt, region->byte_stats_shared_clean_resident));
+    value->SetString("sw",
+                     base::StringPrintf(kHexFmt, region->byte_stats_swapped));
+    value->EndDictionary();
+#endif
+
+    value->EndDictionary();
+  }
+  value->EndArray();
+}
+
 base::Value BuildMemoryMaps(const ExportParams& params) {
   base::trace_event::TracedValueJSON traced_value;
-  memory_instrumentation::TracingObserverTracedValue::MemoryMapsAsValueInto(
-      params.maps, &traced_value, params.strip_path_from_mapped_files);
+  MemoryMapsAsValueInto(params.maps, &traced_value,
+                        params.strip_path_from_mapped_files);
   return std::move(*traced_value.ToBaseValue());
 }
 

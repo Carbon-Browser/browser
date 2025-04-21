@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@ class Status;
 
 class CommandListener {
  public:
-  virtual ~CommandListener() {}
+  virtual ~CommandListener() = default;
 
   // Called just before a WebDriver command is run, but only
   // for commands that operate on an existing session. Will be called for

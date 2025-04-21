@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,12 @@
 
 class NaClValidationDB {
  public:
-  NaClValidationDB() {}
+  NaClValidationDB() = default;
 
   NaClValidationDB(const NaClValidationDB&) = delete;
   NaClValidationDB& operator=(const NaClValidationDB&) = delete;
 
-  virtual ~NaClValidationDB() {}
+  virtual ~NaClValidationDB() = default;
 
   virtual bool QueryKnownToValidate(const std::string& signature) = 0;
   virtual void SetKnownToValidate(const std::string& signature) = 0;

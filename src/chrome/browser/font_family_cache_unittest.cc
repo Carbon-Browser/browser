@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,7 +20,7 @@ class TestingFontFamilyCache : public FontFamilyCache {
   TestingFontFamilyCache(const TestingFontFamilyCache&) = delete;
   TestingFontFamilyCache& operator=(const TestingFontFamilyCache&) = delete;
 
-  ~TestingFontFamilyCache() override {}
+  ~TestingFontFamilyCache() override = default;
   std::u16string FetchFont(const char* script, const char* map_name) override {
     ++fetch_font_count_;
     return FontFamilyCache::FetchFont(script, map_name);

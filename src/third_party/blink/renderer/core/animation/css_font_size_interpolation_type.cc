@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,8 @@ class IsMonospaceChecker : public CSSInterpolationType::CSSConversionChecker {
 
   bool IsValid(const StyleResolverState& state,
                const InterpolationValue&) const final {
-    return is_monospace_ == state.Style()->GetFontDescription().IsMonospace();
+    return is_monospace_ ==
+           state.StyleBuilder().GetFontDescription().IsMonospace();
   }
 
   const bool is_monospace_;
@@ -59,9 +60,9 @@ InterpolationValue MaybeConvertKeyword(
     const StyleResolverState& state,
     InterpolationType::ConversionCheckers& conversion_checkers) {
   if (FontSizeFunctions::IsValidValueID(value_id)) {
-    bool is_monospace = state.Style()->GetFontDescription().IsMonospace();
+    bool is_monospace = state.StyleBuilder().GetFontDescription().IsMonospace();
     conversion_checkers.push_back(
-        std::make_unique<IsMonospaceChecker>(is_monospace));
+        MakeGarbageCollected<IsMonospaceChecker>(is_monospace));
     return ConvertFontSize(state.GetFontBuilder().FontSizeForKeyword(
         FontSizeFunctions::KeywordSize(value_id), is_monospace));
   }
@@ -72,7 +73,7 @@ InterpolationValue MaybeConvertKeyword(
   const FontDescription::Size& inherited_font_size =
       state.ParentFontDescription().GetSize();
   conversion_checkers.push_back(
-      std::make_unique<InheritedFontSizeChecker>(inherited_font_size));
+      MakeGarbageCollected<InheritedFontSizeChecker>(inherited_font_size));
   if (value_id == CSSValueID::kSmaller)
     return ConvertFontSize(
         FontDescription::SmallerSize(inherited_font_size).value);
@@ -101,7 +102,7 @@ InterpolationValue CSSFontSizeInterpolationType::MaybeConvertInherit(
   const FontDescription::Size& inherited_font_size =
       state.ParentFontDescription().GetSize();
   conversion_checkers.push_back(
-      std::make_unique<InheritedFontSizeChecker>(inherited_font_size));
+      MakeGarbageCollected<InheritedFontSizeChecker>(inherited_font_size));
   return ConvertFontSize(inherited_font_size.value);
 }
 
@@ -111,10 +112,9 @@ InterpolationValue CSSFontSizeInterpolationType::MaybeConvertValue(
     ConversionCheckers& conversion_checkers) const {
   DCHECK(state);
 
-  std::unique_ptr<InterpolableValue> result =
-      InterpolableLength::MaybeConvertCSSValue(value);
+  InterpolableValue* result = InterpolableLength::MaybeConvertCSSValue(value);
   if (result)
-    return InterpolationValue(std::move(result));
+    return InterpolationValue(result);
 
   if (auto* identifier_value = DynamicTo<CSSIdentifierValue>(value)) {
     return MaybeConvertKeyword(identifier_value->GetValueID(), *state,
@@ -143,9 +143,13 @@ void CSSFontSizeInterpolationType::ApplyStandardPropertyValue(
                                               Length::ValueRange::kNonNegative);
   float font_size =
       FloatValueForLength(font_size_length, parent_font.GetSize().value);
+  // TODO(dbaron): Setting is_absolute_size this way doesn't match the way
+  // StyleBuilderConverterBase::ConvertFontSize handles calc().  But neither
+  // really makes sense.  (Is it possible to get a calc() here?)
   state.GetFontBuilder().SetSize(FontDescription::Size(
       0, font_size,
-      !font_size_length.IsPercentOrCalc() || parent_font.IsAbsoluteSize()));
+      !(font_size_length.IsPercent() || font_size_length.IsCalculated()) ||
+          parent_font.IsAbsoluteSize()));
 }
 
 }  // namespace blink

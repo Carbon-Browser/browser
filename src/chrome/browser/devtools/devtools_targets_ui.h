@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,10 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
+#include "base/values.h"
 #include "chrome/browser/devtools/device/devtools_android_bridge.h"
-
-namespace base {
-class Value;
-}
 
 class Profile;
 
@@ -51,7 +49,7 @@ class DevToolsTargetsUIHandler {
   virtual void ForceUpdate();
 
  protected:
-  base::Value Serialize(content::DevToolsAgentHost* host);
+  base::Value::Dict Serialize(content::DevToolsAgentHost* host);
   void SendSerializedTargets(const base::Value& list);
 
   using TargetMap =
@@ -75,7 +73,7 @@ class PortForwardingStatusSerializer
 
  private:
   Callback callback_;
-  Profile* profile_;
+  raw_ptr<Profile> profile_;
 };
 
 #endif  // CHROME_BROWSER_DEVTOOLS_DEVTOOLS_TARGETS_UI_H_

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -73,7 +73,7 @@ TEST(PrintJobInfoProtoConversionsTest, CupsPrintJobToProto) {
   // CupsPrintJob computes the start time of the print job, that's why we have
   // to override base::Time::now() value for the test.
   CupsPrintJob cups_print_job(printer, /*job_id=*/0, kTitle, kPagesNumber,
-                              ::printing::PrintJob::Source::PRINT_PREVIEW,
+                              ::printing::PrintJob::Source::kPrintPreview,
                               kSourceId, settings);
   cups_print_job.set_state(CupsPrintJob::State::STATE_FAILED);
   cups_print_job.set_error_code(chromeos::PrinterErrorCode::OUT_OF_PAPER);

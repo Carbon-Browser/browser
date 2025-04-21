@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,7 +31,7 @@ class MockOverscrollControllerDelegateAura
 
   // OverscrollControllerDelegate:
   gfx::Size GetDisplaySize() const override;
-  absl::optional<float> GetMaxOverscrollDelta() const override;
+  std::optional<float> GetMaxOverscrollDelta() const override;
   bool OnOverscrollUpdate(float, float) override;
   void OnOverscrollComplete(OverscrollMode) override;
   void OnOverscrollModeChange(OverscrollMode old_mode,

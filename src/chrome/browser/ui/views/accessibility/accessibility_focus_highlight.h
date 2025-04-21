@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -129,7 +129,7 @@ class AccessibilityFocusHighlight : public ui::LayerDelegate,
   PrefChangeRegistrar profile_pref_registrar_;
 
   // For observing focus notifications.
-  absl::optional<base::CallbackListSubscription> focus_changed_subscription_;
+  std::optional<base::CallbackListSubscription> focus_changed_subscription_;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_ACCESSIBILITY_ACCESSIBILITY_FOCUS_HIGHLIGHT_H_

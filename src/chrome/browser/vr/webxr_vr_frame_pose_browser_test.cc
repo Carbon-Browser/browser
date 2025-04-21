@@ -1,11 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <atomic>
 #include <memory>
 
 #include "base/environment.h"
-#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/stringprintf.h"
 #include "chrome/browser/vr/test/mock_xr_device_hook_base.h"
@@ -47,11 +47,14 @@ class MyXRMock : public MockXRDeviceHookBase {
     DCHECK(!wait_loop_);
     wait_frame_count_ = count;
 
-    base::RunLoop* wait_loop =
-        new base::RunLoop(base::RunLoop::Type::kNestableTasksAllowed);
-    wait_loop_ = wait_loop;
-    wait_loop->Run();
-    delete wait_loop;
+    wait_loop_ = std::make_unique<base::RunLoop>(
+        base::RunLoop::Type::kNestableTasksAllowed);
+    can_signal_wait_loop_ = true;
+
+    wait_loop_->Run();
+
+    can_signal_wait_loop_ = false;
+    wait_loop_ = nullptr;
   }
 
   std::vector<Frame> submitted_frames;
@@ -68,9 +71,12 @@ class MyXRMock : public MockXRDeviceHookBase {
   }
 
  private:
-  // Set to null on background thread after calling Quit(), so we can ensure we
-  // only call Quit once.
-  raw_ptr<base::RunLoop> wait_loop_ = nullptr;
+  std::unique_ptr<base::RunLoop> wait_loop_ = nullptr;
+
+  // Used to track both if `wait_loop_` is valid in a thread-safe manner or if
+  // it has already had quit signaled on it, since `AnyQuitCalled` won't update
+  // until the `Quit` task has posted to the main thread.
+  std::atomic_bool can_signal_wait_loop_ = false;
 
   int wait_frame_count_ = 0;
   int num_frames_submitted_ = 0;
@@ -99,9 +105,9 @@ void MyXRMock::OnFrameSubmitted(
 
   num_frames_submitted_++;
   if (num_frames_submitted_ >= wait_frame_count_ && wait_frame_count_ > 0 &&
-      wait_loop_) {
+      can_signal_wait_loop_) {
     wait_loop_->Quit();
-    wait_loop_ = nullptr;
+    can_signal_wait_loop_ = false;
   }
 
   ASSERT_TRUE(last_immersive_frame_data)
@@ -122,7 +128,7 @@ void MyXRMock::WaitGetMagicWindowPose(
   // Almost identity matrix - enough different that we can identify if magic
   // window poses are used instead of presenting poses.
   pose->device_to_origin =
-      gfx::Transform(1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+      gfx::Transform::RowMajor(1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
   std::move(callback).Run(std::move(pose));
 }
 
@@ -150,12 +156,9 @@ std::string GetMatrixAsString(const gfx::Transform& m) {
   // differences.
   return base::StringPrintf(
       "[%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f]",
-      m.matrix().rc(0, 0), m.matrix().rc(1, 0), m.matrix().rc(2, 0),
-      m.matrix().rc(3, 0), m.matrix().rc(0, 1), m.matrix().rc(1, 1),
-      m.matrix().rc(2, 1), m.matrix().rc(3, 1), m.matrix().rc(0, 2),
-      m.matrix().rc(1, 2), m.matrix().rc(2, 2), m.matrix().rc(3, 2),
-      m.matrix().rc(0, 3), m.matrix().rc(1, 3), m.matrix().rc(2, 3),
-      m.matrix().rc(3, 3));
+      m.rc(0, 0), m.rc(1, 0), m.rc(2, 0), m.rc(3, 0), m.rc(0, 1), m.rc(1, 1),
+      m.rc(2, 1), m.rc(3, 1), m.rc(0, 2), m.rc(1, 2), m.rc(2, 2), m.rc(3, 2),
+      m.rc(0, 3), m.rc(1, 3), m.rc(2, 3), m.rc(3, 3));
 }
 
 std::string GetPoseAsString(const Frame& frame) {
@@ -168,7 +171,7 @@ std::string GetPoseAsString(const Frame& frame) {
 // Validates that submitted frames used expected pose.
 WEBXR_VR_ALL_RUNTIMES_BROWSER_TEST_F(TestPresentationPoses) {
   // Disable frame-timeout UI to test what WebXR renders.
-  UiUtils::DisableFrameTimeoutForTesting();
+  UiUtils::DisableOverlayForTesting();
   MyXRMock my_mock;
 
   // Load the test page, and enter presentation.

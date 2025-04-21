@@ -1,13 +1,15 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "media/gpu/android/maybe_render_early_manager.h"
 
-#include <algorithm>
+#include <vector>
 
-#include "base/containers/cxx20_erase.h"
+#include "base/containers/contains.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/threading/sequence_bound.h"
 #include "media/gpu/android/codec_image_group.h"
 #include "media/gpu/android/codec_surface_bundle.h"
@@ -35,8 +37,7 @@ class GpuMaybeRenderEarlyImpl {
     codec_image_holder->codec_image_raw()->AddUnusedCB(base::BindOnce(
         &GpuMaybeRenderEarlyImpl::OnImageUnused, weak_factory_.GetWeakPtr()));
 
-    DCHECK(std::find(images_.begin(), images_.end(),
-                     codec_image_holder->codec_image_raw()) == images_.end());
+    DCHECK(!base::Contains(images_, codec_image_holder->codec_image_raw()));
     images_.push_back(codec_image_holder->codec_image_raw());
 
     // Add |image| to our current image group.  This makes sure that any overlay
@@ -53,15 +54,15 @@ class GpuMaybeRenderEarlyImpl {
  private:
   void OnImageUnused(CodecImage* image) {
     // |image| is no longer used, so try to render a new image speculatively.
-    DCHECK(std::find(images_.begin(), images_.end(), image) != images_.end());
+    DCHECK(base::Contains(images_, image));
     // Remember that |image_group_| might not be the same one that |image|
     // belongs to.
-    base::Erase(images_, image);
+    std::erase(images_, image);
     internal::MaybeRenderEarly(&images_);
   }
 
   // Outstanding images that should be considered for early rendering.
-  std::vector<CodecImage*> images_;
+  std::vector<raw_ptr<CodecImage, VectorExperimental>> images_;
 
   // Current image group to which new images (frames) will be added.  We'll
   // replace this when SetImageGroup() is called.

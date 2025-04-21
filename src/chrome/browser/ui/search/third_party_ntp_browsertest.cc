@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -58,7 +58,7 @@ IN_PROC_BROWSER_TEST_F(ThirdPartyNTPBrowserTest, EmbeddedMostVisitedIframe) {
   InstantService* instant_service =
       InstantServiceFactory::GetForProfile(browser()->profile());
   EXPECT_TRUE(instant_service->IsInstantProcess(
-      contents->GetPrimaryMainFrame()->GetProcess()->GetID()));
+      contents->GetPrimaryMainFrame()->GetProcess()->GetDeprecatedID()));
 
   // Add a chrome-search://most-visited/title.html?rid=1&fs=0 subframe and
   // verify that navigation completes successfully, with no kills.
@@ -74,11 +74,8 @@ IN_PROC_BROWSER_TEST_F(ThirdPartyNTPBrowserTest, EmbeddedMostVisitedIframe) {
   // Verify that the subframe exists and has the expected origin.
   content::RenderFrameHost* subframe = ChildFrameAt(contents, 0);
   ASSERT_TRUE(subframe);
-  std::string subframe_origin;
-  ASSERT_TRUE(content::ExecuteScriptAndExtractString(
-      subframe, "domAutomationController.send(window.origin)",
-      &subframe_origin));
-  EXPECT_EQ("chrome-search://most-visited", subframe_origin);
+  EXPECT_EQ("chrome-search://most-visited",
+            content::EvalJs(subframe, "window.origin"));
 }
 
 // Verifies that Chrome won't spawn a separate renderer process for
@@ -87,7 +84,8 @@ IN_PROC_BROWSER_TEST_F(ThirdPartyNTPBrowserTest, EmbeddedMostVisitedIframe) {
 // process-per-site mode for NTP tabs.  It seems desirable to preserve this
 // behavior going forward.
 //
-// [1] https://chromium.googlesource.com/chromium/src/+/09911bf300f1a419907a9412154760efd0b7abc3/chrome/browser/browsing_instance.cc#55
+// [1]
+// https://chromium.googlesource.com/chromium/src/+/09911bf300f1a419907a9412154760efd0b7abc3/chrome/browser/browsing_instance.cc#55
 IN_PROC_BROWSER_TEST_F(ThirdPartyNTPBrowserTest, ProcessPerSite) {
   GURL base_url =
       https_test_server().GetURL("ntp.com", "/instant_extended.html");

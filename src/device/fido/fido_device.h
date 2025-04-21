@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,18 +7,22 @@
 
 #include <stdint.h>
 
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "device/fido/authenticator_get_info_response.h"
 #include "device/fido/fido_constants.h"
 #include "device/fido/fido_transport_protocol.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace device {
+
+namespace cablev2 {
+class FidoTunnelDevice;
+}
 
 // Device abstraction for an individual CTAP1.0/CTAP2.0 device.
 //
@@ -36,7 +40,7 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoDevice {
   static constexpr CancelToken kInvalidCancelToken = 0;
 
   using DeviceCallback =
-      base::OnceCallback<void(absl::optional<std::vector<uint8_t>>)>;
+      base::OnceCallback<void(std::optional<std::vector<uint8_t>>)>;
 
   // Internal state machine states.
   enum class State {
@@ -90,14 +94,7 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoDevice {
   // same VID:PID. It defaults to returning the value of |GetId|.
   virtual std::string GetDisplayName() const;
   virtual FidoTransportProtocol DeviceTransport() const = 0;
-
-  // These must only be called on Bluetooth devices.
-  virtual bool IsInPairingMode() const;
-  virtual bool IsPaired() const;
-
-  // Returns whether the service bit is set to require a PIN or passkey to pair
-  // for a FIDO Bluetooth device.
-  virtual bool RequiresBlePairingPin() const;
+  virtual cablev2::FidoTunnelDevice* GetTunnelDevice();
 
   // NoSilentRequests returns true if this device does not support up=false
   // requests.
@@ -119,7 +116,7 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoDevice {
   }
 
   ProtocolVersion supported_protocol() const { return supported_protocol_; }
-  const absl::optional<AuthenticatorGetInfoResponse>& device_info() const {
+  const std::optional<AuthenticatorGetInfoResponse>& device_info() const {
     return device_info_;
   }
   bool is_in_error_state() const {
@@ -137,12 +134,12 @@ class COMPONENT_EXPORT(DEVICE_FIDO) FidoDevice {
 
  protected:
   void OnDeviceInfoReceived(base::OnceClosure done,
-                            absl::optional<std::vector<uint8_t>> response);
+                            std::optional<std::vector<uint8_t>> response);
   void SetDeviceInfo(AuthenticatorGetInfoResponse device_info);
 
   State state_ = State::kInit;
   ProtocolVersion supported_protocol_ = ProtocolVersion::kUnknown;
-  absl::optional<AuthenticatorGetInfoResponse> device_info_;
+  std::optional<AuthenticatorGetInfoResponse> device_info_;
   // If `true`, the device needs to be sent a specific wink command to flash
   // when user presence is required.
   bool needs_explicit_wink_ = false;

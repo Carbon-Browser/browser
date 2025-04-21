@@ -1,4 +1,4 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,9 +23,7 @@ class NavigationURLLoaderDelegate;
 
 // Test implementation of NavigationURLLoader to simulate the network stack
 // response.
-class TestNavigationURLLoader
-    : public NavigationURLLoader,
-      public base::SupportsWeakPtr<TestNavigationURLLoader> {
+class TestNavigationURLLoader final : public NavigationURLLoader {
  public:
   TestNavigationURLLoader(std::unique_ptr<NavigationRequestInfo> request_info,
                           NavigationURLLoaderDelegate* delegate,
@@ -38,6 +36,7 @@ class TestNavigationURLLoader
       const net::HttpRequestHeaders& modified_headers,
       const net::HttpRequestHeaders& modified_cors_exempt_headers) override;
   bool SetNavigationTimeout(base::TimeDelta timeout) override;
+  void CancelNavigationTimeout() override;
 
   NavigationRequestInfo* request_info() const { return request_info_.get(); }
 
@@ -52,10 +51,16 @@ class TestNavigationURLLoader
   void CallOnRequestRedirected(
       const net::RedirectInfo& redirect_info,
       network::mojom::URLResponseHeadPtr response_head);
-  void CallOnResponseStarted(network::mojom::URLResponseHeadPtr response_head,
-                             mojo::ScopedDataPipeConsumerHandle response_body);
+  void CallOnResponseStarted(
+      network::mojom::URLResponseHeadPtr response_head,
+      mojo::ScopedDataPipeConsumerHandle response_body,
+      std::optional<mojo_base::BigBuffer> cached_metadata);
 
   int redirect_count() { return redirect_count_; }
+
+  base::WeakPtr<TestNavigationURLLoader> AsWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
 
  private:
   ~TestNavigationURLLoader() override;
@@ -67,6 +72,8 @@ class TestNavigationURLLoader
   const NavigationURLLoader::LoaderType loader_type_;
 
   bool was_resource_hints_received_ = false;
+
+  base::WeakPtrFactory<TestNavigationURLLoader> weak_ptr_factory_{this};
 };
 
 }  // namespace content

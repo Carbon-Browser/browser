@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -58,7 +58,7 @@ class CONTENT_EXPORT GinJavaMethodInvocationHelper
 
   GinJavaMethodInvocationHelper(std::unique_ptr<ObjectDelegate> object,
                                 const std::string& method_name,
-                                const base::ListValue& arguments);
+                                const base::Value::List& arguments);
 
   GinJavaMethodInvocationHelper(const GinJavaMethodInvocationHelper&) = delete;
   GinJavaMethodInvocationHelper& operator=(
@@ -72,16 +72,16 @@ class CONTENT_EXPORT GinJavaMethodInvocationHelper
   const base::Value::List& GetPrimitiveResult();
   const base::android::JavaRef<jobject>& GetObjectResult();
   const base::android::JavaRef<jclass>& GetSafeAnnotationClass();
-  GinJavaBridgeError GetInvocationError();
+  mojom::GinJavaBridgeError GetInvocationError();
 
  private:
   friend class base::RefCountedThreadSafe<GinJavaMethodInvocationHelper>;
   ~GinJavaMethodInvocationHelper();
 
   void BuildObjectRefsFromListValue(DispatcherDelegate* dispatcher,
-                                    const base::Value& list_value);
+                                    const base::Value::List& list_value);
   void BuildObjectRefsFromDictionaryValue(DispatcherDelegate* dispatcher,
-                                          const base::Value& dict_value);
+                                          const base::Value::Dict& dict_value);
 
   bool AppendObjectRef(DispatcherDelegate* dispatcher,
                        const base::Value& raw_value);
@@ -91,7 +91,7 @@ class CONTENT_EXPORT GinJavaMethodInvocationHelper
                     const JavaType& return_type,
                     jmethodID id,
                     jvalue* parameters);
-  void SetInvocationError(GinJavaBridgeError error);
+  void SetInvocationError(mojom::GinJavaBridgeError error);
   void SetPrimitiveResult(base::Value::List result_wrapper);
   void SetObjectResult(
       const base::android::JavaRef<jobject>& object,
@@ -102,11 +102,11 @@ class CONTENT_EXPORT GinJavaMethodInvocationHelper
 
   std::unique_ptr<ObjectDelegate> object_;
   const std::string method_name_;
-  base::Value arguments_;
+  base::Value::List arguments_;
   ObjectRefs object_refs_;
   bool holds_primitive_result_;
   std::unique_ptr<base::Value::List> primitive_result_;
-  GinJavaBridgeError invocation_error_;
+  mojom::GinJavaBridgeError invocation_error_;
   base::android::ScopedJavaGlobalRef<jobject> object_result_;
   base::android::ScopedJavaGlobalRef<jclass> safe_annotation_clazz_;
 };

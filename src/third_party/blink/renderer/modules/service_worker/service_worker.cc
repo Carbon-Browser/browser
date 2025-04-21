@@ -40,6 +40,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/serialization/post_message_helper.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_post_message_options.h"
+#include "third_party/blink/renderer/bindings/modules/v8/v8_service_worker_state.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
@@ -59,11 +60,11 @@ const AtomicString& ServiceWorker::InterfaceName() const {
 
 void ServiceWorker::postMessage(ScriptState* script_state,
                                 const ScriptValue& message,
-                                HeapVector<ScriptValue>& transfer,
+                                HeapVector<ScriptObject> transfer,
                                 ExceptionState& exception_state) {
   PostMessageOptions* options = PostMessageOptions::Create();
-  if (!transfer.IsEmpty())
-    options->setTransfer(transfer);
+  if (!transfer.empty())
+    options->setTransfer(std::move(transfer));
   postMessage(script_state, message, options, exception_state);
 }
 
@@ -98,11 +99,8 @@ void ServiceWorker::postMessage(ScriptState* script_state,
   if (exception_state.HadException())
     return;
 
-  if (msg.message->IsLockedToAgentCluster()) {
-    msg.locked_agent_cluster_id = GetExecutionContext()->GetAgentClusterID();
-  } else {
-    msg.locked_agent_cluster_id = absl::nullopt;
-  }
+  msg.sender_agent_cluster_id = GetExecutionContext()->GetAgentClusterID();
+  msg.locked_to_sender_agent_cluster = msg.message->IsLockedToAgentCluster();
 
   // Defer postMessage() from a prerendered page until page activation.
   // https://wicg.github.io/nav-speculation/prerendering.html#patch-service-workers
@@ -110,8 +108,8 @@ void ServiceWorker::postMessage(ScriptState* script_state,
     Document* document = To<LocalDOMWindow>(GetExecutionContext())->document();
     if (document->IsPrerendering()) {
       document->AddPostPrerenderingActivationStep(
-          WTF::Bind(&ServiceWorker::PostMessageInternal,
-                    WrapWeakPersistent(this), std::move(msg)));
+          WTF::BindOnce(&ServiceWorker::PostMessageInternal,
+                        WrapWeakPersistent(this), std::move(msg)));
       return;
     }
   }
@@ -123,12 +121,16 @@ void ServiceWorker::PostMessageInternal(BlinkTransferableMessage message) {
   host_->PostMessageToServiceWorker(std::move(message));
 }
 
-ScriptPromise ServiceWorker::InternalsTerminate(ScriptState* script_state) {
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
-  ScriptPromise promise = resolver->Promise();
-  host_->TerminateForTesting(
-      WTF::Bind([](ScriptPromiseResolver* resolver) { resolver->Resolve(); },
-                WrapPersistent(resolver)));
+ScriptPromise<IDLUndefined> ServiceWorker::InternalsTerminate(
+    ScriptState* script_state) {
+  auto* resolver =
+      MakeGarbageCollected<ScriptPromiseResolver<IDLUndefined>>(script_state);
+  auto promise = resolver->Promise();
+  host_->TerminateForTesting(WTF::BindOnce(
+      [](ScriptPromiseResolver<IDLUndefined>* resolver) {
+        resolver->Resolve();
+      },
+      WrapPersistent(resolver)));
   return promise;
 }
 
@@ -141,23 +143,22 @@ String ServiceWorker::scriptURL() const {
   return url_.GetString();
 }
 
-String ServiceWorker::state() const {
+V8ServiceWorkerState ServiceWorker::state() const {
   switch (state_) {
     case mojom::blink::ServiceWorkerState::kParsed:
-      return "parsed";
+      return V8ServiceWorkerState(V8ServiceWorkerState::Enum::kParsed);
     case mojom::blink::ServiceWorkerState::kInstalling:
-      return "installing";
+      return V8ServiceWorkerState(V8ServiceWorkerState::Enum::kInstalling);
     case mojom::blink::ServiceWorkerState::kInstalled:
-      return "installed";
+      return V8ServiceWorkerState(V8ServiceWorkerState::Enum::kInstalled);
     case mojom::blink::ServiceWorkerState::kActivating:
-      return "activating";
+      return V8ServiceWorkerState(V8ServiceWorkerState::Enum::kActivating);
     case mojom::blink::ServiceWorkerState::kActivated:
-      return "activated";
+      return V8ServiceWorkerState(V8ServiceWorkerState::Enum::kActivated);
     case mojom::blink::ServiceWorkerState::kRedundant:
-      return "redundant";
+      return V8ServiceWorkerState(V8ServiceWorkerState::Enum::kRedundant);
   }
   NOTREACHED();
-  return g_null_atom;
 }
 
 ServiceWorker* ServiceWorker::From(
@@ -202,6 +203,7 @@ void ServiceWorker::ContextDestroyed() {
 ServiceWorker::ServiceWorker(ExecutionContext* execution_context,
                              WebServiceWorkerObjectInfo info)
     : AbstractWorker(execution_context),
+      ActiveScriptWrappable<ServiceWorker>({}),
       url_(info.url),
       state_(info.state),
       host_(execution_context),

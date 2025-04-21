@@ -1,12 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 import 'chrome://history/history.js';
 
-import {BrowserServiceImpl, HistoryItemElement} from 'chrome://history/history.js';
+import type {HistoryItemElement} from 'chrome://history/history.js';
+import {BrowserServiceImpl} from 'chrome://history/history.js';
 import {assertEquals, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {eventToPromise, flushTasks, waitAfterNextRender} from 'chrome://webui-test/test_util.js';
+import {flushTasks, waitAfterNextRender} from 'chrome://webui-test/polymer_test_util.js';
+import {eventToPromise} from 'chrome://webui-test/test_util.js';
 
 import {TestBrowserService} from './test_browser_service.js';
 import {createHistoryEntry} from './test_util.js';
@@ -15,7 +17,7 @@ suite('<history-item> focus test', function() {
   let item: HistoryItemElement;
 
   setup(function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     BrowserServiceImpl.setInstance(new TestBrowserService());
 
     item = document.createElement('history-item');

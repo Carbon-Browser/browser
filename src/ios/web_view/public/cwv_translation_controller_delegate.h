@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @class CWVTranslationController;
 @class CWVTranslationLanguage;
+@class CWVTranslationLanguageDetectionDetails;
 
 // Updates delegate on translation progress.
 @protocol CWVTranslationControllerDelegate<NSObject>
@@ -41,6 +42,12 @@ NS_ASSUME_NONNULL_BEGIN
     didFinishTranslationFromLanguage:(CWVTranslationLanguage*)sourceLanguage
                           toLanguage:(CWVTranslationLanguage*)targetLanguage
                                error:(nullable NSError*)error;
+
+// Called when the current page's language detection details have been
+// determined.
+- (void)translationController:(CWVTranslationController*)controller
+    didDeterminePageLanguageDetectionDetails:
+        (CWVTranslationLanguageDetectionDetails*)pageLanguageDetectionDetails;
 
 @end
 

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,9 +12,9 @@ namespace keyboard {
 
 void KeyboardEventHandler::OnGestureEvent(ui::GestureEvent* event) {
   switch (event->type()) {
-    case ui::ET_GESTURE_PINCH_BEGIN:
-    case ui::ET_GESTURE_PINCH_END:
-    case ui::ET_GESTURE_PINCH_UPDATE:
+    case ui::EventType::kGesturePinchBegin:
+    case ui::EventType::kGesturePinchEnd:
+    case ui::EventType::kGesturePinchUpdate:
       event->StopPropagation();
       break;
     default:

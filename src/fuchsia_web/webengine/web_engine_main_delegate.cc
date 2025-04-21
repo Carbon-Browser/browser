@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,6 +22,7 @@
 #include "fuchsia_web/webengine/common/web_engine_content_client.h"
 #include "fuchsia_web/webengine/renderer/web_engine_content_renderer_client.h"
 #include "fuchsia_web/webengine/switches.h"
+#include "google_apis/buildflags.h"
 #include "google_apis/google_api_keys.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/base/ui_base_paths.h"
@@ -34,7 +35,7 @@ void InitializeResources() {
   constexpr char kCommonResourcesPakPath[] = "web_engine_common_resources.pak";
 
   constexpr char kWebUiGeneratedResourcesPakPath[] =
-      "ui/resources/webui_generated_resources.pak";
+      "ui/webui/resources/webui_resources.pak";
 
   base::FilePath asset_root;
   bool result = base::PathService::Get(base::DIR_ASSETS, &asset_root);
@@ -51,11 +52,11 @@ void InitializeResources() {
   VLOG(1) << "Loaded resources including locale: " << locale;
 
   // Conditionally load WebUI resource PAK if visible from namespace.
-  const base::FilePath webui_generated_resources_path =
+  const base::FilePath webui_resources_path =
       asset_root.Append(kWebUiGeneratedResourcesPakPath);
-  if (base::PathExists(webui_generated_resources_path)) {
+  if (base::PathExists(webui_resources_path)) {
     ui::ResourceBundle::GetSharedInstance().AddDataPackFromPath(
-        webui_generated_resources_path, ui::kScaleFactorNone);
+        webui_resources_path, ui::kScaleFactorNone);
   }
 }
 
@@ -72,16 +73,11 @@ WebEngineMainDelegate::WebEngineMainDelegate() {
 
 WebEngineMainDelegate::~WebEngineMainDelegate() = default;
 
-absl::optional<int> WebEngineMainDelegate::BasicStartupComplete() {
+std::optional<int> WebEngineMainDelegate::BasicStartupComplete() {
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
 
   if (!InitLoggingFromCommandLine(*command_line)) {
     return 1;
-  }
-
-  if (command_line->HasSwitch(switches::kGoogleApiKey)) {
-    google_apis::SetAPIKey(
-        command_line->GetSwitchValueASCII(switches::kGoogleApiKey));
   }
 
   SetCorsExemptHeaders(base::SplitString(
@@ -89,7 +85,7 @@ absl::optional<int> WebEngineMainDelegate::BasicStartupComplete() {
           switches::kCorsExemptHeaders),
       ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY));
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 void WebEngineMainDelegate::PreSandboxStartup() {
@@ -103,6 +99,20 @@ void WebEngineMainDelegate::PreSandboxStartup() {
   base::i18n::SetICUDefaultLocale(initial_locale);
 
   InitializeResources();
+}
+
+std::optional<int> WebEngineMainDelegate::PreBrowserMain() {
+  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
+  if (command_line->HasSwitch(switches::kGoogleApiKey)) {
+#if BUILDFLAG(SUPPORT_EXTERNAL_GOOGLE_API_KEY)
+    google_apis::InitializeAndOverrideAPIKey(
+        command_line->GetSwitchValueASCII(switches::kGoogleApiKey));
+#else
+    LOG(WARNING) << "Ignored " << switches::kGoogleApiKey;
+#endif
+  }
+
+  return std::nullopt;
 }
 
 absl::variant<int, content::MainFunctionParams>

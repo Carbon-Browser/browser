@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2012 The Chromium Authors. All rights reserved.
+# Copyright 2012 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -117,10 +117,17 @@ def Main():
 
     message_number += 1
 
-    message = json.dumps({
-        'id': message_number, 'echo': text, 'caller_url': caller_url,
-        'args': reconnect_args, 'connect_id': args.native_messaging_connect_id,
-    }).encode('utf-8')
+    send_invalid_response = 'sendInvalidResponse' in text
+    message = None
+
+    if send_invalid_response:
+      message = '{'.encode('utf-8')
+    else:
+      message = json.dumps({
+          'id': message_number, 'echo': text, 'caller_url': caller_url,
+          'args': reconnect_args, 'connect_id': args.native_messaging_connect_id,
+      }).encode('utf-8')
+
     if not WriteMessage(message):
       break
 

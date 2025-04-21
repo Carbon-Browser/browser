@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,6 @@
 #include "chrome/browser/ui/exclusive_access/exclusive_access_manager.h"
 #include "chrome/browser/ui/layout_constants.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
-#include "chrome/browser/ui/views/toolbar/toolbar_account_icon_container_view.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_view.h"
 #include "chrome/grit/generated_resources.h"
 #include "components/autofill/core/common/autofill_payments_features.h"
@@ -61,7 +60,8 @@ LocationBarBubbleDelegateView::WebContentMouseHandler::WebContentMouseHandler(
   DCHECK(web_contents_);
   event_monitor_ = views::EventMonitor::CreateWindowMonitor(
       this, web_contents_->GetTopLevelNativeWindow(),
-      {ui::ET_MOUSE_PRESSED, ui::ET_KEY_PRESSED, ui::ET_TOUCH_PRESSED});
+      {ui::EventType::kMousePressed, ui::EventType::kKeyPressed,
+       ui::EventType::kTouchPressed});
 }
 
 LocationBarBubbleDelegateView::WebContentMouseHandler::
@@ -79,12 +79,16 @@ void LocationBarBubbleDelegateView::WebContentMouseHandler::OnEvent(
 
 LocationBarBubbleDelegateView::LocationBarBubbleDelegateView(
     views::View* anchor_view,
-    content::WebContents* web_contents)
-    : BubbleDialogDelegateView(anchor_view, views::BubbleBorder::TOP_RIGHT),
+    content::WebContents* web_contents,
+    bool autosize)
+    : BubbleDialogDelegateView(anchor_view,
+                               views::BubbleBorder::TOP_RIGHT,
+                               views::BubbleBorder::DIALOG_SHADOW,
+                               autosize),
       WebContentsObserver(web_contents) {
   // Add observer to close the bubble if the fullscreen state changes.
   if (web_contents) {
-    Browser* browser = chrome::FindBrowserWithWebContents(web_contents);
+    Browser* browser = chrome::FindBrowserWithTab(web_contents);
     // |browser| can be null in tests.
     if (browser) {
       fullscreen_observation_.Observe(
@@ -98,7 +102,7 @@ LocationBarBubbleDelegateView::LocationBarBubbleDelegateView(
   // really wrong. If we need the accessible role before ShowForReason() we
   // can't rely on DisplayReason in there. It also really seems like this dialog
   // role should not depend on if it's showing in the foreground or not.
-  SetAccessibleRole(GetAccessibleRoleForReason(display_reason_));
+  SetAccessibleWindowRole(GetAccessibleRoleForReason(display_reason_));
 }
 
 LocationBarBubbleDelegateView::~LocationBarBubbleDelegateView() {
@@ -108,7 +112,7 @@ LocationBarBubbleDelegateView::~LocationBarBubbleDelegateView() {
 void LocationBarBubbleDelegateView::ShowForReason(DisplayReason reason,
                                                   bool allow_refocus_alert) {
   display_reason_ = reason;
-  SetAccessibleRole(GetAccessibleRoleForReason(reason));
+  SetAccessibleWindowRole(GetAccessibleRoleForReason(reason));
 
   // These bubbles all anchor to the location bar or toolbar. We selectively
   // anchor location bar bubbles to one end or the other of the toolbar based on
@@ -131,7 +135,7 @@ void LocationBarBubbleDelegateView::ShowForReason(DisplayReason reason,
     if (allow_refocus_alert) {
       // Since this will show as inactive, add a description for how to get to
       // it.
-      GetWidget()->GetRootView()->GetViewAccessibility().OverrideDescription(
+      GetWidget()->GetRootView()->GetViewAccessibility().SetDescription(
           l10n_util::GetStringUTF8(IDS_SHOW_BUBBLE_INACTIVE_DESCRIPTION));
     }
     GetWidget()->ShowInactive();
@@ -145,8 +149,9 @@ void LocationBarBubbleDelegateView::OnFullscreenStateChanged() {
 
 void LocationBarBubbleDelegateView::OnVisibilityChanged(
     content::Visibility visibility) {
-  if (visibility == content::Visibility::HIDDEN)
+  if (visibility == content::Visibility::HIDDEN) {
     CloseBubble();
+  }
 }
 
 void LocationBarBubbleDelegateView::WebContentsDestroyed() {
@@ -178,8 +183,9 @@ gfx::Rect LocationBarBubbleDelegateView::GetAnchorBoundsInScreen() const {
 
 void LocationBarBubbleDelegateView::AdjustForFullscreen(
     const gfx::Rect& screen_bounds) {
-  if (GetAnchorView())
+  if (GetAnchorView()) {
     return;
+  }
 
   const int kBubblePaddingFromScreenEdge = 20;
   int horizontal_offset = width() / 2 + kBubblePaddingFromScreenEdge;
@@ -190,7 +196,9 @@ void LocationBarBubbleDelegateView::AdjustForFullscreen(
 }
 
 void LocationBarBubbleDelegateView::CloseBubble() {
-  GetWidget()->Close();
+  if (auto* const widget = GetWidget()) {
+    widget->Close();
+  }
 }
 
 void LocationBarBubbleDelegateView::SetCloseOnMainFrameOriginNavigation(
@@ -203,6 +211,6 @@ bool LocationBarBubbleDelegateView::GetCloseOnMainFrameOriginNavigation()
   return close_on_main_frame_origin_navigation_;
 }
 
-BEGIN_METADATA(LocationBarBubbleDelegateView, views::BubbleDialogDelegateView)
+BEGIN_METADATA(LocationBarBubbleDelegateView)
 ADD_READONLY_PROPERTY_METADATA(bool, CloseOnMainFrameOriginNavigation)
 END_METADATA

@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,14 +49,16 @@ class DataSaverWebAPIsBrowserTest : public InProcessBrowserTest {
  private:
   bool RunScriptExtractBool(Browser* browser, const std::string& script) {
     return content::EvalJs(browser->tab_strip_model()->GetActiveWebContents(),
-                           script, content::EXECUTE_SCRIPT_USE_MANUAL_REPLY)
+                           script)
         .ExtractBool();
   }
 
   net::EmbeddedTestServer test_server_;
 };
 
-IN_PROC_BROWSER_TEST_F(DataSaverWebAPIsBrowserTest, DataSaverEnabledJS) {
+// TODO(crbug.com/40250644): Fix and enable test.
+IN_PROC_BROWSER_TEST_F(DataSaverWebAPIsBrowserTest,
+                       DISABLED_DataSaverEnabledJS) {
   data_saver::OverrideIsDataSaverEnabledForTesting(true);
   VerifySaveDataAPI(true);
 }
@@ -66,7 +68,9 @@ IN_PROC_BROWSER_TEST_F(DataSaverWebAPIsBrowserTest, DataSaverDisabledJS) {
   VerifySaveDataAPI(false);
 }
 
-IN_PROC_BROWSER_TEST_F(DataSaverWebAPIsBrowserTest, DataSaverToggleJS) {
+// TODO(crbug.com/40250644): Fix and enable test.
+IN_PROC_BROWSER_TEST_F(DataSaverWebAPIsBrowserTest,
+                       DISABLED_DataSaverToggleJS) {
   data_saver::OverrideIsDataSaverEnabledForTesting(false);
   VerifySaveDataAPI(false);
 

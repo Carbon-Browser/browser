@@ -1,16 +1,15 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/file_system_provider/operations/close_file.h"
 
-#include <memory>
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
 #include "chrome/browser/ash/file_system_provider/icon_set.h"
 #include "chrome/browser/ash/file_system_provider/operations/test_util.h"
 #include "chrome/browser/ash/file_system_provider/provided_file_system_interface.h"
@@ -21,9 +20,7 @@
 #include "storage/browser/file_system/async_file_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace ash {
-namespace file_system_provider {
-namespace operations {
+namespace ash::file_system_provider::operations {
 namespace {
 
 const char kExtensionId[] = "mbflcebpggnecokmikipoihdbecnjfoj";
@@ -35,13 +32,13 @@ const int kOpenRequestId = 3;
 
 class FileSystemProviderOperationsCloseFileTest : public testing::Test {
  protected:
-  FileSystemProviderOperationsCloseFileTest() {}
-  ~FileSystemProviderOperationsCloseFileTest() override {}
+  FileSystemProviderOperationsCloseFileTest() = default;
+  ~FileSystemProviderOperationsCloseFileTest() override = default;
 
   void SetUp() override {
     file_system_info_ = ProvidedFileSystemInfo(
-        kExtensionId, MountOptions(kFileSystemId, "" /* display_name */),
-        base::FilePath(), false /* configurable */, true /* watchable */,
+        kExtensionId, MountOptions(kFileSystemId, /*display_name=*/""),
+        base::FilePath(), /*configurable=*/false, /*watchable=*/true,
         extensions::SOURCE_FILE, IconSet());
   }
 
@@ -51,14 +48,11 @@ class FileSystemProviderOperationsCloseFileTest : public testing::Test {
 TEST_F(FileSystemProviderOperationsCloseFileTest, Execute) {
   using extensions::api::file_system_provider::CloseFileRequestedOptions;
 
-  util::LoggingDispatchEventImpl dispatcher(true /* dispatch_reply */);
+  util::LoggingDispatchEventImpl dispatcher(/*dispatch_reply=*/true);
   util::StatusCallbackLog callback_log;
 
-  CloseFile close_file(NULL, file_system_info_, kOpenRequestId,
+  CloseFile close_file(&dispatcher, file_system_info_, kOpenRequestId,
                        base::BindOnce(&util::LogStatusCallback, &callback_log));
-  close_file.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(close_file.Execute(kRequestId));
 
@@ -73,62 +67,51 @@ TEST_F(FileSystemProviderOperationsCloseFileTest, Execute) {
   const base::Value* options_as_value = &event_args[0];
   ASSERT_TRUE(options_as_value->is_dict());
 
-  CloseFileRequestedOptions options;
-  ASSERT_TRUE(CloseFileRequestedOptions::Populate(*options_as_value, &options));
-  EXPECT_EQ(kFileSystemId, options.file_system_id);
-  EXPECT_EQ(kRequestId, options.request_id);
-  EXPECT_EQ(kOpenRequestId, options.open_request_id);
+  auto options =
+      CloseFileRequestedOptions::FromValue(options_as_value->GetDict());
+  ASSERT_TRUE(options);
+  EXPECT_EQ(kFileSystemId, options->file_system_id);
+  EXPECT_EQ(kRequestId, options->request_id);
+  EXPECT_EQ(kOpenRequestId, options->open_request_id);
 }
 
 TEST_F(FileSystemProviderOperationsCloseFileTest, Execute_NoListener) {
-  util::LoggingDispatchEventImpl dispatcher(false /* dispatch_reply */);
+  util::LoggingDispatchEventImpl dispatcher(/*dispatch_reply=*/false);
   util::StatusCallbackLog callback_log;
 
-  CloseFile close_file(NULL, file_system_info_, kOpenRequestId,
+  CloseFile close_file(&dispatcher, file_system_info_, kOpenRequestId,
                        base::BindOnce(&util::LogStatusCallback, &callback_log));
-  close_file.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_FALSE(close_file.Execute(kRequestId));
 }
 
 TEST_F(FileSystemProviderOperationsCloseFileTest, OnSuccess) {
-  util::LoggingDispatchEventImpl dispatcher(true /* dispatch_reply */);
+  util::LoggingDispatchEventImpl dispatcher(/*dispatch_reply=*/true);
   util::StatusCallbackLog callback_log;
 
-  CloseFile close_file(NULL, file_system_info_, kOpenRequestId,
+  CloseFile close_file(&dispatcher, file_system_info_, kOpenRequestId,
                        base::BindOnce(&util::LogStatusCallback, &callback_log));
-  close_file.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(close_file.Execute(kRequestId));
 
-  close_file.OnSuccess(kRequestId, std::make_unique<RequestValue>(),
-                       false /* has_more */);
+  close_file.OnSuccess(kRequestId, RequestValue(), /*has_more=*/false);
   ASSERT_EQ(1u, callback_log.size());
   EXPECT_EQ(base::File::FILE_OK, callback_log[0]);
 }
 
 TEST_F(FileSystemProviderOperationsCloseFileTest, OnError) {
-  util::LoggingDispatchEventImpl dispatcher(true /* dispatch_reply */);
+  util::LoggingDispatchEventImpl dispatcher(/*dispatch_reply=*/true);
   util::StatusCallbackLog callback_log;
 
-  CloseFile close_file(NULL, file_system_info_, kOpenRequestId,
+  CloseFile close_file(&dispatcher, file_system_info_, kOpenRequestId,
                        base::BindOnce(&util::LogStatusCallback, &callback_log));
-  close_file.SetDispatchEventImplForTesting(
-      base::BindRepeating(&util::LoggingDispatchEventImpl::OnDispatchEventImpl,
-                          base::Unretained(&dispatcher)));
 
   EXPECT_TRUE(close_file.Execute(kRequestId));
 
-  close_file.OnError(kRequestId, std::make_unique<RequestValue>(),
+  close_file.OnError(kRequestId, RequestValue(),
                      base::File::FILE_ERROR_TOO_MANY_OPENED);
   ASSERT_EQ(1u, callback_log.size());
   EXPECT_EQ(base::File::FILE_ERROR_TOO_MANY_OPENED, callback_log[0]);
 }
 
-}  // namespace operations
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider::operations

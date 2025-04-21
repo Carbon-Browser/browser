@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,8 +24,10 @@
 #if BUILDFLAG(IS_MAC)
 #include <IOKit/IOTypes.h>
 
-#include "base/mac/scoped_cftyperef.h"
+#include "base/apple/scoped_cftyperef.h"
 #include "base/mac/scoped_ionotificationportref.h"
+#include "base/power_monitor/battery_level_provider.h"
+#include "base/power_monitor/iopm_power_source_sampling_event_source.h"
 #include "base/power_monitor/thermal_state_observer_mac.h"
 #endif  // BUILDFLAG(IS_MAC)
 
@@ -51,7 +53,8 @@ class BASE_EXPORT PowerMonitorDeviceSource : public PowerMonitorSource {
   // power daemon, via D-Bus signals received on the UI thread. base can't
   // directly depend on that code, so this class instead exposes static methods
   // so that events can be passed in.
-  static void SetPowerSource(bool on_battery);
+  static void SetPowerSource(
+      PowerStateObserver::BatteryPowerStatus battery_power_status);
   static void HandleSystemSuspending();
   static void HandleSystemResumed();
   static void ThermalEventReceived(
@@ -59,7 +62,8 @@ class BASE_EXPORT PowerMonitorDeviceSource : public PowerMonitorSource {
 
   // These two methods is used for handling thermal state update requests, such
   // as asking for initial state when starting lisitening to thermal change.
-  PowerThermalObserver::DeviceThermalState GetCurrentThermalState() override;
+  PowerThermalObserver::DeviceThermalState GetCurrentThermalState()
+      const override;
   void SetCurrentThermalState(
       PowerThermalObserver::DeviceThermalState state) override;
 #endif
@@ -82,9 +86,9 @@ class BASE_EXPORT PowerMonitorDeviceSource : public PowerMonitorSource {
                                          LPARAM lparam);
 
     // Instance of the module containing the window procedure.
-    HMODULE instance_;
+    HMODULE instance_ = nullptr;
     // A hidden message-only window.
-    HWND message_hwnd_;
+    HWND message_hwnd_ = nullptr;
     // A handle, returned when we register for power setting notification
     HPOWERNOTIFY power_notify_handle_ = nullptr;
   };
@@ -104,24 +108,33 @@ class BASE_EXPORT PowerMonitorDeviceSource : public PowerMonitorSource {
 #endif  // BUILDFLAG(IS_MAC)
 
   // Platform-specific method to check whether the system is currently
-  // running on battery power.  Returns true if running on batteries,
-  // false otherwise.
-  bool IsOnBatteryPower() override;
+  // running on battery power. Returns kBatteryPower if running on battery,
+  // kExternalPower if running on external power or kUnknown if the power
+  // state is unknown (for example, during early process lifetime when the
+  // state hasn't been obtained yet).
+  PowerStateObserver::BatteryPowerStatus GetBatteryPowerStatus() const override;
 
 #if BUILDFLAG(IS_ANDROID)
-  PowerThermalObserver::DeviceThermalState GetCurrentThermalState() override;
-  int GetRemainingBatteryCapacity() override;
+  PowerThermalObserver::DeviceThermalState GetCurrentThermalState()
+      const override;
+  int GetRemainingBatteryCapacity() const override;
 #endif  // BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(IS_WIN)
   // PowerMonitorSource:
-  int GetInitialSpeedLimit() override;
+  int GetInitialSpeedLimit() const override;
 #endif  // BUILDFLAG(IS_WIN)
 
 #if BUILDFLAG(IS_MAC)
   // PowerMonitorSource:
-  PowerThermalObserver::DeviceThermalState GetCurrentThermalState() override;
-  int GetInitialSpeedLimit() override;
+  PowerThermalObserver::DeviceThermalState GetCurrentThermalState()
+      const override;
+  int GetInitialSpeedLimit() const override;
+
+  // Retrieves the current battery state to update `is_on_battery_`.
+  void GetBatteryState();
+  void OnBatteryStateReceived(
+      const std::optional<BatteryLevelProvider::BatteryState>& battery_state);
 
   // Reference to the system IOPMrootDomain port.
   io_connect_t power_manager_port_ = IO_OBJECT_NULL;
@@ -132,11 +145,16 @@ class BASE_EXPORT PowerMonitorDeviceSource : public PowerMonitorSource {
   // Notifier reference for the |notification_port_|.
   io_object_t notifier_ = IO_OBJECT_NULL;
 
-  // Run loop source to observe power-source-change events.
-  ScopedCFTypeRef<CFRunLoopSourceRef> power_source_run_loop_source_;
+  // Generates power-source-change events.
+  IOPMPowerSourceSamplingEventSource power_source_event_source_;
+
+  std::unique_ptr<BatteryLevelProvider> battery_level_provider_;
 
   // Observer of thermal state events: critical temperature etc.
   std::unique_ptr<ThermalStateObserverMac> thermal_state_observer_;
+
+  PowerStateObserver::BatteryPowerStatus battery_power_status_ =
+      PowerStateObserver::BatteryPowerStatus::kUnknown;
 #endif
 
 #if BUILDFLAG(IS_IOS)

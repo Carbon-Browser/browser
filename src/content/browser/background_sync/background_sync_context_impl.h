@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,8 +49,7 @@ class CONTENT_EXPORT BackgroundSyncContextImpl
   // Called when StoragePartition is being setup.
   void Init(
       const scoped_refptr<ServiceWorkerContextWrapper>& service_worker_context,
-      const scoped_refptr<DevToolsBackgroundServicesContextImpl>&
-          devtools_context);
+      DevToolsBackgroundServicesContextImpl& devtools_context);
 
   // Called when StoragePartition is being torn down. Must be called before
   // deleting `this`.
@@ -107,7 +106,7 @@ class CONTENT_EXPORT BackgroundSyncContextImpl
 
   virtual void CreateBackgroundSyncManager(
       scoped_refptr<ServiceWorkerContextWrapper> service_worker_context,
-      scoped_refptr<DevToolsBackgroundServicesContextImpl> devtools_context);
+      DevToolsBackgroundServicesContextImpl& devtools_context);
 
   // The services are owned by this. They're either deleted during Shutdown()
   // or when the channel is closed via *ServiceHadConnectionError.

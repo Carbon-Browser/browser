@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define THIRD_PARTY_BLINK_PUBLIC_COMMON_TOKENS_TOKEN_MOJOM_TRAITS_HELPER_H_
 
 #include "base/unguessable_token.h"
+#include "mojo/public/cpp/base/unguessable_token_mojom_traits.h"
 
 namespace blink {
 

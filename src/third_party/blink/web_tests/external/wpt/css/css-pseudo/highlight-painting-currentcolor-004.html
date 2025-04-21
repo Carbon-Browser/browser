@@ -1,45 +1,31 @@
 <!DOCTYPE html>
-<meta charset="utf-8" />
-<title>CSS Pseudo-Elements Test: Custom Highlights color inherit painting</title>
-<link rel="author" title="Manuel Rego Casasnovas" href="mailto:rego@igalia.com">
-<link rel="help" href="https://drafts.csswg.org/css-pseudo/#highlight-text">
-<meta name="assert" content="Checks that color inherit is properly resolved when painting highlight pseudos. It works like currentcolor, unless some specific color has been defined.">
+<meta charset="utf-8">
+<title>CSS Pseudo-Elements Test: ‘currentColor’ in ‘color’ and ‘text-shadow’ of overlapping highlights</title>
+<link rel="author" title="Delan Azabani" href="mailto:dazabani@igalia.com">
+<link rel="help" href="https://drafts.csswg.org/css-pseudo-4/#highlight-painting">
+<meta name="assert" content="This test checks that ::selection takes the ‘color’ of the next active highlight below when resolving ‘currentColor’ in ‘color’ and ‘text-shadow’.">
 <link rel="match" href="highlight-painting-currentcolor-004-ref.html">
+<meta name="fuzzy" content="0-120;0-10">
 <link rel="stylesheet" href="support/highlights.css">
+<script src="support/selections.js"></script>
 <style>
-.highlight_reftest {
-  color: green;
-  margin: 10px;
-}
-::highlight(color-inherit) {
-  color: inherit;
-}
-#wrapper::highlight(color-inherit) {
-  color: blue;
-}
+  ::highlight(a) {
+    color: yellow;
+    background-color: blue;
+  }
+  ::highlight(b) {
+    color: lime;
+    background-color: blue;
+  }
+  ::selection {
+    color: currentColor;
+    background-color: black;
+    text-shadow: 0 2em red, 0 4em currentColor;
+  }
 </style>
-<div class="highlight_reftest">green</div>
-<div class="highlight_reftest">g<span>ree</span>n</div>
-<div id="wrapper">
-  <div class="highlight_reftest">blue</div>
-  <div class="highlight_reftest">b<span>lu</span>e</div>
-</div>
-
+<div class="highlight_reftest" id="target">test test</div>
 <script>
-  function range(node, start, end) {
-    let range = new Range();
-    range.setStart(node, start);
-    range.setEnd(node, end);
-    return range;
-  }
-
-  const divs = document.getElementsByClassName("highlight_reftest");
-  let ranges = [];
-  for (let div of divs) {
-    if (div.childElementCount == 0)
-      ranges.push(range(div, 0, 1));
-    else
-      ranges.push(range(div, 0, 3));
-  }
-  CSS.highlights.set("color-inherit", new Highlight(...ranges));
+  CSS.highlights.set("b", new Highlight(createRangeForTextOnly(target, 0, 4)));
+  CSS.highlights.set("a", new Highlight(createRangeForTextOnly(target, 5, 9)));
+  selectNodeContents(target);
 </script>

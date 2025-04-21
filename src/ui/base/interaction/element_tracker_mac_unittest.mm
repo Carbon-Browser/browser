@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 #include <map>
 #include <set>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/test/mock_callback.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -23,9 +23,9 @@ namespace ui {
 
 namespace {
 
-NSMenu* const kFakeMenu1 = reinterpret_cast<NSMenu*>(1);
-NSMenu* const kFakeMenu2 = reinterpret_cast<NSMenu*>(2);
-NSMenu* const kFakeMenu3 = reinterpret_cast<NSMenu*>(3);
+NSMenu* const kFakeMenu1 = [[NSMenu alloc] initWithTitle:@"1"];
+NSMenu* const kFakeMenu2 = [[NSMenu alloc] initWithTitle:@"2"];
+NSMenu* const kFakeMenu3 = [[NSMenu alloc] initWithTitle:@"3"];
 
 constexpr gfx::Rect kScreenBounds1(30, 50, 100, 200);
 constexpr gfx::Rect kScreenBounds2(60, 70, 120, 220);
@@ -86,7 +86,7 @@ class ExpectedCall {
     ASSERT_TRUE(element->IsA<TrackedElementMac>());
     if (expected_bounds_.has_value()) {
       EXPECT_EQ(expected_bounds_.value(),
-                element->AsA<TrackedElementMac>()->screen_bounds());
+                element->AsA<TrackedElementMac>()->GetScreenBounds());
       expected_bounds_.reset();
     }
     EXPECT_EQ(identifier_, element->identifier());
@@ -99,7 +99,7 @@ class ExpectedCall {
   const ElementContext context_;
   const int expected_count_;
   int count_ = 0;
-  absl::optional<gfx::Rect> expected_bounds_;
+  std::optional<gfx::Rect> expected_bounds_;
   ElementTracker::Subscription subscription_;
 };
 
@@ -391,9 +391,11 @@ TEST_F(ElementTrackerMacTest, NestMenusSendHideEvents) {
   element_tracker_->NotifyMenuItemShown(kFakeMenu2, kElementIdentifier2,
                                         kScreenBounds2);
   element_tracker_->NotifyMenuItemHidden(kFakeMenu2, kElementIdentifier2);
-  EXPECT_EQ(1, hidden2.count());
+  // Note that the "hide" event isn't sent until the menu is destroyed or
+  // another submenu is shown.
   element_tracker_->NotifyMenuItemShown(kFakeMenu2, kElementIdentifier2,
                                         kScreenBounds3);
+  EXPECT_EQ(1, hidden2.count());
   element_tracker_->NotifyMenuItemActivated(kFakeMenu2, kElementIdentifier2);
   element_tracker_->NotifyMenuItemHidden(kFakeMenu2, kElementIdentifier2);
   element_tracker_->NotifyMenuItemHidden(kFakeMenu1, kElementIdentifier1);
@@ -427,9 +429,11 @@ TEST_F(ElementTrackerMacTest, NestMenusSendHideEvents_SecondSubmenuOpened) {
   element_tracker_->NotifyMenuItemShown(kFakeMenu2, kElementIdentifier2,
                                         kScreenBounds2);
   element_tracker_->NotifyMenuItemHidden(kFakeMenu2, kElementIdentifier2);
-  EXPECT_EQ(1, hidden2.count());
+  // Note that the "hide" event isn't sent until the menu is destroyed or
+  // another submenu is shown.
   element_tracker_->NotifyMenuItemShown(kFakeMenu3, kElementIdentifier3,
                                         kScreenBounds3);
+  EXPECT_EQ(1, hidden2.count());
   element_tracker_->NotifyMenuItemActivated(kFakeMenu3, kElementIdentifier3);
   element_tracker_->NotifyMenuItemHidden(kFakeMenu3, kElementIdentifier3);
   element_tracker_->NotifyMenuItemHidden(kFakeMenu1, kElementIdentifier1);

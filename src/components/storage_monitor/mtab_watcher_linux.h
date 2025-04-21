@@ -1,15 +1,9 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_STORAGE_MONITOR_MTAB_WATCHER_LINUX_H_
 #define COMPONENTS_STORAGE_MONITOR_MTAB_WATCHER_LINUX_H_
-
-#include "build/chromeos_buildflags.h"
-
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#error "ChromeOS does not use MtabWatcherLinux."
-#endif
 
 #include <map>
 
@@ -18,7 +12,10 @@
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
+
+#if BUILDFLAG(IS_CHROMEOS)
+#error "ChromeOS does not use MtabWatcherLinux."
+#endif
 
 namespace storage_monitor {
 

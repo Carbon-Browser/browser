@@ -1,8 +1,8 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {createElementWithClassName} from 'chrome://resources/js/util.m.js';
+import {createElementWithClassName} from 'chrome://resources/ash/common/util.js';
 
 /**
  * Create by |LineChart.LineChart|.
@@ -41,7 +41,7 @@ export class Scrollbar {
    */
   onScroll_() {
     const /** number */ newPosition = this.outerDiv_.scrollLeft;
-    if (newPosition == this.position_) {
+    if (newPosition === this.position_) {
       return;
     }
     this.position_ = newPosition;
@@ -80,7 +80,7 @@ export class Scrollbar {
    * @param {number} width
    */
   resize(width) {
-    if (this.width_ == width) {
+    if (this.width_ === width) {
       return;
     }
     this.width_ = width;
@@ -137,7 +137,7 @@ export class Scrollbar {
    * range. See crbug.com/760425.
    */
   updateScrollbarPosition_() {
-    if (this.outerDiv_.scrollLeft == this.position_) {
+    if (this.outerDiv_.scrollLeft === this.position_) {
       return;
     }
     this.outerDiv_.scrollLeft = this.position_;

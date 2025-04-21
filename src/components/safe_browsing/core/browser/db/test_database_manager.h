@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,9 +9,9 @@
 #include <string>
 #include <vector>
 
+#include "base/task/sequenced_task_runner.h"
 #include "components/safe_browsing/core/browser/db/database_manager.h"
 #include "components/safe_browsing/core/browser/db/v4_protocol_manager_util.h"
-#include "services/network/public/mojom/fetch_api.mojom.h"
 
 namespace safe_browsing {
 
@@ -21,40 +21,43 @@ namespace safe_browsing {
 // non-abstract methods in the base class are not overridden.
 class TestSafeBrowsingDatabaseManager : public SafeBrowsingDatabaseManager {
  public:
-  TestSafeBrowsingDatabaseManager(
-      scoped_refptr<base::SequencedTaskRunner> ui_task_runner,
-      scoped_refptr<base::SequencedTaskRunner> io_task_runner);
+  explicit TestSafeBrowsingDatabaseManager(
+      scoped_refptr<base::SequencedTaskRunner> ui_task_runner);
 
   // SafeBrowsingDatabaseManager implementation:
   void CancelCheck(Client* client) override;
-  bool CanCheckRequestDestination(
-      network::mojom::RequestDestination request_destination) const override;
   bool CanCheckUrl(const GURL& url) const override;
-  bool ChecksAreAlwaysAsync() const override;
-  bool CheckBrowseUrl(const GURL& url,
-                      const SBThreatTypeSet& threat_types,
-                      Client* client) override;
+  bool CheckBrowseUrl(
+      const GURL& url,
+      const SBThreatTypeSet& threat_types,
+      Client* client,
+      CheckBrowseUrlType check_type) override;
   AsyncMatch CheckCsdAllowlistUrl(const GURL& url, Client* client) override;
   bool CheckDownloadUrl(const std::vector<GURL>& url_chain,
                         Client* client) override;
   bool CheckExtensionIDs(const std::set<std::string>& extension_ids,
                          Client* client) override;
-  bool CheckResourceUrl(const GURL& url, Client* client) override;
-  AsyncMatch CheckUrlForHighConfidenceAllowlist(const GURL& url,
-                                                Client* client) override;
+  void CheckUrlForHighConfidenceAllowlist(
+      const GURL& url,
+      CheckUrlForHighConfidenceAllowlistCallback callback) override;
   bool CheckUrlForSubresourceFilter(const GURL& url, Client* client) override;
-  bool CheckUrlForAccuracyTips(const GURL& url, Client* client) override;
-  bool MatchDownloadAllowlistUrl(const GURL& url) override;
-  bool MatchMalwareIP(const std::string& ip_address) override;
-  safe_browsing::ThreatSource GetThreatSource() const override;
-  bool IsDownloadProtectionEnabled() const override;
-  void StartOnIOThread(
+  void MatchDownloadAllowlistUrl(
+      const GURL& url,
+      base::OnceCallback<void(bool)> callback) override;
+  safe_browsing::ThreatSource GetBrowseUrlThreatSource(
+      CheckBrowseUrlType check_type) const override;
+  safe_browsing::ThreatSource GetNonBrowseUrlThreatSource() const override;
+  void StartOnUIThread(
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
       const V4ProtocolConfig& config) override;
-  void StopOnIOThread(bool shutdown) override;
+  void StopOnUIThread(bool shutdown) override;
+  bool IsDatabaseReady() const override;
 
  protected:
   ~TestSafeBrowsingDatabaseManager() override = default;
+
+ private:
+  bool enabled_;
 };
 
 }  // namespace safe_browsing

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,9 @@ static SingleSampleMetricsFactory* g_factory = nullptr;
 
 // static
 SingleSampleMetricsFactory* SingleSampleMetricsFactory::Get() {
-  if (!g_factory)
+  if (!g_factory) {
     g_factory = new DefaultSingleSampleMetricsFactory();
+  }
 
   return g_factory;
 }
@@ -64,8 +65,9 @@ DefaultSingleSampleMetric::DefaultSingleSampleMetric(
 
 DefaultSingleSampleMetric::~DefaultSingleSampleMetric() {
   // |histogram_| may be nullptr if bad construction parameters are given.
-  if (sample_ < 0 || !histogram_)
+  if (sample_ < 0 || !histogram_) {
     return;
+  }
   histogram_->Add(sample_);
 }
 

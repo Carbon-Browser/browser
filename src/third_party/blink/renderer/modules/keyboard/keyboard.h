@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,7 @@ namespace blink {
 class ExceptionState;
 class ExecutionContext;
 class KeyboardLayout;
+class KeyboardLayoutMap;
 class KeyboardLock;
 class ScriptState;
 
@@ -28,10 +29,12 @@ class Keyboard final : public ScriptWrappable {
   ~Keyboard() override;
 
   // KeyboardLock API: https://w3c.github.io/keyboard-lock/
-  ScriptPromise lock(ScriptState*, const Vector<String>&, ExceptionState&);
+  ScriptPromise<IDLUndefined> lock(ScriptState*,
+                                   const Vector<String>&,
+                                   ExceptionState&);
   void unlock(ScriptState*);
 
-  ScriptPromise getLayoutMap(ScriptState*, ExceptionState&);
+  ScriptPromise<KeyboardLayoutMap> getLayoutMap(ScriptState*, ExceptionState&);
 
   // ScriptWrappable override.
   void Trace(Visitor*) const override;

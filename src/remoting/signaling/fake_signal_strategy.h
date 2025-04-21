@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,13 +38,12 @@ class FakeSignalStrategy : public SignalStrategy {
 
   ~FakeSignalStrategy() override;
 
-  const std::vector<std::unique_ptr<jingle_xmpp::XmlElement>>& received_messages() {
+  const std::vector<std::unique_ptr<jingle_xmpp::XmlElement>>&
+  received_messages() {
     return received_messages_;
   }
 
-  void set_send_delay(base::TimeDelta delay) {
-    send_delay_ = delay;
-  }
+  void set_send_delay(base::TimeDelta delay) { send_delay_ = delay; }
 
   void SetError(Error error);
   void SetIsSignInError(bool is_sign_in_error);

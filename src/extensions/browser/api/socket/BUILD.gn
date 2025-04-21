@@ -1,4 +1,4 @@
-# Copyright 2016 The Chromium Authors. All rights reserved.
+# Copyright 2016 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -22,25 +22,28 @@ source_set("socket") {
     "tls_socket.h",
     "udp_socket.cc",
     "udp_socket.h",
+    "write_quota_checker.cc",
+    "write_quota_checker.h",
   ]
+
+  configs += [ "//build/config/compiler:wexit_time_destructors" ]
 
   deps = [
     "//build:chromeos_buildflags",
     "//content/public/browser",
     "//content/public/common",
-    "//extensions/browser/api",
     "//extensions/common",
     "//extensions/common/api",
   ]
 
-  if (is_chromeos_ash) {
+  if (is_chromeos) {
     sources += [
       "app_firewall_hole_manager.cc",
       "app_firewall_hole_manager.h",
     ]
 
     deps += [
-      "//chromeos/ash/components/network",
+      "//chromeos/components/firewall_hole",
       "//components/keyed_service/content",
     ]
   }

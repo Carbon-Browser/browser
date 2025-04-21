@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@ package org.chromium.chrome.browser.firstrun;
 
 import androidx.fragment.app.Fragment;
 
-import org.chromium.base.supplier.BooleanSupplier;
+import java.util.function.BooleanSupplier;
 
 /**
  * Represents first run page shown during the First Run. Actual page implementation is created
@@ -45,9 +45,7 @@ public class FirstRunPage<T extends Fragment & FirstRunFragment> {
         return mShouldShow.getAsBoolean();
     }
 
-    /**
-     * Creates fragment that implements this FRE page.
-     */
+    /** Creates fragment that implements this FRE page. */
     public T instantiateFragment() {
         try {
             return mClazz.newInstance();

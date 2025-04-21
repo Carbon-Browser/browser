@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -14,6 +14,7 @@
 #define CHROME_INSTALLER_UTIL_L10N_STRING_UTIL_H_
 
 #include <string>
+#include <vector>
 
 namespace installer {
 
@@ -38,9 +39,10 @@ void SetTranslationDelegate(TranslationDelegate* delegate);
 // canary Chrome).
 std::wstring GetLocalizedString(int base_message_id);
 
-// Returns the localized version of a string (obtained from GetLocalizedString)
-// with $1 replaced with |a|. Additionally, $$ is replaced by $.
-std::wstring GetLocalizedStringF(int base_message_id, const std::wstring& a);
+// Returns a formatted version of the localized string using `replacements` for
+// the placeholders within `base_message_id`.
+std::wstring GetLocalizedStringF(int base_message_id,
+                                 std::vector<std::wstring> replacements);
 
 // Given the system language, return a url that points to the localized eula.
 // The empty string is returned on failure.

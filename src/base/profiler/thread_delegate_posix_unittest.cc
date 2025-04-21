@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,6 +15,10 @@ namespace base {
 // ASAN moves local variables outside of the stack extents.
 #if defined(ADDRESS_SANITIZER)
 #define MAYBE_CurrentThreadBase DISABLED_CurrentThreadBase
+#elif BUILDFLAG(IS_LINUX)
+// We don't support getting the stack base address on Linux.
+// https://crbug.com/1394278
+#define MAYBE_CurrentThreadBase DISABLED_CurrentThreadBase
 #else
 #define MAYBE_CurrentThreadBase CurrentThreadBase
 #endif
@@ -30,8 +34,9 @@ TEST(ThreadDelegatePosixTest, MAYBE_CurrentThreadBase) {
 }
 
 #if BUILDFLAG(IS_ANDROID)
-
-TEST(ThreadDelegatePosixTest, AndroidMainThreadStackBase) {
+// On ChromeOS, this functionality is tested by
+// GetThreadStackBaseAddressTest.MainThread.
+TEST(ThreadDelegatePosixTest, MainThreadStackBase) {
   // The delegate does not use pthread id for main thread.
   auto delegate = ThreadDelegatePosix::Create(
       SamplingProfilerThreadToken{GetCurrentProcId(), pthread_t()});

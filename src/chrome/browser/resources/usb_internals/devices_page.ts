@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,14 +10,15 @@
 import 'chrome://resources/cr_elements/cr_tree/cr_tree.js';
 import 'chrome://resources/cr_elements/cr_tree/cr_tree_item.js';
 
-import {CrTreeElement} from 'chrome://resources/cr_elements/cr_tree/cr_tree.js';
-import {CrTreeItemElement} from 'chrome://resources/cr_elements/cr_tree/cr_tree_item.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
-import {String16} from 'chrome://resources/mojo/mojo/public/mojom/base/string16.mojom-webui.js';
+import type {CrTreeElement} from 'chrome://resources/cr_elements/cr_tree/cr_tree.js';
+import type {CrTreeItemElement} from 'chrome://resources/cr_elements/cr_tree/cr_tree_item.js';
+import {assert} from 'chrome://resources/js/assert.js';
+import type {String16} from 'chrome://resources/mojo/mojo/public/mojom/base/string16.mojom-webui.js';
 
 import {DescriptorPanel, renderClassCodeWithDescription} from './descriptor_panel.js';
-import {UsbAlternateInterfaceInfo, UsbConfigurationInfo, UsbDeviceInfo, UsbDeviceRemote, UsbEndpointInfo, UsbInterfaceInfo, UsbTransferDirection, UsbTransferType} from './usb_device.mojom-webui.js';
-import {UsbDeviceManagerRemote} from './usb_manager.mojom-webui.js';
+import type {UsbAlternateInterfaceInfo, UsbConfigurationInfo, UsbDeviceInfo, UsbEndpointInfo, UsbInterfaceInfo} from './usb_device.mojom-webui.js';
+import {UsbDeviceRemote, UsbTransferDirection, UsbTransferType} from './usb_device.mojom-webui.js';
+import type {UsbDeviceManagerRemote} from './usb_manager.mojom-webui.js';
 
 /**
  * Page that contains a tab header and a tab panel displaying devices table.
@@ -42,7 +43,7 @@ export class DevicesPage {
 
     const tableBody = this.root_.querySelector<HTMLElement>('#device-list');
     assert(tableBody);
-    tableBody.innerHTML = window.trustedTypes!.emptyHTML as unknown as string;
+    tableBody.innerHTML = window.trustedTypes!.emptyHTML;
 
     const rowTemplate =
         this.root_.querySelector<HTMLTemplateElement>('#device-row');

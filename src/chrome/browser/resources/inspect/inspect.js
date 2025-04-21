@@ -1,8 +1,20 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {$} from 'chrome://resources/js/util.m.js';
+import {assert} from 'chrome://resources/js/assert.js';
+
+function $(id) {
+  // Disable getElementById restriction here, because this UI uses non valid
+  // selectors that don't work with querySelector().
+  // eslint-disable-next-line no-restricted-properties
+  const el = document.getElementById(id);
+  if (!el) {
+    return null;
+  }
+  assert(el instanceof HTMLElement);
+  return el;
+}
 
 const MIN_VERSION_TAB_CLOSE = 25;
 const MIN_VERSION_TARGET_ID = 26;
@@ -16,11 +28,6 @@ let browserInspector = 'chrome://tracing';
 let browserInspectorTitle = 'trace';
 
 (function() {
-const chromeMatch = navigator.userAgent.match(/(?:^|\W)Chrome\/(\S+)/);
-if (chromeMatch && chromeMatch.length > 1) {
-  HOST_CHROME_VERSION = chromeMatch[1].split('.').map(s => Number(s) || 0);
-}
-
 const queryParams = window.location.search;
 if (!queryParams) {
   return;
@@ -150,12 +157,18 @@ function showNativeUILaunchButton(enabled) {
   $('ui-devtools-enabled-text').hidden = !enabled;
 }
 
+function setHostVersion(version) {
+  version = version.split('.').map(s => Number(s) || 0);
+  HOST_CHROME_VERSION = version;
+}
+
 function populateLocalTargets(data) {
   removeChildren('pages-list');
   removeChildren('extensions-list');
   removeChildren('apps-list');
   removeChildren('workers-list');
   removeChildren('service-workers-list');
+  removeChildren('shared-storage-worklets-list');
   removeChildren('others-list');
 
   data.sort((a, b) => a.name.localeCompare(b.name));
@@ -171,6 +184,8 @@ function populateLocalTargets(data) {
       addToWorkersList(data[i]);
     } else if (data[i].type === 'service_worker') {
       addToServiceWorkersList(data[i]);
+    } else if (data[i].type === 'shared_storage_worklet') {
+      addToSharedStorageWorkletsList(data[i]);
     } else {
       addToOthersList(data[i]);
     }
@@ -349,7 +364,12 @@ function populateRemoteTargets(devices) {
         const browserName = document.createElement('div');
         browserName.className = 'browser-name';
         browserHeader.appendChild(browserName);
-        browserName.textContent = browser.adbBrowserName;
+        // Localhost targets are always named "Target".
+        // Let's use the ID instead as it's more expressive.
+        browserName.textContent = browser.adbBrowserName === 'Target' ?
+            browser.id :
+            browser.adbBrowserName;
+
         if (browser.adbBrowserVersion) {
           browserName.textContent += ' (' + browser.adbBrowserVersion + ')';
         }
@@ -509,6 +529,12 @@ function addToServiceWorkersList(data) {
       data, $('service-workers-list'), ['name', 'description', 'url']);
   addActionLink(
       row, 'terminate', sendTargetCommand.bind(null, 'close', data), false);
+}
+
+function addToSharedStorageWorkletsList(data) {
+  const row = addTargetToList(
+      data, $('shared-storage-worklets-list'), ['name', 'description', 'url']);
+  // TODO(yaoxia): add the "terminate" link when the backend supports it
 }
 
 function addToOthersList(data) {
@@ -717,6 +743,8 @@ function initSettings() {
 
   $('launch-ui-devtools')
       .addEventListener('click', sendCommand.bind(null, 'launch-ui-devtools'));
+  checkboxSendsCommand('bubble-locking-checkbox', 'set-bubble-locking');
+
   $('port-forwarding-config-open')
       .addEventListener('click', openPortForwardingConfig);
   $('tcp-discovery-config-open').addEventListener('click', openTargetsConfig);
@@ -905,6 +933,10 @@ function updateTCPDiscoveryEnabled(enabled) {
 function updateTCPDiscoveryConfig(config) {
   window.targetDiscoveryConfig = config;
   $('tcp-discovery-config-open').disabled = !config;
+}
+
+function updateBubbleLockingCheckbox(enabled) {
+  updateCheckbox('bubble-locking-checkbox', enabled);
 }
 
 function appendRow(list, lineFactory, key, value) {
@@ -1142,11 +1174,13 @@ Object.assign(window, {
   updatePortForwardingConfig,
   updateTCPDiscoveryEnabled,
   updateTCPDiscoveryConfig,
+  updateBubbleLockingCheckbox,
   populateNativeUITargets,
   populateTargets,
   populatePortStatus,
   showIncognitoWarning,
   showNativeUILaunchButton,
+  setHostVersion,
 });
 
 document.addEventListener('DOMContentLoaded', onload);

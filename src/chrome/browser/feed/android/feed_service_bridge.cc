@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,6 @@
 #include "base/notreached.h"
 #include "base/time/time.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/feed/android/jni_headers/FeedServiceBridge_jni.h"
 #include "chrome/browser/feed/feed_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
@@ -25,6 +24,9 @@
 #include "components/feed/feed_feature_list.h"
 #include "components/metrics/metrics_service.h"
 #include "components/prefs/pref_service.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "chrome/browser/feed/android/jni_headers/FeedServiceBridge_jni.h"
 
 namespace feed {
 namespace {
@@ -64,31 +66,8 @@ static int JNI_FeedServiceBridge_GetLoadMoreTriggerScrollDistanceDp(
   return GetFeedConfig().load_more_trigger_scroll_distance_dp;
 }
 
-static void JNI_FeedServiceBridge_ReportOpenVisitComplete(JNIEnv* env,
-                                                          jlong visitTimeMs) {
-  FeedApi* api = GetFeedApi();
-  if (!api)
-    return;
-  api->ReportOpenVisitComplete(base::Milliseconds(visitTimeMs));
-}
-
-static int JNI_FeedServiceBridge_GetVideoPreviewsTypePreference(JNIEnv* env) {
-  PrefService* pref_service = ProfileManager::GetLastUsedProfile()->GetPrefs();
-  return pref_service->GetInteger(feed::prefs::kVideoPreviewsType);
-}
-
-static void JNI_FeedServiceBridge_SetVideoPreviewsTypePreference(JNIEnv* env,
-                                                                 jint setting) {
-  PrefService* pref_service = ProfileManager::GetLastUsedProfile()->GetPrefs();
-  pref_service->SetInteger(feed::prefs::kVideoPreviewsType, setting);
-}
-
 static jlong JNI_FeedServiceBridge_GetReliabilityLoggingId(JNIEnv* env) {
   return FeedServiceBridge::GetReliabilityLoggingId();
-}
-
-static jboolean JNI_FeedServiceBridge_IsAutoplayEnabled(JNIEnv* env) {
-  return FeedServiceBridge::IsAutoplayEnabled();
 }
 
 static jlong JNI_FeedServiceBridge_AddUnreadContentObserver(
@@ -100,7 +79,8 @@ static jlong JNI_FeedServiceBridge_AddUnreadContentObserver(
     return static_cast<jint>(ContentOrder::kUnspecified);
   JavaUnreadContentObserver* observer = new JavaUnreadContentObserver(
       base::android::ScopedJavaGlobalRef<jobject>(j_observer));
-  api->AddUnreadContentObserver(is_web_feed ? kWebFeedStream : kForYouStream,
+  api->AddUnreadContentObserver(is_web_feed ? StreamType(StreamKind::kFollowing)
+                                            : StreamType(StreamKind::kForYou),
                                 observer);
   return reinterpret_cast<jlong>(observer);
 }
@@ -119,7 +99,8 @@ static jint JNI_FeedServiceBridge_GetContentOrderForWebFeed(JNIEnv* env) {
   FeedApi* api = GetFeedApi();
   if (!api)
     return 0;
-  return static_cast<int>(api->GetContentOrder(kWebFeedStream));
+  return static_cast<int>(
+      api->GetContentOrder(StreamType(StreamKind::kFollowing)));
 }
 
 static void JNI_FeedServiceBridge_SetContentOrderForWebFeed(
@@ -130,10 +111,12 @@ static void JNI_FeedServiceBridge_SetContentOrderForWebFeed(
     return;
   switch (content_order) {
     case static_cast<jint>(ContentOrder::kGrouped):
-      api->SetContentOrder(kWebFeedStream, ContentOrder::kGrouped);
+      api->SetContentOrder(StreamType(StreamKind::kFollowing),
+                           ContentOrder::kGrouped);
       return;
     case static_cast<jint>(ContentOrder::kReverseChron):
-      api->SetContentOrder(kWebFeedStream, ContentOrder::kReverseChron);
+      api->SetContentOrder(StreamType(StreamKind::kFollowing),
+                           ContentOrder::kReverseChron);
       return;
     case static_cast<jint>(ContentOrder::kUnspecified):
       break;
@@ -147,8 +130,7 @@ static jboolean JNI_FeedServiceBridge_IsSignedIn(JNIEnv* env) {
 
 std::string FeedServiceBridge::GetLanguageTag() {
   JNIEnv* env = base::android::AttachCurrentThread();
-  return ConvertJavaStringToUTF8(env,
-                                 Java_FeedServiceBridge_getLanguageTag(env));
+  return Java_FeedServiceBridge_getLanguageTag(env);
 }
 
 DisplayMetrics FeedServiceBridge::GetDisplayMetrics() {
@@ -164,10 +146,6 @@ DisplayMetrics FeedServiceBridge::GetDisplayMetrics() {
   return result;
 }
 
-bool FeedServiceBridge::IsAutoplayEnabled() {
-  return base::FeatureList::IsEnabled(kInterestFeedV2Autoplay);
-}
-
 void FeedServiceBridge::ClearAll() {
   JNIEnv* env = base::android::AttachCurrentThread();
   Java_FeedServiceBridge_clearAll(env);
@@ -180,8 +158,7 @@ bool FeedServiceBridge::IsEnabled() {
 
 void FeedServiceBridge::PrefetchImage(const GURL& url) {
   JNIEnv* env = base::android::AttachCurrentThread();
-  Java_FeedServiceBridge_prefetchImage(
-      env, base::android::ConvertUTF8ToJavaString(env, url.spec()));
+  Java_FeedServiceBridge_prefetchImage(env, url.spec());
 }
 
 uint64_t FeedServiceBridge::GetReliabilityLoggingId() {

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,6 +21,7 @@ class MockUserCloudPolicyStore : public UserCloudPolicyStore {
   MOCK_METHOD0(Load, void(void));
   MOCK_METHOD0(LoadImmediately, void(void));
   MOCK_METHOD0(Clear, void(void));
+  MOCK_METHOD0(ResetPolicyKey, void(void));
 
   // Publish the protected members.
   using CloudPolicyStore::NotifyStoreLoaded;
@@ -28,6 +29,7 @@ class MockUserCloudPolicyStore : public UserCloudPolicyStore {
 
   using CloudPolicyStore::policy_map_;
   using CloudPolicyStore::status_;
+  using CloudPolicyStore::validation_result_;
 };
 
 }  // namespace policy

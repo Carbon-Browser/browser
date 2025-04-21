@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,8 +31,9 @@ class AppShellTest : public content::BrowserTestBase {
   content::BrowserContext* browser_context() { return browser_context_; }
 
  protected:
-  raw_ptr<content::BrowserContext> browser_context_ = nullptr;
-  raw_ptr<ShellExtensionSystem> extension_system_ = nullptr;
+  raw_ptr<content::BrowserContext, DanglingUntriaged> browser_context_ =
+      nullptr;
+  raw_ptr<ShellExtensionSystem, DanglingUntriaged> extension_system_ = nullptr;
 };
 
 }  // namespace extensions

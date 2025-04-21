@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -62,32 +62,27 @@ class DurableStorageBrowserTest : public InProcessBrowserTest {
   }
 
   bool CheckPermission(content::RenderFrameHost* render_frame_host = nullptr) {
-    bool is_persistent = false;
     if (!render_frame_host)
       render_frame_host = GetRenderFrameHost();
-    EXPECT_TRUE(content::ExecuteScriptAndExtractBool(
-        render_frame_host, "checkPermission()", &is_persistent));
-    return is_persistent;
+    return content::EvalJs(render_frame_host, "checkPermission()")
+        .ExtractBool();
   }
 
   std::string CheckPermissionUsingPermissionApi(
       content::RenderFrameHost* render_frame_host = nullptr) {
-    std::string state;
     if (!render_frame_host)
       render_frame_host = GetRenderFrameHost();
-    EXPECT_TRUE(content::ExecuteScriptAndExtractString(
-        render_frame_host, "checkPermissionUsingPermissionApi()", &state));
-    return state;
+    return content::EvalJs(render_frame_host,
+                           "checkPermissionUsingPermissionApi()")
+        .ExtractString();
   }
 
   bool RequestPermission(
       content::RenderFrameHost* render_frame_host = nullptr) {
-    bool is_persistent = false;
     if (!render_frame_host)
       render_frame_host = GetRenderFrameHost();
-    EXPECT_TRUE(content::ExecuteScriptAndExtractBool(
-        render_frame_host, "requestPermission()", &is_persistent));
-    return is_persistent;
+    return content::EvalJs(render_frame_host, "requestPermission()")
+        .ExtractBool();
   }
 
   GURL url_;
@@ -142,7 +137,7 @@ IN_PROC_BROWSER_TEST_F(DurableStorageBrowserTest, BookmarkThenUnbookmark) {
 
   bookmarks::BookmarkModel* bookmark_model =
       BookmarkModelFactory::GetForBrowserContext(browser()->profile());
-  bookmarks::RemoveAllBookmarks(bookmark_model, url_);
+  bookmarks::RemoveAllBookmarks(bookmark_model, url_, FROM_HERE);
 
   // Unbookmarking doesn't change the permission.
   EXPECT_TRUE(CheckPermission());

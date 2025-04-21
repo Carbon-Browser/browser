@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,6 @@ import org.chromium.base.StrictModeContext;
  * before native has loaded.
  */
 public class SubscriptionFlagManager {
-    private static final String TAG = "SubscriptionFlagManager";
     private static final String PREF_PACKAGE =
             "org.chromium.components.gcm_driver.subscription_flags";
 
@@ -25,17 +24,14 @@ public class SubscriptionFlagManager {
     /**
      * Given an appId and a senderId, this methods builds a unique identifier for a subscription.
      * Currently implementation concatenates both senderId and appId.
-     * @param appId
-     * @param senderId
+     *
      * @return The unique identifier for the subscription.
      */
     public static String buildSubscriptionUniqueId(final String appId, final String senderId) {
         return appId + senderId;
     }
 
-    /**
-     * Stores the flags for a |subscriptionId| in SharedPreferences.
-     */
+    /** Stores the flags for a |subscriptionId| in SharedPreferences. */
     public static void setFlags(final String subscriptionId, int flags) {
         if (flags == 0) {
             clearFlags(subscriptionId);
@@ -48,9 +44,7 @@ public class SubscriptionFlagManager {
                 .apply();
     }
 
-    /**
-     * Removes flags for |subscriptionId| from SharedPreferences.
-     */
+    /** Removes flags for |subscriptionId| from SharedPreferences. */
     public static void clearFlags(final String subscriptionId) {
         ContextUtils.getApplicationContext()
                 .getSharedPreferences(PREF_PACKAGE, Context.MODE_PRIVATE)
@@ -59,9 +53,7 @@ public class SubscriptionFlagManager {
                 .apply();
     }
 
-    /**
-     * Returns whether the subscription with |subscriptionId| has all |flags|.
-     */
+    /** Returns whether the subscription with |subscriptionId| has all |flags|. */
     public static boolean hasFlags(final String subscriptionId, int flags) {
         try (StrictModeContext ignored = StrictModeContext.allowDiskReads()) {
             int subscriptionFlags =

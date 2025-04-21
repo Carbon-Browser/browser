@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/threading/thread_restrictions.h"
 #include "chrome/browser/notifications/notification_display_service.h"
+#include "chrome/browser/notifications/notification_display_service_factory.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/message_center/public/cpp/notification.h"
@@ -25,9 +26,9 @@ const char kDesktopNotificationPrefix[] = "desktop_notification_balloon.";
 
 int DesktopNotificationBalloon::id_count_ = 1;
 
-DesktopNotificationBalloon::DesktopNotificationBalloon() {}
+DesktopNotificationBalloon::DesktopNotificationBalloon() = default;
 
-DesktopNotificationBalloon::~DesktopNotificationBalloon() {}
+DesktopNotificationBalloon::~DesktopNotificationBalloon() = default;
 
 void DesktopNotificationBalloon::DisplayBalloon(
     const ui::ImageModel& icon,
@@ -39,7 +40,7 @@ void DesktopNotificationBalloon::DisplayBalloon(
   // IO access won't be required for normal uses.
   Profile* profile;
   {
-    base::ThreadRestrictions::ScopedAllowIO allow_io;
+    base::ScopedAllowBlocking allow_blocking;
     profile = ProfileManager::GetLastUsedProfile();
   }
 
@@ -50,6 +51,6 @@ void DesktopNotificationBalloon::DisplayBalloon(
       contents, icon, std::u16string(), GURL(), notifier_id, {},
       new message_center::NotificationDelegate());
 
-  NotificationDisplayService::GetForProfile(profile)->Display(
+  NotificationDisplayServiceFactory::GetForProfile(profile)->Display(
       NotificationHandler::Type::TRANSIENT, notification, /*metadata=*/nullptr);
 }

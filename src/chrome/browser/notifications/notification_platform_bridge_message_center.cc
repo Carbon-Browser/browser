@@ -1,11 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/notifications/notification_platform_bridge_message_center.h"
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/no_destructor.h"
@@ -42,8 +42,8 @@ class PassThroughDelegate : public message_center::NotificationDelegate {
     NotificationDisplayServiceImpl::GetForProfile(profile_)
         ->ProcessNotificationOperation(
             NotificationOperation::kSettings, notification_type_,
-            notification_.origin_url(), notification_.id(), absl::nullopt,
-            absl::nullopt, absl::nullopt /* by_user */);
+            notification_.origin_url(), notification_.id(), std::nullopt,
+            std::nullopt, std::nullopt /* by_user */, base::DoNothing());
   }
 
   void DisableNotification() override {
@@ -51,8 +51,8 @@ class PassThroughDelegate : public message_center::NotificationDelegate {
         ->ProcessNotificationOperation(
             NotificationOperation::kDisablePermission, notification_type_,
             notification_.origin_url(), notification_.id(),
-            absl::nullopt /* action_index */, absl::nullopt /* reply */,
-            absl::nullopt /* by_user */);
+            std::nullopt /* action_index */, std::nullopt /* reply */,
+            std::nullopt /* by_user */, base::DoNothing());
   }
 
   void Close(bool by_user) override {
@@ -60,17 +60,17 @@ class PassThroughDelegate : public message_center::NotificationDelegate {
         ->ProcessNotificationOperation(
             NotificationOperation::kClose, notification_type_,
             notification_.origin_url(), notification_.id(),
-            absl::nullopt /* action_index */, absl::nullopt /* reply */,
-            by_user);
+            std::nullopt /* action_index */, std::nullopt /* reply */, by_user,
+            base::DoNothing());
   }
 
-  void Click(const absl::optional<int>& button_index,
-             const absl::optional<std::u16string>& reply) override {
+  void Click(const std::optional<int>& button_index,
+             const std::optional<std::u16string>& reply) override {
     NotificationDisplayServiceImpl::GetForProfile(profile_)
         ->ProcessNotificationOperation(
             NotificationOperation::kClick, notification_type_,
             notification_.origin_url(), notification_.id(), button_index, reply,
-            absl::nullopt /* by_user */);
+            std::nullopt /* by_user */, base::DoNothing());
   }
 
  protected:
@@ -142,6 +142,24 @@ void NotificationPlatformBridgeMessageCenter::GetDisplayed(
   if (ui_manager) {
     displayed_notifications = ui_manager->GetAllIdsByProfile(
         ProfileNotification::GetProfileID(profile));
+  }
+
+  content::GetUIThreadTaskRunner({})->PostTask(
+      FROM_HERE,
+      base::BindOnce(std::move(callback), std::move(displayed_notifications),
+                     true /* supports_synchronization */));
+}
+
+void NotificationPlatformBridgeMessageCenter::GetDisplayedForOrigin(
+    Profile* profile,
+    const GURL& origin,
+    GetDisplayedNotificationsCallback callback) const {
+  std::set<std::string> displayed_notifications;
+  NotificationUIManager* ui_manager =
+      g_browser_process->notification_ui_manager();
+  if (ui_manager) {
+    displayed_notifications = ui_manager->GetAllIdsByProfileAndOrigin(
+        ProfileNotification::GetProfileID(profile), origin);
   }
 
   content::GetUIThreadTaskRunner({})->PostTask(

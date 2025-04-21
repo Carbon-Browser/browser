@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,35 +14,34 @@
 
 #include "ash/components/arc/arc_features.h"
 #include "ash/components/arc/arc_util.h"
-#include "ash/components/arc/enterprise/arc_data_snapshotd_manager.h"
 #include "ash/components/arc/session/arc_bridge_host_impl.h"
-#include "ash/components/cryptohome/cryptohome_parameters.h"
+#include "ash/components/arc/session/arc_service_manager.h"
+#include "ash/components/arc/session/mojo_init_data.h"
+#include "ash/components/arc/session/mojo_invitation_manager.h"
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/compiler_specific.h"
+#include "base/feature_list.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/memory/raw_ptr.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/process/process_metrics.h"
-#include "base/rand_util.h"
-#include "base/strings/string_number_conversions.h"
 #include "base/system/sys_info.h"
 #include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/threading/thread_restrictions.h"
-#include "chromeos/ash/components/memory/memory.h"
-#include "chromeos/system/scheduler_configuration_manager_base.h"
+#include "chromeos/ash/components/cryptohome/cryptohome_parameters.h"
+#include "chromeos/ash/components/dbus/spaced/spaced_client.h"
+#include "chromeos/ash/components/system/scheduler_configuration_manager_base.h"
 #include "components/user_manager/user_manager.h"
 #include "components/version_info/channel.h"
-#include "mojo/public/cpp/bindings/pending_remote.h"
-#include "mojo/public/cpp/bindings/remote.h"
+#include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/platform/named_platform_channel.h"
 #include "mojo/public/cpp/platform/platform_channel.h"
-#include "mojo/public/cpp/platform/platform_handle.h"
 #include "mojo/public/cpp/platform/socket_utils_posix.h"
-#include "mojo/public/cpp/system/invitation.h"
 
 namespace arc {
 
@@ -56,16 +55,10 @@ constexpr int kClassify4GbDeviceInKb = 3500000;
 constexpr int kClassify8GbDeviceInKb = 7500000;
 constexpr int kClassify16GbDeviceInKb = 15500000;
 
-std::string GenerateRandomToken() {
-  char random_bytes[16];
-  base::RandBytes(random_bytes, 16);
-  return base::HexEncode(random_bytes, 16);
-}
-
-// Waits until |raw_socket_fd| is readable.
+// Waits until `raw_socket_fd` is readable.
 // The operation may be cancelled originally triggered by user interaction to
 // disable ARC, or ARC instance is unexpectedly stopped (e.g. crash).
-// To notify such a situation, |raw_cancel_fd| is also passed to here, and the
+// To notify such a situation, `raw_cancel_fd` is also passed to here, and the
 // write side will be closed in such a case.
 bool WaitForSocketReadable(int raw_socket_fd, int raw_cancel_fd) {
   struct pollfd fds[2] = {
@@ -91,7 +84,7 @@ bool WaitForSocketReadable(int raw_socket_fd, int raw_cancel_fd) {
 // Applies dalvik memory profile to the ARC mini instance start params.
 // Profile is determined based on enable feature and available memory on the
 // device. Possible profiles 16G,8G and 4G. For low memory devices dalvik
-// profile is not overridden. If |memory_stat_file_for_testing| is set,
+// profile is not overridden. If `memory_stat_file_for_testing` is set,
 // it specifies the file to read in tests instead of /proc/meminfo in
 // production.
 void ApplyDalvikMemoryProfile(
@@ -121,36 +114,29 @@ void ApplyDalvikMemoryProfile(
           << (mem_info.total / 1024) << "Mb device.";
 }
 
-// Applies USAP profile to the ARC mini instance start params.
-// Profile is determined based on enable feature and available memory on the
-// device. Possible profiles 16G,8G and 4G. For low memory devices USAP
-// profile is not overridden. If |memory_stat_file_for_testing| is set,
-// it specifies the file to read in tests instead of /proc/meminfo in
-// production.
-// Note: This is only used for VM. This profile does nothing for container.
-void ApplyUsapProfile(
-    ArcSessionImpl::SystemMemoryInfoCallback system_memory_info_callback,
-    StartParams* params) {
-  // Check if enabled.
-  if (!base::FeatureList::IsEnabled(arc::kEnableUsap)) {
-    VLOG(1) << "USAP profile is not enabled.";
-    return;
-  }
-
-  base::SystemMemoryInfoKB mem_info;
-  if (!system_memory_info_callback.Run(&mem_info)) {
-    LOG(ERROR) << "Failed to get system memory info";
-    return;
-  }
-
-  if (mem_info.total >= kClassify16GbDeviceInKb) {
-    params->usap_profile = StartParams::UsapProfile::M16G;
-  } else if (mem_info.total >= kClassify8GbDeviceInKb) {
-    params->usap_profile = StartParams::UsapProfile::M8G;
-  } else if (mem_info.total >= kClassify4GbDeviceInKb) {
-    params->usap_profile = StartParams::UsapProfile::M4G;
-  } else {
-    params->usap_profile = StartParams::UsapProfile::DEFAULT;
+void ApplyHostUreadaheadMode(StartParams* params) {
+  // Check if deprecated flags are in use, override later if necessary
+  const arc::ArcUreadaheadMode mode =
+      arc::GetArcUreadaheadMode(ash::switches::kArcHostUreadaheadMode);
+  switch (mode) {
+    case arc::ArcUreadaheadMode::READAHEAD: {
+      params->host_ureadahead_mode =
+          StartParams::HostUreadaheadMode::MODE_READAHEAD;
+      break;
+    }
+    case arc::ArcUreadaheadMode::GENERATE: {
+      params->host_ureadahead_mode =
+          StartParams::HostUreadaheadMode::MODE_GENERATE;
+      break;
+    }
+    case arc::ArcUreadaheadMode::DISABLED: {
+      params->host_ureadahead_mode =
+          StartParams::HostUreadaheadMode::MODE_DISABLED;
+      break;
+    }
+    default: {
+      NOTREACHED();
+    }
   }
 }
 
@@ -160,8 +146,8 @@ void ApplyDisableDownloadProvider(StartParams* params) {
           ash::switches::kArcDisableDownloadProvider);
 }
 
-void ApplyDisableUreadahed(StartParams* params) {
-  params->disable_ureadahead = IsUreadaheadDisabled();
+void ApplyUseDevCaches(StartParams* params) {
+  params->use_dev_caches = IsArcUseDevCaches();
 }
 
 // Real Delegate implementation to connect Mojo.
@@ -189,20 +175,22 @@ class ArcSessionDelegateImpl : public ArcSessionImpl::Delegate {
   // blocking thread. Unlinks any existing files at socket address.
   static base::ScopedFD CreateSocketInternal();
 
-  // Synchronously accepts a connection on |server_endpoint| and then processes
+  // Synchronously accepts a connection on `server_endpoint` and then processes
   // the connected socket's file descriptor. This is designed to run on a
   // blocking thread.
-  static mojo::ScopedMessagePipeHandle ConnectMojoInternal(
+  static std::unique_ptr<MojoInvitationManager> ConnectMojoInternal(
       base::ScopedFD socket_fd,
       base::ScopedFD cancel_fd);
 
   // Called when Mojo connection is established or canceled.
-  // In case of cancel or error, |server_pipe| is invalid.
-  void OnMojoConnected(ConnectMojoCallback callback,
-                       mojo::ScopedMessagePipeHandle server_pipe);
+  // In case of cancel or error, `server_pipe` is invalid.
+  void OnMojoConnected(
+      ConnectMojoCallback callback,
+      std::unique_ptr<ArcBridgeHostImpl> host,
+      std::unique_ptr<MojoInvitationManager> invitation_manager);
 
   // Owned by ArcServiceManager.
-  ArcBridgeService* const arc_bridge_service_;
+  const raw_ptr<ArcBridgeService> arc_bridge_service_;
 
   const version_info::Channel channel_;
 
@@ -234,25 +222,23 @@ base::ScopedFD ArcSessionDelegateImpl::ConnectMojo(
     return base::ScopedFD();
   }
 
-  // For production, |socket_fd| passed from session_manager is either a valid
-  // socket or a valid file descriptor (/dev/null). For testing, |socket_fd|
+  // For production, `socket_fd` passed from session_manager is either a valid
+  // socket or a valid file descriptor (/dev/null). For testing, `socket_fd`
   // might be invalid.
   base::ThreadPool::PostTaskAndReplyWithResult(
       FROM_HERE, {base::MayBlock()},
       base::BindOnce(&ArcSessionDelegateImpl::ConnectMojoInternal,
                      std::move(socket_fd), std::move(cancel_fd)),
       base::BindOnce(&ArcSessionDelegateImpl::OnMojoConnected,
-                     weak_factory_.GetWeakPtr(), std::move(callback)));
+                     weak_factory_.GetWeakPtr(), std::move(callback),
+                     std::make_unique<ArcBridgeHostImpl>(arc_bridge_service_)));
   return return_fd;
 }
 
 void ArcSessionDelegateImpl::GetFreeDiskSpace(
     GetFreeDiskSpaceCallback callback) {
-  base::ThreadPool::PostTaskAndReplyWithResult(
-      FROM_HERE, {base::MayBlock()},
-      base::BindOnce(&base::SysInfo::AmountOfFreeDiskSpace,
-                     base::FilePath("/home")),
-      std::move(callback));
+  ash::SpacedClient::Get()->GetFreeDiskSpace("/home/chronos/user",
+                                             std::move(callback));
 }
 
 version_info::Channel ArcSessionDelegateImpl::GetChannel() {
@@ -297,7 +283,7 @@ base::ScopedFD ArcSessionDelegateImpl::CreateSocketInternal() {
 
   // Change permissions on the socket. Note that since arcvm doesn't directly
   // share the socket with ARC, it can use 0600 and the default group. arcvm
-  // build doesn't have |kArcBridgeSocketGroup| in the first place.
+  // build doesn't have `kArcBridgeSocketGroup` in the first place.
   if (!IsArcVmEnabled()) {
     struct group arc_bridge_group;
     struct group* arc_bridge_group_res = nullptr;
@@ -333,67 +319,53 @@ base::ScopedFD ArcSessionDelegateImpl::CreateSocketInternal() {
 }
 
 // static
-mojo::ScopedMessagePipeHandle ArcSessionDelegateImpl::ConnectMojoInternal(
-    base::ScopedFD socket_fd,
-    base::ScopedFD cancel_fd) {
+std::unique_ptr<MojoInvitationManager>
+ArcSessionDelegateImpl::ConnectMojoInternal(base::ScopedFD socket_fd,
+                                            base::ScopedFD cancel_fd) {
   if (!WaitForSocketReadable(socket_fd.get(), cancel_fd.get())) {
     VLOG(1) << "Mojo connection was cancelled.";
-    return mojo::ScopedMessagePipeHandle();
+    return nullptr;
   }
 
   base::ScopedFD connection_fd;
   if (!mojo::AcceptSocketConnection(socket_fd.get(), &connection_fd,
                                     /* check_peer_user = */ false) ||
       !connection_fd.is_valid()) {
-    return mojo::ScopedMessagePipeHandle();
+    return nullptr;
   }
 
+  // Send Mojo invitation to ARCVM.
+  auto invitation_manager = std::make_unique<MojoInvitationManager>();
   mojo::PlatformChannel channel;
-  mojo::OutgoingInvitation invitation;
-  // Generate an arbitrary 32-byte string. ARC uses this length as a protocol
-  // version identifier.
-  std::string token = GenerateRandomToken();
-  mojo::ScopedMessagePipeHandle pipe = invitation.AttachMessagePipe(token);
-  mojo::OutgoingInvitation::Send(std::move(invitation),
-                                 base::kNullProcessHandle,
-                                 channel.TakeLocalEndpoint());
+  MojoInitData mojo_init_data;
+  invitation_manager->SendInvitation(channel, mojo_init_data.token());
 
   std::vector<base::ScopedFD> fds;
   fds.emplace_back(channel.TakeRemoteEndpoint().TakePlatformHandle().TakeFD());
 
-  // Version of protocol chrome is using.
-  uint8_t protocol_version = 0;
-
-  // We need to send the length of the message as a single byte, so make sure it
-  // fits.
-  DCHECK_LT(token.size(), 256u);
-  uint8_t message_length = static_cast<uint8_t>(token.size());
-
-  struct iovec iov[] = {{&protocol_version, sizeof(protocol_version)},
-                        {&message_length, sizeof(message_length)},
-                        {const_cast<char*>(token.c_str()), token.size()}};
-  ssize_t result = mojo::SendmsgWithHandles(connection_fd.get(), iov,
-                                            sizeof(iov) / sizeof(iov[0]), fds);
-  if (result == -1) {
+  std::vector<iovec> data_arr = mojo_init_data.AsIOvecVector();
+  if (mojo::SendmsgWithHandles(connection_fd.get(), data_arr.data(),
+                               data_arr.size(), fds) == -1) {
     PLOG(ERROR) << "sendmsg";
-    return mojo::ScopedMessagePipeHandle();
+    return nullptr;
   }
 
-  return pipe;
+  return invitation_manager;
 }
 
 void ArcSessionDelegateImpl::OnMojoConnected(
     ConnectMojoCallback callback,
-    mojo::ScopedMessagePipeHandle server_pipe) {
-  if (!server_pipe.is_valid()) {
+    std::unique_ptr<ArcBridgeHostImpl> host,
+    std::unique_ptr<MojoInvitationManager> invitation_manager) {
+  if (!invitation_manager) {
     LOG(ERROR) << "Invalid pipe";
-    std::move(callback).Run(nullptr);
+    std::move(callback).Run(nullptr, nullptr);
     return;
   }
 
-  std::move(callback).Run(std::make_unique<ArcBridgeHostImpl>(
-      arc_bridge_service_,
-      mojo::PendingReceiver<mojom::ArcBridgeHost>(std::move(server_pipe))));
+  host->AddReceiver(mojo::PendingReceiver<mojom::ArcBridgeHost>(
+      invitation_manager->TakePipe()));
+  std::move(callback).Run(std::move(host), std::move(invitation_manager));
 }
 
 }  // namespace
@@ -407,8 +379,7 @@ std::unique_ptr<ArcSessionImpl::Delegate> ArcSessionImpl::CreateDelegate(
 
 ArcSessionImpl::ArcSessionImpl(
     std::unique_ptr<Delegate> delegate,
-    chromeos::SchedulerConfigurationManagerBase*
-        scheduler_configuration_manager,
+    ash::SchedulerConfigurationManagerBase* scheduler_configuration_manager,
     AdbSideloadingAvailabilityDelegate* adb_sideloading_availability_delegate)
     : delegate_(std::move(delegate)),
       client_(delegate_->CreateClient()),
@@ -448,30 +419,21 @@ void ArcSessionImpl::DoStartMiniInstance(size_t num_cores_disabled) {
   StartParams params;
   params.native_bridge_experiment =
       base::FeatureList::IsEnabled(arc::kNativeBridgeToggleFeature);
-  params.arc_file_picker_experiment =
-      base::FeatureList::IsEnabled(arc::kFilePickerExperimentFeature);
   // Enable Custom Tabs only on Dev and Canary.
   const bool is_custom_tab_enabled =
       base::FeatureList::IsEnabled(arc::kCustomTabsExperimentFeature) &&
       delegate_->GetChannel() != version_info::Channel::STABLE &&
       delegate_->GetChannel() != version_info::Channel::BETA;
   params.arc_custom_tabs_experiment = is_custom_tab_enabled;
-  params.enable_keyboard_shortcut_helper_integration =
-      base::FeatureList::IsEnabled(
-          arc::kKeyboardShortcutHelperIntegrationFeature);
   params.lcd_density = lcd_density_;
   params.num_cores_disabled = num_cores_disabled;
-  params.enable_notifications_refresh =
-      ash::features::IsNotificationsRefreshEnabled();
-  params.enable_tts_caching =
-      base::FeatureList::IsEnabled(kEnableTTSCacheSetup);
-  params.enable_consumer_auto_update_toggle = base::FeatureList::IsEnabled(
-      ash::features::kConsumerAutoUpdateToggleAllowed);
-
-  // TODO (b/196460968): Remove after CTS run is complete.
-  if (params.enable_notifications_refresh) {
-    VLOG(1) << "Notifications Refresh is enabled";
-  }
+  params.enable_tts_caching = true;
+  params.enable_privacy_hub_for_chrome =
+      base::FeatureList::IsEnabled(ash::features::kCrosPrivacyHub);
+  params.arc_switch_to_keymint = ShouldUseArcKeyMint();
+  params.enable_arc_attestation = ShouldUseArcAttestation();
+  params.use_virtio_blk_data = use_virtio_blk_data_;
+  params.arc_signed_in = arc_signed_in_;
 
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
           ash::switches::kArcPlayStoreAutoUpdate)) {
@@ -504,12 +466,13 @@ void ArcSessionImpl::DoStartMiniInstance(size_t num_cores_disabled) {
 
   VLOG(1) << "Starting ARC mini instance with lcd_density="
           << params.lcd_density
-          << ", num_cores_disabled=" << params.num_cores_disabled;
+          << ", num_cores_disabled=" << params.num_cores_disabled
+          << ", arc_signed_in=" << params.arc_signed_in;
 
   ApplyDalvikMemoryProfile(system_memory_info_callback_, &params);
-  ApplyUsapProfile(system_memory_info_callback_, &params);
   ApplyDisableDownloadProvider(&params);
-  ApplyDisableUreadahed(&params);
+  ApplyUseDevCaches(&params);
+  ApplyHostUreadaheadMode(&params);
 
   client_->StartMiniArc(std::move(params),
                         base::BindOnce(&ArcSessionImpl::OnMiniInstanceStarted,
@@ -533,7 +496,6 @@ void ArcSessionImpl::RequestUpgrade(UpgradeParams params) {
   switch (state_) {
     case State::NOT_STARTED:
       NOTREACHED();
-      break;
     case State::WAITING_FOR_NUM_CORES:
     case State::STARTING_MINI_INSTANCE:
       // OnMiniInstanceStarted() will restart a full instance.
@@ -548,7 +510,6 @@ void ArcSessionImpl::RequestUpgrade(UpgradeParams params) {
       // These mean RequestUpgrade() is called twice or called after
       // stopped, which are invalid operations.
       NOTREACHED();
-      break;
   }
 }
 
@@ -587,13 +548,13 @@ void ArcSessionImpl::DoUpgrade() {
                                              weak_factory_.GetWeakPtr()));
 }
 
-void ArcSessionImpl::OnFreeDiskSpace(int64_t space) {
+void ArcSessionImpl::OnFreeDiskSpace(std::optional<int64_t> space) {
   // Ensure there's sufficient space on disk for the container.
-  if (space == -1) {
+  if (!space.has_value()) {
     LOG(ERROR) << "Could not determine free disk space";
     StopArcInstance(/*on_shutdown=*/false, /*should_backup_log=*/false);
     return;
-  } else if (space < kMinimumFreeDiskSpaceBytes) {
+  } else if (space.value() < kMinimumFreeDiskSpaceBytes) {
     VLOG(1) << "There is not enough disk space to start the ARC container";
     insufficient_disk_space_ = true;
     StopArcInstance(/*on_shutdown=*/false, /*should_backup_log=*/false);
@@ -631,23 +592,7 @@ void ArcSessionImpl::OnSocketCreated(base::ScopedFD socket_fd) {
     return;
   }
 
-  VLOG(2) << "Socket is created. Start loading ARC data snapshot";
-  StartLoadingDataSnapshot(base::BindOnce(&ArcSessionImpl::OnDataSnapshotLoaded,
-                                          weak_factory_.GetWeakPtr(),
-                                          std::move(socket_fd)));
-}
-
-void ArcSessionImpl::StartLoadingDataSnapshot(base::OnceClosure callback) {
-  auto* arc_data_snapshotd_manager =
-      arc::data_snapshotd::ArcDataSnapshotdManager::Get();
-  if (arc_data_snapshotd_manager)
-    arc_data_snapshotd_manager->StartLoadingSnapshot(std::move(callback));
-  else
-    std::move(callback).Run();
-}
-
-void ArcSessionImpl::OnDataSnapshotLoaded(base::ScopedFD socket_fd) {
-  VLOG(2) << "Starting ARC container";
+  VLOG(2) << "Socket is created. Starting ARC container";
   client_->UpgradeArc(
       std::move(upgrade_params_),
       base::BindOnce(&ArcSessionImpl::OnUpgraded, weak_factory_.GetWeakPtr(),
@@ -684,7 +629,8 @@ void ArcSessionImpl::OnUpgraded(base::ScopedFD socket_fd, bool result) {
 }
 
 void ArcSessionImpl::OnMojoConnected(
-    std::unique_ptr<mojom::ArcBridgeHost> arc_bridge_host) {
+    std::unique_ptr<mojom::ArcBridgeHost> arc_bridge_host,
+    std::unique_ptr<MojoInvitationManager> invitation_manager) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   DCHECK_EQ(state_, State::CONNECTING_MOJO);
   accept_cancel_pipe_.reset();
@@ -697,18 +643,16 @@ void ArcSessionImpl::OnMojoConnected(
   if (!arc_bridge_host.get()) {
     LOG(ERROR) << "Invalid pipe.";
     // If we can't establish the connection with ARC bridge, it could
-    // be a problem inside ARC thus setting |should_backup_log| to back up log
+    // be a problem inside ARC thus setting `should_backup_log` to back up log
     // before container is shutdown.
     StopArcInstance(/*on_shutdown=*/false, /*should_backup_log*/ true);
     return;
   }
   arc_bridge_host_ = std::move(arc_bridge_host);
+  mojo_invitation_manager_ = std::move(invitation_manager);
 
   VLOG(0) << "ARC ready.";
   state_ = State::RUNNING_FULL_INSTANCE;
-
-  // Some memory parameters may be changed when ARC is launched.
-  ash::UpdateMemoryParameters();
 }
 
 void ArcSessionImpl::Stop() {
@@ -717,8 +661,9 @@ void ArcSessionImpl::Stop() {
 
   // For second time or later, just do nothing.
   // It is already in the stopping phase.
-  if (stop_requested_)
+  if (stop_requested_) {
     return;
+  }
 
   stop_requested_ = true;
   arc_bridge_host_.reset();
@@ -728,7 +673,7 @@ void ArcSessionImpl::Stop() {
         scheduler_configuration_manager_->RemoveObserver(this);
       [[fallthrough]];
     case State::NOT_STARTED:
-      // If |Stop()| is called while waiting for LCD density or CPU cores
+      // If `Stop()` is called while waiting for LCD density or CPU cores
       // information, it can directly move to stopped state.
       VLOG(1) << "ARC session is not started. state: " << state_;
       OnStopped(ArcStopReason::SHUTDOWN);
@@ -778,7 +723,7 @@ void ArcSessionImpl::StopArcInstance(bool on_shutdown, bool should_backup_log) {
           << " on_shutdown: " << on_shutdown
           << " should_backup_log: " << should_backup_log;
 
-  // When the instance is full instance, change the |state_| in
+  // When the instance is full instance, change the `state_` in
   // ArcInstanceStopped().
   client_->StopArcInstance(on_shutdown, should_backup_log);
 }
@@ -821,11 +766,12 @@ void ArcSessionImpl::OnStopped(ArcStopReason reason) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   // OnStopped() should be called once per instance.
   DCHECK_NE(state_, State::STOPPED);
-  VLOG(1) << "ARC session is stopped."
-          << " reason: " << reason << " state: " << state_;
+  VLOG(1) << "ARC session is stopped. reason: " << reason
+          << " state: " << state_;
 
   const bool was_running = (state_ == State::RUNNING_FULL_INSTANCE);
   arc_bridge_host_.reset();
+  mojo_invitation_manager_.reset();
   state_ = State::STOPPED;
   for (auto& observer : observer_list_)
     observer.OnSessionStopped(reason, was_running, upgrade_requested_);
@@ -834,8 +780,9 @@ void ArcSessionImpl::OnStopped(ArcStopReason reason) {
 void ArcSessionImpl::OnShutdown() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   stop_requested_ = true;
-  if (state_ == State::STOPPED)
+  if (state_ == State::STOPPED) {
     return;
+  }
 
   // Here, the message loop is already stopped, and the Chrome will be soon
   // shutdown. Thus, it is not necessary to take care about restarting case.
@@ -884,6 +831,14 @@ void ArcSessionImpl::SetDefaultDeviceScaleFactor(float scale_factor) {
   DCHECK_GT(lcd_density_, 0);
 }
 
+void ArcSessionImpl::SetUseVirtioBlkData(bool use_virtio_blk_data) {
+  use_virtio_blk_data_ = use_virtio_blk_data;
+}
+
+void ArcSessionImpl::SetArcSignedIn(bool arc_signed_in) {
+  arc_signed_in_ = arc_signed_in;
+}
+
 void ArcSessionImpl::OnConfigurationSet(bool success,
                                         size_t num_cores_disabled) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
@@ -894,7 +849,7 @@ void ArcSessionImpl::OnConfigurationSet(bool success,
 
   // Note: On non-x86_64 devices, the configuration request to debugd always
   // fails. It is WAI, and to support that case, don't log anything even when
-  // |success| is false. |num_cores_disabled| is always set regardless of
+  // `success` is false. `num_cores_disabled` is always set regardless of
   // where the call is successful.
   DoStartMiniInstance(num_cores_disabled);
 }
@@ -919,7 +874,6 @@ std::ostream& operator<<(std::ostream& os, ArcSessionImpl::State state) {
   // Some compilers report an error even if all values of an enum-class are
   // covered exhaustively in a switch statement.
   NOTREACHED() << "Invalid value " << static_cast<int>(state);
-  return os;
 }
 
 }  // namespace arc

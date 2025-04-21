@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -74,12 +74,12 @@ TEST_F(InstantServiceTest, TestNoNtpTheme) {
 
 class InstantServiceThemeTest : public InstantServiceTest {
  public:
-  InstantServiceThemeTest() {}
+  InstantServiceThemeTest() = default;
 
   InstantServiceThemeTest(const InstantServiceThemeTest&) = delete;
   InstantServiceThemeTest& operator=(const InstantServiceThemeTest&) = delete;
 
-  ~InstantServiceThemeTest() override {}
+  ~InstantServiceThemeTest() override = default;
 
   ui::TestNativeTheme* theme() { return &theme_; }
 

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 #include <vector>
 
 #include "base/check_op.h"
-#include "base/notreached.h"
 #include "base/numerics/safe_math.h"
 #include "base/strings/stringprintf.h"
 #include "build/build_config.h"
@@ -14,7 +13,7 @@
 
 #if BUILDFLAG(IS_WIN)
 #include <winsock2.h>
-#elif BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
+#elif BUILDFLAG(IS_POSIX)
 #include <arpa/inet.h>
 #endif
 
@@ -40,7 +39,6 @@ V4DecodeResult V4RiceDecoder::ValidateInput(const int32 rice_parameter,
                                             const int32 num_entries,
                                             const std::string& encoded_data) {
   if (num_entries < 0) {
-    NOTREACHED();
     return NUM_ENTRIES_NEGATIVE_FAILURE;
   }
 
@@ -49,12 +47,10 @@ V4DecodeResult V4RiceDecoder::ValidateInput(const int32 rice_parameter,
   }
 
   if (rice_parameter <= 0) {
-    NOTREACHED();
     return RICE_PARAMETER_NON_POSITIVE_FAILURE;
   }
 
   if (encoded_data.empty()) {
-    NOTREACHED();
     return ENCODED_DATA_UNEXPECTED_EMPTY_FAILURE;
   }
 
@@ -92,7 +88,6 @@ V4DecodeResult V4RiceDecoder::DecodeIntegers(const int64 first_value,
 
     last_value += offset;
     if (!last_value.IsValid()) {
-      NOTREACHED();
       return DECODED_INTEGER_OVERFLOW_FAILURE;
     }
 
@@ -131,7 +126,6 @@ V4DecodeResult V4RiceDecoder::DecodePrefixes(const int64 first_value,
 
       last_value += offset;
       if (!last_value.IsValid()) {
-        NOTREACHED();
         return DECODED_INTEGER_OVERFLOW_FAILURE;
       }
 
@@ -169,7 +163,7 @@ V4RiceDecoder::V4RiceDecoder(const int rice_parameter,
   current_word_bit_index_ = kMaxBitIndex;
 }
 
-V4RiceDecoder::~V4RiceDecoder() {}
+V4RiceDecoder::~V4RiceDecoder() = default;
 
 bool V4RiceDecoder::HasAnotherValue() const {
   return num_entries_ > 0;
@@ -232,7 +226,6 @@ V4DecodeResult V4RiceDecoder::GetNextWord(uint32_t* word) {
 V4DecodeResult V4RiceDecoder::GetNextBits(unsigned int num_requested_bits,
                                           uint32_t* x) {
   if (num_requested_bits > kMaxBitIndex) {
-    NOTREACHED();
     return DECODE_REQUESTED_TOO_MANY_BITS_FAILURE;
   }
 

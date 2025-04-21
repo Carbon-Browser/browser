@@ -1,11 +1,15 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/viz/service/surfaces/surface_allocation_group.h"
 
+#include <numeric>
 #include <utility>
 
+#include "base/memory/raw_ptr.h"
+#include "base/not_fatal_until.h"
+#include "base/ranges/algorithm.h"
 #include "components/viz/service/surfaces/surface.h"
 #include "components/viz/service/surfaces/surface_manager.h"
 
@@ -40,8 +44,8 @@ void SurfaceAllocationGroup::RegisterSurface(Surface* surface) {
 }
 
 void SurfaceAllocationGroup::UnregisterSurface(Surface* surface) {
-  auto it = std::find(surfaces_.begin(), surfaces_.end(), surface);
-  DCHECK(it != surfaces_.end());
+  auto it = base::ranges::find(surfaces_, surface);
+  CHECK(it != surfaces_.end(), base::NotFatalUntil::M130);
   surfaces_.erase(it);
   MaybeMarkForDestruction();
 }
@@ -190,7 +194,7 @@ void SurfaceAllocationGroup::AckLastestActiveUnAckedFrame() {
     lastest_active->SendAckToClient();
 }
 
-std::vector<Surface*>::const_iterator
+std::vector<raw_ptr<Surface, VectorExperimental>>::const_iterator
 SurfaceAllocationGroup::FindLatestSurfaceUpTo(
     const SurfaceId& surface_id) const {
   DCHECK_EQ(submitter_, surface_id.frame_sink_id());
@@ -210,7 +214,7 @@ SurfaceAllocationGroup::FindLatestSurfaceUpTo(
   int begin = 0;
   int end = surfaces_.size();
   while (end - begin > 1) {
-    int avg = (begin + end) / 2;
+    int avg = std::midpoint(begin, end);
     if (!surface_id.IsSameOrNewerThan(surfaces_[avg]->surface_id()))
       end = avg;
     else
@@ -221,7 +225,7 @@ SurfaceAllocationGroup::FindLatestSurfaceUpTo(
   return surfaces_.begin() + begin;
 }
 
-std::vector<Surface*>::const_iterator
+std::vector<raw_ptr<Surface, VectorExperimental>>::const_iterator
 SurfaceAllocationGroup::FindLatestActiveSurfaceUpTo(
     const SurfaceId& surface_id) const {
   // Start from the last older or equal surface and keep iterating back until we

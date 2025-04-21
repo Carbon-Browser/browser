@@ -1,27 +1,26 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #import "ios/components/security_interstitials/lookalikes/lookalike_url_tab_helper.h"
 
-#include "base/test/metrics/histogram_tester.h"
-#include "base/test/scoped_feature_list.h"
-#include "components/lookalikes/core/features.h"
-#include "components/reputation/core/safety_tip_test_utils.h"
-#include "ios/components/security_interstitials/lookalikes/lookalike_url_container.h"
-#include "ios/components/security_interstitials/lookalikes/lookalike_url_tab_allow_list.h"
+#import "base/memory/raw_ptr.h"
+#import "base/test/metrics/histogram_tester.h"
+#import "components/lookalikes/core/safety_tip_test_utils.h"
+#import "ios/components/security_interstitials/lookalikes/lookalike_url_container.h"
+#import "ios/components/security_interstitials/lookalikes/lookalike_url_tab_allow_list.h"
 #import "ios/web/public/navigation/web_state_policy_decider.h"
+#import "ios/web/public/test/fakes/fake_browser_state.h"
 #import "ios/web/public/test/fakes/fake_web_state.h"
-#import "net/base/mac/url_conversions.h"
-#include "testing/platform_test.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
+#import "net/base/apple/url_conversions.h"
+#import "testing/platform_test.h"
 
 class LookalikeUrlTabHelperTest : public PlatformTest {
  protected:
   LookalikeUrlTabHelperTest() {
+    browser_state_.SetOffTheRecord(false);
+    web_state_.SetBrowserState(&browser_state_);
+
     LookalikeUrlTabHelper::CreateForWebState(&web_state_);
     LookalikeUrlTabAllowList::CreateForWebState(&web_state_);
     LookalikeUrlContainer::CreateForWebState(&web_state_);
@@ -29,7 +28,7 @@ class LookalikeUrlTabHelperTest : public PlatformTest {
   }
 
   // Helper function that calls into WebState::ShouldAllowResponse with the
-  // given |url| and |for_main_frame|, waits for the callback with the decision
+  // given `url` and `for_main_frame`, waits for the callback with the decision
   // to be called, and returns the decision.
   web::WebStatePolicyDecider::PolicyDecision ShouldAllowResponseUrl(
       const GURL& url,
@@ -57,10 +56,11 @@ class LookalikeUrlTabHelperTest : public PlatformTest {
   LookalikeUrlTabAllowList* allow_list() { return allow_list_; }
 
   base::HistogramTester histogram_tester_;
+  web::FakeBrowserState browser_state_;
   web::FakeWebState web_state_;
 
  private:
-  LookalikeUrlTabAllowList* allow_list_;
+  raw_ptr<LookalikeUrlTabAllowList> allow_list_;
 };
 
 // Tests that ShouldAllowResponse properly blocks lookalike navigations and
@@ -69,15 +69,15 @@ class LookalikeUrlTabHelperTest : public PlatformTest {
 // Also tests that UMA records correctly.
 TEST_F(LookalikeUrlTabHelperTest, ShouldAllowResponse) {
   GURL lookalike_url("https://xn--googl-fsa.com/");
-  reputation::InitializeSafetyTipConfig();
+  lookalikes::InitializeSafetyTipConfig();
 
   // Lookalike IDNs should be blocked.
   EXPECT_FALSE(ShouldAllowResponseUrl(lookalike_url, /*main_frame=*/true)
                    .ShouldAllowNavigation());
   histogram_tester_.ExpectUniqueSample(
-      lookalikes::kHistogramName,
+      lookalikes::kInterstitialHistogramName,
       static_cast<base::HistogramBase::Sample>(
-          NavigationSuggestionEvent::kMatchSkeletonTop500),
+          lookalikes::NavigationSuggestionEvent::kMatchSkeletonTop500),
       1);
 
   // Non-main frame navigations should be allowed.
@@ -94,15 +94,15 @@ TEST_F(LookalikeUrlTabHelperTest, ShouldAllowResponse) {
   EXPECT_TRUE(ShouldAllowResponseUrl(lookalike_url, /*main_frame=*/true)
                   .ShouldAllowNavigation());
 
-  histogram_tester_.ExpectTotalCount(lookalikes::kHistogramName, 1);
+  histogram_tester_.ExpectTotalCount(lookalikes::kInterstitialHistogramName, 1);
 }
 
 // Tests that ShouldAllowResponse properly allows lookalike navigations
 // when the domain has been allowlisted by the Safety Tips component.
 TEST_F(LookalikeUrlTabHelperTest, ShouldAllowResponseForAllowlistedDomains) {
   GURL lookalike_url("https://xn--googl-fsa.com/");
-  reputation::InitializeSafetyTipConfig();
-  reputation::SetSafetyTipAllowlistPatterns({"xn--googl-fsa.com/"}, {}, {});
+  lookalikes::InitializeSafetyTipConfig();
+  lookalikes::SetSafetyTipAllowlistPatterns({"xn--googl-fsa.com/"}, {}, {});
 
   EXPECT_TRUE(ShouldAllowResponseUrl(lookalike_url, /*main_frame=*/true)
                   .ShouldAllowNavigation());
@@ -112,7 +112,7 @@ TEST_F(LookalikeUrlTabHelperTest, ShouldAllowResponseForAllowlistedDomains) {
 // to IDNs.
 TEST_F(LookalikeUrlTabHelperTest, ShouldAllowResponseForPunycode) {
   GURL lookalike_url("https://ɴoτ-τoρ-ďoᛖaiɴ.com/");
-  reputation::InitializeSafetyTipConfig();
+  lookalikes::InitializeSafetyTipConfig();
 
   EXPECT_FALSE(ShouldAllowResponseUrl(lookalike_url, /*main_frame=*/true)
                    .ShouldAllowNavigation());

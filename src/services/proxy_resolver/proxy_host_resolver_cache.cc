@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,10 +11,11 @@
 #include <vector>
 
 #include "base/check_op.h"
+#include "base/not_fatal_until.h"
 #include "base/time/time.h"
 #include "net/base/ip_address.h"
 #include "net/base/net_errors.h"
-#include "net/base/network_isolation_key.h"
+#include "net/base/network_anonymization_key.h"
 
 namespace proxy_resolver {
 
@@ -30,16 +31,17 @@ ProxyHostResolverCache::~ProxyHostResolverCache() = default;
 
 void ProxyHostResolverCache::StoreEntry(
     std::string hostname,
-    net::NetworkIsolationKey network_isolation_key,
+    net::NetworkAnonymizationKey network_anonymization_key,
     bool is_ex_operation,
     std::vector<net::IPAddress> results) {
-  Key key{std::move(hostname), std::move(network_isolation_key),
+  Key key{std::move(hostname), std::move(network_anonymization_key),
           is_ex_operation};
 
   // Delete any old, now-obsolete entries.
   auto old_entry = entries_.find(key);
   if (old_entry != entries_.end()) {
-    DCHECK(old_entry->second.expiration_list_it != expiration_list_.end());
+    CHECK(old_entry->second.expiration_list_it != expiration_list_.end(),
+          base::NotFatalUntil::M130);
     expiration_list_.erase(old_entry->second.expiration_list_it);
     entries_.erase(old_entry);
   }
@@ -62,16 +64,17 @@ void ProxyHostResolverCache::StoreEntry(
 
 const std::vector<net::IPAddress>* ProxyHostResolverCache::LookupEntry(
     std::string hostname,
-    net::NetworkIsolationKey network_isolation_key,
+    net::NetworkAnonymizationKey network_anonymization_key,
     bool is_ex_operation) {
-  Key key{std::move(hostname), std::move(network_isolation_key),
+  Key key{std::move(hostname), std::move(network_anonymization_key),
           is_ex_operation};
 
   auto entry = entries_.find(key);
   if (entry == entries_.end())
     return nullptr;
 
-  DCHECK(entry->second.expiration_list_it != expiration_list_.end());
+  CHECK(entry->second.expiration_list_it != expiration_list_.end(),
+        base::NotFatalUntil::M130);
   if (entry->second.expiration < base::TimeTicks::Now()) {
     expiration_list_.erase(std::move(entry->second.expiration_list_it));
     entries_.erase(entry);

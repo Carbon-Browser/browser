@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -85,11 +85,14 @@ class TabModel {
     // Opened a non-restored tab during the startup process
     FROM_STARTUP,
     // Opened from the start surface.
+    // This is deprecated.
     FROM_START_SURFACE,
     // Opened from Tab group UI.
     // Tab group UI include:
     // - "+" button in the bottom tab strip
     // - "+" button in the tab grid dialog
+    // - "New tab in group" option in the tab strip group context menu
+    // - "Reopen" action in shared tab group messages.
     FROM_TAB_GROUP_UI,
     // Open from the long press context menu item 'Open in new tab in group'.
     // Will not be brought to the foreground.
@@ -97,6 +100,7 @@ class TabModel {
     // Opened from an app widget.
     FROM_APP_WIDGET,
     // Open from the long press context menu item 'Open in Incognito Tab'.
+    // This is deprecated; use `FROM_LONGPRESS_FOREGROUND` in new code.
     FROM_LONGPRESS_INCOGNITO,
     // Opened in background from Recent Tabs. This is a non-link launch with no
     // parent/child relationship. The tab is added to the end of the TabModel.
@@ -105,6 +109,23 @@ class TabModel {
     // Opened from a Reading list. When going "back" on Android, the Reading
     // list should be reopened.
     FROM_READING_LIST,
+    // Opened from Tab Switcher UI.
+    FROM_TAB_SWITCHER_UI,
+    // Opened from the Restore Tabs UI. When restoring synced tabs the first
+    // tab is opened but not brought to the foreground.
+    FROM_RESTORE_TABS_UI,
+    // Opened to load an omnibox search query in a new tab.
+    FROM_OMNIBOX,
+    // Used for tab pre-warming where the reason for tab creation is not yet
+    // known.
+    UNSET,
+    // Used when creating a tab to keep synced tab groups up to date.
+    FROM_SYNC_BACKGROUND,
+    // Open most recent tab in foregroud, used by ctrl-shift-t to restore
+    // most recently closed tab or tabs.
+    FROM_RECENT_TABS_FOREGROUND,
+    // Open a new tab to prevent collaborations from having 0 tabs.
+    FROM_COLLABORATION_BACKGROUND_IN_GROUP,
     // Must be last.
     SIZE
   };
@@ -166,11 +187,13 @@ class TabModel {
   virtual base::android::ScopedJavaLocalRef<jobject> GetJavaObject() const = 0;
 
   virtual void SetActiveIndex(int index) = 0;
+  virtual void ForceCloseAllTabs() = 0;
   virtual void CloseTabAt(int index) = 0;
 
   // Used for restoring tabs from synced foreign sessions.
   virtual void CreateTab(TabAndroid* parent,
-                         content::WebContents* web_contents) = 0;
+                         content::WebContents* web_contents,
+                         bool select) = 0;
 
   virtual void HandlePopupNavigation(TabAndroid* parent,
                                      NavigateParams* params) = 0;
@@ -192,6 +215,17 @@ class TabModel {
   // Removes an observer from this TabModel.
   virtual void RemoveObserver(TabModelObserver* observer) = 0;
 
+  // Return the count of non-custom tabs that were created or had a navigation
+  // committed within the time range [`begin_time`, `end_time`).
+  virtual int GetTabCountNavigatedInTimeWindow(
+      const base::Time& begin_time,
+      const base::Time& end_time) const = 0;
+
+  // Closes non-custom tabs that were created or had a navigation
+  // committed within the time range [`begin_time`, `end_time`).
+  virtual void CloseTabsNavigatedInTimeWindow(const base::Time& begin_time,
+                                              const base::Time& end_time) = 0;
+
   chrome::android::ActivityType activity_type() const { return activity_type_; }
 
  protected:
@@ -205,7 +239,7 @@ class TabModel {
   LocationBarModel* GetLocationBarModel();
 
  private:
-  raw_ptr<Profile> profile_;
+  raw_ptr<Profile, DanglingUntriaged> profile_;
 
   chrome::android::ActivityType activity_type_;
 
@@ -221,6 +255,10 @@ class TabModel {
   // unique within the current session, and is not guaranteed to be unique
   // across sessions.
   SessionID session_id_;
+
+  // Records metrics about which percentage of syncable tabs are actually
+  // synced.
+  void RecordActualSyncedTabsHistogram();
 };
 
 #endif  // CHROME_BROWSER_UI_ANDROID_TAB_MODEL_TAB_MODEL_H_

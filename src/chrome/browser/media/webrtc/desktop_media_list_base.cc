@@ -1,13 +1,18 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/media/webrtc/desktop_media_list_base.h"
 
 #include <set>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/hash/hash.h"
 #include "chrome/browser/media/webrtc/desktop_media_list.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -52,6 +57,10 @@ void DesktopMediaListBase::StartUpdating(DesktopMediaListObserver* observer) {
   DCHECK(!observer_);
   observer_ = observer;
 
+  // If there is a delegated source list, it may not have been started yet.
+  if (IsSourceListDelegated())
+    StartDelegatedCapturer();
+
   // Process sources previously discovered by a call to Update().
   if (observer_) {
     for (size_t i = 0; i < sources_.size(); i++) {
@@ -90,6 +99,18 @@ DesktopMediaList::Type DesktopMediaListBase::GetMediaListType() const {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   return type_;
 }
+
+bool DesktopMediaListBase::IsSourceListDelegated() const {
+  return false;
+}
+
+void DesktopMediaListBase::ClearDelegatedSourceListSelection() {
+  NOTREACHED();
+}
+
+void DesktopMediaListBase::FocusList() {}
+void DesktopMediaListBase::HideList() {}
+void DesktopMediaListBase::ShowDelegatedList() {}
 
 DesktopMediaListBase::SourceDescription::SourceDescription(
     DesktopMediaID id,
@@ -208,8 +229,8 @@ void DesktopMediaListBase::UpdateSourcePreview(const DesktopMediaID& id,
 uint32_t DesktopMediaListBase::GetImageHash(const gfx::Image& image) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   SkBitmap bitmap = image.AsBitmap();
-  return base::FastHash(base::make_span(
-      static_cast<uint8_t*>(bitmap.getPixels()), bitmap.computeByteSize()));
+  return base::FastHash(base::span(static_cast<uint8_t*>(bitmap.getPixels()),
+                                   bitmap.computeByteSize()));
 }
 
 void DesktopMediaListBase::OnRefreshComplete() {
@@ -228,4 +249,22 @@ void DesktopMediaListBase::ScheduleNextRefresh() {
       base::BindOnce(&DesktopMediaListBase::Refresh, weak_factory_.GetWeakPtr(),
                      true),
       update_period_);
+}
+
+void DesktopMediaListBase::OnDelegatedSourceListSelection() {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  DCHECK(IsSourceListDelegated());
+  if (observer_)
+    observer_->OnDelegatedSourceListSelection();
+
+  Refresh(false);
+}
+
+void DesktopMediaListBase::OnDelegatedSourceListDismissed() {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  DCHECK(IsSourceListDelegated());
+  if (observer_)
+    observer_->OnDelegatedSourceListDismissed();
+
+  Refresh(false);
 }

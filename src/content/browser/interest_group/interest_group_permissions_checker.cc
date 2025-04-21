@@ -1,10 +1,10 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/interest_group/interest_group_permissions_checker.h"
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/strings/escape.h"
 #include "base/strings/strcat.h"
 #include "base/time/time.h"
@@ -47,11 +47,13 @@ constexpr net::NetworkTrafficAnnotationTag kTrafficAnnotation =
         policy {
           cookies_allowed: NO
           setting:
-            "These requests are controlled by a feature flag that is off by "
-            "default currently. When enabled, they can be disabled by the "
-            "Privacy Sandbox setting."
-          policy_exception_justification:
-            "These requests are triggered by a website."
+            "Users can disable this via Settings > Privacy and Security > Ads "
+            "privacy > Site-suggested ads."
+          chrome_policy {
+            PrivacySandboxSiteEnabledAdsEnabled {
+              PrivacySandboxSiteEnabledAdsEnabled: false
+            }
+          }
         })");
 
 }  // namespace
@@ -122,7 +124,7 @@ void InterestGroupPermissionsChecker::CheckPermissions(
     resource_request->credentials_mode = network::mojom::CredentialsMode::kOmit;
     // These requests are JSON requests made using a URLLoaderFactory matching
     // the one created for the renderer process. Therefore, CORS needs to be
-    // enabled to avoid CORB blocking.
+    // enabled to avoid ORB blocking.
     //
     // TODO(mmenke): Figure if we really need CORS.
     resource_request->mode = network::mojom::RequestMode::kCors;
@@ -191,9 +193,9 @@ void InterestGroupPermissionsChecker::OnJsonParsed(
     return;
   }
 
-  absl::optional<bool> can_join =
+  std::optional<bool> can_join =
       result->GetDict().FindBool("joinAdInterestGroup");
-  absl::optional<bool> can_leave =
+  std::optional<bool> can_leave =
       result->GetDict().FindBool("leaveAdInterestGroup");
   Permissions permissions{/*can_join=*/can_join.value_or(false),
                           /*can_leave=*/can_leave.value_or(false)};

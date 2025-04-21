@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,21 +8,8 @@
 
 namespace blink {
 
-namespace {
-
-const String MapOverlayType(XRDOMOverlayState::DOMOverlayType type) {
-  switch (type) {
-    case XRDOMOverlayState::DOMOverlayType::kScreen:
-      return "screen";
-    case XRDOMOverlayState::DOMOverlayType::kFloating:
-      return "floating";
-  }
-}
-
-}  // namespace
-
-XRDOMOverlayState::XRDOMOverlayState(DOMOverlayType type)
-    : type_string_(MapOverlayType(type)) {}
+XRDOMOverlayState::XRDOMOverlayState(V8XRDOMOverlayType::Enum type)
+    : type_(type) {}
 
 void XRDOMOverlayState::Trace(Visitor* visitor) const {
   ScriptWrappable::Trace(visitor);

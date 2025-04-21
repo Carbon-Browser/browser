@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/string_util.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "net/base/net_errors.h"
@@ -17,8 +17,7 @@
 #include "net/dns/public/dns_protocol.h"
 #include "net/dns/record_rdata.h"
 
-namespace ash {
-namespace smb_client {
+namespace ash::smb_client {
 
 namespace {
 
@@ -139,10 +138,11 @@ void MDnsHostLocator::FindHosts(FindHostsCallback callback) {
   impl_.reset(new Impl(io_task_runner_));
 
   callback_ = std::move(callback);
-  impl_->FindHosts(base::BindOnce(
-      &MDnsHostLocator::PostFindHostsDone, base::ThreadTaskRunnerHandle::Get(),
-      base::BindOnce(&MDnsHostLocator::OnFindHostsDone,
-                     weak_factory_.GetWeakPtr())));
+  impl_->FindHosts(
+      base::BindOnce(&MDnsHostLocator::PostFindHostsDone,
+                     base::SingleThreadTaskRunner::GetCurrentDefault(),
+                     base::BindOnce(&MDnsHostLocator::OnFindHostsDone,
+                                    weak_factory_.GetWeakPtr())));
 }
 
 // static
@@ -349,5 +349,4 @@ void MDnsHostLocator::Impl::FireCallback(bool success) {
   std::move(callback_).Run(success, std::move(results_));
 }
 
-}  // namespace smb_client
-}  // namespace ash
+}  // namespace ash::smb_client

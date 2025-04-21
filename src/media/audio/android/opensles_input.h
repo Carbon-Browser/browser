@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,7 @@
 #include "base/time/time.h"
 #include "media/audio/android/opensles_util.h"
 #include "media/audio/audio_io.h"
+#include "media/base/amplitude_peak_detector.h"
 #include "media/base/audio_parameters.h"
 
 namespace media {
@@ -76,6 +77,8 @@ class OpenSLESInputStream : public AudioInputStream {
   void HandleError(SLresult error);
 
   base::ThreadChecker thread_checker_;
+
+  AmplitudePeakDetector peak_detector_;
 
   // Protects |callback_|, |active_buffer_index_|, |audio_data_|,
   // |buffer_size_bytes_| and |simple_buffer_queue_|.

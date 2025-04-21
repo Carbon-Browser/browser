@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,17 +7,18 @@
 #include <utility>
 
 #include "android_webview/browser/gfx/aw_vulkan_context_provider.h"
-#include "android_webview/browser_jni_headers/AwDrawFnImpl_jni.h"
 #include "base/android/build_info.h"
 #include "base/trace_event/trace_event.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
-#include "gpu/config/gpu_finch_features.h"
-#include "gpu/config/gpu_switches.h"
 #include "third_party/skia/include/core/SkRefCnt.h"
-#include "third_party/skia/include/gpu/GrDirectContext.h"
-#include "third_party/skia/src/gpu/vk/GrVkSecondaryCBDrawContext.h"
+#include "third_party/skia/include/gpu/ganesh/GrDirectContext.h"
+#include "third_party/skia/include/gpu/ganesh/vk/GrVkTypes.h"
+#include "third_party/skia/include/private/chromium/GrVkSecondaryCBDrawContext.h"
 #include "ui/gfx/color_space.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "android_webview/browser_jni_headers/AwDrawFnImpl_jni.h"
 
 using base::android::JavaParamRef;
 using content::BrowserThread;
@@ -26,6 +27,7 @@ namespace android_webview {
 
 namespace {
 
+// Set once during process-wide initialization.
 AwDrawFnFunctionTable* g_draw_fn_function_table = nullptr;
 
 void OnSyncWrapper(int functor, void* data, AwDrawFn_OnSyncParams* params) {
@@ -122,7 +124,6 @@ OverlaysParams::Mode GetOverlaysMode(AwDrawFnOverlaysMode mode) {
       return OverlaysParams::Mode::Enabled;
     default:
       NOTREACHED();
-      return OverlaysParams::Mode::Disabled;
   }
 }
 
@@ -190,9 +191,18 @@ bool AwDrawFnImpl::IsUsingVulkan() {
              AW_DRAW_FN_RENDER_MODE_VULKAN;
 }
 
+// static
+void AwDrawFnImpl::ReportRenderingThreads(int functor,
+                                          const pid_t* thread_ids,
+                                          size_t size) {
+  if (g_draw_fn_function_table && g_draw_fn_function_table->version >= 4) {
+    g_draw_fn_function_table->report_rendering_threads(functor, thread_ids,
+                                                       size);
+  }
+}
+
 AwDrawFnImpl::AwDrawFnImpl()
-    : is_interop_mode_(!features::IsUsingVulkan()),
-      render_thread_manager_(content::GetUIThreadTaskRunner({})) {
+    : render_thread_manager_(content::GetUIThreadTaskRunner({})) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK(g_draw_fn_function_table);
 
@@ -246,9 +256,6 @@ void AwDrawFnImpl::OnSync(AwDrawFn_OnSyncParams* params) {
 }
 
 void AwDrawFnImpl::OnContextDestroyed() {
-  if (interop_)
-    interop_->MakeGLContextCurrentIgnoreFailure();
-
   {
     RenderThreadManager::InsideHardwareReleaseReset release_reset(
         &render_thread_manager_);
@@ -256,7 +263,6 @@ void AwDrawFnImpl::OnContextDestroyed() {
         false /* save_restore */, false /* abandon_context */);
   }
 
-  interop_.reset();
   vulkan_context_provider_.reset();
 }
 
@@ -265,8 +271,9 @@ void AwDrawFnImpl::DrawGL(AwDrawFn_DrawGLParams* params) {
   HardwareRendererDrawParams hr_params =
       CreateHRDrawParams(params, color_space.get());
   OverlaysParams overlays_params = CreateOverlaysParams(params);
-  render_thread_manager_.DrawOnRT(/*save_restore=*/false, hr_params,
-                                  overlays_params);
+  render_thread_manager_.DrawOnRT(
+      /*save_restore=*/false, hr_params, overlays_params,
+      base::BindOnce(&AwDrawFnImpl::ReportRenderingThreads, functor_handle_));
 }
 
 void AwDrawFnImpl::InitVk(AwDrawFn_InitVkParams* params) {
@@ -276,12 +283,8 @@ void AwDrawFnImpl::InitVk(AwDrawFn_InitVkParams* params) {
   vulkan_context_provider_ = AwVulkanContextProvider::Create(params);
   DCHECK(vulkan_context_provider_);
 
-  if (is_interop_mode_) {
-    interop_.emplace(&render_thread_manager_, vulkan_context_provider_.get());
-  } else {
-    render_thread_manager_.SetVulkanContextProviderOnRT(
-        vulkan_context_provider_.get());
-  }
+  render_thread_manager_.SetVulkanContextProviderOnRT(
+      vulkan_context_provider_.get());
 }
 
 void AwDrawFnImpl::DrawVk(AwDrawFn_DrawVkParams* params) {
@@ -311,15 +314,15 @@ void AwDrawFnImpl::DrawVk(AwDrawFn_DrawVkParams* params) {
       CreateHRDrawParams(params, color_space.get());
   OverlaysParams overlays_params = CreateOverlaysParams(params);
 
-  if (is_interop_mode_) {
-    DCHECK(interop_);
-    interop_->DrawVk(std::move(draw_context), std::move(color_space), hr_params,
-                     overlays_params);
+  DCHECK(!scoped_secondary_cb_draw_);
 
-  } else {
-    DrawVkDirect(std::move(draw_context), std::move(color_space), hr_params,
-                 overlays_params);
-  }
+  // Set the draw contexct in |vulkan_context_provider_|, so the SkiaRenderer
+  // and SkiaOutputSurface* will use it as frame render target.
+  scoped_secondary_cb_draw_.emplace(vulkan_context_provider_.get(),
+                                    std::move(draw_context));
+  render_thread_manager_.DrawOnRT(
+      false /* save_restore */, hr_params, overlays_params,
+      base::BindOnce(&AwDrawFnImpl::ReportRenderingThreads, functor_handle_));
 }
 
 void AwDrawFnImpl::PostDrawVk(AwDrawFn_PostDrawVkParams* params) {
@@ -330,32 +333,6 @@ void AwDrawFnImpl::PostDrawVk(AwDrawFn_PostDrawVkParams* params) {
     skip_next_post_draw_vk_ = false;
     return;
   }
-
-  if (is_interop_mode_) {
-    DCHECK(interop_);
-    interop_->PostDrawVk();
-  } else {
-    PostDrawVkDirect(params);
-  }
-}
-
-void AwDrawFnImpl::DrawVkDirect(sk_sp<GrVkSecondaryCBDrawContext> draw_context,
-                                sk_sp<SkColorSpace> color_space,
-                                const HardwareRendererDrawParams& hr_params,
-                                const OverlaysParams& overlays_params) {
-  DCHECK(!scoped_secondary_cb_draw_);
-
-  // Set the draw contexct in |vulkan_context_provider_|, so the SkiaRenderer
-  // and SkiaOutputSurface* will use it as frame render target.
-  scoped_secondary_cb_draw_.emplace(vulkan_context_provider_.get(),
-                                    std::move(draw_context));
-  render_thread_manager_.DrawOnRT(false /* save_restore */, hr_params,
-                                  overlays_params);
-}
-
-void AwDrawFnImpl::PostDrawVkDirect(AwDrawFn_PostDrawVkParams* params) {
-  if (!vulkan_context_provider_)
-    return;
 
   DCHECK(scoped_secondary_cb_draw_);
   scoped_secondary_cb_draw_.reset();

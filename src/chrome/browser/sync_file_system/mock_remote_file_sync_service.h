@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/observer_list.h"
 #include "chrome/browser/sync_file_system/file_status_observer.h"
 #include "chrome/browser/sync_file_system/mock_local_change_processor.h"
@@ -55,12 +55,8 @@ class MockRemoteFileSyncService : public RemoteFileSyncService {
   MOCK_METHOD0(GetLocalChangeProcessor, LocalChangeProcessor*());
   MOCK_CONST_METHOD0(GetCurrentState,
                      RemoteServiceState());
-  MOCK_METHOD1(GetOriginStatusMap, void(StatusMapCallback callback));
   MOCK_METHOD1(SetSyncEnabled, void(bool enabled));
   MOCK_METHOD1(PromoteDemotedChanges, void(base::OnceClosure callback));
-
-  void DumpFiles(const GURL& origin, ListCallback callback) override;
-  void DumpDatabase(ListCallback callback) override;
 
   void SetServiceState(RemoteServiceState state);
 
@@ -89,8 +85,10 @@ class MockRemoteFileSyncService : public RemoteFileSyncService {
   // For default implementation.
   ::testing::NiceMock<MockLocalChangeProcessor> mock_local_change_processor_;
 
-  base::ObserverList<Observer>::Unchecked service_observers_;
-  base::ObserverList<FileStatusObserver>::Unchecked file_status_observers_;
+  base::ObserverList<Observer>::UncheckedAndDanglingUntriaged
+      service_observers_;
+  base::ObserverList<FileStatusObserver>::UncheckedAndDanglingUntriaged
+      file_status_observers_;
 
   RemoteServiceState state_;
 };

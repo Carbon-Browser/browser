@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,8 @@
 
 #include <memory>
 
-#include "ash/components/settings/timezone_settings.h"
+#include "base/task/sequenced_task_runner.h"
+#include "chromeos/ash/components/settings/timezone_settings.h"
 #include "third_party/icu/source/i18n/unicode/timezone.h"
 
 namespace device {
@@ -27,9 +28,7 @@ class TimeZoneMonitorAsh : public TimeZoneMonitor,
 
   // ash::system::TimezoneSettings::Observer implementation.
   void TimezoneChanged(const icu::TimeZone& time_zone) override {
-    // ICU's default time zone is already set to a new zone. No need to redetect
-    // it with detectHostTimeZone() or to update ICU.
-    NotifyClients(GetTimeZoneId(time_zone));
+    UpdateIcuAndNotifyClients(base::WrapUnique(time_zone.clone()));
   }
 };
 

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,11 +30,10 @@ class SafeBrowsingDatabaseManager;
 
 namespace subresource_filter {
 
-class SubresourceFilterSafeBrowsingActivationThrottle;
+class SafeBrowsingPageActivationThrottle;
 class SubresourceFilterSafeBrowsingClientRequest;
 
-// Created on the UI thread but used on the IO thread to communicate with the
-// safe browsing service.
+// This is used to communicate with the safe browsing service.
 //
 // The class is expected to accompany a single navigation, and can maintain many
 // database requests. It will cancel any outgoing requests when it is destroyed.
@@ -58,8 +57,7 @@ class SubresourceFilterSafeBrowsingClient {
   SubresourceFilterSafeBrowsingClient(
       scoped_refptr<safe_browsing::SafeBrowsingDatabaseManager>
           database_manager,
-      base::WeakPtr<SubresourceFilterSafeBrowsingActivationThrottle> throttle,
-      scoped_refptr<base::SingleThreadTaskRunner> io_task_runner,
+      SafeBrowsingPageActivationThrottle* throttle,
       scoped_refptr<base::SingleThreadTaskRunner> throttle_task_runner);
 
   SubresourceFilterSafeBrowsingClient(
@@ -69,9 +67,7 @@ class SubresourceFilterSafeBrowsingClient {
 
   ~SubresourceFilterSafeBrowsingClient();
 
-  void CheckUrlOnIO(const GURL& url,
-                    size_t request_id,
-                    base::TimeTicks start_time);
+  void CheckUrl(const GURL& url, size_t request_id, base::TimeTicks start_time);
 
   void OnCheckBrowseUrlResult(
       SubresourceFilterSafeBrowsingClientRequest* request,
@@ -84,9 +80,8 @@ class SubresourceFilterSafeBrowsingClient {
       requests_;
 
   scoped_refptr<safe_browsing::SafeBrowsingDatabaseManager> database_manager_;
-
-  base::WeakPtr<SubresourceFilterSafeBrowsingActivationThrottle> throttle_;
-  scoped_refptr<base::SingleThreadTaskRunner> io_task_runner_;
+  // A raw_ptr is safe because `throttle_` owns `this`.
+  raw_ptr<SafeBrowsingPageActivationThrottle> throttle_;
   scoped_refptr<base::SingleThreadTaskRunner> throttle_task_runner_;
 };
 

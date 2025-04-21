@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,11 +39,6 @@ void RecordResizeLockAction(ResizeLockActionType type) {
 void RecordResizeLockStateHistogram(ResizeLockStateHistogramType type,
                                     mojom::ArcResizeLockState state) {
   base::UmaHistogramEnumeration(GetStateHistogramName(type), state);
-}
-
-void RecordRightClickConversionResultHistogram(
-    RightClickConversionResultHistogramResult result) {
-  base::UmaHistogramEnumeration("Arc.CompatMode.RightClickConversion", result);
 }
 
 const char* GetResizeLockActionNameForTesting(  // IN-TEST

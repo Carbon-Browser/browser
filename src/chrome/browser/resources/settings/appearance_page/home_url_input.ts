@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,17 +7,18 @@
  * `home-url-input` is a single-line text field intending to be used with
  * prefs.homepage
  */
-import 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
-import 'chrome://resources/cr_elements/policy/cr_policy_pref_indicator.m.js';
+import 'chrome://resources/cr_elements/cr_input/cr_input.js';
+import '/shared/settings/controls/cr_policy_pref_indicator.js';
 
-import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
-import {assert} from 'chrome://resources/js/assert_ts.js';
+import type {CrPolicyPrefMixinInterface} from '/shared/settings/controls/cr_policy_pref_mixin.js';
+import {CrPolicyPrefMixin} from '/shared/settings/controls/cr_policy_pref_mixin.js';
+import {PrefControlMixin} from '/shared/settings/controls/pref_control_mixin.js';
+import type {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.js';
+import {assert} from 'chrome://resources/js/assert.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
-import {CrPolicyPrefMixin, CrPolicyPrefMixinInterface} from '../controls/cr_policy_pref_mixin.js';
-import {PrefControlMixin} from '../controls/pref_control_mixin.js';
-
-import {AppearanceBrowserProxy, AppearanceBrowserProxyImpl} from './appearance_browser_proxy.js';
+import type {AppearanceBrowserProxy} from './appearance_browser_proxy.js';
+import {AppearanceBrowserProxyImpl} from './appearance_browser_proxy.js';
 import {getTemplate} from './home_url_input.html.js';
 
 export interface HomeUrlInputElement {
@@ -62,7 +63,7 @@ export class HomeUrlInputElement extends HomeUrlInputElementBase {
     };
   }
 
-  pref: chrome.settingsPrivate.PrefObject|undefined;
+  pref: chrome.settingsPrivate.PrefObject<string>|undefined;
   disabled: boolean;
   canTab: boolean;
   invalid: boolean;

@@ -1,14 +1,14 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <memory>
 
 #include "base/base_paths.h"
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/path_service.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
@@ -119,7 +119,7 @@ IN_PROC_BROWSER_TEST_F(LockScreenServiceImplBrowserTest,
   base::ScopedAllowBlockingForTesting allow_blocking;
   base::FilePath expected_dir = GetStoragePath();
   EXPECT_FALSE(base::PathExists(expected_dir));
-  // TODO(crbug.com/1268227): Consider testing write failure case.
+  // TODO(crbug.com/40204655): Consider testing write failure case.
   ASSERT_EQ(blink::mojom::LockScreenServiceStatus::kSuccess,
             AwaitSetData(service(), "key1", "data1"));
   ASSERT_TRUE(base::PathExists(expected_dir));

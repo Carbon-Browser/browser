@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,16 +8,17 @@
 #include <vector>
 
 #include "ash/public/cpp/multi_user_window_manager.h"
-#include "ash/public/cpp/multi_user_window_manager_observer.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_util.h"
 #include "chrome/browser/ash/app_restore/full_restore_service.h"
+#include "chrome/browser/ash/app_restore/full_restore_service_factory.h"
+#include "chrome/browser/ash/floating_workspace/floating_workspace_util.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/ui/ash/multi_user/multi_user_util.h"
-#include "chrome/browser/ui/ash/session_controller_client_impl.h"
-#include "chrome/browser/ui/ash/session_util.h"
+#include "chrome/browser/ui/ash/session/session_controller_client_impl.h"
+#include "chrome/browser/ui/ash/session/session_util.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_controller.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
@@ -30,59 +31,6 @@
 #include "ui/aura/window.h"
 #include "ui/base/ui_base_types.h"
 
-namespace {
-
-// Used for UMA metrics. Do not reorder.
-enum TeleportWindowType {
-  TELEPORT_WINDOW_BROWSER = 0,
-  TELEPORT_WINDOW_INCOGNITO_BROWSER,
-  TELEPORT_WINDOW_V1_APP,
-  TELEPORT_WINDOW_V2_APP,
-  DEPRECATED_TELEPORT_WINDOW_PANEL,
-  TELEPORT_WINDOW_POPUP,
-  TELEPORT_WINDOW_UNKNOWN,
-  NUM_TELEPORT_WINDOW_TYPES
-};
-
-// Records the type of window which was transferred to another desktop.
-void RecordUMAForTransferredWindowType(aura::Window* window) {
-  // We need to figure out what kind of window this is to record the transfer.
-  Browser* browser = chrome::FindBrowserWithWindow(window);
-  TeleportWindowType window_type = TELEPORT_WINDOW_UNKNOWN;
-  if (browser) {
-    if (browser->profile()->IsOffTheRecord()) {
-      window_type = TELEPORT_WINDOW_INCOGNITO_BROWSER;
-    } else if (browser->is_type_app() || browser->is_type_app_popup()) {
-      window_type = TELEPORT_WINDOW_V1_APP;
-    } else if (browser->is_type_popup()) {
-      window_type = TELEPORT_WINDOW_POPUP;
-    } else {
-      window_type = TELEPORT_WINDOW_BROWSER;
-    }
-  } else {
-    // Unit tests might come here without a profile manager.
-    if (!g_browser_process->profile_manager())
-      return;
-    // If it is not a browser, it is probably be a V2 application. In that case
-    // one of the AppWindowRegistry instances should know about it.
-    extensions::AppWindow* app_window = NULL;
-    std::vector<Profile*> profiles =
-        g_browser_process->profile_manager()->GetLoadedProfiles();
-    for (std::vector<Profile*>::iterator it = profiles.begin();
-         it != profiles.end() && app_window == NULL; it++) {
-      app_window =
-          extensions::AppWindowRegistry::Get(*it)->GetAppWindowForNativeWindow(
-              window);
-    }
-    if (app_window)
-      window_type = TELEPORT_WINDOW_V2_APP;
-  }
-  UMA_HISTOGRAM_ENUMERATION("MultiProfile.TeleportWindowType", window_type,
-                            NUM_TELEPORT_WINDOW_TYPES);
-}
-
-}  // namespace
-
 // This class keeps track of all applications which were started for a user.
 // When an app gets created, the window will be tagged for that user. Note
 // that the destruction does not need to be tracked here since the universal
@@ -94,7 +42,7 @@ class AppObserver : public extensions::AppWindowRegistry::Observer {
   AppObserver(const AppObserver&) = delete;
   AppObserver& operator=(const AppObserver&) = delete;
 
-  ~AppObserver() override {}
+  ~AppObserver() override = default;
 
   // AppWindowRegistry::Observer overrides:
   void OnAppWindowAdded(extensions::AppWindow* app_window) override {
@@ -130,8 +78,9 @@ MultiProfileSupport::~MultiProfileSupport() {
   // Remove all app observers.
   ProfileManager* profile_manager = g_browser_process->profile_manager();
   // might be nullptr in unit tests.
-  if (!profile_manager)
+  if (!profile_manager) {
     return;
+  }
 
   std::vector<Profile*> profiles = profile_manager->GetLoadedProfiles();
   for (auto it = profiles.begin(); it != profiles.end(); ++it) {
@@ -158,8 +107,9 @@ void MultiProfileSupport::Init() {
   // Add an app window observer & all already running apps.
   Profile* profile =
       multi_user_util::GetProfileFromAccountId(current_account_id);
-  if (profile)
+  if (profile) {
     AddUser(profile);
+  }
 }
 
 void MultiProfileSupport::AddUser(content::BrowserContext* context) {
@@ -167,8 +117,9 @@ void MultiProfileSupport::AddUser(content::BrowserContext* context) {
   const AccountId& account_id(
       multi_user_util::GetAccountIdFromProfile(profile));
   if (account_id_to_app_observer_.find(account_id) !=
-      account_id_to_app_observer_.end())
+      account_id_to_app_observer_.end()) {
     return;
+  }
 
   account_id_to_app_observer_[account_id] =
       std::make_unique<AppObserver>(account_id.GetUserEmail());
@@ -180,21 +131,24 @@ void MultiProfileSupport::AddUser(content::BrowserContext* context) {
       extensions::AppWindowRegistry::Get(profile)->app_windows();
   extensions::AppWindowRegistry::AppWindowList::const_iterator it =
       app_windows.begin();
-  for (; it != app_windows.end(); ++it)
+  for (; it != app_windows.end(); ++it) {
     account_id_to_app_observer_[account_id]->OnAppWindowAdded(*it);
+  }
 
   // Account all existing browser windows of this user accordingly.
-  for (auto* browser : *BrowserList::GetInstance()) {
-    if (browser->profile()->IsSameOrParent(profile))
+  for (Browser* browser : *BrowserList::GetInstance()) {
+    if (browser->profile()->IsSameOrParent(profile)) {
       OnBrowserAdded(browser);
+    }
   }
 }
 
 void MultiProfileSupport::OnBrowserAdded(Browser* browser) {
   // A unit test (e.g. CrashRestoreComplexTest.RestoreSessionForThreeUsers) can
   // come here with no valid window.
-  if (!browser->window() || !browser->window()->GetNativeWindow())
+  if (!browser->window() || !browser->window()->GetNativeWindow()) {
     return;
+  }
   multi_user_window_manager_->SetWindowOwner(
       browser->window()->GetNativeWindow(),
       multi_user_util::GetAccountIdFromProfile(browser->profile()));
@@ -204,9 +158,6 @@ void MultiProfileSupport::OnWindowOwnerEntryChanged(aura::Window* window,
                                                     const AccountId& account_id,
                                                     bool was_minimized,
                                                     bool teleported) {
-  if (was_minimized)
-    RecordUMAForTransferredWindowType(window);
-
   const AccountId& owner = multi_user_window_manager_->GetWindowOwner(window);
   // Browser windows don't use kAvatarIconKey. See
   // BrowserNonClientFrameViewAsh::UpdateProfileIcons().
@@ -229,16 +180,22 @@ void MultiProfileSupport::OnTransitionUserShelfToNewAccount() {
   Profile* profile = ProfileManager::GetActiveUserProfile();
   full_restore::SetActiveProfilePath(profile->GetPath());
 
-  auto* full_restore_service =
-      ash::full_restore::FullRestoreService::GetForProfile(profile);
-  if (full_restore_service)
-    full_restore_service->OnTransitionedToNewActiveUser(profile);
+  // Only init full restore when floating workspace is disabled or in safe mode.
+  // TODO(b/312233508): Add fws test coverage for this case.
+  if (!ash::floating_workspace_util::ShouldHandleRestartRestore()) {
+    auto* full_restore_service =
+        ash::full_restore::FullRestoreServiceFactory::GetForProfile(profile);
+    if (full_restore_service) {
+      full_restore_service->OnTransitionedToNewActiveUser(profile);
+    }
+  }
 
   ChromeShelfController* chrome_shelf_controller =
       ChromeShelfController::instance();
   // Some unit tests have no ChromeShelfController.
-  if (!chrome_shelf_controller)
+  if (!chrome_shelf_controller) {
     return;
+  }
   chrome_shelf_controller->ActiveUserChanged(
       multi_user_window_manager_->CurrentAccountId());
 }

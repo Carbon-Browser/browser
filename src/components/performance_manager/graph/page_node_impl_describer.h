@@ -1,14 +1,17 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_PERFORMANCE_MANAGER_GRAPH_PAGE_NODE_IMPL_DESCRIBER_H_
 #define COMPONENTS_PERFORMANCE_MANAGER_GRAPH_PAGE_NODE_IMPL_DESCRIBER_H_
 
+#include "base/values.h"
 #include "components/performance_manager/public/graph/graph.h"
 #include "components/performance_manager/public/graph/node_data_describer.h"
 
 namespace performance_manager {
+
+class PageNode;
 
 // Describes the state of of a PageNodeImpl for human consumption.
 class PageNodeImplDescriber : public GraphOwned,
@@ -25,7 +28,8 @@ class PageNodeImplDescriber : public GraphOwned,
   void OnTakenFromGraph(Graph* graph) override;
 
   // NodeDataDescriber implementation:
-  base::Value DescribePageNodeData(const PageNode* page_node) const override;
+  base::Value::Dict DescribePageNodeData(
+      const PageNode* page_node) const override;
 };
 
 }  // namespace performance_manager

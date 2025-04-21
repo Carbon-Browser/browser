@@ -1,11 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_DOWNLOAD_INTERNAL_BACKGROUND_SERVICE_STARTUP_STATUS_H_
 #define COMPONENTS_DOWNLOAD_INTERNAL_BACKGROUND_SERVICE_STARTUP_STATUS_H_
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
 
 namespace download {
 
@@ -19,9 +19,9 @@ struct StartupStatus {
 
   ~StartupStatus();
 
-  absl::optional<bool> driver_ok;
-  absl::optional<bool> model_ok;
-  absl::optional<bool> file_monitor_ok;
+  std::optional<bool> driver_ok;
+  std::optional<bool> model_ok;
+  std::optional<bool> file_monitor_ok;
 
   // Resets all startup state tracking.
   void Reset();

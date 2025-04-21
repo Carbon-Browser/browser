@@ -14,6 +14,14 @@
 
 #include "absl/hash/internal/hash.h"
 
+#include <cstddef>
+#include <cstdint>
+#include <type_traits>
+
+#include "absl/base/attributes.h"
+#include "absl/base/config.h"
+#include "absl/hash/internal/low_level_hash.h"
+
 namespace absl {
 ABSL_NAMESPACE_BEGIN
 namespace hash_internal {
@@ -61,7 +69,7 @@ constexpr uint64_t kHashSalt[5] = {
 
 uint64_t MixingHashState::LowLevelHashImpl(const unsigned char* data,
                                            size_t len) {
-  return LowLevelHash(data, len, Seed(), kHashSalt);
+  return LowLevelHashLenGt16(data, len, Seed(), kHashSalt);
 }
 
 }  // namespace hash_internal

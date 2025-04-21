@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/safe_browsing/core/browser/safe_browsing_metrics_collector.h"
 #include "content/public/browser/browser_context.h"
 
@@ -22,18 +21,28 @@ SafeBrowsingMetricsCollectorFactory::GetForProfile(Profile* profile) {
 // static
 SafeBrowsingMetricsCollectorFactory*
 SafeBrowsingMetricsCollectorFactory::GetInstance() {
-  return base::Singleton<SafeBrowsingMetricsCollectorFactory>::get();
+  static base::NoDestructor<SafeBrowsingMetricsCollectorFactory> instance;
+  return instance.get();
 }
 
 SafeBrowsingMetricsCollectorFactory::SafeBrowsingMetricsCollectorFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "SafeBrowsingMetricsCollector",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/40257657): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOriginalOnly)
+              // TODO(crbug.com/41488885): Check if this service is needed for
+              // Ash Internals.
+              .WithAshInternals(ProfileSelection::kOriginalOnly)
+              .Build()) {}
 
-KeyedService* SafeBrowsingMetricsCollectorFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+SafeBrowsingMetricsCollectorFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
-  return new SafeBrowsingMetricsCollector(profile->GetPrefs());
+  return std::make_unique<SafeBrowsingMetricsCollector>(profile->GetPrefs());
 }
 
 }  // namespace safe_browsing

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 #include <memory>
 
 #include "base/check.h"
+#include "base/memory/raw_ptr.h"
 #include "base/numerics/safe_math.h"
 
 namespace safe_browsing {
@@ -24,7 +25,7 @@ class ByteSlice {
   // Creates a slice for a given data array.
   explicit ByteSlice(const uint8_t* data, size_t size)
       : data_(data), size_(size) {}
-  ~ByteSlice() {}
+  ~ByteSlice() = default;
 
   bool IsValid() {
     return data_ != nullptr;
@@ -42,7 +43,7 @@ class ByteSlice {
   const T* GetPointerAt(size_t at) {
     if (!RangeCheck(at, sizeof(T)))
       return nullptr;
-    return reinterpret_cast<const T*>(data_ + at);
+    return reinterpret_cast<const T*>((data_ + at).get());
   }
 
   // Copies data from an offset to a buffer.
@@ -67,17 +68,17 @@ class ByteSlice {
   size_t size() const { return size_; }
 
  private:
-  const uint8_t* data_;
+  raw_ptr<const uint8_t, AllowPtrArithmetic> data_;
   size_t size_;
 
   // Copy and assign allowed.
 };
 
-MachOImageReader::LoadCommand::LoadCommand() {}
+MachOImageReader::LoadCommand::LoadCommand() = default;
 
 MachOImageReader::LoadCommand::LoadCommand(const LoadCommand& other) = default;
 
-MachOImageReader::LoadCommand::~LoadCommand() {}
+MachOImageReader::LoadCommand::~LoadCommand() = default;
 
 // static
 bool MachOImageReader::IsMachOMagicValue(uint32_t magic) {
@@ -93,7 +94,7 @@ MachOImageReader::MachOImageReader()
       commands_() {
 }
 
-MachOImageReader::~MachOImageReader() {}
+MachOImageReader::~MachOImageReader() = default;
 
 bool MachOImageReader::Initialize(const uint8_t* image, size_t image_size) {
   if (!image)

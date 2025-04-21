@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -29,9 +29,6 @@ class SetIconNatives : public ObjectBackedNativeHandler {
       v8::Local<v8::Object>& details,
       v8::Local<v8::Object>* bitmap_set_value);
   void SetIconCommon(const v8::FunctionCallbackInfo<v8::Value>& args);
-
-  // Determines if the associated script context is for a ServiceWorker.
-  void IsInServiceWorker(const v8::FunctionCallbackInfo<v8::Value>& args);
 };
 
 }  // namespace extensions

@@ -1,4 +1,4 @@
-// Copyright 2022 The Crashpad Authors. All rights reserved.
+// Copyright 2022 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -61,7 +61,7 @@ void SetCurrentThreadName(const std::string& thread_name) {
 
 std::string GetCurrentThreadName() {
   std::string result(kPthreadNameMaxLen, '\0');
-#if BUILDFLAG(IS_ANDROID) && __ANDROID_API__ < 24
+#if BUILDFLAG(IS_ANDROID) && __ANDROID_API__ < 26
   static constexpr char kGetThreadNameFunctionName[] = "prctl";
   PCHECK(prctl(PR_GET_NAME, result.data()) == 0) << "prctl(PR_GET_NAME)";
 #else

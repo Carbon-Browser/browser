@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 #include <string>
 #include <utility>
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -23,7 +23,8 @@ namespace page_image_annotation {
 // Notifies clients of page images that can be annotated and forwards annotation
 // requests for these images to the image annotation service.
 //
-// TODO(crbug.com/916363): this class is not yet complete - add more logic (e.g.
+// TODO(crbug.com/41432474): this class is not yet complete - add more logic
+// (e.g.
 //                         communication with the service).
 class PageAnnotator {
  public:
@@ -36,7 +37,7 @@ class PageAnnotator {
     // can have the same source ID.
     std::string source_id;
 
-    // TODO(crbug.com/916363): add other useful info (e.g. image dimensions).
+    // TODO(crbug.com/41432474): add other useful info (e.g. image dimensions).
   };
 
   // Clients (i.e. classes that annotate page images) should implement this

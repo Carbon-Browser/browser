@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include "third_party/blink/renderer/modules/xr/xr_pose.h"
 #include "third_party/blink/renderer/modules/xr/xr_session.h"
 #include "third_party/blink/renderer/modules/xr/xr_space.h"
-#include "third_party/blink/renderer/platform/transforms/transformation_matrix.h"
+#include "ui/gfx/geometry/transform.h"
 
 namespace blink {
 
@@ -22,19 +22,20 @@ XRImageTrackingResult::XRImageTrackingResult(
       width_in_meters_(result.width_in_meters) {
   DVLOG(2) << __func__ << ": image index=" << index_;
   if (result.actively_tracked) {
-    tracking_state_string_ = "tracked";
+    tracking_state_ =
+        V8XRImageTrackingState(V8XRImageTrackingState::Enum::kTracked);
   } else {
-    tracking_state_string_ = "emulated";
+    tracking_state_ =
+        V8XRImageTrackingState(V8XRImageTrackingState::Enum::kEmulated);
   }
 }
 
-absl::optional<TransformationMatrix> XRImageTrackingResult::MojoFromObject()
-    const {
+std::optional<gfx::Transform> XRImageTrackingResult::MojoFromObject() const {
   if (!mojo_from_this_) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
-  return TransformationMatrix(mojo_from_this_->ToTransform());
+  return mojo_from_this_->ToTransform();
 }
 
 XRSpace* XRImageTrackingResult::imageSpace() const {
@@ -43,7 +44,7 @@ XRSpace* XRImageTrackingResult::imageSpace() const {
         session_, this);
   }
 
-  return image_space_;
+  return image_space_.Get();
 }
 
 device::mojom::blink::XRNativeOriginInformationPtr

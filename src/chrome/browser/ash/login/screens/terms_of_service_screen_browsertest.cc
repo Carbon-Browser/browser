@@ -1,14 +1,15 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/screens/terms_of_service_screen.h"
 
-#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/login_screen_test_api.h"
-#include "base/bind.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
+#include "base/metrics/histogram_base.h"
 #include "base/run_loop.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/threading/thread_restrictions.h"
 #include "chrome/browser/ash/login/existing_user_controller.h"
 #include "chrome/browser/ash/login/oobe_screen.h"
@@ -16,7 +17,6 @@
 #include "chrome/browser/ash/login/session/user_session_manager_test_api.h"
 #include "chrome/browser/ash/login/test/cryptohome_mixin.h"
 #include "chrome/browser/ash/login/test/device_state_mixin.h"
-#include "chrome/browser/ash/login/test/embedded_policy_test_server_mixin.h"
 #include "chrome/browser/ash/login/test/embedded_test_server_setup_mixin.h"
 #include "chrome/browser/ash/login/test/js_checker.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
@@ -24,24 +24,28 @@
 #include "chrome/browser/ash/login/test/oobe_screen_waiter.h"
 #include "chrome/browser/ash/login/test/session_manager_state_waiter.h"
 #include "chrome/browser/ash/login/test/user_policy_mixin.h"
-#include "chrome/browser/ash/login/ui/login_display_host.h"
-#include "chrome/browser/ash/login/ui/webui_login_view.h"
+#include "chrome/browser/ash/login/wizard_context.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
-#include "chrome/browser/ash/policy/core/device_local_account.h"
 #include "chrome/browser/ash/policy/core/device_policy_builder.h"
 #include "chrome/browser/ash/policy/core/device_policy_cros_browser_test.h"
+#include "chrome/browser/ash/policy/test_support/embedded_policy_test_server_mixin.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/ui/ash/login/login_display_host.h"
+#include "chrome/browser/ui/ash/login/webui_login_view.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/browser/ui/webui/chromeos/login/gaia_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/oobe_ui.h"
-#include "chrome/browser/ui/webui/chromeos/login/sync_consent_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/terms_of_service_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/family_link_notice_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/gaia_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/oobe_ui.h"
+#include "chrome/browser/ui/webui/ash/login/sync_consent_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/terms_of_service_screen_handler.h"
 #include "chromeos/ash/components/dbus/session_manager/fake_session_manager_client.h"
 #include "components/policy/core/common/cloud/test/policy_builder.h"
+#include "components/policy/core/common/device_local_account_type.h"
 #include "components/policy/proto/chrome_device_policy.pb.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/known_user.h"
 #include "content/public/test/browser_test.h"
+#include "google_apis/gaia/gaia_id.h"
 #include "net/test/embedded_test_server/http_request.h"
 #include "net/test/embedded_test_server/http_response.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -53,8 +57,6 @@ namespace em = ::enterprise_management;
 using ::net::test_server::BasicHttpResponse;
 using ::net::test_server::HttpRequest;
 using ::net::test_server::HttpResponse;
-using ::testing::_;
-using ::testing::InvokeWithoutArgs;
 
 const char kAccountId[] = "dla@example.com";
 const char kDisplayName[] = "display name";
@@ -62,13 +64,13 @@ const char kManagedUser[] = "user@example.com";
 const char kManagedGaiaID[] = "33333";
 const char kTosText[] = "By using this test you agree to fix future bugs";
 
-absl::optional<std::string> ReadFileToOptionalString(
+std::optional<std::string> ReadFileToOptionalString(
     const base::FilePath& file_path) {
   base::ScopedAllowBlockingForTesting allow_blocking;
   std::string content;
   if (base::ReadFileToString(file_path, &content))
-    return absl::make_optional<std::string>(content);
-  return absl::nullopt;
+    return std::make_optional<std::string>(content);
+  return std::nullopt;
 }
 
 std::string TestServerBaseUrl(net::EmbeddedTestServer* server) {
@@ -94,7 +96,7 @@ std::unique_ptr<HttpResponse> HandleRequest(const HttpRequest& request) {
 
 class PublicSessionTosScreenTest : public OobeBaseTest {
  public:
-  PublicSessionTosScreenTest() {}
+  PublicSessionTosScreenTest() = default;
   ~PublicSessionTosScreenTest() override = default;
 
   void SetUpOnMainThread() override {
@@ -102,7 +104,7 @@ class PublicSessionTosScreenTest : public OobeBaseTest {
 
     // Prevent browser start in user session so that we do not need to wait
     // for its initialization.
-    ash::test::UserSessionManagerTestApi(ash::UserSessionManager::GetInstance())
+    test::UserSessionManagerTestApi(UserSessionManager::GetInstance())
         .SetShouldLaunchBrowserInTests(false);
   }
 
@@ -210,7 +212,7 @@ class PublicSessionTosScreenTest : public OobeBaseTest {
     return FakeSessionManagerClient::Get();
   }
 
-  absl::optional<TermsOfServiceScreen::Result> result_;
+  std::optional<TermsOfServiceScreen::Result> result_;
   base::HistogramTester histogram_tester_;
 
  private:
@@ -237,7 +239,7 @@ class PublicSessionTosScreenTest : public OobeBaseTest {
   const AccountId account_id_ =
       AccountId::FromUserEmail(GenerateDeviceLocalAccountUserId(
           kAccountId,
-          policy::DeviceLocalAccount::TYPE_PUBLIC_SESSION));
+          policy::DeviceLocalAccountType::kPublicSession));
   policy::DevicePolicyCrosTestHelper policy_helper_;
   EmbeddedPolicyTestServerMixin policy_test_server_mixin_{&mixin_host_};
   DeviceStateMixin device_state_{
@@ -299,10 +301,10 @@ IN_PROC_BROWSER_TEST_F(PublicSessionTosScreenTest, Declined) {
   EXPECT_TRUE(LoginScreenTestApi::IsPublicSessionExpanded());
 }
 
-class ManagedUserTosScreenTestBase : public OobeBaseTest {
+class ManagedUserTosScreenTest : public OobeBaseTest {
  public:
-  ManagedUserTosScreenTestBase() = default;
-  ~ManagedUserTosScreenTestBase() override = default;
+  ManagedUserTosScreenTest() = default;
+  ~ManagedUserTosScreenTest() override = default;
 
   void RegisterAdditionalRequestHandlers() override {
     embedded_test_server()->RegisterRequestHandler(
@@ -339,9 +341,12 @@ class ManagedUserTosScreenTestBase : public OobeBaseTest {
   void SetUpExitCallback() {
     auto* screen = GetTosScreen();
     original_callback_ = screen->get_exit_callback_for_testing();
-    screen->set_exit_callback_for_testing(
-        base::BindRepeating(&ManagedUserTosScreenTestBase::HandleScreenExit,
-                            base::Unretained(this)));
+    screen->set_exit_callback_for_testing(base::BindRepeating(
+        &ManagedUserTosScreenTest::HandleScreenExit, base::Unretained(this)));
+    LoginDisplayHost::default_host()
+        ->GetWizardContext()
+        ->knowledge_factor_setup.auth_setup_flow =
+        WizardContext::AuthChangeFlow::kReauthentication;
   }
 
   void WaitForScreenShown() {
@@ -376,12 +381,12 @@ class ManagedUserTosScreenTestBase : public OobeBaseTest {
     return saved_tos.has_value() && saved_tos.value() == tos;
   }
 
-  absl::optional<TermsOfServiceScreen::Result> result_;
+  std::optional<TermsOfServiceScreen::Result> result_;
   base::HistogramTester histogram_tester_;
 
  protected:
   const LoginManagerMixin::TestUserInfo managed_user_{
-      AccountId::FromUserEmailGaiaId(kManagedUser, kManagedGaiaID)};
+      AccountId::FromUserEmailGaiaId(kManagedUser, GaiaId(kManagedGaiaID))};
 
  private:
   void HandleScreenExit(TermsOfServiceScreen::Result result) {
@@ -402,27 +407,7 @@ class ManagedUserTosScreenTestBase : public OobeBaseTest {
                                          &cryptohome_mixin_};
 };
 
-class ManagedUserTosScreenTest : public ManagedUserTosScreenTestBase,
-                                 public ::testing::WithParamInterface<bool> {
- public:
-  ManagedUserTosScreenTest() {
-    auto enabled_features =
-        std::vector<base::Feature>{features::kManagedTermsOfService};
-    auto disabled_features = std::vector<base::Feature>{};
-
-    if (GetParam()) {
-      enabled_features.push_back(features::kUseAuthsessionAuthentication);
-    } else {
-      disabled_features.push_back(features::kUseAuthsessionAuthentication);
-    }
-    feature_list_.InitWithFeatures(enabled_features, disabled_features);
-  }
-
- private:
-  base::test::ScopedFeatureList feature_list_;
-};
-
-IN_PROC_BROWSER_TEST_P(ManagedUserTosScreenTest, Skipped) {
+IN_PROC_BROWSER_TEST_F(ManagedUserTosScreenTest, Skipped) {
   EXPECT_FALSE(TosFileExists());
   StartManagedUserSession();
 
@@ -435,7 +420,7 @@ IN_PROC_BROWSER_TEST_P(ManagedUserTosScreenTest, Skipped) {
   test::WaitForPrimaryUserSessionStart();
 }
 
-IN_PROC_BROWSER_TEST_P(ManagedUserTosScreenTest, Accepted) {
+IN_PROC_BROWSER_TEST_F(ManagedUserTosScreenTest, Accepted) {
   SetUpTermsOfServiceUrlPolicy();
   StartManagedUserSession();
 
@@ -458,7 +443,7 @@ IN_PROC_BROWSER_TEST_P(ManagedUserTosScreenTest, Accepted) {
   test::WaitForPrimaryUserSessionStart();
 }
 
-IN_PROC_BROWSER_TEST_P(ManagedUserTosScreenTest, Declined) {
+IN_PROC_BROWSER_TEST_F(ManagedUserTosScreenTest, Declined) {
   SetUpTermsOfServiceUrlPolicy();
   StartManagedUserSession();
 
@@ -478,7 +463,7 @@ IN_PROC_BROWSER_TEST_P(ManagedUserTosScreenTest, Declined) {
   EXPECT_TRUE(session_manager_client()->session_stopped());
 }
 
-IN_PROC_BROWSER_TEST_P(ManagedUserTosScreenTest, TosSaved) {
+IN_PROC_BROWSER_TEST_F(ManagedUserTosScreenTest, TosSaved) {
   SetUpTermsOfServiceUrlPolicy();
   EXPECT_FALSE(TosFileExists());
   base::RunLoop run_loop;
@@ -497,7 +482,7 @@ enum class PendingScreen { kEmpty, kTermsOfService, kSyncConsent };
 OobeScreenId PendingScreenToId(PendingScreen pending_screen) {
   switch (pending_screen) {
     case PendingScreen::kEmpty:
-      return ash::OOBE_SCREEN_UNKNOWN;
+      return OOBE_SCREEN_UNKNOWN;
     case PendingScreen::kTermsOfService:
       return TermsOfServiceScreenView::kScreenId;
     case PendingScreen::kSyncConsent:
@@ -506,24 +491,14 @@ OobeScreenId PendingScreenToId(PendingScreen pending_screen) {
 }
 
 class ManagedUserTosOnboardingResumeTest
-    : public ManagedUserTosScreenTestBase,
+    : public ManagedUserTosScreenTest,
       public LocalStateMixin::Delegate,
-      public ::testing::WithParamInterface<std::tuple<PendingScreen, bool>> {
+      public ::testing::WithParamInterface<PendingScreen> {
  public:
-  ManagedUserTosOnboardingResumeTest() {
-    pending_screen_param_ = std::get<0>(GetParam());
-
-    if (std::get<1>(GetParam())) {
-      feature_list_.InitAndEnableFeature(
-          features::kUseAuthsessionAuthentication);
-    } else {
-      feature_list_.InitAndDisableFeature(
-          features::kUseAuthsessionAuthentication);
-    }
-  }
+  ManagedUserTosOnboardingResumeTest() { pending_screen_param_ = GetParam(); }
 
   void SetUpLocalState() override {
-    auto pending_screen_param = std::get<0>(GetParam());
+    auto pending_screen_param = GetParam();
     if (pending_screen_param_ == PendingScreen::kEmpty) {
       return;
     }
@@ -543,7 +518,6 @@ class ManagedUserTosOnboardingResumeTest
   PendingScreen pending_screen_param_;
 
  private:
-  base::test::ScopedFeatureList feature_list_;
   LocalStateMixin local_state_mixin_{&mixin_host_, this};
 };
 
@@ -569,7 +543,7 @@ IN_PROC_BROWSER_TEST_P(ManagedUserTosOnboardingResumeTest, ResumeOnboarding) {
       EnsurePendingScreenIsEmpty();
       EXPECT_EQ(WizardController::default_controller()
                     ->get_screen_after_managed_tos_for_testing(),
-                ash::OOBE_SCREEN_UNKNOWN);
+                OOBE_SCREEN_UNKNOWN);
       test::WaitForPrimaryUserSessionStart();
       break;
     case PendingScreen::kTermsOfService:
@@ -586,14 +560,11 @@ IN_PROC_BROWSER_TEST_P(ManagedUserTosOnboardingResumeTest, ResumeOnboarding) {
 }
 
 // Sets different pending screens to test resumable flow.
-INSTANTIATE_TEST_SUITE_P(
-    All,
-    ManagedUserTosOnboardingResumeTest,
-    testing::Combine(testing::Values(PendingScreen::kEmpty,
-                                     PendingScreen::kTermsOfService,
-                                     PendingScreen::kSyncConsent),
-                     testing::Bool()));
+INSTANTIATE_TEST_SUITE_P(All,
+                         ManagedUserTosOnboardingResumeTest,
+                         testing::Values(PendingScreen::kEmpty,
+                                         PendingScreen::kTermsOfService,
+                                         PendingScreen::kSyncConsent));
 
-INSTANTIATE_TEST_SUITE_P(All, ManagedUserTosScreenTest, testing::Bool());
 }  // namespace
 }  // namespace ash

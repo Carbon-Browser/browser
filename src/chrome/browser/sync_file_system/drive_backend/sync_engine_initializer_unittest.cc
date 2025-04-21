@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,11 +11,11 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "chrome/browser/sync_file_system/drive_backend/drive_backend_constants.h"
 #include "chrome/browser/sync_file_system/drive_backend/drive_backend_test_util.h"
 #include "chrome/browser/sync_file_system/drive_backend/metadata_database.h"
@@ -48,13 +48,13 @@ class SyncEngineInitializerTest : public testing::Test {
     FileTracker tracker;
   };
 
-  SyncEngineInitializerTest() {}
+  SyncEngineInitializerTest() = default;
 
   SyncEngineInitializerTest(const SyncEngineInitializerTest&) = delete;
   SyncEngineInitializerTest& operator=(const SyncEngineInitializerTest&) =
       delete;
 
-  ~SyncEngineInitializerTest() override {}
+  ~SyncEngineInitializerTest() override = default;
 
   void SetUp() override {
     ASSERT_TRUE(database_dir_.CreateUniqueTempDir());
@@ -67,12 +67,13 @@ class SyncEngineInitializerTest : public testing::Test {
     sync_context_ = std::make_unique<SyncEngineContext>(
         std::move(fake_drive_service),
         std::unique_ptr<drive::DriveUploaderInterface>(),
-        nullptr /* task_logger */, base::ThreadTaskRunnerHandle::Get(),
-        base::ThreadTaskRunnerHandle::Get());
+        nullptr /* task_logger */,
+        base::SingleThreadTaskRunner::GetCurrentDefault(),
+        base::SingleThreadTaskRunner::GetCurrentDefault());
 
     sync_task_manager_ = std::make_unique<SyncTaskManager>(
         base::WeakPtr<SyncTaskManager::Client>(), 1 /* maximum_parallel_task */,
-        base::ThreadTaskRunnerHandle::Get());
+        base::SingleThreadTaskRunner::GetCurrentDefault());
     sync_task_manager_->Initialize(SYNC_STATUS_OK);
   }
 
@@ -215,7 +216,8 @@ class SyncEngineInitializerTest : public testing::Test {
   std::unique_ptr<MetadataDatabase> metadata_database_;
   std::unique_ptr<SyncTaskManager> sync_task_manager_;
   std::unique_ptr<SyncEngineContext> sync_context_;
-  raw_ptr<drive::FakeDriveService> fake_drive_service_ = nullptr;
+  raw_ptr<drive::FakeDriveService, DanglingUntriaged> fake_drive_service_ =
+      nullptr;
 };
 
 TEST_F(SyncEngineInitializerTest, EmptyDatabase_NoRemoteSyncRoot) {

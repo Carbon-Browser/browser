@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -21,9 +21,8 @@ import "url/mojom/url.mojom";
 // ash-chrome. It is intended to be the minimal subset of apps::mojom::App
 // required for this purpose, and exists to allow apps::mojom::App to not have
 // to be versioned.
-// See components/services/app_service/public/mojom/types.mojom for details
-// for the structs in this file.
-[Stable]
+// See components/services/app_service/public/cpp/app_types.h for details for
+// the structs in this file.
 struct App {
   AppType app_type@0;
   string app_id@1;
@@ -71,10 +70,9 @@ struct App {
   [MinVersion=2]
   WindowMode window_mode@22;
 
-  // An optional ID used for policy to identify the app.
-  // For web apps, it contains the install URL.
-  [MinVersion=7]
-  string? policy_id@23;
+  [MinVersion=7, RenamedFrom="policy_id"]
+  // DEPRECATED, replaced with |policy_ids| below.
+  string? deprecated_policy_id@23;
 
   // This vector must be treated atomically, if there is a permission
   // change, the publisher must send through the entire list of permissions.
@@ -93,34 +91,53 @@ struct App {
   // surfaces.
   OptionalBool handles_intents@26;
 
-  [MinVersion=18]
-  // Shortcuts help users perform specific actions easily.
-  // This vector must be treated atomically, if there is a shortcut
-  // change, the publisher must send through the entire list of shortcuts.
-  // Should contain no duplicate IDs.
-  // If empty during updates, Subscriber can assume no changes.
-  // There is no guarantee that this is sorted by any criteria.
-  array<Shortcut>? shortcuts@27;
+  [MinVersion=18, RenamedFrom="shortcuts"]
+  // DEPRECATED, will be replaced by specific interfaces to update shortcuts.
+  // This struct is not used in production yet, so it's safe to deprecate.
+  array<REMOVED_01>? deprecated_shortcuts@27;
 
   [MinVersion=19]
   OptionalBool is_platform_app@28;
+
+  [MinVersion=20]
+  // IDs used for policy to identify the app.
+  // For web apps, it contains the install URL(s).
+  array<string>? policy_ids@29;
+
+  // The amount of storage (in bytes) used by the app.
+  [MinVersion=21]
+  uint64? app_size_in_bytes@30;
+
+  // The amount of storage (in bytes) used by the app's data.
+  [MinVersion=21]
+  uint64? data_size_in_bytes@31;
+
+  [MinVersion=22]
+  // Whether the app publisher allows the app to be closed.
+  OptionalBool allow_close@32;
+
+  [MinVersion=23]
+  // Whether the app publisher allows the user to select app open mode.
+  OptionalBool allow_window_mode_selection@33;
+
+  [MinVersion=24]
+  // An optional ID for the package that installed this app.
+  PackageId? installer_package_id@34;
 };
 
 // The types of apps available in the registry.
-[Stable, Extensible]
+[Extensible]
 enum AppType {
   [Default] kUnknown = 0,
-  kArc,           // Android app.
-  kWeb,           // Web app.
-  kSystemWeb,     // System web app.
-  [MinVersion=1]
-  kStandaloneBrowserChromeApp,     // Chrome app.
-  [MinVersion=17]
-  kStandaloneBrowserExtension,     // Chrome extension.
+  kArc = 1,           // Android app.
+  kWeb = 2,           // Web app.
+  kSystemWeb = 3,     // System web app.
+  // kStandaloneBrowserChromeApp = 4,  // Removed. No longer used.
+  // kStandaloneBrowserExtension = 5,  // Removed. No longer used.
 };
 
 // Whether an app is ready to launch, i.e. installed.
-[Stable, Extensible]
+[Extensible]
 enum Readiness {
   [Default] kUnknown = 0,
   kReady,                // Installed and launchable.
@@ -134,11 +151,13 @@ enum Readiness {
   // apps, so publishers must set the app as uninstalled before
   // removing it.
   kRemoved,
-  [MinVersion=1] kUninstalledByMigration,
+  // This is used for all non-user initiated uninstallation.
+  [MinVersion=1] kUninstalledByNonUser,
+  [MinVersion=2] kDisabledByLocalSettings,  // Disabled by local settings.
 };
 
 // The reason why the app was installed.
-[Stable, Extensible, RenamedFrom="crosapi.mojom.InstallSource"]
+[Extensible, RenamedFrom="crosapi.mojom.InstallSource"]
 enum InstallReason {
   [Default] kUnknown = 0,
   kSystem,     // Installed with the system and is considered a part of the OS.
@@ -147,22 +166,52 @@ enum InstallReason {
   kDefault,    // Preinstalled by default, but is not considered a system app.
   kSync,       // Installed by sync.
   kUser,       // Installed by user action.
-  [MinVersion=7] kSubApp,     // Installed by the SubApp API call.
+  [MinVersion=7] kSubApp,        // Installed by the SubApp API call.
+  [MinVersion=8] kKiosk,         // Installed by Kiosk on Chrome OS.
+  [MinVersion=9] kCommandLine,   // Deprecated, no longer used.
 };
 
 // Augments a bool to include an 'unknown' value.
-[Stable, Extensible]
+[Extensible]
 enum OptionalBool {
   [Default] kUnknown = 0,
   kFalse,
   kTrue,
 };
 
-[Stable]
-struct IconKey {
-  // A timeline value for icons that do not change.
-  const uint64 kDoesNotChangeOverTime = 0;
+// `IconUpdateVersion` should hold a bool to specify whether the icon image is
+// updated by the app when the publisher publishes the app. `IconUpdateVersion`
+// should never hold a int32_t when calling OnApps to publish apps.
+//
+// AppRegistryCache generates an int32_t for `IconUpdateVersion` to notify
+// AppService clients whether reload the icon, when merging `deltas`.
+// `IconUpdateVersion` should never hold a bool in AppRegistryCache's `states_`.
+//
+// When the icon has a valid `resource_id`, IconUpdateVersion is
+// `kInitVersion`, and never changes.
+//
+// When an app is added, if the icon doesn't have a valid `resource_id`,
+// IconUpdateVersion is set as `kInitVersion`.
+//
+// If the app updates the icon image, IconUpdateVersion is set as true by a
+// Publisher, and AppService increases the saved IconUpdateVersion to notify
+// AppService clients to reload icons.
+//
+// When IconUpdateVersion is an int32_t, the exact value of the number isn't
+// important, only that newer IconKey's (those that were created more recently)
+// have a larger IconUpdateVersion than older IconKey's.
+//
+// IconUpdateVersion isn't changed if `icon_effects` is changed.
+// IconUpdateVersion is increased only when the app updates, or upgrades, and
+// publish a new icon image.
+//
+// See components/services/app_service/public/cpp/icon_types.h for details
+union IconUpdateVersion {
+  bool raw_icon_updated;
+  int32 timeline;
+};
 
+struct IconKey {
   // A monotonically increasing number so that, after an icon update, a new
   // IconKey, one that is different in terms of field-by-field equality, can be
   // broadcast by a Publisher.
@@ -175,10 +224,9 @@ struct IconKey {
   // "version", to avoid any possible confusion that it encodes *the* app's
   // version number, e.g. the "2.3.5" in "FooBar version 2.3.5 is installed".
   //
-  // For example, if an app is disabled for some reason (so that its icon is
-  // grayed out), this would result in a different timeline even though the
-  // app's version is unchanged.
-  uint64 timeline;
+  // DEPRECATED, replaced with `update_version` below.
+  [RenamedFrom="timeline"]
+  uint64 deprecated_timeline;
 
   // A bitmask of icon post-processing effects, such as desaturation to gray
   // and rounding the corners.
@@ -186,14 +234,35 @@ struct IconKey {
   // chrome/browser/apps/app_service/app_icon/app_icon_factory.h and will remain
   // stable.
   uint32 icon_effects;
+
+  // True when the raw icon is updated. After an icon update, a new IconKey can
+  // be broadcast by a Publisher. Then the AppService icon directory should be
+  // removed to fetch the new raw icon from the app.
+  //
+  // DEPRECATED, replaced with `update_version` below.
+  [MinVersion=22, RenamedFrom="raw_icon_updated"]
+  bool deprecated_raw_icon_updated;
+
+  // The icon updated info to notify AppService clients to reload the icon.
+  //
+  // If the app updates the icon image, `update_version` is set as true by a
+  // Publisher, and AppService increases the saved `update_version` to notify
+  // AppService clients to reload icons.
+  //
+  // `update_version` isn't changed if `icon_effects` is changed.
+  // `update_version` is increased only when the app updates, or upgrades, and
+  // publish a new icon image.
+  [MinVersion=23]
+  IconUpdateVersion? update_version;
 };
 
 // The intent filter matching condition types.
-[Stable, Extensible]
+[Extensible]
 enum ConditionType {
   [Default] kScheme,  // Matches the URL scheme (e.g. https, tel).
-  kHost,              // Matches the URL host (e.g. www.google.com).
-  kPattern,           // Matches the URL pattern (e.g. /abc/*).
+  kAuthority,         // Matches the URL host and optionally the port
+                      // (e.g. www.google.com:443).
+  kPath,              // Matches the URL path (e.g. /abc/*).
   kAction,            // Matches the action type (e.g. view, send).
   kMimeType,          // Matches the top-level mime type (e.g. text/plain).
   [MinVersion=1] kFileExtension,  // Deprecated.
@@ -201,7 +270,7 @@ enum ConditionType {
 };
 
 // The pattern match type for intent filter pattern condition.
-[Stable, Extensible]
+[Extensible]
 enum PatternMatchType {
   [Default] kNone = 0,
   kLiteral,
@@ -216,7 +285,6 @@ enum PatternMatchType {
 // For pattern type of condition, the value match will be based on the pattern
 // match type. If the match_type is kNone, then an exact match with the value
 // will be required.
-[Stable]
 struct ConditionValue {
   string value;
   PatternMatchType match_type; // This will be None for non pattern conditions.
@@ -225,7 +293,6 @@ struct ConditionValue {
 // The condition for an intent filter. It matches if the intent contains this
 // condition type and the corresponding value matches with any of the
 // condition_values.
-[Stable]
 struct Condition {
   ConditionType condition_type;
   array<ConditionValue> condition_values;
@@ -234,7 +301,6 @@ struct Condition {
 // An intent filter is defined by an app, and contains a list of conditions that
 // an intent needs to match. If all conditions match, then this intent filter
 // matches against an intent.
-[Stable]
 struct IntentFilter {
   array<Condition> conditions;
 
@@ -247,7 +313,7 @@ struct IntentFilter {
 };
 
 // What caused the app to be uninstalled.
-[Stable, Extensible]
+[Extensible]
 enum UninstallSource {
   [Default] kUnknown = 0,
   kAppList,       // Uninstall by the user from the App List (Launcher)
@@ -258,7 +324,6 @@ enum UninstallSource {
 
 // Information about whether an app is accessing some capability, e.g. camera,
 // microphone.
-[Stable]
 struct CapabilityAccess {
   string app_id;
 
@@ -269,7 +334,7 @@ struct CapabilityAccess {
   OptionalBool microphone;
 };
 
-[Stable, Extensible]
+[Extensible]
 enum IconType {
   // Sentinel value used in error cases.
   [Default] kUnknown,
@@ -283,34 +348,36 @@ enum IconType {
 };
 
 // The icon value for each app.
-[Stable]
 struct IconValue {
   // The icon format and whether it uses Chrome OS mask.
-  IconType icon_type;
+  IconType icon_type@0;
   // The uncompressed icon data in gfx::ImageSkia format.
-  gfx.mojom.ImageSkia? uncompressed;
+  gfx.mojom.ImageSkia? uncompressed@1;
   // The compressed icon data in PNG format.
-  array<uint8>? compressed;
+  array<uint8>? compressed@2;
   // Whether this icon data is a placeholder icon.
-  bool is_placeholder_icon;
+  bool is_placeholder_icon@3;
+  // Whether this icon is a maskable icon. Per
+  // https://www.w3.org/TR/appmanifest/#icon-masks, we apply a white background
+  // for the maskable icon in its safe zone, and clear the standard icon effect,
+  // apply the mask to the icon without shrinking it.
+  [MinVersion=21] bool is_maskable_icon@4;
 };
 
 // MenuItems are used to populate context menus.
-[Stable]
 struct MenuItems {
   array<MenuItem> items@0;
 };
 
 // The context menu model for each app. For web apps currently it's the info
 // for shortcut items.
-[Stable]
 struct MenuItem {
   string label@0;                      // The string label, may be empty.
   gfx.mojom.ImageSkia? image@1;        // The image icon, may be null.
   [MinVersion=3]string? id@2;          // The id of the item.
 };
 
-[Stable, Extensible]
+[Extensible]
 // The mode that the app will be opened in (e.g. standalone window or browser
 // tab).
 enum WindowMode {
@@ -324,7 +391,6 @@ enum WindowMode {
 };
 
 // Metadata for a single file shared through an intent.
-[Stable]
 struct IntentFile {
   // The file path of the file to share.
   mojo_base.mojom.FilePath file_path@0;
@@ -336,7 +402,6 @@ struct IntentFile {
 // Action and resource handling request. This should
 // be kept in sync with ConvertIntentToValue and ConvertValueToIntent in
 // components/services/app_service/public/cpp/intent_util.*
-[Stable]
 struct Intent {
   string action@0;       // Intent action. e.g. view, send.
   url.mojom.Url? url@1;  // The URL of the intent. e.g. https://www.google.com/.
@@ -348,20 +413,29 @@ struct Intent {
   // The activity for the app to launch.
   [MinVersion=13] string? activity_name@6;
   [MinVersion=14] string? data@7;
+  [MinVersion=15] bool? ui_bypassed@8; // Whether or not the user saw the UI.
+  [MinVersion=15] map<string, string>? extras@9;  // Optional string extras.
+};
+
+[Extensible]
+enum LaunchResultState {
+  [Default] kFailed,
+  kFailedDirectoryNotShared,
+  kSuccess,
 };
 
 // The result from launching an app.
-[Stable]
 struct LaunchResult {
   // The id to represent which instance the app is launched in. Deprecated: use
   // `instance_ids`.
   mojo_base.mojom.UnguessableToken instance_id@0;
   // The IDs that represent the instances the app is launched in.
   [MinVersion=1] array<mojo_base.mojom.UnguessableToken>? instance_ids@1;
+  [MinVersion=2] LaunchResultState state@2;
 };
 
 // Enumeration of app launch sources.
-[Stable, Extensible]
+[Extensible]
 enum LaunchSource {
   [Default] kUnknown = 0,
   kFromAppListGrid,              // Grid of apps, not the search box.
@@ -396,9 +470,16 @@ enum LaunchSource {
   [MinVersion=10] kFromOsLogin,                  // Run on OS login.
   [MinVersion=10] kFromProtocolHandler,          // Protocol handler.
   [MinVersion=10] kFromUrlHandler,               // Url handler.
+  [MinVersion=11] kFromSysTrayCalendar,          // System Tray Calendar.
+  [MinVersion=12] kFromInstaller,                // Installation UI.
+  [MinVersion=13] kFromFirstRun,                 // First Run.
+  [MinVersion=14] kFromWelcomeTour,              // Welcome Tour.
+  [MinVersion=15] kFromFocusMode,                // Focus Mode panel.
+  [MinVersion=16] kFromSparky,                   // Sparky.
+  [MinVersion=36] kFromNavigationCapturing,      // WebApp Navigation Capturing.
 };
 
-[Stable, Extensible]
+[Extensible]
 // The container type to launch the application in.
 enum LaunchContainer {
   [Default] kLaunchContainerNone, // No specified container
@@ -406,7 +487,7 @@ enum LaunchContainer {
   kLaunchContainerTab,            // Tab container
 };
 
-[Stable, Extensible]
+[Extensible]
 // Controls how a tab is opened in a window.
 enum WindowOpenDisposition {
   [Default] kUnknown,
@@ -414,9 +495,9 @@ enum WindowOpenDisposition {
   kNewForegroundTab,
   kNewBackgroundTab,
   kNewWindow,
+  [MinVersion=1] kNewPopup,
 };
 
-[Stable]
 // The parameters to launch an app.
 struct LaunchParams {
   string app_id@0;               // The app id of the app.
@@ -430,7 +511,6 @@ struct LaunchParams {
   [MinVersion=15]int64 display_id@5;
 };
 
-[Stable]
 struct Permission {
   PermissionType permission_type@0;
   PermissionValue value@1;
@@ -439,7 +519,7 @@ struct Permission {
 };
 
 // The types of permissions in App Service.
-[Stable, Extensible]
+[Extensible]
 enum PermissionType {
   [Default] kUnknown              = 0,
   kCamera                         = 1,
@@ -451,14 +531,12 @@ enum PermissionType {
   [MinVersion=10] kFileHandling   = 7,
 };
 
-[Stable]
 enum TriState {
   kAllow,
   kBlock,
   kAsk,
 };
 
-[Stable]
 union PermissionValue {
   bool bool_value;
   TriState tristate_value;
@@ -468,30 +546,111 @@ union PermissionValue {
 // adding new filters and removing existing filters. The map is keyed by
 // |app_id|, and the value is the list of the filters that is added/removed
 // for that |app_id|.
-[Stable]
 struct PreferredAppChanges {
   map<string, array<IntentFilter>> added_filters;
   map<string, array<IntentFilter>> removed_filters;
 };
 
 // Represents the entry of the preferred apps list.
-[Stable]
 struct PreferredApp {
   IntentFilter intent_filter;
   string app_id;
 };
 
-// Represents an app shortcut.
-[Stable]
-struct Shortcut {
-  // Represents a particular shortcut in an app. Needs to be unique within an
-  // app as calls will be made using both app_id and shortcut_id.
-  string shortcut_id@0;
+[Extensible]
+enum PackageIdType {
+  [Default] kUnknown = 0,
+  kWeb = 1,
+  kArc = 2,
+};
+
+// A globally unique stable identifier for an installable app package.
+struct PackageId {
+  // The app type of the package.
+  PackageIdType package_type;
+
+  // A platform-specific unique ID for the package. For example, for
+  // PackageIdType::kArc, the identifier will be the package name. Must be
+  // non-empty.
+  string identifier;
+};
+
+// Information about an app shortcut.
+
+// This struct is used to transport App Shortcut data between lacros-chrome and
+// ash-chrome. It is intended to be the minimal subset of apps::Shortcut
+// required for this purpose.
+//
+// See components/services/app_service/public/cpp/shortcut/shortcut.h for
+// details for the structs in this file.
+struct AppShortcut {
+  // 'host_app_id' and 'local_id' should not be changeable after creation.
+  // The host app of the shortcut.
+  string host_app_id@0;
+
+  // The locally unique identifier for the shortcut within an app. This id would
+  // be used to launch the shortcut or load shortcut icon from the app.
+  string local_id@1;
 
   // Name of the shortcut.
+  string? name@2;
+
+  // Represents what icon should be loaded for this shortcut, icon key will
+  // change if the icon has been updated from the publisher.
+  IconKey? icon_key@3;
+
+  // Whether the shortcut publisher allows the shortcut to be removed by user.
+  [MinVersion=1] bool? allow_removal@4;
+};
+
+// DEPRECATED
+[RenamedFrom="crosapi.mojom.Shortcut"]
+struct REMOVED_01 {
+  // DEPRECATED
+  string shortcut_id@0;
+
+  // DEPRECATED
   string name@1;
 
-  // "Position" of a shortcut, which is a non-negative, sequential
-  // value. If position is 0, no position was specified.
+  // DEPRECATED
   uint8 position@2;
+};
+
+// Controller registration result in App Service.
+[Extensible]
+enum ControllerRegistrationResult {
+  [Default] kSuccess              = 0,
+  kFailed                         = 1,
+};
+
+
+// Represents parameters for installing an app.
+// Next version: 2
+struct InstallAppParams {
+  // Represents the origin of the installation.
+  // Next version: 3
+  [Extensible]
+  enum Surface {
+    [Default] kUnknown = 0,
+    kAppInstallUriUnknown = 1,
+    [MinVersion=1] kAppInstallUriShowoff = 2,
+    [MinVersion=1] kAppInstallUriMall = 3,
+    [MinVersion=1] kAppInstallUriGetit = 4,
+    [MinVersion=1] kAppInstallUriLauncher = 5,
+    [MinVersion=2] kAppInstallUriPeripherals = 6,
+  };
+  Surface surface@0;
+
+  // Represents which package_id to fetch from Almanac to be installed.
+  string? serialized_package_id@1;
+
+  // Instance ID of a parent window to anchor the app install dialog to. If not
+  // provided or a corresponding window is not found, the app install dialog is
+  // created without anchoring to a parent.
+  [MinVersion=1] mojo_base.mojom.UnguessableToken? window_id@2;
+};
+
+// Represents the result of an InstallApp() request.
+// Currently empty but will be extended with fields as needed.
+struct AppInstallResult {
 };

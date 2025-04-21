@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,16 +6,15 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
-#include "base/strings/string_piece.h"
 #include "base/threading/scoped_blocking_call.h"
 
 namespace device {
 
-UdevWatcher::Filter::Filter(base::StringPiece subsystem_in,
-                            base::StringPiece devtype_in) {
+UdevWatcher::Filter::Filter(std::string_view subsystem_in,
+                            std::string_view devtype_in) {
   if (!subsystem_in.empty())
     subsystem_ = std::string(subsystem_in);
   if (!devtype_in.empty())
@@ -75,11 +74,11 @@ std::unique_ptr<UdevWatcher> UdevWatcher::StartWatching(
 }
 
 UdevWatcher::~UdevWatcher() {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 }
 
 void UdevWatcher::EnumerateExistingDevices() {
-  DCHECK(sequence_checker_.CalledOnValidSequence());
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
                                                 base::BlockingType::MAY_BLOCK);
   ScopedUdevEnumeratePtr enumerate(udev_enumerate_new(udev_.get()));
@@ -127,18 +126,20 @@ void UdevWatcher::OnMonitorReadable() {
   base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
                                                 base::BlockingType::MAY_BLOCK);
   ScopedUdevDevicePtr device(udev_monitor_receive_device(udev_monitor_.get()));
-  if (!device)
+  if (!device) {
     return;
+  }
 
-  std::string action(udev_device_get_action(device.get()));
-  if (action == "add")
+  std::string_view action(udev_device_get_action(device.get()));
+  if (action == "add") {
     observer_->OnDeviceAdded(std::move(device));
-  else if (action == "remove")
+  } else if (action == "remove") {
     observer_->OnDeviceRemoved(std::move(device));
-  else if (action == "change")
+  } else if (action == "change") {
     observer_->OnDeviceChanged(std::move(device));
-  else
+  } else {
     DVLOG(1) << "Unknown udev action: " << action;
+  }
 }
 
 }  // namespace device

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,12 +6,13 @@
 
 #include <stddef.h>
 
+#include <array>
 #include <string>
 
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/path_service.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -146,7 +147,8 @@ TEST(BookmarkHTMLReaderTest, CanImportURLAsSearchEngineTest) {
     const std::string url;
     const bool can_be_imported_as_search_engine;
     const std::string expected_search_engine_url;
-  } test_cases[] = {
+  };
+  auto test_cases = std::to_array<TestCase>({
       {"http://www.example.%s.com", true,
        "http://www.example.{searchTerms}.com/"},
       {"http://www.example.%S.com", true,
@@ -158,7 +160,7 @@ TEST(BookmarkHTMLReaderTest, CanImportURLAsSearchEngineTest) {
        "http://www.example.{searchTerms}.test.{searchTerms}.com/"},
       // Illegal characters in the host get escaped.
       {"http://www.test&test.%s.com", true,
-       "http://www.test%26test.{searchTerms}.com/"},
+       "http://www.test&test.{searchTerms}.com/"},
       {"http://www.example.com?q=%s&foo=bar", true,
        "http://www.example.com/?q={searchTerms}&foo=bar"},
       {"http://www.example.com/%s/?q=%s&foo=bar", true,
@@ -190,7 +192,7 @@ TEST(BookmarkHTMLReaderTest, CanImportURLAsSearchEngineTest) {
       // Invalid characters that should be auto-encoded.
       {"http://www.example.com/{search}?q=%s", true,
        "http://www.example.com/%7Bsearch%7D?q={searchTerms}"},
-  };
+  });
 
   std::string search_engine_url;
   for (size_t i = 0; i < std::size(test_cases); ++i) {

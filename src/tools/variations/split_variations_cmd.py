@@ -1,8 +1,8 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-"""A script to split Chrome variations into two sets.
+r"""A script to split Chrome variations into two sets.
 
 Chrome runs with many experiments and variations (field trials) that are
 randomly selected based on a configuration from a server. They lead to
@@ -45,6 +45,7 @@ _ENABLE_FEATURES_SWITCH_NAME = 'enable-features'
 _DISABLE_FEATURES_SWITCH_NAME = 'disable-features'
 _FORCE_FIELD_TRIALS_SWITCH_NAME = 'force-fieldtrials'
 _FORCE_FIELD_TRIAL_PARAMS_SWITCH_NAME = 'force-fieldtrial-params'
+_DISABLE_FIELD_TRIAL_CONFIG_SWITCH_NAME = 'disable-field-trial-config'
 
 
 _Trial = collections.namedtuple('Trial', ['star', 'trial_name', 'group_name'])
@@ -255,6 +256,8 @@ def ParseCommandLineSwitchesString(data):
   switch_data = {}
   for switch in switches:
     switch = switch.strip()
+    if switch == _DISABLE_FIELD_TRIAL_CONFIG_SWITCH_NAME:
+      continue
     fields = switch.split('=', 1) # Split by the first '='.
     if len(fields) != 2:
       raise ValueError('Wrong format, expected name=value, got %s' % switch)

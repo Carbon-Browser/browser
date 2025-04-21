@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,18 +6,15 @@
 
 #include <string>
 
-#include "ash/components/login/auth/public/auth_failure.h"
-#include "chrome/browser/ash/app_mode/kiosk_app_manager.h"
+#include "chrome/browser/ash/app_mode/kiosk_chrome_app_manager.h"
 #include "chrome/grit/generated_resources.h"
 #include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
+#include "chromeos/ash/components/login/auth/public/auth_failure.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/l10n/l10n_util.h"
 
 namespace ash {
-
-using ::ash::AuthFailure;
-using ::chromeos::KioskAppLaunchError;
 
 namespace {
 
@@ -28,9 +25,9 @@ constexpr char kKeyLaunchError[] = "launch_error";
 constexpr char kKeyCryptohomeFailure[] = "cryptohome_failure";
 
 // Get Kiosk dictionary value. It is replaced after each update.
-const base::Value* GetKioskDictionary() {
-  return g_browser_process->local_state()->GetDictionary(
-      KioskAppManager::kKioskDictionaryName);
+const base::Value::Dict& GetKioskDictionary() {
+  return g_browser_process->local_state()->GetDict(
+      KioskChromeAppManager::kKioskDictionaryName);
 }
 
 }  // namespace
@@ -64,7 +61,7 @@ TEST_F(KioskAppLaunchErrorTest, GetErrorMessage) {
                      expected_message);
   VerifyErrorMessage(KioskAppLaunchError::Error::kPolicyLoadFailed,
                      expected_message);
-  VerifyErrorMessage(KioskAppLaunchError::Error::kArcAuthFailed,
+  VerifyErrorMessage(KioskAppLaunchError::Error::kUserNotAllowlisted,
                      expected_message);
 
   expected_message =
@@ -99,12 +96,11 @@ TEST_F(KioskAppLaunchErrorTest, GetErrorMessage) {
 
 TEST_F(KioskAppLaunchErrorTest, SaveError) {
   // No launch error is stored before it is saved.
-  EXPECT_EQ(GetKioskDictionary()->FindKey(kKeyLaunchError), nullptr);
+  EXPECT_FALSE(GetKioskDictionary().contains(kKeyLaunchError));
   KioskAppLaunchError::Save(KioskAppLaunchError::Error::kUserCancel);
 
   // The launch error can be retrieved.
-  absl::optional<int> out_error =
-      GetKioskDictionary()->FindIntKey(kKeyLaunchError);
+  std::optional<int> out_error = GetKioskDictionary().FindInt(kKeyLaunchError);
   EXPECT_TRUE(out_error.has_value());
   EXPECT_EQ(out_error.value(),
             static_cast<int>(KioskAppLaunchError::Error::kUserCancel));
@@ -113,25 +109,25 @@ TEST_F(KioskAppLaunchErrorTest, SaveError) {
 
   // The launch error is cleaned up after clear operation.
   KioskAppLaunchError::RecordMetricAndClear();
-  EXPECT_EQ(GetKioskDictionary()->FindKey(kKeyLaunchError), nullptr);
+  EXPECT_FALSE(GetKioskDictionary().contains(kKeyLaunchError));
   EXPECT_EQ(KioskAppLaunchError::Get(), KioskAppLaunchError::Error::kNone);
 }
 
 TEST_F(KioskAppLaunchErrorTest, SaveCryptohomeFailure) {
   // No cryptohome failure is stored before it is saved.
-  EXPECT_EQ(GetKioskDictionary()->FindKey(kKeyCryptohomeFailure), nullptr);
+  EXPECT_FALSE(GetKioskDictionary().contains(kKeyCryptohomeFailure));
   AuthFailure auth_failure(AuthFailure::FailureReason::AUTH_DISABLED);
   KioskAppLaunchError::SaveCryptohomeFailure(auth_failure);
 
   // The cryptohome failure can be retrieved.
-  absl::optional<int> out_error =
-      GetKioskDictionary()->FindIntKey(kKeyCryptohomeFailure);
+  std::optional<int> out_error =
+      GetKioskDictionary().FindInt(kKeyCryptohomeFailure);
   EXPECT_TRUE(out_error.has_value());
   EXPECT_EQ(out_error.value(), auth_failure.reason());
 
   // The cryptohome failure is cleaned up after clear operation.
   KioskAppLaunchError::RecordMetricAndClear();
-  EXPECT_EQ(GetKioskDictionary()->FindKey(kKeyCryptohomeFailure), nullptr);
+  EXPECT_FALSE(GetKioskDictionary().contains(kKeyCryptohomeFailure));
 }
 
 }  // namespace ash

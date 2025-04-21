@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
@@ -96,6 +97,25 @@ class PolicyStorage {
     managed_users_.insert(managed_user);
   }
 
+  const std::vector<std::string>& device_affiliation_ids() const {
+    return device_affiliation_ids_;
+  }
+  void add_device_affiliation_id(const std::string& device_affiliation_id) {
+    device_affiliation_ids_.emplace_back(device_affiliation_id);
+  }
+
+  const std::vector<std::string>& user_affiliation_ids() const {
+    return user_affiliation_ids_;
+  }
+  void add_user_affiliation_id(const std::string& user_affiliation_id) {
+    user_affiliation_ids_.emplace_back(user_affiliation_id);
+  }
+
+  const std::string& directory_api_id() const { return directory_api_id_; }
+  void set_directory_api_id(const std::string& directory_api_id) {
+    directory_api_id_ = directory_api_id;
+  }
+
   std::string policy_user() const { return policy_user_; }
   void set_policy_user(const std::string& policy_user) {
     policy_user_ = policy_user;
@@ -107,6 +127,24 @@ class PolicyStorage {
   void set_policy_invalidation_topic(
       const std::string& policy_invalidation_topic) {
     policy_invalidation_topic_ = policy_invalidation_topic;
+  }
+
+  const std::optional<enterprise_management::PolicyData::MarketSegment>
+  market_segment() const {
+    return market_segment_;
+  }
+  void set_market_segment(
+      enterprise_management::PolicyData::MarketSegment segment) {
+    market_segment_ = segment;
+  }
+
+  const std::optional<enterprise_management::PolicyData::MetricsLogSegment>
+  metrics_log_segment() const {
+    return metrics_log_segment_;
+  }
+  void set_metrics_log_segment(
+      enterprise_management::PolicyData::MetricsLogSegment segment) {
+    metrics_log_segment_ = segment;
   }
 
   base::Time timestamp() const { return timestamp_; }
@@ -166,6 +204,11 @@ class PolicyStorage {
     return error_detail_;
   }
 
+  bool enrollment_required() const { return enrollment_required_; }
+  void set_enrollment_required(bool enrollment_required) {
+    enrollment_required_ = enrollment_required;
+  }
+
  private:
   // Maps policy keys to a serialized proto representing the policies to be
   // applied for the type (e.g. CloudPolicySettings, ChromeDeviceSettingsProto).
@@ -182,9 +225,20 @@ class PolicyStorage {
 
   base::flat_set<std::string> managed_users_;
 
+  std::vector<std::string> device_affiliation_ids_;
+
+  std::vector<std::string> user_affiliation_ids_;
+
+  std::string directory_api_id_;
+
   std::string policy_user_;
 
   std::string policy_invalidation_topic_;
+
+  std::optional<enterprise_management::PolicyData::MarketSegment>
+      market_segment_;
+  std::optional<enterprise_management::PolicyData::MetricsLogSegment>
+      metrics_log_segment_;
 
   base::Time timestamp_;
 
@@ -195,6 +249,8 @@ class PolicyStorage {
   bool has_kiosk_license_ = true;
 
   bool has_enterprise_license_ = true;
+
+  bool enrollment_required_ = false;
 
   // Maps brand serial ID to PsmEntry.
   base::flat_map<std::string, PsmEntry> psm_entries_;

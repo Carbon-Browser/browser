@@ -20,7 +20,7 @@
 
 #include "third_party/blink/renderer/core/svg/svg_stop_element.h"
 
-#include "third_party/blink/renderer/core/dom/node_computed_style.h"
+#include "third_party/blink/renderer/core/css/properties/longhands.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
 #include "third_party/blink/renderer/core/svg/svg_animated_number.h"
 #include "third_party/blink/renderer/core/svg/svg_gradient_element.h"
@@ -34,8 +34,6 @@ SVGStopElement::SVGStopElement(Document& document)
           this,
           svg_names::kOffsetAttr,
           MakeGarbageCollected<SVGNumberAcceptPercentage>())) {
-  AddToPropertyMap(offset_);
-
   // Since stop elements don't have corresponding layout objects, we rely on
   // style recalc callbacks for invalidation.
   DCHECK(HasCustomStyleCallbacks());
@@ -48,12 +46,11 @@ void SVGStopElement::Trace(Visitor* visitor) const {
 
 namespace {
 
-void InvalidateInstancesAndAncestorResources(SVGStopElement* stop_element) {
-  SVGElement::InvalidationGuard invalidation_guard(stop_element);
-
+void InvalidateAncestorResources(SVGStopElement* stop_element) {
   Element* parent = stop_element->parentElement();
-  if (auto* gradient = DynamicTo<SVGGradientElement>(parent))
-    gradient->InvalidateGradient(layout_invalidation_reason::kChildChanged);
+  if (auto* gradient = DynamicTo<SVGGradientElement>(parent)) {
+    gradient->InvalidateGradient();
+  }
 }
 
 }  // namespace
@@ -61,7 +58,7 @@ void InvalidateInstancesAndAncestorResources(SVGStopElement* stop_element) {
 void SVGStopElement::SvgAttributeChanged(
     const SvgAttributeChangedParams& params) {
   if (params.name == svg_names::kOffsetAttr) {
-    InvalidateInstancesAndAncestorResources(this);
+    InvalidateAncestorResources(this);
     return;
   }
 
@@ -71,7 +68,8 @@ void SVGStopElement::SvgAttributeChanged(
 void SVGStopElement::DidRecalcStyle(const StyleRecalcChange change) {
   SVGElement::DidRecalcStyle(change);
 
-  InvalidateInstancesAndAncestorResources(this);
+  InvalidateAncestorResources(this);
+  InvalidateInstances();
 }
 
 Color SVGStopElement::StopColorIncludingOpacity() const {
@@ -85,7 +83,23 @@ Color SVGStopElement::StopColorIncludingOpacity() const {
     return Color::kBlack;
 
   Color base_color = style->VisitedDependentColor(GetCSSPropertyStopColor());
-  return base_color.CombineWithAlpha(style->StopOpacity());
+  base_color.SetAlpha(style->StopOpacity() * base_color.Alpha());
+  return base_color;
+}
+
+SVGAnimatedPropertyBase* SVGStopElement::PropertyFromAttribute(
+    const QualifiedName& attribute_name) const {
+  if (attribute_name == svg_names::kOffsetAttr) {
+    return offset_.Get();
+  } else {
+    return SVGElement::PropertyFromAttribute(attribute_name);
+  }
+}
+
+void SVGStopElement::SynchronizeAllSVGAttributes() const {
+  SVGAnimatedPropertyBase* attrs[]{offset_.Get()};
+  SynchronizeListOfSVGAttributes(attrs);
+  SVGElement::SynchronizeAllSVGAttributes();
 }
 
 }  // namespace blink

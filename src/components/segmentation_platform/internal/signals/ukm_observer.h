@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,8 +28,8 @@ class UkmObserver : public ukm::UkmRecorderObserver {
   explicit UkmObserver(ukm::UkmRecorderImpl* ukm_recorder);
   ~UkmObserver() override;
 
-  UkmObserver(UkmObserver&) = delete;
-  UkmObserver& operator=(UkmObserver&) = delete;
+  UkmObserver(const UkmObserver&) = delete;
+  UkmObserver& operator=(const UkmObserver&) = delete;
 
   // Starts observing with the given |config| if not started. Otherwise, merges
   // the currently observed config with the new |config|, and observes a
@@ -47,7 +47,12 @@ class UkmObserver : public ukm::UkmRecorderObserver {
   void OnEntryAdded(ukm::mojom::UkmEntryPtr entry) override;
   void OnUpdateSourceURL(ukm::SourceId source_id,
                          const std::vector<GURL>& urls) override;
-  void OnUkmAllowedStateChanged(bool allowed) override;
+  void OnUkmAllowedStateChanged(ukm::UkmConsentState state) override;
+
+  // Called to initialize UKM state when the observer is created, in case it
+  // missed notifications prior to set up. `is_msbb_enabled` should indicate if
+  // ukm::MSBB was consented.
+  void InitalizeUkmAllowedState(bool is_msbb_enabled);
 
   void set_ukm_data_manager(UkmDataManagerImpl* ukm_data_manager) {
     ukm_data_manager_ = ukm_data_manager;
@@ -59,7 +64,7 @@ class UkmObserver : public ukm::UkmRecorderObserver {
  private:
   // UkmDataManagerImpl destroys this observer before the UKM service is
   // destroyed.
-  raw_ptr<ukm::UkmRecorderImpl> const ukm_recorder_;
+  raw_ptr<ukm::UkmRecorderImpl, LeakedDanglingUntriaged> const ukm_recorder_;
 
   // Currently observed config.
   std::unique_ptr<UkmConfig> config_;

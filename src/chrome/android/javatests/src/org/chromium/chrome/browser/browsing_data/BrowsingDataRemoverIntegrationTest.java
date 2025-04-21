@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,18 +12,23 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.util.CallbackHelper;
 import org.chromium.base.test.util.CommandLineFlags;
+import org.chromium.base.test.util.Features;
 import org.chromium.chrome.browser.browserservices.intents.BrowserServicesIntentDataProvider;
-import org.chromium.chrome.browser.browserservices.verification.VerificationResultStore;
+import org.chromium.chrome.browser.browserservices.verification.ChromeVerificationResultStore;
 import org.chromium.chrome.browser.browsing_data.BrowsingDataBridge.OnClearBrowsingDataListener;
+import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.webapps.TestFetchStorageCallback;
 import org.chromium.chrome.browser.webapps.WebappRegistry;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
 import org.chromium.chrome.test.util.browser.webapps.WebappTestHelper;
-import org.chromium.content_public.browser.test.util.TestThreadUtils;
+import org.chromium.components.embedder_support.util.UrlUtilities;
+import org.chromium.net.test.EmbeddedTestServer;
+import org.chromium.url.GURL;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -35,13 +40,15 @@ import java.util.concurrent.TimeoutException;
 /**
  * Integration tests for the native BrowsingDataRemover.
  *
- * BrowsingDataRemover is used to delete data from various data storage backends. However, for
+ * <p>BrowsingDataRemover is used to delete data from various data storage backends. However, for
  * those backends that live in the Java code, it is not possible to test whether deletions were
  * successful in its own unit tests. This test can do so.
  */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
 public class BrowsingDataRemoverIntegrationTest {
+    private static final String TEST_PATH = "/chrome/test/data/android/about.html";
+
     @Rule
     public ChromeTabbedActivityTestRule mActivityTestRule = new ChromeTabbedActivityTestRule();
 
@@ -62,7 +69,8 @@ public class BrowsingDataRemoverIntegrationTest {
     /**
      * Tests that web apps are unregistered after clearing with the "cookies and site data" option.
      * TODO(msramek): Expose more granular datatypes to the Java code, so we can directly test
-     * BrowsingDataRemover::RemoveDataMask::REMOVE_WEBAPP_DATA instead of BrowsingDataType.COOKIES.
+     * BrowsingDataRemover::RemoveDataMask::REMOVE_WEBAPP_DATA instead of
+     * BrowsingDataType.SITE_DATA.
      */
     @Test
     @MediumTest
@@ -80,34 +88,46 @@ public class BrowsingDataRemoverIntegrationTest {
 
         CallbackHelper dataClearedExcludingDomainHelper = new CallbackHelper();
         // Clear cookies and site data excluding the registrable domain "google.com".
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            BrowsingDataBridge.getInstance().clearBrowsingDataExcludingDomains(
-                    new OnClearBrowsingDataListener() {
-                        @Override
-                        public void onBrowsingDataCleared() {
-                            dataClearedExcludingDomainHelper.notifyCalled();
-                        }
-                    },
-                    new int[] {BrowsingDataType.COOKIES}, TimePeriod.ALL_TIME,
-                    new String[] {"google.com"}, new int[] {1}, new String[0], new int[0]);
-        });
-        dataClearedExcludingDomainHelper.waitForFirst();
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    BrowsingDataBridge.getForProfile(mActivityTestRule.getProfile(false))
+                            .clearBrowsingDataExcludingDomains(
+                                    new OnClearBrowsingDataListener() {
+                                        @Override
+                                        public void onBrowsingDataCleared() {
+                                            dataClearedExcludingDomainHelper.notifyCalled();
+                                        }
+                                    },
+                                    new int[] {BrowsingDataType.SITE_DATA},
+                                    TimePeriod.ALL_TIME,
+                                    new String[] {"google.com"},
+                                    new int[] {1},
+                                    new String[0],
+                                    new int[0]);
+                });
+        dataClearedExcludingDomainHelper.waitForOnly();
 
         // The last two webapps should have been unregistered.
-        Assert.assertEquals(new HashSet<String>(Arrays.asList("webapp1")),
+        Assert.assertEquals(
+                new HashSet<String>(Arrays.asList("webapp1")),
                 WebappRegistry.getRegisteredWebappIdsForTesting());
 
         CallbackHelper dataClearedNoUrlFilterHelper = new CallbackHelper();
         // Clear cookies and site data with no url filter.
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            BrowsingDataBridge.getInstance().clearBrowsingData(new OnClearBrowsingDataListener() {
-                @Override
-                public void onBrowsingDataCleared() {
-                    dataClearedNoUrlFilterHelper.notifyCalled();
-                }
-            }, new int[] {BrowsingDataType.COOKIES}, TimePeriod.ALL_TIME);
-        });
-        dataClearedNoUrlFilterHelper.waitForFirst();
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    BrowsingDataBridge.getForProfile(mActivityTestRule.getProfile(false))
+                            .clearBrowsingData(
+                                    new OnClearBrowsingDataListener() {
+                                        @Override
+                                        public void onBrowsingDataCleared() {
+                                            dataClearedNoUrlFilterHelper.notifyCalled();
+                                        }
+                                    },
+                                    new int[] {BrowsingDataType.SITE_DATA},
+                                    TimePeriod.ALL_TIME);
+                });
+        dataClearedNoUrlFilterHelper.waitForOnly();
 
         // All webapps should have been unregistered.
         Assert.assertTrue(WebappRegistry.getRegisteredWebappIdsForTesting().isEmpty());
@@ -122,18 +142,91 @@ public class BrowsingDataRemoverIntegrationTest {
         Set<String> savedLinks = new HashSet<>();
         savedLinks.add(relationship);
 
-        VerificationResultStore mStore = VerificationResultStore.getInstanceForTesting();
+        ChromeVerificationResultStore mStore =
+                ChromeVerificationResultStore.getInstanceForTesting();
 
         mStore.setRelationships(savedLinks);
 
         Assert.assertTrue(mStore.getRelationships().contains(relationship));
 
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            BrowsingDataBridge.getInstance().clearBrowsingData(callbackHelper::notifyCalled,
-                    new int[] {BrowsingDataType.HISTORY}, TimePeriod.ALL_TIME);
-        });
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    BrowsingDataBridge.getForProfile(mActivityTestRule.getProfile(false))
+                            .clearBrowsingData(
+                                    callbackHelper::notifyCalled,
+                                    new int[] {BrowsingDataType.HISTORY},
+                                    TimePeriod.ALL_TIME);
+                });
 
         callbackHelper.waitForCallback(0);
         Assert.assertTrue(mStore.getRelationships().isEmpty());
+    }
+
+    @Test
+    @MediumTest
+    @Features.DisableFeatures(ChromeFeatureList.QUICK_DELETE_ANDROID_FOLLOWUP)
+    public void testClearingTabs() throws TimeoutException {
+        EmbeddedTestServer testServer = mActivityTestRule.getTestServer();
+        String testUrl = testServer.getURL(TEST_PATH);
+
+        CallbackHelper callbackHelper = new CallbackHelper();
+        mActivityTestRule.loadUrlInNewTab(testUrl, /* incognito= */ false);
+        mActivityTestRule.loadUrlInNewTab(testUrl, /* incognito= */ false);
+        mActivityTestRule.loadUrlInNewTab(testUrl, /* incognito= */ true);
+
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    BrowsingDataBridge.getForProfile(mActivityTestRule.getProfile(false))
+                            .clearBrowsingData(
+                                    callbackHelper::notifyCalled,
+                                    new int[] {BrowsingDataType.TABS},
+                                    TimePeriod.ALL_TIME);
+                });
+
+        callbackHelper.waitForCallback(0);
+
+        Assert.assertEquals(0, mActivityTestRule.tabsCount(/* incognito= */ false));
+        Assert.assertEquals(1, mActivityTestRule.tabsCount(/* incognito= */ true));
+
+        Assert.assertEquals(new GURL(testUrl), mActivityTestRule.getWebContents().getVisibleUrl());
+    }
+
+    @Test
+    @MediumTest
+    @Features.EnableFeatures(ChromeFeatureList.QUICK_DELETE_ANDROID_FOLLOWUP)
+    public void testClearingAllTabsOpensNtp() throws TimeoutException {
+        EmbeddedTestServer testServer = mActivityTestRule.getTestServer();
+        String testUrl = testServer.getURL(TEST_PATH);
+
+        CallbackHelper callbackHelper = new CallbackHelper();
+        mActivityTestRule.loadUrlInNewTab(testUrl, /* incognito= */ false);
+        mActivityTestRule.loadUrlInNewTab(testUrl, /* incognito= */ false);
+        mActivityTestRule.loadUrlInNewTab(testUrl, /* incognito= */ true);
+
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    BrowsingDataBridge.getForProfile(mActivityTestRule.getProfile(false))
+                            .clearBrowsingData(
+                                    callbackHelper::notifyCalled,
+                                    new int[] {BrowsingDataType.TABS},
+                                    TimePeriod.ALL_TIME);
+                });
+
+        callbackHelper.waitForCallback(0);
+
+        Assert.assertEquals(1, mActivityTestRule.tabsCount(/* incognito= */ false));
+        Assert.assertEquals(1, mActivityTestRule.tabsCount(/* incognito= */ true));
+
+        Assert.assertTrue(
+                UrlUtilities.isNtpUrl(mActivityTestRule.getWebContents().getVisibleUrl()));
+        Assert.assertEquals(
+                new GURL(testUrl),
+                mActivityTestRule
+                        .getActivity()
+                        .getTabModelSelectorSupplier()
+                        .get()
+                        .getModel(/* incognito= */ true)
+                        .getTabAt(0)
+                        .getUrl());
     }
 }

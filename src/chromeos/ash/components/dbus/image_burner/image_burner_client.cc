@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,9 @@
 
 #include <stdint.h>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
+#include "base/memory/raw_ptr.h"
 #include "chromeos/ash/components/dbus/image_burner/fake_image_burner_client.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
@@ -132,7 +133,7 @@ class ImageBurnerClientImpl : public ImageBurnerClient {
         << "Connect to " << interface << " " << signal << " failed.";
   }
 
-  dbus::ObjectProxy* proxy_;
+  raw_ptr<dbus::ObjectProxy> proxy_;
   BurnFinishedHandler burn_finished_handler_;
   BurnProgressUpdateHandler burn_progress_update_handler_;
 

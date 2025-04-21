@@ -1,11 +1,11 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_UI_VIEWS_ELEVATION_ICON_SETTER_H_
 #define CHROME_BROWSER_UI_VIEWS_ELEVATION_ICON_SETTER_H_
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 
@@ -24,7 +24,7 @@ class ElevationIconSetter {
   // |callback| will be called if the button icon is actually changed; callers
   // should pass a function which does a relayout on the view containing the
   // button, to ensure the button is correctly resized as necessary.
-  ElevationIconSetter(views::LabelButton* button, base::OnceClosure callback);
+  explicit ElevationIconSetter(views::LabelButton* button);
 
   ElevationIconSetter(const ElevationIconSetter&) = delete;
   ElevationIconSetter& operator=(const ElevationIconSetter&) = delete;
@@ -32,7 +32,7 @@ class ElevationIconSetter {
   ~ElevationIconSetter();
 
  private:
-  void SetButtonIcon(base::OnceClosure callback, const SkBitmap& icon);
+  void SetButtonIcon(const SkBitmap& icon);
 
   raw_ptr<views::LabelButton> button_;
   base::WeakPtrFactory<ElevationIconSetter> weak_factory_{this};

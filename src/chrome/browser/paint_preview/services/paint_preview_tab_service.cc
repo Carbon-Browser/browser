@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,12 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/memory_pressure_listener.h"
 #include "base/memory/memory_pressure_monitor.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/task_traits.h"
 #include "build/build_config.h"
 #include "chrome/browser/paint_preview/services/paint_preview_tab_service_file_mixin.h"
@@ -35,7 +36,7 @@ namespace paint_preview {
 namespace {
 
 // The maximum X and Y dimension in pixels.
-// TODO(crbug/1239291): Tune this value.
+// TODO(crbug.com/40193795): Tune this value.
 constexpr int kMaxCaptureSizePixels = 100000;
 
 constexpr size_t kMaxPerCaptureSizeBytes = 8 * 1000L * 1000L;       // 8 MB.
@@ -62,7 +63,7 @@ int TabIdFromDirectoryKey(const DirectoryKey& key) {
 PaintPreviewTabService::TabServiceTask::TabServiceTask(
     int tab_id,
     const DirectoryKey& key,
-    int frame_tree_node_id,
+    content::FrameTreeNodeId frame_tree_node_id,
     content::GlobalRenderFrameHostId frame_routing_id,
     float page_scale_factor,
     int scroll_offset_x,
@@ -138,9 +139,9 @@ void PaintPreviewTabService::CaptureTab(int tab_id,
   // Mark |contents| as being captured so that the renderer doesn't go away
   // until the capture is finished. This is done even before a file is created
   // to ensure the renderer doesn't go away while that happens.
-  auto capture_handle =
-      contents->IncrementCapturerCount(gfx::Size(), /*stay_hidden=*/true,
-                                       /*stay_awake=*/true);
+  auto capture_handle = contents->IncrementCapturerCount(
+      gfx::Size(), /*stay_hidden=*/true,
+      /*stay_awake=*/true, /*is_activity=*/true);
 
   auto file_manager = GetFileMixin()->GetFileManager();
 
@@ -172,7 +173,7 @@ void PaintPreviewTabService::TabClosed(int tab_id) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // Defer deletions until the cache is ready.
   if (!CacheInitialized()) {
-    base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&PaintPreviewTabService::TabClosed,
                        weak_ptr_factory_.GetWeakPtr(), tab_id),
@@ -198,7 +199,7 @@ void PaintPreviewTabService::AuditArtifacts(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // Defer deletions until the cache is ready.
   if (!CacheInitialized()) {
-    base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE,
         base::BindOnce(&PaintPreviewTabService::AuditArtifacts,
                        weak_ptr_factory_.GetWeakPtr(), active_tab_ids),
@@ -258,10 +259,8 @@ jboolean PaintPreviewTabService::IsCacheInitializedAndroid(JNIEnv* env) {
   return static_cast<jboolean>(CacheInitialized());
 }
 
-base::android::ScopedJavaLocalRef<jstring>
-PaintPreviewTabService::GetPathAndroid(JNIEnv* env) {
-  return base::android::ConvertUTF8ToJavaString(
-      env, GetFileMixin()->GetFileManager()->GetPath().AsUTF8Unsafe());
+std::string PaintPreviewTabService::GetPathAndroid(JNIEnv* env) {
+  return GetFileMixin()->GetFileManager()->GetPath().AsUTF8Unsafe();
 }
 #endif  // BUILDFLAG(IS_ANDROID)
 
@@ -280,7 +279,7 @@ void PaintPreviewTabService::InitializeCache(
 void PaintPreviewTabService::CaptureTabInternal(
     base::WeakPtr<TabServiceTask> task,
     bool accessibility_enabled,
-    const absl::optional<base::FilePath>& file_path) {
+    const std::optional<base::FilePath>& file_path) {
   if (!task) {
     return;
   }
@@ -307,9 +306,8 @@ void PaintPreviewTabService::CaptureTabInternal(
                        base::BindOnce(&PaintPreviewTabService::OnAXTreeWritten,
                                       weak_ptr_factory_.GetWeakPtr(), task)),
         ui::kAXModeWebContentsOnly,
-        /* exclude_offscreen= */ false,
         /* max_nodes= */ 5000,
-        /* timeout= */ {});
+        /* timeout= */ {}, content::WebContents::AXTreeSnapshotPolicy::kAll);
   }
 
   CaptureParams capture_params;

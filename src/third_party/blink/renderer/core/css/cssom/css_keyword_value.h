@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,6 +23,7 @@ class CORE_EXPORT CSSKeywordValue final : public CSSStyleValue {
   static CSSKeywordValue* FromCSSValue(const CSSValue&);
 
   explicit CSSKeywordValue(const String& keyword) : keyword_value_(keyword) {}
+  explicit CSSKeywordValue(CSSValueID keyword_value);
   CSSKeywordValue(const CSSKeywordValue&) = delete;
   CSSKeywordValue& operator=(const CSSKeywordValue&) = delete;
 

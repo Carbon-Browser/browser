@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -38,7 +38,21 @@ enum ColorModel {
   kSharpARCModeCMBW,            // Used in Sharp printer PPDs.
   kXeroxXRXColorAutomatic,      // Used in Xerox printer PPDs.
   kXeroxXRXColorBW,             // Used in Xerox printer PPDs.
-  kColorModelLast = kXeroxXRXColorBW
+  kColorModelLast = kXeroxXRXColorBW,  // Obsolete, do not use
+  [MinVersion=1] kCanonCNColorModeColor,       // Used in Canon printer PPDs.
+  [MinVersion=1] kCanonCNColorModeMono,        // Used in Canon printer PPDs.
+  [MinVersion=1] kCanonCNIJGrayScaleOne,       // Used in Canon printer PPDs.
+  [MinVersion=1] kCanonCNIJGrayScaleZero,      // Used in Canon printer PPDs.
+  // Used in Konica Minolta printer PPDs.
+  [MinVersion=1] kKonicaMinoltaSelectColorColor,
+  [MinVersion=1] kKonicaMinoltaSelectColorGrayscale,
+  [MinVersion=1] kOkiOKControlColor,           // Used in Oki printer PPDs.
+  [MinVersion=1] kOkiOKControlGray,            // Used in Oki printer PPDs.
+  // Used in Xerox printer PPDs.
+  [MinVersion=1] kXeroxXROutputColorPrintAsColor,
+  [MinVersion=1] kXeroxXROutputColorPrintAsGrayscale,
+  [MinVersion=2] kHpPjlColorAsGrayNo,   // Used in HP printer PPDs.
+  [MinVersion=2] kHpPjlColorAsGrayYes,  // Used in HP printer PPDs.
 };
 
 // Print job duplex mode values.
@@ -65,7 +79,7 @@ struct PageSizeMargins {
 enum PageOrientation { kUpright, kRotateLeft, kRotateRight };
 
 // Describes whether to reduce/enlarge/retain the print contents to fit the
-// printable area. (This is used only by plugin printing).
+// printable area.
 enum PrintScalingOption {
   // Prints the upper left of a page without scaling. Crop the page contents
   // that don't fit on the paper.
@@ -78,15 +92,21 @@ enum PrintScalingOption {
   kSourceSize,
   // Reduces or enlarges each page to fit the selected printer paper size.
   kFitToPaper,
+  // Center each page on paper. If the page is larger than the selected printer
+  // paper size, it will be scaled down to fit. Note that the page will never be
+  // scaled *up*. If it's not larger than the paper, it will just be centered.
+  kCenterShrinkToFitPaper,
 };
 
 // Document type that Skia graphics library generates.
 enum SkiaDocumentType {
   // PDF document type.
   kPDF,
-  // MultiPictureDocument type. kMSKP is an experimental, fragile, and
-  // diagnostic-only document type.
+  // MultiPictureDocument type
   kMSKP,
+  // XPS document type.
+  [EnableIf=is_win]
+  kXPS,
 };
 
 // Metafile data type encapsulated by a player.
@@ -94,12 +114,21 @@ enum MetafileDataType {
   kPDF,
   [EnableIf=is_win]
   kEMF,
+  [EnableIf=is_win]
+  kPostScriptEmf,
+};
+
+// What kind of document outline to generate.
+enum GenerateDocumentOutline {
+  kNone,
+  kFromAccessibilityTreeHeaders,
 };
 
 // What kind of margins to use.
+[Stable, Extensible]
 enum MarginType {
   // Default varies depending on headers being enabled or not
-  kDefaultMargins,
+  [Default] kDefaultMargins,
   kNoMargins,
   kPrintableAreaMargins,
   kCustomMargins,
@@ -169,4 +198,23 @@ enum PrinterLanguageType {
 struct PageRange {
   uint32 from;
   uint32 to;
+};
+
+// Corresponds to the 'client-info' IPP attribute.
+// For optional fields, missing values correspond to the 'no-value' IPP
+// out-of-band value.
+[Stable, EnableIf=is_chromeos]
+struct IppClientInfo {
+  [Stable, Extensible]
+  enum ClientType {
+    kApplication = 3,
+    kOperatingSystem = 4,
+    kDriver = 5,
+    [Default] kOther = 6,
+  };
+  ClientType client_type;
+  string client_name;
+  string? client_patches;
+  string client_string_version;
+  string? client_version;
 };

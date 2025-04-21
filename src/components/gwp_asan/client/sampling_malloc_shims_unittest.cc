@@ -1,17 +1,21 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "components/gwp_asan/client/sampling_malloc_shims.h"
 
 #include <stdlib.h>
+
 #include <cstdlib>
 #include <memory>
 #include <string>
 
-#include "base/allocator/allocator_shim.h"
-#include "base/allocator/buildflags.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/page_size.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/test/gtest_util.h"
@@ -20,7 +24,10 @@
 #include "build/build_config.h"
 #include "components/crash/core/common/crash_key.h"
 #include "components/gwp_asan/client/guarded_page_allocator.h"
+#include "components/gwp_asan/client/gwp_asan.h"
 #include "components/gwp_asan/common/crash_key_name.h"
+#include "partition_alloc/buildflags.h"
+#include "partition_alloc/shim/allocator_shim.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/multiprocess_func_list.h"
 
@@ -51,10 +58,12 @@ extern GuardedPageAllocator& GetMallocGpaForTesting();
 
 namespace {
 
-constexpr size_t kSamplingFrequency = 10;
-
-// Number of loop iterations required to definitely hit a sampled allocation.
-constexpr size_t kLoopIterations = kSamplingFrequency * 4;
+constexpr size_t kSamplingFrequency = 5;
+// Number of loop iterations required to hit a sampled allocation.
+// The probability of not hitting a sample allocation in kLoopIterations
+// is (1 - 1/kSamplingFrequency)^kLoopIterations. In this case that is
+// (4/5)^100 < 3*10^-10.
+constexpr size_t kLoopIterations = 100;
 
 constexpr int kSuccess = 0;
 constexpr int kFailure = 1;
@@ -63,12 +72,17 @@ class SamplingMallocShimsTest : public base::MultiProcessTest {
  public:
   static void multiprocessTestSetup() {
 #if BUILDFLAG(IS_APPLE)
-    base::allocator::InitializeAllocatorShim();
+    allocator_shim::InitializeAllocatorShim();
 #endif  // BUILDFLAG(IS_APPLE)
     crash_reporter::InitializeCrashKeys();
-    InstallMallocHooks(AllocatorState::kMaxMetadata,
-                       AllocatorState::kMaxMetadata, AllocatorState::kMaxSlots,
-                       kSamplingFrequency, base::DoNothing());
+    InstallMallocHooks(
+        AllocatorSettings{
+            .max_allocated_pages = AllocatorState::kMaxMetadata,
+            .num_metadata = AllocatorState::kMaxMetadata,
+            .total_pages = AllocatorState::kMaxRequestedSlots,
+            .sampling_frequency = kSamplingFrequency,
+        },
+        base::DoNothing());
   }
 
  protected:
@@ -297,7 +311,7 @@ TEST_F(SamplingMallocShimsTest, AlignedRealloc) {
 #endif  // BUILDFLAG(IS_WIN)
 
 // PartitionAlloc-Everywhere does not support batch_malloc / batch_free.
-#if BUILDFLAG(IS_APPLE) && !BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
+#if BUILDFLAG(IS_APPLE) && !PA_BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
 MULTIPROCESS_TEST_MAIN_WITH_SETUP(
     BatchFree,
     SamplingMallocShimsTest::multiprocessTestSetup) {
@@ -325,7 +339,7 @@ MULTIPROCESS_TEST_MAIN_WITH_SETUP(
 TEST_F(SamplingMallocShimsTest, BatchFree) {
   runTest("BatchFree");
 }
-#endif  // BUILDFLAG(IS_APPLE) && !BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
+#endif  // BUILDFLAG(IS_APPLE) && !PA_BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
 
 }  // namespace
 

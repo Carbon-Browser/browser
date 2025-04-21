@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,15 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <cstdint>
+#include <functional>
 #include <set>
+#include <string_view>
 
 #include "base/containers/contains.h"
 #include "base/logging.h"
 #include "base/strings/string_util.h"
+#include "components/variations/variations_layers.h"
 #include "components/variations/variations_seed_processor.h"
 
 namespace variations {
@@ -27,10 +31,9 @@ base::Time ConvertStudyDateToBaseTime(int64_t date_time) {
 template <typename Collection>
 bool ContainsStringIgnoreCaseASCII(const Collection& collection,
                                    const std::string& value) {
-  return std::find_if(std::begin(collection), std::end(collection),
-                      [&value](const std::string& s) -> bool {
-                        return base::EqualsCaseInsensitiveASCII(s, value);
-                      }) != std::end(collection);
+  return base::ranges::any_of(collection, [&value](const std::string& s) {
+    return base::EqualsCaseInsensitiveASCII(s, value);
+  });
 }
 
 }  // namespace
@@ -228,6 +231,44 @@ bool CheckStudyEnterprise(const Study::Filter& filter,
          filter.is_enterprise() == client_state.IsEnterprise();
 }
 
+bool CheckStudyGoogleGroup(const Study::Filter& filter,
+                           const ClientFilterableState& client_state) {
+  if (filter.google_group_size() == 0 &&
+      filter.exclude_google_group_size() == 0) {
+    // This study doesn't have any google group configuration, so break early.
+    return true;
+  }
+
+  // Fetch the groups this client is a member of.
+  base::flat_set<uint64_t> client_groups = client_state.GoogleGroups();
+
+  if (filter.google_group_size() > 0 &&
+      filter.exclude_google_group_size() > 0) {
+    // This is an invalid configuration; reject the study.
+    return false;
+  }
+
+  if (filter.google_group_size() > 0) {
+    for (int64_t filter_group : filter.google_group()) {
+      if (base::Contains(client_groups, filter_group)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  if (filter.exclude_google_group_size() > 0) {
+    for (int64_t filter_exclude_group : filter.exclude_google_group()) {
+      if (base::Contains(client_groups, filter_exclude_group)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  return true;
+}
+
 const std::string& GetClientCountryForStudy(
     const Study& study,
     const ClientFilterableState& client_state) {
@@ -249,32 +290,30 @@ const std::string& GetClientCountryForStudy(
   return base::EmptyString();
 }
 
-bool IsStudyExpired(const Study& study, const base::Time& date_time) {
-  if (study.has_expiry_date()) {
-    const base::Time expiry_date =
-        ConvertStudyDateToBaseTime(study.expiry_date());
-    return date_time >= expiry_date;
-  }
-
-  return false;
-}
-
-bool ShouldAddStudy(const Study& study,
+bool ShouldAddStudy(const ProcessedStudy& processed_study,
                     const ClientFilterableState& client_state,
                     const VariationsLayers& layers) {
+  const Study& study = *processed_study.study();
+  if (study.has_expiry_date()) {
+    DVLOG(1) << "Filtered out study " << study.name()
+             << " due to unsupported expiry_date field.";
+    return false;
+  }
+
   if (study.has_layer()) {
-    if (!layers.IsLayerMemberActive(study.layer().layer_id(),
-                                    study.layer().layer_member_id())) {
+    if (!layers.IsLayerMemberActive(study.layer())) {
       DVLOG(1) << "Filtered out study " << study.name()
                << " due to layer member not being active.";
       return false;
     }
 
-    if (VariationsSeedProcessor::ShouldStudyUseLowEntropy(study) &&
-        layers.IsLayerUsingDefaultEntropy(study.layer().layer_id())) {
-      DVLOG(1) << "Filtered out study " << study.name()
-               << " due to requiring a low entropy source yet being a member "
-                  "of a layer using the default entropy source.";
+    if (!VariationsLayers::AllowsHighEntropy(study) &&
+        layers.ActiveLayerMemberDependsOnHighEntropy(
+            study.layer().layer_id())) {
+      DVLOG(1)
+          << "Filtered out study " << study.name()
+          << " due to not allowing a high entropy source yet being a member "
+             "of a layer using the default (high) entropy source.";
       return false;
     }
   }
@@ -363,6 +402,12 @@ bool ShouldAddStudy(const Study& study,
                << " due to enterprise state.";
       return false;
     }
+
+    if (!CheckStudyGoogleGroup(study.filter(), client_state)) {
+      DVLOG(1) << "Filtered out study " << study.name()
+               << " due to Google groups membership checks.";
+      return false;
+    }
   }
 
   DVLOG(1) << "Kept study " << study.name() << ".";
@@ -371,46 +416,38 @@ bool ShouldAddStudy(const Study& study,
 
 }  // namespace internal
 
-void FilterAndValidateStudies(const VariationsSeed& seed,
-                              const ClientFilterableState& client_state,
-                              const VariationsLayers& layers,
-                              std::vector<ProcessedStudy>* filtered_studies) {
+std::vector<ProcessedStudy> FilterAndValidateStudies(
+    const VariationsSeed& seed,
+    const ClientFilterableState& client_state,
+    const VariationsLayers& layers) {
   DCHECK(client_state.version.IsValid());
 
-  // Add expired studies (in a disabled state) only after all the non-expired
-  // studies have been added (and do not add an expired study if a corresponding
-  // non-expired study got added). This way, if there's both an expired and a
-  // non-expired study that applies, the non-expired study takes priority.
-  std::set<std::string> created_studies;
-  std::vector<ProcessedStudy> expired_studies;
+  std::vector<ProcessedStudy> filtered_studies;
 
-  for (int i = 0; i < seed.study_size(); ++i) {
-    const Study& study = seed.study(i);
+  // Don't create two studies with the same name.
+  // These `string_view`s contain pointers which point to memory owned by
+  // `seed`.
+  std::set<std::string_view, std::less<>> created_studies;
+
+  for (const Study& study : seed.study()) {
     ProcessedStudy processed_study;
-    bool is_expired =
-        internal::IsStudyExpired(study, client_state.reference_date);
-    if (!processed_study.Init(&study, is_expired))
+    if (!processed_study.Init(&study))
       continue;
 
-    if (!internal::ShouldAddStudy(*processed_study.study(), client_state,
-                                  layers)) {
+    if (!internal::ShouldAddStudy(processed_study, client_state, layers))
+      continue;
+
+    auto [it, inserted] =
+        created_studies.insert(processed_study.study()->name());
+    if (!inserted) {
+      // The study's name is already in `created_studies`, which means that a
+      // study with the same name was already added to `filtered_studies`.
       continue;
     }
 
-    if (processed_study.is_expired()) {
-      expired_studies.push_back(processed_study);
-    } else if (!base::Contains(created_studies,
-                               processed_study.study()->name())) {
-      filtered_studies->push_back(processed_study);
-      created_studies.insert(processed_study.study()->name());
-    }
+    filtered_studies.push_back(processed_study);
   }
-
-  for (auto& expired_study : expired_studies) {
-    if (!base::Contains(created_studies, expired_study.study()->name())) {
-      filtered_studies->push_back(expired_study);
-    }
-  }
+  return filtered_studies;
 }
 
 }  // namespace variations

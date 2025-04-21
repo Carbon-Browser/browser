@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -189,7 +189,7 @@ TEST(UIResourceLayerImplTest, Occlusion) {
   impl.host_impl()->CreateUIResource(uid, bitmap);
 
   UIResourceLayerImpl* ui_resource_layer_impl =
-      impl.AddLayer<UIResourceLayerImpl>();
+      impl.AddLayerInActiveTree<UIResourceLayerImpl>();
   ui_resource_layer_impl->SetBounds(layer_size);
   ui_resource_layer_impl->SetDrawsContent(true);
   ui_resource_layer_impl->SetUIResourceId(uid);

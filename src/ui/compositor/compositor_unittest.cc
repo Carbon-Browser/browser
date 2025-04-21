@@ -1,18 +1,20 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include "ui/compositor/compositor.h"
 
 #include <stdint.h>
 
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/bind.h"
 #include "base/test/power_monitor_test.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_mock_time_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "cc/metrics/frame_sequence_tracker.h"
@@ -20,18 +22,27 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/ui_base_features.h"
-#include "ui/compositor/compositor.h"
+#include "ui/compositor/compositor_metrics_tracker.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/layer_delegate.h"
 #include "ui/compositor/test/draw_waiter_for_test.h"
 #include "ui/compositor/test/in_process_context_factory.h"
 #include "ui/compositor/test/test_context_factories.h"
+#include "ui/display/types/display_constants.h"
 
 using testing::Mock;
 using testing::_;
 
 namespace ui {
 namespace {
+
+class MockCompositorObserver : public CompositorObserver {
+ public:
+  MOCK_METHOD2(OnCompositorVisibilityChanging,
+               void(Compositor* compositor, bool visible));
+  MOCK_METHOD2(OnCompositorVisibilityChanged,
+               void(Compositor* compositor, bool visible));
+};
 
 class CompositorTest : public testing::Test {
  public:
@@ -105,7 +116,7 @@ class CompositorTestWithMessageLoop : public CompositorTest {
 
  protected:
   scoped_refptr<base::SingleThreadTaskRunner> CreateTaskRunner() override {
-    task_runner_ = base::ThreadTaskRunnerHandle::Get();
+    task_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
     return task_runner_;
   }
 
@@ -203,8 +214,8 @@ TEST_F(CompositorTestWithMessageLoop, ShouldUpdateDisplayProperties) {
   ASSERT_TRUE(compositor()->IsVisible());
 
   // Set a non-identity color matrix, color space, sdr white level, vsync
-  // timebase and vsync interval, and expect it to be set on the context
-  // factory.
+  // timebase, vsync interval, and max interval, and expect it to be set on the
+  // context factory.
   SkM44 color_matrix;
   color_matrix.setRC(1, 1, 0.7f);
   color_matrix.setRC(2, 2, 0.4f);
@@ -213,9 +224,12 @@ TEST_F(CompositorTestWithMessageLoop, ShouldUpdateDisplayProperties) {
   display_color_spaces.SetSDRMaxLuminanceNits(1.f);
   base::TimeTicks vsync_timebase(base::TimeTicks::Now());
   base::TimeDelta vsync_interval(base::Milliseconds(250));
+  base::TimeDelta max_vsync_interval(base::Milliseconds(500));
   compositor()->SetDisplayColorMatrix(color_matrix);
   compositor()->SetDisplayColorSpaces(display_color_spaces);
   compositor()->SetDisplayVSyncParameters(vsync_timebase, vsync_interval);
+  compositor()->SetMaxVSyncAndVrr(
+      max_vsync_interval, display::VariableRefreshRateState::kVrrEnabled);
 
   InProcessContextFactory* context_factory =
       static_cast<InProcessContextFactory*>(compositor()->context_factory());
@@ -228,11 +242,15 @@ TEST_F(CompositorTestWithMessageLoop, ShouldUpdateDisplayProperties) {
             context_factory->GetDisplayVSyncTimeBase(compositor()));
   EXPECT_EQ(vsync_interval,
             context_factory->GetDisplayVSyncTimeInterval(compositor()));
+  EXPECT_EQ(max_vsync_interval,
+            context_factory->GetMaxVSyncInterval(compositor()));
+  EXPECT_EQ(display::VariableRefreshRateState::kVrrEnabled,
+            context_factory->GetVrrState(compositor()));
 
   // Simulate a lost context by releasing the output surface and setting it on
   // the compositor again. Expect that the same color matrix, color space, sdr
-  // white level, vsync timebase and vsync interval will be set again on the
-  // context factory.
+  // white level, vsync timebase, vsync interval, and max interval will be set
+  // again on the context factory.
   context_factory->ResetDisplayOutputParameters(compositor());
   compositor()->SetVisible(false);
   EXPECT_EQ(gfx::kNullAcceleratedWidget,
@@ -248,6 +266,11 @@ TEST_F(CompositorTestWithMessageLoop, ShouldUpdateDisplayProperties) {
             context_factory->GetDisplayVSyncTimeBase(compositor()));
   EXPECT_EQ(vsync_interval,
             context_factory->GetDisplayVSyncTimeInterval(compositor()));
+  EXPECT_EQ(max_vsync_interval,
+            context_factory->GetMaxVSyncInterval(compositor()));
+  EXPECT_EQ(display::VariableRefreshRateState::kVrrEnabled,
+            context_factory->GetVrrState(compositor()));
+
   compositor()->SetRootLayer(nullptr);
 }
 
@@ -263,13 +286,13 @@ TEST_F(CompositorTestWithMockedTime,
 TEST_F(CompositorTestWithMessageLoop, MoveThroughputTracker) {
   // Move a not started instance.
   {
-    auto tracker = compositor()->RequestNewThroughputTracker();
+    auto tracker = compositor()->RequestNewCompositorMetricsTracker();
     auto moved_tracker = std::move(tracker);
   }
 
   // Move a started instance.
   {
-    auto tracker = compositor()->RequestNewThroughputTracker();
+    auto tracker = compositor()->RequestNewCompositorMetricsTracker();
     tracker.Start(base::BindLambdaForTesting(
         [&](const cc::FrameSequenceMetrics::CustomReportData& data) {
           // This should not be called since the tracking is auto canceled.
@@ -280,7 +303,7 @@ TEST_F(CompositorTestWithMessageLoop, MoveThroughputTracker) {
 
   // Move a started instance and stop.
   {
-    auto tracker = compositor()->RequestNewThroughputTracker();
+    auto tracker = compositor()->RequestNewCompositorMetricsTracker();
     tracker.Start(base::BindLambdaForTesting(
         [&](const cc::FrameSequenceMetrics::CustomReportData& data) {
           // May be called since Stop() is called.
@@ -291,7 +314,7 @@ TEST_F(CompositorTestWithMessageLoop, MoveThroughputTracker) {
 
   // Move a started instance and cancel.
   {
-    auto tracker = compositor()->RequestNewThroughputTracker();
+    auto tracker = compositor()->RequestNewCompositorMetricsTracker();
     tracker.Start(base::BindLambdaForTesting(
         [&](const cc::FrameSequenceMetrics::CustomReportData& data) {
           // This should not be called since Cancel() is called.
@@ -303,7 +326,7 @@ TEST_F(CompositorTestWithMessageLoop, MoveThroughputTracker) {
 
   // Move a stopped instance.
   {
-    auto tracker = compositor()->RequestNewThroughputTracker();
+    auto tracker = compositor()->RequestNewCompositorMetricsTracker();
     tracker.Start(base::BindLambdaForTesting(
         [&](const cc::FrameSequenceMetrics::CustomReportData& data) {
           // May be called since Stop() is called.
@@ -314,7 +337,7 @@ TEST_F(CompositorTestWithMessageLoop, MoveThroughputTracker) {
 
   // Move a canceled instance.
   {
-    auto tracker = compositor()->RequestNewThroughputTracker();
+    auto tracker = compositor()->RequestNewCompositorMetricsTracker();
     tracker.Start(base::BindLambdaForTesting(
         [&](const cc::FrameSequenceMetrics::CustomReportData& data) {
           // This should not be called since Cancel() is called.
@@ -325,7 +348,9 @@ TEST_F(CompositorTestWithMessageLoop, MoveThroughputTracker) {
   }
 }
 
-TEST_F(CompositorTestWithMessageLoop, ThroughputTracker) {
+#if BUILDFLAG(IS_CHROMEOS)
+// ui::CompositorMetricsTracker is only supported on ChromeOS
+TEST_F(CompositorTestWithMessageLoop, CompositorMetricsTracker) {
   auto root_layer = std::make_unique<Layer>(ui::LAYER_SOLID_COLOR);
   viz::ParentLocalSurfaceIdAllocator allocator;
   allocator.GenerateId();
@@ -335,13 +360,14 @@ TEST_F(CompositorTestWithMessageLoop, ThroughputTracker) {
                                 allocator.GetCurrentLocalSurfaceId());
   ASSERT_TRUE(compositor()->IsVisible());
 
-  ThroughputTracker tracker = compositor()->RequestNewThroughputTracker();
+  CompositorMetricsTracker tracker =
+      compositor()->RequestNewCompositorMetricsTracker();
 
   base::RunLoop run_loop;
   tracker.Start(base::BindLambdaForTesting(
       [&](const cc::FrameSequenceMetrics::CustomReportData& data) {
-        EXPECT_GT(data.frames_expected, 0u);
-        EXPECT_GT(data.frames_produced, 0u);
+        EXPECT_GT(data.frames_expected_v3, 0u);
+        EXPECT_GT(data.frames_expected_v3 - data.frames_dropped_v3, 0u);
         run_loop.Quit();
       }));
 
@@ -365,7 +391,7 @@ TEST_F(CompositorTestWithMessageLoop, ThroughputTracker) {
 }
 
 TEST_F(CompositorTestWithMessageLoop, ThroughputTrackerOutliveCompositor) {
-  auto tracker = compositor()->RequestNewThroughputTracker();
+  auto tracker = compositor()->RequestNewCompositorMetricsTracker();
   tracker.Start(base::BindLambdaForTesting(
       [&](const cc::FrameSequenceMetrics::CustomReportData& data) {
         ADD_FAILURE() << "No report should happen";
@@ -387,7 +413,8 @@ TEST_F(CompositorTestWithMessageLoop, ThroughputTrackerCallbackStateChange) {
                                 allocator.GetCurrentLocalSurfaceId());
   ASSERT_TRUE(compositor()->IsVisible());
 
-  ThroughputTracker tracker = compositor()->RequestNewThroughputTracker();
+  CompositorMetricsTracker tracker =
+      compositor()->RequestNewCompositorMetricsTracker();
 
   base::RunLoop run_loop;
   tracker.Start(base::BindLambdaForTesting(
@@ -396,8 +423,8 @@ TEST_F(CompositorTestWithMessageLoop, ThroughputTrackerCallbackStateChange) {
         tracker.Cancel();
 
         // Starting another tracker should not DCHECK or crash.
-        ThroughputTracker another_tracker =
-            compositor()->RequestNewThroughputTracker();
+        CompositorMetricsTracker another_tracker =
+            compositor()->RequestNewCompositorMetricsTracker();
         another_tracker.Start(base::DoNothing());
 
         run_loop.Quit();
@@ -432,7 +459,8 @@ TEST_F(CompositorTestWithMessageLoop, ThroughputTrackerInvoluntaryReport) {
                                 allocator.GetCurrentLocalSurfaceId());
   ASSERT_TRUE(compositor()->IsVisible());
 
-  ThroughputTracker tracker = compositor()->RequestNewThroughputTracker();
+  CompositorMetricsTracker tracker =
+      compositor()->RequestNewCompositorMetricsTracker();
 
   tracker.Start(base::BindLambdaForTesting(
       [&](const cc::FrameSequenceMetrics::CustomReportData& data) {
@@ -453,9 +481,10 @@ TEST_F(CompositorTestWithMessageLoop, ThroughputTrackerInvoluntaryReport) {
   // Stop() fails but no DCHECK or crash.
   EXPECT_FALSE(tracker.Stop());
 }
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 #if BUILDFLAG(IS_WIN)
-// TODO(crbug.com/608436): Flaky on windows trybots
+// TODO(crbug.com/40467610): Flaky on windows trybots
 #define MAYBE_CreateAndReleaseOutputSurface \
   DISABLED_CreateAndReleaseOutputSurface
 #else
@@ -485,7 +514,7 @@ TEST_F(CompositorTestWithMessageLoop, MAYBE_CreateAndReleaseOutputSurface) {
 class LayerDelegateThatAddsDuringUpdateVisualState : public LayerDelegate {
  public:
   explicit LayerDelegateThatAddsDuringUpdateVisualState(Layer* parent)
-      : parent_(parent) {}
+      : parent_(*parent) {}
 
   bool update_visual_state_called() const {
     return update_visual_state_called_;
@@ -502,7 +531,7 @@ class LayerDelegateThatAddsDuringUpdateVisualState : public LayerDelegate {
                                   float new_device_scale_factor) override {}
 
  private:
-  raw_ptr<Layer> parent_;
+  const raw_ref<Layer> parent_;
   std::vector<std::unique_ptr<Layer>> added_layers_;
   bool update_visual_state_called_ = false;
 };
@@ -531,39 +560,35 @@ TEST_F(CompositorTestWithMessageLoop, AddLayerDuringUpdateVisualState) {
   DrawWaiterForTest::WaitForCompositingEnded(compositor());
   EXPECT_TRUE(child_layer_delegate.update_visual_state_called());
   compositor()->SetRootLayer(nullptr);
-  child_layer2.reset();
-  child_layer.reset();
-  root_layer.reset();
 }
 
-TEST_F(CompositorTestWithMessageLoop, PriorityCutoffWhenVisible) {
-  EXPECT_EQ(gpu::MemoryAllocation::CUTOFF_ALLOW_NICE_TO_HAVE,
-            compositor()
-                ->GetLayerTreeSettings()
-                .memory_policy.priority_cutoff_when_visible);
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(
-      features::kUiCompositorRequiredTilesOnly);
-  DestroyCompositor();
-  CreateCompositor();
-  EXPECT_EQ(gpu::MemoryAllocation::CUTOFF_ALLOW_REQUIRED_ONLY,
-            compositor()
-                ->GetLayerTreeSettings()
-                .memory_policy.priority_cutoff_when_visible);
-}
+TEST_F(CompositorTestWithMessageLoop, CompositorVisibilityChanges) {
+  testing::StrictMock<MockCompositorObserver> observer;
+  compositor()->AddObserver(&observer);
 
-TEST_F(CompositorTestWithMessageLoop, ReleaseTileResourcesForHiddenLayers) {
-  EXPECT_FALSE(compositor()
-                   ->GetLayerTreeSettings()
-                   .release_tile_resources_for_hidden_layers);
-  base::test::ScopedFeatureList scoped_feature_list;
-  scoped_feature_list.InitAndEnableFeature(
-      features::kUiCompositorReleaseTileResourcesForHiddenLayers);
-  DestroyCompositor();
-  CreateCompositor();
-  EXPECT_TRUE(compositor()
-                  ->GetLayerTreeSettings()
-                  .release_tile_resources_for_hidden_layers);
+  EXPECT_CALL(observer, OnCompositorVisibilityChanging(compositor(), false))
+      .Times(1);
+  EXPECT_CALL(observer, OnCompositorVisibilityChanged(compositor(), false))
+      .Times(1);
+  compositor()->SetVisible(false);
+  ::testing::Mock::VerifyAndClearExpectations(&observer);
+
+  EXPECT_CALL(observer, OnCompositorVisibilityChanging(compositor(), true))
+      .Times(1);
+  EXPECT_CALL(observer, OnCompositorVisibilityChanged(compositor(), true))
+      .Times(1);
+  compositor()->SetVisible(true);
+  ::testing::Mock::VerifyAndClearExpectations(&observer);
+
+  // Verify no calls if visibility isn't changed.
+  EXPECT_CALL(observer, OnCompositorVisibilityChanging(compositor(), _))
+      .Times(0);
+  EXPECT_CALL(observer, OnCompositorVisibilityChanged(compositor(), _))
+      .Times(0);
+  compositor()->SetVisible(true);
+  ::testing::Mock::VerifyAndClearExpectations(&observer);
+
+  compositor()->RemoveObserver(&observer);
 }
 
 }  // namespace ui

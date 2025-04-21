@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,6 +13,10 @@ namespace printing {
 
 // static
 void PageRange::Normalize(PageRanges& ranges) {
+  if (ranges.empty()) {
+    return;
+  }
+
   std::sort(ranges.begin(), ranges.end());
   PageRanges::iterator dst = ranges.begin();
   for (PageRanges::iterator src = ranges.begin() + 1; src < ranges.end();

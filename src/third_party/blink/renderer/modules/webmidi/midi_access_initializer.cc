@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,8 @@
 #include <memory>
 #include <utility>
 
+#include "base/task/single_thread_task_runner.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/permissions/permission.mojom-blink.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
@@ -20,43 +22,38 @@
 #include "third_party/blink/renderer/modules/webmidi/midi_access.h"
 #include "third_party/blink/renderer/modules/webmidi/midi_port.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
-#include "third_party/blink/renderer/platform/mojo/mojo_helper.h"
 
 namespace blink {
 
 using midi::mojom::PortState;
 using midi::mojom::Result;
-using mojom::blink::PermissionStatus;
 
 MIDIAccessInitializer::MIDIAccessInitializer(ScriptState* script_state,
                                              const MIDIOptions* options)
-    : ScriptPromiseResolver(script_state),
+    : resolver_(MakeGarbageCollected<ScriptPromiseResolver<MIDIAccess>>(
+          script_state)),
       options_(options),
       permission_service_(ExecutionContext::From(script_state)) {}
 
-void MIDIAccessInitializer::ContextDestroyed() {
-  ScriptPromiseResolver::ContextDestroyed();
-}
-
-ScriptPromise MIDIAccessInitializer::Start() {
-  ScriptPromise promise = Promise();
-
+ScriptPromise<MIDIAccess> MIDIAccessInitializer::Start(LocalDOMWindow* window) {
   // See https://bit.ly/2S0zRAS for task types.
   scoped_refptr<base::SingleThreadTaskRunner> task_runner =
-      GetExecutionContext()->GetTaskRunner(TaskType::kMiscPlatformAPI);
+      window->GetTaskRunner(TaskType::kMiscPlatformAPI);
 
   ConnectToPermissionService(
-      GetExecutionContext(),
+      window,
       permission_service_.BindNewPipeAndPassReceiver(std::move(task_runner)));
 
-  LocalDOMWindow* window = To<LocalDOMWindow>(GetExecutionContext());
   permission_service_->RequestPermission(
-      CreateMidiPermissionDescriptor(options_->hasSysex() && options_->sysex()),
+      CreateMidiPermissionDescriptor(
+          base::FeatureList::IsEnabled(blink::features::kBlockMidiByDefault)
+              ? true
+              : options_->hasSysex() && options_->sysex()),
       LocalFrame::HasTransientUserActivation(window->GetFrame()),
-      WTF::Bind(&MIDIAccessInitializer::OnPermissionsUpdated,
-                WrapPersistent(this)));
+      WTF::BindOnce(&MIDIAccessInitializer::OnPermissionsUpdated,
+                    WrapPersistent(this)));
 
-  return promise;
+  return resolver_->Promise();
 }
 
 void MIDIAccessInitializer::DidAddInputPort(const String& id,
@@ -66,7 +63,7 @@ void MIDIAccessInitializer::DidAddInputPort(const String& id,
                                             PortState state) {
   DCHECK(dispatcher_);
   port_descriptors_.push_back(PortDescriptor(
-      id, manufacturer, name, MIDIPort::kTypeInput, version, state));
+      id, manufacturer, name, MIDIPortType::kInput, version, state));
 }
 
 void MIDIAccessInitializer::DidAddOutputPort(const String& id,
@@ -76,7 +73,7 @@ void MIDIAccessInitializer::DidAddOutputPort(const String& id,
                                              PortState state) {
   DCHECK(dispatcher_);
   port_descriptors_.push_back(PortDescriptor(
-      id, manufacturer, name, MIDIPort::kTypeOutput, version, state));
+      id, manufacturer, name, MIDIPortType::kOutput, version, state));
 }
 
 void MIDIAccessInitializer::DidSetInputPortState(unsigned port_index,
@@ -99,60 +96,58 @@ void MIDIAccessInitializer::DidStartSession(Result result) {
   // SecurityError is handled in onPermission(s)Updated().
   switch (result) {
     case Result::NOT_INITIALIZED:
-      break;
+      NOTREACHED();
     case Result::OK:
-      return Resolve(MakeGarbageCollected<MIDIAccess>(
+      resolver_->Resolve(MakeGarbageCollected<MIDIAccess>(
           dispatcher_, options_->hasSysex() && options_->sysex(),
-          port_descriptors_, GetExecutionContext()));
+          port_descriptors_, resolver_->GetExecutionContext()));
+      return;
     case Result::NOT_SUPPORTED:
-      return Reject(MakeGarbageCollected<DOMException>(
+      resolver_->Reject(MakeGarbageCollected<DOMException>(
           DOMExceptionCode::kNotSupportedError));
+      return;
     case Result::INITIALIZATION_ERROR:
-      return Reject(MakeGarbageCollected<DOMException>(
+      resolver_->Reject(MakeGarbageCollected<DOMException>(
           DOMExceptionCode::kInvalidStateError,
           "Platform dependent initialization failed."));
+      return;
   }
-  NOTREACHED();
-  Reject(
-      MakeGarbageCollected<DOMException>(DOMExceptionCode::kInvalidStateError,
-                                         "Unknown internal error occurred."));
 }
 
 void MIDIAccessInitializer::Trace(Visitor* visitor) const {
+  visitor->Trace(resolver_);
   visitor->Trace(dispatcher_);
   visitor->Trace(options_);
   visitor->Trace(permission_service_);
-  ScriptPromiseResolver::Trace(visitor);
-}
-
-ExecutionContext* MIDIAccessInitializer::GetExecutionContext() const {
-  return ExecutionContext::From(GetScriptState());
 }
 
 void MIDIAccessInitializer::StartSession() {
   DCHECK(!dispatcher_);
 
-  dispatcher_ = MakeGarbageCollected<MIDIDispatcher>(GetExecutionContext());
+  dispatcher_ =
+      MakeGarbageCollected<MIDIDispatcher>(resolver_->GetExecutionContext());
   dispatcher_->SetClient(this);
 }
 
-void MIDIAccessInitializer::OnPermissionsUpdated(PermissionStatus status) {
+void MIDIAccessInitializer::OnPermissionsUpdated(
+    mojom::blink::PermissionStatus status) {
   permission_service_.reset();
-  if (status == PermissionStatus::GRANTED) {
+  if (status == mojom::blink::PermissionStatus::GRANTED) {
     StartSession();
   } else {
-    Reject(
-        MakeGarbageCollected<DOMException>(DOMExceptionCode::kSecurityError));
+    resolver_->Reject(
+        MakeGarbageCollected<DOMException>(DOMExceptionCode::kNotAllowedError));
   }
 }
 
-void MIDIAccessInitializer::OnPermissionUpdated(PermissionStatus status) {
+void MIDIAccessInitializer::OnPermissionUpdated(
+    mojom::blink::PermissionStatus status) {
   permission_service_.reset();
-  if (status == PermissionStatus::GRANTED) {
+  if (status == mojom::blink::PermissionStatus::GRANTED) {
     StartSession();
   } else {
-    Reject(
-        MakeGarbageCollected<DOMException>(DOMExceptionCode::kSecurityError));
+    resolver_->Reject(
+        MakeGarbageCollected<DOMException>(DOMExceptionCode::kNotAllowedError));
   }
 }
 

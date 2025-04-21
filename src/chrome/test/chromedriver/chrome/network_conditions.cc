@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,7 +11,7 @@
 #include "chrome/test/chromedriver/chrome/network_list.h"
 #include "chrome/test/chromedriver/chrome/status.h"
 
-NetworkConditions::NetworkConditions() {}
+NetworkConditions::NetworkConditions() = default;
 NetworkConditions::NetworkConditions(
     bool offline, double latency, double download_throughput,
     double upload_throughput)
@@ -19,7 +19,7 @@ NetworkConditions::NetworkConditions(
     latency(latency),
     download_throughput(download_throughput),
     upload_throughput(upload_throughput) {}
-NetworkConditions::~NetworkConditions() {}
+NetworkConditions::~NetworkConditions() = default;
 
 Status FindPresetNetwork(std::string network_name,
                          NetworkConditions* network_conditions) {
@@ -33,26 +33,23 @@ Status FindPresetNetwork(std::string network_name,
     return Status(kUnknownError, "malformed networks list");
 
   for (const auto& entry : parsed_json->GetList()) {
-    const base::DictionaryValue* network = nullptr;
-    if (!entry.GetAsDictionary(&network)) {
+    if (!entry.is_dict()) {
       return Status(kUnknownError,
                     "malformed network in list: should be a dictionary");
     }
 
-    if (network == NULL)
-      continue;
+    const base::Value::Dict& network = entry.GetDict();
 
-    std::string title;
-    if (!network->GetString("title", &title)) {
+    const std::string* title = network.FindString("title");
+    if (!title) {
       return Status(kUnknownError,
                     "malformed network title: should be a string");
     }
-    if (title != network_name)
+    if (*title != network_name)
       continue;
 
-    absl::optional<double> maybe_latency = network->FindDoubleKey("latency");
-    absl::optional<double> maybe_throughput =
-        network->FindDoubleKey("throughput");
+    std::optional<double> maybe_latency = network.FindDouble("latency");
+    std::optional<double> maybe_throughput = network.FindDouble("throughput");
 
     if (!maybe_latency.has_value()) {
       return Status(kUnknownError,

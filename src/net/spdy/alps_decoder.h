@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,9 +10,9 @@
 #include "base/containers/span.h"
 #include "base/strings/string_number_conversions.h"
 #include "net/base/net_export.h"
-#include "net/third_party/quiche/src/quiche/spdy/core/http2_frame_decoder_adapter.h"
-#include "net/third_party/quiche/src/quiche/spdy/core/spdy_no_op_visitor.h"
-#include "net/third_party/quiche/src/quiche/spdy/core/spdy_protocol.h"
+#include "net/third_party/quiche/src/quiche/http2/core/http2_frame_decoder_adapter.h"
+#include "net/third_party/quiche/src/quiche/http2/core/spdy_no_op_visitor.h"
+#include "net/third_party/quiche/src/quiche/http2/core/spdy_protocol.h"
 
 namespace net {
 
@@ -113,6 +113,9 @@ class NET_EXPORT_PRIVATE AlpsDecoder {
     // Returns an error code, or Error::kNoError if no error has occurred.
     Error error() const { return error_; }
 
+    // Returns an error code if it was bypassed, or Error::kNoError if no error was bypassed.
+    Error error_bypass() const { return error_bypass_; }
+
     // ExtensionVisitorInterface implementation.
 
     // Settings are parsed in a SpdyFramerVisitorInterface implementation,
@@ -131,6 +134,7 @@ class NET_EXPORT_PRIVATE AlpsDecoder {
     std::vector<spdy::AcceptChOriginValuePair> accept_ch_;
 
     Error error_ = Error::kNoError;
+    Error error_bypass_ = Error::kNoError;
   };
 
   SettingsParser settings_parser_;

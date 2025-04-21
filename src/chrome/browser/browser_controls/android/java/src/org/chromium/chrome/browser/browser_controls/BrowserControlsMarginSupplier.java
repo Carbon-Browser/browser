@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -31,8 +31,15 @@ public class BrowserControlsMarginSupplier extends ObservableSupplierImpl<Rect>
     }
 
     @Override
-    public void onControlsOffsetChanged(int topOffset, int topControlsMinHeightOffset,
-            int bottomOffset, int bottomControlsMinHeightOffset, boolean needsAnimate) {
+    public void onControlsOffsetChanged(
+            int topOffset,
+            int topControlsMinHeightOffset,
+            boolean topControlsMinHeightChanged,
+            int bottomOffset,
+            int bottomControlsMinHeightOffset,
+            boolean bottomControlsMinHeightChanged,
+            boolean requestNewFrame,
+            boolean isVisibilityForced) {
         updateMargins();
     }
 
@@ -48,10 +55,12 @@ public class BrowserControlsMarginSupplier extends ObservableSupplierImpl<Rect>
     }
 
     private void updateMargins() {
-        int topMargin = mBrowserControlsStateProvider.getTopControlsHeight()
-                + mBrowserControlsStateProvider.getTopControlOffset();
-        int bottomMargin = mBrowserControlsStateProvider.getBottomControlsHeight()
-                - mBrowserControlsStateProvider.getBottomControlOffset();
+        int topMargin =
+                mBrowserControlsStateProvider.getTopControlsHeight()
+                        + mBrowserControlsStateProvider.getTopControlOffset();
+        int bottomMargin =
+                mBrowserControlsStateProvider.getBottomControlsHeight()
+                        - mBrowserControlsStateProvider.getBottomControlOffset();
         super.set(new Rect(0, topMargin, 0, bottomMargin));
     }
 }

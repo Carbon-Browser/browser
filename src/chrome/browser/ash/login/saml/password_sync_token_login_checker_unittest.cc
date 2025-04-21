@@ -1,18 +1,24 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/saml/password_sync_token_login_checker.h"
 
+#include <memory>
+
 #include "base/test/metrics/histogram_tester.h"
-#include "base/time/default_clock.h"
+#include "base/test/task_environment.h"
+#include "base/time/time.h"
 #include "chrome/browser/ash/login/saml/password_sync_token_checkers_collection.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
+#include "chrome/test/base/scoped_testing_local_state.h"
 #include "chrome/test/base/testing_browser_process.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "components/user_manager/user_names.h"
 #include "content/public/test/browser_task_environment.h"
-#include "testing/gmock/include/gmock/gmock.h"
+#include "google_apis/gaia/gaia_id.h"
+#include "net/base/backoff_entry.h"
+#include "testing/gtest/include/gtest/gtest.h"
 
 namespace ash {
 namespace {
@@ -23,22 +29,6 @@ const char kSAMLUserEmail[] = "alice@corp.example.com";
 const char kSyncToken[] = "sync-token-1";
 
 constexpr base::TimeDelta kSamlTokenDelay = base::Seconds(60);
-
-class FakeUserManagerWithLocalState : public FakeChromeUserManager {
- public:
-  FakeUserManagerWithLocalState()
-      : test_local_state_(std::make_unique<TestingPrefServiceSimple>()) {
-    RegisterPrefs(test_local_state_->registry());
-  }
-  ~FakeUserManagerWithLocalState() override = default;
-
-  PrefService* GetLocalState() const override {
-    return test_local_state_.get();
-  }
-
- private:
-  std::unique_ptr<TestingPrefServiceSimple> test_local_state_;
-};
 
 }  // namespace
 
@@ -51,30 +41,27 @@ class PasswordSyncTokenLoginCheckerTest : public testing::Test {
   void OnTokenVerified(bool is_verified);
 
   const AccountId saml_login_account_id_ =
-      AccountId::FromUserEmailGaiaId(kSAMLUserEmail, kSAMLUserId);
+      AccountId::FromUserEmailGaiaId(kSAMLUserEmail, GaiaId(kSAMLUserId));
 
   content::BrowserTaskEnvironment test_environment_{
       base::test::TaskEnvironment::MainThreadType::UI,
       base::test::TaskEnvironment::TimeSource::MOCK_TIME};
 
+  ScopedTestingLocalState scoped_local_state_;
   std::unique_ptr<net::BackoffEntry> sync_token_retry_backoff_;
-  FakeChromeUserManager* user_manager_ = nullptr;
-  std::unique_ptr<user_manager::ScopedUserManager> scoped_user_manager_;
+  user_manager::TypedScopedUserManager<ash::FakeChromeUserManager>
+      fake_user_manager_;
   std::unique_ptr<PasswordSyncTokenLoginChecker> checker_;
 };
 
-PasswordSyncTokenLoginCheckerTest::PasswordSyncTokenLoginCheckerTest() {
-  std::unique_ptr<FakeChromeUserManager> fake_user_manager =
-      std::make_unique<FakeUserManagerWithLocalState>();
-  scoped_user_manager_ = std::make_unique<user_manager::ScopedUserManager>(
-      std::move(fake_user_manager));
+PasswordSyncTokenLoginCheckerTest::PasswordSyncTokenLoginCheckerTest()
+    : scoped_local_state_(TestingBrowserProcess::GetGlobal()) {
+  fake_user_manager_.Reset(std::make_unique<ash::FakeChromeUserManager>());
 
   sync_token_retry_backoff_ = std::make_unique<net::BackoffEntry>(
       &PasswordSyncTokenCheckersCollection::kFetchTokenRetryBackoffPolicy);
-  user_manager_ =
-      static_cast<FakeChromeUserManager*>(user_manager::UserManager::Get());
-  user_manager_->AddUser(saml_login_account_id_);
-  user_manager_->SwitchActiveUser(saml_login_account_id_);
+  fake_user_manager_->AddUser(saml_login_account_id_);
+  fake_user_manager_->SwitchActiveUser(saml_login_account_id_);
 }
 
 void PasswordSyncTokenLoginCheckerTest::CreatePasswordSyncTokenLoginChecker() {
@@ -95,8 +82,8 @@ TEST_F(PasswordSyncTokenLoginCheckerTest, SyncTokenValid) {
   CreatePasswordSyncTokenLoginChecker();
   checker_->CheckForPasswordNotInSync();
   OnTokenVerified(true);
-  EXPECT_FALSE(
-      user_manager_->FindUser(saml_login_account_id_)->force_online_signin());
+  EXPECT_FALSE(fake_user_manager_->FindUser(saml_login_account_id_)
+                   ->force_online_signin());
   test_environment_.FastForwardBy(kSamlTokenDelay);
   EXPECT_TRUE(checker_->IsCheckPending());
 }
@@ -105,8 +92,8 @@ TEST_F(PasswordSyncTokenLoginCheckerTest, SyncTokenInvalid) {
   CreatePasswordSyncTokenLoginChecker();
   checker_->CheckForPasswordNotInSync();
   OnTokenVerified(false);
-  EXPECT_TRUE(
-      user_manager_->FindUser(saml_login_account_id_)->force_online_signin());
+  EXPECT_TRUE(fake_user_manager_->FindUser(saml_login_account_id_)
+                  ->force_online_signin());
   test_environment_.FastForwardBy(kSamlTokenDelay);
   EXPECT_FALSE(checker_->IsCheckPending());
 }

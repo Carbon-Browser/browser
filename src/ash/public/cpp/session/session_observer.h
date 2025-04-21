@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define ASH_PUBLIC_CPP_SESSION_SESSION_OBSERVER_H_
 
 #include "ash/public/cpp/ash_public_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/observer_list_types.h"
 #include "components/session_manager/session_manager_types.h"
 
@@ -24,8 +25,13 @@ class ASH_PUBLIC_EXPORT SessionObserver : public base::CheckedObserver {
   // Called when a user session gets added to the existing session.
   virtual void OnUserSessionAdded(const AccountId& account_id) {}
 
-  // Called once the first time a user session starts.
+  // Called when the first user session starts. Note this is called before the
+  // first user session is fully initialized. Post login works might still be
+  // pending.
   virtual void OnFirstSessionStarted() {}
+
+  // Called when the first user session finishes post login works.
+  virtual void OnFirstSessionReady() {}
 
   // Called when a user session is updated, such as avatar change.
   virtual void OnUserSessionUpdated(const AccountId& account_id) {}
@@ -55,6 +61,9 @@ class ASH_PUBLIC_EXPORT SessionObserver : public base::CheckedObserver {
   // initialized. Never called with null.
   virtual void OnActiveUserPrefServiceChanged(PrefService* pref_service) {}
 
+  // Called when the user is going to be removed soon.
+  virtual void OnUserToBeRemoved(const AccountId& account_id) {}
+
  protected:
   ~SessionObserver() override {}
 };
@@ -73,7 +82,7 @@ class ASH_PUBLIC_EXPORT ScopedSessionObserver {
   virtual ~ScopedSessionObserver();
 
  private:
-  SessionObserver* const observer_;
+  const raw_ptr<SessionObserver> observer_;
 };
 
 }  // namespace ash

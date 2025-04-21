@@ -1,11 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CONTENT_BROWSER_MEDIA_MEDIA_DEVICES_PERMISSION_CHECKER_H_
 #define CONTENT_BROWSER_MEDIA_MEDIA_DEVICES_PERMISSION_CHECKER_H_
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "content/browser/renderer_host/media/media_devices_manager.h"
 #include "content/common/content_export.h"
 
@@ -35,6 +35,17 @@ class CONTENT_EXPORT MediaDevicesPermissionChecker {
   bool CheckPermissionOnUIThread(MediaDeviceType device_type,
                                  int render_process_id,
                                  int render_frame_id) const;
+
+  // This function checks the state of the speaker selection and microphone
+  // permissions for the SelectAudioOutput API. The speaker selection state is
+  // returned as denied/not denied via the first parameter of `callback` and
+  // the microphone permission state is returned as a bool (true for allowed,
+  // false for not allowed) via the second parameter of `callback`.
+  void GetSpeakerSelectionAndMicrophonePermissionState(
+      int render_process_id,
+      int render_frame_id,
+      base::OnceCallback<void(MediaDevicesManager::PermissionDeniedState, bool)>
+          callback) const;
 
   // Checks if the origin associated to a render frame identified by
   // |render_process_id| and |render_frame_id| is allowed to access the media

@@ -1,10 +1,10 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/favicon/chrome_favicon_client.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/singleton.h"
 #include "chrome/browser/ui/webui/chrome_web_ui_controller_factory.h"
 #include "chrome/common/url_constants.h"
@@ -33,13 +33,18 @@ void RunFaviconCallbackIfNotCanceled(
 ChromeFaviconClient::ChromeFaviconClient(Profile* profile) : profile_(profile) {
 }
 
-ChromeFaviconClient::~ChromeFaviconClient() {
-}
+ChromeFaviconClient::~ChromeFaviconClient() = default;
 
 bool ChromeFaviconClient::IsNativeApplicationURL(const GURL& url) {
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   if (url.SchemeIs(extensions::kExtensionScheme))
     return true;
+#endif
+
+#if !BUILDFLAG(IS_ANDROID)
+  if (url.SchemeIs(chrome::kIsolatedAppScheme)) {
+    return true;
+  }
 #endif
 
   return url.SchemeIs(content::kChromeUIScheme);

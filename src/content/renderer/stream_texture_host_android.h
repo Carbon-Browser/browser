@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "content/common/content_export.h"
 #include "gpu/ipc/common/gpu_channel.mojom.h"
@@ -25,7 +26,6 @@ class Size;
 namespace gpu {
 class GpuChannelHost;
 struct Mailbox;
-struct SyncToken;
 struct VulkanYCbCrInfo;
 }
 
@@ -57,7 +57,7 @@ class CONTENT_EXPORT StreamTextureHost
         const gpu::Mailbox& mailbox,
         const gfx::Size& coded_size,
         const gfx::Rect& visible_rect,
-        const absl::optional<gpu::VulkanYCbCrInfo>& ycbcr_info) = 0;
+        const std::optional<gpu::VulkanYCbCrInfo>& ycbcr_info) = 0;
     virtual ~Listener() {}
   };
 
@@ -67,7 +67,6 @@ class CONTENT_EXPORT StreamTextureHost
   void ForwardStreamTextureForSurfaceRequest(
       const base::UnguessableToken& request_token);
   void UpdateRotatedVisibleSize(const gfx::Size& size);
-  gpu::SyncToken GenUnverifiedSyncToken();
 
  private:
   // gpu::mojom::StreamTextureClient:
@@ -76,12 +75,11 @@ class CONTENT_EXPORT StreamTextureHost
       const gpu::Mailbox& mailbox,
       const gfx::Size& coded_size,
       const gfx::Rect& visible_rect,
-      absl::optional<gpu::VulkanYCbCrInfo> ycbcr_info) override;
+      std::optional<gpu::VulkanYCbCrInfo> ycbcr_info) override;
 
   int32_t route_id_;
-  Listener* listener_;
+  raw_ptr<Listener> listener_;
   scoped_refptr<gpu::GpuChannelHost> channel_;
-  uint32_t release_id_ = 0;
 
   // The StreamTextureHost may be created on another thread, but the Mojo
   // endpoints below are to be bound on the compositor thread. This holds the

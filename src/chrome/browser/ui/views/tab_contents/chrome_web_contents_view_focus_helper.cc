@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -51,8 +51,9 @@ bool ChromeWebContentsViewFocusHelper::TakeFocus(bool reverse) {
 
 void ChromeWebContentsViewFocusHelper::StoreFocus() {
   last_focused_view_tracker_.SetView(nullptr);
-  if (GetFocusManager())
+  if (GetFocusManager()) {
     last_focused_view_tracker_.SetView(GetFocusManager()->GetFocusedView());
+  }
 }
 
 bool ChromeWebContentsViewFocusHelper::RestoreFocus() {
@@ -71,8 +72,9 @@ void ChromeWebContentsViewFocusHelper::ResetStoredFocus() {
 
 views::View* ChromeWebContentsViewFocusHelper::GetStoredFocus() {
   views::View* last_focused_view = last_focused_view_tracker_.view();
-  if (last_focused_view && last_focused_view->IsFocusable() &&
-      GetFocusManager()->ContainsView(last_focused_view)) {
+  views::FocusManager* focus_manager = GetFocusManager();
+  if (last_focused_view && focus_manager && last_focused_view->IsFocusable() &&
+      focus_manager->ContainsView(last_focused_view)) {
     return last_focused_view;
   }
   return nullptr;
@@ -88,7 +90,7 @@ views::Widget* ChromeWebContentsViewFocusHelper::GetTopLevelWidget() {
 
 views::FocusManager* ChromeWebContentsViewFocusHelper::GetFocusManager() {
   views::Widget* toplevel_widget = GetTopLevelWidget();
-  return toplevel_widget ? toplevel_widget->GetFocusManager() : NULL;
+  return toplevel_widget ? toplevel_widget->GetFocusManager() : nullptr;
 }
 
 WEB_CONTENTS_USER_DATA_KEY_IMPL(ChromeWebContentsViewFocusHelper);

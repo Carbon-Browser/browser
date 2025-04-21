@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,12 +33,15 @@ const InstallConstants kInstallModes[] = {
             L"",  // Empty install_suffix for the primary install mode.
         .logo_suffix = L"",  // No logo suffix for the primary install mode.
         .app_guid =
-            L"",  // Empty app_guid since no integraion with Google Update.
-        .base_app_name = L"Chromium",      // A distinct base_app_name.
-        .base_app_id = L"Chromium",        // A distinct base_app_id.
-        .prog_id_prefix = L"ChromiumHTM",  // ProgID prefix.
-        .prog_id_description =
-            L"Chromium HTML Document",  // ProgID description.
+            L"",  // Empty app_guid since no integration with Google Update.
+        .base_app_name = L"Chromium",              // A distinct base_app_name.
+        .base_app_id = L"Chromium",                // A distinct base_app_id.
+        .browser_prog_id_prefix = L"ChromiumHTM",  // Browser ProgID prefix.
+        .browser_prog_id_description =
+            L"Chromium HTML Document",         // Browser ProgID description.
+        .pdf_prog_id_prefix = L"ChromiumPDF",  // PDF ProgID prefix.
+        .pdf_prog_id_description =
+            L"Chromium PDF Document",  // PDF ProgID description.
         .active_setup_guid =
             L"{7D2B3E1D-D096-4594-9D8F-A6667F12E0AC}",  // Active Setup GUID.
         .legacy_command_execute_clsid =
@@ -60,17 +63,31 @@ const InstallConstants kInstallModes[] = {
                          {0xb8, 0x3e, 0x77, 0xcc, 0x67, 0xd9, 0xce,
                           0xed}},  // IElevator IID and TypeLib
                                    // {B88C45B9-8825-4629-B83E-77CC67D9CEED}.
+        .tracing_service_clsid = {0x83f69367,
+                                  0x442d,
+                                  0x447f,
+                                  {0x8b, 0xcc, 0x0e, 0x3f, 0x97, 0xbe, 0x9c,
+                                   0xf2}},  // SystemTraceSession CLSID.
+        .tracing_service_iid = {0xa3fd580a,
+                                0xffd4,
+                                0x4075,
+                                {0x91, 0x74, 0x75, 0xd0, 0xb1, 0x99, 0xd3,
+                                 0xcb}},  // ISystemTraceSessionChromium IID and
+                                          // TypeLib
         .default_channel_name =
             L"",  // Empty default channel name since no update integration.
         .channel_strategy = ChannelStrategy::UNSUPPORTED,
         .supports_system_level = true,  // Supports system-level installs.
         .supports_set_as_default_browser =
             true,  // Supports in-product set as default browser UX.
-        .supports_retention_experiments =
-            false,  // Does not support retention experiments.
+        .registers_tracing_service = false,  // Does not register the service.
         .app_icon_resource_index =
             icon_resources::kApplicationIndex,  // App icon resource index.
         .app_icon_resource_id = IDR_MAINFRAME,  // App icon resource id.
+        .html_doc_icon_resource_index =
+            icon_resources::kHtmlDocIndex,  // HTML doc icon resource index.
+        .pdf_doc_icon_resource_index =
+            icon_resources::kPDFDocIndex,  // PDF doc icon resource index.
         .sandbox_sid_prefix =
             L"S-1-15-2-3251537155-1984446955-2931258699-841473695-1938553385-"
             L"924012148-",  // App container sid prefix for sandbox.

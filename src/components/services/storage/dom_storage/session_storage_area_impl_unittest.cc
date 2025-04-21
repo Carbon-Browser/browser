@@ -1,15 +1,14 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/services/storage/dom_storage/session_storage_area_impl.h"
 
 #include "base/barrier_closure.h"
-#include "base/bind.h"
-#include "base/callback.h"
-#include "base/callback_helpers.h"
 #include "base/containers/contains.h"
-#include "base/guid.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/run_loop.h"
 #include "base/task/sequenced_task_runner.h"
@@ -18,6 +17,7 @@
 #include "base/test/gmock_callback_support.h"
 #include "base/test/task_environment.h"
 #include "base/threading/thread.h"
+#include "base/uuid.h"
 #include "components/services/storage/dom_storage/async_dom_storage_database.h"
 #include "components/services/storage/dom_storage/session_storage_data_map.h"
 #include "components/services/storage/dom_storage/session_storage_metadata.h"
@@ -56,14 +56,19 @@ class MockListener : public SessionStorageDataMap::Listener {
 class SessionStorageAreaImplTest : public testing::Test {
  public:
   SessionStorageAreaImplTest()
-      : test_namespace_id1_(base::GenerateGUID()),
-        test_namespace_id2_(base::GenerateGUID()) {
+      : test_namespace_id1_(base::Uuid::GenerateRandomV4().AsLowercaseString()),
+        test_namespace_id2_(
+            base::Uuid::GenerateRandomV4().AsLowercaseString()) {
     leveldb_database_ = AsyncDomStorageDatabase::OpenInMemory(
-        absl::nullopt, "SessionStorageAreaImplTestDatabase",
+        std::nullopt, "SessionStorageAreaImplTestDatabase",
         base::ThreadPool::CreateSequencedTaskRunner({base::MayBlock()}),
         base::DoNothing());
-    leveldb_database_->Put(StdStringToUint8Vector("map-0-key1"),
-                           StdStringToUint8Vector("data1"), base::DoNothing());
+    leveldb_database_->RunDatabaseTask(
+        base::BindOnce([](const DomStorageDatabase& db) {
+          return db.Put(StdStringToUint8Vector("map-0-key1"),
+                        StdStringToUint8Vector("data1"));
+        }),
+        base::DoNothing());
 
     std::vector<AsyncDomStorageDatabase::BatchDatabaseTask> save_tasks =
         metadata_.SetupNewDatabase();
@@ -242,8 +247,7 @@ TEST_F(SessionStorageAreaImplTest, Cloning) {
   EXPECT_CALL(listener_, OnCommitResult(OKStatus()))
       .Times(testing::AnyNumber());
   EXPECT_TRUE(test::PutSync(ss_leveldb2.get(), StdStringToUint8Vector("key2"),
-                            StdStringToUint8Vector("data2"), absl::nullopt,
-                            ""));
+                            StdStringToUint8Vector("data2"), std::nullopt, ""));
 
   // The maps were forked on the above put.
   EXPECT_NE(ss_leveldb_impl1->data_map(), ss_leveldb_impl2->data_map());

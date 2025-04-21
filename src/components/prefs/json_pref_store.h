@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,18 +8,20 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <set>
-#include <string>
+#include <string_view>
 
-#include "base/callback_forward.h"
 #include "base/compiler_specific.h"
 #include "base/files/file_path.h"
 #include "base/files/important_file_writer.h"
+#include "base/functional/callback_forward.h"
 #include "base/gtest_prod_util.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/sequence_checker.h"
 #include "base/task/thread_pool.h"
+#include "base/values.h"
 #include "components/prefs/persistent_pref_store.h"
 #include "components/prefs/pref_filter.h"
 #include "components/prefs/prefs_export.h"
@@ -27,20 +29,18 @@
 class PrefFilter;
 
 namespace base {
-class DictionaryValue;
 class FilePath;
 class JsonPrefStoreCallbackTest;
 class JsonPrefStoreLossyWriteTest;
 class SequencedTaskRunner;
 class WriteCallbacksObserver;
-class Value;
-}
+}  // namespace base
 
 // A writable PrefStore implementation that is used for user preferences.
-class COMPONENTS_PREFS_EXPORT JsonPrefStore
+class COMPONENTS_PREFS_EXPORT JsonPrefStore final
     : public PersistentPrefStore,
       public base::ImportantFileWriter::DataSerializer,
-      public base::SupportsWeakPtr<JsonPrefStore> {
+      public base::ImportantFileWriter::BackgroundDataSerializer {
  public:
   struct ReadResult;
 
@@ -75,25 +75,26 @@ class COMPONENTS_PREFS_EXPORT JsonPrefStore
   JsonPrefStore& operator=(const JsonPrefStore&) = delete;
 
   // PrefStore overrides:
-  bool GetValue(const std::string& key,
+  bool GetValue(std::string_view key,
                 const base::Value** result) const override;
-  std::unique_ptr<base::DictionaryValue> GetValues() const override;
+  base::Value::Dict GetValues() const override;
   void AddObserver(PrefStore::Observer* observer) override;
   void RemoveObserver(PrefStore::Observer* observer) override;
   bool HasObservers() const override;
   bool IsInitializationComplete() const override;
 
   // PersistentPrefStore overrides:
-  bool GetMutableValue(const std::string& key, base::Value** result) override;
-  void SetValue(const std::string& key,
-                std::unique_ptr<base::Value> value,
+  bool GetMutableValue(std::string_view key, base::Value** result) override;
+  void SetValue(std::string_view key,
+                base::Value value,
                 uint32_t flags) override;
-  void SetValueSilently(const std::string& key,
-                        std::unique_ptr<base::Value> value,
+  void SetValueSilently(std::string_view key,
+                        base::Value value,
                         uint32_t flags) override;
-  void RemoveValue(const std::string& key, uint32_t flags) override;
+  void RemoveValue(std::string_view key, uint32_t flags) override;
   bool ReadOnly() const override;
   PrefReadError GetReadError() const override;
+  bool HasReadErrorDelegate() const override;
   // Note this method may be asynchronous if this instance has a |pref_filter_|
   // in which case it will return PREF_READ_ERROR_ASYNCHRONOUS_TASK_INCOMPLETE.
   // See details in pref_filter.h.
@@ -104,15 +105,16 @@ class COMPONENTS_PREFS_EXPORT JsonPrefStore
       base::OnceClosure synchronous_done_callback =
           base::OnceClosure()) override;
   void SchedulePendingLossyWrites() override;
-  void ReportValueChanged(const std::string& key, uint32_t flags) override;
+  void ReportValueChanged(std::string_view key, uint32_t flags) override;
 
   // Just like RemoveValue(), but doesn't notify observers. Used when doing some
   // cleanup that shouldn't otherwise alert observers.
-  void RemoveValueSilently(const std::string& key, uint32_t flags);
+  void RemoveValueSilently(std::string_view key, uint32_t flags);
 
   // Just like RemoveValue(), but removes all the prefs that start with
   // |prefix|. Used for pref-initialization cleanup.
-  void RemoveValuesByPrefixSilently(const std::string& prefix) override;
+  void RemoveValuesByPrefixSilently(std::string_view prefix) override;
+
   // Registers |on_next_successful_write_reply| to be called once, on the next
   // successful write event of |writer_|.
   // |on_next_successful_write_reply| will be called on the thread from which
@@ -120,9 +122,11 @@ class COMPONENTS_PREFS_EXPORT JsonPrefStore
   void RegisterOnNextSuccessfulWriteReply(
       base::OnceClosure on_next_successful_write_reply);
 
-  void ClearMutableValues() override;
-
   void OnStoreDeletionFromDisk() override;
+
+  base::WeakPtr<JsonPrefStore> AsWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
 
 #if defined(UNIT_TEST)
   base::ImportantFileWriter& get_writer() { return writer_; }
@@ -134,6 +138,10 @@ class COMPONENTS_PREFS_EXPORT JsonPrefStore
   friend class base::WriteCallbacksObserver;
 
   ~JsonPrefStore() override;
+
+  // Perform pre-serialization bookkeeping common to either serialization flow
+  // (main thread or background thread).
+  void PerformPreserializationTasks();
 
   // If |write_success| is true, runs |on_next_successful_write_|.
   // Otherwise, re-registers |on_next_successful_write_|.
@@ -162,7 +170,10 @@ class COMPONENTS_PREFS_EXPORT JsonPrefStore
   void OnFileRead(std::unique_ptr<ReadResult> read_result);
 
   // ImportantFileWriter::DataSerializer overrides:
-  bool SerializeData(std::string* output) override;
+  std::optional<std::string> SerializeData() override;
+  // ImportantFileWriter::BackgroundDataSerializer implementation.
+  base::ImportantFileWriter::BackgroundDataProducerCallback
+  GetSerializedDataProducerForBackgroundSequence() override;
 
   // This method is called after the JSON file has been read and the result has
   // potentially been intercepted and modified by |pref_filter_|.
@@ -172,7 +183,7 @@ class COMPONENTS_PREFS_EXPORT JsonPrefStore
   // (typically because the |pref_filter_| has already altered the |prefs|) --
   // this will be ignored if this store is read-only.
   void FinalizeFileRead(bool initialization_successful,
-                        std::unique_ptr<base::DictionaryValue> prefs,
+                        base::Value::Dict prefs,
                         bool schedule_write);
 
   // Schedule a write with the file writer as long as |flags| doesn't contain
@@ -182,7 +193,7 @@ class COMPONENTS_PREFS_EXPORT JsonPrefStore
   const base::FilePath path_;
   const scoped_refptr<base::SequencedTaskRunner> file_task_runner_;
 
-  std::unique_ptr<base::DictionaryValue> prefs_;
+  base::Value::Dict prefs_;
 
   bool read_only_;
 
@@ -190,9 +201,10 @@ class COMPONENTS_PREFS_EXPORT JsonPrefStore
   base::ImportantFileWriter writer_;
 
   std::unique_ptr<PrefFilter> pref_filter_;
-  base::ObserverList<PrefStore::Observer, true>::Unchecked observers_;
+  base::ObserverList<PrefStore::Observer, true> observers_;
 
-  std::unique_ptr<ReadErrorDelegate> error_delegate_;
+  // Optional so we can differentiate `nullopt` from `nullptr`.
+  std::optional<std::unique_ptr<ReadErrorDelegate>> error_delegate_;
 
   bool initialized_;
   bool filtering_in_progress_;
@@ -205,6 +217,8 @@ class COMPONENTS_PREFS_EXPORT JsonPrefStore
   base::OnceClosure on_next_successful_write_reply_;
 
   SEQUENCE_CHECKER(sequence_checker_);
+
+  base::WeakPtrFactory<JsonPrefStore> weak_ptr_factory_{this};
 };
 
 #endif  // COMPONENTS_PREFS_JSON_PREF_STORE_H_

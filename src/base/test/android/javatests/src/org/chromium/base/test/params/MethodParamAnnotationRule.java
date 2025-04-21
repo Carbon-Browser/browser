@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,8 +21,11 @@ import java.util.List;
  */
 public class MethodParamAnnotationRule extends MethodParamRule {
     @Override
-    protected Statement applyParameterAndValues(final Statement base, Object target,
-            Class<? extends ParameterProvider> parameterProvider, List<Object> values) {
+    protected Statement applyParameterAndValues(
+            final Statement base,
+            Object target,
+            Class<? extends ParameterProvider> parameterProvider,
+            List<Object> values) {
         final List<Method> beforeMethods = new ArrayList<>();
         final List<Method> afterMethods = new ArrayList<>();
         for (Method m : target.getClass().getDeclaredMethods()) {

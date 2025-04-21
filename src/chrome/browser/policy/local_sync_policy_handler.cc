@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,7 @@ LocalSyncPolicyHandler::LocalSyncPolicyHandler()
     : TypeCheckingPolicyHandler(key::kRoamingProfileLocation,
                                 base::Value::Type::STRING) {}
 
-LocalSyncPolicyHandler::~LocalSyncPolicyHandler() {}
+LocalSyncPolicyHandler::~LocalSyncPolicyHandler() = default;
 
 void LocalSyncPolicyHandler::ApplyPolicySettings(const PolicyMap& policies,
                                                  PrefValueMap* prefs) {

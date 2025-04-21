@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,18 @@
 
 #include <memory>
 
-#include "base/atomicops.h"
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/synchronization/lock.h"
+#include "base/thread_annotations.h"
 #include "base/threading/thread_checker.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_audio_deliverer.h"
 #include "third_party/blink/renderer/platform/mediastream/media_stream_track_platform.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
+
+namespace media {
+struct AudioGlitchInfo;
+}
 
 namespace blink {
 
@@ -34,6 +38,10 @@ class PLATFORM_EXPORT MediaStreamAudioTrack : public MediaStreamTrackPlatform {
 
   ~MediaStreamAudioTrack() override;
 
+  std::unique_ptr<MediaStreamTrackPlatform> CreateFromComponent(
+      const MediaStreamComponent*,
+      const String& id) override;
+
   // Returns the MediaStreamAudioTrack instance owned by the given blink |track|
   // or null.
   static MediaStreamAudioTrack* From(const MediaStreamComponent* component);
@@ -47,7 +55,7 @@ class PLATFORM_EXPORT MediaStreamAudioTrack : public MediaStreamTrackPlatform {
 
   // Add a sink to the track. This function will trigger a OnSetFormat()
   // call on the |sink| before the first chunk of audio is delivered.
-  void AddSink(WebMediaStreamAudioSink* sink);
+  void AddSink(WebMediaStreamAudioSink* sink) override;
 
   // Remove a sink from the track. When this method returns, the sink's
   // OnSetFormat() and OnData() methods will not be called again on any thread.
@@ -70,6 +78,8 @@ class PLATFORM_EXPORT MediaStreamAudioTrack : public MediaStreamTrackPlatform {
   void SetEnabled(bool enabled) override;
   void SetContentHint(
       WebMediaStreamTrack::ContentHintType content_hint) override;
+  void TransferAudioFrameStatsTo(
+      MediaStreamTrackPlatform::AudioFrameStats& destination) override;
 
   // Returns the maximum number of channels preferred by any sink connected to
   // this track.
@@ -99,11 +109,17 @@ class PLATFORM_EXPORT MediaStreamAudioTrack : public MediaStreamTrackPlatform {
   // track, which in turn delivers the audio to one or more
   // WebMediaStreamAudioSinks. While this track is disabled, silent audio will
   // be delivered to the sinks instead of the content of |audio_bus|.
-  void OnData(const media::AudioBus& audio_bus, base::TimeTicks reference_time);
+  void OnData(const media::AudioBus& audio_bus,
+              base::TimeTicks reference_time,
+              const media::AudioGlitchInfo& glitch_info);
 
   MediaStreamTrackPlatform::StreamType Type() const override {
     return MediaStreamTrackPlatform::StreamType::kAudio;
-  };
+  }
+
+  void UpdateFrameStats(const media::AudioBus& audio_bus,
+                        base::TimeTicks reference_time,
+                        const media::AudioGlitchInfo& glitch_info);
 
  private:
   // In debug builds, check that all methods that could cause object graph
@@ -116,8 +132,8 @@ class PLATFORM_EXPORT MediaStreamAudioTrack : public MediaStreamTrackPlatform {
   // Manages sinks connected to this track and the audio format and data flow.
   MediaStreamAudioDeliverer<WebMediaStreamAudioSink> deliverer_;
 
-  // While false (0), silent audio is delivered to the sinks.
-  base::subtle::Atomic32 is_enabled_;
+  // While false, silent audio is delivered to the sinks.
+  std::atomic<bool> is_enabled_;
 
   // Buffer used to deliver silent audio data while this track is disabled.
   std::unique_ptr<media::AudioBus> silent_bus_;
@@ -125,6 +141,16 @@ class PLATFORM_EXPORT MediaStreamAudioTrack : public MediaStreamTrackPlatform {
   // Set to true once at first audio callback after calling Start().
   // Only used for logging purposes.
   bool received_audio_callback_ = false;
+
+  base::Lock mainthread_frame_stats_lock_;
+
+  // The latest frame stats that can be observed on the main thread.
+  AudioFrameStats mainthread_frame_stats_
+      GUARDED_BY(mainthread_frame_stats_lock_);
+
+  // Frame stats that have not yet been added into mainthread_frame_stats_. This
+  // is only used on the audio thread.
+  AudioFrameStats pending_frame_stats_;
 
   // Provides weak pointers that are valid until Stop() is called.
   base::WeakPtrFactory<MediaStreamAudioTrack> weak_factory_{this};

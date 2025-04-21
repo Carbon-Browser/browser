@@ -2,10 +2,11 @@ Name: libphonenumber-android
 Short Name: libphonenumber-android
 URL: https://github.com/michaelrocks/libphonenumber-android
 Version: 8.12.28
-License: Apache Version 2.0
+License: Apache-2.0
 License File: LICENSE
 CPEPrefix: unknown
 Security Critical: yes
+Shipped: yes
 
 Description:
 An Android port of Google's libphonenumber.

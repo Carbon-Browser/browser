@@ -1,10 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "remoting/protocol/host_control_dispatcher.h"
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "net/socket/stream_socket.h"
 #include "remoting/base/compound_buffer.h"
 #include "remoting/base/constants.h"
@@ -15,15 +15,13 @@
 #include "remoting/protocol/message_pipe.h"
 #include "remoting/protocol/message_serialization.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 HostControlDispatcher::HostControlDispatcher()
     : ChannelDispatcherBase(kControlChannelName) {}
 HostControlDispatcher::~HostControlDispatcher() = default;
 
-void HostControlDispatcher::SetCapabilities(
-    const Capabilities& capabilities) {
+void HostControlDispatcher::SetCapabilities(const Capabilities& capabilities) {
   ControlMessage message;
   message.mutable_capabilities()->CopyFrom(capabilities);
   message_pipe()->Send(&message, {});
@@ -53,6 +51,13 @@ void HostControlDispatcher::SetTransportInfo(
     const TransportInfo& transport_info) {
   ControlMessage message;
   message.mutable_transport_info()->CopyFrom(transport_info);
+  message_pipe()->Send(&message, {});
+}
+
+void HostControlDispatcher::SetActiveDisplay(
+    const ActiveDisplay& active_display) {
+  ControlMessage message;
+  message.mutable_active_display_changed()->CopyFrom(active_display);
   message_pipe()->Send(&message, {});
 }
 
@@ -98,16 +103,17 @@ void HostControlDispatcher::OnIncomingMessage(
 
   std::unique_ptr<ControlMessage> message =
       ParseMessage<ControlMessage>(buffer.get());
-  if (!message)
+  if (!message) {
     return;
+  }
 
   // TODO(sergeyu): Move message validation from the message handlers here.
   if (message->has_clipboard_event()) {
     clipboard_stub_->InjectClipboardEvent(message->clipboard_event());
   } else if (message->has_client_resolution()) {
     const ClientResolution& resolution = message->client_resolution();
-    if ((resolution.has_dips_width() && resolution.dips_width() <= 0) ||
-        (resolution.has_dips_height() && resolution.dips_height() <= 0)) {
+    if ((resolution.has_width_pixels() && resolution.width_pixels() <= 0) ||
+        (resolution.has_height_pixels() && resolution.height_pixels() <= 0)) {
       LOG(ERROR) << "Received invalid ClientResolution message.";
       return;
     }
@@ -126,10 +132,21 @@ void HostControlDispatcher::OnIncomingMessage(
     host_stub_->SelectDesktopDisplay(message->select_display());
   } else if (message->has_peer_connection_parameters()) {
     host_stub_->ControlPeerConnection(message->peer_connection_parameters());
+  } else if (message->has_video_layout()) {
+    host_stub_->SetVideoLayout(message->video_layout());
+  } else if (message->has_cursor_shape()) {
+    LOG(WARNING) << "Unexpected control message received: CursorShape";
+  } else if (message->has_pairing_response()) {
+    LOG(WARNING) << "Unexpected control message received: PairingResponse";
+  } else if (message->has_keyboard_layout()) {
+    LOG(WARNING) << "Unexpected control message received: KeyboardLayout";
+  } else if (message->has_transport_info()) {
+    LOG(WARNING) << "Unexpected control message received: TransportInfo";
+  } else if (message->has_active_display_changed()) {
+    LOG(WARNING) << "Unexpected control message received: ActiveDisplayChanged";
   } else {
-    LOG(WARNING) << "Unknown control message received.";
+    LOG(WARNING) << "Unknown control message received";
   }
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

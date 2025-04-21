@@ -155,12 +155,14 @@
       <div is="action-link" on-click="discardUrgentNow_">
         [Urgent discard a tab now]
       </div>
-      <div is="action-link" on-click="toggleHighEfficiencyMode_">
-        [Toggle high efficiency mode]
-      </div>
       <div is="action-link" on-click="toggleBatterySaverMode_">
         [Toggle battery saver mode]
       </div>
+      <template is="dom-if" if="[[isPerformanceInterventionDemoModeEnabled_]]">
+        <div is="action-link" on-click="refreshPerformanceTabCpuMeasurements_">
+          [Trigger Performance CPU intervention]
+        </div>
+      </template>
       <table id="tab-discard-info-table">
         <thead >
           <tr id="tab-discards-info-table-header">
@@ -169,15 +171,7 @@
               <div class="header-cell-container">
                 <div>
                   <div>Utility</div>
-                  <div>Rank<div>
-                </div>
-              </div>
-            </th>
-            <th data-sort-key="reactivationScore" on-click="onSortClick">
-              <div class="header-cell-container">
-                <div>
-                  <div>Reactivation</div>
-                  <div>Score</div>
+                  <div>Rank</div>
                 </div>
               </div>
             </th>
@@ -218,6 +212,22 @@
                 </div>
               </div>
             </th>
+            <th data-sort-key="canDiscard" on-click="onSortClick">
+              <div class="header-cell-container">
+                <div>
+                  <div>Is</div>
+                  <div>Discardable</div>
+                </div>
+              </div>
+            </th>
+            <th data-sort-key="canFreeze" on-click="onSortClick">
+              <div class="header-cell-container">
+                <div>
+                  <div>Is</div>
+                  <div>Freezable</div>
+                </div>
+              </div>
+            </th>
             <th data-sort-key="discardCount" on-click="onSortClick">
               <div class="header-cell-container">
                 <div>
@@ -225,7 +235,7 @@
                   <div>Count</div>
                 </div>
               </div>
-            </div></th>
+            </th>
             <th data-sort-key="isAutoDiscardable" on-click="onSortClick">
               <div class="header-cell-container">
                 <div>
@@ -252,7 +262,6 @@
               items="[[tabInfos_]]">
             <tr>
               <td>[[item.utilityRank]]</td>
-              <td>[[getReactivationScore_(item)]]</td>
               <td>[[getSiteEngagementScore_(item)]]</td>
               <td>
                 <div class="title-cell-container">
@@ -265,6 +274,22 @@
               <td>[[visibilityToString_(item.visibility)]]</td>
               <td>[[loadingStateToString_(item.loadingState)]]</td>
               <td>[[getLifeCycleState_(item)]]</td>
+              <td class="boolean-cell">
+                <div>[[boolToString_(item.canDiscard)]]</div>
+                <div is="action-link" class="tooltip-container"
+                  disabled$="[[!shouldShowCannotDiscardReason_(item)]]">
+                  [View Reason]
+                  <div class="tooltip">[[item.cannotDiscardReasons]]<div>
+                </div>
+              </td>
+              <td class="boolean-cell">
+                <div>[[canFreezeToString_(item.canFreeze)]]</div>
+                <div is="action-link" class="tooltip-container"
+                  disabled$="[[!shouldShowCannotFreezeReason_(item)]]">
+                  [View Reason]
+                  <div class="tooltip">[[item.cannotFreezeReasons]]<div>
+                </div>
+              </td>
               <td>[[item.discardCount]]</td>
               <td class="boolean-cell">
                 <div>[[boolToString_(item.isAutoDiscardable)]]</div>
@@ -278,11 +303,19 @@
               </td>
               <td class="actions-cell">
                 <div is="action-link" on-click="loadTab_"
-                    disabled$="[[!canLoad_(item)]]">
+                    disabled$="[[!canLoadViaUi_(item)]]">
                     [Load]</div>
                 <div is="action-link" on-click="urgentDiscardTab_"
-                    disabled$="[[!canDiscard_(item)]]">
+                    disabled$="[[!canDiscardViaUi_(item)]]">
                   [Urgent Discard]
+                </div>
+                <div is="action-link" on-click="proactiveDiscardTab_"
+                    disabled$="[[!canDiscardViaUi_(item)]]">
+                  [Proactive Discard]
+                </div>
+                <div is="action-link" on-click="freezeTab_"
+                    disabled$="[[!canFreezeViaUi_(item)]]">
+                  [Freeze]
                 </div>
               </td>
             </tr>

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@
 
 #include <memory>
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/sequence_checker.h"
 #include "base/task/sequenced_task_runner.h"
@@ -66,7 +66,7 @@ class ImageWriterUtilityClient
 
   // Cancels any pending write or verify operation.
   // |cancel_callback|: Called when the cancel has actually occurred.
-  // TODO(crbug.com/703514): Consider removing this API.
+  // TODO(crbug.com/40511721): Consider removing this API.
   virtual void Cancel(CancelCallback cancel_callback);
 
   // Shuts down the utility process that may have been created.

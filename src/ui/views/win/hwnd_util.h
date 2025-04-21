@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -30,6 +30,9 @@ VIEWS_EXPORT HWND HWNDForNativeWindow(const gfx::NativeWindow window);
 VIEWS_EXPORT gfx::Rect GetWindowBoundsForClientBounds(
     View* view,
     const gfx::Rect& client_bounds);
+
+// Returns the headless window bounds for the specified HWND.
+VIEWS_EXPORT gfx::Rect GetHeadlessWindowBounds(HWND window);
 
 // Shows |window|'s system menu (at a specified |point| in screen physical
 // coordinates).

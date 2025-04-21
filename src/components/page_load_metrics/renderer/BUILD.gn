@@ -1,4 +1,4 @@
-# Copyright 2019 The Chromium Authors. All rights reserved.
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -13,6 +13,7 @@ source_set("renderer") {
     "page_timing_metrics_sender.cc",
     "page_timing_metrics_sender.h",
     "page_timing_sender.h",
+    "soft_navigation_metrics_type_converter.h",
   ]
   deps = [
     "//base",

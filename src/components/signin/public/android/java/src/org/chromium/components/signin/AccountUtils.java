@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,17 +12,16 @@ import androidx.annotation.VisibleForTesting;
 
 import org.chromium.base.Promise;
 import org.chromium.components.signin.AccountManagerFacade.ChildAccountStatusListener;
+import org.chromium.components.signin.base.AccountInfo;
 import org.chromium.components.signin.base.CoreAccountInfo;
 
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
 
-/**
- * AccountUtils groups some static util methods for account.
- */
+/** AccountUtils groups some static util methods for account. */
 public class AccountUtils {
     private static final Pattern AT_SYMBOL = Pattern.compile("@");
     private static final String GMAIL_COM = "gmail.com";
@@ -34,43 +33,50 @@ public class AccountUtils {
     private AccountUtils() {}
 
     /**
-     * Creates an Account object for the given name.
+     * Creates an Account object for the given {@param name}. Only used in places where we need to
+     * talk to Android which is very rare. Non-signin code should not use this method and should use
+     * {@link CoreAccountInfo} instead. TODO(crbug.com/40065164): Rename this method to
+     * createAccountFromEmail.
      */
     public static Account createAccountFromName(String name) {
         return new Account(name, GOOGLE_ACCOUNT_TYPE);
     }
 
-    /**
-     * Converts a list of accounts to a list of account names.
-     */
-    public static List<String> toAccountNames(final List<Account> accounts) {
-        List<String> accountNames = new ArrayList<>();
-        for (Account account : accounts) {
-            accountNames.add(account.name);
+    /** Converts a list of {@link CoreAccountInfo}s to a list of account emails. */
+    public static List<String> toAccountEmails(final List<CoreAccountInfo> coreAccountInfos) {
+        int size = coreAccountInfos.size();
+        String[] emails = new String[size];
+        for (int i = 0; i < size; ++i) {
+            emails[i] = coreAccountInfos.get(i).getEmail();
         }
-        return accountNames;
+        return Arrays.asList(emails);
     }
 
     /**
-     * Converts a list of {@link CoreAccountInfo} to a list of {@link Account}.
+     * Finds the first {@link CoreAccountInfo} of the given {@param coreAccountInfos} whose
+     * canonical name equal the given {@param accountEmail}'s canonical name; null if there is no
+     * match.
      */
-    public static List<Account> toAndroidAccounts(final List<CoreAccountInfo> accounts) {
-        List<Account> androidAccounts = new ArrayList<>();
-        for (CoreAccountInfo account : accounts) {
-            androidAccounts.add(createAccountFromName(account.getEmail()));
+    public static @Nullable CoreAccountInfo findCoreAccountInfoByEmail(
+            final List<CoreAccountInfo> coreAccountInfos, String accountEmail) {
+        String canonicalEmail = AccountUtils.canonicalizeEmail(accountEmail);
+        for (CoreAccountInfo coreAccountInfo : coreAccountInfos) {
+            if (AccountUtils.canonicalizeEmail(coreAccountInfo.getEmail()).equals(canonicalEmail)) {
+                return coreAccountInfo;
+            }
         }
-        return androidAccounts;
+        return null;
     }
 
     /**
-     * Finds the first account of the account list whose canonical name equal the given
-     * accountName's canonical name; null if account does not exist.
+     * Finds the first {@link AccountInfo} among `accounts` whose canonical email is equal to
+     * `accountEmail`; `null` if there is no match.
      */
-    public static @Nullable Account findAccountByName(
-            final List<Account> accounts, String accountName) {
-        String canonicalName = AccountUtils.canonicalizeName(accountName);
-        for (Account account : accounts) {
-            if (AccountUtils.canonicalizeName(account.name).equals(canonicalName)) {
+    public static @Nullable AccountInfo findAccountByEmail(
+            List<AccountInfo> accounts, String accountEmail) {
+        String canonicalEmail = AccountUtils.canonicalizeEmail(accountEmail);
+        for (AccountInfo account : accounts) {
+            if (AccountUtils.canonicalizeEmail(account.getEmail()).equals(canonicalEmail)) {
                 return account;
             }
         }
@@ -78,27 +84,44 @@ public class AccountUtils {
     }
 
     /**
-     * Gets the cached list of accounts from the given {@link Promise}.
+     * Finds the first {@link CoreAccountInfo} of the given {@param coreAccountInfos} whose Gaia ID
+     * equals the given {@param accountGaiaId}; null if there is no match.
+     */
+    public static @Nullable CoreAccountInfo findCoreAccountInfoByGaiaId(
+            final List<CoreAccountInfo> coreAccountInfos, String accountGaiaId) {
+        for (CoreAccountInfo coreAccountInfo : coreAccountInfos) {
+            if (coreAccountInfo.getGaiaId().equals(accountGaiaId)) {
+                return coreAccountInfo;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Gets the cached list of {@link CoreAccountInfo} from the given {@link Promise}.
      * If the cache is not yet populated, return an empty list.
      */
-    public static List<Account> getAccountsIfFulfilledOrEmpty(Promise<List<Account>> promise) {
+    public static List<CoreAccountInfo> getCoreAccountInfosIfFulfilledOrEmpty(
+            Promise<List<CoreAccountInfo>> promise) {
         return promise.isFulfilled() ? promise.getResult() : Collections.emptyList();
     }
 
     /**
-     * Gets the cached default accounts from the given {@link Promise}.
+     * Gets the cached default {@link CoreAccountInfo} from the given {@link Promise}.
      * If the cache is not yet populated or no accounts exist, return null.
      */
-    public static @Nullable Account getDefaultAccountIfFulfilled(Promise<List<Account>> promise) {
-        final List<Account> accounts = getAccountsIfFulfilledOrEmpty(promise);
-        return accounts.isEmpty() ? null : accounts.get(0);
+    public static @Nullable CoreAccountInfo getDefaultCoreAccountInfoIfFulfilled(
+            Promise<List<CoreAccountInfo>> promise) {
+        final List<CoreAccountInfo> coreAccountInfos =
+                getCoreAccountInfosIfFulfilledOrEmpty(promise);
+        return coreAccountInfos.isEmpty() ? null : coreAccountInfos.get(0);
     }
 
     /**
      * Checks the child account status on device based on the list of (zero or more) provided
-     * accounts.
+     * {@param coreAccountInfos}.
      *
-     * If there are no child accounts on the device, the listener will be invoked with
+     * If there are no child coreAccountInfo on the device, the listener will be invoked with
      * isChild = false. If there is a child account on device, the listener
      * will be called with that account and isChild = true. Note that it is not currently possible
      * to have more than one child account on device.
@@ -106,27 +129,58 @@ public class AccountUtils {
      * It should be safe to invoke this method before the native library is initialized.
      *
      * @param accountManagerFacade The singleton instance of {@link AccountManagerFacade}.
-     * @param accounts The list of accounts on device.
+     * @param coreAccountInfos The list of {@link CoreAccountInfo} on device.
      * @param listener The listener is called when the status of the account
      *                 (whether it is a child one) is ready.
      */
-    public static void checkChildAccountStatus(@NonNull AccountManagerFacade accountManagerFacade,
-            @NonNull List<Account> accounts, @NonNull ChildAccountStatusListener listener) {
-        if (accounts.size() >= 1) {
+    public static void checkChildAccountStatus(
+            @NonNull AccountManagerFacade accountManagerFacade,
+            @NonNull List<CoreAccountInfo> coreAccountInfos,
+            @NonNull ChildAccountStatusListener listener) {
+        if (coreAccountInfos.size() >= 1) {
             // If a child account is present then there can be only one, and it must be the first
             // account on the device.
-            accountManagerFacade.checkChildAccountStatus(accounts.get(0), listener);
+            accountManagerFacade.checkChildAccountStatus(coreAccountInfos.get(0), listener);
         } else {
             listener.onStatusReady(false, null);
         }
     }
 
     /**
-     * Canonicalizes the account name.
+     * Checks the parental control subjectivity of the accounts on the device based on the list of
+     * (zero or more) provided {@param coreAccountInfos}.
+     *
+     * <p>If there are no coreAccountInfo subject to parental controls on the device, the listener
+     * will be invoked with isChild = false. If there is an account subject to parental controls on
+     * device, the listener will be called with that account and isChild = true. Note that it is not
+     * currently possible to have more than one account subject to parental controls on device.
+     *
+     * <p>It should be safe to invoke this method before the native library is initialized.
+     *
+     * @param accountManagerFacade The singleton instance of {@link AccountManagerFacade}.
+     * @param coreAccountInfos The list of {@link CoreAccountInfo} on device.
+     * @param listener The listener is called when the status of the account (whether it is subject
+     *     to parental controls) is ready.
      */
-    static String canonicalizeName(String name) {
-        String[] parts = AT_SYMBOL.split(name);
-        if (parts.length != 2) return name;
+    public static void checkIsSubjectToParentalControls(
+            @NonNull AccountManagerFacade accountManagerFacade,
+            @NonNull List<CoreAccountInfo> coreAccountInfos,
+            @NonNull ChildAccountStatusListener listener) {
+        if (coreAccountInfos.size() >= 1) {
+            // If an account subject to parental controls is present then there can be only one, and
+            // it must be the first
+            // account on the device.
+            accountManagerFacade.checkIsSubjectToParentalControls(
+                    coreAccountInfos.get(0), listener);
+        } else {
+            listener.onStatusReady(false, null);
+        }
+    }
+
+    /** Canonicalizes the account email. */
+    static String canonicalizeEmail(String email) {
+        String[] parts = AT_SYMBOL.split(email);
+        if (parts.length != 2) return email;
 
         if (GOOGLEMAIL_COM.equalsIgnoreCase(parts[1])) {
             parts[1] = GMAIL_COM;

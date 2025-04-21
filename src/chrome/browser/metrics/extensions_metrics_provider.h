@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -45,6 +46,8 @@ class ExtensionsMetricsProvider : public metrics::MetricsProvider {
   ~ExtensionsMetricsProvider() override;
 
   // metrics::MetricsProvider:
+  void ProvideCurrentSessionData(
+      metrics::ChromeUserMetricsExtension* uma_proto) override;
   void ProvideSystemProfileMetrics(
       metrics::SystemProfileProto* system_profile) override;
 
@@ -61,7 +64,7 @@ class ExtensionsMetricsProvider : public metrics::MetricsProvider {
   // Exposed for the sake of mocking in test code.
 
   // Retrieves the set of extensions installed in the given |profile|.
-  virtual std::unique_ptr<extensions::ExtensionSet> GetInstalledExtensions(
+  virtual std::optional<extensions::ExtensionSet> GetInstalledExtensions(
       Profile* profile);
 
   // Retrieves the client ID.

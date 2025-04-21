@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,8 +10,8 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
 #include "base/containers/circular_deque.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
@@ -65,7 +65,7 @@ class RequestCoordinator : public KeyedService,
 
   class ActiveTabInfo {
    public:
-    virtual ~ActiveTabInfo() {}
+    virtual ~ActiveTabInfo() = default;
     // Returns true if the active tab's URL matches |url|. If Chrome is in the
     // background, this should return false.
     virtual bool DoesActiveTabMatch(const GURL& url) = 0;

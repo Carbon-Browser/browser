@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,18 +7,24 @@ package org.chromium.ui.resources.dynamics;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
 
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 import org.chromium.ui.resources.Resource;
 import org.chromium.ui.resources.statics.NinePatchData;
 
 /** The current state of a dynamic resource. */
+@NullMarked
 public class DynamicResourceSnapshot implements Resource {
     private final Bitmap mBitmap;
     private final boolean mShouldRemoveResourceOnNullBitmap;
     private final Rect mBitmapSize;
     private final long mNativeResourceId;
 
-    public DynamicResourceSnapshot(Bitmap bitmap, boolean shouldRemoveResourceOnNullBitmap,
-            Rect bitmapSize, long nativeResourceId) {
+    public DynamicResourceSnapshot(
+            Bitmap bitmap,
+            boolean shouldRemoveResourceOnNullBitmap,
+            Rect bitmapSize,
+            long nativeResourceId) {
         mBitmap = bitmap;
         mShouldRemoveResourceOnNullBitmap = shouldRemoveResourceOnNullBitmap;
         mBitmapSize = bitmapSize;
@@ -41,7 +47,7 @@ public class DynamicResourceSnapshot implements Resource {
     }
 
     @Override
-    public NinePatchData getNinePatchData() {
+    public @Nullable NinePatchData getNinePatchData() {
         return null;
     }
 

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,10 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_typedefs.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
+
+namespace WTF {
+class String;
+}  // namespace WTF
 
 namespace blink {
 
@@ -26,6 +30,8 @@ class CustomElementReactionFactory {
   static CustomElementReaction& CreateConnected(
       CustomElementDefinition& definition);
   static CustomElementReaction& CreateDisconnected(
+      CustomElementDefinition& definition);
+  static CustomElementReaction& CreateConnectedMove(
       CustomElementDefinition& definition);
   static CustomElementReaction& CreateAdopted(
       CustomElementDefinition& definition,
@@ -47,7 +53,7 @@ class CustomElementReactionFactory {
   static CustomElementReaction& CreateFormStateRestore(
       CustomElementDefinition& definition,
       const V8ControlValue* value,
-      const String& mode);
+      const WTF::String& mode);
 };
 
 }  // namespace blink

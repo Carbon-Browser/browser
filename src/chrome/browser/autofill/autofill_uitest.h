@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,15 @@
 #include <memory>
 #include <ostream>
 
+#include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/interactive_test_utils.h"
-#include "components/autofill/core/browser/browser_autofill_manager.h"
-#include "components/autofill/core/browser/browser_autofill_manager_test_delegate.h"
-#include "components/autofill/core/browser/test_event_waiter.h"
+#include "components/autofill/content/browser/content_autofill_driver_factory.h"
+#include "components/autofill/core/browser/foundations/browser_autofill_manager.h"
+#include "components/autofill/core/browser/foundations/browser_autofill_manager_test_delegate.h"
+#include "components/autofill/core/browser/test_utils/autofill_test_utils.h"
+#include "components/autofill/core/browser/test_utils/test_event_waiter.h"
 #include "components/autofill/core/common/dense_set.h"
 #include "content/public/browser/render_widget_host.h"
 #include "content/public/browser/web_contents_observer.h"
@@ -30,7 +33,8 @@ namespace autofill {
 enum class ObservedUiEvents {
   kPreviewFormData,
   kFormDataFilled,
-  kSuggestionShown,
+  kSuggestionsShown,
+  kSuggestionsHidden,
   kNoEvent,
   kMaxValue = kNoEvent
 };
@@ -43,7 +47,7 @@ std::ostream& operator<<(std::ostream& os, ObservedUiEvents event);
 void TryToCloseAllPrompts(content::WebContents* web_contents);
 
 class BrowserAutofillManagerTestDelegateImpl
-    : public autofill::BrowserAutofillManagerTestDelegate {
+    : public BrowserAutofillManagerTestDelegate {
  public:
   BrowserAutofillManagerTestDelegateImpl();
 
@@ -64,11 +68,12 @@ class BrowserAutofillManagerTestDelegateImpl
   void DidPreviewFormData() override;
   void DidFillFormData() override;
   void DidShowSuggestions() override;
-  void OnTextFieldChanged() override;
+  void DidHideSuggestions() override;
 
   void SetExpectations(std::list<ObservedUiEvents> expected_events,
-                       base::TimeDelta timeout = base::Seconds(0));
-  bool Wait();
+                       base::TimeDelta timeout = base::Seconds(0),
+                       base::Location location = FROM_HERE);
+  [[nodiscard]] testing::AssertionResult Wait();
 
  private:
   void FireEvent(ObservedUiEvents event);
@@ -79,9 +84,12 @@ class BrowserAutofillManagerTestDelegateImpl
 };
 
 class AutofillUiTest : public InProcessBrowserTest,
-                       public content::WebContentsObserver {
+                       public content::WebContentsObserver,
+                       public ContentAutofillDriverFactory::Observer {
  public:
-  AutofillUiTest();
+  explicit AutofillUiTest(
+      const test::AutofillTestEnvironment::Options& options = {
+          .disable_server_communication = true});
   ~AutofillUiTest() override;
 
   AutofillUiTest(const AutofillUiTest&) = delete;
@@ -91,40 +99,49 @@ class AutofillUiTest : public InProcessBrowserTest,
   void SetUpOnMainThread() override;
   void TearDownOnMainThread() override;
 
-  bool SendKeyToPageAndWait(ui::DomKey key,
-                            std::list<ObservedUiEvents> expected_events,
-                            base::TimeDelta timeout = {});
-  bool SendKeyToPageAndWait(ui::DomKey key,
-                            ui::DomCode code,
-                            ui::KeyboardCode key_code,
-                            std::list<ObservedUiEvents> expected_events,
-                            base::TimeDelta timeout = {});
+  [[nodiscard]] testing::AssertionResult SendKeyToPageAndWait(
+      ui::DomKey key,
+      std::list<ObservedUiEvents> expected_events,
+      base::TimeDelta timeout = {},
+      base::Location location = FROM_HERE);
+  [[nodiscard]] testing::AssertionResult SendKeyToPageAndWait(
+      ui::DomKey key,
+      ui::DomCode code,
+      ui::KeyboardCode key_code,
+      std::list<ObservedUiEvents> expected_events,
+      base::TimeDelta timeout = {},
+      base::Location location = FROM_HERE);
 
   void SendKeyToPopup(content::RenderFrameHost* render_frame_host,
                       const ui::DomKey key);
   // Send key to the render host view's widget if |widget| is null.
-  bool SendKeyToPopupAndWait(ui::DomKey key,
-                             std::list<ObservedUiEvents> expected_events,
-                             content::RenderWidgetHost* widget = nullptr,
-                             base::TimeDelta timeout = {});
-  bool SendKeyToPopupAndWait(ui::DomKey key,
-                             ui::DomCode code,
-                             ui::KeyboardCode key_code,
-                             std::list<ObservedUiEvents> expected_events,
-                             content::RenderWidgetHost* widget,
-                             base::TimeDelta timeout = {});
+  [[nodiscard]] testing::AssertionResult SendKeyToPopupAndWait(
+      ui::DomKey key,
+      std::list<ObservedUiEvents> expected_events,
+      content::RenderWidgetHost* widget = nullptr,
+      base::TimeDelta timeout = {},
+      base::Location location = FROM_HERE);
+  [[nodiscard]] testing::AssertionResult SendKeyToPopupAndWait(
+      ui::DomKey key,
+      ui::DomCode code,
+      ui::KeyboardCode key_code,
+      std::list<ObservedUiEvents> expected_events,
+      content::RenderWidgetHost* widget,
+      base::TimeDelta timeout = {},
+      base::Location location = FROM_HERE);
 
   void SendKeyToDataListPopup(ui::DomKey key);
   void SendKeyToDataListPopup(ui::DomKey key,
                               ui::DomCode code,
                               ui::KeyboardCode key_code);
 
-  bool HandleKeyPressEvent(const content::NativeWebKeyboardEvent& event);
+  bool HandleKeyPressEvent(const input::NativeWebKeyboardEvent& event);
 
   // DoNothingAndWait() violates an assertion if during the time an event
   // happens. Delayed events during DoNothingAndWait() may therefore cause
   // flakiness. DoNothingAndWaitAndIgnoreEvents() ignores any events.
-  void DoNothingAndWait(base::TimeDelta timeout);
+  void DoNothingAndWait(base::TimeDelta timeout,
+                        base::Location location = FROM_HERE);
   void DoNothingAndWaitAndIgnoreEvents(base::TimeDelta timeout);
 
   content::WebContents* GetWebContents();
@@ -141,6 +158,17 @@ class AutofillUiTest : public InProcessBrowserTest,
   void RenderFrameHostChanged(content::RenderFrameHost* old_host,
                               content::RenderFrameHost* new_host) override;
 
+  // ContentAutofillDriverFactory::Observer
+  void OnContentAutofillDriverFactoryDestroyed(
+      ContentAutofillDriverFactory& factory) override;
+  void OnContentAutofillDriverCreated(ContentAutofillDriverFactory& factory,
+                                      ContentAutofillDriver& driver) override;
+
+  test::AutofillBrowserTestEnvironment autofill_test_environment_;
+  base::ScopedObservation<ContentAutofillDriverFactory,
+                          ContentAutofillDriverFactory::Observer>
+      autofill_driver_factory_observation_{this};
+
   raw_ptr<content::RenderFrameHost> current_main_rfh_ = nullptr;
   BrowserAutofillManagerTestDelegateImpl test_delegate_;
 
@@ -150,7 +178,9 @@ class AutofillUiTest : public InProcessBrowserTest,
   // key press event callback handles the event (at least on Mac), a DCHECK
   // ends up going off that the |event| doesn't have an |os_event| associated
   // with it.
-  content::RenderWidgetHost::KeyPressEventCallback key_press_event_sink_;
+  content::RenderWidgetHost::KeyPressEventCallback key_press_event_sink_{
+      base::BindRepeating(&AutofillUiTest::HandleKeyPressEvent,
+                          base::Unretained(this))};
 
   std::unique_ptr<ui::ScopedAnimationDurationScaleMode> disable_animation_;
 };

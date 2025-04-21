@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,7 @@ class KEYED_SERVICE_EXPORT RefcountedBrowserStateKeyedServiceFactory
   // BrowserState. This is used primarily for testing, where we want to feed
   // a specific mock into the BSKSF system.
   using TestingFactory =
-      base::RepeatingCallback<scoped_refptr<RefcountedKeyedService>(
+      base::OnceCallback<scoped_refptr<RefcountedKeyedService>(
           web::BrowserState* context)>;
 
   RefcountedBrowserStateKeyedServiceFactory(
@@ -47,13 +47,6 @@ class KEYED_SERVICE_EXPORT RefcountedBrowserStateKeyedServiceFactory
   // SetTestingFactory() are allowed; previous services will be shut down.
   void SetTestingFactory(web::BrowserState* context,
                          TestingFactory testing_factory);
-
-  // Associates |testing_factory| with |context| and immediately returns the
-  // created KeyedService. Since the factory will be used immediately, it may
-  // not be empty.
-  scoped_refptr<RefcountedKeyedService> SetTestingFactoryAndUse(
-      web::BrowserState* context,
-      TestingFactory testing_factory);
 
  protected:
   // RefcountedBrowserStateKeyedServiceFactories must communicate with a
@@ -127,7 +120,6 @@ class KEYED_SERVICE_EXPORT RefcountedBrowserStateKeyedServiceFactory
   // RefcountedKeyedServiceFactory:
   scoped_refptr<RefcountedKeyedService> BuildServiceInstanceFor(
       void* context) const final;
-  bool IsOffTheRecord(void* context) const final;
 
   // KeyedServiceBaseFactory:
   void* GetContextToUse(void* context) const final;

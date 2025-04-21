@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,6 @@
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "components/app_restore/features.h"
 #include "components/exo/wm_helper.h"
-#include "components/exo/wm_helper_chromeos.h"
 #include "components/services/app_service/public/cpp/app_launch_util.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -23,13 +22,12 @@ const int TEST_DISPLAY_HEIGHT = 1440;
 const double TEST_SCALE_FACTOR = 2.0;
 }  // namespace
 
-namespace ash {
-namespace full_restore {
+namespace ash::full_restore {
 
 class ArcWindowUtilsTest : public testing::Test {
  protected:
   ArcWindowUtilsTest()
-      : user_manager_enabler_(std::make_unique<FakeChromeUserManager>()) {
+      : fake_user_manager_(std::make_unique<ash::FakeChromeUserManager>()) {
     const display::Display test_display = test_screen_.GetPrimaryDisplay();
     display::Display display(test_display);
     display.set_id(TEST_DISPLAY_ID);
@@ -49,9 +47,7 @@ class ArcWindowUtilsTest : public testing::Test {
     display::Screen::SetScreenInstance(nullptr);
   }
 
-  void SetUp() override {
-    wm_helper_ = std::make_unique<exo::WMHelperChromeOS>();
-  }
+  void SetUp() override { wm_helper_ = std::make_unique<exo::WMHelper>(); }
 
   void TearDown() override { wm_helper_.reset(); }
 
@@ -59,7 +55,8 @@ class ArcWindowUtilsTest : public testing::Test {
   display::test::TestScreen test_screen_;
   base::test::ScopedFeatureList scoped_feature_list_;
   std::unique_ptr<exo::WMHelper> wm_helper_;
-  user_manager::ScopedUserManager user_manager_enabler_;
+  user_manager::TypedScopedUserManager<ash::FakeChromeUserManager>
+      fake_user_manager_;
 };
 
 TEST_F(ArcWindowUtilsTest, ArcWindowInfoInvalidDisplayValidBoundsTest) {
@@ -93,5 +90,4 @@ TEST_F(ArcWindowUtilsTest, ArcWindowInfoValidDisplayAndBoundsTest) {
   EXPECT_EQ(arc_window_info->bounds->height(), 800);
 }
 
-}  // namespace full_restore
-}  // namespace ash
+}  // namespace ash::full_restore

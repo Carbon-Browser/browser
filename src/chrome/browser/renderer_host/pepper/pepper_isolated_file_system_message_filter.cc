@@ -1,11 +1,17 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "chrome/browser/renderer_host/pepper/pepper_isolated_file_system_message_filter.h"
 
 #include <stddef.h>
 
+#include "base/task/sequenced_task_runner.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
@@ -49,7 +55,7 @@ PepperIsolatedFileSystemMessageFilter::Create(PP_Instance instance,
   int unused_render_frame_id;
   if (!host->GetRenderFrameIDsForInstance(
           instance, &render_process_id, &unused_render_frame_id)) {
-    return NULL;
+    return nullptr;
   }
   return new PepperIsolatedFileSystemMessageFilter(
       render_process_id,
@@ -71,7 +77,7 @@ PepperIsolatedFileSystemMessageFilter::PepperIsolatedFileSystemMessageFilter(
 }
 
 PepperIsolatedFileSystemMessageFilter::
-    ~PepperIsolatedFileSystemMessageFilter() {}
+    ~PepperIsolatedFileSystemMessageFilter() = default;
 
 scoped_refptr<base::SequencedTaskRunner>
 PepperIsolatedFileSystemMessageFilter::OverrideTaskRunnerForMessage(
@@ -127,16 +133,13 @@ int32_t PepperIsolatedFileSystemMessageFilter::OnOpenFileSystem(
       return OpenCrxFileSystem(context);
   }
   NOTREACHED();
-  context->reply_msg =
-      PpapiPluginMsg_IsolatedFileSystem_BrowserOpenReply(std::string());
-  return PP_ERROR_FAILED;
 }
 
 int32_t PepperIsolatedFileSystemMessageFilter::OpenCrxFileSystem(
     ppapi::host::HostMessageContext* context) {
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   Profile* profile = GetProfile();
-  const extensions::ExtensionSet* extension_set = NULL;
+  const extensions::ExtensionSet* extension_set = nullptr;
   if (profile) {
     extension_set =
         &extensions::ExtensionRegistry::Get(profile)->enabled_extensions();

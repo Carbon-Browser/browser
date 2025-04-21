@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,8 +28,19 @@ class SingleClientPrintersSyncTest : public SyncTest {
   SingleClientPrintersSyncTest() : SyncTest(SINGLE_CLIENT) {}
   ~SingleClientPrintersSyncTest() override = default;
 
+  bool SetupClients() override {
+    if (!SyncTest::SetupClients()) {
+      return false;
+    }
+
+    CHECK(UseVerifier());
+    printers_helper::WaitForPrinterStoreToLoad(verifier());
+    printers_helper::WaitForPrinterStoreToLoad(GetProfile(0));
+    return true;
+  }
+
   bool UseVerifier() override {
-    // TODO(crbug.com/1137770): rewrite tests to not use verifier.
+    // TODO(crbug.com/40724972): rewrite tests to not use verifier.
     return true;
   }
 };
@@ -108,7 +119,7 @@ IN_PROC_BROWSER_TEST_F(SingleClientPrintersSyncTest, AddPrintServerPrinter) {
 
   // Start the sync.
   ASSERT_TRUE(SetupSync());
-  absl::optional<sync_pb::PrinterSpecifics> spec_printer =
+  std::optional<sync_pb::PrinterSpecifics> spec_printer =
       bridge->GetPrinter(spec_printer_id);
   ASSERT_TRUE(spec_printer);
 

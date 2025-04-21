@@ -1,4 +1,4 @@
-// Copyright 2014 The Crashpad Authors. All rights reserved.
+// Copyright 2014 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 
 #include "util/mach/mach_extensions.h"
 
-#include "base/mac/scoped_mach_port.h"
+#include "base/apple/scoped_mach_port.h"
 #include "build/build_config.h"
 #include "gtest/gtest.h"
 #include "test/mac/mach_errors.h"
@@ -25,12 +25,13 @@ namespace test {
 namespace {
 
 TEST(MachExtensions, MachThreadSelf) {
-  base::mac::ScopedMachSendRight thread_self(mach_thread_self());
+  base::apple::ScopedMachSendRight thread_self(mach_thread_self());
   EXPECT_EQ(MachThreadSelf(), thread_self);
 }
 
 TEST(MachExtensions, NewMachPort_Receive) {
-  base::mac::ScopedMachReceiveRight port(NewMachPort(MACH_PORT_RIGHT_RECEIVE));
+  base::apple::ScopedMachReceiveRight port(
+      NewMachPort(MACH_PORT_RIGHT_RECEIVE));
   ASSERT_NE(port, kMachPortNull);
 
   mach_port_type_t type;
@@ -41,7 +42,7 @@ TEST(MachExtensions, NewMachPort_Receive) {
 }
 
 TEST(MachExtensions, NewMachPort_PortSet) {
-  base::mac::ScopedMachPortSet port(NewMachPort(MACH_PORT_RIGHT_PORT_SET));
+  base::apple::ScopedMachPortSet port(NewMachPort(MACH_PORT_RIGHT_PORT_SET));
   ASSERT_NE(port, kMachPortNull);
 
   mach_port_type_t type;
@@ -52,7 +53,7 @@ TEST(MachExtensions, NewMachPort_PortSet) {
 }
 
 TEST(MachExtensions, NewMachPort_DeadName) {
-  base::mac::ScopedMachSendRight port(NewMachPort(MACH_PORT_RIGHT_DEAD_NAME));
+  base::apple::ScopedMachSendRight port(NewMachPort(MACH_PORT_RIGHT_DEAD_NAME));
   ASSERT_NE(port, kMachPortNull);
 
   mach_port_type_t type;

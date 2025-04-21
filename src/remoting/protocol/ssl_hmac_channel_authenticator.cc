@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/logging.h"
 #include "build/build_config.h"
 #include "crypto/secure_util.h"
@@ -20,8 +20,6 @@
 #include "net/cert/cert_status_flags.h"
 #include "net/cert/cert_verifier.h"
 #include "net/cert/cert_verify_result.h"
-#include "net/cert/ct_policy_enforcer.h"
-#include "net/cert/ct_policy_status.h"
 #include "net/cert/signed_certificate_timestamp_and_status.h"
 #include "net/cert/x509_certificate.h"
 #include "net/http/transport_security_state.h"
@@ -37,8 +35,7 @@
 #include "remoting/protocol/auth_util.h"
 #include "remoting/protocol/p2p_stream_socket.h"
 
-namespace remoting {
-namespace protocol {
+namespace remoting::protocol {
 
 namespace {
 
@@ -86,6 +83,8 @@ class FailingCertVerifier : public net::CertVerifier {
     return net::ERR_CERT_INVALID;
   }
   void SetConfig(const Config& config) override {}
+  void AddObserver(Observer* observer) override {}
+  void RemoveObserver(Observer* observer) override {}
 };
 
 // Implements net::StreamSocket interface on top of P2PStreamSocket to be passed
@@ -110,20 +109,11 @@ class NetStreamSocketAdapter : public net::StreamSocket {
                           traffic_annotation);
   }
 
-  int SetReceiveBufferSize(int32_t size) override {
-    NOTREACHED();
-    return net::ERR_FAILED;
-  }
+  int SetReceiveBufferSize(int32_t size) override { NOTREACHED(); }
 
-  int SetSendBufferSize(int32_t size) override {
-    NOTREACHED();
-    return net::ERR_FAILED;
-  }
+  int SetSendBufferSize(int32_t size) override { NOTREACHED(); }
 
-  int Connect(net::CompletionOnceCallback callback) override {
-    NOTREACHED();
-    return net::ERR_FAILED;
-  }
+  int Connect(net::CompletionOnceCallback callback) override { NOTREACHED(); }
   void Disconnect() override { socket_.reset(); }
   bool IsConnected() const override { return true; }
   bool IsConnectedAndIdle() const override { return true; }
@@ -132,27 +122,11 @@ class NetStreamSocketAdapter : public net::StreamSocket {
     *address = net::IPEndPoint(net::IPAddress::IPv4AllZeros(), 0);
     return net::OK;
   }
-  int GetLocalAddress(net::IPEndPoint* address) const override {
-    NOTREACHED();
-    return net::ERR_FAILED;
-  }
+  int GetLocalAddress(net::IPEndPoint* address) const override { NOTREACHED(); }
   const net::NetLogWithSource& NetLog() const override { return net_log_; }
-  bool WasEverUsed() const override {
-    NOTREACHED();
-    return true;
-  }
-  bool WasAlpnNegotiated() const override {
-    NOTREACHED();
-    return false;
-  }
-  net::NextProto GetNegotiatedProtocol() const override {
-    NOTREACHED();
-    return net::kProtoUnknown;
-  }
-  bool GetSSLInfo(net::SSLInfo* ssl_info) override {
-    NOTREACHED();
-    return false;
-  }
+  bool WasEverUsed() const override { NOTREACHED(); }
+  net::NextProto GetNegotiatedProtocol() const override { NOTREACHED(); }
+  bool GetSSLInfo(net::SSLInfo* ssl_info) override { NOTREACHED(); }
   int64_t GetTotalReceivedBytes() const override {
     NOTIMPLEMENTED();
     return 0;
@@ -227,8 +201,7 @@ SslHmacChannelAuthenticator::CreateForHost(const std::string& local_cert,
 
 SslHmacChannelAuthenticator::SslHmacChannelAuthenticator(
     const std::string& auth_key)
-    : auth_key_(auth_key) {
-}
+    : auth_key_(auth_key) {}
 
 SslHmacChannelAuthenticator::~SslHmacChannelAuthenticator() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -244,8 +217,7 @@ void SslHmacChannelAuthenticator::SecureAndAuthenticate(
   int result;
   if (is_ssl_server()) {
     scoped_refptr<net::X509Certificate> cert =
-        net::X509Certificate::CreateFromBytes(
-            base::as_bytes(base::make_span(local_cert_)));
+        net::X509Certificate::CreateFromBytes(base::as_byte_span(local_cert_));
     if (!cert) {
       LOG(ERROR) << "Failed to parse X509Certificate";
       NotifyError(net::ERR_FAILED);
@@ -269,20 +241,16 @@ void SslHmacChannelAuthenticator::SecureAndAuthenticate(
     socket_context_.transport_security_state =
         std::make_unique<net::TransportSecurityState>();
     socket_context_.cert_verifier = std::make_unique<FailingCertVerifier>();
-    socket_context_.ct_policy_enforcer =
-        std::make_unique<net::DefaultCTPolicyEnforcer>();
     socket_context_.client_context = std::make_unique<net::SSLClientContext>(
         nullptr /* default config */, socket_context_.cert_verifier.get(),
         socket_context_.transport_security_state.get(),
-        socket_context_.ct_policy_enforcer.get(),
         nullptr /* no session caching */, nullptr /* no sct auditing */);
 
     net::SSLConfig ssl_config;
     ssl_config.require_ecdhe = true;
 
     scoped_refptr<net::X509Certificate> cert =
-        net::X509Certificate::CreateFromBytes(
-            base::as_bytes(base::make_span(remote_cert_)));
+        net::X509Certificate::CreateFromBytes(base::as_byte_span(remote_cert_));
     if (!cert) {
       LOG(ERROR) << "Failed to parse X509Certificate";
       NotifyError(net::ERR_FAILED);
@@ -304,8 +272,9 @@ void SslHmacChannelAuthenticator::SecureAndAuthenticate(
         &SslHmacChannelAuthenticator::OnConnected, base::Unretained(this)));
   }
 
-  if (result == net::ERR_IO_PENDING)
+  if (result == net::ERR_IO_PENDING) {
     return;
+  }
 
   OnConnected(result);
 }
@@ -324,16 +293,19 @@ void SslHmacChannelAuthenticator::OnConnected(int result) {
 
   // Generate authentication digest to write to the socket.
   std::string auth_bytes = GetAuthBytes(
-      socket_.get(), is_ssl_server() ?
-      kHostAuthSslExporterLabel : kClientAuthSslExporterLabel, auth_key_);
+      socket_.get(),
+      is_ssl_server() ? kHostAuthSslExporterLabel : kClientAuthSslExporterLabel,
+      auth_key_);
   if (auth_bytes.empty()) {
     NotifyError(net::ERR_FAILED);
     return;
   }
 
   // Allocate a buffer to write the digest.
+  const size_t auth_bytes_size = auth_bytes.size();
   auth_write_buf_ = base::MakeRefCounted<net::DrainableIOBuffer>(
-      base::MakeRefCounted<net::StringIOBuffer>(auth_bytes), auth_bytes.size());
+      base::MakeRefCounted<net::StringIOBuffer>(std::move(auth_bytes)),
+      auth_bytes_size);
 
   // Read an incoming token.
   auth_read_buf_ = base::MakeRefCounted<net::GrowableIOBuffer>();
@@ -344,8 +316,9 @@ void SslHmacChannelAuthenticator::OnConnected(int result) {
   // be destroyed at that point.
   bool callback_called = false;
   WriteAuthenticationBytes(&callback_called);
-  if (!callback_called)
+  if (!callback_called) {
     ReadAuthenticationBytes();
+  }
 }
 
 void SslHmacChannelAuthenticator::WriteAuthenticationBytes(
@@ -356,33 +329,39 @@ void SslHmacChannelAuthenticator::WriteAuthenticationBytes(
         base::BindOnce(&SslHmacChannelAuthenticator::OnAuthBytesWritten,
                        base::Unretained(this)),
         kTrafficAnnotation);
-    if (result == net::ERR_IO_PENDING)
+    if (result == net::ERR_IO_PENDING) {
       break;
-    if (!HandleAuthBytesWritten(result, callback_called))
+    }
+    if (!HandleAuthBytesWritten(result, callback_called)) {
       break;
+    }
   }
 }
 
 void SslHmacChannelAuthenticator::OnAuthBytesWritten(int result) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (HandleAuthBytesWritten(result, nullptr))
+  if (HandleAuthBytesWritten(result, nullptr)) {
     WriteAuthenticationBytes(nullptr);
+  }
 }
 
 bool SslHmacChannelAuthenticator::HandleAuthBytesWritten(
-    int result, bool* callback_called) {
+    int result,
+    bool* callback_called) {
   if (result <= 0) {
     LOG(ERROR) << "Error writing authentication: " << result;
-    if (callback_called)
+    if (callback_called) {
       *callback_called = false;
+    }
     NotifyError(result);
     return false;
   }
 
   auth_write_buf_->DidConsume(result);
-  if (auth_write_buf_->BytesRemaining() > 0)
+  if (auth_write_buf_->BytesRemaining() > 0) {
     return true;
+  }
 
   auth_write_buf_ = nullptr;
   CheckDone(callback_called);
@@ -395,18 +374,21 @@ void SslHmacChannelAuthenticator::ReadAuthenticationBytes() {
         auth_read_buf_.get(), auth_read_buf_->RemainingCapacity(),
         base::BindOnce(&SslHmacChannelAuthenticator::OnAuthBytesRead,
                        base::Unretained(this)));
-    if (result == net::ERR_IO_PENDING)
+    if (result == net::ERR_IO_PENDING) {
       break;
-    if (!HandleAuthBytesRead(result))
+    }
+    if (!HandleAuthBytesRead(result)) {
       break;
+    }
   }
 }
 
 void SslHmacChannelAuthenticator::OnAuthBytesRead(int result) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (HandleAuthBytesRead(result))
+  if (HandleAuthBytesRead(result)) {
     ReadAuthenticationBytes();
+  }
 }
 
 bool SslHmacChannelAuthenticator::HandleAuthBytesRead(int read_result) {
@@ -416,12 +398,11 @@ bool SslHmacChannelAuthenticator::HandleAuthBytesRead(int read_result) {
   }
 
   auth_read_buf_->set_offset(auth_read_buf_->offset() + read_result);
-  if (auth_read_buf_->RemainingCapacity() > 0)
+  if (auth_read_buf_->RemainingCapacity() > 0) {
     return true;
+  }
 
-  if (!VerifyAuthBytes(std::string(
-          auth_read_buf_->StartOfBuffer(),
-          auth_read_buf_->StartOfBuffer() + kAuthDigestLength))) {
+  if (!VerifyAuthBytes(auth_read_buf_->everything().first(kAuthDigestLength))) {
     LOG(WARNING) << "Mismatched authentication";
     NotifyError(net::ERR_FAILED);
     return false;
@@ -433,25 +414,27 @@ bool SslHmacChannelAuthenticator::HandleAuthBytesRead(int read_result) {
 }
 
 bool SslHmacChannelAuthenticator::VerifyAuthBytes(
-    const std::string& received_auth_bytes) {
-  DCHECK(received_auth_bytes.length() == kAuthDigestLength);
+    base::span<const uint8_t> bytes) {
+  CHECK_EQ(bytes.size(), kAuthDigestLength);
 
   // Compute expected auth bytes.
   std::string auth_bytes = GetAuthBytes(
-      socket_.get(), is_ssl_server() ?
-      kClientAuthSslExporterLabel : kHostAuthSslExporterLabel, auth_key_);
-  if (auth_bytes.empty())
+      socket_.get(),
+      is_ssl_server() ? kClientAuthSslExporterLabel : kHostAuthSslExporterLabel,
+      auth_key_);
+  if (auth_bytes.empty()) {
     return false;
+  }
 
-  return crypto::SecureMemEqual(received_auth_bytes.data(),
-                                &(auth_bytes[0]), kAuthDigestLength);
+  return crypto::SecureMemEqual(bytes, base::as_byte_span(auth_bytes));
 }
 
 void SslHmacChannelAuthenticator::CheckDone(bool* callback_called) {
   if (auth_write_buf_.get() == nullptr && auth_read_buf_.get() == nullptr) {
     DCHECK(socket_.get() != nullptr);
-    if (callback_called)
+    if (callback_called) {
       *callback_called = true;
+    }
 
     std::move(done_callback_)
         .Run(net::OK, std::make_unique<P2PStreamSocketAdapter>(
@@ -463,5 +446,4 @@ void SslHmacChannelAuthenticator::NotifyError(int error) {
   std::move(done_callback_).Run(error, nullptr);
 }
 
-}  // namespace protocol
-}  // namespace remoting
+}  // namespace remoting::protocol

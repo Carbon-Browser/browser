@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,8 @@ import android.accounts.Account;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import org.chromium.base.annotations.CalledByNative;
+import org.jni_zero.CalledByNative;
+
 import org.chromium.components.signin.AccountUtils;
 
 /**
@@ -42,27 +43,28 @@ public class CoreAccountInfo {
         mGaiaId = gaiaId;
     }
 
-    /**
-     * Returns a unique identifier of the current account.
-     */
+    /** Returns a unique identifier of the current account. */
     @CalledByNative
     public CoreAccountId getId() {
         return mId;
     }
 
-    /**
-     * Returns the email of the current account.
-     */
+    /** Returns the email of the current account. */
     @CalledByNative
     public String getEmail() {
         return mEmail;
     }
 
-    /**
-     * Returns the string representation of the Gaia ID
-     */
+    /** Returns the string representation of the Gaia ID */
     @CalledByNative
     public String getGaiaId() {
+        return mGaiaId;
+    }
+
+    // TODO(crbug.com/380416867): Remove this API once all callers, including internal ones, are
+    // migrated.
+    /** Returns the Gaia ID in string form */
+    public String getGaiaIdAsString() {
         return mGaiaId;
     }
 
@@ -81,7 +83,8 @@ public class CoreAccountInfo {
     public boolean equals(Object obj) {
         if (!(obj instanceof CoreAccountInfo)) return false;
         CoreAccountInfo other = (CoreAccountInfo) obj;
-        return mId.equals(other.mId) && mEmail.equals(other.mEmail)
+        return mId.equals(other.mId)
+                && mEmail.equals(other.mEmail)
                 && mGaiaId.equals(other.mGaiaId);
     }
 
@@ -91,8 +94,9 @@ public class CoreAccountInfo {
      * @return {@link Account} for the argument if it is not null, null otherwise.
      */
     public static @Nullable Account getAndroidAccountFrom(@Nullable CoreAccountInfo accountInfo) {
-        return accountInfo == null ? null
-                                   : AccountUtils.createAccountFromName(accountInfo.getEmail());
+        return accountInfo == null
+                ? null
+                : AccountUtils.createAccountFromName(accountInfo.getEmail());
     }
 
     /**
@@ -123,9 +127,16 @@ public class CoreAccountInfo {
     }
 
     /**
-     * Creates a {@link CoreAccountInfo} object from email and gaiaID.
+     * Creates a {@link CoreAccountInfo} object from email and string representation of a gaia ID.
      */
+    // TODO(crbug.com/380416867): Remove this API once all callers, including internal ones, are
+    // migrated.
     public static CoreAccountInfo createFromEmailAndGaiaId(String email, String gaiaId) {
         return new CoreAccountInfo(new CoreAccountId(gaiaId), email, gaiaId);
+    }
+
+    /** Creates a {@link CoreAccountInfo} object from email and gaiaID. */
+    public static CoreAccountInfo createFromEmailAndGaiaId(String email, GaiaId gaiaId) {
+        return new CoreAccountInfo(new CoreAccountId(gaiaId.toString()), email, gaiaId.toString());
     }
 }

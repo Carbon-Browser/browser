@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,7 +39,6 @@
         "nocompile": true,
         "deprecated": "Please use $(ref:runtime.sendMessage).",
         "type": "function",
-        "allowAmbiguousOptionalArguments": true,
         "description": "Sends a single request to other listeners within the extension. Similar to $(ref:runtime.connect), but only sends a single request with an optional response. The $(ref:extension.onRequest) event is fired in each page of the extension.",
         "parameters": [
           {"type": "string", "name": "extensionId", "optional": true, "description": "The extension ID of the extension you want to connect to. If omitted, default is your own extension."},
@@ -89,7 +88,7 @@
               "type": {
                 "$ref": "ViewType",
                 "optional": true,
-                "description": "The type of view to get. If omitted, returns all views (including background pages and tabs). Valid values: 'tab', 'notification', 'popup'."
+                "description": "The type of view to get. If omitted, returns all views (including background pages and tabs)."
               },
               "windowId": {
                 "type": "integer",

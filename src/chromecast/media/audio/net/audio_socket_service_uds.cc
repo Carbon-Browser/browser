@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,14 +10,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/posix/eintr_wrapper.h"
 #include "base/posix/safe_strerror.h"
 #include "base/posix/unix_domain_socket.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/threading/sequenced_task_runner_handle.h"
 #include "chromecast/net/socket_util.h"
 #include "net/base/net_errors.h"
 #include "net/socket/stream_socket.h"
@@ -33,7 +32,7 @@ constexpr char kSocketMsg[] = "socket-handle";
 
 void CloseSocket(int fd) {
   int rv = IGNORE_EINTR(close(fd));
-  DCHECK_EQ(rv, 0) << "Error closing socket: " << base::safe_strerror(errno);
+  DPCHECK(rv == 0) << "Error closing socket";
 }
 
 }  // namespace
@@ -54,7 +53,7 @@ AudioSocketService::AudioSocketService(const std::string& endpoint,
     : max_accept_loop_(max_accept_loop),
       use_socket_descriptor_(use_socket_descriptor),
       delegate_(delegate),
-      task_runner_(base::SequencedTaskRunnerHandle::Get()) {
+      task_runner_(base::SequencedTaskRunner::GetCurrentDefault()) {
   DCHECK_GT(max_accept_loop_, 0);
   DCHECK(delegate_);
 

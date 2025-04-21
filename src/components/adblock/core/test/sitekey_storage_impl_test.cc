@@ -128,4 +128,28 @@ TEST_F(AdblockSitekeyStorageFlatbufferTest, ValidSignature) {
   EXPECT_EQ(expected, storage_->FindSiteKeyForAnyUrl({test_url}).value());
 }
 
+// DPD-1912: This test works with Base64DecodePolicy::kForgiving and fails
+// with Base64DecodePolicy::kStrict. Uses data from a real page.
+TEST_F(AdblockSitekeyStorageFlatbufferTest,
+       SignatureValidWithRelaxedDecodePolicy) {
+  constexpr char public_key[] =
+      "MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJRmzcpTevQqkWn6dJuX/N/"
+      "Hxl7YxbOwy8+73ijqYSQEN+WGxrruAKtZtliWC86+ewQ0msW1W8psOFL/b00zWqsCAwEAAQ";
+  constexpr char signature[] =
+      "kJCR9f/Vb/"
+      "NJwTNvLcnLVpM82hW+"
+      "6DiMmiBNLSpCBF0LuCTQ0LQZzUaNf5RK8TPaRZKOpTahrMY0B1fCr82MwA";
+  constexpr char host[] = "http://skillpanda.com";
+  constexpr char uri[] = "/";
+  constexpr char user_agent[] =
+      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+      "Chrome/114.0.0.0 Safari/537.36";
+  auto url = GURL{std::string(host) + std::string(uri)};
+  ProcessResponseHeader(public_key, signature, host, uri, user_agent);
+  std::pair<GURL, SiteKey> expected{
+      GURL{url}, SiteKey{std::string(public_key)
+                             .substr(0, std::string(public_key).find("=="))}};
+  EXPECT_EQ(expected, storage_->FindSiteKeyForAnyUrl({url}).value());
+}
+
 }  // namespace adblock

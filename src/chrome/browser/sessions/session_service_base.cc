@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,38 +10,48 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/feature_list.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/strings/to_string.h"
+#include "base/task/sequenced_task_runner.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/apps/app_service/web_contents_app_id_utils.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/sessions/session_service_log.h"
 #include "chrome/browser/sessions/session_service_utils.h"
 #include "chrome/browser/sessions/tab_restore_service_factory.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/startup/startup_browser_creator.h"
+#include "chrome/browser/ui/tabs/saved_tab_groups/saved_tab_group_utils.h"
 #include "chrome/browser/ui/tabs/tab_group.h"
 #include "chrome/browser/ui/tabs/tab_group_model.h"
+#include "chrome/browser/ui/ui_features.h"
 #include "components/sessions/content/content_serialized_navigation_builder.h"
 #include "components/sessions/content/session_tab_helper.h"
 #include "components/sessions/core/command_storage_manager.h"
 #include "components/sessions/core/session_command.h"
 #include "components/sessions/core/session_constants.h"
+#include "components/sessions/core/session_id.h"
 #include "components/sessions/core/session_types.h"
 #include "content/public/browser/navigation_details.h"
 #include "content/public/browser/navigation_entry.h"
-#include "content/public/browser/notification_service.h"
 #include "content/public/browser/session_storage_namespace.h"
+#include "ui/base/mojom/window_show_state.mojom.h"
 
 #if BUILDFLAG(IS_MAC)
 #include "chrome/browser/app_controller_mac.h"
 #endif
+
+#if BUILDFLAG(IS_CHROMEOS)
+#include "chrome/browser/ui/web_applications/app_browser_controller.h"
+#include "chrome/browser/web_applications/web_app_provider.h"
+#include "chrome/browser/web_applications/web_app_registrar.h"
+#endif  // BUILDFLAG(IS_CHROMEOS)
 
 using base::Time;
 using content::NavigationEntry;
@@ -171,7 +181,7 @@ Browser::Type SessionServiceBase::GetBrowserTypeFromWebContents(
 }
 
 void SessionServiceBase::SetWindowVisibleOnAllWorkspaces(
-    const SessionID& window_id,
+    SessionID window_id,
     bool visible_on_all_workspaces) {
   if (!ShouldTrackChangesToWindow(window_id))
     return;
@@ -185,17 +195,17 @@ void SessionServiceBase::ResetFromCurrentBrowsers() {
     ScheduleResetCommands();
 }
 
-void SessionServiceBase::SetTabWindow(const SessionID& window_id,
-                                      const SessionID& tab_id) {
+void SessionServiceBase::SetTabWindow(SessionID window_id, SessionID tab_id) {
   if (!ShouldTrackChangesToWindow(window_id))
     return;
 
   ScheduleCommand(sessions::CreateSetTabWindowCommand(window_id, tab_id));
 }
 
-void SessionServiceBase::SetWindowBounds(const SessionID& window_id,
-                                         const gfx::Rect& bounds,
-                                         ui::WindowShowState show_state) {
+void SessionServiceBase::SetWindowBounds(
+    SessionID window_id,
+    const gfx::Rect& bounds,
+    ui::mojom::WindowShowState show_state) {
   if (!ShouldTrackChangesToWindow(window_id))
     return;
 
@@ -203,7 +213,7 @@ void SessionServiceBase::SetWindowBounds(const SessionID& window_id,
       sessions::CreateSetWindowBoundsCommand(window_id, bounds, show_state));
 }
 
-void SessionServiceBase::SetWindowWorkspace(const SessionID& window_id,
+void SessionServiceBase::SetWindowWorkspace(SessionID window_id,
                                             const std::string& workspace) {
   if (!ShouldTrackChangesToWindow(window_id))
     return;
@@ -212,8 +222,8 @@ void SessionServiceBase::SetWindowWorkspace(const SessionID& window_id,
       sessions::CreateSetWindowWorkspaceCommand(window_id, workspace));
 }
 
-void SessionServiceBase::SetTabIndexInWindow(const SessionID& window_id,
-                                             const SessionID& tab_id,
+void SessionServiceBase::SetTabIndexInWindow(SessionID window_id,
+                                             SessionID tab_id,
                                              int new_index) {
   if (!ShouldTrackChangesToWindow(window_id))
     return;
@@ -274,12 +284,12 @@ void SessionServiceBase::TabRestored(WebContents* tab, bool pinned) {
   if (!ShouldTrackChangesToWindow(session_tab_helper->window_id()))
     return;
 
-  BuildCommandsForTab(session_tab_helper->window_id(), tab, -1, absl::nullopt,
+  BuildCommandsForTab(session_tab_helper->window_id(), tab, -1, std::nullopt,
                       pinned, nullptr);
   command_storage_manager()->StartSaveTimer();
 }
 
-void SessionServiceBase::SetSelectedTabInWindow(const SessionID& window_id,
+void SessionServiceBase::SetSelectedTabInWindow(SessionID window_id,
                                                 int index) {
   if (!ShouldTrackChangesToWindow(window_id))
     return;
@@ -294,8 +304,8 @@ void SessionServiceBase::SetSelectedTabInWindow(const SessionID& window_id,
 }
 
 void SessionServiceBase::SetTabExtensionAppID(
-    const SessionID& window_id,
-    const SessionID& tab_id,
+    SessionID window_id,
+    SessionID tab_id,
     const std::string& extension_app_id) {
   if (!ShouldTrackChangesToWindow(window_id))
     return;
@@ -304,9 +314,9 @@ void SessionServiceBase::SetTabExtensionAppID(
       sessions::CreateSetTabExtensionAppIDCommand(tab_id, extension_app_id));
 }
 
-void SessionServiceBase::SetLastActiveTime(const SessionID& window_id,
-                                           const SessionID& tab_id,
-                                           base::TimeTicks last_active_time) {
+void SessionServiceBase::SetLastActiveTime(SessionID window_id,
+                                           SessionID tab_id,
+                                           base::Time last_active_time) {
   if (!ShouldTrackChangesToWindow(window_id))
     return;
 
@@ -323,7 +333,7 @@ void SessionServiceBase::GetLastSession(
                      weak_factory_.GetWeakPtr(), std::move(callback)));
 }
 
-void SessionServiceBase::SetWindowAppName(const SessionID& window_id,
+void SessionServiceBase::SetWindowAppName(SessionID window_id,
                                           const std::string& app_name) {
   if (!ShouldTrackChangesToWindow(window_id))
     return;
@@ -331,13 +341,26 @@ void SessionServiceBase::SetWindowAppName(const SessionID& window_id,
   ScheduleCommand(sessions::CreateSetWindowAppNameCommand(window_id, app_name));
 }
 
+void SessionServiceBase::SetPinnedState(SessionID window_id,
+                                        SessionID tab_id,
+                                        bool is_pinned) {
+  if (!ShouldTrackChangesToWindow(window_id))
+    return;
+
+  ScheduleCommand(sessions::CreatePinnedStateCommand(tab_id, is_pinned));
+}
+
 bool SessionServiceBase::ShouldUseDelayedSave() {
   return should_use_delayed_save_;
 }
 
 void SessionServiceBase::OnWillSaveCommands() {
-  if (!is_saving_enabled_)
+  if (!is_saving_enabled_) {
+    // There should be no commands scheduled, otherwise data will be written,
+    // potentially clobbering the last file.
+    DCHECK(command_storage_manager_->pending_commands().empty());
     return;
+  }
 
   RebuildCommandsIfRequired();
   did_save_commands_at_least_once_ |=
@@ -351,18 +374,17 @@ void SessionServiceBase::OnErrorWritingSessionCommands() {
 }
 
 void SessionServiceBase::SetTabUserAgentOverride(
-    const SessionID& window_id,
-    const SessionID& tab_id,
+    SessionID window_id,
+    SessionID tab_id,
     const sessions::SerializedUserAgentOverride& user_agent_override) {
   // This is overridden by session_service implementation.
   // We still need it here because we derive from
   // sessions::SessionTabHelperDelegate.
   NOTREACHED();
-  return;
 }
 
-void SessionServiceBase::SetSelectedNavigationIndex(const SessionID& window_id,
-                                                    const SessionID& tab_id,
+void SessionServiceBase::SetSelectedNavigationIndex(SessionID window_id,
+                                                    SessionID tab_id,
                                                     int index) {
   if (!ShouldTrackChangesToWindow(window_id))
     return;
@@ -381,8 +403,8 @@ void SessionServiceBase::SetSelectedNavigationIndex(const SessionID& window_id,
 }
 
 void SessionServiceBase::UpdateTabNavigation(
-    const SessionID& window_id,
-    const SessionID& tab_id,
+    SessionID window_id,
+    SessionID tab_id,
     const SerializedNavigationEntry& navigation) {
   if (!ShouldTrackURLForRestore(navigation.virtual_url()) ||
       !ShouldTrackChangesToWindow(window_id)) {
@@ -397,8 +419,8 @@ void SessionServiceBase::UpdateTabNavigation(
   ScheduleCommand(CreateUpdateTabNavigationCommand(tab_id, navigation));
 }
 
-void SessionServiceBase::TabNavigationPathPruned(const SessionID& window_id,
-                                                 const SessionID& tab_id,
+void SessionServiceBase::TabNavigationPathPruned(SessionID window_id,
+                                                 SessionID tab_id,
                                                  int index,
                                                  int count) {
   if (!ShouldTrackChangesToWindow(window_id))
@@ -434,9 +456,8 @@ void SessionServiceBase::TabNavigationPathPruned(const SessionID& window_id,
       sessions::CreateTabNavigationPathPrunedCommand(tab_id, index, count));
 }
 
-void SessionServiceBase::TabNavigationPathEntriesDeleted(
-    const SessionID& window_id,
-    const SessionID& tab_id) {
+void SessionServiceBase::TabNavigationPathEntriesDeleted(SessionID window_id,
+                                                         SessionID tab_id) {
   if (!ShouldTrackChangesToWindow(window_id))
     return;
 
@@ -445,6 +466,37 @@ void SessionServiceBase::TabNavigationPathEntriesDeleted(
   rebuild_on_next_save_ = true;
   command_storage_manager_->StartSaveTimer();
 }
+
+#if DCHECK_IS_ON()
+base::Value SessionServiceBase::ToDebugValue() const {
+  base::Value::Dict result;
+  result.Set("profile", base::ToString(profile_.get()));
+  if (command_storage_manager_) {
+    result.Set("command_storage_manager",
+               command_storage_manager_->ToDebugValue());
+  }
+  for (const auto& [id, range] : tab_to_available_range_) {
+    base::Value::Dict* range_dict =
+        result.EnsureDict("tab_to_available_range")
+            ->EnsureDict(base::NumberToString(id.id()));
+    range_dict->Set("first", range.first);
+    range_dict->Set("second", range.first);
+  }
+  result.Set("rebuild_on_next_save", rebuild_on_next_save_);
+  for (const auto& [id, tab_index] : last_selected_tab_in_window_) {
+    result.EnsureDict("last_selected_tab_in_window")
+        ->Set(base::NumberToString(id.id()), tab_index);
+  }
+  for (const SessionID& window_tracking : windows_tracking_) {
+    result.EnsureList("windows_tracking")
+        ->Append(base::NumberToString(window_tracking.id()));
+  }
+  result.Set("is_saving_enabled", is_saving_enabled_);
+  result.Set("did_save_commands_at_least_once",
+             did_save_commands_at_least_once_);
+  return base::Value(std::move(result));
+}
+#endif  // DCHECK_IS_ON()
 
 void SessionServiceBase::DestroyCommandStorageManager() {
   command_storage_manager_.reset(nullptr);
@@ -485,10 +537,10 @@ void SessionServiceBase::OnGotSessionCommands(
 }
 
 void SessionServiceBase::BuildCommandsForTab(
-    const SessionID& window_id,
+    SessionID window_id,
     WebContents* tab,
     int index_in_window,
-    absl::optional<tab_groups::TabGroupId> group,
+    std::optional<tab_groups::TabGroupId> group,
     bool is_pinned,
     IdToRange* tab_to_available_range) {
   DCHECK(tab);
@@ -496,7 +548,7 @@ void SessionServiceBase::BuildCommandsForTab(
 
   sessions::SessionTabHelper* session_tab_helper =
       sessions::SessionTabHelper::FromWebContents(tab);
-  const SessionID& session_id(session_tab_helper->session_id());
+  const SessionID session_id(session_tab_helper->session_id());
   command_storage_manager()->AppendRebuildCommand(
       sessions::CreateSetTabWindowCommand(window_id, session_id));
 
@@ -549,6 +601,11 @@ void SessionServiceBase::BuildCommandsForTab(
     command_storage_manager()->AppendRebuildCommand(
         sessions::CreateSetTabIndexInWindowCommand(session_id,
                                                    index_in_window));
+  }
+
+  if (is_pinned) {
+    command_storage_manager()->AppendRebuildCommand(
+        sessions::CreatePinnedStateCommand(session_id, true));
   }
 
   // Record the association between the sessionStorage namespace and the tab.
@@ -604,19 +661,34 @@ void SessionServiceBase::BuildCommandsForBrowser(
   TabStripModel* tab_strip = browser->tab_strip_model();
   if (tab_strip->SupportsTabGroups()) {
     TabGroupModel* group_model = tab_strip->group_model();
+    tab_groups::TabGroupSyncService* tab_group_service =
+        tab_groups::SavedTabGroupUtils::GetServiceForProfile(
+            browser->profile());
+
     for (const tab_groups::TabGroupId& group_id :
          group_model->ListTabGroups()) {
       const tab_groups::TabGroupVisualData* visual_data =
           group_model->GetTabGroup(group_id)->visual_data();
+
+      std::optional<std::string> saved_guid;
+      if (tab_group_service) {
+        const std::optional<tab_groups::SavedTabGroup> saved_group =
+            tab_group_service->GetGroup(group_id);
+        if (saved_group.has_value()) {
+          saved_guid = saved_group->saved_guid().AsLowercaseString();
+        }
+      }
+
       command_storage_manager()->AppendRebuildCommand(
-          sessions::CreateTabGroupMetadataUpdateCommand(group_id, visual_data));
+          sessions::CreateTabGroupMetadataUpdateCommand(group_id, visual_data,
+                                                        std::move(saved_guid)));
     }
   }
 
   for (int i = 0; i < tab_strip->count(); ++i) {
     WebContents* tab = tab_strip->GetWebContentsAt(i);
     DCHECK(tab);
-    const absl::optional<tab_groups::TabGroupId> group_id =
+    const std::optional<tab_groups::TabGroupId> group_id =
         tab_strip->GetTabGroupForTab(i);
     BuildCommandsForTab(browser->session_id(), tab, i, group_id,
                         tab_strip->IsTabPinned(i), tab_to_available_range);
@@ -629,7 +701,7 @@ void SessionServiceBase::BuildCommandsFromBrowsers(
     IdToRange* tab_to_available_range,
     std::set<SessionID>* windows_to_track) {
   DCHECK(is_saving_enabled_);
-  for (auto* browser : *BrowserList::GetInstance()) {
+  for (Browser* browser : *BrowserList::GetInstance()) {
     // Make sure the browser has tabs and a window. Browser's destructor
     // removes itself from the BrowserList. When a browser is closed the
     // destructor is not necessarily run immediately. This means it's possible
@@ -665,8 +737,7 @@ void SessionServiceBase::ScheduleCommand(
   DidScheduleCommand();
 }
 
-bool SessionServiceBase::ShouldTrackChangesToWindow(
-    const SessionID& window_id) const {
+bool SessionServiceBase::ShouldTrackChangesToWindow(SessionID window_id) const {
   return windows_tracking_.find(window_id) != windows_tracking_.end();
 }
 
@@ -685,6 +756,22 @@ bool SessionServiceBase::ShouldTrackBrowser(Browser* browser) const {
     return false;
   }
 
+#if BUILDFLAG(IS_CHROMEOS)
+  // Windows that are auto-started and prevented from closing are exempted from
+  // tracking for session restore to prevent multiple unclosable open instances
+  // of the same app.
+  web_app::AppBrowserController* app_controller = browser->app_controller();
+  web_app::WebAppProvider* provider =
+      web_app::WebAppProvider::GetForWebApps(profile());
+  // Checking for close prevention does not require an `AppLock` and
+  // therefore `registrar_unsafe()` is safe to use.
+  if (app_controller && provider &&
+      provider->registrar_unsafe().IsPreventCloseEnabled(
+          app_controller->app_id())) {
+    return false;
+  }
+#endif  // #if BUILDFLAG(IS_CHROMEOS)
+
   return ShouldRestoreWindowOfType(WindowTypeForBrowserType(browser->type()));
 }
 
@@ -694,12 +781,12 @@ SessionServiceBase::GetCommandStorageManagerForTest() {
 }
 
 void SessionServiceBase::SetAvailableRangeForTest(
-    const SessionID& tab_id,
+    SessionID tab_id,
     const std::pair<int, int>& range) {
   tab_to_available_range_[tab_id] = range;
 }
 
-bool SessionServiceBase::GetAvailableRangeForTest(const SessionID& tab_id,
+bool SessionServiceBase::GetAvailableRangeForTest(SessionID tab_id,
                                                   std::pair<int, int>* range) {
   auto i = tab_to_available_range_.find(tab_id);
   if (i == tab_to_available_range_.end())

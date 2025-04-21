@@ -1,12 +1,12 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef IOS_WEB_WEB_STATE_POLICY_DECISION_STATE_TRACKER_H_
 #define IOS_WEB_WEB_STATE_POLICY_DECISION_STATE_TRACKER_H_
 
-#include "base/callback.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/weak_ptr.h"
 #import "ios/web/public/navigation/web_state_policy_decider.h"
 
@@ -22,17 +22,16 @@ namespace web {
 // the error associated with the first such decision. If this is destroyed
 // before all decisions have been received and the callback has not yet been
 // invoked, the callback is invoked with PolicyDecision::Cancel.
-class PolicyDecisionStateTracker
-    : public base::SupportsWeakPtr<PolicyDecisionStateTracker> {
+class PolicyDecisionStateTracker final {
  public:
-  // Constructor that takes a |callback| to be called once all decisions have
+  // Constructor that takes a `callback` to be called once all decisions have
   // been received.
   PolicyDecisionStateTracker(
       WebStatePolicyDecider::PolicyDecisionCallback callback);
 
   ~PolicyDecisionStateTracker();
 
-  // Called by each WebStatePolicyDecider with its |decision|.
+  // Called by each WebStatePolicyDecider with its `decision`.
   void OnSinglePolicyDecisionReceived(
       WebStatePolicyDecider::PolicyDecision decision);
 
@@ -43,7 +42,7 @@ class PolicyDecisionStateTracker
   bool DeterminedFinalResult();
 
   // Called once all WebStatePolicyDeciders have been asked for a decision,
-  // where |num_decisions_requested| is the number of WebStatePolicyDeciders
+  // where `num_decisions_requested` is the number of WebStatePolicyDeciders
   // that have been asked for a decision.
   void FinishedRequestingDecisions(int num_decisions_requested);
 
@@ -65,9 +64,11 @@ class PolicyDecisionStateTracker
 
   // Called after each decision is received. Initially, this is a no-op. Once
   // all decisions have been requested, this is changed to a BarrierClosure
-  // that handles invoking |callback_| after receiving the remaining
+  // that handles invoking `callback_` after receiving the remaining
   // outstanding decisions.
   base::RepeatingClosure decision_closure_ = base::DoNothing();
+
+  base::WeakPtrFactory<PolicyDecisionStateTracker> weak_ptr_factory_{this};
 };
 
 }  // namespace web

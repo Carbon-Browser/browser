@@ -1,20 +1,29 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_BROWSER_WEB_APPLICATIONS_COMMANDS_WEB_APP_COMMAND_H_
 #define CHROME_BROWSER_WEB_APPLICATIONS_COMMANDS_WEB_APP_COMMAND_H_
 
-#include "base/callback_forward.h"
+#include <iterator>
+#include <memory>
+#include <optional>
+#include <tuple>
+#include <type_traits>
+
+#include "base/functional/bind.h"
+#include "base/functional/bind_internal.h"
+#include "base/functional/callback.h"
+#include "base/location.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
+#include "base/strings/to_string.h"
+#include "base/types/pass_key.h"
 #include "base/values.h"
-#include "chrome/browser/web_applications/web_app_constants.h"
-#include "chrome/browser/web_applications/web_app_id.h"
-#include "components/services/storage/indexed_db/locks/disjoint_range_lock_manager.h"
-#include "components/services/storage/indexed_db/locks/leveled_lock_manager.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "chrome/browser/web_applications/commands/command_result.h"
+#include "chrome/browser/web_applications/commands/internal/command_internal.h"
+#include "components/webapps/common/web_app_id.h"
 
 namespace content {
 class WebContents;
@@ -22,201 +31,183 @@ class WebContents;
 
 namespace web_app {
 
+class LockDescription;
 class WebAppCommandManager;
-
-class WebAppCommandLock {
- public:
-  using LockRequestSet =
-      base::flat_set<content::DisjointRangeLockManager::LeveledLockRequest>;
-
-  WebAppCommandLock(WebAppCommandLock&&);
-  WebAppCommandLock& operator=(WebAppCommandLock&&);
-
-  WebAppCommandLock(const WebAppCommandLock&) = delete;
-  WebAppCommandLock& operator=(const WebAppCommandLock&) = delete;
-
-  ~WebAppCommandLock();
-
-  //  Creates a lock that guarantees isolation against all commands.
-  //  This makes sure that all commands are finished before this command is
-  //  started, and no command will be started during execution of the command.
-  static WebAppCommandLock CreateForFullSystemLock();
-
-  // Creates a lock that guarantees isolation against all
-  // commands that also use this lock type. Background web app installations can
-  // use this lock to run tasks sequentially that loads a `WebContents` in the
-  // background to avoid adding too much load to the system.
-  static WebAppCommandLock CreateForBackgroundWebContentsLock();
-
-  // Creates a lock that guarantees isolation against all commands that has lock
-  // on any of the `app_ids`.
-  static WebAppCommandLock CreateForAppLock(base::flat_set<AppId> app_ids);
-
-  // Creates a lock that guarantees isolation against all commands that has lock
-  // on any of the `app_ids` and also grants access to the shared web contents.
-  static WebAppCommandLock CreateForAppAndWebContentsLock(
-      base::flat_set<AppId> app_ids);
-
-  // Creates a no-op lock that doesn't lock on anything. This is useful to
-  // create commands that doesn't need isolation protection but would like to be
-  // managed by WebAppCommandManager for consistent lifecycle management.
-  static WebAppCommandLock CreateForNoOpLock();
-
-  const LockRequestSet& GetLockRequests() const { return lock_requests_; }
-
-  bool IsAppLocked(const AppId& app_id) const;
-
-  bool IncludesSharedWebContents() const;
-
-  const base::flat_set<AppId>& app_ids() const { return app_ids_; }
-
-  friend class WebAppCommandManager;
-
- private:
-  enum class LockType {
-    kFullSystem,
-    kApp,
-    kAppAndWebContents,
-    kBackgroundWebContents,
-    kNoOp,
-  };
-
-  explicit WebAppCommandLock(base::flat_set<AppId> app_ids,
-                             LockType lock_type,
-                             LockRequestSet lock_requests);
-
-  // Exposed for usage in the WebAppCommandManager to determine if the shared
-  // web contents can be destroyed.
-  static content::LeveledLockManager::LeveledLockRequest
-  GetSharedWebContentsLock();
-
-  enum class LockLevel {
-    kStatic = 0,
-    kApp = 1,
-    kMaxValue = kApp,
-  };
-
-  base::flat_set<AppId> app_ids_{};
-  LockType lock_type_;
-  LockRequestSet lock_requests_{};
-};
-
-enum class CommandResult { kSuccess, kFailure, kShutdown };
-
-// Each command has a queue id, which is either an `AppId` corresponding to a
-// specific web app, or `absl::nullopt` for the global queue. The global queue
-// is independent (does not block) of other queues.
-using WebAppCommandQueueId = absl::optional<AppId>;
+class WebAppLockManager;
 
 // Encapsulates code that reads or modifies the WebAppProvider system. All
 // reading or writing to the system should occur in a WebAppCommand to ensure
 // that it is isolated. Reading can also happen in any WebAppRegistrar observer.
 //
-// Commands can only be started by either enqueueing the command in the
-// WebAppCommandManager or by having the command be "chained" from another
-// command.
-// When a command is complete, it can call `SignalCompletionAndSelfDestruct` to
-// signal completion and self-destruct. The command can pass a list of "chained"
-// commands to run next as part of this operation. This allows for commands to
-// re-use each other easily.
+// Commands allow an operation to:
+// - Ensure that resources are not being used by another operation (e.g. no
+//   other operation is operating on the given app id).
+// - Automatically handles edge cases like profile shutdown.
+// - Prevent any possible re-entry bugs by allowing any final callback to be
+//   called after the command is destructed.
+// - Record detailed logs that are exposed in chrome://web-app-internals.
+//
+// For simple operations that require holding on to lock only for single
+// synchronous function calls, WebAppCommandScheduler::ScheduleCallback*
+// can be used instead of creating a sub-class.
+//
+// To create a command sub-class, extend the below type `WebAppCommand,
+// which allows specification of the type of lock to retrieve. For example:
+//
+// class GetAppInformationForMySystem
+//    : public WebAppCommand<AppLock, CallbackArgType> {
+//   GetAppInformationForMySystem(ReportBackInformationCallback callback)
+//       : WebAppCommand(std::move(callback),
+//         /*args_for_shutdown*/=CallbackArgType::kShutdownValue) {}
+//   ...
+//   void StartWithLock(std::unique_ptr<AppLock> lock) {
+//     ...
+//
+//     ...
+//     CompleteAndSelfDestruct(
+//         CommandResult::kSuccess,
+//         lock.<information>());
+//   }
+//   ...
+//
+//   // Implement this if installing from an external web contents.
+//   WebContents* GetInstallingWebContents(...) override;
+// };
+//
+// See the `WebAppLockManager` for information about the available locks & how
+// they work.
+//
+// Commands can only be started by enqueueing the command in the
+// WebAppCommandManager, which is done by the WebAppCommandScheduler. When a
+// command is complete, it can call `CompleteAndSelfDestruct` to signal
+// completion and self-destruct.
+//
+// Call pattern of commands:
+// - StartWithLock(),
+// - <subclass stuff>
+// - <subclass calls CompleteAndSelfDestruct()>.
+//
+// The command can use the following optional features:
+// - Populate the `GetMutableDebugValue()` with information that is useful for
+//   debugging - this shown in chrome://web-app-internals and printed in failed
+//   tests.
+// - To prevent multiple installs occurring at the same time for a given
+//   `WebContents`, installations that install from an external `WebContents`
+//   should override `GetInstallingWebContents()` and return that WebContents.
+// - `OnShutdown()` can be overridden to do stateless tasks like recording
+//   metrics.
 //
 // Invariants:
-// * Destruction can occur without `Start()` being called. If the system shuts
-//   down and the command was never started, then it will simply be destructed.
-// * `OnShutdown()` and `OnSyncSourceRemoved()` are only called if
-//   the command has been started.
-// * `SignalCompletionAndSelfDestruct()` can ONLY be called if `Start()` has
-//   been called. Otherwise it will CHECK-fail.
-class WebAppCommand {
+// * Destruction can occur without `StartWithLock()` being called. If the system
+//   shuts down and the command was never started, then it will simply be
+//   destructed and the `callback` will be called with the
+//   `args_for_shutdown`, if they exist.
+//
+// TODO(dmurph): Add an example of a CL that creates a command.
+template <typename LockType, typename... CallbackArgs>
+class WebAppCommand : public internal::CommandWithLock<LockType> {
  public:
-  using Id = int;
-  explicit WebAppCommand(WebAppCommandLock command_lock);
-  virtual ~WebAppCommand();
+  using PassKey = base::PassKey<WebAppCommand>;
+  using LockDescription = LockType::LockDescription;
+  using CallbackType = base::OnceCallback<void(CallbackArgs...)>;
+  using ShutdownArgumentsTuple = std::tuple<std::decay_t<CallbackArgs>...>;
 
-  // Unique id generated for this command. Currently only used for debug values.
-  Id id() const { return id_; }
-
-  // The command lock that contains isolation information.
-  const WebAppCommandLock& lock() const { return command_lock_; }
-
-  // Returns if the command has been started yet.
-  bool IsStarted() const { return command_manager_ != nullptr; }
-
-  // Returns the pre-existing web contents the installation was
-  // initiated with. Only implements this when the command is used for
-  // installation and uses a pre-existing web contents.
-  virtual content::WebContents* GetInstallingWebContents();
-
-  // Returns a debug value to log the state of the command. Used in
-  // chrome://web-app-internals.
-  virtual base::Value ToDebugValue() const = 0;
-
- protected:
-  // Triggered by the WebAppCommandManager. Signals that this command can
-  // start its operations. When this command is complete, it should call
-  // `SignalCompletionAndSelfDestruct` to signal it's completion and destruct
-  // itself. Note: It is not guaranteed that the web app this command was
-  // created for is still installed. All state must be re-checked when method
-  // this is called.
-  virtual void Start() = 0;
-
-  // This is called when the sync system has triggered an uninstall for an app
-  // id that is relevant to this command and this command is running (`Start()
-  // has been called). Relevance is determined by the
-  // `WebAppCommandLock::IsAppLocked()` function for this command's lock). The
-  // web app should still be in the registry, but it will no longer have the
-  // `WebAppManagement::kSync` source and `is_uninstalling()` will return true.
-  virtual void OnSyncSourceRemoved() = 0;
-
-  // Signals the system is shutting down. Used to cancel any pending operations,
-  // if possible, to prevent re-entry. Only called if the command has been
-  // started.
-  virtual void OnShutdown() = 0;
-
-  // Calling this will destroy the command and allow the next command in the
-  // queue to run. The caller can optionally schedule chained commands.
-  // Arguments:
-  // `call_after_destruction`: If the command has a closure that
-  //                           needs to be called on the completion  of the
-  //                           command, it can be passed here to ensure it is
-  //                           called after this  command is destructed and any
-  //                           chained  commands are queued.
-  // Note: This can ONLY be called if `Start()` has been called (`IsStarted()`
-  // is true). Otherwise it will CHECK-fail.
-  void SignalCompletionAndSelfDestruct(
-      CommandResult result,
-      base::OnceClosure call_after_destruction);
-
-  WebAppCommandManager* command_manager() const { return command_manager_; }
-
-  // If the `lock()` includes the lock for the kBackgroundWebContents, then this
-  // will be populated when `Start()` is called.
-  // Commands can assume that this WebContents will outlive them.
-  content::WebContents* shared_web_contents() const {
-    return shared_web_contents_;
+  // Special constructor if the callback doesn't take any arguments. There is no
+  // need to specify an empty tuple.
+  template <std::size_t i = sizeof...(CallbackArgs),
+            std::enable_if_t<i == 0, int> = 0>
+  WebAppCommand(const std::string& name,
+                LockDescription initial_lock_request,
+                CallbackType callback)
+      : internal::CommandWithLock<LockType>(name,
+                                            std::move(initial_lock_request)),
+        callback_(std::move(callback)) {
+    CHECK(!callback_.is_null());
   }
 
-  SEQUENCE_CHECKER(command_sequence_checker_);
+  template <std::size_t i = sizeof...(CallbackArgs),
+            std::enable_if_t<i >= 1, int> = 0>
+  WebAppCommand(const std::string& name,
+                LockDescription initial_lock_request,
+                CallbackType callback,
+                ShutdownArgumentsTuple args_for_shutdown)
+      : internal::CommandWithLock<LockType>(name,
+                                            std::move(initial_lock_request)),
+        callback_(std::move(callback)),
+        args_for_shutdown_(std::move(args_for_shutdown)) {
+    CHECK(!callback_.is_null());
+  }
+
+  ~WebAppCommand() override = default;
+
+  base::OnceClosure TakeCallbackWithShutdownArgs(
+      base::PassKey<WebAppCommandManager>) override {
+    DCHECK_CALLED_ON_VALID_SEQUENCE(
+        internal::CommandBase::command_sequence_checker_);
+    CHECK(!callback_.is_null());
+    internal::CommandBase::GetMutableDebugValue().Set("!command_result",
+                                                      "kShutdown");
+    if constexpr (sizeof...(CallbackArgs) == 0) {
+      return std::move(callback_);
+    } else {
+      internal::CommandBase::GetMutableDebugValue().Set(
+          "!result", base::ToString(args_for_shutdown_));
+
+      // We need to call BindOnce with both the callback and the shutdown args,
+      // so they must be concatenated into a tuple with both before calling
+      // std::apply.
+      // The below code is the C++ equivalent of
+      // `callback_.bind(...args_used_on_shutdown_)` in JavaScript.
+      std::tuple<CallbackType, CallbackArgs...> bind_arguments =
+          std::tuple_cat<std::tuple<CallbackType>, std::tuple<CallbackArgs...>>(
+              /*tuple1=*/{std::move(callback_)},
+              /*tuple2=*/std::move(args_for_shutdown_));
+      return std::apply(
+          &base::BindOnce<base::OnceCallback<void(CallbackArgs...)>,
+                          CallbackArgs...>,
+          std::move(bind_arguments));
+    }
+  }
+
+ protected:
+  // Calling this will destroy the command and allow the next command in the
+  // queue to run. This will do the following in order:
+  // 1) Destroy this object.
+  // 2) Call this command's `callback` with the given `args`.
+  // The `result` reports if the command encountered any unknown errors.
+  // TODO(dmurph): Use `result` in metrics. https://b/304553492.
+  void CompleteAndSelfDestruct(CommandResult result,
+                               CallbackArgs... args_for_callback,
+                               const base::Location& location = FROM_HERE) {
+    DCHECK_CALLED_ON_VALID_SEQUENCE(
+        internal::CommandBase::command_sequence_checker_);
+
+    base::Value::Dict* metadata =
+        internal::CommandBase::GetMutableDebugValue().EnsureDict("!metadata");
+    CHECK(internal::CommandBase::command_manager())
+        << "Command was never given to the command manager: "
+        << internal::CommandBase::GetMutableDebugValue().DebugString();
+    metadata->Set("command_result",
+                  result == CommandResult::kSuccess ? "kSuccess" : "kFailure");
+    metadata->Set(
+        "result",
+        base::ToString(std::tie<CallbackArgs&...>(args_for_callback...)));
+    metadata->Set("completion_location", base::ToString(location));
+
+    // Note: `BindOnce` should correctly handle copying any ref or move
+    // arguments internally. This allows the callback arguments to contain ref
+    // types (which are standard for mojo callbacks) or move-only types.
+    internal::CommandBase::CompleteAndSelfDestructInternal(
+        result,
+        base::BindOnce(std::move(callback_),
+                       std::forward<CallbackArgs>(args_for_callback)...));
+  }
 
  private:
-  friend class WebAppCommandManager;
-
-  // Start called by the WebAppCommandManager.
-  void Start(WebAppCommandManager* command_manager);
-
-  base::WeakPtr<WebAppCommand> AsWeakPtr();
-
-  Id id_;
-  WebAppCommandLock command_lock_;
-  raw_ptr<WebAppCommandManager> command_manager_ = nullptr;
-  // Because this is owned by the command manager, it will always outlive this
-  // object. Thus a raw pointer is save.
-  //
-  // TODO(crbug.com/1298696): unit_tests breaks with MTECheckedPtr
-  // enabled. Triage.
-  raw_ptr<content::WebContents, DegradeToNoOpWhenMTE> shared_web_contents_;
-
-  base::WeakPtrFactory<WebAppCommand> weak_factory_{this};
+  CallbackType callback_;
+  ShutdownArgumentsTuple args_for_shutdown_;
 };
+
 }  // namespace web_app
+
 #endif  // CHROME_BROWSER_WEB_APPLICATIONS_COMMANDS_WEB_APP_COMMAND_H_

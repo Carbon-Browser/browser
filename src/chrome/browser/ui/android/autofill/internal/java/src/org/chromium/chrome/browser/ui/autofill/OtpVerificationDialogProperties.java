@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,9 +21,8 @@ class OtpVerificationDialogProperties {
          * @param s The current text in the edit text field.
          */
         void onTextChanged(CharSequence s);
-        /**
-         * Notifies the mediator that the resend link was clicked.
-         */
+
+        /** Notifies the mediator that the resend link was clicked. */
         void onResendLinkClicked();
     }
 
@@ -57,6 +56,13 @@ class OtpVerificationDialogProperties {
     static final WritableBooleanPropertyKey SHOW_PROGRESS_BAR_OVERLAY =
             new WritableBooleanPropertyKey();
 
-    static final PropertyKey[] ALL_KEYS = {OTP_LENGTH, EDIT_TEXT, EDIT_TEXT_HINT, VIEW_DELEGATE,
-            OTP_ERROR_MESSAGE, SHOW_CONFIRMATION, SHOW_PROGRESS_BAR_OVERLAY};
+    static final PropertyKey[] ALL_KEYS = {
+        OTP_LENGTH,
+        EDIT_TEXT,
+        EDIT_TEXT_HINT,
+        VIEW_DELEGATE,
+        OTP_ERROR_MESSAGE,
+        SHOW_CONFIRMATION,
+        SHOW_PROGRESS_BAR_OVERLAY
+    };
 }

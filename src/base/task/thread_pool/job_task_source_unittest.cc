@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/ptr_util.h"
 #include "base/task/thread_pool/pooled_task_runner_delegate.h"
 #include "base/task/thread_pool/test_utils.h"
@@ -125,7 +125,7 @@ TEST_F(ThreadPoolJobTaskSourceTest, Clear) {
   {
     EXPECT_EQ(1U, task_source->GetRemainingConcurrency());
     auto task = registered_task_source_c.Clear();
-    std::move(task.task).Run();
+    EXPECT_FALSE(task);
     registered_task_source_c.DidProcessTask();
     EXPECT_EQ(0U, task_source->GetRemainingConcurrency());
   }
@@ -137,7 +137,7 @@ TEST_F(ThreadPoolJobTaskSourceTest, Clear) {
   // Another outstanding RunStatus can still call Clear.
   {
     auto task = registered_task_source_d.Clear();
-    std::move(task.task).Run();
+    EXPECT_FALSE(task);
     registered_task_source_d.DidProcessTask();
     EXPECT_EQ(0U, task_source->GetRemainingConcurrency());
   }

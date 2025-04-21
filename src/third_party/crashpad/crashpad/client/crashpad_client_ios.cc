@@ -1,4 +1,4 @@
-// Copyright 2020 The Crashpad Authors. All rights reserved.
+// Copyright 2020 The Crashpad Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,9 +21,9 @@
 #include <ios>
 #include <iterator>
 
+#include "base/apple/mach_logging.h"
+#include "base/apple/scoped_mach_port.h"
 #include "base/logging.h"
-#include "base/mac/mach_logging.h"
-#include "base/mac/scoped_mach_port.h"
 #include "client/ios_handler/exception_processor.h"
 #include "client/ios_handler/in_process_handler.h"
 #include "util/ios/raw_logging.h"
@@ -53,6 +53,40 @@ namespace crashpad {
 
 namespace {
 
+// Thread-safe version of `base::apple::ScopedMachReceiveRight` which allocates
+// the Mach port upon construction and deallocates it upon destruction.
+class ThreadSafeScopedMachPortWithReceiveRight {
+ public:
+  ThreadSafeScopedMachPortWithReceiveRight()
+      : port_(NewMachPort(MACH_PORT_RIGHT_RECEIVE)) {}
+
+  ThreadSafeScopedMachPortWithReceiveRight(
+      const ThreadSafeScopedMachPortWithReceiveRight&) = delete;
+  ThreadSafeScopedMachPortWithReceiveRight& operator=(
+      const ThreadSafeScopedMachPortWithReceiveRight&) = delete;
+
+  ~ThreadSafeScopedMachPortWithReceiveRight() { reset(); }
+
+  mach_port_t get() { return port_.load(); }
+  void reset() {
+    mach_port_t old_port = port_.exchange(MACH_PORT_NULL);
+    if (old_port == MACH_PORT_NULL) {
+      // Already reset, nothing to do.
+      return;
+    }
+    kern_return_t kr = mach_port_mod_refs(
+        mach_task_self(), old_port, MACH_PORT_RIGHT_RECEIVE, -1);
+    MACH_LOG_IF(ERROR, kr != KERN_SUCCESS, kr)
+        << "ThreadSafeScopedMachPortWithReceiveRight mach_port_mod_refs";
+    kr = mach_port_deallocate(mach_task_self(), old_port);
+    MACH_LOG_IF(ERROR, kr != KERN_SUCCESS, kr)
+        << "ThreadSafeScopedMachPortWithReceiveRight mach_port_deallocate";
+  }
+
+ private:
+  std::atomic<mach_port_t> port_;
+};
+
 // A base class for signal handler and Mach exception server.
 class CrashHandler : public Thread,
                      public UniversalMachExcServer::Interface,
@@ -72,11 +106,14 @@ class CrashHandler : public Thread,
     instance_ = nullptr;
   }
 
-  bool Initialize(const base::FilePath& database,
-                  const std::string& url,
-                  const std::map<std::string, std::string>& annotations) {
+  bool Initialize(
+      const base::FilePath& database,
+      const std::string& url,
+      const std::map<std::string, std::string>& annotations,
+      internal::InProcessHandler::ProcessPendingReportsObservationCallback
+          callback) {
     INITIALIZATION_STATE_SET_INITIALIZING(initialized_);
-    if (!in_process_handler_.Initialize(database, url, annotations) ||
+    if (!in_process_handler_.Initialize(database, url, annotations, callback) ||
         !InstallMachExceptionHandler() ||
         // xnu turns hardware faults into Mach exceptions, so the only signal
         // left to register is SIGABRT, which never starts off as a hardware
@@ -145,9 +182,9 @@ class CrashHandler : public Thread,
         context, kMachExceptionSimulated, path);
   }
 
-  void StartProcessingPendingReports() {
+  void StartProcessingPendingReports(UploadBehavior upload_behavior) {
     INITIALIZATION_STATE_DCHECK_VALID(initialized_);
-    in_process_handler_.StartProcessingPendingReports();
+    in_process_handler_.StartProcessingPendingReports(upload_behavior);
   }
 
   void SetMachExceptionCallbackForTesting(void (*callback)()) {
@@ -166,14 +203,14 @@ class CrashHandler : public Thread,
   }
 
   bool InstallMachExceptionHandler() {
-    exception_port_.reset(NewMachPort(MACH_PORT_RIGHT_RECEIVE));
-    if (!exception_port_.is_valid()) {
+    mach_port_t exception_port = exception_port_.get();
+    if (exception_port == MACH_PORT_NULL) {
       return false;
     }
 
     kern_return_t kr = mach_port_insert_right(mach_task_self(),
-                                              exception_port_.get(),
-                                              exception_port_.get(),
+                                              exception_port,
+                                              exception_port,
                                               MACH_MSG_TYPE_MAKE_SEND);
     if (kr != KERN_SUCCESS) {
       MACH_LOG(ERROR, kr) << "mach_port_insert_right";
@@ -191,7 +228,7 @@ class CrashHandler : public Thread,
     if (!exception_ports.GetExceptionPorts(mask, &original_handlers_) ||
         !exception_ports.SetExceptionPort(
             mask,
-            exception_port_.get(),
+            exception_port,
             EXCEPTION_STATE_IDENTITY | MACH_EXCEPTION_CODES,
             MACHINE_THREAD_STATE)) {
       return false;
@@ -390,7 +427,7 @@ class CrashHandler : public Thread,
     Signals::RestoreHandlerAndReraiseSignalOnReturn(siginfo, old_action);
   }
 
-  base::mac::ScopedMachReceiveRight exception_port_;
+  ThreadSafeScopedMachPortWithReceiveRight exception_port_;
   ExceptionPorts::ExceptionHandlerVector original_handlers_;
   struct sigaction old_action_ = {};
   internal::InProcessHandler in_process_handler_;
@@ -411,10 +448,11 @@ CrashpadClient::~CrashpadClient() {}
 bool CrashpadClient::StartCrashpadInProcessHandler(
     const base::FilePath& database,
     const std::string& url,
-    const std::map<std::string, std::string>& annotations) {
+    const std::map<std::string, std::string>& annotations,
+    ProcessPendingReportsObservationCallback callback) {
   CrashHandler* crash_handler = CrashHandler::Get();
   DCHECK(crash_handler);
-  return crash_handler->Initialize(database, url, annotations);
+  return crash_handler->Initialize(database, url, annotations, callback);
 }
 
 // static
@@ -435,10 +473,11 @@ void CrashpadClient::ProcessIntermediateDump(
 }
 
 // static
-void CrashpadClient::StartProcessingPendingReports() {
+void CrashpadClient::StartProcessingPendingReports(
+    UploadBehavior upload_behavior) {
   CrashHandler* crash_handler = CrashHandler::Get();
   DCHECK(crash_handler);
-  crash_handler->StartProcessingPendingReports();
+  crash_handler->StartProcessingPendingReports(upload_behavior);
 }
 
 // static

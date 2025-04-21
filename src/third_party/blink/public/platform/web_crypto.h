@@ -31,6 +31,9 @@
 #ifndef THIRD_PARTY_BLINK_PUBLIC_PLATFORM_WEB_CRYPTO_H_
 #define THIRD_PARTY_BLINK_PUBLIC_PLATFORM_WEB_CRYPTO_H_
 
+#include <string_view>
+
+#include "base/containers/span.h"
 #include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/public/platform/web_common.h"
 #include "third_party/blink/public/platform/web_crypto_algorithm.h"
@@ -48,6 +51,7 @@ namespace blink {
 class CryptoResult;
 class CryptoResultCancel;
 class WebString;
+class ExecutionContext;
 
 enum WebCryptoErrorType {
   kWebCryptoErrorTypeType,
@@ -58,7 +62,12 @@ enum WebCryptoErrorType {
   kWebCryptoErrorTypeOperation,
 };
 
-class WebCryptoResult {
+enum WebCryptoWarningType {
+  kWebCryptoWarningTypeNone,
+  kWebCryptoWarningTypeDeriveBitsTruncated,
+};
+
+class BLINK_PLATFORM_EXPORT WebCryptoResult {
  public:
   WebCryptoResult(const WebCryptoResult& o) { Assign(o); }
 
@@ -75,34 +84,34 @@ class WebCryptoResult {
   // secret information such as bytes of the key or plain text. An
   // appropriate error would be something like:
   //   "iv must be 16 bytes long".
-  BLINK_PLATFORM_EXPORT void CompleteWithError(WebCryptoErrorType,
-                                               const WebString&);
+  void CompleteWithError(WebCryptoErrorType, const WebString&);
 
-  // Makes a copy of the input data given as a pointer and byte length.
-  BLINK_PLATFORM_EXPORT void CompleteWithBuffer(const void*, unsigned);
-  BLINK_PLATFORM_EXPORT void CompleteWithJson(const char* utf8_data,
-                                              unsigned length);
-  BLINK_PLATFORM_EXPORT void CompleteWithBoolean(bool);
-  BLINK_PLATFORM_EXPORT void CompleteWithKey(const WebCryptoKey&);
-  BLINK_PLATFORM_EXPORT void CompleteWithKeyPair(
-      const WebCryptoKey& public_key,
-      const WebCryptoKey& private_key);
+  // Makes a copy of the input data given as a span of bytes.
+  void CompleteWithBuffer(base::span<const uint8_t>);
+  void CompleteWithJson(std::string_view);
+  void CompleteWithBoolean(bool);
+  void CompleteWithKey(const WebCryptoKey&);
+  void CompleteWithKeyPair(const WebCryptoKey& public_key,
+                           const WebCryptoKey& private_key);
 
   // Returns true if the underlying operation was cancelled.
   // This method can be called from any thread.
-  BLINK_PLATFORM_EXPORT bool Cancelled() const;
+  bool Cancelled() const;
+
+  ExecutionContext* GetExecutionContext() const;
 
 #if INSIDE_BLINK
-  BLINK_PLATFORM_EXPORT WebCryptoResult(CryptoResult*,
-                                        scoped_refptr<CryptoResultCancel>);
+  WebCryptoResult(CryptoResult*, scoped_refptr<CryptoResultCancel>);
 #endif
 
  private:
-  BLINK_PLATFORM_EXPORT void Reset();
-  BLINK_PLATFORM_EXPORT void Assign(const WebCryptoResult&);
+  void Reset();
+  void Assign(const WebCryptoResult&);
 
-  WebPrivatePtr<CryptoResult, kWebPrivatePtrDestructionCrossThread> impl_;
-  WebPrivatePtr<CryptoResultCancel, kWebPrivatePtrDestructionCrossThread>
+  WebPrivatePtrForGC<CryptoResult, WebPrivatePtrDestruction::kCrossThread>
+      impl_;
+  WebPrivatePtrForRefCounted<CryptoResultCancel,
+                             WebPrivatePtrDestruction::kCrossThread>
       cancel_;
 };
 
@@ -263,7 +272,7 @@ class WebCrypto {
   virtual void DeriveBits(
       const WebCryptoAlgorithm&,
       const WebCryptoKey&,
-      unsigned length,
+      std::optional<unsigned> length,
       WebCryptoResult result,
       scoped_refptr<base::SingleThreadTaskRunner> task_runner) {
     result.CompleteWithError(kWebCryptoErrorTypeNotSupported, "");
@@ -326,8 +335,7 @@ class WebCrypto {
                                       WebCryptoKeyType,
                                       bool extractable,
                                       WebCryptoKeyUsageMask,
-                                      const unsigned char* key_data,
-                                      unsigned key_data_size,
+                                      base::span<const unsigned char> key_data,
                                       WebCryptoKey&) {
     return false;
   }

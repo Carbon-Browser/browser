@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,7 +33,8 @@ TEST(GoogleServiceAuthErrorTest, State) {
       EXPECT_FALSE(error.IsPersistentError());
     } else if ((i == GoogleServiceAuthError::CONNECTION_FAILED) ||
                (i == GoogleServiceAuthError::SERVICE_UNAVAILABLE) ||
-               (i == GoogleServiceAuthError::REQUEST_CANCELED)) {
+               (i == GoogleServiceAuthError::REQUEST_CANCELED) ||
+               (i == GoogleServiceAuthError::CHALLENGE_RESPONSE_REQUIRED)) {
       EXPECT_TRUE(error.IsTransientError());
       EXPECT_FALSE(error.IsPersistentError());
     } else {
@@ -44,6 +45,10 @@ TEST(GoogleServiceAuthErrorTest, State) {
     if (i == GoogleServiceAuthError::INVALID_GAIA_CREDENTIALS) {
       EXPECT_EQ(GoogleServiceAuthError::InvalidGaiaCredentialsReason::UNKNOWN,
                 error.GetInvalidGaiaCredentialsReason());
+    }
+
+    if (i == GoogleServiceAuthError::CHALLENGE_RESPONSE_REQUIRED) {
+      EXPECT_TRUE(error.GetTokenBindingChallenge().empty());
     }
   }
 }

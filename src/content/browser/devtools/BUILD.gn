@@ -1,16 +1,17 @@
-# Copyright 2014 The Chromium Authors. All rights reserved.
+# Copyright 2014 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 import("//build/config/compiler/pgo/pgo.gni")
 import("//build/config/devtools.gni")
 import("//components/viz/common/debugger/viz_debugger.gni")
+import("//device/bluetooth/emulation/buildflags.gni")
 import("//third_party/inspector_protocol/inspector_protocol.gni")
 import("//third_party/protobuf/proto_library.gni")
 import("//tools/grit/grit_rule.gni")
 
-# Android does not support DevTools front-end.
-if (!is_android) {
+# Android and iOS don't support DevTools front-end.
+if (!is_android && !is_ios) {
   source_set("devtools_resources_extern") {
     sources = [ "devtools_resources.cc" ]
 
@@ -104,10 +105,16 @@ inspector_protocol_generate("protocol_sources") {
     "protocol/background_service.h",
     "protocol/browser.cc",
     "protocol/browser.h",
+    "protocol/device_access.cc",
+    "protocol/device_access.h",
+    "protocol/device_orientation.cc",
+    "protocol/device_orientation.h",
     "protocol/dom.cc",
     "protocol/dom.h",
     "protocol/emulation.cc",
     "protocol/emulation.h",
+    "protocol/fed_cm.cc",
+    "protocol/fed_cm.h",
     "protocol/fetch.cc",
     "protocol/fetch.h",
     "protocol/forward.h",
@@ -127,6 +134,8 @@ inspector_protocol_generate("protocol_sources") {
     "protocol/overlay.h",
     "protocol/page.cc",
     "protocol/page.h",
+    "protocol/preload.cc",
+    "protocol/preload.h",
     "protocol/protocol.h",
     "protocol/runtime.cc",
     "protocol/runtime.h",
@@ -161,6 +170,13 @@ inspector_protocol_generate("protocol_sources") {
     outputs += [
       "protocol/native_profiling.cc",
       "protocol/native_profiling.h",
+    ]
+  }
+
+  if (enable_bluetooth_emulation) {
+    outputs += [
+      "protocol/bluetooth_emulation.cc",
+      "protocol/bluetooth_emulation.h",
     ]
   }
 }

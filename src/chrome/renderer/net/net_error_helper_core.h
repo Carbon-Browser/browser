@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,8 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
-#include "base/memory/weak_ptr.h"
+#include "base/functional/callback.h"
+#include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "components/error_page/common/error.h"
 #include "components/error_page/common/localized_error.h"
@@ -19,7 +19,6 @@
 #include "url/gurl.h"
 
 #if BUILDFLAG(IS_ANDROID)
-#include "chrome/renderer/net/available_offline_content_helper.h"
 #include "chrome/renderer/net/page_auto_fetcher_helper_android.h"
 #endif
 
@@ -49,6 +48,7 @@ class NetErrorHelperCore {
     MORE_BUTTON,
     EASTER_EGG,
     DIAGNOSE_ERROR,
+    PORTAL_SIGNIN,
     DOWNLOAD_BUTTON,  // "Download page later" experiment.
   };
 
@@ -63,7 +63,7 @@ class NetErrorHelperCore {
         bool can_show_network_diagnostics_dialog,
         content::mojom::AlternativeErrorPageOverrideInfoPtr
             alternative_error_page_info,
-        std::string* html) const = 0;
+        std::string* html) = 0;
 
     // Create extra Javascript bindings in the error page. Will only be invoked
     // after an error page has finished loading.
@@ -94,16 +94,14 @@ class NetErrorHelperCore {
     // Run the platform diagnostics too for the specified URL.
     virtual void DiagnoseError(const GURL& page_url) = 0;
 
+    // Show the captive portal signin page.
+    virtual void PortalSignin() = 0;
+
     // Schedule to download the page at a later time.
     virtual void DownloadPageLater() = 0;
 
     // Inform that download button is being shown in the error page.
     virtual void SetIsShowingDownloadButton(bool show) = 0;
-
-    // Signals that offline content is available.
-    virtual void OfflineContentAvailable(
-        bool list_visible_by_prefs,
-        const std::string& offline_content_json) = 0;
 
     // Returns the render frame associated with NetErrorHelper.
     virtual content::RenderFrame* GetRenderFrame() = 0;
@@ -116,7 +114,7 @@ class NetErrorHelperCore {
 #endif
 
    protected:
-    virtual ~Delegate() {}
+    virtual ~Delegate() = default;
   };
 
   explicit NetErrorHelperCore(Delegate* delegate);
@@ -162,18 +160,8 @@ class NetErrorHelperCore {
   // care of in JavaScript.
   void ExecuteButtonPress(Button button);
 
-  // Opens a suggested offline item.
-  void LaunchOfflineItem(const std::string& id, const std::string& name_space);
-
-  // Shows all available offline content.
-  void LaunchDownloadsPage();
-
   void CancelSavePage();
   void SavePageForLater();
-
-  // Signals the user changed the visibility of the offline content list in the
-  // dino page.
-  void ListVisibilityChanged(bool is_visible);
 
  private:
   struct ErrorPageInfo;
@@ -202,7 +190,7 @@ class NetErrorHelperCore {
 
   void Reload();
 
-  Delegate* const delegate_;
+  const raw_ptr<Delegate> delegate_;
 
   // The last DnsProbeStatus received from the browser.
   error_page::DnsProbeStatus last_probe_status_;
@@ -223,7 +211,6 @@ class NetErrorHelperCore {
   Button navigation_from_button_;
 
 #if BUILDFLAG(IS_ANDROID)
-  AvailableOfflineContentHelper available_content_helper_;
   std::unique_ptr<PageAutoFetcherHelper> page_auto_fetcher_helper_;
 #endif
 };

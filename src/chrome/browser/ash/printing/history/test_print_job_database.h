@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -37,10 +37,5 @@ class TestPrintJobDatabase : public PrintJobDatabase {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove when ChromeOS code migration is done.
-namespace chromeos {
-using ::ash::TestPrintJobDatabase;
-}  // namespace chromeos
 
 #endif  // CHROME_BROWSER_ASH_PRINTING_HISTORY_TEST_PRINT_JOB_DATABASE_H_

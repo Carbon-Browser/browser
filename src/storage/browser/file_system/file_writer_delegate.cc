@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,13 +9,14 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/containers/span.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/location.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/threading/thread_restrictions.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/base/net_errors.h"
 #include "storage/browser/file_system/file_stream_writer.h"
 #include "storage/browser/file_system/file_system_context.h"
@@ -135,7 +136,7 @@ void FileWriterDelegate::Read() {
         OnReadCompleted(blob_reader_->net_error());
         return;
       case BlobReader::Status::DONE:
-        base::ThreadTaskRunnerHandle::Get()->PostTask(
+        base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
             FROM_HERE, base::BindOnce(&FileWriterDelegate::OnReadCompleted,
                                       weak_factory_.GetWeakPtr(), bytes_read_));
         return;
@@ -144,19 +145,18 @@ void FileWriterDelegate::Read() {
         return;
     }
     NOTREACHED();
-    return;
   }
 
   DCHECK(data_pipe_);
-  uint32_t num_bytes = io_buffer_->size();
-  MojoResult result = data_pipe_->ReadData(io_buffer_->data(), &num_bytes,
-                                           MOJO_READ_DATA_FLAG_NONE);
+  size_t num_bytes = 0;
+  MojoResult result = data_pipe_->ReadData(MOJO_READ_DATA_FLAG_NONE,
+                                           io_buffer_->span(), num_bytes);
   if (result == MOJO_RESULT_SHOULD_WAIT) {
     data_pipe_watcher_.ArmOrNotify();
     return;
   }
   if (result == MOJO_RESULT_OK) {
-    bytes_read_ = num_bytes;
+    bytes_read_ = base::checked_cast<int>(num_bytes);
     OnReadCompleted(bytes_read_);
     return;
   }
@@ -167,7 +167,6 @@ void FileWriterDelegate::Read() {
   }
   // Some unknown error, this shouldn't happen.
   NOTREACHED();
-  OnReadError(base::File::FILE_ERROR_FAILED);
 }
 
 void FileWriterDelegate::OnDataReceived(int bytes_read) {
@@ -192,7 +191,7 @@ void FileWriterDelegate::Write() {
       base::BindOnce(&FileWriterDelegate::OnDataWritten,
                      weak_factory_.GetWeakPtr()));
   if (write_response > 0) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&FileWriterDelegate::OnDataWritten,
                                   weak_factory_.GetWeakPtr(), write_response));
   } else if (net::ERR_IO_PENDING != write_response) {
@@ -300,6 +299,7 @@ void FileWriterDelegate::MaybeFlushForCompletion(
   DCHECK(flush_policy_ == FlushPolicy::FLUSH_ON_COMPLETION);
 
   int flush_error = file_stream_writer_->Flush(
+      FlushMode::kEndOfFile,
       base::BindOnce(&FileWriterDelegate::OnFlushed, weak_factory_.GetWeakPtr(),
                      error, bytes_written, progress_status));
   if (flush_error != net::ERR_IO_PENDING)

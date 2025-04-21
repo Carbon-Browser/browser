@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,9 +7,9 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
@@ -67,7 +67,7 @@ class MediaEngagementScoreDetailsProviderImpl
   MediaEngagementScoreDetailsProviderImpl& operator=(
       const MediaEngagementScoreDetailsProviderImpl&) = delete;
 
-  ~MediaEngagementScoreDetailsProviderImpl() override {}
+  ~MediaEngagementScoreDetailsProviderImpl() override = default;
 
   // media::mojom::MediaEngagementScoreDetailsProvider overrides:
   void GetMediaEngagementScoreDetails(
@@ -115,8 +115,9 @@ class MediaEngagementScoreDetailsProviderImpl
     std::vector<component_updater::ComponentInfo> info = cus->GetComponents();
 
     for (const auto& component : info) {
-      if (component.id == kPreloadComponentID)
+      if (component.id == kPreloadComponentID) {
         return component.version.GetString();
+      }
     }
 
     return std::string();
@@ -142,11 +143,16 @@ class MediaEngagementScoreDetailsProviderImpl
 
 }  // namespace
 
+bool MediaEngagementUIConfig::IsWebUIEnabled(
+    content::BrowserContext* browser_context) {
+  return MediaEngagementService::IsEnabled();
+}
+
 MediaEngagementUI::MediaEngagementUI(content::WebUI* web_ui)
     : ui::MojoWebUIController(web_ui) {
   // Setup the data source behind chrome://media-engagement.
-  std::unique_ptr<content::WebUIDataSource> source(
-      content::WebUIDataSource::Create(chrome::kChromeUIMediaEngagementHost));
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      Profile::FromWebUI(web_ui), chrome::kChromeUIMediaEngagementHost);
   source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::ScriptSrc,
       "script-src chrome://resources chrome://webui-test 'self';");
@@ -156,7 +162,6 @@ MediaEngagementUI::MediaEngagementUI(content::WebUI* web_ui)
       "media_engagement_score_details.mojom-webui.js",
       IDR_MEDIA_MEDIA_ENGAGEMENT_SCORE_DETAILS_MOJOM_WEBUI_JS);
   source->SetDefaultResource(IDR_MEDIA_MEDIA_ENGAGEMENT_HTML);
-  content::WebUIDataSource::Add(Profile::FromWebUI(web_ui), source.release());
 }
 
 WEB_UI_CONTROLLER_TYPE_IMPL(MediaEngagementUI)

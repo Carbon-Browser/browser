@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,7 +13,7 @@ using testing::UnorderedElementsAre;
 namespace network {
 
 TEST(ContentLanguageTest, ParseContentLanguages) {
-  absl::optional<std::vector<std::string>> result;
+  std::optional<std::vector<std::string>> result;
 
   // Empty is OK.
   result = ParseContentLanguages(" ");

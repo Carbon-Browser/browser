@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -46,7 +46,7 @@ void NearOomReductionMessageDelegate::ShowMessage(
       l10n_util::GetStringUTF16(IDS_NEAR_OOM_REDUCTION_MESSAGE_DESCRIPTION));
   message_->SetPrimaryButtonText(l10n_util::GetStringUTF16(IDS_SHOW_CONTENT));
   message_->SetIconResourceId(
-      ResourceMapper::MapToJavaDrawableId(IDR_ANDROID_INFOBAR_MOBILE_FRIENDLY));
+      ResourceMapper::MapToJavaDrawableId(IDR_ANDROID_IC_MOBILE_FRIENDLY));
 
   messages::MessageDispatcherBridge::Get()->EnqueueMessage(
       message_.get(), web_contents, messages::MessageScopeType::NAVIGATION,

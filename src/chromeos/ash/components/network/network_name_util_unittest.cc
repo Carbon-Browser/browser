@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,10 +27,13 @@ namespace {
 const char kTestEuiccPath[] = "euicc_path";
 const char kTestIccid[] = "iccid";
 const char kTestProfileName[] = "test_profile_name";
+const char kTestProfileNickname[] = "test_profile_nickname";
+const char kTestServiceProviderName[] = "test_service_provider_name";
 const char kTestEidName[] = "eid";
 const char kTestEthName[] = "test_eth_name";
 const char kTestNameFromShill[] = "shill_network_name";
 
+const char kTestCellularDevicePath[] = "device/cellular1";
 const char kTestESimCellularServicePath[] = "/service/cellular1";
 const char kTestEthServicePath[] = "/service/eth0";
 
@@ -50,17 +53,22 @@ class NetworkNameUtilTest : public testing::Test {
     network_state_test_helper_.hermes_manager_test()->AddEuicc(
         dbus::ObjectPath(kTestEuiccPath), kTestEidName, /*is_active=*/true,
         /*physical_slot=*/0);
+    network_state_test_helper_.device_test()->AddDevice(
+        kTestCellularDevicePath, shill::kTypeCellular, "fake_cellular_device");
     cellular_esim_profile_handler_->Init(
         network_state_test_helper_.network_state_handler(),
         cellular_inhibitor_.get());
     base::RunLoop().RunUntilIdle();
   }
 
-  void AddESimProfile(hermes::profile::State state,
+  void AddESimProfile(const std::string& name,
+                      const std::string& nickname,
+                      const std::string& service_provider_name,
+                      hermes::profile::State state,
                       const std::string& service_path) {
     network_state_test_helper_.hermes_euicc_test()->AddCarrierProfile(
         dbus::ObjectPath(service_path), dbus::ObjectPath(kTestEuiccPath),
-        kTestIccid, kTestProfileName, "service_provider", "activation_code",
+        kTestIccid, name, nickname, service_provider_name, "activation_code",
         service_path, state, hermes::profile::ProfileClass::kOperational,
         HermesEuiccClient::TestInterface::AddCarrierProfileBehavior::
             kAddProfileWithService);
@@ -78,28 +86,43 @@ class NetworkNameUtilTest : public testing::Test {
  protected:
   base::test::SingleThreadTaskEnvironment task_environment_;
   NetworkStateTestHelper network_state_test_helper_{
-      false /* use_default_devices_and_services */};
+      /*use_default_devices_and_services=*/false};
   std::unique_ptr<CellularInhibitor> cellular_inhibitor_;
   std::unique_ptr<TestCellularESimProfileHandler>
       cellular_esim_profile_handler_;
 };
 
 TEST_F(NetworkNameUtilTest, EsimNetworkGetNetworkName) {
-  AddESimProfile(hermes::profile::State::kActive, kTestESimCellularServicePath);
+  AddESimProfile(kTestProfileName, kTestProfileNickname,
+                 kTestServiceProviderName, hermes::profile::State::kActive,
+                 kTestESimCellularServicePath);
 
-  const chromeos::NetworkState* network =
+  const NetworkState* network =
       network_state_test_helper_.network_state_handler()->GetNetworkState(
           kTestESimCellularServicePath);
 
   std::string name = network_name_util::GetNetworkName(
       cellular_esim_profile_handler_.get(), network);
 
-  EXPECT_EQ(name, kTestProfileName);
+  EXPECT_EQ(name, kTestProfileNickname);
+}
+
+TEST_F(NetworkNameUtilTest, EsimNetworNetworkNamePriority) {
+  AddESimProfile("", "", kTestServiceProviderName,
+                 hermes::profile::State::kActive, kTestESimCellularServicePath);
+  const NetworkState* network =
+      network_state_test_helper_.network_state_handler()->GetNetworkState(
+          kTestESimCellularServicePath);
+
+  std::string name = network_name_util::GetNetworkName(
+      cellular_esim_profile_handler_.get(), network);
+
+  EXPECT_EQ(name, kTestServiceProviderName);
 }
 
 TEST_F(NetworkNameUtilTest, EthernetNetworkGetNetworkName) {
   AddEthernet();
-  const chromeos::NetworkState* network =
+  const NetworkState* network =
       network_state_test_helper_.network_state_handler()->GetNetworkState(
           kTestEthServicePath);
 
@@ -110,7 +133,9 @@ TEST_F(NetworkNameUtilTest, EthernetNetworkGetNetworkName) {
 }
 
 TEST_F(NetworkNameUtilTest, NameComesFromHermes) {
-  AddESimProfile(hermes::profile::State::kActive, kTestESimCellularServicePath);
+  AddESimProfile(kTestProfileName, kTestProfileNickname,
+                 kTestServiceProviderName, hermes::profile::State::kActive,
+                 kTestESimCellularServicePath);
 
   // Change the network's name in Shill. Now, Hermes and Shill have different
   // names associated with the profile.
@@ -119,14 +144,14 @@ TEST_F(NetworkNameUtilTest, NameComesFromHermes) {
       base::Value(kTestNameFromShill));
   base::RunLoop().RunUntilIdle();
 
-  const chromeos::NetworkState* network =
+  const NetworkState* network =
       network_state_test_helper_.network_state_handler()->GetNetworkState(
           kTestESimCellularServicePath);
 
   std::string name = network_name_util::GetNetworkName(
       cellular_esim_profile_handler_.get(), network);
 
-  EXPECT_EQ(name, kTestProfileName);
+  EXPECT_EQ(name, kTestProfileNickname);
 }
 
 }  // namespace ash

@@ -1,4 +1,4 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,8 @@ namespace ui {
 const char WindowEventTarget::kWin32InputEventTarget[]
     = "Win32_InputEventTarget";
 
-WindowEventTarget::WindowEventTarget() {}
+WindowEventTarget::WindowEventTarget() = default;
 
-WindowEventTarget::~WindowEventTarget() {}
+WindowEventTarget::~WindowEventTarget() = default;
 
 }  // namespace ui

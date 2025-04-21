@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,10 +20,11 @@ bool NativeUnwinderWin::CanUnwindFrom(const Frame& current_frame) const {
 // Attempts to unwind the frame represented by the context values. If
 // successful appends frames onto the stack and returns true. Otherwise
 // returns false.
-UnwindResult NativeUnwinderWin::TryUnwind(RegisterContext* thread_context,
+UnwindResult NativeUnwinderWin::TryUnwind(UnwinderStateCapture* capture_state,
+                                          RegisterContext* thread_context,
                                           uintptr_t stack_top,
-                                          std::vector<Frame>* stack) const {
-  // We expect the frame correponding to the |thread_context| register state to
+                                          std::vector<Frame>* stack) {
+  // We expect the frame corresponding to the |thread_context| register state to
   // exist within |stack|.
   DCHECK_GT(stack->size(), 0u);
 
@@ -58,8 +59,9 @@ UnwindResult NativeUnwinderWin::TryUnwind(RegisterContext* thread_context,
       return UnwindResult::kAborted;
     }
 
-    if (RegisterContextInstructionPointer(thread_context) == 0)
+    if (RegisterContextInstructionPointer(thread_context) == 0) {
       return UnwindResult::kCompleted;
+    }
 
     // Exclusive range of expected stack pointer values after the unwind.
     struct {
@@ -89,7 +91,6 @@ UnwindResult NativeUnwinderWin::TryUnwind(RegisterContext* thread_context,
   }
 
   NOTREACHED();
-  return UnwindResult::kCompleted;
 }
 
 }  // namespace base

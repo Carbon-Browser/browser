@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,10 +7,9 @@
 
 #include "chrome/updater/win/ui/progress_wnd.h"
 
-namespace updater {
-namespace ui {
+namespace updater::ui {
 
-const ProgressWnd::ControlState ProgressWnd::ctls_[] = {
+inline constexpr ProgressWnd::ControlState ProgressWnd::ctls_[] = {
     // The struct values are:
     // is_ignore_entry, is_visible, is_enabled, is_button, is_default
     {
@@ -250,7 +249,6 @@ const ProgressWnd::ControlState ProgressWnd::ctls_[] = {
     },
 };
 
-}  // namespace ui
-}  // namespace updater
+}  // namespace updater::ui
 
 #endif  // CHROME_UPDATER_WIN_UI_UI_CTLS_H_

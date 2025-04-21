@@ -1,9 +1,11 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef NET_TEST_TEST_WITH_TASK_ENVIRONMENT_H_
 #define NET_TEST_TEST_WITH_TASK_ENVIRONMENT_H_
+
+#include <memory>
 
 #include "base/test/task_environment.h"
 #include "base/time/time.h"
@@ -14,6 +16,8 @@ class TickClock;
 }  // namespace base
 
 namespace net {
+
+class TestNetLogManager;
 
 // Inherit from this class if a TaskEnvironment is needed in a test.
 // Use in class hierachies where inheritance from ::testing::Test at the same
@@ -29,13 +33,19 @@ class WithTaskEnvironment {
   // to mock time.
   explicit WithTaskEnvironment(
       base::test::TaskEnvironment::TimeSource time_source =
-          base::test::TaskEnvironment::TimeSource::DEFAULT)
-      : task_environment_(base::test::TaskEnvironment::MainThreadType::IO,
-                          time_source) {}
+          base::test::TaskEnvironment::TimeSource::DEFAULT);
+
+  ~WithTaskEnvironment();
 
   [[nodiscard]] bool MainThreadIsIdle() const {
     return task_environment_.MainThreadIsIdle();
   }
+
+  [[nodiscard]] base::RepeatingClosure QuitClosure() {
+    return task_environment_.QuitClosure();
+  }
+
+  void RunUntilQuit() { task_environment_.RunUntilQuit(); }
 
   void RunUntilIdle() { task_environment_.RunUntilIdle(); }
 
@@ -65,7 +75,10 @@ class WithTaskEnvironment {
   }
 
  private:
+  void MaybeStartNetLog();
+
   base::test::TaskEnvironment task_environment_;
+  std::unique_ptr<TestNetLogManager> net_log_manager_;
 };
 
 // Inherit from this class instead of ::testing::Test directly if a

@@ -1,8 +1,8 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {createElementWithClassName} from 'chrome://resources/js/util.m.js';
+import {createElementWithClassName} from 'chrome://resources/ash/common/util.js';
 
 import {MENU_TEXT_COLOR_DARK, MENU_TEXT_COLOR_LIGHT} from './constants.js';
 import {DataSeries} from './data_series.js';
@@ -74,7 +74,7 @@ export class Menu {
    */
   addDataSeries(dataSeries) {
     const /** number */ idx = this.dataSeries_.indexOf(dataSeries);
-    if (idx != -1) {
+    if (idx !== -1) {
       return;
     }
     const /** Element */ button = this.createButton_(dataSeries);
@@ -145,7 +145,7 @@ export class Menu {
    */
   removeDataSeries(dataSeries) {
     const /** number */ idx = this.dataSeries_.indexOf(dataSeries);
-    if (idx == -1) {
+    if (idx === -1) {
       return;
     }
     this.dataSeries_.splice(idx, 1);

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,6 @@ void TCPSocketState::CompletePendingTransition(bool success) {
   switch (pending_transition_) {
     case NONE:
       NOTREACHED();
-      break;
     case BIND:
       if (success)
         state_ = BOUND;
@@ -70,7 +69,6 @@ bool TCPSocketState::IsValidTransition(TransitionType transition) const {
       return true;
   }
   NOTREACHED();
-  return false;
 }
 
 bool TCPSocketState::IsPending(TransitionType transition) const {

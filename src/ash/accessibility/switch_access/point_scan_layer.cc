@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 #include "ash/shell.h"
 #include "third_party/skia/include/core/SkPaint.h"
 #include "third_party/skia/include/core/SkPath.h"
-#include "third_party/skia/include/effects/SkDashPathEffect.h"
 #include "ui/aura/window.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/paint_recorder.h"
@@ -93,7 +92,8 @@ void PointScanLayer::OnPaintLayer(const ui::PaintContext& context) {
   if (!is_moving_) {
     SkScalar intervals[] = {kDashLengthDips, kGapLengthDips};
     int intervals_length = 2;
-    flags.setPathEffect(SkDashPathEffect::Make(intervals, intervals_length, 0));
+    flags.setPathEffect(
+        cc::PathEffect::MakeDash(intervals, intervals_length, 0));
   }
 
   flags.setColor(kOuterColor);

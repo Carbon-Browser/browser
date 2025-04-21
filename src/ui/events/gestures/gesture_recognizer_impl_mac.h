@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -43,11 +43,6 @@ class EVENTS_EXPORT GestureRecognizerImplMac : public GestureRecognizer {
       GestureConsumer* current_consumer,
       GestureConsumer* new_consumer,
       TransferTouchesBehavior transfer_touches_behavior) override;
-  std::vector<std::unique_ptr<ui::TouchEvent>> ExtractTouches(
-      GestureConsumer* consumer) override;
-  void TransferTouches(GestureConsumer* consumer,
-                       const std::vector<std::unique_ptr<ui::TouchEvent>>&
-                           touch_events) override;
   bool GetLastTouchPointForTarget(GestureConsumer* consumer,
                                   gfx::PointF* point) override;
   bool CancelActiveTouches(GestureConsumer* consumer) override;

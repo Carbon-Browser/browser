@@ -30,6 +30,7 @@
 #define THIRD_PARTY_BLINK_RENDERER_CORE_SVG_GRAPHICS_SVG_IMAGE_CHROME_CLIENT_H_
 
 #include "base/gtest_prod_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/loader/empty_clients.h"
 #include "third_party/blink/renderer/platform/heap/disallow_new_wrapper.h"
@@ -40,20 +41,27 @@ namespace blink {
 
 class SVGImage;
 
-class CORE_EXPORT SVGImageChromeClient final : public EmptyChromeClient {
+class IsolatedSVGChromeClient : public EmptyChromeClient {
+ public:
+  bool IsIsolatedSVGChromeClient() const override;
+
+  // Callback to allow restoring (resuming) animations that was suspended due
+  // to changes in page visibility (see Page::SetVisibilityState).
+  virtual void RestoreAnimationIfNeeded() {}
+};
+
+class CORE_EXPORT SVGImageChromeClient final : public IsolatedSVGChromeClient {
  public:
   explicit SVGImageChromeClient(SVGImage*);
 
   void InitAnimationTimer(
       scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner);
 
-  bool IsSVGImageChromeClient() const override;
-
   SVGImage* GetImage() const { return image_; }
 
   void SuspendAnimation();
   void ResumeAnimation();
-  void RestoreAnimationIfNeeded();
+  void RestoreAnimationIfNeeded() override;
 
   bool IsSuspended() const { return timeline_state_ >= kSuspended; }
 
@@ -82,12 +90,16 @@ class CORE_EXPORT SVGImageChromeClient final : public EmptyChromeClient {
   FRIEND_TEST_ALL_PREFIXES(SVGImageTest, TimelineSuspendAndResume);
   FRIEND_TEST_ALL_PREFIXES(SVGImageTest, ResetAnimation);
   FRIEND_TEST_ALL_PREFIXES(SVGImageSimTest, PageVisibilityHiddenToVisible);
+  FRIEND_TEST_ALL_PREFIXES(SVGImageSimTest,
+                           AnimationsPausedWhenImageScrolledOutOfView);
+  FRIEND_TEST_ALL_PREFIXES(SVGImageSimTest,
+                           AnimationsResumedWhenImageScrolledIntoView);
 };
 
 template <>
-struct DowncastTraits<SVGImageChromeClient> {
+struct DowncastTraits<IsolatedSVGChromeClient> {
   static bool AllowFrom(const ChromeClient& client) {
-    return client.IsSVGImageChromeClient();
+    return client.IsIsolatedSVGChromeClient();
   }
 };
 

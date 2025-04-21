@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -134,8 +134,7 @@ TEST_F(SerialNumberUtilTest, GetOrCreateSerialNumber) {
   // in local state.
   using std::literals::string_literals::operator""s;
   const std::string salt_on_disk = "BAADDECAFC0\0FFEE"s;
-  const std::string salt_on_disk_hex =
-      base::HexEncode(salt_on_disk.data(), salt_on_disk.size());
+  const std::string salt_on_disk_hex = base::HexEncode(salt_on_disk);
   const std::string serialno_4 =
       GetOrCreateSerialNumber(test_local_state(), chromeos_user, salt_on_disk);
   EXPECT_FALSE(serialno_4.empty());
@@ -223,8 +222,7 @@ TEST_F(SerialNumberUtilTest, GetOrCreateSerialNumber_SerialNumberComputation) {
   const std::string chromeos_user = "user@gmail.com";
 
   // Set the |hex_salt| in local state.
-  const std::string hex_salt =
-      base::HexEncode(std::string(kSaltLen, 'x').data(), kSaltLen);
+  const std::string hex_salt = base::HexEncode(std::string(kSaltLen, 'x'));
   test_local_state()->SetString(prefs::kArcSerialNumberSalt, hex_salt);
 
   // Get a serial number based on the hex salt.
@@ -243,7 +241,7 @@ TEST_F(SerialNumberUtilTest, ReadSaltOnDisk) {
   constexpr int kSaltLen = 16;
 
   // Verify the function returns a non-null result when the file doesn't exist.
-  absl::optional<std::string> salt =
+  std::optional<std::string> salt =
       ReadSaltOnDisk(base::FilePath("/nonexistent/path"));
   EXPECT_TRUE(salt.has_value());
 
@@ -253,8 +251,7 @@ TEST_F(SerialNumberUtilTest, ReadSaltOnDisk) {
   base::ScopedTempDir temp_dir;
   ASSERT_TRUE(temp_dir.CreateUniqueTempDir());
   base::FilePath arc_salt_path = temp_dir.GetPath().Append("arc_salt");
-  ASSERT_EQ(kSaltLen, base::WriteFile(arc_salt_path, expected_salt_value.data(),
-                                      expected_salt_value.size()));
+  ASSERT_TRUE(base::WriteFile(arc_salt_path, expected_salt_value));
 
   // Verify the function can read the salt file even when the file contains
   // non-ASCII characters like '\0'.

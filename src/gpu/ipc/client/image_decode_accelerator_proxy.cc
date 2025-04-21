@@ -1,16 +1,17 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "gpu/ipc/client/image_decode_accelerator_proxy.h"
 
-#include <algorithm>
 #include <memory>
 #include <utility>
 #include <vector>
 
 #include "base/check_op.h"
+#include "base/containers/contains.h"
 #include "base/notreached.h"
+#include "base/ranges/algorithm.h"
 #include "cc/paint/paint_image.h"
 #include "gpu/command_buffer/common/constants.h"
 #include "gpu/config/gpu_info.h"
@@ -24,7 +25,7 @@ namespace gpu {
 
 namespace {
 
-// TODO(crbug.com/984971): for WebPs we may need to compute the coded size
+// TODO(crbug.com/41471307): for WebPs we may need to compute the coded size
 // instead and check that against the supported dimensions.
 bool IsSupportedImageSize(
     const cc::ImageHeaderMetadata* image_data,
@@ -83,9 +84,7 @@ bool IsSupportedJpegImage(
       return false;
   }
 
-  return std::find(supported_profile.subsamplings.cbegin(),
-                   supported_profile.subsamplings.cend(),
-                   subsampling) != supported_profile.subsamplings.cend();
+  return base::Contains(supported_profile.subsamplings, subsampling);
 }
 
 }  // namespace
@@ -134,11 +133,9 @@ bool ImageDecodeAcceleratorProxy::IsImageSupported(
   // of the image.
   const std::vector<ImageDecodeAcceleratorSupportedProfile>& profiles =
       host_->gpu_info().image_decode_accelerator_supported_profiles;
-  auto profile_it = std::find_if(
-      profiles.cbegin(), profiles.cend(),
-      [image_type](const ImageDecodeAcceleratorSupportedProfile& profile) {
-        return profile.image_type == image_type;
-      });
+  auto profile_it =
+      base::ranges::find(profiles, image_type,
+                         &ImageDecodeAcceleratorSupportedProfile::image_type);
   if (profile_it == profiles.cend())
     return false;
 
@@ -156,7 +153,6 @@ bool ImageDecodeAcceleratorProxy::IsImageSupported(
     case ImageDecodeAcceleratorType::kUnknown:
       // Should not reach due to a check above.
       NOTREACHED();
-      break;
   }
   return false;
 }

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 
 #include <string>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/scoped_refptr.h"
 #include "build/build_config.h"
 #include "components/services/storage/public/cpp/quota_error_or.h"
@@ -51,9 +51,6 @@ class CONTENT_EXPORT WebDatabaseHostImpl
                   DeleteFileCallback callback) override;
   void GetFileAttributes(const std::u16string& vfs_file_name,
                          GetFileAttributesCallback callback) override;
-  void SetFileSize(const std::u16string& vfs_file_name,
-                   int64_t expected_size,
-                   SetFileSizeCallback callback) override;
   void GetSpaceAvailable(const url::Origin& origin,
                          GetSpaceAvailableCallback callback) override;
   void Opened(const url::Origin& origin,
@@ -100,10 +97,6 @@ class CONTENT_EXPORT WebDatabaseHostImpl
 
   void GetFileAttributesValidated(const std::u16string& vfs_file_name,
                                   GetFileAttributesCallback callback);
-
-  void SetFileSizeValidated(const std::u16string& vfs_file_name,
-                            int64_t expected_size,
-                            SetFileSizeCallback callback);
 
   void GetSpaceAvailableValidated(const url::Origin& origin,
                                   GetSpaceAvailableCallback callback);

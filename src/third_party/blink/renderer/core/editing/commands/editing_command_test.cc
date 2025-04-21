@@ -1,6 +1,8 @@
-// Copyright (c) 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#include <array>
 
 #include "third_party/blink/public/mojom/input/focus_type.mojom-blink.h"
 #include "third_party/blink/renderer/core/dom/focus_params.h"
@@ -25,11 +27,11 @@ struct CommandNameEntry {
   EditingCommandType type;
 };
 
-const CommandNameEntry kCommandNameEntries[] = {
+const auto kCommandNameEntries = std::to_array<CommandNameEntry>({
 #define V(name) {#name, EditingCommandType::k##name},
     FOR_EACH_BLINK_EDITING_COMMAND_NAME(V)
 #undef V
-};
+});
 // Test all commands except EditingCommandType::Invalid.
 static_assert(
     std::size(kCommandNameEntries) + 1 ==
@@ -91,12 +93,12 @@ TEST_F(EditingCommandTest, EnabledVisibleSelection) {
   Selection().SetSelection(
       SetSelectionTextToBody("<div contenteditable>a|b<div>"),
       SetSelectionOptions());
-  Element* div = GetDocument().QuerySelector("div");
+  Element* div = GetDocument().QuerySelector(AtomicString("div"));
   GetDocument().SetFocusedElement(
       div, FocusParams(SelectionBehaviorOnFocus::kNone,
                        mojom::blink::FocusType::kNone, nullptr));
   EXPECT_TRUE(command.IsEnabled());
-  div->removeAttribute("contenteditable");
+  div->removeAttribute(html_names::kContenteditableAttr);
   EXPECT_FALSE(command.IsEnabled());
   GetDocument().GetFrame()->GetSettings()->SetCaretBrowsingEnabled(true);
   EXPECT_TRUE(command.IsEnabled());
@@ -108,14 +110,14 @@ TEST_F(EditingCommandTest, EnabledVisibleSelectionAndMark) {
   Selection().SetSelection(
       SetSelectionTextToBody("<div contenteditable>a|b<div>"),
       SetSelectionOptions());
-  Element* div = GetDocument().QuerySelector("div");
+  Element* div = GetDocument().QuerySelector(AtomicString("div"));
   GetDocument().SetFocusedElement(
       div, FocusParams(SelectionBehaviorOnFocus::kNone,
                        mojom::blink::FocusType::kNone, nullptr));
   EXPECT_FALSE(command.IsEnabled());
   editor.SetMark();
   EXPECT_TRUE(command.IsEnabled());
-  div->removeAttribute("contenteditable");
+  div->removeAttribute(html_names::kContenteditableAttr);
   EXPECT_FALSE(command.IsEnabled());
   GetDocument().GetFrame()->GetSettings()->SetCaretBrowsingEnabled(true);
   EXPECT_TRUE(command.IsEnabled());
@@ -135,12 +137,12 @@ TEST_F(EditingCommandTest, EnabledInEditableTextOrCaretBrowsing) {
   Selection().SetSelection(
       SetSelectionTextToBody("<div contenteditable>a|b<div>"),
       SetSelectionOptions());
-  Element* div = GetDocument().QuerySelector("div");
+  Element* div = GetDocument().QuerySelector(AtomicString("div"));
   GetDocument().SetFocusedElement(
       div, FocusParams(SelectionBehaviorOnFocus::kNone,
                        mojom::blink::FocusType::kNone, nullptr));
   EXPECT_TRUE(command.IsEnabled());
-  div->removeAttribute("contenteditable");
+  div->removeAttribute(html_names::kContenteditableAttr);
   EXPECT_FALSE(command.IsEnabled());
 }
 
@@ -151,7 +153,7 @@ TEST_F(EditingCommandTest, DeleteSoftLineBackwardTargetRanges) {
   Selection().SetSelection(
       SetSelectionTextToBody("<div contenteditable>abcdef<br>123|<div>"),
       SetSelectionOptions());
-  Element* div = GetDocument().QuerySelector("div");
+  Element* div = GetDocument().QuerySelector(AtomicString("div"));
   GetDocument().SetFocusedElement(
       div, FocusParams(SelectionBehaviorOnFocus::kNone,
                        mojom::blink::FocusType::kNone, nullptr));

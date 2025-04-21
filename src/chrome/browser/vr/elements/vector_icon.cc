@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/vr/elements/ui_texture.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/gfx/scoped_canvas.h"
@@ -15,12 +16,12 @@ namespace vr {
 
 class VectorIconTexture : public UiTexture {
  public:
-  VectorIconTexture() {}
+  VectorIconTexture() = default;
 
   VectorIconTexture(const VectorIconTexture&) = delete;
   VectorIconTexture& operator=(const VectorIconTexture&) = delete;
 
-  ~VectorIconTexture() override {}
+  ~VectorIconTexture() override = default;
 
   void SetColor(SkColor color) { SetAndDirty(&color_, color); }
 
@@ -30,8 +31,9 @@ class VectorIconTexture : public UiTexture {
 
  private:
   void Draw(SkCanvas* sk_canvas, const gfx::Size& texture_size) override {
-    if (icon_ == nullptr || icon_->is_empty())
+    if (icon_ == nullptr || icon_->is_empty()) {
       return;
+    }
     cc::SkiaPaintCanvas paint_canvas(sk_canvas);
     gfx::Canvas gfx_canvas(&paint_canvas, 1.0f);
 
@@ -46,14 +48,14 @@ class VectorIconTexture : public UiTexture {
   }
 
   gfx::SizeF size_;
-  const gfx::VectorIcon* icon_ = nullptr;
+  raw_ptr<const gfx::VectorIcon> icon_ = nullptr;
   SkColor color_ = SK_ColorWHITE;
 };
 
 VectorIcon::VectorIcon(int texture_width)
     : texture_(std::make_unique<VectorIconTexture>()),
       texture_width_(texture_width) {}
-VectorIcon::~VectorIcon() {}
+VectorIcon::~VectorIcon() = default;
 
 void VectorIcon::SetColor(SkColor color) {
   texture_->SetColor(color);

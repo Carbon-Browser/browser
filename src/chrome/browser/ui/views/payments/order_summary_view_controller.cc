@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,26 +33,39 @@ namespace payments {
 
 namespace {
 
+// The vertical spacing for these rows is slightly different than the
+// spacing spacing for clickable rows, so don't use
+// kPaymentRequestRowVerticalInsets.
+constexpr int kLineItemRowVerticalInset = 4;
+
 class LineItemRow : public views::View {
+  METADATA_HEADER(LineItemRow, views::View)
+
  public:
-  METADATA_HEADER(LineItemRow);
+  LineItemRow()
+      : row_insets_(
+            gfx::Insets::TLBR(kLineItemRowVerticalInset,
+                              payments::kPaymentRequestRowHorizontalInsets,
+                              kLineItemRowVerticalInset,
+                              payments::kPaymentRequestRowHorizontalInsets)) {
+    // The border color will be set to the theme color in OnThemeChanged, but we
+    // need to initialize the view with an empty border so that the correct
+    // bounds are computed.
+    SetBorder(views::CreateEmptyBorder(row_insets_));
+  }
 
   // views::View:
   void OnThemeChanged() override {
     View::OnThemeChanged();
-    // The vertical spacing for these rows is slightly different than the
-    // spacing spacing for clickable rows, so don't use
-    // kPaymentRequestRowVerticalInsets.
-    constexpr int kRowVerticalInset = 4;
-    const auto row_insets = gfx::Insets::TLBR(
-        kRowVerticalInset, payments::kPaymentRequestRowHorizontalInsets,
-        kRowVerticalInset, payments::kPaymentRequestRowHorizontalInsets);
     SetBorder(payments::CreatePaymentRequestRowBorder(
-        GetColorProvider()->GetColor(ui::kColorSeparator), row_insets));
+        GetColorProvider()->GetColor(ui::kColorSeparator), row_insets_));
   }
+
+ private:
+  gfx::Insets row_insets_;
 };
 
-BEGIN_METADATA(LineItemRow, views::View)
+BEGIN_METADATA(LineItemRow)
 END_METADATA
 
 // Creates a view for a line item to be displayed in the Order Summary Sheet.
@@ -134,8 +147,9 @@ OrderSummaryViewController::OrderSummaryViewController(
 }
 
 OrderSummaryViewController::~OrderSummaryViewController() {
-  if (spec())
+  if (spec()) {
     spec()->RemoveObserver(this);
+  }
 
   state()->RemoveObserver(this);
 }
@@ -157,8 +171,9 @@ std::u16string OrderSummaryViewController::GetSheetTitle() {
 }
 
 void OrderSummaryViewController::FillContentView(views::View* content_view) {
-  if (!spec())
+  if (!spec()) {
     return;
+  }
 
   auto layout = std::make_unique<views::BoxLayout>(
       views::BoxLayout::Orientation::kVertical);
@@ -207,6 +222,20 @@ void OrderSummaryViewController::FillContentView(views::View* content_view) {
           true, DialogViewID::ORDER_SUMMARY_TOTAL_CURRENCY_LABEL,
           DialogViewID::ORDER_SUMMARY_TOTAL_AMOUNT_LABEL)
           .release());
+}
+
+bool OrderSummaryViewController::GetSheetId(DialogViewID* sheet_id) {
+  *sheet_id = DialogViewID::ORDER_SUMMARY_SHEET;
+  return true;
+}
+
+bool OrderSummaryViewController::ShouldAccelerateEnterKey() {
+  return true;
+}
+
+base::WeakPtr<PaymentRequestSheetController>
+OrderSummaryViewController::GetWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
 }
 
 }  // namespace payments

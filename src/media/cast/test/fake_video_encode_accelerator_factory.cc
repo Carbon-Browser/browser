@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,8 @@
 
 #include <utility>
 
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/task/single_thread_task_runner.h"
 
 namespace media {
 namespace cast {
@@ -26,8 +27,9 @@ void FakeVideoEncodeAcceleratorFactory::SetInitializationWillSucceed(
 void FakeVideoEncodeAcceleratorFactory::SetAutoRespond(bool auto_respond) {
   auto_respond_ = auto_respond;
   if (auto_respond_) {
-    if (!vea_response_callback_.is_null())
+    if (!vea_response_callback_.is_null()) {
       RespondWithVideoEncodeAccelerator();
+    }
   }
 }
 
@@ -41,8 +43,9 @@ void FakeVideoEncodeAcceleratorFactory::CreateVideoEncodeAccelerator(
   vea->SetWillInitializationSucceed(will_init_succeed_);
   next_response_vea_.reset(vea);
   vea_response_callback_ = std::move(callback);
-  if (auto_respond_)
+  if (auto_respond_) {
     RespondWithVideoEncodeAccelerator();
+  }
 }
 
 void FakeVideoEncodeAcceleratorFactory::RespondWithVideoEncodeAccelerator() {

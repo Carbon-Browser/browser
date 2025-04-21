@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -35,7 +35,8 @@ class CONTENT_EXPORT HidDelegate {
     virtual void OnDeviceChanged(const device::mojom::HidDeviceInfo&) = 0;
     virtual void OnHidManagerConnectionError() = 0;
 
-    // Event forwarded from permissions::ChooserContextBase::PermissionObserver:
+    // Event forwarded from
+    // permissions::ObjectPermissionContextBase::PermissionObserver:
     virtual void OnPermissionRevoked(const url::Origin& origin) = 0;
   };
 
@@ -60,14 +61,20 @@ class CONTENT_EXPORT HidDelegate {
                                           const url::Origin& origin) = 0;
 
   // Returns whether `origin` has permission to access `device`.
+  // Note that the method takes both render frame host and browser context, as
+  // 'render_frame_host' is null for service workers.
   virtual bool HasDevicePermission(
       BrowserContext* browser_context,
+      RenderFrameHost* render_frame_host,
       const url::Origin& origin,
       const device::mojom::HidDeviceInfo& device) = 0;
 
   // Revoke `device` access permission to `origin`.
+  // Note that the method takes both render frame host and browser context, as
+  // 'render_frame_host' is null for service workers.
   virtual void RevokeDevicePermission(
       BrowserContext* browser_context,
+      RenderFrameHost* render_frame_host,
       const url::Origin& origin,
       const device::mojom::HidDeviceInfo& device) = 0;
 
@@ -86,12 +93,19 @@ class CONTENT_EXPORT HidDelegate {
   // object.
   virtual void AddObserver(BrowserContext* browser_context,
                            Observer* observer) = 0;
-  virtual void RemoveObserver(Observer* observer) = 0;
+  virtual void RemoveObserver(BrowserContext* browser_context,
+                              Observer* observer) = 0;
 
   // Returns true if |origin| is allowed to bypass the HID blocklist and
   // access reports contained in FIDO collections.
   virtual bool IsFidoAllowedForOrigin(BrowserContext* browser_context,
                                       const url::Origin& origin) = 0;
+
+  // Returns true if |device| is a known FIDO U2F security key. Origins allowed
+  // to bypass the HID blocklist to access FIDO collections are also allowed to
+  // access the non-FIDO collections of known security keys.
+  virtual bool IsKnownSecurityKey(BrowserContext* browser_context,
+                                  const device::mojom::HidDeviceInfo& device);
 
   // Returns true if |origin| is allowed to access HID from service workers.
   virtual bool IsServiceWorkerAllowedForOrigin(const url::Origin& origin) = 0;
@@ -100,6 +114,15 @@ class CONTENT_EXPORT HidDelegate {
   virtual const device::mojom::HidDeviceInfo* GetDeviceInfo(
       BrowserContext* browser_context,
       const std::string& guid) = 0;
+
+  // Notify the delegate a connection is created on |origin| by
+  // |browser_context|.
+  virtual void IncrementConnectionCount(BrowserContext* browser_context,
+                                        const url::Origin& origin) = 0;
+  // Notify the delegate a connection is closed on |origin| by
+  // |browser_context|.
+  virtual void DecrementConnectionCount(BrowserContext* browser_context,
+                                        const url::Origin& origin) = 0;
 };
 
 }  // namespace content

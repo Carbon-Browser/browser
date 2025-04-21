@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,6 +17,10 @@ DevToolsManager* DevToolsManager::GetInstance() {
 DevToolsManager::DevToolsManager()
     : delegate_(
           GetContentClient()->browser()->CreateDevToolsManagerDelegate()) {}
+
+void DevToolsManager::ShutdownForTests() {
+  base::Singleton<DevToolsManager>::OnExit(nullptr);
+}
 
 DevToolsManager::~DevToolsManager() = default;
 

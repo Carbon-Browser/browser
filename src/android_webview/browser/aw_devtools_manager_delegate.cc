@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "base/json/json_writer.h"
 #include "base/memory/ptr_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/values.h"
 #include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/web_contents.h"
 
@@ -16,11 +17,9 @@ using content::DevToolsAgentHost;
 
 namespace android_webview {
 
-AwDevToolsManagerDelegate::AwDevToolsManagerDelegate() {
-}
+AwDevToolsManagerDelegate::AwDevToolsManagerDelegate() = default;
 
-AwDevToolsManagerDelegate::~AwDevToolsManagerDelegate() {
-}
+AwDevToolsManagerDelegate::~AwDevToolsManagerDelegate() = default;
 
 std::string AwDevToolsManagerDelegate::GetTargetDescription(
     content::WebContents* web_contents) {
@@ -28,17 +27,17 @@ std::string AwDevToolsManagerDelegate::GetTargetDescription(
       android_webview::BrowserViewRenderer::FromWebContents(web_contents);
   if (!bvr)
     return "";
-  base::DictionaryValue description;
-  description.SetBoolKey("attached", bvr->attached_to_window());
-  description.SetBoolKey("never_attached", !bvr->was_attached());
-  description.SetBoolKey("visible", bvr->IsVisible());
+  base::Value::Dict description;
+  description.Set("attached", bvr->attached_to_window());
+  description.Set("never_attached", !bvr->was_attached());
+  description.Set("visible", bvr->IsVisible());
   gfx::Rect screen_rect = bvr->GetScreenRect();
-  description.SetIntKey("screenX", screen_rect.x());
-  description.SetIntKey("screenY", screen_rect.y());
-  description.SetBoolKey("empty", screen_rect.size().IsEmpty());
+  description.Set("screenX", screen_rect.x());
+  description.Set("screenY", screen_rect.y());
+  description.Set("empty", screen_rect.size().IsEmpty());
   if (!screen_rect.size().IsEmpty()) {
-    description.SetIntKey("width", screen_rect.width());
-    description.SetIntKey("height", screen_rect.height());
+    description.Set("width", screen_rect.width());
+    description.Set("height", screen_rect.height());
   }
   std::string json;
   base::JSONWriter::Write(description, &json);
@@ -59,4 +58,22 @@ bool AwDevToolsManagerDelegate::IsBrowserTargetDiscoverable() {
   return true;
 }
 
+content::DevToolsAgentHost::List
+AwDevToolsManagerDelegate::RemoteDebuggingTargets(TargetType target_type) {
+  DevToolsAgentHost::List result;
+  std::set<content::WebContents*> targets_web_contents;
+  DevToolsAgentHost::List agents = DevToolsAgentHost::GetOrCreateAll();
+  for (DevToolsAgentHost::List::iterator it = agents.begin();
+       it != agents.end(); ++it) {
+    if (content::WebContents* web_contents = (*it)->GetWebContents()) {
+      if (targets_web_contents.find(web_contents) !=
+          targets_web_contents.end()) {
+        continue;
+      }
+      targets_web_contents.insert(web_contents);
+    }
+    result.push_back(*it);
+  }
+  return result;
+}
 }  // namespace android_webview

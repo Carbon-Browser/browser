@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@ namespace blink {
 class ExceptionState;
 
 // CSSStyleVariableReferenceValue represents a CSS var() value for CSS Typed OM.
-// The corresponding idl file is CSSVariableReferenceValue.idl.
+// The corresponding idl file is css_variable_reference_value.idl.
 class CORE_EXPORT CSSStyleVariableReferenceValue final
     : public ScriptWrappable {
   DEFINE_WRAPPERTYPEINFO();

@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/ui/android/tab_model/tab_model.h"
 
 class TabAndroid;
@@ -27,13 +28,15 @@ class TabModelObserver {
   virtual void DidSelectTab(TabAndroid* tab, TabModel::TabSelectionType type);
 
   // Called when a |tab| starts closing.
-  virtual void WillCloseTab(TabAndroid* tab, bool animate);
+  virtual void WillCloseTab(TabAndroid* tab);
 
   // Called right before a |tab| has been destroyed.
-  virtual void DidCloseTab(int tab_id, bool incognito);
+  virtual void OnFinishingTabClosure(int tab_id, bool incognito);
 
   // Called right before all |tabs| are destroyed.
-  virtual void DidCloseTabs(const std::vector<TabAndroid*>& tabs);
+  virtual void OnFinishingMultipleTabClosure(
+      const std::vector<raw_ptr<TabAndroid, VectorExperimental>>& tabs,
+      bool canRestore);
 
   // Called before a |tab| is added to the TabModel.
   virtual void WillAddTab(TabAndroid* tab, TabModel::TabLaunchType type);
@@ -57,7 +60,8 @@ class TabModelObserver {
   virtual void TabClosureCommitted(TabAndroid* tab);
 
   // Called when all |tabs| are pending closure.
-  virtual void AllTabsPendingClosure(const std::vector<TabAndroid*>& tabs);
+  virtual void AllTabsPendingClosure(
+      const std::vector<raw_ptr<TabAndroid, VectorExperimental>>& tabs);
 
   // Called when an all tabs closure has been committed and can't be undone
   // anymore.

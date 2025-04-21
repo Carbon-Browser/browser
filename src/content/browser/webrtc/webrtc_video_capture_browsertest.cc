@@ -1,14 +1,13 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/command_line.h"
-#include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
 #include "content/browser/webrtc/webrtc_webcam_browsertest.h"
 #include "content/public/browser/browser_child_process_host.h"
+#include "content/public/browser/child_process_host.h"
 #include "content/public/browser/video_capture_service.h"
-#include "content/public/common/child_process_host.h"
 #include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/test/browser_test.h"
@@ -38,21 +37,18 @@ static const char kVerifyHasReceivedTrackEndedEvent[] =
 // JavaScript level.
 class WebRtcVideoCaptureBrowserTest : public ContentBrowserTest {
  public:
+  WebRtcVideoCaptureBrowserTest() = default;
   WebRtcVideoCaptureBrowserTest(const WebRtcVideoCaptureBrowserTest&) = delete;
   WebRtcVideoCaptureBrowserTest& operator=(
       const WebRtcVideoCaptureBrowserTest&) = delete;
 
  protected:
-  WebRtcVideoCaptureBrowserTest() {
-    scoped_feature_list_.InitAndEnableFeature(features::kMojoVideoCapture);
-  }
-
   ~WebRtcVideoCaptureBrowserTest() override {}
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
     command_line->AppendSwitch(switches::kUseFakeUIForMediaStream);
-    base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
-        switches::kEnableBlinkFeatures, "GetUserMedia");
+    command_line->AppendSwitchASCII(switches::kEnableBlinkFeatures,
+                                    "GetUserMedia");
   }
 
   void SetUp() override {
@@ -61,13 +57,11 @@ class WebRtcVideoCaptureBrowserTest : public ContentBrowserTest {
     embedded_test_server()->StartAcceptingConnections();
     ContentBrowserTest::SetUp();
   }
-
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
-#if BUILDFLAG(IS_MAC)
-// TODO(https://crbug.com/1235254): This test is flakey on macOS.
+#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
+// TODO(crbug.com/40781953): This test is flakey on macOS.
+// TODO(crbug.com/40911814): This test is flaky on Windows.
 #define MAYBE_RecoverFromCrashInVideoCaptureProcess \
   DISABLED_RecoverFromCrashInVideoCaptureProcess
 #else
@@ -85,8 +79,7 @@ IN_PROC_BROWSER_TEST_F(WebRtcVideoCaptureBrowserTest,
   EXPECT_TRUE(NavigateToURL(shell(), url));
 
   // Start video capture and wait until it started rendering
-  ASSERT_EQ("OK", EvalJs(shell(), kStartVideoCaptureAndVerifySize,
-                         EXECUTE_SCRIPT_USE_MANUAL_REPLY));
+  ASSERT_TRUE(ExecJs(shell(), kStartVideoCaptureAndVerifySize));
 
   // Simulate crash in video capture process
   mojo::Remote<video_capture::mojom::TestingControls> service_controls;
@@ -95,14 +88,11 @@ IN_PROC_BROWSER_TEST_F(WebRtcVideoCaptureBrowserTest,
   service_controls->Crash();
 
   // Wait for video element to turn black
-  ASSERT_EQ("OK", EvalJs(shell(), kWaitForVideoToTurnBlack,
-                         EXECUTE_SCRIPT_USE_MANUAL_REPLY));
-  ASSERT_EQ("OK", EvalJs(shell(), kVerifyHasReceivedTrackEndedEvent,
-                         EXECUTE_SCRIPT_USE_MANUAL_REPLY));
+  ASSERT_TRUE(ExecJs(shell(), kWaitForVideoToTurnBlack));
+  ASSERT_TRUE(ExecJs(shell(), kVerifyHasReceivedTrackEndedEvent));
 
   // Start capturing again and expect it to work.
-  ASSERT_EQ("OK", EvalJs(shell(), kStartVideoCaptureAndVerifySize,
-                         EXECUTE_SCRIPT_USE_MANUAL_REPLY));
+  ASSERT_TRUE(ExecJs(shell(), kStartVideoCaptureAndVerifySize));
 }
 
 }  // namespace content

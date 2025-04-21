@@ -1,12 +1,12 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_KEYED_SERVICE_CONTENT_REFCOUNTED_BROWSER_CONTEXT_KEYED_SERVICE_FACTORY_H_
 #define COMPONENTS_KEYED_SERVICE_CONTENT_REFCOUNTED_BROWSER_CONTEXT_KEYED_SERVICE_FACTORY_H_
 
-#include "base/callback.h"
 #include "base/compiler_specific.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "components/keyed_service/core/keyed_service_export.h"
 #include "components/keyed_service/core/refcounted_keyed_service_factory.h"
@@ -34,7 +34,7 @@ class KEYED_SERVICE_EXPORT RefcountedBrowserContextKeyedServiceFactory
   // BrowserContext. This is used primarily for testing, where we want to feed
   // a specific test double into the BCKSF system.
   using TestingFactory =
-      base::RepeatingCallback<scoped_refptr<RefcountedKeyedService>(
+      base::OnceCallback<scoped_refptr<RefcountedKeyedService>(
           content::BrowserContext* context)>;
 
   RefcountedBrowserContextKeyedServiceFactory(
@@ -85,6 +85,9 @@ class KEYED_SERVICE_EXPORT RefcountedBrowserContextKeyedServiceFactory
   // Interface for people building a concrete FooServiceFactory: --------------
 
   // Finds which browser context (if any) to use.
+  //
+  // Should return nullptr when the service should not be created for the given
+  // |context|.
   virtual content::BrowserContext* GetBrowserContextToUse(
       content::BrowserContext* context) const;
 
@@ -104,6 +107,9 @@ class KEYED_SERVICE_EXPORT RefcountedBrowserContextKeyedServiceFactory
 
   // All subclasses of BrowserContextKeyedServiceFactory must return a
   // KeyedService instead of just a BrowserContextKeyedBase.
+  //
+  // This should not return nullptr; instead, return nullptr from
+  // `GetBrowserContextToUse()`.
   virtual scoped_refptr<RefcountedKeyedService> BuildServiceInstanceFor(
       content::BrowserContext* context) const = 0;
 
@@ -133,7 +139,6 @@ class KEYED_SERVICE_EXPORT RefcountedBrowserContextKeyedServiceFactory
   // RefcountedKeyedServiceFactory:
   scoped_refptr<RefcountedKeyedService> BuildServiceInstanceFor(
       void* context) const final;
-  bool IsOffTheRecord(void* context) const final;
 
   // KeyedServiceBaseFactory:
   void* GetContextToUse(void* context) const final;

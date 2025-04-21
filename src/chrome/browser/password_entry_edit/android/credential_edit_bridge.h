@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@
 #include <jni.h>
 
 #include "base/android/scoped_java_ref.h"
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "components/password_manager/core/browser/ui/credential_ui_entry.h"
 #include "components/password_manager/core/browser/ui/insecure_credentials_manager.h"
@@ -29,8 +29,7 @@ class CredentialEditBridge {
       std::vector<std::u16string> existing_usernames,
       password_manager::SavedPasswordsPresenter* saved_passwords_presenter,
       base::OnceClosure dismissal_callback,
-      const base::android::JavaRef<jobject>& context,
-      const base::android::JavaRef<jobject>& settings_launcher);
+      const base::android::JavaRef<jobject>& context);
   ~CredentialEditBridge();
 
   CredentialEditBridge(const CredentialEditBridge&) = delete;
@@ -44,14 +43,14 @@ class CredentialEditBridge {
 
   // Called by Java to save the changes to the edited credential.
   void SaveChanges(JNIEnv* env,
-                   const base::android::JavaParamRef<jstring>& username,
-                   const base::android::JavaParamRef<jstring>& password);
+                   std::u16string& username,
+                   std::u16string& password);
 
   // Called by Java to remove the credential from the store.
   void DeleteCredential(JNIEnv* env);
 
   // Called by Java to signal that the UI was dismissed.
-  void OnUIDismissed(JNIEnv* env);
+  void OnUiDismissed(JNIEnv* env);
 
  private:
   CredentialEditBridge(
@@ -61,7 +60,6 @@ class CredentialEditBridge {
       password_manager::SavedPasswordsPresenter* saved_passwords_presenter,
       base::OnceClosure dismissal_callback,
       const base::android::JavaRef<jobject>& context,
-      const base::android::JavaRef<jobject>& settings_launcher,
       base::android::ScopedJavaGlobalRef<jobject> java_bridge);
 
   // Returns the URL or app for which the credential was saved, formatted

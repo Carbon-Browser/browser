@@ -1,14 +1,15 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/services/storage/dom_storage/session_storage_namespace_impl.h"
 
-#include <algorithm>
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
+#include "base/not_fatal_until.h"
+#include "base/ranges/algorithm.h"
 
 namespace storage {
 
@@ -92,12 +93,13 @@ void SessionStorageNamespaceImpl::PopulateAsClone(
   state_ = State::kPopulated;
   pending_population_from_parent_namespace_.clear();
   namespace_entry_ = namespace_metadata;
-  std::transform(areas_to_clone.begin(), areas_to_clone.end(),
-                 std::inserter(storage_key_areas_, storage_key_areas_.begin()),
-                 [namespace_metadata](const auto& source) {
-                   return std::make_pair(
-                       source.first, source.second->Clone(namespace_metadata));
-                 });
+  base::ranges::transform(
+      areas_to_clone,
+      std::inserter(storage_key_areas_, storage_key_areas_.begin()),
+      [namespace_metadata](const auto& source) {
+        return std::make_pair(source.first,
+                              source.second->Clone(namespace_metadata));
+      });
   if (!run_after_population_.empty()) {
     for (base::OnceClosure& callback : run_after_population_)
       std::move(callback).Run();
@@ -233,7 +235,7 @@ void SessionStorageNamespaceImpl::CloneAllNamespacesWaitingForClone(
     // from the map is to call DeleteNamespace, which would have called this
     // method on the parent if there were children, and resolved our clone
     // dependency.
-    DCHECK(parent_it != namespaces_map.end());
+    CHECK(parent_it != namespaces_map.end(), base::NotFatalUntil::M130);
     parent = parent_it->second.get();
   }
 
@@ -259,7 +261,7 @@ void SessionStorageNamespaceImpl::CloneAllNamespacesWaitingForClone(
       // The child must be in the map, as the only way to add it to
       // |child_namespaces_waiting_for_clone_call_| is to call
       // CloneNamespace, which always adds it to the map.
-      DCHECK(child_it != namespaces_map.end());
+      CHECK(child_it != namespaces_map.end(), base::NotFatalUntil::M130);
       child_it->second->SetPendingPopulationFromParentNamespace(
           parent->namespace_id_);
     }

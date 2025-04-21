@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include "ash/constants/ash_paths.h"
 #include "base/path_service.h"
 #include "base/system/sys_info.h"
-#include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/common/chrome_paths.h"
+#include "chromeos/ash/components/settings/cros_settings.h"
 #include "google_apis/google_api_keys.h"
 
 namespace {

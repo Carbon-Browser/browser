@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,19 +12,20 @@
 #include <utility>
 
 #include "base/base_switches.h"
-#include "base/bind.h"
 #include "base/clang_profiling_buildflags.h"
 #include "base/command_line.h"
+#include "base/compiler_specific.h"
 #include "base/debug/alias.h"
 #include "base/debug/leak_annotations.h"
 #include "base/debug/profiler.h"
 #include "base/files/file.h"
-#include "base/lazy_instance.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/memory_pressure_listener.h"
 #include "base/memory/ptr_util.h"
-#include "base/message_loop/timer_slack.h"
+#include "base/message_loop/message_pump.h"
 #include "base/metrics/field_trial.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/power_monitor/power_monitor.h"
@@ -35,22 +36,23 @@
 #include "base/strings/string_util.h"
 #include "base/synchronization/condition_variable.h"
 #include "base/synchronization/lock.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_local.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "base/timer/elapsed_timer.h"
 #include "base/trace_event/memory_dump_manager.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
-#include "components/power_scheduler/power_mode_arbiter.h"
 #include "content/child/browser_exposed_child_interfaces.h"
+#include "content/child/child_performance_coordinator.h"
 #include "content/child/child_process.h"
+#include "content/child/child_process_synthetic_trial_syncer.h"
 #include "content/common/child_process.mojom.h"
 #include "content/common/content_constants_internal.h"
+#include "content/common/features.h"
 #include "content/common/field_trial_recorder.mojom.h"
 #include "content/common/in_process_child_thread_params.h"
-#include "content/common/mojo_core_library_support.h"
 #include "content/common/pseudonymization_salt.h"
+#include "content/public/child/child_thread.h"
 #include "content/public/common/content_client.h"
 #include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
@@ -87,14 +89,17 @@
 #endif  // !BUILDFLAG(IS_ANDROID)
 #endif  // BUILDFLAG(IS_POSIX)
 
-#if BUILDFLAG(IS_MAC)
-#include "base/mac/mach_port_rendezvous.h"
+#if BUILDFLAG(IS_APPLE)
+#include "base/apple/mach_port_rendezvous.h"
 #endif
 
 #if BUILDFLAG(CLANG_PROFILING_INSIDE_SANDBOX)
 #include <stdio.h>
 #include "base/test/clang_profiling.h"
 #include "build/config/compiler/compiler_buildflags.h"
+#if BUILDFLAG(IS_POSIX)
+#include "base/files/scoped_file.h"
+#endif
 #if BUILDFLAG(IS_WIN)
 #include <io.h>
 #endif
@@ -109,15 +114,14 @@ namespace {
 // How long to wait for a connection to the browser process before giving up.
 const int kConnectionTimeoutS = 15;
 
-base::LazyInstance<base::ThreadLocalPointer<ChildThreadImpl>>::DestructorAtExit
-    g_lazy_child_thread_impl_tls = LAZY_INSTANCE_INITIALIZER;
+constinit thread_local ChildThreadImpl* child_thread_impl = nullptr;
 
 // This isn't needed on Windows because there the sandbox's job object
 // terminates child processes automatically. For unsandboxed processes (i.e.
 // plugins), PluginThread has EnsureTerminateMessageFilter.
 #if BUILDFLAG(IS_POSIX)
 
-#if defined(ADDRESS_SANITIZER) || defined(LEAK_SANITIZER) || \
+#if defined(ADDRESS_SANITIZER) || defined(LEAK_SANITIZER) ||  \
     defined(MEMORY_SANITIZER) || defined(THREAD_SANITIZER) || \
     defined(UNDEFINED_SANITIZER)
 // A thread delegate that waits for |duration| and then exits the process
@@ -206,6 +210,8 @@ class SuicideOnChannelErrorFilter : public IPC::MessageFilter {
 mojo::IncomingInvitation InitializeMojoIPCChannel() {
   TRACE_EVENT0("startup", "InitializeMojoIPCChannel");
   mojo::PlatformChannelEndpoint endpoint;
+  MojoAcceptInvitationFlags flags =
+      MOJO_ACCEPT_INVITATION_FLAG_LEAK_TRANSPORT_ENDPOINT;
 #if BUILDFLAG(IS_WIN)
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
           mojo::PlatformChannel::kHandleSwitch)) {
@@ -216,11 +222,12 @@ mojo::IncomingInvitation InitializeMojoIPCChannel() {
     // command line.
     endpoint = mojo::NamedPlatformChannel::ConnectToServer(
         *base::CommandLine::ForCurrentProcess());
+    flags |= MOJO_ACCEPT_INVITATION_FLAG_ELEVATED;
   }
 #elif BUILDFLAG(IS_FUCHSIA)
   endpoint = mojo::PlatformChannel::RecoverPassedEndpointFromCommandLine(
       *base::CommandLine::ForCurrentProcess());
-#elif BUILDFLAG(IS_MAC)
+#elif BUILDFLAG(IS_APPLE)
   auto* client = base::MachPortRendezvousClient::GetInstance();
   if (!client) {
     LOG(ERROR) << "Mach rendezvous failed, terminating process (parent died?)";
@@ -234,12 +241,24 @@ mojo::IncomingInvitation InitializeMojoIPCChannel() {
   endpoint =
       mojo::PlatformChannelEndpoint(mojo::PlatformHandle(std::move(receive)));
 #elif BUILDFLAG(IS_POSIX)
-  endpoint = mojo::PlatformChannelEndpoint(mojo::PlatformHandle(base::ScopedFD(
-      base::GlobalDescriptors::GetInstance()->Get(kMojoIPCChannel))));
+#if BUILDFLAG(IS_ANDROID)
+  // If the endpoint is backed by a BinderRef it will be recovered here.
+  // Otherwise we'll assume a socket FD below.
+  endpoint = mojo::PlatformChannel::RecoverPassedEndpointFromCommandLine(
+      *base::CommandLine::ForCurrentProcess());
 #endif
+  if (!endpoint.is_valid()) {
+    endpoint =
+        mojo::PlatformChannelEndpoint(mojo::PlatformHandle(base::ScopedFD(
+            base::GlobalDescriptors::GetInstance()->Get(kMojoIPCChannel))));
+  }
+#endif
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+          switches::kDisableMojoBroker)) {
+    flags |= MOJO_ACCEPT_INVITATION_FLAG_INHERIT_BROKER;
+  }
 
-  return mojo::IncomingInvitation::Accept(
-      std::move(endpoint), MOJO_ACCEPT_INVITATION_FLAG_LEAK_TRANSPORT_ENDPOINT);
+  return mojo::IncomingInvitation::Accept(std::move(endpoint), flags);
 }
 
 // Callback passed to variations::ChildProcessFieldTrialSyncer. Notifies the
@@ -297,10 +316,10 @@ class ChildThreadImpl::IOThreadState
                                        base::BindOnce(quit_closure_));
   }
 
-#if BUILDFLAG(IS_MAC)
+#if BUILDFLAG(IS_APPLE)
   void GetTaskPort(GetTaskPortCallback callback) override {
     mojo::PlatformHandle task_port(
-        (base::mac::ScopedMachSendRight(task_self_trap())));
+        (base::apple::ScopedMachSendRight(task_self_trap())));
     std::move(callback).Run(std::move(task_port));
   }
 #endif
@@ -336,21 +355,11 @@ class ChildThreadImpl::IOThreadState
   }
 #endif
 
-  // Make sure this isn't inlined so it shows up in stack traces, and also make
-  // the function body unique by adding a log line, so it doesn't get merged
-  // with other functions by link time optimizations (ICF).
-  NOINLINE void CrashHungProcess() override {
-    LOG(ERROR) << "Crashing because hung";
-    IMMEDIATE_CRASH();
-  }
-
-  void RunServiceDeprecated(
-      const std::string& service_name,
-      mojo::ScopedMessagePipeHandle service_pipe) override {
-    main_thread_task_runner_->PostTask(
-        FROM_HERE, base::BindOnce(&ChildThreadImpl::RunServiceDeprecated,
-                                  weak_main_thread_, service_name,
-                                  std::move(service_pipe)));
+  // Make sure this isn't inlined, tail-called, or folded by ICF so it always
+  // shows up in stack traces.
+  NOT_TAIL_CALLED NOINLINE void CrashHungProcess() override {
+    NO_CODE_FOLDING();
+    LOG(FATAL) << "Crashing because hung";
   }
 
   void BindServiceInterface(mojo::GenericPendingReceiver receiver) override {
@@ -380,17 +389,31 @@ class ChildThreadImpl::IOThreadState
 
 #if BUILDFLAG(CLANG_PROFILING_INSIDE_SANDBOX)
   void SetProfilingFile(base::File file) override {
-    // TODO(crbug.com/985574) Remove Android check when possible.
-#if BUILDFLAG(IS_POSIX) && (!BUILDFLAG(IS_ANDROID) || defined(CLANG_PGO))
+    // If |file| is unused, its DTOR will call base::File::Close(), but this
+    // would trigger DCHECK on the UI thread. Rejected fixes:
+    // * Run on IO thread: This causes sequencing checker failure, whose fix
+    //   might upend PGO use case.
+    // * Use base::ScopedDisallowBlocking: This requires making
+    //   ChildThreadImpl::IOThreadState a friend of the class. Unfortunately,
+    //   inner classes cannot be forward declared.
+    // The simple fix adopted is to explicitly close |file| if unused, thus
+    // eliding checks -- this function is rather low-level anyway.
+#if BUILDFLAG(IS_POSIX)
     // Take the file descriptor so that |file| does not close it.
-    int fd = file.TakePlatformFile();
-    FILE* f = fdopen(fd, "r+b");
+    base::ScopedFD fd(file.TakePlatformFile());
+#if BUILDFLAG(CLANG_PGO) || BUILDFLAG(USE_CLANG_COVERAGE)
+    FILE* f = fdopen(fd.release(), "r+b");
     __llvm_profile_set_file_object(f, 1);
+#else
+    // Let |fd| close file descriptor.
+#endif
 #elif BUILDFLAG(IS_WIN)
     HANDLE handle = file.TakePlatformFile();
     int fd = _open_osfhandle((intptr_t)handle, 0);
     FILE* f = _fdopen(fd, "r+b");
     __llvm_profile_set_file_object(f, 1);
+#else
+#error Unsupported architecture for profiling.
 #endif
   }
 
@@ -403,6 +426,47 @@ class ChildThreadImpl::IOThreadState
 
   void SetPseudonymizationSalt(uint32_t salt) override {
     content::SetPseudonymizationSalt(salt);
+  }
+
+#if BUILDFLAG(IS_CHROMEOS)
+  void ReinitializeLogging(mojom::LoggingSettingsPtr settings) override {
+    logging::LoggingSettings logging_settings;
+    logging_settings.logging_dest = settings->logging_dest;
+    base::ScopedFD log_file_descriptor = settings->log_file_descriptor.TakeFD();
+    logging_settings.log_file = fdopen(log_file_descriptor.release(), "a");
+    if (!logging_settings.log_file) {
+      LOG(ERROR) << "Failed to open new log file handle";
+      return;
+    }
+    if (!logging::InitLogging(logging_settings))
+      LOG(ERROR) << "Unable to reinitialize logging";
+  }
+#endif
+
+#if BUILDFLAG(IS_ANDROID)
+  void OnMemoryPressure(
+      base::MemoryPressureListener::MemoryPressureLevel level) override {
+    main_thread_task_runner_->PostTask(
+        FROM_HERE,
+        base::BindOnce(&ChildThreadImpl::OnMemoryPressureFromBrowserReceived,
+                       weak_main_thread_, level));
+  }
+#endif
+
+  void SetBatterySaverMode(bool battery_saver_mode_enabled) override {
+    if (battery_saver_mode_enabled) {
+      if (base::FeatureList::IsEnabled(
+              features::kBatterySaverModeAlignWakeUps)) {
+        base::MessagePump::OverrideAlignWakeUpsState(true,
+                                                     base::Milliseconds(32));
+      }
+    } else {
+      base::MessagePump::ResetAlignWakeUpsState();
+    }
+    main_thread_task_runner_->PostTask(
+        FROM_HERE,
+        base::BindOnce(&ChildThreadImpl::SetBatterySaverMode, weak_main_thread_,
+                       battery_saver_mode_enabled));
   }
 
   const scoped_refptr<base::SequencedTaskRunner> main_thread_task_runner_;
@@ -453,13 +517,6 @@ ChildThreadImpl::Options::Builder::ConnectToBrowser(
 }
 
 ChildThreadImpl::Options::Builder&
-ChildThreadImpl::Options::Builder::AddStartupFilter(
-    IPC::MessageFilter* filter) {
-  options_.startup_filters.push_back(filter);
-  return *this;
-}
-
-ChildThreadImpl::Options::Builder&
 ChildThreadImpl::Options::Builder::IPCTaskRunner(
     scoped_refptr<base::SingleThreadTaskRunner> ipc_task_runner_parms) {
   options_.ipc_task_runner = ipc_task_runner_parms;
@@ -479,10 +536,18 @@ ChildThreadImpl::Options::Builder::ExposesInterfacesToBrowser() {
   return *this;
 }
 
+ChildThreadImpl::Options::Builder&
+ChildThreadImpl::Options::Builder::SetUrgentMessageObserver(
+    IPC::UrgentMessageObserver* observer) {
+  options_.urgent_message_observer = observer;
+  return *this;
+}
+
 ChildThreadImpl::Options ChildThreadImpl::Options::Builder::Build() {
   return options_;
 }
 
+#if BUILDFLAG(CONTENT_ENABLE_LEGACY_IPC)
 ChildThreadImpl::ChildThreadMessageRouter::ChildThreadMessageRouter(
     IPC::Sender* sender)
     : sender_(sender) {}
@@ -503,21 +568,26 @@ bool ChildThreadImpl::ChildThreadMessageRouter::RouteMessage(
 #endif
   return handled;
 }
+#endif
 
 ChildThreadImpl::ChildThreadImpl(base::RepeatingClosure quit_closure)
     : ChildThreadImpl(std::move(quit_closure), Options::Builder().Build()) {}
 
 ChildThreadImpl::ChildThreadImpl(base::RepeatingClosure quit_closure,
                                  const Options& options)
-    : router_(this),
+    : resetter_(&child_thread_impl, this),
+#if BUILDFLAG(CONTENT_ENABLE_LEGACY_IPC)
+      router_(this),
+#endif
       quit_closure_(std::move(quit_closure)),
       browser_process_io_runner_(options.browser_process_io_runner),
       channel_connected_factory_(
           new base::WeakPtrFactory<ChildThreadImpl>(this)),
       ipc_task_runner_(options.ipc_task_runner) {
   io_thread_state_ = base::MakeRefCounted<IOThreadState>(
-      base::ThreadTaskRunnerHandle::Get(), weak_factory_.GetWeakPtr(),
-      quit_closure_, std::move(options.service_binder));
+      base::SingleThreadTaskRunner::GetCurrentDefault(),
+      weak_factory_.GetWeakPtr(), quit_closure_,
+      std::move(options.service_binder));
 
   // |ExposeInterfacesToBrowser()| must be called exactly once. Subclasses which
   // set |exposes_interfaces_to_browser| in Options signify that they take
@@ -547,9 +617,8 @@ void ChildThreadImpl::SetFieldTrialGroup(const std::string& trial_name,
 
 void ChildThreadImpl::Init(const Options& options) {
   TRACE_EVENT0("startup", "ChildThreadImpl::Init");
-  g_lazy_child_thread_impl_tls.Pointer()->Set(this);
   on_channel_error_called_ = false;
-  main_thread_runner_ = base::ThreadTaskRunnerHandle::Get();
+  main_thread_runner_ = base::SingleThreadTaskRunner::GetCurrentDefault();
 #if BUILDFLAG(IPC_MESSAGE_LOG_ENABLED)
   // We must make sure to instantiate the IPC Logger *before* we create the
   // channel, otherwise we can get a callback on the IO thread which creates
@@ -561,9 +630,12 @@ void ChildThreadImpl::Init(const Options& options) {
     channel_ = IPC::SyncChannel::Create(
         this, ChildProcess::current()->io_task_runner(),
         ipc_task_runner_ ? ipc_task_runner_
-                         : base::ThreadTaskRunnerHandle::Get(),
+                         : base::SingleThreadTaskRunner::GetCurrentDefault(),
         ChildProcess::current()->GetShutDownEvent());
-#if BUILDFLAG(IPC_MESSAGE_LOG_ENABLED)
+    if (options.urgent_message_observer) {
+      channel_->SetUrgentMessageObserver(options.urgent_message_observer);
+    }
+#if BUILDFLAG(IPC_MESSAGE_LOG_ENABLED) && BUILDFLAG(CONTENT_ENABLE_LEGACY_IPC)
     if (!IsInBrowserProcess())
       IPC::Logging::GetInstance()->SetIPCSender(this);
 #endif
@@ -573,19 +645,17 @@ void ChildThreadImpl::Init(const Options& options) {
   mojo::ScopedMessagePipeHandle child_process_host_pipe_for_remote;
   mojo::ScopedMessagePipeHandle legacy_ipc_bootstrap_pipe;
   if (!IsInBrowserProcess()) {
-    // If using a shared Mojo Core library, IPC support is already initialized.
-    if (!IsMojoCoreSharedLibraryEnabled()) {
-      scoped_refptr<base::SingleThreadTaskRunner> mojo_ipc_task_runner =
-          GetIOTaskRunner();
-      if (base::FeatureList::IsEnabled(features::kMojoDedicatedThread)) {
-        mojo_ipc_thread_.StartWithOptions(
-            base::Thread::Options(base::MessagePumpType::IO, 0));
-        mojo_ipc_task_runner = mojo_ipc_thread_.task_runner();
-      }
-      mojo_ipc_support_ = std::make_unique<mojo::core::ScopedIPCSupport>(
-          mojo_ipc_task_runner,
-          mojo::core::ScopedIPCSupport::ShutdownPolicy::FAST);
+    scoped_refptr<base::SingleThreadTaskRunner> mojo_ipc_task_runner =
+        GetIOTaskRunner();
+    if (base::FeatureList::IsEnabled(features::kMojoDedicatedThread)) {
+      mojo_ipc_thread_.StartWithOptions(
+          base::Thread::Options(base::MessagePumpType::IO, 0));
+      mojo_ipc_task_runner = mojo_ipc_thread_.task_runner();
     }
+    mojo_ipc_support_ = std::make_unique<mojo::core::ScopedIPCSupport>(
+        mojo_ipc_task_runner,
+        mojo::core::ScopedIPCSupport::ShutdownPolicy::FAST);
+
     mojo::IncomingInvitation invitation = InitializeMojoIPCChannel();
     if (!invitation.is_valid()) {
       LOG(ERROR) << "Child process could not find its Mojo invitation";
@@ -637,12 +707,13 @@ void ChildThreadImpl::Init(const Options& options) {
   }
 
   // In single process mode we may already have initialized the power monitor,
-  if (!base::PowerMonitor::IsInitialized()) {
+  if (auto* power_monitor = base::PowerMonitor::GetInstance();
+      !power_monitor->IsInitialized()) {
     auto power_monitor_source =
         std::make_unique<device::PowerMonitorBroadcastSource>(
             GetIOTaskRunner());
     auto* source_ptr = power_monitor_source.get();
-    base::PowerMonitor::Initialize(std::move(power_monitor_source));
+    power_monitor->Initialize(std::move(power_monitor_source));
     // The two-phase init is necessary to ensure that the process-wide
     // PowerMonitor is set before the power monitor source receives incoming
     // communication from the browser process (see https://crbug.com/821790 for
@@ -652,8 +723,8 @@ void ChildThreadImpl::Init(const Options& options) {
     source_ptr->Init(std::move(remote_power_monitor));
   }
 
-  // Requires base::PowerMonitor to be initialized first.
-  power_scheduler::PowerModeArbiter::GetInstance()->OnThreadPoolAvailable();
+  performance_coordinator_ = std::make_unique<ChildPerformanceCoordinator>();
+  BindHostReceiver(performance_coordinator_->InitializeAndPassReceiver());
 
 #if BUILDFLAG(IS_POSIX)
   // Check that --process-type is specified so we don't do this in unit tests
@@ -671,19 +742,14 @@ void ChildThreadImpl::Init(const Options& options) {
 
   // Add filters passed here via options.
   if (options.with_legacy_ipc_channel) {
-    for (auto* startup_filter : options.startup_filters) {
-      channel_->AddFilter(startup_filter);
-    }
-
     DCHECK(legacy_ipc_bootstrap_pipe.is_valid());
     channel_->Init(IPC::ChannelMojo::CreateClientFactory(
                        std::move(legacy_ipc_bootstrap_pipe),
                        ChildProcess::current()->io_task_runner(),
-                       ipc_task_runner_ ? ipc_task_runner_
-                                        : base::ThreadTaskRunnerHandle::Get()),
+                       ipc_task_runner_
+                           ? ipc_task_runner_
+                           : base::SingleThreadTaskRunner::GetCurrentDefault()),
                    /*create_pipe_now=*/true);
-  } else {
-    DCHECK(options.startup_filters.empty());
   }
 
   DCHECK(child_process_pipe_for_receiver.is_valid());
@@ -730,7 +796,7 @@ void ChildThreadImpl::Init(const Options& options) {
 }
 
 ChildThreadImpl::~ChildThreadImpl() {
-#if BUILDFLAG(IPC_MESSAGE_LOG_ENABLED)
+#if BUILDFLAG(IPC_MESSAGE_LOG_ENABLED) && BUILDFLAG(CONTENT_ENABLE_LEGACY_IPC)
   IPC::Logging::GetInstance()->SetIPCSender(NULL);
 #endif
 
@@ -758,15 +824,12 @@ ChildThreadImpl::~ChildThreadImpl() {
     [[maybe_unused]] auto* leaked_remote_ptr = leaked_remote.release();
     ANNOTATE_LEAKING_OBJECT_PTR(leaked_remote_ptr);
   }
-
-  g_lazy_child_thread_impl_tls.Pointer()->Set(nullptr);
 }
 
 void ChildThreadImpl::Shutdown() {
   // Ensure that our IOThreadState's last ref goes away on the IO thread.
   ChildThreadImpl::GetIOTaskRunner()->PostTask(
-      FROM_HERE, base::BindOnce([](scoped_refptr<IOThreadState>) {},
-                                std::move(io_thread_state_)));
+      FROM_HERE, base::DoNothingWithBoundArgs(std::move(io_thread_state_)));
 }
 
 bool ChildThreadImpl::ShouldBeDestroyed() {
@@ -785,6 +848,7 @@ void ChildThreadImpl::OnChannelError() {
     quit_closure_.Run();
 }
 
+#if BUILDFLAG(CONTENT_ENABLE_LEGACY_IPC)
 bool ChildThreadImpl::Send(IPC::Message* msg) {
   DCHECK(main_thread_runner_->BelongsToCurrentThread());
   if (!channel_) {
@@ -794,6 +858,7 @@ bool ChildThreadImpl::Send(IPC::Message* msg) {
 
   return channel_->Send(msg);
 }
+#endif
 
 #if BUILDFLAG(IS_WIN)
 void ChildThreadImpl::PreCacheFont(const LOGFONT& log_font) {
@@ -812,11 +877,11 @@ const mojo::Remote<mojom::FontCacheWin>& ChildThreadImpl::GetFontCacheWin() {
 #endif
 
 void ChildThreadImpl::RecordAction(const base::UserMetricsAction& action) {
-    NOTREACHED();
+  NOTREACHED();
 }
 
 void ChildThreadImpl::RecordComputedAction(const std::string& action) {
-    NOTREACHED();
+  NOTREACHED();
 }
 
 void ChildThreadImpl::BindHostReceiver(mojo::GenericPendingReceiver receiver) {
@@ -824,16 +889,22 @@ void ChildThreadImpl::BindHostReceiver(mojo::GenericPendingReceiver receiver) {
     child_process_host_->BindHostReceiver(std::move(receiver));
 }
 
+#if BUILDFLAG(CONTENT_ENABLE_LEGACY_IPC)
 IPC::MessageRouter* ChildThreadImpl::GetRouter() {
   DCHECK(main_thread_runner_->BelongsToCurrentThread());
   return &router_;
 }
+#endif
 
 bool ChildThreadImpl::OnMessageReceived(const IPC::Message& msg) {
+#if BUILDFLAG(CONTENT_ENABLE_LEGACY_IPC)
   if (msg.routing_id() == MSG_ROUTING_CONTROL)
     return OnControlMessageReceived(msg);
 
   return router_.OnMessageReceived(msg);
+#else
+  return false;
+#endif
 }
 
 void ChildThreadImpl::OnAssociatedInterfaceRequest(
@@ -842,23 +913,26 @@ void ChildThreadImpl::OnAssociatedInterfaceRequest(
   // All associated interfaces are requested through RenderThreadImpl.
   LOG(ERROR) << "Receiver for unknown Channel-associated interface: "
              << interface_name;
-  NOTREACHED();
+  DUMP_WILL_BE_NOTREACHED();
 }
 
 void ChildThreadImpl::ExposeInterfacesToBrowser(mojo::BinderMap binders) {
   // NOTE: Do not add new binders directly within this method. Instead, modify
   // the definition of |ExposeChildInterfacesToBrowser()|, ensuring security
   // review coverage.
-  ExposeChildInterfacesToBrowser(GetIOTaskRunner(), &binders);
+  ExposeChildInterfacesToBrowser(GetIOTaskRunner(), IsInBrowserProcess(),
+                                 &binders);
 
   ChildThreadImpl::GetIOTaskRunner()->PostTask(
       FROM_HERE, base::BindOnce(&IOThreadState::ExposeInterfacesToBrowser,
                                 io_thread_state_, std::move(binders)));
 }
 
+#if BUILDFLAG(CONTENT_ENABLE_LEGACY_IPC)
 bool ChildThreadImpl::OnControlMessageReceived(const IPC::Message& msg) {
   return false;
 }
+#endif
 
 void ChildThreadImpl::GetBackgroundTracingAgentProvider(
     mojo::PendingReceiver<tracing::mojom::BackgroundTracingAgentProvider>
@@ -874,12 +948,6 @@ void ChildThreadImpl::DisconnectChildProcessHost() {
   child_process_host_.reset();
 }
 
-void ChildThreadImpl::RunServiceDeprecated(
-    const std::string& service_name,
-    mojo::ScopedMessagePipeHandle service_pipe) {
-  DLOG(ERROR) << "Ignoring unhandled request to run service: " << service_name;
-}
-
 void ChildThreadImpl::BindServiceInterface(
     mojo::GenericPendingReceiver receiver) {
   DLOG(ERROR) << "Ignoring unhandled request to bind service interface: "
@@ -889,7 +957,7 @@ void ChildThreadImpl::BindServiceInterface(
 void ChildThreadImpl::OnBindReceiver(mojo::GenericPendingReceiver receiver) {}
 
 ChildThreadImpl* ChildThreadImpl::current() {
-  return g_lazy_child_thread_impl_tls.Pointer()->Get();
+  return child_thread_impl;
 }
 
 void ChildThreadImpl::OnProcessFinalRelease() {
@@ -899,6 +967,8 @@ void ChildThreadImpl::OnProcessFinalRelease() {
   quit_closure_.Run();
 }
 
+void ChildThreadImpl::SetBatterySaverMode(bool battery_saver_mode_enabled) {}
+
 void ChildThreadImpl::EnsureConnected() {
   VLOG(0) << "ChildThreadImpl::EnsureConnected()";
   base::Process::TerminateCurrentProcessImmediately(0);
@@ -907,5 +977,19 @@ void ChildThreadImpl::EnsureConnected() {
 bool ChildThreadImpl::IsInBrowserProcess() const {
   return static_cast<bool>(browser_process_io_runner_);
 }
+
+#if BUILDFLAG(IS_ANDROID)
+void ChildThreadImpl::OnMemoryPressureFromBrowserReceived(
+    base::MemoryPressureListener::MemoryPressureLevel level) {
+  // Generate no memory pressure signals when --single-process is specified.
+  // Because we expect a signal for the browser process has been already
+  // generated.
+  if (IsInBrowserProcess()) {
+    return;
+  }
+  // Forward the notification to the registry of MemoryPressureListeners.
+  base::MemoryPressureListener::NotifyMemoryPressure(level);
+}
+#endif
 
 }  // namespace content

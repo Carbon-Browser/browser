@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,8 +13,9 @@
 #include "ash/public/cpp/keyboard/keyboard_switches.h"
 #include "ash/root_window_controller.h"
 #include "ash/shelf/shelf.h"
+#include "ash/shelf/shelf_layout_manager.h"
 #include "ash/shell.h"
-#include "ash/system/message_center/ash_message_popup_collection.h"
+#include "ash/system/notification_center/ash_message_popup_collection.h"
 #include "ash/system/unified/unified_system_tray.h"
 #include "ash/test/ash_test_base.h"
 #include "ash/test/test_window_builder.h"
@@ -22,7 +23,8 @@
 #include "ash/wm/window_state.h"
 #include "ash/wm/wm_event.h"
 #include "ash/wm/work_area_insets.h"
-#include "base/callback_helpers.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
 #include "ui/aura/window.h"
 #include "ui/display/scoped_display_for_new_windows.h"
@@ -104,11 +106,9 @@ TEST_F(CollisionDetectionUtilsTest, AvoidObstaclesAvoidsPopupNotification) {
 }
 
 TEST_F(CollisionDetectionUtilsTest, AvoidObstaclesAvoidsClamshellLauncher) {
-  base::test::ScopedFeatureList feature_list(features::kProductivityLauncher);
-
   UpdateDisplay("1000x900");
   AppListController* app_list_controller = AppListController::Get();
-  app_list_controller->ShowAppList();
+  app_list_controller->ShowAppList(AppListShowSource::kSearchKey);
 
   display::Display display = GetPrimaryDisplay();
   gfx::Rect movement_area = CollisionDetectionUtils::GetMovementArea(display);
@@ -139,7 +139,7 @@ class CollisionDetectionUtilsDisplayTest
     const std::size_t root_window_index = std::get<1>(GetParam());
     UpdateWorkArea(display_string);
     ASSERT_LT(root_window_index, Shell::GetAllRootWindows().size());
-    root_window_ = Shell::GetAllRootWindows()[root_window_index];
+    root_window_ = Shell::GetAllRootWindows()[root_window_index].get();
     scoped_display_ =
         std::make_unique<display::ScopedDisplayForNewWindows>(root_window_);
     for (auto* root_window_controller : Shell::GetAllRootWindowControllers()) {
@@ -195,7 +195,7 @@ class CollisionDetectionUtilsDisplayTest
 
  private:
   std::unique_ptr<display::ScopedDisplayForNewWindows> scoped_display_;
-  aura::Window* root_window_;
+  raw_ptr<aura::Window, DanglingUntriaged> root_window_;
 };
 
 TEST_P(CollisionDetectionUtilsDisplayTest, MovementAreaIsInset) {
@@ -209,7 +209,7 @@ TEST_P(CollisionDetectionUtilsDisplayTest,
        MovementAreaIncludesKeyboardIfKeyboardIsShown) {
   auto* keyboard_controller = keyboard::KeyboardUIController::Get();
   keyboard_controller->ShowKeyboardInDisplay(GetDisplay());
-  ASSERT_TRUE(keyboard::WaitUntilShown());
+  ASSERT_TRUE(keyboard::test::WaitUntilShown());
   aura::Window* keyboard_window = keyboard_controller->GetKeyboardWindow();
 
   constexpr int keyboard_height = 100;
@@ -304,7 +304,7 @@ TEST_P(CollisionDetectionUtilsDisplayTest,
   keyboard_controller->SetContainerType(keyboard::ContainerType::kFloating,
                                         gfx::Rect(), base::DoNothing());
   keyboard_controller->ShowKeyboardInDisplay(display);
-  ASSERT_TRUE(keyboard::WaitUntilShown());
+  ASSERT_TRUE(keyboard::test::WaitUntilShown());
   aura::Window* keyboard_window = keyboard_controller->GetKeyboardWindow();
   keyboard_window->SetBounds(gfx::Rect(0, 0, 100, 100));
 
@@ -406,7 +406,7 @@ TEST_P(CollisionDetectionUtilsDisplayTest, GetRestingPositionAvoidsKeyboard) {
 
   auto* keyboard_controller = keyboard::KeyboardUIController::Get();
   keyboard_controller->ShowKeyboardInDisplay(display);
-  ASSERT_TRUE(keyboard::WaitUntilShown());
+  ASSERT_TRUE(keyboard::test::WaitUntilShown());
   aura::Window* keyboard_window = keyboard_controller->GetKeyboardWindow();
 
   constexpr int keyboard_height = 100;
@@ -431,6 +431,32 @@ TEST_P(CollisionDetectionUtilsDisplayTest, AutoHideShownShelfAffectsWindow) {
   auto bounds = CallAvoidObstacles(
       GetDisplay(), gfx::Rect(shelf_bounds.CenterPoint(), gfx::Size(1, 1)));
   EXPECT_FALSE(shelf_bounds.Intersects(bounds));
+}
+
+TEST_P(CollisionDetectionUtilsDisplayTest,
+       AvoidObstaclesWorksWithHorizontalShelf) {
+  auto* shelf = Shelf::ForWindow(root_window());
+  shelf->SetAutoHideBehavior(ShelfAutoHideBehavior::kAlways);
+  EXPECT_EQ(SHELF_AUTO_HIDE_SHOWN, shelf->GetAutoHideState());
+
+  shelf->SetAlignment(ShelfAlignment::kLeft);
+  EXPECT_FALSE(shelf->IsHorizontalAlignment());
+  ShelfLayoutManager* manager = shelf->shelf_layout_manager();
+  manager->LayoutShelf();
+
+  auto shelf_bounds = shelf->GetWindow()->GetBoundsInScreen();
+  {
+    auto initial_bounds = gfx::Rect(shelf_bounds.right() - 10,
+                                    shelf_bounds.CenterPoint().y(), 1, 1);
+    auto bounds = CallAvoidObstacles(GetDisplay(), initial_bounds);
+    EXPECT_NE(initial_bounds, bounds);
+  }
+  {
+    auto initial_bounds = gfx::Rect(shelf_bounds.right() + 10,
+                                    shelf_bounds.CenterPoint().y(), 1, 1);
+    auto bounds = CallAvoidObstacles(GetDisplay(), initial_bounds);
+    EXPECT_EQ(initial_bounds, bounds);
+  }
 }
 
 // TODO: UpdateDisplay() doesn't support different layouts of multiple displays.

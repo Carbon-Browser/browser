@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -280,7 +280,7 @@ TEST_F(MidiManagerAlsaTest, MatchConnected) {
 
 TEST_F(MidiManagerAlsaTest, MatchCard1) {
   // The query can be disconnected or connected, but the target
-  // must be disonnected.
+  // must be disconnected.
   EXPECT_FALSE(port_input_0_->MatchCardPass1(*port_input_1_.get()));
   port_input_0_->set_connected(false);
   EXPECT_TRUE(port_input_0_->MatchCardPass1(*port_input_1_.get()));
@@ -305,7 +305,7 @@ TEST_F(MidiManagerAlsaTest, MatchCard1) {
 
 TEST_F(MidiManagerAlsaTest, MatchCard2) {
   // The query can be disconnected or connected, but the target
-  // must be disonnected.
+  // must be disconnected.
   EXPECT_FALSE(port_input_0_->MatchCardPass2(*port_input_1_.get()));
   port_input_0_->set_connected(false);
   EXPECT_TRUE(port_input_0_->MatchCardPass2(*port_input_1_.get()));
@@ -330,7 +330,7 @@ TEST_F(MidiManagerAlsaTest, MatchCard2) {
 
 TEST_F(MidiManagerAlsaTest, MatchNoCard1) {
   // The query can be disconnected or connected, but the target
-  // must be disonnected.
+  // must be disconnected.
   // path and id must be empty. midi_device must be -1.
   EXPECT_FALSE(port_input_0_no_card_->MatchNoCardPass1(*port_input_1_.get()));
   port_input_0_no_card_->set_connected(false);
@@ -355,7 +355,7 @@ TEST_F(MidiManagerAlsaTest, MatchNoCard1) {
 
 TEST_F(MidiManagerAlsaTest, MatchNoCard2) {
   // The query can be disconnected or connected, but the target
-  // must be disonnected.
+  // must be disconnected.
   // path and id must be empty. midi_device must be -1.
   EXPECT_FALSE(port_input_0_no_card_->MatchNoCardPass2(*port_input_1_.get()));
   port_input_0_no_card_->set_connected(false);

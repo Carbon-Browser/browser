@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,8 @@
 #include <memory>
 #include <utility>
 
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "content/public/browser/content_browser_client.h"
@@ -67,7 +67,7 @@ PresentationServiceImpl::PresentationServiceImpl(
       receiver_delegate_(receiver_delegate),
       start_presentation_request_id_(kInvalidRequestId),
       // TODO(imcheng): Consider using RenderFrameHost* directly instead of IDs.
-      render_process_id_(render_frame_host->GetProcess()->GetID()),
+      render_process_id_(render_frame_host->GetProcess()->GetDeprecatedID()),
       render_frame_id_(render_frame_host->GetRoutingID()),
       is_outermost_document_(!render_frame_host->GetParentOrOuterDocument()) {
   DCHECK(render_frame_host_);
@@ -96,8 +96,9 @@ PresentationServiceImpl::~PresentationServiceImpl() {
 // static
 std::unique_ptr<PresentationServiceImpl> PresentationServiceImpl::Create(
     RenderFrameHost* render_frame_host) {
-  DVLOG(2) << __func__ << ": " << render_frame_host->GetProcess()->GetID()
-           << ", " << render_frame_host->GetRoutingID();
+  DVLOG(2) << __func__ << ": "
+           << render_frame_host->GetProcess()->GetDeprecatedID() << ", "
+           << render_frame_host->GetRoutingID();
   WebContents* web_contents =
       WebContents::FromRenderFrameHost(render_frame_host);
   DCHECK(web_contents);
@@ -431,7 +432,8 @@ bool PresentationServiceImpl::FrameMatches(
   if (!render_frame_host)
     return false;
 
-  return render_frame_host->GetProcess()->GetID() == render_process_id_ &&
+  return render_frame_host->GetProcess()->GetDeprecatedID() ==
+             render_process_id_ &&
          render_frame_host->GetRoutingID() == render_frame_id_;
 }
 
@@ -446,18 +448,12 @@ PresentationServiceImpl::GetPresentationServiceDelegate() {
              : static_cast<PresentationServiceDelegate*>(controller_delegate_);
 }
 
-// TODO(btolsch): Convert to PresentationConnectionResultPtr.
 void PresentationServiceImpl::OnReceiverConnectionAvailable(
-    PresentationInfoPtr presentation_info,
-    mojo::PendingRemote<blink::mojom::PresentationConnection>
-        controller_connection_remote,
-    mojo::PendingReceiver<blink::mojom::PresentationConnection>
-        receiver_connection_receiver) {
+    blink::mojom::PresentationConnectionResultPtr result) {
   DVLOG(2) << "PresentationServiceImpl::OnReceiverConnectionAvailable";
 
   presentation_receiver_remote_->OnReceiverConnectionAvailable(
-      std::move(presentation_info), std::move(controller_connection_remote),
-      std::move(receiver_connection_receiver));
+      std::move(result));
 }
 
 void PresentationServiceImpl::DidFinishNavigation(

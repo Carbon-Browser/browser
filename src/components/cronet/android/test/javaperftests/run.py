@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-# Copyright 2015 The Chromium Authors. All rights reserved.
+#!/usr/bin/env python3
+# Copyright 2015 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -17,10 +17,10 @@ Prerequisites:
    to the host machine (i.e. the computer running this script).
 2. quic_server has been built for the host machine, e.g. via:
      gn gen out/Release --args="is_debug=false"
-     ninja -C out/Release quic_server
+     autoninja -C out/Release quic_server
 3. cronet_perf_test_apk has been built for the Android device, e.g. via:
      ./components/cronet/tools/cr_cronet.py gn -r
-     ninja -C out/Release cronet_perf_test_apk
+     autoninja -C out/Release cronet_perf_test_apk
 4. If "sudo ufw status" doesn't say "Status: inactive", run "sudo ufw disable".
 5. sudo apt-get install lighttpd
 6. If the usb0 interface on the host keeps losing it's IPv4 address
@@ -47,7 +47,7 @@ import shutil
 import sys
 import tempfile
 import time
-import six.moves.urllib_parse # pylint: disable=import-error
+import urllib.parse
 
 REPOSITORY_ROOT = os.path.abspath(os.path.join(
     os.path.dirname(__file__), '..', '..', '..', '..', '..'))
@@ -89,7 +89,7 @@ class CronetPerfTestAndroidStory(android.AndroidStory):
     self._device = device
     config = perf_test_utils.GetConfig(device)
     device.RemovePath(config['DONE_FILE'], force=True)
-    self.url ='http://dummy/?' + six.moves.urllib_parse.urlencode(config)
+    self.url ='http://sample/?' + urllib.parse.urlencode(config)
     start_intent = intent.Intent(
         package=perf_test_utils.APP_PACKAGE,
         activity=perf_test_utils.APP_ACTIVITY,

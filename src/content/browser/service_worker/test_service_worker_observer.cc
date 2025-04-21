@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -49,6 +49,16 @@ void TestServiceWorkerObserver::RunUntilActivated(
   RunUntilStatusChange(version, ServiceWorkerVersion::ACTIVATED);
 }
 
+void TestServiceWorkerObserver::RunUntilLiveVersion() {
+  if (!wrapper_->GetAllLiveVersionInfo().empty())
+    return;
+
+  base::RunLoop loop;
+  DCHECK(!quit_closure_for_live_version_);
+  quit_closure_for_live_version_ = loop.QuitClosure();
+  loop.Run();
+}
+
 void TestServiceWorkerObserver::OnVersionStateChanged(
     int64_t version_id,
     const GURL& scope,
@@ -58,6 +68,12 @@ void TestServiceWorkerObserver::OnVersionStateChanged(
       status == status_for_status_change_ && quit_closure_for_status_change_) {
     std::move(quit_closure_for_status_change_).Run();
   }
+}
+
+void TestServiceWorkerObserver::OnNewLiveVersion(
+    const ServiceWorkerVersionInfo& version_info) {
+  if (quit_closure_for_live_version_)
+    std::move(quit_closure_for_live_version_).Run();
 }
 
 }  // namespace content

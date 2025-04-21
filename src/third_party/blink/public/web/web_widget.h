@@ -32,7 +32,6 @@
 #define THIRD_PARTY_BLINK_PUBLIC_WEB_WEB_WIDGET_H_
 
 #include "third_party/blink/public/common/metrics/document_update_reason.h"
-#include "third_party/blink/public/platform/scheduler/web_agent_group_scheduler.h"
 #include "third_party/blink/public/platform/web_input_event_result.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/web/web_lifecycle_update.h"
@@ -70,15 +69,19 @@ class WebWidget {
   // is called. |settings| is typically null. When |settings| is null
   // the default settings will be used, tests may provide a |settings| object to
   // override the defaults.
-  virtual void InitializeCompositing(
-      scheduler::WebAgentGroupScheduler& agent_group_scheduler,
-      const display::ScreenInfos& screen_info,
-      const cc::LayerTreeSettings* settings) = 0;
+  virtual void InitializeCompositing(const display::ScreenInfos& screen_info,
+                                     const cc::LayerTreeSettings* settings) = 0;
 
   // Set the compositor as visible. If |visible| is true, then the compositor
   // will request a new layer frame sink and begin producing frames from the
   // compositor.
   virtual void SetCompositorVisible(bool visible) = 0;
+
+  // Asks the compositor to request warming up and request a new frame sink
+  // speculatively. This is an experimental function and only used if
+  // `kWarmUpCompositor` is enabled. Please see crbug.com/41496019
+  // for more details.
+  virtual void WarmUpCompositor() = 0;
 
   // Returns the current size of the WebWidget.
   virtual gfx::Size Size() { return gfx::Size(); }
@@ -142,6 +145,10 @@ class WebWidget {
   // Process the input event, blocking until complete.
   virtual void ProcessInputEventSynchronouslyForTesting(
       const WebCoalescedInputEvent&) = 0;
+
+  // Dispatches the input event asynchronously, without blocking.
+  virtual void DispatchNonBlockingEventForTesting(
+      std::unique_ptr<WebCoalescedInputEvent> event) = 0;
 
   virtual void DidOverscrollForTesting(
       const gfx::Vector2dF& overscroll_delta,

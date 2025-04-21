@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,17 +19,17 @@ const float kScreenScaleFactor = 2;
 
 class TestScreenInfoMetricsProvider : public ScreenInfoMetricsProvider {
  public:
-  TestScreenInfoMetricsProvider() {}
+  TestScreenInfoMetricsProvider() = default;
 
   TestScreenInfoMetricsProvider(const TestScreenInfoMetricsProvider&) = delete;
   TestScreenInfoMetricsProvider& operator=(
       const TestScreenInfoMetricsProvider&) = delete;
 
-  ~TestScreenInfoMetricsProvider() override {}
+  ~TestScreenInfoMetricsProvider() override = default;
 
  private:
-  absl::optional<gfx::Size> GetScreenSize() const override {
-    return absl::make_optional(gfx::Size(kScreenWidth, kScreenHeight));
+  std::optional<gfx::Size> GetScreenSize() const override {
+    return std::make_optional(gfx::Size(kScreenWidth, kScreenHeight));
   }
 
   float GetScreenDeviceScaleFactor() const override {
@@ -43,13 +43,13 @@ class TestScreenInfoMetricsProvider : public ScreenInfoMetricsProvider {
 
 class ScreenInfoMetricsProviderTest : public testing::Test {
  public:
-  ScreenInfoMetricsProviderTest() {}
+  ScreenInfoMetricsProviderTest() = default;
 
   ScreenInfoMetricsProviderTest(const ScreenInfoMetricsProviderTest&) = delete;
   ScreenInfoMetricsProviderTest& operator=(
       const ScreenInfoMetricsProviderTest&) = delete;
 
-  ~ScreenInfoMetricsProviderTest() override {}
+  ~ScreenInfoMetricsProviderTest() override = default;
 };
 
 TEST_F(ScreenInfoMetricsProviderTest, ProvideSystemProfileMetrics) {

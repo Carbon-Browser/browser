@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include "ash/constants/ash_switches.h"
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
+#include "ash/wm/tablet_mode/tablet_mode_controller.h"
 #include "base/command_line.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
@@ -36,28 +37,21 @@ constexpr int kUsedWithSuccess = static_cast<int>(
     feature_usage::FeatureUsageMetrics::Event::kUsedWithSuccess);
 
 // Uses NoSessionAshTestBase because some tests need to simulate kiosk login.
-// Tests are optionally parameterized by feature ProductivityLauncher.
-class AppListFeatureUsageMetricsTest
-    : public NoSessionAshTestBase,
-      public testing::WithParamInterface<bool> {
+class AppListFeatureUsageMetricsTest : public NoSessionAshTestBase {
  public:
   AppListFeatureUsageMetricsTest()
       : NoSessionAshTestBase(
-            base::test::TaskEnvironment::TimeSource::MOCK_TIME) {
-    // Support both TEST_F and TEST_P.
-    if (testing::UnitTest::GetInstance()->current_test_info()->value_param()) {
-      feature_list_.InitWithFeatureState(features::kProductivityLauncher,
-                                         GetParam());
-    }
-  }
+            base::test::TaskEnvironment::TimeSource::MOCK_TIME) {}
   ~AppListFeatureUsageMetricsTest() override = default;
 
   // Simulates a device that supports tablet mode.
   void SimulateTabletModeSupport() {
     base::CommandLine::ForCurrentProcess()->AppendSwitch(
         switches::kAshEnableTabletMode);
-    Shell::Get()->tablet_mode_controller()->OnECLidAngleDriverStatusChanged(
+    auto* tablet_mode_controller = Shell::Get()->tablet_mode_controller();
+    tablet_mode_controller->OnECLidAngleDriverStatusChanged(
         /*is_supported=*/true);
+    tablet_mode_controller->OnDeviceListsComplete();
   }
 
   void FastForwardBy(base::TimeDelta delta) {
@@ -70,13 +64,8 @@ class AppListFeatureUsageMetricsTest
     FastForwardBy(feature_usage::FeatureUsageMetrics::kInitialInterval);
   }
 
-  base::test::ScopedFeatureList feature_list_;
   base::HistogramTester histograms_;
 };
-
-INSTANTIATE_TEST_SUITE_P(ProductivityLauncher,
-                         AppListFeatureUsageMetricsTest,
-                         testing::Bool());
 
 TEST_F(AppListFeatureUsageMetricsTest, CountsStartAtZero) {
   SimulateUserLogin("user@gmail.com");
@@ -115,7 +104,7 @@ TEST_F(AppListFeatureUsageMetricsTest, InitialMetricsWithTabletModeSupport) {
 }
 
 TEST_F(AppListFeatureUsageMetricsTest, NotEligibleInKioskMode) {
-  SimulateKioskMode(user_manager::USER_TYPE_KIOSK_APP);
+  SimulateKioskMode(user_manager::UserType::kKioskApp);
   FastForwardPastMetricsReportingInterval();
 
   histograms_.ExpectBucketCount(kClamshellMetric, kEligible, 0);
@@ -124,9 +113,10 @@ TEST_F(AppListFeatureUsageMetricsTest, NotEligibleInKioskMode) {
   histograms_.ExpectBucketCount(kTabletMetric, kEnabled, 0);
 }
 
-TEST_P(AppListFeatureUsageMetricsTest, ShowAndHideLauncherInClamshell) {
+TEST_F(AppListFeatureUsageMetricsTest, ShowAndHideLauncherInClamshell) {
   SimulateUserLogin("user@gmail.com");
-  Shell::Get()->app_list_controller()->ShowAppList();
+  Shell::Get()->app_list_controller()->ShowAppList(
+      AppListShowSource::kSearchKey);
   histograms_.ExpectBucketCount(kClamshellMetric, kUsedWithSuccess, 1);
 
   const base::TimeDelta kUsetime = base::Seconds(2);
@@ -138,7 +128,7 @@ TEST_P(AppListFeatureUsageMetricsTest, ShowAndHideLauncherInClamshell) {
   histograms_.ExpectTotalCount(kTabletUsetimeMetric, 0);
 }
 
-TEST_P(AppListFeatureUsageMetricsTest, ShowAndHideLauncherInTablet) {
+TEST_F(AppListFeatureUsageMetricsTest, ShowAndHideLauncherInTablet) {
   SimulateTabletModeSupport();
   ASSERT_TRUE(Shell::Get()->tablet_mode_controller()->CanEnterTabletMode());
   SimulateUserLogin("user@gmail.com");
@@ -150,20 +140,23 @@ TEST_P(AppListFeatureUsageMetricsTest, ShowAndHideLauncherInTablet) {
   const base::TimeDelta kUsetime = base::Seconds(2);
   FastForwardBy(kUsetime);
   // Creating a window hides the launcher.
-  std::unique_ptr<views::Widget> widget = CreateTestWidget();
+  std::unique_ptr<views::Widget> widget =
+      CreateTestWidget(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET);
   histograms_.ExpectTimeBucketCount(kTabletUsetimeMetric, kUsetime, 1);
 
   // Clamshell usage is not recorded.
   histograms_.ExpectTotalCount(kClamshellUsetimeMetric, 0);
 }
 
-TEST_P(AppListFeatureUsageMetricsTest,
+TEST_F(AppListFeatureUsageMetricsTest,
        EnterTabletModeWithLauncherAndWindowOpen) {
   SimulateTabletModeSupport();
   ASSERT_TRUE(Shell::Get()->tablet_mode_controller()->CanEnterTabletMode());
   SimulateUserLogin("user@gmail.com");
-  std::unique_ptr<views::Widget> widget = CreateTestWidget();
-  Shell::Get()->app_list_controller()->ShowAppList();
+  std::unique_ptr<views::Widget> widget =
+      CreateTestWidget(views::Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET);
+  Shell::Get()->app_list_controller()->ShowAppList(
+      AppListShowSource::kSearchKey);
 
   // Entering tablet mode with a window open does not show the launcher.
   Shell::Get()->tablet_mode_controller()->SetEnabledForTest(true);
@@ -179,11 +172,12 @@ TEST_P(AppListFeatureUsageMetricsTest,
   histograms_.ExpectTimeBucketCount(kTabletUsetimeMetric, base::Seconds(1), 1);
 }
 
-TEST_P(AppListFeatureUsageMetricsTest, OpenClamshellThenTabletThenExit) {
+TEST_F(AppListFeatureUsageMetricsTest, OpenClamshellThenTabletThenExit) {
   SimulateTabletModeSupport();
   SimulateUserLogin("user@gmail.com");
 
-  Shell::Get()->app_list_controller()->ShowAppList();
+  Shell::Get()->app_list_controller()->ShowAppList(
+      AppListShowSource::kSearchKey);
   histograms_.ExpectBucketCount(kClamshellMetric, kUsedWithSuccess, 1);
 
   // Switching from clamshell to tablet with the launcher open records usage

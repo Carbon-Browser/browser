@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,6 @@
 #include "base/location.h"
 #include "base/run_loop.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "content/browser/media/session/media_session_impl.h"
 #include "content/browser/media/session/mock_media_session_player_observer.h"
 #include "content/public/test/browser_test.h"
@@ -24,7 +23,7 @@ class AudioFocusDelegateAndroidBrowserTest : public ContentBrowserTest {};
 // is the only way found to actually reproduce the crash so as a result, the
 // test will only run on builds without DCHECK's.
 #if defined(NDEBUG) && !defined(DCHECK_ALWAYS_ON)
-// TODO(crbug.com/602787) The test is flaky, disabling it everywhere.
+// TODO(crbug.com/40464766) The test is flaky, disabling it everywhere.
 #define MAYBE_OnAudioFocusChangeAfterDtorCrash \
   DISABLED_OnAudioFocusChangeAfterDtorCrash
 #else
@@ -35,7 +34,7 @@ class AudioFocusDelegateAndroidBrowserTest : public ContentBrowserTest {};
 IN_PROC_BROWSER_TEST_F(AudioFocusDelegateAndroidBrowserTest,
                        MAYBE_OnAudioFocusChangeAfterDtorCrash) {
   std::unique_ptr<MockMediaSessionPlayerObserver> player_observer(
-      new MockMediaSessionPlayerObserver(media::MediaContentType::Persistent));
+      new MockMediaSessionPlayerObserver(media::MediaContentType::kPersistent));
 
   MediaSessionImpl* media_session =
       MediaSessionImpl::Get(shell()->web_contents());
@@ -63,7 +62,7 @@ IN_PROC_BROWSER_TEST_F(AudioFocusDelegateAndroidBrowserTest,
   // to the listeners. If the bug is still present, it will crash.
   {
     base::RunLoop run_loop;
-    base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
         FROM_HERE, run_loop.QuitClosure(), base::Seconds(1));
     run_loop.Run();
   }

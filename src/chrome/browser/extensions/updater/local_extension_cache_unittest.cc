@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,20 +7,20 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/values.h"
+#include "base/version.h"
 #include "chrome/common/extensions/extension_constants.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_utils.h"
-#include "crypto/secure_hash.h"
 #include "crypto/sha2.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -60,8 +60,9 @@ class LocalExtensionCacheTest : public testing::Test {
                            const base::Time& timestamp,
                            base::FilePath* filename) {
     const base::FilePath file = GetExtensionFileName(dir, id, version, "");
-    if (filename)
+    if (filename) {
       *filename = file;
+    }
     CreateFile(file, size, timestamp);
   }
 
@@ -69,8 +70,7 @@ class LocalExtensionCacheTest : public testing::Test {
                   size_t size,
                   const base::Time& timestamp) {
     std::string data(size, 0);
-    EXPECT_EQ(base::WriteFile(file, data.data(), data.size()),
-              static_cast<int>(size));
+    EXPECT_TRUE(base::WriteFile(file, data));
     EXPECT_TRUE(base::TouchFile(file, timestamp, timestamp));
   }
 
@@ -81,21 +81,15 @@ class LocalExtensionCacheTest : public testing::Test {
                                         const base::Time& timestamp,
                                         base::FilePath* filename) {
     std::string data(size, 0);
-
-    std::unique_ptr<crypto::SecureHash> hash =
-        crypto::SecureHash::Create(crypto::SecureHash::SHA256);
-    hash->Update(data.c_str(), size);
-    uint8_t output[crypto::kSHA256Length];
-    hash->Finish(output, sizeof(output));
-    const std::string hex_hash =
-        base::ToLowerASCII(base::HexEncode(output, sizeof(output)));
+    const std::string hex_hash = base::ToLowerASCII(
+        base::HexEncode(crypto::SHA256Hash(base::as_byte_span(data))));
 
     const base::FilePath file =
         GetExtensionFileName(dir, id, version, hex_hash);
-    if (filename)
+    if (filename) {
       *filename = file;
-    EXPECT_EQ(base::WriteFile(file, data.data(), data.size()),
-              static_cast<int>(size));
+    }
+    EXPECT_TRUE(base::WriteFile(file, data));
     EXPECT_TRUE(base::TouchFile(file, timestamp, timestamp));
 
     return hex_hash;
@@ -107,6 +101,11 @@ class LocalExtensionCacheTest : public testing::Test {
                                       const std::string& hash) {
     return dir.Append(
         extensions::LocalExtensionCache::ExtensionFileName(id, version, hash));
+  }
+
+  base::FilePath GetInvalidCacheFilePath() {
+    return cache_dir_.GetPath().AppendASCII(
+        LocalExtensionCache::kInvalidCacheIdsFileName);
   }
 
  private:
@@ -150,9 +149,9 @@ TEST_F(LocalExtensionCacheTest, Basic) {
   // All extensions should be there because cleanup happens on shutdown to
   // support use case when device was not used to more than 30 days and cache
   // shouldn't be cleaned before someone will have a chance to use it.
-  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, "", NULL, NULL));
-  EXPECT_TRUE(cache.GetExtension(kTestExtensionId2, "", NULL, NULL));
-  EXPECT_TRUE(cache.GetExtension(kTestExtensionId3, "", NULL, NULL));
+  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, "", nullptr, nullptr));
+  EXPECT_TRUE(cache.GetExtension(kTestExtensionId2, "", nullptr, nullptr));
+  EXPECT_TRUE(cache.GetExtension(kTestExtensionId3, "", nullptr, nullptr));
 
   bool did_shutdown = false;
   cache.Shutdown(base::BindOnce(&SimpleCallback, &did_shutdown));
@@ -195,10 +194,10 @@ TEST_F(LocalExtensionCacheTest, KeepHashed) {
 
   // We should be able to lookup all three extension queries
   std::string version;
-  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, "", NULL, &version));
+  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, "", nullptr, &version));
   EXPECT_EQ(version, "1.0");
-  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, hash1, NULL, NULL));
-  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, hash2, NULL, NULL));
+  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, hash1, nullptr, nullptr));
+  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, hash2, nullptr, nullptr));
 }
 
 TEST_F(LocalExtensionCacheTest, KeepLatest) {
@@ -232,9 +231,9 @@ TEST_F(LocalExtensionCacheTest, KeepLatest) {
   EXPECT_TRUE(base::PathExists(file22));
 
   // We should be able to lookup only the latest version queries.
-  EXPECT_FALSE(cache.GetExtension(kTestExtensionId1, hash1, NULL, NULL));
-  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, hash21, NULL, NULL));
-  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, hash22, NULL, NULL));
+  EXPECT_FALSE(cache.GetExtension(kTestExtensionId1, hash1, nullptr, nullptr));
+  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, hash21, nullptr, nullptr));
+  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, hash22, nullptr, nullptr));
 }
 
 TEST_F(LocalExtensionCacheTest, Complex) {
@@ -277,12 +276,12 @@ TEST_F(LocalExtensionCacheTest, Complex) {
   // We should be able to lookup only the latest version queries, both with and
   // without hash.
   std::string version;
-  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, "", NULL, &version));
+  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, "", nullptr, &version));
   EXPECT_EQ(version, "2.0");
-  EXPECT_FALSE(cache.GetExtension(kTestExtensionId1, hash11, NULL, NULL));
-  EXPECT_FALSE(cache.GetExtension(kTestExtensionId1, hash12, NULL, NULL));
-  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, hash21, NULL, NULL));
-  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, hash22, NULL, NULL));
+  EXPECT_FALSE(cache.GetExtension(kTestExtensionId1, hash11, nullptr, nullptr));
+  EXPECT_FALSE(cache.GetExtension(kTestExtensionId1, hash12, nullptr, nullptr));
+  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, hash21, nullptr, nullptr));
+  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, hash22, nullptr, nullptr));
 }
 
 static void PutExtensionAndWait(LocalExtensionCache* cache,
@@ -292,7 +291,7 @@ static void PutExtensionAndWait(LocalExtensionCache* cache,
                                 const std::string& version) {
   base::RunLoop run_loop;
   cache->PutExtension(
-      id, expected_hash, path, version,
+      id, expected_hash, path, base::Version(version),
       base::BindRepeating([](base::RunLoop* run_loop, const base::FilePath&,
                              bool) { run_loop->Quit(); },
                           &run_loop));
@@ -345,7 +344,7 @@ TEST_F(LocalExtensionCacheTest, PutExtensionCases) {
       GetExtensionFileName(cache_dir, kTestExtensionId1, "3.0", "");
   EXPECT_TRUE(base::PathExists(unhashed));
   // Old files removed from cache (kept in the directory though).
-  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, hash11, NULL, &version));
+  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, hash11, nullptr, &version));
   EXPECT_EQ(version, "3.0");
   EXPECT_TRUE(base::DeleteFile(temp1));
 
@@ -357,7 +356,7 @@ TEST_F(LocalExtensionCacheTest, PutExtensionCases) {
   EXPECT_FALSE(base::PathExists(
       GetExtensionFileName(cache_dir, kTestExtensionId1, "2.0", "")));
   // Old file kept.
-  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, "", NULL, &version));
+  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, "", nullptr, &version));
   EXPECT_EQ(version, "3.0");
   EXPECT_TRUE(base::DeleteFile(temp2));
 
@@ -380,10 +379,11 @@ TEST_F(LocalExtensionCacheTest, PutExtensionCases) {
   const base::FilePath hashed =
       GetExtensionFileName(cache_dir, kTestExtensionId1, "3.0", hash3);
   EXPECT_TRUE(base::PathExists(hashed));
-  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, hash3, NULL, NULL));
+  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, hash3, nullptr, nullptr));
   // Old file removed (queries return hashed version)
   base::FilePath unhashed_path;
-  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, "", &unhashed_path, NULL));
+  EXPECT_TRUE(
+      cache.GetExtension(kTestExtensionId1, "", &unhashed_path, nullptr));
   EXPECT_EQ(unhashed_path, hashed);
   EXPECT_TRUE(base::DeleteFile(temp4));
   EXPECT_TRUE(base::DeleteFile(unhashed));
@@ -395,7 +395,7 @@ TEST_F(LocalExtensionCacheTest, PutExtensionCases) {
   // New file skipped.
   EXPECT_FALSE(base::PathExists(unhashed));
   // Old file kept.
-  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, hash3, NULL, NULL));
+  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, hash3, nullptr, nullptr));
   EXPECT_TRUE(base::DeleteFile(temp5));
 
   // 6. Cache contains the same version with hash, our file has the "same" hash.
@@ -417,10 +417,95 @@ TEST_F(LocalExtensionCacheTest, PutExtensionCases) {
   const base::FilePath hashed2 =
       GetExtensionFileName(cache_dir, kTestExtensionId1, "3.0", hash4);
   EXPECT_TRUE(base::PathExists(hashed2));
-  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, hash4, NULL, NULL));
+  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, hash4, nullptr, nullptr));
   // Old file kept.
-  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, hash3, NULL, NULL));
+  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, hash3, nullptr, nullptr));
   EXPECT_TRUE(base::DeleteFile(temp7));
+}
+
+// This test checks that scheduling extension cache removal with
+// `RemoveOnNextInit` works correctly: extension cache is deleted for the
+// specified extension right on the next initialization, another extension is
+// not affected.
+TEST_F(LocalExtensionCacheTest, InvalidExtensionRemoval) {
+  base::FilePath cache_dir(CreateCacheDir());
+
+  LocalExtensionCache cache(
+      cache_dir, /*max_cache_size=*/1000, /*max_cache_age=*/base::Days(30),
+      /*backend_task_runner=*/
+      base::ThreadPool::CreateSequencedTaskRunner({base::MayBlock()}));
+  cache.SetCacheStatusPollingDelayForTests(base::TimeDelta());
+
+  bool initialized = false;
+  cache.Init(true, base::BindOnce(&SimpleCallback, &initialized));
+
+  const base::Time time = base::Time::Now() - base::Days(1);
+  base::FilePath file_1, file_2_1, file_2_2;
+  const std::string hash_1 = CreateSignedExtensionFile(
+      cache_dir, kTestExtensionId1, "1.0", 100, time, &file_1);
+  const std::string hash_2_1 = CreateSignedExtensionFile(
+      cache_dir, kTestExtensionId2, "2.0", 101, time, &file_2_1);
+  const std::string hash_2_2 = CreateSignedExtensionFile(
+      cache_dir, kTestExtensionId2, "2.0", 123, time, &file_2_2);
+  content::RunAllTasksUntilIdle();
+  ASSERT_TRUE(initialized);
+
+  EXPECT_TRUE(base::PathExists(file_1));
+  EXPECT_TRUE(base::PathExists(file_2_1));
+  EXPECT_TRUE(base::PathExists(file_2_2));
+
+  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, hash_1, nullptr, nullptr));
+  EXPECT_TRUE(cache.GetExtension(kTestExtensionId2, "", nullptr, nullptr));
+
+  // Invalid cache file should be removed on initializion.
+  EXPECT_FALSE(base::PathExists(GetInvalidCacheFilePath()));
+
+  cache.RemoveOnNextInit(kTestExtensionId2);
+  content::RunAllTasksUntilIdle();
+
+  // Extension files should still exist, nothing should be deleted before the
+  // next initialization.
+  EXPECT_TRUE(base::PathExists(file_1));
+  EXPECT_TRUE(base::PathExists(file_2_1));
+  EXPECT_TRUE(base::PathExists(file_2_2));
+
+  EXPECT_TRUE(cache.GetExtension(kTestExtensionId1, hash_1, nullptr, nullptr));
+  EXPECT_TRUE(cache.GetExtension(kTestExtensionId2, "", nullptr, nullptr));
+
+  bool did_shutdown = false;
+  cache.Shutdown(base::BindOnce(&SimpleCallback, &did_shutdown));
+  content::RunAllTasksUntilIdle();
+  ASSERT_TRUE(did_shutdown);
+
+  EXPECT_TRUE(base::PathExists(file_1));
+  EXPECT_TRUE(base::PathExists(file_2_1));
+  EXPECT_TRUE(base::PathExists(file_2_2));
+
+  // Create cache again for the same directory.
+  LocalExtensionCache new_cache(
+      cache_dir, 1000, base::Days(30),
+      base::ThreadPool::CreateSequencedTaskRunner({base::MayBlock()}));
+  initialized = false;
+  new_cache.Init(true, base::BindOnce(&SimpleCallback, &initialized));
+  content::RunAllTasksUntilIdle();
+  ASSERT_TRUE(initialized);
+
+  // Check that second extension's cache was cleaned up after initialization.
+  EXPECT_TRUE(base::PathExists(file_1));
+  EXPECT_FALSE(base::PathExists(file_2_1));
+  EXPECT_FALSE(base::PathExists(file_2_2));
+
+  EXPECT_TRUE(
+      new_cache.GetExtension(kTestExtensionId1, hash_1, nullptr, nullptr));
+  EXPECT_FALSE(new_cache.GetExtension(kTestExtensionId2, "", nullptr, nullptr));
+
+  // Invalid cache file should be removed on initializion.
+  EXPECT_FALSE(base::PathExists(GetInvalidCacheFilePath()));
+
+  did_shutdown = false;
+  new_cache.Shutdown(base::BindOnce(&SimpleCallback, &did_shutdown));
+  content::RunAllTasksUntilIdle();
+  ASSERT_TRUE(did_shutdown);
 }
 
 }  // namespace extensions

@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -47,8 +47,7 @@ TEST_F(AshTestHelperTest, AshTestHelper) {
   // Enough state is initialized to create a window.
   using views::Widget;
   std::unique_ptr<Widget> w1(new Widget);
-  Widget::InitParams params;
-  params.ownership = Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET;
+  Widget::InitParams params(Widget::InitParams::WIDGET_OWNS_NATIVE_WIDGET);
   params.context = ash_test_helper()->GetContext();
   w1->Init(std::move(params));
   w1->Show();

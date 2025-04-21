@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,20 +13,19 @@
 #include <iosfwd>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 #include "base/containers/flat_set.h"
 #include "base/gtest_prod_util.h"
-#include "base/strings/string_piece.h"
 #include "components/safe_browsing/core/browser/db/safebrowsing.pb.h"
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
 #include "url/gurl.h"
 
 namespace net {
 class HttpRequestHeaders;
-class IPAddress;
 }  // namespace net
 
 namespace safe_browsing {
@@ -43,10 +42,10 @@ const PrefixSize kMinHashPrefixLength = 4;
 const PrefixSize kMaxHashPrefixLength = 32;
 
 // A hash prefix sent by the SafeBrowsing PVer4 service.
-using HashPrefix = std::string;
+using HashPrefixStr = std::string;
 
 // A full SHA256 hash.
-using FullHash = HashPrefix;
+using FullHashStr = HashPrefixStr;
 
 using ListUpdateRequest = FetchThreatListUpdatesRequest::ListUpdateRequest;
 using ListUpdateResponse = FetchThreatListUpdatesResponse::ListUpdateResponse;
@@ -91,13 +90,22 @@ std::string GetReportUrl(
     const ExtendedReportingLevel* reporting_level = nullptr,
     const bool is_enhanced_protection = false);
 
+// Used to specify the type of check to perform in CheckBrowseUrl function.
+enum class CheckBrowseUrlType {
+  // Performs the hash-prefix database check.
+  kHashDatabase = 0,
+  // Performs the hash-prefix real-time check. Only the remote database used on
+  // Android supports it.
+  kHashRealTime = 1,
+};
+
 // Different types of threats that SafeBrowsing protects against. This is the
 // type that's returned to the clients of SafeBrowsing in Chromium.
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused.
 // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.components.safe_browsing
 // GENERATED_JAVA_PREFIX_TO_STRIP: SB_THREAT_TYPE_
-enum SBThreatType {
+enum class SBThreatType {
   // This type can be used for lists that can be checked synchronously so a
   // client callback isn't required, or for allowlists.
   SB_THREAT_TYPE_UNUSED = 0,
@@ -124,13 +132,13 @@ enum SBThreatType {
   // The Chrome extension or app (given by its ID) is malware.
   SB_THREAT_TYPE_EXTENSION = 7,
 
-  // Url detected by the client-side malware IP list. This IP list is part
-  // of the client side detection model.
-  SB_THREAT_TYPE_URL_CLIENT_SIDE_MALWARE = 8,
+  // DEPRECATED. Url detected by the client-side malware IP list. This IP list
+  // is part of the client side detection model.
+  DEPRECATED_SB_THREAT_TYPE_URL_CLIENT_SIDE_MALWARE = 8,
 
   // Url leads to a blocklisted resource script. Note that no warnings should be
   // shown on this threat type, but an incident report might be sent.
-  SB_THREAT_TYPE_BLOCKLISTED_RESOURCE = 9,
+  // DEPRECATED: SB_THREAT_TYPE_BLOCKLISTED_RESOURCE = 9,
 
   // Url abuses a permission API.
   SB_THREAT_TYPE_API_ABUSE = 10,
@@ -180,9 +188,15 @@ enum SBThreatType {
   SB_THREAT_TYPE_HIGH_CONFIDENCE_ALLOWLIST = 24,
 
   // List of URLs that should shown an accuracy tip.
-  SB_THREAT_TYPE_ACCURACY_TIPS = 25,
+  // DEPRECATED: SB_THREAT_TYPE_ACCURACY_TIPS = 25,
 
-  SB_THREAT_TYPE_MAX = SB_THREAT_TYPE_ACCURACY_TIPS,
+  // Managed policy indicated to warn a navigation.
+  SB_THREAT_TYPE_MANAGED_POLICY_WARN = 26,
+
+  // Managed policy indicated to block a navigation.
+  SB_THREAT_TYPE_MANAGED_POLICY_BLOCK = 27,
+
+  kMaxValue = SB_THREAT_TYPE_MANAGED_POLICY_BLOCK,
 };
 
 using SBThreatTypeSet = base::flat_set<SBThreatType>;
@@ -233,9 +247,6 @@ std::ostream& operator<<(std::ostream& os, const ListIdentifier& id);
 PlatformType GetCurrentPlatformType();
 ListIdentifier GetChromeExtMalwareId();
 ListIdentifier GetChromeUrlApiId();
-ListIdentifier GetChromeUrlClientIncidentId();
-ListIdentifier GetIpMalwareId();
-ListIdentifier GetUrlAccuracyTipsId();
 ListIdentifier GetUrlBillingId();
 ListIdentifier GetUrlCsdDownloadAllowlistId();
 ListIdentifier GetUrlCsdAllowlistId();
@@ -260,9 +271,9 @@ using ParsedServerResponse = std::vector<std::unique_ptr<ListUpdateResponse>>;
 struct StoreAndHashPrefix {
  public:
   ListIdentifier list_id;
-  HashPrefix hash_prefix;
+  HashPrefixStr hash_prefix;
 
-  StoreAndHashPrefix(ListIdentifier list_id, const HashPrefix& hash_prefix);
+  StoreAndHashPrefix(ListIdentifier list_id, const HashPrefixStr& hash_prefix);
   ~StoreAndHashPrefix();
 
   bool operator==(const StoreAndHashPrefix& other) const;
@@ -276,6 +287,11 @@ struct StoreAndHashPrefix {
 // Used to track the hash prefix and the store in which a full hash's prefix
 // matched.
 using StoreAndHashPrefixes = std::vector<StoreAndHashPrefix>;
+
+// The matching hash prefixes and corresponding stores, for each full hash
+// generated for a given URL.
+using FullHashToStoreAndHashPrefixesMap =
+    std::unordered_map<FullHashStr, StoreAndHashPrefixes>;
 
 // Enumerate failures for histogramming purposes.  DO NOT CHANGE THE
 // ORDERING OF THESE VALUES.
@@ -343,9 +359,9 @@ class V4ProtocolManagerUtil {
   static void GeneratePatternsToCheck(const GURL& url,
                                       std::vector<std::string>* urls);
 
-  // Returns a FullHash for the basic host+path pattern for a given URL after
+  // Returns a FullHashStr for the basic host+path pattern for a given URL after
   // canonicalization. Not intended for general use.
-  static FullHash GetFullHash(const GURL& url);
+  static FullHashStr GetFullHash(const GURL& url);
 
   // Generates a Pver4 request URL and sets the appropriate header values.
   // |request_base64| is the serialized request protocol buffer encoded in
@@ -370,30 +386,20 @@ class V4ProtocolManagerUtil {
 
   // Generate the set of FullHashes to check for |url|.
   static void UrlToFullHashes(const GURL& url,
-                              std::vector<FullHash>* full_hashes);
+                              std::vector<FullHashStr>* full_hashes);
 
-  static bool FullHashToHashPrefix(const FullHash& full_hash,
+  static bool FullHashToHashPrefix(const FullHashStr& full_hash,
                                    PrefixSize prefix_size,
-                                   HashPrefix* hash_prefix);
+                                   HashPrefixStr* hash_prefix);
 
-  static bool FullHashToSmallestHashPrefix(const FullHash& full_hash,
-                                           HashPrefix* hash_prefix);
+  static bool FullHashToSmallestHashPrefix(const FullHashStr& full_hash,
+                                           HashPrefixStr* hash_prefix);
 
-  static bool FullHashMatchesHashPrefix(const FullHash& full_hash,
-                                        const HashPrefix& hash_prefix);
+  static bool FullHashMatchesHashPrefix(const FullHashStr& full_hash,
+                                        const HashPrefixStr& hash_prefix);
 
   static void SetClientInfoFromConfig(ClientInfo* client_info,
                                       const V4ProtocolConfig& config);
-
-  static bool GetIPV6AddressFromString(const std::string& ip_address,
-                                       net::IPAddress* address);
-
-  // Converts a IPV4 or IPV6 address in |ip_address| to the SHA1 hash of the
-  // corresponding packed IPV6 address in |hashed_encoded_ip|, and adds an
-  // extra byte containing the value 128 at the end. This is done to match the
-  // server implementation for calculating the hash prefix of an IP address.
-  static bool IPAddressToEncodedIPV6Hash(const std::string& ip_address,
-                                         FullHash* hashed_encoded_ip);
 
   // Stores the client state values for each of the lists in |store_state_map|
   // into |list_client_states|.
@@ -402,7 +408,7 @@ class V4ProtocolManagerUtil {
       std::vector<std::string>* list_client_states);
 
  private:
-  V4ProtocolManagerUtil() {}
+  V4ProtocolManagerUtil() = default;
 
   FRIEND_TEST_ALL_PREFIXES(V4ProtocolManagerUtilTest, TestBackOffLogic);
   FRIEND_TEST_ALL_PREFIXES(V4ProtocolManagerUtilTest,
@@ -430,8 +436,7 @@ class V4ProtocolManagerUtil {
   static void GeneratePathsToCheck(const GURL& url,
                                    std::vector<std::string>* paths);
 
-  static std::string RemoveConsecutiveChars(base::StringPiece str,
-                                            const char c);
+  static std::string RemoveConsecutiveChars(std::string_view str, const char c);
 };
 
 using StoresToCheck = std::unordered_set<ListIdentifier>;

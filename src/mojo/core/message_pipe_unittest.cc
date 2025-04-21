@@ -1,6 +1,11 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <stdint.h>
 #include <string.h>
@@ -12,7 +17,9 @@
 
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted.h"
+#include "build/blink_buildflags.h"
 #include "build/build_config.h"
+#include "mojo/core/embedder/embedder.h"
 #include "mojo/core/test/mojo_test_base.h"
 #include "mojo/public/c/system/core.h"
 #include "mojo/public/c/system/types.h"
@@ -312,7 +319,7 @@ TEST_F(MessagePipeTest, BasicWaiting) {
   ASSERT_FALSE(hss.satisfiable_signals & MOJO_HANDLE_SIGNAL_WRITABLE);
 }
 
-#if !BUILDFLAG(IS_IOS)
+#if BUILDFLAG(USE_BLINK)
 
 const size_t kPingPongHandlesPerIteration = 30;
 const size_t kPingPongIterations = 500;
@@ -329,10 +336,10 @@ DEFINE_TEST_CLIENT_TEST_WITH_PIPE(HandlePingPong, MessagePipeTest, h) {
   char msg[4];
   uint32_t num_bytes = 4;
   EXPECT_EQ(MOJO_RESULT_OK, ReadMessage(h, msg, &num_bytes));
+  EXPECT_EQ(MOJO_RESULT_OK, MojoClose(h));
 }
 
-// This test is flaky: http://crbug.com/585784
-TEST_F(MessagePipeTest, DISABLED_DataPipeConsumerHandlePingPong) {
+TEST_F(MessagePipeTest, DataPipeConsumerHandlePingPong) {
   MojoHandle p, c[kPingPongHandlesPerIteration];
   for (size_t i = 0; i < kPingPongHandlesPerIteration; ++i) {
     EXPECT_EQ(MOJO_RESULT_OK, MojoCreateDataPipe(nullptr, &p, &c[i]));
@@ -350,8 +357,7 @@ TEST_F(MessagePipeTest, DISABLED_DataPipeConsumerHandlePingPong) {
     MojoClose(c[i]);
 }
 
-// This test is flaky: http://crbug.com/585784
-TEST_F(MessagePipeTest, DISABLED_DataPipeProducerHandlePingPong) {
+TEST_F(MessagePipeTest, DataPipeProducerHandlePingPong) {
   MojoHandle p[kPingPongHandlesPerIteration], c;
   for (size_t i = 0; i < kPingPongHandlesPerIteration; ++i) {
     EXPECT_EQ(MOJO_RESULT_OK, MojoCreateDataPipe(nullptr, &p[i], &c));
@@ -369,7 +375,13 @@ TEST_F(MessagePipeTest, DISABLED_DataPipeProducerHandlePingPong) {
     MojoClose(p[i]);
 }
 
-TEST_F(MessagePipeTest, SharedBufferHandlePingPong) {
+#if BUILDFLAG(IS_IOS)
+// TODO(crbug.com/40257752): Test currently fails on iOS.
+#define MAYBE_SharedBufferHandlePingPong DISABLED_SharedBufferHandlePingPong
+#else
+#define MAYBE_SharedBufferHandlePingPong SharedBufferHandlePingPong
+#endif  // BUILDFLAG(IS_IOS)
+TEST_F(MessagePipeTest, MAYBE_SharedBufferHandlePingPong) {
   MojoHandle buffers[kPingPongHandlesPerIteration];
   for (size_t i = 0; i < kPingPongHandlesPerIteration; ++i)
     EXPECT_EQ(MOJO_RESULT_OK, MojoCreateSharedBuffer(1, nullptr, &buffers[i]));
@@ -385,7 +397,7 @@ TEST_F(MessagePipeTest, SharedBufferHandlePingPong) {
     MojoClose(buffers[i]);
 }
 
-#endif  // !BUILDFLAG(IS_IOS)
+#endif  // BUILDFLAG(USE_BLINK)
 
 TEST_F(FuseMessagePipeTest, Basic) {
   // Test that we can fuse pipes and they still work.
@@ -395,10 +407,6 @@ TEST_F(FuseMessagePipeTest, Basic) {
   CreateMessagePipe(&c, &d);
 
   EXPECT_EQ(MOJO_RESULT_OK, MojoFuseMessagePipes(b, c, nullptr));
-
-  // Handles b and c should be closed.
-  EXPECT_EQ(MOJO_RESULT_INVALID_ARGUMENT, MojoClose(b));
-  EXPECT_EQ(MOJO_RESULT_INVALID_ARGUMENT, MojoClose(c));
 
   const std::string kTestMessage1 = "Hello, world!";
   const std::string kTestMessage2 = "Goodbye, world!";
@@ -427,10 +435,6 @@ TEST_F(FuseMessagePipeTest, FuseAfterPeerWrite) {
 
   EXPECT_EQ(MOJO_RESULT_OK, MojoFuseMessagePipes(b, c, nullptr));
 
-  // Handles b and c should be closed.
-  EXPECT_EQ(MOJO_RESULT_INVALID_ARGUMENT, MojoClose(b));
-  EXPECT_EQ(MOJO_RESULT_INVALID_ARGUMENT, MojoClose(c));
-
   EXPECT_EQ(kTestMessage1, ReadMessage(d));
   EXPECT_EQ(kTestMessage2, ReadMessage(a));
 
@@ -449,10 +453,6 @@ TEST_F(FuseMessagePipeTest, NoFuseAfterWrite) {
   EXPECT_EQ(MOJO_RESULT_FAILED_PRECONDITION,
             MojoFuseMessagePipes(b, c, nullptr));
 
-  // Handles b and c should be closed.
-  EXPECT_EQ(MOJO_RESULT_INVALID_ARGUMENT, MojoClose(b));
-  EXPECT_EQ(MOJO_RESULT_INVALID_ARGUMENT, MojoClose(c));
-
   EXPECT_EQ(MOJO_RESULT_OK, MojoClose(a));
   EXPECT_EQ(MOJO_RESULT_OK, MojoClose(d));
 }
@@ -465,13 +465,17 @@ TEST_F(FuseMessagePipeTest, NoFuseSelf) {
 
   EXPECT_EQ(MOJO_RESULT_FAILED_PRECONDITION,
             MojoFuseMessagePipes(a, b, nullptr));
-
-  // Handles a and b should be closed.
-  EXPECT_EQ(MOJO_RESULT_INVALID_ARGUMENT, MojoClose(a));
-  EXPECT_EQ(MOJO_RESULT_INVALID_ARGUMENT, MojoClose(b));
 }
 
 TEST_F(FuseMessagePipeTest, FuseInvalidArguments) {
+  if (IsMojoIpczEnabled()) {
+    // The MergePortals() API which supports MojoFuseMessagePipes() with
+    // MojoIpcz enabled is simpler and has fewer side effects on failure. Making
+    // this test pass would require additional complexity with no real value to
+    // production code.
+    GTEST_SKIP() << "Not relevant to MojoIpcz";
+  }
+
   MojoHandle a, b, c, d;
   CreateMessagePipe(&a, &b);
   CreateMessagePipe(&c, &d);
@@ -508,10 +512,6 @@ TEST_F(FuseMessagePipeTest, FuseAfterPeerClosure) {
   EXPECT_EQ(MOJO_RESULT_OK, MojoClose(a));
   EXPECT_EQ(MOJO_RESULT_OK, MojoFuseMessagePipes(b, c, nullptr));
 
-  // Handles b and c should be closed.
-  EXPECT_EQ(MOJO_RESULT_INVALID_ARGUMENT, MojoClose(b));
-  EXPECT_EQ(MOJO_RESULT_INVALID_ARGUMENT, MojoClose(c));
-
   EXPECT_EQ(MOJO_RESULT_OK, WaitForSignals(d, MOJO_HANDLE_SIGNAL_PEER_CLOSED));
   EXPECT_EQ(MOJO_RESULT_OK, MojoClose(d));
 }
@@ -529,10 +529,6 @@ TEST_F(FuseMessagePipeTest, FuseAfterPeerWriteAndClosure) {
   EXPECT_EQ(MOJO_RESULT_OK, MojoClose(a));
 
   EXPECT_EQ(MOJO_RESULT_OK, MojoFuseMessagePipes(b, c, nullptr));
-
-  // Handles b and c should be closed.
-  EXPECT_EQ(MOJO_RESULT_INVALID_ARGUMENT, MojoClose(b));
-  EXPECT_EQ(MOJO_RESULT_INVALID_ARGUMENT, MojoClose(c));
 
   EXPECT_EQ(kTestMessage, ReadMessage(d));
   EXPECT_EQ(MOJO_RESULT_OK, WaitForSignals(d, MOJO_HANDLE_SIGNAL_PEER_CLOSED));

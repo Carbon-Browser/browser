@@ -1,8 +1,7 @@
-#!/usr/bin/env python
-# Copyright (c) 2019 The Chromium Authors. All rights reserved.
+#!/usr/bin/env python3
+# Copyright 2019 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
-
 """Unit tests for test_env.py functionality.
 
 Each unit test is launches python process that uses test_env.py
@@ -20,28 +19,24 @@ import unittest
 HERE = os.path.dirname(os.path.abspath(__file__))
 TEST_SCRIPT = os.path.join(HERE, 'test_env_user_script.py')
 
-# pylint: disable=super-with-arguments
-
 
 def launch_process_windows(args):
   # The `universal_newlines` option is equivalent to `text` in Python 3.
-  return subprocess.Popen(
-      [sys.executable, TEST_SCRIPT] + args,
-      stdout=subprocess.PIPE,
-      stderr=subprocess.STDOUT,
-      env=os.environ.copy(),
-      creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
-      universal_newlines=True)
+  return subprocess.Popen([sys.executable, TEST_SCRIPT] + args,
+                          stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT,
+                          env=os.environ.copy(),
+                          creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+                          universal_newlines=True)
 
 
 def launch_process_nonwindows(args):
   # The `universal_newlines` option is equivalent to `text` in Python 3.
-  return subprocess.Popen(
-      [sys.executable, TEST_SCRIPT] + args,
-      stdout=subprocess.PIPE,
-      stderr=subprocess.STDOUT,
-      env=os.environ.copy(),
-      universal_newlines=True)
+  return subprocess.Popen([sys.executable, TEST_SCRIPT] + args,
+                          stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT,
+                          env=os.environ.copy(),
+                          universal_newlines=True)
 
 
 # pylint: disable=inconsistent-return-statements
@@ -50,10 +45,12 @@ def read_subprocess_message(proc, starts_with):
   for line in proc.stdout:
     if line.startswith(starts_with):
       return line.rstrip().replace(starts_with, '')
+
+
 # pylint: enable=inconsistent-return-statements
 
 
-def send_and_wait(proc, sig, sleep_time=0.3):
+def send_and_wait(proc, sig, sleep_time=0.6):
   """Sends a signal to subprocess."""
   time.sleep(sleep_time)  # gives process time to launch.
   os.kill(proc.pid, sig)
@@ -63,21 +60,25 @@ def send_and_wait(proc, sig, sleep_time=0.3):
 class SignalingWindowsTest(unittest.TestCase):
 
   def setUp(self):
-    super(SignalingWindowsTest, self).setUp()
+    super().setUp()
     if sys.platform != 'win32':
       self.skipTest('test only runs on Windows')
 
   def test_send_ctrl_break_event(self):
     proc = launch_process_windows([])
-    send_and_wait(proc, signal.CTRL_BREAK_EVENT) # pylint: disable=no-member
+    send_and_wait(proc, signal.CTRL_BREAK_EVENT)  # pylint: disable=no-member
     sig = read_subprocess_message(proc, 'Signal :')
-    self.assertEqual(sig, str(int(signal.SIGBREAK))) # pylint: disable=no-member
+    # This test is flaky because it relies on the child process starting quickly
+    # "enough", which it fails to do sometimes. This is tracked by
+    # https://crbug.com/1335123 and it is hoped that increasing the timeout will
+    # reduce the flakiness.
+    self.assertEqual(sig, str(int(signal.SIGBREAK)))  # pylint: disable=no-member
 
 
 class SignalingNonWindowsTest(unittest.TestCase):
 
   def setUp(self):
-    super(SignalingNonWindowsTest, self).setUp()
+    super().setUp()
     if sys.platform == 'win32':
       self.skipTest('test does not run on Windows')
 

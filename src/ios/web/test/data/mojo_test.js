@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,16 +12,21 @@ var pageImpl, browserProxy;
 
 /** @constructor */
 function TestPageImpl() {
-  this.binding = new mojo.Binding(TestPage, this);
+  this.binding = new mojo.Binding(web.mojom.TestPage, this);
 }
 
 TestPageImpl.prototype = {
   /** @override */
   handleNativeMessage: function(result) {
     if (result.message == 'ack') {
-      // Native code has replied with "ack", send "fin" to complete the
-      // test.
-      browserProxy.handleJsMessage('fin');
+      // Expect "ack2" reply to syn2 via the callback.
+      browserProxy.handleJsMessageWithCallback('syn2').then((r) =>
+      {
+        if (r.result.message == 'ack2') {
+          // Send "fin" to complete the test.
+          browserProxy.handleJsMessage('fin');
+        }
+      });
     }
   },
 };
@@ -37,12 +42,12 @@ function whenDomContentLoaded() {
 
 function main() {
   whenDomContentLoaded().then(function() {
-    browserProxy = new TestUIHandlerMojoPtr();
-    Mojo.bindInterface(TestUIHandlerMojo.name,
+    browserProxy = new web.mojom.TestUIHandlerMojoPtr();
+    Mojo.bindInterface(web.mojom.TestUIHandlerMojo.name,
                        mojo.makeRequest(browserProxy).handle);
 
     pageImpl = new TestPageImpl();
-    var pagePtr = new TestPagePtr();
+    var pagePtr = new web.mojom.TestPagePtr();
     pageImpl.binding.bind(mojo.makeRequest(pagePtr));
     browserProxy.setClientPage(pagePtr);
 

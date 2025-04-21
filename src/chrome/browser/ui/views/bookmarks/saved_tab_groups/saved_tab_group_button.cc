@@ -1,216 +1,322 @@
-// Copyright (c) 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ui/views/bookmarks/saved_tab_groups/saved_tab_group_button.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/check.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_forward.h"
+#include "cc/paint/paint_flags.h"
+#include "chrome/app/vector_icons/vector_icons.h"
+#include "chrome/browser/favicon/favicon_utils.h"
+#include "chrome/browser/ui/bookmarks/bookmark_utils_desktop.h"
+#include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_element_identifiers.h"
 #include "chrome/browser/ui/layout_constants.h"
-#include "chrome/browser/ui/tabs/saved_tab_groups/saved_tab_group.h"
+#include "chrome/browser/ui/tabs/saved_tab_groups/saved_tab_group_keyed_service.h"
+#include "chrome/browser/ui/tabs/saved_tab_groups/saved_tab_group_service_factory.h"
+#include "chrome/browser/ui/tabs/saved_tab_groups/saved_tab_group_utils.h"
+#include "chrome/browser/ui/tabs/tab_group_model.h"
 #include "chrome/browser/ui/tabs/tab_group_theme.h"
+#include "chrome/browser/ui/tabs/tab_strip_model_delegate.h"
 #include "chrome/browser/ui/view_ids.h"
 #include "chrome/browser/ui/views/bookmarks/bookmark_button_util.h"
+#include "chrome/browser/ui/views/bookmarks/saved_tab_groups/saved_tab_group_drag_data.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
+#include "chrome/browser/ui/views/location_bar/location_bar_util.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_ink_drop_util.h"
 #include "chrome/grit/generated_resources.h"
-#include "content/public/browser/page_navigator.h"
+#include "components/saved_tab_groups/public/saved_tab_group.h"
+#include "components/tab_groups/tab_group_id.h"
+#include "ui/accessibility/ax_enums.mojom-shared.h"
 #include "ui/accessibility/ax_enums.mojom.h"
 #include "ui/accessibility/ax_node_data.h"
+#include "ui/base/dragdrop/drag_drop_types.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/models/dialog_model.h"
+#include "ui/base/models/dialog_model_field.h"
 #include "ui/base/models/dialog_model_menu_model_adapter.h"
 #include "ui/base/models/image_model.h"
+#include "ui/base/mojom/menu_source_type.mojom.h"
 #include "ui/base/theme_provider.h"
+#include "ui/base/ui_base_features.h"
+#include "ui/color/color_id.h"
 #include "ui/gfx/animation/slide_animation.h"
 #include "ui/gfx/canvas.h"
+#include "ui/gfx/color_palette.h"
+#include "ui/gfx/favicon_size.h"
+#include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/point_f.h"
+#include "ui/gfx/geometry/rect.h"
+#include "ui/views/accessibility/view_accessibility.h"
+#include "ui/views/background.h"
+#include "ui/views/border.h"
 #include "ui/views/controls/button/label_button_border.h"
 #include "ui/views/controls/button/menu_button.h"
 #include "ui/views/controls/highlight_path_generator.h"
 #include "ui/views/controls/menu/menu_runner.h"
+#include "ui/views/view_class_properties.h"
+#include "ui/views/view_utils.h"
+
+namespace tab_groups {
 
 namespace {
-constexpr float kBorderRadius = 4.5f;
-constexpr float kButtonRadius = 5.0f;
-constexpr float kBorderThickness = 2.0f;
-
-// This value comes from tab_group_header.cc as kEmptyChipSize. Since this
-// button and the tab_group_header are rendered on different surfaces, keep the
-// value here in case we want to change one but not the other.
-constexpr float kCircleRadius = 14.0f;
+// The max height of the button and the max width of a button with no title.
+constexpr int kButtonSize = 20;
+// The corner radius for the button.
+constexpr float kButtonRadius = 6.0f;
+// The amount of insets above and below the text.
+constexpr float kVerticalInsets = 2.0f;
+// The amount of insets before and after the text.
+constexpr float kHorizontalInsets = 6.0f;
+// The width of the outline of the button when open in the Tab Strip.
+constexpr float kBorderThickness = 1.0f;
+// The size of the squircle (rounded rect) in a button with no text.
+constexpr float kEmptyChipSize = 12.0f;
+// The amount of padding around the squircle (rounded rect).
+constexpr float kEmptyChipInsets = 4.0f;
+// The radius of the squircle (rounded rect).
+constexpr float kEmptyChipCornerRadius = 2.0f;
+// The amount of insets before and after the share icon when the title is empty.
+constexpr float kSharedEmptyChipInsets = 2.0f;
 }  // namespace
 
-SavedTabGroupButton::SavedTabGroupButton(
-    const SavedTabGroup& group,
-    base::RepeatingCallback<content::PageNavigator*()> page_navigator,
-    PressedCallback callback,
-    bool animations_enabled)
+SavedTabGroupButton::SavedTabGroupButton(const SavedTabGroup& group,
+                                         PressedCallback callback,
+                                         Browser* browser,
+                                         bool animations_enabled)
     : MenuButton(std::move(callback), group.title()),
+      is_shared_(group.is_shared_tab_group()),
       tab_group_color_id_(group.color()),
-      is_group_in_tabstrip_(group.tab_group_id().has_value()),
+      guid_(group.saved_guid()),
+      local_group_id_(group.local_group_id()),
       tabs_(group.saved_tabs()),
-      page_navigator_callback_(std::move(page_navigator)),
       context_menu_controller_(
           this,
           base::BindRepeating(
-              &SavedTabGroupButton::CreateDialogModelForContextMenu,
-              base::Unretained(this)),
+              &SavedTabGroupUtils::CreateSavedTabGroupContextMenuModel,
+              browser,
+              group.saved_guid()),
           views::MenuRunner::CONTEXT_MENU | views::MenuRunner::IS_NESTED) {
-  SetText(group.title());
-  SetAccessibleName(group.title());
+  GetViewAccessibility().SetRole(ax::mojom::Role::kButton);
+  GetViewAccessibility().SetName(GetAccessibleNameForButton());
+  GetViewAccessibility().SetRoleDescription(l10n_util::GetStringUTF16(
+      IDS_ACCNAME_SAVED_TAB_GROUP_BUTTON_ROLE_DESCRIPTION));
+  UpdateButtonData(group);
   SetID(VIEW_ID_BOOKMARK_BAR_ELEMENT);
-
-  // Since the theme provider is not currently available when instantiated the
-  // text color will be set to a placeholder color now. the text color will then
-  // be enabled when a theme provider can provide one onpaint.
-  SetEnabledTextColors(gfx::kPlaceholderColor);
-
-  // TODO (dljames): Add set_drag_controller to this button once dragging is
-  // built.
-  SetMaxSize(gfx::Size(bookmark_button_util::kMaxButtonWidth, 0));
-
-  ConfigureInkDropForToolbar(this);
-  SetImageLabelSpacing(ChromeLayoutProvider::Get()->GetDistanceMetric(
-      ChromeDistanceMetric::DISTANCE_RELATED_LABEL_HORIZONTAL_LIST));
-  views::InstallPillHighlightPathGenerator(this);
+  SetProperty(views::kElementIdentifierKey, kSavedTabGroupButtonElementId);
+  SetMaxSize(gfx::Size(bookmark_button_util::kMaxButtonWidth, kButtonSize));
+  label()->SetTextStyle(views::style::STYLE_BODY_4_EMPHASIS);
 
   show_animation_ = std::make_unique<gfx::SlideAnimation>(this);
   if (!animations_enabled) {
-    // For some reason during testing the events generated by animating
-    // throw off the test. So, don't animate while testing.
+    // For some reason during testing the events generated by animating throw
+    // off the test. So, don't animate while testing.
     show_animation_->Reset(1);
   } else {
     show_animation_->Show();
   }
 
-  int button_height = GetLayoutConstant(BOOKMARK_BAR_BUTTON_HEIGHT);
-  if (GetText().empty()) {
-    // When the text is empty force the button to have square dimensions.
-    // Likewise, we already have a constant that denotes the standard button
-    // height for all elements in the bookmarks bar. As such, we will use this
-    // constant for the width of the button to create a square that will
-    // comfortably fit in the bookmarks bar.
-    SetPreferredSize(gfx::Size(button_height, button_height));
-  }
+  ConfigureInkDropForToolbar(this);
+  SetImageLabelSpacing(
+      ChromeLayoutProvider::Get()->GetDistanceMetric(
+          ChromeDistanceMetric::DISTANCE_RELATED_LABEL_HORIZONTAL_LIST) /
+      2);
+  views::InstallRoundRectHighlightPathGenerator(this, gfx::Insets(0),
+                                                kButtonRadius);
+  SetFocusBehavior(FocusBehavior::ALWAYS);
+
+  set_drag_controller(this);
+
+  UpdateCachedTooltipText();
 }
 
 SavedTabGroupButton::~SavedTabGroupButton() = default;
 
-std::u16string SavedTabGroupButton::GetTooltipText(const gfx::Point& p) const {
-  return label()->GetPreferredSize().width() > label()->size().width()
-             ? GetText()
-             : std::u16string();
+void SavedTabGroupButton::UpdateButtonData(const SavedTabGroup& group) {
+  SetTextProperties(group);
+
+  tab_group_color_id_ = group.color();
+  local_group_id_ = group.local_group_id();
+  guid_ = group.saved_guid();
+  tabs_.clear();
+  tabs_ = group.saved_tabs();
+  is_shared_ = group.is_shared_tab_group();
+
+  UpdateButtonLayout();
+  UpdateAccessibleName();
+  UpdateCachedTooltipText();
 }
 
-void SavedTabGroupButton::GetAccessibleNodeData(ui::AXNodeData* node_data) {
-  // If the button would have no name, avoid crashing by setting the name
-  // explicitly empty.
-  if (GetAccessibleName().empty())
-    node_data->SetNameExplicitlyEmpty();
+bool SavedTabGroupButton::OnKeyPressed(const ui::KeyEvent& event) {
+  if (event.key_code() == ui::KeyboardCode::VKEY_RETURN) {
+    ShowContextMenu(GetKeyboardContextMenuLocation(),
+                    ui::mojom::MenuSourceType::kKeyboard);
+    return true;
+  } else if (event.key_code() == ui::KeyboardCode::VKEY_SPACE) {
+    NotifyClick(event);
+    return true;
+  }
 
-  views::MenuButton::GetAccessibleNodeData(node_data);
-  node_data->AddStringAttribute(
-      ax::mojom::StringAttribute::kRoleDescription,
-      l10n_util::GetStringUTF8(
-          IDS_ACCNAME_SAVED_TAB_GROUP_BUTTON_ROLE_DESCRIPTION));
+  return false;
 }
 
-void SavedTabGroupButton::OnPaintBackground(gfx::Canvas* canvas) {
+bool SavedTabGroupButton::IsTriggerableEvent(const ui::Event& e) {
+  return e.type() == ui::EventType::kGestureTap ||
+         e.type() == ui::EventType::kGestureTapDown ||
+         event_utils::IsPossibleDispositionEvent(e);
+}
+
+void SavedTabGroupButton::PaintButtonContents(gfx::Canvas* canvas) {
+  if (!GetText().empty()) {
+    return;
+  } else if (is_shared_) {
+    // Not title shared groups display a share icon in place of the squircle we
+    // draw for un-shared groups. See SavedTabGroupButton::UpdateButtonLayout.
+    return;
+  }
+
+  // When the title is empty, we draw a circle similar to the tab group
+  // header when there is no title.
   const ui::ColorProvider* const cp = GetColorProvider();
-  gfx::PointF center_point_f = gfx::PointF(width() / 2, height() / 2);
-  gfx::RectF rect_f = gfx::RectF(width(), height());
-  rect_f.Inset(1.0f);
-
-  // Relies on logic in theme_helper.cc to determine dark/light palette.
-  SkColor background_color =
-      cp->GetColor(GetTabGroupBookmarkColorId(tab_group_color_id_));
   SkColor text_and_outline_color =
-      cp->GetColor(GetTabGroupDialogColorId(tab_group_color_id_));
-  SetEnabledTextColors(text_and_outline_color);
+      cp->GetColor(GetSavedTabGroupOutlineColorId(tab_group_color_id_));
 
-  // Draw background.
+  // Draw squircle (rounded rect).
   cc::PaintFlags flags;
   flags.setAntiAlias(true);
   flags.setStyle(cc::PaintFlags::kFill_Style);
-  flags.setColor(background_color);
-  canvas->DrawRoundRect(rect_f, kButtonRadius, flags);
-
-  // At the time this was written, all non-background elements share the same
-  // color. As such, we can set the color once here.
   flags.setColor(text_and_outline_color);
 
-  if (GetText().empty()) {
-    // When the title is empty, we draw a circle similar to the tab group header
-    // when there is no title.
-    canvas->DrawCircle(gfx::PointF(width() / 2, width() / 2), kCircleRadius / 2,
-                       flags);
+  canvas->DrawRoundRect(gfx::RectF(kEmptyChipInsets, kEmptyChipInsets,
+                                   kEmptyChipSize, kEmptyChipSize),
+                        kEmptyChipCornerRadius, flags);
+}
+
+std::u16string SavedTabGroupButton::GetAccessibleNameForButton() const {
+  const std::u16string& opened_state =
+      local_group_id_.has_value()
+          ? l10n_util::GetStringUTF16(IDS_SAVED_GROUP_AX_LABEL_OPENED)
+          : l10n_util::GetStringUTF16(IDS_SAVED_GROUP_AX_LABEL_CLOSED);
+
+  const std::u16string saved_group_acessible_name =
+      GetText().empty()
+          ? l10n_util::GetStringFUTF16(
+                IDS_GROUP_AX_LABEL_UNNAMED_SAVED_GROUP_FORMAT, opened_state)
+          : l10n_util::GetStringFUTF16(
+                IDS_GROUP_AX_LABEL_NAMED_SAVED_GROUP_FORMAT, GetText(),
+                opened_state);
+  return saved_group_acessible_name;
+}
+
+void SavedTabGroupButton::UpdateCachedTooltipText() {
+  SetCachedTooltipText(GetAccessibleNameForButton());
+}
+
+void SavedTabGroupButton::UpdateAccessibleName() {
+  GetViewAccessibility().SetName(GetAccessibleNameForButton());
+}
+
+void SavedTabGroupButton::SetText(const std::u16string& text) {
+  LabelButton::SetText(text);
+  UpdateAccessibleName();
+  UpdateCachedTooltipText();
+}
+
+void SavedTabGroupButton::SetTextProperties(const SavedTabGroup& group) {
+  GetViewAccessibility().SetName(GetAccessibleNameForButton());
+  SetTooltipText(group.title());
+  SetText(group.title());
+}
+
+void SavedTabGroupButton::UpdateButtonLayout() {
+  SetEnabledTextColorIds(
+      GetSavedTabGroupForegroundColorId(tab_group_color_id_));
+  SetBackground(views::CreateThemedRoundedRectBackground(
+      GetTabGroupBookmarkColorId(tab_group_color_id_), kButtonRadius));
+
+  // Adjust the insets so the share icon can fit within the bounds of this
+  // button if the group has no title.
+  bool use_shared_empty_chip_insets = is_shared_ && GetText().empty();
+  int horizontal_insets =
+      use_shared_empty_chip_insets ? kSharedEmptyChipInsets : kHorizontalInsets;
+  const gfx::Insets& insets =
+      gfx::Insets::VH(kVerticalInsets, horizontal_insets);
+
+  // Only draw a border if the group is open in the tab strip.
+  if (!local_group_id_.has_value()) {
+    SetBorder(views::CreateEmptyBorder(insets));
+  } else {
+    std::unique_ptr<views::Border> border =
+        views::CreateThemedRoundedRectBorder(
+            kBorderThickness, kButtonRadius,
+            GetSavedTabGroupOutlineColorId(tab_group_color_id_));
+    SetBorder(views::CreatePaddedBorder(std::move(border), insets));
   }
 
-  // Draw border.
-  flags.setStyle(cc::PaintFlags::kStroke_Style);
-  flags.setStrokeWidth(kBorderThickness);
-  if (is_group_in_tabstrip_)
-    canvas->DrawRoundRect(rect_f, kBorderRadius, flags);
+  if (is_shared_) {
+    const ui::ColorId icon_color =
+        GetText().empty() ? GetSavedTabGroupOutlineColorId(tab_group_color_id_)
+                          : ui::kColorMenuIcon;
+    SetImageModel(ButtonState::STATE_NORMAL,
+                  ui::ImageModel::FromVectorIcon(kPeopleGroupIcon, icon_color,
+                                                 gfx::kFaviconSize));
+  }
 
-  if (GetState() == STATE_HOVERED) {
-    // TODO: Draw a box shadow on hover.
-    return;
+  if (GetText().empty()) {
+    // When the text is empty force the button to have square dimensions.
+    SetPreferredSize(gfx::Size(kButtonSize, kButtonSize));
+  } else {
+    SetPreferredSize(CalculatePreferredSize({}));
   }
 }
 
 std::unique_ptr<views::LabelButtonBorder>
 SavedTabGroupButton::CreateDefaultBorder() const {
   auto border = std::make_unique<views::LabelButtonBorder>();
-  border->set_insets(ChromeLayoutProvider::Get()->GetInsetsMetric(
-      INSETS_BOOKMARKS_BAR_BUTTON));
   return border;
 }
 
 void SavedTabGroupButton::OnThemeChanged() {
   views::MenuButton::OnThemeChanged();
-
-  // We don't always have a theme provider (ui tests, for example).
-  SkColor text_color = gfx::kPlaceholderColor;
-  const ui::ColorProvider* const cp = GetColorProvider();
-  if (cp) {
-    SkColor background_color =
-        cp->GetColor(GetTabGroupBookmarkColorId(tab_group_color_id_));
-    text_color = cp->GetColor(GetTabGroupDialogColorId(tab_group_color_id_));
-    text_color = color_utils::PickGoogleColor(
-        text_color, background_color,
-        color_utils::kMinimumReadableContrastRatio);
-  }
+  UpdateButtonLayout();
 }
 
-std::unique_ptr<ui::DialogModel>
-SavedTabGroupButton::CreateDialogModelForContextMenu() {
-  ui::DialogModel::Builder dialog_model = ui::DialogModel::Builder();
+void SavedTabGroupButton::WriteDragDataForView(View* sender,
+                                               const gfx::Point& press_pt,
+                                               ui::OSExchangeData* data) {
+  SavedTabGroupButton* const button =
+      views::AsViewClass<SavedTabGroupButton>(sender);
+  CHECK(button);
+  CHECK(button == this);
 
-  for (const SavedTabGroupTab& tab : tabs_) {
-    dialog_model.AddMenuItem(
-        ui::ImageModel::FromImage(tab.favicon), tab.tab_title,
-        base::BindRepeating(
-            [](GURL url,
-               base::RepeatingCallback<content::PageNavigator*()>
-                   page_navigator_callback,
-               int event_flags) {
-              content::OpenURLParams params(
-                  url, content::Referrer(),
-                  WindowOpenDisposition::NEW_FOREGROUND_TAB,
-                  ui::PAGE_TRANSITION_AUTO_BOOKMARK,
-                  /*is_renderer_initiated=*/false,
-                  /*started_from_context_menu=*/true);
-              page_navigator_callback.Run()->OpenURL(params);
-            },
-            tab.url, page_navigator_callback_));
-  }
-
-  return dialog_model.Build();
+  // Write the image and MIME type to the OSExchangeData.
+  SavedTabGroupDragData::WriteToOSExchangeData(this, press_pt,
+                                               GetThemeProvider(), data);
 }
 
-BEGIN_METADATA(SavedTabGroupButton, MenuButton)
+int SavedTabGroupButton::GetDragOperationsForView(View* sender,
+                                                  const gfx::Point& p) {
+  // This may need to become more complicated
+  return ui::DragDropTypes::DRAG_MOVE;
+}
+
+bool SavedTabGroupButton::CanStartDragForView(View* sender,
+                                              const gfx::Point& press_pt,
+                                              const gfx::Point& p) {
+  // Check if we have not moved enough horizontally but we have moved downward
+  // vertically - downward drag.
+  gfx::Vector2d move_offset = p - press_pt;
+  return View::ExceededDragThreshold(move_offset);
+}
+
+BEGIN_METADATA(SavedTabGroupButton)
 END_METADATA
+
+}  // namespace tab_groups

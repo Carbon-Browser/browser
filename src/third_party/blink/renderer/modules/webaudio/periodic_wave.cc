@@ -26,6 +26,13 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
+#include "third_party/blink/renderer/modules/webaudio/periodic_wave.h"
+
 #include <algorithm>
 #include <memory>
 
@@ -33,7 +40,6 @@
 #include "third_party/blink/renderer/bindings/modules/v8/v8_periodic_wave_options.h"
 #include "third_party/blink/renderer/modules/webaudio/base_audio_context.h"
 #include "third_party/blink/renderer/modules/webaudio/oscillator_node.h"
-#include "third_party/blink/renderer/modules/webaudio/periodic_wave.h"
 #include "third_party/blink/renderer/platform/audio/fft_frame.h"
 #include "third_party/blink/renderer/platform/audio/vector_math.h"
 #include "third_party/blink/renderer/platform/bindings/exception_messages.h"
@@ -175,7 +181,7 @@ PeriodicWaveImpl::PeriodicWaveImpl(float sample_rate)
 }
 
 PeriodicWaveImpl::~PeriodicWaveImpl() {
-  AdjustV8ExternalMemory(-static_cast<int64_t>(v8_external_memory_));
+  external_memory_accounter_.Clear(v8::Isolate::GetCurrent());
 }
 
 unsigned PeriodicWaveImpl::PeriodicWaveSize() const {
@@ -392,13 +398,6 @@ unsigned PeriodicWaveImpl::NumberOfPartialsForRange(
   return number_of_partials;
 }
 
-// Tell V8 about the memory we're using so it can properly schedule garbage
-// collects.
-void PeriodicWaveImpl::AdjustV8ExternalMemory(int64_t delta) {
-  v8::Isolate::GetCurrent()->AdjustAmountOfExternalAllocatedMemory(delta);
-  v8_external_memory_ += delta;
-}
-
 // Convert into time-domain wave buffers.  One table is created for each range
 // for non-aliasing playback at different playback rates.  Thus, higher ranges
 // have more high-frequency partials culled out.
@@ -406,8 +405,7 @@ void PeriodicWaveImpl::CreateBandLimitedTables(const float* real_data,
                                                const float* imag_data,
                                                unsigned number_of_components,
                                                bool disable_normalization) {
-  // TODO(rtoy): Figure out why this needs to be 0.5 when normalization is
-  // disabled.
+  // The default scale factor for when normalization is disabled.
   float normalization_scale = 0.5;
 
   unsigned fft_size = PeriodicWaveSize();
@@ -416,7 +414,7 @@ void PeriodicWaveImpl::CreateBandLimitedTables(const float* real_data,
 
   number_of_components = std::min(number_of_components, half_size);
 
-  band_limited_tables_.ReserveCapacity(NumberOfRanges());
+  band_limited_tables_.reserve(NumberOfRanges());
 
   FFTFrame frame(fft_size);
   for (unsigned range_index = 0; range_index < NumberOfRanges();
@@ -432,9 +430,11 @@ void PeriodicWaveImpl::CreateBandLimitedTables(const float* real_data,
     // arrays.  Need to scale the data by fftSize to remove the scaling that the
     // inverse IFFT would do.
     float scale = fft_size;
-    vector_math::Vsmul(real_data, 1, &scale, real.Data(), 1, number_of_components);
+    vector_math::Vsmul(
+        real_data, 1, &scale, real.Data(), 1, number_of_components);
     scale = -scale;
-    vector_math::Vsmul(imag_data, 1, &scale, imag.Data(), 1, number_of_components);
+    vector_math::Vsmul(
+        imag_data, 1, &scale, imag.Data(), 1, number_of_components);
 
     // Find the starting bin where we should start culling.  We need to clear
     // out the highest frequencies to band-limit the waveform.
@@ -457,7 +457,8 @@ void PeriodicWaveImpl::CreateBandLimitedTables(const float* real_data,
     unsigned wave_size = PeriodicWaveSize();
     std::unique_ptr<AudioFloatArray> table =
         std::make_unique<AudioFloatArray>(wave_size);
-    AdjustV8ExternalMemory(wave_size * sizeof(float));
+    external_memory_accounter_.Increase(v8::Isolate::GetCurrent(),
+                                        wave_size * sizeof(float));
     band_limited_tables_.push_back(std::move(table));
 
     // Apply an inverse FFT to generate the time-domain table data.
@@ -552,8 +553,6 @@ void PeriodicWaveImpl::GenerateBasicWaveform(int shape) {
         break;
       default:
         NOTREACHED();
-        b = 0;
-        break;
     }
 
     real_p[n] = 0;

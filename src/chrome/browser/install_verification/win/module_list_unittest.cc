@@ -1,19 +1,20 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/install_verification/win/module_list.h"
 
 #include <Windows.h>
+
 #include <stddef.h>
 
 #include <memory>
+#include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
 #include "base/win/win_util.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/cleanup/cleanup.h"
 
 TEST(ModuleListTest, TestCase) {
   std::vector<HMODULE> snapshot;
@@ -33,8 +34,7 @@ TEST(ModuleListTest, TestCase) {
 
   HMODULE new_dll = ::LoadLibrary(L"msvidc32.dll");
   ASSERT_NE(static_cast<HMODULE>(NULL), new_dll);
-  base::ScopedClosureRunner release_new_dll(
-      base::BindOnce(base::IgnoreResult(&::FreeLibrary), new_dll));
+  absl::Cleanup release_new_dll = [new_dll] { ::FreeLibrary(new_dll); };
 
   // Verify that there is an increase in the snapshot size.
   ASSERT_TRUE(
@@ -43,7 +43,7 @@ TEST(ModuleListTest, TestCase) {
   ASSERT_GT(module_list->size(), original_list_size);
 
   // Unload the module.
-  release_new_dll.RunAndReset();
+  std::move(release_new_dll).Invoke();
 
   // Reset module_list here. That should typically be the last ref on
   // msvidc32.dll, so it will be unloaded now.

@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,32 +11,26 @@
 
 namespace features {
 
-MEDIA_EXPORT extern const base::Feature kAudioServiceOutOfProcessKillAtHang;
-MEDIA_EXPORT extern const base::Feature kDumpOnAudioServiceHang;
+MEDIA_EXPORT BASE_DECLARE_FEATURE(kAudioServiceOutOfProcessKillAtHang);
+MEDIA_EXPORT BASE_DECLARE_FEATURE(kDumpOnAudioServiceHang);
 
 #if BUILDFLAG(IS_ANDROID)
-MEDIA_EXPORT extern const base::Feature kUseAAudioDriver;
-#endif
-
-#if BUILDFLAG(IS_CHROMEOS)
-MEDIA_EXPORT extern const base::Feature kCrOSSystemAEC;
-MEDIA_EXPORT extern const base::Feature kCrOSSystemAECDeactivatedGroups;
-MEDIA_EXPORT extern const base::Feature kCrOSEnforceSystemAecNsAgc;
-MEDIA_EXPORT extern const base::Feature kCrOSEnforceSystemAecNs;
-MEDIA_EXPORT extern const base::Feature kCrOSEnforceSystemAecAgc;
-MEDIA_EXPORT extern const base::Feature kCrOSEnforceSystemAec;
-MEDIA_EXPORT extern const base::Feature kCrOSDspBasedAecDeactivatedGroups;
-MEDIA_EXPORT extern const base::Feature kCrOSDspBasedNsDeactivatedGroups;
-MEDIA_EXPORT extern const base::Feature kCrOSDspBasedAgcDeactivatedGroups;
-MEDIA_EXPORT extern const base::Feature kCrOSDspBasedAecAllowed;
-MEDIA_EXPORT extern const base::Feature kCrOSDspBasedNsAllowed;
-MEDIA_EXPORT extern const base::Feature kCrOSDspBasedAgcAllowed;
+MEDIA_EXPORT BASE_DECLARE_FEATURE(kUseAAudioDriver);
+MEDIA_EXPORT BASE_DECLARE_FEATURE(kUseAAudioInput);
 #endif
 
 #if BUILDFLAG(IS_WIN)
-MEDIA_EXPORT extern const base::Feature kAllowIAudioClient3;
+MEDIA_EXPORT BASE_DECLARE_FEATURE(kAllowIAudioClient3);
 #endif
 
 }  // namespace features
+
+namespace media {
+
+// Returns true if system audio loopback capture is implemented for the current
+// OS.
+MEDIA_EXPORT bool IsSystemLoopbackCaptureSupported();
+
+}  // namespace media
 
 #endif  // MEDIA_AUDIO_AUDIO_FEATURES_H_

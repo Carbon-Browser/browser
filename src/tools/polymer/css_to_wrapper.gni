@@ -1,4 +1,4 @@
-# Copyright 2022 The Chromium Authors. All rights reserved.
+# Copyright 2022 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -16,6 +16,10 @@ template("css_to_wrapper") {
     outputs = []
 
     wrapper_extension = ".ts"
+
+    if (defined(invoker.use_js) && invoker.use_js) {
+      wrapper_extension = ".js"
+    }
 
     in_folder = "."
     if (defined(invoker.in_folder)) {
@@ -44,6 +48,14 @@ template("css_to_wrapper") {
              rebase_path(out_folder, root_build_dir),
              "--in_files",
            ] + invoker.in_files
+
+    if (is_ios) {
+      args += [ "--is_ios" ]
+    }
+
+    if (defined(invoker.use_js) && invoker.use_js) {
+      args += [ "--use_js" ]
+    }
 
     if (defined(invoker.minify) && invoker.minify) {
       args += [ "--minify" ]

@@ -1,10 +1,10 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "cc/paint/skottie_wrapper.h"
 
-#include "base/check.h"
+#include "base/notreached.h"
 
 namespace cc {
 
@@ -13,17 +13,15 @@ namespace cc {
 // a concrete SkottieWrapper implementation is not required.
 
 // static
-scoped_refptr<SkottieWrapper> SkottieWrapper::CreateSerializable(
+scoped_refptr<SkottieWrapper> SkottieWrapper::UnsafeCreateSerializable(
     std::vector<uint8_t> data) {
-  CHECK(false) << "Skottie is not supported on this platform";
-  return nullptr;
+  NOTREACHED() << "Skottie is not supported on this platform";
 }
 
 // static
-scoped_refptr<SkottieWrapper> SkottieWrapper::CreateNonSerializable(
+scoped_refptr<SkottieWrapper> SkottieWrapper::UnsafeCreateNonSerializable(
     base::span<const uint8_t> data) {
-  CHECK(false) << "Skottie is not supported on this platform";
-  return nullptr;
+  NOTREACHED() << "Skottie is not supported on this platform";
 }
 
 }  // namespace cc

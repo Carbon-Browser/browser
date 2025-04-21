@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,8 +21,6 @@ namespace content {
 // GENERATED_JAVA_ENUM_PACKAGE: org.chromium.content_public.browser
 // GENERATED_JAVA_CLASS_NAME_OVERRIDE: ClientDataRequestType
 enum class ClientDataRequestType {
-  kU2fRegister,
-  kU2fSign,
   kWebAuthnCreate,
   kWebAuthnGet,
   kPaymentGet,
@@ -32,6 +30,7 @@ enum class ClientDataRequestType {
 struct CONTENT_EXPORT ClientDataJsonParams {
   ClientDataJsonParams(ClientDataRequestType type,
                        url::Origin origin,
+                       url::Origin top_origin,
                        std::vector<uint8_t> challenge,
                        bool is_cross_origin_iframe = false);
   ClientDataJsonParams(ClientDataJsonParams&&);
@@ -40,13 +39,13 @@ struct CONTENT_EXPORT ClientDataJsonParams {
 
   ClientDataRequestType type;
   url::Origin origin;
+  url::Origin top_origin;
   std::vector<uint8_t> challenge;
   bool is_cross_origin_iframe = false;
 
   // The following fields are only set if `type` is `kPaymentGet`.
   blink::mojom::PaymentOptionsPtr payment_options = nullptr;
   std::string payment_rp;
-  std::string payment_top_origin;
 };
 
 // Builds the CollectedClientData[1] dictionary with the given values,

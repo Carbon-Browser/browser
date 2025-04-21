@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -55,6 +55,7 @@ class CdmHostProxy {
                                             cdm::Status decoder_status) = 0;
   virtual cdm::FileIO* CreateFileIO(cdm::FileIOClient* client) = 0;
   virtual void RequestStorageId(uint32_t version) = 0;
+  virtual void ReportMetrics(cdm::MetricName metric_name, uint64_t value) = 0;
 };
 
 }  // namespace media

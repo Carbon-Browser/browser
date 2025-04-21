@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,6 +18,8 @@ class UI_ANDROID_EXPORT Resource {
 
   Resource();
   virtual ~Resource();
+
+  constexpr static int kInvalidResourceId = 0;
 
   virtual std::unique_ptr<Resource> CreateForCopy();
   void SetUIResource(std::unique_ptr<cc::ScopedUIResource> ui_resource,

@@ -1,24 +1,28 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/omnibox/browser/autocomplete_match_type.h"
 
+#include <array>
+
 #include "base/check.h"
 #include "base/notreached.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "components/omnibox/browser/actions/omnibox_action.h"
 #include "components/omnibox/browser/autocomplete_match.h"
 #include "components/omnibox/browser/omnibox_field_trial.h"
 #include "components/omnibox/browser/omnibox_popup_selection.h"
 #include "components/omnibox/browser/suggestion_answer.h"
+#include "components/omnibox/common/omnibox_feature_configs.h"
 #include "components/strings/grit/components_strings.h"
 #include "ui/base/l10n/l10n_util.h"
 
 // static
 std::string AutocompleteMatchType::ToString(AutocompleteMatchType::Type type) {
   // clang-format off
-  const char* strings[] = {
+  static constexpr auto strings = std::to_array<const char*>({
     "url-what-you-typed",
     "history-url",
     "history-title",
@@ -51,9 +55,16 @@ std::string AutocompleteMatchType::ToString(AutocompleteMatchType::Type type) {
     "navsuggest-tiles",
     "open-tab",
     "history-cluster",
-  };
+    "null-result-message",
+    "starter-pack",
+    "most-visited-site-tile",
+    "organic-repeatable-query-tile",
+    "history-embeddings",
+    "featured-enterprise-search",
+    "history-embeddings-answer",
+  });
   // clang-format on
-  static_assert(std::size(strings) == AutocompleteMatchType::NUM_TYPES,
+  static_assert(strings.size() == AutocompleteMatchType::NUM_TYPES,
                 "strings array must have NUM_TYPES elements");
   return strings[type];
 }
@@ -97,7 +108,7 @@ std::u16string GetAccessibilityBaseLabel(const AutocompleteMatch& match,
                                          const std::u16string& match_text,
                                          int* label_prefix_length) {
   // Types with a message ID of zero get |text| returned as-is.
-  static constexpr int message_ids[] = {
+  static constexpr auto message_ids = std::to_array<int>({
       0,                             // URL_WHAT_YOU_TYPED
       IDS_ACC_AUTOCOMPLETE_HISTORY,  // HISTORY_URL
       IDS_ACC_AUTOCOMPLETE_HISTORY,  // HISTORY_TITLE
@@ -141,7 +152,14 @@ std::u16string GetAccessibilityBaseLabel(const AutocompleteMatch& match,
       0,                                     // TILE_NAVSUGGEST
       0,                                     // OPEN_TAB
       0,                                     // HISTORY_CLUSTER
-  };
+      0,                                     // NULL_RESULT_MESSAGE
+      0,                                     // STARTER_PACK
+      0,                                     // TILE_MOST_VISITED_SITE
+      0,                                     // TILE_REPEATABLE_QUERY
+      IDS_ACC_AUTOCOMPLETE_HISTORY,          // HISTORY_EMBEDDINGS
+      0,                                     // FEATURED_ENTERPRISE_SEARCH
+      0,                                     // HISTORY_EMBEDDINGS_ANSWER
+  });
   static_assert(std::size(message_ids) == AutocompleteMatchType::NUM_TYPES,
                 "message_ids must have NUM_TYPES elements");
 
@@ -153,6 +171,12 @@ std::u16string GetAccessibilityBaseLabel(const AutocompleteMatch& match,
     std::u16string doc_string =
         match.contents + u", " + match.description + u", " + match_text;
     return doc_string;
+  }
+
+  // Standalone action suggestions must use the associated accessibility hint.
+  if (match.type == AutocompleteMatchType::PEDAL) {
+    DCHECK(match.takeover_action);
+    return match.takeover_action->GetLabelStrings().accessibility_hint;
   }
 
   int message = message_ids[match.type];
@@ -168,8 +192,11 @@ std::u16string GetAccessibilityBaseLabel(const AutocompleteMatch& match,
       // Search match.
       // If additional descriptive text exists with a search, treat as search
       // with immediate answer, such as Weather in Boston: 53 degrees.
-      if (match.answer) {
-        description = match.answer->second_line().AccessibleText();
+      if (match.answer_template.has_value()) {
+        omnibox::FormattedString subhead =
+            match.answer_template->answers(0).subhead();
+        description = base::UTF8ToUTF16(
+            subhead.has_a11y_text() ? subhead.a11y_text() : subhead.text());
         has_description = true;
         message = IDS_ACC_AUTOCOMPLETE_QUICK_ANSWER;
       }
@@ -203,7 +230,6 @@ std::u16string GetAccessibilityBaseLabel(const AutocompleteMatch& match,
       break;
     default:
       NOTREACHED();
-      break;
   }
 
   // Get the length of friendly text inserted before the actual suggested match.

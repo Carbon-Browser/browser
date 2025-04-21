@@ -1,15 +1,17 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/settings/stub_cros_settings_provider.h"
 
-#include "ash/components/settings/cros_settings_names.h"
+#include <string_view>
+
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/values.h"
-#include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/ash/settings/device_settings_provider.h"
+#include "chromeos/ash/components/settings/cros_settings.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
 
 namespace ash {
 
@@ -24,16 +26,14 @@ StubCrosSettingsProvider::StubCrosSettingsProvider()
   SetDefaults();
 }
 
-StubCrosSettingsProvider::~StubCrosSettingsProvider() {
-}
+StubCrosSettingsProvider::~StubCrosSettingsProvider() = default;
 
-const base::Value* StubCrosSettingsProvider::Get(
-    const std::string& path) const {
+const base::Value* StubCrosSettingsProvider::Get(std::string_view path) const {
   DCHECK(HandlesSetting(path));
   const base::Value* value;
   if (values_.GetValue(path, &value))
     return value;
-  return NULL;
+  return nullptr;
 }
 
 CrosSettingsProvider::TrustedStatus
@@ -43,7 +43,7 @@ StubCrosSettingsProvider::PrepareTrustedValues(base::OnceClosure* callback) {
   return trusted_status_;
 }
 
-bool StubCrosSettingsProvider::HandlesSetting(const std::string& path) const {
+bool StubCrosSettingsProvider::HandlesSetting(std::string_view path) const {
   return DeviceSettingsProvider::IsDeviceSetting(path);
 }
 

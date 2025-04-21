@@ -1,4 +1,4 @@
-# Copyright 2021 The Chromium Authors. All rights reserved.
+# Copyright 2021 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 """The primary module for the suite of mini_installer integration tests.
@@ -221,10 +221,10 @@ def RunCleanCommand(force_clean, clean_state, variable_expander):
     """
     # A list of (product_name, product_switch) tuples for the possible installed
     # products.
-    data = [
-        ('$CHROME_LONG_NAME', ''),
-        ('$CHROME_LONG_NAME', '--system-level'),
-    ]
+    data = [('$CHROME_LONG_NAME', '')]
+    # Chrome for Testing does not support system-level installs.
+    if variable_expander.Expand('$BRAND') != 'Google Chrome for Testing':
+        data.extend([('$CHROME_LONG_NAME', '--system-level')])
     if variable_expander.Expand('$BRAND') == 'Google Chrome':
         data.extend([('$CHROME_LONG_NAME_BETA', ''),
                      ('$CHROME_LONG_NAME_BETA', '--system-level'),

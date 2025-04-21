@@ -1,8 +1,11 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include "content/browser/webauth/client_data_json.h"
+
 #include <jni.h>
+
 #include <cstddef>
 #include <cstring>
 #include <utility>
@@ -10,12 +13,14 @@
 
 #include "base/android/jni_android.h"
 #include "base/android/jni_array.h"
+#include "base/android/jni_bytebuffer.h"
 #include "base/android/jni_string.h"
 #include "base/android/scoped_java_ref.h"
 #include "base/containers/span.h"
-#include "content/browser/webauth/client_data_json.h"
-#include "content/public/android/content_jni_headers/ClientDataJsonImpl_jni.h"
 #include "third_party/blink/public/mojom/webauthn/authenticator.mojom.h"
+
+// Must come after all headers that specialize FromJniType() / ToJniType().
+#include "content/public/android/content_jni_headers/ClientDataJsonImpl_jni.h"
 
 namespace content {
 namespace {
@@ -29,15 +34,13 @@ void DeserializePaymentOptionsFromJavaByteBuffer(
     *out = nullptr;
     return;
   }
-  jbyte* buf_in =
-      static_cast<jbyte*>(env->GetDirectBufferAddress(jbuffer.obj()));
-  jlong buf_size = env->GetDirectBufferCapacity(jbuffer.obj());
-  if (buf_size == 0) {
+  base::span<const uint8_t> span =
+      base::android::JavaByteBufferToSpan(env, jbuffer.obj());
+  if (span.empty()) {
     *out = nullptr;
     return;
   }
-  bool success =
-      blink::mojom::PaymentOptions::Deserialize(buf_in, buf_size, out);
+  bool success = blink::mojom::PaymentOptions::Deserialize(span, out);
   DCHECK(success);
 }
 
@@ -52,7 +55,7 @@ JNI_ClientDataJsonImpl_BuildClientDataJson(
     jboolean jis_cross_origin,
     const base::android::JavaParamRef<jobject>& joptions_byte_buffer,
     const base::android::JavaParamRef<jstring>& jrelying_party_id,
-    const base::android::JavaParamRef<jstring>& jtop_origin) {
+    const base::android::JavaParamRef<jobject>& jtop_origin) {
   ClientDataRequestType type =
       static_cast<ClientDataRequestType>(jclient_data_request_type);
   std::string caller_origin =
@@ -69,16 +72,13 @@ JNI_ClientDataJsonImpl_BuildClientDataJson(
       jrelying_party_id
           ? base::android::ConvertJavaStringToUTF8(env, jrelying_party_id)
           : "";
-  std::string top_origin =
-      jtop_origin ? base::android::ConvertJavaStringToUTF8(env, jtop_origin)
-                  : "";
 
   ClientDataJsonParams client_data_json_params(
       /*type=*/type, /*origin=*/url::Origin::Create(GURL(caller_origin)),
+      /*top_origin=*/url::Origin::FromJavaObject(env, jtop_origin),
       /*challenge=*/challenge, /*is_cross_origin_iframe=*/is_cross_origin);
   client_data_json_params.payment_options = std::move(options);
   client_data_json_params.payment_rp = relying_party_id;
-  client_data_json_params.payment_top_origin = top_origin;
   std::string client_data_json =
       BuildClientDataJson(std::move(client_data_json_params));
   return base::android::ConvertUTF8ToJavaString(env, client_data_json);

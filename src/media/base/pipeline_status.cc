@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -39,7 +39,6 @@ std::string PipelineStatusToString(const PipelineStatus& status) {
 #undef STRINGIFY_STATUS_CASE
 
   NOTREACHED();
-  return "";
 }
 
 std::ostream& operator<<(std::ostream& out, const PipelineStatus& status) {

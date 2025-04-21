@@ -1,12 +1,13 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef BASE_STRINGS_PATTERN_H_
 #define BASE_STRINGS_PATTERN_H_
 
+#include <string_view>
+
 #include "base/base_export.h"
-#include "base/strings/string_piece.h"
 
 namespace base {
 
@@ -15,8 +16,10 @@ namespace base {
 //
 // The backslash character (\) is an escape character for * and ?.
 // ? matches 0 or 1 character, while * matches 0 or more characters.
-BASE_EXPORT bool MatchPattern(StringPiece string, StringPiece pattern);
-BASE_EXPORT bool MatchPattern(StringPiece16 string, StringPiece16 pattern);
+BASE_EXPORT bool MatchPattern(std::string_view string,
+                              std::string_view pattern);
+BASE_EXPORT bool MatchPattern(std::u16string_view string,
+                              std::u16string_view pattern);
 
 }  // namespace base
 

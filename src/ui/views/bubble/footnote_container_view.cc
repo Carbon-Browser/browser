@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -71,8 +71,9 @@ FootnoteContainerView::~FootnoteContainerView() = default;
 
 void FootnoteContainerView::SetCornerRadius(float corner_radius) {
   corner_radius_ = corner_radius;
-  if (GetWidget())
+  if (GetWidget()) {
     ResetBackground();
+  }
 }
 
 void FootnoteContainerView::OnThemeChanged() {
@@ -87,8 +88,9 @@ void FootnoteContainerView::ChildVisibilityChanged(View* child) {
 }
 
 void FootnoteContainerView::ResetBackground() {
-  if (!GetWidget())
+  if (!GetWidget()) {
     return;
+  }
   SkColor background_color =
       GetColorProvider()->GetColor(ui::kColorBubbleFooterBackground);
   SetBackground(std::make_unique<HalfRoundedRectBackground>(background_color,
@@ -96,14 +98,15 @@ void FootnoteContainerView::ResetBackground() {
 }
 
 void FootnoteContainerView::ResetBorder() {
-  if (!GetWidget())
+  if (!GetWidget()) {
     return;
+  }
   SetBorder(CreateSolidSidedBorder(
       gfx::Insets::TLBR(1, 0, 0, 0),
       GetColorProvider()->GetColor(ui::kColorBubbleFooterBorder)));
 }
 
-BEGIN_METADATA(FootnoteContainerView, View)
+BEGIN_METADATA(FootnoteContainerView)
 END_METADATA
 
 }  // namespace views

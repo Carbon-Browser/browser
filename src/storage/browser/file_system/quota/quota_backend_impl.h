@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,8 +8,9 @@
 #include <stdint.h>
 
 #include "base/component_export.h"
+#include "base/files/file_error_or.h"
 #include "base/memory/raw_ptr.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "storage/browser/file_system/quota/quota_reservation_manager.h"
 #include "storage/browser/file_system/sandbox_file_system_backend_delegate.h"
@@ -79,9 +80,8 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) QuotaBackendImpl
                                           int64_t quota);
 
   void ReserveQuotaInternal(const QuotaReservationInfo& info);
-  base::File::Error GetUsageCachePath(const url::Origin& origin,
-                                      FileSystemType type,
-                                      base::FilePath* usage_file_path);
+  base::FileErrorOr<base::FilePath> GetUsageCachePath(const url::Origin& origin,
+                                                      FileSystemType type);
 
   const scoped_refptr<base::SequencedTaskRunner> file_task_runner_;
 

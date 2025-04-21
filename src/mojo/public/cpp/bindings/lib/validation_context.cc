@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -33,15 +33,15 @@ ValidationContext::ValidationContext(const void* data,
   // uint32_t causes overflow.
   // They shouldn't happen but they do, set the corresponding range to empty.
   if (data_end_ < data_begin_) {
-    NOTREACHED();
+    DUMP_WILL_BE_NOTREACHED();
     data_end_ = data_begin_;
   }
   if (handle_end_ < num_handles) {
-    NOTREACHED();
+    DUMP_WILL_BE_NOTREACHED();
     handle_end_ = 0;
   }
   if (associated_endpoint_handle_end_ < num_associated_endpoint_handles) {
-    NOTREACHED();
+    DUMP_WILL_BE_NOTREACHED();
     associated_endpoint_handle_end_ = 0;
   }
 }

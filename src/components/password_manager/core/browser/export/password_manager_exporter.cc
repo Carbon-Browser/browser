@@ -1,23 +1,25 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/password_manager/core/browser/export/password_manager_exporter.h"
 
+#include <string_view>
 #include <utility>
+#include <vector>
 
-#include "base/bind.h"
 #include "base/containers/flat_set.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/strings/utf_string_conversions.h"
 #include "base/task/lazy_thread_pool_task_runner.h"
-#include "base/task/task_runner_util.h"
 #include "build/build_config.h"
 #include "components/password_manager/core/browser/export/password_csv_writer.h"
 #include "components/password_manager/core/browser/password_manager_metrics_util.h"
 #include "components/password_manager/core/browser/ui/credential_ui_entry.h"
-#include "components/password_manager/core/browser/ui/saved_passwords_presenter.h"
+#include "components/password_manager/core/browser/ui/passwords_provider.h"
 
 namespace password_manager {
 
@@ -41,15 +43,16 @@ bool DoWriteOnTaskRunner(
         set_permissions_function,
     const base::FilePath& destination,
     const std::string& serialised) {
-  if (!write_function.Run(destination, serialised))
+  if (!write_function.Run(destination, serialised)) {
     return false;
+  }
 
   // Set file permissions. This is a no-op outside of Posix.
   set_permissions_function.Run(destination, 0600 /* -rw------- */);
   return true;
 }
 
-bool DefaultWriteFunction(const base::FilePath& file, base::StringPiece data) {
+bool DefaultWriteFunction(const base::FilePath& file, std::string_view data) {
   return base::WriteFile(file, data);
 }
 
@@ -60,13 +63,15 @@ bool DefaultDeleteFunction(const base::FilePath& file) {
 }  // namespace
 
 PasswordManagerExporter::PasswordManagerExporter(
-    SavedPasswordsPresenter* presenter,
-    ProgressCallback on_progress)
-    : presenter_(presenter),
+    PasswordsProvider* provider,
+    ProgressCallback on_progress,
+    base::OnceClosure completion_callback)
+    : provider_(provider),
       on_progress_(std::move(on_progress)),
-      last_progress_status_(ExportProgressStatus::NOT_STARTED),
+      last_progress_status_(ExportProgressStatus::kNotStarted),
       write_function_(base::BindRepeating(&DefaultWriteFunction)),
       delete_function_(base::BindRepeating(&DefaultDeleteFunction)),
+      completion_callback_(std::move(completion_callback)),
 #if BUILDFLAG(IS_POSIX)
       set_permissions_function_(
           base::BindRepeating(base::SetPosixFilePermissions)),
@@ -80,32 +85,34 @@ PasswordManagerExporter::PasswordManagerExporter(
 PasswordManagerExporter::~PasswordManagerExporter() = default;
 
 void PasswordManagerExporter::PreparePasswordsForExport() {
-  DCHECK_EQ(GetProgressStatus(), ExportProgressStatus::NOT_STARTED);
+  DCHECK_EQ(GetProgressStatus(), ExportProgressStatus::kNotStarted);
 
-  std::vector<CredentialUIEntry> credentials =
-      presenter_->GetSavedCredentials();
+  std::vector<CredentialUIEntry> credentials = provider_->GetSavedCredentials();
   // Clear blocked credentials.
-  base::EraseIf(credentials, [](const auto& credential) {
+  std::erase_if(credentials, [](const auto& credential) {
     return credential.blocked_by_user;
   });
 
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE,
-      base::BindOnce(&PasswordCSVWriter::SerializePasswords, credentials),
+  size_t credentials_size = credentials.size();
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
+      base::BindOnce(&PasswordCSVWriter::SerializePasswords,
+                     std::move(credentials)),
       base::BindOnce(&PasswordManagerExporter::SetSerialisedPasswordList,
-                     weak_factory_.GetWeakPtr(), credentials.size()));
+                     weak_factory_.GetWeakPtr(), credentials_size));
 }
 
 void PasswordManagerExporter::SetDestination(
     const base::FilePath& destination) {
-  DCHECK_EQ(GetProgressStatus(), ExportProgressStatus::NOT_STARTED);
+  DCHECK_EQ(GetProgressStatus(), ExportProgressStatus::kNotStarted);
 
   destination_ = destination;
 
-  if (IsReadyForExport())
+  if (IsReadyForExport()) {
     Export();
+  }
 
-  OnProgress(ExportProgressStatus::IN_PROGRESS, std::string());
+  OnProgress({.status = ExportProgressStatus::kInProgress});
 }
 
 void PasswordManagerExporter::SetSerialisedPasswordList(
@@ -113,8 +120,9 @@ void PasswordManagerExporter::SetSerialisedPasswordList(
     const std::string& serialised) {
   serialised_password_list_ = serialised;
   password_count_ = count;
-  if (IsReadyForExport())
+  if (IsReadyForExport()) {
     Export();
+  }
 }
 
 void PasswordManagerExporter::Cancel() {
@@ -123,11 +131,14 @@ void PasswordManagerExporter::Cancel() {
 
   // If we are currently still serialising, Export() will see the cancellation
   // status and won't schedule writing.
-  OnProgress(ExportProgressStatus::FAILED_CANCELLED, std::string());
+  OnProgress({.status = ExportProgressStatus::kFailedCancelled});
 
   // If we are currently writing to the disk, we will have to cleanup the file
   // once writing stops.
   Cleanup();
+
+  // Resets the unique pointer to the current object instance.
+  std::move(completion_callback_).Run();
 }
 
 ExportProgressStatus PasswordManagerExporter::GetProgressStatus() {
@@ -155,13 +166,13 @@ bool PasswordManagerExporter::IsReadyForExport() {
 void PasswordManagerExporter::Export() {
   // If cancelling was requested while we were serialising the passwords, don't
   // write anything to the disk.
-  if (GetProgressStatus() == ExportProgressStatus::FAILED_CANCELLED) {
+  if (GetProgressStatus() == ExportProgressStatus::kFailedCancelled) {
     serialised_password_list_.clear();
     return;
   }
 
-  base::PostTaskAndReplyWithResult(
-      task_runner_.get(), FROM_HERE,
+  task_runner_->PostTaskAndReplyWithResult(
+      FROM_HERE,
       base::BindOnce(DoWriteOnTaskRunner, write_function_,
                      set_permissions_function_, destination_,
                      std::move(serialised_password_list_)),
@@ -171,19 +182,29 @@ void PasswordManagerExporter::Export() {
 
 void PasswordManagerExporter::OnPasswordsExported(bool success) {
   if (success) {
-    OnProgress(ExportProgressStatus::SUCCEEDED, std::string());
+#if !BUILDFLAG(IS_WIN)
+    std::string file_path = destination_.value();
+#else
+    std::string file_path = base::WideToUTF8(destination_.value());
+#endif
+    OnProgress(
+        {.status = ExportProgressStatus::kSucceeded, .file_path = file_path});
+
   } else {
-    OnProgress(ExportProgressStatus::FAILED_WRITE_FAILED,
-               destination_.DirName().BaseName().AsUTF8Unsafe());
+    OnProgress(
+        {.status = ExportProgressStatus::kFailedWrite,
+         .folder_name = destination_.DirName().BaseName().AsUTF8Unsafe()});
     // Don't leave partial password files, if we tell the user we couldn't write
     Cleanup();
   }
+
+  // Resets the unique pointer to the current object instance.
+  std::move(completion_callback_).Run();
 }
 
-void PasswordManagerExporter::OnProgress(ExportProgressStatus status,
-                                         const std::string& folder) {
-  last_progress_status_ = status;
-  on_progress_.Run(status, folder);
+void PasswordManagerExporter::OnProgress(const PasswordExportInfo& progress) {
+  last_progress_status_ = progress.status;
+  on_progress_.Run(progress);
 }
 
 void PasswordManagerExporter::Cleanup() {
@@ -191,8 +212,8 @@ void PasswordManagerExporter::Cleanup() {
   // executed, e.g. because a new export was initiated. The cleanup should be
   // carried out regardless, so we only schedule tasks which own their
   // arguments.
-  // TODO(crbug.com/811779) When Chrome is overwriting an existing file, cancel
-  // should restore the file rather than delete it.
+  // TODO(crbug.com/41370350) When Chrome is overwriting an existing file,
+  // cancel should restore the file rather than delete it.
   if (!destination_.empty()) {
     task_runner_->PostTask(
         FROM_HERE,

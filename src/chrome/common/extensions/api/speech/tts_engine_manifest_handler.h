@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -32,7 +32,7 @@ struct TtsVoice {
 struct TtsVoices : public Extension::ManifestData {
   TtsVoices();
   ~TtsVoices() override;
-  static bool Parse(base::Value::ConstListView tts_voices,
+  static bool Parse(const base::Value::List& tts_voices,
                     TtsVoices* out_voices,
                     std::u16string* error,
                     Extension* extension);
@@ -40,10 +40,10 @@ struct TtsVoices : public Extension::ManifestData {
   std::vector<extensions::TtsVoice> voices;
 
   // The sample rate at which this engine encodes its audio data.
-  absl::optional<int> sample_rate;
+  std::optional<int> sample_rate;
 
   // The number of samples in one audio buffer.
-  absl::optional<int> buffer_size;
+  std::optional<int> buffer_size;
 
   static const std::vector<TtsVoice>* GetTtsVoices(const Extension* extension);
   static const TtsVoices* GetTtsEngineInfo(const Extension* extension);

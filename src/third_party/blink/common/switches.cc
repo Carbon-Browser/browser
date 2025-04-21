@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@ namespace blink {
 namespace switches {
 
 // Allows processing of input before a frame has been committed.
-// TODO(schenney): crbug.com/987626. Used by headless. Look for a way not
+// TODO(crbug.com/987626): Used by headless. Look for a way not
 // involving a command line switch.
 const char kAllowPreCommitInput[] = "allow-pre-commit-input";
 
@@ -29,9 +29,16 @@ const char kBlinkSettings[] = "blink-settings";
 // the contrast.
 const char kDarkModeSettings[] = "dark-mode-settings";
 
+// Overrides data: URLs in SVGUseElement deprecation through enterprise policy.
+const char kDataUrlInSvgUseEnabled[] = "data-url-in-svg-use-enabled";
+
 // Sets the tile size used by composited layers.
 const char kDefaultTileWidth[] = "default-tile-width";
 const char kDefaultTileHeight[] = "default-tile-height";
+
+// If set, the unload event cannot be disabled by default by Permissions-Policy.
+const char kForcePermissionPolicyUnloadDefaultEnabled[] =
+    "force-permission-policy-unload-default-enabled";
 
 // Disallow image animations to be reset to the beginning to avoid skipping
 // many frames. Only effective if compositor image animations are enabled.
@@ -53,9 +60,6 @@ const char kDisablePreferCompositingToLCDText[] =
 // Disables RGBA_4444 textures.
 const char kDisableRGBA4444Textures[] = "disable-rgba-4444-textures";
 
-// Disable multithreaded, compositor scrolling of web content.
-const char kDisableThreadedScrolling[] = "disable-threaded-scrolling";
-
 // Disable rasterizer that writes directly to GPU memory associated with tiles.
 const char kDisableZeroCopy[] = "disable-zero-copy";
 
@@ -66,6 +70,11 @@ const char kDumpRuntimeCallStats[] = "dump-blink-runtime-call-stats";
 // Specify that all compositor resources should be backed by GPU memory buffers.
 const char kEnableGpuMemoryBufferCompositorResources[] =
     "enable-gpu-memory-buffer-compositor-resources";
+
+// Enables taking a heap snapshot and dumping it to file when using leak
+// detection.
+const char kEnableLeakDetectionHeapSnapshot[] =
+    "enable-leak-detection-heap-snapshot";
 
 // When using CPU rasterizing generate low resolution tiling. Low res
 // tiles may be displayed during fast scrolls especially on slower devices.
@@ -100,6 +109,19 @@ extern const char kIntensiveWakeUpThrottlingPolicy[] =
 extern const char kIntensiveWakeUpThrottlingPolicy_ForceDisable[] = "0";
 extern const char kIntensiveWakeUpThrottlingPolicy_ForceEnable[] = "1";
 
+// Used to communicate managed policy for KeyboardFocusableScrollers feature.
+// This feature is typically controlled by a RuntimeEnabledFeature, but requires
+// an enterprise policy override.
+extern const char kKeyboardFocusableScrollersEnabled[] =
+    "keyboard-focusable-scrollers-enabled";
+extern const char kKeyboardFocusableScrollersOptOut[] =
+    "keyboard-focusable-scrollers-opt-out";
+
+// A command line to indicate if there ia any legacy tech report urls being set.
+// If so, we will send report from blink to browser process.
+extern const char kLegacyTechReportPolicyEnabled[] =
+    "legacy-tech-report-policy-enabled";
+
 // Sets the width and height above which a composited layer will get tiled.
 const char kMaxUntiledLayerHeight[] = "max-untiled-layer-height";
 const char kMaxUntiledLayerWidth[] = "max-untiled-layer-width";
@@ -107,15 +129,30 @@ const char kMaxUntiledLayerWidth[] = "max-untiled-layer-width";
 // Sets the min tile height for GPU raster.
 const char kMinHeightForGpuRasterTile[] = "min-height-for-gpu-raster-tile";
 
+// Used to communicate managed policy for MutationEvents feature. This feature
+// is typically controlled by a RuntimeEnabledFeature, but requires an
+// enterprise policy override.
+extern const char kMutationEventsEnabled[] =
+    "deprecated-mutation-events-enabled";
+
+// Used to communicate managed policy for CSSCustomStateDeprecatedSyntax. This
+// feature is typically controlled by a RuntimeEnabledFeature, but requires an
+// enterprise policy override.
+extern const char kCSSCustomStateDeprecatedSyntaxEnabled[] =
+    "css-custom-state-deprecated-syntax-enabled";
+
+// Used to communicate managed policy for SelectParserRelaxation. This feature
+// is typically controlled by a RuntimeEnabledFeature, but requires an
+// enterprise policy override.
+extern const char kDisableSelectParserRelaxation[] =
+    "disable-select-parser-relaxation";
+
 // Sets the timeout seconds of the network-quiet timers in IdlenessDetector.
 // Used by embedders who want to change the timeout time in order to run web
 // contents on various embedded devices and changeable network bandwidths in
 // different regions. For example, it's useful when using FirstMeaningfulPaint
 // signal to dismiss a splash screen.
 const char kNetworkQuietTimeout[] = "network-quiet-timeout";
-
-// Number of worker threads used to rasterize content.
-const char kNumRasterThreads[] = "num-raster-threads";
 
 // Visibly render a border around layout shift rects in the web page to help
 // debug and study layout shifts.
@@ -129,26 +166,12 @@ const char kShowPaintRects[] = "show-paint-rects";
 // handles are dragged. Should be "character" or "direction". If not specified,
 // the platform default is used.
 const char kTouchTextSelectionStrategy[] = "touch-selection-strategy";
+const char kTouchTextSelectionStrategy_Character[] = "character";
+const char kTouchTextSelectionStrategy_Direction[] = "direction";
 
-// Used to communicate managed policy for the SetTimeoutWithoutClamp feature.
-// This feature is typically controlled by base::Feature (see
-// blink/common/features.*) but requires an enterprise policy override.
-// This is implicitly a tri-state, and can be either unset, or
-// set to "1" for force enable, or "0" for force disable.
-extern const char kSetTimeoutWithout1MsClampPolicy[] =
-    "set-timeout-without-1ms-clamp-policy";
-extern const char kSetTimeoutWithout1MsClampPolicy_ForceDisable[] = "0";
-extern const char kSetTimeoutWithout1MsClampPolicy_ForceEnable[] = "1";
-
-// Used to communicate managed policy for the MaxUnthrottledTimeoutNestingLevel
-// feature. This feature is typically controlled by base::Feature (see
-// blink/common/features.*) but requires an enterprise policy override. This is
-// implicitly a tri-state, and can be either unset, or set to "1" for force
-// enable, or "0" for force disable.
-extern const char kUnthrottledNestedTimeoutPolicy[] =
-    "unthrottled-nested-timeout-level-policy";
-extern const char kUnthrottledNestedTimeoutPolicy_ForceDisable[] = "0";
-extern const char kUnthrottledNestedTimeoutPolicy_ForceEnable[] = "1";
+// Override mechanism for preserving the old non-standard behavior of CSS zoom.
+const char kDisableStandardizedBrowserZoom[] =
+    "disable-standardized-browser-zoom";
 
 // Comma-separated list of origins that can use SharedArrayBuffer without
 // enabling cross-origin isolation.
@@ -161,21 +184,11 @@ const char kConditionalFocusWindowMs[] = "conditional-focus-window-ms";
 // Specifies the flags passed to JS engine.
 const char kJavaScriptFlags[] = "js-flags";
 
-// Controls whether WebSQL is force enabled.
-const char kWebSQLAccess[] = "web-sql-access";
-
-// Controls whether WebSQL for non-secure context is force enabled.
-const char kWebSQLNonSecureContextEnabled[] =
-    "web-sql-non-secure-context-enabled";
-
-// Used to communicate managed policy for the EventPath feature. This feature is
-// typically controlled by base::Feature (see blink/common/features.*) but
-// requires an enterprise policy override. This is implicitly a tri-state, and
-// can be either unset, or set to "1" for force enable, or "0" for force
-// disable.
-extern const char kEventPathPolicy[] = "event-path-policy";
-extern const char kEventPathPolicy_ForceDisable[] = "0";
-extern const char kEventPathPolicy_ForceEnable[] = "1";
+// Used to communicate managed policy for WebAudioBypassOutputBuffering.  This
+// feature is typically controlled by a RuntimeEnabledFeature, but requires an
+// enterprise policy override.
+const char kWebAudioBypassOutputBufferingOptOut[] =
+    "web-audio-bypass-output-buffering-opt-out";
 
 }  // namespace switches
 }  // namespace blink

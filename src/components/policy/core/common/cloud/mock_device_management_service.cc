@@ -1,17 +1,16 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "components/policy/core/common/cloud/mock_device_management_service.h"
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/notreached.h"
 #include "base/strings/string_util.h"
 #include "base/test/bind.h"
 #include "components/policy/core/common/cloud/dm_auth.h"
 #include "net/base/net_errors.h"
-#include "services/network/public/cpp/shared_url_loader_factory.h"
 
 namespace policy {
 namespace {
@@ -66,12 +65,6 @@ MockDeviceManagementServiceConfiguration::GetRealtimeReportingServerUrl()
 std::string
 MockDeviceManagementServiceConfiguration::GetEncryptedReportingServerUrl()
     const {
-  return server_url_;
-}
-
-std::string
-MockDeviceManagementServiceConfiguration::GetReportingConnectorServerUrl(
-    content::BrowserContext* context) const {
   return server_url_;
 }
 
@@ -169,7 +162,7 @@ FakeDeviceManagementService::SendJobResponseAsync(int net_error,
   // pending jobs, e.g. CloudPolicyClientTest, CancelUploadAppInstallReport.
   // And base::WeakPtr cannot bind to non-void functions.
   // Thus, we need the redirect to SendWeakJobResponseNow.
-  return [=](DeviceManagementService::JobForTesting job) {
+  return [=, this](DeviceManagementService::JobForTesting job) {
     this->GetTaskRunnerForTesting()->PostTask(
         FROM_HERE, base::BindLambdaForTesting([=]() mutable {
           if (job.IsActive()) {
@@ -243,24 +236,11 @@ void FakeDeviceManagementService::SendJobOKNow(
 }
 
 FakeJobConfiguration::FakeJobConfiguration(
-    DeviceManagementService* service,
-    JobType type,
-    const std::string& client_id,
-    bool critical,
-    DMAuth auth_data,
-    absl::optional<std::string> oauth_token,
-    scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
+    DMServerJobConfiguration::CreateParams params,
     FakeCallback callback,
     RetryCallback retry_callback,
     RetryCallback should_retry_callback)
-    : DMServerJobConfiguration(service,
-                               type,
-                               client_id,
-                               critical,
-                               std::move(auth_data),
-                               oauth_token,
-                               url_loader_factory,
-                               base::DoNothing()),
+    : DMServerJobConfiguration(std::move(params)),
       should_retry_response_(DeviceManagementService::Job::NO_RETRY),
       callback_(std::move(callback)),
       retry_callback_(retry_callback),

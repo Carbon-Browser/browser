@@ -40,7 +40,6 @@
 #include "third_party/blink/renderer/modules/webdatabase/change_version_wrapper.h"
 #include "third_party/blink/renderer/modules/webdatabase/database_authorizer.h"
 #include "third_party/blink/renderer/modules/webdatabase/database_context.h"
-#include "third_party/blink/renderer/modules/webdatabase/database_manager.h"
 #include "third_party/blink/renderer/modules/webdatabase/database_task.h"
 #include "third_party/blink/renderer/modules/webdatabase/database_thread.h"
 #include "third_party/blink/renderer/modules/webdatabase/database_tracker.h"
@@ -265,8 +264,8 @@ Database::Database(DatabaseContext* database_context,
     guid_ = cache.RegisterOriginAndName(GetSecurityOrigin()->ToString(), name);
   }
 
-  filename_ = DatabaseManager::Manager().FullPathForDatabase(
-      GetSecurityOrigin(), name_);
+  filename_ = DatabaseTracker::Tracker().FullPathForDatabase(
+      GetSecurityOrigin(), name_, /*create_if_does_not_exist=*/true);
 
   database_thread_security_origin_ =
       context_thread_security_origin_->IsolatedCopy();
@@ -316,10 +315,10 @@ bool Database::OpenAndVerifyVersion(bool set_version_in_new_database,
       async_task_context->Schedule(GetExecutionContext(), "openDatabase");
       GetExecutionContext()
           ->GetTaskRunner(TaskType::kDatabaseAccess)
-          ->PostTask(FROM_HERE, WTF::Bind(&Database::RunCreationCallback,
-                                          WrapPersistent(this),
-                                          WrapPersistent(creation_callback),
-                                          std::move(async_task_context)));
+          ->PostTask(FROM_HERE, WTF::BindOnce(&Database::RunCreationCallback,
+                                              WrapPersistent(this),
+                                              WrapPersistent(creation_callback),
+                                              std::move(async_task_context)));
     }
   }
 
@@ -344,7 +343,7 @@ void Database::Close() {
     // Transaction phase 1 cleanup. See comment on "What happens if a
     // transaction is interrupted?" at the top of SQLTransactionBackend.cpp.
     SQLTransactionBackend* transaction = nullptr;
-    while (!transaction_queue_.IsEmpty()) {
+    while (!transaction_queue_.empty()) {
       transaction = transaction_queue_.TakeFirst();
       transaction->NotifyDatabaseThreadIsShuttingDown();
     }
@@ -388,7 +387,7 @@ void Database::InProgressTransactionCompleted() {
 void Database::ScheduleTransaction() {
   SQLTransactionBackend* transaction = nullptr;
 
-  if (is_transaction_queue_enabled_ && !transaction_queue_.IsEmpty())
+  if (is_transaction_queue_enabled_ && !transaction_queue_.empty())
     transaction = transaction_queue_.TakeFirst();
 
   if (transaction && GetDatabaseContext()->DatabaseThreadAvailable()) {
@@ -470,7 +469,7 @@ bool Database::PerformOpenAndVerify(bool should_set_version_in_new_database,
                                     DatabaseError& error,
                                     String& error_message) {
   DoneCreatingDatabaseOnExitCaller on_exit_caller(this);
-  DCHECK(error_message.IsEmpty());
+  DCHECK(error_message.empty());
   DCHECK_EQ(error,
             DatabaseError::kNone);  // Better not have any errors already.
   // Presumed failure. We'll clear it if we succeed below.
@@ -855,9 +854,9 @@ void Database::RunTransaction(
       auto error = std::make_unique<SQLErrorData>(SQLError::kUnknownErr,
                                                   "database has been closed");
       GetDatabaseTaskRunner()->PostTask(
-          FROM_HERE, WTF::Bind(&CallTransactionErrorCallback,
-                               WrapPersistent(transaction_error_callback),
-                               std::move(error)));
+          FROM_HERE, WTF::BindOnce(&CallTransactionErrorCallback,
+                                   WrapPersistent(transaction_error_callback),
+                                   std::move(error)));
     }
   }
 }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,14 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
 #include "base/files/file.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/test/gmock_callback_support.h"
 #include "base/values.h"
 #include "chrome/browser/ash/file_system_provider/icon_set.h"
 #include "chrome/browser/ash/file_system_provider/mount_path_util.h"
@@ -29,14 +31,20 @@
 #include "chrome/common/extensions/api/file_system_provider_internal.h"
 #include "chrome/test/base/testing_profile.h"
 #include "content/public/test/browser_task_environment.h"
+#include "content/public/test/mock_render_process_host.h"
 #include "extensions/browser/event_router.h"
 #include "extensions/common/extension_id.h"
 #include "storage/browser/file_system/watcher_manager.h"
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace ash {
-namespace file_system_provider {
+namespace ash::file_system_provider {
 namespace {
+
+using base::test::RunOnceCallback;
+using testing::_;
+using testing::IsEmpty;
+using testing::SizeIs;
 
 const char kOrigin[] =
     "chrome-extension://abcabcabcabcabcabcabcabcabcabcabcabca/";
@@ -56,14 +64,14 @@ const base::FilePath::CharType kFilePath[] =
 class FakeEventRouter : public extensions::EventRouter {
  public:
   FakeEventRouter(Profile* profile, ProvidedFileSystemInterface* file_system)
-      : EventRouter(profile, NULL),
+      : EventRouter(profile, nullptr),
         file_system_(file_system),
         reply_result_(base::File::FILE_OK) {}
 
   FakeEventRouter(const FakeEventRouter&) = delete;
   FakeEventRouter& operator=(const FakeEventRouter&) = delete;
 
-  ~FakeEventRouter() override {}
+  ~FakeEventRouter() override = default;
 
   // Handles an event which would normally be routed to an extension. Instead
   // replies with a hard coded response.
@@ -73,10 +81,11 @@ class FakeEventRouter : public extensions::EventRouter {
     ASSERT_TRUE(file_system_);
     const base::Value* dict = &event->event_args[0];
     ASSERT_TRUE(dict->is_dict());
-    const std::string* file_system_id = dict->FindStringKey("fileSystemId");
+    const std::string* file_system_id =
+        dict->GetDict().FindString("fileSystemId");
     EXPECT_NE(file_system_id, nullptr);
     EXPECT_EQ(kFileSystemId, *file_system_id);
-    absl::optional<int> id = dict->FindIntKey("requestId");
+    std::optional<int> id = dict->GetDict().FindInt("requestId");
     EXPECT_TRUE(id);
     int request_id = *id;
     EXPECT_TRUE(event->event_name == extensions::api::file_system_provider::
@@ -92,113 +101,62 @@ class FakeEventRouter : public extensions::EventRouter {
       base::Value::List list;
       list.Append(kFileSystemId);
       list.Append(request_id);
-      list.Append(0 /* execution_time */);
+      list.Append(0);  // Execution time.
 
       using extensions::api::file_system_provider_internal::
           OperationRequestedSuccess::Params;
-      std::unique_ptr<Params> params(Params::Create(list));
-      ASSERT_TRUE(params.get());
+      std::optional<Params> params(Params::Create(list));
+      ASSERT_TRUE(params.has_value());
       file_system_->GetRequestManager()->FulfillRequest(
           request_id,
-          RequestValue::CreateForOperationSuccess(std::move(params)),
-          false /* has_more */);
+          RequestValue::CreateForOperationSuccess(std::move(*params)),
+          /*has_more=*/false);
     } else {
       file_system_->GetRequestManager()->RejectRequest(
-          request_id, std::make_unique<RequestValue>(), reply_result_);
+          request_id, RequestValue(), reply_result_);
     }
   }
 
   void set_reply_result(base::File::Error result) { reply_result_ = result; }
 
  private:
-  ProvidedFileSystemInterface* const file_system_;  // Not owned.
+  const raw_ptr<ProvidedFileSystemInterface,
+                DanglingUntriaged>
+      file_system_;  // Not owned.
   base::File::Error reply_result_;
 };
 
-// Observes the tested file system.
-class Observer : public ProvidedFileSystemObserver {
+class MockObserver : public ProvidedFileSystemObserver {
  public:
-  class ChangeEvent {
-   public:
-    ChangeEvent(storage::WatcherManager::ChangeType change_type,
-                const ProvidedFileSystemObserver::Changes& changes)
-        : change_type_(change_type), changes_(changes) {}
-
-    ChangeEvent(const ChangeEvent&) = delete;
-    ChangeEvent& operator=(const ChangeEvent&) = delete;
-
-    virtual ~ChangeEvent() {}
-
-    storage::WatcherManager::ChangeType change_type() const {
-      return change_type_;
-    }
-    const ProvidedFileSystemObserver::Changes& changes() const {
-      return changes_;
-    }
-
-   private:
-    const storage::WatcherManager::ChangeType change_type_;
-    const ProvidedFileSystemObserver::Changes changes_;
-  };
-
-  Observer() : list_changed_counter_(0), tag_updated_counter_(0) {}
-
-  Observer(const Observer&) = delete;
-  Observer& operator=(const Observer&) = delete;
-
-  // ProvidedFileSystemInterfaceObserver overrides.
-  void OnWatcherChanged(const ProvidedFileSystemInfo& file_system_info,
-                        const Watcher& watcher,
-                        storage::WatcherManager::ChangeType change_type,
-                        const ProvidedFileSystemObserver::Changes& changes,
-                        base::OnceClosure callback) override {
-    EXPECT_EQ(kFileSystemId, file_system_info.file_system_id());
-    change_events_.push_back(
-        std::make_unique<ChangeEvent>(change_type, changes));
-    complete_callback_ = std::move(callback);
-  }
-
-  void OnWatcherTagUpdated(const ProvidedFileSystemInfo& file_system_info,
-                           const Watcher& watcher) override {
-    EXPECT_EQ(kFileSystemId, file_system_info.file_system_id());
-    ++tag_updated_counter_;
-  }
-
-  void OnWatcherListChanged(const ProvidedFileSystemInfo& file_system_info,
-                            const Watchers& watchers) override {
-    EXPECT_EQ(kFileSystemId, file_system_info.file_system_id());
-    ++list_changed_counter_;
-  }
-
-  // Completes handling the OnWatcherChanged event.
-  void CompleteOnWatcherChanged() {
-    DCHECK(!complete_callback_.is_null());
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
-        FROM_HERE, std::move(complete_callback_));
-  }
-
-  int list_changed_counter() const { return list_changed_counter_; }
-  const std::vector<std::unique_ptr<ChangeEvent>>& change_events() const {
-    return change_events_;
-  }
-  int tag_updated_counter() const { return tag_updated_counter_; }
-
- private:
-  std::vector<std::unique_ptr<ChangeEvent>> change_events_;
-  int list_changed_counter_;
-  int tag_updated_counter_;
-  base::OnceClosure complete_callback_;
+  MOCK_METHOD(void,
+              OnWatcherChanged,
+              (const ProvidedFileSystemInfo& file_system_info,
+               const Watcher& watcher,
+               storage::WatcherManager::ChangeType change_type,
+               const ProvidedFileSystemObserver::Changes& changes,
+               base::OnceClosure callback),
+              (override));
+  MOCK_METHOD(void,
+              OnWatcherTagUpdated,
+              (const ProvidedFileSystemInfo& file_system_info,
+               const Watcher& watcher),
+              (override));
+  MOCK_METHOD(void,
+              OnWatcherListChanged,
+              (const ProvidedFileSystemInfo& file_system_info,
+               const Watchers& watchers),
+              (override));
 };
 
 // Stub notification manager, which works in unit tests.
 class StubNotificationManager : public NotificationManagerInterface {
  public:
-  StubNotificationManager() {}
+  StubNotificationManager() = default;
 
   StubNotificationManager(const StubNotificationManager&) = delete;
   StubNotificationManager& operator=(const StubNotificationManager&) = delete;
 
-  ~StubNotificationManager() override {}
+  ~StubNotificationManager() override = default;
 
   // NotificationManagerInterface overrides.
   void ShowUnresponsiveNotification(int id,
@@ -224,19 +182,22 @@ void LogNotification(NotificationLog* notification_log,
 // Writes a |file_handle| and |result| to the |open_file_log| vector.
 void LogOpenFile(OpenFileLog* open_file_log,
                  int file_handle,
-                 base::File::Error result) {
-  open_file_log->push_back(std::make_pair(file_handle, result));
+                 base::File::Error result,
+                 std::unique_ptr<EntryMetadata> metadata) {
+  open_file_log->emplace_back(file_handle, result);
 }
 
 }  // namespace
 
 class FileSystemProviderProvidedFileSystemTest : public testing::Test {
  protected:
-  FileSystemProviderProvidedFileSystemTest() {}
-  ~FileSystemProviderProvidedFileSystemTest() override {}
+  FileSystemProviderProvidedFileSystemTest() = default;
+  ~FileSystemProviderProvidedFileSystemTest() override = default;
 
   void SetUp() override {
     profile_ = std::make_unique<TestingProfile>();
+    render_process_host_ =
+        std::make_unique<content::MockRenderProcessHost>(profile_.get());
     const base::FilePath mount_path = util::GetMountPath(
         profile_.get(), ProviderId::CreateFromExtensionId(kExtensionId),
         kFileSystemId);
@@ -246,33 +207,37 @@ class FileSystemProviderProvidedFileSystemTest : public testing::Test {
     mount_options.supports_notify_tag = true;
     mount_options.writable = true;
     file_system_info_ = std::make_unique<ProvidedFileSystemInfo>(
-        kExtensionId, mount_options, mount_path, false /* configurable */,
-        true /* watchable */, extensions::SOURCE_FILE, IconSet());
+        kExtensionId, mount_options, mount_path, /*configurable=*/false,
+        /*watchable=*/true, extensions::SOURCE_FILE, IconSet());
     provided_file_system_ = std::make_unique<ProvidedFileSystem>(
         profile_.get(), *file_system_info_.get());
     event_router_ = std::make_unique<FakeEventRouter>(
         profile_.get(), provided_file_system_.get());
     event_router_->AddEventListener(extensions::api::file_system_provider::
                                         OnAddWatcherRequested::kEventName,
-                                    NULL,
-                                    kExtensionId);
+                                    render_process_host_.get(), kExtensionId);
     event_router_->AddEventListener(extensions::api::file_system_provider::
                                         OnRemoveWatcherRequested::kEventName,
-                                    NULL,
-                                    kExtensionId);
+                                    render_process_host_.get(), kExtensionId);
     event_router_->AddEventListener(
         extensions::api::file_system_provider::OnOpenFileRequested::kEventName,
-        NULL, kExtensionId);
+        render_process_host_.get(), kExtensionId);
     event_router_->AddEventListener(
         extensions::api::file_system_provider::OnCloseFileRequested::kEventName,
-        NULL, kExtensionId);
+        render_process_host_.get(), kExtensionId);
     provided_file_system_->SetEventRouterForTesting(event_router_.get());
     provided_file_system_->SetNotificationManagerForTesting(
         base::WrapUnique(new StubNotificationManager));
   }
 
+  void TearDown() override {
+    render_process_host_.reset();
+    Test::TearDown();
+  }
+
   content::BrowserTaskEnvironment task_environment_;
   std::unique_ptr<TestingProfile> profile_;
+  std::unique_ptr<content::RenderProcessHost> render_process_host_;
   std::unique_ptr<FakeEventRouter> event_router_;
   std::unique_ptr<ProvidedFileSystemInfo> file_system_info_;
   std::unique_ptr<ProvidedFileSystem> provided_file_system_;
@@ -296,13 +261,13 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, AutoUpdater) {
   // callbacks.
   EXPECT_EQ(0u, log.size());
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                std::move(first_callback));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, std::move(first_callback));
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(0u, log.size());
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                std::move(second_callback));
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE, std::move(second_callback));
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(1u, log.size());
 }
@@ -333,17 +298,20 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, AutoUpdater_CallbackIgnored) {
 TEST_F(FileSystemProviderProvidedFileSystemTest, AddWatcher_NotFound) {
   Log log;
   NotificationLog notification_log;
-  Observer observer;
+  MockObserver mock_observer;
 
-  provided_file_system_->AddObserver(&observer);
+  provided_file_system_->AddObserver(&mock_observer);
 
   // First, set the extension response to an error.
   event_router_->set_reply_result(base::File::FILE_ERROR_NOT_FOUND);
 
+  // The observer should not be called.
+  EXPECT_CALL(mock_observer, OnWatcherListChanged(_, _)).Times(0);
+  EXPECT_CALL(mock_observer, OnWatcherTagUpdated(_, _)).Times(0);
+
   provided_file_system_->AddWatcher(
-      GURL(kOrigin), base::FilePath(kDirectoryPath), false /* recursive */,
-      false /* persistent */,
-      base::BindOnce(&LogStatus, base::Unretained(&log)),
+      GURL(kOrigin), base::FilePath(kDirectoryPath), /*recursive=*/false,
+      /*persistent=*/false, base::BindOnce(&LogStatus, base::Unretained(&log)),
       base::BindRepeating(&LogNotification,
                           base::Unretained(&notification_log)));
   base::RunLoop().RunUntilIdle();
@@ -356,29 +324,26 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, AddWatcher_NotFound) {
   Watchers* const watchers = provided_file_system_->GetWatchers();
   EXPECT_EQ(0u, watchers->size());
 
-  // The observer should not be called.
-  EXPECT_EQ(0, observer.list_changed_counter());
-  EXPECT_EQ(0, observer.tag_updated_counter());
-
-  provided_file_system_->RemoveObserver(&observer);
+  provided_file_system_->RemoveObserver(&mock_observer);
 }
 
 TEST_F(FileSystemProviderProvidedFileSystemTest, AddWatcher) {
   Log log;
-  Observer observer;
+  MockObserver mock_observer;
 
-  provided_file_system_->AddObserver(&observer);
+  provided_file_system_->AddObserver(&mock_observer);
+
+  EXPECT_CALL(mock_observer, OnWatcherListChanged(_, SizeIs(1))).Times(1);
+  EXPECT_CALL(mock_observer, OnWatcherTagUpdated(_, _)).Times(0);
 
   provided_file_system_->AddWatcher(
-      GURL(kOrigin), base::FilePath(kDirectoryPath), false /* recursive */,
-      true /* persistent */, base::BindOnce(&LogStatus, base::Unretained(&log)),
+      GURL(kOrigin), base::FilePath(kDirectoryPath), /*recursive=*/false,
+      /*persistent=*/true, base::BindOnce(&LogStatus, base::Unretained(&log)),
       storage::WatcherManager::NotificationCallback());
   base::RunLoop().RunUntilIdle();
 
   ASSERT_EQ(1u, log.size());
   EXPECT_EQ(base::File::FILE_OK, log[0]);
-  EXPECT_EQ(1, observer.list_changed_counter());
-  EXPECT_EQ(0, observer.tag_updated_counter());
 
   Watchers* const watchers = provided_file_system_->GetWatchers();
   ASSERT_EQ(1u, watchers->size());
@@ -387,7 +352,7 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, AddWatcher) {
   EXPECT_FALSE(watcher.recursive);
   EXPECT_EQ("", watcher.last_tag);
 
-  provided_file_system_->RemoveObserver(&observer);
+  provided_file_system_->RemoveObserver(&mock_observer);
 }
 
 TEST_F(FileSystemProviderProvidedFileSystemTest, AddWatcher_PersistentIllegal) {
@@ -397,12 +362,15 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, AddWatcher_PersistentIllegal) {
     Log log;
     NotificationLog notification_log;
 
-    Observer observer;
-    provided_file_system_->AddObserver(&observer);
+    MockObserver mock_observer;
+    provided_file_system_->AddObserver(&mock_observer);
+
+    EXPECT_CALL(mock_observer, OnWatcherListChanged(_, _)).Times(0);
+    EXPECT_CALL(mock_observer, OnWatcherTagUpdated(_, _)).Times(0);
 
     provided_file_system_->AddWatcher(
-        GURL(kOrigin), base::FilePath(kDirectoryPath), false /* recursive */,
-        true /* persistent */,
+        GURL(kOrigin), base::FilePath(kDirectoryPath), /*recursive=*/false,
+        /*=persistent=*/true,
         base::BindOnce(&LogStatus, base::Unretained(&log)),
         base::BindRepeating(&LogNotification,
                             base::Unretained(&notification_log)));
@@ -410,10 +378,8 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, AddWatcher_PersistentIllegal) {
 
     ASSERT_EQ(1u, log.size());
     EXPECT_EQ(base::File::FILE_ERROR_INVALID_OPERATION, log[0]);
-    EXPECT_EQ(0, observer.list_changed_counter());
-    EXPECT_EQ(0, observer.tag_updated_counter());
 
-    provided_file_system_->RemoveObserver(&observer);
+    provided_file_system_->RemoveObserver(&mock_observer);
   }
 
   {
@@ -421,7 +387,7 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, AddWatcher_PersistentIllegal) {
     // support the notify tag. It's because the notify tag is essential to be
     // able to recreate notification during shutdown.
     Log log;
-    Observer observer;
+    MockObserver mock_observer;
 
     // Create a provided file system interface, which does not support a notify
     // tag, though.
@@ -433,56 +399,56 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, AddWatcher_PersistentIllegal) {
     mount_options.display_name = kDisplayName;
     mount_options.supports_notify_tag = false;
     ProvidedFileSystemInfo file_system_info(
-        kExtensionId, mount_options, mount_path, false /* configurable */,
-        true /* watchable */, extensions::SOURCE_FILE, IconSet());
+        kExtensionId, mount_options, mount_path, /*configurable=*/false,
+        /*watchable=*/true, extensions::SOURCE_FILE, IconSet());
     ProvidedFileSystem simple_provided_file_system(profile_.get(),
                                                    file_system_info);
     simple_provided_file_system.SetEventRouterForTesting(event_router_.get());
     simple_provided_file_system.SetNotificationManagerForTesting(
         base::WrapUnique(new StubNotificationManager));
 
-    simple_provided_file_system.AddObserver(&observer);
+    simple_provided_file_system.AddObserver(&mock_observer);
+
+    EXPECT_CALL(mock_observer, OnWatcherListChanged(_, _)).Times(0);
+    EXPECT_CALL(mock_observer, OnWatcherTagUpdated(_, _)).Times(0);
 
     simple_provided_file_system.AddWatcher(
-        GURL(kOrigin), base::FilePath(kDirectoryPath), false /* recursive */,
-        true /* persistent */,
-        base::BindOnce(&LogStatus, base::Unretained(&log)),
+        GURL(kOrigin), base::FilePath(kDirectoryPath), /*recursive=*/false,
+        /*persistent=*/true, base::BindOnce(&LogStatus, base::Unretained(&log)),
         storage::WatcherManager::NotificationCallback());
     base::RunLoop().RunUntilIdle();
 
     ASSERT_EQ(1u, log.size());
     EXPECT_EQ(base::File::FILE_ERROR_INVALID_OPERATION, log[0]);
-    EXPECT_EQ(0, observer.list_changed_counter());
-    EXPECT_EQ(0, observer.tag_updated_counter());
 
-    simple_provided_file_system.RemoveObserver(&observer);
+    simple_provided_file_system.RemoveObserver(&mock_observer);
   }
 }
 
 TEST_F(FileSystemProviderProvidedFileSystemTest, AddWatcher_Exists) {
-  Observer observer;
-  provided_file_system_->AddObserver(&observer);
+  MockObserver mock_observer;
+  provided_file_system_->AddObserver(&mock_observer);
 
   {
+    EXPECT_CALL(mock_observer, OnWatcherListChanged(_, SizeIs(1))).Times(1);
+    EXPECT_CALL(mock_observer, OnWatcherTagUpdated(_, _)).Times(0);
+
     // First watch a directory not recursively.
     Log log;
     provided_file_system_->AddWatcher(
-        GURL(kOrigin), base::FilePath(kDirectoryPath), false /* recursive */,
-        true /* persistent */,
-        base::BindOnce(&LogStatus, base::Unretained(&log)),
+        GURL(kOrigin), base::FilePath(kDirectoryPath), /*recursive=*/false,
+        /*persistent=*/true, base::BindOnce(&LogStatus, base::Unretained(&log)),
         storage::WatcherManager::NotificationCallback());
     base::RunLoop().RunUntilIdle();
 
     ASSERT_EQ(1u, log.size());
     EXPECT_EQ(base::File::FILE_OK, log[0]);
-    EXPECT_EQ(1, observer.list_changed_counter());
-    EXPECT_EQ(0, observer.tag_updated_counter());
 
     Watchers* const watchers = provided_file_system_->GetWatchers();
     ASSERT_TRUE(watchers);
     ASSERT_EQ(1u, watchers->size());
     const auto& watcher_it = watchers->find(
-        WatcherKey(base::FilePath(kDirectoryPath), false /* recursive */));
+        WatcherKey(base::FilePath(kDirectoryPath), /*recursive=*/false));
     ASSERT_NE(watchers->end(), watcher_it);
 
     EXPECT_EQ(1u, watcher_it->second.subscribers.size());
@@ -494,52 +460,55 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, AddWatcher_Exists) {
   }
 
   {
+    EXPECT_CALL(mock_observer, OnWatcherListChanged(_, _)).Times(0);
+    EXPECT_CALL(mock_observer, OnWatcherTagUpdated(_, _)).Times(0);
+
     // Create another non-recursive observer. That should fail.
     Log log;
     provided_file_system_->AddWatcher(
-        GURL(kOrigin), base::FilePath(kDirectoryPath), false /* recursive */,
-        true /* persistent */,
-        base::BindOnce(&LogStatus, base::Unretained(&log)),
+        GURL(kOrigin), base::FilePath(kDirectoryPath), /*recursive=*/false,
+        /*persistent=*/true, base::BindOnce(&LogStatus, base::Unretained(&log)),
         storage::WatcherManager::NotificationCallback());
     base::RunLoop().RunUntilIdle();
 
     ASSERT_EQ(1u, log.size());
     EXPECT_EQ(base::File::FILE_ERROR_EXISTS, log[0]);
-    EXPECT_EQ(1, observer.list_changed_counter());  // No changes on the list.
-    EXPECT_EQ(0, observer.tag_updated_counter());
   }
 
   {
+    EXPECT_CALL(mock_observer, OnWatcherListChanged(_, SizeIs(2))).Times(1);
+    EXPECT_CALL(mock_observer, OnWatcherTagUpdated(_, _)).Times(0);
+
     // Lastly, create another recursive observer. That should succeed.
     Log log;
     provided_file_system_->AddWatcher(
-        GURL(kOrigin), base::FilePath(kDirectoryPath), true /* recursive */,
-        true /* persistent */,
-        base::BindOnce(&LogStatus, base::Unretained(&log)),
+        GURL(kOrigin), base::FilePath(kDirectoryPath), /*recursive=*/true,
+        /*persistent=*/true, base::BindOnce(&LogStatus, base::Unretained(&log)),
         storage::WatcherManager::NotificationCallback());
     base::RunLoop().RunUntilIdle();
 
     ASSERT_EQ(1u, log.size());
     EXPECT_EQ(base::File::FILE_OK, log[0]);
-    EXPECT_EQ(2, observer.list_changed_counter());
-    EXPECT_EQ(0, observer.tag_updated_counter());
   }
 
-  provided_file_system_->RemoveObserver(&observer);
+  provided_file_system_->RemoveObserver(&mock_observer);
 }
 
 TEST_F(FileSystemProviderProvidedFileSystemTest, AddWatcher_MultipleOrigins) {
-  Observer observer;
-  provided_file_system_->AddObserver(&observer);
+  MockObserver mock_observer;
+  provided_file_system_->AddObserver(&mock_observer);
 
   {
     // First watch a directory not recursively.
     Log log;
     NotificationLog notification_log;
 
+    EXPECT_CALL(mock_observer, OnWatcherListChanged(_, SizeIs(1))).Times(1);
+    EXPECT_CALL(mock_observer, OnWatcherTagUpdated(_, _)).Times(0);
+
     provided_file_system_->AddWatcher(
-        GURL(kOrigin), base::FilePath(kDirectoryPath), false /* recursive */,
-        false /* persistent */,
+        GURL(kOrigin), base::FilePath(kDirectoryPath), /*recursive=*/false,
+        /*persistent=*/false,
         base::BindOnce(&LogStatus, base::Unretained(&log)),
         base::BindRepeating(&LogNotification,
                             base::Unretained(&notification_log)));
@@ -547,15 +516,13 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, AddWatcher_MultipleOrigins) {
 
     ASSERT_EQ(1u, log.size());
     EXPECT_EQ(base::File::FILE_OK, log[0]);
-    EXPECT_EQ(1, observer.list_changed_counter());
-    EXPECT_EQ(0, observer.tag_updated_counter());
     EXPECT_EQ(0u, notification_log.size());
 
     Watchers* const watchers = provided_file_system_->GetWatchers();
     ASSERT_TRUE(watchers);
     ASSERT_EQ(1u, watchers->size());
     const auto& watcher_it = watchers->find(
-        WatcherKey(base::FilePath(kDirectoryPath), false /* recursive */));
+        WatcherKey(base::FilePath(kDirectoryPath), /*recursive=*/false));
     ASSERT_NE(watchers->end(), watcher_it);
 
     EXPECT_EQ(1u, watcher_it->second.subscribers.size());
@@ -568,13 +535,16 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, AddWatcher_MultipleOrigins) {
   }
 
   {
+    EXPECT_CALL(mock_observer, OnWatcherListChanged(_, SizeIs(2))).Times(1);
+    EXPECT_CALL(mock_observer, OnWatcherTagUpdated(_, _)).Times(0);
+
     // Create another watcher, but recursive and with a different origin.
     Log log;
     NotificationLog notification_log;
 
     provided_file_system_->AddWatcher(
         GURL(kAnotherOrigin), base::FilePath(kDirectoryPath),
-        true /* recursive */, false /* persistent */,
+        /*recursive=*/true, /*persistent=*/false,
         base::BindOnce(&LogStatus, base::Unretained(&log)),
         base::BindRepeating(&LogNotification,
                             base::Unretained(&notification_log)));
@@ -582,15 +552,13 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, AddWatcher_MultipleOrigins) {
 
     ASSERT_EQ(1u, log.size());
     EXPECT_EQ(base::File::FILE_OK, log[0]);
-    EXPECT_EQ(2, observer.list_changed_counter());
-    EXPECT_EQ(0, observer.tag_updated_counter());
     EXPECT_EQ(0u, notification_log.size());
 
     Watchers* const watchers = provided_file_system_->GetWatchers();
     ASSERT_TRUE(watchers);
     ASSERT_EQ(2u, watchers->size());
     const auto& watcher_it = watchers->find(
-        WatcherKey(base::FilePath(kDirectoryPath), false /* recursive */));
+        WatcherKey(base::FilePath(kDirectoryPath), /*recursive=*/false));
     ASSERT_NE(watchers->end(), watcher_it);
 
     EXPECT_EQ(1u, watcher_it->second.subscribers.size());
@@ -603,24 +571,24 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, AddWatcher_MultipleOrigins) {
   }
 
   {
+    EXPECT_CALL(mock_observer, OnWatcherListChanged(_, SizeIs(1))).Times(1);
+    EXPECT_CALL(mock_observer, OnWatcherTagUpdated(_, _)).Times(0);
+
     // Remove the second watcher gracefully.
     Log log;
     provided_file_system_->RemoveWatcher(
         GURL(kAnotherOrigin), base::FilePath(kDirectoryPath),
-        true /* recursive */,
-        base::BindOnce(&LogStatus, base::Unretained(&log)));
+        /*recursive=*/true, base::BindOnce(&LogStatus, base::Unretained(&log)));
     base::RunLoop().RunUntilIdle();
 
     ASSERT_EQ(1u, log.size());
     EXPECT_EQ(base::File::FILE_OK, log[0]);
-    EXPECT_EQ(3, observer.list_changed_counter());
-    EXPECT_EQ(0, observer.tag_updated_counter());
 
     Watchers* const watchers = provided_file_system_->GetWatchers();
     ASSERT_TRUE(watchers);
     EXPECT_EQ(1u, watchers->size());
     const auto& watcher_it = watchers->find(
-        WatcherKey(base::FilePath(kDirectoryPath), false /* recursive */));
+        WatcherKey(base::FilePath(kDirectoryPath), /*recursive=*/false));
     ASSERT_NE(watchers->end(), watcher_it);
 
     EXPECT_EQ(1u, watcher_it->second.subscribers.size());
@@ -632,36 +600,40 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, AddWatcher_MultipleOrigins) {
     EXPECT_FALSE(subscriber_it->second.persistent);
   }
 
-  provided_file_system_->RemoveObserver(&observer);
+  provided_file_system_->RemoveObserver(&mock_observer);
 }
 
 TEST_F(FileSystemProviderProvidedFileSystemTest, RemoveWatcher) {
-  Observer observer;
-  provided_file_system_->AddObserver(&observer);
+  MockObserver mock_observer;
+  provided_file_system_->AddObserver(&mock_observer);
 
   {
+    EXPECT_CALL(mock_observer, OnWatcherListChanged(_, _)).Times(0);
+    EXPECT_CALL(mock_observer, OnWatcherTagUpdated(_, _)).Times(0);
+
     // First, confirm that removing a watcher which does not exist results in an
     // error.
     Log log;
     provided_file_system_->RemoveWatcher(
-        GURL(kOrigin), base::FilePath(kDirectoryPath), false /* recursive */,
+        GURL(kOrigin), base::FilePath(kDirectoryPath), /*recursive=*/false,
         base::BindOnce(&LogStatus, base::Unretained(&log)));
     base::RunLoop().RunUntilIdle();
 
     ASSERT_EQ(1u, log.size());
     EXPECT_EQ(base::File::FILE_ERROR_NOT_FOUND, log[0]);
-    EXPECT_EQ(0, observer.list_changed_counter());
-    EXPECT_EQ(0, observer.tag_updated_counter());
   }
 
   {
+    EXPECT_CALL(mock_observer, OnWatcherListChanged(_, SizeIs(1))).Times(1);
+    EXPECT_CALL(mock_observer, OnWatcherTagUpdated(_, _)).Times(0);
+
     // Watch a directory not recursively.
     Log log;
     NotificationLog notification_log;
 
     provided_file_system_->AddWatcher(
-        GURL(kOrigin), base::FilePath(kDirectoryPath), false /* recursive */,
-        false /* persistent */,
+        GURL(kOrigin), base::FilePath(kDirectoryPath), /*recursive=*/false,
+        /*persistent=*/false,
         base::BindOnce(&LogStatus, base::Unretained(&log)),
         base::BindRepeating(&LogNotification,
                             base::Unretained(&notification_log)));
@@ -669,8 +641,6 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, RemoveWatcher) {
 
     ASSERT_EQ(1u, log.size());
     EXPECT_EQ(base::File::FILE_OK, log[0]);
-    EXPECT_EQ(1, observer.list_changed_counter());
-    EXPECT_EQ(0, observer.tag_updated_counter());
     EXPECT_EQ(0u, notification_log.size());
 
     Watchers* const watchers = provided_file_system_->GetWatchers();
@@ -678,30 +648,34 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, RemoveWatcher) {
   }
 
   {
+    EXPECT_CALL(mock_observer, OnWatcherListChanged(_, SizeIs(0))).Times(1);
+    EXPECT_CALL(mock_observer, OnWatcherTagUpdated(_, _)).Times(0);
+
     // Remove a watcher gracefully.
     Log log;
     provided_file_system_->RemoveWatcher(
-        GURL(kOrigin), base::FilePath(kDirectoryPath), false /* recursive */,
+        GURL(kOrigin), base::FilePath(kDirectoryPath), /*recursive=*/false,
         base::BindOnce(&LogStatus, base::Unretained(&log)));
     base::RunLoop().RunUntilIdle();
 
     ASSERT_EQ(1u, log.size());
     EXPECT_EQ(base::File::FILE_OK, log[0]);
-    EXPECT_EQ(2, observer.list_changed_counter());
-    EXPECT_EQ(0, observer.tag_updated_counter());
 
     Watchers* const watchers = provided_file_system_->GetWatchers();
     EXPECT_EQ(0u, watchers->size());
   }
 
   {
+    EXPECT_CALL(mock_observer, OnWatcherListChanged(_, SizeIs(1))).Times(1);
+    EXPECT_CALL(mock_observer, OnWatcherTagUpdated(_, _)).Times(0);
+
     // Confirm that it's possible to watch it again.
     Log log;
     NotificationLog notification_log;
 
     provided_file_system_->AddWatcher(
-        GURL(kOrigin), base::FilePath(kDirectoryPath), false /* recursive */,
-        false /* persistent */,
+        GURL(kOrigin), base::FilePath(kDirectoryPath), /*recursive=*/false,
+        /*persistent=*/false,
         base::BindOnce(&LogStatus, base::Unretained(&log)),
         base::BindRepeating(&LogNotification,
                             base::Unretained(&notification_log)));
@@ -709,8 +683,6 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, RemoveWatcher) {
 
     ASSERT_EQ(1u, log.size());
     EXPECT_EQ(base::File::FILE_OK, log[0]);
-    EXPECT_EQ(3, observer.list_changed_counter());
-    EXPECT_EQ(0, observer.tag_updated_counter());
     EXPECT_EQ(0u, notification_log.size());
 
     Watchers* const watchers = provided_file_system_->GetWatchers();
@@ -718,40 +690,83 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, RemoveWatcher) {
   }
 
   {
+    EXPECT_CALL(mock_observer, OnWatcherListChanged(_, SizeIs(0))).Times(1);
+    EXPECT_CALL(mock_observer, OnWatcherTagUpdated(_, _)).Times(0);
+
     // Finally, remove it, but with an error from extension. That should result
     // in a removed watcher, anyway. The error code should not be passed.
     event_router_->set_reply_result(base::File::FILE_ERROR_FAILED);
 
     Log log;
     provided_file_system_->RemoveWatcher(
-        GURL(kOrigin), base::FilePath(kDirectoryPath), false /* recursive */,
+        GURL(kOrigin), base::FilePath(kDirectoryPath), /*recursive=*/false,
         base::BindOnce(&LogStatus, base::Unretained(&log)));
     base::RunLoop().RunUntilIdle();
 
     ASSERT_EQ(1u, log.size());
     EXPECT_EQ(base::File::FILE_OK, log[0]);
-    EXPECT_EQ(4, observer.list_changed_counter());
-    EXPECT_EQ(0, observer.tag_updated_counter());
 
     Watchers* const watchers = provided_file_system_->GetWatchers();
     EXPECT_EQ(0u, watchers->size());
   }
 
-  provided_file_system_->RemoveObserver(&observer);
+  provided_file_system_->RemoveObserver(&mock_observer);
+}
+
+TEST_F(FileSystemProviderProvidedFileSystemTest,
+       RemoveWatcher_NotifiedAfterWatchersRemoved) {
+  MockObserver mock_observer;
+  provided_file_system_->AddObserver(&mock_observer);
+
+  {
+    EXPECT_CALL(mock_observer, OnWatcherListChanged(_, SizeIs(1))).Times(1);
+
+    // Watch a directory not recursively.
+    Log log;
+    NotificationLog notification_log;
+
+    provided_file_system_->AddWatcher(
+        GURL(kOrigin), base::FilePath(kDirectoryPath), /*recursive=*/false,
+        /*persistent=*/false,
+        base::BindOnce(&LogStatus, base::Unretained(&log)),
+        base::BindRepeating(&LogNotification,
+                            base::Unretained(&notification_log)));
+    base::RunLoop().RunUntilIdle();
+
+    Watchers* const watchers = provided_file_system_->GetWatchers();
+    EXPECT_EQ(1u, watchers->size());
+  }
+
+  {
+    // The observer should be notified after the watchers list was modified, so
+    // it should see 0 watchers.
+    EXPECT_CALL(mock_observer, OnWatcherListChanged(_, SizeIs(0))).Times(1);
+
+    Log log;
+    provided_file_system_->RemoveWatcher(
+        GURL(kOrigin), base::FilePath(kDirectoryPath), /*recursive=*/false,
+        base::BindOnce(&LogStatus, base::Unretained(&log)));
+    base::RunLoop().RunUntilIdle();
+  }
+
+  provided_file_system_->RemoveObserver(&mock_observer);
 }
 
 TEST_F(FileSystemProviderProvidedFileSystemTest, Notify) {
-  Observer observer;
-  provided_file_system_->AddObserver(&observer);
+  MockObserver mock_observer;
+  provided_file_system_->AddObserver(&mock_observer);
   NotificationLog notification_log;
 
   {
+    EXPECT_CALL(mock_observer, OnWatcherListChanged(_, SizeIs(1))).Times(1);
+    EXPECT_CALL(mock_observer, OnWatcherTagUpdated(_, _)).Times(0);
+
     // Watch a directory.
     Log log;
 
     provided_file_system_->AddWatcher(
-        GURL(kOrigin), base::FilePath(kDirectoryPath), false /* recursive */,
-        false /* persistent */,
+        GURL(kOrigin), base::FilePath(kDirectoryPath), /*recursive=*/false,
+        /*persistent=*/false,
         base::BindOnce(&LogStatus, base::Unretained(&log)),
         base::BindRepeating(&LogNotification,
                             base::Unretained(&notification_log)));
@@ -759,8 +774,6 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, Notify) {
 
     ASSERT_EQ(1u, log.size());
     EXPECT_EQ(base::File::FILE_OK, log[0]);
-    EXPECT_EQ(1, observer.list_changed_counter());
-    EXPECT_EQ(0, observer.tag_updated_counter());
     EXPECT_EQ(0u, notification_log.size());
 
     Watchers* const watchers = provided_file_system_->GetWatchers();
@@ -775,9 +788,38 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, Notify) {
         storage::WatcherManager::CHANGED;
     const std::string tag = "hello-world";
 
+    EXPECT_CALL(mock_observer,
+                OnWatcherChanged(_, _, change_type, IsEmpty(), _))
+        .WillOnce([&](const ProvidedFileSystemInfo& file_system_info,
+                      const Watcher& watcher,
+                      storage::WatcherManager::ChangeType change_type,
+                      const ProvidedFileSystemObserver::Changes& changes,
+                      base::OnceClosure callback) {
+          // The tag should not be updated in advance, before all observers
+          // handle the notification.
+          Watchers* const watchers = provided_file_system_->GetWatchers();
+          EXPECT_EQ(1u, watchers->size());
+          provided_file_system_->GetWatchers();
+          EXPECT_EQ("", watchers->begin()->second.last_tag);
+
+          // Mark the notification as handled.
+          std::move(callback).Run();
+        });
+
+    EXPECT_CALL(mock_observer, OnWatcherTagUpdated(_, _))
+        .WillOnce([&](const ProvidedFileSystemInfo& file_system_info,
+                      const Watcher& watcher) {
+          // Confirm, that the watcher still exists, and that the tag is
+          // updated.
+          Watchers* const watchers = provided_file_system_->GetWatchers();
+          ASSERT_EQ(1u, watchers->size());
+          EXPECT_EQ(tag, watchers->begin()->second.last_tag);
+        });
+    EXPECT_CALL(mock_observer, OnWatcherListChanged(_, SizeIs(1))).Times(0);
+
     Log log;
     provided_file_system_->Notify(
-        base::FilePath(kDirectoryPath), false /* recursive */, change_type,
+        base::FilePath(kDirectoryPath), /*recursive=*/false, change_type,
         base::WrapUnique(new ProvidedFileSystemObserver::Changes), tag,
         base::BindOnce(&LogStatus, base::Unretained(&log)));
     base::RunLoop().RunUntilIdle();
@@ -786,50 +828,29 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, Notify) {
     ASSERT_EQ(1u, notification_log.size());
     EXPECT_EQ(change_type, notification_log[0]);
 
-    // Verify the observer event.
-    ASSERT_EQ(1u, observer.change_events().size());
-    const Observer::ChangeEvent* const change_event =
-        observer.change_events()[0].get();
-    EXPECT_EQ(change_type, change_event->change_type());
-    EXPECT_EQ(0u, change_event->changes().size());
-
-    // The tag should not be updated in advance, before all observers handle
-    // the notification.
-    Watchers* const watchers = provided_file_system_->GetWatchers();
-    EXPECT_EQ(1u, watchers->size());
-    provided_file_system_->GetWatchers();
-    EXPECT_EQ("", watchers->begin()->second.last_tag);
-
-    // Wait until all observers finish handling the notification.
-    observer.CompleteOnWatcherChanged();
-    base::RunLoop().RunUntilIdle();
-
     ASSERT_EQ(1u, log.size());
     EXPECT_EQ(base::File::FILE_OK, log[0]);
-
-    // Confirm, that the watcher still exists, and that the tag is updated.
-    ASSERT_EQ(1u, watchers->size());
-    EXPECT_EQ(tag, watchers->begin()->second.last_tag);
-    EXPECT_EQ(1, observer.list_changed_counter());
-    EXPECT_EQ(1, observer.tag_updated_counter());
   }
 
   {
     // Notify about deleting of the watched entry.
     const storage::WatcherManager::ChangeType change_type =
         storage::WatcherManager::DELETED;
-    const ProvidedFileSystemObserver::Changes changes;
     const std::string tag = "chocolate-disco";
+
+    // Mark the notification as handled once received.
+    EXPECT_CALL(mock_observer,
+                OnWatcherChanged(_, _, change_type, IsEmpty(), _))
+        .WillOnce(RunOnceCallback<4>());
+
+    EXPECT_CALL(mock_observer, OnWatcherTagUpdated(_, _)).Times(1);
+    EXPECT_CALL(mock_observer, OnWatcherListChanged(_, SizeIs(0))).Times(1);
 
     Log log;
     provided_file_system_->Notify(
-        base::FilePath(kDirectoryPath), false /* recursive */, change_type,
+        base::FilePath(kDirectoryPath), /*recursive=*/false, change_type,
         base::WrapUnique(new ProvidedFileSystemObserver::Changes), tag,
         base::BindOnce(&LogStatus, base::Unretained(&log)));
-    base::RunLoop().RunUntilIdle();
-
-    // Complete all change events.
-    observer.CompleteOnWatcherChanged();
     base::RunLoop().RunUntilIdle();
 
     ASSERT_EQ(1u, log.size());
@@ -838,30 +859,18 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, Notify) {
     // Confirm that the notification callback was called.
     ASSERT_EQ(2u, notification_log.size());
     EXPECT_EQ(change_type, notification_log[1]);
-
-    // Verify the observer event.
-    ASSERT_EQ(2u, observer.change_events().size());
-    const Observer::ChangeEvent* const change_event =
-        observer.change_events()[1].get();
-    EXPECT_EQ(change_type, change_event->change_type());
-    EXPECT_EQ(0u, change_event->changes().size());
   }
 
   // Confirm, that the watcher is removed.
   {
     Watchers* const watchers = provided_file_system_->GetWatchers();
     EXPECT_EQ(0u, watchers->size());
-    EXPECT_EQ(2, observer.list_changed_counter());
-    EXPECT_EQ(2, observer.tag_updated_counter());
   }
 
-  provided_file_system_->RemoveObserver(&observer);
+  provided_file_system_->RemoveObserver(&mock_observer);
 }
 
 TEST_F(FileSystemProviderProvidedFileSystemTest, OpenedFiles) {
-  Observer observer;
-  provided_file_system_->AddObserver(&observer);
-
   OpenFileLog log;
   provided_file_system_->OpenFile(
       base::FilePath(kFilePath), OPEN_FILE_MODE_WRITE,
@@ -886,14 +895,9 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, OpenedFiles) {
   ASSERT_EQ(1u, close_log.size());
   EXPECT_EQ(base::File::FILE_OK, close_log[0]);
   EXPECT_EQ(0u, opened_files.size());
-
-  provided_file_system_->RemoveObserver(&observer);
 }
 
 TEST_F(FileSystemProviderProvidedFileSystemTest, OpenedFiles_OpeningFailure) {
-  Observer observer;
-  provided_file_system_->AddObserver(&observer);
-
   event_router_->set_reply_result(base::File::FILE_ERROR_NOT_FOUND);
 
   OpenFileLog log;
@@ -907,14 +911,9 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, OpenedFiles_OpeningFailure) {
 
   const OpenedFiles& opened_files = provided_file_system_->GetOpenedFiles();
   EXPECT_EQ(0u, opened_files.size());
-
-  provided_file_system_->RemoveObserver(&observer);
 }
 
 TEST_F(FileSystemProviderProvidedFileSystemTest, OpenedFile_ClosingFailure) {
-  Observer observer;
-  provided_file_system_->AddObserver(&observer);
-
   OpenFileLog log;
   provided_file_system_->OpenFile(
       base::FilePath(kFilePath), OPEN_FILE_MODE_WRITE,
@@ -943,9 +942,6 @@ TEST_F(FileSystemProviderProvidedFileSystemTest, OpenedFile_ClosingFailure) {
   ASSERT_EQ(1u, close_log.size());
   EXPECT_EQ(base::File::FILE_ERROR_NOT_FOUND, close_log[0]);
   EXPECT_EQ(0u, opened_files.size());
-
-  provided_file_system_->RemoveObserver(&observer);
 }
 
-}  // namespace file_system_provider
-}  // namespace ash
+}  // namespace ash::file_system_provider

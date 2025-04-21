@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,19 +8,18 @@
 #include <fuchsia/ui/composition/cpp/fidl.h>
 #include <vulkan/vulkan.h>
 
+#include <optional>
+
 #include "base/containers/circular_deque.h"
 #include "base/containers/flat_map.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/threading/thread_checker.h"
 #include "base/time/time.h"
 #include "mojo/public/cpp/platform/platform_handle.h"
-#include "ui/gfx/geometry/rect.h"
-#include "ui/gfx/geometry/rect_f.h"
-#include "ui/gfx/geometry/size_f.h"
+#include "ui/gfx/geometry/size.h"
 #include "ui/gfx/native_pixmap.h"
-#include "ui/gfx/native_pixmap_handle.h"
 #include "ui/gfx/native_widget_types.h"
-#include "ui/gfx/overlay_transform.h"
 #include "ui/ozone/platform/flatland/flatland_connection.h"
 #include "ui/ozone/public/platform_window_surface.h"
 
@@ -60,12 +59,8 @@ class FlatlandSurface : public ui::PlatformWindowSurface {
   }
 
  private:
-  friend class FlatlandSurfaceTest;
-
-  struct PresentationState {
-    base::TimeTicks presentation_time;
-    base::TimeDelta interval;
-  };
+  template <typename T>
+  friend class FlatlandSurfaceTestBase;
 
   struct PresentedFrame {
     PresentedFrame(fuchsia::ui::composition::ContentId image_id,
@@ -95,7 +90,7 @@ class FlatlandSurface : public ui::PlatformWindowSurface {
       return buffer_collection_id < other_id.buffer_collection_id;
     }
 
-    base::UnguessableToken buffer_collection_id;
+    zx_koid_t buffer_collection_id;
     uint32_t buffer_index;
   };
 
@@ -104,18 +99,22 @@ class FlatlandSurface : public ui::PlatformWindowSurface {
   struct FlatlandIds {
     fuchsia::ui::composition::ContentId image_id;
     fuchsia::ui::composition::TransformId transform_id;
+    gfx::Size image_size;
   };
 
   void OnGetLayout(fuchsia::ui::composition::LayoutInfo info);
 
-  void RemoveBufferCollection(FlatlandPixmapId pixmap_id);
+  void RemovePixmapResources(FlatlandPixmapId pixmap_id);
 
-  void OnPresentComplete(zx_time_t actual_presentation_time);
+  void OnPresentComplete(base::TimeTicks actual_presentation_time,
+                         base::TimeDelta presentation_interval);
 
   FlatlandIds CreateOrGetFlatlandIds(gfx::NativePixmap* pixmap,
                                      bool is_primary_plane);
 
   void ClearScene();
+
+  void OnFlatlandError(fuchsia::ui::composition::FlatlandError error);
 
   fuchsia::ui::composition::AllocatorPtr flatland_allocator_;
   FlatlandConnection flatland_;
@@ -124,8 +123,12 @@ class FlatlandSurface : public ui::PlatformWindowSurface {
   // FlatlandConnection.
   base::flat_map<FlatlandPixmapId, FlatlandIds> pixmap_ids_to_flatland_ids_;
 
+  // Keeps the frames that are presented to Flatland that are waiting for the
+  // confirmations.
   base::circular_deque<PresentedFrame> pending_frames_;
 
+  // Keeps the release fences from the last present that we should signal when
+  // this class gets destroyed.
   std::vector<zx::event> release_fences_from_last_present_;
 
   // Flatland resources used for the primary plane, that is not an overlay.
@@ -139,9 +142,16 @@ class FlatlandSurface : public ui::PlatformWindowSurface {
 
   fuchsia::ui::composition::ParentViewportWatcherPtr parent_viewport_watcher_;
   fuchsia::ui::composition::ChildViewWatcherPtr main_plane_view_watcher_;
-  fuchsia::ui::composition::LayoutInfo layout_info_;
+  std::optional<gfx::Size> logical_size_;
+  std::optional<float> device_pixel_ratio_;
 
-  FlatlandSurfaceFactory* const flatland_surface_factory_;
+  // FlatlandSurface might receive a Present() call before OnGetLayout(),
+  // because the present loop is tied to the parent Flatland instance in
+  // FlatlandWindow. There is no |logical_size_| or |device_pixel_ratio_| in
+  // that case, so we should hold onto the Present until receiving them.
+  std::vector<base::OnceClosure> pending_present_closures_;
+
+  const raw_ptr<FlatlandSurfaceFactory> flatland_surface_factory_;
   const gfx::AcceleratedWidget window_;
 
   THREAD_CHECKER(thread_checker_);

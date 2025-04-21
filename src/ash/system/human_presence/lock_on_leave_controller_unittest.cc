@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "ash/constants/ash_switches.h"
 #include "ash/test/ash_test_base.h"
 #include "base/command_line.h"
+#include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/scoped_command_line.h"
 #include "base/test/scoped_feature_list.h"
@@ -36,7 +37,7 @@ class LockOnLeaveControllerTest : public AshTestBase {
   }
 
  protected:
-  FakeHumanPresenceDBusClient* human_presence_client_ = nullptr;
+  raw_ptr<FakeHumanPresenceDBusClient> human_presence_client_ = nullptr;
 
  private:
   base::test::ScopedFeatureList scoped_feature_list_;

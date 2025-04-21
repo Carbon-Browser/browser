@@ -1,6 +1,11 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "mojo/core/node_channel.h"
 
@@ -8,15 +13,17 @@
 #include <limits>
 #include <sstream>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "mojo/core/broker_host.h"
 #include "mojo/core/channel.h"
 #include "mojo/core/configuration.h"
 #include "mojo/core/core.h"
+#include "mojo/core/ipcz_driver/envelope.h"
 #include "mojo/core/request_context.h"
 
 namespace mojo {
@@ -51,6 +58,8 @@ enum class MessageType : uint32_t {
 struct alignas(8) Header {
   MessageType type;
 };
+
+static_assert(sizeof(Header) == kNodeChannelHeaderSize);
 
 static_assert(IsAlignedForChannelMessage(sizeof(Header)),
               "Invalid header size.");
@@ -89,7 +98,7 @@ using AcceptPeerData = AcceptPeerDataV0;
 struct alignas(8) AddBrokerClientDataV0 {
   ports::NodeName client_name;
 #if !BUILDFLAG(IS_WIN)
-  uint32_t process_handle = 0;
+  uint32_t process_handle;
 #endif
 };
 
@@ -254,7 +263,6 @@ scoped_refptr<NodeChannel> NodeChannel::Create(
     const ProcessErrorCallback& process_error_callback) {
 #if BUILDFLAG(IS_NACL)
   LOG(FATAL) << "Multi-process not yet supported on NaCl-SFI";
-  return nullptr;
 #else
   return new NodeChannel(delegate, std::move(connection_params),
                          channel_handle_policy, io_task_runner,
@@ -386,7 +394,9 @@ void NodeChannel::AddBrokerClient(const ports::NodeName& client_name,
   message->SetHandles(std::move(handles));
   data->client_name = client_name;
 #if !BUILDFLAG(IS_WIN)
-  data->process_handle = process_handle.Handle();
+  // Older clients treat this as a real process handle, but don't actually need
+  // it, so send a valid null handle.
+  data->process_handle = base::kNullProcessHandle;
 #endif
   WriteChannelMessage(std::move(message));
 }
@@ -505,7 +515,7 @@ void NodeChannel::RelayEventMessage(const ports::NodeName& destination,
   // will leak, but that means something else has probably broken and the
   // sending process won't likely be around much longer.
   //
-  // TODO(https://crbug.com/813112): We would like to be able to violate the
+  // TODO(crbug.com/40563346): We would like to be able to violate the
   // above stated assumption. We should not leak handles in cases where we
   // outlive the broker, as we may continue existing and eventually accept a new
   // broker invitation.
@@ -567,9 +577,11 @@ void NodeChannel::CreateAndBindLocalBrokerHost(
 #endif
 }
 
-void NodeChannel::OnChannelMessage(const void* payload,
-                                   size_t payload_size,
-                                   std::vector<PlatformHandle> handles) {
+void NodeChannel::OnChannelMessage(
+    const void* payload,
+    size_t payload_size,
+    std::vector<PlatformHandle> handles,
+    scoped_refptr<ipcz_driver::Envelope> envelope) {
   DCHECK(owning_task_runner()->RunsTasksInCurrentSequence());
 
   RequestContext request_context(RequestContext::Source::SYSTEM);
@@ -624,7 +636,7 @@ void NodeChannel::OnChannelMessage(const void* payload,
           break;
         }
         delegate_->OnAddBrokerClient(remote_node_name_, data.client_name,
-                                     data.process_handle);
+                                     base::kNullProcessHandle);
 #endif
         return;
       }
@@ -747,11 +759,17 @@ void NodeChannel::OnChannelMessage(const void* payload,
         if (payload_size <= sizeof(Header) + sizeof(data))
           break;
 
+        Channel::HandlePolicy handle_policy;
+        {
+          base::AutoLock lock(channel_lock_);
+          handle_policy = channel_->handle_policy();
+        }
+
         const void* message_start = reinterpret_cast<const uint8_t*>(payload) +
                                     sizeof(Header) + sizeof(data);
         Channel::MessagePtr message = Channel::Message::Deserialize(
             message_start, payload_size - sizeof(Header) - sizeof(data),
-            Channel::HandlePolicy::kAcceptHandles, from_process);
+            handle_policy, from_process);
         if (!message) {
           DLOG(ERROR) << "Dropping invalid relay message.";
           break;

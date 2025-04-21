@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,6 +7,7 @@
 #include <set>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/resource_coordinator/tab_helper.h"
 #include "chrome/browser/resource_coordinator/tab_load_tracker.h"
@@ -49,7 +50,8 @@ class MockSessionRestoreObserver : public SessionRestoreObserver {
     return session_restore_events_;
   }
 
-  const std::set<content::WebContents*>& tabs_restoring() const {
+  const std::set<raw_ptr<content::WebContents, SetExperimental>>&
+  tabs_restoring() const {
     return tabs_restoring_;
   }
 
@@ -72,14 +74,14 @@ class MockSessionRestoreObserver : public SessionRestoreObserver {
 
  private:
   std::vector<SessionRestoreEvent> session_restore_events_;
-  std::set<content::WebContents*> tabs_restoring_;
+  std::set<raw_ptr<content::WebContents, SetExperimental>> tabs_restoring_;
 };
 
 class SessionRestoreObserverTest : public ChromeRenderViewHostTestHarness {
  public:
   using RestoredTab = SessionRestoreDelegate::RestoredTab;
 
-  SessionRestoreObserverTest() {}
+  SessionRestoreObserverTest() = default;
 
   SessionRestoreObserverTest(const SessionRestoreObserverTest&) = delete;
   SessionRestoreObserverTest& operator=(const SessionRestoreObserverTest&) =
@@ -90,7 +92,7 @@ class SessionRestoreObserverTest : public ChromeRenderViewHostTestHarness {
     ChromeRenderViewHostTestHarness::SetUp();
     SetContents(CreateRestoredWebContents());
     restored_tabs_.emplace_back(web_contents(), false, false, false,
-                                absl::nullopt);
+                                std::nullopt);
   }
 
   void TearDown() override {
@@ -179,7 +181,7 @@ TEST_F(SessionRestoreObserverTest, SequentialSessionRestores) {
     different_test_contents.emplace_back(CreateRestoredWebContents());
     content::WebContents* test_contents = different_test_contents.back().get();
     std::vector<RestoredTab> restored_tabs{
-        RestoredTab(test_contents, false, false, false, absl::nullopt)};
+        RestoredTab(test_contents, false, false, false, std::nullopt)};
 
     SessionRestore::NotifySessionRestoreStartedLoadingTabs();
     SessionRestore::OnWillRestoreTab(test_contents);
@@ -204,7 +206,7 @@ TEST_F(SessionRestoreObserverTest, ConcurrentSessionRestores) {
   std::vector<RestoredTab> another_restored_tabs;
   auto test_contents = CreateRestoredWebContents();
   another_restored_tabs.emplace_back(test_contents.get(), false, false, false,
-                                     absl::nullopt);
+                                     std::nullopt);
 
   SessionRestore::NotifySessionRestoreStartedLoadingTabs();
   SessionRestore::OnWillRestoreTab(web_contents());
@@ -225,27 +227,4 @@ TEST_F(SessionRestoreObserverTest, ConcurrentSessionRestores) {
       MockSessionRestoreObserver::SessionRestoreEvent::FINISHED_LOADING_TABS,
       session_restore_events()[1]);
   EXPECT_EQ(0u, number_of_tabs_restoring());
-}
-
-TEST_F(SessionRestoreObserverTest, TabManagerShouldObserveSessionRestore) {
-  auto test_contents = CreateRestoredWebContents();
-
-  std::vector<SessionRestoreDelegate::RestoredTab> restored_tabs{
-      SessionRestoreDelegate::RestoredTab(test_contents.get(), false, false,
-                                          false, absl::nullopt)};
-
-  resource_coordinator::TabManager* tab_manager =
-      g_browser_process->GetTabManager();
-  EXPECT_FALSE(tab_manager->IsSessionRestoreLoadingTabs());
-  EXPECT_FALSE(tab_manager->IsTabInSessionRestore(test_contents.get()));
-
-  SessionRestore::NotifySessionRestoreStartedLoadingTabs();
-  SessionRestore::OnWillRestoreTab(test_contents.get());
-  EXPECT_TRUE(tab_manager->IsSessionRestoreLoadingTabs());
-  EXPECT_TRUE(tab_manager->IsTabInSessionRestore(test_contents.get()));
-  TabLoader::RestoreTabs(restored_tabs, base::TimeTicks());
-
-  LoadWebContents(test_contents.get());
-  EXPECT_FALSE(tab_manager->IsSessionRestoreLoadingTabs());
-  EXPECT_FALSE(tab_manager->IsTabInSessionRestore(test_contents.get()));
 }

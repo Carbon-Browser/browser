@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -18,14 +18,14 @@ namespace {
 
 class WebAppManifestSectionTableTest : public testing::Test {
  public:
-  WebAppManifestSectionTableTest() {}
+  WebAppManifestSectionTableTest() = default;
 
   WebAppManifestSectionTableTest(const WebAppManifestSectionTableTest&) =
       delete;
   WebAppManifestSectionTableTest& operator=(
       const WebAppManifestSectionTableTest&) = delete;
 
-  ~WebAppManifestSectionTableTest() override {}
+  ~WebAppManifestSectionTableTest() override = default;
 
  protected:
   void SetUp() override {
@@ -60,7 +60,7 @@ TEST_F(WebAppManifestSectionTableTest, GetNonExistManifest) {
   WebAppManifestSectionTable* web_app_manifest_section_table =
       WebAppManifestSectionTable::FromWebDatabase(db_.get());
   std::vector<WebAppManifestSection> retrieved_manifest =
-      web_app_manifest_section_table->GetWebAppManifest("https://bobpay.com");
+      web_app_manifest_section_table->GetWebAppManifest("https://bobpay.test");
   ASSERT_TRUE(retrieved_manifest.empty());
 }
 

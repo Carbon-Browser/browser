@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,8 @@
 #define PDF_PDF_ACCESSIBILITY_DATA_HANDLER_H_
 
 #include <vector>
+
+#include "services/screen_ai/buildflags/buildflags.h"
 
 namespace chrome_pdf {
 
@@ -28,6 +30,12 @@ class PdfAccessibilityDataHandler {
       std::vector<AccessibilityTextRunInfo> text_runs,
       std::vector<AccessibilityCharInfo> chars,
       AccessibilityPageObjects page_objects) = 0;
+
+#if BUILDFLAG(ENABLE_SCREEN_AI_SERVICE)
+  // Notifies that at least one page is searchified. This function is called at
+  // most once.
+  virtual void OnHasSearchifyText() = 0;
+#endif
 };
 
 }  // namespace chrome_pdf

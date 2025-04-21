@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -80,6 +80,30 @@ void ChooserController::OpenAdapterOffHelpUrl() const {
 }
 
 void ChooserController::OpenPermissionPreferences() const {
+  NOTREACHED();
+}
+
+bool ChooserController::ShouldShowAdapterOffView() const {
+  return false;
+}
+
+int ChooserController::GetAdapterOffMessageId() const {
+  NOTREACHED();
+}
+
+int ChooserController::GetTurnAdapterOnLinkTextMessageId() const {
+  NOTREACHED();
+}
+
+bool ChooserController::ShouldShowAdapterUnauthorizedView() const {
+  return false;
+}
+
+int ChooserController::GetBluetoothUnauthorizedMessageId() const {
+  NOTREACHED();
+}
+
+int ChooserController::GetAuthorizeBluetoothLinkTextMessageId() const {
   NOTREACHED();
 }
 

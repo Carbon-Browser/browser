@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -64,10 +64,10 @@ MATCHER_P2(RestrictionsWithMinAndMaxMilestones,
 MATCHER(UnboundedRestrictions,
         "is a Restrictions with neither min nor max milestones") {
   return ExplainMatchResult(
-             Field(&Restrictions::min_milestone, Eq(absl::nullopt)), arg,
+             Field(&Restrictions::min_milestone, Eq(std::nullopt)), arg,
              result_listener) &&
          ExplainMatchResult(
-             Field(&Restrictions::max_milestone, Eq(absl::nullopt)), arg,
+             Field(&Restrictions::max_milestone, Eq(std::nullopt)), arg,
              result_listener);
 }
 

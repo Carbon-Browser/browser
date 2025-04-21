@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "third_party/blink/public/common/browser_interface_broker_proxy.h"
+#include "third_party/blink/public/platform/browser_interface_broker_proxy.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_background_fetch_options.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_image_resource.h"
 #include "third_party/blink/renderer/modules/background_fetch/background_fetch_registration.h"
@@ -62,16 +62,16 @@ void BackgroundFetchBridge::Fetch(
   GetService()->Fetch(GetSupplementable()->RegistrationId(), developer_id,
                       std::move(requests), std::move(options), icon,
                       std::move(ukm_data),
-                      WTF::Bind(&BackgroundFetchBridge::DidGetRegistration,
-                                WrapPersistent(this), std::move(callback)));
+                      WTF::BindOnce(&BackgroundFetchBridge::DidGetRegistration,
+                                    WrapPersistent(this), std::move(callback)));
 }
 
 void BackgroundFetchBridge::GetRegistration(const String& developer_id,
                                             RegistrationCallback callback) {
   GetService()->GetRegistration(
       GetSupplementable()->RegistrationId(), developer_id,
-      WTF::Bind(&BackgroundFetchBridge::DidGetRegistration,
-                WrapPersistent(this), std::move(callback)));
+      WTF::BindOnce(&BackgroundFetchBridge::DidGetRegistration,
+                    WrapPersistent(this), std::move(callback)));
 }
 
 void BackgroundFetchBridge::DidGetRegistration(

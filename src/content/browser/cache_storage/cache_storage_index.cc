@@ -1,10 +1,13 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/cache_storage/cache_storage_index.h"
 
 #include <utility>
+
+#include "base/containers/contains.h"
+#include "base/not_fatal_until.h"
 
 namespace content {
 
@@ -30,8 +33,7 @@ CacheStorageIndex& CacheStorageIndex::operator=(CacheStorageIndex&& rhs) {
 
 void CacheStorageIndex::Insert(const CacheMetadata& cache_metadata) {
   DCHECK(!has_doomed_cache_);
-  DCHECK(cache_metadata_map_.find(cache_metadata.name) ==
-         cache_metadata_map_.end());
+  DCHECK(!base::Contains(cache_metadata_map_, cache_metadata.name));
   ordered_cache_metadata_.push_back(cache_metadata);
   cache_metadata_map_[cache_metadata.name] = --ordered_cache_metadata_.end();
   storage_size_ = CacheStorage::kSizeUnknown;
@@ -41,7 +43,7 @@ void CacheStorageIndex::Insert(const CacheMetadata& cache_metadata) {
 void CacheStorageIndex::Delete(const std::string& cache_name) {
   DCHECK(!has_doomed_cache_);
   auto it = cache_metadata_map_.find(cache_name);
-  DCHECK(it != cache_metadata_map_.end());
+  CHECK(it != cache_metadata_map_.end(), base::NotFatalUntil::M130);
   ordered_cache_metadata_.erase(it->second);
   cache_metadata_map_.erase(it);
   storage_size_ = CacheStorage::kSizeUnknown;
@@ -52,10 +54,18 @@ bool CacheStorageIndex::SetCacheSize(const std::string& cache_name,
                                      int64_t size) {
   if (has_doomed_cache_)
     DCHECK_NE(cache_name, doomed_cache_metadata_.name);
+
   auto it = cache_metadata_map_.find(cache_name);
-  DCHECK(it != cache_metadata_map_.end());
-  if (it->second->size == size)
+  if (it == cache_metadata_map_.end()) {
+    // This can happen during initialization. The cache should be added to the
+    // map soon and the size will be set correctly at that point.
     return false;
+  }
+
+  if (it->second->size == size) {
+    return false;
+  }
+
   it->second->size = size;
   storage_size_ = CacheStorage::kSizeUnknown;
   return true;
@@ -82,9 +92,16 @@ bool CacheStorageIndex::SetCachePadding(const std::string& cache_name,
   DCHECK(!has_doomed_cache_ || cache_name != doomed_cache_metadata_.name)
       << "Setting padding of doomed cache: \"" << cache_name << '"';
   auto it = cache_metadata_map_.find(cache_name);
-  DCHECK(it != cache_metadata_map_.end());
-  if (it->second->padding == padding)
+  if (it == cache_metadata_map_.end()) {
+    // This can happen during initialization. The cache should be added to the
+    // map soon and the padding will be set correctly at that point.
     return false;
+  }
+
+  if (it->second->padding == padding) {
+    return false;
+  }
+
   it->second->padding = padding;
   storage_padding_ = CacheStorage::kSizeUnknown;
   return true;
@@ -135,7 +152,7 @@ void CacheStorageIndex::CalculateStoragePadding() {
 void CacheStorageIndex::DoomCache(const std::string& cache_name) {
   DCHECK(!has_doomed_cache_);
   auto map_it = cache_metadata_map_.find(cache_name);
-  DCHECK(map_it != cache_metadata_map_.end());
+  CHECK(map_it != cache_metadata_map_.end(), base::NotFatalUntil::M130);
   doomed_cache_metadata_ = std::move(*(map_it->second));
   after_doomed_cache_metadata_ = ordered_cache_metadata_.erase(map_it->second);
   cache_metadata_map_.erase(map_it);

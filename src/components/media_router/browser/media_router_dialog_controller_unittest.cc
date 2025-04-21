@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "build/build_config.h"
 #include "components/media_router/browser/media_router_metrics.h"
 #include "components/media_router/browser/presentation/start_presentation_context.h"
@@ -34,7 +34,7 @@ class TestMediaRouterDialogController : public MediaRouterDialogController {
  public:
   explicit TestMediaRouterDialogController(content::WebContents* initiator)
       : MediaRouterDialogController(initiator) {}
-  ~TestMediaRouterDialogController() override {}
+  ~TestMediaRouterDialogController() override = default;
 
   bool IsShowingMediaRouterDialog() const override { return has_dialog_; }
   void CreateMediaRouterDialog(
@@ -49,8 +49,8 @@ class TestMediaRouterDialogController : public MediaRouterDialogController {
 
 class MockWebContentsDelegate : public content::WebContentsDelegate {
  public:
-  MockWebContentsDelegate() {}
-  ~MockWebContentsDelegate() override {}
+  MockWebContentsDelegate() = default;
+  ~MockWebContentsDelegate() override = default;
 
   MOCK_METHOD1(ActivateContents, void(content::WebContents* web_contents));
 };
@@ -66,8 +66,8 @@ class MediaRouterDialogControllerTest
                void(const blink::mojom::PresentationError& error));
 
  protected:
-  MediaRouterDialogControllerTest() {}
-  ~MediaRouterDialogControllerTest() override {}
+  MediaRouterDialogControllerTest() = default;
+  ~MediaRouterDialogControllerTest() override = default;
 
   void SetUp() override {
     content::RenderViewHostTestHarness::SetUp();

@@ -10,16 +10,6 @@ enum GamepadHand {
 };
 
 [Exposed=Window]
-interface GamepadHapticActuator {
-  readonly attribute GamepadHapticActuatorType type;
-  Promise<boolean> pulse(double value, double duration);
-};
-
-enum GamepadHapticActuatorType {
-  "vibration"
-};
-
-[Exposed=Window]
 interface GamepadPose {
   readonly attribute boolean hasOrientation;
   readonly attribute boolean hasPosition;
@@ -45,4 +35,9 @@ partial interface Gamepad {
   readonly attribute FrozenArray<GamepadHapticActuator> hapticActuators;
   readonly attribute GamepadPose? pose;
   readonly attribute FrozenArray<GamepadTouch>? touchEvents;
+};
+
+[Exposed=Window]
+partial interface GamepadHapticActuator {
+  Promise<boolean> pulse(double value, double duration);
 };

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,7 +25,7 @@ class PreloaderNetworkHintsMock : public WebPrescientNetworking {
  public:
   PreloaderNetworkHintsMock() : did_preconnect_(false) {}
 
-  void PrefetchDNS(const WebString& hostname) override {}
+  void PrefetchDNS(const WebURL& url) override {}
   void Preconnect(const WebURL& url, bool allow_credentials) override {
     did_preconnect_ = true;
     is_https_ = url.ProtocolIs("https");
@@ -56,10 +56,10 @@ class HTMLResourcePreloaderTest : public PageTestBase {
     // TODO(yoav): Need a mock loader here to verify things are happenning
     // beyond preconnect.
     auto preload_request = PreloadRequest::CreateIfNeeded(
-        String(), TextPosition::MinimumPosition(), test_case.url,
-        KURL(test_case.base_url), ResourceType::kImage,
+        String(), test_case.url, KURL(test_case.base_url), ResourceType::kImage,
         network::mojom::ReferrerPolicy(), ResourceFetcher::kImageNotImageSet,
-        nullptr /* exclusion_info */, FetchParameters::ResourceWidth(),
+        nullptr /* exclusion_info */, std::nullopt /* resource_width */,
+        std::nullopt /* resource_height */,
         PreloadRequest::kRequestTypePreconnect);
     DCHECK(preload_request);
     if (test_case.is_cors)

@@ -1,4 +1,4 @@
-// Copyright (c) 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,9 +15,6 @@
 #include "chrome/browser/prefs/session_startup_pref.h"
 #include "chrome/browser/profile_resetter/profile_resetter.h"
 
-namespace base {
-class ListValue;
-}
 namespace reset_report {
 class ChromeResetReport;
 }
@@ -137,7 +134,7 @@ void SendSettingsFeedbackProto(const reset_report::ChromeResetReport& report,
 
 // Returns list of key/value pairs for all available reported information
 // from the |profile| and some additional fields.
-std::unique_ptr<base::ListValue> GetReadableFeedbackForSnapshot(
+base::Value::List GetReadableFeedbackForSnapshot(
     Profile* profile,
     const ResettableSettingsSnapshot& snapshot);
 

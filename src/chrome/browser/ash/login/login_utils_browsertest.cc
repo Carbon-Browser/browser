@@ -1,10 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include <string>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/run_loop.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/ash/login/login_manager_test.h"
@@ -13,13 +13,14 @@
 #include "chrome/browser/ash/login/wizard_controller.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/common/pref_names.h"
-#include "chromeos/system/fake_statistics_provider.h"
+#include "chromeos/ash/components/system/fake_statistics_provider.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/test/browser_test.h"
 #include "rlz/buildflags/buildflags.h"
 
 #if BUILDFLAG(ENABLE_RLZ)
-#include "components/rlz/rlz_tracker.h"
+#include "components/rlz/rlz_tracker.h"  // nogncheck
+#include "content/public/browser/browser_thread.h"
 #endif
 
 namespace ash {

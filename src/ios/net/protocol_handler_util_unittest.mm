@@ -1,4 +1,4 @@
-// Copyright 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,8 +11,8 @@
 #include "base/run_loop.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/test/task_environment.h"
+#import "net/base/apple/url_conversions.h"
 #include "net/base/elements_upload_data_stream.h"
-#import "net/base/mac/url_conversions.h"
 #include "net/base/upload_bytes_element_reader.h"
 #include "net/http/http_request_headers.h"
 #include "net/http/http_response_headers.h"
@@ -27,19 +27,6 @@
 #include "testing/gtest_mac.h"
 #include "testing/platform_test.h"
 #include "url/gurl.h"
-
-#if !defined(__has_feature) || !__has_feature(objc_arc)
-#error "This file requires ARC support."
-#endif
-
-// When C++ exceptions are disabled, the C++ library defines |try| and
-// |catch| so as to allow exception-expecting C++ code to build properly when
-// language support for exceptions is not present.  These macros interfere
-// with the use of |@try| and |@catch| in Objective-C files such as this one.
-// Undefine these macros here, after everything has been #included, since
-// there will be no C++ uses and only Objective-C uses from this point on.
-#undef try
-#undef catch
 
 namespace net {
 namespace {
@@ -206,11 +193,8 @@ TEST_F(ProtocolHandlerUtilTest, CopyHttpHeaders) {
   EXPECT_EQ("referrer", out_request->referrer());
   const HttpRequestHeaders& headers = out_request->extra_request_headers();
   EXPECT_FALSE(headers.HasHeader("Content-Type"));  // Only in POST requests.
-  std::string header;
-  EXPECT_TRUE(headers.GetHeader("Accept", &header));
-  EXPECT_EQ("money/cash", header);
-  EXPECT_TRUE(headers.GetHeader("Foo", &header));
-  EXPECT_EQ("bar", header);
+  EXPECT_EQ("money/cash", headers.GetHeader("Accept"));
+  EXPECT_EQ("bar", headers.GetHeader("Foo"));
 }
 
 TEST_F(ProtocolHandlerUtilTest, AddMissingHeaders) {
@@ -220,19 +204,17 @@ TEST_F(ProtocolHandlerUtilTest, AddMissingHeaders) {
   std::unique_ptr<URLRequest> out_request(
       request_context_->CreateRequest(url, DEFAULT_PRIORITY, nullptr));
   out_request->set_method("POST");
-  std::unique_ptr<UploadElementReader> reader(
-      new UploadBytesElementReader(nullptr, 0));
+  auto reader = std::make_unique<UploadBytesElementReader>(
+      base::byte_span_from_cstring(""));
   out_request->set_upload(
-      ElementsUploadDataStream::CreateWithReader(std::move(reader), 0));
+      ElementsUploadDataStream::CreateWithReader(std::move(reader)));
   CopyHttpHeaders(in_request, out_request.get());
 
   // Some headers are added by default if missing.
   const HttpRequestHeaders& headers = out_request->extra_request_headers();
-  std::string header;
-  EXPECT_TRUE(headers.GetHeader("Accept", &header));
-  EXPECT_EQ("*/*", header);
-  EXPECT_TRUE(headers.GetHeader("Content-Type", &header));
-  EXPECT_EQ("application/x-www-form-urlencoded", header);
+  EXPECT_EQ("*/*", headers.GetHeader("Accept"));
+  EXPECT_EQ("application/x-www-form-urlencoded",
+            headers.GetHeader("Content-Type"));
 }
 
 }  // namespace net

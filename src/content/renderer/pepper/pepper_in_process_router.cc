@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,10 +6,9 @@
 
 #include <memory>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/task/single_thread_task_runner.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "content/public/renderer/render_frame.h"
 #include "content/public/renderer/render_thread.h"
 #include "content/renderer/pepper/renderer_ppapi_host_impl.h"
@@ -77,14 +76,12 @@ bool PepperInProcessRouter::OnPluginMsgReceived(const IPC::Message& msg) {
     if (!UnpackMessage<PpapiPluginMsg_ResourceReply>(
             msg, &reply_params, &nested_msg)) {
       NOTREACHED();
-      return false;
     }
   } else if (msg.type() == PpapiHostMsg_InProcessResourceReply::ID) {
     // Resource reply from the browser (has a routing id).
     if (!UnpackMessage<PpapiHostMsg_InProcessResourceReply>(
             msg, &reply_params, &nested_msg)) {
       NOTREACHED();
-      return false;
     }
   } else {
     return false;
@@ -110,7 +107,7 @@ bool PepperInProcessRouter::SendToHost(IPC::Message* msg) {
     // This won't cause message reordering problems because the resource
     // destroyed message is always the last one sent for a resource.
     if (message->type() == PpapiHostMsg_ResourceDestroyed::ID) {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(&PepperInProcessRouter::DispatchHostMsg,
                                     weak_factory_.GetWeakPtr(),
                                     base::Owned(message.release())));
@@ -123,8 +120,8 @@ bool PepperInProcessRouter::SendToHost(IPC::Message* msg) {
   }
 
   pending_message_id_ = IPC::SyncMessage::GetMessageId(*message);
-  reply_deserializer_.reset(
-      static_cast<IPC::SyncMessage*>(message.get())->GetReplyDeserializer());
+  reply_deserializer_ =
+      static_cast<IPC::SyncMessage*>(message.get())->TakeReplyDeserializer();
   reply_result_ = false;
 
   bool result = host_impl_->GetPpapiHost()->OnMessageReceived(*message);
@@ -144,7 +141,7 @@ bool PepperInProcessRouter::SendToPlugin(IPC::Message* msg) {
   } else {
     CHECK(!pending_message_id_);
     // Dispatch plugin messages from the message loop.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&PepperInProcessRouter::DispatchPluginMsg,
                                   weak_factory_.GetWeakPtr(),
                                   base::Owned(message.release())));

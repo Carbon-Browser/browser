@@ -1,21 +1,22 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
+import 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import 'chrome://resources/cr_elements/cr_input/cr_input.js';
 import '../settings_shared.css.js';
 
-import {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.m.js';
-import {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
-import {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
+import type {CrButtonElement} from 'chrome://resources/cr_elements/cr_button/cr_button.js';
+import type {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.js';
+import type {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.js';
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {loadTimeData} from '../i18n_setup.js';
 
 import {getTemplate} from './startup_url_dialog.html.js';
-import {StartupPageInfo, StartupUrlsPageBrowserProxy, StartupUrlsPageBrowserProxyImpl} from './startup_urls_page_browser_proxy.js';
+import type {StartupPageInfo, StartupUrlsPageBrowserProxy} from './startup_urls_page_browser_proxy.js';
+import {StartupUrlsPageBrowserProxyImpl} from './startup_urls_page_browser_proxy.js';
 
 
 /**
@@ -112,11 +113,11 @@ export class SettingsStartupUrlDialogElement extends PolymerElement {
     return ['', invalidUrl, tooLong][this.error_];
   }
 
-  private onCancelTap_() {
+  private onCancelClick_() {
     this.$.dialog.close();
   }
 
-  private onActionButtonTap_() {
+  private onActionButtonClick_() {
     const whenDone = this.model ?
         this.browserProxy_.editStartupPage(this.model.modelIndex, this.url_) :
         this.browserProxy_.addStartupPage(this.url_);

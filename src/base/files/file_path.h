@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -105,10 +105,11 @@
 #include <cstddef>
 #include <iosfwd>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/base_export.h"
-#include "base/strings/string_piece.h"
+#include "base/compiler_specific.h"
 #include "base/trace_event/base_tracing_forward.h"
 #include "build/build_config.h"
 
@@ -132,10 +133,21 @@
 
 // Macros for string literal initialization of FilePath::CharType[].
 #if BUILDFLAG(IS_WIN)
-#define FILE_PATH_LITERAL(x) L##x
+
+// The `FILE_PATH_LITERAL_INTERNAL` indirection allows `FILE_PATH_LITERAL` to
+// work correctly with macro parameters, for example
+// `FILE_PATH_LITERAL(TEST_FILE)` where `TEST_FILE` is a macro #defined as
+// "TestFile".
+#define FILE_PATH_LITERAL_INTERNAL(x) L##x
+#define FILE_PATH_LITERAL(x) FILE_PATH_LITERAL_INTERNAL(x)
+
 #elif BUILDFLAG(IS_POSIX) || BUILDFLAG(IS_FUCHSIA)
 #define FILE_PATH_LITERAL(x) x
 #endif  // BUILDFLAG(IS_WIN)
+
+#if BUILDFLAG(IS_APPLE)
+typedef const struct __CFString* CFStringRef;
+#endif
 
 namespace base {
 
@@ -159,7 +171,7 @@ class BASE_EXPORT FilePath {
 #endif  // BUILDFLAG(IS_WIN)
 
   typedef StringType::value_type CharType;
-  typedef BasicStringPiece<CharType> StringPieceType;
+  typedef std::basic_string_view<CharType> StringPieceType;
 
   // Null-terminated array of separators used to separate components in paths.
   // Each character in this array is a valid separator, but kSeparators[0] is
@@ -202,11 +214,9 @@ class BASE_EXPORT FilePath {
   bool operator!=(const FilePath& that) const;
 
   // Required for some STL containers and operations
-  bool operator<(const FilePath& that) const {
-    return path_ < that.path_;
-  }
+  bool operator<(const FilePath& that) const { return path_ < that.path_; }
 
-  const StringType& value() const { return path_; }
+  const StringType& value() const LIFETIME_BOUND { return path_; }
 
   [[nodiscard]] bool empty() const { return path_.empty(); }
 
@@ -316,7 +326,8 @@ class BASE_EXPORT FilePath {
   // path == "C:\pics\jojo"     suffix == " (1)", returns "C:\pics\jojo (1)"
   // path == "C:\pics.old\jojo" suffix == " (1)", returns "C:\pics.old\jojo (1)"
   [[nodiscard]] FilePath InsertBeforeExtension(StringPieceType suffix) const;
-  [[nodiscard]] FilePath InsertBeforeExtensionASCII(StringPiece suffix) const;
+  [[nodiscard]] FilePath InsertBeforeExtensionASCII(
+      std::string_view suffix) const;
 
   // Adds |extension| to |file_name|. Returns the current FilePath if
   // |extension| is empty. Returns "" if BaseName() == "." or "..".
@@ -324,7 +335,7 @@ class BASE_EXPORT FilePath {
 
   // Like above, but takes the extension as an ASCII string. See AppendASCII for
   // details on how this is handled.
-  [[nodiscard]] FilePath AddExtensionASCII(StringPiece extension) const;
+  [[nodiscard]] FilePath AddExtensionASCII(std::string_view extension) const;
 
   // Replaces the extension of |file_name| with |extension|.  If |file_name|
   // does not have an extension, then |extension| is added.  If |extension| is
@@ -343,9 +354,9 @@ class BASE_EXPORT FilePath {
   // Returns a FilePath by appending a separator and the supplied path
   // component to this object's path.  Append takes care to avoid adding
   // excessive separators if this object's path already ends with a separator.
-  // If this object's path is kCurrentDirectory, a new FilePath corresponding
-  // only to |component| is returned.  |component| must be a relative path;
-  // it is an error to pass an absolute path.
+  // If this object's path is kCurrentDirectory ('.'), a new FilePath
+  // corresponding only to |component| is returned.  |component| must be a
+  // relative path; it is an error to pass an absolute path.
   [[nodiscard]] FilePath Append(StringPieceType component) const;
   [[nodiscard]] FilePath Append(const FilePath& component) const;
   [[nodiscard]] FilePath Append(const SafeBaseName& component) const;
@@ -356,7 +367,7 @@ class BASE_EXPORT FilePath {
   // On Linux, although it can use any 8-bit encoding for paths, we assume that
   // ASCII is a valid subset, regardless of the encoding, since many operating
   // system paths will always be ASCII.
-  [[nodiscard]] FilePath AppendASCII(StringPiece component) const;
+  [[nodiscard]] FilePath AppendASCII(std::string_view component) const;
 
   // Returns true if this FilePath contains an absolute path.  On Windows, an
   // absolute path begins with either a drive letter specification followed by
@@ -413,7 +424,7 @@ class BASE_EXPORT FilePath {
   std::u16string AsUTF16Unsafe() const;
 
   // Returns a FilePath object from a path name in ASCII.
-  static FilePath FromASCII(StringPiece ascii);
+  static FilePath FromASCII(std::string_view ascii);
 
   // Returns a FilePath object from a path name in UTF-8. This function
   // should only be used for cases where you are sure that the input
@@ -423,10 +434,10 @@ class BASE_EXPORT FilePath {
   // internally calls SysWideToNativeMB() on POSIX systems other than Mac
   // and Chrome OS, to mitigate the encoding issue. See the comment at
   // AsUTF8Unsafe() for details.
-  static FilePath FromUTF8Unsafe(StringPiece utf8);
+  static FilePath FromUTF8Unsafe(std::string_view utf8);
 
   // Similar to FromUTF8Unsafe, but accepts UTF-16 instead.
-  static FilePath FromUTF16Unsafe(StringPiece16 utf16);
+  static FilePath FromUTF16Unsafe(std::u16string_view utf16);
 
   void WriteToPickle(Pickle* pickle) const;
   bool ReadFromPickle(PickleIterator* iter);
@@ -466,8 +477,9 @@ class BASE_EXPORT FilePath {
   // HFS, which is close to, but not quite, decomposition form D. See
   // http://developer.apple.com/mac/library/technotes/tn/tn1150.html#UnicodeSubtleties
   // for further comments.
-  // Returns the epmty string if the conversion failed.
+  // Returns the empty string if the conversion failed.
   static StringType GetHFSDecomposedForm(StringPieceType string);
+  static StringType GetHFSDecomposedForm(CFStringRef cfstring);
 
   // Special UTF-8 version of FastUnicodeCompare. Cf:
   // http://developer.apple.com/mac/library/technotes/tn/tn1150.html#StringComparisonAlgorithm
@@ -485,6 +497,9 @@ class BASE_EXPORT FilePath {
   // Returns true if the path is a content uri, or false otherwise.
   bool IsContentUri() const;
 #endif
+
+  // NOTE: When adding a new public method, consider adding it to
+  // file_path_fuzzer.cc as well.
 
  private:
   // Remove trailing separators from this object.  If the path is absolute, it

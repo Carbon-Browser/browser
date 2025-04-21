@@ -1,20 +1,14 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 // Include test fixture.
-GEN_INCLUDE(['../testing/chromevox_next_e2e_test_base.js']);
+GEN_INCLUDE(['../testing/chromevox_e2e_test_base.js']);
 
 /**
  * Test fixture for Color.
  */
-ChromeVoxColorTest = class extends ChromeVoxNextE2ETest {
-  /** @override */
-  async setUpDeferred() {
-    await super.setUpDeferred();
-    await importModule('Color', '/chromevox/background/color.js');
-  }
-};
+ChromeVoxColorTest = class extends ChromeVoxE2ETest {};
 
 
 AX_TEST_F('ChromeVoxColorTest', 'FindDistanceTest', function() {

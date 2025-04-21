@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,9 +14,9 @@ namespace ash {
 // or collapsed through SetExpandedAmount and the icon will be rotated on the
 // `expanded_amount_`. Expanded is the default state.
 class CollapseButton : public IconButton {
- public:
-  METADATA_HEADER(CollapseButton);
+  METADATA_HEADER(CollapseButton, IconButton)
 
+ public:
   explicit CollapseButton(PressedCallback callback);
 
   CollapseButton(const CollapseButton&) = delete;

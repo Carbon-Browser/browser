@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -28,7 +28,7 @@ class MojoSingleSampleMetric : public mojom::SingleSampleMetric {
   MojoSingleSampleMetric(const MojoSingleSampleMetric&) = delete;
   MojoSingleSampleMetric& operator=(const MojoSingleSampleMetric&) = delete;
 
-  ~MojoSingleSampleMetric() override {}
+  ~MojoSingleSampleMetric() override = default;
 
  private:
   // mojom::SingleSampleMetric:
@@ -42,7 +42,7 @@ class MojoSingleSampleMetric : public mojom::SingleSampleMetric {
 class MojoSingleSampleMetricsProvider
     : public mojom::SingleSampleMetricsProvider {
  public:
-  MojoSingleSampleMetricsProvider() {}
+  MojoSingleSampleMetricsProvider() = default;
 
   MojoSingleSampleMetricsProvider(const MojoSingleSampleMetricsProvider&) =
       delete;

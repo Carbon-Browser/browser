@@ -1,38 +1,70 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/40285824): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "sql/database.h"
 
 #include <stddef.h>
 #include <stdint.h>
-#include <cstdint>
+#include <sys/stat.h>
+#include <sys/types.h>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include <memory>
+#include <optional>
+#include <string>
+#include <tuple>
+#include <utility>
+#include <vector>
+
+#include "base/check.h"
+#include "base/containers/contains.h"
+#include "base/containers/span.h"
+#include "base/files/file.h"
 #include "base/files/file_util.h"
 #include "base/files/scoped_temp_dir.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
+#include "base/location.h"
 #include "base/logging.h"
 #include "base/memory/raw_ptr.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/ranges/algorithm.h"
+#include "base/run_loop.h"
 #include "base/sequence_checker.h"
+#include "base/strings/cstring_view.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/task_traits.h"
+#include "base/task/thread_pool.h"
 #include "base/test/bind.h"
 #include "base/test/gtest_util.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/test/task_environment.h"
 #include "base/thread_annotations.h"
+#include "base/trace_event/memory_dump_request_args.h"
 #include "base/trace_event/process_memory_dump.h"
 #include "build/build_config.h"
 #include "sql/database_memory_dump_provider.h"
 #include "sql/meta_table.h"
-#include "sql/sql_features.h"
+#include "sql/recovery.h"
 #include "sql/statement.h"
-#include "sql/test/database_test_peer.h"
+#include "sql/statement_id.h"
 #include "sql/test/scoped_error_expecter.h"
 #include "sql/test/test_helpers.h"
 #include "sql/transaction.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/abseil-cpp/absl/cleanup/cleanup.h"
 #include "third_party/sqlite/sqlite3.h"
+
+#if BUILDFLAG(IS_WIN)
+#include "base/strings/strcat.h"
+#endif
 
 namespace sql {
 
@@ -43,7 +75,7 @@ using sql::test::ExecuteWithResult;
 // Helper to return the count of items in sqlite_schema.  Return -1 in
 // case of error.
 int SqliteSchemaCount(Database* db) {
-  const char* kSchemaCount = "SELECT COUNT(*) FROM sqlite_schema";
+  static constexpr char kSchemaCount[] = "SELECT COUNT(*) FROM sqlite_schema";
   Statement s(db->GetUniqueStatement(kSchemaCount));
   return s.Step() ? s.ColumnInt(0) : -1;
 }
@@ -56,7 +88,7 @@ void RazeErrorCallback(Database* db,
   // Nothing here needs extended errors at this time.
   EXPECT_EQ(expected_error, expected_error & 0xff);
   EXPECT_EQ(expected_error, error & 0xff);
-  db->RazeAndClose();
+  db->RazeAndPoison();
 }
 
 #if BUILDFLAG(IS_POSIX)
@@ -77,6 +109,11 @@ class ScopedUmaskSetter {
 };
 #endif  // BUILDFLAG(IS_POSIX)
 
+bool IsOpenedInCorrectJournalMode(Database* db, bool is_wal) {
+  std::string expected_mode = is_wal ? "wal" : "truncate";
+  return ExecuteWithResult(db, "PRAGMA journal_mode") == expected_mode;
+}
+
 }  // namespace
 
 // We use the parameter to run all tests with WAL mode on and off.
@@ -91,16 +128,28 @@ class SQLDatabaseTest : public testing::Test,
   ~SQLDatabaseTest() override = default;
 
   void SetUp() override {
-    db_ = std::make_unique<Database>(GetDBOptions());
     ASSERT_TRUE(temp_dir_.CreateUniqueTempDir());
     db_path_ = temp_dir_.GetPath().AppendASCII("database_test.sqlite");
+    CreateFreshDB();
+  }
+
+  // Resets the database handle and deletes the backing file. On return, `db_`
+  // has just been opened on a fresh temp file named by `db_path_`.
+  void CreateFreshDB() {
+    ASSERT_FALSE(db_path_.empty());
+
+    db_.reset();
+    ASSERT_TRUE(base::DeleteFile(db_path_));
+
+    db_ = std::make_unique<Database>(GetDBOptions(), test::kTestTag);
     ASSERT_TRUE(db_->Open(db_path_));
+    ASSERT_TRUE(base::PathExists(db_path_));
   }
 
   DatabaseOptions GetDBOptions() {
     DatabaseOptions options;
     options.wal_mode = IsWALEnabled();
-    // TODO(crbug.com/1120969): Remove after switching to exclusive mode on by
+    // TODO(crbug.com/40146017): Remove after switching to exclusive mode on by
     // default.
     options.exclusive_locking = false;
 #if BUILDFLAG(IS_FUCHSIA)  // Exclusive mode needs to be enabled to enter WAL
@@ -230,8 +279,8 @@ TEST_P(SQLDatabaseTest, ExecuteScriptForTesting_StopsOnStepError) {
 TEST_P(SQLDatabaseTest, CachedStatement) {
   StatementID id1 = SQL_FROM_HERE;
   StatementID id2 = SQL_FROM_HERE;
-  static const char kId1Sql[] = "SELECT a FROM foo";
-  static const char kId2Sql[] = "SELECT b FROM foo";
+  static constexpr char kId1Sql[] = "SELECT a FROM foo";
+  static constexpr char kId2Sql[] = "SELECT b FROM foo";
 
   ASSERT_TRUE(db_->Execute("CREATE TABLE foo (a, b)"));
   ASSERT_TRUE(db_->Execute("INSERT INTO foo(a, b) VALUES (12, 13)"));
@@ -368,7 +417,7 @@ TEST_P(SQLDatabaseTest, GetLastInsertRowId) {
 // Test the scoped error expecter by attempting to insert a duplicate
 // value into an index.
 TEST_P(SQLDatabaseTest, ScopedErrorExpecter) {
-  const char* kCreateSql = "CREATE TABLE foo (id INTEGER UNIQUE)";
+  static constexpr char kCreateSql[] = "CREATE TABLE foo (id INTEGER UNIQUE)";
   ASSERT_TRUE(db_->Execute(kCreateSql));
   ASSERT_TRUE(db_->Execute("INSERT INTO foo (id) VALUES (12)"));
 
@@ -381,7 +430,7 @@ TEST_P(SQLDatabaseTest, ScopedErrorExpecter) {
 }
 
 TEST_P(SQLDatabaseTest, SchemaIntrospectionUsesErrorExpecter) {
-  const char* kCreateSql = "CREATE TABLE foo (id INTEGER UNIQUE)";
+  static constexpr char kCreateSql[] = "CREATE TABLE foo (id INTEGER UNIQUE)";
   ASSERT_TRUE(db_->Execute(kCreateSql));
   ASSERT_FALSE(db_->DoesTableExist("bar"));
   ASSERT_TRUE(db_->DoesTableExist("foo"));
@@ -392,13 +441,16 @@ TEST_P(SQLDatabaseTest, SchemaIntrospectionUsesErrorExpecter) {
   ASSERT_TRUE(sql::test::CorruptSizeInHeader(db_path_));
 
   {
+    base::HistogramTester tester;
     sql::test::ScopedErrorExpecter expecter;
     expecter.ExpectError(SQLITE_CORRUPT);
-    ASSERT_TRUE(db_->Open(db_path_));
+    ASSERT_FALSE(db_->Open(db_path_));
     ASSERT_FALSE(db_->DoesTableExist("bar"));
     ASSERT_FALSE(db_->DoesTableExist("foo"));
     ASSERT_FALSE(db_->DoesColumnExist("foo", "id"));
     ASSERT_TRUE(expecter.SawExpectedErrors());
+    tester.ExpectUniqueSample("Sql.Database.Open.FirstAttempt.Error.Test",
+                              SqliteResultCode::kCorrupt, 1);
   }
 }
 
@@ -458,6 +510,100 @@ TEST_P(SQLDatabaseTest, ResetErrorCallback) {
       << "Execute() should not report errors after reset_error_callback()";
 }
 
+// Regression test for https://crbug.com/1522873
+TEST_P(SQLDatabaseTest, ErrorCallbackThatClosesDb) {
+  for (const bool reopen_db : {false, true}) {
+    SCOPED_TRACE(::testing::Message() << "reopen_db: " << reopen_db);
+    // Ensure that `db_` is fresh in this iteration.
+    CreateFreshDB();
+    static constexpr char kCreateSql[] =
+        "CREATE TABLE rows(id INTEGER PRIMARY KEY NOT NULL)";
+    ASSERT_TRUE(db_->Execute(kCreateSql));
+    ASSERT_TRUE(db_->Execute("INSERT INTO rows(id) VALUES(12)"));
+
+    bool error_callback_called = false;
+    int error = SQLITE_OK;
+    db_->set_error_callback(
+        base::BindLambdaForTesting([&](int sqlite_error, Statement* statement) {
+          error_callback_called = true;
+          error = sqlite_error;
+          db_->Close();
+          if (reopen_db) {
+            ASSERT_TRUE(db_->Open(db_path_));
+          }
+        }));
+
+    {
+      sql::test::ScopedErrorExpecter expecter;
+      expecter.ExpectError(SQLITE_CONSTRAINT);
+      EXPECT_FALSE(db_->Execute("INSERT INTO rows(id) VALUES(12)"))
+          << "Inserting a duplicate primary key should have failed";
+      EXPECT_TRUE(expecter.SawExpectedErrors())
+          << "Inserting a duplicate primary key should have failed";
+    }
+    EXPECT_TRUE(error_callback_called);
+    EXPECT_EQ(SQLITE_CONSTRAINT_PRIMARYKEY, error);
+    EXPECT_EQ(db_->is_open(), reopen_db);
+  }
+}
+
+TEST_P(SQLDatabaseTest, DetachFromSequence) {
+  base::test::TaskEnvironment task_environment;
+
+  // Get a task runner so we can post tasks to different sequence.
+  scoped_refptr<base::SequencedTaskRunner> task_runner =
+      base::ThreadPool::CreateSequencedTaskRunner({base::MayBlock()});
+  ASSERT_FALSE(task_runner->RunsTasksInCurrentSequence());
+
+  // The database's sequence checker is already implicitly attached to the
+  // current sequence because the test fixture opened it.
+  ASSERT_TRUE(db_->is_open());
+
+  // Detach before moving the Database instance to another sequence. Note that
+  // it will be destroyed on the other sequence.
+  db_->DetachFromSequence();
+  base::RunLoop run_loop;
+  task_runner->PostTaskAndReply(
+      FROM_HERE,
+      base::BindOnce(
+          [](std::unique_ptr<Database> db) {
+            static constexpr char kCreateSql[] =
+                "CREATE TABLE rows(id INTEGER PRIMARY KEY NOT NULL)";
+            ASSERT_TRUE(db->Execute(kCreateSql));
+          },
+          std::move(db_)),
+      run_loop.QuitClosure());
+  run_loop.Run();
+}
+
+// Regression test for https://crbug.com/1522873
+TEST_P(SQLDatabaseTest, ErrorCallbackThatFreesDatabase) {
+  static constexpr char kCreateSql[] =
+      "CREATE TABLE rows(id INTEGER PRIMARY KEY NOT NULL)";
+  ASSERT_TRUE(db_->Execute(kCreateSql));
+  ASSERT_TRUE(db_->Execute("INSERT INTO rows(id) VALUES(12)"));
+
+  bool error_callback_called = false;
+  int error = SQLITE_OK;
+  db_->set_error_callback(
+      base::BindLambdaForTesting([&](int sqlite_error, Statement* statement) {
+        error_callback_called = true;
+        error = sqlite_error;
+        db_.reset();
+      }));
+
+  {
+    sql::test::ScopedErrorExpecter expecter;
+    expecter.ExpectError(SQLITE_CONSTRAINT);
+    EXPECT_FALSE(db_->Execute("INSERT INTO rows(id) VALUES(12)"))
+        << "Inserting a duplicate primary key should have failed";
+    EXPECT_TRUE(expecter.SawExpectedErrors())
+        << "Inserting a duplicate primary key should have failed";
+  }
+  EXPECT_TRUE(error_callback_called);
+  EXPECT_EQ(SQLITE_CONSTRAINT_PRIMARYKEY, error);
+}
+
 // Sets a flag to true/false to track being alive.
 class LifeTracker {
  public:
@@ -488,6 +634,87 @@ class LifeTracker {
   SEQUENCE_CHECKER(sequence_checker_);
   raw_ptr<bool> flag_ptr_ GUARDED_BY_CONTEXT(sequence_checker_);
 };
+
+int TestVfsOpen(sqlite3_vfs* vfs,
+                const char* full_path,
+                sqlite3_file* result_file,
+                int requested_flags,
+                int* granted_flags) {
+  uint64_t* call_count = reinterpret_cast<uint64_t*>(vfs->pAppData);
+  ++*call_count;
+  return SQLITE_ERROR;
+}
+int TestVfsFullPathname(sqlite3_vfs* vfs,
+                        const char* file_path,
+                        int result_size,
+                        char* result) {
+  uint64_t* call_count = reinterpret_cast<uint64_t*>(vfs->pAppData);
+  ++*call_count;
+
+  if (result_size < 0) {
+    return SQLITE_CANTOPEN;
+  }
+
+  const size_t expected_result_size = result_size;
+  base::cstring_view file_path_view(file_path);
+  if (expected_result_size < file_path_view.size() + sizeof(*file_path)) {
+    return SQLITE_CANTOPEN;
+  }
+
+  // `copy()` returns an output iterator just past the last char copied. Write
+  // the string terminator to that location.
+  *base::ranges::copy(file_path_view,
+                      base::span(result, expected_result_size).begin()) = 0;
+  return SQLITE_OK;
+}
+
+TEST_P(SQLDatabaseTest, UseVfs) {
+  uint64_t call_count = 0;
+
+  constexpr const char kVFSName[] = "test_vfs";
+  static constexpr int kSqliteVfsApiVersion = 3;
+  static constexpr int kSqliteMaxPathSize = 512;
+
+  sqlite3_vfs vfs{
+      kSqliteVfsApiVersion,
+      sizeof(sqlite3_vfs),
+      kSqliteMaxPathSize,
+      /*pNext=*/nullptr,
+      kVFSName,
+      // Provide pointer to `call_count` so it can be modified from within calls
+      // to the VFS and used in test assertions.
+      /*pAppData=*/&call_count,
+      TestVfsOpen,
+      /*xDelete*/ nullptr,
+      /*xAccess*/ nullptr,
+      TestVfsFullPathname,
+      /*xDlOpen=*/nullptr,
+      /*xDlError=*/nullptr,
+      /*xDlSym=*/nullptr,
+      /*xDlClose=*/nullptr,
+      /*xRandomness*/ nullptr,
+      /*xSleep*/ nullptr,
+      /*xCurrentTime=*/nullptr,
+      /*xGetLastError*/ nullptr,
+      /*xCurrentTimeInt64*/ nullptr,
+      /*xSetSystemCall=*/nullptr,
+      /*xGetSystemCall=*/nullptr,
+      /*xNextSystemCall=*/nullptr,
+  };
+
+  sqlite3_vfs_register(&vfs, /*makeDflt=*/false);
+  absl::Cleanup vfs_unregisterer = [&vfs]() { sqlite3_vfs_unregister(&vfs); };
+
+  DatabaseOptions options = GetDBOptions();
+  options.vfs_name_discouraged = kVFSName;
+  Database other_db(options, test::kTestTag);
+
+  // Since the vfs's Open function is not implemented `Open()` will fail.
+  ASSERT_FALSE(other_db.Open(db_path_));
+
+  // Vfs implementation called twice, once for open and once for path name.
+  ASSERT_EQ(call_count, 2ull);
+}
 
 // base::BindRepeating() can curry arguments to be passed by const reference to
 // the callback function. If the error callback function calls
@@ -672,7 +899,8 @@ TEST_P(SQLDatabaseTest, GetCachedStatement_NoContents) {
 }
 
 TEST_P(SQLDatabaseTest, GetReadonlyStatement) {
-  const char* kCreateSql = "CREATE TABLE foo (id INTEGER PRIMARY KEY, value)";
+  static constexpr char kCreateSql[] =
+      "CREATE TABLE foo (id INTEGER PRIMARY KEY, value)";
   ASSERT_TRUE(db_->Execute(kCreateSql));
   ASSERT_TRUE(db_->Execute("INSERT INTO foo (value) VALUES (12)"));
 
@@ -731,7 +959,8 @@ TEST_P(SQLDatabaseTest, IsSQLValid_NoContents) {
 // Test that Database::Raze() results in a database without the
 // tables from the original database.
 TEST_P(SQLDatabaseTest, Raze) {
-  const char* kCreateSql = "CREATE TABLE foo (id INTEGER PRIMARY KEY, value)";
+  static constexpr char kCreateSql[] =
+      "CREATE TABLE foo (id INTEGER PRIMARY KEY, value)";
   ASSERT_TRUE(db_->Execute(kCreateSql));
   ASSERT_TRUE(db_->Execute("INSERT INTO foo (value) VALUES (12)"));
 
@@ -811,14 +1040,16 @@ void TestPageSize(const base::FilePath& db_prefix,
                   const std::string& expected_initial_page_size,
                   int final_page_size,
                   const std::string& expected_final_page_size) {
-  static const char kCreateSql[] = "CREATE TABLE x (t TEXT)";
-  static const char kInsertSql1[] = "INSERT INTO x VALUES ('This is a test')";
-  static const char kInsertSql2[] = "INSERT INTO x VALUES ('That was a test')";
+  static constexpr char kCreateSql[] = "CREATE TABLE x (t TEXT)";
+  static constexpr char kInsertSql1[] =
+      "INSERT INTO x VALUES ('This is a test')";
+  static constexpr char kInsertSql2[] =
+      "INSERT INTO x VALUES ('That was a test')";
 
   const base::FilePath db_path = db_prefix.InsertBeforeExtensionASCII(
       base::NumberToString(initial_page_size));
   Database::Delete(db_path);
-  Database db({.page_size = initial_page_size});
+  Database db({.page_size = initial_page_size}, test::kTestTag);
   ASSERT_TRUE(db.Open(db_path));
   ASSERT_TRUE(db.Execute(kCreateSql));
   ASSERT_TRUE(db.Execute(kInsertSql1));
@@ -828,7 +1059,7 @@ void TestPageSize(const base::FilePath& db_prefix,
   db.Close();
 
   // Re-open the database while setting a new |options.page_size| in the object.
-  Database razed_db({.page_size = final_page_size});
+  Database razed_db({.page_size = final_page_size}, test::kTestTag);
   ASSERT_TRUE(razed_db.Open(db_path));
   // Raze will use the page size set in the connection object, which may not
   // match the file's page size.
@@ -875,10 +1106,11 @@ TEST_P(SQLDatabaseTest, RazePageSize) {
 
 // Test that Raze() results are seen in other connections.
 TEST_P(SQLDatabaseTest, RazeMultiple) {
-  const char* kCreateSql = "CREATE TABLE foo (id INTEGER PRIMARY KEY, value)";
+  static constexpr char kCreateSql[] =
+      "CREATE TABLE foo (id INTEGER PRIMARY KEY, value)";
   ASSERT_TRUE(db_->Execute(kCreateSql));
 
-  Database other_db(GetDBOptions());
+  Database other_db(GetDBOptions(), test::kTestTag);
   ASSERT_TRUE(other_db.Open(db_path_));
 
   // Check that the second connection sees the table.
@@ -893,7 +1125,7 @@ TEST_P(SQLDatabaseTest, RazeMultiple) {
 TEST_P(SQLDatabaseTest, Raze_OtherConnectionHasWriteLock) {
   ASSERT_TRUE(db_->Execute("CREATE TABLE rows(id INTEGER PRIMARY KEY)"));
 
-  Database other_db(GetDBOptions());
+  Database other_db(GetDBOptions(), test::kTestTag);
   ASSERT_TRUE(other_db.Open(db_path_));
 
   Transaction other_db_transaction(&other_db);
@@ -918,7 +1150,7 @@ TEST_P(SQLDatabaseTest, Raze_OtherConnectionHasReadLock) {
     return;
   }
 
-  Database other_db(GetDBOptions());
+  Database other_db(GetDBOptions(), test::kTestTag);
   ASSERT_TRUE(other_db.Open(db_path_));
 
   Statement select(other_db.GetUniqueStatement("SELECT id FROM rows"));
@@ -964,7 +1196,7 @@ TEST_P(SQLDatabaseTest, RazeNOTADB) {
     sql::test::ScopedErrorExpecter expecter;
     expecter.ExpectError(SQLITE_NOTADB);
 
-    EXPECT_TRUE(db_->Open(db_path_));
+    EXPECT_FALSE(db_->Open(db_path_));
     ASSERT_TRUE(expecter.SawExpectedErrors());
   }
   EXPECT_TRUE(db_->Raze());
@@ -977,7 +1209,8 @@ TEST_P(SQLDatabaseTest, RazeNOTADB) {
 
 // Verify that Raze() can handle a database overwritten with garbage.
 TEST_P(SQLDatabaseTest, RazeNOTADB2) {
-  const char* kCreateSql = "CREATE TABLE foo (id INTEGER PRIMARY KEY, value)";
+  static constexpr char kCreateSql[] =
+      "CREATE TABLE foo (id INTEGER PRIMARY KEY, value)";
   ASSERT_TRUE(db_->Execute(kCreateSql));
   ASSERT_EQ(1, SqliteSchemaCount(db_.get()));
   db_->Close();
@@ -990,7 +1223,7 @@ TEST_P(SQLDatabaseTest, RazeNOTADB2) {
   {
     sql::test::ScopedErrorExpecter expecter;
     expecter.ExpectError(SQLITE_NOTADB);
-    EXPECT_TRUE(db_->Open(db_path_));
+    EXPECT_FALSE(db_->Open(db_path_));
     ASSERT_TRUE(expecter.SawExpectedErrors());
   }
   EXPECT_TRUE(db_->Raze());
@@ -1006,7 +1239,8 @@ TEST_P(SQLDatabaseTest, RazeNOTADB2) {
 // Raze() cannot happen later.  Additionally test that when the
 // callback does this during Open(), the open is retried and succeeds.
 TEST_P(SQLDatabaseTest, RazeCallbackReopen) {
-  const char* kCreateSql = "CREATE TABLE foo (id INTEGER PRIMARY KEY, value)";
+  static constexpr char kCreateSql[] =
+      "CREATE TABLE foo (id INTEGER PRIMARY KEY, value)";
   ASSERT_TRUE(db_->Execute(kCreateSql));
   ASSERT_EQ(1, SqliteSchemaCount(db_.get()));
   db_->Close();
@@ -1018,8 +1252,11 @@ TEST_P(SQLDatabaseTest, RazeCallbackReopen) {
   // fail with SQLITE_CORRUPT, as will this PRAGMA.
   {
     sql::test::ScopedErrorExpecter expecter;
+    base::HistogramTester tester;
     expecter.ExpectError(SQLITE_CORRUPT);
-    ASSERT_TRUE(db_->Open(db_path_));
+    ASSERT_FALSE(db_->Open(db_path_));
+    tester.ExpectUniqueSample("Sql.Database.Open.FirstAttempt.Error.Test",
+                              SqliteResultCode::kCorrupt, 1);
     ASSERT_FALSE(db_->Execute("PRAGMA auto_vacuum"));
     db_->Close();
     ASSERT_TRUE(expecter.SawExpectedErrors());
@@ -1029,7 +1266,7 @@ TEST_P(SQLDatabaseTest, RazeCallbackReopen) {
       base::BindRepeating(&RazeErrorCallback, db_.get(), SQLITE_CORRUPT));
 
   // When the PRAGMA calls in Open() raise SQLITE_CORRUPT, the error
-  // callback will call RazeAndClose().  Open() will then fail and be
+  // callback will call RazeAndPoison().  Open() will then fail and be
   // retried.  The second Open() on the empty database will succeed
   // cleanly.
   ASSERT_TRUE(db_->Open(db_path_));
@@ -1037,174 +1274,171 @@ TEST_P(SQLDatabaseTest, RazeCallbackReopen) {
   EXPECT_EQ(0, SqliteSchemaCount(db_.get()));
 }
 
-TEST_P(SQLDatabaseTest, RazeAndClose_DeletesData) {
+TEST_P(SQLDatabaseTest, RazeAndPoison_DeletesData) {
   ASSERT_TRUE(
       db_->Execute("CREATE TABLE rows(id INTEGER PRIMARY KEY NOT NULL)"));
   ASSERT_TRUE(db_->Execute("INSERT INTO rows(id) VALUES(12)"));
-  ASSERT_TRUE(db_->RazeAndClose());
+  ASSERT_TRUE(db_->RazeAndPoison());
 
-  // RazeAndClose() actually Poison()s. We need to call Close() in order to
-  // re-Open(). crbug.com/1311771 tracks renaming RazeAndClose().
+  // We need to call Close() in order to re-Open().
   db_->Close();
   ASSERT_TRUE(db_->Open(db_path_))
-      << "RazeAndClose() did not produce a healthy database";
+      << "RazeAndPoison() did not produce a healthy database";
   EXPECT_TRUE(
       db_->Execute("CREATE TABLE rows(id INTEGER PRIMARY KEY NOT NULL)"))
-      << "RazeAndClose() did not produce a healthy empty database";
+      << "RazeAndPoison() did not produce a healthy empty database";
 }
 
-TEST_P(SQLDatabaseTest, RazeAndClose_IsOpen) {
+TEST_P(SQLDatabaseTest, RazeAndPoison_IsOpen) {
   ASSERT_TRUE(
       db_->Execute("CREATE TABLE rows(id INTEGER PRIMARY KEY NOT NULL)"));
   ASSERT_TRUE(db_->Execute("INSERT INTO rows(id) VALUES(12)"));
-  ASSERT_TRUE(db_->RazeAndClose());
+  ASSERT_TRUE(db_->RazeAndPoison());
 
   EXPECT_FALSE(db_->is_open())
-      << "RazeAndClose() did not mark the database as closed";
+      << "RazeAndPoison() did not mark the database as closed";
 }
 
-TEST_P(SQLDatabaseTest, RazeAndClose_Reopen_NoChanges) {
-  ASSERT_TRUE(db_->RazeAndClose());
+TEST_P(SQLDatabaseTest, RazeAndPoison_Reopen_NoChanges) {
+  ASSERT_TRUE(db_->RazeAndPoison());
   EXPECT_FALSE(
       db_->Execute("CREATE TABLE rows(id INTEGER PRIMARY KEY NOT NULL)"))
-      << "Execute() should return false after RazeAndClose()";
+      << "Execute() should return false after RazeAndPoison()";
 
-  // RazeAndClose() actually Poison()s. We need to call Close() in order to
-  // re-Open(). crbug.com/1311771 tracks renaming RazeAndClose().
+  // We need to call Close() in order to re-Open().
   db_->Close();
   ASSERT_TRUE(db_->Open(db_path_))
-      << "RazeAndClose() did not produce a healthy database";
+      << "RazeAndPoison() did not produce a healthy database";
   EXPECT_TRUE(
       db_->Execute("CREATE TABLE rows(id INTEGER PRIMARY KEY NOT NULL)"))
-      << "Execute() returned false but went through after RazeAndClose()";
+      << "Execute() returned false but went through after RazeAndPoison()";
 }
 
-TEST_P(SQLDatabaseTest, RazeAndClose_OpenTransaction) {
+TEST_P(SQLDatabaseTest, RazeAndPoison_OpenTransaction) {
   ASSERT_TRUE(
       db_->Execute("CREATE TABLE rows(id INTEGER PRIMARY KEY NOT NULL)"));
   ASSERT_TRUE(db_->Execute("INSERT INTO rows(id) VALUES(12)"));
 
   Transaction transaction(db_.get());
   ASSERT_TRUE(transaction.Begin());
-  ASSERT_TRUE(db_->RazeAndClose());
+  ASSERT_TRUE(db_->RazeAndPoison());
 
   EXPECT_FALSE(db_->is_open())
-      << "RazeAndClose() did not mark the database as closed";
+      << "RazeAndPoison() did not mark the database as closed";
   EXPECT_FALSE(transaction.Commit())
-      << "RazeAndClose() did not cancel the transaction";
+      << "RazeAndPoison() did not cancel the transaction";
 
-  // RazeAndClose() actually Poison()s. We need to call Close() in order to
-  // re-Open(). crbug.com/1311771 tracks renaming RazeAndClose().
+  // We need to call Close() in order to re-Open().
   db_->Close();
 
   ASSERT_TRUE(db_->Open(db_path_));
   EXPECT_TRUE(
       db_->Execute("CREATE TABLE rows(id INTEGER PRIMARY KEY NOT NULL)"))
-      << "RazeAndClose() did not produce a healthy empty database";
+      << "RazeAndPoison() did not produce a healthy empty database";
 }
 
-TEST_P(SQLDatabaseTest, RazeAndClose_Preload_NoCrash) {
+TEST_P(SQLDatabaseTest, RazeAndPoison_Preload_NoCrash) {
   db_->Preload();
-  db_->RazeAndClose();
+  db_->RazeAndPoison();
   db_->Preload();
 }
 
-TEST_P(SQLDatabaseTest, RazeAndClose_DoesTableExist) {
+TEST_P(SQLDatabaseTest, RazeAndPoison_DoesTableExist) {
   ASSERT_TRUE(
       db_->Execute("CREATE TABLE rows(id INTEGER PRIMARY KEY NOT NULL)"));
   ASSERT_TRUE(db_->DoesTableExist("rows")) << "Incorrect test setup";
 
-  ASSERT_TRUE(db_->RazeAndClose());
+  ASSERT_TRUE(db_->RazeAndPoison());
   EXPECT_FALSE(db_->DoesTableExist("rows"))
-      << "DoesTableExist() should return false after RazeAndClose()";
+      << "DoesTableExist() should return false after RazeAndPoison()";
 }
 
-TEST_P(SQLDatabaseTest, RazeAndClose_IsSQLValid) {
+TEST_P(SQLDatabaseTest, RazeAndPoison_IsSQLValid) {
   ASSERT_TRUE(db_->IsSQLValid("SELECT 1")) << "Incorrect test setup";
 
-  ASSERT_TRUE(db_->RazeAndClose());
+  ASSERT_TRUE(db_->RazeAndPoison());
   EXPECT_FALSE(db_->IsSQLValid("SELECT 1"))
-      << "IsSQLValid() should return false after RazeAndClose()";
+      << "IsSQLValid() should return false after RazeAndPoison()";
 }
 
-TEST_P(SQLDatabaseTest, RazeAndClose_Execute) {
+TEST_P(SQLDatabaseTest, RazeAndPoison_Execute) {
   ASSERT_TRUE(db_->Execute("SELECT 1")) << "Incorrect test setup";
 
-  ASSERT_TRUE(db_->RazeAndClose());
+  ASSERT_TRUE(db_->RazeAndPoison());
   EXPECT_FALSE(db_->Execute("SELECT 1"))
-      << "Execute() should return false after RazeAndClose()";
+      << "Execute() should return false after RazeAndPoison()";
 }
 
-TEST_P(SQLDatabaseTest, RazeAndClose_GetUniqueStatement) {
+TEST_P(SQLDatabaseTest, RazeAndPoison_GetUniqueStatement) {
   {
     Statement select(db_->GetUniqueStatement("SELECT 1"));
     ASSERT_TRUE(select.Step()) << "Incorrect test setup";
   }
 
-  ASSERT_TRUE(db_->RazeAndClose());
+  ASSERT_TRUE(db_->RazeAndPoison());
   {
     Statement select(db_->GetUniqueStatement("SELECT 1"));
     EXPECT_FALSE(select.Step())
         << "GetUniqueStatement() should return an invalid Statement after "
-        << "RazeAndClose()";
+        << "RazeAndPoison()";
   }
 }
 
-TEST_P(SQLDatabaseTest, RazeAndClose_GetCachedStatement) {
+TEST_P(SQLDatabaseTest, RazeAndPoison_GetCachedStatement) {
   {
     Statement select(db_->GetCachedStatement(SQL_FROM_HERE, "SELECT 1"));
     ASSERT_TRUE(select.Step()) << "Incorrect test setup";
   }
 
-  ASSERT_TRUE(db_->RazeAndClose());
+  ASSERT_TRUE(db_->RazeAndPoison());
   {
     Statement select(db_->GetCachedStatement(SQL_FROM_HERE, "SELECT 1"));
     EXPECT_FALSE(select.Step())
         << "GetCachedStatement() should return an invalid Statement after "
-        << "RazeAndClose()";
+        << "RazeAndPoison()";
   }
 }
 
-TEST_P(SQLDatabaseTest, RazeAndClose_InvalidatesUniqueStatement) {
+TEST_P(SQLDatabaseTest, RazeAndPoison_InvalidatesUniqueStatement) {
   Statement select(db_->GetUniqueStatement("SELECT 1"));
   ASSERT_TRUE(select.is_valid()) << "Incorrect test setup";
   ASSERT_TRUE(select.Step()) << "Incorrect test setup";
   select.Reset(/*clear_bound_vars=*/true);
 
-  ASSERT_TRUE(db_->RazeAndClose());
+  ASSERT_TRUE(db_->RazeAndPoison());
   EXPECT_FALSE(select.is_valid())
-      << "RazeAndClose() should invalidate live Statements";
+      << "RazeAndPoison() should invalidate live Statements";
   EXPECT_FALSE(select.Step())
-      << "RazeAndClose() should invalidate live Statements";
+      << "RazeAndPoison() should invalidate live Statements";
 }
 
-TEST_P(SQLDatabaseTest, RazeAndClose_InvalidatesCachedStatement) {
+TEST_P(SQLDatabaseTest, RazeAndPoison_InvalidatesCachedStatement) {
   Statement select(db_->GetCachedStatement(SQL_FROM_HERE, "SELECT 1"));
   ASSERT_TRUE(select.is_valid()) << "Incorrect test setup";
   ASSERT_TRUE(select.Step()) << "Incorrect test setup";
   select.Reset(/*clear_bound_vars=*/true);
 
-  ASSERT_TRUE(db_->RazeAndClose());
+  ASSERT_TRUE(db_->RazeAndPoison());
   EXPECT_FALSE(select.is_valid())
-      << "RazeAndClose() should invalidate live Statements";
+      << "RazeAndPoison() should invalidate live Statements";
   EXPECT_FALSE(select.Step())
-      << "RazeAndClose() should invalidate live Statements";
+      << "RazeAndPoison() should invalidate live Statements";
 }
 
-TEST_P(SQLDatabaseTest, RazeAndClose_TransactionBegin) {
+TEST_P(SQLDatabaseTest, RazeAndPoison_TransactionBegin) {
   {
     Transaction transaction(db_.get());
     ASSERT_TRUE(transaction.Begin()) << "Incorrect test setup";
     ASSERT_TRUE(transaction.Commit()) << "Incorrect test setup";
   }
 
-  ASSERT_TRUE(db_->RazeAndClose());
+  ASSERT_TRUE(db_->RazeAndPoison());
   {
     Transaction transaction(db_.get());
     EXPECT_FALSE(transaction.Begin())
-        << "Transaction::Begin() should return false after RazeAndClose()";
+        << "Transaction::Begin() should return false after RazeAndPoison()";
     EXPECT_FALSE(transaction.IsActiveForTesting())
-        << "RazeAndClose() should block transactions from starting";
+        << "RazeAndPoison() should block transactions from starting";
   }
 }
 
@@ -1227,12 +1461,13 @@ TEST_P(SQLDatabaseTest, RazeTruncate) {
   // page.  Not checking directly because auto_vacuum on Android adds a freelist
   // page.
   ASSERT_TRUE(db_->Raze());
-  int64_t expected_size;
-  ASSERT_TRUE(base::GetFileSize(db_path_, &expected_size));
-  ASSERT_GT(expected_size, 0);
+  std::optional<int64_t> expected_size = GetFileSize(db_path_);
+  ASSERT_TRUE(expected_size.has_value());
+  EXPECT_GT(*expected_size, 0);
 
   // Cause the database to take a few pages.
-  const char* kCreateSql = "CREATE TABLE foo (id INTEGER PRIMARY KEY, value)";
+  static constexpr char kCreateSql[] =
+      "CREATE TABLE foo (id INTEGER PRIMARY KEY, value)";
   ASSERT_TRUE(db_->Execute(kCreateSql));
   for (size_t i = 0; i < 24; ++i) {
     ASSERT_TRUE(
@@ -1243,9 +1478,9 @@ TEST_P(SQLDatabaseTest, RazeTruncate) {
   // happens.
   ASSERT_TRUE(db_->CheckpointDatabase());
 
-  int64_t db_size;
-  ASSERT_TRUE(base::GetFileSize(db_path_, &db_size));
-  ASSERT_GT(db_size, expected_size);
+  std::optional<int64_t> db_size = GetFileSize(db_path_);
+  ASSERT_TRUE(db_size.has_value());
+  EXPECT_GT(*db_size, *expected_size);
 
   // Make a query covering most of the database file to make sure that the
   // blocks are actually mapped into memory.  Empirically, the truncate problem
@@ -1254,8 +1489,9 @@ TEST_P(SQLDatabaseTest, RazeTruncate) {
             ExecuteWithResult(db_.get(), "SELECT SUM(LENGTH(value)) FROM foo"));
 
   ASSERT_TRUE(db_->Raze());
-  ASSERT_TRUE(base::GetFileSize(db_path_, &db_size));
-  ASSERT_EQ(expected_size, db_size);
+  db_size = GetFileSize(db_path_);
+  ASSERT_TRUE(db_size.has_value());
+  EXPECT_EQ(*expected_size, *db_size);
 }
 
 #if BUILDFLAG(IS_ANDROID)
@@ -1479,7 +1715,7 @@ TEST_P(SQLDatabaseTest, AttachDatabase) {
       db_path_.DirName().AppendASCII("attach_database_test.db");
   static constexpr char kAttachmentPoint[] = "other";
   {
-    Database other_db;
+    Database other_db(test::kTestTag);
     ASSERT_TRUE(other_db.Open(attach_path));
     ASSERT_TRUE(
         other_db.Execute("CREATE TABLE rows(id INTEGER PRIMARY KEY NOT NULL)"));
@@ -1489,8 +1725,7 @@ TEST_P(SQLDatabaseTest, AttachDatabase) {
   // Cannot see the attached database, yet.
   EXPECT_FALSE(db_->IsSQLValid("SELECT COUNT(*) from other.rows"));
 
-  EXPECT_TRUE(DatabaseTestPeer::AttachDatabase(db_.get(), attach_path,
-                                               kAttachmentPoint));
+  EXPECT_TRUE(db_->AttachDatabase(attach_path, kAttachmentPoint));
   EXPECT_TRUE(db_->IsSQLValid("SELECT COUNT(*) from other.rows"));
 
   // Queries can touch both databases after the ATTACH.
@@ -1501,7 +1736,7 @@ TEST_P(SQLDatabaseTest, AttachDatabase) {
     EXPECT_EQ(1, select.ColumnInt(0));
   }
 
-  EXPECT_TRUE(DatabaseTestPeer::DetachDatabase(db_.get(), kAttachmentPoint));
+  EXPECT_TRUE(db_->DetachDatabase(kAttachmentPoint));
   EXPECT_FALSE(db_->IsSQLValid("SELECT COUNT(*) from other.rows"));
 }
 
@@ -1514,7 +1749,7 @@ TEST_P(SQLDatabaseTest, AttachDatabaseWithOpenTransaction) {
       db_path_.DirName().AppendASCII("attach_database_test.db");
   static constexpr char kAttachmentPoint[] = "other";
   {
-    Database other_db;
+    Database other_db(test::kTestTag);
     ASSERT_TRUE(other_db.Open(attach_path));
     ASSERT_TRUE(
         other_db.Execute("CREATE TABLE rows(id INTEGER PRIMARY KEY NOT NULL)"));
@@ -1527,8 +1762,7 @@ TEST_P(SQLDatabaseTest, AttachDatabaseWithOpenTransaction) {
   // Attach succeeds in a transaction.
   Transaction transaction(db_.get());
   EXPECT_TRUE(transaction.Begin());
-  EXPECT_TRUE(DatabaseTestPeer::AttachDatabase(db_.get(), attach_path,
-                                               kAttachmentPoint));
+  EXPECT_TRUE(db_->AttachDatabase(attach_path, kAttachmentPoint));
   EXPECT_TRUE(db_->IsSQLValid("SELECT COUNT(*) from other.rows"));
 
   // Queries can touch both databases after the ATTACH.
@@ -1543,14 +1777,14 @@ TEST_P(SQLDatabaseTest, AttachDatabaseWithOpenTransaction) {
   {
     sql::test::ScopedErrorExpecter expecter;
     expecter.ExpectError(SQLITE_ERROR);
-    EXPECT_FALSE(DatabaseTestPeer::DetachDatabase(db_.get(), kAttachmentPoint));
+    EXPECT_FALSE(db_->DetachDatabase(kAttachmentPoint));
     ASSERT_TRUE(expecter.SawExpectedErrors());
   }
   EXPECT_TRUE(db_->IsSQLValid("SELECT COUNT(*) from other.rows"));
 
   // Detach succeeds when the transaction is closed.
   transaction.Rollback();
-  EXPECT_TRUE(DatabaseTestPeer::DetachDatabase(db_.get(), kAttachmentPoint));
+  EXPECT_TRUE(db_->DetachDatabase(kAttachmentPoint));
   EXPECT_FALSE(db_->IsSQLValid("SELECT COUNT(*) from other.rows"));
 }
 
@@ -1583,7 +1817,7 @@ TEST_P(SQLDatabaseTest, FullIntegrityCheck) {
 
 TEST_P(SQLDatabaseTest, OnMemoryDump) {
   base::trace_event::MemoryDumpArgs args = {
-      base::trace_event::MemoryDumpLevelOfDetail::DETAILED};
+      base::trace_event::MemoryDumpLevelOfDetail::kDetailed};
   base::trace_event::ProcessMemoryDump pmd(args);
   ASSERT_TRUE(db_->memory_dump_provider_->OnMemoryDump(args, &pmd));
   EXPECT_GE(pmd.allocator_dumps().size(), 1u);
@@ -1593,21 +1827,30 @@ TEST_P(SQLDatabaseTest, OnMemoryDump) {
 // worrying too much about what they generate (since that will change).
 TEST_P(SQLDatabaseTest, CollectDiagnosticInfo) {
   const std::string corruption_info = db_->CollectCorruptionInfo();
-  EXPECT_NE(std::string::npos, corruption_info.find("SQLITE_CORRUPT"));
-  EXPECT_NE(std::string::npos, corruption_info.find("integrity_check"));
+  EXPECT_TRUE(base::Contains(corruption_info, "SQLITE_CORRUPT"));
+  EXPECT_TRUE(base::Contains(corruption_info, "integrity_check"));
 
   // A statement to see in the results.
-  const char* kSimpleSql = "SELECT 'mountain'";
+  static constexpr char kSimpleSql[] = "SELECT 'mountain'";
   Statement s(db_->GetCachedStatement(SQL_FROM_HERE, kSimpleSql));
 
   // Error includes the statement.
-  const std::string readonly_info = db_->CollectErrorInfo(SQLITE_READONLY, &s);
-  EXPECT_NE(std::string::npos, readonly_info.find(kSimpleSql));
+  {
+    DatabaseDiagnostics diagnostics;
+    const std::string readonly_info =
+        db_->CollectErrorInfo(SQLITE_READONLY, &s, &diagnostics);
+    EXPECT_TRUE(base::Contains(readonly_info, kSimpleSql));
+    EXPECT_EQ(diagnostics.sql_statement, kSimpleSql);
+  }
 
-  // Some other error doesn't include the statment.
-  // TODO(shess): This is weak.
-  const std::string full_info = db_->CollectErrorInfo(SQLITE_FULL, nullptr);
-  EXPECT_EQ(std::string::npos, full_info.find(kSimpleSql));
+  // Some other error doesn't include the statement.
+  {
+    DatabaseDiagnostics diagnostics;
+    const std::string full_info =
+        db_->CollectErrorInfo(SQLITE_FULL, nullptr, &diagnostics);
+    EXPECT_FALSE(base::Contains(full_info, kSimpleSql));
+    EXPECT_TRUE(diagnostics.sql_statement.empty());
+  }
 
   // A table to see in the SQLITE_ERROR results.
   EXPECT_TRUE(db_->Execute("CREATE TABLE volcano (x)"));
@@ -1616,10 +1859,47 @@ TEST_P(SQLDatabaseTest, CollectDiagnosticInfo) {
   MetaTable meta_table;
   ASSERT_TRUE(meta_table.Init(db_.get(), 4, 4));
 
-  const std::string error_info = db_->CollectErrorInfo(SQLITE_ERROR, &s);
-  EXPECT_NE(std::string::npos, error_info.find(kSimpleSql));
-  EXPECT_NE(std::string::npos, error_info.find("volcano"));
-  EXPECT_NE(std::string::npos, error_info.find("version: 4"));
+  {
+    DatabaseDiagnostics diagnostics;
+    const std::string error_info =
+        db_->CollectErrorInfo(SQLITE_ERROR, &s, &diagnostics);
+    EXPECT_TRUE(base::Contains(error_info, kSimpleSql));
+    EXPECT_TRUE(base::Contains(error_info, "volcano"));
+    EXPECT_TRUE(base::Contains(error_info, "version: 4"));
+    EXPECT_EQ(diagnostics.sql_statement, kSimpleSql);
+    EXPECT_EQ(diagnostics.version, 4);
+
+    ASSERT_EQ(diagnostics.schema_sql_rows.size(), 2U);
+    EXPECT_EQ(diagnostics.schema_sql_rows[0], "CREATE TABLE volcano (x)");
+    EXPECT_EQ(diagnostics.schema_sql_rows[1],
+              "CREATE TABLE meta(key LONGVARCHAR NOT NULL UNIQUE PRIMARY KEY, "
+              "value LONGVARCHAR)");
+
+    ASSERT_EQ(diagnostics.schema_other_row_names.size(), 1U);
+    EXPECT_EQ(diagnostics.schema_other_row_names[0], "sqlite_autoindex_meta_1");
+  }
+
+  // Test that an error message is included in the diagnostics.
+  {
+    sql::test::ScopedErrorExpecter error_expecter;
+    error_expecter.ExpectError(SQLITE_ERROR);
+    EXPECT_FALSE(
+        db_->Execute("INSERT INTO volcano VALUES ('bound_value1', 42, 1234)"));
+    EXPECT_TRUE(error_expecter.SawExpectedErrors());
+
+    DatabaseDiagnostics diagnostics;
+    const std::string error_info =
+        db_->CollectErrorInfo(SQLITE_ERROR, &s, &diagnostics);
+    // Expect that the error message contains the table name and a column error.
+    EXPECT_TRUE(base::Contains(diagnostics.error_message, "table"));
+    EXPECT_TRUE(base::Contains(diagnostics.error_message, "volcano"));
+    EXPECT_TRUE(base::Contains(diagnostics.error_message, "column"));
+
+    // Expect that bound values are not present.
+    EXPECT_FALSE(base::Contains(diagnostics.error_message, "bound_value1"));
+    EXPECT_FALSE(base::Contains(diagnostics.error_message, "42"));
+    EXPECT_FALSE(base::Contains(diagnostics.error_message, "1234"));
+  }
 }
 
 // Test that a fresh database has mmap enabled by default, if mmap'ed I/O is
@@ -1660,7 +1940,7 @@ TEST_P(SQLDatabaseTest, MmapInitiallyEnabledAltStatus) {
   DatabaseOptions options = GetDBOptions();
   options.mmap_alt_status_discouraged = true;
   options.enable_views_discouraged = true;
-  db_ = std::make_unique<Database>(options);
+  db_ = std::make_unique<Database>(options, test::kTestTag);
   ASSERT_TRUE(db_->Open(db_path_));
 
   {
@@ -1699,7 +1979,7 @@ TEST_P(SQLDatabaseTest, ComputeMmapSizeForOpen) {
   ASSERT_TRUE(!db_->DoesTableExist("meta"));
 
   // When the meta table is first created, it sets up to map everything.
-  MetaTable().Init(db_.get(), 1, 1);
+  ASSERT_TRUE(MetaTable().Init(db_.get(), 1, 1));
   ASSERT_TRUE(db_->DoesTableExist("meta"));
   ASSERT_GT(db_->ComputeMmapSizeForOpen(), kMmapAlot);
   ASSERT_TRUE(MetaTable::GetMmapStatus(db_.get(), &mmap_status));
@@ -1718,7 +1998,7 @@ TEST_P(SQLDatabaseTest, ComputeMmapSizeForOpen) {
   // Re-initializing the meta table does not re-create the key if the table
   // already exists.
   ASSERT_TRUE(db_->Execute("DELETE FROM meta WHERE key = 'mmap_status'"));
-  MetaTable().Init(db_.get(), 1, 1);
+  ASSERT_TRUE(MetaTable().Init(db_.get(), 1, 1));
   ASSERT_EQ(MetaTable::kMmapSuccess, mmap_status);
   ASSERT_TRUE(MetaTable::GetMmapStatus(db_.get(), &mmap_status));
   ASSERT_EQ(0, mmap_status);
@@ -1745,7 +2025,7 @@ TEST_P(SQLDatabaseTest, ComputeMmapSizeForOpenAltStatus) {
   DatabaseOptions options = GetDBOptions();
   options.mmap_alt_status_discouraged = true;
   options.enable_views_discouraged = true;
-  db_ = std::make_unique<Database>(options);
+  db_ = std::make_unique<Database>(options, test::kTestTag);
   ASSERT_TRUE(db_->Open(db_path_));
 
   ASSERT_GT(db_->ComputeMmapSizeForOpen(), kMmapAlot);
@@ -1799,7 +2079,7 @@ TEST_P(SQLDatabaseTest, DoubleQuotedStringLiteralsDisabledByDefault) {
   ASSERT_TRUE(db_->Execute("CREATE TABLE data(item TEXT NOT NULL);"));
 
   struct TestCase {
-    const char* sql;
+    const std::string sql;
     bool is_valid;
   };
   std::vector<TestCase> test_cases = {
@@ -1833,8 +2113,6 @@ TEST_P(SQLDatabaseTest, DoubleQuotedStringLiteralsDisabledByDefault) {
 }
 
 TEST_P(SQLDatabaseTest, ForeignKeyEnforcementDisabledByDefault) {
-  EXPECT_FALSE(GetDBOptions().enable_foreign_keys_discouraged);
-
   ASSERT_TRUE(db_->Execute("CREATE TABLE targets(id INTEGER PRIMARY KEY)"));
   // sqlite3_db_config() currently only disables foreign key enforcement. Schema
   // operations on foreign keys are still allowed.
@@ -1848,30 +2126,6 @@ TEST_P(SQLDatabaseTest, ForeignKeyEnforcementDisabledByDefault) {
 
   EXPECT_TRUE(db_->Execute("DELETE FROM targets WHERE id=42"))
       << "Foreign key enforcement is not disabled";
-}
-
-TEST_P(SQLDatabaseTest, ForeignKeyEnforcementEnabled) {
-  DatabaseOptions options = GetDBOptions();
-  options.enable_foreign_keys_discouraged = true;
-  db_ = std::make_unique<Database>(options);
-  ASSERT_TRUE(db_->Open(db_path_));
-
-  ASSERT_TRUE(db_->Execute("CREATE TABLE targets(id INTEGER PRIMARY KEY)"));
-  ASSERT_TRUE(
-      db_->Execute("CREATE TABLE refs("
-                   "id INTEGER PRIMARY KEY,"
-                   "target_id INTEGER REFERENCES targets(id))"));
-
-  ASSERT_TRUE(db_->Execute("INSERT INTO targets(id) VALUES(42)"));
-  ASSERT_TRUE(db_->Execute("INSERT INTO refs(id, target_id) VALUES(42, 42)"));
-
-  {
-    sql::test::ScopedErrorExpecter expecter;
-    expecter.ExpectError(SQLITE_CONSTRAINT_FOREIGNKEY);
-    EXPECT_FALSE(db_->Execute("DELETE FROM targets WHERE id=42"))
-        << "Foreign key enforcement is disabled";
-    EXPECT_TRUE(expecter.SawExpectedErrors());
-  }
 }
 
 TEST_P(SQLDatabaseTest, TriggersDisabledByDefault) {
@@ -1895,13 +2149,148 @@ TEST_P(SQLDatabaseTest, TriggersDisabledByDefault) {
   EXPECT_TRUE(db_->Execute("DROP TRIGGER IF EXISTS trigger"));
 }
 
+// This test ensures that a database can be open/create with a journal mode and
+// can be re-open later with a different journal mode.
+TEST_P(SQLDatabaseTest, ReOpenWithDifferentJournalMode) {
+  const bool is_wal = IsWALEnabled();
+  const base::FilePath journal_path = Database::JournalPath(db_path_);
+  const base::FilePath wal_path = Database::WriteAheadLogPath(db_path_);
+
+  ASSERT_TRUE(db_->Execute("CREATE TABLE foo (id INTEGER PRIMARY KEY, value)"));
+  ASSERT_TRUE(db_->Execute("INSERT INTO foo (value) VALUES (12)"));
+
+  // Last insert row ID should be valid.
+  int64_t row = db_->GetLastInsertRowId();
+  EXPECT_LT(0, row);
+
+  // It should be the primary key of the row we just inserted.
+  {
+    Statement s(db_->GetUniqueStatement("SELECT value FROM foo WHERE id=?"));
+    s.BindInt64(0, row);
+    ASSERT_TRUE(s.Step());
+    EXPECT_EQ(12, s.ColumnInt(0));
+  }
+
+  // Ensure appropriate journal mode and the journal file exists.
+  EXPECT_TRUE(IsOpenedInCorrectJournalMode(db_.get(), is_wal));
+  EXPECT_EQ(base::PathExists(wal_path), is_wal);
+
+  db_->Close();
+  if (is_wal) {
+    // The WAL journal file is removed on database close. Database that enable
+    // WAL mode can use a different journal mode on a subsequent database open.
+    EXPECT_FALSE(base::PathExists(wal_path));
+  } else {
+    // The Rollback journal should have a zero size when pending operations
+    // are completed.
+    std::optional<int64_t> journal_size = GetFileSize(journal_path);
+    EXPECT_THAT(journal_size, testing::Optional(0));
+  }
+
+  // Re-open the database with a different mode (Rollback vs WAL).
+  DatabaseOptions options = GetDBOptions();
+  options.wal_mode = !is_wal;
+#if BUILDFLAG(IS_FUCHSIA)
+  // Exclusive mode needs to be enabled to enter WAL mode on Fuchsia.
+  if (options.wal_mode) {
+    options.exclusive_locking = true;
+  }
+#endif  // BUILDFLAG(IS_FUCHSIA)
+
+  db_ = std::make_unique<Database>(options, test::kTestTag);
+  ASSERT_TRUE(db_->Open(db_path_));
+
+  // The value for the last inserted row should be valid.
+  {
+    Statement s(db_->GetUniqueStatement("SELECT value FROM foo WHERE id=?"));
+    s.BindInt64(0, row);
+    ASSERT_TRUE(s.Step());
+    EXPECT_EQ(12, s.ColumnInt(0));
+  }
+
+  // Ensure appropriate journal file exists.
+  EXPECT_TRUE(IsOpenedInCorrectJournalMode(db_.get(), options.wal_mode));
+  EXPECT_EQ(base::PathExists(wal_path), options.wal_mode);
+}
+
+#if BUILDFLAG(IS_WIN)
+
+class SQLDatabaseTestExclusiveFileLockMode
+    : public testing::Test,
+      public testing::WithParamInterface<::testing::tuple<bool, bool>> {
+ public:
+  ~SQLDatabaseTestExclusiveFileLockMode() override = default;
+
+  void SetUp() override {
+    db_ = std::make_unique<Database>(GetDBOptions(), test::kTestTag);
+    ASSERT_TRUE(temp_dir_.CreateUniqueTempDir());
+    db_path_ = temp_dir_.GetPath().AppendASCII("maybelocked.sqlite");
+    ASSERT_TRUE(db_->Open(db_path_));
+  }
+
+  DatabaseOptions GetDBOptions() {
+    DatabaseOptions options;
+    options.wal_mode = IsWALEnabled();
+    options.exclusive_locking = true;
+    options.exclusive_database_file_lock = IsExclusivelockEnabled();
+    return options;
+  }
+
+  bool IsWALEnabled() { return std::get<0>(GetParam()); }
+  bool IsExclusivelockEnabled() { return std::get<1>(GetParam()); }
+
+ protected:
+  base::ScopedTempDir temp_dir_;
+  base::FilePath db_path_;
+  std::unique_ptr<Database> db_;
+};
+
+TEST_P(SQLDatabaseTestExclusiveFileLockMode, BasicStatement) {
+  ASSERT_TRUE(db_->Execute("CREATE TABLE data(contents TEXT)"));
+  EXPECT_EQ(SQLITE_OK, db_->GetErrorCode());
+
+  ASSERT_TRUE(base::PathExists(db_path_));
+  base::File open_db(db_path_, base::File::Flags::FLAG_OPEN_ALWAYS |
+                                   base::File::Flags::FLAG_READ);
+
+  // If exclusive lock is enabled, then the test should not be able to re-open
+  // the database file, on Windows only.
+  EXPECT_EQ(IsExclusivelockEnabled(), !open_db.IsValid());
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    All,
+    SQLDatabaseTestExclusiveFileLockMode,
+    ::testing::Combine(::testing::Bool(), ::testing::Bool()),
+    [](const auto& info) {
+      return base::StrCat(
+          {std::get<0>(info.param) ? "WALEnabled" : "WALDisabled",
+           std::get<1>(info.param) ? "ExclusiveLock" : "NoExclusiveLock"});
+    });
+
+#else
+
+TEST(SQLInvalidDatabaseFlagsDeathTest, ExclusiveDatabaseLock) {
+  base::ScopedTempDir temp_dir;
+  ASSERT_TRUE(temp_dir.CreateUniqueTempDir());
+  auto db_path = temp_dir.GetPath().AppendASCII("database_test_locked.sqlite");
+
+  Database db({.exclusive_database_file_lock = true}, test::kTestTag);
+
+  EXPECT_CHECK_DEATH_WITH(
+      { std::ignore = db.Open(db_path); },
+      "exclusive_database_file_lock is only supported on Windows");
+}
+
+#endif  // BUILDFLAG(IS_WIN)
+
 class SQLDatabaseTestExclusiveMode : public testing::Test,
                                      public testing::WithParamInterface<bool> {
  public:
   ~SQLDatabaseTestExclusiveMode() override = default;
 
   void SetUp() override {
-    db_ = std::make_unique<Database>(GetDBOptions());
+    db_ = std::make_unique<Database>(GetDBOptions(), test::kTestTag);
     ASSERT_TRUE(temp_dir_.CreateUniqueTempDir());
     db_path_ = temp_dir_.GetPath().AppendASCII("recovery_test.sqlite");
     ASSERT_TRUE(db_->Open(db_path_));
@@ -1931,8 +2320,7 @@ TEST_P(SQLDatabaseTest, LockingModeNormal) {
 }
 
 TEST_P(SQLDatabaseTest, OpenedInCorrectMode) {
-  std::string expected_mode = IsWALEnabled() ? "wal" : "truncate";
-  EXPECT_EQ(ExecuteWithResult(db_.get(), "PRAGMA journal_mode"), expected_mode);
+  EXPECT_TRUE(IsOpenedInCorrectJournalMode(db_.get(), IsWALEnabled()));
 }
 
 TEST_P(SQLDatabaseTest, CheckpointDatabase) {
@@ -1941,11 +2329,10 @@ TEST_P(SQLDatabaseTest, CheckpointDatabase) {
 
   base::FilePath wal_path = Database::WriteAheadLogPath(db_path_);
 
-  int64_t wal_size = 0;
   // WAL file initially empty.
   EXPECT_TRUE(base::PathExists(wal_path));
-  base::GetFileSize(wal_path, &wal_size);
-  EXPECT_EQ(wal_size, 0);
+  std::optional<int64_t> wal_size = GetFileSize(wal_path);
+  EXPECT_THAT(wal_size, testing::Optional(0));
 
   ASSERT_TRUE(
       db_->Execute("CREATE TABLE foo (id INTEGER UNIQUE, value INTEGER)"));
@@ -1953,18 +2340,20 @@ TEST_P(SQLDatabaseTest, CheckpointDatabase) {
   ASSERT_TRUE(db_->Execute("INSERT INTO foo VALUES (2, 2)"));
 
   // Writes reach WAL file but not db file.
-  base::GetFileSize(wal_path, &wal_size);
-  EXPECT_GT(wal_size, 0);
+  wal_size = GetFileSize(wal_path);
+  ASSERT_TRUE(wal_size.has_value());
+  EXPECT_GT(wal_size.value(), 0);
 
-  int64_t db_size = 0;
-  base::GetFileSize(db_path_, &db_size);
-  EXPECT_EQ(db_size, db_->page_size());
+  std::optional<int64_t> db_size = GetFileSize(db_path_);
+  ASSERT_TRUE(db_size.has_value());
+  EXPECT_EQ(db_size.value(), db_->page_size());
 
   // Checkpoint database to immediately propagate writes to DB file.
   EXPECT_TRUE(db_->CheckpointDatabase());
 
-  base::GetFileSize(db_path_, &db_size);
-  EXPECT_GT(db_size, db_->page_size());
+  db_size = GetFileSize(db_path_);
+  EXPECT_TRUE(db_size.has_value());
+  EXPECT_GT(db_size.value(), db_->page_size());
   EXPECT_EQ(ExecuteWithResult(db_.get(), "SELECT value FROM foo where id=1"),
             "1");
   EXPECT_EQ(ExecuteWithResult(db_.get(), "SELECT value FROM foo where id=2"),
@@ -1980,9 +2369,61 @@ TEST_P(SQLDatabaseTest, OpenFailsAfterCorruptSizeInHeader) {
   ASSERT_TRUE(sql::test::CorruptSizeInHeader(db_path_));
   {
     sql::test::ScopedErrorExpecter expecter;
+    base::HistogramTester tester;
     expecter.ExpectError(SQLITE_CORRUPT);
-    ASSERT_TRUE(db_->Open(db_path_));
+    ASSERT_FALSE(db_->Open(db_path_));
+    tester.ExpectUniqueSample("Sql.Database.Open.FirstAttempt.Error.Test",
+                              SqliteResultCode::kCorrupt, 1);
     EXPECT_TRUE(expecter.SawExpectedErrors());
+  }
+}
+
+TEST_P(SQLDatabaseTest, OpenWithRecoveryHandlesCorruption) {
+  for (const bool corrupt_after_recovery : {false, true}) {
+    SCOPED_TRACE(::testing::Message()
+                 << "corrupt_after_recovery: " << corrupt_after_recovery);
+    // Ensure that `db_` is fresh in this iteration.
+    CreateFreshDB();
+    // The database file ends up empty if we don't create at least one table.
+    ASSERT_TRUE(
+        db_->Execute("CREATE TABLE rows(i INTEGER PRIMARY KEY NOT NULL)"));
+    db_->Close();
+
+    ASSERT_TRUE(sql::test::CorruptSizeInHeader(db_path_));
+
+    size_t error_count = 0;
+    auto callback = base::BindLambdaForTesting([&](int error, Statement* stmt) {
+      error_count++;
+      ASSERT_TRUE(Recovery::RecoverIfPossible(
+          db_.get(), error, sql::Recovery::Strategy::kRecoverOrRaze));
+      if (corrupt_after_recovery) {
+        // Corrupt the file again after temporarily recovering it.
+        ASSERT_TRUE(sql::test::CorruptSizeInHeader(db_path_));
+      }
+    });
+    db_->set_error_callback(std::move(callback));
+
+    {
+      sql::test::ScopedErrorExpecter expecter;
+      base::HistogramTester tester;
+      expecter.ExpectError(SQLITE_CORRUPT);
+
+      // When `corrupt_after_recovery` is true, `Database::Open()` will return
+      // false because both attempts at opening the database will fail. When the
+      // database is *not* corrupted after recovery, recovery will succeed and
+      // thus `Database::Open()`'s second attempt at opening the database will
+      // succeed.
+      ASSERT_EQ(db_->Open(db_path_), !corrupt_after_recovery);
+      tester.ExpectUniqueSample("Sql.Database.Open.FirstAttempt.Error.Test",
+                                SqliteResultCode::kCorrupt, 1);
+      if (corrupt_after_recovery) {
+        tester.ExpectUniqueSample("Sql.Database.Open.SecondAttempt.Error.Test",
+                                  SqliteResultCode::kCorrupt, 1);
+      }
+      EXPECT_TRUE(expecter.SawExpectedErrors());
+    }
+    EXPECT_EQ(error_count, 1u);
+    EXPECT_FALSE(db_->has_error_callback());
   }
 }
 
@@ -1997,8 +2438,11 @@ TEST_P(SQLDatabaseTest, ExecuteFailsAfterCorruptSizeInHeader) {
   ASSERT_TRUE(sql::test::CorruptSizeInHeader(db_path_));
   {
     sql::test::ScopedErrorExpecter expecter;
+    base::HistogramTester tester;
     expecter.ExpectError(SQLITE_CORRUPT);
-    ASSERT_TRUE(db_->Open(db_path_));
+    ASSERT_FALSE(db_->Open(db_path_));
+    tester.ExpectUniqueSample("Sql.Database.Open.FirstAttempt.Error.Test",
+                              SqliteResultCode::kCorrupt, 1);
     EXPECT_TRUE(expecter.SawExpectedErrors())
         << "Database::Open() did not encounter SQLITE_CORRUPT";
   }
@@ -2021,8 +2465,11 @@ TEST_P(SQLDatabaseTest, SchemaFailsAfterCorruptSizeInHeader) {
   ASSERT_TRUE(sql::test::CorruptSizeInHeader(db_path_));
   {
     sql::test::ScopedErrorExpecter expecter;
+    base::HistogramTester tester;
     expecter.ExpectError(SQLITE_CORRUPT);
-    ASSERT_TRUE(db_->Open(db_path_));
+    ASSERT_FALSE(db_->Open(db_path_));
+    tester.ExpectUniqueSample("Sql.Database.Open.FirstAttempt.Error.Test",
+                              SqliteResultCode::kCorrupt, 1);
     EXPECT_TRUE(expecter.SawExpectedErrors())
         << "Database::Open() did not encounter SQLITE_CORRUPT";
   }
@@ -2036,7 +2483,7 @@ TEST_P(SQLDatabaseTest, SchemaFailsAfterCorruptSizeInHeader) {
 }
 
 TEST(SQLEmptyPathDatabaseTest, EmptyPathTest) {
-  Database db;
+  Database db(test::kTestTag);
   EXPECT_TRUE(db.OpenInMemory());
   EXPECT_TRUE(db.is_open());
   EXPECT_TRUE(db.DbPath().empty());

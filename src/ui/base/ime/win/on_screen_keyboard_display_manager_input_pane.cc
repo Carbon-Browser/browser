@@ -1,11 +1,13 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ui/base/ime/win/on_screen_keyboard_display_manager_input_pane.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task/single_thread_task_runner.h"
+#include "base/task/task_traits.h"
 #include "base/task/thread_pool.h"
 #include "base/trace_event/trace_event.h"
 #include "base/win/com_init_util.h"
@@ -48,7 +50,7 @@ class OnScreenKeyboardDisplayManagerInputPane::VirtualKeyboardInputPane
   }
 
   void TryShowInBackgroundThread(HWND hwnd) {
-    // TODO(crbug.com/1031786): Remove this once TSF fix for input pane policy
+    // TODO(crbug.com/40110609): Remove this once TSF fix for input pane policy
     // is serviced
     DCHECK(!main_task_runner_->BelongsToCurrentThread());
     if (!EnsureInputPanePointersInBackgroundThread(hwnd))
@@ -61,7 +63,7 @@ class OnScreenKeyboardDisplayManagerInputPane::VirtualKeyboardInputPane
   }
 
   void TryHideInBackgroundThread(HWND hwnd) {
-    // TODO(crbug.com/1031786): Remove this once TSF fix for input pane policy
+    // TODO(crbug.com/40110609): Remove this once TSF fix for input pane policy
     // is serviced
     DCHECK(!main_task_runner_->BelongsToCurrentThread());
     if (!EnsureInputPanePointersInBackgroundThread(hwnd))
@@ -89,10 +91,6 @@ class OnScreenKeyboardDisplayManagerInputPane::VirtualKeyboardInputPane
     DCHECK(!main_task_runner_->BelongsToCurrentThread());
     if (input_pane2_)
       return true;
-    if (!base::win::ResolveCoreWinRTDelayload() ||
-        !base::win::ScopedHString::ResolveCoreWinRTStringDelayload()) {
-      return false;
-    }
 
     base::win::AssertComApartmentType(base::win::ComApartmentType::STA);
 
@@ -209,9 +207,15 @@ class OnScreenKeyboardDisplayManagerInputPane::VirtualKeyboardInputPane
 OnScreenKeyboardDisplayManagerInputPane::
     OnScreenKeyboardDisplayManagerInputPane(HWND hwnd)
     : hwnd_(hwnd),
-      main_task_runner_(base::ThreadTaskRunnerHandle::Get()),
-      background_task_runner_(
-          base::ThreadPool::CreateCOMSTATaskRunner({base::MayBlock()})),
+      main_task_runner_(base::SingleThreadTaskRunner::GetCurrentDefault()),
+      background_task_runner_(base::ThreadPool::CreateCOMSTATaskRunner(
+          {base::MayBlock(),
+           // This TaskRunner runs tasks that wait for messages to be processed
+           // on the main thread. During shutdown, the main thread stops
+           // processing messages and as a result tasks on this TaskRunner may
+           // hang. Use `CONTINUE_ON_SHUTDOWN` to let shutdown complete when
+           // this happens (see crbug.com/40848571).
+           base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN})),
       virtual_keyboard_input_pane_(
           base::MakeRefCounted<OnScreenKeyboardDisplayManagerInputPane::
                                    VirtualKeyboardInputPane>(
@@ -301,7 +305,8 @@ bool OnScreenKeyboardDisplayManagerInputPane::IsKeyboardVisible() {
 void OnScreenKeyboardDisplayManagerInputPane::SetInputPaneForTesting(
     Microsoft::WRL::ComPtr<ABI::Windows::UI::ViewManagement::IInputPane> pane) {
   DCHECK(main_task_runner_->BelongsToCurrentThread());
-  base::ThreadPool::CreateCOMSTATaskRunner({base::MayBlock()})
+  base::ThreadPool::CreateCOMSTATaskRunner(
+      {base::MayBlock(), base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN})
       ->PostTask(FROM_HERE,
                  base::BindOnce(
                      &OnScreenKeyboardDisplayManagerInputPane::

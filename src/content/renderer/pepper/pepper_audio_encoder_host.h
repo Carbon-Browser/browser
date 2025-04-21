@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -11,6 +11,7 @@
 
 #include "base/memory/ref_counted.h"
 #include "base/numerics/safe_math.h"
+#include "base/task/single_thread_task_runner.h"
 #include "ppapi/c/pp_codecs.h"
 #include "ppapi/host/host_message_context.h"
 #include "ppapi/host/resource_host.h"

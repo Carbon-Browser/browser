@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,11 +16,15 @@ namespace switches {
 extern const char kSwitchValueTrue[];
 extern const char kSwitchValueFalse[];
 
-// Url to upload crash data to.
+// Switches for crash_uploader
 extern const char kCrashServerUrl[];
+extern const char kCrashUploaderDaemon[];
 
 // Disable Crash Reporting
 extern const char kDisableCrashReporter[];
+
+// Disable Crashpad forwarding
+extern const char kDisableCrashpadForwarding[];
 
 // Path to dumpstate binary to be used for crash reporting.
 // This gives Chromium's crash reporter the flexibility to switch
@@ -100,19 +104,19 @@ extern const char kCastMemoryPressureCriticalFraction[];
 extern const char kCastMemoryPressureModerateFraction[];
 
 extern const char kDisableMojoRenderer[];
+extern const char kForceMojoRenderer[];
 
 // OTA update related switches.
 extern const char kForceUpdateRemoteUrl[];
 
 extern const char kSysInfoFilePath[];
 
-// Extension switches.
-extern const char kExtensionsDir[];
-
 // Switches for Cast browser decoupling.
 extern const char kDeferFeatureList[];
 extern const char kUseCastBrowserPrefConfig[];
 extern const char kInProcessBroker[];
+
+extern const char kCastMojoBrokerPath[];
 
 }  // namespace switches
 

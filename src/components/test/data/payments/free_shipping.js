@@ -1,34 +1,8 @@
 /*
- * Copyright 2016 The Chromium Authors. All rights reserved.
+ * Copyright 2016 The Chromium Authors
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-
-/* global PaymentRequest:false */
-/* global print:false */
-
-/**
- * Launches the PaymentRequest UI that offers free shipping worldwide.
- *
- * Legacy entry function until basic-card is removed.
- */
-function buy() { // eslint-disable-line no-unused-vars
-  buyWithMethods([{
-    supportedMethods: 'basic-card',
-    data: {
-      supportedNetworks: [
-        'visa',
-        'unionpay',
-        'mir',
-        'mastercard',
-        'jcb',
-        'discover',
-        'diners',
-        'amex',
-      ],
-    },
-  }]);
-}
 
 /**
  * Launches the PaymentRequest UI that offers free shipping worldwide.
@@ -37,7 +11,7 @@ function buy() { // eslint-disable-line no-unused-vars
  */
 function buyWithMethods(methodData) {
   try {
-    var details = {
+    const details = {
       total: {label: 'Total', amount: {currency: 'USD', value: '5.00'}},
       shippingOptions: [{
         id: 'freeShippingOption',
@@ -46,9 +20,8 @@ function buyWithMethods(methodData) {
         selected: true,
       }],
     };
-    var request = new PaymentRequest(
-        methodData,
-        details, {requestShipping: true});
+    const request =
+        new PaymentRequest(methodData, details, {requestShipping: true});
     request.addEventListener('shippingaddresschange', function(e) {
       e.updateWith(new Promise(function(resolve) {
         // No changes in price based on shipping address change.

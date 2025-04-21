@@ -79,8 +79,6 @@ void V8PerContextData::Dispose() {
   context_holder_ = nullptr;
   if (!context_.IsEmpty())
     context_.SetPhantom();
-  if (!private_custom_element_definition_id_.IsEmpty())
-    private_custom_element_definition_id_.SetPhantom();
 }
 
 void V8PerContextData::Trace(Visitor* visitor) const {
@@ -89,16 +87,13 @@ void V8PerContextData::Trace(Visitor* visitor) const {
   visitor->Trace(data_map_);
 }
 
-V8PerContextData* V8PerContextData::From(v8::Local<v8::Context> context) {
-  return ScriptState::From(context)->PerContextData();
-}
-
 v8::Local<v8::Object> V8PerContextData::CreateWrapperFromCacheSlowCase(
+    v8::Isolate* isolate,
     const WrapperTypeInfo* type) {
   DCHECK(!wrapper_boilerplates_.Contains(type));
   v8::Context::Scope scope(GetContext());
   v8::Local<v8::Function> interface_object = ConstructorForType(type);
-  if (UNLIKELY(interface_object.IsEmpty())) {
+  if (interface_object.IsEmpty()) [[unlikely]] {
     // For investigation of crbug.com/1199223
     static crash_reporter::CrashKeyString<64> crash_key(
         "blink__create_interface_object");
@@ -109,11 +104,10 @@ v8::Local<v8::Object> V8PerContextData::CreateWrapperFromCacheSlowCase(
       V8ObjectConstructor::NewInstance(isolate_, interface_object)
           .ToLocalChecked();
 
-  TraceWrapperV8Reference<v8::Object> traced_wrapper;
-  traced_wrapper.Reset(isolate_, instance_template);
-  wrapper_boilerplates_.insert(type, traced_wrapper);
+  wrapper_boilerplates_.insert(
+      type, TraceWrapperV8Reference<v8::Object>(isolate_, instance_template));
 
-  return instance_template->Clone();
+  return instance_template->Clone(isolate);
 }
 
 v8::Local<v8::Function> V8PerContextData::ConstructorForTypeSlowCase(
@@ -123,19 +117,34 @@ v8::Local<v8::Function> V8PerContextData::ConstructorForTypeSlowCase(
   v8::Context::Scope scope(context);
 
   v8::Local<v8::Function> parent_interface_object;
-  if (type->parent_class) {
-    parent_interface_object = ConstructorForType(type->parent_class);
+  if (auto* parent = type->parent_class) {
+    if (parent->is_skipped_in_interface_object_prototype_chain) {
+      // This is a special case for WindowProperties.
+      // We need to set up the inheritance of Window as the following:
+      //   Window.__proto__ === EventTarget
+      // although the prototype chain is the following:
+      //   Window.prototype.__proto__           === the named properties object
+      //   Window.prototype.__proto__.__proto__ === EventTarget.prototype
+      // where the named properties object is WindowProperties.prototype in
+      // our implementation (although WindowProperties is not JS observable).
+      // Let WindowProperties be skipped and make
+      // Window.__proto__ == EventTarget.
+      DCHECK(parent->parent_class);
+      DCHECK(!parent->parent_class
+                  ->is_skipped_in_interface_object_prototype_chain);
+      parent = parent->parent_class;
+    }
+    parent_interface_object = ConstructorForType(parent);
   }
 
-  const DOMWrapperWorld& world = DOMWrapperWorld::World(context);
+  const DOMWrapperWorld& world = DOMWrapperWorld::World(isolate_, context);
   v8::Local<v8::Function> interface_object =
       V8ObjectConstructor::CreateInterfaceObject(
           type, context, world, isolate_, parent_interface_object,
           V8ObjectConstructor::CreationMode::kInstallConditionalFeatures);
 
-  TraceWrapperV8Reference<v8::Function> traced_wrapper;
-  traced_wrapper.Reset(isolate_, interface_object);
-  constructor_map_.insert(type, traced_wrapper);
+  constructor_map_.insert(
+      type, TraceWrapperV8Reference<v8::Function>(isolate_, interface_object));
 
   return interface_object;
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -13,11 +13,22 @@
 
 namespace blink {
 
+namespace internal {
+template <typename T>
+inline constexpr bool IsHeapVector = false;
+
+template <typename T>
+inline constexpr bool IsHeapVector<HeapVector<T>> = true;
+}  // namespace internal
+
 // Given a type T, returns a type that is either Member<T> or just T depending
 // on whether T is a garbage-collected type.
 template <typename T>
 using AddMemberIfNeeded =
-    std::conditional_t<WTF::IsGarbageCollectedType<T>::value, Member<T>, T>;
+    std::conditional_t<WTF::IsGarbageCollectedType<T>::value &&
+                           !internal::IsHeapVector<T>,
+                       Member<T>,
+                       T>;
 
 // Given a type T, returns a type that is either HeapVector<T>,
 // HeapVector<Member<T>> or Vector<T> depending on T.

@@ -1,13 +1,16 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef THIRD_PARTY_BLINK_RENDERER_MODULES_LOCKS_LOCK_MANAGER_H_
 #define THIRD_PARTY_BLINK_RENDERER_MODULES_LOCKS_LOCK_MANAGER_H_
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
+
 #include "third_party/blink/public/mojom/feature_observer/feature_observer.mojom-blink.h"
-#include "third_party/blink/public/mojom/locks/lock_manager.mojom-blink-forward.h"
+#include "third_party/blink/public/mojom/locks/lock_manager.mojom-blink.h"
+#include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
+#include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/modules/v8/v8_lock_options.h"
 #include "third_party/blink/renderer/modules/locks/lock.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
@@ -19,8 +22,8 @@
 
 namespace blink {
 
+class LockManagerSnapshot;
 class NavigatorBase;
-class ScriptPromise;
 class ScriptState;
 class V8LockGrantedCallback;
 
@@ -40,17 +43,17 @@ class LockManager final : public ScriptWrappable,
   LockManager(const LockManager&) = delete;
   LockManager& operator=(const LockManager&) = delete;
 
-  ScriptPromise request(ScriptState*,
-                        const String& name,
-                        V8LockGrantedCallback*,
-                        ExceptionState&);
-  ScriptPromise request(ScriptState*,
-                        const String& name,
-                        const LockOptions*,
-                        V8LockGrantedCallback*,
-                        ExceptionState&);
+  ScriptPromise<IDLAny> request(ScriptState*,
+                                const String& name,
+                                V8LockGrantedCallback*,
+                                ExceptionState&);
+  ScriptPromise<IDLAny> request(ScriptState*,
+                                const String& name,
+                                const LockOptions*,
+                                V8LockGrantedCallback*,
+                                ExceptionState&);
 
-  ScriptPromise query(ScriptState*, ExceptionState&);
+  ScriptPromise<LockManagerSnapshot> query(ScriptState*, ExceptionState&);
 
   void Trace(Visitor*) const override;
 
@@ -66,6 +69,10 @@ class LockManager final : public ScriptWrappable,
   // is destroyed. See https://crbug.com/798500 for an example.
   void OnLockReleased(Lock*);
 
+  // Sets the LockManager remote
+  void SetManager(mojo::PendingRemote<mojom::blink::LockManager> manager,
+                  ExecutionContext* execution_context);
+
  private:
   class LockRequestImpl;
 
@@ -75,10 +82,22 @@ class LockManager final : public ScriptWrappable,
   void RemovePendingRequest(LockRequestImpl*);
   bool IsPendingRequest(LockRequestImpl*);
 
+  void QueryImpl(ScriptPromiseResolver<LockManagerSnapshot>* resolver);
+  void RequestImpl(const LockOptions* options,
+                   const String& name,
+                   V8LockGrantedCallback* callback,
+                   mojom::blink::LockMode mode,
+                   ScriptPromiseResolver<IDLAny>* resolver);
+
   // Query the ContentSettingsClient to ensure access is allowed from
-  // this context. The first call invokes a synchronous IPC call, but
-  // the result is cached for subsequent accesses.
-  bool AllowLocks(ScriptState* script_state);
+  // this context. This invokes an asynchronous IPC call.
+  // The result is cached for subsequent accesses.
+  void CheckStorageAccessAllowed(ExecutionContext* context,
+                                 ScriptPromiseResolverBase* resolver,
+                                 base::OnceCallback<void()> callback);
+  void DidCheckStorageAccessAllowed(ScriptPromiseResolverBase* resolver,
+                                    base::OnceCallback<void()> callback,
+                                    bool allow_access);
 
   HeapHashSet<Member<LockRequestImpl>> pending_requests_;
   HeapHashSet<Member<Lock>> held_locks_;
@@ -86,7 +105,7 @@ class LockManager final : public ScriptWrappable,
   HeapMojoRemote<mojom::blink::LockManager> service_;
   HeapMojoRemote<mojom::blink::FeatureObserver> observer_;
 
-  absl::optional<bool> cached_allowed_;
+  std::optional<bool> cached_allowed_;
 };
 
 }  // namespace blink

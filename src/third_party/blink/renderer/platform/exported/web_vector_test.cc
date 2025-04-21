@@ -1,8 +1,14 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "third_party/blink/public/platform/web_vector.h"
+
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
@@ -51,7 +57,7 @@ TEST(WebVectorTest, Empty) {
   WebVector<int> vector;
   ASSERT_TRUE(vector.empty());
   int value = 1;
-  vector.Assign(&value, 1);
+  vector.Assign(base::span_from_ref(value));
   ASSERT_EQ(1u, vector.size());
   ASSERT_FALSE(vector.empty());
 }
@@ -62,27 +68,17 @@ TEST(WebVectorTest, Swap) {
   const size_t kFirstDataLength = std::size(kFirstData);
   const size_t kSecondDataLength = std::size(kSecondData);
 
-  WebVector<int> first(kFirstData, kFirstDataLength);
-  WebVector<int> second(kSecondData, kSecondDataLength);
+  WebVector<int> first(base::span{kFirstData});
+  WebVector<int> second(base::span{kSecondData});
   ASSERT_EQ(kFirstDataLength, first.size());
   ASSERT_EQ(kSecondDataLength, second.size());
-  first.Swap(second);
+  first.swap(second);
   ASSERT_EQ(kSecondDataLength, first.size());
   ASSERT_EQ(kFirstDataLength, second.size());
   for (size_t i = 0; i < first.size(); ++i)
     EXPECT_EQ(kSecondData[i], first[i]);
   for (size_t i = 0; i < second.size(); ++i)
     EXPECT_EQ(kFirstData[i], second[i]);
-}
-
-TEST(WebVectorTest, CreateFromPointer) {
-  const int kValues[] = {1, 2, 3, 4, 5};
-
-  WebVector<int> vector(kValues, 3);
-  ASSERT_EQ(3u, vector.size());
-  ASSERT_EQ(1, vector[0]);
-  ASSERT_EQ(2, vector[1]);
-  ASSERT_EQ(3, vector[2]);
 }
 
 TEST(WebVectorTest, CreateFromWtfVector) {
@@ -135,9 +131,10 @@ TEST(WebVectorTest, EmplaceBackArgumentForwarding) {
   WebVector<WebString> vector;
   vector.reserve(1);
   WebUChar buffer[] = {'H', 'e', 'l', 'l', 'o', ' ', 'b', 'l', 'i', 'n', 'k'};
-  vector.emplace_back(buffer, std::size(buffer));
+  std::u16string_view view(buffer, std::size(buffer));
+  vector.emplace_back(view);
   ASSERT_EQ(1U, vector.size());
-  EXPECT_EQ(WebString(buffer, std::size(buffer)), vector[0]);
+  EXPECT_EQ(WebString(view), vector[0]);
 }
 
 TEST(WebVectorTest, EmplaceBackElementPlacement) {

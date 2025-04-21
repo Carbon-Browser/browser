@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,7 +9,7 @@
 #include "base/win/shlwapi.h"
 #include "chrome/installer/util/duplicate_tree_detector.h"
 
-MoveTreeWorkItem::~MoveTreeWorkItem() {}
+MoveTreeWorkItem::~MoveTreeWorkItem() = default;
 
 MoveTreeWorkItem::MoveTreeWorkItem(const base::FilePath& source_path,
                                    const base::FilePath& dest_path,

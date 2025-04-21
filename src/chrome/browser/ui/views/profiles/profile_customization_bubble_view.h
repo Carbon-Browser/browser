@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -20,8 +20,10 @@ class Profile;
 // This bubble is implemented as a WebUI page rendered inside a native bubble.
 // After the bubble is closed, a IPH for profile switching may be shown.
 class ProfileCustomizationBubbleView : public views::BubbleDialogDelegateView {
+  METADATA_HEADER(ProfileCustomizationBubbleView,
+                  views::BubbleDialogDelegateView)
+
  public:
-  METADATA_HEADER(ProfileCustomizationBubbleView);
   ProfileCustomizationBubbleView(const ProfileCustomizationBubbleView& other) =
       delete;
   ProfileCustomizationBubbleView& operator=(

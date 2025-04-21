@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,31 +7,22 @@
 namespace net {
 
 const char* CookieChangeCauseToString(CookieChangeCause cause) {
-  const char* cause_string = "INVALID";
   switch (cause) {
     case CookieChangeCause::INSERTED:
-      cause_string = "inserted";
-      break;
+      return "inserted";
     case CookieChangeCause::EXPLICIT:
-      cause_string = "explicit";
-      break;
+      return "explicit";
     case CookieChangeCause::UNKNOWN_DELETION:
-      cause_string = "unknown";
-      break;
+      return "unknown";
     case CookieChangeCause::OVERWRITE:
-      cause_string = "overwrite";
-      break;
+      return "overwrite";
     case CookieChangeCause::EXPIRED:
-      cause_string = "expired";
-      break;
+      return "expired";
     case CookieChangeCause::EVICTED:
-      cause_string = "evicted";
-      break;
+      return "evicted";
     case CookieChangeCause::EXPIRED_OVERWRITE:
-      cause_string = "expired_overwrite";
-      break;
+      return "expired_overwrite";
   }
-  return cause_string;
 }
 
 CookieChangeInfo::CookieChangeInfo() = default;

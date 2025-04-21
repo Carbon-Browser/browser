@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -21,7 +21,7 @@ bool GetUseRealClients() {
 #if defined(USE_REAL_DBUS_CLIENTS)
   return true;
 #else
-  // TODO(crbug.com/952745): Always use fakes after adding
+  // TODO(crbug.com/41452889): Always use fakes after adding
   // use_real_dbus_clients=true to where needed.
   return (base::SysInfo::IsRunningOnChromeOS() &&
           !base::CommandLine::ForCurrentProcess()->HasSwitch(

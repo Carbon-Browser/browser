@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,9 @@
 #define COMPONENTS_PAGE_LOAD_METRICS_BROWSER_PAGE_LOAD_METRICS_FORWARD_OBSERVER_H_
 
 #include "base/memory/weak_ptr.h"
+#include "components/page_load_metrics/browser/page_load_metrics_observer_delegate.h"
 #include "components/page_load_metrics/browser/page_load_metrics_observer_interface.h"
+#include "content/public/browser/auction_result.h"
 
 namespace page_load_metrics {
 
@@ -34,6 +36,8 @@ class PageLoadMetricsForwardObserver final
  private:
   // PageLoadMetricsObserverInterface implementation:
   const char* GetObserverName() const override;
+  const PageLoadMetricsObserverDelegate& GetDelegate() const override;
+  void SetDelegate(PageLoadMetricsObserverDelegate*) override;
   ObservePolicy OnStart(content::NavigationHandle* navigation_handle,
                         const GURL& currently_committed_url,
                         bool started_in_foreground) override;
@@ -42,6 +46,10 @@ class PageLoadMetricsForwardObserver final
       const GURL& currently_committed_url) override;
   ObservePolicy OnPrerenderStart(content::NavigationHandle* navigation_handle,
                                  const GURL& currently_committed_url) override;
+  ObservePolicy OnPreviewStart(content::NavigationHandle* navigation_handle,
+                               const GURL& currently_committed_url) override;
+  ObservePolicy OnNavigationHandleTimingUpdated(
+      content::NavigationHandle* navigation_handle) override;
   ObservePolicy OnRedirect(
       content::NavigationHandle* navigation_handle) override;
   ObservePolicy OnCommit(content::NavigationHandle* navigation_handle) override;
@@ -62,15 +70,16 @@ class PageLoadMetricsForwardObserver final
       content::NavigationHandle* navigation_handle) override;
   ObservePolicy ShouldObserveMimeType(
       const std::string& mime_type) const override;
+  ObservePolicy ShouldObserveScheme(const GURL& url) const override;
   void OnTimingUpdate(content::RenderFrameHost* subframe_rfh,
                       const mojom::PageLoadTiming& timing) override;
-  void OnSoftNavigationCountUpdated() override;
-  void OnMobileFriendlinessUpdate(
-      const blink::MobileFriendliness& mobile_friendliness) override;
+  void OnSoftNavigationUpdated(const mojom::SoftNavigationMetrics&) override;
   void OnInputTimingUpdate(
       content::RenderFrameHost* subframe_rfh,
       const mojom::InputTiming& input_timing_delta) override;
-  void OnPageInputTimingUpdate(uint64_t num_input_events) override;
+  void OnPageInputTimingUpdate(uint64_t num_interactions) override;
+  void OnPageRenderDataUpdate(const mojom::FrameRenderDataUpdate& render_data,
+                              bool is_main_frame) override;
   void OnSubFrameRenderDataUpdate(
       content::RenderFrameHost* subframe_rfh,
       const mojom::FrameRenderDataUpdate& render_data) override;
@@ -81,9 +90,12 @@ class PageLoadMetricsForwardObserver final
   void OnDomContentLoadedEventStart(
       const mojom::PageLoadTiming& timing) override;
   void OnLoadEventStart(const mojom::PageLoadTiming& timing) override;
-  void OnFirstLayout(const mojom::PageLoadTiming& timing) override;
   void OnParseStart(const mojom::PageLoadTiming& timing) override;
   void OnParseStop(const mojom::PageLoadTiming& timing) override;
+  void OnConnectStart(const mojom::PageLoadTiming& timing) override;
+  void OnConnectEnd(const mojom::PageLoadTiming& timing) override;
+  void OnDomainLookupStart(const mojom::PageLoadTiming& timing) override;
+  void OnDomainLookupEnd(const mojom::PageLoadTiming& timing) override;
   void OnFirstPaintInPage(const mojom::PageLoadTiming& timing) override;
   void OnFirstImagePaintInPage(const mojom::PageLoadTiming& timing) override;
   void OnFirstContentfulPaintInPage(
@@ -102,6 +114,9 @@ class PageLoadMetricsForwardObserver final
   void OnFirstInputInPage(const mojom::PageLoadTiming& timing) override;
   void OnLoadingBehaviorObserved(content::RenderFrameHost* rfh,
                                  int behavior_flags) override;
+  void OnJavaScriptFrameworksObserved(
+      content::RenderFrameHost* rfh,
+      const blink::JavaScriptFrameworkDetectionResult&) override;
   void OnFeaturesUsageObserved(
       content::RenderFrameHost* rfh,
       const std::vector<blink::UseCounterFeature>& features) override;
@@ -118,6 +133,8 @@ class PageLoadMetricsForwardObserver final
       const gfx::Rect& main_frame_intersection_rect) override;
   void OnMainFrameViewportRectChanged(
       const gfx::Rect& main_frame_viewport_rect) override;
+  void OnMainFrameImageAdRectsChanged(
+      const base::flat_map<int, gfx::Rect>& main_frame_image_ad_rects) override;
   ObservePolicy FlushMetricsOnAppEnterBackground(
       const mojom::PageLoadTiming& timing) override;
   void OnComplete(const mojom::PageLoadTiming& timing) override;
@@ -133,25 +150,40 @@ class PageLoadMetricsForwardObserver final
                         const gfx::Size& frame_size) override;
   void OnRenderFrameDeleted(
       content::RenderFrameHost* render_frame_host) override;
-  void OnSubFrameDeleted(int frame_tree_node_id) override;
-  void OnCookiesRead(const GURL& url,
-                     const GURL& first_party_url,
-                     const net::CookieList& cookie_list,
-                     bool blocked_by_policy) override;
-  void OnCookieChange(const GURL& url,
-                      const GURL& first_party_url,
-                      const net::CanonicalCookie& cookie,
-                      bool blocked_by_policy) override;
+  void OnSubFrameDeleted(content::FrameTreeNodeId frame_tree_node_id) override;
+  void OnCookiesRead(
+      const GURL& url,
+      const GURL& first_party_url,
+      bool blocked_by_policy,
+      bool is_ad_tagged,
+      const net::CookieSettingOverrides& cookie_setting_overrides,
+      bool is_partitioned_access) override;
+  void OnCookieChange(
+      const GURL& url,
+      const GURL& first_party_url,
+      const net::CanonicalCookie& cookie,
+      bool blocked_by_policy,
+      bool is_ad_tagged,
+      const net::CookieSettingOverrides& cookie_setting_overrides,
+      bool is_partitioned_access) override;
   void OnStorageAccessed(const GURL& url,
                          const GURL& first_party_url,
                          bool blocked_by_policy,
                          StorageType access_type) override;
   void OnPrefetchLikely() override;
-  void DidActivatePortal(base::TimeTicks activation_time) override;
   void DidActivatePrerenderedPage(
       content::NavigationHandle* navigation_handle) override;
+  void DidActivatePreviewedPage(base::TimeTicks activation_time) override;
   void OnV8MemoryChanged(
       const std::vector<MemoryUpdate>& memory_updates) override;
+  void OnSharedStorageWorkletHostCreated() override;
+  void OnSharedStorageSelectURLCalled() override;
+  void OnCustomUserTimingMarkObserved(
+      const std::vector<mojom::CustomUserTimingMarkPtr>& timings) override;
+  void OnAdAuctionComplete(bool is_server_auction,
+                           bool is_on_device_auction,
+                           content::AuctionResult result) override;
+  void OnPrimaryPageRenderProcessGone() override;
 
   // Holds the forward target observer running in the parent PageLoadTracker.
   base::WeakPtr<PageLoadMetricsObserverInterface> parent_observer_;

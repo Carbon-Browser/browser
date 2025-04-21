@@ -1,18 +1,19 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef ASH_QUICK_PAIR_REPOSITORY_FAST_PAIR_REPOSITORY_H_
 #define ASH_QUICK_PAIR_REPOSITORY_FAST_PAIR_REPOSITORY_H_
 
+#include <optional>
+
 #include "ash/quick_pair/common/device.h"
 #include "ash/quick_pair/proto/fastpair.pb.h"
 #include "ash/quick_pair/repository/fast_pair/device_metadata.h"
 #include "ash/quick_pair/repository/fast_pair/pairing_metadata.h"
-#include "base/callback.h"
 #include "base/containers/flat_map.h"
-#include "chromeos/services/bluetooth_config/public/cpp/device_image_info.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "base/functional/callback.h"
+#include "chromeos/ash/services/bluetooth_config/public/cpp/device_image_info.h"
 
 namespace chromeos {
 namespace bluetooth_config {
@@ -20,17 +21,13 @@ class DeviceImageInfo;
 }  // namespace bluetooth_config
 }  // namespace chromeos
 
-namespace device {
-class BluetoothDevice;
-}  // namespace device
-
 namespace ash {
 namespace quick_pair {
 
 class AccountKeyFilter;
 
 using CheckAccountKeysCallback =
-    base::OnceCallback<void(absl::optional<PairingMetadata>)>;
+    base::OnceCallback<void(std::optional<PairingMetadata>)>;
 using DeviceMetadataCallback = base::OnceCallback<void(DeviceMetadata*, bool)>;
 using ValidModelIdCallback = base::OnceCallback<void(bool)>;
 using CheckOptInStatusCallback =
@@ -42,12 +39,19 @@ using DeleteAssociatedDeviceByAccountKeyCallback =
 using GetSavedDevicesCallback =
     base::OnceCallback<void(nearby::fastpair::OptInStatus,
                             std::vector<nearby::fastpair::FastPairDevice>)>;
+using IsDeviceSavedToAccountCallback = base::OnceCallback<void(bool)>;
 
 // The entry point for the Repository component in the Quick Pair system,
 // responsible for connecting to back-end services.
 class FastPairRepository {
  public:
   static FastPairRepository* Get();
+
+  // Computes and returns the SHA256 of the concatenation of the given
+  // |account_key| and |mac_address|.
+  static std::string GenerateSha256OfAccountKeyAndMacAddress(
+      const std::string& account_key,
+      const std::string& mac_address);
 
   FastPairRepository();
   virtual ~FastPairRepository();
@@ -68,15 +72,17 @@ class FastPairRepository {
   virtual bool IsAccountKeyPairedLocally(
       const std::vector<uint8_t>& account_key) = 0;
 
-  // Stores the given |account_key| for a |device| on the server.
-  virtual void AssociateAccountKey(scoped_refptr<Device> device,
-                                   const std::vector<uint8_t>& account_key) = 0;
+  // Stores the given |account_key| for a |device| on the Footprints server.
+  virtual void WriteAccountAssociationToFootprints(
+      scoped_refptr<Device> device,
+      const std::vector<uint8_t>& account_key) = 0;
 
   // Stores the account_key for a |device| locally in the SavedDeviceRegistry,
   // skipping the step where we send a request to the server. The account key
   // should be stored in the additional data field of the device, fails
   // otherwise.
-  virtual bool AssociateAccountKeyLocally(scoped_refptr<Device> device) = 0;
+  virtual bool WriteAccountAssociationToLocalRegistry(
+      scoped_refptr<Device> device) = 0;
 
   // Deletes the associated data for device with a given |mac_address|.
   // Returns true if a delete will be processed for this device, false
@@ -84,6 +90,15 @@ class FastPairRepository {
   virtual void DeleteAssociatedDevice(
       const std::string& mac_address,
       DeleteAssociatedDeviceCallback callback) = 0;
+
+  // Updates the display name of the device saved on the Footprints server. The
+  // function will first check the cache for the device, if the device is not
+  // found in the cache and |cache_may_be_stale| is set to true, it will trigger
+  // a server call to refresh the cache.
+  virtual void UpdateAssociatedDeviceFootprintsName(
+      const std::string& mac_address,
+      const std::string& nickname,
+      bool cache_may_be_stale) = 0;
 
   // Deletes the associated data for a given |account_key|.
   // Runs true if a delete is successful for this account key, false
@@ -96,17 +111,25 @@ class FastPairRepository {
   // mapping to memory.
   virtual void FetchDeviceImages(scoped_refptr<Device> device) = 0;
 
+  // Fetches the |device| display_name from the cache, this is only called
+  // during the subsequent pairing scenario and is called after the account_key
+  // filter has been matched to an account_key. Therefore the account_key and
+  // associated display_name should already be in the cache so no need for a
+  // server call.
+  virtual std::optional<std::string> GetDeviceDisplayNameFromCache(
+      std::vector<uint8_t> account_key) = 0;
+
   // Persists the images and device ID belonging to |device| to
   // disk, if model ID is not already persisted.
   virtual bool PersistDeviceImages(scoped_refptr<Device> device) = 0;
 
-  // Evicts the images and device ID belonging to |device| from
-  // disk, if model ID is not in use by other device IDs.
-  virtual bool EvictDeviceImages(const device::BluetoothDevice* device) = 0;
+  // Evicts the images and mac address record for |mac_address| from
+  // disk, if model ID is not in use by other mac addresses.
+  virtual bool EvictDeviceImages(const std::string& mac_address) = 0;
 
-  // Returns device images belonging to |device_id|, if found.
-  virtual absl::optional<chromeos::bluetooth_config::DeviceImageInfo>
-  GetImagesForDevice(const std::string& device_id) = 0;
+  // Returns device images belonging to |mac_address|, if found.
+  virtual std::optional<bluetooth_config::DeviceImageInfo> GetImagesForDevice(
+      const std::string& mac_address) = 0;
 
   // Fetches the opt in status from Footprints to determine the status for
   // saving a user's devices to their account, which is synced all across a
@@ -125,8 +148,15 @@ class FastPairRepository {
   // status for saving future devices to their account.
   virtual void GetSavedDevices(GetSavedDevicesCallback callback) = 0;
 
- protected:
+  // Checks if a device with an address |mac_address| is already saved to
+  // the user's account by cross referencing the |mac_address| with any
+  // associated account keys.
+  virtual void IsDeviceSavedToAccount(
+      const std::string& mac_address,
+      IsDeviceSavedToAccountCallback callback) = 0;
+
   static void SetInstance(FastPairRepository* instance);
+  static void SetInstanceForTesting(FastPairRepository* instance);
 };
 
 }  // namespace quick_pair

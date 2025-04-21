@@ -1,17 +1,15 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/device/generic_sensor/linux/sensor_data_linux.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/system/sys_info.h"
 #include "base/version.h"
-#include "build/chromeos_buildflags.h"
 #include "services/device/generic_sensor/generic_sensor_consts.h"
 #include "services/device/public/cpp/generic_sensor/sensor_reading.h"
 #include "services/device/public/cpp/generic_sensor/sensor_traits.h"
-#include "ui/gfx/geometry/angle_conversions.h"
 
 namespace device {
 

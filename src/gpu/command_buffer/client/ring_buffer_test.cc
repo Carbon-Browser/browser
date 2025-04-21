@@ -1,6 +1,11 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 // This file contains the tests for the RingBuffer class.
 
@@ -10,8 +15,8 @@
 
 #include <memory>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/test/task_environment.h"
@@ -37,8 +42,8 @@ class BaseRingBufferTest : public testing::Test {
   static const unsigned int kAlignment = 4;
 
   void RunPendingSetToken() {
-    for (std::vector<const volatile void*>::iterator it =
-             set_token_arguments_.begin();
+    for (std::vector<raw_ptr<const volatile void, VectorExperimental>>::iterator
+             it = set_token_arguments_.begin();
          it != set_token_arguments_.end(); ++it) {
       api_mock_->SetToken(cmd::kSetToken, 1, *it);
     }
@@ -59,9 +64,9 @@ class BaseRingBufferTest : public testing::Test {
 
   void SetUp() override {
     delay_set_token_ = false;
-    command_buffer_.reset(new CommandBufferDirect());
-    api_mock_.reset(new AsyncAPIMock(true, command_buffer_->service()));
-    command_buffer_->set_handler(api_mock_.get());
+    command_buffer_ = std::make_unique<CommandBufferDirect>();
+    api_mock_ = std::make_unique<AsyncAPIMock>(true, command_buffer_.get(),
+                                               command_buffer_->service());
 
     // ignore noops in the mock - we don't want to inspect the internals of the
     // helper.
@@ -78,14 +83,14 @@ class BaseRingBufferTest : public testing::Test {
 
   int32_t GetToken() { return command_buffer_->GetLastState().token; }
 
+  std::vector<raw_ptr<const volatile void, VectorExperimental>>
+      set_token_arguments_;
+  bool delay_set_token_;
   std::unique_ptr<CommandBufferDirect> command_buffer_;
   std::unique_ptr<AsyncAPIMock> api_mock_;
   std::unique_ptr<CommandBufferHelper> helper_;
-  std::vector<const volatile void*> set_token_arguments_;
-  bool delay_set_token_;
 
-  std::unique_ptr<int8_t[]> buffer_;
-  raw_ptr<int8_t> buffer_start_;
+  scoped_refptr<gpu::Buffer> buffer_;
   base::test::SingleThreadTaskEnvironment task_environment_;
 };
 
@@ -101,10 +106,10 @@ class RingBufferTest : public BaseRingBufferTest {
   void SetUp() override {
     BaseRingBufferTest::SetUp();
 
-    buffer_.reset(new int8_t[kBufferSize + kBaseOffset]);
-    buffer_start_ = buffer_.get() + kBaseOffset;
-    allocator_.reset(new RingBuffer(kAlignment, kBaseOffset, kBufferSize,
-                                    helper_.get(), buffer_start_));
+    buffer_ = base::MakeRefCounted<gpu::Buffer>(
+        std::make_unique<MemoryBufferBacking>(kBufferSize + kBaseOffset));
+    allocator_.reset(
+        new RingBuffer(buffer_, kAlignment, kBaseOffset, helper_.get()));
   }
 
   void TearDown() override {
@@ -139,10 +144,10 @@ TEST_F(RingBufferTest, TestBasic) {
 // GetLargestFreeOrPendingSize to try to allocate more memory than was allowed.
 TEST_F(RingBufferTest, TestCanAllocGetLargestFreeOrPendingSize) {
   // Make sure we aren't actually aligned
-  buffer_.reset(new int8_t[kBufferSize + 2 + kBaseOffset]);
-  buffer_start_ = buffer_.get() + kBaseOffset;
-  allocator_.reset(new RingBuffer(kAlignment, kBaseOffset, kBufferSize + 2,
-                                  helper_.get(), buffer_start_));
+  buffer_ = base::MakeRefCounted<gpu::Buffer>(
+      std::make_unique<MemoryBufferBacking>(kBufferSize + 2 + kBaseOffset));
+  allocator_.reset(
+      new RingBuffer(buffer_, kAlignment, kBaseOffset, helper_.get()));
   void* pointer = allocator_->Alloc(allocator_->GetLargestFreeOrPendingSize());
   allocator_->FreePendingToken(pointer, helper_->InsertToken());
 }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 
 #include "base/format_macros.h"
 #include "base/strings/stringprintf.h"
+#include "base/values.h"
 #include "components/sync/protocol/proto_value_conversions.h"
 
 namespace syncer {
@@ -15,7 +16,7 @@ namespace syncer {
 CommitRequestEvent::CommitRequestEvent(
     base::Time timestamp,
     size_t num_items,
-    ModelTypeSet contributing_types,
+    DataTypeSet contributing_types,
     const sync_pb::ClientToServerMessage& request)
     : timestamp_(timestamp),
       num_items_(num_items),
@@ -42,12 +43,15 @@ std::string CommitRequestEvent::GetDetails() const {
       "Item count: %" PRIuS
       "\n"
       "Contributing types: %s",
-      num_items_, ModelTypeSetToDebugString(contributing_types_).c_str());
+      num_items_, DataTypeSetToDebugString(contributing_types_).c_str());
 }
 
-std::unique_ptr<base::DictionaryValue> CommitRequestEvent::GetProtoMessage(
+base::Value::Dict CommitRequestEvent::GetProtoMessage(
     bool include_specifics) const {
-  return ClientToServerMessageToValue(request_, include_specifics);
+  return ClientToServerMessageToValue(
+             request_, {.include_specifics = include_specifics,
+                        .include_full_get_update_triggers = false})
+      .TakeDict();
 }
 
 }  // namespace syncer

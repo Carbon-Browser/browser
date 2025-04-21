@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,15 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/strings/stringprintf.h"
+#include "base/test/run_until.h"
 #include "build/build_config.h"
 #include "chrome/browser/apps/platform_apps/app_browsertest_util.h"
+#include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/browser.h"
 #include "components/guest_view/browser/guest_view_manager.h"
 #include "components/guest_view/browser/guest_view_manager_factory.h"
 #include "components/guest_view/browser/test_guest_view_manager.h"
 #include "content/public/browser/child_process_termination_info.h"
-#include "content/public/browser/notification_service.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/render_process_host_observer.h"
@@ -27,6 +29,7 @@
 #include "extensions/browser/guest_view/app_view/app_view_constants.h"
 #include "extensions/browser/guest_view/app_view/app_view_guest.h"
 #include "extensions/browser/guest_view/extensions_guest_view_manager_delegate.h"
+#include "extensions/browser/guest_view/web_view/web_view_guest.h"
 #include "extensions/browser/process_manager.h"
 #include "extensions/common/switches.h"
 #include "extensions/test/extension_test_message_listener.h"
@@ -41,16 +44,11 @@ using guest_view::TestGuestViewManagerFactory;
 
 class AppViewTest : public extensions::PlatformAppBrowserTest {
  public:
-  AppViewTest() {
-    GuestViewManager::set_factory_for_testing(&factory_);
-  }
+  AppViewTest() = default;
   AppViewTest(const AppViewTest&) = delete;
   AppViewTest& operator=(const AppViewTest&) = delete;
 
-  enum TestServer {
-    NEEDS_TEST_SERVER,
-    NO_TEST_SERVER
-  };
+  enum TestServer { NEEDS_TEST_SERVER, NO_TEST_SERVER };
 
   void TestHelper(const std::string& test_name,
                   const std::string& app_location,
@@ -78,7 +76,7 @@ class AppViewTest : public extensions::PlatformAppBrowserTest {
 
     ExtensionTestMessageListener done_listener("TEST_PASSED");
     done_listener.set_failure_message("TEST_FAILED");
-    if (!content::ExecuteScript(
+    if (!content::ExecJs(
             embedder_web_contents,
             base::StringPrintf("runTest('%s', '%s')", test_name.c_str(),
                                app_to_embed.c_str()))) {
@@ -92,66 +90,74 @@ class AppViewTest : public extensions::PlatformAppBrowserTest {
     return test_guest_view_manager_;
   }
 
+  void CloseAppWindow() {
+    content::WebContents* embedder_web_contents =
+        GetFirstAppWindowWebContents();
+    content::WebContentsDestroyedWatcher destroyed_watcher(
+        embedder_web_contents);
+    EXPECT_TRUE(content::ExecJs(embedder_web_contents, "window.close()"));
+    destroyed_watcher.Wait();
+  }
+
+  // Completes an onEmbedRequested request in `app`. Assumes the app has a
+  // `continueEmbedding` function which does this.
+  void ContinueEmbedding(const extensions::Extension* app, bool allow_request) {
+    content::WebContents* host_contents =
+        extensions::ProcessManager::Get(browser()->profile())
+            ->GetBackgroundHostForExtension(app->id())
+            ->host_contents();
+    ASSERT_TRUE(content::WaitForLoadStop(host_contents));
+    ASSERT_TRUE(content::ExecJs(
+        host_contents,
+        content::JsReplace("continueEmbedding($1);", allow_request)));
+  }
+
  private:
   void SetUpOnMainThread() override {
     extensions::PlatformAppBrowserTest::SetUpOnMainThread();
-    test_guest_view_manager_ = static_cast<guest_view::TestGuestViewManager*>(
-        guest_view::GuestViewManager::CreateWithDelegate(
-            browser()->profile(),
-            std::unique_ptr<guest_view::GuestViewManagerDelegate>(
-                ExtensionsAPIClient::Get()->CreateGuestViewManagerDelegate(
-                    browser()->profile()))));
+    test_guest_view_manager_ = factory_.GetOrCreateTestGuestViewManager(
+        browser()->profile(),
+        ExtensionsAPIClient::Get()->CreateGuestViewManagerDelegate());
+  }
+
+  void TearDownOnMainThread() override {
+    test_guest_view_manager_ = nullptr;
+    extensions::PlatformAppBrowserTest::TearDownOnMainThread();
   }
 
   TestGuestViewManagerFactory factory_;
-  raw_ptr<guest_view::TestGuestViewManager> test_guest_view_manager_;
+  raw_ptr<guest_view::TestGuestViewManager> test_guest_view_manager_ = nullptr;
 };
 
 // Tests that <appview> is able to navigate to another installed app.
 IN_PROC_BROWSER_TEST_F(AppViewTest, TestAppViewWithUndefinedDataShouldSucceed) {
   const extensions::Extension* skeleton_app =
       InstallPlatformApp("app_view/shim/skeleton");
-  TestHelper("testAppViewWithUndefinedDataShouldSucceed",
-             "app_view/shim",
-             skeleton_app->id(),
-             NO_TEST_SERVER);
+  TestHelper("testAppViewWithUndefinedDataShouldSucceed", "app_view/shim",
+             skeleton_app->id(), NO_TEST_SERVER);
 }
 
 // Tests that <appview> correctly processes parameters passed on connect.
-// Flaky on Windows, Linux and Mac. See https://crbug.com/875908
-#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_CHROMEOS) || \
-    BUILDFLAG(IS_MAC)
-#define MAYBE_TestAppViewRefusedDataShouldFail \
-  DISABLED_TestAppViewRefusedDataShouldFail
-#else
-#define MAYBE_TestAppViewRefusedDataShouldFail TestAppViewRefusedDataShouldFail
-#endif
-IN_PROC_BROWSER_TEST_F(AppViewTest, MAYBE_TestAppViewRefusedDataShouldFail) {
+IN_PROC_BROWSER_TEST_F(AppViewTest, TestAppViewRefusedDataShouldFail) {
   const extensions::Extension* skeleton_app =
       InstallPlatformApp("app_view/shim/skeleton");
-  TestHelper("testAppViewRefusedDataShouldFail",
-             "app_view/shim",
-             skeleton_app->id(),
-             NO_TEST_SERVER);
+  TestHelper("testAppViewRefusedDataShouldFail", "app_view/shim",
+             skeleton_app->id(), NO_TEST_SERVER);
 }
 
 // Tests that <appview> correctly processes parameters passed on connect.
 IN_PROC_BROWSER_TEST_F(AppViewTest, TestAppViewGoodDataShouldSucceed) {
   const extensions::Extension* skeleton_app =
       InstallPlatformApp("app_view/shim/skeleton");
-  TestHelper("testAppViewGoodDataShouldSucceed",
-             "app_view/shim",
-             skeleton_app->id(),
-             NO_TEST_SERVER);
+  TestHelper("testAppViewGoodDataShouldSucceed", "app_view/shim",
+             skeleton_app->id(), NO_TEST_SERVER);
 }
 
 // Tests that <appview> correctly handles multiple successive connects.
 IN_PROC_BROWSER_TEST_F(AppViewTest, TestAppViewMultipleConnects) {
   const extensions::Extension* skeleton_app =
       InstallPlatformApp("app_view/shim/skeleton");
-  TestHelper("testAppViewMultipleConnects",
-             "app_view/shim",
-             skeleton_app->id(),
+  TestHelper("testAppViewMultipleConnects", "app_view/shim", skeleton_app->id(),
              NO_TEST_SERVER);
 }
 
@@ -169,10 +175,26 @@ IN_PROC_BROWSER_TEST_F(AppViewTest,
 IN_PROC_BROWSER_TEST_F(AppViewTest, TestAppViewEmbedSelfShouldFail) {
   const extensions::Extension* skeleton_app =
       InstallPlatformApp("app_view/shim/skeleton");
-  TestHelper("testAppViewEmbedSelfShouldFail",
-             "app_view/shim",
-             skeleton_app->id(),
-             NO_TEST_SERVER);
+  TestHelper("testAppViewEmbedSelfShouldFail", "app_view/shim",
+             skeleton_app->id(), NO_TEST_SERVER);
+}
+
+IN_PROC_BROWSER_TEST_F(AppViewTest, TestCloseWithPendingEmbedRequestDeny) {
+  const extensions::Extension* skeleton_app =
+      InstallPlatformApp("app_view/shim/skeleton");
+  TestHelper("testCloseWithPendingEmbedRequest", "app_view/shim",
+             skeleton_app->id(), NO_TEST_SERVER);
+  CloseAppWindow();
+  ContinueEmbedding(skeleton_app, false);
+}
+
+IN_PROC_BROWSER_TEST_F(AppViewTest, TestCloseWithPendingEmbedRequestAllow) {
+  const extensions::Extension* skeleton_app =
+      InstallPlatformApp("app_view/shim/skeleton");
+  TestHelper("testCloseWithPendingEmbedRequest", "app_view/shim",
+             skeleton_app->id(), NO_TEST_SERVER);
+  CloseAppWindow();
+  ContinueEmbedding(skeleton_app, true);
 }
 
 IN_PROC_BROWSER_TEST_F(AppViewTest, KillGuestWithInvalidInstanceID) {
@@ -203,8 +225,8 @@ IN_PROC_BROWSER_TEST_F(AppViewTest, KillGuestWithInvalidInstanceID) {
   EXPECT_FALSE(exit_observer.did_exit_normally());
 }
 
-// TODO(https://crbug.com/1179298): this is flaky on wayland-ozone.
-#if defined(USE_OZONE)
+// TODO(crbug.com/40169473): this is flaky on wayland-ozone.
+#if BUILDFLAG(IS_OZONE)
 #define MAYBE_KillGuestCommunicatingWithWrongAppView \
   DISABLED_KillGuestCommunicatingWithWrongAppView
 #else
@@ -220,12 +242,12 @@ IN_PROC_BROWSER_TEST_F(AppViewTest,
   const extensions::Extension* bad_app =
       LoadAndLaunchPlatformApp("app_view/bad_app", "AppViewTest.LAUNCHED");
   // The host app attemps to embed the guest
-  EXPECT_TRUE(content::ExecuteScript(
-      extensions::AppWindowRegistry::Get(browser()->profile())
-          ->GetCurrentAppWindowForApp(host_app->id())
-          ->web_contents(),
-      base::StringPrintf("onAppCommand('%s', '%s');", "EMBED",
-                         guest_app->id().c_str())));
+  EXPECT_TRUE(
+      content::ExecJs(extensions::AppWindowRegistry::Get(browser()->profile())
+                          ->GetCurrentAppWindowForApp(host_app->id())
+                          ->web_contents(),
+                      base::StringPrintf("onAppCommand('%s', '%s');", "EMBED",
+                                         guest_app->id().c_str())));
   ExtensionTestMessageListener on_embed_requested_listener(
       "AppViewTest.EmbedRequested");
   EXPECT_TRUE(on_embed_requested_listener.WaitUntilSatisfied());
@@ -238,19 +260,62 @@ IN_PROC_BROWSER_TEST_F(AppViewTest,
           ->GetBackgroundHostForExtension(bad_app->id())
           ->render_process_host(),
       content::RenderProcessHostWatcher::WATCH_FOR_PROCESS_EXIT);
-  std::unique_ptr<base::DictionaryValue> fake_embed_request_param(
-      new base::DictionaryValue);
-  fake_embed_request_param->SetIntKey(appview::kGuestInstanceID,
-                                      guest_instance_id);
-  fake_embed_request_param->SetStringKey(appview::kEmbedderID, host_app->id());
+  base::Value::Dict fake_embed_request_param;
+  fake_embed_request_param.Set(appview::kGuestInstanceID, guest_instance_id);
+  fake_embed_request_param.Set(appview::kEmbedderID, host_app->id());
   extensions::AppRuntimeEventRouter::DispatchOnEmbedRequestedEvent(
       browser()->profile(), std::move(fake_embed_request_param), bad_app);
   bad_app_obs.Wait();
   EXPECT_FALSE(bad_app_obs.did_exit_normally());
   // Now ask the guest to continue embedding.
-  ASSERT_TRUE(
-      ExecuteScript(extensions::ProcessManager::Get(browser()->profile())
-                        ->GetBackgroundHostForExtension(guest_app->id())
-                        ->web_contents(),
-                    "continueEmbedding();"));
+  ContinueEmbedding(guest_app, true);
+}
+
+// Load an AppView which loads a WebView with a text field. The embedding app
+// calls `focus()` on the AppView. The AppView calls `focus()` on the WebView.
+// This should be enough to focus the content of the WebView without further
+// user input like needing to click on the WebView.
+IN_PROC_BROWSER_TEST_F(AppViewTest, FocusWebViewInAppView) {
+  const extensions::Extension* skeleton_app =
+      InstallPlatformApp("app_view/shim/skeleton");
+  TestHelper("testFocusWebViewInAppView", "app_view/shim", skeleton_app->id(),
+             NO_TEST_SERVER);
+
+  extensions::WebViewGuest* webview_guest = nullptr;
+  content::WebContents* embedder_web_contents = GetFirstAppWindowWebContents();
+  ASSERT_TRUE(base::test::RunUntil([&]() {
+    content::RenderFrameHost* focused =
+        embedder_web_contents->GetFocusedFrame();
+    webview_guest = extensions::WebViewGuest::FromRenderFrameHost(focused);
+    return !!webview_guest;
+  })) << "Timeout waiting for webview focus";
+
+  content::SimulateKeyPress(embedder_web_contents,
+                            ui::DomKey::FromCharacter('F'), ui::DomCode::US_F,
+                            ui::VKEY_F, false, false, false, false);
+  EXPECT_TRUE(
+      content::ExecJs(webview_guest->GetGuestMainFrame(), "waitForInput();"));
+}
+
+IN_PROC_BROWSER_TEST_F(AppViewTest, TestAppViewCannotOpenNewWindow) {
+  const extensions::Extension* skeleton_app =
+      InstallPlatformApp("app_view/shim/skeleton");
+  TestHelper("testBasicConnect", "app_view/shim", skeleton_app->id(),
+             NO_TEST_SERVER);
+
+  auto* guest = test_guest_view_manager()->WaitForSingleGuestViewCreated();
+  test_guest_view_manager()->WaitUntilAttached(guest);
+  content::WaitForLoadStop(guest->web_contents());
+  auto* guest_rfh = guest->GetGuestMainFrame();
+
+  // Try to open new windows. Since it's inside an appview, nothing should
+  // happen.
+  EXPECT_TRUE(content::ExecJs(guest_rfh, "window.open('', 'attempt1');"));
+  // Also test with noopener, since the browser side code paths have substantial
+  // differences between the opener and noopener cases.
+  EXPECT_TRUE(
+      content::ExecJs(guest_rfh, "window.open('', 'attempt2', 'noopener');"));
+
+  // Verify that the window open attempts didn't create additional guests.
+  EXPECT_EQ(1u, test_guest_view_manager()->num_guests_created());
 }

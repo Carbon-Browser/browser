@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -76,61 +76,69 @@ TEST(SubstringSetMatcherTest, TestMatcher) {
   // Pattern 1  bc
   // Pattern 2   cd
   TestTwoPatterns("abcde", "bc", "cd", true, true);
-  if (HasFatalFailure())
+  if (HasFatalFailure()) {
     return;
+  }
 
   // Test subpatterns - part 1
   // String    abcde
   // Pattern 1  bc
   // Pattern 2  b
   TestTwoPatterns("abcde", "bc", "b", true, true);
-  if (HasFatalFailure())
+  if (HasFatalFailure()) {
     return;
+  }
 
   // Test subpatterns - part 2
   // String    abcde
   // Pattern 1  bc
   // Pattern 2   c
   TestTwoPatterns("abcde", "bc", "c", true, true);
-  if (HasFatalFailure())
+  if (HasFatalFailure()) {
     return;
+  }
 
   // Test identical matches
   // String    abcde
   // Pattern 1 abcde
   TestOnePattern("abcde", "abcde", true);
-  if (HasFatalFailure())
+  if (HasFatalFailure()) {
     return;
+  }
 
   // Test multiple matches
   // String    aaaaa
   // Pattern 1 a
   TestOnePattern("abcde", "a", true);
-  if (HasFatalFailure())
+  if (HasFatalFailure()) {
     return;
+  }
 
   // Test matches at beginning and end
   // String    abcde
   // Pattern 1 ab
   // Pattern 2    de
   TestTwoPatterns("abcde", "ab", "de", true, true);
-  if (HasFatalFailure())
+  if (HasFatalFailure()) {
     return;
+  }
 
   // Test non-match
   // String    abcde
   // Pattern 1        fg
   TestOnePattern("abcde", "fg", false);
-  if (HasFatalFailure())
+  if (HasFatalFailure()) {
     return;
+  }
 
   // Test empty pattern and too long pattern
   // String    abcde
   // Pattern 1
   // Pattern 2 abcdef
   TestTwoPatterns("abcde", std::string(), "abcdef", true, false);
-  if (HasFatalFailure())
+  if (HasFatalFailure()) {
     return;
+  }
 }
 
 TEST(SubstringSetMatcherTest, TestMatcher2) {
@@ -196,6 +204,28 @@ TEST(SubstringSetMatcherTest, TestEmptyMatcher) {
   matcher.Match("abd", &matches);
   EXPECT_TRUE(matches.empty());
   EXPECT_TRUE(matcher.IsEmpty());
+}
+
+// Test a case where we have more than 256 edges from one node
+// (the “a” node gets one for each possible ASCII bytes, and then
+// one for the output link).
+TEST(SubstringSetMatcherTest, LotsOfEdges) {
+  std::vector<MatcherStringPattern> patterns;
+  for (int i = 0; i < 256; ++i) {
+    std::string str;
+    str.push_back('a');
+    str.push_back(static_cast<char>(i));
+    patterns.emplace_back(str, i);
+  }
+
+  {
+    std::string str;
+    str.push_back('a');
+    patterns.emplace_back(str, 256);
+  }
+
+  SubstringSetMatcher matcher;
+  matcher.Build(patterns);
 }
 
 }  // namespace base

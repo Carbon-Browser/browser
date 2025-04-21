@@ -1,35 +1,31 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "content/browser/webauth/client_data_json.h"
 
+#include <string_view>
+
 #include "base/base64url.h"
 #include "base/check.h"
+#include "base/containers/span.h"
 #include "base/rand_util.h"
-#include "base/strings/string_piece.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversion_utils.h"
+#include "content/browser/webauth/common_utils.h"
+#include "content/public/common/content_features.h"
 
 namespace content {
 namespace {
 
-std::string Base64UrlEncode(const base::span<const uint8_t> input) {
-  std::string ret;
-  base::Base64UrlEncode(
-      base::StringPiece(reinterpret_cast<const char*>(input.data()),
-                        input.size()),
-      base::Base64UrlEncodePolicy::OMIT_PADDING, &ret);
-  return ret;
-}
-
 // ToJSONString encodes |in| as a JSON string, using the specific escaping rules
 // required by https://github.com/w3c/webauthn/pull/1375.
-std::string ToJSONString(base::StringPiece in) {
+std::string ToJSONString(std::string_view in) {
   std::string ret;
   ret.reserve(in.size() + 2);
   ret.push_back('"');
 
-  const char* const in_bytes = in.data();
+  base::span<const char> in_bytes = base::span(in);
   const size_t length = in.size();
   size_t offset = 0;
 
@@ -37,7 +33,8 @@ std::string ToJSONString(base::StringPiece in) {
     const size_t prior_offset = offset;
     // Input strings must be valid UTF-8.
     base_icu::UChar32 codepoint;
-    CHECK(base::ReadUnicodeCharacter(in_bytes, length, &offset, &codepoint));
+    CHECK(base::ReadUnicodeCharacter(in_bytes.data(), length, &offset,
+                                     &codepoint));
     // offset is updated by |ReadUnicodeCharacter| to index the last byte of the
     // codepoint. Increment it to index the first byte of the next codepoint for
     // the subsequent iteration.
@@ -45,16 +42,14 @@ std::string ToJSONString(base::StringPiece in) {
 
     if (codepoint == 0x20 || codepoint == 0x21 ||
         (codepoint >= 0x23 && codepoint <= 0x5b) || codepoint >= 0x5d) {
-      ret.append(&in_bytes[prior_offset], &in_bytes[offset]);
+      ret.append(&in_bytes[prior_offset], offset - prior_offset);
     } else if (codepoint == 0x22) {
       ret.append("\\\"");
     } else if (codepoint == 0x5c) {
       ret.append("\\\\");
     } else {
-      static const char hextable[17] = "0123456789abcdef";
       ret.append("\\u00");
-      ret.push_back(hextable[codepoint >> 4]);
-      ret.push_back(hextable[codepoint & 15]);
+      base::AppendHexEncodedByte(static_cast<uint8_t>(codepoint), ret, false);
     }
   }
 
@@ -66,10 +61,12 @@ std::string ToJSONString(base::StringPiece in) {
 
 ClientDataJsonParams::ClientDataJsonParams(ClientDataRequestType type,
                                            url::Origin origin,
+                                           url::Origin top_origin,
                                            std::vector<uint8_t> challenge,
                                            bool is_cross_origin_iframe)
     : type(type),
       origin(std::move(origin)),
+      top_origin(std::move(top_origin)),
       challenge(std::move(challenge)),
       is_cross_origin_iframe(is_cross_origin_iframe) {}
 ClientDataJsonParams::ClientDataJsonParams(ClientDataJsonParams&&) = default;
@@ -81,14 +78,7 @@ std::string BuildClientDataJson(ClientDataJsonParams params) {
   std::string ret;
   ret.reserve(128);
 
-  // U2F uses "typ", while WebAuthn uses "type" for the type key.
   switch (params.type) {
-    case ClientDataRequestType::kU2fRegister:
-      ret.append(R"({"typ":"navigator.id.finishEnrollment")");
-      break;
-    case ClientDataRequestType::kU2fSign:
-      ret.append(R"({"typ":"navigator.id.getAssertion")");
-      break;
     case ClientDataRequestType::kWebAuthnCreate:
       ret.append(R"({"type":"webauthn.create")");
       break;
@@ -101,13 +91,17 @@ std::string BuildClientDataJson(ClientDataJsonParams params) {
   }
 
   ret.append(R"(,"challenge":)");
-  ret.append(ToJSONString(Base64UrlEncode(params.challenge)));
+  ret.append(ToJSONString(Base64UrlEncodeOmitPadding(params.challenge)));
 
   ret.append(R"(,"origin":)");
   ret.append(ToJSONString(params.origin.Serialize()));
 
+  std::string serialized_top_origin =
+      ToJSONString(params.top_origin.Serialize());
   if (params.is_cross_origin_iframe) {
     ret.append(R"(,"crossOrigin":true)");
+    ret.append(R"(,"topOrigin":)");
+    ret.append(serialized_top_origin);
   } else {
     ret.append(R"(,"crossOrigin":false)");
   }
@@ -115,11 +109,11 @@ std::string BuildClientDataJson(ClientDataJsonParams params) {
   if (params.payment_options) {
     ret.append(R"(,"payment":{)");
 
-    ret.append(R"("rp":)");
+    ret.append(R"("rpId":)");
     ret.append(ToJSONString(params.payment_rp));
 
     ret.append(R"(,"topOrigin":)");
-    ret.append(ToJSONString(params.payment_top_origin));
+    ret.append(serialized_top_origin);
 
     if (params.payment_options->payee_name.has_value()) {
       ret.append(R"(,"payeeName":)");
@@ -147,7 +141,13 @@ std::string BuildClientDataJson(ClientDataJsonParams params) {
     ret.append(R"(,"displayName":)");
     ret.append(ToJSONString(params.payment_options->instrument->display_name));
 
-    ret.append("}}");
+    ret.append("}");
+    if (params.payment_options->browser_bound_public_key.has_value()) {
+      ret.append(R"(,"browserBoundPublicKey":)");
+      ret.append(ToJSONString(Base64UrlEncodeOmitPadding(
+          *params.payment_options->browser_bound_public_key)));
+    }
+    ret.append("}");
   }
 
   if (base::RandDouble() < 0.2) {

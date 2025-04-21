@@ -1,20 +1,21 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "chrome/browser/policy/restricted_mgs_policy_provider.h"
-
 #include <memory>
 
-#include "ash/components/settings/cros_settings_names.h"
 #include "base/values.h"
 #include "build/build_config.h"
-#include "chrome/browser/ash/settings/cros_settings.h"
+#include "chrome/browser/ash/settings/cros_settings_holder.h"
 #include "chrome/browser/ash/settings/device_settings_test_helper.h"
 #include "chrome/browser/ash/settings/scoped_cros_settings_test_helper.h"
+#include "chrome/browser/policy/restricted_mgs_policy_provider.h"
 #include "chrome/browser/profiles/profiles_state.h"
 #include "chrome/browser/ui/webui/certificates_handler.h"
 #include "chrome/test/base/testing_browser_process.h"
+#include "chromeos/ash/components/login/login_state/login_state.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
+#include "chromeos/components/mgs/managed_guest_session_test_utils.h"
 #include "components/policy/core/common/policy_bundle.h"
 #include "components/policy/core/common/policy_map.h"
 #include "components/policy/core/common/policy_namespace.h"
@@ -95,8 +96,8 @@ class RestrictedMGSPolicyProviderAshTest : public ash::DeviceSettingsTestBase {
  public:
   void SetUp() override {
     ash::DeviceSettingsTestBase::SetUp();
-    chromeos::LoginState::Initialize();
-    cros_settings_ = std::make_unique<ash::CrosSettings>(
+    ash::LoginState::Initialize();
+    cros_settings_holder_ = std::make_unique<ash::CrosSettingsHolder>(
         device_settings_service_.get(),
         TestingBrowserProcess::GetGlobal()->local_state());
 
@@ -106,28 +107,26 @@ class RestrictedMGSPolicyProviderAshTest : public ash::DeviceSettingsTestBase {
   }
 
   void TearDown() override {
-    cros_settings_.reset();
     cros_settings_helper_.reset();
+    cros_settings_holder_.reset();
     ash::DeviceSettingsTestBase::TearDown();
-    chromeos::LoginState::Shutdown();
+    ash::LoginState::Shutdown();
   }
 
-  std::unique_ptr<ash::CrosSettings> cros_settings_;
+  std::unique_ptr<ash::CrosSettingsHolder> cros_settings_holder_;
   std::unique_ptr<ash::ScopedCrosSettingsTestHelper> cros_settings_helper_;
 };
 
 TEST_F(RestrictedMGSPolicyProviderAshTest, CreateRestrictedMGSPolicyProvider) {
   // Doesn't get created for a regular user.
-  chromeos::LoginState::Get()->SetLoggedInState(
-      chromeos::LoginState::LOGGED_IN_ACTIVE,
-      chromeos::LoginState::LOGGED_IN_USER_REGULAR);
+  ash::LoginState::Get()->SetLoggedInState(
+      ash::LoginState::LOGGED_IN_ACTIVE,
+      ash::LoginState::LOGGED_IN_USER_REGULAR);
   auto policy_provider = RestrictedMGSPolicyProvider::Create();
   EXPECT_FALSE(policy_provider);
 
-  // Gets created for a Managed Guest Session.
-  chromeos::LoginState::Get()->SetLoggedInState(
-      chromeos::LoginState::LOGGED_IN_ACTIVE,
-      chromeos::LoginState::LOGGED_IN_USER_PUBLIC_ACCOUNT_MANAGED);
+  chromeos::FakeManagedGuestSession managed_guest_session(
+      /*initialize_login_state=*/false);
   policy_provider = RestrictedMGSPolicyProvider::Create();
   EXPECT_TRUE(policy_provider);
 }
@@ -142,9 +141,9 @@ TEST_F(RestrictedMGSPolicyProviderAshTest,
   expected_policy_bundle.Get(PolicyNamespace(
       POLICY_DOMAIN_CHROME, std::string())) = expected_policy_map.Clone();
 
-  chromeos::LoginState::Get()->SetLoggedInState(
-      chromeos::LoginState::LOGGED_IN_ACTIVE,
-      chromeos::LoginState::LOGGED_IN_USER_PUBLIC_ACCOUNT_MANAGED);
+  ash::LoginState::Get()->SetLoggedInState(
+      ash::LoginState::LOGGED_IN_ACTIVE,
+      ash::LoginState::LOGGED_IN_USER_PUBLIC_ACCOUNT);
   auto policy_provider = RestrictedMGSPolicyProvider::Create();
   ASSERT_TRUE(policy_provider);
   EXPECT_TRUE(expected_policy_bundle.Equals(policy_provider->policies()));
@@ -156,9 +155,9 @@ TEST_F(RestrictedMGSPolicyProviderAshTest,
       ash::kDeviceRestrictedManagedGuestSessionEnabled, true);
   auto expected_policy_bundle = BuildRestrictedPolicyBundle();
 
-  chromeos::LoginState::Get()->SetLoggedInState(
-      chromeos::LoginState::LOGGED_IN_ACTIVE,
-      chromeos::LoginState::LOGGED_IN_USER_PUBLIC_ACCOUNT_MANAGED);
+  ash::LoginState::Get()->SetLoggedInState(
+      ash::LoginState::LOGGED_IN_ACTIVE,
+      ash::LoginState::LOGGED_IN_USER_PUBLIC_ACCOUNT);
   auto policy_provider = RestrictedMGSPolicyProvider::Create();
   ASSERT_TRUE(policy_provider);
   EXPECT_TRUE(expected_policy_bundle->Equals(policy_provider->policies()));

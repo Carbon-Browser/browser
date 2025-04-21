@@ -1,22 +1,19 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/login/screens/parental_handoff_screen.h"
 
 #include <memory>
+#include <optional>
 
 #include "ash/constants/ash_features.h"
 #include "base/auto_reset.h"
-#include "base/callback.h"
-#include "base/run_loop.h"
+#include "base/functional/callback.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "base/test/scoped_feature_list.h"
-#include "chrome/browser/ash/child_accounts/family_features.h"
+#include "base/test/test_future.h"
 #include "chrome/browser/ash/login/screens/assistant_optin_flow_screen.h"
 #include "chrome/browser/ash/login/screens/edu_coexistence_login_screen.h"
-#include "chrome/browser/ash/login/test/embedded_policy_test_server_mixin.h"
-#include "chrome/browser/ash/login/test/fake_gaia_mixin.h"
 #include "chrome/browser/ash/login/test/js_checker.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/ash/login/test/oobe_base_test.h"
@@ -26,15 +23,16 @@
 #include "chrome/browser/ash/login/test/wizard_controller_screen_exit_waiter.h"
 #include "chrome/browser/ash/login/wizard_context.h"
 #include "chrome/browser/ash/login/wizard_controller.h"
-#include "chrome/browser/supervised_user/supervised_user_service.h"
-#include "chrome/browser/ui/webui/chromeos/login/assistant_optin_flow_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/parental_handoff_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/sync_consent_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/login/user_creation_screen_handler.h"
-#include "chrome/browser/ui/webui/chromeos/system_web_dialog_delegate.h"
+#include "chrome/browser/ash/policy/test_support/embedded_policy_test_server_mixin.h"
+#include "chrome/browser/ui/webui/ash/login/assistant_optin_flow_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/parental_handoff_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/sync_consent_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/login/user_creation_screen_handler.h"
+#include "chrome/browser/ui/webui/ash/system_web_dialog/system_web_dialog_delegate.h"
+#include "chrome/test/base/fake_gaia_mixin.h"
 #include "components/account_id/account_id.h"
 #include "content/public/test/browser_test.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "google_apis/gaia/gaia_id.h"
 
 namespace ash {
 namespace {
@@ -45,7 +43,7 @@ const test::UIPath kNextButton = {"parental-handoff", "nextButton"};
 
 class ParentalHandoffScreenBrowserTest : public OobeBaseTest {
  public:
-  ParentalHandoffScreenBrowserTest();
+  ParentalHandoffScreenBrowserTest() = default;
   ParentalHandoffScreenBrowserTest(const ParentalHandoffScreenBrowserTest&) =
       delete;
   ParentalHandoffScreenBrowserTest& operator=(
@@ -61,7 +59,7 @@ class ParentalHandoffScreenBrowserTest : public OobeBaseTest {
 
   void SkipToParentalHandoffScreen();
 
-  const absl::optional<ParentalHandoffScreen::Result>& result() const {
+  const std::optional<ParentalHandoffScreen::Result>& result() const {
     return result_;
   }
 
@@ -74,13 +72,11 @@ class ParentalHandoffScreenBrowserTest : public OobeBaseTest {
 
   base::OnceCallback<void()> quit_closure_;
 
-  absl::optional<ParentalHandoffScreen::Result> result_;
+  std::optional<ParentalHandoffScreen::Result> result_;
 
   ParentalHandoffScreen::ScreenExitCallback original_callback_;
 
   FakeGaiaMixin fake_gaia_{&mixin_host_};
-
-  base::test::ScopedFeatureList feature_list_;
 
   base::HistogramTester histogram_tester_;
 
@@ -91,11 +87,6 @@ class ParentalHandoffScreenBrowserTest : public OobeBaseTest {
   LoginManagerMixin login_manager_mixin_{&mixin_host_, /* initial_users */ {},
                                          &fake_gaia_};
 };
-
-ParentalHandoffScreenBrowserTest::ParentalHandoffScreenBrowserTest() {
-  feature_list_.InitWithFeatures({kFamilyLinkOobeHandoff},
-                                 {} /*disable_features*/);
-}
 
 void ParentalHandoffScreenBrowserTest::SetUpOnMainThread() {
   assistant_is_enabled_ =
@@ -110,11 +101,12 @@ void ParentalHandoffScreenBrowserTest::SetUpOnMainThread() {
 }
 
 void ParentalHandoffScreenBrowserTest::WaitForScreenExit() {
-  if (result_.has_value())
+  if (result_.has_value()) {
     return;
-  base::RunLoop run_loop;
-  quit_closure_ = base::BindOnce(run_loop.QuitClosure());
-  run_loop.Run();
+  }
+  base::test::TestFuture<void> waiter;
+  quit_closure_ = waiter.GetCallback();
+  EXPECT_TRUE(waiter.Wait());
 }
 
 ParentalHandoffScreen*
@@ -146,7 +138,7 @@ IN_PROC_BROWSER_TEST_F(ParentalHandoffScreenBrowserTest, RegularUserLogin) {
   WaitForScreenExit();
 
   // Regular user login shouldn't show the EduCoexistenceLoginScreen.
-  EXPECT_EQ(result().value(), ParentalHandoffScreen::Result::SKIPPED);
+  EXPECT_EQ(result().value(), ParentalHandoffScreen::Result::kSkipped);
 
   histogram_tester().ExpectTotalCount(
       "OOBE.StepCompletionTimeByExitReason.Parental-handoff.Done", 0);
@@ -186,11 +178,14 @@ class ParentalHandoffScreenChildBrowserTest
   EmbeddedPolicyTestServerMixin policy_server_mixin_{&mixin_host_};
   UserPolicyMixin user_policy_mixin_{
       &mixin_host_,
-      AccountId::FromUserEmailGaiaId(test::kTestEmail, test::kTestGaiaId),
+      AccountId::FromUserEmailGaiaId(test::kTestEmail,
+                                     GaiaId(test::kTestGaiaId)),
       &policy_server_mixin_};
 };
 
-IN_PROC_BROWSER_TEST_F(ParentalHandoffScreenChildBrowserTest, ChildUserLogin) {
+// TODO(crbug.com/353692644): Test is flaky
+IN_PROC_BROWSER_TEST_F(ParentalHandoffScreenChildBrowserTest,
+                       DISABLED_ChildUserLogin) {
   LoginAsNewChildUser();
 
   WizardController* wizard = WizardController::default_controller();

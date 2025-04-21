@@ -1,9 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/network/public/cpp/optional_trust_token_params.h"
 
+#include <optional>
 #include <tuple>
 
 #include "base/test/gtest_util.h"
@@ -11,7 +12,6 @@
 #include "mojo/public/cpp/test_support/test_utils.h"
 #include "services/network/public/mojom/trust_tokens.mojom-shared.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 #include "url/mojom/origin_mojom_traits.h"
 #include "url/origin.h"
@@ -26,7 +26,8 @@ namespace {
 OptionalTrustTokenParams NonemptyTrustTokenParams() {
   return mojom::TrustTokenParams(
       mojom::TrustTokenOperationType::kRedemption,
-      mojom::TrustTokenRefreshPolicy::kRefresh,
+      mojom::TrustTokenRefreshPolicy::kRefresh, "custom_key_commitment",
+      url::Origin::Create(GURL("https://custom-issuer.com")),
       mojom::TrustTokenSignRequestData::kInclude,
       /*include_timestamp_header=*/true,
       std::vector<url::Origin>{url::Origin::Create(GURL("https://issuer.com"))},
@@ -38,10 +39,9 @@ OptionalTrustTokenParams NonemptyTrustTokenParams() {
 TEST(OptionalTrustTokenParams, Empty) {
   EXPECT_EQ(OptionalTrustTokenParams(), OptionalTrustTokenParams());
   EXPECT_FALSE(OptionalTrustTokenParams().has_value());
-  EXPECT_FALSE(OptionalTrustTokenParams(absl::nullopt).has_value());
+  EXPECT_FALSE(OptionalTrustTokenParams(std::nullopt).has_value());
 
-  EXPECT_EQ(OptionalTrustTokenParams(absl::nullopt),
-            OptionalTrustTokenParams());
+  EXPECT_EQ(OptionalTrustTokenParams(std::nullopt), OptionalTrustTokenParams());
   EXPECT_NE(OptionalTrustTokenParams(), NonemptyTrustTokenParams());
 }
 
@@ -79,14 +79,15 @@ TEST(OptionalTrustTokenParams, CopyAndMove) {
 
 TEST(OptionalTrustTokenParams, Dereference) {
   OptionalTrustTokenParams in = NonemptyTrustTokenParams();
-  EXPECT_EQ(in->type, mojom::TrustTokenOperationType::kRedemption);
-  EXPECT_EQ(in.as_ptr()->type, mojom::TrustTokenOperationType::kRedemption);
-  EXPECT_EQ(in.value().type, mojom::TrustTokenOperationType::kRedemption);
+  EXPECT_EQ(in->operation, mojom::TrustTokenOperationType::kRedemption);
+  EXPECT_EQ(in.as_ptr()->operation,
+            mojom::TrustTokenOperationType::kRedemption);
+  EXPECT_EQ(in.value().operation, mojom::TrustTokenOperationType::kRedemption);
 }
 
 TEST(OptionalTrustTokenParams, DereferenceEmpty) {
-  OptionalTrustTokenParams in = absl::nullopt;
-  EXPECT_CHECK_DEATH(std::ignore = in->type);
+  OptionalTrustTokenParams in = std::nullopt;
+  EXPECT_CHECK_DEATH(std::ignore = in->operation);
   EXPECT_CHECK_DEATH(std::ignore = in.value());
   EXPECT_EQ(in.as_ptr(), mojom::TrustTokenParamsPtr());
 }

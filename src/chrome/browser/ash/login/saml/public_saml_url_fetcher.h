@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,15 +8,14 @@
 #include <memory>
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "components/account_id/account_id.h"
-#include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/policy/core/common/cloud/device_management_service.h"
 
-namespace enterprise_management {
-class DeviceManagementResponse;
-}  // namespace enterprise_management
+namespace policy {
+struct DMServerJobResult;
+}
 
 namespace ash {
 
@@ -40,11 +39,7 @@ class PublicSamlUrlFetcher {
  private:
   // Response from DM server. Calls the stored FetchCallback or initiates the
   // SAML flow.
-  void OnPublicSamlUrlReceived(
-      policy::DeviceManagementService::Job* job,
-      policy::DeviceManagementStatus dm_status,
-      int net_error,
-      const enterprise_management::DeviceManagementResponse& response);
+  void OnPublicSamlUrlReceived(policy::DMServerJobResult result);
 
   // Account ID, added to the DM server request.
   std::string account_id_;
@@ -64,11 +59,5 @@ class PublicSamlUrlFetcher {
 };
 
 }  // namespace ash
-
-// TODO(https://crbug.com/1164001): remove after the //chrome/browser/chromeos
-// source migration is finished.
-namespace chromeos {
-using ::ash::PublicSamlUrlFetcher;
-}
 
 #endif  // CHROME_BROWSER_ASH_LOGIN_SAML_PUBLIC_SAML_URL_FETCHER_H_

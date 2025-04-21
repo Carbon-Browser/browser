@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,6 +10,7 @@
 #include "ash/public/cpp/assistant/controller/assistant_controller.h"
 #include "ash/public/cpp/assistant/controller/assistant_controller_observer.h"
 #include "base/component_export.h"
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 
@@ -23,17 +24,17 @@ class COMPONENT_EXPORT(ASSISTANT_UI) MicView
     : public AssistantButton,
       public AssistantControllerObserver,
       public AssistantInteractionModelObserver {
- public:
-  METADATA_HEADER(MicView);
+  METADATA_HEADER(MicView, AssistantButton)
 
+ public:
   MicView(AssistantButtonListener* listener,
           AssistantButtonId button_id);
   MicView(const MicView&) = delete;
   MicView& operator=(const MicView&) = delete;
   ~MicView() override;
 
-  gfx::Size CalculatePreferredSize() const override;
-  int GetHeightForWidth(int width) const override;
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override;
 
   // AssistantControllerObserver:
   void OnAssistantControllerDestroying() override;
@@ -51,7 +52,7 @@ class COMPONENT_EXPORT(ASSISTANT_UI) MicView
   // immediately to the next state regardless of |animate|.
   void UpdateState(bool animate);
 
-  LogoView* logo_view_;  // Owned by view hierarchy.
+  raw_ptr<LogoView> logo_view_;  // Owned by view hierarchy.
 
   // True when speech level goes above a threshold and sets LogoView in
   // kUserSpeaks state.

@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,21 +7,40 @@
 #include "base/feature_list.h"
 #include "build/build_config.h"
 
-namespace views {
-namespace features {
+namespace views::features {
 
 // Please keep alphabetized.
 
 // Use a high-contrast style for ink drops when in platform high-contrast mode,
 // including full opacity and a high-contrast color
-const base::Feature kEnablePlatformHighContrastInkDrop{
-    "EnablePlatformHighContrastInkDrop", base::FEATURE_DISABLED_BY_DEFAULT};
+BASE_FEATURE(kEnablePlatformHighContrastInkDrop,
+             "EnablePlatformHighContrastInkDrop",
+             base::FEATURE_DISABLED_BY_DEFAULT);
 
-// Only paint views that are invalidated/dirty (i.e. a paint was directly
-// scheduled on those views) as opposed to painting all views that intersect
-// an invalid rectangle on the layer.
-const base::Feature kEnableViewPaintOptimization{
-    "EnableViewPaintOptimization", base::FEATURE_DISABLED_BY_DEFAULT};
+// Handle mouse cursor being out sync with a touch drag operation. If mouse
+// cursor is over different window, drag will not start, and cursor will be
+// moved to the window where the touch drag started. This is a kill switch
+// for this new logic,  crbug.com/370856871.
+BASE_FEATURE(kEnableTouchDragCursorSync,
+             "EnableTouchDragCursorSync",
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
-}  // namespace features
-}  // namespace views
+// Used to enable keyboard-accessible tooltips in Views UI, as opposed
+// to kKeyboardAccessibleTooltip in //ui/base/ui_base_features.cc.
+BASE_FEATURE(kKeyboardAccessibleTooltipInViews,
+             "KeyboardAccessibleTooltipInViews",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+// Used to enable additional a11y attributes when announcing text.
+BASE_FEATURE(kAnnounceTextAdditionalAttributes,
+             "AnnounceTextAdditionalAttributes",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+// Whether the window appearance follows the color provider's color mode.
+// This is only effective for mac. Some plumbing is not restricted to mac,
+// therefore this flag is included in all platforms.
+BASE_FEATURE(kMacWindowFollowsColorProviderColorMode,
+             "MacWindowFollowsColorProviderColorMode",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+}  // namespace views::features

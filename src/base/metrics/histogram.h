@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -70,6 +70,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/base_export.h"
@@ -81,7 +82,6 @@
 #include "base/metrics/bucket_ranges.h"
 #include "base/metrics/histogram_base.h"
 #include "base/metrics/histogram_samples.h"
-#include "base/strings/string_piece.h"
 #include "base/time/time.h"
 #include "base/values.h"
 
@@ -123,6 +123,25 @@ class BASE_EXPORT Histogram : public HistogramBase {
   // buckets <= (maximum - minimum + 2) - this is to ensure that we don't have
   // more buckets than the range of numbers; having more buckets than 1 per
   // value in the range would be nonsensical.
+  static HistogramBase* FactoryGet(std::string_view name,
+                                   Sample minimum,
+                                   Sample maximum,
+                                   size_t bucket_count,
+                                   int32_t flags);
+  static HistogramBase* FactoryTimeGet(std::string_view name,
+                                       base::TimeDelta minimum,
+                                       base::TimeDelta maximum,
+                                       size_t bucket_count,
+                                       int32_t flags);
+  static HistogramBase* FactoryMicrosecondsTimeGet(std::string_view name,
+                                                   base::TimeDelta minimum,
+                                                   base::TimeDelta maximum,
+                                                   size_t bucket_count,
+                                                   int32_t flags);
+
+  // Overloads of the above functions that take a const std::string& or const
+  // char* |name| param, to avoid code bloat from the std::string constructor
+  // being inlined into call sites.
   static HistogramBase* FactoryGet(const std::string& name,
                                    Sample minimum,
                                    Sample maximum,
@@ -139,9 +158,6 @@ class BASE_EXPORT Histogram : public HistogramBase {
                                                    size_t bucket_count,
                                                    int32_t flags);
 
-  // Overloads of the above functions that take a const char* |name| param, to
-  // avoid code bloat from the std::string constructor being inlined into call
-  // sites.
   static HistogramBase* FactoryGet(const char* name,
                                    Sample minimum,
                                    Sample maximum,
@@ -202,7 +218,7 @@ class BASE_EXPORT Histogram : public HistogramBase {
   // function on non-dcheck builds without crashing.
   // Note. Currently it allow some bad input, e.g. 0 as minimum, but silently
   // converts it to good input: 1.
-  static bool InspectConstructionArguments(StringPiece name,
+  static bool InspectConstructionArguments(std::string_view name,
                                            Sample* minimum,
                                            Sample* maximum,
                                            size_t* bucket_count);
@@ -216,9 +232,11 @@ class BASE_EXPORT Histogram : public HistogramBase {
   void Add(Sample value) override;
   void AddCount(Sample value, int count) override;
   std::unique_ptr<HistogramSamples> SnapshotSamples() const override;
+  std::unique_ptr<HistogramSamples> SnapshotUnloggedSamples() const override;
+  void MarkSamplesAsLogged(const HistogramSamples& samples) final;
   std::unique_ptr<HistogramSamples> SnapshotDelta() override;
   std::unique_ptr<HistogramSamples> SnapshotFinalDelta() const override;
-  void AddSamples(const HistogramSamples& samples) override;
+  bool AddSamples(const HistogramSamples& samples) override;
   bool AddSamplesFromPickle(base::PickleIterator* iter) override;
   base::Value::Dict ToGraphDict() const override;
 
@@ -253,11 +271,12 @@ class BASE_EXPORT Histogram : public HistogramBase {
   // Return a string description of what goes in a given bucket.
   // Most commonly this is the numeric value, but in derived classes it may
   // be a name (or string description) given to the bucket.
-  virtual const std::string GetAsciiBucketRange(size_t it) const;
+  virtual std::string GetAsciiBucketRange(size_t it) const;
 
  private:
   // Allow tests to corrupt our innards for testing purposes.
   friend class HistogramTest;
+  friend class HistogramThreadsafeTest;
   FRIEND_TEST_ALL_PREFIXES(HistogramTest, BoundsTest);
   FRIEND_TEST_ALL_PREFIXES(HistogramTest, BucketPlacementTest);
   FRIEND_TEST_ALL_PREFIXES(HistogramTest, CorruptSampleCounts);
@@ -269,13 +288,32 @@ class BASE_EXPORT Histogram : public HistogramBase {
       base::PickleIterator* iter);
   static HistogramBase* DeserializeInfoImpl(base::PickleIterator* iter);
 
+  static HistogramBase* FactoryGetInternal(std::string_view name,
+                                           Sample minimum,
+                                           Sample maximum,
+                                           size_t bucket_count,
+                                           int32_t flags);
+  static HistogramBase* FactoryTimeGetInternal(std::string_view name,
+                                               base::TimeDelta minimum,
+                                               base::TimeDelta maximum,
+                                               size_t bucket_count,
+                                               int32_t flags);
+  static HistogramBase* FactoryMicrosecondsTimeGetInternal(
+      std::string_view name,
+      base::TimeDelta minimum,
+      base::TimeDelta maximum,
+      size_t bucket_count,
+      int32_t flags);
+
   // Create a snapshot containing all samples (both logged and unlogged).
   // Implementation of SnapshotSamples method with a more specific type for
   // internal use.
   std::unique_ptr<SampleVector> SnapshotAllSamples() const;
 
-  // Create a copy of unlogged samples.
-  std::unique_ptr<SampleVector> SnapshotUnloggedSamples() const;
+  // Returns a copy of unlogged samples as the underlying SampleVector class,
+  // instead of the HistogramSamples base class. Used for tests and to avoid
+  // virtual dispatch from some callsites.
+  std::unique_ptr<SampleVector> SnapshotUnloggedSamplesImpl() const;
 
   // Writes the type, min, max, and bucket count information of the histogram in
   // |params|.
@@ -307,6 +345,20 @@ class BASE_EXPORT LinearHistogram : public Histogram {
 
   /* minimum should start from 1. 0 is as minimum is invalid. 0 is an implicit
      default underflow bucket. */
+  static HistogramBase* FactoryGet(std::string_view name,
+                                   Sample minimum,
+                                   Sample maximum,
+                                   size_t bucket_count,
+                                   int32_t flags);
+  static HistogramBase* FactoryTimeGet(std::string_view name,
+                                       TimeDelta minimum,
+                                       TimeDelta maximum,
+                                       size_t bucket_count,
+                                       int32_t flags);
+
+  // Overloads of the above two functions that take a const std::string& or
+  // const char* |name| param, to avoid code bloat from the std::string
+  // constructor being inlined into call sites.
   static HistogramBase* FactoryGet(const std::string& name,
                                    Sample minimum,
                                    Sample maximum,
@@ -318,9 +370,6 @@ class BASE_EXPORT LinearHistogram : public Histogram {
                                        size_t bucket_count,
                                        int32_t flags);
 
-  // Overloads of the above two functions that take a const char* |name| param,
-  // to avoid code bloat from the std::string constructor being inlined into
-  // call sites.
   static HistogramBase* FactoryGet(const char* name,
                                    Sample minimum,
                                    Sample maximum,
@@ -352,7 +401,7 @@ class BASE_EXPORT LinearHistogram : public Histogram {
   // it's not NULL, the last element in the array must has a NULL in its
   // "description" field.
   static HistogramBase* FactoryGetWithRangeDescription(
-      const std::string& name,
+      std::string_view name,
       Sample minimum,
       Sample maximum,
       size_t bucket_count,
@@ -380,12 +429,23 @@ class BASE_EXPORT LinearHistogram : public Histogram {
 
   // If we have a description for a bucket, then return that.  Otherwise
   // let parent class provide a (numeric) description.
-  const std::string GetAsciiBucketRange(size_t i) const override;
+  std::string GetAsciiBucketRange(size_t i) const override;
 
  private:
   friend BASE_EXPORT HistogramBase* DeserializeHistogramInfo(
       base::PickleIterator* iter);
   static HistogramBase* DeserializeInfoImpl(base::PickleIterator* iter);
+
+  static HistogramBase* FactoryGetInternal(std::string_view name,
+                                           Sample minimum,
+                                           Sample maximum,
+                                           size_t bucket_count,
+                                           int32_t flags);
+  static HistogramBase* FactoryTimeGetInternal(std::string_view name,
+                                               TimeDelta minimum,
+                                               TimeDelta maximum,
+                                               size_t bucket_count,
+                                               int32_t flags);
 
   // For some ranges, we store a printable description of a bucket range.
   // If there is no description, then GetAsciiBucketRange() uses parent class
@@ -410,6 +470,16 @@ class BASE_EXPORT ScaledLinearHistogram {
  public:
   // Currently only works with "exact" linear histograms: minimum=1, maximum=N,
   // and bucket_count=N+1.
+  ScaledLinearHistogram(std::string_view name,
+                        Sample minimum,
+                        Sample maximum,
+                        size_t bucket_count,
+                        int32_t scale,
+                        int32_t flags);
+
+  // Overload of the above function that take a const std::string& or const
+  // char* |name| param, to avoid code bloat from the std::string constructor
+  // being inlined into call sites.
   ScaledLinearHistogram(const char* name,
                         Sample minimum,
                         Sample maximum,
@@ -431,7 +501,8 @@ class BASE_EXPORT ScaledLinearHistogram {
   // Like AddCount() but actually accumulates |count|/|scale| and increments
   // the accumulated remainder by |count|%|scale|. An additional increment
   // is done when the remainder has grown sufficiently large.
-  void AddScaledCount(Sample value, int count);
+  // The value after scaling must fit into 32-bit signed integer.
+  void AddScaledCount(Sample value, int64_t count);
 
   int32_t scale() const { return scale_; }
   HistogramBase* histogram() { return histogram_; }
@@ -456,11 +527,12 @@ class BASE_EXPORT ScaledLinearHistogram {
 // BooleanHistogram is a histogram for booleans.
 class BASE_EXPORT BooleanHistogram : public LinearHistogram {
  public:
-  static HistogramBase* FactoryGet(const std::string& name, int32_t flags);
+  static HistogramBase* FactoryGet(std::string_view name, int32_t flags);
 
-  // Overload of the above function that takes a const char* |name| param,
-  // to avoid code bloat from the std::string constructor being inlined into
-  // call sites.
+  // Overload of the above function that take a const std::string& or const
+  // char* |name| param, to avoid code bloat from the std::string constructor
+  // being inlined into call sites.
+  static HistogramBase* FactoryGet(const std::string& name, int32_t flags);
   static HistogramBase* FactoryGet(const char* name, int32_t flags);
 
   BooleanHistogram(const BooleanHistogram&) = delete;
@@ -481,6 +553,9 @@ class BASE_EXPORT BooleanHistogram : public LinearHistogram {
   class Factory;
 
  private:
+  static HistogramBase* FactoryGetInternal(std::string_view name,
+                                           int32_t flags);
+
   BooleanHistogram(const char* name, const BucketRanges* ranges);
   BooleanHistogram(const char* name,
                    const BucketRanges* ranges,
@@ -503,13 +578,16 @@ class BASE_EXPORT CustomHistogram : public Histogram {
   // > 0 and < kSampleType_MAX. (Currently 0 is still accepted for backward
   // compatibility). The limits can be unordered or contain duplication, but
   // client should not depend on this.
-  static HistogramBase* FactoryGet(const std::string& name,
+  static HistogramBase* FactoryGet(std::string_view name,
                                    const std::vector<Sample>& custom_ranges,
                                    int32_t flags);
 
-  // Overload of the above function that takes a const char* |name| param,
-  // to avoid code bloat from the std::string constructor being inlined into
-  // call sites.
+  // Overload of the above function that take a const std::string& or const
+  // char* |name| param, to avoid code bloat from the std::string constructor
+  // being inlined into call sites.
+  static HistogramBase* FactoryGet(const std::string& name,
+                                   const std::vector<Sample>& custom_ranges,
+                                   int32_t flags);
   static HistogramBase* FactoryGet(const char* name,
                                    const std::vector<Sample>& custom_ranges,
                                    int32_t flags);
@@ -557,8 +635,40 @@ class BASE_EXPORT CustomHistogram : public Histogram {
       base::PickleIterator* iter);
   static HistogramBase* DeserializeInfoImpl(base::PickleIterator* iter);
 
+  static HistogramBase* FactoryGetInternal(
+      std::string_view name,
+      const std::vector<Sample>& custom_ranges,
+      int32_t flags);
+
   static bool ValidateCustomRanges(const std::vector<Sample>& custom_ranges);
 };
+
+namespace internal {
+
+// Controls whether invocations of UMA_HISTOGRAM_SPLIT_BY_PROCESS_PRIORITY in
+// this process log to their ".BestEffort" suffix or not. Timing metrics
+// reported through UMA_HISTOGRAM_SPLIT_BY_PROCESS_PRIORITY which overlap a
+// best-effort range will be suffixed with ".BestEffort".
+BASE_EXPORT void SetSharedLastForegroundTimeForMetrics(
+    const std::atomic<TimeTicks>* last_foreground_time_ref);
+
+// Returns the pointer passed to SetSharedLastForegroundTimeForMetrics, or
+// nullptr if it was never called.
+BASE_EXPORT const std::atomic<TimeTicks>*
+GetSharedLastForegroundTimeForMetricsForTesting();
+
+// Reports whether the interval [`now - range`, `now`] overlaps with a period
+// where this process was running at Process::Priority::kBestEffort. Defaults to
+// false if `last_foreground_time_ref` was never set (e.g. in processes not
+// affected by priorities) but otherwise defaults to true if there's ambiguity
+// (might have overlapped a best-effort range; as the reported timing might have
+// been affected and shouldn't be reported as "definitely measured in
+// foreground").
+// This method is atomic and suitable for performance critical histogram
+// samples.
+BASE_EXPORT bool OverlapsBestEffortRange(TimeTicks now, TimeDelta range);
+
+}  // namespace internal
 
 }  // namespace base
 

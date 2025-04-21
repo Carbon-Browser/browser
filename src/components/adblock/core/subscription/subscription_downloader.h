@@ -20,14 +20,15 @@
 
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback_forward.h"
 #include "components/adblock/core/common/flatbuffer_data.h"
+#include "components/adblock/core/net/adblock_resource_request.h"
 #include "url/gurl.h"
 
 namespace adblock {
 
 // Downloads filter lists from the Internet and converts them into flatbuffers.
-// See also: OngoingSubscriptionRequest for more details about allowing and
+// See also: AdblockRewourceRequest for more details about allowing and
 // retrying downloads.
 class SubscriptionDownloader {
  public:
@@ -36,20 +37,13 @@ class SubscriptionDownloader {
 
   // For head requests we only need the parsed version as result
   using HeadRequestCallback = base::OnceCallback<void(const std::string)>;
-  // Controls retry behavior when download or conversion failed.
-  enum class RetryPolicy {
-    // Will retry with a progressive back-off until download succeeded.
-    RetryUntilSucceeded,
-    // Will only try to download and convert the subscription once.
-    DoNotRetry,
-  };
   virtual ~SubscriptionDownloader() = default;
   // Starts downlading |subscription_url|. |on_finished| will be called with
   // the converted flatbuffer. |retry_policy| controls failure-handling
   // behavior. If downloading is disallowed due to current network state, it is
   // deferred until conditions allow it.
   virtual void StartDownload(const GURL& subscription_url,
-                             RetryPolicy retry_policy,
+                             AdblockResourceRequest::RetryPolicy retry_policy,
                              DownloadCompletedCallback on_finished) = 0;
   // Cancels ongoing downloads for matching |url|, including retry attempts or
   // downloads deferred due to network conditions.

@@ -1,10 +1,13 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "services/network/trust_tokens/trust_token_key_commitments.h"
 
+#include <array>
+
 #include "base/base64.h"
+#include "base/ranges/algorithm.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_command_line.h"
 #include "base/test/task_environment.h"
@@ -110,15 +113,15 @@ TEST(TrustTokenKeyCommitments, CantRetrieveRecordForOriginNotPresent) {
 TEST(TrustTokenKeyCommitments, MultipleOrigins) {
   TrustTokenKeyCommitments commitments;
 
-  SuitableTrustTokenOrigin origins[] = {
+  auto origins = std::to_array<SuitableTrustTokenOrigin>({
       *SuitableTrustTokenOrigin::Create(GURL("https://an-origin.example")),
       *SuitableTrustTokenOrigin::Create(GURL("https://another-origin.example")),
-  };
+  });
 
-  mojom::TrustTokenKeyCommitmentResultPtr expectations[] = {
+  auto expectations = std::to_array<mojom::TrustTokenKeyCommitmentResultPtr>({
       mojom::TrustTokenKeyCommitmentResult::New(),
       mojom::TrustTokenKeyCommitmentResult::New(),
-  };
+  });
 
   expectations[0]->protocol_version =
       mojom::TrustTokenProtocolVersion::kTrustTokenV3Pmb;
@@ -144,8 +147,9 @@ TEST(TrustTokenKeyCommitments, MultipleOrigins) {
 TEST(TrustTokenKeyCommitments, ParseAndSet) {
   TrustTokenKeyCommitments commitments;
   commitments.ParseAndSet(
-      R"( { "https://issuer.example": { "TrustTokenV3PMB": {
-      "protocol_version": "TrustTokenV3PMB", "id": 1, "batchsize": 5 } } } )");
+      R"( { "https://issuer.example": { "PrivateStateTokenV3PMB": {
+      "protocol_version": "PrivateStateTokenV3PMB", "id": 1,
+      "batchsize": 5 } } } )");
 
   EXPECT_TRUE(GetCommitmentForOrigin(
       commitments,
@@ -156,8 +160,9 @@ TEST(TrustTokenKeyCommitments, KeysFromCommandLine) {
   base::test::ScopedCommandLine command_line;
   command_line.GetProcessCommandLine()->AppendSwitchASCII(
       switches::kAdditionalTrustTokenKeyCommitments,
-      R"( { "https://issuer.example": { "TrustTokenV3PMB": {
-      "protocol_version": "TrustTokenV3PMB", "id": 1, "batchsize": 5 } }} )");
+      R"( { "https://issuer.example": { "PrivateStateTokenV3PMB": {
+      "protocol_version": "PrivateStateTokenV3PMB", "id": 1,
+      "batchsize": 5 } }} )");
 
   TrustTokenKeyCommitments commitments;
 
@@ -166,8 +171,9 @@ TEST(TrustTokenKeyCommitments, KeysFromCommandLine) {
       *SuitableTrustTokenOrigin::Create(GURL("https://issuer.example"))));
 
   commitments.ParseAndSet(
-      R"( { "https://issuer.example": { "TrustTokenV3PMB": {
-      "protocol_version": "TrustTokenV3PMB", "id": 1, "batchsize": 10 } }} )");
+      R"( { "https://issuer.example": { "PrivateStateTokenV3PMB": {
+      "protocol_version": "PrivateStateTokenV3PMB", "id": 1,
+      "batchsize": 10 } }} )");
 
   auto result = GetCommitmentForOrigin(
       commitments,
@@ -211,11 +217,10 @@ TEST(TrustTokenKeyCommitments, FiltersKeys) {
 
   auto result = GetCommitmentForOrigin(commitments, origin);
   EXPECT_EQ(result->keys.size(), max_keys);
-  EXPECT_TRUE(std::all_of(result->keys.begin(), result->keys.end(),
-                          [](const mojom::TrustTokenVerificationKeyPtr& key) {
-                            return key->expiry ==
-                                   base::Time::Now() + base::Minutes(1);
-                          }));
+  EXPECT_TRUE(base::ranges::all_of(
+      result->keys, [](const mojom::TrustTokenVerificationKeyPtr& key) {
+        return key->expiry == base::Time::Now() + base::Minutes(1);
+      }));
 }
 
 TEST(TrustTokenKeyCommitments, GetSync) {

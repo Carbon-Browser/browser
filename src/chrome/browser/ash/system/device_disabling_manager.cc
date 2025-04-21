@@ -1,15 +1,12 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/ash/system/device_disabling_manager.h"
 
-#include "ash/components/settings/cros_settings_names.h"
-#include "ash/components/settings/cros_settings_provider.h"
-#include "ash/components/tpm/install_attributes.h"
 #include "ash/constants/ash_switches.h"
-#include "base/bind.h"
 #include "base/command_line.h"
+#include "base/functional/bind.h"
 #include "base/logging.h"
 #include "base/values.h"
 #include "chrome/browser/ash/login/existing_user_controller.h"
@@ -18,7 +15,11 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/common/pref_names.h"
-#include "chromeos/system/statistics_provider.h"
+#include "chromeos/ash/components/install_attributes/install_attributes.h"
+#include "chromeos/ash/components/policy/restriction_schedule/device_restriction_schedule_controller.h"
+#include "chromeos/ash/components/settings/cros_settings_names.h"
+#include "chromeos/ash/components/settings/cros_settings_provider.h"
+#include "chromeos/ash/components/system/statistics_provider.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_manager/user_manager.h"
@@ -26,11 +27,19 @@
 namespace ash {
 namespace system {
 
-DeviceDisablingManager::Observer::~Observer() {
+namespace {
+
+policy::DeviceRestrictionScheduleController*
+DeviceRestrictionScheduleController() {
+  return g_browser_process->platform_part()
+      ->device_restriction_schedule_controller();
 }
 
-DeviceDisablingManager::Delegate::~Delegate() {
-}
+}  // namespace
+
+DeviceDisablingManager::Observer::~Observer() = default;
+
+DeviceDisablingManager::Delegate::~Delegate() = default;
 
 DeviceDisablingManager::DeviceDisablingManager(
     Delegate* delegate,
@@ -46,6 +55,9 @@ DeviceDisablingManager::DeviceDisablingManager(
 }
 
 DeviceDisablingManager::~DeviceDisablingManager() {
+  if (DeviceRestrictionScheduleController()) {
+    DeviceRestrictionScheduleController()->RemoveObserver(this);
+  }
 }
 
 void DeviceDisablingManager::AddObserver(Observer* observer) {
@@ -65,15 +77,18 @@ void DeviceDisablingManager::Init() {
   }
 
   device_disabled_subscription_ = cros_settings_->AddSettingsObserver(
-      kDeviceDisabled,
-      base::BindRepeating(&DeviceDisablingManager::UpdateFromCrosSettings,
-                          weak_factory_.GetWeakPtr()));
+      kDeviceDisabled, base::BindRepeating(&DeviceDisablingManager::Update,
+                                           weak_factory_.GetWeakPtr()));
   disabled_message_subscription_ = cros_settings_->AddSettingsObserver(
       kDeviceDisabledMessage,
-      base::BindRepeating(&DeviceDisablingManager::UpdateFromCrosSettings,
+      base::BindRepeating(&DeviceDisablingManager::Update,
                           weak_factory_.GetWeakPtr()));
 
-  UpdateFromCrosSettings();
+  if (DeviceRestrictionScheduleController()) {
+    DeviceRestrictionScheduleController()->AddObserver(this);
+  }
+
+  Update();
 }
 
 void DeviceDisablingManager::CacheDisabledMessageAndNotify(
@@ -98,7 +113,7 @@ void DeviceDisablingManager::CheckWhetherDeviceDisabledDuringOOBE(
   }
 
   if (browser_policy_connector_->GetDeviceMode() ==
-          policy::DEVICE_MODE_PENDING) {
+      policy::DEVICE_MODE_PENDING) {
     // If the device mode is not known yet, request to be called back once it
     // becomes known.
     browser_policy_connector_->GetInstallAttributes()->ReadImmutableAttributes(
@@ -109,7 +124,7 @@ void DeviceDisablingManager::CheckWhetherDeviceDisabledDuringOOBE(
   }
 
   if (browser_policy_connector_->GetDeviceMode() !=
-          policy::DEVICE_MODE_NOT_SET) {
+      policy::DEVICE_MODE_NOT_SET) {
     // If the device is owned already, this method must have been called after
     // OOBE, which is an error. Indicate that the device is not disabled to
     // prevent spurious disabling. Actual device disabling after OOBE will be
@@ -128,20 +143,20 @@ void DeviceDisablingManager::CheckWhetherDeviceDisabledDuringOOBE(
   enrollment_domain_.clear();
   const std::string* maybe_enrollment_domain =
       g_browser_process->local_state()
-          ->GetDictionary(prefs::kServerBackedDeviceState)
-          ->FindStringKey(policy::kDeviceStateManagementDomain);
+          ->GetDict(prefs::kServerBackedDeviceState)
+          .FindString(policy::kDeviceStateManagementDomain);
   enrollment_domain_ =
       maybe_enrollment_domain ? *maybe_enrollment_domain : std::string();
 
   // Update the serial number.
-  serial_number_ = chromeos::system::StatisticsProvider::GetInstance()
-                       ->GetEnterpriseMachineID();
+  serial_number_ = std::string(
+      StatisticsProvider::GetInstance()->GetMachineID().value_or(""));
 
   // Update the disabled message.
   const std::string* maybe_disabled_message =
       g_browser_process->local_state()
-          ->GetDictionary(prefs::kServerBackedDeviceState)
-          ->FindStringKey(policy::kDeviceStateDisabledMessage);
+          ->GetDict(prefs::kServerBackedDeviceState)
+          .FindString(policy::kDeviceStateDisabledMessage);
   std::string disabled_message =
       maybe_disabled_message ? *maybe_disabled_message : std::string();
   CacheDisabledMessageAndNotify(disabled_message);
@@ -152,13 +167,18 @@ void DeviceDisablingManager::CheckWhetherDeviceDisabledDuringOOBE(
 
 // static
 bool DeviceDisablingManager::IsDeviceDisabledDuringNormalOperation() {
-  bool device_disabled = false;
-  CrosSettings::Get()->GetBoolean(kDeviceDisabled, &device_disabled);
-  if (device_disabled && HonorDeviceDisablingDuringNormalOperation()) {
+  if (!HonorDeviceDisablingDuringNormalOperation()) {
+    return false;
+  }
+
+  if (DeviceRestrictionScheduleController() &&
+      DeviceRestrictionScheduleController()->RestrictionScheduleEnabled()) {
     return true;
   }
 
-  return false;
+  bool device_disabled = false;
+  CrosSettings::Get()->GetBoolean(kDeviceDisabled, &device_disabled);
+  return device_disabled;
 }
 
 // static
@@ -172,26 +192,29 @@ bool DeviceDisablingManager::HonorDeviceDisablingDuringNormalOperation() {
              switches::kDisableDeviceDisabling);
 }
 
-void DeviceDisablingManager::UpdateFromCrosSettings() {
+void DeviceDisablingManager::OnRestrictionScheduleStateChanged(bool enabled) {
+  Update();
+}
+
+void DeviceDisablingManager::OnRestrictionScheduleMessageChanged() {
+  for (auto& observer : observers_) {
+    observer.OnRestrictionScheduleMessageChanged();
+  }
+}
+
+void DeviceDisablingManager::Update() {
   if (cros_settings_->PrepareTrustedValues(base::BindOnce(
-          &DeviceDisablingManager::UpdateFromCrosSettings,
-          weak_factory_.GetWeakPtr())) != CrosSettingsProvider::TRUSTED) {
+          &DeviceDisablingManager::Update, weak_factory_.GetWeakPtr())) !=
+      CrosSettingsProvider::TRUSTED) {
     // If the cros settings are not trusted yet, request to be called back
     // later.
     return;
   }
 
-  if (!HonorDeviceDisablingDuringNormalOperation()) {
-    // If the device is not enterprise managed or device disabling has been
-    // turned of by flag, device disabling is not available.
-    return;
-  }
-
-  bool should_device_be_disabled = false;
-  if (!cros_settings_->GetBoolean(kDeviceDisabled,
-                                  &should_device_be_disabled) ||
-      !should_device_be_disabled) {
-    // The device should not be disabled.
+  if (!IsDeviceDisabledDuringNormalOperation()) {
+    // The device should not be disabled because: (a) device is not enterprise
+    // managed, (b) device disabling has been turned off by flag, or (c)
+    // cros settings indicates that device should not be disabled.
 
     if (!device_disabled_) {
       // If the device is currently not disabled, there is nothing to do.
@@ -238,8 +261,8 @@ void DeviceDisablingManager::UpdateFromCrosSettings() {
       browser_policy_connector_->GetEnterpriseEnrollmentDomain();
 
   // Cache the device serial number.
-  serial_number_ = chromeos::system::StatisticsProvider::GetInstance()
-                       ->GetEnterpriseMachineID();
+  serial_number_ = std::string(
+      StatisticsProvider::GetInstance()->GetMachineID().value_or(""));
 
   // If no session or login is in progress, show the device disabled screen.
   delegate_->ShowDeviceDisabledScreen();

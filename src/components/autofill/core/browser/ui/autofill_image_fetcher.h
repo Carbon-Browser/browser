@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,108 +7,92 @@
 
 #include <map>
 #include <memory>
-#include <string>
-#include <vector>
+#include <optional>
 
-#include "base/callback.h"
-#include "base/memory/scoped_refptr.h"
+#include "base/barrier_callback.h"
+#include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
-#include "components/keyed_service/core/keyed_service.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "components/autofill/core/browser/ui/autofill_image_fetcher_base.h"
+
+class GURL;
 
 namespace gfx {
 class Image;
 }  // namespace gfx
 
 namespace image_fetcher {
-class ImageDecoder;
 class ImageFetcher;
 struct RequestMetadata;
 }  // namespace image_fetcher
 
-namespace network {
-class SharedURLLoaderFactory;
-}  // namespace network
-
-class GURL;
-
 namespace autofill {
 
-struct CreditCardArtImage;
-
-using CardArtImagesFetchedCallback = base::OnceCallback<void(
-    std::vector<std::unique_ptr<CreditCardArtImage>> card_art_images)>;
-
-// The image fetching operation instance. It tracks the state of the paired
-// request. Will be created when the AutofillImageFetcher receives a request to
-// fetch images for a vector of urls.
-class ImageFetchOperation : public base::RefCounted<ImageFetchOperation> {
+// Abstract class for Desktop and iOS that exposes image fetcher for images
+// stored outside of Chrome.
+//
+// Subclasses provide the underlying platform-specific
+// image_fetcher::ImageFetcher.
+class AutofillImageFetcher : public AutofillImageFetcherBase {
  public:
-  ImageFetchOperation(size_t image_count,
-                      CardArtImagesFetchedCallback callback);
-  ImageFetchOperation(const ImageFetchOperation&) = delete;
-  ImageFetchOperation& operator=(const ImageFetchOperation&) = delete;
+  virtual ~AutofillImageFetcher();
 
-  // Invoked when an image fetch is complete and data is returned.
-  void ImageFetched(
-      const GURL& card_art_url,
-      const gfx::Image& card_art_image,
-      const absl::optional<base::TimeTicks>& fetch_image_request_timestamp);
+  // AutofillImageFetcherBase:
+  // The image sizes passed in the arguments are unused as this param is only
+  // used for Android. For Desktop, the implementation of this method has
+  // hardcoded image sizes.
+  void FetchImagesForURLs(
+      base::span<const GURL> image_urls,
+      base::span<const AutofillImageFetcherBase::ImageSize> image_sizes_unused,
+      base::OnceCallback<void(
+          const std::vector<std::unique_ptr<CreditCardArtImage>>&)> callback)
+      override;
 
- private:
-  friend class base::RefCounted<ImageFetchOperation>;
+  // Subclasses may override this to provide custom handling of a given card art
+  // URL.
+  virtual GURL ResolveCardArtURL(const GURL& card_art_url);
 
-  ~ImageFetchOperation();
+  // Subclasses may override this to provide custom handling of a fetched card
+  // art image. The default behavior is a no-op. The passed-in `card_art_url` is
+  // the original URL before resolving via `ResolveCardArtURL`.
+  virtual gfx::Image ResolveCardArtImage(const GURL& card_art_url,
+                                         const gfx::Image& card_art_image);
 
-  // The number of images that should be fetched before completion.
-  size_t pending_request_count_ = 0;
+  // Subclasses override this to provide the underlying image fetcher instance.
+  //
+  // Non-const because some platforms initialize the image fetcher dynamically
+  // as needed.
+  virtual image_fetcher::ImageFetcher* GetImageFetcher() = 0;
 
-  // The vector of the fetched CreditCardArtImages.
-  std::vector<std::unique_ptr<CreditCardArtImage>> fetched_card_art_images_;
-
-  // Callback function to be invoked when fetching is finished.
-  CardArtImagesFetchedCallback all_fetches_complete_callback_;
-};
-
-// Fetches images stored outside of Chrome for autofill.
-class AutofillImageFetcher : public KeyedService {
- public:
-  AutofillImageFetcher(
-      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-      std::unique_ptr<image_fetcher::ImageDecoder> image_decoder);
-  ~AutofillImageFetcher() override;
-  AutofillImageFetcher(const AutofillImageFetcher&) = delete;
-  AutofillImageFetcher& operator=(const AutofillImageFetcher&) = delete;
-
-  // Once invoked, the |image_fetcher_| will start fetching images based on the
-  // urls. |card_art_urls| is a vector with credit cards' card art image url.
-  // |callback| will be invoked when all the requests have been completed. The
-  // callback will receive a vector of CreditCardArtImage, for (only) those
-  // cards for which the AutofillImageFetcher could successfully fetch the
-  // image.
-  void FetchImagesForUrls(const std::vector<GURL>& card_art_urls,
-                          CardArtImagesFetchedCallback callback);
+  // Subclasses override this to provide a weak-pointer to this class. This is
+  // not done in the parent class as the base::WeakPtrFactory member must be the
+  // last member in the object, which is not possible to ensure for
+  // superclasses.
+  virtual base::WeakPtr<AutofillImageFetcher> GetWeakPtr() = 0;
 
  protected:
-  // Helper function to fetch art image for card given the |card_art_url|, for
-  // the specific |operation| instance.
-  virtual void FetchImageForUrl(
-      const scoped_refptr<ImageFetchOperation>& operation,
-      const GURL& card_art_url);
+  AutofillImageFetcher();
 
-  // The image fetcher implementation.
-  std::unique_ptr<image_fetcher::ImageFetcher> image_fetcher_;
-
- private:
-  friend class AutofillImageFetcherTest;
-
-  // Called when an image is fetched for the |operation| instance.
-  static void OnCardArtImageFetched(
-      const scoped_refptr<ImageFetchOperation>& operation,
+  // Called when an image is fetched. If the fetch was unsuccessful,
+  // `card_art_image` will be an empty gfx::Image(). If the original URL was
+  // invalid, `fetch_image_request_timestamp` will also be null.
+  void OnCardArtImageFetched(
+      base::OnceCallback<void(std::unique_ptr<CreditCardArtImage>)>
+          barrier_callback,
       const GURL& card_art_url,
-      const absl::optional<base::TimeTicks>& fetch_image_request_timestamp,
+      const std::optional<base::TimeTicks>& fetch_image_request_timestamp,
       const gfx::Image& card_art_image,
       const image_fetcher::RequestMetadata& metadata);
+
+ private:
+  void FetchImageForURL(
+      base::OnceCallback<void(std::unique_ptr<CreditCardArtImage>)>
+          barrier_callback,
+      const GURL& card_art_url);
+
+  // Stores the result of fetching images for card art URLs. It's used to
+  // mitigate the issue of inflated failure metrics caused by repeated fetch
+  // attempts.
+  std::map<std::string, bool> url_to_image_fetch_result_map_;
 };
 
 }  // namespace autofill

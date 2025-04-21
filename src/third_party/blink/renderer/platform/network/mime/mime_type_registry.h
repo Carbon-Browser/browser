@@ -41,7 +41,7 @@ class PLATFORM_EXPORT MIMETypeRegistry {
 
  public:
   // For Media MIME type checks.
-  enum SupportsType { kIsNotSupported, kIsSupported, kMayBeSupported };
+  enum SupportsType { kNotSupported, kSupported, kMaybeSupported };
 
   static String GetMIMETypeForExtension(const String& extension);
   static String GetWellKnownMIMETypeForExtension(const String& extension);
@@ -85,11 +85,11 @@ class PLATFORM_EXPORT MIMETypeRegistry {
 
   // Checks to see if the mime type and codecs are supported by the MediaSource
   // implementation.
-  // kIsNotSupported indicates definitive lack of support.
-  // kIsSupported indicates the mime type is supported, any non-empty codecs
+  // kNotSupported indicates definitive lack of support.
+  // kSupported indicates the mime type is supported, any non-empty codecs
   // requirement is met for the mime type, and all of the passed codecs are
   // supported for the mime type.
-  // kMayBeSupported indicates the mime type is supported, but the mime type
+  // kMaybeSupported indicates the mime type is supported, but the mime type
   // requires a codecs parameter that is missing.
   static SupportsType SupportsMediaSourceMIMEType(const String& mime_type,
                                                   const String& codecs);
@@ -106,18 +106,13 @@ class PLATFORM_EXPORT MIMETypeRegistry {
   // Checks to see if a mime type is suitable for being loaded as a text track.
   static bool IsSupportedTextTrackMIMEType(const String& mime_type);
 
-  // Checks to see if a mime type is an image type with lossy compression, whose
-  // size will be restricted via the 'lossy-images-max-bpp' document
-  // policy. (JPEG)
-  static bool IsLossyImageMIMEType(const String& mime_type);
-
-  // Checks to see if a mime type is an image type with lossless (or no)
-  // compression, whose size may be restricted via the
-  // 'lossless-images-max-bpp' document policy. (BMP, GIF, PNG, WEBP)
-  static bool IsLosslessImageMIMEType(const String& mime_type);
-
   // Checks to see if a mime type is suitable for being loaded as XML.
+  // https://mimesniff.spec.whatwg.org/#xml-mime-type
   static bool IsXMLMIMEType(const String& mime_type);
+
+  // Returns true if the MIME type is suitable for loading as a XML external
+  // entity.
+  static bool IsXMLExternalEntityMIMEType(const String& mime_type);
 
   // Checks to see if a mime type is suitable for being loaded as plain text.
   static bool IsPlainTextMIMEType(const String& mime_type);

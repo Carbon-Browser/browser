@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -52,11 +52,11 @@ class OverlayAgentViews : public OverlayAgent,
   // Overlay::Backend:
   protocol::Response setInspectMode(
       const protocol::String& in_mode,
-      protocol::Maybe<protocol::Overlay::HighlightConfig> in_highlightConfig)
+      std::unique_ptr<protocol::Overlay::HighlightConfig> in_highlightConfig)
       override;
   protocol::Response highlightNode(
       std::unique_ptr<protocol::Overlay::HighlightConfig> highlight_config,
-      protocol::Maybe<int> node_id) override;
+      std::optional<int> node_id) override;
   protocol::Response hideHighlight() override;
 
   HighlightRectsConfiguration highlight_rect_config() const {

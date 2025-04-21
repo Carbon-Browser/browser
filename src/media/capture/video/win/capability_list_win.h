@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,9 @@
 #ifndef MEDIA_CAPTURE_VIDEO_WIN_CAPABILITY_LIST_WIN_H_
 #define MEDIA_CAPTURE_VIDEO_WIN_CAPABILITY_LIST_WIN_H_
 
-#include <list>
 #include <windows.h>
+
+#include <list>
 
 #include "media/capture/video_capture_types.h"
 
@@ -40,13 +41,14 @@ struct CapabilityWin {
   CapabilityWin(int media_type_index,
                 const VideoCaptureFormat& format,
                 int stream_index,
-                VideoPixelFormat source_format)
+                VideoPixelFormat source_format,
+                bool maybe_fake)
       : media_type_index(media_type_index),
         supported_format(format),
         info_header(),
         stream_index(stream_index),
         source_pixel_format(source_format),
-        maybe_fake(false) {}
+        maybe_fake(maybe_fake) {}
 
   const int media_type_index;
   const VideoCaptureFormat supported_format;

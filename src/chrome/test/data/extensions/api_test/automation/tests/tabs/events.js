@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,7 +8,7 @@ let allTests = [
     assertEq('Cancel', cancelButton.name);
     cancelButton.addEventListener(EventType.FOCUS,
                                   function onFocusTarget(event) {
-      window.setTimeout(function() {
+      setTimeout(function() {
         cancelButton.removeEventListener(EventType.FOCUS, onFocusTarget);
         chrome.test.succeed();
       }, 0);
@@ -45,7 +45,7 @@ let allTests = [
                                   function onFocusStopProp(event) {
       cancelButton.removeEventListener(EventType.FOCUS, onFocusStopProp);
       event.stopPropagation();
-      window.setTimeout((function() {
+      setTimeout((function() {
         rootNode.removeEventListener(EventType.FOCUS, onFocusStopPropRoot);
         chrome.test.succeed();
       }).bind(this), 0);
@@ -71,7 +71,7 @@ let allTests = [
       event.stopPropagation();
       rootNode.removeEventListener(EventType.FOCUS, onFocusCaptureRoot);
       rootNode.removeEventListener(EventType.FOCUS, onFocusCapture);
-      window.setTimeout(chrome.test.succeed.bind(this), 0);
+      setTimeout(chrome.test.succeed.bind(this), 0);
     }, true);
     okButton.focus();
   },
@@ -102,4 +102,4 @@ let allTests = [
   }
 ];
 
-setUpAndRunTests(allTests)
+setUpAndRunTabsTests(allTests)

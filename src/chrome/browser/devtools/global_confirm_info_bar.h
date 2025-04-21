@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,6 +8,7 @@
 #include <map>
 #include <memory>
 
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "chrome/browser/ui/browser_tab_strip_tracker.h"
 #include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
@@ -69,7 +70,8 @@ class GlobalConfirmInfoBar : public TabStripModelObserver,
   void MaybeAddInfoBar(content::WebContents* web_contents);
 
   std::unique_ptr<ConfirmInfoBarDelegate> delegate_;
-  std::map<infobars::InfoBarManager*, DelegateProxy*> proxies_;
+  std::map<infobars::InfoBarManager*, raw_ptr<DelegateProxy, CtnExperimental>>
+      proxies_;
   BrowserTabStripTracker browser_tab_strip_tracker_{this, nullptr};
 
   // Indicates if the global infobar is currently in the process of shutting

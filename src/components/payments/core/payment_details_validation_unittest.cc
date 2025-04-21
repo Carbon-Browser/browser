@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -27,7 +27,7 @@ struct PaymentDetailsValidationTestCase {
       : details(details),
         require_total(require_total),
         expect_valid(expect_valid) {}
-  ~PaymentDetailsValidationTestCase() {}
+  ~PaymentDetailsValidationTestCase() = default;
 
   const char* const details;
   const bool require_total;
@@ -44,22 +44,15 @@ class PaymentDetailsValidationTest
     : public ::testing::TestWithParam<PaymentDetailsValidationTestCase> {};
 
 TEST_P(PaymentDetailsValidationTest, Test) {
-  absl::optional<base::Value> value =
-      base::JSONReader::Read(GetParam().details);
+  std::optional<base::Value> value = base::JSONReader::Read(GetParam().details);
   ASSERT_TRUE(value.has_value()) << "Should be in JSON format";
   ASSERT_TRUE(value->is_dict());
   PaymentDetails details;
-  ASSERT_TRUE(details.FromValue(*value, GetParam().require_total));
+  ASSERT_TRUE(
+      details.FromValueDict(value->GetDict(), GetParam().require_total));
   std::string unused;
 
   EXPECT_EQ(GetParam().expect_valid, ValidatePaymentDetails(details, &unused));
-}
-
-TEST(PaymentDetailsValidationTest, TestNonDict) {
-  // Make sure that FromValue on a non-dict doesn't crash.
-  PaymentDetails details;
-  EXPECT_FALSE(details.FromValue(base::Value("hello"),
-                                 /*requires_total=*/false));
 }
 
 INSTANTIATE_TEST_SUITE_P(

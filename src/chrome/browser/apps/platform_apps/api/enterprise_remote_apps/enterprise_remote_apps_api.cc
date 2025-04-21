@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,8 @@
 #include "chrome/common/apps/platform_apps/api/enterprise_remote_apps.h"
 #include "url/gurl.h"
 
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-#include "chrome/browser/lacros/remote_apps/remote_apps_proxy_lacros.h"
-#include "chrome/browser/lacros/remote_apps/remote_apps_proxy_lacros_factory.h"
-#else
-#include "chrome/browser/ash/crosapi/crosapi_ash.h"
-#include "chrome/browser/ash/crosapi/crosapi_manager.h"
 #include "chrome/browser/ash/remote_apps/remote_apps_manager.h"
 #include "chrome/browser/ash/remote_apps/remote_apps_manager_factory.h"
-#endif
 
 namespace chrome_apps::api {
 
@@ -26,21 +19,17 @@ namespace {
 chromeos::remote_apps::mojom::RemoteApps* GetEnterpriseRemoteAppsApi(
     content::BrowserContext* context) {
   Profile* profile = Profile::FromBrowserContext(context);
-#if BUILDFLAG(IS_CHROMEOS_LACROS)
-  // This also validates that the Remote Apps Mojo interface is available in
-  // Ash via the factory.
-  return chromeos::RemoteAppsProxyLacrosFactory::GetForBrowserContext(profile);
-#else
   ash::RemoteAppsManager* remote_apps_manager =
       ash::RemoteAppsManagerFactory::GetForProfile(profile);
   if (remote_apps_manager == nullptr)
     return nullptr;
 
   return &remote_apps_manager->GetRemoteAppsImpl();
-#endif
 }
 
 }  // namespace
+
+using enterprise_remote_apps::RemoteAppsPosition;
 
 EnterpriseRemoteAppsAddFolderFunction::EnterpriseRemoteAppsAddFolderFunction() =
     default;
@@ -76,7 +65,7 @@ void EnterpriseRemoteAppsAddFolderFunction::OnResult(
     return;
   }
 
-  Respond(OneArgument(base::Value(result->get_folder_id())));
+  Respond(WithArguments(result->get_folder_id()));
 }
 
 EnterpriseRemoteAppsAddAppFunction::EnterpriseRemoteAppsAddAppFunction() =
@@ -128,7 +117,7 @@ void EnterpriseRemoteAppsAddAppFunction::OnResult(
     return;
   }
 
-  Respond(OneArgument(base::Value(result->get_app_id())));
+  Respond(WithArguments(result->get_app_id()));
 }
 
 EnterpriseRemoteAppsDeleteAppFunction::EnterpriseRemoteAppsDeleteAppFunction() =
@@ -156,7 +145,86 @@ ExtensionFunction::ResponseAction EnterpriseRemoteAppsDeleteAppFunction::Run() {
 }
 
 void EnterpriseRemoteAppsDeleteAppFunction::OnResult(
-    const absl::optional<std::string>& error) {
+    const std::optional<std::string>& error) {
+  if (error) {
+    Respond(Error(*error));
+    return;
+  }
+
+  Respond(NoArguments());
+}
+
+EnterpriseRemoteAppsSortLauncherFunction::
+    EnterpriseRemoteAppsSortLauncherFunction() = default;
+
+EnterpriseRemoteAppsSortLauncherFunction::
+    ~EnterpriseRemoteAppsSortLauncherFunction() = default;
+
+ExtensionFunction::ResponseAction
+EnterpriseRemoteAppsSortLauncherFunction::Run() {
+  auto parameters =
+      api::enterprise_remote_apps::SortLauncher::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(parameters);
+
+  chromeos::remote_apps::mojom::RemoteApps* remote_apps_api =
+      GetEnterpriseRemoteAppsApi(browser_context());
+  if (remote_apps_api == nullptr)
+    return RespondNow(Error("Remote apps not supported in this session"));
+
+  switch (parameters->options.position) {
+    case RemoteAppsPosition::kRemoteAppsFirst: {
+      auto callback = base::BindOnce(
+          &EnterpriseRemoteAppsSortLauncherFunction::OnResult, this);
+      remote_apps_api->SortLauncherWithRemoteAppsFirst(std::move(callback));
+      break;
+    }
+    default: {
+      return RespondNow(Error("Remote apps sort position not valid."));
+    }
+  }
+
+  // `did_respond()` needed here as the `SortLauncher()` can be sync or async.
+  return did_respond() ? AlreadyResponded() : RespondLater();
+}
+
+void EnterpriseRemoteAppsSortLauncherFunction::OnResult(
+    const std::optional<std::string>& error) {
+  if (error) {
+    Respond(Error(*error));
+    return;
+  }
+
+  Respond(NoArguments());
+}
+
+EnterpriseRemoteAppsSetPinnedAppsFunction::
+    EnterpriseRemoteAppsSetPinnedAppsFunction() = default;
+
+EnterpriseRemoteAppsSetPinnedAppsFunction::
+    ~EnterpriseRemoteAppsSetPinnedAppsFunction() = default;
+
+ExtensionFunction::ResponseAction
+EnterpriseRemoteAppsSetPinnedAppsFunction::Run() {
+  auto parameters =
+      api::enterprise_remote_apps::SetPinnedApps::Params::Create(args());
+  EXTENSION_FUNCTION_VALIDATE(parameters);
+
+  chromeos::remote_apps::mojom::RemoteApps* remote_apps_api =
+      GetEnterpriseRemoteAppsApi(browser_context());
+  if (remote_apps_api == nullptr) {
+    return RespondNow(Error("Remote apps not supported in this session"));
+  }
+
+  auto callback = base::BindOnce(
+      &EnterpriseRemoteAppsSetPinnedAppsFunction::OnResult, this);
+  remote_apps_api->SetPinnedApps(parameters->app_ids, std::move(callback));
+
+  // `did_respond()` needed here as the `SetPinnedApps()` can be sync or async.
+  return did_respond() ? AlreadyResponded() : RespondLater();
+}
+
+void EnterpriseRemoteAppsSetPinnedAppsFunction::OnResult(
+    const std::optional<std::string>& error) {
   if (error) {
     Respond(Error(*error));
     return;

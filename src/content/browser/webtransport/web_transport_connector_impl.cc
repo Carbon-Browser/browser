@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -77,8 +77,8 @@ class InterceptingHandshakeClient final : public WebTransportHandshakeClient {
   void OnConnectionEstablished(
       mojo::PendingRemote<network::mojom::WebTransport> transport,
       mojo::PendingReceiver<network::mojom::WebTransportClient> client,
-      const scoped_refptr<net::HttpResponseHeaders>& response_headers)
-      override {
+      const scoped_refptr<net::HttpResponseHeaders>& response_headers,
+      network::mojom::WebTransportStatsPtr initial_stats) override {
     if (tracker_) {
       tracker_->OnHandshakeEstablished();
     }
@@ -87,17 +87,18 @@ class InterceptingHandshakeClient final : public WebTransportHandshakeClient {
     remote_->OnConnectionEstablished(
         std::move(transport), std::move(client),
         base::MakeRefCounted<net::HttpResponseHeaders>(
-            /*raw_headers=*/""));
+            /*raw_headers=*/""),
+        std::move(initial_stats));
   }
   void OnHandshakeFailed(
-      const absl::optional<net::WebTransportError>& error) override {
+      const std::optional<net::WebTransportError>& error) override {
     if (tracker_) {
       tracker_->OnHandshakeFailed();
     }
 
     // Here we pass null because it is dangerous to pass the error details
     // to the initiator renderer.
-    remote_->OnHandshakeFailed(absl::nullopt);
+    remote_->OnHandshakeFailed(std::nullopt);
 
     if (RenderFrameHostImpl* frame = frame_.get()) {
       devtools_instrumentation::OnWebTransportHandshakeFailed(frame, url_,
@@ -121,11 +122,11 @@ WebTransportConnectorImpl::WebTransportConnectorImpl(
     int process_id,
     base::WeakPtr<RenderFrameHostImpl> frame,
     const url::Origin& origin,
-    const net::NetworkIsolationKey& network_isolation_key)
+    const net::NetworkAnonymizationKey& network_anonymization_key)
     : process_id_(process_id),
       frame_(std::move(frame)),
       origin_(origin),
-      network_isolation_key_(network_isolation_key),
+      network_anonymization_key_(network_anonymization_key),
       throttle_context_(GetThrottleContext(process_id_, frame_)) {}
 
 WebTransportConnectorImpl::~WebTransportConnectorImpl() = default;
@@ -204,7 +205,7 @@ void WebTransportConnectorImpl::OnWillCreateWebTransportCompleted(
         fingerprints,
     mojo::PendingRemote<network::mojom::WebTransportHandshakeClient>
         handshake_client,
-    absl::optional<network::mojom::WebTransportErrorPtr> error) {
+    std::optional<network::mojom::WebTransportErrorPtr> error) {
   DCHECK(BrowserThread::CurrentlyOn(BrowserThread::UI));
 
   RenderProcessHost* process = RenderProcessHost::FromID(process_id_);
@@ -223,7 +224,7 @@ void WebTransportConnectorImpl::OnWillCreateWebTransportCompleted(
   }
 
   process->GetStoragePartition()->GetNetworkContext()->CreateWebTransport(
-      url, origin_, network_isolation_key_, std::move(fingerprints),
+      url, origin_, network_anonymization_key_, std::move(fingerprints),
       std::move(handshake_client));
 }
 

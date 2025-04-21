@@ -1,15 +1,15 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/sync_file_system/drive_backend/fake_drive_uploader.h"
 
-#include "base/bind.h"
 #include "base/check.h"
+#include "base/functional/bind.h"
 #include "base/location.h"
 #include "base/notreached.h"
 #include "base/run_loop.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/task/single_thread_task_runner.h"
 #include "google_apis/drive/drive_api_parser.h"
 #include "google_apis/drive/drive_common_callbacks.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -39,7 +39,7 @@ void DidAddFileForUploadNew(UploadCompletionCallback callback,
                             std::unique_ptr<FileResource> entry) {
   ASSERT_EQ(google_apis::HTTP_CREATED, error);
   ASSERT_TRUE(entry);
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), google_apis::HTTP_SUCCESS,
                                 GURL(), std::move(entry)));
 }
@@ -47,7 +47,7 @@ void DidAddFileForUploadNew(UploadCompletionCallback callback,
 void DidGetFileResourceForUploadExisting(UploadCompletionCallback callback,
                                          ApiErrorCode error,
                                          std::unique_ptr<FileResource> entry) {
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE,
       base::BindOnce(std::move(callback), error, GURL(), std::move(entry)));
 }
@@ -57,7 +57,7 @@ void DidGetFileResourceForUploadExisting(UploadCompletionCallback callback,
 FakeDriveServiceWrapper::FakeDriveServiceWrapper()
     : make_directory_conflict_(false) {}
 
-FakeDriveServiceWrapper::~FakeDriveServiceWrapper() {}
+FakeDriveServiceWrapper::~FakeDriveServiceWrapper() = default;
 
 CancelCallbackOnce FakeDriveServiceWrapper::AddNewDirectory(
     const std::string& parent_resource_id,
@@ -77,7 +77,7 @@ FakeDriveUploader::FakeDriveUploader(
     FakeDriveServiceWrapper* fake_drive_service)
     : fake_drive_service_(fake_drive_service), make_file_conflict_(false) {}
 
-FakeDriveUploader::~FakeDriveUploader() {}
+FakeDriveUploader::~FakeDriveUploader() = default;
 
 void FakeDriveUploader::StartBatchProcessing() {}
 
@@ -133,7 +133,6 @@ CancelCallbackOnce FakeDriveUploader::ResumeUploadFile(
   // At the moment, sync file system doesn't support resuming of the uploading.
   // So this method shouldn't be reached.
   NOTREACHED();
-  return CancelCallbackOnce();
 }
 
 }  // namespace drive_backend

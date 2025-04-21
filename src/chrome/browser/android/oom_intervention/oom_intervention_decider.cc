@@ -1,10 +1,10 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/android/oom_intervention/oom_intervention_decider.h"
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
@@ -17,7 +17,7 @@ namespace {
 const char kOomInterventionDecider[] = "oom_intervention.decider";
 
 // Deprecated: Replaced with `kBlocklist`.
-// TODO(https://crbug.com/1169828): Remove this after M92 once existing
+// TODO(crbug.com/40744119): Remove this after M92 once existing
 // clients have migrated to the new pref.
 const char kBlacklist[] = "oom_intervention.blacklist";
 // Pref path for blocklist. If a hostname is in the blocklist we never trigger
@@ -137,18 +137,16 @@ void OomInterventionDecider::OnPrefInitialized(bool success) {
     return;
 
   // Migrate `kBlacklist` to `kBlocklist`.
-  auto* old_pref_value = prefs_->GetList(kBlacklist);
-  if (!old_pref_value->GetListDeprecated().empty()) {
-    prefs_->Set(kBlocklist, *old_pref_value);
-    ListPrefUpdate update(prefs_, kBlacklist);
-    update->ClearList();
+  const base::Value::List& old_pref_value = prefs_->GetList(kBlacklist);
+  if (!old_pref_value.empty()) {
+    prefs_->SetList(kBlocklist, old_pref_value.Clone());
+    prefs_->SetList(kBlacklist, base::Value::List());
   }
 
   if (delegate_->WasLastShutdownClean())
     return;
 
-  base::Value::ConstListView declined_list =
-      prefs_->GetList(kDeclinedHostList)->GetListDeprecated();
+  const base::Value::List& declined_list = prefs_->GetList(kDeclinedHostList);
   if (!declined_list.empty()) {
     const std::string& last_declined = declined_list.back().GetString();
     if (!IsInList(kBlocklist, last_declined))
@@ -157,8 +155,7 @@ void OomInterventionDecider::OnPrefInitialized(bool success) {
 }
 
 bool OomInterventionDecider::IsOptedOut(const std::string& host) const {
-  if (prefs_->GetList(kBlocklist)->GetListDeprecated().size() >=
-      kMaxBlocklistSize)
+  if (prefs_->GetList(kBlocklist).size() >= kMaxBlocklistSize)
     return true;
 
   return IsInList(kBlocklist, host);
@@ -166,7 +163,7 @@ bool OomInterventionDecider::IsOptedOut(const std::string& host) const {
 
 bool OomInterventionDecider::IsInList(const char* list_name,
                                       const std::string& host) const {
-  for (const auto& value : prefs_->GetList(list_name)->GetListDeprecated()) {
+  for (const auto& value : prefs_->GetList(list_name)) {
     if (value.GetString() == host)
       return true;
   }
@@ -177,10 +174,11 @@ void OomInterventionDecider::AddToList(const char* list_name,
                                        const std::string& host) {
   if (IsInList(list_name, host))
     return;
-  ListPrefUpdate update(prefs_, list_name);
-  update->Append(host);
-  if (update->GetListDeprecated().size() > kMaxListSize)
-    update->EraseListIter(update->GetListDeprecated().begin());
+  ScopedListPrefUpdate update(prefs_, list_name);
+  base::Value::List& update_list = update.Get();
+  update_list.Append(host);
+  if (update_list.size() > kMaxListSize)
+    update_list.erase(update_list.begin());
 
   // Save the list immediately because we typically modify lists under high
   // memory pressure, in which the browser process can be killed by the OS

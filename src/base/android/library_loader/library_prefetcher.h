@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,7 +6,6 @@
 #define BASE_ANDROID_LIBRARY_LOADER_LIBRARY_PREFETCHER_H_
 
 #include <jni.h>
-
 #include <stdint.h>
 
 #include "base/android/library_loader/anchor_functions_buildflags.h"

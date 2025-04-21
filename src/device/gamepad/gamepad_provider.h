@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,12 +9,13 @@
 #include <utility>
 #include <vector>
 
-#include "base/callback_forward.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/read_only_shared_memory_region.h"
-#include "base/memory/ref_counted.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/synchronization/lock.h"
 #include "base/system/system_monitor.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "device/gamepad/gamepad_export.h"
 #include "device/gamepad/gamepad_pad_state_provider.h"
@@ -37,7 +38,6 @@ class DEVICE_GAMEPAD_EXPORT GamepadChangeClient {
   virtual void OnGamepadConnectionChange(bool connected,
                                          uint32_t index,
                                          const Gamepad& pad) = 0;
-  virtual void OnGamepadChange(mojom::GamepadChangesPtr changes) = 0;
 };
 
 class DEVICE_GAMEPAD_EXPORT GamepadProvider
@@ -107,8 +107,6 @@ class DEVICE_GAMEPAD_EXPORT GamepadProvider
   // Method for polling a GamepadDataFetcher. Runs on the polling_thread_.
   void DoPoll();
   void ScheduleDoPoll();
-
-  void SendChangeEvents(mojom::GamepadChangesPtr changes);
 
   void OnGamepadConnectionChange(bool connected,
                                  uint32_t index,

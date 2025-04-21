@@ -1,12 +1,14 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/types/cxx23_to_underlying.h"
 #include "chrome/test/base/chrome_render_view_test.h"
 #include "components/grit/components_resources.h"
 #include "components/translate/core/common/translate_errors.h"
+#include "third_party/blink/public/platform/scheduler/web_agent_group_scheduler.h"
 #include "third_party/blink/public/web/web_local_frame.h"
 #include "third_party/blink/public/web/web_script_source.h"
 #include "ui/base/resource/resource_bundle.h"
@@ -74,7 +76,7 @@ std::string GenerateSetCallbackErrorCodeScript(int code) {
 // correctly.
 class TranslateScriptBrowserTest : public ChromeRenderViewTest {
  public:
-  TranslateScriptBrowserTest() {}
+  TranslateScriptBrowserTest() = default;
 
   TranslateScriptBrowserTest(const TranslateScriptBrowserTest&) = delete;
   TranslateScriptBrowserTest& operator=(const TranslateScriptBrowserTest&) =
@@ -111,14 +113,14 @@ class TranslateScriptBrowserTest : public ChromeRenderViewTest {
   double ExecuteScriptAndGetNumberResult(const std::string& script) {
     WebScriptSource source =
         WebScriptSource(blink::WebString::FromASCII(script));
-    v8::HandleScope handle_scope(v8::Isolate::GetCurrent());
+    v8::HandleScope handle_scope(
+        GetMainFrame()->GetAgentGroupScheduler()->Isolate());
     v8::Local<v8::Value> result =
         GetMainFrame()->ExecuteScriptAndReturnValue(source);
     if (result.IsEmpty() || !result->IsNumber()) {
-      NOTREACHED();
       // TODO(toyoshim): Return NaN here and the real implementation in
       // TranslateAgent::ExecuteScriptAndGetDoubleResult().
-      return 0.0;
+      NOTREACHED();
     }
     return result.As<v8::Number>()->Value();
   }
@@ -126,12 +128,12 @@ class TranslateScriptBrowserTest : public ChromeRenderViewTest {
   bool ExecuteScriptAndGetBoolResult(const std::string& script) {
     WebScriptSource source =
         WebScriptSource(blink::WebString::FromASCII(script));
-    v8::HandleScope handle_scope(v8::Isolate::GetCurrent());
+    v8::HandleScope handle_scope(
+        GetMainFrame()->GetAgentGroupScheduler()->Isolate());
     v8::Local<v8::Value> result =
         GetMainFrame()->ExecuteScriptAndReturnValue(source);
     if (result.IsEmpty() || !result->IsBoolean()) {
       NOTREACHED();
-      return false;
     }
     return result.As<v8::Boolean>()->Value();
   }
@@ -142,7 +144,8 @@ TEST_F(TranslateScriptBrowserTest, ElementLoadSuccess) {
   InjectElementLibrary();
   EXPECT_TRUE(IsLibReady());
   EXPECT_FALSE(GetError());
-  EXPECT_EQ(translate::TranslateErrors::NONE, GetErrorCode());
+  EXPECT_EQ(base::to_underlying(translate::TranslateErrors::NONE),
+            GetErrorCode());
 }
 
 // Test if onTranslateElementLoad() fails to initialize the element library and
@@ -153,7 +156,9 @@ TEST_F(TranslateScriptBrowserTest, ElementLoadFailure) {
   InjectElementLibrary();
   EXPECT_FALSE(IsLibReady());
   EXPECT_TRUE(GetError());
-  EXPECT_EQ(translate::TranslateErrors::INITIALIZATION_ERROR, GetErrorCode());
+  EXPECT_EQ(
+      base::to_underlying(translate::TranslateErrors::INITIALIZATION_ERROR),
+      GetErrorCode());
 }
 
 // Test if cr.googleTranslate.translate() works.
@@ -161,12 +166,14 @@ TEST_F(TranslateScriptBrowserTest, TranslateSuccess) {
   InjectElementLibrary();
   EXPECT_TRUE(IsLibReady());
   EXPECT_FALSE(GetError());
-  EXPECT_EQ(translate::TranslateErrors::NONE, GetErrorCode());
+  EXPECT_EQ(base::to_underlying(translate::TranslateErrors::NONE),
+            GetErrorCode());
 
   ExecuteScript(kTranslate);
 
   EXPECT_FALSE(GetError());
-  EXPECT_EQ(translate::TranslateErrors::NONE, GetErrorCode());
+  EXPECT_EQ(base::to_underlying(translate::TranslateErrors::NONE),
+            GetErrorCode());
 }
 
 // Test if cr.googleTranslate.translate() handles library exception correctly.
@@ -176,13 +183,15 @@ TEST_F(TranslateScriptBrowserTest, TranslateFail) {
   InjectElementLibrary();
   EXPECT_TRUE(IsLibReady());
   EXPECT_FALSE(GetError());
-  EXPECT_EQ(translate::TranslateErrors::NONE, GetErrorCode());
+  EXPECT_EQ(base::to_underlying(translate::TranslateErrors::NONE),
+            GetErrorCode());
 
   ExecuteScript(kTranslate);
 
   EXPECT_TRUE(GetError());
-  EXPECT_EQ(translate::TranslateErrors::UNEXPECTED_SCRIPT_ERROR,
-            GetErrorCode());
+  EXPECT_EQ(
+      base::to_underlying(translate::TranslateErrors::UNEXPECTED_SCRIPT_ERROR),
+      GetErrorCode());
 }
 
 // Test if onTranslateProgress callback handles boolean type error correctly.
@@ -193,12 +202,14 @@ TEST_F(TranslateScriptBrowserTest, CallbackGetBooleanError) {
   InjectElementLibrary();
   EXPECT_TRUE(IsLibReady());
   EXPECT_FALSE(GetError());
-  EXPECT_EQ(translate::TranslateErrors::NONE, GetErrorCode());
+  EXPECT_EQ(base::to_underlying(translate::TranslateErrors::NONE),
+            GetErrorCode());
 
   ExecuteScript(kTranslate);
 
   EXPECT_TRUE(GetError());
-  EXPECT_EQ(translate::TranslateErrors::TRANSLATION_ERROR, GetErrorCode());
+  EXPECT_EQ(base::to_underlying(translate::TranslateErrors::TRANSLATION_ERROR),
+            GetErrorCode());
 }
 
 // Test if onTranslateProgress callback handles number type error correctly and
@@ -210,12 +221,14 @@ TEST_F(TranslateScriptBrowserTest, CallbackGetNumberError1) {
   InjectElementLibrary();
   EXPECT_TRUE(IsLibReady());
   EXPECT_FALSE(GetError());
-  EXPECT_EQ(translate::TranslateErrors::NONE, GetErrorCode());
+  EXPECT_EQ(base::to_underlying(translate::TranslateErrors::NONE),
+            GetErrorCode());
 
   ExecuteScript(kTranslate);
 
   EXPECT_TRUE(GetError());
-  EXPECT_EQ(translate::TranslateErrors::TRANSLATION_ERROR, GetErrorCode());
+  EXPECT_EQ(base::to_underlying(translate::TranslateErrors::TRANSLATION_ERROR),
+            GetErrorCode());
 }
 
 // Test if onTranslateProgress callback handles number type error correctly and
@@ -227,12 +240,15 @@ TEST_F(TranslateScriptBrowserTest, CallbackGetNumberError2) {
   InjectElementLibrary();
   EXPECT_TRUE(IsLibReady());
   EXPECT_FALSE(GetError());
-  EXPECT_EQ(translate::TranslateErrors::NONE, GetErrorCode());
+  EXPECT_EQ(base::to_underlying(translate::TranslateErrors::NONE),
+            GetErrorCode());
 
   ExecuteScript(kTranslate);
 
   EXPECT_TRUE(GetError());
-  EXPECT_EQ(translate::TranslateErrors::UNSUPPORTED_LANGUAGE, GetErrorCode());
+  EXPECT_EQ(
+      base::to_underlying(translate::TranslateErrors::UNSUPPORTED_LANGUAGE),
+      GetErrorCode());
 }
 
 // TODO(toyoshim): Add test for onLoadJavaScript.

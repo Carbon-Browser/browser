@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -8,9 +8,8 @@
 #define COMPONENTS_GOOGLE_CORE_COMMON_GOOGLE_UTIL_H_
 
 #include <string>
+#include <string_view>
 #include <vector>
-
-#include "base/strings/string_piece.h"
 
 class GURL;
 
@@ -45,7 +44,7 @@ extern const char kGoogleHomepageURL[];
 // True iff |str| contains a "q=" or "as_q=" query parameter with a non-empty
 // value. |str| should be a query or a hash fragment, without the ? or # (as
 // returned by GURL::query() or GURL::ref().
-bool HasGoogleSearchQueryParam(base::StringPiece str);
+bool HasGoogleSearchQueryParam(std::string_view str);
 
 // Returns the Google locale corresponding to |application_locale|.  This is
 // the same string as AppendGoogleLocaleParam adds to the URL, only without the
@@ -91,17 +90,6 @@ enum PortPermission {
   DISALLOW_NON_STANDARD_PORTS,
 };
 
-// True if |host| is "[www.]google.<TLD>" with a valid TLD. If
-// |subdomain_permission| is ALLOW_SUBDOMAIN, we check against host
-// "*.google.<TLD>" instead.
-//
-// If the Google base URL has been overridden on the command line, this function
-// will also return true for any URL whose hostname exactly matches the hostname
-// of the URL specified on the command line.  In this case,
-// |subdomain_permission| is ignored.
-bool IsGoogleHostname(base::StringPiece host,
-                      SubdomainPermission subdomain_permission);
-
 // True if |url| is a valid URL with a host that returns true for
 // IsGoogleHostname(), and an HTTP or HTTPS scheme.  If |port_permission| is
 // DISALLOW_NON_STANDARD_PORTS, this also requires |url| to use the standard
@@ -113,6 +101,20 @@ bool IsGoogleHostname(base::StringPiece host,
 bool IsGoogleDomainUrl(const GURL& url,
                        SubdomainPermission subdomain_permission,
                        PortPermission port_permission);
+
+// True if |host| is "[www.]google.<TLD>" with a valid TLD. If
+// |subdomain_permission| is ALLOW_SUBDOMAIN, we check against host
+// "*.google.<TLD>" instead. Note this function does not check the URL is an
+// HTTP or HTTPS scheme. If checking a URL, use IsGoogleDomainUrl(). This
+// function should only be used in cases when the input is just a hostname, such
+// as a search engine keyword.
+//
+// If the Google base URL has been overridden on the command line, this function
+// will also return true for any URL whose hostname exactly matches the hostname
+// of the URL specified on the command line.  In this case,
+// |subdomain_permission| is ignored.
+bool IsGoogleHostname(std::string_view host,
+                      SubdomainPermission subdomain_permission);
 
 // True if |url| represents a valid Google home page URL.
 bool IsGoogleHomePageUrl(const GURL& url);

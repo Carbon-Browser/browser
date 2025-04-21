@@ -1,19 +1,18 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/test/embedded_test_server/http2_connection.h"
 
 #include <memory>
+#include <string_view>
 
-#include "absl/strings/escaping.h"
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/debug/stack_trace.h"
-#include "base/format_macros.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
-#include "base/strings/stringprintf.h"
-#include "base/threading/sequenced_task_runner_handle.h"
+#include "base/memory/raw_ref.h"
+#include "base/strings/strcat.h"
+#include "base/task/sequenced_task_runner.h"
 #include "net/http/http_response_headers.h"
 #include "net/http/http_status_code.h"
 #include "net/socket/stream_socket.h"
@@ -24,6 +23,8 @@
 namespace net {
 
 namespace {
+
+using http2::adapter::Http2VisitorInterface;
 
 std::vector<http2::adapter::Header> GenerateHeaders(HttpStatusCode status,
                                                     base::StringPairs headers) {
@@ -48,78 +49,6 @@ std::vector<http2::adapter::Header> GenerateHeaders(HttpStatusCode status,
 
 namespace test_server {
 
-class Http2Connection::DataFrameSource
-    : public http2::adapter::DataFrameSource {
- public:
-  explicit DataFrameSource(Http2Connection* connection,
-                           const StreamId& stream_id)
-      : connection_(connection), stream_id_(stream_id) {}
-  ~DataFrameSource() override = default;
-  DataFrameSource(const DataFrameSource&) = delete;
-  DataFrameSource& operator=(const DataFrameSource&) = delete;
-
-  std::pair<int64_t, bool> SelectPayloadLength(size_t max_length) override {
-    if (chunks_.empty())
-      return {kBlocked, last_frame_};
-
-    bool finished = (chunks_.size() <= 1) &&
-                    (chunks_.front().size() <= max_length) && last_frame_;
-
-    return {std::min(chunks_.front().size(), max_length), finished};
-  }
-
-  bool Send(absl::string_view frame_header, size_t payload_length) override {
-    std::string concatenated =
-        absl::StrCat(frame_header, chunks_.front().substr(0, payload_length));
-    const int64_t result = connection_->OnReadyToSend(concatenated);
-    // Write encountered error.
-    if (result < 0) {
-      connection_->OnConnectionError(ConnectionError::kSendError);
-      return false;
-    }
-
-    // Write blocked.
-    if (result == 0) {
-      connection_->blocked_streams_.insert(stream_id_);
-      return false;
-    }
-
-    if (static_cast<const size_t>(result) < concatenated.size()) {
-      // Probably need to handle this better within this test class.
-      QUICHE_LOG(DFATAL)
-          << "DATA frame not fully flushed. Connection will be corrupt!";
-      connection_->OnConnectionError(ConnectionError::kSendError);
-      return false;
-    }
-
-    chunks_.front().erase(0, payload_length);
-
-    if (chunks_.front().empty())
-      chunks_.pop();
-
-    if (chunks_.empty() && send_completion_callback_) {
-      std::move(send_completion_callback_).Run();
-    }
-
-    return true;
-  }
-
-  bool send_fin() const override { return true; }
-
-  void AddChunk(std::string chunk) { chunks_.push(std::move(chunk)); }
-  void set_last_frame(bool last_frame) { last_frame_ = last_frame; }
-  void SetSendCompletionCallback(base::OnceClosure callback) {
-    send_completion_callback_ = std::move(callback);
-  }
-
- private:
-  const raw_ptr<Http2Connection> connection_;
-  const StreamId& stream_id_;
-  std::queue<std::string> chunks_;
-  bool last_frame_ = false;
-  base::OnceClosure send_completion_callback_;
-};
-
 // Corresponds to an HTTP/2 stream
 class Http2Connection::ResponseDelegate : public HttpResponseDelegate {
  public:
@@ -136,11 +65,9 @@ class Http2Connection::ResponseDelegate : public HttpResponseDelegate {
   void SendResponseHeaders(HttpStatusCode status,
                            const std::string& status_reason,
                            const base::StringPairs& headers) override {
-    std::unique_ptr<DataFrameSource> data_frame =
-        std::make_unique<DataFrameSource>(connection_, stream_id_);
-    data_frame_ = data_frame.get();
-    connection_->adapter()->SubmitResponse(
-        stream_id_, GenerateHeaders(status, headers), std::move(data_frame));
+    connection_->adapter()->SubmitResponse(stream_id_,
+                                           GenerateHeaders(status, headers),
+                                           /*end_stream=*/false);
     connection_->SendIfNotProcessing();
   }
 
@@ -163,21 +90,20 @@ class Http2Connection::ResponseDelegate : public HttpResponseDelegate {
 
   void SendContents(const std::string& contents,
                     base::OnceClosure callback) override {
-    DCHECK(data_frame_);
-    data_frame_->AddChunk(contents);
-    data_frame_->SetSendCompletionCallback(std::move(callback));
+    chunks_.push(std::move(contents));
+    send_completion_callback_ = std::move(callback);
     connection_->adapter()->ResumeStream(stream_id_);
     connection_->SendIfNotProcessing();
   }
 
   void FinishResponse() override {
-    data_frame_->set_last_frame(true);
+    last_frame_ = true;
     connection_->adapter()->ResumeStream(stream_id_);
     connection_->SendIfNotProcessing();
   }
 
   void SendContentsAndFinish(const std::string& contents) override {
-    data_frame_->set_last_frame(true);
+    last_frame_ = true;
     SendContents(contents, base::DoNothing());
   }
 
@@ -185,23 +111,77 @@ class Http2Connection::ResponseDelegate : public HttpResponseDelegate {
                                    const std::string& status_reason,
                                    const base::StringPairs& headers,
                                    const std::string& contents) override {
-    std::unique_ptr<DataFrameSource> data_frame =
-        std::make_unique<DataFrameSource>(connection_, stream_id_);
-    data_frame->AddChunk(contents);
-    data_frame->set_last_frame(true);
-    connection_->adapter()->SubmitResponse(
-        stream_id_, GenerateHeaders(status, headers), std::move(data_frame));
+    chunks_.push(std::move(contents));
+    last_frame_ = true;
+    connection_->adapter()->SubmitResponse(stream_id_,
+                                           GenerateHeaders(status, headers),
+                                           /*end_stream=*/false);
     connection_->SendIfNotProcessing();
   }
   base::WeakPtr<ResponseDelegate> GetWeakPtr() {
     return weak_factory_.GetWeakPtr();
   }
 
+  Http2VisitorInterface::DataFrameHeaderInfo OnReadyToSendDataForStream(
+      StreamId stream_id,
+      size_t max_length) {
+    if (chunks_.empty()) {
+      return {Http2VisitorInterface::kSendBlocked, false, false};
+    }
+
+    bool finished = (chunks_.size() <= 1) &&
+                    (chunks_.front().size() <= max_length) && last_frame_;
+
+    return {static_cast<int64_t>(std::min(chunks_.front().size(), max_length)),
+            finished, finished};
+  }
+
+  bool SendDataFrame(StreamId stream_id,
+                     std::string_view frame_header,
+                     size_t payload_length) {
+    std::string concatenated =
+        base::StrCat({frame_header, chunks_.front().substr(0, payload_length)});
+    const int64_t result = connection_->OnReadyToSend(concatenated);
+    // Write encountered error.
+    if (result < 0) {
+      connection_->OnConnectionError(ConnectionError::kSendError);
+      return false;
+    }
+
+    // Write blocked.
+    if (result == 0) {
+      connection_->blocked_streams_.insert(stream_id);
+      return false;
+    }
+
+    if (static_cast<const size_t>(result) < concatenated.size()) {
+      // Probably need to handle this better within this test class.
+      QUICHE_LOG(DFATAL)
+          << "DATA frame not fully flushed. Connection will be corrupt!";
+      connection_->OnConnectionError(ConnectionError::kSendError);
+      return false;
+    }
+
+    chunks_.front().erase(0, payload_length);
+
+    if (chunks_.front().empty()) {
+      chunks_.pop();
+    }
+
+    if (chunks_.empty() && send_completion_callback_) {
+      std::move(send_completion_callback_).Run();
+    }
+
+    return true;
+  }
+
  private:
   std::vector<std::unique_ptr<HttpResponse>> responses_;
   StreamId stream_id_;
   const raw_ptr<Http2Connection> connection_;
-  raw_ptr<DataFrameSource> data_frame_;
+  std::queue<std::string> chunks_;
+  bool last_frame_ = false;
+  base::OnceClosure send_completion_callback_;
   base::WeakPtrFactory<ResponseDelegate> weak_factory_{this};
 };
 
@@ -250,15 +230,12 @@ bool Http2Connection::HandleData(int rv) {
   if (connection_listener_)
     connection_listener_->ReadFromSocket(*socket_, rv);
 
-  char* remaining_buffer = read_buf_->data();
-  int bytes_remaining = rv;
-  while (bytes_remaining > 0) {
-    int result = adapter_->ProcessBytes(
-        absl::string_view(remaining_buffer, bytes_remaining));
+  std::string_view remaining_buffer(read_buf_->data(), rv);
+  while (!remaining_buffer.empty()) {
+    int result = adapter_->ProcessBytes(remaining_buffer);
     if (result < 0)
       return false;
-    remaining_buffer += result;
-    bytes_remaining -= result;
+    remaining_buffer = remaining_buffer.substr(result);
   }
 
   // Any frames and data sources will be queued up and sent all at once below
@@ -271,7 +248,8 @@ bool Http2Connection::HandleData(int rv) {
     ResponseDelegate* delegate_ptr = delegate.get();
     response_map_[stream_id] = std::move(delegate);
     embedded_test_server_->HandleRequest(delegate_ptr->GetWeakPtr(),
-                                         std::move(request_map_[stream_id]));
+                                         std::move(request_map_[stream_id]),
+                                         socket_.get());
     request_map_.erase(stream_id);
   }
   adapter_->Send();
@@ -291,7 +269,7 @@ base::WeakPtr<HttpConnection> Http2Connection::GetWeakPtr() {
   return weak_factory_.GetWeakPtr();
 }
 
-int64_t Http2Connection::OnReadyToSend(absl::string_view serialized) {
+int64_t Http2Connection::OnReadyToSend(std::string_view serialized) {
   if (write_buf_)
     return kSendBlocked;
 
@@ -306,6 +284,26 @@ bool Http2Connection::OnCloseStream(StreamId stream_id,
                                     http2::adapter::Http2ErrorCode error_code) {
   response_map_.erase(stream_id);
   return true;
+}
+
+Http2VisitorInterface::DataFrameHeaderInfo
+Http2Connection::OnReadyToSendDataForStream(StreamId stream_id,
+                                            size_t max_length) {
+  auto it = response_map_.find(stream_id);
+  if (it == response_map_.end()) {
+    return {kSendError, false, false};
+  }
+  return it->second->OnReadyToSendDataForStream(stream_id, max_length);
+}
+
+bool Http2Connection::SendDataFrame(StreamId stream_id,
+                                    absl::string_view frame_header,
+                                    size_t payload_bytes) {
+  auto it = response_map_.find(stream_id);
+  if (it == response_map_.end()) {
+    return false;
+  }
+  return it->second->SendDataFrame(stream_id, frame_header, payload_bytes);
 }
 
 void Http2Connection::SendInternal() {
@@ -347,7 +345,7 @@ void Http2Connection::OnSendInternalDone(int rv) {
       adapter_->ResumeStream(stream_id);
 
     if (adapter_->want_write()) {
-      base::SequencedTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
           FROM_HERE, base::BindOnce(&Http2Connection::SendIfNotProcessing,
                                     weak_factory_.GetWeakPtr()));
     }
@@ -364,21 +362,21 @@ void Http2Connection::SendIfNotProcessing() {
 
 http2::adapter::Http2VisitorInterface::OnHeaderResult
 Http2Connection::OnHeaderForStream(http2::adapter::Http2StreamId stream_id,
-                                   absl::string_view key,
-                                   absl::string_view value) {
-  header_map_[stream_id][key.data()] = value.data();
-  return http2::adapter::Http2VisitorInterface::HEADER_OK;
+                                   std::string_view key,
+                                   std::string_view value) {
+  header_map_[stream_id][std::string(key)] = std::string(value);
+  return http2::adapter::Http2VisitorInterface::OnHeaderResult::HEADER_OK;
 }
 
 bool Http2Connection::OnEndHeadersForStream(
     http2::adapter::Http2StreamId stream_id) {
   HttpRequest::HeaderMap header_map = header_map_[stream_id];
   auto request = std::make_unique<HttpRequest>();
+  // TODO(crbug.com/40242862): Handle proxy cases.
   request->relative_url = header_map[":path"];
   request->base_url = GURL(header_map[":authority"]);
   request->method_string = header_map[":method"];
-  request->method = HttpRequestParser::GetMethodType(
-      base::ToLowerASCII(request->method_string));
+  request->method = HttpRequestParser::GetMethodType(request->method_string);
   request->headers = header_map;
 
   request->has_content = false;
@@ -391,8 +389,9 @@ bool Http2Connection::OnEndHeadersForStream(
   return true;
 }
 
-void Http2Connection::OnEndStream(http2::adapter::Http2StreamId stream_id) {
+bool Http2Connection::OnEndStream(http2::adapter::Http2StreamId stream_id) {
   ready_streams_.push(stream_id);
+  return true;
 }
 
 bool Http2Connection::OnFrameHeader(StreamId /*stream_id*/,
@@ -412,18 +411,28 @@ bool Http2Connection::OnBeginDataForStream(StreamId stream_id,
 }
 
 bool Http2Connection::OnDataForStream(StreamId stream_id,
-                                      absl::string_view data) {
+                                      std::string_view data) {
+  auto request = request_map_.find(stream_id);
+  if (request == request_map_.end()) {
+    // We should not receive data before receiving headers.
+    return false;
+  }
+
+  request->second->has_content = true;
+  request->second->content.append(data);
+  adapter_->MarkDataConsumedForStream(stream_id, data.size());
   return true;
 }
 
 bool Http2Connection::OnDataPaddingLength(StreamId stream_id,
                                           size_t padding_length) {
+  adapter_->MarkDataConsumedForStream(stream_id, padding_length);
   return true;
 }
 
 bool Http2Connection::OnGoAway(StreamId last_accepted_stream_id,
                                http2::adapter::Http2ErrorCode error_code,
-                               absl::string_view opaque_data) {
+                               std::string_view opaque_data) {
   return true;
 }
 
@@ -448,7 +457,7 @@ bool Http2Connection::OnInvalidFrame(StreamId stream_id,
 }
 
 bool Http2Connection::OnMetadataForStream(StreamId stream_id,
-                                          absl::string_view metadata) {
+                                          std::string_view metadata) {
   return true;
 }
 

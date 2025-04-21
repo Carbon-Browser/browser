@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,13 +10,13 @@
 
 #include "base/memory/raw_ptr.h"
 #include "ui/base/models/menu_model.h"
+#include "ui/base/mojom/menu_source_type.mojom-forward.h"
 #include "ui/views/controls/combobox/combobox.h"
 #include "ui/views/controls/menu/menu_runner.h"
 #include "ui/views/controls/menu/menu_runner_handler.h"
 #include "ui/views/test/menu_runner_test_api.h"
 
-namespace views {
-namespace test {
+namespace views::test {
 namespace {
 
 // An dummy implementation of MenuRunnerHandler to check if the dropdown menu is
@@ -33,7 +33,7 @@ class TestMenuRunnerHandler : public MenuRunnerHandler {
                  MenuButtonController* button_controller,
                  const gfx::Rect& bounds,
                  MenuAnchorPosition anchor,
-                 ui::MenuSourceType source_type,
+                 ui::mojom::MenuSourceType source_type,
                  int32_t types) override {
     *show_counter_ += 1;
   }
@@ -64,5 +64,8 @@ ui::MenuModel* ComboboxTestApi::menu_model() {
   return combobox_->menu_model_.get();
 }
 
-}  // namespace test
-}  // namespace views
+void ComboboxTestApi::CloseMenu() {
+  return combobox_->OnMenuClosed(views::Button::ButtonState::STATE_NORMAL);
+}
+
+}  // namespace views::test

@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <string_view>
 
 #include "base/notreached.h"
 #include "base/threading/platform_thread.h"
@@ -39,9 +40,10 @@ PpapiBlinkPlatformImpl::PpapiBlinkPlatformImpl() {
   mojo::PendingRemote<font_service::mojom::FontService> font_service;
   ChildThread::Get()->BindHostReceiver(
       font_service.InitWithNewPipeAndPassReceiver());
-  font_loader_ = sk_make_sp<font_service::FontLoader>(std::move(font_service));
-  SkFontConfigInterface::SetGlobal(font_loader_);
-  sandbox_support_ = std::make_unique<WebSandboxSupportLinux>(font_loader_);
+  sk_sp<font_service::FontLoader> font_loader =
+      sk_make_sp<font_service::FontLoader>(std::move(font_service));
+  SkFontConfigInterface::SetGlobal(font_loader);
+  sandbox_support_ = std::make_unique<WebSandboxSupportLinux>(font_loader);
 #elif BUILDFLAG(IS_MAC)
   sandbox_support_ = std::make_unique<WebSandboxSupportMac>();
 #endif
@@ -60,15 +62,22 @@ blink::WebSandboxSupport* PpapiBlinkPlatformImpl::GetSandboxSupport() {
 #endif
 }
 
-uint64_t PpapiBlinkPlatformImpl::VisitedLinkHash(const char* canonical_url,
-                                                 size_t length) {
+uint64_t PpapiBlinkPlatformImpl::VisitedLinkHash(
+    std::string_view canonical_url) {
   NOTREACHED();
-  return 0;
 }
 
 bool PpapiBlinkPlatformImpl::IsLinkVisited(uint64_t link_hash) {
   NOTREACHED();
-  return false;
+}
+
+// PPAPI does not support partitioned :visited links. Since per-origin
+// salts are only used in the partitioned :visited link hashtable, PPAPI clients
+// do not need to take any action if a per-origin salt is received.
+void PpapiBlinkPlatformImpl::AddOrUpdateVisitedLinkSalt(
+    const url::Origin& origin,
+    uint64_t salt) {
+  NOTREACHED();
 }
 
 blink::WebString PpapiBlinkPlatformImpl::DefaultLocale() {

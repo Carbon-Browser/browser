@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,36 +8,29 @@
 #include <memory>
 
 #include "components/viz/service/viz_service_export.h"
-#include "gpu/ipc/display_compositor_memory_and_task_controller_on_gpu.h"
-#include "gpu/ipc/gpu_task_scheduler_helper.h"
+#include "gpu/command_buffer/service/display_compositor_memory_and_task_controller_on_gpu.h"
+#include "gpu/command_buffer/service/gpu_task_scheduler_helper.h"
 
 namespace base {
 class WaitableEvent;
 }
 
 namespace gpu {
-class ImageFactory;
 class SharedImageInterface;
 class SharedImageInterfaceInProcess;
-}
+}  // namespace gpu
 
 namespace viz {
 class SkiaOutputSurfaceDependency;
 
-// This class holds onwership of task posting sequence to the gpu thread and
+// This class holds ownership of task posting sequence to the gpu thread and
 // memory tracking for the display compositor. This class has a 1:1 relationship
 // to the display compositor class. This class is only used for gpu compositing.
-// TODO(weiliangc): After GLRenderer is removed, this should merge with
-// SkiaOutputSurfaceDependency.
+// TODO(weiliangc): This should merge with SkiaOutputSurfaceDependency.
 class VIZ_SERVICE_EXPORT DisplayCompositorMemoryAndTaskController {
  public:
-  // For SkiaRenderer.
   explicit DisplayCompositorMemoryAndTaskController(
       std::unique_ptr<SkiaOutputSurfaceDependency> skia_dependency);
-  // For InProcessCommandBuffer.
-  DisplayCompositorMemoryAndTaskController(
-      gpu::CommandBufferTaskExecutor* task_executor,
-      gpu::ImageFactory* image_factory);
   DisplayCompositorMemoryAndTaskController(
       const DisplayCompositorMemoryAndTaskController&) = delete;
   DisplayCompositorMemoryAndTaskController& operator=(
@@ -58,11 +51,8 @@ class VIZ_SERVICE_EXPORT DisplayCompositorMemoryAndTaskController {
   gpu::SharedImageInterface* shared_image_interface();
 
  private:
-  void InitializeOnGpuSkia(SkiaOutputSurfaceDependency* skia_dependency,
-                           base::WaitableEvent* event);
-  void InitializeOnGpuGL(gpu::CommandBufferTaskExecutor* task_executor,
-                         gpu::ImageFactory* image_factory,
-                         base::WaitableEvent* event);
+  void InitializeOnGpu(SkiaOutputSurfaceDependency* skia_dependency,
+                       base::WaitableEvent* event);
   void DestroyOnGpu(base::WaitableEvent* event);
 
   // Accessed on viz compositor thread.
@@ -75,9 +65,7 @@ class VIZ_SERVICE_EXPORT DisplayCompositorMemoryAndTaskController {
       controller_on_gpu_;
 
   // Accessed on the compositor thread.
-  // TODO(weiliangc): Move the GLRenderer's SharedImageInterface ownership here
-  // as well.
-  std::unique_ptr<gpu::SharedImageInterfaceInProcess> shared_image_interface_;
+  scoped_refptr<gpu::SharedImageInterfaceInProcess> shared_image_interface_;
 };
 
 }  // namespace viz

@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -65,12 +65,11 @@ class AssistantOverlayTest : public AshTestBase,
 
     // Enable Assistant
     Shell::Get()->session_controller()->GetPrimaryUserPrefService()->SetBoolean(
-        chromeos::assistant::prefs::kAssistantEnabled, true);
+        assistant::prefs::kAssistantEnabled, true);
     AssistantState* assistant_state = AssistantState::Get();
     assistant_state->NotifyFeatureAllowed(
-        chromeos::assistant::AssistantAllowedState::ALLOWED);
-    assistant_state->NotifyStatusChanged(
-        chromeos::assistant::AssistantStatus::READY);
+        assistant::AssistantAllowedState::ALLOWED);
+    assistant_state->NotifyStatusChanged(assistant::AssistantStatus::READY);
 
     const TestVariant test_variant = GetParam();
     switch (test_variant) {
@@ -154,11 +153,12 @@ INSTANTIATE_TEST_SUITE_P(All,
 // Make sure that it's not clipped by an ancestor layer.
 //
 // For long press, events and expectations are follows:
-// - ET_GESTURE_TAP_DOWN: Ripple animation starts
-// - ET_GESTURE_LONG_PRESS: Burst animation starts (clip rect will be restored
+// - EventType::kGestureTapDown: Ripple animation starts
+// - EventType::kGestureLongPress: Burst animation starts (clip rect will be
+// restored
 //   after the animation)
-// - ET_GESTURE_TAP_CANCEL: Nothing should happen
-// - ET_GESTURE_LONG_TAP: Nothing should happen
+// - EventType::kGestureTapCancel: Nothing should happen
+// - EventType::kGestureLongTap: Nothing should happen
 TEST_P(AssistantOverlayTest, BurstAnimationWithLongPress) {
   const views::View* assistant_overlay = GetAssistantOverlay();
   ASSERT_THAT(assistant_overlay, testing::NotNull());
@@ -168,7 +168,7 @@ TEST_P(AssistantOverlayTest, BurstAnimationWithLongPress) {
   std::vector<gfx::Rect> clip_rect_snapshot_before =
       TakeClipRectSnapshot(assistant_overlay_layer);
 
-  SendGestureEventToHomeButton(ui::ET_GESTURE_TAP_DOWN);
+  SendGestureEventToHomeButton(ui::EventType::kGestureTapDown);
 
   // HomeButtonController delays assistant animation for
   // kAssistantAnimationDelay.
@@ -181,16 +181,16 @@ TEST_P(AssistantOverlayTest, BurstAnimationWithLongPress) {
     EXPECT_TRUE(clip_rect.IsEmpty());
   }
 
-  // AssistantOverlay starts burst animation with ET_GESTURE_LONG_PRESS.
-  SendGestureEventToHomeButton(ui::ET_GESTURE_LONG_PRESS);
+  // AssistantOverlay starts burst animation with EventType::kGestureLongPress.
+  SendGestureEventToHomeButton(ui::EventType::kGestureLongPress);
 
   // Burst animation ends immediately in this test case. Confirm that clip rect
   // is restored now.
   EXPECT_EQ(TakeClipRectSnapshot(assistant_overlay_layer),
             clip_rect_snapshot_before);
 
-  SendGestureEventToHomeButton(ui::ET_GESTURE_TAP_CANCEL);
-  SendGestureEventToHomeButton(ui::ET_GESTURE_LONG_TAP);
+  SendGestureEventToHomeButton(ui::EventType::kGestureTapCancel);
+  SendGestureEventToHomeButton(ui::EventType::kGestureLongTap);
   // Confirm that nothing should happen with the following TAP_CANCEL and
   // LONG_TAP events.
   EXPECT_EQ(TakeClipRectSnapshot(assistant_overlay_layer),
@@ -208,7 +208,7 @@ TEST_P(AssistantOverlayTest, RippleAnimationWithTap) {
   std::vector<gfx::Rect> clip_rect_snapshot_before =
       TakeClipRectSnapshot(assistant_overlay_layer);
 
-  SendGestureEventToHomeButton(ui::ET_GESTURE_TAP_DOWN);
+  SendGestureEventToHomeButton(ui::EventType::kGestureTapDown);
 
   // HomeButtonController delays assistant animation for
   // kAssistantAnimationDelay.
@@ -221,7 +221,7 @@ TEST_P(AssistantOverlayTest, RippleAnimationWithTap) {
     EXPECT_TRUE(clip_rect.IsEmpty());
   }
 
-  SendGestureEventToHomeButton(ui::ET_GESTURE_TAP);
+  SendGestureEventToHomeButton(ui::EventType::kGestureTap);
 
   // The above tap will de-activate test window and hides back button.
   // Re-activate the window to show a back button. Clip rect can be different if

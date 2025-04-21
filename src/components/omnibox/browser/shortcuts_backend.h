@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,6 +14,7 @@
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
+#include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
 #include "base/synchronization/lock.h"
@@ -35,9 +36,7 @@ void PopulateShortcutsBackendWithTestData(
     TestShortcutData* db,
     size_t db_size);
 
-namespace history {
 class ShortcutsDatabase;
-}  // namespace history
 
 // This class manages the shortcut provider backend - access to database on the
 // db thread, etc.
@@ -46,6 +45,23 @@ class ShortcutsBackend : public RefcountedKeyedService,
  public:
   typedef std::multimap<std::u16string, const ShortcutsDatabase::Shortcut>
       ShortcutMap;
+
+  // Get either `contents`, `description`, or `description_class_for_shortcuts`
+  // (or their classifications) depending on the method called,
+  // `swap_contents_and_description`, and whether
+  // `description_class_for_shortcuts` is empty.
+  // TODO(manukh): Simplify these once `swap_contents_and_description` is
+  //   removed.
+  static const std::u16string& GetDescription(const AutocompleteMatch& match);
+  static const std::u16string& GetSwappedDescription(
+      const AutocompleteMatch& match);
+  static const ACMatchClassifications& GetDescriptionClass(
+      const AutocompleteMatch& match);
+  static const std::u16string& GetContents(const AutocompleteMatch& match);
+  static const std::u16string& GetSwappedContents(
+      const AutocompleteMatch& match);
+  static const ACMatchClassifications& GetContentsClass(
+      const AutocompleteMatch& match);
 
   // For unit testing, set |suppress_db| to true to prevent creation
   // of the database, in which case all operations are performed in memory only.
@@ -68,7 +84,7 @@ class ShortcutsBackend : public RefcountedKeyedService,
     virtual void OnShortcutsChanged() {}
 
    protected:
-    virtual ~ShortcutsBackendObserver() {}
+    virtual ~ShortcutsBackendObserver() = default;
   };
 
   // Asynchronously initializes the ShortcutsBackend, it is safe to call
@@ -101,8 +117,6 @@ class ShortcutsBackend : public RefcountedKeyedService,
       scoped_refptr<ShortcutsBackend> backend,
       TestShortcutData* db,
       size_t db_size);
-  FRIEND_TEST_ALL_PREFIXES(ShortcutsBackendTest, EntitySuggestionTest);
-  FRIEND_TEST_ALL_PREFIXES(ShortcutsBackendTest, MatchCoreDescriptionTest);
 
   enum CurrentState {
     NOT_INITIALIZED,  // Backend created but not initialized.
@@ -124,8 +138,8 @@ class ShortcutsBackend : public RefcountedKeyedService,
   void ShutdownOnUIThread() override;
 
   // history::HistoryServiceObserver:
-  void OnURLsDeleted(history::HistoryService* history_service,
-                     const history::DeletionInfo& deletion_info) override;
+  void OnHistoryDeletions(history::HistoryService* history_service,
+                          const history::DeletionInfo& deletion_info) override;
 
   // Internal initialization of the back-end. Posted by Init() to the DB thread.
   // On completion posts InitCompleted() back to UI thread.
@@ -133,6 +147,11 @@ class ShortcutsBackend : public RefcountedKeyedService,
 
   // Finishes initialization on UI thread, notifies all observers.
   void InitCompleted();
+
+  // Computes and records various metrics for the database. Should only be
+  // called once and only upon successful Init and before deleting old
+  // shortcuts.
+  void ComputeDatabaseMetrics();
 
   // Adds the Shortcut to the database.
   bool AddShortcut(const ShortcutsDatabase::Shortcut& shortcut);
@@ -150,6 +169,18 @@ class ShortcutsBackend : public RefcountedKeyedService,
 
   // Deletes all of the shortcuts.
   bool DeleteAllShortcuts();
+
+  // Deletes all shortcuts whose `last_access_time` is older than the threshold
+  // defined by HistoryBackend.
+  //
+  // This is called once on initialization after a short delay in order to
+  // remove any shortcuts that have not been removed by calls to
+  // `OnHistoryDeletions()`. That method is called from `HistoryService`, which
+  // can be initialized and running before `ShortcutsBackend` is created since
+  // the former is created at browser startup but the latter is not created
+  // until a browser window has been created, leading to the initialization of
+  // the autocomplete system.
+  bool DeleteOldShortcuts();
 
   raw_ptr<TemplateURLService> template_url_service_;
   std::unique_ptr<SearchTermsData> search_terms_data_;
@@ -177,6 +208,8 @@ class ShortcutsBackend : public RefcountedKeyedService,
 
   // For some unit-test only.
   bool no_db_access_;
+
+  base::WeakPtrFactory<ShortcutsBackend> weak_factory_{this};
 };
 
 #endif  // COMPONENTS_OMNIBOX_BROWSER_SHORTCUTS_BACKEND_H_

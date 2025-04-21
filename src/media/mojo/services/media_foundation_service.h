@@ -1,12 +1,13 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef MEDIA_MOJO_SERVICES_MEDIA_FOUNDATION_SERVICE_H_
 #define MEDIA_MOJO_SERVICES_MEDIA_FOUNDATION_SERVICE_H_
 
-#include "base/callback.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback.h"
+#include "gpu/config/gpu_info.h"
 #include "media/mojo/mojom/frame_interface_factory.mojom.h"
 #include "media/mojo/mojom/interface_factory.mojom.h"
 #include "media/mojo/mojom/media_foundation_service.mojom.h"

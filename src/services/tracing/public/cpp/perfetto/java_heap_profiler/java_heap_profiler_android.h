@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,7 +22,6 @@ class COMPONENT_EXPORT(TRACING_CPP) JavaHeapProfiler
 
   // PerfettoTracedProcess::DataSourceBase implementation:
   void StartTracingImpl(
-      PerfettoProducer* producer,
       const perfetto::DataSourceConfig& data_source_config) override;
   void StopTracingImpl(base::OnceClosure stop_complete_callback) override;
   void Flush(base::RepeatingClosure flush_complete_callback) override;

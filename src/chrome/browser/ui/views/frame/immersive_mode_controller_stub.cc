@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,7 @@
 
 #include "base/notreached.h"
 
-void ImmersiveModeControllerStub::Init(BrowserView* browser_view) {
-}
+void ImmersiveModeControllerStub::Init(BrowserView* browser_view) {}
 
 void ImmersiveModeControllerStub::SetEnabled(bool enabled) {
   NOTREACHED();
@@ -36,8 +35,7 @@ ImmersiveModeControllerStub::GetRevealedLock(AnimateReveal animate_reveal) {
 }
 
 void ImmersiveModeControllerStub::OnFindBarVisibleBoundsChanged(
-    const gfx::Rect& new_visible_bounds_in_screen) {
-}
+    const gfx::Rect& new_visible_bounds_in_screen) {}
 
 bool ImmersiveModeControllerStub::ShouldStayImmersiveAfterExitingFullscreen() {
   return false;
@@ -46,3 +44,14 @@ bool ImmersiveModeControllerStub::ShouldStayImmersiveAfterExitingFullscreen() {
 void ImmersiveModeControllerStub::OnWidgetActivationChanged(
     views::Widget* widget,
     bool active) {}
+
+int ImmersiveModeControllerStub::GetMinimumContentOffset() const {
+  return 0;
+}
+
+int ImmersiveModeControllerStub::GetExtraInfobarOffset() const {
+  return 0;
+}
+
+void ImmersiveModeControllerStub::OnContentFullscreenChanged(
+    bool is_content_fullscreen) {}

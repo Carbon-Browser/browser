@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -16,7 +16,7 @@ class UpdateServiceInternal;
 
 scoped_refptr<UpdateService> CreateUpdateServiceProxy(
     UpdaterScope updater_scope,
-    const base::TimeDelta& get_version_timeout = base::TimeDelta::Max());
+    base::TimeDelta get_version_timeout = base::TimeDelta::Max());
 
 scoped_refptr<UpdateServiceInternal> CreateUpdateServiceInternalProxy(
     UpdaterScope updater_scope);

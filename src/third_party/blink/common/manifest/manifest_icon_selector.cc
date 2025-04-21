@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -48,8 +48,7 @@ BLINK_COMMON_EXPORT GURL ManifestIconSelector::FindBestMatchingIcon(
       std::string type = base::UTF16ToUTF8(icon.type);
       if (!(blink::IsSupportedImageMimeType(base::UTF16ToUTF8(icon.type)) ||
             // The following condition is intended to support image/svg+xml:
-            (base::StartsWith(base::UTF16ToUTF8(icon.type), "image/",
-                              base::CompareCase::SENSITIVE) &&
+            (base::UTF16ToUTF8(icon.type).starts_with("image/") &&
              blink::IsSupportedNonImageMimeType(
                  base::UTF16ToUTF8(icon.type))))) {
         continue;

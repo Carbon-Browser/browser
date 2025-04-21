@@ -1,19 +1,18 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/language/accept_languages_service_factory.h"
 
-#include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
-#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/language/core/browser/accept_languages_service.h"
 #include "components/language/core/browser/pref_names.h"
 #include "components/prefs/pref_service.h"
 
 // static
 AcceptLanguagesServiceFactory* AcceptLanguagesServiceFactory::GetInstance() {
-  return base::Singleton<AcceptLanguagesServiceFactory>::get();
+  static base::NoDestructor<AcceptLanguagesServiceFactory> instance;
+  return instance.get();
 }
 
 // static
@@ -25,20 +24,24 @@ AcceptLanguagesServiceFactory::GetForBrowserContext(
 }
 
 AcceptLanguagesServiceFactory::AcceptLanguagesServiceFactory()
-    : BrowserContextKeyedServiceFactory(
+    : ProfileKeyedServiceFactory(
           "AcceptLanguagesService",
-          BrowserContextDependencyManager::GetInstance()) {}
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/40257657): Check if this service is needed in
+              // Guest mode.
+              .WithGuest(ProfileSelection::kOwnInstance)
+              // TODO(crbug.com/41488885): Check if this service is needed for
+              // Ash Internals.
+              .WithAshInternals(ProfileSelection::kOwnInstance)
+              .Build()) {}
 
-AcceptLanguagesServiceFactory::~AcceptLanguagesServiceFactory() {}
+AcceptLanguagesServiceFactory::~AcceptLanguagesServiceFactory() = default;
 
-KeyedService* AcceptLanguagesServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+AcceptLanguagesServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* browser_context) const {
   Profile* profile = Profile::FromBrowserContext(browser_context);
-  return new language::AcceptLanguagesService(
+  return std::make_unique<language::AcceptLanguagesService>(
       profile->GetPrefs(), language::prefs::kAcceptLanguages);
-}
-
-content::BrowserContext* AcceptLanguagesServiceFactory::GetBrowserContextToUse(
-    content::BrowserContext* context) const {
-  return chrome::GetBrowserContextOwnInstanceInIncognito(context);
 }

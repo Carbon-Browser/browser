@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -255,7 +255,8 @@ class CRDTP_EXPORT CBORTokenizer {
   span<uint8_t> GetString8() const;
 
   // Wire representation for STRING16 is low byte first (little endian).
-  // To be called only if ::TokenTag() == CBORTokenTag::STRING16.
+  // To be called only if ::TokenTag() == CBORTokenTag::STRING16. The result is
+  // guaranteed to have even length.
   span<uint8_t> GetString16WireRep() const;
 
   // To be called only if ::TokenTag() == CBORTokenTag::BINARY.

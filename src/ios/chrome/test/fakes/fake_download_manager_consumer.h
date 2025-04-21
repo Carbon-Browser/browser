@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #import <Foundation/Foundation.h>
 
-#import "ios/chrome/browser/ui/download/download_manager_consumer.h"
+#import "ios/chrome/browser/download/ui_bundled/download_manager_consumer.h"
 
 // Consumer for the download manager mediator to be used in tests.
 @interface FakeDownloadManagerConsumer : NSObject<DownloadManagerConsumer>

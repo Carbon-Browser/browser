@@ -1,20 +1,20 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef COMPONENTS_SERVICES_STORAGE_DOM_STORAGE_SESSION_STORAGE_AREA_IMPL_H_
 #define COMPONENTS_SERVICES_STORAGE_DOM_STORAGE_SESSION_STORAGE_AREA_IMPL_H_
 
+#include <optional>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "components/services/storage/dom_storage/session_storage_metadata.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote_set.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/storage_key/storage_key.h"
 #include "third_party/blink/public/mojom/dom_storage/storage_area.mojom.h"
 
@@ -80,11 +80,11 @@ class SessionStorageAreaImpl : public blink::mojom::StorageArea {
       mojo::PendingRemote<blink::mojom::StorageAreaObserver> observer) override;
   void Put(const std::vector<uint8_t>& key,
            const std::vector<uint8_t>& value,
-           const absl::optional<std::vector<uint8_t>>& client_old_value,
+           const std::optional<std::vector<uint8_t>>& client_old_value,
            const std::string& source,
            PutCallback callback) override;
   void Delete(const std::vector<uint8_t>& key,
-              const absl::optional<std::vector<uint8_t>>& client_old_value,
+              const std::optional<std::vector<uint8_t>>& client_old_value,
               const std::string& source,
               DeleteCallback callback) override;
   void DeleteAll(
@@ -95,6 +95,7 @@ class SessionStorageAreaImpl : public blink::mojom::StorageArea {
   void GetAll(
       mojo::PendingRemote<blink::mojom::StorageAreaObserver> new_observer,
       GetAllCallback callback) override;
+  void Checkpoint() override;
 
   void FlushForTesting();
 
@@ -112,7 +113,7 @@ class SessionStorageAreaImpl : public blink::mojom::StorageArea {
   enum class NewMapType { FORKED, EMPTY_FROM_DELETE_ALL };
 
   void CreateNewMap(NewMapType map_type,
-                    const absl::optional<std::string>& delete_all_source);
+                    const std::optional<std::string>& delete_all_source);
 
   SessionStorageMetadata::NamespaceEntry namespace_entry_;
   blink::StorageKey storage_key_;

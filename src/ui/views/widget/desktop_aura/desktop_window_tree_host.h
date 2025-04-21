@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,6 +9,8 @@
 #include <string>
 
 #include "ui/aura/window_event_dispatcher.h"
+#include "ui/base/mojom/ui_base_types.mojom-shared.h"
+#include "ui/base/mojom/window_show_state.mojom-forward.h"
 #include "ui/base/ui_base_types.h"
 #include "ui/views/views_export.h"
 #include "ui/views/widget/widget.h"
@@ -63,6 +65,8 @@ class VIEWS_EXPORT DesktopWindowTreeHost {
   virtual void OnWidgetInitDone() = 0;
 
   // Called from DesktopNativeWidgetAura::OnWindowActivated().
+  // `active`: if `DesktopNativeWidgetAura::content_window()` contains the
+  // `aura::Window` that gains active.
   virtual void OnActiveWindowChanged(bool active) = 0;
 
   // Creates and returns the Tooltip implementation to use. Return value is
@@ -95,14 +99,14 @@ class VIEWS_EXPORT DesktopWindowTreeHost {
   //
   // Implementations must deal with these two code paths. In general, this is
   // done by having the WindowTreeHost subclass override ShowImpl() to call this
-  // function: Show(ui::SHOW_STATE_NORMAL, gfx::Rect()). A subtle
+  // function: Show(ui::mojom::WindowShowState::kNormal, gfx::Rect()). A subtle
   // ramification is the implementation of this function can *not* call
   // WindowTreeHost::Show(), and the implementation of this must perform the
   // same work as WindowTreeHost::Show(). This means setting the visibility of
   // the compositor, window() and DesktopNativeWidgetAura::content_window()
   // appropriately. Some subclasses set the visibility of window() in the
   // constructor and assume it's always true.
-  virtual void Show(ui::WindowShowState show_state,
+  virtual void Show(ui::mojom::WindowShowState show_state,
                     const gfx::Rect& restore_bounds) = 0;
 
   virtual bool IsVisible() const = 0;
@@ -110,9 +114,11 @@ class VIEWS_EXPORT DesktopWindowTreeHost {
   virtual void SetSize(const gfx::Size& size) = 0;
   virtual void StackAbove(aura::Window* window) = 0;
   virtual void StackAtTop() = 0;
+  virtual bool IsStackedAbove(aura::Window* window) = 0;
   virtual void CenterWindow(const gfx::Size& size) = 0;
-  virtual void GetWindowPlacement(gfx::Rect* bounds,
-                                  ui::WindowShowState* show_state) const = 0;
+  virtual void GetWindowPlacement(
+      gfx::Rect* bounds,
+      ui::mojom::WindowShowState* show_state) const = 0;
   virtual gfx::Rect GetWindowBoundsInScreen() const = 0;
   virtual gfx::Rect GetClientAreaBoundsInScreen() const = 0;
   virtual gfx::Rect GetRestoredBounds() const = 0;
@@ -124,9 +130,12 @@ class VIEWS_EXPORT DesktopWindowTreeHost {
   // window reverts to rectangular.
   virtual void SetShape(std::unique_ptr<Widget::ShapeRects> native_shape) = 0;
 
+  virtual void SetParent(gfx::AcceleratedWidget parent) = 0;
+
   virtual void Activate() = 0;
   virtual void Deactivate() = 0;
   virtual bool IsActive() const = 0;
+  virtual void PaintAsActiveChanged();
   virtual void Maximize() = 0;
   virtual void Minimize() = 0;
   virtual void Restore() = 0;
@@ -164,26 +173,30 @@ class VIEWS_EXPORT DesktopWindowTreeHost {
   virtual bool ShouldWindowContentsBeTransparent() const = 0;
   virtual void FrameTypeChanged() = 0;
 
-  virtual void SetFullscreen(bool fullscreen) = 0;
+  // Set the fullscreen state. `target_display_id` indicates the display where
+  // the window should be shown fullscreen; display::kInvalidDisplayId indicates
+  // that no display was specified, so the current display may be used.
+  virtual void SetFullscreen(bool fullscreen, int64_t target_display_id) = 0;
+  // Returns true if the window is in fullscreen on any display.
   virtual bool IsFullscreen() const = 0;
 
   virtual void SetOpacity(float opacity) = 0;
 
-  virtual void SetAspectRatio(const gfx::SizeF& aspect_ratio) = 0;
+  // See NativeWidgetPrivate::SetAspectRatio for more information about what
+  // `excluded_margin` does.
+  virtual void SetAspectRatio(const gfx::SizeF& aspect_ratio,
+                              const gfx::Size& excluded_margin) = 0;
 
   virtual void SetWindowIcons(const gfx::ImageSkia& window_icon,
                               const gfx::ImageSkia& app_icon) = 0;
 
-  virtual void InitModalType(ui::ModalType modal_type) = 0;
+  virtual void InitModalType(ui::mojom::ModalType modal_type) = 0;
 
   virtual void FlashFrame(bool flash_frame) = 0;
 
   // Returns true if the Widget was closed but is still showing because of
   // animations.
   virtual bool IsAnimatingClosed() const = 0;
-
-  // Returns true if the Widget supports translucency.
-  virtual bool IsTranslucentWindowOpacitySupported() const = 0;
 
   // Called when the window's size constraints change.
   virtual void SizeConstraintsChanged() = 0;
@@ -203,6 +216,10 @@ class VIEWS_EXPORT DesktopWindowTreeHost {
   // Sets the bounds in screen coordinate DIPs (WindowTreeHost generally
   // operates in pixels). This function is implemented in terms of Screen.
   virtual void SetBoundsInDIP(const gfx::Rect& bounds) = 0;
+
+  // Allow or prevent screenshots of this window tree.
+  virtual void SetAllowScreenshots(bool allow) = 0;
+  virtual bool AreScreenshotsAllowed() = 0;
 
   // Updates window shape by clipping the canvas before paint starts.
   virtual void UpdateWindowShapeIfNeeded(const ui::PaintContext& context);

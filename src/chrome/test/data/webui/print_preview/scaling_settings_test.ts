@@ -1,31 +1,21 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {PrintPreviewModelElement, PrintPreviewScalingSettingsElement, ScalingType} from 'chrome://print/print_preview.js';
-import {assert} from 'chrome://resources/js/assert.m.js';
+import type {PrintPreviewModelElement, PrintPreviewScalingSettingsElement} from 'chrome://print/print_preview.js';
+import {ScalingType} from 'chrome://print/print_preview.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://webui-test/chai_assert.js';
-import {fakeDataBind} from 'chrome://webui-test/test_util.js';
+import {fakeDataBind} from 'chrome://webui-test/polymer_test_util.js';
+
 import {selectOption, triggerInputEvent} from './print_preview_test_utils.js';
 
-const scaling_settings_test = {
-  suiteName: 'ScalingSettingsTest',
-  TestNames: {
-    ShowCorrectDropdownOptions: 'show correct dropdown options',
-    SetScaling: 'set scaling',
-    InputNotDisabledOnValidityChange: 'input not disabled on validity change',
-  },
-};
-
-Object.assign(window, {scaling_settings_test: scaling_settings_test});
-
-suite(scaling_settings_test.suiteName, function() {
+suite('ScalingSettingsTest', function() {
   let scalingSection: PrintPreviewScalingSettingsElement;
 
   let model: PrintPreviewModelElement;
 
   setup(function() {
-    document.body.innerHTML = '';
+    document.body.innerHTML = window.trustedTypes!.emptyHTML;
     model = document.createElement('print-preview-model');
     document.body.appendChild(model);
 
@@ -38,8 +28,7 @@ suite(scaling_settings_test.suiteName, function() {
   });
 
   test(
-      assert(scaling_settings_test.TestNames.ShowCorrectDropdownOptions),
-      function() {
+      'ShowCorrectDropdownOptions', function() {
         // Not a PDF document -> No fit to page or fit to paper options.
         const fitToPageOption =
             scalingSection.shadowRoot!.querySelector<HTMLOptionElement>(
@@ -93,7 +82,7 @@ suite(scaling_settings_test.suiteName, function() {
          ScalingType.CUSTOM) ||
         (scalingSection.getSettingValue('scalingTypePdf') ===
          ScalingType.CUSTOM);
-    const collapse = scalingSection.shadowRoot!.querySelector('iron-collapse')!;
+    const collapse = scalingSection.shadowRoot!.querySelector('cr-collapse')!;
     assertEquals(!valid, scalingInput.invalid);
     assertEquals(scalingDisplayValue, scalingInput.value);
     assertEquals(expectedCollapseOpened, collapse.opened);
@@ -110,16 +99,18 @@ suite(scaling_settings_test.suiteName, function() {
 
   // Verifies that setting the scaling value using the dropdown and/or the
   // custom input works correctly.
-  test(assert(scaling_settings_test.TestNames.SetScaling), async () => {
+  test('SetScaling', async () => {
     // Default is 100
-    const scalingInput =
+    const scalingCrInput =
         scalingSection.shadowRoot!
-            .querySelector('print-preview-number-settings-section')!.$.userValue
-            .inputElement;
+            .querySelector(
+                'print-preview-number-settings-section')!.$.userValue;
+    const scalingInput = scalingCrInput.inputElement;
     // Make fit to page and fit to paper available.
     setDocumentPdf(true);
 
     // Default is 100
+    await scalingCrInput.updateComplete;
     validateState('100', true, ScalingType.DEFAULT, ScalingType.DEFAULT, '100');
     assertFalse(scalingSection.getSetting('scaling').setFromUi);
     assertFalse(scalingSection.getSetting('scalingType').setFromUi);
@@ -156,6 +147,7 @@ suite(scaling_settings_test.suiteName, function() {
 
     // Select fit to page. Should clear the invalid value.
     await selectOption(scalingSection, ScalingType.FIT_TO_PAGE.toString());
+    await scalingCrInput.updateComplete;
     validateState(
         '105', true, ScalingType.CUSTOM, ScalingType.FIT_TO_PAGE, '105');
 
@@ -170,6 +162,7 @@ suite(scaling_settings_test.suiteName, function() {
 
     // Pick default scaling. This should clear the error.
     await selectOption(scalingSection, ScalingType.DEFAULT.toString());
+    await scalingCrInput.updateComplete;
     validateState('105', true, ScalingType.DEFAULT, ScalingType.DEFAULT, '105');
 
     // Custom scaling should set to last valid.
@@ -187,8 +180,7 @@ suite(scaling_settings_test.suiteName, function() {
   // Verifies that the input is never disabled when the validity of the
   // setting changes.
   test(
-      assert(scaling_settings_test.TestNames.InputNotDisabledOnValidityChange),
-      async () => {
+      'InputNotDisabledOnValidityChange', async () => {
         const numberSection = scalingSection.shadowRoot!.querySelector(
             'print-preview-number-settings-section')!;
         const input = numberSection.getInput();
@@ -203,6 +195,7 @@ suite(scaling_settings_test.suiteName, function() {
         });
 
         await selectOption(scalingSection, ScalingType.CUSTOM.toString());
+        await input.updateComplete;
         await triggerInputEvent(input, '90', scalingSection);
         validateState('90', true, ScalingType.CUSTOM, ScalingType.CUSTOM, '90');
 

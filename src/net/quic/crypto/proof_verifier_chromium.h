@@ -1,4 +1,4 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -14,7 +14,7 @@
 #include "base/compiler_specific.h"
 #include "base/memory/raw_ptr.h"
 #include "net/base/net_export.h"
-#include "net/base/network_isolation_key.h"
+#include "net/base/network_anonymization_key.h"
 #include "net/cert/cert_verify_result.h"
 #include "net/cert/x509_certificate.h"
 #include "net/log/net_log_with_source.h"
@@ -22,7 +22,6 @@
 
 namespace net {
 
-class CTPolicyEnforcer;
 class CertVerifier;
 class SCTAuditingDelegate;
 class TransportSecurityState;
@@ -40,11 +39,6 @@ class NET_EXPORT_PRIVATE ProofVerifyDetailsChromium
   quic::ProofVerifyDetails* Clone() const override;
 
   CertVerifyResult cert_verify_result;
-
-  // pinning_failure_log contains a message produced by
-  // TransportSecurityState::PKPState::CheckPublicKeyPins in the event of a
-  // pinning failure. It is a (somewhat) human-readable string.
-  std::string pinning_failure_log;
 
   // True if PKP was bypassed due to a local trust anchor.
   bool pkp_bypassed = false;
@@ -70,12 +64,12 @@ struct ProofVerifyContextChromium : public quic::ProofVerifyContext {
 // is capable of handling multiple simultaneous requests.
 class NET_EXPORT_PRIVATE ProofVerifierChromium : public quic::ProofVerifier {
  public:
-  ProofVerifierChromium(CertVerifier* cert_verifier,
-                        CTPolicyEnforcer* ct_policy_enforcer,
-                        TransportSecurityState* transport_security_state,
-                        SCTAuditingDelegate* sct_auditing_delegate,
-                        std::set<std::string> hostnames_to_allow_unknown_roots,
-                        const NetworkIsolationKey& network_isolation_key);
+  ProofVerifierChromium(
+      CertVerifier* cert_verifier,
+      TransportSecurityState* transport_security_state,
+      SCTAuditingDelegate* sct_auditing_delegate,
+      std::set<std::string> hostnames_to_allow_unknown_roots,
+      const NetworkAnonymizationKey& network_anonymization_key);
 
   ProofVerifierChromium(const ProofVerifierChromium&) = delete;
   ProofVerifierChromium& operator=(const ProofVerifierChromium&) = delete;
@@ -88,7 +82,7 @@ class NET_EXPORT_PRIVATE ProofVerifierChromium : public quic::ProofVerifier {
       const uint16_t port,
       const std::string& server_config,
       quic::QuicTransportVersion quic_version,
-      absl::string_view chlo_hash,
+      std::string_view chlo_hash,
       const std::vector<std::string>& certs,
       const std::string& cert_sct,
       const std::string& signature,
@@ -119,7 +113,6 @@ class NET_EXPORT_PRIVATE ProofVerifierChromium : public quic::ProofVerifier {
 
   // Underlying verifier used to verify certificates.
   const raw_ptr<CertVerifier> cert_verifier_;
-  const raw_ptr<CTPolicyEnforcer> ct_policy_enforcer_;
 
   const raw_ptr<TransportSecurityState> transport_security_state_;
 
@@ -127,7 +120,7 @@ class NET_EXPORT_PRIVATE ProofVerifierChromium : public quic::ProofVerifier {
 
   std::set<std::string> hostnames_to_allow_unknown_roots_;
 
-  const NetworkIsolationKey network_isolation_key_;
+  const NetworkAnonymizationKey network_anonymization_key_;
 };
 
 }  // namespace net

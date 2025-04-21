@@ -1,4 +1,4 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -19,6 +19,7 @@ class MockFileSystemAccessPermissionGrant
 
   MOCK_METHOD(PermissionStatus, GetStatus, (), (override));
   MOCK_METHOD(base::FilePath, GetPath, (), (override));
+  MOCK_METHOD(std::string, GetDisplayName, (), (override));
   void RequestPermission(
       GlobalRenderFrameHostId frame_id,
       UserActivationState user_activation_state,

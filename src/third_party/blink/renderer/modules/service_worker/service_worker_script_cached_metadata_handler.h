@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -17,8 +17,7 @@ namespace blink {
 class CachedMetadata;
 class ServiceWorkerGlobalScope;
 
-class ServiceWorkerScriptCachedMetadataHandler
-    : public SingleCachedMetadataHandler {
+class ServiceWorkerScriptCachedMetadataHandler : public CachedMetadataHandler {
  public:
   ServiceWorkerScriptCachedMetadataHandler(
       ServiceWorkerGlobalScope*,
@@ -28,8 +27,7 @@ class ServiceWorkerScriptCachedMetadataHandler
   void Trace(Visitor*) const override;
   void SetCachedMetadata(CodeCacheHost*,
                          uint32_t data_type_id,
-                         const uint8_t*,
-                         size_t) override;
+                         base::span<const uint8_t>) override;
   void ClearCachedMetadata(CodeCacheHost*, ClearCacheType) override;
   scoped_refptr<CachedMetadata> GetCachedMetadata(
       uint32_t data_type_id,

@@ -1,43 +1,41 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/app/chrome_exe_main_win.h"
 
+#include <tchar.h>
 #include <windows.h>
 
 #include <malloc.h>
 #include <stddef.h>
-#include <tchar.h>
 
 #include <algorithm>
 #include <array>
 #include <string>
+#include <vector>
 
 #include "base/at_exit.h"
 #include "base/base_switches.h"
 #include "base/command_line.h"
-#include "base/containers/cxx20_erase.h"
 #include "base/debug/alias.h"
 #include "base/debug/handle_hooks_win.h"
 #include "base/feature_list.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/logging.h"
-#include "base/path_service.h"
 #include "base/process/memory.h"
 #include "base/process/process.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/time/time.h"
 #include "base/win/current_module.h"
-#include "base/win/registry.h"
 #include "base/win/win_util.h"
 #include "base/win/windows_version.h"
 #include "build/build_config.h"
 #include "chrome/app/delay_load_failure_hook_win.h"
+#include "chrome/app/exit_code_watcher_win.h"
 #include "chrome/app/main_dll_loader_win.h"
 #include "chrome/app/packed_resources_integrity.h"
 #include "chrome/browser/policy/policy_path_parser.h"
@@ -48,7 +46,6 @@
 #include "chrome/install_static/initialize_from_primary_module.h"
 #include "chrome/install_static/install_util.h"
 #include "chrome/install_static/user_data_dir.h"
-#include "components/browser_watcher/exit_code_watcher_win.h"
 #include "components/crash/core/app/crash_switches.h"
 #include "components/crash/core/app/crashpad.h"
 #include "components/crash/core/app/fallback_crash_handling_win.h"
@@ -109,68 +106,34 @@ bool AttemptFastNotify(const base::CommandLine& command_line) {
     return false;
   policy::path_parser::CheckUserDataDirPolicy(&user_data_dir);
 
-  HWND chrome = chrome::FindRunningChromeWindow(user_data_dir);
+  HWND chrome = FindRunningChromeWindow(user_data_dir);
   if (!chrome)
     return false;
-  return chrome::AttemptToNotifyRunningChrome(chrome) == chrome::NOTIFY_SUCCESS;
+  return AttemptToNotifyRunningChrome(chrome) ==
+         NotifyChromeResult::NOTIFY_SUCCESS;
 }
 
-// Returns true if |command_line| contains a /prefetch:# argument where # is in
-// [1, 8].
+// Returns true if the child process |command_line| contains a /prefetch:#
+// argument where # is in [1, 8] prior to Win11 and [1,16] for it and later.
+// The intent of the function is to ensure that all child processes have a
+// /prefetch:N cmd line arg in the required range.
+// No child process shall have /prefetch:0 or it will interefere with the main
+// browser process prefetch. This includes things like /prefetch:simians where
+// simians will evalate to 0. Absence of a /prefetch:N argument is the same as
+// /prefetch:0 and is also excluded.
+// The function assumes only one /prefetch:N argument for child processes.
 bool HasValidWindowsPrefetchArgument(const base::CommandLine& command_line) {
-  const wchar_t kPrefetchArgumentPrefix[] = L"/prefetch:";
+  static constexpr std::wstring_view kPrefetchArgumentPrefix(L"/prefetch:");
 
   for (const auto& arg : command_line.argv()) {
-    if (arg.size() == std::size(kPrefetchArgumentPrefix) &&
-        base::StartsWith(arg, kPrefetchArgumentPrefix,
-                         base::CompareCase::SENSITIVE)) {
-      return arg[std::size(kPrefetchArgumentPrefix) - 1] >= L'1' &&
-             arg[std::size(kPrefetchArgumentPrefix) - 1] <= L'8';
+    if (!base::StartsWith(arg, kPrefetchArgumentPrefix)) {
+      continue;  // Ignore arguments that don't start with "/prefetch:".
     }
-  }
-  return false;
-}
-
-// Some users are getting stuck in compatibility mode. Try to help them escape.
-// See http://crbug.com/581499. Returns true if a compatibility mode entry was
-// removed.
-bool RemoveAppCompatFlagsEntry() {
-  base::FilePath current_exe;
-  if (!base::PathService::Get(base::FILE_EXE, &current_exe))
-    return false;
-  if (!current_exe.IsAbsolute())
-    return false;
-  base::win::RegKey key;
-  if (key.Open(HKEY_CURRENT_USER,
-               L"Software\\Microsoft\\Windows "
-               L"NT\\CurrentVersion\\AppCompatFlags\\Layers",
-               KEY_READ | KEY_WRITE) == ERROR_SUCCESS) {
-    std::wstring layers;
-    if (key.ReadValue(current_exe.value().c_str(), &layers) == ERROR_SUCCESS) {
-      std::vector<std::wstring> tokens = base::SplitString(
-          layers, L" ", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
-      size_t initial_size = tokens.size();
-      static const wchar_t* const kCompatModeTokens[] = {
-          L"WIN95",       L"WIN98",       L"WIN4SP5",  L"WIN2000",  L"WINXPSP2",
-          L"WINXPSP3",    L"VISTARTM",    L"VISTASP1", L"VISTASP2", L"WIN7RTM",
-          L"WINSRV03SP1", L"WINSRV08SP1", L"WIN8RTM",
-      };
-      for (const wchar_t* compat_mode_token : kCompatModeTokens) {
-        base::Erase(tokens, compat_mode_token);
-      }
-      LONG result;
-      if (tokens.empty()) {
-        result = key.DeleteValue(current_exe.value().c_str());
-      } else {
-        std::wstring without_compat_mode_tokens =
-            base::JoinString(tokens, L" ");
-        result = key.WriteValue(current_exe.value().c_str(),
-                                without_compat_mode_tokens.c_str());
-      }
-
-      // Return if we changed anything so that we can restart.
-      return tokens.size() != initial_size && result == ERROR_SUCCESS;
-    }
+    auto value = std::wstring_view(arg).substr(kPrefetchArgumentPrefix.size());
+    int profile = 0;
+    return base::StringToInt(value, &profile) && profile >= 1 &&
+           profile <=
+               (base::win::GetVersion() < base::win::Version::WIN11 ? 8 : 16);
   }
   return false;
 }
@@ -293,6 +256,7 @@ int main() {
   // Done here to ensure that OOMs that happen early in process initialization
   // are correctly signaled to the OS.
   base::EnableTerminationOnOutOfMemory();
+  logging::RegisterAbslAbortHook();
 
   // Initialize the CommandLine singleton from the environment.
   base::CommandLine::Init(0, nullptr);
@@ -303,10 +267,10 @@ int main() {
       command_line->GetSwitchValueASCII(switches::kProcessType);
 
 #if !defined(COMPONENT_BUILD) && DCHECK_IS_ON()
-  // In non-component mode, chrome.exe contains a separate instance of
-  // base::FeatureList. Prevent accidental use of this here by forbidding use of
-  // the one that's linked with chrome.exe.
-  base::FeatureList::ForbidUseForCurrentModule();
+  // In non-component mode, chrome.exe contains its own base::FeatureList
+  // instance pointer, which remains nullptr. Attempts to access feature state
+  // from chrome.exe should fail, instead of silently returning a default state.
+  base::FeatureList::FailOnFeatureAccessWithoutFeatureList();
 
   // Patch the main EXE on non-component builds when DCHECKs are enabled.
   // This allows detection of third party code that might attempt to meddle with
@@ -315,7 +279,7 @@ int main() {
   // emplaced.
   // Note: The DLL is patched separately, in chrome/app/chrome_main.cc.
   base::debug::HandleHooks::AddIATPatch(CURRENT_MODULE());
-#endif  // !defined(COMPONENT_BUILD) && !DCHECK_IS_ON()
+#endif  // !defined(COMPONENT_BUILD) && DCHECK_IS_ON()
 
   // Confirm that an explicit prefetch profile is used for all process types
   // except for the browser process. Any new process type will have to assign
@@ -326,7 +290,7 @@ int main() {
 
   if (process_type == crash_reporter::switches::kCrashpadHandler) {
     // Check if we should monitor the exit code of this process
-    std::unique_ptr<browser_watcher::ExitCodeWatcher> exit_code_watcher;
+    std::unique_ptr<ExitCodeWatcher> exit_code_watcher;
 
     crash_reporter::SetupFallbackCrashHandling(*command_line);
     // no-periodic-tasks is specified for self monitoring crashpad instances.
@@ -344,8 +308,7 @@ int main() {
                 ::GetCurrentProcess(), &duplicate_handle,
                 PROCESS_QUERY_INFORMATION, FALSE, DUPLICATE_SAME_ACCESS)) {
           base::Process parent_process(duplicate_handle);
-          exit_code_watcher =
-              std::make_unique<browser_watcher::ExitCodeWatcher>();
+          exit_code_watcher = std::make_unique<ExitCodeWatcher>();
           if (exit_code_watcher->Initialize(std::move(parent_process))) {
             exit_code_watcher->StartWatching();
           }
@@ -380,14 +343,8 @@ int main() {
   // The exit manager is in charge of calling the dtors of singletons.
   base::AtExitManager exit_manager;
 
-  // Only enable High DPI support for browser and GPU process.
-  if (process_type.empty() || process_type == switches::kGpuProcess)
-    base::win::EnableHighDPISupport();
-
   if (AttemptFastNotify(*command_line))
     return 0;
-
-  RemoveAppCompatFlagsEntry();
 
   // Load and launch the chrome dll. *Everything* happens inside.
   VLOG(1) << "About to load main DLL.";

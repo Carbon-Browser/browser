@@ -1,9 +1,10 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "net/proxy_resolution/pac_file_fetcher_impl.h"
 
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -18,13 +19,11 @@
 #include "base/task/single_thread_task_runner.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "net/base/features.h"
 #include "net/base/filename_util.h"
 #include "net/base/load_flags.h"
 #include "net/base/network_delegate_impl.h"
 #include "net/base/test_completion_callback.h"
-#include "net/cert/ct_policy_enforcer.h"
 #include "net/cert/mock_cert_verifier.h"
 #include "net/cert/multi_log_ct_verifier.h"
 #include "net/disk_cache/disk_cache.h"
@@ -51,7 +50,6 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/platform_test.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 using net::test::IsError;
 using net::test::IsOk;
@@ -77,7 +75,7 @@ struct FetchResult {
 // Get a file:// url relative to net/data/proxy/pac_file_fetcher_unittest.
 GURL GetTestFileUrl(const std::string& relpath) {
   base::FilePath path;
-  base::PathService::Get(base::DIR_SOURCE_ROOT, &path);
+  base::PathService::Get(base::DIR_SRC_TEST_DATA_ROOT, &path);
   path = path.AppendASCII("net");
   path = path.AppendASCII("data");
   path = path.AppendASCII("pac_file_fetcher_unittest");
@@ -242,12 +240,8 @@ TEST_F(PacFileFetcherImplTest, ContentDisposition) {
 // the DNS cache.
 TEST_F(PacFileFetcherImplTest, IsolationInfo) {
   base::test::ScopedFeatureList feature_list;
-  feature_list.InitWithFeatures(
-      // enabled_features
-      {features::kPartitionConnectionsByNetworkIsolationKey,
-       features::kSplitHostCacheByNetworkIsolationKey},
-      // disabled_features
-      {});
+  feature_list.InitAndEnableFeature(
+      features::kPartitionConnectionsByNetworkIsolationKey);
   const char kHost[] = "foo.test";
 
   ASSERT_TRUE(test_server_.Start());
@@ -263,13 +257,13 @@ TEST_F(PacFileFetcherImplTest, IsolationInfo) {
   EXPECT_EQ(u"-downloadable.pac-\n", text);
 
   // Check that the URL in kDestination is in the HostCache, with
-  // the fetcher's IsolationInfo / NetworkIsolationKey, and no others.
+  // the fetcher's IsolationInfo / NetworkAnonymizationKey, and no others.
   net::HostResolver::ResolveHostParameters params;
   params.source = net::HostResolverSource::LOCAL_ONLY;
   std::unique_ptr<net::HostResolver::ResolveHostRequest> host_request =
       context_->host_resolver()->CreateRequest(
           url::SchemeHostPort(url),
-          pac_fetcher->isolation_info().network_isolation_key(),
+          pac_fetcher->isolation_info().network_anonymization_key(),
           net::NetLogWithSource(), params);
   net::TestCompletionCallback callback2;
   result = host_request->Start(callback2.callback());
@@ -280,10 +274,10 @@ TEST_F(PacFileFetcherImplTest, IsolationInfo) {
   EXPECT_EQ(1u, context_->host_resolver()->GetHostCache()->size());
 
   // Make sure the cache is actually returning different results based on
-  // NetworkIsolationKey.
+  // NetworkAnonymizationKey.
   host_request = context_->host_resolver()->CreateRequest(
-      url::SchemeHostPort(url), NetworkIsolationKey(), net::NetLogWithSource(),
-      params);
+      url::SchemeHostPort(url), NetworkAnonymizationKey(),
+      net::NetLogWithSource(), params);
   net::TestCompletionCallback callback3;
   result = host_request->Start(callback3.callback());
   EXPECT_EQ(net::ERR_NAME_NOT_RESOLVED, callback3.GetResult(result));
@@ -514,10 +508,9 @@ TEST_F(PacFileFetcherImplTest, IgnoresLimits) {
   test_server_.SetConnectionListener(&connection_listener);
   ASSERT_TRUE(test_server_.Start());
 
-  std::vector<std::unique_ptr<PacFileFetcherImpl>> pac_fetchers;
-
-  TestCompletionCallback callback;
   std::u16string text;
+  TestCompletionCallback callback;
+  std::vector<std::unique_ptr<PacFileFetcherImpl>> pac_fetchers;
   for (int i = 0; i < num_requests; i++) {
     auto pac_fetcher = PacFileFetcherImpl::Create(context_.get());
     GURL url(test_server_.GetURL("/hung"));

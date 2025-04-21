@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,8 +7,8 @@
 #include "third_party/blink/renderer/bindings/core/v8/v8_object_builder.h"
 #include "third_party/blink/renderer/core/animation/animation_input_helpers.h"
 #include "third_party/blink/renderer/core/animation/css/css_animations.h"
-#include "third_party/blink/renderer/core/css/css_custom_property_declaration.h"
 #include "third_party/blink/renderer/core/css/css_keyframe_shorthand_value.h"
+#include "third_party/blink/renderer/core/css/css_unparsed_declaration_value.h"
 #include "third_party/blink/renderer/core/css/parser/css_parser.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
 #include "third_party/blink/renderer/core/style_property_shorthand.h"
@@ -22,7 +22,7 @@ namespace {
 bool IsLogicalProperty(CSSPropertyID property_id) {
   const CSSProperty& property = CSSProperty::Get(property_id);
   const CSSProperty& resolved_property = property.ResolveDirectionAwareProperty(
-      TextDirection::kLtr, WritingMode::kHorizontalTb);
+      {WritingMode::kHorizontalTb, TextDirection::kLtr});
   return resolved_property.PropertyID() != property_id;
 }
 
@@ -35,14 +35,17 @@ MutableCSSPropertyValueSet* CreateCssPropertyValueSet() {
 using PropertyResolver = StringKeyframe::PropertyResolver;
 
 StringKeyframe::StringKeyframe(const StringKeyframe& copy_from)
-    : Keyframe(copy_from.offset_, copy_from.composite_, copy_from.easing_),
+    : Keyframe(copy_from.offset_,
+               copy_from.timeline_offset_,
+               copy_from.composite_,
+               copy_from.easing_),
+      tree_scope_(copy_from.tree_scope_),
       input_properties_(copy_from.input_properties_),
       presentation_attribute_map_(
           copy_from.presentation_attribute_map_->MutableCopy()),
       svg_attribute_map_(copy_from.svg_attribute_map_),
       has_logical_property_(copy_from.has_logical_property_),
-      text_direction_(copy_from.text_direction_),
-      writing_mode_(copy_from.writing_mode_) {
+      writing_direction_(copy_from.writing_direction_) {
   if (copy_from.css_property_map_)
     css_property_map_ = copy_from.css_property_map_->MutableCopy();
 }
@@ -55,9 +58,10 @@ MutableCSSPropertyValueSet::SetResult StringKeyframe::SetCSSPropertyValue(
   bool is_animation_tainted = true;
 
   auto* property_map = CreateCssPropertyValueSet();
-  MutableCSSPropertyValueSet::SetResult result = property_map->SetProperty(
-      custom_property_name, value, false, secure_context_mode,
-      style_sheet_contents, is_animation_tainted);
+  MutableCSSPropertyValueSet::SetResult result =
+      property_map->ParseAndSetCustomProperty(
+          custom_property_name, value, false, secure_context_mode,
+          style_sheet_contents, is_animation_tainted);
 
   const CSSValue* parsed_value =
       property_map->GetPropertyCSSValue(custom_property_name);
@@ -87,7 +91,7 @@ MutableCSSPropertyValueSet::SetResult StringKeyframe::SetCSSPropertyValue(
 
   auto* property_value_set = CreateCssPropertyValueSet();
   MutableCSSPropertyValueSet::SetResult result =
-      property_value_set->SetProperty(
+      property_value_set->ParseAndSetProperty(
           property_id, value, false, secure_context_mode, style_sheet_contents);
 
   // TODO(crbug.com/1132078): Add flag to CSSProperty to track if it is for a
@@ -97,11 +101,11 @@ MutableCSSPropertyValueSet::SetResult StringKeyframe::SetCSSPropertyValue(
     // Logical shorthands to not directly map to physical shorthands. Determine
     // if the shorthand is for a logical property by checking the first
     // longhand.
-    if (property_value_set->PropertyCount()) {
-      CSSPropertyValueSet::PropertyReference reference =
-          property_value_set->PropertyAt(0);
-      if (IsLogicalProperty(reference.Id()))
+    if (!property_value_set->IsEmpty()) {
+      const CSSPropertyValue& reference = property_value_set->PropertyAt(0);
+      if (IsLogicalProperty(reference.PropertyID())) {
         is_logical = true;
+      }
     }
   } else {
     is_logical = IsLogicalProperty(property_id);
@@ -154,9 +158,9 @@ void StringKeyframe::SetPresentationAttributeValue(
     StyleSheetContents* style_sheet_contents) {
   DCHECK_NE(property.PropertyID(), CSSPropertyID::kInvalid);
   if (!CSSAnimations::IsAnimationAffectingProperty(property)) {
-    presentation_attribute_map_->SetProperty(property.PropertyID(), value,
-                                             false, secure_context_mode,
-                                             style_sheet_contents);
+    presentation_attribute_map_->ParseAndSetProperty(
+        property.PropertyID(), value, false, secure_context_mode,
+        style_sheet_contents);
   }
 }
 
@@ -170,9 +174,9 @@ PropertyHandleSet StringKeyframe::Properties() const {
   // worry about caching this result.
   EnsureCssPropertyMap();
   PropertyHandleSet properties;
-  for (unsigned i = 0; i < css_property_map_->PropertyCount(); ++i) {
-    CSSPropertyValueSet::PropertyReference property_reference =
-        css_property_map_->PropertyAt(i);
+
+  for (const CSSPropertyValue& property_reference :
+       css_property_map_->Properties()) {
     const CSSPropertyName& name = property_reference.Name();
     DCHECK(!name.IsCustomProperty() ||
            !CSSProperty::Get(name.Id()).IsShorthand())
@@ -181,10 +185,10 @@ PropertyHandleSet StringKeyframe::Properties() const {
     properties.insert(PropertyHandle(name));
   }
 
-  for (unsigned i = 0; i < presentation_attribute_map_->PropertyCount(); ++i) {
-    properties.insert(PropertyHandle(
-        CSSProperty::Get(presentation_attribute_map_->PropertyAt(i).Id()),
-        true));
+  for (const CSSPropertyValue& property :
+       presentation_attribute_map_->Properties()) {
+    properties.insert(
+        PropertyHandle(CSSProperty::Get(property.PropertyID()), true));
   }
 
   for (auto* const key : svg_attribute_map_.Keys())
@@ -213,7 +217,7 @@ void StringKeyframe::AddKeyframePropertiesToV8Object(
         AnimationInputHelpers::PropertyHandleToKeyframeAttribute(
             property_handle);
 
-    object_builder.Add(property_name, property_value->CssText());
+    object_builder.AddString(property_name, property_value->CssText());
   }
 
   // Legacy code path for SVG and Presentation attributes.
@@ -235,11 +239,12 @@ void StringKeyframe::AddKeyframePropertiesToV8Object(
       DCHECK(property.IsSVGAttribute());
       property_value = SvgPropertyValue(property.SvgAttribute());
     }
-    object_builder.Add(property_name, property_value);
+    object_builder.AddString(property_name, property_value);
   }
 }
 
 void StringKeyframe::Trace(Visitor* visitor) const {
+  visitor->Trace(tree_scope_);
   visitor->Trace(input_properties_);
   visitor->Trace(css_property_map_);
   visitor->Trace(presentation_attribute_map_);
@@ -251,11 +256,9 @@ Keyframe* StringKeyframe::Clone() const {
 }
 
 bool StringKeyframe::SetLogicalPropertyResolutionContext(
-    TextDirection text_direction,
-    WritingMode writing_mode) {
-  if (text_direction != text_direction_ || writing_mode != writing_mode_) {
-    text_direction_ = text_direction;
-    writing_mode_ = writing_mode;
+    WritingDirectionMode writing_direction) {
+  if (writing_direction != writing_direction_) {
+    writing_direction_ = writing_direction;
     if (has_logical_property_) {
       // force a rebuild of the property map on the next property fetch.
       InvalidateCssPropertyMap();
@@ -282,7 +285,8 @@ void StringKeyframe::EnsureCssPropertyMap() const {
     if (property_handle.IsCSSCustomProperty()) {
       CSSPropertyName property_name(property_handle.CustomPropertyName());
       const CSSValue* value = entry.value->CssValue();
-      css_property_map_->SetProperty(CSSPropertyValue(property_name, *value));
+      css_property_map_->SetLonghandProperty(
+          CSSPropertyValue(property_name, *value));
     } else {
       PropertyResolver* resolver = entry.value;
       if (resolver->IsLogical() || resolver->IsShorthand())
@@ -297,7 +301,7 @@ void StringKeyframe::EnsureCssPropertyMap() const {
   }
 
   for (const auto& resolver : resolvers) {
-    resolver->AppendTo(css_property_map_, text_direction_, writing_mode_);
+    resolver->AppendTo(css_property_map_, writing_direction_);
   }
 }
 
@@ -409,19 +413,18 @@ const CSSValue* PropertyResolver::CssValue() {
   DCHECK(IsValid());
 
   if (css_value_)
-    return css_value_;
+    return css_value_.Get();
 
   // For shorthands create a special wrapper value, |CSSKeyframeShorthandValue|,
   // which can be used to correctly serialize it given longhands that are
   // present in this set.
   css_value_ = MakeGarbageCollected<CSSKeyframeShorthandValue>(
       property_id_, css_property_value_set_);
-  return css_value_;
+  return css_value_.Get();
 }
 
 void PropertyResolver::AppendTo(MutableCSSPropertyValueSet* property_value_set,
-                                TextDirection text_direction,
-                                WritingMode writing_mode) {
+                                WritingDirectionMode writing_direction) {
   DCHECK(property_id_ != CSSPropertyID::kInvalid);
   DCHECK(property_id_ != CSSPropertyID::kVariable);
 
@@ -430,18 +433,17 @@ void PropertyResolver::AppendTo(MutableCSSPropertyValueSet* property_value_set,
     if (is_logical_) {
       // Walk set of properties converting each property name to its
       // corresponding physical property.
-      for (unsigned i = 0; i < css_property_value_set_->PropertyCount(); i++) {
-        CSSPropertyValueSet::PropertyReference reference =
-            css_property_value_set_->PropertyAt(i);
-        SetProperty(property_value_set, reference.Id(), reference.Value(),
-                    text_direction, writing_mode);
+      for (const CSSPropertyValue& reference :
+           css_property_value_set_->Properties()) {
+        SetProperty(property_value_set, reference.PropertyID(),
+                    reference.Value(), writing_direction);
       }
     } else {
       property_value_set->MergeAndOverrideOnConflict(css_property_value_set_);
     }
   } else {
-    SetProperty(property_value_set, property_id_, *css_value_, text_direction,
-                writing_mode);
+    SetProperty(property_value_set, property_id_, *css_value_,
+                writing_direction);
   }
 }
 
@@ -449,11 +451,10 @@ void PropertyResolver::SetProperty(
     MutableCSSPropertyValueSet* property_value_set,
     CSSPropertyID property_id,
     const CSSValue& value,
-    TextDirection text_direction,
-    WritingMode writing_mode) {
+    WritingDirectionMode writing_direction) {
   const CSSProperty& physical_property =
       CSSProperty::Get(property_id)
-          .ResolveDirectionAwareProperty(text_direction, writing_mode);
+          .ResolveDirectionAwareProperty(writing_direction);
   property_value_set->SetProperty(physical_property.PropertyID(), value);
 }
 

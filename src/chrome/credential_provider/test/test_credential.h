@@ -1,13 +1,10 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef CHROME_CREDENTIAL_PROVIDER_TEST_TEST_CREDENTIAL_H_
 #define CHROME_CREDENTIAL_PROVIDER_TEST_TEST_CREDENTIAL_H_
 
-#include "base/win/atl.h"
-
-#include <atlcomcli.h>
 #include <credentialprovider.h>
 
 #include <memory>
@@ -16,6 +13,7 @@
 #include "base/command_line.h"
 #include "base/strings/string_util.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/win/atl.h"
 #include "chrome/credential_provider/common/gcp_strings.h"
 #include "chrome/credential_provider/gaiacp/gaia_credential_base.h"
 #include "chrome/credential_provider/test/gls_runner_test_base.h"
@@ -125,7 +123,7 @@ class ATL_NO_VTABLE CTestCredentialBase : public T, public ITestCredential {
       CGaiaCredentialBase::UIProcessInfo* uiprocinfo) override;
 
   // Overrides to directly save to a fake scoped user profile.
-  HRESULT ForkPerformPostSigninActionsStub(const base::Value& dict,
+  HRESULT ForkPerformPostSigninActionsStub(const base::Value::Dict& dict,
                                            BSTR* status_text) override;
 
   UiExitCodes default_exit_code_ = kUiecSuccess;
@@ -151,7 +149,7 @@ CTestCredentialBase<T>::CTestCredentialBase()
                 base::WaitableEvent::InitialState::NOT_SIGNALED) {}
 
 template <class T>
-CTestCredentialBase<T>::~CTestCredentialBase() {}
+CTestCredentialBase<T>::~CTestCredentialBase() = default;
 
 template <class T>
 HRESULT CTestCredentialBase<T>::SetDefaultExitCode(
@@ -218,19 +216,19 @@ BSTR CTestCredentialBase<T>::GetFinalUsername() {
 
 template <class T>
 bool CTestCredentialBase<T>::IsAuthenticationResultsEmpty() {
-  auto& results = this->get_authentication_results();
+  const auto& results = this->get_authentication_results();
 
-  return !results || (results->is_dict() && results->DictEmpty());
+  return !results || results->empty();
 }
 
 template <class T>
 std::string CTestCredentialBase<T>::GetFinalEmail() {
-  auto& results = this->get_authentication_results();
+  const auto& results = this->get_authentication_results();
 
   if (!results)
     return std::string();
 
-  const std::string* email_value = results->FindStringKey(kKeyEmail);
+  const std::string* email_value = results->FindString(kKeyEmail);
 
   if (!email_value)
     return std::string();
@@ -239,13 +237,13 @@ std::string CTestCredentialBase<T>::GetFinalEmail() {
 
 template <class T>
 bool CTestCredentialBase<T>::IsAdJoinedUser() {
-  auto& results = this->get_authentication_results();
+  const auto& results = this->get_authentication_results();
 
   if (!results)
     return false;
 
   const std::string* is_ad_joined_user =
-      results->FindStringKey(kKeyIsAdJoinedUser);
+      results->FindString(kKeyIsAdJoinedUser);
 
   if (!is_ad_joined_user)
     return false;
@@ -254,13 +252,13 @@ bool CTestCredentialBase<T>::IsAdJoinedUser() {
 
 template <class T>
 bool CTestCredentialBase<T>::ContainsIsAdJoinedUser() {
-  auto& results = this->get_authentication_results();
+  const auto& results = this->get_authentication_results();
 
   if (!results)
     return false;
 
   const std::string* is_ad_joined_user =
-      results->FindStringKey(kKeyIsAdJoinedUser);
+      results->FindString(kKeyIsAdJoinedUser);
 
   if (!is_ad_joined_user)
     return false;
@@ -356,7 +354,7 @@ HRESULT CTestCredentialBase<T>::ForkGaiaLogonStub(
 
 template <class T>
 HRESULT CTestCredentialBase<T>::ForkPerformPostSigninActionsStub(
-    const base::Value& dict,
+    const base::Value::Dict& dict,
     BSTR* status_text) {
   return CGaiaCredentialBase::PerformPostSigninActions(
       dict, /* com_initialized */ true);

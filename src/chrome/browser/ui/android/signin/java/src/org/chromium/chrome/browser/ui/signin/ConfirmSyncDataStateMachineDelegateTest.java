@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 package org.chromium.chrome.browser.ui.signin;
@@ -28,12 +28,13 @@ import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 import org.mockito.quality.Strictness;
 
+import org.chromium.base.ThreadUtils;
 import org.chromium.base.test.BaseActivityTestRule;
 import org.chromium.base.test.util.CommandLineFlags;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
+import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.components.browser_ui.styles.SemanticColorUtils;
-import org.chromium.content_public.browser.test.util.TestThreadUtils;
 import org.chromium.ui.test.util.BlankUiTestActivity;
 
 /** Tests for {@link ConfirmSyncDataStateMachineDelegate}. */
@@ -47,8 +48,11 @@ public class ConfirmSyncDataStateMachineDelegateTest {
     @Rule
     public final MockitoRule mMockitoRule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
 
+    @Mock private Profile mProfile;
+
     @Mock
     private ConfirmSyncDataStateMachineDelegate.TimeoutDialogListener mTimeoutDialogListenerMock;
+
     @Mock
     private ConfirmSyncDataStateMachineDelegate.ProgressDialogListener mProgressDialogListenerMock;
 
@@ -60,16 +64,17 @@ public class ConfirmSyncDataStateMachineDelegateTest {
         mActivityTestRule.launchActivity(null);
         final BlankUiTestActivity activity = mActivityTestRule.getActivity();
         mFragmentManager = activity.getSupportFragmentManager();
-        mStateMachineDelegate = new ConfirmSyncDataStateMachineDelegate(
-                activity, activity.getSupportFragmentManager(), activity.getModalDialogManager());
+        mStateMachineDelegate =
+                new ConfirmSyncDataStateMachineDelegate(
+                        activity, mProfile, activity.getModalDialogManager());
     }
 
     @Test
     @MediumTest
     public void testTimeoutDialogWhenPositiveButtonPressed() {
-        TestThreadUtils.runOnUiThreadBlocking(
-                ()
-                        -> mStateMachineDelegate.showFetchManagementPolicyTimeoutDialog(
+        ThreadUtils.runOnUiThreadBlocking(
+                () ->
+                        mStateMachineDelegate.showFetchManagementPolicyTimeoutDialog(
                                 mTimeoutDialogListenerMock));
 
         onView(withText(R.string.try_again)).inRoot(isDialog()).perform(click());
@@ -80,9 +85,9 @@ public class ConfirmSyncDataStateMachineDelegateTest {
     @Test
     @MediumTest
     public void testTimeoutDialogWhenNegativeButtonPressed() {
-        TestThreadUtils.runOnUiThreadBlocking(
-                ()
-                        -> mStateMachineDelegate.showFetchManagementPolicyTimeoutDialog(
+        ThreadUtils.runOnUiThreadBlocking(
+                () ->
+                        mStateMachineDelegate.showFetchManagementPolicyTimeoutDialog(
                                 mTimeoutDialogListenerMock));
 
         onView(withText(R.string.cancel)).inRoot(isDialog()).perform(click());
@@ -93,17 +98,20 @@ public class ConfirmSyncDataStateMachineDelegateTest {
     @Test
     @MediumTest
     public void testProgressDialogWhenNegativeButtonPressed() {
-        TestThreadUtils.runOnUiThreadBlocking(
-                ()
-                        -> mStateMachineDelegate.showFetchManagementPolicyProgressDialog(
+        ThreadUtils.runOnUiThreadBlocking(
+                () ->
+                        mStateMachineDelegate.showFetchManagementPolicyProgressDialog(
                                 mProgressDialogListenerMock));
-        TestThreadUtils.runOnUiThreadBlocking(() -> {
-            // Replace the progress bar with a dummy. Currently the progress bar cannot be stopped
-            // otherwise due to some espresso issues (crbug/1115067).
-            ProgressBar progressBar = mStateMachineDelegate.getProgressBarViewForTesting();
-            progressBar.setIndeterminateDrawable(new ColorDrawable(
-                    SemanticColorUtils.getDefaultBgColor(mActivityTestRule.getActivity())));
-        });
+        ThreadUtils.runOnUiThreadBlocking(
+                () -> {
+                    // Replace the progress bar with a dummy. Currently the progress bar cannot be
+                    // stopped otherwise due to some espresso issues (crbug/1115067).
+                    ProgressBar progressBar = mStateMachineDelegate.getProgressBarViewForTesting();
+                    progressBar.setIndeterminateDrawable(
+                            new ColorDrawable(
+                                    SemanticColorUtils.getDefaultBgColor(
+                                            mActivityTestRule.getActivity())));
+                });
 
         onView(withText(R.string.cancel)).inRoot(isDialog()).perform(click());
 
@@ -113,15 +121,15 @@ public class ConfirmSyncDataStateMachineDelegateTest {
     @Test
     @MediumTest
     public void testDismissAllDialogs() {
-        TestThreadUtils.runOnUiThreadBlocking(
-                ()
-                        -> mStateMachineDelegate.showFetchManagementPolicyTimeoutDialog(
+        ThreadUtils.runOnUiThreadBlocking(
+                () ->
+                        mStateMachineDelegate.showFetchManagementPolicyTimeoutDialog(
                                 mTimeoutDialogListenerMock));
         onView(withText(R.string.sign_in_timeout_title))
                 .inRoot(isDialog())
                 .check(matches(isDisplayed()));
 
-        TestThreadUtils.runOnUiThreadBlocking(() -> mStateMachineDelegate.dismissAllDialogs());
+        ThreadUtils.runOnUiThreadBlocking(() -> mStateMachineDelegate.dismissAllDialogs());
 
         onView(withText(R.string.sign_in_timeout_title)).check(doesNotExist());
     }

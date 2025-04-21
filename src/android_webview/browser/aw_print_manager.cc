@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,9 +6,9 @@
 
 #include <utility>
 
-#include "base/bind.h"
 #include "base/file_descriptor_posix.h"
 #include "base/files/file_util.h"
+#include "base/functional/bind.h"
 #include "base/memory/ptr_util.h"
 #include "base/memory/ref_counted_memory.h"
 #include "base/numerics/safe_conversions.h"
@@ -16,9 +16,11 @@
 #include "base/task/thread_pool.h"
 #include "components/printing/browser/print_manager_utils.h"
 #include "components/printing/common/print.mojom.h"
+#include "components/printing/common/print_params.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/render_frame_host.h"
 #include "printing/print_job_constants.h"
+#include "printing/print_settings.h"
 
 namespace android_webview {
 
@@ -77,6 +79,11 @@ void AwPrintManager::GetDefaultPrintSettings(
   auto params = printing::mojom::PrintParams::New();
   printing::RenderParamsFromPrintSettings(*settings_, params.get());
   params->document_cookie = cookie();
+  if (!printing::PrintMsgPrintParamsIsValid(*params)) {
+    std::move(callback).Run(nullptr);
+    return;
+  }
+
   std::move(callback).Run(std::move(params));
 }
 
@@ -89,27 +96,33 @@ void AwPrintManager::UpdateParam(
   settings_ = std::move(settings);
   fd_ = file_descriptor;
   set_pdf_writing_done_callback(std::move(callback));
-  set_cookie(1);  // Set a valid dummy cookie value.
+  set_cookie(printing::PrintSettings::NewCookie());
 }
 
 void AwPrintManager::ScriptedPrint(
     printing::mojom::ScriptedPrintParamsPtr scripted_params,
     ScriptedPrintCallback callback) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
-  auto params = printing::mojom::PrintPagesParams::New();
-  params->params = printing::mojom::PrintParams::New();
 
   if (scripted_params->is_scripted &&
       GetCurrentTargetFrame()->IsNestedWithinFencedFrame()) {
     DLOG(ERROR) << "Unexpected message received. Script Print is not allowed"
                    " in a fenced frame.";
-    std::move(callback).Run(std::move(params));
+    std::move(callback).Run(nullptr);
     return;
   }
 
+  auto params = printing::mojom::PrintPagesParams::New();
+  params->params = printing::mojom::PrintParams::New();
   printing::RenderParamsFromPrintSettings(*settings_, params->params.get());
   params->params->document_cookie = scripted_params->cookie;
   params->pages = settings_->ranges();
+
+  if (!printing::PrintMsgPrintParamsIsValid(*params->params)) {
+    std::move(callback).Run(nullptr);
+    return;
+  }
+
   std::move(callback).Run(std::move(params));
 }
 
@@ -124,20 +137,12 @@ void AwPrintManager::DidPrintDocument(
   const printing::mojom::DidPrintContentParams& content = *params->content;
   if (!content.metafile_data_region.IsValid()) {
     NOTREACHED() << "invalid memory handle";
-    web_contents()->Stop();
-    PdfWritingDone(0);
-    std::move(callback).Run(false);
-    return;
   }
 
   auto data = base::RefCountedSharedMemoryMapping::CreateFromWholeRegion(
       content.metafile_data_region);
   if (!data) {
     NOTREACHED() << "couldn't map";
-    web_contents()->Stop();
-    PdfWritingDone(0);
-    std::move(callback).Run(false);
-    return;
   }
 
   if (number_pages() > printing::kMaxPageCount) {
@@ -148,14 +153,13 @@ void AwPrintManager::DidPrintDocument(
   }
 
   DCHECK(pdf_writing_done_callback());
-  base::PostTaskAndReplyWithResult(
-      base::ThreadPool::CreateTaskRunner(
-          {base::MayBlock(), base::TaskPriority::BEST_EFFORT,
-           base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN})
-          .get(),
-      FROM_HERE, base::BindOnce(&SaveDataToFd, fd_, number_pages(), data),
-      base::BindOnce(&AwPrintManager::OnDidPrintDocumentWritingDone,
-                     pdf_writing_done_callback(), std::move(callback)));
+  base::ThreadPool::CreateTaskRunner(
+      {base::MayBlock(), base::TaskPriority::BEST_EFFORT,
+       base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN})
+      ->PostTaskAndReplyWithResult(
+          FROM_HERE, base::BindOnce(&SaveDataToFd, fd_, number_pages(), data),
+          base::BindOnce(&AwPrintManager::OnDidPrintDocumentWritingDone,
+                         pdf_writing_done_callback(), std::move(callback)));
 }
 
 // static

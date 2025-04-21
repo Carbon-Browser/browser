@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,8 +9,9 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
 #include "cc/cc_export.h"
@@ -40,8 +41,7 @@ class CC_EXPORT DecodedImageTracker {
   // Request that the given image be decoded. This issues a callback upon
   // completion. The callback takes a bool indicating whether the decode was
   // successful or not.
-  void QueueImageDecode(const PaintImage& image,
-                        const TargetColorParams& target_color_params,
+  void QueueImageDecode(const DrawImage& image,
                         base::OnceCallback<void(bool)> callback);
 
   // Unlock all locked images - used to respond to memory pressure or

@@ -1,4 +1,4 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,10 @@
 #define MEDIA_GPU_ANDROID_VIDEO_FRAME_FACTORY_IMPL_H_
 
 #include <memory>
+#include <optional>
 
 #include "base/memory/weak_ptr.h"
+#include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
 #include "gpu/config/gpu_preferences.h"
 #include "media/base/video_frame.h"
@@ -19,7 +21,6 @@
 #include "media/gpu/android/shared_image_video_provider.h"
 #include "media/gpu/android/video_frame_factory.h"
 #include "media/gpu/media_gpu_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/gl/gl_bindings.h"
 
 namespace media {
@@ -71,6 +72,7 @@ class MEDIA_GPU_EXPORT VideoFrameFactoryImpl
       PromotionHintAggregator::NotifyPromotionHintCB promotion_hint_cb,
       OnceOutputCB output_cb) override;
   void RunAfterPendingVideoFrames(base::OnceClosure closure) override;
+  bool IsStalled() const override;
 
   // This should be only used for testing.
   void SetCodecBufferWaitCorrdinatorForTesting(

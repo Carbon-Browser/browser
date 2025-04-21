@@ -1,13 +1,16 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "base/sampling_heap_profiler/sampling_heap_profiler.h"
 
 #include <stdlib.h>
+
 #include <cinttypes>
 
-#include "base/allocator/allocator_shim.h"
+#include "base/allocator/dispatcher/dispatcher.h"
+#include "base/allocator/dispatcher/notification_data.h"
+#include "base/allocator/dispatcher/subsystem.h"
 #include "base/debug/alias.h"
 #include "base/memory/raw_ptr.h"
 #include "base/rand_util.h"
@@ -15,18 +18,22 @@
 #include "base/synchronization/waitable_event.h"
 #include "base/threading/simple_thread.h"
 #include "build/build_config.h"
+#include "partition_alloc/shim/allocator_shim.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace base {
 
 using ScopedSuppressRandomnessForTesting =
     PoissonAllocationSampler::ScopedSuppressRandomnessForTesting;
+using base::allocator::dispatcher::AllocationNotificationData;
+using base::allocator::dispatcher::AllocationSubsystem;
+using base::allocator::dispatcher::FreeNotificationData;
 
 class SamplingHeapProfilerTest : public ::testing::Test {
  public:
   void SetUp() override {
 #if BUILDFLAG(IS_APPLE)
-    allocator::InitializeAllocatorShim();
+    allocator_shim::InitializeAllocatorShim();
 #endif
     SamplingHeapProfiler::Init();
 
@@ -34,6 +41,13 @@ class SamplingHeapProfilerTest : public ::testing::Test {
     ASSERT_FALSE(PoissonAllocationSampler::AreHookedSamplesMuted());
     ASSERT_FALSE(PoissonAllocationSampler::ScopedMuteThreadSamples::IsMuted());
     ASSERT_FALSE(ScopedSuppressRandomnessForTesting::IsSuppressed());
+
+    allocator::dispatcher::Dispatcher::GetInstance().InitializeForTesting(
+        PoissonAllocationSampler::Get());
+  }
+
+  void TearDown() override {
+    allocator::dispatcher::Dispatcher::GetInstance().ResetForTesting();
   }
 
   size_t GetNextSample(size_t mean_interval) {
@@ -41,7 +55,9 @@ class SamplingHeapProfilerTest : public ::testing::Test {
   }
 
   static int GetRunningSessionsCount() {
-    return SamplingHeapProfiler::Get()->running_sessions_;
+    SamplingHeapProfiler* p = SamplingHeapProfiler::Get();
+    AutoLock lock(p->start_stop_mutex_);
+    return p->running_sessions_;
   }
 
   static void RunStartStopLoop(SamplingHeapProfiler* profiler) {
@@ -60,17 +76,19 @@ class SamplesCollector : public PoissonAllocationSampler::SamplesObserver {
   void SampleAdded(void* address,
                    size_t size,
                    size_t,
-                   PoissonAllocationSampler::AllocatorType,
+                   AllocationSubsystem,
                    const char*) override {
-    if (sample_added || size != watch_size_)
+    if (sample_added || size != watch_size_) {
       return;
+    }
     sample_address_ = address;
     sample_added = true;
   }
 
   void SampleRemoved(void* address) override {
-    if (address == sample_address_)
+    if (address == sample_address_) {
       sample_removed = true;
+    }
   }
 
   bool sample_added = false;
@@ -78,7 +96,7 @@ class SamplesCollector : public PoissonAllocationSampler::SamplesObserver {
 
  private:
   size_t watch_size_;
-  raw_ptr<void> sample_address_ = nullptr;
+  raw_ptr<void, DanglingUntriaged> sample_address_ = nullptr;
 };
 
 TEST_F(SamplingHeapProfilerTest, SampleObserver) {
@@ -117,8 +135,9 @@ TEST_F(SamplingHeapProfilerTest, IntervalRandomizationSanity) {
   int sum = 0;
   for (int i = 0; i < iterations; ++i) {
     int samples = 0;
-    for (size_t value = 0; value < target; value += GetNextSample(10000))
+    for (size_t value = 0; value < target; value += GetNextSample(10000)) {
       ++samples;
+    }
     // There are should be ~ target/10000 = 1000 samples.
     sum += samples;
   }
@@ -153,8 +172,9 @@ class MyThread1 : public SimpleThread {
  public:
   MyThread1() : SimpleThread("MyThread1") {}
   void Run() override {
-    for (int i = 0; i < kNumberOfAllocations; ++i)
+    for (int i = 0; i < kNumberOfAllocations; ++i) {
       Allocate1();
+    }
   }
 };
 
@@ -162,8 +182,9 @@ class MyThread2 : public SimpleThread {
  public:
   MyThread2() : SimpleThread("MyThread2") {}
   void Run() override {
-    for (int i = 0; i < kNumberOfAllocations; ++i)
+    for (int i = 0; i < kNumberOfAllocations; ++i) {
       Allocate2();
+    }
   }
 };
 
@@ -185,8 +206,9 @@ void CheckAllocationPattern(void (*allocate_callback)()) {
       buckets[sample.size] += sample.total;
     }
     for (auto& it : buckets) {
-      if (it.first != 400 && it.first != 700 && it.first != 20480)
+      if (it.first != 400 && it.first != 700 && it.first != 20480) {
         continue;
+      }
       sums[it.first] += it.second;
       printf("%zu,", it.second);
     }
@@ -208,20 +230,21 @@ void CheckAllocationPattern(void (*allocate_callback)()) {
 // Yes, they do leak lots of memory.
 
 TEST_F(SamplingHeapProfilerTest, DISABLED_ParallelLargeSmallStats) {
-  CheckAllocationPattern([]() {
+  CheckAllocationPattern([] {
     MyThread1 t1;
     MyThread1 t2;
     t1.Start();
     t2.Start();
-    for (int i = 0; i < kNumberOfAllocations; ++i)
+    for (int i = 0; i < kNumberOfAllocations; ++i) {
       Allocate3();
+    }
     t1.Join();
     t2.Join();
   });
 }
 
 TEST_F(SamplingHeapProfilerTest, DISABLED_SequentialLargeSmallStats) {
-  CheckAllocationPattern([]() {
+  CheckAllocationPattern([] {
     for (int i = 0; i < kNumberOfAllocations; ++i) {
       Allocate1();
       Allocate2();
@@ -232,7 +255,7 @@ TEST_F(SamplingHeapProfilerTest, DISABLED_SequentialLargeSmallStats) {
 
 // Platform TLS: alloc+free[ns]: 22.184  alloc[ns]: 8.910  free[ns]: 13.274
 // thread_local: alloc+free[ns]: 18.353  alloc[ns]: 5.021  free[ns]: 13.331
-// TODO(crbug.com/1117342) Disabled on Mac
+// TODO(crbug.com/40145097) Disabled on Mac
 #if BUILDFLAG(IS_MAC)
 #define MAYBE_MANUAL_SamplerMicroBenchmark DISABLED_MANUAL_SamplerMicroBenchmark
 #else
@@ -251,13 +274,16 @@ TEST_F(SamplingHeapProfilerTest, MAYBE_MANUAL_SamplerMicroBenchmark) {
 
   base::TimeTicks t0 = base::TimeTicks::Now();
   for (int i = 1; i <= kNumAllocations; ++i) {
-    sampler->RecordAlloc(
+    sampler->OnAllocation(AllocationNotificationData(
         reinterpret_cast<void*>(static_cast<intptr_t>(i)), allocation_size,
-        PoissonAllocationSampler::AllocatorType::kMalloc, nullptr);
+        nullptr, AllocationSubsystem::kAllocatorShim));
   }
   base::TimeTicks t1 = base::TimeTicks::Now();
-  for (int i = 1; i <= kNumAllocations; ++i)
-    sampler->RecordFree(reinterpret_cast<void*>(static_cast<intptr_t>(i)));
+  for (int i = 1; i <= kNumAllocations; ++i) {
+    sampler->OnFree(
+        FreeNotificationData(reinterpret_cast<void*>(static_cast<intptr_t>(i)),
+                             AllocationSubsystem::kAllocatorShim));
+  }
   base::TimeTicks t2 = base::TimeTicks::Now();
 
   printf(
@@ -299,7 +325,7 @@ TEST_F(SamplingHeapProfilerTest, StartStop) {
   EXPECT_EQ(0, GetRunningSessionsCount());
 }
 
-// TODO(crbug.com/1116543): Test is crashing on Mac.
+// TODO(crbug.com/40711998): Test is crashing on Mac.
 #if BUILDFLAG(IS_MAC)
 #define MAYBE_ConcurrentStartStop DISABLED_ConcurrentStartStop
 #else
@@ -341,9 +367,10 @@ TEST_F(SamplingHeapProfilerTest, HookedAllocatorMuted) {
     // Manual allocations should be captured.
     sampler->AddSamplesObserver(&collector);
     void* const kAddress = reinterpret_cast<void*>(0x1234);
-    sampler->RecordAlloc(kAddress, 10000,
-                         PoissonAllocationSampler::kManualForTesting, nullptr);
-    sampler->RecordFree(kAddress);
+    sampler->OnAllocation(AllocationNotificationData(
+        kAddress, 10000, nullptr, AllocationSubsystem::kManualForTesting));
+    sampler->OnFree(
+        FreeNotificationData(kAddress, AllocationSubsystem::kManualForTesting));
     sampler->RemoveSamplesObserver(&collector);
     EXPECT_TRUE(collector.sample_added);
     EXPECT_TRUE(collector.sample_removed);

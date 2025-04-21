@@ -1,4 +1,4 @@
-// Copyright (c) 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,7 +15,7 @@ namespace debug {
 //
 // Expects `trace` and `cu_offsets` to be `num_frames` in size. If a frame
 // cannot be found, the corresponding value stored in `cu_offsets` is 0.
-void GetDwarfCompileUnitOffsets(void* const* trace,
+void GetDwarfCompileUnitOffsets(const void* const* trace,
                                 uint64_t* cu_offsets,
                                 size_t num_frames);
 
@@ -29,7 +29,7 @@ void GetDwarfCompileUnitOffsets(void* const* trace,
 //   ../../base/debug/stack_trace_unittest.cc:120,16
 //
 // This means `pc` was from line 120, column 16, of stack_trace_unittest.cc.
-bool GetDwarfSourceLineNumber(void* pc,
+bool GetDwarfSourceLineNumber(const void* pc,
                               uint64_t cu_offsets,
                               char* out,
                               size_t out_size);

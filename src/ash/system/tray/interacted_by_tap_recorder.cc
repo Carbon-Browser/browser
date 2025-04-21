@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -15,10 +15,10 @@ InteractedByTapRecorder::InteractedByTapRecorder(views::View* target_view) {
 }
 
 void InteractedByTapRecorder::OnEvent(ui::Event* event) {
-  if (event->type() == ui::ET_GESTURE_TAP) {
+  if (event->type() == ui::EventType::kGestureTap) {
     UMA_HISTOGRAM_ENUMERATION("ChromeOS.SystemTray.Interaction",
                               INTERACTION_TYPE_TAP, INTERACTION_TYPE_COUNT);
-  } else if (event->type() == ui::ET_MOUSE_PRESSED) {
+  } else if (event->type() == ui::EventType::kMousePressed) {
     UMA_HISTOGRAM_ENUMERATION("ChromeOS.SystemTray.Interaction",
                               INTERACTION_TYPE_CLICK, INTERACTION_TYPE_COUNT);
   }

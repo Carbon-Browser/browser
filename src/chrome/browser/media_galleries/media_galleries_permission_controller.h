@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "chrome/browser/media_galleries/media_galleries_dialog_controller.h"
 #include "chrome/browser/media_galleries/media_galleries_preferences.h"
@@ -120,10 +120,8 @@ class MediaGalleriesPermissionController
   void OnPreferencesInitialized();
 
   // SelectFileDialog::Listener implementation:
-  void FileSelected(const base::FilePath& path,
-                    int index,
-                    void* params) override;
-  void FileSelectionCanceled(void* params) override;
+  void FileSelected(const ui::SelectedFileInfo& file_info, int index) override;
+  void FileSelectionCanceled() override;
 
   // RemovableStorageObserver implementation.
   // Used to keep dialog in sync with removable device status.

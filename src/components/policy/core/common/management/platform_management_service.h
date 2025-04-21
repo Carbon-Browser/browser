@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,6 @@
 
 #include "base/containers/flat_map.h"
 #include "base/no_destructor.h"
-#include "build/chromeos_buildflags.h"
 
 #include "components/policy/core/common/management/management_service.h"
 #include "components/policy/policy_export.h"
@@ -23,7 +22,13 @@ class POLICY_EXPORT PlatformManagementService : public ManagementService {
   // Returns the singleton instance of PlatformManagementService.
   static PlatformManagementService* GetInstance();
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+  void AddLocalBrowserManagementStatusProvider(
+      std::unique_ptr<ManagementStatusProvider> provider);
+  bool has_local_browser_managment_status_provider() const {
+    return has_local_browser_managment_status_provider_;
+  }
+
+#if BUILDFLAG(IS_CHROMEOS)
   void AddChromeOsStatusProvider(
       std::unique_ptr<ManagementStatusProvider> provider);
   bool has_cros_status_provider() const { return has_cros_status_provider_; }
@@ -50,7 +55,8 @@ class POLICY_EXPORT PlatformManagementService : public ManagementService {
   PlatformManagementService();
   ~PlatformManagementService() override;
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+  bool has_local_browser_managment_status_provider_;
+#if BUILDFLAG(IS_CHROMEOS)
   bool has_cros_status_provider_;
 #endif
 };

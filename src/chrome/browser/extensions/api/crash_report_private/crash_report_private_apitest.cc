@@ -1,8 +1,9 @@
-// Copyright 2019 The Chromium Authors. All rights reserved.
+// Copyright 2019 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "ash/constants/ash_features.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/strcat.h"
 #include "base/strings/stringprintf.h"
 #include "base/system/sys_info.h"
@@ -20,6 +21,7 @@
 #include "components/crash/content/browser/error_reporting/mock_crash_endpoint.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "extensions/browser/extension_host.h"
 #include "extensions/browser/process_manager.h"
 #include "extensions/common/switches.h"
@@ -51,12 +53,12 @@ class CrashReportPrivateApiTest : public ExtensionApiTest {
   void SetUpOnMainThread() override {
     ExtensionApiTest::SetUpOnMainThread();
 
-    constexpr char kKey[] =
+    static constexpr char kKey[] =
         "MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC+uU63MD6T82Ldq5wjrDFn5mGmPnnnj"
         "WZBWxYXfpG4kVf0s+p24VkXwTXsxeI12bRm8/ft9sOq0XiLfgQEh5JrVUZqvFlaZYoS+g"
         "iZfUqzKFGMLa4uiSMDnvv+byxrqAepKz5G8XX/q5Wm5cvpdjwgiu9z9iM768xJy+Ca/G5"
         "qQwIDAQAB";
-    constexpr char kManifestTemplate[] =
+    static constexpr char kManifestTemplate[] =
         R"({
       "key": "%s",
       "name": "chrome.crashReportPrivate basic extension tests",
@@ -88,25 +90,25 @@ class CrashReportPrivateApiTest : public ExtensionApiTest {
   }
 
  protected:
-  const absl::optional<MockCrashEndpoint::Report>& last_report() {
+  const std::optional<MockCrashEndpoint::Report>& last_report() {
     return crash_endpoint_->last_report();
   }
-  const Extension* extension_;
+  raw_ptr<const Extension, DanglingUntriaged> extension_;
   std::unique_ptr<MockCrashEndpoint> crash_endpoint_;
   std::unique_ptr<ScopedMockChromeJsErrorReportProcessor> processor_;
 };
 
 IN_PROC_BROWSER_TEST_F(CrashReportPrivateApiTest, Basic) {
-  constexpr char kTestScript[] = R"(
+  static constexpr char kTestScript[] = R"(
     chrome.crashReportPrivate.reportError({
         message: "hi",
         url: "http://www.test.com",
       },
-      () => window.domAutomationController.send(""));
+      () => chrome.test.sendScriptResult(""));
   )";
   ExecuteScriptInBackgroundPage(extension_->id(), kTestScript);
 
-  const absl::optional<MockCrashEndpoint::Report>& report = last_report();
+  const std::optional<MockCrashEndpoint::Report>& report = last_report();
   ASSERT_TRUE(report);
   EXPECT_THAT(
       report->query,
@@ -126,7 +128,7 @@ IN_PROC_BROWSER_TEST_F(CrashReportPrivateApiTest, Basic) {
 }
 
 IN_PROC_BROWSER_TEST_F(CrashReportPrivateApiTest, ExtraParamsAndStackTrace) {
-  constexpr char kTestScript[] = R"-(
+  static constexpr char kTestScript[] = R"-(
     chrome.crashReportPrivate.reportError({
         message: "hi",
         url: "http://www.test.com/foo",
@@ -137,11 +139,11 @@ IN_PROC_BROWSER_TEST_F(CrashReportPrivateApiTest, ExtraParamsAndStackTrace) {
         debugId: "2751679EE:233977D75E03BAC9DA/255DD0",
         stackTrace: "   at <anonymous>:1:1",
       },
-      () => window.domAutomationController.send(""));
+      () => chrome.test.sendScriptResult(""));
   )-";
   ExecuteScriptInBackgroundPage(extension_->id(), kTestScript);
 
-  const absl::optional<MockCrashEndpoint::Report>& report = last_report();
+  const std::optional<MockCrashEndpoint::Report>& report = last_report();
   ASSERT_TRUE(report);
   // The product name is escaped twice. The first time, it becomes
   // "Chrome%20(Chrome%20OS)" and then the second escapes the '%' into '%25'.
@@ -165,7 +167,7 @@ IN_PROC_BROWSER_TEST_F(CrashReportPrivateApiTest, ExtraParamsAndStackTrace) {
 }
 
 IN_PROC_BROWSER_TEST_F(CrashReportPrivateApiTest, StackTraceWithErrorMessage) {
-  constexpr char kTestScript[] = R"(
+  static constexpr char kTestScript[] = R"(
     chrome.crashReportPrivate.reportError({
         message: "hi",
         url: "http://www.test.com/foo",
@@ -175,11 +177,11 @@ IN_PROC_BROWSER_TEST_F(CrashReportPrivateApiTest, StackTraceWithErrorMessage) {
         columnNumber: 456,
         stackTrace: 'hi'
       },
-      () => window.domAutomationController.send(""));
+      () => chrome.test.sendScriptResult(""));
   )";
   ExecuteScriptInBackgroundPage(extension_->id(), kTestScript);
 
-  const absl::optional<MockCrashEndpoint::Report>& report = last_report();
+  const std::optional<MockCrashEndpoint::Report>& report = last_report();
   ASSERT_TRUE(report);
   EXPECT_THAT(
       report->query,
@@ -201,7 +203,7 @@ IN_PROC_BROWSER_TEST_F(CrashReportPrivateApiTest, StackTraceWithErrorMessage) {
 IN_PROC_BROWSER_TEST_F(CrashReportPrivateApiTest, RedactMessage) {
   // We use the feedback APIs redaction tool, which scrubs many different types
   // of PII. As a sanity check, test if MAC addresses are redacted.
-  constexpr char kTestScript[] = R"(
+  static constexpr char kTestScript[] = R"(
     chrome.crashReportPrivate.reportError({
         message: "06-00-00-00-00-00",
         url: "http://www.test.com/foo",
@@ -210,11 +212,11 @@ IN_PROC_BROWSER_TEST_F(CrashReportPrivateApiTest, RedactMessage) {
         lineNumber: 123,
         columnNumber: 456,
       },
-      () => window.domAutomationController.send(""));
+      () => chrome.test.sendScriptResult(""));
   )";
   ExecuteScriptInBackgroundPage(extension_->id(), kTestScript);
 
-  const absl::optional<MockCrashEndpoint::Report>& report = last_report();
+  const std::optional<MockCrashEndpoint::Report>& report = last_report();
   ASSERT_TRUE(report);
   EXPECT_THAT(
       report->query,
@@ -222,7 +224,7 @@ IN_PROC_BROWSER_TEST_F(CrashReportPrivateApiTest, RedactMessage) {
           {"app_locale=en-US&browser=Chrome&browser_process_uptime_ms=\\d+&"
            "browser_version=1.2."
            "3.4&channel=Stable&column=456&"
-           "error_message=%5BMAC%20OUI%3D06%3A00%3A00%20IFACE%3D1%5D&"
+           "error_message=\\(MAC%20OUI%3D06%3A00%3A00%20IFACE%3D1\\)&"
            "full_url=http%3A%2F%2Fwww.test.com%2Ffoo&line=123&num-experiments="
            "1&"
            "os=ChromeOS&prod=TestApp&renderer_process_uptime_ms=\\d+&"
@@ -244,17 +246,17 @@ IN_PROC_BROWSER_TEST_F(CrashReportPrivateApiTest, SuppressedIfDevtoolsOpen) {
   DevToolsWindow* devtools_window =
       DevToolsWindowTesting::OpenDevToolsWindowSync(
           web_contents, false /** is devtools docked. */);
-  constexpr char kTestScript[] = R"(
+  static constexpr char kTestScript[] = R"(
     chrome.crashReportPrivate.reportError({
         message: "hi",
         url: "http://www.test.com",
       },
       () => {
-        window.domAutomationController.send(chrome.runtime.lastError ?
+        chrome.test.sendScriptResult(chrome.runtime.lastError ?
             chrome.runtime.lastError.message : "")
       });
   )";
-  const absl::optional<MockCrashEndpoint::Report>& report = last_report();
+  const std::optional<MockCrashEndpoint::Report>& report = last_report();
 
   // Ensure error is not reported since devtools is open.
   EXPECT_EQ("", ExecuteScriptInBackgroundPage(extension_->id(), kTestScript));
@@ -278,7 +280,7 @@ IN_PROC_BROWSER_TEST_F(CrashReportPrivateApiTest, CalledFromWebContentsInTab) {
       browser()->tab_strip_model()->GetActiveWebContents();
   EXPECT_TRUE(NavigateToURL(web_content, extension_context_url));
 
-  constexpr char kTestScript[] = R"(
+  static constexpr char kTestScript[] = R"(
     chrome.crashReportPrivate.reportError({
         message: "hi",
         url: "http://www.test.com",
@@ -287,8 +289,8 @@ IN_PROC_BROWSER_TEST_F(CrashReportPrivateApiTest, CalledFromWebContentsInTab) {
   )";
   // Run the script in the |web_content| that has loaded |extension_| instead of
   // |ExecuteScriptInBackgroundPage| so
-  // |chrome::FindBrowserWithWebContents(web_contents)| is not |nullptr|.
-  EXPECT_EQ(true, ExecuteScript(web_content, kTestScript));
+  // |chrome::FindBrowserWithTab(web_contents)| is not |nullptr|.
+  EXPECT_EQ(true, ExecJs(web_content, kTestScript));
 
   auto report = crash_endpoint_->WaitForReport();
   EXPECT_THAT(
@@ -314,10 +316,6 @@ using CrashReportPrivateCalledFromSwaTest = ash::SystemWebAppIntegrationTest;
 // window.
 IN_PROC_BROWSER_TEST_P(CrashReportPrivateCalledFromSwaTest,
                        CalledFromWebContentsInWebAppWindow) {
-  if (web_app::IsWebAppsCrosapiEnabled()) {
-    // TODO(crbug.com/1234938): Support Crosapi (web apps running in Lacros).
-    return;
-  }
   WaitForTestSystemAppInstall();
   // Set up test server to listen to handle crash reports & serve fake web app
   // content. Note: Creating a |MockCrashEndpoint| starts the server.
@@ -326,9 +324,9 @@ IN_PROC_BROWSER_TEST_P(CrashReportPrivateCalledFromSwaTest,
   ASSERT_TRUE(embedded_test_server()->Started());
   // Create and launch a test web app, opens in an app window.
   GURL start_url = embedded_test_server()->GetURL("/test_app.html");
-  auto web_app_info = std::make_unique<WebAppInstallInfo>();
-  web_app_info->start_url = start_url;
-  web_app::AppId app_id =
+  auto web_app_info =
+      web_app::WebAppInstallInfo::CreateWithStartUrlForTesting(start_url);
+  webapps::AppId app_id =
       web_app::test::InstallWebApp(profile(), std::move(web_app_info));
   Browser* app_browser = web_app::LaunchWebAppBrowserAndWait(profile(), app_id);
 
@@ -339,14 +337,14 @@ IN_PROC_BROWSER_TEST_P(CrashReportPrivateCalledFromSwaTest,
   const GURL extension_context_url("chrome://media-app");
   EXPECT_TRUE(NavigateToURL(web_content, extension_context_url));
 
-  constexpr char kTestScript[] = R"(
+  static constexpr char kTestScript[] = R"(
     chrome.crashReportPrivate.reportError({
         message: "hi",
         url: "http://www.test.com",
       },
       () => window.domAutomationController.send(""));
   )";
-  EXPECT_EQ(true, ExecuteScript(web_content, kTestScript));
+  EXPECT_EQ(true, ExecJs(web_content, kTestScript));
 
   auto report = endpoint.WaitForReport();
 
@@ -376,14 +374,14 @@ IN_PROC_BROWSER_TEST_P(CrashReportPrivateCalledFromSwaTest,
   MockCrashEndpoint endpoint(embedded_test_server());
   ScopedMockChromeJsErrorReportProcessor processor(endpoint);
 
-  constexpr char kTestScript[] = R"(
+  static constexpr char kTestScript[] = R"(
     chrome.crashReportPrivate.reportError({
         message: "hi",
         url: "http://www.test.com",
       },
       () => window.domAutomationController.send(""));
   )";
-  EXPECT_EQ(true, ExecuteScript(web_content, kTestScript));
+  EXPECT_EQ(true, ExecJs(web_content, kTestScript));
 
   auto report = endpoint.WaitForReport();
 

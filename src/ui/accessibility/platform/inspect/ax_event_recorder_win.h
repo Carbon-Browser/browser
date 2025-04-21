@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,14 +7,15 @@
 
 #include <oleacc.h>
 
+#include "base/component_export.h"
 #include "base/process/process_handle.h"
-#include "ui/accessibility/ax_export.h"
 #include "ui/accessibility/platform/inspect/ax_event_recorder.h"
 #include "ui/accessibility/platform/inspect/ax_inspect.h"
 
 namespace ui {
 
-class AX_EXPORT AXEventRecorderWin : public ui::AXEventRecorder {
+class COMPONENT_EXPORT(AX_PLATFORM) AXEventRecorderWin
+    : public AXEventRecorder {
  public:
   // Flag values that specify the way events are handled.
   enum ListenerType {
@@ -23,7 +24,7 @@ class AX_EXPORT AXEventRecorderWin : public ui::AXEventRecorder {
   };
 
   AXEventRecorderWin(base::ProcessId pid,
-                     const ui::AXTreeSelector& selector,
+                     const AXTreeSelector& selector,
                      ListenerType listenerType = kSync);
 
   AXEventRecorderWin(const AXEventRecorderWin&) = delete;

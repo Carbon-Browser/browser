@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-# Copyright 2015 The Chromium Authors. All rights reserved.
+#!/usr/bin/env python3
+# Copyright 2015 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -21,7 +21,7 @@ import wrapper_utils
 
 def CollectSONAME(args):
   """Replaces: readelf -d $sofile | grep SONAME"""
-  # TODO(crbug.com/1259067): Come up with a way to get this info without having
+  # TODO(crbug.com/40797404): Come up with a way to get this info without having
   # to bundle readelf in the toolchain package.
   toc = ''
   readelf = subprocess.Popen(wrapper_utils.CommandToRun(

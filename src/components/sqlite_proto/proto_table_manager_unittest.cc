@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,14 @@
 
 #include "base/memory/scoped_refptr.h"
 #include "base/strings/strcat.h"
+#include "base/task/single_thread_task_runner.h"
 #include "base/test/task_environment.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/sqlite_proto/key_value_data.h"
 #include "components/sqlite_proto/key_value_table.h"
 #include "components/sqlite_proto/test_proto.pb.h"
 #include "sql/database.h"
 #include "sql/meta_table.h"
+#include "sql/test/test_helpers.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -43,11 +44,11 @@ TEST(ProtoTableTest, PutReinitializeAndGet) {
   // existing database state.
 
   base::test::TaskEnvironment env;
-  sql::Database db;
+  sql::Database db(sql::test::kTestTag);
   CHECK(db.OpenInMemory());
 
   auto manager = base::MakeRefCounted<ProtoTableManager>(
-      base::ThreadTaskRunnerHandle::Get());
+      base::SingleThreadTaskRunner::GetCurrentDefault());
   manager->InitializeOnDbSequence(&db, std::vector<std::string>{kTableName},
                                   /*schema_version=*/1);
 
@@ -59,7 +60,7 @@ TEST(ProtoTableTest, PutReinitializeAndGet) {
 
   {
     KeyValueData<TestProto> data(manager, &table,
-                                 /*max_num_entries=*/absl::nullopt,
+                                 /*max_num_entries=*/std::nullopt,
                                  /*flush_delay=*/base::TimeDelta());
 
     // In these tests, we're using the current thread as the DB sequence.
@@ -71,13 +72,13 @@ TEST(ProtoTableTest, PutReinitializeAndGet) {
   }
 
   manager = base::MakeRefCounted<ProtoTableManager>(
-      base::ThreadTaskRunnerHandle::Get());
+      base::SingleThreadTaskRunner::GetCurrentDefault());
   manager->InitializeOnDbSequence(&db, std::vector<std::string>{kTableName},
                                   /*schema_version=*/1);
 
   {
     KeyValueData<TestProto> data(manager, &table,
-                                 /*max_num_entries=*/absl::nullopt,
+                                 /*max_num_entries=*/std::nullopt,
                                  /*flush_delay=*/base::TimeDelta());
 
     data.InitializeOnDBSequence();
@@ -100,13 +101,13 @@ TEST(ProtoTableTest, ReinitializingWithDifferentVersionClearsTables) {
   // existing database state.
 
   base::test::TaskEnvironment env;
-  sql::Database db;
+  sql::Database db(sql::test::kTestTag);
   CHECK(db.OpenInMemory());
 
   constexpr int kInitialVersion = 1;
 
   auto manager = base::MakeRefCounted<ProtoTableManager>(
-      base::ThreadTaskRunnerHandle::Get());
+      base::SingleThreadTaskRunner::GetCurrentDefault());
   manager->InitializeOnDbSequence(&db, std::vector<std::string>{kTableName},
                                   /*schema_version=*/kInitialVersion);
 
@@ -118,7 +119,7 @@ TEST(ProtoTableTest, ReinitializingWithDifferentVersionClearsTables) {
 
   {
     KeyValueData<TestProto> data(manager, &table,
-                                 /*max_num_entries=*/absl::nullopt,
+                                 /*max_num_entries=*/std::nullopt,
                                  /*flush_delay=*/base::TimeDelta());
 
     // In these tests, we're using the current thread as the DB sequence.
@@ -130,13 +131,13 @@ TEST(ProtoTableTest, ReinitializingWithDifferentVersionClearsTables) {
   }
 
   manager = base::MakeRefCounted<ProtoTableManager>(
-      base::ThreadTaskRunnerHandle::Get());
+      base::SingleThreadTaskRunner::GetCurrentDefault());
   manager->InitializeOnDbSequence(&db, std::vector<std::string>{kTableName},
                                   /*schema_version=*/kInitialVersion + 1);
 
   {
     KeyValueData<TestProto> data(manager, &table,
-                                 /*max_num_entries=*/absl::nullopt,
+                                 /*max_num_entries=*/std::nullopt,
                                  /*flush_delay=*/base::TimeDelta());
 
     data.InitializeOnDBSequence();
@@ -153,13 +154,13 @@ TEST(ProtoTableTest, InitializingWithoutWrittenVersionClearsTables) {
   // ProtoTableManager correctly clears the database.
 
   base::test::TaskEnvironment env;
-  sql::Database db;
+  sql::Database db(sql::test::kTestTag);
   CHECK(db.OpenInMemory());
 
   constexpr int kInitialVersion = 1;
 
   auto manager = base::MakeRefCounted<ProtoTableManager>(
-      base::ThreadTaskRunnerHandle::Get());
+      base::SingleThreadTaskRunner::GetCurrentDefault());
   manager->InitializeOnDbSequence(&db, std::vector<std::string>{kTableName},
                                   /*schema_version=*/kInitialVersion);
 
@@ -171,7 +172,7 @@ TEST(ProtoTableTest, InitializingWithoutWrittenVersionClearsTables) {
 
   {
     KeyValueData<TestProto> data(manager, &table,
-                                 /*max_num_entries=*/absl::nullopt,
+                                 /*max_num_entries=*/std::nullopt,
                                  /*flush_delay=*/base::TimeDelta());
 
     // In these tests, we're using the current thread as the DB sequence.
@@ -186,13 +187,13 @@ TEST(ProtoTableTest, InitializingWithoutWrittenVersionClearsTables) {
   }
 
   manager = base::MakeRefCounted<ProtoTableManager>(
-      base::ThreadTaskRunnerHandle::Get());
+      base::SingleThreadTaskRunner::GetCurrentDefault());
   manager->InitializeOnDbSequence(&db, std::vector<std::string>{kTableName},
                                   /*schema_version=*/kInitialVersion);
 
   {
     KeyValueData<TestProto> data(manager, &table,
-                                 /*max_num_entries=*/absl::nullopt,
+                                 /*max_num_entries=*/std::nullopt,
                                  /*flush_delay=*/base::TimeDelta());
 
     data.InitializeOnDBSequence();
@@ -209,13 +210,13 @@ TEST(ProtoTableTest, LoadingUnexpectedlyLargeVersionClearsTables) {
   // correctly clears the database.
 
   base::test::TaskEnvironment env;
-  sql::Database db;
+  sql::Database db(sql::test::kTestTag);
   CHECK(db.OpenInMemory());
 
   constexpr int kInitialVersion = 1;
 
   auto manager = base::MakeRefCounted<ProtoTableManager>(
-      base::ThreadTaskRunnerHandle::Get());
+      base::SingleThreadTaskRunner::GetCurrentDefault());
   manager->InitializeOnDbSequence(&db, std::vector<std::string>{kTableName},
                                   /*schema_version=*/kInitialVersion);
 
@@ -227,7 +228,7 @@ TEST(ProtoTableTest, LoadingUnexpectedlyLargeVersionClearsTables) {
 
   {
     KeyValueData<TestProto> data(manager, &table,
-                                 /*max_num_entries=*/absl::nullopt,
+                                 /*max_num_entries=*/std::nullopt,
                                  /*flush_delay=*/base::TimeDelta());
 
     // In these tests, we're using the current thread as the DB sequence.
@@ -246,19 +247,19 @@ TEST(ProtoTableTest, LoadingUnexpectedlyLargeVersionClearsTables) {
     // The SetVersionNumber is what actually overwrites the version.
     sql::MetaTable meta_helper;
     ASSERT_TRUE(meta_helper.Init(&db, 1, 1));
-    meta_helper.SetVersionNumber(kInitialVersion + 1);
-    meta_helper.SetCompatibleVersionNumber(kInitialVersion + 1);
+    ASSERT_TRUE(meta_helper.SetVersionNumber(kInitialVersion + 1));
+    ASSERT_TRUE(meta_helper.SetCompatibleVersionNumber(kInitialVersion + 1));
     env.RunUntilIdle();
   }
 
   manager = base::MakeRefCounted<ProtoTableManager>(
-      base::ThreadTaskRunnerHandle::Get());
+      base::SingleThreadTaskRunner::GetCurrentDefault());
   manager->InitializeOnDbSequence(&db, std::vector<std::string>{kTableName},
                                   /*schema_version=*/kInitialVersion);
 
   {
     KeyValueData<TestProto> data(manager, &table,
-                                 /*max_num_entries=*/absl::nullopt,
+                                 /*max_num_entries=*/std::nullopt,
                                  /*flush_delay=*/base::TimeDelta());
 
     data.InitializeOnDBSequence();

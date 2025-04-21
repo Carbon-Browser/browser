@@ -1,4 +1,4 @@
-/// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,6 +6,7 @@
 #define CHROME_BROWSER_UI_WEBUI_SIGNIN_SIGNIN_UI_ERROR_H_
 
 #include <string>
+#include <utility>
 
 #include "base/files/file_path.h"
 #include "build/build_config.h"
@@ -99,6 +100,52 @@ class SigninUIError {
   credential_provider::UiExitCodes credential_provider_exit_code_ =
       credential_provider::UiExitCodes::kUiecSuccess;
 #endif
+};
+
+// Holds different errors to be displayed through the Force Signin error dialog.
+class ForceSigninUIError {
+ public:
+  ForceSigninUIError(const ForceSigninUIError& other);
+  ForceSigninUIError& operator=(const ForceSigninUIError& other);
+
+  enum class Type {
+    kNone,
+    // Reauth is not allowed for this Profile.
+    kReauthNotAllowed,
+    // Reauth was attempted using a different account than the main one.
+    // The expected email will be shown in the error message.
+    kReauthWrongAccount,
+    // A timeout occurred while attempting to reauth.
+    kReauthTimeout,
+    // Signin pattern not matching.
+    kSigninPatternNotMatching,
+  };
+
+  // Helper pair to get the error messages based on the `Type` error enum to be
+  // displayed on the Profile Picker error dialog.
+  // - `first` for the title/header message.
+  // - `second` for the body message.
+  using UiTexts = std::pair<std::u16string, std::u16string>;
+
+  // Static constructors for each error type with the corresponding needed
+  // inputs.
+  static ForceSigninUIError ErrorNone();
+  static ForceSigninUIError ReauthNotAllowed();
+  static ForceSigninUIError ReauthWrongAccount(const std::string& email);
+  static ForceSigninUIError ReauthTimeout();
+  static ForceSigninUIError SigninPatternNotMatching(const std::string& email);
+
+  // Returns the error messages for the given `error`.
+  // `type_` must not be `ForceSigninUIError::kNone`.
+  UiTexts GetErrorTexts() const;
+
+  Type type() const;
+
+ private:
+  ForceSigninUIError(Type type, const std::string& email);
+
+  Type type_;
+  std::string email_;
 };
 
 #endif  // CHROME_BROWSER_UI_WEBUI_SIGNIN_SIGNIN_UI_ERROR_H_

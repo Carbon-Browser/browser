@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,11 +7,12 @@
 
 #include <ostream>
 
-#include "ash/components/phonehub/browser_tabs_metadata_fetcher.h"
-#include "ash/components/phonehub/browser_tabs_model_provider.h"
-#include "ash/services/multidevice_setup/public/cpp/multidevice_setup_client.h"
 #include "base/callback_list.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "chromeos/ash/components/phonehub/browser_tabs_metadata_fetcher.h"
+#include "chromeos/ash/components/phonehub/browser_tabs_model_provider.h"
+#include "chromeos/ash/services/multidevice_setup/public/cpp/multidevice_setup_client.h"
 
 namespace sync_sessions {
 class SessionSyncService;
@@ -21,8 +22,7 @@ namespace syncer {
 class SyncService;
 }  // namespace syncer
 
-namespace ash {
-namespace phonehub {
+namespace ash::phonehub {
 
 // Gets the browser tab model info by finding a SyncedSession (provided lazily
 // by a SessionService) with a |session_name| that matches the |pii_free_name|
@@ -49,6 +49,7 @@ class BrowserTabsModelProviderImpl
 
   // BrowserTabsModelProvider:
   void TriggerRefresh() override;
+  bool IsBrowserTabSyncEnabled() override;
 
  private:
   friend class BrowserTabsModelProviderImplTest;
@@ -61,20 +62,18 @@ class BrowserTabsModelProviderImpl
   void AttemptBrowserTabsModelUpdate();
   void InvalidateWeakPtrsAndClearTabMetadata(bool is_tab_sync_enabled);
   void OnMetadataFetched(
-      absl::optional<std::vector<BrowserTabsModel::BrowserTabMetadata>>
+      std::optional<std::vector<BrowserTabsModel::BrowserTabMetadata>>
           metadata);
-  absl::optional<std::string> GetSessionName() const;
+  std::optional<std::string> GetHostDeviceName() const;
 
-  multidevice_setup::MultiDeviceSetupClient* multidevice_setup_client_;
-  syncer::SyncService* sync_service_;
-  sync_sessions::SessionSyncService* session_sync_service_;
+  raw_ptr<multidevice_setup::MultiDeviceSetupClient> multidevice_setup_client_;
+  raw_ptr<syncer::SyncService> sync_service_;
+  raw_ptr<sync_sessions::SessionSyncService> session_sync_service_;
   std::unique_ptr<BrowserTabsMetadataFetcher> browser_tabs_metadata_fetcher_;
   base::CallbackListSubscription session_updated_subscription_;
-
   base::WeakPtrFactory<BrowserTabsModelProviderImpl> weak_ptr_factory_{this};
 };
 
-}  // namespace phonehub
-}  // namespace ash
+}  // namespace ash::phonehub
 
 #endif  // CHROME_BROWSER_ASH_PHONEHUB_BROWSER_TABS_MODEL_PROVIDER_IMPL_H_

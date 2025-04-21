@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,8 +12,8 @@
 #include <utility>
 #include <vector>
 
-#include "base/bind.h"
-#include "base/callback.h"
+#include "base/functional/bind.h"
+#include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "dbus/dbus_export.h"
 #include "dbus/message.h"
@@ -97,7 +97,7 @@
 //
 // This now allows code using the client implementation to access properties
 // in a type-safe manner, and assuming the PropertyChanged callback is
-// propogated up to observers, be notified of changes. A typical access of
+// propagated up to observers, be notified of changes. A typical access of
 // the current value of the name property would be:
 //
 //   ExampleClient::Properties* p = example_client->GetProperties(object_path);
@@ -333,7 +333,7 @@ class CHROME_DBUS_EXPORT PropertySet {
 
   // Pointer to object proxy for making method calls, no ownership is taken
   // so this must outlive this class.
-  raw_ptr<ObjectProxy> object_proxy_;
+  raw_ptr<ObjectProxy, AcrossTasksDanglingUntriaged> object_proxy_;
 
   // Interface of property, e.g. "org.chromium.ExampleService", this is
   // distinct from the interface of the method call itself which is the
@@ -347,7 +347,8 @@ class CHROME_DBUS_EXPORT PropertySet {
   // names as used in D-Bus method calls and signals. The base pointer
   // restricts property access via this map to type-unsafe and non-specific
   // actions only.
-  typedef std::map<const std::string, PropertyBase*> PropertiesMap;
+  typedef std::map<const std::string, raw_ptr<PropertyBase, CtnExperimental>>
+      PropertiesMap;
   PropertiesMap properties_map_;
 
   // Weak pointer factory as D-Bus callbacks may last longer than these

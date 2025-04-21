@@ -1,4 +1,4 @@
-// Copyright (c) 2012 The Chromium Authors. All rights reserved.
+// Copyright 2012 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,6 +12,7 @@
 #include "base/memory/ref_counted.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/common/extensions/api/page_capture.h"
+#include "extensions/browser/extension_api_frame_id_map.h"
 #include "extensions/browser/extension_function.h"
 #include "storage/browser/blob/shareable_file_reference.h"
 
@@ -24,10 +25,6 @@ class WebContents;
 }
 
 namespace extensions {
-
-#if BUILDFLAG(IS_CHROMEOS)
-class PermissionIDSet;
-#endif
 
 class PageCaptureSaveAsMHTMLFunction : public ExtensionFunction {
  public:
@@ -43,22 +40,16 @@ class PageCaptureSaveAsMHTMLFunction : public ExtensionFunction {
   };
   static void SetTestDelegate(TestDelegate* delegate);
 
-  // ExtensionFunction:
-  void OnServiceWorkerAck() override;
-
  private:
+  // ExtensionFunction:
   ~PageCaptureSaveAsMHTMLFunction() override;
   ResponseAction Run() override;
-  bool OnMessageReceived(const IPC::Message& message) override;
-
-#if BUILDFLAG(IS_CHROMEOS)
-  // Resolves the API permission request in Public Sessions.
-  void ResolvePermissionRequest(const PermissionIDSet& allowed_permissions);
-#endif
+  void OnResponseAck() override;
 
   // Returns whether or not the extension has permission to capture the current
   // page. Sets |*error| to an error value on failure.
-  bool CanCaptureCurrentPage(std::string* error);
+  bool CanCaptureCurrentPage(content::WebContents& web_contents,
+                             std::string* error);
 
   // Called on the file thread.
   void CreateTemporaryFile();
@@ -68,7 +59,7 @@ class PageCaptureSaveAsMHTMLFunction : public ExtensionFunction {
 
   // Called on the UI thread.
   void ReturnFailure(const std::string& error);
-  void ReturnSuccess(int64_t file_size);
+  void ReturnSuccess(int file_size);
 
   // Callback called once the MHTML generation is done.
   void MHTMLGenerated(int64_t mhtml_file_size);
@@ -76,7 +67,11 @@ class PageCaptureSaveAsMHTMLFunction : public ExtensionFunction {
   // Returns the WebContents we are associated with, NULL if it's been closed.
   content::WebContents* GetWebContents();
 
-  std::unique_ptr<extensions::api::page_capture::SaveAsMHTML::Params> params_;
+  // The document ID for the page being captured. Used to check that the page
+  // hasn't navigated before the capture completes.
+  ExtensionApiFrameIdMap::DocumentId document_id_;
+
+  std::optional<extensions::api::page_capture::SaveAsMHTML::Params> params_;
 
   // The path to the temporary file containing the MHTML data.
   base::FilePath mhtml_path_;

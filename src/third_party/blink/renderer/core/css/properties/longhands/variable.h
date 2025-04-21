@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -22,10 +22,7 @@ class CORE_EXPORT Variable : public Longhand {
   constexpr Variable() : Variable(true) {}
 
   bool IsAffectedByAll() const override { return false; }
-  CSSPropertyName GetCSSPropertyName() const override {
-    NOTREACHED();
-    return CSSPropertyName("");
-  }
+  CSSPropertyName GetCSSPropertyName() const override { NOTREACHED(); }
   const char* GetPropertyName() const override { return "variable"; }
   const WTF::AtomicString& GetPropertyNameAtomicString() const override {
     DEFINE_STATIC_LOCAL(const AtomicString, name, ("variable"));

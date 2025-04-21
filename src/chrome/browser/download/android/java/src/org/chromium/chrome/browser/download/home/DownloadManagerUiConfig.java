@@ -1,4 +1,4 @@
-// Copyright 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,13 +8,13 @@ import static org.chromium.components.browser_ui.util.ConversionUtils.BYTES_PER_
 
 import org.chromium.base.ContextUtils;
 import org.chromium.base.SysUtils;
-import org.chromium.chrome.browser.profiles.OTRProfileID;
+import org.chromium.chrome.browser.profiles.OtrProfileId;
 import org.chromium.ui.base.DeviceFormFactor;
 
 /** Provides the configuration params required by the download home UI. */
 public class DownloadManagerUiConfig {
     /** If not null, which off the record items to show in the UI. */
-    public final OTRProfileID otrProfileID;
+    public final OtrProfileId otrProfileId;
 
     /** Whether or not the UI should be shown as part of a separate activity. */
     public final boolean isSeparateActivity;
@@ -25,9 +25,7 @@ public class DownloadManagerUiConfig {
     /** Whether showing full width images should be supported. */
     public final boolean supportFullWidthImages;
 
-    /**
-     * The in-memory thumbnail size in bytes.
-     */
+    /** The in-memory thumbnail size in bytes. */
     public final int inMemoryThumbnailCacheSizeBytes;
 
     /**
@@ -53,7 +51,7 @@ public class DownloadManagerUiConfig {
 
     /** Constructor. */
     private DownloadManagerUiConfig(Builder builder) {
-        otrProfileID = builder.mOtrProfileID;
+        otrProfileId = builder.mOtrProfileId;
         isSeparateActivity = builder.mIsSeparateActivity;
         useGenericViewTypes = builder.mUseGenericViewTypes;
         supportFullWidthImages = builder.mSupportFullWidthImages;
@@ -74,7 +72,7 @@ public class DownloadManagerUiConfig {
 
         private static final float MAX_THUMBNAIL_SCALE_FACTOR = 1.5f; /* hdpi scale factor. */
 
-        private OTRProfileID mOtrProfileID;
+        private OtrProfileId mOtrProfileId;
         private boolean mIsSeparateActivity;
         private boolean mUseGenericViewTypes;
         private boolean mSupportFullWidthImages;
@@ -86,13 +84,14 @@ public class DownloadManagerUiConfig {
         private boolean mStartWithPrefetchedContent;
 
         public Builder() {
-            mSupportFullWidthImages = !DeviceFormFactor.isNonMultiDisplayContextOnTablet(
-                    ContextUtils.getApplicationContext());
+            mSupportFullWidthImages =
+                    !DeviceFormFactor.isNonMultiDisplayContextOnTablet(
+                            ContextUtils.getApplicationContext());
             mUseGenericViewTypes = SysUtils.isLowEndDevice();
         }
 
-        public Builder setOTRProfileID(OTRProfileID otrProfileID) {
-            mOtrProfileID = otrProfileID;
+        public Builder setOtrProfileId(OtrProfileId otrProfileId) {
+            mOtrProfileId = otrProfileId;
             return this;
         }
 

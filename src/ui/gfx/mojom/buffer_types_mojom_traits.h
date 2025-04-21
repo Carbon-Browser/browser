@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -53,11 +53,12 @@ struct COMPONENT_EXPORT(GFX_SHARED_MOJOM_TRAITS)
         return gfx::mojom::BufferFormat::YVU_420;
       case gfx::BufferFormat::YUV_420_BIPLANAR:
         return gfx::mojom::BufferFormat::YUV_420_BIPLANAR;
+      case gfx::BufferFormat::YUVA_420_TRIPLANAR:
+        return gfx::mojom::BufferFormat::YUVA_420_TRIPLANAR;
       case gfx::BufferFormat::P010:
         return gfx::mojom::BufferFormat::P010;
     }
     NOTREACHED();
-    return gfx::mojom::BufferFormat::kMinValue;
   }
 
   static bool FromMojom(gfx::mojom::BufferFormat input,
@@ -108,12 +109,14 @@ struct COMPONENT_EXPORT(GFX_SHARED_MOJOM_TRAITS)
       case gfx::mojom::BufferFormat::YUV_420_BIPLANAR:
         *out = gfx::BufferFormat::YUV_420_BIPLANAR;
         return true;
+      case gfx::mojom::BufferFormat::YUVA_420_TRIPLANAR:
+        *out = gfx::BufferFormat::YUVA_420_TRIPLANAR;
+        return true;
       case gfx::mojom::BufferFormat::P010:
         *out = gfx::BufferFormat::P010;
         return true;
     }
     NOTREACHED();
-    return false;
   }
 };
 
@@ -134,6 +137,8 @@ struct COMPONENT_EXPORT(GFX_SHARED_MOJOM_TRAITS)
         return gfx::mojom::BufferUsage::SCANOUT_CPU_READ_WRITE;
       case gfx::BufferUsage::SCANOUT_VDA_WRITE:
         return gfx::mojom::BufferUsage::SCANOUT_VDA_WRITE;
+      case gfx::BufferUsage::PROTECTED_SCANOUT:
+        return gfx::mojom::BufferUsage::PROTECTED_SCANOUT;
       case gfx::BufferUsage::PROTECTED_SCANOUT_VDA_WRITE:
         return gfx::mojom::BufferUsage::PROTECTED_SCANOUT_VDA_WRITE;
       case gfx::BufferUsage::GPU_READ_CPU_READ_WRITE:
@@ -146,7 +151,6 @@ struct COMPONENT_EXPORT(GFX_SHARED_MOJOM_TRAITS)
         return gfx::mojom::BufferUsage::SCANOUT_FRONT_RENDERING;
     }
     NOTREACHED();
-    return gfx::mojom::BufferUsage::kMinValue;
   }
 
   static bool FromMojom(gfx::mojom::BufferUsage input, gfx::BufferUsage* out) {
@@ -169,6 +173,9 @@ struct COMPONENT_EXPORT(GFX_SHARED_MOJOM_TRAITS)
       case gfx::mojom::BufferUsage::SCANOUT_VDA_WRITE:
         *out = gfx::BufferUsage::SCANOUT_VDA_WRITE;
         return true;
+      case gfx::mojom::BufferUsage::PROTECTED_SCANOUT:
+        *out = gfx::BufferUsage::PROTECTED_SCANOUT;
+        return true;
       case gfx::mojom::BufferUsage::PROTECTED_SCANOUT_VDA_WRITE:
         *out = gfx::BufferUsage::PROTECTED_SCANOUT_VDA_WRITE;
         return true;
@@ -186,7 +193,6 @@ struct COMPONENT_EXPORT(GFX_SHARED_MOJOM_TRAITS)
         return true;
     }
     NOTREACHED();
-    return false;
   }
 };
 
@@ -255,9 +261,10 @@ struct COMPONENT_EXPORT(GFX_SHARED_MOJOM_TRAITS)
         return gfx::mojom::BufferPlane::U;
       case gfx::BufferPlane::V:
         return gfx::mojom::BufferPlane::V;
+      case gfx::BufferPlane::A:
+        return gfx::mojom::BufferPlane::A;
     }
     NOTREACHED();
-    return gfx::mojom::BufferPlane::kMinValue;
   }
 
   static bool FromMojom(gfx::mojom::BufferPlane input, gfx::BufferPlane* out) {
@@ -277,9 +284,11 @@ struct COMPONENT_EXPORT(GFX_SHARED_MOJOM_TRAITS)
       case gfx::mojom::BufferPlane::V:
         *out = gfx::BufferPlane::V;
         return true;
+      case gfx::mojom::BufferPlane::A:
+        *out = gfx::BufferPlane::A;
+        return true;
     }
     NOTREACHED();
-    return false;
   }
 };
 

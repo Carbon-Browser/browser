@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,11 +8,9 @@
 #include "base/memory/raw_ptr.h"
 #include "ui/views/widget/tooltip_manager.h"
 
-namespace remote_cocoa {
-namespace mojom {
+namespace remote_cocoa::mojom {
 class NativeWidgetNSWindow;
-}  // namespace mojom
-}  // namespace remote_cocoa
+}  // namespace remote_cocoa::mojom
 
 namespace views {
 
@@ -30,10 +28,11 @@ class TooltipManagerMac : public TooltipManager {
   int GetMaxWidth(const gfx::Point& location) const override;
   const gfx::FontList& GetFontList() const override;
   void UpdateTooltip() override;
+  void UpdateTooltipForFocus(View* view) override;
   void TooltipTextChanged(View* view) override;
 
  private:
-  raw_ptr<remote_cocoa::mojom::NativeWidgetNSWindow>
+  raw_ptr<remote_cocoa::mojom::NativeWidgetNSWindow, DanglingUntriaged>
       bridge_;  // Weak. Owned by the owner of this.
 };
 

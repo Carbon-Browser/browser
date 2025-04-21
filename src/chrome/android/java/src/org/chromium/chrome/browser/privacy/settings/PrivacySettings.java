@@ -1,176 +1,317 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 package org.chromium.chrome.browser.privacy.settings;
 
+import static org.chromium.components.content_settings.PrefNames.COOKIE_CONTROLS_MODE;
+
 import android.os.Build;
 import android.os.Bundle;
 import android.text.SpannableString;
+import android.text.style.ClickableSpan;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
-import android.view.ViewGroup;
+import android.view.View;
 
+import androidx.annotation.VisibleForTesting;
 import androidx.preference.Preference;
-import androidx.preference.PreferenceFragmentCompat;
-import androidx.vectordrawable.graphics.drawable.VectorDrawableCompat;
 
+import org.chromium.base.metrics.RecordHistogram;
+import org.chromium.base.metrics.RecordUserAction;
+import org.chromium.base.supplier.ObservableSupplier;
+import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.chrome.R;
-import org.chromium.chrome.browser.feedback.HelpAndFeedbackLauncherImpl;
+import org.chromium.chrome.browser.enterprise.util.ManagedBrowserUtils;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.incognito.reauth.IncognitoReauthSettingSwitchPreference;
 import org.chromium.chrome.browser.preferences.Pref;
 import org.chromium.chrome.browser.prefetch.settings.PreloadPagesSettingsFragment;
 import org.chromium.chrome.browser.privacy.secure_dns.SecureDnsSettings;
-import org.chromium.chrome.browser.privacy_review.PrivacyReviewDialog;
+import org.chromium.chrome.browser.privacy_guide.PrivacyGuideInteractions;
 import org.chromium.chrome.browser.privacy_sandbox.PrivacySandboxBridge;
 import org.chromium.chrome.browser.privacy_sandbox.PrivacySandboxReferrer;
-import org.chromium.chrome.browser.privacy_sandbox.PrivacySandboxSettingsFragment;
-import org.chromium.chrome.browser.privacy_sandbox.PrivacySandboxSettingsFragmentV3;
-import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.privacy_sandbox.PrivacySandboxSettingsBaseFragment;
+import org.chromium.chrome.browser.quick_delete.QuickDeleteController;
+import org.chromium.chrome.browser.safe_browsing.SafeBrowsingBridge;
 import org.chromium.chrome.browser.safe_browsing.metrics.SettingsAccessPoint;
 import org.chromium.chrome.browser.safe_browsing.settings.SafeBrowsingSettingsFragment;
+import org.chromium.chrome.browser.settings.ChromeBaseSettingsFragment;
 import org.chromium.chrome.browser.settings.ChromeManagedPreferenceDelegate;
-import org.chromium.chrome.browser.settings.SettingsLauncherImpl;
+import org.chromium.chrome.browser.settings.SettingsNavigationFactory;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
+import org.chromium.chrome.browser.ssl.HttpsFirstModeSettingsFragment;
 import org.chromium.chrome.browser.sync.settings.GoogleServicesSettings;
 import org.chromium.chrome.browser.sync.settings.ManageSyncSettings;
 import org.chromium.chrome.browser.usage_stats.UsageStatsConsentDialog;
-import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
 import org.chromium.components.browser_ui.settings.ChromeSwitchPreference;
-import org.chromium.components.browser_ui.settings.ManagedPreferenceDelegate;
-import org.chromium.components.browser_ui.settings.SettingsLauncher;
 import org.chromium.components.browser_ui.settings.SettingsUtils;
-import org.chromium.components.prefs.PrefService;
+import org.chromium.components.browser_ui.site_settings.ContentSettingsResources;
+import org.chromium.components.browser_ui.site_settings.SingleCategorySettings;
+import org.chromium.components.browser_ui.util.TraceEventVectorDrawableCompat;
+import org.chromium.components.content_settings.CookieControlsMode;
 import org.chromium.components.signin.identitymanager.ConsentLevel;
 import org.chromium.components.user_prefs.UserPrefs;
-import org.chromium.ui.text.NoUnderlineClickableSpan;
+import org.chromium.device.DeviceFeatureList;
+import org.chromium.device.DeviceFeatureMap;
 import org.chromium.ui.text.SpanApplier;
 
-/**
- * Fragment to keep track of the all the privacy related preferences.
- */
-public class PrivacySettings
-        extends PreferenceFragmentCompat implements Preference.OnPreferenceChangeListener {
+/** Fragment to keep track of the all the privacy related preferences. */
+public class PrivacySettings extends ChromeBaseSettingsFragment
+        implements Preference.OnPreferenceChangeListener {
     private static final String PREF_CAN_MAKE_PAYMENT = "can_make_payment";
     private static final String PREF_PRELOAD_PAGES = "preload_pages";
     private static final String PREF_HTTPS_FIRST_MODE = "https_first_mode";
+    // TODO(crbug.com/349860796): Remove once new settings are fully rolled out.
+    private static final String PREF_HTTPS_FIRST_MODE_LEGACY = "https_first_mode_legacy";
     private static final String PREF_SECURE_DNS = "secure_dns";
     private static final String PREF_USAGE_STATS = "usage_stats_reporting";
-    private static final String PREF_DO_NOT_TRACK = "do_not_track";
     private static final String PREF_SAFE_BROWSING = "safe_browsing";
+    private static final String PREF_PASSWORD_LEAK_DETECTION = "password_leak_detection";
     private static final String PREF_SYNC_AND_SERVICES_LINK = "sync_and_services_link";
-    private static final String PREF_CLEAR_BROWSING_DATA = "clear_browsing_data";
     private static final String PREF_PRIVACY_SANDBOX = "privacy_sandbox";
-    private static final String PREF_PRIVACY_REVIEW = "privacy_review";
+    private static final String PREF_PRIVACY_GUIDE = "privacy_guide";
     private static final String PREF_INCOGNITO_LOCK = "incognito_lock";
+    private static final String PREF_JAVASCRIPT_OPTIMIZER = "javascript_optimizer";
+    private static final String PREF_PHONE_AS_A_SECURITY_KEY = "phone_as_a_security_key";
+    @VisibleForTesting static final String PREF_CLEAR_BROWSING_DATA = "clear_browsing_data";
+    @VisibleForTesting static final String PREF_DO_NOT_TRACK = "do_not_track";
+    @VisibleForTesting static final String PREF_FP_PROTECTION = "fp_protection";
+    @VisibleForTesting static final String PREF_IP_PROTECTION = "ip_protection";
+    @VisibleForTesting static final String PREF_THIRD_PARTY_COOKIES = "third_party_cookies";
+    @VisibleForTesting static final String PREF_TRACKING_PROTECTION = "tracking_protection";
 
-    private ManagedPreferenceDelegate mManagedPreferenceDelegate;
+    @VisibleForTesting
+    static final String PREF_CLEAR_BROWSING_DATA_ADVANCED = "clear_browsing_data_advanced";
+
     private IncognitoLockSettings mIncognitoLockSettings;
-    private ViewGroup mDialogContainer;
-    private BottomSheetController mBottomSheetController;
+    private final ObservableSupplierImpl<String> mPageTitle = new ObservableSupplierImpl<>();
 
     @Override
     public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
-        PrivacyPreferencesManagerImpl privacyPrefManager =
-                PrivacyPreferencesManagerImpl.getInstance();
+        mPageTitle.set(getString(R.string.prefs_privacy_security));
+
         SettingsUtils.addPreferencesFromResource(this, R.xml.privacy_preferences);
-        getActivity().setTitle(R.string.prefs_privacy_security);
+
+        Preference fpProtectionPreference = findPreference(PREF_FP_PROTECTION);
+        fpProtectionPreference.setVisible(shouldShowFpProtectionUi());
+
+        Preference ipProtectionPreference = findPreference(PREF_IP_PROTECTION);
+        ipProtectionPreference.setVisible(shouldShowIpProtectionUi());
+        ipProtectionPreference.setOnPreferenceClickListener(
+                preference -> {
+                    RecordUserAction.record("Settings.IpProtection.OpenedFromPrivacyPage");
+                    return false;
+                });
 
         Preference sandboxPreference = findPreference(PREF_PRIVACY_SANDBOX);
-        // Hide the Privacy Sandbox if it is restricted.
-        if (PrivacySandboxBridge.isPrivacySandboxRestricted()) {
-            getPreferenceScreen().removePreference(sandboxPreference);
-        } else {
-            sandboxPreference.setSummary(
-                    PrivacySandboxSettingsFragment.getStatusString(getContext()));
-            // Overwrite the click listener to pass a correct referrer to the fragment.
-            sandboxPreference.setOnPreferenceClickListener(preference -> {
-                PrivacySandboxSettingsFragmentV3.launchPrivacySandboxSettings(getContext(),
-                        new SettingsLauncherImpl(), PrivacySandboxReferrer.PRIVACY_SETTINGS);
-                return true;
-            });
+        // Overwrite the click listener to pass a correct referrer to the fragment.
+        sandboxPreference.setOnPreferenceClickListener(
+                preference -> {
+                    PrivacySandboxSettingsBaseFragment.launchPrivacySandboxSettings(
+                            getContext(), PrivacySandboxReferrer.PRIVACY_SETTINGS);
+                    return true;
+                });
+
+        PrivacySandboxBridge privacySandboxBridge = new PrivacySandboxBridge(getProfile());
+        if (privacySandboxBridge.isPrivacySandboxRestricted()) {
+            if (privacySandboxBridge.isRestrictedNoticeEnabled()) {
+                // Update the summary to one that describes only ad measurement if ad-measurement
+                // is available to restricted users.
+                sandboxPreference.setSummary(
+                        getContext()
+                                .getString(
+                                        R.string
+                                                .settings_ad_privacy_restricted_link_row_sub_label));
+            } else {
+                // Hide the Privacy Sandbox if it is restricted and ad-measurement is not
+                // available to restricted users.
+                getPreferenceScreen().removePreference(sandboxPreference);
+            }
         }
 
-        Preference privacyReviewPreference = findPreference(PREF_PRIVACY_REVIEW);
-        if (!ChromeFeatureList.isEnabled(ChromeFeatureList.PRIVACY_REVIEW)) {
-            getPreferenceScreen().removePreference(privacyReviewPreference);
-        } else {
-            // Display the privacy review dialog when the menu item is clicked.
-            privacyReviewPreference.setOnPreferenceClickListener(preference -> {
-                PrivacyReviewDialog dialog = new PrivacyReviewDialog(
-                        getContext(), mDialogContainer, mBottomSheetController);
-                dialog.show();
-                return true;
-            });
+        Preference privacyGuidePreference = findPreference(PREF_PRIVACY_GUIDE);
+        // Record the launch of PG from the S&P link-row entry point
+        privacyGuidePreference.setOnPreferenceClickListener(
+                preference -> {
+                    RecordUserAction.record("Settings.PrivacyGuide.StartPrivacySettings");
+                    RecordHistogram.recordEnumeratedHistogram(
+                            "Settings.PrivacyGuide.EntryExit",
+                            PrivacyGuideInteractions.SETTINGS_LINK_ROW_ENTRY,
+                            PrivacyGuideInteractions.MAX_VALUE);
+                    UserPrefs.get(getProfile()).setBoolean(Pref.PRIVACY_GUIDE_VIEWED, true);
+                    return false;
+                });
+        if (getProfile().isChild()
+                || ManagedBrowserUtils.isBrowserManaged(getProfile())
+                || ManagedBrowserUtils.isProfileManaged(getProfile())) {
+            getPreferenceScreen().removePreference(privacyGuidePreference);
         }
 
         IncognitoReauthSettingSwitchPreference incognitoReauthPreference =
                 (IncognitoReauthSettingSwitchPreference) findPreference(PREF_INCOGNITO_LOCK);
-        mIncognitoLockSettings = new IncognitoLockSettings(incognitoReauthPreference);
+        mIncognitoLockSettings = new IncognitoLockSettings(incognitoReauthPreference, getProfile());
         mIncognitoLockSettings.setUpIncognitoReauthPreference(getActivity());
 
         Preference safeBrowsingPreference = findPreference(PREF_SAFE_BROWSING);
         safeBrowsingPreference.setSummary(
-                SafeBrowsingSettingsFragment.getSafeBrowsingSummaryString(getContext()));
-        safeBrowsingPreference.setOnPreferenceClickListener((preference) -> {
-            preference.getExtras().putInt(
-                    SafeBrowsingSettingsFragment.ACCESS_POINT, SettingsAccessPoint.PARENT_SETTINGS);
-            return false;
-        });
+                SafeBrowsingSettingsFragment.getSafeBrowsingSummaryString(
+                        getContext(), getProfile()));
+        safeBrowsingPreference.setOnPreferenceClickListener(
+                (preference) -> {
+                    preference
+                            .getExtras()
+                            .putInt(
+                                    SafeBrowsingSettingsFragment.ACCESS_POINT,
+                                    SettingsAccessPoint.PARENT_SETTINGS);
+                    return false;
+                });
 
         setHasOptionsMenu(true);
 
-        mManagedPreferenceDelegate = createManagedPreferenceDelegate();
+        ChromeSwitchPreference passwordLeakTogglePref =
+                (ChromeSwitchPreference) findPreference(PREF_PASSWORD_LEAK_DETECTION);
+        if (ChromeFeatureList.isEnabled(ChromeFeatureList.PASSWORD_LEAK_TOGGLE_MOVE)) {
+            passwordLeakTogglePref.setOnPreferenceChangeListener(this);
+        } else {
+            passwordLeakTogglePref.setVisible(false);
+        }
 
         ChromeSwitchPreference canMakePaymentPref =
                 (ChromeSwitchPreference) findPreference(PREF_CAN_MAKE_PAYMENT);
         canMakePaymentPref.setOnPreferenceChangeListener(this);
 
-        ChromeSwitchPreference httpsFirstModePref =
-                (ChromeSwitchPreference) findPreference(PREF_HTTPS_FIRST_MODE);
-        httpsFirstModePref.setVisible(
-                ChromeFeatureList.isEnabled(ChromeFeatureList.HTTPS_FIRST_MODE));
-        httpsFirstModePref.setOnPreferenceChangeListener(this);
-        httpsFirstModePref.setManagedPreferenceDelegate(mManagedPreferenceDelegate);
-        httpsFirstModePref.setChecked(UserPrefs.get(Profile.getLastUsedRegularProfile())
-                                              .getBoolean(Pref.HTTPS_ONLY_MODE_ENABLED));
+        // TODO(crbug.com/349860796): Remove old version (PREF_HTTPS_FIRST_MODE_LEGACY)
+        // when new settings are fully rolled out.
+        Preference httpsFirstModePref = findPreference(PREF_HTTPS_FIRST_MODE);
+        ChromeSwitchPreference httpsFirstModeLegacySwitchPref =
+                (ChromeSwitchPreference) findPreference(PREF_HTTPS_FIRST_MODE_LEGACY);
+        if (ChromeFeatureList.isEnabled(ChromeFeatureList.HTTPS_FIRST_BALANCED_MODE)) {
+            // Hide the old toggle pref if the feature flag is enabled.
+            httpsFirstModeLegacySwitchPref.setVisible(false);
 
-        Preference secureDnsPref = findPreference(PREF_SECURE_DNS);
-        secureDnsPref.setVisible(SecureDnsSettings.isUiEnabled());
+            httpsFirstModePref.setSummary(
+                    HttpsFirstModeSettingsFragment.getSummary(getContext(), getProfile()));
+        } else {
+            // Hide the new pref item if the feature flag isn't enabled.
+            httpsFirstModePref.setVisible(false);
 
-        // Preference syncAndServicesLink = findPreference(PREF_SYNC_AND_SERVICES_LINK);
-        // syncAndServicesLink.setSummary(buildSyncAndServicesLink());
-        Preference syncServicesLinkPref = findPreference(PREF_SYNC_AND_SERVICES_LINK);
-        if (syncServicesLinkPref != null) {
-            getPreferenceScreen().removePreference(syncServicesLinkPref);
+            httpsFirstModeLegacySwitchPref.setOnPreferenceChangeListener(this);
+            httpsFirstModeLegacySwitchPref.setManagedPreferenceDelegate(
+                    new ChromeManagedPreferenceDelegate(getProfile()) {
+                        @Override
+                        public boolean isPreferenceControlledByPolicy(Preference preference) {
+                            String key = preference.getKey();
+                            assert PREF_HTTPS_FIRST_MODE_LEGACY.equals(key)
+                                    : "Unexpected preference key: " + key;
+                            return UserPrefs.get(getProfile())
+                                    .isManagedPreference(Pref.HTTPS_ONLY_MODE_ENABLED);
+                        }
+
+                        @Override
+                        public boolean isPreferenceClickDisabled(Preference preference) {
+                            // Advanced Protection automatically enables HTTPS-Only Mode so
+                            // lock the setting.
+                            return isPreferenceControlledByPolicy(preference)
+                                    || new SafeBrowsingBridge(getProfile())
+                                            .isUnderAdvancedProtection();
+                        }
+                    });
+            httpsFirstModeLegacySwitchPref.setChecked(
+                    UserPrefs.get(getProfile()).getBoolean(Pref.HTTPS_ONLY_MODE_ENABLED));
+            if (new SafeBrowsingBridge(getProfile()).isUnderAdvancedProtection()) {
+                httpsFirstModeLegacySwitchPref.setSummary(
+                        getContext()
+                                .getString(
+                                        R.string
+                                                .settings_https_first_mode_with_advanced_protection_summary));
+            }
         }
+
+        Preference syncAndServicesLink = findPreference(PREF_SYNC_AND_SERVICES_LINK);
+        syncAndServicesLink.setSummary(buildFooterString());
+
+        Preference thirdPartyCookies = findPreference(PREF_THIRD_PARTY_COOKIES);
+        if (showTrackingProtectionUi()) {
+            if (thirdPartyCookies != null) thirdPartyCookies.setVisible(false);
+            Preference trackingProtection = findPreference(PREF_TRACKING_PROTECTION);
+            trackingProtection.setVisible(true);
+        } else if (thirdPartyCookies != null) {
+            thirdPartyCookies
+                    .getExtras()
+                    .putString(SingleCategorySettings.EXTRA_CATEGORY, thirdPartyCookies.getKey());
+            thirdPartyCookies
+                    .getExtras()
+                    .putString(
+                            SingleCategorySettings.EXTRA_TITLE,
+                            thirdPartyCookies.getTitle().toString());
+        }
+
+        if (QuickDeleteController.isQuickDeleteFollowupEnabled()) {
+            Preference clearBrowsingDataPreference = findPreference(PREF_CLEAR_BROWSING_DATA);
+            Preference clearBrowsingDataAdvancedPreference =
+                    findPreference(PREF_CLEAR_BROWSING_DATA_ADVANCED);
+            clearBrowsingDataPreference.setVisible(false);
+            clearBrowsingDataAdvancedPreference.setVisible(true);
+        }
+
+        Preference javascriptOptimizerPref = findPreference(PREF_JAVASCRIPT_OPTIMIZER);
+        javascriptOptimizerPref
+                .getExtras()
+                .putString(SingleCategorySettings.EXTRA_CATEGORY, javascriptOptimizerPref.getKey());
+        javascriptOptimizerPref
+                .getExtras()
+                .putString(
+                        SingleCategorySettings.EXTRA_TITLE,
+                        javascriptOptimizerPref.getTitle().toString());
+
+        Preference phoneAsASecurityKey = findPreference(PREF_PHONE_AS_A_SECURITY_KEY);
+        phoneAsASecurityKey.setVisible(
+                DeviceFeatureMap.isEnabled(DeviceFeatureList.WEBAUTHN_ENABLE_PAASK_SETTING));
 
         updatePreferences();
     }
 
-    private SpannableString buildSyncAndServicesLink() {
-        SettingsLauncher settingsLauncher = new SettingsLauncherImpl();
-        NoUnderlineClickableSpan servicesLink = new NoUnderlineClickableSpan(getContext(), v -> {
-            settingsLauncher.launchSettingsActivity(getActivity(), GoogleServicesSettings.class);
-        });
+    @Override
+    public ObservableSupplier<String> getPageTitle() {
+        return mPageTitle;
+    }
+
+    private SpannableString buildFooterString() {
+        ClickableSpan servicesLink =
+                new ClickableSpan() {
+                    @Override
+                    public void onClick(View view) {
+                        SettingsNavigationFactory.createSettingsNavigation()
+                                .startSettings(getActivity(), GoogleServicesSettings.class);
+                    }
+                };
+
+        ClickableSpan accountSettingsLink =
+                new ClickableSpan() {
+                    @Override
+                    public void onClick(View view) {
+                        SettingsNavigationFactory.createSettingsNavigation()
+                                .startSettings(
+                                        getActivity(),
+                                        ManageSyncSettings.class,
+                                        ManageSyncSettings.createArguments(false));
+                    }
+                };
         if (IdentityServicesProvider.get()
-                        .getIdentityManager(Profile.getLastUsedRegularProfile())
-                        .getPrimaryAccountInfo(ConsentLevel.SYNC)
+                        .getIdentityManager(getProfile())
+                        .getPrimaryAccountInfo(ConsentLevel.SIGNIN)
                 == null) {
-            // Sync is off, show the string with one link to "Google Services".
+            // User is signed out, show the string with one link to "Google Services".
             return SpanApplier.applySpans(
-                    getString(R.string.privacy_sync_and_services_link_sync_off),
+                    getString(R.string.privacy_chrome_data_and_google_services_signed_out_footer),
                     new SpanApplier.SpanInfo("<link>", "</link>", servicesLink));
         }
-        // Otherwise, show the string with both links to "Sync" and "Google Services".
-        NoUnderlineClickableSpan syncLink = new NoUnderlineClickableSpan(getContext(), v -> {
-            settingsLauncher.launchSettingsActivity(getActivity(), ManageSyncSettings.class,
-                    ManageSyncSettings.createArguments(false));
-        });
-        return SpanApplier.applySpans(getString(R.string.privacy_sync_and_services_link_sync_on),
-                new SpanApplier.SpanInfo("<link1>", "</link1>", syncLink),
+        // Otherwise, show the string with both links to account settings and "Google Services".
+        return SpanApplier.applySpans(
+                getString(R.string.privacy_chrome_data_and_google_services_footer),
+                new SpanApplier.SpanInfo("<link1>", "</link1>", accountSettingsLink),
                 new SpanApplier.SpanInfo("<link2>", "</link2>", servicesLink));
     }
 
@@ -178,11 +319,15 @@ public class PrivacySettings
     public boolean onPreferenceChange(Preference preference, Object newValue) {
         String key = preference.getKey();
         if (PREF_CAN_MAKE_PAYMENT.equals(key)) {
-            UserPrefs.get(Profile.getLastUsedRegularProfile())
+            UserPrefs.get(getProfile())
                     .setBoolean(Pref.CAN_MAKE_PAYMENT_ENABLED, (boolean) newValue);
-        } else if (PREF_HTTPS_FIRST_MODE.equals(key)) {
-            UserPrefs.get(Profile.getLastUsedRegularProfile())
+        } else if (PREF_HTTPS_FIRST_MODE_LEGACY.equals(key)) {
+            // TODO(crbug.com/349860796): Remove once new settings are fully rolled out.
+            UserPrefs.get(getProfile())
                     .setBoolean(Pref.HTTPS_ONLY_MODE_ENABLED, (boolean) newValue);
+        } else if (PREF_PASSWORD_LEAK_DETECTION.equals(key)) {
+            UserPrefs.get(getProfile())
+                    .setBoolean(Pref.PASSWORD_LEAK_DETECTION_ENABLED, (boolean) newValue);
         }
         return true;
     }
@@ -193,21 +338,45 @@ public class PrivacySettings
         updatePreferences();
     }
 
-    /**
-     * Updates the preferences.
-     */
+    /** Updates the preferences. */
     public void updatePreferences() {
-        PrefService prefService = UserPrefs.get(Profile.getLastUsedRegularProfile());
+        ChromeSwitchPreference passwordLeakTogglePref =
+                (ChromeSwitchPreference) findPreference(PREF_PASSWORD_LEAK_DETECTION);
+        if (passwordLeakTogglePref != null && passwordLeakTogglePref.isVisible()) {
+            passwordLeakTogglePref.setEnabled(
+                    !UserPrefs.get(getProfile())
+                            .isManagedPreference(Pref.PASSWORD_LEAK_DETECTION_ENABLED));
+            passwordLeakTogglePref.setChecked(
+                    UserPrefs.get(getProfile()).getBoolean(Pref.PASSWORD_LEAK_DETECTION_ENABLED));
+        }
 
         ChromeSwitchPreference canMakePaymentPref =
                 (ChromeSwitchPreference) findPreference(PREF_CAN_MAKE_PAYMENT);
         if (canMakePaymentPref != null) {
-            canMakePaymentPref.setChecked(prefService.getBoolean(Pref.CAN_MAKE_PAYMENT_ENABLED));
+            canMakePaymentPref.setChecked(
+                    UserPrefs.get(getProfile()).getBoolean(Pref.CAN_MAKE_PAYMENT_ENABLED));
         }
 
         Preference doNotTrackPref = findPreference(PREF_DO_NOT_TRACK);
         if (doNotTrackPref != null) {
-            doNotTrackPref.setSummary(prefService.getBoolean(Pref.ENABLE_DO_NOT_TRACK)
+            doNotTrackPref.setSummary(
+                    UserPrefs.get(getProfile()).getBoolean(Pref.ENABLE_DO_NOT_TRACK)
+                            ? R.string.text_on
+                            : R.string.text_off);
+        }
+
+        Preference ipProtectionPref = findPreference(PREF_IP_PROTECTION);
+        if (ipProtectionPref != null) {
+            ipProtectionPref.setSummary(
+                    UserPrefs.get(getProfile()).getBoolean(Pref.IP_PROTECTION_ENABLED)
+                            ? R.string.text_on
+                            : R.string.text_off);
+        }
+
+        Preference fpProtectionPref = findPreference(PREF_FP_PROTECTION);
+        if (fpProtectionPref != null) {
+            fpProtectionPref.setSummary(
+                    UserPrefs.get(getProfile()).getBoolean(Pref.FINGERPRINTING_PROTECTION_ENABLED)
                             ? R.string.text_on
                             : R.string.text_off);
         }
@@ -215,7 +384,8 @@ public class PrivacySettings
         Preference preloadPagesPreference = findPreference(PREF_PRELOAD_PAGES);
         if (preloadPagesPreference != null) {
             preloadPagesPreference.setSummary(
-                    PreloadPagesSettingsFragment.getPreloadPagesSummaryString(getContext()));
+                    PreloadPagesSettingsFragment.getPreloadPagesSummaryString(
+                            getContext(), getProfile()));
         }
 
         Preference secureDnsPref = findPreference(PREF_SECURE_DNS);
@@ -226,74 +396,102 @@ public class PrivacySettings
         Preference safeBrowsingPreference = findPreference(PREF_SAFE_BROWSING);
         if (safeBrowsingPreference != null && safeBrowsingPreference.isVisible()) {
             safeBrowsingPreference.setSummary(
-                    SafeBrowsingSettingsFragment.getSafeBrowsingSummaryString(getContext()));
+                    SafeBrowsingSettingsFragment.getSafeBrowsingSummaryString(
+                            getContext(), getProfile()));
+        }
+
+        Preference httpsFirstModePreference = findPreference(PREF_HTTPS_FIRST_MODE);
+        if (httpsFirstModePreference != null && httpsFirstModePreference.isVisible()) {
+            httpsFirstModePreference.setSummary(
+                    HttpsFirstModeSettingsFragment.getSummary(getContext(), getProfile()));
         }
 
         Preference usageStatsPref = findPreference(PREF_USAGE_STATS);
         if (usageStatsPref != null) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
-                    && prefService.getBoolean(Pref.USAGE_STATS_ENABLED)) {
-                usageStatsPref.setOnPreferenceClickListener(preference -> {
-                    UsageStatsConsentDialog
-                            .create(getActivity(), true,
-                                    (didConfirm) -> {
-                                        if (didConfirm) {
-                                            updatePreferences();
-                                        }
-                                    })
-                            .show();
-                    return true;
-                });
+                    && UserPrefs.get(getProfile()).getBoolean(Pref.USAGE_STATS_ENABLED)) {
+                usageStatsPref.setOnPreferenceClickListener(
+                        preference -> {
+                            UsageStatsConsentDialog.create(
+                                            getActivity(),
+                                            getProfile(),
+                                            true,
+                                            (didConfirm) -> {
+                                                if (didConfirm) {
+                                                    updatePreferences();
+                                                }
+                                            })
+                                    .show();
+                            return true;
+                        });
             } else {
                 getPreferenceScreen().removePreference(usageStatsPref);
             }
         }
 
-        Preference privacySandboxPreference = findPreference(PREF_PRIVACY_SANDBOX);
-        if (privacySandboxPreference != null) {
-            privacySandboxPreference.setSummary(
-                    PrivacySandboxSettingsFragment.getStatusString(getContext()));
+        mIncognitoLockSettings.updateIncognitoReauthPreferenceIfNeeded(getActivity());
+
+        Preference trackingProtection = findPreference(PREF_TRACKING_PROTECTION);
+        if (trackingProtection != null) {
+            trackingProtection.setSummary(
+                    ContentSettingsResources.getTrackingProtectionListSummary(
+                            UserPrefs.get(getProfile())
+                                    .getBoolean(Pref.BLOCK_ALL3PC_TOGGLE_ENABLED)));
         }
 
-        mIncognitoLockSettings.updateIncognitoReauthPreferenceIfNeeded(getActivity());
+        Preference thirdPartyCookies = findPreference(PREF_THIRD_PARTY_COOKIES);
+        if (thirdPartyCookies != null) {
+            @CookieControlsMode
+            int cookieControlsMode = UserPrefs.get(getProfile()).getInteger(COOKIE_CONTROLS_MODE);
+            thirdPartyCookies.setSummary(
+                    ChromeFeatureList.isEnabled(ChromeFeatureList.ALWAYS_BLOCK_3PCS_INCOGNITO)
+                                    && cookieControlsMode == CookieControlsMode.INCOGNITO_ONLY
+                            ? R.string.third_party_cookies_link_row_sub_label_enabled
+                            : ContentSettingsResources.getThirdPartyCookieListSummary(
+                                    UserPrefs.get(getProfile()).getInteger(COOKIE_CONTROLS_MODE)));
+        }
     }
 
-    private ChromeManagedPreferenceDelegate createManagedPreferenceDelegate() {
-        return preference -> {
-            String key = preference.getKey();
-            if (PREF_HTTPS_FIRST_MODE.equals(key)) {
-                return UserPrefs.get(Profile.getLastUsedRegularProfile())
-                        .isManagedPreference(Pref.HTTPS_ONLY_MODE_ENABLED);
-            }
-            return false;
-        };
+    private boolean showTrackingProtectionUi() {
+        return UserPrefs.get(getProfile()).getBoolean(Pref.TRACKING_PROTECTION3PCD_ENABLED)
+                || ChromeFeatureList.isEnabled(ChromeFeatureList.TRACKING_PROTECTION_3PCD);
+    }
+
+    private boolean shouldShowIpProtectionUi() {
+        return !showTrackingProtectionUi()
+                && ChromeFeatureList.isEnabled(ChromeFeatureList.IP_PROTECTION_UX);
+    }
+
+    private boolean shouldShowFpProtectionUi() {
+        return !showTrackingProtectionUi()
+                && ChromeFeatureList.isEnabled(ChromeFeatureList.FINGERPRINTING_PROTECTION_UX);
     }
 
     @Override
     public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
         menu.clear();
-        // MenuItem help =
-        //         menu.add(Menu.NONE, R.id.menu_id_targeted_help, Menu.NONE, R.string.menu_help);
-        // help.setIcon(VectorDrawableCompat.create(
-        //         getResources(), R.drawable.ic_help_and_feedback, getActivity().getTheme()));
+        MenuItem help =
+                menu.add(Menu.NONE, R.id.menu_id_targeted_help, Menu.NONE, R.string.menu_help);
+        help.setIcon(
+                TraceEventVectorDrawableCompat.create(
+                        getResources(), R.drawable.ic_help_and_feedback, getActivity().getTheme()));
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         if (item.getItemId() == R.id.menu_id_targeted_help) {
-            HelpAndFeedbackLauncherImpl.getInstance().show(getActivity(),
-                    getString(R.string.help_context_privacy), Profile.getLastUsedRegularProfile(),
-                    null);
+            getHelpAndFeedbackLauncher()
+                    .show(getActivity(), getString(R.string.help_context_privacy), null);
             return true;
         }
         return false;
     }
 
-    public void setDialogContainer(ViewGroup dialogContainer) {
-        mDialogContainer = dialogContainer;
-    }
-
-    public void setBottomSheetController(BottomSheetController controller) {
-        mBottomSheetController = controller;
+    @Override
+    public void onDestroy() {
+        if (mIncognitoLockSettings != null) {
+            mIncognitoLockSettings.destroy();
+        }
+        super.onDestroy();
     }
 }

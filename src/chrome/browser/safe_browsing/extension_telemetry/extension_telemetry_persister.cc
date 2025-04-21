@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,8 +6,8 @@
 
 #include <sstream>
 
-#include "base/callback.h"
 #include "base/files/file_util.h"
+#include "base/functional/callback.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/path_service.h"
@@ -22,6 +22,9 @@
 namespace safe_browsing {
 
 namespace {
+
+using WriteReportTrigger = ExtensionTelemetryPersister::WriteReportTrigger;
+
 // If a file is older than `kMaxFileAge` it will be deleted instead
 // of read.
 constexpr base::TimeDelta kMaxFileAge = base::Days(3);
@@ -29,10 +32,24 @@ constexpr base::TimeDelta kMaxFileAge = base::Days(3);
 constexpr int kInitialWriteIndex = 0;
 constexpr int kInitialReadIndex = -1;
 constexpr char kPersistedFileNamePrefix[] = "CRXTelemetry_";
+// `kMaxCacheSize` is based off of a 12 hour reporting interval with a 15
+// minute write interval. This value is used to size the UMA metric,
+// there are no plans for the persister to have a cache this large.
+constexpr int kMaxCacheSize = 48;
 
-void RecordWriteResult(bool success) {
-  base::UmaHistogramBoolean("SafeBrowsing.ExtensionPersister.WriteResult",
-                            success);
+void RecordWriteResult(bool success, WriteReportTrigger trigger) {
+  std::string metric = "SafeBrowsing.ExtensionPersister.WriteResult";
+  std::string suffix;
+  switch (trigger) {
+    case WriteReportTrigger::kAtWriteInterval:
+      suffix = ".AtWriteInterval";
+      break;
+    case WriteReportTrigger::kAtShutdown:
+      suffix = ".AtShutdown";
+      break;
+  }
+  base::UmaHistogramBoolean(metric, success);
+  base::UmaHistogramBoolean(metric + suffix, success);
 }
 
 void RecordReadResult(bool success) {
@@ -46,12 +63,9 @@ void RecordPersistedFileSize(size_t size) {
 }
 
 void RecordNumberOfFilesInCacheOnStartup(int cache_size) {
-  // `max_cache_size` is based off of a 12 hour reporting interval with a 15
-  // minute write interval. Add 1 to the `max_cache_size` to account for
-  // zero files in the cache.
-  int max_cache_size = 48;
+  // Add 1 to `kMaxCacheSize` to account for zero files in the cache.
   base::UmaHistogramExactLinear("SafeBrowsing.ExtensionPersister.CacheSize",
-                                cache_size, max_cache_size + 1);
+                                cache_size, kMaxCacheSize + 1);
 }
 
 void RecordAgedFileFound(bool found) {
@@ -65,11 +79,13 @@ ExtensionTelemetryPersister::~ExtensionTelemetryPersister() = default;
 ExtensionTelemetryPersister::ExtensionTelemetryPersister(
     int max_num_files,
     base::FilePath profile_path)
-    : dir_path_(profile_path), max_num_files_(max_num_files) {}
+    : dir_path_(profile_path), max_num_files_(max_num_files) {
+  DCHECK(max_num_files <= kMaxCacheSize);
+}
 
 void ExtensionTelemetryPersister::PersisterInit() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  // TODO(https://crbug.com/1325864): Remove old directory clean up code after
+  // TODO(crbug.com/40225665): Remove old directory clean up code after
   // launch.
   base::FilePath old_dir;
   if (base::PathService::Get(chrome::DIR_USER_DATA, &old_dir)) {
@@ -91,10 +107,11 @@ void ExtensionTelemetryPersister::PersisterInit() {
   }
   write_index_ = (read_index_ + 1) % max_num_files_;
   initialization_complete_ = true;
-  RecordNumberOfFilesInCacheOnStartup(read_index_ + 1);
+  RecordNumberOfFilesInCacheOnStartup(read_index_);
 }
 
-void ExtensionTelemetryPersister::WriteReport(const std::string write_string) {
+void ExtensionTelemetryPersister::WriteReport(const std::string write_string,
+                                              WriteReportTrigger trigger) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (initialization_complete_) {
     if (!base::DirectoryExists(dir_path_)) {
@@ -112,7 +129,7 @@ void ExtensionTelemetryPersister::WriteReport(const std::string write_string) {
       if (write_index_ >= max_num_files_)
         write_index_ = 0;
     }
-    RecordWriteResult(success);
+    RecordWriteResult(success, trigger);
   }
 }
 
@@ -158,6 +175,10 @@ void ExtensionTelemetryPersister::ClearPersistedFiles() {
   write_index_ = kInitialWriteIndex;
   read_index_ = kInitialReadIndex;
   base::DeletePathRecursively(dir_path_);
+}
+
+int ExtensionTelemetryPersister::MaxFilesSupported() {
+  return kMaxCacheSize;
 }
 
 bool ExtensionTelemetryPersister::DeleteFile(const base::FilePath path) {

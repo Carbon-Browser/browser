@@ -1,4 +1,4 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
+// Copyright 2014 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 #include "device/bluetooth/bluetooth_remote_gatt_characteristic.h"
 #include "device/bluetooth/bluetooth_remote_gatt_descriptor.h"
 #include "device/bluetooth/public/cpp/bluetooth_uuid.h"
@@ -44,13 +44,13 @@ class MockBluetoothGattDescriptor : public BluetoothRemoteGattDescriptor {
     ReadRemoteDescriptor_(c);
   }
   MOCK_METHOD1(ReadRemoteDescriptor_, void(ValueCallback&));
-  void WriteRemoteDescriptor(const std::vector<uint8_t>& v,
+  void WriteRemoteDescriptor(base::span<const uint8_t> v,
                              base::OnceClosure c,
                              ErrorCallback ec) override {
     WriteRemoteDescriptor_(v, c, ec);
   }
   MOCK_METHOD3(WriteRemoteDescriptor_,
-               void(const std::vector<uint8_t>&,
+               void(base::span<const uint8_t>,
                     base::OnceClosure&,
                     ErrorCallback&));
 };

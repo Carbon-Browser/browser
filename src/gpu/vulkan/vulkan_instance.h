@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -40,8 +40,8 @@ class COMPONENT_EXPORT(VULKAN) VulkanInstance {
   // `required_extensions` or `required_layers`.
   bool BindUnassignedFunctionPointers(
       const base::FilePath& vulkan_loader_library_path);
-  bool InitializeInstace(const std::vector<const char*>& required_extensions,
-                         const std::vector<const char*>& required_layers);
+  bool InitializeInstance(const std::vector<const char*>& required_extensions,
+                          const std::vector<const char*>& required_layers);
 
   const VulkanInfo& vulkan_info() const { return vulkan_info_; }
 

@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -23,6 +23,7 @@ const CpuUarchTableEntry kCpuUarchTable[] = {
     // These were found on various sources on the Internet. Main ones are:
     // http://instlatx64.atw.hu/ for CPUID to model name and
     // http://www.cpu-world.com for model name to microarchitecture
+    // clang-format off
     {"06_09", "Banias"},
     {"06_0D", "Dothan"},
     {"06_0F", "Merom"},
@@ -59,13 +60,53 @@ const CpuUarchTableEntry kCpuUarchTable[] = {
     {"06_5E", "Skylake"},
     {"06_5F", "Goldmont"},    // Denverton
     {"06_7A", "GoldmontPlus"},
+    {"06_7E", "IceLake"},
     {"06_8C", "Tigerlake"},
+    {"06_8D", "Tigerlake"},
     {"06_8E", "Kabylake"},
+    {"06_97", "AlderLake"},
+    {"06_9A", "AlderLake"},
+    {"06_9C", "Tremont"},     // Jasperlake
     {"06_9E", "Kabylake"},
+    {"06_A5", "CometLake"},
+    {"06_A6", "CometLake"},
+    {"06_B7", "RaptorLake"},
+    {"06_BA", "RaptorLake"},
+    {"06_BE", "Gracemont"},   // Alderlake-N
+    {"06_BF", "RaptorLake"},
     {"0F_03", "Prescott"},
     {"0F_04", "Prescott"},
     {"0F_06", "Presler"},
+    {"0F_68", "Athlon64"},
+    {"0F_6B", "Athlon64"},
+    {"10_02", "K10"},
+    {"10_04", "K10"},
+    {"10_05", "K10"},
+    {"10_06", "K10"},
+    {"12_01", "Llano"},
+    {"14_01", "Bobcat"},
+    {"14_02", "Bobcat"},
+    {"15_01", "Bulldozer"},
+    {"15_10", "Piledriver"},  // AMD Trinity
+    {"15_13", "Piledriver"},  // AMD Richland
+    {"15_30", "Steamroller"}, // AMD Kaveri
+    {"15_38", "Steamroller"}, // AMD Godavari
+    {"15_60", "Excavator"},   // AMD Carizzo
+    {"15_65", "Excavator"},   // AMD Bristol Ridge
     {"15_70", "Excavator"},   // AMD Stoney Ridge
+    {"16_00", "Jaguar"},      // AMD APUs Beema, Mullins, Steppe & Crowned Eagle
+    {"16_30", "Puma"},        // AMD APUs Kabini, Temash, Kyoto
+    {"17_01", "Zen"},         // AMD Summit Ridge
+    {"17_08", "Zen+"},        // AMD Pinacle Ridge
+    {"17_11", "Zen"},         // AMD Raven Ridge
+    {"17_18", "Zen+"},        // AMD Picasso
+    {"17_20", "Zen"},         // AMD Dali
+    {"17_60", "Zen2"},        // AMD Renoir
+    {"17_68", "Zen2"},        // AMD Lucienne
+    {"17_71", "Zen2"},        // AMD Matisse
+    {"17_A0", "Zen2"},        // AMD Mendocino
+    {"19_50", "Zen3"},        // AMD Cezanne
+    // clang-format on
 };
 
 const CpuUarchTableEntry* kCpuUarchTableEnd =
@@ -82,7 +123,7 @@ CPUIdentity::CPUIdentity() : family(0), model(0) {}
 
 CPUIdentity::CPUIdentity(const CPUIdentity& other) = default;
 
-CPUIdentity::~CPUIdentity() {}
+CPUIdentity::~CPUIdentity() = default;
 
 std::string GetCpuUarch(const CPUIdentity& cpuid) {
   if (cpuid.vendor != "GenuineIntel" && cpuid.vendor != "AuthenticAMD")

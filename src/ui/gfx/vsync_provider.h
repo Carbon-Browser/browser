@@ -1,17 +1,17 @@
-// Copyright 2013 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #ifndef UI_GFX_VSYNC_PROVIDER_H_
 #define UI_GFX_VSYNC_PROVIDER_H_
 
-#include "base/callback.h"
+#include "base/component_export.h"
+#include "base/functional/callback.h"
 #include "base/time/time.h"
-#include "ui/gfx/gfx_export.h"
 
 namespace gfx {
 
-class GFX_EXPORT VSyncProvider {
+class COMPONENT_EXPORT(GFX) VSyncProvider {
  public:
   virtual ~VSyncProvider() {}
 
@@ -40,7 +40,7 @@ class GFX_EXPORT VSyncProvider {
 };
 
 // Provides a constant timebase and interval.
-class GFX_EXPORT FixedVSyncProvider : public VSyncProvider {
+class COMPONENT_EXPORT(GFX) FixedVSyncProvider : public VSyncProvider {
  public:
   FixedVSyncProvider(base::TimeTicks timebase, base::TimeDelta interval)
     : timebase_(timebase), interval_(interval) {

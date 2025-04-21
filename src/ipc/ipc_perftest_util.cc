@@ -1,6 +1,11 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/351564777): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "ipc/ipc_perftest_util.h"
 
@@ -8,6 +13,7 @@
 
 #include "base/logging.h"
 #include "base/run_loop.h"
+#include "base/task/single_thread_task_runner.h"
 #include "build/build_config.h"
 #include "ipc/ipc_channel_proxy.h"
 #include "ipc/ipc_perftest_messages.h"
@@ -117,7 +123,8 @@ int MojoPerfTestClient::Run(MojoHandle handle) {
   base::RunLoop run_loop;
   std::unique_ptr<ChannelProxy> channel = IPC::ChannelProxy::Create(
       handle_.release(), Channel::MODE_CLIENT, listener_.get(),
-      GetIOThreadTaskRunner(), base::ThreadTaskRunnerHandle::Get());
+      GetIOThreadTaskRunner(),
+      base::SingleThreadTaskRunner::GetCurrentDefault());
   listener_->Init(channel.get(), run_loop.QuitWhenIdleClosure());
   run_loop.Run();
   return 0;

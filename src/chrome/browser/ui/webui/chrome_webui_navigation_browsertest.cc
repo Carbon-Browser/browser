@@ -1,11 +1,10 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2020 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
-#include "chrome/browser/ui/webui/chrome_web_ui_controller_factory.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "content/public/browser/webui_config_map.h"
@@ -43,8 +42,8 @@ IN_PROC_BROWSER_TEST_F(ChromeWebUINavigationBrowserTest,
                        DisallowEmbeddingChromeSchemeFromWebFrameBrowserCheck) {
   GURL main_frame_url(embedded_test_server()->GetURL("/title1.html"));
   auto* web_contents = browser()->tab_strip_model()->GetActiveWebContents();
-  auto* main_frame = web_contents->GetPrimaryMainFrame();
   EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(), main_frame_url));
+  auto* main_frame = web_contents->GetPrimaryMainFrame();
 
   // Add iframe but don't navigate it to a chrome:// URL yet.
   EXPECT_TRUE(content::ExecJs(main_frame,
@@ -76,8 +75,8 @@ IN_PROC_BROWSER_TEST_F(
     DisallowEmbeddingChromeUntrustedSchemeFromWebFrameBrowserCheck) {
   GURL main_frame_url(embedded_test_server()->GetURL("/title1.html"));
   auto* web_contents = browser()->tab_strip_model()->GetActiveWebContents();
-  auto* main_frame = web_contents->GetPrimaryMainFrame();
   EXPECT_TRUE(ui_test_utils::NavigateToURL(browser(), main_frame_url));
+  auto* main_frame = web_contents->GetPrimaryMainFrame();
 
   // Add iframe but don't navigate it to a chrome-untrusted:// URL yet.
   EXPECT_TRUE(content::ExecJs(main_frame,

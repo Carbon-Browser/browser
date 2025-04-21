@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -6,13 +6,14 @@
 
 #include <utility>
 
-#include "base/bind.h"
+#include "base/functional/bind.h"
 #include "base/synchronization/waitable_event.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/window_container_type.mojom-shared.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom-shared.h"
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom.h"
+#include "third_party/blink/public/mojom/window_features/window_features.mojom.h"
 #include "url/gurl.h"
 
 namespace background_loader {
@@ -64,7 +65,7 @@ BackgroundLoaderContentsTest::BackgroundLoaderContentsTest()
       waiter_(base::WaitableEvent::ResetPolicy::MANUAL,
               base::WaitableEvent::InitialState::NOT_SIGNALED) {}
 
-BackgroundLoaderContentsTest::~BackgroundLoaderContentsTest() {}
+BackgroundLoaderContentsTest::~BackgroundLoaderContentsTest() = default;
 
 void BackgroundLoaderContentsTest::SetUp() {
   contents_.reset(new BackgroundLoaderContents());
@@ -115,12 +116,12 @@ TEST_F(BackgroundLoaderContentsTest, SuppressDialogs) {
 }
 
 TEST_F(BackgroundLoaderContentsTest, DoesNotFocusAfterCrash) {
-  ASSERT_FALSE(contents()->ShouldFocusPageAfterCrash());
+  ASSERT_FALSE(contents()->ShouldFocusPageAfterCrash(nullptr));
 }
 
 TEST_F(BackgroundLoaderContentsTest, CannotDownloadNoDelegate) {
   contents()->CanDownload(
-      GURL::EmptyGURL(), std::string(),
+      GURL(), std::string(),
       base::BindOnce(&BackgroundLoaderContentsTest::DownloadCallback,
                      base::Unretained(this)));
   WaitForSignal();
@@ -131,7 +132,7 @@ TEST_F(BackgroundLoaderContentsTest, CannotDownloadNoDelegate) {
 TEST_F(BackgroundLoaderContentsTest, CanDownload_DelegateCalledWhenSet) {
   SetDelegate();
   contents()->CanDownload(
-      GURL::EmptyGURL(), std::string(),
+      GURL(), std::string(),
       base::BindOnce(&BackgroundLoaderContentsTest::DownloadCallback,
                      base::Unretained(this)));
   WaitForSignal();
@@ -144,7 +145,7 @@ TEST_F(BackgroundLoaderContentsTest, ShouldNotCreateWebContents) {
       nullptr /* source_site_instance */,
       content::mojom::WindowContainerType::NORMAL /* window_container_type */,
       GURL() /* opener_url */, "foo" /* frame_name */,
-      GURL::EmptyGURL() /* target_url */));
+      GURL() /* target_url */));
 }
 
 TEST_F(BackgroundLoaderContentsTest, ShouldNotAddNewContents) {
@@ -154,23 +155,23 @@ TEST_F(BackgroundLoaderContentsTest, ShouldNotAddNewContents) {
       std::unique_ptr<content::WebContents>() /* new_contents */,
       GURL() /* target_url */,
       WindowOpenDisposition::CURRENT_TAB /* disposition */,
-      gfx::Rect() /* initial_rect */, false /* user_gesture */,
-      &blocked /* was_blocked */);
+      blink::mojom::WindowFeatures() /* window_features */,
+      false /* user_gesture */, &blocked /* was_blocked */);
   ASSERT_TRUE(blocked);
 }
 
 TEST_F(BackgroundLoaderContentsTest, DoesNotGiveMediaAccessPermission) {
   content::MediaStreamRequest request(
       0 /* render_process_id */, 0 /* render_frame_id */,
-      0 /* page_request_id */, GURL::EmptyGURL() /* security_origin */,
+      0 /* page_request_id */, url::Origin::Create(GURL()) /* url_origin */,
       false /* user_gesture */,
       blink::MediaStreamRequestType::MEDIA_DEVICE_ACCESS /* request_type */,
-      std::string() /* requested_audio_device_id */,
-      std::string() /* requested_video_device_id */,
+      {} /* requested_audio_device_ids */, {} /* requested_video_device_ids */,
       blink::mojom::MediaStreamType::GUM_TAB_AUDIO_CAPTURE /* audio_type */,
       blink::mojom::MediaStreamType::GUM_TAB_VIDEO_CAPTURE /* video_type */,
       false /* disable_local_echo */,
-      false /* request_pan_tilt_zoom_permission */);
+      false /* request_pan_tilt_zoom_permission */,
+      false /* captured_surface_control_active */);
   contents()->RequestMediaAccessPermission(
       nullptr /* contents */, request /* request */,
       base::BindRepeating(&BackgroundLoaderContentsTest::MediaAccessCallback,
@@ -187,7 +188,7 @@ TEST_F(BackgroundLoaderContentsTest, DoesNotGiveMediaAccessPermission) {
 
 TEST_F(BackgroundLoaderContentsTest, CheckMediaAccessPermissionFalse) {
   ASSERT_FALSE(contents()->CheckMediaAccessPermission(
-      nullptr /* contents */, GURL::EmptyGURL() /* security_origin */,
+      nullptr /* contents */, url::Origin() /* security_origin */,
       blink::mojom::MediaStreamType::GUM_TAB_VIDEO_CAPTURE /* type */));
 }
 

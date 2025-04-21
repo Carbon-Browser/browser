@@ -1,4 +1,4 @@
-// Copyright 2022 The Chromium Authors. All rights reserved.
+// Copyright 2022 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,12 +7,13 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
 
-#include "base/callback_forward.h"
 #include "base/files/file_path.h"
+#include "base/functional/callback_forward.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 #include "base/values.h"
@@ -26,7 +27,8 @@
 // - Support Case ID
 // - Issue Description
 // - Email Address (optional)
-// - GUID of the support packet
+// - GUID of the support packet: This ID matches with the `upload_id` field on
+// server.
 // - List of data collectors
 // - Chrome details:
 //   - Platform and OS (contains board and channel for ChromeOS)
@@ -38,7 +40,8 @@ class SupportPacketMetadata {
  public:
   SupportPacketMetadata(std::string case_id,
                         std::string email_address,
-                        std::string issue_description);
+                        std::string issue_description,
+                        std::optional<std::string> upload_id);
 
   ~SupportPacketMetadata();
 
@@ -68,7 +71,7 @@ class SupportPacketMetadata {
   // Removes all PII sensitive data from metadata except the PII types in
   // `pii_to_keep`. Runs `on_metadata_file_written` when file is written.
   void WriteMetadataFile(base::FilePath target_path,
-                         std::set<feedback::PIIType> pii_to_keep,
+                         std::set<redaction::PIIType> pii_to_keep,
                          base::OnceClosure on_matadata_file_written);
 
  private:

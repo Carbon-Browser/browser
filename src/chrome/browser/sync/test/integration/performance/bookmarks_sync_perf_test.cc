@@ -1,4 +1,4 @@
-// Copyright (c) 2011 The Chromium Authors. All rights reserved.
+// Copyright 2011 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -61,7 +61,7 @@ class BookmarksSyncPerfTest : public SyncTest {
   std::string NextIndexedURL();
 
   // Returns a new unique bookmark title.
-  std::string NextIndexedURLTitle();
+  std::u16string NextIndexedURLTitle();
 
   size_t url_number_ = 0;
   size_t url_title_number_ = 0;
@@ -95,12 +95,12 @@ std::string BookmarksSyncPerfTest::NextIndexedURL() {
   return IndexedURL(url_number_++);
 }
 
-std::string BookmarksSyncPerfTest::NextIndexedURLTitle() {
+std::u16string BookmarksSyncPerfTest::NextIndexedURLTitle() {
   return IndexedURLTitle(url_title_number_++);
 }
 
 IN_PROC_BROWSER_TEST_F(BookmarksSyncPerfTest, P0) {
-  ASSERT_TRUE(SetupSync()) << "SetupSync() failed.";
+  ASSERT_TRUE(SetupSync());
 
   perf_test::PerfResultReporter reporter =
       SetUpReporter(base::NumberToString(kNumBookmarks) + "_bookmarks");

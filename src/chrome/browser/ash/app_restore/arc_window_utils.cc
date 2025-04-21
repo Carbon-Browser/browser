@@ -1,4 +1,4 @@
-// Copyright 2021 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -12,29 +12,11 @@
 #include "components/app_restore/features.h"
 #include "components/exo/wm_helper.h"
 #include "components/prefs/pref_service.h"
-#include "components/services/app_service/public/mojom/types.mojom.h"
 #include "components/user_manager/user_manager.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
 #include "ui/views/window/caption_button_layout_constants.h"
-
-namespace {
-
-void ScaleToRoundedRectWithHeightInsets(absl::optional<gfx::Rect>& rect,
-                                        double scale_factor,
-                                        int height) {
-  if (!rect.has_value())
-    return;
-
-  gfx::Rect bounds =
-      gfx::Rect(rect->x(), rect->y(), rect->width(), rect->height());
-  if (height)
-    bounds.Inset(gfx::Insets::TLBR(height, 0, 0, 0));
-  rect = gfx::ScaleToRoundedRect(bounds, scale_factor);
-}
-
-}  // namespace
 
 namespace ash {
 namespace full_restore {
@@ -55,13 +37,19 @@ bool IsArcGhostWindowEnabled() {
   return profile->GetPrefs()->GetBoolean(kGhostWindowEnabled);
 }
 
-absl::optional<double> GetDisplayScaleFactor(int64_t display_id) {
+std::optional<double> GetDisplayScaleFactor(int64_t display_id) {
+  // The `kDefaultDisplayId` should not be a valid parameter. Here replace it to
+  // primary display id to keep it as the same semantics with Android, since the
+  // ARC app window will not be shown on chromium default display (placeholder
+  // display when no display connected).
+  if (display_id == display::kDefaultDisplayId)
+    display_id = display::Screen::GetScreen()->GetPrimaryDisplay().id();
   display::Display display;
   if (display::Screen::GetScreen()->GetDisplayWithDisplayId(display_id,
                                                             &display)) {
     return display.device_scale_factor();
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 apps::WindowInfoPtr HandleArcWindowInfo(apps::WindowInfoPtr window_info) {
@@ -80,17 +68,10 @@ apps::WindowInfoPtr HandleArcWindowInfo(apps::WindowInfoPtr window_info) {
     return window_info;
   }
 
-  // For ARC P, the window bounds in launch parameters should minus caption
-  // height.
-  int extra_caption_height = 0;
-  if (!arc::IsArcVmEnabled()) {
-    extra_caption_height =
-        views::GetCaptionButtonLayoutSize(
-            views::CaptionButtonLayoutSize::kNonBrowserCaption)
-            .height();
+  if (window_info->bounds) {
+    window_info->bounds = gfx::ScaleToRoundedRect(window_info->bounds.value(),
+                                                  scale_factor.value());
   }
-  ScaleToRoundedRectWithHeightInsets(window_info->bounds, scale_factor.value(),
-                                     extra_caption_height);
   return window_info;
 }
 
@@ -98,7 +79,7 @@ bool IsValidThemeColor(uint32_t theme_color) {
   return SkColorGetA(theme_color) == SK_AlphaOPAQUE;
 }
 
-const std::string WindowIdToAppId(int window_id) {
+const std::string WrapSessionAppIdFromWindowId(int window_id) {
   return std::string("org.chromium.arc.session.") +
          base::NumberToString(window_id);
 }

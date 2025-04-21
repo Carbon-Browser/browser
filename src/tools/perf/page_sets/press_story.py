@@ -1,4 +1,4 @@
-# Copyright 2018 The Chromium Authors. All rights reserved.
+# Copyright 2018 The Chromium Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
@@ -67,7 +67,7 @@ class PressStory(page_module.Page):
       description: An optional string with a short human readable description
         of the measurement.
     """
-    # TODO(crbug.com/999484): Ideally, these should be recorded directly into
+    # TODO(crbug.com/40642835): Ideally, these should be recorded directly into
     # the results object, rather than held on this temporary list. That needs,
     # however, another slight refactor to make the results object available at
     # this point.

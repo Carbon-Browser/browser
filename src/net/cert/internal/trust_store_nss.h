@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,65 +8,66 @@
 #include <cert.h>
 #include <certt.h>
 
+#include <vector>
+
 #include "crypto/scoped_nss_types.h"
 #include "net/base/net_export.h"
-#include "net/cert/pki/trust_store.h"
+#include "net/cert/internal/platform_trust_store.h"
+#include "net/cert/scoped_nss_types.h"
 #include "third_party/abseil-cpp/absl/types/variant.h"
+#include "third_party/boringssl/src/pki/trust_store.h"
 
 namespace net {
 
-// TrustStoreNSS is an implementation of TrustStore which uses NSS to find trust
-// anchors for path building. This TrustStore is thread-safe.
-class NET_EXPORT TrustStoreNSS : public TrustStore {
+// TrustStoreNSS is an implementation of bssl::TrustStore which uses NSS to find
+// trust anchors for path building. This bssl::TrustStore is thread-safe.
+class NET_EXPORT TrustStoreNSS : public PlatformTrustStore {
  public:
-  enum SystemTrustSetting {
-    kUseSystemTrust,
-    kIgnoreSystemTrust,
-  };
-
   struct UseTrustFromAllUserSlots : absl::monostate {};
   using UserSlotTrustSetting =
       absl::variant<UseTrustFromAllUserSlots, crypto::ScopedPK11Slot>;
 
   // Creates a TrustStoreNSS which will find anchors that are trusted for
-  // |trust_type|.
-  //
-  // |system_trust_setting| configures the use of trust from the builtin roots.
-  // If |system_trust_setting| is kIgnoreSystemTrust, trust settings from the
-  // builtin roots slot with the Mozilla CA Policy attribute will not be used.
+  // SSL server auth. (Trust settings from the builtin roots slot with the
+  // Mozilla CA Policy attribute will not be used.)
   //
   // |user_slot_trust_setting| configures the use of trust from user slots:
   //  * UseTrustFromAllUserSlots: all user slots will be allowed.
-  //  * nullptr: no user slots will be allowed.
-  //  * non-null PK11Slot: the specified slot will be allowed.
-  TrustStoreNSS(SECTrustType trust_type,
-                SystemTrustSetting system_trust_setting,
-                UserSlotTrustSetting user_slot_trust_setting);
+  //  * PK11Slot: the specified slot will be allowed. Must not be nullptr.
+  explicit TrustStoreNSS(UserSlotTrustSetting user_slot_trust_setting);
 
   TrustStoreNSS(const TrustStoreNSS&) = delete;
   TrustStoreNSS& operator=(const TrustStoreNSS&) = delete;
 
   ~TrustStoreNSS() override;
 
-  // CertIssuerSource implementation:
-  void SyncGetIssuersOf(const ParsedCertificate* cert,
-                        ParsedCertificateList* issuers) override;
+  // bssl::CertIssuerSource implementation:
+  void SyncGetIssuersOf(const bssl::ParsedCertificate* cert,
+                        bssl::ParsedCertificateList* issuers) override;
 
-  // TrustStore implementation:
-  CertificateTrust GetTrust(const ParsedCertificate* cert,
-                            base::SupportsUserData* debug_data) const override;
+  // bssl::TrustStore implementation:
+  bssl::CertificateTrust GetTrust(const bssl::ParsedCertificate* cert) override;
+
+  // net::PlatformTrustStore implementation:
+  std::vector<net::PlatformTrustStore::CertWithTrust> GetAllUserAddedCerts()
+      override;
+
+  struct ListCertsResult {
+    ListCertsResult(ScopedCERTCertificate cert, bssl::CertificateTrust trust);
+    ~ListCertsResult();
+    ListCertsResult(ListCertsResult&& other);
+    ListCertsResult& operator=(ListCertsResult&& other);
+
+    ScopedCERTCertificate cert;
+    bssl::CertificateTrust trust;
+  };
+  std::vector<ListCertsResult> ListCertsIgnoringNSSRoots();
 
  private:
-  bool IsCertAllowedForTrust(CERTCertificate* cert) const;
+  bssl::CertificateTrust GetTrustForNSSTrust(const CERTCertTrust& trust) const;
 
-  SECTrustType trust_type_;
-
-  // |ignore_system_certs_trust_settings_| specifies if the system trust
-  // settings should be considered when determining a cert's trustworthiness.
-  //
-  // TODO(hchao, sleevi): Figure out how to ignore built-in trust settings,
-  // while respecting user-configured trust settings, for these certificates.
-  const bool ignore_system_trust_settings_ = false;
+  bssl::CertificateTrust GetTrustIgnoringSystemTrust(
+      CERTCertificate* nss_cert) const;
 
   // |user_slot_trust_setting_| specifies which slots certificates must be
   // stored on to be allowed to be trusted. The possible values are:
@@ -75,8 +76,7 @@ class NET_EXPORT TrustStoreNSS : public TrustStore {
   // settings from any user slots.
   //
   // |user_slot_trust_setting_| is a ScopedPK11Slot: Allow
-  // certificates from the specified slot to be trusted. If the slot is nullptr,
-  // trust from user slots will not be used.
+  // certificates from the specified slot to be trusted. Must not be nullptr.
   const UserSlotTrustSetting user_slot_trust_setting_;
 };
 

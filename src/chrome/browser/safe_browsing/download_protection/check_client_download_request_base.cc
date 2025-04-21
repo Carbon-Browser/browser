@@ -1,16 +1,18 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "chrome/browser/safe_browsing/download_protection/check_client_download_request_base.h"
 
-#include "base/bind.h"
 #include "base/cancelable_callback.h"
 #include "base/containers/span.h"
+#include "base/functional/bind.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/rand_util.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/strcat.h"
+#include "base/task/bind_post_task.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/extensions/api/safe_browsing_private/safe_browsing_private_event_router.h"
 #include "chrome/browser/extensions/api/safe_browsing_private/safe_browsing_private_event_router_factory.h"
@@ -50,35 +52,8 @@ void RecordFileExtensionType(const std::string& metric_name,
       metric_name, FileTypePolicies::GetInstance()->UmaValueForFile(file));
 }
 
-bool CheckUrlAgainstAllowlist(
-    const GURL& url,
-    scoped_refptr<SafeBrowsingDatabaseManager> database_manager) {
-  DCHECK_CURRENTLY_ON(BrowserThread::IO);
-
-  if (!database_manager.get()) {
-    return false;
-  }
-
-  return (url.is_valid() && database_manager->MatchDownloadAllowlistUrl(url));
-}
-
 std::string SanitizeUrl(const std::string& url) {
   return GURL(url).DeprecatedGetOriginAsURL().spec();
-}
-
-void MaybeLogDocumentMetrics(const std::string& request_data,
-                             DownloadCheckResultReason reason) {
-  ClientDownloadRequest request;
-  if (!request.ParseFromString(request_data))
-    return;
-
-  if (request.has_document_summary()) {
-    base::UmaHistogramBoolean(
-        "SBClientDownload.DocumentContainsMacros",
-        request.document_summary().metadata().contains_macros());
-    base::UmaHistogramEnumeration("SBClientDownload.DocumentCheckDownloadStats",
-                                  reason, REASON_MAX);
-  }
 }
 
 }  // namespace
@@ -123,31 +98,34 @@ void CheckClientDownloadRequestBase::Start() {
   DVLOG(2) << "Starting SafeBrowsing download check for: " << source_url_;
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
+  content::GetUIThreadTaskRunner({})->PostTask(
+      FROM_HERE, base::BindOnce(&CheckClientDownloadRequestBase::StartTimeout,
+                                GetWeakPtr()));
+
   if (IsAllowlistedByPolicy()) {
     FinishRequest(DownloadCheckResult::ALLOWLISTED_BY_POLICY,
                   REASON_ALLOWLISTED_URL);
     return;
   }
 
+  if (!database_manager_ || !source_url_.is_valid()) {
+    OnUrlAllowlistCheckDone(false);
+    return;
+  }
+
   // If allowlist check passes, FinishRequest() will be called to avoid
   // analyzing file. Otherwise, AnalyzeFile() will be called to continue with
   // analysis.
-  content::GetIOThreadTaskRunner({})->PostTaskAndReplyWithResult(
-      FROM_HERE,
-      base::BindOnce(&CheckUrlAgainstAllowlist, source_url_, database_manager_),
-      base::BindOnce(&CheckClientDownloadRequestBase::OnUrlAllowlistCheckDone,
-                     GetWeakPtr()));
+  auto callback = base::BindOnce(
+      &CheckClientDownloadRequestBase::OnUrlAllowlistCheckDone, GetWeakPtr());
+  database_manager_->MatchDownloadAllowlistUrl(source_url_,
+                                               std::move(callback));
 }
 
 void CheckClientDownloadRequestBase::FinishRequest(
     DownloadCheckResult result,
     DownloadCheckResultReason reason) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-
-  if (!request_start_time_.is_null()) {
-    base::UmaHistogramEnumeration(
-        "SBClientDownload.DownloadRequestNetworkStats", reason, REASON_MAX);
-  }
 
   auto settings = ShouldUploadBinary(reason);
   if (settings.has_value()) {
@@ -158,15 +136,8 @@ void CheckClientDownloadRequestBase::FinishRequest(
         FROM_HERE, base::BindOnce(std::move(callback_), result));
   }
 
-  if (FileTypePolicies::GetInstance()
-          ->PolicyForFile(target_file_path_, GURL{}, nullptr)
-          .extension() == "exe") {
-    base::UmaHistogramEnumeration("SBClientDownload.CheckDownloadStats.Exe",
-                                  reason, REASON_MAX);
-  }
   base::UmaHistogramEnumeration("SBClientDownload.CheckDownloadStats", reason,
                                 REASON_MAX);
-  MaybeLogDocumentMetrics(client_download_request_data_, reason);
 
   NotifyRequestFinished(result, reason);
   service()->RequestFinished(this, GetBrowserContext(), result);
@@ -278,8 +249,80 @@ void CheckClientDownloadRequestBase::SanitizeRequest() {
   }
 }
 
+void CheckClientDownloadRequestBase::GetAdditionalPromptResult(
+    const ClientDownloadResponse& response,
+    DownloadCheckResult* result,
+    DownloadCheckResultReason* reason,
+    std::string* token) const {
+  bool local_decryption_prompt = ShouldPromptForLocalDecryption(
+      response.is_suspicious_encrypted_archive());
+  if (local_decryption_prompt) {
+    LogLocalDecryptionEvent(safe_browsing::DeepScanEvent::kPromptShown);
+
+    *result = DownloadCheckResult::PROMPT_FOR_LOCAL_PASSWORD_SCANNING;
+    *reason = DownloadCheckResultReason::REASON_LOCAL_DECRYPTION_PROMPT;
+    *token = response.token();
+  }
+
+  if (ShouldPromptForLocalDecryption(/*server_requests_prompt=*/true)) {
+    base::UmaHistogramBoolean(
+        "SBClientDownload.ServerRequestsLocalDecryptionPrompt",
+        local_decryption_prompt);
+  }
+
+  bool deep_scanning_prompt =
+      ShouldPromptForDeepScanning(response.request_deep_scan());
+  if (deep_scanning_prompt) {
+    *result = DownloadCheckResult::PROMPT_FOR_SCANNING;
+    *reason = DownloadCheckResultReason::REASON_DEEP_SCAN_PROMPT;
+    // Always set the token if Chrome should prompt for deep scanning.
+    // Otherwise, client Safe Browsing reports may be missed when the
+    // verdict is SAFE. See https://crbug.com/1485218.
+    *token = response.token();
+  }
+
+  // Only record the UMA metric if we're in a population that potentially
+  // could prompt for deep scanning.
+  if (ShouldPromptForDeepScanning(/*server_requests_prompt=*/true)) {
+    LogDeepScanningPrompt(deep_scanning_prompt);
+  }
+
+  bool immediate_deep_scan_prompt = ShouldImmediatelyDeepScan(
+      response.request_deep_scan(), /*log_metrics=*/true);
+  if (immediate_deep_scan_prompt) {
+    *result = DownloadCheckResult::IMMEDIATE_DEEP_SCAN;
+    *reason = DownloadCheckResultReason::REASON_IMMEDIATE_DEEP_SCAN;
+    // Always set the token if Chrome should prompt for deep scanning.
+    // Otherwise, client Safe Browsing reports may be missed when the
+    // verdict is SAFE. See https://crbug.com/1485218.
+    *token = response.token();
+  }
+
+  // Only record the UMA metric if we're in a population that potentially
+  // could prompt for deep scanning.
+  if (ShouldImmediatelyDeepScan(/*server_requests_prompt=*/true,
+                                /*log_metrics=*/false)) {
+    base::UmaHistogramBoolean(
+        "SBClientDownload.ServerRequestsImmediateDeepScan2",
+        immediate_deep_scan_prompt);
+  }
+}
+
 void CheckClientDownloadRequestBase::OnRequestBuilt(
     std::unique_ptr<ClientDownloadRequest> request) {
+  if (ShouldPromptForIncorrectPassword()) {
+    LogLocalDecryptionEvent(safe_browsing::DeepScanEvent::kIncorrectPassword);
+    FinishRequest(DownloadCheckResult::PROMPT_FOR_LOCAL_PASSWORD_SCANNING,
+                  REASON_LOCAL_DECRYPTION_PROMPT);
+    return;
+  }
+
+  if (ShouldShowScanFailure()) {
+    FinishRequest(DownloadCheckResult::DEEP_SCANNED_FAILED,
+                  REASON_LOCAL_DECRYPTION_FAILED);
+    return;
+  }
+
   client_download_request_ = std::move(request);
   SanitizeRequest();
 
@@ -287,11 +330,13 @@ void CheckClientDownloadRequestBase::OnRequestBuilt(
   if ((client_download_request_->download_type() ==
            ClientDownloadRequest::ZIPPED_EXECUTABLE ||
        client_download_request_->download_type() ==
-           ClientDownloadRequest::RAR_COMPRESSED_EXECUTABLE) &&
-      client_download_request_->archive_valid() &&
-      std::all_of(
-          client_download_request_->archived_binary().begin(),
-          client_download_request_->archived_binary().end(),
+           ClientDownloadRequest::RAR_COMPRESSED_EXECUTABLE ||
+       client_download_request_->download_type() ==
+           ClientDownloadRequest::SEVEN_ZIP_COMPRESSED_EXECUTABLE) &&
+      client_download_request_->archive_summary().parser_status() ==
+          ClientDownloadRequest::ArchiveSummary::VALID &&
+      base::ranges::all_of(
+          client_download_request_->archived_binary(),
           [](const ClientDownloadRequest::ArchivedBinary& archived_binary) {
             return !archived_binary.is_executable() &&
                    !archived_binary.is_archive();
@@ -300,13 +345,6 @@ void CheckClientDownloadRequestBase::OnRequestBuilt(
                   REASON_ARCHIVE_WITHOUT_BINARIES);
     return;
   }
-
-  // We wait until after the file checks finish to start the timeout, as
-  // windows can cause permissions errors if the timeout fired while we were
-  // checking the file signature and we tried to complete the download.
-  content::GetUIThreadTaskRunner({})->PostTask(
-      FROM_HERE, base::BindOnce(&CheckClientDownloadRequestBase::StartTimeout,
-                                GetWeakPtr()));
 
   if (!pingback_enabled_) {
     FinishRequest(DownloadCheckResult::UNKNOWN, REASON_PING_DISABLED);
@@ -332,7 +370,7 @@ void CheckClientDownloadRequestBase::StartTimeout() {
       DownloadCheckResult::UNKNOWN, REASON_REQUEST_CANCELED));
   content::GetUIThreadTaskRunner({})->PostDelayedTask(
       FROM_HERE, timeout_closure_.callback(),
-      base::Milliseconds(service_->download_request_timeout_ms()));
+      service_->GetDownloadRequestTimeout());
 }
 
 void CheckClientDownloadRequestBase::OnGotAccessToken(
@@ -410,11 +448,18 @@ void CheckClientDownloadRequestBase::SendRequest() {
               "from dangerous sites' under Privacy. This feature is enabled by "
               "default."
             chrome_policy {
+              SafeBrowsingProtectionLevel {
+                policy_options {mode: MANDATORY}
+                SafeBrowsingProtectionLevel: 0
+              }
+            }
+            chrome_policy {
               SafeBrowsingEnabled {
                 policy_options {mode: MANDATORY}
                 SafeBrowsingEnabled: false
               }
             }
+            deprecated_policies: "SafeBrowsingEnabled"
           })");
   auto resource_request = std::make_unique<network::ResourceRequest>();
   resource_request->url = PPAPIDownloadRequest::GetDownloadRequestUrl();
@@ -422,8 +467,18 @@ void CheckClientDownloadRequestBase::SendRequest() {
   resource_request->load_flags = net::LOAD_DISABLE_CACHE;
 
   if (!access_token_.empty()) {
+    LogAuthenticatedCookieResets(
+        *resource_request,
+        SafeBrowsingAuthenticatedEndpoint::kDownloadProtection);
     SetAccessTokenAndClearCookieInResourceRequest(resource_request.get(),
                                                   access_token_);
+  }
+
+  network::mojom::URLLoaderFactory* url_loader_factory =
+      service_->GetURLLoaderFactory(GetBrowserContext()).get();
+  if (!url_loader_factory) {
+    FinishRequest(DownloadCheckResult::UNKNOWN, REASON_SERVER_PING_FAILED);
+    return;
   }
 
   loader_ = network::SimpleURLLoader::Create(std::move(resource_request),
@@ -458,12 +513,18 @@ void CheckClientDownloadRequestBase::OnURLLoaderComplete(
     response_code = loader_->ResponseInfo()->headers->response_code();
   DVLOG(2) << "Received a response for URL: " << source_url_
            << ": success=" << success << " response_code=" << response_code;
+  RecordHttpResponseOrErrorCode("SBClientDownload.DownloadRequestNetworkResult",
+                                loader_->NetError(), response_code);
+  // TODO: crbug.com/383994656 - Remove these metrics once
+  // SBClientDownload.DownloadRequestNetworkResult available on Stable. Alert
+  // monitoring should also be modified.
   if (success) {
     base::UmaHistogramSparse("SBClientDownload.DownloadRequestResponseCode",
                              response_code);
   }
   base::UmaHistogramSparse("SBClientDownload.DownloadRequestNetError",
                            -loader_->NetError());
+
   DownloadCheckResultReason reason = REASON_SERVER_PING_FAILED;
   DownloadCheckResult result = DownloadCheckResult::UNKNOWN;
   std::string token;
@@ -526,27 +587,20 @@ void CheckClientDownloadRequestBase::OnURLLoaderComplete(
             base::Unretained(WebUIInfoSingleton::GetInstance()),
             std::make_unique<ClientDownloadResponse>(response)));
 
-    if (!token.empty())
-      SetDownloadPingToken(token);
+    GetAdditionalPromptResult(response, &result, &reason, &token);
+
+    if (!token.empty()) {
+      const TailoredVerdictOverrideData& local_override =
+          WebUIInfoSingleton::GetInstance()->tailored_verdict_override();
+      SetDownloadProtectionData(
+          token, response.verdict(),
+          local_override.override_value.value_or(response.tailored_verdict()));
+    }
 
     bool upload_requested = response.upload();
-    MaybeStorePingsForDownload(result, upload_requested,
-                               client_download_request_data_,
-                               *response_body.get());
-
-    bool should_prompt =
-        ShouldPromptForDeepScanning(response.request_deep_scan());
-    if (should_prompt) {
-      result = DownloadCheckResult::PROMPT_FOR_SCANNING;
-      reason = DownloadCheckResultReason::REASON_ADVANCED_PROTECTION_PROMPT;
-    }
-
-    // Only record the UMA metric if we're in a population that potentially
-    // could prompt for deep scanning.
-    if (ShouldPromptForDeepScanning(/*server_requests_prompt=*/true)) {
-      base::UmaHistogramBoolean(
-          "SBClientDownload.ServerRequestsDeepScanningPrompt", should_prompt);
-    }
+    MaybeBeginFeedbackForDownload(result, upload_requested,
+                                  client_download_request_data_,
+                                  *response_body.get());
   }
 
   // We don't need the loader anymore.
@@ -556,32 +610,32 @@ void CheckClientDownloadRequestBase::OnURLLoaderComplete(
       FileTypePolicies::GetInstance()
           ->PolicyForFile(target_file_path_, GURL{}, nullptr)
           .inspection_type();
+  std::string histogram_name = "SBClientDownload.DownloadRequestDuration";
+  base::TimeDelta duration = base::TimeTicks::Now() - start_time_;
+  base::UmaHistogramTimes("SBClientDownload.DownloadRequestDuration", duration);
+
+  std::string metrics_suffix = "";
   switch (inspection_type) {
     case DownloadFileType::NONE:
-      UMA_HISTOGRAM_TIMES("SBClientDownload.DownloadRequestDuration.None",
-                          base::TimeTicks::Now() - start_time_);
+      base::StrAppend(&histogram_name, {".None"});
       break;
     case DownloadFileType::ZIP:
-      UMA_HISTOGRAM_TIMES("SBClientDownload.DownloadRequestDuration.Zip",
-                          base::TimeTicks::Now() - start_time_);
+      base::StrAppend(&histogram_name, {".Zip"});
       break;
     case DownloadFileType::RAR:
-      UMA_HISTOGRAM_TIMES("SBClientDownload.DownloadRequestDuration.Rar",
-                          base::TimeTicks::Now() - start_time_);
+      base::StrAppend(&histogram_name, {".Rar"});
       break;
     case DownloadFileType::DMG:
-      UMA_HISTOGRAM_TIMES("SBClientDownload.DownloadRequestDuration.Dmg",
-                          base::TimeTicks::Now() - start_time_);
+      base::StrAppend(&histogram_name, {".Dmg"});
       break;
-    case DownloadFileType::OFFICE_DOCUMENT:
-      UMA_HISTOGRAM_TIMES("SBClientDownload.DownloadRequestDuration.Document",
-                          base::TimeTicks::Now() - start_time_);
+    case DownloadFileType::SEVEN_ZIP:
+      base::StrAppend(&histogram_name, {".SevenZip"});
       break;
   }
-  UMA_HISTOGRAM_TIMES("SBClientDownload.DownloadRequestDuration",
-                      base::TimeTicks::Now() - start_time_);
-  UMA_HISTOGRAM_TIMES("SBClientDownload.DownloadRequestNetworkDuration",
-                      base::TimeTicks::Now() - request_start_time_);
+
+  base::UmaHistogramTimes(histogram_name, duration);
+  base::UmaHistogramTimes("SBClientDownload.DownloadRequestNetworkDuration",
+                          base::TimeTicks::Now() - request_start_time_);
 
   FinishRequest(result, reason);
 }

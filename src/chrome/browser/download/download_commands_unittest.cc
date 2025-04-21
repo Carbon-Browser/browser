@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -34,7 +34,7 @@ class DownloadCommandsTest : public testing::Test {
       : model_(std::make_unique<DownloadItemModel>(&item_)),
         commands_(model_->GetWeakPtr()) {}
 
-  ~DownloadCommandsTest() override {}
+  ~DownloadCommandsTest() override = default;
 
  protected:
   // Sets up defaults for the download item.

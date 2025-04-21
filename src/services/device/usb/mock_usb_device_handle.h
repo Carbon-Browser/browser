@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -24,7 +24,7 @@ class MockUsbDeviceHandle : public UsbDeviceHandle {
   scoped_refptr<UsbDevice> GetDevice() const override;
   MOCK_METHOD0(Close, void());
 
-  // TODO(crbug.com/729950): Use MOCK_METHOD directly once GMock gets the
+  // TODO(crbug.com/40524294): Use MOCK_METHOD directly once GMock gets the
   // move-only type support.
   void SetConfiguration(int configuration_value,
                         ResultCallback callback) override {
@@ -143,7 +143,7 @@ class MockUsbDeviceHandle : public UsbDeviceHandle {
   ~MockUsbDeviceHandle() override;
 
  private:
-  raw_ptr<UsbDevice> device_;
+  raw_ptr<UsbDevice, DanglingUntriaged> device_;
 };
 
 }  // namespace device

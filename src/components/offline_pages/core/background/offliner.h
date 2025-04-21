@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2016 The Chromium Authors
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "base/callback.h"
+#include "base/functional/callback.h"
 
 namespace offline_pages {
 
@@ -98,8 +98,8 @@ class Offliner {
   // TODO(chili): make save operation cancellable.
   typedef base::OnceCallback<void(const SavePageRequest&)> CancelCallback;
 
-  Offliner() {}
-  virtual ~Offliner() {}
+  Offliner() = default;
+  virtual ~Offliner() = default;
 
   // Processes |request| to load and save an offline page.
   // Returns whether the request was accepted or not. |completion_callback| is
